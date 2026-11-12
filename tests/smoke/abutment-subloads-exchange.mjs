@@ -208,7 +208,7 @@ const rc = await oc.p.evaluate(async () => { const w = ms => new Promise(r => se
   const txt = document.getElementById('abd-modal').innerText; document.getElementById('abd-apply').click(); await w(500);
   const E = earthLoads(0).E; return { txt, br: { m: P.br.hEQmode, a: P.br.hAEr }, ls: P.units[0].earth.lsRed, z0: { loc: z0.loc, zi: z0.zi }, z1: { loc: E.seis.loc, zc: E.seis.zc, zi: E.seis.zi, H: E.H } }; });
 check(rc.br.m === 'comb' && rc.br.a === 0.45 && rc.ls === 'no', 'applied: P.br.hEQmode comb, hAEr 0.45 (bridge-wide), Abut. 1 earth.lsRed no');
-check(rc.z0.loc === 'sw' && rc.z1.loc === 'comb' && Math.abs(rc.z1.zc - 0.45 * rc.z1.H) < 1e-9, 'SubLoads placement: (a) before, the combined P_AE at 0.45H after (' + JSON.stringify(rc.z1) + ')');
+check(rc.z0.loc === 'static' && rc.z1.loc === 'comb' && Math.abs(rc.z1.zc - 0.45 * rc.z1.H) < 1e-9, 'SubLoads placement: (b) before (a new project, SDB 2026-11-12), the combined P_AE at 0.45H after (' + JSON.stringify(rc.z1) + ')');
 check(/LS with the slab/.test(rc.txt) && /changes/.test(rc.txt), 'review: the LS row in the Approach slab group');
 check(oc.errs.length === 0, 'no console errors' + (oc.errs.length ? ': ' + oc.errs.join(' | ') : ''));
 await oc.b.close();

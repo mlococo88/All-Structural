@@ -20573,3 +20573,1488 @@ index 86c84c8..1e86dac 100644
   2. Negative invalid, with an existing clamp or default in the handler: Design scour depth (≥ 0), Added unsupported length (≥ 0), P-crit ramp cap (≤ 0 → 10), the seven H-pile minimum penetration depths (≥ 0), IAB designed pile length (≥ 0), group rows / columns (≥ 1, rounded), φ_da (≤ 0 → 1.0), blow-count limit (≤ 0 → 10), IAB K_b (→ 1.2), θ weak / strong (→ 1.0), γ_DW / η (→ defaults): the minus stays visible while typing; the stored value is clamped at each key exactly as before, and the field shows it on leaving.
   3. Negative invalid, no clamp in the handler (dimensions, lengths and embedments, material strengths, E, φ factors, K, γ_DR, deflection limit, drag load, σ_dr, blow count, section loss, soil layer values): the minus stays visible and the value is stored as typed, as main already stores the same text when pasted or stepped; the tool's existing checks apply. No new clamp added (that would change validation; open item).
 - **Open items:** (1) category 3 fields accept a negative value without a field-level warning (as before); whether to add one is the engineer's call. (2) Added unsupported length is shown as `LuFree − stickup`, which can show a float tail (e.g. 0.7000000000000002) when the project is opened; display only, not changed here.
+
+## 2026-11-12 — PR: claude/pile-neg-block (PR #1434: https://github.com/mlococo88/All-Structural/pull/1434) (PDNB; engineer decision 2026-11-12) — negative (and meaningless zero) inputs blocked with an input error; results withheld until fixed   [validation change: no formula, factor, unit or reference changed; valid inputs give identical results]
+- **Problem:** the DECE entry (PR #1430) found number fields where a negative value is physically invalid and the handler has no clamp (its category 3): the value was stored and the results computed with it, silently (e.g. Casing OD −12 in). Engineer decision 2026-11-12: block them with an input error, as the other tools' input checks (#1399), in this tool's own style; zero is an error too where it is meaningless; categories 1 (negative valid) and 2 (already clamped) unchanged.
+- **Rule:** `gt` = must be > 0 (zero meaningless); `ge` = must be ≥ 0 (zero valid: "not entered", none, optional length, load). A blank (NaN) or unset (null) value is not checked here (F54 still reports blanks). A field is checked only in the view where it is shown (`when`).
+- **Fields checked** (`PD_NEG_RULES`, anchor `const PD_NEG_RULES = [`, after `blankInputsMsg`):
+  - Micropile, `gt`: Bond length `LbProvided`; Cap f'c `fc`, Grout f'c `fcGrout`, Bar fyb `fyb`, Bar fub `fub`, Casing fyc `fyc`, Es `E`; Casing OD `OD`, Wall t `tc`, Bar area `Ab`, d_h `dhBond` (when "d_h differs" is on); bond β `beta`; φgeo, φcc, φcu, φf, φc, φb, φv, φup, φt, φv punch; Verification / Proof bar Ab `AbVerf` `AbProof`; Cap geometry edge distances `de1` `de2`, cap thicknesses `t1` `t2`, cap bar dia `capBar`.
+  - Micropile, `ge`: Cased length `Lcased`, Plunge depth `Lplunge`, Cap embedment `capEmbed`, Fixed-head req. k×D `capEmbedK`, Corrosion `corr`, Casing threaded-joint tension efficiency `casingJointTenEff`, Head embed `he1`.
+  - H-pile, `gt`: Embedded length `solverLembed`; Fy `hpFy`, Fu `hpFu`, Es `E`; d, b_f, t_f, t_w `hpD` `hpBf` `hpTf` `hpTw`; C_b `hpCb`; φc axial `hpPhiC`, φc combined `hpPhiCcomb`, φf, φv, φy, φu `hpPhiF` `hpPhiV` `hpPhiTy` `hpPhiTu`; φ geo sand/silt, clay, clay tip, uplift `hpPhiGeo` `hpPhiGeoClay` `hpPhiTipClay` `hpPhiUp` (also integral mode with the geotechnical check on); Head fixity k `hpCapEmbedK`.
+  - H-pile, `ge`: Cap embed `hpCapEmbed`, Drag load DR `hpDR`, γ_DR structural `hpGammaDR` (0.00 is the geotechnical value).
+  - Micropile and H-pile: Buckling K `Kb` (`gt`, when buckling is evaluated); η override `groupEta` (`gt`, when the override is on); service deflection limit `deflLimit` (`gt`); K_θ `pyKrot` (`ge`, free head); large head-deflection warning `pyDeflWarnD` (`ge`); with the pile group on: spacing ×dia `groupSpacingDia` (`gt`), cap L / W / t `capL` `capW` `capThk` (`ge`), edge distance min `capEdgeMin` (`ge`), concrete γ `capGamma` (`gt`) and soil surcharge `capSoilSurcharge` (`ge`) with self-weight on, stem widths / height `stemWx` `stemWy` `stemH` (`ge`) with the stem on, γDC `dlFactor` (`gt`) with either on.
+  - Integral abutment, `ge`: Geotech length `iabGeoLength`, DL / LL / DW per pile `iabDL` `iabLL` `iabDW`, Total bridge length `iabBridgeLength`, Abut. height `iabAbutHeight` (both 0 = not entered, already flagged "enter a value"), embedment into cap `iabEmbed`, pile spacing `iabSpacing`, Tier 2 scour / check-flood scour depths `iabScourDepth` `iabScourCheck` (Tier 2 on).
+  - Soil profile layers (`ge`, the cells shown for the layer's type; `pdNegLayerKeys`): p-y table top (layers 2+), γ, φ or s_u, k or ε50, rock q_u, E_m, RQD; static table (H-pile, integral with the geotechnical check) SPT N, S_u, α.
+- **Not checked (unchanged):** category 1 and 2 fields of the DECE entry (incl. stickup `solverFree`, which may be negative: head below grade; load-case values, `Tu`, moments; ΔT range, δT); fields located in the output column (Module 02 n_h / k_h / layer table / p-multiplier / y-multiplier / LPILE M_max, Buckling-module L_f override, p-y probe depth), because withholding the output would hide the field (open item); the clamped H-pile driving fields.
+- **Where (all in `Pile Designer.html`):**
+  - New block after `const blankInputsMsg = …;`: `pdMP` / `pdHP` / `pdIAB` / `pdGrp`, `PD_NEG_RULES`, `pdSoilShown`, `pdStatShown`, `pdNegLayerKeys`, `pdNegCheck(I, r)`, `pdNegRuleTxt`, `pdNegMsg`, `PD_NEG_NOTE`, `PdNegCtx` (React context), `pdNegAt`.
+  - `PdNumIn`: new prop `ck` (the input key, or `soilLayers.<i>.<key>`), removed before the `<input>` is rendered; while that key is in the error list the input gets `aria-invalid="true"`, `data-pdneg`, a red border / tint, class `pd-neg-bad` and the message as its title. With no error the rendered input is exactly as before.
+  - `Field`: new prop `ck` passed to `PdNumIn`; with an error it prints "⚠ Input error: must be greater than 0 / must not be negative; results withheld" under the field (the ⚠ also puts the rail tab's warning dot on).
+  - `ck` added at each checked field: every `Field` above (`ck: "<key>"`; the micropile φ grid `ck: key`), and the raw `PdNumIn` sites: β, service deflection limit, K_θ, y₀ limit, group spacing, `capF` (`ck: key`), edge distance min, the integral fields, the DW row (`ck: k === "iabDW" ? k : undefined`), the C_b row (`ck: k === "hpCb" ? k : undefined`), the soil-layer cells.
+  - New `PdNegBanner` and `pdNegMain` (before `function App() {`). In `App`, after `const r = useMemo(…)`: `negErr`, `negMap`, `negBlk`, `goNeg` (a banner entry shows the rail tab holding the field and focuses it). The App's root is wrapped in `PdNegCtx.Provider`.
+  - Withheld while `negBlk`: the output `main` (anchor `pdNegMain(negBlk, negErr, goNeg, {` — was `React.createElement("main", {`) keeps the pile-type card, the tab strip and the Report tab and shows the `#pdNegBlock` card on the Summary tab instead of every other output block; `PdDashCol` (new prop `negBlk`) shows "input error" and the note; the Overall pill reads INPUT ERROR and the check index "Input error: results withheld" (`CheckIndex` new prop `negBlk`); the rail's load-case envelope line (edit card gets `caseRes: negBlk ? null : caseRes`); the integral rail's ✓/✗ echoes (length, P_u, embedment, spacing, eligibility, geotechnical result, δ_T: `!negBlk && ` prefixed); `PileResultsXfer.build()` returns an error when `LIVE.blocked` (the App passes `blocked: negBlk` to `note`).
+  - Banner: the input-error banner condition gains `negBlk ||`, its first child is `PdNegBanner` (list + the note `PD_NEG_NOTE`, §6). The existing input errors (e.g. "Casing OD must be greater than 0 …") are kept as before.
+  - Report (`pdrModel`): `const negE = pdNegCheck(I, r)`; while it is not empty the Report holds one section "Input check" › "Input error(s) — results withheld" (table Input / Entered / Rule, the note, link to the on-screen list) and no other section; `pdrExtras` adds nothing to it.
+  - `HANDOFF.md` §4.10: one paragraph on the held send.
+- **Governing provision:** none (input validation). **Formulas, factors, units, references:** none changed (§4). **Saved data (§5):** no key or format changed; stored values are never altered; a saved project with an invalid value opens, keeps it and shows the error.
+- **Check case:** default micropile. OD = 7 in: results as main (Module 01 etc. unchanged; probe below). OD = −12 in (typed, or a saved project with `OD: -12`): banner "⚠ Input error — results withheld: Pile section › Casing OD must be greater than 0 (entered -12.000 in).", the field red with the message, Summary tab shows only the input-error card, no module rendered, Overall "INPUT ERROR", Report = "Input check" section only, Send pile results refused; stored OD stays −12. OD = 0: same error. Corrosion −0.0625 → "must not be negative"; 0 → valid. Back to 7: results return, identical to before.
+- **How verified:** headless probe origin/main vs branch, 7 views (default micropile; micropile with group, cap self-weight, stem, d_h, η override; micropile with buckling and K_θ; H-pile; H-pile with group and C_b; integral; integral with geotechnical check and Tier 2): main-column text, rail text, check-summary column, check index, all input values, rail HTML, the computed results object (`PDRP.cur.r`), the pile-results hand-off payload and the Report text identical (Plotly's random element ids normalised). Rule probe on the branch: every rule active in each view set to −12 and 0 (`gt`) or −1.5 (`ge`): 422 cases, each listed in the banner, its field marked, no module rendered, the blocked card shown, INPUT ERROR, one Report section, send refused; no error at the valid state; restored state shows the results again. `decimal-entry --tool pile` (new check: Casing OD "-1.5" kept while typing, then the error, back to 7 clears it), pile-library ALL PASS, pile-fdx-picker, retwall-pile-handoff, check-syntax.
+- **Other copies:** none.
+- **Decisions** (item (1) engineer-confirmed 2026-11-12: dimensions / strengths / E / φ / K > 0; zero = "not entered" fields ≥ 0; recorded with PDRL, PR #1440): (1) the rule of each field above (`gt` / `ge`), in particular `ge` for soil-layer values, bridge length / abutment height (0 = not entered), DL/LL/DW per pile, γ_DR, K_θ, the cap / stem dimensions; (2) the checked set follows category 3 of DECE except fields in the output column; (3) withheld = the output column, check summary, status, Report and the results hand-off; the input rail stays (its derived echoes, e.g. micropile toe depth, group "Computed η", the group workspace's cap-reaction summary, stay visible; the integral rail's ✓/✗ results are hidden); (4) the existing OD / φgeo / wall-t input errors are kept, so OD ≤ 0 is listed twice (the new list and the existing message).
+- **Open items:** (1) output-column inputs (n_h, k_h, Module 02 layer table, p- / y-multiplier, LPILE M_max, L_f override, p-y probe depth) are not checked: blocking would hide them; they could be moved to the rail or checked with a warning instead. **Closed 2026-11-12 (engineer decision): moved to the input rail and checked, see the PDRL entry.** (2) `hpCapEmbedK` handler maps 0 to 2 but stores a negative (listed here as `gt`).
+- **Exact before / after (git diff of `Pile Designer.html`):**
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 95d21f9..c74202e 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -1474,6 +1474,7 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
+   }
+   function build(){
+     if(!LIVE || !LIVE.I || !LIVE.r) return { err:'No results yet.' };
++    if(LIVE.blocked) return { err:'Input error: results are withheld until the inputs listed above the results are corrected.' };
+     var I=LIVE.I, r=LIVE.r, fs=I.foundationSrc||null, iab=I.pileType==='iab';
+     var cs=iab? {rows:[],warn:[],ok:false,at:null} : cases(I,LIVE.caseRes,LIVE.cases);
+     var sp=(window.BridgeXfer&&BridgeXfer.sharedProject)? BridgeXfer.sharedProject() : null;
+@@ -2008,6 +2009,123 @@ const fmt = (x, d = 2) => {
+ // F54 (O13): banner text for blank / invalid numeric inputs (input keys as stored)
+ const blankInputsMsg = keys => "blank or invalid input" + (keys.length > 1 ? "s " : " ") + keys.join(", ") + ". Results that use " + (keys.length > 1 ? "them" : "it") + " are not valid (shown as \u2014 or NG) until a number is entered; the field" + (keys.length > 1 ? "s are" : " is") + " marked \u201center a value\u201d in the inputs.";
+ 
++/* PDNB (2026-11-12, engineer decision): input check of the number fields where a negative value (and, for rule "gt", zero) is
++   physically invalid and whose handler has no clamp (category 3 of the DECE entry, PR #1430). A value that breaks its rule is an
++   input error: the field is marked (red border; Field also prints the rule), the error is listed in the input-error banner, and the
++   results (check summary column, output tabs, status, Report, the pile results hand-off) are withheld until it is fixed. The stored
++   value is never changed: a saved project holding such a value opens and shows the error. Rule "gt": > 0; "ge": >= 0. A blank (NaN)
++   or unset (null) value is not checked here (F54 reports blanks). Fields located in the output column (Module 02 / Buckling
++   module inputs) are not checked: withholding the output would hide the field. `when` mirrors where the field is shown. */
++const pdMP = I => I.pileType !== "hpile" && I.pileType !== "iab", pdHP = I => I.pileType === "hpile", pdIAB = I => I.pileType === "iab";
++const pdGrp = I => !pdIAB(I) && !!I.groupEnable;
++const PD_NEG_RULES = [
++  // [key, where › label, unit, rule, when(I, r)]
++  ["solverLembed", "Pile geometry › Embedded length", "ft", "gt", pdHP],
++  ["Lcased", "Pile geometry › Cased length", "ft", "ge", pdMP],
++  ["LbProvided", "Pile geometry › Bond length", "ft", "gt", pdMP],
++  ["Lplunge", "Pile geometry › Plunge depth", "ft", "ge", pdMP],
++  ["capEmbed", "Pile geometry › Cap embedment", "in", "ge", pdMP],
++  ["capEmbedK", "Pile geometry › Fixed-head req. k×D", "×D", "ge", pdMP],
++  ["hpFy", "Materials / Pile section › Steel Fy", "ksi", "gt", pdHP],
++  ["hpFu", "Materials › Steel Fu", "ksi", "gt", pdHP],
++  ["E", "Materials › Es", "ksi", "gt", I => !pdIAB(I)],
++  ["fc", "Materials › Cap f'c", "psi", "gt", pdMP],
++  ["fcGrout", "Materials › Grout f'c", "psi", "gt", pdMP],
++  ["fyb", "Materials › Bar fyb", "ksi", "gt", pdMP],
++  ["fub", "Materials › Bar fub", "ksi", "gt", pdMP],
++  ["fyc", "Materials › Casing fyc", "ksi", "gt", pdMP],
++  ["hpD", "Pile section › Depth d", "in", "gt", pdHP],
++  ["hpBf", "Pile section › Flange width bf", "in", "gt", pdHP],
++  ["hpTf", "Pile section › Flange thick tf", "in", "gt", pdHP],
++  ["hpTw", "Pile section › Web thick tw", "in", "gt", pdHP],
++  ["hpCapEmbed", "Pile section › Cap embed", "in", "ge", pdHP],
++  ["hpCb", "Pile section › Cᵇ", "", "gt", pdHP],
++  ["hpPhiC", "Pile section › φc axial", "", "gt", pdHP],
++  ["hpPhiCcomb", "Pile section › φc combined", "", "gt", pdHP],
++  ["hpDR", "Pile section › Drag load DR", "kip", "ge", pdHP],
++  ["hpGammaDR", "Pile section › γDR structural", "", "ge", pdHP],
++  ["hpPhiF", "Pile section › φf flexure", "", "gt", pdHP],
++  ["hpPhiV", "Pile section › φv shear", "", "gt", pdHP],
++  ["hpPhiTy", "Pile section › φy tension yield", "", "gt", pdHP],
++  ["hpPhiTu", "Pile section › φu tension fracture", "", "gt", pdHP],
++  ["hpPhiGeo", "φ geo sand/silt", "", "gt", I => pdHP(I) || (pdIAB(I) && !!I.iabGeoOn)],
++  ["hpPhiGeoClay", "φ geo clay", "", "gt", I => pdHP(I) || (pdIAB(I) && !!I.iabGeoOn)],
++  ["hpPhiTipClay", "φ geo clay tip", "", "gt", I => pdHP(I) || (pdIAB(I) && !!I.iabGeoOn)],
++  ["hpPhiUp", "φ uplift", "", "gt", I => pdHP(I) || (pdIAB(I) && !!I.iabGeoOn)],
++  ["hpCapEmbedK", "Head fixity › Embedment criterion k", "× d", "gt", pdHP],
++  ["OD", "Pile section › Casing OD", "in", "gt", pdMP],
++  ["tc", "Pile section › Wall t", "in", "gt", pdMP],
++  ["corr", "Pile section › Corrosion", "in", "ge", pdMP],
++  ["Ab", "Pile section › Bar area Ab", "in²", "gt", pdMP],
++  ["dhBond", "Pile section › Drilled-hole dia dₕ", "in", "gt", I => pdMP(I) && !!I.dhBondSeparate],
++  ["beta", "Geotechnical › Bond β", "ksf", "gt", pdMP],
++  ...[["phiGeo", "φgeo"], ["phiCC", "φcc"], ["phiCU", "φcu"], ["phiF", "φf"], ["phiC", "φc"], ["phiB", "φb"], ["phiV", "φv"], ["phiUp", "φup"], ["phiT", "φt"], ["phiVpunch", "φv punch"]]
++    .map(([k, l]) => [k, "Resistance factors › " + l, "", "gt", pdMP]),
++  ["groupEta", "Group options › η override", "", "gt", (I, r) => !pdIAB(I) && !!I.groupEtaOverride && !!(r && r.group && r.group.enable)],
++  ["Kb", "Buckling › Effective length factor K", "", "gt", (I, r) => !pdIAB(I) && !!(r && r.buckling && r.buckling.enable)],
++  ["casingJointTenEff", "Uplift › Casing threaded-joint tension efficiency", "%", "ge", pdMP],
++  ["AbVerf", "Load test bars › Verification bar Ab", "in²", "gt", pdMP],
++  ["AbProof", "Load test bars › Proof bar Ab", "in²", "gt", pdMP],
++  ["de1", "Cap geometry › Edge distance 1", "ft", "gt", pdMP],
++  ["de2", "Cap geometry › Edge distance 2", "ft", "gt", pdMP],
++  ["t1", "Cap geometry › Cap thk 1", "ft", "gt", pdMP],
++  ["t2", "Cap geometry › Cap thk 2", "ft", "gt", pdMP],
++  ["he1", "Cap geometry › Head embed", "ft", "ge", pdMP],
++  ["capBar", "Cap geometry › Cap bar dia", "in", "gt", pdMP],
++  ["deflLimit", "Load cases › Service deflection limit", "in", "gt", I => !pdIAB(I)],
++  ["pyKrot", "Head condition › Kθ", "kip·in/rad", "ge", I => !pdIAB(I) && I.solverHead !== "fixed"],
++  ["pyDeflWarnD", "Large head-deflection warning › y₀ limit", "× D", "ge", I => !pdIAB(I)],
++  ["groupSpacingDia", "Pile group › spacing", "× dia", "gt", pdGrp],
++  ["capL", "Pile group › Cap length L (x)", "ft", "ge", pdGrp],
++  ["capW", "Pile group › Cap width W (y)", "ft", "ge", pdGrp],
++  ["capThk", "Pile group › Cap thick t", "ft", "ge", pdGrp],
++  ["capEdgeMin", "Pile group › Edge distance min req'd", "in", "ge", pdGrp],
++  ["capGamma", "Pile group › Concrete γ", "pcf", "gt", I => pdGrp(I) && !!I.capIncludeWeight],
++  ["capSoilSurcharge", "Pile group › Soil surcharge", "psf", "ge", I => pdGrp(I) && !!I.capIncludeWeight],
++  ["stemWx", "Pile group › Stem width x", "ft", "ge", I => pdGrp(I) && !!I.stemEnable],
++  ["stemWy", "Pile group › Stem width y", "ft", "ge", I => pdGrp(I) && !!I.stemEnable],
++  ["stemH", "Pile group › Stem height", "ft", "ge", I => pdGrp(I) && !!I.stemEnable],
++  ["dlFactor", "Pile group › Dead-load factor γDC", "", "gt", I => pdGrp(I) && (!!I.capIncludeWeight || !!I.stemEnable)],
++  ["iabGeoLength", "Integral abutment › Geotech length", "ft", "ge", pdIAB],
++  ["iabDL", "Integral abutment › DL per pile", "kip", "ge", pdIAB],
++  ["iabLL", "Integral abutment › LL per pile", "kip", "ge", pdIAB],
++  ["iabDW", "Integral abutment › DW per pile", "kip", "ge", pdIAB],
++  ["iabBridgeLength", "Integral abutment › Total bridge length", "ft", "ge", pdIAB],
++  ["iabAbutHeight", "Integral abutment › Abut. height", "ft", "ge", pdIAB],
++  ["iabEmbed", "Integral abutment › Pile embedment into cap", "in", "ge", pdIAB],
++  ["iabSpacing", "Integral abutment › Pile spacing c/c", "ft", "ge", pdIAB],
++  ["iabScourDepth", "Integral abutment › Tier 2 › Scour/peat depth", "ft", "ge", I => pdIAB(I) && !!I.iabTier2],
++  ["iabScourCheck", "Integral abutment › Tier 2 › Check-flood scour depth", "ft", "ge", I => pdIAB(I) && !!I.iabTier2]
++];
++// soil layers (Soil profile tab): the cells shown for the layer's type; rule >= 0
++const pdSoilShown = I => !pdIAB(I) || (!!I.iabTier2 && I.iabNlSoilSource === "layered") || !!I.iabGeoOn;
++const pdStatShown = I => pdHP(I) || (pdIAB(I) && !!I.iabGeoOn);
++function pdNegLayerKeys(ly, I, i) {
++  const isClay = ly.type === "clay" || ly.type === "stiffclay", isRock = ly.type === "weakrock", out = [];
++  if (pdSoilShown(I)) {
++    if (i > 0) out.push(["topDepth", "top", "ft"]);
++    if (isRock) out.push(["qu", "qᵤ", "ksi"], ["Em", "Eₘ", "ksi"], ["rqd", "RQD", "%"]);
++    else out.push(["gamma", "γ", "pcf"], isClay ? ["su", "sᵤ", "psf"] : ["phi", "φ", "°"], isClay ? ["eps50", "ε₅₀", ""] : ["k", "k", "pci"]);
++  }
++  if (pdStatShown(I)) {
++    const sClay = (ly.staticType || (isClay ? "clay" : "sand")) === "clay";
++    if (sClay) out.push(["Su", "Sᵤ (static)", "ksf"], ["alpha", "α", ""]); else out.push(["N60", "SPT N", "bl/ft"]);
++  }
++  return out;
++}
++function pdNegCheck(I, r) {
++  const out = [], bad = (v, rule) => typeof v === "number" && (rule === "gt" ? v <= 0 : v < 0);   // NaN, null, "" not checked
++  PD_NEG_RULES.forEach(([k, label, unit, rule, when]) => { if (when(I, r) && bad(I[k], rule)) out.push({ ck: k, label, unit, rule, v: I[k] }); });
++  if (Array.isArray(I.soilLayers)) I.soilLayers.forEach((ly, i) => { if (ly && typeof ly === "object") pdNegLayerKeys(ly, I, i).forEach(([k, l, u]) => {
++    if (bad(ly[k], "ge")) out.push({ ck: "soilLayers." + i + "." + k, label: "Soil profile › layer " + (i + 1) + " " + l, unit: u, rule: "ge", v: ly[k] }); }); });
++  return out;
++}
++const pdNegRuleTxt = rule => rule === "gt" ? "must be greater than 0" : "must not be negative";
++const pdNegMsg = e => e.label + " " + pdNegRuleTxt(e.rule) + " (entered " + fmt(e.v, 3) + (e.unit ? " " + e.unit : "") + ").";
++const PD_NEG_NOTE = "Results are withheld while an input is invalid: the check summary, the output tabs, the overall status, the Report and the pile results hand-off show again once every listed input is corrected. Saved values are kept as entered.";
++const PdNegCtx = React.createContext(null);   // App provides { ck: entry } of the current input errors
++const pdNegAt = (map, ck) => (map && ck && map[ck]) || null;
++
+ /* ============================================================
+    CALC ENGINE  — mirrors GeoEngineers reference (Derby-Shelton)
+    All structural references AASHTO LRFD BDS 10th Ed (2024),
+@@ -6460,7 +6578,12 @@ const PdNumIn = React.forwardRef(function PdNumIn(props, ref) {
+     if (!("v" in draft)) draft.v = value;
+     if (Object.is(draft.v, value)) value = draft.t;
+   }
+-  return React.createElement("input", Object.assign({}, props, {
++  // PDNB: props.ck = the input key (or soilLayers.<i>.<key>) of a checked field; marked while it is in the input-error list
++  const ng = pdNegAt(React.useContext(PdNegCtx), props.ck), p = Object.assign({}, props);
++  delete p.ck;
++  if (ng) Object.assign(p, { "aria-invalid": "true", "data-pdneg": props.ck, title: pdNegMsg(ng), className: (props.className || "") + " pd-neg-bad",
++    style: Object.assign({}, props.style, { borderColor: "#b23b3b", background: "rgba(178,59,59,0.08)" }) });
++  return React.createElement("input", Object.assign(p, {
+     ref: ref,
+     value: value,
+     onChange: e => { setDraft({ t: e.target.value }); if (props.onChange) props.onChange(e); },
+@@ -6475,10 +6598,12 @@ function Field({
+   unit,
+   step = "any",
+   disabled,
+-  bx
++  bx,
++  ck
+ }) {
+   // F54 (O13): a blank or invalid number is stored as NaN -> say so at the field (display only)
+   const bad = !disabled && typeof value === "number" && isNaN(value);
++  const ng = pdNegAt(React.useContext(PdNegCtx), ck);   // PDNB: input error (negative / zero), the rule is printed under the field
+   // ABPX: bx = [I, key]: marked while the input still holds the value set from the foundationLoads hand-off
+   const mk = bx && window.PileFoundationXfer ? PileFoundationXfer.mkCls(bx[0], bx[1]) : "";
+   return /*#__PURE__*/React.createElement("label", {
+@@ -6497,11 +6622,13 @@ function Field({
+     value: value,
+     disabled: disabled,
+     onChange: e => onChange(parseFloat(e.target.value)),
++    ck: ck,
+     "aria-invalid": bad ? "true" : undefined,
+     style: bad ? { borderColor: "#b23b3b" } : undefined,
+     title: mk ? PileFoundationXfer.mkTip(bx[0], bx[1]) : undefined,
+     className: "mt-1 w-full font-mono-tech text-[13px] px-2 py-1.5 bg-white border rounded-sm outline-none transition " + (disabled ? "opacity-50 border-slate-200 " : "border-slate-300 focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]") + mk
+-  }), bad && /*#__PURE__*/React.createElement("div", { className: "pd-fld-bad text-[10px] mt-0.5 leading-tight", style: { color: "#b23b3b" } }, "enter a value"));
++  }), bad && /*#__PURE__*/React.createElement("div", { className: "pd-fld-bad text-[10px] mt-0.5 leading-tight", style: { color: "#b23b3b" } }, "enter a value"),
++    ng && /*#__PURE__*/React.createElement("div", { className: "pd-fld-bad pd-neg-msg text-[10px] mt-0.5 leading-tight", style: { color: "#b23b3b" } }, "\u26a0 Input error: " + pdNegRuleTxt(ng.rule) + "; results withheld"));
+ }
+ function TextField({
+   label,
+@@ -13076,7 +13203,7 @@ function LoadCasesCard({ cases, updCases, applyCase, runAllCases, caseRes, I, up
+       /*#__PURE__*/React.createElement("span", { className: "flex items-center gap-2 flex-wrap" },
+         ro ? /*#__PURE__*/React.createElement("span", { className: "text-[9px] font-mono-tech text-slate-500" }, "svc defl limit ", fmt(I.deflLimit, 2), " in")
+         : /*#__PURE__*/React.createElement("span", { className: "flex items-center gap-1 text-[9px] font-mono-tech text-slate-500" },
+-          "svc defl limit", /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: 0.05, "aria-label": "Service deflection limit, in", value: I.deflLimit,
++          "svc defl limit", /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: 0.05, "aria-label": "Service deflection limit, in", ck: "deflLimit", value: I.deflLimit,
+             onChange: e => updCasesLimit(parseFloat(e.target.value) || 0),
+             className: "w-14 font-mono-tech text-[9px] px-1 py-0.5 rounded-sm border border-slate-300" }), "in"),
+         /*#__PURE__*/React.createElement("button", { onClick: runAllCases, className: "font-mono-tech text-[9.5px] px-2 py-1 rounded-sm text-white", style: { background: "var(--blueprint2)" } },
+@@ -13276,8 +13403,11 @@ function pdUtilRows(r, I) {
+    (CSS), so tablet and phone layouts are unchanged. Display only. */
+ const PDSP_KEY = "pd_dashCollapsed_v1";
+ function pdspRead() { try { return window.localStorage.getItem(PDSP_KEY) === "1"; } catch (e) { return false; } }
+-function PdDashCol({ r, I, pyRes, caseLabel, coll, setColl }) {
++function PdDashCol({ r, I, pyRes, caseLabel, coll, setColl, negBlk }) {
+   const e = React.createElement;
++  if (negBlk) return e("aside", { id: "pdDashCol", className: "pdsp-col no-print" + (coll ? " is-coll" : ""), "aria-label": "Check summary" },   // PDNB: withheld
++    coll ? e("div", { className: "pdsp-vt" }, "Input error") : e("div", { className: "pdsp-head" }, e("h2", { className: "pdsp-ttl" }, "Check summary"), e("span", { className: "pdsp-cnt is-ng" }, "input error")),
++    coll ? null : e("div", { className: "pdsp-sub" }, PD_NEG_NOTE));
+   const rows = pdUtilRows(r, I), nNG = rows.filter(x => !x.pass).length;
+   const dw = (I.pileType !== "iab" && I.lateralSource === "py" && pyRes && pyRes.ok) ? pyDeflWarnOfRes(pyRes, I) : null;
+   const tgl = e("button", { type: "button", id: "pdDashTgl", "aria-controls": "pdDash", "aria-expanded": coll ? "false" : "true",
+@@ -14444,13 +14574,13 @@ function GroupWorkspaceBody({ I, set, cap, g, rail, cases, activeIdx }) {
+ 
+   const capF = (lbl, key, unit) => /*#__PURE__*/React.createElement("div", null,
+     /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, lbl, /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, " (" + unit + ")")),
+-    /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, key), title: PileFoundationXfer.mkTip(I, key), value: I[key] || 0, onChange: e => set(key, parseFloat(e.target.value) || 0) }));
++    /*#__PURE__*/React.createElement(PdNumIn, { type: "number", ck: key, className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, key), title: PileFoundationXfer.mkTip(I, key), value: I[key] || 0, onChange: e => set(key, parseFloat(e.target.value) || 0) }));
+   const leftA = [
+           /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-2" }, "1 \u00b7 Pile layout"),
+           /*#__PURE__*/React.createElement("div", { className: "flex items-end gap-2 mb-2" },
+             /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, "rows"), /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-14 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm" + PileFoundationXfer.mkCls(I, 'groupNrows'), title: PileFoundationXfer.mkTip(I, 'groupNrows'), value: I.groupNrows, onChange: e => set('groupNrows', Math.max(1, Math.round(+e.target.value))) })),
+             /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, "cols"), /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-14 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm" + PileFoundationXfer.mkCls(I, 'groupNcols'), title: PileFoundationXfer.mkTip(I, 'groupNcols'), value: I.groupNcols, onChange: e => set('groupNcols', Math.max(1, Math.round(+e.target.value))) })),
+-            /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, I.pileType === "hpile" ? "spacing \u00d7B" : "spacing \u00d7dia"), /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-16 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm", title: I.pileType === "hpile" ? "c/c spacing in multiples of B = " + fmt(groupB(I), 2) + " in (H-pile p-y width normal to the load)" : "c/c spacing in multiples of the casing OD = " + fmt(pileWidth(I), 2) + " in", value: I.groupSpacingDia, onChange: e => set('groupSpacingDia', +e.target.value) })),
++            /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, I.pileType === "hpile" ? "spacing \u00d7B" : "spacing \u00d7dia"), /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-16 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm", title: I.pileType === "hpile" ? "c/c spacing in multiples of B = " + fmt(groupB(I), 2) + " in (H-pile p-y width normal to the load)" : "c/c spacing in multiples of the casing OD = " + fmt(pileWidth(I), 2) + " in", ck: "groupSpacingDia", value: I.groupSpacingDia, onChange: e => set('groupSpacingDia', +e.target.value) })),
+             /*#__PURE__*/React.createElement("button", { onClick: genGrid, className: "text-[10px] px-2 py-1 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, "\u21bb generate grid")),
+           /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mb-1" }, "Generate fills the table; then edit x,y freely for irregular layouts. Coordinates in ft, any origin (centroid computed automatically)."),
+           /*#__PURE__*/React.createElement("div", { className: "border border-slate-200 rounded-sm overflow-auto", style: { maxHeight: "180px" } },
+@@ -14591,7 +14721,7 @@ function GroupWorkspaceBody({ I, set, cap, g, rail, cases, activeIdx }) {
+               /*#__PURE__*/React.createElement("div", { className: "flex items-center justify-between gap-2 mb-1" },
+                 /*#__PURE__*/React.createElement("span", null, "Edge distance (pile center → cap edge): min = ", /*#__PURE__*/React.createElement("b", null, fmt(worst2.e, 1), " in"), " at pile P", worst2.id),
+                 /*#__PURE__*/React.createElement("span", { className: "flex items-center gap-1 text-slate-500" }, "min req'd",
+-                  /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-14 font-mono-tech text-[9.5px] px-1 py-0.5 rounded-sm border border-slate-300", value: I.capEdgeMin || 0, onChange: e => set('capEdgeMin', parseFloat(e.target.value) || 0) }), "in")),
++                  /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-14 font-mono-tech text-[9.5px] px-1 py-0.5 rounded-sm border border-slate-300", ck: "capEdgeMin", value: I.capEdgeMin || 0, onChange: e => set('capEdgeMin', parseFloat(e.target.value) || 0) }), "in")),
+               outside ? /*#__PURE__*/React.createElement("div", null, "✗ Pile P", worst2.id, " lies OUTSIDE the defined cap plan — fix the layout or cap dimensions.")
+                 : short2 ? /*#__PURE__*/React.createElement("div", null, "⚠ Edge distance below the project minimum (", fmt(minReq, 1), " in) — enlarge the cap or move the pile.")
+                 : /*#__PURE__*/React.createElement("div", { className: "text-slate-500" }, minReq > 0 ? "✓ All piles meet the entered minimum." : "Enter a project minimum to check (set per structural detailing criteria — e.g. cover + embedment; a common rule of thumb is ≥ ~1.5×OD, verify per project)."));
+@@ -15284,7 +15414,7 @@ function PyLayerTable({ I, set }) {
+         const isRock = ly.type === "weakrock";
+         return /*#__PURE__*/React.createElement("tr", { key: i, style: { borderTop: "1px solid #eef2f6" } },
+           /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1", style: { width: "16%" } },
+-            /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: cell, value: ly.topDepth, disabled: i === 0,
++            /*#__PURE__*/React.createElement(PdNumIn, { type: "number", ck: "soilLayers." + i + ".topDepth", className: cell, value: ly.topDepth, disabled: i === 0,
+               onChange: e => upd(i, 'topDepth', parseFloat(e.target.value) || 0) })),
+           /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1", style: { width: "24%" } },
+             /*#__PURE__*/React.createElement("select", { className: cell, value: ly.type === "weakrock" ? "weakrock" : (isClay ? ly.type : "sand"),
+@@ -15294,24 +15424,24 @@ function PyLayerTable({ I, set }) {
+               /*#__PURE__*/React.createElement("option", { value: "stiffclay" }, "stiff clay (W&R)"),
+               /*#__PURE__*/React.createElement("option", { value: "weakrock" }, "weak rock (Reese 1997)"))),
+           isRock ? /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1", style: { width: "16%" } },
+-            /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: cell, step: 0.1, title: "qu unconfined comp. strength (ksi)", value: ly.qu == null ? 1.0 : ly.qu,
++            /*#__PURE__*/React.createElement(PdNumIn, { type: "number", ck: "soilLayers." + i + ".qu", className: cell, step: 0.1, title: "qu unconfined comp. strength (ksi)", value: ly.qu == null ? 1.0 : ly.qu,
+               onChange: e => upd(i, 'qu', parseFloat(e.target.value) || 0) }))
+           : /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1", style: { width: "16%" } },
+-            /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: cell, value: ly.gamma == null ? 120 : ly.gamma,
++            /*#__PURE__*/React.createElement(PdNumIn, { type: "number", ck: "soilLayers." + i + ".gamma", className: cell, value: ly.gamma == null ? 120 : ly.gamma,
+               onChange: e => upd(i, 'gamma', parseFloat(e.target.value) || 0) })),
+           isRock ? /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1", style: { width: "18%" } },
+-            /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: cell, step: 50, title: "Em rock mass modulus (ksi)", value: ly.Em == null ? 300 : ly.Em,
++            /*#__PURE__*/React.createElement(PdNumIn, { type: "number", ck: "soilLayers." + i + ".Em", className: cell, step: 50, title: "Em rock mass modulus (ksi)", value: ly.Em == null ? 300 : ly.Em,
+               onChange: e => upd(i, 'Em', parseFloat(e.target.value) || 0) }))
+           : /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1", style: { width: "18%" } },
+-            /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: cell,
++            /*#__PURE__*/React.createElement(PdNumIn, { type: "number", ck: "soilLayers." + i + "." + (isClay ? 'su' : 'phi'), className: cell,
+               value: isClay ? (ly.su == null ? 1000 : ly.su) : (ly.phi == null ? 32 : ly.phi),
+               onChange: e => upd(i, isClay ? 'su' : 'phi', parseFloat(e.target.value) || 0) })),
+           isRock ? /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1", style: { width: "18%" } },
+-            /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: cell, step: 5, title: "RQD % (sets alpha_r)", value: ly.rqd == null ? 50 : ly.rqd,
++            /*#__PURE__*/React.createElement(PdNumIn, { type: "number", ck: "soilLayers." + i + ".rqd", className: cell, step: 5, title: "RQD % (sets alpha_r)", value: ly.rqd == null ? 50 : ly.rqd,
+               onChange: e => upd(i, 'rqd', parseFloat(e.target.value) || 0) }))
+           : /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1", style: { width: "18%" } },
+             /*#__PURE__*/React.createElement("div", { className: "flex gap-0.5 items-center" },
+-              /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: cell, step: isClay ? 0.005 : 5,
++              /*#__PURE__*/React.createElement(PdNumIn, { type: "number", ck: "soilLayers." + i + "." + (isClay ? 'eps50' : 'k'), className: cell, step: isClay ? 0.005 : 5,
+                 value: isClay ? (ly.eps50 == null ? 0.02 : ly.eps50) : (ly.k == null ? 90 : ly.k),
+                 onChange: e => upd(i, isClay ? 'eps50' : 'k', parseFloat(e.target.value) || 0) }),
+               !isClay && /*#__PURE__*/React.createElement("button", {
+@@ -15376,11 +15506,11 @@ function PyLayerTable({ I, set }) {
+                 /*#__PURE__*/React.createElement("option", { value: "silt" }, "silt"),
+                 /*#__PURE__*/React.createElement("option", { value: "clay" }, "clay"))),
+             /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1" }, sClay ? "—" :
+-              /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: cell, value: ly.N60 != null ? ly.N60 : "", onChange: e => upd(i, 'N60', parseFloat(e.target.value) || 0) })),
++              /*#__PURE__*/React.createElement(PdNumIn, { type: "number", ck: "soilLayers." + i + ".N60", className: cell, value: ly.N60 != null ? ly.N60 : "", onChange: e => upd(i, 'N60', parseFloat(e.target.value) || 0) })),
+             /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1" }, !sClay ? "—" :
+-              /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: cell, value: ly.Su != null ? ly.Su : "", onChange: e => upd(i, 'Su', parseFloat(e.target.value) || 0) })),
++              /*#__PURE__*/React.createElement(PdNumIn, { type: "number", ck: "soilLayers." + i + ".Su", className: cell, value: ly.Su != null ? ly.Su : "", onChange: e => upd(i, 'Su', parseFloat(e.target.value) || 0) })),
+             /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1" }, !sClay ? "—" :
+-              /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: 0.05, className: cell, value: ly.alpha != null ? ly.alpha : 0.5, onChange: e => upd(i, 'alpha', parseFloat(e.target.value) || 0) })));
++              /*#__PURE__*/React.createElement(PdNumIn, { type: "number", ck: "soilLayers." + i + ".alpha", step: 0.05, className: cell, value: ly.alpha != null ? ly.alpha : 0.5, onChange: e => upd(i, 'alpha', parseFloat(e.target.value) || 0) })));
+         }))),
+       /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-2 mt-1.5 text-[9px] text-slate-600" },
+         /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: !!I.hpSmallGroup, onChange: e => set('hpSmallGroup', e.target.checked) }),
+@@ -16294,6 +16424,11 @@ function pdrModel(I, r, pyRes, pcr, sel) {
+   const note = (text, warn) => ({ type: "note", text, warn: !!warn });
+   const goto = (tab, txt) => note("[[tab:" + tab + "|On screen: " + txt + "]]");
+   const nc = !!r.lateralNoConv;
++  const negE = pdNegCheck(I, r);   // PDNB: invalid inputs -> the Report holds only the input-error list (results withheld)
++  const negSub = negE.length ? sub("Input error" + (negE.length > 1 ? "s" : "") + " \u2014 results withheld", [
++    { type: "table", wide: true, head: ["Input", "Entered", "Rule"], rows: negE.map(x => ({ cells: [x.label, { t: fmt(x.v, 3) + (x.unit ? " " + x.unit : ""), n: true }, { t: x.rule === "gt" ? "> 0" : "\u2265 0", cls: "ng" }], cls: "gov" })) },
++    note(PD_NEG_NOTE, true), goto("summary", "the input-error list above the results (each entry links to its field)")]) : null;
++  if (negSub) negSub._neg = true;
+ 
+   /* ---------- results rows (as PrintReport / the Summary of results) ---------- */
+   const rows = isIAB ? (() => { const b = r.iab; if (!b) return []; const o = [];
+@@ -16608,8 +16743,9 @@ function pdrModel(I, r, pyRes, pcr, sel) {
+     ...(rvItems.length ? [{ type: "table", wide: true, caption: "Items for review: required by AASHTO, not computed by this tool (not in the status)", head: ["Item", "Basis", "Why it is listed", "Status"], rows: rvItems.map(it => ({ cells: [it.title, it.ref, it.why, { t: "REVIEW", cls: "ng" }] })) }] : []),
+     note("The rows of the Summary of results (D/C = |demand| / capacity). " + (isIAB ? "MassDOT Simplified Method." : "Active load case only; the load-case envelope is on the Summary tab.")), goto("summary", "Summary tab")]));
+   const order = ["summary"].concat(RPT_GRP_ORDER.filter(g => g !== "summary"));
+-  const sections = order.filter(g => secs[g] && secs[g].length && !(sel && sel[g] === false)).map(g => ({ title: RPT_GRP_LABEL[g], subs: secs[g], grp: g }));
+-  const present = order.filter(g => secs[g] && secs[g].length);
++  const sections = negE.length ? [{ title: "Input check", subs: [negSub], grp: "summary" }]   // PDNB: withheld
++    : order.filter(g => secs[g] && secs[g].length && !(sel && sel[g] === false)).map(g => ({ title: RPT_GRP_LABEL[g], subs: secs[g], grp: g }));
++  const present = negE.length ? [] : order.filter(g => secs[g] && secs[g].length);
+   const pileT = isIAB ? "Integral Abutment H-Pile \u2014 MassDOT Simplified Method" : isHP ? "Driven Steel H-Pile \u2014 Structural & Geotechnical Design" : "Drilled Micropile \u2014 Structural & Geotechnical Design";
+   const basis = isIAB ? "MassDOT Bridge Manual Part I \u00a73.10; AASHTO LRFD BDS 10th Ed. (2024)" : isHP ? "AASHTO LRFD BDS 10th Ed. (2024); FHWA-NHI-16-009" : "AASHTO LRFD BDS 10th Ed. (2024); FHWA NHI-05-039";
+   const v = x => (x != null && String(x).trim()) ? String(x).trim() : "";
+@@ -16646,6 +16782,7 @@ function pdrPcr(pcr, I) {
+    print group it is printed under (the nearest preceding PrintReport heading). imgs: Plotly images by index (pdrPlotImages, async). */
+ function pdrExtras(root, M, imgs) {
+   if (!root) return;
++  if (M.sections.some(x => x.subs.some(q => q && q._neg))) return;   // PDNB: results withheld, nothing is added
+   const heads = [...root.querySelectorAll(".rpt-h[data-rgrp]")];
+   const grpOf = el => { let g = null; heads.forEach(h => { if (h.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) g = h.getAttribute("data-rgrp"); }); return g; };
+   const capOf = el => { const w = el.closest('[data-pd-gfx="rpt"]'); if (w && w.lastElementChild) return w.lastElementChild.textContent.trim(); const box = el.closest(".rpt-avoid, .rpt-grp, .rpt-section") || el.parentElement; const c = box ? [...box.querySelectorAll("div, p")].find(d => /^Figure [A-Z]-\d/.test(d.textContent.trim()) && d.textContent.trim().length < 400 && !d.querySelector("svg, .js-plotly-plot")) : null; return c ? c.textContent.trim() : ""; };
+@@ -16817,6 +16954,28 @@ window.addEventListener("beforeprint", () => {
+   document.body.classList.add("rp-printing");
+ });
+ 
++/* PDNB (2026-11-12): the input-error list (banner above the results, and the Summary tab's blocked card). Each entry links to its
++   field (the rail tab is shown and the field focused). */
++function PdNegBanner({ errs, go }) {
++  const e = React.createElement, sty = { background: "rgba(178,59,59,0.10)", color: "#8a2a2a", border: "1px solid rgba(178,59,59,0.35)" };
++  return e("div", { id: "pdNegBanner", className: "pd-neg-banner text-[11px] px-2 py-1 mb-1 rounded-sm", style: sty, role: "alert" },
++    e("b", null, "\u26a0 Input error" + (errs.length > 1 ? "s" : "") + " \u2014 results withheld: "),
++    e("ul", { className: "pl-4 my-0.5", style: { listStyle: "disc" } }, errs.map(x => e("li", { key: x.ck },
++      go ? e("button", { type: "button", className: "underline text-left", "data-pdneg-go": x.ck, onClick: () => go(x.ck), title: "Show this input" }, pdNegMsg(x)) : pdNegMsg(x)))),
++    e("div", { className: "pd-neg-note text-[10px] leading-snug" }, PD_NEG_NOTE));
++}
++/* PDNB: the output column while inputs are invalid: the pile-type card, the tab strip, this card (Summary tab) and the Report tab
++   (which then holds only the input-error list); every other output block is not rendered. With no error the children are as before. */
++function pdNegMain(blk, errs, go, props, card, outTabs, rptTab, ...rest) {
++  const e = React.createElement;
++  if (!blk) return e("main", props, card, outTabs, rptTab, ...rest);
++  return e("main", props, card, outTabs,
++    e("div", { id: "pdNegBlock", "data-otab-fixed": "summary", className: "bg-white border rounded-md card-sh px-4 py-3", style: { borderColor: "rgba(178,59,59,0.45)" } },
++      e("div", { className: "font-mono-tech text-[11px] tracking-wider mb-1", style: { color: "#8a2a2a" } }, "RESULTS WITHHELD \u2014 INPUT ERROR"),
++      e(PdNegBanner, { errs, go })),
++    rptTab);
++}
++
+ function App() {
+   const [I, setI] = useState(() => loadSavedInputs() || DEFAULT_INPUTS);
+   const [loadNotes, setLoadNotes] = useState(() => LAST_LOAD_NOTES.slice());
+@@ -18505,9 +18664,19 @@ function App() {
+     if (pyRowsEval) return pyRowsEval.R;
+     return computeAll(I, rOptsFor(pyRes));
+   }, [I, activeLayers, solved, pyRes, pcr, pyRowsEval, lpileParse]);   // F43: lpileParse (uncased demand, Input Mmax)
++  // PDNB (2026-11-12): input errors (negative / zero where invalid). While any is listed the results are withheld (display only;
++  // r is still computed, nothing stored changes). negMap feeds the field marks (PdNegCtx).
++  const negErr = useMemo(() => pdNegCheck(I, r), [I, r]);
++  const negMap = useMemo(() => { const m = {}; negErr.forEach(x => { m[x.ck] = x; }); return m; }, [negErr]);
++  const negBlk = negErr.length > 0;
++  const goNeg = ck => {   // the banner's links: show the rail tab that holds the field, then focus it
++    const el = document.querySelector('aside.input-rail [data-pdneg="' + ck + '"]') || document.querySelector('[data-pdneg="' + ck + '"]'); if (!el) return;
++    const sec = el.closest("aside.input-rail > [data-rtab]"); if (sec) setRailTab(sec.getAttribute("data-rtab"));
++    setTimeout(() => { el.scrollIntoView({ block: "center" }); el.focus(); }, 0);
++  };
+   // PXR (2026-10-20): the pile results hand-off (channel pileResults) reads the live results; no effect on any result
+-  React.useEffect(() => { if (window.PileResultsXfer) PileResultsXfer.note({ I, r, pyRes, caseRes, cases }); });
+-  return /*#__PURE__*/React.createElement("div", {
++  React.useEffect(() => { if (window.PileResultsXfer) PileResultsXfer.note({ I, r, pyRes, caseRes, cases, blocked: negBlk }); });
++  return React.createElement(PdNegCtx.Provider, { value: negMap }, /*#__PURE__*/React.createElement("div", {
+     className: "min-h-screen text-[var(--ink)]"
+   }, /*#__PURE__*/React.createElement(PrintReport, {
+     I: I,
+@@ -18582,23 +18751,24 @@ function App() {
+   }, /*#__PURE__*/React.createElement("span", {
+     className: "pd-overall-lbl"
+   }, "Overall"), /*#__PURE__*/React.createElement(StatusPill, {
+-    pass: r.allPass,
+-    label: r.allPass ? "ALL CHECKS OK" : "CHECK REQUIRED"
++    pass: r.allPass && !negBlk,
++    label: negBlk ? "INPUT ERROR" : r.allPass ? "ALL CHECKS OK" : "CHECK REQUIRED"
+   }))))))), /*#__PURE__*/React.createElement(CheckIndex, {
+     pileLabel: I.pileType === "iab" ? "Integral abutment pile" : I.pileType === "hpile" ? "Driven H-pile" : "Drilled micropile",
+-    allPass: r.allPass,
++    allPass: r.allPass && !negBlk,
++    negBlk: negBlk,
+     onSave: exportProject,
+     onPreview: () => { if (window.__pdSetOutTab) window.__pdSetOutTab("report"); },
+     onPrint: printReport,
+     caseLabel: (cases && cases[activeIdx]) ? (cases[activeIdx].name || ("Case " + (activeIdx + 1))) : null
+-  }), ((r.inputErrors && r.inputErrors.length) || (r.inputNotes && r.inputNotes.length) || loadNotes.length || r.blankInputs) ? /*#__PURE__*/React.createElement("div", {
++  }), (negBlk || (r.inputErrors && r.inputErrors.length) || (r.inputNotes && r.inputNotes.length) || loadNotes.length || r.blankInputs) ? /*#__PURE__*/React.createElement("div", {
+     className: "max-w-[1920px] mx-auto px-6 pt-3 no-print"
+-  }, r.blankInputs && /*#__PURE__*/React.createElement("div", { className: "pd-blank-banner text-[11px] px-2 py-1 mb-1 rounded-sm", style: { background: "rgba(178,59,59,0.10)", color: "#8a2a2a", border: "1px solid rgba(178,59,59,0.35)" } }, /*#__PURE__*/React.createElement("b", null, "\u26a0 Enter a value: "), blankInputsMsg(r.blankInputs)),
++  }, negBlk && React.createElement(PdNegBanner, { errs: negErr, go: goNeg }), r.blankInputs && /*#__PURE__*/React.createElement("div", { className: "pd-blank-banner text-[11px] px-2 py-1 mb-1 rounded-sm", style: { background: "rgba(178,59,59,0.10)", color: "#8a2a2a", border: "1px solid rgba(178,59,59,0.35)" } }, /*#__PURE__*/React.createElement("b", null, "\u26a0 Enter a value: "), blankInputsMsg(r.blankInputs)),
+     (r.inputErrors || []).map((m, i) => /*#__PURE__*/React.createElement("div", { key: "e" + i, className: "text-[11px] px-2 py-1 mb-1 rounded-sm", style: { background: "rgba(178,59,59,0.10)", color: "#8a2a2a", border: "1px solid rgba(178,59,59,0.35)" } }, /*#__PURE__*/React.createElement("b", null, "\u26a0 Input error: "), m)),
+     (r.inputNotes || []).concat(loadNotes).map((m, i) => /*#__PURE__*/React.createElement("div", { key: "n" + i, className: "text-[11px] px-2 py-1 mb-1 rounded-sm", style: { background: "rgba(201,98,46,0.10)", color: "#7a4d15", border: "1px solid rgba(201,98,46,0.30)" } }, /*#__PURE__*/React.createElement("b", null, "\u26a0 Note: "), m)),
+     loadNotes.length > 0 && /*#__PURE__*/React.createElement("button", { onClick: () => setLoadNotes([]), className: "text-[10px] text-slate-500 underline" }, "dismiss load notes")) : null, /*#__PURE__*/React.createElement("div", {
+     className: "max-w-[1920px] mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-6 pdsp-grid" + (pdspColl ? " pdsp-coll" : "")
+-  }, React.createElement(PdDashCol, { r: r, I: I, pyRes: pyRes, coll: pdspColl, setColl: setPdspColl, caseLabel: (cases && cases[activeIdx]) ? (cases[activeIdx].name || ("Case " + (activeIdx + 1))) : null }),   // PDSP
++  }, React.createElement(PdDashCol, { negBlk: negBlk, r: r, I: I, pyRes: pyRes, coll: pdspColl, setColl: setPdspColl, caseLabel: (cases && cases[activeIdx]) ? (cases[activeIdx].name || ("Case " + (activeIdx + 1))) : null }),   // PDSP
+   /*#__PURE__*/React.createElement("aside", {
+     className: "input-rail space-y-4 lg:sticky lg:self-start no-print",
+     style: {
+@@ -18695,31 +18865,31 @@ function App() {
+         /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabSkew'), title: PileFoundationXfer.mkTip(I, 'iabSkew'), value: I.iabSkew || 0, onChange: e => set('iabSkew', parseFloat(e.target.value) || 0) })),
+       /*#__PURE__*/React.createElement("div", null,
+         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Geotech length ", /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, "(ft)")),
+-        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300", value: I.iabGeoLength || 0, onChange: e => set('iabGeoLength', parseFloat(e.target.value) || 0) }))),
++        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", ck: "iabGeoLength", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300", value: I.iabGeoLength || 0, onChange: e => set('iabGeoLength', parseFloat(e.target.value) || 0) }))),
+     // PDA-IAB2 (2026-10-21): designed pile length below the cap (from the abutment calculator); checked against the required length
+     /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-3 mb-2 items-end" },
+       /*#__PURE__*/React.createElement("div", null,
+         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Designed pile length below the cap ", /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, "(ft; 0 = not entered)")),
+         /*#__PURE__*/React.createElement(PdNumIn, { type: "number", id: "iabLpile", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabLpile'), title: PileFoundationXfer.mkTip(I, 'iabLpile'), value: I.iabLpile || 0, onChange: e => set('iabLpile', Math.max(parseFloat(e.target.value) || 0, 0)) })),
+-      r.iab && /*#__PURE__*/React.createElement("div", { className: "text-[9px] pb-1", style: { color: !r.iab.lenChk ? "#64748b" : r.iab.lenChk.pass ? "#2f6f3e" : "#b23b3b" } },
++      !negBlk && r.iab && /*#__PURE__*/React.createElement("div", { className: "text-[9px] pb-1", style: { color: !r.iab.lenChk ? "#64748b" : r.iab.lenChk.pass ? "#2f6f3e" : "#b23b3b" } },
+         r.iab.lenChk ? (r.iab.lenChk.pass ? "\u2713 " : "\u2717 ") + "required L = max(L_geo, L_f + 5) = " + fmt(r.iab.lenChk.req, 1) + " ft " + (r.iab.lenChk.pass ? "\u2264" : ">") + " designed " + fmt(r.iab.lenChk.des, 1) + " ft (\u00a73.10.11.2)" : "required L = " + fmt(r.iab.reqLength, 1) + " ft (no designed length: not checked)")),
+     /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1 mt-1" }, "Gravity load per pile (unfactored)"),
+     /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-3 mb-1" },
+       /*#__PURE__*/React.createElement("div", null,
+         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Dead load DL ", /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, "(kip)")),
+-        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabDL'), title: PileFoundationXfer.mkTip(I, 'iabDL'), value: I.iabDL || 0, onChange: e => set('iabDL', parseFloat(e.target.value) || 0) })),
++        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", ck: "iabDL", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabDL'), title: PileFoundationXfer.mkTip(I, 'iabDL'), value: I.iabDL || 0, onChange: e => set('iabDL', parseFloat(e.target.value) || 0) })),
+       /*#__PURE__*/React.createElement("div", null,
+         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Live load LL ", /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, "(kip)")),
+-        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabLL'), title: PileFoundationXfer.mkTip(I, 'iabLL'), value: I.iabLL || 0, onChange: e => set('iabLL', parseFloat(e.target.value) || 0) }))),
++        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", ck: "iabLL", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabLL'), title: PileFoundationXfer.mkTip(I, 'iabLL'), value: I.iabLL || 0, onChange: e => set('iabLL', parseFloat(e.target.value) || 0) }))),
+     // ABPX2: DW per pile at γDW, and η
+     /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-3 gap-2 mb-1" },
+       [["iabDW", "DW (wearing surface, utilities)", "kip", 0], ["iabGammaDW", "\u03b3DW", "", 1.5], ["iabEta", "\u03b7 = \u03b7D\u00b7\u03b7R\u00b7\u03b7I", "", 1]].map(([k, lbl, u, d0]) =>
+         /*#__PURE__*/React.createElement("div", { key: k },
+           /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, lbl, u ? /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, " (" + u + ")") : null),
+-          /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: "any", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, k), title: PileFoundationXfer.mkTip(I, k), value: I[k] != null ? I[k] : d0, onChange: e => set(k, parseFloat(e.target.value) || (k === "iabDW" ? 0 : d0)) })))),
+-    r.iab && (r.iab.DW > 0 || r.iab.eta !== 1) && /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-3 leading-snug" },
++          /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: "any", ck: k === "iabDW" ? k : undefined, className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, k), title: PileFoundationXfer.mkTip(I, k), value: I[k] != null ? I[k] : d0, onChange: e => set(k, parseFloat(e.target.value) || (k === "iabDW" ? 0 : d0)) })))),
++    !negBlk && r.iab && (r.iab.DW > 0 || r.iab.eta !== 1) && /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-3 leading-snug" },
+       "Strength I: P", /*#__PURE__*/React.createElement("sub", null, "u"), " = \u03b7(\u03b3DC\u00b7DL + \u03b3DW\u00b7DW + \u03b3LL\u00b7LL) = ", fmt(r.iab.eta, 2), "[", fmt(r.iab.gDC, 2), "(", fmt(r.iab.DL, 1), ") + ", fmt(r.iab.gDW, 2), "(", fmt(r.iab.DW, 1), ") + ", fmt(r.iab.gLL, 2), "(", fmt(r.iab.LL, 1), ")] = ", /*#__PURE__*/React.createElement("b", null, fmt(r.iab.demand, 1), " kip")),
+-    r.iab && !(r.iab.DW > 0 || r.iab.eta !== 1) && /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-3 leading-snug" },
++    !negBlk && r.iab && !(r.iab.DW > 0 || r.iab.eta !== 1) && /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-3 leading-snug" },
+       "Strength I: P", /*#__PURE__*/React.createElement("sub", null, "u"), " = ", fmt(r.iab.gDC, 2), "\u00b7DL + ", fmt(r.iab.gLL, 2), "\u00b7LL = ", fmt(r.iab.gDC, 2), "(", fmt(r.iab.DL, 0), ") + ", fmt(r.iab.gLL, 2), "(", fmt(r.iab.LL, 0), ") = ", /*#__PURE__*/React.createElement("b", null, fmt(r.iab.demand, 0), " kip")),
+     /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1.5 mt-3" }, "Boundary conditions (\u00a73.10.11.1)"),
+     /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-2 mb-2" },
+@@ -18730,12 +18900,12 @@ function App() {
+           /*#__PURE__*/React.createElement("option", { value: "concrete" }, "Concrete (\u2264200 ft)"))),
+       /*#__PURE__*/React.createElement("div", null,
+         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Total bridge length (ft)"),
+-        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full text-[10px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabBridgeLength'), title: PileFoundationXfer.mkTip(I, 'iabBridgeLength'), value: I.iabBridgeLength || 0, onChange: e => set('iabBridgeLength', parseFloat(e.target.value) || 0) }),
++        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", ck: "iabBridgeLength", className: "w-full text-[10px] px-1.5 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabBridgeLength'), title: PileFoundationXfer.mkTip(I, 'iabBridgeLength'), value: I.iabBridgeLength || 0, onChange: e => set('iabBridgeLength', parseFloat(e.target.value) || 0) }),
+         !((I.iabBridgeLength || 0) > 0) && /*#__PURE__*/React.createElement("div", { className: "text-[9px] mt-0.5 leading-tight", style: { color: "#b23b3b" } }, "enter the bridge length (eligibility)"))),
+     /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-3 gap-2 mb-2" },
+       /*#__PURE__*/React.createElement("div", null,
+         /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Abut. height (ft)"),
+-        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabAbutHeight'), title: PileFoundationXfer.mkTip(I, 'iabAbutHeight'), value: I.iabAbutHeight || 0, onChange: e => set('iabAbutHeight', parseFloat(e.target.value) || 0) }),
++        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", ck: "iabAbutHeight", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300" + PileFoundationXfer.mkCls(I, 'iabAbutHeight'), title: PileFoundationXfer.mkTip(I, 'iabAbutHeight'), value: I.iabAbutHeight || 0, onChange: e => set('iabAbutHeight', parseFloat(e.target.value) || 0) }),
+         !((I.iabAbutHeight || 0) > 0) && /*#__PURE__*/React.createElement("div", { className: "text-[9px] mt-0.5 leading-tight", style: { color: "#b23b3b" } }, "enter a value")),
+       /*#__PURE__*/React.createElement("div", null,
+         /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Grade diff (%)"),
+@@ -18751,12 +18921,12 @@ function App() {
+     /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-2 mt-2 items-end" },
+       /*#__PURE__*/React.createElement("div", null,
+         /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Pile embedment into cap (in)"),
+-        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabEmbed != null ? I.iabEmbed : 24, onChange: e => set('iabEmbed', parseFloat(e.target.value) || 0) })),
+-      r.iab && r.iab.embedChk && /*#__PURE__*/React.createElement("div", { className: "text-[9px] pb-1", style: { color: r.iab.embedChk.pass ? "#2f6f3e" : "#b23b3b" } }, (r.iab.embedChk.pass ? "\u2713 " : "\u2717 ") + fmt(r.iab.embedChk.prov, 1) + " in vs \u2265 " + fmt(r.iab.embedChk.req, 0) + " in (" + r.iab.embedChk.src + ")"),
++        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", ck: "iabEmbed", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabEmbed != null ? I.iabEmbed : 24, onChange: e => set('iabEmbed', parseFloat(e.target.value) || 0) })),
++      !negBlk && r.iab && r.iab.embedChk && /*#__PURE__*/React.createElement("div", { className: "text-[9px] pb-1", style: { color: r.iab.embedChk.pass ? "#2f6f3e" : "#b23b3b" } }, (r.iab.embedChk.pass ? "\u2713 " : "\u2717 ") + fmt(r.iab.embedChk.prov, 1) + " in vs \u2265 " + fmt(r.iab.embedChk.req, 0) + " in (" + r.iab.embedChk.src + ")"),
+       // PDA-IS (2026-10-20): pile spacing and the owner rule for the detailing checks
+       /*#__PURE__*/React.createElement("div", null,
+         /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Pile spacing c/c (ft; 0 = not checked)"),
+-        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: "0.25", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabSpacing || 0, onChange: e => set('iabSpacing', parseFloat(e.target.value) || 0) })),
++        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", ck: "iabSpacing", step: "0.25", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabSpacing || 0, onChange: e => set('iabSpacing', parseFloat(e.target.value) || 0) })),
+       /*#__PURE__*/React.createElement("div", null,
+         /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Detailing rules"),
+         /*#__PURE__*/React.createElement("select", { className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300 bg-white", value: I.iabDetailRule || "auto", onChange: e => set('iabDetailRule', e.target.value) },
+@@ -18764,9 +18934,9 @@ function App() {
+           /*#__PURE__*/React.createElement("option", { value: "massdot" }, "MassDOT 3.10.10.3"),
+           /*#__PURE__*/React.createElement("option", { value: "ridot" }, "RIDOT BDM"),
+           /*#__PURE__*/React.createElement("option", { value: "ctdot" }, "CTDOT BDM / AASHTO 10.7.1.2"))),
+-      r.iab && r.iab.spacingChk && /*#__PURE__*/React.createElement("div", { className: "col-span-2 text-[9px]", style: { color: r.iab.spacingChk.pass ? "#2f6f3e" : "#b23b3b" } },
++      !negBlk && r.iab && r.iab.spacingChk && /*#__PURE__*/React.createElement("div", { className: "col-span-2 text-[9px]", style: { color: r.iab.spacingChk.pass ? "#2f6f3e" : "#b23b3b" } },
+         (r.iab.spacingChk.pass ? "\u2713 " : "\u2717 ") + "s = " + fmt(r.iab.spacingChk.s, 2) + " ft vs " + fmt(r.iab.spacingChk.sMin_in / 12, 2) + " ft min" + (r.iab.spacingChk.sMax_ft != null ? " / " + fmt(r.iab.spacingChk.sMax_ft, 0) + " ft max" : "") + " (" + r.iab.spacingChk.src + ")")),
+-    r.iab && !r.iab.simplifiedApplies && /*#__PURE__*/React.createElement("div", { className: "mt-2 text-[9px] text-amber-800 bg-amber-50 border border-amber-300 rounded-sm px-2 py-1.5 leading-snug pdNL" }, pdNL(
++    !negBlk && r.iab && !r.iab.simplifiedApplies && /*#__PURE__*/React.createElement("div", { className: "mt-2 text-[9px] text-amber-800 bg-amber-50 border border-amber-300 rounded-sm px-2 py-1.5 leading-snug pdNL" }, pdNL(
+       "⚠ One or more boundary conditions are not satisfied — the Simplified Method does not apply.", [["Required method:", "MassDOT requires the 3D Space Frame Analysis Method (§3.10.11.5), which is outside this tool."], ["Action:", "design must be performed separately."]])),
+     // PDA-IAB (2026-10-21): geotechnical axial resistance of the integral pile (Module 13), sent to the abutment calculator
+     /*#__PURE__*/React.createElement("div", { id: "iabGeoSec", className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1.5 mt-4 pt-3 border-t border-slate-200" }, "Geotechnical axial resistance (optional, Module 13)"),
+@@ -18785,12 +18955,12 @@ function App() {
+       /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-2" },
+         /*#__PURE__*/React.createElement(Field, { label: "No side resistance above", sub: "pre-bored hole / sleeve, ft below the cap (0 = none)", unit: "ft", value: I.iabGeoTop || 0, onChange: v => set('iabGeoTop', (isFinite(v) && v > 0) ? v : 0) }),
+         /*#__PURE__*/React.createElement("div", null),
+-        /*#__PURE__*/React.createElement(Field, { label: "φ geo sand/silt", sub: "SPT side + tip", value: I.hpPhiGeo, onChange: v => set('hpPhiGeo', v) }),
+-        /*#__PURE__*/React.createElement(Field, { label: "φ geo clay", sub: "α side", value: I.hpPhiGeoClay, onChange: v => set('hpPhiGeoClay', v) }),
+-        /*#__PURE__*/React.createElement(Field, { label: "φ geo clay tip", sub: "9Su, α-method 0.35", value: I.hpPhiTipClay, onChange: v => set('hpPhiTipClay', v) }),
+-        /*#__PURE__*/React.createElement(Field, { label: "φ uplift", sub: "SPT / α side", value: I.hpPhiUp, onChange: v => set('hpPhiUp', v) }),
++        /*#__PURE__*/React.createElement(Field, { ck: "hpPhiGeo", label: "φ geo sand/silt", sub: "SPT side + tip", value: I.hpPhiGeo, onChange: v => set('hpPhiGeo', v) }),
++        /*#__PURE__*/React.createElement(Field, { ck: "hpPhiGeoClay", label: "φ geo clay", sub: "α side", value: I.hpPhiGeoClay, onChange: v => set('hpPhiGeoClay', v) }),
++        /*#__PURE__*/React.createElement(Field, { ck: "hpPhiTipClay", label: "φ geo clay tip", sub: "9Su, α-method 0.35", value: I.hpPhiTipClay, onChange: v => set('hpPhiTipClay', v) }),
++        /*#__PURE__*/React.createElement(Field, { ck: "hpPhiUp", label: "φ uplift", sub: "SPT / α side", value: I.hpPhiUp, onChange: v => set('hpPhiUp', v) }),
+         hpResMethodBlock(I, set, r, true)),
+-      r.iab && r.iab.geo && /*#__PURE__*/React.createElement("div", { id: "iabGeoRes", className: "text-[9.5px] mt-1.5 leading-snug", style: { color: r.iab.geo.pass ? "#2f6f3e" : "#b23b3b" } },
++      !negBlk && r.iab && r.iab.geo && /*#__PURE__*/React.createElement("div", { id: "iabGeoRes", className: "text-[9.5px] mt-1.5 leading-snug", style: { color: r.iab.geo.pass ? "#2f6f3e" : "#b23b3b" } },
+         (r.iab.geo.pass ? "✓ " : "✗ ") + "Rₙ = " + fmt(r.iab.geo.Rn_comp, 1) + " kip, φRₙ = " + fmt(r.iab.geo.phiRn_comp, 1) + " kip " + (r.iab.geo.comp_pass ? "≥" : "<") + " Pᵤ = " + fmt(r.iab.geo.STL, 1) + " kip; Rₙ,up = " + fmt(r.iab.geo.Rn_up, 1) + " kip, φRₙ,up = " + fmt(r.iab.geo.phiRn_up, 1) + " kip" + (r.iab.geo.drv && r.iab.geo.drv.phiDyn ? "; " + r.iab.geo.drv.label + ": required Rₙ = " + fmt(r.iab.geo.drv.Rn_req, 1) + " kip, Rₙdr = " + fmt(r.iab.geo.drv.Rndr, 1) + " kip" : "") + (r.iab.geo.drive && r.iab.geo.drive.minPen ? "; zₘᵢₙ = " + fmt(r.iab.geo.drive.minPen.zMin, 1) + " ft (" + (r.iab.geo.drive.minPen.pass ? "toe below it" : "toe ABOVE it") + ")" : "") + ".",
+         React.createElement(PdWorkedIn, { I: I, items: [{ mod: "13", txt: "Rₙ, φRₙ", title: "Integral Pile — Geotechnical Axial Resistance" }] }))),
+     /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1.5 mt-4 pt-3 border-t border-slate-200" }, "Tier 2 \u2014 \u03b4\u1d1b-driven p-y check (optional)"),
+@@ -18857,7 +19027,7 @@ function App() {
+       /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-2 mb-1" },
+         /*#__PURE__*/React.createElement("div", null,
+           /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Scour/peat depth (ft)"),
+-          /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabScourDepth || 0, onChange: e => set('iabScourDepth', parseFloat(e.target.value) || 0) })),
++          /*#__PURE__*/React.createElement(PdNumIn, { type: "number", ck: "iabScourDepth", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabScourDepth || 0, onChange: e => set('iabScourDepth', parseFloat(e.target.value) || 0) })),
+         /*#__PURE__*/React.createElement("div", null,
+           /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Ext. moment override (kip\u00b7ft)"),
+           /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabMoments_ext || 0, onChange: e => set('iabMoments_ext', parseFloat(e.target.value) || 0) }))),
+@@ -18868,7 +19038,7 @@ function App() {
+           /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: "0.05", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabKb != null ? I.iabKb : 1.2, onChange: e => set('iabKb', parseFloat(e.target.value) || 1.2) })),
+         /*#__PURE__*/React.createElement("div", { title: "Scour depth below the bottom of the cap at the scour check flood (MassDOT 3.2.10.5). The pile is checked for axial load only with this unbraced length (MassDOT 3.10.11.3). 0 = not checked." },
+           /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Check-flood scour (ft)"),
+-          /*#__PURE__*/React.createElement(PdNumIn, { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabScourCheck || 0, onChange: e => set('iabScourCheck', parseFloat(e.target.value) || 0) })),
++          /*#__PURE__*/React.createElement(PdNumIn, { type: "number", ck: "iabScourCheck", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabScourCheck || 0, onChange: e => set('iabScourCheck', parseFloat(e.target.value) || 0) })),
+         /*#__PURE__*/React.createElement("div", { title: "Live-load factor at the scour check flood, Extreme Event II: 0.5; 1.0 for a critical / essential bridge (MassDOT 3.2.10.5)." },
+           /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "\u03b3LL check flood"),
+           /*#__PURE__*/React.createElement("select", { className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300 bg-white", value: String(I.iabCheckGammaLL != null ? I.iabCheckGammaLL : 0.5), onChange: e => set('iabCheckGammaLL', parseFloat(e.target.value)) },
+@@ -18885,7 +19055,7 @@ function App() {
+           /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[9px] text-slate-500" }, (Array.isArray(I.soilLayers) ? I.soilLayers.length : 0), " layer", (Array.isArray(I.soilLayers) && I.soilLayers.length === 1) ? "" : "s")),
+         (!Array.isArray(I.soilLayers) || I.soilLayers.length === 0) && /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-amber-700 bg-amber-50 border border-amber-200 rounded-sm px-1.5 py-1 mt-1 leading-snug" }, "No project soil layers defined \u2014 the nonlinear check falls back to the MassDOT idealized soil until you add layers.")),
+       I.iabNlSoilSource === "layered" && /*#__PURE__*/React.createElement("div", { className: "text-[8px] text-slate-400 mb-1 leading-snug" }, "The nonlinear Tier-2 analysis runs on this layered profile (same engine and p-y models as the Module 02 lateral analysis). The Tier-1 table check and the linear MassDOT-basis line always use the idealized soil above."),
+-      r.iab && r.iab.tier2 && /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] mt-1 text-slate-400 leading-snug" },
++      !negBlk && r.iab && r.iab.tier2 && /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] mt-1 text-slate-400 leading-snug" },
+         "\u03b4\u1d1b resolves to ", fmt(r.iab.tier2.deltaT, 3), " in \u2014 full derivation, interaction check, response plots, and profile table are in the \u201cTier 2\u201d module in the results column."))),
+   /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
+     title: "Pile Geometry"
+@@ -18896,25 +19066,29 @@ function App() {
+     sub: "below grade",
+     unit: "ft",
+     value: I.solverLembed,
+-    onChange: v => set('solverLembed', v)
++    onChange: v => set('solverLembed', v),
++    ck: "solverLembed"
+   }) : /*#__PURE__*/React.createElement(Field, {
+     label: "Cased length",
+     sub: "head → tip (includes plunge)",
+     unit: "ft",
+     value: I.Lcased,
+-    onChange: v => set('Lcased', v)
++    onChange: v => set('Lcased', v),
++    ck: "Lcased"
+   }), I.pileType !== "hpile" && /*#__PURE__*/React.createElement(Field, {
+     label: "Bond length",
+     sub: "grout-to-ground",
+     unit: "ft",
+     value: I.LbProvided,
+-    onChange: v => set('LbProvided', v)
++    onChange: v => set('LbProvided', v),
++    ck: "LbProvided"
+   }), I.pileType !== "hpile" && /*#__PURE__*/React.createElement(Field, {
+     label: "Plunge depth",
+     sub: "overlap inside cased length",
+     unit: "ft",
+     value: I.Lplunge,
+-    onChange: v => set('Lplunge', v)
++    onChange: v => set('Lplunge', v),
++    ck: "Lplunge"
+   }), /*#__PURE__*/React.createElement(Field, {
+     label: "Stickup / free length",
+     sub: I.solverFree < 0 ? "NEGATIVE = head below grade (buried cap)" : "+ above grade / soft zone",
+@@ -18932,13 +19106,15 @@ function App() {
+     sub: "casing into cap (fixed-head dev.)",
+     unit: "in",
+     value: I.capEmbed,
+-    onChange: v => set('capEmbed', v)
++    onChange: v => set('capEmbed', v),
++    ck: "capEmbed"
+   }), I.pileType !== "hpile" && /*#__PURE__*/React.createElement(Field, {
+     label: "Fixed-head req. k×D",
+     sub: "req = max(k×OD, 6 in) = " + fmt(Math.max((I.capEmbedK || 2) * I.OD, 6), 1) + " in",
+     unit: "×D",
+     value: I.capEmbedK,
+-    onChange: v => set('capEmbedK', v)
++    onChange: v => set('capEmbedK', v),
++    ck: "capEmbedK"
+   })), I.pileType === "hpile" ? /*#__PURE__*/React.createElement("div", {
+     className: "mt-2 p-1.5 rounded-sm text-[9px] leading-snug pdNL",
+     style: { background: "rgba(28,79,115,0.06)", color: "#1c4f73", border: "1px solid rgba(28,79,115,0.25)" }
+@@ -18980,7 +19156,7 @@ function App() {
+     "data-rtab-fixed": "checks",
+     onClick: () => gotoLoadsTab(setRailTab, "group"),
+     className: "w-full mt-2 font-mono-tech text-[11px] tracking-wider py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition flex items-center justify-center gap-1.5"
+-  }, "▦ PILE GROUP \u2192 Loads & group tab", (cases[activeIdx] && cases[activeIdx]._fromGroup) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--accent)" } }, "GROUP CASE ACTIVE") : (groupEnabled && groupCase) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, "APPLIED") : null), /*#__PURE__*/React.createElement("div", { className: "mt-3 pt-2 border-t border-slate-200" }, /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mb-1" }, "Head condition"), /*#__PURE__*/React.createElement("div", { className: "flex gap-2 text-[11px] font-mono-tech" }, [["free", "free / pinned"], ["fixed", "fixed / capped"]].map(([v, l]) => /*#__PURE__*/React.createElement("button", { key: v, onClick: () => set('solverHead', v), className: "flex-1 px-2 py-1 rounded-sm border " + (I.solverHead === v ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50") }, l))), I.solverHead !== "fixed" && /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1.5 mt-1.5" }, /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500 font-mono-tech" }, "K\u03b8"), /*#__PURE__*/React.createElement(PdNumIn, { type: "number", "aria-label": "Head rotational stiffness K-theta, kip-in per radian", value: I.pyKrot || 0, onChange: e => set('pyKrot', parseFloat(e.target.value) || 0), className: "w-24 font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" }), /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-mono-tech" }, "kip\u00b7in/rad \u00b7 0 = pinned")), /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug pdNL" }, pdNL(null, [["Free:", "head rotates (flagpole/pinned), or is partially restrained by Kθ."], ["Fixed:", "rotation fully restrained by a rigid cap connection."], ["Drives", "the p-y boundary condition, the deflection-matched buckling basis, and the cap-embedment check."]])), /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mt-2.5 mb-1" }, "p-y loading criterion"), /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-1.5 text-[10px] text-slate-600 font-mono-tech" }, /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: !!I.pyCyclic, onChange: e => { const on = e.target.checked; set('pyCyclic', on); if (on) setCycInfoOpen(true); } }), "cyclic p-y curves"), /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, !!I.pyCyclic ? [/*#__PURE__*/React.createElement("b", { key: "b", style: { color: "#8a5a1f" } }, "\u26a0 Cyclic active. "), "Models soil-resistance degradation under repeated large-amplitude reversal (offshore wave, seismic). Static is the usual basis for bridge substructure. ", /*#__PURE__*/React.createElement("button", { key: "d", onClick: () => setCycInfoOpen(true), className: "underline font-mono-tech" }, "details")] : "Unchecked = static (the usual basis for bridge substructure lateral analysis). Cyclic models soil degradation under repeated reversal \u2014 an offshore/seismic criterion."), /*#__PURE__*/React.createElement(CyclicInfoModal, { open: cycInfoOpen, onClose: () => setCycInfoOpen(false), onRevert: () => { set('pyCyclic', false); setCycInfoOpen(false); } }), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mt-2.5 mb-1" }, "Large head-deflection warning"), /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1.5" }, /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500 font-mono-tech" }, "y\u2080 >"), /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: 0.05, min: 0, "aria-label": "Large head-deflection warning, multiple of the pile width D", value: (typeof I.pyDeflWarnD === "number" && isFinite(I.pyDeflWarnD)) ? I.pyDeflWarnD : "", onChange: e => set('pyDeflWarnD', e.target.value === "" ? NaN : parseFloat(e.target.value)), className: "w-16 font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" }), /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-mono-tech" }, "\u00d7 D \u00b7 0 = off \u00b7 blank = 0.25")), /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug pdNL" }, pdNL("Amber warning, not a check.", [["Shown", "when the p-y head deflection |y₀| exceeds this multiple of the pile width D (default 0.25 D), for the active case and for each case of the envelope."], ["No status change:", "nothing becomes NG because of it."], ["Service deflection limit", "(Loads & group tab): separate."]])))), /*#__PURE__*/React.createElement("button", { onClick: () => gotoSoilProfileTab(setRailTab), className: "w-full mt-2 font-mono-tech text-[11px] tracking-wider py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition flex items-center justify-center gap-1.5" }, "\u2261 SOIL PROFILE", (Array.isArray(I.soilLayers) && I.soilLayers.length) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, I.soilLayers.length, " LAYER", I.soilLayers.length > 1 ? "S" : "") : /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm", style: { background: "#e2e8f0", color: "#64748b" } }, "UNIFORM")), /*#__PURE__*/React.createElement("div", { className: "mt-1 text-[8.5px] text-slate-400 font-mono-tech leading-snug" }, (Array.isArray(I.soilLayers) && I.soilLayers.length) ? ["Drives the p-y lateral analysis and the Davisson fixity depth (Module 10). Top layer: ", (() => { const t = [...I.soilLayers].sort((a, b) => (a.topDepth || 0) - (b.topDepth || 0))[0]; return t.type === "sand" ? "sand n\u2095=" + fmt(t.nh, 0) : (t.type === "stiffclay" ? "stiff clay" : t.type === "weakrock" ? "weak rock" : "clay") + " k\u2095=" + fmt(t.kh, 0); })(), "."] : "No layered profile \u2014 the analysis uses the uniform soil set in Module 02."), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
++  }, "▦ PILE GROUP \u2192 Loads & group tab", (cases[activeIdx] && cases[activeIdx]._fromGroup) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--accent)" } }, "GROUP CASE ACTIVE") : (groupEnabled && groupCase) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, "APPLIED") : null), /*#__PURE__*/React.createElement("div", { className: "mt-3 pt-2 border-t border-slate-200" }, /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mb-1" }, "Head condition"), /*#__PURE__*/React.createElement("div", { className: "flex gap-2 text-[11px] font-mono-tech" }, [["free", "free / pinned"], ["fixed", "fixed / capped"]].map(([v, l]) => /*#__PURE__*/React.createElement("button", { key: v, onClick: () => set('solverHead', v), className: "flex-1 px-2 py-1 rounded-sm border " + (I.solverHead === v ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50") }, l))), I.solverHead !== "fixed" && /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1.5 mt-1.5" }, /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500 font-mono-tech" }, "K\u03b8"), /*#__PURE__*/React.createElement(PdNumIn, { type: "number", "aria-label": "Head rotational stiffness K-theta, kip-in per radian", ck: "pyKrot", value: I.pyKrot || 0, onChange: e => set('pyKrot', parseFloat(e.target.value) || 0), className: "w-24 font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" }), /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-mono-tech" }, "kip\u00b7in/rad \u00b7 0 = pinned")), /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug pdNL" }, pdNL(null, [["Free:", "head rotates (flagpole/pinned), or is partially restrained by Kθ."], ["Fixed:", "rotation fully restrained by a rigid cap connection."], ["Drives", "the p-y boundary condition, the deflection-matched buckling basis, and the cap-embedment check."]])), /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mt-2.5 mb-1" }, "p-y loading criterion"), /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-1.5 text-[10px] text-slate-600 font-mono-tech" }, /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: !!I.pyCyclic, onChange: e => { const on = e.target.checked; set('pyCyclic', on); if (on) setCycInfoOpen(true); } }), "cyclic p-y curves"), /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, !!I.pyCyclic ? [/*#__PURE__*/React.createElement("b", { key: "b", style: { color: "#8a5a1f" } }, "\u26a0 Cyclic active. "), "Models soil-resistance degradation under repeated large-amplitude reversal (offshore wave, seismic). Static is the usual basis for bridge substructure. ", /*#__PURE__*/React.createElement("button", { key: "d", onClick: () => setCycInfoOpen(true), className: "underline font-mono-tech" }, "details")] : "Unchecked = static (the usual basis for bridge substructure lateral analysis). Cyclic models soil degradation under repeated reversal \u2014 an offshore/seismic criterion."), /*#__PURE__*/React.createElement(CyclicInfoModal, { open: cycInfoOpen, onClose: () => setCycInfoOpen(false), onRevert: () => { set('pyCyclic', false); setCycInfoOpen(false); } }), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mt-2.5 mb-1" }, "Large head-deflection warning"), /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1.5" }, /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500 font-mono-tech" }, "y\u2080 >"), /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: 0.05, min: 0, "aria-label": "Large head-deflection warning, multiple of the pile width D", ck: "pyDeflWarnD", value: (typeof I.pyDeflWarnD === "number" && isFinite(I.pyDeflWarnD)) ? I.pyDeflWarnD : "", onChange: e => set('pyDeflWarnD', e.target.value === "" ? NaN : parseFloat(e.target.value)), className: "w-16 font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" }), /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-mono-tech" }, "\u00d7 D \u00b7 0 = off \u00b7 blank = 0.25")), /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug pdNL" }, pdNL("Amber warning, not a check.", [["Shown", "when the p-y head deflection |y₀| exceeds this multiple of the pile width D (default 0.25 D), for the active case and for each case of the envelope."], ["No status change:", "nothing becomes NG because of it."], ["Service deflection limit", "(Loads & group tab): separate."]])))), /*#__PURE__*/React.createElement("button", { onClick: () => gotoSoilProfileTab(setRailTab), className: "w-full mt-2 font-mono-tech text-[11px] tracking-wider py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition flex items-center justify-center gap-1.5" }, "\u2261 SOIL PROFILE", (Array.isArray(I.soilLayers) && I.soilLayers.length) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, I.soilLayers.length, " LAYER", I.soilLayers.length > 1 ? "S" : "") : /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm", style: { background: "#e2e8f0", color: "#64748b" } }, "UNIFORM")), /*#__PURE__*/React.createElement("div", { className: "mt-1 text-[8.5px] text-slate-400 font-mono-tech leading-snug" }, (Array.isArray(I.soilLayers) && I.soilLayers.length) ? ["Drives the p-y lateral analysis and the Davisson fixity depth (Module 10). Top layer: ", (() => { const t = [...I.soilLayers].sort((a, b) => (a.topDepth || 0) - (b.topDepth || 0))[0]; return t.type === "sand" ? "sand n\u2095=" + fmt(t.nh, 0) : (t.type === "stiffclay" ? "stiff clay" : t.type === "weakrock" ? "weak rock" : "clay") + " k\u2095=" + fmt(t.kh, 0); })(), "."] : "No layered profile \u2014 the analysis uses the uniform soil set in Module 02."), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
+     title: "Loads",
+     sub: "active case · edit in the Loads & group tab"
+   }, (() => {
+@@ -19006,50 +19182,59 @@ function App() {
+     sub: "yield (set in Pile Section)",
+     unit: "ksi",
+     value: I.hpFy,
+-    onChange: v => set('hpFy', v)
++    onChange: v => set('hpFy', v),
++    ck: "hpFy"
+   }), /*#__PURE__*/React.createElement(Field, {
+     label: "Steel Fu",
+     sub: "tensile",
+     unit: "ksi",
+     value: I.hpFu,
+-    onChange: v => set('hpFu', v)
++    onChange: v => set('hpFu', v),
++    ck: "hpFu"
+   }), /*#__PURE__*/React.createElement(Field, {
+     label: "Es",
+     unit: "ksi",
+     value: I.E,
+-    onChange: v => set('E', v)
++    onChange: v => set('E', v),
++    ck: "E"
+   })) : /*#__PURE__*/React.createElement("div", {
+     className: "grid grid-cols-2 gap-3"
+   }, /*#__PURE__*/React.createElement(Field, {
+     label: "Cap f'c",
+     unit: "psi",
+     value: I.fc,
+-    onChange: v => set('fc', v)
++    onChange: v => set('fc', v),
++    ck: "fc"
+   }), /*#__PURE__*/React.createElement(Field, {
+     label: "Grout f'c",
+     unit: "psi",
+     value: I.fcGrout,
+-    onChange: v => set('fcGrout', v)
++    onChange: v => set('fcGrout', v),
++    ck: "fcGrout"
+   }), /*#__PURE__*/React.createElement(Field, {
+     label: "Bar fyb",
+     unit: "ksi",
+     value: I.fyb,
+-    onChange: v => set('fyb', v)
++    onChange: v => set('fyb', v),
++    ck: "fyb"
+   }), /*#__PURE__*/React.createElement(Field, {
+     label: "Bar fub",
+     unit: "ksi",
+     value: I.fub,
+-    onChange: v => set('fub', v)
++    onChange: v => set('fub', v),
++    ck: "fub"
+   }), /*#__PURE__*/React.createElement(Field, {
+     label: "Casing fyc",
+     unit: "ksi",
+     value: I.fyc,
+-    onChange: v => set('fyc', v)
++    onChange: v => set('fyc', v),
++    ck: "fyc"
+   }), /*#__PURE__*/React.createElement(Field, {
+     label: "Es",
+     unit: "ksi",
+     value: I.E,
+-    onChange: v => set('E', v)
++    onChange: v => set('E', v),
++    ck: "E"
+   }))), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
+     title: "Pile Section"
+   }, I.pileType === "hpile" ? /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-3" },
+@@ -19062,12 +19247,12 @@ function App() {
+         Object.keys(HP_AISC).map(k => /*#__PURE__*/React.createElement("option", { key: k, value: k }, k))),
+       HP_AISC[I.hpShape] && /*#__PURE__*/React.createElement("div", { className: "text-[10px] leading-tight mt-0.5", style: { color: hpAiscRow(I.hpShape, I.hpD, I.hpBf, I.hpTf, I.hpTw) ? "#2f7d4f" : "#8a5a1f" } },
+         hpAiscRow(I.hpShape, I.hpD, I.hpBf, I.hpTf, I.hpTw) ? "Tabulated AISC properties of " + I.hpShape + " used (A = " + fmt(HP_AISC[I.hpShape][0], 1) + " in\u00b2)." : "d, b_f, t_f or t_w differ from " + I.hpShape + ": the properties are computed from the three rectangles.")),
+-    /*#__PURE__*/React.createElement(Field, { label: "Depth d", unit: "in", value: I.hpD, bx: [I, 'hpD'], onChange: v => set('hpD', v) }),
+-    /*#__PURE__*/React.createElement(Field, { label: "Flange width bf", unit: "in", value: I.hpBf, bx: [I, 'hpBf'], onChange: v => set('hpBf', v) }),
+-    /*#__PURE__*/React.createElement(Field, { label: "Flange thick tf", unit: "in", value: I.hpTf, bx: [I, 'hpTf'], onChange: v => set('hpTf', v) }),
+-    /*#__PURE__*/React.createElement(Field, { label: "Web thick tw", unit: "in", value: I.hpTw, bx: [I, 'hpTw'], onChange: v => set('hpTw', v) }),
+-    /*#__PURE__*/React.createElement(Field, { label: "Yield Fy", unit: "ksi", value: I.hpFy, bx: [I, 'hpFy'], onChange: v => set('hpFy', v) }),
+-    /*#__PURE__*/React.createElement(Field, { label: "Cap embed", sub: "below cap underside", unit: "in", value: I.hpCapEmbed, bx: [I, 'hpCapEmbed'], onChange: v => set('hpCapEmbed', v) }),
++    /*#__PURE__*/React.createElement(Field, { ck: "hpD", label: "Depth d", unit: "in", value: I.hpD, bx: [I, 'hpD'], onChange: v => set('hpD', v) }),
++    /*#__PURE__*/React.createElement(Field, { ck: "hpBf", label: "Flange width bf", unit: "in", value: I.hpBf, bx: [I, 'hpBf'], onChange: v => set('hpBf', v) }),
++    /*#__PURE__*/React.createElement(Field, { ck: "hpTf", label: "Flange thick tf", unit: "in", value: I.hpTf, bx: [I, 'hpTf'], onChange: v => set('hpTf', v) }),
++    /*#__PURE__*/React.createElement(Field, { ck: "hpTw", label: "Web thick tw", unit: "in", value: I.hpTw, bx: [I, 'hpTw'], onChange: v => set('hpTw', v) }),
++    /*#__PURE__*/React.createElement(Field, { ck: "hpFy", label: "Yield Fy", unit: "ksi", value: I.hpFy, bx: [I, 'hpFy'], onChange: v => set('hpFy', v) }),
++    /*#__PURE__*/React.createElement(Field, { ck: "hpCapEmbed", label: "Cap embed", sub: "below cap underside", unit: "in", value: I.hpCapEmbed, bx: [I, 'hpCapEmbed'], onChange: v => set('hpCapEmbed', v) }),
+     /*#__PURE__*/React.createElement("label", { className: "block" },
+       /*#__PURE__*/React.createElement("span", { className: "text-[12px] text-[var(--blueprint)] font-medium leading-tight block mb-1" }, "Bending axis"),
+       /*#__PURE__*/React.createElement("select", { value: I.hpAxis, onChange: e => set('hpAxis', e.target.value), className: "w-full text-[12px] border border-slate-300 rounded-sm px-2 py-1 bg-white" },
+@@ -19082,19 +19267,19 @@ function App() {
+         /*#__PURE__*/React.createElement("option", { value: "good" }, "Good driving, no pile tip (\u03c6c 0.60)"),
+         /*#__PURE__*/React.createElement("option", { value: "severe" }, "Severe driving, pile tip needed (\u03c6c 0.50)"),
+         /*#__PURE__*/React.createElement("option", { value: "static_generic" }, "Custom (\u03c6c as entered)"))),
+-    /*#__PURE__*/React.createElement(Field, { label: "\u03c6c axial", value: I.hpPhiC, bx: [I, 'hpPhiC'], onChange: v => { set('hpPhiC', v); set('hpDriveCond', v === 0.60 ? "good" : v === 0.50 ? "severe" : "static_generic"); } }),
+-    /*#__PURE__*/React.createElement(Field, { label: "\u03c6c combined", sub: "axial term, P-M", value: I.hpPhiCcomb, onChange: v => set('hpPhiCcomb', v) }),
++    /*#__PURE__*/React.createElement(Field, { ck: "hpPhiC", label: "\u03c6c axial", value: I.hpPhiC, bx: [I, 'hpPhiC'], onChange: v => { set('hpPhiC', v); set('hpDriveCond', v === 0.60 ? "good" : v === 0.50 ? "severe" : "static_generic"); } }),
++    /*#__PURE__*/React.createElement(Field, { ck: "hpPhiCcomb", label: "\u03c6c combined", sub: "axial term, P-M", value: I.hpPhiCcomb, onChange: v => set('hpPhiCcomb', v) }),
+     // ABPX2: drag load at the neutral plane (structural strength only)
+-    /*#__PURE__*/React.createElement(Field, { label: "Drag load DR", sub: "per pile; 0 = none (3.11.8)", unit: "kip", value: I.hpDR || 0, bx: [I, 'hpDR'], onChange: v => set('hpDR', v) }),
+-    /*#__PURE__*/React.createElement(Field, { label: "\u03b3DR structural", sub: "geotechnical 0.00 (T.3.4.1-1 note)", value: I.hpGammaDR != null ? I.hpGammaDR : 1.10, bx: [I, 'hpGammaDR'], onChange: v => set('hpGammaDR', v) }),
+-    /*#__PURE__*/React.createElement(Field, { label: "\u03c6f flexure", value: I.hpPhiF, onChange: v => set('hpPhiF', v) }),
+-    /*#__PURE__*/React.createElement(Field, { label: "\u03c6v shear", value: I.hpPhiV, onChange: v => set('hpPhiV', v) }),
+-    /*#__PURE__*/React.createElement(Field, { label: "\u03c6y tension yield", value: I.hpPhiTy, onChange: v => set('hpPhiTy', v) }),
+-    /*#__PURE__*/React.createElement(Field, { label: "\u03c6u tension fracture", value: I.hpPhiTu, onChange: v => set('hpPhiTu', v) }),
+-    /*#__PURE__*/React.createElement(Field, { label: "\u03c6 geo sand/silt", sub: "SPT side + tip", value: I.hpPhiGeo, onChange: v => set('hpPhiGeo', v) }),
+-    /*#__PURE__*/React.createElement(Field, { label: "\u03c6 geo clay", sub: "\u03b1 side", value: I.hpPhiGeoClay, onChange: v => set('hpPhiGeoClay', v) }),
+-    /*#__PURE__*/React.createElement(Field, { label: "\u03c6 geo clay tip", sub: "9Su, \u03b1-method 0.35", value: I.hpPhiTipClay, onChange: v => set('hpPhiTipClay', v) }),
+-    /*#__PURE__*/React.createElement(Field, { label: "\u03c6 uplift", sub: "SPT / \u03b1 side", value: I.hpPhiUp, onChange: v => set('hpPhiUp', v) }),
++    /*#__PURE__*/React.createElement(Field, { ck: "hpDR", label: "Drag load DR", sub: "per pile; 0 = none (3.11.8)", unit: "kip", value: I.hpDR || 0, bx: [I, 'hpDR'], onChange: v => set('hpDR', v) }),
++    /*#__PURE__*/React.createElement(Field, { ck: "hpGammaDR", label: "\u03b3DR structural", sub: "geotechnical 0.00 (T.3.4.1-1 note)", value: I.hpGammaDR != null ? I.hpGammaDR : 1.10, bx: [I, 'hpGammaDR'], onChange: v => set('hpGammaDR', v) }),
++    /*#__PURE__*/React.createElement(Field, { ck: "hpPhiF", label: "\u03c6f flexure", value: I.hpPhiF, onChange: v => set('hpPhiF', v) }),
++    /*#__PURE__*/React.createElement(Field, { ck: "hpPhiV", label: "\u03c6v shear", value: I.hpPhiV, onChange: v => set('hpPhiV', v) }),
++    /*#__PURE__*/React.createElement(Field, { ck: "hpPhiTy", label: "\u03c6y tension yield", value: I.hpPhiTy, onChange: v => set('hpPhiTy', v) }),
++    /*#__PURE__*/React.createElement(Field, { ck: "hpPhiTu", label: "\u03c6u tension fracture", value: I.hpPhiTu, onChange: v => set('hpPhiTu', v) }),
++    /*#__PURE__*/React.createElement(Field, { ck: "hpPhiGeo", label: "\u03c6 geo sand/silt", sub: "SPT side + tip", value: I.hpPhiGeo, onChange: v => set('hpPhiGeo', v) }),
++    /*#__PURE__*/React.createElement(Field, { ck: "hpPhiGeoClay", label: "\u03c6 geo clay", sub: "\u03b1 side", value: I.hpPhiGeoClay, onChange: v => set('hpPhiGeoClay', v) }),
++    /*#__PURE__*/React.createElement(Field, { ck: "hpPhiTipClay", label: "\u03c6 geo clay tip", sub: "9Su, \u03b1-method 0.35", value: I.hpPhiTipClay, onChange: v => set('hpPhiTipClay', v) }),
++    /*#__PURE__*/React.createElement(Field, { ck: "hpPhiUp", label: "\u03c6 uplift", sub: "SPT / \u03b1 side", value: I.hpPhiUp, onChange: v => set('hpPhiUp', v) }),
+     // PDA-M1 (2026-10-20): resistance determination method and owner rule for the required driving resistance
+     hpResMethodBlock(I, set, r, false),   // PDA-IAB: unchanged, see hpResMethodBlock
+     // PDA-Cb (2026-10-20): moment-gradient modifier for the strong-axis LTB of Module 04
+@@ -19102,7 +19287,7 @@ function App() {
+       /*#__PURE__*/React.createElement("div", { className: "text-[11px] text-[var(--blueprint)] font-medium mb-1" }, "C\u1d47 for lateral\u2013torsional buckling (strong axis, over L\u1d64)"),
+       /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-5 gap-1.5 items-end" },
+         [["hpCb", "C\u1d47"], ["hpCbMmax", "M\u2098\u2090\u2093"], ["hpCbMA", "M\u1d00"], ["hpCbMB", "M\u0299"], ["hpCbMC", "M\u1d04"]].map(([k, l]) => /*#__PURE__*/React.createElement("label", { key: k, className: "text-[9.5px] text-slate-500" }, l,
+-          /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: "any", className: "w-full font-mono-tech text-[10px] px-1 py-0.5 rounded-sm border border-slate-300", value: I[k] != null ? I[k] : (k === "hpCb" ? 1.0 : ""), onChange: e => set(k, e.target.value === "" ? null : parseFloat(e.target.value)) })))),
++          /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: "any", className: "w-full font-mono-tech text-[10px] px-1 py-0.5 rounded-sm border border-slate-300", ck: k === "hpCb" ? k : undefined, value: I[k] != null ? I[k] : (k === "hpCb" ? 1.0 : ""), onChange: e => set(k, e.target.value === "" ? null : parseFloat(e.target.value)) })))),
+       (() => { const c = hpCbCalc(I); return /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mt-1 leading-snug" },
+         c ? (c.ok ? [c.txt + " ", /*#__PURE__*/React.createElement("button", { key: "a", type: "button", className: "underline text-[var(--blueprint2)]", onClick: () => set('hpCb', c.Cb) }, "apply C\u1d47 = " + c.Cb.toFixed(3))] : c.why)
+           : "C\u1d47 = 1.0 is conservative (6.10.8.2.3b). To compute it, enter |M| (kip\u00b7ft) over the unbraced length: M\u2098\u2090\u2093 and the quarter-, mid- and three-quarter-point moments M\u1d00, M\u0299, M\u1d04 (Eq. 6.10.8.2.3b-1), then apply."); })()),
+@@ -19116,24 +19301,28 @@ function App() {
+     label: "Casing OD",
+     unit: "in",
+     value: I.OD,
+-    onChange: v => set('OD', v)
++    onChange: v => set('OD', v),
++    ck: "OD"
+   }), /*#__PURE__*/React.createElement(Field, {
+     label: "Wall t",
+     unit: "in",
+     value: I.tc,
+-    onChange: v => set('tc', v)
++    onChange: v => set('tc', v),
++    ck: "tc"
+   }), /*#__PURE__*/React.createElement(Field, {
+     label: "Corrosion",
+     unit: "in",
+     value: I.corr,
+-    onChange: v => set('corr', v)
++    onChange: v => set('corr', v),
++    ck: "corr"
+   }), /*#__PURE__*/React.createElement(BarSelect, {
+     I: I, set: set, areaKey: "Ab", setGrade: true, label: "Center bar"
+   }), /*#__PURE__*/React.createElement(Field, {
+     label: "Bar area Ab",
+     unit: "in²",
+     value: I.Ab,
+-    onChange: v => set('Ab', v)
++    onChange: v => set('Ab', v),
++    ck: "Ab"
+   }), /*#__PURE__*/React.createElement("div", { className: "col-span-2 pt-2 border-t border-slate-100" },
+     /*#__PURE__*/React.createElement("label", { className: "flex items-start gap-2 cursor-pointer" },
+       /*#__PURE__*/React.createElement("input", {
+@@ -19156,7 +19345,8 @@ function App() {
+         sub: "bond zone, below casing tip",
+         unit: "in",
+         value: I.dhBond,
+-        onChange: v => set('dhBond', v)
++        onChange: v => set('dhBond', v),
++        ck: "dhBond"
+       }),
+       /*#__PURE__*/React.createElement("div", { className: "text-[10px] leading-snug self-end pb-1", style: { color: (I.dhBond > 0 && I.dhBond < I.OD) ? "#7a4d15" : "#64748b" } },
+         (I.dhBond > 0 && I.dhBond < I.OD)
+@@ -19166,7 +19356,7 @@ function App() {
+   }, /*#__PURE__*/React.createElement(PileSection, {
+     r: r
+   }))), (I.pileType !== "iab" || (I.iabTier2 && I.iabNlSoilSource === "layered") || I.iabGeoOn) && React.createElement(SoilProfilePanel, { I: I, set: set, r: r, pyRes: pyRes }), (I.pileType !== "iab") && React.createElement(LoadsGroupPanel, { I: I, set: set, setI: setI, r: r, cases: cases, activeIdx: activeIdx,
+-    casesCard: /*#__PURE__*/React.createElement(LoadCasesCard, { variant: "edit", cases: cases, updCases: updCases, applyCase: applyCase, runAllCases: runAllCases, caseRes: caseRes, I: I, updCasesLimit: v => { set('deflLimit', v); setCaseRes(null); }, activeIdx: activeIdx, setActive: i => set('activeCase', i),
++    casesCard: /*#__PURE__*/React.createElement(LoadCasesCard, { variant: "edit", cases: cases, updCases: updCases, applyCase: applyCase, runAllCases: runAllCases, caseRes: negBlk ? null : caseRes, I: I, updCasesLimit: v => { set('deflLimit', v); setCaseRes(null); }, activeIdx: activeIdx, setActive: i => set('activeCase', i),
+       onShowResults: () => { if (window.__pdSetOutTab) window.__pdSetOutTab("summary"); setTimeout(() => { const el = document.getElementById("pd-cases-sum"); if (el) el.scrollIntoView({ block: "start", behavior: "auto" }); }, 60); },
+       onRowEdit: (i, k, v) => {
+     const next = cases.map((c, j) => j === i ? { ...c, [k]: v } : c);
+@@ -19196,6 +19386,7 @@ function App() {
+     type: "number",
+     step: "any",
+     "aria-label": "Bond value beta, " + (I.betaUnit === "psi" ? "psi" : "ksf"),
++    ck: "beta",
+     value: I.betaUnit === "psi" ? +(I.beta * 1000 / 144).toFixed(2) : I.beta,
+     onChange: e => {
+       const v = parseFloat(e.target.value);
+@@ -19250,7 +19441,7 @@ function App() {
+     className: "grid grid-cols-3 gap-2"
+   }, [["φgeo", "phiGeo"], ["φcc", "phiCC"], ["φcu", "phiCU"], ["φf", "phiF"], ["φc", "phiC"], ["φb", "phiB"], ["φv (unused)", "phiV"], ["φup", "phiUp"], ["φt", "phiT"], ["φv punch", "phiVpunch"]].map(([lbl, key]) =>
+     /*#__PURE__*/React.createElement("div", { key: key, className: "relative" },
+-      /*#__PURE__*/React.createElement(Field, { label: lbl, value: I[key], onChange: v => set(key, v) }),
++      /*#__PURE__*/React.createElement(Field, { ck: key, label: lbl, value: I[key], onChange: v => set(key, v) }),
+       /*#__PURE__*/React.createElement("button", { title: "AASHTO definition & options", onClick: () => setPhiInfo({ open: true, key: key }),
+         className: "absolute top-0 right-0 text-[9px] w-4 h-4 flex items-center justify-center rounded-full border border-slate-300 text-slate-400 hover:border-[var(--blueprint2)] hover:text-[var(--blueprint2)]" }, "\u24d8")))),
+     // F50 part b (O20): display only -- the phi_c default 0.80 is kept; the engineer picks 0.90 / 0.95
+@@ -19258,7 +19449,7 @@ function App() {
+       "\u03c6c = ", fmt(I.phiC, 2), I.phiC < 0.90 ? ": conservative; " : ": ", "AASHTO 6.5.4.2 gives 0.90 composite / 0.95 steel \u2014 verify.")), /*#__PURE__*/(I.pileType === "hpile") && /*#__PURE__*/React.createElement(Panel, {
+     title: "Head fixity",
+     sub: "fixed-head cap embedment criterion (06)"
+-  }, /*#__PURE__*/React.createElement(Field, { label: "Embedment criterion k", sub: "required embedment = k \u00d7 d (d or b\u1da0 by axis)", unit: "\u00d7 d", step: 0.5,
++  }, /*#__PURE__*/React.createElement(Field, { ck: "hpCapEmbedK", label: "Embedment criterion k", sub: "required embedment = k \u00d7 d (d or b\u1da0 by axis)", unit: "\u00d7 d", step: 0.5,
+     value: I.hpCapEmbedK, onChange: v => set('hpCapEmbedK', (isFinite(v) && v) ? v : 2) })), /*#__PURE__*/(I.pileType !== "iab" && r.group && r.group.enable) && /*#__PURE__*/React.createElement(Panel, {
+     title: "Group options",
+     sub: "axial group efficiency (11)"
+@@ -19266,7 +19457,7 @@ function App() {
+     /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: !!I.groupEtaOverride, onChange: e => set('groupEtaOverride', e.target.checked) }),
+     "manually override \u03b7"),
+     I.groupEtaOverride && /*#__PURE__*/React.createElement("div", { className: "mt-2 max-w-[180px]" },
+-      /*#__PURE__*/React.createElement(Field, { label: "\u03b7 override", value: I.groupEta, onChange: v => set('groupEta', v) })),
++      /*#__PURE__*/React.createElement(Field, { ck: "groupEta", label: "\u03b7 override", value: I.groupEta, onChange: v => set('groupEta', v) })),
+     // F34 (O45): H-pile groups -- pile cap contact for the AASHTO 10.7.3.9 eta (cohesive soil)
+     (r.group.capBasis === "hpile" || !!r.group.aashtoMP) && /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-1.5 text-[12px] text-slate-600 cursor-pointer mt-2" },
+       /*#__PURE__*/React.createElement("input", { type: "checkbox", "aria-label": "Pile cap in firm contact with the ground", checked: I.hpCapContact !== false, onChange: e => set('hpCapContact', e.target.checked) }),
+@@ -19281,7 +19472,7 @@ function App() {
+     on: r.buckling.enable,
+     onChange: v => { if (!r.buckling.auto) set('bucklingEnable', v); }   // PDA-H2
+   }), r.buckling.enable && /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-3 mt-3" },
+-    /*#__PURE__*/React.createElement(Field, { label: "Effective length factor K", sub: "free \u2248 2.1 \u00b7 fixed \u2248 1.2 (AASHTO C4.6.2.5)", value: I.Kb, step: 0.1, onChange: v => set('Kb', v) }),
++    /*#__PURE__*/React.createElement(Field, { ck: "Kb", label: "Effective length factor K", sub: "free \u2248 2.1 \u00b7 fixed \u2248 1.2 (AASHTO C4.6.2.5)", value: I.Kb, step: 0.1, onChange: v => set('Kb', v) }),
+     /*#__PURE__*/React.createElement(Field, { label: "Added unsupported length", sub: "scour / void / soft layer below grade", unit: "ft", step: 0.5,
+       value: Math.max((I.LuFree || 0) - r.buckling.stickPos, 0),
+       onChange: v => { const add = Math.max(isFinite(v) ? v : 0, 0); set('LuFree', r.buckling.stickPos + add); } }),
+@@ -19307,7 +19498,8 @@ function App() {
+     sub: "% of the casing tensile capacity; 0 = casing neglected in tension (FHWA NHI-05-039) unless the joint capacity is documented",
+     unit: "%",
+     value: I.casingJointTenEff != null ? I.casingJointTenEff : 0,
+-    onChange: v => set('casingJointTenEff', v)
++    onChange: v => set('casingJointTenEff', v),
++    ck: "casingJointTenEff"
+   }))), /*#__PURE__*/(I.pileType === "micropile") && /*#__PURE__*/React.createElement(Panel, {
+     title: "Load test bars",
+     sub: "verification and proof tests (08) \u00b7 bar held at \u2264 80% of yield"
+@@ -19334,13 +19526,15 @@ function App() {
+     sub: "#14 = 2.25",
+     unit: "in²",
+     value: I.AbVerf,
+-    onChange: v => set('AbVerf', v)
++    onChange: v => set('AbVerf', v),
++    ck: "AbVerf"
+   }), /*#__PURE__*/React.createElement(Field, {
+     label: "Proof bar Ab",
+     sub: "#11 = 1.56",
+     unit: "in²",
+     value: I.AbProof,
+-    onChange: v => set('AbProof', v)
++    onChange: v => set('AbProof', v),
++    ck: "AbProof"
+   }))), /*#__PURE__*/(I.pileType === "micropile") && /*#__PURE__*/React.createElement(Panel, {
+     title: "Cap geometry",
+     sub: "pile-head bearing (06) and punching shear (07)"
+@@ -19351,33 +19545,39 @@ function App() {
+     sub: "pile centre to cap edge",
+     unit: "ft",
+     value: I.de1,
+-    onChange: v => set('de1', v)
++    onChange: v => set('de1', v),
++    ck: "de1"
+   }), /*#__PURE__*/React.createElement(Field, {
+     label: "Edge distance 2",
+     sub: "pile centre to cap edge",
+     unit: "ft",
+     value: I.de2,
+-    onChange: v => set('de2', v)
++    onChange: v => set('de2', v),
++    ck: "de2"
+   }), /*#__PURE__*/React.createElement(Field, {
+     label: "Cap thk 1",
+     unit: "ft",
+     value: I.t1,
+-    onChange: v => set('t1', v)
++    onChange: v => set('t1', v),
++    ck: "t1"
+   }), /*#__PURE__*/React.createElement(Field, {
+     label: "Cap thk 2",
+     unit: "ft",
+     value: I.t2,
+-    onChange: v => set('t2', v)
++    onChange: v => set('t2', v),
++    ck: "t2"
+   }), /*#__PURE__*/React.createElement(Field, {
+     label: "Head embed",
+     unit: "ft",
+     value: I.he1,
+-    onChange: v => set('he1', v)
++    onChange: v => set('he1', v),
++    ck: "he1"
+   }), /*#__PURE__*/React.createElement(Field, {
+     label: "Cap bar dia",
+     unit: "in",
+     value: I.capBar,
+-    onChange: v => set('capBar', v)
++    onChange: v => set('capBar', v),
++    ck: "capBar"
+   }))), /*#__PURE__*/React.createElement("div", {
+     className: "space-y-2"
+   }, /*#__PURE__*/React.createElement("button", {
+@@ -19395,7 +19595,7 @@ function App() {
+   }, "↓ Download user manual (theory + methodology)"), /*#__PURE__*/React.createElement("div", { className: "flex gap-2" },
+     /*#__PURE__*/React.createElement("button", { onClick: saveScenario, className: "flex-1 font-mono-tech text-[10px] tracking-wider py-2 rounded-sm border border-slate-300 text-slate-600 hover:bg-slate-50 transition" }, "↓ Save scenario"),
+     /*#__PURE__*/React.createElement("button", { onClick: () => fileInputRef.current && fileInputRef.current.click(), className: "flex-1 font-mono-tech text-[10px] tracking-wider py-2 rounded-sm border border-slate-300 text-slate-600 hover:bg-slate-50 transition" }, "↑ Load scenario"),
+-    /*#__PURE__*/React.createElement("input", { ref: fileInputRef, type: "file", accept: ".json,application/json", onChange: loadScenarioFile, style: { display: "none" } })))), /*#__PURE__*/React.createElement("main", {
++    /*#__PURE__*/React.createElement("input", { ref: fileInputRef, type: "file", accept: ".json,application/json", onChange: loadScenarioFile, style: { display: "none" } })))), /*#__PURE__*/pdNegMain(negBlk, negErr, goNeg, {
+     className: "main-col space-y-4"
+   }, /*#__PURE__*/React.createElement("div", {
+     className: "bg-white border border-slate-200 rounded-md card-sh px-4 py-3"
+@@ -21551,7 +21751,7 @@ function App() {
+     open: soilModalOpen,
+     onClose: () => setSoilModalOpen(false),
+     I: I, set: set
+-  }));
++  })));
+ }
+ function Stat({
+   label,
+@@ -22358,7 +22558,7 @@ function OutTabs({ pileType }) {
+    collapsed. Reads the rendered <section data-module> hooks, so it follows
+    whatever modules the active pile type renders; it never touches calc state.
+ ============================================================ */
+-function CheckIndex({ pileLabel, allPass, onSave, onPreview, onPrint, caseLabel }) {
++function CheckIndex({ pileLabel, allPass, negBlk, onSave, onPreview, onPrint, caseLabel }) {
+   // Expand / Collapse all act on the modules of the open output tab (on a tab
+   // with no modules, e.g. Summary, on every module).
+   const setAll = (wantOpen) => {
+@@ -22444,7 +22644,7 @@ function CheckIndex({ pileLabel, allPass, onSave, onPreview, onPrint, caseLabel
+     /*#__PURE__*/React.createElement("div", { className: "check-index-inner max-w-[1920px] mx-auto px-6" },
+       /*#__PURE__*/React.createElement("div", { className: "ci-pile" }, pileLabel),
+       /*#__PURE__*/React.createElement("div", { className: "ci-status " + (allPass ? "is-ok" : "is-ng") },
+-        allPass ? "All checks OK" : (nNG + " check" + (nNG === 1 ? "" : "s") + " not satisfied")),
++        negBlk ? "Input error: results withheld" : allPass ? "All checks OK" : (nNG + " check" + (nNG === 1 ? "" : "s") + " not satisfied")),
+       caseLabel && /*#__PURE__*/React.createElement("div", { className: "ci-case", title: "Every result on this page is for the active load case" }, "Active case: ", /*#__PURE__*/React.createElement("b", null, caseLabel)),
+       /*#__PURE__*/React.createElement("ol", { className: "ci-list" },
+         items.map(it => /*#__PURE__*/React.createElement("li", { key: it.id },
+```
+
+## 2026-11-12 — PR: claude/pile-rail-inputs (PR #1440: https://github.com/mlococo88/All-Structural/pull/1440) (PDRL; engineer decision 2026-11-12) — Module 02 inputs and the Buckling L_f override moved from the output column to the input rail and checked (closes PDNB open item 1)   [UI move + input validation: no formula, factor, unit or reference changed; valid inputs give identical results]
+- **Problem:** PDNB (#1434) could not check the inputs that sat in the output column (n_h, k_h, the Module 02 layer table, p- / y-multiplier, LPILE M_max, the L_f override, the p-y probe depth): withholding the output would hide them. Engineer decision 2026-11-12: move them into the input rail so they are always visible, and check them with PDNB's rules. The PDNB `gt` / `ge` rules are engineer-confirmed 2026-11-12 (dimensions / strengths / E / φ / K > 0; zero = "not entered" fields ≥ 0).
+- **Where each input moved** (all in `Pile Designer.html`; same state keys, handlers, defaults and values):
+  - New rail panel **"Lateral analysis"** (`PdLatInPanel`, anchor `function PdLatInPanel({ I, set })`, before the RAIL TABS block), on the **Bond / p-y** (H-pile: **p-y / lateral**) tab, after the Geotechnical panel; non-integral piles. It shows the fields of the lateral basis chosen in Module 02 Step 1 (the basis selector stays in Module 02), as Module 02 did:
+    - nonlinear p-y: p-multiplier `pyPM` (disabled "not used" while group p-multipliers are applied per row, as before), y-multiplier `pyYM` (moved from `PyPanel`, Step 3), p-y curve probe depth `pyCurveDepth` (moved from the Lateral graphs tab, p-y curves sub-tab);
+    - input Mmax (from LPILE): `Mmax` (moved from Module 02 Step 2; the LPILE file import and its "Use … as Mmax" button stay in Module 02);
+    - linear estimate: the soil block of Module 02's left column moved whole: soil model (sand n_h / clay k_h), layered-profile ON/OFF (with its seeding), the layer table `LayerTable` (top, type, n_h / k_h), the sand-density / clay-consistency presets with above / below WT, and `solverNh` / `solverKh`. "Vary EI at casing tip", the lateral-load / free-length mirrors, analysis depth and head condition stay in Module 02.
+  - Rail **Buckling** panel (Checks tab): "Override the fixity depth L_f manually" (`bklLfOverride`) and L_f (`LfBuckle`), moved from Module 10 (`BucklingTabs`); shown, as before, with buckling evaluated and method tab 1 or 2 selected.
+  - `railTabFor`: `/^Geotechnical/` → `/^(Geotechnical|Lateral analysis)/` (tab "soil").
+- **Context kept at the old places (§6):** read-only `InputsUsed` echoes with the "edit in … →" link (opens the rail tab and the panel, focuses its first field): Module 02 linear estimate ("soil = sand, n_h = 60 kip/ft³" / clay k_h / "layered profile, N layers"), Module 02 input Mmax ("Maximum moment, Mmax = 25.0 kip·ft"; note now "Enter it in the input rail (Lateral analysis), or import an LPILE output file →"), Module 02 p-y Step 3 (p- / y-multiplier), Lateral graphs p-y curves (probe depth), Module 10 (manual fixity-depth override on / off, L_f, and the ⚠ "override active" line). `PyPanel`, `LatGraphsCard`, `BucklingTabs` get a new prop `setRailTab`. Texts naming the old place: rail "No layered profile — the analysis uses the uniform soil set in the Lateral analysis panel (linear estimate)." (was "… set in Module 02."); Module 11 helper "copy one value into the p-multiplier field (input rail, Lateral analysis)." (was "… into the Module 02 p-multiplier field.").
+- **Checks added** (`PD_NEG_RULES`, new helper `pdLatSrc(I, src)` = not integral and `I.lateralSource === src`; checked only where shown, as PDNB):
+  - `pyPM` `gt` (p-y basis, not while group p-multipliers are applied per row); `pyYM` `gt` (p-y basis): multipliers, like φ / K. Note: the solver uses `I.pyPM || 1`, so a typed 0 ran as 1.0 before; it is now an input error (as `hpCapEmbedK` in PDNB).
+  - `pyCurveDepth` `ge` (p-y basis): 0 = off; display only (adds one curve to the p-y curves graph).
+  - `Mmax` `ge` (input basis): a moment magnitude (the LPILE import stores |M|); 0 = no lateral moment.
+  - `solverNh` `gt` (linear, uniform sand), `solverKh` `gt` (linear, uniform clay): a subgrade modulus, like E; 0 = no soil.
+  - layer table n_h (sand) / k_h (other types) `ge` (linear, layered; `pdNegCheck`, label "Lateral analysis › linear-estimate layer i n_h"): soil-layer values as PDNB (0 = not entered; the Davisson fixity falls back to 60 / 150 for a 0). The layer top `soilLayers.i.topDepth` was already checked by PDNB (Soil profile tab); its cell in this table now carries the same key, so it is marked too.
+  - `LfBuckle` `ge` (buckling evaluated, override active): a depth below grade, like the scour depths; 0 = fixity at grade.
+  - Fields get `ck` (PdNumIn: red border, `aria-invalid`, title; Field: also the "⚠ Input error …" line). The banner entry's link opens the rail tab and focuses the field.
+- **Governing provision:** none (UI move, input validation). **Formulas, factors, units, references:** none changed (§4). **Saved data (§5):** no key or format changed; stored values are never altered; a saved project with an invalid value opens, keeps it and shows the error.
+- **Check case:** default micropile (p-y basis). p-multiplier 1.00: results as main. p-multiplier −0.5 (Bond / p-y tab › Lateral analysis): banner "⚠ Input error — results withheld: Lateral analysis › p-multiplier must be greater than 0 (entered -0.500).", the field red, Summary shows only the input-error card, Report "Input check" only, send refused; stored −0.5. 0: same error ("must be greater than 0"). Back to 1: results as before. Linear basis, uniform sand: n_h 60 → as before; n_h −12 or 0 → error. Input basis: Mmax 25 → as before; −1.5 → "must not be negative"; 0 → valid. Buckling on (stickup 5 ft), override on, L_f 6 ft → as before; L_f −2 → error; 0 → valid.
+- **How verified:** headless probe origin/main vs branch, 15 views (default micropile; micropile with group, cap self-weight, stem, d_h, η override; micropile with buckling and K_θ; H-pile; H-pile with group and C_b; integral; integral with geotechnical check and Tier 2; micropile input Mmax; micropile linear estimate sand, clay and layered; micropile buckling with the L_f override; H-pile group with per-row p-multipliers; micropile p/y-multipliers 0.8/1.1 with probe depth 7 ft; H-pile input Mmax), every module expanded and every Lateral graphs sub-tab shown: all input values, the computed results object (`PDRP.cur.r`), the pile-results hand-off payload, the Report text and the check-summary column identical; the main-column text differs only where a moved input became its read-only echo (word diff reviewed: the "Inputs used: … edit in Lateral analysis / Buckling →" lines, the two re-pointed texts) (Plotly ids normalised). Rule probe on the branch: 52 checks (each new rule at −12 and 0 for `gt`, −1.5 and 0 for `ge`, in micropile / H-pile / each basis / both buckling tabs; layer n_h / k_h of a sand, clay and stiff-clay layer; not checked where not shown: Mmax and n_h with the p-y basis, p-multiplier with the input basis or per-row group p-multipliers, L_f with the override off or the P-crit tab, the layer table with a uniform soil, integral piles; banner link opens the Bond / p-y tab and focuses the field; stored value kept): all pass, no console errors. `decimal-entry --tool pile` (53 numeric fields, was 50: the moved fields are now in the rail), pile-library (A vs B page text: B's two new rail blocks masked while A predates PDRL, `PDRL_MASK`), pile-fdx-picker, retwall-pile-handoff, check-syntax. Screenshots before / after of the rail sections reviewed.
+- **Other copies:** none.
+- **Decisions:** (1) the rule of each moved field above; (2) the whole linear-estimate soil block moved (not only n_h / k_h / the table), so the soil model and presets stay next to the value they fill; the lateral basis selector, "Vary EI at casing tip", the LPILE import and Module 11's "apply f_m" buttons stay in the output column (choices / actions, nothing to check); (3) the rail panel shows only the active basis's fields, as Module 02 did.
+- **Open items:** (1) the Davisson buckling fixity (Module 10) uses the uniform n_h / k_h (no soil layers) or the top layer's n_h / k_h regardless of the lateral basis, but those fields are shown only with the linear-estimate basis; not changed (visibility as before). (2) Report inputs table row "Analysis depth … auto ≈ 10× char. length" prints `I.pyCurveDepth` (the probe depth); label not changed.
+- **Exact before / after (git diff of `Pile Designer.html`):**
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index c74202e..b092352 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -2014,10 +2014,12 @@ const blankInputsMsg = keys => "blank or invalid input" + (keys.length > 1 ? "s
+    input error: the field is marked (red border; Field also prints the rule), the error is listed in the input-error banner, and the
+    results (check summary column, output tabs, status, Report, the pile results hand-off) are withheld until it is fixed. The stored
+    value is never changed: a saved project holding such a value opens and shows the error. Rule "gt": > 0; "ge": >= 0. A blank (NaN)
+-   or unset (null) value is not checked here (F54 reports blanks). Fields located in the output column (Module 02 / Buckling
+-   module inputs) are not checked: withholding the output would hide the field. `when` mirrors where the field is shown. */
++   or unset (null) value is not checked here (F54 reports blanks). `when` mirrors where the field is shown. PDRL (2026-11-12,
++   engineer decision): the Module 02 / Buckling-module inputs that sat in the output column (withholding the output would have
++   hidden them) moved to the input rail and are checked here too (Lateral analysis panel; Buckling panel L_f override). */
+ const pdMP = I => I.pileType !== "hpile" && I.pileType !== "iab", pdHP = I => I.pileType === "hpile", pdIAB = I => I.pileType === "iab";
+ const pdGrp = I => !pdIAB(I) && !!I.groupEnable;
++const pdLatSrc = (I, src) => !pdIAB(I) && I.lateralSource === src;   // PDRL: the Module 02 lateral basis whose inputs the rail shows
+ const PD_NEG_RULES = [
+   // [key, where › label, unit, rule, when(I, r)]
+   ["solverLembed", "Pile geometry › Embedded length", "ft", "gt", pdHP],
+@@ -2095,7 +2097,15 @@ const PD_NEG_RULES = [
+   ["iabEmbed", "Integral abutment › Pile embedment into cap", "in", "ge", pdIAB],
+   ["iabSpacing", "Integral abutment › Pile spacing c/c", "ft", "ge", pdIAB],
+   ["iabScourDepth", "Integral abutment › Tier 2 › Scour/peat depth", "ft", "ge", I => pdIAB(I) && !!I.iabTier2],
+-  ["iabScourCheck", "Integral abutment › Tier 2 › Check-flood scour depth", "ft", "ge", I => pdIAB(I) && !!I.iabTier2]
++  ["iabScourCheck", "Integral abutment › Tier 2 › Check-flood scour depth", "ft", "ge", I => pdIAB(I) && !!I.iabTier2],
++  // PDRL (2026-11-12): moved from the output column to the input rail
++  ["pyPM", "Lateral analysis › p-multiplier", "", "gt", I => pdLatSrc(I, "py") && !groupPmAutoOn(I)],
++  ["pyYM", "Lateral analysis › y-multiplier", "", "gt", I => pdLatSrc(I, "py")],
++  ["pyCurveDepth", "Lateral analysis › p-y curve probe depth", "ft", "ge", I => pdLatSrc(I, "py")],
++  ["Mmax", "Lateral analysis › Maximum moment Mmax (LPILE)", "kip·ft", "ge", I => pdLatSrc(I, "input")],
++  ["solverNh", "Lateral analysis › n_h", "kip/ft³", "gt", I => pdLatSrc(I, "solver") && !I.solverLayered && I.solverSoil === "cohesionless"],
++  ["solverKh", "Lateral analysis › k_h", "kip/ft²", "gt", I => pdLatSrc(I, "solver") && !I.solverLayered && I.solverSoil !== "cohesionless"],
++  ["LfBuckle", "Buckling › Manual fixity depth L_f", "ft", "ge", (I, r) => !pdIAB(I) && !!(r && r.buckling && r.buckling.enable && r.buckling.lfOverrideActive)]
+ ];
+ // soil layers (Soil profile tab): the cells shown for the layer's type; rule >= 0
+ const pdSoilShown = I => !pdIAB(I) || (!!I.iabTier2 && I.iabNlSoilSource === "layered") || !!I.iabGeoOn;
+@@ -2118,6 +2128,10 @@ function pdNegCheck(I, r) {
+   PD_NEG_RULES.forEach(([k, label, unit, rule, when]) => { if (when(I, r) && bad(I[k], rule)) out.push({ ck: k, label, unit, rule, v: I[k] }); });
+   if (Array.isArray(I.soilLayers)) I.soilLayers.forEach((ly, i) => { if (ly && typeof ly === "object") pdNegLayerKeys(ly, I, i).forEach(([k, l, u]) => {
+     if (bad(ly[k], "ge")) out.push({ ck: "soilLayers." + i + "." + k, label: "Soil profile › layer " + (i + 1) + " " + l, unit: u, rule: "ge", v: ly[k] }); }); });
++  // PDRL: linear-estimate layer table (Lateral analysis panel): n_h (sand) or k_h (other types), the cell shown; rule >= 0
++  if (pdLatSrc(I, "solver") && I.solverLayered && Array.isArray(I.soilLayers)) I.soilLayers.forEach((ly, i) => { if (ly && typeof ly === "object") {
++    const k = ly.type === "sand" ? "nh" : "kh";
++    if (bad(ly[k], "ge")) out.push({ ck: "soilLayers." + i + "." + k, label: "Lateral analysis › linear-estimate layer " + (i + 1) + " " + (k === "nh" ? "n_h" : "k_h"), unit: k === "nh" ? "kip/ft³" : "kip/ft²", rule: "ge", v: ly[k] }); } });
+   return out;
+ }
+ const pdNegRuleTxt = rule => rule === "gt" ? "must be greater than 0" : "must not be negative";
+@@ -15568,7 +15582,7 @@ function CyclicInfoModal({ open, onClose, onRevert }) {
+      4. factored axial     Pn via the AASHTO column curve -> phi_c*Pn >= STL
+    The SELECTED tab governs the module status, dashboard, and report.
+ ==================================================================== */
+-function BucklingTabs({ b, I, set, pcr, computePcr }) {
++function BucklingTabs({ b, I, set, pcr, computePcr, setRailTab }) {
+   if (!b) return null;
+   const TABS = [
+     { k: "davisson", label: "1 · Davisson", sub: "closed form" },
+@@ -15868,28 +15882,17 @@ function BucklingTabs({ b, I, set, pcr, computePcr }) {
+             closer(b.methods.pcrit))),
+ 
+     // ---------- manual override (tabs 1-2 only) ----------
++    // PDRL: the override is set in the input rail (Buckling panel); shown here read-only with a link
+     tab !== "pcrit" && /*#__PURE__*/React.createElement("div", { className: "mt-3 pt-2 border-t border-slate-200" },
+-      /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-1.5 text-[9.5px] text-slate-600" },
+-        /*#__PURE__*/React.createElement("input", {
+-          type: "checkbox", checked: !!I.bklLfOverride,
+-          onChange: e => {
+-            if (e.target.checked && b.methods[tab] && !I.LfBuckle) set('LfBuckle', parseFloat(b.methods[tab].Lf.toFixed(1)));
+-            set('bklLfOverride', e.target.checked);
+-          }
+-        }),
+-        "Override the fixity depth manually"),
++      /*#__PURE__*/React.createElement(InputsUsed, { tab: "checks", setTab: setRailTab, panelTitle: "Buckling",
++        items: [["manual fixity-depth override", b.lfOverrideActive ? "on, L\u1da0 = " + fmt(I.LfBuckle, 1) : "off", b.lfOverrideActive ? "ft" : ""]] }),
+       b.lfOverrideActive && /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-2 mt-1" },
+-        /*#__PURE__*/React.createElement("span", { className: "text-[9.5px] text-slate-500" }, "L\u1da0 ="),
+-        /*#__PURE__*/React.createElement(PdNumIn, {
+-          type: "number", step: "0.5", className: "w-20 text-[10px] border border-slate-300 rounded-sm px-1 py-0.5",
+-          value: I.LfBuckle, onChange: e => set('LfBuckle', parseFloat(e.target.value) || 0)
+-        }),
+         /*#__PURE__*/React.createElement("span", { className: "text-[9px]", style: { color: "#8a5a1f" } },
+           "\u26a0 override active \u2014 the computed ", tab === "davisson" ? "Davisson" : "deflection-matched",
+           " value (", b.methods[tab] ? fmt(b.methods[tab].Lf, 1) : "\u2014", " ft) is not being used."))));
+ }
+ 
+-function PyPanel({ I, set, pyRes, r, EI, EI_composite_kipin2, EI_aashto_kipin2, EI_aashto_Cp, EI_uncased_kipin2, casingTipBelowMudline, pcr, computePcr, pmCurve, caseRes, setLoad, openSoilModal }) {
++function PyPanel({ I, set, pyRes, r, EI, EI_composite_kipin2, EI_aashto_kipin2, EI_aashto_Cp, EI_uncased_kipin2, casingTipBelowMudline, pcr, computePcr, pmCurve, caseRes, setLoad, openSoilModal, setRailTab }) {
+   const ok = pyRes && pyRes.ok;
+   const [lpd, setLpd] = React.useState(null);        // parsed .lp12d {data, warn} | {err}
+   const [lpdCase, setLpdCase] = React.useState(0);
+@@ -16211,10 +16214,9 @@ function PyPanel({ I, set, pyRes, r, EI, EI_composite_kipin2, EI_aashto_kipin2,
+           /*#__PURE__*/React.createElement(Field, { label: "Lateral load", unit: "kip", sub: "⇐ active load case", value: I.Plat, onChange: v => setLoad('Plat', v) }),
+           /*#__PURE__*/React.createElement(GeoMirror, { label: "Stickup", val: I.solverFree, unit: "ft" }),
+           /*#__PURE__*/React.createElement(Field, { label: "Head moment", unit: "kip\u00b7ft", sub: I.solverHead === "fixed" ? "ignored (fixed head)" : "⇐ active load case", value: I.pyMhead, onChange: v => setLoad('Mhead', v) }),
+-          groupPmAutoOn(I)
+-            ? /*#__PURE__*/React.createElement(Field, { label: "p-multiplier", sub: "not used \u2014 per row: row f\u2098 \u00d7 modifier (Module 11)", value: I.pyPM, disabled: true, onChange: () => {} })
+-            : /*#__PURE__*/React.createElement(Field, { label: "p-multiplier", sub: "group fm \u00d7 curve", value: I.pyPM, onChange: v => set('pyPM', v) }),
+-          /*#__PURE__*/React.createElement(Field, { label: "y-multiplier", value: I.pyYM, onChange: v => set('pyYM', v) })),
++          /*#__PURE__*/React.createElement("div", { className: "col-span-2" },   // PDRL: p- / y-multiplier are entered in the input rail
++            /*#__PURE__*/React.createElement(InputsUsed, { tab: "soil", setTab: setRailTab, panelTitle: "Lateral analysis",
++              items: [["p-multiplier", groupPmAutoOn(I) ? "not used (per row: row f\u2098 \u00d7 modifier, Module 11)" : fmt(I.pyPM, 2), ""], ["y-multiplier", fmt(I.pyYM, 2), ""]] }))),
+         /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 leading-snug mb-2" },
+           "Axial thrust Q = STL = ", fmt(I.STL, 0), " kip is carried in the governing equation (P-\u0394 native). Cyclic Reese A/B factors are uncalibrated placeholders \u2014 the static path is the benchmarked one.",
+           I.solverFree < 0 ? /*#__PURE__*/React.createElement("span", { style: { color: "#8a5a1f" } }, " Head is ", fmt(Math.abs(I.solverFree), 1), " ft below grade (buried cap): soil credited from the head down; cap passive resistance not included \u2014 reduce top-layer f\u2098 if backfill is non-structural.") : ""),
+@@ -16297,6 +16299,7 @@ function LayerTable({
+   }, /*#__PURE__*/React.createElement(PdNumIn, {
+     type: "number",
+     value: L.topDepth,
++    ck: "soilLayers." + L._i + ".topDepth",
+     onChange: e => update(L._i, {
+       topDepth: parseFloat(e.target.value) || 0
+     }),
+@@ -16315,6 +16318,7 @@ function LayerTable({
+   }, "clay (k_h)")), L.type === "sand" ? /*#__PURE__*/React.createElement(PdNumIn, {
+     type: "number",
+     value: L.nh,
++    ck: "soilLayers." + L._i + ".nh",
+     onChange: e => update(L._i, {
+       nh: parseFloat(e.target.value) || 0
+     }),
+@@ -16323,6 +16327,7 @@ function LayerTable({
+   }) : /*#__PURE__*/React.createElement(PdNumIn, {
+     type: "number",
+     value: L.kh,
++    ck: "soilLayers." + L._i + ".kh",
+     onChange: e => update(L._i, {
+       kh: parseFloat(e.target.value) || 0
+     }),
+@@ -19156,7 +19161,7 @@ function App() {
+     "data-rtab-fixed": "checks",
+     onClick: () => gotoLoadsTab(setRailTab, "group"),
+     className: "w-full mt-2 font-mono-tech text-[11px] tracking-wider py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition flex items-center justify-center gap-1.5"
+-  }, "▦ PILE GROUP \u2192 Loads & group tab", (cases[activeIdx] && cases[activeIdx]._fromGroup) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--accent)" } }, "GROUP CASE ACTIVE") : (groupEnabled && groupCase) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, "APPLIED") : null), /*#__PURE__*/React.createElement("div", { className: "mt-3 pt-2 border-t border-slate-200" }, /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mb-1" }, "Head condition"), /*#__PURE__*/React.createElement("div", { className: "flex gap-2 text-[11px] font-mono-tech" }, [["free", "free / pinned"], ["fixed", "fixed / capped"]].map(([v, l]) => /*#__PURE__*/React.createElement("button", { key: v, onClick: () => set('solverHead', v), className: "flex-1 px-2 py-1 rounded-sm border " + (I.solverHead === v ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50") }, l))), I.solverHead !== "fixed" && /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1.5 mt-1.5" }, /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500 font-mono-tech" }, "K\u03b8"), /*#__PURE__*/React.createElement(PdNumIn, { type: "number", "aria-label": "Head rotational stiffness K-theta, kip-in per radian", ck: "pyKrot", value: I.pyKrot || 0, onChange: e => set('pyKrot', parseFloat(e.target.value) || 0), className: "w-24 font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" }), /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-mono-tech" }, "kip\u00b7in/rad \u00b7 0 = pinned")), /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug pdNL" }, pdNL(null, [["Free:", "head rotates (flagpole/pinned), or is partially restrained by Kθ."], ["Fixed:", "rotation fully restrained by a rigid cap connection."], ["Drives", "the p-y boundary condition, the deflection-matched buckling basis, and the cap-embedment check."]])), /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mt-2.5 mb-1" }, "p-y loading criterion"), /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-1.5 text-[10px] text-slate-600 font-mono-tech" }, /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: !!I.pyCyclic, onChange: e => { const on = e.target.checked; set('pyCyclic', on); if (on) setCycInfoOpen(true); } }), "cyclic p-y curves"), /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, !!I.pyCyclic ? [/*#__PURE__*/React.createElement("b", { key: "b", style: { color: "#8a5a1f" } }, "\u26a0 Cyclic active. "), "Models soil-resistance degradation under repeated large-amplitude reversal (offshore wave, seismic). Static is the usual basis for bridge substructure. ", /*#__PURE__*/React.createElement("button", { key: "d", onClick: () => setCycInfoOpen(true), className: "underline font-mono-tech" }, "details")] : "Unchecked = static (the usual basis for bridge substructure lateral analysis). Cyclic models soil degradation under repeated reversal \u2014 an offshore/seismic criterion."), /*#__PURE__*/React.createElement(CyclicInfoModal, { open: cycInfoOpen, onClose: () => setCycInfoOpen(false), onRevert: () => { set('pyCyclic', false); setCycInfoOpen(false); } }), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mt-2.5 mb-1" }, "Large head-deflection warning"), /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1.5" }, /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500 font-mono-tech" }, "y\u2080 >"), /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: 0.05, min: 0, "aria-label": "Large head-deflection warning, multiple of the pile width D", ck: "pyDeflWarnD", value: (typeof I.pyDeflWarnD === "number" && isFinite(I.pyDeflWarnD)) ? I.pyDeflWarnD : "", onChange: e => set('pyDeflWarnD', e.target.value === "" ? NaN : parseFloat(e.target.value)), className: "w-16 font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" }), /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-mono-tech" }, "\u00d7 D \u00b7 0 = off \u00b7 blank = 0.25")), /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug pdNL" }, pdNL("Amber warning, not a check.", [["Shown", "when the p-y head deflection |y₀| exceeds this multiple of the pile width D (default 0.25 D), for the active case and for each case of the envelope."], ["No status change:", "nothing becomes NG because of it."], ["Service deflection limit", "(Loads & group tab): separate."]])))), /*#__PURE__*/React.createElement("button", { onClick: () => gotoSoilProfileTab(setRailTab), className: "w-full mt-2 font-mono-tech text-[11px] tracking-wider py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition flex items-center justify-center gap-1.5" }, "\u2261 SOIL PROFILE", (Array.isArray(I.soilLayers) && I.soilLayers.length) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, I.soilLayers.length, " LAYER", I.soilLayers.length > 1 ? "S" : "") : /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm", style: { background: "#e2e8f0", color: "#64748b" } }, "UNIFORM")), /*#__PURE__*/React.createElement("div", { className: "mt-1 text-[8.5px] text-slate-400 font-mono-tech leading-snug" }, (Array.isArray(I.soilLayers) && I.soilLayers.length) ? ["Drives the p-y lateral analysis and the Davisson fixity depth (Module 10). Top layer: ", (() => { const t = [...I.soilLayers].sort((a, b) => (a.topDepth || 0) - (b.topDepth || 0))[0]; return t.type === "sand" ? "sand n\u2095=" + fmt(t.nh, 0) : (t.type === "stiffclay" ? "stiff clay" : t.type === "weakrock" ? "weak rock" : "clay") + " k\u2095=" + fmt(t.kh, 0); })(), "."] : "No layered profile \u2014 the analysis uses the uniform soil set in Module 02."), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
++  }, "▦ PILE GROUP \u2192 Loads & group tab", (cases[activeIdx] && cases[activeIdx]._fromGroup) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--accent)" } }, "GROUP CASE ACTIVE") : (groupEnabled && groupCase) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, "APPLIED") : null), /*#__PURE__*/React.createElement("div", { className: "mt-3 pt-2 border-t border-slate-200" }, /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mb-1" }, "Head condition"), /*#__PURE__*/React.createElement("div", { className: "flex gap-2 text-[11px] font-mono-tech" }, [["free", "free / pinned"], ["fixed", "fixed / capped"]].map(([v, l]) => /*#__PURE__*/React.createElement("button", { key: v, onClick: () => set('solverHead', v), className: "flex-1 px-2 py-1 rounded-sm border " + (I.solverHead === v ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50") }, l))), I.solverHead !== "fixed" && /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1.5 mt-1.5" }, /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500 font-mono-tech" }, "K\u03b8"), /*#__PURE__*/React.createElement(PdNumIn, { type: "number", "aria-label": "Head rotational stiffness K-theta, kip-in per radian", ck: "pyKrot", value: I.pyKrot || 0, onChange: e => set('pyKrot', parseFloat(e.target.value) || 0), className: "w-24 font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" }), /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-mono-tech" }, "kip\u00b7in/rad \u00b7 0 = pinned")), /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug pdNL" }, pdNL(null, [["Free:", "head rotates (flagpole/pinned), or is partially restrained by Kθ."], ["Fixed:", "rotation fully restrained by a rigid cap connection."], ["Drives", "the p-y boundary condition, the deflection-matched buckling basis, and the cap-embedment check."]])), /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mt-2.5 mb-1" }, "p-y loading criterion"), /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-1.5 text-[10px] text-slate-600 font-mono-tech" }, /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: !!I.pyCyclic, onChange: e => { const on = e.target.checked; set('pyCyclic', on); if (on) setCycInfoOpen(true); } }), "cyclic p-y curves"), /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, !!I.pyCyclic ? [/*#__PURE__*/React.createElement("b", { key: "b", style: { color: "#8a5a1f" } }, "\u26a0 Cyclic active. "), "Models soil-resistance degradation under repeated large-amplitude reversal (offshore wave, seismic). Static is the usual basis for bridge substructure. ", /*#__PURE__*/React.createElement("button", { key: "d", onClick: () => setCycInfoOpen(true), className: "underline font-mono-tech" }, "details")] : "Unchecked = static (the usual basis for bridge substructure lateral analysis). Cyclic models soil degradation under repeated reversal \u2014 an offshore/seismic criterion."), /*#__PURE__*/React.createElement(CyclicInfoModal, { open: cycInfoOpen, onClose: () => setCycInfoOpen(false), onRevert: () => { set('pyCyclic', false); setCycInfoOpen(false); } }), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mt-2.5 mb-1" }, "Large head-deflection warning"), /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1.5" }, /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500 font-mono-tech" }, "y\u2080 >"), /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: 0.05, min: 0, "aria-label": "Large head-deflection warning, multiple of the pile width D", ck: "pyDeflWarnD", value: (typeof I.pyDeflWarnD === "number" && isFinite(I.pyDeflWarnD)) ? I.pyDeflWarnD : "", onChange: e => set('pyDeflWarnD', e.target.value === "" ? NaN : parseFloat(e.target.value)), className: "w-16 font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" }), /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-mono-tech" }, "\u00d7 D \u00b7 0 = off \u00b7 blank = 0.25")), /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug pdNL" }, pdNL("Amber warning, not a check.", [["Shown", "when the p-y head deflection |y₀| exceeds this multiple of the pile width D (default 0.25 D), for the active case and for each case of the envelope."], ["No status change:", "nothing becomes NG because of it."], ["Service deflection limit", "(Loads & group tab): separate."]])))), /*#__PURE__*/React.createElement("button", { onClick: () => gotoSoilProfileTab(setRailTab), className: "w-full mt-2 font-mono-tech text-[11px] tracking-wider py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition flex items-center justify-center gap-1.5" }, "\u2261 SOIL PROFILE", (Array.isArray(I.soilLayers) && I.soilLayers.length) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, I.soilLayers.length, " LAYER", I.soilLayers.length > 1 ? "S" : "") : /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm", style: { background: "#e2e8f0", color: "#64748b" } }, "UNIFORM")), /*#__PURE__*/React.createElement("div", { className: "mt-1 text-[8.5px] text-slate-400 font-mono-tech leading-snug" }, (Array.isArray(I.soilLayers) && I.soilLayers.length) ? ["Drives the p-y lateral analysis and the Davisson fixity depth (Module 10). Top layer: ", (() => { const t = [...I.soilLayers].sort((a, b) => (a.topDepth || 0) - (b.topDepth || 0))[0]; return t.type === "sand" ? "sand n\u2095=" + fmt(t.nh, 0) : (t.type === "stiffclay" ? "stiff clay" : t.type === "weakrock" ? "weak rock" : "clay") + " k\u2095=" + fmt(t.kh, 0); })(), "."] : "No layered profile \u2014 the analysis uses the uniform soil set in the Lateral analysis panel (linear estimate)."), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
+     title: "Loads",
+     sub: "active case · edit in the Loads & group tab"
+   }, (() => {
+@@ -19406,7 +19411,7 @@ function App() {
+       className: "w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition" },
+       /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[10px] tracking-wider" }, "◈ SOIL PROFILE \u2192 Soil profile tab"),
+       /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[9px] text-slate-500" }, (Array.isArray(I.soilLayers) ? I.soilLayers.length : 0), " layer", (Array.isArray(I.soilLayers) && I.soilLayers.length === 1) ? "" : "s", " · edit")),
+-    /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, "Layered p-y soil model used by the lateral analysis (Module 02) and the buckling fixity estimate. Same workspace as the button in Module 02."))), /*#__PURE__*/(I.pileType === "micropile") && /*#__PURE__*/React.createElement(Panel, {
++    /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, "Layered p-y soil model used by the lateral analysis (Module 02) and the buckling fixity estimate. Same workspace as the button in Module 02."))), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(PdLatInPanel, { I: I, set: set }), /*#__PURE__*/(I.pileType === "micropile") && /*#__PURE__*/React.createElement(Panel, {
+     title: "Resistance Factors"
+   },
+   /*#__PURE__*/React.createElement("div", { className: "mb-2 p-2 rounded-sm text-[9px] leading-snug pdNL", style: { background: "rgba(138,90,31,0.09)", color: "#7a4d15", border: "1px solid rgba(138,90,31,0.28)" } }, pdNL("AASHTO φ presets (provisional).", [
+@@ -19481,6 +19486,28 @@ function App() {
+       onChange: v => set('bklCapMult', isFinite(v) && v > 0 ? v : 10) }),
+     /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 leading-snug self-end pb-1" },
+       "L\u1d64 = stickup ", fmt(r.buckling.stickPos, 1), " ft + ", r.buckling.scourBkl > 0 ? "max(added, design scour " + fmt(r.buckling.scourBkl, 1) + " ft)" : "added", " = ", /*#__PURE__*/React.createElement("b", null, fmt(r.buckling.Lu_free, 1), " ft"))),   // PDA-D12
++    // PDRL (2026-11-12): manual fixity-depth override, moved from Module 10 (method tabs 1-2 only; same keys and handlers)
++    r.buckling.enable && r.buckling.bklTab !== "pcrit" && /*#__PURE__*/React.createElement("div", { className: "mt-3 pt-2 border-t border-slate-200" },
++      /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-1.5 text-[11px] text-slate-600" },
++        /*#__PURE__*/React.createElement("input", {
++          type: "checkbox", checked: !!I.bklLfOverride,
++          onChange: e => {
++            const b = r.buckling, tab = b.bklTab;
++            if (e.target.checked && b.methods[tab] && !I.LfBuckle) set('LfBuckle', parseFloat(b.methods[tab].Lf.toFixed(1)));
++            set('bklLfOverride', e.target.checked);
++          }
++        }),
++        "Override the fixity depth L\u1da0 manually (method ", r.buckling.bklTab === "deflmatch" ? "2 \u00b7 deflection-matched" : "1 \u00b7 Davisson", ", Module 10)"),
++      r.buckling.lfOverrideActive && /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-2 mt-1" },
++        /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500" }, "L\u1da0 ="),
++        /*#__PURE__*/React.createElement(PdNumIn, {
++          type: "number", step: "0.5", "aria-label": "Manual fixity depth override, ft", ck: "LfBuckle", className: "w-20 text-[11px] border border-slate-300 rounded-sm px-1 py-0.5",
++          value: I.LfBuckle, onChange: e => set('LfBuckle', parseFloat(e.target.value) || 0)
++        }),
++        /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500" }, "ft"),
++        /*#__PURE__*/React.createElement("span", { className: "text-[9px]", style: { color: "#8a5a1f" } },
++          "override active \u2014 the computed value (", r.buckling.methods[r.buckling.bklTab] ? fmt(r.buckling.methods[r.buckling.bklTab].Lf, 1) : "\u2014", " ft) is not used")),
++      ),
+     r.buckling.enable && /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mt-2" },
+       "The ramp's real endpoint is non-convergence; the cap only bounds runtime. Truncating low is unconservative \u2014 on LPILE Ex. 23 a 2\u00d7 cap returned +25.9% over the true P\u1d04\u1d63, while R\u00b2 improved.")), /*#__PURE__*/(I.pileType === "micropile") && /*#__PURE__*/React.createElement(Panel, {
+     title: "Uplift",
+@@ -20429,7 +20456,7 @@ function App() {
+     EI: EI, EI_composite_kipin2: EI_composite_kipin2, EI_aashto_kipin2: EI_aashto_kipin2,
+     EI_aashto_Cp: EI_aashto_Cp, EI_uncased_kipin2: EI_uncased_kipin2,
+     casingTipBelowMudline: casingTipBelowMudline
+-    , pcr: pcr, computePcr: computePcr, pmCurve: pmCurve, caseRes: caseRes, setLoad: setCaseLoad, openSoilModal: () => gotoSoilProfileTab(setRailTab)
++    , pcr: pcr, computePcr: computePcr, pmCurve: pmCurve, caseRes: caseRes, setLoad: setCaseLoad, openSoilModal: () => gotoSoilProfileTab(setRailTab), setRailTab: setRailTab
+   }) : I.lateralSource === "input" ? /*#__PURE__*/React.createElement("div", null,
+   /*#__PURE__*/React.createElement("div", {
+     className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-2"
+@@ -20438,15 +20465,10 @@ function App() {
+     className: "grid md:grid-cols-[260px_1fr] gap-5"
+   }, /*#__PURE__*/React.createElement("div", {
+     className: "max-w-xs"
+-  }, /*#__PURE__*/React.createElement(Field, {
+-    label: "Maximum moment, Mmax",
+-    sub: "from external LPILE run",
+-    unit: "kip·ft",
+-    value: I.Mmax,
+-    onChange: v => set('Mmax', v)
+-  }), /*#__PURE__*/React.createElement("p", {
++  }, /*#__PURE__*/React.createElement(InputsUsed, { tab: "soil", setTab: setRailTab, panelTitle: "Lateral analysis",   // PDRL: Mmax is entered in the input rail
++    items: [["Maximum moment, Mmax", fmt(I.Mmax, 1), "kip\u00b7ft"]] }), /*#__PURE__*/React.createElement("p", {
+     className: "text-[10px] text-slate-400 mt-2 leading-snug"
+-  }, "Used downstream in flexure & combined checks. Enter manually, or import an LPILE output file →")), /*#__PURE__*/React.createElement("div", {
++  }, "Used downstream in flexure & combined checks. Enter it in the input rail (Lateral analysis), or import an LPILE output file →")), /*#__PURE__*/React.createElement("div", {
+     className: "rounded-sm border border-slate-200 p-3"
+   }, /*#__PURE__*/React.createElement("div", {
+     className: "flex items-center justify-between mb-2"
+@@ -20653,106 +20675,10 @@ function App() {
+     className: "text-[10px] text-slate-400 leading-tight mb-1"
+   }, "= Plat (Loads panel)"), /*#__PURE__*/React.createElement("div", {
+     className: "mt-1 w-full font-mono-tech text-[13px] px-2 py-1.5 bg-slate-100 border border-slate-200 rounded-sm text-slate-600"
+-  }, fmt(I.Plat, 1))), /*#__PURE__*/React.createElement(GeoMirror, { label: "Free length e", val: I.solverFree, unit: "ft" }), /*#__PURE__*/React.createElement("div", {
+-    className: "col-span-2"
+-  }, /*#__PURE__*/React.createElement("span", {
+-    className: "text-[12px] text-[var(--blueprint)] font-medium"
+-  }, "Soil model"), /*#__PURE__*/React.createElement("div", {
+-    className: "flex gap-2 mt-1 text-[11px] font-mono-tech"
+-  }, [["cohesionless", "sand (n_h)"], ["cohesive", "clay (k_h)"]].map(([v, l]) => /*#__PURE__*/React.createElement("button", {
+-    key: v,
+-    onClick: () => set('solverSoil', v),
+-    className: "px-2 py-1 rounded-sm border " + (I.solverSoil === v ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300"),
+-    disabled: I.solverLayered,
+-    style: I.solverLayered ? {
+-      opacity: 0.4
+-    } : undefined
+-  }, l)))), /*#__PURE__*/React.createElement("div", {
+-    className: "col-span-2 flex items-center justify-between rounded-sm border border-slate-200 px-2.5 py-2",
+-    style: {
+-      background: "rgba(20,48,74,0.03)"
+-    }
+-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+-    className: "text-[11px] font-mono-tech text-[var(--blueprint)]"
+-  }, "Layered soil profile"), /*#__PURE__*/React.createElement("p", {
+-    className: "text-[9px] text-slate-400 leading-snug"
+-  }, "define 2–3 layers by depth instead of one uniform soil")), /*#__PURE__*/React.createElement("button", {
+-    onClick: () => {
+-      const turningOn = !I.solverLayered;
+-      if (turningOn && (!I.soilLayers || I.soilLayers.length === 0)) {
+-        // seed from current single-value soil
+-        set('soilLayers', [{
+-          topDepth: 0,
+-          type: I.solverSoil === "cohesionless" ? "sand" : "clay",
+-          nh: I.solverNh,
+-          kh: I.solverKh
+-        }]);
+-      }
+-      set('solverLayered', turningOn);
+-    },
+-    className: "px-2.5 py-1 rounded-sm border text-[11px] font-mono-tech " + (I.solverLayered ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300")
+-  }, I.solverLayered ? "ON" : "OFF")), I.solverLayered && /*#__PURE__*/React.createElement("div", {
+-    className: "col-span-2"
+-  }, /*#__PURE__*/React.createElement(LayerTable, {
+-    I: I,
+-    set: set
+-  })), !I.solverLayered && /*#__PURE__*/React.createElement("div", {
+-    className: "col-span-2"
+-  }, /*#__PURE__*/React.createElement("span", {
+-    className: "text-[12px] text-[var(--blueprint)] font-medium"
+-  }, "Soil type"), /*#__PURE__*/React.createElement("span", {
+-    className: "text-[10px] text-slate-400 ml-2"
+-  }, "fills the value below — still editable"), I.solverSoil === "cohesionless" ? /*#__PURE__*/React.createElement("div", {
+-    className: "flex flex-wrap items-center gap-2 mt-1"
+-  }, /*#__PURE__*/React.createElement("select", {
+-    value: "",
+-    onChange: e => {
+-      const p = SAND_NH_PRESETS.find(x => x.key === e.target.value);
+-      if (p) set('solverNh', I.solverGWT === "below" ? p.below : p.above);
+-    },
+-    className: "font-mono-tech text-[11px] px-2 py-1.5 rounded-sm border border-slate-300 bg-white flex-1 min-w-[140px]"
+-  }, /*#__PURE__*/React.createElement("option", {
+-    value: "",
+-    disabled: true
+-  }, "Select sand density…"), SAND_NH_PRESETS.map(p => /*#__PURE__*/React.createElement("option", {
+-    key: p.key,
+-    value: p.key
+-  }, p.label, " — n_h ", I.solverGWT === "below" ? p.below : p.above))), /*#__PURE__*/React.createElement("div", {
+-    className: "flex gap-1 text-[10px] font-mono-tech"
+-  }, [["above", "above WT"], ["below", "below WT"]].map(([v, l]) => /*#__PURE__*/React.createElement("button", {
+-    key: v,
+-    onClick: () => set('solverGWT', v),
+-    className: "px-2 py-1 rounded-sm border " + (I.solverGWT === v ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300")
+-  }, l)))) : /*#__PURE__*/React.createElement("div", {
+-    className: "mt-1"
+-  }, /*#__PURE__*/React.createElement("select", {
+-    value: "",
+-    onChange: e => {
+-      const p = CLAY_KH_PRESETS.find(x => x.key === e.target.value);
+-      if (p) set('solverKh', p.kh);
+-    },
+-    className: "font-mono-tech text-[11px] px-2 py-1.5 rounded-sm border border-slate-300 bg-white w-full"
+-  }, /*#__PURE__*/React.createElement("option", {
+-    value: "",
+-    disabled: true
+-  }, "Select clay consistency…"), CLAY_KH_PRESETS.map(p => /*#__PURE__*/React.createElement("option", {
+-    key: p.key,
+-    value: p.key
+-  }, p.label, " — k_h ", p.kh)))), /*#__PURE__*/React.createElement("p", {
+-    className: "text-[9px] text-slate-400 mt-1 leading-snug"
+-  }, "Sand n_h: AASHTO LRFD 10th Ed. Table C10.4.6.3-2 (ksi/ft \u00d7 144 = kip/ft\u00b3). Clay k_h: representative values. Use your geotechnical report's value where available.")), !I.solverLayered && (I.solverSoil === "cohesionless" ? /*#__PURE__*/React.createElement(Field, {
+-    label: "n_h",
+-    sub: "subgrade rate Es=nh·z",
+-    unit: "kip/ft³",
+-    value: I.solverNh,
+-    onChange: v => set('solverNh', v)
+-  }) : /*#__PURE__*/React.createElement(Field, {
+-    label: "k_h",
+-    sub: "constant subgrade mod.",
+-    unit: "kip/ft²",
+-    value: I.solverKh,
+-    onChange: v => set('solverKh', v)
+-  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
++  }, fmt(I.Plat, 1))), /*#__PURE__*/React.createElement(GeoMirror, { label: "Free length e", val: I.solverFree, unit: "ft" }), /*#__PURE__*/React.createElement("div", { className: "col-span-2" },   // PDRL: the soil inputs below moved to the input rail (Lateral analysis)
++    /*#__PURE__*/React.createElement(InputsUsed, { tab: "soil", setTab: setRailTab, panelTitle: "Lateral analysis",
++      items: I.solverLayered ? [["soil", "layered profile, " + (Array.isArray(I.soilLayers) ? I.soilLayers.length : 0) + " layer" + ((Array.isArray(I.soilLayers) && I.soilLayers.length === 1) ? "" : "s"), ""]]
++        : I.solverSoil === "cohesionless" ? [["soil", "sand", ""], ["n_h", fmt(I.solverNh, 0), "kip/ft\u00b3"]] : [["soil", "clay", ""], ["k_h", fmt(I.solverKh, 0), "kip/ft\u00b2"]] })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+     className: "flex items-baseline justify-between gap-2"
+   }, /*#__PURE__*/React.createElement("span", {
+     className: "text-[12px] text-[var(--blueprint)] font-medium leading-tight"
+@@ -20868,7 +20794,7 @@ function App() {
+     className: "bg-white rounded-sm p-3 border border-slate-200"
+   }, /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mb-2" }, "The deflection and moment diagrams of this linear solution", lpileParse && lpileParse.ok && lpileParse.records && lpileParse.records.length > 2 ? " (with the imported LPILE profiles overlaid and compared)" : "", " are on the ", /*#__PURE__*/React.createElement("b", null, "Lateral graphs"), " output tab."),
+   /*#__PURE__*/React.createElement(LatGraphsLinks, { ids: ["dmv", "py"].concat(lpileParse && lpileParse.ok && lpileParse.records && lpileParse.records.length > 2 ? ["lpile"] : []) })))),
+-  (I.pileType !== "iab") && React.createElement(LatGraphsCard, { I: I, set: set, pyRes: pyRes, solved: solved, activeLayers: activeLayers, pyDepths: pyDepths, setPyDepths: setPyDepths, r: r, actType: (cases[activeIdx] || {}).type,
++  (I.pileType !== "iab") && React.createElement(LatGraphsCard, { I: I, set: set, pyRes: pyRes, solved: solved, activeLayers: activeLayers, pyDepths: pyDepths, setPyDepths: setPyDepths, r: r, actType: (cases[activeIdx] || {}).type, setRailTab: setRailTab,
+     caseRes: caseRes, runAllCases: runAllCases, pmCurve: pmCurve, lpileParse: lpileParse }),
+   (I.pileType === "micropile") && React.createElement(GfxCard, { order: 29, otab: "struct", badge: "S-1", title: "Pile cross-sections (to scale)",
+     sub: "cased and uncased (bond-zone) sections with the properties the checks use" },
+@@ -21396,7 +21322,7 @@ function App() {
+         ["Three methods estimate the same thing: the ", /*#__PURE__*/React.createElement("b", { key: "b" }, "effective length"), " of the equivalent column."], [
+         ["Difference:", "they differ only in how the fixity depth is obtained — a formula, a stiffness match to a lateral analysis, or a nonlinear collapse ramp."],
+         ["The tab you select governs", "the status chip, the dashboard, and the report."], ["Shown:", "all three are shown side by side so nothing is hidden."]])),
+-      /*#__PURE__*/React.createElement(BucklingTabs, { b: r.buckling, I: I, set: set, pcr: pcr, computePcr: computePcr })),
++      /*#__PURE__*/React.createElement(BucklingTabs, { b: r.buckling, I: I, set: set, pcr: pcr, computePcr: computePcr, setRailTab: setRailTab })),
+   /*#__PURE__*/React.createElement("div", { className: "mt-4 rounded-sm border p-3", style: { borderColor: "var(--blueprint2)", background: "rgba(20,48,74,0.02)" } },
+     /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1.5" }, "Step 4 · Soil-supported critical buckling load — rigorous cross-check"),
+     /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 leading-snug mb-2 pdNL" }, pdNL("The most refined answer to the same stability question as Step 3.", [["Method:", "instead of idealizing the pile as a column of length KL, the full nonlinear p-y model is ramped in axial thrust until instability, with soil bracing, concurrent lateral load and moment, and the uncased reach all represented."], ["Role:", "it ", /*#__PURE__*/React.createElement("b", null, "verifies"), " Step 3; Step 3 remains the code design basis."]])),
+@@ -21680,7 +21606,7 @@ function App() {
+         r.group.nRows > 1 && /*#__PURE__*/React.createElement("button", { onClick: () => { set('pyPM', +r.group.pMultipliers[r.group.nRows - 1].fm.toFixed(2)); gotoModule(2, "02"); },
+           className: "font-mono-tech text-[9.5px] px-2 py-1 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50" }, "use trailing row ", fmt(r.group.pMultipliers[r.group.nRows - 1].fm, 2)),
+         Math.abs((I.pyPM || 1) - r.group.pmAvg) < 0.005 ? /*#__PURE__*/React.createElement("span", { className: "text-[9px] font-mono-tech", style: { color: "#256436" } }, "✓ currently applied") : /*#__PURE__*/React.createElement("span", { className: "text-[9px] font-mono-tech text-slate-400" }, "Module 02 p-mult currently ", fmt(I.pyPM || 1, 2))),
+-      /*#__PURE__*/React.createElement("p", { className: "text-[8px] text-slate-400 mt-1 leading-snug" }, "Helpers (toggle off): copy one value into the Module 02 p-multiplier field. A single value reduces every depth's p-y uniformly for one pile; the automatic per-row option above runs every row instead."))),
++      /*#__PURE__*/React.createElement("p", { className: "text-[8px] text-slate-400 mt-1 leading-snug" }, "Helpers (toggle off): copy one value into the p-multiplier field (input rail, Lateral analysis). A single value reduces every depth's p-y uniformly for one pile; the automatic per-row option above runs every row instead."))),
+ 
+     // === 3. BLOCK FAILURE ===
+     /*#__PURE__*/React.createElement("div", { className: "rounded-sm border border-slate-200 p-3 mb-2" },
+@@ -21857,6 +21783,134 @@ function InputsUsed({ items, tab, setTab, panelTitle }) {
+     /*#__PURE__*/React.createElement("button", { type: "button", className: "iu-edit", onClick: edit }, "edit in " + panelTitle + " \u2192"));
+ }
+ 
++/* PDRL (2026-11-12, engineer decision): the Module 02 inputs (lateral analysis) moved from the output column into the input
++   rail (p-y / lateral tab), so they stay visible while results are withheld and are checked like the other inputs (PDNB):
++   p- / y-multiplier and the p-y curve probe depth (nonlinear p-y), Mmax (input from LPILE), and the soil model, layered
++   profile, n_h / k_h (linear estimate). Same state keys, handlers and values as before; Module 02 and the Lateral graphs tab
++   show them read-only with an "edit in Lateral analysis" link. The fields of the lateral basis chosen in Module 02 (Step 1)
++   are shown, as before. */
++const PD_LAT_SRC_LBL = { py: "nonlinear p-y (built-in)", input: "input Mmax (from LPILE)", solver: "linear estimate" };
++function PdLatInPanel({ I, set }) {
++  const src = I.lateralSource;
++  return /*#__PURE__*/React.createElement(Panel, { title: "Lateral analysis", sub: "Module 02 inputs \u00b7 basis: " + (PD_LAT_SRC_LBL[src] || "\u2014") + " (chosen in Module 02, Step 1)" },
++    src === "py" ? /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-3" },
++      groupPmAutoOn(I)
++        ? /*#__PURE__*/React.createElement(Field, { label: "p-multiplier", sub: "not used \u2014 per row: row f\u2098 \u00d7 modifier (Module 11)", value: I.pyPM, disabled: true, onChange: () => {} })
++        : /*#__PURE__*/React.createElement(Field, { ck: "pyPM", label: "p-multiplier", sub: "group fm \u00d7 curve", value: I.pyPM, onChange: v => set('pyPM', v) }),
++      /*#__PURE__*/React.createElement(Field, { ck: "pyYM", label: "y-multiplier", value: I.pyYM, onChange: v => set('pyYM', v) }),
++      /*#__PURE__*/React.createElement("div", { className: "col-span-2" },
++        /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1 text-[11px] font-mono-tech text-slate-500" }, "p-y curve probe depth",
++          /*#__PURE__*/React.createElement(PdNumIn, { type: "number", "aria-label": "p-y curve probe depth, ft below grade", ck: "pyCurveDepth", value: I.pyCurveDepth || 0, onChange: ev => set('pyCurveDepth', parseFloat(ev.target.value) || 0),
++            className: "w-16 text-[11px] px-1 py-0.5 rounded-sm border border-slate-300" }), "ft below grade (0 = off)"),
++        /*#__PURE__*/React.createElement("p", { className: "text-[9px] text-slate-400 mt-1 leading-snug" }, "Adds one p-y curve at this depth to the p-y curves graph (Lateral graphs tab); display only.")))
++    : src === "input" ? /*#__PURE__*/React.createElement("div", null,
++      /*#__PURE__*/React.createElement(Field, { ck: "Mmax", label: "Maximum moment, Mmax", sub: "from external LPILE run", unit: "kip\u00b7ft", value: I.Mmax, onChange: v => set('Mmax', v) }),
++      /*#__PURE__*/React.createElement("p", { className: "text-[9px] text-slate-400 mt-1 leading-snug" }, "Used downstream in flexure & combined checks. Enter manually, or import an LPILE output file in Module 02 (Step 2)."))
++    : src === "solver" ? /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-3 content-start" }, /*#__PURE__*/React.createElement("div", {
++    className: "col-span-2"
++  }, /*#__PURE__*/React.createElement("span", {
++    className: "text-[12px] text-[var(--blueprint)] font-medium"
++  }, "Soil model"), /*#__PURE__*/React.createElement("div", {
++    className: "flex gap-2 mt-1 text-[11px] font-mono-tech"
++  }, [["cohesionless", "sand (n_h)"], ["cohesive", "clay (k_h)"]].map(([v, l]) => /*#__PURE__*/React.createElement("button", {
++    key: v,
++    onClick: () => set('solverSoil', v),
++    className: "px-2 py-1 rounded-sm border " + (I.solverSoil === v ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300"),
++    disabled: I.solverLayered,
++    style: I.solverLayered ? {
++      opacity: 0.4
++    } : undefined
++  }, l)))), /*#__PURE__*/React.createElement("div", {
++    className: "col-span-2 flex items-center justify-between rounded-sm border border-slate-200 px-2.5 py-2",
++    style: {
++      background: "rgba(20,48,74,0.03)"
++    }
++  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
++    className: "text-[11px] font-mono-tech text-[var(--blueprint)]"
++  }, "Layered soil profile"), /*#__PURE__*/React.createElement("p", {
++    className: "text-[9px] text-slate-400 leading-snug"
++  }, "define 2–3 layers by depth instead of one uniform soil")), /*#__PURE__*/React.createElement("button", {
++    onClick: () => {
++      const turningOn = !I.solverLayered;
++      if (turningOn && (!I.soilLayers || I.soilLayers.length === 0)) {
++        // seed from current single-value soil
++        set('soilLayers', [{
++          topDepth: 0,
++          type: I.solverSoil === "cohesionless" ? "sand" : "clay",
++          nh: I.solverNh,
++          kh: I.solverKh
++        }]);
++      }
++      set('solverLayered', turningOn);
++    },
++    className: "px-2.5 py-1 rounded-sm border text-[11px] font-mono-tech " + (I.solverLayered ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300")
++  }, I.solverLayered ? "ON" : "OFF")), I.solverLayered && /*#__PURE__*/React.createElement("div", {
++    className: "col-span-2"
++  }, /*#__PURE__*/React.createElement(LayerTable, {
++    I: I,
++    set: set
++  })), !I.solverLayered && /*#__PURE__*/React.createElement("div", {
++    className: "col-span-2"
++  }, /*#__PURE__*/React.createElement("span", {
++    className: "text-[12px] text-[var(--blueprint)] font-medium"
++  }, "Soil type"), /*#__PURE__*/React.createElement("span", {
++    className: "text-[10px] text-slate-400 ml-2"
++  }, "fills the value below — still editable"), I.solverSoil === "cohesionless" ? /*#__PURE__*/React.createElement("div", {
++    className: "flex flex-wrap items-center gap-2 mt-1"
++  }, /*#__PURE__*/React.createElement("select", {
++    value: "",
++    onChange: e => {
++      const p = SAND_NH_PRESETS.find(x => x.key === e.target.value);
++      if (p) set('solverNh', I.solverGWT === "below" ? p.below : p.above);
++    },
++    className: "font-mono-tech text-[11px] px-2 py-1.5 rounded-sm border border-slate-300 bg-white flex-1 min-w-[140px]"
++  }, /*#__PURE__*/React.createElement("option", {
++    value: "",
++    disabled: true
++  }, "Select sand density…"), SAND_NH_PRESETS.map(p => /*#__PURE__*/React.createElement("option", {
++    key: p.key,
++    value: p.key
++  }, p.label, " — n_h ", I.solverGWT === "below" ? p.below : p.above))), /*#__PURE__*/React.createElement("div", {
++    className: "flex gap-1 text-[10px] font-mono-tech"
++  }, [["above", "above WT"], ["below", "below WT"]].map(([v, l]) => /*#__PURE__*/React.createElement("button", {
++    key: v,
++    onClick: () => set('solverGWT', v),
++    className: "px-2 py-1 rounded-sm border " + (I.solverGWT === v ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300")
++  }, l)))) : /*#__PURE__*/React.createElement("div", {
++    className: "mt-1"
++  }, /*#__PURE__*/React.createElement("select", {
++    value: "",
++    onChange: e => {
++      const p = CLAY_KH_PRESETS.find(x => x.key === e.target.value);
++      if (p) set('solverKh', p.kh);
++    },
++    className: "font-mono-tech text-[11px] px-2 py-1.5 rounded-sm border border-slate-300 bg-white w-full"
++  }, /*#__PURE__*/React.createElement("option", {
++    value: "",
++    disabled: true
++  }, "Select clay consistency…"), CLAY_KH_PRESETS.map(p => /*#__PURE__*/React.createElement("option", {
++    key: p.key,
++    value: p.key
++  }, p.label, " — k_h ", p.kh)))), /*#__PURE__*/React.createElement("p", {
++    className: "text-[9px] text-slate-400 mt-1 leading-snug"
++  }, "Sand n_h: AASHTO LRFD 10th Ed. Table C10.4.6.3-2 (ksi/ft \u00d7 144 = kip/ft\u00b3). Clay k_h: representative values. Use your geotechnical report's value where available.")), !I.solverLayered && (I.solverSoil === "cohesionless" ? /*#__PURE__*/React.createElement(Field, {
++    label: "n_h",
++    sub: "subgrade rate Es=nh·z",
++    unit: "kip/ft³",
++    ck: "solverNh",
++    value: I.solverNh,
++    onChange: v => set('solverNh', v)
++  }) : /*#__PURE__*/React.createElement(Field, {
++    label: "k_h",
++    sub: "constant subgrade mod.",
++    unit: "kip/ft²",
++    ck: "solverKh",
++    value: I.solverKh,
++    onChange: v => set('solverKh', v)
++  })))
++    : null);
++}
++
+ /* ============================================================
+    RAIL TABS -- the left input rail split into workflow tabs (UI only)
+    ------------------------------------------------------------
+@@ -21884,7 +21938,7 @@ function railTabFor(el) {
+   if (/^Project (file|library|Info)/i.test(title)) return "project";
+   if (/Preview calculation report|Close report preview/.test(txt)) return "project";
+   if (/^(Pile Geometry|Pile Section|Materials|Integral Abutment Pile)/i.test(title)) return "pile";
+-  if (/^Geotechnical/i.test(title)) return "soil";
++  if (/^(Geotechnical|Lateral analysis)/i.test(title)) return "soil";
+   if (/^Resistance Factors/i.test(title)) return "phi";
+   if (/^Loads/i.test(title)) return "checks";
+   if (/^(Cap geometry|Head fixity)/i.test(title)) return "cap";
+@@ -22046,7 +22100,7 @@ function LatFail({ pyRes, dav }) {
+     " ", pyRes && pyRes.msg ? "Solver message: " + pyRes.msg + " " : "",
+     "The graphs return when the solve converges (Module 02 on the Lateral (p-y) tab holds the inputs).", dv);
+ }
+-function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDepths, caseRes, runAllCases, pmCurve, lpileParse, r, actType }) {
++function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDepths, caseRes, runAllCases, pmCurve, lpileParse, r, actType, setRailTab }) {
+   const e = React.createElement;
+   const lp = lpileParse && lpileParse.ok && lpileParse.records && lpileParse.records.length > 2 ? lpileParse : null;
+   const ids = latGraphTabsFor(I, !!lp);
+@@ -22196,9 +22250,8 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+       e(PyCurvesFig, { I: I, pyRes: pyRes, solved: solved, activeLayers: activeLayers, depths: pyDepths, setDepths: setPyDepths })),
+     ok && pyRes.curves && pyRes.curves.length > 0 && e("div", { style: { marginTop: "12px" } }, e(LatPanel, { title: "p-y curves at 1, 2.5, 5, 10 and 20 pile widths below grade · ● = operating point" },
+       /*#__PURE__*/React.createElement("p", { className: "pd-lg-note", style: { marginTop: 0 } }, "The nonlinear soil springs: horizontal resistance p (per unit length) vs pile deflection y, at several depths. Stiffer/stronger with depth. The ● marks where each spring is actually operating under the design load — near the flat top means the soil is near its ultimate resistance there."),
+-      /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1 text-[11px] font-mono-tech text-slate-500 mb-1" }, "probe depth",
+-        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", "aria-label": "p-y curve probe depth, ft below grade", value: I.pyCurveDepth || 0, onChange: ev => set('pyCurveDepth', parseFloat(ev.target.value) || 0),
+-          className: "w-16 text-[11px] px-1 py-0.5 rounded-sm border border-slate-300" }), "ft below grade (0 = off)"),
++      /*#__PURE__*/React.createElement(InputsUsed, { tab: "soil", setTab: setRailTab, panelTitle: "Lateral analysis",   // PDRL: the probe depth is entered in the input rail
++        items: [["probe depth", fmt(I.pyCurveDepth || 0, 1), "ft below grade (0 = off)"]] }),
+       /*#__PURE__*/React.createElement(Plot, {
+         data: [
+           ...pyRes.curves.map((c2, i2) => {
+```

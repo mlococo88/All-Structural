@@ -67,6 +67,11 @@ body{margin:0;background:var(--paper);color:var(--ink);
    pins both to its top. */
 #outTop{position:sticky;top:0;z-index:40;background:var(--paper);
   box-shadow:0 3px 6px -3px rgba(0,0,0,.28);}
+/* ARDB (2026-11-12): "updating…" while a typed value waits to be recalculated (see archRecalcSoon) */
+#outTop{position:sticky;}
+#arUpd{position:absolute;top:4px;right:8px;z-index:41;padding:2px 8px;border-radius:10px;font-size:12px;
+  background:#fff3c4;color:#5a4500;border:1px solid #e0c060;pointer-events:none;}
+#arUpd[hidden]{display:none;}
 #inPanel,#outPanel{height:100%;min-height:0;overflow-y:auto;overflow-x:hidden;
   padding-right:4px;}
 @media(max-width:1050px){
@@ -551,6 +556,7 @@ a.wkA{color:var(--blue);text-decoration:none;border-bottom:1px dotted var(--blue
 <!-- ================= OUTPUT PANEL ================= -->
 <div id="outPanel">
   <div id="outTop">
+    <div id="arUpd" class="noprint" role="status" aria-live="polite" hidden>updating&hellip;</div>
     <div id="focusBar" class="focusbar noprint"></div>
     <div id="tabs"></div>
   </div>
@@ -13675,12 +13681,12 @@ function plibInit(){
   const pb=SharedProjectsUI.projectBar({store,storage:LS,label:"Stone Masonry Arch Load Rating",id:"saLibDlg",
     snapshot:()=>pick(snapshot()), snapOf:n=>pick(store.get(n)),
     current:()=>curProj||"", setCurrent:n=>{if((curProj||"")!==(n||"")){curProj=n||"";if($("projName"))$("projName").value=curProj;autosave();showAutoInfo();}},
-    save:n=>{curProj=n;const ps=projects();ps[n]=snapshot();setProjects(ps);refreshProjSel(n);if($("projName"))$("projName").value=n;autosave();showAutoInfo();
+    save:n=>{archSettle();/* ARDB */curProj=n;const ps=projects();ps[n]=snapshot();setProjects(ps);refreshProjSel(n);if($("projName"))$("projName").value=n;autosave();showAutoInfo();
       if(!store.has(n))return{ok:false,message:"The project was not saved (browser storage unavailable or full). Use Export JSON."};projMsg(`Saved "${n}".`);return{ok:true};},
     open:n=>{if(!$("projSel")||!$("bLoad"))return false;refreshProjSel(n);$("projSel").value=n;$("bLoad").click();return curProj===n;},
     newProject:()=>saNewCalc(),
     displayName:()=>($("tbProject")&&$("tbProject").value||"").trim(),
-    exportFile:n=>{const o=snapshot(),blob=new Blob([JSON.stringify(o,null,2)],{type:"application/json"}),a=document.createElement("a");   /* the #bExp file, named n */
+    exportFile:n=>{archSettle();/* ARDB */const o=snapshot(),blob=new Blob([JSON.stringify(o,null,2)],{type:"application/json"}),a=document.createElement("a");   /* the #bExp file, named n */
       a.href=URL.createObjectURL(blob);a.download=((n||$("tbProject").value||"stone-arch-rating").replace(/[^\w.-]+/g,"_"))+".json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);},
     importFile:()=>$("fImp").click(),
     header:row,chipBefore:bu,card:$("saSaveCard"),
@@ -13748,6 +13754,7 @@ function saNewCalc(){
 function wireProjectFiles(){
   if(!$("bSave"))return;
   $("bSave").onclick=()=>{
+    archSettle();   /* ARDB */
     const nm=($("projName").value||"").trim();
     if(!nm){projMsg("Enter a project name first.",true);inTabReveal($("projName"));$("projName").focus();return;}
     const ps=projects(), existed=!!ps[nm];
@@ -13780,6 +13787,7 @@ function wireProjectFiles(){
     projMsg(`Deleted "${nm}".`);
   };
   $("bExp").onclick=()=>{
+    archSettle();   /* ARDB */
     const o=snapshot();
     const blob=new Blob([JSON.stringify(o,null,2)],{type:"application/json"});
     const a=document.createElement("a");
@@ -14397,11 +14405,13 @@ function arxWire(T){
 }
 /* Print: from any tab the Report is shown (activeTab, not saved), printed, and the tab of before comes back after printing */
 function arxPrintPrep(){
+  archSettle();   /* ARDB: print the settled results */
   if(activeTab==="rpt"||!M||!window.SharedReport||!window.SharedSteps||document.body.classList.contains("rp-printing"))return false;
   ARX.back=activeTab; activeTab="rpt"; render(); return true;
 }
 window.archPrintPrep=arxPrintPrep;   /* the inline beforeprint script in <head> */
 function arxPrintAny(){
+  archSettle();   /* ARDB */
   if(!M||!window.SharedReport||!window.SharedSteps){window.print();return;}
   arxPrintPrep();
   if(ARPT.api)ARPT.api.print();else window.print();
@@ -14542,6 +14552,32 @@ document.addEventListener("click",e=>{
   i.focus({preventScroll:true});
 });
 
+/* ARDB (2026-11-12, engineer decision): the whole analysis takes a few seconds, so typing in a numeric field, a paste box or
+   a list-table cell no longer recalculates on every keystroke. archRecalcSoon() waits ARDB_MS after the last keystroke;
+   leaving the field (change / focusout) or pressing Enter recalculates at once (archSettle). "updating…" (#arUpd) shows
+   on the results meanwhile. The recalculation itself is unchanged (syncCond, render, autosave, as each keystroke did), so
+   the settled results and the saved data are identical. Printing, saving and exporting settle first; closing or hiding
+   the page writes the autosave of a pending entry (autosave only: the stored fields do not depend on the results). */
+const ARDB_MS=400;
+let ardbT=null, ardbPend=false;
+function ardbInd(on){const u=$("arUpd"); if(u)u.hidden=!on;}
+function archRecalcSoon(){ardbPend=true; clearTimeout(ardbT); ardbT=setTimeout(archSettle,ARDB_MS); ardbInd(true);}
+function archRecalcDrop(){clearTimeout(ardbT); ardbT=null; ardbPend=false; ardbInd(false);}
+function archSettle(){if(!ardbPend)return false; archRecalcDrop(); syncCond(); render(); autosave(); return true;}
+window.archSettle=archSettle;
+function ardbWire(){
+  const ip=$("inPanel"); if(!ip||ip._ardb)return; ip._ardb=true;   /* #inPanel itself is never replaced, only its content */
+  ip.addEventListener("change",()=>archSettle());     /* bubbles here after the field's own handlers */
+  ip.addEventListener("focusout",()=>archSettle());
+  ip.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target&&e.target.tagName!=="TEXTAREA")setTimeout(archSettle,0);});
+  /* Ctrl/Cmd+S, P, Z, Y, O, E with the focus still in a field: settle before the shortcut acts */
+  document.addEventListener("keydown",e=>{if(ardbPend&&(e.ctrlKey||e.metaKey)&&/^[spzyoe]$/i.test(e.key||""))archSettle();},true);
+  const flushSave=()=>{if(ardbPend)autosave();};
+  window.addEventListener("beforeunload",flushSave);
+  window.addEventListener("pagehide",flushSave);
+  document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")flushSave();});
+}
+
 /* ---------------- init ---------------- */
 let bind=null;
 function init(){
@@ -14559,6 +14595,8 @@ function init(){
       if(e2.closest("#saPrjPane"))return;   /* SAHD: the title block (moved from the header) is bound below, as before */
       const ev=(e2.tagName==="TEXTAREA"||e2.type==="text")?"input":"change";
       e2.addEventListener(ev,()=>{
+        if(ev==="input"){archRecalcSoon();return;}   /* ARDB: a text box, paste box or list-table cell: recalculate once typing pauses */
+        archRecalcDrop();                            /* ARDB: a committed change recalculates now (below) */
         if(e2.id==="loadMode"){
           F.loadMode=e2.value;
           const set=ARCH.vehiclesFor(e2.value).map(v=>v.id);
@@ -14592,11 +14630,12 @@ function init(){
         if(e2.id==="lanes")F.lanes=e2.value;
         if(e2.id==="truckClr")F.truckClr=e2.value;
         syncCond();render();autosave();});
-      if(e2.type==="number")e2.addEventListener("input",()=>{render();autosave();});
+      if(e2.type==="number")e2.addEventListener("input",archRecalcSoon);   /* ARDB: was render();autosave(); on every keystroke */
     });
     TB.forEach(t=>{if($(t))$(t).addEventListener("input",autosave);});
   };
   bind();
+  ardbWire();   /* ARDB */
   deterRender();
   refreshProjSel();
 

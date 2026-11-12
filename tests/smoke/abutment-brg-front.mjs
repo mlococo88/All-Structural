@@ -35,8 +35,8 @@ const CASES = {
   default: () => {},
   offsetShelf: () => { S.apSlab.on = true; S.apSlab.t = 0.75; S.geom.tbw = 2; S.geom.tst = 5.5; S.geom.tsb = 5.5; S.geom.bwOff = 10; S.geom.shD = 9; },
   engineerAbwMinus4: () => { S.apSlab.on = true; S.geom.bwOff = 19; S.geom.shD = 9; },   // a_bw = 15 − 19 = −4.0 in (input error)
-  semi: () => { S.iab.type = 'semi'; S.apSlab.on = true; },
-  integral: () => { S.iab.type = 'integral'; S.apSlab.on = true; },
+  semi: () => { S.iab.type = 'semi'; S.iab.dg = 4.0; S.apSlab.on = true; },   // ABDG (2026-11-12): as saved before (new projects have iab.dg null)
+  integral: () => { S.iab.type = 'integral'; S.iab.dg = 4.0; S.apSlab.on = true; },
   ctdotOdd: () => { S.own.owner = 'CTDOT'; S.geom.tst = 4.25; S.geom.tsb = 4.6; S.geom.tbw = 1.35; S.geom.brgSetback = 1.1; },
   ridotPileOffset: () => { S.own.owner = 'RIDOT'; S.fnd.branch = 'pile'; S.apSlab.on = true; S.geom.bwOff = 6; S.geom.shD = 0; },
 };

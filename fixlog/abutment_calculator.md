@@ -17351,3 +17351,101 @@ Engineer decision 2026-11-10 (geometry). AASHTO LRFD 10th Ed. (2024): 5.6.5 / Fi
 - **Calculations:** none (§4 not engaged): a pull of any copy imports exactly the payload that unit's send produced; main-vs-branch probes identical (PR description).
 - **Saved data (§5):** new prefixed keys only (`bridgeSuite.v1.foundationLoads.by.<producer>.<project id>.<unit id>`, and `.by.abutment.<project id>`); no existing key or format changed.
 - **Other copies:** none.
+
+## 2026-11-12 — PR: abut-seis-default-b (PR #1435: https://github.com/mlococo88/All-Structural/pull/1435) (SDB) — Seismic earth pressure location: new projects default to (b) combined P_AE at H/3 (engineer decision 2026-11-12)   [§4: results change for NEW projects with Extreme Event I on only; saved projects unchanged; no migration change]
+- **Engineer decision (2026-11-12):** the default for NEW projects is option (b) "combined P_AE at H/3, not lower than the static resultant (C11.6.5.3)", not (a) Seed & Whitman. This reverses the SEL default above (#1409) and closes its "Decision (pending engineer review)" about the default. The four options, their order and their calculations are unchanged.
+- **Where (all in `abutment_calculator.html`):**
+  - `defaultState().seismic` (anchor `hAEr:0.5, nonConc:true, shEQt:100 },`): before `hEQmode:"sw", hAEr:0.5, …` after `hEQmode:"static", hAEr:0.5, …` (comment updated).
+  - SEL helper comment above `function eqMode()`: "default for new projects" moved from "sw" (a) to "static" (b).
+  - `eqLocNoteHTML()` (panel I-11 note, Tab 1 notes "Location", Report "Seismic earth pressure and inertia" note): before `"Option (a) is the tool default for new projects. "` after `"Option (b) is the tool default for new projects (engineer decision 2026-11-12). "`.
+- **Not changed (§5):** `migrate()`: a save without `seismic.hEQmode` still takes "static" when hEQr = 0.6, else "ratio" (pre-ABR3 rule, unchanged); `fill(…,"hAEr")` unchanged; `eqMode()` (any unknown value = "static") unchanged; the Input ID rules unchanged. A saved project keeps its stored option (the load merge `abutMergeState` takes the whole saved `seismic` object). Only a project saved with no `seismic` object at all (none exists from #1409 on) takes the new default, (b), which is also what it took before #1409; its results do not change (seismic off by default).
+- **Exchange (`shared/abutment-def.js`, #1412): not changed.** `fromCalc()` sends the stored mode (unknown → 'static', the calculator's eqMode rule); `fromSubLoads()` sends SubLoads' stored mode (absent → 'sw', SubLoads' rule). Neither reads a tool default.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 11.6.5.3 and C11.6.5.3 (combined P_AE at h/3, not lower than the static resultant; Seed & Whitman 1970, the increment at 0.6h, as past practice); 11.6.5.1 (nonconcurrent cases), unchanged.
+- **Check case (default project with Extreme Event I turned on: A_s = 0.15, k_h = 0.5·0.15 = 0.075, spread footing, H = 22 ft, γ = 0.120 kcf, φ = 32°, K_A = 0.30726, L_ab = 44 ft, B = 13 ft; the default project itself has Extreme Event I off, so its results do not change, only its Input ID):**
+  - K_AE = 0.35166; P_AE = ½(0.120)(22²)(0.35166) = 10.212 kip/ft; P_A = 8.923 kip/ft; ΔP_AE = 1.289 kip/ft × 44 = 56.73 kip.
+  - Before ((a)): z̄_Δ = 0.6·22 = 13.20 ft, M_ΔP = 56.73 × 13.20 = 748.86 kip-ft. After ((b)): z̄_Δ = (10.212·7.333 − 8.923·7.333)/1.289 = 7.333 ft, M_ΔP = 56.73 × 7.333 = 416.03 kip-ft (−332.82).
+  - EE I case A: V = 1867.05 kip, M_v = 13493.58 (unchanged); M_h 5587.66 → 5254.83 kip-ft; e = 6.5 − (M_v − M_h)/V 2.2655 → 2.0873 ft (limit B/3 = 4.333 ft).
+  - Stem (H_s = 19 ft): ΔP = 0.9617 kip/ft at 11.40 → 6.333 ft, M 10.963 → 6.091 kip-ft/ft. Backwall (h = 5 ft): ΔP at 3.000 → 1.667 ft.
+  - Same project on piles (`fnd.branch` "pile", k_h = k_h0 = 0.15): ΔP_AE·L_ab = 121.73 kip; M_ΔP 1606.79 → 892.66 kip-ft; EE I case A M_h 6921.21 → 6207.08 kip-ft. **EE I uplift:** minimum pile reaction −7.73 kip (pile 17, case A, uplift D/C 0.155, PILE UPLIFT warning) → +1.91 kip (case B; no uplift, D/C 0, no warning). Pile compression governed by Strength I 200.97 kip, D/C 0.937 (unchanged).
+- **How verified:** main-vs-branch probe of every numeric leaf of `LAST_R`, the warnings and the state, saved projects on spread and piles with A_s 0.15: "sw", "static", "comb" 0.45, "nonyield", "ratio" 0.5, pre-mode 0.6 ("static") and 0.45 ("ratio"): 0 differences each; a save with no `seismic` object: mode "sw" → "static" and the Input ID only (seismic off). `abutment-pile-group-parity` with both sides on "static" (EE I off, and EE I on at A_s 0.15): 14/14 identical; as-is: only `fingerprint` differs. `tests/smoke/abutment-seis-loc.mjs` updated: new project (b) with the hand values above, (a) selected explicitly, saved projects on each option ("sw", "static", "comb" 0.45, "nonyield", "ratio", pre-mode) reopen on it.
+- **Other copies:** SubLoads (`Bridge Substructure Loading.html`) gets the same default in PR #1436 (SDB).
+
+## 2026-11-12 — PR: abut-girder-depth (PR #1437: https://github.com/mlococo88/All-Structural/pull/1437) (ABDG) — Integral / semi-integral owner screening reads the girder depth d_g of the superstructure inputs (geom.elGird) instead of its own panel I-0a entry (iab.dg); a saved iab.dg is kept, the larger is used when they differ, flagged   [§4: owner screening result only; saved projects unchanged unless d_g was entered and differs; new projects: iab.dg null]
+- **Engineer decision (2026-11-12):** "the integral-abutment owner screening check's girder depth (iab.dg) reads from the new girder depth input instead of its own entry"; migration: keep the stored value, decide conservatively, flag the mismatch, never discard. Follows ABEL2 #1383 ("Existing calculations that could use these (reported, not connected)": `iab.dg`).
+- **Where (all in `abutment_calculator.html`):**
+  - `iabDefault()` (anchor `dg:4.0, grade:2.0, curve:0.0, dH:0.0,`): before `dg:4.0` after `dg:null` (new projects; `migrate()` fills a missing key only, so a saved `iab.dg` is kept as saved).
+  - New functions before `/* Pile Designer's pile (pileResults, pile footing): head-to-toe length`: `iabDg()` ({v, src "girder" | "max" | "saved" | "none", gi, sv, mis, tex}), `iabDgPanel()`, `iabDgTxt(D)`, `iabDgInHTML()`.
+    ```js
+    gi = d_g (in, geom.elGird, > 0) or null; sv = iab.dg (ft, > 0) or null
+    gi and sv, |gi − 12 sv| > 0.05 in  → v = max(gi/12, sv), "max", flagged
+    gi                                → v = gi/12, "girder"
+    sv only                           → v = sv, "saved"
+    neither                           → v = null, "none"
+    ```
+  - Owner rules (`ABUT_OWN` IAB rows): MassDOT integral `iab.conn` — before `ownLE(+S.iab.dg,8)`, after `D.v!==null&&ownLE(D.v,8)`; RIDOT integral `iab.geo` — before `ownLE(+S.iab.dg,6)`, after `D.v!==null&&ownLE(D.v,6)`; RIDOT semi `iab.lim` — the same with 6 ft. The `val` text gives the value and its source (`iabDgTxt`), `tex` the worked d_g when entered.
+  - Panel I-0a (anchor was `${inpRow("Girder depth","iab.dg","ft")}`): integral — the d_g input `abElInRow(…,"geom.elGird","in",…)` (the panel I-1 superstructure rows are not shown for an integral abutment); semi — a note that d_g is in panel I-1. Then, only while a value is saved, `inpRow("  Girder depth saved in this panel (before 2026-11-12; blank = clear)","iab.dg","ft",{blank:true})`, and `<div class="in-note" id="abDgIn">${iabDgInHTML()}</div>` (refreshed in `updateDerivedInInputs`).
+  - `inpRow`: new option `blank` (`data-blank="1"`, value "" when null; the input handler already stores null for an empty data-blank input).
+  - Panel I-1: the superstructure note and the d_g tooltip say that for a semi-integral abutment d_g is also the screening girder depth.
+  - `computeAll`, before `/* ===== C-22 Owner requirements`: `warn("Girder depth — d_g = … differs from the … saved in panel I-0a …: the owner screening uses the larger, …")` when `iabDg().mis`.
+  - `abElev()` semi-integral flag (anchor was `if(semi&&dg!==null&&+S.iab.dg>0&&Math.abs(dg-12*S.iab.dg)>0.05)`): now from `iabDg().mis`, naming the value the screening uses.
+  - Figures: `svgIabSection` girder outlines `+I.dg` → `iabDg().v||4`; `drawXsec` semi end-diaphragm girder `+S.iab.dg||g.hbw*0.7` → `iabDg().v||g.hbw*0.7`; 3D integral `+I.dg||hd-td` → `iabDg().v||hd-td`.
+  - Tab 1 §1.0a owner card note list: "Girder depth: d_g of the superstructure inputs (…): <value and source>". Report: owner-requirements note (owner ≠ AASHTO) and the input echo row "Girder depth (owner screening, Tab 1 §1.0a; engineer decision 2026-11-12: d_g of the superstructure inputs); grade".
+- **Governing provisions (limits unchanged):** MassDOT LRFD Bridge Manual Part I 3.10.8 (standard connection bars for girders up to 8 ft); RIDOT BDM (2026) 11.3.2 (integral: girder depth ≤ 6 ft) and 11.3.3 (semi-integral: ≤ 6 ft). Units: d_g in inches, converted /12 to ft (the limits are in ft).
+- **Check cases (owner screening row, before → after):**
+  - Default project (conventional, AASHTO): no girder-depth rule; `LAST_R` identical to main.
+  - Saved RIDOT integral, iab.dg 4.00 ft, d_g blank: girder 4.00 ft ≤ 6 PASS → 4.00 ft (saved value) PASS; `LAST_R` differs only in the row text.
+  - Saved RIDOT integral, iab.dg 4.00 ft, d_g 48 in: 4.00 → d_g = 48/12 = 4.00 ft, PASS, no flag.
+  - Saved RIDOT semi-integral, iab.dg 4.00 ft, d_g 80 in (entered for the elevations): 4.00 ft PASS → d_g = max(80/12, 4.00) = 6.67 ft > 6 ft **FAIL** (nFail 0 → 1), flagged.
+  - Saved MassDOT integral, iab.dg 4.00 ft, d_g 36 in: 4.00 ft PASS → max(36/12, 4.00) = 4.00 ft PASS, flagged.
+  - MassDOT integral, nothing saved, d_g 108 in: 108/12 = 9.00 ft > 8 ft CHECK. RIDOT integral, nothing entered: girder "not entered", iab.geo not met (main: `+null` = 0 → PASS).
+- **Saved data (§5):** no key renamed or removed; `iab.dg` stays in the format and in a saved project until the user clears it (blank → null). Input ID: unchanged for saved projects; a NEW integral / semi-integral project's Input ID changes (iab.dg null instead of 4.0); conventional projects unchanged (iab is not in their ID).
+- **Decisions (pending engineer review):** (1) the larger of the two when they differ (every limit is an upper limit on the girder depth); (2) new projects have no default girder depth (was 4.0 ft): the rows that need it are not met until d_g is entered; (3) d_g blank and a saved value: the saved value is used without a warning (the I-0a note says so); (4) integral: the d_g input sits in panel I-0a (the panel I-1 superstructure rows are hidden for an integral abutment).
+- **How verified:** new `tests/smoke/abutment-girder-depth.mjs` (the cases above, UI typing and clearing, 0 console errors); main-vs-branch probe (10 cases: only `own.rows[*].val/tex/st` and `own.nFail` differ, as listed); `abutment-elevations` (main comparison: the integral case is now a project saved with iab.dg 4.0, and the Report echo row is normalised), `abutment-brg-front` and `abutment-stem-shelf` (their semi / integral main comparisons set iab.dg 4.0, as saved before); `abutment-pile-group-parity` 14/14; `abutment-drawings`, `abutment-fdx-copies`, `abutment-panel-scroll`, `abutment-pile-mat-level`, `abutment-rx-table`, `abutment-seis-loc`, `abutment-subloads-exchange`, `abutment-subloads-pull`, `project-library --tool abutment`, `check-syntax`.
+- **Other copies:** none (SubLoads and Pile Designer do not read iab.dg).
+
+## 2026-11-12 — PR: abut-pile-length (PR #1441: https://github.com/mlococo88/All-Structural/pull/1441) (ABPL) — Pile footing: the pile length L_pile (panel I-7) is checked against the depth to fixity + 5 ft; flags when the pile does not reach D_f or is shorter than 5T for the elastic lateral solution   [§4: new check, only with L_pile entered; no existing result changes; no saved key or format change]
+- **Engineer decision (2026-11-12):** use the pile length L_pile (total incl. the embedment, ABEL2 #1383) in the pile checks: (a) the pile is longer than the depth to fixity plus 5 ft or the applicable owner rule; (b) where a calc assumes a length or "long pile" behaviour, keep it and flag when L_pile is too short. Follows ABEL2 "Existing calculations that could use these (reported, not connected)": "the pile depth to fixity / buckling length / Matlock–Reese (pile length)".
+- **Basis found (references, paraphrased):**
+  - AASHTO LRFD 10th Ed. (2024) 10.7.6 (minimum penetration, where applicable, includes the penetration needed to obtain fixity for the lateral loads) and C10.7.3.12 (minimum penetration set so that fixity is obtained). No margin below fixity is given.
+  - 10.7.3.13.4 / C10.7.3.13.4: effective length = unsupported length + depth to fixity. Eqs. C10.7.3.13.4-1/-2 (preliminary) take the pile as fixed at its ends.
+  - MassDOT Bridge Manual Part I 3.2.2.2 (pile footings): the pile length provides the minimum penetration for lateral stability (no margin). 3.10.11.2: L_f + 5 ft applies to integral-abutment piles only, with L_f from MassDOT Tables 3.10.11-2/-3. RIDOT BDM (2026) 11.3.2 and CTDOT BRSDM CT11.1.1.1 (10 ft minimum) are also integral-only.
+  - So for a pile footing the owner rule is AASHTO's "reach fixity". The added 5 ft is the engineer's stated rule (see Questions in the PR).
+  - Integral abutments: the length is already `iab.Lpile` (pile below the cap), checked by MassDOT 3.10.11.2 (dashboard `iabTip`), RIDOT 11.3.2 and CTDOT CT11.1.1.1. Unchanged.
+- **Where (all in `abutment_calculator.html`):**
+  - `computeAll` pile branch, after `R.checks.pileCF=pileCombined(perLS, R.checks.pileStr);`:
+    - `{ const PLc=pileLength(R.checks.pileStr, R.checks.pileCF); if(PLc) R.checks.pileLen=PLc; }`;
+    - two `warnFor("conv",…)`: "Pile length: the pile does not reach the depth to fixity …" (error) and "Pile length: the elastic lateral solution (Matlock–Reese) assumes a long pile, L_s ≥ 5T …".
+  - New `pileLength(ps,pf)` before `function actIndexToNo(act,i){`:
+    ```js
+    L = piles.elLpile (ft, > 0; blank → null, no check)
+    L_s = L − e/12 − L_u                       // length in the soil below the ground
+    D_f = pileGeom().Df                        // C10.7.3.13.4 or entered, as §4.4b
+    L_req = e/12 + L_u + D_f + 5;  D/C = L_req/L;  reach = L_s ≥ D_f
+    mr (elastic solution used for a limit state): per axis z = L_s/T (T of pf.latL / pf.latT), short when the axis carries moment and z < 5
+    ```
+  - Dashboard, after `addD("pileV",…)`: `addD("pileLen","Pile length ≥ e + L_u + D_f + 5 ft [10.7.6; engineer decision 2026-11-12]",…)` (n/a for a square pile: no D_f). `DASH_CARD`: `pileLen:"o-pilelen"`.
+  - Tab 4 (anchor `}else if(pf){ h+=panel("o-pilecf","4.4b",…`): `{ const PL=R.checks.pileLen; if(PL) h+=pileLenPanelHTML(PL); }`. New `pileLenPanelHTML(PL)` before `/* ================= TAB 1`: card §4.4c, with L_s, D_f, L_req and L_s vs D_f worked, the check line, the long-pile premise per axis and the basis notes (link to §4.4b).
+  - Report worksheet (anchor `const pu=C.punching; if(pu&&has("punching")){`): topic "Pile length: depth to fixity + 5 ft (engineer decision 2026-11-12)" with L_s, D_f, L_req, L_s/T and dcStep `pileLen`. The block condition gains `||has("pileLen")`. Input echo row: "(the pile tip elevation, Tab 1 §1.1a; the pile length check, Tab 4 §4.4c)".
+  - Panel I-7: the L_pile tooltip and `abElLpInHTML()` note now say it is used for the length check (was "Display only … not used by any check"). `defaultState` comment.
+- **Not changed (kept, flagged):**
+  - The buckling length K(L_u + D_f) of §4.4a/§4.4b. It needs the pile to reach D_f; L_pile does not enter it.
+  - The elastic lateral solution (`pileLatSolve`, 12T in the soil, free tip; ABR3). Its long-pile moment is kept. With the tool's solver, C_M at 5T is within 0.5 % of 12T (sand: 0.999–1.000, free or fixed head, L_u 0 or 5 ft; clay: 0.998–0.999). At 4T it is 0.6 % (sand) to 2 % (clay) off; at 3T 4–13 %.
+- **Check case (default project on piles; HP12X53 auto, I_w = I_y = 125.355 in⁴ = 0.0060453 ft⁴; s_min 4.25 ft → s/D = 4.25 → group factor 0.25 + 0.75(1.25/5) = 0.4375; n_h = 1.11 × 0.4375 = 0.485625 ksi/ft; e = 12 in; L_u = 0):**
+  - D_f = 1.8(29000 × 0.0060453 / 0.485625)^0.2 = 1.8(361.0)^0.2 = 1.8 × 3.247 = 5.845 ft.
+  - T_x = (EI/n_h)^(1/5), EI = 29000 × 125.355/144 = 25245 kip-ft² → T_x = 3.247 ft. T_y = 4.063 ft (strong axis; no transverse moment).
+  - Before: no length check (L_pile was display only).
+  - After, L_pile 40 ft: L_s = 40 − 1 − 0 = 39 ft ≥ D_f; L_req = 1 + 0 + 5.845 + 5 = 11.845 ft; D/C = 11.845/40 = 0.296 PASS; L_s/T_x = 12.01 ≥ 5 (long pile).
+  - L_pile 40, L_u 5: L_req = 16.845, D/C 0.421. L_pile 15: D/C 0.790 PASS, L_s/T_x = 14/3.247 = 4.31 < 5, flagged. L_pile 6: L_s 5.00 < D_f 5.845, D/C 1.974 FAIL (nFail 0 → 1), both flags. Clay (S_u 1 ksf), L_pile 30: D_f 7.585, D/C 0.453, L_s/R_x 5.35.
+- **Values that change:** only with L_pile entered on a pile footing (conventional or semi-integral): the new dashboard row (nFail when > 1) and the warnings. Every other `LAST_R` value is identical to main: the default project, the default on piles with L_pile blank, and a spread footing with a stored L_pile. Integral: unchanged.
+- **Saved data (§5):** none changed (`piles.elLpile` is the ABEL2 key); Input IDs unchanged.
+- **Decisions (pending engineer review):**
+  1. The 5 ft margin is applied to pile footings, as the engineer stated. AASHTO / MassDOT 3.2.2.2 require only reaching fixity.
+  2. D_f = the C10.7.3.13.4 (or entered / Pile Designer) depth to fixity of §4.4b, not a p-y second point of zero deflection.
+  3. The long-pile threshold is 5T (5R for clay).
+  4. A pile that does not reach D_f is an error-level warning plus the D/C row. The buckling result is kept.
+- **How verified:**
+  - New `tests/smoke/abutment-pile-length.mjs` (the cases above, Tab 4 §4.4c, Report, 0 console errors).
+  - Main-vs-branch probe of 13 cases: only `checks.pileLen`, the dashboard row (index shift) and nFail where it fails.
+  - `abutment-pile-group-parity` 14/14 identical.
+  - The abutment smoke tests, `abutment-subloads-exchange`, `project-library --tool abutment` and `check-syntax`.
+- **Other copies:** none.
