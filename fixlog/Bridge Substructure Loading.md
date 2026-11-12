@@ -3210,7 +3210,7 @@ function listTables() {
 - **Saved data (§5):** no key or format change; files without the field keep (a).
 - **Other copies:** the Abutment Calculator (`defaultState().seismic.hEQmode`), PR #1435 (SDB).
 
-## 2026-11-12 — PR: sl-graphics-2 (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — the response spectrum and the influence line in the SLGX style, every tab-graphic label 10 px or more (SLGX2; engineer decision 2026-11-12)   [display only: no computed value, saved field, hand-off or DXF change]
+## 2026-11-12 — PR: sl-graphics-2 (PR #1438: https://github.com/mlococo88/All-Structural/pull/1438) — the response spectrum and the influence line in the SLGX style, every tab-graphic label 10 px or more (SLGX2; engineer decision 2026-11-12)   [display only: no computed value, saved field, hand-off or DXF change]
 
 - **Where:**
   - CSS block `/* SLGX2 (2026-11-12): the response spectrum and the reaction influence line in the same style` (after the SLGX print rule): `svg.vk-chart` (width 100 %, max 820 px; Barlow Semi Condensed; text halo), `.sl-spec-row` / `.sl-spec-fig`, phone `min-width: 680px` in the sideways-scrolling box, print `max-width: 7in`. SLGX phone rule: `.vk-dwg-box.vk-wide > svg.dwg { min-width: 760px; }` → `920px` (the Geometry plan / elevation, 8.6 → 10.4 px at 390 px).
