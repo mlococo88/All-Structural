@@ -44,25 +44,15 @@
     background:rgba(255,255,255,.06);color:#c7d4e4;cursor:pointer;white-space:nowrap;}
   #suite-xfer button:hover{background:rgba(255,255,255,.14);color:#fff;}
   @media print{#suite-xfer{display:none!important;}}
-  /* CBRP: the combined Report tab (shared viewer) */
-  #suite-tab-report.active .dot{background:#60a5fa;opacity:1;}   /* CBTH-3: blue as the other tabs (was pink #f472b6) */
-  #suite-report{position:absolute;inset:0;overflow:auto;padding:12px 16px;background:#F1F3F5;font-family:"Times New Roman",Times,serif;}
-  #suite-report .rp-bar button{font-size:9pt;padding:3px 10px;font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    border:1px solid #CBD5E1;border-radius:4px;background:#fff;color:#0F172A;cursor:pointer;}
-  #suite-report .rp-bar button:hover{background:#F1F3F5;}   /* CBTH-3 (2026-11-05): the suite's buttons; Report background slate (was beige #efede8) */ .suite-rpt-err{color:#991B1B;font:13px -apple-system,"Segoe UI",Roboto,Arial,sans-serif;}
-  #suite-report .rp-fig svg{max-height:420px;}
-  @media(max-width:1000px){#suite-report .rp-body{grid-template-columns:minmax(0,1fr);} #suite-report .rp-doc{min-width:0;}}
+  /* CBMR (2026-11-12): the combined Report tab is retired (its CSS removed); each tab has its own Report tab */
   /* PHN (2026-11-02): phone / tablet: the suite bar wraps (the tabs, All tools and the share buttons were cut off at the right) */
   @media screen and (max-width:899px){#suite-nav{flex:0 0 auto;height:auto;flex-wrap:wrap;row-gap:0;padding:0 8px;} .suite-tab{padding:9px 12px;} #suite-brand{border-right:none;} #suite-xfer{margin-left:0;padding:4px 0 6px;flex-wrap:wrap;}}
   /* CBTH-3 (2026-11-05): phone: a slimmer suite bar (smaller tab padding, brand without its right rule) so the four tabs take two rows, not three */
   @media screen and (max-width:899px){.suite-tab{padding:8px 9px;font-size:12px;gap:6px;} #suite-brand{padding-right:6px;margin-right:0;gap:7px;} #suite-xfer{padding:2px 0 6px;}}
 </style>
-<!-- CBRP: the combined Report tab: KaTeX (the version the Beam Capacity tab loads), shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
+<!-- CBMR (2026-11-12): the print hand-off (CBMRP, below): a tab's Report prints as this page. KaTeX (the version the Beam Capacity and ASD tabs load), shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
-<!-- CBRX (2026-11-03): Ctrl+P / the browser's Print from any tab prints the combined Report (CBRP.prep, below). Registered here,
-     before shared/report.js's own beforeprint listener, so that listener finds the Report shown (running header, every item filled). -->
-<script>window.addEventListener('beforeprint',function(){ try{ if(window.CBRP&&CBRP.prep) CBRP.prep(); }catch(e){} });</script>
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
 <script src="shared/dxf.js"></script><!-- CBDW: the Beam Capacity tab's Drawings print their sheets through this copy (SharedDxf.printSheets), so they print as this page -->
@@ -76,7 +66,6 @@
     <button class="suite-tab active" id="suite-tab-capacity" data-target="capacity"><span class="dot"></span>Beam Capacity</button>
     <button class="suite-tab" id="suite-tab-asd" data-target="asd"><span class="dot"></span>ASD Beam Calcs</button>
     <button class="suite-tab" id="suite-tab-dev" data-target="dev"><span class="dot"></span>Development &amp; Splice</button>
-    <button class="suite-tab" id="suite-tab-report" data-target="report"><span class="dot"></span>Report</button>
     <div id="suite-xfer">
       <a class="alltools" href="tools.html" target="_top">&larr; All tools</a>
       <!-- HDR (2026-11-05): "Use shared project info" / "Share project info" moved to each tab's Project input tab (they call bxUseProjectInfo / bxShareProjectInfo below) -->
@@ -92,6 +81,9 @@
 <title>Reinforced Concrete Beam Capacity</title>
 <link rel=&quot;stylesheet&quot; href=&quot;https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css&quot;>
 <script defer src=&quot;https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js&quot;></script>
+<!-- CBMR (2026-11-12): this tab's Report tab: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
+<script src=&quot;shared/steps.js&quot;></script>
+<script src=&quot;shared/report.js&quot;></script>
 <script src=&quot;https://cdn.plot.ly/plotly-2.32.0.min.js&quot;></script>
 <script src=&quot;https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js&quot;></script>
 <script src=&quot;shared/projects.js&quot;></script>
@@ -469,6 +461,14 @@ body dialog.spLib{font-family:var(--font-ui)}
    tabs. Screen only; the Summary tab, the Report and printing are unchanged. */
 #cbcDashCol{display:none}
 @media print{#cbcDashCol,#cbcDashBox{display:none!important}}
+/* CBMR (2026-11-12): this tab's Report tab, the shared viewer (shared/report.js) in the output page; the contents list goes above
+   the report when the page is narrower than 820 px (the output panel is narrower than the window) */
+#pageBody.cbmr{container-type:inline-size;padding:12px 0 0;font-family:&quot;Times New Roman&quot;,Times,serif}
+#pageBody.cbmr .rp-bar button{font-size:9pt;padding:3px 10px;font-family:-apple-system,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif;border:1px solid #CBD5E1;border-radius:4px;background:#fff;color:#0F172A;cursor:pointer}
+#pageBody.cbmr .rp-bar button:hover{background:#F1F3F5}
+#pageBody.cbmr .rp-fig svg{max-height:420px}
+@container (max-width:819px){#pageBody.cbmr .rp-body{grid-template-columns:minmax(0,1fr)} #pageBody.cbmr .rp-toc{position:static;max-height:220px} #pageBody.cbmr .rp-doc{min-width:0}}
+.cbmrErr{color:#991B1B;font:13px -apple-system,&quot;Segoe UI&quot;,Roboto,Arial,sans-serif}
 @media screen{
   #cbcDashBox{flex:0 0 auto;font-family:var(--font-ui);padding:5px 14px 0;background:var(--slate-50);border-bottom:1px solid var(--color-border);
     max-height:42vh;overflow-y:auto}
@@ -537,7 +537,7 @@ body dialog.spLib{font-family:var(--font-ui)}
       <div id=&quot;statusChip&quot; title=&quot;Overall worst demand/capacity — click for the Summary dashboard&quot;>—</div>
       <div id=&quot;hdrBtns&quot;><!-- HDR (2026-11-05): the project line and the global actions; Undo / Redo are inserted before Print (plibUndoInit) -->
         <a id=&quot;hdrProj&quot; hidden href=&quot;#&quot; title=&quot;Project name and number: edit them in the Project input tab&quot;>Project: <span id=&quot;hdrProjTxt&quot;></span></a>
-        <button class=&quot;pri&quot; id=&quot;btnPrint&quot; title=&quot;Print / PDF the suite's calculation report (the Report tab), from any tab&quot;>Print / PDF</button>
+        <button class=&quot;pri&quot; id=&quot;btnPrint&quot; title=&quot;Print / PDF this tab's calculation report (its Report tab), from any of its tabs&quot;>Print / PDF</button>
       </div>
     </div>
   </div>
@@ -1947,6 +1947,7 @@ function cbcCheckCard(c){
 }
 function cbcGoto(tab,card){
   if(!cbcTabName(tab)) return;
+  CBMR.on=false;   /* CBMR: a link opens a result tab */
   S.ui.tab=tab; if(card) S.ui.collapse[card]=false; autosave(); refresh();
   setTimeout(()=>{ const e=card&amp;&amp;document.querySelector(&quot;#tabPages #&quot;+card); if(!e) return;
     const op=document.getElementById(&quot;outputPanel&quot;);   /* scroll the output panel only (scrollIntoView would also scroll the page and hide the header) */
@@ -2414,14 +2415,23 @@ function buildTabs(){
   bar.innerHTML=&quot;&quot;; pages.innerHTML=&quot;&quot;;
   const tabs=TABS();
   if(!tabs.find(t=>t[0]===S.ui.tab)) S.ui.tab=&quot;tabSummary&quot;;
+  /* CBMR: the Report tab shows until another tab is opened (a tab button, a link, the status chip); S.ui.tab keeps the tab before */
+  if(CBMR.on&amp;&amp;CBMR.tab!==S.ui.tab&amp;&amp;tabs.find(t=>t[0]===CBMR.tab)) CBMR.on=false;
+  CBMR.tab=S.ui.tab;
   tabs.forEach(([id,label])=>{
     const b=el(&quot;button&quot;,null,label);
-    if(id===S.ui.tab) b.classList.add(&quot;active&quot;);
-    b.addEventListener(&quot;click&quot;,()=>{ S.ui.tab=id; autosave(); refresh(); });
+    if(id===S.ui.tab&amp;&amp;!CBMR.on) b.classList.add(&quot;active&quot;);
+    b.addEventListener(&quot;click&quot;,()=>{ CBMR.on=false; S.ui.tab=id; autosave(); refresh(); });
     bar.appendChild(b);
   });
+  /* CBMR (2026-11-12): this tab's Report tab, last; not saved as S.ui.tab (CBMR.on is in memory only) */
+  const rb=el(&quot;button&quot;,null,&quot;Report&quot;); rb.id=&quot;cbmrTab&quot;; rb.title=&quot;This tab's calculation report (print it with Print report or Ctrl+P)&quot;;
+  if(CBMR.on) rb.classList.add(&quot;active&quot;);
+  rb.addEventListener(&quot;click&quot;,()=>{ if(CBMR.on) return; CBMR.on=true; CBMR.tab=S.ui.tab; refresh(); const op=document.getElementById(&quot;outputPanel&quot;); if(op) op.scrollTop=0; });
+  bar.appendChild(rb);
   const pg=el(&quot;div&quot;); pg.id=&quot;pageBody&quot;; pages.appendChild(pg);
-  buildOutput(pg);
+  buildOutput(pg);   /* with the Report tab: the tab before is built first (the results CC, and the references its cards cite), then replaced */
+  if(CBMR.on){ if(typeof cancelAnimationFrame===&quot;function&quot;&amp;&amp;VIS3D.raf) cancelAnimationFrame(VIS3D.raf); mrMount(pg); }
 }
 function updateStatusChip(){
   const chip=document.getElementById(&quot;statusChip&quot;); if(!chip) return;
@@ -5100,7 +5110,9 @@ function cbcResultRows(tabId){
    buildOutput into a detached holder, as buildReport did (every card open; a deselected combination's derivation replaced by
    the note); cbcRxResults(tab) the D/C result lines buildReport printed at the end of a section; cbcRxAbout() its cover
    lines, front note and footer. Nothing is computed here: every value is the tab's own (computeAll / allChecks).
-   Print / PDF and Ctrl+P print the suite's Report (cbcRxPrint). ===================================================================== */
+   Print / PDF and Ctrl+P print the suite's Report (cbcRxPrint).
+   CBMR (2026-11-12): the suite's Report is retired; these functions feed this tab's own Report tab (block CBMR, before refresh()),
+   and Print / PDF and Ctrl+P print it (cbcRxPrint -> mrPrint). ===================================================================== */
 const CBRX_OMIT=&quot;The fully-worked derivation for this combination was omitted from this report at the user’s selection. Its factored actions and results appear in the summary table above; the on-screen output contains the complete work.&quot;;
 function cbcRxSel(){
   const o=S.ui&amp;&amp;S.ui.rptOpts, ok=!!(o&amp;&amp;o.tabs), r={tabs:{},combos:{}};   /* as normRptOpts: a missing entry is true; an old boolean map reads as all true */
@@ -5203,16 +5215,14 @@ function cbcRxAbout(){
   const sel=cbcRxSel(), P=S.proj||{}, om=S.combos.map((c,i)=>sel.combos[i]?null:&quot;Combination &quot;+(i+1)+&quot; (&quot;+c.name+&quot;)&quot;).filter(Boolean);
   return [{type:'note',text:&quot;Reinforced Concrete Beam Capacity — &quot;+(P.name||&quot;Untitled&quot;)+(P.subj?&quot; — &quot;+P.subj:&quot;&quot;)+&quot;. &quot;+cbcCodeLabel()+&quot; · Concrete Beam Design Suite · by Mario Lococo.&quot;},
     {type:'note',text:&quot;Title block of the Beam Capacity tab: Subject &quot;+(P.subj||&quot;—&quot;)+&quot;; Sheet &quot;+(P.sheet||&quot;—&quot;)+&quot;; Code &quot;+(S.code==='ACI'?&quot;ACI 318-19&quot;:&quot;AASHTO LRFD&quot;)+&quot;.&quot;},
-    ...cbrNL(&quot;How this chapter is laid out:&quot;,[[&quot;Equations:&quot;,&quot;shown symbolically, then with values substituted, then with the result.&quot;],   /* CBNL */
+    ...cbrNL(&quot;How this report is laid out:&quot;,[[&quot;Equations:&quot;,&quot;shown symbolically, then with values substituted, then with the result.&quot;],   /* CBNL */
       [&quot;Results:&quot;,&quot;the Flexure, Shear, Torsion, Serviceability and Detailing sections end with the D/C result of each check; PASS means D/C ≤ 1.00 &quot;+
       &quot;(detailing: the limit is met for every combination it applies to).&quot;],[&quot;Units:&quot;,&quot;kip, in, ksi unless noted.&quot;],
       (om.length?[&quot;Omitted:&quot;,&quot;the worked derivation is omitted at the user’s selection for: &quot;+om.join(&quot;, &quot;)+&quot;; their results are in every summary table.&quot;]:[&quot;Combinations:&quot;,&quot;every load combination is worked.&quot;])]),
     {type:'note',text:&quot;This calculation is a computation aid. All results must be independently verified and sealed by the responsible engineer of record.&quot;}];
 }
-/* Print / PDF and Ctrl+P: the suite's Report (the shell's CBRP.printAny); this frame alone only when the shell is not there */
-function cbcRxPrint(){ try{ const P=window.parent; if(P&amp;&amp;P!==window&amp;&amp;P.CBRP&amp;&amp;P.CBRP.printAny){ P.CBRP.printAny(); return; } }catch(e){} window.print(); }
-document.addEventListener(&quot;keydown&quot;,e=>{ if(!(e.ctrlKey||e.metaKey)||e.altKey||String(e.key).toLowerCase()!==&quot;p&quot;) return;
-  try{ const P=window.parent; if(P&amp;&amp;P!==window&amp;&amp;P.CBRP&amp;&amp;P.CBRP.printAny){ e.preventDefault(); P.CBRP.printAny(); } }catch(err){} });
+/* Print / PDF: this tab's report (CBMR mrPrint; in the suite printed by the suite page). Ctrl+P: the CBMR keydown handler */
+function cbcRxPrint(){ mrPrint(); }
 /* the tabs a report section stands for, and the Include filter: the sections of deselected tabs are left out, a link into one
    becomes a link to its tab (&quot;not in this report&quot;), and a link into an omitted combination goes to the note that replaces it */
 function cbcRxFilter(secs,sel,TABOF,omit){
@@ -5679,6 +5689,415 @@ document.getElementById('hdrProj').addEventListener('click',e=>{
   document.getElementById('btnUseProjInfo').addEventListener('click',()=>P.bxUseProjectInfo());
   document.getElementById('btnShareProjInfo').addEventListener('click',()=>P.bxShareProjectInfo());
 })();
+/* =====================================================================
+   CBMR (2026-11-12, engineer request: one report per tab of the suite): this tab's own Report tab, the last button of its
+   tab bar. The suite's combined Report tab (CBRP #544, with CBRX / CBRO / CBRF / CBOV / CBIR / CBPI) is retired; this
+   report is the chapter of this tab it printed, built by the same code, moved here from the suite shell: the worked
+   sections (CBMR_CFG.model, the tab's report model), the copies of the tabs as printed (CBRX: CBMR_CFG.harvest, mrRest,
+   mrWalk), the design order with &quot;Summary of results&quot; first and fixed section numbers (CBRO: mrOrder, CBMR_CFG.sum),
+   &quot;Input error: no results&quot; (CBIR), figures and unique tables in their sections and the rest in an appendix (CBRF: mrMove),
+   the references, the Include boxes of the report bar (the tab's own S.ui.rptOpts) and the svg ids of the print copy (CBPI).
+   Nothing is computed here: every value is the tab's own. Section numbers start at 1; in-report tab links ([[tab:<tabId>|…]])
+   open this tab's own result tabs. Print: the viewer's Print report, Print / PDF and Ctrl+P print this report alone (title
+   block, running header, page numbers); in the suite the print is handed to the suite page (CBMRP.print), which prints it
+   as the top page (a page printed from inside a frame would be cut to the frame). Nothing is saved: the Report tab is not
+   stored as S.ui.tab (CBMR.on is in memory only; S.ui.tab keeps the tab shown before, so a saved project or an older copy of
+   this file never opens on a tab it does not know); the collapsed sections are kept in memory. Display only.
+   This block is the same in the Beam Capacity and ASD Beam Calcs frames (keep the two copies in step); CBMR_CFG differs.
+   ===================================================================== */
+var CBMR={on:false,closed:new Set(),api:null,doc:null};
+function mrEsc(s){ return String(s==null?'':s).replace(/[&amp;<>&quot;]/g,function(c){ return {'&amp;':'&amp;amp;','<':'&amp;lt;','>':'&amp;gt;','&quot;':'&amp;quot;'}[c]; }); }
+/* the built-in renderer (shared/steps.js, used for every step without KaTeX and for $…$ in notes and cells always) knows a TeX
+   subset; the tabs' strings also use \dfrac, \left( … \right), \; and a few more. mrLite maps them to the subset (display only:
+   the same symbols and numbers), so offline the Report shows each line legibly instead of &quot;dfrac…&quot; (CBRX rxLite). */
+function mrLite(t){ return String(t==null?'':t).replace(/\\[dt]frac/g,'\\frac').replace(/\\(mathbf|mathrm|boldsymbol|textbf|mathit|operatorname)\{/g,'{').replace(/\\color\{[^}]*\}/g,'')
+  .replace(/\\left\s*\\?([()\[\]|.])/g,function(m,c){ return c==='.'?'':c; }).replace(/\\right\s*\\?([()\[\]|.])/g,function(m,c){ return c==='.'?'':c; })
+  .replace(/\\checkmark/g,'\u2713').replace(/\\q?quad/g,' ').replace(/\\[;:!]/g,' ').replace(/\\(displaystyle|scriptstyle|textstyle|limits)/g,'').replace(/\\Rightarrow/g,'\u21D2').replace(/\\rightarrow|\\to\b/g,'\u2192')
+  .replace(/\\approx/g,'\u2248').replace(/\\infty/g,'\u221E').replace(/\\gg/g,'\u226B').replace(/\\varepsilon/g,'\\epsilon').replace(/\\big[lr]?|\\Big[lr]?/g,'').replace(/\\ /g,' '); }
+function mrLiteIt(it){
+  var o={}; for(var k in it) o[k]=it[k];
+  var st=function(s){ var q={}; for(var k in s) q[k]=s[k]; ['sym','eq','sub'].forEach(function(f){ if(typeof q[f]==='string') q[f]=mrLite(q[f]); }); return q; };
+  if(it.list) o.list=it.list.map(function(t){ var q={}; for(var k in t) q[k]=t[k]; q.steps=(t.steps||[]).map(st); return q; });
+  if(it.steps) o.steps=it.steps.map(st);
+  return o;
+}
+function mrTx(s){ return s==null?s:String(s).replace(/\$([^$]+)\$/g,function(m,q){ return '$'+mrLite(q)+'$'; }); }
+function mrCell(c){ if(c&amp;&amp;typeof c==='object'){ var o={}; for(var k in c) o[k]=c[k]; o.t=mrTx(c.t); return o; } return mrTx(c); }
+/* a 'topics' item of the tab's model -> one 'steps' item grouped by topic (SharedSteps.group) */
+function mrTopics(list){
+  var L=(list||[]).filter(function(t){ return t&amp;&amp;t.steps&amp;&amp;t.steps.length; }), steps=[];
+  L.forEach(function(t){ t.steps.forEach(function(s){ steps.push(s); }); });
+  return {steps:steps,topics:L.map(function(t){ var g=SharedSteps.group(t.steps,[{key:'k',title:t.title,ref:t.ref,ids:function(){ return true; }}],{strip:false})[0];
+    return {title:t.title,ref:t.ref||'',n:t.steps.length,cls:g.cls,chip:g.chip,res:g.res}; })};
+}
+function mrItem(it){
+  if(!window.katex&amp;&amp;(it.type==='topics'||it.type==='steps')) it=mrLiteIt(it);   /* offline: the steps in the built-in renderer's subset */
+  var o={}; for(var k in it) o[k]=it[k];
+  if(it.type==='topics'){ var T=mrTopics(it.list); o={type:'steps',scope:it.scope,title:mrTx(it.title),steps:T.steps,topics:T.topics}; if(it.see) o.see=it.see; return o; }
+  if(it.type==='steps'){ o.title=mrTx(it.title); return o; }
+  if(it.type==='note') o.text=mrTx(it.text);
+  else if(it.type==='figure') o.caption=mrTx(it.caption);
+  else if(it.type==='kv') o.rows=(it.rows||[]).map(function(r){ return [mrTx(r[0]),mrTx(r[1])].concat(r[2]?[r[2]]:[]); });
+  else if(it.type==='table'){ o.caption=mrTx(it.caption); o.head=(it.head||[]).map(mrCell);
+    o.rows=(it.rows||[]).map(function(r){ return Array.isArray(r)?r.map(mrCell):{cells:r.cells.map(mrCell),cls:r.cls}; }); }
+  return o;
+}
+/* ---------- CBRX: what the retired print report printed and the worked sections lack: each chosen tab, built by the tab's own
+   buildOutput (CBMR_CFG.harvest), is read in order and every table with a number the Report does not show yet (or, for a table
+   that is not a variable list, a row of text it does not have), every equation line with such a number or remark, every note
+   with a sentence or number it does not have yet, and every figure it lacks is added to the section of that tab (&quot;As printed:
+   tables, equations, notes and figures&quot;, under the tab's card titles); the D/C result lines go at the end of the section
+   (&quot;Results — <tab>&quot;). Without KaTeX an equation line is shown as its TeX source. ---------- */
+var mrNums=function(t){ return (String(t).replace(/\{,\}/g,',').replace(/[−–]/g,'-').replace(/(\d),(?=\d{3})/g,'$1').match(/\d+(?:\.\d+)?/g)||[]).map(function(x){ return String(parseFloat(x)); }); };
+var mrNrm=function(x){ return String(x).toLowerCase().replace(/[^a-z0-9]+/g,''); };
+function mrRest(M){
+  var C=CBMR_CFG, txt=''; try{ txt=SharedReport.text(SharedReport.build(M),{legacy:true}); }catch(e){ return; }
+  if(M._err) return;   /* CBIR: no tab copies, no result lines while the tab has an input error */
+  var have=new Set(), all=mrNrm(txt);
+  var addNum=function(x){ have.add(x); var v=parseFloat(x), d=(x.split('.')[1]||'').length; for(var k=0;k<d;k++) have.add(String(parseFloat(v.toFixed(k)))); };
+  mrNums(txt).forEach(addNum);
+  var newNum=function(t){ return mrNums(t).some(function(n){ return !have.has(n); }); };
+  var fresh=function(t){ var ss=String(t).split(/(?<=[.;:])\s+/).map(mrNrm).filter(function(x){ return x.length>15; }); return ss.some(function(x){ return all.indexOf(x)<0; }); };
+  var seen=function(t){ mrNums(t).forEach(addNum); all+=mrNrm(t); };
+  var figs=new Set(); M.sections.forEach(function(s){ (s.subs||[]).forEach(function(q){ (q.items||[]).forEach(function(it){ if(it.type==='figure') figs.add(mrNrm(it.caption)); }); }); });
+  var H; try{ H=C.harvest(); }catch(e){ return; }
+  var last=-1;   /* the index of the last section that a harvested tab went into */
+  H.forEach(function(h){
+    var si=-1; M.sections.forEach(function(s,i){ if(si<0&amp;&amp;s._m&amp;&amp;s._tab===h.id) si=i; });
+    if(si<0){   /* a tab without a section of its own (ASD: Summary &amp; Rating): a new section after the one before it */
+      var first=-1; M.sections.forEach(function(s,i){ if(first<0&amp;&amp;s._m) first=i; });
+      si=last>=0?last+1:(first>=0?first:M.sections.length-1);
+      M.sections.splice(si,0,{title:h.label,_m:1,_tab:h.id,_new:true,subs:[]});
+    }
+    last=si;
+    var sec=M.sections[si], items=mrWalk(h.el,'rx-'+h.id,{newNum:newNum,fresh:fresh,seen:seen,figs:figs});
+    if(items.length) sec.subs.push({title:'As printed: tables, equations, notes and figures',items:items,_rx:{tab:h.id,label:h.label}});   /* CBRF: _rx marks the copy (mrMove) */
+    var r=null; try{ r=C.results(h.id); }catch(e){}
+    if(r){ sec.subs.push({title:'Results — '+h.label,items:[r,{type:'note',text:'PASS: D/C ≤ 1.00 (detailing: the limit is met for every combination it applies to; rating: RF ≥ 1.00). Each check is worked in the subsections above.'}]}); seen(JSON.stringify(r.rows)); }
+  });
+  M.sections=M.sections.filter(function(s){ return !(s._new&amp;&amp;!s.subs.length); });
+}
+/* one built tab -> report items, in document order; a card title (.secTitle) becomes the topic heading of its first item */
+function mrWalk(root,scope,T){
+  var out=[], topic=null, card='', nfig=0, k=0, ntp=0, D=root.ownerDocument;
+  var INL=/^(B|I|EM|STRONG|SPAN|BR|SUB|SUP|A|SMALL|U|CODE|LABEL)$/;
+  var txt=function(e){ var c=e.cloneNode(true);
+    c.querySelectorAll('.katex').forEach(function(x){ var a=x.querySelector('annotation'); x.replaceWith(D.createTextNode(' '+(a?a.textContent:x.textContent)+' ')); });
+    c.querySelectorAll('br').forEach(function(b){ b.replaceWith(D.createTextNode(' ')); });
+    c.querySelectorAll('.wkLink,.caret,button,select,input').forEach(function(x){ x.remove(); });
+    return c.textContent.replace(/\s+/g,' ').trim().replace(/\$/g,''); };
+  var tex=function(l){ var a=l.querySelector('annotation'); return (a?a.textContent:l.textContent).trim(); };
+  var push=function(it){ if(topic){ it.topic={title:topic,no:++ntp}; topic=null; } it._card=card; out.push(it); };   /* numbered in the subsection's order; CBRF: _card = the tab card it comes from */
+  var cellOf=function(v){ if(/^(PASS|OK)\b/.test(v)) return {t:v,cls:'ok'}; if(/^(FAIL|NG)\b/.test(v)) return {t:v,cls:'ng'}; if(/^N\/A\b/.test(v)) return {t:v,cls:'na'};
+    return /^[-−\d.,e+\s%/×()≫∞—]+$/.test(v)&amp;&amp;/\d/.test(v)?{t:v,n:true}:v; };
+  var table=function(t){
+    var trs=[].slice.call(t.rows); if(!trs.length) return;
+    var all=t.innerText||t.textContent, vt=t.classList.contains('vt');
+    var rowTxt=trs.map(function(r){ return [].slice.call(r.cells).map(txt).join(' '); });
+    if(!(T.newNum(all)||(!vt&amp;&amp;rowTxt.some(T.fresh)))) return;
+    var hd=trs[0].querySelector('th')?[].slice.call(trs[0].cells).map(txt):null, cap=t.querySelector('caption');
+    var body=trs.slice(hd?1:0).map(function(r){ return [].slice.call(r.cells).map(function(c){ return cellOf(txt(c)); }); });
+    push({type:'table',caption:cap?txt(cap):undefined,head:hd||[],rows:body,wide:(trs[0].cells.length>6)||undefined,lazy:trs.length>31||undefined,title:trs.length>31?(cap?txt(cap):'Table'):undefined});
+    rowTxt.forEach(T.seen);
+  };
+  var eqb=function(b){
+    var tt=b.querySelector('.eqTitle'), title=tt?txt(tt):'', steps=[];
+    [].slice.call(b.querySelectorAll('.eqLine')).forEach(function(l,j){
+      var s=tex(l), rem=(s.match(/\\text\{[^}]{20,}\}/g)||[]).join(' ');
+      if(!(T.newNum(s)||(rem&amp;&amp;T.fresh(rem.replace(/\\text\{|\}/g,''))))) return;
+      steps.push(window.katex?{id:'l'+(++k),label:title,eq:s}:{id:'l'+(++k),label:title,note:s});   /* without KaTeX: the TeX source (#724) */
+      T.seen(s+' '+rem);
+    });
+    if(steps.length) push({type:'steps',scope:scope,title:title||undefined,steps:steps});
+    [].slice.call(b.querySelectorAll('table')).forEach(table);
+  };
+  var visit=function(e){
+    if(e.nodeType!==1) return;
+    if(e.matches('.secHead')){ var st=e.querySelector('.secTitle'); topic=st?txt(st):null; card=topic||''; nfig=0; return; }
+    if(e.matches('.wkLink,.caret,button,select,input,script,style,textarea')) return;
+    if(e.matches('svg')){ nfig++; var cap=(card||'Figure')+(nfig>1?' ('+nfig+')':''); if(!T.figs.has(mrNrm(cap))){ T.figs.add(mrNrm(cap)); push({type:'figure',svg:e.outerHTML,caption:cap}); } return; }
+    if(e.matches('table')){ table(e); return; }
+    if(e.matches('.eqBlock')){ eqb(e); return; }
+    /* CBNL (2026-11-08): a note built as a lead line and a list (the tabs' cbNL) is kept or skipped as one note, with the same test as
+       before on its whole text, then copied as one Report line per part (the lead, then &quot;• lead words: text&quot;
+       per item); an action line (.cbNLa) is a warning line */
+    if(e.matches('.cbNL')){ var P=[].slice.call(e.querySelectorAll('.cbNLa,.cbNLl,.cbNLu>li')), tA=P.map(txt).filter(Boolean).join(' ');
+      if(tA.length>=12&amp;&amp;(T.fresh(tA)||T.newNum(tA))){ P.forEach(function(p){ var x=txt(p); if(x) push({type:'note',warn:p.matches('.cbNLa')||undefined,text:(p.tagName==='LI'?'• ':'')+x}); }); T.seen(tA); }
+      return; }
+    var kids=[].slice.call(e.children), leaf=kids.every(function(x){ return INL.test(x.tagName)&amp;&amp;!x.querySelector('table,svg,div,p,ul,ol,li'); });
+    if(leaf){ var t=txt(e); if(t.length>=12&amp;&amp;(T.fresh(t)||T.newNum(t))){ push({type:'note',text:(e.tagName==='LI'?'• ':'')+t}); T.seen(t); } return; }
+    kids.forEach(visit);
+  };
+  [].slice.call(root.children).forEach(visit);
+  return out;
+}
+/* the Include boxes on the report bar: the tabs and (Beam Capacity) the combinations and the overview (the dialogs' choices) */
+function mrControls(){
+  var C=CBMR_CFG, h='<span class=&quot;cbrx-inc&quot; style=&quot;display:inline-flex;flex-wrap:wrap;gap:2px 10px;font-size:9pt;align-items:center&quot;>', B, Sl;
+  try{ B=C.boxes(); Sl=C.sel(); }catch(e){ return ''; }
+  h+='<b>Report:</b>';
+  if(C.overview) h+='<label><input type=&quot;checkbox&quot; data-cbrx=&quot;ov|&quot;'+(Sl.ov!==false?' checked':'')+'> Overview figures</label><span style=&quot;width:8px&quot;></span><b>Tabs:</b>';   /* CBOV: S.ui.rptOpts.ov */
+  h+=B.tabs.map(function(t){ return '<label><input type=&quot;checkbox&quot; data-cbrx=&quot;tab|'+mrEsc(t[0])+'&quot;'+(Sl.tabs[t[0]]?' checked':'')+'> '+mrEsc(t[1])+'</label>'; }).join('');
+  if(B.combos.length) h+='<b>worked detail:</b>'+B.combos.map(function(t,i){ return '<label><input type=&quot;checkbox&quot; data-cbrx=&quot;combo|'+i+'&quot;'+(Sl.combos[i]?' checked':'')+'> '+mrEsc(t)+'</label>'; }).join('')+
+    '<button type=&quot;button&quot; data-cbrx=&quot;all|&quot;>Select all</button><button type=&quot;button&quot; data-cbrx=&quot;gov|&quot;>Governing combinations only</button>';
+  return h+'</span>';
+}
+function mrWire(host){
+  host.querySelectorAll('[data-cbrx]').forEach(function(x){ x.addEventListener(x.tagName==='BUTTON'?'click':'change',function(){
+    var p=x.getAttribute('data-cbrx').split('|');
+    try{ CBMR_CFG.set(p[0],p[0]==='combo'?parseInt(p[1],10):p[1],x.checked); }catch(e){}
+    mrMount(document.getElementById('pageBody')); }); });
+}
+/* ---------- CBRO: the Report in the design order, &quot;Summary of results&quot; first (CBMR_CFG.sum: the lines of this tab's check
+   summary panel), then (Beam Capacity) the overview, then the tab's sections in CBMR_CFG.ord. A section whose Include box is
+   off (or that has nothing to show for this project) stays as a one-line section, so the section numbers do not move with the
+   Include boxes. Every section of a tab gets the key cbro:<tab>. ---------- */
+function mrOrder(M){
+  var C=CBMR_CFG, G=[], REF=[];
+  M.sections.forEach(function(s){ (s._m?G:REF).push(s); });
+  if(G.some(function(s){ return s._tab; })){   /* a report that could not be built (input error): as it is */
+    var B=null, Sl=null; try{ B=C.boxes(); Sl=C.sel(); }catch(e){}
+    var lab={}; ((B&amp;&amp;B.tabs)||[]).forEach(function(t){ lab[t[0]]=t[1]; });
+    var res=[];
+    C.ord.forEach(function(t){
+      var hit=G.filter(function(s){ return s._tab===t; });
+      if(hit.length){ res=res.concat(hit); return; }
+      if(!lab[t]) return;   /* not a tab of this project (e.g. Torsion when torsion is off) */
+      var off=!!(Sl&amp;&amp;Sl.tabs&amp;&amp;Sl.tabs[t]===false), link='[[tab:'+t+'|On screen: '+lab[t]+' tab]]';
+      res.push({title:C.ttl[t],_m:1,_tab:t,_stub:true,subs:[],
+        note:off?'Not included in this report: the Include box “'+lab[t]+'” on the report bar is off. '+link
+          :(t==='tabValid'?'No validation notices for this project. ':'The '+lab[t]+' tab adds nothing to the other sections of this report for this project. ')+link});
+    });
+    G.forEach(function(s){ if(res.indexOf(s)<0) res.push(s); });
+    G=res;
+  }
+  G.forEach(function(s){ if(s._tab) s.key='cbro:'+s._tab; });
+  M.sections=[mrSum(M._err)].concat(C.overview?[C.overview()]:[],G,REF);
+  mrKeys(M);
+}
+/* &quot;Summary of results&quot;: one line per check of the tab's check summary panel (CBMR_CFG.sum), the same name, short value (the D/C,
+   the RF, or the condition not met), status and reference; the last column links to the step where the check is worked */
+var MR_ST={pass:['PASS','ok'],fail:['FAIL','ng'],na:['N/A','na'],warn:['REVIEW','hi'],info:['INFO','na']};
+function mrSum(ERR){
+  var C=CBMR_CFG, head=['Check','Result','Status','Detail','Reference (worked in)'], subs=[], tot='';
+  var row=function(name,short,st,detail,ref,keys){ var x=MR_ST[st]||MR_ST.na;
+    return [name,{t:short||'—',n:/^[−\-\d.,\s]*$|^(D\/C|RF) /.test(short||'')||undefined},{t:x[0],cls:x[1]},detail||'',{t:ref||'—',_k:keys}]; };
+  var count=function(rows){ var f=0,w=0; rows.forEach(function(r){ if(r[2].t==='FAIL') f++; if(r[2].t==='REVIEW') w++; });
+    return (f?f+' NG':'no NG')+(w?', '+w+' REVIEW':''); };
+  var S0=null; try{ S0=C.sum(ERR,row); }catch(e){ S0=null; }
+  if(!S0) S0={msg:'No results: the '+C.name+' tab has not finished loading, or its inputs need correcting.'};
+  if(S0.msg){ subs.push({title:C.name,items:[{type:'note',warn:true,text:S0.msg}]}); tot=C.name+': '+S0.msg.replace(/\.$/,''); }
+  else { var rows=S0.rows, cn=count(rows); tot=C.name+': '+(rows.length?cn:'no checks');
+    subs.push({title:C.name,items:[{type:'note',text:rows.length?'Check summary: '+cn+' ('+rows.length+' lines).':'No checks.'}].concat(rows.length?[{type:'table',head:head,rows:rows}]:[]).concat(S0.note?[{type:'note',text:S0.note}]:[])}); }
+  return {title:'Summary of results',key:'cbro:sum',note:tot+'.',subs:subs};
+}
+/* each summary line links to the first of its keys found in the report (the step, else an omitted combination's note, else
+   the tab's section); a line with none keeps its reference as plain text */
+function mrKeys(M){
+  var D=null; try{ D=SharedReport.build(M); }catch(e){ return; }
+  M.sections[0].subs.forEach(function(q){ (q.items||[]).forEach(function(it){ if(it.type!=='table') return;
+    it.rows.forEach(function(r){ var c=r[4]; if(!c||!c._k) return; var h=c._k.filter(function(k){ return D.index.has(k); })[0]; delete c._k; if(h) c.key=h; }); }); });
+}
+/* ---------- CBIR: while the tab has an input error (its check summary panel and output say &quot;Input error: no results&quot;) the
+   report prints &quot;Input error: no results&quot; with the list of errors in place of its worked sections, so it never prints the
+   last results computed before the error. The Summary of results says the same. ---------- */
+function mrErrMsg(E){ return 'Input error: no results. '+E.join(' ')+' Correct the marked inputs on the '+CBMR_CFG.name+' tab ([[cbir]]).'; }
+function mrErrSection(E){
+  var n=CBMR_CFG.name;
+  return {title:'Input error: no results',_cbir:'cbir',_m:1,
+    note:'The '+n+' tab has an input error, so this report has no results: no value of this tab is printed until the inputs are corrected. [[tab:|On screen: '+n+' tab]]',
+    subs:[{title:'Input errors',items:E.map(function(t){ return {type:'note',warn:true,text:t}; })}]};
+}
+/* ---------- CBRF: each tab copy (&quot;As printed: tables, equations, notes and figures&quot;, mrRest) is split. Its figures, and its
+   tables that hold a value or a text found nowhere else in the Report, go into the section that works the check (a
+   combination's card into that combination's subsection; CBMR_CFG.sub; the rest into &quot;Figures and tables from the <tab> tab&quot;
+   before the Results lines). What is left of the copy (its notes, equation lines and the tables whose values the Report
+   already shows) goes to &quot;Appendix: the tabs as printed&quot; after the References, one subsection per tab, and the section gets
+   a pointer to it. Items are moved, never changed or dropped. ---------- */
+function mrMove(M){
+  var C=CBMR_CFG, rx=[]; M.sections.forEach(function(s){ (s.subs||[]).forEach(function(q){ if(q._rx) rx.push({s:s,q:q}); }); });
+  if(!rx.length) return;
+  var txt=''; try{ txt=SharedReport.text(SharedReport.build({title:M.title,sections:M.sections.map(function(s){ return {title:s.title,note:s.note,subs:(s.subs||[]).filter(function(q){ return !q._rx; })}; })}),{legacy:true}); }catch(e){ return; }
+  var have=new Set(), all=mrNrm(txt);
+  var addNum=function(x){ have.add(x); var v=parseFloat(x), d=(x.split('.')[1]||'').length; for(var k=0;k<d;k++) have.add(String(parseFloat(v.toFixed(k)))); };
+  mrNums(txt).forEach(addNum);
+  var ct=function(c){ return c&amp;&amp;typeof c==='object'?String(c.t==null?'':c.t):String(c==null?'':c); };
+  var cells=function(it){ var o=[]; (it.head||[]).forEach(function(c){ o.push(ct(c)); }); (it.rows||[]).forEach(function(r){ (Array.isArray(r)?r:r.cells).forEach(function(c){ o.push(ct(c)); }); }); if(it.caption) o.push(ct(it.caption)); return o; };
+  var unique=function(it){ return cells(it).some(function(t){ if(mrNums(t).some(function(n){ return !have.has(n); })) return true; var x=mrNrm(t); return x.length>15&amp;&amp;all.indexOf(x)<0; }); };
+  var seen=function(it){ cells(it).forEach(function(t){ mrNums(t).forEach(addNum); all+=mrNrm(t); }); };
+  var ap=[];
+  rx.forEach(function(R){
+    var s=R.s, q=R.q, X=q._rx, lab=X.label, keep=[], tabT=' ('+lab+' tab)', extra=null;
+    var target=function(card){
+      var m=/^Combination (\d+)\b/.exec(card||''); if(m){ var t=s.subs.filter(function(u){ return u.title.indexOf('Combination '+m[1]+' (')===0; })[0]; if(t) return t; }
+      var L=(C.sub||{})[X.tab]||[]; for(var i=0;i<L.length;i++){ if(L[i][0].test(card||'')){ var nm=L[i][1], u=s.subs.filter(function(v){ return v.title===nm; })[0]; if(u) return u; } }
+      if(!extra){ extra={title:'Figures and tables from the '+lab+' tab',items:[]}; var k=-1; s.subs.forEach(function(u,i){ if(k<0&amp;&amp;/^Results — /.test(u.title)) k=i; }); s.subs.splice(k<0?s.subs.length:k,0,extra); }
+      return extra;
+    };
+    var prevFig=null;
+    q.items.forEach(function(it){
+      if(it.type==='note'&amp;&amp;prevFig&amp;&amp;(it._card||'')===(prevFig._card||'')&amp;&amp;!it.topic){   /* the figure's own caption line on the tab moves with it */
+        var cn={}; for(var kk in it) cn[kk]=it[kk]; delete cn._card; prevFig.into.items.push(cn); prevFig=null; return; }
+      prevFig=null;
+      var mv=it.type==='figure'||(it.type==='table'&amp;&amp;unique(it));
+      if(!mv){ keep.push(it); return; }
+      if(it.type==='table') seen(it);
+      var o={}; for(var k in it) o[k]=it[k]; delete o._card;
+      var card=it._card||'';
+      if(it.type==='figure') o.caption=(o.caption||card||'Figure')+tabT;
+      o.topic={title:(it.type==='figure'?(it.caption||card||'Figure'):(card||'Table'))+tabT};
+      var into=target(card); into.items.push(o);
+      if(it.type==='figure') prevFig={_card:it._card,into:into};
+    });
+    s.subs.splice(s.subs.indexOf(q),1);
+    if(!keep.length) return;
+    /* the copy's topic headings again: the first item left of each card carries it, numbered in the appendix's order */
+    var n=0, last=null; keep.forEach(function(it){ var c=it._card||''; delete it.topic; if(c!==last){ last=c; if(c) it.topic={title:c,no:++n}; } delete it._card; });
+    var key='cbrf:ap:'+X.tab;
+    ap.push({title:lab+' tab',key:key,items:[{type:'note',text:'As printed on the tab: its notes, equation lines and the tables whose values are worked in [['+(s.key||key)+']]. The figures and tables found only on the tab are in that section.'}].concat(keep)});
+    s.note=(s.note?s.note+' ':'')+'The '+lab+' tab’s other notes, equation lines and tables, as printed: [['+key+']].';
+  });
+  rx.forEach(function(R){ if(R.q.items) R.q.items.forEach(function(it){ delete it._card; }); });
+  if(ap.length) M.sections.push({part:'Appendices',title:'Appendix: the tabs as printed',key:'cbrf:ap',note:'Text and tables of the '+C.name+' result tabs as they print, kept for completeness. Every value here is worked, or shown, in the section named at the start of each subsection; figures and tables found only on a tab are in that section.',subs:ap});
+}
+/* the report: the tab's model (its worked sections, CBMR_CFG.model), input errors, references, then the steps above */
+function mrModel(){
+  var C=CBMR_CFG, secs=[], m=null, E=[];
+  try{ m=C.model(); }catch(e){ m={sections:[{title:C.name,subs:[{title:'Report error',items:[{type:'note',warn:true,text:'This report could not be built: '+(e&amp;&amp;e.message)}]}]}]}; }
+  if(!m) m={sections:[]};
+  try{ E=C.errors()||[]; }catch(e){ E=[]; }
+  if(E.length) m={code:m.code,proj:m.proj,refs:m.refs,sections:[mrErrSection(E)]};   /* CBIR: an input error replaces the worked sections */
+  var P=m.proj||{}, refRows=(m.refs||[]).map(function(x){ return [String(x[0]).replace(/<[^>]+>/g,''),String(x[1]).replace(/<sub>(.*?)<\/sub>/g,'$$_{$1}$$').replace(/<[^>]+>/g,'')]; });
+  (m.sections||[]).forEach(function(s){ secs.push({title:s.title,note:mrTx(s.note),_m:1,_tab:s.tab,key:s._cbir,
+    subs:(s.subs||[]).map(function(q){ return {title:mrTx(q.title),key:q.key,items:(q.items||[]).map(mrItem)}; })}); });
+  if(!E.length&amp;&amp;C.note){ var nt=C.note(); if(nt&amp;&amp;secs.length) secs[0].note=(secs[0].note?secs[0].note+' ':'')+nt; }   /* ASD: Beam Capacity has an input error (CBIR / CBST) */
+  var ab=[]; try{ ab=C.about()||[]; }catch(e){ ab=[]; }   /* CBRX: the retired print report's cover lines, front note and footer */
+  secs.push({title:'References',subs:[{title:'Codes and articles cited',items:[{type:'table',head:['Reference','Provisions used'],rows:refRows}]}].concat(ab.length?[{title:'About this report',items:ab}]:[])});
+  var proj=P.name||'Untitled';
+  var M={title:C.title,subtitle:proj+(P.subj?' — '+P.subj:''),code:m.code||'',
+    info:[['Project',P.name],['Project No.',P.num],['Subject',P.subj],['Calculated by',P.by],['Date',P.date],['Sheet',P.sheet],['Checked by',P.chk],['Checked date',P.chkDate]],
+    head:{left:'Project No. '+(P.num||'—')+' — '+String(proj).slice(0,40),right:'Computed: '+(P.by||'—')+' '+(P.date||'')+' · Checked: '+(P.chk||'—')+' '+(P.chkDate||''),foot:proj+' (Concrete Beam Design Suite — '+C.name+')'},
+    sections:secs};
+  if(E.length) M._err=E;
+  mrRest(M);    /* CBRX */
+  mrOrder(M);   /* CBRO */
+  mrMove(M);    /* CBRF */
+  return M;
+}
+/* the report as a SharedReport document (the Report tab's when it is shown), for printing; null without the shared scripts */
+function suiteReportDoc(){
+  if(!window.SharedReport||!window.SharedSteps) return null;
+  if(CBMR.on&amp;&amp;CBMR.doc) return CBMR.doc;
+  return SharedReport.build(mrModel());
+}
+/* [[tab:<tabId>|…]]: this tab's own result tab (an empty name: the tab shown before the Report) */
+function mrGo(name){ CBMR.on=false; if(name&amp;&amp;CBMR_CFG.tabName(name)) CBMR_CFG.go(name); else refresh(); }
+/* the Report tab: the viewer mounted in the output page (pg, #pageBody) */
+function mrMount(pg){
+  if(!pg) return;
+  pg.classList.add('cbmr');
+  if(!window.SharedReport||!window.SharedSteps){ pg.innerHTML='<p class=&quot;cbmrErr&quot;>The report cannot be shown: shared/report.js or shared/steps.js is not loaded. Keep the shared folder next to this file.</p>'; CBMR.api=null; CBMR.doc=null; return; }
+  var M; try{ M=mrModel(); }catch(e){ pg.innerHTML='<p class=&quot;cbmrErr&quot;>Report error: '+mrEsc(e&amp;&amp;e.message)+'</p>'; CBMR.api=null; CBMR.doc=null; return; }
+  CBMR.api=SharedReport.mount(pg,M,{closed:CBMR.closed,onGoto:mrGo,stick:0,controls:mrControls()}); CBMR.doc=CBMR.api.doc;
+  mrWire(pg);
+  /* the viewer's Print report button prints through mrPrint (in the suite: the suite page; see below) */
+  if(!pg.__mrPrint){ pg.__mrPrint=true; pg.addEventListener('click',function(e){ var b=e.target.closest&amp;&amp;e.target.closest('[data-rpact=&quot;print&quot;]'); if(!b) return; e.preventDefault(); e.stopPropagation(); mrPrint(); },true); }
+}
+/* Print: this report alone. In the suite the suite page prints it (CBMRP.print: the top page, with the running header and page
+   numbers; printing from inside a frame would cut the page to the frame); a frame opened alone prints itself. */
+function mrPrint(){
+  var d=suiteReportDoc(); if(!d){ window.print(); return; }
+  try{ var P=window.parent; if(P&amp;&amp;P!==window&amp;&amp;P.CBMRP&amp;&amp;P.CBMRP.print){ P.CBMRP.print(d); return; } }catch(e){}
+  SharedReport.print(d);
+}
+document.addEventListener('keydown',function(e){ if(!(e.ctrlKey||e.metaKey)||e.altKey||String(e.key).toLowerCase()!=='p') return;
+  if(!window.SharedReport) return; e.preventDefault(); mrPrint(); });
+/* CBPI: the print box is a second rendering of the Report while the Report tab's own copy stays in the page (hidden while
+   printing); a figure's url(#id) / href=&quot;#id&quot; (markers, patterns, clip paths) would resolve to the hidden copy's element. At
+   beforeprint each top-level SVG of the box gets its own ids (a frame opened alone; in the suite the suite page does the same). */
+var MR_PI=0;
+function mrUniqSvgIds(root){
+  var A=['fill','stroke','clip-path','mask','filter','marker-start','marker-mid','marker-end','style','href','xlink:href'];
+  Array.prototype.forEach.call(root.querySelectorAll('svg'),function(svg){ if(svg.parentNode&amp;&amp;svg.parentNode.closest&amp;&amp;svg.parentNode.closest('svg')) return;
+    var defs=svg.querySelectorAll('[id]'); if(!defs.length) return; var sfx='-pr'+(++MR_PI), map={};
+    Array.prototype.forEach.call(defs,function(e){ map[e.id]=e.id+sfx; e.id=map[e.id]; });
+    Array.prototype.forEach.call(svg.querySelectorAll('*'),function(e){ A.forEach(function(a){ var v=e.getAttribute(a); if(!v||v.indexOf('#')<0) return;
+      var w=v.replace(/url\(([&quot;']?)#([^&quot;')\s]+)\1\)/g,function(m,q,id){ return map[id]?'url('+q+'#'+map[id]+q+')':m; });
+      if((a==='href'||a==='xlink:href')&amp;&amp;w.charAt(0)==='#'&amp;&amp;map[w.slice(1)]) w='#'+map[w.slice(1)];
+      if(w!==v) e.setAttribute(a,w); }); }); });
+}
+window.addEventListener('beforeprint',function(){
+  if(window.parent!==window) return;   /* in the suite the suite page prints (CBMRP) */
+  if(!document.body.classList.contains('rp-printing')&amp;&amp;CBMR.on&amp;&amp;CBMR.doc){   /* the browser's Print while the Report tab is shown */
+    var b0=document.getElementById('rp-print'); if(!b0){ b0=document.createElement('div'); b0.id='rp-print'; document.body.appendChild(b0); }
+    b0.innerHTML='<div class=&quot;rp&quot;><article class=&quot;rp-doc&quot;>'+SharedReport.html(CBMR.doc,{lazy:false})+'</article></div>';
+    document.body.classList.add('rp-printing'); }
+  var box=document.getElementById('rp-print'); if(!box||!document.body.classList.contains('rp-printing')||box.getAttribute('data-cbpi')===box.innerHTML.length+'') return;
+  try{ mrUniqSvgIds(box); box.setAttribute('data-cbpi',box.innerHTML.length+''); }catch(e){}
+});
+/* CBMR: what the report of the Beam Capacity tab takes from this tab (the common block above reads only CBMR_CFG) */
+var CBMR_CFG={name:'Beam Capacity',title:'Beam Capacity — Calculation Report',
+  model:function(){ return cbcRptModel(); }, errors:function(){ return cbcRxErrors(); }, harvest:function(){ return cbcRxHarvest(); },
+  results:function(t){ return cbcRxResults(t); }, about:function(){ return cbcRxAbout(); },
+  boxes:function(){ return cbcRxBoxes(); }, sel:function(){ return cbcRxSel(); }, set:function(k,key,v){ cbcRxSet(k,key,v); },
+  tabName:function(t){ return cbcTabName(t); }, go:function(t){ cbcGoto(t); },
+  ord:['tabInputEcho','tabValid','tabFlex','tabShear','tabTor','tabServ','tabDetail','tabSummary'],
+  ttl:{tabInputEcho:'Inputs',tabValid:'Validation notices',tabFlex:'Flexure',tabShear:'Shear',tabTor:'Torsion',tabServ:'Serviceability',tabDetail:'Detailing',tabSummary:'Summary of checks'},
+  sub:{tabInputEcho:[[/^Section Schematic/,'Reinforcement'],[/^Reinforcement/,'Reinforcement'],[/^Load Combinations/,'Load combinations']],tabDetail:[[/^Detailing Checks/,'Detailing checks (envelope)']]},
+  /* the Summary of results: the lines of the check summary panel (CBDC cbcDashItems; allChecks for the link to each worked step) */
+  sum:function(ERR,row){
+    var its=null, K=null, msg=null, rows=[];
+    if(ERR) msg=mrErrMsg(ERR);   /* CBIR */
+    else try{ var m=document.querySelector('#cbcDash .cbdMsg'); if(m) msg=m.textContent; else { its=cbcDashItems(); K=allChecks(); } }catch(e){ msg=null; its=null; }
+    if(!msg&amp;&amp;!its) msg='No results: the Beam Capacity tab has not finished loading, or its inputs need correcting.';
+    if(msg) return {msg:msg.replace('the output panel','the Beam Capacity tab’s output panel')};
+    its.forEach(function(it,i){ var c=K[i]||{}, ks=[];
+      if(!c.na&amp;&amp;c.ci!=null){ var ci=c.ci;
+        if(c.tab==='tabFlex') ks=['fx'+ci+'/DCR'];
+        else if(c.id==='torA') ks=['tth/Tu'+ci];   /* CBH1 */
+        else if(c.id==='torAT'||c.id==='torAC'||c.id==='torAS') ks=['tad/'+({torAT:'dcT',torAC:'dcC',torAS:'dcS'}[c.id])+ci];   /* CBH1b: AASHTO torsion design */
+        else if(c.id==='lonA') ks=['lon/dc'+ci];   /* CBM2 */
+        else if(c.tab==='tabShear') ks=['sh'+ci+'/DCRs','sh'+ci+'/DCR'];
+        else if(c.tab==='tabTor') ks=[/cross/i.test(c.label)?'tq'+ci+'/size':(/Combined/.test(c.label)?'tq'+ci+'/combVT':'tq'+ci+'/DCR')];
+        else if(c.tab==='tabServ') ks=['svm/minr'+ci,'sv/minr'];   /* CBM1: the combination that governs 5.6.3.3 */
+        else if(c.tab==='tabDetail') ks=['dt/'+c.id+'.cmp']; }
+      ks=ks.concat(ks.length?['omit-'+ks[0].split('/')[0]]:[],c.tab?['cbro:'+c.tab]:[]);
+      var det=it.text+(it.cond&amp;&amp;it.dc?'; '+it.dc+(it.within?' (the ratio is within its limit; the status comes from the condition)':''):'');
+      rows.push(row(it.name,it.cond||it.dc,it.st,det,it.ref,ks)); });
+    return {rows:rows,note:'Result: the D/C, or, where a limit or condition is not met, that condition (its D/C is under Detail). Every load combination is enveloped; the tables by combination are in the Summary of checks section ([[cbro:tabSummary]]).'};
+  },
+  overview:function(){ return cbmOvSection(); }, note:null};
+/* ---------- CBOV (2026-11-05; in this tab's report since CBMR): &quot;Overview of the beam&quot;, section 2, after the Summary of results:
+   the cross-section with its reinforcement and dimensions, the stirrup elevation (each to scale, with a scale bar) and a snapshot
+   of the Visuals tab's 3-D view (cbcOvFigs). Include box &quot;Overview figures&quot; on the report bar (S.ui.rptOpts.ov, default on); off,
+   the section stays as one line, so the numbers after it do not move. ---------- */
+var CBOV_N=0;
+function cbmOvUniq(svg){   /* the copies get their own ids (marker / gradient references resolve inside the copy, also in print) */
+  var n=++CBOV_N, ids=[]; String(svg).replace(/\sid=&quot;([^&quot;]+)&quot;/g,function(m,id){ ids.push(id); return m; });
+  ids.forEach(function(id){ var e=id.replace(/[.*+?^${}()|[\]\\]/g,'\\$&amp;');
+    svg=svg.replace(new RegExp('id=&quot;'+e+'&quot;','g'),'id=&quot;'+id+'-ov'+n+'&quot;').replace(new RegExp('url\\(#'+e+'\\)','g'),'url(#'+id+'-ov'+n+')').replace(new RegExp('href=&quot;#'+e+'&quot;','g'),'href=&quot;#'+id+'-ov'+n+'&quot;'); });
+  return svg;
+}
+function cbmOvSection(){
+  var S0={title:'Overview of the beam',key:'cbov',subs:[]}, on=true, F=null;
+  try{ on=cbcRxSel().ov!==false; }catch(e){}
+  if(!on){ S0.note='Not included in this report: the Include box “Overview figures” on the report bar is off.'; return S0; }
+  try{ F=cbcOvFigs(); }catch(e){ F=null; }
+  if(!F){ S0.note='No overview: the Beam Capacity tab has no results (it has not finished loading, or its inputs need correcting).'; return S0; }
+  if(F.blocked){ S0.note='No overview: input error on the Beam Capacity tab, no results, so the beam is not drawn (the errors: [[cbir]]).'; return S0; }
+  var f2=function(x){ return (Math.round(x*100)/100).toFixed(2); };
+  var dims='$b_{w}$ × h = '+f2(F.bw)+' × '+f2(F.h)+' in'+(F.tee?', $b_{f}$ × $h_{f}$ = '+f2(F.bf)+' × '+f2(F.hf)+' in (T-beam)':'');
+  var sense=F.neg?'negative moment, top face in tension':'positive moment, bottom face in tension';
+  S0.note='The beam as entered on the Beam Capacity tab, for orientation; the checks are worked in the sections below.';
+  S0.subs.push({title:'Cross-section',items:[{type:'figure',svg:cbmOvUniq(F.sec).replace('<svg ','<svg style=&quot;max-width:420px&quot; '),caption:'Cross-section, '+dims+': reinforcement as entered, to scale (scale bar), for the governing sense of bending ('+sense+(F.gov?'; '+F.gov:'')+'). Dimensions in inches; d of each layer from the extreme compression fibre. Inputs: [[cbro:tabInputEcho]]. [[tab:tabInputEcho|On screen: Input Echo tab]]'}]});
+  S0.subs.push({title:'Elevation',items:F.elev?[{type:'figure',svg:cbmOvUniq(F.elev),caption:'Elevation of a short run of the beam: closed stirrups at s = '+f2(F.s)+' in, to scale (scale bar); the green band is the permitted spacing range (s_max; Detailing: [[cbro:tabDetail]]). [[tab:tabInputEcho|On screen: Input Echo tab]]'}]
+    :[{type:'note',text:'No elevation: '+(F.stir?'no results.':'the section has no stirrups (transverse reinforcement), so there is no stirrup layout to draw.')}]});
+  var P=F.snap||{};
+  S0.subs.push({title:'3-D view',items:P.url?[{type:'figure',svg:'<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 '+P.W+' '+P.H+'&quot;><image href=&quot;'+P.url+'&quot; x=&quot;0&quot; y=&quot;0&quot; width=&quot;'+P.W+'&quot; height=&quot;'+P.H+'&quot;/></svg>',
+      caption:'3-D view of the Visuals tab at its start angles (closer in): every layer on (concrete 45 % opaque, tension bars red, compression bars blue, stirrups grey). The length shown ('+Math.round(P.Lb)+' in) is illustrative: the tool checks a cross-section, not a span. [[tab:tabVisuals|On screen: Visuals tab]]'}]
+    :[{type:'note',text:'3-D view not included: '+(P.note||'it could not be rendered.')+' The cross-section above shows the same reinforcement to scale.'}]});
+  return S0;
+}
 function refresh(){
   const st=captureUI();
   VALIDATION=validate();
@@ -5752,9 +6171,9 @@ function init(){
   document.getElementById(&quot;btnImport&quot;).addEventListener(&quot;click&quot;,()=>document.getElementById(&quot;fileIn&quot;).click());
   document.getElementById(&quot;fileIn&quot;).addEventListener(&quot;change&quot;,e=>{
     const f=e.target.files[0]; if(f) doImport(f); e.target.value=&quot;&quot;; });
-  document.getElementById(&quot;btnPrint&quot;).addEventListener(&quot;click&quot;,cbcRxPrint);   /* CBRX: the suite's Report */
+  document.getElementById(&quot;btnPrint&quot;).addEventListener(&quot;click&quot;,cbcRxPrint);   /* CBMR: this tab's Report */
   document.getElementById(&quot;statusChip&quot;).addEventListener(&quot;click&quot;,()=>{
-    S.ui.tab=&quot;tabSummary&quot;; autosave(); refresh(); });
+    CBMR.on=false; S.ui.tab=&quot;tabSummary&quot;; autosave(); refresh(); });
   document.getElementById(&quot;prjX&quot;).addEventListener(&quot;click&quot;,closeProjDialog);
   document.getElementById(&quot;prjCancel&quot;).addEventListener(&quot;click&quot;,closeProjDialog);
   document.getElementById(&quot;prjGo&quot;).addEventListener(&quot;click&quot;,projDialogGo);
@@ -5881,6 +6300,9 @@ else init();
 <title>Concrete Beam Rating — ASD (AASHTO 8.15)</title>
 <link rel=&quot;stylesheet&quot; href=&quot;https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css&quot;>
 <script defer src=&quot;https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js&quot;></script>
+<!-- CBMR (2026-11-12): this tab's Report tab: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
+<script src=&quot;shared/steps.js&quot;></script>
+<script src=&quot;shared/report.js&quot;></script>
 <script src=&quot;shared/projects.js&quot;></script>
 <script src=&quot;shared/projects-ui.js&quot;></script>
 <script src=&quot;shared/github-sync.js&quot;></script><!-- STDS (2026-11-06): GitHub sync of the saved projects (off until set up) -->
@@ -6252,6 +6674,14 @@ body dialog.spLib{font-family:var(--font-ui)}
    tabs. Screen only; the Summary tab, the Report and printing are unchanged. */
 #asdDashCol{display:none}
 @media print{#asdDashCol,#asdDashBox{display:none!important}}
+/* CBMR (2026-11-12): this tab's Report tab, the shared viewer (shared/report.js) in the output page; the contents list goes above
+   the report when the page is narrower than 820 px (the output panel is narrower than the window) */
+#pageBody.cbmr{container-type:inline-size;padding:12px 0 0;font-family:&quot;Times New Roman&quot;,Times,serif}
+#pageBody.cbmr .rp-bar button{font-size:9pt;padding:3px 10px;font-family:-apple-system,&quot;Segoe UI&quot;,Roboto,Helvetica,Arial,sans-serif;border:1px solid #CBD5E1;border-radius:4px;background:#fff;color:#0F172A;cursor:pointer}
+#pageBody.cbmr .rp-bar button:hover{background:#F1F3F5}
+#pageBody.cbmr .rp-fig svg{max-height:420px}
+@container (max-width:819px){#pageBody.cbmr .rp-body{grid-template-columns:minmax(0,1fr)} #pageBody.cbmr .rp-toc{position:static;max-height:220px} #pageBody.cbmr .rp-doc{min-width:0}}
+.cbmrErr{color:#991B1B;font:13px -apple-system,&quot;Segoe UI&quot;,Roboto,Arial,sans-serif}
 @media screen{
   #asdDashBox{flex:0 0 auto;font-family:var(--font-ui);padding:5px 14px 0;background:var(--slate-50);border-bottom:1px solid var(--color-border);
     max-height:42vh;overflow-y:auto}
@@ -6318,7 +6748,7 @@ body dialog.spLib{font-family:var(--font-ui)}
       <div id=&quot;statusChip&quot; title=&quot;Governing rating factor — click for the Summary dashboard&quot;>—</div>
       <div id=&quot;hdrBtns&quot;><!-- HDR (2026-11-05): the project line and the global actions; Undo / Redo are inserted before Print (plibUndoInit) -->
         <a id=&quot;hdrProj&quot; hidden href=&quot;#&quot; title=&quot;Project name and number: edit them in the Project input tab&quot;>Project: <span id=&quot;hdrProjTxt&quot;></span></a>
-        <button class=&quot;pri&quot; id=&quot;btnPrint&quot; title=&quot;Print / PDF the suite's calculation report (the Report tab), from any tab&quot;>Print / PDF</button>
+        <button class=&quot;pri&quot; id=&quot;btnPrint&quot; title=&quot;Print / PDF this tab's calculation report (its Report tab), from any of its tabs&quot;>Print / PDF</button>
       </div>
     </div>
   </div>
@@ -6623,6 +7053,7 @@ function asdWorkedIn(parent,items){   /* items: [{card, txt}] */
 }
 function asdGoto(tab,card){
   if(!asdTabName(tab)) return;
+  CBMR.on=false;   /* CBMR: a link opens a result tab */
   S.ui.tab=tab; if(card) S.ui.collapse[card]=false; autosave(); refresh();
   setTimeout(()=>{ const e=card&amp;&amp;document.querySelector(&quot;#tabPages #&quot;+card); if(!e) return;
     const op=document.getElementById(&quot;outputPanel&quot;);   /* scroll the output panel only (scrollIntoView would also scroll the page and hide the header) */
@@ -6923,14 +7354,23 @@ function buildTabs(){
   bar.innerHTML=&quot;&quot;; pages.innerHTML=&quot;&quot;;
   const tabs=TABS();
   if(!tabs.find(t=>t[0]===S.ui.tab)) S.ui.tab=&quot;tabSummary&quot;;
+  /* CBMR: the Report tab shows until another tab is opened (a tab button, a link, the status chip); S.ui.tab keeps the tab before */
+  if(CBMR.on&amp;&amp;CBMR.tab!==S.ui.tab&amp;&amp;tabs.find(t=>t[0]===CBMR.tab)) CBMR.on=false;
+  CBMR.tab=S.ui.tab;
   tabs.forEach(([id,label])=>{
     const b=el(&quot;button&quot;,null,label);
-    if(id===S.ui.tab) b.classList.add(&quot;active&quot;);
-    b.addEventListener(&quot;click&quot;,()=>{ S.ui.tab=id; autosave(); refresh(); });
+    if(id===S.ui.tab&amp;&amp;!CBMR.on) b.classList.add(&quot;active&quot;);
+    b.addEventListener(&quot;click&quot;,()=>{ CBMR.on=false; S.ui.tab=id; autosave(); refresh(); });
     bar.appendChild(b);
   });
+  /* CBMR (2026-11-12): this tab's Report tab, last; not saved as S.ui.tab (CBMR.on is in memory only) */
+  const rb=el(&quot;button&quot;,null,&quot;Report&quot;); rb.id=&quot;cbmrTab&quot;; rb.title=&quot;This tab's calculation report (print it with Print report or Ctrl+P)&quot;;
+  if(CBMR.on) rb.classList.add(&quot;active&quot;);
+  rb.addEventListener(&quot;click&quot;,()=>{ if(CBMR.on) return; CBMR.on=true; CBMR.tab=S.ui.tab; refresh(); const op=document.getElementById(&quot;outputPanel&quot;); if(op) op.scrollTop=0; });
+  bar.appendChild(rb);
   const pg=el(&quot;div&quot;); pg.id=&quot;pageBody&quot;; pages.appendChild(pg);
-  buildOutput(pg);
+  buildOutput(pg);   /* with the Report tab: the tab before is built first (the results CC, and the references its cards cite), then replaced */
+  if(CBMR.on){ mrMount(pg); }
 }
 function updateStatusChip(){
   const chip=document.getElementById(&quot;statusChip&quot;); if(!chip||!CC) return;
@@ -7330,6 +7770,8 @@ const ASD_REFS=[
    buildOutput into a detached holder, every card open, as buildReport did), asdRxResults(tab) (the rating result lines, with the
    Analysis section, else with the Summary, as buildReport) and asdRxAbout() (its cover lines, front note and footer).
    Nothing is computed here: every value is compute()'s. Print / PDF and Ctrl+P print the suite's Report (asdRxPrint).
+   CBMR (2026-11-12): the suite's Report is retired; these functions feed this tab's own Report tab (block CBMR, before refresh()),
+   and Print / PDF and Ctrl+P print it (asdRxPrint -> mrPrint).
    ===================================================================== */
 function asdRxSel(){ const o=S.ui&amp;&amp;S.ui.rptOpts, ok=!!(o&amp;&amp;o.tabs), r={tabs:{}}; reportTabList().forEach(([id])=>r.tabs[id]=!(ok&amp;&amp;o.tabs[id]===false)); return r; }
 function asdRxSet(kind,key,val){ const o=normRptOpts(); if(kind===&quot;tab&quot;) o.tabs[key]=!!val; else if(kind===&quot;all&quot;) reportTabList().forEach(([id])=>o.tabs[id]=true); autosave(); }
@@ -7360,14 +7802,13 @@ function asdRxAbout(){
   const P=S.proj||{};
   return [{type:'note',text:&quot;Concrete Beam Load Rating — ASD — &quot;+(P.name||&quot;Untitled&quot;)+(P.subj?&quot; — &quot;+P.subj:&quot;&quot;)+&quot;. AASHTO Standard Specifications, §8.15 (Working Stress) · Concrete Beam Design Suite · by M. Lococo.&quot;},
     {type:'note',text:&quot;Title block of the ASD Beam Calcs tab: Subject &quot;+(P.subj||&quot;—&quot;)+&quot;; Sheet &quot;+(P.sheet||&quot;—&quot;)+&quot;; Method AASHTO 8.15 (ASD).&quot;},
-    ...cbrNL(&quot;How this chapter is laid out:&quot;,[[&quot;Equations:&quot;,&quot;shown symbolically, then with values substituted, then with the result.&quot;],   /* CBNL */
+    ...cbrNL(&quot;How this report is laid out:&quot;,[[&quot;Equations:&quot;,&quot;shown symbolically, then with values substituted, then with the result.&quot;],   /* CBNL */
       [&quot;Inputs:&quot;,&quot;the section, f′c, f_y, d and A_s are received from the Beam Capacity tab of the suite (its own calculation report).&quot;],
       [&quot;Pass:&quot;,&quot;a rating level passes when RF ≥ 1.00.&quot;],[&quot;Units:&quot;,&quot;psi, in, k-ft unless noted.&quot;]]),
     {type:'note',text:&quot;This calculation is a computation aid. All results must be independently verified and sealed by the responsible engineer of record.&quot;}];
 }
-function asdRxPrint(){ try{ const P=window.parent; if(P&amp;&amp;P!==window&amp;&amp;P.CBRP&amp;&amp;P.CBRP.printAny){ P.CBRP.printAny(); return; } }catch(e){} window.print(); }
-document.addEventListener(&quot;keydown&quot;,e=>{ if(!(e.ctrlKey||e.metaKey)||e.altKey||String(e.key).toLowerCase()!==&quot;p&quot;) return;
-  try{ const P=window.parent; if(P&amp;&amp;P!==window&amp;&amp;P.CBRP&amp;&amp;P.CBRP.printAny){ e.preventDefault(); P.CBRP.printAny(); } }catch(err){} });
+/* Print / PDF: this tab's report (CBMR mrPrint; in the suite printed by the suite page). Ctrl+P: the CBMR keydown handler */
+function asdRxPrint(){ mrPrint(); }
 /* CBRX: openRptDialog, closeRptDialog, doPrint and buildReport were removed (the dialog is retired; Print: asdRxPrint) */
 
 /* =====================================================================
@@ -7482,7 +7923,7 @@ function asdRptModel(){
       [&quot;Concrete strength $f^{\\prime}_{c}$&quot;,{t:grp(R.fc),n:true},'psi'],['Steel yield $f_{y}$',{t:grp(R.fy),n:true},'psi'],['Section shape',R.shape==='tee'?'T-beam':'Rectangular',''],
       ['Effective flange width $b_{eff}$',{t:F(R.b_eff),n:true},'in'],['Flange thickness $h_{f}$',{t:F(R.h_f),n:true},'in'],['Web width $b_{w}$',{t:F(R.b_w),n:true},'in'],
       ['Overall depth h',{t:F(R.h),n:true},'in'],['Effective depth d',{t:F(R.d),n:true},'in'],['Tension steel $A_{s}$',{t:F(R.As),n:true},'in²']]},
-      {type:'note',text:'Received from the Beam Capacity tab (its chapter of this report).'+(R.beffEntered!==null?' Entered $b_{eff}$ = '+F(R.beffEntered)+' in. exceeds $b_{w}$ + 12$h_{f}$ = '+F(R.beffLim)+' in. (Std. Spec. 8.10.1.1): '+(R.beffCapped?F(R.beffLim)+' in. is used.':'the limit is switched off, the entered width is used.'):'')}]},
+      {type:'note',text:'Received from the Beam Capacity tab (worked in its own Report tab).'+(R.beffEntered!==null?' Entered $b_{eff}$ = '+F(R.beffEntered)+' in. exceeds $b_{w}$ + 12$h_{f}$ = '+F(R.beffLim)+' in. (Std. Spec. 8.10.1.1): '+(R.beffCapped?F(R.beffLim)+' in. is used.':'the limit is switched off, the entered width is used.'):'')}]},
     {title:'ASD inputs',items:[{type:'table',head:['Quantity','Value','Unit'],rows:[['Moment sense',R.isPos?'Positive (+M)':'Negative (−M)',''],
       ['Allowable concrete $f_{c}$ (inventory)',{t:grp(R.A.fc_inv),n:true},'psi'],['Allowable steel $f_{s}$ (inventory)',{t:grp(R.A.fs_inv),n:true},'psi'],
       ['Allowable concrete $f_{c}$ (operating)',{t:grp(R.A.fc_op),n:true},'psi'],['Allowable steel $f_{s}$ (operating)',{t:grp(R.A.fs_op),n:true},'psi'],
@@ -7679,6 +8120,377 @@ document.getElementById('hdrProj').addEventListener('click',e=>{
   document.getElementById('btnUseProjInfo').addEventListener('click',()=>P.bxUseProjectInfo());
   document.getElementById('btnShareProjInfo').addEventListener('click',()=>P.bxShareProjectInfo());
 })();
+/* =====================================================================
+   CBMR (2026-11-12, engineer request: one report per tab of the suite): this tab's own Report tab, the last button of its
+   tab bar. The suite's combined Report tab (CBRP #544, with CBRX / CBRO / CBRF / CBOV / CBIR / CBPI) is retired; this
+   report is the chapter of this tab it printed, built by the same code, moved here from the suite shell: the worked
+   sections (CBMR_CFG.model, the tab's report model), the copies of the tabs as printed (CBRX: CBMR_CFG.harvest, mrRest,
+   mrWalk), the design order with &quot;Summary of results&quot; first and fixed section numbers (CBRO: mrOrder, CBMR_CFG.sum),
+   &quot;Input error: no results&quot; (CBIR), figures and unique tables in their sections and the rest in an appendix (CBRF: mrMove),
+   the references, the Include boxes of the report bar (the tab's own S.ui.rptOpts) and the svg ids of the print copy (CBPI).
+   Nothing is computed here: every value is the tab's own. Section numbers start at 1; in-report tab links ([[tab:<tabId>|…]])
+   open this tab's own result tabs. Print: the viewer's Print report, Print / PDF and Ctrl+P print this report alone (title
+   block, running header, page numbers); in the suite the print is handed to the suite page (CBMRP.print), which prints it
+   as the top page (a page printed from inside a frame would be cut to the frame). Nothing is saved: the Report tab is not
+   stored as S.ui.tab (CBMR.on is in memory only; S.ui.tab keeps the tab shown before, so a saved project or an older copy of
+   this file never opens on a tab it does not know); the collapsed sections are kept in memory. Display only.
+   This block is the same in the Beam Capacity and ASD Beam Calcs frames (keep the two copies in step); CBMR_CFG differs.
+   ===================================================================== */
+var CBMR={on:false,closed:new Set(),api:null,doc:null};
+function mrEsc(s){ return String(s==null?'':s).replace(/[&amp;<>&quot;]/g,function(c){ return {'&amp;':'&amp;amp;','<':'&amp;lt;','>':'&amp;gt;','&quot;':'&amp;quot;'}[c]; }); }
+/* the built-in renderer (shared/steps.js, used for every step without KaTeX and for $…$ in notes and cells always) knows a TeX
+   subset; the tabs' strings also use \dfrac, \left( … \right), \; and a few more. mrLite maps them to the subset (display only:
+   the same symbols and numbers), so offline the Report shows each line legibly instead of &quot;dfrac…&quot; (CBRX rxLite). */
+function mrLite(t){ return String(t==null?'':t).replace(/\\[dt]frac/g,'\\frac').replace(/\\(mathbf|mathrm|boldsymbol|textbf|mathit|operatorname)\{/g,'{').replace(/\\color\{[^}]*\}/g,'')
+  .replace(/\\left\s*\\?([()\[\]|.])/g,function(m,c){ return c==='.'?'':c; }).replace(/\\right\s*\\?([()\[\]|.])/g,function(m,c){ return c==='.'?'':c; })
+  .replace(/\\checkmark/g,'\u2713').replace(/\\q?quad/g,' ').replace(/\\[;:!]/g,' ').replace(/\\(displaystyle|scriptstyle|textstyle|limits)/g,'').replace(/\\Rightarrow/g,'\u21D2').replace(/\\rightarrow|\\to\b/g,'\u2192')
+  .replace(/\\approx/g,'\u2248').replace(/\\infty/g,'\u221E').replace(/\\gg/g,'\u226B').replace(/\\varepsilon/g,'\\epsilon').replace(/\\big[lr]?|\\Big[lr]?/g,'').replace(/\\ /g,' '); }
+function mrLiteIt(it){
+  var o={}; for(var k in it) o[k]=it[k];
+  var st=function(s){ var q={}; for(var k in s) q[k]=s[k]; ['sym','eq','sub'].forEach(function(f){ if(typeof q[f]==='string') q[f]=mrLite(q[f]); }); return q; };
+  if(it.list) o.list=it.list.map(function(t){ var q={}; for(var k in t) q[k]=t[k]; q.steps=(t.steps||[]).map(st); return q; });
+  if(it.steps) o.steps=it.steps.map(st);
+  return o;
+}
+function mrTx(s){ return s==null?s:String(s).replace(/\$([^$]+)\$/g,function(m,q){ return '$'+mrLite(q)+'$'; }); }
+function mrCell(c){ if(c&amp;&amp;typeof c==='object'){ var o={}; for(var k in c) o[k]=c[k]; o.t=mrTx(c.t); return o; } return mrTx(c); }
+/* a 'topics' item of the tab's model -> one 'steps' item grouped by topic (SharedSteps.group) */
+function mrTopics(list){
+  var L=(list||[]).filter(function(t){ return t&amp;&amp;t.steps&amp;&amp;t.steps.length; }), steps=[];
+  L.forEach(function(t){ t.steps.forEach(function(s){ steps.push(s); }); });
+  return {steps:steps,topics:L.map(function(t){ var g=SharedSteps.group(t.steps,[{key:'k',title:t.title,ref:t.ref,ids:function(){ return true; }}],{strip:false})[0];
+    return {title:t.title,ref:t.ref||'',n:t.steps.length,cls:g.cls,chip:g.chip,res:g.res}; })};
+}
+function mrItem(it){
+  if(!window.katex&amp;&amp;(it.type==='topics'||it.type==='steps')) it=mrLiteIt(it);   /* offline: the steps in the built-in renderer's subset */
+  var o={}; for(var k in it) o[k]=it[k];
+  if(it.type==='topics'){ var T=mrTopics(it.list); o={type:'steps',scope:it.scope,title:mrTx(it.title),steps:T.steps,topics:T.topics}; if(it.see) o.see=it.see; return o; }
+  if(it.type==='steps'){ o.title=mrTx(it.title); return o; }
+  if(it.type==='note') o.text=mrTx(it.text);
+  else if(it.type==='figure') o.caption=mrTx(it.caption);
+  else if(it.type==='kv') o.rows=(it.rows||[]).map(function(r){ return [mrTx(r[0]),mrTx(r[1])].concat(r[2]?[r[2]]:[]); });
+  else if(it.type==='table'){ o.caption=mrTx(it.caption); o.head=(it.head||[]).map(mrCell);
+    o.rows=(it.rows||[]).map(function(r){ return Array.isArray(r)?r.map(mrCell):{cells:r.cells.map(mrCell),cls:r.cls}; }); }
+  return o;
+}
+/* ---------- CBRX: what the retired print report printed and the worked sections lack: each chosen tab, built by the tab's own
+   buildOutput (CBMR_CFG.harvest), is read in order and every table with a number the Report does not show yet (or, for a table
+   that is not a variable list, a row of text it does not have), every equation line with such a number or remark, every note
+   with a sentence or number it does not have yet, and every figure it lacks is added to the section of that tab (&quot;As printed:
+   tables, equations, notes and figures&quot;, under the tab's card titles); the D/C result lines go at the end of the section
+   (&quot;Results — <tab>&quot;). Without KaTeX an equation line is shown as its TeX source. ---------- */
+var mrNums=function(t){ return (String(t).replace(/\{,\}/g,',').replace(/[−–]/g,'-').replace(/(\d),(?=\d{3})/g,'$1').match(/\d+(?:\.\d+)?/g)||[]).map(function(x){ return String(parseFloat(x)); }); };
+var mrNrm=function(x){ return String(x).toLowerCase().replace(/[^a-z0-9]+/g,''); };
+function mrRest(M){
+  var C=CBMR_CFG, txt=''; try{ txt=SharedReport.text(SharedReport.build(M),{legacy:true}); }catch(e){ return; }
+  if(M._err) return;   /* CBIR: no tab copies, no result lines while the tab has an input error */
+  var have=new Set(), all=mrNrm(txt);
+  var addNum=function(x){ have.add(x); var v=parseFloat(x), d=(x.split('.')[1]||'').length; for(var k=0;k<d;k++) have.add(String(parseFloat(v.toFixed(k)))); };
+  mrNums(txt).forEach(addNum);
+  var newNum=function(t){ return mrNums(t).some(function(n){ return !have.has(n); }); };
+  var fresh=function(t){ var ss=String(t).split(/(?<=[.;:])\s+/).map(mrNrm).filter(function(x){ return x.length>15; }); return ss.some(function(x){ return all.indexOf(x)<0; }); };
+  var seen=function(t){ mrNums(t).forEach(addNum); all+=mrNrm(t); };
+  var figs=new Set(); M.sections.forEach(function(s){ (s.subs||[]).forEach(function(q){ (q.items||[]).forEach(function(it){ if(it.type==='figure') figs.add(mrNrm(it.caption)); }); }); });
+  var H; try{ H=C.harvest(); }catch(e){ return; }
+  var last=-1;   /* the index of the last section that a harvested tab went into */
+  H.forEach(function(h){
+    var si=-1; M.sections.forEach(function(s,i){ if(si<0&amp;&amp;s._m&amp;&amp;s._tab===h.id) si=i; });
+    if(si<0){   /* a tab without a section of its own (ASD: Summary &amp; Rating): a new section after the one before it */
+      var first=-1; M.sections.forEach(function(s,i){ if(first<0&amp;&amp;s._m) first=i; });
+      si=last>=0?last+1:(first>=0?first:M.sections.length-1);
+      M.sections.splice(si,0,{title:h.label,_m:1,_tab:h.id,_new:true,subs:[]});
+    }
+    last=si;
+    var sec=M.sections[si], items=mrWalk(h.el,'rx-'+h.id,{newNum:newNum,fresh:fresh,seen:seen,figs:figs});
+    if(items.length) sec.subs.push({title:'As printed: tables, equations, notes and figures',items:items,_rx:{tab:h.id,label:h.label}});   /* CBRF: _rx marks the copy (mrMove) */
+    var r=null; try{ r=C.results(h.id); }catch(e){}
+    if(r){ sec.subs.push({title:'Results — '+h.label,items:[r,{type:'note',text:'PASS: D/C ≤ 1.00 (detailing: the limit is met for every combination it applies to; rating: RF ≥ 1.00). Each check is worked in the subsections above.'}]}); seen(JSON.stringify(r.rows)); }
+  });
+  M.sections=M.sections.filter(function(s){ return !(s._new&amp;&amp;!s.subs.length); });
+}
+/* one built tab -> report items, in document order; a card title (.secTitle) becomes the topic heading of its first item */
+function mrWalk(root,scope,T){
+  var out=[], topic=null, card='', nfig=0, k=0, ntp=0, D=root.ownerDocument;
+  var INL=/^(B|I|EM|STRONG|SPAN|BR|SUB|SUP|A|SMALL|U|CODE|LABEL)$/;
+  var txt=function(e){ var c=e.cloneNode(true);
+    c.querySelectorAll('.katex').forEach(function(x){ var a=x.querySelector('annotation'); x.replaceWith(D.createTextNode(' '+(a?a.textContent:x.textContent)+' ')); });
+    c.querySelectorAll('br').forEach(function(b){ b.replaceWith(D.createTextNode(' ')); });
+    c.querySelectorAll('.wkLink,.caret,button,select,input').forEach(function(x){ x.remove(); });
+    return c.textContent.replace(/\s+/g,' ').trim().replace(/\$/g,''); };
+  var tex=function(l){ var a=l.querySelector('annotation'); return (a?a.textContent:l.textContent).trim(); };
+  var push=function(it){ if(topic){ it.topic={title:topic,no:++ntp}; topic=null; } it._card=card; out.push(it); };   /* numbered in the subsection's order; CBRF: _card = the tab card it comes from */
+  var cellOf=function(v){ if(/^(PASS|OK)\b/.test(v)) return {t:v,cls:'ok'}; if(/^(FAIL|NG)\b/.test(v)) return {t:v,cls:'ng'}; if(/^N\/A\b/.test(v)) return {t:v,cls:'na'};
+    return /^[-−\d.,e+\s%/×()≫∞—]+$/.test(v)&amp;&amp;/\d/.test(v)?{t:v,n:true}:v; };
+  var table=function(t){
+    var trs=[].slice.call(t.rows); if(!trs.length) return;
+    var all=t.innerText||t.textContent, vt=t.classList.contains('vt');
+    var rowTxt=trs.map(function(r){ return [].slice.call(r.cells).map(txt).join(' '); });
+    if(!(T.newNum(all)||(!vt&amp;&amp;rowTxt.some(T.fresh)))) return;
+    var hd=trs[0].querySelector('th')?[].slice.call(trs[0].cells).map(txt):null, cap=t.querySelector('caption');
+    var body=trs.slice(hd?1:0).map(function(r){ return [].slice.call(r.cells).map(function(c){ return cellOf(txt(c)); }); });
+    push({type:'table',caption:cap?txt(cap):undefined,head:hd||[],rows:body,wide:(trs[0].cells.length>6)||undefined,lazy:trs.length>31||undefined,title:trs.length>31?(cap?txt(cap):'Table'):undefined});
+    rowTxt.forEach(T.seen);
+  };
+  var eqb=function(b){
+    var tt=b.querySelector('.eqTitle'), title=tt?txt(tt):'', steps=[];
+    [].slice.call(b.querySelectorAll('.eqLine')).forEach(function(l,j){
+      var s=tex(l), rem=(s.match(/\\text\{[^}]{20,}\}/g)||[]).join(' ');
+      if(!(T.newNum(s)||(rem&amp;&amp;T.fresh(rem.replace(/\\text\{|\}/g,''))))) return;
+      steps.push(window.katex?{id:'l'+(++k),label:title,eq:s}:{id:'l'+(++k),label:title,note:s});   /* without KaTeX: the TeX source (#724) */
+      T.seen(s+' '+rem);
+    });
+    if(steps.length) push({type:'steps',scope:scope,title:title||undefined,steps:steps});
+    [].slice.call(b.querySelectorAll('table')).forEach(table);
+  };
+  var visit=function(e){
+    if(e.nodeType!==1) return;
+    if(e.matches('.secHead')){ var st=e.querySelector('.secTitle'); topic=st?txt(st):null; card=topic||''; nfig=0; return; }
+    if(e.matches('.wkLink,.caret,button,select,input,script,style,textarea')) return;
+    if(e.matches('svg')){ nfig++; var cap=(card||'Figure')+(nfig>1?' ('+nfig+')':''); if(!T.figs.has(mrNrm(cap))){ T.figs.add(mrNrm(cap)); push({type:'figure',svg:e.outerHTML,caption:cap}); } return; }
+    if(e.matches('table')){ table(e); return; }
+    if(e.matches('.eqBlock')){ eqb(e); return; }
+    /* CBNL (2026-11-08): a note built as a lead line and a list (the tabs' cbNL) is kept or skipped as one note, with the same test as
+       before on its whole text, then copied as one Report line per part (the lead, then &quot;• lead words: text&quot;
+       per item); an action line (.cbNLa) is a warning line */
+    if(e.matches('.cbNL')){ var P=[].slice.call(e.querySelectorAll('.cbNLa,.cbNLl,.cbNLu>li')), tA=P.map(txt).filter(Boolean).join(' ');
+      if(tA.length>=12&amp;&amp;(T.fresh(tA)||T.newNum(tA))){ P.forEach(function(p){ var x=txt(p); if(x) push({type:'note',warn:p.matches('.cbNLa')||undefined,text:(p.tagName==='LI'?'• ':'')+x}); }); T.seen(tA); }
+      return; }
+    var kids=[].slice.call(e.children), leaf=kids.every(function(x){ return INL.test(x.tagName)&amp;&amp;!x.querySelector('table,svg,div,p,ul,ol,li'); });
+    if(leaf){ var t=txt(e); if(t.length>=12&amp;&amp;(T.fresh(t)||T.newNum(t))){ push({type:'note',text:(e.tagName==='LI'?'• ':'')+t}); T.seen(t); } return; }
+    kids.forEach(visit);
+  };
+  [].slice.call(root.children).forEach(visit);
+  return out;
+}
+/* the Include boxes on the report bar: the tabs and (Beam Capacity) the combinations and the overview (the dialogs' choices) */
+function mrControls(){
+  var C=CBMR_CFG, h='<span class=&quot;cbrx-inc&quot; style=&quot;display:inline-flex;flex-wrap:wrap;gap:2px 10px;font-size:9pt;align-items:center&quot;>', B, Sl;
+  try{ B=C.boxes(); Sl=C.sel(); }catch(e){ return ''; }
+  h+='<b>Report:</b>';
+  if(C.overview) h+='<label><input type=&quot;checkbox&quot; data-cbrx=&quot;ov|&quot;'+(Sl.ov!==false?' checked':'')+'> Overview figures</label><span style=&quot;width:8px&quot;></span><b>Tabs:</b>';   /* CBOV: S.ui.rptOpts.ov */
+  h+=B.tabs.map(function(t){ return '<label><input type=&quot;checkbox&quot; data-cbrx=&quot;tab|'+mrEsc(t[0])+'&quot;'+(Sl.tabs[t[0]]?' checked':'')+'> '+mrEsc(t[1])+'</label>'; }).join('');
+  if(B.combos.length) h+='<b>worked detail:</b>'+B.combos.map(function(t,i){ return '<label><input type=&quot;checkbox&quot; data-cbrx=&quot;combo|'+i+'&quot;'+(Sl.combos[i]?' checked':'')+'> '+mrEsc(t)+'</label>'; }).join('')+
+    '<button type=&quot;button&quot; data-cbrx=&quot;all|&quot;>Select all</button><button type=&quot;button&quot; data-cbrx=&quot;gov|&quot;>Governing combinations only</button>';
+  return h+'</span>';
+}
+function mrWire(host){
+  host.querySelectorAll('[data-cbrx]').forEach(function(x){ x.addEventListener(x.tagName==='BUTTON'?'click':'change',function(){
+    var p=x.getAttribute('data-cbrx').split('|');
+    try{ CBMR_CFG.set(p[0],p[0]==='combo'?parseInt(p[1],10):p[1],x.checked); }catch(e){}
+    mrMount(document.getElementById('pageBody')); }); });
+}
+/* ---------- CBRO: the Report in the design order, &quot;Summary of results&quot; first (CBMR_CFG.sum: the lines of this tab's check
+   summary panel), then (Beam Capacity) the overview, then the tab's sections in CBMR_CFG.ord. A section whose Include box is
+   off (or that has nothing to show for this project) stays as a one-line section, so the section numbers do not move with the
+   Include boxes. Every section of a tab gets the key cbro:<tab>. ---------- */
+function mrOrder(M){
+  var C=CBMR_CFG, G=[], REF=[];
+  M.sections.forEach(function(s){ (s._m?G:REF).push(s); });
+  if(G.some(function(s){ return s._tab; })){   /* a report that could not be built (input error): as it is */
+    var B=null, Sl=null; try{ B=C.boxes(); Sl=C.sel(); }catch(e){}
+    var lab={}; ((B&amp;&amp;B.tabs)||[]).forEach(function(t){ lab[t[0]]=t[1]; });
+    var res=[];
+    C.ord.forEach(function(t){
+      var hit=G.filter(function(s){ return s._tab===t; });
+      if(hit.length){ res=res.concat(hit); return; }
+      if(!lab[t]) return;   /* not a tab of this project (e.g. Torsion when torsion is off) */
+      var off=!!(Sl&amp;&amp;Sl.tabs&amp;&amp;Sl.tabs[t]===false), link='[[tab:'+t+'|On screen: '+lab[t]+' tab]]';
+      res.push({title:C.ttl[t],_m:1,_tab:t,_stub:true,subs:[],
+        note:off?'Not included in this report: the Include box “'+lab[t]+'” on the report bar is off. '+link
+          :(t==='tabValid'?'No validation notices for this project. ':'The '+lab[t]+' tab adds nothing to the other sections of this report for this project. ')+link});
+    });
+    G.forEach(function(s){ if(res.indexOf(s)<0) res.push(s); });
+    G=res;
+  }
+  G.forEach(function(s){ if(s._tab) s.key='cbro:'+s._tab; });
+  M.sections=[mrSum(M._err)].concat(C.overview?[C.overview()]:[],G,REF);
+  mrKeys(M);
+}
+/* &quot;Summary of results&quot;: one line per check of the tab's check summary panel (CBMR_CFG.sum), the same name, short value (the D/C,
+   the RF, or the condition not met), status and reference; the last column links to the step where the check is worked */
+var MR_ST={pass:['PASS','ok'],fail:['FAIL','ng'],na:['N/A','na'],warn:['REVIEW','hi'],info:['INFO','na']};
+function mrSum(ERR){
+  var C=CBMR_CFG, head=['Check','Result','Status','Detail','Reference (worked in)'], subs=[], tot='';
+  var row=function(name,short,st,detail,ref,keys){ var x=MR_ST[st]||MR_ST.na;
+    return [name,{t:short||'—',n:/^[−\-\d.,\s]*$|^(D\/C|RF) /.test(short||'')||undefined},{t:x[0],cls:x[1]},detail||'',{t:ref||'—',_k:keys}]; };
+  var count=function(rows){ var f=0,w=0; rows.forEach(function(r){ if(r[2].t==='FAIL') f++; if(r[2].t==='REVIEW') w++; });
+    return (f?f+' NG':'no NG')+(w?', '+w+' REVIEW':''); };
+  var S0=null; try{ S0=C.sum(ERR,row); }catch(e){ S0=null; }
+  if(!S0) S0={msg:'No results: the '+C.name+' tab has not finished loading, or its inputs need correcting.'};
+  if(S0.msg){ subs.push({title:C.name,items:[{type:'note',warn:true,text:S0.msg}]}); tot=C.name+': '+S0.msg.replace(/\.$/,''); }
+  else { var rows=S0.rows, cn=count(rows); tot=C.name+': '+(rows.length?cn:'no checks');
+    subs.push({title:C.name,items:[{type:'note',text:rows.length?'Check summary: '+cn+' ('+rows.length+' lines).':'No checks.'}].concat(rows.length?[{type:'table',head:head,rows:rows}]:[]).concat(S0.note?[{type:'note',text:S0.note}]:[])}); }
+  return {title:'Summary of results',key:'cbro:sum',note:tot+'.',subs:subs};
+}
+/* each summary line links to the first of its keys found in the report (the step, else an omitted combination's note, else
+   the tab's section); a line with none keeps its reference as plain text */
+function mrKeys(M){
+  var D=null; try{ D=SharedReport.build(M); }catch(e){ return; }
+  M.sections[0].subs.forEach(function(q){ (q.items||[]).forEach(function(it){ if(it.type!=='table') return;
+    it.rows.forEach(function(r){ var c=r[4]; if(!c||!c._k) return; var h=c._k.filter(function(k){ return D.index.has(k); })[0]; delete c._k; if(h) c.key=h; }); }); });
+}
+/* ---------- CBIR: while the tab has an input error (its check summary panel and output say &quot;Input error: no results&quot;) the
+   report prints &quot;Input error: no results&quot; with the list of errors in place of its worked sections, so it never prints the
+   last results computed before the error. The Summary of results says the same. ---------- */
+function mrErrMsg(E){ return 'Input error: no results. '+E.join(' ')+' Correct the marked inputs on the '+CBMR_CFG.name+' tab ([[cbir]]).'; }
+function mrErrSection(E){
+  var n=CBMR_CFG.name;
+  return {title:'Input error: no results',_cbir:'cbir',_m:1,
+    note:'The '+n+' tab has an input error, so this report has no results: no value of this tab is printed until the inputs are corrected. [[tab:|On screen: '+n+' tab]]',
+    subs:[{title:'Input errors',items:E.map(function(t){ return {type:'note',warn:true,text:t}; })}]};
+}
+/* ---------- CBRF: each tab copy (&quot;As printed: tables, equations, notes and figures&quot;, mrRest) is split. Its figures, and its
+   tables that hold a value or a text found nowhere else in the Report, go into the section that works the check (a
+   combination's card into that combination's subsection; CBMR_CFG.sub; the rest into &quot;Figures and tables from the <tab> tab&quot;
+   before the Results lines). What is left of the copy (its notes, equation lines and the tables whose values the Report
+   already shows) goes to &quot;Appendix: the tabs as printed&quot; after the References, one subsection per tab, and the section gets
+   a pointer to it. Items are moved, never changed or dropped. ---------- */
+function mrMove(M){
+  var C=CBMR_CFG, rx=[]; M.sections.forEach(function(s){ (s.subs||[]).forEach(function(q){ if(q._rx) rx.push({s:s,q:q}); }); });
+  if(!rx.length) return;
+  var txt=''; try{ txt=SharedReport.text(SharedReport.build({title:M.title,sections:M.sections.map(function(s){ return {title:s.title,note:s.note,subs:(s.subs||[]).filter(function(q){ return !q._rx; })}; })}),{legacy:true}); }catch(e){ return; }
+  var have=new Set(), all=mrNrm(txt);
+  var addNum=function(x){ have.add(x); var v=parseFloat(x), d=(x.split('.')[1]||'').length; for(var k=0;k<d;k++) have.add(String(parseFloat(v.toFixed(k)))); };
+  mrNums(txt).forEach(addNum);
+  var ct=function(c){ return c&amp;&amp;typeof c==='object'?String(c.t==null?'':c.t):String(c==null?'':c); };
+  var cells=function(it){ var o=[]; (it.head||[]).forEach(function(c){ o.push(ct(c)); }); (it.rows||[]).forEach(function(r){ (Array.isArray(r)?r:r.cells).forEach(function(c){ o.push(ct(c)); }); }); if(it.caption) o.push(ct(it.caption)); return o; };
+  var unique=function(it){ return cells(it).some(function(t){ if(mrNums(t).some(function(n){ return !have.has(n); })) return true; var x=mrNrm(t); return x.length>15&amp;&amp;all.indexOf(x)<0; }); };
+  var seen=function(it){ cells(it).forEach(function(t){ mrNums(t).forEach(addNum); all+=mrNrm(t); }); };
+  var ap=[];
+  rx.forEach(function(R){
+    var s=R.s, q=R.q, X=q._rx, lab=X.label, keep=[], tabT=' ('+lab+' tab)', extra=null;
+    var target=function(card){
+      var m=/^Combination (\d+)\b/.exec(card||''); if(m){ var t=s.subs.filter(function(u){ return u.title.indexOf('Combination '+m[1]+' (')===0; })[0]; if(t) return t; }
+      var L=(C.sub||{})[X.tab]||[]; for(var i=0;i<L.length;i++){ if(L[i][0].test(card||'')){ var nm=L[i][1], u=s.subs.filter(function(v){ return v.title===nm; })[0]; if(u) return u; } }
+      if(!extra){ extra={title:'Figures and tables from the '+lab+' tab',items:[]}; var k=-1; s.subs.forEach(function(u,i){ if(k<0&amp;&amp;/^Results — /.test(u.title)) k=i; }); s.subs.splice(k<0?s.subs.length:k,0,extra); }
+      return extra;
+    };
+    var prevFig=null;
+    q.items.forEach(function(it){
+      if(it.type==='note'&amp;&amp;prevFig&amp;&amp;(it._card||'')===(prevFig._card||'')&amp;&amp;!it.topic){   /* the figure's own caption line on the tab moves with it */
+        var cn={}; for(var kk in it) cn[kk]=it[kk]; delete cn._card; prevFig.into.items.push(cn); prevFig=null; return; }
+      prevFig=null;
+      var mv=it.type==='figure'||(it.type==='table'&amp;&amp;unique(it));
+      if(!mv){ keep.push(it); return; }
+      if(it.type==='table') seen(it);
+      var o={}; for(var k in it) o[k]=it[k]; delete o._card;
+      var card=it._card||'';
+      if(it.type==='figure') o.caption=(o.caption||card||'Figure')+tabT;
+      o.topic={title:(it.type==='figure'?(it.caption||card||'Figure'):(card||'Table'))+tabT};
+      var into=target(card); into.items.push(o);
+      if(it.type==='figure') prevFig={_card:it._card,into:into};
+    });
+    s.subs.splice(s.subs.indexOf(q),1);
+    if(!keep.length) return;
+    /* the copy's topic headings again: the first item left of each card carries it, numbered in the appendix's order */
+    var n=0, last=null; keep.forEach(function(it){ var c=it._card||''; delete it.topic; if(c!==last){ last=c; if(c) it.topic={title:c,no:++n}; } delete it._card; });
+    var key='cbrf:ap:'+X.tab;
+    ap.push({title:lab+' tab',key:key,items:[{type:'note',text:'As printed on the tab: its notes, equation lines and the tables whose values are worked in [['+(s.key||key)+']]. The figures and tables found only on the tab are in that section.'}].concat(keep)});
+    s.note=(s.note?s.note+' ':'')+'The '+lab+' tab’s other notes, equation lines and tables, as printed: [['+key+']].';
+  });
+  rx.forEach(function(R){ if(R.q.items) R.q.items.forEach(function(it){ delete it._card; }); });
+  if(ap.length) M.sections.push({part:'Appendices',title:'Appendix: the tabs as printed',key:'cbrf:ap',note:'Text and tables of the '+C.name+' result tabs as they print, kept for completeness. Every value here is worked, or shown, in the section named at the start of each subsection; figures and tables found only on a tab are in that section.',subs:ap});
+}
+/* the report: the tab's model (its worked sections, CBMR_CFG.model), input errors, references, then the steps above */
+function mrModel(){
+  var C=CBMR_CFG, secs=[], m=null, E=[];
+  try{ m=C.model(); }catch(e){ m={sections:[{title:C.name,subs:[{title:'Report error',items:[{type:'note',warn:true,text:'This report could not be built: '+(e&amp;&amp;e.message)}]}]}]}; }
+  if(!m) m={sections:[]};
+  try{ E=C.errors()||[]; }catch(e){ E=[]; }
+  if(E.length) m={code:m.code,proj:m.proj,refs:m.refs,sections:[mrErrSection(E)]};   /* CBIR: an input error replaces the worked sections */
+  var P=m.proj||{}, refRows=(m.refs||[]).map(function(x){ return [String(x[0]).replace(/<[^>]+>/g,''),String(x[1]).replace(/<sub>(.*?)<\/sub>/g,'$$_{$1}$$').replace(/<[^>]+>/g,'')]; });
+  (m.sections||[]).forEach(function(s){ secs.push({title:s.title,note:mrTx(s.note),_m:1,_tab:s.tab,key:s._cbir,
+    subs:(s.subs||[]).map(function(q){ return {title:mrTx(q.title),key:q.key,items:(q.items||[]).map(mrItem)}; })}); });
+  if(!E.length&amp;&amp;C.note){ var nt=C.note(); if(nt&amp;&amp;secs.length) secs[0].note=(secs[0].note?secs[0].note+' ':'')+nt; }   /* ASD: Beam Capacity has an input error (CBIR / CBST) */
+  var ab=[]; try{ ab=C.about()||[]; }catch(e){ ab=[]; }   /* CBRX: the retired print report's cover lines, front note and footer */
+  secs.push({title:'References',subs:[{title:'Codes and articles cited',items:[{type:'table',head:['Reference','Provisions used'],rows:refRows}]}].concat(ab.length?[{title:'About this report',items:ab}]:[])});
+  var proj=P.name||'Untitled';
+  var M={title:C.title,subtitle:proj+(P.subj?' — '+P.subj:''),code:m.code||'',
+    info:[['Project',P.name],['Project No.',P.num],['Subject',P.subj],['Calculated by',P.by],['Date',P.date],['Sheet',P.sheet],['Checked by',P.chk],['Checked date',P.chkDate]],
+    head:{left:'Project No. '+(P.num||'—')+' — '+String(proj).slice(0,40),right:'Computed: '+(P.by||'—')+' '+(P.date||'')+' · Checked: '+(P.chk||'—')+' '+(P.chkDate||''),foot:proj+' (Concrete Beam Design Suite — '+C.name+')'},
+    sections:secs};
+  if(E.length) M._err=E;
+  mrRest(M);    /* CBRX */
+  mrOrder(M);   /* CBRO */
+  mrMove(M);    /* CBRF */
+  return M;
+}
+/* the report as a SharedReport document (the Report tab's when it is shown), for printing; null without the shared scripts */
+function suiteReportDoc(){
+  if(!window.SharedReport||!window.SharedSteps) return null;
+  if(CBMR.on&amp;&amp;CBMR.doc) return CBMR.doc;
+  return SharedReport.build(mrModel());
+}
+/* [[tab:<tabId>|…]]: this tab's own result tab (an empty name: the tab shown before the Report) */
+function mrGo(name){ CBMR.on=false; if(name&amp;&amp;CBMR_CFG.tabName(name)) CBMR_CFG.go(name); else refresh(); }
+/* the Report tab: the viewer mounted in the output page (pg, #pageBody) */
+function mrMount(pg){
+  if(!pg) return;
+  pg.classList.add('cbmr');
+  if(!window.SharedReport||!window.SharedSteps){ pg.innerHTML='<p class=&quot;cbmrErr&quot;>The report cannot be shown: shared/report.js or shared/steps.js is not loaded. Keep the shared folder next to this file.</p>'; CBMR.api=null; CBMR.doc=null; return; }
+  var M; try{ M=mrModel(); }catch(e){ pg.innerHTML='<p class=&quot;cbmrErr&quot;>Report error: '+mrEsc(e&amp;&amp;e.message)+'</p>'; CBMR.api=null; CBMR.doc=null; return; }
+  CBMR.api=SharedReport.mount(pg,M,{closed:CBMR.closed,onGoto:mrGo,stick:0,controls:mrControls()}); CBMR.doc=CBMR.api.doc;
+  mrWire(pg);
+  /* the viewer's Print report button prints through mrPrint (in the suite: the suite page; see below) */
+  if(!pg.__mrPrint){ pg.__mrPrint=true; pg.addEventListener('click',function(e){ var b=e.target.closest&amp;&amp;e.target.closest('[data-rpact=&quot;print&quot;]'); if(!b) return; e.preventDefault(); e.stopPropagation(); mrPrint(); },true); }
+}
+/* Print: this report alone. In the suite the suite page prints it (CBMRP.print: the top page, with the running header and page
+   numbers; printing from inside a frame would cut the page to the frame); a frame opened alone prints itself. */
+function mrPrint(){
+  var d=suiteReportDoc(); if(!d){ window.print(); return; }
+  try{ var P=window.parent; if(P&amp;&amp;P!==window&amp;&amp;P.CBMRP&amp;&amp;P.CBMRP.print){ P.CBMRP.print(d); return; } }catch(e){}
+  SharedReport.print(d);
+}
+document.addEventListener('keydown',function(e){ if(!(e.ctrlKey||e.metaKey)||e.altKey||String(e.key).toLowerCase()!=='p') return;
+  if(!window.SharedReport) return; e.preventDefault(); mrPrint(); });
+/* CBPI: the print box is a second rendering of the Report while the Report tab's own copy stays in the page (hidden while
+   printing); a figure's url(#id) / href=&quot;#id&quot; (markers, patterns, clip paths) would resolve to the hidden copy's element. At
+   beforeprint each top-level SVG of the box gets its own ids (a frame opened alone; in the suite the suite page does the same). */
+var MR_PI=0;
+function mrUniqSvgIds(root){
+  var A=['fill','stroke','clip-path','mask','filter','marker-start','marker-mid','marker-end','style','href','xlink:href'];
+  Array.prototype.forEach.call(root.querySelectorAll('svg'),function(svg){ if(svg.parentNode&amp;&amp;svg.parentNode.closest&amp;&amp;svg.parentNode.closest('svg')) return;
+    var defs=svg.querySelectorAll('[id]'); if(!defs.length) return; var sfx='-pr'+(++MR_PI), map={};
+    Array.prototype.forEach.call(defs,function(e){ map[e.id]=e.id+sfx; e.id=map[e.id]; });
+    Array.prototype.forEach.call(svg.querySelectorAll('*'),function(e){ A.forEach(function(a){ var v=e.getAttribute(a); if(!v||v.indexOf('#')<0) return;
+      var w=v.replace(/url\(([&quot;']?)#([^&quot;')\s]+)\1\)/g,function(m,q,id){ return map[id]?'url('+q+'#'+map[id]+q+')':m; });
+      if((a==='href'||a==='xlink:href')&amp;&amp;w.charAt(0)==='#'&amp;&amp;map[w.slice(1)]) w='#'+map[w.slice(1)];
+      if(w!==v) e.setAttribute(a,w); }); }); });
+}
+window.addEventListener('beforeprint',function(){
+  if(window.parent!==window) return;   /* in the suite the suite page prints (CBMRP) */
+  if(!document.body.classList.contains('rp-printing')&amp;&amp;CBMR.on&amp;&amp;CBMR.doc){   /* the browser's Print while the Report tab is shown */
+    var b0=document.getElementById('rp-print'); if(!b0){ b0=document.createElement('div'); b0.id='rp-print'; document.body.appendChild(b0); }
+    b0.innerHTML='<div class=&quot;rp&quot;><article class=&quot;rp-doc&quot;>'+SharedReport.html(CBMR.doc,{lazy:false})+'</article></div>';
+    document.body.classList.add('rp-printing'); }
+  var box=document.getElementById('rp-print'); if(!box||!document.body.classList.contains('rp-printing')||box.getAttribute('data-cbpi')===box.innerHTML.length+'') return;
+  try{ mrUniqSvgIds(box); box.setAttribute('data-cbpi',box.innerHTML.length+''); }catch(e){}
+});
+/* CBMR: what the report of the ASD Beam Calcs tab takes from this tab (the common block above reads only CBMR_CFG) */
+var CBMR_CFG={name:'ASD Beam Calcs',title:'ASD Beam Calcs — Calculation Report',
+  model:function(){ return asdRptModel(); }, errors:function(){ return asdRxErrors(); }, harvest:function(){ return asdRxHarvest(); },
+  results:function(t){ return asdRxResults(t); }, about:function(){ return asdRxAbout(); },
+  boxes:function(){ return asdRxBoxes(); }, sel:function(){ return asdRxSel(); }, set:function(k,key,v){ asdRxSet(k,key,v); },
+  tabName:function(t){ return asdTabName(t); }, go:function(t){ asdGoto(t); },
+  ord:['tabInputEcho','tabAnalysis','tabSummary'],
+  ttl:{tabInputEcho:'Inputs',tabAnalysis:'Analysis and rating',tabSummary:'Summary &amp; Rating'},
+  sub:{},
+  /* the Summary of results: the lines of the check summary panel (ASDC asdDashItems) */
+  sum:function(ERR,row){
+    var its=null, rows=[];
+    if(ERR) return {msg:mrErrMsg(ERR)};   /* CBIR */
+    try{ its=asdDashItems(); }catch(e){ its=null; }
+    if(!its) return {msg:'No results: the ASD Beam Calcs tab has not finished loading, or its inputs need correcting.'};
+    its.forEach(function(it){ var ks=[];
+      if(it.card==='anRF') ks=[/^Inventory/.test(it.name)?'an/inv.RF':'an/op.RF'];
+      ks.push('cbro:'+(it.tab||'tabAnalysis'));
+      rows.push(row(it.name,it.short,it.st,it.text,it.ref,ks)); });
+    return {rows:rows,note:'Result: the rating factor RF (PASS when RF ≥ 1.00), or the condition of a REVIEW notice.'};
+  },
+  overview:null,
+  /* CBIR / CBST: while the Beam Capacity tab has an input error (ASDCE, set by the suite when this tab is shown) the values this
+     report inherits are the last ones it sent */
+  note:function(){ return ASDCE.length?'Note: the Beam Capacity tab has an input error ('+ASDCE.join(' ')+'). The values this report inherits from it are the last ones it sent before the error; check them against the corrected Beam Capacity inputs.':''; }};
 function refresh(){
   applyAutoAllow();
   const st=captureUI();
@@ -7751,8 +8563,8 @@ function init(){
   document.getElementById(&quot;btnExport&quot;).addEventListener(&quot;click&quot;,doExport);
   document.getElementById(&quot;btnImport&quot;).addEventListener(&quot;click&quot;,()=>document.getElementById(&quot;fileIn&quot;).click());
   document.getElementById(&quot;fileIn&quot;).addEventListener(&quot;change&quot;,e=>{ const f=e.target.files[0]; if(f) doImport(f); e.target.value=&quot;&quot;; });
-  document.getElementById(&quot;btnPrint&quot;).addEventListener(&quot;click&quot;,asdRxPrint);   /* CBRX: the suite's Report */
-  document.getElementById(&quot;statusChip&quot;).addEventListener(&quot;click&quot;,()=>{ S.ui.tab=&quot;tabSummary&quot;; autosave(); refresh(); });
+  document.getElementById(&quot;btnPrint&quot;).addEventListener(&quot;click&quot;,asdRxPrint);   /* CBMR: this tab's Report */
+  document.getElementById(&quot;statusChip&quot;).addEventListener(&quot;click&quot;,()=>{ CBMR.on=false; S.ui.tab=&quot;tabSummary&quot;; autosave(); refresh(); });
   document.getElementById(&quot;prjX&quot;).addEventListener(&quot;click&quot;,closeProjDialog);
   document.getElementById(&quot;prjCancel&quot;).addEventListener(&quot;click&quot;,closeProjDialog);
   document.getElementById(&quot;prjGo&quot;).addEventListener(&quot;click&quot;,projDialogGo);
@@ -8227,7 +9039,7 @@ body.rbNoExcess .rbExcessOnly{display:none!important}
         <button class=&quot;tab&quot; data-tab=&quot;tsplice&quot;>Tension Splice</button>
         <button class=&quot;tab&quot; data-tab=&quot;csplice&quot;>Comp. Splice</button>
         <button class=&quot;tab&quot; data-tab=&quot;batch&quot;>Bar Schedule</button>
-        <!-- CBRP-2 (2026-11-01): no Report tab button in this embedded copy; the suite's combined Report tab (chapter C) covers it -->
+        <button class=&quot;tab&quot; data-tab=&quot;report&quot;>Report</button><!-- CBMR (2026-11-12): this tab's own Report tab again (the suite's combined Report tab is retired; CBRP-2 had removed this button) -->
       </div>
       <div id=&quot;dashboard&quot; class=&quot;dash&quot;></div>
       <div id=&quot;tabcontent&quot; class=&quot;tabcontent&quot;></div>
@@ -9986,7 +10798,7 @@ function showRebarTable(){ showRefImage('table'); }
    PRINT / PDF REPORT
    RBRX (2026-11-02; this embedded copy CBRX 2026-11-03): the D11 calculation sheet (buildReport → #printroot, rebarPageCSS,
    rebarResultBlock) was retired; its content is in the suite's combined Report tab (chapter C, rbrModel). The Print / PDF
-   Report button and Ctrl+P print the suite's Report from any tab (printReport, below; the shell's CBRP.printAny). Kept:
+   Report button and Ctrl+P print this tab's Report from any of its tabs (printReport, below; CBMR 2026-11-12). Kept:
    REBAR_RPT_TOOL (print footer), rebarRefs (the Report's references) and rebarResultRows (the Report's summary of results).
    ===================================================================== */
 const REBAR_RPT_TOOL = &quot;Concrete Beam Design Suite — Development &amp; Splice&quot;;   // suite tab name in the print footer (standalone: &quot;Rebar Development &amp; Splice Calculator&quot;)
@@ -10035,14 +10847,18 @@ function rebarResultRows(inp,f,tab){
   }
   return rows;
 }
-/* RBRX / CBRX: the button prints the suite's Report (the shell's CBRP.printAny); without the shell, this tab's own Report */
+/* CBMR (2026-11-12): the Print / PDF Report button, the Report tab's Print report and Ctrl+P print this tab's Report (from any of
+   its tabs). In the suite the suite page prints it (CBMRP.print: the top page, with the running header and page numbers; a page
+   printed from inside a frame would be cut to the frame); a frame opened alone prints itself. suiteReportDoc: the report as a
+   SharedReport document (the Report tab's when it is shown), for the suite's print hand-off. */
+function suiteReportDoc(){ if(!window.SharedReport||!window.SharedSteps) return null; return RBRP.on&amp;&amp;RBRP.doc?RBRP.doc:SharedReport.build(rbrSuite(rbrModel())); }
 function printReport(){
-  try{ const P=window.parent; if(P&amp;&amp;P!==window&amp;&amp;P.CBRP&amp;&amp;P.CBRP.printAny){ P.CBRP.printAny(); return; } }catch(e){}
-  if(RBRP.on&amp;&amp;RBRP.api){ RBRP.api.print(); return; }
-  window.print();   // no report: the page as shown
+  const d=suiteReportDoc(); if(!d){ window.print(); return; }   // no shared scripts: the page as shown
+  try{ const P=window.parent; if(P&amp;&amp;P!==window&amp;&amp;P.CBMRP&amp;&amp;P.CBMRP.print){ P.CBMRP.print(d); return; } }catch(e){}
+  SharedReport.print(d);
 }
 document.addEventListener('keydown',e=>{ if(!(e.ctrlKey||e.metaKey)||e.altKey||String(e.key).toLowerCase()!=='p') return;
-  try{ const P=window.parent; if(P&amp;&amp;P!==window&amp;&amp;P.CBRP&amp;&amp;P.CBRP.printAny){ e.preventDefault(); P.CBRP.printAny(); } }catch(err){} });
+  if(!window.SharedReport) return; e.preventDefault(); printReport(); });
 
 /* =====================================================================
    REPORT TAB (RBRP, 2026-11-01): the calculation report in the shared viewer (shared/report.js: navigation tree,
@@ -10396,14 +11212,68 @@ function rbrModel(){
       foot:(inp.projName||'Untitled')+' ('+REBAR_RPT_TOOL+')'},
     sections:secs};
 }
+/* CBMR (2026-11-12, engineer request: one report per tab of the suite): this tab's Report tab is the Development &amp; Splice chapter
+   of the retired combined suite Report (CBRO / CBIR there), built by the same code, moved here from the suite shell: rbrSuite(M)
+   takes rbrModel() and puts &quot;Summary of results&quot; first (the lines of this tab's check summary panel, #rbrDash, each linked to the
+   step where it is worked), then the worked sections in the design order with this tab's own Summary of results (the length and
+   check table) as the last section before the References; while an input is in error it prints &quot;Input error: no results&quot; with
+   the errors (CBIR). Display only: items are moved, nothing is computed (every value is the tab's own). */
+function rbrSuite(M){
+  const inp=readInputs(), f=computeFactors(inp), ie=rbInputErrors(inp,f).map(e=>String(e[1]));
+  const head=['Check','Result','Status','Detail','Reference (worked in)'], ST={pass:['PASS','ok'],fail:['FAIL','ng'],na:['N/A','na'],warn:['REVIEW','hi'],info:['INFO','na']};
+  const row=(name,short,st,detail,ref,keys)=>{ const x=ST[st]||ST.na; return [name,{t:short||'—',n:/^[−\-\d.,\s]*$|^(D\/C|RF) /.test(short||'')||undefined},{t:x[0],cls:x[1]},detail||'',{t:ref||'—',_k:keys}]; };
+  const refs={title:'References',subs:[{title:'Codes and articles cited',items:[{type:'table',head:['Reference','Provisions used'],rows:rebarRefs(inp,f).map(r=>[rbPlain(r[0]),rbPlain(r[1])])}]}]};
+  let secs=(M.sections||[]).slice(), msg=null, rows=[];
+  if(ie.length){   /* CBIR: the chapter's one section */
+    msg='Input error: no results. '+ie.join(' ')+' Correct the marked inputs on the Development &amp; Splice tab ([[cbir]]).';
+    secs=[{title:'Input error: no results',key:'cbir',note:'The Development &amp; Splice tab has an input error, so this report has no results: no value of this tab is printed until the inputs are corrected. [[tab:'+currentTab+'|On screen: Development &amp; Splice tab]]',
+      subs:[{title:'Input errors',items:ie.map(t=>({type:'note',warn:true,text:t}))}]},refs];
+  } else {
+    const ri=secs.findIndex(s=>s.title==='References'), R=ri>=0?secs.splice(ri,1)[0]:refs;
+    /* this tab's Summary of results (a subsection of &quot;Project and inputs&quot;): the last section before the References */
+    const pi=secs.find(s=>s.title==='Project and inputs'), k=pi?pi.subs.findIndex(q=>q.title==='Summary of results'):-1;
+    if(k>=0){ const q=pi.subs.splice(k,1)[0]; q.title='Development and splice lengths and code checks'; secs.push({title:'Summary of results',_tab:'sum',subs:[q]}); }
+    const DT={'Project and inputs':'inputs','Tension development':'tension','Standard hook':'hook','Compression development':'compression','Tension lap splice':'tsplice','Compression lap splice':'csplice','Bar development schedule':'batch'};
+    secs.forEach(s=>{ if(!s._tab&amp;&amp;DT[s.title]) s._tab=DT[s.title]; if(s._tab) s.key='cbro:'+s._tab; });
+    secs.push(R);
+    /* the check summary panel's lines as shown (RBDC), each linked to the step that works it, else to its tab's section */
+    const CK={tLd:'td/ld',hLdh:'hk/ldh',cLdc:'cd/ldc',tsLen:'ts/lst',tsClassA:'ts/clsA',tConf:'td/ktrHS',csLen:'cs/lsc'};
+    const CT={tLd:'tension',tConf:'tension',tConfA:'tension',hLdh:'hook',cLdc:'compression',tsLen:'tsplice',tsClassA:'tsplice',csLen:'csplice'};   /* card -> tab (REBAR_CARDS) */
+    const NK=[['(c_b+K_tr)/d_b',['td/cbKtr']],['ψ_t·ψ_e',['td/psiTE']],['λ_rl·λ_cf',['td/rlcf']],['λ_rc',['td/lrc','td/ldcalc']],['K_tr ≥ 0.5d_b',['td/ktrHS','td/Ktr']]];   /* the step that works a limit line */
+    try{ [].slice.call(document.querySelectorAll('#rbrDash .rbrdCh')).forEach(c=>{
+        const q=s=>{ const e=c.querySelector(s); return e?e.textContent:''; };
+        const name=q('.rbrdN'), short=q('.rbrdR'), S=q('.rbrdS'), V=q('.rbrdV'), val=V.indexOf(name+': ')===0?V.slice(name.length+2).replace(/ \(information\)$/,''):V;
+        const st={PASS:'pass',FAIL:'fail',REVIEW:'warn',INFO:'info'}[S]||'na', m=rbrDashMeta(name,f,val)||{};
+        let ks=[]; NK.forEach(x=>{ if(name.indexOf(x[0])===0) ks=ks.concat(x[1]); });
+        if(m.card&amp;&amp;CK[m.card]) ks.push(CK[m.card]);
+        ks=ks.concat(['cbro:'+(CT[m.card]||m.tab||'sum')]);
+        rows.push(row(name,short,st,short!==val?val:'',m.ref,ks)); });
+    }catch(e){ rows=[]; }
+    if(!rows.length) msg='No results: the Development &amp; Splice tab has not finished loading.';
+  }
+  let F=0,W=0; rows.forEach(r=>{ if(r[2].t==='FAIL') F++; if(r[2].t==='REVIEW') W++; });
+  const cn=(F?F+' NG':'no NG')+(W?', '+W+' REVIEW':'');
+  const sum={title:'Summary of results',key:'cbro:sum',note:'Development &amp; Splice: '+(msg?msg.replace(/\.$/,''):(rows.length?cn:'no checks'))+'.',
+    subs:[{title:'Development &amp; Splice',items:msg?[{type:'note',warn:true,text:msg}]:[{type:'note',text:'Check summary: '+cn+' ('+rows.length+' lines).'},{type:'table',head,rows},
+      {type:'note',text:'INFO: a required length, or a code limit applied in the calculation (not a check). Lengths are required lengths: compare them with the lengths detailed.'}]}]};
+  const out=Object.assign({},M,{title:'Development &amp; Splice — Calculation Report',sections:[sum].concat(secs)});
+  if(!out.info){   /* the input-error model of rbrModel has no title block: the same one as with results */
+    out.info=[['Project',inp.projName],['Project No.',inp.projNo],['Calculated by',inp.calcBy],['Date',inp.calcDate],['Checked by',inp.chkBy],['Checked date',inp.chkDate]];
+    out.head={left:'Project No. '+(inp.projNo||'—')+' — '+String(inp.projName||'—').slice(0,40),right:'Computed: '+(inp.calcBy||'—')+' '+(inp.calcDate||'')+' · Checked: '+(inp.chkBy||'—')+' '+(inp.chkDate||''),foot:(inp.projName||'Untitled')+' ('+REBAR_RPT_TOOL+')'}; }
+  /* each summary line links to the first of its keys found in the report; a line with none keeps its reference as plain text */
+  try{ const D=SharedReport.build(out); rows.forEach(r=>{ const c=r[4], h=c._k.filter(k=>D.index.has(k))[0]; delete c._k; if(h) c.key=h; }); }catch(e){ rows.forEach(r=>{ delete r[4]._k; }); }
+  return out;
+}
 function rbrRender(){
   const T=document.getElementById('tabcontent'); if(!T) return;
   if(!window.SharedReport||!window.SharedSteps){ T.innerHTML='<div class=&quot;warnbox&quot;><b>Report not available:</b> shared/report.js or shared/steps.js is not loaded. Keep the shared folder next to this file.</div>'; RBRP.api=null; RBRP.doc=null; return; }
-  let M; try{ M=rbrModel(); }catch(e){ T.innerHTML='<div class=&quot;warnbox&quot;><b>Report error:</b> '+escHTML(e&amp;&amp;e.message)+'</div>'; RBRP.api=null; RBRP.doc=null; return; }
+  let M; try{ M=rbrSuite(rbrModel()); }catch(e){ T.innerHTML='<div class=&quot;warnbox&quot;><b>Report error:</b> '+escHTML(e&amp;&amp;e.message)+'</div>'; RBRP.api=null; RBRP.doc=null; return; }
   const top=T.scrollTop;
   const two=rbrTwoPanel();
   RBRP.api=SharedReport.mount(T,M,{closed:RBRP.closed,onGoto:rbrGoto,stick:two?-16:0}); RBRP.doc=RBRP.api.doc;   // two-panel layout: the bar sticks at the top of #tabcontent, over its 16 px padding
   T.scrollTop=top;   // a rebuild while typing keeps the place in the report
+  if(!T.__cbmrPrint){ T.__cbmrPrint=true;   // CBMR: the viewer's Print report prints through printReport (in the suite: the suite page)
+    T.addEventListener('click',e=>{ const b=e.target.closest&amp;&amp;e.target.closest('[data-rpact=&quot;print&quot;]'); if(!b||!RBRP.on) return; e.preventDefault(); e.stopPropagation(); printReport(); },true); }
   if(!T.__rbrKeep){ T.__rbrKeep=true;   // two-panel layout: a jump inside the report scrolls #tabcontent only, never the page (as rebarGoto)
     T.addEventListener('click',()=>{ if(!RBRP.on||!rbrTwoPanel()) return; const x=window.scrollX,y=window.scrollY; setTimeout(()=>{ if(window.scrollY!==y||window.scrollX!==x) window.scrollTo(x,y); },0); },true); }
 }
@@ -10623,7 +11493,6 @@ window.addEventListener('DOMContentLoaded',()=>{
 </body>
 </html>"></iframe>
     </div>
-    <div class="suite-frame-wrap" data-app="report"><div id="suite-report"></div></div>
   </div>
 <script>
 (function(){
@@ -10682,480 +11551,21 @@ window.addEventListener('DOMContentLoaded',()=>{
 })();
 </script>
 <script>
-/* CBRP (2026-11-01): the suite's combined Report tab (engineer decision 2026-11-01: ONE Report tab, a chapter per tab).
-   Each embedded tab builds its own chapter from its own computed values: Beam Capacity cbcRptModel(), ASD Beam Calcs
-   asdRptModel(), Development & Splice rbrModel() (the same function as ACI Rebar Development Length.html's Report tab).
-   This shell only joins them: it prefixes each chapter's step scopes and cross-references ("cap:", "asd:", "dev:"),
-   groups the steps by topic (SharedSteps.group) and mounts the shared viewer (shared/report.js: navigation tree,
-   numbered sections, search, Print with title block, running header and page numbers). The report is rebuilt each
-   time the tab is shown. Nothing is saved (the collapsed sections are kept in memory). Display only. */
+/* CBMR (2026-11-12, engineer request: one report per tab): the suite's combined Report tab (CBRP #544, CBRX #726) is retired;
+   Beam Capacity, ASD Beam Calcs and Development & Splice each have their own Report tab in their own tab bar. This page only
+   prints a tab's report (CBMRP): a page printed from inside a frame is cut to the frame, so each tab hands its report to this
+   page (CBMRP.print, called by the tab's Print / PDF button, its Report tab's Print report and Ctrl+P inside the tab); Ctrl+P on
+   the suite bar and the browser's Print print the report of the tab shown, from any of its result tabs (as the combined Report
+   printed from every tab before). The report is the tab's own SharedReport document (suiteReportDoc() in its frame), printed
+   alone by shared/report.js: title block, running header, page numbers. The Drawings sheets print as before
+   (SharedDxf.printSheets marks the page sdx-printing; then nothing here runs). Nothing is saved. Display only. */
 (function(){
-  var CH=[{id:'cap',app:'capacity',fn:'cbcRptModel',name:'Beam Capacity'},{id:'asd',app:'asd',fn:'asdRptModel',name:'ASD Beam Calcs'},{id:'dev',app:'dev',fn:'rbrModel',name:'Development & Splice'}];
-  var R={closed:new Set(),api:null,doc:null};
-  window.CBRP=R;
-  function win(app){ try{ var f=document.getElementById('suite-frame-'+app); return f?f.contentWindow:null; }catch(e){ return null; } }
-  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
-  /* [[key]] -> [[pre:key]], [[tab:name|text]] -> [[tab:chapter/name|text]] */
-  /* CBRX (2026-11-03): the built-in renderer (shared/steps.js, used for every step without KaTeX and for $…$ in notes and cells
-     always) knows a TeX subset; the tabs' strings also use \dfrac, \left( … \right), \; and a few more. rxLite maps them to the
-     subset (display only: the same symbols and numbers), so offline the Report shows each line legibly instead of "dfrac…". */
-  function rxLite(t){ return String(t==null?'':t).replace(/\\[dt]frac/g,'\\frac').replace(/\\(mathbf|mathrm|boldsymbol|textbf|mathit|operatorname)\{/g,'{').replace(/\\color\{[^}]*\}/g,'')
-    .replace(/\\left\s*\\?([()\[\]|.])/g,function(m,c){ return c==='.'?'':c; }).replace(/\\right\s*\\?([()\[\]|.])/g,function(m,c){ return c==='.'?'':c; })
-    .replace(/\\checkmark/g,'\u2713').replace(/\\q?quad/g,' ').replace(/\\[;:!]/g,' ').replace(/\\(displaystyle|scriptstyle|textstyle|limits)/g,'').replace(/\\Rightarrow/g,'\u21D2').replace(/\\rightarrow|\\to\b/g,'\u2192')
-    .replace(/\\approx/g,'\u2248').replace(/\\infty/g,'\u221E').replace(/\\gg/g,'\u226B').replace(/\\varepsilon/g,'\\epsilon').replace(/\\big[lr]?|\\Big[lr]?/g,'').replace(/\\ /g,' '); }
-  function rxLiteIt(it){
-    var o={}; for(var k in it) o[k]=it[k];
-    var st=function(s){ var q={}; for(var k in s) q[k]=s[k]; ['sym','eq','sub'].forEach(function(f){ if(typeof q[f]==='string') q[f]=rxLite(q[f]); }); return q; };
-    if(it.list) o.list=it.list.map(function(t){ var q={}; for(var k in t) q[k]=t[k]; q.steps=(t.steps||[]).map(st); return q; });
-    if(it.steps) o.steps=it.steps.map(st);
-    return o;
+  function frameDoc(){
+    var t=document.querySelector('.suite-tab.active'), app=t?t.getAttribute('data-target'):'capacity', f=document.getElementById('suite-frame-'+app);
+    try{ var w=f&&f.contentWindow; return w&&typeof w.suiteReportDoc==='function'?w.suiteReportDoc():null; }catch(e){ return null; }
   }
-  function tx(s,id){ return s==null?s:String(s).replace(/\$([^$]+)\$/g,function(m,q){ return '$'+rxLite(q)+'$'; }).replace(/\[\[([^\]|]+)((?:\|[^\]]*)?)\]\]/g,function(m,k,lab){ return k.indexOf('tab:')===0?'[[tab:'+id+'/'+k.slice(4)+lab+']]':'[['+id+':'+k+lab+']]'; }); }
-  function cell(c,id){ if(c&&typeof c==='object'){ var o={}; for(var k in c) o[k]=c[k]; o.t=tx(c.t,id); if(c.key) o.key=id+':'+c.key; return o; } return tx(c,id); }
-  function topics(list){
-    var L=(list||[]).filter(function(t){ return t&&t.steps&&t.steps.length; }), steps=[];
-    L.forEach(function(t){ t.steps.forEach(function(s){ steps.push(s); }); });
-    return {steps:steps,topics:L.map(function(t){ var g=SharedSteps.group(t.steps,[{key:'k',title:t.title,ref:t.ref,ids:function(){ return true; }}],{strip:false})[0];
-      return {title:t.title,ref:t.ref||'',n:t.steps.length,cls:g.cls,chip:g.chip,res:g.res}; })};
-  }
-  function item(it,id){
-    if(!window.katex&&(it.type==='topics'||it.type==='steps')) it=rxLiteIt(it);   /* CBRX: offline, the steps in the built-in renderer's subset */
-    var o={}; for(var k in it) o[k]=it[k];
-    if(it.type==='topics'){ var T=topics(it.list); o={type:'steps',scope:id+':'+it.scope,title:tx(it.title,id),steps:T.steps,topics:T.topics}; if(it.see) o.see=id+':'+it.see; return o; }
-    if(it.type==='steps'){ o.scope=id+':'+it.scope; if(it.see) o.see=id+':'+it.see; o.title=tx(it.title,id); return o; }
-    if(it.type==='note') o.text=tx(it.text,id);
-    else if(it.type==='figure') o.caption=tx(it.caption,id);
-    else if(it.type==='kv') o.rows=(it.rows||[]).map(function(r){ return [tx(r[0],id),tx(r[1],id)].concat(r[2]?[id+':'+r[2]]:[]); });
-    else if(it.type==='table'){ o.caption=tx(it.caption,id); o.head=(it.head||[]).map(function(c){ return cell(c,id); });
-      o.rows=(it.rows||[]).map(function(r){ return Array.isArray(r)?r.map(function(c){ return cell(c,id); }):{cells:r.cells.map(function(c){ return cell(c,id); }),cls:r.cls}; }); }
-    return o;
-  }
-  /* ---------- CBRX (2026-11-03): the print reports of the Beam Capacity and ASD Beam Calcs tabs (buildReport, their "Report
-     Contents" dialogs) are retired; this Report prints from every tab. What they printed and the chapters lacked is added here:
-     each chosen tab, built by the tab's own buildOutput (cbcRxHarvest / asdRxHarvest in the frame), is read in order and every
-     table with a number the Report does not show yet (or, for a table that is not a variable list, a row of text it does not
-     have), every equation line with such a number or remark, every note with a sentence or number it does not have yet, and
-     every figure it lacks is added to the section of that tab ("As printed: tables, equations, notes and figures", under the
-     tab's card titles); the D/C result lines go at the end of the section ("Results — <tab>"); the cover lines, front notes and
-     footers go to References. Without KaTeX an equation line is shown as its TeX source. The dialogs' choices are the Include
-     boxes of the report bar (the tabs' own field S.ui.rptOpts, written through the tab's normRptOpts as the dialog did).
-     Nothing is computed here: every value is the tab's own text. ---------- */
-  var RXCH=[{id:'cap',app:'capacity',pre:'cbcRx',name:'Beam Capacity'},{id:'asd',app:'asd',pre:'asdRx',name:'ASD Beam Calcs'}];
-  function rxFn(c,f){ var w=win(c.app); return w&&typeof w[c.pre+f]==='function'?function(){ return w[c.pre+f].apply(w,arguments); }:null; }
-  function rxAbout(){ var out=[];
-    RXCH.forEach(function(c){ var f=rxFn(c,'About'); if(!f) return; try{ out.push({title:'About the '+c.name+' chapter',items:f()}); }catch(e){} });
-    return out; }
-  var rxNums=function(t){ return (String(t).replace(/\{,\}/g,',').replace(/[−–]/g,'-').replace(/(\d),(?=\d{3})/g,'$1').match(/\d+(?:\.\d+)?/g)||[]).map(function(x){ return String(parseFloat(x)); }); };
-  var rxNrm=function(x){ return String(x).toLowerCase().replace(/[^a-z0-9]+/g,''); };
-  function rxRest(M){
-    var txt=''; try{ txt=SharedReport.text(SharedReport.build(M),{legacy:true}); }catch(e){ return; }
-    var have=new Set(), all=rxNrm(txt);
-    var addNum=function(x){ have.add(x); var v=parseFloat(x), d=(x.split('.')[1]||'').length; for(var k=0;k<d;k++) have.add(String(parseFloat(v.toFixed(k)))); };
-    rxNums(txt).forEach(addNum);
-    var newNum=function(t){ return rxNums(t).some(function(n){ return !have.has(n); }); };
-    var fresh=function(t){ var ss=String(t).split(/(?<=[.;:])\s+/).map(rxNrm).filter(function(x){ return x.length>15; }); return ss.some(function(x){ return all.indexOf(x)<0; }); };
-    var seen=function(t){ rxNums(t).forEach(addNum); all+=rxNrm(t); };
-    var figs=new Set(); M.sections.forEach(function(s){ (s.subs||[]).forEach(function(q){ (q.items||[]).forEach(function(it){ if(it.type==='figure') figs.add(rxNrm(it.caption)); }); }); });
-    RXCH.forEach(function(c){
-      var hv=rxFn(c,'Harvest'), rs=rxFn(c,'Results'); if(!hv) return;
-      if(M._err&&M._err[c.id]) return;   /* CBIR: no tab copies, no result lines for a chapter with an input error */
-      var H; try{ H=hv(); }catch(e){ return; }
-      var last=-1;   /* the index of the last section of this chapter that a harvested tab went into */
-      H.forEach(function(h){
-        var si=-1; M.sections.forEach(function(s,i){ if(si<0&&s._ch===c.id&&s._tab===h.id) si=i; });
-        if(si<0){   /* a tab without a section of its own (ASD: Summary & Rating): a new section after the one before it */
-          var first=-1; M.sections.forEach(function(s,i){ if(first<0&&s._ch===c.id) first=i; });
-          si=last>=0?last+1:(first>=0?first:M.sections.length-1);
-          var ns={title:h.label,_ch:c.id,_tab:h.id,_new:true,subs:[]};
-          if(last<0&&first>=0&&M.sections[first].part){ ns.part=M.sections[first].part; M.sections[first].part=undefined; }
-          M.sections.splice(si,0,ns);
-        }
-        last=si;
-        var sec=M.sections[si], items=rxWalk(h.el,c.id+':rx-'+h.id,{newNum:newNum,fresh:fresh,seen:seen,figs:figs});
-        if(items.length) sec.subs.push({title:'As printed: tables, equations, notes and figures',items:items,_rx:{ch:c.id,tab:h.id,label:h.label}});   /* CBRF: _rx marks the copy (cbrfMove) */
-        var r=null; try{ r=rs?rs(h.id):null; }catch(e){}
-        if(r){ sec.subs.push({title:'Results — '+h.label,items:[r,{type:'note',text:'PASS: D/C ≤ 1.00 (detailing: the limit is met for every combination it applies to; rating: RF ≥ 1.00). Each check is worked in the subsections above.'}]}); seen(JSON.stringify(r.rows)); }
-      });
-    });
-    M.sections=M.sections.filter(function(s){ return !(s._new&&!s.subs.length); });
-  }
-  /* one built tab -> report items, in document order; a card title (.secTitle) becomes the topic heading of its first item */
-  function rxWalk(root,scope,T){
-    var out=[], topic=null, card='', nfig=0, k=0, ntp=0, D=root.ownerDocument;
-    var INL=/^(B|I|EM|STRONG|SPAN|BR|SUB|SUP|A|SMALL|U|CODE|LABEL)$/;
-    var txt=function(e){ var c=e.cloneNode(true);
-      c.querySelectorAll('.katex').forEach(function(x){ var a=x.querySelector('annotation'); x.replaceWith(D.createTextNode(' '+(a?a.textContent:x.textContent)+' ')); });
-      c.querySelectorAll('br').forEach(function(b){ b.replaceWith(D.createTextNode(' ')); });
-      c.querySelectorAll('.wkLink,.caret,button,select,input').forEach(function(x){ x.remove(); });
-      return c.textContent.replace(/\s+/g,' ').trim().replace(/\$/g,''); };
-    var tex=function(l){ var a=l.querySelector('annotation'); return (a?a.textContent:l.textContent).trim(); };
-    var push=function(it){ if(topic){ it.topic={title:topic,no:++ntp}; topic=null; } it._card=card; out.push(it); };   /* numbered in the subsection's order; CBRF: _card = the tab card it comes from */
-    var cellOf=function(v){ if(/^(PASS|OK)\b/.test(v)) return {t:v,cls:'ok'}; if(/^(FAIL|NG)\b/.test(v)) return {t:v,cls:'ng'}; if(/^N\/A\b/.test(v)) return {t:v,cls:'na'};
-      return /^[-−\d.,e+\s%/×()≫∞—]+$/.test(v)&&/\d/.test(v)?{t:v,n:true}:v; };
-    var table=function(t){
-      var trs=[].slice.call(t.rows); if(!trs.length) return;
-      var all=t.innerText||t.textContent, vt=t.classList.contains('vt');
-      var rowTxt=trs.map(function(r){ return [].slice.call(r.cells).map(txt).join(' '); });
-      if(!(T.newNum(all)||(!vt&&rowTxt.some(T.fresh)))) return;
-      var hd=trs[0].querySelector('th')?[].slice.call(trs[0].cells).map(txt):null, cap=t.querySelector('caption');
-      var body=trs.slice(hd?1:0).map(function(r){ return [].slice.call(r.cells).map(function(c){ return cellOf(txt(c)); }); });
-      push({type:'table',caption:cap?txt(cap):undefined,head:hd||[],rows:body,wide:(trs[0].cells.length>6)||undefined,lazy:trs.length>31||undefined,title:trs.length>31?(cap?txt(cap):'Table'):undefined});
-      rowTxt.forEach(T.seen);
-    };
-    var eqb=function(b){
-      var tt=b.querySelector('.eqTitle'), title=tt?txt(tt):'', steps=[];
-      [].slice.call(b.querySelectorAll('.eqLine')).forEach(function(l,j){
-        var s=tex(l), rem=(s.match(/\\text\{[^}]{20,}\}/g)||[]).join(' ');
-        if(!(T.newNum(s)||(rem&&T.fresh(rem.replace(/\\text\{|\}/g,''))))) return;
-        steps.push(window.katex?{id:'l'+(++k),label:title,eq:s}:{id:'l'+(++k),label:title,note:s});   /* without KaTeX: the TeX source (#724) */
-        T.seen(s+' '+rem);
-      });
-      if(steps.length) push({type:'steps',scope:scope,title:title||undefined,steps:steps});
-      [].slice.call(b.querySelectorAll('table')).forEach(table);
-    };
-    var visit=function(e){
-      if(e.nodeType!==1) return;
-      if(e.matches('.secHead')){ var st=e.querySelector('.secTitle'); topic=st?txt(st):null; card=topic||''; nfig=0; return; }
-      if(e.matches('.wkLink,.caret,button,select,input,script,style,textarea')) return;
-      if(e.matches('svg')){ nfig++; var cap=(card||'Figure')+(nfig>1?' ('+nfig+')':''); if(!T.figs.has(rxNrm(cap))){ T.figs.add(rxNrm(cap)); push({type:'figure',svg:e.outerHTML,caption:cap}); } return; }
-      if(e.matches('table')){ table(e); return; }
-      if(e.matches('.eqBlock')){ eqb(e); return; }
-      /* CBNL (2026-11-08): a note built as a lead line and a list (the tabs' cbNL) is kept or skipped as one note, with the same test as
-         before on its whole text, then copied as one Report line per part (the lead, then "• lead words: text"
-         per item); an action line (.cbNLa) is a warning line */
-      if(e.matches('.cbNL')){ var P=[].slice.call(e.querySelectorAll('.cbNLa,.cbNLl,.cbNLu>li')), tA=P.map(txt).filter(Boolean).join(' ');
-        if(tA.length>=12&&(T.fresh(tA)||T.newNum(tA))){ P.forEach(function(p){ var x=txt(p); if(x) push({type:'note',warn:p.matches('.cbNLa')||undefined,text:(p.tagName==='LI'?'• ':'')+x}); }); T.seen(tA); }
-        return; }
-      var kids=[].slice.call(e.children), leaf=kids.every(function(x){ return INL.test(x.tagName)&&!x.querySelector('table,svg,div,p,ul,ol,li'); });
-      if(leaf){ var t=txt(e); if(t.length>=12&&(T.fresh(t)||T.newNum(t))){ push({type:'note',text:(e.tagName==='LI'?'• ':'')+t}); T.seen(t); } return; }
-      kids.forEach(visit);
-    };
-    [].slice.call(root.children).forEach(visit);
-    return out;
-  }
-  /* the Include boxes: the tabs of each chapter and the Beam Capacity combinations (the dialogs' choices) */
-  function rxControls(){
-    var h='<span class="cbrx-inc" style="display:inline-flex;flex-wrap:wrap;gap:2px 10px;font-size:9pt;align-items:center">';
-    (function(){ var s=rxFn(RXCH[0],'Sel'), on=true; if(!s) return; try{ on=s().ov!==false; }catch(e){ return; }   /* CBOV: the overview's Include box (Beam Capacity tab, S.ui.rptOpts.ov) */
-      h+='<b>Report:</b><label><input type="checkbox" data-cbrx="cap|ov|"'+(on?' checked':'')+'> Overview figures</label><span style="width:8px"></span>'; })();
-    RXCH.forEach(function(c){ var b=rxFn(c,'Boxes'), s=rxFn(c,'Sel'); if(!b||!s) return; var B, Sl; try{ B=b(); Sl=s(); }catch(e){ return; }
-      h+='<b>'+esc(c.name)+':</b>'+B.tabs.map(function(t){ return '<label><input type="checkbox" data-cbrx="'+c.id+'|tab|'+esc(t[0])+'"'+(Sl.tabs[t[0]]?' checked':'')+'> '+esc(t[1])+'</label>'; }).join('');
-      if(B.combos.length) h+='<b>worked detail:</b>'+B.combos.map(function(t,i){ return '<label><input type="checkbox" data-cbrx="'+c.id+'|combo|'+i+'"'+(Sl.combos[i]?' checked':'')+'> '+esc(t)+'</label>'; }).join('')+
-        '<button type="button" data-cbrx="'+c.id+'|all|">Select all</button><button type="button" data-cbrx="'+c.id+'|gov|">Governing combinations only</button>';
-      h+='<span style="width:8px"></span>'; });
-    return h+'</span>';
-  }
-  function rxWire(host){
-    host.querySelectorAll('[data-cbrx]').forEach(function(x){ x.addEventListener(x.tagName==='BUTTON'?'click':'change',function(){
-      var p=x.getAttribute('data-cbrx').split('|'), c=RXCH.filter(function(q){ return q.id===p[0]; })[0], f=c&&rxFn(c,'Set'); if(!f) return;
-      try{ f(p[1],p[1]==='combo'?parseInt(p[2],10):p[2],x.checked); }catch(e){}
-      render(); }); });
-  }
-  /* ---------- CBRO (2026-11-05, Phase 4 of the concrete beam suite update): the Report in the design order, with a suite-wide
-     "Summary of results" first (the Spread Footing Report's order, SFRO #778 / SFRF #779). Display only: sections are moved and
-     the check lines are read from the tabs' own check summary panels; nothing is computed here.
-     Order: 1 Summary of results · A. Beam Capacity: Inputs, Validation notices (the basis), Flexure, Shear, Torsion,
-     Serviceability, Detailing, Summary of checks · B. ASD Beam Calcs: Inputs, Analysis and rating, Summary & Rating ·
-     C. Development & Splice: Project and inputs, the five lengths, Bar development schedule, Summary of results · D. References.
-     A section whose Include box is off (or that has nothing to show for this project) stays as a one-line section, so the
-     section numbers do not move with the Include boxes. Every section of a tab gets the key cbro:<chapter>:<tab>. ---------- */
-  var CBRO_ORD={cap:['tabInputEcho','tabValid','tabFlex','tabShear','tabTor','tabServ','tabDetail','tabSummary'],asd:['tabInputEcho','tabAnalysis','tabSummary']};
-  var CBRO_TTL={cap:{tabInputEcho:'Inputs',tabValid:'Validation notices',tabFlex:'Flexure',tabShear:'Shear',tabTor:'Torsion',tabServ:'Serviceability',tabDetail:'Detailing',tabSummary:'Summary of checks'},
-    asd:{tabInputEcho:'Inputs',tabAnalysis:'Analysis and rating',tabSummary:'Summary & Rating'}};
-  function cbroOrder(M){
-    var G={cap:[],asd:[],dev:[],ref:[]}, part={};
-    M.sections.forEach(function(s){ var g=G[s._ch]?s._ch:'ref'; if(s.part&&!part[g]) part[g]=s.part; G[g].push(s); });
-    ['cap','asd'].forEach(function(id){
-      var g=G[id]; if(!g.some(function(s){ return s._tab; })) return;   /* a chapter that could not be built: as it is */
-      var c=RXCH.filter(function(q){ return q.id===id; })[0], b=rxFn(c,'Boxes'), sl=rxFn(c,'Sel'), B=null, Sl=null;
-      try{ B=b?b():null; Sl=sl?sl():null; }catch(e){}
-      var lab={}; ((B&&B.tabs)||[]).forEach(function(t){ lab[t[0]]=t[1]; });
-      var res=[];
-      CBRO_ORD[id].forEach(function(t){
-        var hit=g.filter(function(s){ return s._tab===t; });
-        if(hit.length){ res=res.concat(hit); return; }
-        if(!lab[t]) return;   /* not a tab of this project (e.g. Torsion when torsion is off) */
-        var off=!!(Sl&&Sl.tabs&&Sl.tabs[t]===false), link='[[tab:'+id+'/'+t+'|On screen: '+lab[t]+' tab]]';
-        res.push({title:CBRO_TTL[id][t],_ch:id,_tab:t,_stub:true,subs:[],
-          note:off?'Not included in this report: the Include box “'+lab[t]+'” on the report bar is off. '+link
-            :(t==='tabValid'?'No validation notices for this project. ':'The '+lab[t]+' tab adds nothing to the other sections of this chapter for this project. ')+link});
-      });
-      g.forEach(function(s){ if(res.indexOf(s)<0) res.push(s); });
-      G[id]=res;
-    });
-    /* Development & Splice: its Summary of results (a subsection of "Project and inputs") becomes the last section of the chapter */
-    var pi=G.dev.filter(function(s){ return s.title==='Project and inputs'; })[0], k=-1;
-    if(pi) pi.subs.forEach(function(q,i){ if(k<0&&q.title==='Summary of results') k=i; });
-    if(k>=0){ var q=pi.subs.splice(k,1)[0]; q.title='Development and splice lengths and code checks'; G.dev.push({title:'Summary of results',_ch:'dev',_tab:'sum',subs:[q]}); }
-    var DT={'Project and inputs':'inputs','Tension development':'tension','Standard hook':'hook','Compression development':'compression','Tension lap splice':'tsplice','Compression lap splice':'csplice','Bar development schedule':'batch'};
-    G.dev.forEach(function(s){ if(!s._tab&&DT[s.title]) s._tab=DT[s.title]; });
-    ['cap','asd','dev','ref'].forEach(function(g){ G[g].forEach(function(s,i){ s.part=i===0?part[g]:undefined; if(s._tab&&g!=='ref') s.key='cbro:'+g+':'+s._tab; }); });
-    M.sections=[cbroSum(M._err||{}),cbovSection()].concat(G.cap,G.asd,G.dev,G.ref);   /* CBOV: the overview second */
-    cbroKeys(M);
-  }
-  /* ---------- CBIR (2026-11-05, Phase 4 follow-up): a chapter whose tab has an input error (the tab's check summary panel and
-     output say "Input error: no results": Beam Capacity VALIDATION.blockers, ASD CC.errors, Development & Splice rbInputErrors)
-     prints "Input error: no results" with the list of errors in place of its worked sections, so the Report never prints the
-     last results computed before the error. The Summary of results and the Overview say the same. Valid inputs: unchanged. ---------- */
-  function cbirErrors(id){
-    try{
-      if(id==='cap'){ var f=rxFn(RXCH[0],'Errors'); return f?f():[]; }
-      if(id==='asd'){ var g=rxFn(RXCH[1],'Errors'); return g?g():[]; }
-      if(id==='dev'){ var w=win('dev'); if(!w||typeof w.rbInputErrors!=='function') return []; var inp=w.readInputs(); return w.rbInputErrors(inp,w.computeFactors(inp)).map(function(e){ return String(e[1]); }); }
-    }catch(e){}
-    return [];
-  }
-  var CBIR_TAB={cap:'Beam Capacity',asd:'ASD Beam Calcs',dev:'Development & Splice'};
-  function cbirMsg(E,id){ return 'Input error: no results. '+E.join(' ')+' Correct the marked inputs on the '+CBIR_TAB[id]+' tab ([[cbir:'+id+']]).'; }
-  function cbirSection(c,E){   /* the chapter's one section; text in the chapter's own form (model() prefixes keys and tab links) */
-    return {title:'Input error: no results',_cbir:'cbir:'+c.id,
-      note:'The '+c.name+' tab has an input error, so this chapter has no results: no value of this tab is printed until the inputs are corrected. [[tab:|On screen: '+c.name+' tab]]',
-      subs:[{title:'Input errors',items:E.map(function(t){ return {type:'note',warn:true,text:t}; })}]};
-  }
-  /* ---------- CBRF (2026-11-05, Phase 4 part 3; as Spread Footing SFRF #779): each tab copy ("As printed: tables, equations,
-     notes and figures", rxRest) is split. Its figures, and its tables that hold a value or a text found nowhere else in the
-     Report, go into the section that works the check (a combination's card into that combination's subsection; the Input
-     Echo's into Reinforcement / Load combinations; the Detailing table into the envelope; the rest into "Figures and tables
-     from the <tab> tab" before the Results lines). What is left of the copy (its notes, equation lines and the tables whose
-     values the Report already shows) goes to "Appendix: the tabs as printed" after the References, one subsection per tab,
-     and the section gets a pointer to it. Display only: items are moved, never changed or dropped. ---------- */
-  var CBRF_SUB={cap:{tabInputEcho:[[/^Section Schematic/,'Reinforcement'],[/^Reinforcement/,'Reinforcement'],[/^Load Combinations/,'Load combinations']],tabDetail:[[/^Detailing Checks/,'Detailing checks (envelope)']]}};
-  function cbrfMove(M){
-    var rx=[]; M.sections.forEach(function(s){ (s.subs||[]).forEach(function(q){ if(q._rx) rx.push({s:s,q:q}); }); });
-    if(!rx.length) return;
-    var txt=''; try{ txt=SharedReport.text(SharedReport.build({title:M.title,sections:M.sections.map(function(s){ return {title:s.title,note:s.note,subs:(s.subs||[]).filter(function(q){ return !q._rx; })}; })}),{legacy:true}); }catch(e){ return; }
-    var have=new Set(), all=rxNrm(txt);
-    var addNum=function(x){ have.add(x); var v=parseFloat(x), d=(x.split('.')[1]||'').length; for(var k=0;k<d;k++) have.add(String(parseFloat(v.toFixed(k)))); };
-    rxNums(txt).forEach(addNum);
-    var ct=function(c){ return c&&typeof c==='object'?String(c.t==null?'':c.t):String(c==null?'':c); };
-    var cells=function(it){ var o=[]; (it.head||[]).forEach(function(c){ o.push(ct(c)); }); (it.rows||[]).forEach(function(r){ (Array.isArray(r)?r:r.cells).forEach(function(c){ o.push(ct(c)); }); }); if(it.caption) o.push(ct(it.caption)); return o; };
-    var unique=function(it){ return cells(it).some(function(t){ if(rxNums(t).some(function(n){ return !have.has(n); })) return true; var x=rxNrm(t); return x.length>15&&all.indexOf(x)<0; }); };
-    var seen=function(it){ cells(it).forEach(function(t){ rxNums(t).forEach(addNum); all+=rxNrm(t); }); };
-    var ap=[];
-    rx.forEach(function(R){
-      var s=R.s, q=R.q, X=q._rx, lab=X.label, keep=[], tabT=' ('+lab+' tab)', extra=null;
-      var target=function(card){
-        var m=/^Combination (\d+)\b/.exec(card||''); if(m){ var t=s.subs.filter(function(u){ return u.title.indexOf('Combination '+m[1]+' (')===0; })[0]; if(t) return t; }
-        var L=(CBRF_SUB[X.ch]||{})[X.tab]||[]; for(var i=0;i<L.length;i++){ if(L[i][0].test(card||'')){ var nm=L[i][1], u=s.subs.filter(function(v){ return v.title===nm; })[0]; if(u) return u; } }
-        if(!extra){ extra={title:'Figures and tables from the '+lab+' tab',items:[]}; var k=-1; s.subs.forEach(function(u,i){ if(k<0&&/^Results — /.test(u.title)) k=i; }); s.subs.splice(k<0?s.subs.length:k,0,extra); }
-        return extra;
-      };
-      var prevFig=null;
-      q.items.forEach(function(it){
-        if(it.type==='note'&&prevFig&&(it._card||'')===(prevFig._card||'')&&!it.topic){   /* the figure's own caption line on the tab moves with it */
-          var cn={}; for(var kk in it) cn[kk]=it[kk]; delete cn._card; prevFig.into.items.push(cn); prevFig=null; return; }
-        prevFig=null;
-        var mv=it.type==='figure'||(it.type==='table'&&unique(it));
-        if(!mv){ keep.push(it); return; }
-        if(it.type==='table') seen(it);
-        var o={}; for(var k in it) o[k]=it[k]; delete o._card;
-        var card=it._card||'';
-        if(it.type==='figure') o.caption=(o.caption||card||'Figure')+tabT;
-        o.topic={title:(it.type==='figure'?(it.caption||card||'Figure'):(card||'Table'))+tabT};
-        var into=target(card); into.items.push(o);
-        if(it.type==='figure') prevFig={_card:it._card,into:into};
-      });
-      s.subs.splice(s.subs.indexOf(q),1);
-      if(!keep.length) return;
-      /* the copy's topic headings again: the first item left of each card carries it, numbered in the appendix's order */
-      var n=0, last=null; keep.forEach(function(it){ var c=it._card||''; delete it.topic; if(c!==last){ last=c; if(c) it.topic={title:c,no:++n}; } delete it._card; });
-      var key='cbrf:ap:'+X.ch+':'+X.tab;
-      ap.push({title:lab+' tab ('+({cap:'Beam Capacity',asd:'ASD Beam Calcs'}[X.ch]||X.ch)+')',key:key,items:[{type:'note',text:'As printed on the tab: its notes, equation lines and the tables whose values are worked in [['+(s.key||key)+']]. The figures and tables found only on the tab are in that section.'}].concat(keep)});
-      s.note=(s.note?s.note+' ':'')+'The '+lab+' tab’s other notes, equation lines and tables, as printed: [['+key+']].';
-    });
-    rx.forEach(function(R){ if(R.q.items) R.q.items.forEach(function(it){ delete it._card; }); });
-    if(ap.length) M.sections.push({part:'Appendices',title:'Appendix: the tabs as printed',key:'cbrf:ap',note:'Text and tables of the Beam Capacity and ASD Beam Calcs tabs as they print, kept for completeness. Every value here is worked, or shown, in the chapter section named at the start of each subsection; figures and tables found only on a tab are in that section.',subs:ap});
-  }
-  /* ---------- CBOV (2026-11-05): "Overview of the beam", the Report's section 2, after the Summary of results (as Spread
-     Footing SFOV #780): the cross-section with its reinforcement and dimensions, the stirrup elevation (each to scale, with a
-     scale bar) and a snapshot of the Visuals tab's 3-D view, from the Beam Capacity tab (cbcOvFigs). Include box "Overview
-     figures" on the report bar (the tab's S.ui.rptOpts.ov, default on); off, the section stays as one line, so the numbers
-     after it do not move. Display only. ---------- */
-  var CBOV_N=0;
-  function cbovUniq(svg){   /* the copies get their own ids (marker / gradient references resolve inside the copy, also in print) */
-    var n=++CBOV_N, ids=[]; String(svg).replace(/\sid="([^"]+)"/g,function(m,id){ ids.push(id); return m; });
-    ids.forEach(function(id){ var e=id.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-      svg=svg.replace(new RegExp('id="'+e+'"','g'),'id="'+id+'-ov'+n+'"').replace(new RegExp('url\\(#'+e+'\\)','g'),'url(#'+id+'-ov'+n+')').replace(new RegExp('href="#'+e+'"','g'),'href="#'+id+'-ov'+n+'"'); });
-    return svg;
-  }
-  function cbovSection(){
-    var S0={title:'Overview of the beam',key:'cbov',_ch:'ov',subs:[]}, c=RXCH[0], sl=rxFn(c,'Sel'), on=true, w=win('capacity'), F=null;
-    try{ on=!sl||sl().ov!==false; }catch(e){}
-    if(!on){ S0.note='Not included in this report: the Include box “Overview figures” on the report bar is off.'; return S0; }
-    try{ F=w&&typeof w.cbcOvFigs==='function'?w.cbcOvFigs():null; }catch(e){ F=null; }
-    if(!F){ S0.note='No overview: the Beam Capacity tab has no results (it has not finished loading, or its inputs need correcting).'; return S0; }
-    if(F.blocked){ S0.note='No overview: input error on the Beam Capacity tab, no results, so the beam is not drawn (the errors: [[cbir:cap]]).'; return S0; }
-    var f2=function(x){ return (Math.round(x*100)/100).toFixed(2); };
-    var dims='$b_{w}$ × h = '+f2(F.bw)+' × '+f2(F.h)+' in'+(F.tee?', $b_{f}$ × $h_{f}$ = '+f2(F.bf)+' × '+f2(F.hf)+' in (T-beam)':'');
-    var sense=F.neg?'negative moment, top face in tension':'positive moment, bottom face in tension';
-    S0.note='The beam as entered on the Beam Capacity tab, for orientation; the checks are worked in the chapters below.';
-    S0.subs.push({title:'Cross-section',items:[{type:'figure',svg:cbovUniq(F.sec).replace('<svg ','<svg style="max-width:420px" '),caption:'Cross-section, '+dims+': reinforcement as entered, to scale (scale bar), for the governing sense of bending ('+sense+(F.gov?'; '+F.gov:'')+'). Dimensions in inches; d of each layer from the extreme compression fibre. Inputs: [[cbro:cap:tabInputEcho]]. [[tab:cap/tabInputEcho|On screen: Input Echo tab]]'}]});
-    S0.subs.push({title:'Elevation',items:F.elev?[{type:'figure',svg:cbovUniq(F.elev),caption:'Elevation of a short run of the beam: closed stirrups at s = '+f2(F.s)+' in, to scale (scale bar); the green band is the permitted spacing range (s_max; Detailing: [[cbro:cap:tabDetail]]). [[tab:cap/tabInputEcho|On screen: Input Echo tab]]'}]
-      :[{type:'note',text:'No elevation: '+(F.stir?'no results.':'the section has no stirrups (transverse reinforcement), so there is no stirrup layout to draw.')}]});
-    var P=F.snap||{};
-    S0.subs.push({title:'3-D view',items:P.url?[{type:'figure',svg:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+P.W+' '+P.H+'"><image href="'+P.url+'" x="0" y="0" width="'+P.W+'" height="'+P.H+'"/></svg>',
-        caption:'3-D view of the Visuals tab at its start angles (closer in): every layer on (concrete 45 % opaque, tension bars red, compression bars blue, stirrups grey). The length shown ('+Math.round(P.Lb)+' in) is illustrative: the tool checks a cross-section, not a span. [[tab:cap/tabVisuals|On screen: Visuals tab]]'}]
-      :[{type:'note',text:'3-D view not included: '+(P.note||'it could not be rendered.')+' The cross-section above shows the same reinforcement to scale.'}]});
-    return S0;
-  }
-  /* the suite-wide Summary of results: one line per check of each tab's check summary panel (Beam Capacity CBDC #788
-     cbcDashItems, ASD Beam Calcs ASDC #789 asdDashItems, Development & Splice RBDC #791 #rbrDash lines), the same name, short
-     value (the D/C, the RF, the length, or the condition not met), status and reference; the last column links to the step
-     where the check is worked (resolved in cbroKeys, else the tab's section). */
-  var CBRO_ST={pass:['PASS','ok'],fail:['FAIL','ng'],na:['N/A','na'],warn:['REVIEW','hi'],info:['INFO','na']};
-  function cbroSum(ERR){
-    var subs=[], tot=[];
-    var head=['Check','Result','Status','Detail','Reference (worked in)'];
-    var row=function(name,short,st,detail,ref,keys){ var x=CBRO_ST[st]||CBRO_ST.na;
-      return [name,{t:short||'—',n:/^[−\-\d.,\s]*$|^(D\/C|RF) /.test(short||'')||undefined},{t:x[0],cls:x[1]},detail||'',{t:ref||'—',_k:keys}]; };
-    var count=function(rows){ var f=0,w=0; rows.forEach(function(r){ if(r[2].t==='FAIL') f++; if(r[2].t==='REVIEW') w++; });
-      return (f?f+' NG':'no NG')+(w?', '+w+' REVIEW':''); };
-    var add=function(title,rows,msg,note){
-      if(msg){ subs.push({title:title,items:[{type:'note',warn:true,text:msg}]}); tot.push(title+': '+msg.replace(/\.$/,'')); return; }
-      var cn=count(rows); tot.push(title+': '+(rows.length?cn:'no checks'));
-      subs.push({title:title,items:[{type:'note',text:rows.length?'Check summary: '+cn+' ('+rows.length+' lines).':'No checks.'}].concat(rows.length?[{type:'table',head:head,rows:rows}]:[]).concat(note?[{type:'note',text:note}]:[])});
-    };
-    /* A. Beam Capacity */
-    (function(){ var w=win('capacity'), its=null, K=null, msg=null, rows=[];
-      if(ERR.cap) msg=cbirMsg(ERR.cap,'cap');   /* CBIR: as the chapter */
-      else try{ var m=w.document.querySelector('#cbcDash .cbdMsg'); if(m) msg=m.textContent; else { its=w.cbcDashItems(); K=w.allChecks(); } }catch(e){ msg=null; its=null; }
-      if(!msg&&!its) msg='No results: the Beam Capacity tab has not finished loading, or its inputs need correcting.';
-      if(!msg) its.forEach(function(it,i){ var c=K[i]||{}, ks=[];
-        if(!c.na&&c.ci!=null){ var ci=c.ci;
-          if(c.tab==='tabFlex') ks=['fx'+ci+'/DCR'];
-          else if(c.id==='torA') ks=['tth/Tu'+ci];   /* CBH1 */
-          else if(c.id==='torAT'||c.id==='torAC'||c.id==='torAS') ks=['tad/'+({torAT:'dcT',torAC:'dcC',torAS:'dcS'}[c.id])+ci];   /* CBH1b: AASHTO torsion design */
-          else if(c.id==='lonA') ks=['lon/dc'+ci];   /* CBM2 */
-          else if(c.tab==='tabShear') ks=['sh'+ci+'/DCRs','sh'+ci+'/DCR'];
-          else if(c.tab==='tabTor') ks=[/cross/i.test(c.label)?'tq'+ci+'/size':(/Combined/.test(c.label)?'tq'+ci+'/combVT':'tq'+ci+'/DCR')];
-          else if(c.tab==='tabServ') ks=['svm/minr'+ci,'sv/minr'];   /* CBM1: the combination that governs 5.6.3.3 */
-          else if(c.tab==='tabDetail') ks=['dt/'+c.id+'.cmp']; }
-        ks=ks.map(function(k){ return 'cap:'+k; });
-        ks=ks.concat(ks.length?['cap:omit-'+ks[0].slice(4).split('/')[0]]:[],c.tab?['cbro:cap:'+c.tab]:[]);
-        var det=it.text+(it.cond&&it.dc?'; '+it.dc+(it.within?' (the ratio is within its limit; the status comes from the condition)':''):'');
-        rows.push(row(it.name,it.cond||it.dc,it.st,det,it.ref,ks)); });
-      add('Beam Capacity',rows,msg?msg.replace('the output panel','the Beam Capacity tab’s output panel'):null,msg?null:'Result: the D/C, or, where a limit or condition is not met, that condition (its D/C is under Detail). Every load combination is enveloped; the tables by combination are in the Beam Capacity chapter ([[cbro:cap:tabSummary]]).');
-    })();
-    /* B. ASD Beam Calcs */
-    (function(){ var w=win('asd'), its=null, rows=[], msg=null;
-      try{ its=ERR.asd?null:w.asdDashItems(); }catch(e){ its=null; }
-      if(ERR.asd) msg=cbirMsg(ERR.asd,'asd');   /* CBIR: as the chapter */
-      else if(!its) msg='No results: the ASD Beam Calcs tab has not finished loading, or its inputs need correcting.';
-      else its.forEach(function(it){ var ks=[];
-        if(it.card==='anRF') ks=[/^Inventory/.test(it.name)?'asd:an/inv.RF':'asd:an/op.RF'];
-        ks.push('cbro:asd:'+(it.tab||'tabAnalysis'));
-        rows.push(row(it.name,it.short,it.st,it.text,it.ref,ks)); });
-      add('ASD Beam Calcs',rows,msg,msg?null:'Result: the rating factor RF (PASS when RF ≥ 1.00), or the condition of a REVIEW notice.');
-    })();
-    /* C. Development & Splice: the lines of its check summary panel as shown (the dashboard's checks; RBDC) */
-    (function(){ var w=win('dev'), rows=[], msg=null, f=null, CK={tLd:'td/ld',hLdh:'hk/ldh',cLdc:'cd/ldc',tsLen:'ts/lst',tsClassA:'ts/clsA',tConf:'td/ktrHS',csLen:'cs/lsc'};
-      var CT={tLd:'tension',tConf:'tension',tConfA:'tension',hLdh:'hook',cLdc:'compression',tsLen:'tsplice',tsClassA:'tsplice',csLen:'csplice'};   /* card -> tab (REBAR_CARDS) */
-      var NK=[['(c_b+K_tr)/d_b',['td/cbKtr']],['ψ_t·ψ_e',['td/psiTE']],['λ_rl·λ_cf',['td/rlcf']],['λ_rc',['td/lrc','td/ldcalc']],['K_tr ≥ 0.5d_b',['td/ktrHS','td/Ktr']]];   /* the step that works a limit line */
-      try{ f=w.computeFactors(w.readInputs());
-        [].slice.call(w.document.querySelectorAll('#rbrDash .rbrdCh')).forEach(function(c){
-          var q=function(s){ var e=c.querySelector(s); return e?e.textContent:''; };
-          var name=q('.rbrdN'), short=q('.rbrdR'), S=q('.rbrdS'), V=q('.rbrdV'), val=V.indexOf(name+': ')===0?V.slice(name.length+2).replace(/ \(information\)$/,''):V;
-          var st={PASS:'pass',FAIL:'fail',REVIEW:'warn',INFO:'info'}[S]||'na', m=w.rbrDashMeta(name,f,val)||{}, ks=[];
-          NK.forEach(function(x){ if(name.indexOf(x[0])===0) ks=ks.concat(x[1]); });
-          if(m.card&&CK[m.card]) ks.push(CK[m.card]);
-          ks=ks.map(function(k){ return 'dev:'+k; }).concat(['cbro:dev:'+(CT[m.card]||m.tab||'sum')]);
-          rows.push(row(name,short,st,short!==val?val:'',m.ref,ks)); });
-      }catch(e){ rows=[]; }
-      if(ERR.dev) msg=cbirMsg(ERR.dev,'dev');   /* CBIR: as the chapter */
-      else if(!rows.length) msg='No results: the Development & Splice tab has not finished loading.';
-      add('Development & Splice',rows,msg,msg?null:'INFO: a required length, or a code limit applied in the calculation (not a check). Lengths are required lengths: compare them with the lengths detailed.');
-    })();
-    return {title:'Summary of results',key:'cbro:sum',note:tot.join(' · ')+'.',subs:subs,_ch:'sum'};
-  }
-  /* each summary line links to the first of its keys found in the report (the step, else an omitted combination's note,
-     else the tab's section); a line with none keeps its reference as plain text */
-  function cbroKeys(M){
-    var D=null; try{ D=SharedReport.build(M); }catch(e){ return; }
-    M.sections[0].subs.forEach(function(q){ (q.items||[]).forEach(function(it){ if(it.type!=='table') return;
-      it.rows.forEach(function(r){ var c=r[4]; if(!c||!c._k) return; var h=c._k.filter(function(k){ return D.index.has(k); })[0]; delete c._k; if(h) c.key=h; }); }); });
-  }
-  function model(){
-    var secs=[], codes=[], letters='ABC', P={}, refRows=[], ERR={};
-    try{ if(window.CBST_capStatus) window.CBST_capStatus(); }catch(e){}   /* CBST: the ASD tab's notice of a Beam Capacity input error, before its chapter is read */
-    CH.forEach(function(c,ci){
-      var w=win(c.app), m=null, part=letters[ci]+'. '+c.name;
-      try{ m=w&&typeof w[c.fn]==='function'?w[c.fn]():null; }catch(e){ m={sections:[{title:c.name,subs:[{title:'Chapter error',items:[{type:'note',warn:true,text:'This chapter could not be built: '+(e&&e.message)}]}]}]}; }
-      if(!m) m={sections:[{title:c.name,subs:[{title:'Not available',items:[{type:'note',warn:true,text:'The '+c.name+' tab has not finished loading. Open it once, then show the Report tab again.'}]}]}]};
-      var ie=cbirErrors(c.id); if(ie.length){ ERR[c.id]=ie; m={code:m.code,proj:m.proj,refs:m.refs,sections:[cbirSection(c,ie)]}; }   /* CBIR: an input error replaces the chapter's worked sections */
-      if(m.code) codes.push(m.code);
-      if(c.id==='cap'&&m.proj) P=m.proj;
-      (m.refs||[]).forEach(function(x){ refRows.push([c.name,String(x[0]).replace(/<[^>]+>/g,''),String(x[1]).replace(/<sub>(.*?)<\/sub>/g,'$$_{$1}$$').replace(/<[^>]+>/g,'')]); });
-      var S=(m.sections||[]).filter(function(s){ return !(c.id==='dev'&&/^References$/.test(s.title)); });   /* the references of every chapter are joined at the end */
-      S.forEach(function(s,k){ secs.push({part:k===0?part:undefined,title:s.title,note:tx(s.note,c.id),_ch:c.id,_tab:s.tab,key:s._cbir,
-        subs:(s.subs||[]).map(function(q){ return {title:tx(q.title,c.id),key:q.key?c.id+':'+q.key:undefined,items:(q.items||[]).map(function(it){ return item(it,c.id); })}; })}); });
-    });
-    /* references: every chapter's own list (cap, asd: m.refs; dev: its References section, rebarRefs) */
-    (function(){ var w=win('dev'); try{ var inp=w.readInputs(), r=w.rebarRefs(inp,w.computeFactors(inp)); r.forEach(function(x){ refRows.push(['Development & Splice',String(x[0]).replace(/<[^>]+>/g,''),String(x[1]).replace(/<sub>(.*?)<\/sub>/g,'$$_{$1}$$').replace(/<[^>]+>/g,'')]); }); }catch(e){} })();
-    secs.push({part:'D. References',title:'References',subs:[{title:'Codes and articles cited, by chapter',items:[{type:'table',head:['Chapter','Reference','Provisions used'],rows:refRows}]}].concat(rxAbout())});   /* CBRX: the retired print reports' cover lines, front notes and footers */
-    var proj=P.name||'Untitled';
-    var M={title:'Concrete Beam Design Suite — Calculation Report',subtitle:proj+(P.subj?' — '+P.subj:''),code:codes.join(' · '),
-      info:[['Project',P.name],['Project No.',P.num],['Subject',P.subj],['Calculated by',P.by],['Date',P.date],['Sheet',P.sheet],['Checked by',P.chk],['Checked date',P.chkDate]],   /* CBRX: Subject and Sheet, as the print report's title block */
-      head:{left:'Project No. '+(P.num||'—')+' — '+String(proj).slice(0,40),right:'Computed: '+(P.by||'—')+' '+(P.date||'')+' · Checked: '+(P.chk||'—')+' '+(P.chkDate||''),foot:proj+' (Concrete Beam Design Suite)'},
-      sections:secs};
-    M._err=ERR;   /* CBIR: the chapters with an input error (rxRest copies none of their tabs; the Summary says so) */
-    if(ERR.cap&&!ERR.asd) secs.forEach(function(s){ if(s._ch==='asd'&&s.part) s.note=(s.note?s.note+' ':'')+'Note: the Beam Capacity tab has an input error ([[cbir:cap]]). The values this chapter inherits from it are the last ones it sent before the error; check them against the corrected Beam Capacity inputs.'; });   /* CBIR */
-    rxRest(M);   /* CBRX: what the retired print reports printed and the chapters lack */
-    cbroOrder(M);   /* CBRO: design order, the suite's Summary of results first, numbering independent of the Include boxes */
-    cbrfMove(M);   /* CBRF: figures and unique tables in their sections, the rest of the tab copies in an appendix */
-    return M;
-  }
-  /* [[tab:<chapter>/<tab>|…]]: the suite tab, then that tab's own result tab */
-  function go(name){
-    var p=String(name).split('/'), c=CH.filter(function(x){ return x.id===p[0]; })[0]; if(!c) return;
-    var b=document.getElementById('suite-tab-'+c.app); if(b) b.click();
-    var w=win(c.app), t=p[1]; if(!w||!t) return;
-    try{
-      if(c.id==='dev'){ if(w.rbrGoto) w.rbrGoto(t); return; }
-      var lab=c.id==='cap'?w.cbcTabName(t):w.asdTabName(t);
-      var btn=[].slice.call(w.document.querySelectorAll('#tabBar button')).filter(function(x){ return x.textContent.trim().indexOf(lab)===0; })[0];
-      if(btn) btn.click();
-    }catch(e){}
-  }
-  function render(){
-    var host=document.getElementById('suite-report'); if(!host) return;
-    if(!window.SharedReport||!window.SharedSteps){ host.innerHTML='<p class="suite-rpt-err">shared/report.js or shared/steps.js is not loaded: keep the shared folder next to this file.</p>'; R.api=null; R.doc=null; return; }
-    var M; try{ M=model(); }catch(e){ host.innerHTML='<p class="suite-rpt-err">Report error: '+esc(e&&e.message)+'</p>'; R.api=null; R.doc=null; return; }
-    var top=host.scrollTop;
-    R.api=SharedReport.mount(host,M,{closed:R.closed,onGoto:go,stick:-12,controls:rxControls()}); R.doc=R.api.doc; host.scrollTop=top;
-    rxWire(host);
-  }
-  R.render=render; R.model=model;
-  function shown(){ var w=document.querySelector('.suite-frame-wrap[data-app="report"]'); return !!(w&&w.classList.contains('active')); }
-  document.addEventListener('DOMContentLoaded',function(){
-    var b=document.getElementById('suite-tab-report'); if(b) b.addEventListener('click',function(){ setTimeout(render,0); });
-  });
-  /* CBRX (2026-11-03): Print / PDF of any tab (the frames call printAny), Ctrl+P and the browser's Print (prep, from the
-     inline script in <head>) print this Report; after printing the suite tab of before comes back. Nothing is saved. */
-  var BACK=null;
-  function activeTab(){ var t=document.querySelector('.suite-tab.active'); return t?t.getAttribute('data-target'):'capacity'; }
-  function showReport(){ if(shown()) return; BACK=activeTab(); var b=document.getElementById('suite-tab-report'); if(b) b.click(); }
-  R.prep=function(){
-    if(shown()||document.body.classList.contains('rp-printing')||!window.SharedReport||!window.SharedSteps) return false;
-    showReport(); render(); return true;
-  };
-  R.printAny=function(){
-    if(!window.SharedReport||!window.SharedSteps){ window.print(); return; }
-    showReport(); render();
-    if(R.api) R.api.print(); else window.print();
-  };
-  window.addEventListener('afterprint',function(){ if(!BACK) return; var t=BACK; BACK=null; setTimeout(function(){ var b=document.getElementById('suite-tab-'+t); if(b) b.click(); },0); });
-  /* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header) */
-  window.addEventListener('beforeprint',function(){
-    if(!R.doc||!shown()||document.body.classList.contains('rp-printing')) return;
-    var box=document.getElementById('rp-print'); if(!box){ box=document.createElement('div'); box.id='rp-print'; document.body.appendChild(box); }
-    box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(R.doc,{lazy:false})+'</article></div>';
-    document.body.classList.add('rp-printing');
-  });
-  /* CBPI (2026-11-05): the print box is a second rendering of the Report, while the Report tab's own copy stays in the page (hidden
-     while printing). A figure's url(#id) / href="#id" (markers, patterns, clip paths) then resolved to the hidden copy's element (the
-     first with that id), which does not paint: arrowheads of the section / elevation dimensions and the ASD hatching did not print.
-     At beforeprint, after the box is filled (here, or by SharedReport.print for Print / PDF), each top-level SVG of the box gets its own
-     ids: every id defined in it gets a suffix, and its references in that SVG follow. Display only. */
+  /* CBPI (2026-11-05): each top-level SVG of the print box gets its own ids (a figure's url(#id) / href="#id" markers, patterns,
+     clip paths then resolve inside that figure, also when the same figure is printed twice) */
   var PI_N=0;
   function uniqSvgIds(root){
     var A=['fill','stroke','clip-path','mask','filter','marker-start','marker-mid','marker-end','style','href','xlink:href'];
@@ -11167,10 +11577,22 @@ window.addEventListener('DOMContentLoaded',()=>{
         if((a==='href'||a==='xlink:href')&&w.charAt(0)==='#'&&map[w.slice(1)]) w='#'+map[w.slice(1)];
         if(w!==v) e.setAttribute(a,w); }); }); });
   }
+  /* SharedReport.print fills #rp-print, sets the running header and page numbers, then calls window.print(); from beforeprint
+     (the print is already under way) that call is skipped */
+  function printDoc(doc,inBefore){
+    if(!doc||!window.SharedReport) return false;
+    if(inBefore){ var prev=window.print, noop=function(){}; window.print=noop; setTimeout(function(){ if(window.print===noop) window.print=prev; },1000); }
+    SharedReport.print(doc);
+    var box=document.getElementById('rp-print'); if(box){ try{ uniqSvgIds(box); }catch(e){} }
+    return true;
+  }
+  window.CBMRP={print:function(doc){ if(!printDoc(doc,false)) window.print(); }, doc:frameDoc};
   window.addEventListener('beforeprint',function(){
-    var box=document.getElementById('rp-print'); if(!box||!document.body.classList.contains('rp-printing')||box.getAttribute('data-cbpi')===box.innerHTML.length+'') return;
-    try{ uniqSvgIds(box); box.setAttribute('data-cbpi',box.innerHTML.length+''); }catch(e){}
+    var b=document.body; if(b.classList.contains('rp-printing')||b.classList.contains('sdx-printing')) return;
+    printDoc(frameDoc(),true);
   });
+  document.addEventListener('keydown',function(e){ if(!(e.ctrlKey||e.metaKey)||e.altKey||String(e.key).toLowerCase()!=='p') return;
+    var d=frameDoc(); if(!d) return; e.preventDefault(); printDoc(d,false); });
 })();
 </script>
 <script>

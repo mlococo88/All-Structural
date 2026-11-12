@@ -104,8 +104,10 @@ const TOOLS = {
     one: '#cbdwPrint1', all: '#cbdwPrintAll',
     n: f => f.evaluate(() => CBDW.B.S.length),
     known: f => f.evaluate(() => { const s = CBDW.B.S.find(q => q.id === CBDW.cur); return { what: `concrete b_w x h = ${S.sec.bw} x ${S.sec.h} in on ${s.title} at ${s.scale} (1:${s.k})`, w: S.sec.bw / s.k, h: S.sec.h / s.k }; }),
-    reportOpen: async p => { await p.click('#suite-tab-report'); await p.waitForTimeout(4000); },
-    report: /Concrete Beam|Beam Capacity/i,
+    // CBMR (2026-11-12): each suite tab has its own Report tab (the suite's Report tab is retired); the page's print hands the print
+    // to the report of the tab shown (the suite page prints it), so the Beam Capacity tab's Report tab is opened here
+    reportOpen: async (p, f) => { await f.click('#cbmrTab'); await p.waitForTimeout(4000); },
+    report: /Beam Capacity — Calculation Report/i,
   },
   bp: {   // BPDW (2026-11-06): the Drawings tab of the Base Plate & Anchor Designer; the known rectangle is the pedestal Bx x By of the default
           // project on the BASE PLATE PLAN sheet. Ctrl+P prints the Report from the Report tab (RPT-4).
@@ -191,7 +193,7 @@ for (const key of want) {
     const gone2 = await o.p.evaluate(() => !document.getElementById('sdx-print') && !document.getElementById('sdx-print-css'));
     check(gone2, 'after printing all: the print box and its style are removed');
     // 3. the page's own print: the Report
-    if (T.reportOpen) await T.reportOpen(o.p);   // a tool that prints the open tab: the Report tab first
+    if (T.reportOpen) await T.reportOpen(o.p, X);   // a tool that prints the open tab: the Report tab first (X: the frame, CBMR)
     const f3 = path.join(OUT, `${key}-report.pdf`);
     await o.p.pdf({ path: f3, preferCSSPageSize: true, printBackground: true });
     const P3 = pages(f3), txt = execFileSync('pdftotext', [f3, '-'], { encoding: 'utf8' });
