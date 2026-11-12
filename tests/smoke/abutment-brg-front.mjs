@@ -72,7 +72,7 @@ console.log(`1. Main (${REF} ${sha}) vs this tree: identical geometry, identical
     // AB-1 (2026-11-12): the BR vertical couple (R.brCouple, its REVIEW warning while the elevation inputs are blank) is new; tests/smoke/abutment-br-couple.mjs
     const TXT = /^\.own\.rows\[\d+\]\.(val|tex)$/, dAll = diff(x.R, y.R).filter(d => !/^\.brCouple/.test(d[0])), dR = dAll.filter(d => !TXT.test(d[0]));
     dAll.filter(d => TXT.test(d[0])).forEach(d => console.log(`       owner row text ${d[0]}:\n         − ${String(d[1]).slice(0, 200)}\n         + ${String(d[2]).slice(0, 200)}`));
-    const wA = x.W.slice(), wB = y.W.filter(m => !/Braking vertical couple/.test(m)); let ren = 0;
+    const wA = x.W.filter(m => !/Braking vertical couple/.test(m)), wB = y.W.filter(m => !/Braking vertical couple/.test(m)); let ren = 0;
     const rw = []; const wOK = wA.length === wB.length && wA.every((m, i) => m === wB[i] || (RENAMED_MSG.some(([p, q]) => p.test(m) && q.test(wB[i])) && rw.push([m, wB[i]]))); ren = rw.length;
     rw.forEach(([m, n]) => console.log('       reworded warning:\n         − ' + m.slice(0, 300) + '\n         + ' + n.slice(0, 300)));
     check(!dR.length && wOK && x.fp === y.fp, `${nm} (saved without a_f → a_f = ${y.af}): LAST_R ${dR.length ? dR.length + ' diffs ' + JSON.stringify(dR.slice(0, 2)) : 'identical'} (${JSON.stringify(y.R).length} chars), warnings ${wOK ? 'same' + (ren ? ` (${ren} reworded, same values)` : '') : 'DIFF ' + JSON.stringify([wA, wB]).slice(0, 400)}, Input ID ${x.fp} / ${y.fp}`);

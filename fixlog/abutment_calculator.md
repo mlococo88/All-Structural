@@ -17438,11 +17438,11 @@ Engineer decision 2026-11-10 (geometry). AASHTO LRFD 10th Ed. (2024): 5.6.5 / Fi
   - L_pile 40, L_u 5: L_req = 16.845, D/C 0.421. L_pile 15: D/C 0.790 PASS, L_s/T_x = 14/3.247 = 4.31 < 5, flagged. L_pile 6: L_s 5.00 < D_f 5.845, D/C 1.974 FAIL (nFail 0 → 1), both flags. Clay (S_u 1 ksf), L_pile 30: D_f 7.585, D/C 0.453, L_s/R_x 5.35.
 - **Values that change:** only with L_pile entered on a pile footing (conventional or semi-integral): the new dashboard row (nFail when > 1) and the warnings. Every other `LAST_R` value is identical to main: the default project, the default on piles with L_pile blank, and a spread footing with a stored L_pile. Integral: unchanged.
 - **Saved data (§5):** none changed (`piles.elLpile` is the ABEL2 key); Input IDs unchanged.
-- **Decisions (pending engineer review):**
-  1. The 5 ft margin is applied to pile footings, as the engineer stated. AASHTO / MassDOT 3.2.2.2 require only reaching fixity.
-  2. D_f = the C10.7.3.13.4 (or entered / Pile Designer) depth to fixity of §4.4b, not a p-y second point of zero deflection.
-  3. The long-pile threshold is 5T (5R for clay).
-  4. A pile that does not reach D_f is an error-level warning plus the D/C row. The buckling result is kept.
+- **Decisions (engineer-decided 2026-11-12, see AB-4 #1446):**
+  1. The 5 ft margin is applied to pile footings, as the engineer stated. AASHTO / MassDOT 3.2.2.2 require only reaching fixity. — **Decided (AB-2):** kept; adopted from MassDOT 3.10.11.2 (integral rule) for pile footings, stated in the app note and the Report.
+  2. D_f = the C10.7.3.13.4 (or entered / Pile Designer) depth to fixity of §4.4b, not a p-y second point of zero deflection. — **Decided (AB-3):** confirmed.
+  3. The long-pile threshold is 5T (5R for clay). — **Decided (AB-4):** confirmed, and L_s < 5T on an axis carrying moment is now a FAILED check (dashboard row, D/C = 5T/L_s).
+  4. A pile that does not reach D_f is an error-level warning plus the D/C row. The buckling result is kept. — **Decided (AB-4):** the error stays.
 - **How verified:**
   - New `tests/smoke/abutment-pile-length.mjs` (the cases above, Tab 4 §4.4c, Report, 0 console errors).
   - Main-vs-branch probe of 13 cases: only `checks.pileLen`, the dashboard row (index shift) and nFail where it fails.
@@ -17480,3 +17480,28 @@ Engineer decision 2026-11-10 (geometry). AASHTO LRFD 10th Ed. (2024): 5.6.5 / Fi
 - **Saved data (§5):** no key or format changed; Input ID unchanged. Saved projects change only when BR ≠ 0, not imported, and all four elevation inputs are entered.
 - **How verified:** new `tests/smoke/abutment-br-couple.mjs`; main-vs-branch probe of 22 cases; `abutment-brg-front`, `abutment-stem-shelf`, `abutment-pile-group-parity` (R.brCouple and the new REVIEW warning excluded from the main comparison), `abutment-elevations` (its invariance cases run without BR; echo text); the other abutment smoke tests, `abutment-subloads-exchange`, `project-library --tool abutment` (against this branch; against main it shows only R.brCouple), `check-syntax`.
 - **Other copies:** none (SubLoads computes its own couple).
+
+## 2026-11-12 — PR: abut-short-pile (PR #1446: https://github.com/mlococo88/All-Structural/pull/1446) (AB-4, with the AB-2 / AB-3 notes) — Pile footing: L_s < 5T (5R in clay) on an axis carrying moment is a FAILED check (dashboard row D/C = 5T/L_s); the 5 ft margin and D_f confirmed as engineer decisions   [§4: check change, only with L_pile entered and the elastic lateral solution in use; no saved key or format change]
+- **Engineer decisions (2026-11-12):** AB-2: keep the +5 ft in the pile length check (ABPL); state that it is adopted from MassDOT 3.10.11.2 (integral rule) for pile footings (AASHTO 10.7.6 / C10.7.3.12 and MassDOT 3.2.2.2 require only fixity). AB-3: D_f stays C10.7.3.13.4 or entered / Pile Designer. AB-4: the short-pile condition L_s < 5T (5R in clay) on an axis carrying moment becomes a FAILED check (dashboard row, D/C = 5T/L_s, counted in nFail), results still shown; the "does not reach D_f" error stays.
+- **Where (all in `abutment_calculator.html`):**
+  - `pileLength(ps,pf)`, after `out.mr.short=["L","T"].filter(k=>out.mr[k].used&&out.mr[k].z<5-1e-9);`:
+    ```js
+    const us=["L","T"].filter(k=>out.mr[k].used);
+    if(us.length){ const k=us.reduce((a,b)=>out.mr[b].T>out.mr[a].T?b:a); out.mr.gov=k; out.mr.dc=out.Ls>1e-9? 5*out.mr[k].T/out.Ls : Infinity; }
+    ```
+    (the axis with the larger T among those that bend governs 5T/L_s; T = R in clay, as `pileCombined`'s `lat()`).
+  - Dashboard, after the `addD("pileLen",…)` line: `if(PL&&PL.mr&&PL.mr.dc!=null) addD("pileShort","Pile long-pile premise L_s ≥ 5T (5R clay), elastic lateral solution [engineer decision 2026-11-12]",PL.mr.dc,"tab-found",…,false, L_s ≤ 0 → "L_s ≤ 0: FAIL")`. `DASH_CARD`: `pileShort:"o-pilelen"`. nFail counts it (`dash.filter(d=>d.pass===false)`).
+  - Warning "Pile length: the elastic lateral solution (Matlock–Reese) assumes a long pile …": before a plain warning ending "The long-pile moment C_M·H·T is kept: check it with a p-y analysis …"; after level "err", "…: FAILS (D/C = 5T/L_s = …; engineer decision 2026-11-12). The long-pile moment C_M·H·T and its results are still shown: lengthen the pile, or analyse it with its actual length (p-y, Pile Designer) and enter or pull that moment."
+  - Tab 4 §4.4c (`pileLenPanelHTML`): the L_s/T lines use R in clay and say "short pile: FAILS"; new `checkLine("Long-pile premise", 5T/L_s …)`; notes: "Requirement" (AB-2 wording: AASHTO 10.7.6 / C10.7.3.12 and MassDOT 3.2.2.2 require only fixity; the 5 ft adopted from MassDOT 3.10.11.2 for pile footings by engineer decision 2026-11-12), new "Depth to fixity" (AB-3), "Premise" / new "Check" (AB-4). Before, "Premise" ended "shorter is flagged and the long-pile moment is kept".
+  - Report (topic "Pile length: depth to fixity + 5 ft"): the L_req row label carries the AB-2 statement, a note with AB-3; the L_s/T rows say "SHORT: FAILS"; new `dcStep(…,"pileShort","Long-pile premise (… H; L_s < 5T fails, engineer decision 2026-11-12)", 5T/L_s)`.
+  - `pileLength` header comment.
+- **Governing provisions:** AASHTO LRFD 10th Ed. (2024) 10.7.6, 10.7.3.12, C10.7.3.12, 10.7.3.13.4 / C10.7.3.13.4 (unchanged use); MassDOT LRFD Bridge Manual Part I 3.2.2.2 and 3.10.11.2 (basis notes); Matlock & Reese (1960) relative stiffness T = (EI/n_h)^(1/5), clay R = (EI/E_s)^(1/4) (unchanged).
+- **Check case (ABPL's: default state on piles, HP12X53, T_x = 3.247 ft, e = 12 in, L_u = 0):**
+  - L_pile 15 ft: L_s = 15 − 1 − 0 = 14 ft; L_s/T_x = 4.31 < 5. Before: PASS (length D/C 0.790), flagged only. After: new row D/C = 5 × 3.247/14 = 16.236/14 = **1.160 FAIL**, nFail 0 → 1; length row 0.790 PASS unchanged; pile results unchanged.
+  - L_pile 40 ft: D/C = 16.236/39 = 0.416 PASS (row added, nFail unchanged).
+  - L_pile 6 ft: L_s 5: D/C 3.247 FAIL; with the length row (1.974 FAIL) nFail 0 → 2 (main: 1).
+  - p-y moment entered (elastic solution not used), square pile, spread footing, integral, L_pile blank: no row.
+- **Values that change:** only with L_pile entered on a pile footing whose moment is from the elastic solution: the new dashboard row (index shift of later rows), nFail where L_s < 5T, the warning text and level. Everything else in `LAST_R` is identical.
+- **Saved data (§5):** none changed; Input IDs unchanged.
+- **How verified:** `tests/smoke/abutment-pile-length.mjs` extended (rows, nFail, Tab 4 / Report text, KaTeX); main-vs-branch probe; `abutment-elevations` invariance also leaves out the `pileShort` row; `abutment-brg-front` / `abutment-stem-shelf`: the AB-1 REVIEW warning is now left out on both sides of the main comparison (main has AB-1 since #1445); the abutment smoke tests, `abutment-pile-group-parity`, `abutment-subloads-exchange`, `abutment-girder-depth`, `project-library --tool abutment`, `check-syntax`.
+- **Other copies:** none.
