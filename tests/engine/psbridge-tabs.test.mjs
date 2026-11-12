@@ -11,10 +11,11 @@ import { TAB_CASES } from './psbridge-tab-cases.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared('steps.js', ...PBD, ...['model', 'design', 'fields', 'inputcheck', 'worked', 'worked-stress'].map(n => path.join(APP, `engine/${n}.js`)));
+const W = loadShared('steps.js', ...PBD, ...['model', 'design', 'fields', 'inputcheck', 'worked', 'worked-stress', 'worked-strength'].map(n => path.join(APP, `engine/${n}.js`)));
 const at = (R, p) => p.split('.').reduce((o, k) => o == null ? o : o[k], R);
 const STEPS = (inp, R) => ({ section: W.PSBWorked.section(inp, R), loads: W.PSBWorked.loads(inp, R), analysis: W.PSBWorked.analysis(inp, R),
-  losses: W.PSBWorkedStress.losses(inp, R), stresses: W.PSBWorkedStress.stresses(inp, R) });
+  losses: W.PSBWorkedStress.losses(inp, R), stresses: W.PSBWorkedStress.stresses(inp, R),
+  flexure: W.PSBWorkedStrength.flexure(inp, R), shear: W.PSBWorkedStrength.shear(inp, R) });
 const CASES = TAB_CASES(() => W.PSBModel.defaultProject());
 for (const [name, P] of Object.entries(CASES)) {
   test(`worked steps = engine values: ${name}`, () => {
@@ -25,7 +26,7 @@ for (const [name, P] of Object.entries(CASES)) {
     for (const f of Object.keys(ST)) {
       const r = ST[f];
       Object.entries(r.paths || {}).forEach(([id, p]) => { const s = r.steps.find(q => q.id === id), v = at(R, p); assert.ok(s, 'path of a step ' + id); assert.ok(Object.is(s.value, v), `${id}: value ${s.value} vs R.${p} ${v}`); });
-      if (f === 'losses' || f === 'stresses') assert.ok(Object.keys(r.paths).length >= 20, f + ' paths ' + Object.keys(r.paths).length);
+      if (['losses', 'stresses', 'flexure', 'shear'].includes(f)) assert.ok(Object.keys(r.paths).length >= (f === 'losses' || f === 'stresses' ? 20 : 15), f + ' paths ' + Object.keys(r.paths).length);
       assert.ok(r.steps.length >= 8, f);
       const ids = r.steps.map(s => s.id); assert.equal(new Set(ids).size, ids.length, 'unique ids ' + f);
       r.steps.forEach(s => { if (typeof s.value === 'number') assert.ok(Number.isFinite(s.value), `${s.id} finite`); });

@@ -344,7 +344,7 @@ Six cases: `default` (built-in example, empty storage) and the projects in `proj
 
 ## PS Bridge: harness B, new tabs vs the old app (`psbridge-compare.mjs`, added 2026-11-12, PR 2c-1)
 
-`node tests/psbridge-compare.mjs [--tabs loss,str] [--case <part of a name>] [--verbose] [--control]`: for each design of
+`node tests/psbridge-compare.mjs [--tabs loss,str,flex,shear] [--case <part of a name>] [--verbose] [--control]`: for each design of
 `tests/engine/psbridge-tab-cases.mjs`, the new app (`apps/ps-bridge/index.html`) shows its result tabs and the old `Prestressed Bridge Design.html`
 (frozen) computes the same engine inputs; every value a compared tab shows (its `data-ev` R path, as formatted) and every worked step with an
 R path must equal the old app's `computeAll` value (text and number, `Object.is`). Also checks that a seeded `psbeam.*` key stays byte-identical

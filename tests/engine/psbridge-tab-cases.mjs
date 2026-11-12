@@ -15,5 +15,8 @@ export const TAB_CASES = base => ({
   'approximate losses, transformed release, severe corrosion, bonded release steel, entered fatigue DF': (() => { const P = base(); P.base.opt.lossMethod = 'approx'; P.base.opt.useTrans = true;
     P.base.opt.corrosion = 'severe'; P.base.opt.relBondedReinf = true; P.base.opt.relAs = 2; P.base.loads.fatM = 0.45; P.base.opt.dfpSSauto = false; P.base.opt.dfpSS = 1.5; return P; })(),
   'cracked under Service III (few strands), continuous with top steel, two spans': (() => { const P = base(); P.base.rows = [{ n: 10, y: 2, nd: 0, dbnd: 0 }, { n: 8, y: 4, nd: 0, dbnd: 0 }]; P.base.harp.n = 4;
-    P.spans = { lengths: [120, 120], continuity: 'composite' }; P.xs.skews = [0, 0, 0]; P.base.cont.restraint = true; P.base.cont.AsTop = 3; return P; })()
+    P.spans = { lengths: [120, 120], continuity: 'composite' }; P.xs.skews = [0, 0, 0]; P.base.cont.restraint = true; P.base.cont.AsTop = 3; return P; })(),
+  'flanged flexure (thin deck, 46 strands), two spans, young girder (positive restraint), positive moment connection steel': (() => { const P = base(); P.base.ts = 5; P.xs.bays = [6, 6, 6, 6];
+    P.base.rows = [{ n: 16, y: 2, nd: 0, dbnd: 0 }, { n: 16, y: 4, nd: 0, dbnd: 0 }, { n: 14, y: 6, nd: 0, dbnd: 0 }]; P.spans = { lengths: [120, 120], continuity: 'composite' }; P.xs.skews = [0, 0, 0];
+    P.base.cont.AsPos = 4; P.base.cont.restraint = true; P.base.mat.td = 10; return P; })()
 });
