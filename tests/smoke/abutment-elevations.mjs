@@ -155,7 +155,7 @@ console.log('6. ABEL2: bearing height, girder + haunch + deck, pile length (disp
   check(['TOP OF DECK EL. 57.83', 'TOP OF BEARING EL. 52.50', 'PILE TIPS EL. -4.00', 'TOP OF DECK AT CL BRG EL. 57.83', 'TOP OF PILES EL. 36.00', 'PILE TIPS (BELOW, NOT TO SCALE) EL. -4.00', 'TOTAL HEIGHT 6"'].every(has),
     `Drawings: section (deck, bearing, tips), seat detail (bearing, deck), pile in the footing (pile heads, tips), bearing drawn at 6 in`);
   const rp = await withCase(p, HC, () => { activateTab('tab-rpt'); const t = document.getElementById('tab-rpt').textContent.replace(/\s+/g, ' '); activateTab('tab-loads');
-    return { deck: /Top of deck at the bearing line \(bearing \+ girder \+ haunch \+ deck\) ?57\.83/.test(t), tip: /Pile tips ?-4\.00/.test(t), echo: /Total bearing height h_brg \(display only/.test(t) && /Pile length L_pile, total/.test(t) }; });
+    return { deck: /Top of deck at the bearing line \(bearing \+ girder \+ haunch \+ deck\) ?57\.83/.test(t), tip: /Pile tips ?-4\.00/.test(t), echo: /Total bearing height h_brg \(the elevations of Tab 1 §1\.1a; the BR vertical couple/.test(t) && /Pile length L_pile, total/.test(t) }; });
   check(!rp.err && rp.deck && rp.tip && rp.echo, `Report: elevations table rows and the input echo (${JSON.stringify(rp)})`);
   // semi-integral: deck vs the top of the end diaphragm; girder depth vs panel I-0a
   const cs = await withCase(p, () => { S.geom.elSeat = 52; S.iab.type = 'semi'; S.iab.dg = 4.0; S.geom.elBrgH = 6; S.geom.elGird = 48; S.geom.elHaunch = 0; S.geom.elDeck = 6; }, () => abElev(window.LAST_R));
@@ -176,10 +176,11 @@ console.log('6. ABEL2: bearing height, girder + haunch + deck, pile length (disp
     `Pile Designer: suggestion 39 + 0 + 1 = 40 ft, blank until "Use" (${pd.before} -> ${pd.after}), tip El. -6.00 vs -4.00 flagged`);
   const pd2 = await withCase(p, () => { S.geom.elSeat = 52; S.geom.elBrgH = 6; S.geom.elGird = 54; S.geom.elHaunch = 2; S.geom.elDeck = 8; S.fnd.branch = 'pile'; S.piles.embed = 12; S.piles.elLpile = 40; S.piles.elLpile = 45; S.pileRes = { pile: { stickup: 0 }, geo: { toe: 39 } }; }, () => ({ L: S.piles.elLpile, f: abElev(window.LAST_R).flags, s: abElLpInHTML() }));
   check(!pd2.err && pd2.L === 45 && pd2.f.some(t => /Pile length L<sub>pile<\/sub> = 45\.00 ft .* differs from Pile Designer's pile/.test(t)) && /your entry is kept/.test(pd2.s), `an entered length is kept (45) and the difference flagged`);
-  // invariance: LAST_R identical with the new fields blank and set (ABPL 2026-11-12: except the pile length check that L_pile now feeds, checks.pileLen and its dashboard row; tests/smoke/abutment-pile-length.mjs)
+  // invariance: LAST_R identical with the new fields blank and set (ABPL 2026-11-12: except the pile length check that L_pile now feeds, checks.pileLen and its dashboard row; tests/smoke/abutment-pile-length.mjs.
+  // AB-1 2026-11-12: h_brg, d_g, h_h and t_d now give the height of the BR vertical couple, so these cases have no BR; tests/smoke/abutment-br-couple.mjs)
   const inv = await p.evaluate(() => { const snap = () => JSON.stringify(window.LAST_R, (k, v) => typeof v === 'number' && !isFinite(v) ? String(v) : k === 'pileLen' ? undefined : k === 'dash' && Array.isArray(v) ? v.filter(d => d.id !== 'pileLen') : v).replace(/"fingerprint":"[^"]*"/, '');
     const out = []; for (const su of [() => { S.fnd.branch = 'pile'; }, () => { S.iab.type = 'semi'; S.fnd.branch = 'pile'; S.apSlab.on = true; }, () => {}]) {
-      const st = JSON.parse(JSON.stringify(S)); su(); migrate(); recalcAll(); const a = snap(), fa = window.LAST_R.fingerprint;
+      const st = JSON.parse(JSON.stringify(S)); su(); S.longit.computeBR = false; S.rx.BR.forEach(r => { r.P = 0; r.Vx = 0; r.Vy = 0; }); migrate(); recalcAll(); const a = snap(), fa = window.LAST_R.fingerprint;
       S.geom.elBrgH = 6; S.geom.elGird = 54; S.geom.elHaunch = 2; S.geom.elDeck = 8; S.piles.elLpile = 40; recalcAll(); const b = snap();
       S.geom.elBrgH = null; S.geom.elGird = null; S.geom.elHaunch = null; S.geom.elDeck = null; S.piles.elLpile = null; recalcAll(); const fb = window.LAST_R.fingerprint;
       out.push({ same: a === b, fa, fb }); Object.keys(S).forEach(k => delete S[k]); Object.assign(S, st); recalcAll(); } return out; });

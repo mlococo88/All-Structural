@@ -7,7 +7,8 @@ async function run(root) {
   const o = await openPage(path.join(root, 'abutment_calculator.html'), { vw: 1400, vh: 1000 });
   await o.p.waitForFunction(() => window.LAST_R, null, { timeout: 60000 });
   const out = await o.p.evaluate(() => {
-    const snap = () => JSON.stringify(window.LAST_R, (k, v) => typeof v === 'number' && !isFinite(v) ? String(v) : v);
+    // AB-1 (2026-11-12): R.brCouple (the BR vertical couple record; not applied while the elevation inputs are blank) is not compared
+    const snap = () => JSON.stringify(window.LAST_R, (k, v) => typeof v === 'number' && !isFinite(v) ? String(v) : k === 'brCouple' ? undefined : v);
     const res = [snap()];
     let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     S.fnd.branch = 'pile'; recalcAll(); res.push(snap());

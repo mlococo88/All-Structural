@@ -835,7 +835,7 @@ function defaultState(){
       spanL:80.0, skew:0.0,         // span length & skew (for min support length)
       hw:0.0,                       // water table height above BOTTOM of footing (ft); 0 = none
       elSeat:null,                  // ABEL (2026-11-10): beam seat elevation (ft), display only: every elevation shown is derived from it and the heights; null = none shown
-      elBrgH:null, elGird:null, elHaunch:null, elDeck:null,   // ABEL2 (2026-11-10): display only (elevations, Tab 1 §1.1a; conventional / semi-integral): total bearing height seat to underside of girder, girder depth, haunch, deck thickness (in); null = not entered (level not shown); no calculation reads them
+      elBrgH:null, elGird:null, elHaunch:null, elDeck:null,   // ABEL2 (2026-11-10): the elevations (Tab 1 §1.1a; conventional / semi-integral): total bearing height seat to underside of girder, girder depth, haunch, deck thickness (in); null = not entered (level not shown). AB-1 (2026-11-12): also the height of the BR vertical couple (brCouple, Tab 1 §1.6a; all four needed)
       hwFr:null                     // ABM6: water level in front of the wall, above the bottom of footing (ft); null = same as h_w (balanced, no WA) [3.11.3]
     },
     mat:{fc:4.0, gc:0.150, fy:60.0, coverF:3.0, coverT:2.0, ag:0.75, // ksi, kcf, ksi, in (footing / wall+top), max aggregate size (in) for the 5.7.3.4.2 s_xe
@@ -2249,11 +2249,11 @@ function buildInputs(){
     <div class="in-row"><label title="Optional. The elevation of the beam seat (bridge seat${iabType()==="integral"?"; integral abutment: the seat of panel I-0a, h_c above the bottom of the cap":""}). Every other elevation is derived from it and the heights of the geometry inputs (Tab 1 §1.1a). Blank = no elevations shown. Display only: no result depends on it.">Beam seat elevation El<sub>seat</sub> (blank = none)</label>
       <input type="number" step="any" data-path="geom.elSeat" data-blank="1" value="${abElevOn()?S.geom.elSeat:""}"><span class="unit">ft</span></div>
     <div class="in-note" id="abElevIn">${abElevInHTML()}</div>
-    ${iabType()!=="integral"?`<div class="in-note">Superstructure at the bearing line, for the elevations (Tab 1 §1.1a: top of bearing, top of deck; blank = not shown)${iabType()==="semi"?"; the girder depth d<sub>g</sub> is also the owner screening girder depth (Tab 1 §1.0a)":"; no check uses them"}:</div>`
-      +abElInRow("&nbsp;&nbsp;Total bearing height h<sub>brg</sub> (blank = none)","geom.elBrgH","in","Masonry plate + elastomer + sole plate, from the beam seat to the underside of the girder. Display only: the top of bearing / bottom of girder elevation. Not h_rt of panel I-6 (the elastomer only, used for the pad shear); no calculation reads it.")
-      +abElInRow("&nbsp;&nbsp;Girder depth d<sub>g</sub> (blank = none)","geom.elGird","in","Girder depth at the bearing. The top of deck elevation."+(iabType()==="semi"?" Also the girder depth of the semi-integral owner screening (Tab 1 §1.0a; engineer decision 2026-11-12, was its own panel I-0a entry): a different girder depth saved in panel I-0a is kept, the larger is used and the difference is flagged.":" No calculation reads it for a conventional abutment."))
-      +abElInRow("&nbsp;&nbsp;Haunch h<sub>h</sub> (blank = none; 0 = no haunch)","geom.elHaunch","in","Haunch (girder top to deck underside) at the bearing. Display only: the top of deck elevation.")
-      +abElInRow("&nbsp;&nbsp;Deck thickness t<sub>d</sub> (blank = none)","geom.elDeck","in","Deck slab thickness, including any integral wearing surface. Display only: the top of deck elevation.") : ""}
+    ${iabType()!=="integral"?`<div class="in-note">Superstructure at the bearing line, for the elevations (Tab 1 §1.1a: top of bearing, top of deck; blank = not shown)${iabType()==="semi"?"; the girder depth d<sub>g</sub> is also the owner screening girder depth (Tab 1 §1.0a)":""}; with BR, all four also give the height of the braking vertical couple (Tab 1 §1.6a; not applied while one is blank):</div>`
+      +abElInRow("&nbsp;&nbsp;Total bearing height h<sub>brg</sub> (blank = none)","geom.elBrgH","in","Masonry plate + elastomer + sole plate, from the beam seat to the underside of the girder. The top of bearing / bottom of girder elevation, and the height of the braking vertical couple (Tab 1 §1.6a). Not h_rt of panel I-6 (the elastomer only, used for the pad shear).")
+      +abElInRow("&nbsp;&nbsp;Girder depth d<sub>g</sub> (blank = none)","geom.elGird","in","Girder depth at the bearing. The top of deck elevation."+(iabType()==="semi"?" Also the girder depth of the semi-integral owner screening (Tab 1 §1.0a; engineer decision 2026-11-12, was its own panel I-0a entry): a different girder depth saved in panel I-0a is kept, the larger is used and the difference is flagged.":"")+" Also the height of the braking vertical couple (Tab 1 §1.6a).")
+      +abElInRow("&nbsp;&nbsp;Haunch h<sub>h</sub> (blank = none; 0 = no haunch)","geom.elHaunch","in","Haunch (girder top to deck underside) at the bearing. The top of deck elevation, and the height of the braking vertical couple (Tab 1 §1.6a).")
+      +abElInRow("&nbsp;&nbsp;Deck thickness t<sub>d</sub> (blank = none)","geom.elDeck","in","Deck slab thickness, including any integral wearing surface. The top of deck elevation, and the height of the braking vertical couple (Tab 1 §1.6a).") : ""}
     <div class="subhead">Footing</div>
     ${inpRow("Toe length L<sub>toe</sub>","geom.Ltoe","ft")}
     ${inpRow("Heel length L<sub>heel</sub>","geom.Lheel","ft")}
@@ -2938,6 +2938,33 @@ function eqLocTxt(short){ const m=eqMode(), r=fmt(+S.seismic.hAEr,2);
   return short? "PAE combined @ H/3, not below the static resultant [C11.6.5.3]" : "P<sub>AE</sub> (static + seismic) combined at H/3, not lower than the static resultant (distributed as the static pressure) [C11.6.5.3]"; }
 function eqNC(fB){ return S.seismic.nonConc===false? [{c:"", fP:1, fI:1}] : [{c:"A", fP:1, fI:0.5},{c:"B", fP:Math.max(0,fB||0), fI:1}]; }
 function eqFB(dK,kA){ return dK>1e-12? Math.max(0,0.5*(dK+kA)-kA)/dK : 0; }
+/* AB-1 (2026-11-12, engineer decision): the braking vertical couple [AASHTO LRFD 10th Ed. 3.6.4: BR acts 6 ft above the deck]. The BR of the
+   reaction table (BR_total along the girders, before the share: computed in §1.6, entered, or pulled) at h above the bridge seat, where
+   H_BR is applied, is resisted by a vertical couple on the span's supports:
+     h = (h_brg + d_g + h_h + t_d)/12 + 6 ft   (panel I-1 elevation inputs, in; ABEL2)
+     P_BR = BR_total·h/L                        (L = the span length of panel I-1; the end span of a continuous bridge, conservative)
+   Applied with BR (class LL, γ_LL·m, the BR load factors) at the bearing line x_brg, uplift when BR acts toward the span (H_x > 0) and
+   downward in the reversed permutations (BR toward the backfill): both braking directions [3.6.4], in every combination with BR. Not × the
+   BR share: the couple does not depend on which supports take H_BR. Not for an integral abutment (no BR there).
+   Imported: a BR pulled from SubLoads carries its own couple P (ABXC #1408, applied above): that one is used, nothing is added.
+   Inputs blank: not applied, REVIEW warning. Only the groups (stability, bearing, piles, foundation hand-off) take it, as the imported P. */
+function brCouple(agg,groups,xBrg,shBR){
+  if(iabType()==="integral") return null;
+  const BR=agg.BR, F=Math.hypot(+BR.Vx||0,+BR.Vy||0), Lg=S.longit||{};
+  if(Math.abs(+BR.P||0)>1e-12) return {src:"imported", F, Psum:+BR.P, sh:shBR, V:groups.BR.V};
+  if(!(F>1e-9)) return null;
+  const hb=abElNum("geom.elBrgH"), dg=abElNum("geom.elGird",true), hh=abElNum("geom.elHaunch"), td=abElNum("geom.elDeck",true), Ls=+S.geom.spanL;
+  const miss=[]; if(hb===null) miss.push("total bearing height h_brg"); if(dg===null) miss.push("girder depth d_g"); if(hh===null) miss.push("haunch h_h (0 = no haunch)");
+  if(td===null) miss.push("deck thickness t_d"); if(!(Ls>0)) miss.push("span length L");
+  const sl=S.subloadsSrc, legacy=!!(sl&&Array.isArray(sl.groups)&&sl.groups.indexOf("br")>=0&&!Lg.computeBR);
+  const c={src:Lg.computeBR?"computed":(legacy?"pulled":"table"), F, hb, dg, hh, td, Ls, miss, legacy, sgn:(+BR.Vx||0)<0?-1:1};
+  if(legacy) warn("REVIEW — Braking vertical couple: the BR of the reaction table was pulled from SubLoads without its couple P (a pull before 2026-11-11); the couple is "+(miss.length?"not applied":"computed here")+" from that BR, which is this abutment's share, not the bridge total. Pull BR again to import SubLoads' couple (Tab 1 §1.6a).");
+  if(miss.length){ warn(`REVIEW — Braking vertical couple [3.6.4] not applied: ${miss.join(", ")} not entered (panel I-1, superstructure elevations). BR = ${fmt(F)} kip acts 6 ft above the deck; its couple P = BR·(h_brg + d_g + h_h + t_d + 6 ft)/L at the bearings is left out until they are entered (Tab 1 §1.6a).`); return c; }
+  c.h=(hb+dg+hh+td)/12+6; c.P=F*c.h/Ls; c.V=-c.sgn*c.P;
+  groups.BR.V=c.V; groups.BR.Mv=c.V*xBrg;
+  groups.BR.desc+=", + vertical couple P_BR (§1.6a)";
+  return c;
+}
 /* ABR3 (2026-10-20): dynamic load allowance share of the girder LL reaction [3.6.2.1]. IM (33 %) applies to the design truck or tandem, not to
    the lane load. Simple-span support reaction for span L: truck 32 + 32(L − 14)/L + 8(L − 28)/L (axles 14 ft apart, the 32-kip axle over the
    support), tandem 25 + 25(L − 4)/L, lane 0.64L/2; f_IM = 0.33T/(1.33T + lane), T = the larger of truck and tandem. An entered f_IM (panel I-4)
@@ -3815,6 +3842,7 @@ function computeAll(){
      reversed permutations (toward the backfill) instead of the reversed TU row: group TUr below, comboEffects. BR P is 0 in every project that
      did not pull it (the reaction table offers BR V_x only), so those results are unchanged. */
   if(agg.BR.P){ groups.BR.V=agg.BR.P*shBR; groups.BR.Mv=agg.BR.P*shBR*xBrg; groups.BR.Mt+=agg.BR.MtP*shBR; }
+  { const bc=brCouple(agg,groups,xBrg,shBR); if(bc) R.brCouple=bc; }   // AB-1 (2026-11-12, engineer decision): the BR vertical couple [3.6.4] when none was imported (Tab 1 §1.6a)
   if(Array.isArray(S.rxTUr)&&S.rxTUr.length===S.rx.TU.length&&!Lg.computeTU){
     let Vx=0,Vy=0; S.rxTUr.forEach(r=>{ Vx+=+r.Vx||0; Vy+=+r.Vy||0; });
     groups.TUr={cls:"TU", V:0,Mv:0, Hx:Vx*shTU, Mh:Vx*shTU*zB, Hy:Vy*shTU, Mt:Vy*shTU*zB, desc:"Uniform temperature rise from SubLoads (its own case: the TU of the reversed permutations; share applied)"}; }
@@ -3979,7 +4007,7 @@ function computeAll(){
     const esB=(+S.soil.esQ||0)>0?[0,1]:[1];
     // ABL7 (2026-11-07): BR and TU act in either direction (braking both ways; temperature rise pushes toward the backfill): each permutation is also
     // run with them reversed when they are present (CR/SH shortening acts toward the span only)
-    const revs=(!L.noSuper&&((groups.BR&&Math.abs(groups.BR.Hx)>1e-9)||(groups.TU&&Math.abs(groups.TU.Hx)>1e-9)||(groups.TUr&&Math.abs(groups.TUr.Hx)>1e-9)))? [false,true] : [false];
+    const revs=(!L.noSuper&&((groups.BR&&(Math.abs(groups.BR.Hx)>1e-9||Math.abs(groups.BR.V)>1e-9))||(groups.TU&&Math.abs(groups.TU.Hx)>1e-9)||(groups.TUr&&Math.abs(groups.TUr.Hx)>1e-9)))? [false,true] : [false];   // AB-1: also a BR couple with no H_x here (share 0): both braking directions
     for(const rv of revs){   // the reversed permutations follow the usual ones (whose order is unchanged)
     if(!L.perm){ const xs=L.eq? eqSubCases() : [{}];   // ABR3: Extreme Event I — the 11.6.5.1 cases × the two directions of 3.10.8
       for(const lv of lives) for(const x of xs) yield {perm:Object.assign({DC:0,DW:0,EV:0,EH:0,ES:1},x,rv?{rev:true}:{}), liveOn:lv}; continue; }
@@ -6969,10 +6997,11 @@ function renderTabLoads(R){
       ${eqB("Total bridge braking — lanes × multiple-presence factor","AASHTO 3.6.1.1.1, Table 3.6.1.1.2-1",[
         `n_{lanes} = \\lfloor w_{road}/12 \\rfloor = \\lfloor ${fmtT(S.longit.roadwayW)}/12 \\rfloor = ${b.nLanes}\\qquad m = ${fmtT(b.mpf,2)}`,
         `BR_{total} = BR_{lane}\\,n_{lanes}\\,m = (${fmtT(b.perLane)})(${b.nLanes})(${fmtT(b.mpf,2)}) = ${fmtT(b.total)}\\ \\text{kip}`],
-        `Applied horizontally at the bearing seat elevation z = ${fmt(R.geo.zSeat)} ft; the abutment carries its distribution share (panel I-6): H_{BR} = ${fmt(b.total)} × ${fmt(R.shares.shBR*100,0)}% = <b>${fmt(b.total*R.shares.shBR)} kip</b>. The 6-ft-above-deck application point [3.6.4] adds a superstructure couple that is not transferred to a single substructure line and is not included.`)}
+        `Applied horizontally at the bearing seat elevation z = ${fmt(R.geo.zSeat)} ft; the abutment carries its distribution share (panel I-6): H_{BR} = ${fmt(b.total)} × ${fmt(R.shares.shBR*100,0)}% = <b>${fmt(b.total*R.shares.shBR)} kip</b>. The 6-ft-above-deck application point [3.6.4] also puts a vertical couple on the supports of the span: P<sub>BR</sub>, worked in <span class="xlink" data-jump="tab-loads|o-br-couple">§1.6a</span> (engineer decision 2026-11-12; ${R.brCouple&&R.brCouple.P!=null?"applied":"not applied: elevation inputs missing"}).`)}
       ${skB(b.total*R.shares.shBR,"BR")}
     `);
   }
+  if(R.brCouple) h+=brCoupleHTML(R);   // AB-1 (2026-11-12)
   if(LG&&(LG.on.TU||LG.on.CRSH)){
     const mLT=bearingMLT(), mT=mLT!==1;   // EGM: low-temperature multiplier [14.7.5.2] shown when it is not 1 (×1: the step as before)
     const padNote=`Pad shear stiffness uses A = padL·padW = ${fmt(S.bearing.padL)}·${fmt(S.bearing.padW)} = ${fmt((+S.bearing.padL)*(+S.bearing.padW),0)} in², G = ${fmt(S.bearing.G,3)} ksi, h_{rt} = ${fmt(S.bearing.hrt)} in, over N = ${fmt(LG.tu&&LG.tu.nb||LG.crsh.nb,0)} bearings (${S.beams.N} girders × ${S.bearing.nBrgPerGird}).`+(mT?` Low-temperature design option [14.7.5.2, Table 14.7.5.2-1]: m<sub>LT</sub> = ${fmt(mLT,0)} × the 14.6.3.1 force (panel I-6b; from the Elastomeric Bearing Design module).`:"");
@@ -7028,6 +7057,25 @@ function renderTabLoads(R){
   document.getElementById("tab-loads").innerHTML=h;
 }
 
+/* AB-1 (2026-11-12, engineer decision): Tab 1 §1.6a, the braking vertical couple [3.6.4] (R.brCouple, brCouple()) */
+function brCoupleHTML(R){
+  const c=R.brCouple, ttl="Braking Vertical Couple (BR) [AASHTO 3.6.4]";
+  if(c.src==="imported") return panel("o-br-couple","1.6a",ttl,`<div class="note-box">BR pulled from SubLoads carries its own vertical couple P (the force at 6 ft above the deck, 3.6.4; ABXC): ΣP = ${fmt(c.Psum,3)} kip × the BR share ${fmt(c.sh*100,0)}% = <b>V = ${fmt(c.V,3)} kip</b> at the bearing line, applied with BR and reversed with it (both braking directions). The calculator's own couple P<sub>BR</sub> = BR·h/L is <b>not added</b> (no double count; engineer decision 2026-11-12).</div>`);
+  const srcT=c.src==="computed"? `BR<sub>total</sub> of <span class="xlink" data-jump="tab-loads|o-longit-br">§1.6</span> (along the girders)`
+    : `the BR of the reaction table (panel I-5), √(ΣV<sub>x</sub>² + ΣV<sub>y</sub>²), before the share`+(c.legacy?" (pulled from SubLoads before 2026-11-11 without its couple: this abutment's share, not the bridge total; pull BR again to import SubLoads' couple)":"");
+  const basis=`The braking force acts 6 ft above the deck [3.6.4]; H<sub>BR</sub> is applied at the bridge seat (z = ${fmt(R.geo.zSeat)} ft), so the force × its height above the seat is resisted by a vertical couple on the supports of the span. L = the span length (panel I-1); for a continuous bridge the end span (conservative). Engineer decision 2026-11-12.`;
+  if(c.P==null) return panel("o-br-couple","1.6a",ttl,`<div class="checkline fail"><span class="flagchip warn">REVIEW</span> Not applied: ${esc(c.miss.join(", "))} not entered (panel I-1, superstructure elevations). BR = ${fmt(c.F)} kip (${srcT}); P<sub>BR</sub> = BR·(h<sub>brg</sub> + d<sub>g</sub> + h<sub>h</sub> + t<sub>d</sub> + 6 ft)/L is left out of every combination until they are entered.</div><div class="eq-note">${basis}</div>`);
+  const rv=c.sgn>0? ["uplift","toward the span","downward","toward the backfill"] : ["downward","toward the backfill","uplift","toward the span"];
+  return panel("o-br-couple","1.6a",ttl,`
+    ${varsTbl([["h_{brg}","Total bearing height (panel I-1)",c.hb,"in"],["d_{g}","Girder depth (panel I-1)",c.dg,"in"],["h_{h}","Haunch (panel I-1)",c.hh,"in"],["t_{d}","Deck thickness (panel I-1)",c.td,"in"],
+      ["L","Span length (panel I-1; the end span of a continuous bridge)",c.Ls,"ft",1],["BR","Braking force: "+srcT,c.F,"kip"]])}
+    ${eqB("Height of the braking force above the bridge seat, and the vertical couple","AASHTO LRFD 10th Ed. 3.6.4; statics",[
+      `h = \\dfrac{h_{brg} + d_{g} + h_{h} + t_{d}}{12} + 6 = \\dfrac{${fmtT(c.hb)} + ${fmtT(c.dg)} + ${fmtT(c.hh)} + ${fmtT(c.td)}}{12} + 6 = ${fmtT(c.h,3)}\\ \\text{ft}`,
+      `P_{BR} = \\dfrac{BR\\,h}{L} = \\dfrac{(${fmtT(c.F)})(${fmtT(c.h,3)})}{${fmtT(c.Ls,1)}} = ${fmtT(c.P,3)}\\ \\text{kip}`,
+      `V_{BR} = ${fmtT(c.V,3)}\\ \\text{kip at } x_{brg} = ${fmtT(R.geo.xBrg,3)}\\ \\text{ft}\\,, \\quad M_{V} = V_{BR}\\,x_{brg} = ${fmtT(c.V*R.geo.xBrg,2)}\\ \\text{kip-ft}`],
+      `${basis} Not × the BR share (${fmt(R.shares.shBR*100,0)}%): the couple does not depend on which supports take H<sub>BR</sub>. Applied with BR in the load-group summary (<span class="xlink" data-jump="tab-loads|o-groups">§1.9</span>): ${rv[0]} at this abutment when BR acts ${rv[1]} (the usual permutations), ${rv[2]} when BR acts ${rv[3]} (the reversed permutations, <span class="xlink" data-jump="tab-comb|o-perm-StrengthI">Tab 2 §2.3</span>): both braking directions, with BR's load factors (γ<sub>LL</sub>·m). It enters sliding, eccentricity, bearing, the pile reactions and the foundation hand-off; the stem eccentric moment and the bearing on the concrete seat do not include it (as an imported SubLoads couple).`)}
+  `);
+}
 /* ================= APS (2026-10-20): APPROACH SLAB — output panels =================
    §1.4a loads on the abutment (Tab 1); §5.8 / §10.7 shelf as a bracket; §5.9 / §10.8 slab design. Every value from computeAll() (R.ap,
    R.apShelf, R.apDes); worked symbolic → substituted → result. */
@@ -9056,7 +9104,8 @@ function svgApShelf(R){
 function abElevOn(){ const v=S.geom&&S.geom.elSeat; return v!==null&&v!==undefined&&v!==""&&isFinite(+v); }
 /* ABEL2 (2026-11-10, engineer decision "add those inputs so the full set of elevations shows"): display-only inputs for the levels #1374 could
    not derive: total bearing height, girder depth, haunch and deck thickness (panel I-1, conventional / semi-integral; in) and the pile length of
-   a pile footing (panel I-7; ft, total, including the embedment). Blank (null, absent) = the level is not shown. No calculation reads them. */
+   a pile footing (panel I-7; ft, total, including the embedment). Blank (null, absent) = the level is not shown. Since read by: iabDg (ABDG, d_g),
+   pileLength (ABPL, L_pile) and brCouple (AB-1, 2026-11-12: h_brg + d_g + h_h + t_d, the height of the BR vertical couple). */
 function abElNum(path,pos){ const v=getPath(S,path); if(v===null||v===undefined||v===""||!isFinite(+v)) return null; const n=+v; return pos? (n>0?n:null) : (n>=0?n:null); }
 function abElInRow(label,path,unit,title){ const v=getPath(S,path), ok=v!==null&&v!==undefined&&v!==""&&isFinite(+v);
   return `<div class="in-row"><label title="${esc(title)}">${label}</label>
@@ -11511,6 +11560,13 @@ function abrModel(){
     w=topic(T,"EV","Vertical earth load EV over the heel",ABR_AA+"Art. 3.5.1");
     w.add({id:"W",label:"Soil over the heel (moist "+abrN(R.EV.dry)+" ft, submerged "+abrN(R.EV.sub)+" ft)"+(R.EV.Wwedge>0?" + sloping-backfill wedge":""),sym:"EV",eq:"(\\gamma\\,h_{dry} + \\gamma^{\\prime} h_{sub}) L_{heel} L_{ab}"+(R.EV.Wwedge>0?" + W_{wedge}":""),
       sub:"("+abrN(gam,3)+"\\cdot "+abrN(R.EV.dry)+" + "+abrN(gamB,4)+"\\cdot "+abrN(R.EV.sub)+")\\cdot "+abrN(g.Lheel)+"\\cdot "+abrN(Lab)+(R.EV.Wwedge>0?" + "+abrN(R.EV.Wwedge,1):""),value:R.EV.W,unit:"kip",d:1});
+    { const c=R.brCouple;   // AB-1 (2026-11-12, engineer decision): the braking vertical couple, Tab 1 §1.6a
+      if(c){ w=topic(T,"BRv","Braking vertical couple at the bearings (engineer decision 2026-11-12)",ABR_AA+"Art. 3.6.4");
+        if(c.src==="imported") w.add({id:"V",label:"Imported from SubLoads with BR (ΣP × BR share "+abrN(c.sh*100,0)+" %); the calculator's couple not added (no double count)",sym:"V_{BR}",eq:"\\Sigma P\\,s_{BR}",sub:abrN(c.Psum,3)+"\\cdot "+abrN(c.sh,2),value:c.V,unit:"kip",d:3,note:"see Tab 1 §1.6a"});
+        else if(c.P==null) w.add({id:"P",label:"Not applied (REVIEW): "+c.miss.join(", ")+" not entered (panel I-1)",sym:"P_{BR}",eq:"",sub:"",value:0,unit:"kip",d:0,note:"see Tab 1 §1.6a"});
+        else { w.add({id:"h",label:"Height of BR above the bridge seat (h_brg "+abrN(c.hb,2)+", d_g "+abrN(c.dg,2)+", h_h "+abrN(c.hh,2)+", t_d "+abrN(c.td,2)+" in; 6 ft above the deck)",sym:"h",eq:"\\frac{h_{brg} + d_{g} + h_{h} + t_{d}}{12} + 6",sub:"\\frac{"+abrN(c.hb,2)+" + "+abrN(c.dg,2)+" + "+abrN(c.hh,2)+" + "+abrN(c.td,2)+"}{12} + 6",value:c.h,unit:"ft",d:3});
+          w.add({id:"P",label:"Vertical couple on the span supports (BR = "+(c.src==="computed"?"BR_total, §1.6":"the reaction table BR, before the share")+"; L = span, the end span if continuous)",sym:"P_{BR}",eq:"\\frac{BR\\,h}{L}",sub:"\\frac{"+abrN(c.F,2)+"\\cdot "+abrN(c.h,3)+"}{"+abrN(c.Ls,1)+"}",value:c.P,unit:"kip",d:3,
+            note:"at x_brg with BR (γ_LL·m): "+(c.sgn>0?"uplift with BR toward the span, downward with BR reversed":"downward with BR toward the backfill, uplift with BR reversed")+"; sliding, eccentricity, bearing, piles; not the stem eccentricity or the seat bearing. See Tab 1 §1.6a."}); } } }
     if(R.passive&&R.passive.on){ const pv=R.passive, De=Math.max(0,(+fn.Df||0)-Math.max(0,+fn.dNeg||0));
       w=topic(T,"Pp","Passive resistance at the toe (sliding only)",ABR_AA+"Art. 10.6.3.4");
       w.add({id:"kp",label:"Rankine passive coefficient",sym:"k_{p}",eq:"\\tan^{2}(45 + \\phi_{f}/2)",sub:"\\tan^{2}(45 + "+abrN(fn.phiF,1)+"/2)",value:pv.kp,unit:"",d:3});
@@ -12398,7 +12454,7 @@ function inputEchoHTML(){
     ["Soil height over heel / backfill slope β",fmt(g.soilH)+" / "+fmt(g.beta,1)+"°","ft / deg"],
     ["Water table above footing base",g.hw,"ft"],
     ...(abElevOn()?[["Beam seat elevation (display only: the elevations of Tab 1 §1.1a)",fmt(+g.elSeat,2),"ft"]]:[]),   // ABEL
-    ...(iabType()!=="integral"?[["Total bearing height h_brg","geom.elBrgH"],["Girder depth d_g","geom.elGird"],["Haunch h_h","geom.elHaunch"],["Deck thickness t_d","geom.elDeck"]].filter(q=>abElNum(q[1])!==null).map(q=>[q[0]+" (display only: Tab 1 §1.1a)",fmt(abElNum(q[1]),2),"in"]):[]),   // ABEL2
+    ...(iabType()!=="integral"?[["Total bearing height h_brg","geom.elBrgH"],["Girder depth d_g","geom.elGird"],["Haunch h_h","geom.elHaunch"],["Deck thickness t_d","geom.elDeck"]].filter(q=>abElNum(q[1])!==null).map(q=>[q[0]+" (the elevations of Tab 1 §1.1a; the BR vertical couple, Tab 1 §1.6a)",fmt(abElNum(q[1]),2),"in"]):[]),   // ABEL2
     ["Span length / skew",fmt(g.spanL)+" / "+fmt(g.skew,1)+"°","ft / deg"]].concat(
     itg?[]:g.HsupMode==="single"?[["Support-length H [4.7.4.4]","0 (single span)","ft"]]:g.HsupMode==="user"?[["Support-length H [4.7.4.4] (entered)",fmt(+g.HsupUser||0),"ft"]]:[]));
   h+="<h3>Materials</h3>"+echoRows([
@@ -12821,9 +12877,9 @@ document.addEventListener("DOMContentLoaded",init);
     const dfn=!!(o.def&&!o.def.legacy);   // ABX (2026-11-11): the payload has a definition block: soil, approach slab, elevations and seismic settings are offered as groups
     if(dfn) u.push(["Approach slab reaction and share sent by SubLoads"+(L.approachSlab?" ("+nfmt(+L.approachSlab.shareOnAbutment)+"% of the slab weight)":""),"not imported: the calculator computes its own slab reaction (half the slab, its skew rule, wearing surface and live load) from panel I-0b; the slab's on / off, length, thickness and width are in the Approach slab group"+(st.on.aps&&!o.gerr.aps?" (ticked)":" (not ticked: panel I-0b stays as it is, "+(apOn()?"on":"off")+")")]);
     else u.push(["Approach slab"+(L.approachSlab?" (reaction, width, length, thickness, share)":""),(L.approachSlab?"NOT imported: ":"none sent; ")+"the calculator computes its own approach slab loads from its panel I-0b (Tab 1 §1.4a), which this pull does not change — "+(apOn()?"on":"off")+" in the calculator now"]);   // ABPF: the calculator has an approach slab (APS), not \"no load\"
-    if(dfn){ u.push(["Bearing fixity and type; per-girder seat and bottom-of-girder elevations; girder stations; unit station","not imported: the calculator's longitudinal restraint model (panel I-6) is left as it is; the bridge seat, bearing + pedestal height, girder, haunch and deck are in the Elevations group (display only)"]);
+    if(dfn){ u.push(["Bearing fixity and type; per-girder seat and bottom-of-girder elevations; girder stations; unit station","not imported: the calculator's longitudinal restraint model (panel I-6) is left as it is; the bridge seat, bearing + pedestal height, girder, haunch and deck are in the Elevations group (the elevations, and the height of the BR vertical couple, Tab 1 §1.6a)"]);
       u.push(["Footing width","not imported: the calculator uses B = toe + stem + heel"]); }
-    else { u.push(["Bearing fixity, type, height, pedestal, seat and bottom-of-girder elevations; girder stations; unit station","not imported: the calculator's longitudinal restraint model (panel I-6) and its display-only bearing height, girder depth and seat elevation (Tab 1 §1.1a) are left as they are"]);
+    else { u.push(["Bearing fixity, type, height, pedestal, seat and bottom-of-girder elevations; girder stations; unit station","not imported: the calculator's longitudinal restraint model (panel I-6) and its bearing height, girder depth and seat elevation (Tab 1 §1.1a; the bearing height and girder depth also give the BR couple height, §1.6a) are left as they are"]);
     u.push(["Footing width; deck at ℄, bridge seat elevations","not imported: the calculator uses B = toe + stem + heel, and its display-only elevations (Tab 1 §1.1a, from its own seat elevation) are left as they are. Of the SubLoads elevations only top of backwall − top of footing (soil height) and ground − bottom of footing (D_f) are used, in the geometry group"]); }
     u.push(["Bridge data: spans, skews of other units, girder spacings, deck width, design lanes, IM %","no matching input (the adjacent span, this abutment's skew and the roadway width are used, in the Bridge data group)"]);
     u.push(["calculatorInput block","not read directly; the same values are mapped here from the load cases and geometry (it is used only for the concrete unit weight and A_s)"]);
@@ -12838,7 +12894,7 @@ document.addEventListener("DOMContentLoaded",init);
      stays only where a difference remains: BR / CE height; the LS rule when this project's owner removes LS automatically or the hand-off is
      from an earlier SubLoads; the location when the hand-off does not state it. */
   function diffs(o){ const q=S.seismic||{}, d=o.def||{}, sd=d.seismic, sa=d.approachSlab, ow=abutOwner(), r=[];
-    r.push(["Height of BR (and CE)","SubLoads: at the top of the bearings, with the couple of the 6 ft above-deck height (3.6.4, 3.6.3) at the bearings; this calculator: at the bridge seat (its own BR without that couple; an imported SubLoads BR keeps its couple P, with V_x at the seat); no CE row"]);
+    r.push(["Height of BR (and CE)","SubLoads: at the top of the bearings, with the couple of the 6 ft above-deck height (3.6.4, 3.6.3) at the bearings; this calculator: at the bridge seat, with the couple P_BR = BR·h/L of the 6 ft above-deck height (Tab 1 §1.6a; engineer decision 2026-11-12); an imported SubLoads BR keeps its couple P and the calculator's is not added; no CE row"]);
     if(sa&&sa.on&&typeof sa.lsRed!=="boolean") r.push(["Live load surcharge with an approach slab","SubLoads: not stated (a hand-off from an earlier SubLoads); this calculator: "+(apOn()?(apLsRule().rem?"removed":"kept")+" ("+(apLsRule().ref||"equivalent dead load")+")":"no slab here")]);
     else if(sa&&sa.on&&(ow==="MassDOT"||ow==="CTDOT")) r.push(["Live load surcharge with an approach slab","SubLoads: "+(sa.lsRed?"removed":"kept")+(sa.lsRule?" ("+sa.lsRule+")":"")+"; this calculator: removed automatically under "+ow+" rules ("+(ow==="MassDOT"?"MassDOT Part I 3.3.1.3":"CTDOT BRSDM V2 CT11.1.1.3")+"), whatever the option"]);
     if(sd&&!(Object.prototype.hasOwnProperty.call(sd,"hAEr")&&["sw","static","comb","nonyield","ratio"].includes(sd.hEQmode))) r.push(["Seismic earth pressure location","SubLoads: not stated (a hand-off from an earlier SubLoads; ΔP_AE ratio "+nfmt(sd.hEQr)+"); this calculator: "+eqLocTxt(true)+" (panel I-11), not changed"]);

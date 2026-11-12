@@ -17449,3 +17449,34 @@ Engineer decision 2026-11-10 (geometry). AASHTO LRFD 10th Ed. (2024): 5.6.5 / Fi
   - `abutment-pile-group-parity` 14/14 identical.
   - The abutment smoke tests, `abutment-subloads-exchange`, `project-library --tool abutment` and `check-syntax`.
 - **Other copies:** none.
+
+## 2026-11-12 — PR: abut-br-couple (PR #1445: https://github.com/mlococo88/All-Structural/pull/1445) (AB-1) — Braking vertical couple P_BR = BR·(h_brg + d_g + h_h + t_d + 6 ft)/L at the bearings, both braking directions   [§4: results change for projects with BR and all four superstructure elevation inputs entered; otherwise only a REVIEW warning; no saved key or format change]
+- **Engineer decision (2026-11-12, AB-1):** add the AASHTO LRFD 10th Ed. 3.6.4 braking vertical couple, P_BR = BR × (h_brg + d_g + haunch + t_deck + 6 ft) / L_span, with the elevation inputs of ABEL2 #1383; the end span for a continuous bridge (conservative); a vertical BR load at the seat in both braking directions with BR's load factors; blank inputs: not applied with a REVIEW note; a BR imported from SubLoads already carries its couple P (ABXC #1408): use that one. Before: the §1.6 card said the couple "is not transferred to a single substructure line and is not included".
+- **Where (all in `abutment_calculator.html`):**
+  - New `brCouple(agg,groups,xBrg,shBR)` after `function eqFB(dK,kA){`:
+    ```js
+    integral → null;  imported (|agg.BR.P| > 0, ABXC) → {src:"imported", Psum, sh, V: groups.BR.V} (nothing added)
+    F = √(ΣV_x² + ΣV_y²) of BR (before the share; = BR_total of §1.6 when computed); F = 0 → null
+    h_brg = geom.elBrgH (≥ 0), d_g = geom.elGird (> 0), h_h = geom.elHaunch (≥ 0), t_d = geom.elDeck (> 0), L = geom.spanL (> 0)
+    any blank → not applied, warn("REVIEW — Braking vertical couple [3.6.4] not applied: … not entered …")
+    h = (h_brg + d_g + h_h + t_d)/12 + 6;  P = F·h/L;  V = −sign(ΣV_x)·P   (uplift with BR toward the span)
+    groups.BR.V = V;  groups.BR.Mv = V·x_brg
+    ```
+    A BR pulled before ABXC (S.subloadsSrc.groups has "br", P = 0, own BR off): REVIEW warning (its BR is this abutment's share; pull again).
+  - `computeAll`, after `if(agg.BR.P){ groups.BR.V=agg.BR.P*shBR; …}`: `{ const bc=brCouple(agg,groups,xBrg,shBR); if(bc) R.brCouple=bc; }`.
+  - `permutations`: `const revs=…(groups.BR&&Math.abs(groups.BR.Hx)>1e-9)…` → `(groups.BR&&(Math.abs(groups.BR.Hx)>1e-9||Math.abs(groups.BR.V)>1e-9))` (a couple with BR share 0 still runs both directions). `comboEffects` unchanged: the reversed permutations negate the whole BR group, so V is downward with BR toward the backfill.
+  - Tab 1: new card §1.6a `o-br-couple` (`brCoupleHTML(R)`, before `/* ================= APS (2026-10-20)`), shown after §1.6 whenever R.brCouple exists (worked h, P, V, M_v; REVIEW when blank; the imported note). §1.6 note: was "…adds a superstructure couple that is not transferred to a single substructure line and is not included.", now links §1.6a.
+  - Report, section 3 Loads, topic "Braking vertical couple at the bearings (engineer decision 2026-11-12)" after EV (h, P_BR; or the imported V; or not applied), "see Tab 1 §1.6a".
+  - Texts: panel I-1 superstructure note and the h_brg / d_g / h_h / t_d tooltips (were "Display only … no calculation reads it"), the input echo rows, the SubLoads pull texts ("Height of BR (and CE)", the Elevations group "not imported" rows), `defaultState` and ABEL2 comments.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 3.6.4 (BR applied 6 ft above the deck, either direction); Table 3.4.1-1 γ_LL (BR) and Table 3.4.1-2 unchanged. Units: elevation inputs in inches /12 → ft; L in ft.
+- **Not in (as the imported couple, ABXC):** the stem eccentric moment (Tab 5; BR acts toward the span there, its couple is uplift) and the bearing on the concrete seat (§5.x, Strength I/V per girder), and the per-bearing loads (3D / hand-off per girder). Open item (question in the PR).
+- **Check cases** (BR 3.5 kip × 6 girders in the reaction table = the page's default project; share 50 %; L = 80 ft):
+  - Default project as opened (elevation inputs blank): couple not applied, one REVIEW warning; every result unchanged.
+  - Default + h_brg 3, d_g 54, h_h 2, t_d 8 in: h = (3 + 54 + 2 + 8)/12 + 6 = 11.583 ft; P = 21 × 11.583/80 = 3.041 kip; V = −3.041 kip at x_brg = 5.25 ft (M_v −15.96 kip-ft). Strength I governing bearing: V 2913.81 → 2908.49 (−1.75 × 3.041 = −5.321), D/C 0.8804 → 0.8790; eccentricity 0.6420 → 0.6431. Reversed permutations: V +5.321.
+  - Same on piles (24 piles, 3 rows × 8 at x′ = ±4.25, 0 ft, Σx′² = 289 ft²): ΔP = −5.321/24 − 5.321 × (6.50 − 5.25) × 4.25/289 = −0.2217 − 0.0978 = −0.320 kip: P_max 200.97 → 200.65 kip, pile compression D/C 0.9369 → 0.9354; P_min 10.58 → 10.46; pile combined 1.0774 → 1.0768 (FAIL both).
+  - Computed BR (BR_total 45.90 kip): P = 45.90 × 11.583/80 = 6.646 kip.
+  - SubLoads-imported BR (P −0.242 × 6, share 100 %): V = −1.452 kip from ABXC, as before; no own couple; LAST_R values unchanged (R.brCouple record only).
+  - Stem M_u, seat bearing: unchanged in every case. Integral: no couple.
+- **Saved data (§5):** no key or format changed; Input ID unchanged. Saved projects change only when BR ≠ 0, not imported, and all four elevation inputs are entered.
+- **How verified:** new `tests/smoke/abutment-br-couple.mjs`; main-vs-branch probe of 22 cases; `abutment-brg-front`, `abutment-stem-shelf`, `abutment-pile-group-parity` (R.brCouple and the new REVIEW warning excluded from the main comparison), `abutment-elevations` (its invariance cases run without BR; echo text); the other abutment smoke tests, `abutment-subloads-exchange`, `project-library --tool abutment` (against this branch; against main it shows only R.brCouple), `check-syntax`.
+- **Other copies:** none (SubLoads computes its own couple).
