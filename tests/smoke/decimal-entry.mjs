@@ -16,6 +16,14 @@ const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
 
 const TABS = '[role=tab], .tab-btn, .itab[data-pane], .tab, [data-tab], .tabbtn';
+const IXERR = /^\[BABEL\] Note: The code generator has deoptimised|^Error: <\w+> attribute (width|height): A negative value/;
+// index.html: change the stored cfg (mct_cfg_v3) and reload the page
+async function ixReload(F, fn) {
+  await F.evaluate(fs => { const c = JSON.parse(localStorage.getItem('mct_cfg_v3') || '{}'); (0, eval)('(' + fs + ')')(c);
+    localStorage.setItem('mct_cfg_v3', JSON.stringify(c)); location.reload(); }, fn.toString()).catch(() => {});
+  await F.waitForFunction(() => typeof generateMCT === 'function' && document.querySelector('#root nav button'), null, { timeout: 180000 }); await F.waitForTimeout(3000);
+}
+const IXSUB = ['AASHTO Rating', 'Summary', 'Multi-Vehicle', 'Demand vs. Cap', 'Service II', 'Fatigue', 'PS Strength I', 'PS Service III', 'Report Card', 'Inputs & Setup'];
 // file; hash (opened as file#hash); frame (a same-origin iframe holding the inputs); tabs (buttons that switch views); wait (ms after load)
 const TOOLS = {
   cbc: { file: 'Concrete Beam Capacity.html', frame: '#suite-frame-capacity', tabs: '.rcbInTab, [role=tab]', wait: 5000 },
@@ -25,7 +33,18 @@ const TOOLS = {
     init: F => F.evaluate(() => { S.sec.type = 'tee'; S.code = 'AASHTO'; S.layers[0].dMan = 15.5; refresh(); }), checks: 'cbcChecks' },
   cbasd: { file: 'Concrete Beam Capacity.html', hash: '#asd', frame: '#suite-frame-asd', tabs: '[role=tab]', wait: 5000 },
   cbdev: { file: 'Concrete Beam Capacity.html', hash: '#dev', frame: '#suite-frame-dev', tabs: '[role=tab], .tab-btn, .itab, .tab, [data-tab]', wait: 5000 },
-  index: { file: 'index.html', tabs: '#root>div>header+div>nav>button', wait: 8000, checks: 'ixChecks' },
+  // index: knownErr (IXTYP, 2026-11-12): Babel's note that the page's script is over 500 KB (logged as an error at every load), and the
+  // SVG errors of the bridge drawing while a span holds a negative length the sweep types (-1.5); the same on origin/main. Counted, not failed.
+  index: { file: 'index.html', tabs: '#root>div>header+div>nav>button', wait: 8000, checks: 'ixChecks', knownErr: IXERR },
+  // index.html with MIDAS results seeded as tests/smoke/index-report.mjs does (IXTYP, 2026-11-12): the Results, AASHTO Rating and AREMA
+  // Rating steps show most of their inputs only with results. Every step, then every AASHTO Rating sub-tab (sub), with the collapsed
+  // panels (a button ending in ▼) opened (expand). seed: the index-report.mjs case (base: manual zone; lfr: quick-calc zone, LFR; arema).
+  ixbase: { file: 'index.html', seed: 'base', tabs: '#root>div>header+div>nav>button', wait: 300, sub: IXSUB, expand: true, knownErr: IXERR },
+  ixlfr: { file: 'index.html', seed: 'lfr', tabs: '#root>div>header+div>nav>button', wait: 300, sub: IXSUB, expand: true, knownErr: IXERR, checks: 'ixRatingChecks' },
+  // ixgfs / ixps: the default page switched to the girder-floorbeam-stringer geometry (geomMode gfs), or to a prestressed member (ps.enabled)
+  ixgfs: { file: 'index.html', tabs: '#root>div>header+div>nav>button', wait: 8000, expand: true, knownErr: IXERR, init: F => ixReload(F, c => { c.geomMode = 'gfs'; }) },
+  ixps: { file: 'index.html', tabs: '#root>div>header+div>nav>button', wait: 8000, expand: true, knownErr: IXERR, init: F => ixReload(F, c => { c.ps = { ...(c.ps || {}), enabled: true }; }) },
+  ixarema: { file: 'index.html', seed: 'arema', tabs: '#root>div>header+div>nav>button', wait: 300, sub: IXSUB, expand: true, knownErr: IXERR },
   lldf: { file: 'lldf.html', tabs: TABS, wait: 5000 },
   pbd: { file: 'Prestressed Bridge Design.html', tabs: TABS, wait: 6000 },
   sf: { file: 'Spread Footing.html', tabs: '#sfdInTabs .sfdInTab, #tabbar button', wait: 3000 },
@@ -113,6 +132,41 @@ async function testField(p, F, fld) {
   return res;
 }
 
+// index.html (IXTYP, 2026-11-12): type each string key by key into the number field labelled lab on the step (and sub-tab), check the text
+// shown while typing, then the stored cfg (mct_cfg_v3) and the field's text on leaving it; the field's first text is put back at the end.
+// rows: [step, label, [[typed, stored-test(cfg), shown on leaving, note]…], sub-tab]
+const imOf = c => ((c.rating && c.rating.llFactors) || []).find(f => f.id === 'im').value;
+async function ixTyping(p, F, rows) {
+  const out = [], chk = (c, m) => { if (!c) out.push(m); console.log(`   ${c ? 'ok  ' : 'FAIL'} ${m}`); };
+  const cfg = () => F.evaluate(() => JSON.parse(localStorage.getItem('mct_cfg_v3') || '{}'));
+  const leave = () => F.evaluate(() => document.activeElement.blur()).then(() => p.waitForTimeout(150));
+  for (const [stepName, lab, cases, sub] of rows) {
+    await F.evaluate(n => { const b = [...document.querySelectorAll('#root>div>header+div>nav>button')].find(x => x.textContent.replace(/\s+/g, ' ').trim().endsWith(n)); if (b) b.click(); }, stepName);
+    await p.waitForTimeout(700);
+    if (sub) { await F.evaluate(l => { const b = [...document.querySelectorAll('#root button')].find(x => x.offsetParent && !x.closest('nav') && x.textContent.replace(/\s+/g, ' ').trim().endsWith(l)); if (b) b.click(); }, sub); await p.waitForTimeout(700); }
+    await F.evaluate(() => { for (const x of document.querySelectorAll('#root button')) if (x.offsetParent && /▼\s*$/.test(x.textContent)) x.click(); }); await p.waitForTimeout(300);
+    const found = await F.evaluate(l => { document.querySelectorAll('[data-ixtyp]').forEach(e => e.removeAttribute('data-ixtyp'));
+      const own = e => [...e.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').replace(/\s+/g, ' ').trim();
+      for (const e of document.querySelectorAll('#root label, #root div, #root span')) {
+        if (!e.offsetParent || !(own(e) === l || own(e).startsWith(l + ' ') || own(e).startsWith(l + 'ft'))) continue;
+        for (let a = e; a && a.id !== 'root'; a = a.parentElement) { const i = a.querySelector('input[type=number]:not([disabled])'); if (i && i.offsetParent) { i.setAttribute('data-ixtyp', '1'); return i.value; } }
+      }
+      return null; }, lab);
+    if (found === null) { chk(false, `${stepName}: field "${lab}" found`); continue; }
+    for (const [s, ok, shown, note] of cases) {
+      await F.evaluate(() => { const e = document.querySelector('[data-ixtyp]'); e.scrollIntoView({ block: 'center' }); e.focus(); e.select(); });
+      await p.keyboard.press('Control+A'); for (const ch of s) await p.keyboard.type(ch); await p.waitForTimeout(80);
+      const r = await F.evaluate(() => ({ v: document.activeElement.value, k: document.activeElement.hasAttribute('data-ixtyp') }));
+      chk(r.k && r.v === (s === '-' ? '' : s), `${lab} typed "${s}": field "${r.v}" while typing`);
+      await leave(); const c = await cfg(), v = await F.evaluate(() => document.querySelector('[data-ixtyp]').value);
+      chk(ok(c) && (v === shown || (v !== '' && +v === +shown)), `${lab} "${s}": ${note || 'stored ' + shown}; field "${v}" on leaving it`);
+    }
+    await F.evaluate(() => { const e = document.querySelector('[data-ixtyp]'); e.focus(); e.select(); });
+    await p.keyboard.press('Control+A'); for (const ch of found) await p.keyboard.type(ch); await leave();
+  }
+  return out;
+}
+
 // Concrete Beam Capacity, Beam Capacity tab (DECE, 2026-11-11): what is committed while typing, and what the field shows on leaving it
 const CHECKS = {
   async cbcChecks(p, F) {
@@ -184,7 +238,27 @@ const CHECKS = {
     r = await typeIn('v', String(c0.vehicleDLA && c0.vehicleDLA['HL-93TRK'] != null ? c0.vehicleDLA['HL-93TRK'] : 33)); await leave();
     await setGlobal(!!c0.useGlobalDLA);
     await typeIn('g', String(c0.globalDLA ?? 0)).catch(() => {}); await leave();
+    // IXTYP (2026-11-12): the other number fields keep a typed minus sign, a leading "." or "0." and a count typed digit by digit;
+    // the stored value is the field's own parse as before (parseFloat / parseInt, fallbacks and clamps unchanged)
+    out.push(...await ixTyping(p, F, [
+      ['Moving Loads', 'Lane Width (ft)', [['-1.5', c => c.laneWidth === -1.5, '-1.5'], ['.5', c => c.laneWidth === 0.5, '0.5'], ['11.5', c => c.laneWidth === 11.5, '11.5'],
+        ['-', c => c.laneWidth === 10, '10', 'stored 10, the fallback (as before)']]],
+      ['Moving Loads', 'Wheel Spacing (ft)', [['0.5', c => c.laneWheelSpacing === 0.5, '0.5'], ['-', c => c.laneWheelSpacing === 6, '6', 'stored 6, the fallback (as before)']]],
+      ['Geometry', 'Elements per Span', [['12', c => c.elemsPerSpan === 12, '12', 'stored 12 (main: "1" was clamped to 2 while typing, so "12" became 22)'],
+        ['9.6', c => c.elemsPerSpan === 9, '9', 'stored 9 (parseInt, a count; as before)']]],
+      ['Geometry', 'Span 1', [['-1.5', c => c.spans[0] === -1.5, '-1.5'], ['.25', c => c.spans[0] === 0.25, '0.25']]],
+    ]));
     return out;
+  },
+  // index.html AASHTO Rating step with MIDAS results seeded (IXTYP, 2026-11-12; case lfr): the Live Load Scale Factors rows (the
+  // Dynamic Load Allowance IM row) and φ_f keep a decimal, a leading "." or "0." and a minus sign while typing; stored as before
+  async ixRatingChecks(p, F) {
+    return ixTyping(p, F, [
+      ['AASHTO Rating', 'Dynamic Load Allowance', [['33.3', c => imOf(c) === 33.3, '33.3'], ['.5', c => imOf(c) === 0.5, '0.5'],
+        ['-', c => imOf(c) === 0, '0', 'stored 0 (as before)']], 'Inputs & Setup'],
+      ['AASHTO Rating', 'φ_f — Flexure', [['0.95', c => c.rating.phiF === 0.95, '0.95', 'stored 0.95 (main: "0" stored the fallback 1 and wrote "1", so "0.95" became 1.95)'],
+        ['-', c => c.rating.phiF === 1, '1', 'stored 1, the fallback (as before)']], 'Inputs & Setup'],
+    ]);
   },
   // Pile Designer (DECE, 2026-11-11): a load-case moment (negative valid) and a "-" alone, committed values read from the rendered
   // inputs (PDPL_I)
@@ -238,22 +312,33 @@ const CHECKS = {
 for (const key of keys) {
   const T = TOOLS[key]; if (!T) { console.log(`unknown tool ${key}`); failures++; continue; }
   const src = resolveFile(args.file && new Set(keys.map(k => TOOLS[k] && TOOLS[k].file)).size === 1 ? args.file : T.file, T.file);
-  const { b, p, errs } = await openPage(src.file, { vw: 1400, vh: 1000, hash: T.hash || '' });
+  const { b, p, errs } = T.seed ? await (await import('./index-report.mjs')).open(src.file, T.seed) : await openPage(src.file, { vw: 1400, vh: 1000, hash: T.hash || '' });
   let tested = 0; const bad = [];
   try {
     await p.waitForTimeout(T.wait || 3000);
     const F = T.frame ? await (await p.$(T.frame)).contentFrame() : p;
     if (T.init) { await T.init(F); await p.waitForTimeout(800); }
     if (T.checks) bad.push(...(await CHECKS[T.checks](p, F)).map(m => 'check: ' + m));
-    const nt = T.tabs ? await F.$$eval(T.tabs, e => e.length) : 0;
-    for (let t = -1; t < nt; t++) {
-      if (t >= 0) { const shown = await F.$$eval(T.tabs, (e, t) => { const x = e[t]; if (!x || x.offsetParent === null) return false; x.click(); return true; }, t);
-        if (!shown) continue; await p.waitForTimeout(700); }
+    const sweep = async view => {
+      if (T.expand) { await F.evaluate(() => { for (const x of document.querySelectorAll('#root button')) if (x.offsetParent && /▼\s*$/.test(x.textContent)) x.click(); }); await p.waitForTimeout(400); }
       const flds = (await collect(F)).slice(0, MAX);
       for (const fld of flds) {
         const t0 = Date.now(), r = await testField(p, F, fld); tested++;
-        if (args.list) console.log(`   ${r.length ? 'BAD' : 'ok '} ${fld.sig || '#' + fld.n} [${fld.type}] ${fld.lab}${r.length ? '  ' + r.join('; ') : ''}  (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
-        if (r.length) bad.push(`${fld.sig || '#' + fld.n} (${fld.lab}): ${r.join('; ')}`);
+        if (args.list) console.log(`   ${r.length ? 'BAD' : 'ok '} ${fld.sig || '#' + fld.n} [${fld.type}] ${view ? view + ': ' : ''}${fld.lab}${r.length ? '  ' + r.join('; ') : ''}  (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+        if (r.length) bad.push(`${fld.sig || '#' + fld.n} (${view ? view + ': ' : ''}${fld.lab}): ${r.join('; ')}`);
+      }
+    };
+    const nt = T.tabs ? await F.$$eval(T.tabs, e => e.length) : 0;
+    for (let t = -1; t < nt; t++) {
+      let view = '';
+      if (t >= 0) { const shown = await F.$$eval(T.tabs, (e, t) => { const x = e[t]; if (!x || x.offsetParent === null) return false; x.click(); return x.textContent.replace(/\s+/g, ' ').trim() || '(tab ' + t + ')'; }, t);
+        if (!shown) continue; view = T.seed ? shown : ''; await p.waitForTimeout(700); }
+      await sweep(view);
+      // sub-tabs shown on this view (index: the AASHTO Rating sub-tabs)
+      if (T.sub && view.endsWith(T.sub[0])) for (const lab of T.sub.slice(1)) {
+        const hit = await F.evaluate(l => { const x = [...document.querySelectorAll('#root main button, #root button')].find(b => b.offsetParent && b.textContent.replace(/\s+/g, ' ').trim().endsWith(l) && !b.closest('nav'));
+          if (!x) return false; x.click(); return true; }, lab);
+        if (hit) { await p.waitForTimeout(700); await sweep(view + ' / ' + lab); }
       }
     }
   } catch (e) { bad.push('error: ' + e.message.split('\n')[0]); }

@@ -4684,14 +4684,14 @@ function StepGeometry({cfg,set}) {
       <div style={{minWidth:'240px'}}>
         <Field label="Number of Spans">
           <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
-            <input type="number" style={{...INP,width:'80px'}} min="1" max="12" value={cfg.spans.length}
+            <IxNumIn type="number" style={{...INP,width:'80px'}} min="1" max="12" value={cfg.spans.length}
               onChange={e=>{const n=Math.max(1,Math.min(12,parseInt(e.target.value)||1));set('spans',Array.from({length:n},(_,i)=>cfg.spans[i]??40));}}/>
             <span style={{color:'#6b7280',fontSize:'12px',fontFamily:'monospace'}}>spans</span>
           </div>
         </Field>
         <Field label="Elements per Span" hint="10 is typical for line girder models">
           <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
-            <input type="number" style={{...INP,width:'80px'}} min="2" max="50" value={cfg.elemsPerSpan}
+            <IxNumIn type="number" style={{...INP,width:'80px'}} min="2" max="50" value={cfg.elemsPerSpan}
               onChange={e=>set('elemsPerSpan',Math.max(2,parseInt(e.target.value)||10))}/>
             <span style={{color:'#6b7280',fontSize:'12px',fontFamily:'monospace'}}>elements</span>
           </div>
@@ -4704,7 +4704,7 @@ function StepGeometry({cfg,set}) {
           {cfg.spans.map((sp,i)=>(
             <div key={i} style={{display:'flex',gap:'8px',alignItems:'center',marginBottom:'7px'}}>
               <span style={{color:'#9ca3af',fontSize:'11px',fontFamily:'monospace',width:'52px',flexShrink:0}}>Span {i+1}</span>
-              <input type="number" style={{...INP,width:'100px'}} min="1" step="0.25" value={sp}
+              <IxNumIn type="number" style={{...INP,width:'100px'}} min="1" step="0.25" value={sp}
                 onChange={e=>{const s=[...cfg.spans];s[i]=parseFloat(e.target.value)||0;set('spans',s);}}/>
               <span style={{color:'#9ca3af',fontSize:'11px',fontFamily:'monospace'}}>ft</span>
               <span style={{color:'#d1d5db',fontSize:'10px',fontFamily:'monospace'}}>{sp>0?`Δ ${(sp/cfg.elemsPerSpan).toFixed(3)} ft`:''}</span>
@@ -4762,7 +4762,7 @@ function GFSEditor({cfg,set}) {
             </div>
             <div>
               <label style={lblStyle}>Span (ft, along left girder)</label>
-              <input type="number" style={{...INP,width:'120px'}} min="1" step="0.5" value={g.span??60}
+              <IxNumIn type="number" style={{...INP,width:'120px'}} min="1" step="0.5" value={g.span??60}
                 onChange={e=>setG('span',parseFloat(e.target.value)||0)}/>
             </div>
           </div>
@@ -4771,13 +4771,13 @@ function GFSEditor({cfg,set}) {
             <div style={{display:'flex',gap:'10px',alignItems:'center',flexWrap:'wrap'}}>
               <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
                 <span style={{fontSize:'10px',color:'#6b7280',fontFamily:'monospace'}}>L→{nG===3?'C':'R'}</span>
-                <input type="number" style={{...INP,width:'90px'}} min="0.5" step="0.25" value={(g.girderSpacing||[8,8])[0]??8}
+                <IxNumIn type="number" style={{...INP,width:'90px'}} min="0.5" step="0.25" value={(g.girderSpacing||[8,8])[0]??8}
                   onChange={e=>{const sp=[...(g.girderSpacing||[8,8])];sp[0]=parseFloat(e.target.value)||0;setG('girderSpacing',sp);}}/>
               </div>
               {nG===3&&(
                 <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
                   <span style={{fontSize:'10px',color:'#6b7280',fontFamily:'monospace'}}>C→R</span>
-                  <input type="number" style={{...INP,width:'90px'}} min="0.5" step="0.25" value={(g.girderSpacing||[8,8])[1]??8}
+                  <IxNumIn type="number" style={{...INP,width:'90px'}} min="0.5" step="0.25" value={(g.girderSpacing||[8,8])[1]??8}
                     onChange={e=>{const sp=[...(g.girderSpacing||[8,8])];sp[1]=parseFloat(e.target.value)||0;setG('girderSpacing',sp);}}/>
                 </div>
               )}
@@ -4790,12 +4790,12 @@ function GFSEditor({cfg,set}) {
           <div style={{display:'flex',gap:'16px',flexWrap:'wrap'}}>
             <div>
               <label style={lblStyle}>Entry Skew (deg)</label>
-              <input type="number" style={{...INP,width:'110px'}} step="1" value={g.skewEntry??0}
+              <IxNumIn type="number" style={{...INP,width:'110px'}} step="1" value={g.skewEntry??0}
                 onChange={e=>setG('skewEntry',parseFloat(e.target.value)||0)}/>
             </div>
             <div>
               <label style={lblStyle}>Exit Skew (deg)</label>
-              <input type="number" style={{...INP,width:'110px'}} step="1" value={g.skewExit??0}
+              <IxNumIn type="number" style={{...INP,width:'110px'}} step="1" value={g.skewExit??0}
                 onChange={e=>setG('skewExit',parseFloat(e.target.value)||0)}/>
             </div>
           </div>
@@ -4848,7 +4848,7 @@ function GFSEditor({cfg,set}) {
             <div key={i} style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'6px'}}>
               <span style={{fontSize:'10px',color:'#6b7280',fontFamily:'monospace',width:'20px'}}>{i+1}.</span>
               <span style={{fontSize:'10px',color:'#6b7280',fontFamily:'monospace'}}>X =</span>
-              <input type="number" step="0.5" value={s.x} onChange={e=>{
+              <IxNumIn type="number" step="0.5" value={s.x} onChange={e=>{
                 const arr=[...(g.intermediateSupports||[])]; arr[i]={...arr[i],x:parseFloat(e.target.value)||0}; setG('intermediateSupports',arr);
               }} style={{...INP,width:'80px',fontFamily:'monospace'}}/>
               <span style={{fontSize:'10px',color:'#6b7280',fontFamily:'monospace'}}>ft</span>
@@ -4875,7 +4875,7 @@ function GFSEditor({cfg,set}) {
             {[['girder','Girders','#1d4ed8'],['floorbeam','Floorbeams','#15803d'],['stringer','Stringers','#be185d']].map(([k,label,col])=>(
               <div key={k} style={{display:'flex',alignItems:'center',gap:'6px'}}>
                 <span style={{fontSize:'10px',fontFamily:'monospace',color:col,fontWeight:'600',width:'80px'}}>{label}</span>
-                <input type="number" min="1" max="30" step="1" value={(g.meshDensity||{})[k]||10}
+                <IxNumIn type="number" min="1" max="30" step="1" value={(g.meshDensity||{})[k]||10}
                   onChange={e=>setG('meshDensity',{...(g.meshDensity||{girder:10,floorbeam:6,stringer:8}),[k]:Math.max(1,parseInt(e.target.value)||5)})}
                   style={{...INP,width:'60px',fontFamily:'monospace',textAlign:'center'}}/>
                 <span style={{fontSize:'9px',color:'#9ca3af',fontFamily:'monospace'}}>per panel</span>
@@ -5482,7 +5482,7 @@ function AremaLibraryEditor({AS, setAS, totalLen, customRolledShapes = {}, isGFS
             ['Unbraced L (in)','unbracedL',240,'1'],['L/r (0=auto)','ryc',0,'0.001']].map(([lbl,k,def,step])=>(
             <div key={k}>
               <div style={STYLES.monoTiny2}>{lbl}</div>
-              <input type="number" step={step} style={{...INP,fontFamily:'monospace',fontWeight:'600'}}
+              <IxNumIn type="number" step={step} style={{...INP,fontFamily:'monospace',fontWeight:'600'}}
                 value={k==='ryc'?(cur.autoRyc!==false?'':(cur.ryc??'')):(cur[k]??def)}
                 placeholder={k==='ryc'?(curSec?('auto '+curSec.ryc.toFixed(2)+'"'):'auto'):''}
                 onChange={e=>{
@@ -5508,7 +5508,7 @@ function AremaLibraryEditor({AS, setAS, totalLen, customRolledShapes = {}, isGFS
             ].map(([lbl,field,def,step])=>(
               <div key={field}>
                 <div style={{fontSize:'7.5px',fontFamily:'monospace',color:'#6b7280',marginBottom:'2px'}}>{lbl}</div>
-                <input type="number" step={step} style={{...INP,fontFamily:'monospace',fontSize:'11px'}}
+                <IxNumIn type="number" step={step} style={{...INP,fontFamily:'monospace',fontSize:'11px'}}
                   value={cur[field]??def}
                   onChange={e=>updLib(curIdx,{[field]:parseFloat(e.target.value)||0})}/>
               </div>
@@ -5534,7 +5534,7 @@ function AremaLibraryEditor({AS, setAS, totalLen, customRolledShapes = {}, isGFS
             ].map(([lbl,field,def,step])=>(
               <div key={field}>
                 <div style={{fontSize:'7.5px',fontFamily:'monospace',color:'#6b7280',marginBottom:'2px'}}>{lbl}</div>
-                <input type="number" step={step} style={{...INP,fontFamily:'monospace',fontSize:'11px'}}
+                <IxNumIn type="number" step={step} style={{...INP,fontFamily:'monospace',fontSize:'11px'}}
                   value={cur[field]??def}
                   onChange={e=>updLib(curIdx,{[field]:parseFloat(e.target.value)||0})}/>
               </div>
@@ -5621,7 +5621,7 @@ function AremaLibraryEditor({AS, setAS, totalLen, customRolledShapes = {}, isGFS
                     </td>
                     <td style={{border:'1px solid #dbeafe',padding:'2px 4px',fontFamily:'monospace',fontSize:'9.5px',color:'#374151'}}>{c.label||row.id}</td>
                     <td style={{border:'1px solid #dbeafe',padding:'1px 2px',verticalAlign:'top'}}>
-                      <input type="number" step="0.0625" disabled={disabled}
+                      <IxNumIn type="number" step="0.0625" disabled={disabled}
                         style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'10.5px',width:'100%',padding:'2px 3px',textAlign:'right'}}
                         value={isPlate?(c.w??18):(c.w??0.5)}
                         onChange={e=>{const v=e.target.value;if(v===''||v.endsWith('.'))return;const n=parseFloat(v);if(!isNaN(n))updLibComp(curIdx,row.id,'w',n);}}/>
@@ -5630,7 +5630,7 @@ function AremaLibraryEditor({AS, setAS, totalLen, customRolledShapes = {}, isGFS
                       {effLabel(isPlate?(c.w??18):(c.w??0.5), c.lossW||0)}
                     </td>
                     <td style={{border:'1px solid #dbeafe',padding:'1px 2px',verticalAlign:'top'}}>
-                      <input type="number" step="0.0625" disabled={disabled}
+                      <IxNumIn type="number" step="0.0625" disabled={disabled}
                         style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'10.5px',width:'100%',padding:'2px 3px',textAlign:'right'}}
                         value={isPlate?(c.t??0.5):(c.h??6)}
                         onChange={e=>{const v=e.target.value;if(v===''||v.endsWith('.'))return;const n=parseFloat(v);if(!isNaN(n))isPlate?updLibComp(curIdx,row.id,'t',n):updLibComp(curIdx,row.id,'h',n);}}/>
@@ -5647,7 +5647,7 @@ function AremaLibraryEditor({AS, setAS, totalLen, customRolledShapes = {}, isGFS
                     <td style={{border:'1px solid #dbeafe',padding:'1px 2px',verticalAlign:'top'}}>
                       {isAngle
                         ?<div>
-                          <input type="number" step="0.0625" disabled={disabled}
+                          <IxNumIn type="number" step="0.0625" disabled={disabled}
                             style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'10.5px',width:'100%',padding:'2px 3px',textAlign:'right'}}
                             value={c.t??0.75}
                             onChange={e=>{const v=e.target.value;if(v===''||v.endsWith('.'))return;const n=parseFloat(v);if(!isNaN(n))updLibComp(curIdx,row.id,'t',n);}}/>
@@ -5678,7 +5678,7 @@ function AremaLibraryEditor({AS, setAS, totalLen, customRolledShapes = {}, isGFS
                             </div>
                           )}
                         </div>
-                        :<input type="number" step="1" min="1" max="10" disabled={disabled}
+                        :<IxNumIn type="number" step="1" min="1" max="10" disabled={disabled}
                             style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'10.5px',width:'100%',padding:'2px 3px',textAlign:'center'}}
                             value={c.qty||1}
                             onChange={e=>updLibComp(curIdx,row.id,'qty',parseInt(e.target.value)||1)}/>}
@@ -5885,12 +5885,12 @@ function AremaLibraryEditor({AS, setAS, totalLen, customRolledShapes = {}, isGFS
                     onChange={e=>updZone(zi,{label:e.target.value})}/>
                 </td>
                 <td style={STYLES.padding3}>
-                  <input type="number" step="1" style={{...INP2,width:'70px',textAlign:'right',fontFamily:'monospace'}}
+                  <IxNumIn type="number" step="1" style={{...INP2,width:'70px',textAlign:'right',fontFamily:'monospace'}}
                     value={z.startX??0}
                     onChange={e=>{const v=e.target.value;if(v===''||v.endsWith('.'))return;const n=parseFloat(v);if(!isNaN(n))updZone(zi,{startX:n});}}/>
                 </td>
                 <td style={STYLES.padding3}>
-                  <input type="number" step="1" style={{...INP2,width:'70px',textAlign:'right',fontFamily:'monospace'}}
+                  <IxNumIn type="number" step="1" style={{...INP2,width:'70px',textAlign:'right',fontFamily:'monospace'}}
                     value={z.endX??totalLen}
                     onChange={e=>{const v=e.target.value;if(v===''||v.endsWith('.'))return;const n=parseFloat(v);if(!isNaN(n))updZone(zi,{endX:n});}}/>
                 </td>
@@ -6246,10 +6246,10 @@ function ZoneScheme({title, color, zones, refLen, lib, onChange, unit='ft'}) {
       {zs.map((z,i)=>(
         <div key={z.id} style={{display:'flex',gap:'6px',alignItems:'center',marginBottom:'5px'}}>
           <span style={{width:'14px',height:'14px',background:palette[i%palette.length],borderRadius:'3px',flexShrink:0}}/>
-          <input type="number" step={stepV} value={z.startX} onChange={e=>setZ(i,{startX:parseFloat(e.target.value)||0})}
+          <IxNumIn type="number" step={stepV} value={z.startX} onChange={e=>setZ(i,{startX:parseFloat(e.target.value)||0})}
             style={{...INP2,width:'70px'}}/>
           <span style={{fontSize:'10px',color:'#9ca3af'}}>to</span>
-          <input type="number" step={stepV} value={z.endX} onChange={e=>setZ(i,{endX:parseFloat(e.target.value)||0})}
+          <IxNumIn type="number" step={stepV} value={z.endX} onChange={e=>setZ(i,{endX:parseFloat(e.target.value)||0})}
             style={{...INP2,width:'70px'}}/>
           <span style={{fontSize:'10px',color:'#9ca3af'}}>{frac?'frac':'ft'}</span>
           <select value={z.libId} onChange={e=>setZ(i,{libId:e.target.value})} style={{...INP2,flex:1,minWidth:'120px'}}>
@@ -6601,11 +6601,11 @@ function StepSections({cfg,set}) {
               {av&&av.Ic
                 ? <div style={{fontSize:'10.5px',color:'#15803d',marginBottom:'8px'}}>PS-Beam member available{av.memberKey?(' — “'+av.memberKey+'”'):''} (A_c={(+av.Ac).toFixed(0)} in², I_c={(+av.Ic).toFixed(0)} in⁴)</div>
                 : <div style={{fontSize:'10.5px',color:'#b45309',marginBottom:'8px'}}>No PS-Beam section published yet — open PS-Beam and select/compute a member.</div>}
-              <Field label="Area A (in²)"><input style={INP} type="number" value={P.A??''} onChange={e=>setP({A:parseFloat(e.target.value)||0})}/></Field>
-              <Field label="Ix — strong axis (in⁴)"><input style={INP} type="number" value={P.Ix??''} onChange={e=>setP({Ix:parseFloat(e.target.value)||0})}/></Field>
-              <Field label="Weak-axis I (in⁴)"><input style={INP} type="number" placeholder="blank ⇒ 0.15·Ix" value={P.Iweak??''} onChange={e=>setP({Iweak:parseFloat(e.target.value)||0})}/></Field>
-              <Field label="Torsion J (in⁴)"><input style={INP} type="number" placeholder="blank ⇒ 0.05·Ix" value={P.J??''} onChange={e=>setP({J:parseFloat(e.target.value)||0})}/></Field>
-              <Field label="E concrete (ksi)"><input style={INP} type="number" value={P.E??''} onChange={e=>setP({E:parseFloat(e.target.value)||0})}/></Field>
+              <Field label="Area A (in²)"><IxNumIn style={INP} type="number" value={P.A??''} onChange={e=>setP({A:parseFloat(e.target.value)||0})}/></Field>
+              <Field label="Ix — strong axis (in⁴)"><IxNumIn style={INP} type="number" value={P.Ix??''} onChange={e=>setP({Ix:parseFloat(e.target.value)||0})}/></Field>
+              <Field label="Weak-axis I (in⁴)"><IxNumIn style={INP} type="number" placeholder="blank ⇒ 0.15·Ix" value={P.Iweak??''} onChange={e=>setP({Iweak:parseFloat(e.target.value)||0})}/></Field>
+              <Field label="Torsion J (in⁴)"><IxNumIn style={INP} type="number" placeholder="blank ⇒ 0.05·Ix" value={P.J??''} onChange={e=>setP({J:parseFloat(e.target.value)||0})}/></Field>
+              <Field label="E concrete (ksi)"><IxNumIn style={INP} type="number" value={P.E??''} onChange={e=>setP({E:parseFloat(e.target.value)||0})}/></Field>
               {P.srcMember&&<div style={{fontSize:'10px',color:'#9ca3af',marginTop:'2px'}}>auto-filled from PS-Beam “{P.srcMember}”; edit any value to override.</div>}
 
               {/* ── Shape for the 3D view ──────────────────────────────────────────────
@@ -6630,7 +6630,7 @@ function StepSections({cfg,set}) {
                   {src==='psbeam'&&!pub&&<div style={{fontSize:'10.5px',color:'#b45309',marginTop:'5px'}}>
                     PS-Beam hasn’t published a shape yet — open it and let it compute, or pick a standard shape above.
                   </div>}
-                  {(src.indexOf('NEXT')===0)&&<Field label="Flange (beam) width — in"><input style={INP} type="number"
+                  {(src.indexOf('NEXT')===0)&&<Field label="Flange (beam) width — in"><IxNumIn style={INP} type="number"
                     placeholder="96–144" value={P.shapeW??''} onChange={e=>setP({shapeW:parseFloat(e.target.value)||0})}/></Field>}
                   {prof&&<div style={{marginTop:'8px'}}>
                     <div style={{display:'flex',gap:'10px',alignItems:'center'}}>
@@ -6773,7 +6773,7 @@ function GFSLoads({cfg,set}) {
             <div style={{display:'flex',gap:'12px',alignItems:'center',flexWrap:'wrap'}}>
               <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
                 <span style={{fontSize:'10px',color:'#6b7280',fontFamily:'monospace'}}>UDL (k/ft)</span>
-                <input type="number" step="0.01" value={e.udl||0} onChange={ev=>upd(i,{udl:parseFloat(ev.target.value)||0})} style={{...INP2,width:'80px'}}/>
+                <IxNumIn type="number" step="0.01" value={e.udl||0} onChange={ev=>upd(i,{udl:parseFloat(ev.target.value)||0})} style={{...INP2,width:'80px'}}/>
               </div>
               <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
                 <span style={{fontSize:'10px',color:'#6b7280',fontFamily:'monospace'}}>Points</span>
@@ -6782,9 +6782,9 @@ function GFSLoads({cfg,set}) {
             </div>
             {(e.points||[]).length>0&&<div style={{marginTop:'5px'}}>{(e.points||[]).map((pt,pi)=>(
               <div key={pi} style={{display:'inline-flex',alignItems:'center',gap:'4px',margin:'2px'}}>
-                <input type="number" step="0.25" value={pt.pos} onChange={ev=>upd(i,{points:(e.points||[]).map((q,j)=>j===pi?{...q,pos:parseFloat(ev.target.value)||0}:q)})} style={{...INP2,width:'55px'}}/>
+                <IxNumIn type="number" step="0.25" value={pt.pos} onChange={ev=>upd(i,{points:(e.points||[]).map((q,j)=>j===pi?{...q,pos:parseFloat(ev.target.value)||0}:q)})} style={{...INP2,width:'55px'}}/>
                 <span style={{fontSize:'9px',color:'#9ca3af'}}>ft</span>
-                <input type="number" step="0.1" value={pt.load} onChange={ev=>upd(i,{points:(e.points||[]).map((q,j)=>j===pi?{...q,load:parseFloat(ev.target.value)||0}:q)})} style={{...INP2,width:'55px'}}/>
+                <IxNumIn type="number" step="0.1" value={pt.load} onChange={ev=>upd(i,{points:(e.points||[]).map((q,j)=>j===pi?{...q,load:parseFloat(ev.target.value)||0}:q)})} style={{...INP2,width:'55px'}}/>
                 <span style={{fontSize:'9px',color:'#9ca3af'}}>k</span>
                 <span onClick={()=>upd(i,{points:(e.points||[]).filter((_,j)=>j!==pi)})} style={{cursor:'pointer',color:'#dc2626',fontSize:'10px',fontWeight:'700'}}>✕</span>
               </div>
@@ -6813,7 +6813,7 @@ function GFSLoads({cfg,set}) {
           </label>
           <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
             <span style={{fontSize:'10px',color:'#6b7280',fontFamily:'monospace'}}>factor</span>
-            <input type="number" step="0.05" value={sl.selfWeightFactor??1.0} onChange={e=>setSL({selfWeightFactor:parseFloat(e.target.value)||0})} style={{...INP2,width:'60px'}}/>
+            <IxNumIn type="number" step="0.05" value={sl.selfWeightFactor??1.0} onChange={e=>setSL({selfWeightFactor:parseFloat(e.target.value)||0})} style={{...INP2,width:'60px'}}/>
           </div>
           <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
             <span style={{fontSize:'10px',color:'#6b7280',fontFamily:'monospace'}}>case</span>
@@ -7211,7 +7211,7 @@ function StepLoads({cfg,set,dlLocked,onToggleDLLock,setStep}) {   // HOC: setSte
             </div>
             {/* Value */}
             <div style={{paddingLeft:'4px'}}>
-              <input type="number" style={{...INP2,textAlign:'right',fontFamily:'monospace'}}
+              <IxNumIn type="number" style={{...INP2,textAlign:'right',fontFamily:'monospace'}}
                 step="0.0001" min="0"
                 value={d.value} onChange={e=>updateLoad(d.id,'value',parseFloat(e.target.value)||0)}/>
             </div>
@@ -7293,7 +7293,9 @@ function StepLoads({cfg,set,dlLocked,onToggleDLLock,setStep}) {   // HOC: setSte
 /* IXDLA (2026-11-12): a number input that keeps the text being typed (as PdNumIn in Pile Designer, DECE). Every keystroke still
    calls the field's own onChange, but while the field has the focus it shows what was typed instead of the stored number: "33."
    reads as an empty number field, was stored as 0 and React wrote "0" back over it, so a decimal could not be typed. The stored
-   value is shown again on leaving the field, or at once if it is changed from elsewhere while the field has the focus. */
+   value is shown again on leaving the field, or at once if it is changed from elsewhere while the field has the focus.
+   IXTYP (2026-11-12): used for every number field of the tool whose stored value would be written back over the typed text
+   (a lone "-" or "." stored as 0 or a default, "0" shown blank, a count clamped while typing); parse, clamp and validation unchanged. */
 function IxNumIn(props){
   const [draft,setDraft]=React.useState(null);   // { t: the field's text after the last keystroke, v: the value prop then }
   let value=props.value;
@@ -7342,10 +7344,10 @@ function StepMovingLoads({cfg,set}) {
         <Field label="Lane Name"><input style={INP} value={cfg.laneName} onChange={e=>set('laneName',e.target.value)}/></Field>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
           <Field label="Lane Width (ft)">
-            <input type="number" style={INP} value={cfg.laneWidth} min="8" max="16" step="0.5" onChange={e=>set('laneWidth',parseFloat(e.target.value)||10)}/>
+            <IxNumIn type="number" style={INP} value={cfg.laneWidth} min="8" max="16" step="0.5" onChange={e=>set('laneWidth',parseFloat(e.target.value)||10)}/>
           </Field>
           <Field label="Wheel Spacing (ft)">
-            <input type="number" style={INP} value={cfg.laneWheelSpacing} min="4" max="8" step="0.5" onChange={e=>set('laneWheelSpacing',parseFloat(e.target.value)||6)}/>
+            <IxNumIn type="number" style={INP} value={cfg.laneWheelSpacing} min="4" max="8" step="0.5" onChange={e=>set('laneWheelSpacing',parseFloat(e.target.value)||6)}/>
           </Field>
         </div>
 
@@ -8059,7 +8061,7 @@ function StepCombos({cfg,set}) {
                                 <option key={lc} value={lc}>{label}</option>)}
                             </optgroup>
                           </select>
-                          <input type="number" step="0.05" value={term.factor}
+                          <IxNumIn type="number" step="0.05" value={term.factor}
                             onChange={e=>updateTermFactor(c.id,key,parseFloat(e.target.value)||0)}
                             style={{...INP2,textAlign:'right',fontFamily:'monospace',fontWeight:'600',fontSize:'12px',
                               color:term.factor<0?'#dc2626':term.factor===0?'#9ca3af':'#059669'}}/>
@@ -8115,7 +8117,7 @@ function StepCombos({cfg,set}) {
               ].map(({f,lbl})=>(
                 <div key={f} style={{display:'flex',alignItems:'center',gap:'3px',flexShrink:0}}>
                   <span style={{fontSize:'9.5px',color:'#9ca3af',fontFamily:'monospace',minWidth:'30px'}}>{lbl}</span>
-                  <input type="number" step="0.05" min="0" max="3" style={{...INP2,width:'60px',textAlign:'right',
+                  <IxNumIn type="number" step="0.05" min="0" max="3" style={{...INP2,width:'60px',textAlign:'right',
                     fontFamily:'monospace',background:(c[f]??1)!==1?'#fffbeb':'#fff'}}
                     value={c[f]??1} onChange={e=>update(c.id,f,parseFloat(e.target.value)||0)}/>
                 </div>
@@ -8218,7 +8220,7 @@ function StepCombos({cfg,set}) {
                               <option key={lc} value={lc}>{label}</option>)}
                           </optgroup>
                         </select>
-                        <input type="number" step="0.05" value={term.factor}
+                        <IxNumIn type="number" step="0.05" value={term.factor}
                           onChange={e=>updateTermFactor(c.id, key, parseFloat(e.target.value)||0)}
                           style={{...INP2,textAlign:'right',fontFamily:'monospace',fontWeight:'600',fontSize:'12px',
                             color:term.factor<0?'#dc2626':term.factor===0?'#9ca3af':'#059669'}}/>
@@ -14018,7 +14020,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                       <div style={{fontSize:'9.5px',color:'#9ca3af',fontFamily:'monospace'}}>{f.hint}</div>
                     </div>
                     <div style={{display:'flex',alignItems:'center',gap:'3px'}}>
-                      <input type="number" step={f.isPercent?1:0.01} style={{...INP,width:'68px',padding:'4px 6px',fontSize:'12px',
+                      <IxNumIn type="number" step={f.isPercent?1:0.01} style={{...INP,width:'68px',padding:'4px 6px',fontSize:'12px',
                         textAlign:'right',opacity:f.enabled?1:0.4}}
                         value={f.value} disabled={!f.enabled}
                         onChange={e=>updateFactor(f.id,'value',parseFloat(e.target.value)||0)}/>
@@ -14315,7 +14317,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                 {(ratingCategory==='Legal'||ratingCategory==='Permit')&&(
                   <div style={{display:'flex',alignItems:'center',gap:'5px',marginLeft:'6px'}}>
                     <span style={{fontSize:'10px',color:'#9ca3af',fontFamily:'monospace'}}>ADTT:</span>
-                    <input type="number" style={{...INP,width:'70px',padding:'4px 6px',fontSize:'12px'}}
+                    <IxNumIn type="number" style={{...INP,width:'70px',padding:'4px 6px',fontSize:'12px'}}
                       value={ratingAdtt} onChange={e=>setRatingAdtt(parseInt(e.target.value)||0)}/>
                   </div>
                 )}
@@ -14342,7 +14344,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
             ].map(({label,val,set:setter,hint})=>(
               <div key={label} style={{background:'#f9fafb',borderRadius:'6px',padding:'8px 10px',border:'1px solid #e5e7eb'}}>
                 <div style={{fontSize:'10px',fontFamily:'monospace',color:'#6b7280',marginBottom:'3px'}}>{label}</div>
-                <input type="number" step="0.01" style={{...INP,padding:'4px 6px',fontSize:'13px',fontFamily:'monospace',
+                <IxNumIn type="number" step="0.01" style={{...INP,padding:'4px 6px',fontSize:'13px',fontFamily:'monospace',
                   fontWeight:'700',color:'#111827',background:ratingCustomFact?'#fff':'#f3f4f6'}}
                   value={val} disabled={!ratingCustomFact||label==='η Load Modifier'}
                   onChange={e=>setter(parseFloat(e.target.value)||0)}/>
@@ -14411,7 +14413,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         </div>
                       </div>
                       <div style={{display:'flex',alignItems:'center',gap:'3px'}}>
-                        <input type="number" step={f.isPercent?1:0.01} min="0"
+                        <IxNumIn type="number" step={f.isPercent?1:0.01} min="0"
                           style={{...INP,width:'65px',padding:'4px 6px',fontSize:'12px',textAlign:'right',
                             opacity:f.enabled?1:0.4,fontFamily:'monospace',fontWeight:'600'}}
                           value={f.value} disabled={!f.enabled}
@@ -14631,18 +14633,18 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                   ))}
                 </select>
                 {ratingSysKey==='Custom'&&(
-                  <input type="number" step="0.05" style={{...INP,marginTop:'4px',fontSize:'13px'}}
+                  <IxNumIn type="number" step="0.05" style={{...INP,marginTop:'4px',fontSize:'13px'}}
                     value={ratingPhiSCustom} onChange={e=>setRatingPhiSCustom(parseFloat(e.target.value)||1)}
                     placeholder="Enter φ_s"/>
                 )}
               </div>
               <div>
                 <div style={{fontSize:'10px',fontFamily:'monospace',color:'#6b7280',marginBottom:'3px'}}>φ_f — Flexure</div>
-                <input type="number" step="0.05" style={{...INP,fontSize:'12px'}} value={ratingPhiF} onChange={e=>setRatingPhiF(parseFloat(e.target.value)||1)}/>
+                <IxNumIn type="number" step="0.05" style={{...INP,fontSize:'12px'}} value={ratingPhiF} onChange={e=>setRatingPhiF(parseFloat(e.target.value)||1)}/>
               </div>
               <div>
                 <div style={{fontSize:'10px',fontFamily:'monospace',color:'#6b7280',marginBottom:'3px'}}>φ_v — Shear</div>
-                <input type="number" step="0.05" style={{...INP,fontSize:'12px'}} value={ratingPhiV} onChange={e=>setRatingPhiV(parseFloat(e.target.value)||1)}/>
+                <IxNumIn type="number" step="0.05" style={{...INP,fontSize:'12px'}} value={ratingPhiV} onChange={e=>setRatingPhiV(parseFloat(e.target.value)||1)}/>
               </div>
             </div>
             <div style={{padding:'7px 10px',background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:'5px',fontSize:'11px',fontFamily:'monospace',color:'#166534'}}>
@@ -14739,11 +14741,11 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                     </span>
                     {/* X range */}
                     <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
-                      <input type="number" step="0.25" min="0" max={totalBridgeForCap}
+                      <IxNumIn type="number" step="0.25" min="0" max={totalBridgeForCap}
                         style={{...INP2,width:'84px',textAlign:'right'}}
                         value={z.startX} onChange={e=>updateCapZone(z.id,'startX',parseFloat(e.target.value)||0)}/>
                       <span style={{fontSize:'11px',color:'#9ca3af',fontFamily:'monospace'}}>→</span>
-                      <input type="number" step="0.25" min="0" max={totalBridgeForCap}
+                      <IxNumIn type="number" step="0.25" min="0" max={totalBridgeForCap}
                         style={{...INP2,width:'84px',textAlign:'right'}}
                         value={z.endX} onChange={e=>updateCapZone(z.id,'endX',parseFloat(e.target.value)||totalBridgeForCap)}/>
                       <span style={{fontSize:'10px',color:'#9ca3af',fontFamily:'monospace'}}>ft</span>
@@ -14821,7 +14823,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                       {[['Mn⁺ (ft·k)','MnPos'],['Mn⁻ (ft·k)','MnNeg'],['Vn (kips)','Vn']].map(([lbl,field])=>(
                         <div key={field}>
                           <div style={{fontSize:'9.5px',fontFamily:'monospace',color:'#6b7280',marginBottom:'3px'}}>{lbl}</div>
-                          <input type="number" step="1" style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'13px'}}
+                          <IxNumIn type="number" step="1" style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'13px'}}
                             value={z[field]||''} onChange={e=>updateCapZone(z.id,field,parseFloat(e.target.value)||0)}/>
                         </div>
                       ))}
@@ -14832,7 +14834,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         {[['Fy (ksi)','Fy'],['Zx⁺ (in³)','ZxPos'],['Zx⁻ (in³)','ZxNeg'],['Aw (in²)','Aw']].map(([lbl,field])=>(
                           <div key={field}>
                             <div style={{fontSize:'9.5px',fontFamily:'monospace',color:'#6b7280',marginBottom:'3px'}}>{lbl}</div>
-                            <input type="number" step="0.1" style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'12px'}}
+                            <IxNumIn type="number" step="0.1" style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'12px'}}
                               value={z[field]||''} onChange={e=>updateCapZone(z.id,field,parseFloat(e.target.value)||0)}/>
                           </div>
                         ))}
@@ -14870,7 +14872,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         {[['Sx⁺ (in³) — bottom flange positive moment','SxPos'],['Sx⁻ (in³) — top flange negative moment','SxNeg']].map(([lbl,field])=>(
                           <div key={field}>
                             <div style={STYLES.monoSmall}>{lbl}</div>
-                            <input type="number" step="0.1" style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'12px'}}
+                            <IxNumIn type="number" step="0.1" style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'12px'}}
                               value={z[field]||''} onChange={e=>updateCapZone(z.id,field,parseFloat(e.target.value)||0)}/>
                           </div>
                         ))}
@@ -14900,7 +14902,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         ].map(([lbl,field,def])=>(
                           <div key={field}>
                             <div style={STYLES.monoTiny2}>{lbl}</div>
-                            <input type="number" step="0.1" style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
+                            <IxNumIn type="number" step="0.1" style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
                               value={z[field]||''} placeholder={String(def)}
                               onChange={e=>updateCapZone(z.id,field,parseFloat(e.target.value)||0)}/>
                           </div>
@@ -14912,7 +14914,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         ].map(([lbl,field])=>(
                           <div key={field}>
                             <div style={STYLES.monoTiny2}>{lbl}</div>
-                            <input type="number" step="0.125" style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
+                            <IxNumIn type="number" step="0.125" style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
                               value={z[field]||''} placeholder="—"
                               onChange={e=>updateCapZone(z.id,field,parseFloat(e.target.value)||0)}/>
                           </div>
@@ -14948,7 +14950,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         ].map(([lbl,field,def,step])=>(
                           <div key={field}>
                             <div style={STYLES.monoTiny2}>{lbl}</div>
-                            <input type="number" step={step} style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
+                            <IxNumIn type="number" step={step} style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
                               value={z[field]||''} placeholder={String(def)}
                               onChange={e=>updateCapZone(z.id,field,parseFloat(e.target.value)||0)}/>
                           </div>
@@ -14970,7 +14972,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         ].map(([lbl,field,def,step])=>(
                           <div key={field}>
                             <div style={STYLES.monoTiny2}>{lbl}</div>
-                            <input type="number" step={step} style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
+                            <IxNumIn type="number" step={step} style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
                               value={z[field]||''} placeholder={String(def)}
                               onChange={e=>updateCapZone(z.id,field,parseFloat(e.target.value)||0)}/>
                           </div>
@@ -14996,7 +14998,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                       {[['Sx⁺ (in³) bottom flange','SxPos'],['Sx⁻ (in³) top flange','SxNeg']].map(([lbl,field])=>(
                         <div key={field}>
                           <div style={STYLES.monoSmall}>{lbl}</div>
-                          <input type="number" step="0.1" style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'12px'}}
+                          <IxNumIn type="number" step="0.1" style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'12px'}}
                             value={z[field]||''} onChange={e=>updateCapZone(z.id,field,parseFloat(e.target.value)||0)}/>
                         </div>
                       ))}
@@ -15049,7 +15051,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                       ].map(([lbl,field,def,step])=>(
                         <div key={field}>
                           <div style={STYLES.monoTiny}>{lbl}</div>
-                          <input type="number" step={step||0.1} style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
+                          <IxNumIn type="number" step={step||0.1} style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
                             value={field==='beta1'?(z.beta1||psBeta1(z.fc||5).toFixed(2)):z[field]||def}
                             placeholder={field==='beta1'?psBeta1(z.fc||5).toFixed(2):String(def)}
                             onChange={e=>updateCapZone(z.id,field,parseFloat(e.target.value)||0)}/>
@@ -15069,7 +15071,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         ].map(([lbl,field,def,step])=>(
                           <div key={field}>
                             <div style={STYLES.monoTiny}>{lbl}</div>
-                            <input type="number" step={step} style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
+                            <IxNumIn type="number" step={step} style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
                               value={z[field]||''}  placeholder={String(def)}
                               onChange={e=>updateCapZone(z.id,field,parseFloat(e.target.value)||0)}/>
                           </div>
@@ -15087,7 +15089,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                       ].map(([lbl,field,def,step])=>(
                         <div key={field}>
                           <div style={STYLES.monoTiny}>{lbl}</div>
-                          <input type="number" step={step} style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
+                          <IxNumIn type="number" step={step} style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
                             value={z[field]||''} placeholder={String(def)}
                             onChange={e=>updateCapZone(z.id,field,parseFloat(e.target.value)||0)}/>
                         </div>
@@ -15098,7 +15100,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                     <div style={{display:'grid',gridTemplateColumns:'minmax(72px,1fr) 4fr',gap:'6px',alignItems:'start'}}>
                       <div>
                         <div style={STYLES.monoTiny}>Dt (in) ductility</div>
-                        <input type="number" step={0.5} style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
+                        <IxNumIn type="number" step={0.5} style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
                           value={z.d||''} placeholder="blank"
                           onChange={e=>updateCapZone(z.id,'d',parseFloat(e.target.value)||0)}/>
                       </div>
@@ -15118,7 +15120,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                           ].filter(([,f])=>f!=='fpe').map(([lbl,field,def,step])=>(
                             <div key={field}>
                               <div style={STYLES.monoTiny2}>{lbl}</div>
-                              <input type="number" step={step} style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
+                              <IxNumIn type="number" step={step} style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
                                 value={z[field]||''} placeholder={String(def)}
                                 onChange={e=>updateCapZone(z.id,field,parseFloat(e.target.value)||0)}/>
                             </div>
@@ -15145,7 +15147,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                             ) : (
                               <div key={field}>
                                 <div style={STYLES.monoTiny2}>{lbl}</div>
-                                <input type="number" step="0.1" style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
+                                <IxNumIn type="number" step="0.1" style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
                                   value={z[field]||''} placeholder={String(def)}
                                   onChange={e=>updateCapZone(z.id,field,parseFloat(e.target.value)||0)}/>
                               </div>
@@ -15205,7 +15207,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                           <div style={STYLES.monoTiny}>
                             Out-to-out angle dist (in)
                           </div>
-                          <input type="number" step="0.0625" style={{...INP2,fontFamily:'monospace',fontWeight:'700',fontSize:'13px',color:'#1d4ed8'}}
+                          <IxNumIn type="number" step="0.0625" style={{...INP2,fontFamily:'monospace',fontWeight:'700',fontSize:'13px',color:'#1d4ed8'}}
                             value={z.outToOut||42}
                             onChange={e=>updateCapZone(z.id,'outToOut',parseFloat(e.target.value)||42)}/>
                           <div style={{fontSize:'8px',color:'#9ca3af',marginTop:'2px',fontFamily:'monospace'}}>
@@ -15215,7 +15217,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         {/* Fy */}
                         <div>
                           <div style={STYLES.monoTiny}>Fy (ksi)</div>
-                          <input type="number" step="1" style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'12px'}}
+                          <IxNumIn type="number" step="1" style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'12px'}}
                             value={z.Fy||36}
                             onChange={e=>updateCapZone(z.id,'Fy',parseFloat(e.target.value)||36)}/>
                           <div style={{fontSize:'8px',color:'#9ca3af',marginTop:'2px',fontFamily:'monospace'}}>
@@ -15228,10 +15230,10 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                             Unbraced L (in) · r<sub>yc</sub>
                           </div>
                           <div style={{display:'flex',gap:'4px'}}>
-                            <input type="number" step="1" style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px',flex:1}}
+                            <IxNumIn type="number" step="1" style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px',flex:1}}
                               value={z.unbracedL||240}
                               onChange={e=>updateCapZone(z.id,'unbracedL',parseFloat(e.target.value)||240)}/>
-                            <input type="number" step="0.1" style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px',width:'52px'}}
+                            <IxNumIn type="number" step="0.1" style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px',width:'52px'}}
                               placeholder={sec.ryc.toFixed(2)} title="ryc — leave 0 to auto-compute"
                               value={z.autoRyc!==false?'':(z.ryc||'')}
                               onChange={e=>{
@@ -15257,7 +15259,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         ].map(([lbl,field,def,step])=>(
                           <div key={field}>
                             <div style={STYLES.monoTiny2}>{lbl}</div>
-                            <input type="number" step={step} style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
+                            <IxNumIn type="number" step={step} style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
                               value={z[field]??def}
                               onChange={e=>updateCapZone(z.id,field,parseFloat(e.target.value)||0)}/>
                           </div>
@@ -15322,7 +15324,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                                     </td>
                                     {/* W field */}
                                     <td style={{border:'1px solid #e5e7eb',padding:'2px'}}>
-                                      <input type="number" step="0.0625" disabled={disabled}
+                                      <IxNumIn type="number" step="0.0625" disabled={disabled}
                                         style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px',
                                           width:'100%',padding:'3px 4px',textAlign:'right'}}
                                         value={isPlate?(c.w||18):(isAngle?(c.w||6):(c.w||0.5))}
@@ -15330,7 +15332,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                                     </td>
                                     {/* H field — for plates this is thickness per plate */}
                                     <td style={{border:'1px solid #e5e7eb',padding:'2px'}}>
-                                      <input type="number" step="0.0625" disabled={disabled}
+                                      <IxNumIn type="number" step="0.0625" disabled={disabled}
                                         style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px',
                                           width:'100%',padding:'3px 4px',textAlign:'right'}}
                                         value={isPlate?(c.t||0.5):(isAngle?(c.h||6):(c.h||12))}
@@ -15342,7 +15344,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                                     {/* T field (angles only) */}
                                     <td style={{border:'1px solid #e5e7eb',padding:'2px'}}>
                                       {isAngle ? (
-                                        <input type="number" step="0.0625" disabled={disabled}
+                                        <IxNumIn type="number" step="0.0625" disabled={disabled}
                                           style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px',
                                             width:'100%',padding:'3px 4px',textAlign:'right'}}
                                           value={c.t||0.75}
@@ -15356,7 +15358,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                                       {row.fixedQty ? (
                                         <span style={{fontSize:'10px',fontFamily:'monospace',color:'#9ca3af',fontWeight:'600'}}>{c.qty||1}</span>
                                       ) : (
-                                        <input type="number" step="1" min="1" max="10" disabled={disabled}
+                                        <IxNumIn type="number" step="1" min="1" max="10" disabled={disabled}
                                           style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px',
                                             width:'100%',padding:'3px 4px',textAlign:'center'}}
                                           value={c.qty||1}
@@ -15797,7 +15799,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
           </div>
           <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
             <span style={{fontSize:'11px',color:'#6b7280',fontFamily:'monospace'}}>W =</span>
-            <input type="number" step="0.5" style={{...INP,width:'80px',padding:'5px 8px',fontSize:'13px',fontFamily:'monospace',fontWeight:'700'}}
+            <IxNumIn type="number" step="0.5" style={{...INP,width:'80px',padding:'5px 8px',fontSize:'13px',fontFamily:'monospace',fontWeight:'700'}}
               value={ratingVehicleTon} onChange={e=>setRatingVehicleTon(parseFloat(e.target.value)||36)}/>
             <span style={{fontSize:'11px',color:'#6b7280',fontFamily:'monospace'}}>tons</span>
           </div>
@@ -15866,7 +15868,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
               ))}
               <div style={{display:'flex',alignItems:'center',gap:'4px',marginLeft:'4px'}}>
                 <span style={{fontSize:'10px',color:'#9ca3af',fontFamily:'monospace'}}>Custom:</span>
-                <input type="number" min="1" max="20" step="0.5"
+                <IxNumIn type="number" min="1" max="20" step="0.5"
                   value={rfYMax??''} placeholder="auto"
                   onChange={e=>{
                     const v=parseFloat(e.target.value);
@@ -16407,7 +16409,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         <div style={{display:'flex',flexDirection:'column',gap:'3px'}}>
                           <div style={{display:'flex',alignItems:'center',gap:'3px'}}>
                             <span style={{fontSize:'9px',fontFamily:'monospace',color:'#9ca3af',width:'22px'}}>Inv</span>
-                            <input type="number" step="0.05" min="0" max="3"
+                            <IxNumIn type="number" step="0.05" min="0" max="3"
                               value={assign.gamLLinv!=null?assign.gamLLinv:defaultGam.inv}
                               onChange={e=>setVehicleLCMap(prev=>({...prev,[vn]:{...(prev[vn]||{}),
                                 gamLLinv:parseFloat(e.target.value)||0, customGam:true}}))}
@@ -16417,7 +16419,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                           </div>
                           <div style={{display:'flex',alignItems:'center',gap:'3px'}}>
                             <span style={{fontSize:'9px',fontFamily:'monospace',color:'#9ca3af',width:'22px'}}>Op</span>
-                            <input type="number" step="0.05" min="0" max="3"
+                            <IxNumIn type="number" step="0.05" min="0" max="3"
                               value={assign.gamLLop!=null?assign.gamLLop:defaultGam.op}
                               onChange={e=>setVehicleLCMap(prev=>({...prev,[vn]:{...(prev[vn]||{}),
                                 gamLLop:parseFloat(e.target.value)||0, customGam:true}}))}
@@ -16683,7 +16685,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                 {/* Rh */}
                 <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'16px'}}>
                   <span style={{fontSize:'11px',fontFamily:'monospace',color:'#374151'}}>Hybrid Factor Rh</span>
-                  <input type="number" step="0.05" min="0.5" max="1.0" value={serviceIIRh}
+                  <IxNumIn type="number" step="0.05" min="0.5" max="1.0" value={serviceIIRh}
                     onChange={e=>setRating('serviceIIRh',parseFloat(e.target.value)||1.0)}
                     style={{...INP2,width:'80px',fontFamily:'monospace',fontWeight:'600'}}/>
                   <span style={STYLES.monoMed}>1.0 for homogeneous sections · AASHTO 6.10.1.10.1 · used in f_R of noncomposite sections only</span>
@@ -16821,7 +16823,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                       ].map(({label,field,val,step,hint})=>(
                         <div key={field}>
                           <div style={STYLES.monoSmall}>{label}</div>
-                          <input type="number" step={step} min="1" value={val}
+                          <IxNumIn type="number" step={step} min="1" value={val}
                             onChange={e=>setRating(field, parseFloat(e.target.value)||1)}
                             style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'12px'}}/>
                           <div style={{fontSize:'8.5px',color:'#9ca3af',fontFamily:'monospace',marginTop:'2px'}}>{hint}</div>
@@ -17496,7 +17498,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                       <div style={STYLES.monoSmall}>
                         DL Factor &nbsp;<span style={STYLES.dimText}>(applied to all dead load results)</span>
                       </div>
-                      <input type="number" step="0.01" min="0.5" max="3"
+                      <IxNumIn type="number" step="0.01" min="0.5" max="3"
                         style={{...INP,fontSize:'12px',fontFamily:'monospace',fontWeight:'600',width:'90px'}}
                         value={+(R2.arema_dlFactor??1.0)}
                         onChange={e=>setRating('arema_dlFactor',parseFloat(e.target.value)||1.0)}/>
@@ -17557,7 +17559,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                       ['Rail ht above top flange (ft)','arema_h_rail',h_rail,0.1]].map(([lbl,key,val,step])=>(
                       <div key={key}>
                         <div style={STYLES.monoSmall}>{lbl}</div>
-                        <input type="number" step={step} style={{...INP,fontSize:'12px',fontFamily:'monospace',fontWeight:'600'}}
+                        <IxNumIn type="number" step={step} style={{...INP,fontSize:'12px',fontFamily:'monospace',fontWeight:'600'}}
                           value={val} onChange={e=>setRating(key,parseFloat(e.target.value)||0)}/>
                       </div>
                     ))}
@@ -17599,7 +17601,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                           <div style={STYLES.monoTiny}>
                             Track offset from bridge CL (ft)
                           </div>
-                          <input type="number" step="0.25" value={e_track}
+                          <IxNumIn type="number" step="0.25" value={e_track}
                             style={{...INP,fontSize:'11px',fontFamily:'monospace',width:'100%'}}
                             onChange={e=>setRating('arema_track_offset',parseFloat(e.target.value)||0)}/>
                         </div>
@@ -17610,7 +17612,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         </div>
                         <div>
                           <div style={STYLES.monoTiny}>Current DF</div>
-                          <input type="number" step="0.01" value={DF}
+                          <IxNumIn type="number" step="0.01" value={DF}
                             style={{...INP,fontSize:'12px',fontFamily:'monospace',fontWeight:'700',width:'100%'}}
                             onChange={e=>setRating(isGFS?'arema_DF_gfs':'arema_DF',parseFloat(e.target.value)||0)}/>
                         </div>
@@ -17695,7 +17697,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                           <div style={STYLES.monoTiny}>
                             Reference span L_ref (ft) — span used to build the MIDAS LC
                           </div>
-                          <input type="number" step="5" value={long_L_ref}
+                          <IxNumIn type="number" step="5" value={long_L_ref}
                             style={{...INP,fontSize:'12px',fontFamily:'monospace',fontWeight:'700',width:'100%'}}
                             onChange={e=>setRating('arema_long_L_ref',parseFloat(e.target.value)||span)}/>
                         </div>
@@ -17714,7 +17716,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         ?<div style={{padding:'6px 8px',background:'#fffbeb',border:'1px solid #fde68a',borderRadius:'4px',
                             fontSize:'12px',fontFamily:'monospace',fontWeight:'700',color:'#92400e'}}>
                             {f1pI.toFixed(4)}</div>
-                        :<input type="number" step="0.01" style={{...INP,fontSize:'12px',fontFamily:'monospace',fontWeight:'600'}}
+                        :<IxNumIn type="number" step="0.01" style={{...INP,fontSize:'12px',fontFamily:'monospace',fontWeight:'600'}}
                             value={impMan} onChange={e=>setRating('arema_imp_man',parseFloat(e.target.value)||0)}/>}
                       <div style={{fontSize:'7.5px',fontFamily:'monospace',color:'#6b7280',marginTop:'2px'}}>
                         I={((iBase*100)*(ballastDeck?0.9:1)).toFixed(1)}%{ballastDeck?' (×0.9)':''}
@@ -17781,7 +17783,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         <div style={STYLES.monoSmall}>
                           β — Fatigue impact factor
                         </div>
-                        <input type="number" step="0.01" min="0" max="1"
+                        <IxNumIn type="number" step="0.01" min="0" max="1"
                           style={{...INP,fontSize:'12px',fontFamily:'monospace',fontWeight:'600'}}
                           value={fatBeta}
                           onChange={e=>setRating('arema_fatBeta',parseFloat(e.target.value)||0)}/>
@@ -17795,7 +17797,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         <div style={STYLES.monoSmall}>
                           α — Live load reduction factor
                         </div>
-                        <input type="number" step="0.01" min="0" max="1"
+                        <IxNumIn type="number" step="0.01" min="0" max="1"
                           style={{...INP,fontSize:'12px',fontFamily:'monospace',fontWeight:'600'}}
                           value={fatAlpha}
                           onChange={e=>setRating('arema_fatAlpha',parseFloat(e.target.value)||0)}/>
@@ -19393,7 +19395,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                             ):null
                           )}
                         </select>
-                        <input type="number" step="0.05" value={term.factor}
+                        <IxNumIn type="number" step="0.05" value={term.factor}
                           onChange={e=>updateTerm(combo.id,tKey,'factor',parseFloat(e.target.value)||0)}
                           style={{...INP,padding:'5px 8px',fontSize:'13px',fontFamily:'monospace',
                             fontWeight:'600',textAlign:'right',
