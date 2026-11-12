@@ -881,5 +881,27 @@
   }
   function undo(P) { const u = P.autodesign && P.autodesign.undo; if (!u) return null; const Q = clone(P); Object.assign(Q, clone(u)); Object.keys(u).forEach(k => { if (u[k] === null) delete Q[k]; }); delete Q.autodesign.undo; delete Q.autodesign.applied; return Q; }
 
-  window.SBDAutoDesign = { relayout, splPlan, splCheck, framesOf, DEF, STEEL, VARS, DET_KEYS, APPLY_KEYS, ohLimit, ohCands, pickOh, varsOf, sizeDetails, lockText, settings, layoutOf, segmentsOf, projectWith, lineWeight, transitions, costOf, proportions, boltFitWidth, payloadOf, evaluate, sizeFlanges, design, trim, run, runChunked, apply, undo, depthList, nbList };
+  /* ---------- girder types (SB-2 PR 3, 2026-11-12; engineer: Auto design sizes each type for its worst line, all types in one run or the
+     selected type) ----------
+     typeScope(P): 'together' (one plate design on every plate girder, governed by all of them: the Auto design of before SB-2) for a
+     project with one type or saved before girder types (no girders[i].lines), else 'each' (each type sized on its own lines).
+     typeProject(P, t): the project Auto design runs for type t: one plate girder per line of type t (a copy of it with that line; a type
+     with no line: its design line), so that run()'s one layout for every plate girder is governed by the type's worst line; its stiffener
+     bays and splice plate entries copied to each line; the other types left out. With more than one type the bridge-wide variables
+     (TYPE_LOCK: girder count, overhang, field splices and their plates, stiffeners, studs, cross-frames, weld) are locked at the current
+     values (one design for the bridge); the plates (D, t_w, flanges, transitions) are the type's own.
+     applyType(P, t, Qt, c): type t takes candidate c's plates (projectWith on Qt); nothing else changes. */
+  const TYPE_LOCK = ['nb', 'oh', 'spl', 'splPl', 'tsSp', 'tsA_b', 'tsA_t', 'tsB_b', 'tsB_t', 'bsA_n', 'bsA_b', 'bsA_t', 'bsB_n', 'bsB_b', 'bsB_t', 'scP', 'scN', 'cf', 'weld'];
+  const typeScope = P => (P.girders || []).length > 1 && (P.girders || []).some(g => Array.isArray(g.lines)) ? 'each' : 'together';
+  function typeProject(P, t) {
+    const M = MD(), Q = clone(P), g = P.girders[t], L0 = M.typeLines ? M.typeLines(P, t) : [], L = L0.length ? L0 : [M.designLine ? M.designLine(P, g) : 0], gNo = t + 1;
+    Q.girders = L.map((j, k) => ({ ...clone(g), id: k ? `${g.id}@${j + 1}` : g.id, label: L.length > 1 ? `${g.label || g.id} on G${j + 1}` : (g.label || g.id), line: j, lines: [j] }));
+    const ly = Q.stiffeners && Q.stiffeners.layout; if (ly && Array.isArray(ly.bays)) { const own = ly.bays.filter(q => +q.g === gNo); ly.bays = L.flatMap((_, k) => own.map(q => ({ ...clone(q), g: k + 1 }))); }
+    const S = Q.splices; if (S && Array.isArray(S.plates)) S.plates = S.plates.filter(q => !q || q.g == null).concat(L.flatMap((_, k) => S.plates.filter(q => q && q.g != null && +q.g === t).map(q => ({ ...clone(q), g: k }))));
+    if ((P.girders || []).length > 1) { const a = Q.autodesign = { ...(Q.autodesign || {}) }, V = { ...(a.vars || {}) };
+      Object.keys(V).forEach(k => { if (TYPE_LOCK.includes(k.split('#')[0])) delete V[k]; }); TYPE_LOCK.forEach(id => { V[id] = { mode: 'lock' }; }); a.vars = V; }
+    return Q;
+  }
+  function applyType(P, t, Qt, c) { const r = apply(Qt, c); P.girders[t].segments = clone(r.project.girders[0].segments); return P; }
+  window.SBDAutoDesign = { TYPE_LOCK, typeScope, typeProject, applyType, relayout, splPlan, splCheck, framesOf, DEF, STEEL, VARS, DET_KEYS, APPLY_KEYS, ohLimit, ohCands, pickOh, varsOf, sizeDetails, lockText, settings, layoutOf, segmentsOf, projectWith, lineWeight, transitions, costOf, proportions, boltFitWidth, payloadOf, evaluate, sizeFlanges, design, trim, run, runChunked, apply, undo, depthList, nbList };
 })();

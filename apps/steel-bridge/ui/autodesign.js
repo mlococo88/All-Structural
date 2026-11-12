@@ -70,10 +70,21 @@
         Width rules: constant in a field piece; at a field splice wide enough for the splice bolts (DT10, the Splices tab bolts and the owner's edge distance), or one gage line where that is lighter (the objective decides).</p>
       </div></section>`;
   }
-  function runBar(P) {
+  /* SB-2 PR 3 (2026-11-12): girder types. scopeOf(P): the choice of this page view (S.scope), else engine typeScope(P): 'each' (every type,
+     one after the other, each sized for its worst line), 'sel' (the selected type only), 'together' (one plate design on every plate girder,
+     as before girder types). Shown when the project has more than one type. */
+  const scopeOf = P => (P.girders || []).length < 2 ? 'together' : S.scope || AD().typeScope(P);
+  const tyLab = (P, t) => { const g = P.girders[t] || {}, M = window.SBDModel, L = M.typeLines ? M.typeLines(P, t) : []; return `${g.label || g.id}${L.length ? ` (${L.map(j => 'G' + (j + 1)).join(', ')})` : ''}`; };
+  function scopeHtml(P, gi) {
+    if ((P.girders || []).length < 2) return '';
+    const sc = scopeOf(P), o = (v, t) => `<option value="${v}"${sc === v ? ' selected' : ''}>${esc(t)}</option>`;
+    return `<div class="fRow"><label for="ad_scope">Design</label><select id="ad_scope">${o('each', 'Every girder type, each for its worst line')}${o('sel', `The selected type only: ${tyLab(P, Math.min(gi || 0, P.girders.length - 1))}`)}${o('together', 'One plate design for every type (as before girder types)')}</select></div>
+      ${sc !== 'together' ? `<p class="note">Each type is designed on its own lines (each line a plate girder of the run, so the worst line governs). The bridge-wide variables are locked at the current values in this mode: ${esc(AD().TYPE_LOCK.join(', '))}; the plates (D, t<sub>w</sub>, flanges, transitions) are each type's own. Apply writes each type's plates only.</p>` : ''}`;
+  }
+  function runBar(P, gi) {
     const IE = window.SBDInputCheck ? window.SBDInputCheck.collect(P).errors : [];   // SBINV (2026-11-10): Run is refused while an input error exists
     return `<section class="sec"><div class="secBody">${IE.length ? `<div class="alert err" id="ad_blocked">Auto design cannot run: ${IE.length} input${IE.length > 1 ? 's need' : ' needs'} fixing first (marked in red on their tabs and listed above the results).</div>` : ''}
-      <div class="fRow"><button type="button" class="primary" id="ad_run"${S.running || IE.length ? ' disabled' : ''}>Run Auto design</button><button type="button" id="ad_stop"${S.running ? '' : ' disabled'}>Stop</button>
+      ${scopeHtml(P, gi)}<div class="fRow"><button type="button" class="primary" id="ad_run"${S.running || IE.length ? ' disabled' : ''}>Run Auto design</button><button type="button" id="ad_stop"${S.running ? '' : ' disabled'}>Stop</button>
 </div>
       ${bar()}<p class="note">The candidates, Apply and Undo the last Apply are on the <a href="#" data-adout="1">Auto design output tab</a>.</p></div></section>`;
   }
@@ -246,9 +257,9 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
      handlers as before (P.autodesign); nothing computed changes. A link on each tab opens the other. */
   const bar = () => S.running || S.prog ? `<div class="ad-bar"><div style="width:${Math.round(100 * ((S.prog && S.prog.f) || 0))}%"></div></div><p class="note">${esc((S.prog && S.prog.msg) || '')}</p>` : '';
   /* inputs(P): the Auto design input tab's HTML */
-  function inputs(P) {
-    css();
-    return `<p class="note"><a href="#" data-adout="1">Results: Auto design output tab</a> (candidates, ranking, full checks, Apply).</p>` + inputsHtml(P) + varsHtml(P, AD().settings(P)) + runBar(P)
+  function inputs(P, gi) {
+    css(); S.gi = gi || 0;
+    return `<p class="note"><a href="#" data-adout="1">Results: Auto design output tab</a> (candidates, ranking, full checks, Apply).</p>` + inputsHtml(P) + varsHtml(P, AD().settings(P)) + runBar(P, gi)
       + (S.err ? `<div class="alert err">${esc(S.err)}</div>` : '');
   }
   /* ---------- the design variables dialog (ADVD) ---------- */
@@ -306,11 +317,21 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
       setTimeout(() => { if (ctx.changed) ctx.changed(true); }, 0); });
     on('#ad_run', 'click', () => { const IE = window.SBDInputCheck ? window.SBDInputCheck.collect(P).errors : [];   // SBINV (2026-11-10): no run while an input error exists
       if (IE.length) { alert(`Auto design cannot run: ${IE.length} input${IE.length > 1 ? 's need' : ' needs'} fixing first.\n\n${IE.slice(0, 12).map(e => '- ' + e.msg).join('\n')}`); return; }
-      S.running = true; S.stop = false; S.err = ''; S.R = null; S.sel = 0; S.cmp = ['cur', '0']; S.prog = { f: 0, msg: 'Starting…' }; const k = key(P); redraw(); if (ctx.showOut) ctx.showOut();
+      S.running = true; S.stop = false; S.err = ''; S.R = null; S.RT = null; S.selT = null; S.sel = 0; S.cmp = ['cur', '0']; S.prog = { f: 0, msg: 'Starting…' }; const k = key(P); redraw(); if (ctx.showOut) ctx.showOut();
+      const sc = scopeOf(P);
+      if (sc !== 'together') {   // SB-2 PR 3: one run per type (its own project, typeProject), one after the other
+        const T = sc === 'sel' ? [Math.min(S.gi || 0, P.girders.length - 1)] : P.girders.map((_, t) => t), out = [];
+        const one = i => { if (i >= T.length) { S.running = false; S.prog = null; S.RT = out; S.key = k; S.selT = out.length ? out[0].t : null; redraw(); return; }
+          const t = T[i], Qt = AD().typeProject(JSON.parse(JSON.stringify(P)), t);
+          AD().runChunked(JSON.parse(JSON.stringify(Qt)), {}, p => { S.prog = { ...p, f: (i + (p.f || 0)) / T.length, msg: `Type ${tyLab(P, t)} (${i + 1} of ${T.length}): ${p.msg || ''}` }; document.querySelectorAll('.ad-bar>div').forEach(b => { b.style.width = Math.round(100 * S.prog.f) + '%'; }); document.querySelectorAll('.ad-bar + .note').forEach(nt => { nt.textContent = S.prog.msg; }); }, () => S.stop)
+            .then(R => { if (!R) { S.running = false; S.prog = { f: 0, msg: 'Stopped.' }; S.RT = out.length ? out : null; S.key = k; S.selT = out.length ? out[0].t : null; redraw(); return; } out.push({ t, Q: Qt, R }); one(i + 1); })
+            .catch(e => { S.running = false; S.prog = null; S.err = `Auto design failed (type ${tyLab(P, t)}): ` + (e && e.message); redraw(); }); };
+        one(0); return; }
       AD().runChunked(JSON.parse(JSON.stringify(P)), {}, p => { S.prog = p; document.querySelectorAll('.ad-bar>div').forEach(b => { b.style.width = Math.round(100 * (p.f || 0)) + '%'; }); document.querySelectorAll('.ad-bar + .note').forEach(nt => { nt.textContent = p.msg || ''; }); }, () => S.stop)
         .then(R => { S.running = false; S.prog = R ? null : { f: 0, msg: 'Stopped.' }; S.R = R; S.key = k; redraw(); })
         .catch(e => { S.running = false; S.prog = null; S.err = 'Auto design failed: ' + (e && e.message); redraw(); }); });
     on('#ad_stop', 'click', () => { S.stop = true; });
+    on('#ad_scope', 'change', e => { S.scope = e.target.value; redraw(); });   // SB-2 PR 3: page view only (not saved)
     on('[data-adout]', 'click', e => { e.preventDefault(); if (ctx.showOut) ctx.showOut(); });
   }
   /* render(host, ctx): the Auto design output tab (the results) */
@@ -320,8 +341,16 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
     if (S.running || S.prog) h += `<section class="sec"><div class="secBody"><div class="fRow"><button type="button" id="ad_stop2"${S.running ? '' : ' disabled'}>Stop</button></div>${bar()}</div></section>`;
     if (S.err) h += `<div class="alert err">${esc(S.err)}</div>`;
     if (P.autodesign && P.autodesign.undo) h += '<div class="fRow"><button type="button" id="ad_undo">Undo the last Apply</button></div>';
-    if (S.R && !S.running) h += (S.key !== key(P) ? '<div class="alert">The project changed since this run: run again before applying.</div>' : '') + resultsHtml(P, S.R);
-    else if (!S.running) h += '<p class="note">No results yet: set the inputs and Run on the Auto design input tab. The results are kept for this page view.</p>';
+    if (S.RT && !S.running) {   // SB-2 PR 3: one run per girder type
+      const T = S.RT, cur = T.find(q => q.t === S.selT) || T[0];
+      h += (S.key !== key(P) ? '<div class="alert">The project changed since this run: run again before applying.</div>' : '')
+        + `<section class="sec"><div class="secHead">Every girder type: the best candidate of each</div><div class="secBody"><div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Girder type (lines)</th><th>Candidates</th><th>D (in)</th><th>Weight (lb, its lines)</th><th>Governing ratio</th><th class="lft">What governs</th><th></th></tr></thead><tbody>
+        ${T.map(q => { const c = q.R.cands[0]; return `<tr${q === cur ? ' class="sel"' : ''}><td class="lft"><a href="#" data-adty="${q.t}">${esc(tyLab(P, q.t))}</a></td><td>${q.R.cands.length}</td><td>${c ? fmt(c.D, 2) : '—'}</td><td>${c ? fmt(c.cost.w, 0) : '—'}</td><td>${c ? fmt(c.ratio, 3) : '—'}</td><td class="lft">${c && c.gov ? govTxt(c.gov) : c ? '' : 'no passing candidate'}</td><td>${c ? `<button type="button" data-adapt="${q.t}">Apply #1</button>` : ''}</td></tr>`; }).join('')}
+        </tbody></table></div>${T.some(q => q.R.cands.length) && T.length > 1 ? '<div class="fRow"><button type="button" class="primary" id="ad_applyAll">Apply #1 of every type</button></div>' : ''}
+        <p class="note">Each type was run on its own lines: every line a plate girder of the run, so the worst line governs each check (its weight is that of its lines). Below: the candidates of ${esc(tyLab(P, cur.t))} (click a type above for another). Apply writes the type's plates only; Undo the last Apply puts every type's plates back.</p></div></section>`
+        + resultsHtml(cur.Q, cur.R);
+    } else if (S.R && !S.running) h += (S.key !== key(P) ? '<div class="alert">The project changed since this run: run again before applying.</div>' : '') + resultsHtml(P, S.R);
+    else if (!S.running && !S.RT) h += '<p class="note">No results yet: set the inputs and Run on the Auto design input tab. The results are kept for this page view.</p>';
     host.innerHTML = h;
     const redraw = () => render(host, ctx), on = (sel, ev, f) => host.querySelectorAll(sel).forEach(el => el.addEventListener(ev, f));
     on('[data-adin]', 'click', e => { e.preventDefault(); const b = document.querySelector('#inTabs [data-itab="ad"]'); if (b) b.click(); });
@@ -329,7 +358,14 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
     on('[data-adcmp]', 'change', e => { const v = e.target.value, i = +e.target.dataset.adcmp; S.cmp[i] = v; redraw(); });
     on('[data-adsel]', 'click', e => { if (e.target.closest('[data-adgo]')) return; S.sel = +e.currentTarget.dataset.adsel; redraw(); });
     on('[data-adgo]', 'click', e => { e.preventDefault(); const b = document.querySelector(`#tabBar [data-otab="${e.currentTarget.dataset.adgo}"]`); if (b) b.click(); });
-    on('#ad_apply', 'click', () => { const c = S.R && S.R.cands[S.sel]; if (!c) return; if (S.key !== key(P) && !confirm('The project changed since this run. Apply anyway?')) return;
+    const applyT = list => { if (S.key !== key(P) && !confirm('The project changed since this run. Apply anyway?')) return;   // SB-2 PR 3: [{ q (a type's run), c (its candidate) }]
+      const a = ensure(P), keep = JSON.parse(JSON.stringify(P.girders)); list.forEach(({ q, c }) => AD().applyType(P, q.t, q.Q, c));
+      a.undo = { girders: keep }; a.applied = { at: new Date().toISOString(), types: list.map(({ q, c }) => ({ t: q.t, D: c.L.D, w: c.cost.w })) }; S.RT = null; if (ctx.changed) ctx.changed(true); else redraw(); };
+    on('[data-adty]', 'click', e => { e.preventDefault(); S.selT = +e.currentTarget.dataset.adty; S.sel = 0; S.cmp = ['cur', '0']; redraw(); });
+    on('[data-adapt]', 'click', e => { const q = (S.RT || []).find(z => z.t === +e.currentTarget.dataset.adapt); if (q && q.R.cands[0]) applyT([{ q, c: q.R.cands[0] }]); });
+    on('#ad_applyAll', 'click', () => applyT((S.RT || []).filter(q => q.R.cands[0]).map(q => ({ q, c: q.R.cands[0] }))));
+    on('#ad_apply', 'click', () => { if (S.RT) { const q = S.RT.find(z => z.t === S.selT) || S.RT[0], c = q && q.R.cands[S.sel]; if (c) applyT([{ q, c }]); return; }
+      const c = S.R && S.R.cands[S.sel]; if (!c) return; if (S.key !== key(P) && !confirm('The project changed since this run. Apply anyway?')) return;
       const r = AD().apply(P, c); ['autodesign', ...AD().APPLY_KEYS].forEach(k => { if (r.project[k] === undefined) delete P[k]; else P[k] = r.project[k]; }); S.R = null; if (ctx.changed) ctx.changed(true); else redraw(); });
     on('#ad_undo', 'click', () => { const Q = AD().undo(P); if (!Q) return; ['autodesign', ...AD().APPLY_KEYS].forEach(k => { if (Q[k] === undefined) delete P[k]; else P[k] = Q[k]; }); if (ctx.changed) ctx.changed(true); else redraw(); });
   }
