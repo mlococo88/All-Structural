@@ -2016,7 +2016,7 @@ Concrete Beam Capacity: ONE combined Report tab, a chapter per sub-app. The coor
 ## 2026-11-01 — PR: claude/cbc-hide-dev-report — the Development & Splice tab's own Report tab button removed in the suite (CBRP-2; display only)
 - **Coordinator / engineer (2026-11-01):** every report self-contained; inside the suite the combined Report tab (chapter C. Development & Splice, built by the same `rbrModel()`) covers the embedded rebar app, so its own Report tab is not shown. The standalone `ACI Rebar Development Length.html` keeps its Report tab.
 - **Where:** `#suite-frame-dev` srcdoc, the tab bar: the line `<button class="tab" data-tab="report">Report</button>` (entity-encoded in the srcdoc) is replaced by the comment `<!-- CBRP-2 (2026-11-01): no Report tab button in this embedded copy; the suite's combined Report tab (chapter C) covers it -->`. The RBRP code stays in the embedded copy (the combined report calls its `rbrModel()`; `rbrGoto` / `switchTab` serve the combined report's links).
-- **Intentional embedded difference (CLAUDE.md §3):** add this to the list of differences between the standalone tool and the embedded copy (frame layout CSS, no All-tools link / share buttons / BridgeXfer, `rcsuite.rebar_autosave_v1`, `REBAR_RPT_TOOL`, and now no Report tab button). Tools that contain the rebar snippet: `ACI Rebar Development Length.html`, `Concrete Beam Capacity.html` (Development & Splice tab).
+- **Intentional embedded difference (CLAUDE.md §3):** add this to the list of differences between the standalone tool and the embedded copy (frame layout CSS, no All-tools link / share buttons / BridgeXfer, `rcsuite.rebar_autosave_v1`, `REBAR_RPT_TOOL`). *(CBMR, 2026-11-12, PR #1431: "no Report tab button" is removed from this list again: the button is back. The standalone file is a redirect page since RBRT #804, so no copy is left to differ from.)* Tools that contain the rebar snippet: `ACI Rebar Development Length.html`, `Concrete Beam Capacity.html` (Development & Splice tab).
 - **How verified:** headless Chromium, origin/main vs branch: the Development & Splice tab bar has no Report button on the branch (main: it had); the six result tabs' text, the combined Report tab's text (`SharedReport.text`), its tab links (Development & Splice · Tension Splice) and localStorage identical; 0 page errors.
 - **Provision:** none. **Saved data:** none (the Report tab was never saved as `currentTab`).
 - **Also fixed (combined report, display only; found while testing):** an identical load combination's note linked to `[[<chapter><first combination>/DCR]]`; when that combination's torsion is negligible its torsion work has no DCR step, so the default project had one unresolved link ("§?") in §5.3. The note now links to the first step of that combination's work (`fx…/Mu`, `sh…/d`, `tq…/Acp`). Anchor in the Beam Capacity srcdoc: `Same factored actions as Combination`. Check: default project, 0 unresolved references after (1 before).
@@ -6167,3 +6167,170 @@ Frame: Beam Capacity (`suite-frame-capacity`).
 - **Provisions:** none. **Check case:** M_u typed key by key "9.6" (main and number-pad "."), "-12.25", ".5": field text as typed, `S.combos[0].Mu` and `computeAll().combos[0].Mu` = 9.6 / −12.25 / 0.5 (before: 96 / 12.25 / 5). Legs "12" → 12 (before 22). f′c "4.5" over http → 4.5 ksi (before 45).
 - **How verified:** probe origin/main vs branch (computeAll() of the Beam Capacity frame, the ASD frame's compute() and inherited values, and the `rcbeam_v2_auto` text without `ui`). Three cases: default; project A (M_u 250, V_u 35, b_w 14, h 30, f′c 5, s 8 typed key by key; combo 2 M_u −120.75 / V_u 42.5, f_y 60, c_c 1.75 set directly); project B (T-section AASHTO, b_f 48.5, h_f 7.25, T_u 12.4, d_man 27.375, layer clear 1.5 set; M_u 180, f′c 6, T_u 12 typed). All three byte-identical. Values typed without "." or "-" give the same results on both sides; values with "." or "-" are the bug. New `tests/smoke/decimal-entry.mjs` (default: cbc, cbc2, cbasd, cbdev): every visible number field of the three frames takes "9.6", "0.75", "-1.5" and "9.6" with the number-pad "." (sent as key ".", code NumpadDecimal, keyCode 110), plus the behaviour checks above. All pass on the branch; on main 25 + 6 fields fail. check-syntax, phone-layout `--tool cbc,aci`, project-library `--tool cbc` / `asd` / `rebar`, cbc-asd-mbe4, rebar-comp-lap, dxf-print-sheets, home-projects: pass. 0 console errors.
 - **Saved data (§5):** none. **Other copies:** the stand-alone `Concrete Beam ASD.html` is a redirect page. The Development & Splice frame has no `numIn`.
+
+## 2026-11-12 — PR: claude/cbc-module-reports (PR #1431: https://github.com/mlococo88/All-Structural/pull/1431) (CBMR) — one Report tab per suite tab; the suite's combined Report tab retired   [display only; no formula, value, code reference, storage key or saved-data format change]
+
+The file uses CRLF line endings; keep them. Every code site is tagged `CBMR`.
+
+**Editing method:** each srcdoc was edited by exact-string replacements on its encoded text. Each anchor was decoded (`&quot;`, `&amp;`), then each old and new string was re-encoded with `&` → `&amp;` and `"` → `&quot;`. Each anchor was found once in its frame's region. CRLF was kept. Do not use a decode → re-encode round trip of a whole srcdoc: six `&#39;` / `&gt;` entities would not survive it.
+
+### Engineer request (2026-11-12)
+One report per module. Remove the top-bar Report tab. Each module gets its own Report tab in its own tab bar, as the old standalone rebar tool had.
+
+### CBMR-1. Shell (outer page)
+- **Removed:**
+  - the `#suite-report` CSS block (anchor was `/* CBRP: the combined Report tab (shared viewer) */`; it is now a one-line comment);
+  - `<button class="suite-tab" id="suite-tab-report" …>Report</button>`;
+  - `<div class="suite-frame-wrap" data-app="report"><div id="suite-report"></div></div>`;
+  - the CBRX inline `beforeprint` script that called `CBRP.prep()`;
+  - the whole CBRP script (anchor was `/* CBRP (2026-11-01): the suite's combined Report tab`). Its functions moved into the frames (CBMR-2 to CBMR-4).
+- **Kept:** KaTeX 0.16.11 (css + js), `shared/steps.js`, `shared/report.js` and `shared/dxf.js`. The head comment now says they serve the print hand-off. The `#asd` / `#dev` / `#capacity` hash code, `show()` and the CBST `capStatus` are unchanged. `window.CBST_capStatus` is now unused and harmless.
+- **Added** (anchor `/* CBMR (2026-11-12, engineer request: one report per tab)`, where the CBRP script was): the print hand-off `window.CBMRP`.
+  - `frameDoc()` returns the active frame's `suiteReportDoc()`.
+  - `printDoc(doc, inBefore)` calls `SharedReport.print(doc)`, then CBPI `uniqSvgIds` on `#rp-print`. From `beforeprint` it first stubs `window.print` for one second, so the 50 ms `window.print()` of `SharedReport.print` does not start a second print.
+  - `CBMRP.print(doc)` is called by the frames.
+  - A `beforeprint` listener prints the shown tab's report. It does nothing while `rp-printing` or `sdx-printing` is set.
+  - A Ctrl+P `keydown` listener prints the shown tab's report.
+- **Why the suite page prints:** a page printed from inside an iframe is cut to the frame.
+
+### CBMR-2. Beam Capacity frame (`#suite-frame-capacity`)
+- **Head:** after `<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>` add `<script src="shared/steps.js"></script>` and `<script src="shared/report.js"></script>`. These are classic scripts with relative paths. The srcdoc base URL is the suite's, so they resolve next to the suite file; checked under `file://` and http.
+- **CSS:** after `@media print{#cbcDashCol,#cbcDashBox{display:none!important}}` add the `#pageBody.cbmr` rules: viewer font, bar buttons, figure height and `.cbmrErr`. A container query (max-width 819 px) puts the contents list above the report.
+- **`buildTabs()`:**
+  - Before:
+    ```js
+      tabs.forEach(([id,label])=>{
+        const b=el("button",null,label);
+        if(id===S.ui.tab) b.classList.add("active");
+        b.addEventListener("click",()=>{ S.ui.tab=id; autosave(); refresh(); });
+        bar.appendChild(b);
+      });
+      const pg=el("div"); pg.id="pageBody"; pages.appendChild(pg);
+      buildOutput(pg);
+    ```
+  - After:
+    - `CBMR.on` is switched off when `S.ui.tab` changed to another existing tab (a link or the status chip), and `CBMR.tab=S.ui.tab`.
+    - The active class goes on a tab button only when `!CBMR.on`.
+    - A tab button click sets `CBMR.on=false` first.
+    - A "Report" button (`#cbmrTab`) is added last. Its click sets `CBMR.on=true; CBMR.tab=S.ui.tab; refresh();` and scrolls the output panel to the top.
+    - `buildOutput(pg)` runs as before: the tab shown before is built first, for `CC` and for the `.eqRef` references that `cbcRefs` reads.
+    - Then `if(CBMR.on){ cancel VIS3D.raf; mrMount(pg); }`.
+- **`cbcGoto()`:** `CBMR.on=false;` before `S.ui.tab=tab;`. The status chip handler gets `CBMR.on=false;` as well.
+- **`cbcRxPrint()`:** Before: `try{ … P.CBRP.printAny() … }catch(e){} window.print();` plus the frame `keydown` that called `P.CBRP.printAny`. After: `function cbcRxPrint(){ mrPrint(); }`; Ctrl+P is the CBMR `keydown` handler.
+- **Text:**
+  - `cbcRxAbout`: "How this chapter is laid out:" → "How this report is laid out:".
+  - `#btnPrint` title: "…the suite's calculation report (the Report tab), from any tab" → "…this tab's calculation report (its Report tab), from any of its tabs".
+- **Before `function refresh(){`:** the CBMR block (anchor `CBMR (2026-11-12, engineer request: one report per tab of the suite)`), then `CBMR_CFG` and `cbmOvSection`. The block ports these shell functions to one module:
+
+  | Shell (CBRP) | Frame (CBMR) |
+  |---|---|
+  | `rxLite`, `rxLiteIt`, `tx`, `cell` | `mrLite`, `mrLiteIt`, `mrTx`, `mrCell`, without the chapter prefix |
+  | `topics` | `mrTopics` |
+  | `item` | `mrItem` |
+  | `rxRest` | `mrRest`: one tab; no copies while the tab has an input error |
+  | `rxWalk` | `mrWalk`: verbatim |
+  | `rxControls`, `rxWire` | `mrControls`, `mrWire`: they re-mount the viewer |
+  | `cbroOrder` | `mrOrder` |
+  | `cbroSum` | `mrSum`, with `CBMR_CFG.sum` |
+  | `cbroKeys` | `mrKeys` |
+  | `cbirMsg`, `cbirSection` | `mrErrMsg`, `mrErrSection` |
+  | `cbrfMove` | `mrMove` |
+  | `model` | `mrModel` |
+  | `go` | `mrGo` |
+  | `render` | `mrMount` |
+  | `printAny` | `mrPrint`, via `CBMRP.print` in the suite, else `SharedReport.print` |
+  | `uniqSvgIds` | `mrUniqSvgIds`: a frame opened alone |
+  | `cbovSection` | `cbmOvSection` |
+
+  `suiteReportDoc()` is also added (the shown report's document, or a fresh build). The viewer's Print report click is captured and sent to `mrPrint`.
+- **Keys without the chapter prefix:**
+  - step scopes and `[[key]]` are unchanged;
+  - `[[tab:<tabId>|…]]`;
+  - `cbro:<tab>`, `cbro:sum`, `cbov`, `cbir`, `cbrf:ap:<tab>`, `omit-<scope>`.
+- **Model:**
+  - `M.title` is "Beam Capacity — Calculation Report".
+  - The title block and running header come from this tab's `S.proj`: Project, Project No., Subject, Calculated by, Date, Sheet, Checked by, Checked date.
+  - The footer is "<project> (Concrete Beam Design Suite — Beam Capacity)".
+  - References: a table with the columns Reference and Provisions used, plus "About this report" (`cbcRxAbout`).
+  - No chapter parts. "Appendices" is kept for the appendix.
+
+### CBMR-3. ASD Beam Calcs frame (`#suite-frame-asd`)
+- The same as CBMR-2:
+  - head: the shared scripts only. KaTeX 0.16.11 was already loaded with the same URLs, so no new library.
+  - CSS after `@media print{#asdDashCol,#asdDashBox{display:none!important}}`;
+  - `buildTabs`, `asdGoto`, the status chip, `asdRxPrint` → `mrPrint`;
+  - the CBMR block, byte-identical to the Beam Capacity copy;
+  - `CBMR_CFG` (anchor `CBMR: what the report of the ASD Beam Calcs tab takes`).
+- Its "Summary of results" comes from `asdDashItems`.
+- `CBMR_CFG.note` replaces the cross-chapter CBIR note. While `ASDCE` (the Beam Capacity input errors, CBST) is not empty, the first section says "Note: the Beam Capacity tab has an input error (…). The values this report inherits from it are the last ones it sent before the error; …".
+- **Text:**
+  - `asdRptModel`: "Received from the Beam Capacity tab (its chapter of this report)." → "Received from the Beam Capacity tab (worked in its own Report tab)."
+  - `asdRxAbout`: "How this chapter…" → "How this report…".
+  - the `#btnPrint` title, as in CBMR-2.
+
+### CBMR-4. Development & Splice frame (`#suite-frame-dev`)
+- **Tab bar:** Before: `<!-- CBRP-2 (2026-11-01): no Report tab button in this embedded copy; … -->`. After: `<button class="tab" data-tab="report">Report</button>` with a CBMR comment. The RBRP code (`switchTab`, `render`, `rbrRender`, `beforeprint`) was already there. The Report tab is still not stored as `currentTab`.
+- **Before `function rbrRender(){`:** `rbrSuite(M)`. It is the dev part of the shell's CBRO / CBIR:
+  - Summary of results first: the `#rbrDash` lines, each linked to its step (same `CK` / `CT` / `NK` maps);
+  - the sections get the keys `cbro:<tab>`;
+  - the "Summary of results" subsection of "Project and inputs" becomes the last section before References, titled "Development and splice lengths and code checks";
+  - with `rbInputErrors`: "Input error: no results" with the errors, and the References;
+  - title "Development & Splice — Calculation Report".
+- **`rbrRender`:** `M=rbrModel()` → `M=rbrSuite(rbrModel())`. `rbrModel()` itself is unchanged (the tests read it).
+- **Print:** `printReport()` was `P.CBRP.printAny()`, else `RBRP.api.print()` on the Report tab, else `window.print()`. It is now `suiteReportDoc()` → `P.CBMRP.print(d)` in the suite, else `SharedReport.print(d)`; the report prints from any tab. Ctrl+P `keydown` calls `printReport()`. The viewer's Print report click is captured in `rbrRender` (`T.__cbmrPrint`).
+- **§3 list:** "no Report tab button" is removed from the intentional embedded differences (entry claude/cbc-hide-dev-report above, annotated). The standalone `ACI Rebar Development Length.html` has been a redirect page since RBRT #804, so it needed no change.
+
+### Tests
+- `tests/smoke/dxf-print-sheets.mjs`, cbc entry: `reportOpen` clicks the Beam Capacity frame's `#cbmrTab`, not `#suite-tab-report`. The report pattern is now `/Beam Capacity — Calculation Report/`. `reportOpen` receives the frame.
+
+### Decisions (pending engineer review)
+- **The Report tab is not persisted as the active tab** (`S.ui.tab` / `currentTab` keep the tab shown before; `CBMR.on` / `RBRP.on` are in memory). Saving "report" would make an older copy of the file, or a reopened project, open on a tab it does not know. Beam Capacity and ASD fall back to Summary; in Development & Splice `render()` would show nothing.
+- **Print from any of a tab's result tabs prints that tab's report,** as the combined Report printed from every tab (CBRX).
+- **Each report is self-contained.** The CBRX tab copy now tests what is new against its own report, so the ASD report keeps the Input Echo table "Inherited from Beam Capacity", which the combined report omitted because chapter A showed those numbers.
+- **"Chapter" wording changed where it no longer holds:**
+  - "chapters below" → "sections below"
+  - "in the Beam Capacity chapter" → "in the Summary of checks section"
+  - "How this chapter is laid out" → "How this report is laid out"
+  - "(its chapter of this report)" → "(worked in its own Report tab)"
+  - "About the X chapter" → "About this report"
+  - "Codes and articles cited, by chapter" → "Codes and articles cited"
+  - "… of this chapter for this project" → "… of this report …"
+  - the appendix note
+- **The two copies of the CBMR block** (Beam Capacity and ASD frames) are known duplicated code within this file. Keep them in step.
+
+### Saved data / provisions
+- No key or format change: `rcbeam_v2_*`, `asd_v1_*`, `rcsuite.rebar_autosave_v1` and `rebar_aci_*`. `S.ui.rptOpts` is written by the Include boxes as before.
+- **Provision:** none. No formula, factor, unit, code reference or value changed.
+
+### Check case
+Default project, Beam Capacity (ACI 318-19, 12 × 18 in, 3 #5 / 3 #5, #4 @ 6 in, T_u 13.5 kip-ft): the Report tab's "Summary of results" reads "Beam Capacity: 3 NG.", the same 17 check lines as the combined report's Beam Capacity subsection. Printed: 33 letter pages, header "Project No. — — Untitled / Computed: M. Lococo <date> · Checked: —", "Page n of 33".
+
+### How verified
+Headless Chromium, `file://`. Scratch probe: origin/main vs branch, 5 cases (def; c1 / c2 / c3 as PR #544; err: b_w 0 and M_LL 0).
+- The text of every tab of the three frames, the Beam Capacity and ASD `CC`, the Development & Splice results, the check panel and localStorage before and after showing the reports: identical.
+- Each module report vs its chapter of the old combined report (`SharedReport.text`, § numbers normalised): common lines in the same order. Only these lines differ:
+  - the title, the title block and the code line;
+  - the summary note naming the other chapters;
+  - the wording listed above;
+  - the ASD inherited table.
+- 0 unresolved references, 0 KaTeX errors, no NaN / undefined (also Development & Splice in AASHTO mode and with an input error).
+- **Print:** for each module, 5 paths each gave one top-page print of that module's report with the running header, and `#rp-print` was emptied after `afterprint`. The paths: Print / PDF, Ctrl+P in the frame on a result tab and on the Report tab, the viewer's Print report, and Ctrl+P on the suite page. The browser's Print (`page.pdf`) gave 33 / 10 / 12 letter pages, each with "Page 1 of N". A frame opened alone printed itself (33 pages).
+- **Report tab links** open the module's own tab (Beam Capacity · Input Echo; ASD · Input Echo; Development & Splice · Tension) and turn the Report off.
+- `shared/` resolves under http too.
+- 1400 / 768 / 390 px: no sideways scroll; the 3 suite tabs are visible.
+- 0 console errors.
+- Tests:
+  - `node tests/check-syntax.mjs "Concrete Beam Capacity.html"`: all pass, with each srcdoc decoded.
+  - `node tests/engine/run.mjs report steps steps-groups report-wiring`: 42 passed.
+  - Smoke tests, all pass:
+    - `decimal-entry.mjs` (cbc, cbc2, cbasd, cbdev)
+    - `phone-layout.mjs --tool cbc`
+    - `dxf-print-sheets.mjs --tool cbc`
+    - `cbc-asd-mbe4.mjs`
+    - `rebar-comp-lap.mjs`
+    - `rebar-redirect.mjs`
+    - `project-library.mjs --tool cbc / asd / rebar`
+
+### Open items
+- Decimal entry with the Beam Capacity Report tab open: 0 keystrokes lost. While the sweep types transient values, the section figure logs "`<rect>` attribute width: A negative value". The Input Echo tab shows the same errors on its own (unchanged code, 20 errors); the report draws the figure three times. Not changed.
+- Typing with the Report tab open rebuilds the report on each refresh (about 190 ms in the default project), as the Development & Splice Report tab already did.
