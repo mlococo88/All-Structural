@@ -157,5 +157,34 @@
      steel with the detail allowance, worked in the Analysis tab's step eq.DC1steel), kip; null where the analysis has not run */
   function weight(an) { return an && an.segs && an.wSteel ? an.segs.reduce((a, s, i) => a + an.wSteel[i] * (s.x1 - s.x0), 0) : null; }
 
-  window.SBDSummary = { weight, MODS, COLS, GROUPS, run, cells, overall, grpStat, modOf, FLEX_CLS, label, grpLabel };
+  /* units(P) (SB-2 PR 2, 2026-11-12; engineer: each girder type is checked on every line assigned to it): [{ u, gi, j, P }] — type gi on
+     line j, P the project as seen with the type on that line (SBDModel.atLine; the type's design line is the project itself). A type with
+     no line assigned is worked on its design line, as before. In type order, each type's lines ascending. */
+  function units(P) {
+    const M = W().SBDModel, out = [];
+    (P.girders || []).forEach((g, gi) => { const L = M && M.typeLines ? M.typeLines(P, gi) : [];
+      (L.length ? L : [M && M.designLine ? M.designLine(P, g) : null]).forEach(j => out.push({ u: out.length, gi, j, P: j == null ? P : M.atLine(P, gi, j) })); });
+    return out;
+  }
+  /* merge(P, gi, us): the summary of type gi from those of its lines (us: [{ j, G }] where G = cells() of the type on line j): each column the
+     line whose value governs (the largest ratio, a ratio not a number first, or the smallest RF; a run before a check not run / not
+     applicable), its cell with ln = that line. One line: that line's summary itself, unchanged. */
+  function merge(P, gi, us) {
+    const g = P.girders[gi] || {}, lab = g.label || g.id || `G${gi + 1}`, J = us.filter(q => q.G);
+    if (!J.length) return null;
+    if (J.length === 1) return J[0].G;   // one line: its summary unchanged (the line is the type's design line, or the only one)
+    const out = { gi, label: lab, cells: {}, warn: [], notes: [], err: {}, lines: J.map(q => q.j), byLine: J.map(q => ({ j: q.j, cells: q.G.cells })) };
+    COLS.forEach(c => { let b = null;
+      J.forEach(q => { const x = q.G.cells[c.id]; if (!x) return; const v = c.rf ? x.rf : x.r;
+        const rank = z => z.st === 'notrun' ? 0 : z.st === 'na' ? 1 : 2;
+        if (!b || rank(x) > rank(b.x) || (rank(x) === 2 && rank(b.x) === 2 && (c.rf ? v < b.x.rf : gr(v) > gr(b.x.r)))) b = { x, j: q.j }; });
+      if (b) out.cells[c.id] = { ...b.x, ln: b.j }; });
+    const top = J.reduce((b, q) => { const r = Math.max(-Infinity, ...COLS.filter(c => !c.rf).map(c => { const x = q.G.cells[c.id]; return x && x.st !== 'notrun' && x.st !== 'na' ? gr(x.r) : -Infinity; })); return !b || r > b.r ? { q, r } : b; }, null);
+    out.gov = (top ? top.q.G : J[0].G).gov; out.govLine = top ? top.q.j : J[0].j;
+    const wl = new Map(); J.forEach(q => (q.G.warn || []).forEach(w => { if (!wl.has(w)) wl.set(w, []); wl.get(w).push(q.j); }));   // a warning of several lines listed once, with its lines
+    wl.forEach((js, w) => out.warn.push(`${js.map(j => 'G' + (j + 1)).join(', ')}: ${w}`));
+    J.forEach(q => { Object.entries(q.G.err || {}).forEach(([k, v]) => { if (!out.err[k]) out.err[k] = v; }); });
+    return out;
+  }
+  window.SBDSummary = { units, merge, weight, MODS, COLS, GROUPS, run, cells, overall, grpStat, modOf, FLEX_CLS, label, grpLabel };
 })();

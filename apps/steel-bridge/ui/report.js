@@ -19,7 +19,7 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const S = { src: 'analysis', pl: null, plName: '', B: null, key: '', err: '', busy: false, closed: new Set(), A: null, aKey: '', prog: '', rows: new Map(), run: 0 };
   const keyOf = ctx => JSON.stringify([ctx.P, ctx.g, S.src, S.plName]);
-  const allKey = ctx => JSON.stringify([ctx.P]);
+  const allKey = ctx => JSON.stringify([ctx.base || ctx.P]);   // SB-2 PR 2: ctx.base, the project itself (ctx.P: the type on the line chosen)
   const rowKey = (P, gi) => JSON.stringify([P, gi]);   // one girder's summary rows (this project's analysis)
   const incOf = o => { const SEC = window.SBDReportBuild.SECTIONS, inc = {}; SEC.forEach(([k]) => { inc[k] = !(o.inc && o.inc[k] === false); }); return inc; };
 
@@ -95,20 +95,21 @@
   /* one girder after the other, one per timer tick (the page stays responsive and shows the progress); a girder whose rows are kept
      for this project state is not run again */
   function buildAll(host, ctx) {
-    const P = ctx.P, n = P.girders.length, list = [], run = ++S.run, t0 = Date.now();
+    // SB-2 PR 2 (2026-11-12): one column per girder type on each of its lines (report/summary.js units; a type on one line: as before)
+    const P0 = ctx.base || ctx.P, US = window.SBDSummary.units(P0), n = US.length, list = [], run = ++S.run, t0 = Date.now();
     S.busy = true; S.err = ''; S.prog = `Building the report of every girder: girder 1 of ${n}…`; render(host, ctx);
-    const step = gi => {
+    const step = k => {
       if (run !== S.run) return;
-      if (gi >= n) { S.A = list; S.aKey = allKey(ctx); S.busy = false; S.prog = ''; S.secs = (Date.now() - t0) / 1000; render(host, ctx); return; }
-      const g = P.girders[gi], lab = g.label || g.id || `G${gi + 1}`;
+      if (k >= n) { S.A = list; S.aKey = allKey(ctx); S.busy = false; S.prog = ''; S.secs = (Date.now() - t0) / 1000; render(host, ctx); return; }
+      const { gi, j, P } = US[k], g = P.girders[gi], many = US.filter(q => q.gi === gi).length > 1, lab = (g.label || g.id || `G${gi + 1}`) + (many ? ` on G${j + 1}` : '');
       try {
         let e = S.rows.get(rowKey(P, gi));
         if (!e) { const B = window.SBDReportData.compute(P, gi, { src: 'analysis' }), r = window.SBDReportBuild.govRows(B); e = { rows: r.rows, err: r.err }; S.rows.set(rowKey(P, gi), e); }
         list.push({ gi, label: lab, rows: e.rows, err: e.err });
       } catch (er) { list.push({ gi, label: lab, rows: [], err: { all: 'Report error: ' + (er && er.message) } }); }
       if (S.rows.size > 4 * n + 8) S.rows.delete(S.rows.keys().next().value);
-      S.prog = `Building the report of every girder: girder ${Math.min(gi + 2, n)} of ${n}…`; render(host, ctx);
-      setTimeout(() => step(gi + 1), 30);
+      S.prog = `Building the report of every girder: girder ${Math.min(k + 2, n)} of ${n}…`; render(host, ctx);
+      setTimeout(() => step(k + 1), 30);
     };
     setTimeout(() => step(0), 30);
   }

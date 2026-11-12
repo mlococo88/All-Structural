@@ -45,7 +45,7 @@ table.sum-tbl td.s-pass{background:#ECFDF5} table.sum-tbl td.s-fail{background:#
 table.sum-tbl td a{color:inherit;text-decoration:underline dotted;text-underline-offset:2px} table.sum-tbl td a:hover{text-decoration:underline}
 table.sum-tbl td.s-pass a{color:#065F46} table.sum-tbl td.s-fail a{color:#991B1B} table.sum-tbl td.s-review a{color:#92400E}
 table.sum-ov th{width:1%;white-space:nowrap;font-family:var(--font-ui);font-size:9pt;font-weight:600} table.sum-ov td{font-size:10pt}
-table.sum-tbl th.g0,table.sum-tbl td.g0{border-left:2px solid #94A3B8}
+table.sum-tbl th.g0,table.sum-tbl td.g0{border-left:2px solid #94A3B8} table.sum-tbl tr.sum-line td{font-size:8pt} table.sum-tbl tr.sum-line td.lft{color:#475569}
 .sum-sub{font-size:7.5pt;color:#475569;font-weight:400;display:block}
 .sum-fig{max-width:680px;margin:6px auto 0} .sum-fig svg{max-width:100%;height:auto;display:block}
 .sum-list{margin:4px 0;padding-left:18px;font-size:9.5pt} .sum-list li{margin:2px 0}
@@ -63,33 +63,42 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
 
   /* ---------- the run ---------- */
   const pkOf = P => JSON.stringify(P);
-  const todo = (P, mods) => { const out = []; P.girders.forEach((g, gi) => SM().MODS.forEach(m => { if ((!mods || mods.includes(m.k)) && !(S.parts[gi] && S.parts[gi][m.k])) out.push({ gi, m }); })); return out; };
+  /* SB-2 PR 2 (2026-11-12): the run is per unit (a girder type on one of its lines, report/summary.js units); S.parts[u] holds a unit's
+     module results, S.ulist[u] its summary, S.list[gi] the type's summary over its lines (merge: each column's governing line) */
+  const unitsOf = P => { if (!S.U || S.U.pk !== S.pk) S.U = { pk: S.pk, list: SM().units(P) }; return S.U.list; };
+  const todo = (P, mods) => { const out = []; unitsOf(P).forEach(U => SM().MODS.forEach(m => { if ((!mods || mods.includes(m.k)) && !(S.parts[U.u] && S.parts[U.u][m.k])) out.push({ gi: U.gi, u: U.u, j: U.j, m }); })); return out; };
   const notify = () => S.subs.forEach(f => { try { f(state()); } catch (e) { /* a listener's error does not stop the run */ } });
   function sync(P) {   // a new project state: the results of the last one are out of date
     const pk = pkOf(P); if (pk === S.pk) return;
     if (S.list.some(G => G && Object.values(G.cells || {}).some(q => q.st !== 'notrun'))) S.prev = S.list;   // DASH: the last results, shown as out of date by the left summary
-    S.first = !S.pk; S.pk = pk; S.parts = []; S.list = []; S.secs = null; S.run++; S.busy = false; S.prog = ''; clearTimeout(S.timer);
+    S.first = !S.pk; S.pk = pk; S.parts = []; S.list = []; S.ulist = []; S.U = null; S.secs = null; S.run++; S.busy = false; S.prog = ''; clearTimeout(S.timer);
     notify();
   }
-  function recell(P, gi) { const L = S.list; try { L[gi] = SM().cells(P, gi, S.parts[gi] || {}); } catch (e) { L[gi] = { gi, label: (P.girders[gi] || {}).label || `G${gi + 1}`, cells: {}, warn: ['Summary error: ' + (e && e.message)], err: {} }; } }
+  function recell(P, gi) {
+    const L = S.list, lab = (P.girders[gi] || {}).label || `G${gi + 1}`, US = unitsOf(P).filter(U => U.gi === gi);
+    try { US.forEach(U => { S.ulist[U.u] = SM().cells(U.P, gi, S.parts[U.u] || {}); }); L[gi] = SM().merge(P, gi, US.map(U => ({ j: U.j, G: S.ulist[U.u] }))); }
+    catch (e) { L[gi] = { gi, label: lab, cells: {}, warn: ['Summary error: ' + (e && e.message)], err: {} }; }
+  }
+  const lnTxt = (G, c) => G && G.lines && G.lines.length > 1 && c && c.ln != null ? ` on G${c.ln + 1}` : '';   // the governing line of a type checked on several lines
   /* start(P, o): run the modules not yet run for this project state (o.mods: only those modules; o.all: every module again; o.delay ms) */
   function start(P, o) {
     o = o || {}; sync(P);
-    if (o.all) { S.parts = []; S.list = []; S.run++; S.busy = false; }
+    if (o.all) { S.parts = []; S.list = []; S.ulist = []; S.run++; S.busy = false; }
     if (S.busy) return;   // a run in progress covers every module not yet run of this project state
     const list = todo(P, o.mods); P.girders.forEach((g, gi) => { if (!S.list[gi]) recell(P, gi); });
     if (!list.length) { notify(); return; }
-    const run = ++S.run; S.busy = true; S.err = ''; S.t0 = Date.now(); S.prog = o.delay ? (S.first ? 'Starting…' : 'Inputs changed — updating…') : `Running ${list[0].m.name}, ${S.list[list[0].gi].label} (1/${list.length})…`; draw(); notify();
+    const uLab = q => `${S.list[q.gi].label}${q.j != null && unitsOf(P).filter(U => U.gi === q.gi).length > 1 ? ` on G${q.j + 1}` : ''}`;
+    const run = ++S.run; S.busy = true; S.err = ''; S.t0 = Date.now(); S.prog = o.delay ? (S.first ? 'Starting…' : 'Inputs changed — updating…') : `Running ${list[0].m.name}, ${uLab(list[0])} (1/${list.length})…`; draw(); notify();
     const step = k => {
       if (run !== S.run) return;
       if (pkOf(P) !== S.pk) { S.busy = false; return; }
       if (k >= list.length) { S.busy = false; S.prog = ''; S.secs = (Date.now() - S.t0) / 1000; draw(); notify(); return; }
-      const { gi, m } = list[k];
-      S.prog = `Running ${m.name}, ${S.list[gi].label} (${k + 1}/${list.length})…`; draw(); notify();
+      const { gi, u, m } = list[k], UP = unitsOf(P)[u].P;
+      S.prog = `Running ${m.name}, ${uLab(list[k])} (${k + 1}/${list.length})…`; draw(); notify();
       // paint the progress, then one module of one girder, then yield
       requestAnimationFrame(() => setTimeout(() => {
         if (run !== S.run) return;
-        try { (S.parts[gi] = S.parts[gi] || {})[m.k] = SM().run(P, gi, m.k); } catch (e) { (S.parts[gi] = S.parts[gi] || {})[m.k] = { k: m.k, err: { [m.k]: 'Calculation error: ' + (e && e.message) } }; }
+        try { (S.parts[u] = S.parts[u] || {})[m.k] = SM().run(UP, gi, m.k); } catch (e) { (S.parts[u] = S.parts[u] || {})[m.k] = { k: m.k, err: { [m.k]: 'Calculation error: ' + (e && e.message) } }; }
         recell(P, gi);
         { const pf = S.pendFocus, q = pf && pf.gi === gi && S.list[gi].cells[pf.id]; if (q && q.st !== 'notrun') { S.pendFocus = null; focus(q); } }   // DASH: a chip of a module not run: its card once run
         setTimeout(() => step(k + 1), 0);
@@ -138,11 +147,11 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
   }
   /* gotoCell(gi, id, cx): the cell's tab, girder and step (cx: the caller's { P, goto } when the Summary tab has not been drawn: the left
      summary); a module not run yet is run (and its tab, selected, runs itself: #1260) */
-  function gotoCell(gi, id, cx) {
+  function gotoCell(gi, id, cx, j) {
     const X = cx || S.ctx, col = SM().COLS.find(q => q.id === id); if (!X || !col) return;
-    sync(X.P); const G = S.list[gi], c = G && G.cells[id];
+    sync(X.P); const G = S.list[gi], c0 = G && G.cells[id], bl = j != null && G && G.byLine ? G.byLine.find(q => q.j === j) : null, c = bl ? { ...bl.cells[id], ln: j } : c0;
     if (!c || c.st === 'notrun') { S.pendFocus = { gi, id }; start(X.P, { mods: [SM().modOf(id).k] }); } else S.pendFocus = null;
-    X.goto(col.tab, gi); const c2 = (S.list[gi] || {}).cells; if (c2 && c2[id] && c2[id].st !== 'notrun') focus(c2[id]);
+    X.goto(col.tab, gi, c && c.ln != null ? c.ln : (j != null ? j : undefined)); const c2 = (S.list[gi] || {}).cells; if (c2 && c2[id] && c2[id].st !== 'notrun') focus(c2[id]);
   }
 
   /* ---------- drawing ---------- */
@@ -155,25 +164,26 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
   const vTxt = (c, col) => !c || c.st === 'notrun' ? 'not run' : c.st === 'na' ? 'n/a' : col.rf ? (isFinite(c.rf) ? fmt(c.rf, 2) : '—') : (isFinite(c.r) ? fmt(c.r, 3) : nfTxt(c.r));
   const cellHtml = (G, col, k0) => { const c = G.cells[col.id] || { st: 'notrun' };
     const nn = c.st !== 'na' && c.st !== 'notrun' && !col.rf && c.r != null && !isFinite(c.r) ? NF_WHY[nfTxt(c.r)] + '(Counted as REVIEW.) ' : '';
-    const tip = c.st === 'na' ? c.why : c.st === 'notrun' ? 'Not run yet: click to run' : `${nn}${G.label}: ${c.check} — ${c.loc}${c.nWarn ? ` (${c.nWarn} warning item(s) on the tab)` : ''}`;
-    return `<td class="s-${c.st}${k0 ? ' g0' : ''}" title="${esc(String(tip || '').replace(/\$|\{\}|[{}]|\\/g, ''))}"><a href="#" data-sumgo="${G.gi}|${col.id}">${vTxt(c, col)}</a></td>`; };
+    const tip = c.st === 'na' ? c.why : c.st === 'notrun' ? 'Not run yet: click to run' : `${nn}${G.label}${lnTxt(G, c)}: ${c.check} — ${c.loc}${c.nWarn ? ` (${c.nWarn} warning item(s) on the tab)` : ''}`;
+    return `<td class="s-${c.st}${k0 ? ' g0' : ''}" title="${esc(String(tip || '').replace(/\$|\{\}|[{}]|\\/g, ''))}"><a href="#" data-sumgo="${G.gi}|${col.id}${G.j != null ? '|' + G.j : ''}">${vTxt(c, col)}</a>${G.j == null && c.ln != null && G.lines && G.lines.length > 1 ? `<span class="sum-sub">G${c.ln + 1}</span>` : ''}</td>`; };
   function overview(P, list) {
     const M = window.SBDModel, G = M.GRADES, m = P.materials, d = P.deck, xs = P.xs || {}, U = window.SharedUnits, AN = window.SBDAnalysis;
     const sp = P.spans.lengths, cont = P.spans.continuity !== 'simple' && sp.length > 1, own = (P.ownerRules || {}).owner || 'AASHTO';
     const bays = (xs.bays || []).map(Number), same = bays.length && bays.every(b => b === bays[0]);
     const kv = (k, v) => `<tr><th class="lft">${k}</th><td class="lft">${v}</td></tr>`;
-    const wts = list.map(Gs => ({ G: Gs, w: SM().weight(((S.parts[Gs.gi] || {}).an || {}).an) }));
-    const wAll = wts.every(q => q.w != null) ? wts.reduce((a, q) => a + q.w, 0) : null;
+    const US = unitsOf(P), wts = list.map(Gs => { const U = US.find(q => q.gi === Gs.gi), n = Math.max(1, US.filter(q => q.gi === Gs.gi && q.j != null && M.typeLines(P, Gs.gi).includes(q.j)).length);
+      return { G: Gs, n, w: U ? SM().weight(((S.parts[U.u] || {}).an || {}).an) : null }; });   // SB-2: a type's steel on each of its n lines
+    const wAll = wts.every(q => q.w != null) ? wts.reduce((a, q) => a + q.w * q.n, 0) : null;
     const wk = gi => `<a href="#" class="wk" data-sumwk="${gi}" title="Worked on the Analysis tab (Σw_s ℓ, equilibrium step)">§</a>`;
     const h = `<div class="tscroll"><table class="tbl sum-ov"><tbody>
       ${kv('Spans', `${sp.map(L => U.fmt(+L, 2)).join(' + ')} = ${U.fmt(sp.reduce((a, b) => a + (+b || 0), 0), 2)} ft, ${cont ? 'continuous' : sp.length > 1 ? 'simple spans' : 'simple span'}`)}
       ${kv('Support skews', (xs.skews || []).length ? xs.skews.map(s => U.fmt(+s, 1) + '°').join(', ') : '—')}
       ${kv('Cross-section', `${xs.nb || '—'} girders at ${bays.length ? (same ? U.fmt(bays[0], 2) + ' ft' : bays.map(b => U.fmt(b, 2)).join(', ') + ' ft') : '—'}; overhangs ${U.fmt(+xs.ohL, 2)} / ${U.fmt(+xs.ohR, 2)} ft`)}
-      ${kv('Plate girders designed', P.girders.map(g => `${esc(g.label || g.id)} (${esc(g.position)}${AN ? `, loads of G${AN.lineOf(P, g) + 1}` : ''})`).join(', '))}
+      ${kv('Plate girders designed', P.girders.map((g, gi) => { const L = M.typeLines(P, gi); return `${esc(g.label || g.id)} (${esc(g.position)}${L.length > 1 ? `, girder type on lines ${L.map(j => 'G' + (j + 1)).join(', ')}` : AN ? `, loads of G${AN.lineOf(P, g) + 1}` : ''})`; }).join(', '))}
       ${kv('Steel (A709)', `top ${esc(m.steel.top)}, bottom ${esc(m.steel.bot)}, web ${esc(m.steel.web)} (F<sub>y</sub> ${G[m.steel.top].Fy} / ${G[m.steel.bot].Fy} / ${G[m.steel.web].Fy} ksi)`)}
       ${kv('Deck', `${d.composite === false ? 'noncomposite' : 'composite'}, t<sub>s</sub> ${U.fmt(d.ts, 2)} in (total ${U.fmt(d.tdeck, 2)} in), haunch ${U.fmt(d.haunch, 2)} in, f′<sub>c</sub> ${U.fmt(m.concrete.fc, 2)} ksi`)}
       ${kv('Owner', (() => { const cn = M.clientName ? M.clientName(P) : ''; return cn ? `${esc(cn)}; load rules ${esc(own)}` : `none entered; load rules ${esc(own)}`; })())}
-      ${kv('Girder steel (DC1, with detail allowance)', wts.map(q => `${esc(q.G.label)} ${q.w != null ? U.fmt(q.w, 1) + ' kip ' + wk(q.G.gi) : 'not run'}`).join('; ') + (wAll != null && list.length > 1 ? `; total ${U.fmt(wAll, 1)} kip` : ''))}
+      ${kv('Girder steel (DC1, with detail allowance)', wts.map(q => `${esc(q.G.label)} ${q.w != null ? U.fmt(q.w, 1) + ' kip ' + wk(q.G.gi) + (q.n > 1 ? ` × ${q.n} lines` : '') : 'not run'}`).join('; ') + (wAll != null && (list.length > 1 || wts.some(q => q.n > 1)) ? `; total ${U.fmt(wAll, 1)} kip` : ''))}
     </tbody></table></div><p class="note">Girder steel: Σw<sub>s</sub>ℓ of each plate girder from its analysis (the plates × 490/144 lb/ft per in² × (1 + detail allowance)), as worked in the Analysis tab's DC1 equilibrium step (§). ${list.length > 1 ? 'The total is the sum of the plate girders listed.' : ''}${P.girders.length < (xs.nb || 0) ? ` The project has ${P.girders.length} plate girder(s) for ${xs.nb} girder lines.` : ''}</p>`;
     return h;
   }
@@ -229,15 +239,15 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
     const verdict = !done && !n.fail && !n.review ? (n.pass ? 'INCOMPLETE' : '—') : ov.verdict;
     const bcls = verdict === 'FAIL' ? 'fail' : verdict === 'PASS' ? 'pass' : verdict === 'REVIEW' ? 'review' : 'none';
     const link = (G, col, c, t) => `<a href="#" data-sumgo="${G.gi}|${col.id}">${t}</a>`;
-    const govTxt = top ? `<b>Governing:</b> ${esc(LB(top.c).head)}, girder ${esc(top.G.label)}, ${txt(top.q.loc)}: ${txt(top.q.check)} — ${link(top.G, top.c, top.q, `${top.c.rf ? 'RF ' + fmt(top.q.rf, 2) : 'D/C ' + (isFinite(top.q.r) ? fmt(top.q.r, 3) : 'not a number')}`)}` : 'No check has run yet.';
+    const govTxt = top ? `<b>Governing:</b> ${esc(LB(top.c).head)}, girder ${esc(top.G.label)}${lnTxt(top.G, top.q)}, ${txt(top.q.loc)}: ${txt(top.q.check)} — ${link(top.G, top.c, top.q, `${top.c.rf ? 'RF ' + fmt(top.q.rf, 2) : 'D/C ' + (isFinite(top.q.r) ? fmt(top.q.r, 3) : 'not a number')}`)}` : 'No check has run yet.';
     const nanTxt = ov.nan.length ? `<span class="sum-low"><b>Not evaluated</b> (ratio not finite, REVIEW): ${ov.nan.map(z => `${esc(LB(z.c).head)}, ${esc(z.G.label)} ${link(z.G, z.c, z.q, txt(z.q.loc))}: ${txt(z.q.check)} — <span title="${esc(NF_WHY[nfTxt(z.q.r)])}">ratio ${nfTxt(z.q.r)}</span>`).join('; ')}.</span>` : '';
-    const low = ov.low && ov.low !== top ? `<span class="sum-low"><b>Lowest rating factor:</b> ${esc(ov.low.c.head.replace('Rating, ', ''))} ${link(ov.low.G, ov.low.c, ov.low.q, fmt(ov.low.q.rf, 2))} (${esc(ov.low.G.label)}, ${txt(ov.low.q.loc)}).</span>` : '';
+    const low = ov.low && ov.low !== top ? `<span class="sum-low"><b>Lowest rating factor:</b> ${esc(ov.low.c.head.replace('Rating, ', ''))} ${link(ov.low.G, ov.low.c, ov.low.q, fmt(ov.low.q.rf, 2))} (${esc(ov.low.G.label)}${lnTxt(ov.low.G, ov.low.q)}, ${txt(ov.low.q.loc)}).</span>` : '';
     const AD = window.SBDAutoDesignUI && window.SBDAutoDesignUI.lastWarns ? window.SBDAutoDesignUI.lastWarns(P) : null;
     const cdTxt = (() => { const CD = window.SBDCustomDemands, ks = CD ? ['flex', 'shear', 'cn', 'fat', 'rt', 'spl', 'wt'].filter(k => CD.srcGet(P, k) === 'custom') : [];
       return ks.length ? `Custom (entered) demands where chosen on a tab: ${ks.map(k => esc(CD.SPECS[k].name)).join(', ')}; this project's analysis for the rest.` : "this project's analysis (Analysis tab) for every module."; })();
     let h = `<section class="sec" id="sum-verdict"><div class="secHead">Summary: overall verdict</div><div class="secBody">
       <div class="sum-verd"><span class="sum-badge ${bcls}">${verdict}</span><span class="sum-cnt"><span class="c-fail">${n.fail} FAIL</span><span class="c-review">${n.review} REVIEW</span><span class="c-pass">${n.pass} PASS</span>${n.na ? `<span class="c-na">${n.na} n/a</span>` : ''}${n.notrun ? `<span class="c-na">${n.notrun} not run</span>` : ''}</span></div>
-      <p class="sum-gov">${govTxt}${low}${nanTxt}</p>
+      <p class="sum-gov">${govTxt}${low}${nanTxt}</p>${(() => { const Ua = window.SBDModel.unassigned ? window.SBDModel.unassigned(P) : []; return Ua.length ? `<div class="alert err" id="sum-unassigned"><b>Line${Ua.length > 1 ? 's' : ''} ${Ua.map(j => 'G' + (j + 1)).join(', ')} ${Ua.length > 1 ? 'have' : 'has'} no girder type</b> and ${Ua.length > 1 ? 'are' : 'is'} not checked: the verdict covers the lines of the types only. Assign a type to every line on the <a href="#" data-sumin="gird">Girders &amp; plates</a> or <a href="#" data-sumin="xsec">Cross-section</a> input tab.</div>` : ''; })()}
       <p class="note">Counts: one per girder and column of the table below. FAIL: demand / capacity &gt; 1.0, or a rating factor RF &lt; 1.0. REVIEW: a check whose ratio is not a number, or a module item with a Warning status (welds, cross-frames, deflection over the owner's preferred limit). A ratio cell showing ∞ (or −∞ / NaN): that check's demand / capacity ratio has no finite value (∞: infinite, e.g. a capacity, or a factor in it such as the 6.10.1.6 amplification, that is zero or not finite for the demand; NaN: not a number, e.g. 0 / 0); it is counted as REVIEW, and its tooltip and link give the reason and the work on its tab. Demands: ${cdTxt} A hand-off file or the Example demands chosen on a tab for this page view, and the Flexure tab's "6.10.8 only" choice, are not used here (each tab's own run uses them). Every value is the module's own governing value, worked on its tab; each links there. AASHTO LRFD 10th Ed. (2024); MBE 4th Ed. (2026) for the rating.</p>
       <div class="sum-run">${S.busy ? `<span role="status" aria-live="polite"><span class="spin" aria-hidden="true"></span>${esc(S.prog)}</span>` : `<span role="status" aria-live="polite">${done ? `Up to date${S.secs != null ? ` (last run ${fmt(S.secs, 1)} s)` : ' (shown from the last run of this project state)'}.` : 'Out of date.'}</span>`}
         <button type="button" id="sum_rerun" title="Run every module of every girder again">Re-run all</button>
@@ -254,12 +264,13 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
       <div class="tscroll"><table class="tbl sum-tbl"><thead><tr><th rowspan="2" class="lft">Girder</th>${groups.map(g => g.cols.length > 1 ? `<th colspan="${g.cols.length}" class="g0">${esc(g.grp)}</th>`
         : `<th rowspan="2" class="g0" title="${esc(g.cols[0].head)}">${esc(g.grp)}${g.cols[0].what ? `<span class="sum-sub">${esc(g.cols[0].what)}</span>` : ''}</th>`).join('')}</tr>
       <tr>${COLS.filter(c => groups.find(g => g.grp === c.grp).cols.length > 1).map(c => `<th class="${first.has(c.id) ? 'g0' : ''}" title="${esc(c.head)}">${esc(c.short)}${c.what ? `<span class="sum-sub">${esc(c.what)}</span>` : ''}</th>`).join('')}</tr></thead>
-      <tbody>${list.map(G => `<tr><td class="lft"><b>${esc(G.label)}</b></td>${COLS.map(c => cellHtml(G, c, first.has(c.id))).join('')}</tr>`).join('')}</tbody></table></div>
+      <tbody>${list.map(G => `<tr><td class="lft"><b>${esc(G.label)}</b>${G.lines && G.lines.length > 1 ? `<span class="sum-sub">worst of ${G.lines.map(j => 'G' + (j + 1)).join(', ')}</span>` : ''}</td>${COLS.map(c => cellHtml(G, c, first.has(c.id))).join('')}</tr>`
+        + (G.byLine ? G.byLine.map(q => `<tr class="sum-line"><td class="lft">&nbsp;&nbsp;on line G${q.j + 1}</td>${COLS.map(c => cellHtml({ gi: G.gi, label: `${G.label} on G${q.j + 1}`, cells: q.cells, j: q.j }, c, first.has(c.id))).join('')}</tr>`).join('') : '')).join('')}</tbody></table></div>
       <p class="note">Ratio = demand / capacity (OK ≤ 1.0); rating factors RF (OK ≥ 1.0). Each cell opens its output tab with that girder selected, at the location and step that work the value. Flexure: the governing check over every location of the Flexure tab, by limit state (Strength I GS5–GS10; Service II GS12, GS13; proportions GS1–GS4); the largest of the three is the Flexure tab's governing ratio. ${esc(window.SBDRating ? window.SBDRating.BASIS.short : '')} ${P.fatigue && P.fatigue.ev && P.fatigue.ev.on === 'yes' ? 'Fatigue includes the remaining fatigue life (FA6, MBE 4th Ed. Section 7: fatigue-prone details only, 2.2(Δf)_tension > f_DL,compression (7.2.3); (Δf)_eff = R_pR_s × the factored Fatigue II range, N_av − N_1 with the first-year and present ADTT_SL), turned on on the Fatigue &amp; studs input tab.' : 'Remaining fatigue life (MBE 4th Ed. Section 7): off (Fatigue &amp; studs input tab).'}</p></div></section>`;
     // the governing check of each column, per girder (the GirderDetail Summary's per-check table)
     h += `<section class="sec" id="sum-checks"><div class="secHead">Governing check of each column</div><div class="secBody">${list.map(G => `<details class="sum-g" data-sumg="${G.gi}"${S.open.has(G.gi) || list.length === 1 ? ' open' : ''}><summary><b>${esc(G.label)}</b></summary>
       <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Column</th><th class="lft">Check</th><th class="lft">Location</th><th>Ratio / RF</th><th>Status</th></tr></thead><tbody>
-      ${COLS.map(c => { const q = G.cells[c.id] || { st: 'notrun' }; return `<tr><td class="lft">${esc(c.head)}</td><td class="lft">${q.check ? txt(q.check) : esc(q.why || (q.st === 'notrun' ? 'Not run yet.' : ''))}</td><td class="lft">${q.loc ? txt(q.loc) : ''}</td><td class="s-${q.st}">${link(G, c, q, vTxt(q, c))}</td><td>${LBL[q.st]}</td></tr>`; }).join('')}
+      ${COLS.map(c => { const q = G.cells[c.id] || { st: 'notrun' }; return `<tr><td class="lft">${esc(c.head)}</td><td class="lft">${q.check ? txt(q.check) : esc(q.why || (q.st === 'notrun' ? 'Not run yet.' : ''))}</td><td class="lft">${q.loc ? txt(q.loc) : ''}${lnTxt(G, q) ? `<span class="sum-sub">line${lnTxt(G, q).replace(' on', '')}</span>` : ''}</td><td class="s-${q.st}">${link(G, c, q, vTxt(q, c))}</td><td>${LBL[q.st]}</td></tr>`; }).join('')}
       </tbody></table></div></details>`).join('')}</div></section>`;
     // not run / not applicable, warnings
     const nr = []; list.forEach(G => COLS.forEach(c => { const q = G.cells[c.id]; if (q && q.st === 'na') nr.push(`<li>${esc(c.head)}, ${esc(G.label)}: ${txt(q.why || 'not applicable')}</li>`); }));
@@ -286,7 +297,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
     if (!host.__sum) { host.__sum = true;   // handlers on the host (bound once; the host is the page's #out)
       host.addEventListener('click', e => {
         if (!S.ctx || !S.ctx.open()) return;
-        const a = e.target.closest('[data-sumgo]'); if (a) { e.preventDefault(); const [gi, id] = a.dataset.sumgo.split('|'); gotoCell(+gi, id); return; }
+        const a = e.target.closest('[data-sumgo]'); if (a) { e.preventDefault(); const [gi, id, j] = a.dataset.sumgo.split('|'); gotoCell(+gi, id, null, j != null && j !== '' ? +j : null); return; }
         const w = e.target.closest('[data-sumwk]'); if (w) { e.preventDefault(); S.ctx.goto('an', +w.dataset.sumwk); focus({ step: 'an.eq.DC1steel' }); return; }
         const ig = e.target.closest('[data-sumin], #sum-plan [data-itgo]'); if (ig) { e.preventDefault(); if (S.ctx.inTab) S.ctx.inTab(ig.dataset.sumin || ig.dataset.itgo); return; }   // GFXS: an input tab
         const t = e.target.closest('[data-sumtab]'); if (t) { e.preventDefault(); S.ctx.goto(t.dataset.sumtab, Math.min(+(S.ctx.ui.g || 0), S.ctx.P.girders.length - 1)); return; }
