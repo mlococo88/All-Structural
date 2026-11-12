@@ -2289,7 +2289,7 @@ const PbdListTable = window.SharedListInput ? SharedListInput.react(React) : nul
 - **How verified:** main vs branch: localStorage keys (the folder path in `bridgeSuite.v1.appPaths` normalised), page text, Export JSON and printed text identical on load (index.html, lldf.html, Prestressed Bridge Design.html); `tests/smoke/bridge-suite-compare.mjs --a <main worktree>`: all identical; `tests/smoke/bridge-suite-save.mjs`: all passed (updated, see the PR); `project-library.mjs --tool lldf / index`, `github-sync-tools.mjs --tool index`, `home-projects.mjs --tool index`, `tests/engine/run.mjs`, `check-syntax.mjs`: see the PR. Header at 1280 / 1400 / 1920 / 390 px; screenshots looked at.
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** the same change in the other two Bridge Suite pages (index.html, lldf.html, Prestressed Bridge Design.html) and `shared/bridge-suite-projects.js` (one PR). **Open items:** none.
-## 2026-11-12 — FROZEN (PS Bridge PR 2a, PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM)   [no change to this file]
+## 2026-11-12 — FROZEN (PS Bridge PR 2a, PR #1448: https://github.com/mlococo88/All-Structural/pull/1448)   [no change to this file]
 - **From this PR on this file is frozen** (engineer decision PS-14 g, `docs/ps-bridge-plan.md` §3.4): bug fixes only when the engineer asks.
   Its engine was moved unchanged into `apps/ps-bridge/engine/pbd-*.js` from commit `8fe8650275b7fc7377fdb87685d3bf0d669a4aa8` (this file's
   blob `00a3a34e1421b28ad12c760d113f597f1a3a7c60`), and `tests/engine/psbridge-parity.test.mjs` compares the two. A fix made here later must

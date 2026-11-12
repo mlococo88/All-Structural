@@ -60,7 +60,7 @@ PR #1444: https://github.com/mlococo88/All-Structural/pull/1444
 - Next: PR 2a (engine moved in verbatim + Node parity harness, plan §3).
 
 ## 2026-11-12 — PR 2a: engine moved in unchanged (pbd-*.js) + Node parity harness A; project base design (model.base)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1448: https://github.com/mlococo88/All-Structural/pull/1448
 ### Where
 - `apps/ps-bridge/engine/pbd-*.js` (new): the old app's engine, moved unchanged (plan §3, PS-6). Each file = a header comment (source file,
   commit, lines, the global names it defines) + a `PBD-VERBATIM` marker line + the slice of `Prestressed Bridge Design.html` at commit
