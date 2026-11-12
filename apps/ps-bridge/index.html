@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- CBUST: ask browsers to revalidate this page (best effort; as apps/steel-bridge/index.html). The ?v= stamp below makes the scripts follow it. -->
+<meta http-equiv="Cache-Control" content="no-cache">
+<title>Prestressed Bridge Design (new, in development)</title>
+<!-- PS Bridge, the Prestressed Bridge Design rebuild (docs/ps-bridge-plan.md; engineer decisions PS-1 to PS-14, 2026-11-12). Built like the
+     Steel Bridge app (apps/steel-bridge/): plain HTML/JS/CSS, classic scripts, opens from file://, relative paths only.
+     Engine: engine/*.js (no DOM). Report: report/*.js. UI: ui/*.js. Saved data: localStorage keys psb2.* only (engine/model.js).
+     PR 1 (skeleton): the shell, the input and output tabs with placeholders, the project model (psb2.project v1). No calculation yet;
+     the old Prestressed Bridge Design.html stays the working tool. -->
+<!-- KaTeX for the worked-step equations: the steel app's pinned version and URL (CLAUDE.md §2; used from PR 2b) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<!-- CBUST: the app's own scripts are written here with ?v=<index.html Last-Modified>, as apps/steel-bridge/index.html: document.write keeps them
+     parser-blocking classic scripts, in this order (file:// safe: relative paths, nothing fetched). CDN libraries stay static tags. -->
+<script>
+(function () {
+  var v = Date.parse(document.lastModified) || Date.now();
+  [
+    'engine/model.js',
+    'report/sections.js',
+    'ui/dash.js',     // the check summary column (adapted copy of apps/steel-bridge/ui/dash.js)
+    'ui/splitter.js'  // the splitter between the input and output panels (copy of apps/steel-bridge/ui/splitter.js)
+  ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
+})();
+</script>
+<!-- three.js for the 3D view (PR 3c): the steel app's pinned files, r128 + OrbitControls (CLAUDE.md §2) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js" defer></script>
+<style>
+  /* COPY, to move to shared/ later (CLAUDE.md §3): the shell CSS of apps/steel-bridge/index.html at 1c75fcc (tokens, #app, #hdr, the two scrolling
+     panels, tabs, cards, fields, alerts, the check summary column #sbDashCol, the splitter #sbSplit, print), without its tab-specific rules. */
+  /* layout: copied from BasePlateAnchorDesigner.html (tokens, #app, #hdr, #main, the two scrolling panels, tabs, cards) */
+  :root{
+    --navy-900:#16304F; --navy-800:#1E3A5F; --blue-600:#2563EB;
+    --green-600:#059669; --red-600:#DC2626; --amber-700:#B45309;
+    --slate-50:#F8FAFC; --slate-100:#F1F3F5; --slate-200:#E4E7EB; --slate-400:#94A3B8; --slate-900:#0F172A;
+    --color-primary:var(--navy-800); --color-secondary:var(--blue-600); --color-ring:var(--blue-600);
+    --color-bg:var(--slate-50); --color-surface:#ffffff; --color-border:var(--slate-200); --color-fg:var(--slate-900);
+    --ink:var(--slate-900); --paper:#ffffff; --line:var(--slate-200); --accent:var(--navy-800); --pass:var(--green-600); --fail:var(--red-600); --warn:var(--amber-700);
+    --font-ui:-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; --font-doc:"Times New Roman",Times,serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{font-family:var(--font-doc);font-size:10pt;color:var(--ink);background:#efede8;}
+  #app{max-width:none;margin:0 auto;height:100vh;height:100dvh;display:flex;flex-direction:column;background:var(--paper);box-shadow:0 0 12px rgba(0,0,0,.12);}
+  html,body{overflow:hidden;}
+  #hdr{flex:0 0 auto;border-bottom:3px solid var(--navy-900);padding:9px 14px 8px;background:var(--color-primary);color:#fff;z-index:20;}
+  #hdr .titleRow{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;}
+  #hdr h1{font-size:15pt;margin:0;letter-spacing:.4px;font-family:var(--font-ui);font-weight:600;color:#fff;}
+  #hdr .byline{font-size:9pt;color:#C7D4E4;margin-top:1px;font-family:var(--font-ui);}
+  #hdrBtns{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+  #hdrUR{display:inline-flex;gap:6px;align-items:center;white-space:nowrap;}
+  #hdr .allToolsLink{font-size:8.5pt;color:#C7D4E4;text-decoration:none;font-family:var(--font-ui);}
+  #hdr .allToolsLink:hover{color:#fff;text-decoration:underline;}
+  #main{flex:1 1 auto;display:flex;min-height:0;}
+  #inputPanel{flex:0 0 calc(100% * var(--sbIn,.33));max-width:calc(100% * var(--sbIn,.33));border-right:1px solid var(--color-border);overflow-y:auto;position:relative;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:var(--color-bg);padding:10px 12px 60px;font-family:var(--font-ui);font-size:9.5pt;}
+  #outputPanel{flex:1 1 67%;min-width:0;overflow-y:auto;position:relative;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:0 16px 80px;background:var(--paper);}
+  @media screen and (max-width:899.98px){
+    html,body{overflow:visible;height:auto;}
+    #app{height:auto;min-height:100vh;}
+    #main{flex-direction:column;}
+    #inputPanel{flex:none;max-width:none;border-right:none;border-bottom:2px solid var(--ink);overflow:visible;padding-bottom:16px;}
+    #outputPanel{flex:none;overflow:visible;}
+    .inTabs{top:0;}
+    /* QAP (2026-11-09): on a phone the Report's and the Drawings' drop-downs (width:auto: as wide as their longest choice, up to 454 px) fit the
+       screen; the Report tab no longer scrolls the page 91 px sideways (display only) */
+    #out .rp-bar select,#out .dwg-bar select{max-width:calc(100vw - 48px);}
+  }
+  .inTabs{position:sticky;top:-10px;z-index:12;display:flex;flex-wrap:wrap;gap:2px;margin:-10px -12px 0;padding:8px 12px 0;background:var(--color-bg);border-bottom:2px solid var(--ink);}
+  .inTabs button,#tabBar button{border:1px solid var(--color-border);border-bottom:none;border-radius:6px 6px 0 0;font-size:9pt;font-family:var(--font-ui);padding:5px 10px;background:var(--slate-100);color:#475569;}
+  .inTabs button[aria-selected="true"],#tabBar button[aria-selected="true"]{background:var(--paper);font-weight:600;color:var(--color-primary);box-shadow:inset 0 3px 0 var(--color-secondary);}
+  .inDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--fail);margin-left:6px;}
+  .inTabs button.has-err .inDot{display:inline-block;}
+  #autoBar{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin:6px 0 2px;font-family:var(--font-ui);font-size:9pt;color:#475569;min-height:26px;} #autoBar[hidden]{display:none;}
+  #autoBar .spin{display:inline-block;width:12px;height:12px;border:2px solid #CBD5E1;border-top-color:var(--color-primary);border-radius:50%;animation:sbspin .8s linear infinite;vertical-align:-2px;margin-right:6px;}
+  @keyframes sbspin{to{transform:rotate(360deg);}} @media (prefers-reduced-motion:reduce){#autoBar .spin{animation:none;}}
+  #tabBar{position:sticky;top:0;background:var(--paper);z-index:10;display:flex;gap:2px;border-bottom:2px solid var(--ink);padding:8px 0 0;flex-wrap:wrap;}
+  .pane[hidden]{display:none!important;}
+  .sec{border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface);margin:10px 0;overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,.04);}
+  .sec>.secHead{padding:6px 9px;background:var(--slate-100);border-bottom:1px solid var(--color-border);font-family:var(--font-ui);font-size:8.5pt;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#334155;}
+  .sec>.secBody{padding:8px 10px;}
+  .fRow{display:flex;align-items:center;gap:6px;margin:4px 0;flex-wrap:wrap;}
+  .fRow label{min-width:170px;font-size:10pt;}
+  /* QAF (2026-11-09): a long label wraps inside its own column instead of pushing its input or unit onto a line of their own (display only);
+     a drop-down widens into the free space of its row up to its longest choice, so its text is not cut at 110 px */
+  .fRow>label:first-child{flex:0 1 auto;max-width:calc(100% - 150px);}
+  .fRow>select{flex:1 1 110px;width:110px;min-width:110px;max-width:max-content;}
+  input[type=number],input[type=text],select{font-family:var(--font-ui);font-size:9.5pt;padding:3px 6px;border:1px solid var(--color-border);border-radius:4px;width:110px;background:#fff;color:var(--color-fg);}
+  input:focus-visible,select:focus-visible{outline:none;border-color:var(--color-ring);box-shadow:0 0 0 2px rgba(37,99,235,.25);}
+  input.bad{border-color:var(--fail);background:#FEF2F2;}
+  .unit{color:#555;font-size:10pt;}
+  button{font-family:var(--font-ui);font-size:9.5pt;padding:4px 11px;border:1px solid var(--color-border);border-radius:4px;background:var(--color-surface);color:var(--color-fg);cursor:pointer;}
+  button:hover{background:var(--slate-100);border-color:var(--slate-400);}
+  #hdrBtns button{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.35);color:#fff;}
+  #hdrBtns button:hover{background:rgba(255,255,255,.18);}
+  button.primary{background:var(--color-secondary);color:#fff;border-color:var(--color-secondary);}
+  table.tbl{border-collapse:collapse;width:100%;font-size:10pt;margin:6px 0;}
+  table.tbl th,table.tbl td{border:1px solid var(--line);padding:3px 5px;text-align:center;}
+  table.tbl th{background:#f1efe9;font-weight:bold;}
+  table.tbl td.lft,table.tbl th.lft{text-align:left;}
+  table.tbl td input{width:62px;font-size:9pt;padding:1px 3px;text-align:right;}
+  table.tbl tr.sel{background:#eef4fb;}
+  .tscroll{overflow-x:auto;}
+  /* this app */
+  .note{font-size:9pt;color:#475569;margin:4px 0;}
+  .alert{border:1px solid var(--color-border);border-left:4px solid var(--warn);background:#FFFBEB;padding:6px 9px;margin:8px 0;font-family:var(--font-ui);font-size:9pt;}
+  .alert.err{border-left-color:var(--fail);background:#FEF2F2;}
+  .stale{display:flex;align-items:center;gap:10px;}
+  .alert[hidden]{display:none;}
+  .srcBar{border:1px solid var(--color-border);border-left:4px solid var(--pass);background:#F0FDF4;padding:5px 9px;margin:4px 0 8px;font-family:var(--font-ui);font-size:9.5pt;} .srcBar.ex{border-left-color:var(--accent);background:#EFF6FF;} .srcBar.warn{border-left-color:var(--warn);background:#FFFBEB;} .srcBar .srcWhy{color:#475569;font-size:8.5pt;}
+  .steps{list-style:none;padding:0;margin:4px 0;}
+  .steps li{padding:3px 0;border-bottom:1px dotted var(--line);}
+  .steps li:target{background:#FFF7D6;}
+  .steps .lbl{font-family:var(--font-ui);font-size:8.5pt;color:#475569;}
+  .steps .ref{font-family:var(--font-ui);font-size:8pt;color:#64748b;margin-left:6px;}
+  .steps .nt{font-family:var(--font-ui);font-size:8.5pt;color:var(--warn);}
+  .steps .no{color:#94A3B8;}
+  .st-frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;font-size:92%;margin:0 2px;}
+  .st-frac>.st-num{border-bottom:1px solid currentColor;padding:0 2px;}
+  .st-frac>.st-den{padding:0 2px;}
+  .st-bar{text-decoration:overline;}
+  .steps .katex{font-size:1.08em;} .steps .lbl{margin-bottom:3px;}
+  .steps .katex .katex-error{color:var(--fail);}
+  a.wk{font-family:var(--font-ui);font-size:8.5pt;}
+  .kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:4px 14px;margin:6px 0;}
+  .kv div{display:flex;justify-content:space-between;border-bottom:1px dotted var(--line);padding:2px 0;}
+  #toast{position:fixed;right:14px;top:84px;max-width:min(520px,calc(100vw - 28px));max-height:60vh;overflow:auto;z-index:50;background:#fff;border:1px solid var(--slate-400);border-left:4px solid var(--navy-800);border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.25);padding:8px 12px;font-family:var(--font-ui);font-size:9.5pt;}
+  #toast[hidden]{display:none;} #toast.err{border-left-color:var(--fail);} #toast ul{margin:4px 0 6px;padding-left:18px;} #toast .tBtns{display:flex;gap:6px;justify-content:flex-end;margin-top:4px;} #toast .tFld{font-weight:600;} #toast .tArr{color:#475569;}
+  @media print{ #hdrBtns,#toast,#libDlg,.inTabs,#tabBar,#autoBar,#inputPanel{display:none!important;} html,body{overflow:visible;height:auto;} #app{height:auto;box-shadow:none;} #outputPanel{overflow:visible;}
+    .steps li{break-inside:avoid;} .katex,.katex *{-webkit-print-color-adjust:exact;print-color-adjust:exact;} .katex .frac-line,.katex .overline-line,.katex .underline-line{border-bottom-color:#000!important;min-height:1px;} .katex-display{overflow:visible;} }
+  /* DASH (2026-11-09): the left check summary column (ui/dash.js), as the other apps' (RW/SF/LP #984/#988/#991, GirderDetail #1196): at the far
+     left from 1200 px, 240 px (280 px from 1500 px), 42 px when shrunk; the input panel keeps a third of the rest. Not shown below 1200 px, not printed. */
+  #sbDashCol{display:none}
+  @media screen and (min-width:1200px){
+    #sbDashCol{display:block;flex:0 0 240px;width:240px;min-width:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;border-right:1px solid var(--color-border);background:var(--slate-50);padding:0 9px 40px;font-family:var(--font-ui);font-size:9pt;color:var(--ink)}
+    #inputPanel{flex-basis:calc((100% - 240px)*var(--sbIn,.33));max-width:calc((100% - 240px)*var(--sbIn,.33))}
+    body.sbDashColl #sbDashCol{flex-basis:42px;width:42px;padding:0 2px}
+    body.sbDashColl #inputPanel{flex-basis:calc((100% - 42px)*var(--sbIn,.33));max-width:calc((100% - 42px)*var(--sbIn,.33))}
+  }
+  @media screen and (min-width:1500px){
+    #sbDashCol{flex-basis:280px;width:280px} #inputPanel{flex-basis:calc((100% - 280px)*var(--sbIn,.33));max-width:calc((100% - 280px)*var(--sbIn,.33))}
+    body.sbDashColl #sbDashCol{flex-basis:42px;width:42px} body.sbDashColl #inputPanel{flex-basis:calc((100% - 42px)*var(--sbIn,.33));max-width:calc((100% - 42px)*var(--sbIn,.33))}
+  }
+  #sbDashHead{position:sticky;top:0;z-index:3;background:var(--slate-50);display:flex;align-items:center;flex-wrap:wrap;gap:3px 7px;padding:8px 0 5px;border-bottom:1px solid var(--color-border)}
+  #sbDashTtl{margin:0;font-size:9.5pt;letter-spacing:.05em;text-transform:uppercase;color:var(--accent)}
+  #sbDashTgl{margin:0;padding:0 7px;font-size:10pt;line-height:1.5}
+  #sbDashCol .sdC{display:inline-flex;gap:3px;flex-wrap:wrap} #sbDashCol .sdC span{font-size:7.5pt;font-weight:700;padding:0 4px;border:1px solid;border-radius:3px;white-space:nowrap}
+  #sbDashCol .sdF{color:#991B1B;background:#FEF2F2;border-color:var(--fail)} #sbDashCol .sdW{color:#92400E;background:#FFFBEB;border-color:var(--warn)} #sbDashCol .sdP{color:#065F46;background:#ECFDF5;border-color:var(--pass)} #sbDashCol .sdN{color:#475569;background:var(--slate-100);border-color:var(--slate-400)}
+  body.sbDashColl #sbDashHead{flex-direction:column;align-items:center;border-bottom:none} body.sbDashColl #sbDashTtl{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;margin:6px 0}
+  body.sbDashColl #sbDashCol .sdC{flex-direction:column;align-items:center} body.sbDashColl #sbDashCol .sdC span{font-size:7pt;padding:1px 2px;white-space:normal;text-align:center;width:36px}
+  #sbDashCol .sdVerd{margin:6px 0 2px;font-size:9.5pt} #sbDashCol .sdVerd b{padding:0 5px;border-radius:3px} #sbDashCol .sdVerd b.sd-fail{color:#fff;background:var(--fail)} #sbDashCol .sdVerd b.sd-pass{color:#fff;background:var(--pass)} #sbDashCol .sdVerd b.sd-review{color:#fff;background:var(--warn)}
+  #sbDashCol .sdGov{font-size:8.5pt;margin:2px 0;line-height:1.3} #sbDashCol .sdRun{font-size:8.5pt;color:#475569;margin:4px 0} #sbDashCol .sdOld{color:#92400E;font-size:8pt}
+  #sbDashCol .spin{display:inline-block;width:10px;height:10px;border:2px solid #CBD5E1;border-top-color:var(--color-primary);border-radius:50%;animation:sbspin .8s linear infinite;vertical-align:-1px;margin-right:5px}
+  #sbDash{display:flex;flex-direction:column;gap:3px;margin:6px 0}
+  #sbDashCol .sdChip{display:grid;grid-template-columns:18px minmax(0,1fr);border:1px solid var(--color-border);border-left:4px solid var(--slate-400);border-radius:4px;background:#fff}
+  #sbDashCol .sdChip.sd-pass{border-left-color:var(--pass)} #sbDashCol .sdChip.sd-fail{border-left-color:var(--fail);background:#FEF2F2} #sbDashCol .sdChip.sd-review{border-left-color:var(--warn);background:#FFFBEB} #sbDashCol .sdChip.sdOldC{opacity:.7}
+  #sbDashCol .sdX{border:none;background:none;padding:0;font-size:8pt;color:#475569;cursor:pointer}
+  #sbDashCol .sdMain{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 6px;padding:3px 5px 3px 0;color:var(--ink);text-decoration:none;min-width:0}
+  #sbDashCol .sdMain:hover .sdName{text-decoration:underline} #sbDashCol .sdName{font-weight:600;flex:1 1 auto} #sbDashCol .sdVal{font-variant-numeric:tabular-nums;white-space:nowrap} #sbDashCol .sdSt{font-size:7.5pt;font-weight:700;color:#475569}
+  #sbDashCol .sd-fail .sdSt{color:#991B1B} #sbDashCol .sd-pass .sdSt{color:#065F46} #sbDashCol .sd-review .sdSt{color:#92400E}
+  #sbDashCol .sdList{grid-column:2;margin:0 0 4px;padding:0 4px 0 0;list-style:none;font-size:8.5pt} #sbDashCol .sdList a{text-decoration:none} #sbDashCol .sdList a:hover{text-decoration:underline}
+  #sbDashCol .sdList a.sd-fail{color:#991B1B;font-weight:700} #sbDashCol .sdList a.sd-review{color:#92400E} #sbDashCol .sdList a.sd-pass{color:#065F46} #sbDashCol .sdList a.sd-na,#sbDashCol .sdList a.sd-notrun{color:#64748b} #sbDashCol .sdOldV{font-style:italic}
+  #sbDashCol .sdNote{font-size:8pt;color:#64748b;margin:6px 0}
+  @media print{#sbDashCol{display:none!important}}
+  /* SBW (2026-11-09): the full screen width (no 1500 px cap) and the splitter between the input and output panels (ui/splitter.js).
+     --sbIn: the input panel's share of the width beside the check summary column (default .33; set on #main only after a drag, from the
+     per-browser UI key sbd2.splitRatio_v1). Shown only where the panels are side by side (900 px and wider); not printed. */
+  #sbSplit{display:none}
+  @media screen and (min-width:900px){
+    #sbSplit{display:flex;align-items:center;justify-content:center;flex:0 0 7px;width:7px;cursor:col-resize;touch-action:none;user-select:none;-webkit-user-select:none;background:var(--slate-100);border-left:1px solid var(--color-border);border-right:1px solid var(--color-border);z-index:5}
+    #sbSplit::before{content:"";width:3px;height:36px;border-radius:2px;background:radial-gradient(circle,#94A3B8 1px,transparent 1.3px) 0 0/3px 6px repeat-y}
+    #sbSplit:hover,#sbSplit.drag{background:#DBEAFE} #sbSplit:hover::before,#sbSplit.drag::before{background-image:radial-gradient(circle,var(--blue-600) 1px,transparent 1.3px)}
+    #sbSplit:focus-visible{outline:2px solid var(--color-ring);outline-offset:-2px;background:#DBEAFE}
+    #main:has(#sbSplit) #inputPanel{border-right:none}
+    body.sbSplitDrag,body.sbSplitDrag *{cursor:col-resize!important;user-select:none!important}
+    body.sbSplitDrag iframe,body.sbSplitDrag canvas{pointer-events:none}
+  }
+  @media print{#sbSplit{display:none!important}}
+  /* this app (PR 1) */
+  .ph{border:1px dashed var(--slate-400);border-radius:6px;background:var(--slate-50);padding:8px 10px;margin:10px 0;font-family:var(--font-ui);font-size:9pt;color:#475569;}
+  .ph b{color:var(--color-primary);} .ph ul{margin:4px 0 0;padding-left:18px;}
+  .devBadge{display:inline-block;font-family:var(--font-ui);font-size:8pt;font-weight:700;letter-spacing:.04em;padding:1px 6px;border-radius:3px;background:#FDE68A;color:#78350F;margin-left:6px;vertical-align:2px;}
+  input.wide{width:180px;}
+</style>
+</head>
+<body>
+<div id="toast" role="status" hidden></div>
+<div id="app">
+  <header id="hdr">
+    <div class="titleRow">
+      <div>
+        <h1>Prestressed Bridge Design <span style="font-weight:400;font-size:11pt">(new, in development)</span></h1>
+        <div class="byline">AASHTO LRFD 10th Ed. (2024) <span id="saveState" aria-live="polite"></span></div>
+        <a class="allToolsLink" href="../../tools.html" title="Open the list of all tools">&larr; All tools</a>
+      </div>
+      <div id="hdrBtns"><input type="file" id="fImport" accept=".json,application/json" hidden></div>
+    </div>
+  </header>
+  <div id="main">
+    <aside id="sbDashCol" aria-label="Check summary"></aside><!-- the check summary column, screens 1200 px and wider (ui/dash.js) -->
+    <aside id="inputPanel">
+      <div class="inTabs" role="tablist" id="inTabs"></div>
+      <div id="inPanes"></div>
+    </aside>
+    <div id="sbSplit" role="separator" aria-orientation="vertical" aria-controls="inputPanel outputPanel" aria-label="Width of the input and output panels (arrow keys move it, Home / End to the limits, double-click or Enter resets)" tabindex="0" title="Drag to change the width of the input and output panels; double-click to reset"></div><!-- ui/splitter.js -->
+    <main id="outputPanel">
+      <div id="tabBar" role="tablist"></div>
+      <div id="out"></div>
+    </main>
+  </div>
+</div>
+<script>
+(function () {
+  'use strict';
+  /* The page controller (PR 1 skeleton), in the steel app's pattern (apps/steel-bridge/index.html): one project P (engine/model.js),
+     autosaved to psb2.project.current on every change; the input tabs on the left, the output tabs on the right; the page's tab choices in
+     psb2.ui. Only the Project, Bridge layout and Cross-section inputs of schema v1 are editable; every other tab is a placeholder naming
+     what it will hold and the PR that brings it (docs/ps-bridge-plan.md §2.2, §2.3, §5). Nothing is calculated. */
+  const M = window.PSBModel;
+  const $ = id => document.getElementById(id), esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const store = (() => { try { const k = '__psb2_probe'; localStorage.setItem(k, '1'); localStorage.removeItem(k); return localStorage; } catch (e) { return null; } })();
+  const memStore = { getItem: () => null, setItem: () => {}, removeItem: () => {} }, LS = store || memStore;
+  const L = M.load(LS);
+  let P = L.project, autosave = !L.noAutosave, autoFailed = false, errs = [];
+  let ui = { itab: 'proj', otab: 'sum' };
+  try { Object.assign(ui, JSON.parse((store && store.getItem(M.KEYS.ui)) || '{}')); } catch (e) { /* default tabs */ }
+  const saveUi = () => { try { store && store.setItem(M.KEYS.ui, JSON.stringify(ui)); } catch (e) { /* not kept */ } };
+
+  /* ---------- tabs (docs/ps-bridge-plan.md §2.2 and §2.3) ---------- */
+  const TABS = [['proj', 'Project'], ['layout', 'Bridge layout'], ['xsec', 'Cross-section'], ['gird', 'Girders & strands'], ['mat', 'Materials'],
+    ['dd', 'Diaphragms / deck'], ['loads', 'Loads'], ['own', 'Owner rules'], ['ad', 'Auto design']];
+  const OTABS = [['sum', 'Summary'], ['sec', 'Section properties'], ['lds', 'Loads & LLDF'], ['an', 'Analysis'], ['loss', 'Losses'], ['str', 'Stresses'],
+    ['flex', 'Flexure'], ['shear', 'Shear'], ['end', 'End zone & hold-down'], ['camb', 'Camber & deflection'], ['hand', 'Handling'], ['deck', 'Deck'],
+    ['rt', 'Rating'], ['rpt', 'Report'], ['dwg', 'Drawings'], ['ad', 'Auto design'], ['3d', '3D view']];
+  if (!TABS.some(t => t[0] === ui.itab)) ui.itab = 'proj';
+  if (!OTABS.some(t => t[0] === ui.otab)) ui.otab = 'sum';
+
+  /* ---------- inputs ---------- */
+  const get = path => path.split('.').reduce((o, k) => o == null ? o : o[k], P);
+  const set = (path, v) => { const ks = path.split('.'), last = ks.pop(), o = ks.reduce((a, k) => a[k], P); o[last] = v; };
+  const num = (path, label, unit, o) => `<div class="fRow"><label for="i_${path}">${label}</label><input type="${o && o.text ? 'text' : 'number'}" step="any" id="i_${path}" data-path="${path}" data-kind="${o && o.text ? 'text' : 'num'}" value="${esc(get(path))}"><span class="unit">${unit || ''}</span></div>`;
+  const sel = (path, label, opts) => `<div class="fRow"><label for="i_${path}">${label}</label><select id="i_${path}" data-path="${path}" data-kind="sel">${opts.map(([v, t]) => `<option value="${esc(v)}"${String(get(path)) === String(v) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
+  const list = (path, label, unit, o) => `<div class="fRow"><label for="i_${path}">${label}</label><input type="text" class="wide" id="i_${path}" data-path="${path}" data-kind="list"${o && o.int ? ' data-int="1"' : ''} value="${esc((get(path) || []).join(', '))}"><span class="unit">${unit || ''}</span></div>`;
+  const card = (title, body) => `<section class="sec"><div class="secHead">${title}</div><div class="secBody">${body}</div></section>`;
+  /* ph(title, pr, items): a placeholder card: what the card will hold and the PR that brings it */
+  const ph = (title, pr, items) => `<div class="ph"><b>${title}</b> <span class="devBadge">PR ${pr}</span><ul>${items.map(t => `<li>${t}</li>`).join('')}</ul></div>`;
+  const fmt = (x, d) => (typeof x === 'number' && isFinite(x)) ? x.toFixed(d) : '—';
+
+  function panes() {
+    const nS = P.spans.lengths.length, off = M.girderOffsets(P), deckW = off[off.length - 1] + (+P.xs.ohR || 0);
+    return {
+      proj: card('Save and open', `<div class="fRow"><button type="button" id="bExport" title="Save the open project as a .json file">Export JSON</button><button type="button" id="bImport" title="Open a PS Bridge (.psb2.json) project file">Import JSON</button><button type="button" id="bNew" title="Start a new project (export the open one first to keep it)">New</button></div>
+          <p class="note">The open project is kept in this browser automatically. The saved-projects list (Save, Save as…, Saved projects…) and "From old app" (read-only import of the old Prestressed Bridge Design data) come in later PRs.</p>`)
+        + card('Project', ['name', 'number', 'owner', 'designer', 'checker', 'date'].map(k => num('project.' + k, k === 'owner' ? 'Client name (title block, optional)' : k[0].toUpperCase() + k.slice(1), '', { text: true })).join('')
+          + num('project.notes', 'Notes', '', { text: true }))
+        + ph('Assumptions', '2b', ['every assumption of the input tabs, listed here and in the Report (engineer rule)'])
+        + ph('Hand-offs', '9', ['to and from the other tools, from the switch-over (PS-14): bearings to Elastomeric Bearing Design, every girder\'s reactions to Substructure Loading; before that, by file only']),
+      layout: card('Spans', `${sel('spans.continuity', 'Continuity', [['simple', 'Simple spans'], ['composite', 'Made continuous for composite loads (5.12.3.3)']])}
+          ${list('spans.lengths', 'Span lengths', 'ft')}
+          <p class="note">Left to right, separated by commas. Total ${fmt(M.totalLength(P), 2)} ft. Made continuous: girder and DC1 simple; DC2, DW and live load continuous; restraint moments switchable (as the old app, PS-7).</p>`)
+        + card('Support skews', `${list('xs.skews', 'Skews', 'deg')}<p class="note">One per support, left to right: abutment, ${nS > 1 ? 'piers, ' : ''}abutment (${nS + 1} values).</p>`)
+        + ph('Plan and age at continuity', '3a', ['the plan of the girders and supports', 'age of the girders when made continuous']),
+      xsec: card('Girders', `${num('xs.nb', 'Number of girders', '')}${list('xs.bays', 'Girder spacings (bays)', 'ft')}${num('xs.ohL', 'Left overhang', 'ft')}${num('xs.ohR', 'Right overhang', 'ft')}
+          <p class="note">Bays left to right (${Math.max(0, (P.xs.nb | 0) - 1)} values); unequal bays allowed (PS-9). Overhangs from the exterior girder centreline. Deck width ${fmt(deckW, 2)} ft.</p>`)
+        + ph('Deck, haunch and edges', '2b', ['structural slab t<sub>s</sub>, haunch, b<sub>eff</sub> (as the old app, PS-14)', 'barriers, sidewalks and wearing surface (DW)'])
+        + ph('Dead-load distribution', '3a', ['DC2 and DW to each girder by the Steel Bridge app\'s method, with unequal bays (PS-9; a calculation change against the old app, with §4 callouts)']),
+      gird: ph('Girder shape per span', '2b / 3a', ['the same shape for every girder of a span (PS-8)', 'interior and exterior design per span, optional per-girder override (PS-8)', 'girder library from the standard sheets (NEBT, NEDBT, NEXT, boxes): PR 4, waits for the sheets (PS-2)'])
+        + ph('Strands', '2b', ['strand rows (number, height), debonding (entered only; auto-design never adds it, PS-12)', 'strand-pattern graphic in the Steel Bridge style'])
+        + ph('Draped strands', '2b', ['number n<sub>h</sub>, y<sub>end</sub>, y<sub>mid</sub>', 'two hold-down points at frac × L from ℄ bearing (PS-5, PS-13; default 0.40)'])
+        + ph('Reinforcement', '2b', ['stirrups, confinement, splitting and release tension steel, top bars over the piers']),
+      mat: ph('Concrete and strands', '2b', ['f′<sub>ci</sub>, f′<sub>c</sub>, w<sub>c</sub>, deck concrete', 'strand size, f<sub>pu</sub>, jacking, E<sub>p</sub>'])
+        + ph('Time-dependent', '2b', ['relative humidity H, V/S, ages at release, deck placement and final', 'loss method (refined or approximate)']),
+      dd: ph('Diaphragms', '2b', ['entered once for the bridge and applied to every girder (PS-14)'])
+        + ph('Deck design', '2b', ['strip-method deck design, on or off (as the old app, PS-14)']),
+      loads: ph('Dead loads', '2b / 3a', ['DC1 (girder, deck, haunch), DC2, DW; per girder from PR 3a (PS-9)'])
+        + ph('Live load', '2b', ['HL-93, live-load distribution factors (or entered), external demands by file (MIDAS)', 'rating vehicles'])
+        + ph('Handling', '2b', ['lifting and hauling, on or off']),
+      own: ph('Owner', '2b', ['AASHTO, MassDOT, CTDOT or RIDOT and the load modifiers η', 'release compression limit factor, exposure'])
+        + ph('Hold-down', '2b', ['F<sub>hd</sub> = 2 n<sub>h</sub> f<sub>pbt</sub> A<sub>b</sub> sin α ≤ limit: MassDOT 3.7.2.2, CTDOT V2 5.9.1.6', 'AASHTO and RIDOT: optional check, on by default, limit 75 % of the beam weight, editable (PS-10)']),
+      ad: ph('Auto design', '5', ['waits for the girder library (PR 4, PS-2)', 'strands in symmetric pairs (PS-12) → draping, hold-down 0.33–0.45 L (PS-5) → f′<sub>ci</sub> / f′<sub>c</sub> in 0.5 ksi steps (PS-11)', 'locked fields never changed; Apply with Undo'])
+    };
+  }
+  function drawInputs() {
+    $('inTabs').innerHTML = TABS.map(([k, t]) => `<button type="button" role="tab" data-itab="${k}" aria-selected="${ui.itab === k}">${t}<span class="inDot"></span></button>`).join('');
+    const p = panes();
+    $('inPanes').innerHTML = TABS.map(([k]) => `<div class="pane" data-pane="${k}"${ui.itab === k ? '' : ' hidden'}>${p[k]}</div>`).join('');
+    markErrors();
+  }
+  /* the model's input errors (engine/model.js validate): their fields marked, counted on their input tab; no results while one exists */
+  const TAB_RULES = [[/^project\b/, 'proj'], [/^(spans|xs\.skews)\b/, 'layout'], [/^xs\b/, 'xsec']];
+  const tabOf = p => { const r = TAB_RULES.find(q => q[0].test(p || '')); return r ? r[1] : 'proj'; };
+  const fieldOf = p => { let q = String(p || ''); while (q) { const el = document.querySelector(`#inPanes [data-path="${q}"]`); if (el) return el; q = q.replace(/\.?[^.]*$/, ''); } return null; };
+  function markErrors() {
+    errs = M.validate(P).errors;
+    document.querySelectorAll('#inPanes .bad').forEach(el => { el.classList.remove('bad'); el.removeAttribute('aria-invalid'); el.removeAttribute('title'); });
+    const cnt = {};
+    errs.forEach(e => { const el = fieldOf(e.path); if (el) { el.classList.add('bad'); el.setAttribute('aria-invalid', 'true'); el.title = e.msg; } const t = tabOf(e.path); cnt[t] = (cnt[t] || 0) + 1; });
+    document.querySelectorAll('#inTabs [data-itab]').forEach(b => { const n = cnt[b.dataset.itab] || 0, d = b.querySelector('.inDot');
+      b.classList.toggle('has-err', n > 0); if (d) d.textContent = n ? String(n) : ''; if (n) b.title = `${n} input${n > 1 ? 's' : ''} to fix on this tab`; else b.removeAttribute('title'); });
+  }
+  function gotoErr(i) { const e = errs[i]; if (!e) return; ui.itab = tabOf(e.path); saveUi(); drawInputs(); const el = fieldOf(e.path); if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); } }
+  const parseList = v => String(v).split(/[,;\s]+/).filter(Boolean).map(Number);
+  /* resize(a, n, fill): a list kept at n values when the span or girder count changes (new values: the last one, else fill) */
+  const resize = (a, n, fill) => { const b = (a || []).slice(0, Math.max(0, n)); while (b.length < n) b.push(b.length ? b[b.length - 1] : fill); return b; };
+  $('inTabs').addEventListener('click', e => { const b = e.target.closest('[data-itab]'); if (!b) return; ui.itab = b.dataset.itab; saveUi(); drawInputs(); });
+  $('inPanes').addEventListener('change', e => {
+    const el = e.target, path = el.dataset.path, k = el.dataset.kind; if (!path) return;
+    const v = el.value;
+    if (k === 'num') set(path, v === '' ? NaN : Number(v));
+    else if (k === 'list') set(path, parseList(v));
+    else set(path, v);
+    if (path === 'spans.lengths' && P.spans.lengths.length) P.xs.skews = resize(P.xs.skews, P.spans.lengths.length + 1, 0);   // one skew per support
+    if (path === 'xs.nb' && Number.isInteger(P.xs.nb) && P.xs.nb >= 1) P.xs.bays = resize(P.xs.bays, P.xs.nb - 1, 9);         // one spacing per bay
+    changed();
+  });
+  $('inPanes').addEventListener('click', e => {
+    const t = e.target;
+    if (t.id === 'bExport') exportFile(P);
+    else if (t.id === 'bImport') $('fImport').click();
+    else if (t.id === 'bNew') { if (confirm('Start a new project? The open project is replaced here (export it first to keep it).')) { P = M.defaultProject(); autosave = true; changed(); } }
+  });
+  function changed() {
+    if (autosave) autoFailed = !M.save(LS, P);
+    drawInputs(); drawOut(); syncBar();
+  }
+  function syncBar() { const el = $('saveState'); el.className = autoFailed ? 'err' : ''; el.textContent = autoFailed ? '· Autosave failed: browser storage is full. Export JSON now.' : !autosave ? '· Autosave off (see the note on the output panel).' : ''; }
+
+  /* ---------- outputs (placeholders; docs/ps-bridge-plan.md §2.3, §5) ---------- */
+  const OUT = {
+    sec: ['2b', ['gross and composite section properties per design group, with worked steps', 'the girder section graphic with the strands, in the Steel Bridge style']],
+    lds: ['2b / 3a', ['DC1, DC2 and DW per girder (the Steel Bridge method with unequal bays from PR 3a, PS-9)', 'live-load distribution factors']],
+    an: ['2b', ['moment and shear envelopes along the girder', 'continuity for composite loads and the restraint moments (5.12.3.3, PS-7)']],
+    loss: ['2c', ['instantaneous and long-term prestress losses, with the losses graphic']],
+    str: ['2c', ['release and service stresses at every station, with the stress diagrams']],
+    flex: ['2c', ['Strength I flexural resistance and minimum reinforcement']],
+    shear: ['2c', ['shear resistance, stirrup spacing and the longitudinal reinforcement check']],
+    end: ['2d', ['splitting and confinement steel, debonding rules', 'draped strands and the hold-down force against its limit (PS-1, PS-10)']],
+    camb: ['2d', ['camber at release and erection, final camber, live-load deflection']],
+    hand: ['2d', ['lifting and hauling checks, where on']],
+    deck: ['2d', ['strip-method deck design, where on']],
+    rt: ['2d', ['LRFR rating factors']],
+    dwg: ['7', ['girder sheet, strand and draping schedule (hold-down from ℄ bearing and from the girder end, PS-13), camber table; DXF']],
+    ad: ['5', ['the auto-design proposal per design group and its trial log (Run on the Auto design input tab)']],
+    '3d': ['3c', ['the bridge in 3D (three.js, as the Steel Bridge app)']]
+  };
+  function drawOut() {
+    $('tabBar').innerHTML = OTABS.map(([k, t]) => `<button type="button" role="tab" data-otab="${k}" aria-selected="${ui.otab === k}">${t}</button>`).join('');
+    let h = '';
+    if (L.note) h += `<div class="alert err">${esc(L.note)}</div>`;
+    if (errs.length) { h += `<div class="alert err"><b>Input errors: results are not shown until they are fixed.</b><ul>${errs.map((e, i) => `<li><a href="#" data-icgo="${i}">${esc(e.msg)}</a></li>`).join('')}</ul></div>`; }
+    h += `<div class="alert">In development (PR 1, skeleton): no checks are calculated yet. Use the old <a href="../../Prestressed%20Bridge%20Design.html">Prestressed Bridge Design</a> for design work.</div>`;
+    const name = (OTABS.find(t => t[0] === ui.otab) || [, ''])[1];
+    if (ui.otab === 'sum') {
+      const off = M.girderOffsets(P);
+      h += errs.length ? '' : card('Project', `<div class="kv"><div><span>Project</span><span>${esc(P.project.name)}</span></div><div><span>Spans</span><span>${P.spans.lengths.map(x => fmt(x, 1)).join(' – ')} ft</span></div>
+          <div><span>Continuity</span><span>${P.spans.continuity === 'composite' ? 'made continuous for composite loads' : 'simple spans'}</span></div><div><span>Girders</span><span>${P.xs.nb}</span></div>
+          <div><span>Bays</span><span>${P.xs.bays.map(x => fmt(x, 2)).join(', ')} ft</span></div><div><span>Girder lines from the left deck edge</span><span>${off.map(x => fmt(x, 2)).join(', ')} ft</span></div></div>
+          <p class="note">Entered values only (nothing calculated).</p>`)
+        + ph('Summary', '3b', ['every girder × span × check, coloured by ratio; a cell opens the tab and card that works it', 'the check summary column (left, screens 1200 px and wider) shows the same values']);
+    } else if (ui.otab === 'rpt') {
+      h += ph('Report', '2e', ['the calculation report in the Steel Bridge style (shared/report.js), every value from the prestressed engine, with § references to its derivation']) + card('Planned sections', `<ol>${window.PSBReportPlan.SECTIONS.map(s => `<li><b>${esc(s.title)}</b>: ${esc(s.what)}</li>`).join('')}</ol>`);
+    } else { const o = OUT[ui.otab]; h += ph(esc(name), o[0], o[1]); }
+    $('out').innerHTML = h;
+    if (window.PSBDashUI) window.PSBDashUI.refresh();
+  }
+  const gotoOut = t => { ui.otab = t; saveUi(); drawOut(); $('outputPanel').scrollTop = 0; };
+  $('tabBar').addEventListener('click', e => { const b = e.target.closest('[data-otab]'); if (b) gotoOut(b.dataset.otab); });
+  $('out').addEventListener('click', e => { const a = e.target.closest('[data-icgo]'); if (a) { e.preventDefault(); gotoErr(+a.dataset.icgo); } });
+
+  /* ---------- file ---------- */
+  function exportFile(Q) {
+    const a = document.createElement('a'), name = (Q.project.name || 'ps-bridge').replace(/[^\w.-]+/g, '_');
+    a.href = URL.createObjectURL(new Blob([M.exportJSON(Q)], { type: 'application/json' })); a.download = name + '.psb2.json'; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+  }
+  $('fImport').addEventListener('change', e => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
+    rd.onload = () => { const r = M.importJSON(String(rd.result)); e.target.value = '';
+      if (!r.ok) { alert(r.error); return; }
+      if (!confirm('Open this project? It replaces the open project here (export it first to keep it).')) return;
+      P = r.project; autosave = true; changed(); };
+    rd.readAsText(f); });
+
+  drawInputs(); drawOut(); syncBar();
+  if (window.PSBDashUI) window.PSBDashUI.init({ el: $('sbDashCol'), store, getP: () => P, errors: () => errs, goto: gotoOut, fix: gotoErr });
+})();
+</script>
+</body>
+</html>
