@@ -734,7 +734,7 @@ function wingDefault(on){
 function iabDefault(){
   return {type:"conv",
     b:3.5, hc:4.0, hd:5.0,                 // integral: cap / wall width, cap depth below the seat, end-diaphragm height above the seat (ft); deck surface to bottom of cap = hd + hc
-    dg:4.0, grade:2.0, curve:0.0, dH:0.0,  // girder depth (ft); grade between abutments (%); horizontal curvature, subtended angle (deg); height difference between the two abutments (ft)
+    dg:null, grade:2.0, curve:0.0, dH:0.0,  // ABDG (2026-11-12, engineer decision): dg = the girder depth formerly entered in panel I-0a (ft); new projects null: the screening reads the girder depth d_g of the superstructure inputs (geom.elGird, in; iabDg()); a saved value is kept and used as iabDg() states (was dg:4.0); grade between abutments (%); horizontal curvature, subtended angle (deg); height difference between the two abutments (ft)
     Dfront:4.0,                            // bottom of the cap below the finished grade at the front face (ft)
     straight:true, parallel:true, rockBelow:true, noScour:true, bothEnds:true,   // straight girders / alignment; parallel abutments and piers; top of rock below the pile tip; not scour susceptible; both ends semi-integral
     Lexp:0, Tset:50, epsSH:0.0005,         // expansion length to this abutment (ft, 0 = half the total length); CTDOT integral setting temperature (°F); CTDOT shrinkage strain
@@ -1258,7 +1258,7 @@ ABUT_OWN.rules.push(
   {owner:"MassDOT", iab:"integral", id:"iab.cap", kind:"load", sec:"3.10.8 (p. 3-88)", text:"Cap: continuous beam on the piles for all vertical loads (80 % of the simple-span moment, simple-span shear); whole wall a horizontal beam on the girders for the earth pressure",
     ev:C=>({st:"pass", val:"cases 1 and 2 in §10.5", lim:"—", link:OWN_LK_IAB.cap})},
   {owner:"MassDOT", iab:"integral", id:"iab.conn", kind:"advisory", sec:"3.10.8 (p. 3-89)", text:"Connection bars #6 @ 9 in for girders up to 8 ft deep; deeper girders: designed",
-    ev:C=>({st:ownLE(+S.iab.dg,8)?"pass":"warn", val:`girder depth ${fmt(+S.iab.dg,2)} ft`, lim:"≤ 8 ft for the standard bars", link:OWN_LK_IAB.elig})},
+    ev:C=>{ const D=iabDg(); return {st:D.v!==null&&ownLE(D.v,8)?"pass":"warn", val:`girder depth ${iabDgTxt(D)}`, lim:"≤ 8 ft for the standard bars", ...(D.tex?{tex:D.tex}:{}), link:OWN_LK_IAB.elig}; }},
   {owner:"MassDOT", iab:"integral", id:"iab.cover", kind:"should-warning", sec:"3.10.8 (p. 3-88)", text:"Abutment kept short; at least 3 ft for inspection access; at least 3 ft of fill over the bottom of the abutment desirable; equal abutment heights recommended",
     ev:C=>({st:ownGE(+S.iab.Dfront,3)&&ownLE(+S.iab.dH,0)?"pass":"warn", val:`fill over the bottom of the cap ${fmt(+S.iab.Dfront,2)} ft; height difference ${fmt(+S.iab.dH,2)} ft`, lim:"≥ 3 ft; equal heights", link:OWN_LK_IAB.elig})},
   {owner:"MassDOT", iab:"integral", id:"iab.misc", kind:"note", sec:"3.10.3, 3.10.4, 3.10.10.4 (pp. 3-87, 3-91)", text:"Permitted superstructure types; approach slab required, sliding at the abutment; 3-ft deep, 2'-6\" wide crushed-stone trench below the cap",
@@ -1275,8 +1275,8 @@ ABUT_OWN.rules.push(
   {owner:"RIDOT", iab:"integral", id:"iab.ht", kind:"shall-check", sec:"11.3.2 (p. 11-4)", text:"Top of deck to bottom of pile cap at most 13 ft; pile cap depth 3.5 ft to 6 ft",
     ev:C=>{ const a=iabHt(C,13), b=iabLim(+S.iab.hc,3.5,6,"cap depth h<sub>c</sub>","ft"); return {st:a.st==="pass"&&b.st==="pass"?"pass":"fail", val:a.val+"; "+b.val, lim:"≤ 13 ft; 3.5 to 6 ft", tex:a.tex, link:OWN_LK_IAB.elig}; }},
   {owner:"RIDOT", iab:"integral", id:"iab.geo", kind:"shall-check", sec:"11.3.2 (p. 11-4)", text:"Grade between abutments at most 5 %; straight alignment; girder depth at most 6 ft; minimum pile length 10 ft",
-    ev:C=>{ const ok=ownLE(+S.iab.grade,5)&&S.iab.straight&&ownLE(+S.iab.dg,6)&&ownGE(+S.iab.Lpile,10);
-      return {st:ok?"pass":"fail", val:`grade ${fmt(+S.iab.grade,2)} %; ${S.iab.straight?"straight":"curved"}; girder ${fmt(+S.iab.dg,2)} ft; pile ${fmt(+S.iab.Lpile,1)} ft`, lim:"≤ 5 %; straight; ≤ 6 ft; ≥ 10 ft"}; }},
+    ev:C=>{ const D=iabDg(), ok=ownLE(+S.iab.grade,5)&&S.iab.straight&&D.v!==null&&ownLE(D.v,6)&&ownGE(+S.iab.Lpile,10);
+      return {st:ok?"pass":"fail", val:`grade ${fmt(+S.iab.grade,2)} %; ${S.iab.straight?"straight":"curved"}; girder ${iabDgTxt(D)}; pile ${fmt(+S.iab.Lpile,1)} ft`, lim:"≤ 5 %; straight; ≤ 6 ft; ≥ 10 ft", ...(D.tex?{tex:D.tex}:{})}; }},
   {owner:"RIDOT", iab:"integral", id:"iab.pile", kind:"shall-check", sec:"11.3.2 (p. 11-5)", text:"Single row of H-piles, weak axis normal to the bridge axis regardless of skew; embedded at least 2 ft into the cap (or as needed to develop M_p); rigid connection, anchored against uplift",
     ev:C=>{ const a=iabWeak(), b=iabEmb(C,24); return {st:a.st==="pass"&&b.st==="pass"?"pass":"fail", val:a.val+"; "+b.val, lim:"weak axis; ≥ 24 in", link:OWN_LK_IAB.pile}; }},
   {owner:"RIDOT", iab:"integral", id:"iab.ly", kind:"shall-check", sec:"11.3.2 (pp. 11-5, 11-6)", text:"Pile design by an iterative lateral analysis (L-Pile or similar) under the factored thermal movement and the pile-head moment matching the superstructure rotation; elastic or inelastic interaction",
@@ -1290,8 +1290,8 @@ ABUT_OWN.rules.push(
   {owner:"RIDOT", iab:"any", id:"iab.joint", kind:"advisory", sec:"11.3.2, 11.3.3 (pp. 11-7, 11-8)", text:"Movement over ½ in: expansion joint at the sleeper slab; ½ in or less: saw-and-seal detail",
     ev:C=>iabJoint(C,0.5,"≤ 0.5 in for saw-and-seal")},
   {owner:"RIDOT", iab:"semi", id:"iab.lim", kind:"shall-check", sec:"11.3.3 (p. 11-8)", text:"Semi-integral limits: skew at most 30°; expansion length 175 ft (steel) / 300 ft (concrete); grade at most 5 %; girder depth at most 6 ft",
-    ev:C=>{ const Q=iabQ(C), Lm=C.mat==="concrete"?300:175, ok=ownLE(+C.g.skew||0,30)&&ownLE(Q.Lexp,Lm)&&ownLE(+S.iab.grade,5)&&ownLE(+S.iab.dg,6);
-      return {st:ok?"pass":"fail", val:`skew ${fmt(+C.g.skew||0,1)}°; L<sub>exp</sub> ${fmt(Q.Lexp,1)} ft; grade ${fmt(+S.iab.grade,2)} %; girder ${fmt(+S.iab.dg,2)} ft`, lim:`≤ 30°; ≤ ${Lm} ft; ≤ 5 %; ≤ 6 ft`, link:OWN_LK_IAB.mv}; }},
+    ev:C=>{ const Q=iabQ(C), D=iabDg(), Lm=C.mat==="concrete"?300:175, ok=ownLE(+C.g.skew||0,30)&&ownLE(Q.Lexp,Lm)&&ownLE(+S.iab.grade,5)&&D.v!==null&&ownLE(D.v,6);
+      return {st:ok?"pass":"fail", val:`skew ${fmt(+C.g.skew||0,1)}°; L<sub>exp</sub> ${fmt(Q.Lexp,1)} ft; grade ${fmt(+S.iab.grade,2)} %; girder ${iabDgTxt(D)}`, lim:`≤ 30°; ≤ ${Lm} ft; ≤ 5 %; ≤ 6 ft`, ...(D.tex?{tex:D.tex}:{}), link:OWN_LK_IAB.mv}; }},
   {owner:"RIDOT", iab:"semi", id:"iab.Kp", kind:"load", sec:"11.3.3 (p. 11-8)", text:"Backwall (end diaphragm) designed for full passive pressure",
     ev:C=>({st:"pass", val:`K<sub>p</sub> = ${fmt(iabQ(C).Kexp,3)} (§10.3)`, lim:"full passive", link:OWN_LK_IAB.ep})},
   {owner:"RIDOT", iab:"semi", id:"iab.wing", kind:"shall-check", sec:"11.3.3 (p. 11-8)", text:"Wingwalls independent of the backwall, to allow its movement",
@@ -1641,8 +1641,9 @@ function inpRow(label, path, unit, o={}){
   const title = o.title ? ` title="${esc(o.title)}"` : "";
   const ot=ownTagHTML(path)||pxrTagHTML(path), oc=ot&&!/ovr/.test(ot)?' class="ownv"':'';   // OWNB: owner default highlight; PXR: value from Pile Designer
   const dis=o.dis?" disabled":"";   // ABPM: a kept but unused input, greyed out
+  const bl=o.blank?' data-blank="1"':"";   // ABDG: an optional input stored as null when emptied
   return `<div class="in-row"><label${title}>${label}</label>
-    <input type="number" step="${step}" data-path="${path}" value="${v}"${oc}${dis}>
+    <input type="number" step="${step}" data-path="${path}" value="${o.blank&&(v===null||v===undefined)?"":v}"${bl}${oc}${dis}>
     <span class="unit">${unit||"&nbsp;"}</span>${ot}</div>`;
 }
 function selRow(label, path, options, o={}){
@@ -2154,7 +2155,9 @@ function buildInputs(){
       body+=`<div class="subhead">Bridge</div>
       ${oo==="AASHTO"?inpRow("Total bridge length (0 = span L)","own.Ltot","ft"):`<div class="in-note">Total bridge length: panel I-0 (${fmt((+S.own.Ltot>0)?+S.own.Ltot:+S.geom.spanL,1)} ft). Span, skew: panel I-1. Superstructure material and temperatures: panel I-6b.</div>`}
       ${inpRow("Expansion length to this abutment (0 = half the total length)","iab.Lexp","ft",{title:"Length from the point of zero movement to this abutment. 0 = L_tot/2 (symmetric bridge: MassDOT 3.10.2.4, CTDOT CT11.1.1.4.1)."})}
-      ${inpRow("Girder depth","iab.dg","ft")}
+      ${it==="integral"?abElInRow("Girder depth d<sub>g</sub> (blank = none)","geom.elGird","in","Girder depth at the bearing line (in). Used by the owner screening of Tab 1 §1.0a (engineer decision 2026-11-12; the former entry of this panel in ft). Same input as the girder depth d_g of panel I-1 (shown there for conventional and semi-integral abutments)."):`<div class="in-note">Girder depth d<sub>g</sub>: the superstructure input of panel I-1 (engineer decision 2026-11-12).</div>`}
+      ${(()=>{ const D=iabDg(); return D.sv!==null? inpRow("&nbsp;&nbsp;Girder depth saved in this panel (before 2026-11-12; blank = clear)","iab.dg","ft",{blank:true,title:"The girder depth this project was saved with (the former entry of this panel). Kept, never discarded: with d_g blank it is used; with d_g entered and a different value, the larger of the two is used and flagged. Clear it to use d_g only."}) : ""; })()}
+      <div class="in-note" id="abDgIn">${iabDgInHTML()}</div>
       ${inpRow("Grade between the abutments (elevation difference / length)","iab.grade","%")}
       ${it==="integral"?inpRow("Horizontal curvature, subtended angle","iab.curve","deg")+inpRow("Height difference between the two abutments","iab.dH","ft"):""}
       ${it==="integral"?ck("iab.straight","Straight girders and alignment (curved bridge: straight parallel beams)")+ck("iab.parallel","Parallel abutments and piers"):ck("iab.bothEnds","The other end is also semi-integral")+ck("iab.diaRx","End-diaphragm weight already included in the girder DC reactions (panel I-5)")}`;   // ABC (b)
@@ -2246,9 +2249,9 @@ function buildInputs(){
     <div class="in-row"><label title="Optional. The elevation of the beam seat (bridge seat${iabType()==="integral"?"; integral abutment: the seat of panel I-0a, h_c above the bottom of the cap":""}). Every other elevation is derived from it and the heights of the geometry inputs (Tab 1 §1.1a). Blank = no elevations shown. Display only: no result depends on it.">Beam seat elevation El<sub>seat</sub> (blank = none)</label>
       <input type="number" step="any" data-path="geom.elSeat" data-blank="1" value="${abElevOn()?S.geom.elSeat:""}"><span class="unit">ft</span></div>
     <div class="in-note" id="abElevIn">${abElevInHTML()}</div>
-    ${iabType()!=="integral"?`<div class="in-note">Superstructure at the bearing line, for the elevations only (Tab 1 §1.1a: top of bearing, top of deck; blank = not shown; no check uses them):</div>`
+    ${iabType()!=="integral"?`<div class="in-note">Superstructure at the bearing line, for the elevations (Tab 1 §1.1a: top of bearing, top of deck; blank = not shown)${iabType()==="semi"?"; the girder depth d<sub>g</sub> is also the owner screening girder depth (Tab 1 §1.0a)":"; no check uses them"}:</div>`
       +abElInRow("&nbsp;&nbsp;Total bearing height h<sub>brg</sub> (blank = none)","geom.elBrgH","in","Masonry plate + elastomer + sole plate, from the beam seat to the underside of the girder. Display only: the top of bearing / bottom of girder elevation. Not h_rt of panel I-6 (the elastomer only, used for the pad shear); no calculation reads it.")
-      +abElInRow("&nbsp;&nbsp;Girder depth d<sub>g</sub> (blank = none)","geom.elGird","in","Girder depth at the bearing. Display only: the top of deck elevation."+(iabType()==="semi"?" Separate from the girder depth of panel I-0a (owner screening, Tab 10); a difference is flagged.":"")+" No calculation reads it.")
+      +abElInRow("&nbsp;&nbsp;Girder depth d<sub>g</sub> (blank = none)","geom.elGird","in","Girder depth at the bearing. The top of deck elevation."+(iabType()==="semi"?" Also the girder depth of the semi-integral owner screening (Tab 1 §1.0a; engineer decision 2026-11-12, was its own panel I-0a entry): a different girder depth saved in panel I-0a is kept, the larger is used and the difference is flagged.":" No calculation reads it for a conventional abutment."))
       +abElInRow("&nbsp;&nbsp;Haunch h<sub>h</sub> (blank = none; 0 = no haunch)","geom.elHaunch","in","Haunch (girder top to deck underside) at the bearing. Display only: the top of deck elevation.")
       +abElInRow("&nbsp;&nbsp;Deck thickness t<sub>d</sub> (blank = none)","geom.elDeck","in","Deck slab thickness, including any integral wearing surface. Display only: the top of deck elevation.") : ""}
     <div class="subhead">Footing</div>
@@ -5667,6 +5670,8 @@ function computeAll(){
     addD(gR?"globalRef":"global",(gR?"":"REVIEW — ")+"Overall (global) stability [11.6.3.7]",NaN,"tab-stab",gR? "by others: "+gR : "by the geotechnical engineer — enter the reference (panel I-4)",true); }
   R.dash=dash;
   R.nFail=dash.filter(d=>d.pass===false).length;
+  /* ABDG (2026-11-12): a girder depth saved in panel I-0a that differs from d_g — kept, the larger used by the screening, flagged */
+  if(iabType()!=="conv"){ const D=iabDg(); if(D.mis) warn(`Girder depth — d<sub>g</sub> = ${fmt(D.gi,2)} in (${iabDgPanel()}) differs from the ${fmt(D.sv,2)} ft (${fmt(12*D.sv,2)} in) saved in panel I-0a with this project: the owner screening uses the larger, ${fmt(D.v,2)} ft (Tab 1 §1.0a). Make them equal, or clear the saved value in panel I-0a.`); }
   /* ===== C-22 Owner requirements (OWNA): checked after every result is final; they change no result ===== */
   R.own=abutOwnChecks(R);
   if(R.own.nFail) warn(`Owner requirements (${ABUT_OWN.owners[R.own.owner].short}): ${R.own.nFail} not met — ${R.own.rows.filter(x=>x.st==="fail").map(x=>x.r.sec).join("; ")} (Tab 1 §1.0a).`,"err");
@@ -6469,7 +6474,7 @@ function svgIabSection(R){
     const X=x=>x0+x*sc, Y=y=>yT+y*sc;   // x from the front face (toward the span negative), y down from the deck surface
     const cut=hd+hc+Lp*0.55;
     b+=`<rect x="${X(-7)}" y="${Y(-0.7)}" width="${7*sc}" height="${0.7*sc}" fill="#d9d9d0" stroke="#555"/>`+svgT(X(-6.8),Y(-0.9),"deck",{fs:10,c:"#555"});   // deck slab
-    b+=`<rect x="${X(-7)}" y="${Y(0)}" width="${(7+0.4)*sc}" height="${Math.max(0.3,+I.dg)*sc}" fill="none" stroke="#1f3a5f" stroke-dasharray="5 3"/>`+svgT(X(-6.8),Y(Math.max(0.3,+I.dg))-5,"girder (cast into the diaphragm)",{fs:10,c:"#1f3a5f"});
+    b+=`<rect x="${X(-7)}" y="${Y(0)}" width="${(7+0.4)*sc}" height="${Math.max(0.3,iabDg().v||4)*sc}" fill="none" stroke="#1f3a5f" stroke-dasharray="5 3"/>`+svgT(X(-6.8),Y(Math.max(0.3,iabDg().v||4))-5,"girder (cast into the diaphragm)",{fs:10,c:"#1f3a5f"});
     b+=`<rect x="${X(0)}" y="${Y(-0.7)}" width="${bw*sc}" height="${(hd+0.7)*sc}" fill="#ecebe4" stroke="#333" stroke-width="1.4"/>`+svgT(X(bw/2),Y(hd/2),"end diaphragm",{fs:10,a:"middle"});
     if(!FIG_STATIC) b+=`<rect x="${X(0)}" y="${Y(-0.7)}" width="${bw*sc}" height="${(hd+hc+0.7)*sc}" fill="transparent"${fia(`End diaphragm and pile cap: b = ${fF(bw)} ft, h_d = ${fF(hd)} ft, h_c = ${fF(hc)} ft; H = h_d + h_c = ${fF(Q.H)} ft\ncap and wall demands and checks: §10.5`,"tab-iab|o-iab-cap")}/>`;
     b+=`<rect x="${X(0)}" y="${Y(hd)}" width="${bw*sc}" height="${hc*sc}" fill="#e4e2d8" stroke="#333" stroke-width="1.4"/>`+svgT(X(bw/2),Y(hd+0.9),"pile cap",{fs:10,a:"middle"});
@@ -6500,7 +6505,7 @@ function svgIabSection(R){
     if(!FIG_STATIC) b+=`<rect x="${X(xBack-tbw)}" y="${Y(-0.7)}" width="${tbw*sc}" height="${(hbw+0.7-0.15)*sc}" fill="transparent"${fia(`End diaphragm: h_bw = ${fF(hbw)} ft, t_bw = ${fF(tbw)} ft (panel I-1); moves with the superstructure\ndemands and checks: §10.5`,"tab-iab|o-iab-cap")}/>`;
     b+=`<rect x="${X(xBack-tbw-6)}" y="${Y(-0.7)}" width="${6*sc}" height="${0.7*sc}" fill="#d9d9d0" stroke="#555"/>`+svgT(X(xBack-tbw-5.8),Y(-0.9),"deck",{fs:10,c:"#555"});
     const brgX=xSeatF+(+g.brgSetback>0?Math.min(tst-tbw,+g.brgSetback):0.5);
-    b+=`<rect x="${X(xBack-tbw-6)}" y="${Y(0)}" width="${(6+0.05)*sc}" height="${Math.max(0.3,Math.min(hbw-0.4,+I.dg))*sc}" fill="none" stroke="#1f3a5f" stroke-dasharray="5 3"/>`;
+    b+=`<rect x="${X(xBack-tbw-6)}" y="${Y(0)}" width="${(6+0.05)*sc}" height="${Math.max(0.3,Math.min(hbw-0.4,iabDg().v||4))*sc}" fill="none" stroke="#1f3a5f" stroke-dasharray="5 3"/>`;
     b+=`<rect x="${X(Math.min(brgX,xBack-tbw-0.6)-0.3)}" y="${Y(hbw)-6}" width="${0.6*sc}" height="6" fill="#444"/>`+svgT(X(Math.min(brgX,xBack-tbw-0.6)-0.5),Y(hbw)-4,"bearing",{fs:9.5,a:"end",c:"#444"});
     b+=`<line x1="${X(xBack-tbw)}" y1="${Y(hbw)}" x2="${X(xBack)}" y2="${Y(hbw)}" stroke="#c62828" stroke-width="2"/>`+svgT(X(xBack)+4,Y(hbw)+16,"joint (diaphragm slides on the stem)",{fs:9.5,c:"#c62828"});
     if(R.ap){ const P=R.ap, ts=P.t, sh=P.sup==="shelf"&&!P.legacy, bS=P.bS/12, hS=P.hS/12, hE=P.hE/12;   // APS: the approach slab and its shelf on the end diaphragm
@@ -6693,6 +6698,7 @@ function ownerPanelHTML(R){
     ["Default","= an owner value of an input (applied when the owner is chosen while the input held the previous default; a value you entered is kept and flagged)."],
     ["Load rule","= applied in the calculation (worked in Tab 2 §2.0a)."],["Pending reference","= the owner document that sets it is not available."],
     ["Values:","worked in the row or in the linked panel."],
+    iabType()!=="conv"?["Girder depth:",`d<sub>g</sub> of the superstructure inputs (${iabDgPanel()}; engineer decision 2026-11-12, was its own panel I-0a entry): ${iabDgTxt()}.`]:null,
     OWN_LAST&&OWN_LAST.owner===O.owner&&(OWN_LAST.set.length||OWN_LAST.kept.length)?["Last change:",`${OWN_LAST.set.length?"set to the owner default — "+OWN_LAST.set.map(ownDefLabel).join(", "):""}${OWN_LAST.set.length&&OWN_LAST.kept.length?"; ":""}${OWN_LAST.kept.length?"your values kept — "+OWN_LAST.kept.map(ownDefLabel).join(", "):""}.`]:null])}</div>${t}`);
 }
 
@@ -9000,6 +9006,30 @@ function abElNum(path,pos){ const v=getPath(S,path); if(v===null||v===undefined|
 function abElInRow(label,path,unit,title){ const v=getPath(S,path), ok=v!==null&&v!==undefined&&v!==""&&isFinite(+v);
   return `<div class="in-row"><label title="${esc(title)}">${label}</label>
       <input type="number" step="any" data-path="${path}" data-blank="1" value="${ok?v:""}"><span class="unit">${unit}</span></div>`; }
+/* ABDG (2026-11-12, engineer decision): the girder depth of the integral / semi-integral owner screening (Tab 1 §1.0a; formerly its own
+   panel I-0a entry iab.dg, ft) is the girder depth d_g of the superstructure inputs (geom.elGird, in; panel I-1, or panel I-0a for an integral
+   abutment). A girder depth saved in iab.dg is kept, never discarded, and shown in panel I-0a until it is cleared:
+   - d_g entered, no saved value or the same (within 0.05 in): d_g/12;
+   - d_g entered and a different saved value: the larger of the two (conservative: every owner limit on the girder depth is an upper limit), flagged;
+   - d_g blank, a saved value: the saved value (a saved project's screening is unchanged), flagged;
+   - neither: not entered (the screening rows that need it are not met / to check). */
+function iabDg(){
+  const gi=abElNum("geom.elGird",true), d=S.iab&&S.iab.dg, sv=(d!==null&&d!==undefined&&d!==""&&isFinite(+d)&&+d>0)? +d : null, f2=x=>fmtT(x,2);
+  if(gi!==null&&sv!==null&&Math.abs(gi-12*sv)>0.05){ const v=Math.max(gi/12,sv);
+    return {v, src:"max", gi, sv, mis:true, tex:`d_{g} = \\max\\left(${f2(gi)}/12,\\ ${f2(sv)}\\right) = ${f2(v)}\\ \\text{ft}`}; }
+  if(gi!==null) return {v:gi/12, src:"girder", gi, sv, mis:false, tex:`d_{g} = ${f2(gi)}/12 = ${f2(gi/12)}\\ \\text{ft}`};
+  if(sv!==null) return {v:sv, src:"saved", gi, sv, mis:false, tex:null};
+  return {v:null, src:"none", gi, sv, mis:false, tex:null}; }
+function iabDgPanel(){ return iabType()==="integral"? "panel I-0a" : "panel I-1"; }
+function iabDgTxt(D){ D=D||iabDg();
+  if(D.src==="max") return `${fmt(D.v,2)} ft = the larger of d<sub>g</sub> ${fmt(D.gi,2)} in (${iabDgPanel()}) and the ${fmt(D.sv,2)} ft saved in panel I-0a (they differ: check both)`;
+  if(D.src==="girder") return `${fmt(D.v,2)} ft (d<sub>g</sub> = ${fmt(D.gi,2)} in, ${iabDgPanel()})`;
+  if(D.src==="saved") return `${fmt(D.v,2)} ft (saved in panel I-0a; d<sub>g</sub> of ${iabDgPanel()} not entered)`;
+  return `not entered (d<sub>g</sub>, ${iabDgPanel()})`; }
+/* the note under the girder depth (panel I-0a), refreshed by updateDerivedInInputs */
+function iabDgInHTML(){ if(iabType()==="conv") return ""; const D=iabDg();
+  const st=D.src==="max"||D.src==="saved"||D.src==="none";
+  return `${st?"⚠ ":""}Owner screening girder depth (Tab 1 §1.0a): <b>${iabDgTxt(D)}</b>.`+(D.src==="max"?" The larger is used (conservative). Make them equal, or clear the saved value below to use d<sub>g</sub> only.":D.src==="saved"?" Enter d<sub>g</sub>"+(iabType()==="integral"?" above":" in panel I-1")+"; then the saved value below is compared with it.":D.src==="none"?" Enter d<sub>g</sub>"+(iabType()==="integral"?" above":" in panel I-1")+".":""); }
 /* Pile Designer's pile (pileResults, pile footing): head-to-toe length = stick-up above grade + toe depth below grade (its model's pile head is the
    underside of the footing), + this footing's embedment = the total length. Only a record imported with the toe depth (since ABEL2) has it. */
 function abElPdLen(){ const s=S.pileRes, gg=s&&s.geo, pl=s&&s.pile; if(!gg||gg.pileType==="iab"||!(isFinite(+gg.toe)&&+gg.toe>0)) return null;
@@ -9051,7 +9081,7 @@ function abElev(R){
       if(dg!==null) add({k:"gTop",lab:"Top of girder at the bearing line",el:eb+dg/12,how:`El<sub>brg</sub> + d<sub>g</sub>/12 = ${f(eb)} + ${fi(dg)}/12`,y:yb+dg/12,side:"F",x:R.geo.xBrg,src:"I-1",dwg:false});
       add({k:"brgTop",lab:"Top of bearing / bottom of girder",el:eb,how:`El<sub>seat</sub> + h<sub>brg</sub>/12 = ${f(E0)} + ${fi(hb)}/12`,y:yb,side:"F",x:R.geo.xBrg,src:"I-1"}); }
     else notes.push("Top of bearing and top of deck: not shown (enter the total bearing height, panel I-1; h<sub>rt</sub> of panel I-6 is the elastomer only).");
-    if(semi&&dg!==null&&+S.iab.dg>0&&Math.abs(dg-12*S.iab.dg)>0.05) flags.push(`Girder depth d<sub>g</sub> = ${fi(dg)} in (panel I-1, elevations only) differs from the girder depth ${fi(12*S.iab.dg)} in (${fmt(+S.iab.dg,2)} ft) of panel I-0a used by the owner screening of Tab 10; check both.`);
+    if(semi){ const D=iabDg(); if(D.mis) flags.push(`Girder depth d<sub>g</sub> = ${fi(dg)} in (panel I-1) differs from the girder depth ${fi(12*D.sv)} in (${fmt(D.sv,2)} ft) saved in panel I-0a; the owner screening (Tab 1 §1.0a) uses the larger, ${fmt(D.v,2)} ft; check both.`); }   // ABDG
     add({k:"seat",lab:"Beam seat (bridge seat; top of the stem)",el:E0,how:"entered (panel I-1)",y:tf+hs,side:"F",x:R.geo.xStemTopFront,src:"I-1"});
     add({k:"tof",lab:"Top of the footing (bottom of the stem)",el:tof,how:`El<sub>seat</sub> − h<sub>stem</sub> = ${f(E0)} − ${f(hs)}`,y:tf,side:"F",x:0,src:"I-1"});
     add({k:"bof",lab:"Bottom of the footing",el:base,how:`El<sub>tof</sub> − t<sub>f</sub> = ${f(tof)} − ${f(tf)}`,y:0,side:"F",x:0,src:"I-1"});
@@ -9162,7 +9192,7 @@ function drawXsec(){
   if(!semiX) s+=`<rect x="${X(xbwF)}" y="${Y(Htot)}" width="${g.tbw*sc}" height="${g.hbw*sc}" ${conc}/>`;
   else{ const Qx=window.LAST_R.iab, zs=g.tf+g.hstem, pB=Qx.Kexp*(+S.soil.gamma)*g.hbw, pw=Math.min(46,(g.Lheel)*sc*0.6);
     s+=`<rect x="${X(xbwF)}" y="${Y(Htot)}" width="${g.tbw*sc}" height="${(g.hbw-0.12)*sc}" fill="#ecebe4" stroke="#1f3a5f" stroke-width="1.6"/>`;
-    s+=`<rect x="${X(xbwF)-26}" y="${Y(Htot)}" width="26" height="${Math.min(g.hbw-0.3,+S.iab.dg||g.hbw*0.7)*sc}" fill="none" stroke="#1f3a5f" stroke-dasharray="5 3"/>`;
+    s+=`<rect x="${X(xbwF)-26}" y="${Y(Htot)}" width="26" height="${Math.min(g.hbw-0.3,iabDg().v||g.hbw*0.7)*sc}" fill="none" stroke="#1f3a5f" stroke-dasharray="5 3"/>`;
     s+=`<line x1="${X(xbwF)}" y1="${Y(zs)}" x2="${X(xsb)}" y2="${Y(zs)}" stroke="#c62828" stroke-width="2.2"/><text x="${X(xsb)+4}" y="${Y(zs)+12}" font-size="10" font-family="Times New Roman" fill="#c62828">joint (diaphragm on the stem)</text>`;
     s+=`<text x="${X(xbwF+g.tbw/2)}" y="${Y(Htot)-4}" text-anchor="middle" font-size="10.5" font-family="Times New Roman" fill="#1f3a5f">end diaphragm</text>`;
     s+=`<polygon points="${X(xsb)},${Y(Htot)} ${X(xsb)+pw},${Y(zs)} ${X(xsb)},${Y(zs)}" fill="rgba(31,58,95,0.14)" stroke="#1f3a5f" stroke-width="1"/>`
@@ -9757,7 +9787,7 @@ function build3DIntegral(R){
   d3Add(d3SecGeo([[-cx,0],[b-cx,0],[b-cx,hc],[-cx,hc]],Lab),M.wall,M.ed);
   d3Add(d3SecGeo([[-cx,hc],[b-cx,hc],[b-cx,H],[-cx,H]],Lab),M.wall,M.ed);
   const td=Math.min(0.7,0.3*hd), Ls=Math.max(6,Math.min(12,1.5*H));
-  d3Super(R,M,{xRef:0, xEnd:-cx+Math.min(1.0,0.5*b), xDeck:-cx, Ls, yTop:H, td, dg:Math.min(+I.dg||hd-td,hd-td+0.5*hc), th, Lab});
+  d3Super(R,M,{xRef:0, xEnd:-cx+Math.min(1.0,0.5*b), xDeck:-cx, Ls, yTop:H, td, dg:Math.min(iabDg().v||hd-td,hd-td+0.5*hc), th, Lab});
   const ap=(S.apSlab&&S.apSlab.on&&d3ApShow())? d3ApSlab(R,M,b-cx,H,th,Lab) : null;   // AB3A: the layer toggle
   d3Wings(R,T,M.conc,M.ed||new THREE.LineBasicMaterial({color:0x555550}),b-cx,H,Lab);
   // soil: backfill behind the wall (below the approach slab) and the fill in front over D_front
@@ -11734,7 +11764,8 @@ function abrModel(){
   { const O=R.own||{owner:"AASHTO",rows:[]};
     secs.push({title:"Owner requirements",subs:[{title:O.owner==="AASHTO"?"AASHTO LRFD only":ABUT_OWN.owners[O.owner].short,items:O.rows.length?[
       {type:"table",head:["Section","Requirement (paraphrased)","Value checked","Required","Result"],rows:O.rows.map(x=>({cells:[abrPlain(x.r.sec),abrPlain(x.r.text),abrPlain(x.val||"—"),abrPlain(x.lim||"—"),{t:(OWN_ST[x.st]||["",x.st])[1],cls:x.st==="fail"?"ng":x.st==="pass"?"ok":x.st==="warn"?"hi":"na"}],cls:x.st==="fail"?"gov":""}))},
-      {type:"note",text:"As on "+abrTab("tab-loads","o-owner")+"."}]:[{type:"note",text:"No owner rules (AASHTO LRFD 10th Ed. only). Choose an owner in panel I-0 to check that owner's requirements."}]}]}); }
+      {type:"note",text:"As on "+abrTab("tab-loads","o-owner")+"."},
+      ...(iabType()!=="conv"&&O.owner!=="AASHTO"?[{type:"note",text:"Girder depth of the screening (engineer decision 2026-11-12): d_g of the superstructure inputs ("+iabDgPanel()+"), "+abrPlain(iabDgTxt())+"; a different value saved in panel I-0a is kept and the larger is used (see the input echo, panel I-0a)."}]:[])]:[{type:"note",text:"No owner rules (AASHTO LRFD 10th Ed. only). Choose an owner in panel I-0 to check that owner's requirements."}]}]}); }
   /* ---------- warnings and assumptions ---------- */
   secs.push({title:"Warnings and assumptions",subs:[{title:"Warnings",items:WARNINGS.length?WARNINGS.map(x=>({type:"note",warn:true,text:(x.level==="err"?"ERROR: ":"")+abrPlain(x.msg)})):[{type:"note",text:"No active warnings."}]},
     {title:"Engineering assumptions",items:String(abutAssumptionsText()||"—").split(/\n+/).map(x=>abrPlain(x)).filter(x=>x.trim()).map(x=>({type:"note",text:x}))},   /* ABNL: one Report line per line of the text (the saved text is unchanged) */
@@ -11859,6 +11890,7 @@ function updateDerivedInInputs(){
   if(dv[0]) dv[0].innerHTML=bwOffGeo()? bwOffDerivedHTML() : `Derived: bridge seat width = t<sub>st</sub> − t<sub>bw</sub> = <b>${fmt(g.tst-g.tbw)} ft</b> &nbsp;·&nbsp; seat elevation (above footing base) = <b>${fmt(g.tf+g.hstem)} ft</b>`;
   { const ei=document.getElementById("abElevIn"); if(ei) ei.innerHTML=abElevInHTML(); }   // ABEL
   { const ei=document.getElementById("abElLpIn"); if(ei) ei.innerHTML=abElLpInHTML(); }   // ABEL2
+  { const ei=document.getElementById("abDgIn"); if(ei) ei.innerHTML=iabDgInHTML(); }   // ABDG
   if(dv[1]) dv[1].innerHTML=`Derived: total footing width B = L<sub>toe</sub> + t<sub>sb</sub> + L<sub>heel</sub> = <b>${fmt(g.Ltoe+g.tsb+g.Lheel)} ft</b>`;
   const pos=beamPositions();
   document.querySelectorAll("#inputCol table.itbl tr").forEach(tr=>{
@@ -12397,7 +12429,7 @@ function inputEchoHTML(){
     h+="<h3>Abutment type (panel I-0a)</h3>"+echoRows([
       ["Type",it?"integral":"semi-integral",""],
       ["Total length; expansion length (0 = half)",fmt((+S.own.Ltot>0)?+S.own.Ltot:+S.geom.spanL,1)+"; "+fmt(+I.Lexp,1),"ft"],
-      ["Girder depth; grade",fmt(+I.dg)+" ft; "+fmt(+I.grade)+" %",""],
+      ["Girder depth (owner screening, Tab 1 §1.0a; engineer decision 2026-11-12: d_g of the superstructure inputs); grade",abrPlain(iabDgTxt())+"; "+fmt(+I.grade)+" %",""],
       ["Backfill (Table C3.11.1-1)",IAB_BF[I.bfType]?IAB_BF[I.bfType].l:I.bfType,""],
       ["K_p entered (0 = Rankine); γEH on the movement pressure",fmt(+I.KpUser,3)+"; "+fmt(+I.gEH,2),""]].concat(it?[
       ["Cap width b; cap depth h_c; diaphragm h_d",fmt(+I.b)+" / "+fmt(+I.hc)+" / "+fmt(+I.hd),"ft"],

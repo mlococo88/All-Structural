@@ -150,7 +150,7 @@ if (REF) {
     const o = { tabs: {}, num: {} }, fl = v => JSON.stringify(v, (k, x) => (x instanceof Float64Array || Array.isArray(x)) ? Array.from(x).map(y => typeof y === 'number' ? +y.toPrecision(12) : y) : x);
     const ids = TABS.filter(t => t !== '|' && t[0] !== 'v3d').map(t => t[0]);
     for (let k = 0; k < P.units.length; k++) { P.ui.sel = k;
-      for (const id of ids) { if (k && ['summary', 'geometry', 'manual'].includes(id)) continue; showTab(id); await sleep(15); const el = document.getElementById('tab-' + id), hid = [...el.querySelectorAll('.slw-card, .slw-top')]; hid.forEach(x => { x.style.display = 'none'; }); o.tabs[id + '~' + k] = el.innerText; hid.forEach(x => { x.style.display = ''; }); }   // SLWS (2026-11-11): the tabs' worked-steps card (the Report's steps, display) left out
+      for (const id of ids) { if (k && ['summary', 'geometry', 'manual'].includes(id)) continue; showTab(id); await sleep(15); const el = document.getElementById('tab-' + id), hid = [...el.querySelectorAll('.slw-card, .slw-top, svg, .sl-spec-fig')]; hid.forEach(x => { x.style.display = 'none'; }); o.tabs[id + '~' + k] = el.innerText; hid.forEach(x => { x.style.display = ''; }); }   // SLWS (2026-11-11): the tabs' worked-steps card (the Report's steps, display) left out; SLGX2 (2026-11-12): the tab graphics and the spectrum figure with its note (display) too
       try { o.num['combine' + k] = fl(combine(k)); } catch (e) { o.num['combine' + k] = 'ERR ' + e.message; }
       o.num['comps' + k] = fl(COMBOS.map(c => { try { return comboComps(k, c); } catch (e) { return 'ERR'; } })); }
     try { const a = abutHandoffPayload(); o.num.abx = fl(a.err ? a : JSON.parse(JSON.stringify(a.p, (k, v) => (/At$/.test(k) || k === 'exported' || k === 'definition' || k === 'notes') ? undefined : v))); } catch (e) { o.num.abx = 'ERR ' + e.message; }   // ABX (2026-11-11): the additive definition block and the payload notes are not compared
@@ -172,7 +172,8 @@ if (REF) {
     .replace(/(\n• *)?\n?Seismic earth location:[^\n]*/g, '').replace(/\n?[^\n]*Seismic earth pressure location[^\n]*/g, '').replace(/\n?\(a\) Seed & Whitman: ΔP_AE at 0\.6H[^\n]*/g, '').replace(/Combined PAE height \/ H: blank or from 0\.4 to 0\.5; /g, '')   // SLPL notes and input-check range (display text)
     .replace(/\n{3,}/g, '\n\n');
   const slgp = t => typeof t !== 'string' ? t : t.replace(/\n?Input ID: [0-9A-F]{8}-[0-9A-F]{4}/g, '');   // SLGP (2026-11-11): the Report title block's Input ID line (display)
-  [...A, ...B].forEach(r => { const o = r.o; Object.keys(o.tabs).forEach(k => { o.tabs[k] = slgp(slls(slal(o.tabs[k]))); }); o.report = slgp(slls(slal(o.report))); });
+  const slgx2 = t => typeof t !== 'string' ? t : t.replace(/\n?Dots are the 22 entered S[^\n]*/g, '');   // SLGX2 (2026-11-12): the note under the response spectrum (display)
+  [...A, ...B].forEach(r => { const o = r.o; Object.keys(o.tabs).forEach(k => { o.tabs[k] = slgp(slls(slal(o.tabs[k]))); }); o.report = slgx2(slgp(slls(slal(o.report)))); });
   for (let i = 0; i < A.length; i++) { const a = A[i].o, bb = B[i].o;
     const keys = [...Object.keys(a.num).map(k => ['num', k]), ...Object.keys(a.tabs).filter(k => !/^manual/.test(k)).map(k => ['tabs', k])];
     const diff = keys.filter(([g, k]) => a[g][k] !== bb[g][k]).map(x => x.join('.')); n += keys.length + 2;

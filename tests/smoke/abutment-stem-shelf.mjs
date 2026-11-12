@@ -43,8 +43,8 @@ const CASES = {
   massdotStop: () => { S.own.owner = 'MassDOT'; S.apSlab.on = true; S.seismic.on = true; S.seismic.bwStop = true; },
   pile: () => { S.fnd.branch = 'pile'; S.apSlab.on = true; },
   eqLoad: () => { S.apSlab.on = true; S.apSlab.qEq = 1.2; },
-  semi: () => { S.iab.type = 'semi'; S.apSlab.on = true; },
-  integral: () => { S.iab.type = 'integral'; S.apSlab.on = true; },
+  semi: () => { S.iab.type = 'semi'; S.iab.dg = 4.0; S.apSlab.on = true; },   // ABDG (2026-11-12): as saved before (new projects have iab.dg null)
+  integral: () => { S.iab.type = 'integral'; S.iab.dg = 4.0; S.apSlab.on = true; },
   waterCoulomb: () => { S.geom.hw = 6; S.soil.method = 'coulomb'; },
 };
 async function snapAll(file) {

@@ -107,13 +107,13 @@ async function blankOut(root, setup) {
   const r = await p.evaluate(su => { eval('(' + su + ')')(); migrate(); buildInputs(); recalcAll(); renderTabContent('tab-loads');
     const cl = document.getElementById('tab-loads').cloneNode(true); cl.querySelectorAll('.plot-container, .js-plotly-plot').forEach(x => x.remove());   // Plotly ids are random
     const tab1 = cl.innerHTML, dxf = abdwBuild(window.LAST_R).D.toDXF({ ltscale: 1 });
-    activateTab('tab-rpt'); const rpt = (document.getElementById('tab-rpt').textContent || '').replace(/Printed [^·]*·/g, '');
+    activateTab('tab-rpt'); const rpt = (document.getElementById('tab-rpt').textContent || '').replace(/Printed [^·]*·/g, '').replace(/Girder depth[^%]*%/g, 'Girder depth (ABDG echo row)');   // ABDG: the echo row's wording
     return { tab1, dxf, rpt, fp: window.LAST_R.fingerprint, elSeat: S.geom.elSeat === undefined ? 'undefined' : S.geom.elSeat }; }, setup.toString());
   const errs = o.errs.slice(); await o.b.close(); return { ...r, errs };
 }
 if (MAIN) {
   console.log('4b. Field blank: identical to main (' + MAIN + ')');
-  for (const [nm, su] of [['built-in project', () => {}], ['slab + water + pile footing', () => { S.apSlab.on = true; S.geom.hw = 6; S.fnd.branch = 'pile'; }], ['integral + slab', () => { S.iab.type = 'integral'; S.apSlab.on = true; }]]) {
+  for (const [nm, su] of [['built-in project', () => {}], ['slab + water + pile footing', () => { S.apSlab.on = true; S.geom.hw = 6; S.fnd.branch = 'pile'; }], ['integral + slab', () => { S.iab.type = 'integral'; S.iab.dg = 4.0; S.apSlab.on = true; }]]) {   // ABDG (2026-11-12): a project saved with the panel I-0a girder depth (new projects: null)
     const [a, b] = await Promise.all([blankOut(MAIN, su), blankOut(REPO, su)]);
     check(a.tab1 === b.tab1 && a.dxf === b.dxf && a.rpt === b.rpt && a.fp === b.fp && !b.errs.length,
       `${nm}: Tab 1 (${b.tab1.length} chars) ${a.tab1 === b.tab1 ? 'same' : 'DIFF'}, DXF (${b.dxf.length}) ${a.dxf === b.dxf ? 'same' : 'DIFF'}, Report (${b.rpt.length}) ${a.rpt === b.rpt ? 'same' : 'DIFF'}, Input ID ${a.fp} / ${b.fp}; errors ${b.errs.length}`);
