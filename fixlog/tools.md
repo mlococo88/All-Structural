@@ -98,3 +98,11 @@
 - **After:** `<a class="card" href="apps/ps-bridge/index.html" target="_blank"><div class="name">Prestressed Bridge Design (new, in development)</div>…<li><b>Not for design use yet:</b> use the card above.</li>…<span class="tag">AASHTO LRFD 10th</span></a>` (the Steel Bridge app's precedent, #465).
 - **Formulas, factors, units, code references:** none. **Saved data:** none.
 - **How verified:** home-projects pass; the card opens the app (file://). **Other copies:** none. **Open items:** none.
+
+## 2026-11-12 — PR: claude/tools-canopy-link (CNL1) — card for the Canopy MIDAS MCT Generator   [navigation only]
+- **Where:** "Loads & analysis" section, before the card `href="Shear%20and%20Moment%20Diagrams.html"`.
+- **Before:** no link to the canopy app.
+- **After:** `<a class="card" href="https://mlococo88.github.io/Canopy-MCT-Generator/" target="_blank" rel="noopener"><div class="name">Canopy MIDAS MCT Generator</div>…` with Also (anchorage groups, report / Excel, Drawings tab) and Online (separate app on GitHub Pages, needs internet) items; tags ASCE 7-16, MIDAS Civil.
+- The canopy app lives in its own repository (mlococo88/Canopy-MCT-Generator) and embeds this repo's Base Plate & Anchor Designer and shared/dxf.js; it is not in this folder, so the card is the only absolute (online) link on the page.
+- **Formulas, factors, units, code references:** none. **Saved data:** none.
+- **How verified:** headless Chromium: the card shows in its section, the filter "canopy" and "anchor" find it, no sideways scroll at 390 px, 0 console errors. **Other copies:** none. **Open items:** none.

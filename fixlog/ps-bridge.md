@@ -133,3 +133,113 @@ PR #1448: https://github.com/mlococo88/All-Structural/pull/1448
 ### Open items
 - Next: PR 2b (input tabs wired to `base`, input checks; Section properties, Loads & LLDF and Analysis tabs in the steel style, values =
   engine values).
+
+## 2026-11-12 — PR 2b-1: input tabs wired to the base design (one design girder), input checks (new files; no calculation change)
+PR #1450: https://github.com/mlococo88/All-Structural/pull/1450
+### Where
+- `apps/ps-bridge/engine/design.js` (new, `window.PSBDesign`): the one girder design until the bridge level (PR 3a). `P.design = { g, s }`
+  (optional within schema v1; absent: G2, or G1 with one girder, in span 1). `inputs(P)` = the engine inputs: `PBD.applyBridge` (the old
+  app's "Preliminary designer" bridge values, moved unchanged in PR 2a) on a copy of `P.base` with the bridge `{ spans: spans.lengths,
+  nGirders: xs.nb, S: xs.bays[0], title }` (sets L = span s, S, nGirders, loads.pos exterior for G1 / G<nb>, cont.spans / cont.span, proj),
+  then `cont.on` = made continuous with 2 or more spans, `loads.skew` = |skew| of the design span's supports, `deck.oh` = the overhang on
+  the design girder's side (right for G<nb>, else left). `checks(P)`: blocking errors for the PR 2b limits — unequal bays (one S until PR
+  3a, PS-9, plan §7 item 3), different skews at the two supports of the design span, fewer than 2 girders, a design girder / span out of
+  range. `DRIVEN`: the base paths the bridge sets (not edited in base). `driven(P)`: those values for display.
+- `apps/ps-bridge/engine/fields.js` (new, `window.PSBFields`): every engine input the old app's input cards expose, on its plan §2.2 tab,
+  with label, unit, tooltip, rule and when-shown condition (labels from the old InputsTab at 8fe8650; "draped strands" (MassDOT / CTDOT
+  wording, PS-5); "Hold-down point from ℄ bearing, frac × L_span" (PS-13)); the table inputs (strand rows, diaphragms, rating vehicles);
+  `tabOf(path)`.
+  | tab | inputs |
+  |---|---|
+  | Bridge layout | continuity card (made continuous only): restraint moments, deck A_s / d_top / f_y over the pier, A_s,pos, girder top near the pier |
+  | Cross-section | t_s, haunch, b_eff automatic / entered, haunch in the section, separate dead-load deck thickness; d_e, N_L |
+  | Girders & strands | design girder and span (+ the bridge values shown, linked); shape, Custom dimensions, property overrides; straight strand rows (n, y, debonded, length); draped strands n_h, y_end, y_mid, frac; stirrups; 5.7.3.5 tie bars, girder end past bearing, pad; release tension steel; girder top steel near the pier; splitting and confinement steel |
+  | Materials | f′ci, f′c, f′c deck, the four unit weights; strand size, jacking ratio, E_p; H, V/S, t_i, t_d, t_f, loss method, Δf_pSS computed / entered; the PCI camber multipliers |
+  | Diaphragms / deck | diaphragm point loads (table); deck design on/off and its inputs |
+  | Loads | DC1 additional, DC2, DW per girder; LL automatic / entered, DF automatic / entered, fatigue DF; release stress section, γ_LL Service III; φ_c, φ_s; rating vehicles (table); handling on/off and its inputs; MIDAS import: placeholder (later PR) |
+  | Owner rules | owner (the old `PBD.ownApply`: an input still at its default takes the new owner's default, an entered value is kept; the change listed in a message; `cont.on` stays the bridge's), η questions, HL-93 multiplier, sidewalk question, the owner's rules table; release compression factor, corrosion exposure; hold-down check (PS-10) placeholder, PR 2d |
+  | Project | Assumptions card (the one design, the bridge values, the 2b limits, DC2/DW per girder until 3a, the moved engine, what is not yet in) |
+  Not exposed (as in the old app's cards): str.fpu, str.lowlax, handling.sweep / fr / zo / ag / gFactor, deck.method, opt.splitFy; the MIDAS
+  fields (external, loads.ext*) come with the MIDAS import (later PR). A test lists them.
+- `apps/ps-bridge/engine/inputcheck.js` (new, `window.PSBInputCheck`, the steel app's `engine/inputcheck.js` pattern): `collect(P)` = model
+  errors + design checks + every shown field against its rule (blank, sign, whole count, limits, an option) + table rows + locations
+  (strand rows and draped centroids inside the girder depth, debonded ≤ strands of the row, debond length < L/2, diaphragms within the
+  span, Custom y_b < h, override y_b < h) + ages in order (t_i < t_d < t_f). Design limits of the specification stay checks of the engine.
+- `apps/ps-bridge/ui/inputs.js` (new, `window.PSBInputsUI`): draws the cards (tooltips on label and input, owner-default hints), the
+  tables (add / delete; the last strand row cannot be deleted: the engine's mergeInputs reads an empty list as its default rows), the
+  design girder card, the owner card, the assumptions; handles their input changes.
+- `apps/ps-bridge/index.html`: loads the new files; the placeholders of these inputs replaced by the cards; the errors from
+  `PSBInputCheck.collect` marked with their message beside the field, counted on their tab, listed with links on the output panel
+  ("Results not shown: fix the inputs above") and in the check summary; the design girder / span follow a smaller girder or span count
+  (as the old bridge bar); a message box for the owner change.
+- `apps/ps-bridge/engine/model.js`: header documents the optional `design`. `ui/dash.js`: one sentence.
+### Copies from the Steel Bridge app (to move to shared/ later, CLAUDE.md §3)
+- `apps/ps-bridge/ui/inputcheck.js` = `apps/steel-bridge/ui/inputcheck.js` at `28e1605`, changed in: namespace `PSBInputCheckUI`, `fieldsOf`
+  by data-path (then a row's inputs, then the nearest parent path), no steel list / output-tab fields, no `SBDInputCheck.NOTE`.
+### Governing provisions
+- None changed: no formula, factor or unit. The values the bridge gives the design are copied by the old app's own `PBD.applyBridge`
+  (plus continuity, skew and overhang, which the old app took from its own boxes). Default project: every check identical to the old app's
+  default design (test).
+### Check case
+- Spans 100, 125, 100 ft made continuous; 6 girders at 8.5 ft; overhangs 2.5 / 3.25 ft; skews 10, 20, 20, 10°; design G6 in span 2 →
+  L = 125, S = 8.5, nGirders = 6, exterior, deck.oh = 3.25 ft, skew 20°, cont.on, cont.spans [100, 125, 100], span 2.
+- Bays 9, 10, 9, 9 → error on xs.bays "Unequal bays … enter equal bays"; skews 0, 15 → "different skews"; row y = 80 in on a BT-72 →
+  "not inside the girder (h = 72 in)".
+### Saved data (CLAUDE.md §5)
+- `psb2.project` v1 gains the optional `design`; the base design's fields are the old app's inputs format (unchanged). No new key; no
+  `psbeam.*` key read or written (smoke test: seeded keys byte-identical after edits).
+### How verified
+- `node tests/engine/run.mjs psbridge` (new `psbridge-inputs.test.mjs`: defaults no error and identical checks, the bridge values,
+  the limits, the field rules, every DEFAULTS input covered); `node tests/check-syntax.mjs`; `node tests/smoke/ps-bridge-skeleton.mjs`
+  (65 checks: every tab, a base field saved, a blank f′c marked / counted / blocking, owner change to RIDOT sets H = 80 %, a strand row
+  added / outside the girder / deleted, only psb2.* keys, 390 px with no sideways scroll on every input tab, 0 console errors).
+### Open items
+- Next: PR 2b-2 (Section properties, Loads & LLDF, Analysis output tabs with worked steps; values = engine values).
+
+## 2026-11-12 — PR 2b-2: Section properties, Loads & LLDF and Analysis output tabs (steel style, worked steps; values = engine values)
+PR #1452: https://github.com/mlococo88/All-Structural/pull/1452
+### Where
+- `apps/ps-bridge/engine/worked.js` (new, `window.PSBWorked`, no DOM): `section(inp, R)`, `loads(inp, R)`, `analysis(inp, R)` → `{ steps, pairs }`.
+  Every step (shared/steps.js format: symbol → equation → values substituted → result) carries the engine's own value (R = computeAll of the
+  design inputs); `pairs` = the step's expression evaluated from its substituted full-precision values against that engine value. Steps:
+  gross section (y_t, S_b, S_t, w_g), E_c (Eq. 5.4.2.4-1), n, b_eff (4.6.2.6.1), transformed deck / haunch, A_c, y_bc, I_c, h_c, S_bc, S_tg,
+  S_td, strands (N, A_ps, straight centroid, hold-down x = frac × L, draped slope, centroid and eccentricity at midspan, ℓ_t = 60 d_b);
+  η and m, DC1 (self-weight, deck, haunch, total, diaphragms), DC2 / DW, HL-93 per lane (truck by search, tandem, lane, with IM; shears),
+  e_g, K_g, g_M1/g_M2/g_V1/g_V2, exterior lever rule / e / rigid section, skew c_1 / r_M / shear correction, DF_M, DF_V, M_LL / V_LL per
+  girder; moments at midspan (M_g, M_DC1 with diaphragms, M_DC2 / M_DW simple or w·M_w continuous, M_LL, M_DC, Strength I, Service I,
+  Service III), shears at the support, the pier section (M_DC2,n, M_DW,n, M_LL,n, M_u,n) and the restraint moments (δ_1, δ_2, M_rc, M_res).
+  These are the expressions of the moved engine written out for display: no new formula, nothing computed for a result.
+- `apps/ps-bridge/ui/section.js`, `ui/loads.js`, `ui/analysis.js` (new; `PSBUiSection`, `PSBUiLoads`, `PSBUiAnalysis`): the three tabs in the
+  steel app's layout (graphic card with stat tiles, key-value cards, tables, worked steps in topics with § links, links to the input tabs
+  and between tabs). Section properties: the composite section graphic (the engine's outline and voids, haunch, deck, strands, the three
+  centroids, read-out); Loads & LLDF: the bridge cross-section with the design girder, dead loads, HL-93 per lane, distribution factors;
+  Analysis: moment and shear envelopes along the girder (the steel along-girder chart; station read-out and selection), the station table
+  (every sixth engine station + the selected one), the selected station's effects, continuity (unit, pier moments, restraint table).
+- `apps/ps-bridge/ui/outkit.js` (new, `PSBOutKit`): cards, `ev()` (every engine value on a tab is a `<span data-ev="R path">`), steps.
+- `apps/ps-bridge/index.html`: loads `../../shared/steps.js` (first shared file of this app), the new files; `result()` = computeAll of
+  `PSBDesign.inputs(P)` (cached by the inputs), shown only without input errors; an engine error blocks the tabs; Summary: the design
+  girder's key values and the engine's design warnings; tab and step links.
+### Copies from the Steel Bridge app (to move to shared/ later, CLAUDE.md §3)
+- `apps/ps-bridge/ui/vizkit.js` = `apps/steel-bridge/ui/vizkit.js` at `28e1605`: namespace `PSBVizKit`, event `psb2:panelresize`,
+  `PSBGraphics` (absent), detCard's Download DXF only when `o.dxf` is given (no DXF before PR 7).
+- `apps/ps-bridge/ui/vizalong.js` = `apps/steel-bridge/ui/vizalong.js` at `28e1605`: namespaces `PSBVizAlong`, `PSBVizKit`, `PSBGraphics`,
+  `PSBSub` (absent: text widths estimated, read-out as plain text), event `psb2:panelresize`.
+### Shared files
+- `shared/steps.js` is now loaded by `apps/ps-bridge/index.html` (unchanged; no shared file is changed by this PR).
+### Governing provisions
+- None changed (§4): the steps restate the moved engine's expressions; their values are the engine's. AASHTO LRFD 10th Ed. articles as
+  cited on each step.
+### Check case
+- Default design (PCI BT-72, L = 120 ft, S = 9 ft, interior): b_eff = 12 × 9 = 108 in; A_d = 108 × 0.8345 × 8 = 721.0 in²; A_c = 767 + 721.0
+  = 1488.0 in²; y_bc = (767 × 36.6 + 721.0 × 76.0) / 1488.0 = 55.691 in; I_c = 545,894 + 279,543 + 3,845 + 297,380 = 1,126,663 in⁴;
+  DF_M = max(0.4904, 0.7191) = 0.7191; M_LL+IM = 0.7191 × 3652.4 = 2626.6 kip-ft; M_u (midspan) = 1.25(3983.6) + 1.50(450.0) + 1.75(2626.6)
+  = 10,251.0 kip-ft (the screen values).
+### How verified
+- `node tests/engine/run.mjs psbridge-tabs` (new: 7 designs — simple / continuous with restraint, interior / exterior, skew 35°, haunch in
+  the section, NEXT, box without topping, diaphragms, RIDOT / MassDOT, entered DF, entered LL — every step value finite, ids unique, every
+  pair agrees to 1e-9; spot check that step values are R's numbers); `tex.test.mjs` parses every step's TeX with KaTeX.
+- `node tests/smoke/ps-bridge-skeleton.mjs` (95 checks): on three designs every shown engine value (`data-ev`, ≥ 20 per tab) equals
+  computeAll evaluated on the page; graphics and KaTeX steps drawn; a § link opens a step on another tab; the station choice; an input
+  error blocks the three tabs; 390 px with no sideways scroll; 0 console errors under file://. `node tests/check-syntax.mjs`.
+### Open items
+- Next: PR 2c (Losses, Stresses, Flexure, Shear tabs; strand-pattern and stress graphics) with harness B against the old app.

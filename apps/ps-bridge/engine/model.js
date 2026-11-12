@@ -22,9 +22,11 @@
      base:    { … }   added 2026-11-12 (PR 2a, plan §2.4), optional within version 1: the base girder design, an inputs object of the old
                       app's format (its DEFAULTS shape), always stored as mergeInputs(base) of the moved engine (engine/pbd-merge.js), so a
                       field added to DEFAULTS later is filled in. A project without it (saved by PR 1) reads with the old app's defaults.
+     design:  { g, s }  added 2026-11-12 (PR 2b), optional within version 1: the design girder line and span of the one girder design until the
+                      bridge level (PR 3a); absent: G2 (G1 with one girder) in span 1. Read and checked by engine/design.js (not validated here).
    }
    Needs the moved engine (engine/pbd-*.js) loaded first for base; without it (a test of this file alone) base is left as it is.
-   Nothing in the project is used by a calculation yet (the input tabs are wired to base in PR 2b, docs/ps-bridge-plan.md §5). */
+   From PR 2b the engine computes the design girder from base and the bridge values (engine/design.js). */
 (function () {
   'use strict';
   const SCHEMA = 'psb2.project', VERSION = 1;

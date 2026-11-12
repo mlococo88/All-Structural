@@ -71,7 +71,7 @@ test('the page: classic scripts by relative path (file://), no modules or fetch,
   assert.ok(!/type\s*=\s*["']module["']|\bimport\s*\(|\bfetch\s*\(|XMLHttpRequest|text\/babel/.test(html));
   const list = [...html.matchAll(/^\s*'([^']+\.js)',?/gm)].map(m => m[1]);
   const pbd = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => `engine/pbd-${n}.js`);
-  assert.deepEqual(list, [...pbd, 'engine/model.js', 'report/sections.js', 'ui/dash.js', 'ui/splitter.js']);   // PR 2a: the moved engine first
+  assert.deepEqual(list, [...pbd, 'engine/model.js', 'engine/design.js', 'engine/fields.js', 'engine/inputcheck.js', 'engine/worked.js', 'report/sections.js', '../../shared/steps.js', 'ui/inputs.js', 'ui/inputcheck.js', 'ui/vizkit.js', 'ui/vizalong.js', 'ui/outkit.js', 'ui/section.js', 'ui/loads.js', 'ui/analysis.js', 'ui/dash.js', 'ui/splitter.js']);   // PR 2a: the moved engine first; PR 2b: the inputs and three result tabs
   list.forEach(f => { assert.ok(!f.startsWith('/') && !/^\w+:/.test(f), f); assert.ok(fs.existsSync(path.join(APP, f)), f); });
   const cdn = s => [...s.matchAll(/(?:src|href)="(https:[^"]+)"/g)].map(m => m[1]).sort();
   const ours = cdn(html); assert.equal(ours.length, 4); ours.forEach(u => assert.ok(cdn(steel).includes(u), u));   // KaTeX 0.16.9, three r128 + OrbitControls 0.128.0

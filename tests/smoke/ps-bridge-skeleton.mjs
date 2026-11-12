@@ -5,8 +5,11 @@
 //   2. an input change (span lengths "100, 125, 100", made continuous) is autosaved to psb2.project.current (5 girders, 4 support skews);
 //      a reload shows it; localStorage holds psb2.* keys only, and a seeded psbeam.* / sbd2.* key is byte-identical;
 //   3. an invalid input (a negative bay) marks its field, counts on its input tab, lists it on the output panel and in the check summary,
-//      and its link opens the field; fixing it clears them;
+//      and its link opens the field; fixing it clears them; PR 2b: a girder-design (base) input saved, a blank f'c marked / counted /
+//      blocking, an owner change setting its defaults, a strand row added / outside the girder / deleted, psbeam.* keys untouched;
 //   4. an unreadable saved project is kept under psb2.project.unreadable.<time> and the page says so;
+//   3c. PR 2b-2: Section properties, Loads & LLDF, Analysis for three designs: every shown engine value (data-ev) = computeAll on the page;
+//      graphics and KaTeX steps drawn; a link to another tab's step; the station choice; an input error blocks the three tabs;
 //   5. 390 x 844 (phone): stacked panels, no splitter, no check summary column, no horizontal page scroll; 0 console errors.
 //   node tests/smoke/ps-bridge-skeleton.mjs [--file <index.html>] [--shots <dir>]
 import fs from 'fs';
@@ -46,17 +49,81 @@ check(Object.keys(ls).every(k => k.startsWith('psb2.') || k in SEED || k === '__
 Object.entries(SEED).forEach(([k, v]) => check(ls[k] === v, 'untouched ' + k));
 await p.reload(); await ready(p);
 check((await p.inputValue('#i_spans\\.lengths')) === '100, 125, 100', 'reload keeps the spans');
-// 3. invalid input
+// 3. invalid input (model): a negative bay; the PR 2b limit (unequal bays) is listed with it
 await p.click('#inTabs [data-itab="xsec"]');
 await p.fill('#i_xs\\.bays', '9, -2, 9, 9'); await p.press('#i_xs\\.bays', 'Tab');
 check(await p.$eval('#i_xs\\.bays', e => e.classList.contains('bad')), 'bad field marked');
-check((await p.textContent('#inTabs [data-itab="xsec"] .inDot')) === '1', 'tab count');
-check(/Bay 2 spacing must be a positive number/.test(await p.textContent('#out')) && /1 to fix/.test(await p.textContent('#sbDashCol')), 'error listed');
+check((await p.textContent('#inTabs [data-itab="xsec"] .inDot')) === '2', 'tab count ' + await p.textContent('#inTabs [data-itab="xsec"] .inDot'));
+check(/Bay 2 spacing must be a positive number/.test(await p.textContent('#out')) && /Unequal bays/.test(await p.textContent('#out')) && /2 to fix/.test(await p.textContent('#sbDashCol')), 'errors listed');
+check(/Results not shown/.test(await p.textContent('#out')), 'results blocked');
 await p.click('#inTabs [data-itab="proj"]'); await p.click('#out [data-icgo="0"]');
 check(await p.isVisible('#inPanes [data-pane="xsec"]') && await p.evaluate(() => document.activeElement && document.activeElement.id === 'i_xs.bays'), 'error link opens the field');
-await p.fill('#i_xs\\.bays', '9, 8.5, 9.5, 9'); await p.press('#i_xs\\.bays', 'Tab');
+await p.fill('#i_xs\\.bays', '9, 9, 9, 9'); await p.press('#i_xs\\.bays', 'Tab');
 check(!(await p.$eval('#i_xs\\.bays', e => e.classList.contains('bad'))) && !/to fix/.test(await p.textContent('#sbDashCol')), 'fixed');
+// 3b. PR 2b: a girder-design input (base) is saved; a blank f'c is marked with its message, counted on Materials, blocks results; the
+// owner change sets an input still at its default to the owner's default (RIDOT: H 80 %) and says so
+await p.click('#inTabs [data-itab="mat"]');
+await p.fill('#i_base\\.mat\\.fc', ''); await p.press('#i_base\\.mat\\.fc', 'Tab');
+check(await p.$eval('#i_base\\.mat\\.fc', e => e.classList.contains('bad')) && /is blank: enter a value/.test(await p.textContent('#inPanes')), 'base field marked with its message');
+check((await p.textContent('#inTabs [data-itab="mat"] .inDot')) === '1' && /Materials › f/.test(await p.textContent('#out')), 'base error counted and listed');
+await p.fill('#i_base\\.mat\\.fc', '9'); await p.press('#i_base\\.mat\\.fc', 'Tab');
+ls = await lsSnap(p); sv = JSON.parse(ls['psb2.project.current']);
+check(sv.base.mat.fc === 9 && !/to fix/.test(await p.textContent('#sbDashCol')), 'base input saved: ' + sv.base.mat.fc);
+await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.owner', 'RIDOT');
+ls = await lsSnap(p); sv = JSON.parse(ls['psb2.project.current']);
+check(sv.base.owner === 'RIDOT' && sv.base.mat.H === 80 && /mat\.H 70 → 80/.test(await p.textContent('#toast')), 'owner defaults set: ' + sv.base.mat.H);
+check(await p.isVisible('#i_base\\.opt\\.etaR'), 'owner question shown');
+await p.click('#tClose');
+await p.click('#inTabs [data-itab="gird"]'); await p.click('[data-act="add"][data-tbl="base.rows"]');
+ls = await lsSnap(p); sv = JSON.parse(ls['psb2.project.current']);
+check(sv.base.rows.length === 4 && sv.base.rows[3].y === 8, 'strand row added');
+await p.fill('[data-path="base.rows.3.y"]', '90'); await p.press('[data-path="base.rows.3.y"]', 'Tab');
+check(await p.$eval('[data-path="base.rows.3.y"]', e => e.classList.contains('bad')) && /not inside the girder/.test(await p.textContent('#inPanes')), 'row outside the girder marked');
+await p.click('[data-act="del"][data-tbl="base.rows"][data-i="3"]');
+check(!/to fix/.test(await p.textContent('#sbDashCol')), 'row deleted, no errors');
+ls = await lsSnap(p);
+check(Object.keys(ls).every(k => k.startsWith('psb2.') || k in SEED || k === '__seeded'), 'keys after edits: ' + Object.keys(ls).join(', '));
+Object.entries(SEED).forEach(([k, v]) => check(ls[k] === v, 'untouched after edits ' + k));
 check(!o.errs.length, 'console errors (1400 px): ' + o.errs.join(' | '));
+await o.b.close();
+o = await openPage(FILE, { vw: 1400, vh: 1000, ls: SEED }); p = o.p; await ready(p);
+// 3c. PR 2b-2: the Section properties, Loads & LLDF and Analysis tabs, three designs: every engine value shown (data-ev) equals computeAll of
+// the design inputs, evaluated on the page; the graphics are drawn; the worked steps are KaTeX; links to a step of another tab open it
+const evCheck = async () => p.evaluate(() => {
+  const s0 = localStorage.getItem('psb2.project.current'), P = s0 ? window.PSBModel.importJSON(s0).project : window.PSBModel.defaultProject(), R = computeAll(window.PSBDesign.inputs(P));
+  const f = (v, d) => typeof v === 'number' && isFinite(v) ? v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }).replace(/^-(0(\.0*)?)$/, '$1') : '—';
+  const bad = [], els = [...document.querySelectorAll('#out [data-ev]')];
+  els.forEach(el => { let v = el.dataset.ev.split('.').reduce((o, k) => o == null ? o : o[k], R); if (el.dataset.div) v = v / +el.dataset.div;
+    if (typeof v !== 'number' || el.textContent !== f(v, +el.dataset.d)) bad.push(`${el.dataset.ev}: ${el.textContent} vs ${v}`); });
+  return { n: els.length, bad, svg: document.querySelectorAll('#out svg').length, katex: document.querySelectorAll('#out .katex').length };
+});
+const DESIGNS = [['default', null], ['continuous, exterior G1 in span 2, restraint', async () => {
+    await p.click('#inTabs [data-itab="layout"]'); await p.fill('#i_spans\\.lengths', '100, 125, 100'); await p.press('#i_spans\\.lengths', 'Tab');
+    await p.selectOption('#i_spans\\.continuity', 'composite'); await p.selectOption('#i_base\\.cont\\.restraint', 'true');
+    await p.click('#inTabs [data-itab="gird"]'); await p.selectOption('#i_design\\.s', '2'); await p.selectOption('#i_design\\.g', '1'); }],
+  ['NEXT 36F, skew 35 deg, one span', async () => {
+    await p.click('#inTabs [data-itab="layout"]'); await p.fill('#i_spans\\.lengths', '90'); await p.press('#i_spans\\.lengths', 'Tab'); await p.fill('#i_xs\\.skews', '35, 35'); await p.press('#i_xs\\.skews', 'Tab');
+    await p.click('#inTabs [data-itab="xsec"]'); await p.fill('#i_xs\\.bays', '10, 10, 10, 10'); await p.press('#i_xs\\.bays', 'Tab');
+    await p.click('#inTabs [data-itab="gird"]'); await p.selectOption('#i_base\\.girder', 'NEXT 36F'); await p.fill('#i_base\\.harp\\.n', '0'); await p.press('#i_base\\.harp\\.n', 'Tab'); }]];
+for (const [lab, setup] of DESIGNS) {
+  if (setup) await setup();
+  check(!/to fix/.test(await p.textContent('#sbDashCol')), `${lab}: no input error`);
+  for (const t of ['sec', 'lds', 'an']) {
+    await p.click(`#tabBar [data-otab="${t}"]`); await p.waitForTimeout(250);
+    const r = await evCheck();
+    check(r.n >= 20 && !r.bad.length, `${lab} / ${t}: ${r.n} values, mismatches ${r.bad.slice(0, 5).join(' | ')}`);
+    check(r.svg >= 1 && r.katex >= 5, `${lab} / ${t}: graphic ${r.svg}, KaTeX ${r.katex}`);
+  }
+}
+await p.click('#tabBar [data-otab="lds"]'); await p.click('#out a.wk[data-gotab="sec"]');
+check(await p.evaluate(() => { const el = document.getElementById('st-sec.g.wsw'); return !!el && el.closest('details').open && document.querySelector('#tabBar [data-otab="sec"]').getAttribute('aria-selected') === 'true'; }), 'link to a step of another tab opens it');
+await p.click('#tabBar [data-otab="an"]'); await p.selectOption('#o_anSel', '0');
+check(/x = 0\.00 ft/.test(await p.textContent('#out')), 'station choice');
+// an input error blocks every result tab
+await p.click('#inTabs [data-itab="mat"]'); await p.fill('#i_base\\.mat\\.fci', '-1'); await p.press('#i_base\\.mat\\.fci', 'Tab');
+for (const t of ['sec', 'lds', 'an']) { await p.click(`#tabBar [data-otab="${t}"]`); check(/Results not shown/.test(await p.textContent('#out')) && !(await p.$('#out [data-ev]')), 'blocked ' + t); }
+await p.fill('#i_base\\.mat\\.fci', '6.8'); await p.press('#i_base\\.mat\\.fci', 'Tab');
+check(!o.errs.length, 'console errors (result tabs): ' + o.errs.join(' | '));
 await o.b.close();
 // 4. unreadable saved project
 o = await openPage(FILE, { vw: 1400, vh: 1000, ls: { 'psb2.project.current': '{broken' } }); p = o.p; await ready(p);
@@ -70,7 +137,8 @@ o = await openPage(FILE, { vw: 390, vh: 844 }); p = o.p; await ready(p);
 const ph = await p.evaluate(() => { const r = id => document.getElementById(id).getBoundingClientRect(), cs = id => getComputedStyle(document.getElementById(id)).display;
   return { dash: cs('sbDashCol'), split: cs('sbSplit'), i: r('inputPanel'), o: r('outputPanel'), x: document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth }; });
 check(ph.dash === 'none' && ph.split === 'none' && ph.i.width <= 390 && ph.o.top >= ph.i.bottom - 1 && ph.x <= 0, 'phone layout ' + JSON.stringify(ph));
-for (const t of ['layout', 'xsec', 'gird', 'own']) { await p.click(`#inTabs [data-itab="${t}"]`); check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth) <= 0, 'no sideways scroll on ' + t); }
+for (const t of ['layout', 'xsec', 'gird', 'mat', 'dd', 'loads', 'own']) { await p.click(`#inTabs [data-itab="${t}"]`); check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth) <= 0, 'no sideways scroll on ' + t); }
+for (const t of ['sec', 'lds', 'an']) { await p.click(`#tabBar [data-otab="${t}"]`); await p.waitForTimeout(300); check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth) <= 0 && (await p.$$('#out svg')).length >= 1, 'phone: no sideways scroll, graphic on ' + t); }
 await p.click('#inTabs [data-itab="proj"]');
 if (args.shots) await p.screenshot({ path: path.join(args.shots, 'ps-bridge-390.png'), fullPage: true });
 check(!o.errs.length, 'console errors (390 px): ' + o.errs.join(' | '));
