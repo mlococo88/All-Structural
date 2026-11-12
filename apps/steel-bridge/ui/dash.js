@@ -17,6 +17,7 @@
    refresh() after the page draws. */
 (function () {
   'use strict';
+  const lnT = (G, q) => G && G.lines && G.lines.length > 1 && q && q.ln != null ? ` on G${q.ln + 1}` : '';   // SB-2 PR 2: the governing line of a girder type on several lines
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const KEY = 'sbd2.dashCollapsed_v1';
   const D = { o: null, open: new Set(), coll: false };
@@ -33,7 +34,7 @@
     const st = SU().state(), prev = st.prev || [], COLS = SM().COLS;
     const list = P.girders.map((g, gi) => { const G = st.list[gi], O = prev[gi], lab = g.label || g.id || `G${gi + 1}`, cells = {}, old = {};
       COLS.forEach(c => { const q = G && G.cells[c.id]; if (q && q.st !== 'notrun') cells[c.id] = q; else if (O && O.cells[c.id] && O.cells[c.id].st !== 'notrun' && O.label === lab) { cells[c.id] = O.cells[c.id]; old[c.id] = true; } else cells[c.id] = { st: 'notrun', tab: c.tab }; });
-      return { gi, label: lab, cells, old }; });
+      return { gi, label: lab, cells, old, lines: G ? G.lines : null }; });   // lines: SB-2 PR 2 (the governing line shown)
     return { st, list };
   }
   function draw() {
@@ -49,7 +50,7 @@
     const cnt = `<span class="sdC">${n.fail ? `<span class="sdF">${n.fail} FAIL</span>` : ''}${n.review ? `<span class="sdW">${n.review} REVIEW</span>` : ''}${n.pass ? `<span class="sdP">${n.pass} PASS</span>` : ''}${!nRun ? '<span class="sdN">not run</span>' : ''}</span>`;
     const head = `<div id="sbDashHead"><button type="button" id="sbDashTgl" aria-expanded="${!D.coll}" title="${D.coll ? 'Show the check summary' : 'Shrink the check summary to a strip'}">${D.coll ? '»' : '«'}</button><h2 id="sbDashTtl">Check summary</h2>${cnt}</div>`;
     if (D.coll) { o.el.innerHTML = head; return; }
-    const govLink = top ? `<a href="#" data-sdgo="${top.G.gi}|${top.c.id}">${esc(SM().label(top.c, P).head)}, ${esc(top.G.label)}: D/C ${isFinite(top.q.r) ? fmt(top.q.r, 3) : 'NaN'}</a>` : '';
+    const govLink = top ? `<a href="#" data-sdgo="${top.G.gi}|${top.c.id}">${esc(SM().label(top.c, P).head)}, ${esc(top.G.label)}${lnT(top.G, top.q)}: D/C ${isFinite(top.q.r) ? fmt(top.q.r, 3) : 'NaN'}</a>` : '';
     const status = st.busy ? `<div class="sdRun"><span class="spin" aria-hidden="true"></span>${esc(st.prog)}</div>`
       : anyOld || (nRun && nRun < list.length * SM().COLS.length) || !nRun ? `<div class="sdRun">${anyOld ? 'Inputs changed: values out of date. ' : !nRun ? 'Nothing run yet. ' : 'Some modules not run. '}<a href="#" id="sbDashRun">Run all</a></div>` : '';
     const verdict = `<div class="sdVerd"><b class="sd-${n.fail ? 'fail' : n.review ? 'review' : n.pass ? 'pass' : 'notrun'}">${n.fail ? 'FAIL' : n.review ? 'REVIEW' : n.pass ? 'PASS' : '—'}</b>${top ? ` · max D/C ${isFinite(top.q.r) ? fmt(top.q.r, 3) : 'NaN'}` : ''}${anyOld ? ' <span class="sdOld">(out of date)</span>' : ''}</div>
@@ -58,7 +59,7 @@
       const S = SM().grpStat(list, gp), g = S.gov, rf = S.cols.every(c => c.rf), op = D.open.has(gp), old = S.all.some(z => list[z.G.gi].old[z.c.id]);
       const v = g ? `${vOf(g.q, g.c)} · ${esc(g.G.label)}` : S.st === 'na' ? 'n/a' : 'not run';
       const go = g ? `${g.G.gi}|${g.c.id}` : `${Math.min(+(D.o.ui().g || 0), list.length - 1)}|${S.cols[0].id}`;
-      const rows = S.all.map(z => `<li><a href="#" data-sdgo="${z.G.gi}|${z.c.id}" class="sd-${z.q.st}${list[z.G.gi].old[z.c.id] ? ' sdOldV' : ''}">${S.cols.length > 1 ? esc(z.c.short) + ', ' : ''}${esc(z.G.label)}: ${vOf(z.q, z.c)}</a></li>`).join('');
+      const rows = S.all.map(z => `<li><a href="#" data-sdgo="${z.G.gi}|${z.c.id}" class="sd-${z.q.st}${list[z.G.gi].old[z.c.id] ? ' sdOldV' : ''}">${S.cols.length > 1 ? esc(z.c.short) + ', ' : ''}${esc(z.G.label)}${lnT(z.G, z.q)}: ${vOf(z.q, z.c)}</a></li>`).join('');
       return `<div class="sdChip sd-${S.st}${old ? ' sdOldC' : ''}" data-sdgrp="${esc(gp)}"><button type="button" class="sdX" data-sdx="${esc(gp)}" aria-expanded="${op}" title="${op ? 'Hide' : 'Show'} each girder">${op ? '▾' : '▸'}</button><a href="#" class="sdMain" data-sdgo="${go}" title="${esc(g ? `${SM().label(g.c, P).head}, ${g.G.label}: ${String(g.q.check || '').replace(/\$|\{\}|[{}]|\\/g, '')} (${String(g.q.loc || '').replace(/\$|[{}]/g, '')})` : S.st === 'na' ? 'Not applicable' : 'Not run yet: click to run it and open its tab')}">
         <span class="sdName">${esc(SM().grpLabel ? SM().grpLabel(gp, P) : gp)}</span><span class="sdVal">${v}</span><span class="sdSt">${S.st === 'notrun' ? '' : LBL[S.st]}${rf && g ? '' : ''}</span></a>${op ? `<ul class="sdList">${rows}</ul>` : ''}</div>`;
     }).join('');
