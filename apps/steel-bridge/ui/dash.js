@@ -57,7 +57,7 @@
       ${govLink ? `<div class="sdGov">Governing: ${govLink}</div>` : ''}${status}`;
     const chips = SM().GROUPS.map(gp => {
       const S = SM().grpStat(list, gp), g = S.gov, rf = S.cols.every(c => c.rf), op = D.open.has(gp), old = S.all.some(z => list[z.G.gi].old[z.c.id]);
-      const v = g ? `${vOf(g.q, g.c)} · ${esc(g.G.label)}` : S.st === 'na' ? 'n/a' : 'not run';
+      const v = g ? `${vOf(g.q, g.c)} · ${esc(g.G.label)}${lnT(g.G, g.q)}` : S.st === 'na' ? 'n/a' : 'not run';
       const go = g ? `${g.G.gi}|${g.c.id}` : `${Math.min(+(D.o.ui().g || 0), list.length - 1)}|${S.cols[0].id}`;
       const rows = S.all.map(z => `<li><a href="#" data-sdgo="${z.G.gi}|${z.c.id}" class="sd-${z.q.st}${list[z.G.gi].old[z.c.id] ? ' sdOldV' : ''}">${S.cols.length > 1 ? esc(z.c.short) + ', ' : ''}${esc(z.G.label)}${lnT(z.G, z.q)}: ${vOf(z.q, z.c)}</a></li>`).join('');
       return `<div class="sdChip sd-${S.st}${old ? ' sdOldC' : ''}" data-sdgrp="${esc(gp)}"><button type="button" class="sdX" data-sdx="${esc(gp)}" aria-expanded="${op}" title="${op ? 'Hide' : 'Show'} each girder">${op ? '▾' : '▸'}</button><a href="#" class="sdMain" data-sdgo="${go}" title="${esc(g ? `${SM().label(g.c, P).head}, ${g.G.label}: ${String(g.q.check || '').replace(/\$|\{\}|[{}]|\\/g, '')} (${String(g.q.loc || '').replace(/\$|[{}]/g, '')})` : S.st === 'na' ? 'Not applicable' : 'Not run yet: click to run it and open its tab')}">

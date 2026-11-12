@@ -6533,3 +6533,416 @@ index ed5ee46..1716cc1 100644
      importFile: () => $('fImport').click(),
      exportOne: v => { const i = vItem(v); if (!i) return; const t = LIB.text(LS, i.id); if (t != null) SPUI.download(String(i.name || 'steel-bridge').replace(/[^\w.-]+/g, '_') + '.sbd2.json', t); },
 ```
+
+## 2026-11-12 — PR: sbgl-pr2 (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Girder types, PR 2 of 4: every type checked on every line assigned to it — the output tabs' type and line choice, the Summary and the check summary (governing type and line, type × check table with a row per line), the Report's every-girder scope per line (SB-2)
+- **Request:** engineer decision 2026-11-12, SB-2 (see PR 1, #1451): each girder type is checked on every line assigned to it with that line's own loads and LLDF and governed by its worst line; results show which line governs each check; Summary and check summary: governing type and line, a type × check table and per-line detail; Report consistent with how it is built, with its links.
+- **Change (no formula, factor or input changes; a type is run on another line through `SBDModel.atLine`, the project with `girders[gi].line` reading that line — what a project saved with that line computes):**
+  - `report/summary.js`: `units(P)` (each type on each of its lines; a type with no line on its design line, as before) and `merge(P, gi, us)` (each column the line that governs: the largest ratio, a ratio not a number first as `gr()`, or the smallest RF; one line: that line's summary unchanged).
+  - `ui/summary.js`: the run is per unit (`S.parts[u]`), `S.list[gi]` the type's merged summary (cells carry `ln`, `lines`, `byLine` when the type has more than one line); the verdict's governing check and the lowest RF name the line ("girder Exterior on G1"); the table gives each type's governing value with its line under it and a row per line ("on line G1", "on line G5"), each cell linking to its tab with that type and line selected; the governing-check table names the line; the steel weight counts each line of a type (× n lines, total over the lines); a red note lists the lines with no type (not checked).
+  - `ui/dash.js`: the governing check and the chips' lists name the line.
+  - `ui/report.js`: "Every girder" builds one column per type and line ("Exterior on G1"); "Selected girder" reports the type on the line chosen above the tab.
+  - `index.html`: above each per-girder output tab (Section properties, Flexure, Loads & LLDF, Shear & stiffeners, Analysis, Fatigue & studs, Cross-frames, Field splices, Constructibility, Rating, Welds, Report) a bar "Girder type … on line …" (ui.g, ui.ln: the same choices as the Girders & plates and Loads tabs; shown when there is more than one type or line); those tabs get the type on that line (`atLine`; the design line is the project itself); `gotoOut(tab, gi, ln)`.
+- **Saved data (§5):** none (no key or field; `sbd2.ui.ln` is UI state, PR 1).
+- **Check case:** new project (Interior on G2–G4, Exterior on G1 and G5, both the built-in plates): Summary runs 5 units; Flexure Strength I of Exterior on G1 and on G5 1.253 (the same: symmetric section), Exterior's cell 1.253 with "G1"; Interior 1.229 (its design line G2, as the built-in project's G1: GS7 at x = 249.99 ft); verdict governing "Flexure, Strength I, girder Exterior on G1 … D/C 1.253"; a click on Exterior's Flexure cell opens the Flexure tab with "Girder type Exterior on line G1".
+- **Probe (origin/main vs branch):** the 6 saved projects of PR 1 (built-in; exterior automatic line; two girders, 20° skews; legacy imports xsA, curb, util with 5 girders): IDENTICAL Summary state (every module of every girder), drawings mapping, Loads tab cards, stored text; 0 console errors. A one-line type gives the same state object as before (merge returns the line's own summary). Type on another line = project stored with that line: a new project's Exterior on G1 and on G5 (Summary, every column) equal the Summary of the same project saved with Exterior's design line G5 (browser probe), and SBDAnalysis.moduleOf through atLine equals a project stored with that line (tests/engine/girder-types.test.mjs, PR 1).
+- **How verified:** tests/engine/girder-types.test.mjs +2 tests (units, merge: 8 pass); the engine tests that load the changed files (dxf-sheets, girder-types, sb-diaphragm, sb-summary, report*): 35 passed, 0 failed; check-syntax; steel-bridge-summary (new section 8: a new project, a row per type and line, the governing line, a line's link opens Flexure with that type and line; section 4 no longer seeded: it saves its own project and reloads), -wiring, -dash, -report, -paths, -taberrors, -invalid, -library, -equal-spacing, -deflection, -drawings, -graphics, -tabgraphics-b, -fatlife, -splitter, -splice-addrow, -diaphragm, -dxf-unchanged, -scroll, sbd-undo, phone-layout --tool sbapp (390 / 768 px): all pass; phone 390 px; 0 console errors.
+- **Decisions (pending engineer review):** (1) a type's cell is its worst line; the line rows show every line; ties keep the first line; (2) the verdict counts one per type and column (not per line); (3) the type's steel weight × its lines in the total.
+- **Other copies:** none (apps/ps-bridge not touched).
+- **Before / after (exact):**
+```diff
+diff --git a/apps/steel-bridge/index.html b/apps/steel-bridge/index.html
+index 1716cc1..e53cdd6 100644
+--- a/apps/steel-bridge/index.html
++++ b/apps/steel-bridge/index.html
+@@ -155,6 +155,7 @@
+   .inTabs button[aria-selected="true"],#tabBar button[aria-selected="true"]{background:var(--paper);font-weight:600;color:var(--color-primary);box-shadow:inset 0 3px 0 var(--color-secondary);}
+   .inDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--fail);margin-left:6px;}
+   .inTabs button.has-err .inDot{display:inline-block;}
++  #gBar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:6px 0 0;font-family:var(--font-ui);font-size:9pt;color:#475569;} #gBar[hidden]{display:none;} #gBar select{font-size:9pt;max-width:100%;}
+   #autoBar{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin:6px 0 2px;font-family:var(--font-ui);font-size:9pt;color:#475569;min-height:26px;} #autoBar[hidden]{display:none;}
+   #autoBar .spin{display:inline-block;width:12px;height:12px;border:2px solid #CBD5E1;border-top-color:var(--color-primary);border-radius:50%;animation:sbspin .8s linear infinite;vertical-align:-2px;margin-right:6px;}
+   @keyframes sbspin{to{transform:rotate(360deg);}} @media (prefers-reduced-motion:reduce){#autoBar .spin{animation:none;}}
+@@ -331,7 +332,7 @@
+     <div id="sbSplit" role="separator" aria-orientation="vertical" aria-controls="inputPanel outputPanel" aria-label="Width of the input and output panels (arrow keys move it, Home / End to the limits, double-click or Enter resets)" tabindex="0" title="Drag to change the width of the input and output panels; double-click to reset"></div><!-- SBW (2026-11-09): splitter, ui/splitter.js -->
+     <main id="outputPanel">
+       <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="false" data-otab="sum">Summary</button><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button><button type="button" role="tab" aria-selected="false" data-otab="flex">Flexure</button><button type="button" role="tab" aria-selected="false" data-otab="loads">Loads &amp; LLDF</button><button type="button" role="tab" aria-selected="false" data-otab="shear">Shear &amp; stiffeners</button><button type="button" role="tab" aria-selected="false" data-otab="fat">Fatigue &amp; studs</button><button type="button" role="tab" aria-selected="false" data-otab="an">Analysis</button><button type="button" role="tab" aria-selected="false" data-otab="defl">Deflection</button><button type="button" role="tab" aria-selected="false" data-otab="cn">Constructibility</button><button type="button" role="tab" aria-selected="false" data-otab="cf">Cross-frames</button><button type="button" role="tab" aria-selected="false" data-otab="spl">Field splices</button><button type="button" role="tab" aria-selected="false" data-otab="rt">Rating</button><button type="button" role="tab" aria-selected="false" data-otab="wt">Welds</button><button type="button" role="tab" aria-selected="false" data-otab="rpt">Report</button><button type="button" role="tab" aria-selected="false" data-otab="dwg">Drawings</button><button type="button" role="tab" aria-selected="false" data-otab="ad">Auto design</button><button type="button" role="tab" aria-selected="false" data-otab="3d">3D view</button></div>
+-      <div id="autoBar" hidden><span id="autoMsg" role="status" aria-live="polite"></span><button type="button" id="bRerun" title="Calculate this tab again now">Re-run</button></div>
++      <div id="gBar" hidden></div><!-- SB-2 PR 2: the girder type and line of the output tab --><div id="autoBar" hidden><span id="autoMsg" role="status" aria-live="polite"></span><button type="button" id="bRerun" title="Calculate this tab again now">Re-run</button></div>
+       <div id="out"></div>
+     </main>
+   </div>
+@@ -433,7 +434,9 @@
+      calculated values shown are that line's (SBDModel.atLine: a read view; the design line is the project itself). The entered values and
+      the override boxes belong to the type: they apply on every line of it. */
+   const lnSel = () => { const gi = Math.min(ui.g, P.girders.length - 1), L = M.typeLines(P, gi); return L.includes(ui.ln) ? ui.ln : M.designLine(P, P.girders[gi]); };
+-  const loadsView = () => M.atLine(P, Math.min(ui.g, P.girders.length - 1), lnSel());
++  let viewMemo = null;
++  const loadsView = () => { const gi = Math.min(ui.g, P.girders.length - 1), j = lnSel();   // SB-2 PR 2: the same view object while P, the type and the line stay
++    if (!viewMemo || viewMemo.P !== P || viewMemo.gi !== gi || viewMemo.j !== j) viewMemo = { P, gi, j, V: M.atLine(P, gi, j) }; return viewMemo.V; };
+   function loadsPick() {
+     const gi = Math.min(ui.g, P.girders.length - 1), L = M.typeLines(P, gi), j = lnSel();
+     return card('Girder type and line', `<div class="fRow"><label for="i__gLd">Girder type</label><select id="i__gLd">${P.girders.map((q, i) => `<option value="${i}"${i === gi ? ' selected' : ''}>${esc(q.label || q.id)}</option>`).join('')}</select><span class="unit">the same choice as the Girders &amp; plates tab</span></div>
+@@ -714,13 +717,13 @@
+   function markStale() { stale = true; drawOut(); }
+   function calc() {
+     const v = markErrors(); if (v.errors.length) { R = { errors: v.errors }; stale = false; drawOut(); return; }
+-    const g = P.girders[ui.g], s = g.segments[ui.seg] || g.segments[0], G = M.GRADES, m = P.materials, d = P.deck;
++    const g = P.girders[ui.g], s = g.segments[ui.seg] || g.segments[0], G = M.GRADES, m = P.materials, d = P.deck, PV = loadsView();   // SB-2 PR 2: the loads of the line chosen
+     const lf = OWN.loadFactors(P.ownerRules.owner, P.ownerRules.eta, P.xs.nb);   // owner rules: OWN8 haunch, OWN17 w_c for E_c
+     const nr = SEC.modularRatio(m.concrete.fc, m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc, m.concrete.K1, m.concrete.nRule);
+     const plates = { D: s.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT };
+     const deck = { composite: d.composite, ts: d.ts, haunch: OWN.haunchInProps(d.haunch, lf), beff: g.beff, rebar: d.rebar };
+     const mat = { Fyt: G[m.steel.top].Fy, Fyb: G[m.steel.bot].Fy, Fyw: G[m.steel.web].Fy, Fyr: m.rebar.Fyr, fc: m.concrete.fc };
+-    R = { g, s, nr, lf, c: SEC.card(plates, deck, mat, nr.n, { region: ui.region, rebarInPositive: d.rebarInPositiveMp }), warnings: v.warnings, loads: UL.calc(P, ui.g) };
++    R = { g, s, nr, lf, c: SEC.card(plates, deck, mat, nr.n, { region: ui.region, rebarInPositive: d.rebarInPositiveMp }), warnings: v.warnings, loads: UL.calc(PV, ui.g) };
+     stale = false; drawOut();
+   }
+   const secOpen = new Set();
+@@ -739,7 +742,7 @@
+   let autoT = null, autoNow = false, autoBusy = false, autoPend = false;
+   const autoBtn = t => AUTO_BTN[t] ? $('out').querySelector(AUTO_BTN[t]) : null;
+   const autoStale = (t, b) => !!b && (t === 'dwg' ? b.classList.contains('primary') && !b.disabled : !!(b.closest('.alert.stale') && !b.closest('.alert.stale').hidden));
+-  const autoKey = t => t + '|' + ui.g + '|' + JSON.stringify(P) + '|' + [...$('out').querySelectorAll('select,input:not([type=file])')].filter(e => !e.closest('.alert')).map(e => e.id + '=' + (e.type === 'checkbox' ? e.checked : e.value)).join('&');
++  const autoKey = t => t + '|' + ui.g + '|' + lnSel() + '|' + JSON.stringify(P) + '|' + [...$('out').querySelectorAll('select,input:not([type=file])')].filter(e => !e.closest('.alert')).map(e => e.id + '=' + (e.type === 'checkbox' ? e.checked : e.value)).join('&');
+   function autoMsg(t, busy) { const bar = $('autoBar'); bar.hidden = !AUTO_BTN[t]; $('autoMsg').innerHTML = busy ? `<span class="spin" aria-hidden="true"></span>${esc(busy)}` : ''; }
+   function autoRun() {
+     const t = ui.otab || 'sec', delay = autoNow ? 0 : AUTO_MS; autoNow = false; clearTimeout(autoT); autoPend = false; autoMsg(t, '');
+@@ -756,14 +759,29 @@
+   function autoWatch(t) { const b = autoBtn(t); if (autoStale(t, b) || /Calculating/.test(($('out').querySelector('.alert:not(.stale)') || {}).textContent || '') || (b && b.disabled)) { setTimeout(() => (ui.otab || 'sec') === t && autoWatch(t), 250); return; } autoMsg(t, ''); }
+   function drawOut() { drawOut0(); autoRun(); if (window.SBDDashUI) window.SBDDashUI.refresh(); }   // DASH: the left check summary follows the project
+   /* gotoOut(tab, gi): an output tab with girder gi selected (as the Girder select of the Girders & plates tab); the Summary tab's links and the left check summary */
+-  function gotoOut(t, gi) { if (gi != null && gi !== ui.g && P.girders[gi]) { ui.g = gi; ui.seg = 0; stale = true; drawInputs(); } ui.otab = t; saveUi(); autoNow = true; drawOut(); $('outputPanel').scrollTop = 0; }
++  function gotoOut(t, gi, ln) { if (Number.isInteger(ln) && ln !== lnSel()) { ui.ln = ln; stale = true; if (gi == null || gi === ui.g) drawInputs(); } if (gi != null && gi !== ui.g && P.girders[gi]) { ui.g = gi; ui.seg = 0; stale = true; drawInputs(); } ui.otab = t; saveUi(); autoNow = true; drawOut(); $('outputPanel').scrollTop = 0; }
+   $('bRerun').addEventListener('click', () => { const t = ui.otab || 'sec', b = autoBtn(t); if (!b) return; autoMsg(t, 'Calculating…'); requestAnimationFrame(() => setTimeout(() => { b.click(); autoWatch(t); }, 0)); });
+   // a tab's own redraw (a choice on the tab: demand source, girder, options) runs it at once; skipped while a run is pending or running
+   new MutationObserver(() => { if (autoBusy || autoPend) return; autoNow = true; autoRun(); }).observe($('out'), { childList: true });
+   /* SBINV: while a blocking input error exists every output tab (the Summary, each module, the Report, the Drawings, the 3D view) shows the
+      banner and "Results not shown" instead of its results. A tab that holds an errored field itself (e.host: Flexure f_ℓ, Rating φ, the
+      Welds inputs, a Custom demand table, …) is drawn for the fix, out of date and with its Calculate button off (hostFix). */
++  /* gBar (SB-2 PR 2): above a per-girder output tab, the girder type (ui.g, as the Girders & plates tab) and the line it is worked on (ui.ln,
++     as the Loads tab; the type's design line by default, whose results are the project's own). Shown when there is a choice to make. */
++  const G_TABS = ['sec', 'flex', 'loads', 'shear', 'an', 'fat', 'cf', 'spl', 'cn', 'rt', 'wt', 'rpt'];
++  function drawGBar() {
++    const b = $('gBar'), t = ui.otab || 'sec', gi = Math.min(ui.g, P.girders.length - 1), L = M.typeLines(P, gi), j = lnSel(), dl = M.designLine(P, P.girders[gi]);
++    if (!G_TABS.includes(t) || (P.girders.length < 2 && L.length < 2) || (t === 'rpt' && ui.rpt && ui.rpt.scope === 'all')) { b.hidden = true; b.innerHTML = ''; return; }
++    b.hidden = false;
++    b.innerHTML = `<label for="o_gt">Girder type</label><select id="o_gt">${P.girders.map((q, i) => `<option value="${i}"${i === gi ? ' selected' : ''}>${esc(q.label || q.id)}</option>`).join('')}</select>
++      <label for="o_ln">on line</label><select id="o_ln">${(L.includes(j) ? L : [j, ...L]).map(k => `<option value="${k}"${k === j ? ' selected' : ''}>${lnName(k)}${k === dl ? ' (design line)' : ''}</option>`).join('')}</select>
++      <span>${L.length > 1 ? `checked on ${lnList(L)}; every line in the <a href="#" data-gbsum="1">Summary</a>` : L.length ? '' : 'no line assigned (its design line shown)'}</span>`;
++  }
++  $('gBar').addEventListener('change', e => { if (e.target.id === 'o_gt') { ui.g = +e.target.value; ui.seg = 0; delete ui.ln; } else if (e.target.id === 'o_ln') ui.ln = +e.target.value; else return;
++    saveUi(); stale = true; drawInputs(); autoNow = true; drawOut(); });
++  $('gBar').addEventListener('click', e => { if (e.target.closest('[data-gbsum]')) { e.preventDefault(); ui.otab = 'sum'; saveUi(); autoNow = true; drawOut(); } });
+   function drawOut0() {
++    drawGBar();
+     const E = icErr = IC().collect(P).errors, t = ui.otab || 'sec';
+     { const b = document.querySelector('#tabBar [data-otab="cf"]'), t = window.SBDFramingUI.isDia(P) ? 'Diaphragms' : 'Cross-frames'; if (b && b.textContent !== t) b.textContent = t; }   // SBDIA (2026-11-10): the tab's name with a diaphragm as the bracing
+     if (E.length && !E.some(e => e.host === t)) {
+@@ -782,18 +800,18 @@
+   function drawTab() {
+     document.querySelectorAll('#tabBar [data-otab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.otab === (ui.otab || 'sec'))));
+     $('out').onchange = null; $('out').onclick = null;   // the Analysis tab's own handlers (ui/analysis.js sets them)
+-    if (ui.otab === 'flex') { window.SBDFlexureUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Flexure tab (ui/flexure.js)
+-    if (ui.otab === 'shear') { window.SBDShearUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Shear & stiffeners tab (ui/shear.js)
+-    if (ui.otab === 'an') { window.SBDAnalysisUI.draw($('out'), { P, gi: ui.g, changed: () => changed(false) }); return; }   // Analysis tab (ui/analysis.js)
++    if (ui.otab === 'flex') { window.SBDFlexureUI.render($('out'), { P: loadsView(), g: ui.g, changed: () => changed(false) }); return; }   // Flexure tab (ui/flexure.js)
++    if (ui.otab === 'shear') { window.SBDShearUI.render($('out'), { P: loadsView(), g: ui.g, changed: () => changed(false) }); return; }   // Shear & stiffeners tab (ui/shear.js)
++    if (ui.otab === 'an') { window.SBDAnalysisUI.draw($('out'), { P: loadsView(), gi: ui.g, changed: () => changed(false) }); return; }   // Analysis tab (ui/analysis.js)
+     if (ui.otab === 'defl') { window.SBDDeflectionUI.render($('out'), { P, g: ui.g, setG: gi => { ui.g = gi; ui.seg = 0; saveUi(); drawInputs(); markStale(); } }); return; }   // Deflection tab (ui/deflection.js; DEFL): its girder choice is ui.g, as the Girders & plates tab (i__g)
+-    if (ui.otab === 'fat') { window.SBDFatigueUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Fatigue & studs tab (ui/fatigue.js)
+-    if (ui.otab === 'cf') { window.SBDFramingUI.render($('out'), { P, g: ui.g }); return; }   // Cross-frames tab (ui/framing.js)
+-    if (ui.otab === 'spl') { window.SBDSplicesUI.render($('out'), { P, g: ui.g, changed: () => changed(true) }); return; }   // Field splices tab (ui/splices.js)
++    if (ui.otab === 'fat') { window.SBDFatigueUI.render($('out'), { P: loadsView(), g: ui.g, changed: () => changed(false) }); return; }   // Fatigue & studs tab (ui/fatigue.js)
++    if (ui.otab === 'cf') { window.SBDFramingUI.render($('out'), { P: loadsView(), g: ui.g }); return; }   // Cross-frames tab (ui/framing.js)
++    if (ui.otab === 'spl') { window.SBDSplicesUI.render($('out'), { P: loadsView(), g: ui.g, changed: () => changed(true) }); return; }   // Field splices tab (ui/splices.js)
+     if (ui.otab === 'ad') { window.SBDAutoDesignUI.render($('out'), { P, g: ui.g, changed: r => changed(r) }); return; }   // Auto design tab (ui/autodesign.js)
+-    if (ui.otab === 'cn') { window.SBDConstrUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Constructibility tab (ui/constructibility.js)
+-    if (ui.otab === 'rt') { window.SBDRatingUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Rating tab (ui/rating.js)
+-    if (ui.otab === 'wt') { window.SBDWeldsUI.render($('out'), { P, g: ui.g, changed: () => changed(false) }); return; }   // Welds tab (ui/welds.js)
+-    if (ui.otab === 'rpt') { ui.rpt = ui.rpt || {}; window.SBDReportUI.render($('out'), { P, g: ui.g, opts: ui.rpt, save: saveUi, goto: t => { ui.otab = t; saveUi(); autoNow = true; drawOut(); $('outputPanel').scrollTop = 0; } }); return; }   // Report tab (ui/report.js; its choices kept in ui.rpt)
++    if (ui.otab === 'cn') { window.SBDConstrUI.render($('out'), { P: loadsView(), g: ui.g, changed: () => changed(false) }); return; }   // Constructibility tab (ui/constructibility.js)
++    if (ui.otab === 'rt') { window.SBDRatingUI.render($('out'), { P: loadsView(), g: ui.g, changed: () => changed(false) }); return; }   // Rating tab (ui/rating.js)
++    if (ui.otab === 'wt') { window.SBDWeldsUI.render($('out'), { P: loadsView(), g: ui.g, changed: () => changed(false) }); return; }   // Welds tab (ui/welds.js)
++    if (ui.otab === 'rpt') { ui.rpt = ui.rpt || {}; window.SBDReportUI.render($('out'), { P: loadsView(), base: P, g: ui.g, opts: ui.rpt, save: saveUi, goto: t => { ui.otab = t; saveUi(); autoNow = true; drawOut(); $('outputPanel').scrollTop = 0; } }); return; }   // Report tab (ui/report.js; its choices kept in ui.rpt)
+     if (ui.otab === 'dwg') { window.SBDDrawingsUI.render($('out'), { P, g: ui.g, ui, saveUi, goto: t => { ui.otab = t; saveUi(); autoNow = true; drawOut(); } }); return; }   // Drawings tab (ui/drawings.js)
+     /* Summary tab (ui/summary.js, 2026-11-09; display only): runs the modules out of date itself (now: selected now, else after 600 ms of quiet);
+        goto(tab, gi): a cell's link opens that output tab with that girder selected (as the Girder select of the Girders & plates tab) */
+diff --git a/apps/steel-bridge/report/summary.js b/apps/steel-bridge/report/summary.js
+index 079fc36..0653fe8 100644
+--- a/apps/steel-bridge/report/summary.js
++++ b/apps/steel-bridge/report/summary.js
+@@ -157,5 +157,34 @@
+      steel with the detail allowance, worked in the Analysis tab's step eq.DC1steel), kip; null where the analysis has not run */
+   function weight(an) { return an && an.segs && an.wSteel ? an.segs.reduce((a, s, i) => a + an.wSteel[i] * (s.x1 - s.x0), 0) : null; }
+ 
+-  window.SBDSummary = { weight, MODS, COLS, GROUPS, run, cells, overall, grpStat, modOf, FLEX_CLS, label, grpLabel };
++  /* units(P) (SB-2 PR 2, 2026-11-12; engineer: each girder type is checked on every line assigned to it): [{ u, gi, j, P }] — type gi on
++     line j, P the project as seen with the type on that line (SBDModel.atLine; the type's design line is the project itself). A type with
++     no line assigned is worked on its design line, as before. In type order, each type's lines ascending. */
++  function units(P) {
++    const M = W().SBDModel, out = [];
++    (P.girders || []).forEach((g, gi) => { const L = M && M.typeLines ? M.typeLines(P, gi) : [];
++      (L.length ? L : [M && M.designLine ? M.designLine(P, g) : null]).forEach(j => out.push({ u: out.length, gi, j, P: j == null ? P : M.atLine(P, gi, j) })); });
++    return out;
++  }
++  /* merge(P, gi, us): the summary of type gi from those of its lines (us: [{ j, G }] where G = cells() of the type on line j): each column the
++     line whose value governs (the largest ratio, a ratio not a number first, or the smallest RF; a run before a check not run / not
++     applicable), its cell with ln = that line. One line: that line's summary itself, unchanged. */
++  function merge(P, gi, us) {
++    const g = P.girders[gi] || {}, lab = g.label || g.id || `G${gi + 1}`, J = us.filter(q => q.G);
++    if (!J.length) return null;
++    if (J.length === 1) return J[0].G;   // one line: its summary unchanged (the line is the type's design line, or the only one)
++    const out = { gi, label: lab, cells: {}, warn: [], notes: [], err: {}, lines: J.map(q => q.j), byLine: J.map(q => ({ j: q.j, cells: q.G.cells })) };
++    COLS.forEach(c => { let b = null;
++      J.forEach(q => { const x = q.G.cells[c.id]; if (!x) return; const v = c.rf ? x.rf : x.r;
++        const rank = z => z.st === 'notrun' ? 0 : z.st === 'na' ? 1 : 2;
++        if (!b || rank(x) > rank(b.x) || (rank(x) === 2 && rank(b.x) === 2 && (c.rf ? v < b.x.rf : gr(v) > gr(b.x.r)))) b = { x, j: q.j }; });
++      if (b) out.cells[c.id] = { ...b.x, ln: b.j }; });
++    const top = J.reduce((b, q) => { const r = Math.max(-Infinity, ...COLS.filter(c => !c.rf).map(c => { const x = q.G.cells[c.id]; return x && x.st !== 'notrun' && x.st !== 'na' ? gr(x.r) : -Infinity; })); return !b || r > b.r ? { q, r } : b; }, null);
++    out.gov = (top ? top.q.G : J[0].G).gov; out.govLine = top ? top.q.j : J[0].j;
++    const wl = new Map(); J.forEach(q => (q.G.warn || []).forEach(w => { if (!wl.has(w)) wl.set(w, []); wl.get(w).push(q.j); }));   // a warning of several lines listed once, with its lines
++    wl.forEach((js, w) => out.warn.push(`${js.map(j => 'G' + (j + 1)).join(', ')}: ${w}`));
++    J.forEach(q => { Object.entries(q.G.err || {}).forEach(([k, v]) => { if (!out.err[k]) out.err[k] = v; }); });
++    return out;
++  }
++  window.SBDSummary = { units, merge, weight, MODS, COLS, GROUPS, run, cells, overall, grpStat, modOf, FLEX_CLS, label, grpLabel };
+ })();
+diff --git a/apps/steel-bridge/ui/dash.js b/apps/steel-bridge/ui/dash.js
+index ac0f9b1..d007b6a 100644
+--- a/apps/steel-bridge/ui/dash.js
++++ b/apps/steel-bridge/ui/dash.js
+@@ -17,6 +17,7 @@
+    refresh() after the page draws. */
+ (function () {
+   'use strict';
++  const lnT = (G, q) => G && G.lines && G.lines.length > 1 && q && q.ln != null ? ` on G${q.ln + 1}` : '';   // SB-2 PR 2: the governing line of a girder type on several lines
+   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+   const KEY = 'sbd2.dashCollapsed_v1';
+   const D = { o: null, open: new Set(), coll: false };
+@@ -33,7 +34,7 @@
+     const st = SU().state(), prev = st.prev || [], COLS = SM().COLS;
+     const list = P.girders.map((g, gi) => { const G = st.list[gi], O = prev[gi], lab = g.label || g.id || `G${gi + 1}`, cells = {}, old = {};
+       COLS.forEach(c => { const q = G && G.cells[c.id]; if (q && q.st !== 'notrun') cells[c.id] = q; else if (O && O.cells[c.id] && O.cells[c.id].st !== 'notrun' && O.label === lab) { cells[c.id] = O.cells[c.id]; old[c.id] = true; } else cells[c.id] = { st: 'notrun', tab: c.tab }; });
+-      return { gi, label: lab, cells, old }; });
++      return { gi, label: lab, cells, old, lines: G ? G.lines : null }; });   // lines: SB-2 PR 2 (the governing line shown)
+     return { st, list };
+   }
+   function draw() {
+@@ -49,16 +50,16 @@
+     const cnt = `<span class="sdC">${n.fail ? `<span class="sdF">${n.fail} FAIL</span>` : ''}${n.review ? `<span class="sdW">${n.review} REVIEW</span>` : ''}${n.pass ? `<span class="sdP">${n.pass} PASS</span>` : ''}${!nRun ? '<span class="sdN">not run</span>' : ''}</span>`;
+     const head = `<div id="sbDashHead"><button type="button" id="sbDashTgl" aria-expanded="${!D.coll}" title="${D.coll ? 'Show the check summary' : 'Shrink the check summary to a strip'}">${D.coll ? '»' : '«'}</button><h2 id="sbDashTtl">Check summary</h2>${cnt}</div>`;
+     if (D.coll) { o.el.innerHTML = head; return; }
+-    const govLink = top ? `<a href="#" data-sdgo="${top.G.gi}|${top.c.id}">${esc(SM().label(top.c, P).head)}, ${esc(top.G.label)}: D/C ${isFinite(top.q.r) ? fmt(top.q.r, 3) : 'NaN'}</a>` : '';
++    const govLink = top ? `<a href="#" data-sdgo="${top.G.gi}|${top.c.id}">${esc(SM().label(top.c, P).head)}, ${esc(top.G.label)}${lnT(top.G, top.q)}: D/C ${isFinite(top.q.r) ? fmt(top.q.r, 3) : 'NaN'}</a>` : '';
+     const status = st.busy ? `<div class="sdRun"><span class="spin" aria-hidden="true"></span>${esc(st.prog)}</div>`
+       : anyOld || (nRun && nRun < list.length * SM().COLS.length) || !nRun ? `<div class="sdRun">${anyOld ? 'Inputs changed: values out of date. ' : !nRun ? 'Nothing run yet. ' : 'Some modules not run. '}<a href="#" id="sbDashRun">Run all</a></div>` : '';
+     const verdict = `<div class="sdVerd"><b class="sd-${n.fail ? 'fail' : n.review ? 'review' : n.pass ? 'pass' : 'notrun'}">${n.fail ? 'FAIL' : n.review ? 'REVIEW' : n.pass ? 'PASS' : '—'}</b>${top ? ` · max D/C ${isFinite(top.q.r) ? fmt(top.q.r, 3) : 'NaN'}` : ''}${anyOld ? ' <span class="sdOld">(out of date)</span>' : ''}</div>
+       ${govLink ? `<div class="sdGov">Governing: ${govLink}</div>` : ''}${status}`;
+     const chips = SM().GROUPS.map(gp => {
+       const S = SM().grpStat(list, gp), g = S.gov, rf = S.cols.every(c => c.rf), op = D.open.has(gp), old = S.all.some(z => list[z.G.gi].old[z.c.id]);
+-      const v = g ? `${vOf(g.q, g.c)} · ${esc(g.G.label)}` : S.st === 'na' ? 'n/a' : 'not run';
++      const v = g ? `${vOf(g.q, g.c)} · ${esc(g.G.label)}${lnT(g.G, g.q)}` : S.st === 'na' ? 'n/a' : 'not run';
+       const go = g ? `${g.G.gi}|${g.c.id}` : `${Math.min(+(D.o.ui().g || 0), list.length - 1)}|${S.cols[0].id}`;
+-      const rows = S.all.map(z => `<li><a href="#" data-sdgo="${z.G.gi}|${z.c.id}" class="sd-${z.q.st}${list[z.G.gi].old[z.c.id] ? ' sdOldV' : ''}">${S.cols.length > 1 ? esc(z.c.short) + ', ' : ''}${esc(z.G.label)}: ${vOf(z.q, z.c)}</a></li>`).join('');
++      const rows = S.all.map(z => `<li><a href="#" data-sdgo="${z.G.gi}|${z.c.id}" class="sd-${z.q.st}${list[z.G.gi].old[z.c.id] ? ' sdOldV' : ''}">${S.cols.length > 1 ? esc(z.c.short) + ', ' : ''}${esc(z.G.label)}${lnT(z.G, z.q)}: ${vOf(z.q, z.c)}</a></li>`).join('');
+       return `<div class="sdChip sd-${S.st}${old ? ' sdOldC' : ''}" data-sdgrp="${esc(gp)}"><button type="button" class="sdX" data-sdx="${esc(gp)}" aria-expanded="${op}" title="${op ? 'Hide' : 'Show'} each girder">${op ? '▾' : '▸'}</button><a href="#" class="sdMain" data-sdgo="${go}" title="${esc(g ? `${SM().label(g.c, P).head}, ${g.G.label}: ${String(g.q.check || '').replace(/\$|\{\}|[{}]|\\/g, '')} (${String(g.q.loc || '').replace(/\$|[{}]/g, '')})` : S.st === 'na' ? 'Not applicable' : 'Not run yet: click to run it and open its tab')}">
+         <span class="sdName">${esc(SM().grpLabel ? SM().grpLabel(gp, P) : gp)}</span><span class="sdVal">${v}</span><span class="sdSt">${S.st === 'notrun' ? '' : LBL[S.st]}${rf && g ? '' : ''}</span></a>${op ? `<ul class="sdList">${rows}</ul>` : ''}</div>`;
+     }).join('');
+diff --git a/apps/steel-bridge/ui/report.js b/apps/steel-bridge/ui/report.js
+index 10d2b45..4faca4d 100644
+--- a/apps/steel-bridge/ui/report.js
++++ b/apps/steel-bridge/ui/report.js
+@@ -19,7 +19,7 @@
+   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+   const S = { src: 'analysis', pl: null, plName: '', B: null, key: '', err: '', busy: false, closed: new Set(), A: null, aKey: '', prog: '', rows: new Map(), run: 0 };
+   const keyOf = ctx => JSON.stringify([ctx.P, ctx.g, S.src, S.plName]);
+-  const allKey = ctx => JSON.stringify([ctx.P]);
++  const allKey = ctx => JSON.stringify([ctx.base || ctx.P]);   // SB-2 PR 2: ctx.base, the project itself (ctx.P: the type on the line chosen)
+   const rowKey = (P, gi) => JSON.stringify([P, gi]);   // one girder's summary rows (this project's analysis)
+   const incOf = o => { const SEC = window.SBDReportBuild.SECTIONS, inc = {}; SEC.forEach(([k]) => { inc[k] = !(o.inc && o.inc[k] === false); }); return inc; };
+ 
+@@ -95,20 +95,21 @@
+   /* one girder after the other, one per timer tick (the page stays responsive and shows the progress); a girder whose rows are kept
+      for this project state is not run again */
+   function buildAll(host, ctx) {
+-    const P = ctx.P, n = P.girders.length, list = [], run = ++S.run, t0 = Date.now();
++    // SB-2 PR 2 (2026-11-12): one column per girder type on each of its lines (report/summary.js units; a type on one line: as before)
++    const P0 = ctx.base || ctx.P, US = window.SBDSummary.units(P0), n = US.length, list = [], run = ++S.run, t0 = Date.now();
+     S.busy = true; S.err = ''; S.prog = `Building the report of every girder: girder 1 of ${n}…`; render(host, ctx);
+-    const step = gi => {
++    const step = k => {
+       if (run !== S.run) return;
+-      if (gi >= n) { S.A = list; S.aKey = allKey(ctx); S.busy = false; S.prog = ''; S.secs = (Date.now() - t0) / 1000; render(host, ctx); return; }
+-      const g = P.girders[gi], lab = g.label || g.id || `G${gi + 1}`;
++      if (k >= n) { S.A = list; S.aKey = allKey(ctx); S.busy = false; S.prog = ''; S.secs = (Date.now() - t0) / 1000; render(host, ctx); return; }
++      const { gi, j, P } = US[k], g = P.girders[gi], many = US.filter(q => q.gi === gi).length > 1, lab = (g.label || g.id || `G${gi + 1}`) + (many ? ` on G${j + 1}` : '');
+       try {
+         let e = S.rows.get(rowKey(P, gi));
+         if (!e) { const B = window.SBDReportData.compute(P, gi, { src: 'analysis' }), r = window.SBDReportBuild.govRows(B); e = { rows: r.rows, err: r.err }; S.rows.set(rowKey(P, gi), e); }
+         list.push({ gi, label: lab, rows: e.rows, err: e.err });
+       } catch (er) { list.push({ gi, label: lab, rows: [], err: { all: 'Report error: ' + (er && er.message) } }); }
+       if (S.rows.size > 4 * n + 8) S.rows.delete(S.rows.keys().next().value);
+-      S.prog = `Building the report of every girder: girder ${Math.min(gi + 2, n)} of ${n}…`; render(host, ctx);
+-      setTimeout(() => step(gi + 1), 30);
++      S.prog = `Building the report of every girder: girder ${Math.min(k + 2, n)} of ${n}…`; render(host, ctx);
++      setTimeout(() => step(k + 1), 30);
+     };
+     setTimeout(() => step(0), 30);
+   }
+diff --git a/apps/steel-bridge/ui/summary.js b/apps/steel-bridge/ui/summary.js
+index bbd0590..e49156b 100644
+--- a/apps/steel-bridge/ui/summary.js
++++ b/apps/steel-bridge/ui/summary.js
+@@ -45,7 +45,7 @@ table.sum-tbl td.s-pass{background:#ECFDF5} table.sum-tbl td.s-fail{background:#
+ table.sum-tbl td a{color:inherit;text-decoration:underline dotted;text-underline-offset:2px} table.sum-tbl td a:hover{text-decoration:underline}
+ table.sum-tbl td.s-pass a{color:#065F46} table.sum-tbl td.s-fail a{color:#991B1B} table.sum-tbl td.s-review a{color:#92400E}
+ table.sum-ov th{width:1%;white-space:nowrap;font-family:var(--font-ui);font-size:9pt;font-weight:600} table.sum-ov td{font-size:10pt}
+-table.sum-tbl th.g0,table.sum-tbl td.g0{border-left:2px solid #94A3B8}
++table.sum-tbl th.g0,table.sum-tbl td.g0{border-left:2px solid #94A3B8} table.sum-tbl tr.sum-line td{font-size:8pt} table.sum-tbl tr.sum-line td.lft{color:#475569}
+ .sum-sub{font-size:7.5pt;color:#475569;font-weight:400;display:block}
+ .sum-fig{max-width:680px;margin:6px auto 0} .sum-fig svg{max-width:100%;height:auto;display:block}
+ .sum-list{margin:4px 0;padding-left:18px;font-size:9.5pt} .sum-list li{margin:2px 0}
+@@ -63,33 +63,42 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
+ 
+   /* ---------- the run ---------- */
+   const pkOf = P => JSON.stringify(P);
+-  const todo = (P, mods) => { const out = []; P.girders.forEach((g, gi) => SM().MODS.forEach(m => { if ((!mods || mods.includes(m.k)) && !(S.parts[gi] && S.parts[gi][m.k])) out.push({ gi, m }); })); return out; };
++  /* SB-2 PR 2 (2026-11-12): the run is per unit (a girder type on one of its lines, report/summary.js units); S.parts[u] holds a unit's
++     module results, S.ulist[u] its summary, S.list[gi] the type's summary over its lines (merge: each column's governing line) */
++  const unitsOf = P => { if (!S.U || S.U.pk !== S.pk) S.U = { pk: S.pk, list: SM().units(P) }; return S.U.list; };
++  const todo = (P, mods) => { const out = []; unitsOf(P).forEach(U => SM().MODS.forEach(m => { if ((!mods || mods.includes(m.k)) && !(S.parts[U.u] && S.parts[U.u][m.k])) out.push({ gi: U.gi, u: U.u, j: U.j, m }); })); return out; };
+   const notify = () => S.subs.forEach(f => { try { f(state()); } catch (e) { /* a listener's error does not stop the run */ } });
+   function sync(P) {   // a new project state: the results of the last one are out of date
+     const pk = pkOf(P); if (pk === S.pk) return;
+     if (S.list.some(G => G && Object.values(G.cells || {}).some(q => q.st !== 'notrun'))) S.prev = S.list;   // DASH: the last results, shown as out of date by the left summary
+-    S.first = !S.pk; S.pk = pk; S.parts = []; S.list = []; S.secs = null; S.run++; S.busy = false; S.prog = ''; clearTimeout(S.timer);
++    S.first = !S.pk; S.pk = pk; S.parts = []; S.list = []; S.ulist = []; S.U = null; S.secs = null; S.run++; S.busy = false; S.prog = ''; clearTimeout(S.timer);
+     notify();
+   }
+-  function recell(P, gi) { const L = S.list; try { L[gi] = SM().cells(P, gi, S.parts[gi] || {}); } catch (e) { L[gi] = { gi, label: (P.girders[gi] || {}).label || `G${gi + 1}`, cells: {}, warn: ['Summary error: ' + (e && e.message)], err: {} }; } }
++  function recell(P, gi) {
++    const L = S.list, lab = (P.girders[gi] || {}).label || `G${gi + 1}`, US = unitsOf(P).filter(U => U.gi === gi);
++    try { US.forEach(U => { S.ulist[U.u] = SM().cells(U.P, gi, S.parts[U.u] || {}); }); L[gi] = SM().merge(P, gi, US.map(U => ({ j: U.j, G: S.ulist[U.u] }))); }
++    catch (e) { L[gi] = { gi, label: lab, cells: {}, warn: ['Summary error: ' + (e && e.message)], err: {} }; }
++  }
++  const lnTxt = (G, c) => G && G.lines && G.lines.length > 1 && c && c.ln != null ? ` on G${c.ln + 1}` : '';   // the governing line of a type checked on several lines
+   /* start(P, o): run the modules not yet run for this project state (o.mods: only those modules; o.all: every module again; o.delay ms) */
+   function start(P, o) {
+     o = o || {}; sync(P);
+-    if (o.all) { S.parts = []; S.list = []; S.run++; S.busy = false; }
++    if (o.all) { S.parts = []; S.list = []; S.ulist = []; S.run++; S.busy = false; }
+     if (S.busy) return;   // a run in progress covers every module not yet run of this project state
+     const list = todo(P, o.mods); P.girders.forEach((g, gi) => { if (!S.list[gi]) recell(P, gi); });
+     if (!list.length) { notify(); return; }
+-    const run = ++S.run; S.busy = true; S.err = ''; S.t0 = Date.now(); S.prog = o.delay ? (S.first ? 'Starting…' : 'Inputs changed — updating…') : `Running ${list[0].m.name}, ${S.list[list[0].gi].label} (1/${list.length})…`; draw(); notify();
++    const uLab = q => `${S.list[q.gi].label}${q.j != null && unitsOf(P).filter(U => U.gi === q.gi).length > 1 ? ` on G${q.j + 1}` : ''}`;
++    const run = ++S.run; S.busy = true; S.err = ''; S.t0 = Date.now(); S.prog = o.delay ? (S.first ? 'Starting…' : 'Inputs changed — updating…') : `Running ${list[0].m.name}, ${uLab(list[0])} (1/${list.length})…`; draw(); notify();
+     const step = k => {
+       if (run !== S.run) return;
+       if (pkOf(P) !== S.pk) { S.busy = false; return; }
+       if (k >= list.length) { S.busy = false; S.prog = ''; S.secs = (Date.now() - S.t0) / 1000; draw(); notify(); return; }
+-      const { gi, m } = list[k];
+-      S.prog = `Running ${m.name}, ${S.list[gi].label} (${k + 1}/${list.length})…`; draw(); notify();
++      const { gi, u, m } = list[k], UP = unitsOf(P)[u].P;
++      S.prog = `Running ${m.name}, ${uLab(list[k])} (${k + 1}/${list.length})…`; draw(); notify();
+       // paint the progress, then one module of one girder, then yield
+       requestAnimationFrame(() => setTimeout(() => {
+         if (run !== S.run) return;
+-        try { (S.parts[gi] = S.parts[gi] || {})[m.k] = SM().run(P, gi, m.k); } catch (e) { (S.parts[gi] = S.parts[gi] || {})[m.k] = { k: m.k, err: { [m.k]: 'Calculation error: ' + (e && e.message) } }; }
++        try { (S.parts[u] = S.parts[u] || {})[m.k] = SM().run(UP, gi, m.k); } catch (e) { (S.parts[u] = S.parts[u] || {})[m.k] = { k: m.k, err: { [m.k]: 'Calculation error: ' + (e && e.message) } }; }
+         recell(P, gi);
+         { const pf = S.pendFocus, q = pf && pf.gi === gi && S.list[gi].cells[pf.id]; if (q && q.st !== 'notrun') { S.pendFocus = null; focus(q); } }   // DASH: a chip of a module not run: its card once run
+         setTimeout(() => step(k + 1), 0);
+@@ -138,11 +147,11 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
+   }
+   /* gotoCell(gi, id, cx): the cell's tab, girder and step (cx: the caller's { P, goto } when the Summary tab has not been drawn: the left
+      summary); a module not run yet is run (and its tab, selected, runs itself: #1260) */
+-  function gotoCell(gi, id, cx) {
++  function gotoCell(gi, id, cx, j) {
+     const X = cx || S.ctx, col = SM().COLS.find(q => q.id === id); if (!X || !col) return;
+-    sync(X.P); const G = S.list[gi], c = G && G.cells[id];
++    sync(X.P); const G = S.list[gi], c0 = G && G.cells[id], bl = j != null && G && G.byLine ? G.byLine.find(q => q.j === j) : null, c = bl ? { ...bl.cells[id], ln: j } : c0;
+     if (!c || c.st === 'notrun') { S.pendFocus = { gi, id }; start(X.P, { mods: [SM().modOf(id).k] }); } else S.pendFocus = null;
+-    X.goto(col.tab, gi); const c2 = (S.list[gi] || {}).cells; if (c2 && c2[id] && c2[id].st !== 'notrun') focus(c2[id]);
++    X.goto(col.tab, gi, c && c.ln != null ? c.ln : (j != null ? j : undefined)); const c2 = (S.list[gi] || {}).cells; if (c2 && c2[id] && c2[id].st !== 'notrun') focus(c2[id]);
+   }
+ 
+   /* ---------- drawing ---------- */
+@@ -155,25 +164,26 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
+   const vTxt = (c, col) => !c || c.st === 'notrun' ? 'not run' : c.st === 'na' ? 'n/a' : col.rf ? (isFinite(c.rf) ? fmt(c.rf, 2) : '—') : (isFinite(c.r) ? fmt(c.r, 3) : nfTxt(c.r));
+   const cellHtml = (G, col, k0) => { const c = G.cells[col.id] || { st: 'notrun' };
+     const nn = c.st !== 'na' && c.st !== 'notrun' && !col.rf && c.r != null && !isFinite(c.r) ? NF_WHY[nfTxt(c.r)] + '(Counted as REVIEW.) ' : '';
+-    const tip = c.st === 'na' ? c.why : c.st === 'notrun' ? 'Not run yet: click to run' : `${nn}${G.label}: ${c.check} — ${c.loc}${c.nWarn ? ` (${c.nWarn} warning item(s) on the tab)` : ''}`;
+-    return `<td class="s-${c.st}${k0 ? ' g0' : ''}" title="${esc(String(tip || '').replace(/\$|\{\}|[{}]|\\/g, ''))}"><a href="#" data-sumgo="${G.gi}|${col.id}">${vTxt(c, col)}</a></td>`; };
++    const tip = c.st === 'na' ? c.why : c.st === 'notrun' ? 'Not run yet: click to run' : `${nn}${G.label}${lnTxt(G, c)}: ${c.check} — ${c.loc}${c.nWarn ? ` (${c.nWarn} warning item(s) on the tab)` : ''}`;
++    return `<td class="s-${c.st}${k0 ? ' g0' : ''}" title="${esc(String(tip || '').replace(/\$|\{\}|[{}]|\\/g, ''))}"><a href="#" data-sumgo="${G.gi}|${col.id}${G.j != null ? '|' + G.j : ''}">${vTxt(c, col)}</a>${G.j == null && c.ln != null && G.lines && G.lines.length > 1 ? `<span class="sum-sub">G${c.ln + 1}</span>` : ''}</td>`; };
+   function overview(P, list) {
+     const M = window.SBDModel, G = M.GRADES, m = P.materials, d = P.deck, xs = P.xs || {}, U = window.SharedUnits, AN = window.SBDAnalysis;
+     const sp = P.spans.lengths, cont = P.spans.continuity !== 'simple' && sp.length > 1, own = (P.ownerRules || {}).owner || 'AASHTO';
+     const bays = (xs.bays || []).map(Number), same = bays.length && bays.every(b => b === bays[0]);
+     const kv = (k, v) => `<tr><th class="lft">${k}</th><td class="lft">${v}</td></tr>`;
+-    const wts = list.map(Gs => ({ G: Gs, w: SM().weight(((S.parts[Gs.gi] || {}).an || {}).an) }));
+-    const wAll = wts.every(q => q.w != null) ? wts.reduce((a, q) => a + q.w, 0) : null;
++    const US = unitsOf(P), wts = list.map(Gs => { const U = US.find(q => q.gi === Gs.gi), n = Math.max(1, US.filter(q => q.gi === Gs.gi && q.j != null && M.typeLines(P, Gs.gi).includes(q.j)).length);
++      return { G: Gs, n, w: U ? SM().weight(((S.parts[U.u] || {}).an || {}).an) : null }; });   // SB-2: a type's steel on each of its n lines
++    const wAll = wts.every(q => q.w != null) ? wts.reduce((a, q) => a + q.w * q.n, 0) : null;
+     const wk = gi => `<a href="#" class="wk" data-sumwk="${gi}" title="Worked on the Analysis tab (Σw_s ℓ, equilibrium step)">§</a>`;
+     const h = `<div class="tscroll"><table class="tbl sum-ov"><tbody>
+       ${kv('Spans', `${sp.map(L => U.fmt(+L, 2)).join(' + ')} = ${U.fmt(sp.reduce((a, b) => a + (+b || 0), 0), 2)} ft, ${cont ? 'continuous' : sp.length > 1 ? 'simple spans' : 'simple span'}`)}
+       ${kv('Support skews', (xs.skews || []).length ? xs.skews.map(s => U.fmt(+s, 1) + '°').join(', ') : '—')}
+       ${kv('Cross-section', `${xs.nb || '—'} girders at ${bays.length ? (same ? U.fmt(bays[0], 2) + ' ft' : bays.map(b => U.fmt(b, 2)).join(', ') + ' ft') : '—'}; overhangs ${U.fmt(+xs.ohL, 2)} / ${U.fmt(+xs.ohR, 2)} ft`)}
+-      ${kv('Plate girders designed', P.girders.map(g => `${esc(g.label || g.id)} (${esc(g.position)}${AN ? `, loads of G${AN.lineOf(P, g) + 1}` : ''})`).join(', '))}
++      ${kv('Plate girders designed', P.girders.map((g, gi) => { const L = M.typeLines(P, gi); return `${esc(g.label || g.id)} (${esc(g.position)}${L.length > 1 ? `, girder type on lines ${L.map(j => 'G' + (j + 1)).join(', ')}` : AN ? `, loads of G${AN.lineOf(P, g) + 1}` : ''})`; }).join(', '))}
+       ${kv('Steel (A709)', `top ${esc(m.steel.top)}, bottom ${esc(m.steel.bot)}, web ${esc(m.steel.web)} (F<sub>y</sub> ${G[m.steel.top].Fy} / ${G[m.steel.bot].Fy} / ${G[m.steel.web].Fy} ksi)`)}
+       ${kv('Deck', `${d.composite === false ? 'noncomposite' : 'composite'}, t<sub>s</sub> ${U.fmt(d.ts, 2)} in (total ${U.fmt(d.tdeck, 2)} in), haunch ${U.fmt(d.haunch, 2)} in, f′<sub>c</sub> ${U.fmt(m.concrete.fc, 2)} ksi`)}
+       ${kv('Owner', (() => { const cn = M.clientName ? M.clientName(P) : ''; return cn ? `${esc(cn)}; load rules ${esc(own)}` : `none entered; load rules ${esc(own)}`; })())}
+-      ${kv('Girder steel (DC1, with detail allowance)', wts.map(q => `${esc(q.G.label)} ${q.w != null ? U.fmt(q.w, 1) + ' kip ' + wk(q.G.gi) : 'not run'}`).join('; ') + (wAll != null && list.length > 1 ? `; total ${U.fmt(wAll, 1)} kip` : ''))}
++      ${kv('Girder steel (DC1, with detail allowance)', wts.map(q => `${esc(q.G.label)} ${q.w != null ? U.fmt(q.w, 1) + ' kip ' + wk(q.G.gi) + (q.n > 1 ? ` × ${q.n} lines` : '') : 'not run'}`).join('; ') + (wAll != null && (list.length > 1 || wts.some(q => q.n > 1)) ? `; total ${U.fmt(wAll, 1)} kip` : ''))}
+     </tbody></table></div><p class="note">Girder steel: Σw<sub>s</sub>ℓ of each plate girder from its analysis (the plates × 490/144 lb/ft per in² × (1 + detail allowance)), as worked in the Analysis tab's DC1 equilibrium step (§). ${list.length > 1 ? 'The total is the sum of the plate girders listed.' : ''}${P.girders.length < (xs.nb || 0) ? ` The project has ${P.girders.length} plate girder(s) for ${xs.nb} girder lines.` : ''}</p>`;
+     return h;
+   }
+@@ -229,15 +239,15 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
+     const verdict = !done && !n.fail && !n.review ? (n.pass ? 'INCOMPLETE' : '—') : ov.verdict;
+     const bcls = verdict === 'FAIL' ? 'fail' : verdict === 'PASS' ? 'pass' : verdict === 'REVIEW' ? 'review' : 'none';
+     const link = (G, col, c, t) => `<a href="#" data-sumgo="${G.gi}|${col.id}">${t}</a>`;
+-    const govTxt = top ? `<b>Governing:</b> ${esc(LB(top.c).head)}, girder ${esc(top.G.label)}, ${txt(top.q.loc)}: ${txt(top.q.check)} — ${link(top.G, top.c, top.q, `${top.c.rf ? 'RF ' + fmt(top.q.rf, 2) : 'D/C ' + (isFinite(top.q.r) ? fmt(top.q.r, 3) : 'not a number')}`)}` : 'No check has run yet.';
++    const govTxt = top ? `<b>Governing:</b> ${esc(LB(top.c).head)}, girder ${esc(top.G.label)}${lnTxt(top.G, top.q)}, ${txt(top.q.loc)}: ${txt(top.q.check)} — ${link(top.G, top.c, top.q, `${top.c.rf ? 'RF ' + fmt(top.q.rf, 2) : 'D/C ' + (isFinite(top.q.r) ? fmt(top.q.r, 3) : 'not a number')}`)}` : 'No check has run yet.';
+     const nanTxt = ov.nan.length ? `<span class="sum-low"><b>Not evaluated</b> (ratio not finite, REVIEW): ${ov.nan.map(z => `${esc(LB(z.c).head)}, ${esc(z.G.label)} ${link(z.G, z.c, z.q, txt(z.q.loc))}: ${txt(z.q.check)} — <span title="${esc(NF_WHY[nfTxt(z.q.r)])}">ratio ${nfTxt(z.q.r)}</span>`).join('; ')}.</span>` : '';
+-    const low = ov.low && ov.low !== top ? `<span class="sum-low"><b>Lowest rating factor:</b> ${esc(ov.low.c.head.replace('Rating, ', ''))} ${link(ov.low.G, ov.low.c, ov.low.q, fmt(ov.low.q.rf, 2))} (${esc(ov.low.G.label)}, ${txt(ov.low.q.loc)}).</span>` : '';
++    const low = ov.low && ov.low !== top ? `<span class="sum-low"><b>Lowest rating factor:</b> ${esc(ov.low.c.head.replace('Rating, ', ''))} ${link(ov.low.G, ov.low.c, ov.low.q, fmt(ov.low.q.rf, 2))} (${esc(ov.low.G.label)}${lnTxt(ov.low.G, ov.low.q)}, ${txt(ov.low.q.loc)}).</span>` : '';
+     const AD = window.SBDAutoDesignUI && window.SBDAutoDesignUI.lastWarns ? window.SBDAutoDesignUI.lastWarns(P) : null;
+     const cdTxt = (() => { const CD = window.SBDCustomDemands, ks = CD ? ['flex', 'shear', 'cn', 'fat', 'rt', 'spl', 'wt'].filter(k => CD.srcGet(P, k) === 'custom') : [];
+       return ks.length ? `Custom (entered) demands where chosen on a tab: ${ks.map(k => esc(CD.SPECS[k].name)).join(', ')}; this project's analysis for the rest.` : "this project's analysis (Analysis tab) for every module."; })();
+     let h = `<section class="sec" id="sum-verdict"><div class="secHead">Summary: overall verdict</div><div class="secBody">
+       <div class="sum-verd"><span class="sum-badge ${bcls}">${verdict}</span><span class="sum-cnt"><span class="c-fail">${n.fail} FAIL</span><span class="c-review">${n.review} REVIEW</span><span class="c-pass">${n.pass} PASS</span>${n.na ? `<span class="c-na">${n.na} n/a</span>` : ''}${n.notrun ? `<span class="c-na">${n.notrun} not run</span>` : ''}</span></div>
+-      <p class="sum-gov">${govTxt}${low}${nanTxt}</p>
++      <p class="sum-gov">${govTxt}${low}${nanTxt}</p>${(() => { const Ua = window.SBDModel.unassigned ? window.SBDModel.unassigned(P) : []; return Ua.length ? `<div class="alert err" id="sum-unassigned"><b>Line${Ua.length > 1 ? 's' : ''} ${Ua.map(j => 'G' + (j + 1)).join(', ')} ${Ua.length > 1 ? 'have' : 'has'} no girder type</b> and ${Ua.length > 1 ? 'are' : 'is'} not checked: the verdict covers the lines of the types only. Assign a type to every line on the <a href="#" data-sumin="gird">Girders &amp; plates</a> or <a href="#" data-sumin="xsec">Cross-section</a> input tab.</div>` : ''; })()}
+       <p class="note">Counts: one per girder and column of the table below. FAIL: demand / capacity &gt; 1.0, or a rating factor RF &lt; 1.0. REVIEW: a check whose ratio is not a number, or a module item with a Warning status (welds, cross-frames, deflection over the owner's preferred limit). A ratio cell showing ∞ (or −∞ / NaN): that check's demand / capacity ratio has no finite value (∞: infinite, e.g. a capacity, or a factor in it such as the 6.10.1.6 amplification, that is zero or not finite for the demand; NaN: not a number, e.g. 0 / 0); it is counted as REVIEW, and its tooltip and link give the reason and the work on its tab. Demands: ${cdTxt} A hand-off file or the Example demands chosen on a tab for this page view, and the Flexure tab's "6.10.8 only" choice, are not used here (each tab's own run uses them). Every value is the module's own governing value, worked on its tab; each links there. AASHTO LRFD 10th Ed. (2024); MBE 4th Ed. (2026) for the rating.</p>
+       <div class="sum-run">${S.busy ? `<span role="status" aria-live="polite"><span class="spin" aria-hidden="true"></span>${esc(S.prog)}</span>` : `<span role="status" aria-live="polite">${done ? `Up to date${S.secs != null ? ` (last run ${fmt(S.secs, 1)} s)` : ' (shown from the last run of this project state)'}.` : 'Out of date.'}</span>`}
+         <button type="button" id="sum_rerun" title="Run every module of every girder again">Re-run all</button>
+@@ -254,12 +264,13 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
+       <div class="tscroll"><table class="tbl sum-tbl"><thead><tr><th rowspan="2" class="lft">Girder</th>${groups.map(g => g.cols.length > 1 ? `<th colspan="${g.cols.length}" class="g0">${esc(g.grp)}</th>`
+         : `<th rowspan="2" class="g0" title="${esc(g.cols[0].head)}">${esc(g.grp)}${g.cols[0].what ? `<span class="sum-sub">${esc(g.cols[0].what)}</span>` : ''}</th>`).join('')}</tr>
+       <tr>${COLS.filter(c => groups.find(g => g.grp === c.grp).cols.length > 1).map(c => `<th class="${first.has(c.id) ? 'g0' : ''}" title="${esc(c.head)}">${esc(c.short)}${c.what ? `<span class="sum-sub">${esc(c.what)}</span>` : ''}</th>`).join('')}</tr></thead>
+-      <tbody>${list.map(G => `<tr><td class="lft"><b>${esc(G.label)}</b></td>${COLS.map(c => cellHtml(G, c, first.has(c.id))).join('')}</tr>`).join('')}</tbody></table></div>
++      <tbody>${list.map(G => `<tr><td class="lft"><b>${esc(G.label)}</b>${G.lines && G.lines.length > 1 ? `<span class="sum-sub">worst of ${G.lines.map(j => 'G' + (j + 1)).join(', ')}</span>` : ''}</td>${COLS.map(c => cellHtml(G, c, first.has(c.id))).join('')}</tr>`
++        + (G.byLine ? G.byLine.map(q => `<tr class="sum-line"><td class="lft">&nbsp;&nbsp;on line G${q.j + 1}</td>${COLS.map(c => cellHtml({ gi: G.gi, label: `${G.label} on G${q.j + 1}`, cells: q.cells, j: q.j }, c, first.has(c.id))).join('')}</tr>`).join('') : '')).join('')}</tbody></table></div>
+       <p class="note">Ratio = demand / capacity (OK ≤ 1.0); rating factors RF (OK ≥ 1.0). Each cell opens its output tab with that girder selected, at the location and step that work the value. Flexure: the governing check over every location of the Flexure tab, by limit state (Strength I GS5–GS10; Service II GS12, GS13; proportions GS1–GS4); the largest of the three is the Flexure tab's governing ratio. ${esc(window.SBDRating ? window.SBDRating.BASIS.short : '')} ${P.fatigue && P.fatigue.ev && P.fatigue.ev.on === 'yes' ? 'Fatigue includes the remaining fatigue life (FA6, MBE 4th Ed. Section 7: fatigue-prone details only, 2.2(Δf)_tension > f_DL,compression (7.2.3); (Δf)_eff = R_pR_s × the factored Fatigue II range, N_av − N_1 with the first-year and present ADTT_SL), turned on on the Fatigue &amp; studs input tab.' : 'Remaining fatigue life (MBE 4th Ed. Section 7): off (Fatigue &amp; studs input tab).'}</p></div></section>`;
+     // the governing check of each column, per girder (the GirderDetail Summary's per-check table)
+     h += `<section class="sec" id="sum-checks"><div class="secHead">Governing check of each column</div><div class="secBody">${list.map(G => `<details class="sum-g" data-sumg="${G.gi}"${S.open.has(G.gi) || list.length === 1 ? ' open' : ''}><summary><b>${esc(G.label)}</b></summary>
+       <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Column</th><th class="lft">Check</th><th class="lft">Location</th><th>Ratio / RF</th><th>Status</th></tr></thead><tbody>
+-      ${COLS.map(c => { const q = G.cells[c.id] || { st: 'notrun' }; return `<tr><td class="lft">${esc(c.head)}</td><td class="lft">${q.check ? txt(q.check) : esc(q.why || (q.st === 'notrun' ? 'Not run yet.' : ''))}</td><td class="lft">${q.loc ? txt(q.loc) : ''}</td><td class="s-${q.st}">${link(G, c, q, vTxt(q, c))}</td><td>${LBL[q.st]}</td></tr>`; }).join('')}
++      ${COLS.map(c => { const q = G.cells[c.id] || { st: 'notrun' }; return `<tr><td class="lft">${esc(c.head)}</td><td class="lft">${q.check ? txt(q.check) : esc(q.why || (q.st === 'notrun' ? 'Not run yet.' : ''))}</td><td class="lft">${q.loc ? txt(q.loc) : ''}${lnTxt(G, q) ? `<span class="sum-sub">line${lnTxt(G, q).replace(' on', '')}</span>` : ''}</td><td class="s-${q.st}">${link(G, c, q, vTxt(q, c))}</td><td>${LBL[q.st]}</td></tr>`; }).join('')}
+       </tbody></table></div></details>`).join('')}</div></section>`;
+     // not run / not applicable, warnings
+     const nr = []; list.forEach(G => COLS.forEach(c => { const q = G.cells[c.id]; if (q && q.st === 'na') nr.push(`<li>${esc(c.head)}, ${esc(G.label)}: ${txt(q.why || 'not applicable')}</li>`); }));
+@@ -286,7 +297,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
+     if (!host.__sum) { host.__sum = true;   // handlers on the host (bound once; the host is the page's #out)
+       host.addEventListener('click', e => {
+         if (!S.ctx || !S.ctx.open()) return;
+-        const a = e.target.closest('[data-sumgo]'); if (a) { e.preventDefault(); const [gi, id] = a.dataset.sumgo.split('|'); gotoCell(+gi, id); return; }
++        const a = e.target.closest('[data-sumgo]'); if (a) { e.preventDefault(); const [gi, id, j] = a.dataset.sumgo.split('|'); gotoCell(+gi, id, null, j != null && j !== '' ? +j : null); return; }
+         const w = e.target.closest('[data-sumwk]'); if (w) { e.preventDefault(); S.ctx.goto('an', +w.dataset.sumwk); focus({ step: 'an.eq.DC1steel' }); return; }
+         const ig = e.target.closest('[data-sumin], #sum-plan [data-itgo]'); if (ig) { e.preventDefault(); if (S.ctx.inTab) S.ctx.inTab(ig.dataset.sumin || ig.dataset.itgo); return; }   // GFXS: an input tab
+         const t = e.target.closest('[data-sumtab]'); if (t) { e.preventDefault(); S.ctx.goto(t.dataset.sumtab, Math.min(+(S.ctx.ui.g || 0), S.ctx.P.girders.length - 1)); return; }
+```

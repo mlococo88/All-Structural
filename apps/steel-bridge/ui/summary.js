@@ -165,7 +165,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
   const cellHtml = (G, col, k0) => { const c = G.cells[col.id] || { st: 'notrun' };
     const nn = c.st !== 'na' && c.st !== 'notrun' && !col.rf && c.r != null && !isFinite(c.r) ? NF_WHY[nfTxt(c.r)] + '(Counted as REVIEW.) ' : '';
     const tip = c.st === 'na' ? c.why : c.st === 'notrun' ? 'Not run yet: click to run' : `${nn}${G.label}${lnTxt(G, c)}: ${c.check} — ${c.loc}${c.nWarn ? ` (${c.nWarn} warning item(s) on the tab)` : ''}`;
-    return `<td class="s-${c.st}${k0 ? ' g0' : ''}" title="${esc(String(tip || '').replace(/\$|\{\}|[{}]|\\/g, ''))}"><a href="#" data-sumgo="${G.gi}|${col.id}${G.j != null ? '|' + G.j : ''}">${vTxt(c, col)}${G.j == null && c.ln != null && G.lines && G.lines.length > 1 ? `<span class="sum-sub">G${c.ln + 1}</span>` : ''}</a></td>`; };
+    return `<td class="s-${c.st}${k0 ? ' g0' : ''}" title="${esc(String(tip || '').replace(/\$|\{\}|[{}]|\\/g, ''))}"><a href="#" data-sumgo="${G.gi}|${col.id}${G.j != null ? '|' + G.j : ''}">${vTxt(c, col)}</a>${G.j == null && c.ln != null && G.lines && G.lines.length > 1 ? `<span class="sum-sub">G${c.ln + 1}</span>` : ''}</td>`; };
   function overview(P, list) {
     const M = window.SBDModel, G = M.GRADES, m = P.materials, d = P.deck, xs = P.xs || {}, U = window.SharedUnits, AN = window.SBDAnalysis;
     const sp = P.spans.lengths, cont = P.spans.continuity !== 'simple' && sp.length > 1, own = (P.ownerRules || {}).owner || 'AASHTO';
