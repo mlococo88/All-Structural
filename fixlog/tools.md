@@ -106,3 +106,10 @@
 - The canopy app lives in its own repository (mlococo88/Canopy-MCT-Generator) and embeds this repo's Base Plate & Anchor Designer and shared/dxf.js; it is not in this folder, so the card is the only absolute (online) link on the page.
 - **Formulas, factors, units, code references:** none. **Saved data:** none.
 - **How verified:** headless Chromium: the card shows in its section, the filter "canopy" and "anchor" find it, no sideways scroll at 390 px, 0 console errors. **Other copies:** none. **Open items:** none.
+
+## 2026-11-12 — PR: claude/tools-canopy-rename (CNL2) — canopy card renamed   [display only]
+- **Where:** "Loads & analysis" section, card `href="https://mlococo88.github.io/Canopy-MCT-Generator/"` (CNL1).
+- **Before:** `<div class="name">Canopy MIDAS MCT Generator</div>`
+- **After:** `<div class="name">Steel Canopy Designer</div>` (engineer's name for it). Link, description and tags unchanged.
+- **Formulas, factors, units, code references:** none. **Saved data:** none.
+- **How verified:** headless Chromium: the card shows the new name, the filter "canopy" finds it, 0 console errors. **Other copies:** none. **Open items:** none.
