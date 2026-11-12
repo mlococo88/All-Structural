@@ -317,7 +317,7 @@ PR #1456: https://github.com/mlococo88/All-Structural/pull/1456
 - Next: PR 2c-2 (Flexure and Shear tabs, the pier negative-moment resistance and the positive moment connection; chips; harness B).
 
 ## 2026-11-12 — PR 2c-2: Flexure and Shear output tabs (pier negative-moment resistance, positive moment connection), check chips; harness B (no calculation change)
-PR #PR2C2: https://github.com/mlococo88/All-Structural/pull/PR2C2
+PR #1457: https://github.com/mlococo88/All-Structural/pull/1457
 ### Where
 - `apps/ps-bridge/engine/worked-strength.js` (new, `window.PSBWorkedStrength`, no DOM): `flexure(inp, R)`, `shear(inp, R)` → `{ steps, pairs, paths }`.
   Flexure: M_u at midspan (η, m, restraint where added), β_1, d_p, c (rectangular Eq. 5.6.3.1.1-4 or flanged -3; developed tension where the
