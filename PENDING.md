@@ -18,7 +18,7 @@ Last updated: 2026-10-22 (merge of GirderDetail and ST-Girder: PR 1 done, later 
 ### AASHTO LRFD 10th Ed. gaps (inventory 2026-10-19; engineer decision "follow the owner, else 10th")
 All inventory items were fixed and merged on 2026-10-19 (engineer approved; PRs #324–#349). Each tool now states AASHTO LRFD 10th Ed. (2024), with the owner manual's edition noted where the tool has an owner setting. Details and check cases are in each tool's fix log. Remaining open questions:
 - **Pile Designer:** φc default kept at 0.80 (engineer, 2026-10-19). Still open: the S_u < 0.50 ksf "soft" limit for group efficiency; whether loose sand over clay counts as "soft".
-- **Spread Footing:** depth-factor option keeps Vesić (building-footing tool, engineer 2026-10-19); the 10th Ed. arctan form is noted only.
+- **Spread Footing:** ~~depth-factor option keeps Vesić (building-footing tool, engineer 2026-10-19); the 10th Ed. arctan form is noted only.~~ The depth-factor option now uses the 10th Ed. Eq. 10.6.3.1.2a-10 arctan form with d_q ≤ 1.4 (SFLW L6, #1062, 2026-11-07). Q-SF1–Q-SF4 decided 2026-11-12 (engineer; fix log SFDL): nothing open.
 - **Gusset:** the rating keeps the MBE 3rd Ed. φ (engineer); MBE article numbers still flagged "verify" (no MBE copy available).
 - **Elastomeric:** with the MassDOT 0.03 rad tolerance the default pad needs restraint per 14.7.5.4 (accepted as is); n not increased for cover layers (conservative).
 - **Rebar (ACI Rebar, CBC):** compression development does not divide by λ for lightweight concrete (notice shown); #14/#18 hooks flagged only; CBC γ3 option "0.76 — A615 Gr 75" names the wrong grade (10th: Gr 75 0.75, Gr 80 0.76).
