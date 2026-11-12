@@ -91,3 +91,10 @@
 - The Saved projects panel heading comes from `shared/project-registry.js` `name` (changed in the same PR). Link target unchanged.
 - **Formulas, factors, units, code references:** none. **Saved data:** none.
 - **How verified:** home-projects, home-sync: pass. **Other copies:** none.
+
+## 2026-11-12 — PR: ps-bridge-skeleton (PSB1) — card for the new Prestressed Bridge Design app (in development)   [navigation only]
+- **Where:** "Bridge suite (linked apps)" section, after the card `href="Prestressed%20Bridge%20Design.html"` (anchor `Formerly psbeam.html.</div>`).
+- **Before:** no card for `apps/ps-bridge/index.html`.
+- **After:** `<a class="card" href="apps/ps-bridge/index.html" target="_blank"><div class="name">Prestressed Bridge Design (new, in development)</div>…<li><b>Not for design use yet:</b> use the card above.</li>…<span class="tag">AASHTO LRFD 10th</span></a>` (the Steel Bridge app's precedent, #465).
+- **Formulas, factors, units, code references:** none. **Saved data:** none.
+- **How verified:** home-projects pass; the card opens the app (file://). **Other copies:** none. **Open items:** none.
