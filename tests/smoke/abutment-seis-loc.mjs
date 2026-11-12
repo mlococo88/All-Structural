@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Abutment calculator: seismic earth pressure location, panel I-11 (SEL, 2026-11-11, engineer-approved).
 //   node tests/smoke/abutment-seis-loc.mjs [file]   (default: abutment_calculator.html in this tree)
-// Options (seismic.hEQmode): (a) "sw" Seed & Whitman ΔP_AE at 0.6H (new projects); (b) "static" combined P_AE at H/3 (not below the
-// static resultant); (c) "comb" combined P_AE at hAEr·H, 0.4–0.5; (d) "nonyield" combined P_AE at H/2; "ratio" = earlier option (saved).
+// Options (seismic.hEQmode): (a) "sw" Seed & Whitman ΔP_AE at 0.6H; (b) "static" combined P_AE at H/3 (not below the
+// static resultant; new projects, engineer decision 2026-11-12); (c) "comb" combined P_AE at hAEr·H, 0.4–0.5; (d) "nonyield" combined P_AE at H/2; "ratio" = earlier option (saved).
 // Hand values: default project, Extreme Event I on (A_s = 0.15, k_h = 0.5·k_h0 = 0.075, spread footing), H = 22 ft, γ = 0.120 kcf,
 // φ = 32° (Rankine, K_A = tan²29° = 0.30726), L_ab = 44 ft:
 //   K_AE = 0.35166, P_AE = ½γH²K_AE = 10.212 kip/ft, P_A = 8.923 kip/ft, ΔP_AE = 1.289 kip/ft, ΔP_AE·L_ab = 56.73 kip
@@ -28,17 +28,20 @@ const run = (p, mode, extra) => p.evaluate(([m, x]) => { S.seismic.on = true; if
     V: ee.V, MhEE: ee.Mh, eEE: ee.e, B: R.geo.B, stM: st && st.iA.M, stV: st && st.iA.V, bwz: bw && bw.zP, bwdP: bw && bw.dP, warn: (typeof WARNINGS !== 'undefined' ? WARNINGS : []).map(w => w.msg).join(' | '),
     fp: R.fingerprint }; }, [mode, extra]);
 
-// ---- 1. a new project: option (a), hAEr 0.5; the four options listed in order
+// ---- 1. a new project: option (b) (engineer decision 2026-11-12), hAEr 0.5; the four options listed in order
 {
   const o = await openPage(FILE); const p = o.p; await ready(p);
   const st = await p.evaluate(() => ({ m: S.seismic.hEQmode, r: S.seismic.hAEr }));
-  check(st.m === 'sw' && st.r === 0.5, `new project: location (a) Seed & Whitman, hAEr 0.5 (got ${st.m}, ${st.r})`);
+  check(st.m === 'static' && st.r === 0.5, `new project: location (b) combined P_AE at H/3, hAEr 0.5 (got ${st.m}, ${st.r})`);
+  check(await p.evaluate(() => /Option \(b\) is the tool default for new projects/.test(eqLocNoteHTML())), 'location note: option (b) is the default for new projects');
   await p.evaluate(() => { S.seismic.on = true; buildInputs(); recalcAll(); });
   const opts = await p.evaluate(() => [...document.querySelectorAll('select[data-path="seismic.hEQmode"] option')].map(x => x.value));
   check(JSON.stringify(opts) === JSON.stringify(['sw', 'static', 'comb', 'nonyield']), 'panel I-11: options (a) to (d) in order: ' + opts.join(', '));
   check(await p.evaluate(() => /Seismic earth pressure location/.test(document.querySelector('[data-cid="in-seis"]').textContent)), 'panel I-11: the location note is shown');
 
-  const a = await run(p, null);
+  const n = await run(p, null);
+  check(n.mode === 'static' && near(n.zEQ, 22 / 3, 1e-9) && near(n.Mh, 416.03, 0.02) && near(n.MhEE, 5254.83, 0.05) && near(n.eEE, 2.0873, 2e-4), `new project (b): ΔP_AE at ${n.zEQ.toFixed(3)} ft, M ${n.Mh.toFixed(2)}, EE I M_h ${n.MhEE.toFixed(2)}, e ${n.eEE.toFixed(4)} ft (hand 7.333, 416.03, 5254.83, 2.0873)`);
+  const a = await run(p, 'sw');
   check(near(a.KAE, 0.35166, 5e-5) && near(a.PAE, 10.212, 2e-3) && near(a.dPAE, 1.289, 1e-3) && near(a.dPAEh, 56.73, 0.02), `K_AE ${a.KAE.toFixed(5)}, P_AE ${a.PAE.toFixed(3)}, ΔP_AE ${a.dPAE.toFixed(3)} kip/ft, ×L_ab ${a.dPAEh.toFixed(2)} kip`);
   check(near(a.zEQ, 13.2, 1e-9) && near(a.Mh, 748.86, 0.02), `(a) ΔP_AE at 0.6H = ${a.zEQ.toFixed(3)} ft, M = ${a.Mh.toFixed(2)} kip-ft (hand 13.20, 748.86)`);
   check(near(a.V, 1867.05, 0.02) && near(a.MhEE, 5587.66, 0.05) && near(a.eEE, 2.2655, 2e-4), `(a) EE I case A: M_h ${a.MhEE.toFixed(2)}, e ${a.eEE.toFixed(4)} ft (hand 5587.66, 2.2655)`);
@@ -86,12 +89,15 @@ const run = (p, mode, extra) => p.evaluate(([m, x]) => { S.seismic.on = true; if
 {
   const base = await (async () => { const o = await openPage(FILE); await ready(o.p); const s = await o.p.evaluate(() => JSON.stringify(defaultState())); allErrs.push(...o.errs); await o.b.close(); return JSON.parse(s); })();
   const mk = f => { const s = JSON.parse(JSON.stringify(base)); s.seismic.on = true; delete s.seismic.hAEr; f(s); return JSON.stringify(s); };
-  const cases = [['static', s => { s.seismic.hEQmode = 'static'; }, 'static', 22 / 3], ['ratio 0.45', s => { s.seismic.hEQmode = 'ratio'; s.seismic.hEQr = 0.45; }, 'ratio', 9.9],
+  const cases = [['sw', s => { s.seismic.hEQmode = 'sw'; }, 'sw', 13.2], ['static', s => { s.seismic.hEQmode = 'static'; }, 'static', 22 / 3],
+    ['comb 0.45', s => { s.seismic.hEQmode = 'comb'; s.seismic.hAEr = 0.45; }, 'comb', r => (r.PAE * 0.45 * 22 - r.PA * 22 / 3) / r.dPAE],
+    ['nonyield', s => { s.seismic.hEQmode = 'nonyield'; }, 'nonyield', r => (r.PAE * 11 - r.PA * 22 / 3) / r.dPAE], ['ratio 0.45', s => { s.seismic.hEQmode = 'ratio'; s.seismic.hEQr = 0.45; }, 'ratio', 9.9],
     ['pre-mode, 0.6', s => { delete s.seismic.hEQmode; s.seismic.hEQr = 0.6; }, 'static', 22 / 3], ['pre-mode, 0.5', s => { delete s.seismic.hEQmode; s.seismic.hEQr = 0.5; }, 'ratio', 11]];
   for (const [name, f, want, z] of cases) {
     const o = await openPage(FILE, { ls: { abutcalc_v1_autosave: mk(f) } }); await ready(o.p); await o.p.waitForTimeout(500);
-    const r = await o.p.evaluate(() => { recalcAll(); return { m: S.seismic.hEQmode, z: LAST_R.seis.zEQ, opts: [...document.querySelectorAll('select[data-path="seismic.hEQmode"] option')].map(x => x.value) }; });
-    check(r.m === want && near(r.z, z, 1e-9), `saved (${name}): keeps "${r.m}", ΔP_AE at ${r.z.toFixed(3)} ft`);
+    const r = await o.p.evaluate(() => { recalcAll(); return { m: S.seismic.hEQmode, z: LAST_R.seis.zEQ, PAE: LAST_R.seis.PAE, PA: LAST_R.seis.PaSumA, dPAE: LAST_R.seis.dPAE, opts: [...document.querySelectorAll('select[data-path="seismic.hEQmode"] option')].map(x => x.value) }; });
+    const zw = typeof z === 'function' ? z(r) : z;
+    check(r.m === want && near(r.z, zw, 1e-9), `saved (${name}): keeps "${r.m}", ΔP_AE at ${r.z.toFixed(3)} ft`);
     if (want === 'ratio') check(r.opts.includes('ratio'), `saved (${name}): the earlier option is listed`);
     allErrs.push(...o.errs); await o.b.close();
   }
