@@ -437,6 +437,8 @@ One girder's line-girder analysis results from GirderDetail (Steel Bridge Design
 
 Pile Designer's results for the piles the abutment calculator sent on `foundationLoads` (§4.6), back to the abutment: geotechnical and structural resistance, depth to fixity, and per load case the p-y results; for an integral abutment the integral-mode results. Cross-tool connection in one PR (CLAUDE.md §7 exception): fixlog/Pile Designer.md and fixlog/abutment_calculator.md PXR.
 
+*Held while inputs are invalid (added 2026-11-12, PDNB).* While Pile Designer lists an input error (a negative, or zero where zero is meaningless, value in a dimension, strength, E, φ, K or similar field), "Send pile results" does not open the preview or publish: it says the results are withheld until the inputs are corrected. Valid inputs send exactly as before; the payload and schema are unchanged.
+
 ```js
 { ...envelope, _schema:"bridge-pile-results", schemaVersion:1, producer:"Pile Designer", producerFile:"Pile Designer.html",
   project:{ name:<Pile Designer project name>, bridgeId },
