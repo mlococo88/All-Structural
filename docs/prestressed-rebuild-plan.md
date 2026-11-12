@@ -1,3 +1,5 @@
+> **Superseded (engineer, 2026-11-12):** replaced by [`docs/ps-bridge-plan.md`](ps-bridge-plan.md) (`apps/ps-bridge/`, decisions PS-1 to PS-14). Kept for its §9 (saved data, "From old app") and §9.4 (hand-off table), which the new plan reuses.
+
 # Prestressed Bridge Design: rebuild plan (draft for the engineer, 2026-11-02)
 
 **Planning only.** This document changes no tool, formula, test or saved data. Nothing below starts until you approve it (§13, Q14).
