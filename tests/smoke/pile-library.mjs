@@ -44,7 +44,13 @@ async function run(file) {
 }
 // STDS-P (2026-11-06): the Project tab block (#pdPrjBlock: the new "Save and open" card replaced "Project file" and "Project library") and the
 // header buttons are left out of the A vs B text: the page's results (the rest of the page) must be identical
-const text = p => p.evaluate(() => { const c = document.body.cloneNode(true); c.querySelectorAll('[data-sp],script,style,#pdPrjBlock,.pd-hdrBtns').forEach(x => x.remove()); return c.innerText.replace(/saved to browser|auto-save on/g, '').replace(/Project fileSave \/ load \.json · auto-saves to this browser.Project libraryStored in this browser \(IndexedDB\)./, '')   /* main's two collapsed panels (STDS-P: replaced by the card) */.replace(/\s+/g, ' '); });
+// PDRL (2026-11-12, engineer decision): the Module 02 inputs and the L_f override moved from the output column to the input rail. While A
+// predates it (A's file has no "PDRL (2026-11-12"), B's new rail blocks (the "Lateral analysis" panel, the Buckling panel's override row)
+// are left out of B's text; every other character must still be identical. With A at or after PDRL: exact.
+let PDRL_MASK = false;
+const text = p => p.evaluate(mask => { const c = document.body.cloneNode(true); c.querySelectorAll('[data-sp],script,style,#pdPrjBlock,.pd-hdrBtns').forEach(x => x.remove());
+  if (mask) { c.querySelectorAll('aside.input-rail .panel').forEach(x => { if (((x.querySelector('.panel-title') || {}).textContent || '') === 'Lateral analysis') x.remove(); });
+    c.querySelectorAll('aside.input-rail label').forEach(x => { if (/^Override the fixity depth L/.test(x.textContent)) x.parentElement.remove(); }); } return c.innerText.replace(/saved to browser|auto-save on/g, '').replace(/Project fileSave \/ load \.json · auto-saves to this browser.Project libraryStored in this browser \(IndexedDB\)./, '')   /* main's two collapsed panels (STDS-P: replaced by the card) */.replace(/\s+/g, ' '); }, PDRL_MASK);
 // PDLB (2026-11-10, engineer): L_b,req = STL/(phi_geo q_b), the pile self-weight no longer added. While A predates it (A's file has no
 // "PDLB (2026-11-10"), the L_b,req values, the comparison sign and status of "L_b,eff >= L_b,req", its Summary row (D/C, PASS/FAIL)
 // and the PDLB note text are masked in both A and B; every other character must still be identical. With A at or after PDLB: exact.
@@ -67,6 +73,7 @@ const same = (a, b, m) => { const eq = JSON.stringify(a) === JSON.stringify(b); 
 
 console.log(`pile-library: ${FILE}  A = ${REF} (${sha})  B = working tree`);
 PDLB_MASK = !fs.readFileSync(path.join(ADIR, FILE), 'utf8').includes('PDLB (2026-11-10');
+PDRL_MASK = !fs.readFileSync(path.join(ADIR, FILE), 'utf8').includes('PDRL (2026-11-12');
 if (PDLB_MASK) console.log('  (A predates PDLB: L_b,req values, its check and the PDLB note masked in the A vs B text)');
 const A = await run(path.join(ADIR, FILE)), B = await run(path.join(REPO, FILE));
 const a0 = await state(A.p), b0 = await state(B.p); same(a0, b0, 'on load: page text and autosaved inputs identical');

@@ -2014,10 +2014,12 @@ const blankInputsMsg = keys => "blank or invalid input" + (keys.length > 1 ? "s 
    input error: the field is marked (red border; Field also prints the rule), the error is listed in the input-error banner, and the
    results (check summary column, output tabs, status, Report, the pile results hand-off) are withheld until it is fixed. The stored
    value is never changed: a saved project holding such a value opens and shows the error. Rule "gt": > 0; "ge": >= 0. A blank (NaN)
-   or unset (null) value is not checked here (F54 reports blanks). Fields located in the output column (Module 02 / Buckling
-   module inputs) are not checked: withholding the output would hide the field. `when` mirrors where the field is shown. */
+   or unset (null) value is not checked here (F54 reports blanks). `when` mirrors where the field is shown. PDRL (2026-11-12,
+   engineer decision): the Module 02 / Buckling-module inputs that sat in the output column (withholding the output would have
+   hidden them) moved to the input rail and are checked here too (Lateral analysis panel; Buckling panel L_f override). */
 const pdMP = I => I.pileType !== "hpile" && I.pileType !== "iab", pdHP = I => I.pileType === "hpile", pdIAB = I => I.pileType === "iab";
 const pdGrp = I => !pdIAB(I) && !!I.groupEnable;
+const pdLatSrc = (I, src) => !pdIAB(I) && I.lateralSource === src;   // PDRL: the Module 02 lateral basis whose inputs the rail shows
 const PD_NEG_RULES = [
   // [key, where › label, unit, rule, when(I, r)]
   ["solverLembed", "Pile geometry › Embedded length", "ft", "gt", pdHP],
@@ -2095,7 +2097,15 @@ const PD_NEG_RULES = [
   ["iabEmbed", "Integral abutment › Pile embedment into cap", "in", "ge", pdIAB],
   ["iabSpacing", "Integral abutment › Pile spacing c/c", "ft", "ge", pdIAB],
   ["iabScourDepth", "Integral abutment › Tier 2 › Scour/peat depth", "ft", "ge", I => pdIAB(I) && !!I.iabTier2],
-  ["iabScourCheck", "Integral abutment › Tier 2 › Check-flood scour depth", "ft", "ge", I => pdIAB(I) && !!I.iabTier2]
+  ["iabScourCheck", "Integral abutment › Tier 2 › Check-flood scour depth", "ft", "ge", I => pdIAB(I) && !!I.iabTier2],
+  // PDRL (2026-11-12): moved from the output column to the input rail
+  ["pyPM", "Lateral analysis › p-multiplier", "", "gt", I => pdLatSrc(I, "py") && !groupPmAutoOn(I)],
+  ["pyYM", "Lateral analysis › y-multiplier", "", "gt", I => pdLatSrc(I, "py")],
+  ["pyCurveDepth", "Lateral analysis › p-y curve probe depth", "ft", "ge", I => pdLatSrc(I, "py")],
+  ["Mmax", "Lateral analysis › Maximum moment Mmax (LPILE)", "kip·ft", "ge", I => pdLatSrc(I, "input")],
+  ["solverNh", "Lateral analysis › n_h", "kip/ft³", "gt", I => pdLatSrc(I, "solver") && !I.solverLayered && I.solverSoil === "cohesionless"],
+  ["solverKh", "Lateral analysis › k_h", "kip/ft²", "gt", I => pdLatSrc(I, "solver") && !I.solverLayered && I.solverSoil !== "cohesionless"],
+  ["LfBuckle", "Buckling › Manual fixity depth L_f", "ft", "ge", (I, r) => !pdIAB(I) && !!(r && r.buckling && r.buckling.enable && r.buckling.lfOverrideActive)]
 ];
 // soil layers (Soil profile tab): the cells shown for the layer's type; rule >= 0
 const pdSoilShown = I => !pdIAB(I) || (!!I.iabTier2 && I.iabNlSoilSource === "layered") || !!I.iabGeoOn;
@@ -2118,6 +2128,10 @@ function pdNegCheck(I, r) {
   PD_NEG_RULES.forEach(([k, label, unit, rule, when]) => { if (when(I, r) && bad(I[k], rule)) out.push({ ck: k, label, unit, rule, v: I[k] }); });
   if (Array.isArray(I.soilLayers)) I.soilLayers.forEach((ly, i) => { if (ly && typeof ly === "object") pdNegLayerKeys(ly, I, i).forEach(([k, l, u]) => {
     if (bad(ly[k], "ge")) out.push({ ck: "soilLayers." + i + "." + k, label: "Soil profile › layer " + (i + 1) + " " + l, unit: u, rule: "ge", v: ly[k] }); }); });
+  // PDRL: linear-estimate layer table (Lateral analysis panel): n_h (sand) or k_h (other types), the cell shown; rule >= 0
+  if (pdLatSrc(I, "solver") && I.solverLayered && Array.isArray(I.soilLayers)) I.soilLayers.forEach((ly, i) => { if (ly && typeof ly === "object") {
+    const k = ly.type === "sand" ? "nh" : "kh";
+    if (bad(ly[k], "ge")) out.push({ ck: "soilLayers." + i + "." + k, label: "Lateral analysis › linear-estimate layer " + (i + 1) + " " + (k === "nh" ? "n_h" : "k_h"), unit: k === "nh" ? "kip/ft³" : "kip/ft²", rule: "ge", v: ly[k] }); } });
   return out;
 }
 const pdNegRuleTxt = rule => rule === "gt" ? "must be greater than 0" : "must not be negative";
@@ -15568,7 +15582,7 @@ function CyclicInfoModal({ open, onClose, onRevert }) {
      4. factored axial     Pn via the AASHTO column curve -> phi_c*Pn >= STL
    The SELECTED tab governs the module status, dashboard, and report.
 ==================================================================== */
-function BucklingTabs({ b, I, set, pcr, computePcr }) {
+function BucklingTabs({ b, I, set, pcr, computePcr, setRailTab }) {
   if (!b) return null;
   const TABS = [
     { k: "davisson", label: "1 · Davisson", sub: "closed form" },
@@ -15868,28 +15882,17 @@ function BucklingTabs({ b, I, set, pcr, computePcr }) {
             closer(b.methods.pcrit))),
 
     // ---------- manual override (tabs 1-2 only) ----------
+    // PDRL: the override is set in the input rail (Buckling panel); shown here read-only with a link
     tab !== "pcrit" && /*#__PURE__*/React.createElement("div", { className: "mt-3 pt-2 border-t border-slate-200" },
-      /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-1.5 text-[9.5px] text-slate-600" },
-        /*#__PURE__*/React.createElement("input", {
-          type: "checkbox", checked: !!I.bklLfOverride,
-          onChange: e => {
-            if (e.target.checked && b.methods[tab] && !I.LfBuckle) set('LfBuckle', parseFloat(b.methods[tab].Lf.toFixed(1)));
-            set('bklLfOverride', e.target.checked);
-          }
-        }),
-        "Override the fixity depth manually"),
+      /*#__PURE__*/React.createElement(InputsUsed, { tab: "checks", setTab: setRailTab, panelTitle: "Buckling",
+        items: [["manual fixity-depth override", b.lfOverrideActive ? "on, L\u1da0 = " + fmt(I.LfBuckle, 1) : "off", b.lfOverrideActive ? "ft" : ""]] }),
       b.lfOverrideActive && /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-2 mt-1" },
-        /*#__PURE__*/React.createElement("span", { className: "text-[9.5px] text-slate-500" }, "L\u1da0 ="),
-        /*#__PURE__*/React.createElement(PdNumIn, {
-          type: "number", step: "0.5", className: "w-20 text-[10px] border border-slate-300 rounded-sm px-1 py-0.5",
-          value: I.LfBuckle, onChange: e => set('LfBuckle', parseFloat(e.target.value) || 0)
-        }),
         /*#__PURE__*/React.createElement("span", { className: "text-[9px]", style: { color: "#8a5a1f" } },
           "\u26a0 override active \u2014 the computed ", tab === "davisson" ? "Davisson" : "deflection-matched",
           " value (", b.methods[tab] ? fmt(b.methods[tab].Lf, 1) : "\u2014", " ft) is not being used."))));
 }
 
-function PyPanel({ I, set, pyRes, r, EI, EI_composite_kipin2, EI_aashto_kipin2, EI_aashto_Cp, EI_uncased_kipin2, casingTipBelowMudline, pcr, computePcr, pmCurve, caseRes, setLoad, openSoilModal }) {
+function PyPanel({ I, set, pyRes, r, EI, EI_composite_kipin2, EI_aashto_kipin2, EI_aashto_Cp, EI_uncased_kipin2, casingTipBelowMudline, pcr, computePcr, pmCurve, caseRes, setLoad, openSoilModal, setRailTab }) {
   const ok = pyRes && pyRes.ok;
   const [lpd, setLpd] = React.useState(null);        // parsed .lp12d {data, warn} | {err}
   const [lpdCase, setLpdCase] = React.useState(0);
@@ -16211,10 +16214,9 @@ function PyPanel({ I, set, pyRes, r, EI, EI_composite_kipin2, EI_aashto_kipin2, 
           /*#__PURE__*/React.createElement(Field, { label: "Lateral load", unit: "kip", sub: "⇐ active load case", value: I.Plat, onChange: v => setLoad('Plat', v) }),
           /*#__PURE__*/React.createElement(GeoMirror, { label: "Stickup", val: I.solverFree, unit: "ft" }),
           /*#__PURE__*/React.createElement(Field, { label: "Head moment", unit: "kip\u00b7ft", sub: I.solverHead === "fixed" ? "ignored (fixed head)" : "⇐ active load case", value: I.pyMhead, onChange: v => setLoad('Mhead', v) }),
-          groupPmAutoOn(I)
-            ? /*#__PURE__*/React.createElement(Field, { label: "p-multiplier", sub: "not used \u2014 per row: row f\u2098 \u00d7 modifier (Module 11)", value: I.pyPM, disabled: true, onChange: () => {} })
-            : /*#__PURE__*/React.createElement(Field, { label: "p-multiplier", sub: "group fm \u00d7 curve", value: I.pyPM, onChange: v => set('pyPM', v) }),
-          /*#__PURE__*/React.createElement(Field, { label: "y-multiplier", value: I.pyYM, onChange: v => set('pyYM', v) })),
+          /*#__PURE__*/React.createElement("div", { className: "col-span-2" },   // PDRL: p- / y-multiplier are entered in the input rail
+            /*#__PURE__*/React.createElement(InputsUsed, { tab: "soil", setTab: setRailTab, panelTitle: "Lateral analysis",
+              items: [["p-multiplier", groupPmAutoOn(I) ? "not used (per row: row f\u2098 \u00d7 modifier, Module 11)" : fmt(I.pyPM, 2), ""], ["y-multiplier", fmt(I.pyYM, 2), ""]] }))),
         /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 leading-snug mb-2" },
           "Axial thrust Q = STL = ", fmt(I.STL, 0), " kip is carried in the governing equation (P-\u0394 native). Cyclic Reese A/B factors are uncalibrated placeholders \u2014 the static path is the benchmarked one.",
           I.solverFree < 0 ? /*#__PURE__*/React.createElement("span", { style: { color: "#8a5a1f" } }, " Head is ", fmt(Math.abs(I.solverFree), 1), " ft below grade (buried cap): soil credited from the head down; cap passive resistance not included \u2014 reduce top-layer f\u2098 if backfill is non-structural.") : ""),
@@ -16297,6 +16299,7 @@ function LayerTable({
   }, /*#__PURE__*/React.createElement(PdNumIn, {
     type: "number",
     value: L.topDepth,
+    ck: "soilLayers." + L._i + ".topDepth",
     onChange: e => update(L._i, {
       topDepth: parseFloat(e.target.value) || 0
     }),
@@ -16315,6 +16318,7 @@ function LayerTable({
   }, "clay (k_h)")), L.type === "sand" ? /*#__PURE__*/React.createElement(PdNumIn, {
     type: "number",
     value: L.nh,
+    ck: "soilLayers." + L._i + ".nh",
     onChange: e => update(L._i, {
       nh: parseFloat(e.target.value) || 0
     }),
@@ -16323,6 +16327,7 @@ function LayerTable({
   }) : /*#__PURE__*/React.createElement(PdNumIn, {
     type: "number",
     value: L.kh,
+    ck: "soilLayers." + L._i + ".kh",
     onChange: e => update(L._i, {
       kh: parseFloat(e.target.value) || 0
     }),
@@ -19156,7 +19161,7 @@ function App() {
     "data-rtab-fixed": "checks",
     onClick: () => gotoLoadsTab(setRailTab, "group"),
     className: "w-full mt-2 font-mono-tech text-[11px] tracking-wider py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition flex items-center justify-center gap-1.5"
-  }, "▦ PILE GROUP \u2192 Loads & group tab", (cases[activeIdx] && cases[activeIdx]._fromGroup) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--accent)" } }, "GROUP CASE ACTIVE") : (groupEnabled && groupCase) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, "APPLIED") : null), /*#__PURE__*/React.createElement("div", { className: "mt-3 pt-2 border-t border-slate-200" }, /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mb-1" }, "Head condition"), /*#__PURE__*/React.createElement("div", { className: "flex gap-2 text-[11px] font-mono-tech" }, [["free", "free / pinned"], ["fixed", "fixed / capped"]].map(([v, l]) => /*#__PURE__*/React.createElement("button", { key: v, onClick: () => set('solverHead', v), className: "flex-1 px-2 py-1 rounded-sm border " + (I.solverHead === v ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50") }, l))), I.solverHead !== "fixed" && /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1.5 mt-1.5" }, /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500 font-mono-tech" }, "K\u03b8"), /*#__PURE__*/React.createElement(PdNumIn, { type: "number", "aria-label": "Head rotational stiffness K-theta, kip-in per radian", ck: "pyKrot", value: I.pyKrot || 0, onChange: e => set('pyKrot', parseFloat(e.target.value) || 0), className: "w-24 font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" }), /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-mono-tech" }, "kip\u00b7in/rad \u00b7 0 = pinned")), /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug pdNL" }, pdNL(null, [["Free:", "head rotates (flagpole/pinned), or is partially restrained by Kθ."], ["Fixed:", "rotation fully restrained by a rigid cap connection."], ["Drives", "the p-y boundary condition, the deflection-matched buckling basis, and the cap-embedment check."]])), /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mt-2.5 mb-1" }, "p-y loading criterion"), /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-1.5 text-[10px] text-slate-600 font-mono-tech" }, /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: !!I.pyCyclic, onChange: e => { const on = e.target.checked; set('pyCyclic', on); if (on) setCycInfoOpen(true); } }), "cyclic p-y curves"), /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, !!I.pyCyclic ? [/*#__PURE__*/React.createElement("b", { key: "b", style: { color: "#8a5a1f" } }, "\u26a0 Cyclic active. "), "Models soil-resistance degradation under repeated large-amplitude reversal (offshore wave, seismic). Static is the usual basis for bridge substructure. ", /*#__PURE__*/React.createElement("button", { key: "d", onClick: () => setCycInfoOpen(true), className: "underline font-mono-tech" }, "details")] : "Unchecked = static (the usual basis for bridge substructure lateral analysis). Cyclic models soil degradation under repeated reversal \u2014 an offshore/seismic criterion."), /*#__PURE__*/React.createElement(CyclicInfoModal, { open: cycInfoOpen, onClose: () => setCycInfoOpen(false), onRevert: () => { set('pyCyclic', false); setCycInfoOpen(false); } }), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mt-2.5 mb-1" }, "Large head-deflection warning"), /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1.5" }, /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500 font-mono-tech" }, "y\u2080 >"), /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: 0.05, min: 0, "aria-label": "Large head-deflection warning, multiple of the pile width D", ck: "pyDeflWarnD", value: (typeof I.pyDeflWarnD === "number" && isFinite(I.pyDeflWarnD)) ? I.pyDeflWarnD : "", onChange: e => set('pyDeflWarnD', e.target.value === "" ? NaN : parseFloat(e.target.value)), className: "w-16 font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" }), /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-mono-tech" }, "\u00d7 D \u00b7 0 = off \u00b7 blank = 0.25")), /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug pdNL" }, pdNL("Amber warning, not a check.", [["Shown", "when the p-y head deflection |y₀| exceeds this multiple of the pile width D (default 0.25 D), for the active case and for each case of the envelope."], ["No status change:", "nothing becomes NG because of it."], ["Service deflection limit", "(Loads & group tab): separate."]])))), /*#__PURE__*/React.createElement("button", { onClick: () => gotoSoilProfileTab(setRailTab), className: "w-full mt-2 font-mono-tech text-[11px] tracking-wider py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition flex items-center justify-center gap-1.5" }, "\u2261 SOIL PROFILE", (Array.isArray(I.soilLayers) && I.soilLayers.length) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, I.soilLayers.length, " LAYER", I.soilLayers.length > 1 ? "S" : "") : /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm", style: { background: "#e2e8f0", color: "#64748b" } }, "UNIFORM")), /*#__PURE__*/React.createElement("div", { className: "mt-1 text-[8.5px] text-slate-400 font-mono-tech leading-snug" }, (Array.isArray(I.soilLayers) && I.soilLayers.length) ? ["Drives the p-y lateral analysis and the Davisson fixity depth (Module 10). Top layer: ", (() => { const t = [...I.soilLayers].sort((a, b) => (a.topDepth || 0) - (b.topDepth || 0))[0]; return t.type === "sand" ? "sand n\u2095=" + fmt(t.nh, 0) : (t.type === "stiffclay" ? "stiff clay" : t.type === "weakrock" ? "weak rock" : "clay") + " k\u2095=" + fmt(t.kh, 0); })(), "."] : "No layered profile \u2014 the analysis uses the uniform soil set in Module 02."), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
+  }, "▦ PILE GROUP \u2192 Loads & group tab", (cases[activeIdx] && cases[activeIdx]._fromGroup) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--accent)" } }, "GROUP CASE ACTIVE") : (groupEnabled && groupCase) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, "APPLIED") : null), /*#__PURE__*/React.createElement("div", { className: "mt-3 pt-2 border-t border-slate-200" }, /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mb-1" }, "Head condition"), /*#__PURE__*/React.createElement("div", { className: "flex gap-2 text-[11px] font-mono-tech" }, [["free", "free / pinned"], ["fixed", "fixed / capped"]].map(([v, l]) => /*#__PURE__*/React.createElement("button", { key: v, onClick: () => set('solverHead', v), className: "flex-1 px-2 py-1 rounded-sm border " + (I.solverHead === v ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50") }, l))), I.solverHead !== "fixed" && /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1.5 mt-1.5" }, /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500 font-mono-tech" }, "K\u03b8"), /*#__PURE__*/React.createElement(PdNumIn, { type: "number", "aria-label": "Head rotational stiffness K-theta, kip-in per radian", ck: "pyKrot", value: I.pyKrot || 0, onChange: e => set('pyKrot', parseFloat(e.target.value) || 0), className: "w-24 font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" }), /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-mono-tech" }, "kip\u00b7in/rad \u00b7 0 = pinned")), /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug pdNL" }, pdNL(null, [["Free:", "head rotates (flagpole/pinned), or is partially restrained by Kθ."], ["Fixed:", "rotation fully restrained by a rigid cap connection."], ["Drives", "the p-y boundary condition, the deflection-matched buckling basis, and the cap-embedment check."]])), /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mt-2.5 mb-1" }, "p-y loading criterion"), /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-1.5 text-[10px] text-slate-600 font-mono-tech" }, /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: !!I.pyCyclic, onChange: e => { const on = e.target.checked; set('pyCyclic', on); if (on) setCycInfoOpen(true); } }), "cyclic p-y curves"), /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, !!I.pyCyclic ? [/*#__PURE__*/React.createElement("b", { key: "b", style: { color: "#8a5a1f" } }, "\u26a0 Cyclic active. "), "Models soil-resistance degradation under repeated large-amplitude reversal (offshore wave, seismic). Static is the usual basis for bridge substructure. ", /*#__PURE__*/React.createElement("button", { key: "d", onClick: () => setCycInfoOpen(true), className: "underline font-mono-tech" }, "details")] : "Unchecked = static (the usual basis for bridge substructure lateral analysis). Cyclic models soil degradation under repeated reversal \u2014 an offshore/seismic criterion."), /*#__PURE__*/React.createElement(CyclicInfoModal, { open: cycInfoOpen, onClose: () => setCycInfoOpen(false), onRevert: () => { set('pyCyclic', false); setCycInfoOpen(false); } }), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mt-2.5 mb-1" }, "Large head-deflection warning"), /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1.5" }, /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500 font-mono-tech" }, "y\u2080 >"), /*#__PURE__*/React.createElement(PdNumIn, { type: "number", step: 0.05, min: 0, "aria-label": "Large head-deflection warning, multiple of the pile width D", ck: "pyDeflWarnD", value: (typeof I.pyDeflWarnD === "number" && isFinite(I.pyDeflWarnD)) ? I.pyDeflWarnD : "", onChange: e => set('pyDeflWarnD', e.target.value === "" ? NaN : parseFloat(e.target.value)), className: "w-16 font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" }), /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-mono-tech" }, "\u00d7 D \u00b7 0 = off \u00b7 blank = 0.25")), /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug pdNL" }, pdNL("Amber warning, not a check.", [["Shown", "when the p-y head deflection |y₀| exceeds this multiple of the pile width D (default 0.25 D), for the active case and for each case of the envelope."], ["No status change:", "nothing becomes NG because of it."], ["Service deflection limit", "(Loads & group tab): separate."]])))), /*#__PURE__*/React.createElement("button", { onClick: () => gotoSoilProfileTab(setRailTab), className: "w-full mt-2 font-mono-tech text-[11px] tracking-wider py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition flex items-center justify-center gap-1.5" }, "\u2261 SOIL PROFILE", (Array.isArray(I.soilLayers) && I.soilLayers.length) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, I.soilLayers.length, " LAYER", I.soilLayers.length > 1 ? "S" : "") : /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm", style: { background: "#e2e8f0", color: "#64748b" } }, "UNIFORM")), /*#__PURE__*/React.createElement("div", { className: "mt-1 text-[8.5px] text-slate-400 font-mono-tech leading-snug" }, (Array.isArray(I.soilLayers) && I.soilLayers.length) ? ["Drives the p-y lateral analysis and the Davisson fixity depth (Module 10). Top layer: ", (() => { const t = [...I.soilLayers].sort((a, b) => (a.topDepth || 0) - (b.topDepth || 0))[0]; return t.type === "sand" ? "sand n\u2095=" + fmt(t.nh, 0) : (t.type === "stiffclay" ? "stiff clay" : t.type === "weakrock" ? "weak rock" : "clay") + " k\u2095=" + fmt(t.kh, 0); })(), "."] : "No layered profile \u2014 the analysis uses the uniform soil set in the Lateral analysis panel (linear estimate)."), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
     title: "Loads",
     sub: "active case · edit in the Loads & group tab"
   }, (() => {
@@ -19406,7 +19411,7 @@ function App() {
       className: "w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition" },
       /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[10px] tracking-wider" }, "◈ SOIL PROFILE \u2192 Soil profile tab"),
       /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[9px] text-slate-500" }, (Array.isArray(I.soilLayers) ? I.soilLayers.length : 0), " layer", (Array.isArray(I.soilLayers) && I.soilLayers.length === 1) ? "" : "s", " · edit")),
-    /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, "Layered p-y soil model used by the lateral analysis (Module 02) and the buckling fixity estimate. Same workspace as the button in Module 02."))), /*#__PURE__*/(I.pileType === "micropile") && /*#__PURE__*/React.createElement(Panel, {
+    /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, "Layered p-y soil model used by the lateral analysis (Module 02) and the buckling fixity estimate. Same workspace as the button in Module 02."))), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(PdLatInPanel, { I: I, set: set }), /*#__PURE__*/(I.pileType === "micropile") && /*#__PURE__*/React.createElement(Panel, {
     title: "Resistance Factors"
   },
   /*#__PURE__*/React.createElement("div", { className: "mb-2 p-2 rounded-sm text-[9px] leading-snug pdNL", style: { background: "rgba(138,90,31,0.09)", color: "#7a4d15", border: "1px solid rgba(138,90,31,0.28)" } }, pdNL("AASHTO φ presets (provisional).", [
@@ -19481,6 +19486,28 @@ function App() {
       onChange: v => set('bklCapMult', isFinite(v) && v > 0 ? v : 10) }),
     /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 leading-snug self-end pb-1" },
       "L\u1d64 = stickup ", fmt(r.buckling.stickPos, 1), " ft + ", r.buckling.scourBkl > 0 ? "max(added, design scour " + fmt(r.buckling.scourBkl, 1) + " ft)" : "added", " = ", /*#__PURE__*/React.createElement("b", null, fmt(r.buckling.Lu_free, 1), " ft"))),   // PDA-D12
+    // PDRL (2026-11-12): manual fixity-depth override, moved from Module 10 (method tabs 1-2 only; same keys and handlers)
+    r.buckling.enable && r.buckling.bklTab !== "pcrit" && /*#__PURE__*/React.createElement("div", { className: "mt-3 pt-2 border-t border-slate-200" },
+      /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-1.5 text-[11px] text-slate-600" },
+        /*#__PURE__*/React.createElement("input", {
+          type: "checkbox", checked: !!I.bklLfOverride,
+          onChange: e => {
+            const b = r.buckling, tab = b.bklTab;
+            if (e.target.checked && b.methods[tab] && !I.LfBuckle) set('LfBuckle', parseFloat(b.methods[tab].Lf.toFixed(1)));
+            set('bklLfOverride', e.target.checked);
+          }
+        }),
+        "Override the fixity depth L\u1da0 manually (method ", r.buckling.bklTab === "deflmatch" ? "2 \u00b7 deflection-matched" : "1 \u00b7 Davisson", ", Module 10)"),
+      r.buckling.lfOverrideActive && /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-2 mt-1" },
+        /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500" }, "L\u1da0 ="),
+        /*#__PURE__*/React.createElement(PdNumIn, {
+          type: "number", step: "0.5", "aria-label": "Manual fixity depth override, ft", ck: "LfBuckle", className: "w-20 text-[11px] border border-slate-300 rounded-sm px-1 py-0.5",
+          value: I.LfBuckle, onChange: e => set('LfBuckle', parseFloat(e.target.value) || 0)
+        }),
+        /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500" }, "ft"),
+        /*#__PURE__*/React.createElement("span", { className: "text-[9px]", style: { color: "#8a5a1f" } },
+          "override active \u2014 the computed value (", r.buckling.methods[r.buckling.bklTab] ? fmt(r.buckling.methods[r.buckling.bklTab].Lf, 1) : "\u2014", " ft) is not used")),
+      ),
     r.buckling.enable && /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mt-2" },
       "The ramp's real endpoint is non-convergence; the cap only bounds runtime. Truncating low is unconservative \u2014 on LPILE Ex. 23 a 2\u00d7 cap returned +25.9% over the true P\u1d04\u1d63, while R\u00b2 improved.")), /*#__PURE__*/(I.pileType === "micropile") && /*#__PURE__*/React.createElement(Panel, {
     title: "Uplift",
@@ -20429,7 +20456,7 @@ function App() {
     EI: EI, EI_composite_kipin2: EI_composite_kipin2, EI_aashto_kipin2: EI_aashto_kipin2,
     EI_aashto_Cp: EI_aashto_Cp, EI_uncased_kipin2: EI_uncased_kipin2,
     casingTipBelowMudline: casingTipBelowMudline
-    , pcr: pcr, computePcr: computePcr, pmCurve: pmCurve, caseRes: caseRes, setLoad: setCaseLoad, openSoilModal: () => gotoSoilProfileTab(setRailTab)
+    , pcr: pcr, computePcr: computePcr, pmCurve: pmCurve, caseRes: caseRes, setLoad: setCaseLoad, openSoilModal: () => gotoSoilProfileTab(setRailTab), setRailTab: setRailTab
   }) : I.lateralSource === "input" ? /*#__PURE__*/React.createElement("div", null,
   /*#__PURE__*/React.createElement("div", {
     className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-2"
@@ -20438,15 +20465,10 @@ function App() {
     className: "grid md:grid-cols-[260px_1fr] gap-5"
   }, /*#__PURE__*/React.createElement("div", {
     className: "max-w-xs"
-  }, /*#__PURE__*/React.createElement(Field, {
-    label: "Maximum moment, Mmax",
-    sub: "from external LPILE run",
-    unit: "kip·ft",
-    value: I.Mmax,
-    onChange: v => set('Mmax', v)
-  }), /*#__PURE__*/React.createElement("p", {
+  }, /*#__PURE__*/React.createElement(InputsUsed, { tab: "soil", setTab: setRailTab, panelTitle: "Lateral analysis",   // PDRL: Mmax is entered in the input rail
+    items: [["Maximum moment, Mmax", fmt(I.Mmax, 1), "kip\u00b7ft"]] }), /*#__PURE__*/React.createElement("p", {
     className: "text-[10px] text-slate-400 mt-2 leading-snug"
-  }, "Used downstream in flexure & combined checks. Enter manually, or import an LPILE output file →")), /*#__PURE__*/React.createElement("div", {
+  }, "Used downstream in flexure & combined checks. Enter it in the input rail (Lateral analysis), or import an LPILE output file →")), /*#__PURE__*/React.createElement("div", {
     className: "rounded-sm border border-slate-200 p-3"
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex items-center justify-between mb-2"
@@ -20653,106 +20675,10 @@ function App() {
     className: "text-[10px] text-slate-400 leading-tight mb-1"
   }, "= Plat (Loads panel)"), /*#__PURE__*/React.createElement("div", {
     className: "mt-1 w-full font-mono-tech text-[13px] px-2 py-1.5 bg-slate-100 border border-slate-200 rounded-sm text-slate-600"
-  }, fmt(I.Plat, 1))), /*#__PURE__*/React.createElement(GeoMirror, { label: "Free length e", val: I.solverFree, unit: "ft" }), /*#__PURE__*/React.createElement("div", {
-    className: "col-span-2"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "text-[12px] text-[var(--blueprint)] font-medium"
-  }, "Soil model"), /*#__PURE__*/React.createElement("div", {
-    className: "flex gap-2 mt-1 text-[11px] font-mono-tech"
-  }, [["cohesionless", "sand (n_h)"], ["cohesive", "clay (k_h)"]].map(([v, l]) => /*#__PURE__*/React.createElement("button", {
-    key: v,
-    onClick: () => set('solverSoil', v),
-    className: "px-2 py-1 rounded-sm border " + (I.solverSoil === v ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300"),
-    disabled: I.solverLayered,
-    style: I.solverLayered ? {
-      opacity: 0.4
-    } : undefined
-  }, l)))), /*#__PURE__*/React.createElement("div", {
-    className: "col-span-2 flex items-center justify-between rounded-sm border border-slate-200 px-2.5 py-2",
-    style: {
-      background: "rgba(20,48,74,0.03)"
-    }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
-    className: "text-[11px] font-mono-tech text-[var(--blueprint)]"
-  }, "Layered soil profile"), /*#__PURE__*/React.createElement("p", {
-    className: "text-[9px] text-slate-400 leading-snug"
-  }, "define 2–3 layers by depth instead of one uniform soil")), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      const turningOn = !I.solverLayered;
-      if (turningOn && (!I.soilLayers || I.soilLayers.length === 0)) {
-        // seed from current single-value soil
-        set('soilLayers', [{
-          topDepth: 0,
-          type: I.solverSoil === "cohesionless" ? "sand" : "clay",
-          nh: I.solverNh,
-          kh: I.solverKh
-        }]);
-      }
-      set('solverLayered', turningOn);
-    },
-    className: "px-2.5 py-1 rounded-sm border text-[11px] font-mono-tech " + (I.solverLayered ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300")
-  }, I.solverLayered ? "ON" : "OFF")), I.solverLayered && /*#__PURE__*/React.createElement("div", {
-    className: "col-span-2"
-  }, /*#__PURE__*/React.createElement(LayerTable, {
-    I: I,
-    set: set
-  })), !I.solverLayered && /*#__PURE__*/React.createElement("div", {
-    className: "col-span-2"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "text-[12px] text-[var(--blueprint)] font-medium"
-  }, "Soil type"), /*#__PURE__*/React.createElement("span", {
-    className: "text-[10px] text-slate-400 ml-2"
-  }, "fills the value below — still editable"), I.solverSoil === "cohesionless" ? /*#__PURE__*/React.createElement("div", {
-    className: "flex flex-wrap items-center gap-2 mt-1"
-  }, /*#__PURE__*/React.createElement("select", {
-    value: "",
-    onChange: e => {
-      const p = SAND_NH_PRESETS.find(x => x.key === e.target.value);
-      if (p) set('solverNh', I.solverGWT === "below" ? p.below : p.above);
-    },
-    className: "font-mono-tech text-[11px] px-2 py-1.5 rounded-sm border border-slate-300 bg-white flex-1 min-w-[140px]"
-  }, /*#__PURE__*/React.createElement("option", {
-    value: "",
-    disabled: true
-  }, "Select sand density…"), SAND_NH_PRESETS.map(p => /*#__PURE__*/React.createElement("option", {
-    key: p.key,
-    value: p.key
-  }, p.label, " — n_h ", I.solverGWT === "below" ? p.below : p.above))), /*#__PURE__*/React.createElement("div", {
-    className: "flex gap-1 text-[10px] font-mono-tech"
-  }, [["above", "above WT"], ["below", "below WT"]].map(([v, l]) => /*#__PURE__*/React.createElement("button", {
-    key: v,
-    onClick: () => set('solverGWT', v),
-    className: "px-2 py-1 rounded-sm border " + (I.solverGWT === v ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300")
-  }, l)))) : /*#__PURE__*/React.createElement("div", {
-    className: "mt-1"
-  }, /*#__PURE__*/React.createElement("select", {
-    value: "",
-    onChange: e => {
-      const p = CLAY_KH_PRESETS.find(x => x.key === e.target.value);
-      if (p) set('solverKh', p.kh);
-    },
-    className: "font-mono-tech text-[11px] px-2 py-1.5 rounded-sm border border-slate-300 bg-white w-full"
-  }, /*#__PURE__*/React.createElement("option", {
-    value: "",
-    disabled: true
-  }, "Select clay consistency…"), CLAY_KH_PRESETS.map(p => /*#__PURE__*/React.createElement("option", {
-    key: p.key,
-    value: p.key
-  }, p.label, " — k_h ", p.kh)))), /*#__PURE__*/React.createElement("p", {
-    className: "text-[9px] text-slate-400 mt-1 leading-snug"
-  }, "Sand n_h: AASHTO LRFD 10th Ed. Table C10.4.6.3-2 (ksi/ft \u00d7 144 = kip/ft\u00b3). Clay k_h: representative values. Use your geotechnical report's value where available.")), !I.solverLayered && (I.solverSoil === "cohesionless" ? /*#__PURE__*/React.createElement(Field, {
-    label: "n_h",
-    sub: "subgrade rate Es=nh·z",
-    unit: "kip/ft³",
-    value: I.solverNh,
-    onChange: v => set('solverNh', v)
-  }) : /*#__PURE__*/React.createElement(Field, {
-    label: "k_h",
-    sub: "constant subgrade mod.",
-    unit: "kip/ft²",
-    value: I.solverKh,
-    onChange: v => set('solverKh', v)
-  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }, fmt(I.Plat, 1))), /*#__PURE__*/React.createElement(GeoMirror, { label: "Free length e", val: I.solverFree, unit: "ft" }), /*#__PURE__*/React.createElement("div", { className: "col-span-2" },   // PDRL: the soil inputs below moved to the input rail (Lateral analysis)
+    /*#__PURE__*/React.createElement(InputsUsed, { tab: "soil", setTab: setRailTab, panelTitle: "Lateral analysis",
+      items: I.solverLayered ? [["soil", "layered profile, " + (Array.isArray(I.soilLayers) ? I.soilLayers.length : 0) + " layer" + ((Array.isArray(I.soilLayers) && I.soilLayers.length === 1) ? "" : "s"), ""]]
+        : I.solverSoil === "cohesionless" ? [["soil", "sand", ""], ["n_h", fmt(I.solverNh, 0), "kip/ft\u00b3"]] : [["soil", "clay", ""], ["k_h", fmt(I.solverKh, 0), "kip/ft\u00b2"]] })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "flex items-baseline justify-between gap-2"
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-[12px] text-[var(--blueprint)] font-medium leading-tight"
@@ -20868,7 +20794,7 @@ function App() {
     className: "bg-white rounded-sm p-3 border border-slate-200"
   }, /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mb-2" }, "The deflection and moment diagrams of this linear solution", lpileParse && lpileParse.ok && lpileParse.records && lpileParse.records.length > 2 ? " (with the imported LPILE profiles overlaid and compared)" : "", " are on the ", /*#__PURE__*/React.createElement("b", null, "Lateral graphs"), " output tab."),
   /*#__PURE__*/React.createElement(LatGraphsLinks, { ids: ["dmv", "py"].concat(lpileParse && lpileParse.ok && lpileParse.records && lpileParse.records.length > 2 ? ["lpile"] : []) })))),
-  (I.pileType !== "iab") && React.createElement(LatGraphsCard, { I: I, set: set, pyRes: pyRes, solved: solved, activeLayers: activeLayers, pyDepths: pyDepths, setPyDepths: setPyDepths, r: r, actType: (cases[activeIdx] || {}).type,
+  (I.pileType !== "iab") && React.createElement(LatGraphsCard, { I: I, set: set, pyRes: pyRes, solved: solved, activeLayers: activeLayers, pyDepths: pyDepths, setPyDepths: setPyDepths, r: r, actType: (cases[activeIdx] || {}).type, setRailTab: setRailTab,
     caseRes: caseRes, runAllCases: runAllCases, pmCurve: pmCurve, lpileParse: lpileParse }),
   (I.pileType === "micropile") && React.createElement(GfxCard, { order: 29, otab: "struct", badge: "S-1", title: "Pile cross-sections (to scale)",
     sub: "cased and uncased (bond-zone) sections with the properties the checks use" },
@@ -21396,7 +21322,7 @@ function App() {
         ["Three methods estimate the same thing: the ", /*#__PURE__*/React.createElement("b", { key: "b" }, "effective length"), " of the equivalent column."], [
         ["Difference:", "they differ only in how the fixity depth is obtained — a formula, a stiffness match to a lateral analysis, or a nonlinear collapse ramp."],
         ["The tab you select governs", "the status chip, the dashboard, and the report."], ["Shown:", "all three are shown side by side so nothing is hidden."]])),
-      /*#__PURE__*/React.createElement(BucklingTabs, { b: r.buckling, I: I, set: set, pcr: pcr, computePcr: computePcr })),
+      /*#__PURE__*/React.createElement(BucklingTabs, { b: r.buckling, I: I, set: set, pcr: pcr, computePcr: computePcr, setRailTab: setRailTab })),
   /*#__PURE__*/React.createElement("div", { className: "mt-4 rounded-sm border p-3", style: { borderColor: "var(--blueprint2)", background: "rgba(20,48,74,0.02)" } },
     /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1.5" }, "Step 4 · Soil-supported critical buckling load — rigorous cross-check"),
     /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 leading-snug mb-2 pdNL" }, pdNL("The most refined answer to the same stability question as Step 3.", [["Method:", "instead of idealizing the pile as a column of length KL, the full nonlinear p-y model is ramped in axial thrust until instability, with soil bracing, concurrent lateral load and moment, and the uncased reach all represented."], ["Role:", "it ", /*#__PURE__*/React.createElement("b", null, "verifies"), " Step 3; Step 3 remains the code design basis."]])),
@@ -21680,7 +21606,7 @@ function App() {
         r.group.nRows > 1 && /*#__PURE__*/React.createElement("button", { onClick: () => { set('pyPM', +r.group.pMultipliers[r.group.nRows - 1].fm.toFixed(2)); gotoModule(2, "02"); },
           className: "font-mono-tech text-[9.5px] px-2 py-1 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50" }, "use trailing row ", fmt(r.group.pMultipliers[r.group.nRows - 1].fm, 2)),
         Math.abs((I.pyPM || 1) - r.group.pmAvg) < 0.005 ? /*#__PURE__*/React.createElement("span", { className: "text-[9px] font-mono-tech", style: { color: "#256436" } }, "✓ currently applied") : /*#__PURE__*/React.createElement("span", { className: "text-[9px] font-mono-tech text-slate-400" }, "Module 02 p-mult currently ", fmt(I.pyPM || 1, 2))),
-      /*#__PURE__*/React.createElement("p", { className: "text-[8px] text-slate-400 mt-1 leading-snug" }, "Helpers (toggle off): copy one value into the Module 02 p-multiplier field. A single value reduces every depth's p-y uniformly for one pile; the automatic per-row option above runs every row instead."))),
+      /*#__PURE__*/React.createElement("p", { className: "text-[8px] text-slate-400 mt-1 leading-snug" }, "Helpers (toggle off): copy one value into the p-multiplier field (input rail, Lateral analysis). A single value reduces every depth's p-y uniformly for one pile; the automatic per-row option above runs every row instead."))),
 
     // === 3. BLOCK FAILURE ===
     /*#__PURE__*/React.createElement("div", { className: "rounded-sm border border-slate-200 p-3 mb-2" },
@@ -21857,6 +21783,134 @@ function InputsUsed({ items, tab, setTab, panelTitle }) {
     /*#__PURE__*/React.createElement("button", { type: "button", className: "iu-edit", onClick: edit }, "edit in " + panelTitle + " \u2192"));
 }
 
+/* PDRL (2026-11-12, engineer decision): the Module 02 inputs (lateral analysis) moved from the output column into the input
+   rail (p-y / lateral tab), so they stay visible while results are withheld and are checked like the other inputs (PDNB):
+   p- / y-multiplier and the p-y curve probe depth (nonlinear p-y), Mmax (input from LPILE), and the soil model, layered
+   profile, n_h / k_h (linear estimate). Same state keys, handlers and values as before; Module 02 and the Lateral graphs tab
+   show them read-only with an "edit in Lateral analysis" link. The fields of the lateral basis chosen in Module 02 (Step 1)
+   are shown, as before. */
+const PD_LAT_SRC_LBL = { py: "nonlinear p-y (built-in)", input: "input Mmax (from LPILE)", solver: "linear estimate" };
+function PdLatInPanel({ I, set }) {
+  const src = I.lateralSource;
+  return /*#__PURE__*/React.createElement(Panel, { title: "Lateral analysis", sub: "Module 02 inputs \u00b7 basis: " + (PD_LAT_SRC_LBL[src] || "\u2014") + " (chosen in Module 02, Step 1)" },
+    src === "py" ? /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-3" },
+      groupPmAutoOn(I)
+        ? /*#__PURE__*/React.createElement(Field, { label: "p-multiplier", sub: "not used \u2014 per row: row f\u2098 \u00d7 modifier (Module 11)", value: I.pyPM, disabled: true, onChange: () => {} })
+        : /*#__PURE__*/React.createElement(Field, { ck: "pyPM", label: "p-multiplier", sub: "group fm \u00d7 curve", value: I.pyPM, onChange: v => set('pyPM', v) }),
+      /*#__PURE__*/React.createElement(Field, { ck: "pyYM", label: "y-multiplier", value: I.pyYM, onChange: v => set('pyYM', v) }),
+      /*#__PURE__*/React.createElement("div", { className: "col-span-2" },
+        /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1 text-[11px] font-mono-tech text-slate-500" }, "p-y curve probe depth",
+          /*#__PURE__*/React.createElement(PdNumIn, { type: "number", "aria-label": "p-y curve probe depth, ft below grade", ck: "pyCurveDepth", value: I.pyCurveDepth || 0, onChange: ev => set('pyCurveDepth', parseFloat(ev.target.value) || 0),
+            className: "w-16 text-[11px] px-1 py-0.5 rounded-sm border border-slate-300" }), "ft below grade (0 = off)"),
+        /*#__PURE__*/React.createElement("p", { className: "text-[9px] text-slate-400 mt-1 leading-snug" }, "Adds one p-y curve at this depth to the p-y curves graph (Lateral graphs tab); display only.")))
+    : src === "input" ? /*#__PURE__*/React.createElement("div", null,
+      /*#__PURE__*/React.createElement(Field, { ck: "Mmax", label: "Maximum moment, Mmax", sub: "from external LPILE run", unit: "kip\u00b7ft", value: I.Mmax, onChange: v => set('Mmax', v) }),
+      /*#__PURE__*/React.createElement("p", { className: "text-[9px] text-slate-400 mt-1 leading-snug" }, "Used downstream in flexure & combined checks. Enter manually, or import an LPILE output file in Module 02 (Step 2)."))
+    : src === "solver" ? /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-3 content-start" }, /*#__PURE__*/React.createElement("div", {
+    className: "col-span-2"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-[12px] text-[var(--blueprint)] font-medium"
+  }, "Soil model"), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2 mt-1 text-[11px] font-mono-tech"
+  }, [["cohesionless", "sand (n_h)"], ["cohesive", "clay (k_h)"]].map(([v, l]) => /*#__PURE__*/React.createElement("button", {
+    key: v,
+    onClick: () => set('solverSoil', v),
+    className: "px-2 py-1 rounded-sm border " + (I.solverSoil === v ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300"),
+    disabled: I.solverLayered,
+    style: I.solverLayered ? {
+      opacity: 0.4
+    } : undefined
+  }, l)))), /*#__PURE__*/React.createElement("div", {
+    className: "col-span-2 flex items-center justify-between rounded-sm border border-slate-200 px-2.5 py-2",
+    style: {
+      background: "rgba(20,48,74,0.03)"
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    className: "text-[11px] font-mono-tech text-[var(--blueprint)]"
+  }, "Layered soil profile"), /*#__PURE__*/React.createElement("p", {
+    className: "text-[9px] text-slate-400 leading-snug"
+  }, "define 2–3 layers by depth instead of one uniform soil")), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      const turningOn = !I.solverLayered;
+      if (turningOn && (!I.soilLayers || I.soilLayers.length === 0)) {
+        // seed from current single-value soil
+        set('soilLayers', [{
+          topDepth: 0,
+          type: I.solverSoil === "cohesionless" ? "sand" : "clay",
+          nh: I.solverNh,
+          kh: I.solverKh
+        }]);
+      }
+      set('solverLayered', turningOn);
+    },
+    className: "px-2.5 py-1 rounded-sm border text-[11px] font-mono-tech " + (I.solverLayered ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300")
+  }, I.solverLayered ? "ON" : "OFF")), I.solverLayered && /*#__PURE__*/React.createElement("div", {
+    className: "col-span-2"
+  }, /*#__PURE__*/React.createElement(LayerTable, {
+    I: I,
+    set: set
+  })), !I.solverLayered && /*#__PURE__*/React.createElement("div", {
+    className: "col-span-2"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-[12px] text-[var(--blueprint)] font-medium"
+  }, "Soil type"), /*#__PURE__*/React.createElement("span", {
+    className: "text-[10px] text-slate-400 ml-2"
+  }, "fills the value below — still editable"), I.solverSoil === "cohesionless" ? /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-wrap items-center gap-2 mt-1"
+  }, /*#__PURE__*/React.createElement("select", {
+    value: "",
+    onChange: e => {
+      const p = SAND_NH_PRESETS.find(x => x.key === e.target.value);
+      if (p) set('solverNh', I.solverGWT === "below" ? p.below : p.above);
+    },
+    className: "font-mono-tech text-[11px] px-2 py-1.5 rounded-sm border border-slate-300 bg-white flex-1 min-w-[140px]"
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "",
+    disabled: true
+  }, "Select sand density…"), SAND_NH_PRESETS.map(p => /*#__PURE__*/React.createElement("option", {
+    key: p.key,
+    value: p.key
+  }, p.label, " — n_h ", I.solverGWT === "below" ? p.below : p.above))), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-1 text-[10px] font-mono-tech"
+  }, [["above", "above WT"], ["below", "below WT"]].map(([v, l]) => /*#__PURE__*/React.createElement("button", {
+    key: v,
+    onClick: () => set('solverGWT', v),
+    className: "px-2 py-1 rounded-sm border " + (I.solverGWT === v ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300")
+  }, l)))) : /*#__PURE__*/React.createElement("div", {
+    className: "mt-1"
+  }, /*#__PURE__*/React.createElement("select", {
+    value: "",
+    onChange: e => {
+      const p = CLAY_KH_PRESETS.find(x => x.key === e.target.value);
+      if (p) set('solverKh', p.kh);
+    },
+    className: "font-mono-tech text-[11px] px-2 py-1.5 rounded-sm border border-slate-300 bg-white w-full"
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "",
+    disabled: true
+  }, "Select clay consistency…"), CLAY_KH_PRESETS.map(p => /*#__PURE__*/React.createElement("option", {
+    key: p.key,
+    value: p.key
+  }, p.label, " — k_h ", p.kh)))), /*#__PURE__*/React.createElement("p", {
+    className: "text-[9px] text-slate-400 mt-1 leading-snug"
+  }, "Sand n_h: AASHTO LRFD 10th Ed. Table C10.4.6.3-2 (ksi/ft \u00d7 144 = kip/ft\u00b3). Clay k_h: representative values. Use your geotechnical report's value where available.")), !I.solverLayered && (I.solverSoil === "cohesionless" ? /*#__PURE__*/React.createElement(Field, {
+    label: "n_h",
+    sub: "subgrade rate Es=nh·z",
+    unit: "kip/ft³",
+    ck: "solverNh",
+    value: I.solverNh,
+    onChange: v => set('solverNh', v)
+  }) : /*#__PURE__*/React.createElement(Field, {
+    label: "k_h",
+    sub: "constant subgrade mod.",
+    unit: "kip/ft²",
+    ck: "solverKh",
+    value: I.solverKh,
+    onChange: v => set('solverKh', v)
+  })))
+    : null);
+}
+
 /* ============================================================
    RAIL TABS -- the left input rail split into workflow tabs (UI only)
    ------------------------------------------------------------
@@ -21884,7 +21938,7 @@ function railTabFor(el) {
   if (/^Project (file|library|Info)/i.test(title)) return "project";
   if (/Preview calculation report|Close report preview/.test(txt)) return "project";
   if (/^(Pile Geometry|Pile Section|Materials|Integral Abutment Pile)/i.test(title)) return "pile";
-  if (/^Geotechnical/i.test(title)) return "soil";
+  if (/^(Geotechnical|Lateral analysis)/i.test(title)) return "soil";
   if (/^Resistance Factors/i.test(title)) return "phi";
   if (/^Loads/i.test(title)) return "checks";
   if (/^(Cap geometry|Head fixity)/i.test(title)) return "cap";
@@ -22046,7 +22100,7 @@ function LatFail({ pyRes, dav }) {
     " ", pyRes && pyRes.msg ? "Solver message: " + pyRes.msg + " " : "",
     "The graphs return when the solve converges (Module 02 on the Lateral (p-y) tab holds the inputs).", dv);
 }
-function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDepths, caseRes, runAllCases, pmCurve, lpileParse, r, actType }) {
+function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDepths, caseRes, runAllCases, pmCurve, lpileParse, r, actType, setRailTab }) {
   const e = React.createElement;
   const lp = lpileParse && lpileParse.ok && lpileParse.records && lpileParse.records.length > 2 ? lpileParse : null;
   const ids = latGraphTabsFor(I, !!lp);
@@ -22196,9 +22250,8 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
       e(PyCurvesFig, { I: I, pyRes: pyRes, solved: solved, activeLayers: activeLayers, depths: pyDepths, setDepths: setPyDepths })),
     ok && pyRes.curves && pyRes.curves.length > 0 && e("div", { style: { marginTop: "12px" } }, e(LatPanel, { title: "p-y curves at 1, 2.5, 5, 10 and 20 pile widths below grade · ● = operating point" },
       /*#__PURE__*/React.createElement("p", { className: "pd-lg-note", style: { marginTop: 0 } }, "The nonlinear soil springs: horizontal resistance p (per unit length) vs pile deflection y, at several depths. Stiffer/stronger with depth. The ● marks where each spring is actually operating under the design load — near the flat top means the soil is near its ultimate resistance there."),
-      /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1 text-[11px] font-mono-tech text-slate-500 mb-1" }, "probe depth",
-        /*#__PURE__*/React.createElement(PdNumIn, { type: "number", "aria-label": "p-y curve probe depth, ft below grade", value: I.pyCurveDepth || 0, onChange: ev => set('pyCurveDepth', parseFloat(ev.target.value) || 0),
-          className: "w-16 text-[11px] px-1 py-0.5 rounded-sm border border-slate-300" }), "ft below grade (0 = off)"),
+      /*#__PURE__*/React.createElement(InputsUsed, { tab: "soil", setTab: setRailTab, panelTitle: "Lateral analysis",   // PDRL: the probe depth is entered in the input rail
+        items: [["probe depth", fmt(I.pyCurveDepth || 0, 1), "ft below grade (0 = off)"]] }),
       /*#__PURE__*/React.createElement(Plot, {
         data: [
           ...pyRes.curves.map((c2, i2) => {
