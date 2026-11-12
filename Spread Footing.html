@@ -502,7 +502,7 @@ a.wkA:hover{text-decoration:underline}
 <details class="sec" id="sec-peds" open>
 <summary>Pedestals &amp; Applied Loads</summary>
 <div class="secbody">
- <div class="row"><label>Load input mode</label><select data-path="loadMode" id="loadModeSel"><option value="type">By load type (D, L, Lr, S, Wx, Wy)</option><option value="direct">Direct factored (LRFD envelope)</option></select></div>
+ <div class="row"><label>Load input mode</label><select data-path="loadMode" id="loadModeSel"><option value="type">By load type (D, L, Lr, S, Wx, Wy)</option><option value="direct">Direct factored (ASCE 7 / indicative)</option></select></div>
  <div class="note sfNL" id="loadModeNote"></div>
  <div class="note sfNL" style="background:#eef4fb;border:1px solid #b9c8dc;padding:6px 8px;border-radius:3px">
   <div class="sfNLl">Axes &amp; sign convention <span style="font-weight:normal">(origin at footing centroid, plan view):</span></div><ul class="sfNLu">
@@ -993,13 +993,17 @@ function refreshVis(){
  $$('select[data-path$=".loadEntry"]').forEach(e=>{const m=e.dataset.path.match(/^peds\.(\d+)\.loadEntry$/),q=m&&state.peds[+m[1]];if(q)e.value=q.loadEntry==='perFt'?'perFt':'total';});
  $$('.swUser').forEach(e=>e.style.display=state.mat.swMode==='user'?'flex':'none');
  const lmn=$('#loadModeNote');
- if(lmn){lmn.innerHTML=(state.loadMode==='direct')
-  ?sfNL('Direct factored mode: enter one already-factored (LRFD/strength) load set per pedestal.',[
+ const lmAD=state.loadMode==='direct'?sfAashtoDirect():null;   /* SFDL (2026-11-12): basis stated (engineer Q-SF1) */
+ const lmo=$('#loadModeSel option[value="direct"]');if(lmo)lmo.textContent=lmAD?'Direct factored (imported AASHTO case)':'Direct factored (ASCE 7 / indicative)';   // SFDL
+ if(lmn){
+  lmn.innerHTML=(state.loadMode==='direct')
+  ?sfNL((lmAD?'Direct factored mode, imported AASHTO case (AASHTO LRFD 10th Ed. factors on self-weight, EV and surcharge; stability indicative)':'Direct factored mode, ASCE 7 basis / indicative')+': enter one already-factored (LRFD/strength) load set per pedestal.',[
    ['Combinations:','the combination engine is bypassed \u2014 a single "Direct LRFD" envelope drives all checks.'],
    ['Self-weight and EV:','footing self-weight, pedestal self-weight, and EV are still auto-computed and added, bracketed per ASCE 7-16 (factor 1.2 where they add to demand; 0.9 where they resist, i.e. uplift/overturning/sliding).'],
    ['Imported case:','a case imported from the abutment calculator or Bridge Substructure Loading uses that case\'s AASHTO LRFD 10th Ed. factors instead (Strength γp as built, Extreme Event 1.00).'],
    ['Bearing:','checked conservatively (factored loads vs allowable bearing \u2014 a service quantity).'],
-   ['Stability:','results are indicative only, since a single envelope is not a true combination-by-combination sweep.']])
+   ['Stability:','results are indicative only, since a single envelope is not a true combination-by-combination sweep.'],
+   lmAD?null:['Bridge (AASHTO) work:','do not rely on this mode with hand-entered loads; pull the factored case from the Abutment Calculator or Bridge Substructure Loading (Project tab, hand-offs: self-weight, EV and surcharge then take that case\'s AASHTO LRFD 10th Ed. factors), or use By-load-type mode (full combination sweep; bearing and stability at service).']])
   :'<b>By-load-type mode.</b> Enter unfactored loads by type; the app generates the full ASD and LRFD combination sets (ASCE 7-16) and runs bearing/stability on service (ASD) and concrete design on strength (LRFD).';}
 }
 /* SFHB (2026-11-11, engineer: "there are no ties in the walls"): a Wall checked by ACI 318-19 Chapter 11 (element type Wall, l_w/t > 3,
@@ -2457,12 +2461,13 @@ function renderSchematic(){
  const b5=secPanel(T,'o-schem-assump','1.5  Engineering Assumptions & Items Not Considered');
  const ul=el('div');
  if(state.assump.trim())ul.appendChild(el('p','', '<b>User assumptions:</b> '+state.assump.replace(/</g,'&lt;').replace(/\n/g,'<br>')));
- if(R.directMode)ul.appendChild(el('div','note sfNL',sfNL('Direct factored load mode is active.',[   /* SFNL */
+ if(R.directMode)ul.appendChild(el('div','note sfNL',sfNL('Direct factored load mode is active'+(R.aashtoDirect?' (imported AASHTO case; stability indicative).':' (ASCE 7 basis / indicative).'),[   /* SFNL; SFDL */
   ['REVIEW:','the engineer is responsible for confirming the entered factored loads envelope the governing code combinations.'],
   ['Loads:','entered as a single already-factored (LRFD) envelope per pedestal; the ASCE 7-16 combination sweep was bypassed.'],
   R.aashtoDirect?['Imported AASHTO case "'+sfEsc(R.aashtoDirect.caseName)+'" ('+sfEsc(R.aashtoDirect.ls)+'):','self-weight, EV and surcharge are added at its AASHTO LRFD 10th Ed. factors ('+R.aashtoDirect.sets.map(st=>'DC '+st.dc.toFixed(2)+', EV '+st.ev.toFixed(2)+', ES '+st.es.toFixed(2)+', LS '+st.ls.toFixed(2)).join('; ')+'; Tables 3.4.1-1, 3.4.1-2).']:['Self-weight/EV:','auto-added with 1.2 (demand) / 0.9 (resisting) dead brackets.'],
   ['Bearing:','checked conservatively against allowable bearing.'],
-  ['Overturning/sliding/flotation:','indicative (single envelope, not a full combination evaluation).']])));
+  ['Overturning/sliding/flotation:','indicative (single envelope, not a full combination evaluation).'],
+  R.aashtoDirect?null:['Bridge (AASHTO) work:','use a case pulled from the Abutment Calculator or Bridge Substructure Loading (AASHTO LRFD 10th Ed. factors on self-weight, EV and surcharge), or By-load-type mode.']])));   // SFDL
  ul.appendChild(el('div','note sfNL',sfNL('Not considered in this version (v1 audit trail):',[   /* SFNL */
   'settlement;','live-load patterning;','seismic analysis and detailing (E loads are entered as E_h; the ASCE 7-16 seismic combinations are generated; no Ω₀ unless E_mh is entered; no ACI 318-19 Chapter 18 detailing);','rain load (R);','minimum/accidental eccentricity (other than M_2,min of a slender pedestal);','lateral earth pressure;','second-order frame (story) analysis of slender pedestals (the moments of a slender pedestal are magnified per ACI 318-19 6.6.4);','non-rectangular footings.',
   ['Passive resistance:','neglected unless a mobilized fraction is entered.'],
@@ -2656,11 +2661,12 @@ function renderCombos(){
  if(R.fatal)return;
  const intro=secPanel(T,'o-cb-basis','2.1  Load Basis & Common Quantities');
  if(R.directMode){
-  intro.appendChild(el('div','warnbox sfNL',sfNL('Direct factored (LRFD) mode: a single user-entered factored envelope drives all checks; the ASCE 7-16 combination sweep is bypassed.',[   /* SFNL */
+  intro.appendChild(el('div','warnbox sfNL',sfNL((R.aashtoDirect?'Direct factored mode, imported AASHTO case':'Direct factored mode, ASCE 7 basis / indicative')+': a single user-entered factored envelope drives all checks; the ASCE 7-16 combination sweep is bypassed.',[   /* SFNL; SFDL */
    ['Self-weight and EV:','footing/pedestal self-weight and EV are auto-added and bracketed: factor 1.2 where they increase demand (bearing, footing/pedestal design); factor 0.9 in the minimum-dead case used for uplift/overturning/sliding.'],
    ['Bearing DCR:','computed conservatively by checking the factored envelope against the allowable bearing (a service-level quantity).'],
    ['Stability:','results are <b>indicative only</b> — a single envelope is not a true combination-by-combination evaluation.'],
    ['Full results:','for full dual-basis (service bearing/stability + strength design) results, switch to by-load-type input.'],
+   R.aashtoDirect?null:['Bridge (AASHTO) work:','use a case pulled from the Abutment Calculator or Bridge Substructure Loading (AASHTO LRFD 10th Ed. factors on self-weight, EV and surcharge), or By-load-type mode.'],   // SFDL
    R.aashtoDirect?['Imported AASHTO case "'+sfEsc(R.aashtoDirect.caseName)+'" ('+sfEsc(R.aashtoDirect.ls)+'):','the 1.2 / 0.9 bracket is replaced by the case\'s AASHTO LRFD 10th Ed. factors (Tables 3.4.1-1, 3.4.1-2) on the footing and pedestal self-weight (DC), EV, dead surcharge (ES) and live surcharge: '+R.aashtoDirect.sets.map(st=>st.tag+': DC '+st.dc.toFixed(2)+', EV '+st.ev.toFixed(2)+', ES '+st.es.toFixed(2)+', LS '+st.ls.toFixed(2)).join('; ')+' (see the resultant breakdown below for each factor × magnitude).']:null])));   // SFAD
  }else{
   intro.appendChild(el('div','note sfNL',sfNL('Two combination sets:',[   /* SFNL */
@@ -4193,7 +4199,7 @@ function sfrModel(){
   const hand=[typeof sfMrSourceLine==='function'?sfMrSourceLine():'',typeof sfFlSourceLine==='function'?sfFlSourceLine():''].filter(Boolean);
   subs.push({title:'Project',items:[{type:'kv',rows:[
    ['Project',m.project||'—'],['Project number',m.number||'—'],['Calculated by',(m.calcBy||'—')+(m.calcDate?', '+m.calcDate:'')],['Checked by',(m.chkBy||'—')+(m.chkDate?', '+m.chkDate:'')],
-   ['Load input',R.directMode?'Direct factored (LRFD envelope) per pedestal'+(R.aashtoDirect?'; imported AASHTO case "'+R.aashtoDirect.caseName+'" ('+R.aashtoDirect.ls+')':''):'By load type (D, L, Lr, S, Wx, Wy); ASCE 7-16 combinations generated'],
+   ['Load input',R.directMode?'Direct factored (LRFD envelope) per pedestal'+(R.aashtoDirect?'; imported AASHTO case "'+R.aashtoDirect.caseName+'" ('+R.aashtoDirect.ls+'), AASHTO LRFD 10th Ed. factors on self-weight, EV and surcharge; stability indicative':'; ASCE 7 basis / indicative (1.2 / 0.9 dead-load bracket; stability indicative)'):'By load type (D, L, Lr, S, Wx, Wy); ASCE 7-16 combinations generated'],
    ['Codes','ACI 318-19 (concrete'+(sfrCombined()?'; combined footing, 13.3.4 with Chapter 8':'; isolated footing, 13.3.3')+'); ASCE 7-16 §2.3.1 / §2.4.1 (combinations); IBC 2021'+(state.soil.mode==='vesic'?'; bearing capacity per Vesić / Meyerhof':'; allowable bearing q_a (geotechnical input)')+' (see [[S-ref]])'],
    ...hand.map(h=>['Hand-off source',h])]},
    {type:'note',text:'Units: kip, ft, ksf unless noted; bar sizes and covers in in, f′c and f_y in psi. Every value in this report is the value the tool computes on its result tabs (Schematic[[tab:schem| ↗]], Load Combinations[[tab:combos| ↗]], Bearing[[tab:bearing| ↗]], Stability[[tab:stab| ↗]], Footing Design[[tab:footdes| ↗]], Pedestal Design[[tab:peddes| ↗]]'+((P2&&P2.bearing&&P2.bearing.some(z=>z.wall&&z.wall.applied))?', Wall Design[[tab:walldes| ↗]]':'')+').'}]});
@@ -4749,7 +4755,7 @@ function sfrModel(){
   const items=[];
   if(String(state.assump||'').trim())items.push({type:'note',text:'Project assumptions (input): '+String(state.assump).trim()});
   ['Rigid footing on a compression-only (no-tension) soil; pressures are linear over the contact area (rigidity verified in [[S-stab]]).',
-   'Service (ASD) combinations for bearing and stability; strength (LRFD) combinations for the concrete design (ASCE 7-16 §2.4.1 / §2.3.1).'+(R.directMode?' Direct factored mode: one user envelope with dead-load brackets; stability is indicative.':''),
+   'Service (ASD) combinations for bearing and stability; strength (LRFD) combinations for the concrete design (ASCE 7-16 §2.4.1 / §2.3.1).'+(R.directMode?(R.aashtoDirect?' Direct factored mode with an imported AASHTO case: one envelope, the footing and pedestal self-weight, EV and surcharge at that case\'s AASHTO LRFD 10th Ed. factors; stability is indicative.':' Direct factored mode, ASCE 7 basis / indicative: one user envelope with the ASCE 7 1.2 / 0.9 dead-load brackets; stability is indicative. For bridge (AASHTO) work use a case pulled from the Abutment Calculator or Bridge Substructure Loading, or By-load-type mode.'):''),   // SFDL
    'Horizontal shears act at the top of each pedestal; the couple V·(t + h) is '+(state.stab.shearCouple==='off'?'excluded by input.':'included at the base of the footing.'),
    'Loads act at the load point of each pedestal (x + e_x, y + e_y); the pedestal transmits them to the footing as P at its centroid and the moments P·e.',
    'Flexure and shear capacities per foot of width with uniformly spaced bars (A_s = 12 A_b/s); short-direction banding (ACI 13.3.3.3) is advisory.',
