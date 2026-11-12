@@ -1,6 +1,8 @@
 // AB-1 (2026-11-12, engineer decision): the braking vertical couple [AASHTO LRFD 10th Ed. 3.6.4]
 // P_BR = BR (h_brg + d_g + h_h + t_d + 6 ft) / L at the bearing line, with BR (gamma_LL m), uplift with BR toward the span and
 // downward in the reversed permutations; not applied (REVIEW) while an elevation input is blank; an imported SubLoads BR keeps its own P.
+// AB-5 (2026-11-12): also the seat bearing (Strength I/V) and the per-bearing loads (3D, elastomeric hand-off), downward case, P/N per girder
+// (imported: |P_i| x share); not the stem. AB-7 (2026-11-12): a blank haunch counts as 0.
 // usage: node tests/smoke/abutment-br-couple.mjs [abutment_calculator.html]
 import path from 'path';
 import { openPage, REPO } from '../lib.mjs';
@@ -19,7 +21,8 @@ const run = js => o.p.evaluate(js => {
   const r0 = T.find(x => !x.perm.rev && x.perm.DC === 0 && x.perm.EH === 0 && x.liveOn === 1), r1 = T.find(x => x.perm.rev && x.perm.DC === 0 && x.perm.EH === 0 && x.liveOn === 1);
   return { c: R.brCouple, BR: { V: R.groups.BR.V, Mv: R.groups.BR.Mv }, nFail: R.nFail, V0: r0 && r0.V, V1: r1 && r1.V,
     bearing: C.bearing && { dc: C.bearing.dc, V: C.bearing.V }, pc: C.pileComp && C.pileComp.P, pu: C.pileUplift && C.pileUplift.P,
-    stemMu: R.stemDem && R.stemDem.Mu, seat: C.bearingSeat && C.bearingSeat.Pu,
+    stemMu: R.stemDem && R.stemDem.Mu, seat: C.bearingSeat && C.bearingSeat.Pu, seatDC: C.bearingSeat && C.bearingSeat.dc, seatBr: C.bearingSeat && C.bearingSeat.puT && C.bearingSeat.puT.br,
+    edm: edmPayload().payload.girders.map(g => g.Pll), pb: perBearingLoads(R, 'ls:Strength I').beams.map(q => q.P), pbBR: perBearingLoads(R, 'load:BR').beams.map(q => q.P),
     warn: WARNINGS.map(w => t(w.msg)).filter(m => /Braking vertical couple/.test(m)) };
 }, js);
 
@@ -28,13 +31,25 @@ check(!r.c && r.BR.V === 0 && !r.warn.length, 'defaultState() (no BR): no couple
 // the project a new page opens with (example reactions: BR V_x 3.5 kip x 6 girders = 21 kip, table, share 50 %)
 r = await run('seedExampleReactions();');
 check(r.c && r.c.src === 'table' && r.c.P == null && r.BR.V === 0 && r.warn.length === 1, 'default page project, elevation inputs blank: not applied, REVIEW');
+const def0 = await run('seedExampleReactions();');
 r = await run('seedExampleReactions();' + ELEV);
 check(near(r.c.F, 21) && near(r.c.P, 21 * (67 / 12 + 6) / 80) && near(r.BR.V, -3.04063) && !r.warn.length, `default page project + elevations: P = 21 x 11.583 / 80 = ${r.c.P.toFixed(4)} kip`);
+// AB-5 hand check: per girder P/N = 3.04063/6 = 0.50677 kip; Strength I seat P_u 246.750 -> 246.750 + 1.75 x 0.50677 = 247.637 kip; D/C 0.12000 -> 0.12043
+check(near(def0.seat, 246.75, 1e-3) && near(r.seat, 246.75 + 1.75 * 3.040625 / 6, 1e-3) && near(r.seatBr, 3.040625 / 6, 1e-6) && near(r.seatDC, def0.seatDC * r.seat / def0.seat, 1e-6),
+  `AB-5 seat bearing (Strength I): P_u ${def0.seat.toFixed(3)} -> ${r.seat.toFixed(3)} kip, D/C ${def0.seatDC.toFixed(5)} -> ${r.seatDC.toFixed(5)}`);
+check(r.edm.every(v => near(v, 70.507, 1e-6)) && def0.edm.every(v => v === 70), `AB-5 elastomeric hand-off P_LL per bearing 70 -> ${r.edm[0]} kip`);
+check(r.pb.every(v => near(v, 247.6369, 1e-3)) && r.pbBR.every(v => near(v, 0.50677, 1e-4)) && def0.pbBR.every(v => v === 0), `AB-5 per-bearing loads (3D): Strength I P ${r.pb[0].toFixed(3)}, BR alone ${r.pbBR[0].toFixed(4)} kip`);
+check(r.stemMu === def0.stemMu, 'AB-5: stem M_u unchanged (the couple only relieves the stem)');
+r = await run('seedExampleReactions(); S.longit.computeBR=false; S.rx.BR.forEach(r=>{r.P=-0.242;}); S.dist.shBR=50;');
+check(r.c.src === 'imported' && near(r.seat, 246.75 + 1.75 * 0.121, 1e-3) && r.edm.every(v => near(v, 70.121, 1e-6)) && r.stemMu === def0.stemMu,
+  `AB-5 SubLoads-imported couple (P -0.242/girder, share 50 %): seat P_u ${r.seat.toFixed(3)} (+1.75 x 0.121), EDM P_LL ${r.edm[0]}`);
 r = await run('S.longit.computeBR=true;');
-check(r.c && r.c.P == null && r.c.miss.length === 4 && r.BR.V === 0 && r.warn.length === 1 && /^REVIEW/.test(r.warn[0]), 'BR on, elevation inputs blank: not applied, REVIEW warning');
+check(r.c && r.c.P == null && r.c.miss.length === 3 && !r.c.miss.some(m => /haunch/.test(m)) && r.BR.V === 0 && r.warn.length === 1 && /^REVIEW/.test(r.warn[0]), 'BR on, elevation inputs blank: not applied, REVIEW warning (h_brg, d_g, t_d; not the haunch: AB-7)');
 const noC = r;
 r = await run('S.longit.computeBR=true; S.geom.elBrgH=3; S.geom.elGird=54; S.geom.elDeck=8;');
-check(r.c && r.c.P == null && r.c.miss.length === 1 && /haunch/.test(r.c.miss[0]), 'haunch blank: not applied (0 = no haunch must be entered)');
+check(r.c && r.c.hhBlank && r.c.hh === 0 && near(r.c.h, 65 / 12 + 6) && near(r.c.P, 45.9 * (65 / 12 + 6) / 80, 0.01) && !r.warn.length, `AB-7 haunch blank: counts as 0, h ${r.c.h.toFixed(3)} ft, P ${r.c.P && r.c.P.toFixed(3)} kip`);
+r = await run('S.longit.computeBR=true; S.geom.elBrgH=3; S.geom.elHaunch=2; S.geom.elDeck=8;');
+check(r.c && r.c.P == null && r.c.miss.length === 1 && /girder depth/.test(r.c.miss[0]) && r.warn.length === 1, 'AB-7 girder depth blank: not applied, REVIEW names it');
 
 // hand check: BR_total = 45.90 kip (default, 3 lanes); h = (3 + 54 + 2 + 8)/12 + 6 = 11.583 ft; P = 45.90 x 11.583 / 80 = 6.646 kip
 r = await run('S.longit.computeBR=true;' + ELEV);
@@ -42,7 +57,7 @@ check(r.c && near(r.c.h, 11.58333) && near(r.c.P, 6.64594) && near(r.BR.V, -6.64
   `couple: h ${r.c && r.c.h.toFixed(3)} ft, P ${r.c && r.c.P.toFixed(3)} kip, V = -P (uplift) at x_brg 5.25 ft`);
 check(near(r.V0 - noC.V0, -1.75 * 6.64594, 1e-3) && near(r.V1 - noC.V1, 1.75 * 6.64594, 1e-3), `Strength I: usual permutation -1.75P, reversed (BR toward the backfill) +1.75P: ${(r.V0 - noC.V0).toFixed(3)} / ${(r.V1 - noC.V1).toFixed(3)}`);
 check(near(r.bearing.V, 1561.6821, 1e-3) && near(r.bearing.dc, 0.546166, 1e-5) && r.nFail === noC.nFail, `spread footing bearing: V 1573.31 -> ${r.bearing.V.toFixed(2)}, D/C 0.5490 -> ${r.bearing.dc.toFixed(4)}`);
-check(r.stemMu === noC.stemMu && r.seat === noC.seat, 'stem M_u and the seat bearing P_u unchanged (couple not in the stem eccentricity / seat bearing)');
+check(r.stemMu === noC.stemMu && near(r.seat - noC.seat, 1.75 * 6.64594 / 6, 1e-3), `stem M_u unchanged; seat bearing P_u + 1.75 x P/N = +${(r.seat - noC.seat).toFixed(3)} kip (AB-5)`);
 r = await run('S.longit.computeBR=true; S.dist.shBR=10;' + ELEV);
 check(near(r.c.P, 6.64594), 'not x the BR share');
 r = await run('S.fnd.branch="pile"; S.longit.computeBR=true;' + ELEV);
@@ -64,11 +79,15 @@ const ui = await o.p.evaluate(ELEV => { S = defaultState(); migrate(); S.longit.
   const b = document.querySelector('#tab-loads [data-cid="o-longit-br"]'), bt = b ? b.textContent : '';
   const ke = document.querySelectorAll('#tab-loads .katex-error').length;
   activateTab('tab-rpt'); const t = document.getElementById('tab-rpt').textContent.replace(/\s+/g, ' ');
-  const out = { card: !!c, ct: /11\.583/.test(ct) && /6\.646/.test(ct) && /engineer decision 2026-11-12/i.test(ct), br: /§1\.6a/.test(bt) && !/is not included/.test(bt), ke,
+  const out = { card: !!c, ct: /11\.583/.test(ct) && /6\.646/.test(ct) && /engineer decision 2026-11-12/i.test(ct) && /Not in the stem eccentric moment/.test(ct) && /1\.108 kip per girder/.test(ct), br: /§1\.6a/.test(bt) && !/is not included/.test(bt), ke,
     rpt: /Braking vertical couple at the bearings/.test(t) && /6\.646/.test(t), rke: document.querySelectorAll('#tab-rpt .katex-error').length };
+  activateTab('tab-struct'); const s5 = document.querySelector('#tab-struct [data-cid="o-str-bearing"]'), st = s5 ? s5.textContent.replace(/\s+/g, ' ') : '';
+  out.seat = /P_BR,i:/.test(st) && /downward case/.test(st) && /1\.75\(1\.108\)/.test(st.replace(/\s/g, '')); out.ske = document.querySelectorAll('#tab-struct .katex-error').length;
+  out.rptSeat = /incl\. the braking vertical couple/.test(t);
   activateTab('tab-loads'); return out; }, ELEV);
 check(ui.card && ui.ct && ui.br && !ui.ke, 'Tab 1 §1.6a card (h, P), §1.6 note links it, no KaTeX error');
 check(ui.rpt && !ui.rke, 'Report: worked step');
+check(ui.seat && !ui.ske && ui.rptSeat, 'AB-5: Tab 5 §5.6 worked P_u has gamma_LL P_BR,i and the note; Report seat row; no KaTeX error');
 check(!o.errs.length, 'no console errors ' + JSON.stringify(o.errs));
 await o.b.close();
 console.log(fails ? fails + ' FAILED' : 'all passed');
