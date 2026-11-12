@@ -18,9 +18,13 @@
      spans:   { lengths: [ft, …], continuity: 'simple' | 'composite' },        'composite': simple for the girder and DC1, made
                                                                                continuous for DC2, DW and LL (AASHTO 5.12.3.3; today's cont.on, PS-7)
      xs:      { nb (girders), bays: [ft, …] (nb − 1 girder spacings, left to right, unequal allowed, PS-9),
-                ohL, ohR (deck overhang from the exterior girder centreline, ft), skews: [deg, …] (one per support: abutment, piers, abutment) }
+                ohL, ohR (deck overhang from the exterior girder centreline, ft), skews: [deg, …] (one per support: abutment, piers, abutment) },
+     base:    { … }   added 2026-11-12 (PR 2a, plan §2.4), optional within version 1: the base girder design, an inputs object of the old
+                      app's format (its DEFAULTS shape), always stored as mergeInputs(base) of the moved engine (engine/pbd-merge.js), so a
+                      field added to DEFAULTS later is filled in. A project without it (saved by PR 1) reads with the old app's defaults.
    }
-   Nothing in version 1 is used by a calculation yet (the PS engine moves in with PR 2a, docs/ps-bridge-plan.md §3). */
+   Needs the moved engine (engine/pbd-*.js) loaded first for base; without it (a test of this file alone) base is left as it is.
+   Nothing in the project is used by a calculation yet (the input tabs are wired to base in PR 2b, docs/ps-bridge-plan.md §5). */
 (function () {
   'use strict';
   const SCHEMA = 'psb2.project', VERSION = 1;
@@ -29,6 +33,13 @@
     split: 'psb2.splitRatio_v1', dash: 'psb2.dashCollapsed_v1' };   // per-browser UI keys (ui/splitter.js, ui/dash.js); not in the project
   const CONTINUITY = ['simple', 'composite'];
   const isNum = v => typeof v === 'number' && isFinite(v);
+  /* baseInputs(saved): the old app's mergeInputs(saved) (DEFAULTS when saved is not an object), as a plain copy (mergeInputs shares
+     DEFAULTS' objects); undefined when the moved engine is not loaded. */
+  const engineLoaded = () => typeof mergeInputs === 'function';
+  function baseInputs(saved) {
+    if (!engineLoaded()) return undefined;
+    return JSON.parse(JSON.stringify(mergeInputs(saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : null)));
+  }
 
   /* defaultProject(): a new project — one 120 ft simple span, 5 girders at 9.0 ft, 3.0 ft overhangs, no skew
      (the old app's default design: L 120 ft, S 9.0 ft, 5 girders, deck overhang 3.0 ft). */
@@ -37,7 +48,8 @@
       schema: SCHEMA, version: VERSION,
       project: { name: 'New prestressed bridge', number: '', owner: '', designer: '', checker: '', date: '', notes: '' },
       spans: { lengths: [120], continuity: 'simple' },
-      xs: { nb: 5, bays: [9, 9, 9, 9], ohL: 3, ohR: 3, skews: [0, 0] }
+      xs: { nb: 5, bays: [9, 9, 9, 9], ohL: 3, ohR: 3, skews: [0, 0] },
+      ...(engineLoaded() ? { base: baseInputs(null) } : {})
     };
   }
 
@@ -64,6 +76,7 @@
     const S = Array.isArray(x.skews) ? x.skews : [];
     if (L.length && S.length !== L.length + 1) E('xs.skews', `Enter ${L.length + 1} support skews (abutment, piers, abutment) for ${L.length} span${L.length === 1 ? '' : 's'}.`);
     S.forEach((v, i) => { if (!(isNum(v) && Math.abs(v) < 90)) E(`xs.skews.${i}`, `Skew at support ${i + 1} must be a number of degrees between −90 and 90.`); });
+    if (p.base !== undefined && (!p.base || typeof p.base !== 'object' || Array.isArray(p.base))) E('base', 'The base girder design is not an inputs object.');
     return { errors, warnings };
   }
 
@@ -98,6 +111,7 @@
     if (k) return { ok: false, legacy: k, error: `${k} (old app) files are imported in a later version of this app. The file was not changed.` };
     if (!obj || obj.schema !== SCHEMA) return { ok: false, error: 'Not a PS Bridge (psb2) project file.' };
     let p; try { p = migrate(obj); } catch (e) { return { ok: false, error: e.message }; }
+    if (engineLoaded() && (p.base === undefined || (p.base && typeof p.base === 'object' && !Array.isArray(p.base)))) p.base = baseInputs(p.base);   // filled / merged onto DEFAULTS
     const v = validate(p);
     return { ok: true, project: p, errors: v.errors, warnings: v.warnings, notes: [] };
   }
@@ -131,5 +145,5 @@
     return out;
   }
 
-  window.PSBModel = { SCHEMA, VERSION, KEYS, CONTINUITY, defaultProject, validate, migrate, legacyKind, exportJSON, importJSON, save, load, totalLength, girderOffsets };
+  window.PSBModel = { SCHEMA, VERSION, KEYS, CONTINUITY, defaultProject, validate, migrate, legacyKind, exportJSON, importJSON, save, load, totalLength, girderOffsets, baseInputs };
 })();

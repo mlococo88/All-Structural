@@ -9,8 +9,9 @@
 <!-- PS Bridge, the Prestressed Bridge Design rebuild (docs/ps-bridge-plan.md; engineer decisions PS-1 to PS-14, 2026-11-12). Built like the
      Steel Bridge app (apps/steel-bridge/): plain HTML/JS/CSS, classic scripts, opens from file://, relative paths only.
      Engine: engine/*.js (no DOM). Report: report/*.js. UI: ui/*.js. Saved data: localStorage keys psb2.* only (engine/model.js).
-     PR 1 (skeleton): the shell, the input and output tabs with placeholders, the project model (psb2.project v1). No calculation yet;
-     the old Prestressed Bridge Design.html stays the working tool. -->
+     PR 1 (skeleton): the shell, the input and output tabs with placeholders, the project model (psb2.project v1). PR 2a: the old app's
+     engine moved in unchanged (engine/pbd-*.js) and the project's base design (model base); nothing shown from it yet (PR 2b on).
+     The old Prestressed Bridge Design.html stays the working tool. -->
 <!-- KaTeX for the worked-step equations: the steel app's pinned version and URL (CLAUDE.md §2; used from PR 2b) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
@@ -20,6 +21,18 @@
 (function () {
   var v = Date.parse(document.lastModified) || Date.now();
   [
+    // the Prestressed Bridge Design engine, moved unchanged (PR 2a, docs/ps-bridge-plan.md §3): slices of the old page, in its order
+    'engine/pbd-model.js',
+    'engine/pbd-library.js',
+    'engine/pbd-section.js',
+    'engine/pbd-strands.js',
+    'engine/pbd-losses-ll.js',
+    'engine/pbd-handling-deck.js',
+    'engine/pbd-lldf-flexure.js',
+    'engine/pbd-external.js',
+    'engine/pbd-compute.js',
+    'engine/pbd-optimize.js',
+    'engine/pbd-merge.js',
     'engine/model.js',
     'report/sections.js',
     'ui/dash.js',     // the check summary column (adapted copy of apps/steel-bridge/ui/dash.js)
