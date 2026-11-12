@@ -135,7 +135,7 @@ PR #1448: https://github.com/mlococo88/All-Structural/pull/1448
   engine values).
 
 ## 2026-11-12 — PR 2b-1: input tabs wired to the base design (one design girder), input checks (new files; no calculation change)
-PR #PR2B1: https://github.com/mlococo88/All-Structural/pull/PR2B1
+PR #1450: https://github.com/mlococo88/All-Structural/pull/1450
 ### Where
 - `apps/ps-bridge/engine/design.js` (new, `window.PSBDesign`): the one girder design until the bridge level (PR 3a). `P.design = { g, s }`
   (optional within schema v1; absent: G2, or G1 with one girder, in span 1). `inputs(P)` = the engine inputs: `PBD.applyBridge` (the old
