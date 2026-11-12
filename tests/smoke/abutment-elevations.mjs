@@ -107,13 +107,13 @@ async function blankOut(root, setup) {
   const r = await p.evaluate(su => { eval('(' + su + ')')(); migrate(); buildInputs(); recalcAll(); renderTabContent('tab-loads');
     const cl = document.getElementById('tab-loads').cloneNode(true); cl.querySelectorAll('.plot-container, .js-plotly-plot').forEach(x => x.remove());   // Plotly ids are random
     const tab1 = cl.innerHTML, dxf = abdwBuild(window.LAST_R).D.toDXF({ ltscale: 1 });
-    activateTab('tab-rpt'); const rpt = (document.getElementById('tab-rpt').textContent || '').replace(/Printed [^·]*·/g, '');
+    activateTab('tab-rpt'); const rpt = (document.getElementById('tab-rpt').textContent || '').replace(/Printed [^·]*·/g, '').replace(/Girder depth[^%]*%/g, 'Girder depth (ABDG echo row)');   // ABDG: the echo row's wording
     return { tab1, dxf, rpt, fp: window.LAST_R.fingerprint, elSeat: S.geom.elSeat === undefined ? 'undefined' : S.geom.elSeat }; }, setup.toString());
   const errs = o.errs.slice(); await o.b.close(); return { ...r, errs };
 }
 if (MAIN) {
   console.log('4b. Field blank: identical to main (' + MAIN + ')');
-  for (const [nm, su] of [['built-in project', () => {}], ['slab + water + pile footing', () => { S.apSlab.on = true; S.geom.hw = 6; S.fnd.branch = 'pile'; }], ['integral + slab', () => { S.iab.type = 'integral'; S.apSlab.on = true; }]]) {
+  for (const [nm, su] of [['built-in project', () => {}], ['slab + water + pile footing', () => { S.apSlab.on = true; S.geom.hw = 6; S.fnd.branch = 'pile'; }], ['integral + slab', () => { S.iab.type = 'integral'; S.iab.dg = 4.0; S.apSlab.on = true; }]]) {   // ABDG (2026-11-12): a project saved with the panel I-0a girder depth (new projects: null)
     const [a, b] = await Promise.all([blankOut(MAIN, su), blankOut(REPO, su)]);
     check(a.tab1 === b.tab1 && a.dxf === b.dxf && a.rpt === b.rpt && a.fp === b.fp && !b.errs.length,
       `${nm}: Tab 1 (${b.tab1.length} chars) ${a.tab1 === b.tab1 ? 'same' : 'DIFF'}, DXF (${b.dxf.length}) ${a.dxf === b.dxf ? 'same' : 'DIFF'}, Report (${b.rpt.length}) ${a.rpt === b.rpt ? 'same' : 'DIFF'}, Input ID ${a.fp} / ${b.fp}; errors ${b.errs.length}`);
@@ -176,8 +176,8 @@ console.log('6. ABEL2: bearing height, girder + haunch + deck, pile length (disp
     `Pile Designer: suggestion 39 + 0 + 1 = 40 ft, blank until "Use" (${pd.before} -> ${pd.after}), tip El. -6.00 vs -4.00 flagged`);
   const pd2 = await withCase(p, () => { S.geom.elSeat = 52; S.geom.elBrgH = 6; S.geom.elGird = 54; S.geom.elHaunch = 2; S.geom.elDeck = 8; S.fnd.branch = 'pile'; S.piles.embed = 12; S.piles.elLpile = 40; S.piles.elLpile = 45; S.pileRes = { pile: { stickup: 0 }, geo: { toe: 39 } }; }, () => ({ L: S.piles.elLpile, f: abElev(window.LAST_R).flags, s: abElLpInHTML() }));
   check(!pd2.err && pd2.L === 45 && pd2.f.some(t => /Pile length L<sub>pile<\/sub> = 45\.00 ft .* differs from Pile Designer's pile/.test(t)) && /your entry is kept/.test(pd2.s), `an entered length is kept (45) and the difference flagged`);
-  // invariance: LAST_R identical with the new fields blank and set
-  const inv = await p.evaluate(() => { const snap = () => JSON.stringify(window.LAST_R, (k, v) => typeof v === 'number' && !isFinite(v) ? String(v) : v).replace(/"fingerprint":"[^"]*"/, '');
+  // invariance: LAST_R identical with the new fields blank and set (ABPL 2026-11-12: except the pile length check that L_pile now feeds, checks.pileLen and its dashboard row; tests/smoke/abutment-pile-length.mjs)
+  const inv = await p.evaluate(() => { const snap = () => JSON.stringify(window.LAST_R, (k, v) => typeof v === 'number' && !isFinite(v) ? String(v) : k === 'pileLen' ? undefined : k === 'dash' && Array.isArray(v) ? v.filter(d => d.id !== 'pileLen') : v).replace(/"fingerprint":"[^"]*"/, '');
     const out = []; for (const su of [() => { S.fnd.branch = 'pile'; }, () => { S.iab.type = 'semi'; S.fnd.branch = 'pile'; S.apSlab.on = true; }, () => {}]) {
       const st = JSON.parse(JSON.stringify(S)); su(); migrate(); recalcAll(); const a = snap(), fa = window.LAST_R.fingerprint;
       S.geom.elBrgH = 6; S.geom.elGird = 54; S.geom.elHaunch = 2; S.geom.elDeck = 8; S.piles.elLpile = 40; recalcAll(); const b = snap();
