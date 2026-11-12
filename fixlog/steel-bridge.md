@@ -6214,3 +6214,322 @@ index 7923289..fa7f1c6 100644
 - **Saved data (§5):** none (the Drawings tab's remembered sheet id `plan` / `sec` still exists).
 - **Decision (pending engineer review):** (1) on paper B the plan and the section are always split (not only when they overflow), so every later B sheet is renumbered; (2) continuation sheets show the scale of their drawing sheet; (3) chain texts that do not fit their run go on rows with leaders, some long at 1:480; (4) the B framing plan (also at 1:1200, not reported) is split the same way.
 - **Other copies:** none (GirderDetail `dxfPlan` / `dxfSection` in `Steel Bridge Design.html` is the old tool, not changed).
+
+## 2026-11-12 — PR: sbgl-pr1 (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Girder types, PR 1 of 4: the model, the Girders & plates tab (types, their lines, Add / Copy / Delete), the girder type of each line on the Cross-section tab, the Loads tab's type and line picker (SB-2; input and display only)
+- **Request:** engineer decision 2026-11-12, SB-2 (replaces SB-1, "one plate girder per line", which was not merged): the user defines girder types (each a plate girder with its own segments, b_eff, position, label) and assigns a type to each cross-section girder line; each type is checked on every line assigned to it with that line's loads and LLDF, governed by the worst line. New projects start with two types, Exterior on G1 and G_n, Interior on the rest. A line always has a type (deleting a type asks where its lines go). Saved projects: each girders[i] becomes a type on its line, results byte-identical; the other lines get no type until the user assigns them (never silently), with a clear note listing them. Done as a sequence of PRs: this one (model + inputs), then Summary / check summary / Report over every line (PR 2), Auto design per type (PR 3), hand-offs (PR 4).
+- **Change (no computed value changes; every engine still works a type on its design line `girders[i].line` / the automatic line, SB2-A7):**
+  - `engine/model.js`: saved field `girders[i].lines` (optional; absent = the one line of `line` or the automatic line, exactly as before; written only by an assignment the user makes). New functions `designLine`, `typeLines`, `lineTypes`, `unassigned`, `isExtLine`, `tribBeff` (tributary width, AASHTO LRFD 10th Ed. Art. 4.6.2.6.1, the rule of `engine/legacy.js` setGirders), `setLines` / `assignLine` (a line moves to one type; the design line stays when it is still one of the type's lines, else the first), `addType` (copy of a type's plates, b_eff, position, its stiffener bays and splice plate entries; not its entered or pulled loads and factors, nor its custom demands), `deleteType` (its lines go to the chosen type; its stiffener bays and splice plate entries removed, later types renumbered; custom demands by id kept), `newProject` (defaultProject() + Exterior; defaultProject() unchanged), `atLine` (a read view of the project with a type on another line: `girders[gi].line` reads j, writes go to the project; the design line returns the project itself). `validate`: `lines` must be a list of line numbers.
+  - `engine/drawings.js plateGirderOf`: a line takes the type whose `lines` holds it; a project without `lines` as before (the rest of the function unchanged).
+  - `index.html`: Girders & plates tab: "Girder types" card (type, position, lines, design line; Add type, Copy type, Delete type with the inline "its lines go to …" choice; the lines with no type in red with "Assign them to <type>" buttons; two types on one line flagged) and "Selected type" card (the Girder select, label, position, the lines as check boxes: checking moves the line here, a type's own line is not unchecked so a line keeps a type; the design line select, which replaces "Loads from cross-section girder" and writes the same `line` field; b_eff; notes when a line's position or tributary width differs from the type's inputs). Cross-section tab: "Girder type of each line" (a select per line; "— none —" for an unassigned line). Loads tab: "Girder type and line" (type = ui.g, the same choice as the Girders & plates tab; line ui.ln, display only: the calculated dead loads, construction live load and LLDF shown are that line's through `atLine`; entered values belong to the type). N_b change: a message offering to assign the new lines to a type (a button per type) and naming the stored lines beyond N_b. A new project (New, and the first start with nothing saved) is `newProject()`.
+- **Saved data (§5):** no key or format change; schema version 1 kept (the new field is optional and absent in every saved file; nothing is written on load). The probe below shows the stored project text unchanged after opening it. UI state: `sbd2.ui` may hold `ln` (the Loads tab's line; per-tool key, existing).
+- **Check case (display):** built-in project saved before this PR (one girder G1, interior, automatic line): Girders & plates shows G1 on G2 (design line G2) and "Lines G1, G3, G4, G5 have no girder type, so they are not checked"; Assign them to G1 → G1 on G1–G5, design line G2 (written `line: 2 − 1 = 1`), results on the output tabs unchanged (they work G2). New project: Interior on G2, G3, G4 (b_eff 114 in = 9.5 ft × 12), Exterior on G1, G5 with b_eff = 12 (9.5 / 2 + 3.25) = 96 in; Loads tab, Exterior on G5: the dead loads of cross-section girder G5.
+- **Probe (origin/main vs branch, the page, `sbd2.project.current` set, Summary run to "Up to date"):** 6 saved projects — the built-in project; it as an exterior girder (automatic line G1); two plate girders (interior + exterior, 20° skews); the legacy imports of GirderDetail xsA, curb and util (5 girders each, lines 0–4) — every case IDENTICAL: the Summary state (every module of every girder; run timings excluded), the drawings' plate girder of each line ([0,0,0,0,0] / [1,0,0,0,1] / [0,1,2,3,4]), the Loads tab's dead load / CL / LLDF card text, and the stored project text unchanged by opening it (no silent write); 0 console errors on both.
+- **How verified:** new `tests/engine/girder-types.test.mjs` (6 tests); `node tests/engine/run.mjs` : every file passes (the new test included; 0 failed); `node tests/check-syntax.mjs`; smoke steel-bridge-wiring, -library, -invalid, -equal-spacing, -summary, -dash, -report, -paths, -taberrors, -deflection, -diaphragm, -drawings, -dxf-unchanged (18 DXFs byte-identical to main), -fatlife, -graphics, -scroll, -splice-addrow, -splitter, -tabgraphics-b, -splices, sbd-undo, decimal-entry, geometry-handoff, home-projects, dxf-print-sheets --tool sbd: all pass. Six of them (wiring, summary, dash, deflection, drawings and the summary's first sections) recorded values of the one-girder built-in project, which a fresh page no longer opens: they now open with it saved (new tests/smoke/sbd-seed.mjs: SBDModel.defaultProject(), unchanged) so their recorded values stay theirs. list-input --part sbridge fails on origin/main too (it clicks the input tab "spans", renamed in TABR 2026-11-09): not changed here; phone layout 390 px; 0 console errors. Screenshots: the Girders & plates tab of a new project.
+- **Decisions (pending engineer review):** (1) a type's position and b_eff are entered per type and used on every line of it (a note shows each line whose exterior / interior position or tributary width differs); (2) the entered loads / factors and override boxes of the Loads tab belong to the type (every line of it); (3) the types of a new project: Interior (the default girder, kept first: id G1) and Exterior (the same plates, b_eff the tributary width); (4) a line beyond N_b stays stored with its type but is not checked (it comes back if N_b grows); (5) until PR 2 the output tabs, Summary and Report work each type on its design line only.
+- **Other copies:** none (`index.html` and `engine/*` of apps/steel-bridge; no shared file; apps/ps-bridge not touched).
+- **Before / after (exact):**
+```diff
+diff --git a/apps/steel-bridge/engine/drawings.js b/apps/steel-bridge/engine/drawings.js
+index 75ffc3d..f0e797f 100644
+--- a/apps/steel-bridge/engine/drawings.js
++++ b/apps/steel-bridge/engine/drawings.js
+@@ -43,7 +43,8 @@
+   /* plate girder (index in P.girders) of cross-section girder i of nb */
+   function plateGirderOf(P, i, nb) {
+     const G = P.girders || [], ext = i === 0 || i === nb - 1;
+-    let j = G.findIndex(g => Number.isInteger(g.line) && g.line === i); if (j >= 0) return j;
++    let j = G.findIndex(g => Array.isArray(g.lines) && g.lines.includes(i)); if (j >= 0) return j;   // SB-2 (2026-11-12): the girder type assigned to the line (absent lines: as before)
++    j = G.findIndex(g => Number.isInteger(g.line) && g.line === i); if (j >= 0) return j;
+     j = G.findIndex(g => !Number.isInteger(g.line) && (g.position === 'exterior') === ext); if (j >= 0) return j;
+     return 0;
+   }
+diff --git a/apps/steel-bridge/engine/model.js b/apps/steel-bridge/engine/model.js
+index 6286657..9cef5eb 100644
+--- a/apps/steel-bridge/engine/model.js
++++ b/apps/steel-bridge/engine/model.js
+@@ -82,6 +82,12 @@
+                   live load; absent: on when loadsManual.CL is entered (as before)
+      girders[i].line: the cross-section girder (0-based, of xs.nb) whose loads and factors this plate girder takes
+                   (absent: the first exterior girder for position 'exterior', else the first interior girder)
++     -- added 2026-11-12 (SB-2, girder types; engineer decision 2026-11-12), optional: absent = the girder sits on its one line (line
++        above, or the automatic line), exactly as before. Each girders[i] is a GIRDER TYPE: one plate girder design (its segments, b_eff,
++        position, label) assigned to one or more cross-section girder lines. --
++     girders[i].lines: [j, …] (0-based lines of xs.nb, each line in at most one type): the lines this type is checked on. Written only by an
++                  assignment the user makes (typeLines / setLines below); girders[i].line stays the type's design line (the line the
++                  output tabs work, as before) and is always one of lines when lines is not empty. Absent: [the line of line / automatic].
+      girders[i].loadsManual: { DC1wet, DC2, DW, CL, UT, UF (klf), xf: [{ x (ft), P (kip) }] } and girders[i].dfManual: { gM, gMpier,
+                   gV, fatM, fatV, gDef }: entered values, used where the loads module gives none (CL and xf: the module has none yet)
+      girders[i].loadsOverride, girders[i].dfOverride (added 2026-11-09, analysis inputs moved to the Loads tab; optional, true | false): the
+@@ -225,6 +231,82 @@
+   function defaultWelds() { return { Fexx: 70, w: '', gam: { dc: 1.25, dw: 1.50, ll: 1.75, fat: 1.75 }, ground: 'yes' }; }
+   const OWNERS = ['AASHTO', 'RIDOT', 'MassDOT', 'CTDOT'];
+ 
++  /* ---------- girder types (SB-2, 2026-11-12) ----------
++     A girder type is a girders[] entry (its plates, b_eff, position, label); its lines are the cross-section girder lines (0-based, of
++     xs.nb) it is checked on. Nothing here changes a computed value: every engine reads the type's design line girders[i].line (or the
++     automatic line) as before. typeLines / lineTypes / unassigned read; setLines, assignLine, addType, deleteType write on a user action. */
++  const nbOf = P => { const n = Math.round(+(((P || {}).xs) || {}).nb); return Number.isInteger(n) && n > 0 && n < 100 ? n : 0; };
++  /* designLine(P, g): the line girders[i] works on the output tabs: engine/analysis.js lineOf (line when valid, else the first exterior
++     line G1 for position 'exterior' or N_b < 3, else the first interior line G2). The same rule, here so that the model needs no engine. */
++  function designLine(P, g) { const nb = nbOf(P); if (g && isNum(g.line) && g.line >= 0 && g.line < nb) return Math.round(g.line); return (g && g.position === 'exterior') || nb < 3 ? 0 : 1; }
++  /* typeLines(P, gi): the lines of type gi, ascending, those of xs.nb only (a stored line beyond N_b is kept in the file, not checked) */
++  function typeLines(P, gi) {
++    const g = ((P && P.girders) || [])[gi], nb = nbOf(P); if (!g || !nb) return [];
++    if (!Array.isArray(g.lines)) return [designLine(P, g)].filter(j => j < nb);
++    return [...new Set(g.lines.filter(j => Number.isInteger(j) && j >= 0 && j < nb))].sort((a, b) => a - b);
++  }
++  /* lineTypes(P): for each line 0 … N_b − 1 the types on it ([] = no type; two or more: a conflict, shown, never resolved silently) */
++  function lineTypes(P) { const nb = nbOf(P), out = Array.from({ length: nb }, () => []); ((P && P.girders) || []).forEach((g, gi) => typeLines(P, gi).forEach(j => out[j].push(gi))); return out; }
++  const unassigned = P => lineTypes(P).map((t, j) => t.length ? -1 : j).filter(j => j >= 0);
++  const isExtLine = (P, j) => { const nb = nbOf(P); return j === 0 || j === nb - 1; };
++  /* tribBeff(xs, j): the tributary deck width of line j, in (AASHTO LRFD 10th Ed. Art. 4.6.2.6.1: b_eff = the tributary width; exterior:
++     half the adjacent spacing + the overhang; interior: half of each adjacent spacing), the rule engine/legacy.js uses for its girders */
++  function tribBeff(xs, j) { const n = Math.round(+xs.nb), B = xs.bays || []; if (!(n >= 2) || B.length !== n - 1) return NaN;
++    const ft = j === 0 ? B[0] / 2 + +xs.ohL : j === n - 1 ? B[n - 2] / 2 + +xs.ohR : (B[j - 1] + B[j]) / 2; return +(ft * 12).toFixed(6); }
++  /* setLines(P, gi, lines): type gi takes exactly these lines; each is removed from any other type (which then stores its own lines). The
++     design line: kept when still one of the lines (written as a number), else the first of them. */
++  function setLines(P, gi, lines) {
++    const G = P.girders, nb = nbOf(P), want = [...new Set(lines.filter(j => Number.isInteger(j) && j >= 0 && j < nb))].sort((a, b) => a - b);
++    G.forEach((q, k) => { if (k === gi) return; const own = typeLines(P, k); if (own.some(j => want.includes(j))) fix(k, own.filter(j => !want.includes(j))); });
++    fix(gi, want);
++    function fix(k, L) { const q = G[k], dl = designLine(P, q); q.lines = L; if (L.length) q.line = L.includes(dl) ? dl : L[0]; }
++  }
++  /* assignLine(P, j, gi): line j to type gi (removed from the type it had) */
++  function assignLine(P, j, gi) { setLines(P, gi, [...typeLines(P, gi), j]); }
++  /* addType(P, src, o): a new type, a copy of type src's plates, b_eff, position and its stiffener bays and splice plate entries (the
++     design of src); o = { label, lines (default none) }. Not copied: the loads and factors entered or pulled for src (each line has its own),
++     its custom demands. Returns the new index. */
++  function addType(P, src, o) {
++    o = o || {}; const G = P.girders, s = G[src] || G[0], ids = new Set([...G.map(q => q.id), ...Object.values(P.custom || {}).flatMap(m => Object.keys(m || {}))]);
++    let k = G.length + 1; while (ids.has('G' + k)) k++;
++    const g = { id: 'G' + k, label: o.label || `Type ${G.length + 1}`, position: s.position, beff: s.beff, segments: JSON.parse(JSON.stringify(s.segments)) };
++    const gi = G.push(g) - 1, sNo = G.indexOf(s) + 1;
++    const ly = P.stiffeners && P.stiffeners.layout; if (ly && Array.isArray(ly.bays)) ly.bays.filter(q => +q.g === sNo).forEach(q => ly.bays.push({ ...q, g: gi + 1 }));
++    const pl = P.splices && P.splices.plates; if (Array.isArray(pl)) pl.filter(q => q && q.g != null && +q.g === sNo - 1).forEach(q => pl.push({ ...JSON.parse(JSON.stringify(q)), g: gi }));
++    g.lines = []; if (o.lines && o.lines.length) setLines(P, gi, o.lines);
++    return gi;
++  }
++  /* deleteType(P, gi, to): removes type gi; its lines go to type to (an index before the removal). The stiffener bays and splice plate
++     entries of gi are removed and those of later types renumbered (they are stored by girder number / index). Its custom demands
++     (stored by id) are kept in the file. Returns false when gi is the only type. */
++  function deleteType(P, gi, to) {
++    const G = P.girders; if (G.length < 2 || !G[gi] || !G[to] || to === gi) return false;
++    const L = typeLines(P, gi); if (L.length) setLines(P, to, [...typeLines(P, to), ...L]);
++    G.splice(gi, 1);
++    const ly = P.stiffeners && P.stiffeners.layout; if (ly && Array.isArray(ly.bays)) ly.bays = ly.bays.filter(q => +q.g !== gi + 1).map(q => +q.g > gi + 1 ? { ...q, g: +q.g - 1 } : q);
++    const S = P.splices; if (S && Array.isArray(S.plates)) S.plates = S.plates.filter(q => !(q && q.g != null && +q.g === gi)).map(q => q && q.g != null && +q.g > gi ? { ...q, g: +q.g - 1 } : q);
++    return true;
++  }
++  /* newProject(): the project the page starts a NEW project with (engineer 2026-11-12, SB-2): defaultProject() with two girder types,
++     Interior (the default girder, unchanged: id G1, its plates and b_eff 114 in) on the interior lines and Exterior (the same plates, b_eff
++     the tributary width of G1) on the two exterior lines. defaultProject() itself is unchanged (the engines' tests and baselines use it). */
++  function newProject() {
++    const p = defaultProject(), nb = p.xs.nb, g = p.girders[0];
++    g.label = 'Interior'; g.line = 1; g.lines = Array.from({ length: nb - 2 }, (_, i) => i + 1);
++    p.girders.push({ id: 'G2', label: 'Exterior', position: 'exterior', line: 0, lines: [0, nb - 1], beff: tribBeff(p.xs, 0), segments: JSON.parse(JSON.stringify(g.segments)) });
++    return p;
++  }
++  /* atLine(P, gi, j): P as seen with type gi on line j (a read view: girders[gi].line reads j; every write goes to P itself). P itself when
++     j is the type's design line, so the design line's results are those of P exactly. */
++  function atLine(P, gi, j) {
++    const g = P && P.girders && P.girders[gi]; if (!g || !Number.isInteger(j) || j === designLine(P, g)) return P;
++    const gp = new Proxy(g, { get: (t, k) => k === 'line' ? j : Reflect.get(t, k), has: (t, k) => k === 'line' || Reflect.has(t, k),
++      ownKeys: t => { const K = Reflect.ownKeys(t); return K.includes('line') ? K : [...K, 'line']; },
++      getOwnPropertyDescriptor: (t, k) => k === 'line' ? { value: j, writable: true, enumerable: true, configurable: true } : Reflect.getOwnPropertyDescriptor(t, k) });
++    const ga = new Proxy(P.girders, { get: (t, k) => String(k) === String(gi) ? gp : Reflect.get(t, k) });
++    return new Proxy(P, { get: (t, k) => k === 'girders' ? ga : Reflect.get(t, k) });
++  }
++
+   const isNum = v => typeof v === 'number' && isFinite(v);
+   /* equalSpacing(xs) (EQSP, 2026-11-09; engineer's definition 2026-11-09): equally spaced girders from the exterior girder spacing.
+      S = W_cc / (N_b − 1): W_cc the exterior girder spacing (℄ to ℄ of the two exterior girders, ft), N_b − 1 the number of bays.
+@@ -271,6 +353,7 @@
+       if (!g || typeof g !== 'object') { E(gp, 'Girder is not an object.'); return; }
+       if (!g.id || ids.has(g.id)) E(`${gp}.id`, 'Each girder needs its own id.'); ids.add(g.id);
+       if (!['interior', 'exterior'].includes(g.position)) E(`${gp}.position`, 'Position must be "interior" or "exterior".');
++      if (g.lines != null && !(Array.isArray(g.lines) && g.lines.every(j => Number.isInteger(j) && j >= 0))) E(`${gp}.lines`, `${g.label || g.id}: the girder lines of the type must be a list of line numbers.`);   // SB-2
+       if (d.composite) pos(g.beff, `${gp}.beff`, 'Effective flange width');
+       const S = Array.isArray(g.segments) ? g.segments : [];
+       if (!S.length) E(`${gp}.segments`, `${g.label || g.id}: enter at least one plate segment.`);
+@@ -477,5 +560,5 @@
+      (ownerRules.owner) when it is not AASHTO, else '' (as before the owner card moved to the Project tab). Display only; nothing computed or saved. */
+   const clientName = P => { const t = String(((P || {}).project || {}).owner == null ? '' : P.project.owner).trim(), o = ((P || {}).ownerRules || {}).owner;
+     return t || (o && o !== 'AASHTO' ? o : ''); };
+-  window.SBDModel = { clientName, SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, defaultXs, equalSpacing, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, migrateNbList, legacyKind, importLegacy, exportJSON, importJSON, save, load };
++  window.SBDModel = { clientName, SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, newProject, designLine, typeLines, lineTypes, unassigned, isExtLine, tribBeff, setLines, assignLine, addType, deleteType, atLine, defaultXs, equalSpacing, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, migrateNbList, legacyKind, importLegacy, exportJSON, importJSON, save, load };
+ })();
+diff --git a/apps/steel-bridge/index.html b/apps/steel-bridge/index.html
+index ed5ee46..1716cc1 100644
+--- a/apps/steel-bridge/index.html
++++ b/apps/steel-bridge/index.html
+@@ -345,6 +345,7 @@
+   const memStore = { getItem: () => null, setItem: () => {} };
+   if (window.SBDReportData && window.SBDReportData.install) window.SBDReportData.install();   // one analysis cache for every output tab and the report (paths PR, 2026-10-30)
+   const L = M.load(store || memStore);
++  if (L.source === 'default') L.project = M.newProject();   // SB-2 (2026-11-12): a new project starts with two girder types (Interior, Exterior)
+   let P = L.project, autosave = !L.noAutosave, stale = true, R = null;
+   const LIB = window.SBDLibrary, LS = store || memStore;
+   /* saved-project link (engine/library.js): cur.id = the library item the open project was last saved to / opened from; cur.text = its
+@@ -377,11 +378,68 @@
+     [/^(spans|xs\.skews)\b/, 'layout'], [/^(analysis\b|girders\.\d+\.(loadsManual|dfManual|loadsOverride|dfOverride|clOverride)\b)/, 'loads'], [/^xs\.(ws|overlays|sip|allow|extra|dlMethod|lldf)\b/, 'loads'], [/^(xs|deck)\b/, 'xsec'], [/^(project|ownerRules)\b/, 'proj'], [/^girders\b/, 'gird'], [/^autodesign\b/, 'ad']];
+   const tabOf = p => { const el = p && document.querySelector(`#inPanes [data-path="${String(p).replace(/["\\]/g, '\\$&')}"]`), pn = el && el.closest('[data-pane]');
+     if (pn) return pn.dataset.pane; const r = TAB_RULES.find(q => q[0].test(p || '')); return r ? r[1] : 'mat'; };
+-  // SB2-A7: the cross-section girder whose dead loads and distribution factors this plate girder takes (girders[i].line; blank = automatic,
+-  // engine/analysis.js lineOf: the first exterior girder G1 for position 'exterior', else the first interior girder G2)
+-  const lineSel = g => { const nb = P.xs ? Math.round(P.xs.nb) : 0; if (!(nb > 0)) return '';
+-    const auto = window.SBDAnalysis ? window.SBDAnalysis.lineOf(P, { position: g.position }) : (g.position === 'exterior' || nb < 3 ? 0 : 1), cur = Number.isInteger(g.line) && g.line >= 0 && g.line < nb ? g.line : '';
+-    return `<div class="fRow"><label for="i_line">Loads from cross-section girder</label><select id="i_line" data-kind="line">${[['', `Automatic (G${auto + 1})`], ...[...Array(nb)].map((_, j) => [j, `G${j + 1}${j === 0 || j === nb - 1 ? ' (exterior)' : ''}`])].map(([v, t]) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select><span class="unit">dead loads and LLDF (Loads &amp; LLDF tab)</span></div>`; };
++  /* SB-2 (2026-11-12, engineer: girder types): each girders[] entry is a girder TYPE (its plates, b_eff, position, label) assigned to one or
++     more cross-section girder lines (engine/model.js typeLines / setLines). The Girders & plates tab lists the types, their lines and the
++     lines with no type; the Cross-section tab assigns a type to each line. Display and input only: every engine still works a type on its
++     design line girders[i].line (blank = automatic, SB2-A7), as before. */
++  const lnName = j => `G${j + 1}`;
++  const lnList = L => L.map(lnName).join(', ');
++  const tyName = gi => { const q = P.girders[gi]; return q ? q.label || q.id : ''; };
++  let delAsk = null;   // the type whose Delete asks where its lines go (inline, Girders & plates tab)
++  /* unassignedNote(): the lines with no type and the lines with two types, with "Assign remaining lines to <type>" (never done silently) */
++  function unassignedNote() {
++    const U = M.unassigned(P), LT = M.lineTypes(P), dup = LT.map((t, j) => t.length > 1 ? j : -1).filter(j => j >= 0); let h = '';
++    if (U.length) h += `<div class="alert err" data-sbtypes="unassigned"><b>Line${U.length > 1 ? 's' : ''} ${lnList(U)} ${U.length > 1 ? 'have' : 'has'} no girder type</b>, so ${U.length > 1 ? 'they are' : 'it is'} not checked. Every cross-section girder line needs a type for the checks to cover the bridge.
++      <div style="margin-top:4px">${P.girders.map((q, gi) => `<button type="button" data-asgall="${gi}">Assign ${U.length > 1 ? 'them' : 'it'} to ${esc(tyName(gi))}</button>`).join(' ')}</div></div>`;
++    if (dup.length) h += `<div class="alert err">Line${dup.length > 1 ? 's' : ''} ${dup.map(j => `${lnName(j)} (${LT[j].map(tyName).map(esc).join(', ')})`).join('; ')}: more than one type on one line. Assign the line to one type (Cross-section tab, Girder type of each line).</div>`;
++    return h;
++  }
++  /* typeNotes(gi): the type's lines whose position (exterior / interior) or tributary width differs from the type's own inputs (the type's
++     position and b_eff are used on every line; a note only, nothing changed) */
++  function typeNotes(gi) {
++    const g = P.girders[gi], L = M.typeLines(P, gi), out = [];
++    const pos = L.filter(j => M.isExtLine(P, j) !== (g.position === 'exterior')); if (pos.length) out.push(`Line${pos.length > 1 ? 's' : ''} ${lnList(pos)} ${pos.length > 1 ? 'are' : 'is'} ${g.position === 'exterior' ? 'interior' : 'exterior'}; this type's position is ${esc(g.position)} (used on every line).`);
++    const bw = L.map(j => [j, M.tribBeff(P.xs, j)]).filter(([, b]) => isFinite(b) && isFinite(+g.beff) && Math.abs(b - +g.beff) > 0.5);
++    if (bw.length) out.push(`Tributary width (4.6.2.6.1) ${bw.map(([j, b]) => `${lnName(j)} ${U.fmt(b, 1)} in`).join(', ')}; this type's b<sub>eff</sub> ${U.fmt(+g.beff, 1)} in is used on every line.`);
++    if (!L.length) out.push('No line is assigned to this type: it is not checked on the bridge (the output tabs show it on its design line).');
++    return out.length ? `<p class="note" data-sbtypes="notes">${out.join('<br>')}</p>` : '';
++  }
++  /* typesCard(): the Girder types card (Girders & plates tab): one row per type, its lines; Add / Copy / Delete; the selected type's lines
++     as check boxes (checking a line moves it to this type; a line leaves a type only by being assigned to another, so it always keeps one) */
++  function typesCard() {
++    const nb = P.xs ? M.lineTypes(P).length : 0, gi0 = Math.min(ui.g, P.girders.length - 1), g = P.girders[gi0], L = M.typeLines(P, gi0);
++    const rows = P.girders.map((q, gi) => { const Lq = M.typeLines(P, gi); return `<tr class="${gi === gi0 ? 'sel' : ''}"><td><button type="button" data-gsel="${gi}" title="Select this type">${esc(tyName(gi))}</button></td><td>${esc(q.position)}</td><td class="lft">${Lq.length ? lnList(Lq) : '<i>none</i>'}</td><td>${Lq.length ? lnName(M.designLine(P, q)) : ''}</td></tr>`; }).join('');
++    const cbs = nb ? `<div class="fRow" style="flex-wrap:wrap"><label>Lines of ${esc(tyName(gi0))}</label><span data-sbtypes="lines">${[...Array(nb)].map((_, j) => { const own = L.includes(j), oth = M.lineTypes(P)[j].filter(k => k !== gi0);
++        return `<label style="white-space:nowrap;margin-right:8px"><input type="checkbox" data-gline="${j}"${own ? ' checked disabled title="Assign this line to another type to take it off this one (a line always keeps a type)"' : ` title="${oth.length ? `Move ${lnName(j)} from ${esc(oth.map(tyName).join(', '))} to this type` : `Assign ${lnName(j)} to this type`}"`}> ${lnName(j)}${M.isExtLine(P, j) ? ' (ext.)' : ''}${!own && oth.length ? ` <span class="note">${esc(oth.map(tyName).join(', '))}</span>` : ''}</label>`; }).join('')}</span></div>` : '';
++    const dsel = L.length ? `<div class="fRow"><label for="i_dline">Design line (output tabs)</label><select id="i_dline" data-kind="line">${(Number.isInteger(g.line) ? [] : [['', `Automatic (${lnName(M.designLine(P, g))})`]]).concat(L.map(j => [j, lnName(j)])).map(([v, t]) => `<option value="${v}"${String(Number.isInteger(g.line) ? g.line : '') === String(v) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select><span class="unit">dead loads and LLDF of this line on the output tabs</span></div>` : '';
++    const del = delAsk === gi0 && P.girders.length > 1 ? `<div class="alert" data-sbtypes="delask">Delete type <b>${esc(tyName(gi0))}</b>?${L.length ? ` Its line${L.length > 1 ? 's' : ''} ${lnList(L)} go${L.length > 1 ? '' : 'es'} to <select id="i_delTo">${P.girders.map((q, k) => k === gi0 ? '' : `<option value="${k}">${esc(tyName(k))}</option>`).join('')}</select>.` : ''}
++      Its stiffener bays and splice plate entries are removed with it. <button type="button" id="bDelTypeOk">Delete</button> <button type="button" id="bDelTypeNo">Cancel</button></div>` : '';
++    return card('Girder types', `<p class="note">A girder type is one plate girder design (plates, b<sub>eff</sub>, position) used on the cross-section girder lines assigned to it (engineer, 2026-11-12). Each line has one type.</p>
++      ${unassignedNote()}<div class="tscroll"><table class="tbl"><thead><tr><th>Type</th><th>Position</th><th class="lft">Lines</th><th>Design line</th></tr></thead><tbody>${rows}</tbody></table></div>
++      <div style="margin:4px 0"><button type="button" id="bAddType" title="A new type with the plates of ${esc(tyName(gi0))}, no line yet">Add type</button> <button type="button" id="bCopyType" title="A copy of ${esc(tyName(gi0))} (plates, b_eff, position), no line yet">Copy type</button> <button type="button" id="bDelType"${P.girders.length < 2 ? ' disabled title="The only type cannot be deleted"' : ''}>Delete type</button></div>${del}`)
++      + card('Selected type', `${sel('_g', 'Girder type', P.girders.map((q, i) => [i, q.label || q.id]), gi0)}${num(`girders.${gi0}.label`, 'Label', '', { text: true })}
++          ${sel(`girders.${gi0}.position`, 'Position', [['interior', 'Interior'], ['exterior', 'Exterior']])}${cbs}${dsel}${num(`girders.${gi0}.beff`, 'Effective flange width b<sub>eff</sub>', 'in')}${typeNotes(gi0)}`);
++  }
++  /* lineTypeCard(): the Cross-section tab's "Girder type of each line" (a select per line; a line with no type, as a saved project's other
++     lines, shows "— none —" until a type is chosen) */
++  function lineTypeCard() {
++    const LT = M.lineTypes(P); if (!LT.length) return '';
++    return card('Girder type of each line', `${unassignedNote()}<div class="tscroll"><table class="tbl"><thead><tr><th>Line</th><th class="lft">Girder type</th><th>Tributary width (in)</th></tr></thead><tbody>
++      ${LT.map((t, j) => `<tr><td>${lnName(j)}${M.isExtLine(P, j) ? ' (exterior)' : ''}</td><td class="lft"><select data-ltype="${j}" aria-label="girder type of line ${lnName(j)}">${t.length === 1 ? '' : `<option value="" selected>${t.length ? esc(t.map(tyName).join(' + ')) + ' (conflict)' : '— none —'}</option>`}${P.girders.map((q, gi) => `<option value="${gi}"${t.length === 1 && t[0] === gi ? ' selected' : ''}>${esc(tyName(gi))}</option>`).join('')}</select></td><td>${U.fmt(M.tribBeff(P.xs, j), 1)}</td></tr>`).join('')}
++      </tbody></table></div><p class="note">The plates of each type: <a href="#" data-itgo="gird">Girders &amp; plates tab</a>. A line moves to the type chosen here.</p>`);
++  }
++  /* SB-2: the Loads tab's per-girder cards (dead loads, construction live load, distribution factors: ui/analysis.js inputs) are those of the
++     girder type of the Girders & plates tab (ui.g, the same choice) on one of its lines (ui.ln; the type's design line by default). The
++     calculated values shown are that line's (SBDModel.atLine: a read view; the design line is the project itself). The entered values and
++     the override boxes belong to the type: they apply on every line of it. */
++  const lnSel = () => { const gi = Math.min(ui.g, P.girders.length - 1), L = M.typeLines(P, gi); return L.includes(ui.ln) ? ui.ln : M.designLine(P, P.girders[gi]); };
++  const loadsView = () => M.atLine(P, Math.min(ui.g, P.girders.length - 1), lnSel());
++  function loadsPick() {
++    const gi = Math.min(ui.g, P.girders.length - 1), L = M.typeLines(P, gi), j = lnSel();
++    return card('Girder type and line', `<div class="fRow"><label for="i__gLd">Girder type</label><select id="i__gLd">${P.girders.map((q, i) => `<option value="${i}"${i === gi ? ' selected' : ''}>${esc(q.label || q.id)}</option>`).join('')}</select><span class="unit">the same choice as the Girders &amp; plates tab</span></div>
++      <div class="fRow"><label for="i__lnLd">Line</label><select id="i__lnLd">${(L.includes(j) ? L : [j, ...L]).map(k => `<option value="${k}"${k === j ? ' selected' : ''}>${lnName(k)}${k === M.designLine(P, P.girders[gi]) ? ' (design line)' : ''}</option>`).join('')}</select><span class="unit">${L.length > 1 ? `the type is on ${lnList(L)}` : L.length ? '' : 'no line assigned: its design line'}</span></div>
++      <p class="note">The calculated values below are those of line ${lnName(j)}. Entered values and the override boxes belong to the type and apply on every line of it.</p>${M.unassigned(P).length ? `<p class="note">Line(s) ${lnList(M.unassigned(P))} have no girder type: <a href="#" data-itgo="gird">Girders &amp; plates tab</a>.</p>` : ''}`);
++  }
+   function panes() {
+     const g = P.girders[ui.g] || P.girders[0];
+     const xsp = UL.parts(P, { num, sel, card, esc });   // the cross-section and load cards (ui/loads.js), on the Bridge layout, Cross-section, Materials and Loads tabs
+@@ -398,7 +456,7 @@
+         <p class="note">One span per row (Enter adds a row). Total ${U.fmt(P.spans.lengths.reduce((a, b) => a + (+b || 0), 0), 2)} ft. The last plate segment of each girder must end there.</p>`)
+         + card('Support skews', `${xsp.skews}<p class="note">Left to right: abutment, piers, abutment. The cross-frame orientation and the flange lateral bending from skew: <a href="#" data-itgo="framing">Framing &amp; bracing tab</a>.</p>`)
+         + card('Plan', window.SBDFramingUI.layoutPlan(P)),   // the framing plan of the Framing & bracing tab (ui/framing.js plan), for a look at the skews and spans
+-      xsec: xsp.girders
++      xsec: xsp.girders + lineTypeCard()   // SB-2: the girder type of each line
+         + card('Deck', `${sel('deck.composite', 'Composite', [['true', 'Yes'], ['false', 'No (noncomposite)']])}${num('deck.ts', 'Structural slab t<sub>s</sub>', 'in')}${num('deck.tdeck', 'Total deck thickness', 'in')}${num('deck.haunch', 'Haunch', 'in')}
+           ${num('deck.rebar.top.A', 'Top layer A<sub>rt</sub> (per girder)', 'in²')}${num('deck.rebar.top.c', 'Top layer, centroid below top of slab', 'in')}
+           ${num('deck.rebar.bot.A', 'Bottom layer A<sub>rb</sub> (per girder)', 'in²')}${num('deck.rebar.bot.c', 'Bottom layer, centroid above bottom of slab', 'in')}
+@@ -409,14 +467,13 @@
+         + card('Deck concrete and reinforcement', `${num('materials.concrete.fc', 'f′<sub>c</sub>', 'ksi')}${num('materials.concrete.wc', 'w<sub>c</sub>', 'kcf')}${xsp.wcE}${num('materials.concrete.K1', 'K<sub>1</sub>', '')}
+           ${sel('materials.concrete.nRule', 'Modular ratio n', [['exact', 'Exact (E_s/E_c)'], ['round', 'Rounded to an integer']])}${num('materials.rebar.Fyr', 'Rebar F<sub>yr</sub>', 'ksi')}
+           <p class="note">Slab thickness, haunch and the rebar areas: <a href="#" data-itgo="xsec">Cross-section tab</a>.</p>`),
+-      gird: card('Girder', `${sel('_g', 'Girder', P.girders.map((q, i) => [i, q.label || q.id]), ui.g)}${num(`girders.${ui.g}.label`, 'Label', '', { text: true })}
+-          ${sel(`girders.${ui.g}.position`, 'Position', [['interior', 'Interior'], ['exterior', 'Exterior']])}${lineSel(g)}${num(`girders.${ui.g}.beff`, 'Effective flange width b<sub>eff</sub>', 'in')}`)
+-        + card('Plate segments (from the left end)', `<div class="tscroll"><table class="tbl"><thead><tr><th></th><th>x<sub>0</sub><br>ft</th><th>x<sub>1</sub><br>ft</th><th>D<br>in</th><th>t<sub>w</sub><br>in</th><th>b<sub>t</sub><br>in</th><th>t<sub>t</sub><br>in</th><th>b<sub>b</sub><br>in</th><th>t<sub>b</sub><br>in</th><th></th></tr></thead><tbody>
++      gird: typesCard()
++        + card(`Plate segments of ${esc(g.label || g.id)} (from the left end)`, `<div class="tscroll"><table class="tbl"><thead><tr><th></th><th>x<sub>0</sub><br>ft</th><th>x<sub>1</sub><br>ft</th><th>D<br>in</th><th>t<sub>w</sub><br>in</th><th>b<sub>t</sub><br>in</th><th>t<sub>t</sub><br>in</th><th>b<sub>b</sub><br>in</th><th>t<sub>b</sub><br>in</th><th></th></tr></thead><tbody>
+           ${g.segments.map((s, i) => `<tr class="${i === ui.seg ? 'sel' : ''}"><td><button type="button" data-seg="${i}" title="Show this segment's section properties">${i + 1}</button></td>${['x0', 'x1', 'D', 'tw', 'topB', 'topT', 'botB', 'botT'].map(k => `<td><input type="number" step="any" data-path="girders.${ui.g}.segments.${i}.${k}" data-kind="num" value="${esc(s[k])}" aria-label="segment ${i + 1} ${k}"></td>`).join('')}<td><button type="button" data-del="${i}" title="Remove this segment"${g.segments.length < 2 ? ' disabled' : ''}>×</button></td></tr>`).join('')}
+           </tbody></table></div><button type="button" id="bAddSeg">Add segment</button><p class="note">Segments are contiguous: each starts where the one before ends. Plate thicknesses may be typed as decimals (0.5625).</p>`),
+       framing: window.SBDFramingUI.inputs(P, { num, sel, card, esc }, ui),   // framing.* and crossframes.* (the wind card: Loads tab)
+       loads: xsp.ws + xsp.extra + xsp.dist + window.SBDFramingUI.windCard(P, { num, sel, card, esc })
+-        + window.SBDAnalysisUI.inputs(P, Math.min(ui.g, P.girders.length - 1)),   // AIN (2026-11-09): the analysis inputs, moved here from the Analysis output tab
++        + loadsPick() + window.SBDAnalysisUI.inputs(loadsView(), Math.min(ui.g, P.girders.length - 1)),   // AIN (2026-11-09): the analysis inputs, moved here from the Analysis output tab
+       stf: window.SBDShearUI.inputs(P, { num, sel, card, esc }, ui),
+       fs: window.SBDFatigueUI.inputs(P, { num, sel, card, esc }, ui),
+       spl: window.SBDSplicesUI.inputs(P, { num, sel, card, esc }, ui),
+@@ -461,9 +518,14 @@
+   $('inTabs').addEventListener('click', e => { const b = e.target.closest('[data-itab]'); if (!b) return; ui.itab = b.dataset.itab; saveUi(); drawInputs(); });
+   $('inPanes').addEventListener('change', e => {
+     const el = e.target;
+-    if (el.id === 'i__g' || el.id === 'i__gHo') { ui.g = +el.value; ui.seg = 0; saveUi(); drawInputs(); markStale(); return; }
++    if (el.id === 'i__g' || el.id === 'i__gHo' || el.id === 'i__gLd') { ui.g = +el.value; ui.seg = 0; delete ui.ln; delAsk = null; saveUi(); drawInputs(); markStale(); return; }
++    if (el.id === 'i__lnLd') { ui.ln = +el.value; saveUi(); drawInputs(); return; }   // SB-2: the line of the Loads tab's cards (display only)
+     if (window.SBDAnalysisUI.onInputChange(el, P, Math.min(ui.g, P.girders.length - 1))) { changed(true); return; }   // AIN: the analysis inputs (ui/analysis.js)
++    if (el.dataset.path === 'xs.nb') { const nb0 = M.lineTypes(P).length; if (UL.onChange(el, P)) { changed(true); nbOffer(nb0); return; } }   // SB-2: N_b changed: offer to assign the new lines
+     if (UL.onChange(el, P)) { changed(true); return; }
++    if (el.dataset.ltype != null) { if (el.value !== '') { M.assignLine(P, +el.dataset.ltype, +el.value); changed(true); } return; }   // SB-2: Cross-section tab, the type of a line
++    if (el.dataset.gline != null) { if (el.checked) { M.assignLine(P, +el.dataset.gline, Math.min(ui.g, P.girders.length - 1)); changed(true); } return; }   // SB-2: a line checked on the selected type
++    if (el.id === 'i_delTo') return;
+     if (el.dataset.kind === 'line') { const g = P.girders[ui.g]; if (el.value === '') delete g.line; else g.line = Number(el.value); changed(false); return; }   // SB2-A7
+     if (window.SBDSplicesUI.onChange(el, P)) { changed(true); return; }
+     if (window.SBDFramingUI.onChange(el, P)) { changed(true); return; }
+@@ -481,6 +543,13 @@
+     if (window.SBDFatigueUI.onClick(e, P, ui)) { changed(true); return; }
+     if (window.SBDSplicesUI.onClick(e, P, ui)) { changed(true); return; }
+     if (window.SBDHandoffUI && window.SBDHandoffUI.onClick(e, P, ui)) { changed(true); return; }   // B2
++    { const gs = e.target.closest('[data-gsel]'), ga = e.target.closest('[data-asgall]'), id = e.target.id, gi = Math.min(ui.g, P.girders.length - 1);   // SB-2: girder types
++      if (gs) { ui.g = +gs.dataset.gsel; ui.seg = 0; delAsk = null; saveUi(); drawInputs(); markStale(); return; }
++      if (ga) { const U = M.unassigned(P); if (U.length) { M.setLines(P, +ga.dataset.asgall, [...M.typeLines(P, +ga.dataset.asgall), ...U]); changed(true); } return; }
++      if (id === 'bAddType' || id === 'bCopyType') { const n = M.addType(P, gi, id === 'bCopyType' ? { label: `${tyName(gi)} copy` } : {}); ui.g = n; ui.seg = 0; delAsk = null; saveUi(); changed(true); return; }
++      if (id === 'bDelType') { delAsk = gi; drawInputs(); return; }
++      if (id === 'bDelTypeNo') { delAsk = null; drawInputs(); return; }
++      if (id === 'bDelTypeOk') { const to = $('i_delTo') ? +$('i_delTo').value : (gi ? 0 : 1); delAsk = null; if (M.deleteType(P, gi, to)) { ui.g = Math.min(to > gi ? to - 1 : to, P.girders.length - 1); ui.seg = 0; saveUi(); changed(true); } return; } }
+     const s = e.target.closest('[data-seg]'), d = e.target.closest('[data-del]');
+     if (s) { ui.seg = +s.dataset.seg; saveUi(); drawInputs(); markStale(); return; }
+     if (d) { const g = P.girders[ui.g], i = +d.dataset.del, S = g.segments; S.splice(i, 1); if (S[i]) S[i].x0 = i ? S[i - 1].x1 : 0; ui.seg = Math.min(ui.seg, S.length - 1); changed(true); return; }
+@@ -521,10 +590,20 @@
+     toast(`<strong>${esc(od.owner)} defaults applied: ${od.changes.length} input${od.changes.length > 1 ? 's' : ''} changed</strong><ul>${od.changes.map(c => `<li><span class="tFld">${esc(c.tab)} › ${esc(c.field)}</span>: ${esc(c.from)} <span class="tArr">→</span> ${esc(c.to)}${c.unit ? ' ' + esc(c.unit) : ''}</li>`).join('')}</ul>`
+       + (od.same.length ? `<div class="note">Already at the default, not changed: ${od.same.map(c => esc(c.field)).join(', ')}.</div>` : ''), { undo: true });
+   }
++  /* nbOffer(nb0): after N_b changes (SB-2), the lines with no type are offered to a type (a button per type; nothing assigned silently),
++     and the lines beyond N_b that types still store are named (kept in the file, not checked; they come back if N_b grows again) */
++  function nbOffer(nb0) {
++    const nb = M.lineTypes(P).length, U = M.unassigned(P); if (nb === nb0) return;
++    const gone = P.girders.map((q, gi) => [gi, (Array.isArray(q.lines) ? q.lines : []).filter(j => j >= nb)]).filter(([, L]) => L.length);
++    if (!U.length && !gone.length) return;
++    toast(`<strong>N<sub>b</sub> is now ${nb}.</strong>${U.length ? ` Line${U.length > 1 ? 's' : ''} ${lnList(U)} ${U.length > 1 ? 'have' : 'has'} no girder type and ${U.length > 1 ? 'are' : 'is'} not checked until assigned:<div>${P.girders.map((q, gi) => `<button type="button" data-tasg="${gi}">Assign to ${esc(tyName(gi))}</button>`).join(' ')}</div>` : ''}`
++      + (gone.length ? `<div class="note">No longer on the bridge (kept with the type, not checked): ${gone.map(([gi, L]) => `${esc(tyName(gi))} ${lnList(L)}`).join('; ')}. The exterior lines changed too: check each type's lines and position (Girders &amp; plates tab).</div>` : ''));
++  }
+   function closeToast() { $('toast').hidden = true; }
+   /* loadNotes(notes): the one-line notices of the field migrations run on load (engine/model.js importJSON notes, e.g. migrateNbList) */
+   const loadNotes = n => { if (n && n.length) toast(n.map(t => esc(t)).join('<br>')); };
+-  $('toast').addEventListener('click', e => { if (e.target.id === 'tClose') closeToast(); else if (e.target.id === 'tUndo') undo(); });
++  $('toast').addEventListener('click', e => { const ta = e.target.closest && e.target.closest('[data-tasg]'); if (ta) { const U = M.unassigned(P), gi = +ta.dataset.tasg; if (U.length && P.girders[gi]) { M.setLines(P, gi, [...M.typeLines(P, gi), ...U]); changed(true); } closeToast(); return; }   // SB-2: nbOffer
++    if (e.target.id === 'tClose') closeToast(); else if (e.target.id === 'tUndo') undo(); });
+   const loadAs = (proj, id, textFn) => { P = proj; ui.g = 0; ui.seg = 0; autosave = true; undoS = []; redoS = []; closeToast(); changed(true, true); cur = { id, text: textFn ? textFn(P) : null }; LIB.setCur(LS, id); snap = JSON.stringify(P); syncBar(); };   // a different project: the undo history starts again
+   /* STDS-B (2026-11-06): the standard save (shared/projects-ui.js projectBar; engineer-approved standard, 2026-11-05): header chip ·
+      Undo · Redo · Save (Ctrl+S) · Saved projects…; the Project tab's first card "Save and open" (Save · Save as… · Saved projects… · New;
+@@ -604,7 +683,7 @@
+     displayName: () => clean(P.project.name),
+     save: pbSave,
+     open: v => { const i = vItem(v); if (!i) return false; const r = LIB.open(LS, i.id); if (!r.ok) { alert(r.error); return false; } loadAs(r.project, i.id, norm); loadNotes(r.notes); return true; },
+-    newProject: () => loadAs(M.defaultProject(), null, norm),
++    newProject: () => loadAs(M.newProject(), null, norm),   // SB-2: two girder types
+     exportFile: v => { if (!v || v === vName(cur.id) || v === P.project.name) { exportFile(P); return; } const Q = JSON.parse(JSON.stringify(P)); Q.project.name = v; exportFile(Q); },
+     importFile: () => $('fImport').click(),
+     exportOne: v => { const i = vItem(v); if (!i) return; const t = LIB.text(LS, i.id); if (t != null) SPUI.download(String(i.name || 'steel-bridge').replace(/[^\w.-]+/g, '_') + '.sbd2.json', t); },
+```
