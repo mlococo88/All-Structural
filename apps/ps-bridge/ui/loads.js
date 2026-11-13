@@ -18,7 +18,7 @@
     { key: 'hlv', title: 'HL-93 shear per lane (simple span)', ref: A + '3.6.1.2, 3.6.1.3', ids: /^ld\.(Vtr|Vtd|Vln|V)$/, res: /^ld\.V$/ },
     { key: 'kg', title: 'Stiffness parameter', ref: A + '4.6.2.2.1', ids: /^ld\.(Sf|eg|Kg)$/, res: /^ld\.Kg$/ },
     { key: 'int', title: 'Interior girder equations', ref: A + 'Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1', ids: /^ld\.(m1|m2|v1|v2)$/ },
-    { key: 'ext', title: 'Exterior girder: lever rule, e, rigid section', ref: A + '4.6.2.2.2d, 4.6.2.2.3b', ids: /^ld\.(lever|eM|eV|rigid)$/ },
+    { key: 'ext', title: 'Exterior girder: lever rule, e, rigid section', ref: A + '4.6.2.2.2d, 4.6.2.2.3b', ids: /^ld\.(lever|eM|eV|rigid|rigXbar|rigXext|rigSx2)$/ },
     { key: 'df', title: 'Distribution factors used', ref: A + '4.6.2.2.2e, 4.6.2.2.3c', ids: /^ld\.(dfmRaw|dfvRaw|c1|skM|skV|dfm|dfv)$/, res: /^ld\.dfm$/ },
     { key: 'll', title: 'Live load per girder', ref: A + '3.6.1.3, 4.6.2.2', ids: /^ld\.(MLL|VLL)$/, res: /^ld\.MLL$/ }];
   function output(ctx) {

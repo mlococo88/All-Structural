@@ -64,14 +64,18 @@ let nImp = 0, nImpKeys = 0; const impNotes = [];
 const SEED = { 'psbeam.inputs.v1': '{"girder":"PCI BT-72","L":118}', 'psbeam.ui.v1': '{"tab":"losses"}' };
 let fails = 0, errors = 0;
 const log = s => console.log(s);
-// scanList(p): "Find the old app's designs" clicked until its list (or its "none found") is drawn. 2026-11-13 (PR 3a-4): a run now and then
-// timed out waiting for the list's radio after one click (on main too, not reproduced in 4 reruns): the click is read only (the list is read
-// again on each click), so a click that drew nothing is repeated, at most 3 times, and said in the log; the list itself is checked as before.
-async function scanList(p, name) {
+// reloadKept(p, name, o, wait): reload the new page and check that the keys o the harness just put are in the reloaded page's storage, each
+// value as put. 2026-11-13 (PR PS-19): now and then the reloaded page saw a store with none of them (only the seed and psb2.ui: the page's
+// browser storage reset, on main too), so the import list had nothing and the harness timed out (PR 3a-4 took it for a missed click and
+// repeated the click: removed, that was not the cause). Then the keys are put again and the page reloaded, at most 3 times, said in the log;
+// nothing is compared on a page without them.
+async function reloadKept(p, name, o, wait) {
   for (let t = 1; ; t++) {
-    await p.click('[data-lg="scan"]');
-    try { await p.waitForSelector('#lgListHost #lgList, #lgListHost #lgNone', { timeout: 10000 }); if (t > 1) log(`note ${name}: the list was drawn on click ${t}`); return; }
-    catch (e) { if (t >= 3) throw e; }
+    await p.reload(); await p.waitForSelector('#tabBar [data-otab]'); await p.waitForTimeout(wait);
+    if (await p.evaluate(o => Object.entries(o).every(([k, v]) => localStorage.getItem(k) === v), o)) {
+      if (t > 1) log(`note ${name}: the page's storage held the design's keys on reload ${t}`); return; }
+    if (t >= 3) throw new Error(`${name}: the reloaded page's storage does not hold the keys put for the design (3 reloads)`);
+    await p.evaluate(o => Object.entries(o).forEach(([k, v]) => localStorage.setItem(k, v)), o);
   }
 }
 
@@ -92,7 +96,8 @@ for (const name of names) {
   let inp, P;
   if (!IMPORT) {
     P = await nw.p.evaluate(([src, nm]) => { eval(src); const P = window.__TAB_CASES(() => window.PSBModel.defaultProject())[nm]; localStorage.setItem('psb2.project.current', window.PSBModel.exportJSON(P)); return P; }, [caseSrc, name]);
-    await nw.p.reload(); await nw.p.waitForSelector('#tabBar [data-otab]'); await nw.p.waitForTimeout(300);
+    const pj = await nw.p.evaluate(() => localStorage.getItem('psb2.project.current'));
+    await reloadKept(nw.p, name, { 'psb2.project.current': pj }, 300);
     inp = await nw.p.evaluate(() => window.PSBDesign.inputs(window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project));
   } else {
     // PR 2f: the old app's inputs of the design, put where the old app keeps them, imported through the Project tab
@@ -109,10 +114,10 @@ for (const name of names) {
       return { o, inp, file: how === 'file' ? JSON.stringify(saved, null, 1) : null };   // the old Export JSON: JSON.stringify(inp, null, 1)
     }, [caseSrc, name, how, ctl]);
     inp = seed.inp;
-    await nw.p.reload(); await nw.p.waitForSelector('#tabBar [data-otab]'); await nw.p.waitForTimeout(200);
+    await reloadKept(nw.p, name, seed.o, 200);
     await nw.p.click('#inTabs [data-itab="proj"]');
     if (how === 'file') { const f = path.join(TMP, 'old-export.json'); fs.writeFileSync(f, seed.file); await nw.p.click('[data-lg="file"]').catch(() => {}); await nw.p.setInputFiles('#fImport', f); }
-    else { await scanList(nw.p, name); const id = { autosave: 'autosave', shared: 'reg:bp_h', older: 'lib:old1' }[how]; await nw.p.check(`input[name="lgPick"][value="${id}"]`); await nw.p.click('[data-lg="imp"]'); }
+    else { await nw.p.click('[data-lg="scan"]'); const id = { autosave: 'autosave', shared: 'reg:bp_h', older: 'lib:old1' }[how]; await nw.p.check(`input[name="lgPick"][value="${id}"]`); await nw.p.click('[data-lg="imp"]'); }
     await nw.p.waitForSelector('#lgSum', { timeout: 120000 }); await nw.p.waitForTimeout(200);
     const imp = await nw.p.evaluate(o => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, i = window.PSBDesign.inputs(P), changed = Object.keys(o).filter(k => localStorage.getItem(k) !== o[k]);
       const t = document.getElementById('toast');
