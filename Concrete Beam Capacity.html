@@ -678,6 +678,77 @@ function eqBlock(o){
 }
 
 /* =====================================================================
+   CBSL (2026-11-13, engineer decision): SERVICE LOAD CASES -> ACI 318-19 5.3.1 strength combinations
+   S.loadMode &quot;service&quot;: the load cases D, L, L_r, S, R, W, E (actions M, V, T at the section, signed as the factored
+   input: +M sagging) are combined by Table 5.3.1, Eqs. (5.3.1a)-(5.3.1g); &quot;factored&quot;: S.combos as typed (unchanged).
+   Service mode applies in ACI mode only (cbcSvcOn); AASHTO mode always uses the typed factored actions.
+   cbcBuildCombos(svc) is a pure function (Node test: tests/engine/cbc-loads.test.mjs). Each row:
+     {eq:&quot;5.3.1b&quot;, terms:[{k,f,s}], Mu, Vu, Tu, name, merged:[names of the alternatives this row stands for]}
+   with f the load factor and s = +1 (as entered) or -1 (W / E reversed). Rules:
+     - &quot;or&quot; alternatives expand into separate rows: (L_r or S or R) three rows; (1.0L or 0.5W) two.
+     - 5.3.3 (svc.l05): the factor on L in Eqs. (5.3.1c), (d), (e) is 0.5 instead of 1.0.
+     - svc.rev.W / svc.rev.E: the row is built with +W and with -W (likewise E); the signs of M, V and T flip together.
+     - A row is dropped only where, once the terms of all-zero load cases are left out, the same terms (load, factor,
+       sign) are already in an earlier row of the SAME equation (e.g. L_r = S = R = 0 leaves one row of Eq. (5.3.1b);
+       W = 0 leaves one of +W / -W). The kept row lists the dropped alternatives in merged. Rows of different
+       equations are never dropped; identical actions are flagged by the identical-combination check (computeAll).
+   ===================================================================== */
+const CBC_LD_KEYS=[&quot;D&quot;,&quot;L&quot;,&quot;Lr&quot;,&quot;S&quot;,&quot;R&quot;,&quot;W&quot;,&quot;E&quot;];
+function cbcBuildCombos(svc){
+  const C=(svc&amp;&amp;svc.cases)||{}, rev=(svc&amp;&amp;svc.rev)||{}, fL=(svc&amp;&amp;svc.l05)?0.5:1.0;
+  const val=(k,a)=>{ const c=C[k]||{}; const v=+c[a]; return isFinite(v)?v:0; };
+  const zero=k=>!val(k,&quot;M&quot;)&amp;&amp;!val(k,&quot;V&quot;)&amp;&amp;!val(k,&quot;T&quot;);
+  const lab={D:&quot;D&quot;,L:&quot;L&quot;,Lr:&quot;Lr&quot;,S:&quot;S&quot;,R:&quot;R&quot;,W:&quot;W&quot;,E:&quot;E&quot;};
+  const ff=f=>f.toFixed(1);
+  const nameOf=terms=>terms.map((t,i)=>(i===0?(t.s<0?&quot;−&quot;:&quot;&quot;):(t.s<0?&quot; − &quot;:&quot; + &quot;))+ff(t.f)+lab[t.k]).join(&quot;&quot;);
+  const X3=[&quot;Lr&quot;,&quot;S&quot;,&quot;R&quot;], T=[];
+  const tpl=(eq,list)=>list.forEach(terms=>T.push({eq,terms}));
+  tpl(&quot;5.3.1a&quot;,[[[&quot;D&quot;,1.4]]]);
+  tpl(&quot;5.3.1b&quot;,X3.map(x=>[[&quot;D&quot;,1.2],[&quot;L&quot;,1.6],[x,0.5]]));
+  tpl(&quot;5.3.1c&quot;,[].concat(...X3.map(x=>[[[&quot;D&quot;,1.2],[x,1.6],[&quot;L&quot;,fL]],[[&quot;D&quot;,1.2],[x,1.6],[&quot;W&quot;,0.5]]])));
+  tpl(&quot;5.3.1d&quot;,X3.map(x=>[[&quot;D&quot;,1.2],[&quot;W&quot;,1.0],[&quot;L&quot;,fL],[x,0.5]]));
+  tpl(&quot;5.3.1e&quot;,[[[&quot;D&quot;,1.2],[&quot;E&quot;,1.0],[&quot;L&quot;,fL],[&quot;S&quot;,0.2]]]);
+  tpl(&quot;5.3.1f&quot;,[[[&quot;D&quot;,0.9],[&quot;W&quot;,1.0]]]);
+  tpl(&quot;5.3.1g&quot;,[[[&quot;D&quot;,0.9],[&quot;E&quot;,1.0]]]);
+  const rows=[], sig={};
+  T.forEach(t=>{
+    const revK=t.terms.map(x=>x[0]).find(k=>(k===&quot;W&quot;||k===&quot;E&quot;)&amp;&amp;rev[k]);
+    (revK?[1,-1]:[1]).forEach(sg=>{
+      const terms=t.terms.map(([k,f])=>({k,f,s:(k===revK?sg:1)}));
+      const key=t.eq+&quot;|&quot;+terms.filter(x=>!zero(x.k)).map(x=>x.k+&quot;:&quot;+x.f+&quot;:&quot;+x.s).join(&quot;,&quot;);
+      const name=nameOf(terms);
+      if(sig[key]){ sig[key].merged.push(name); return; }
+      const sum=a=>terms.reduce((s,x)=>s+x.f*x.s*val(x.k,a),0);
+      const r={eq:t.eq,terms,Mu:sum(&quot;M&quot;),Vu:sum(&quot;V&quot;),Tu:sum(&quot;T&quot;),name,merged:[]};
+      sig[key]=r; rows.push(r);
+    });
+  });
+  return rows;
+}
+/* the load cases as entered (all zero = blank); W and E reverse by default (conservative: both signs are built) */
+function cbcSvcDefault(){ const c={}; CBC_LD_KEYS.forEach(k=>c[k]={M:0,V:0,T:0}); return {cases:c,rev:{W:true,E:true},l05:false}; }
+function cbcSvcNorm(x){ const d=cbcSvcDefault(); if(!x||typeof x!==&quot;object&quot;) return d;
+  const c=x.cases||{}; CBC_LD_KEYS.forEach(k=>{ const o=c[k]||{}; d.cases[k]={M:+o.M||0,V:+o.V||0,T:+o.T||0}; });
+  const r=x.rev||{}; d.rev={W:r.W!==false,E:r.E!==false}; d.l05=!!x.l05; return d; }
+/* the default combinations of every save made before CBSL (used only where such a save has no combinations, as before) */
+const CBC_LEGACY_COMBOS=[{name:&quot;1.2D + 1.6L&quot;,Mu:0,Vu:0,Tu:13.5},{name:&quot;1.2D + 1.0W + L&quot;,Mu:0,Vu:0,Tu:0},{name:&quot;0.9D + 1.0W&quot;,Mu:0,Vu:0,Tu:0}];
+/* service mode is used in ACI mode only; AASHTO mode always takes the typed factored actions (S.combos) */
+function cbcSvcOn(){ return S.loadMode==='service'&amp;&amp;S.code==='ACI'; }
+/* the combinations the checks use: built from the load cases (service mode) or as typed (factored mode, unchanged) */
+function cbcCombos(){ return cbcSvcOn()?cbcBuildCombos(S.svc).map(r=>({name:r.name,Mu:r.Mu,Vu:r.Vu,Tu:r.Tu,gen:r})):S.combos; }
+const CBC_LD_SYM={D:&quot;D&quot;,L:&quot;L&quot;,Lr:&quot;L_r&quot;,S:&quot;S&quot;,R:&quot;R&quot;,W:&quot;W&quot;,E:&quot;E&quot;};
+const CBC_LD_NAME={D:&quot;Dead&quot;,L:&quot;Live&quot;,Lr:&quot;Roof live&quot;,S:&quot;Snow&quot;,R:&quot;Rain&quot;,W:&quot;Wind (strength level)&quot;,E:&quot;Earthquake (strength level)&quot;};
+/* one generated row as TeX: the symbolic form U = ..., and for action a (&quot;M&quot;|&quot;V&quot;|&quot;T&quot;) the substituted form and the result */
+function cbcLdTex(g,a){
+  const sym=g.terms.map((t,i)=>(i===0?(t.s<0?&quot;-&quot;:&quot;&quot;):(t.s<0?&quot; - &quot;:&quot; + &quot;))+t.f.toFixed(1)+CBC_LD_SYM[t.k]).join(&quot;&quot;);
+  if(!a) return &quot;U = &quot;+sym;
+  const sub=g.terms.map((t,i)=>(i===0?(t.s<0?&quot;-&quot;:&quot;&quot;):(t.s<0?&quot; - &quot;:&quot; + &quot;))+t.f.toFixed(1)+&quot;(&quot;+fmt((S.svc.cases[t.k]||{})[a]||0)+&quot;)&quot;).join(&quot;&quot;);
+  const symA=g.terms.map((t,i)=>(i===0?(t.s<0?&quot;-&quot;:&quot;&quot;):(t.s<0?&quot; - &quot;:&quot; + &quot;))+t.f.toFixed(1)+a+&quot;_{&quot;+CBC_LD_SYM[t.k]+&quot;}&quot;).join(&quot;&quot;);
+  return {sym:symA,sub,val:a===&quot;M&quot;?g.Mu:(a===&quot;V&quot;?g.Vu:g.Tu)};
+}
+function cbcEqLetter(eq){ return eq.slice(-1); }
+
+/* =====================================================================
    STATE
    ===================================================================== */
 function defaultState(){
@@ -696,11 +767,12 @@ function defaultState(){
     skin:{size:&quot;&quot;,s:0},   /* CBM3: skin bars on each side face (&quot;&quot; = none entered) */
     tor:{present:true,Al:0,theta:45,kind:&quot;equilibrium&quot;},
     crack:{check:true,fsBasis:&quot;code&quot;,fs:40,gammaE:1.0,MsPos:0,MsNeg:0},
-    combos:[
-      {name:&quot;1.2D + 1.6L&quot;,   Mu:0,   Vu:0,   Tu:13.5},
-      {name:&quot;1.2D + 1.0W + L&quot;,Mu:0,  Vu:0,   Tu:0},
-      {name:&quot;0.9D + 1.0W&quot;,   Mu:0,   Vu:0,   Tu:0}
-    ],
+    /* CBSL (2026-11-13; Decision (pending engineer review)): a new project starts with blank service load cases, and one blank
+       factored row for factored mode. The three named zero rows of before (T_u 13.5 on the first) are CBC_LEGACY_COMBOS,
+       kept only for older saves without combinations (mergeState). */
+    loadMode:&quot;service&quot;,
+    svc:cbcSvcDefault(),
+    combos:[{name:&quot;Combo 1&quot;,Mu:0,Vu:0,Tu:0}],
     assumptions:&quot;&quot;,
     ui:{tab:&quot;tabSummary&quot;,collapse:{},detailCombo:0,rptOpts:null}
   };
@@ -723,7 +795,13 @@ function mergeState(st){
   S.layers=S.layers.map(L=>({n:+L.n||1,size:String(L.size||'5'),
     face:(L.face==='compression'?'compression':'tension'),
     dMan:(L.dMan==null||L.dMan==='')?null:+L.dMan}));
-  if(!Array.isArray(S.combos)||!S.combos.length) S.combos=d.combos;
+  /* CBSL migration (2026-11-13): a save, project or Export JSON made before service load cases has no loadMode: it opens in
+     factored mode with its combinations as saved, so its results are unchanged (none saved: the old default rows, as before).
+     S.svc is read (missing or partial: blank cases, W and E reversible, 5.3.3 off). */
+  const legacy=!(st.loadMode==='service'||st.loadMode==='factored');
+  S.loadMode=(st.loadMode==='service')?'service':'factored';
+  S.svc=cbcSvcNorm(st.svc);
+  if(!Array.isArray(st.combos)||!st.combos.length) S.combos=legacy?CBC_LEGACY_COMBOS.map(c=>({...c})):d.combos;
   S.combos=S.combos.map(c=>({name:String(c.name||&quot;Combo&quot;),Mu:+c.Mu||0,Vu:+c.Vu||0,Tu:+c.Tu||0}));
   if(!S.ui.collapse) S.ui.collapse={};
 }
@@ -1625,7 +1703,7 @@ function cbcTorDesA(F,sh,Vu,ta,ve){
    (cbcTorA, every combination); otherwise the T_u column is hidden and a value kept in it has no effect on any result. */
 function cbcTuUsed(){ return (S.tor.present&amp;&amp;S.code==='ACI')||S.code==='AASHTO'; }
 function computeAll(){
-  const combos=S.combos.map((c,i)=>({...c,ci:i}));
+  const combos=cbcCombos().map((c,i)=>({...c,ci:i}));   /* CBSL: built from the load cases in service mode; S.combos in factored mode */
   /* Sign of the governing moment sets which face is in tension. A negative
      Mu means hogging; the section is analysed with the faces swapped. */
   const rows=combos.map(c=>{
@@ -1774,16 +1852,18 @@ function validate(){
   if(!(S.proj.chk||&quot;&quot;).trim() || !(S.proj.chkDate||&quot;&quot;).trim())
     W.push({code:&quot;QA&quot;,msg:&quot;The \u201cChecked by\u201d and/or \u201cChecked date\u201d fields in the title block are blank. A calculation issued for a sealed submittal must record an independent checker.&quot;});
   /* combinations */
-  if(!S.combos.length) B.push({code:&quot;Loads&quot;,msg:&quot;At least one load combination is required.&quot;});
-  const allZero=S.combos.every(c=>!c.Mu&amp;&amp;!c.Vu&amp;&amp;!(cbcTuUsed()&amp;&amp;c.Tu));   /* CBTU: a hidden T_u is not a demand */
-  if(allZero) W.push({code:&quot;Loads&quot;,msg:&quot;All factored actions are zero. Capacities are reported, but no demand/capacity ratio is meaningful.&quot;});
+  const CO=cbcCombos();   /* CBSL */
+  if(!CO.length) B.push({code:&quot;Loads&quot;,msg:&quot;At least one load combination is required.&quot;});
+  const allZero=CO.every(c=>!c.Mu&amp;&amp;!c.Vu&amp;&amp;!(cbcTuUsed()&amp;&amp;c.Tu));   /* CBTU: a hidden T_u is not a demand */
+  if(allZero) W.push({code:&quot;Loads&quot;,msg:cbcSvcOn()?&quot;All service load cases are zero, so every factored action is zero. Capacities are reported, but no demand/capacity ratio is meaningful.&quot;:&quot;All factored actions are zero. Capacities are reported, but no demand/capacity ratio is meaningful.&quot;});
+  if(cbcSvcOn()) N.push({code:&quot;ACI 5.3.1&quot;,msg:&quot;Loads: the factored combinations are built from the service load cases by ACI 318-19 Table 5.3.1, Eqs. (5.3.1a)–(5.3.1g) (Load Combinations tab)&quot;+(S.svc.l05?&quot;; the load factor on L in Eqs. (5.3.1c)–(5.3.1e) is 0.5 (5.3.3), as selected — confirm the area is not a garage, a place of public assembly, or an area with L over 100 psf.&quot;:&quot;; the load factor on L is 1.0 in every equation (5.3.3 reduction not taken).&quot;)});
   /* torsion */
   if(S.code==='AASHTO'){   /* CBH1 */
     N.push({code:&quot;AASHTO 5.7.2.1&quot;,msg:&quot;AASHTO torsion: the tool checks the 5.7.2.1 threshold T_u \u2264 0.25\u03c6T_cr for every combination (Shear tab). Above it the combination is designed for combined shear and torsion of a solid section (5.7.3.4.2 V_eff, 5.7.3.6.1 transverse, 5.7.3.6.2 T_n, 5.7.3.6.3 longitudinal; f\u2032c \u2264 10 ksi). T_u is used as entered (the compatibility-torsion reduction to φT_cr is not applied); the stirrups are taken as closed, with a longitudinal bar in each corner (5.7.3.6.3; confirm on the drawings).&quot;});
     cbNLx(N[N.length-1],&quot;nl&quot;,{lead:&quot;AASHTO torsion:&quot;,items:[[&quot;Threshold:&quot;,&quot;the tool checks the 5.7.2.1 threshold T_u ≤ 0.25φT_cr for every combination (Shear tab).&quot;],   /* CBNL: display only; msg unchanged */
         [&quot;Above it:&quot;,&quot;the combination is designed for combined shear and torsion of a solid section (5.7.3.4.2 V_eff, 5.7.3.6.1 transverse, 5.7.3.6.2 T_n, 5.7.3.6.3 longitudinal; f′c ≤ 10 ksi).&quot;],
         [&quot;T_u:&quot;,&quot;used as entered (the compatibility-torsion reduction to φT_cr is not applied).&quot;],[&quot;Stirrups:&quot;,&quot;taken as closed, with a longitudinal bar in each corner (5.7.3.6.3; confirm on the drawings).&quot;]]});   /* CBH1b */
-    const big=S.combos.filter(c=>cbcTorA(c.Tu).consider).map(c=>c.name);
+    const big=CO.filter(c=>cbcTorA(c.Tu).consider).map(c=>c.name);
     if(big.length) W.push({code:&quot;AASHTO 5.7.2.1&quot;,msg:&quot;T_u exceeds 0.25\u03c6T_cr in &quot;+big.join(&quot;, &quot;)+&quot;: torsion is designed for those combinations (Shear tab, Torsion Design).&quot;+(S.mat.fyt100&amp;&amp;S.mat.fyt>fytTorA()?&quot; The 100 ksi transverse yield strength of 5.7.2.7 applies without torsion only: f_y = &quot;+fmt(fytTorA())+&quot; ksi is used for those combinations.&quot;:&quot;&quot;)});
   }
   if(S.tor.present &amp;&amp; S.code==='ACI' &amp;&amp; S.tor.Al>0){
@@ -1804,7 +1884,7 @@ function validate(){
   if(S.code==='AASHTO' &amp;&amp; S.crack.check &amp;&amp; S.crack.fsBasis==='calc' &amp;&amp; S.mat.lambda<1 &amp;&amp; !(S.mat.wc>0))   /* CBL7b */
     W.push({code:&quot;AASHTO 5.4.2.4&quot;,msg:&quot;Lightweight concrete (\u03bb < 1) with no unit weight entered: E_c for the computed f_ss uses w_c = 0.110 kcf, the low end of the Table 3.5.1-1 lightweight range (conservative). Enter w_c under Materials if known.&quot;});
   if(S.crack.check &amp;&amp; S.crack.fsBasis==='calc'){
-    const needPos=S.combos.some(c=>c.Mu>0), needNeg=S.combos.some(c=>c.Mu<0);
+    const needPos=CO.some(c=>c.Mu>0), needNeg=CO.some(c=>c.Mu<0);
     if(needPos &amp;&amp; !(S.crack.MsPos>0))
       W.push({code:&quot;Crack control&quot;,msg:&quot;f_s is set to be computed from the service moment, but no positive (sagging) service moment has been entered. The code default stress is being used for the sagging combinations.&quot;});
     if(needNeg &amp;&amp; !(S.crack.MsNeg>0))
@@ -2256,6 +2336,12 @@ function buildInput(){
   },P);
 
   mkSection(&quot;inLoads&quot;,NT(&quot;Load Combinations&quot;),b=>{
+    /* CBSL (2026-11-13): the Loads mode, ACI mode only. Service: the load cases, the tool builds the combinations (buildSvcLoads);
+       factored: the table below, as before. */
+    if(S.code==='ACI') fRow(b,&quot;Loads&quot;,selIn([&quot;service&quot;,&quot;factored&quot;],()=>S.loadMode,v=>{S.loadMode=(v==='service'?'service':'factored');},
+      o=>o===&quot;service&quot;?&quot;Service load cases (the tool builds the combinations)&quot;:&quot;Factored actions typed per combination&quot;,o=>o,&quot;ldMode&quot;),&quot;&quot;);
+    else if(S.loadMode==='service') b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;AASHTO LRFD mode: enter factored actions below; this tool builds the ACI 318-19 combinations only. The service load cases entered in ACI mode are kept and used again when the design code is set back to ACI 318-19.&quot;));
+    if(cbcSvcOn()){ buildSvcLoads(b); return; }
     b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Enter factored actions for each combination. Every combination is worked in full in the output.&quot;));
     const t=el(&quot;table&quot;,&quot;cbT&quot;);
     t.innerHTML=&quot;<tr><th>Name</th><th>M_u (k-ft)</th><th>V_u (kip)</th>&quot;+
@@ -2292,6 +2378,39 @@ function buildInput(){
   },P);
   cbcInputMarks(P);   /* CBIE: outline blank or invalid required inputs (display only) */
   rcbInputTabs(P);   /* move the sections just built into the input tabs (UI only) */
+}
+/* CBSL (2026-11-13): the service load cases (input panel, Loads). Each case: M, V, T at the section (T only where T_u is used,
+   cbcTuUsed); W / E reversal; the 5.3.3 option; then the combinations built, each linked to its derivation (Load Combinations tab). */
+function buildSvcLoads(b){
+  const SV=S.svc, tuShow=cbcTuUsed();
+  b.appendChild(cbNL(&quot;note&quot;,&quot;Enter the service (unfactored) actions of each load case at this section.&quot;,[
+    [&quot;Signs:&quot;,&quot;as the factored input: +M is sagging (tension at the bottom face), −M hogging. V and T are combined with their signs; the checks use |V_u| and |T_u|.&quot;],
+    [&quot;W and E:&quot;,&quot;the strength-level wind and earthquake effects, as given (Table 5.3.1 applies a load factor of 1.0 to each).&quot;],
+    [&quot;Blank:&quot;,&quot;a case left at zero adds nothing.&quot;]]));
+  const t=el(&quot;table&quot;,&quot;cbT&quot;);
+  t.innerHTML=&quot;<tr><th>Case</th><th>M (k-ft)</th><th>V (kip)</th>&quot;+(tuShow?&quot;<th>T (k-ft)</th>&quot;:&quot;&quot;)+&quot;</tr>&quot;;
+  CBC_LD_KEYS.forEach(k=>{ const c=SV.cases[k], tr=el(&quot;tr&quot;);
+    const c0=el(&quot;td&quot;); c0.innerHTML=&quot;<b>&quot;+(k===&quot;Lr&quot;?&quot;L<sub>r</sub>&quot;:k)+&quot;</b> <span class=\&quot;unit\&quot;>&quot;+CBC_LD_NAME[k]+&quot;</span>&quot;; tr.appendChild(c0);
+    [[&quot;M&quot;,&quot;1&quot;],[&quot;V&quot;,&quot;1&quot;]].concat(tuShow?[[&quot;T&quot;,&quot;0.5&quot;]]:[]).forEach(([a,st])=>{ const td=el(&quot;td&quot;); td.appendChild(numIn(()=>c[a],v=>{c[a]=v;},st,&quot;sv&quot;+a+k)); tr.appendChild(td); });
+    t.appendChild(tr); });
+  b.appendChild(t);
+  [[&quot;W&quot;,&quot;Wind reverses: build each combination with +W and with −W&quot;],[&quot;E&quot;,&quot;Earthquake reverses: build each combination with +E and with −E&quot;]].forEach(([k,lab])=>{
+    const r=el(&quot;div&quot;,&quot;fRow chk&quot;); r.appendChild(chkIn(()=>SV.rev[k],v=>{SV.rev[k]=v;},&quot;svRev&quot;+k)); r.appendChild(el(&quot;label&quot;,null,lab)); b.appendChild(r); });
+  const r5=el(&quot;div&quot;,&quot;fRow chk&quot;); r5.appendChild(chkIn(()=>SV.l05,v=>{SV.l05=v;},&quot;svL05&quot;));
+  r5.appendChild(el(&quot;label&quot;,null,&quot;Load factor on L of 0.5 in Eqs. (5.3.1c)–(5.3.1e) (ACI 318-19 5.3.3)&quot;)); b.appendChild(r5);
+  b.appendChild(cbNL(&quot;note&quot;,&quot;5.3.3 (paraphrased): the factor on L in Eqs. (5.3.1c), (5.3.1d) and (5.3.1e) may be taken as 0.5, except for garages, areas of public assembly, and areas where L is more than 100 psf.&quot;,
+    [[&quot;Off (default):&quot;,&quot;1.0 on L in those equations (conservative).&quot;]]));
+  const G=cbcBuildCombos(SV);
+  const t2=el(&quot;table&quot;,&quot;cbT&quot;);
+  t2.innerHTML=&quot;<tr><th>#</th><th>Eq.</th><th>Combination</th><th>M_u</th><th>V_u</th>&quot;+(tuShow?&quot;<th>T_u</th>&quot;:&quot;&quot;)+&quot;</tr>&quot;;
+  G.forEach((g,i)=>{ const tr=el(&quot;tr&quot;);
+    tr.appendChild(el(&quot;td&quot;,null,String(i+1))); tr.appendChild(el(&quot;td&quot;,null,&quot;(&quot;+g.eq+&quot;)&quot;));
+    const td=el(&quot;td&quot;), a=el(&quot;a&quot;,&quot;wkA&quot;,g.name); a.href=&quot;#&quot;; a.dataset.tab=&quot;tabLoads&quot;; a.dataset.card=&quot;ldC&quot;+i; a.title=&quot;Worked on the Load Combinations tab&quot;;
+    td.appendChild(a); tr.appendChild(td);
+    tr.appendChild(el(&quot;td&quot;,null,fmt(g.Mu))); tr.appendChild(el(&quot;td&quot;,null,fmt(g.Vu))); if(tuShow) tr.appendChild(el(&quot;td&quot;,null,fmt(g.Tu)));
+    t2.appendChild(tr); });
+  b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Combinations built by ACI 318-19 Table 5.3.1 (k-ft, kip). Each is worked on the Load Combinations tab (click a name) and checked in full on the result tabs.&quot;));
+  b.appendChild(t2);
 }
 /* CBIE (2026-11-05, engineer): required inputs that are blank (stored as 0) or invalid: the box is outlined red and the reason
    is written under its row. These are the input blockers of validate(), field by field; validate() still decides that the
@@ -2405,6 +2524,7 @@ function buildAlGuidance(b){
 function TABS(){
   const t=[[&quot;tabSummary&quot;,&quot;Summary&quot;],[&quot;tabInputEcho&quot;,&quot;Input Echo&quot;],
     [&quot;tabFlex&quot;,&quot;Flexure&quot;],[&quot;tabShear&quot;,&quot;Shear&quot;]];
+  if(cbcSvcOn()) t.splice(2,0,[&quot;tabLoads&quot;,&quot;Load Combinations&quot;]);   /* CBSL: service mode only */
   if(S.tor.present&amp;&amp;S.code==='ACI') t.push([&quot;tabTor&quot;,&quot;Torsion&quot;]);
   t.push([&quot;tabServ&quot;,&quot;Serviceability&quot;],[&quot;tabDetail&quot;,&quot;Detailing&quot;],
     [&quot;tabVisuals&quot;,&quot;Visuals&quot;],[&quot;tabDrawings&quot;,&quot;Drawings&quot;],[&quot;tabValid&quot;,&quot;Validation&quot;]);   /* tabDrawings: CBDW */
@@ -2477,6 +2597,7 @@ function buildOutput(pg){
   switch(S.ui.tab){
     case &quot;tabSummary&quot;: buildSummaryTab(pg); break;
     case &quot;tabInputEcho&quot;: buildInputEchoTab(pg); break;
+    case &quot;tabLoads&quot;: buildLoadsTab(pg); break;   /* CBSL */
     case &quot;tabFlex&quot;: buildFlexTab(pg); break;
     case &quot;tabShear&quot;: buildShearTab(pg); break;
     case &quot;tabTor&quot;: buildTorTab(pg); break;
@@ -2813,6 +2934,66 @@ function comboTitle(r,gi,what){
     ((S.tor.present&amp;&amp;S.code==='ACI')?&quot;, T_u = &quot;+fmt(r.Tu)+&quot; k-ft&quot;:&quot;&quot;);
 }
 
+/* ---------------- LOAD COMBINATIONS tab (CBSL, 2026-11-13; service mode only) ----------------
+   The service load cases and every combination built by ACI 318-19 Table 5.3.1, each worked: U symbolic, then M_u, V_u (and
+   T_u where it is used) symbolic -> values -> result. The result tabs link back to these cards (cbcLdLink). Display only:
+   the values are those of CC.combos (cbcBuildCombos). */
+function cbcLdLink(b,r){
+  if(!r||!r.gen||!cbcSvcOn()) return;
+  cbcWorkedIn(b,[{tab:&quot;tabLoads&quot;,c:{card:&quot;ldC&quot;+r.ci,name:&quot;Combination &quot;+(r.ci+1)+&quot; (Eq. &quot;+r.gen.eq+&quot;)&quot;},txt:&quot;M_u, V_u&quot;+(cbcTuUsed()?&quot;, T_u&quot;:&quot;&quot;)}]);
+}
+/* the rules of the builder as note items (Load Combinations tab and Report) */
+function cbcLdRules(){ const SV=S.svc;
+  return [
+      [&quot;Alternatives:&quot;,&quot;each “or” of an equation is its own row: (L_r or S or R) gives three rows, (1.0L or 0.5W) two.&quot;],
+      [&quot;Reversal:&quot;,&quot;W or E marked as reversing gives each row with +W and with −W (+E / −E); the signs of M, V and T flip together.&quot;],
+      [&quot;Load factor on L:&quot;,SV.l05?&quot;0.5 in Eqs. (5.3.1c), (5.3.1d) and (5.3.1e), as selected (5.3.3: not for garages, places of public assembly, or L over 100 psf).&quot;:&quot;1.0 in every equation; the 0.5 permitted by 5.3.3 is not taken (conservative).&quot;],
+      [&quot;Rows left out:&quot;,&quot;a row is left out only where, once the zero load cases are dropped, an earlier row of the same equation has the same loads, factors and signs (e.g. L_r = S = R = 0 leaves one row of Eq. (5.3.1b)); that row names the alternatives it stands for. Rows of different equations are all kept; identical actions are flagged on the result tabs and worked once.&quot;],
+      [&quot;Signs:&quot;,&quot;+M is sagging; V and T are combined with their signs and the checks use |V_u| and |T_u|.&quot;],
+      [&quot;Not included:&quot;,&quot;other loads of 5.3 (fluid, lateral earth pressure, self-straining effects, flood, ice and others) are not built; enter such cases in factored mode. 5.3.2 (loads not acting together) is covered here by the 0.9D equations and the W / E reversal only: a case whose effect relieves the others is included at its full factor in every row that names it.&quot;]];
+}
+function buildLoadsTab(pg){
+  const SV=S.svc, tuShow=cbcTuUsed(), G=CC.combos;
+  mkSection(&quot;ldCases&quot;,&quot;Service Load Cases at the Section&quot;,b=>{
+    const t=el(&quot;table&quot;,&quot;rt&quot;);
+    t.innerHTML=&quot;<tr><th>Case</th><th>Load</th><th>M (k-ft)</th><th>V (kip)</th>&quot;+(tuShow?&quot;<th>T (k-ft)</th>&quot;:&quot;&quot;)+&quot;</tr>&quot;;
+    CBC_LD_KEYS.forEach(k=>{ const c=SV.cases[k], tr=el(&quot;tr&quot;);
+      const td=el(&quot;td&quot;); tex(td,CBC_LD_SYM[k],false); tr.appendChild(td); tr.appendChild(el(&quot;td&quot;,null,CBC_LD_NAME[k]+((k===&quot;W&quot;||k===&quot;E&quot;)&amp;&amp;SV.rev[k]?&quot; — reverses (±)&quot;:&quot;&quot;)));
+      tr.appendChild(el(&quot;td&quot;,null,fmt(c.M))); tr.appendChild(el(&quot;td&quot;,null,fmt(c.V))); if(tuShow) tr.appendChild(el(&quot;td&quot;,null,fmt(c.T)));
+      t.appendChild(tr); });
+    b.appendChild(t);
+    b.appendChild(cbNL(&quot;note&quot;,&quot;How the combinations are built (ACI 318-19 5.3.1, Table 5.3.1, Eqs. (5.3.1a)–(5.3.1g)):&quot;,cbcLdRules()));
+  },pg);
+  mkSection(&quot;ldAll&quot;,&quot;Factored Combinations — ACI 318-19 Table 5.3.1&quot;,b=>{
+    const t=el(&quot;table&quot;,&quot;rt&quot;);
+    t.innerHTML=&quot;<tr><th>#</th><th>Eq.</th><th>Combination</th><th>M_u (k-ft)</th><th>V_u (kip)</th>&quot;+(tuShow?&quot;<th>T_u (k-ft)</th>&quot;:&quot;&quot;)+&quot;<th>Note</th></tr>&quot;;
+    G.forEach(r=>{ const tr=el(&quot;tr&quot;); if(r.ci===CC.govIndex) tr.className=&quot;gov&quot;;
+      tr.appendChild(el(&quot;td&quot;,null,String(r.ci+1))); tr.appendChild(el(&quot;td&quot;,null,&quot;(&quot;+r.gen.eq+&quot;)&quot;));
+      const td=el(&quot;td&quot;), a=cbcLink(&quot;tabLoads&quot;,{card:&quot;ldC&quot;+r.ci,name:r.name}); if(a){ a.textContent=r.name; td.appendChild(a); } else td.textContent=r.name; tr.appendChild(td);
+      tr.appendChild(el(&quot;td&quot;,null,fmt(r.Mu))); tr.appendChild(el(&quot;td&quot;,null,fmt(r.Vu))); if(tuShow) tr.appendChild(el(&quot;td&quot;,null,fmt(r.Tu)));
+      tr.appendChild(el(&quot;td&quot;,null,(r.sameAs!==undefined?&quot;same actions as &quot;+(r.sameAs+1):&quot;&quot;)+(r.ci===CC.govIndex?(r.sameAs!==undefined?&quot;; &quot;:&quot;&quot;)+&quot;governs overall&quot;:&quot;&quot;)));
+      t.appendChild(tr); });
+    b.appendChild(t);
+  },pg);
+  comboControls(pg,&quot;ldC&quot;);
+  G.forEach(r=>{ const g=r.gen;
+    mkSection(&quot;ldC&quot;+r.ci,&quot;Combination &quot;+(r.ci+1)+&quot; — Eq. (&quot;+g.eq+&quot;)   |   &quot;+r.name,b=>{
+      const L=[cbcLdTex(g)];
+      [&quot;M&quot;,&quot;V&quot;].concat(tuShow?[&quot;T&quot;]:[]).forEach(a=>{ const x=cbcLdTex(g,a), u=a===&quot;V&quot;?&quot;\\text{ kip}&quot;:&quot;\\text{ kip-ft}&quot;;
+        L.push(a+&quot;_u = &quot;+x.sym, a+&quot;_u = &quot;+x.sub+&quot; = &quot;+fmt(x.val)+u); });
+      b.appendChild(eqBlock({title:&quot;Factored actions&quot;,ref:&quot;ACI 318-19 5.3.1, Eq. (&quot;+g.eq+&quot;)&quot;,lines:L,
+        vars:g.terms.map(t=>[CBC_LD_SYM[t.k],CBC_LD_NAME[t.k]+&quot; (M, V&quot;+(tuShow?&quot;, T&quot;:&quot;&quot;)+&quot;)&quot;,fmt(SV.cases[t.k].M)+&quot;, &quot;+fmt(SV.cases[t.k].V)+(tuShow?&quot;, &quot;+fmt(SV.cases[t.k].T):&quot;&quot;),&quot;k-ft, kip&quot;])}));
+      const notes=[];
+      if(g.merged.length) notes.push([&quot;Stands for:&quot;,g.merged.join(&quot;; &quot;)+&quot; (the alternative load cases are zero, so these rows are the same).&quot;]);
+      if(g.terms.some(t=>t.s<0)) notes.push([&quot;Reversed:&quot;,g.terms.filter(t=>t.s<0).map(t=>t.k).join(&quot;, &quot;)+&quot; with its sign reversed (−1 × the entered M, V, T).&quot;]);
+      if(SV.l05&amp;&amp;/5\.3\.1[cde]/.test(g.eq)&amp;&amp;g.terms.some(t=>t.k===&quot;L&quot;)) notes.push([&quot;L:&quot;,&quot;load factor 0.5 by 5.3.3, as selected.&quot;]);
+      if(r.sameAs!==undefined) notes.push([&quot;Identical actions:&quot;,&quot;the same factored actions as Combination &quot;+(r.sameAs+1)+&quot;; the result tabs work it once.&quot;]);
+      if(notes.length) b.appendChild(cbNL(&quot;note&quot;,null,notes));
+      cbcWorkedIn(b,[{tab:&quot;tabFlex&quot;,c:cbcComboCard(&quot;flexC&quot;,r.ci),txt:&quot;M_u used&quot;},{tab:&quot;tabShear&quot;,c:cbcComboCard(&quot;shC&quot;,r.ci),txt:&quot;V_u used&quot;}].concat(tuShow&amp;&amp;S.code==='ACI'&amp;&amp;S.tor.present?[{tab:&quot;tabTor&quot;,c:cbcComboCard(&quot;torC&quot;,r.ci),txt:&quot;T_u used&quot;}]:[]));
+    },pg,r.ci===CC.govIndex?&quot;govSec&quot;:&quot;&quot;);
+  });
+}
+
 /* ---------------- FLEXURE tab ---------------- */
 function buildFlexTab(pg){
   bothCapSection(pg,&quot;flexBoth&quot;);
@@ -2841,6 +3022,7 @@ function buildFlexTab(pg){
   comboControls(pg,&quot;flexC&quot;);
   CC.combos.forEach(r=>{
     mkSection(&quot;flexC&quot;+r.ci,comboTitle(r,CC.govFlexIndex,&quot;flexure&quot;),b=>{
+      cbcLdLink(b,r);   /* CBSL: the factored actions are worked on the Load Combinations tab */
       if(r.sameAs!==undefined){
         const x=el(&quot;div&quot;,&quot;infoBox&quot;);
         x.innerHTML=&quot;This combination produces factored actions identical to <b>&quot;+
@@ -3105,6 +3287,7 @@ function buildShearTab(pg){
   comboControls(pg,&quot;shC&quot;);
   CC.combos.forEach(r=>{
     mkSection(&quot;shC&quot;+r.ci,comboTitle(r,CC.govShearIndex,&quot;shear&quot;),b=>{
+      cbcLdLink(b,r);   /* CBSL: the factored actions are worked on the Load Combinations tab */
       if(r.sameAs!==undefined){
         const x=el(&quot;div&quot;,&quot;infoBox&quot;);
         x.innerHTML=&quot;Actions identical to <b>&quot;+CC.combos[r.sameAs].name+&quot;</b>; results are identical.&quot;;
@@ -3317,6 +3500,7 @@ function buildTorTab(pg){
   comboControls(pg,&quot;torC&quot;);
   CC.combos.forEach(r=>{
     mkSection(&quot;torC&quot;+r.ci,comboTitle(r,CC.govTorIndex,&quot;torsion&quot;),b=>{
+      cbcLdLink(b,r);   /* CBSL: the factored actions are worked on the Load Combinations tab */
       if(r.sameAs!==undefined){ const x=el(&quot;div&quot;,&quot;infoBox&quot;);
         x.innerHTML=&quot;Actions identical to <b>&quot;+CC.combos[r.sameAs].name+&quot;</b>; results are identical.&quot;;
         b.appendChild(x); return; }
@@ -3827,7 +4011,7 @@ function buildInputEchoTab(pg){
     const hasT=S.tor.present&amp;&amp;S.code==='ACI';
     t.innerHTML=&quot;<tr><th>#</th><th>Combination</th><th>M_u (k-ft)</th><th>V_u (kip)</th>&quot;+
       (hasT?&quot;<th>T_u (k-ft)</th>&quot;:&quot;&quot;)+&quot;</tr>&quot;;
-    S.combos.forEach((c,i)=>{ const tr=el(&quot;tr&quot;);
+    cbcCombos().forEach((c,i)=>{ const tr=el(&quot;tr&quot;);
       tr.appendChild(el(&quot;td&quot;,null,String(i+1)));
       tr.appendChild(el(&quot;td&quot;,null,c.name));
       tr.appendChild(el(&quot;td&quot;,null,fmt(c.Mu)));
@@ -5145,7 +5329,7 @@ const CBRX_OMIT=&quot;The fully-worked derivation for this combination was omitt
 function cbcRxSel(){
   const o=S.ui&amp;&amp;S.ui.rptOpts, ok=!!(o&amp;&amp;o.tabs), r={tabs:{},combos:{}};   /* as normRptOpts: a missing entry is true; an old boolean map reads as all true */
   reportTabList().forEach(([id])=>r.tabs[id]=!(ok&amp;&amp;o.tabs[id]===false));
-  S.combos.forEach((c,i)=>r.combos[i]=!(ok&amp;&amp;o.combos&amp;&amp;o.combos[i]===false));
+  cbcCombos().forEach((c,i)=>r.combos[i]=!(ok&amp;&amp;o.combos&amp;&amp;o.combos[i]===false));
   r.ov=!(o&amp;&amp;o.ov===false);   /* CBOV: the Report's &quot;Overview figures&quot; box; absent (older saves) = on */
   return r;
 }
@@ -5168,7 +5352,7 @@ function cbcRxSet(kind,key,val){
 /* CBIR (2026-11-05): the input errors that withhold this tab's results (VALIDATION.blockers, as the check summary panel's
    &quot;Input error: no results&quot;), for the suite Report: with any, the shell prints the chapter as &quot;Input error: no results&quot;. */
 function cbcRxErrors(){ return ((VALIDATION&amp;&amp;VALIDATION.blockers)||[]).map(b=>String(b.msg).replace(/<[^>]+>/g,'')); }
-function cbcRxBoxes(){ return {tabs:reportTabList(),combos:S.combos.map((c,i)=>&quot;Combination &quot;+(i+1)+&quot; — &quot;+c.name+(CC&amp;&amp;i===CC.govIndex?&quot; (governing)&quot;:&quot;&quot;))}; }
+function cbcRxBoxes(){ return {tabs:reportTabList(),combos:cbcCombos().map((c,i)=>&quot;Combination &quot;+(i+1)+&quot; — &quot;+c.name+(CC&amp;&amp;i===CC.govIndex?&quot; (governing)&quot;:&quot;&quot;))}; }
 /* =====================================================================
    CBOV (2026-11-05): the figures of the overview at the start of the suite's Report (the shell's cbovSection): the
    cross-section of the Input Echo / Visuals tabs (svgSection, the governing sense of bending) and the stirrup elevation
@@ -5224,7 +5408,7 @@ function cbcRxHarvest(){
       if(!sel.tabs[id]) return;
       const holder=el(&quot;div&quot;); S.ui.tab=id; buildOutput(holder);
       holder.querySelectorAll(&quot;.sec&quot;).forEach(s=>s.classList.remove(&quot;collapsed&quot;));   /* every card open, as buildReport */
-      S.combos.forEach((c,ci)=>{ if(sel.combos[ci]) return;
+      cbcCombos().forEach((c,ci)=>{ if(sel.combos[ci]) return;
         [&quot;flexC&quot;,&quot;shC&quot;,&quot;torC&quot;].forEach(px=>{ const sc=holder.querySelector(&quot;#&quot;+px+ci), b=sc&amp;&amp;sc.querySelector(&quot;.secBody&quot;); if(b) b.innerHTML='<div class=&quot;infoBox&quot;>'+CBRX_OMIT+'</div>'; }); });
       out.push({id,label,el:holder});
     });
@@ -5240,7 +5424,7 @@ function cbcRxResults(tabId){
 }
 /* the cover lines, the front-matter note and the footer of the retired print report */
 function cbcRxAbout(){
-  const sel=cbcRxSel(), P=S.proj||{}, om=S.combos.map((c,i)=>sel.combos[i]?null:&quot;Combination &quot;+(i+1)+&quot; (&quot;+c.name+&quot;)&quot;).filter(Boolean);
+  const sel=cbcRxSel(), P=S.proj||{}, om=cbcCombos().map((c,i)=>sel.combos[i]?null:&quot;Combination &quot;+(i+1)+&quot; (&quot;+c.name+&quot;)&quot;).filter(Boolean);
   return [{type:'note',text:&quot;Reinforced Concrete Beam Capacity — &quot;+(P.name||&quot;Untitled&quot;)+(P.subj?&quot; — &quot;+P.subj:&quot;&quot;)+&quot;. &quot;+cbcCodeLabel()+&quot; · Concrete Beam Design Suite · by Mario Lococo.&quot;},
     {type:'note',text:&quot;Title block of the Beam Capacity tab: Subject &quot;+(P.subj||&quot;—&quot;)+&quot;; Sheet &quot;+(P.sheet||&quot;—&quot;)+&quot;; Code &quot;+(S.code==='ACI'?&quot;ACI 318-19&quot;:&quot;AASHTO LRFD&quot;)+&quot;.&quot;},
     ...cbrNL(&quot;How this report is laid out:&quot;,[[&quot;Equations:&quot;,&quot;shown symbolically, then with values substituted, then with the result.&quot;],   /* CBNL */
@@ -5282,14 +5466,14 @@ function reportTabList(){
 function defaultRptOpts(){
   const o={tabs:{},combos:{}};
   reportTabList().forEach(([id])=>o.tabs[id]=true);
-  S.combos.forEach((c,i)=>o.combos[i]=true);
+  cbcCombos().forEach((c,i)=>o.combos[i]=true);
   return o;
 }
 function normRptOpts(){
   let o=S.ui.rptOpts;
   if(!o||!o.tabs){ o=defaultRptOpts(); }                 /* migrate old boolean map */
   reportTabList().forEach(([id])=>{ if(o.tabs[id]===undefined) o.tabs[id]=true; });
-  S.combos.forEach((c,i)=>{ if(o.combos[i]===undefined) o.combos[i]=true; });
+  cbcCombos().forEach((c,i)=>{ if(o.combos[i]===undefined) o.combos[i]=true; });
   S.ui.rptOpts=o; return o;
 }
 /* CBRX: openRptDialog, closeRptDialog, doPrint and generateReport were removed (the dialog is retired; Print: cbcRxPrint) */
@@ -5469,9 +5653,31 @@ function cbcRptModel(){
     subs.push({title:'Reinforcement',items:[{type:'table',head:['Layer','Bars','Size','$A_{s}$ (in²)','Face','d (in)','Source'],rows:G.map((L,i)=>[L.side+(i+1),String(L.n),'#'+L.size,{t:fmt(L.As),n:true},L.face==='tension'?'Tension':'Compression',{t:fmt(L.d),n:true},L.manual?'manual override':'auto-stacked'])},
       ...cbrNL('Other reinforcement:',[S.stir.present?['Transverse:',S.stir.legs+'-leg #'+S.stir.size+' closed stirrup at '+fmt(S.stir.s)+' in. ($A_{v}$ = '+fmt(S.stir.legs*REBAR[S.stir.size].a)+' in²).']:'No transverse reinforcement specified.',S.tor.present&amp;&amp;ACI?['Torsion:',(S.tor.kind==='compatibility'?'compatibility':'equilibrium')+' torsion, θ = '+fmt(S.tor.theta,0)+'°, $A_{\\ell}$ = '+fmt(S.tor.Al)+' in².']:null,S.skin&amp;&amp;S.skin.size&amp;&amp;S.skin.s>0?['Skin bars:','#'+S.skin.size+' at '+fmt(S.skin.s)+' in on each side face (drawn over the zone of 9.7.2.3 / 5.6.7 only, the first one spacing from the outermost tension layer).']:['Skin bars:','none entered.'],['Clear spacing between layers:',fmt(S.layerClear)+' in.']])]});   /* CBM3: skin bars; CBNL: as a list */
     const hasT=(S.tor.present&amp;&amp;ACI)||!ACI;   /* CBH1b: T_u shown in AASHTO mode (as the Loads input) */
+    if(cbcSvcOn()){   /* CBSL: the service load cases, then the combinations built (each value links to its worked step) */
+      const SV=S.svc, tuU=cbcTuUsed();
+      subs.push({title:'Service load cases',items:[{type:'table',head:['Case','Load','M (kip-ft)','V (kip)'].concat(tuU?['T (kip-ft)']:[]),rows:CBC_LD_KEYS.map(k=>['$'+CBC_LD_SYM[k]+'$',CBC_LD_NAME[k]+((k==='W'||k==='E')&amp;&amp;SV.rev[k]?' — reverses (±)':''),{t:fmt(SV.cases[k].M),n:true},{t:fmt(SV.cases[k].V),n:true}].concat(tuU?[{t:fmt(SV.cases[k].T),n:true}]:[]))},
+        {type:'note',text:'Loads: service load cases; the factored combinations are built by ACI 318-19 Table 5.3.1 (section Load combinations).'}]});
+      subs.push({title:'Load combinations',items:[{type:'table',head:['#','Eq.','Combination','$M_{u}$ (kip-ft)','$V_{u}$ (kip)'].concat(hasT?['$T_{u}$ (kip-ft)']:[]),rows:CC.combos.map(r=>[String(r.ci+1),'('+r.gen.eq+')',r.name,{t:fmt(r.Mu),n:true,key:'ld'+r.ci+'/Mu'},{t:fmt(r.Vu),n:true,key:'ld'+r.ci+'/Vu'}].concat(hasT?[{t:fmt(r.Tu),n:true,key:tuU?'ld'+r.ci+'/Tu':undefined}]:[]))}]});
+    } else
     subs.push({title:'Load combinations',items:[{type:'table',head:['#','Combination','$M_{u}$ (kip-ft)','$V_{u}$ (kip)'].concat(hasT?['$T_{u}$ (kip-ft)']:[]),rows:CC.combos.map(r=>[String(r.ci+1),r.name,{t:fmt(r.Mu),n:true},{t:fmt(r.Vu),n:true}].concat(hasT?[{t:fmt(r.Tu),n:true}]:[]))}]});
     if(String(S.assumptions||'').trim()) subs.push({title:'Assumptions',items:[{type:'note',text:String(S.assumptions).trim()}]});
     secs.push({title:'Inputs',subs});
+  }
+  /* CBSL (2026-11-13): service mode, every combination of ACI 318-19 Table 5.3.1 worked (symbolic -> values -> result);
+     step keys ld<ci>/Mu, /Vu, /Tu (linked from the Inputs table and from each Flexure / Shear / Torsion combination) */
+  if(cbcSvcOn()){ const tuU=cbcTuUsed();
+    const subs=[{title:'How the combinations are built',items:cbrNL('ACI 318-19 5.3.1, Table 5.3.1, Eqs. (5.3.1a)–(5.3.1g):',cbcLdRules()).concat([{type:'note',text:'[[tab:tabLoads|On screen: Load Combinations tab]]'}])}];
+    CC.combos.forEach(r=>{ const g=r.gen;
+      const st=['M','V'].concat(tuU?['T']:[]).map(a=>{ const x=cbcLdTex(g,a);
+        return cS({id:a+'u',label:'Factored '+({M:'moment',V:'shear',T:'torsion'}[a])+' (U = '+r.name+')',sym:a+'_{u}',eq:x.sym,sub:x.sub,value:x.val,unit:a==='V'?'kip':'kip-ft'}); });
+      const nt=[];
+      if(g.merged.length) nt.push({type:'note',text:'Stands for: '+g.merged.join('; ')+' (the alternative load cases are zero).'});
+      if(g.terms.some(t=>t.s<0)) nt.push({type:'note',text:'Reversed: '+g.terms.filter(t=>t.s<0).map(t=>t.k).join(', ')+' (−1 × the entered M, V, T).'});
+      if(S.svc.l05&amp;&amp;/5\.3\.1[cde]/.test(g.eq)&amp;&amp;g.terms.some(t=>t.k==='L')) nt.push({type:'note',text:'Load factor 0.5 on L by 5.3.3, as selected.'});
+      if(r.sameAs!==undefined) nt.push({type:'note',text:'The same factored actions as Combination '+(r.sameAs+1)+'.'});
+      subs.push({title:cn(r)+' — Eq. ('+g.eq+')',items:[{type:'topics',scope:'ld'+r.ci,title:'Worked steps',list:[{title:'U = '+r.name,ref:'ACI 318-19 5.3.1, Eq. ('+g.eq+')',steps:st}]}].concat(nt)});
+    });
+    secs.push({title:'Load combinations',subs});
   }
   /* 2. summary of checks */
   { const K=allChecks(), keyOf=c=>{ if(c.na||c.ci==null) return undefined;
@@ -5488,7 +5694,8 @@ function cbcRptModel(){
       const sa=r.sameAs!==undefined&amp;&amp;r.sameAs!==r.ci;
       if(!sa&amp;&amp;!RX.combos[r.ci]){ RXO[pre+r.ci]=1; return {title:cn(r)+(r.ci===gov?' — governs':''),key:'omit-'+pre+r.ci,items:[{type:'note',text:CBRX_OMIT}]}; }   /* CBRX: deselected (the dialog's second tier) */
       return {title:cn(r)+(r.ci===gov?' — governs':''),items:sa?[{type:'note',text:'Same factored actions as Combination '+(r.sameAs+1)+': [['+pre+r.sameAs+'/'+({fx:'Mu',sh:'d',tq:'Acp'}[pre])+']].'}]
-        :fn(r).map(it=>it.type==='topics'?Object.assign({},it,{scope:pre+r.ci}):it).concat([{type:'note',text:'[[tab:'+tab+'|On screen: '+cbcTabName(tab)+' tab]]'}])}; });
+        :(cbcSvcOn()&amp;&amp;r.gen?[{type:'note',text:'Factored actions from the service load cases (ACI 318-19 Table 5.3.1): [[ld'+r.ci+'/Mu]].'}]:[])   /* CBSL */
+          .concat(fn(r).map(it=>it.type==='topics'?Object.assign({},it,{scope:pre+r.ci}):it)).concat([{type:'note',text:'[[tab:'+tab+'|On screen: '+cbcTabName(tab)+' tab]]'}])}; });
     secs.push({title,subs}); };
   per('Flexure','fx',cbcRptFlex,'tabFlex',CC.govFlexIndex);
   per('Shear','sh',cbcRptShear,'tabShear',CC.govShearIndex);
@@ -5587,7 +5794,7 @@ function cbcRptModel(){
   { const W=[].concat((V.blockers||[]).map(x=>({warn:true,text:'Blocker ('+x.code+'): '+x.msg})),(V.warnings||[]).map(x=>({warn:true,text:'Warning ('+x.code+'): '+x.msg})),...(V.notes||[]).map(x=>x.nl?cbrNL((x.code?x.code+': ':'')+x.nl.lead,x.nl.items,{act:x.nl.act}).map(q=>q.warn?{warn:true,text:q.text}:{text:q.text}):[{text:(x.code?x.code+': ':'')+x.msg}]));   /* CBNL: a notice with a display list as items */
     if(W.length) secs.push({title:'Validation notices',subs:[{title:'Notices',items:W.map(w=>Object.assign({type:'note'},w,{text:String(w.text).replace(/<[^>]+>/g,'')}))}]});
   }
-  const keep=cbcRxFilter(secs,RX,{'Inputs':'tabInputEcho','Summary of checks':'tabSummary','Flexure':'tabFlex','Shear':'tabShear','Torsion (AASHTO 5.7.2.1, 5.7.3.6)':'tabShear','Longitudinal reinforcement (AASHTO 5.7.3.5)':'tabShear','Torsion':'tabTor','Serviceability':'tabServ','Detailing':'tabDetail','Validation notices':'tabValid'},RXO);   /* CBRX */
+  const keep=cbcRxFilter(secs,RX,{'Inputs':'tabInputEcho','Load combinations':'tabInputEcho','Summary of checks':'tabSummary','Flexure':'tabFlex','Shear':'tabShear','Torsion (AASHTO 5.7.2.1, 5.7.3.6)':'tabShear','Longitudinal reinforcement (AASHTO 5.7.3.5)':'tabShear','Torsion':'tabTor','Serviceability':'tabServ','Detailing':'tabDetail','Validation notices':'tabValid'},RXO);   /* CBRX */
   return {title:'Beam Capacity',code:codeName,proj:P,refs:cbcRefs(document.getElementById('pageBody')||document.body),sections:keep};
 }
 
