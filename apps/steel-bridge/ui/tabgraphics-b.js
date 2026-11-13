@@ -67,7 +67,8 @@
     if (!putC(host, 'fatigue-chart', ctx, TX => TX.fatigueChart(R, ctx.P, { gi: gi(ctx), sel }), 'fatigueChart', { P: ctx.P, gi: gi(ctx), R, sel, onSel })) put(host, 'fatigue-chart', ctx, TX => TX.fatigueChart(R, ctx.P, { gi: gi(ctx), sel }), onSel);
   }
   function crossframe(host, ctx, B) { const o = { dia: !!(window.SBDCrossframes && ctx.P.crossframes && window.SBDCrossframes.cfDiaOn(ctx.P.crossframes)) };
-    putDet(host, 'crossframe', ctx, TX => TX.crossframe(B, ctx.P, o), 'crossframe', { B, opt: o }) || put(host, 'crossframe', ctx, TX => TX.crossframe(B, ctx.P, o)); }
+    // SBXF (2026-11-13): the Download DXF as before (B.dxfB: the reported girder's own depth, when the governing bay's differs; the engineer's rule, no DXF change)
+    putDet(host, 'crossframe', ctx, TX => TX.crossframe(B.dxfB || B, ctx.P, o), 'crossframe', { B, opt: o }) || put(host, 'crossframe', ctx, TX => TX.crossframe(B, ctx.P, o)); }
   function welds(host, ctx, B, sel, onSel) {
     if (!putC(host, 'welds', ctx, TX => TX.welds(B, ctx.P, { gi: gi(ctx), sel }), 'welds', { P: ctx.P, gi: gi(ctx), R: B, sel, onSel })) put(host, 'welds', ctx, TX => TX.welds(B, ctx.P, { gi: gi(ctx), sel }), onSel);
     const oW = { i: sel && sel.k === 'fw' ? sel.i : undefined };

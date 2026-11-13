@@ -163,7 +163,9 @@
     const C = R.errors ? (R.errors.length ? null : CF.checks(R)) : null;
     const G = P.girders[gi] || P.girders[0], line = Math.min(FRM.lineOf(P, G), L.FR.girders.length - 1), ext = line === 0 || line === L.FR.girders.length - 1;
     const fl = FRM.flSkew(L.m.skews, ext, P.framing), XF = CF.pointLoads(P, gi, { L }), br = FRM.girderBraces(P, gi, L);
-    return { L, I, R, C, fl, XF, br, line, G, A };
+    // SBXF (2026-11-13): the governing bay's depth differs from the reported girder's: the tab graphic's Download DXF drawn as before (dxfB, the reported girder's own depth)
+    let dxfB; if (I.p.xfBay && I.p.xfBay.vary) { const I0 = CF.inputsOf(P, { L, A, gi, bays: false }), R0 = CF.compute(I0.p, env); dxfB = { L, I: I0, R: R0, C: R0.errors && !R0.errors.length ? CF.checks(R0) : null, line }; }
+    return { L, I, R, C, fl, XF, br, line, G, A, dxfB };
   }
   const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>`;
   const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
@@ -173,7 +175,7 @@
   const TOPICS = { x: () => [...TPX('own', 'n', 'steel', 'c3', 'cn', 'cr'),
     { key: 'lay', title: 'Cross-frame spacing and orientation', ref: A + '6.7.4.2.1', ids: /^fr\.(s|k\d+\.)/, res: /^fr\.s$/ },
     { key: 'lb', title: 'Unbraced lengths of the girders', ref: A + '6.7.4.2.1', ids: /^fr\.g\d+\./ },
-    { key: 'geo', title: 'Girder depth, spacing and connection geometry', ref: A + '6.7.4.2.1', ids: /^cf\.(dg|Lb|geo)$/ },
+    { key: 'geo', title: 'Girder depth, spacing and connection geometry', ref: A + '6.7.4.2.1', ids: /^cf\.(xfD|h|dg|dW|Lb|geo)$/ },   // SBXF: xfD, h, dW (girder types)
     { key: 'lat', title: 'Flange lateral bending from skew', ref: A + 'C6.10.1', ids: /^flsk\./ },
     { key: 'w3', title: 'Wind on the girders, Strength III', ref: A + '3.8.1.2, 4.6.2.7', ids: /^cf\.wIII\./, res: /^cf\.wIII\.Fw$/ },
     { key: 'w5', title: 'Wind on the girders, Strength V', ref: A + '3.8.1.2, 4.6.2.7', ids: /^cf\.wV\./, res: /^cf\.wV\.Fw$/ },
@@ -214,6 +216,12 @@
     return `<svg viewBox="0 0 ${W} ${H.toFixed(0)}" style="width:100%;height:auto;max-height:60vh;background:#fff;border:1px solid #e4e7eb;border-radius:4px" role="img" aria-label="Diaphragm elevation">${o}</svg>
       <p class="note">Intermediate diaphragm looking along the girders (connection plates grey, bolts brown), nominal dimensions. Checks CFD (intermediate) and CFE (end diaphragms at the bearing lines) below; the details sheet is on the Drawings tab.</p>`;
   }
+  /* SBXF (2026-11-13; engineer decision 2026-11-13, girder types): the governing bay of the frame checked, its two girders and their web
+     depths (xfBayKv), and the assumption stated (xfBayNote; also the Report). '' for a project saved before girder types (no p.xfBay). */
+  const bayTxt = B => { const gl = q => q ? `G${q.line + 1} ${q.label}` : 'no type'; return `G${B.j + 1}–G${B.j + 2}: ${gl(B.a)} D = ${B.a ? fmt(B.a.D, 2) : '—'} in, ${gl(B.b)} D = ${B.b ? fmt(B.b.D, 2) : '—'} in; ${B.eq ? 'equal depths' : `the shallower, G${B.s.line + 1} ${B.s.label}`}, D = ${fmt(B.D, 2)} in`; };
+  function xfBayKv(p) { const B = p.xfBay; return B ? `<div><span>Governing bay (shallowest)</span><span>${esc(bayTxt(B))} ${wk('cf.xfD')}</span></div><div><span>d<sub>W</sub> (wind, ${esc(B.rep)})</span><span>${fmt(p.dW, 2)} in ${wk('cf.dW')}</span></div>` : ''; }
+  function xfBayNote(p, bn) { const B = p.xfBay; if (!B) return '';
+    return `<p class="note"><b>Assumption (engineer decision 2026-11-13):</b> each ${bn.replace(/s$/, '')} bay takes the depth of the shallower of the two girders it connects, by the girder type assigned to each line (Girders &amp; plates tab). The frame checked here is the governing bay, the shallowest (${esc(bayTxt(B))}), with the largest girder spacing S and the largest L<sub>b</sub> as before; the ${bn.replace(/s$/, '')} weights in DC1 take each bay's own h${B.hAuto ? '' : ' (h entered: the same in every bay)'}. The wind acts on the reported girder's own depth d<sub>W</sub>, and the stability bracing check braces the reported girder (${esc(B.rep)}), as before. ${wk('cf.xfD')}</p>`; }
   /* umNote(R): which way the entered member forces combine (CFRM), with a link to the input card and the worked step; '' when none is entered */
   function umNote(R) {
     const p = R.p || {}; if (isDia(p)) return '';   // SBDIA: entered member forces do not apply to a diaphragm
@@ -229,9 +237,9 @@
     h += `<section class="sec"><div class="secHead">${BN}: governing</div><div class="secBody">
       ${gov ? `<p>Governing ratio <b class="${cls(gov.it.r)}">${fmt(gov.it.r, 3)}</b>: ${esc(gov.c.id)} ${window.SBDSub.html(gov.c.title)}, ${window.SBDSub.html(gov.it.loc)} ${wk(gov.it.step)}</p>` : ''}
       ${R.errors && R.errors.length ? `<div class="alert err">${R.errors.map(esc).join('<br>')}</div>` : ''}
-      <div class="kv"><div><span>S (largest spacing)</span><span>${fmt(I.p.S, 2)} in</span></div><div><span>h / d</span><span>${fmt(I.p.h, 2)} / ${fmt(I.p.dg, 2)} in ${wk('cf.dg')}</span></div><div><span>L<sub>b</sub> (largest on any girder)</span><span>${fmt(I.p.Lb, 2)} ft ${wk('cf.Lb')}</span></div>
+      <div class="kv"><div><span>S (largest spacing)</span><span>${fmt(I.p.S, 2)} in</span></div><div><span>h / d</span><span>${fmt(I.p.h, 2)} / ${fmt(I.p.dg, 2)} in ${wk(I.p.xfBay ? 'cf.h' : 'cf.dg')}</span></div>${xfBayKv(I.p)}<div><span>L<sub>b</sub> (largest on any girder)</span><span>${fmt(I.p.Lb, 2)} ft ${wk('cf.Lb')}</span></div>
       <div><span>Deck placement M<sub>u</sub></span><span>${fmt(+I.p.sb.Mu, 1)} kip-ft</span></div><div><span>Stability span L, frames n</span><span>${fmt(I.p.sb.L, 2)} ft, ${I.p.sb.n}</span></div>${R.W ? `<div><span>F<sub>w</sub> Strength III / V</span><span>${fmt(R.W.III.Fw, 2)} / ${fmt(R.W.V.Fw, 2)} kip ${wk('cf.wIII.Fw')}</span></div>` : ''}</div>
-      <p class="note">M<sub>u</sub>: ${window.SBDSub.html(I.src.Mu || '')}; ${window.SBDSub.html(I.src.sb || '')}.${umNote(R)}</p></div></section>`;
+      <p class="note">M<sub>u</sub>: ${window.SBDSub.html(I.src.Mu || '')}; ${window.SBDSub.html(I.src.sb || '')}.${umNote(R)}</p>${xfBayNote(I.p, bn)}</div></section>`;
     h += dOn ? `<section class="sec"><div class="secHead">Diaphragms: elevation</div><div class="secBody">${diaSvg(B)}</div></section>`   // SBDIA: the diaphragm, not the X / K truss
       : `<section class="sec"><div class="secHead">Cross-frames: elevation</div><div class="secBody"><div data-gfxb="crossframe"></div></div></section>`;   // drawn by ui/tabgraphics-b.js from the results below
     // layout
