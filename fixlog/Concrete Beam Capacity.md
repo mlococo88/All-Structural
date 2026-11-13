@@ -7205,7 +7205,7 @@ No computed value changes. Layer table at 1500 px, slab, T1 #11 / C2 #10: before
 - **Results identical:** origin/main vs branch, 8 projects (default; beam; T-beam in negative bending with torsion; AASHTO beam; strip slab without S&T; strip slab with S&T and top bars; actual-width slab; the engineer's slab). The autosave, `CC`, `VALIDATION`, `allChecks()`, every output tab's text, the Report text, the ASD state and the Development & Splice hand-off are all identical.
 - Screenshots: layer table and input tabs before and after, at 1400, 1500, 1920 and 390 px.
 
-## 2026-11-13 — PR: claude/cb-nocap-chip (CBBS) — Beam Capacity header chip: "NO CAPACITY" only for a strength check with no capacity; a layer with no valid bar size is an input error naming the layer   [display / validation only; no computed value, PASS / FAIL, saved key or format change]
+## 2026-11-13 — PR: claude/cb-nocap-chip (PR #1517: https://github.com/mlococo88/All-Structural/pull/1517) (CBBS) — Beam Capacity header chip: "NO CAPACITY" only for a strength check with no capacity; a layer with no valid bar size is an input error naming the layer   [display / validation only; no computed value, PASS / FAIL, saved key or format change]
 
 Engineer report (screenshot): a one-way slab, layer T1 at s = 4 in, Set d 6.25 in. The Size select read "#", the header chip read "NO CAPACITY ✗", and the check list showed "(provided = 0) FAIL" and "D/C ≫1 FAIL". Every site is tagged CBBS. The file uses CRLF line endings; keep them. All code is in the Beam Capacity srcdoc (`#suite-frame-capacity`); escape `"` as `&quot;` and `&` as `&amp;` when re-applying (the text below is un-escaped).
 
