@@ -30,11 +30,14 @@ test('hand check D 5/2, L 3/1.2, W ±2/±0.8: rows, M_u, V_u', () => {
     ['5.3.1c', '1.2D + 1.6Lr + 1.0L', 9.0, 3.6],                    // 6 + 3 = 9.0; 2.4 + 1.2 = 3.6
     ['5.3.1c', '1.2D + 1.6Lr + 0.5W', 7.0, 2.8],                    // 6 + 1 = 7.0; 2.4 + 0.4 = 2.8
     ['5.3.1c', '1.2D + 1.6Lr − 0.5W', 5.0, 2.0],                    // 6 − 1 = 5.0; 2.4 − 0.4 = 2.0
+    ['5.3.1c', '1.2D + 1.6Lr − 0.5W, W omitted', 6.0, 2.4],         // CBOM 5.3.2: 6 > 5, 2.4 > 2.0
     ['5.3.1d', '1.2D + 1.0W + 1.0L + 0.5Lr', 11.0, 4.4],            // 6 + 2 + 3 = 11.0; 2.4 + 0.8 + 1.2 = 4.4
     ['5.3.1d', '1.2D − 1.0W + 1.0L + 0.5Lr', 7.0, 2.8],             // 6 − 2 + 3 = 7.0; 2.4 − 0.8 + 1.2 = 2.8
+    ['5.3.1d', '1.2D − 1.0W + 1.0L + 0.5Lr, W omitted', 9.0, 3.6],  // CBOM: 6 + 3 = 9 > 7
     ['5.3.1e', '1.2D + 1.0E + 1.0L + 0.2S', 9.0, 3.6],              // E = 0: one row (±E merged); 6 + 3 = 9.0
     ['5.3.1f', '0.9D + 1.0W', 6.5, 2.6],                            // 4.5 + 2 = 6.5; 1.8 + 0.8 = 2.6
     ['5.3.1f', '0.9D − 1.0W', 2.5, 1.0],                            // 4.5 − 2 = 2.5; 1.8 − 0.8 = 1.0
+    ['5.3.1f', '0.9D − 1.0W, W omitted', 4.5, 1.8],                 // CBOM: 4.5 > 2.5
     ['5.3.1g', '0.9D + 1.0E', 4.5, 1.8]];                           // E = 0: 4.5; 1.8
   assert.deepEqual(R.map(r => [r.eq, r.name]), exp.map(e => [e[0], e[1]]));
   exp.forEach(([, n, M, V]) => { const r = row(R, n); near(r.Mu, M, n + ' M_u'); near(r.Vu, V, n + ' V_u'); near(r.Tu, 0, n + ' T_u'); });
@@ -45,15 +48,16 @@ test('hand check D 5/2, L 3/1.2, W ±2/±0.8: rows, M_u, V_u', () => {
 });
 
 test('every alternative expanded when every case is non-zero: 25 rows, as Table 5.3.1', () => {
+  // all effects of one sign and W / E not reversed... with reversal the −W / −E rows add 5.3.2 rows; filter the full rows here
   const all = cases({ D: { M: 1 }, L: { M: 1 }, Lr: { M: 1 }, S: { M: 1 }, R: { M: 1 }, W: { M: 1 }, E: { M: 1 } });
-  const R = builder()({ cases: all, rev: { W: true, E: true }, l05: false });
+  const R = builder()({ cases: all, rev: { W: true, E: true }, l05: false }).filter(r => !r.omit);
   const n = eq => R.filter(r => r.eq === eq).length;
   // a 1; b 3; c 3 x (1.0L, +0.5W, −0.5W) = 9; d 3 x ±W = 6; e ±E = 2; f ±W = 2; g ±E = 2
   assert.deepEqual(['5.3.1a', '5.3.1b', '5.3.1c', '5.3.1d', '5.3.1e', '5.3.1f', '5.3.1g'].map(n), [1, 3, 9, 6, 2, 2, 2]);
   assert.equal(R.length, 25);
   R.forEach(r => assert.deepEqual(r.merged, []));
   const R2 = builder()({ cases: all, rev: { W: false, E: false }, l05: false });
-  assert.equal(R2.length, 1 + 3 + 6 + 3 + 1 + 1 + 1);   // no reversal: 16
+  assert.equal(R2.length, 1 + 3 + 6 + 3 + 1 + 1 + 1);   // no reversal, all effects of one sign: no 5.3.2 row, 16
 });
 
 test('5.3.3: the factor on L is 0.5 in Eqs. (5.3.1c), (d), (e) only', () => {
@@ -80,4 +84,31 @@ test('blank cases: one row per equation, all zero; missing or partial input read
   R.forEach(r => { assert.equal(r.Mu, 0); assert.equal(r.Vu, 0); assert.equal(r.Tu, 0); });
   assert.equal(builder()({}).length, 7);
   near(row(builder()({ cases: { D: { M: '5' } } }), '1.4D').Mu, 7, 'string input');
+});
+
+// CBOM (2026-11-13, CB-7): ACI 318-19 5.3.2, a variable load left out where that increases |M_u| or |V_u| (mixed signs).
+// D M = 5, L M = −3, W M = ±2 (reverses), others 0; V = 0. Full rows (M_u): a 7.0; b 1.2; c+L 3.0, c+0.5W 7.0, c−0.5W 5.0; d+W 5.0,
+// d−W 1.0; e 3.0; f+W 6.5, f−W 2.5; g 4.5. Omitted rows (|M_u| larger): b L omitted 6.0; c+L L omitted 6.0; c−0.5W W omitted 6.0
+// (same loads as "c+L, L omitted" in Eq. (5.3.1c): merged); d+W L omitted 8.0; d−W W omitted 3.0, L omitted 4.0; e L omitted 6.0;
+// f−W W omitted 4.5. Governing |M_u|: 7.0 before (1.4D), 8.0 after ((5.3.1d) +W, L omitted = 1.2D + 1.0W + 0.5Lr).
+test('5.3.2 mixed-sign hand check: omitted rows, merge, governing 7.0 -> 8.0', () => {
+  const R = builder()({ cases: cases({ D: { M: 5 }, L: { M: -3 }, W: { M: 2 } }), rev: { W: true, E: true }, l05: false });
+  const exp = [['1.4D', 7], ['1.2D + 1.6L + 0.5Lr', 1.2], ['1.2D + 1.6L + 0.5Lr, L omitted', 6], ['1.2D + 1.6Lr + 1.0L', 3], ['1.2D + 1.6Lr + 1.0L, L omitted', 6],
+    ['1.2D + 1.6Lr + 0.5W', 7], ['1.2D + 1.6Lr − 0.5W', 5], ['1.2D + 1.0W + 1.0L + 0.5Lr', 5], ['1.2D + 1.0W + 1.0L + 0.5Lr, L omitted', 8],
+    ['1.2D − 1.0W + 1.0L + 0.5Lr', 1], ['1.2D − 1.0W + 1.0L + 0.5Lr, W omitted', 3], ['1.2D − 1.0W + 1.0L + 0.5Lr, L omitted', 4],
+    ['1.2D + 1.0E + 1.0L + 0.2S', 3], ['1.2D + 1.0E + 1.0L + 0.2S, L omitted', 6], ['0.9D + 1.0W', 6.5], ['0.9D − 1.0W', 2.5], ['0.9D − 1.0W, W omitted', 4.5], ['0.9D + 1.0E', 4.5]];
+  assert.deepEqual(R.map(r => r.name), exp.map(e => e[0]));
+  exp.forEach(([n, M]) => near(row(R, n).Mu, M, n));
+  assert.deepEqual(row(R, '1.2D + 1.6Lr + 1.0L, L omitted').merged, ['1.2D + 1.6Lr − 0.5W, W omitted']);
+  assert.deepEqual(row(R, '1.2D + 1.0W + 1.0L + 0.5Lr, L omitted').why, ['M']);
+  const full = R.filter(r => !r.omit), gov = rs => rs.reduce((a, r) => Math.abs(r.Mu) > Math.abs(a.Mu) + 1e-9 ? r : a);
+  near(gov(full).Mu, 7, 'governing full row'); assert.equal(gov(R).name, '1.2D + 1.0W + 1.0L + 0.5Lr, L omitted'); near(gov(R).Mu, 8, 'governing with 5.3.2');
+});
+
+test('5.3.2: V checked on its own; an omitted row only where |M_u| or |V_u| grows', () => {
+  // D M 5 V 4, L M 3 V −2: (5.3.1b) M 10.8, V 4.8 − 3.2 = 1.6; L omitted M 6.0 (smaller), V 4.8 (larger) -> generated for V only
+  const R = builder()({ cases: cases({ D: { M: 5, V: 4 }, L: { M: 3, V: -2 } }), rev: { W: true, E: true }, l05: false });
+  const o = row(R, '1.2D + 1.6L + 0.5Lr, L omitted');
+  near(o.Mu, 6, 'M'); near(o.Vu, 4.8, 'V'); assert.deepEqual(o.why, ['V']);
+  assert.ok(R.every(r => !r.omit || r.omit !== 'D'), 'D never omitted');
 });
