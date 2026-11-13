@@ -6991,7 +6991,7 @@ D: M = 5; L: M = −3; W: M = ±2 (reverses); other cases 0; V = 0.
   `computeAll()`, `VALIDATION`, `allChecks`, the hand-off message, the autosave, the Report and every tab are identical, except in the same-sign service project. There the rows are identical (no omitted row is generated) and only the rules note differs.
 - **Tests:** `tests/engine/cbc-loads.test.mjs` (7 tests, 2 new) and `tests/smoke/cbc-loads.mjs` (updated rows; new mixed-sign block). The suite's other tests are listed in the PR.
 
-## 2026-11-13 — PR: claude/cbc-omit-subsets (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CBSS) — Beam Capacity tab, service load cases: ACI 318-19 5.3.2 omitted rows for every subset of the variable loads (engineer decision CB-8)   [CALCULATION CHANGE (service mode only: more combinations); factored mode identical; no saved key or format change]
+## 2026-11-13 — PR: claude/cbc-omit-subsets (PR #1507: https://github.com/mlococo88/All-Structural/pull/1507) (CBSS) — Beam Capacity tab, service load cases: ACI 318-19 5.3.2 omitted rows for every subset of the variable loads (engineer decision CB-8)   [CALCULATION CHANGE (service mode only: more combinations); factored mode identical; no saved key or format change]
 
 The file uses CRLF line endings; keep them. The code is in the Beam Capacity srcdoc. When re-applying, escape `&` as `&amp;` and `"` as `&quot;`. The sites are tagged CBSS.
 
