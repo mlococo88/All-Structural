@@ -220,7 +220,8 @@ node tests/smoke/cbc-input-fit.mjs [--file <Concrete Beam Capacity.html>] [--w 1
 
 # Beam Capacity header chip and layer bar size (CBBS): the engineer's slab (#5 @ 4, Set d 6.25, no T&S): size kept, phi M_n 23.29, chip
 # "DCR >>1" (was NO CAPACITY) naming the not-entered checks; provided = 0 (A_s,min, no top bars) "DCR >>1" (was DCR 172800000000.00);
-# torsion with no stirrups still NO CAPACITY; an imported unknown size: INPUT INVALID "Layer T1: choose a bar size", no page error; 1400 / 390 px. ~1 min
+# torsion with no stirrups still NO CAPACITY; an imported unknown size: INPUT INVALID "Layer T1: choose a bar size", no page error; CBBZ (CB-15): a blank saved
+# layer size stays blank (was #5) with the same error; stirrup size blank / unknown (was a page error), unknown skin / S&T size: input errors; 1400 / 390 px. ~2 min
 node tests/smoke/cbc-bar-size.mjs [--file <Concrete Beam Capacity.html>]
 
 # Beam Capacity, one-way slab: shrinkage and temperature bars drawn (CBTS): h 9, #5 @ 12 bottom, c_c 0.75, T&S #4 @ 12: T&S bar on the

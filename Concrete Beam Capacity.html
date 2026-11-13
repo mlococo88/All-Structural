@@ -842,7 +842,7 @@ function mergeState(st){
   S={...d,...st};
   [&quot;proj&quot;,&quot;sec&quot;,&quot;mat&quot;,&quot;cover&quot;,&quot;stir&quot;,&quot;skin&quot;,&quot;tor&quot;,&quot;crack&quot;,&quot;ui&quot;].forEach(k=>{ S[k]={...d[k],...(st[k]||{})}; });
   if(!Array.isArray(S.layers)||!S.layers.length) S.layers=d.layers;
-  S.layers=S.layers.map(L=>({n:+L.n||1,size:String(L.size||'5'),
+  S.layers=S.layers.map(L=>({n:+L.n||1,size:(L.size==null||String(L.size).trim()==='')?'':String(L.size),   /* CBBZ (CB-15): a blank size stays blank (input error), was '5' */
     face:(L.face==='compression'?'compression':'tension'),
     dMan:(L.dMan==null||L.dMan==='')?null:+L.dMan,...(+L.s>0?{s:+L.s}:{})}));   /* CBSB: s (slab bar spacing) kept only where saved */
   /* CBSB migration (2026-11-13): no memberType -> beam (results as before). A slab is a 12 in rectangular strip; each layer's bars
@@ -870,7 +870,7 @@ function mergeState(st){
    Faces swap with the sign of the governing moment.
    d is always measured from the extreme COMPRESSION fibre (solver convention).
    ===================================================================== */
-function stirDia(){ return S.stir.present ? REBAR[S.stir.size].d : 0; }
+function stirDia(){ return S.stir.present ? (REBAR[S.stir.size]?REBAR[S.stir.size].d:0) : 0; }   /* CBBZ: an unknown size is an input error (cbcBarSizeErrs), not a throw */
 function layerGeom(neg,layersOv){
   const h=S.sec.h, cc=S.cover.cc, ds=stirDia(), LC=S.layerClear;
   const stacks={tension:0,compression:0};
@@ -1970,7 +1970,7 @@ function validate(){
     if(hf>=h) B.push({code:&quot;Geometry&quot;,msg:&quot;Flange thickness h_f must be less than the overall depth h.&quot;});
   }
   if(!S.layers.length) B.push({code:&quot;Reinforcement&quot;,msg:&quot;At least one reinforcement layer is required.&quot;});
-  cbcBarSizeErrs().forEach(([k,msg])=>B.push({code:&quot;Reinforcement&quot;,msg}));   /* CBBS */
+  cbcBarSizeErrs().forEach(([k,msg,code])=>B.push({code,msg}));   /* CBBS, CBBZ */
   if(cbcSlab()&amp;&amp;S.layers.some(L=>!(L.s>0))) B.push({code:&quot;Reinforcement&quot;,msg:&quot;Slab bar spacing s must be greater than 0 in every layer.&quot;});   /* CBSB */
   if(cbcSlabAct()&amp;&amp;S.sec.bw>0&amp;&amp;S.layers.some(L=>L.s>0&amp;&amp;L.s>S.sec.bw+1e-9)) B.push({code:&quot;Reinforcement&quot;,msg:&quot;Slab width b = &quot;+fmt(S.sec.bw)+&quot; in is less than a layer's bar spacing s: no bar would be counted (n = floor(b/s) = 0). Enter b at least s.&quot;});   /* CBSW */
   const G=layerGeom(false);
@@ -2622,16 +2622,22 @@ function cbcInputErrs(){
   if(!(M.fyt>0)) E.push(['fyt','f_yt must be greater than 0.']);
   if(!cbcLamOk()) E.push(['lam',cbcLamMsg()]);
   if(S.stir.present&amp;&amp;!(S.stir.s>0)) E.push(['sp','Stirrup spacing s must be greater than 0.']);
-  E.push(...cbcBarSizeErrs());   /* CBBS: the Size select of the layer */
+  E.push(...cbcBarSizeErrs().map(e=>[e[0],e[1]]));   /* CBBS, CBBZ: the bar-size select named */
   if(h>0) layerGeom(false).forEach((L,i)=>{ if(L.d<=0||L.d>=h) E.push(['ld'+i,'Layer '+(i+1)+' depth d = '+fmt(L.d)+' in is outside the section (0 to '+fmt(h)+' in).']); });
   return E;
 }
-/* CBBS (2026-11-13, engineer report “NO CAPACITY”): a layer whose bar size is not a bar of the table (an unknown size, only from an
-   edited or imported file: the Size select always holds a bar, and a blank saved size opens as #5, mergeState, unchanged) is an input error naming the layer (its tag, as in the layer
-   table), so no zero-steel result is shown. Display / validation only. */
+/* CBBS (2026-11-13, engineer report “NO CAPACITY”): a layer whose bar size is not a bar of the table is an input error naming the
+   layer (its tag, as in the layer table), so no zero-steel result is shown. Display / validation only.
+   CBBZ (2026-11-13, engineer decision CB-15): also a BLANK layer size from a saved or imported file (mergeState keeps it blank; before,
+   it opened as #5 without a word); a closed-stirrup size that is blank or not a bar while stirrups are present (before: a page error);
+   and a shrinkage and temperature or skin bar size that is not a bar (before: taken as none entered). A blank S&T or skin size is the
+   select's own &quot;None entered&quot; / &quot;None&quot; choice and stays as it was. Each entry: [data-fkey of the select, message, validate() code]. */
 function cbcBarSizeErrs(){ const E=[]; let G=null;
   S.layers.forEach((L,i)=>{ if(REBAR[L.size]) return; G=G||layerGeom(false);
-    E.push(['ls'+i,'Layer '+((G[i]&amp;&amp;G[i].side)||'')+(i+1)+': choose a bar size (Reinforcement, 4. Reinforcement layers).']); });
+    E.push(['ls'+i,'Layer '+((G[i]&amp;&amp;G[i].side)||'')+(i+1)+': choose a bar size (Reinforcement, 4. Reinforcement layers).','Reinforcement']); });
+  if(S.stir.present&amp;&amp;!REBAR[S.stir.size]) E.push(['ss','Stirrups: choose a bar size (Reinforcement, Transverse reinforcement).','Stirrups']);
+  if(S.skin&amp;&amp;S.skin.size&amp;&amp;!REBAR[S.skin.size]) E.push(['skz','Skin bars: choose a bar size or None (Reinforcement, Transverse reinforcement).','Stirrups']);
+  if(cbcSlab()&amp;&amp;S.slab&amp;&amp;S.slab.stSize&amp;&amp;!REBAR[S.slab.stSize]) E.push(['stSz','Shrinkage and temperature bars: choose a bar size or None entered (Reinforcement, Shrinkage &amp; Temperature).','Reinforcement']);
   return E; }
 function cbcLamOk(){ const l=S.mat.lambda; return S.code==='ACI'?(l>=0.75&amp;&amp;l<=1.0):(l>0&amp;&amp;l<=1.0); }
 /* CBASM (2026-11-10): the lambda range this tab accepts, stated under the input and in the Report inputs (CLAUDE.md §6) */
