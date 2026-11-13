@@ -148,20 +148,30 @@
   const LITE = new Map();
   const lite = t => { let h = LITE.get(t); if (h != null) return h; const w = typeof window !== 'undefined' ? window : null, K = w && w.katex;
     try { if (K) w.katex = undefined; h = ST().toHTML(t); } finally { if (K) w.katex = K; } if (LITE.size < 20000) LITE.set(t, h); return h; };
+  /* SEE1 (2026-11-13): in print a § link reads "see §x" (.rp-see::before); a link the text already introduces with "see" ("(see [[k]])",
+     "see also [[k]]", and the further links of that run: "see [[a]], [[b]] and [[c]]") gets class rp-seen (no "see " added), so "see" is
+     printed once; a link without "see" before it prints "see §x" as before. Screen and plain text unchanged. */
+  const SEE_BEFORE = /\bsee(?:\s+also)?\s*$/i, SEE_RUN = /^\s*(?:,|;|\/|&|and|or|to|–|-)\s*$/i;
+  const seenA = a => a.replace('class="rp-see"', 'class="rp-see rp-seen"');
   function rich(doc, s, html, o) {   // o: SharedSteps.toText's options (plain text only; text(doc, o))
     const parts = String(s == null ? '' : s).split(/(\[\[[^\]]+\]\]|\$[^$]+\$)/);
+    let prev = '', seen = false;   // the text part before this one; the last link was introduced by "see" (SEE1)
     return parts.map(p => {
       if (!p) return '';
       if (p.startsWith('[[') && p.endsWith(']]')) {
         const [k, lab] = p.slice(2, -2).split('|');
-        if (k.startsWith('tab:')) return html ? `<a href="#" class="rp-go" data-rpgoto="${esc(k.slice(4))}">${esc(lab || k.slice(4))}</a>` : (lab || k.slice(4));
+        if (k.startsWith('tab:')) { prev = ''; seen = false; return html ? `<a href="#" class="rp-go" data-rpgoto="${esc(k.slice(4))}">${esc(lab || k.slice(4))}</a>` : (lab || k.slice(4)); }
         const e = doc.index.get(k), t = e ? '§' + e.n : '§?';
-        return html ? (e ? `<a href="#${e.anchor}" class="rp-see" data-rpjump="${esc(k)}">${t}</a>` : `<span class="rp-bad" title="${esc(k)}">${t}</span>`) : t;
+        seen = SEE_BEFORE.test(prev) || (seen && SEE_RUN.test(prev)); prev = '';
+        return html ? (e ? (a => seen ? seenA(a) : a)(`<a href="#${e.anchor}" class="rp-see" data-rpjump="${esc(k)}">${t}</a>`) : `<span class="rp-bad" title="${esc(k)}">${t}</span>`) : t;
       }
-      if (p.length > 2 && p[0] === '$' && p[p.length - 1] === '$') return html ? lite(p.slice(1, -1)) : ST().toText(p.slice(1, -1), o);
+      if (p.length > 2 && p[0] === '$' && p[p.length - 1] === '$') { prev = ''; seen = false; return html ? lite(p.slice(1, -1)) : ST().toText(p.slice(1, -1), o); }
+      prev = p;
       return html ? esc(p) : p;
     }).join('');
   }
+  /* a cell's or kv row's key link after its text: no "see " in print when the text ends with "see" (SEE1) */
+  const keyLink = (doc, before, key) => (a => SEE_BEFORE.test(String(before == null ? '' : before)) ? seenA(a) : a)(rich(doc, `[[${key}]]`, true));
 
   /* ---------- HTML ---------- */
   const stepVal = s => {   // the result column: value and unit (and OK / NG of a test step), through SharedSteps
@@ -178,7 +188,7 @@
   }
   function cellHtml(doc, c, th) {
     const o = c && typeof c === 'object' ? c : { t: c }, tag = th ? 'th' : 'td', cl = [o.cls ? 'rp-' + o.cls : '', o.n ? 'rp-n' : ''].filter(Boolean).join(' ');
-    const lk = o.key ? ' ' + rich(doc, `[[${o.key}]]`, true) : '';
+    const lk = o.key ? ' ' + keyLink(doc, o.t, o.key) : '';
     return `<${tag}${cl ? ` class="${cl}"` : ''}${o.span ? ` colspan="${o.span}"` : ''}>${rich(doc, o.t, true)}${lk}</${tag}>`;
   }
   /* a lazy item's body (steps or a table), made when it is opened */
@@ -203,7 +213,7 @@
     }
     if (it.type === 'figure') return `<figure class="rp-fig">${it.svg || ''}${it.caption ? `<figcaption>${rich(doc, it.caption, true)}</figcaption>` : ''}</figure>`;
     if (it.type === 'note') return `<p class="rp-note${it.warn ? ' rp-warn' : ''}">${rich(doc, it.text, true)}</p>`;
-    if (it.type === 'kv') return `<table class="rp-kv">${(it.rows || []).map(r => `<tr><td>${rich(doc, r[0], true)}</td><td>${rich(doc, r[1], true)}${r[2] ? ' ' + rich(doc, `[[${r[2]}]]`, true) : ''}</td></tr>`).join('')}</table>`;
+    if (it.type === 'kv') return `<table class="rp-kv">${(it.rows || []).map(r => `<tr><td>${rich(doc, r[0], true)}</td><td>${rich(doc, r[1], true)}${r[2] ? ' ' + keyLink(doc, r[1], r[2]) : ''}</td></tr>`).join('')}</table>`;
     return '';
   }
   function titleBlock(doc) {

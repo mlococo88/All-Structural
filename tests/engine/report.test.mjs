@@ -49,6 +49,27 @@ test('shared/report.js: numbering, anchors, references, step-note links, lazy it
   assert.deepEqual(J([d2.unresolved.map(u => u.key), d2.dup]), [['nope'], ['a.x']]); assert.match(R.text(d2), /§\?/);
 });
 
+/* SEE1 (2026-11-13): in print a § link reads "see §x" (.rp-see::before); text that already says "see" before the link (a cell "(see [[k]])",
+   "See [[k]]", "see also [[k]]", the further links of that run, a cell / kv key after text ending in "see") gets rp-seen, so "see" prints once;
+   every other link unchanged (bare "[[k]]", "Length [[k]]", a link after a "$…$" or a tab link); screen and text() unchanged */
+test('shared/report.js: "see" printed once before a § link that the text already introduces with "see" (SEE1)', () => {
+  const W = loadShared('units.js', 'steps.js', 'report.js'), R = W.SharedReport, S = W.SharedSteps;
+  const st = [S.step({ id: 'a', label: 'A', value: 1 }), S.step({ id: 'b', label: 'B', value: 2 }), S.step({ id: 'c', label: 'C', value: 3 })];
+  const cells = ['(see [[a]])', 'See [[a]].', 'see also [[b]]', 'see [[a]], [[b]] and [[c]]', '[[a]]', 'Length [[a]]', '[[a]], [[b]]', 'seesaw [[a]]', 'oversee [[a]]', 'see $x$ [[a]]',
+    'see [[tab:t|the tab]] [[a]]', 'see [[a]]; ratio [[b]]', { t: 'Worked: see', key: 'a' }, { t: 'Worked', key: 'b' }];
+  const M = { title: 'T', sections: [{ id: 's', title: 'S', subs: [{ id: 'q', title: 'Q', items: [{ type: 'steps', scope: '', steps: st },
+    { type: 'table', head: ['h'], rows: cells.map(c => [c]) }, { type: 'kv', rows: [['k', 'see', 'c'], ['k2', 'value', 'c']] }, { type: 'note', text: 'Total (see [[c]]).' }] }] }] };
+  const doc = R.build(M), h = R.html(doc, { lazy: false }), tb = h.slice(h.indexOf('<table class="rp-tbl'));
+  const rows = [...tb.matchAll(/<tr>(.*?)<\/tr>/gs)].slice(1).map(m => m[1]);
+  const seen = r => [...r.matchAll(/class="(rp-see[^"]*)"/g)].map(m => m[1] === 'rp-see rp-seen' ? 1 : 0).join('');
+  assert.deepEqual(rows.slice(0, cells.length).map(seen), ['1', '1', '1', '111', '0', '0', '00', '0', '0', '0', '0', '10', '1', '0']);
+  const kv = h.slice(h.indexOf('<table class="rp-kv">')); assert.deepEqual([...kv.matchAll(/class="(rp-see[^"]*)"/g)].slice(0, 2).map(m => m[1]), ['rp-see rp-seen', 'rp-see']);
+  assert.match(h, /Total \(see <a href="#[^"]+" class="rp-see rp-seen" data-rpjump="c">§1\.1<\/a>\)\./);
+  // the printed CSS: rp-seen has no "see " (the rule this relies on); the plain text unchanged ("(see §1.1)", "§1.1")
+  assert.ok(fs.readFileSync(path.join(ROOT, 'shared/report.js'), 'utf8').includes('.rp-see::before{content:"see ";} .rp-seen::before{content:none;}'));
+  const T = R.text(doc); assert.ok(T.includes('(see §1.1)') && T.includes('Total (see §1.1).') && !/see see/i.test(T));
+});
+
 /* ---------- 2–4. the Steel Bridge report ---------- */
 function checkReport(W, B, name) {
   const out = {};
