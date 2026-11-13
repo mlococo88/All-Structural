@@ -106,7 +106,7 @@
     const DQ = diaDepthReq(p, E), req = DQ ? DQ.gov.req : frac_ * dg;   // SB-22: girder types: the least depth of every bay (SB-19's, the deeper girder), else as before
     const ch = recCh(req, Infinity), w = recW(req, Infinity), grp = DQ && !deep ? recGroups(p, DQ, ch || w) : null;
     const skM = rT && rT.value.table ? (E.skews ? Math.max(0, ...E.skews.map(v => Math.abs(+v || 0))) : 0) : 0;
-    const tb = rT && rT.value.table && !deep ? rT.value.table.find(q => dB >= q[0] - 1e-9 && dB <= q[1] + 1e-9) || rT.value.table.find((q, i, A) => i > 0 && dB > A[i - 1][1] && dB < q[0]) : null;
+    const tb = rT && rT.value.table && !deep ? chRow(rT, dB) : null;
     const chT = tb && skM < rT.value.skT - 1e-9 ? tb[2] : null;
     const sd = S / dg, kx = rT && rT.value.kHi ? (sd >= rT.value.kHi - 1e-9 ? 'K' : sd <= rT.value.xLo + 1e-9 ? 'X' : null) : null;
     const one = q => q.ch ? `channel diaphragm ${q.ch[0]} (or a rolled W)` : q.w ? `rolled diaphragm ${q.w[0]}` : null, bl = g => g.bays.map(j => `G${j + 1}–G${j + 2}`).join(', ');
@@ -117,6 +117,9 @@
     const sel = xf ? ({ X: 'X-frame', Kb: 'K-frame', Kt: 'K-frame' }[p.type] || 'cross-frame') : DG && DG.some(g => g.shape !== DG[0].shape) ? `by bay depth group (SB-24): ${DG.map(g => `${bl(g)}: ${sN(g.shape)}`).join('; ')}` : sN(DG ? DG[0].shape : (p.dia || {}).shape);
     return { dg, dMin, deep, xf, rec, sel, ch: ch && ch[0], w: w && w[0], frac: frac_, dB, web, Dw, sd, kx, chT, skM, rT, rDd, ...(DQ ? { req, DQ, grp, show: !!grp || Math.abs(req - frac_ * dg) > 1e-9 || DQ.bays.some(b => Math.abs(b.req - req) > 1e-9) } : {}) };   // show: the SB-22 work (not for equal depths: as before)
   }
+  /* chRow(rT, D): the row of an owner's channel table (OWN35, CTDOT Table 6.7.4.2-1: [D_lo, D_hi, channel]) for the web depth D: the row whose
+     range holds D, else the next row above a gap between two ranges; undefined beyond the table (moved out of cfTypeRec unchanged, OWN35G) */
+  const chRow = (rT, dB) => rT.value.table.find(q => dB >= q[0] - 1e-9 && dB <= q[1] + 1e-9) || rT.value.table.find((q, i, A) => i > 0 && dB > A[i - 1][1] && dB < q[0]);
   /* SB-22 (2026-11-13; engineer decision SB-22): the section CF10 recommends meets the least diaphragm depth of every bay (SB-19: f × the
      deeper of the two girders a bay connects; the governing bay's req). recCh(req, top): the lightest channel (nominal area) with
      req ≤ d ≤ top; recW(req, top): the first rolled W of CF_DIA with req ≤ d ≤ top (top = Infinity: no upper limit, the rule as before).
@@ -326,7 +329,11 @@
         const DG = dOn ? diaGroups(R.p) : null, bl = g => g.bays.map(j => `G${j + 1}–G${j + 2}`).join(', '), sN = v => (v === 'custom' ? 'custom W' : v);   // SB-24: the shape of each bay depth group
         if (rT && rT.value.members) { c.items.push({ loc: 'Single members (no back-to-back members)', cells: [dOn ? (DG ? `${DG.map(g => `${bl(g)}: ${sN(g.shape)}`).join('; ')} (single sections)` : `${q.shape === 'custom' ? 'custom W' : q.shape || 'diaphragm'} (single section)`) : 'single angles', 'single angles, tees, channels or W sections'], st: 'pass' });
           c.items.push({ loc: 'Bottom chord (under-clearance less than 16 ft 3 in)', cells: [dOn ? 'diaphragm (full section)' : `${{ X: 'X', Kb: 'K (bottom)', Kt: 'K (top)' }[R.p.type] || ''}-frame with a bottom chord`, 'a bottom chord on every cross-frame'], st: 'pass' }); }
-        if (rT && rT.value.table && dOn && !TR.deep) { const ok = !TR.chT || q.shape === TR.chT;
+        if (rT && rT.value.table && dOn && DG) DG.forEach(g => {   // OWN35G (2026-11-13; Decision pending engineer review): the channel table per bay depth group
+          const dB = TR.web ? g.s.D : g.dg, deep = rT.value.strict ? dB > TR.dMin + 1e-9 : dB >= TR.dMin - 1e-9; if (deep) return;
+          const tb = chRow(rT, dB), chT = tb && TR.skM < rT.value.skT - 1e-9 ? tb[2] : null, ok = !chT || g.shape === chT;
+          c.items.push({ loc: `Intermediate channel diaphragm (Table 6.7.4.2-1), bays ${bl(g)} (${TR.web ? 'web D' : 'd'} of G${g.s.line + 1} ${g.s.label})`, cells: [sN(g.shape), chT ? `${chT} for D = ${f2(dB)} in` : TR.skM >= rT.value.skT - 1e-9 ? `skew ${f2(TR.skM)}° ≥ ${rT.value.skT}°: designed` : `D = ${f2(dB)} in outside the table: designed`], st: ok ? 'pass' : 'adv', step: 'cf.xfD' }); });
+        else if (rT && rT.value.table && dOn && !TR.deep) { const ok = !TR.chT || q.shape === TR.chT;
           c.items.push({ loc: 'Intermediate channel diaphragm (Table 6.7.4.2-1)', cells: [String(q.shape === 'custom' ? 'custom W' : q.shape || '—'), TR.chT ? `${TR.chT} for D = ${f2(TR.dB)} in` : TR.skM >= rT.value.skT - 1e-9 ? `skew ${f2(TR.skM)}° ≥ ${rT.value.skT}°: designed` : `D = ${f2(TR.dB)} in outside the table: designed`], st: ok ? 'pass' : 'adv' }); }
         if (rT && rT.value.endCh) { if (dOn) (DG && !q.eShape ? DG.map(g => [g, cfDiaEnd({ ...q, shape: g.shape })]) : [[null, cfDiaEnd(q)]]).forEach(([g, e]) => { const ok = rT.value.endCh.includes(e.shape);   // SB-24: each group's end diaphragm when it takes the intermediate shape
             c.items.push({ loc: `End bearing diaphragms (6.7.4.2.1bCT)${g ? `, bays ${bl(g)}` : ''}`, cells: [String(cfDiaSec(e).nm_), `channel, preferably ${rT.value.endCh.join(' or ')}`], st: ok ? 'pass' : 'warn' }); });

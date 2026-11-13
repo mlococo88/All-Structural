@@ -9355,3 +9355,57 @@ index d38359e..f7ead04 100644
      // layout
      h += `<section class="sec"><div class="secHead">Framing (6.7.4.2.1)</div><div class="secBody">${plan(L, dOn, { ui: true })}
 ```
+
+## 2026-11-13 — PR: claude/sb-own35-groups2 (PR #1504: https://github.com/mlococo88/All-Structural/pull/1504) — CF11, CTDOT channel table (OWN35, Table 6.7.4.2-1): applied to every bay depth group with the group's web depth and its diaphragm shape; every group must satisfy it, the worst governs (OWN35G; Decision (pending engineer review); CALCULATION CHANGE (owner item status) for CTDOT projects with a diaphragm whose bays form two or more depth groups only)
+- **Request:** open item (2) of #1490 / item of the SB-24 task: the CTDOT channel-table rule (OWN35, `xf.type` `table`: web D 21–24 in → C12x20.7, 27–30 in → C15x33.9, 33–36 in → MC18x42.7; designed above a 30° skew or outside the table) was read with the web depth of the single representative frame (the frame checked, `TR.dB`) and `dia.shape`. Apply it per bay depth group; conservative: every group must satisfy it, the worst governs. Equal depths identical. The engineer was not asked: **Decision (pending engineer review)**.
+- **Change (`engine/crossframes.js`):**
+  - `chRow(rT, D)`: the table row lookup moved out of `cfTypeRec` unchanged (the row whose range holds D, else the next row above a gap) — a pure refactor of `cfTypeRec`.
+  - `checks` CF11: with a diaphragm and two or more bay depth groups (`diaGroups`, SB-24), one item per group that is not deep enough for a cross-frame (the group's D below `dMinXF`, the rule's strictness as CF10): D = the web depth of the group's shallower girder (`g.s.D`, as `TR.dB` is the frame checked's with `web: true`; d of the group when the rule does not use the web depth), the channel of `chRow` (none above the skew limit, `skM`, unchanged), the group's shape (`grpShape`, SB-24); "pass" when equal or no table channel, else "adv", as before; loc "Intermediate channel diaphragm (Table 6.7.4.2-1), bays G1–G2, G4–G5 (web D of G1 Exterior)", linked to the step that lists every bay's girders and D (`cf.xfD`). CF11's status is the worst of its items (unchanged `ckNew`). Otherwise (one group, equal depths, a project saved before girder types): the one item, as before.
+- **Governing provision:** CTDOT Bridge Design Manual V2 Table 6.7.4.2-1 (OWN35; the app's owner rule `xf.type`, `engine/owners.js`), with AASHTO LRFD 10th Ed. (2024) Art. 6.7.4.2. The table gives a channel by web depth; which depth to use when the bays differ is not stated: **Decision (pending engineer review):** every bay depth group is checked with its own web depth and its own shape; every group must satisfy the table (conservative); a group whose depth calls for a cross-frame is not checked against the table (as before for the frame checked).
+- **Before / after (expressions):** before: one item, `q.shape` vs `chRow(D_frame checked)`. After (two or more groups): for every group g with D_g below the cross-frame minimum, `grpShape(q, g)` vs `chRow(D_g)`; CF11 status = worst.
+- **Check case 1 (new project, CTDOT, 5 girders at 9.5 ft, Interior D = 36 on G2–G4, Exterior D = 30 on G1, G5; C15x33.9 channel diaphragm, no per-group shape):** groups G1–G2, G4–G5 (shallower Exterior, D = 30.00) and G2–G3, G3–G4 (Interior, D = 36.00). Before: one item, D of the frame checked = 30.00 (27 ≤ 30 ≤ 30 → C15x33.9) = C15x33.9: **pass**; CF11 pass. After: G1–G2, G4–G5: D = 30.00 → C15x33.9 = C15x33.9: **pass**; G2–G3, G3–G4: D = 36.00 (33 ≤ 36 ≤ 36) → MC18x42.7 ≠ C15x33.9: **Advisory**; CF11 **Advisory**. With MC18x42.7 entered for G2–G3, G3–G4 (SB-24): both pass, CF11 pass.
+- **Check case 2 (three types, CTDOT, C15x33.9: Exterior G1, G6 D = 24; Mid G2, G5 and Core G3, G4 D = 30):** groups G1–G2, G5–G6 (D = 24.00 → C12x20.7: **Advisory**) and G2–G3, G3–G4, G4–G5 (D = 30.00 → C15x33.9: **pass**). Before: one item, the frame checked D = 24.00 → C12x20.7, Advisory (the same status; now each group listed).
+- **Equal depths identical (proof):** Node probe (34 projects, 62 girder-type cases; see SBCKN and SBDG): this branch vs SBDG (#1503): every value, step, DC1, DXF, sheet and the Report byte-identical in 57 of 62 type cases and 34 of 34 sheets; the 5 that differ are exactly the CTDOT multi-group diaphragm cases (check cases 1 and 2, every girder type): CF11's table items and the Report's rows of them. tests/engine/crossframes.test.mjs (GirderDetail parity, CTDOT included) passes unchanged.
+- **Saved data (§5):** none.
+- **How verified:** new tests/engine/xf-own35-groups.test.mjs (equal depths, one group and a pre-types project: one item as before; check cases 1 and 2, with and without per-group shapes). Engine subsets and smoke tests: see the PR.
+- **Other copies:** none (GirderDetail has no girder types).
+- **Open items (not changed; reported):** CF10's CTDOT "shall use a cross-frame" (`shallXF`) and its web-depth basis still use the frame checked (not part of this task).
+- **Before / after (exact):**
+```diff
+diff --git a/apps/steel-bridge/engine/crossframes.js b/apps/steel-bridge/engine/crossframes.js
+index 0a68ac5..1701009 100644
+--- a/apps/steel-bridge/engine/crossframes.js
++++ b/apps/steel-bridge/engine/crossframes.js
+@@ -106,7 +106,7 @@
+     const DQ = diaDepthReq(p, E), req = DQ ? DQ.gov.req : frac_ * dg;   // SB-22: girder types: the least depth of every bay (SB-19's, the deeper girder), else as before
+     const ch = recCh(req, Infinity), w = recW(req, Infinity), grp = DQ && !deep ? recGroups(p, DQ, ch || w) : null;
+     const skM = rT && rT.value.table ? (E.skews ? Math.max(0, ...E.skews.map(v => Math.abs(+v || 0))) : 0) : 0;
+-    const tb = rT && rT.value.table && !deep ? rT.value.table.find(q => dB >= q[0] - 1e-9 && dB <= q[1] + 1e-9) || rT.value.table.find((q, i, A) => i > 0 && dB > A[i - 1][1] && dB < q[0]) : null;
++    const tb = rT && rT.value.table && !deep ? chRow(rT, dB) : null;
+     const chT = tb && skM < rT.value.skT - 1e-9 ? tb[2] : null;
+     const sd = S / dg, kx = rT && rT.value.kHi ? (sd >= rT.value.kHi - 1e-9 ? 'K' : sd <= rT.value.xLo + 1e-9 ? 'X' : null) : null;
+     const one = q => q.ch ? `channel diaphragm ${q.ch[0]} (or a rolled W)` : q.w ? `rolled diaphragm ${q.w[0]}` : null, bl = g => g.bays.map(j => `G${j + 1}–G${j + 2}`).join(', ');
+@@ -117,6 +117,9 @@
+     const sel = xf ? ({ X: 'X-frame', Kb: 'K-frame', Kt: 'K-frame' }[p.type] || 'cross-frame') : DG && DG.some(g => g.shape !== DG[0].shape) ? `by bay depth group (SB-24): ${DG.map(g => `${bl(g)}: ${sN(g.shape)}`).join('; ')}` : sN(DG ? DG[0].shape : (p.dia || {}).shape);
+     return { dg, dMin, deep, xf, rec, sel, ch: ch && ch[0], w: w && w[0], frac: frac_, dB, web, Dw, sd, kx, chT, skM, rT, rDd, ...(DQ ? { req, DQ, grp, show: !!grp || Math.abs(req - frac_ * dg) > 1e-9 || DQ.bays.some(b => Math.abs(b.req - req) > 1e-9) } : {}) };   // show: the SB-22 work (not for equal depths: as before)
+   }
++  /* chRow(rT, D): the row of an owner's channel table (OWN35, CTDOT Table 6.7.4.2-1: [D_lo, D_hi, channel]) for the web depth D: the row whose
++     range holds D, else the next row above a gap between two ranges; undefined beyond the table (moved out of cfTypeRec unchanged, OWN35G) */
++  const chRow = (rT, dB) => rT.value.table.find(q => dB >= q[0] - 1e-9 && dB <= q[1] + 1e-9) || rT.value.table.find((q, i, A) => i > 0 && dB > A[i - 1][1] && dB < q[0]);
+   /* SB-22 (2026-11-13; engineer decision SB-22): the section CF10 recommends meets the least diaphragm depth of every bay (SB-19: f × the
+      deeper of the two girders a bay connects; the governing bay's req). recCh(req, top): the lightest channel (nominal area) with
+      req ≤ d ≤ top; recW(req, top): the first rolled W of CF_DIA with req ≤ d ≤ top (top = Infinity: no upper limit, the rule as before).
+@@ -326,7 +329,11 @@
+         const DG = dOn ? diaGroups(R.p) : null, bl = g => g.bays.map(j => `G${j + 1}–G${j + 2}`).join(', '), sN = v => (v === 'custom' ? 'custom W' : v);   // SB-24: the shape of each bay depth group
+         if (rT && rT.value.members) { c.items.push({ loc: 'Single members (no back-to-back members)', cells: [dOn ? (DG ? `${DG.map(g => `${bl(g)}: ${sN(g.shape)}`).join('; ')} (single sections)` : `${q.shape === 'custom' ? 'custom W' : q.shape || 'diaphragm'} (single section)`) : 'single angles', 'single angles, tees, channels or W sections'], st: 'pass' });
+           c.items.push({ loc: 'Bottom chord (under-clearance less than 16 ft 3 in)', cells: [dOn ? 'diaphragm (full section)' : `${{ X: 'X', Kb: 'K (bottom)', Kt: 'K (top)' }[R.p.type] || ''}-frame with a bottom chord`, 'a bottom chord on every cross-frame'], st: 'pass' }); }
+-        if (rT && rT.value.table && dOn && !TR.deep) { const ok = !TR.chT || q.shape === TR.chT;
++        if (rT && rT.value.table && dOn && DG) DG.forEach(g => {   // OWN35G (2026-11-13; Decision pending engineer review): the channel table per bay depth group
++          const dB = TR.web ? g.s.D : g.dg, deep = rT.value.strict ? dB > TR.dMin + 1e-9 : dB >= TR.dMin - 1e-9; if (deep) return;
++          const tb = chRow(rT, dB), chT = tb && TR.skM < rT.value.skT - 1e-9 ? tb[2] : null, ok = !chT || g.shape === chT;
++          c.items.push({ loc: `Intermediate channel diaphragm (Table 6.7.4.2-1), bays ${bl(g)} (${TR.web ? 'web D' : 'd'} of G${g.s.line + 1} ${g.s.label})`, cells: [sN(g.shape), chT ? `${chT} for D = ${f2(dB)} in` : TR.skM >= rT.value.skT - 1e-9 ? `skew ${f2(TR.skM)}° ≥ ${rT.value.skT}°: designed` : `D = ${f2(dB)} in outside the table: designed`], st: ok ? 'pass' : 'adv', step: 'cf.xfD' }); });
++        else if (rT && rT.value.table && dOn && !TR.deep) { const ok = !TR.chT || q.shape === TR.chT;
+           c.items.push({ loc: 'Intermediate channel diaphragm (Table 6.7.4.2-1)', cells: [String(q.shape === 'custom' ? 'custom W' : q.shape || '—'), TR.chT ? `${TR.chT} for D = ${f2(TR.dB)} in` : TR.skM >= rT.value.skT - 1e-9 ? `skew ${f2(TR.skM)}° ≥ ${rT.value.skT}°: designed` : `D = ${f2(TR.dB)} in outside the table: designed`], st: ok ? 'pass' : 'adv' }); }
+         if (rT && rT.value.endCh) { if (dOn) (DG && !q.eShape ? DG.map(g => [g, cfDiaEnd({ ...q, shape: g.shape })]) : [[null, cfDiaEnd(q)]]).forEach(([g, e]) => { const ok = rT.value.endCh.includes(e.shape);   // SB-24: each group's end diaphragm when it takes the intermediate shape
+             c.items.push({ loc: `End bearing diaphragms (6.7.4.2.1bCT)${g ? `, bays ${bl(g)}` : ''}`, cells: [String(cfDiaSec(e).nm_), `channel, preferably ${rT.value.endCh.join(' or ')}`], st: ok ? 'pass' : 'warn' }); });
+```
