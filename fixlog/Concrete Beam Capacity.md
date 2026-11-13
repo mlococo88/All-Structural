@@ -6851,3 +6851,60 @@ h = 9 in, d = 6.25 in (set), #5 @ 12 in, f′c = 4 ksi, f_y = 60 ksi.
 
   The input panel differs only by the Member type select (ACI).
 - **Tests:** new `tests/smoke/cbc-slab.mjs`, 1400 and 390 px, 0 console errors. The suite's other tests are listed in the PR.
+
+## 2026-11-13 — PR: claude/cbc-min-thickness (PR #1502: https://github.com/mlococo88/All-Structural/pull/1502) (CBMH) — Beam Capacity tab, ACI mode: minimum depth / thickness check, ACI 318-19 Table 9.3.1.1 (beams) and Table 7.3.1.1 (one-way slabs), with the f_y and lightweight modifiers; new inputs span and support condition   [NEW CHECK; every existing result identical; saved format: additive `minh` with migration (absent = not checked); no new storage key]
+
+The file uses CRLF line endings; keep them. All code is in the Beam Capacity srcdoc. When re-applying, escape `&` as `&amp;` and `"` as `&quot;`. Every site is tagged CBMH. This is PR 2 of 2 of engineer decision CB-6.
+
+### Provisions (ACI 318-19, read in structural_references ACI-318-19-2019.pdf, PDF pages 131 (Table 9.3.1.1, 9.3.1.1.1, 9.3.1.1.2) and 92 (Table 7.3.1.1, 7.3.1.1.1, 7.3.1.1.2); paraphrased)
+
+| Support condition | Beam h_min | Slab h_min |
+|---|---|---|
+| Simply supported | ℓ/16 | ℓ/20 |
+| One end continuous | ℓ/18.5 | ℓ/24 |
+| Both ends continuous | ℓ/21 | ℓ/28 |
+| Cantilever | ℓ/8 | ℓ/10 |
+
+- **f_y modifier:** where f_y ≠ 60,000 psi, multiply by (0.4 + f_y/100,000).
+- **Lightweight modifier:** for lightweight concrete with w_c of 90 to 115 pcf, multiply by the greater of 1.65 − 0.005w_c and 1.09.
+- **Scope:** the tables apply to members not supporting, and not attached to, partitions or other construction likely to be damaged by large deflections (9.3.1.1, 7.3.1).
+
+### Changes
+- **State:** `defaultState()` adds `minh:{span:0,sup:"simple",wc:0}`. `mergeState()` reads `minh`; absent means span 0, i.e. not checked.
+- **Input:** new "Minimum Thickness" section (ACI, Checks input tab, `inMinH`):
+  - span ℓ (ft; blank = not checked);
+  - support condition;
+  - w_c (pcf), shown only for lightweight concrete (λ < 1);
+  - a note stating the assumption and the table.
+- **`detailing()`**, after `dEpsMin`: `dMinH` ("Minimum beam depth" / "Minimum slab thickness").
+  - h_min = (ℓ × 12/k) × f_y factor × lightweight factor, against h.
+  - Worked lines: ℓ/k, the modifiers, and h ≥ h_min with the assumption.
+  - With no span it is N/A: "Not checked: the span is not entered".
+- **`validate()`:** an ACI note gives the min-thickness status and the partitions assumption.
+- **No other changes needed:** the check summary, Summary, All Combinations × Limit States (Detailing), Detailing tab and Report pick the row up as the other detailing checks do.
+
+### Hand checks
+| Member | Span and support | Calculation | h_min | h | Result |
+|---|---|---|---|---|---|
+| Slab | 12 ft, simply supported | 144/20 | 7.20 in | 9 in | PASS |
+| Slab | 12 ft, simply supported | 144/20 | 7.20 in | 7 in | FAIL |
+| Beam | 20 ft, both ends continuous | 240/21 | 11.43 in | 18 in | PASS |
+| Beam, f_y 80 ksi | 20 ft, both ends continuous | 11.43 × (0.4 + 0.8) | 13.71 in | — | — |
+| Beam | 10 ft cantilever | 120/8 | 15.00 in | — | — |
+| Beam, lightweight (λ 0.85), w_c not entered (90 pcf) | 10 ft cantilever | 15.00 × max(1.65 − 0.45, 1.09) = 15.00 × 1.20 | 18.00 in | — | — |
+| Beam, lightweight, w_c 110 pcf | 10 ft cantilever | 15.00 × 1.10 | 16.50 in | — | — |
+
+Before: no minimum-thickness check.
+
+### Decisions (pending engineer review)
+- **Lightweight concrete without an entered w_c** is taken as w_c = 90 pcf, the end of the 90–115 range that gives the larger factor (1.20). An entered w_c outside 90–115 is taken within that range; above 115 pcf this gives 1.09, which is conservative because the code gives no modifier there.
+- **No span entered:** the check reads N/A "not checked" in the check summary, and a Validation note says so. It is not a PASS.
+- **The partitions condition** is stated as an assumption on the input, the card and in Validation. Deflections are not calculated.
+- **ACI mode only.**
+
+### How verified
+- **Probe:** origin/main (#1499) vs branch, 15 projects. These are identical in every project once the new `dMinH` row (N/A, not checked) and its Validation note are removed:
+  - `computeAll()`, `VALIDATION`, `allChecks`, `detEnvelope`;
+  - the hand-off message;
+  - the autosave, apart from the added `minh`.
+- **Tests:** new `tests/smoke/cbc-min-thickness.mjs`, 1400 and 390 px, 0 console errors. The suite's other tests are listed in the PR.
