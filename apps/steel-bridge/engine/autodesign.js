@@ -147,9 +147,12 @@
   const piecesOf = (spl, Lt) => { const e = [0, ...spl.filter(x => x > 1e-6 && x < Lt - 1e-6), Lt]; return e.slice(1).map((x, i) => ({ x0: e[i], x1: x })); };
   const at = (list, x) => list.find(r => x >= r.x0 - 1e-9 && x < r.x1 - 1e-9) || list[list.length - 1];
   function merge(list, keys) { const out = []; list.forEach(r => { const la = out[out.length - 1]; if (la && keys.every(k => la[k] === r[k]) && Math.abs(la.x1 - r.x0) < 1e-6) la.x1 = r.x1; else out.push({ ...r }); }); return out; }
-  /* layoutOf(P): the current design of girder 1 as a layout (every plate girder of the project gets the same layout on Apply, as Suggest did) */
+  /* adF(g): a girder of another type in a girder type's run project (SB-2 PR 3, typeProject: girders[i].adFixed, set only there, never
+     saved): kept with its own plates, not designed and not checked; a saved project has none, so everything below works as before */
+  const adF = g => !!(g && g.adFixed);
+  /* layoutOf(P): the current design of girder 1 (SB-2 PR 3: the first girder that is not adFixed) as a layout (every plate girder of the project gets the same layout on Apply, as Suggest did) */
   function layoutOf(P) {
-    const g = P.girders[0], S = g.segments, Lt = supsOf(P)[P.spans.lengths.length], spl = (((P.framing || {}).splices) || []).map(Number).filter(x => x > 0 && x < Lt).sort((a, b) => a - b);
+    const g = P.girders.find(q => !adF(q)) || P.girders[0], S = g.segments, Lt = supsOf(P)[P.spans.lengths.length], spl = (((P.framing || {}).splices) || []).map(Number).filter(x => x > 0 && x < Lt).sort((a, b) => a - b);
     const D = Math.max(...S.map(s => +s.D)), segAt = x => S.find(s => x >= s.x0 - 1e-9 && x < s.x1 - 1e-9) || S[S.length - 1];
     const web = piecesOf(spl, Lt).map(p => ({ ...p, tw: Math.max(...S.filter(s => s.x1 > p.x0 + 1e-6 && s.x0 < p.x1 - 1e-6).map(s => +s.tw)) }));
     const fl = k => { const out = []; piecesOf(spl, Lt).forEach(p => { const cuts = [p.x0, ...S.map(s => s.x0).filter(x => x > p.x0 + 1e-6 && x < p.x1 - 1e-6), p.x1];
@@ -191,7 +194,7 @@
       xs.nb = L.nb; xs.bays = new Array(L.nb - 1).fill(r4(S)); xs.beamClass = {};
       Q.girders.forEach(g => { const ext = g.position === 'exterior'; g.beff = r4(12 * (ext ? S / 2 + (+xs.ohL >= +xs.ohR ? +xs.ohL : +xs.ohR) : S)); if (g.line != null && g.line >= L.nb) g.line = L.nb - 1; });
     }
-    const segs = segmentsOf(L); Q.girders.forEach(g => { g.segments = clone(segs); });
+    const segs = segmentsOf(L); Q.girders.forEach(g => { if (!adF(g)) g.segments = clone(segs); });   // SB-2 PR 3: an adFixed girder keeps its plates
     // field splices: into the project's framing; a project without framing (the Framing & bracing tab not set up) keeps none unless the layout has
     // splices (before 2026-10-31 a default framing was always added, which moved the brace points from the stiffener layout's cross-frames)
     if (Q.framing || L.spl.length) { Q.framing = Q.framing || MD().defaultFraming(); Q.framing.splices = L.spl.slice(); }
@@ -322,7 +325,9 @@
       if (!isFinite(o.r)) { if (o.fail && o.r === Infinity) { fails.push(o); modGov[o.mod] = o; } return; } if (!gov || o.r > gov.r) gov = o; if (!modGov[o.mod] || (isFinite(modGov[o.mod].r) && o.r > modGov[o.mod].r)) modGov[o.mod] = o; if (o.fail || o.r > 1 + 1e-9) fails.push(o); };
     const v = MD().validate(P); if (v.errors.length) return { pass: false, ratio: Infinity, gov: { mod: 'model', id: 'input', title: v.errors[0].msg, r: Infinity }, hits, fails: [{ mod: 'model', title: v.errors[0].msg }], warns, nStiff, mods };
     const own = P.ownerRules || { owner: 'AASHTO', eta: {} };
+    const nD = P.girders.filter(g => !adF(g)).length || 1;   // SB-2 PR 3: the girders designed (all of them in a saved project)
     for (let gi = 0; gi < P.girders.length; gi++) {
+      if (adF(P.girders[gi])) continue;   // SB-2 PR 3: another girder type of a type's run (typeProject): not checked here
       const gl = P.girders[gi].label || P.girders[gi].id, gm = { g: gi, gl };
       const R = withLL(ctx, !full, () => AN().analyzeGirder(P, gi));
       if (R.errors && R.errors.length) { const o = { ...gm, mod: 'analysis', id: 'analysis', title: R.errors.join(' '), r: Infinity, fail: true }; take(o); continue; }
@@ -355,7 +360,7 @@
       if (SA.err) { take({ ...gm, mod: 'shear', id: 'input', title: SA.err, r: Infinity, fail: true }); continue; }
       const SB = window.SBDShearUI.build({ P, g: gi, pl: SA.pl }); mods['shear' + gi] = SB;
       SB.stations.forEach(r => r.checks.forEach(c => { if (!c.inUse || !isFinite(c.ratio)) return; const o = { ...gm, mod: 'shear', tab: 'shear', id: c.id, title: c.title, r: c.ratio, x: r.x, step: c.step, part: 'web' }; hits.push(o); take(o); }));
-      nStiff += (SB.bays || []).reduce((a, b) => a + (+b.n || 0), 0) / P.girders.length;
+      nStiff += (SB.bays || []).reduce((a, b) => a + (+b.n || 0), 0) / nD;
       // constructibility (deck placement GS14–GS16, overhang brackets OH1–OH5)
       const Cn = CN(), F = Cn.fromAnalysis(P, gi, R, { flC: DC ? DC.fl : 0, oh: { ...Cn.OH_DEF, ...((P.constr && P.constr.oh) || {}) }, ...(DC && DC.br ? { braces: DC.braces } : {}) }), CR = Cn.girder(F.locs, F.prj, { supports: F.supports, oh: F.oh }); mods['constr' + gi] = CR;
       CR.rows.forEach(r => r.checks.forEach(c => { if (!isFinite(c.ratio)) return; const o = { ...gm, mod: 'constructibility', tab: 'cn', id: c.id, title: c.title, r: c.ratio, x: r.x, step: c.step, part: c.id === 'GS16' ? 'web' : partOf(c, true, r.conC && r.conC.lab === 'top' ? 'top' : 'bot') }; hits.push(o); take(o); }));
@@ -771,7 +776,7 @@
     const SLs = SL ? SL.lays : [null], splOf = j => j && j.spl ? { spl: j.spl, si: j.si, L0: j.L0 } : {};
     // the trial list: girder counts × depths (coarse, then around the best), both splice gage-line choices where they differ
     let jobs = [];
-    const nl0 = minLinesOf(P), lines = [null], oneLine = !!(((P.framing && (P.framing.splices || []).length) || (SL && SL.lays.some(l => l.spl.length))) && nl0 > 1);   // the 1-gage-line variant: added after a design whose splice widths the bolt fit raised
+    const nl0 = minLinesOf(P), lines = [null], oneLine = opt.oneLine !== false && !!(((P.framing && (P.framing.splices || []).length) || (SL && SL.lays.some(l => l.spl.length))) && nl0 > 1);   // the 1-gage-line variant: added after a design whose splice widths the bolt fit raised
     if (S.mode === 'refine') jobs = lines.map(ml => ({ nb: L0.nb, D: L0.D, refine: true, minLines: ml }));
     else if (S.mode === 'check') { const nb = +S.change.nb >= 2 ? Math.round(+S.change.nb) : L0.nb, D = +S.change.D > 0 ? +S.change.D : L0.D; jobs = lines.map(ml => ({ nb, D, refine: nb === L0.nb, minLines: ml })); }
     else { const DL = depthList(P, S, L0); nbList(P, S).forEach(nb => DL.coarse.forEach(D => lines.forEach(ml => SLs.forEach((ly, si) => jobs.push({ nb, D, minLines: ml, coarse: true, maxIt: 5, ...(ly ? { spl: ly.spl, si, L0: relayout(L0, ly.spl) } : {}) }))))); ctx.DL = DL; }
@@ -881,27 +886,52 @@
   }
   function undo(P) { const u = P.autodesign && P.autodesign.undo; if (!u) return null; const Q = clone(P); Object.assign(Q, clone(u)); Object.keys(u).forEach(k => { if (u[k] === null) delete Q[k]; }); delete Q.autodesign.undo; delete Q.autodesign.applied; return Q; }
 
-  /* ---------- girder types (SB-2 PR 3, 2026-11-12; engineer: Auto design sizes each type for its worst line, all types in one run or the
-     selected type) ----------
-     typeScope(P): 'together' (one plate design on every plate girder, governed by all of them: the Auto design of before SB-2) for a
-     project with one type or saved before girder types (no girders[i].lines), else 'each' (each type sized on its own lines).
-     typeProject(P, t): the project Auto design runs for type t: one plate girder per line of type t (a copy of it with that line; a type
-     with no line: its design line), so that run()'s one layout for every plate girder is governed by the type's worst line; its stiffener
-     bays and splice plate entries copied to each line; the other types left out. With more than one type the bridge-wide variables
-     (TYPE_LOCK: girder count, overhang, field splices and their plates, stiffeners, studs, cross-frames, weld) are locked at the current
-     values (one design for the bridge); the plates (D, t_w, flanges, transitions) are the type's own.
-     applyType(P, t, Qt, c): type t takes candidate c's plates (projectWith on Qt); nothing else changes. */
+  /* ---------- girder types (SB-2 PR 3, 2026-11-13; engineer decision SB-2 of 2026-11-12: Auto design sizes each type for its worst
+     assigned line, every type in one run or the selected type) ----------
+     typeScope(P): 'together' for a project saved before girder types (no girders[i].lines): run(P) exactly as before (one plate design on
+     every plate girder, each on its design line); 'each' once a line is assigned (each type sized on its own lines).
+     typeProject(P, t): the project Auto design runs for type t: type t replaced, in its place in girders[], by one plate girder per line
+     of it (a copy of the type with that line, so its loads and LLDF are that line's; a type with no line: its design line), so that run()'s
+     one layout for every plate girder is governed by the type's worst line; the other types kept in their places with their own plates
+     (adFixed: not designed, not checked), because the bridge-wide models read every girder (engine/framing.js the cross-frame layout from
+     every girder's plates, engine/crossframes.js the cross-frame depth from girders[0]): each line of the run then computes exactly what
+     the Summary computes for the type on that line (atLine; tests/engine/autodesign-types.test.mjs). The stiffener bays (by girder
+     number) and splice plate entries (by girder index) renumbered with them, those of type t on each of its copies. With more than one
+     type, the bridge-wide variables (TYPE_LOCK: girder count, overhang, field splices and their plates, stiffeners, studs, cross-frames,
+     weld) are locked at their current values (the one detail design of the bridge), the details are not re-sized (run opt details: false)
+     and the 1-gage-line splice variant is not tried (oneLine: false; splices.bolts.minLines is bridge-wide): typeOpt(P). The plates (D,
+     t_w, flanges, transitions) are the type's own, with the user's locks and ranges on them as set. One type: every variable as set (the type is the bridge) except the girder count,
+     locked (a new count changes the lines, which only the user assigns: SB-2, never silently).
+     applyType(P, t, Qt, c): type t takes candidate c (of run(typeProject(P, t))). More than one type: its plates only (girders[t].segments).
+     One type: apply(P, c) as before, with the candidate's details mapped back to the type (detBack). Returns the project parts to write
+     back ({ girders } or apply's: autodesign with its undo, APPLY_KEYS). */
   const TYPE_LOCK = ['nb', 'oh', 'spl', 'splPl', 'tsSp', 'tsA_b', 'tsA_t', 'tsB_b', 'tsB_t', 'bsA_n', 'bsA_b', 'bsA_t', 'bsB_n', 'bsB_b', 'bsB_t', 'scP', 'scN', 'cf', 'weld'];
-  const typeScope = P => (P.girders || []).length > 1 && (P.girders || []).some(g => Array.isArray(g.lines)) ? 'each' : 'together';
+  const typeScope = P => (P.girders || []).some(g => Array.isArray(g.lines)) ? 'each' : 'together';
+  const linesOf = (P, t) => { const M = MD(), L = M.typeLines(P, t); return L.length ? L : [M.designLine(P, P.girders[t])]; };
   function typeProject(P, t) {
-    const M = MD(), Q = clone(P), g = P.girders[t], L0 = M.typeLines ? M.typeLines(P, t) : [], L = L0.length ? L0 : [M.designLine ? M.designLine(P, g) : 0], gNo = t + 1;
-    Q.girders = L.map((j, k) => ({ ...clone(g), id: k ? `${g.id}@${j + 1}` : g.id, label: L.length > 1 ? `${g.label || g.id} on G${j + 1}` : (g.label || g.id), line: j, lines: [j] }));
-    const ly = Q.stiffeners && Q.stiffeners.layout; if (ly && Array.isArray(ly.bays)) { const own = ly.bays.filter(q => +q.g === gNo); ly.bays = L.flatMap((_, k) => own.map(q => ({ ...clone(q), g: k + 1 }))); }
-    const S = Q.splices; if (S && Array.isArray(S.plates)) S.plates = S.plates.filter(q => !q || q.g == null).concat(L.flatMap((_, k) => S.plates.filter(q => q && q.g != null && +q.g === t).map(q => ({ ...clone(q), g: k }))));
-    if ((P.girders || []).length > 1) { const a = Q.autodesign = { ...(Q.autodesign || {}) }, V = { ...(a.vars || {}) };
-      Object.keys(V).forEach(k => { if (TYPE_LOCK.includes(k.split('#')[0])) delete V[k]; }); TYPE_LOCK.forEach(id => { V[id] = { mode: 'lock' }; }); a.vars = V; }
+    const Q = clone(P), G = P.girders, g = G[t], L = linesOf(P, t), at = [], out = [];   // at[k]: the new indices of old girder k
+    G.forEach((q, k) => { if (k !== t) { at[k] = [out.length]; out.push({ ...clone(q), adFixed: true }); return; }
+      at[k] = L.map((j, n) => out.push({ ...clone(g), id: n ? `${g.id}@${j + 1}` : g.id, label: L.length > 1 ? `${g.label || g.id} on G${j + 1}` : (g.label || g.id), line: j, lines: [j] }) - 1); });
+    Q.girders = out;
+    const ly = Q.stiffeners && Q.stiffeners.layout; if (ly && Array.isArray(ly.bays)) ly.bays = ly.bays.flatMap(q => (at[+q.g - 1] || []).map(i => ({ ...clone(q), g: i + 1 })));   // by girder number
+    const S = Q.splices; if (S && Array.isArray(S.plates)) S.plates = S.plates.flatMap(q => !q || q.g == null ? [q] : (at[+q.g] || []).map(i => ({ ...clone(q), g: i })));   // by girder index
+    { const lk = G.length > 1 ? TYPE_LOCK : ['nb'], a = Q.autodesign = { ...(Q.autodesign || {}) }, V = { ...(a.vars || {}) };
+      Object.keys(V).forEach(k => { if (lk.includes(k.split('#')[0])) delete V[k]; }); lk.forEach(id => { V[id] = { mode: 'lock' }; }); a.vars = V; }
     return Q;
   }
-  function applyType(P, t, Qt, c) { const r = apply(Qt, c); P.girders[t].segments = clone(r.project.girders[0].segments); return P; }
-  window.SBDAutoDesign = { TYPE_LOCK, typeScope, typeProject, applyType, relayout, splPlan, splCheck, framesOf, DEF, STEEL, VARS, DET_KEYS, APPLY_KEYS, ohLimit, ohCands, pickOh, varsOf, sizeDetails, lockText, settings, layoutOf, segmentsOf, projectWith, lineWeight, transitions, costOf, proportions, boltFitWidth, payloadOf, evaluate, sizeFlanges, design, trim, run, runChunked, apply, undo, depthList, nbList };
+  const typeOpt = P => (P.girders || []).length > 1 ? { oneLine: false, details: false } : {};
+  /* detBack(det, t): the details of a candidate of typeProject(P, t) as the project stores them: the stiffener bays and splice plate
+     entries of the first copy (line) back on type t (the copies are the same type) */
+  function detBack(det, t) {
+    if (!det || !det.inputs) return det; const I = clone(det.inputs), ly = I.stiffeners && I.stiffeners.layout, S = I.splices;
+    if (ly && Array.isArray(ly.bays)) ly.bays = ly.bays.filter(q => +q.g === 1).map(q => ({ ...q, g: t + 1 }));
+    if (S && Array.isArray(S.plates)) S.plates = S.plates.filter(q => !q || q.g == null || +q.g === 0).map(q => q && q.g != null ? { ...q, g: t } : q);
+    return { ...det, inputs: I };
+  }
+  function applyType(P, t, Qt, c) {
+    if ((P.girders || []).length > 1) { const G = clone(P.girders); G[t].segments = segmentsOf(c.L); return { girders: G }; }
+    const Q = apply(P, { ...c, det: detBack(c.det, t) }).project;
+    return Object.fromEntries(['autodesign', ...APPLY_KEYS].map(k => [k, Q[k]]));
+  }
+  window.SBDAutoDesign = { TYPE_LOCK, typeScope, typeProject, typeOpt, detBack, applyType, relayout, splPlan, splCheck, framesOf, DEF, STEEL, VARS, DET_KEYS, APPLY_KEYS, ohLimit, ohCands, pickOh, varsOf, sizeDetails, lockText, settings, layoutOf, segmentsOf, projectWith, lineWeight, transitions, costOf, proportions, boltFitWidth, payloadOf, evaluate, sizeFlanges, design, trim, run, runChunked, apply, undo, depthList, nbList };
 })();
