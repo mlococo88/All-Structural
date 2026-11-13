@@ -3441,3 +3441,69 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
 - **Saved data (§5):** new optional field only (absent = off). No key or format changed.
 - **Other copies:** none. The batch tension columns are unchanged.
 - **Open items:** gusset plate, welds, block shear and the HSS wall at the slot end are not checked (stated on the card). Two-side-gusset case 6 is not offered.
+
+## 2026-11-13 — PR: claude/hss-chapter-k (PR #1480: https://github.com/mlococo88/All-Structural/pull/1480) (SBHK) — concentrated forces on HSS walls for beam-type loads: transverse plate across the face, bearing on a cap plate / seat at supports   [new checks, §4; new optional fields `S.design.hssK`, `S.member.hssK`]
+- **Engineer's decision HSS-2 (2026-11-13):** add Chapter K checks for beam-type loads on HSS walls (HSS review gap A6).
+- **Article numbering (AISC 360-16):**
+  - Concentrated forces on HSS are §K2: §K2.2 round (Table K2.1 / K2.1A); §K2.3 rectangular, which sends the loads to the applicable limit states of Chapter J.
+  - B_e is §K1.2a, Eq. K1-1.
+  - How Chapter J applies to an HSS: Commentary J10 and K1.2.
+  - The cap-plate dispersion model is Commentary K2.3 (axial load).
+  - §K3 covers HSS-to-HSS.
+- **Code (re-apply by hand):**
+  1. New functions `hssKPrm`, `hssKCaps`, `hssKAt` and `hssKLocs`, with the SBHK comment block, plus `sbHssKCheck(D)`. All are placed before `/* ---------- J10 concentrated forces (I & C) ---------- */`.
+  2. `designAll`:
+     - before the `/* M3: J10.4 inputs …` comment: `if(p._fam==='HSSR'||p._fam==='HSSP')D.hssK=hssKLocs(p,Ltot);`;
+     - in each combination, after the J10 demands: `if(D.hssK)C.hssK=D.hssK.map(lo=>{…})`. The force is the support reaction `cb.R[node].v` or the factored sum of the point loads at x (as J10); M_u comes from `evalVM(x)`; P_u is `man.Pu`.
+  3. `memberDesignAll`:
+     - before `rows.forEach(r=>{`: `if(p._fam==='HSSR'||p._fam==='HSSP')D.hssK=hssKLocs(p,0);`;
+     - per row, after the J10 block: `C.hssK=[…hssKAt(p,lo.caps,+S.member.j10.R||0,r.Pu||0,Math.abs(r.Mux||0))]`.
+  4. `buildDesignChecks`: `}else D.checks.push({label:'Concentrated forces',ref:'J10',na:true,` becomes `}else if(D.hssK)sbHssKCheck(D); else D.checks.push({label:'Concentrated forces',ref:'J10',na:true,`.
+  5. `buildJ10Tab`: first line after `const D=dOrNull(pg),p=AN.sect;if(!D)return;` → `if(!(p._kind==='I'||p._kind==='C')&&D.hssK){sbHssKTab(pg,D,p);return;}`. New functions `sbHssKTab(pg,D,p)` and `sbHssKWork(body,p,lo)` (cards `hkCap`, `hkW<i>`, `hk_<combo>`).
+  6. `secJ10` (input card `inJ10`): before the HSS pointer hint, add `if(pk&&(pk._kind==='R'||pk._kind==='P')&&(S.section.family==='HSSR'||S.section.family==='HSSP')){sbHssKInputs(body,pk);return;}`. New function `sbHssKInputs(body,pk)`. It writes the fields only on entry, so opening a project does not change it.
+- **Equations (rect, t = design wall, k = 1.5t, ×2 walls):**
+
+  | Limit state | Equation | φ |
+  |---|---|---|
+  | Plate local yielding | B_e = (10/(B/t))(F_y t/(F_yp t_p))B_p ≤ B_p (K1-1); R_n = F_yp t_p B_e | 0.90 |
+  | Punching (B_p ≤ B − 2t) | R_n = 0.6F_y t(2l_b + 2B_e) | 0.95 |
+  | Sidewall yielding | 2F_y t(5k + l_b) (J10-2); within H of the end, 2F_y t(2.5k + l_b) (J10-3) | 1.00 |
+  | Sidewall crippling (compressive) | 2 × (J10-4 / J10-5a / J10-5b) with d = H − 3t, t_f = t_w = t; Q_f = min(1, 1.3 − 0.4U/β) (K3-14) | 0.75 |
+
+  **Round:** R_n = F_y t²[5.5/(1 − 0.81B_p/D)]Q_f (K2-1a), φ 0.90; Q_f = 1 − 0.3U(1 + U) (K2-3); the Table K2.1A limits produce warnings.
+
+  **U** = P_ro/(F_y A_g) + |M_ro|·12/(F_y S) (K2-4).
+- **Check cases:**
+  - **HSS8X8X1/2 Gr. C,** 20 ft, P = 5 D + 10 L at midspan, plate 7 × 1/2 (F_yp 36):
+    - B_e = 5.255 in;
+    - φR_n: plate 85.14, punching 152.55, sidewall yielding 185.42, crippling 383.40·Q_f;
+    - 1.2D + 1.6L: R_u 22.0, M_u 112.93, U 0.8687, Q_f 0.9029 → governing plate yielding, DCR **0.258**.
+  - **Supports,** bearing l_b = 4: J10-3 ×2 = 267.08; J10-5b ×2 = 671.21·Q_f.
+  - **HSS10.000X0.500 Gr. C,** plate 6 in: 106.43·Q_f; U 0.9303, Q_f 0.4613 → φR_n 44.18, DCR **0.498**.
+  - **Member mode,** R 30, M_ux 60: DCR 0.352.
+- **Decisions (pending engineer review):**
+  1. k = 1.5t.
+  2. Plate yielding φ 0.90 (§J4.1/J4.4).
+  3. Punching φ 0.95 (Comm. K1.2), checked whenever B_p ≤ B − 2t, with B_ep = B_e (K1-1).
+  4. Sidewall limit states checked for every β, with l_b only.
+  5. Q_f always with the loaded face in compression; tension P taken as 0.
+  6. F_yp blank → 36 ksi; l_b blank → t_p.
+  7. Rect bearing is taken across the full width (sidewalls only); round bearing uses K2-1a with B_p (default D).
+  8. Missing input at a location carrying force → FAIL. Round outside Table K2.1A → value shown with a warning.
+  9. Rect B_p < 0.85B: face yield line not checked; warning, not blocked.
+- **Not covered (stated in the tool):**
+  - rect face yield line for B_p < 0.85B (no 360-16 equation; §J10.10, Manual Part 9);
+  - §J10.5 pair of forces;
+  - longitudinal plates;
+  - cap plate loaded axially;
+  - HSS-to-HSS;
+  - plate / welds;
+  - Pipe;
+  - batch.
+- **How verified:**
+  - Headless Chromium, origin/main against the branch, 13 cases. W and Pipe: `AN` and all texts identical. HSS without input: `AN` identical apart from the new `hssK` keys and the N/A detail of the Concentrated forces row.
+  - Tab and Report: 0 KaTeX errors; 390 px: no sideways scroll; UI override and edit confirmed.
+  - Node `sbeam-hss` test 9; check-syntax; `aisc-hss`.
+  - Smoke tests pass: builtup, h1-composite, phone-layout, decimal-entry, project-library, start-chooser. list-input `--part sbeam` fails the same 2 baseline checks as main.
+- **Other copies:** none.
+- **Open items:** the batch keeps the HSS N/A note. Per-location inputs are keyed by support index and by point-load x (`P<x>`), so moving a load drops its own override and falls back to the group value.
