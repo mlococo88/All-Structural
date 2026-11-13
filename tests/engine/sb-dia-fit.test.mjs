@@ -27,15 +27,15 @@ test('hand check: W36x135 (d = 35.60 in) between girders of D = 30 in: 35.60 > 3
   assert.equal(CF.diaClr({}), 2); assert.equal(CF.DIA_CLR, 2);
 });
 
-test('Interior 30 / Exterior 36 (one depth group): W30x99 29.70 > 28.00 Fail, W27x84 26.70 ≤ 28.00 OK; CF10 (one group: no fit test, #1490 decision 2) still W30x99', () => {
+test('Interior 30 / Exterior 36 (one depth group): W30x99 29.70 > 28.00 Fail, W27x84 26.70 ≤ 28.00 OK; CF10 (SB-27: the fit always applied) names the nearest section W27x84, flagged', () => {
   const a = fit(run(dia(two(30, 36), 'W30x99')).d), b = fit(run(dia(two(30, 36), 'W27x84')).d);
   assert.equal(a.length, 1); assert.equal(a[0].st, 'fail'); assert.equal(+a[0].r.toFixed(3), 1.061); assert.match(a[0].loc, /bay G1–G2, shallower girder G2 Interior/);
   assert.equal(b[0].st, 'pass'); assert.equal(+b[0].r.toFixed(3), 0.954);
-  assert.equal(TR(two(30, 36)).rec, 'rolled diaphragm W30x99');
+  assert.equal(TR(two(30, 36)).rec, 'rolled diaphragm W27x84: the nearest section, FAILS the depth requirement (no channel or W of the list meets both the least depth 28.41 in and the fit d ≤ D_0 − c = 30.00 − 2.00 = 28.00 in; the deepest that fits, d = 26.70 in, is 1.71 in short, ratio 1.064; SB-27)');   // SB-27 (was 'rolled diaphragm W30x99', #1490 decision 2)
 });
 
-test('Exterior 30 / Interior 36 (two groups): CF10 before W30x99, now per group (none fits the exterior bays: 28.41 > 28.00); CFD fit per group', () => {
-  assert.equal(TR(two(36, 30)).rec, 'by bay depth (one section does not fit every bay): G1–G2, G4–G5: no section fits (the least depth 28.41 in exceeds the fit limit, web depth 30.00 − clearance 2.00 = 28.00 in, SB-25); G2–G3, G3–G4: rolled diaphragm W30x99');
+test('Exterior 30 / Interior 36 (two groups): CF10 before W30x99, now per group (none fits the exterior bays: 28.41 > 28.00, SB-27: the nearest W27x84); CFD fit per group', () => {
+  assert.equal(TR(two(36, 30)).rec, 'by bay depth (one section does not fit every bay): G1–G2, G4–G5: rolled diaphragm W27x84: the nearest section, FAILS the depth requirement (no channel or W of the list meets both the least depth 28.41 in and the fit d ≤ D_0 − c = 30.00 − 2.00 = 28.00 in; the deepest that fits, d = 26.70 in, is 1.71 in short, ratio 1.064; SB-27); G2–G3, G3–G4: rolled diaphragm W30x99');   // SB-27 (was 'no section fits …, SB-25')
   const P0 = two(36, 30); P0.crossframes.dia.clr = 0; assert.equal(TR(P0).rec, 'rolled diaphragm W30x99', 'c = 0: as before (#1490)');
   const F = fit(run(dia(two(36, 30), 'W30x99')).d);
   assert.deepEqual(J(F.map(i => [i.loc.split(':')[0], i.capacity, i.st, i.step])), [['G1–G2, G4–G5 (W30x99)', 28, 'fail', 'cf.cfd.g1.fit'], ['G2–G3, G3–G4 (W30x99)', 34, 'pass', 'cf.cfd.g2.fit']]);
@@ -43,11 +43,11 @@ test('Exterior 30 / Interior 36 (two groups): CF10 before W30x99, now per group 
 
 test('three types 30 / 36 / 42: CF10 per group with the clearance; the prefill; W36x135 everywhere fails the Exterior and Mid groups', () => {
   const P = three(30, 36, 42);
-  assert.equal(TR(P).rec, 'by bay depth (one section does not fit every bay): G1–G2, G5–G6: no section fits (the least depth 28.41 in exceeds the fit limit, web depth 30.00 − clearance 2.00 = 28.00 in, SB-25); G2–G3, G4–G5: no channel or W of the list between 32.91 and 34.00 in; G3–G4: rolled diaphragm W36x135');
+  assert.equal(TR(P).rec, 'by bay depth (one section does not fit every bay): G1–G2, G5–G6: rolled diaphragm W27x84: the nearest section, FAILS the depth requirement (no channel or W of the list meets both the least depth 28.41 in and the fit d ≤ D_0 − c = 30.00 − 2.00 = 28.00 in; the deepest that fits, d = 26.70 in, is 1.71 in short, ratio 1.064; SB-27); G2–G3, G4–G5: rolled diaphragm W33x118: the nearest section, FAILS the depth requirement (no channel or W of the list meets both the least depth 32.91 in and the fit d ≤ D_0 − c = 36.00 − 2.00 = 34.00 in; the deepest that fits, d = 32.90 in, is 0.01 in short, ratio 1.000; SB-27); G3–G4: rolled diaphragm W36x135');   // SB-27 (was 'no section fits …' / 'no channel or W of the list between 32.91 and 34.00 in')
   assert.deepEqual(J(TR(P).grp.map(g => [g.bays.join(), g.top, g.clr, g.lim])), [['0,4', 30, 2, 28], ['1,3', 36, 2, 34], ['2', 42, 2, 40]]);
   const F = fit(run(dia(three(30, 36, 42), 'W36x135'), 1).d);
   assert.deepEqual(J(F.map(i => [i.loc.split(':')[0], i.capacity, i.st, +i.r.toFixed(3)])), [['G1–G2, G5–G6 (W36x135)', 28, 'fail', 1.271], ['G2–G3, G4–G5 (W36x135)', 34, 'fail', 1.047], ['G3–G4 (W36x135)', 40, 'pass', 0.89]]);
-  const st = run(P, 0).B.R.steps.find(s => s.id === 'cf.type'); assert.match(st.note, /D_0 − c = 30\.00 − 2\.00 = 28\.00 in; d_req = 28\.41 in\): no section fits/);
+  const st = run(P, 0).B.R.steps.find(s => s.id === 'cf.type'); assert.match(st.note, /D_0 − c = 30\.00 − 2\.00 = 28\.00 in; d_req = 28\.41 in\): rolled W27x84 \(d = 26\.70 in\): the NEAREST section/);   // SB-27
 });
 
 test('the clearance input: absent, null, blank, NaN → 2 in; 0.25 in lets W30x99 fit 30 in webs; the input row and the validation', () => {

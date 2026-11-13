@@ -96,7 +96,7 @@
      grpRec(P, br): the section CF10 recommends for each group (cfTypeRec: SB-22's per-group section, else the one section for every bay) in
      the family br ('w' | 'ch'), { key: shape }; grpFill(P, q, v): when the bays form two or more depth groups and CF10 recommends a section per
      group (one section does not fit every bay), q.grp is prefilled with it (a group with no section of the list that fits: no entry, the Shape
-     above). Only on the user's change of the Intermediate bracing choice (setBrace); a project loaded is never rewritten (absent: dia.shape). */
+     above; SB-27, 2026-11-13: a group with no section meeting both the depth and the fit takes CF10's nearest section, the deepest that fits). Only on the user's change of the Intermediate bracing choice (setBrace); a project loaded is never rewritten (absent: dia.shape). */
   function grpRec(P, br) {
     const CF = window.SBDCrossframes, out = {}; let TR = null; try { TR = CF.cfTypeRec(CF.inputsOf(P).p, CF.envOf(P)); } catch (e) { return out; }
     const GR = CF.bayGroups(P); if (!GR) return out;

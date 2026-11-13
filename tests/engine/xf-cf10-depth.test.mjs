@@ -68,10 +68,12 @@ test('three types (Exterior 30, Mid 36, Core 42): W36x135 does not fit the Exter
     assert.equal(TR.rec, 'by bay depth (one section does not fit every bay): G1–G2, G5–G6: rolled diaphragm W30x99; G2–G3, G4–G5: rolled diaphragm W36x135; G3–G4: rolled diaphragm W36x135');
   }
   // no section fits a group: the text says so
-  const Q = c0(three(32, 40, 40)), { TR } = rec(Q, 1); assert.ok(TR.grp); assert.match(TR.rec, /G1–G2, G5–G6: no channel or W of the list between 31\.41 and 32\.00 in/);
+  // SB-27 (2026-11-13): no section between 31.41 and 32.00 in: the nearest, W30x99 (was "no channel or W of the list between 31.41 and 32.00 in")
+  const Q = c0(three(32, 40, 40)), { TR } = rec(Q, 1); assert.ok(TR.grp); assert.match(TR.rec, /G1–G2, G5–G6: rolled diaphragm W30x99: the nearest section, FAILS the depth requirement \(no channel or W of the list meets both the least depth 31\.41 in and the fit d ≤ D_0 − c = 32\.00 − 0\.00 = 32\.00 in; the deepest that fits, d = 29\.70 in, is 1\.71 in short, ratio 1\.058; SB-27\)/);
 });
 
 test('the Diaphragm switch (ui/framing.js setBrace) takes the section that meets every bay', () => {
   const P = two(30, 36); P.crossframes.dia.on = 'no'; P.crossframes.dia.shape = 'MC18x42.7';
-  W.SBDFramingUI.setBrace(P, 'w'); assert.equal(P.crossframes.dia.shape, 'W30x99');
+  W.SBDFramingUI.setBrace(P, 'w'); assert.equal(P.crossframes.dia.shape, 'W27x84', 'SB-27: the fit always applied (c = 2 in): the nearest section W27x84 (was W30x99)');
+  const P0 = c0(two(30, 36)); P0.crossframes.dia.on = 'no'; P0.crossframes.dia.shape = 'MC18x42.7'; W.SBDFramingUI.setBrace(P0, 'w'); assert.equal(P0.crossframes.dia.shape, 'W30x99', 'c = 0: W30x99 meets both');
 });
