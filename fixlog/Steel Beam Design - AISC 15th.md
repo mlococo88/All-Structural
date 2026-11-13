@@ -3408,3 +3408,36 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
 - **Open items:**
   - The cross-section drawing still draws the A1085 wall at t_nom with the database corner geometry (display only).
   - `sectionWarnings` still compares A with an approximate wall-geometry area (1.5 % tolerance band, no warning now).
+
+## 2026-11-13 — PR: claude/hss-tension-u (PR #1478: https://github.com/mlococo88/All-Structural/pull/1478) (SBTU) — optional shear-lag helper for HSS with a single concentric gusset (Table D3.1 cases 5/6) and the slotted net area   [new calculation, opt-in; new optional field `S.design.ten.hlp`]
+- **Engineer's decision HSS-7 (2026-11-13):** add a Table D3.1 case 5/6 U helper and a slot A_n helper. Slot width default = gusset t + 1/8 in., editable. Typed U / A_n are still allowed and stay the default path.
+- **Code (re-apply by hand):**
+  1. New `sbTenHelper(p,ten)` and `sbTenFor(p,ten)`, with their comment block, before `/* ---------- H3 torsion (HSS only) ---------- */`.
+     - `sbTenHelper` returns null unless `ten.hlp.on` and the family is HSSR / HSSP. It computes:
+       - rect, case 6: H = the side in the gusset plane (`hlp.plane`, default 'H'), x̄ = (B² + 2BH)/(4(B + H)); l ≥ H → U = 1 − x̄/l.
+       - round, case 5: D = `hssLabelOD`, x̄ = D/π; l ≥ 1.3D → U = 1; D ≤ l < 1.3D → U = 1 − x̄/l.
+       - A_n = A_g − 2·t_des·w, with w blank → t_p + 0.125.
+       - It collects errors: no t_p (and no w), no l, l below the case limit, A_n ≤ 0.
+     - `sbTenFor`: no helper → `tensionStrength(p,An,U)` as before. Helper with errors → `t.blocked` (text), φPn = 0. Otherwise A_n = min(typed, helper) and U = min(typed, helper) when typed, else the helper's.
+  2. `designAll` and `memberDesignAll`:
+     - before: `if(!D.ten)D.ten=tensionStrength(p,dsn.ten&&dsn.ten.An,dsn.ten&&dsn.ten.U);` and `C.dcrPt=Math.abs(man.Pu)/C.phiPt;` (`r.Pu` in member mode);
+     - after: `if(!D.ten)D.ten=sbTenFor(p,dsn.ten);` and `C.dcrPt=D.ten.blocked?Infinity:Math.abs(man.Pu)/C.phiPt;`.
+  3. Checks list, Tension `detail`: `blocked — <reason>` when blocked; otherwise `(shear-lag helper, Table D3.1 case N)` is appended. The tension warning: when blocked, a new message with the reason replaces the standard one.
+  4. `secEffLen` input (card "Compression Effective Lengths"), after the "Axial tension" hint, for HSSR / HSSP: the checkbox `tenHlpOn` and, when on, `tenHlpTp`, `tenHlpW`, `tenHlpL`, `tenHlpPl` (rect only), plus a hint.
+  5. `tensionSections`, card `tnCap`: `if(t.hlp)sbTenHelperWork(body,t);` and, when blocked, an errBox with return. The rupture block's A_n / U vars name the source ("shear-lag helper (above)", "entered" or "blank").
+  6. New `sbTenHelperWork(body,t)`: the eqBlock "Shear-lag factor and net area (helper …)" [Table D3.1 case N, §B4.3b] and the notes.
+- **Governing provisions:** AISC 360-16 Table D3.1 cases 5 and 6; §B4.3b (slotted HSS welded to a gusset: A_n = A_g − thickness × total width removed); §D3 Eq. D3-1; §D2 Eq. D2-1, D2-2.
+- **Check cases:**
+  - **HSS8X6X1/2 Gr. B, case 6.** H = 8, B = 6, l = 10 in, gusset 1/2 in (w 0.625): x̄ = 2.357 in, U = 0.764, A_n = 11.6 − 2(0.465)(0.625) = 11.019 in², φPn = 0.75(58)(0.764)(11.019) = **366.3 kip**. Helper off: 480.2 kip (yielding, A_n = A_g, U = 1). Spreadsheet: 385.7 kip.
+  - **HSS10.000X0.500 Gr. C round, case 5.** l = 12 in, gusset 3/4 in (w 0.875): x̄ = 3.183 in, U = 0.7347, A_n = 13.086 in², φPn = 0.75(62)(9.614) = **447.1 kip**. With l = 13 in, U = 1.0; with l = 9 in, blocked.
+- **Decisions (pending engineer review):**
+  1. When a typed A_n or U is also present, the smaller of the typed and helper values governs.
+  2. Incomplete or out-of-range helper inputs make the tension check FAIL with the reason; there is no fallback to A_n = A_g, U = 1.
+  3. The helper is offered for HSS rect / round only (not Pipe).
+- **How verified:**
+  - Headless Chromium, origin/main against the branch, 10 cases with the helper off or absent: `AN` identical; all texts identical apart from the new checkbox label.
+  - Node `sbeam-hss` test 8; check-syntax; `aisc-hss`.
+  - Smoke tests pass: builtup, h1-composite, phone-layout, decimal-entry, project-library, start-chooser. list-input `--part sbeam` fails the same 2 baseline checks as main.
+- **Saved data (§5):** new optional field only (absent = off). No key or format changed.
+- **Other copies:** none. The batch tension columns are unchanged.
+- **Open items:** gusset plate, welds, block shear and the HSS wall at the slot end are not checked (stated on the card). Two-side-gusset case 6 is not offered.
