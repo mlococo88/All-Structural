@@ -8856,3 +8856,155 @@ index 098ab55..17ca6ee 100644
      { key: 'w3', title: 'Wind on the girders, Strength III', ref: A + '3.8.1.2, 4.6.2.7', ids: /^cf\.wIII\./, res: /^cf\.wIII\.Fw$/ },
      { key: 'w5', title: 'Wind on the girders, Strength V', ref: A + '3.8.1.2, 4.6.2.7', ids: /^cf\.wV\./, res: /^cf\.wV\.Fw$/ },
 ```
+
+## 2026-11-13 — PR: claude/sb23-xf-tab-dxf (PR #1493: https://github.com/mlococo88/All-Structural/pull/1493) — Cross-frames tab: the graphic's Download DXF draws one frame per distinct bay depth, the groups of the Drawings cross-frame sheet (SB-23) (SBXFD; DXF change explicitly requested by the engineer, 2026-11-13; no calculation change)
+- **Request:** engineer decision SB-23 (2026-11-13), open item (2) of #1477. The Cross-frames tab's own Download DXF must draw the same per-bay-depth details as the Drawings sheet (#1477 SB-21). With equal depths, the tab DXF must be byte-identical.
+- **Change:**
+  - `engine/crossframes.js`: new exported `bayGroups(P)`, the grouping moved unchanged from `engine/sheets.js cfGroups` (the typed bays grouped by h and the d of their shallower girder; null for one group). `engine/sheets.js`: `cfGroups = P => SBDCrossframes.bayGroups(P)` (a pure refactor; the Drawings are unchanged).
+  - `ui/framing.js build`: `dxfB` (#1472: the reported girder's own depth when the governing bay's differed) is replaced by `dxfG`. With girder types and two or more bay depth groups, `dxfG` is one model per group: the reported type's inputs with the group's h and d, computed (`CF.compute`) and checked (`CF.checks`), at the group's first bay (`line = bays[0]`).
+  - `ui/tabgraphics-b.js crossframe`: Download DXF (`putDet`'s CAD drawing) passes `opt.groups = B.dxfG`. The screen drawing is unchanged (it still shows the frame checked).
+  - `engine/tabgraphics-b.js crossframe`: the elevation body moved into `cfElev(D, L, B, opt, sfx)`, operation for operation. With `opt.groups`, it draws one elevation per group, one below the other, 16 text heights apart (as `sheets.js cf`), each title suffixed " - BAYS G1-G2, G4-G5 (DEPTH OF G1, EXTERIOR)" (the Drawings label). Without `opt.groups`, the output is as before.
+- **Result:** one depth group (equal depths, one type, a project saved before girder types, or e.g. Exterior deeper, where every bay takes Interior's depth): the DXF is the frame checked, `B`. With equal depths this is the same file as before. For a reported girder deeper than every bay (Exterior deeper, Exterior reported) the DXF now draws the bays' depth (h = 52, d = 61.88) instead of its own (h = 58, d = 67.88), which matches the Drawings sheet and the screen.
+- **Saved data (§5):** none.
+- **Governing provision:** none (drawing output only; no formula, factor or check changed). The values drawn are those of `CF.compute` / `CF.checks` for each group's h and d (AASHTO LRFD 10th Ed. Arts. 6.7.4.2, 4.6.2.7.1, as the tab).
+- **Check case (new project, 5 girders at 114 in, Interior on G2–G4 D = 60, Exterior on G1/G5 D = 54; t_top 0.75, t_bot 1.125):** bays 54, 60, 60, 54. Drawings groups: G1–G2, G4–G5 at h = round(max(54 − 8, 40.5)) = 46, d = 55.88; G2–G3, G3–G4 at h = 52, d = 61.88.
+  - **Before**, Interior reported: one elevation, "CROSS-FRAME ELEVATION, TYPE X", h = 52.00, d = 61.88 (dxfB, Interior's own depth). Exterior reported: one elevation, h = 46, d = 55.88.
+  - **After** (both reported types): two elevations, "… TYPE X - BAYS G1-G2, G4-G5 (DEPTH OF G1, EXTERIOR)" with "WORK-POINT DEPTH h = 46.00 IN, GIRDER DEPTH d = 55.88 IN" between G1 and G2, and "… - BAYS G2-G3, G3-G4 (DEPTH OF G2, INTERIOR)" with h = 52.00, d = 61.88 between G2 and G3. These are the Drawings sheet's labels.
+  - **Exterior D = 66, Exterior reported:** before h = 58.00, d = 67.88 (its own depth); after h = 52.00, d = 61.88 (every bay's depth: Interior).
+- **Equal depths unchanged (proof):**
+  - **Node probe** (origin/main 499ff05 vs branch; the #1477 set and more: built-in, it with a splice, 11 girders, CTDOT, MassDOT, C15x33.9 and W21x44 diaphragms, gd_builtin28, gd_xsA, two girders saved before types of unequal depth, new project, it under CTDOT and MassDOT, one type on every line, with C15 and W21, equal D = 30 under AASHTO / MassDOT / CTDOT, with a W27x84, equal D = 20). The tab Download DXF of every girder type is byte-identical: 33 of 33. The whole Drawings set (paper D and B) is byte-identical for all 30 projects, the unequal ones included (60 of 60), which also proves the `bayGroups` move. Only the tab DXF of the unequal projects differs: 18 of their 21 type cases. Identical: Interior reported with Exterior deeper (with and without a C15), and Interior D = 30 with Exterior 36 and Interior reported, since one depth group means the frame checked, as before.
+  - **Browser:** tests/smoke/steel-bridge-dxf-unchanged.mjs, 18 graphics byte-identical; scratch probe: the Cross-frames card's Download DXF text, origin/main vs branch, 8 of 8 equal-depth or one-depth projects byte-identical (built-in, built-in C15, gd_builtin28, new, new CTDOT, one type, equal D = 30, Exterior +6); Exterior −6 gives the two labelled groups.
+- **How verified:** tests/engine/xf-bay-depth.test.mjs (the build test now asserts `dxfG`: two groups for Exterior −6 with either type reported, none for one depth). tests/engine/xf-dxf-groups.test.mjs gains two tests: (1) one depth: the tab DXF equals the frame on screen, byte for byte, for 4 projects × 2 types; Exterior deeper with Exterior reported is drawn at h = 52. (2) Exterior −6: `bayGroups` and the tab DXF carry the Drawings sheet's two labels, h and d, each group between the girders of its first bay.
+- **Other copies:** none.
+- **Decisions (pending engineer review):** (1) each group's tab elevation uses the reported type's inputs (its deck-placement brace plates and M_u, the wind depth) with the group's h and d, so the member forces drawn are those of the reported type in that bay depth. The Drawings sheet draws from the first girder type (`inputsOf(P, { bays: false })`). (2) The screen graphic still shows only the frame checked; only the Download DXF shows every group.
+- **Open items (not changed):** the 3D view still draws frames at 0.8 × the deepest girder (#1477 open item 3).
+- **Before / after (exact):**
+```diff
+diff --git a/apps/steel-bridge/engine/crossframes.js b/apps/steel-bridge/engine/crossframes.js
+index c1491f9..fcbb5bb 100644
+--- a/apps/steel-bridge/engine/crossframes.js
++++ b/apps/steel-bridge/engine/crossframes.js
+@@ -633,6 +633,16 @@
+       const q = { j, a, b, s }; bays.push(q); if (!gov || shallower(gov.s, s) !== gov.s) gov = q; }
+     return gov ? { bays, gov } : null;
+   }
++  /* bayGroups(P) (SB-23, 2026-11-13; moved from engine/sheets.js cfGroups, SBXF2 SB-21, unchanged): the distinct bay depths of the cross-frame
++     details: the typed bays grouped by their h and the d of their shallower girder (rounded to 0.01 in), in bay order, each { h, s (the
++     shallower girder of its first bay), dg, bays: [j] }; null for one group or none (a project saved before girder types, equal depths). Used
++     by the Drawings cross-frame sheet and the Cross-frames tab graphic's Download DXF. */
++  function bayGroups(P) {
++    const X = bayDepths(P); if (!X) return null;
++    const B = inputsOf(P, { bridge: true }).p.xfBay; if (!B) return null; const m = new Map(), r2 = v => +(+v).toFixed(2);
++    B.bays.forEach(q => { if (!q) return; const k = `${q.h}|${r2(q.s.dg)}`; if (!m.has(k)) m.set(k, { h: q.h, s: q.s, dg: r2(q.s.dg), bays: [] }); m.get(k).bays.push(q.j); });
++    return m.size > 1 ? [...m.values()] : null;
++  }
+   /* typeGov(P, BD, gi) (SBXF2, 2026-11-13; engineer decision SB-18): the frame the brace checks of girder type gi use: of the bays attached to
+      any of its lines (bays j − 1 and j of each line j), the shallowest (the rule of bayDepths, the first on ties). The lines: the type's
+      (SBDModel.typeLines), or adLines (Auto design's run, engine/autodesign.js typeProject: each line's copy of the type carries the type's
+@@ -721,6 +731,6 @@
+     return { line, X, pts: G[line], tot: G[line].reduce((a, q) => a + q.P, 0) };
+   }
+ 
+-  window.SBDCrossframes = { ES, DEF, GD_GR, BOLT, FUB, PHI, ANGLES, CF_MEM, CF_CH, CF_DIA, angleProps, cfDiaSec, cfDiaOn, cfDiaGap, cfDiaEnd, cfTypeRec, cfTsCP, cfCPsize, cfBsCP, cfCP, cfDiaFit,
++  window.SBDCrossframes = { ES, DEF, GD_GR, BOLT, FUB, PHI, ANGLES, CF_MEM, CF_CH, CF_DIA, angleProps, cfDiaSec, cfDiaOn, cfDiaGap, cfDiaEnd, cfTypeRec, cfTsCP, cfCPsize, cfBsCP, cfCP, cfDiaFit, bayGroups,
+     env0, compute, checks, userModes, xfW, xfModel, xfPts, defaults, inputsOf, envOf, pointLoads, girderDepth, bayDepths, typeGov, extDepth, diaDepthReq };
+ })();
+diff --git a/apps/steel-bridge/engine/sheets.js b/apps/steel-bridge/engine/sheets.js
+index 72de0d5..4e808c1 100644
+--- a/apps/steel-bridge/engine/sheets.js
++++ b/apps/steel-bridge/engine/sheets.js
+@@ -392,12 +392,7 @@
+      (each bay the shallower of its two girders, engine/crossframes.js bayDepths), one detail per distinct bay depth (h and the girder depth d
+      of the bay's shallower girder), drawn with that girder's plates and labelled with its bays, one below the other. One distinct depth (equal
+      depths) or a project saved before girder types: cfDetail(D, C, null), the drawing as before, byte for byte. */
+-  function cfGroups(P) {
+-    const CF = window.SBDCrossframes, X = CF.bayDepths && CF.bayDepths(P); if (!X) return null;
+-    const B = CF.inputsOf(P, { bridge: true }).p.xfBay; if (!B) return null; const m = new Map(), r2 = v => +(+v).toFixed(2);
+-    B.bays.forEach(q => { if (!q) return; const k = `${q.h}|${r2(q.s.dg)}`; if (!m.has(k)) m.set(k, { h: q.h, s: q.s, dg: r2(q.s.dg), bays: [] }); m.get(k).bays.push(q.j); });
+-    return m.size > 1 ? [...m.values()] : null;
+-  }
++  const cfGroups = P => window.SBDCrossframes.bayGroups(P);   // SB-23: the grouping moved to engine/crossframes.js bayGroups (unchanged), shared with the Cross-frames tab's Download DXF
+   function cf(D, C) {
+     const GR = cfGroups(C.P); if (!GR) return cfDetail(D, C, null);
+     let yb = null; GR.forEach(g => { const i0 = D.mark(); cfDetail(D, C, g); if (yb != null) { const b = D.bbox(i0); D.move(i0, 0, yb - 16 * D.h - b[3]); } yb = D.bbox(i0)[1]; });
+diff --git a/apps/steel-bridge/engine/tabgraphics-b.js b/apps/steel-bridge/engine/tabgraphics-b.js
+index 9ab3aea..8ce189c 100644
+--- a/apps/steel-bridge/engine/tabgraphics-b.js
++++ b/apps/steel-bridge/engine/tabgraphics-b.js
+@@ -357,9 +357,23 @@
+   /* crossframe(B, P, opt): B = SBDFramingUI.build() result: the frame of one bay (members of B.R.frames at the work points B.R.N) between two
+      girder webs, labelled (name, section, largest T / C over the load combinations); the group that governs (B's governing check: its step
+      cf.top / cf.bot / cf.diag) highlighted. */
++  /* SB-23 (2026-11-13; the engineer's request for this DXF change): opt.groups (ui/framing.js build dxfG, the Download DXF only): one elevation
++     per distinct bay depth (engine/crossframes.js bayGroups, as the Drawings cross-frame sheet), one below the other (16 text heights apart,
++     as engine/sheets.js cf), each titled with its bays " - BAYS G1-G2, G4-G5 (DEPTH OF G1, EXTERIOR)". Without opt.groups: as before. */
+   function crossframe(B, P, opt) {
+-    opt = opt || {}; const R = B.R, N = R.N, I = B.I.p, { D, L } = newDrawing(4.6), h = D.h, S = I.S, dg = I.dg, hw = I.h, ox = 0, oy = 0;
+-    if (!N || !R.frames) return base('crossframe', 'Cross-frame', D, 0, []);
++    opt = opt || {}; const { D, L } = newDrawing(4.6);
++    if (Array.isArray(opt.groups) && opt.groups.length) {
++      let yb = null; opt.groups.forEach(q => { const g = q.grp, i0 = D.mark(); if (!cfElev(D, L, q, opt, ` - BAYS ${g.bays.map(j => `G${j + 1}-G${j + 2}`).join(', ')} (DEPTH OF G${g.s.line + 1}, ${up(String(g.s.label || ''))})`)) return;
++        if (yb != null) { const b = D.bbox(i0); D.move(i0, 0, yb - 16 * D.h - b[3]); } yb = D.bbox(i0)[1]; });
++      return base('crossframe', 'Cross-frame elevation', D, 0, []);
++    }
++    if (!cfElev(D, L, B, opt, '')) return base('crossframe', 'Cross-frame', D, 0, []);
++    return base('crossframe', 'Cross-frame elevation', D, 0, []);
++  }
++  /* cfElev(D, L, B, opt, sfx): the elevation of crossframe() drawn into D (sfx: appended to the title); false when B has no frame */
++  function cfElev(D, L, B, opt, sfx) {
++    const R = B.R, N = R.N, I = B.I.p, h = D.h, S = I.S, dg = I.dg, hw = I.h, ox = 0, oy = 0;
++    if (!N || !R.frames) return false;
+     const gov = (() => { let g = null; (B.C || []).forEach(c => c.items.forEach(it => { if (fin(it.r) && (it.st === 'pass' || it.st === 'fail') && (!g || it.r > g.it.r)) g = { c, it }; })); return g; })();
+     const grp = gov && /^cf\.(top|bot|diag)\b/.exec(gov.it.step || '') ? /^cf\.(top|bot|diag)\b/.exec(gov.it.step)[1] : null, nodeY = n => oy + N[n][1], nodeX = n => ox + N[n][0];
+     // the girder webs and flanges at each end (depth dg), the deck line at the top
+@@ -375,10 +389,10 @@
+       rowsT.push([`${i + 1}`, up(e.lbl), asc((R.mem && R.mem[e.k] && R.mem[e.k].name) || ''), f1(e.L), f1(mx.T), f1(mx.C), on ? 'GOVERNS' : '']); });
+         D.dimH(L.d, ox, ox + S, oy + (hw - dg) / 2 - 8 * h, oy + (hw - dg) / 2, 'S = <>'); D.dimV(L.d, oy, oy + hw, ox - 14, ox, 'h = <>');
+     if (DT && DT.table) DT.table(D, L.t, ox, oy + (hw - dg) / 2 - 14 * h, ['NO.', 'MEMBER', 'SECTION', 'L (IN)', 'T (KIP)', 'C (KIP)', ''], rowsT, 'MEMBERS (LARGEST FACTORED FORCES OF THE COMBINATIONS)');
+-    D.text(L.t, ox, oy + hw + (dg - hw) / 2 + 10 * h, h * 1.5, `CROSS-FRAME ELEVATION, TYPE ${I.type}${opt.dia ? ' (DIAPHRAGM IN USE: SEE THE DIAPHRAGM CHECKS)' : ''}`);
++    D.text(L.t, ox, oy + hw + (dg - hw) / 2 + 10 * h, h * 1.5, `CROSS-FRAME ELEVATION, TYPE ${I.type}${opt.dia ? ' (DIAPHRAGM IN USE: SEE THE DIAPHRAGM CHECKS)' : ''}${sfx}`);
+     D.text(L.t, ox, oy + hw + (dg - hw) / 2 + 7.4 * h, h * 0.8, `LOOKING ALONG THE GIRDERS; WORK-POINT DEPTH h = ${f2(hw)} IN, GIRDER DEPTH d = ${f2(dg)} IN, S = ${f2(S)} IN.`);
+     D.text(gov && grp ? L.gov : L.t, ox, oy + hw + (dg - hw) / 2 + 5.2 * h, h * 0.9, gov ? `GOVERNING CHECK: ${gov.c.id} ${up(gov.it.loc)}, RATIO ${f3(gov.it.r)}${grp ? ' (MEMBERS HIGHLIGHTED)' : ' (NOT A MEMBER CHECK)'}` : 'NO GOVERNING CHECK');
+-    return base('crossframe', 'Cross-frame elevation', D, 0, []);
++    return true;
+   }
+ 
+   /* ====================================================================================================== */
+diff --git a/apps/steel-bridge/ui/framing.js b/apps/steel-bridge/ui/framing.js
+index 17ca6ee..445bedc 100644
+--- a/apps/steel-bridge/ui/framing.js
++++ b/apps/steel-bridge/ui/framing.js
+@@ -163,9 +163,13 @@
+     const C = R.errors ? (R.errors.length ? null : CF.checks(R)) : null;
+     const G = P.girders[gi] || P.girders[0], line = Math.min(FRM.lineOf(P, G), L.FR.girders.length - 1), ext = line === 0 || line === L.FR.girders.length - 1;
+     const fl = FRM.flSkew(L.m.skews, ext, P.framing), XF = CF.pointLoads(P, gi, { L }), br = FRM.girderBraces(P, gi, L);
+-    // SBXF (2026-11-13): the governing bay's depth differs from the reported girder's: the tab graphic's Download DXF drawn as before (dxfB, the reported girder's own depth)
+-    let dxfB; if (I.p.xfBay && I.p.xfBay.vary) { const I0 = CF.inputsOf(P, { L, A, gi, bays: false }), R0 = CF.compute(I0.p, env); dxfB = { L, I: I0, R: R0, C: R0.errors && !R0.errors.length ? CF.checks(R0) : null, line }; }
+-    return { L, I, R, C, fl, XF, br, line, G, A, dxfB };
++    // SB-23 (2026-11-13; the engineer's request for this DXF change): the tab graphic's Download DXF draws one cross-frame per distinct bay depth,
++    // as the Drawings cross-frame sheet (CF.bayGroups): each group's frame is the reported type's inputs with the group's h and d, computed and
++    // checked, at the group's first bay (dxfG). One depth, or a project saved before girder types: the frame checked (B), as before for equal
++    // depths. (Was SBXF dxfB: the reported girder's own depth when the governing bay's differed.)
++    let dxfG; if (I.p.xfBay) { const GR = CF.bayGroups(P); if (GR) dxfG = GR.map(g => { const p = { ...I.p, h: g.h, dg: g.dg }, Rg = CF.compute(p, env);
++      return { L, I: { ...I, p }, R: Rg, C: Rg.errors && !Rg.errors.length ? CF.checks(Rg) : null, line: g.bays[0], grp: g }; }); }
++    return { L, I, R, C, fl, XF, br, line, G, A, dxfG };
+   }
+   const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>`;
+   const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
+diff --git a/apps/steel-bridge/ui/tabgraphics-b.js b/apps/steel-bridge/ui/tabgraphics-b.js
+index caf8749..e3277a1 100644
+--- a/apps/steel-bridge/ui/tabgraphics-b.js
++++ b/apps/steel-bridge/ui/tabgraphics-b.js
+@@ -67,8 +67,9 @@
+     if (!putC(host, 'fatigue-chart', ctx, TX => TX.fatigueChart(R, ctx.P, { gi: gi(ctx), sel }), 'fatigueChart', { P: ctx.P, gi: gi(ctx), R, sel, onSel })) put(host, 'fatigue-chart', ctx, TX => TX.fatigueChart(R, ctx.P, { gi: gi(ctx), sel }), onSel);
+   }
+   function crossframe(host, ctx, B) { const o = { dia: !!(window.SBDCrossframes && ctx.P.crossframes && window.SBDCrossframes.cfDiaOn(ctx.P.crossframes)) };
+-    // SBXF (2026-11-13): the Download DXF as before (B.dxfB: the reported girder's own depth, when the governing bay's differs; the engineer's rule, no DXF change)
+-    putDet(host, 'crossframe', ctx, TX => TX.crossframe(B.dxfB || B, ctx.P, o), 'crossframe', { B, opt: o }) || put(host, 'crossframe', ctx, TX => TX.crossframe(B, ctx.P, o)); }
++    // SB-23 (2026-11-13; the engineer's request for this DXF change): the Download DXF draws one frame per distinct bay depth (B.dxfG, as the Drawings
++    // cross-frame sheet); one depth: the frame on screen, as before. The screen drawing is unchanged.
++    putDet(host, 'crossframe', ctx, TX => TX.crossframe(B, ctx.P, B.dxfG ? { ...o, groups: B.dxfG } : o), 'crossframe', { B, opt: o }) || put(host, 'crossframe', ctx, TX => TX.crossframe(B, ctx.P, o)); }
+   function welds(host, ctx, B, sel, onSel) {
+     if (!putC(host, 'welds', ctx, TX => TX.welds(B, ctx.P, { gi: gi(ctx), sel }), 'welds', { P: ctx.P, gi: gi(ctx), R: B, sel, onSel })) put(host, 'welds', ctx, TX => TX.welds(B, ctx.P, { gi: gi(ctx), sel }), onSel);
+     const oW = { i: sel && sel.k === 'fw' ? sel.i : undefined };
+```
