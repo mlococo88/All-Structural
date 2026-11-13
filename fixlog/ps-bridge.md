@@ -1142,7 +1142,7 @@ PR #1518: https://github.com/mlococo88/All-Structural/pull/1518
   was not the cause. No comparison changed.
 
 ## 2026-11-13 — PS-20: d_e of each exterior girder line from the bridge cross-section; each exterior line its own LLDF, the worst line governs (CALCULATION CHANGE, §4, for projects with the cross-section barriers; equal overhangs: both lines identical)
-PR: (link added on merge)
+PR #1521: https://github.com/mlococo88/All-Structural/pull/1521
 ### Request
 - Engineer decision PS-20 (2026-11-13), answering the 3a-2 open item: "d_e per exterior line computed from the bridge cross-section (that
   line's overhang minus barrier/curb width), each exterior line its own LLDF; worst line governs. Identical when overhangs equal (prove)."
