@@ -7042,7 +7042,7 @@ The file uses CRLF line endings; keep them. The code is in the Beam Capacity src
   - Service project: `computeAll()` identical; only the labels and the note text differ on the Load Combinations tab and in the Report.
   - `check-syntax` and `cbc-loads` pass.
 
-## 2026-11-13 — PR: claude/cbc-aashto-size-limit (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CBSA, CBLX) — AASHTO mode: explicit check "Section size limit (AASHTO 5.7.3.3)", V_u ≤ φ(0.25f′c b_v d_v + V_p); note that 5.7.2.6 has no across-width leg spacing limit   [NEW CHECK (can FAIL only where shear fails); shear results identical; no saved key or format change]
+## 2026-11-13 — PR: claude/cbc-aashto-size-limit (PR #1509: https://github.com/mlococo88/All-Structural/pull/1509) (CBSA, CBLX) — AASHTO mode: explicit check "Section size limit (AASHTO 5.7.3.3)", V_u ≤ φ(0.25f′c b_v d_v + V_p); note that 5.7.2.6 has no across-width leg spacing limit   [NEW CHECK (can FAIL only where shear fails); shear results identical; no saved key or format change]
 
 The file uses CRLF line endings; keep them. The code is in the Beam Capacity srcdoc; escape as usual. The sites are tagged CBSA and CBLX.
 
