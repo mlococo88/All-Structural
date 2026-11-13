@@ -398,7 +398,9 @@
     let yb = null; GR.forEach(g => { const i0 = D.mark(); cfDetail(D, C, g); if (yb != null) { const b = D.bbox(i0); D.move(i0, 0, yb - 16 * D.h - b[3]); } yb = D.bbox(i0)[1]; });
   }
   function cfDetail(D, C, grp) {
-    const G = C.G, CF = window.SBDCrossframes, I = CF.inputsOf(C.P, { bays: false }), p = grp ? { ...I.p, h: grp.h, dg: grp.dg } : I.p, E = CF.envOf(C.P), s0 = G.girders[grp ? grp.s.line : 0].segs[0], h = D.h;
+    const G = C.G, CF = window.SBDCrossframes, I = CF.inputsOf(C.P, { bays: false }), E = CF.envOf(C.P), s0 = G.girders[grp ? grp.s.line : 0].segs[0], h = D.h;
+    // SB-24 (2026-11-13; engineer decision SB-24): a diaphragm detail of a bay depth group is drawn with the group's own shape (crossframes.dia.grp; absent: dia.shape, as before)
+    const p = grp ? { ...I.p, h: grp.h, dg: grp.dg, ...(CF.cfDiaOn(I.p) && CF.grpShape && CF.grpShape(I.p.dia, grp) !== I.p.dia.shape ? { dia: { ...I.p.dia, shape: CF.grpShape(I.p.dia, grp) } } : {}) } : I.p;
     const sfx = grp ? ` - BAYS ${grp.bays.map(j => `G${j + 1}-G${j + 2}`).join(', ')} (DEPTH OF G${grp.s.line + 1}, ${str(grp.s.label).toUpperCase()})` : '';   // SBXF2: the bays of this detail
     const ly = { g: D.layer('GRDR', 5), x: D.layer('XFRM', 3), cp: D.layer('GRDR-STIF', 30), bo: D.layer('BOLT', 2), d: D.layer('DIMS', 7), t: D.layer('ANNO-TEXT', 7), c: D.layer('CNTR', 8) }, cl = D.ltype('CENTER');
     const S = +p.S, hh = +p.h, tf = { b: s0.topB, t: s0.topT }, bf = { b: s0.botB, t: s0.botT }, Dm = s0.D, Dt = Dm + tf.t + bf.t, yb = (Dt - hh) / 2, yt = yb + hh, tw = s0.tw, cn = p.conn || {}, rb = (+cn.d || 0.875) / 2 + 0.0625;

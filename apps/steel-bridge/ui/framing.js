@@ -86,10 +86,36 @@
     if (v === 'X' || v === 'Kb' || v === 'Kt') { C.type = v; if (C.dia) C.dia.on = 'no'; return; }
     if (v !== 'w' && v !== 'ch') return;
     if (!C.dia) C.dia = window.SBDModel.defaultCrossframes().dia;
-    const q = C.dia, fam = isCh(q.shape) ? 'ch' : 'w'; q.on = 'yes'; if (fam === v) return;
-    const mem = SHP.get(C) || {}; mem[fam] = q.shape; SHP.set(C, mem);
+    const q = C.dia, fam = isCh(q.shape) ? 'ch' : 'w'; q.on = 'yes'; if (fam === v) { if (q.grp == null) grpFill(P, q, v); return; }
+    const mem = SHP.get(C) || {}; mem[fam] = q.shape; if (q.grp != null) mem[fam + 'G'] = q.grp; SHP.set(C, mem);
     let rec = null; try { const TR = CF.cfTypeRec(CF.inputsOf(P).p, CF.envOf(P)); rec = v === 'ch' ? TR.ch : TR.w; } catch (e) { rec = null; }
     q.shape = mem[v] || rec || (v === 'ch' ? 'MC18x42.7' : 'W21x44');
+    if (mem[v + 'G']) q.grp = mem[v + 'G']; else { delete q.grp; grpFill(P, q, v); }   // SB-24: the shapes per bay depth group of the new family
+  }
+  /* SB-24 (2026-11-13; engineer decision SB-24): the diaphragm shape per bay depth group (crossframes.dia.grp, engine/crossframes.js grpShape).
+     grpRec(P, br): the section CF10 recommends for each group (cfTypeRec: SB-22's per-group section, else the one section for every bay) in
+     the family br ('w' | 'ch'), { key: shape }; grpFill(P, q, v): when the bays form two or more depth groups and CF10 recommends a section per
+     group (one section does not fit every bay), q.grp is prefilled with it (a group with no section of the list that fits: no entry, the Shape
+     above). Only on the user's change of the Intermediate bracing choice (setBrace); a project loaded is never rewritten (absent: dia.shape). */
+  function grpRec(P, br) {
+    const CF = window.SBDCrossframes, out = {}; let TR = null; try { TR = CF.cfTypeRec(CF.inputsOf(P).p, CF.envOf(P)); } catch (e) { return out; }
+    const GR = CF.bayGroups(P); if (!GR) return out;
+    GR.forEach(g => { const k = CF.grpKey(g), t = TR.grp ? TR.grp.find(x => x.bays.join(',') === k) : null, sec = t ? (br === 'ch' ? t.ch : t.w) : null, one = br === 'ch' ? TR.ch : TR.w;
+      if (t ? sec : one) out[k] = t ? sec[0] : one; }); out.TR = TR; return out;
+  }
+  function grpFill(P, q, v) {
+    const R = grpRec(P, v); if (!R.TR || !R.TR.grp) return; const o = {}; Object.keys(R).forEach(k => { if (k !== 'TR') o[k] = R[k]; }); if (Object.keys(o).length) q.grp = o;
+  }
+  /* grpCard(P, C, br): the inputs of the shape per bay depth group (two or more groups; '' with one): a select per group, "Same as Shape above"
+     (no entry) or a shape of the family, the one CF10 recommends marked */
+  function grpCard(P, C, br) {
+    const CF = window.SBDCrossframes; let GR = null; try { GR = CF.bayGroups(P); } catch (e) { GR = null; } if (!GR) return '';
+    const R = grpRec(P, br), list = br === 'ch' ? CF.CF_CH.map(s => s[0]) : [...CF.CF_DIA.map(s => s[0]), 'custom'], m = C.dia.grp && typeof C.dia.grp === 'object' ? C.dia.grp : {};
+    const nmS = v => (v === 'custom' ? 'Custom W' : v);
+    return `<h4 class="sub">Shape per bay depth group (girder types)</h4>${GR.map(g => { const k = CF.grpKey(g), cur = list.includes(m[k]) ? m[k] : '', id = `i_dgrp_${k.replace(/\W/g, '_')}`;
+      return `<div class="fRow"><label for="${id}">Bays ${g.bays.map(j => `G${j + 1}–G${j + 2}`).join(', ')} (d = ${fmt(g.dg, 2)} in, G${g.s.line + 1} ${esc(g.s.label)})</label><select id="${id}" data-dgrp="${esc(k)}" style="width:200px;max-width:100%">`
+        + [['', `Same as Shape above (${nmS(C.dia.shape)})`], ...list.map(v => [v, `${nmS(v)}${R[k] === v ? ' (CF10 recommends)' : ''}`])].map(([v, t]) => `<option value="${esc(v)}"${cur === v ? ' selected' : ''}>${esc(t)}</option>`).join('') + '</select></div>'; }).join('')}
+      <p class="note">Girder types: the bays form ${GR.length} depth groups (the same h and the same shallower girder depth d: the Drawings' cross-frame details). Each group's diaphragm is checked with its own shape on its own frame (CFD; CFE too when the end diaphragm takes the intermediate shape) and weighed in DC1 with it; the worst group governs (engineer decision SB-24, 2026-11-13). Turning the diaphragm on prefills the shapes CF10 recommends per group where one section does not fit every bay.</p>`;
   }
   function inputs(P, h) {
     ensure(P); const F = P.framing, C = P.crossframes, CF = window.SBDCrossframes, FRM = window.SBDFraming;
@@ -113,7 +139,7 @@
       + h.card('Intermediate bracing (6.7.4.2)', `${h.sel('crossframes.type', 'Intermediate bracing', BRACE, br).replace('<select ', '<select style="width:200px;max-width:100%" ')}
         ${h.num('crossframes.dMinXF', 'Minimum girder depth for cross-frames', 'in')}${dOn ? `${h.sel('crossframes.dia.shape', 'Shape', br === 'ch' ? CF.CF_CH.map(s => [s[0], s[0]]) : [...CF.CF_DIA.map(s => [s[0], s[0]]), ['custom', 'Custom W']])}
         ${C.dia.shape === 'custom' ? `${h.num('crossframes.dia.d', 'Depth d', 'in')}${h.num('crossframes.dia.bf', 'Flange width', 'in')}${h.num('crossframes.dia.tf', 'Flange thickness', 'in')}${h.num('crossframes.dia.tw', 'Web thickness', 'in')}` : ''}
-        ${h.sel('crossframes.dia.gr', 'Grade', [['36', '36'], ['50', '50']])}
+        ${h.sel('crossframes.dia.gr', 'Grade', [['36', '36'], ['50', '50']])}${grpCard(P, C, br)}
         <h4 class="sub">End connections</h4>${conn}${h.num('crossframes.dia.nb', 'Bolts per end (one row)', '')}${h.num('crossframes.dia.pitch', 'Bolt pitch', 'in')}${h.num('crossframes.dia.ecc', 'Bolt line from the girder web', 'in')}
         <h4 class="sub">End diaphragms (bearing lines)</h4>${h.sel('crossframes.dia.end', 'Jacking at the end diaphragms', [['no', 'No'], ['yes', 'Yes']])}${h.num('crossframes.dia.Rj', 'Jacking reaction R<sub>j</sub>', 'kip')}${h.num('crossframes.dia.aj', 'at a<sub>j</sub> from the girder', 'in')}
         <p class="note">The diaphragm is the intermediate bracing (checks CFD) and the end diaphragm at the bearing lines (CFE); the angle checks CF1 to CF9 and member forces entered from a refined analysis do not apply. S (largest girder spacing) and the girder depth d come from the project and the layout. On a change between a rolled W and a channel, the shape starts at the one last used in that family on this page, else the shape that check CF10 recommends for the girder depth, else W21x44 / MC18x42.7: a starting choice, checked by CFD like any other.</p>`
@@ -149,6 +175,9 @@
   }
   function onChange(el, P) {
     if (el.dataset && el.dataset.path === 'crossframes.type' && el.dataset.kind === 'sel') { setBrace(P, el.value); return true; }   // BRSEL
+    if (el.dataset && el.dataset.dgrp != null) { const q = ensure(P).crossframes.dia, k = el.dataset.dgrp;   // SB-24: the shape of a bay depth group ('' : the Shape above, the entry removed)
+      if (el.value === '') { if (q.grp && typeof q.grp === 'object') { delete q.grp[k]; if (!Object.keys(q.grp).length) delete q.grp; } }
+      else { if (!q.grp || typeof q.grp !== 'object' || Array.isArray(q.grp)) q.grp = {}; q.grp[k] = el.value; } return true; }
     if (el.dataset && el.dataset.fr === 'splices') { ensure(P); P.framing.splices = el.value.split(/[,;\s]+/).map(Number).filter(v => isFinite(v) && v > 0).sort((a, b) => a - b); return true; }
     return false;
   }
@@ -256,7 +285,7 @@
       <div class="kv"><div><span>S (largest spacing)</span><span>${fmt(I.p.S, 2)} in</span></div><div><span>h / d</span><span>${fmt(I.p.h, 2)} / ${fmt(I.p.dg, 2)} in ${wk(I.p.xfBay ? 'cf.h' : 'cf.dg')}</span></div>${xfBayKv(I.p)}<div><span>L<sub>b</sub> (largest on any girder)</span><span>${fmt(I.p.Lb, 2)} ft ${wk('cf.Lb')}</span></div>
       <div><span>Deck placement M<sub>u</sub></span><span>${fmt(+I.p.sb.Mu, 1)} kip-ft</span></div><div><span>Stability span L, frames n</span><span>${fmt(I.p.sb.L, 2)} ft, ${I.p.sb.n}</span></div>${R.W ? `<div><span>F<sub>w</sub> Strength III / V</span><span>${fmt(R.W.III.Fw, 2)} / ${fmt(R.W.V.Fw, 2)} kip ${wk('cf.wIII.Fw')}</span></div>` : ''}</div>
       <p class="note">M<sub>u</sub>: ${window.SBDSub.html(I.src.Mu || '')}; ${window.SBDSub.html(I.src.sb || '')}.${umNote(R)}</p>${xfBayNote(I.p, bn)}</div></section>`;
-    h += dOn ? `<section class="sec"><div class="secHead">Diaphragms: elevation</div><div class="secBody">${diaSvg(B)}</div></section>`   // SBDIA: the diaphragm, not the X / K truss
+    h += dOn ? `<section class="sec"><div class="secHead">Diaphragms: elevation</div><div class="secBody">${R.DIAg && R.DIAg.length ? R.DIAg.map(q => `<h4 class="sub">Bays ${q.bays.map(j => `G${j + 1}–G${j + 2}`).join(', ')}: ${esc(q.DIA.i ? q.DIA.i.nm_ : q.shape)} (d = ${fmt(q.dg, 2)} in, G${q.s.line + 1} ${esc(q.s.label)}; engineer decision SB-24)</h4>${diaSvg({ ...B, I: { ...I, p: q.p }, R: { ...R, DIA: q.DIA } })}`).join('') : diaSvg(B)}</div></section>`   // SBDIA: the diaphragm, not the X / K truss; SB-24: one per bay depth group
       : `<section class="sec"><div class="secHead">Cross-frames: elevation</div><div class="secBody"><div data-gfxb="crossframe"></div></div></section>`;   // drawn by ui/tabgraphics-b.js from the results below
     // layout
     h += `<section class="sec"><div class="secHead">Framing (6.7.4.2.1)</div><div class="secBody">${plan(L, dOn, { ui: true })}
