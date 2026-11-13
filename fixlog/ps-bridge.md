@@ -656,3 +656,55 @@ PR #1466: https://github.com/mlococo88/All-Structural/pull/1466
 ### Open items
 - "Girder age at continuity (RIDOT 5.6.3.3)" (RIDOT, continuity on) is still on no result tab and in no column group; §1 lists it and says
   so. Whether to add it to the column (e.g. to the Analysis group or the Materials chip) is for the engineer.
+
+## 2026-11-13 — Report graphics: each result tab's graphics in its Report section, numbered "Figure n.m" (display only, no calculation change)
+PR: (link added after the PR is opened)
+### Problem
+- The Report (PR 2e) had no graphics: its sections are built from each tab's `output()` HTML, and the tabs draw their graphics afterwards in
+  `after()` (open item of PR 2e). Engineer's decision (2026-11-13): put each tab's main graphic in its Report section, drawn by the tab's own
+  code, sized to the page in print, readable labels, captions and numbering as the steel report's figures where sensible.
+### Where
+- `apps/ps-bridge/ui/report.js` (new functions `grab`, `figures`, constant `PW = 700`): `figures(B, inc, wScr)` draws each included result
+  tab off screen (a hidden host 700 px wide, `U.output(ctx)` then `U.after(host, ctx)`, ctx = the report's `{ P, inp, R, W, ui: {} }`: the
+  same defaults as the Report's cards) and takes each graphic card the tab mounts (`.vk.va-card` of `PSBVizAlong.mount`, `.vk.vk-det` of
+  `PSBVizKit.detCard`) with the id of its slot `#gfx_…`: the drawn figure (`.vk-fig`, the read-out overlay `.va-hov` removed), the series chips as
+  a static legend of the series shown, the tab's legend (`.va-leg`) and captions (`.vk-cap`), links as text; the caption = the card's title
+  (sub-title in brackets) and, for a graphic with a state control, "shown: <control>: <state>" (e.g. the handling elevation "shown: Stage:
+  Lifting", the stage last chosen on the Handling tab). On a screen narrower than 660 px (phone) each tab is drawn a second time at the report's
+  width: that copy is shown on screen (`.rp-fig-scr`) and the 700 px one printed (`.rp-fig-prn`). `render()`: anchor
+  `if (S.key !== key || !S.M)`: before `S.M = window.PSBReportBuild.model(B, { include: inc })`; after `figs = figures(B, inc, narrow ? wScr : 0)`
+  then `model(B, { include: inc, figures: figs })`; the cache key also holds the narrow width. No drawing code is added or copied.
+- `apps/ps-bridge/report/fromtab.js`: `cards(html, o)` / `blocks()`: a graphics slot `#gfx_…` (before: skipped) gives `o.figs[<slot id>]`
+  (copies) at its place when given (a slot outside the cards goes to `top`); new `inline(html)` (a title as report text, sub / sup as $…$).
+- `apps/ps-bridge/report/builders.js`: `tabSec()` passes `X.figs[k]` to `FT.cards` and puts the figures outside the cards in a first
+  subsection "Graphics" (before: only notes, "Notes"); `model()` takes `opt.figures` and numbers every figure "Figure n.m: " + caption (n = the
+  section's number among the sections shown, m = its order in the section).
+- `apps/ps-bridge/index.html` CSS (anchor `.rp-fig .rp-vk`): the figure body without the card frame, svg max-width 100 %, the two-section
+  rows of the strand pattern kept side by side (`flex-wrap:nowrap`), screen / print copies (`.rp-fig-scr`, `.rp-fig-prn`).
+- Figures (default project, every module on): 3.1 composite section and strands, 4.1 cross-section and design girder, 5.1 moment and shear
+  envelopes, 6.1 losses, 6.2 strand pattern (elevation and the two sections), 7.1 stresses along the span, 7.2 stress distribution on the section
+  (stage shown), 8.1 moments and resistance (8.2 pier section when continuous), 9.1 shear, 10.1–10.3 end-zone checks, girder end, hold-down,
+  11.1–11.2 camber, 12.1–12.2 handling checks and elevation (stage shown), 13.1–13.2 deck checks and deck section, 14.1–14.2 rating factors and
+  rated sections. Handling and Deck have none when the module is off (the tab shows no graphic either).
+### Shared files
+- None changed (`shared/report.js` renders `{ type: 'figure', svg, caption }` items as before).
+### Saved data (CLAUDE.md §5)
+- No key, no project field, no format change.
+### Governing provisions
+- None (§4): no value is computed or recorded by the figures; `model.vals` are unchanged with and without figures (test).
+### Check case
+- Default project: the Report shows 16 figures (20 with Handling and Deck on and two continuous spans), Figure 3.1 to 14.2; the printed labels
+  are 10.0–12.0 px (drawn at 700 px = 7.3 in, the letter page between the report's 0.6 in margins); before: no figure.
+### How verified
+- `node tests/engine/run.mjs psbridge tex project-registry` (101 tests; `psbridge-report.test.mjs` + 1: figures at their slots (a top slot
+  in "Graphics", the pier slot in its card), numbered by the sections shown (also with sections left out), the values unchanged, the handed-in
+  figures not changed, `[Figure]` in the text).
+- `node tests/smoke/ps-bridge-skeleton.mjs` (214 checks; + 5): every result section has its figures, numbered Figure n.m by its section,
+  static (no button, read-out or control), the strand pattern, deck section, camber, rating and handling elevation (with its stage) present,
+  every label ≥ 10 px on the printed page and no figure wider than the page; Print report prints every figure; 390 px: the figures drawn at the
+  screen width, no sideways scroll, print uses the 700 px ones; file://, 0 console errors.
+- Harness B (`node tests/psbridge-compare.mjs`): 16 designs, 0 differences (the Report's numbers and steps as before, with the figures in the
+  rendered sections). `node tests/check-syntax.mjs`.
+### Open items
+- No dark mode in this app (none to support). In print, the shared report adds "see " before every § link, so a table cell that already says
+  "(see §x)" prints "(see see §x)" (shared/report.js `.rp-see::before`, since PR 2e; the steel report has the same): not changed here.

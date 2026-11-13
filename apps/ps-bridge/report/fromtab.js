@@ -12,7 +12,9 @@
    Skipped: the graphics slots (<div id="gfx_…">, drawn after the HTML on screen), the controls (.fRow: a station chooser, buttons), the
    tab's own worked-steps list (the Report puts the tab's steps there itself: report/builders.js). Display only: nothing is calculated.
 
-   parse(html) -> tree; cards(html, o) -> { subs: [{ title, items, steps? }], top: [notes] }
+   parse(html) -> tree; cards(html, o) -> { subs: [{ title, items, steps? }], top: [notes] }; inline(html) -> report text (sub / sup as $…$, tab links as in-app links)
+     o.figs (optional, the Report's graphics, 2026-11-13): { <slot id>: [figure items] }: a graphics slot (#gfx_…) of the tab gives its
+     figures at its place (a slot outside the cards: in top), instead of nothing
      o = { tab: key of the tab, X: { vals: [] }, sec: the section key recorded with each value, inReport(tab) -> bool (that tab has a
      section in this report) }. A card titled "Worked steps…" comes back as { title, items (its notes), steps: true } for the builder. */
 (function () {
@@ -94,7 +96,8 @@
     (n.kids || []).forEach(k => {
       if (k.text != null) { const t = tidy(dec(k.text)); if (t) out.push({ type: 'note', text: t }); return; }
       const t = k.tag, id = (k.a && k.a.id) || '';
-      if (/^gfx_/.test(id) || has(k, 'fRow') || t === 'select' || t === 'button' || t === 'input' || t === 'svg' || t === 'script' || t === 'style' || t === 'label') return;
+      if (/^gfx_/.test(id)) { if (o.figs && o.figs[id]) out.push(...o.figs[id].map(f => ({ ...f }))); return; }   // a graphics slot: the tab's own figures when given (o.figs), else nothing
+      if (has(k, 'fRow') || t === 'select' || t === 'button' || t === 'input' || t === 'svg' || t === 'script' || t === 'style' || t === 'label') return;
       if (has(k, 'kv')) { out.push({ type: 'kv', rows: (k.kids || []).filter(r => r.tag === 'div').map(r => { const sp = (r.kids || []).filter(s => s.tag === 'span'); return [line(sp[0] || { kids: [] }, o), sp.slice(1).map(s => line(s, o)).join(' ')]; }) }); return; }
       if (t === 'table') { out.push(table(k, o)); return; }
       if (has(k, 'alert')) { const ls = (k.kids || []).filter(q => q.tag === 'ul' || q.tag === 'ol'), lead = line({ kids: (k.kids || []).filter(q => q.tag !== 'ul' && q.tag !== 'ol') }, o);
@@ -117,12 +120,14 @@
         if (/^Worked steps/.test(plainText(hd || { kids: [] }).trim())) { const notes = []; (body.kids || []).forEach(q => { if (q.tag === 'p') { const s = line(q, o); if (s) notes.push({ type: 'note', text: s }); } }); subs.push({ title, items: notes, steps: true }); return; }
         subs.push({ title, items: blocks(body, o, []) }); return;
       }
-      if (k.tag && (/^gfx_/.test((k.a && k.a.id) || ''))) return;
+      if (k.tag && (/^gfx_/.test((k.a && k.a.id) || ''))) { const f = o.figs && o.figs[k.a.id]; if (f) top.push(...f.map(q => ({ ...q }))); return; }
       if (k.tag && (has(k, 'alert') || k.tag === 'p')) { blocks({ kids: [k] }, o, top); return; }
       if (k.tag) walk(k);
     });
     walk(T);
     return { subs, top };
   }
-  window.PSBReportTab = { parse, cards, texOf, dec };
+  /* inline(html): a piece of the app's HTML as report text (sub / sup as $…$, tab links as in-app links), e.g. a graphic's title for its caption */
+  const inline = html => line(parse(html), { X: { vals: [] }, sec: '', inReport: () => false });
+  window.PSBReportTab = { parse, cards, texOf, dec, inline };
 })();

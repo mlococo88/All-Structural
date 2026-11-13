@@ -253,6 +253,10 @@
     #out .rp-doc{max-width:11in;}
     @container (max-width:999.98px){ #out .rp-body{grid-template-columns:minmax(0,1fr);} #out .rp-toc{position:static;max-height:220px;} #out .rp-doc{padding:0.3in 0.35in 0.5in;} }
   }
+  /* the Report's figures (2026-11-13, ui/report.js figures()): the tab graphics drawn at the printed width; on a narrow screen a copy at the
+     screen width is shown and the 700 px one printed */
+  .rp-fig .rp-vk{background:#fff;padding:0;font-size:9.5pt;} .rp-fig .rp-vk .vk-fig svg{max-width:100%;height:auto;} .rp-fig .rp-vk .vk-figs{flex-wrap:nowrap;} .rp-fig .rp-vk .vk-figs>div{flex:0 1 auto;max-width:100%;}
+  .rp-fig .rp-fig-prn{display:none;} @media print{ .rp-fig .rp-fig-scr{display:none!important;} .rp-fig .rp-fig-prn{display:block!important;} }
   @media print{ body:has(#tabBar [data-otab="rpt"][aria-selected="true"]) #hdr,body:has(#tabBar [data-otab="rpt"][aria-selected="true"]) #out .rp-host>:not(.rp),body:has(#tabBar [data-otab="rpt"][aria-selected="true"]) #out>:not(#rptHost){display:none!important;} }
 </style>
 </head>

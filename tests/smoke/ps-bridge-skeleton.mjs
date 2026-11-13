@@ -27,6 +27,9 @@
 //   3j. 2026-11-13: the owner's material limits: no chip for AASHTO; CTDOT: the "Materials (owner limits)" chip FAILs f′ci 6.8 > 6.5 ksi (1.046),
 //      counted in the column's totals (= every engine check), opens the Owner rules tab at the rule's row (engine values = computeAll),
 //      and the Report's §1 counts and groups the same;
+//   3k. 2026-11-13: the Report's graphics: each result section holds its tab's graphics (the tab's own drawing), numbered Figure n.m,
+//      static, the handling stage named, labels >= 10 px on the printed page; Print report prints every figure; on the phone the figures are
+//      drawn at the screen width and print at 700 px;
 //   5. 390 x 844 (phone): stacked panels, no splitter, no check summary column, no horizontal page scroll (the Report too); 0 console errors.
 //   node tests/smoke/ps-bridge-skeleton.mjs [--file <index.html>] [--shots <dir>]
 import fs from 'fs';
@@ -200,6 +203,22 @@ await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.opt\
   check(r.secs.length === 14 && /^1\. Summary of checks/.test(r.secs[0]) && /^14\. Rating/.test(r.secs[13]), 'report sections: ' + r.secs.join(' | '));
   check(r.vals > 1000 && !r.bad.length, `report values = computeAll (${r.vals}; differ: ${r.bad.slice(0, 5).join(', ')})`);
   check(r.steps === r.nSt && r.steps > 200 && r.katex > 200 && !r.kErr && !r.unres && !r.text && r.see > 100, 'report steps, KaTeX, § links ' + JSON.stringify({ ...r, secs: undefined, bad: undefined }));
+  // 2026-11-13: the graphics of each result tab in its section (the tab's own drawing), numbered Figure n.m by the section, static (no
+  // read-out, no controls), the handling stage named; labels at least 10 px on the printed page (drawn at 700 px = the printed width)
+  const FIGQ = () => p.evaluate(() => { const secs = [...document.querySelectorAll('.rp-doc section.rp-sec')], out = { per: {}, bad: [], n: 0, small: [], caps: [] };
+    secs.forEach(sec => { const h = sec.querySelector('.rp-h1'), n = parseInt(h.textContent, 10), title = h.textContent.replace(/^\d+\.\s*/, ''); let m = 0;
+      sec.querySelectorAll('.rp-fig').forEach(f => { m++; out.n++; const cap = f.querySelector('figcaption').textContent; out.caps.push(cap); if (!cap.startsWith(`Figure ${n}.${m}: `)) out.bad.push(cap.slice(0, 40));
+        if (!f.querySelector('svg') || f.querySelector('button, select, input, .va-hov, .vk-read')) out.bad.push('static ' + cap.slice(0, 30));
+        const box = f.querySelector('.rp-fig-prn') || f;
+        box.querySelectorAll('svg').forEach(svg => { const vb = svg.viewBox.baseVal, vbW = (vb && vb.width) || svg.getBoundingClientRect().width, wa = svg.getAttribute('width'), sc = Math.min(wa && /^[\d.]+$/.test(wa) ? +wa : vbW, 700) / vbW;
+          if (vbW > 702) out.bad.push('wider than the page ' + cap.slice(0, 30));
+          svg.querySelectorAll('text').forEach(t => { if (!t.textContent.trim()) return; const e = parseFloat(getComputedStyle(t).fontSize) * sc; if (e < 9.95) out.small.push(`${cap.slice(0, 12)} "${t.textContent.slice(0, 20)}" ${e.toFixed(1)}`); }); }); });
+      out.per[title] = m; });
+    return out; });
+  { const f = await FIGQ(), want = ['Section properties', 'Loads & LLDF', 'Analysis', 'Prestress losses', 'Stresses', 'Flexure', 'Shear', 'End zone & hold-down', 'Camber & deflection', 'Handling', 'Deck', 'Rating'];
+    check(f.n >= 20 && !f.bad.length && !f.small.length && want.every(t => f.per[t.toUpperCase()] >= 1 || f.per[t] >= 1) && !f.per['Summary of checks'.toUpperCase()] && !f.per['Summary of checks'], 'report figures: every result section, numbered, static, labels >= 10 px printed ' + JSON.stringify({ n: f.n, per: f.per, bad: f.bad.slice(0, 5), small: f.small.slice(0, 5) }));
+    check(f.caps.some(c => /Girder on its supports.*shown: Stage: (Lifting|Hauling)/.test(c)) && f.caps.some(c => /Strand pattern/.test(c)) && f.caps.some(c => /Deck section/.test(c)) && f.caps.some(c => /Camber/.test(c)) && f.caps.some(c => /Rated sections/.test(c)), 'report figures: handling elevation with its stage, strand pattern, deck section, camber, rating locations ' + f.caps.filter(c => /supports/.test(c)).join(' | '));
+    if (args.shots) { await p.evaluate(() => { const f = [...document.querySelectorAll('.rp-doc .rp-fig')].find(x => /Strand pattern/.test(x.textContent)); f.scrollIntoView({ block: 'start' }); }); await p.waitForTimeout(200); await p.screenshot({ path: path.join(args.shots, 'ps-bridge-1400-report-figure.png') }); } }
   const j = await p.evaluate(() => { const a = [...document.querySelectorAll('.rp-doc section[data-rpsec="rp-s1"] .rp-see')][0], id = a.getAttribute('href').slice(1); a.click(); const el = document.getElementById(id), b = el.getBoundingClientRect(); return { id, step: el.classList.contains('rp-step'), inView: b.top >= -2 && b.top < innerHeight }; });
   check(j.step && j.inView, 'summary "see §" link jumps to its step ' + JSON.stringify(j));
   if (args.shots) { await p.evaluate(() => document.querySelector('.rp-doc section[data-rpsec="rp-s1"]').scrollIntoView()); await p.waitForTimeout(200); await p.screenshot({ path: path.join(args.shots, 'ps-bridge-1400-report.png') }); }
@@ -215,6 +234,10 @@ await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.opt\
   const pr = await p.evaluate(() => { const vis = el => !!el && getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().height > 0, box = document.getElementById('rp-print');
     return { box: vis(box), app: vis(document.getElementById('app')), steps: box.querySelectorAll('.rp-step').length, hidden: [...box.querySelectorAll('.rp-step')].filter(x => !vis(x)).length, kErr: box.querySelectorAll('.katex-error').length }; });
   check(pr.box && !pr.app && pr.steps === r.steps && !pr.hidden && !pr.kErr, 'Print report: the report alone ' + JSON.stringify(pr));
+  { const pf = await p.evaluate(() => { const box = document.getElementById('rp-print'), figs = [...box.querySelectorAll('.rp-fig')];
+      return { n: figs.length, shown: figs.filter(f => [...f.querySelectorAll('svg')].some(s => s.getBoundingClientRect().width > 100)).length, doc: document.querySelectorAll('#rptHost .rp-doc .rp-fig').length }; });
+    check(pf.n === pf.doc && pf.shown === pf.n && pf.n >= 20, 'Print report: every figure printed ' + JSON.stringify(pf));
+    if (args.shots) { await p.evaluate(() => { const f = [...document.querySelectorAll('#rp-print .rp-fig')].find(x => /Girder on its supports/.test(x.textContent)); if (f) f.scrollIntoView({ block: 'start' }); }); await p.waitForTimeout(200); await p.screenshot({ path: path.join(args.shots, 'ps-bridge-1400-report-print.png') }); } }
   await p.emulateMedia({ media: 'screen' }); await p.evaluate(() => window.dispatchEvent(new Event('afterprint')));
   check(!(await p.evaluate(() => document.body.classList.contains('rp-printing'))), 'after print');
   await p.emulateMedia({ media: 'print' });
@@ -270,6 +293,14 @@ await p.click('#inTabs [data-itab="loads"]'); await p.selectOption('#i_base\\.ha
 for (const t of ['sec', 'lds', 'an', 'loss', 'str', 'flex', 'shear', 'end', 'camb', 'hand', 'deck', 'rt']) { await p.click(`#tabBar [data-otab="${t}"]`); await p.waitForTimeout(300); check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth) <= 0 && (await p.$$('#out svg')).length >= 1, 'phone: no sideways scroll, graphic on ' + t); }
 await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 60000 }); await p.waitForTimeout(300);
 check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth) <= 0 && (await p.$$('.rp-doc .rp-h1')).length === 14, 'phone: the Report without sideways scroll');
+{ const ph = await p.evaluate(() => { const figs = [...document.querySelectorAll('.rp-doc .rp-fig')], vis = el => !!el && getComputedStyle(el).display !== 'none';
+    return { n: figs.length, scr: figs.filter(f => vis(f.querySelector('.rp-fig-scr')) && !vis(f.querySelector('.rp-fig-prn'))).length, wide: figs.filter(f => f.getBoundingClientRect().right > innerWidth + 1).length,
+      vb: [...document.querySelectorAll('.rp-doc .rp-fig-scr svg')].map(s => s.viewBox.baseVal && s.viewBox.baseVal.width).filter(w => w > 0) }; });
+  check(ph.n >= 12 && ph.scr === ph.n && !ph.wide && ph.vb.length && Math.max(...ph.vb) < 700, 'phone: the Report figures drawn at the screen width (the 700 px ones for print) ' + JSON.stringify({ ...ph, vb: ph.vb.slice(0, 4) }));
+  if (args.shots) { await p.evaluate(() => { const f = [...document.querySelectorAll('.rp-doc .rp-fig')].find(x => /Strand pattern|Composite section/.test(x.textContent)); if (f) f.scrollIntoView({ block: 'start' }); }); await p.waitForTimeout(200); await p.screenshot({ path: path.join(args.shots, 'ps-bridge-390-report-figure.png') }); }
+  await p.emulateMedia({ media: 'print' });
+  check(await p.evaluate(() => [...document.querySelectorAll('.rp-doc .rp-fig')].every(f => getComputedStyle(f.querySelector('.rp-fig-prn')).display !== 'none' && getComputedStyle(f.querySelector('.rp-fig-scr')).display === 'none')), 'phone: print uses the 700 px figures');
+  await p.emulateMedia({ media: 'screen' }); }
 if (args.shots) await p.screenshot({ path: path.join(args.shots, 'ps-bridge-390-report.png') });
 await p.click('#inTabs [data-itab="gird"]'); await p.waitForTimeout(300); check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth) <= 0 && (await p.$$('#gfx_strands_in svg')).length >= 3, 'phone: strand pattern without sideways scroll');
 await p.click('#inTabs [data-itab="proj"]');
