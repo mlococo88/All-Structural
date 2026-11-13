@@ -238,7 +238,7 @@
     const mg = gov && /^cf\.(top|bot|diag)\b/.exec(gov.it.step || ''), grp = mg ? mg[1] : null, I = B.I.p;
     const rows = R.frames.map((e, i) => { const mx = (R.combos || []).reduce((m, c) => ({ T: Math.max(m.T, c.f[i].T), C: Math.max(m.C, c.f[i].Cc) }), { T: 0, C: 0 });
       return { i, e, on: grp === e.k, sec: (R.mem && R.mem[e.k] && R.mem[e.k].name) || '', L: f1(e.L), T: f1(mx.T), C: f1(mx.C) }; });
-    return { R, N, I, S: I.S, dg: I.dg, hw: I.h, gov, grp, rows, line: B.line || 0, dia: !!opt.dia };
+    return { R, N, I, S: I.S, dg: I.dg, hw: I.h, gov, grp, rows, line: I.xfBay && I.xfBay.vary ? I.xfBay.j : B.line || 0, dia: !!opt.dia };   // SBXF: the governing bay's girders when its depth is not the reported girder's
   }
   function cfSvg(m, W) {
     const K = VK(), Sc = K.scene(), nar = W < 560, S = m.S, dg = m.dg, hw = m.hw, y0 = (hw - dg) / 2, fl = Math.min(8, S * 0.07), nx = n => m.N[n][0], ny = n => m.N[n][1];
