@@ -2117,6 +2117,45 @@ function tensionStrength(p,An,U){
   return{Ag,An:An2,U:U2,Ae,Fy,Fu,Pny,Pnr,phiY,phiR,phiPn:Math.min(phiY,phiR),rupture:phiR<phiY,
     AnDef,UDef,AnCapped:!AnDef&&An>Ag,UCapped:!UDef&&U>1};
 }
+/* SBTU (2026-11-13, engineer HSS-7): optional shear-lag helper for an HSS with a single concentric gusset plate through slots
+   (S.design.ten.hlp, new optional field; absent or off = the typed A_n / U as before).
+   AISC 360-16 Table D3.1: case 5 (round HSS): x = D/pi; l >= 1.3D -> U = 1.0; D <= l < 1.3D -> U = 1 - x/l; l < D not covered.
+   Case 6 (rectangular HSS, single concentric gusset): l >= H -> U = 1 - x/l, x = (B^2 + 2BH)/(4(B + H)), H = the overall side
+   in the plane of the gusset, B = the side 90 deg to it; l < H not covered. Sec. B4.3b: A_n = A_g - 2 t w_slot (two walls slotted).
+   t = the design wall (0.93 t_nom for A500, t_nom for A1085). Slot width blank -> gusset thickness + 1/8 in.
+   Decision (pending engineer review, recorded in the fixlog): a typed A_n or U is still used when it is smaller than the helper's
+   (the smaller governs); incomplete or out-of-range helper inputs make the tension check FAIL with the reason (no fallback to
+   A_n = A_g, U = 1.0). */
+function sbTenHelper(p,ten){
+  const h=ten&&ten.hlp;
+  if(!h||!h.on||!(p._fam==='HSSR'||p._fam==='HSSP'))return null;
+  const t=p.tdes,tp=h.tp>0?+h.tp:null,wDef=!(h.w>0),w=wDef?(tp?tp+0.125:null):+h.w,l=h.l>0?+h.l:null;
+  const o={kind:p._kind,t,tp,w,wDef,l,errs:[],Ag:p.A};
+  if(!tp&&wDef)o.errs.push('enter the gusset plate thickness (or the slot width)');
+  if(!l)o.errs.push('enter the connection length l');
+  if(p._kind==='R'){
+    o.inPlane=h.plane==='B'?'B':'H';
+    o.H=o.inPlane==='H'?p.Ht:p.B;o.B=o.inPlane==='H'?p.B:p.Ht;
+    o.xbar=(o.B*o.B+2*o.B*o.H)/(4*(o.B+o.H));o.case='6';
+    if(l){if(l<o.H)o.errs.push('l = '+fmt(l,2)+' in < H = '+fmt(o.H,2)+' in: outside Table D3.1 case 6 (l ≥ H); enter U and Aₙ directly');
+      else o.U=1-o.xbar/l;}
+  }else{
+    o.D=hssLabelOD(p.lbl,p.OD,p._src&&p._src.OD);o.xbar=o.D/Math.PI;o.case='5';
+    if(l){if(l<o.D)o.errs.push('l = '+fmt(l,2)+' in < D = '+fmt(o.D,3)+' in: outside Table D3.1 case 5 (l ≥ D); enter U and Aₙ directly');
+      else if(l>=1.3*o.D){o.U=1.0;o.Ufull=true;}
+      else o.U=1-o.xbar/l;}
+  }
+  if(w){o.An=p.A-2*t*w;if(!(o.An>0))o.errs.push('the slot removes the whole area (Aₙ ≤ 0)');}
+  return o;
+}
+function sbTenFor(p,ten){
+  const An0=ten&&ten.An,U0=ten&&ten.U,h=sbTenHelper(p,ten);
+  if(!h)return tensionStrength(p,An0,U0);
+  if(h.errs.length){const t=tensionStrength(p,An0,U0);t.hlp=h;t.blocked='Shear-lag helper (Table D3.1 case '+h.case+'): '+h.errs.join('; ')+'.';
+    t.phiR=0;t.phiPn=0;t.rupture=true;return t;}
+  const An=An0>0?Math.min(An0,h.An):h.An,U=U0>0?Math.min(U0,h.U):h.U;
+  const t=tensionStrength(p,An,U);t.hlp=h;t.AnTyped=An0>0;t.UTyped=U0>0;return t;
+}
 /* ---------- H3 torsion (HSS only) ---------- */
 function torsionHSS(p,Lin){
   const Fy=p.mat.Fy,E=EKSI;
@@ -2422,8 +2461,8 @@ function designAll(A){
       if(D.comp&&!D.comp.blocked){C.phiPn=D.comp.phiPn;C.dcrP=man.Pu/C.phiPn;}
       else C.compBlocked=(D.comp&&D.comp.blocked)||'no compression capacity';
     }else if(man.Pu<0){   /* axial tension: \u00A7D2, and \u00A7H1.2 through the same interaction equations */
-      if(!D.ten)D.ten=tensionStrength(p,dsn.ten&&dsn.ten.An,dsn.ten&&dsn.ten.U);
-      C.tens=D.ten;C.phiPt=D.ten.phiPn;C.dcrPt=Math.abs(man.Pu)/C.phiPt;
+      if(!D.ten)D.ten=sbTenFor(p,dsn.ten);   /* SBTU: the shear-lag helper when it is on */
+      C.tens=D.ten;C.phiPt=D.ten.phiPn;C.dcrPt=D.ten.blocked?Infinity:Math.abs(man.Pu)/C.phiPt;
     }
     /* torsion */
     if(D.torOpen&&!D.torOpen.blocked)
@@ -2533,7 +2572,7 @@ function buildDesignChecks(D,A){
   const ptGov=gv(c=>c.dcrPt!=null?{d:c.dcrPt,c}:null);
   if(ptGov)D.checks.push({label:'Tension',ref:ptGov.c.tens.rupture?'D2(b)':'D2(a)',dcr:ptGov.d,combo:ptGov.c.name,tab:'tabComp',
     dem:Math.abs(ptGov.c.man.Pu),cap:ptGov.c.phiPt,unit:'kip',capSym:'\u03C6\u209CP\u2099',
-    detail:ptGov.c.tens.rupture?'rupture, A\u2091 = UA\u2099':'yielding, A\u1D4D'});
+    detail:ptGov.c.tens.blocked?'blocked \u2014 '+ptGov.c.tens.blocked:ptGov.c.tens.rupture?'rupture, A\u2091 = UA\u2099'+(ptGov.c.tens.hlp?' (shear-lag helper, Table D3.1 case '+ptGov.c.tens.hlp.case+')':''):'yielding, A\u1D4D'});
   const hGov=gv(c=>c.h33?{d:c.h33.dcr,c}:null);
   const tGov=gv(c=>c.dcrT!=null?{d:c.dcrT,c}:null);
   if(hGov){const hg=h33Gov(hGov.c.h33);
@@ -2551,7 +2590,8 @@ function buildDesignChecks(D,A){
   if(iGov)D.checks.push({label:'Interaction',ref:iGov.c.inter.eq,dcr:iGov.d,combo:iGov.c.name,tab:'tabInter',
     dem:iGov.c.inter.value,cap:1.0,unit:'\u2014',capSym:'limit'});
   const tenC=D.perCombo.filter(c=>c.dcrPt!=null);
-  if(tenC.length){const t=tenC[0].tens,dflt=[];
+  if(tenC.length&&tenC[0].tens.blocked)D.warns.push('Axial TENSION (P\u1D64 < 0) is entered for: '+tenC.map(c=>c.name).join(', ')+'. '+tenC[0].tens.blocked+' The tension check is reported as failing until the input is complete.');   /* SBTU */
+  else if(tenC.length){const t=tenC[0].tens,dflt=[];
     if(t.AnDef)dflt.push('A\u2099 = A\u1D4D');if(t.UDef)dflt.push('U = 1.0');
     D.warns.push('Axial TENSION (P\u1D64 < 0) is entered for: '+tenC.map(c=>c.name).join(', ')+'. It is checked for tensile yielding and rupture (\u00A7D2) with A\u2099 = '+fmt(t.An,2)+' in\u00B2 and U = '+fmt(t.U,2)+
       (dflt.length?' \u2014 '+dflt.join(' and ')+' ASSUMED because the input is blank (no holes, every element connected); enter the net area and the shear-lag factor of the end connection (\u00A7D3, Table D3.1) under Compression Effective Lengths':'')+
@@ -5273,8 +5313,8 @@ function memberDesignAll(A){
       if(D.comp&&!D.comp.blocked){C.phiPn=D.comp.phiPn;C.dcrP=r.Pu/C.phiPn;}
       else C.compBlocked=(D.comp&&D.comp.blocked)||'compression effective lengths not set (see Design Parameters)';
     }else if((r.Pu||0)<0){   /* axial tension: \u00A7D2 and \u00A7H1.2 */
-      if(!D.ten)D.ten=tensionStrength(p,dsn.ten&&dsn.ten.An,dsn.ten&&dsn.ten.U);
-      C.tens=D.ten;C.phiPt=D.ten.phiPn;C.dcrPt=Math.abs(r.Pu)/C.phiPt;
+      if(!D.ten)D.ten=sbTenFor(p,dsn.ten);   /* SBTU: the shear-lag helper when it is on */
+      C.tens=D.ten;C.phiPt=D.ten.phiPn;C.dcrPt=D.ten.blocked?Infinity:Math.abs(r.Pu)/C.phiPt;
     }
     if(D.torOpen&&!D.torOpen.blocked)
       C.h33=h33Check(p,D.torOpen,{Pu:r.Pu||0,Mux:r.Mux||0,Muy:r.Muy||0,Vux:r.Vux||0,Vuy:r.Vuy||0});
@@ -5758,6 +5798,31 @@ function buildCompTabCore(pg){
     dcrLine(body,'Compression DCR','Ch. E',' P',C.man.Pu,C.phiPn,C.dcrP);
   },C=>String(C.man.Pu));
 }
+/* SBTU: the shear-lag helper worked (Table D3.1 case 5 / 6, Sec. B4.3b) */
+function sbTenHelperWork(body,t){
+  const h=t.hlp,f=(v,n)=>fmt(v,n==null?3:n),lines=[],vars=[];
+  if(h.kind==='R'){
+    lines.push('\\bar{x}=\\tfrac{B^2+2BH}{4(B+H)}=\\tfrac{'+f(h.B)+'^2+2('+f(h.B)+')('+f(h.H)+')}{4('+f(h.B)+'+'+f(h.H)+')}=\\mathbf{'+f(h.xbar)+'\\ \\text{in}}');
+    if(h.U!=null)lines.push('l='+f(h.l,2)+'\\ge H='+f(h.H)+':\\quad U=1-\\tfrac{\\bar{x}}{l}=1-\\tfrac{'+f(h.xbar)+'}{'+f(h.l,2)+'}=\\mathbf{'+f(h.U)+'}');
+    vars.push(['H',f(h.H)+' in','overall side in the plane of the gusset'],['B',f(h.B)+' in','overall side 90\u00B0 to the gusset']);
+  }else{
+    lines.push('\\bar{x}=\\tfrac{D}{\\pi}=\\tfrac{'+f(h.D)+'}{\\pi}=\\mathbf{'+f(h.xbar)+'\\ \\text{in}}');
+    if(h.U!=null)lines.push(h.Ufull?'l='+f(h.l,2)+'\\ge 1.3D='+f(1.3*h.D)+':\\quad U=\\mathbf{1.0}':
+      'D='+f(h.D)+'\\le l='+f(h.l,2)+'<1.3D='+f(1.3*h.D)+':\\quad U=1-\\tfrac{\\bar{x}}{l}=1-\\tfrac{'+f(h.xbar)+'}{'+f(h.l,2)+'}=\\mathbf{'+f(h.U)+'}');
+    vars.push(['D',f(h.D)+' in','outside diameter (label)']);
+  }
+  if(h.An!=null)lines.push('A_n=A_g-2t\\,w='+f(h.Ag,2)+'-2('+f(h.t,4)+')('+f(h.w,4)+')=\\mathbf{'+f(h.An,3)+'\\ \\text{in}^2}');
+  vars.push(['l',h.l!=null?f(h.l,2)+' in':'\u2014','connection length'],['t',f(h.t,4)+' in','design wall'],
+    ['w',h.w!=null?f(h.w,4)+' in':'\u2014',h.wDef?'slot width: blank \u2192 t\u209A + 1/8 in. = '+(h.tp?f(h.tp,4):'\u2014')+' + 0.125':'slot width, entered']);
+  body.appendChild(eqBlock({title:'Shear-lag factor and net area (helper: single concentric gusset through slots)',ref:'Table D3.1 case '+h.case+', \u00A7B4.3b',lines,vars}));
+  const notes=[];
+  if(!t.blocked){
+    if(t.UTyped)notes.push(['U:',t.U<h.U?'the typed U = '+f(t.U)+' is smaller than the helper\u2019s '+f(h.U)+' and is used.':'the helper\u2019s U = '+f(h.U)+' is used (the typed value is larger).']);
+    if(t.AnTyped)notes.push(['A\u2099:',t.An<h.An?'the typed A\u2099 = '+f(t.An,3)+' in\u00B2 is smaller than the helper\u2019s '+f(h.An,3)+' and is used.':'the helper\u2019s A\u2099 = '+f(h.An,3)+' in\u00B2 is used (the typed value is larger).']);
+  }
+  notes.push(['Not checked:','the gusset plate, its welds, block shear (\u00A7J4.3) and the HSS wall at the end of the slot.']);
+  body.appendChild(el('div','hint sbNL',sbNL('Shear-lag helper on (Compression Effective Lengths input).',notes)));
+}
 /* Compression tab = Chapter E, then Chapter D when an axial tension is entered */
 function buildCompTab(pg){buildCompTabCore(pg);tensionSections(pg);}
 function tensionSections(pg){
@@ -5765,13 +5830,15 @@ function tensionSections(pg){
   const tc=D.perCombo.filter(C=>C.dcrPt!=null);if(!tc.length)return;
   const t=tc[0].tens;
   mkSection('tnCap','Axial Tension (Chapter D)',body=>{
+    if(t.hlp)sbTenHelperWork(body,t);   /* SBTU */
+    if(t.blocked){body.appendChild(el('div','errBox','<b>Tension check blocked:</b> '+t.blocked+' The check is reported as failing until the input is complete.'));return;}
     if(t.AnDef||t.UDef)body.appendChild(el('div','warnBox','<b>'+[t.AnDef?'A\u2099 = A\u1D4D':'',t.UDef?'U = 1.0':''].filter(x=>x).join(' and ')+' assumed</b> (input blank): no holes and every element connected. Enter the net area and shear-lag factor of the end connection under <b>Compression Effective Lengths</b> (\u00A7D3, Table D3.1).'));
     body.appendChild(eqBlock({title:'Tensile yielding in the gross section',ref:'Eq. D2-1',
       lines:['P_n=F_yA_g='+fmt(t.Fy,0)+'\\times '+fmt(t.Ag,2)+'=\\mathbf{'+fmt(t.Pny,1)+'\\ \\text{kip}},\\quad \\phi_tP_n=0.90\\times '+fmt(t.Pny,1)+'=\\mathbf{'+fmt(t.phiY,1)+'\\ \\text{kip}}']}));
     body.appendChild(eqBlock({title:'Tensile rupture in the net section',ref:'Eqs. D2-2, D3-1',
       lines:['A_e=UA_n='+fmt(t.U,2)+'\\times '+fmt(t.An,2)+'=\\mathbf{'+fmt(t.Ae,2)+'\\ \\text{in}^2}',
         'P_n=F_uA_e='+fmt(t.Fu,0)+'\\times '+fmt(t.Ae,2)+'=\\mathbf{'+fmt(t.Pnr,1)+'\\ \\text{kip}},\\quad \\phi_tP_n=0.75\\times '+fmt(t.Pnr,1)+'=\\mathbf{'+fmt(t.phiR,1)+'\\ \\text{kip}}'],
-      vars:[['A_n',fmt(t.An,2)+' in\u00B2',t.AnDef?'blank \u2192 A\u1D4D':'entered'],['U',fmt(t.U,2),t.UDef?'blank \u2192 1.0':'entered (Table D3.1)']]}));
+      vars:[['A_n',fmt(t.An,2)+' in\u00B2',t.AnDef?'blank \u2192 A\u1D4D':(t.hlp&&!(t.AnTyped&&t.An<t.hlp.An))?'shear-lag helper (above), \u00A7B4.3b':'entered'],['U',fmt(t.U,2),t.UDef?'blank \u2192 1.0':(t.hlp&&!(t.UTyped&&t.U<t.hlp.U))?'shear-lag helper (above), Table D3.1 case '+t.hlp.case:'entered (Table D3.1)']]}));   /* SBTU: source of A_n / U */
     body.appendChild(el('div','note sbNL',sbNL('Design tensile strength \u03C6\u209CP\u2099 = <b>'+fmt(t.phiPn,1)+' kip</b> ('+(t.rupture?'rupture, Eq. D2-2':'yielding, Eq. D2-1')+').',[['Not checked:','block shear (\u00A7J4.3) and the end connection.'],['Combined tension and flexure:','use \u00A7H1.2 (the H1-1 equations with P\u1D9C = \u03C6\u209CP\u2099); the optional C\u1D47 increase of \u00A7H1.2 is not taken.']])));
   },pg);
   perComboSections(pg,'tn_',isMember()?'Case ':'Combination ',(body,C)=>{
@@ -6833,6 +6900,21 @@ function secCompLengths(P){
     });
     body.appendChild(tg);
     body.appendChild(el('div','hint','<b>Axial tension</b> (P\u1D64 < 0, \u00A7D2): net area A\u2099 and shear-lag factor U (Table D3.1) at the end connection. Blank \u2192 A\u2099 = A\u1D4D and U = 1.0 (no holes, every element connected).'));
+    /* SBTU (2026-11-13): optional shear-lag helper for HSS with a single concentric gusset (new optional field ten.hlp) */
+    if(S.section.family==='HSSR'||S.section.family==='HSSP'){
+      const tn=S.design.ten,hl=tn.hlp||{};
+      fRow(body,'Shear-lag helper (gusset through slotted HSS)',chkInput(()=>!!hl.on,v=>{tn.hlp=Object.assign({},tn.hlp||{},{on:v});rebuildInputs();},'tenHlpOn'),'',
+        'Table D3.1 case '+(S.section.family==='HSSR'?'6':'5')+': computes U and A\u2099 = A\u1D4D \u2212 2t\u00B7w for one concentric gusset plate through slots in the HSS');
+      if(hl.on){
+        const set=k=>v=>{tn.hlp=Object.assign({},tn.hlp||{},{[k]:v});};
+        fRow(body,'Gusset plate thickness t\u209A',numInput(()=>hl.tp,set('tp'),0.125,'tenHlpTp'),'in');
+        fRow(body,'Slot width w',numInput(()=>hl.w,set('w'),0.0625,'tenHlpW'),'in','Blank \u2192 t\u209A + 1/8 in.');
+        fRow(body,'Connection length l',numInput(()=>hl.l,set('l'),0.5,'tenHlpL'),'in','Length of the gusset weld along the HSS');
+        if(S.section.family==='HSSR')fRow(body,'Side in the gusset plane',selInput(['H','B'],()=>hl.plane||'H',v=>{tn.hlp=Object.assign({},tn.hlp||{},{plane:v});},
+          o=>o==='H'?'H (gusset parallel to the H walls)':'B (gusset parallel to the B walls)',null,'tenHlpPl'),'');
+        body.appendChild(el('div','hint','The helper replaces a blank A\u2099 / U; a value typed above is used only where it is smaller (the smaller governs). t = the design wall (0.93t\u2099\u2092\u2098 for A500, t\u2099\u2092\u2098 for A1085). Worked on the Compression tab, card \u2018Axial Tension (Chapter D)\u2019.'));
+      }
+    }
   },P,secOpts());
 }
 /* ---------- 5. web stiffeners ---------- */

@@ -308,3 +308,47 @@ test('SBNT: HSS property formulas reproduce the v16.0 database at t_des; A1085 a
   const o = sb.run("(()=>{const k=S.section;S.section={family:'HSSR',label:'HSS8X8X1/2',grade:'A1085',ovr:{A:13.0}};try{const p=resolveSection();return [p.A,p._src.A,p.Zx].join();}finally{S.section=k;}})()");
   assert.equal(o.split(',')[0], '13'); assert.equal(o.split(',')[1], 'ovr'); near(+o.split(',')[2], 39.7353, 1e-4, 'Z still at t_nom');
 });
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 8. SBTU (engineer HSS-7, 2026-11-13): optional shear-lag helper, AISC 360-16 Table D3.1 cases 5 / 6 and Sec. B4.3b
+//    (A_n = A_g - 2 t w_slot, slot w blank -> gusset t + 1/8 in.), t = design wall. Off (or absent) -> typed A_n / U as before.
+// ---------------------------------------------------------------------------------------------------------------------
+test('SBTU: Table D3.1 case 6 / case 5 helper, slot deduction, typed values, out-of-range l', () => {
+  const ten = (sec, t) => { sb.ctx.__c = { sec, t };
+    const A = sb.design(`(()=>{S=defaultState();S.mode='member';S.section=Object.assign({ovr:{}},__c.sec);S.design.ten=__c.t;S.member.L=10;S.member.Lb=10;
+      S.member.rows=[{id:'m1',name:'T',Mux:0,Vux:0,Pu:-100,Muy:0,Vuy:0,Tu:0}];return computeMember();})()`);
+    return { C: A.design.perCombo[0], chk: A.design.checks.find(c => c.label === 'Tension') }; };
+  const R = { family: 'HSSR', label: 'HSS8X6X1/2', grade: 'A500B_R' };
+  // case 6 (the spreadsheet's tension example): HSS8X6X1/2 Gr. B, H = 8 in the gusset plane, B = 6, l = 10 in, gusset 1/2 in.
+  //   x = (6^2 + 2(6)(8))/(4(6 + 8)) = 132/56 = 2.357 in; U = 1 - 2.357/10 = 0.764 (l = 10 >= H = 8)
+  //   w = 0.5 + 0.125 = 0.625; A_n = 11.6 - 2(0.465)(0.625) = 11.019 in^2; phi Pn = 0.75(58)(0.764)(11.019) = 366.3 kip
+  //   (yielding 0.9(46)(11.6) = 480.2 kip); the spreadsheet (A_n = A_g) gave 385.7 kip
+  let r = ten(R, { An: null, U: null, hlp: { on: true, tp: 0.5, l: 10 } });
+  near(r.C.tens.U, 1 - (132 / 56) / 10, 1e-12, 'U case 6'); near(r.C.tens.An, 11.6 - 2 * 0.465 * 0.625, 1e-12, 'An');
+  near(r.C.phiPt, 0.75 * 58 * (1 - 132 / 560) * (11.6 - 2 * 0.465 * 0.625), 1e-9, 'phiPn'); near(r.C.phiPt, 366.3, 0.05, 'phiPn 366.3');
+  assert.equal(r.C.tens.hlp.case, '6'); assert.ok(/case 6/.test(r.chk.detail));
+  // gusset parallel to the B walls: H = 6 in the plane, B = 8: x = (64 + 96)/(4 x 14) = 2.857; U = 0.714
+  r = ten(R, { hlp: { on: true, tp: 0.5, l: 10, plane: 'B' } }); near(r.C.tens.U, 1 - (160 / 56) / 10, 1e-12, 'U plane B');
+  // case 5: HSS10.000X0.500 Gr. C round, D = 10, l = 12 in (D <= l < 1.3D), gusset 3/4 in.: x = 10/pi = 3.183; U = 0.7347;
+  //   A_n = 13.9 - 2(0.465)(0.875) = 13.086; phi Pn = 0.75(62)(0.7347)(13.086) = 447.1 kip
+  const P = { family: 'HSSP', label: 'HSS10.000X0.500', grade: 'A500C_P' };
+  r = ten(P, { hlp: { on: true, tp: 0.75, l: 12 } });
+  near(r.C.tens.U, 1 - 10 / Math.PI / 12, 1e-12, 'U case 5'); near(r.C.tens.An, 13.9 - 2 * 0.465 * 0.875, 1e-12, 'An round');
+  near(r.C.phiPt, 447.1, 0.05, 'phiPn round'); assert.equal(r.C.tens.hlp.case, '5');
+  r = ten(P, { hlp: { on: true, tp: 0.75, l: 13 } }); near(r.C.tens.U, 1, 0, 'l >= 1.3D: U = 1.0');
+  // slot width entered; A1085 uses t_nom
+  r = ten({ family: 'HSSR', label: 'HSS8X6X1/2', grade: 'A1085' }, { hlp: { on: true, tp: 0.5, w: 0.75, l: 10 } });
+  near(r.C.tens.An, r.C.tens.Ag - 2 * 0.5 * 0.75, 1e-12, 'A1085 t = 0.5, w = 0.75');
+  // typed values: the smaller governs
+  r = ten(R, { An: 10, U: 0.9, hlp: { on: true, tp: 0.5, l: 10 } }); near(r.C.tens.An, 10, 0, 'typed An smaller'); near(r.C.tens.U, 1 - 132 / 560, 1e-12, 'helper U smaller');
+  // out of range: l < H -> FAIL with the reason (no fallback to U = 1)
+  r = ten(R, { hlp: { on: true, tp: 0.5, l: 6 } });
+  assert.ok(r.C.tens.blocked && /case 6/.test(r.C.tens.blocked)); assert.equal(r.C.dcrPt, Infinity); assert.ok(r.chk.dcr > 1);
+  r = ten(P, { hlp: { on: true, tp: 0.75, l: 9 } }); assert.ok(/case 5/.test(r.C.tens.blocked));
+  r = ten(R, { hlp: { on: true, l: 10 } }); assert.ok(/thickness/.test(r.C.tens.blocked));
+  // off / absent: as before (A_n = A_g, U = 1: yielding 0.9(46)(11.6) = 480.24)
+  for (const t of [{ An: null, U: null }, { An: null, U: null, hlp: { on: false, tp: 0.5, l: 10 } }]) {
+    r = ten(R, t); near(r.C.phiPt, 0.9 * 46 * 11.6, 1e-9, 'off'); assert.equal(r.C.tens.hlp, undefined); }
+  // W-shape: the helper is ignored
+  r = ten({ family: 'W', label: 'W18X50', grade: 'A992' }, { hlp: { on: true, tp: 0.5, l: 10 } }); assert.equal(r.C.tens.hlp, undefined);
+});
