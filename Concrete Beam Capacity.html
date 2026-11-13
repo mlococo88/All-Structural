@@ -1837,8 +1837,12 @@ function computeAll(){
     /* CBSZ (2026-11-13, engineer decision CB-2): ACI 318-19 22.5.1.2 section size limit, V_u ≤ φ(V_c + 8√f'c·b_w·d), ACI mode, every
        combination; the same V_c and φ as the shear check, 8√f'c·b_w·d = sh.VsMax (the V_s cap, unchanged). φV_n = φ(V_c + min(V_s, V_s,max))
        never exceeds the limit, so this D/C never exceeds the shear D/C: it can FAIL only where shear already fails. */
+    /* CBSA (2026-11-13, engineer decision CB-10): AASHTO LRFD 10th Ed. 5.7.3.3, Eq. 5.7.3.3-2, section size limit
+       V_u <= φ(0.25 f'c b_v d_v + V_p), V_p = 0 (nonprestressed); sh.Vlim (unchanged, f'c as the shear check uses it). φV_n =
+       φ min(V_c + V_s, V_n,max) never exceeds it, so this D/C never exceeds the shear D/C. */
     const szA=(S.code==='ACI')?(()=>{ const lim=sh.phi*(sh.Vc+sh.VsMax);
-      return {lim,dcr:lim>0?Math.abs(c.Vu)/lim:(Math.abs(c.Vu)>0?Infinity:0)}; })():null;
+      return {lim,dcr:lim>0?Math.abs(c.Vu)/lim:(Math.abs(c.Vu)>0?Infinity:0)}; })()
+      :(S.code==='AASHTO'&amp;&amp;sh.Vlim>0)?(()=>{ const lim=sh.phi*sh.Vlim; return {lim,aashto:true,dcr:Math.abs(c.Vu)/lim}; })():null;
     const dcT=tor?(tor.negligible?0:tor.dcr):(torD?Math.max(torD.dcT,torD.dcSec,torD.dcComb):0);   /* CBH1b */
     const det=detailing(F,sh,neg,Math.abs(c.Mu),Math.abs(c.Vu),tor,torD);
     /* Shear and torsion draw on the SAME stirrup. phiVn and phiTn above are each
@@ -1976,6 +1980,7 @@ function validate(){
   if(allZero) W.push({code:&quot;Loads&quot;,msg:cbcSvcOn()?&quot;All service load cases are zero, so every factored action is zero. Capacities are reported, but no demand/capacity ratio is meaningful.&quot;:&quot;All factored actions are zero. Capacities are reported, but no demand/capacity ratio is meaningful.&quot;});
   if(cbcSvcOn()) N.push({code:&quot;ACI 5.3.1&quot;,msg:&quot;Loads: the factored combinations are built from the service load cases by ACI 318-19 Table 5.3.1, Eqs. (5.3.1a)–(5.3.1g) (Load Combinations tab)&quot;+(S.svc.l05?&quot;; the load factor on L in Eqs. (5.3.1c)–(5.3.1e) is 0.5 (5.3.3), as selected — confirm the area is not a garage, a place of public assembly, or an area with L over 100 psf.&quot;:&quot;; the load factor on L is 1.0 in every equation (5.3.3 reduction not taken).&quot;)});
   /* torsion */
+  if(S.code==='AASHTO') N.push({code:&quot;AASHTO 5.7.2.6&quot;,msg:&quot;AASHTO 5.7.2.6 has no across-width leg spacing limit; ACI Table 9.7.6.2.2 is not applied.&quot;});   /* CBLX (CB-11) */
   if(S.code==='AASHTO'){   /* CBH1 */
     N.push({code:&quot;AASHTO 5.7.2.1&quot;,msg:&quot;AASHTO torsion: the tool checks the 5.7.2.1 threshold T_u \u2264 0.25\u03c6T_cr for every combination (Shear tab). Above it the combination is designed for combined shear and torsion of a solid section (5.7.3.4.2 V_eff, 5.7.3.6.1 transverse, 5.7.3.6.2 T_n, 5.7.3.6.3 longitudinal; f\u2032c \u2264 10 ksi). T_u is used as entered (the compatibility-torsion reduction to φT_cr is not applied); the stirrups are taken as closed, with a longitudinal bar in each corner (5.7.3.6.3; confirm on the drawings).&quot;});
     cbNLx(N[N.length-1],&quot;nl&quot;,{lead:&quot;AASHTO torsion:&quot;,items:[[&quot;Threshold:&quot;,&quot;the tool checks the 5.7.2.1 threshold T_u ≤ 0.25φT_cr for every combination (Shear tab).&quot;],   /* CBNL: display only; msg unchanged */
@@ -2823,6 +2828,9 @@ function allChecks(){
   if(S.code==='ACI'){   /* CBSZ: ACI 318-19 22.5.1.2 section size limit */
     env(&quot;Section size limit (ACI 22.5.1.2)&quot;,&quot;ACI 22.5.1.2&quot;,r=>r.szA?{dcr:r.szA.dcr,na:Math.abs(r.Vu)<1e-9}:{na:true},&quot;tabShear&quot;);
     out[out.length-1].id=&quot;szA&quot;;
+  } else {   /* CBSA: AASHTO 5.7.3.3, Eq. 5.7.3.3-2 */
+    env(&quot;Section size limit (AASHTO 5.7.3.3)&quot;,&quot;AASHTO Eq. 5.7.3.3-2&quot;,r=>r.szA?{dcr:r.szA.dcr,na:Math.abs(r.Vu)<1e-9}:{na:true},&quot;tabShear&quot;);
+    out[out.length-1].id=&quot;szA&quot;;
   }
   if(S.code==='AASHTO'){   /* CBH1b (2026-11-07): above the 5.7.2.1 threshold the combination is designed for torsion (5.7.3.6);
        before: the threshold row FAILed it (&quot;not designed by this tool&quot;). N/A where T_u <= 0.25 phi T_cr (torsion neglected). */
@@ -2994,7 +3002,7 @@ function buildSummaryTab(pg){
     const hasT=S.tor.present&amp;&amp;S.code==='ACI';
     let head=&quot;<tr><th>Combination</th><th>M_u<br>(k-ft)</th><th>V_u<br>(kip)</th>&quot;+
       (hasT?&quot;<th>T_u<br>(k-ft)</th>&quot;:&quot;&quot;)+
-      &quot;<th>D/C<br>Flexure</th><th>D/C<br>Shear</th>&quot;+(S.code==='ACI'?&quot;<th>D/C<br>Size limit</th>&quot;:&quot;&quot;)+(hasT?&quot;<th>D/C<br>Torsion</th>&quot;:&quot;&quot;)+   /* CBSZ */
+      &quot;<th>D/C<br>Flexure</th><th>D/C<br>Shear</th><th>D/C<br>Size limit</th>&quot;+(hasT?&quot;<th>D/C<br>Torsion</th>&quot;:&quot;&quot;)+   /* CBSZ; CBSA: both codes */
       &quot;<th>D/C<br>Detailing</th><th>Worst</th><th>Status</th></tr>&quot;;
     t.innerHTML=head;
     CC.combos.forEach(r=>{
@@ -3006,7 +3014,7 @@ function buildSummaryTab(pg){
       if(hasT) tr.appendChild(el(&quot;td&quot;,null,fmt(r.Tu)));
       tr.appendChild(heatTD(Math.abs(r.Mu)<1e-9?null:r.dcM));
       tr.appendChild(heatTD(Math.abs(r.Vu)<1e-9?null:r.dcV_eff));
-      if(S.code==='ACI') tr.appendChild(heatTD((Math.abs(r.Vu)<1e-9||!r.szA)?null:r.szA.dcr));   /* CBSZ: 22.5.1.2 */
+      tr.appendChild(heatTD((Math.abs(r.Vu)<1e-9||!r.szA)?null:r.szA.dcr));   /* CBSZ: 22.5.1.2; CBSA: AASHTO 5.7.3.3 */
       if(hasT) tr.appendChild(heatTD((!r.tor||r.tor.negligible)?null:r.dcT));
       const dtd=heatTD(r.detWorst>0?r.detWorst:null);
       if(r.detFails.length) dtd.title=&quot;Not satisfied: &quot;+r.detFails.join(&quot;; &quot;);
@@ -3462,6 +3470,21 @@ function cbcVcMaxWork(b,sh){
       `V_c = \\min(V_c,\\;V_{c,max}) = \\min(${fmt(sh.Vc_row)},\\;${fmt(sh.VcMax)}) = ${fmt(sh.Vc)}\\text{ kip}`],
     vars:[[&quot;V_{c,max}&quot;,&quot;Upper limit on V_c (the same \u221af\u2032c as the row above)&quot;,fmt(sh.VcMax),&quot;kip&quot;]]}));
 }
+/* CBSA (2026-11-13, CB-10): AASHTO 5.7.3.3 section size limit for one combination, symbolic -> values -> result, D/C, PASS / FAIL */
+function cbcSzWorkA(b,r,sh){
+  if(!r.szA) return; const Z=r.szA, V=Math.abs(r.Vu), fcU=sh.fcUse!=null?sh.fcUse:S.mat.fc;
+  b.appendChild(el(&quot;h3&quot;,null,&quot;Section size limit (AASHTO 5.7.3.3)&quot;));
+  b.appendChild(eqBlock({title:&quot;Upper limit of the nominal shear resistance&quot;,ref:&quot;AASHTO Eq. 5.7.3.3-2&quot;,
+    lines:[&quot;V_u \\le \\phi\\left(0.25 f'_c b_v d_v + V_p\\right)&quot;,
+      `0.25 f'_c b_v d_v + V_p = 0.25(${fmt(fcU)})(${fmt(S.sec.bw)})(${fmt(sh.dv)}) + 0 = ${fmt(sh.Vlim)}\\text{ kip}`,
+      `\\phi\\left(0.25 f'_c b_v d_v + V_p\\right) = ${fmt(sh.phi,2)}(${fmt(sh.Vlim)}) = ${fmt(Z.lim)}\\text{ kip}`,
+      V>1e-9?`\\text{DCR} = \\dfrac{|V_u|}{\\phi\\left(0.25 f'_c b_v d_v + V_p\\right)} = \\dfrac{${fmt(V)}}{${fmt(Z.lim)}} = ${fmt(Z.dcr)}`:`\\text{No factored shear applied in this combination.}`],
+    vars:[[&quot;\\phi&quot;,&quot;Resistance factor for shear (as the shear check)&quot;,fmt(sh.phi,2),&quot;&quot;],[&quot;V_p&quot;,&quot;Prestressing component (nonprestressed member)&quot;,&quot;0&quot;,&quot;kip&quot;],[&quot;V_u&quot;,&quot;Factored shear&quot;,fmt(r.Vu),&quot;kip&quot;]]}));
+  if(V>1e-9){ const ok=Z.dcr<=1.0001, v=el(&quot;div&quot;,ok?&quot;okBox&quot;:&quot;errBox&quot;);
+    v.innerHTML=ok?&quot;<b>PASS</b> — the section is large enough for this shear (AASHTO 5.7.3.3).&quot;:&quot;<b>FAIL</b> — the section is too small for this shear: enlarge b_v or d_v, or raise f′c. More transverse reinforcement will not help (AASHTO 5.7.3.3).&quot;;
+    b.appendChild(v); }
+  b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;0.25f′c b_v d_v + V_p is the upper limit of V_n used in the shear check (Eq. 5.7.3.3-2); φV_n never exceeds φ times it, so this check can fail only where the shear check also fails.&quot;));
+}
 function cbcSzWork(b,r,sh){
   if(!r.szA) return; const fc=S.mat.fc, bw=S.sec.bw, Z=r.szA, V=Math.abs(r.Vu);
   b.appendChild(el(&quot;h3&quot;,null,&quot;Section size limit (ACI 22.5.1.2)&quot;));
@@ -3537,6 +3560,7 @@ function workShear(b,r){
       lines:[`V_{n,max} = 0.25 f'_c b_v d_v = 0.25(${fmt(fc)}\\text{ ksi})(${fmt(bw)}\\text{ in})(${fmt(sh.dv)}\\text{ in}) = ${fmt(sh.Vlim)}\\text{ kip}`],
       vars:[[&quot;V_{n,max}&quot;,&quot;Crushing limit on the web&quot;,fmt(sh.Vlim),&quot;kip&quot;]]
     }));
+    cbcSzWorkA(b,r,sh);   /* CBSA: AASHTO 5.7.3.3 section size limit */
   } else {
     b.appendChild(el(&quot;h3&quot;,null,&quot;Step 2 — Concrete contribution&quot;));
     if(sh.stirAdequate){
@@ -5488,7 +5512,7 @@ function cbcResultRows(tabId){
   const nm=r=>&quot;Combination &quot;+(r.ci+1)+&quot; (&quot;+r.name+&quot;)&quot;;
   if(tabId===&quot;tabFlex&quot;) CC.combos.forEach(r=>rows.push([&quot;Flexure — &quot;+nm(r),refOf(&quot;tabFlex&quot;),Math.abs(r.Mu)<1e-9?null:r.dcM]));
   else if(tabId===&quot;tabShear&quot;){ CC.combos.forEach(r=>rows.push([&quot;Shear — &quot;+nm(r),refOf(&quot;tabShear&quot;),Math.abs(r.Vu)<1e-9?null:r.dcV_eff]));
-    CC.combos.forEach(r=>{ if(r.szA) rows.push([&quot;Section size limit — &quot;+nm(r),&quot;ACI 22.5.1.2&quot;,Math.abs(r.Vu)<1e-9?null:r.szA.dcr]); }); }   /* CBSZ */
+    CC.combos.forEach(r=>{ if(r.szA) rows.push([&quot;Section size limit — &quot;+nm(r),r.szA.aashto?&quot;AASHTO Eq. 5.7.3.3-2&quot;:&quot;ACI 22.5.1.2&quot;,Math.abs(r.Vu)<1e-9?null:r.szA.dcr]); }); }   /* CBSZ; CBSA */
   else if(tabId===&quot;tabTor&quot;){
     const T=chk.filter(x=>x.tab===&quot;tabTor&quot;);
     const pk=[r=>r.tor.dcr, r=>r.tor.lhs/r.tor.rhs, r=>r.tor.comb_prov>0?r.tor.comb_req/r.tor.comb_prov:Infinity];   /* as allChecks */
@@ -5742,6 +5766,12 @@ function cbcRptShear(r){
       cS({id:'Vs',label:'Shear resisted by the transverse reinforcement',sym:'V_{s}',eq:'\\dfrac{A_v f_y d_v \\cot\\theta}{s}',sub:'\\dfrac{('+fmt(sh.Av)+')('+fmt(fyt)+')('+fmt(sh.dv)+')\\cot '+fmt(sh.theta,1)+'^\\circ}{'+fmt(sh.s)+'}',value:sh.Vs,unit:'kip',ref:'AASHTO LRFD 10th Ed. Eq. 5.7.3.3-4'}));
     cs.push(cS({id:'Vlim',label:'Upper limit on nominal shear',sym:'V_{n,max}',eq:&quot;0.25 f'_c b_v d_v&quot;,sub:'0.25('+fmt(fc)+')('+fmt(bw)+')('+fmt(sh.dv)+')',value:sh.Vlim,unit:'kip',ref:'AASHTO LRFD 10th Ed. Eq. 5.7.3.3-2'}));
     T.push({title:'Concrete and steel contributions',ref:'AASHTO LRFD 10th Ed. 5.7.3.3',steps:cs});
+    if(r.szA){ const Z=r.szA, V=Math.abs(r.Vu);   /* CBSA: AASHTO 5.7.3.3 section size limit */
+      T.push({title:'Section size limit',ref:'AASHTO LRFD 10th Ed. Eq. 5.7.3.3-2',steps:[
+        cS({id:'szLim',label:'Limit on V_u (V_p = 0, nonprestressed)',sym:&quot;\\phi(0.25 f'_c b_v d_v + V_p)&quot;,sub:fmt(sh.phi,2)+'('+fmt(sh.Vlim)+' + 0)',value:Z.lim,unit:'kip'}),
+        ...(V>1e-9?[cS({id:'szDC',label:'Section size: demand / limit',sym:'\\text{DCR}',eq:&quot;\\dfrac{|V_u|}{\\phi(0.25 f'_c b_v d_v + V_p)}&quot;,sub:'\\dfrac{'+fmt(V)+'}{'+fmt(Z.lim)+'}',value:Z.dcr,d:3,ok:Z.dcr<=1.0001,
+          note:Z.dcr<=1.0001?'':'The section is too small for this shear: enlarge b_v or d_v, or raise f′c; transverse reinforcement will not help.'})]:[])]});
+    }
   } else {
     const cs=[];
     if(sh.stirAdequate) cs.push(cS({id:'avs',label:'A_v/s ≥ (A_v/s)_min: Table 22.5.5.1 row (a) applies',sym:'A_{v}/s',eq:'\\ge (A_v/s)_{min}',sub:fmt(sh.avProv,4)+' \\ge '+fmt(sh.avMinACI,4),value:sh.avProv,unit:'in^{2}/in',d:4}),
