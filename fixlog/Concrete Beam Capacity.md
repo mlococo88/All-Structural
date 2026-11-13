@@ -7028,3 +7028,16 @@ The file uses CRLF line endings; keep them. The code is in the Beam Capacity src
     - Identical: `computeAll()`, `VALIDATION`, `allChecks`, the hand-off message, the autosave, the Report and every tab.
     - Exception: the same-sign service project. Its rows (names, M_u, V_u) are identical; only the new `omitK` field and the rules note differ.
   - **Tests:** `tests/engine/cbc-loads.test.mjs` (8 tests; 1 new, 1 updated) and `tests/smoke/cbc-loads.mjs` (19 rows in the mixed-sign block).
+
+## 2026-11-13 — PR: claude/cbc-we-strength (PR #1508: https://github.com/mlococo88/All-Structural/pull/1508) (CBWE) — service load cases: W and E labelled strength-level (ASCE 7), with notes   [display only; no computed value, key or format change]
+
+- **Engineer decision (CB-9):** W and E are strength-level (ASCE 7) effects. Label the inputs "strength-level (ASCE 7)", and add a note on the tab and in the Report: the factor 1.0 applies directly, and service-level values must be converted before entry. No calculation change.
+- **Where** (Beam Capacity srcdoc; escape as usual):
+  - `CBC_LD_NAME`: before `W:"Wind (strength level)",E:"Earthquake (strength level)"`; after `W:"Wind, strength-level (ASCE 7)",E:"Earthquake, strength-level (ASCE 7)"`. These are the labels of the input case table, the Load Combinations tab table and the Report table.
+  - `buildSvcLoads` note, item "W and E:". Before: "the strength-level wind and earthquake effects, as given (Table 5.3.1 applies a load factor of 1.0 to each)." After: "strength-level (ASCE 7) wind and earthquake effects: Table 5.3.1 applies a load factor of 1.0 to each directly. Service-level (allowable stress) values must be converted to strength level before entry."
+  - `cbcLdRules()` (Load Combinations tab card and Report section), a new first-after-reversal item "W and E: strength-level (ASCE 7) effects, as entered; the load factor 1.0 of Table 5.3.1 applies to them directly. Service-level values must be converted to strength level before entry."
+- **Provision:** none changed (ACI 318-19 Table 5.3.1 uses 1.0W and 1.0E).
+- **How verified:** probe of origin/main vs branch on 9 projects.
+  - Factored and AASHTO projects: identical in every output.
+  - Service project: `computeAll()` identical; only the labels and the note text differ on the Load Combinations tab and in the Report.
+  - `check-syntax` and `cbc-loads` pass.
