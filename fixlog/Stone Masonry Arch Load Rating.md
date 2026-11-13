@@ -1781,6 +1781,7 @@ function transDisp(w,n,c,cap){
 - **Saved data (§5):** none. **Decisions (pending engineer review):** none beyond the layout (the card stays where the panel was, so no link). **Other copies:** none.
 
 ## 2026-11-12 — PR: claude/arch-debounce (PR #1439: https://github.com/mlococo88/All-Structural/pull/1439) (ARDB) — recalculate 0.4 s after the last keystroke, at once on leaving the field or Enter   [timing only; no formula, result, saved key or format change]
+- **Decided by the engineer, 2026-11-13 (US Eastern date):** recalculation is debounced (0.4 s after the last keystroke, at once on leaving the field or Enter), as built here.
 - **Engineer (2026-11-12):** the tool re-ran the whole analysis on every keystroke (about 2.5–4 s a key headless), so typing felt frozen. Recalculate about 0.4 s after the last keystroke in a field and immediately on leaving it (change / blur) or Enter; show "updating…" on the results meanwhile; all numeric inputs incl. the depth-override and SDL table cells; results identical once settled; autosave (`stoneArchLR.*`) unchanged in format and never loses an entry; print / report / export / save use settled results.
 - **Where (to re-apply by hand):**
   1. CSS after `#outTop{position:sticky;top:0;z-index:40;…}`: `#arUpd{position:absolute;top:4px;right:8px;…}` and `#arUpd[hidden]{display:none;}`.
