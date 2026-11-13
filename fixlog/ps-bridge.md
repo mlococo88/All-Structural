@@ -775,7 +775,7 @@ PR #1469: https://github.com/mlococo88/All-Structural/pull/1469
 - The stress distribution figure (7.2) shows one stage (Release, the default) in the Report; all stages could be drawn as for handling, if wanted.
 
 ## 2026-11-13 — PR 2f: "From the old app" — read-only import of the old Prestressed Bridge Design's saved designs and Export JSON files (no calculation change)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1489: https://github.com/mlococo88/All-Structural/pull/1489
 ### Where
 - `apps/ps-bridge/engine/legacy.js` (new, `window.PSBLegacy`, no DOM): `scan(storage)` lists every design the old app keeps, reading with
   `getItem` only: the design on screen `psbeam.inputs.v1` with the bridge model the old app opens with it (the old `App()` rule:
