@@ -65,7 +65,8 @@ test('three types 30 / 36 / 42: turning the W diaphragm on prefills the CF10 per
   const P = three(30, 36, 42); P.crossframes.dia.clr = 0; FUI.setBrace(P, 'w'); assert.deepEqual(J(P.crossframes.dia.grp), { '0,4': 'W30x99', '1,3': 'W36x135', 2: 'W36x135' });
   const { B, d } = run(P, 1), D = dep(d);
   assert.deepEqual(J(D.map(i => [i.loc.split(':')[0], +i.demand.toFixed(2), i.capacity, +i.r.toFixed(3)])), [['G1–G2, G5–G6 (W30x99)', 28.41, 29.7, 0.957], ['G2–G3, G4–G5 (W36x135)', 32.91, 35.6, 0.924], ['G3–G4 (W36x135)', 32.91, 35.6, 0.924]]);
-  assert.deepEqual(J(B.XF.X.ab.map(a => a && a.nm)), ['W30x99', 'W36x135', 'W36x135', 'W36x135', 'W30x99']);
+  assert.equal(P.crossframes.dia.shape, 'W36x135', 'SBSP: Shape set to the governing group\'s shape at the prefill');
+  assert.deepEqual(J(B.XF.X.ab.map(a => a && a.nm)), ['W30x99', null, null, null, 'W30x99'], 'X.ab: the bays whose group shape differs from Shape (W36x135, SBSP); the weights as before');
   const t = sheet(P); assert.match(t, /DIAPHRAGM W30x99 ASTM/); assert.match(t, /DIAPHRAGM W36x135 ASTM/);
   // a group set back to "Same as Shape above" removes its entry; the last removes the field
   FUI.onChange({ dataset: { dgrp: '0,4' }, value: '' }, P); assert.deepEqual(J(P.crossframes.dia.grp), { '1,3': 'W36x135', 2: 'W36x135' });
@@ -73,7 +74,7 @@ test('three types 30 / 36 / 42: turning the W diaphragm on prefills the CF10 per
   FUI.onChange({ dataset: { dgrp: '2' }, value: 'W33x118' }, P); assert.deepEqual(J(P.crossframes.dia.grp), { 2: 'W33x118' });
   // an entry that is not a shape of the lists, or of a grouping that no longer exists: dia.shape, kept in the file
   P.crossframes.dia.grp = { '0,4': 'W99x999', '0,1,2': 'W30x99' }; const g = CF.bayGroups(P);
-  assert.deepEqual(J(g.map(x => CF.grpShape(P.crossframes.dia, x))), ['W21x44', 'W21x44', 'W21x44']); assert.deepEqual(J(P.crossframes.dia.grp), { '0,4': 'W99x999', '0,1,2': 'W30x99' });
+  assert.deepEqual(J(g.map(x => CF.grpShape(P.crossframes.dia, x))), ['W36x135', 'W36x135', 'W36x135']); assert.deepEqual(J(P.crossframes.dia.grp), { '0,4': 'W99x999', '0,1,2': 'W30x99' });   // SBSP: dia.shape is W36x135 since the prefill (was W21x44)
   // the input card: one select per group, the CF10 section marked
   const h = { num: () => '', sel: () => '', card: (t, b) => b, esc: s => String(s) }, html = FUI.inputs(P, h);
   assert.match(html, /data-dgrp="0,4"/); assert.match(html, /W30x99 \(CF10 recommends\)/);

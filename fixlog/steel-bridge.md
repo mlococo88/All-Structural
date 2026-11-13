@@ -9660,3 +9660,102 @@ index 4510749..337abc8 100644
          <h4 class="sub">End diaphragms (bearing lines)</h4>${h.sel('crossframes.dia.end', 'Jacking at the end diaphragms', [['no', 'No'], ['yes', 'Yes']])}${h.num('crossframes.dia.Rj', 'Jacking reaction R<sub>j</sub>', 'kip')}${h.num('crossframes.dia.aj', 'at a<sub>j</sub> from the girder', 'in')}
          <p class="note">The diaphragm is the intermediate bracing (checks CFD) and the end diaphragm at the bearing lines (CFE); the angle checks CF1 to CF9 and member forces entered from a refined analysis do not apply. S (largest girder spacing) and the girder depth d come from the project and the layout. On a change between a rolled W and a channel, the shape starts at the one last used in that family on this page, else the shape that check CF10 recommends for the girder depth, else W21x44 / MC18x42.7: a starting choice, checked by CFD like any other.</p>`
 ```
+
+## 2026-11-13 — PR: claude/sb26-dia-conn-hint (PR #1514: https://github.com/mlococo88/All-Structural/pull/1514) — Diaphragm end connection: the default (4 bolts) kept; a hint next to the connection inputs and an assumption note in the Report say it is a placeholder to be designed (SBCH; engineer decision SB-26 of 2026-11-13; display only, no value changes)
+- **Request:** engineer decision SB-26 (2026-11-13): keep the 4-bolt default diaphragm connection; add a hint next to the connection inputs (and in the Report's assumptions) that the default connection is a placeholder and must be designed: it usually fails as entered (e.g. the CFD bolted connection item of the default inputs fails in the #1503 hand checks).
+- **Change (display only):**
+  - `ui/framing.js`: new constant `CONN_HINT` (exported): "Hint (engineer decision SB-26): the default end connection of the diaphragm (4 bolts per end in one row at 3 in pitch, the bolt line 3.5 in from the girder web, the bolt diameter and grade above) is a placeholder, not a design. It usually fails the CFD / CFE bolted connection checks as entered: design the connection (bolts, pitch, bolt line, connection plate) for the project." shown as a note right after the "Bolt line from the girder web" input of the diaphragm's End connections (Framing & bracing tab, diaphragm on; not for cross-frames).
+  - `report/builders.js frm`, Checks subsection (the notes below the check table, after the "Diaphragm bracing" note; diaphragm only): "Assumption: the default end connection of the diaphragm (…, the bolt diameter and grade of the Framing & bracing tab) is a placeholder, not a design. It usually fails … (Engineer decision SB-26, 2026-11-13; inputs on the Framing & bracing tab, checks CFD / CFE on the [[tab:cf|Diaphragms tab]]; this project: 4 bolts per end at 3.00 in, bolt line 3.50 in from the web.)".
+- **Values:** none changed; the default connection (`crossframes.dia` nb 4, pitch 3, ecc 3.5; `DEF`, `defaultCrossframes`) unchanged.
+- **Governing provision:** none changed (AASHTO LRFD 10th Ed. (2024) Art. 6.13.2, the CFD / CFE bolted connection items, as before).
+- **Saved data (§5):** none.
+- **Check case:** new project, rolled W diaphragm W21x44 (default connection): the Framing & bracing tab shows the hint after the bolt line input; the Report's framing checks list the assumption with "this project: 4 bolts per end at 3.00 in, bolt line 3.50 in from the web."; with 6 bolts entered, "6 bolts per end". Cross-frames: neither.
+- **How verified:** new tests/engine/sb-dia-conn-hint.test.mjs (the hint's place and text, cross-frames none, the default connection unchanged; the Report note, its link resolves, this project's values). Engine subsets and smoke tests: see the PR.
+- **Other copies:** none.
+- **Before / after (exact):**
+```diff
+diff --git a/apps/steel-bridge/report/builders.js b/apps/steel-bridge/report/builders.js
+index 8b9fa11..aef480a 100644
+--- a/apps/steel-bridge/report/builders.js
++++ b/apps/steel-bridge/report/builders.js
+@@ -409,6 +409,7 @@
+       tbl(['Check', 'Item', 'Demand', 'Resistance / limit', 'Ratio', 'Status'], C.flatMap(c => c.items.length ? c.items.map(it => [`${c.id} ${c.title}`, locR(c, it), isFinite(it.demand) ? N(it.demand, 2) : (it.cells || [])[0] || '', isFinite(it.capacity) ? N(it.capacity, 2) : (it.cells || [])[1] || '',
+         isFinite(it.r) ? R3(it.r, lk(sOf(it.step))) : { t: '—', key: lk(sOf(it.step)) }, it.lbl || { pass: 'OK', fail: 'Fail', warn: 'Warning', adv: 'Advisory', na: 'n/a' }[it.st] || it.st]) : [[`${c.id} ${c.title}`, { t: c.naWhy || 'n/a', cls: 'na' }, '', '', '', 'n/a']])),
+       C.some(c => c.id === 'CFD') ? note('Diaphragm bracing (Framing & bracing tab): checks CFD (intermediate) and CFE (end diaphragms at the bearing lines); the angle checks CF1 to CF9 and member forces entered from a refined analysis do not apply.') : null,
++      C.some(c => c.id === 'CFD') && FUI && FUI.CONN_HINT ? note(`Assumption: ${FUI.CONN_HINT.replace(/^Hint \(engineer decision SB-26\): /, '').replace(/ the bolt diameter and grade above\)/, ' the bolt diameter and grade of the Framing & bracing tab)')} (Engineer decision SB-26, 2026-11-13; inputs on the Framing & bracing tab, checks CFD / CFE on the [[tab:cf|Diaphragms tab]]; this project: ${Math.max(2, Math.round(+((I.p.dia || {}).nb) || 2))} bolts per end at ${f(+((I.p.dia || {}).pitch) || 3, 2)} in, bolt line ${f(+((I.p.dia || {}).ecc) || 3.5, 2)} in from the web.)`) : null,   // SB-26: the default connection is a placeholder
+       ...(FUI && FUI.ckNotes ? FUI.ckNotes(C).map(q => note(`${q.id}: ${tt(q.note)}${q.id === 'CF10' && rS ? ` [[${rS}]]` : ''}`)) : []),   // SBCKN: every check's note, as the tab
+       note(`References: ${C.map(c => `${c.id} ${c.ref}`).join('; ')}.`)]));
+     if (R.frames && !dOn) subs.push(sub('mf', 'Member forces (truss model)', [tbl(['Member', 'Length (in)', 'per kip of $F_{w}$', ...R.combos.map(c => `${c.id} T / C (kip)`)], R.frames.map((e, i) => [e.lbl, N(e.L, 2), { ...N(e.unit, 3), key: `cf.tr${i}` }, ...R.combos.map(c => c.off ? 'not used' : `${f(c.f[i].T, 2)} / ${f(c.f[i].Cc, 2)}`)]))]));
+diff --git a/apps/steel-bridge/ui/framing.js b/apps/steel-bridge/ui/framing.js
+index 337abc8..4e020a7 100644
+--- a/apps/steel-bridge/ui/framing.js
++++ b/apps/steel-bridge/ui/framing.js
+@@ -121,6 +121,10 @@
+      fit rule, crossframes.dia.clr (in, total); blank or absent: 2 in (engine/crossframes.js diaClr), shown as the placeholder */
+   function clrRow(C, h) { const v = (C.dia || {}).clr, ok = v != null && v !== '' && isFinite(+v);
+     return `<div class="fRow"><label for="i_crossframes.dia.clr">Fit clearance c, total (d ≤ D<sub>0</sub> − c; blank: 2 in, 1 in top and bottom for clips / welds)</label><input type="number" step="any" id="i_crossframes.dia.clr" data-path="crossframes.dia.clr" data-kind="num" value="${ok ? esc(String(v)) : ''}" placeholder="2"><span class="unit">in</span></div>`; }
++  /* CONN_HINT (SB-26, 2026-11-13; engineer decision SB-26, display only): the default diaphragm end connection (crossframes.dia nb 4, pitch
++     3 in, bolt line 3.5 in from the web; DEF) is kept as a starting value; this hint, next to the connection inputs and in the Report's
++     framing check notes (report/builders.js frm), says it is a placeholder to be designed. No value or input changes. */
++  const CONN_HINT = 'Hint (engineer decision SB-26): the default end connection of the diaphragm (4 bolts per end in one row at 3 in pitch, the bolt line 3.5 in from the girder web, the bolt diameter and grade above) is a placeholder, not a design. It usually fails the CFD / CFE bolted connection checks as entered: design the connection (bolts, pitch, bolt line, connection plate) for the project.';
+   function inputs(P, h) {
+     ensure(P); const F = P.framing, C = P.crossframes, CF = window.SBDCrossframes, FRM = window.SBDFraming;
+     let L = null; try { L = FRM.compute(P); } catch (e) { L = { errors: [e.message] }; }
+@@ -145,6 +149,7 @@
+         ${C.dia.shape === 'custom' ? `${h.num('crossframes.dia.d', 'Depth d', 'in')}${h.num('crossframes.dia.bf', 'Flange width', 'in')}${h.num('crossframes.dia.tf', 'Flange thickness', 'in')}${h.num('crossframes.dia.tw', 'Web thickness', 'in')}` : ''}
+         ${h.sel('crossframes.dia.gr', 'Grade', [['36', '36'], ['50', '50']])}${clrRow(C, h)}${grpCard(P, C, br)}
+         <h4 class="sub">End connections</h4>${conn}${h.num('crossframes.dia.nb', 'Bolts per end (one row)', '')}${h.num('crossframes.dia.pitch', 'Bolt pitch', 'in')}${h.num('crossframes.dia.ecc', 'Bolt line from the girder web', 'in')}
++        <p class="note">${CONN_HINT}</p>
+         <h4 class="sub">End diaphragms (bearing lines)</h4>${h.sel('crossframes.dia.end', 'Jacking at the end diaphragms', [['no', 'No'], ['yes', 'Yes']])}${h.num('crossframes.dia.Rj', 'Jacking reaction R<sub>j</sub>', 'kip')}${h.num('crossframes.dia.aj', 'at a<sub>j</sub> from the girder', 'in')}
+         <p class="note">The diaphragm is the intermediate bracing (checks CFD) and the end diaphragm at the bearing lines (CFE); the angle checks CF1 to CF9 and member forces entered from a refined analysis do not apply. S (largest girder spacing) and the girder depth d come from the project and the layout. On a change between a rolled W and a channel, the shape starts at the one last used in that family on this page, else the shape that check CF10 recommends for the girder depth, else W21x44 / MC18x42.7: a starting choice, checked by CFD like any other.</p>`
+         : `${h.num('crossframes.h', 'Chord work-point depth h (blank: from D)', 'in', { text: true })}
+@@ -335,5 +340,5 @@
+     host.querySelectorAll('[data-cfgo]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const t = host.querySelector('#st-' + a.dataset.cfgo.replace(/[^\w.-]/g, '').replace(/\./g, '\\.')); if (t) { t.scrollIntoView({ block: 'center' }); t.style.background = '#FFF7D6'; } }));
+   }
+ 
+-  window.SBDFramingUI = { ensure, braceOf, setBrace, inputs, windCard, layoutPlan, onChange, onClick, render, build, plan, TOPICS, groups, isDia, ckHead, diaSvg, ckRec, recStep, ckNotes };
++  window.SBDFramingUI = { ensure, braceOf, setBrace, inputs, windCard, layoutPlan, onChange, onClick, render, build, plan, TOPICS, groups, isDia, ckHead, diaSvg, ckRec, recStep, ckNotes, CONN_HINT };
+ })();
+```
+
+## 2026-11-13 — PR: claude/sb-dia-shape-prefill (PR #1516: https://github.com/mlococo88/All-Structural/pull/1516) — Diaphragm Shape set to the governing group's shape when the per-group shapes are prefilled (SBSP; Decision (pending engineer review): display / input consistency; the groups without an entry follow it)
+- **Problem:** turning the rolled W (or channel) diaphragm on prefills the shape of each bay depth group (SB-24, `ui/framing.js setBrace` → `grpFill`), but the main Shape select (`crossframes.dia.shape`) kept its old value, e.g. W21x44 of a new project beside groups prefilled W36x135. Every group without an entry (no section of the list fits it, SB-25) takes Shape, so it was checked with that old value.
+- **Decision (pending engineer review):** at the moment of the prefill only, Shape is set to the governing group's shape: of the groups prefilled, the one with the largest least depth d_req (CF10's `TR.grp[].req`), the first in bay order on ties (the group of the governing bay of the depth check). A loaded project, a later edit of a group select or of Shape, and the setBrace paths without a prefill (one depth group, no fitting section of the family) are unchanged.
+- **Change (`ui/framing.js`):** new `govKey(TR, o)`; `grpFill(P, q, v)`: after `q.grp = o`, `q.shape = o[govKey(R.TR, o)]`.
+- **Saved data (§5):** none (the same fields, written by the user's choice as before; no key or format change; nothing rewritten on load).
+- **Governing provision:** none changed. This is an input default at the moment of the user's choice. The groups without an entry are then checked (CFD, CFE, DC1, drawings) with the new Shape.
+- **Check case (new projects, Rolled W diaphragm chosen; default clearance 2 in, SB-25):**
+  - Three types 30 / 36 / 42: prefill `{ '2': 'W36x135' }`. Shape before W21x44, after **W36x135**.
+    - Groups G1–G2, G5–G6 and G2–G3, G4–G5 have no entry. Before they were W21x44: depth warning 1.372 / 1.590, fit OK 0.739 / 0.609. After they are W36x135: depth OK 0.798 / 0.924, fit **Fail** 1.271 / 1.047.
+    - CFD Fail before and after (the bolted connection of the default inputs fails in every case).
+  - With c = 0 (prefill `{ '0,4': 'W30x99', '1,3': 'W36x135', '2': 'W36x135' }`): Shape W21x44 → W36x135 (G2–G3, G4–G5 and G3–G4 tie at 32.91 in; the first in bay order). Every group has an entry, so the checks are unchanged. DC1 is unchanged too: `X.ab` now lists only the bays whose group shape differs from Shape (the W30x99 bays), with the same weights.
+  - Exterior 30 / Interior 36: prefill `{ '1,2': 'W30x99' }`; Shape W21x44 → **W30x99**. The exterior bays (no entry) go from W21x44 (depth warning 1.372, fit OK) to W30x99 (depth OK 0.957, fit **Fail** 1.061).
+  - CTDOT three types 24 / 30 / 30: prefill `{ '1,2,3': 'W27x84' }`; Shape W21x44 → **W27x84**. The exterior bays go from depth warning 1.155 to depth OK 0.896 and fit **Fail** 1.214.
+  - No change where nothing is prefilled: one depth group (Interior 30 / Exterior 36), equal depths, the built-in project, channel diaphragms (no channel deep enough in these cases).
+- **How verified:** new tests/engine/sb-dia-shape-prefill.test.mjs (the cases above; no prefill, a loaded project and a later group edit unchanged). Updated tests/engine/sb-dia-groups.test.mjs (three-type prefill: Shape W36x135; `X.ab` lists only the bays differing from Shape; a stale or invalid entry now falls back to W36x135). Engine subsets and smoke tests: see the PR.
+- **Other copies:** none.
+- **Open items (reported):** when no section of the list fits a group (SB-25), that group still takes Shape, which here is a section that fails its fit (or, before, one that failed its depth). Whether such a group should be flagged on the input card, or Shape left alone in that case, is the engineer's call.
+- **Before / after (exact):**
+```diff
+diff --git a/apps/steel-bridge/ui/framing.js b/apps/steel-bridge/ui/framing.js
+index 4e020a7..58cd4b0 100644
+--- a/apps/steel-bridge/ui/framing.js
++++ b/apps/steel-bridge/ui/framing.js
+@@ -103,8 +103,15 @@
+     GR.forEach(g => { const k = CF.grpKey(g), t = TR.grp ? TR.grp.find(x => x.bays.join(',') === k) : null, sec = t ? (br === 'ch' ? t.ch : t.w) : null, one = br === 'ch' ? TR.ch : TR.w;
+       if (t ? sec : one) out[k] = t ? sec[0] : one; }); out.TR = TR; return out;
+   }
++  /* SBSP (2026-11-13; Decision pending engineer review: display / input consistency): when grpFill prefills the shapes per group, the
++     main Shape (dia.shape, which every group without an entry takes) is set at that moment to the shape of the governing group: of the
++     groups prefilled, the one with the largest least depth d_req (CF10's TR.grp req; the first in bay order on ties: the group of the
++     governing bay of the depth check). Before, Shape kept its old value (e.g. W21x44 of a new project) beside the prefilled groups.
++     Only on the prefill (setBrace); a loaded project or a later edit is never changed. govKey(TR, o): that group's key, null if none. */
++  const govKey = (TR, o) => { let best = null; (TR.grp || []).forEach(g => { const k = g.bays.join(','); if (o[k] && (!best || g.req > best.req + 1e-9)) best = { k, req: g.req }; }); return best ? best.k : null; };
+   function grpFill(P, q, v) {
+-    const R = grpRec(P, v); if (!R.TR || !R.TR.grp) return; const o = {}; Object.keys(R).forEach(k => { if (k !== 'TR') o[k] = R[k]; }); if (Object.keys(o).length) q.grp = o;
++    const R = grpRec(P, v); if (!R.TR || !R.TR.grp) return; const o = {}; Object.keys(R).forEach(k => { if (k !== 'TR') o[k] = R[k]; });
++    if (Object.keys(o).length) { q.grp = o; const k = govKey(R.TR, o); if (k) q.shape = o[k]; }   // SBSP: Shape = the governing group's shape
+   }
+   /* grpCard(P, C, br): the inputs of the shape per bay depth group (two or more groups; '' with one): a select per group, "Same as Shape above"
+      (no entry) or a shape of the family, the one CF10 recommends marked */
+```
