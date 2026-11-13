@@ -70,10 +70,24 @@
         Width rules: constant in a field piece; at a field splice wide enough for the splice bolts (DT10, the Splices tab bolts and the owner's edge distance), or one gage line where that is lighter (the objective decides).</p>
       </div></section>`;
   }
-  function runBar(P) {
+  /* SB-2 PR 3 (2026-11-13): girder types (engineer decision SB-2, 2026-11-12). scopes(P): the choices of the "Design" select: 'each' (every
+     type, one run after the other, each sized for its worst assigned line), 'sel' (the type selected on the Girders & plates tab only),
+     'together' (one plate design on every plate girder: run(P) exactly as before girder types; offered only for a project saved before
+     girder types, i.e. with no line assigned, where it is the default). scopeOf(P): this page view's choice (S.scope, not saved) when it
+     is one of them, else the first. A project with one type and assigned lines: 'each' (that type on its lines), no select. */
+  const scopes = P => { const n = (P.girders || []).length, typed = AD().typeScope(P) === 'each'; return typed ? (n > 1 ? ['each', 'sel'] : ['each']) : (n > 1 ? ['together', 'each', 'sel'] : ['together']); };
+  const scopeOf = P => { const L = scopes(P); return L.includes(S.scope) ? S.scope : L[0]; };
+  const tyLab = (P, t) => { const g = P.girders[t] || {}, M = window.SBDModel, L = M.typeLines ? M.typeLines(P, t) : []; return `${g.label || g.id}${L.length ? ` (${L.map(j => 'G' + (j + 1)).join(', ')})` : ''}`; };
+  const lockLab = P => ((P.girders || []).length > 1 ? AD().TYPE_LOCK : ['nb']).map(id => (AD().VARS.find(v => v.id === id) || { label: id }).label);
+  function scopeHtml(P, gi) {
+    const L = scopes(P), sc = scopeOf(P), o = (v, t) => L.includes(v) ? `<option value="${v}"${sc === v ? ' selected' : ''}>${esc(t)}</option>` : '';
+    const sel = L.length > 1 ? `<div class="fRow"><label for="ad_scope">Design</label><select id="ad_scope">${o('together', 'One plate design for every plate girder (as before girder types)')}${o('each', 'Every girder type, each for its worst line')}${o('sel', `The selected type only: ${tyLab(P, Math.min(gi || 0, P.girders.length - 1))}`)}</select></div>` : '';
+    return sel + (sc !== 'together' ? `<p class="note" id="ad_scopeNote">Each girder type is designed on its own lines: each line a plate girder of the run with that line's loads and distribution factors, so the worst line governs every check. Locked at the current values in this mode (${(P.girders || []).length > 1 ? 'one design of the bridge for every type' : 'a new girder count would change the lines, which you assign'}): ${lockLab(P).map(l => window.SBDSub.html(l)).join('; ')}. ${(P.girders || []).length > 1 ? 'The plates (D, t<sub>w</sub>, flanges, transitions) are each type\'s own, with the locks and ranges set below; Apply writes the type\'s plates only.' : 'Every other variable as set below.'}</p>` : '');
+  }
+  function runBar(P, gi) {
     const IE = window.SBDInputCheck ? window.SBDInputCheck.collect(P).errors : [];   // SBINV (2026-11-10): Run is refused while an input error exists
     return `<section class="sec"><div class="secBody">${IE.length ? `<div class="alert err" id="ad_blocked">Auto design cannot run: ${IE.length} input${IE.length > 1 ? 's need' : ' needs'} fixing first (marked in red on their tabs and listed above the results).</div>` : ''}
-      <div class="fRow"><button type="button" class="primary" id="ad_run"${S.running || IE.length ? ' disabled' : ''}>Run Auto design</button><button type="button" id="ad_stop"${S.running ? '' : ' disabled'}>Stop</button>
+      ${scopeHtml(P, gi)}<div class="fRow"><button type="button" class="primary" id="ad_run"${S.running || IE.length ? ' disabled' : ''}>Run Auto design</button><button type="button" id="ad_stop"${S.running ? '' : ' disabled'}>Stop</button>
 </div>
       ${bar()}<p class="note">The candidates, Apply and Undo the last Apply are on the <a href="#" data-adout="1">Auto design output tab</a>.</p></div></section>`;
   }
@@ -181,16 +195,19 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
     ra.forEach(r => { const q = rb.find(x => x.label === r.label); if (!q || q.value !== r.value) out.push(r.label.toLowerCase()); });
     return out.length ? out.join('; ') : 'nothing listed here (same plates and details)';
   };
+  /* the weight shown (SB-2 PR 3): a run of all girders, as before; a girder type's run (S.wty = { n: its lines }): the steel of its lines,
+     the run's weight (a girder line × N_b, costOf) / N_b × n (display only; the ranking is the run's own) */
+  const wOf = (w, L) => S.wty && L && L.nb ? w / L.nb * S.wty.n : w, wHead = () => S.wty ? `its ${S.wty.n} line${S.wty.n > 1 ? 's' : ''}` : 'all girders';
   function resultsHtml(P, R) {
     const c0 = R.current, cls = r => r > 0.95 ? 'ad-hi' : 'ad-ok';
     let h = `<section class="sec"><div class="secHead">Candidates (ranked by ${esc({ weight: 'steel weight', depth: 'web depth', cost: 'cost' }[R.S.objective])})</div><div class="secBody">`;
     if (R.note) h += `<div class="alert">${esc(R.note)}</div>`;
     if (R.spl) h += `<p class="note"><b>Field splice layouts sized</b> (the splice variable, ${esc(R.S.V.spl.mode)}): ${R.spl.lays.map((l, i) => `${i + 1}. ${l.spl.map(x => fmt(x, 2)).join(', ') || 'none'} ft (${esc(l.how)})`).join('; ') || 'none'}. The rule's stations (contraflexure on ${esc(R.spl.gl || '')}): ${(R.spl.ref ? R.spl.ref.spl : []).map(x => fmt(x, 2)).join(', ') || 'none'} ft.</p>`;
-    h += `<div class="tscroll"><table class="tbl ad-list"><thead><tr><th>#</th><th>N<sub>b</sub></th><th>D (in)</th><th>Weight (lb, all girders)</th><th>Cost ($)</th><th>Transitions</th><th>Splices</th><th>Gage lines</th><th>Overhang (ft)</th><th>Governing ratio</th><th class="lft">What governs</th><th class="lft">Differs from #1 in</th></tr></thead><tbody>
-      <tr class="ad-cur"><td>now</td><td>${c0.L.nb}</td><td>${fmt(c0.L.D, 2)}</td><td>${fmt(c0.cost.w, 0)}</td><td>${fmt(c0.cost.total, 0)}</td><td>${c0.cost.nTr}</td><td>${c0.cost.nSpl}</td><td></td><td>${fmt(+(P.xs || {}).ohL, 2)}${Math.abs(+(P.xs || {}).ohR - +(P.xs || {}).ohL) > 1e-9 ? ' / ' + fmt(+(P.xs || {}).ohR, 2) : ''}</td><td>${c0.E ? fmt(c0.E.ratio, 3) : ''}</td><td class="lft">current design${c0.E && !c0.E.pass ? ' (fails the screen)' : ''}</td><td></td></tr>
-      ${R.cands.map((c, i) => `<tr data-adsel="${i}"${i === S.sel ? ' class="sel"' : ''}><td>${i + 1}</td><td>${c.nb}</td><td>${fmt(c.D, 2)}</td><td>${fmt(c.cost.w, 0)}</td><td>${fmt(c.cost.total, 0)}</td><td>${c.nTr}</td><td>${c.nSpl}</td><td>${c.minLines || 'as set'}</td><td>${ohT(c.L)}</td>
+    h += `<div class="tscroll"><table class="tbl ad-list"><thead><tr><th>#</th><th>N<sub>b</sub></th><th>D (in)</th><th>Weight (lb, ${wHead()})</th><th>Cost ($)</th><th>Transitions</th><th>Splices</th><th>Gage lines</th><th>Overhang (ft)</th><th>Governing ratio</th><th class="lft">What governs</th><th class="lft">Differs from #1 in</th></tr></thead><tbody>
+      <tr class="ad-cur"><td>now</td><td>${c0.L.nb}</td><td>${fmt(c0.L.D, 2)}</td><td>${fmt(wOf(c0.cost.w, c0.L), 0)}</td><td>${fmt(c0.cost.total, 0)}</td><td>${c0.cost.nTr}</td><td>${c0.cost.nSpl}</td><td></td><td>${fmt(+(P.xs || {}).ohL, 2)}${Math.abs(+(P.xs || {}).ohR - +(P.xs || {}).ohL) > 1e-9 ? ' / ' + fmt(+(P.xs || {}).ohR, 2) : ''}</td><td>${c0.E ? fmt(c0.E.ratio, 3) : ''}</td><td class="lft">current design${c0.E && !c0.E.pass ? ' (fails the screen)' : ''}</td><td></td></tr>
+      ${R.cands.map((c, i) => `<tr data-adsel="${i}"${i === S.sel ? ' class="sel"' : ''}><td>${i + 1}</td><td>${c.nb}</td><td>${fmt(c.D, 2)}</td><td>${fmt(wOf(c.cost.w, c.L), 0)}</td><td>${fmt(c.cost.total, 0)}</td><td>${c.nTr}</td><td>${c.nSpl}</td><td>${c.minLines || 'as set'}</td><td>${ohT(c.L)}</td>
         <td class="${cls(c.ratio)}">${fmt(c.ratio, 3)}${wFlag(c)}</td><td class="lft">${c.gov && c.gov.tab ? `<a href="#" data-adgo="${esc(c.gov.tab)}" title="Open the ${esc(DIA && c.gov.tab === 'cf' ? 'Diaphragms' : TABN[c.gov.tab] || '')} tab">${govTxt(c.gov)}</a>` : govTxt(c.gov)}${c.gov ? `: ${esc(c.gov.title)}` : ''}${wTxt(c)}</td><td class="lft">${i ? esc(diffFrom(c, R.cands[0])) : '—'}</td></tr>`).join('')}</tbody></table></div>
-      <p class="note">Every candidate listed passed every module on the full check (the analysis with its own stiffness; flexure, shear and stiffeners, fatigue and studs, constructibility, cross-frames, field splices, rating, welds; its details sized first)${R.cands.some(c => (c.propWarns || []).length) ? ', except the limits set to "as warning only" on the input tab: a candidate with a <span class="ad-warn">WARNING</span> misses one of them (the span-to-depth guidance, AASHTO LRFD 10th Ed. Art. 2.5.2.6.3, or a 6.10.2 proportion limit); its governing ratio is that of the checks enforced, and the flag gives the largest warned ratio' : ''}. ${R.rejected.length ? `${R.rejected.length} finalist(s) failed the full check and were dropped (below).` : ''}${(R.twins || []).length ? ` ${R.twins.length} one-gage-line design${R.twins.length > 1 ? 's' : ''} not listed: the same plates, transitions and splices as a listed design with the splices' own gage lines, and no saving in weight or cost (N<sub>b</sub> ${R.twins.map(t => `${t.nb}, D ${fmt(t.D, 2)} in`).join('; ')}).` : ''} Click a row for its plates and steps.</p></div></section>`;
+      <p class="note">Every candidate listed passed every module on the full check (the analysis with its own stiffness; flexure, shear and stiffeners, fatigue and studs, constructibility, cross-frames, field splices, rating, welds; ${S.wty && S.wty.det ? 'the details as entered: with several girder types they are not re-sized' : 'its details sized first'})${R.cands.some(c => (c.propWarns || []).length) ? ', except the limits set to "as warning only" on the input tab: a candidate with a <span class="ad-warn">WARNING</span> misses one of them (the span-to-depth guidance, AASHTO LRFD 10th Ed. Art. 2.5.2.6.3, or a 6.10.2 proportion limit); its governing ratio is that of the checks enforced, and the flag gives the largest warned ratio' : ''}. ${R.rejected.length ? `${R.rejected.length} finalist(s) failed the full check and were dropped (below).` : ''}${(R.twins || []).length ? ` ${R.twins.length} one-gage-line design${R.twins.length > 1 ? 's' : ''} not listed: the same plates, transitions and splices as a listed design with the splices' own gage lines, and no saving in weight or cost (N<sub>b</sub> ${R.twins.map(t => `${t.nb}, D ${fmt(t.D, 2)} in`).join('; ')}).` : ''} Click a row for its plates and steps.</p></div></section>`;
     const c = R.cands[S.sel];
     if (c) {
       h += `<section class="sec"><div class="secHead">Candidate ${S.sel + 1}: plates</div><div class="secBody"><div class="tscroll"><table class="tbl"><thead><tr><th>x<sub>0</sub> (ft)</th><th>x<sub>1</sub> (ft)</th><th>D</th><th>t<sub>w</sub></th><th>b<sub>t</sub></th><th>t<sub>t</sub></th><th>b<sub>b</sub></th><th>t<sub>b</sub></th></tr></thead><tbody>
@@ -204,8 +221,8 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
         <section class="sec"><div class="secHead">Worked steps, candidate ${S.sel + 1}</div><div class="secBody"><ol class="steps">${c.steps.map(s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>`).join('')}</ol></div></section>`;
     }
     h += compareHtml(P, R);
-    if ((R.blocked || []).length) h += `<section class="sec"><div class="secHead">Blocked by detail checks (not passing candidates)</div><div class="secBody"><p class="note">These designs pass every check the plates control, but fail detail checks that the current design fails too, whatever the plates: ${esc(R.blockers.join(', '))}. Fix those inputs on their tabs and run again.</p><ul>${R.blocked.map(b => `<li>N<sub>b</sub> ${b.nb}, D ${fmt(b.D, 2)} in, ${fmt(b.cost.w, 0)} lb${b.minLines === 1 ? ', 1 gage line' : ''}: ${b.fails.map(f => esc(`${f.mod} ${f.id} ${f.title}`)).join('; ')}</li>`).join('')}</ul></div></section>`;
-    if (R.rejected.length) h += `<section class="sec"><div class="secHead">Dropped at the full check</div><div class="secBody"><ul>${R.rejected.map(r => `<li>N<sub>b</sub> ${r.L.nb}, D ${fmt(r.L.D, 2)} in, ${fmt(r.cost.w, 0)} lb: ${r.fails.map(f => esc(`${f.mod} ${f.id} ${f.title}${isFinite(f.r) ? ` (${fmt(f.r, 3)})` : ''}`)).join('; ')}</li>`).join('')}</ul></div></section>`;
+    if ((R.blocked || []).length) h += `<section class="sec"><div class="secHead">Blocked by detail checks (not passing candidates)</div><div class="secBody"><p class="note">These designs pass every check the plates control, but fail detail checks that the current design fails too, whatever the plates: ${esc(R.blockers.join(', '))}. Fix those inputs on their tabs and run again.</p><ul>${R.blocked.map(b => `<li>N<sub>b</sub> ${b.nb}, D ${fmt(b.D, 2)} in, ${fmt(wOf(b.cost.w, b.L), 0)} lb${b.minLines === 1 ? ', 1 gage line' : ''}: ${b.fails.map(f => esc(`${f.mod} ${f.id} ${f.title}`)).join('; ')}</li>`).join('')}</ul></div></section>`;
+    if (R.rejected.length) h += `<section class="sec"><div class="secHead">Dropped at the full check</div><div class="secBody"><ul>${R.rejected.map(r => `<li>N<sub>b</sub> ${r.L.nb}, D ${fmt(r.L.D, 2)} in, ${fmt(wOf(r.cost.w, r.L), 0)} lb: ${r.fails.map(f => esc(`${f.mod} ${f.id} ${f.title}${isFinite(f.r) ? ` (${fmt(f.r, 3)})` : ''}`)).join('; ')}</li>`).join('')}</ul></div></section>`;
     return h;
   }
   /* ---------- compare view: any two of the current design and the candidates, side by side ---------- */
@@ -225,7 +242,7 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
     let h = `<section class="sec"><div class="secHead">Compare</div><div class="secBody"><div class="fRow"><label for="ad_c0">Left</label><select id="ad_c0" data-adcmp="0">${opts(S.cmp[0])}</select><label for="ad_c1">Right</label><select id="ad_c1" data-adcmp="1">${opts(S.cmp[1])}</select></div>
       <div class="tscroll"><table class="tbl ad-cmp"><thead><tr><th class="lft"></th><th>${esc(A.name)}</th><th>${esc(B.name)}</th></tr></thead><tbody>
       ${line('Girder count N<sub>b</sub>', A.L.nb, B.L.nb, false)}${line('Overhangs (ft)', A.cur ? `${fmt(+(P.xs || {}).ohL, 2)} / ${fmt(+(P.xs || {}).ohR, 2)}` : ohT(A.L), B.cur ? `${fmt(+(P.xs || {}).ohL, 2)} / ${fmt(+(P.xs || {}).ohR, 2)}` : ohT(B.L), false)}${line('Web depth D (in)', A.L.D, B.L.D, true, true, v => fmt(v, 2))}
-      ${line('Steel weight, all girders (lb)', A.cost.w, B.cost.w, true, true, v => fmt(v, 0))}${line('Cost ($)', A.cost.total, B.cost.total, true, true, v => fmt(v, 0))}
+      ${line(`Steel weight, ${wHead()} (lb)`, wOf(A.cost.w, A.L), wOf(B.cost.w, B.L), true, true, v => fmt(v, 0))}${line('Cost ($)', A.cost.total, B.cost.total, true, true, v => fmt(v, 0))}
       ${line('Field splices (ft)', A.L.spl.map(x => fmt(x, 2)).join(', ') || 'none', B.L.spl.map(x => fmt(x, 2)).join(', ') || 'none', false)}${line('Field splices per girder', A.cost.nSpl, B.cost.nSpl, true, true, v => String(v))}
       ${line('Flange transitions per girder', A.cost.nTr, B.cost.nTr, true, true, v => String(v))}${line('Intermediate stiffeners per girder', A.cost.nStiff, B.cost.nStiff, true, true, v => String(v))}
       ${line('Governing ratio (full check)', A.ratio, B.ratio, true, true, v => isFinite(v) ? fmt(v, 3) : '—')}${line('What governs', gl(A.gov), gl(B.gov), false)}
@@ -246,9 +263,9 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
      handlers as before (P.autodesign); nothing computed changes. A link on each tab opens the other. */
   const bar = () => S.running || S.prog ? `<div class="ad-bar"><div style="width:${Math.round(100 * ((S.prog && S.prog.f) || 0))}%"></div></div><p class="note">${esc((S.prog && S.prog.msg) || '')}</p>` : '';
   /* inputs(P): the Auto design input tab's HTML */
-  function inputs(P) {
-    css();
-    return `<p class="note"><a href="#" data-adout="1">Results: Auto design output tab</a> (candidates, ranking, full checks, Apply).</p>` + inputsHtml(P) + varsHtml(P, AD().settings(P)) + runBar(P)
+  function inputs(P, gi) {
+    css(); S.gi = gi || 0;
+    return `<p class="note"><a href="#" data-adout="1">Results: Auto design output tab</a> (candidates, ranking, full checks, Apply).</p>` + inputsHtml(P) + varsHtml(P, AD().settings(P)) + runBar(P, gi)
       + (S.err ? `<div class="alert err">${esc(S.err)}</div>` : '');
   }
   /* ---------- the design variables dialog (ADVD) ---------- */
@@ -306,11 +323,21 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
       setTimeout(() => { if (ctx.changed) ctx.changed(true); }, 0); });
     on('#ad_run', 'click', () => { const IE = window.SBDInputCheck ? window.SBDInputCheck.collect(P).errors : [];   // SBINV (2026-11-10): no run while an input error exists
       if (IE.length) { alert(`Auto design cannot run: ${IE.length} input${IE.length > 1 ? 's need' : ' needs'} fixing first.\n\n${IE.slice(0, 12).map(e => '- ' + e.msg).join('\n')}`); return; }
-      S.running = true; S.stop = false; S.err = ''; S.R = null; S.sel = 0; S.cmp = ['cur', '0']; S.prog = { f: 0, msg: 'Starting…' }; const k = key(P); redraw(); if (ctx.showOut) ctx.showOut();
+      S.running = true; S.stop = false; S.err = ''; S.R = null; S.RT = null; S.selT = null; S.sel = 0; S.cmp = ['cur', '0']; S.prog = { f: 0, msg: 'Starting…' }; const k = key(P); redraw(); if (ctx.showOut) ctx.showOut();
+      const sc = scopeOf(P);
+      if (sc !== 'together') {   // SB-2 PR 3: one run per type (its own project, typeProject), one after the other
+        const T = sc === 'sel' ? [Math.min(S.gi || 0, P.girders.length - 1)] : P.girders.map((_, t) => t), out = [];
+        const one = i => { if (i >= T.length) { S.running = false; S.prog = null; S.RT = out; S.key = k; S.selT = out.length ? out[0].t : null; redraw(); return; }
+          const t = T[i], Qt = AD().typeProject(JSON.parse(JSON.stringify(P)), t);
+          AD().runChunked(JSON.parse(JSON.stringify(Qt)), AD().typeOpt(P), p => { S.prog = { ...p, f: (i + (p.f || 0)) / T.length, msg: `Type ${tyLab(P, t)} (${i + 1} of ${T.length}): ${p.msg || ''}` }; document.querySelectorAll('.ad-bar>div').forEach(b => { b.style.width = Math.round(100 * S.prog.f) + '%'; }); document.querySelectorAll('.ad-bar + .note').forEach(nt => { nt.textContent = S.prog.msg; }); }, () => S.stop)
+            .then(R => { if (!R) { S.running = false; S.prog = { f: 0, msg: 'Stopped.' }; S.RT = out.length ? out : null; S.key = k; S.selT = out.length ? out[0].t : null; redraw(); return; } out.push({ t, Q: Qt, R, n: Qt.girders.filter(g => !g.adFixed).length }); one(i + 1); })
+            .catch(e => { S.running = false; S.prog = null; S.err = `Auto design failed (type ${tyLab(P, t)}): ` + (e && e.message); redraw(); }); };
+        one(0); return; }
       AD().runChunked(JSON.parse(JSON.stringify(P)), {}, p => { S.prog = p; document.querySelectorAll('.ad-bar>div').forEach(b => { b.style.width = Math.round(100 * (p.f || 0)) + '%'; }); document.querySelectorAll('.ad-bar + .note').forEach(nt => { nt.textContent = p.msg || ''; }); }, () => S.stop)
         .then(R => { S.running = false; S.prog = R ? null : { f: 0, msg: 'Stopped.' }; S.R = R; S.key = k; redraw(); })
         .catch(e => { S.running = false; S.prog = null; S.err = 'Auto design failed: ' + (e && e.message); redraw(); }); });
     on('#ad_stop', 'click', () => { S.stop = true; });
+    on('#ad_scope', 'change', e => { S.scope = e.target.value; redraw(); });   // SB-2 PR 3: page view only (not saved)
     on('[data-adout]', 'click', e => { e.preventDefault(); if (ctx.showOut) ctx.showOut(); });
   }
   /* render(host, ctx): the Auto design output tab (the results) */
@@ -320,8 +347,17 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
     if (S.running || S.prog) h += `<section class="sec"><div class="secBody"><div class="fRow"><button type="button" id="ad_stop2"${S.running ? '' : ' disabled'}>Stop</button></div>${bar()}</div></section>`;
     if (S.err) h += `<div class="alert err">${esc(S.err)}</div>`;
     if (P.autodesign && P.autodesign.undo) h += '<div class="fRow"><button type="button" id="ad_undo">Undo the last Apply</button></div>';
-    if (S.R && !S.running) h += (S.key !== key(P) ? '<div class="alert">The project changed since this run: run again before applying.</div>' : '') + resultsHtml(P, S.R);
-    else if (!S.running) h += '<p class="note">No results yet: set the inputs and Run on the Auto design input tab. The results are kept for this page view.</p>';
+    S.wty = null;
+    if (S.RT && !S.running) {   // SB-2 PR 3: one run per girder type (S.RT: [{ t, Q (its run project), R, n (its lines) }])
+      const T = S.RT, cur = T.find(q => q.t === S.selT) || T[0], best = q => q.R.cands[0], wq = (q, c) => c.cost.w / c.L.nb * q.n;
+      h += (S.key !== key(P) ? '<div class="alert">The project changed since this run: run again before applying.</div>' : '')
+        + `<section class="sec" id="ad_types"><div class="secHead">Girder types: the best candidate of each, sized for its worst line</div><div class="secBody"><div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Girder type (lines)</th><th>Candidates</th><th>D (in)</th><th>Weight (lb, its lines)</th><th>Governing ratio</th><th class="lft">What governs (line)</th><th></th></tr></thead><tbody>
+        ${T.map(q => { const c = best(q); return `<tr${q === cur ? ' class="sel"' : ''}><td class="lft"><a href="#" data-adty="${q.t}">${esc(tyLab(P, q.t))}</a></td><td>${q.R.cands.length}</td><td>${c ? fmt(c.D, 2) : '—'}</td><td>${c ? fmt(wq(q, c), 0) : '—'}</td><td>${c ? fmt(c.ratio, 3) : '—'}</td><td class="lft">${c && c.gov ? `${govTxt(c.gov)}${c.gov.title ? ': ' + esc(c.gov.title) : ''}${c.gov.gl ? ` (${esc(c.gov.gl)})` : ''}` : c ? '' : esc(q.R.note || 'no passing candidate')}</td><td>${c ? `<button type="button" data-adapt="${q.t}">Apply #1</button>` : ''}</td></tr>`; }).join('')}
+        </tbody></table></div>${T.filter(best).length > 1 ? '<div class="fRow"><button type="button" class="primary" id="ad_applyAll">Apply #1 of every type</button></div>' : ''}
+        <p class="note">Each type was run on its own lines: every line a plate girder of the run with its own loads and distribution factors, so the worst line governs each check (shown in brackets). Its weight is that of its lines. Below: the candidates of ${esc(tyLab(P, cur.t))}${T.length > 1 ? ' (click a type above for another)' : ''}. ${P.girders.length > 1 ? 'Each type was run with the other types\' current plates (the cross-frame layout and depth read every type). Apply writes the type\'s plates only (the other types and the bridge-wide details are not changed); the other types\' runs are then out of date (run again, and check the Summary). Apply #1 of every type writes each type\'s best candidate together: check the result on the Summary. Undo the last Apply puts back the plates of every type as they were before it.' : 'Apply writes the candidate as before girder types (plates, details); Undo the last Apply puts it back.'}</p></div></section>`;
+      S.wty = { n: cur.n, det: P.girders.length > 1 }; h += resultsHtml(cur.Q, cur.R); S.wty = null;
+    } else if (S.R && !S.running) h += (S.key !== key(P) ? '<div class="alert">The project changed since this run: run again before applying.</div>' : '') + resultsHtml(P, S.R);
+    else if (!S.running && !S.RT) h += '<p class="note">No results yet: set the inputs and Run on the Auto design input tab. The results are kept for this page view.</p>';
     host.innerHTML = h;
     const redraw = () => render(host, ctx), on = (sel, ev, f) => host.querySelectorAll(sel).forEach(el => el.addEventListener(ev, f));
     on('[data-adin]', 'click', e => { e.preventDefault(); const b = document.querySelector('#inTabs [data-itab="ad"]'); if (b) b.click(); });
@@ -329,7 +365,21 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
     on('[data-adcmp]', 'change', e => { const v = e.target.value, i = +e.target.dataset.adcmp; S.cmp[i] = v; redraw(); });
     on('[data-adsel]', 'click', e => { if (e.target.closest('[data-adgo]')) return; S.sel = +e.currentTarget.dataset.adsel; redraw(); });
     on('[data-adgo]', 'click', e => { e.preventDefault(); const b = document.querySelector(`#tabBar [data-otab="${e.currentTarget.dataset.adgo}"]`); if (b) b.click(); });
-    on('#ad_apply', 'click', () => { const c = S.R && S.R.cands[S.sel]; if (!c) return; if (S.key !== key(P) && !confirm('The project changed since this run. Apply anyway?')) return;
+    /* applyT(list) (SB-2 PR 3): list = [{ q (a type's run), c (its candidate) }]. More than one type: each type takes its plates
+       (applyType), the plates before kept for Undo (autodesign.undo = { girders }); the runs of the other types are kept for this page
+       view but out of date (their run projects held the plates before: the cross-frame model reads every type), so S.key is not renewed
+       and Apply asks first. One type: as apply() before girder types (autodesign, APPLY_KEYS). */
+    const applyT = list => { if (S.key !== key(P) && !confirm('The project changed since this run. Apply anyway?')) return;
+      if (P.girders.length > 1) { const keep = JSON.parse(JSON.stringify(P.girders)); let G = P.girders; list.forEach(({ q, c }) => { G = AD().applyType({ ...P, girders: G }, q.t, q.Q, c).girders; });
+        const a = ensure(P); P.girders = G; a.undo = { girders: keep }; a.applied = { at: new Date().toISOString(), types: list.map(({ q, c }) => ({ t: q.t, D: c.L.D, w: c.cost.w / c.L.nb * q.n })) };
+        const done = new Set(list.map(({ q }) => q.t)); S.RT = S.RT.filter(q => !done.has(q.t)); if (!S.RT.length) S.RT = null; else { S.selT = S.RT[0].t; S.sel = 0; S.cmp = ['cur', '0']; } }
+      else { const W = AD().applyType(P, list[0].q.t, list[0].q.Q, list[0].c); Object.entries(W).forEach(([k, v]) => { if (v === undefined) delete P[k]; else P[k] = v; }); S.RT = null; }
+      if (ctx.changed) ctx.changed(true); else redraw(); };
+    on('[data-adty]', 'click', e => { e.preventDefault(); S.selT = +e.currentTarget.dataset.adty; S.sel = 0; S.cmp = ['cur', '0']; redraw(); });
+    on('[data-adapt]', 'click', e => { const q = (S.RT || []).find(z => z.t === +e.currentTarget.dataset.adapt); if (q && q.R.cands[0]) applyT([{ q, c: q.R.cands[0] }]); });
+    on('#ad_applyAll', 'click', () => applyT((S.RT || []).filter(q => q.R.cands[0]).map(q => ({ q, c: q.R.cands[0] }))));
+    on('#ad_apply', 'click', () => { if (S.RT) { const q = S.RT.find(z => z.t === S.selT) || S.RT[0], c = q && q.R.cands[S.sel]; if (c) applyT([{ q, c }]); return; }
+      const c = S.R && S.R.cands[S.sel]; if (!c) return; if (S.key !== key(P) && !confirm('The project changed since this run. Apply anyway?')) return;
       const r = AD().apply(P, c); ['autodesign', ...AD().APPLY_KEYS].forEach(k => { if (r.project[k] === undefined) delete P[k]; else P[k] = r.project[k]; }); S.R = null; if (ctx.changed) ctx.changed(true); else redraw(); });
     on('#ad_undo', 'click', () => { const Q = AD().undo(P); if (!Q) return; ['autodesign', ...AD().APPLY_KEYS].forEach(k => { if (Q[k] === undefined) delete P[k]; else P[k] = Q[k]; }); if (ctx.changed) ctx.changed(true); else redraw(); });
   }
