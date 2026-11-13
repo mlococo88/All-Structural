@@ -168,8 +168,13 @@ await o.b.close();
 // 8. PS-23 (engineer decision 2026-11-13): the entered d_e (2.0 ft) differs from the d_e computed from the cross-section (PS-20): overhangs
 //    3 / 4 ft, barriers 1.5 ft → a banner on the Loads & LLDF tab (PS-22 style, in the flow) naming G1 2.0 → 1.5 and G5 2.0 → 2.5 ft and
 //    that the DF use the computed value; the Report's assumptions list it; Close keeps the dismissal in the project (P.notices.de; no new
-//    key), a reload does not show it again, the Report still lists it; overhangs 3.5 / 3.5 (computed 2.0 = entered): no banner, no note
+//    key), a reload does not show it again, the Report still lists it; overhangs 3.5 / 3.5 (computed 2.0 = entered): no banner, no note.
+//    PS-24: a fresh project enters the computed d_e (1.5 ft): no banner; the PS-23 case is a project saved before PS-24 (entered 2.0 ft)
 o = await openPage(FILE, { vw: 1400, vh: 1000, ls: SEED }); p = o.p; await ready(p);
+await p.click('#tabBar [data-otab="lds"]'); await p.waitForTimeout(300);
+check(!(await p.$('#deNotice')) && await p.evaluate(() => window.PSBModel.newProject().base.loads.de) === 1.5, 'PS-24: a fresh project: entered d_e 1.5 ft, no d_e banner');
+await p.evaluate(() => { const P = window.PSBModel.newProject(); P.base.loads.de = 2.0; localStorage.setItem('psb2.project.current', window.PSBModel.exportJSON(P)); });   // saved before PS-24
+await p.reload(); await ready(p);
 { const DE = /G1: entered 2\.0 ft, computed 1\.5 ft \(left overhang\); G5: entered 2\.0 ft, computed 2\.5 ft \(right overhang\)\. The live-load distribution factors use the computed d\s*e\./;
   await p.click('#inTabs [data-itab="xsec"]'); await p.fill('#i_xs\\.ohR', '4'); await p.press('#i_xs\\.ohR', 'Tab'); await p.waitForTimeout(300);
   await p.click('#tabBar [data-otab="lds"]'); await p.waitForTimeout(300);

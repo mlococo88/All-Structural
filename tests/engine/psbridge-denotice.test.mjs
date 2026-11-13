@@ -15,9 +15,11 @@ const W = loadShared('steps.js', ...PBDF, ...['model', 'rigid', 'holddown', 'des
 const M = W.PSBModel, D = W.PSBDesign;
 const J = v => JSON.parse(JSON.stringify(v));
 const sub = t => `_${t}`;
+// PS-24: a new project's entered d_e is the computed one (1.5 ft); these cases model a project whose entered d_e is 2.0 ft (made before PS-24)
+const NP = () => { const P = M.newProject(); P.base.loads.de = 2.0; return P; };
 
 test('hand check: overhangs 3 / 4 ft, barriers 1.5 ft, entered d_e 2.0 → G1 2.0 → 1.5 ft, G5 2.0 → 2.5 ft; the DF use the computed value', () => {
-  const P = M.newProject(); P.xs.ohL = 3; P.xs.ohR = 4;
+  const P = NP(); P.xs.ohL = 3; P.xs.ohR = 4;
   assert.equal(P.base.loads.de, 2.0); assert.equal(P.xs.dl.barL.bw, 1.5); assert.equal(P.xs.dl.barR.bw, 1.5);
   const before = JSON.stringify(P), r = D.deDiff(P);
   assert.equal(JSON.stringify(P), before, 'deDiff writes nothing');
@@ -28,7 +30,7 @@ test('hand check: overhangs 3 / 4 ft, barriers 1.5 ft, entered d_e 2.0 → G1 2.
 });
 
 test('where they match, or without the cross-section barriers: no rows (no notice, no Report note)', () => {
-  const P = M.newProject(); P.xs.ohL = 3.5; P.xs.ohR = 3.5;   // 3.5 − 1.5 = 2.0 = entered
+  const P = NP(); P.xs.ohL = 3.5; P.xs.ohR = 3.5;   // 3.5 − 1.5 = 2.0 = entered
   assert.deepEqual(J(D.deDiff(P)), { rows: [], sig: '' });
   P.xs.ohR = 3.5 + 1e-12; assert.equal(D.deDiff(P).rows.length, 0, 'within 1e-9 ft');
   for (const [name, P0] of Object.entries(TAB_CASES(() => M.defaultProject()))) {
@@ -38,11 +40,21 @@ test('where they match, or without the cross-section barriers: no rows (no notic
 });
 
 test('different entered values per span on one line: a row per value with its spans; the key follows the difference', () => {
-  const P = M.newProject(); P.spans.lengths = [100, 100, 100]; P.xs.skews = [0, 0, 0, 0]; W.PSBBridge.syncSpans(P);
+  const P = NP(); P.spans.lengths = [100, 100, 100]; P.xs.skews = [0, 0, 0, 0]; W.PSBBridge.syncSpans(P);
   const ext2 = P.types.findIndex(t => t.span === 2 && t.lines.includes(1)); assert.ok(ext2 >= 0);
   W.PSBBridge.setOvr(P, ext2, Object.assign(J(P.base), { loads: Object.assign(J(P.base.loads), { de: 1.5 }) }));   // span 2 entered 1.5 = computed
   const r = D.deDiff(P);
   assert.deepEqual(J(r.rows), [{ g: 1, side: 'left', spans: [1, 3], entered: 2, computed: 1.5 }, { g: 5, side: 'right', spans: [1, 3], entered: 2, computed: 1.5 }]);
   assert.match(D.deText(r, sub), /G1 \(spans 1, 3\): entered 2\.0 ft, computed 1\.5 ft \(left overhang\); G5 \(spans 1, 3\): entered 2\.0 ft, computed 1\.5 ft/);
   const k0 = r.sig; P.xs.ohL = 3.25; assert.notEqual(D.deDiff(P).sig, k0);
+});
+
+test('PS-24: a new project enters the computed d_e (1.5 ft) on every type: no rows (no notice); its results = those with 2.0 entered (every cell)', () => {
+  const P = M.newProject(); assert.equal(P.base.loads.de, 1.5); assert.ok(P.types.every(t => !('loads.de' in (t.ovr || {}))));
+  assert.deepEqual(J(D.deDiff(P)), { rows: [], sig: '' });
+  const Q = J(P); Q.base.loads.de = 2.0;   // the new project before PS-24
+  const C = v => JSON.stringify(v, (k, x) => typeof x === 'number' && Object.is(x, -0) ? '-0' : typeof x === 'function' ? undefined : x);
+  W.PSBBridge.cells(P).forEach(c => { const a = D.cellInputs(P, c.k, c.g), b = D.cellInputs(Q, c.k, c.g), ext = c.g === 1 || c.g === P.xs.nb;
+    if (ext) assert.equal(C(a), C(b), `G${c.g}: identical inputs (the computed d_e either way)`); else { assert.equal(a.loads.de, 1.5); assert.equal(b.loads.de, 2.0); }
+    const ra = W.PSBHoldDown.compute(J(a)), rb = W.PSBHoldDown.compute(J(b)); assert.equal(C(ra), C(rb), `G${c.g} S${c.s}: results byte-identical`); });
 });
