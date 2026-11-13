@@ -7204,3 +7204,62 @@ No computed value changes. Layer table at 1500 px, slab, T1 #11 / C2 #10: before
 - **New test** `tests/smoke/cbc-input-fit.mjs`: at 1400, 1500, 1920 and 390 px, in Beam Capacity (beam and slab, every input tab and every output tab), ASD Beam Calcs and Development & Splice (every input tab), each visible select / number / text input is measured. The text of its selected option or value, in its own font, must fit the content box (less the native arrow of a select), and scrollWidth must not exceed clientWidth. Before: 12 failures (the fields above). After: all pass.
 - **Results identical:** origin/main vs branch, 8 projects (default; beam; T-beam in negative bending with torsion; AASHTO beam; strip slab without S&T; strip slab with S&T and top bars; actual-width slab; the engineer's slab). The autosave, `CC`, `VALIDATION`, `allChecks()`, every output tab's text, the Report text, the ASD state and the Development & Splice hand-off are all identical.
 - Screenshots: layer table and input tabs before and after, at 1400, 1500, 1920 and 390 px.
+
+## 2026-11-13 — PR: claude/cb-nocap-chip (PR #1517: https://github.com/mlococo88/All-Structural/pull/1517) (CBBS) — Beam Capacity header chip: "NO CAPACITY" only for a strength check with no capacity; a layer with no valid bar size is an input error naming the layer   [display / validation only; no computed value, PASS / FAIL, saved key or format change]
+
+Engineer report (screenshot): a one-way slab, layer T1 at s = 4 in, Set d 6.25 in. The Size select read "#", the header chip read "NO CAPACITY ✗", and the check list showed "(provided = 0) FAIL" and "D/C ≫1 FAIL". Every site is tagged CBBS. The file uses CRLF line endings; keep them. All code is in the Beam Capacity srcdoc (`#suite-frame-capacity`); escape `"` as `&quot;` and `&` as `&amp;` when re-applying (the text below is un-escaped).
+
+### Root cause (reproduced)
+- **The bar size was not lost.** The model keeps the layer's size, #5 in the reproduction (`S.layers[0].size === '5'`, select value "5"). The select was only too narrow to show "#5" (fixed in CBIF, #1515). Neither the beam → slab switch (CBSB, 12/n → s) nor the width basis (CBSW) touches the size, and `mergeState` opens a blank saved size as #5 (unchanged).
+- **Why the chip said NO CAPACITY:** no shrinkage and temperature bars were entered (section 5 "None entered", spacing 0). The S&T spacing check then has provided s = ∞ (`dStS`, have = `Infinity`), so its D/C is ∞. `updateStatusChip()` called any infinite D/C "NO CAPACITY", although the flexural capacity was there: A_s = 0.93 in²/ft, φM_n = 23.29 kip-ft/ft.
+- The S&T ratio check (`dStA`, provided 0) and the S&T spacing check FAIL. That is the CBSB engineer decision ("Blank = none entered: the check FAILs") and is unchanged.
+- **"No tension reinforcement for negative moment"** on the Section Flexure card is correct: the slab has a bottom layer only.
+- **Related, found in testing:** a check with provided = 0 (D/C = need/1e-12, shown "≫1 (provided = 0)" since CBAZ) put its huge finite D/C into the chip, e.g. "DCR 172800000000.00 ✗" (a slab with no top bars under a negative M_u).
+- **Separate robustness bug:** a layer size that is not a bar (only from an edited or imported file, e.g. `"99"`) threw in `layerGeom` (`REBAR[L.size].d` of undefined). The page stopped with a console error.
+
+### Changes
+- **`updateStatusChip()`** (anchor `let worst=0, anyFail=false, unbounded=false;`):
+  - Before:
+    ```
+    checks.forEach(c=>{ if(c.na) return; …
+      if(c.dcr!=null&&!isFinite(c.dcr)){ unbounded=true; anyFail=true; }
+      else if(isFinite(c.dcr)&&c.dcr>worst) worst=c.dcr; });
+    …
+    chip.textContent=unbounded?"NO CAPACITY ✗":("DCR "+fmt(worst)+(anyFail?" ✗":" ✓"));
+    chip.title=(anyFail?"At least one check is not satisfied":"All checks satisfied")+" — click for the Summary dashboard.";
+    ```
+  - After:
+    ```
+    const detInf=[];
+    checks.forEach(c=>{ if(c.na) return; …
+      if(c.have0){ detInf.push(c.label); anyFail=true; return; }
+      if(c.dcr!=null&&!isFinite(c.dcr)){ if(c.tab==="tabDetail") detInf.push(c.label); else unbounded=true; anyFail=true; }
+      else if(isFinite(c.dcr)&&c.dcr>worst) worst=c.dcr; });
+    …
+    chip.textContent=unbounded?"NO CAPACITY ✗":(detInf.length?"DCR ≫1 ✗":("DCR "+fmt(worst)+(anyFail?" ✗":" ✓")));
+    chip.title=(…)+(detInf.length?" (provided = 0 or not entered: "+detInf.join("; ")+")":"")+" — click for the Summary dashboard.";
+    ```
+  - "NO CAPACITY" is kept for an unbounded strength D/C (flexure, shear, torsion; e.g. torsion with no stirrups) and for an infinite combination worst.
+- **`layerGeom()`** (anchor `const db=REBAR[L.size].d, As=L.n*REBAR[L.size].a;`): after, `const Rb=REBAR[L.size]||{d:0,a:0}, db=Rb.d, As=L.n*Rb.a;`. A valid size gives identical values.
+- **New `cbcBarSizeErrs()`** (before `function cbcLamOk(){`): for each layer whose `REBAR[L.size]` is undefined, `['ls'+i,'Layer '+side+(i+1)+': choose a bar size (Reinforcement, 4. Reinforcement layers).']` (side T / C as in the layer table).
+  - It is pushed as a `validate()` blocker (code "Reinforcement", after "At least one reinforcement layer is required.").
+  - It is pushed into `cbcInputErrs()`, which outlines the layer's Size select and puts the message under the table.
+- **`validate()` A_ℓ warning** (anchor `const flexTot=S.layers.reduce(`): `REBAR[L.size]?REBAR[L.size].a:0` (no throw).
+- **CSS:** `#inputPanel input.cbcInErr` → `#inputPanel input.cbcInErr,#inputPanel select.cbcInErr`.
+
+### Check case (the engineer's slab: h 8 in, #5 @ 4 in, d 6.25 in set, f′c 4 ksi, f_y 60 ksi, actions 0, no S&T)
+- A_s = (12/4)(0.31) = 0.93 in²/ft; a = 0.93(60)/(0.85 × 4 × 12) = 1.368 in; φM_n = 0.9(0.93)(60)(6.25 − 0.684)/12 = 23.29 kip-ft/ft. Before = after.
+- S&T ratio 0 < 0.0018 FAIL and spacing ∞ > 18 in FAIL. Before = after.
+- Chip, before: "NO CAPACITY ✗". After: "DCR ≫1 ✗", tooltip "(provided = 0 or not entered: Shrinkage and temperature reinforcement ratio; Shrinkage and temperature bar spacing)".
+- With S&T #4 @ 12 entered: "DCR 1.00 ✓" (before = after).
+- Same slab with M_u = −3 kip-ft: A_s,min FAILs with A_s = 0. Chip, before "DCR 172800000000.00 ✗", after "DCR ≫1 ✗".
+- Beam 14 × 24 with torsion (T_u 15 kip-ft) and no stirrups: "NO CAPACITY ✗", before = after.
+- Imported size "99": before, a page error (no output). After, "INPUT INVALID" and "Layer T1: choose a bar size …"; choosing #6 gives A_s = 1.32 in²/ft.
+
+### How verified
+- **New test** `tests/smoke/cbc-bar-size.mjs` (the cases above, at 1400 and 390 px, 0 console errors).
+- **Identity probe:** origin/main vs branch, 8 projects. The autosave, `CC`, `VALIDATION`, `allChecks()`, every output tab's text, the Report text and the hand-offs are identical. Only the chip text changes: "NO CAPACITY ✗" → "DCR ≫1 ✗" in the two slabs without S&T bars.
+
+### Open items
+- A blank saved layer size opens as #5 (`mergeState`, `String(L.size||'5')`, unchanged: saved data). Making it an input error instead would change how such a file opens: engineer decision.
+- `S.stir.size` (and other single sizes) not in the bar table would still throw. This is only possible from a hand-edited file and is not changed here.

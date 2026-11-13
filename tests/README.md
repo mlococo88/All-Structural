@@ -218,6 +218,11 @@ node tests/smoke/cbc-slab.mjs [--file <Concrete Beam Capacity.html>]
 # less a native select's arrow; scrollWidth vs clientWidth) at 1400, 1500, 1920 and 390 px; 0 console errors. ~3 min
 node tests/smoke/cbc-input-fit.mjs [--file <Concrete Beam Capacity.html>] [--w 1400,1500,1920,390] [--shots <dir>]
 
+# Beam Capacity header chip and layer bar size (CBBS): the engineer's slab (#5 @ 4, Set d 6.25, no T&S): size kept, phi M_n 23.29, chip
+# "DCR >>1" (was NO CAPACITY) naming the not-entered checks; provided = 0 (A_s,min, no top bars) "DCR >>1" (was DCR 172800000000.00);
+# torsion with no stirrups still NO CAPACITY; an imported unknown size: INPUT INVALID "Layer T1: choose a bar size", no page error; 1400 / 390 px. ~1 min
+node tests/smoke/cbc-bar-size.mjs [--file <Concrete Beam Capacity.html>]
+
 # Beam Capacity tab, ACI: minimum thickness, Tables 9.3.1.1 / 7.3.1.1 (CBMH): span blank = N/A "not checked"; beam 20 ft both ends continuous
 # 11.43 in (f_y 80: 13.71), cantilever 10 ft 15.00 (lightweight, w_c 90: 18.00; w_c 110: 16.50); slab 12 ft simply supported 7.20 PASS at
 # h 9, FAIL at h 7; check summary, card, Report; AASHTO without the row; 1400 and 390 px, 0 console errors. ~30 s
