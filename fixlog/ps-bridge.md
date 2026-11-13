@@ -481,7 +481,7 @@ PR #1460: https://github.com/mlococo88/All-Structural/pull/1460
 - Next: PR 2d-3 (PS-10 hold-down check for AASHTO / RIDOT, engine addition with a §4 callout).
 
 ## 2026-11-13 — PR 2d-3: PS-10 hold-down force check for AASHTO / RIDOT projects (ENGINE ADDITION, §4)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1461: https://github.com/mlococo88/All-Structural/pull/1461
 ### §4 callout (a new check; no existing formula, factor or value changed)
 - **Before:** AASHTO and RIDOT projects: **no hold-down force check** (the moved engine checks it only for MassDOT 3.7.2.2 and CTDOT V2
   5.9.1.6, `pbd-compute.js` "Hold-down force of all draped strands"). MassDOT / CTDOT: F_hd = 2·n_h·f_pbt·A_b·sin α ≤ 0.75 W (unchanged).
