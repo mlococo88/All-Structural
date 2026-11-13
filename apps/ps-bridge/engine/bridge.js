@@ -245,6 +245,32 @@
     return { errors, warnings };
   }
 
-  window.PSBBridge = { nextId, SHAPE, isShapeKey, validTypes, hasTypes, types, typeLines, lineTypes, typeAt, spanTypes, unassigned, cells, shown, effBase, diffOvr,
+  /* results(P, resOf): every girder type on every line (PR 3a-2; the steel app's SB-2 PR 2 pattern): resOf(inputs) = the engine result
+     (the page's cache of PSBHoldDown.compute, i.e. computeAll + the PS-10 check). Returns
+       { cells: [{ k, id, label, s, g, inp, R, W }], types: [{ k, id, label, span, cells: [...], gov: { <check name>: { c, g } } }], W, n }
+     W (kip) = the girder's weight on the line, w_sw (L + 2 e_end / 12) as engine/holddown.js (PS-10's W), per cell, per type and the
+     bridge total (every checked line; SB-6). gov: each check's worst line of the type (the largest ratio; a ratio that is not a number
+     first; ties keep the first line, SB-2 decision (1)). Nothing is calculated here but the sum of the weights. */
+  function results(P, resOf) {
+    const D = window.PSBDesign, out = { cells: [], types: [], W: 0, n: 0 };
+    cells(P).forEach(c => {
+      let inp, R; try { inp = D.cellInputs(P, c.k, c.g); R = resOf(inp); } catch (e) { R = { error: e.message }; }
+      const W = R && !R.error && R.g ? R.g.wsw * (inp.L + 2 * (+inp.opt.endOh || 0) / 12) : NaN;
+      out.cells.push(Object.assign({}, c, { inp, R, W }));
+    });
+    types(P).forEach((T, k) => {
+      const cs = out.cells.filter(c => c.k === k); if (!cs.length) return;
+      const gov = {};
+      cs.forEach(c => (c.R && c.R.checks || []).forEach(q => { const b = gov[q.n], bad = x => typeof x !== 'number' || isNaN(x);
+        if (!b || (bad(q.r) && !bad(b.c.r)) || (!bad(b.c.r) && q.r > b.c.r)) gov[q.n] = { c: q, g: c.g, cell: c }; }));
+      const W = cs.reduce((a, c) => a + c.W, 0);
+      out.types.push({ k, id: T.id, label: T.label, span: T.span, cells: cs, gov, W });
+      out.W += W;
+    });
+    out.n = out.cells.length;
+    return out;
+  }
+
+  window.PSBBridge = { results, nextId, SHAPE, isShapeKey, validTypes, hasTypes, types, typeLines, lineTypes, typeAt, spanTypes, unassigned, cells, shown, effBase, diffOvr,
     setOvr, sameShape, resetKey, ovrKeyOf, setLines, assignLine, addType, deleteType, fill, newTypes, migrate, syncSpans, renumber, snapshot, checks, posLabel, sel };
 })();

@@ -932,3 +932,55 @@ PR #1496: https://github.com/mlococo88/All-Structural/pull/1496
   harnesses and the check summary read the same cell.
 ### Open items
 - Next: PR 3a-2 (each type on every line, worst line governs; check summary / Summary / Report per type and line; unequal bays, different skews).
+
+## 2026-11-13 — PR 3a-2: the bridge level, part 2 — every girder type checked on every line (worst line governs), check summary / Summary / Report per type and line; unequal bays and different end skews allowed (S and θ per line: §4 callout, no existing result changed)
+PR: (link added on merge)
+### Request
+- Plan §5 PR 3a, §7 item 3 (how S maps onto the engine); PS-9 (unequal bays from the bridge step); PS-15 (the interim blocking errors end
+  at the bridge step); SB-2 PR 2 #1454 (each type on every line, worst line governs), SB-5 (one count per type per check), SB-6 (weight per
+  line, bridge total) as the pattern.
+### §4 callout — the bridge values S and θ fed to the engine (inputs that were input errors before: no saved design changes)
+- **S of a girder line** (`engine/design.js` `lineS`, used by `bridge(P)` for `PBD.applyBridge`): before `S = bays[0]` with unequal bays an
+  input error; after: an exterior line (G1, G_Nb) the bay next to it, an interior line the mean of its two bays — the rule of
+  `shared/lldf.js memberSpacing` that the Steel Bridge app uses; for an interior girder it equals its tributary width (AASHTO LRFD 10th Ed.
+  Art. 4.6.2.6.1). The engine uses S, unchanged, for the distribution factors (Art. 4.6.2.2.2b-1 / 4.6.2.2.3a-1 interior; lever rule and
+  e-factors exterior), b_eff (tributary) and the deck weight. Equal bays: S = the bay, as before (proved: inputs byte-identical).
+- **θ of a span** (`one()`): before `|θ_left|` with different skews an input error; after `max(|θ_left|, |θ_right|)`. The engine's moment
+  reduction is 1.0 below 30° (Table 4.6.2.2.2e-1: c1 = 0 for θ < 30°), so below 30° θ acts only in the shear correction (Table 4.6.2.2.3c-1),
+  where the obtuse corner's (larger) θ is the conservative one. Different skews with the larger ≥ 30° and the DF computed stay a blocking
+  input error (one θ cannot be both the smaller for the moment, Art. 4.6.2.2.2e, and the larger for shear); with the DF entered they are allowed.
+- **Worked check case** (new project, 120 ft, BT-72, 5 girders, overhangs 3 ft; bays 8, 10, 10, 8 ft):
+  - S: G1 = 8, G2 = (8 + 10)/2 = 9, G3 = (10 + 10)/2 = 10, G4 = 9, G5 = 8 ft.
+  - G2: S = 9 ft = the 9-ft equal-bay design exactly (test: engine inputs and computeAll identical): DF_M = max(0.4904, 0.7191) = 0.7191.
+  - G3: S = 10 ft. From the 9-ft case K-term (K_g/12Lt_s³)^0.1 = (0.7191 − 0.075)/[(9/9.5)^0.6 (9/120)^0.2] = 0.6441/0.57667 = 1.1169;
+    g_M2 = 0.075 + (10/9.5)^0.6 (10/120)^0.2 × 1.1169 = 0.075 + 1.03125 × 0.60836 × 1.1169 = 0.7757 (engine 0.7758); g_V2 = 0.2 + 10/12 −
+    (10/35)² = 0.9517 (engine 0.9517); b_eff = 12 × 10 = 120 in; deck DC1 1.0875 klf (9 ft: 0.9875); M_LL+IM 2833.5 kip-ft (9 ft: 2626.6);
+    Flexure ratio 0.7891 (9 ft: 0.7516). The Interior type's flexure governs on G3 (test).
+  - G1 (exterior): S = 8 ft (the bay next to it), lever rule 1.2 × R = 0.750, DF_M = 0.750.
+  - Skews 10° / 20° in span 1: θ = 20°, every result = the 20°/20° design (test). 20° / 35°: input error "… the larger is 30° or more …".
+### Where
+- `engine/design.js`: `lineS`, `bridge()` S = `lineS(P, d.g)`, `one()` skew = the larger, `checks()` (the unequal-bay error removed; the skew
+  rule above), `driven()` labels. `engine/bridge.js`: `results(P, resOf)` (every cell's inputs and result, each check's worst line per type,
+  weights W = w_sw (L + 2 e_end/12) per line, type and bridge). `ui/dash.js`: `grp(R, gp, A)` (one entry per type and check, its worst line;
+  the chips, verdict and lists name the type and line; Rating the lowest over every cell); a click shows that type and line (`o.pick`).
+  `ui/types.js` `summaryCard` (Summary tab: a row per type, its worst line named, a row per line, weights, bridge total; each ratio opens its
+  tab with that cell). `report/data.js` (`B.all`, `B.cell`), `report/builders.js` (§1 "Every girder type and line" table when there are 2 or
+  more cells; titles name the type), `ui/report.js` (cache key with the cells). `index.html`: `allResults()`, `pick()`, the Summary card,
+  `data-tycell` links, the dash `all`/`pick`. `ui/inputs.js`: Assumptions (S per line, θ rule, the rigid-section note below).
+### Saved data (CLAUDE.md §5)
+- None (no field or key). A project saved with equal bays and skews: every value identical (3a-1 proofs; harness B).
+### How verified
+- `tests/engine/psbridge-types.test.mjs` +3 tests (S per line; G2 of 8-10-10-8 = G2 of 9-9-9-9 exactly, G3 = the 10-ft design; skews;
+  results = PSBHoldDown.compute per cell, worst lines, weights). Smoke `ps-bridge-types.mjs` §6 (unequal bays, chips over every cell, the
+  Summary table, a ratio opens its cell, Report §1, skews); `ps-bridge-skeleton.mjs` expectations: chips and column totals over every type and
+  line (the page's first project now has 2 types on 5 lines). Harness B normal / --import (one cell each): see the PR.
+### Decisions (pending engineer review)
+- 3a2-D1. S per line = the steel app's rule (exterior: adjacent bay; interior: mean of the two bays).
+- 3a2-D2. θ per span = the larger |θ| below 30°; ≥ 30° with different skews and the DF computed: blocking input error.
+- 3a2-D3. As the steel app: one verdict per type (its worst line), one count per type per check (SB-5); weight per line and bridge total (SB-6).
+### Open items (raised, not changed)
+- The engine's exterior rigid-section check (C4.6.2.2.2d, `distFactors`) places N_b girders at an equal spacing S (here the exterior bay);
+  with unequal bays the actual Σx² differs. Question for the engineer: keep (noted in the Assumptions), or compute it from the actual girder
+  positions (an engine change, §4)?
+- `loads.de` (d_e for the exterior girder) is entered per type; with different left and right overhangs an exterior type on G1 and G_Nb uses one
+  d_e for both (enter a type per side, or the larger d_e).
