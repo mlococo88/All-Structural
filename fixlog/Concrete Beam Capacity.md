@@ -6334,3 +6334,266 @@ Headless Chromium, `file://`. Scratch probe: origin/main vs branch, 5 cases (def
 ### Open items
 - Decimal entry with the Beam Capacity Report tab open: 0 keystrokes lost. While the sweep types transient values, the section figure logs "`<rect>` attribute width: A negative value". The Input Echo tab shows the same errors on its own (unchanged code, 20 errors); the report draws the figure three times. Not changed.
 - Typing with the Report tab open rebuilds the report on each refresh (about 190 ms in the default project), as the Development & Splice Report tab already did.
+
+## 2026-11-13 — PR: claude/cb-loads-display (PR #1492: https://github.com/mlococo88/All-Structural/pull/1492) (CBTU, CBDA, CBVC) — Beam Capacity tab: a hidden T_u no longer affects the identical-combination and tie logic; detailing checks that do not depend on the factored actions name "All combinations (positive / negative moment)"; the V_c row (a) note reworded   [display only; no formula, computed value, storage key or saved-data format change]
+
+The file uses CRLF line endings; keep them. The code is in the Beam Capacity srcdoc (`#suite-frame-capacity`): when re-applying, escape `&` as `&amp;` and `"` as `&quot;` (the Before / After text below is un-escaped). Every site is tagged CBTU, CBDA or CBVC. First of the PRs for the engineer's decision to add service load cases (2026-11-13); the service-load builder follows in its own PR.
+
+### CBTU. Hidden T_u (torsion off) ignored by the identical-combination check, the torsion tie-break and the all-zero warning
+- **Problem:** the default project's first row "1.2D + 1.6L" carries T_u = 13.5 kip-ft. With "Check torsion" off (ACI) the T_u column is hidden and T_u has no effect on any check (`torsion()` returns null; `cbcTorA` runs in AASHTO mode only), but it was still part of the identical-combination key, so two rows with the same M_u and V_u were worked twice and not flagged identical. It also broke the tie of `govTorIndex` (not shown when torsion is off) and suppressed the "All factored actions are zero" warning.
+- **Where:** new `cbcTuUsed()` before `function computeAll(){`; in `computeAll` (anchor `/* §7.2 identical-result detection`); in `validate` (anchor `const allZero=`).
+- **Added:** `function cbcTuUsed(){ return (S.tor.present&&S.code==='ACI')||S.code==='AASHTO'; }`
+- **Before:**
+  ```js
+    const seen={};
+    rows.forEach(r=>{
+      const key=[r.Mu.toFixed(6),r.Vu.toFixed(6),r.Tu.toFixed(6)].join("|");
+  ...
+    const govTorIndex   = pick(r=>r.dcT,     r=>r.Tu);
+  ...
+    const allZero=S.combos.every(c=>!c.Mu&&!c.Vu&&!c.Tu);
+  ```
+- **After:**
+  ```js
+    const seen={}, tuUsed=cbcTuUsed();
+    rows.forEach(r=>{
+      const key=[r.Mu.toFixed(6),r.Vu.toFixed(6),(tuUsed?r.Tu:0).toFixed(6)].join("|");
+  ...
+    const govTorIndex   = pick(r=>r.dcT,     r=>tuUsed?r.Tu:0);   /* CBTU: a hidden T_u does not break the tie */
+  ...
+    const allZero=S.combos.every(c=>!c.Mu&&!c.Vu&&!(cbcTuUsed()&&c.Tu));   /* CBTU: a hidden T_u is not a demand */
+  ```
+- **Provision:** none (display / identification logic). **Check case:** ACI, torsion off, combinations 1.2D + 1.6L (M_u 180, V_u 30, T_u 13.5 hidden), X (180, 30, 0), Neg (−90, 20, 0): before, X was worked in full; after, X reads "identical to 1.2D + 1.6L" (sameAs 0). Every D/C, φM_n, φV_n and PASS / FAIL unchanged.
+
+### CBDA. Detailing "Governing combination": "All combinations (positive moment)" / "(negative moment)" where the check does not depend on the actions
+- **Problem:** `detEnvelope()` named the first combination on a tie, so a check that depends only on the section and the sense of bending (cover, bar spacing, A_s,min, ε_t, crack control) showed e.g. "1.2D + 1.6L" as governing, as if that combination's actions mattered.
+- **Where:** `detEnvelope()` (anchor `E.allOk=(E.na?true:E.allOk)&&d.ok; E.na=false;`), the Detailing tab card note (anchor `x.innerHTML="<b>Evaluated for "+E.combo+"</b>`), the Report's worked detailing titles (anchor `return {title:d.name+' ('+E.combo+')'`).
+- **Fix:** each evaluation is recorded (`E.ev.push({ci,neg,na,have,need,ok})`). After the loop: where every combination in the sense of bending of the governing entry has the check, none is N/A, and all give the same provided, required and status (relative tolerance 1e-9), `E.combo` becomes "All combinations (positive moment)" or "All combinations (negative moment)", or "All combinations" when the other sense also has it for every combination with the same values. `E.comboName` keeps the name; `E.ci` (link target), D/C, PASS / FAIL and the derivation are unchanged. With one combination the name is kept. A check whose values differ between combinations of that sense keeps the combination's name. The Detailing card note reads "<label>: the same result for each (this check does not depend on the factored actions)." and the Report title "<check> — <label>". The Summary, the Detailing table, the check panel and the Report read `E.combo`, so they all show the label.
+- **Before / After (detEnvelope, end):**
+  ```js
+    return order.map(id=>map[id]);
+  ```
+  ```js
+    const eqv=(a,b)=>a===b||(isFinite(a)&&isFinite(b)&&Math.abs(a-b)<=1e-9*Math.max(1,Math.abs(a),Math.abs(b)));
+    const same=(a,b)=>a.ok===b.ok&&eqv(a.have,b.have)&&eqv(a.need,b.need);
+    order.forEach(id=>{ const E=map[id]; E.comboName=E.combo; E.allC=false;
+      if(E.na||!E.ev||CC.combos.length<2) return;
+      const g=E.ev.find(x=>x.ci===E.ci); if(!g) return;
+      const nIn=neg=>CC.combos.filter(r=>!!r.neg===neg).length;
+      const sense=E.ev.filter(x=>x.neg===g.neg), other=E.ev.filter(x=>x.neg!==g.neg);
+      if(sense.length!==nIn(g.neg)||sense.some(x=>x.na)||!sense.every(x=>same(x,g))) return;
+      E.allC=true;
+      E.combo=(other.length&&other.length===nIn(!g.neg)&&other.every(x=>!x.na&&same(x,g)))?"All combinations":"All combinations ("+(g.neg?"negative":"positive")+" moment)";
+    });
+    return order.map(id=>map[id]);
+  ```
+- **Provision:** none. **Check case:** combinations A (M_u 250, V_u 35), B (−120.75, 42.5), C = A, ACI, torsion on: Clear cover "A" → "All combinations"; Bar clear spacing "A" → "All combinations (positive moment)"; Minimum flexural reinforcement "B" → "All combinations (negative moment)"; Crack control "B" → "All combinations (negative moment)"; torsion detailing (differs by T_u) keeps "A".
+
+### CBVC. Shear tab, ACI: the V_c note (engineer, 2026-11-13: wording only, no V_c method change)
+- **Problem:** the note "The simplified expression of 22.5.5.1 is used. The detailed method of Table 22.5.5.1, which credits the reinforcement ratio and axial load, would generally give a larger V_c; it is not applied here, so the result is conservative." was inaccurate: with no axial load, row (b) exceeds row (a) only when 8λ(ρ_w)^(1/3) > 2λ, i.e. ρ_w > 1/64 ≈ 0.0156. Both rows are permitted when A_v ≥ A_v,min, so using row (a) is code-compliant either way. The note also showed when row (c) (A_v < A_v,min) was used.
+- **Where:** `workShear` (anchor was the old note); `cbcRptShear`, the row (a) `Vc` step.
+- **After (Shear tab):** shown only when `sh.stirAdequate` (row (a) used): lead "Row (a) of Table 22.5.5.1 is used (A_v ≥ A_v,min)." with "Row (b): ACI also permits row (b) when A_v ≥ A_v,min; it adds ρ_w and N_u. This tool uses row (a), which the code permits." and "When (b) is larger: with no axial load (this tool has no N_u input), row (b) gives the larger V_c only when ρ_w > 1/64 ≈ 0.0156 (1.56%), or with axial compression. Here ρ_w = A_s/(b_w d) = <value> (above / not above 0.0156)."
+- **Report:** the row (a) `Vc` step gets the same statement as its note (it had no note before).
+- **Provision:** ACI 318-19 Table 22.5.5.1 rows (a), (b), (c) (paraphrased). **Check case:** default project (12 × 18 in, 3 #5, d = 15.19 in): ρ_w = 0.93/(12 × 15.19) = 0.00510, "not above 0.0156"; no-stirrup project (row (c)): no note. V_c unchanged.
+
+### Decision (pending engineer review)
+- "All combinations" (no sense) is shown where both senses give the same provided / required / status for every combination (e.g. clear cover); the request named only the "(positive moment)" / "(negative moment)" forms.
+- A demand-dependent check (e.g. A_v,min, the d/2 or d/4 spacing tier) is also labelled "All combinations (…)" when every combination of that sense happens to give the same values; the label states the fact that the result is the same for each, not that the check never depends on the actions.
+
+### How verified
+Headless Chromium, `file://`, scratch probe origin/main vs branch, 7 projects seeded as the autosave (fresh, the old default project, ACI torsion on with a duplicate row, ACI torsion off with a hidden T_u, AASHTO T-section with T_u, ACI no stirrups / negative moment only, ACI computed f_s with service moments): `computeAll()` identical apart from `sameAs` (changed only in the hidden-T_u project, as intended) and the invisible `govTorIndex` tie (no-stirrup project, torsion off); `VALIDATION`, the hand-off message to the ASD and Development & Splice frames and the autosave text identical; tab text and Report differ only in the governing-combination labels, the identical-combination notes and the V_c note. 0 console errors. Tests: listed in the PR.
+
+## 2026-11-13 — PR: claude/cb-loads-service (PR #1494: https://github.com/mlococo88/All-Structural/pull/1494) (CBSL) — Beam Capacity tab: service load cases D, L, L_r, S, R, W, E; the tool builds the ACI 318-19 Table 5.3.1 combinations (Eqs. (5.3.1a)–(5.3.1g), 5.3.3 option), each worked on a new Load Combinations tab and in the Report; factored mode unchanged   [NEW CALCULATION FUNCTIONALITY (load factors); saved format: additive fields `loadMode`, `svc` with migration; no new storage key]
+
+The file uses CRLF line endings; keep them. All code is in the Beam Capacity srcdoc (`#suite-frame-capacity`). When re-applying, escape `&` as `&amp;` and `"` as `&quot;` (the text below is un-escaped). Every site is tagged CBSL. This is PR 2 of 2 of the engineer's decision (2026-11-13) to add service load cases. PR 1 was #1492 (CBTU, CBDA, CBVC).
+
+### Engineer decision (2026-11-13)
+- The Loads input takes either:
+  - "Service load cases (the tool builds the combinations)", or
+  - "Factored actions typed per combination" (the existing mode, unchanged).
+- Service mode takes the load cases D, L, L_r, S, R, W, E. Each case has M, V and T at the section, signed. A "reverses" toggle for W and for E builds both signs.
+- The tool builds ACI 318-19 5.3.1, Table 5.3.1, expanding each "or" into its own row.
+- The 5.3.3 option (0.5 on L) is a checkbox, default off.
+- Each combination is worked on screen and in the Report, with links.
+
+### Provisions (ACI 318-19, checked in structural_references ACI-318-19-2019.pdf, PDF pages 64–65; the 2022 errata have no Chapter 5 item)
+| Eq. | Combination (Table 5.3.1) |
+|---|---|
+| (5.3.1a) | U = 1.4D |
+| (5.3.1b) | U = 1.2D + 1.6L + 0.5(L_r or S or R) |
+| (5.3.1c) | U = 1.2D + 1.6(L_r or S or R) + (1.0L or 0.5W) |
+| (5.3.1d) | U = 1.2D + 1.0W + 1.0L + 0.5(L_r or S or R) |
+| (5.3.1e) | U = 1.2D + 1.0E + 1.0L + 0.2S |
+| (5.3.1f) | U = 0.9D + 1.0W |
+| (5.3.1g) | U = 0.9D + 1.0E |
+
+- **5.3.3 (paraphrased):** the factor on L in (5.3.1c), (5.3.1d) and (5.3.1e) may be 0.5, except for garages, areas of public assembly, and areas where L exceeds 100 psf.
+- **5.3.2 (paraphrased):** the effect of one or more loads not acting at the same time is to be investigated. The tool addresses it only through the 0.9D equations and the W / E reversal (see Open items).
+
+### CBSL-1. The builder (new block, inserted before the STATE banner that precedes `function defaultState(){`)
+- **Where:** a new block before the `STATE` banner (anchor `CBSL (2026-11-13, engineer decision): SERVICE LOAD CASES`).
+- **Added:**
+  ```js
+  const CBC_LD_KEYS=["D","L","Lr","S","R","W","E"];
+  function cbcBuildCombos(svc){
+    const C=(svc&&svc.cases)||{}, rev=(svc&&svc.rev)||{}, fL=(svc&&svc.l05)?0.5:1.0;
+    const val=(k,a)=>{ const c=C[k]||{}; const v=+c[a]; return isFinite(v)?v:0; };
+    const zero=k=>!val(k,"M")&&!val(k,"V")&&!val(k,"T");
+    const lab={D:"D",L:"L",Lr:"Lr",S:"S",R:"R",W:"W",E:"E"};
+    const ff=f=>f.toFixed(1);
+    const nameOf=terms=>terms.map((t,i)=>(i===0?(t.s<0?"−":""):(t.s<0?" − ":" + "))+ff(t.f)+lab[t.k]).join("");
+    const X3=["Lr","S","R"], T=[];
+    const tpl=(eq,list)=>list.forEach(terms=>T.push({eq,terms}));
+    tpl("5.3.1a",[[["D",1.4]]]);
+    tpl("5.3.1b",X3.map(x=>[["D",1.2],["L",1.6],[x,0.5]]));
+    tpl("5.3.1c",[].concat(...X3.map(x=>[[["D",1.2],[x,1.6],["L",fL]],[["D",1.2],[x,1.6],["W",0.5]]])));
+    tpl("5.3.1d",X3.map(x=>[["D",1.2],["W",1.0],["L",fL],[x,0.5]]));
+    tpl("5.3.1e",[[["D",1.2],["E",1.0],["L",fL],["S",0.2]]]);
+    tpl("5.3.1f",[[["D",0.9],["W",1.0]]]);
+    tpl("5.3.1g",[[["D",0.9],["E",1.0]]]);
+    const rows=[], sig={};
+    T.forEach(t=>{
+      const revK=t.terms.map(x=>x[0]).find(k=>(k==="W"||k==="E")&&rev[k]);
+      (revK?[1,-1]:[1]).forEach(sg=>{
+        const terms=t.terms.map(([k,f])=>({k,f,s:(k===revK?sg:1)}));
+        const key=t.eq+"|"+terms.filter(x=>!zero(x.k)).map(x=>x.k+":"+x.f+":"+x.s).join(",");
+        const name=nameOf(terms);
+        if(sig[key]){ sig[key].merged.push(name); return; }
+        const sum=a=>terms.reduce((s,x)=>s+x.f*x.s*val(x.k,a),0);
+        const r={eq:t.eq,terms,Mu:sum("M"),Vu:sum("V"),Tu:sum("T"),name,merged:[]};
+        sig[key]=r; rows.push(r);
+      });
+    });
+    return rows;
+  }
+  ```
+- **Helpers (same block):**
+  - `cbcSvcDefault()`: blank cases, `rev:{W:true,E:true}`, `l05:false`.
+  - `cbcSvcNorm(x)`: numbers; a missing case is 0; `rev` true unless saved false; `l05` boolean.
+  - `CBC_LEGACY_COMBOS`: the three old default rows.
+  - `cbcSvcOn()` = `S.loadMode==='service'&&S.code==='ACI'`.
+  - `cbcCombos()`: `cbcBuildCombos(S.svc)` mapped to `{name,Mu,Vu,Tu,gen}` in service mode, else `S.combos`.
+  - `CBC_LD_SYM`, `CBC_LD_NAME`.
+  - `cbcLdTex(g,a)`: the TeX of U, and for a = M, V or T the symbolic, substituted and result forms.
+- **Rows left out (the only skipping):** a row is dropped only where an earlier row of the same equation has the same terms (load, factor, sign) once the terms of all-zero load cases are dropped. The kept row lists the dropped names in `merged`. Examples:
+  - L_r = S = R = 0 leaves one row of (5.3.1b);
+  - W = 0 leaves one of ±W.
+
+  Rows of different equations are never dropped. Equal actions are flagged by the existing identical-combination check (`sameAs`) and worked once on the result tabs.
+
+### CBSL-2. State and migration (§5)
+- **`defaultState()`:**
+  - Before:
+    ```js
+        combos:[
+          {name:"1.2D + 1.6L",   Mu:0,   Vu:0,   Tu:13.5},
+          {name:"1.2D + 1.0W + L",Mu:0,  Vu:0,   Tu:0},
+          {name:"0.9D + 1.0W",   Mu:0,   Vu:0,   Tu:0}
+        ],
+    ```
+  - After:
+    ```js
+        loadMode:"service",
+        svc:cbcSvcDefault(),
+        combos:[{name:"Combo 1",Mu:0,Vu:0,Tu:0}],
+    ```
+- **`mergeState()`** (opening the autosave, a saved project, an Export JSON import, Undo):
+  - Before:
+    ```js
+      if(!Array.isArray(S.combos)||!S.combos.length) S.combos=d.combos;
+    ```
+  - After:
+    ```js
+      const legacy=!(st.loadMode==='service'||st.loadMode==='factored');
+      S.loadMode=(st.loadMode==='service')?'service':'factored';
+      S.svc=cbcSvcNorm(st.svc);
+      if(!Array.isArray(st.combos)||!st.combos.length) S.combos=legacy?CBC_LEGACY_COMBOS.map(c=>({...c})):d.combos;
+    ```
+  - A save without `loadMode` therefore opens in factored mode with its rows, and with the old default rows if it had none, exactly as before.
+- **Keys:** no new storage key (`rcbeam_v2_auto`, `rcbeam_v2_projects` unchanged). The new fields `loadMode` and `svc` are additive inside the existing project object and Export JSON. An older copy of the tool ignores them and uses `combos`.
+
+### CBSL-3. Use of the combinations
+- `computeAll`: `const combos=cbcCombos().map((c,i)=>({...c,ci:i}));` (was `S.combos`). The rows carry `gen` in service mode.
+- `validate`:
+  - `CO=cbcCombos()` replaces `S.combos` in the "at least one", all-zero, AASHTO torsion and crack-control lines.
+  - The all-zero message names the service cases in service mode.
+  - A note "ACI 5.3.1" states how the combinations are built and the 5.3.3 choice (service mode only).
+- `cbcCombos()` also replaces `S.combos` in the Input Echo table, the Report Include boxes and options (`cbcRxSel`, `defaultRptOpts`, `normRptOpts`, `cbcRxBoxes`, `cbcRxHarvest`, `cbcRxAbout`). In factored mode it is `S.combos`, so those are unchanged.
+- The hand-off to the ASD and Development & Splice frames reads `CC`, so it needs no change. In service mode it carries the built combinations' governing values.
+
+### CBSL-4. Input panel (Loads, `mkSection("inLoads"…)`)
+- In ACI mode, a "Loads" select (`data-fkey="ldMode"`) offers the two modes.
+- In AASHTO mode with `loadMode` service, a note says that the typed factored actions are used and the cases are kept.
+- In service mode, `buildSvcLoads(b)` shows:
+  - the signs / W and E / blank notes;
+  - the case table: M, V, and T where T_u is used (`cbcTuUsed`); keys `svM<k>`, `svV<k>`, `svT<k>`;
+  - the W and E reversal boxes (`svRevW`, `svRevE`);
+  - the 5.3.3 box (`svL05`) with its paraphrased condition, "Off (default): 1.0 (conservative)";
+  - the built combinations, each name a link (`a.wkA`, `data-tab="tabLoads"`, `data-card="ldC<i>"`).
+- Factored mode shows the table as before.
+
+### CBSL-5. Load Combinations tab (`tabLoads`, service mode only, after Input Echo)
+- **`TABS()`:** `if(cbcSvcOn()) t.splice(2,0,["tabLoads","Load Combinations"]);`. **`buildOutput`:** `case "tabLoads": buildLoadsTab(pg); break;`.
+- **Cards:**
+  - `ldCases`: the cases, and the rules (`cbcLdRules()`: alternatives, reversal, L factor, rows left out, signs, not included).
+  - `ldAll`: the table, each name linking to its card, with "same actions as n" and "governs overall".
+  - one card `ldC<i>` per combination: `eqBlock` with U symbolic, then M_u, V_u (and T_u) as symbolic → substituted → result. It also gives the variables, the "Stands for" / "Reversed" / 5.3.3 / identical notes, and "Worked in" links to the Flexure, Shear and Torsion cards.
+- **Back links:** the Flexure, Shear and Torsion combination cards start with `cbcLdLink(b,r)`, which reads "Worked in: M_u, V_u → Load Combinations · Combination n (Eq. …)" in service mode.
+
+### CBSL-6. Report (`cbcRptModel`)
+- **Inputs:** in service mode, a "Service load cases" table, and the "Load combinations" table with an Eq. column. Each M_u, V_u, T_u links to its step (`ld<ci>/Mu`, `/Vu`, `/Tu`). Factored mode keeps the old table line unchanged.
+- **New section "Load combinations"** (service mode), after Inputs (mapped to `tabInputEcho` in the `cbcRxFilter` table, so it follows Inputs and shares its Include box):
+  - "How the combinations are built";
+  - per combination a topic "U = …" (ACI 318-19 5.3.1, Eq. (…)) with the M_u, V_u (T_u) steps, and the notes.
+- **Flexure / Shear / Torsion:** each combination's subsection starts with "Factored actions from the service load cases (ACI 318-19 Table 5.3.1): [[ld<ci>/Mu]]" (service mode).
+
+### Hand check (the PR's check case; Node test `tests/engine/cbc-loads.test.mjs`)
+Inputs: D: M = 5 kip-ft, V = 2 kip; L: M = 3, V = 1.2; W: M = ±2, V = ±0.8 (reverses); L_r = S = R = E = 0; 5.3.3 off.
+
+| # | Eq. | Combination | M_u (kip-ft) | V_u (kip) |
+|---|---|---|---|---|
+| 1 | a | 1.4D | 1.4(5) = 7.00 | 1.4(2) = 2.80 |
+| 2 | b | 1.2D + 1.6L + 0.5Lr (stands for 0.5S, 0.5R) | 6 + 4.8 = 10.80 | 2.4 + 1.92 = 4.32 |
+| 3 | c | 1.2D + 1.6Lr + 1.0L | 6 + 3 = 9.00 | 2.4 + 1.2 = 3.60 |
+| 4 | c | 1.2D + 1.6Lr + 0.5W | 6 + 1 = 7.00 | 2.4 + 0.4 = 2.80 |
+| 5 | c | 1.2D + 1.6Lr − 0.5W | 6 − 1 = 5.00 | 2.4 − 0.4 = 2.00 |
+| 6 | d | 1.2D + 1.0W + 1.0L + 0.5Lr | 6 + 2 + 3 = 11.00 | 2.4 + 0.8 + 1.2 = 4.40 |
+| 7 | d | 1.2D − 1.0W + 1.0L + 0.5Lr | 6 − 2 + 3 = 7.00 | 2.4 − 0.8 + 1.2 = 2.80 |
+| 8 | e | 1.2D + 1.0E + 1.0L + 0.2S (E = 0: ±E one row) | 9.00 | 3.60 |
+| 9 | f | 0.9D + 1.0W | 4.5 + 2 = 6.50 | 1.8 + 0.8 = 2.60 |
+| 10 | f | 0.9D − 1.0W | 4.5 − 2 = 2.50 | 1.8 − 0.8 = 1.00 |
+| 11 | g | 0.9D + 1.0E | 4.50 | 1.80 |
+
+- **Governing:** (5.3.1d) with +W, M_u = 11.00 kip-ft, V_u = 4.40 kip.
+- **Identical actions:** rows 4 and 7 equal row 1, and row 8 equals row 3; each is worked once.
+- **With 5.3.3 on:** (c), (d) and (e) use 0.5L: row 3 = 6 + 1.5 = 7.50, row 6 = 6 + 2 + 1.5 = 9.50, governing (5.3.1b) 10.80.
+- **Before:** none. The tool took only typed factored actions.
+
+### Decisions (pending engineer review)
+- **New projects** start in service mode with blank cases. The three named zero rows ("1.2D + 1.6L" with a T_u of 13.5, "1.2D + 1.0W + L", "0.9D + 1.0W") are removed for new projects only. One blank row "Combo 1" is kept for factored mode. Older saves without combinations still get the old rows.
+- **W and E reverse by default** (both signs built: conservative).
+- **5.3.3 is off by default** (1.0 on L, conservative).
+- **Row skipping is within one equation only.** Identical rows of different equations are kept and flagged identical.
+- **ACI mode only.** Service mode does not build AASHTO LRFD Table 3.4.1-1 combinations. In AASHTO mode the typed factored actions are used, and the cases are kept.
+- **Load cases built:** only D, L, L_r, S, R, W, E. Other loads of 5.3 (fluid, earth pressure, self-straining, flood, ice) are not built; the note says to use factored mode for them.
+- **Signs:** M, V and T are combined with their signs; the checks then use |V_u| and |T_u|, as before. A reversed W or E flips M, V and T together.
+- **T column:** the T inputs are shown only where T_u is used (ACI with torsion checked). A T kept while the column is hidden is still summed but, as in factored mode (CBTU), has no effect on any check.
+
+### How verified
+- **Node:** `tests/engine/cbc-loads.test.mjs` (5 tests): the hand check; 25 rows when every case is non-zero (a 1, b 3, c 9, d 6, e 2, f 2, g 2; 16 without reversal); 5.3.3 only in (c)–(e); sign handling; blank input.
+- **Factored mode equal to main (§5):** scratch probe, origin/main vs branch, headless Chromium, `file://`.
+  - Eight saved projects, each opened both from the autosave and through Import (doImport):
+    - the old default project;
+    - ACI torsion on with a duplicate row;
+    - ACI torsion off with a hidden T_u;
+    - an AASHTO T-section with T_u;
+    - ACI no stirrups, negative moment;
+    - ACI computed f_s;
+    - AASHTO without torsion;
+    - an old save with no combinations.
+  - Compared: `computeAll()`, `VALIDATION`, `detEnvelope`, `allChecks`, the hand-off message, the Report model, and every tab's text. All identical.
+  - The autosave text is identical apart from the two added fields (`loadMode: "factored"`, `svc` blank).
+- **Smoke tests:**
+  - new `tests/smoke/cbc-loads.mjs`, 1400 and 390 px;
+  - `decimal-entry.mjs`, which now also types the service D moment and checks 1.4D;
+  - the suite's other tests, as listed in the PR.

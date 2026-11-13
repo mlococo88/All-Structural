@@ -190,6 +190,13 @@ node tests/smoke/rebar-redirect.mjs [--old f9ec0f9]
 # in the Report, 1400 and 390 px, 0 console errors. ~30 s
 node tests/smoke/rebar-comp-lap.mjs [--file <Concrete Beam Capacity.html>]
 
+# Beam Capacity tab, service load cases (CBSL, ACI 318-19 Table 5.3.1): a new project opens in service mode; the hand check typed into the
+# fields (D 5 / 2, L 3 / 1.2, W ±2 / ±0.8: 11 rows, flexure governed by (5.3.1d) +W, M_u 11.00); the input-table link opens the card on the
+# Load Combinations tab (symbolic, substituted, result); the Flexure card links back; the Report's "Load combinations" section after Inputs;
+# reload keeps it; factored mode and AASHTO use the typed rows; an older save opens in factored mode; 1400 and 390 px, 0 console errors. ~1 min
+# (the builder itself: node tests/engine/run.mjs cbc-loads)
+node tests/smoke/cbc-loads.mjs [--file <Concrete Beam Capacity.html>] [--shots <dir>]
+
 # Pile Designer's saved-project library is in IndexedDB (not covered above): page text and autosave main vs the working tree, Undo / Redo,
 # Save as new / rename / duplicate / refused write / load / delete (React 18.3.1 served from the kit's 18.2.0, test-only). ~1 min
 node tests/smoke/pile-library.mjs [--a origin/main]
