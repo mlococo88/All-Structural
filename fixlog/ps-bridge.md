@@ -855,3 +855,80 @@ PR #1489: https://github.com/mlococo88/All-Structural/pull/1489
 ### Open items
 - Several old designs at once (into the saved-projects list) when `psb2.lib.*` comes; the MIDAS demands from `P.legacy.external` when the MIDAS
   import comes; the other girder × span designs of `P.legacy.bridge` at PR 3a.
+
+## 2026-11-13 — PR 3a-1: the bridge level, part 1 — girder types on the girder lines of each span (model, inputs, the type / line shown; no result change)
+PR: (link added on merge)
+### Request
+- Plan §5 PR 3a; engineer decisions PS-8 (interior + exterior design per span, the same shape per span, optional per-girder override), PS-15
+  (the interim one design girder until the bridge step), PS-17 (kept multi-design imports restored at 3a: PR 3a-4). Modelled on the Steel Bridge
+  app's girder types (SB-2 #1451/#1454, SB-14/SB-15 #1486): copied as a pattern into `apps/ps-bridge/`, no steel file edited.
+- Split (task direction): 3a-1 model + inputs (this PR, no result change); 3a-2 every type checked on every line, check summary / Summary /
+  Report per type and line, unequal bays and different end skews allowed; 3a-3 the steel app's DC2/DW distribution (§4); 3a-4 restore the
+  old app's kept designs as types (PS-17).
+### Where
+- `apps/ps-bridge/engine/bridge.js` (new, `window.PSBBridge`, no DOM): a girder type = `{ id, label, span, lines: [g…] (1-based), ovr: {
+  '<engine path>': value } }`; `types`, `typeLines`, `lineTypes`, `typeAt`, `spanTypes`, `unassigned`, `cells`, `shown` (the cell the output tabs
+  show: `P.design` when a type is on it, else the first cell), `effBase` (base ⊕ ovr, key order of the base kept), `diffOvr` / `setOvr` (the
+  overrides = every leaf (a table as one value) that differs from the base; a value set back to the base's stops being an override),
+  `sameShape` / `resetKey` (PS-8: `girder`, `cust.*`, `ovr.*` written to every type of the span), `ovrKeyOf`, `setLines`, `assignLine`,
+  `addType`, `deleteType`, `fill` ("Assign every line"), `newTypes`, `migrate`, `syncSpans`, `renumber` (SB-14), `snapshot`, `checks` (SB-15:
+  two types on one line; different shapes in a span; no checked line — blocking; lines with no type — warning).
+- `apps/ps-bridge/engine/design.js`: anchor `function inputs(P) {` — with types `cellInputs(P, shown.k, shown.g)`, else `one(P)` (the PR 2b body,
+  renamed, unchanged); new `cellInputs(P, k, g) = one({ …P, base: effBase(P, k), design: { g, s: T.span }, types: undefined })`; `sel(P)` with
+  types = the shown cell; `checks`: the different-skew error for every span with a checked cell (the unequal-bay and skew errors stay until 3a-2).
+- `apps/ps-bridge/engine/model.js`: header documents `types`; `newProject()` (defaultProject + `newTypes` + design G2/S1; defaultProject
+  unchanged, the tests use it); `validate`: unreadable `types` → error `types`; `importJSON`: `PSBBridge.migrate(p)` (anchor `// PR 3a-1: girder
+  types`), notes; `load`: nothing stored → `newProject()`.
+- `apps/ps-bridge/engine/inputcheck.js`: `PSBBridge.checks` errors (src 'types'); the field / table / location rules moved unchanged into
+  `inputsOf(P, b, L, E)`; each girder type's own inputs checked by the same rules on its span's length; an error the base does not have is
+  the type's (`scope` = its id, message "Girder type <label>: …").
+- `apps/ps-bridge/engine/fields.js` `tabOf`: `types.*` → Girders & strands.
+- `apps/ps-bridge/ui/types.js` (new, `window.PSBTypesUI`): "Girder types" card (per span: name, the lines as check boxes (a line keeps a
+  type: a ticked box is fixed unless the line has two types), own inputs, Edit its inputs, Copy, Delete (its lines go to the span's first
+  other type, asked first); Add type to span; Assign every line; types of a span beyond the span count kept, listed); "Shown on the output
+  tabs" card (the bridge values, as the PR 2b design card); the scope bar "Entered values for: every girder type (the base design) | <type>
+  only" on Girders & strands, Materials, Loads (`psb2.ui.scope`); the bar "Results of girder type … on line …" above the result tabs and the
+  Report (writes `P.design`); the field markers "● <type>" + reset (type scope) and "own value in: …" (base scope).
+- `apps/ps-bridge/ui/inputs.js`: the design girder card only without types; the Assumptions with types.
+- `apps/ps-bridge/index.html`: loads `engine/bridge.js` (after design.js), `ui/types.js` (after inputs.js); CSS `.tyScope`, `.tyOut`,
+  `.tyMark`, `.tyRow`…; the type scope view (`viewOf`, edits → `BR.setOvr`); N_b change → `BR.renumber` and span-count change →
+  `BR.syncSpans`, each with a notice (toast with Undo: the project text before the change); New → `newProject()`; an old-app import →
+  `BR.migrate`; `cellR` (results of any cell by inputs, last 300) for the strand pattern of the type shown in scope.
+### Saved data (CLAUDE.md §5)
+- New optional field `types` within `psb2.project` v1, with a load migration (`PSBBridge.migrate`, run by `importJSON`): a project saved before
+  this PR gets `types = [{ id: 'T1', label: '<Interior|Exterior> S<s>', span: s, lines: [g], ovr: {} }]` from its `P.design` (absent: G2/S1) —
+  in memory; the stored text is rewritten only by the next edit (smoke test: opening does not rewrite it). Malformed stored `types` are kept
+  as `typesBad`, never discarded. No new key; `psb2.ui.scope` is UI state in the existing per-tool key.
+### Governing provisions
+- None changed (§4): no formula, factor, unit or reference. Each cell's engine inputs are the PR 2b design's for that girder × span (the old
+  app's `PBD.applyBridge` "Preliminary designer" values + continuity, skew, overhang).
+### Proof that no result changed
+- `tests/engine/psbridge-types.test.mjs` (new, 8 tests): the 17 harness B designs saved without types: migrated to T1, `PSBDesign.inputs` text
+  (key order included) === PR 2b's `PSBDesign.one`, `computeAll` and `PSBHoldDown.compute` identical (independent exact comparison, Object.is
+  per number), input errors identical, nothing else in the project changed; every girder line of every span of those designs as a type
+  (`fill`): `cellInputs` === `one` of that girder × span (> 100 cells); a new project's shown cell === the old default design.
+- Harness B (`node tests/psbridge-compare.mjs`, normal and `--import`, with `--control`): see the PR.
+### Check case
+- New project (5 girders at 9 ft, 120 ft): Interior S1 on G2–G4, Exterior S1 on G1, G5. Exterior S1 on G5: L = 120 ft, S = 9.0 ft, exterior,
+  overhang 3.0 ft (right), girder label "G5 (Exterior)". Exterior S1's own f′c = 9.0 ksi: stored `types[1].ovr = { 'mat.fc': 9 }`, base 8.5;
+  Exterior cells f′c 9.0, Interior 8.5. N_b 5 → 6: "S1 G5: Exterior S1 → Interior S1; S1 G6: no type → Exterior S1" (Undo restores).
+### How verified
+- `node tests/engine/run.mjs psbridge tex project-registry`; `node tests/check-syntax.mjs`; `node tests/smoke/ps-bridge-skeleton.mjs` (the
+  continuous design now chosen with the type / line bar); new `node tests/smoke/ps-bridge-types.mjs` (30 checks: new project's card and lines,
+  the bar, Exterior on G5 values = computeAll on the page, a type's own f′c (stored, marked, reset), N_b notice and Undo, a project saved before
+  3a opens as T1 with the PR 2b values and is not rewritten, Assign every line, 390 px, psb2.* keys only, 0 console errors).
+### Decisions (pending engineer review)
+- 3a1-D1. A type belongs to one span (PS-8 "per span"); spans added later get copies of the span before them; a span removed keeps its types in
+  the file, not checked (as the steel app's first rule for lines beyond N_b).
+- 3a1-D2. A project saved before 3a: its one design becomes one type on its one line; the other lines are not checked until assigned
+  ("Assign every line": same-position type of the span, else a new type, a copy of the span's first type), as the steel app's SB-2 (never silently).
+- 3a1-D3. Per-type values: any input of the Girders & strands, Materials and Loads tabs ("Edit its inputs"); the Cross-section deck inputs,
+  diaphragms (PS-14 b), deck design, owner rules and the continuity steel stay bridge-wide. The steel app's per-LINE overrides (SB-7, SB-9,
+  SB-10) are not built: the plan's "optional per-girder override" (PS-8) is a type on one line; DL and LLDF become per line through the bridge
+  (3a-2, 3a-3).
+- 3a1-D4. N_b change: the steel SB-14 rule per span (outer lines keep the old outer types; inner keep theirs or take the span's Interior type;
+  a new Interior type, a copy of the old G1 type, where a span had none); notice with Undo.
+- 3a1-D5. The output tabs' type / line choice is stored in the project as `P.design` (the PR 2b "design girder" field), so the Report, the
+  harnesses and the check summary read the same cell.
+### Open items
+- Next: PR 3a-2 (each type on every line, worst line governs; check summary / Summary / Report per type and line; unequal bays, different skews).
