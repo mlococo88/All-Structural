@@ -330,6 +330,9 @@ function sbNL(lead,items,o){o=o||{};const L=o.ol?'ol':'ul';
   const li=(items||[]).filter(Boolean).map(x=>'<li>'+(Array.isArray(x)?'<b class="sbNLk">'+x[0]+'</b> '+x[1]:x)+'</li>').join('');
   return (o.act||[]).filter(Boolean).map(a=>'<div class="sbNLa">'+a+'</div>').join('')+(lead?'<div class="sbNLl">'+lead+'</div>':'')+(li?'<'+L+' class="sbNLu">'+li+'</'+L+'>':'');}
 const SB_NLW=new Map();
+/* SBLR (2026-11-13, engineer HSS-4, HSS-5): stated on the input tab (Section & Material), the Interaction Basis card and the Report */
+const SB_LRFD_ONLY='Design method: <b>LRFD only</b>. Every strength is a design strength \u03C6R\u2099 with the resistance factors of AISC 360-16 (\u00A7B3.1), checked against factored (LRFD) demands. ASD (R\u2099/\u03A9, \u00A7B3.2) is not available: do not enter service-level (ASD) forces as demands.';
+const SB_H36_BIAX='Eq. H3-6 (\u00A7H3.2) has one flexure term M\u1D63/M\u1D9C and one shear term V\u1D63/V\u1D9C. With bending and shear about both axes the app sums both axes inside each group: M\u1D63\u2093/M\u1D9C\u2093 + M\u1D63\u1D67/M\u1D9C\u1D67 in the flexure group and V\u1D63\u2093/V\u1D9C\u2093 + V\u1D63\u1D67/V\u1D9C\u1D67 in the shear group (the shear sum is added to T\u1D63/T\u1D9C before squaring). Each ratio is the largest of its combination, not taken at one common point (conservative).';
 function sbWarnEl(n,cls){cls=cls||'warnBox';const f=SB_NLW.get(n);return f?el('div',cls+' sbNL',sbNL(f[0],f[1],f[2])):el('div',cls,n);}
 function fmt(v,d){if(v===undefined||v===null||!isFinite(v))return'\u2014';const p=(d===undefined)?2:d;
   const a=Math.abs(v);let s=v.toFixed(p);
@@ -496,8 +499,8 @@ const FAMS=[
   {id:'HP',  name:'HP — Bearing Pile', defMat:'A992'},
   {id:'C',   name:'C — Channel',       defMat:'A36'},
   {id:'MC',  name:'MC — Misc Channel', defMat:'A36'},
-  {id:'HSSR',name:'HSS — Rect / Square',defMat:'A500C_R'},
-  {id:'HSSP',name:'HSS — Round',       defMat:'A500C_P'},
+  {id:'HSSR',name:'HSS — Rect / Square',defMat:'A500B_R'},   /* SBGB (2026-11-13, engineer HSS-8): HSS default A500 Gr. B (was A500C_R); */
+  {id:'HSSP',name:'HSS — Round',       defMat:'A500B_P'},   /* saved projects keep their grade; old batch rows: SB_HSS_DEF_OLD */
   {id:'PIPE',name:'Pipe',              defMat:'A53B'}
 ];
 function matOf(id){return MATS.find(m=>m.id===id)||MATS[0];}
@@ -542,6 +545,16 @@ function resolveSection(){
   /* HSS design wall thickness rule: A1085 uses nominal wall */
   if((kind==='R'||kind==='P')&&mat.tRule==='nom'&&src.tdes!=='ovr')
     {p.tdes=p.tnom;src.tdes='rule';}
+  /* SBNT (2026-11-13, engineer HSS-3): A1085, the section properties at the nominal wall too (AISC 360-16 \u00A7B4.2: t = t_nom
+     for A1085). The database values are computed with t_des = 0.93 t_nom (A500); they are recomputed here with t = t_nom by
+     the same geometry (hssPropsRect / hssPropsRound), each property only where not entered as an override. */
+  if(src.tdes==='rule'){
+    const D=kind==='P'?hssLabelOD(db.lbl,p.OD,src.OD):null;
+    const q=kind==='R'?hssPropsRect(p.B,p.Ht,p.tdes):hssPropsRound(D,p.tdes);
+    (kind==='R'?['A','Ix','Zx','Sx','rx','Iy','Zy','Sy','ry','J','Cc']:['A','Ix','Zx','Sx','rx','J','Cc']).forEach(k=>{
+      if(src[k]!=='ovr'){p[k]=q[k];src[k]='rule';}});
+    p._a1085=q;
+  }
   /* Tier 2 — slenderness ratios recomputed from resolved geometry */
   if(kind==='I'||kind==='C'){
     p.bf2tf=p.bf/(2*p.tf);
@@ -586,6 +599,75 @@ function resolveSection(){
   p._src=src;
   p.overridden=Object.keys(S.section.ovr).filter(k=>S.section.ovr[k]!=null&&S.section.ovr[k]!=='');
   return p;
+}
+/* SBNT (2026-11-13, engineer HSS-3): rectangular / round HSS section properties from the outside dimensions and a wall t.
+   Rectangular: the AISC Manual Part 1 basis, outside corner radius r_o = 2t, inside r_i = t (midline 1.5t, as Commentary
+   H3 Eq. C-H3-2). Each property is the outer rounded rectangle (B x H, r_o) less the inner one ((B-2t) x (H-2t), r_i); a rounded
+   rectangle b x h with corner radius r is a central b x (h-2r) rectangle, two (b-2r) x r strips and four quarter circles.
+   J = 4 A_p^2 t / p (thin-walled closed section; A_p and p on the midline, midline corner radius 1.5t); C by Eq. C-H3-3.
+   Round: A, I, Z of the annulus; J = 2I; C = J/(D/2) (= 2J/D). With t = t_des (0.93 t_nom, tabulated) these reproduce the
+   AISC Shapes Database v16.0 values to their rounding (A, Z, J, C of every rectangular size; I, S, r within 1 %; tested in
+   tests/engine/sbeam-hss.test.mjs). Used for A1085 at t = t_nom. */
+function hssRR(b,h,r){
+  const qa=Math.PI*r*r/4,e=4*r/(3*Math.PI),Iq=(Math.PI/16-4/(9*Math.PI))*Math.pow(r,4),yq=h/2-r+e;
+  return{A:b*h-(4-Math.PI)*r*r,
+    I:b*Math.pow(h-2*r,3)/12+2*((b-2*r)*Math.pow(r,3)/12+(b-2*r)*r*Math.pow(h/2-r/2,2))+4*(Iq+qa*yq*yq),
+    Q:b*Math.pow(h/2-r,2)/2+(b-2*r)*r*(h/2-r/2)+2*qa*yq};
+}
+function hssPropsRect(B,H,t){
+  const ox=hssRR(B,H,2*t),ix=hssRR(B-2*t,H-2*t,t),oy=hssRR(H,B,2*t),iy=hssRR(H-2*t,B-2*t,t);
+  const A=ox.A-ix.A,Ix=ox.I-ix.I,Iy=oy.I-iy.I,rm=1.5*t;
+  const Ap=(B-t)*(H-t)-(4-Math.PI)*rm*rm,pm=2*(B-t)+2*(H-t)-2*(4-Math.PI)*rm;
+  return{kind:'R',B,H,t,ro:2*t,ri:t,Ao:ox.A,Ai:ix.A,Ixo:ox.I,Ixi:ix.I,Iyo:oy.I,Iyi:iy.I,Qxo:ox.Q,Qxi:ix.Q,Qyo:oy.Q,Qyi:iy.Q,Ap,pm,
+    A,Ix,Zx:2*(ox.Q-ix.Q),Sx:Ix/(H/2),rx:Math.sqrt(Ix/A),Iy,Zy:2*(oy.Q-iy.Q),Sy:Iy/(B/2),ry:Math.sqrt(Iy/A),
+    J:4*Ap*Ap*t/pm,Cc:2*t*(B-t)*(H-t)-4.5*Math.pow(t,3)*(4-Math.PI)};
+}
+function hssPropsRound(D,t){
+  const Di=D-2*t,A=Math.PI/4*(D*D-Di*Di),I=Math.PI/64*(Math.pow(D,4)-Math.pow(Di,4));
+  return{kind:'P',D,t,Di,A,Ix:I,Zx:(Math.pow(D,3)-Math.pow(Di,3))/6,Sx:2*I/D,rx:Math.sqrt(I/A),J:2*I,Cc:4*I/D};
+}
+/* SBNT: the A1085 properties worked (Section Properties tab and Report): symbolic, values substituted, result */
+function sbA1085Work(body,p){
+  const q=p._a1085,f3=v=>fmt(v,3),f4=v=>fmt(v,4),u=(v,n)=>fmt(v,n==null?3:n);
+  body.appendChild(el('div','hint sbNL',sbNL('ASTM A1085: the design wall thickness is the nominal wall, t = t\u2099\u2092\u2098 (AISC 360-16 \u00A7B4.2). The database properties (AISC Shapes Database v16.0) are computed with t_des = 0.93t\u2099\u2092\u2098 (A500), so each one is recomputed here with t = t\u2099\u2092\u2098:',
+    [['Used for:','every strength of this section (A, Z, S, I, r, J, C); a property entered as an override is used as entered.'],
+     q.kind==='R'?['Geometry basis:','AISC Manual Part 1: outside corner radius r\u2092 = 2t, inside r\u1D62 = t (midline 1.5t, as Commentary \u00A7H3 Eq. C-H3-2). With t = t_des these formulas reproduce the database values to their rounding.']:
+       ['Geometry basis:','plain annulus, D from the label ('+f3(q.D)+' in; the database OD is rounded). With t = t_des these formulas reproduce the database values to their rounding.'],
+     ['Weight:','the tabulated weight W\u209C is already based on the nominal wall (e.g. HSS8X8X1/2: 48.85 lb/ft = 14.36 in\u00B2 \u00D7 3.40) and is used as tabulated.']])));
+  if(q.kind==='R'){
+    const RR='A_{rr}(b,h,r)=bh-(4-\\pi)r^2';
+    body.appendChild(eqBlock({title:'Area and moments of inertia (rounded rectangles, outer minus inner)',ref:'\u00A7B4.2; Manual Part 1',
+      lines:[RR,
+        'I_{rr}(b,h,r)=\\tfrac{b(h-2r)^3}{12}+2\\left[\\tfrac{(b-2r)r^3}{12}+(b-2r)r\\left(\\tfrac{h-r}{2}\\right)^2\\right]+4\\left[\\left(\\tfrac{\\pi}{16}-\\tfrac{4}{9\\pi}\\right)r^4+\\tfrac{\\pi r^2}{4}\\left(\\tfrac{h}{2}-r+\\tfrac{4r}{3\\pi}\\right)^2\\right]',
+        'A=A_{rr}(B,H,2t)-A_{rr}(B-2t,H-2t,t)='+f4(q.Ao)+'-'+f4(q.Ai)+'='+u(q.A)+'\\ \\text{in}^2',
+        'I_x=I_{rr}(B,H,2t)-I_{rr}(B-2t,H-2t,t)='+u(q.Ixo,2)+'-'+u(q.Ixi,2)+'='+u(q.Ix,2)+'\\ \\text{in}^4',
+        'I_y=I_{rr}(H,B,2t)-I_{rr}(H-2t,B-2t,t)='+u(q.Iyo,2)+'-'+u(q.Iyi,2)+'='+u(q.Iy,2)+'\\ \\text{in}^4'],
+      vars:[['B',f3(q.B)+' in','overall width'],['H',f3(q.H)+' in','overall height'],['t',f4(q.t)+' in','t\u2099\u2092\u2098 (A1085)'],['r_o, r_i',f4(q.ro)+', '+f4(q.ri)+' in','2t, t']]}));
+    body.appendChild(eqBlock({title:'Plastic and elastic section moduli, radii of gyration',ref:'Manual Part 1',
+      lines:['Q_{rr}(b,h,r)=\\tfrac{b}{2}\\left(\\tfrac{h}{2}-r\\right)^2+(b-2r)r\\tfrac{h-r}{2}+\\tfrac{\\pi r^2}{2}\\left(\\tfrac{h}{2}-r+\\tfrac{4r}{3\\pi}\\right)',
+        'Z_x=2\\left[Q_{rr}(B,H,2t)-Q_{rr}(B-2t,H-2t,t)\\right]=2('+f4(q.Qxo)+'-'+f4(q.Qxi)+')='+u(q.Zx)+'\\ \\text{in}^3',
+        'Z_y=2\\left[Q_{rr}(H,B,2t)-Q_{rr}(H-2t,B-2t,t)\\right]=2('+f4(q.Qyo)+'-'+f4(q.Qyi)+')='+u(q.Zy)+'\\ \\text{in}^3',
+        'S_x=\\tfrac{I_x}{H/2}=\\tfrac{'+u(q.Ix,2)+'}{'+f3(q.H/2)+'}='+u(q.Sx)+'\\ \\text{in}^3,\\quad S_y=\\tfrac{I_y}{B/2}=\\tfrac{'+u(q.Iy,2)+'}{'+f3(q.B/2)+'}='+u(q.Sy)+'\\ \\text{in}^3',
+        'r_x=\\sqrt{I_x/A}='+u(q.rx)+'\\ \\text{in},\\quad r_y=\\sqrt{I_y/A}='+u(q.ry)+'\\ \\text{in}']}));
+    body.appendChild(eqBlock({title:'Torsional constants',ref:'Comm. \u00A7H3 Eq. C-H3-2, C-H3-3',
+      lines:['A_p=(B-t)(H-t)-(4-\\pi)(1.5t)^2='+f4(q.Ap)+'\\ \\text{in}^2,\\quad p=2(B-t)+2(H-t)-2(4-\\pi)(1.5t)='+f4(q.pm)+'\\ \\text{in}',
+        'J=\\tfrac{4A_p^2t}{p}=\\tfrac{4('+f4(q.Ap)+')^2('+f4(q.t)+')}{'+f4(q.pm)+'}='+u(q.J,2)+'\\ \\text{in}^4',
+        'C=2t(B-t)(H-t)-4.5t^3(4-\\pi)='+u(q.Cc,2)+'\\ \\text{in}^3']}));
+  }else{
+    body.appendChild(eqBlock({title:'Round HSS properties (annulus)',ref:'\u00A7B4.2; Comm. \u00A7H3 Eq. C-H3-1',
+      lines:['D_i=D-2t='+f3(q.D)+'-2('+f4(q.t)+')='+f4(q.Di)+'\\ \\text{in}',
+        'A=\\tfrac{\\pi}{4}(D^2-D_i^2)='+u(q.A)+'\\ \\text{in}^2,\\quad I=\\tfrac{\\pi}{64}(D^4-D_i^4)='+u(q.Ix,2)+'\\ \\text{in}^4',
+        'Z=\\tfrac{D^3-D_i^3}{6}='+u(q.Zx)+'\\ \\text{in}^3,\\quad S=\\tfrac{2I}{D}='+u(q.Sx)+'\\ \\text{in}^3,\\quad r=\\sqrt{I/A}='+u(q.rx)+'\\ \\text{in}',
+        'J=2I='+u(q.J,2)+'\\ \\text{in}^4,\\quad C=\\tfrac{2J}{D}='+u(q.Cc,2)+'\\ \\text{in}^3'],
+      vars:[['D',f3(q.D)+' in','outside diameter (label)'],['t',f4(q.t)+' in','t\u2099\u2092\u2098 (A1085)']]}));
+  }
+}
+/* the outside diameter for the properties: the label's (HSS10.750X0.500 -> 10.750), the database OD being rounded (10.8);
+   an entered OD wins */
+function hssLabelOD(lbl,OD,srcOD){
+  if(srcOD==='ovr')return OD;
+  const m=/^HSS(\d+(?:\.\d+)?)X/.exec(String(lbl||''));const v=m?+m[1]:NaN;
+  return (isFinite(v)&&Math.abs(v-OD)<0.06)?v:OD;
 }
 /* Consistency checks — idealized re-derivation vs resolved values (§8) */
 function sectionWarnings(p){
@@ -2035,6 +2117,45 @@ function tensionStrength(p,An,U){
   return{Ag,An:An2,U:U2,Ae,Fy,Fu,Pny,Pnr,phiY,phiR,phiPn:Math.min(phiY,phiR),rupture:phiR<phiY,
     AnDef,UDef,AnCapped:!AnDef&&An>Ag,UCapped:!UDef&&U>1};
 }
+/* SBTU (2026-11-13, engineer HSS-7): optional shear-lag helper for an HSS with a single concentric gusset plate through slots
+   (S.design.ten.hlp, new optional field; absent or off = the typed A_n / U as before).
+   AISC 360-16 Table D3.1: case 5 (round HSS): x = D/pi; l >= 1.3D -> U = 1.0; D <= l < 1.3D -> U = 1 - x/l; l < D not covered.
+   Case 6 (rectangular HSS, single concentric gusset): l >= H -> U = 1 - x/l, x = (B^2 + 2BH)/(4(B + H)), H = the overall side
+   in the plane of the gusset, B = the side 90 deg to it; l < H not covered. Sec. B4.3b: A_n = A_g - 2 t w_slot (two walls slotted).
+   t = the design wall (0.93 t_nom for A500, t_nom for A1085). Slot width blank -> gusset thickness + 1/8 in.
+   Decision (pending engineer review, recorded in the fixlog): a typed A_n or U is still used when it is smaller than the helper's
+   (the smaller governs); incomplete or out-of-range helper inputs make the tension check FAIL with the reason (no fallback to
+   A_n = A_g, U = 1.0). */
+function sbTenHelper(p,ten){
+  const h=ten&&ten.hlp;
+  if(!h||!h.on||!(p._fam==='HSSR'||p._fam==='HSSP'))return null;
+  const t=p.tdes,tp=h.tp>0?+h.tp:null,wDef=!(h.w>0),w=wDef?(tp?tp+0.125:null):+h.w,l=h.l>0?+h.l:null;
+  const o={kind:p._kind,t,tp,w,wDef,l,errs:[],Ag:p.A};
+  if(!tp&&wDef)o.errs.push('enter the gusset plate thickness (or the slot width)');
+  if(!l)o.errs.push('enter the connection length l');
+  if(p._kind==='R'){
+    o.inPlane=h.plane==='B'?'B':'H';
+    o.H=o.inPlane==='H'?p.Ht:p.B;o.B=o.inPlane==='H'?p.B:p.Ht;
+    o.xbar=(o.B*o.B+2*o.B*o.H)/(4*(o.B+o.H));o.case='6';
+    if(l){if(l<o.H)o.errs.push('l = '+fmt(l,2)+' in < H = '+fmt(o.H,2)+' in: outside Table D3.1 case 6 (l ≥ H); enter U and Aₙ directly');
+      else o.U=1-o.xbar/l;}
+  }else{
+    o.D=hssLabelOD(p.lbl,p.OD,p._src&&p._src.OD);o.xbar=o.D/Math.PI;o.case='5';
+    if(l){if(l<o.D)o.errs.push('l = '+fmt(l,2)+' in < D = '+fmt(o.D,3)+' in: outside Table D3.1 case 5 (l ≥ D); enter U and Aₙ directly');
+      else if(l>=1.3*o.D){o.U=1.0;o.Ufull=true;}
+      else o.U=1-o.xbar/l;}
+  }
+  if(w){o.An=p.A-2*t*w;if(!(o.An>0))o.errs.push('the slot removes the whole area (Aₙ ≤ 0)');}
+  return o;
+}
+function sbTenFor(p,ten){
+  const An0=ten&&ten.An,U0=ten&&ten.U,h=sbTenHelper(p,ten);
+  if(!h)return tensionStrength(p,An0,U0);
+  if(h.errs.length){const t=tensionStrength(p,An0,U0);t.hlp=h;t.blocked='Shear-lag helper (Table D3.1 case '+h.case+'): '+h.errs.join('; ')+'.';
+    t.phiR=0;t.phiPn=0;t.rupture=true;return t;}
+  const An=An0>0?Math.min(An0,h.An):h.An,U=U0>0?Math.min(U0,h.U):h.U;
+  const t=tensionStrength(p,An,U);t.hlp=h;t.AnTyped=An0>0;t.UTyped=U0>0;return t;
+}
 /* ---------- H3 torsion (HSS only) ---------- */
 function torsionHSS(p,Lin){
   const Fy=p.mat.Fy,E=EKSI;
@@ -2340,8 +2461,8 @@ function designAll(A){
       if(D.comp&&!D.comp.blocked){C.phiPn=D.comp.phiPn;C.dcrP=man.Pu/C.phiPn;}
       else C.compBlocked=(D.comp&&D.comp.blocked)||'no compression capacity';
     }else if(man.Pu<0){   /* axial tension: \u00A7D2, and \u00A7H1.2 through the same interaction equations */
-      if(!D.ten)D.ten=tensionStrength(p,dsn.ten&&dsn.ten.An,dsn.ten&&dsn.ten.U);
-      C.tens=D.ten;C.phiPt=D.ten.phiPn;C.dcrPt=Math.abs(man.Pu)/C.phiPt;
+      if(!D.ten)D.ten=sbTenFor(p,dsn.ten);   /* SBTU: the shear-lag helper when it is on */
+      C.tens=D.ten;C.phiPt=D.ten.phiPn;C.dcrPt=D.ten.blocked?Infinity:Math.abs(man.Pu)/C.phiPt;
     }
     /* torsion */
     if(D.torOpen&&!D.torOpen.blocked)
@@ -2451,7 +2572,7 @@ function buildDesignChecks(D,A){
   const ptGov=gv(c=>c.dcrPt!=null?{d:c.dcrPt,c}:null);
   if(ptGov)D.checks.push({label:'Tension',ref:ptGov.c.tens.rupture?'D2(b)':'D2(a)',dcr:ptGov.d,combo:ptGov.c.name,tab:'tabComp',
     dem:Math.abs(ptGov.c.man.Pu),cap:ptGov.c.phiPt,unit:'kip',capSym:'\u03C6\u209CP\u2099',
-    detail:ptGov.c.tens.rupture?'rupture, A\u2091 = UA\u2099':'yielding, A\u1D4D'});
+    detail:ptGov.c.tens.blocked?'blocked \u2014 '+ptGov.c.tens.blocked:ptGov.c.tens.rupture?'rupture, A\u2091 = UA\u2099'+(ptGov.c.tens.hlp?' (shear-lag helper, Table D3.1 case '+ptGov.c.tens.hlp.case+')':''):'yielding, A\u1D4D'});
   const hGov=gv(c=>c.h33?{d:c.h33.dcr,c}:null);
   const tGov=gv(c=>c.dcrT!=null?{d:c.dcrT,c}:null);
   if(hGov){const hg=h33Gov(hGov.c.h33);
@@ -2469,7 +2590,8 @@ function buildDesignChecks(D,A){
   if(iGov)D.checks.push({label:'Interaction',ref:iGov.c.inter.eq,dcr:iGov.d,combo:iGov.c.name,tab:'tabInter',
     dem:iGov.c.inter.value,cap:1.0,unit:'\u2014',capSym:'limit'});
   const tenC=D.perCombo.filter(c=>c.dcrPt!=null);
-  if(tenC.length){const t=tenC[0].tens,dflt=[];
+  if(tenC.length&&tenC[0].tens.blocked)D.warns.push('Axial TENSION (P\u1D64 < 0) is entered for: '+tenC.map(c=>c.name).join(', ')+'. '+tenC[0].tens.blocked+' The tension check is reported as failing until the input is complete.');   /* SBTU */
+  else if(tenC.length){const t=tenC[0].tens,dflt=[];
     if(t.AnDef)dflt.push('A\u2099 = A\u1D4D');if(t.UDef)dflt.push('U = 1.0');
     D.warns.push('Axial TENSION (P\u1D64 < 0) is entered for: '+tenC.map(c=>c.name).join(', ')+'. It is checked for tensile yielding and rupture (\u00A7D2) with A\u2099 = '+fmt(t.An,2)+' in\u00B2 and U = '+fmt(t.U,2)+
       (dflt.length?' \u2014 '+dflt.join(' and ')+' ASSUMED because the input is blank (no holes, every element connected); enter the net area and the shear-lag factor of the end connection (\u00A7D3, Table D3.1) under Compression Effective Lengths':'')+
@@ -2753,6 +2875,8 @@ function rebuildInputs(){
     body.appendChild(el('div','hint','F<sub>y</sub> = '+m.Fy+' ksi, F<sub>u</sub> = '+m.Fu+' ksi, E = 29,000 ksi'+(m.tRule==='nom'?' \u2014 A1085: design wall = nominal wall':'')+'. '+DBVER+'.'+
       /* L3 (2026-11-07): material edition note, no value changed */
       (m.id==='A500C_P'?' A500 Gr. C round: F<sub>y</sub> = 46 ksi is the ASTM A500-13 value referenced by AISC 360-16 (Table C-A3.1). Later A500 editions, used by the AISC Manual 16th Ed. and the v16.0 Design Examples, give 50 ksi; 46 ksi is kept (conservative).':'')));
+    /* SBLR (2026-11-13, engineer HSS-4, HSS-5): design method and the H3-6 reading for HSS, stated on the input tab (display only) */
+    body.appendChild(el('div','hint sbNL',sbNL(SB_LRFD_ONLY,DBKIND[S.section.family]==='R'||DBKIND[S.section.family]==='P'?[['HSS torsion with biaxial loads (Eq. H3-6):',SB_H36_BIAX]]:null)));
     /* overrides */
     const p=resolveSection();
     if(p){
@@ -3581,6 +3705,7 @@ function buildSectionTab(pg){
     const aw=f13.L.find(x=>x.id==='aw');
     if(aw&&aw.v>10)body.appendChild(el('div','hint','R\u209A\u1D4D (Eq. F5-6) uses a\u1D65 capped at 10 by its definition; the limit itself is reported above.'));
   },pg);
+  if(p._a1085)mkSection('sctA1085','A1085 Section Properties at the Nominal Wall',body=>sbA1085Work(body,p),pg);   /* SBNT (2026-11-13) */
   mkSection('sctTbl','Resolved Properties',body=>{
     const t=el('table','tbl');
     const hd=el('tr');['Property','Value','Units','Source'].forEach(h=>hd.appendChild(el('th',null,h)));t.appendChild(hd);
@@ -3624,7 +3749,7 @@ function buildSectionTab(pg){
         Object.keys(E).filter(k=>p._src[k]==='plates').map(k=>E[k]))));   /* SBNL: one item per property */
     }
     if(p._kind==='I'||p._kind==='C')body.appendChild(el('div','hint sbNL',sbNL('<b>h clear</b> is the clear web depth driving h/t\u1D65 and, where transverse stiffeners are entered, a/h.',[['Value:','backed out of the tabulated h/t\u1D65 at database thickness.'],['To model a built-up plate girder,','override it together with d, t\u1D65, b\u1DA0 and t\u1DA0.']])));
-    if(p._kind==='R')body.appendChild(el('div','hint sbNL',sbNL('HSS wall and flat widths:',[['Flat widths:','use the AISC convention b = B \u2212 3t, h = H \u2212 3t when corner radii are unknown (Spec. \u00A7B4.1b(d), G4).'],['A500:','the tabulated design wall t_des = 0.93\u00B7t_nom is used; selecting A1085 switches to the nominal wall.']])));
+    if(p._kind==='R')body.appendChild(el('div','hint sbNL',sbNL('HSS wall and flat widths:',[['Flat widths:','use the AISC convention b = B \u2212 3t, h = H \u2212 3t when corner radii are unknown (Spec. \u00A7B4.1b(d), G4).'],['A500:','the tabulated design wall t_des = 0.93\u00B7t_nom is used; selecting A1085 switches to the nominal wall, and A, Z, S, I, r, J and C are recomputed with it (card \u2018A1085 Section Properties at the Nominal Wall\u2019).']])));
   },pg);
   mkSection('sctBr','Bracing Summary',body=>{
     const t=el('table','tbl');
@@ -4450,7 +4575,7 @@ manPart('p2','II. Input Reference',[
 {h:'Section & Material'},
 {tbl:{head:['Input','Units','Meaning'],rows:[
 ['Shape family','\u2014','W, M, S, HP, C, MC, HSS rect, HSS round, Pipe \u2014 '+DBVER+' embedded in full'],
-['Material','\u2014','Sets F\u1D67/F\u1D64; the family filters valid grades; A1085 switches HSS design wall from 0.93t\u2099\u2092\u2098 to t\u2099\u2092\u2098'],
+['Material','\u2014','Sets F\u1D67/F\u1D64; the family filters valid grades; A1085 switches HSS design wall from 0.93t\u2099\u2092\u2098 to t\u2099\u2092\u2098 and its A, Z, S, I, r, J and C are recomputed at t\u2099\u2092\u2098 (SBNT)'],
 ['Overrides','in, in\u00B2\u2026','Any property; slenderness ratios always recomputed from resolved geometry; consistency warnings fire on \u22655% disagreement with idealized re-derivation'],
 ]}},
 {h:'Loads'},
@@ -4493,7 +4618,7 @@ manPart('p4','IV. Methodology',[
 {h:'IV.5 Tributary conversion'},
 {eq:'w_{case}=\\frac{p_{case}\\,(TW_L+TW_R)}{1000}+w_{line}\\,,\\qquad w_{sw}=\\frac{W_{shape}}{1000}'},
 {h:'IV.6 Section resolution'},
-{p:'Three tiers: (1) geometry \u2014 overridable; (2) slenderness ratios \u2014 <i>always</i> recomputed from resolved geometry (for I-shapes the clear web h is backed out of the tabulated h/t\u1D65 at database thickness, then re-ratioed); (3) properties \u2014 individually overridable with provenance displayed. HSS flat widths use b = B\u22123t, h = H\u22123t per Spec. \u00A7B4.1b(d)/G4 when corner radii are unknown. A500 design wall = 0.93t\u2099\u2092\u2098 (as tabulated); A1085 uses the nominal wall.'},
+{p:'Three tiers: (1) geometry \u2014 overridable; (2) slenderness ratios \u2014 <i>always</i> recomputed from resolved geometry (for I-shapes the clear web h is backed out of the tabulated h/t\u1D65 at database thickness, then re-ratioed); (3) properties \u2014 individually overridable with provenance displayed. HSS flat widths use b = B\u22123t, h = H\u22123t per Spec. \u00A7B4.1b(d)/G4 when corner radii are unknown. A500 design wall = 0.93t\u2099\u2092\u2098 (as tabulated); A1085 uses the nominal wall and its A, Z, S, I, r, J and C are recomputed at t\u2099\u2092\u2098 (SBNT).'},
 {h:'IV.7 Stage-2 interfaces already in place'},
 {ul:['Per-combination exact M/V evaluation at arbitrary x (C\u1D47 quarter-point sampling)','V = 0 station list (round-HSS L\u1D65)','Negative-moment region maps (compression-flange selection)','Per-span EI slots (composite staging)','Combination stage tags (construction vs final)']}
 ]);
@@ -4580,7 +4705,7 @@ function init(){
    SBHSS (2026-11-13, engineer: improve this tool for HSS, no separate HSS app): the tools page's "HSS Beam Design" card
    opens this file as "Steel Beam Design - AISC 15th.html#hss". The saved project is never changed without the user:
    - a new / blank project on screen (no autosave, or an autosave equal to the default inputs): the section family is set to
-     HSS rect / square, exactly as picking it in the Shape family list (the family's default material, A500 Gr. C, and its
+     HSS rect / square, exactly as picking it in the Shape family list (the family's default material, A500 Gr. B since SBGB, and its
      default shape); nothing else changes;
    - any other project: it stays as it is, and a notice offers "Start a new HSS beam", which runs the existing New path of the
      "Save and open" card (SBPL.pb.newProject, with its unsaved-changes confirm) and then picks the family. A project that is
@@ -4651,7 +4776,7 @@ MANUAL.p0.blocks=[
 {h3:'Euler-Bernoulli bending; deflection integration'},
 {p:'Shear deformation neglected (error < ~3% at span/depth \u2265 10). Deflections integrate M/EI numerically (600 stations); interior-support residuals are reported on the Validation tab.'},
 {h3:'Section resolution'},
-{p:'Slenderness ratios are always recomputed from resolved geometry, so overrides propagate consistently; HSS flats use b = B \u2212 3t; A500 design wall = 0.93t\u2099\u2092\u2098, A1085 uses t\u2099\u2092\u2098.'},
+{p:'Slenderness ratios are always recomputed from resolved geometry, so overrides propagate consistently; HSS flats use b = B \u2212 3t; A500 design wall = 0.93t\u2099\u2092\u2098, A1085 uses t\u2099\u2092\u2098 and its A, Z, S, I, r, J and C are recomputed at t\u2099\u2092\u2098 (SBNT).'},
 {warn:'<b>This application is an engineering aid, not a substitute for engineering judgment.</b> The user is responsible for the design, for the manually entered demands, for load factors versus the governing code edition, and for independent review by a licensed engineer.'}
 ];
 MANUAL.p5.blocks=[
@@ -5188,8 +5313,8 @@ function memberDesignAll(A){
       if(D.comp&&!D.comp.blocked){C.phiPn=D.comp.phiPn;C.dcrP=r.Pu/C.phiPn;}
       else C.compBlocked=(D.comp&&D.comp.blocked)||'compression effective lengths not set (see Design Parameters)';
     }else if((r.Pu||0)<0){   /* axial tension: \u00A7D2 and \u00A7H1.2 */
-      if(!D.ten)D.ten=tensionStrength(p,dsn.ten&&dsn.ten.An,dsn.ten&&dsn.ten.U);
-      C.tens=D.ten;C.phiPt=D.ten.phiPn;C.dcrPt=Math.abs(r.Pu)/C.phiPt;
+      if(!D.ten)D.ten=sbTenFor(p,dsn.ten);   /* SBTU: the shear-lag helper when it is on */
+      C.tens=D.ten;C.phiPt=D.ten.phiPn;C.dcrPt=D.ten.blocked?Infinity:Math.abs(r.Pu)/C.phiPt;
     }
     if(D.torOpen&&!D.torOpen.blocked)
       C.h33=h33Check(p,D.torOpen,{Pu:r.Pu||0,Mux:r.Mux||0,Muy:r.Muy||0,Vux:r.Vux||0,Vuy:r.Vuy||0});
@@ -5673,6 +5798,31 @@ function buildCompTabCore(pg){
     dcrLine(body,'Compression DCR','Ch. E',' P',C.man.Pu,C.phiPn,C.dcrP);
   },C=>String(C.man.Pu));
 }
+/* SBTU: the shear-lag helper worked (Table D3.1 case 5 / 6, Sec. B4.3b) */
+function sbTenHelperWork(body,t){
+  const h=t.hlp,f=(v,n)=>fmt(v,n==null?3:n),lines=[],vars=[];
+  if(h.kind==='R'){
+    lines.push('\\bar{x}=\\tfrac{B^2+2BH}{4(B+H)}=\\tfrac{'+f(h.B)+'^2+2('+f(h.B)+')('+f(h.H)+')}{4('+f(h.B)+'+'+f(h.H)+')}=\\mathbf{'+f(h.xbar)+'\\ \\text{in}}');
+    if(h.U!=null)lines.push('l='+f(h.l,2)+'\\ge H='+f(h.H)+':\\quad U=1-\\tfrac{\\bar{x}}{l}=1-\\tfrac{'+f(h.xbar)+'}{'+f(h.l,2)+'}=\\mathbf{'+f(h.U)+'}');
+    vars.push(['H',f(h.H)+' in','overall side in the plane of the gusset'],['B',f(h.B)+' in','overall side 90\u00B0 to the gusset']);
+  }else{
+    lines.push('\\bar{x}=\\tfrac{D}{\\pi}=\\tfrac{'+f(h.D)+'}{\\pi}=\\mathbf{'+f(h.xbar)+'\\ \\text{in}}');
+    if(h.U!=null)lines.push(h.Ufull?'l='+f(h.l,2)+'\\ge 1.3D='+f(1.3*h.D)+':\\quad U=\\mathbf{1.0}':
+      'D='+f(h.D)+'\\le l='+f(h.l,2)+'<1.3D='+f(1.3*h.D)+':\\quad U=1-\\tfrac{\\bar{x}}{l}=1-\\tfrac{'+f(h.xbar)+'}{'+f(h.l,2)+'}=\\mathbf{'+f(h.U)+'}');
+    vars.push(['D',f(h.D)+' in','outside diameter (label)']);
+  }
+  if(h.An!=null)lines.push('A_n=A_g-2t\\,w='+f(h.Ag,2)+'-2('+f(h.t,4)+')('+f(h.w,4)+')=\\mathbf{'+f(h.An,3)+'\\ \\text{in}^2}');
+  vars.push(['l',h.l!=null?f(h.l,2)+' in':'\u2014','connection length'],['t',f(h.t,4)+' in','design wall'],
+    ['w',h.w!=null?f(h.w,4)+' in':'\u2014',h.wDef?'slot width: blank \u2192 t\u209A + 1/8 in. = '+(h.tp?f(h.tp,4):'\u2014')+' + 0.125':'slot width, entered']);
+  body.appendChild(eqBlock({title:'Shear-lag factor and net area (helper: single concentric gusset through slots)',ref:'Table D3.1 case '+h.case+', \u00A7B4.3b',lines,vars}));
+  const notes=[];
+  if(!t.blocked){
+    if(t.UTyped)notes.push(['U:',t.U<h.U?'the typed U = '+f(t.U)+' is smaller than the helper\u2019s '+f(h.U)+' and is used.':'the helper\u2019s U = '+f(h.U)+' is used (the typed value is larger).']);
+    if(t.AnTyped)notes.push(['A\u2099:',t.An<h.An?'the typed A\u2099 = '+f(t.An,3)+' in\u00B2 is smaller than the helper\u2019s '+f(h.An,3)+' and is used.':'the helper\u2019s A\u2099 = '+f(h.An,3)+' in\u00B2 is used (the typed value is larger).']);
+  }
+  notes.push(['Not checked:','the gusset plate, its welds, block shear (\u00A7J4.3) and the HSS wall at the end of the slot.']);
+  body.appendChild(el('div','hint sbNL',sbNL('Shear-lag helper on (Compression Effective Lengths input).',notes)));
+}
 /* Compression tab = Chapter E, then Chapter D when an axial tension is entered */
 function buildCompTab(pg){buildCompTabCore(pg);tensionSections(pg);}
 function tensionSections(pg){
@@ -5680,13 +5830,15 @@ function tensionSections(pg){
   const tc=D.perCombo.filter(C=>C.dcrPt!=null);if(!tc.length)return;
   const t=tc[0].tens;
   mkSection('tnCap','Axial Tension (Chapter D)',body=>{
+    if(t.hlp)sbTenHelperWork(body,t);   /* SBTU */
+    if(t.blocked){body.appendChild(el('div','errBox','<b>Tension check blocked:</b> '+t.blocked+' The check is reported as failing until the input is complete.'));return;}
     if(t.AnDef||t.UDef)body.appendChild(el('div','warnBox','<b>'+[t.AnDef?'A\u2099 = A\u1D4D':'',t.UDef?'U = 1.0':''].filter(x=>x).join(' and ')+' assumed</b> (input blank): no holes and every element connected. Enter the net area and shear-lag factor of the end connection under <b>Compression Effective Lengths</b> (\u00A7D3, Table D3.1).'));
     body.appendChild(eqBlock({title:'Tensile yielding in the gross section',ref:'Eq. D2-1',
       lines:['P_n=F_yA_g='+fmt(t.Fy,0)+'\\times '+fmt(t.Ag,2)+'=\\mathbf{'+fmt(t.Pny,1)+'\\ \\text{kip}},\\quad \\phi_tP_n=0.90\\times '+fmt(t.Pny,1)+'=\\mathbf{'+fmt(t.phiY,1)+'\\ \\text{kip}}']}));
     body.appendChild(eqBlock({title:'Tensile rupture in the net section',ref:'Eqs. D2-2, D3-1',
       lines:['A_e=UA_n='+fmt(t.U,2)+'\\times '+fmt(t.An,2)+'=\\mathbf{'+fmt(t.Ae,2)+'\\ \\text{in}^2}',
         'P_n=F_uA_e='+fmt(t.Fu,0)+'\\times '+fmt(t.Ae,2)+'=\\mathbf{'+fmt(t.Pnr,1)+'\\ \\text{kip}},\\quad \\phi_tP_n=0.75\\times '+fmt(t.Pnr,1)+'=\\mathbf{'+fmt(t.phiR,1)+'\\ \\text{kip}}'],
-      vars:[['A_n',fmt(t.An,2)+' in\u00B2',t.AnDef?'blank \u2192 A\u1D4D':'entered'],['U',fmt(t.U,2),t.UDef?'blank \u2192 1.0':'entered (Table D3.1)']]}));
+      vars:[['A_n',fmt(t.An,2)+' in\u00B2',t.AnDef?'blank \u2192 A\u1D4D':(t.hlp&&!(t.AnTyped&&t.An<t.hlp.An))?'shear-lag helper (above), \u00A7B4.3b':'entered'],['U',fmt(t.U,2),t.UDef?'blank \u2192 1.0':(t.hlp&&!(t.UTyped&&t.U<t.hlp.U))?'shear-lag helper (above), Table D3.1 case '+t.hlp.case:'entered (Table D3.1)']]}));   /* SBTU: source of A_n / U */
     body.appendChild(el('div','note sbNL',sbNL('Design tensile strength \u03C6\u209CP\u2099 = <b>'+fmt(t.phiPn,1)+' kip</b> ('+(t.rupture?'rupture, Eq. D2-2':'yielding, Eq. D2-1')+').',[['Not checked:','block shear (\u00A7J4.3) and the end connection.'],['Combined tension and flexure:','use \u00A7H1.2 (the H1-1 equations with P\u1D9C = \u03C6\u209CP\u2099); the optional C\u1D47 increase of \u00A7H1.2 is not taken.']])));
   },pg);
   perComboSections(pg,'tn_',isMember()?'Case ':'Combination ',(body,C)=>{
@@ -5826,6 +5978,7 @@ function buildInterTab(pg){
   const D=dOrNull(pg);if(!D)return;
   mkSection('itBasis','Interaction Basis',body=>{
     body.appendChild(el('div','note sbNL',sbNL('M\u1D63\u2093/M\u1D9C\u2093 is taken as the <b>governing major-axis flexural DCR</b> across all regions.',[['Why this is safe:','each region is already divided by its own capacity, so the composition is safe.'],['HSS torsion:','where T\u1D64 > 0.2\u03C6T\u2099 on an HSS, Eq. H3-6 replaces H1 and brings the shear ratio in with it.'],
+      AN.sect&&(AN.sect._kind==='R'||AN.sect._kind==='P')?['HSS torsion with biaxial loads:',SB_H36_BIAX]:null,   /* SBLR (2026-11-13): HSS-4 */
       isMember()?null:['Second-order (P-\u03B4):','in beam mode, where P\u1D64 is compression, the ratio is the governing flexure DCR \u00D7 B\u2081 = C\u2098/(1 \u2212 P\u1D63/P\u2091\u2081) \u2265 1 (AISC 360-16 \u00A7C1, Appendix 8), with C\u2098 = 1.0, EI* = EI and L\u1D9C\u2081 = the compression effective length L\u1D9C\u2093; the M\u2093 flexure check itself is not amplified.'],
       ['Entered moments:',(isMember()?'M\u1D64\u2093 and M\u1D64\u1D67 are':'M\u1D64\u1D67 is')+' entered and taken as already including second-order effects.'],
       D.compActive?['Composite action:','the ratio is the governing flexure DCR of the M\u2093 tab: against the composite \u03c6M\u2099 (Chapter I, \u00a7I3.2a) in positive-moment regions, and against the bare steel section (Chapter F, \u00a7I3.2b) in negative-moment regions, where the slab is in tension and is not counted'+
@@ -6747,6 +6900,21 @@ function secCompLengths(P){
     });
     body.appendChild(tg);
     body.appendChild(el('div','hint','<b>Axial tension</b> (P\u1D64 < 0, \u00A7D2): net area A\u2099 and shear-lag factor U (Table D3.1) at the end connection. Blank \u2192 A\u2099 = A\u1D4D and U = 1.0 (no holes, every element connected).'));
+    /* SBTU (2026-11-13): optional shear-lag helper for HSS with a single concentric gusset (new optional field ten.hlp) */
+    if(S.section.family==='HSSR'||S.section.family==='HSSP'){
+      const tn=S.design.ten,hl=tn.hlp||{};
+      fRow(body,'Shear-lag helper (gusset through slotted HSS)',chkInput(()=>!!hl.on,v=>{tn.hlp=Object.assign({},tn.hlp||{},{on:v});rebuildInputs();},'tenHlpOn'),'',
+        'Table D3.1 case '+(S.section.family==='HSSR'?'6':'5')+': computes U and A\u2099 = A\u1D4D \u2212 2t\u00B7w for one concentric gusset plate through slots in the HSS');
+      if(hl.on){
+        const set=k=>v=>{tn.hlp=Object.assign({},tn.hlp||{},{[k]:v});};
+        fRow(body,'Gusset plate thickness t\u209A',numInput(()=>hl.tp,set('tp'),0.125,'tenHlpTp'),'in');
+        fRow(body,'Slot width w',numInput(()=>hl.w,set('w'),0.0625,'tenHlpW'),'in','Blank \u2192 t\u209A + 1/8 in.');
+        fRow(body,'Connection length l',numInput(()=>hl.l,set('l'),0.5,'tenHlpL'),'in','Length of the gusset weld along the HSS');
+        if(S.section.family==='HSSR')fRow(body,'Side in the gusset plane',selInput(['H','B'],()=>hl.plane||'H',v=>{tn.hlp=Object.assign({},tn.hlp||{},{plane:v});},
+          o=>o==='H'?'H (gusset parallel to the H walls)':'B (gusset parallel to the B walls)',null,'tenHlpPl'),'');
+        body.appendChild(el('div','hint','The helper replaces a blank A\u2099 / U; a value typed above is used only where it is smaller (the smaller governs). t = the design wall (0.93t\u2099\u2092\u2098 for A500, t\u2099\u2092\u2098 for A1085). Worked on the Compression tab, card \u2018Axial Tension (Chapter D)\u2019.'));
+      }
+    }
   },P,secOpts());
 }
 /* ---------- 5. web stiffeners ---------- */
@@ -7573,7 +7741,7 @@ const BATCH_HELP={
   desc:'Free text, e.g. "W-Column" or "Hoist Beam". Carried through to the results and the printed report.',
   mid:'Your member mark or ID. Any text or number.',
   size:'REQUIRED. AISC label: W18X60, C15X33.9, HSS6X4X1/4, HSS8.625X0.322, Pipe8XS. Lower case and \u00D7 accepted.',
-  grade:'Blank \u2192 family default (W/HP A992, C/MC/M/S A36, rect HSS A500 Gr. C, round HSS A500 Gr. C, pipe A53 Gr. B).',
+  grade:'Blank \u2192 family default (W/HP A992, C/MC/M/S A36, rect HSS A500 Gr. B, round HSS A500 Gr. B, pipe A53 Gr. B). Rows imported before 2026-11-13 and saved with a project keep A500 Gr. C for HSS, the default when they were imported.',
   Pu:'Axial force, kip. COMPRESSION POSITIVE. A negative value is treated as tension: the compression check is skipped and the member is checked for tensile yielding and rupture (\u00A7D2, using the Tension An and Tension U columns) and the \u00A7H1.2 interaction.',
   Vux:'Major-axis shear, kip. Sign ignored.',
   Vuy:'Minor-axis shear, kip. Sign ignored.',
@@ -7619,11 +7787,15 @@ function findShape(label){
 function gradesForFam(fam){
   return MATS.filter(m=>!m.fams||m.fams.indexOf(fam)>=0);
 }
-function defGradeFor(fam){
+/* SBGB (2026-11-13): the HSS family default became A500 Gr. B. Batch rows imported before that and saved with a project (no
+   S.batch.hssDefB) keep the default they were checked with, A500 Gr. C, so a saved project's results do not change. */
+const SB_HSS_DEF_OLD={HSSR:'A500C_R',HSSP:'A500C_P'};
+function defGradeFor(fam,legacy){
+  if(legacy&&SB_HSS_DEF_OLD[fam])return SB_HSS_DEF_OLD[fam];
   const fm=FAMS.find(f=>f.id===fam);
   return fm?fm.defMat:(gradesForFam(fam)[0]||{}).id;
 }
-function pickGrade(fam,txt){
+function pickGrade(fam,txt,legacy){
   const g=(txt||'').toString().trim().toUpperCase().replace(/[\s\-]/g,'');
   const list=gradesForFam(fam);
   if(g){
@@ -7632,14 +7804,14 @@ function pickGrade(fam,txt){
     m=list.find(x=>x.name.toUpperCase().replace(/[\s\-]/g,'').indexOf(g)>=0);
     if(m)return m.id;
   }
-  return defGradeFor(fam)||(list.length?list[0].id:null);
+  return defGradeFor(fam,legacy)||(list.length?list[0].id:null);
 }
 /* ---------------- per-row check ---------------- */
 function batchCheckRow(row){
   const R={row,blockers:[],warns:[],notes:[]};
   const fs=findShape(row.size);
   if(!fs){R.blockers.push('Shape "'+(row.size||'')+'" not found in '+DBVER+'.');return R;}
-  const gid=pickGrade(fs.fam,row.grade);
+  const gid=pickGrade(fs.fam,row.grade,!(S.batch&&S.batch.hssDefB));   /* SBGB: rows imported before 2026-11-13 keep A500 Gr. C */
   if(!gid){R.blockers.push('No material grade available for family '+fs.fam+'.');return R;}
   const p=sectionFor(fs.fam,fs.lbl,gid);
   if(!p){R.blockers.push('Could not resolve section properties.');return R;}
@@ -7922,6 +8094,7 @@ async function importBatchFile(file){
   if(!rows.length){toast('No data rows found');return;}
   if(!S.batch)S.batch={rows:[],Cb:1};
   S.batch.rows=rows;
+  S.batch.hssDefB=true;   /* SBGB (2026-11-13): a blank or unknown HSS grade in these rows means A500 Gr. B (new field; absent = rows imported before) */
   S.batch.src=file.name;
   S.batch.headerRow=bestRow;
   S.batch.mapped=Object.keys(bestMap);
@@ -10147,6 +10320,7 @@ function sbrxCover(secs){
   if(isBatch())return;
   const items=[],f=S.proj||{};
   if(typeof bxSourceLine==='function'&&bxSourceLine())items.push({type:'note',text:sbrText(el('div',null,bxSourceLine()))});
+  items.push({type:'note',text:sbrText(el('div',null,SB_LRFD_ONLY))});   /* SBLR (2026-11-13): HSS-5, LRFD only stated in the Report */
   if(isMember())items.push({type:'note',warn:true,text:'MEMBER CHECK MODE — section capacity only. Demands were entered directly; no structural model was solved. Equilibrium, reactions, moment distribution and deflection are not verified by this document.'});
   const govAll=(AN&&AN.design&&AN.design.checks||[]).filter(c=>!c.na),worst=govAll.reduce((m,c)=>c.dcr>(m?m.dcr:-1)?c:m,null);
   if(worst){const g=sbdChkTarget(worst);items.push({type:'note',warn:worst.dcr>1||undefined,text:'Governing: '+worst.label+' — DCR = '+fmt(worst.dcr,3)+(worst.combo?' ('+worst.combo+')':'')+(worst.dcr>1?' — DESIGN FAILS':' — all implemented checks pass')+(g&&SBRX.first&&SBRX.first[g[0]+'|'+g[1]]?' (worked in [['+SBRX.first[g[0]+'|'+g[1]]+']])':'')});}

@@ -215,3 +215,140 @@ test('A1: HSS20.000X0.250, 60 ft: H3-2a governs, phi Tn = 240.6 kip-ft (not 291.
   D = member(S, { L: 30, Lb: 30, rows: row });
   near(D.perCombo[0].phiTn, 291.87, 1e-9, '30 ft: 0.6Fy cap');
 });
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 5. SBLR (engineer HSS-4, HSS-5, 2026-11-13): "LRFD only" and the biaxial reading of Eq. H3-6 are stated (input tab, Interaction
+//    Basis card, Report). The texts are checked here; the H3-6 arithmetic they describe is checked in test 2 (both axes summed).
+// ---------------------------------------------------------------------------------------------------------------------
+test('SBLR: LRFD-only statement and the H3-6 biaxial assumption text', () => {
+  const L = sb.run('SB_LRFD_ONLY'), H = sb.run('SB_H36_BIAX');
+  assert.ok(/LRFD only/.test(L) && /§B3\.1/.test(L) && /ASD/.test(L) && /§B3\.2/.test(L), L);
+  assert.ok(/H3-6/.test(H) && /§H3\.2/.test(H) && /both axes/.test(H) && /conservative/.test(H), H);
+  // the stated reading is what the engine does: member mode, M and V about both axes, T > 0.2 phiTn -> H3-6 with summed terms
+  const D = member({ family: 'HSSR', label: 'HSS12X6X1/2', grade: 'A500B_R' },
+    { L: 12, Lb: 12, rows: [{ id: 'm1', name: 'LC-1', Mux: 150, Vux: 60, Pu: 150, Muy: 40, Vuy: 20, Tu: 40 }] });
+  const C = D.perCombo[0], T = C.inter.terms;
+  assert.equal(C.inter.eq, 'H3-6');
+  near(T.V, C.dcrVx + C.dcrVy, 1e-12, 'shear group = Vx + Vy'); near(T.My, C.dcrMy, 1e-12, 'My in the flexure group');
+  near(C.inter.value, (T.P + T.Mx + T.My) + (T.V + T.T) ** 2, 1e-12, 'H3-6 as stated');
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 6. SBGB (engineer HSS-8, 2026-11-13): the HSS family default is A500 Gr. B (rect Fy 46 / Fu 58, round 42 / 58; AISC 360-16
+//    Table C-A3.1). Saved projects keep their grade: S.section.grade is stored; batch rows imported before (no S.batch.hssDefB)
+//    keep the old default A500 Gr. C for a blank or unknown grade.
+// ---------------------------------------------------------------------------------------------------------------------
+test('SBGB: HSS default A500 Gr. B; old batch rows keep Gr. C; saved grade kept', () => {
+  assert.equal(sb.run("famMeta('HSSR').defMat"), 'A500B_R'); assert.equal(sb.run("famMeta('HSSP').defMat"), 'A500B_P');
+  assert.equal(sb.run("[matOf('A500B_R').Fy,matOf('A500B_R').Fu,matOf('A500B_P').Fy,matOf('A500B_P').Fu].join()"), '46,58,42,58');
+  assert.equal(sb.run("famMeta('W').defMat"), 'A992'); assert.equal(sb.run("famMeta('PIPE').defMat"), 'A53B');
+  // picking the family in the list (and the #hss entry, which runs the same sbSetFamily) gives Gr. B
+  assert.equal(sb.run("S=defaultState();sbSetFamily('HSSR');S.section.grade"), 'A500B_R');
+  assert.equal(sb.run("S=defaultState();sbSetFamily('HSSP');S.section.grade"), 'A500B_P');
+  // batch: blank / unknown grade
+  const row = g => sb.run(`batchCheckRow({size:'HSS8X8X1/2',grade:${JSON.stringify(g)},Pu:100,Mux:50,Lbx:12}).grade`);
+  sb.run('S=defaultState();S.batch={rows:[],Cb:1}');            // a project saved before SBGB: no hssDefB
+  assert.equal(row(''), 'A500C_R'); assert.equal(row('xyz'), 'A500C_R'); assert.equal(row('A500 Gr. C'), 'A500C_R'); assert.equal(row('A500 Gr. B'), 'A500B_R');
+  sb.run('S.batch.hssDefB=true');                               // rows imported from now on
+  assert.equal(row(''), 'A500B_R'); assert.equal(row('xyz'), 'A500B_R'); assert.equal(row('A500 Gr. C'), 'A500C_R');
+  assert.equal(sb.run("batchCheckRow({size:'W18X50',Pu:20,Mux:100,Lbx:10}).grade"), 'A992');
+  // a saved section grade is used as stored, whatever the default
+  const D = member({ family: 'HSSR', label: 'HSS12X6X1/2', grade: 'A500C_R' }, { L: 12, Lb: 12, rows: [{ id: 'm1', name: 'T', Mux: 100, Vux: 0, Pu: 0, Muy: 0, Vuy: 0, Tu: 0 }] });
+  near(D.perCombo[0].flexGov.phiMn, 215.25, 1e-9, 'Gr. C saved: phi Mnx = 0.9(50)(57.4)/12');
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 7. SBNT (engineer HSS-3, 2026-11-13): A1085 section properties at the nominal wall (AISC 360-16 Sec. B4.2).
+//    Rectangular: outside corner radius 2t, inside t (AISC Manual Part 1 basis); round: annulus with D from the label.
+//    (a) with t = the tabulated t_des the formulas reproduce the AISC Shapes Database v16.0 (as embedded): rectangular A, Z, J, C
+//        to 1 unit of the 3rd significant figure for all 525 sizes; I, S, r and every round property within 1 %;
+//    (b) hand cases HSS8X8X1/2 and HSS10.000X0.500 at t = t_nom; (c) A500 sections keep the database values exactly.
+// ---------------------------------------------------------------------------------------------------------------------
+test('SBNT: HSS property formulas reproduce the v16.0 database at t_des; A1085 at t_nom', () => {
+  const DBj = JSON.parse(sb.run('JSON.stringify({R:DB.HSSR,P:DB.HSSP,K:DBKEYS})'));
+  const u3 = v => Math.pow(10, Math.floor(Math.log10(Math.abs(v))) - 2);
+  for (const r of DBj.R) {
+    const o = {}; DBj.K.R.forEach((k, i) => o[k] = r[i]);
+    const q = sb.call('hssPropsRect', o.B, o.Ht, o.tdes);
+    for (const k of ['A', 'Zx', 'Zy', 'J', 'Cc']) assert.ok(Math.abs(q[k] - o[k]) <= 1.0 * u3(o[k]) + 1e-12, `${o.lbl} ${k}: ${q[k]} vs ${o[k]}`);
+    for (const k of ['Ix', 'Iy', 'Sx', 'Sy', 'rx', 'ry']) rel(q[k], o[k], 0.01, `${o.lbl} ${k}`);
+  }
+  for (const r of DBj.P) {
+    const o = {}; DBj.K.P.forEach((k, i) => o[k] = r[i]);
+    const q = sb.call('hssPropsRound', sb.call('hssLabelOD', o.lbl, o.OD, 'db'), o.tdes);
+    for (const k of ['A', 'Ix', 'Zx', 'Sx', 'rx', 'J', 'Cc']) rel(q[k], o[k], 0.01, `${o.lbl} ${k}`);
+  }
+  // (b) HSS8X8X1/2 A1085, t = 0.500, r_o = 1.0, r_i = 0.5:
+  //   A = [64 - (4-pi)(1)^2] - [49 - (4-pi)(0.5)^2] = 63.1416 - 48.7854 = 14.356 in^2 (database at 0.465: 13.5)
+  //   Z = 2[Q(8,8,1) - Q(7,7,0.5)] = 2(62.379 - 42.511) = 39.735 in^3 (37.5); I = 329.06 - 197.62 = 131.44 in^4 (125)
+  //   J = 4 Ap^2 t / p, Ap = 7.5^2 - (4-pi)(0.75)^2 = 55.767, p = 30 - 2(4-pi)(0.75) = 28.712 -> 216.63 in^4 (204)
+  //   C = 2(0.5)(7.5)(7.5) - 4.5(0.5)^3(4-pi) = 55.767 in^3 (52.4)
+  const a = sec('HSSR', 'HSS8X8X1/2', 'A1085');
+  near(a.tdes, 0.5, 0, 't'); near(a.A, 14.3562, 1e-4, 'A'); near(a.Zx, 39.7353, 1e-4, 'Z'); near(a.Ix, 131.4421, 1e-4, 'I');
+  near(a.Sx, 131.4421 / 4, 1e-4, 'S'); near(a.J, 216.6295, 1e-4, 'J'); near(a.Cc, 55.7671, 1e-4, 'C'); near(a.Wt, 48.85, 0, 'Wt as tabulated');
+  assert.equal(a._src.A, 'rule'); assert.equal(a._src.Zx, 'rule');
+  // strength: b/t = (8 - 1.5)/0.5 = 13 compact; phi Mn = 0.9(50)(39.735)/12 = 149.01 kip-ft (was 0.9(50)(37.5)/12 = 140.63)
+  near(sb.call('flexFor', a, 'x', 0, 1).phiMn / 12, 0.9 * 50 * a.Zx / 12, 1e-9, 'phiMn A1085');
+  // torsion: h/t = 13, Fcr = 0.6Fy = 30 ksi; phi Tn = 0.9(30)(55.767)/12 = 125.48 kip-ft (was 117.90)
+  near(sb.call('torsionHSS', a, 144).phiTn / 12, 0.9 * 30 * a.Cc / 12, 1e-9, 'phiTn A1085');
+  // HSS10.000X0.500 A1085: Di = 9; A = pi/4 (100 - 81) = 14.923; I = pi/64 (10^4 - 9^4) = 168.81; Z = (1000 - 729)/6 = 45.167;
+  // S = 2I/D = 33.762; J = 2I = 337.62; C = 2J/D = 67.525 (database at 0.465: 13.9, 159, 42.3, 31.7, 317, 63.5)
+  const c = sec('HSSP', 'HSS10.000X0.500', 'A1085');
+  near(c.A, Math.PI / 4 * 19, 1e-9, 'A round'); near(c.Ix, Math.PI / 64 * 3439, 1e-9, 'I round'); near(c.Zx, 271 / 6, 1e-9, 'Z round');
+  near(c.J, Math.PI / 32 * 3439, 1e-9, 'J round'); near(c.Cc, Math.PI / 160 * 3439, 1e-9, 'C round'); near(c.Iy, c.Ix, 0, 'Iy = Ix');
+  // phi Mn (F8-1, D/t = 20 compact) = 0.9(50)(45.167)/12 = 169.38 kip-ft (was 0.9(50)(42.3)/12 = 158.63)
+  near(sb.call('flexFor', c, 'x', 0, 1).phiMn / 12, 0.9 * 50 * 271 / 6 / 12, 1e-9, 'phiMn round A1085');
+  // (c) A500: the database values, unchanged
+  for (const [f, l, g] of [['HSSR', 'HSS8X8X1/2', 'A500C_R'], ['HSSR', 'HSS12X6X1/2', 'A500B_R'], ['HSSP', 'HSS10.000X0.500', 'A500C_P'], ['HSSP', 'HSS10.750X0.500', 'A500B_P']]) {
+    const p = sec(f, l, g); assert.equal(p._a1085, undefined);
+    for (const k of ['A', 'Ix', 'Zx', 'Sx', 'rx', 'J', 'Cc']) assert.equal(p._src[k], 'db', `${l} ${g} ${k}`);
+  }
+  near(sec('HSSR', 'HSS8X8X1/2', 'A500C_R').A, 13.5, 0, 'A500 A'); near(sec('HSSR', 'HSS8X8X1/2', 'A500C_R').Zx, 37.5, 0, 'A500 Z');
+  // an entered property wins over the A1085 value
+  const o = sb.run("(()=>{const k=S.section;S.section={family:'HSSR',label:'HSS8X8X1/2',grade:'A1085',ovr:{A:13.0}};try{const p=resolveSection();return [p.A,p._src.A,p.Zx].join();}finally{S.section=k;}})()");
+  assert.equal(o.split(',')[0], '13'); assert.equal(o.split(',')[1], 'ovr'); near(+o.split(',')[2], 39.7353, 1e-4, 'Z still at t_nom');
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 8. SBTU (engineer HSS-7, 2026-11-13): optional shear-lag helper, AISC 360-16 Table D3.1 cases 5 / 6 and Sec. B4.3b
+//    (A_n = A_g - 2 t w_slot, slot w blank -> gusset t + 1/8 in.), t = design wall. Off (or absent) -> typed A_n / U as before.
+// ---------------------------------------------------------------------------------------------------------------------
+test('SBTU: Table D3.1 case 6 / case 5 helper, slot deduction, typed values, out-of-range l', () => {
+  const ten = (sec, t) => { sb.ctx.__c = { sec, t };
+    const A = sb.design(`(()=>{S=defaultState();S.mode='member';S.section=Object.assign({ovr:{}},__c.sec);S.design.ten=__c.t;S.member.L=10;S.member.Lb=10;
+      S.member.rows=[{id:'m1',name:'T',Mux:0,Vux:0,Pu:-100,Muy:0,Vuy:0,Tu:0}];return computeMember();})()`);
+    return { C: A.design.perCombo[0], chk: A.design.checks.find(c => c.label === 'Tension') }; };
+  const R = { family: 'HSSR', label: 'HSS8X6X1/2', grade: 'A500B_R' };
+  // case 6 (the spreadsheet's tension example): HSS8X6X1/2 Gr. B, H = 8 in the gusset plane, B = 6, l = 10 in, gusset 1/2 in.
+  //   x = (6^2 + 2(6)(8))/(4(6 + 8)) = 132/56 = 2.357 in; U = 1 - 2.357/10 = 0.764 (l = 10 >= H = 8)
+  //   w = 0.5 + 0.125 = 0.625; A_n = 11.6 - 2(0.465)(0.625) = 11.019 in^2; phi Pn = 0.75(58)(0.764)(11.019) = 366.3 kip
+  //   (yielding 0.9(46)(11.6) = 480.2 kip); the spreadsheet (A_n = A_g) gave 385.7 kip
+  let r = ten(R, { An: null, U: null, hlp: { on: true, tp: 0.5, l: 10 } });
+  near(r.C.tens.U, 1 - (132 / 56) / 10, 1e-12, 'U case 6'); near(r.C.tens.An, 11.6 - 2 * 0.465 * 0.625, 1e-12, 'An');
+  near(r.C.phiPt, 0.75 * 58 * (1 - 132 / 560) * (11.6 - 2 * 0.465 * 0.625), 1e-9, 'phiPn'); near(r.C.phiPt, 366.3, 0.05, 'phiPn 366.3');
+  assert.equal(r.C.tens.hlp.case, '6'); assert.ok(/case 6/.test(r.chk.detail));
+  // gusset parallel to the B walls: H = 6 in the plane, B = 8: x = (64 + 96)/(4 x 14) = 2.857; U = 0.714
+  r = ten(R, { hlp: { on: true, tp: 0.5, l: 10, plane: 'B' } }); near(r.C.tens.U, 1 - (160 / 56) / 10, 1e-12, 'U plane B');
+  // case 5: HSS10.000X0.500 Gr. C round, D = 10, l = 12 in (D <= l < 1.3D), gusset 3/4 in.: x = 10/pi = 3.183; U = 0.7347;
+  //   A_n = 13.9 - 2(0.465)(0.875) = 13.086; phi Pn = 0.75(62)(0.7347)(13.086) = 447.1 kip
+  const P = { family: 'HSSP', label: 'HSS10.000X0.500', grade: 'A500C_P' };
+  r = ten(P, { hlp: { on: true, tp: 0.75, l: 12 } });
+  near(r.C.tens.U, 1 - 10 / Math.PI / 12, 1e-12, 'U case 5'); near(r.C.tens.An, 13.9 - 2 * 0.465 * 0.875, 1e-12, 'An round');
+  near(r.C.phiPt, 447.1, 0.05, 'phiPn round'); assert.equal(r.C.tens.hlp.case, '5');
+  r = ten(P, { hlp: { on: true, tp: 0.75, l: 13 } }); near(r.C.tens.U, 1, 0, 'l >= 1.3D: U = 1.0');
+  // slot width entered; A1085 uses t_nom
+  r = ten({ family: 'HSSR', label: 'HSS8X6X1/2', grade: 'A1085' }, { hlp: { on: true, tp: 0.5, w: 0.75, l: 10 } });
+  near(r.C.tens.An, r.C.tens.Ag - 2 * 0.5 * 0.75, 1e-12, 'A1085 t = 0.5, w = 0.75');
+  // typed values: the smaller governs
+  r = ten(R, { An: 10, U: 0.9, hlp: { on: true, tp: 0.5, l: 10 } }); near(r.C.tens.An, 10, 0, 'typed An smaller'); near(r.C.tens.U, 1 - 132 / 560, 1e-12, 'helper U smaller');
+  // out of range: l < H -> FAIL with the reason (no fallback to U = 1)
+  r = ten(R, { hlp: { on: true, tp: 0.5, l: 6 } });
+  assert.ok(r.C.tens.blocked && /case 6/.test(r.C.tens.blocked)); assert.equal(r.C.dcrPt, Infinity); assert.ok(r.chk.dcr > 1);
+  r = ten(P, { hlp: { on: true, tp: 0.75, l: 9 } }); assert.ok(/case 5/.test(r.C.tens.blocked));
+  r = ten(R, { hlp: { on: true, l: 10 } }); assert.ok(/thickness/.test(r.C.tens.blocked));
+  // off / absent: as before (A_n = A_g, U = 1: yielding 0.9(46)(11.6) = 480.24)
+  for (const t of [{ An: null, U: null }, { An: null, U: null, hlp: { on: false, tp: 0.5, l: 10 } }]) {
+    r = ten(R, t); near(r.C.phiPt, 0.9 * 46 * 11.6, 1e-9, 'off'); assert.equal(r.C.tens.hlp, undefined); }
+  // W-shape: the helper is ignored
+  r = ten({ family: 'W', label: 'W18X50', grade: 'A992' }, { hlp: { on: true, tp: 0.5, l: 10 } }); assert.equal(r.C.tens.hlp, undefined);
+});

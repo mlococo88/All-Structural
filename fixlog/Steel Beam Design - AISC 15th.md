@@ -3274,3 +3274,170 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
   - the tools.html card link opens the tool with HSS.
   - check-syntax; phone-layout / decimal-entry `--tool sbeam`; project-library `--tool steelbeam`; steel-beam-builtup; steel-beam-h1-composite; home-projects. 0 console errors.
 - **Open items:** none.
+
+## 2026-11-13 — PR: claude/hss-lrfd-note (PR #1474: https://github.com/mlococo88/All-Structural/pull/1474) (SBLR) — "LRFD only" and the biaxial reading of Eq. H3-6 stated on the input tab and in the Report   [display only; no result, saved key or format change]
+- **Engineer's decisions (2026-11-13):**
+  - **HSS-4:** keep summing both axes in Eq. H3-6, and state it as an assumption on the input tab and in the Report.
+  - **HSS-5:** LRFD only, stated clearly on the input tab and in the Report.
+- **Where (anchors are the code before the change):**
+  1. After `const SB_NLW=new Map();`, two new constants: `SB_LRFD_ONLY` (design method text) and `SB_H36_BIAX` (Eq. H3-6 biaxial reading). Their text:
+     - LRFD: "Design method: LRFD only. Every strength is a design strength φRₙ with the resistance factors of AISC 360-16 (§B3.1), checked against factored (LRFD) demands. ASD (Rₙ/Ω, §B3.2) is not available: do not enter service-level (ASD) forces as demands."
+     - H3-6: "Eq. H3-6 (§H3.2) has one flexure term Mᵣ/Mᶜ and one shear term Vᵣ/Vᶜ. With bending and shear about both axes the app sums both axes inside each group: Mᵣₓ/Mᶜₓ + Mᵣᵧ/Mᶜᵧ in the flexure group and Vᵣₓ/Vᶜₓ + Vᵣᵧ/Vᶜᵧ in the shear group (the shear sum is added to Tᵣ/Tᶜ before squaring). Each ratio is the largest of its combination, not taken at one common point (conservative)."
+  2. `rebuildInputs`, card `inSect` (Section & Material). After the material hint, the one ending `give 50 ksi; 46 ksi is kept (conservative).':'')));`, add:
+     ```js
+     body.appendChild(el('div','hint sbNL',sbNL(SB_LRFD_ONLY,DBKIND[S.section.family]==='R'||DBKIND[S.section.family]==='P'?[['HSS torsion with biaxial loads (Eq. H3-6):',SB_H36_BIAX]]:null)));
+     ```
+  3. `buildInterTab`, card `itBasis`. After the item `['HSS torsion:','where Tᵤ > 0.2φTₙ on an HSS, Eq. H3-6 replaces H1 and brings the shear ratio in with it.'],`, add:
+     ```js
+     AN.sect&&(AN.sect._kind==='R'||AN.sect._kind==='P')?['HSS torsion with biaxial loads:',SB_H36_BIAX]:null,
+     ```
+     The Report's Interaction section is built from this card.
+  4. `sbrxCover` (Report page 1, "Governing result"). Before `if(isMember())items.push({type:'note',warn:true,text:'MEMBER CHECK MODE…`, add:
+     ```js
+     items.push({type:'note',text:sbrText(el('div',null,SB_LRFD_ONLY))});
+     ```
+- **Governing provision:** AISC 360-16 §B3.1 (LRFD), §B3.2 (ASD, not provided), §H3.2 Eq. H3-6. The engine code is unchanged: `memberDesignAll` / `designAll` already use `vr=(C.dcrVx||0)+(C.dcrVy||0)` and `(rp+rx+ry)+Math.pow(vr+C.dcrT,2)`.
+- **Check case:** HSS12X6X1/2 A500 Gr. B, member mode, L = Lᵇ = 12 ft, LC-1: Mᵤₓ 150, Mᵤᵧ 40 kip·ft, Vᵤₓ 60, Vᵤᵧ 20, Pᵤ 150 kip, Tᵤ 40 kip·ft.
+  - H3-6 = (0.2993 + 0.7575 + 0.3294) + (0.2449 + 0.1880 + 0.3276)² = **1.964**, unchanged.
+  - The statement now appears on the Section input tab, in Interaction Basis and in the Report.
+- **How verified:**
+  - Headless Chromium, origin/main against the branch, four cases: W default beam; the check case above; HSS10.750X0.500 beam; HSS8X8X1/2 A1085 beam.
+  - `AN` JSON is identical in all four.
+  - The input panel, every result tab and the built Report are identical once the inserted sentences are removed. 0 console errors.
+  - Node `sbeam-hss` test 5 passes. check-syntax passes.
+  - Smoke tests pass: builtup, h1-composite, phone-layout, decimal-entry, project-library, start-chooser. list-input `--part sbeam` fails the same 2 baseline checks as main.
+- **Other copies:** none.
+- **Open items:** none.
+
+## 2026-11-13 — PR: claude/hss-default-grb (PR #1475: https://github.com/mlococo88/All-Structural/pull/1475) (SBGB) — new HSS default material A500 Gr. B; saved projects keep their grade   [default change; no formula change; new optional batch field]
+- **Engineer's decision HSS-8 (2026-11-13):** the new HSS default material is A500 Gr. B (rect 46 ksi, round 42 ksi). Saved projects keep their grade.
+- **Defaults before:** HSS rect `A500C_R` (Fy 50 / Fu 62), HSS round `A500C_P` (46 / 62). W and HP: A992. C, MC, M and S: A36. Pipe: A53B.
+- **Where the default is used:** `sbSetFamily` (the Shape family list and the `#hss` entry, SBHSS #1473), and `pickGrade`/`defGradeFor` (a batch row with a blank or unknown grade).
+- **Code (re-apply by hand):**
+  1. `FAMS`:
+     - before: `{id:'HSSR',name:'HSS — Rect / Square',defMat:'A500C_R'},` and `{id:'HSSP',name:'HSS — Round',       defMat:'A500C_P'},`
+     - after: `defMat:'A500B_R'` and `defMat:'A500B_P'`, with a comment.
+  2. `defGradeFor` / `pickGrade`. Before:
+     ```js
+     function defGradeFor(fam){
+       const fm=FAMS.find(f=>f.id===fam);
+       return fm?fm.defMat:(gradesForFam(fam)[0]||{}).id;
+     }
+     function pickGrade(fam,txt){ … return defGradeFor(fam)||(list.length?list[0].id:null);
+     ```
+     After:
+     ```js
+     const SB_HSS_DEF_OLD={HSSR:'A500C_R',HSSP:'A500C_P'};
+     function defGradeFor(fam,legacy){
+       if(legacy&&SB_HSS_DEF_OLD[fam])return SB_HSS_DEF_OLD[fam];
+       const fm=FAMS.find(f=>f.id===fam);
+       return fm?fm.defMat:(gradesForFam(fam)[0]||{}).id;
+     }
+     function pickGrade(fam,txt,legacy){ … return defGradeFor(fam,legacy)||(list.length?list[0].id:null);
+     ```
+  3. `batchCheckRow`: `const gid=pickGrade(fs.fam,row.grade);` → `const gid=pickGrade(fs.fam,row.grade,!(S.batch&&S.batch.hssDefB));`
+  4. Batch import, after `S.batch.rows=rows;`, add `S.batch.hssDefB=true;`. This is a new optional field. Absent means the rows were imported before this change; nothing is written on load.
+  5. `BATCH_HELP.grade`: `rect HSS A500 Gr. C, round HSS A500 Gr. C` → `rect HSS A500 Gr. B, round HSS A500 Gr. B`, plus the sentence "Rows imported before 2026-11-13 and saved with a project keep A500 Gr. C for HSS, the default when they were imported."
+  6. The SBHSS comment block: `the family's default material, A500 Gr. C,` → `A500 Gr. B since SBGB,`.
+- **Values:** the `MATS` rows `A500B_R` (46/58) and `A500B_P` (42/58) are unchanged. They agree with AISC 360-16 Commentary Table C-A3.1. Manual Table 2-4 is not in the references folder.
+- **Check case:** pick HSS rect, then HSS12X6X1/2 (Zx 57.4). φMnx = 0.9·Fy·Zx/12 (F7-1): before 0.9(50)(57.4)/12 = 215.25 → after 0.9(46)(57.4)/12 = **198.03 kip·ft**. The `#hss` default, HSS30X10X1/2 on the 20 ft default beam: flexure DCR 0.0403 → 0.0435.
+- **Saved data (§5), how proved:** headless Chromium, with the autosave seeded and loaded on origin/main and on the branch. Four saved projects:
+  - Gr. C rect beam;
+  - Gr. C round member with T;
+  - A1085 member;
+  - a batch with blank / "xyz" / "A500B" HSS grades plus W and Pipe rows.
+
+  In all four, `AN` and every tab text are identical, and every `runBatch()` row is identical (blank HSS rows still A500C_R / A500C_P).
+- **Tests:** Node `sbeam-hss` test 6. check-syntax. Smoke tests: builtup, h1-composite, phone-layout, decimal-entry, project-library, start-chooser. list-input `--part sbeam` fails the same 2 baseline checks as main.
+- **Other copies:** none.
+- **Open items (not changed):**
+  - Batch grade matching. `pickGrade` strips `_` from the ids but not from the typed text, so "A500B_R", "A500C_R" and "A500B" are not recognized. They fall back to the family default without a warning; "A500 Gr. B" is recognized. Pre-existing.
+  - `matOf` falls back to `MATS[0]` (A992) for an unknown saved grade id. Pre-existing and unchanged.
+
+## 2026-11-13 — PR: claude/hss-a1085-props (PR #1476: https://github.com/mlococo88/All-Structural/pull/1476) (SBNT) — A1085: A, Z, S, I, r, J, C computed at the nominal wall   [calculation change, §4; A1085 only]
+- **Engineer's decision HSS-3 (2026-11-13):** for A1085, recompute all section properties at the nominal t (HSS review item A2).
+- **Problem:** A1085 set t_des = t_nom (§B4.2). A, Z, S, I, r, J and C stayed at the database values, which are computed with 0.93t_nom. Strengths that use these properties were about 6–7 % low (conservative), and E7 / F7-4 mixed the two bases.
+- **Code (re-apply by hand):**
+  1. `resolveSection`, right after
+     ```js
+     if((kind==='R'||kind==='P')&&mat.tRule==='nom'&&src.tdes!=='ovr')
+       {p.tdes=p.tnom;src.tdes='rule';}
+     ```
+     add:
+     ```js
+     if(src.tdes==='rule'){
+       const D=kind==='P'?hssLabelOD(db.lbl,p.OD,src.OD):null;
+       const q=kind==='R'?hssPropsRect(p.B,p.Ht,p.tdes):hssPropsRound(D,p.tdes);
+       (kind==='R'?['A','Ix','Zx','Sx','rx','Iy','Zy','Sy','ry','J','Cc']:['A','Ix','Zx','Sx','rx','J','Cc']).forEach(k=>{
+         if(src[k]!=='ovr'){p[k]=q[k];src[k]='rule';}});
+       p._a1085=q;
+     }
+     ```
+  2. New functions `hssRR(b,h,r)`, `hssPropsRect(B,H,t)`, `hssPropsRound(D,t)` and `hssLabelOD(lbl,OD,srcOD)`, placed before `/* Consistency checks — idealized re-derivation vs resolved values (§8) */`. They use `Math.PI`.
+     - `hssRR` returns A = bh − (4−π)r², the I and the half-section first moment Q of a rounded rectangle. It is built from a central b×(h−2r) rectangle, two (b−2r)×r strips and four quarter circles; each quarter circle has I_c = (π/16 − 4/(9π))r⁴ and its centroid at h/2 − r + 4r/(3π).
+     - `hssPropsRect`: outer `hssRR(B,H,2t)` minus inner `hssRR(B−2t,H−2t,t)` (and the same with B and H swapped for the y-axis). Z = 2ΔQ, S = I/(H/2), r = √(I/A). J = 4A_p²t/p with A_p = (B−t)(H−t) − (4−π)(1.5t)² and p = 2(B−t) + 2(H−t) − 2(4−π)(1.5t). C = 2t(B−t)(H−t) − 4.5t³(4−π).
+     - `hssPropsRound`: A = π(D²−Dᵢ²)/4, I = π(D⁴−Dᵢ⁴)/64, Z = (D³−Dᵢ³)/6, S = 2I/D, J = 2I, C = 4I/D.
+     - `hssLabelOD`: D from the label, if it is within 0.06 in of the database OD; an entered OD wins.
+  3. New `sbA1085Work(body,p)` (worked card) and, in `buildSectionTab` before `mkSection('sctTbl','Resolved Properties',…`, the line `if(p._a1085)mkSection('sctA1085','A1085 Section Properties at the Nominal Wall',body=>sbA1085Work(body,p),pg);`.
+  4. Texts (each sentence is appended after the old text):
+     - Section tab hint: `selecting A1085 switches to the nominal wall.` → `…, and A, Z, S, I, r, J and C are recomputed with it (card 'A1085 Section Properties at the Nominal Wall').`
+     - Inputs table "Material" row, and two User Manual paragraphs: `… and its A, Z, S, I, r, J and C are recomputed at tₙₒₘ (SBNT)`.
+- **Basis:**
+  - AISC 360-16 §B4.2 (A1085: t = t_nom).
+  - Outside corner radius 2t per AISC Manual Part 1. The v16 Design Examples I.x say "outside corner radii of two times the design wall thickness in accordance with AISC Manual Part 1"; Commentary §H3 uses midline radius 1.5t (Eq. C-H3-2).
+  - Commentary Eq. C-H3-1 and C-H3-3.
+  - W_t is used as tabulated: it is already on the nominal wall (48.85 lb/ft = 14.36 in² × 3.40 for HSS8X8X1/2).
+- **Database check (t = tabulated t_des):**
+  - 525 rectangular sizes: A, Zx, Zy, J and C within 1 unit of the 3rd significant figure; Ix, Iy, Sx, Sy, rx and ry within 1 % (max 0.93 %, small thick sizes, e.g. HSS8X2X1/2 Iy 4.159 exact against 4.19 tabulated).
+  - 189 round sizes: within 1 % (max 0.93 %, C).
+- **Check cases (before → after):**
+  - **HSS8X8X1/2 A1085:**
+    - Properties: A 13.5 → 14.356; Zx 37.5 → 39.735; Ix 125 → 131.44; Sx 31.2 → 32.86; rx 3.04 → 3.026; J 204 → 216.63; C 52.4 → 55.767.
+    - Strengths: φMnx 140.63 → 149.01 kip·ft; φTn 117.90 → 125.48 kip·ft; φPn at L_c = 12 ft 515.6 → 547.4 kip.
+    - Member-mode interaction (H3-6), LC-1 (Mux 100, Muy 20, Vux 30, Vuy 10, Pu 200, Tu 30): 1.4739 → 1.3888.
+  - **HSS10.000X0.500 A1085:**
+    - Properties: A 13.9 → 14.923; I 159 → 168.81; Z 42.3 → 45.167; S 31.7 → 33.762; J 317 → 337.62; C 63.5 → 67.52.
+    - Strength: φMn 158.63 → 169.38 kip·ft.
+  - Hand arithmetic is in PR #1476.
+- **How verified:**
+  - Headless Chromium, origin/main against the branch. Six non-A1085 cases (W, A500 B and C rect and round, beam and member, Pipe): `AN` identical; all tab and Report texts identical apart from the one appended Section-tab sentence.
+  - Node `sbeam-hss` test 7; `aisc-hss` 7/7; check-syntax.
+  - Smoke tests pass: builtup, h1-composite, phone-layout, decimal-entry, project-library, start-chooser. list-input `--part sbeam` fails the same 2 baseline checks as main.
+- **Saved data:** no change of key or format.
+- **Other copies:** `shared/aisc-hss.js` (Steel Canopy Designer) has no A1085 grade, so it is not affected.
+- **Open items:**
+  - The cross-section drawing still draws the A1085 wall at t_nom with the database corner geometry (display only).
+  - `sectionWarnings` still compares A with an approximate wall-geometry area (1.5 % tolerance band, no warning now).
+
+## 2026-11-13 — PR: claude/hss-tension-u (PR #1478: https://github.com/mlococo88/All-Structural/pull/1478) (SBTU) — optional shear-lag helper for HSS with a single concentric gusset (Table D3.1 cases 5/6) and the slotted net area   [new calculation, opt-in; new optional field `S.design.ten.hlp`]
+- **Engineer's decision HSS-7 (2026-11-13):** add a Table D3.1 case 5/6 U helper and a slot A_n helper. Slot width default = gusset t + 1/8 in., editable. Typed U / A_n are still allowed and stay the default path.
+- **Code (re-apply by hand):**
+  1. New `sbTenHelper(p,ten)` and `sbTenFor(p,ten)`, with their comment block, before `/* ---------- H3 torsion (HSS only) ---------- */`.
+     - `sbTenHelper` returns null unless `ten.hlp.on` and the family is HSSR / HSSP. It computes:
+       - rect, case 6: H = the side in the gusset plane (`hlp.plane`, default 'H'), x̄ = (B² + 2BH)/(4(B + H)); l ≥ H → U = 1 − x̄/l.
+       - round, case 5: D = `hssLabelOD`, x̄ = D/π; l ≥ 1.3D → U = 1; D ≤ l < 1.3D → U = 1 − x̄/l.
+       - A_n = A_g − 2·t_des·w, with w blank → t_p + 0.125.
+       - It collects errors: no t_p (and no w), no l, l below the case limit, A_n ≤ 0.
+     - `sbTenFor`: no helper → `tensionStrength(p,An,U)` as before. Helper with errors → `t.blocked` (text), φPn = 0. Otherwise A_n = min(typed, helper) and U = min(typed, helper) when typed, else the helper's.
+  2. `designAll` and `memberDesignAll`:
+     - before: `if(!D.ten)D.ten=tensionStrength(p,dsn.ten&&dsn.ten.An,dsn.ten&&dsn.ten.U);` and `C.dcrPt=Math.abs(man.Pu)/C.phiPt;` (`r.Pu` in member mode);
+     - after: `if(!D.ten)D.ten=sbTenFor(p,dsn.ten);` and `C.dcrPt=D.ten.blocked?Infinity:Math.abs(man.Pu)/C.phiPt;`.
+  3. Checks list, Tension `detail`: `blocked — <reason>` when blocked; otherwise `(shear-lag helper, Table D3.1 case N)` is appended. The tension warning: when blocked, a new message with the reason replaces the standard one.
+  4. `secEffLen` input (card "Compression Effective Lengths"), after the "Axial tension" hint, for HSSR / HSSP: the checkbox `tenHlpOn` and, when on, `tenHlpTp`, `tenHlpW`, `tenHlpL`, `tenHlpPl` (rect only), plus a hint.
+  5. `tensionSections`, card `tnCap`: `if(t.hlp)sbTenHelperWork(body,t);` and, when blocked, an errBox with return. The rupture block's A_n / U vars name the source ("shear-lag helper (above)", "entered" or "blank").
+  6. New `sbTenHelperWork(body,t)`: the eqBlock "Shear-lag factor and net area (helper …)" [Table D3.1 case N, §B4.3b] and the notes.
+- **Governing provisions:** AISC 360-16 Table D3.1 cases 5 and 6; §B4.3b (slotted HSS welded to a gusset: A_n = A_g − thickness × total width removed); §D3 Eq. D3-1; §D2 Eq. D2-1, D2-2.
+- **Check cases:**
+  - **HSS8X6X1/2 Gr. B, case 6.** H = 8, B = 6, l = 10 in, gusset 1/2 in (w 0.625): x̄ = 2.357 in, U = 0.764, A_n = 11.6 − 2(0.465)(0.625) = 11.019 in², φPn = 0.75(58)(0.764)(11.019) = **366.3 kip**. Helper off: 480.2 kip (yielding, A_n = A_g, U = 1). Spreadsheet: 385.7 kip.
+  - **HSS10.000X0.500 Gr. C round, case 5.** l = 12 in, gusset 3/4 in (w 0.875): x̄ = 3.183 in, U = 0.7347, A_n = 13.086 in², φPn = 0.75(62)(9.614) = **447.1 kip**. With l = 13 in, U = 1.0; with l = 9 in, blocked.
+- **Decisions (pending engineer review):**
+  1. When a typed A_n or U is also present, the smaller of the typed and helper values governs.
+  2. Incomplete or out-of-range helper inputs make the tension check FAIL with the reason; there is no fallback to A_n = A_g, U = 1.
+  3. The helper is offered for HSS rect / round only (not Pipe).
+- **How verified:**
+  - Headless Chromium, origin/main against the branch, 10 cases with the helper off or absent: `AN` identical; all texts identical apart from the new checkbox label.
+  - Node `sbeam-hss` test 8; check-syntax; `aisc-hss`.
+  - Smoke tests pass: builtup, h1-composite, phone-layout, decimal-entry, project-library, start-chooser. list-input `--part sbeam` fails the same 2 baseline checks as main.
+- **Saved data (§5):** new optional field only (absent = off). No key or format changed.
+- **Other copies:** none. The batch tension columns are unchanged.
+- **Open items:** gusset plate, welds, block shear and the HSS wall at the slot end are not checked (stated on the card). Two-side-gusset case 6 is not offered.
