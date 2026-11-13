@@ -6990,3 +6990,41 @@ D: M = 5; L: M = −3; W: M = ±2 (reverses); other cases 0; V = 0.
 
   `computeAll()`, `VALIDATION`, `allChecks`, the hand-off message, the autosave, the Report and every tab are identical, except in the same-sign service project. There the rows are identical (no omitted row is generated) and only the rules note differs.
 - **Tests:** `tests/engine/cbc-loads.test.mjs` (7 tests, 2 new) and `tests/smoke/cbc-loads.mjs` (updated rows; new mixed-sign block). The suite's other tests are listed in the PR.
+
+## 2026-11-13 — PR: claude/cbc-omit-subsets (PR #1507: https://github.com/mlococo88/All-Structural/pull/1507) (CBSS) — Beam Capacity tab, service load cases: ACI 318-19 5.3.2 omitted rows for every subset of the variable loads (engineer decision CB-8)   [CALCULATION CHANGE (service mode only: more combinations); factored mode identical; no saved key or format change]
+
+The file uses CRLF line endings; keep them. The code is in the Beam Capacity srcdoc. When re-applying, escape `&` as `&amp;` and `"` as `&quot;`. The sites are tagged CBSS.
+
+- **Engineer decision (CB-8, answering the CBOM open item):** leave out ALL subsets of the variable loads of a row (any set of L, L_r/S/R, W, E; at most 15 subsets per row). Keep only rows that increase |M_u| or |V_u| over the full row, de-duplicate, and label them e.g. "…, L and W omitted".
+- **Provision:** ACI 318-19 5.3.2 (PDF page 65; paraphrased): the effect of one or more loads not acting at the same time is to be investigated.
+- **Where:** `cbcBuildCombos`, the CBOM block after `sig[key]=r; rows.push(r);`.
+  - Before (CBOM): `terms.forEach(x=>{ if(x.k==="D"||zero(x.k)) return; const t2=terms.filter(y=>y!==x), … })`, one load at a time.
+  - After:
+    ```js
+          const vars=terms.filter(x=>x.k!=="D"&&!zero(x.k)), subs=[];
+          for(let m=1;m<(1<<vars.length);m++) subs.push(vars.filter((x,i)=>m&(1<<i)));
+          subs.sort((p,q)=>p.length-q.length);
+          subs.forEach(om=>{
+            const t2=terms.filter(y=>om.indexOf(y)<0), s2=…, M2=s2("M"), V2=s2("V");
+            …same increase test (|M| or |V|, each on its own)…
+            const ls=om.map(x=>lab[x.k]), oTx=ls.length<3?ls.join(" and "):ls.slice(0,-1).join(", ")+" and "+ls[ls.length-1];
+            …key as before; nm=name+", "+oTx+" omitted"; merged where the key exists…
+            const o={…,omit:oTx,omitK:om.map(x=>x.k),…};
+          });
+    ```
+  - The notes read "L and W are left out of …".
+  - The rules note: "every set of the variable loads of a row … is left out in turn (up to 15 sets per row)".
+- **Hand check, the CBOM mixed-sign case** (D M 5, L M −3, W M ±2):
+  - New row "(5.3.1d) 1.2D + 1.0W + 1.0L + 0.5Lr, W and L omitted" = 1.2D + 0.5Lr = 6.0 > 5.0.
+  - "(5.3.1d) −W, W and L omitted" (also 6.0) has the same loads, so it is merged into that row ("Stands for").
+  - 19 rows. The governing row stays 8.0 ("(5.3.1d) +W, L omitted").
+- **Hand check, a two-load omission governs:** D M 5, W M 4 (reverses), L M −3, L_r = S = R M −2.
+  - (5.3.1d) +W with L_r: 6 + 4 − 3 − 1 = 6.0.
+  - L omitted: 9.0. L_r omitted: 7.0. **L and L_r omitted: 10.0, which governs.** Its S and R variants are merged into it.
+  - Before (single omissions only), the governing value was 9.0.
+- **Earlier hand check** (D 5/2, L 3/1.2, W ±2/±0.8): unchanged (14 rows, governing 11.00 / 4.40).
+- **How verified:**
+  - **Probe**, origin/main vs branch, 9 projects: factored ACI and AASHTO, an AASHTO project with service mode stored, the V_s cap case with service cases stored, a slab, an old save without combinations, and a same-sign service project.
+    - Identical: `computeAll()`, `VALIDATION`, `allChecks`, the hand-off message, the autosave, the Report and every tab.
+    - Exception: the same-sign service project. Its rows (names, M_u, V_u) are identical; only the new `omitK` field and the rules note differ.
+  - **Tests:** `tests/engine/cbc-loads.test.mjs` (8 tests; 1 new, 1 updated) and `tests/smoke/cbc-loads.mjs` (19 rows in the mixed-sign block).

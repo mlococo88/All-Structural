@@ -91,16 +91,19 @@ test('blank cases: one row per equation, all zero; missing or partial input read
 // d−W 1.0; e 3.0; f+W 6.5, f−W 2.5; g 4.5. Omitted rows (|M_u| larger): b L omitted 6.0; c+L L omitted 6.0; c−0.5W W omitted 6.0
 // (same loads as "c+L, L omitted" in Eq. (5.3.1c): merged); d+W L omitted 8.0; d−W W omitted 3.0, L omitted 4.0; e L omitted 6.0;
 // f−W W omitted 4.5. Governing |M_u|: 7.0 before (1.4D), 8.0 after ((5.3.1d) +W, L omitted = 1.2D + 1.0W + 0.5Lr).
+// CBSS (CB-8): every subset; (d) +W with W and L omitted = 1.2D + 0.5Lr = 6.0 > 5.0 is added; (d) −W with W and L omitted (6.0) has the
+// same loads, so it is merged into it; governing stays 8.0.
 test('5.3.2 mixed-sign hand check: omitted rows, merge, governing 7.0 -> 8.0', () => {
   const R = builder()({ cases: cases({ D: { M: 5 }, L: { M: -3 }, W: { M: 2 } }), rev: { W: true, E: true }, l05: false });
   const exp = [['1.4D', 7], ['1.2D + 1.6L + 0.5Lr', 1.2], ['1.2D + 1.6L + 0.5Lr, L omitted', 6], ['1.2D + 1.6Lr + 1.0L', 3], ['1.2D + 1.6Lr + 1.0L, L omitted', 6],
-    ['1.2D + 1.6Lr + 0.5W', 7], ['1.2D + 1.6Lr − 0.5W', 5], ['1.2D + 1.0W + 1.0L + 0.5Lr', 5], ['1.2D + 1.0W + 1.0L + 0.5Lr, L omitted', 8],
+    ['1.2D + 1.6Lr + 0.5W', 7], ['1.2D + 1.6Lr − 0.5W', 5], ['1.2D + 1.0W + 1.0L + 0.5Lr', 5], ['1.2D + 1.0W + 1.0L + 0.5Lr, L omitted', 8], ['1.2D + 1.0W + 1.0L + 0.5Lr, W and L omitted', 6],
     ['1.2D − 1.0W + 1.0L + 0.5Lr', 1], ['1.2D − 1.0W + 1.0L + 0.5Lr, W omitted', 3], ['1.2D − 1.0W + 1.0L + 0.5Lr, L omitted', 4],
     ['1.2D + 1.0E + 1.0L + 0.2S', 3], ['1.2D + 1.0E + 1.0L + 0.2S, L omitted', 6], ['0.9D + 1.0W', 6.5], ['0.9D − 1.0W', 2.5], ['0.9D − 1.0W, W omitted', 4.5], ['0.9D + 1.0E', 4.5]];
   assert.deepEqual(R.map(r => r.name), exp.map(e => e[0]));
   exp.forEach(([n, M]) => near(row(R, n).Mu, M, n));
   assert.deepEqual(row(R, '1.2D + 1.6Lr + 1.0L, L omitted').merged, ['1.2D + 1.6Lr − 0.5W, W omitted']);
   assert.deepEqual(row(R, '1.2D + 1.0W + 1.0L + 0.5Lr, L omitted').why, ['M']);
+  assert.deepEqual(row(R, '1.2D + 1.0W + 1.0L + 0.5Lr, W and L omitted').merged, ['1.2D − 1.0W + 1.0L + 0.5Lr, W and L omitted']);
   const full = R.filter(r => !r.omit), gov = rs => rs.reduce((a, r) => Math.abs(r.Mu) > Math.abs(a.Mu) + 1e-9 ? r : a);
   near(gov(full).Mu, 7, 'governing full row'); assert.equal(gov(R).name, '1.2D + 1.0W + 1.0L + 0.5Lr, L omitted'); near(gov(R).Mu, 8, 'governing with 5.3.2');
 });
@@ -111,4 +114,18 @@ test('5.3.2: V checked on its own; an omitted row only where |M_u| or |V_u| grow
   const o = row(R, '1.2D + 1.6L + 0.5Lr, L omitted');
   near(o.Mu, 6, 'M'); near(o.Vu, 4.8, 'V'); assert.deepEqual(o.why, ['V']);
   assert.ok(R.every(r => !r.omit || r.omit !== 'D'), 'D never omitted');
+});
+
+// CBSS (CB-8): a two-load omission governs. D M 5, W M 4 (reverses), L M −3, L_r = S = R M −2. (5.3.1d) +W with L_r:
+// 6 + 4 − 3 − 1 = 6.0; L omitted 6 + 4 − 1 = 9.0; L_r omitted 6 + 4 − 3 = 7.0; L and L_r omitted 6 + 4 = 10.0.
+// Best single-load row 9.0 ((5.3.1d) +W, L omitted, each of L_r / S / R); governing 10.0 = "(5.3.1d) 1.2D + 1.0W + 1.0L + 0.5Lr, L and Lr omitted"
+// (the S and R variants merged into it).
+test('5.3.2: a two-load omission governs (10.0 over the best single omission 9.0)', () => {
+  const R = builder()({ cases: cases({ D: { M: 5 }, W: { M: 4 }, L: { M: -3 }, Lr: { M: -2 }, S: { M: -2 }, R: { M: -2 } }), rev: { W: true, E: true }, l05: false });
+  const g = R.reduce((a, r) => Math.abs(r.Mu) > Math.abs(a.Mu) + 1e-9 ? r : a);
+  assert.equal(g.name, '1.2D + 1.0W + 1.0L + 0.5Lr, L and Lr omitted'); near(g.Mu, 10, 'governing');
+  assert.deepEqual(g.merged, ['1.2D + 1.0W + 1.0L + 0.5S, L and S omitted', '1.2D + 1.0W + 1.0L + 0.5R, L and R omitted']);
+  const single = R.filter(r => !r.omitK || r.omitK.length < 2).reduce((a, r) => Math.abs(r.Mu) > Math.abs(a.Mu) + 1e-9 ? r : a);
+  near(single.Mu, 9, 'best without two-load omissions'); assert.equal(single.name, '1.2D + 1.0W + 1.0L + 0.5Lr, L omitted');
+  assert.ok(R.every(r => !r.omitK || r.omitK.length <= 3), 'at most the row\'s variable loads');
 });

@@ -90,7 +90,7 @@ for (const vw of [1400, 390]) {
     S.ui.tab = 'tabLoads'; refresh(); const card = (document.querySelector('#ldC' + i) || {}).innerText || '';
     const t = SharedReport.text(SharedReport.build(mrModel()), { legacy: true });
     return { n: CC.combos.length, gov: g.name, mu: g.Mu, card: /Omitted \(5\.3\.2\)/.test(card) && /from 5\.00 to 8\.00/.test(card), t: /Omitted \(ACI 318-19 5\.3\.2\)/.test(t) && !/NaN|undefined|\[\[/.test(t) }; });
-  ok(r.n === 18 && r.gov === '1.2D + 1.0W + 1.0L + 0.5Lr, L omitted' && Math.abs(r.mu - 8) < 1e-9, `5.3.2 mixed signs: 18 rows, governing ${r.gov} M_u ${r.mu} (8.00; 7.00 without the omitted rows)`);
+  ok(r.n === 19 && r.gov === '1.2D + 1.0W + 1.0L + 0.5Lr, L omitted' && Math.abs(r.mu - 8) < 1e-9, `5.3.2 mixed signs: 19 rows (with the W and L omitted row, CB-8), governing ${r.gov} M_u ${r.mu} (8.00; 7.00 without the omitted rows)`);
   ok(r.card && r.t, '5.3.2: the card says "Omitted (5.3.2) … |M_u| from 5.00 to 8.00"; the Report has the note; no NaN');
   ok(!errs.length, 'console errors (5.3.2): ' + errs.length);
   await b.close();
