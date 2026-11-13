@@ -1621,6 +1621,9 @@ function cbcTorDesA(F,sh,Vu,ta,ve){
   return {...g,phi,Tu,tv:ve.tv,Veff:ve.Veff,V,fyt,fc,th,cot,dv,s,At,At_s,Tn,phiTn,dcT,VsReq,Av_s_req,At_s_req,comb_req,comb_prov,dcComb,
           Vlim:sh.Vlim,VlimR,dcSec,fyt100:!!S.mat.fyt100&amp;&amp;S.mat.fyt>fyt};
 }
+/* CBTU (2026-11-13): T_u is used by the checks only in ACI mode with &quot;Check torsion&quot; ticked (torsion()) and in AASHTO mode
+   (cbcTorA, every combination); otherwise the T_u column is hidden and a value kept in it has no effect on any result. */
+function cbcTuUsed(){ return (S.tor.present&amp;&amp;S.code==='ACI')||S.code==='AASHTO'; }
 function computeAll(){
   const combos=S.combos.map((c,i)=>({...c,ci:i}));
   /* Sign of the governing moment sets which face is in tension. A negative
@@ -1685,10 +1688,12 @@ function computeAll(){
     return {...c,neg,F,pf,phiMn,sh,tor,svc,...(lonA?{lonA}:{}),...(torA?{torA}:{}),...(torD?{torD}:{}),...(mr?{mr}:{}),dcM,dcV,dcT,det,share,dcV_eff,
             detWorst,detFails,worst};
   });
-  /* §7.2 identical-result detection: exact match on the factored action set */
-  const seen={};
+  /* §7.2 identical-result detection: exact match on the factored action set.
+     CBTU (2026-11-13): T_u enters the key only where it is used (cbcTuUsed: ACI with torsion checked, or AASHTO); a T_u
+     typed while torsion is off (hidden column) no longer makes two otherwise identical combinations differ. Display only. */
+  const seen={}, tuUsed=cbcTuUsed();
   rows.forEach(r=>{
-    const key=[r.Mu.toFixed(6),r.Vu.toFixed(6),r.Tu.toFixed(6)].join(&quot;|&quot;);
+    const key=[r.Mu.toFixed(6),r.Vu.toFixed(6),(tuUsed?r.Tu:0).toFixed(6)].join(&quot;|&quot;);
     if(seen[key]!==undefined){ r.sameAs=seen[key]; } else { seen[key]=r.ci; }
   });
   /* ---- governing combination(s) --------------------------------------
@@ -1713,7 +1718,7 @@ function computeAll(){
     return bi; };
   const govFlexIndex  = pick(r=>r.dcM,     r=>r.Mu);
   const govShearIndex = pick(r=>r.dcV_eff, r=>r.Vu);
-  const govTorIndex   = pick(r=>r.dcT,     r=>r.Tu);
+  const govTorIndex   = pick(r=>r.dcT,     r=>tuUsed?r.Tu:0);   /* CBTU: a hidden T_u does not break the tie */
   return {combos:rows,govIndex:gi,govRow:rows[gi]||null,both:bothSenses(),
           govFlexIndex,govShearIndex,govTorIndex};
 }
@@ -1770,7 +1775,7 @@ function validate(){
     W.push({code:&quot;QA&quot;,msg:&quot;The \u201cChecked by\u201d and/or \u201cChecked date\u201d fields in the title block are blank. A calculation issued for a sealed submittal must record an independent checker.&quot;});
   /* combinations */
   if(!S.combos.length) B.push({code:&quot;Loads&quot;,msg:&quot;At least one load combination is required.&quot;});
-  const allZero=S.combos.every(c=>!c.Mu&amp;&amp;!c.Vu&amp;&amp;!c.Tu);
+  const allZero=S.combos.every(c=>!c.Mu&amp;&amp;!c.Vu&amp;&amp;!(cbcTuUsed()&amp;&amp;c.Tu));   /* CBTU: a hidden T_u is not a demand */
   if(allZero) W.push({code:&quot;Loads&quot;,msg:&quot;All factored actions are zero. Capacities are reported, but no demand/capacity ratio is meaningful.&quot;});
   /* torsion */
   if(S.code==='AASHTO'){   /* CBH1 */
@@ -2502,6 +2507,7 @@ function detEnvelope(){
         na:true,naWhy:d.naWhy,naWhyFirst:null,naCombos:[],entry:d,combo:&quot;—&quot;,dcr:null,allOk:true};
         order.push(d.id); }
       const E=map[d.id];
+      (E.ev||(E.ev=[])).push({ci:r.ci,neg:!!r.neg,na:!!d.na,have:d.have,need:d.need,ok:!!d.ok});   /* CBDA: for the label below */
       if(d.na){ E.naCombos.push(r.name); if(!E.naWhyFirst) E.naWhyFirst=d.naWhy;
                 if(E.na){ E.naWhy=d.naWhy; E.entry=d; }
                 return; }
@@ -2510,6 +2516,23 @@ function detEnvelope(){
       if(E.na||dcr>E.dcr){ E.dcr=dcr; E.entry=d; E.combo=r.name; E.ci=r.ci; }   /* ci: D11 link target only */
       E.allOk=(E.na?true:E.allOk)&amp;&amp;d.ok; E.na=false;
     });
+  });
+  /* CBDA (2026-11-13, display only): most detailing checks do not depend on the factored actions, so naming one combination
+     as &quot;governing&quot; (the first on a tie) misled. Where every combination in the governing combination's sense of bending is
+     evaluated and gives the same provided / required / status, the label is &quot;All combinations (positive moment)&quot; or
+     &quot;(negative moment)&quot;; &quot;All combinations&quot; where both senses give the same. A check whose provided or required value differs between
+     combinations of that sense (e.g. the stirrup spacing tier or torsion under different actions) keeps the combination's name. E.comboName keeps the name; E.ci (link) is
+     unchanged; no D/C, PASS / FAIL or derivation changes. */
+  const eqv=(a,b)=>a===b||(isFinite(a)&amp;&amp;isFinite(b)&amp;&amp;Math.abs(a-b)<=1e-9*Math.max(1,Math.abs(a),Math.abs(b)));
+  const same=(a,b)=>a.ok===b.ok&amp;&amp;eqv(a.have,b.have)&amp;&amp;eqv(a.need,b.need);
+  order.forEach(id=>{ const E=map[id]; E.comboName=E.combo; E.allC=false;
+    if(E.na||!E.ev||CC.combos.length<2) return;
+    const g=E.ev.find(x=>x.ci===E.ci); if(!g) return;
+    const nIn=neg=>CC.combos.filter(r=>!!r.neg===neg).length;   /* every combination of the sense must have the check */
+    const sense=E.ev.filter(x=>x.neg===g.neg), other=E.ev.filter(x=>x.neg!==g.neg);
+    if(sense.length!==nIn(g.neg)||sense.some(x=>x.na)||!sense.every(x=>same(x,g))) return;
+    E.allC=true;
+    E.combo=(other.length&amp;&amp;other.length===nIn(!g.neg)&amp;&amp;other.every(x=>!x.na&amp;&amp;same(x,g)))?&quot;All combinations&quot;:&quot;All combinations (&quot;+(g.neg?&quot;negative&quot;:&quot;positive&quot;)+&quot; moment)&quot;;
   });
   return order.map(id=>map[id]);
 }
@@ -3181,7 +3204,12 @@ function workShear(b,r){
       w.innerHTML=&quot;<b>Members without minimum stirrups take the size-effect V_c.</b> The familiar 2\u221af\u2032c row of Table 22.5.5.1 applies only when A_v \u2265 A_v,min; using it here would overstate V_c by &quot;+fmt((sh.Vc_a/Math.max(sh.Vc_c,1e-9)-1)*100,0)+&quot;%.&quot;;
       b.appendChild(w);
     }
-    b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;The simplified expression of 22.5.5.1 is used. The detailed method of Table 22.5.5.1, which credits the reinforcement ratio and axial load, would generally give a larger V_c; it is not applied here, so the result is conservative.&quot;));
+    /* CBVC (2026-11-13, engineer: wording only, no V_c method change): the old note said the detailed method &quot;would generally give
+       a larger V_c&quot; and showed with row (c) too. Row (b) exceeds row (a) only where 8(rho_w)^(1/3) > 2, i.e. rho_w > 1/64, with
+       N_u = 0 (this tool has no axial-load input). Shown only when row (a) is used (A_v >= A_v,min). */
+    if(sh.stirAdequate) b.appendChild(cbNL(&quot;note&quot;,&quot;Row (a) of Table 22.5.5.1 is used (A_v ≥ A_v,min).&quot;,[
+      [&quot;Row (b):&quot;,&quot;ACI also permits row (b) when A_v ≥ A_v,min; it adds the longitudinal reinforcement ratio ρ_w and the axial load N_u. This tool uses row (a), which the code permits.&quot;],
+      [&quot;When (b) is larger:&quot;,&quot;with no axial load (this tool has no N_u input), row (b) gives the larger V_c only when ρ_w > 1/64 ≈ 0.0156 (1.56%), or with axial compression. Here ρ_w = A_s/(b_w d) = &quot;+fmt(sh.rho_w,5)+&quot; (&quot;+(sh.rho_w>1/64?&quot;above&quot;:&quot;not above&quot;)+&quot; 0.0156).&quot;]]));
     if(S.stir.present){
       b.appendChild(el(&quot;h3&quot;,null,&quot;Step 3 — Transverse reinforcement contribution&quot;));
       b.appendChild(eqBlock({
@@ -3642,7 +3670,7 @@ function buildDetailTab(pg){
         b.appendChild(x); return; }
       if(E.naCombos.length &amp;&amp; E.naWhyFirst){
         const x=el(&quot;div&quot;,&quot;infoBox&quot;);
-        x.innerHTML=&quot;<b>Evaluated for &quot;+E.combo+&quot;</b>, the worst of the combinations it applies to. &quot;+
+        x.innerHTML=(E.allC?&quot;<b>&quot;+E.combo+&quot;</b>: the same result for each (this check does not depend on the factored actions). &quot;:&quot;<b>Evaluated for &quot;+E.combo+&quot;</b>, the worst of the combinations it applies to. &quot;)+   /* CBDA */
           &quot;Not applicable to &quot;+E.naCombos.join(&quot;, &quot;)+&quot; \u2014 &quot;+E.naWhyFirst;
         b.appendChild(x);
       }
@@ -5349,7 +5377,7 @@ function cbcRptShear(r){
   } else {
     const cs=[];
     if(sh.stirAdequate) cs.push(cS({id:'avs',label:'A_v/s ≥ (A_v/s)_min: Table 22.5.5.1 row (a) applies',sym:'A_{v}/s',eq:'\\ge (A_v/s)_{min}',sub:fmt(sh.avProv,4)+' \\ge '+fmt(sh.avMinACI,4),value:sh.avProv,unit:'in^{2}/in',d:4}),
-      cS({id:'Vc',label:'Concrete shear, Table 22.5.5.1 row (a)',sym:'V_{c}',eq:&quot;2\\lambda\\sqrt{f'_c}\\,b_w d&quot;,sub:'2('+fmt(S.mat.lambda,2)+')\\sqrt{'+fmt(fc*1000,0)+'}('+fmt(bw)+')('+fmt(sh.d)+')/1000',value:sh.Vc,unit:'kip',ref:cRef('ACI Table 22.5.5.1(a)')}));
+      cS({id:'Vc',label:'Concrete shear, Table 22.5.5.1 row (a)',sym:'V_{c}',eq:&quot;2\\lambda\\sqrt{f'_c}\\,b_w d&quot;,sub:'2('+fmt(S.mat.lambda,2)+')\\sqrt{'+fmt(fc*1000,0)+'}('+fmt(bw)+')('+fmt(sh.d)+')/1000',value:sh.Vc,unit:'kip',ref:cRef('ACI Table 22.5.5.1(a)'),note:'ACI also permits row (b) when A_v ≥ A_v,min; this tool uses row (a). With no axial load (no N_u input), row (b) is larger only when ρ_w > 1/64 ≈ 0.0156; here ρ_w = '+fmt(sh.rho_w,5)+'.'}));   /* CBVC */
     else cs.push(cS({id:'avs',label:'A_v/s < (A_v/s)_min: row (c) applies (size effect)',sym:'A_{v}/s',sub:fmt(sh.avProv,4)+' \\lt '+fmt(sh.avMinACI,4),value:sh.avProv,unit:'in^{2}/in',d:4}),
       cS({id:'lamsr',label:'Size-effect factor before its limit',sym:'\\lambda_{s}',eq:'\\sqrt{\\dfrac{2}{1+d/10}}',sub:'\\sqrt{\\dfrac{2}{1+'+fmt(sh.d)+'/10}}',value:sh.lam_s_raw,d:3,ref:cRef('ACI 22.5.5.1.3')}),
       cS({id:'lams',label:'Size-effect factor (≤ 1.0)',sym:'\\lambda_{s}',eq:'\\min(\\lambda_s,\\;1.00)',sub:'\\min('+fmt(sh.lam_s_raw,3)+',\\;1.00)',value:sh.lam_s,d:3}),
@@ -5549,7 +5577,7 @@ function cbcRptModel(){
     subs.push({title:'Detailing checks (envelope)',items:[{type:'table',head:['Check','Reference','Governing combination','Provided','Required','Unit','Status'],rows:ENV.map(E=>{ const d=E.entry, dp=d.unit==='in²/in'?4:(d.unit===''?5:(d.unit==='in²'?3:2));
       return [d.name,cRef(d.ref),E.na?'—':E.combo,{t:E.na?'—':fmt(d.have,dp),n:true,key:E.na?undefined:'dt/'+d.id+'.cmp'},{t:E.na?'—':(d.cmp==='\\ge'?'≥ ':'≤ ')+fmt(d.need,dp),n:true},d.unit,E.na?{t:'N/A',cls:'na'}:{t:E.allOk?'PASS':'FAIL',cls:E.allOk?'ok':'ng'}]; })}]});
     const L=ENV.filter(E=>!E.na).map(E=>{ const d=E.entry, dp=d.unit==='in²/in'?4:(d.unit===''?5:3);
-      return {title:d.name+' ('+E.combo+')',ref:cRef(d.ref),steps:d.deriv.map((q,k)=>cS({id:d.id+'.'+k,label:q[2]||d.name,sym:'',eq:q[0],sub:q[1]||'',value:null})).concat([
+      return {title:d.name+(E.allC?' — '+E.combo:' ('+E.combo+')'),ref:cRef(d.ref),steps:d.deriv.map((q,k)=>cS({id:d.id+'.'+k,label:q[2]||d.name,sym:'',eq:q[0],sub:q[1]||'',value:null})).concat([
         cS({id:d.id+'.cmp',label:'Provided '+(d.cmp==='\\ge'?'≥':'≤')+' required',sym:'\\text{provided}',eq:d.cmp+'\\;\\text{required}',sub:fmt(d.have,dp)+' '+cbcDetRel(d)+' '+fmt(d.need,dp),value:d.have,unit:cU(d.unit),d:dp,ok:!!d.ok,note:E.allOk?'':'fails for at least one combination'})])}; });
     if(L.length) subs.push({title:'Worked detailing checks',items:[{type:'topics',scope:'dt',title:'Worked steps',list:L},{type:'note',text:'[[tab:tabDetail|On screen: Detailing tab]]'}]});
     const na=ENV.filter(E=>E.na); if(na.length) subs.push({title:'Not applicable',items:[].concat(...na.map(E=>E.entry.naL&amp;&amp;E.naWhy===E.entry.naWhy?cbrNL(E.entry.name+':',E.entry.naL):[{type:'note',text:E.entry.name+': '+E.naWhy}]))});   /* CBNL */
