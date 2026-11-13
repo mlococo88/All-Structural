@@ -92,7 +92,7 @@
     if (!window.SharedReport) { box.innerHTML = '<div class="alert err">shared/report.js is not loaded.</div>'; return null; }
     const B = window.PSBReportData.compute(ctx.P, ctx.rc);
     if (B.err) { box.innerHTML = `<div class="alert err" role="alert">The report cannot be built: ${esc(B.err)}</div>`; return null; }
-    const inc = incOf(o), wScr = Math.round(box.clientWidth || 0), narrow = wScr > 0 && wScr < PW - 40, key = JSON.stringify([ctx.rc && ctx.rc.key, inc, narrow ? wScr : 0]);
+    const inc = incOf(o), wScr = Math.round(box.clientWidth || 0), narrow = wScr > 0 && wScr < PW - 40, key = JSON.stringify([ctx.rc && ctx.rc.key, ctx.rc && ctx.rc.allKey, inc, narrow ? wScr : 0]);
     // the model is kept while the inputs, the sections chosen and the figure width are the same (the result object of the page is the same)
     if (S.key !== key || !S.M) { let figs = {}; try { figs = figures(B, inc, narrow ? wScr : 0); } catch (e) { console.warn(e); }
       S.M = window.PSBReportBuild.model(B, { include: inc, figures: figs }); S.key = key; }
