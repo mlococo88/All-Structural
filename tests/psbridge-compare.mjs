@@ -38,7 +38,8 @@
 //     --control with --import also puts one changed input (f′c + 0.1 ksi) in the first design's old data while the old app computes the
 //     unchanged inputs: the run must report differences.
 //     PR 3a-4 (PS-17): the import's restore notice must be the expected one (autosave / shared: the one more stored design 'G1/S1x' not
-//     restored, not a girder × span cell; older / file: none); it is then closed (it lies over the tab bar).
+//     restored, not a girder × span cell; older / file: none); PS-22: it must be an inline banner below the tab bar (in the page flow); it is
+//     then closed with its Close button.
 //   PR 2d-3 (PS-10): the new page's results are computeAll + engine/holddown.js (PSBHoldDown.compute). The values of that addition (paths
 //   ps10.* and its check) have no counterpart in the old app: they are compared with hand values worked here from the inputs and the old
 //   app's own f_pbt, A_b and w_sw (F_hd = 2 n_h f_pbt A_b sin α, α = atan((y_end − y_mid)/(12 frac L)), W = w_sw (L + 2 e_end/12), limit f W),
@@ -120,12 +121,15 @@ for (const name of names) {
     else { await nw.p.click('[data-lg="scan"]'); const id = { autosave: 'autosave', shared: 'reg:bp_h', older: 'lib:old1' }[how]; await nw.p.check(`input[name="lgPick"][value="${id}"]`); await nw.p.click('[data-lg="imp"]'); }
     await nw.p.waitForSelector('#lgSum', { timeout: 120000 }); await nw.p.waitForTimeout(200);
     const imp = await nw.p.evaluate(o => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, i = window.PSBDesign.inputs(P), changed = Object.keys(o).filter(k => localStorage.getItem(k) !== o[k]);
-      const t = document.getElementById('toast');
-      return { res: (document.getElementById('lgRes') || {}).textContent || '', i, changed, src: P.legacy && P.legacy.source.key, note: t && !t.hidden ? t.textContent : '' }; }, seed.o);
+      const t = document.getElementById('notices'), tb = document.getElementById('tabBar').getBoundingClientRect();
+      const ns = t ? [...t.querySelectorAll('.notice')] : [], below = ns.every(n => getComputedStyle(n).position === 'static' && n.getBoundingClientRect().top >= tb.bottom - 0.5);
+      return { res: (document.getElementById('lgRes') || {}).textContent || '', i, changed, src: P.legacy && P.legacy.source.key, note: t ? t.textContent : '', place: below ? '' : 'over the tab bar' }; }, seed.o);
     // PR 3a-4 (PS-17): with a bridge model (autosave, shared) the restore notice names the harness's one more stored design 'G1/S1x' as not
-    // restored (not a girder × span cell); without one (older, file) no notice. The notice is read, then closed (it lies over the tab bar).
+    // restored (not a girder × span cell); without one (older, file) no notice. PS-22: the notice is an inline banner below the tab bar (a
+    // notice over the tab bar is a difference); it is read, then closed with its Close button.
     const wantNote = how === 'autosave' || how === 'shared' ? "The old bridge model's other designs were not restored: G1/S1x (not a girder × span cell).Close" : '';
-    if (imp.note) await nw.p.click('#tClose');
+    if (imp.place) imp.note += ' [' + imp.place + ']';
+    while (await nw.p.isVisible('#notices .nClose')) await nw.p.click('#notices .nClose');
     const strip = x => { const y = JSON.parse(JSON.stringify(x)); delete y.proj; if (y.opt) { delete y.opt.hdCheck; delete y.opt.hdFrac; } return y; };
     impNotes.push({ name, how, ok: /Results: the same as the old app/.test(imp.res), res: imp.res.slice(0, 160), sameInp: JSON.stringify(strip(imp.i)) === JSON.stringify(strip(inp)), changed: imp.changed, ctl, note: imp.note, wantNote });
     nImpKeys += Object.keys(seed.o).length + (how === 'file' ? 1 : 0);

@@ -68,10 +68,10 @@ await p.click('#inPanes [data-ty="reset"][data-key="mat.fc"]'); await p.waitForT
 await p.selectOption('#tyScope_mat', ''); await p.waitForTimeout(100);
 // 3. the girder count
 await p.click('#inTabs [data-itab="xsec"]'); await p.fill('#i_xs\\.nb', '6'); await p.press('#i_xs\\.nb', 'Tab'); await p.waitForTimeout(250);
-{ const t = await p.textContent('#toast'), sv = await stored(p);
+{ const t = await p.textContent('#notices'), sv = await stored(p);
   check(/S1 G5: Exterior S1 → Interior S1/.test(t) && /S1 G6: no type → Exterior S1/.test(t), 'notice: ' + t);
   check(JSON.stringify(sv.types.map(q => q.lines)) === '[[2,3,4,5],[1,6]]', 'lines re-assigned ' + JSON.stringify(sv.types.map(q => q.lines)));
-  await p.click('#tUndo'); await p.waitForTimeout(250);
+  await p.click('#notices .nUndo'); await p.waitForTimeout(250);
   const s2 = await stored(p); check(s2.xs.nb === 5 && JSON.stringify(s2.types.map(q => q.lines)) === '[[2,3,4],[1,5]]', 'Undo: N_b 5 and the lines back'); }
 let ls = await lsSnap(p);
 check(Object.keys(ls).every(k => k.startsWith('psb2.') || k in SEED), 'keys: ' + Object.keys(ls).join(', '));
