@@ -499,8 +499,8 @@ const FAMS=[
   {id:'HP',  name:'HP — Bearing Pile', defMat:'A992'},
   {id:'C',   name:'C — Channel',       defMat:'A36'},
   {id:'MC',  name:'MC — Misc Channel', defMat:'A36'},
-  {id:'HSSR',name:'HSS — Rect / Square',defMat:'A500C_R'},
-  {id:'HSSP',name:'HSS — Round',       defMat:'A500C_P'},
+  {id:'HSSR',name:'HSS — Rect / Square',defMat:'A500B_R'},   /* SBGB (2026-11-13, engineer HSS-8): HSS default A500 Gr. B (was A500C_R); */
+  {id:'HSSP',name:'HSS — Round',       defMat:'A500B_P'},   /* saved projects keep their grade; old batch rows: SB_HSS_DEF_OLD */
   {id:'PIPE',name:'Pipe',              defMat:'A53B'}
 ];
 function matOf(id){return MATS.find(m=>m.id===id)||MATS[0];}
@@ -4585,7 +4585,7 @@ function init(){
    SBHSS (2026-11-13, engineer: improve this tool for HSS, no separate HSS app): the tools page's "HSS Beam Design" card
    opens this file as "Steel Beam Design - AISC 15th.html#hss". The saved project is never changed without the user:
    - a new / blank project on screen (no autosave, or an autosave equal to the default inputs): the section family is set to
-     HSS rect / square, exactly as picking it in the Shape family list (the family's default material, A500 Gr. C, and its
+     HSS rect / square, exactly as picking it in the Shape family list (the family's default material, A500 Gr. B since SBGB, and its
      default shape); nothing else changes;
    - any other project: it stays as it is, and a notice offers "Start a new HSS beam", which runs the existing New path of the
      "Save and open" card (SBPL.pb.newProject, with its unsaved-changes confirm) and then picks the family. A project that is
@@ -7579,7 +7579,7 @@ const BATCH_HELP={
   desc:'Free text, e.g. "W-Column" or "Hoist Beam". Carried through to the results and the printed report.',
   mid:'Your member mark or ID. Any text or number.',
   size:'REQUIRED. AISC label: W18X60, C15X33.9, HSS6X4X1/4, HSS8.625X0.322, Pipe8XS. Lower case and \u00D7 accepted.',
-  grade:'Blank \u2192 family default (W/HP A992, C/MC/M/S A36, rect HSS A500 Gr. C, round HSS A500 Gr. C, pipe A53 Gr. B).',
+  grade:'Blank \u2192 family default (W/HP A992, C/MC/M/S A36, rect HSS A500 Gr. B, round HSS A500 Gr. B, pipe A53 Gr. B). Rows imported before 2026-11-13 and saved with a project keep A500 Gr. C for HSS, the default when they were imported.',
   Pu:'Axial force, kip. COMPRESSION POSITIVE. A negative value is treated as tension: the compression check is skipped and the member is checked for tensile yielding and rupture (\u00A7D2, using the Tension An and Tension U columns) and the \u00A7H1.2 interaction.',
   Vux:'Major-axis shear, kip. Sign ignored.',
   Vuy:'Minor-axis shear, kip. Sign ignored.',
@@ -7625,11 +7625,15 @@ function findShape(label){
 function gradesForFam(fam){
   return MATS.filter(m=>!m.fams||m.fams.indexOf(fam)>=0);
 }
-function defGradeFor(fam){
+/* SBGB (2026-11-13): the HSS family default became A500 Gr. B. Batch rows imported before that and saved with a project (no
+   S.batch.hssDefB) keep the default they were checked with, A500 Gr. C, so a saved project's results do not change. */
+const SB_HSS_DEF_OLD={HSSR:'A500C_R',HSSP:'A500C_P'};
+function defGradeFor(fam,legacy){
+  if(legacy&&SB_HSS_DEF_OLD[fam])return SB_HSS_DEF_OLD[fam];
   const fm=FAMS.find(f=>f.id===fam);
   return fm?fm.defMat:(gradesForFam(fam)[0]||{}).id;
 }
-function pickGrade(fam,txt){
+function pickGrade(fam,txt,legacy){
   const g=(txt||'').toString().trim().toUpperCase().replace(/[\s\-]/g,'');
   const list=gradesForFam(fam);
   if(g){
@@ -7638,14 +7642,14 @@ function pickGrade(fam,txt){
     m=list.find(x=>x.name.toUpperCase().replace(/[\s\-]/g,'').indexOf(g)>=0);
     if(m)return m.id;
   }
-  return defGradeFor(fam)||(list.length?list[0].id:null);
+  return defGradeFor(fam,legacy)||(list.length?list[0].id:null);
 }
 /* ---------------- per-row check ---------------- */
 function batchCheckRow(row){
   const R={row,blockers:[],warns:[],notes:[]};
   const fs=findShape(row.size);
   if(!fs){R.blockers.push('Shape "'+(row.size||'')+'" not found in '+DBVER+'.');return R;}
-  const gid=pickGrade(fs.fam,row.grade);
+  const gid=pickGrade(fs.fam,row.grade,!(S.batch&&S.batch.hssDefB));   /* SBGB: rows imported before 2026-11-13 keep A500 Gr. C */
   if(!gid){R.blockers.push('No material grade available for family '+fs.fam+'.');return R;}
   const p=sectionFor(fs.fam,fs.lbl,gid);
   if(!p){R.blockers.push('Could not resolve section properties.');return R;}
@@ -7928,6 +7932,7 @@ async function importBatchFile(file){
   if(!rows.length){toast('No data rows found');return;}
   if(!S.batch)S.batch={rows:[],Cb:1};
   S.batch.rows=rows;
+  S.batch.hssDefB=true;   /* SBGB (2026-11-13): a blank or unknown HSS grade in these rows means A500 Gr. B (new field; absent = rows imported before) */
   S.batch.src=file.name;
   S.batch.headerRow=bestRow;
   S.batch.mapped=Object.keys(bestMap);

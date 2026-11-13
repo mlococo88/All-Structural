@@ -3308,3 +3308,48 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
   - Smoke tests pass: builtup, h1-composite, phone-layout, decimal-entry, project-library, start-chooser. list-input `--part sbeam` fails the same 2 baseline checks as main.
 - **Other copies:** none.
 - **Open items:** none.
+
+## 2026-11-13 — PR: claude/hss-default-grb (PR #1475: https://github.com/mlococo88/All-Structural/pull/1475) (SBGB) — new HSS default material A500 Gr. B; saved projects keep their grade   [default change; no formula change; new optional batch field]
+- **Engineer's decision HSS-8 (2026-11-13):** the new HSS default material is A500 Gr. B (rect 46 ksi, round 42 ksi). Saved projects keep their grade.
+- **Defaults before:** HSS rect `A500C_R` (Fy 50 / Fu 62), HSS round `A500C_P` (46 / 62). W and HP: A992. C, MC, M and S: A36. Pipe: A53B.
+- **Where the default is used:** `sbSetFamily` (the Shape family list and the `#hss` entry, SBHSS #1473), and `pickGrade`/`defGradeFor` (a batch row with a blank or unknown grade).
+- **Code (re-apply by hand):**
+  1. `FAMS`:
+     - before: `{id:'HSSR',name:'HSS — Rect / Square',defMat:'A500C_R'},` and `{id:'HSSP',name:'HSS — Round',       defMat:'A500C_P'},`
+     - after: `defMat:'A500B_R'` and `defMat:'A500B_P'`, with a comment.
+  2. `defGradeFor` / `pickGrade`. Before:
+     ```js
+     function defGradeFor(fam){
+       const fm=FAMS.find(f=>f.id===fam);
+       return fm?fm.defMat:(gradesForFam(fam)[0]||{}).id;
+     }
+     function pickGrade(fam,txt){ … return defGradeFor(fam)||(list.length?list[0].id:null);
+     ```
+     After:
+     ```js
+     const SB_HSS_DEF_OLD={HSSR:'A500C_R',HSSP:'A500C_P'};
+     function defGradeFor(fam,legacy){
+       if(legacy&&SB_HSS_DEF_OLD[fam])return SB_HSS_DEF_OLD[fam];
+       const fm=FAMS.find(f=>f.id===fam);
+       return fm?fm.defMat:(gradesForFam(fam)[0]||{}).id;
+     }
+     function pickGrade(fam,txt,legacy){ … return defGradeFor(fam,legacy)||(list.length?list[0].id:null);
+     ```
+  3. `batchCheckRow`: `const gid=pickGrade(fs.fam,row.grade);` → `const gid=pickGrade(fs.fam,row.grade,!(S.batch&&S.batch.hssDefB));`
+  4. Batch import, after `S.batch.rows=rows;`, add `S.batch.hssDefB=true;`. This is a new optional field. Absent means the rows were imported before this change; nothing is written on load.
+  5. `BATCH_HELP.grade`: `rect HSS A500 Gr. C, round HSS A500 Gr. C` → `rect HSS A500 Gr. B, round HSS A500 Gr. B`, plus the sentence "Rows imported before 2026-11-13 and saved with a project keep A500 Gr. C for HSS, the default when they were imported."
+  6. The SBHSS comment block: `the family's default material, A500 Gr. C,` → `A500 Gr. B since SBGB,`.
+- **Values:** the `MATS` rows `A500B_R` (46/58) and `A500B_P` (42/58) are unchanged. They agree with AISC 360-16 Commentary Table C-A3.1. Manual Table 2-4 is not in the references folder.
+- **Check case:** pick HSS rect, then HSS12X6X1/2 (Zx 57.4). φMnx = 0.9·Fy·Zx/12 (F7-1): before 0.9(50)(57.4)/12 = 215.25 → after 0.9(46)(57.4)/12 = **198.03 kip·ft**. The `#hss` default, HSS30X10X1/2 on the 20 ft default beam: flexure DCR 0.0403 → 0.0435.
+- **Saved data (§5), how proved:** headless Chromium, with the autosave seeded and loaded on origin/main and on the branch. Four saved projects:
+  - Gr. C rect beam;
+  - Gr. C round member with T;
+  - A1085 member;
+  - a batch with blank / "xyz" / "A500B" HSS grades plus W and Pipe rows.
+
+  In all four, `AN` and every tab text are identical, and every `runBatch()` row is identical (blank HSS rows still A500C_R / A500C_P).
+- **Tests:** Node `sbeam-hss` test 6. check-syntax. Smoke tests: builtup, h1-composite, phone-layout, decimal-entry, project-library, start-chooser. list-input `--part sbeam` fails the same 2 baseline checks as main.
+- **Other copies:** none.
+- **Open items (not changed):**
+  - Batch grade matching. `pickGrade` strips `_` from the ids but not from the typed text, so "A500B_R", "A500C_R" and "A500B" are not recognized. They fall back to the family default without a warning; "A500 Gr. B" is recognized. Pre-existing.
+  - `matOf` falls back to `MATS[0]` (A992) for an unknown saved grade id. Pre-existing and unchanged.
