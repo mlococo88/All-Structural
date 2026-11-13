@@ -357,9 +357,23 @@
   /* crossframe(B, P, opt): B = SBDFramingUI.build() result: the frame of one bay (members of B.R.frames at the work points B.R.N) between two
      girder webs, labelled (name, section, largest T / C over the load combinations); the group that governs (B's governing check: its step
      cf.top / cf.bot / cf.diag) highlighted. */
+  /* SB-23 (2026-11-13; the engineer's request for this DXF change): opt.groups (ui/framing.js build dxfG, the Download DXF only): one elevation
+     per distinct bay depth (engine/crossframes.js bayGroups, as the Drawings cross-frame sheet), one below the other (16 text heights apart,
+     as engine/sheets.js cf), each titled with its bays " - BAYS G1-G2, G4-G5 (DEPTH OF G1, EXTERIOR)". Without opt.groups: as before. */
   function crossframe(B, P, opt) {
-    opt = opt || {}; const R = B.R, N = R.N, I = B.I.p, { D, L } = newDrawing(4.6), h = D.h, S = I.S, dg = I.dg, hw = I.h, ox = 0, oy = 0;
-    if (!N || !R.frames) return base('crossframe', 'Cross-frame', D, 0, []);
+    opt = opt || {}; const { D, L } = newDrawing(4.6);
+    if (Array.isArray(opt.groups) && opt.groups.length) {
+      let yb = null; opt.groups.forEach(q => { const g = q.grp, i0 = D.mark(); if (!cfElev(D, L, q, opt, ` - BAYS ${g.bays.map(j => `G${j + 1}-G${j + 2}`).join(', ')} (DEPTH OF G${g.s.line + 1}, ${up(String(g.s.label || ''))})`)) return;
+        if (yb != null) { const b = D.bbox(i0); D.move(i0, 0, yb - 16 * D.h - b[3]); } yb = D.bbox(i0)[1]; });
+      return base('crossframe', 'Cross-frame elevation', D, 0, []);
+    }
+    if (!cfElev(D, L, B, opt, '')) return base('crossframe', 'Cross-frame', D, 0, []);
+    return base('crossframe', 'Cross-frame elevation', D, 0, []);
+  }
+  /* cfElev(D, L, B, opt, sfx): the elevation of crossframe() drawn into D (sfx: appended to the title); false when B has no frame */
+  function cfElev(D, L, B, opt, sfx) {
+    const R = B.R, N = R.N, I = B.I.p, h = D.h, S = I.S, dg = I.dg, hw = I.h, ox = 0, oy = 0;
+    if (!N || !R.frames) return false;
     const gov = (() => { let g = null; (B.C || []).forEach(c => c.items.forEach(it => { if (fin(it.r) && (it.st === 'pass' || it.st === 'fail') && (!g || it.r > g.it.r)) g = { c, it }; })); return g; })();
     const grp = gov && /^cf\.(top|bot|diag)\b/.exec(gov.it.step || '') ? /^cf\.(top|bot|diag)\b/.exec(gov.it.step)[1] : null, nodeY = n => oy + N[n][1], nodeX = n => ox + N[n][0];
     // the girder webs and flanges at each end (depth dg), the deck line at the top
@@ -375,10 +389,10 @@
       rowsT.push([`${i + 1}`, up(e.lbl), asc((R.mem && R.mem[e.k] && R.mem[e.k].name) || ''), f1(e.L), f1(mx.T), f1(mx.C), on ? 'GOVERNS' : '']); });
         D.dimH(L.d, ox, ox + S, oy + (hw - dg) / 2 - 8 * h, oy + (hw - dg) / 2, 'S = <>'); D.dimV(L.d, oy, oy + hw, ox - 14, ox, 'h = <>');
     if (DT && DT.table) DT.table(D, L.t, ox, oy + (hw - dg) / 2 - 14 * h, ['NO.', 'MEMBER', 'SECTION', 'L (IN)', 'T (KIP)', 'C (KIP)', ''], rowsT, 'MEMBERS (LARGEST FACTORED FORCES OF THE COMBINATIONS)');
-    D.text(L.t, ox, oy + hw + (dg - hw) / 2 + 10 * h, h * 1.5, `CROSS-FRAME ELEVATION, TYPE ${I.type}${opt.dia ? ' (DIAPHRAGM IN USE: SEE THE DIAPHRAGM CHECKS)' : ''}`);
+    D.text(L.t, ox, oy + hw + (dg - hw) / 2 + 10 * h, h * 1.5, `CROSS-FRAME ELEVATION, TYPE ${I.type}${opt.dia ? ' (DIAPHRAGM IN USE: SEE THE DIAPHRAGM CHECKS)' : ''}${sfx}`);
     D.text(L.t, ox, oy + hw + (dg - hw) / 2 + 7.4 * h, h * 0.8, `LOOKING ALONG THE GIRDERS; WORK-POINT DEPTH h = ${f2(hw)} IN, GIRDER DEPTH d = ${f2(dg)} IN, S = ${f2(S)} IN.`);
     D.text(gov && grp ? L.gov : L.t, ox, oy + hw + (dg - hw) / 2 + 5.2 * h, h * 0.9, gov ? `GOVERNING CHECK: ${gov.c.id} ${up(gov.it.loc)}, RATIO ${f3(gov.it.r)}${grp ? ' (MEMBERS HIGHLIGHTED)' : ' (NOT A MEMBER CHECK)'}` : 'NO GOVERNING CHECK');
-    return base('crossframe', 'Cross-frame elevation', D, 0, []);
+    return true;
   }
 
   /* ====================================================================================================== */

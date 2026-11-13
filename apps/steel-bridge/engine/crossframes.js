@@ -633,6 +633,16 @@
       const q = { j, a, b, s }; bays.push(q); if (!gov || shallower(gov.s, s) !== gov.s) gov = q; }
     return gov ? { bays, gov } : null;
   }
+  /* bayGroups(P) (SB-23, 2026-11-13; moved from engine/sheets.js cfGroups, SBXF2 SB-21, unchanged): the distinct bay depths of the cross-frame
+     details: the typed bays grouped by their h and the d of their shallower girder (rounded to 0.01 in), in bay order, each { h, s (the
+     shallower girder of its first bay), dg, bays: [j] }; null for one group or none (a project saved before girder types, equal depths). Used
+     by the Drawings cross-frame sheet and the Cross-frames tab graphic's Download DXF. */
+  function bayGroups(P) {
+    const X = bayDepths(P); if (!X) return null;
+    const B = inputsOf(P, { bridge: true }).p.xfBay; if (!B) return null; const m = new Map(), r2 = v => +(+v).toFixed(2);
+    B.bays.forEach(q => { if (!q) return; const k = `${q.h}|${r2(q.s.dg)}`; if (!m.has(k)) m.set(k, { h: q.h, s: q.s, dg: r2(q.s.dg), bays: [] }); m.get(k).bays.push(q.j); });
+    return m.size > 1 ? [...m.values()] : null;
+  }
   /* typeGov(P, BD, gi) (SBXF2, 2026-11-13; engineer decision SB-18): the frame the brace checks of girder type gi use: of the bays attached to
      any of its lines (bays j − 1 and j of each line j), the shallowest (the rule of bayDepths, the first on ties). The lines: the type's
      (SBDModel.typeLines), or adLines (Auto design's run, engine/autodesign.js typeProject: each line's copy of the type carries the type's
@@ -721,6 +731,6 @@
     return { line, X, pts: G[line], tot: G[line].reduce((a, q) => a + q.P, 0) };
   }
 
-  window.SBDCrossframes = { ES, DEF, GD_GR, BOLT, FUB, PHI, ANGLES, CF_MEM, CF_CH, CF_DIA, angleProps, cfDiaSec, cfDiaOn, cfDiaGap, cfDiaEnd, cfTypeRec, cfTsCP, cfCPsize, cfBsCP, cfCP, cfDiaFit,
+  window.SBDCrossframes = { ES, DEF, GD_GR, BOLT, FUB, PHI, ANGLES, CF_MEM, CF_CH, CF_DIA, angleProps, cfDiaSec, cfDiaOn, cfDiaGap, cfDiaEnd, cfTypeRec, cfTsCP, cfCPsize, cfBsCP, cfCP, cfDiaFit, bayGroups,
     env0, compute, checks, userModes, xfW, xfModel, xfPts, defaults, inputsOf, envOf, pointLoads, girderDepth, bayDepths, typeGov, extDepth, diaDepthReq };
 })();
