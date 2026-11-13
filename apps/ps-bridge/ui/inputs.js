@@ -146,11 +146,13 @@
     else if (k === 'bool') setp(P, path, v === 'true');
     else if (k === 'int') { P.design = Object.assign(D().sel(P), P.design || {}); setp(P, path, parseInt(v, 10)); }
     else if (k === 'owner') {
+      const from = PB().ownerOf(P.base);
       const r = PB().ownApply(P.base, v, typeof DEFAULTS !== 'undefined' ? DEFAULTS : {});
       const keep = P.base.cont && P.base.cont.on;   // cont.on is the bridge's continuity (Bridge layout tab), not an owner default here
       P.base = r.inp; if (P.base.cont) P.base.cont.on = keep;
       const set = r.set.filter(q => q.key !== 'cont.on'), kept = r.kept.filter(q => q.key !== 'cont.on');
       note = `Owner ${v}.` + (set.length ? ` Set to the owner's defaults: ${set.map(q => `${q.key} ${showV(q.from)} → ${showV(q.to)}`).join('; ')}.` : '') + (kept.length ? ` Kept (your values): ${kept.map(q => `${q.key} = ${showV(q.value)} (owner: ${showV(q.own)})`).join('; ')}.` : '')
+        + (window.PSBBridgeDL ? window.PSBBridgeDL.onOwner(P, from, v) : '')   // PR 3a-3 (PS-21): the DC2 / DW method follows the owner while at its default
         + (v === 'CTDOT' && P.spans.continuity === 'composite' ? ' CTDOT designs multi-span bridges as simple spans with a continuous deck (V2 5.12.1.1CT): continuity is your choice on the Bridge layout tab.' : '');
     }
     else if (k === 'text') setp(P, path, v);

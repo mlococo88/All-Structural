@@ -133,12 +133,24 @@
 /* ---- end of DEAD-VERBATIM ---- */
 
   const isNum = v => typeof v === 'number' && isFinite(v);
-  /* defaults(P): the inputs of a NEW project (PR 3a-3; decision pending engineer review): distributed, the steel app's default method
-     (MassDOT pile-cap, as apps/steel-bridge defaultXs), barriers of the old app's own barrier (deck.wBar 0.30 klf, deck.bBar 18 in = 1.5 ft
+  /* OWNER_METHOD (engineer decision PS-21, 2026-11-13): the distribution method of a NEW project by its owner: AASHTO (no owner rule) the
+     "Typical AASHTO" equal share (AASHTO LRFD 10th Ed. Art. 4.6.2.2.1); MassDOT the pile-cap method (MassDOT Bridge Manual Part I 3.5.3);
+     RIDOT its 60/40 rule (RIDOT BDM 3.3.1, the steel app's owner rule dl.dist); CTDOT the equal share (the steel app's CTDOT rule: no CTDOT
+     method, V2 4.6.2.2.1). A project keeps its stored method. */
+  const OWNER_METHOD = { AASHTO: 'aashto', MassDOT: 'massdot', RIDOT: 'ridot', CTDOT: 'aashto' };
+  const ownerMethod = o => OWNER_METHOD[o] || 'aashto';
+  /* onOwner(P, from, to): the owner changed from → to (Owner rules tab): a method still at the old owner's default takes the new owner's
+     (the owner-default rule of the old app's PBD.ownApply: an entered value is kept). Returns the change text or ''. */
+  function onOwner(P, from, to) {
+    const q = P && P.xs && P.xs.dl; if (!q || !q.method || q.method !== ownerMethod(from) || ownerMethod(to) === q.method) return '';
+    q.method = ownerMethod(to); return ` DC2 / DW distribution method → ${METHODS[q.method]} (the ${to} default).`;
+  }
+  /* defaults(P): the inputs of a NEW project (PR 3a-3; PS-21 for the method, the rest pending engineer review): distributed, the method of
+     the project's owner (OWNER_METHOD), barriers of the old app's own barrier (deck.wBar 0.30 klf, deck.bBar 18 in = 1.5 ft
      wide) on both edges, no sidewalk, a 25 psf future wearing surface (the old app's deck.wsFut 0.025 ksf = the steel app's 25 psf). */
   function defaults(P) {
     const d = (P && P.base && P.base.deck) || {}, w = isNum(+d.wBar) && +d.wBar >= 0 ? +d.wBar : 0.3, bw = isNum(+d.bBar) && +d.bBar > 0 ? +d.bBar / 12 : 1.5;
-    return { mode: 'distributed', method: 'massdot', barL: { bw, w }, barR: { bw, w }, swL: { w: 0, t: 8 }, swR: { w: 0, t: 8 }, fws: 25, extra: [] };
+    return { mode: 'distributed', method: ownerMethod((P && P.base && P.base.owner) || 'AASHTO'), barL: { bw, w }, barR: { bw, w }, swL: { w: 0, t: 8 }, swR: { w: 0, t: 8 }, fws: 25, extra: [] };
   }
   const on = P => !!(P && P.xs && P.xs.dl && P.xs.dl.mode === 'distributed');
   /* checks(P): blocking input errors of the distribution inputs ([{ path, msg }]) */
@@ -199,5 +211,5 @@
       note: `Distributed to girder line G${g} by the Steel Bridge app's method (§dl.G${g}.${s.id === 'ld.wDC2' ? 'DC2' : 'DW'}); on the composite section.` }) : s).concat(stepsFor(P, g));
     return Wl;
   }
-  window.PSBBridgeDL = { withSteps, METHODS, DIST, defaults, on, checks, distribute, line, stepsFor, deckWidth, dead };
+  window.PSBBridgeDL = { OWNER_METHOD, ownerMethod, onOwner, withSteps, METHODS, DIST, defaults, on, checks, distribute, line, stepsFor, deckWidth, dead };
 })();

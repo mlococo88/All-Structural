@@ -62,8 +62,22 @@ test('saved before (no xs.dl) or "entered": engine inputs byte-identical to PR 3
   }
 });
 
-test('§4 check case: new project (MassDOT pile-cap, barriers 0.30 klf × 1.5 ft, 25 psf): DC2 / DW per line by hand; G2 moments before and after', () => {
-  const P = M.newProject();
+test('PS-21: the default method by owner (AASHTO equal share, MassDOT pile-cap, RIDOT 60/40, CTDOT equal); §4 check case of a new AASHTO project; an owner change moves a method still at its default', () => {
+  const N = M.newProject();
+  assert.equal(N.xs.dl.method, 'aashto');
+  // new AASHTO project: equal share. DC2 = 2 × 0.30 / 5 = 0.12 klf every line; DW = 0.975 / 5 = 0.195. G2: M_DC2 = 0.12 × 120² / 8 = 216.0 (before 540.0),
+  // M_DW = 351.0 (before 450.0); M_u = 10,251.0 − 1.25 (324.0) − 1.50 (99.0) = 9,697.5 kip-ft
+  const RN = DL.distribute(N); RN.dc2.forEach(v => assert.ok(Math.abs(v - 0.12) < 1e-12, String(v))); RN.dw.forEach(v => assert.ok(Math.abs(v - 0.195) < 1e-12));
+  const mid0 = R => R.diagrams.reduce((x, r) => Math.abs(r.x - 60) < Math.abs(x.x - 60) ? r : x);
+  const aN = W.PSBHoldDown.compute(D.cellInputs(N, 0, 2)); assert.equal(mid0(aN).M_StrI_pos.toFixed(1), '9697.5'); assert.ok(Math.abs(mid0(aN).M_DC2 - 216) < 1e-9);
+  assert.deepEqual(J(['AASHTO', 'MassDOT', 'RIDOT', 'CTDOT'].map(o => DL.ownerMethod(o))), ['aashto', 'massdot', 'ridot', 'aashto']);
+  const Q0 = J(N); Q0.base.owner = 'MassDOT'; assert.equal(DL.defaults(Q0).method, 'massdot');
+  assert.match(DL.onOwner(N, 'AASHTO', 'RIDOT'), /RIDOT BDM 3\.3\.1/); assert.equal(N.xs.dl.method, 'ridot');
+  N.xs.dl.method = 'massdot'; assert.equal(DL.onOwner(N, 'RIDOT', 'AASHTO'), ''); assert.equal(N.xs.dl.method, 'massdot', 'a chosen method is kept');
+});
+
+test('§4 check case, pile-cap (MassDOT, barriers 0.30 klf × 1.5 ft, 25 psf): DC2 / DW per line by hand; G2 moments before and after', () => {
+  const P = M.newProject(); P.xs.dl.method = 'massdot';
   assert.deepEqual(J(P.xs.dl), { mode: 'distributed', method: 'massdot', barL: { bw: 1.5, w: 0.3 }, barR: { bw: 1.5, w: 0.3 }, swL: { w: 0, t: 8 }, swR: { w: 0, t: 8 }, fws: 25, extra: [] });
   assert.deepEqual(J(W.PSBInputCheck.collect(P).errors), []);
   // x̄ = 3 + 18 = 21 ft; c = −18, −9, 0, 9, 18; Σc² = 810; left barrier at 0.75 ft: e = −20.25

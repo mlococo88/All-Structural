@@ -131,16 +131,16 @@ check(/larger is 30° or more/.test(await p.textContent('#sbDashCol')), 'skews 2
 check(!o.errs.length, 'console errors (3a-2): ' + o.errs.join(' | '));
 await o.b.close();
 
-// 7. PR 3a-3: DC2 / DW distributed (a new project): the Cross-section card (MassDOT pile-cap, barriers 0.30 klf, 25 psf) with its line table
-//    0.255 / 0.1875 / 0.12 / 0.1875 / 0.255 and DW 0.195; the Loads & LLDF tab's line table and steps (dl.*) for the line shown; the DC2 field
+// 7. PR 3a-3: DC2 / DW distributed (a new project): the Cross-section card (Typical AASHTO equal share for an AASHTO project, PS-21; barriers 0.30 klf, 25 psf) with its line table
+//    (PS-21: AASHTO project, equal share) 0.12 on every line and DW 0.195; the Loads & LLDF tab's line table and steps (dl.*) for the line shown; the DC2 field
 //    of the Loads tab hidden; "Entered per girder type" brings back the entered values (0.30 / 0.25)
 o = await openPage(FILE, { vw: 1400, vh: 1000 }); p = o.p; await ready(p);
 await p.click('#inTabs [data-itab="xsec"]'); await p.waitForTimeout(200);
 { const t = (await p.textContent('#card-dl')).replace(/\s+/g, ' ');
-  check(/0\.2550\s*0\.1875\s*0\.1200\s*0\.1875\s*0\.2550/.test(t) && /(0\.1950\s*){5}/.test(t), 'Cross-section: DC2 / DW per line ' + t.slice(-200));
+  check(/(0\.1200\s*){5}/.test(t) && /(0\.1950\s*){5}/.test(t), 'Cross-section: DC2 / DW per line ' + t.slice(-200));
   await p.click('#tabBar [data-otab="lds"]'); await p.waitForTimeout(300);
   const r = await p.evaluate(() => ({ dc2: (document.querySelector('#out [data-ev="wBar"]') || {}).textContent, dw: (document.querySelector('#out [data-ev="wDW"]') || {}).textContent, st: !!document.getElementById('st-dl.G2.DC2'), lt: /distributed to every girder line/.test(document.getElementById('out').textContent) }));
-  check(r.dc2 === '0.188' && r.dw === '0.195' && r.st && r.lt, 'Loads & LLDF: G2 DC2 0.188, DW 0.195 (the tile, 3 decimals), the line table and the steps ' + JSON.stringify(r));
+  check(r.dc2 === '0.120' && r.dw === '0.195' && r.st && r.lt, 'Loads & LLDF: G2 DC2 0.120 (AASHTO equal share, PS-21), DW 0.195 (the tile, 3 decimals), the line table and the steps ' + JSON.stringify(r));
   const e = await evCheck(p); check(e.n >= 20 && !e.bad.length, `Loads & LLDF values = computeAll: ${e.n} ${e.bad.slice(0, 3).join(' | ')}`);
   if (args.shots) await p.screenshot({ path: path.join(args.shots, 'ps3a-1400-lds-distributed.png') });
   await p.click('#inTabs [data-itab="loads"]'); check(!(await p.$('#i_base\\.loads\\.wBar')), 'Loads tab: no entered DC2 while distributed');

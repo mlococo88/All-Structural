@@ -1036,13 +1036,24 @@ PR #1506: https://github.com/mlococo88/All-Structural/pull/1506
 - `tests/engine/psbridge-dl.test.mjs` (new, 5 tests): verbatim slice; the same DC2 / DW / steps as the steel app's `SBDLoads.dead` (12 cases: 3
   methods × equal / unequal bays × sidewalk); every line's engine inputs take them; saved-before and "entered" byte-identical over the 17 harness
   B designs and every line; the check case above (hand values to 1e-12, M_u 10,251.0 → 9,849.4); input checks. Smoke `ps-bridge-types.mjs` §7.
+### Engineer decision PS-21 (2026-11-13, added in this PR before merge)
+- The distribution method of a NEW project follows its owner: AASHTO (no owner rule) → "Typical AASHTO" equal share (AASHTO LRFD 10th Ed.
+  Art. 4.6.2.2.1); MassDOT → pile-cap (MassDOT Bridge Manual Part I 3.5.3); RIDOT → its 60/40 rule (RIDOT BDM 3.3.1, the steel app's owner
+  rule); CTDOT → equal share (the steel app's CTDOT rule: no CTDOT method). A project keeps its stored method. `engine/bridge-dl.js`
+  `OWNER_METHOD`, `ownerMethod`, `defaults` (method), `onOwner`; `ui/inputs.js` owner change: a method still at the old owner's default takes
+  the new owner's (as the old app's owner defaults; a chosen method is kept), named in the owner-change message (decision pending review: the
+  owner-change rule).
+- **Check case, new AASHTO project (the default now):** DC2 = (0.30 + 0.30)/5 = **0.120 klf** on every line; DW 0.195 klf. G2: before (entered
+  0.30 / 0.25) M_DC2 540.0, M_DW 450.0, M_u 10,251.0 kip-ft, flexure 0.7516 → after M_DC2 = 0.12 × 120²/8 = **216.0**, M_DW 351.0, M_u =
+  10,251.0 − 1.25 (324.0) − 1.50 (99.0) = **9,697.5** kip-ft (engine 9,697.5), flexure **0.7110**. G1: M_u 10,430.3 → **9,876.8**, flexure
+  0.7754 → **0.7343**. The pile-cap case above remains the check of that method (MassDOT projects).
 ### Decisions (pending engineer review)
-- 3a3-D1. New projects distribute (MassDOT pile-cap, the steel app's default method); saved projects and old-app imports keep their entered
-  DC2 / DW until the user switches.
+- 3a3-D1. New projects distribute (method by owner, PS-21); saved projects and old-app imports keep their entered DC2 / DW until the user
+  switches.
 - 3a3-D2. Default barriers = the old app's own barrier (`deck.wBar` 0.30 klf, `deck.bBar` 18 in); FWS 25 psf (the old `deck.wsFut` and the
   steel default).
 - 3a3-D3. Inputs offered now: barriers, sidewalk slabs, wearing surface, added line loads (DC2 / DW). Not yet: curbs and railings, fences,
   medians, overlays by thickness, beam-class and per-load overrides (the steel app has them).
 - 3a3-D4. The deck design (Diaphragms / deck tab) keeps its own barrier weight and wearing surface (not tied to the distribution inputs).
 ### Open items
-- Whether the pile-cap method (whose shares can sum to more than the load) should be the default for AASHTO-owner projects, or "Typical AASHTO".
+- None of this PR (the default-method question answered by PS-21).
