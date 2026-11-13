@@ -197,6 +197,11 @@ node tests/smoke/rebar-comp-lap.mjs [--file <Concrete Beam Capacity.html>]
 # (the builder itself: node tests/engine/run.mjs cbc-loads)
 node tests/smoke/cbc-loads.mjs [--file <Concrete Beam Capacity.html>] [--shots <dir>]
 
+# Beam Capacity tab, ACI: section size limit V_u <= phi(V_c + 8 sqrt(f'c) b_w d) (22.5.1.2) and V_c <= 5 lambda sqrt(f'c) b_w d (22.5.5.1.1) (CBSZ):
+# hand check b_w 12, d 20, f'c 4 (V_c 30.36, limit 113.84, V_c,max 75.89; V_u 50 / 120 -> D/C 0.439 / 1.054), check summary, the All
+# Combinations x Limit States column, Shear tab, Report, AASHTO without the row, 1400 and 390 px, 0 console errors. ~30 s
+node tests/smoke/cbc-shear-limit.mjs [--file <Concrete Beam Capacity.html>]
+
 # Pile Designer's saved-project library is in IndexedDB (not covered above): page text and autosave main vs the working tree, Undo / Redo,
 # Save as new / rename / duplicate / refused write / load / delete (React 18.3.1 served from the kit's 18.2.0, test-only). ~1 min
 node tests/smoke/pile-library.mjs [--a origin/main]

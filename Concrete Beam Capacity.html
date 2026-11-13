@@ -979,14 +979,20 @@ function shear(F,Mu,Vu,sOv,tq){
   const lam_s=Math.min(1,lam_s_raw);
   const Vc_a=2*lam*rt*bw*d/1000;
   const Vc_c=8*lam_s*lam*Math.cbrt(Math.max(rho_w,1e-9))*Math.min(rt,100)*bw*d/1000;  /* 22.5.3.1: sqrt(f'c) <= 100 psi without Av,min */
-  const Vc=stirAdequate? Vc_a : Vc_c;
+  /* CBSZ (2026-11-13, engineer decision CB-3): ACI 318-19 22.5.5.1.1, V_c not greater than 5λ√f'c·b_w·d, with the √f'c of the row
+     used (row (c): ≤ 100 psi by 22.5.3.1; row (a), A_v ≥ A_v,min: as entered). It cannot govern: row (a) 2 < 5; row (c)
+     8λ_s(ρ_w)^(1/3) > 5 needs ρ_w > (5/8)^3 ≈ 0.244. V_c is therefore unchanged; the limit is worked on the tab and in the Report. */
+  const Vc_row=stirAdequate? Vc_a : Vc_c;
+  const rtVc=stirAdequate? rt : Math.min(rt,100);
+  const VcMax=5*lam*rtVc*bw*d/1000;
+  const Vc=Math.min(Vc_row,VcMax);
   const Vs=S.stir.present? Av*fyt*d/s : 0;
   const VsMax=8*rt*bw*d/1000;                 /* ACI 22.5.1.2 upper limit */
   const VsUse=Math.min(Vs,VsMax);
   const Vn=Vc+VsUse;
   return {phi,d,dv,Av,s,Vc,Vs,VsMax,VsUse,Vn,phiVn:phi*Vn,
           governed:Vs>VsMax,method:'ACI simplified',
-          stirAdequate,rho_w,lam_s,lam_s_raw,Vc_a,Vc_c,avMinACI,avProv};
+          stirAdequate,rho_w,lam_s,lam_s_raw,Vc_a,Vc_c,avMinACI,avProv,Vc_row,VcMax,rtVc};
 }
 
 /* =====================================================================
@@ -1722,6 +1728,11 @@ function computeAll(){
     const mr=(S.code==='AASHTO')?cbcMin5633(svc,c.Mu,phiMn):null;   /* CBM1 */
     const dcM=phiMn>0?Math.abs(c.Mu)/phiMn:0;
     const dcV=sh.phiVn>0?Math.abs(c.Vu)/sh.phiVn:0;
+    /* CBSZ (2026-11-13, engineer decision CB-2): ACI 318-19 22.5.1.2 section size limit, V_u ≤ φ(V_c + 8√f'c·b_w·d), ACI mode, every
+       combination; the same V_c and φ as the shear check, 8√f'c·b_w·d = sh.VsMax (the V_s cap, unchanged). φV_n = φ(V_c + min(V_s, V_s,max))
+       never exceeds the limit, so this D/C never exceeds the shear D/C: it can FAIL only where shear already fails. */
+    const szA=(S.code==='ACI')?(()=>{ const lim=sh.phi*(sh.Vc+sh.VsMax);
+      return {lim,dcr:lim>0?Math.abs(c.Vu)/lim:(Math.abs(c.Vu)>0?Infinity:0)}; })():null;
     const dcT=tor?(tor.negligible?0:tor.dcr):(torD?Math.max(torD.dcT,torD.dcSec,torD.dcComb):0);   /* CBH1b */
     const det=detailing(F,sh,neg,Math.abs(c.Mu),Math.abs(c.Vu),tor,torD);
     /* Shear and torsion draw on the SAME stirrup. phiVn and phiTn above are each
@@ -1762,8 +1773,8 @@ function computeAll(){
       if(isFinite(ratio)&amp;&amp;ratio>detWorst) detWorst=ratio;
       else if(!isFinite(ratio)) detWorst=Math.max(detWorst,1.01);
     });
-    const worst=Math.max(dcM,dcV_eff,dcT,detWorst);
-    return {...c,neg,F,pf,phiMn,sh,tor,svc,...(lonA?{lonA}:{}),...(torA?{torA}:{}),...(torD?{torD}:{}),...(mr?{mr}:{}),dcM,dcV,dcT,det,share,dcV_eff,
+    const worst=Math.max(dcM,dcV_eff,dcT,detWorst,szA?szA.dcr:0);   /* CBSZ: szA.dcr ≤ dcV ≤ dcV_eff, so worst is unchanged */
+    return {...c,neg,F,pf,phiMn,sh,tor,svc,...(szA?{szA}:{}),...(lonA?{lonA}:{}),...(torA?{torA}:{}),...(torD?{torD}:{}),...(mr?{mr}:{}),dcM,dcV,dcT,det,share,dcV_eff,
             detWorst,detFails,worst};
   });
   /* §7.2 identical-result detection: exact match on the factored action set.
@@ -2672,6 +2683,10 @@ function allChecks(){
   env(&quot;Shear capacity&quot;+(CC.combos.some(r=>r.share)?&quot; (after torsion demand)&quot;:&quot;&quot;),
     S.code==='ACI'?&quot;ACI 22.5&quot;:&quot;AASHTO 5.7.3&quot;,
     r=>({dcr:r.dcV_eff,na:Math.abs(r.Vu)<1e-9}),&quot;tabShear&quot;);
+  if(S.code==='ACI'){   /* CBSZ: ACI 318-19 22.5.1.2 section size limit */
+    env(&quot;Section size limit (ACI 22.5.1.2)&quot;,&quot;ACI 22.5.1.2&quot;,r=>r.szA?{dcr:r.szA.dcr,na:Math.abs(r.Vu)<1e-9}:{na:true},&quot;tabShear&quot;);
+    out[out.length-1].id=&quot;szA&quot;;
+  }
   if(S.code==='AASHTO'){   /* CBH1b (2026-11-07): above the 5.7.2.1 threshold the combination is designed for torsion (5.7.3.6);
        before: the threshold row FAILed it (&quot;not designed by this tool&quot;). N/A where T_u <= 0.25 phi T_cr (torsion neglected). */
     const tdr=k=>r=>r.torD?{dcr:r.torD[k],na:false}:{na:true};
@@ -2842,7 +2857,7 @@ function buildSummaryTab(pg){
     const hasT=S.tor.present&amp;&amp;S.code==='ACI';
     let head=&quot;<tr><th>Combination</th><th>M_u<br>(k-ft)</th><th>V_u<br>(kip)</th>&quot;+
       (hasT?&quot;<th>T_u<br>(k-ft)</th>&quot;:&quot;&quot;)+
-      &quot;<th>D/C<br>Flexure</th><th>D/C<br>Shear</th>&quot;+(hasT?&quot;<th>D/C<br>Torsion</th>&quot;:&quot;&quot;)+
+      &quot;<th>D/C<br>Flexure</th><th>D/C<br>Shear</th>&quot;+(S.code==='ACI'?&quot;<th>D/C<br>Size limit</th>&quot;:&quot;&quot;)+(hasT?&quot;<th>D/C<br>Torsion</th>&quot;:&quot;&quot;)+   /* CBSZ */
       &quot;<th>D/C<br>Detailing</th><th>Worst</th><th>Status</th></tr>&quot;;
     t.innerHTML=head;
     CC.combos.forEach(r=>{
@@ -2854,6 +2869,7 @@ function buildSummaryTab(pg){
       if(hasT) tr.appendChild(el(&quot;td&quot;,null,fmt(r.Tu)));
       tr.appendChild(heatTD(Math.abs(r.Mu)<1e-9?null:r.dcM));
       tr.appendChild(heatTD(Math.abs(r.Vu)<1e-9?null:r.dcV_eff));
+      if(S.code==='ACI') tr.appendChild(heatTD((Math.abs(r.Vu)<1e-9||!r.szA)?null:r.szA.dcr));   /* CBSZ: 22.5.1.2 */
       if(hasT) tr.appendChild(heatTD((!r.tor||r.tor.negligible)?null:r.dcT));
       const dtd=heatTD(r.detWorst>0?r.detWorst:null);
       if(r.detFails.length) dtd.title=&quot;Not satisfied: &quot;+r.detFails.join(&quot;; &quot;);
@@ -3296,6 +3312,30 @@ function buildShearTab(pg){
     },pg,r.ci===CC.govShearIndex?&quot;govSec&quot;:&quot;&quot;);
   });
 }
+/* CBSZ (2026-11-13, engineer decisions CB-2, CB-3), ACI mode. cbcVcMaxWork: the 22.5.5.1.1 upper limit on V_c, worked after the row
+   of Table 22.5.5.1 (same sqrt(f'c) as the row). cbcSzWork: the 22.5.1.2 section size limit for one combination, symbolic -> values
+   -> result, with its D/C and PASS / FAIL. Display of values computed in shear() / computeAll (sh.VcMax, sh.Vc_row, r.szA). */
+function cbcVcMaxWork(b,sh){
+  const fc=S.mat.fc, rtS=sh.rtVc<sqrtfc_psi(fc)-1e-9?&quot;(100\\text{ psi, max per 22.5.3.1})&quot;:&quot;\\sqrt{&quot;+fmt(fc*1000,0)+&quot;\\text{ psi}}&quot;;
+  b.appendChild(eqBlock({title:&quot;Upper limit on V_c&quot;,ref:&quot;ACI 22.5.5.1.1&quot;,
+    lines:[`V_{c,max} = 5\\lambda\\sqrt{f'_c}\\,b_w d = 5(${fmt(S.mat.lambda,2)})${rtS}(${fmt(S.sec.bw)}\\text{ in})(${fmt(sh.d)}\\text{ in}) = ${fmt(sh.VcMax*1000,0)}\\text{ lb} = ${fmt(sh.VcMax)}\\text{ kip}`,
+      `V_c = \\min(V_c,\;V_{c,max}) = \\min(${fmt(sh.Vc_row)},\;${fmt(sh.VcMax)}) = ${fmt(sh.Vc)}\\text{ kip}`],
+    vars:[[&quot;V_{c,max}&quot;,&quot;Upper limit on V_c (the same \u221af\u2032c as the row above)&quot;,fmt(sh.VcMax),&quot;kip&quot;]]}));
+}
+function cbcSzWork(b,r,sh){
+  if(!r.szA) return; const fc=S.mat.fc, bw=S.sec.bw, Z=r.szA, V=Math.abs(r.Vu);
+  b.appendChild(el(&quot;h3&quot;,null,&quot;Section size limit (ACI 22.5.1.2)&quot;));
+  b.appendChild(eqBlock({title:&quot;Cross-sectional dimensions for shear&quot;,ref:&quot;ACI Eq. 22.5.1.2&quot;,
+    lines:[&quot;V_u \\le \\phi\\left(V_c + 8\\sqrt{f'_c}\\,b_w d\\right)&quot;,
+      `8\\sqrt{f'_c}\\,b_w d = 8\\sqrt{${fmt(fc*1000,0)}\\text{ psi}}(${fmt(bw)}\\text{ in})(${fmt(sh.d)}\\text{ in}) = ${fmt(sh.VsMax*1000,0)}\\text{ lb} = ${fmt(sh.VsMax)}\\text{ kip}`,
+      `\\phi\\left(V_c + 8\\sqrt{f'_c}\\,b_w d\\right) = ${fmt(sh.phi,2)}(${fmt(sh.Vc)} + ${fmt(sh.VsMax)}) = ${fmt(Z.lim)}\\text{ kip}`,
+      V>1e-9?`\\text{DCR} = \\dfrac{|V_u|}{\\phi\\left(V_c + 8\\sqrt{f'_c}\\,b_w d\\right)} = \\dfrac{${fmt(V)}}{${fmt(Z.lim)}} = ${fmt(Z.dcr)}`:`\\text{No factored shear applied in this combination.}`],
+    vars:[[&quot;\\phi&quot;,&quot;Resistance factor for shear (as the shear check)&quot;,fmt(sh.phi,2),&quot;&quot;],[&quot;V_c&quot;,&quot;Concrete shear (Step 2)&quot;,fmt(sh.Vc),&quot;kip&quot;],[&quot;V_u&quot;,&quot;Factored shear&quot;,fmt(r.Vu),&quot;kip&quot;]]}));
+  if(V>1e-9){ const ok=Z.dcr<=1.0001, v=el(&quot;div&quot;,ok?&quot;okBox&quot;:&quot;errBox&quot;);
+    v.innerHTML=ok?&quot;<b>PASS</b> \u2014 the section is large enough for this shear (ACI 22.5.1.2).&quot;:&quot;<b>FAIL</b> \u2014 the section is too small for this shear: enlarge b_w or d, or raise f\u2032c. More stirrups will not help (ACI 22.5.1.2).&quot;;
+    b.appendChild(v); }
+  b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;8\u221af\u2032c\u00b7b_w\u00b7d is the same term as the upper limit on V_s; \u03c6 and V_c are those of the shear check. \u03c6V_n never exceeds this limit, so the section size check can fail only where the shear check also fails.&quot;));
+}
 function workShear(b,r){
   const sh=r.sh, fc=(sh.fcUse!=null?sh.fcUse:S.mat.fc), bw=S.sec.bw, fyt=(sh.fytUse!=null?sh.fytUse:fytDesign());   /* CBH1b: f'c <= 10 ksi, torsion f_y with torsion */
   const VE=sh.Veff!=null, Vx=VE?sh.Veff:Math.abs(r.Vu), Vsym=VE?&quot;V_{eff}&quot;:&quot;|V_u|&quot;;   /* CBH1b: V_eff in eps_s (5.7.3.4.2) */
@@ -3387,6 +3427,7 @@ function workShear(b,r){
       w.innerHTML=&quot;<b>Members without minimum stirrups take the size-effect V_c.</b> The familiar 2\u221af\u2032c row of Table 22.5.5.1 applies only when A_v \u2265 A_v,min; using it here would overstate V_c by &quot;+fmt((sh.Vc_a/Math.max(sh.Vc_c,1e-9)-1)*100,0)+&quot;%.&quot;;
       b.appendChild(w);
     }
+    cbcVcMaxWork(b,sh);   /* CBSZ: ACI 22.5.5.1.1 */
     /* CBVC (2026-11-13, engineer: wording only, no V_c method change): the old note said the detailed method &quot;would generally give
        a larger V_c&quot; and showed with row (c) too. Row (b) exceeds row (a) only where 8(rho_w)^(1/3) > 2, i.e. rho_w > 1/64, with
        N_u = 0 (this tool has no axial-load input). Shown only when row (a) is used (A_v >= A_v,min). */
@@ -3415,6 +3456,7 @@ function workShear(b,r){
           &quot; kip, so the capacity is capped. A larger section or higher f\u2032c is required to use more stirrup steel.&quot;;
         b.appendChild(w); }
     }
+    cbcSzWork(b,r,sh);   /* CBSZ: ACI 22.5.1.2 */
   }
   if(r.share){
     const SH=r.share;
@@ -5304,7 +5346,8 @@ function cbcResultRows(tabId){
   const chk=allChecks(), refOf=t=>{ const c=chk.find(x=>x.tab===t); return c?c.ref:&quot;&quot;; };
   const nm=r=>&quot;Combination &quot;+(r.ci+1)+&quot; (&quot;+r.name+&quot;)&quot;;
   if(tabId===&quot;tabFlex&quot;) CC.combos.forEach(r=>rows.push([&quot;Flexure — &quot;+nm(r),refOf(&quot;tabFlex&quot;),Math.abs(r.Mu)<1e-9?null:r.dcM]));
-  else if(tabId===&quot;tabShear&quot;) CC.combos.forEach(r=>rows.push([&quot;Shear — &quot;+nm(r),refOf(&quot;tabShear&quot;),Math.abs(r.Vu)<1e-9?null:r.dcV_eff]));
+  else if(tabId===&quot;tabShear&quot;){ CC.combos.forEach(r=>rows.push([&quot;Shear — &quot;+nm(r),refOf(&quot;tabShear&quot;),Math.abs(r.Vu)<1e-9?null:r.dcV_eff]));
+    CC.combos.forEach(r=>{ if(r.szA) rows.push([&quot;Section size limit — &quot;+nm(r),&quot;ACI 22.5.1.2&quot;,Math.abs(r.Vu)<1e-9?null:r.szA.dcr]); }); }   /* CBSZ */
   else if(tabId===&quot;tabTor&quot;){
     const T=chk.filter(x=>x.tab===&quot;tabTor&quot;);
     const pk=[r=>r.tor.dcr, r=>r.tor.lhs/r.tor.rhs, r=>r.tor.comb_prov>0?r.tor.comb_req/r.tor.comb_prov:Infinity];   /* as allChecks */
@@ -5567,11 +5610,20 @@ function cbcRptShear(r){
       cS({id:'lams',label:'Size-effect factor (≤ 1.0)',sym:'\\lambda_{s}',eq:'\\min(\\lambda_s,\\;1.00)',sub:'\\min('+fmt(sh.lam_s_raw,3)+',\\;1.00)',value:sh.lam_s,d:3}),
       cS({id:'rhow',label:'Longitudinal reinforcement ratio',sym:'\\rho_{w}',eq:'\\dfrac{A_s}{b_w d}',sub:'\\dfrac{'+fmt(r.F.As)+'}{'+fmt(bw)+'('+fmt(sh.d)+')}',value:sh.rho_w,d:5}),
       cS({id:'Vc',label:'Concrete shear, Table 22.5.5.1 row (c)'+(sqrtfc_psi(fc)>100?' (√f′c ≤ 100 psi, 22.5.3.1)':''),sym:'V_{c}',eq:&quot;8\\lambda_s\\lambda(\\rho_w)^{1/3}\\sqrt{f'_c}\\,b_w d&quot;,sub:'8('+fmt(sh.lam_s,3)+')('+fmt(S.mat.lambda,2)+')('+fmt(sh.rho_w,5)+')^{1/3}('+fmt(Math.min(sqrtfc_psi(fc),100),1)+')('+fmt(bw)+')('+fmt(sh.d)+')/1000',value:sh.Vc,unit:'kip',ref:cRef('ACI Table 22.5.5.1(c)')}));
+    cs.push(cS({id:'VcMax',label:'Upper limit on V_c (the same √f′c as the row)',sym:'V_{c,max}',eq:&quot;5\\lambda\\sqrt{f'_c}\\,b_w d&quot;,sub:'5('+fmt(S.mat.lambda,2)+')'+(sh.rtVc<sqrtfc_psi(fc)-1e-9?'(100)':'\\sqrt{'+fmt(fc*1000,0)+'}')+'('+fmt(bw)+')('+fmt(sh.d)+')/1000',value:sh.VcMax,unit:'kip',ref:cRef('ACI 22.5.5.1.1')}),
+      cS({id:'VcUse',label:'V_c used',sym:'V_{c}',eq:'\\min(V_c,\;V_{c,max})',sub:'\\min('+fmt(sh.Vc_row)+',\;'+fmt(sh.VcMax)+')',value:sh.Vc,unit:'kip'}));   /* CBSZ */
     T.push({title:'Concrete contribution',ref:cRef('ACI 22.5.5.1'),steps:cs});
     if(S.stir.present) T.push({title:'Transverse reinforcement contribution',ref:cRef('ACI 22.5.10.5.3, 22.5.1.2'),steps:[
       cS({id:'Vs',label:'Shear strength provided by the stirrups',sym:'V_{s}',eq:'\\dfrac{A_v f_{yt} d}{s}',sub:'\\dfrac{('+fmt(sh.Av)+')('+fmt(fyt)+')('+fmt(sh.d)+')}{'+fmt(sh.s)+'}',value:sh.Vs,unit:'kip',ref:cRef('ACI Eq. 22.5.10.5.3')}),
       cS({id:'VsMax',label:'Upper limit on the stirrup contribution',sym:'V_{s,max}',eq:&quot;8\\sqrt{f'_c}\\,b_w d&quot;,sub:'8\\sqrt{'+fmt(fc*1000,0)+'}('+fmt(bw)+')('+fmt(sh.d)+')/1000',value:sh.VsMax,unit:'kip',ref:cRef('ACI 22.5.1.2')}),
       cS({id:'VsUse',label:'V_s used',sym:'V_{s}',eq:'\\min(V_s,\\;V_{s,max})',sub:'\\min('+fmt(sh.Vs)+',\\;'+fmt(sh.VsMax)+')',value:sh.VsUse,unit:'kip',note:sh.governed?'V_s is limited by ACI 22.5.1.2':''})]});
+    if(r.szA){ const Z=r.szA, V=Math.abs(r.Vu);   /* CBSZ: ACI 22.5.1.2 section size limit */
+      T.push({title:'Section size limit',ref:cRef('ACI 22.5.1.2'),steps:[
+        cS({id:'sz8',label:'8√f′c b_w d (the same term as the upper limit on V_s)',sym:&quot;8\\sqrt{f'_c}\\,b_w d&quot;,sub:'8\\sqrt{'+fmt(fc*1000,0)+'}('+fmt(bw)+')('+fmt(sh.d)+')/1000',value:sh.VsMax,unit:'kip'}),
+        cS({id:'szLim',label:'Limit on V_u',sym:&quot;\\phi(V_c + 8\\sqrt{f'_c}\\,b_w d)&quot;,sub:fmt(sh.phi,2)+'('+fmt(sh.Vc)+' + '+fmt(sh.VsMax)+')',value:Z.lim,unit:'kip',ref:cRef('ACI Eq. 22.5.1.2')}),
+        ...(V>1e-9?[cS({id:'szDC',label:'Section size: demand / limit',sym:'\\text{DCR}',eq:&quot;\\dfrac{|V_u|}{\\phi(V_c + 8\\sqrt{f'_c}\\,b_w d)}&quot;,sub:'\\dfrac{'+fmt(V)+'}{'+fmt(Z.lim)+'}',value:Z.dcr,d:3,ok:Z.dcr<=1.0001,
+          note:Z.dcr<=1.0001?'':'The section is too small for this shear: enlarge b_w or d, or raise f′c; stirrups will not help.'})]:[])]});
+    }
   }
   if(r.share){ const SH=r.share;
     T.push({title:'Transverse steel shared with torsion',ref:SH.aashto?'AASHTO LRFD 10th Ed. 5.7.3.6.1':cRef('ACI 22.7.6.1 / 9.5.4.3'),steps:[
@@ -5681,7 +5733,7 @@ function cbcRptModel(){
   }
   /* 2. summary of checks */
   { const K=allChecks(), keyOf=c=>{ if(c.na||c.ci==null) return undefined;
-      if(c.tab==='tabFlex') return 'fx'+c.ci+'/DCR'; if(c.id==='torA') return 'tth/Tu'+c.ci; if(c.id==='torAT'||c.id==='torAC'||c.id==='torAS') return 'tad/'+({torAT:'dcT',torAC:'dcC',torAS:'dcS'}[c.id])+cbcComboCi(c.ci); if(c.id==='lonA') return 'lon/dc'+c.ci; if(c.tab==='tabShear') return CC.combos[c.ci].share?'sh'+c.ci+'/DCRs':'sh'+c.ci+'/DCR';
+      if(c.tab==='tabFlex') return 'fx'+c.ci+'/DCR'; if(c.id==='szA') return 'sh'+cbcComboCi(c.ci)+'/szDC'; if(c.id==='torA') return 'tth/Tu'+c.ci; if(c.id==='torAT'||c.id==='torAC'||c.id==='torAS') return 'tad/'+({torAT:'dcT',torAC:'dcC',torAS:'dcS'}[c.id])+cbcComboCi(c.ci); if(c.id==='lonA') return 'lon/dc'+c.ci; if(c.tab==='tabShear') return CC.combos[c.ci].share?'sh'+c.ci+'/DCRs':'sh'+c.ci+'/DCR';
       if(c.tab==='tabTor') return /cross/i.test(c.label)?'tq'+c.ci+'/size':(/Combined/.test(c.label)?'tq'+c.ci+'/combVT':'tq'+c.ci+'/DCR');
       if(c.tab==='tabServ') return c.ci!=null?'svm/minr'+c.ci:'sv/minr';   /* CBM1: the combination that governs 5.6.3.3 */ if(c.tab==='tabDetail') return 'dt/'+c.id+'.cmp'; };
     const st=c=>{ if(c.na) return {t:'N/A',cls:'na'}; const ok=c.forceOK!=null?c.forceOK:(c.dcr<=1.0001); return {t:ok?'PASS':'FAIL',cls:ok?(c.dcr>=0.9&amp;&amp;c.forceOK==null?'hi':'ok'):'ng'}; };
@@ -5829,6 +5881,7 @@ function cbcDashItems(){
     if(st==='fail'){
       if(c.id&amp;&amp;CBDC_COND[c.id]) cond=(c.id==='dAvMin'&amp;&amp;c.have0)?'no stirrups':CBDC_COND[c.id];
       else if(c.label==='Torsion cross-sectional limit') cond='section too small';
+      else if(c.id==='szA') cond='section too small (stirrups will not help)';   /* CBSZ */
     }
     let text='';
     if(c.na) text=E?('N/A: '+(E.naWhy||'')):'N/A: no load combination has this action.';
@@ -6292,6 +6345,7 @@ var CBMR_CFG={name:'Beam Capacity',title:'Beam Capacity — Calculation Report',
         else if(c.id==='torA') ks=['tth/Tu'+ci];   /* CBH1 */
         else if(c.id==='torAT'||c.id==='torAC'||c.id==='torAS') ks=['tad/'+({torAT:'dcT',torAC:'dcC',torAS:'dcS'}[c.id])+ci];   /* CBH1b: AASHTO torsion design */
         else if(c.id==='lonA') ks=['lon/dc'+ci];   /* CBM2 */
+        else if(c.id==='szA') ks=['sh'+cbcComboCi(ci)+'/szDC'];   /* CBSZ */
         else if(c.tab==='tabShear') ks=['sh'+ci+'/DCRs','sh'+ci+'/DCR'];
         else if(c.tab==='tabTor') ks=[/cross/i.test(c.label)?'tq'+ci+'/size':(/Combined/.test(c.label)?'tq'+ci+'/combVT':'tq'+ci+'/DCR')];
         else if(c.tab==='tabServ') ks=['svm/minr'+ci,'sv/minr'];   /* CBM1: the combination that governs 5.6.3.3 */
