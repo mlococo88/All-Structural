@@ -82,6 +82,11 @@
     if (!B || !p.base) return p;
     p.types = B.newTypes(p); p.design = { g: Math.min(2, p.xs.nb), s: 1 };
     if (window.PSBBridgeDL) p.xs.dl = window.PSBBridgeDL.defaults(p);   // PR 3a-3: DC2 / DW distributed (PS-9)
+    // PS-24 (engineer decision 2026-11-13): the entered d_e (loads.de) of every girder type = the d_e computed from this default cross-section
+    // (PSBDesign.deOf, PS-20: overhang 3.0 − barrier 1.5 = 1.5 ft; equal overhangs, so G1's value), so a fresh project shows no PS-23 notice.
+    // A new project only: saved projects are not changed; the results are the same (the exterior lines already use the computed d_e).
+    const D = window.PSBDesign, de = D && p.xs.dl ? D.deOf(p, 1) : null;
+    if (de != null && isFinite(de)) { p.base.loads.de = de; p.types.forEach(t => { if (t.ovr && 'loads.de' in t.ovr) t.ovr['loads.de'] = de; }); }
     return p;
   }
 

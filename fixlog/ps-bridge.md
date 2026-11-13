@@ -1290,3 +1290,47 @@ PR #1526: https://github.com/mlococo88/All-Structural/pull/1526
 ### Open item (question for the engineer)
 - Every new project shows the notice: its hidden entered d_e is the default 2.0 ft while the default cross-section (3.0 ft overhangs, 1.5 ft
   barriers) computes 1.5 ft. Keep it, or not count the default (unedited) entered value as "entered"?
+
+## 2026-11-13 — PS-24: a new project's entered d_e = the d_e computed from its default cross-section (1.5 ft), so a fresh project shows no PS-23 notice (new projects only; results unchanged)
+PR #1528: https://github.com/mlococo88/All-Structural/pull/1528
+### Request
+- Engineer decision PS-24 (2026-11-13), answering the PS-23 (#1526) open item: new PS Bridge projects set each girder type's entered d_e
+  (loads.de) to the value computed from the default cross-section (1.5 ft for the default 3.0 ft overhangs / 1.5 ft barriers), so no d_e
+  banner shows on a fresh project. Saved projects unchanged (prove). Results of new projects unchanged (they already use the computed value).
+### Where
+- `apps/ps-bridge/engine/model.js` `newProject()`, anchor `// PS-24 (engineer decision 2026-11-13)`. Before:
+  ```js
+    if (window.PSBBridgeDL) p.xs.dl = window.PSBBridgeDL.defaults(p);   // PR 3a-3: DC2 / DW distributed (PS-9)
+    return p;
+  ```
+  After:
+  ```js
+    if (window.PSBBridgeDL) p.xs.dl = window.PSBBridgeDL.defaults(p);   // PR 3a-3: DC2 / DW distributed (PS-9)
+    // PS-24 (…)
+    const D = window.PSBDesign, de = D && p.xs.dl ? D.deOf(p, 1) : null;
+    if (de != null && isFinite(de)) { p.base.loads.de = de; p.types.forEach(t => { if (t.ovr && 'loads.de' in t.ovr) t.ovr['loads.de'] = de; }); }
+    return p;
+  ```
+  The new types carry no `loads.de` override, so every type's entered d_e is the base's 1.5 ft. `defaultProject()` (tests, harnesses) unchanged.
+- Only `newProject()` changes: the page's first start with nothing stored, New project, and an unreadable stored project replaced by a new
+  one (`load`). A saved or imported project is never passed through it.
+### Saved data (CLAUDE.md §5)
+- No key or format change; nothing rewritten on load. A project saved before PS-24 keeps its entered 2.0 ft (and its PS-23 notice).
+### Governing provisions
+- None changed. d_e: AASHTO LRFD 10th Ed. Art. 4.6.2.2.1, computed per exterior line by PS-20 (#1521); interior lines do not use d_e.
+### Check case
+- New project (5 girders at 9 ft, 120 ft, overhangs 3.0 / 3.0 ft, barriers 1.5 ft): entered d_e before 2.0 ft, after 3.0 − 1.5 = **1.5 ft**;
+  computed G1 = G5 = 1.5 ft (unchanged); PS-23 notice before "G1: entered 2.0 ft, computed 1.5 ft …; G5: …", after none; Report note before
+  listed, after none. Results of every cell (Interior S1 on G2–G4, Exterior S1 on G1, G5): byte-identical (the exterior inputs had d_e 1.5
+  already; the interior inputs' loads.de 2.0 → 1.5 is not used by the engine).
+### How verified
+- Main (14198d9) vs this branch, Node probe: the new project's computeAll + PS-10 of all 5 cells **byte-identical**; 18 saved projects
+  (a new project saved before PS-24 and the 17 harness B designs) load identically on both (project, engine inputs) and the stored text is
+  not rewritten.
+- `tests/engine/psbridge-denotice.test.mjs`: the PS-23 cases now model a project saved before PS-24 (entered 2.0 set explicitly); new test:
+  a new project enters 1.5 on every type, no rows, every cell's inputs (exterior) and results byte-identical to the same project with 2.0
+  entered. `node tests/engine/run.mjs psbridge`: 12 files, 115 passed, 0 failed.
+- Smoke `ps-bridge-types.mjs` §8: a fresh project shows no d_e banner (entered 1.5); the PS-23 checks run on a project saved before PS-24
+  (65 checks, 0 failed). Skeleton smoke 252 checks, 0 failed.
+  Harness B: normal 17 designs 0 differences (exit 0); `--import` 0 differences (exit 0); `--control` / `--import --control` 17 with
+  differences, exit 1. `node tests/check-syntax.mjs` passes.
