@@ -3179,3 +3179,36 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
 - **Saved data (§5):** none.
 - **Decisions (pending engineer review):** "Last sent" is read from the channel key in this browser (no new record).
 - **Other copies:** none.
+
+## 2026-11-13 — PR: claude/sbeam-hss-a1 (PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__) (TLEN) — Member check mode: round HSS torsion (Eq. H3-2a) uses the member length L, not the shear length Lᵥ   [calculation change, §4]
+- **Engineer's decision (2026-11-13):** improve the existing app for HSS; fix review item A1 (HSS review of 2026-11-13).
+- **Problem:** `memberDesignAll` called `torsionHSS(p,(S.member.Lv!=null?S.member.Lv:0)*12)`. Eq. H3-2a needs L = the member length (§H3.1(a)); member mode passed the shear length Lᵥ, or **0 when Lᵥ was blank**. With L = 0, H3-2a is infinite, so F_cr = 0.6F_y for any length. **Unconservative** for long, thin round HSS where H3-2a governs. Beam mode (total length) and batch (`Lx`, blank → `Lbx`) were already right.
+- **Code (re-apply by hand):**
+  1. `torsionHSS`, round branch, after `out.Fcr=Math.min(0.6*Fy,Math.max(F1,F2c));out.clause='H3-2a/b';` add `out.L=Lin;out.F1=F1;out.F2c=F2c;` (display only; Tn, φTn unchanged).
+  2. `memberDesignAll` — before: `D.tors=torsionHSS(p,(S.member.Lv!=null?S.member.Lv:0)*12);` → after (anchor `TLEN (2026-11-13): Eq. H3-2a takes L`):
+     ```js
+     {const sp=memberSpan(),has=sp.v>0;
+      const torsL={v:has?sp.v:null,src:has?(sp.src==='entered'?'member span L':'unbraced length Lᵇ — no member span L entered'):'no member length entered — Eq. H3-2a not used',fallback:!(has&&sp.src==='entered')};
+      D.tors=torsionHSS(p,(has?sp.v*12:Infinity));
+      if(p._kind==='P')D.torsL=torsL;
+      if(p._kind==='P'&&anyTu&&torsL.fallback)D.warns.push('Round HSS torsion: Eq. H3-2a needs the member length L (§H3.1(a)). '+ …);}
+     ```
+     L = the existing **Member span L** input (`S.member.L`, Lateral Bracing & Cᵇ section, whose hint already said it "feeds … torsion"), through the existing `memberSpan()`: blank → the unbraced length Lᵇ (with a warning, as for self-weight and deflection); no length at all (continuously braced, no span) → L = ∞, i.e. H3-2a dropped and F_cr = min(0.6F_y, H3-2b) (the lower bound; conservative), with a warning.
+  3. `designAll` (beam mode), after `D.tors=torsionHSS(p,Ltot*12);` add `if(p._kind==='P')D.torsL={v:Ltot,src:'total member length'};` (display only).
+  4. New `torsRoundWork(D,p)` before `/* ---------- J10 concentrated forces (I & C) ---------- */`: for a round HSS, the lines F_cr,a = 1.23E/(√(L/D)(D/t)^{5/4}) (H3-2a), F_cr,b = 0.60E/(D/t)^{3/2} (H3-2b), F_cr = min[0.6F_y, max(F_cr,a, F_cr,b)] with values, and the variable "L = … ft — <source> (§H3.1(a): L = member length)". Nothing for rectangular HSS.
+  5. `buildTorsTab` (the live, second definition), card `toCap`: `lines:rw.lines.concat([…])`, `vars:rw.vars.concat([…])` with `const rw=torsRoundWork(D,p);`. The Report tab reads this card, so it shows the same lines.
+  6. `xlChecks` (Excel export), after `X.line('Torsional constant','C',…,{kind:'in',ref:'Chz'});`: for a round HSS, rows "Member length for Eq. H3-2a (<source>)" L, "Critical stress, Eq. H3-2a" F_cr,a, "Critical stress, Eq. H3-2b" F_cr,b.
+- **Before → after:** member mode, round HSS: F_cr = min[0.6F_y, max(1.23E/(√(L_v/D)(D/t)^{5/4}), 0.60E/(D/t)^{3/2})] with L_v = shear length or 0 → the same with **L = member span L** (blank → Lᵇ; none → ∞). φ_T = 0.90, Tn = F_cr·C unchanged.
+- **Governing provision:** AISC 360-16 (15th Ed.) §H3.1(a), Eq. H3-2a and H3-2b (L = member length), Eq. H3-1.
+- **Check case:** HSS20.000X0.250, A500 Gr. C round (F_y = 46 ksi), member check mode, member span L = 60 ft, Lᵥ blank, T_u = 100 kip·ft. D = 20.000 in, t = 0.233 in, D/t = 85.84, C = 141 in³.
+  - H3-2a with L = 720 in: 1.23(29000)/(√(720/20) × 85.84^1.25) = 35,670/(6 × 261.3) = **22.75 ksi**.
+  - H3-2b: 0.60(29000)/85.84^1.5 = 17,400/795.3 = **21.88 ksi**.
+  - **Before:** L = 0 → H3-2a = ∞ → F_cr = 0.6(46) = 27.60 ksi; φTn = 0.9 × 27.60 × 141/12 = **291.9 kip·ft** (DCR 0.343).
+  - **After:** F_cr = min(27.60, max(22.75, 21.88)) = 22.75 ksi; Tn = 22.75 × 141 = 3208 kip·in; φTn = 0.9 × 3208/12 = **240.6 kip·ft** (DCR 0.416). Before was 21% unconservative.
+  - Span blank, Lᵇ = 60 ft: 240.6 (with the warning). Span 30 ft: H3-2a = 32.2 ksi > 27.6 → 291.9, unchanged. HSS10.750X0.500 at 60 ft: H3-2a = 47.6 ksi > 27.6 → 153.4, unchanged. Continuously braced, no length: F_cr = min(27.6, 21.88) = 21.88 ksi, φTn = 231.4 kip·ft (warning).
+- **Saved data (§5):** no new field or key; the existing `S.member.L` is read.
+- **How verified:** headless Chromium, origin/main vs branch, 50 cases (member mode with 4 L / Lᵇ / Lᵥ combinations and beam mode × 10 sections): the 40 rectangular-HSS (A500 B/C, A1085) and W-shape cases are **identical** in the whole `AN` JSON (every key) and in the `textContent` of every result tab; the 10 round-HSS cases differ only in the torsion values, the new lines and the warning. Torsion tab, Report tab: 0 KaTeX errors; Excel rows checked in the workbook (see the open item on Excel export). check-syntax; engine `aisc-hss`; smoke steel-beam-builtup, steel-beam-h1-composite, phone-layout / decimal-entry `--tool sbeam`, project-library `--tool steelbeam` pass; list-input `--part sbeam` fails the same 2 checks on origin/main (baseline drift, not this change).
+- **Other copies:** none. `buildAxialTab` (the dead earlier layout) and the first `buildTorsTab` (overridden by the second) are not changed.
+- **Open items (not changed):**
+  - Excel export throws for a round HSS in member mode on origin/main (`xlChecks`: `unresolved ref: 2*«bf»*«tf»`), so the new Excel rows are reached only once that is fixed.
+  - The fallback to Lᵇ when no member span is entered (shared with self-weight and deflection) is unconservative for H3-2a when Lᵇ < the member length; the warning asks for L. Engineer to confirm, or block torsion without an entered span.
