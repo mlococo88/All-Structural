@@ -11,6 +11,10 @@
 //   3. every link (data-sumgo) names a girder type and line of the project, a check group's tab and a worked step that the tab shows for
 //      that type and line (the worked steps of that run, report/data.js worked) or, for an owner limit, the Owner rules row;
 //   4. the Report's §1 (several cells): the grid and the group table carry the same ratios, each group row a "see §" reference.
+//   PS-25 (engineer decision 2026-11-13): 5. the Report works each girder type on its governing line (the line with its largest ratio), or
+//      every girder line: §1, §2, then §3–§14 per unit with the type and line in each heading; every number of a unit's sections is that
+//      unit's engine value; every [[reference]] resolves; §1's "see §" point to the unit of that type (that line); a project with one
+//      girder worked that is the girder shown builds the report of one girder as before (no unit headings).
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { loadShared, test, ROOT } from './harness.mjs';
@@ -148,11 +152,58 @@ test('Report §1 (several cells): the girder × span grid and the group table = 
     const s1 = md.sections.find(s => s.id === 'sum'), all = s1.subs.find(q => q.id === 'all'); assert.ok(all, name);
     const [grid, grp] = all.items.filter(i => i.type === 'table');
     grid.rows.forEach((r, i) => r.slice(1).forEach((c, j) => { const z = Mo.grid[i][j], t = typeof c === 'string' ? c : c.t;
-      if (!z) assert.match(t, /not checked/); else { assert.ok(t.includes(z.gov.q.r.toFixed(3)) && t.includes(z.nF ? 'FAIL' : 'PASS') && /see \[\[rs\.\w+\]\]|see \[\[rs\.own\]\]|—/.test(t), `${name}: grid G${i + 1}/S${j + 1}: ${t}`); n++; } }));
+      if (!z) assert.match(t, /not checked/); else { assert.ok(t.includes(z.gov.q.r.toFixed(3)) && t.includes(z.nF ? 'FAIL' : 'PASS') && /see \[\[rs\.\w+(@u\d+)?\]\]|see \[\[rs\.own\]\]|—/.test(t), `${name}: grid G${i + 1}/S${j + 1}: ${t}`); n++; } }));
     grp.rows.forEach(r => { const c = r.cells || r, T = Mo.types.find(q => q.label === c[0]), gp = Mo.used.find(q => q.name === c[2]);
       if (!gp) { assert.equal(c[5].t, T.rf.v.toFixed(3)); return; }
       const z = T.groups[gp.id]; assert.equal(c[5].t, z.q.r.toFixed(3), `${name}: ${c[0]} ${c[2]}`); assert.equal(c[4], `G${z.g}`);
-      assert.match(c[7], gp.input ? /see \[\[rs\.own\]\]|—/ : new RegExp(`see \\[\\[rs\\.${gp.tab}\\]\\]`)); n++; });
+      assert.match(c[7], gp.input ? /see \[\[rs\.own\]\]|—/ : new RegExp(`see \\[\\[rs\\.${gp.tab}(@u\\d+)?\\]\\]`)); n++; });
   }
   assert.ok(n > 100, `${n} Report cells`);
+});
+
+/* PS-25: the worked units of a report and their references */
+const keysOf = M => { const ks = new Set(); M.sections.forEach(s => { ks.add(s.key); s.subs.forEach(q => { if (q.key) ks.add(q.key); q.items.forEach(it => { if (it.type === 'steps') it.steps.forEach(t => ks.add(it.scope ? it.scope + '/' + t.id : String(t.id))); }); }); }); return ks; };
+const refsOf = M => { const out = []; const walk = o => { if (typeof o === 'string') o.replace(/\[\[([^\]|]+)\]\]/g, (m, k) => { if (!/^tab:/.test(k)) out.push(k); return m; }); else if (o && typeof o === 'object') Object.values(o).forEach(walk); }; walk(M.sections); return out; };
+const OKF = W.PSBOutKit.fx;
+test('Report, PS-25: each girder type on its governing line (default) or every girder line — units, headings, numbering, values and references', () => {
+  let nm = 0, nv = 0;
+  for (const [name, P] of Object.entries(PS)) {
+    for (const mode of ['gov', 'all']) {
+      const B = W.PSBReportData.compute(P, null, mode), A = B.all, SM = SU.model(P, A);
+      // the units: gov: per type the line with the largest governing ratio (ties: the first); all: every type × line
+      const want = mode === 'all' ? SM.types.flatMap(T => T.lines.filter(z => !z.err).map(z => `${T.k}|${z.c.g}`))
+        : SM.types.map(T => { let b = null; T.lines.filter(z => !z.err).forEach(z => { const r = z.c.R.checks.map(q => q.r).sort((x, y) => y - x);   // the largest ratio; a tie: the next largest
+          const gt = () => { for (let i = 0; i < r.length; i++) if (r[i] !== b.r[i]) return r[i] > b.r[i]; return false; }; if (!b || gt()) b = { r, g: z.c.g }; }); return `${T.k}|${b.g}`; });
+      assert.deepEqual(B.units.map(u => `${u.k}|${u.g}`), want, `${name} ${mode}: units`);
+      const one = B.units.length === 1 && B.cell && B.units[0].k === B.cell.k && B.units[0].g === B.cell.g;
+      assert.equal(B.multi, !one, `${name} ${mode}: several units`);
+      const M = W.PSBReportBuild.model(B, {}), ks = keysOf(M);
+      const bad = refsOf(M).filter(k => !ks.has(k) && !/(^|\/)ld\.dfm$/.test(k));   // ld.dfm: an older dangling key of §1 (open item, not PS-25)
+      assert.deepEqual([...new Set(bad)], [], `${name} ${mode}: every reference resolves`);
+      if (!B.multi) { assert.equal(M.sections.length, 14, name); assert.ok(M.sections.every(s => !/ on G\d+, span \d+$/.test(s.title)), `${name}: one girder, no unit headings`);
+        // and the model equals the one-girder model (the PS-25 code not used)
+        assert.equal(JSON.stringify(M), JSON.stringify(W.PSBReportBuild.model(Object.assign({}, B, { units: null, multi: false }), {})), `${name}: one-girder report unchanged`); continue; }
+      nm++;
+      assert.equal(M.sections.length, 2 + 12 * B.units.length, `${name} ${mode}: sections`);
+      B.units.forEach((u, i) => { const ss = M.sections.slice(2 + 12 * i, 14 + 12 * i);   // numbered per unit: §(3 + 12 i) – §(14 + 12 i)
+        ss.forEach(s => { assert.ok(s.title.endsWith(`: ${u.label} on G${u.g}, span ${u.s}`), `${name}: heading ${s.title}`); assert.match(s.key, new RegExp(`@u${i}$`)); }); });
+      // every number recorded: the value of its unit's engine result (sections §3+ and §1's unit tables)
+      M.vals.forEach(v => { const R = v.u != null ? B.units[v.u].R : B.R, x = v.path.split('.').reduce((o, k) => o == null ? o : o[k], R);
+        assert.equal(v.text, OKF(v.div ? x / v.div : x, v.d), `${name} ${mode}: ${v.sec} u${v.u} ${v.path}`); nv++; });
+      assert.ok(M.vals.filter(v => v.u === B.units.length - 1).length > 300, `${name} ${mode}: the last unit's values`);
+      // §1's "see §": the unit that works that type (gov) or that type × line (all)
+      const all = M.sections[0].subs.find(q => q.id === 'all');
+      if (all) { const [grid] = all.items.filter(i => i.type === 'table');
+        grid.rows.forEach((r, i) => r.slice(1).forEach((c, j) => { const z = SM.grid[i][j]; if (!z || z.err || !z.gov || z.gov.gp.input) return;
+          const ui = B.units.findIndex(u => u.k === z.c.k && (mode !== 'all' || u.g === z.c.g)); assert.ok(c.t.includes(`[[rs.${z.gov.gp.tab}@u${ui}]]`), `${name} ${mode}: grid G${i + 1}/S${j + 1} ${c.t}`); })); }
+    }
+  }
+  assert.ok(nm >= 8 && nv > 20000, `${nm} multi-unit reports, ${nv} values`);
+});
+test('Report, PS-25: a section left out is left out for every unit; its references say "(section not included)"', () => {
+  const P = PS['three spans made continuous'], B = W.PSBReportData.compute(P, null, 'gov'), M = W.PSBReportBuild.model(B, { include: { flex: false } });
+  assert.equal(M.sections.length, 2 + 11 * B.units.length);
+  assert.ok(!M.sections.some(s => /^Flexure/.test(s.title)));
+  assert.deepEqual(refsOf(M).filter(k => /^(u\d+\/fx\.|rs\.flex)/.test(k)), []);
+  assert.ok(JSON.stringify(M.sections).includes('(section not included)'));
 });

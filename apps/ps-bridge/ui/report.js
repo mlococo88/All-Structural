@@ -25,9 +25,13 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const S = { closed: new Set(), key: '', M: null };
   const incOf = o => { const inc = {}; window.PSBReportBuild.SECTIONS.forEach(([k]) => { inc[k] = !(o.inc && o.inc[k] === false); }); return inc; };
-  function controls(o) {
-    const inc = incOf(o);
-    return `<div class="rp-chips" role="group" aria-label="Report sections">${window.PSBReportBuild.SECTIONS.map(([k, t]) => `<label class="rp-chip"><input type="checkbox" data-rpinc="${k}"${inc[k] ? ' checked' : ''}>${esc(t)}</label>`).join('')}</div>`;
+  /* PS-25 (engineer decision 2026-11-13): "Worked sections: each type's governing line (default) | every girder line", kept in ctx.opts.worked
+     (the page's psb2.ui object, as the section chips); shown when the project has more than one girder type × line */
+  const modeOf = o => (o.worked === 'all' ? 'all' : 'gov');
+  function controls(o, B) {
+    const inc = incOf(o), m = modeOf(o);
+    const ch = B && B.all && B.all.n > 1 ? `<div class="rp-chips" role="radiogroup" aria-label="Worked sections" id="rpWorked"><span class="rp-chip" style="border:0;padding-left:0"><b>Worked sections:</b></span>${[['gov', "each type's governing line"], ['all', 'every girder line']].map(([v, t]) => `<label class="rp-chip"><input type="radio" name="rpWorked" data-rpworked="${v}"${m === v ? ' checked' : ''}>${t}</label>`).join('')}</div>` : '';
+    return ch + `<div class="rp-chips" role="group" aria-label="Report sections">${window.PSBReportBuild.SECTIONS.map(([k, t]) => `<label class="rp-chip"><input type="checkbox" data-rpinc="${k}"${inc[k] ? ' checked' : ''}>${esc(t)}</label>`).join('')}</div>`;
   }
   const PW = 700;
   const plainA = el => { el.querySelectorAll('a').forEach(a => { const sp = document.createElement('span'); sp.innerHTML = a.innerHTML; a.replaceWith(sp); }); return el; };
@@ -90,15 +94,17 @@
     host.innerHTML = '<div class="rp-host"></div>';
     const box = host.firstChild;
     if (!window.SharedReport) { box.innerHTML = '<div class="alert err">shared/report.js is not loaded.</div>'; return null; }
-    const B = window.PSBReportData.compute(ctx.P, ctx.rc);
+    const B = window.PSBReportData.compute(ctx.P, ctx.rc, modeOf(o));
     if (B.err) { box.innerHTML = `<div class="alert err" role="alert">The report cannot be built: ${esc(B.err)}</div>`; return null; }
-    const inc = incOf(o), wScr = Math.round(box.clientWidth || 0), narrow = wScr > 0 && wScr < PW - 40, key = JSON.stringify([ctx.rc && ctx.rc.key, ctx.rc && ctx.rc.allKey, inc, narrow ? wScr : 0]);
+    const inc = incOf(o), wScr = Math.round(box.clientWidth || 0), narrow = wScr > 0 && wScr < PW - 40, key = JSON.stringify([ctx.rc && ctx.rc.key, ctx.rc && ctx.rc.allKey, inc, narrow ? wScr : 0, modeOf(o)]);
     // the model is kept while the inputs, the sections chosen and the figure width are the same (the result object of the page is the same)
-    if (S.key !== key || !S.M) { let figs = {}; try { figs = figures(B, inc, narrow ? wScr : 0); } catch (e) { console.warn(e); }
+    // PS-25: several worked units: each unit's graphics drawn with its own result (an array, one per unit)
+    if (S.key !== key || !S.M) { let figs = {}; try { figs = B.multi ? B.units.map(u => figures({ P: u.P, inp: u.inp, R: u.R, W: u.W }, inc, narrow ? wScr : 0)) : figures(B, inc, narrow ? wScr : 0); } catch (e) { console.warn(e); }
       S.M = window.PSBReportBuild.model(B, { include: inc, figures: figs }); S.key = key; }
     const tb = document.getElementById('tabBar');
-    const V = window.SharedReport.mount(box, S.M, { controls: controls(o), closed: S.closed, stick: tb ? tb.offsetHeight : 0, spy: true,
+    const V = window.SharedReport.mount(box, S.M, { controls: controls(o, B), closed: S.closed, stick: tb ? tb.offsetHeight : 0, spy: true,
       onGoto: t => { if (/^in:/.test(t)) { if (ctx.goin) ctx.goin(t.slice(3)); } else if (ctx.goto) ctx.goto(t); } });
+    box.querySelectorAll('[data-rpworked]').forEach(el => el.addEventListener('change', () => { if (!el.checked) return; o.worked = el.dataset.rpworked; if (ctx.save) ctx.save(); render(host, ctx); }));
     box.querySelectorAll('[data-rpinc]').forEach(el => el.addEventListener('change', () => { o.inc = o.inc || {}; o.inc[el.dataset.rpinc] = el.checked; if (ctx.save) ctx.save(); render(host, ctx); }));
     return V;
   }

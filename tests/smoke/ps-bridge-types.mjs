@@ -12,6 +12,7 @@
 //      in the project (P.notices.de), shown again for a different difference, none where they match;
 //   9. PR 3b: the Summary tab on five projects (single type, new, three types, three spans continuous, a line not checked): values and
 //      weights = the engine's, counts = the check summary column's, the grid, a grid link opens its tab / type / line / step; Stop, Run all;
+//  10. PS-25: the Report per girder type (governing line) and every girder line, the choice in psb2.ui, print, one-girder report;
 //   5. 390 px: the Girders & strands tab and a result tab with the type / line bar and (PR 3b) the Summary tab without sideways scroll; 0 console errors; psb2.* keys only.
 //   node tests/smoke/ps-bridge-types.mjs [--file <index.html>] [--shots <dir>]
 import fs from 'fs';
@@ -127,7 +128,7 @@ check(!/to fix/.test(await p.textContent('#sbDashCol')), 'unequal bays: no input
   if (args.shots) { await p.click('#tabBar [data-otab="sum"]'); await p.waitForTimeout(300); await p.screenshot({ path: path.join(args.shots, 'ps3a-1400-summary-types.png') }); }
   await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 60000 }); await p.waitForTimeout(200);
   const rp = await p.evaluate(() => { const s1 = document.querySelector('.rp-doc section[data-rpsec="rp-s1"]'); return s1 ? s1.textContent.replace(/\s+/g, ' ') : ''; });
-  check(/Every girder type and line/.test(rp) && /2 girder types on 5 girder lines/.test(rp) && /girder type Interior S1 on line G3, span 1/.test(rp), 'Report §1: every type and line, the reported cell named'); }
+  check(/Every girder type and line/.test(rp) && /2 girder types on 5 girder lines/.test(rp) && /each girder type on its governing line/.test(rp) && /Interior S1 on G3, span 1 \(§3–§14\)/.test(rp), "Report §1: every type and line; PS-25: Interior worked on its governing line G3 (S = 10 ft), §3–§14 " + rp.slice(rp.indexOf("This report works"), rp.indexOf("This report works") + 200)); }
 // PS-19: the exterior rigid section on the real girder lines (8, 10, 10, 8 ft): Exterior S1 on G1, Loads & LLDF: X_ext 18, Σx² 848, R = DF_M 0.7821
 await p.click('#tabBar [data-otab="lds"]'); await p.selectOption('#tyOutT', { label: 'Exterior S1 (span 1)' }); await p.waitForTimeout(150); await p.selectOption('#tyOutL', '1'); await p.waitForTimeout(300);
 { const r = await p.evaluate(() => ({ s: !!document.getElementById('st-ld.rigSx2'), x: !!document.getElementById('st-ld.rigXext'), dfm: (document.querySelector('#out .kv [data-ev="dfm"]') || document.querySelector('#out [data-ev="dfm"]') || {}).textContent }));
@@ -269,6 +270,51 @@ await p.click('#tabBar [data-otab="sum"]'); await p.waitForTimeout(200);
   check(/Running every girder type × line \(\d+ \/ 9\)/.test(d), '3b: the check summary during the run: ' + d);
   await p.waitForFunction(() => /Up to date/.test((document.getElementById('sumRunMsg') || {}).textContent || ''), null, { timeout: 30000 }); }
 check(!o.errs.length, 'console errors (3b): ' + o.errs.join(' | '));
+await o.b.close();
+
+// 10. PS-25 (engineer decision 2026-11-13): the Report works each girder type on its governing line (default), numbered per type, the
+//     type and line in each heading; "Worked sections: every girder line" works every type × line; the choice kept in psb2.ui (not in the
+//     project); §1's "see §" of a line go to its type's sections; Print report prints every unit's sections, steps and figures; a project
+//     with one girder type on one line: no unit headings (the one-girder report).
+o = await openPage(FILE, { vw: 1400, vh: 1000 }); p = o.p; await ready(p);
+const RPQ = () => p.evaluate(() => ({ secs: [...document.querySelectorAll('.rp-doc .rp-h1')].map(h => h.textContent.trim()), unres: document.querySelectorAll('.rp-doc .rp-bad').length,
+  steps: document.querySelectorAll('.rp-doc .rp-step').length, nSt: window.PSBReportUI.state.M.sections.reduce((a, s) => a + s.subs.reduce((b, q) => b + q.items.filter(i => i.type === 'steps').reduce((c, i) => c + i.steps.length, 0), 0), 0),
+  kErr: document.querySelectorAll('.rp-doc .katex-error').length, gov: (document.querySelector('[data-rpworked="gov"]') || {}).checked, all: (document.querySelector('[data-rpworked="all"]') || {}).checked,
+  ui: JSON.parse(localStorage.getItem('psb2.ui') || '{}'), proj: localStorage.getItem('psb2.project.current') }));
+const rptOpen = async () => { await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 120000 }); await p.waitForTimeout(300); };
+await rptOpen();
+{ const r = await RPQ();
+  check(r.gov && !r.all && r.secs.length === 26 && /^3\. Section properties: Interior S1 on G2, span 1$/.test(r.secs[2]) && /^15\. Section properties: Exterior S1 on G1, span 1$/.test(r.secs[14]) && /^26\. Rating: Exterior S1 on G1, span 1$/.test(r.secs[25]) && !r.unres && !r.kErr && r.steps === r.nSt,
+    'PS-25 default: each type on its governing line, §3–§14 Interior, §15–§26 Exterior ' + JSON.stringify({ n: r.secs.length, unres: r.unres, steps: r.steps, nSt: r.nSt }));
+  // §1: the grid row of G5 (Exterior S1) points to Exterior's End zone section §22; a click jumps there
+  const j = await p.evaluate(() => { const s1 = document.querySelector('.rp-doc section[data-rpsec="rp-s1"]'), tr = [...s1.querySelectorAll('table tbody tr')].find(t => t.children[0].textContent.trim() === 'G5');
+    const a = tr && tr.querySelector('a[href^="#"]'); if (!a) return null; const id = a.getAttribute('href').slice(1); a.click(); const el = document.getElementById(id), b = el.getBoundingClientRect();
+    return { text: a.textContent, h: (el.closest('section.rp-sec') || el).querySelector('.rp-h1').textContent, inView: b.top >= -2 && b.top < innerHeight }; });
+  check(j && j.text === '§22' && /^22\. End zone & hold-down: Exterior S1 on G1, span 1$/.test(j.h) && j.inView, 'PS-25: §1 grid G5 → its type\'s section §22 ' + JSON.stringify(j));
+  if (args.shots) { await p.evaluate(() => document.querySelector('.rp-doc section[data-rpsec="rp-s1"]').scrollIntoView()); await p.waitForTimeout(200); await p.screenshot({ path: path.join(args.shots, 'ps25-1400-report-s1.png') });
+    await p.evaluate(() => [...document.querySelectorAll('.rp-doc .rp-h1')][14].scrollIntoView()); await p.waitForTimeout(200); await p.screenshot({ path: path.join(args.shots, 'ps25-1400-report-exterior.png') }); } }
+// every girder line: 2 + 12 × 5 sections; kept in psb2.ui, the project untouched; again after a reload
+{ const proj0 = (await RPQ()).proj;
+  await p.check('[data-rpworked="all"]'); await p.waitForFunction(() => document.querySelectorAll('.rp-doc .rp-h1').length === 62, null, { timeout: 120000 }); await p.waitForTimeout(300);
+  const r = await RPQ(), want = ['Interior S1 on G2', 'Interior S1 on G3', 'Interior S1 on G4', 'Exterior S1 on G1', 'Exterior S1 on G5'];
+  check(r.all && want.every((t, i) => r.secs[2 + 12 * i].endsWith(`: ${t}, span 1`) && r.secs[2 + 12 * i].startsWith(`${3 + 12 * i}. Section properties`)) && !r.unres && !r.kErr && r.steps === r.nSt, 'PS-25 every girder line: 62 sections in type and line order ' + JSON.stringify({ n: r.secs.length, unres: r.unres }));
+  check(r.ui.rpt && r.ui.rpt.worked === 'all' && r.proj === proj0 && Object.keys(await lsSnap(p)).every(k => k.startsWith('psb2.')), 'PS-25: the choice in psb2.ui (rpt.worked), the project not changed, no new key');
+  // print: Print report (the whole report alone) has every unit's sections, steps and figures
+  await p.evaluate(() => { window.__printed = 0; window.print = () => { window.__printed++; }; });
+  await p.click('[data-rpact="print"]'); await p.waitForFunction(() => window.__printed > 0); await p.emulateMedia({ media: 'print' });
+  const pr = await p.evaluate(() => { const vis = el => !!el && getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().height > 0, box = document.getElementById('rp-print');
+    return { box: vis(box), app: vis(document.getElementById('app')), h: [...box.querySelectorAll('.rp-h1')].filter(vis).length, steps: box.querySelectorAll('.rp-step').length, hidden: [...box.querySelectorAll('.rp-step')].filter(x => !vis(x)).length,
+      figs: box.querySelectorAll('.rp-fig').length, docFigs: document.querySelectorAll('#rptHost .rp-doc .rp-fig').length, ext: [...box.querySelectorAll('.rp-h1')].filter(h => /Exterior S1 on G5, span 1$/.test(h.textContent)).length }; });
+  check(pr.box && !pr.app && pr.h === 62 && pr.steps === r.steps && !pr.hidden && pr.figs === pr.docFigs && pr.figs >= 60 && pr.ext === 12, 'PS-25 print: every unit printed (headings, steps, figures) ' + JSON.stringify(pr));
+  await p.emulateMedia({ media: 'screen' }); await p.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+  await p.reload(); await ready(p); await rptOpen(); await p.waitForFunction(() => document.querySelectorAll('.rp-doc .rp-h1').length === 62, null, { timeout: 120000 });
+  check((await RPQ()).all, 'PS-25: the choice kept after a reload');
+  await p.check('[data-rpworked="gov"]'); await p.waitForFunction(() => document.querySelectorAll('.rp-doc .rp-h1').length === 26, null, { timeout: 120000 }); }
+// one girder type on one line: the one-girder report (14 sections, no unit headings, no choice shown)
+await p.evaluate(() => { const P = window.PSBModel.newProject(); P.types = [{ id: 'T1', label: 'One S1', span: 1, lines: [2], ovr: {} }]; localStorage.setItem('psb2.project.current', window.PSBModel.exportJSON(P)); });
+await p.reload(); await ready(p); await rptOpen();
+{ const r = await RPQ(); check(r.secs.length === 14 && /^3\. Section properties/.test(r.secs[2]) && !r.secs.some(t => / on G\d+, span \d+$/.test(t)) && !(await p.$('[data-rpworked]')) && !r.unres, 'PS-25: one girder type on one line: the one-girder report ' + r.secs.slice(0, 3).join(' | ')); }
+check(!o.errs.length, 'console errors (PS-25): ' + o.errs.join(' | '));
 await o.b.close();
 
 // 5. phone

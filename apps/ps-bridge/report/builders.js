@@ -73,29 +73,34 @@
     // PR 3b: the Summary tab's tables (ui/summary.js model: the same choices among the same engine values): the girder × span grid, the
     // governing ratio of each check group per girder type with its line and a "see §" reference to the section that works the group, and
     // the weights per line, per type and the bridge total (SB-6)
-    if (B.all && B.all.n > 1 && window.PSBSummaryUI) {
-      const SM = window.PSBSummaryUI.model(B.P, B.all), fx = (v, d) => (typeof v === 'number' && isFinite(v) ? v.toFixed(d) : '—');
-      const ref = gp => (gp.input ? (X.ownKey ? `see [[${X.ownKey}]]` : '—') : `see [[rs.${gp.tab}]]`);
-      const shown = B.cell ? `girder type ${plain(B.P.types[B.cell.k].label)} on line G${B.cell.g}, span ${B.cell.s}` : 'the girder shown';
-      const gRows = SM.grid.map((row, i) => [`G${i + 1}`, ...row.map(z => (!z ? { t: 'no type: not checked', cls: 'ng' } : z.err ? { t: `${plain(z.c.label)}: engine error`, cls: 'ng' } : !z.gov ? `${plain(z.c.label)}: no check`
-        : { t: `${plain(z.c.label)}: ${fx(z.gov.q.r, 3)} ${z.nF ? `FAIL (${z.nF})` : 'PASS'}, ${z.gov.gp.name} (${ref(z.gov.gp)})`, cls: z.nF ? 'ng' : 'ok' }))]);
-      const trs = []; SM.types.forEach(T => { SM.used.forEach(gp => { const z = T.groups[gp.id]; if (!z) return;
-        trs.push({ cells: [plain(T.label), String(T.span), gp.name, plain(z.q.n), `G${z.g}`, { t: fx(z.q.r, 3), n: true, cls: z.q.pass ? 'ok' : 'ng' }, { t: z.q.pass ? 'PASS' : 'FAIL', cls: z.q.pass ? 'ok' : 'ng' }, ref(gp)], cls: z.q.pass ? '' : 'gov' }); });
-        if (T.rf) trs.push([plain(T.label), String(T.span), 'Rating (RF, not a check)', plain(T.rf.n), `G${T.rf.g}`, { t: fx(T.rf.v, 3), n: true, cls: T.rf.v < 1 ? 'ng' : 'ok' }, T.rf.v >= 1 ? 'RF ≥ 1' : 'RF < 1', 'see [[rs.rt]]']); });
-      const wrs = SM.types.map(T => [plain(T.label), String(T.span), T.lines.map(z => `G${z.c.g} ${fx(z.c.W, 1)}`).join(', '), { t: fx(T.W, 1), n: true }]);
-      wrs.push({ cells: ['Bridge total', '', `${SM.n} lines`, { t: fx(SM.W, 1), n: true }], cls: '' });
-      subs.splice(1, 0, sub('all', 'Every girder type and line', [
-        note(`${B.all.types.length} girder types on ${B.all.n} girder lines (every span): ${SM.nF ? `FAIL: ${SM.nF} check${SM.nF > 1 ? 's' : ''} of the girder types do not pass` : 'PASS: every check of every girder type passes'} (counted once per girder type and check, its worst line, SB-5; ${SM.nP} PASS). Each type is checked on every line assigned to it with that line's span, spacing, position, overhang and skew; the worst line governs. This report works ${shown} (the summary above and every section below); the other types and lines are worked the same way on the result tabs (choose the type and line above them) and listed on the [[tab:sum|Summary tab]].`, SM.nF > 0),
-        tbl(['Line', ...B.P.spans.lengths.map((L, j) => `Span ${j + 1} (L = ${fx(+L, 2)} ft)`)], gRows, { wide: true }),
-        note('Girder × span grid: each cell the girder type on that line, its governing ratio (the largest of its checks, demand / limit, the engine\'s), PASS or FAIL (the number of its checks over 1.0) and the check group, with the section that works it.'),
-        tbl(['Girder type', 'Span', 'Check group', 'Governing check', 'Line', 'Ratio', 'Status', 'Worked'], trs, { wide: true }),
-        note(`Each check group: the check with the largest ratio over the girder type's lines, the line named (SB-5). Worked: the section of this report that works the group, for ${shown}; for another type or line the same steps are on the result tab with that type and line chosen. Rating: the lowest HL-93 inventory rating factor (not a check, not counted).`),
-        tbl(['Girder type', 'Span', 'Weight per line (kip)', 'Weight (kip)'], wrs),
-        note('Weight: w$_{sw}$ (L + 2 e$_{end}$/12) per line, the weight W of the hold-down check (see [[rs.end]]); a girder type\'s weight the sum over its lines, the bridge total the sum over every checked line (SB-6).')]));
-    }
+    if (B.all && B.all.n > 1 && window.PSBSummaryUI) subs.splice(1, 0, allSub(B, X, null));
     if ((R.warns || []).length) subs.push(sub('warn', `Design warnings of the engine (${R.warns.length})`, R.warns.map(w => note(plain(w), true))));
     return { title: 'Summary of checks', subs };
   }
+
+  /* the Report's tables of every girder type and line (PR 3b): the girder × span grid, the governing ratio of each check group per type,
+     the weights. M (PS-25, several worked units) = { sec(tab, k, g) -> the section key that works that type × line's group, shown, works,
+     worked: texts }; null: one worked girder (the sections rs.<tab>) */
+  function allSub(B, X, M) {
+      const SM = window.PSBSummaryUI.model(B.P, B.all), fx = (v, d) => (typeof v === 'number' && isFinite(v) ? v.toFixed(d) : '—');
+      const sk = (tab, k, g) => (M ? M.sec(tab, k, g) : 'rs.' + tab), ref = (gp, k, g) => (gp.input ? (X.ownKey ? `see [[${X.ownKey}]]` : '—') : `see [[${sk(gp.tab, k, g)}]]`);
+      const shown = M ? M.shown : B.cell ? `girder type ${plain(B.P.types[B.cell.k].label)} on line G${B.cell.g}, span ${B.cell.s}` : 'the girder shown';
+      const gRows = SM.grid.map((row, i) => [`G${i + 1}`, ...row.map(z => (!z ? { t: 'no type: not checked', cls: 'ng' } : z.err ? { t: `${plain(z.c.label)}: engine error`, cls: 'ng' } : !z.gov ? `${plain(z.c.label)}: no check`
+        : { t: `${plain(z.c.label)}: ${fx(z.gov.q.r, 3)} ${z.nF ? `FAIL (${z.nF})` : 'PASS'}, ${z.gov.gp.name} (${ref(z.gov.gp, z.c.k, z.c.g)})`, cls: z.nF ? 'ng' : 'ok' }))]);
+      const trs = []; SM.types.forEach(T => { SM.used.forEach(gp => { const z = T.groups[gp.id]; if (!z) return;
+        trs.push({ cells: [plain(T.label), String(T.span), gp.name, plain(z.q.n), `G${z.g}`, { t: fx(z.q.r, 3), n: true, cls: z.q.pass ? 'ok' : 'ng' }, { t: z.q.pass ? 'PASS' : 'FAIL', cls: z.q.pass ? 'ok' : 'ng' }, ref(gp, T.k, z.g)], cls: z.q.pass ? '' : 'gov' }); });
+        if (T.rf) trs.push([plain(T.label), String(T.span), 'Rating (RF, not a check)', plain(T.rf.n), `G${T.rf.g}`, { t: fx(T.rf.v, 3), n: true, cls: T.rf.v < 1 ? 'ng' : 'ok' }, T.rf.v >= 1 ? 'RF ≥ 1' : 'RF < 1', `see [[${sk('rt', T.k, T.rf.g)}]]`]); });
+      const wrs = SM.types.map(T => [plain(T.label), String(T.span), T.lines.map(z => `G${z.c.g} ${fx(z.c.W, 1)}`).join(', '), { t: fx(T.W, 1), n: true }]);
+      wrs.push({ cells: ['Bridge total', '', `${SM.n} lines`, { t: fx(SM.W, 1), n: true }], cls: '' });
+      return sub('all', 'Every girder type and line', [
+        note(`${B.all.types.length} girder types on ${B.all.n} girder lines (every span): ${SM.nF ? `FAIL: ${SM.nF} check${SM.nF > 1 ? 's' : ''} of the girder types do not pass` : 'PASS: every check of every girder type passes'} (counted once per girder type and check, its worst line, SB-5; ${SM.nP} PASS). Each type is checked on every line assigned to it with that line's span, spacing, position, overhang and skew; the worst line governs. ${M ? M.works : `This report works ${shown} (the summary above and every section below); the other types and lines are worked the same way on the result tabs (choose the type and line above them) and listed on the [[tab:sum|Summary tab]].`}`, SM.nF > 0),
+        tbl(['Line', ...B.P.spans.lengths.map((L, j) => `Span ${j + 1} (L = ${fx(+L, 2)} ft)`)], gRows, { wide: true }),
+        note('Girder × span grid: each cell the girder type on that line, its governing ratio (the largest of its checks, demand / limit, the engine\'s), PASS or FAIL (the number of its checks over 1.0) and the check group, with the section that works it.'),
+        tbl(['Girder type', 'Span', 'Check group', 'Governing check', 'Line', 'Ratio', 'Status', 'Worked'], trs, { wide: true }),
+        note(`Each check group: the check with the largest ratio over the girder type's lines, the line named (SB-5). ${M ? M.worked : `Worked: the section of this report that works the group, for ${shown}; for another type or line the same steps are on the result tab with that type and line chosen.`} Rating: the lowest HL-93 inventory rating factor (not a check, not counted).`),
+        tbl(['Girder type', 'Span', 'Weight per line (kip)', 'Weight (kip)'], wrs),
+        note(`Weight: w$_{sw}$ (L + 2 e$_{end}$/12) per line, the weight W of the hold-down check (see [[${sk('end', null, null)}]]); a girder type\'s weight the sum over its lines, the bridge total the sum over every checked line (SB-6).`)]);
+      }
 
   /* ---------- 2. project, basis and assumptions ---------- */
   const ASSUME = [
@@ -145,15 +150,86 @@
     return { title: (SECTIONS.find(q => q[0] === k) || [k, k])[1], subs };
   }
 
+  const refsOf = B => [['AASHTO LRFD', 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): articles as cited at each step'], ['MBE', 'AASHTO Manual for Bridge Evaluation, LRFR (Section 6, Part A): article numbers as the old app'],
+    ['PCI', 'PCI Bridge Design Manual and the Mast method (handling stability screening), as the moved engine'], ...(B.inp.owner && B.inp.owner !== 'AASHTO' && window.PBD ? [[B.inp.owner, window.PBD.OWN_RULES.owners[B.inp.owner].manual]] : [])];
+
+  /* ---------- PS-25: several worked units ----------
+     Engineer decision PS-25 (2026-11-13): the worked sections (§3–§14, figures included) are printed once per girder type for its governing
+     line (report/data.js units: the line with the largest governing ratio), numbered per type (Interior §3–§14, Exterior §15–§26, …), the
+     type and line in each section heading; or (the Report tab's choice "every girder line") once per girder type × line. §1 lists each
+     unit's design checks and key quantities and the tables of every type and line, whose "see §n" point to the unit that works that type
+     (that line in "every line"); §2 once. One unit that is the girder shown: the report of one girder as before (no headings changed).
+     Each unit's step anchors get the scope 'u<i>' and its section keys 'rs.<tab>@u<i>'; the [[key]] references made inside a unit's text
+     are moved to that unit's keys (scopeU). Every number is the unit's engine result (X.R), recorded with u = its index. */
+  const uTitle = U => `${plain(U.label)} on G${U.g}, span ${U.s}`;
+  /* scopeU(subs, keys, i): the unit's references [[k]] (k one of its step ids or section keys) -> its scoped keys; steps items -> scope u<i> */
+  function scopeU(subs, keys, i) {
+    const map = k => (keys.steps.has(k) ? `u${i}/${k}` : keys.secs.has(k) ? `${k}@u${i}` : k);
+    const fixT = t => (typeof t === 'string' ? t.replace(/\[\[([^\]|]+)\]\]/g, (m, k) => `[[${map(k)}]]`) : t);
+    const fixC = c => (c && typeof c === 'object' ? { ...c, t: fixT(c.t), ...(c.key ? { key: map(c.key) } : {}) } : fixT(c));
+    subs.forEach(q => { q.items = q.items.map(it => {
+      if (it.type === 'steps') return { ...it, scope: `u${i}` };
+      if (it.type === 'note') return { ...it, text: fixT(it.text) };
+      if (it.type === 'kv') return { ...it, rows: it.rows.map(r => r.map((x, j) => (j === 2 && x ? map(x) : fixT(x)))) };
+      if (it.type === 'table') return { ...it, head: it.head.map(fixC), rows: it.rows.map(r => (Array.isArray(r) ? r.map(fixC) : { ...r, cells: r.cells.map(fixC) })) };
+      return it; }); });
+    return subs;
+  }
+  function multiSecs(B, X, opt, on, secs, dropped) {
+    const vals = X.vals, U = B.units, figs = Array.isArray(opt.figures) ? opt.figures : [];
+    const Bu = u => ({ P: u.P, inp: u.inp, R: u.R, W: u.W, sel: { g: u.g, s: u.s }, cell: { k: u.k, g: u.g, s: u.s }, all: null });
+    const fail = (k, e) => ({ title: (SECTIONS.find(q => q[0] === k) || [k, k])[1], subs: [sub('n', 'Not available', [note('Report error: ' + (e && e.message), true)])] });
+    // the worked sections of each unit (built first: their step ids are the unit's keys)
+    const unitSecs = U.map((u, i) => {
+      X.u = i; X.R = u.R; X.figs = figs[i] || null; const out = [], keys = { steps: new Set(), secs: new Set(Object.keys(TABS).map(t => 'rs.' + t)) };
+      SECTIONS.forEach(([k]) => { if (!TABS[k]) return;
+        X.cur = k; const n0 = vals.length; let s; try { s = tabSec(Bu(u), k, X); } catch (e) { s = fail(k, e); }
+        vals.slice(n0).forEach(v => { v.sec = k; v.u = i; });
+        s.subs.forEach(q => q.items.forEach(it => { if (it.type === 'steps') it.steps.forEach(t => keys.steps.add(String(t.id))); }));
+        out.push({ k, s, n0, n1: vals.length }); });
+      return { u, out, keys };
+    });
+    const secKey = (tab, k, g) => { const j = U.findIndex(u => u.k === k && (B.mode !== 'all' || u.g === g)); return `rs.${tab}@u${j >= 0 ? j : 0}`; };
+    // §1: the tables of every type and line, then each unit's design checks, key quantities and warnings
+    X.cur = 'sum'; let s1;
+    try {
+      const subs = [];
+      U.forEach((u, i) => { X.u = i; X.R = u.R; const n0 = vals.length; const s = summary(Bu(u), X); vals.slice(n0).forEach(v => { v.sec = 'sum'; v.u = i; });
+        scopeU(s.subs, unitSecs[i].keys, i).forEach(q => subs.push({ ...q, id: q.id + i, title: q.id === 'kq' ? `Key quantities: ${uTitle(u)}` : q.id === 'warn' ? `${q.title}: ${uTitle(u)}` : q.title })); });
+      X.u = null; X.R = null;
+      const range = i => { const ks = SECTIONS.filter(([k]) => TABS[k] && on(k)).map(([k]) => `rs.${k}@u${i}`); return ks.length ? `[[${ks[0]}]]–[[${ks[ks.length - 1]}]]` : '(sections not included)'; };
+      const list = U.map((u, i) => `${uTitle(u)} (${range(i)})`).join('; ');
+      const M = { sec: (tab, k, g) => (k == null ? `rs.${tab}@u0` : secKey(tab, k, g)), shown: B.mode === 'all' ? 'each girder type on each of its lines' : 'each girder type on its governing line',
+        works: `This report works ${B.mode === 'all' ? 'every girder type on every line' : 'each girder type on its governing line (the line with its largest check ratio; on a tie, the next largest)'}: ${list}. ${B.mode === 'all' ? '' : 'The other lines are the rows of the tables below, each pointing to its type\'s sections; their steps are on the result tabs with that type and line chosen (the [[tab:sum|Summary tab]] lists them).'}`,
+        worked: `Worked: the section of this report that works the group for that girder type (${B.mode === 'all' ? 'on the line named' : 'on its governing line'}).` };
+      subs.unshift(allSub(B, X, M));
+      s1 = { title: 'Summary of checks', subs };
+    } catch (e) { X.u = null; X.R = null; s1 = fail('sum', e); }
+    if (on('sum')) secs.push({ id: 'sum', key: 'rs.sum', ...s1 }); else { dropped.push({ key: 'rs.sum', ...s1 }); for (let j = vals.length - 1; j >= 0; j--) if (vals[j].sec === 'sum') vals.splice(j, 1); }
+    // §2 once (the bridge, basis, assumptions; the owner rules table with the first unit's engine values)
+    X.cur = 'proj'; X.u = 0; X.R = U[0].R; { const n0 = vals.length; let s; try { s = proj(Object.assign(Bu(U[0]), { P: B.P }), X); s.subs = s.subs.map(q => q.id !== 'b' ? q : { ...q, title: 'Bridge and the worked girders', items: q.items.map(it => it.type !== 'kv' ? it
+        : { ...it, rows: it.rows.map(r => r[0] !== 'Design girder' ? r : ['Worked girders', U.map((u, i) => `${uTitle(u)}: ${plain(u.inp.girder)}, L = ${OK().fx(u.R.L, 2)} ft, S = ${OK().fx(+u.inp.S, 3)} ft, ${u.inp.loads.pos === 'exterior' ? 'exterior' : 'interior'} (see [[rs.sec@u${i}]])`).join('; ')]) }) }); } catch (e) { s = fail('proj', e); }
+      vals.slice(n0).forEach(v => { v.sec = 'proj'; v.u = 0; }); scopeU(s.subs, unitSecs[0].keys, 0);   // §2's references to a result section: the first unit's
+      if (on('proj')) secs.push({ id: 'proj', key: 'rs.proj', ...s }); else { dropped.push({ key: 'rs.proj', ...s }); vals.splice(n0); } }
+    X.u = null; X.R = null; X.figs = null;
+    // the worked sections, unit by unit, each heading naming its type and line
+    const gone = [];
+    unitSecs.forEach(({ u, out, keys }, i) => out.forEach(({ k, s, n0, n1 }) => {
+      const t = { ...s, title: `${s.title}: ${uTitle(u)}`, subs: scopeU(s.subs, keys, i) };
+      if (on(k)) secs.push({ id: `${k}-u${i}`, key: `rs.${k}@u${i}`, ...t }); else { dropped.push({ key: `rs.${k}@u${i}`, ...t }); for (let j = n0; j < n1; j++) gone.push(vals[j]); } }));
+    for (let j = vals.length - 1; j >= 0; j--) if (gone.includes(vals[j])) vals.splice(j, 1);
+  }
+
   function model(B, opt) {
     opt = opt || {};
     const inc = opt.include || null, on = k => !inc || inc[k] !== false, P = B.P, p = P.project || {}, R = B.R;
     const vals = [];
     const own = B.inp.owner && B.inp.owner !== 'AASHTO';
     const X = { vals, inReport: t => !!TABS[t] && on(t), ownKey: own && on('proj') ? 'rs.own' : null, figs: opt.figures || null };   // rs.own: the owner rules subsection of §2
-    X.V = (path, d, div) => { const v = at(R, path), text = OK().fx(div ? v / div : v, d); vals.push({ sec: X.cur, path, d, div: div || 0, text }); return text; };
+    X.V = (path, d, div) => { const v = at(X.R || R, path), text = OK().fx(div ? v / div : v, d); vals.push({ sec: X.cur, path, d, div: div || 0, text, ...(X.u != null ? { u: X.u } : {}) }); return text; };   // PS-25: X.R / X.u = the worked unit's result
     const secs = [], dropped = [];
-    SECTIONS.forEach(([k]) => {
+    if (B.multi) multiSecs(B, X, opt, on, secs, dropped);   // PS-25: the worked sections once per girder type (or per line)
+    else SECTIONS.forEach(([k]) => {
       X.cur = k; const n0 = vals.length;
       let s; try { s = k === 'sum' ? summary(B, X) : k === 'proj' ? proj(B, X) : tabSec(B, k, X); }
       catch (e) { s = { title: (SECTIONS.find(q => q[0] === k) || [k, k])[1], subs: [sub('n', 'Not available', [note('Report error: ' + (e && e.message), true)])] }; }
@@ -178,12 +254,19 @@
     // the shared viewer: the sections shown, in order) and their order m in it, as the caption's lead
     secs.forEach((s, i) => { let m = 0; s.subs.forEach(q => q.items.forEach(it => { if (it.type === 'figure') { m++; it.no = `${i + 1}.${m}`; it.caption = `Figure ${i + 1}.${m}: ${it.caption || ''}`; } })); });
     const d = B.sel, gid = (B.cell ? `type ${plain(B.P.types[B.cell.k].label)}, ` : '') + plain(B.inp.proj && B.inp.proj.girderId);   // PR 3a-2: the girder type named
+    if (B.multi) {   // PS-25: every girder type (its governing line) or every girder line
+      const what = B.mode === 'all' ? `every girder line (${B.units.length})` : `every girder type on its governing line (${B.units.length})`;
+      return { title: 'Prestressed Bridge Design', subtitle: `Calculation report: ${what}${p.name ? ', ' + p.name : ''}`,
+        code: `${ED}; MBE (LRFR load rating). Each girder type's results on ${B.mode === 'all' ? 'each of its lines' : 'its governing line'}, as on the result tabs.`,
+        info: [['Project No', p.number], ['Computed by', p.designer], ['Date', p.date], ['Project', p.name], ['Checked by', p.checker], ['Girders', what]],
+        head: { left: `${p.name || 'Prestressed Bridge Design'}${p.number ? ' (' + p.number + ')' : ''}\nWorked: ${what}`, right: `Computed by: ${p.designer || '—'}  Date: ${p.date || '—'}\nChecked by: ${p.checker || '—'}`, foot: `Prestressed Bridge Design (new, in development), ${ED}` },
+        refs: refsOf(B), sections: secs, vals };
+    }
     return { title: 'Prestressed Bridge Design', subtitle: `Calculation report: design girder ${gid}, span ${d.s}${p.name ? ', ' + p.name : ''}`,
       code: `${ED}; MBE (LRFR load rating). The design girder's results, as on the result tabs.`,
       info: [['Project No', p.number], ['Computed by', p.designer], ['Date', p.date], ['Project', p.name], ['Checked by', p.checker], ['Girder', `${gid}, span ${d.s}`]],
       head: { left: `${p.name || 'Prestressed Bridge Design'}${p.number ? ' (' + p.number + ')' : ''}\nDesign girder ${gid}, span ${d.s}`, right: `Computed by: ${p.designer || '—'}  Date: ${p.date || '—'}\nChecked by: ${p.checker || '—'}`, foot: `Prestressed Bridge Design (new, in development), ${ED}` },
-      refs: [['AASHTO LRFD', 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): articles as cited at each step'], ['MBE', 'AASHTO Manual for Bridge Evaluation, LRFR (Section 6, Part A): article numbers as the old app'],
-        ['PCI', 'PCI Bridge Design Manual and the Mast method (handling stability screening), as the moved engine'], ...(B.inp.owner && B.inp.owner !== 'AASHTO' && window.PBD ? [[B.inp.owner, window.PBD.OWN_RULES.owners[B.inp.owner].manual]] : [])],
+      refs: refsOf(B),
       sections: secs, vals };
   }
 
