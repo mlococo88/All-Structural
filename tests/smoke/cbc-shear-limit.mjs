@@ -35,8 +35,15 @@ for (const vw of [1400, 390]) {
   ok(/Size limit/i.test(r.m) && /1\.05/.test(r.m), 'All Combinations × Limit States: "Size limit" column (1.05)');
   ok(/Section size limit \(ACI 22\.5\.1\.2\)/.test(r.sh) && /113\.84/.test(r.sh) && /too small for this shear/.test(r.sh) && /Upper limit on V_c/.test(r.sh), 'Shear tab: V_c limit and section size limit worked, FAIL message');
   ok(/Section size limit/.test(r.t) && /113\.84/.test(r.t) && /75\.89/.test(r.t) && !/\[\[|NaN|undefined/.test(r.t), 'Report: both limits worked, no unresolved link or NaN');
-  r = await f.evaluate(() => { S.code = 'AASHTO'; refresh(); return { a: allChecks().some(x => x.id === 'szA'), m: document.querySelector('#sumMatrix') ? document.querySelector('#sumMatrix').innerText : '' }; });
-  ok(!r.a && !/Size limit/i.test(r.m), 'AASHTO mode: no 22.5.1.2 row or column');
+  // CBSA (CB-10): AASHTO mode, "Section size limit (AASHTO 5.7.3.3)": V_u <= phi(0.25 f'c b_v d_v + V_p), V_p = 0, from the shear check's own values
+  r = await f.evaluate(() => { S.code = 'AASHTO'; refresh(); const c = allChecks().find(x => x.id === 'szA'), g = CC.combos.map(x => ({ phi: x.sh.phi, dv: x.sh.dv, Vlim: x.sh.Vlim, lim: x.szA.lim, dc: x.szA.dcr, dcV: x.dcV_eff, Vu: x.Vu }));
+    S.ui.tab = 'tabSummary'; refresh(); const m = document.querySelector('#sumMatrix').innerText; S.ui.tab = 'tabShear'; refresh(); const sh = document.querySelector('#shC1').innerText;
+    const t = SharedReport.text(SharedReport.build(mrModel()), { legacy: true }); const notes = VALIDATION.notes.map(n => n.msg).join(' ');
+    return { c, g, m, sh, t, notes }; });
+  ok(r.c && r.c.label === 'Section size limit (AASHTO 5.7.3.3)' && r.g.every(x => Math.abs(x.Vlim - 0.25 * 4 * 12 * x.dv) < 1e-9 && Math.abs(x.lim - x.phi * x.Vlim) < 1e-9 && Math.abs(x.dc - Math.abs(x.Vu) / x.lim) < 1e-9 && x.dc <= x.dcV + 1e-12),
+    `AASHTO: limit φ(0.25f'c b_v d_v) = ${r.g[0].phi}(0.25)(4)(12)(${r.g[0].dv.toFixed(2)}) = ${r.g[0].lim.toFixed(2)} kip; D/C ${r.g.map(x => x.dc.toFixed(3)).join(', ')} (never above the shear D/C)`);
+  ok(/Size limit/i.test(r.m) && /Section size limit \(AASHTO 5\.7\.3\.3\)/.test(r.sh) && /Section size limit/.test(r.t) && !/NaN|undefined|\[\[/.test(r.t), 'AASHTO: matrix column, Shear tab card, Report');
+  ok(/5\.7\.2\.6 has no across-width leg spacing limit/.test(r.notes), 'AASHTO note (CB-11): no across-width leg spacing limit in 5.7.2.6');
   const sw = await f.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   ok(sw <= 1, 'no sideways scroll (' + sw + ')');
   ok(!errs.length, 'console errors: ' + errs.length + (errs.length ? ' ' + errs.slice(0, 3).join(' | ') : ''));

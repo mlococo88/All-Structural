@@ -15,6 +15,7 @@
   'use strict';
   const YN = [['true', 'Yes'], ['false', 'No']];
   const F = (p, l, u, t, k, o) => Object.assign({ p, l, u: u || '', t: t || '', k: k || 'num', v: 'pos' }, o || {});
+  const distOff = (b, P) => !(window.PSBBridgeDL && window.PSBBridgeDL.on(P));   // PR 3a-3: DC2 / DW entered per girder (not distributed)
   const cont = (b, P) => P && P.spans && P.spans.continuity === 'composite' && P.spans.lengths.length >= 2;
   const CARDS = [
     // ---- Bridge layout ----
@@ -133,9 +134,10 @@
     // ---- Loads ----
     { tab: 'loads', id: 'dead', title: 'Dead loads (per girder)', ref: 'AASHTO LRFD 10th Ed. 3.5.1', fields: [
       F('base.loads.wNC', 'DC1 additional, non-composite (forms, …)', 'klf', 'Added to the computed girder self-weight and deck + haunch, on the bare girder (stay-in-place forms, utilities carried before the deck cures).', 'num', { v: 'nn' }),
-      F('base.loads.wBar', 'DC2 barrier / superimposed dead load', 'klf', 'Per girder, on the composite section. The Steel Bridge distribution of DC2 to each girder (unequal bays) comes in PR 3a (PS-9).', 'num', { v: 'nn' }),
-      F('base.loads.wDW', 'DW wearing surface and utilities', 'klf', 'Per girder, on the composite section. Distributed to each girder from PR 3a (PS-9).', 'num', { v: 'nn' })],
-      note: () => 'Girder self-weight and the deck + haunch weight are computed from the section (Loads &amp; LLDF output tab). Diaphragm point loads: <a href="#" data-goin="dd">Diaphragms / deck tab</a>.' },
+      F('base.loads.wBar', 'DC2 barrier / superimposed dead load', 'klf', 'Per girder, on the composite section. Shown when DC2 and DW are entered per girder (Cross-section tab: "Entered per girder type"); else distributed to each line (PR 3a-3, PS-9).', 'num', { v: 'nn', when: distOff }),
+      F('base.loads.wDW', 'DW wearing surface and utilities', 'klf', 'Per girder, on the composite section. Shown when DC2 and DW are entered per girder; else distributed to each line (PR 3a-3, PS-9).', 'num', { v: 'nn', when: distOff })],
+      note: (b, P) => 'Girder self-weight and the deck + haunch weight are computed from the section (Loads &amp; LLDF output tab). Diaphragm point loads: <a href="#" data-goin="dd">Diaphragms / deck tab</a>. '
+        + (distOff(b, P) ? 'DC2 and DW entered per girder type (Cross-section tab: dead load distribution).' : 'DC2 and DW are distributed to each girder line from the barriers, sidewalks and wearing surface of the <a href="#" data-goin="xsec">Cross-section tab</a> (the Steel Bridge app\'s method, PS-9; PR 3a-3), shown per line on the Loads &amp; LLDF tab.') },
     { tab: 'loads', id: 'll', title: 'Live load (HL-93)', ref: 'AASHTO LRFD 10th Ed. 3.6.1, 4.6.2.2', fields: [
       F('base.loads.llAuto', 'Live load moment and shear', '', 'Automatic: HL-93 (truck or tandem with IM = 33 %, plus lane) × the distribution factor; Entered: your M_LL+IM and V_LL+IM per girder (simple span).', 'bool', { o: [['true', 'HL-93 × distribution factor'], ['false', 'Entered']] }),
       F('base.loads.MLL', 'M<sub>LL+IM</sub> at midspan (per girder)', 'k-ft', 'Entered live load moment including impact and distribution.', 'num', { v: 'nn', when: b => !b.loads.llAuto }),
