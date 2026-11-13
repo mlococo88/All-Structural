@@ -1237,7 +1237,7 @@ PR #1525: https://github.com/mlococo88/All-Structural/pull/1525
   (otherwise the scroll position is kept).
 
 ## 2026-11-13 — PS-23: a notice where the entered d_e differs from the d_e computed from the cross-section (PS-20); the Report lists it in its assumptions (display only; no calculation change)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1526: https://github.com/mlococo88/All-Structural/pull/1526
 ### Request
 - Engineer decision PS-23 (2026-11-13, display): when a project opens and the computed per-line d_e (PS-20, #1521) differs from the
   entered d_e, show a notice (inline banner, PS-22 style) on the Loads & LLDF tab naming each exterior line's entered vs computed d_e and
