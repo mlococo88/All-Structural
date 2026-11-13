@@ -160,6 +160,9 @@
         return; }
       const c = cellOf(P, e); add('model', e.path, e.msg, c != null ? { cell: c } : null); });
     v.warnings.forEach(w => warnings.push({ path: w.path, msg: w.msg, src: 'model' }));
+    // SBTT (2026-11-13; engineer's direction SB-15, 2026-11-13: use judgment): two girder types on one line is an input error naming the line; it blocks
+    // the results and the hand-offs until one type is assigned (before: the Girders & plates tab flagged it and the checks took the first type)
+    if (M && M.lineTypes && P && Array.isArray(P.girders) && P.girders.some(g => g && Array.isArray(g.lines))) { try { M.lineTypes(P).forEach((t, j) => { if (t.length > 1) add('pending', `girders.${t[1]}.lines`, `Line G${j + 1} has ${t.length} girder types (${t.map(gi => (P.girders[gi].label || P.girders[gi].id)).join(', ')}): a line takes one girder type. Choose one for G${j + 1} (Cross-section tab, "Girder type of each line").`); }); } catch (e) { /* a malformed lines field: validate reports it */ } }
     if (P && typeof P === 'object' && P.spans && Array.isArray(P.girders)) {
       const modelPaths = new Set(errors.map(e => e.path));
       const guard = f => { try { f(); } catch (e) { /* a check that throws on a malformed project: the model checks above report it */ } };

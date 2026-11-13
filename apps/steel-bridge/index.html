@@ -538,7 +538,7 @@
     if (el.id === 'i__lnLd') { ui.ln = +el.value; saveUi(); drawInputs(); return; }   // SB-2: the line of the Loads tab's cards (display only)
     if (el.id === 'i__lovLd') { ui.lov = el.value === 'line'; saveUi(); drawInputs(); return; }   // SBLO: entered for the type or the line only (UI choice, sbd2.ui)
     if (window.SBDAnalysisUI.onInputChange(el, P, Math.min(ui.g, P.girders.length - 1), { lov: lovOn() ? { j: lnSel() } : null })) { changed(true); return; }   // AIN: the analysis inputs (ui/analysis.js)
-    if (el.dataset.path === 'xs.nb') { const nb0 = M.lineTypes(P).length; if (UL.onChange(el, P)) { changed(true); nbOffer(nb0); return; } }   // SB-2: N_b changed: offer to assign the new lines
+    if (el.dataset.path === 'xs.nb') { const LT0 = M.lineTypes(P), nb0 = LT0.length; if (UL.onChange(el, P)) { const ch = M.renumberLines(P, LT0); changed(true); if (ch) nbNotice(nb0, ch); else nbOffer(nb0); return; } }   // SB-2: N_b changed; SBNB (SB-14): typed projects re-assigned at once, with a notice and Undo
     if (UL.onChange(el, P)) { changed(true); return; }
     if (el.dataset.ltype != null) { if (el.value !== '') { M.assignLine(P, +el.dataset.ltype, +el.value); changed(true); } return; }   // SB-2: Cross-section tab, the type of a line
     if (el.dataset.gline != null) { if (el.checked) { M.assignLine(P, +el.dataset.gline, Math.min(ui.g, P.girders.length - 1)); changed(true); } return; }   // SB-2: a line checked on the selected type
@@ -617,6 +617,15 @@
     if (!U.length && !gone.length) return;
     toast(`<strong>N<sub>b</sub> is now ${nb}.</strong>${U.length ? ` Line${U.length > 1 ? 's' : ''} ${lnList(U)} ${U.length > 1 ? 'have' : 'has'} no girder type and ${U.length > 1 ? 'are' : 'is'} not checked until assigned:<div>${P.girders.map((q, gi) => `<button type="button" data-tasg="${gi}">Assign to ${esc(tyName(gi))}</button>`).join(' ')}</div>` : ''}`
       + (gone.length ? `<div class="note">No longer on the bridge (kept with the type, not checked): ${gone.map(([gi, L]) => `${esc(tyName(gi))} ${lnList(L)}`).join('; ')}. The exterior lines changed too: check each type's lines and position (Girders &amp; plates tab).</div>` : ''));
+  }
+  /* nbNotice(nb0, ch) (SBNB, 2026-11-13; engineer's direction SB-14, 2026-11-13: use judgment): what the N_b change did to the girder types of the lines
+     (engine/model.js renumberLines): each line whose type changed, the lines dropped beyond N_b, and Undo (the N_b change and the re-assignment
+     together, one step) */
+  function nbNotice(nb0, ch) {
+    const nb = M.lineTypes(P).length, tn = L => L.length ? L.map(tyName).join(' + ') : '— none —';
+    toast(`<strong>N<sub>b</sub> ${nb0} → ${nb}: girder types re-assigned.</strong> The outer lines take the type that was on the outer lines; the inner lines keep their type, a new or formerly outer inner line takes ${esc(tyName(ch.I))}.
+      <div>${ch.map(c => `${lnName(c.j)}: ${c.j >= nb0 ? 'new line' : esc(tn(c.from))} → <b>${esc(tyName(c.to))}</b>`).join('; ') || 'no line changed'}.${nb < nb0 ? ` Lines ${lnList(Array.from({ length: nb0 - nb }, (_, k) => nb + k))} are no longer on the bridge: their assignments were removed.` : ''}</div>
+      <div class="note">Check each type's lines, position and b<sub>eff</sub> on the Girders &amp; plates tab. Undo puts back N<sub>b</sub> and the types of the lines.</div>`, { undo: true });
   }
   function closeToast() { $('toast').hidden = true; }
   /* loadNotes(notes): the one-line notices of the field migrations run on load (engine/model.js importJSON notes, e.g. migrateNbList) */

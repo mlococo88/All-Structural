@@ -264,6 +264,23 @@
     fix(gi, want);
     function fix(k, L) { const q = G[k], dl = designLine(P, q); q.lines = L; if (L.length) q.line = L.includes(dl) ? dl : L[0]; }
   }
+  /* renumberLines(P, LT0) (SBNB, 2026-11-13; engineer's direction SB-14, 2026-11-13: use judgment): after N_b changed from LT0.length lines (LT0 =
+     lineTypes(P) before the change) to xs.nb: the two outer lines take the type that was on the old outer lines (G1's type on G1, the old
+     last line's type on the new last line); an inner line keeps its type when it was an inner line before, else (a new line, or an old outer
+     line now inner) takes the "Interior" type (the type on the most old inner lines, the first on ties; none: the first type of position
+     'interior', else the first type); assignments beyond N_b are dropped (were kept, not checked). Only for a project with girder types
+     (some girders[i].lines); returns [{ j, from: [gi], to: gi }] (every line whose type changed, the new lines included; .I the Interior type) or null. */
+  function renumberLines(P, LT0) {
+    const G = (P && P.girders) || [], nb = nbOf(P), nb0 = (LT0 || []).length; if (!G.some(g => Array.isArray(g.lines)) || !nb || nb === nb0) return null;
+    const one = t => (t && t.length ? t[0] : null), A = one(LT0[0]), B = one(LT0[nb0 - 1]), cnt = new Map();
+    LT0.slice(1, nb0 - 1).forEach(t => { const q = one(t); if (q != null) cnt.set(q, (cnt.get(q) || 0) + 1); });
+    let I = null; cnt.forEach((n, q) => { if (I == null || n > cnt.get(I) || (n === cnt.get(I) && q < I)) I = q; });
+    if (I == null) { const k = G.findIndex(g => g.position === 'interior'); I = k >= 0 ? k : 0; }
+    const want = Array.from({ length: nb }, (_, j) => j === 0 ? (A != null ? A : I) : j === nb - 1 ? (B != null ? B : A != null ? A : I) : (j < nb0 - 1 && one(LT0[j]) != null ? one(LT0[j]) : I));
+    const ch = []; want.forEach((q, j) => { const was = j < nb0 ? LT0[j] : []; if (!(was.length === 1 && was[0] === q)) ch.push({ j, from: was.slice(), to: q }); });
+    G.forEach((g, gi) => { const L = want.map((q, j) => (q === gi ? j : -1)).filter(j => j >= 0), dl = designLine(P, g); g.lines = L; if (L.length) g.line = L.includes(dl) ? dl : L[0]; });
+    ch.I = I; return ch;   // ch.I: the "Interior" type taken
+  }
   /* assignLine(P, j, gi): line j to type gi (removed from the type it had) */
   function assignLine(P, j, gi) { setLines(P, gi, [...typeLines(P, gi), j]); }
   /* addType(P, src, o): a new type, a copy of type src's plates, b_eff, position and its stiffener bays and splice plate entries (the
@@ -616,5 +633,5 @@
      (ownerRules.owner) when it is not AASHTO, else '' (as before the owner card moved to the Project tab). Display only; nothing computed or saved. */
   const clientName = P => { const t = String(((P || {}).project || {}).owner == null ? '' : P.project.owner).trim(), o = ((P || {}).ownerRules || {}).owner;
     return t || (o && o !== 'AASHTO' ? o : ''); };
-  window.SBDModel = { clientName, SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, newProject, designLine, typeLines, lineTypes, unassigned, isExtLine, tribBeff, setLines, assignLine, addType, deleteType, atLine, LO_KEYS, lineOv, lineOvEntry, lineOvReset, effective, customAt, migrateLineOv, defaultXs, equalSpacing, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, migrateNbList, legacyKind, importLegacy, exportJSON, importJSON, save, load };
+  window.SBDModel = { clientName, SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, newProject, designLine, typeLines, lineTypes, unassigned, isExtLine, tribBeff, setLines, assignLine, renumberLines, addType, deleteType, atLine, LO_KEYS, lineOv, lineOvEntry, lineOvReset, effective, customAt, migrateLineOv, defaultXs, equalSpacing, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, migrateNbList, legacyKind, importLegacy, exportJSON, importJSON, save, load };
 })();
