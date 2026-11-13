@@ -54,7 +54,8 @@
     if (AN) AN.analyzeGirder = (P_, gi, o) => { if (P_ !== P) return orig(P_, gi, o); const k = gi + '|' + JSON.stringify(o || {}); if (!memo.has(k)) memo.set(k, orig(P_, gi, o)); return memo.get(k); };
     try {
       pgs.forEach(pg => { const r = { pg, err: {} };
-        try { const B = window.SBDReportData.compute(P, pg); r.B = B; Object.assign(r.err, B.err); r.an = B.an || null; r.spl = B.spl || null; r.fat = B.fat || null;
+        try { const MD = window.SBDModel, Pv = MD && MD.atLine && P.girders[pg] ? MD.atLine(P, pg, MD.designLine(P, P.girders[pg])) : P;   // SBLO: the design line's own values (P itself without line overrides)
+          const B = window.SBDReportData.compute(Pv, pg); r.B = B; Object.assign(r.err, B.err); r.an = B.an || null; r.spl = B.spl || null; r.fat = B.fat || null;
           try { r.gov = window.SBDReportBuild.model(B).gov; } catch (e) { r.err.sum = e.message; } } catch (e) { r.err.all = e.message; }
         try { const w = window.SBDWeldsUI.build({ P, g: pg }); if (w.err) r.err.wt = w.err; else r.wt = w; } catch (e) { r.err.wt = e.message; }
         out.pg[pg] = r; });

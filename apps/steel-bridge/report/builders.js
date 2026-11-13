@@ -115,6 +115,12 @@
     return g + `<text x="12" y="${(t + H - b) / 2}" transform="rotate(-90 12 ${(t + H - b) / 2})" text-anchor="middle" fill="#333">${o.unit}</text></svg>`;
   }
   /* the construction live load basis (CLC, 2026-11-09), as the Loads input tab states it */
+  /* lovNote(B) (SBLO, 2026-11-13; engineer decisions SB-7, SB-9, SB-10): the values entered for the reported line only (girders[g].lineOv), over
+     the girder type's, as the Loads tab marks them; null when the line has none (every project saved before) */
+  const lovNote = B => { const M = window.SBDModel, P = B.P, gi = B.g, g = P && P.girders && P.girders[gi]; if (!M || !M.lineOv || !g) return null; const j = window.SBDAnalysis ? window.SBDAnalysis.lineOf(P, g) : g.line, o = M.lineOv(P, gi, j); if (!o) return null;
+    const nums = (k, L) => Object.keys(o[k] || {}).filter(q => typeof o[k][q] === 'number').map(q => `${L} ${q} = ${o[k][q]}`), b = k => typeof o[k] === 'boolean' ? [`${k === 'loadsOverride' ? 'dead-load' : k === 'dfOverride' ? 'distribution factor' : 'construction live load'} override ${o[k] ? 'on' : 'off'}`] : [];
+    const it = [...nums('loadsManual', 'dead load (klf)'), ...nums('dfManual', 'factor'), ...b('loadsOverride'), ...b('dfOverride'), ...b('clOverride'), ...(o.dfPull ? ['the LL & DL factors pulled for this line'] : []), ...Object.keys(o.custom || {}).filter(m => (o.custom[m].rows || []).length).map(m => `the Custom demands (${m}) of this line`)];
+    return note(`Values entered for line G${j + 1} only (engineer decisions SB-7, SB-9, SB-10, 2026-11-13: per-line values over the girder type ${g.label || g.id}; a blank value takes the type's): ${it.join('; ')}. The analysis and every check of this line use them; the type's other lines keep the type's values. As on the [[tab:loads|Loads tab]] (marked ● G${j + 1}).`); };
   const clNote = A => { const L = A.loads || {}, src = (L.src || {}).CL, C = L.cl || {};
     const how = src === 'calc' ? `calculated, $w_{CL}$ = $q_{CL}$ × $b_{trib}$ [[an.CL.w]], $q_{CL}$ = ${f(C.q, 1)} psf (${C.qSrc === 'entered' ? 'entered' : C.qSrc === 'owner' ? `owner rule ${C.qCite}` : "this app's default, the overhang bracket construction load"})`
       : src === 'manual' ? 'entered on the Loads tab (Override calculated value)' : src === 'girder' ? 'from the girder loads (hand-off)' : `none${C.on ? '' : ' (not calculated: a project saved before the calculation was added, 2026-11-09)'}`;
@@ -134,7 +140,7 @@
       ['LL deflection limit', `L/${S.deflLimit} (2.5.2.6.2)`], ['Deck placement sequence', S.seq === 'off' ? 'off' : 'on'], ['Dead loads', A.loads && A.loads.source], ['Distribution factors', A.df && A.df.src]]),
       A.warnings.length ? note(A.warnings.join(' '), true) : null,
       note(`Unfactored effects per girder: DC1 (steel, then the wet deck) on the steel section, DC2 and DW on 3n, LL+IM on n; ${Nn} stations (GirderDetail's grid), shared beam elements, loads applied exactly. As on the [[tab:an|Analysis tab]].`),
-      clNote(A)]));
+      clNote(A), lovNote(B)]));
     const Mser = [{ name: 'DC1', y: s.DC1.M }, { name: 'DC2', y: s.DC2.M }, { name: 'DW', y: s.DW.M }];
     if (ll) Mser.push({ name: 'LL+IM max', y: ll.Mpos, c: '#DC2626' }, { name: 'LL+IM min', y: ll.Mneg, c: '#DC2626', dash: '4 3' });
     const Vser = [{ name: 'DC1', y: Vr(s.DC1) }, { name: 'DC2', y: Vr(s.DC2) }, { name: 'DW', y: Vr(s.DW) }];
