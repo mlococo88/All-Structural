@@ -59,9 +59,10 @@ test('absent dia.grp with two or more groups: dia.shape in every group (the migr
 });
 
 test('three types 30 / 36 / 42: turning the W diaphragm on prefills the CF10 per-group sections; checks, DC1 and drawing per group', () => {
-  // SB-25 (2026-11-13): with the default fit clearance c = 2 in, CF10's fit is d ≤ D_0 − 2 (W30x99 29.70 > 28, W36x135 35.60 > 34): only G3–G4 is
-  // prefilled; with c = 0 (the fit of #1490 / #1503, d ≤ D_0) the prefill of before
-  { const Q = three(30, 36, 42); FUI.setBrace(Q, 'w'); assert.deepEqual(J(Q.crossframes.dia.grp), { 2: 'W36x135' }); }
+  // SB-25 (2026-11-13): with the default fit clearance c = 2 in, CF10's fit is d ≤ D_0 − 2 (W30x99 29.70 > 28, W36x135 35.60 > 34); SB-27
+  // (2026-11-13): the groups with no section meeting both the depth and the fit take the nearest (the deepest that fits: W27x84, W33x118;
+  // was no entry, { 2: 'W36x135' }); with c = 0 (the fit of #1490 / #1503, d ≤ D_0) the prefill of before
+  { const Q = three(30, 36, 42); FUI.setBrace(Q, 'w'); assert.deepEqual(J(Q.crossframes.dia.grp), { '0,4': 'W27x84', '1,3': 'W33x118', 2: 'W36x135' }); }
   const P = three(30, 36, 42); P.crossframes.dia.clr = 0; FUI.setBrace(P, 'w'); assert.deepEqual(J(P.crossframes.dia.grp), { '0,4': 'W30x99', '1,3': 'W36x135', 2: 'W36x135' });
   const { B, d } = run(P, 1), D = dep(d);
   assert.deepEqual(J(D.map(i => [i.loc.split(':')[0], +i.demand.toFixed(2), i.capacity, +i.r.toFixed(3)])), [['G1–G2, G5–G6 (W30x99)', 28.41, 29.7, 0.957], ['G2–G3, G4–G5 (W36x135)', 32.91, 35.6, 0.924], ['G3–G4 (W36x135)', 32.91, 35.6, 0.924]]);
