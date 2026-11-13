@@ -75,12 +75,12 @@ check(Object.keys(ls).every(k => k.startsWith('psb2.') || k in SEED || k === '__
 Object.entries(SEED).forEach(([k, v]) => check(ls[k] === v, 'untouched ' + k));
 await p.reload(); await ready(p);
 check((await p.inputValue('#i_spans\\.lengths')) === '100, 125, 100', 'reload keeps the spans');
-// 3. invalid input (model): a negative bay; the PR 2b limit (unequal bays) is listed with it
+// 3. invalid input (model): a negative bay (PR 3a-2: unequal bays are no longer an input error)
 await p.click('#inTabs [data-itab="xsec"]');
 await p.fill('#i_xs\\.bays', '9, -2, 9, 9'); await p.press('#i_xs\\.bays', 'Tab');
 check(await p.$eval('#i_xs\\.bays', e => e.classList.contains('bad')), 'bad field marked');
-check((await p.textContent('#inTabs [data-itab="xsec"] .inDot')) === '2', 'tab count ' + await p.textContent('#inTabs [data-itab="xsec"] .inDot'));
-check(/Bay 2 spacing must be a positive number/.test(await p.textContent('#out')) && /Unequal bays/.test(await p.textContent('#out')) && /2 to fix/.test(await p.textContent('#sbDashCol')), 'errors listed');
+check((await p.textContent('#inTabs [data-itab="xsec"] .inDot')) === '1', 'tab count ' + await p.textContent('#inTabs [data-itab="xsec"] .inDot'));
+check(/Bay 2 spacing must be a positive number/.test(await p.textContent('#out')) && /1 to fix/.test(await p.textContent('#sbDashCol')), 'errors listed');
 check(/Results not shown/.test(await p.textContent('#out')), 'results blocked');
 await p.click('#inTabs [data-itab="proj"]'); await p.click('#out [data-icgo="0"]');
 check(await p.isVisible('#inPanes [data-pane="xsec"]') && await p.evaluate(() => document.activeElement && document.activeElement.id === 'i_xs.bays'), 'error link opens the field');
@@ -120,7 +120,7 @@ o = await openPage(FILE, { vw: 1400, vh: 1000, ls: SEED }); p = o.p; await ready
 // 3c. PR 2b-2: the Section properties, Loads & LLDF and Analysis tabs, three designs: every engine value shown (data-ev) equals computeAll of
 // the design inputs, evaluated on the page; the graphics are drawn; the worked steps are KaTeX; links to a step of another tab open it
 const evCheck = async () => p.evaluate(() => {
-  const s0 = localStorage.getItem('psb2.project.current'), P = s0 ? window.PSBModel.importJSON(s0).project : window.PSBModel.defaultProject(), R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
+  const s0 = localStorage.getItem('psb2.project.current'), P = s0 ? window.PSBModel.importJSON(s0).project : window.PSBModel.newProject(), R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
   const f = (v, d) => typeof v === 'number' && isFinite(v) ? v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }).replace(/^-(0(\.0*)?)$/, '$1') : '—';
   const bad = [], els = [...document.querySelectorAll('#out [data-ev]')];
   els.forEach(el => { let v = el.dataset.ev.split('.').reduce((o, k) => o == null ? o : o[k], R); if (el.dataset.div) v = v / +el.dataset.div;
@@ -155,7 +155,7 @@ for (const [lab, setup] of DESIGNS) {
     if (args.shots && ['loss', 'str', 'flex', 'shear', 'end', 'camb', 'hand', 'deck', 'rt'].includes(t)) await p.screenshot({ path: path.join(args.shots, `ps-bridge-1400-${t}-${lab.split(',')[0].replace(/[^A-Za-z0-9]+/g, '_')}.png`) });
   }
   // the check summary column: a chip per built group with the engine's governing ratio
-  const dash = await p.evaluate(() => { const s0 = localStorage.getItem('psb2.project.current'), P = s0 ? window.PSBModel.importJSON(s0).project : window.PSBModel.defaultProject(), R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
+  const dash = await p.evaluate(() => { const s0 = localStorage.getItem('psb2.project.current'), P = s0 ? window.PSBModel.importJSON(s0).project : window.PSBModel.newProject(), R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
     // PR 3a-2: each chip governs over every girder type × line (PSBBridge.results)
     const A = window.PSBBridge.hasTypes(P) ? window.PSBBridge.results(P, i => window.PSBHoldDown.compute(JSON.parse(JSON.stringify(i)))) : { cells: [{ R }] };
     const grp = window.PSBDashUI.GROUPS.filter(g => g.checks), bad = [];
@@ -164,7 +164,7 @@ for (const [lab, setup] of DESIGNS) {
     return { n: grp.length, bad }; });
   check(!dash.bad.length, `${lab}: check summary chips ${dash.bad.join(' | ')}`);
   // PR 2d-2: the Rating chip = the lowest HL-93 inventory RF of the engine
-  const rc = await p.evaluate(() => { const s0 = localStorage.getItem('psb2.project.current'), P = s0 ? window.PSBModel.importJSON(s0).project : window.PSBModel.defaultProject(), R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
+  const rc = await p.evaluate(() => { const s0 = localStorage.getItem('psb2.project.current'), P = s0 ? window.PSBModel.importJSON(s0).project : window.PSBModel.newProject(), R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
     const A = window.PSBBridge.hasTypes(P) ? window.PSBBridge.results(P, i => window.PSBHoldDown.compute(JSON.parse(JSON.stringify(i)))) : { cells: [{ R }] };   // PR 3a-2: the lowest over every type × line
     const v = A.cells.flatMap(z => window.PSBDashUI.RATING.rf.map(q => q[1](z.R))).filter(x => x < 99), el = document.querySelector('#sbDashCol [data-sdgrp="rt"] .sdVal'); return { want: Math.min(...v).toFixed(3), got: el && el.textContent }; });
   check(rc.want === rc.got, `${lab}: rating chip ${rc.got} vs ${rc.want}`);
