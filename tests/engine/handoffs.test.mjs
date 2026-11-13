@@ -137,9 +137,10 @@ test('superReactions with girder types (SB-2 PR 4): each line its type on that l
   const P = M.newProject(); P.girders[1].segments.forEach(s => { s.D = +s.D + 6; s.botT = +s.botT + 0.25; });
   const r = H.srPayload(P); assert.ok(r.ok, r.error); const p = r.payload;
   deq(p.supports[0].girders.map(g => [g.label, g.position]), [['G1', 'exterior'], ['G2', 'interior'], ['G3', 'interior'], ['G4', 'interior'], ['G5', 'exterior']]);
-  const T = [1, 0, 0, 0, 1];
+  const T = [1, 0, 0, 0, 1], ll = p.notes.find(n => /LL\+IM reactions per girder/.test(n));
   T.forEach((gi, j) => { const R = AN.analyzeGirder(M.atLine(P, gi, j), gi);
-    p.supports.forEach((s, k) => ['DC1', 'DC2', 'DW'].forEach(c => assert.equal(s.girders[j][c], Math.round(R.st[c].R[k] * 1000) / 1000, `G${j + 1} ${s.id} ${c}`))); });
+    p.supports.forEach((s, k) => ['DC1', 'DC2', 'DW'].forEach(c => assert.equal(s.girders[j][c], Math.round(R.st[c].R[k] * 1000) / 1000, `G${j + 1} ${s.id} ${c}`)));
+    R.llR.forEach((q, k) => assert.ok(ll.includes(`G${j + 1} ${q.max.toFixed(2)} / ${q.min.toFixed(2)}`), `G${j + 1} LL+IM at support ${k}`)); });   // the notes' LL+IM = a full run of the type on that line
   const n0 = p.notes[0]; assert.match(n0, /Girder types \(Girders & plates\): each line is worked with the girder type assigned to it, on that line, as this app checks it: G1 Exterior, G2 Interior, G3 Interior, G4 Interior, G5 Exterior\./);
   assert.ok(!/take the plates/.test(n0), 'no borrowed line');
   deq(H.lines(P).map(q => [q.j, q.gi, q.own, !!q.type]), [[0, 1, true, true], [1, 0, true, true], [2, 0, true, true], [3, 0, true, true], [4, 1, true, true]]);

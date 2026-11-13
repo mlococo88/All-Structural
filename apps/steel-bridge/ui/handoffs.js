@@ -162,12 +162,14 @@
     const run = (Q, gi, o) => { const R = AN().analyzeGirder(Q, gi, o); if (R.errors && R.errors.length) throw new Error(R.errors[0]); return R; };
     try {
       for (const q of LN) {
-        if (q.own) { const fk = q.P === P ? q.gi : `${q.gi}@${q.j}`; if (!full.has(fk)) full.set(fk, run(q.P, q.gi)); Rs.push(full.get(fk)); continue; }   // SB-2 PR 4: a type on another line (atLine), its own run
-        if (!full.has(q.src)) full.set(q.src, run(P, q.src));
-        const D = full.get(q.src), R = run(q.P, 0, { ll: false }), ns0 = R.spans.length;
+        if (q.own && q.P === P) { if (!full.has(q.gi)) full.set(q.gi, run(P, q.gi)); Rs.push(full.get(q.gi)); continue; }
+        // a borrowed line, and (SB-2 PR 4) a girder type on a line other than its design line (atLine: the same plates, so the same
+        // per-lane envelope as the type's design-line run): its own dead load run, the live load as below
+        const si = q.own ? q.gi : q.src; if (!full.has(si)) full.set(si, run(P, si));
+        const D = full.get(si), R = run(q.P, q.own ? q.gi : 0, { ll: false }), ns0 = R.spans.length;
         if (D.llR) R.llR = D.llR.map((r, k) => { const adj = [k - 1, k].filter(i => i >= 0 && i < ns0), gV = Math.max(...adj.map(i => R.df.spans[i].gV)); return { k, gV, max: gV * r.perLane.max, min: gV * r.perLane.min, perLane: r.perLane, two: r.two }; });
         if (R.loads.PL > 0) { if (D.pl && D.loads.PL > 0) R.pl = { w: R.loads.PL, R: D.pl.R.map(r => ({ k: r.k, max: r.max / D.loads.PL * R.loads.PL, min: r.min / D.loads.PL * R.loads.PL })) };
-          else R.pl = run(q.P, 0).pl; }
+          else R.pl = run(q.P, q.own ? q.gi : 0).pl; }
         Rs.push(R);
       }
     } catch (e) { return { error: e.message }; }
