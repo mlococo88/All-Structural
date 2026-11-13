@@ -7315,3 +7315,312 @@ index 234f2b7..f714674 100644
        `Live load is not sent (liveLoad null): Substructure Loading computes its own. For information, this app's LL+IM reactions per girder (HL-93, IM ${f0(S0.im)}% on the truck and tandem, x the girder's shear distribution factor with the skew correction, the larger of the adjacent spans; 90% of two trucks plus lane at interior supports), max / min, kip: ${per((R, k) => R.llR ? `${f2(R.llR[k].max)} / ${f2(R.llR[k].min)}` : 'n/a')}.`,
        ...(hasPL ? [`Pedestrian load: no field in this hand-off, not sent as a load. This app's pedestrian load reactions, max / min, kip: ${per((R, k) => R.pl && R.pl.R ? `${f2(R.pl.R[k].max)} / ${f2(R.pl.R[k].min)}` : '0.00 / 0.00')}.`] : []),
 ```
+
+## 2026-11-13 — PR: claude/sb-xf-perbay-depth (PR #1472: https://github.com/mlococo88/All-Structural/pull/1472) — Cross-frames: each bay takes the depth of the shallower of the two girders it connects; the frame checked is the governing (shallowest) bay; DC1 frame weights per bay (SBXF; engineer decision 2026-11-13; CALCULATION CHANGE for girder types of unequal depth only)
+- **Request:** engineer decision 2026-11-13: with girder types (Interior / Exterior assigned to lines) of different web depth, each cross-frame bay uses the shallower of the two girders it connects, by the type assigned to each line. Before, the depth came from one girder: `inputsOf(P, { gi })` took h (when not entered) and d from the reported girder type `girders[gi]` (the Cross-frames tab, the Report, Auto design: the selected type; `pointLoads`, the Drawings DXF and the brace-shape recommendation: `girders[0]`).
+- **What the engine allows (reported before building more):** `compute(p)` checks one representative frame (S = the largest girder spacing, L_b = the largest unbraced length on any girder, one h and one d). A per-bay value cannot feed it without restructuring it into one check per bay. So, as instructed, the one frame takes the governing bay, the shallowest (consistently: h, d, the CF10 bracing-type depth, the CFD diaphragm depth check, the 0.8D stability-bracing test, the tab drawing). The DC1 weight model already loops over frames by bay (`xfPts`), so the weights take each bay's own h.
+- **Change:**
+  - `engine/crossframes.js`: new `girderDepth(g)` (D = the largest web depth of the plates, the basis of h as before; d = D_0 + t_top + t_bot at x = 1 ft, as before) and `bayDepths(P)` (per bay j, lines j and j + 1: the girder type on each line via `SBDModel.lineTypes`; the shallower = the smaller D, equal D the smaller d, equal both the first; a line with no type: the other girder; two types on a line: the shallower of them; governing = the shallowest bay, the first on ties). `null` for a project saved before girder types (no `girders[i].lines`), so those compute exactly as before.
+  - `inputsOf`: with `bayDepths`, `p.h` (when not entered) = round(max(D − 8, 0.75D)) with D of the governing bay, `p.dg` = d of its shallower girder; `p.dW` = the reported girder's own d (the wind, unchanged); `p.xfBay` = the governing bay, its two girders, every bay and its h; `sb` (the girder braced) stays the reported girder's; `opt.bays: false` = as before.
+  - `compute`: the wind uses `p.dW` when given (else d, as before). `cfTypeRec`: an owner's web-depth rule takes `p.xfBay.D` when given (else `sb.D`, as before).
+  - `pointLoads` / `xfPts`: `X.hb[bay]` = each bay's h (h not entered, angle frames); else one h as before.
+  - Worked steps (§6): with girder types, `cf.xfD` (D = min(D_a, D_b) of the governing bay, naming both girders and their depths, the assumption and every bay's h in its note), `cf.h` (round(max(D − 8, 0.75D)) substituted), `cf.dg` (D_0 + t_top + t_bot of the shallower girder), `cf.dW` (the wind depth, the reported girder). Tab (`ui/framing.js`) and Report (`report/builders.js` section Framing and cross-frames, Checks): rows "Governing bay (shallowest)" and "d_W (wind)" linked to the steps, and the assumption note.
+  - DXF unchanged (engineer's rule, no DXF change): the Drawings cross-frame sheet (`engine/sheets.js cf`) reads `inputsOf(P, { bays: false })` (girders[0], as before); the Cross-frames tab graphic's Download DXF uses `B.dxfB` (the reported girder's own depth, built only when the governing bay's depth differs; `ui/tabgraphics-b.js`). The on-screen elevation (`ui/gfxdet.js`) shows the frame checked and labels the governing bay's girders when its depth differs.
+- **Saved data (§5):** none (no key, field or format change; `p.dW` / `p.xfBay` are derived, not stored).
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024; the edition this engine cites, `ED`) Art. 6.7.4.2.1 (intermediate cross-frames and diaphragms of plate girders: as deep as practicable, at least 0.75 of the girder depth) and Art. 6.7.4.2.2 (torsional bracing: h_b, the height of the cross-frame between the strut centroids, in the brace stiffness; bracing at least 0.8 of the girder depth on full-depth connection plates for β_sec = ∞ and C = 2.4). Neither article says which of two unequal adjacent girders sets the frame depth: the shallower is the engineer's decision (assumption, stated on the tab and in the Report). Wind: Art. 4.6.2.7.1 (unchanged). No 9th Edition copy is in structural_references; the engine cites the 10th throughout.
+- **Before / after (expressions):**
+  - h (not entered): before round(max(D_gi − 8, 0.75D_gi)), D_gi = the largest web depth of the reported type (girders[0] for the DC1 weights); after round(max(D_gov − 8, 0.75D_gov)), D_gov = min over bays of min(D_line j, D_line j+1) (the weights: each bay's own min).
+  - d: before D_0 + t_top + t_bot of girders[gi] at the first support; after the same of the shallower girder of the governing bay. Wind d_W: unchanged (girders[gi]).
+- **Check case (hand-checkable; new project: 5 girders at 9.5 ft = 114 in, spans 110 / 140 / 110 ft, Interior on G2–G4 D = 60 in, Exterior on G1, G5; plates at the first support t_top = 0.75, t_bot = 1.125 in; L5x5x3/8 X-frames; the Cross-frames tab, Interior reported):**
+  - **Exterior 6 in shallower (D = 54 in):** bays G1–G2 min(54, 60) = 54, G2–G3 60, G3–G4 60, G4–G5 54 → governing G1–G2, D = 54 in.
+    - h: before round(max(60 − 8, 0.75 × 60)) = round(max(52, 45)) = 52 in → after round(max(54 − 8, 0.75 × 54)) = round(max(46, 40.5)) = 46 in. d: 61.88 → 54 + 0.75 + 1.125 = 55.88 in. d_W (wind on Interior) 61.88 in unchanged: F_w (Strength III) 3.509 kip unchanged.
+    - Stability bracing (Interior braced, D = 60 in, "full-depth" automatic): h ≥ 0.8D? before 52 ≥ 48 yes → after 46 < 48 no: C = 2.4 → 3.6 (β_sec = ∞ → finite). M_br = C L/(nEI_yeff)(M_u/C_b)² L_b/(500h_o): 157.53 → 236.23 kip-in (× 3.6/2.4 = 1.5; M_u 1554.5 → 1554.3 kip-ft from the lighter exterior-bay frames in DC1).
+    - Member forces (Constructibility, chord couple M_br/h): top and bottom chords T = C = 157.53/52 = 3.029 kip → 236.23/46 = 5.135 kip. Diagonals (Strength III, f_w F_w): unit force 0.6999 → 0.6929 kip/kip, 2.456 → 2.431 kip.
+    - CF8 torsional brace system stiffness: β_T = 339,750 → 15,479 kip-in/rad against β_T,req = 16,528 → 33,047 (C_s = 2.4 → 3.6/0.75 = 4.8): ratio 0.049 → 2.135 (**now fails**); governing ratio of the tab CF3 0.904 → CF8 2.135.
+    - DC1 frame weights: W = (S(A_t + A_b) + 2√(S² + h²)A_d)(0.2836/1000)(1.10), A = 3.609 in² per angle: the G1–G2 and G4–G5 frames with h = 46, the others h = 52 (hb [46, 52, 52, 46]); the cross-frame point loads on G2 34 frames 9.1612 → 9.1158 kip, on G1 4.5806 → 4.5353 kip.
+  - **Exterior 6 in deeper (D = 66 in):** every bay min = Interior 60 → Interior reported unchanged (h 52, d 61.88, all forces); DC1 weights unchanged (girders[0] = Interior before as well). Exterior reported: h 58 → 52 in, d 67.88 → 61.88 in, d_W 67.88 (F_w 3.850 kip unchanged); 0.8 × 66 = 52.8 > 52: C 2.4 → 3.6, M_br 102.03 → 153.04 kip-in, chords 102.03/58 = 1.759 → 153.04/52 = 2.943 kip, diagonals 2.724 → 2.694 kip; CF8 0.028 → 1.628 (fails).
+- **Problem / direction:** before, the cross-frame depth with unequal girder types was whichever type was reported (Exterior reported: its own deeper depth, unconservative for the frame forces and stiffness) or girders[0] for the DC1 weights. After, the shallower governs every bay: larger brace forces M_br/h, lower brace stiffness, and C = 3.6 / finite β_sec once h < 0.8D of the girder braced: **more conservative**. For the CFD diaphragm depth check (0.75d) the shallower d is the smaller requirement (see open items).
+- **Equal depths unchanged (proof):** Node, origin/main vs branch (`bays: false` = before): the Cross-frames build of every girder type (inputs, results, checks, worked steps other than the four new / reworded depth steps), the DC1 cross-frame point loads of every girder and the dead-load analysis of every girder: IDENTICAL for the built-in project, it under CTDOT, two girders saved before types (20° skews), one exterior girder, the three GirderDetail legacy projects (xsA, curb, util; 5 girders), a new project (two types, equal plates), it under CTDOT, and one type on every line; differ only for the two unequal cases (as above). Browser (origin/main vs branch, the same projects): the Summary state (every module of every type and line) IDENTICAL, the stored project unchanged by opening, 0 console errors; the Cross-frames tab and the Report text IDENTICAL for every project saved before girder types; for typed projects of equal depth (new project, it under CTDOT, one type on every line) the only differences are the added "Governing bay" and "d_W" rows, the assumption note, and in the worked steps the depth steps cf.xfD / cf.h / cf.dg / cf.dW in place of the bare "Girder depth" line (every value unchanged). The two unequal cases differ as in the check case. DXF: the whole Drawings set (paper D and B) and the Cross-frames tab graphic's DXF of every type byte-identical to origin/main for all 12 projects, the unequal ones included.
+- **How verified:** new tests/engine/xf-bay-depth.test.mjs (6 tests: saved projects as before; equal-depth types as before with the steps added; the Exterior-shallower and -deeper hand checks above, chord force = M_br/h, per-bay weights by the hand formula; a line with no type and two types on a line; CF10 with CTDOT; ui/framing.js build's dxfB). tests/engine/autodesign-types.test.mjs: the "other type kept in the run" case now makes Interior 6 in **shallower** (with the new rule a deeper Interior no longer changes Exterior's frames; a shallower one does), assertions unchanged. Engine subsets (`node tests/engine/run.mjs autodesign girder-types handoff crossframes framing xf-bay-depth sb-diaphragm sb-summary report drawings sheets dxf- gfxdet analysis.test loads.test`): 24 files, 161 pass after the autodesign-types update (the GirderDetail parity of crossframes: 2041 cases, 789,485 values, difference 0; weights 27,480 point loads identical). The full run.mjs exceeds the session time and was not run. check-syntax pass. Smoke: steel-bridge-summary, -report, -wiring, -tabgraphics-b, -dxf-unchanged, -adtypes, geometry-handoff, gd-reactions-handoff: all pass, 0 console errors.
+- **Other copies:** none (apps/ps-bridge not touched).
+- **Open items (asked of the engineer, not changed):** (1) per-bay checks: the engine checks one representative frame; checking each bay with its own h (and its own S) needs a restructured compute (one check per bay); (2) CF8 / C: with the reported girder deeper than the governing frame the 0.8D test fails (C = 3.6, β_sec finite) although only the girders adjacent to the shallow bay are braced by it, e.g. Interior G3 has 52 in frames on both sides; confirm the reported girder against the governing bay, or the girders next to it only; (3) CFD diaphragm depth (6.7.4.2.1, 0.75d): the governing (shallowest) bay gives the smallest requirement; a deeper bay needs a deeper diaphragm: check it against the deepest bay?; (4) wind: d_W is still the reported girder's depth (the Interior when Interior is reported), not the exterior girder's; (5) the Drawings DXF cross-frame sheet still draws girders[0]'s depth and the tab graphic's DXF the reported girder's (no DXF change without the engineer's request); (6) the 3D view draws frames at 0.8 × the deepest girder (display only, unchanged).
+- **Before / after (exact):**
+```diff
+diff --git a/apps/steel-bridge/engine/autodesign.js b/apps/steel-bridge/engine/autodesign.js
+index d8ab8d6..fa472ff 100644
+--- a/apps/steel-bridge/engine/autodesign.js
++++ b/apps/steel-bridge/engine/autodesign.js
+@@ -894,7 +894,7 @@
+      of it (a copy of the type with that line, so its loads and LLDF are that line's; a type with no line: its design line), so that run()'s
+      one layout for every plate girder is governed by the type's worst line; the other types kept in their places with their own plates
+      (adFixed: not designed, not checked), because the bridge-wide models read every girder (engine/framing.js the cross-frame layout from
+-     every girder's plates, engine/crossframes.js the cross-frame depth from girders[0]): each line of the run then computes exactly what
++     every girder's plates, engine/crossframes.js the cross-frame depth of each bay from the shallower of its two girders, SBXF 2026-11-13; before, from girders[0]): each line of the run then computes exactly what
+      the Summary computes for the type on that line (atLine; tests/engine/autodesign-types.test.mjs). The stiffener bays (by girder
+      number) and splice plate entries (by girder index) renumbered with them, those of type t on each of its copies. With more than one
+      type, the bridge-wide variables (TYPE_LOCK: girder count, overhang, field splices and their plates, stiffeners, studs, cross-frames,
+diff --git a/apps/steel-bridge/engine/crossframes.js b/apps/steel-bridge/engine/crossframes.js
+index 58b9bca..e875655 100644
+--- a/apps/steel-bridge/engine/crossframes.js
++++ b/apps/steel-bridge/engine/crossframes.js
+@@ -21,6 +21,9 @@
+        frame weighs W and puts W/2 on each of the two girders it connects, at that girder's own frame station from the framing layout
+        (engine/framing.js), mapped into the analysis span proportionally between that girder's bearings; a frame on a bearing line loads
+        that bearing. X: (S(A_t + A_b) + 2√(S² + h²)A_d)·0.2836/1000·(1 + allowance) kip (K: √((S/2)² + h²)); end frames X-type.
++   SBXF (2026-11-13; engineer decision 2026-11-13, girder types): each cross-frame bay takes the depth of the shallower of the two girders it
++   connects (bayDepths); the one frame compute() checks is the governing bay, the shallowest; the DC1 weights take each bay's own h. Projects
++   saved before girder types: as before.
+    Where GirderDetail reads its page state, the inputs are passed in env: env = { owner, lf: { eta } (OWN7), rule(id), cite(r),
+    ts: { types, rows } (the Transverse stiffeners connection plate, CF-D13), bs: { types, rows } (bearing stiffeners at the end
+    diaphragms), skews (deg, every support; CF11 CTDOT channel table) }. The TeX work lines are replaced by worked steps (SharedSteps).
+@@ -93,7 +96,7 @@
+   }
+   /* cfTypeRec(p, E): recommended intermediate bracing type from the girder depth (GirderDetail cfTypeRec; owner rules OWN34–OWN36) */
+   function cfTypeRec(p, E) {
+-    const rT = E.rule('xf.type'), rDd = E.rule('dia.depth'), Dw = nm(p.sb && p.sb.D) > 0 ? nm(p.sb.D) : null;
++    const rT = E.rule('xf.type'), rDd = E.rule('dia.depth'), Dw = p.xfBay && nm(p.xfBay.D) > 0 ? nm(p.xfBay.D) : nm(p.sb && p.sb.D) > 0 ? nm(p.sb.D) : null;   // SBXF: the governing bay's web depth when inputsOf gives one
+     const dg = nm(p.dg), dMin = nm(p.dMinXF), S = nm(p.S), h = nm(p.h), web = !!(rT && rT.value.web), dB = web && Dw ? Dw : dg, xf = (p.dia || {}).on !== 'yes';
+     const deep = rT && rT.value.strict ? dB > dMin + 1e-9 : dB >= dMin - 1e-9, frac_ = rDd && dg < rDd.value.D - 1e-9 ? rDd.value.frac : 0.75;
+     const ch = CF_CH.filter(s => s[1] >= frac_ * dg - 1e-9).sort((a, b) => (2 * a[2] * a[3] + (a[1] - 2 * a[3]) * a[4]) - (2 * b[2] * b[3] + (b[1] - 2 * b[3]) * b[4]))[0], w = CF_DIA.find(s => s[1] >= frac_ * dg - 1e-9);
+@@ -184,7 +187,7 @@
+     // case 2: unit torsional brace moment (1 kip-in) on the left girder, reacted by the right girder
+     solve(['TR', 'BR'], [['TL', 1 / h, 0], ['BL', -1 / h, 0]]).forEach((f, i) => EL[i].ubr = f);
+     // wind
+-    const PZ = V => 2.56e-6 * V ** 2 * nm(p.wind.Kz) * nm(p.wind.G) * nm(p.wind.Cd), dft = g('dg') / 12, Lb = g('Lb');
++    const PZ = V => 2.56e-6 * V ** 2 * nm(p.wind.Kz) * nm(p.wind.G) * nm(p.wind.Cd), dft = (nm(p.dW) > 0 ? nm(p.dW) : g('dg')) / 12, Lb = g('Lb');   // SBXF: wind on the reported girder's own depth d_W (inputsOf), as before; absent: d
+     const gWS = 1.0 * E.lf.eta, W = { III: { V: nm(p.wind.V) }, V: { V: 80 } }; Object.values(W).forEach(w => { w.PZ = PZ(w.V); w.W = gWS * w.PZ * dft / 2; w.Fw = w.W * Lb; });   // OWN7: γ_WS = 1.0 × η at Strength III and V
+     // stability bracing strength for deck placement (AASHTO LRFD 10th Ed. 6.7.4.2.2; AISC App. 6.3.2a form)
+     const sb = p.sb || {}, sbOn = sb.on === 'yes';
+@@ -400,12 +403,27 @@
+   }
+ 
+   /* ================= worked steps (new; the values above, worked) ================= */
++  /* xfBaySteps(w, R, brN) (SBXF, 2026-11-13; engineer decision 2026-11-13): with girder types (p.xfBay from inputsOf) the cross-frame depth h
++     and the girder depth d of the frame checked, from the governing bay (the shallower of its two girders, the shallowest bay of the
++     bridge), and the depth d_W the wind acts on (the reported girder, as before) */
++  function xfBaySteps(w, R, brN) {
++    const p = R.p, B = p.xfBay, gl = q => q ? `G${q.line + 1}` : '', dl = q => q ? `${gl(q)} (${q.label})` : 'no girder type', bn = `G${B.j + 1}–G${B.j + 2}`;
++    const each = B.bays.map(q => q ? `${`G${q.j + 1}–G${q.j + 2}`}: ${q.a ? `${gl(q.a)} D = ${n2(q.a.D)} in` : `${`G${q.j + 1}`} no type`}, ${q.b ? `${gl(q.b)} D = ${n2(q.b.D)} in` : `${`G${q.j + 2}`} no type`}, shallower ${gl(q.s)}${B.hAuto ? `, h = ${n0(q.h)} in` : ''}` : null).filter(Boolean).join('; ');
++    const asm = `Assumption (engineer decision 2026-11-13, girder types): each ${brN} bay takes the depth of the shallower of the two girders it connects (the girder type assigned to each line; the smaller web depth D, equal D the smaller d); AASHTO LRFD sets the depth of a cross-frame or diaphragm (6.7.4.2.1: as deep as practicable, at least 0.75 of the plate girder depth; 6.7.4.2.2: h_b) but not which of two unequal girders governs. The one frame checked here takes the governing bay, the shallowest (with the largest girder spacing S and the largest L_b as before); the frame weights in DC1 take each bay's own h.`;
++    const sa = B.a ? n2(B.a.D) : '—', sb = B.b ? n2(B.b.D) : '—', ref = `${ED} Arts. 6.7.4.2.1, 6.7.4.2.2`;
++    w.add({ id: 'xfD', label: `Web depth of the governing bay ${bn}: ${B.a && B.b ? (B.eq ? `${dl(B.a)} and ${dl(B.b)}, of equal depth` : `the shallower of ${dl(B.a)} and ${dl(B.b)}, ${dl(B.s)}`) : dl(B.s)} (the largest web depth of each girder type)`, sym: 'D', eq: B.a && B.b ? `\\min(D_{${gl(B.a)}},\\ D_{${gl(B.b)}})` : '', sub: B.a && B.b ? `\\min(${sa},\\ ${sb})` : '', value: B.D, unit: 'in', d: 2, ref, note: `${asm} Every bay: ${each}.` });
++    if (B.hAuto) w.add({ id: 'h', label: `Cross-frame depth between the chord work points, governing bay ${bn} (Preliminary sizing rule)`, sym: 'h', eq: '\\mathrm{round}(\\max(D - 8,\\ 0.75D))', sub: `\\mathrm{round}(\\max(${n2(B.D)} - 8,\\ 0.75(${n2(B.D)})))`, value: R.h, unit: 'in', d: 2, ref });
++    else w.add({ id: 'h', label: 'Cross-frame depth between the chord work points, entered (every bay)', sym: 'h', eq: '', sub: '', value: R.h, unit: 'in', d: 2, ref });
++    w.add({ id: 'dg', label: `Girder depth (out-to-out of the flanges, at the first support) of the shallower girder of the governing bay ${bn}, ${dl(B.s)}${B.eq ? ' (equal depths)' : ''}`, sym: 'd', eq: 'D_{0} + t_{top} + t_{bot}', sub: `${n2(B.s.D0)} + ${n3(B.s.tT)} + ${n3(B.s.tB)}`, value: nm(p.dg), unit: 'in', d: 2, ref: `${ED} Art. 6.7.4.2.1`, note: `For the bracing type for the girder depth (CF10) and the diaphragm depth (CFD). ${B.a && B.b ? `d of ${gl(B.a)} = ${n2(B.a.dg)} in, of ${gl(B.b)} = ${n2(B.b.dg)} in.` : ''}` });
++    w.add({ id: 'dW', label: `Girder depth for the wind on the exterior girder: the reported girder ${B.rep} at the first support (as before; a girder depth, not the ${brN} depth)`, sym: 'd_{W}', eq: '', sub: '', value: R.dft * 12, unit: 'in', d: 2, ref: `${ED} Art. 4.6.2.7.1` });
++  }
+   /* SBDIA (2026-11-10): with a diaphragm (dia.on = 'yes') the truss steps of the angle cross-frame (member forces per kip, entered forces, the
+      angle members CF1 to CF6 and CF9, the connection geometry CF6, the X / K brace stiffness and its system stiffness CF8) are not listed: CFD /
+      CFE work the diaphragm's own. Display only: the values computed are unchanged. TRUSS: their step ids. */
+   const TRUSS = /^cf\.(tr\d+|user\.|top\.|bot\.|diag\.|geo$|sb\.bbr$|sb\.bT$)/;
+   function steps(R) {
+     const w = St().work('cf'), p = R.p, W = R.W, dOn = cfDiaOn(p), brN = dOn ? 'diaphragm' : 'cross-frame';
++    if (p.xfBay) xfBaySteps(w, R, brN); else   // SBXF (2026-11-13): girder types: the governing bay's depths (h, d) and the wind depth, worked
+     w.add({ id: 'dg', label: 'Girder depth (out-to-out of the flanges)', sym: 'd', eq: '', sub: '', value: R.dft * 12, unit: 'in', d: 2 });
+     w.add({ id: 'Lb', label: `${dOn ? 'Diaphragm' : 'Cross-frame'} spacing (the largest unbraced length on any girder)`, sym: 'L_{b}', eq: '', sub: '', value: R.Lb, unit: 'ft', d: 2, ref: `${ED} Art. 6.7.4.2.1` });
+     [['III', `Strength III, V = ${n0(W.III.V)} mph`], ['V', 'Strength V, V = 80 mph']].forEach(([k, l]) => { const q = W[k];
+@@ -516,13 +534,13 @@
+     let c = c0, A = ang(c), bad = false; if (!A || !(nm(c.h) > 0)) { c = d; A = ang(d); bad = true; }
+     return { on: true, mode, kind: 'xf', type: c.type === 'X' || c.type === 'Kb' ? c.type : 'Kt', h: nm(c.h), At: A.top.A, Ab: A.bot.A, Ad: A.diag.A, allow, bad, nmT: A.top.nm, nmB: A.bot.nm, nmD: A.diag.nm };
+   }
+-  /* xfPts(b, X): the point loads of every girder (GirderDetail gdXfPts): b = { spans [ft], xf: { g: bearings per girder, f: frames (framing.js
++  /* xfPts(b, X): (SBXF, 2026-11-13: X.hb[bay], when given, the frame depth of each bay) the point loads of every girder (GirderDetail gdXfPts): b = { spans [ft], xf: { g: bearings per girder, f: frames (framing.js
+      plXfDef) } }; per girder [{ x (ft, analysis station), P (kip), end, W (whole frame), Lf (ft) }]; a frame station is mapped into its span
+      proportionally between that girder's bearings; a frame on a bearing line loads that bearing only. null without the model or the frames. */
+   function xfPts(b, X) {
+     if (!X || !X.on || !b || !b.xf || !Array.isArray(b.xf.f) || !Array.isArray(b.xf.g)) return null;
+     const sp = b.spans, X0 = [0]; sp.forEach(L => X0.push(X0[X0.length - 1] + L)); const G = b.xf.g.map(() => []);
+-    b.xf.f.forEach(([sup, k, bay, sa, sc, Lf]) => { const end = !!sup, W = xfW(X, Lf, end);
++    b.xf.f.forEach(([sup, k, bay, sa, sc, Lf]) => { const end = !!sup, W = xfW(X.hb && X.hb[bay] > 0 ? { ...X, h: X.hb[bay] } : X, Lf, end);   // SBXF: X.hb, each bay's h
+       [[bay, sa], [bay + 1, sc]].forEach(([g, st]) => { const B = b.xf.g[g]; if (!B || !G[g]) return; let x;
+         if (end) x = X0[k]; else { const a = B[k], c = B[k + 1]; x = Math.max(X0[k], Math.min(X0[k + 1], X0[k] + (c > a ? (st - a) / (c - a) : 0.5) * sp[k])); }
+         G[g].push({ x, P: W / 2, end, W, Lf }); }); });
+@@ -537,11 +555,37 @@
+   function defaults() { const d = JSON.parse(JSON.stringify(DEF));
+     return { type: d.type, h: '', dMinXF: d.dMinXF, gA: d.gA, gG: d.gG, primary: 'auto', dia: d.dia, wind: d.wind, mem: d.mem, conn: d.conn, user: d.user, userMode: { StrI: 'add', Con: 'add' }, fatCat: d.fatCat,
+       sb: { on: 'yes', full: 'auto', Mu: '', Cb: 1, bs: 5, tsp: 0.5 }, weight: { mode: 'auto', allow: 10, Wi: '', We: '' } }; }
++  /* ---------- SBXF (2026-11-13; engineer decision 2026-11-13, girder types): the depth of each cross-frame bay ----------
++     Each cross-frame (or diaphragm) bay takes the depth of the shallower of the two girders it connects, by the girder type assigned to each
++     line. girderDepth(g): { D (the largest web depth of its plates, the basis of h as before), dg (D_0 + t_top + t_bot at x = 1 ft, the first
++     support's segment, as before), D0, tT, tB }. bayDepths(P): null for a project saved before girder types (no girders[i].lines), with
++     fewer than two girder lines, or without SBDModel: every caller then works exactly as before (the reported girder's plates). Else
++     { bays: [{ j (lines j and j + 1), a, b ({ line, gi, label, D, dg, ... } of the type on each line; null: no type on it), s (the
++     shallower: the smaller D, equal D the smaller d, equal both a) } | null (no type on either line)], gov (the governing bay: the
++     shallowest s, the first such bay) }. Two types on one line (a conflict the Girders & plates tab flags): the shallower of them. */
++  function girderDepth(g) {
++    const S = (g && g.segments) || []; if (!S.length) return null;
++    const s0 = S.find(s => 1 >= s.x0 - 1e-9 && 1 < s.x1) || S[S.length - 1];
++    return { D: Math.max(...S.map(s => s.D)), dg: s0.D + s0.topT + s0.botT, D0: s0.D, tT: s0.topT, tB: s0.botT };
++  }
++  const shallower = (a, b) => !a ? b : !b ? a : (b.D < a.D - 1e-9 || (Math.abs(b.D - a.D) <= 1e-9 && b.dg < a.dg - 1e-9)) ? b : a;
++  function bayDepths(P) {
++    const M = window.SBDModel, G = (P && P.girders) || [], nb = Math.round(+((P && P.xs) || {}).nb || 0);
++    if (!M || !M.lineTypes || nb < 2 || !G.some(g => Array.isArray(g.lines))) return null;
++    const LT = M.lineTypes(P), at = j => (LT[j] || []).map(gi => { const d = girderDepth(G[gi]); return d ? { line: j, gi, label: G[gi].label || G[gi].id, ...d } : null; }).reduce(shallower, null);
++    const bays = []; let gov = null;
++    for (let j = 0; j < nb - 1; j++) { const a = at(j), b = at(j + 1), s = shallower(a, b); if (!s) { bays.push(null); continue; }
++      const q = { j, a, b, s }; bays.push(q); if (!gov || shallower(gov.s, s) !== gov.s) gov = q; }
++    return gov ? { bays, gov } : null;
++  }
+   /* inputsOf(P, opt): GirderDetail's Cross-frames input p for project P (the values Preliminary sizing sends: S = the largest girder spacing,
+      h, d at the first support, L_b = the largest unbraced length on any girder, primary by skew; sb: the span with the largest factored
+      deck-placement moment of the interior girder, its length, the fewest intermediate frames on any girder in it, the plates there).
+      opt = { L (SBDFraming.compute(P)), A (SBDAnalysis.analyzeGirder result of the girder whose plates and moments are used), gi (plate
+-     girder index, default 0) }. Returns { p, src } (src: where each derived value comes from). */
++     girder index, default 0), bays (false: the reported girder's own depth, as before girder types; engine/sheets.js, the Drawings DXF) }.
++     Returns { p, src } (src: where each derived value comes from).
++     SBXF (2026-11-13): with girder types (bayDepths), h (when not entered) and d are those of the governing bay, p.xfBay its girders and
++     every bay's, p.dW the reported girder's own d for the wind on the girder (as before); sb (the girder braced) is the reported girder's. */
+   function inputsOf(P, opt) {
+     opt = opt || {}; const c = Object.assign(defaults(), P.crossframes || {}), FRM = window.SBDFraming, L = opt.L || (FRM ? FRM.compute(P) : null), src = {};
+     const G = (P.girders || [])[opt.gi || 0] || P.girders[0], seg = x => G.segments.find(s => x >= s.x0 - 1e-9 && x < s.x1) || G.segments[G.segments.length - 1];
+@@ -549,8 +593,14 @@
+     const s0 = seg(sup[0] + 1), D = Math.max(...G.segments.map(s => s.D)), r1 = v => +(+v).toFixed(1), r2 = v => +(+v).toFixed(2);
+     const bays = ((P.xs || {}).bays || [9.5]).map(Number), skews = ((P.xs || {}).skews || []).map(Number), nb = Math.round((P.xs || {}).nb || 2);
+     const p = JSON.parse(JSON.stringify(c));
+-    p.S = r2(Math.max(...bays) * 12); p.dg = r2(s0.D + s0.topT + s0.botT); src.S = 'the largest girder spacing'; src.dg = 'D + t_top + t_bot at the first support';
+-    p.h = c.h === '' || c.h == null ? Math.round(Math.max(D - 8, D * 0.75)) : +c.h; src.h = c.h === '' || c.h == null ? 'round(max(D − 8, 0.75D))' : 'entered';
++    const BD = opt.bays === false ? null : bayDepths(P), gb = BD ? BD.gov.s : null, Dh = gb ? gb.D : D, hAuto = c.h === '' || c.h == null, hOf = d => Math.round(Math.max(d - 8, d * 0.75));   // SBXF
++    p.S = r2(Math.max(...bays) * 12); p.dg = r2(gb ? gb.dg : s0.D + s0.topT + s0.botT); src.S = 'the largest girder spacing'; src.dg = 'D + t_top + t_bot at the first support';
++    p.h = hAuto ? hOf(Dh) : +c.h; src.h = hAuto ? 'round(max(D − 8, 0.75D))' : 'entered';
++    if (gb) { const g0 = BD.gov, dW = r2(s0.D + s0.topT + s0.botT), bn = `G${g0.j + 1}–G${g0.j + 2}`;
++      p.dW = dW; src.dW = 'the reported girder: D + t_top + t_bot at the first support';
++      src.dg = `the shallower girder of the governing bay ${bn} (G${gb.line + 1}, ${gb.label}): D + t_top + t_bot at the first support`; if (hAuto) src.h = `round(max(D − 8, 0.75D)), D of the governing bay ${bn}`;
++      p.xfBay = { j: g0.j, a: g0.a, b: g0.b, s: gb, D: gb.D, hAuto, rep: G.label || G.id, eq: !!(g0.a && g0.b && g0.a.D === g0.b.D && g0.a.dg === g0.b.dg), vary: gb.D !== D || r2(gb.dg) !== dW,
++        bays: BD.bays.map(q => q && { j: q.j, a: q.a, b: q.b, s: q.s, h: hAuto ? hOf(q.s.D) : +c.h }) }; }
+     { const v = +(((P.fatigue || {}).gam || {}).fI); p.gFI = v > 0 ? v : 1.75; src.gFI = v > 0 ? 'the Fatigue & studs inputs (γ Fatigue I)' : 'no fatigue inputs: 1.75'; }   // FGAM (2026-11-01)
+     p.primary = c.primary === 'auto' ? (skews.some(s => Math.abs(s) > 20) ? 'yes' : 'no') : c.primary;
+     p.Lb = L && !L.errors.length ? r2(FRM.lbMax(L.FR, L.FR.girders.map(g => g.i), L.m.sup)) : 25; src.Lb = L && !L.errors.length ? 'the largest unbraced length on any girder (framing)' : 'no framing: 25 ft';
+@@ -578,12 +628,13 @@
+   function pointLoads(P, gi, opt) {
+     const FRM = window.SBDFraming; if (!FRM || !P.framing) return null;
+     const c = Object.assign(defaults(), P.crossframes || {}), L = (opt && opt.L) || FRM.compute(P); if (!L || L.errors.length) return null;
+-    const X = xfModel(c.weight, { ...c, h: c.h === '' || c.h == null ? inputsOf(P, { L }).p.h : +c.h }); if (!X.on) return null;
++    const hAuto = c.h === '' || c.h == null, I = hAuto ? inputsOf(P, { L }) : null, X = xfModel(c.weight, { ...c, h: hAuto ? I.p.h : +c.h }); if (!X.on) return null;
++    if (I && I.p.xfBay && X.kind === 'xf' && !X.bad) X.hb = I.p.xfBay.bays.map(q => q ? q.h : X.h);   // SBXF: each bay's own h (the shallower of its two girders)
+     const G = xfPts({ spans: P.spans.lengths.map(Number), xf: L.xf }, X); if (!G) return null;
+     const line = Math.min(FRM.lineOf(P, P.girders[gi]), G.length - 1);
+     return { line, X, pts: G[line], tot: G[line].reduce((a, q) => a + q.P, 0) };
+   }
+ 
+   window.SBDCrossframes = { ES, DEF, GD_GR, BOLT, FUB, PHI, ANGLES, CF_MEM, CF_CH, CF_DIA, angleProps, cfDiaSec, cfDiaOn, cfDiaGap, cfDiaEnd, cfTypeRec, cfTsCP, cfCPsize, cfBsCP, cfCP, cfDiaFit,
+-    env0, compute, checks, userModes, xfW, xfModel, xfPts, defaults, inputsOf, envOf, pointLoads };
++    env0, compute, checks, userModes, xfW, xfModel, xfPts, defaults, inputsOf, envOf, pointLoads, girderDepth, bayDepths };
+ })();
+diff --git a/apps/steel-bridge/engine/sheets.js b/apps/steel-bridge/engine/sheets.js
+index 47f14b0..0dbd8c4 100644
+--- a/apps/steel-bridge/engine/sheets.js
++++ b/apps/steel-bridge/engine/sheets.js
+@@ -386,8 +386,10 @@
+   }
+ 
+   /* ---------- cross-frame or diaphragm (dxfCF) ---------- */
++  /* SBXF (2026-11-13): drawn from the first plate girder's depth as before (inputsOf bays: false): the engineer's rule, no DXF change; with
++     girder types of unequal depth the Cross-frames tab checks the governing bay's depth (engine/crossframes.js bayDepths) */
+   function cf(D, C) {
+-    const G = C.G, CF = window.SBDCrossframes, I = CF.inputsOf(C.P), p = I.p, E = CF.envOf(C.P), s0 = G.girders[0].segs[0], h = D.h;
++    const G = C.G, CF = window.SBDCrossframes, I = CF.inputsOf(C.P, { bays: false }), p = I.p, E = CF.envOf(C.P), s0 = G.girders[0].segs[0], h = D.h;
+     const ly = { g: D.layer('GRDR', 5), x: D.layer('XFRM', 3), cp: D.layer('GRDR-STIF', 30), bo: D.layer('BOLT', 2), d: D.layer('DIMS', 7), t: D.layer('ANNO-TEXT', 7), c: D.layer('CNTR', 8) }, cl = D.ltype('CENTER');
+     const S = +p.S, hh = +p.h, tf = { b: s0.topB, t: s0.topT }, bf = { b: s0.botB, t: s0.botT }, Dm = s0.D, Dt = Dm + tf.t + bf.t, yb = (Dt - hh) / 2, yt = yb + hh, tw = s0.tw, cn = p.conn || {}, rb = (+cn.d || 0.875) / 2 + 0.0625;
+     const cpts = (q, x0, sg, y0, y1) => [[x0 + sg * q.tw / 2, y0 + q.c], [x0 + sg * (q.tw / 2 + q.c), y0], [x0 + sg * (q.tw / 2 + q.bs), y0], [x0 + sg * (q.tw / 2 + q.bs), y1], [x0 + sg * (q.tw / 2 + q.c), y1], [x0 + sg * q.tw / 2, y1 - q.c]];   // GirderDetail cfCPpts
+diff --git a/apps/steel-bridge/report/builders.js b/apps/steel-bridge/report/builders.js
+index 38a5d97..03a9dd3 100644
+--- a/apps/steel-bridge/report/builders.js
++++ b/apps/steel-bridge/report/builders.js
+@@ -377,6 +377,10 @@
+     const FUI = window.SBDFramingUI, dOn = !!(FUI && FUI.isDia && FUI.isDia(I.p)), bn = dOn ? 'diaphragms' : 'cross-frames';
+     let gov = null; (C || []).forEach(c => c.items.forEach(it => { if (isFinite(it.r) && (it.st === 'pass' || it.st === 'fail') && (!gov || it.r > gov.it.r)) gov = { c, it }; }));
+     const svg = window.SBDFramingUI && window.SBDFramingUI.plan ? window.SBDFramingUI.plan(L, dOn) : '';
++    // SBXF (2026-11-13; engineer decision 2026-11-13, girder types): the governing bay, its two girders and their depths, and the assumption, as the tab
++    const xb = (() => { const Bq = I.p.xfBay; if (!Bq) return { kv: [], note: null }; const gl = q => q ? `G${q.line + 1} ${q.label}` : 'no type', bt = `G${Bq.j + 1}–G${Bq.j + 2}: ${gl(Bq.a)} $D$ = ${Bq.a ? f(Bq.a.D, 2) : '—'} in, ${gl(Bq.b)} $D$ = ${Bq.b ? f(Bq.b.D, 2) : '—'} in; ${Bq.eq ? 'equal depths' : `the shallower, G${Bq.s.line + 1} ${Bq.s.label}`}, $D$ = ${f(Bq.D, 2)} in`;
++      return { kv: [['Governing bay (shallowest)', bt, 'cf.xfD'], [`$d_{W}$ (wind, ${Bq.rep})`, `${f(I.p.dW, 2)} in`, 'cf.dW']],
++        note: note(`Assumption (engineer decision 2026-11-13): each ${bn.replace(/s$/, '')} bay takes the depth of the shallower of the two girders it connects, by the girder type assigned to each line. The frame checked is the governing bay, the shallowest (${bt}), with the largest girder spacing S and the largest $L_{b}$ as before; the ${bn.replace(/s$/, '')} weights in DC1 take each bay's own $h$${Bq.hAuto ? '' : ' ($h$ entered: the same in every bay)'}. The wind acts on the reported girder's own depth $d_{W}$ and the stability bracing check braces the reported girder (${Bq.rep}), as before. The depths are worked in the worked steps below (web depth of the governing bay, cross-frame depth h, girder depth d).`) }; })();
+     const work = [...L.steps, ...fl.steps, ...(R.steps || [])], ids = new Set(work.map(t => t.id)), lk = id => (id && ids.has(id) ? id : null);   // an item's step, where the work has it
+     if (gov) X.gov.push({ mod: dOn ? 'Diaphragms' : 'Cross-frames', grp: 'Cross-frames', check: `${gov.c.id} ${tt(gov.c.title)}`, loc: tt(gov.it.loc), r: gov.it.r, key: lk(gov.it.step) });
+     subs.push(sub('pl', 'Framing plan (6.7.4.2.1)', [svg ? { type: 'figure', svg, caption: `Plan: girders, bearing lines, ${bn} and field splices` } : null,
+@@ -385,7 +389,7 @@
+       note(`The reported girder takes cross-section girder G${line + 1}: its brace points are the $L_{b}$ points of the flexure and the ${dOn ? 'diaphragm' : 'cross-frame'} bays of the stiffener panels (${br ? br.ints.length : 0} intermediate ${dOn ? 'diaphragms' : 'frames'}). As on the [[tab:cf|${dOn ? 'Diaphragms' : 'Cross-frames'} tab]].`),
+       note(`Orientation: ${(B.P.framing || {}).orient === 'parallel' ? 'parallel to the skew' : (B.P.framing || {}).orient === 'normal' ? 'normal to the girders' : 'automatic, parallel to the skew in a span whose supports are both skewed 20° or less, else normal to the girders (6.7.4.2.1); an owner rule xf.orient, where the owner has one, decides for the whole bridge'} (Framing & bracing tab). At a support skewed more than 20° the first normal frame is at least max(clear distance, $4b_{f}$, 0.4s) from the bearing (C6.7.4.2.1). Each frame puts half its weight on each girder it connects, at that girder's station, on the steel section (DC1).`)]));
+     subs.push(sub('fl', `Flange lateral bending from skew and ${dOn ? 'diaphragm' : 'cross-frame'} loads`, [kv([[`$f_{\\ell}$ from skew, G${line + 1} (C6.10.1)`, `${f(fl.fl, 2)} ksi`, 'flsk.fl'], [`${dOn ? 'Diaphragm' : 'Cross-frame'} point loads on G${line + 1}`, XF ? `${XF.pts.length}, ${f(XF.tot, 2)} kip` : 'not included']])]));
+-    if (C) subs.push(sub('ck', FUI && FUI.ckHead ? FUI.ckHead(C, dOn) : `Checks (CF1 to CF11${C.some(c => c.id === 'CFD') ? ', CFD, CFE' : ''})`, [kv([['S (largest spacing)', `${f(I.p.S, 2)} in`], ['h / d', `${f(I.p.h, 2)} / ${f(I.p.dg, 2)} in`, 'cf.dg'], ['$L_{b}$ (largest)', `${f(I.p.Lb, 2)} ft`, 'cf.Lb']]),
++    if (C) subs.push(sub('ck', FUI && FUI.ckHead ? FUI.ckHead(C, dOn) : `Checks (CF1 to CF11${C.some(c => c.id === 'CFD') ? ', CFD, CFE' : ''})`, [kv([['S (largest spacing)', `${f(I.p.S, 2)} in`], ['h / d', `${f(I.p.h, 2)} / ${f(I.p.dg, 2)} in`, I.p.xfBay ? 'cf.h' : 'cf.dg'], ...xb.kv, ['$L_{b}$ (largest)', `${f(I.p.Lb, 2)} ft`, 'cf.Lb']]), xb.note,
+       R.errors && R.errors.length ? note(R.errors.join(' '), true) : null,
+       tbl(['Check', 'Item', 'Demand', 'Resistance / limit', 'Ratio', 'Status'], C.flatMap(c => c.items.length ? c.items.map(it => [`${c.id} ${c.title}`, it.loc, isFinite(it.demand) ? N(it.demand, 2) : (it.cells || [])[0] || '', isFinite(it.capacity) ? N(it.capacity, 2) : (it.cells || [])[1] || '',
+         isFinite(it.r) ? R3(it.r, lk(it.step)) : { t: '—', key: lk(it.step) }, { pass: 'OK', fail: 'Fail', warn: 'Warning', adv: 'Advisory', na: 'n/a' }[it.st] || it.st]) : [[`${c.id} ${c.title}`, { t: c.naWhy || 'n/a', cls: 'na' }, '', '', '', 'n/a']])),
+diff --git a/apps/steel-bridge/ui/framing.js b/apps/steel-bridge/ui/framing.js
+index ee0740d..7d60ca1 100644
+--- a/apps/steel-bridge/ui/framing.js
++++ b/apps/steel-bridge/ui/framing.js
+@@ -163,7 +163,9 @@
+     const C = R.errors ? (R.errors.length ? null : CF.checks(R)) : null;
+     const G = P.girders[gi] || P.girders[0], line = Math.min(FRM.lineOf(P, G), L.FR.girders.length - 1), ext = line === 0 || line === L.FR.girders.length - 1;
+     const fl = FRM.flSkew(L.m.skews, ext, P.framing), XF = CF.pointLoads(P, gi, { L }), br = FRM.girderBraces(P, gi, L);
+-    return { L, I, R, C, fl, XF, br, line, G, A };
++    // SBXF (2026-11-13): the governing bay's depth differs from the reported girder's: the tab graphic's Download DXF drawn as before (dxfB, the reported girder's own depth)
++    let dxfB; if (I.p.xfBay && I.p.xfBay.vary) { const I0 = CF.inputsOf(P, { L, A, gi, bays: false }), R0 = CF.compute(I0.p, env); dxfB = { L, I: I0, R: R0, C: R0.errors && !R0.errors.length ? CF.checks(R0) : null, line }; }
++    return { L, I, R, C, fl, XF, br, line, G, A, dxfB };
+   }
+   const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>`;
+   const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
+@@ -173,7 +175,7 @@
+   const TOPICS = { x: () => [...TPX('own', 'n', 'steel', 'c3', 'cn', 'cr'),
+     { key: 'lay', title: 'Cross-frame spacing and orientation', ref: A + '6.7.4.2.1', ids: /^fr\.(s|k\d+\.)/, res: /^fr\.s$/ },
+     { key: 'lb', title: 'Unbraced lengths of the girders', ref: A + '6.7.4.2.1', ids: /^fr\.g\d+\./ },
+-    { key: 'geo', title: 'Girder depth, spacing and connection geometry', ref: A + '6.7.4.2.1', ids: /^cf\.(dg|Lb|geo)$/ },
++    { key: 'geo', title: 'Girder depth, spacing and connection geometry', ref: A + '6.7.4.2.1', ids: /^cf\.(xfD|h|dg|dW|Lb|geo)$/ },   // SBXF: xfD, h, dW (girder types)
+     { key: 'lat', title: 'Flange lateral bending from skew', ref: A + 'C6.10.1', ids: /^flsk\./ },
+     { key: 'w3', title: 'Wind on the girders, Strength III', ref: A + '3.8.1.2, 4.6.2.7', ids: /^cf\.wIII\./, res: /^cf\.wIII\.Fw$/ },
+     { key: 'w5', title: 'Wind on the girders, Strength V', ref: A + '3.8.1.2, 4.6.2.7', ids: /^cf\.wV\./, res: /^cf\.wV\.Fw$/ },
+@@ -214,6 +216,12 @@
+     return `<svg viewBox="0 0 ${W} ${H.toFixed(0)}" style="width:100%;height:auto;max-height:60vh;background:#fff;border:1px solid #e4e7eb;border-radius:4px" role="img" aria-label="Diaphragm elevation">${o}</svg>
+       <p class="note">Intermediate diaphragm looking along the girders (connection plates grey, bolts brown), nominal dimensions. Checks CFD (intermediate) and CFE (end diaphragms at the bearing lines) below; the details sheet is on the Drawings tab.</p>`;
+   }
++  /* SBXF (2026-11-13; engineer decision 2026-11-13, girder types): the governing bay of the frame checked, its two girders and their web
++     depths (xfBayKv), and the assumption stated (xfBayNote; also the Report). '' for a project saved before girder types (no p.xfBay). */
++  const bayTxt = B => { const gl = q => q ? `G${q.line + 1} ${q.label}` : 'no type'; return `G${B.j + 1}–G${B.j + 2}: ${gl(B.a)} D = ${B.a ? fmt(B.a.D, 2) : '—'} in, ${gl(B.b)} D = ${B.b ? fmt(B.b.D, 2) : '—'} in; ${B.eq ? 'equal depths' : `the shallower, G${B.s.line + 1} ${B.s.label}`}, D = ${fmt(B.D, 2)} in`; };
++  function xfBayKv(p) { const B = p.xfBay; return B ? `<div><span>Governing bay (shallowest)</span><span>${esc(bayTxt(B))} ${wk('cf.xfD')}</span></div><div><span>d<sub>W</sub> (wind, ${esc(B.rep)})</span><span>${fmt(p.dW, 2)} in ${wk('cf.dW')}</span></div>` : ''; }
++  function xfBayNote(p, bn) { const B = p.xfBay; if (!B) return '';
++    return `<p class="note"><b>Assumption (engineer decision 2026-11-13):</b> each ${bn.replace(/s$/, '')} bay takes the depth of the shallower of the two girders it connects, by the girder type assigned to each line (Girders &amp; plates tab). The frame checked here is the governing bay, the shallowest (${esc(bayTxt(B))}), with the largest girder spacing S and the largest L<sub>b</sub> as before; the ${bn.replace(/s$/, '')} weights in DC1 take each bay's own h${B.hAuto ? '' : ' (h entered: the same in every bay)'}. The wind acts on the reported girder's own depth d<sub>W</sub>, and the stability bracing check braces the reported girder (${esc(B.rep)}), as before. ${wk('cf.xfD')}</p>`; }
+   /* umNote(R): which way the entered member forces combine (CFRM), with a link to the input card and the worked step; '' when none is entered */
+   function umNote(R) {
+     const p = R.p || {}; if (isDia(p)) return '';   // SBDIA: entered member forces do not apply to a diaphragm
+@@ -229,9 +237,9 @@
+     h += `<section class="sec"><div class="secHead">${BN}: governing</div><div class="secBody">
+       ${gov ? `<p>Governing ratio <b class="${cls(gov.it.r)}">${fmt(gov.it.r, 3)}</b>: ${esc(gov.c.id)} ${window.SBDSub.html(gov.c.title)}, ${window.SBDSub.html(gov.it.loc)} ${wk(gov.it.step)}</p>` : ''}
+       ${R.errors && R.errors.length ? `<div class="alert err">${R.errors.map(esc).join('<br>')}</div>` : ''}
+-      <div class="kv"><div><span>S (largest spacing)</span><span>${fmt(I.p.S, 2)} in</span></div><div><span>h / d</span><span>${fmt(I.p.h, 2)} / ${fmt(I.p.dg, 2)} in ${wk('cf.dg')}</span></div><div><span>L<sub>b</sub> (largest on any girder)</span><span>${fmt(I.p.Lb, 2)} ft ${wk('cf.Lb')}</span></div>
++      <div class="kv"><div><span>S (largest spacing)</span><span>${fmt(I.p.S, 2)} in</span></div><div><span>h / d</span><span>${fmt(I.p.h, 2)} / ${fmt(I.p.dg, 2)} in ${wk(I.p.xfBay ? 'cf.h' : 'cf.dg')}</span></div>${xfBayKv(I.p)}<div><span>L<sub>b</sub> (largest on any girder)</span><span>${fmt(I.p.Lb, 2)} ft ${wk('cf.Lb')}</span></div>
+       <div><span>Deck placement M<sub>u</sub></span><span>${fmt(+I.p.sb.Mu, 1)} kip-ft</span></div><div><span>Stability span L, frames n</span><span>${fmt(I.p.sb.L, 2)} ft, ${I.p.sb.n}</span></div>${R.W ? `<div><span>F<sub>w</sub> Strength III / V</span><span>${fmt(R.W.III.Fw, 2)} / ${fmt(R.W.V.Fw, 2)} kip ${wk('cf.wIII.Fw')}</span></div>` : ''}</div>
+-      <p class="note">M<sub>u</sub>: ${window.SBDSub.html(I.src.Mu || '')}; ${window.SBDSub.html(I.src.sb || '')}.${umNote(R)}</p></div></section>`;
++      <p class="note">M<sub>u</sub>: ${window.SBDSub.html(I.src.Mu || '')}; ${window.SBDSub.html(I.src.sb || '')}.${umNote(R)}</p>${xfBayNote(I.p, bn)}</div></section>`;
+     h += dOn ? `<section class="sec"><div class="secHead">Diaphragms: elevation</div><div class="secBody">${diaSvg(B)}</div></section>`   // SBDIA: the diaphragm, not the X / K truss
+       : `<section class="sec"><div class="secHead">Cross-frames: elevation</div><div class="secBody"><div data-gfxb="crossframe"></div></div></section>`;   // drawn by ui/tabgraphics-b.js from the results below
+     // layout
+diff --git a/apps/steel-bridge/ui/gfxdet.js b/apps/steel-bridge/ui/gfxdet.js
+index 9d7f799..db90dbf 100644
+--- a/apps/steel-bridge/ui/gfxdet.js
++++ b/apps/steel-bridge/ui/gfxdet.js
+@@ -238,7 +238,7 @@
+     const mg = gov && /^cf\.(top|bot|diag)\b/.exec(gov.it.step || ''), grp = mg ? mg[1] : null, I = B.I.p;
+     const rows = R.frames.map((e, i) => { const mx = (R.combos || []).reduce((m, c) => ({ T: Math.max(m.T, c.f[i].T), C: Math.max(m.C, c.f[i].Cc) }), { T: 0, C: 0 });
+       return { i, e, on: grp === e.k, sec: (R.mem && R.mem[e.k] && R.mem[e.k].name) || '', L: f1(e.L), T: f1(mx.T), C: f1(mx.C) }; });
+-    return { R, N, I, S: I.S, dg: I.dg, hw: I.h, gov, grp, rows, line: B.line || 0, dia: !!opt.dia };
++    return { R, N, I, S: I.S, dg: I.dg, hw: I.h, gov, grp, rows, line: I.xfBay && I.xfBay.vary ? I.xfBay.j : B.line || 0, dia: !!opt.dia };   // SBXF: the governing bay's girders when its depth is not the reported girder's
+   }
+   function cfSvg(m, W) {
+     const K = VK(), Sc = K.scene(), nar = W < 560, S = m.S, dg = m.dg, hw = m.hw, y0 = (hw - dg) / 2, fl = Math.min(8, S * 0.07), nx = n => m.N[n][0], ny = n => m.N[n][1];
+diff --git a/apps/steel-bridge/ui/tabgraphics-b.js b/apps/steel-bridge/ui/tabgraphics-b.js
+index 304b4c9..caf8749 100644
+--- a/apps/steel-bridge/ui/tabgraphics-b.js
++++ b/apps/steel-bridge/ui/tabgraphics-b.js
+@@ -67,7 +67,8 @@
+     if (!putC(host, 'fatigue-chart', ctx, TX => TX.fatigueChart(R, ctx.P, { gi: gi(ctx), sel }), 'fatigueChart', { P: ctx.P, gi: gi(ctx), R, sel, onSel })) put(host, 'fatigue-chart', ctx, TX => TX.fatigueChart(R, ctx.P, { gi: gi(ctx), sel }), onSel);
+   }
+   function crossframe(host, ctx, B) { const o = { dia: !!(window.SBDCrossframes && ctx.P.crossframes && window.SBDCrossframes.cfDiaOn(ctx.P.crossframes)) };
+-    putDet(host, 'crossframe', ctx, TX => TX.crossframe(B, ctx.P, o), 'crossframe', { B, opt: o }) || put(host, 'crossframe', ctx, TX => TX.crossframe(B, ctx.P, o)); }
++    // SBXF (2026-11-13): the Download DXF as before (B.dxfB: the reported girder's own depth, when the governing bay's differs; the engineer's rule, no DXF change)
++    putDet(host, 'crossframe', ctx, TX => TX.crossframe(B.dxfB || B, ctx.P, o), 'crossframe', { B, opt: o }) || put(host, 'crossframe', ctx, TX => TX.crossframe(B, ctx.P, o)); }
+   function welds(host, ctx, B, sel, onSel) {
+     if (!putC(host, 'welds', ctx, TX => TX.welds(B, ctx.P, { gi: gi(ctx), sel }), 'welds', { P: ctx.P, gi: gi(ctx), R: B, sel, onSel })) put(host, 'welds', ctx, TX => TX.welds(B, ctx.P, { gi: gi(ctx), sel }), onSel);
+     const oW = { i: sel && sel.k === 'fw' ? sel.i : undefined };
+```

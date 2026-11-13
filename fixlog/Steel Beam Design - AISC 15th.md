@@ -3212,3 +3212,65 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
 - **Open items (not changed):**
   - Excel export throws for a round HSS in member mode on origin/main (`xlChecks`: `unresolved ref: 2*«bf»*«tf»`), so the new Excel rows are reached only once that is fixed.
   - The fallback to Lᵇ when no member span is entered (shared with self-weight and deflection) is unconservative for H3-2a when Lᵇ < the member length; the warning asks for L. Engineer to confirm, or block torsion without an entered span.
+
+## 2026-11-13 — PR: claude/sbeam-hss-tests (PR #1470: https://github.com/mlococo88/All-Structural/pull/1470) (SBHT) — Node tests for the HSS path (review item A7)   [tests only; the tool is not changed]
+- **What:** `tests/engine/sbeam-source.mjs` loads the tool's own engine functions from the page's inline scripts into a Node vm. It uses the method of `lp-source.mjs`, with three differences:
+  - it takes the *last* declaration of a name, because the browser runs the last of the functions declared twice (`shearMajor`, `openTorsionFor`, `compositeFor`, …);
+  - data constants such as `DB` are read while their brackets are open;
+  - `design(code)` retries a name that `computeMember()` swallowed into `designError`.
+- **New test file:** `tests/engine/sbeam-hss.test.mjs` with 6 tests, run by `node tests/engine/run.mjs sbeam-hss`. Each fixture states the hand calculation with its equation numbers (paraphrased).
+- **References used:** each value is checked against the hand value to 1e-9, and against the spreadsheet or Design Example to its rounding.
+  1. **HSS12X6X1/2 A500 Gr. B, L = 12 ft (spreadsheet example):**
+
+     | Check | App | Reference |
+     |---|---|---|
+     | Lp / Lr (ft) | 17.11 / 477.5 | — |
+     | φMnx (F7-1) | 198.03 | — |
+     | φMny | 121.44 | — |
+     | φVnx (G4) | 244.99 | spreadsheet 244.92, tol 0.1 (h from the rounded h/t) |
+     | φVny | 106.38 | — |
+     | φPn (E3) | 501.12 | — |
+     | φTn (H3-3) | 122.13 | spreadsheet 122.11, tol 0.05 (C 58.99 vs 59.0) |
+     | Member mode H1-1b | 0.02460 | — |
+     | H3-6, T_u = 40 | 0.23846 | spreadsheet 0.23856, tol 2e-4 |
+     | H1-1a | 1.2654 | — |
+  2. **HSS12X12X1/4 Gr. B:** E7 Ae = 8.888 in², φPn = 346.2 kip; F7-3/F7-4 be = 9.023 in, Se = 36.27 in³ (rebuilt by hand), φMn = 125.1 kip·ft; G4 φVn = 130.8 kip.
+  3. **HSS10X6X3/16 Gr. B:** F7-2 φMn = 57.01 kip·ft (**AISC Design Example F.7B**, v14.0, Fy 46: 57.0). At Gr. C, Mn = 66.39 (F.7B v16.0: 66.3). Minor axis F7-3 φMn = 31.69. E7 on the h-walls: φPn = 156.2 kip.
+  4. **HSS10.750X0.500 A500 Gr. C round:** F8-1 φMn = 169.74; G5 φVn = 186.3 (0.6Fy cap); E3 φPn = 558.9; H3-2a/b 191.6/155.5 ksi, capped at 27.6, φTn = 153.39.
+  5. **A1 (TLEN, #1468), HSS20.000X0.250 at 60 ft:**
+     - H3-2a = 22.75 ksi governs and φTn = 240.6 kip·ft. With L = 0 it was 291.87.
+     - Member mode gives the same result with span L entered, with Lᵥ set (no effect), and with the Lᵇ fallback (warning).
+     - With no length it gives H3-2b, 231.4. At 30 ft the cap governs (291.87).
+     - The member-mode check gives 291.87 on the pre-#1468 file, so it would have caught A1.
+- **Provisions:** AISC 360-16 Table B4.1a/b, F7, F8, G4, G5, G2.1 (Cv2), E3, E7, H1.1, H3.1, H3.2; AISC Design Examples F.7B.
+- **Saved data:** none. **Calculation change:** none.
+- **Open item found (not changed):** round HSS D/t is recomputed as OD/tdes with the database's *rounded* OD. Example: HSS10.750X0.500 has OD 10.8, so D/t = 23.23 against the tabulated 23.1. This makes D/t about 0.5% high, which is slightly conservative for F8-2/3, G5 and H3-2. The test fixture records the value as is.
+## 2026-11-13 — PR: claude/sbeam-hss-entry (PR #1473: https://github.com/mlococo88/All-Structural/pull/1473) (SBHSS) — HSS entry point: the tools page's "HSS Beam Design" card opens this tool with an HSS section for a new project   [navigation / start-up only; no calculation, saved key or format change]
+- **Engineer's decision (2026-11-13):** no separate HSS app. Instead, a visible HSS starting point into this tool (HSS review, recommendation (e)).
+- **Where:**
+  1. **New functions** `sbSetFamily(v)`, `sbIsBlank()` and `sbHssEntry()`, with their comment block (anchor `SBHSS (2026-11-13, engineer: improve this tool for HSS`). They sit just before `if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();`.
+  2. **`init()`:** after `sbStdSave();   /* STDS */` add `sbHssEntry();`.
+  3. **Section & Material, "Shape family" select (pure refactor, same steps):**
+     - before: `S.section.family=v;S.section.grade=famMeta(v).defMat;S.section.ovr={}; const list=shapesOf(v);if(!list.find(r=>r[0]===S.section.label))S.section.label=list[Math.min(8,list.length-1)][0]; rebuildInputs();`
+     - after: `sbSetFamily(v); rebuildInputs();`. `sbSetFamily` holds those same three statements.
+- **Behavior:** only when the address ends in `#hss` (the card's link). Without `#hss` nothing runs.
+  - **A blank project on screen** means either no autosave, or an autosave equal to the default inputs after a calculation. Not compared: `S.ui`, the project date, and empty `design.man` entries. In that case `sbSetFamily('HSSR')` runs, then `fullRebuild()`. This is exactly what picking "HSS — Rect / Square" in the list does:
+    - material: the family's default **A500 Gr. C (unchanged)**;
+    - shape: the family's default pick (the 9th shape, HSS30X10X1/2);
+    - nothing else changes.
+  - **Any other project** is left as it is: S and the autosave are byte-identical. A small notice (fixed, top right) says the last project is open and unchanged, and offers three buttons:
+    - **Start a new HSS beam:** the existing New path of the "Save and open" card (`SBPL.pb.newProject()`, with its unsaved-changes confirm). If that path went ahead, it then runs `sbSetFamily('HSSR')`;
+    - **Save as…:** the card's `saveAs`, shown only when the project is not in the saved list. The New path does not ask for an untouched project that is not in the saved list, so the notice says so and offers Save as first;
+    - **Keep this project:** closes the notice.
+  - `#hss` is removed from the address with `history.replaceState`, in a try block.
+- **Saved data (§5):** none. No new key, field or format, and the saved list is never written.
+- **Other copies:** the tools page card is in `tools.html` (`fixlog/tools.md`, same PR).
+- **How verified:** headless Chromium from file://, fresh profiles, 25 checks:
+  - fresh profile + `#hss` → HSSR, A500C_R, autosave HSS, no notice, hash removed;
+  - no hash → W18X50 as before;
+  - default autosave → treated as blank;
+  - an unsaved project → kept byte-identical, notice with Save as / Start / Keep. Keep: unchanged. Start: new HSS beam;
+  - a saved project, edited on the page → Start asks once. Cancel keeps it; OK starts the HSS beam, and the saved list is unchanged;
+  - the tools.html card link opens the tool with HSS.
+  - check-syntax; phone-layout / decimal-entry `--tool sbeam`; project-library `--tool steelbeam`; steel-beam-builtup; steel-beam-h1-composite; home-projects. 0 console errors.
+- **Open items:** none.

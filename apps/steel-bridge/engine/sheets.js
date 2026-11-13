@@ -386,8 +386,10 @@
   }
 
   /* ---------- cross-frame or diaphragm (dxfCF) ---------- */
+  /* SBXF (2026-11-13): drawn from the first plate girder's depth as before (inputsOf bays: false): the engineer's rule, no DXF change; with
+     girder types of unequal depth the Cross-frames tab checks the governing bay's depth (engine/crossframes.js bayDepths) */
   function cf(D, C) {
-    const G = C.G, CF = window.SBDCrossframes, I = CF.inputsOf(C.P), p = I.p, E = CF.envOf(C.P), s0 = G.girders[0].segs[0], h = D.h;
+    const G = C.G, CF = window.SBDCrossframes, I = CF.inputsOf(C.P, { bays: false }), p = I.p, E = CF.envOf(C.P), s0 = G.girders[0].segs[0], h = D.h;
     const ly = { g: D.layer('GRDR', 5), x: D.layer('XFRM', 3), cp: D.layer('GRDR-STIF', 30), bo: D.layer('BOLT', 2), d: D.layer('DIMS', 7), t: D.layer('ANNO-TEXT', 7), c: D.layer('CNTR', 8) }, cl = D.ltype('CENTER');
     const S = +p.S, hh = +p.h, tf = { b: s0.topB, t: s0.topT }, bf = { b: s0.botB, t: s0.botT }, Dm = s0.D, Dt = Dm + tf.t + bf.t, yb = (Dt - hh) / 2, yt = yb + hh, tw = s0.tw, cn = p.conn || {}, rb = (+cn.d || 0.875) / 2 + 0.0625;
     const cpts = (q, x0, sg, y0, y1) => [[x0 + sg * q.tw / 2, y0 + q.c], [x0 + sg * (q.tw / 2 + q.c), y0], [x0 + sg * (q.tw / 2 + q.bs), y0], [x0 + sg * (q.tw / 2 + q.bs), y1], [x0 + sg * (q.tw / 2 + q.c), y1], [x0 + sg * q.tw / 2, y1 - q.c]];   // GirderDetail cfCPpts
