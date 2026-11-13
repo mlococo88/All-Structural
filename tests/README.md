@@ -212,6 +212,11 @@ node tests/smoke/cbc-leg-width.mjs [--file <Concrete Beam Capacity.html>]
 # (7.6.3.1), S&T rho 0.00185 / s <= 18 (24.4.3)); back to beam; Input Echo, Report, 1400 and 390 px, 0 console errors. ~30 s
 node tests/smoke/cbc-slab.mjs [--file <Concrete Beam Capacity.html>]
 
+# Beam Capacity tab, ACI: minimum thickness, Tables 9.3.1.1 / 7.3.1.1 (CBMH): span blank = N/A "not checked"; beam 20 ft both ends continuous
+# 11.43 in (f_y 80: 13.71), cantilever 10 ft 15.00 (lightweight, w_c 90: 18.00; w_c 110: 16.50); slab 12 ft simply supported 7.20 PASS at
+# h 9, FAIL at h 7; check summary, card, Report; AASHTO without the row; 1400 and 390 px, 0 console errors. ~30 s
+node tests/smoke/cbc-min-thickness.mjs [--file <Concrete Beam Capacity.html>]
+
 # Pile Designer's saved-project library is in IndexedDB (not covered above): page text and autosave main vs the working tree, Undo / Redo,
 # Save as new / rename / duplicate / refused write / load / delete (React 18.3.1 served from the kit's 18.2.0, test-only). ~1 min
 node tests/smoke/pile-library.mjs [--a origin/main]

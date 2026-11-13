@@ -764,7 +764,8 @@ function defaultState(){
           chk:&quot;&quot;,chkDate:&quot;&quot;,sheet:&quot;S-1&quot;},
     code:&quot;ACI&quot;,
     memberType:&quot;beam&quot;,   /* CBSB: &quot;beam&quot; | &quot;slab&quot; (one-way slab, ACI mode) */
-    slab:{stSize:&quot;&quot;,stS:0},   /* CBSB: shrinkage and temperature bars perpendicular to the span (&quot;&quot; = none entered) */
+    slab:{stSize:&quot;&quot;,stS:0},
+    minh:{span:0,sup:&quot;simple&quot;,wc:0},   /* CBMH: span (ft, 0 = not entered), support condition, w_c (pcf, lightweight only; 0 = not entered) */   /* CBSB: shrinkage and temperature bars perpendicular to the span (&quot;&quot; = none entered) */
     sec:{type:&quot;rect&quot;,bw:12,h:18,bf:36,hf:6,asminSupport:&quot;determinate&quot;},   /* asminSupport: CBM4, ACI 9.6.1.2 flange in tension */
     mat:{fc:4,fy:60,fyt:60,dagg:1.0,lambda:1.0,gamma3:0.67,fyt100:false,wc:0},   /* wc: CBL7b, AASHTO unit weight (kcf), 0 = not entered */
     cover:{cc:2.0,exposure:&quot;exposed&quot;,req:2.0,userEdited:false},
@@ -806,6 +807,7 @@ function mergeState(st){
   /* CBSB migration (2026-11-13): no memberType -> beam (results as before). A slab is a 12 in rectangular strip; each layer's bars
      per strip follow from its spacing. */
   S.memberType=(st.memberType==='slab')?'slab':'beam';
+  S.minh={span:+(st.minh&amp;&amp;st.minh.span)||0,sup:[&quot;simple&quot;,&quot;one&quot;,&quot;both&quot;,&quot;cant&quot;].indexOf(st.minh&amp;&amp;st.minh.sup)>=0?st.minh.sup:&quot;simple&quot;,wc:+(st.minh&amp;&amp;st.minh.wc)||0};   /* CBMH: absent = not entered */
   S.slab={stSize:String((st.slab&amp;&amp;st.slab.stSize)||&quot;&quot;),stS:+(st.slab&amp;&amp;st.slab.stS)||0};
   if(S.memberType==='slab'){ S.sec.bw=12; S.sec.type='rect'; S.layers.forEach(L=>{ if(!(L.s>0)) L.s=Math.round(12/L.n*4)/4||12; L.n=12/L.s; }); }
   /* CBSL migration (2026-11-13): a save, project or Export JSON made before service load cases has no loadMode: it opens in
@@ -1391,6 +1393,30 @@ function detailing(F,sh,neg,govMu,Vu,tor,torD){
       &quot;Limits the reinforcement ratio so the section fails in a ductile manner.&quot;]],
     code!=='ACI',
     code!=='ACI'?&quot;Advisory only \u2014 AASHTO LRFD has no minimum net tensile strain for nonprestressed members; ductility is handled through \u03c6 (Art. 5.5.4.2). For reference \u03b5_t = &quot;+fmt(F.eps_t,5)+(F.eps_t>=0.004?&quot; \u2265 &quot;:&quot; < &quot;)+&quot;0.004.&quot;:&quot;&quot;);
+
+  /* CBMH (2026-11-13, engineer decision CB-6): minimum thickness, ACI 318-19 Table 9.3.1.1 (beams) / Table 7.3.1.1 (one-way slabs):
+     h_min = ℓ/k (simply supported 16 / 20, one end continuous 18.5 / 24, both ends continuous 21 / 28, cantilever 8 / 10),
+     × (0.4 + f_y/100,000) where f_y ≠ 60,000 psi (9.3.1.1.1 / 7.3.1.1.1), × max(1.65 − 0.005w_c, 1.09) for lightweight concrete
+     (λ < 1) with w_c 90–115 pcf (9.3.1.1.2 / 7.3.1.1.2). Blank span: not checked (N/A). Applies to members not supporting or attached
+     to partitions or other construction likely to be damaged by large deflections (stated as an assumption). */
+  if(code==='ACI'){
+    const slb=cbcSlab(), sp=+(S.minh&amp;&amp;S.minh.span)||0, sup=(S.minh&amp;&amp;S.minh.sup)||&quot;simple&quot;;
+    const K=slb?{simple:20,one:24,both:28,cant:10}:{simple:16,one:18.5,both:21,cant:8}, k=K[sup]||K.simple;
+    const supTx={simple:&quot;simply supported&quot;,one:&quot;one end continuous&quot;,both:&quot;both ends continuous&quot;,cant:&quot;cantilever&quot;}[sup];
+    const ref=slb?&quot;ACI 7.3.1.1, Table 7.3.1.1&quot;:&quot;ACI 9.3.1.1, Table 9.3.1.1&quot;, nm=slb?&quot;Minimum slab thickness&quot;:&quot;Minimum beam depth&quot;;
+    if(!(sp>0)) add(&quot;dMinH&quot;,nm,ref,0,0,&quot;\\ge&quot;,&quot;in&quot;,true,[],true,&quot;Not checked: the span is not entered (Minimum Thickness input).&quot;);
+    else {
+      const ffy=Math.abs(fy-60)<1e-9?1:(0.4+fy/100);
+      const lw=S.mat.lambda<1, wcU=(S.minh.wc>0?S.minh.wc:90), wcE=Math.min(Math.max(wcU,90),115), flw=lw?Math.max(1.65-0.005*wcE,1.09):1;
+      const h0=sp*12/k, hmin=h0*ffy*flw;
+      const L=[[&quot;h_{min}=\\dfrac{\\ell}{&quot;+k+&quot;}&quot;,`\\dfrac{${fmt(sp)}(12)}{${k}}=${fmt(h0)}\\text{ in}`,supTx+&quot; (&quot;+(slb?&quot;Table 7.3.1.1&quot;:&quot;Table 9.3.1.1&quot;)+&quot;).&quot;]];
+      if(ffy!==1) L.push([&quot;\\times\\left(0.4+\\dfrac{f_y}{100{,}000}\\right)&quot;,`0.4+\\dfrac{${fmt(fy*1000,0)}}{100{,}000}=${fmt(ffy,3)}`,&quot;f_y other than 60,000 psi (&quot;+(slb?&quot;7.3.1.1.1&quot;:&quot;9.3.1.1.1&quot;)+&quot;).&quot;]);
+      if(lw) L.push([&quot;\\times\\max\\left(1.65-0.005w_c,\\,1.09\\right)&quot;,`\\max\\left(1.65-0.005(${fmt(wcE,0)}),\\,1.09\\right)=${fmt(flw,3)}`,
+        &quot;Lightweight concrete (&quot;+(slb?&quot;7.3.1.1.2&quot;:&quot;9.3.1.1.2&quot;)+&quot;): w_c = &quot;+fmt(wcE,0)+&quot; pcf&quot;+(S.minh.wc>0?(wcU!==wcE?&quot; (entered &quot;+fmt(wcU,0)+&quot; pcf, taken within 90 to 115)&quot;:&quot; (entered)&quot;):&quot; (not entered: 90 pcf, the end of the range giving the larger factor)&quot;)+&quot;.&quot;]);
+      L.push([&quot;h \\ge h_{min}&quot;,`${fmt(h)}\\text{ in}\\ ${h>=hmin-1e-9?&quot;\\ge&quot;:&quot;<&quot;}\\ ${fmt(hmin)}\\text{ in}`,&quot;Assumes the member does not support, and is not attached to, partitions or other construction likely to be damaged by large deflections; otherwise deflections must be calculated (&quot;+(slb?&quot;7.3.2&quot;:&quot;9.3.2&quot;)+&quot;).&quot;]);
+      add(&quot;dMinH&quot;,nm,ref,h,hmin,&quot;\\ge&quot;,&quot;in&quot;,h>=hmin-1e-9,L);
+    }
+  }
 
   /* stirrup detailing */
   if(S.stir.present){
@@ -1978,6 +2004,7 @@ function validate(){
   if(S.tor.present &amp;&amp; S.code==='ACI')
     N.push({code:&quot;ACI 9.7.5.1&quot;,msg:&quot;Longitudinal torsion steel is entered as a total area, so the requirement for a bar at every corner of the closed stirrup and a maximum 12 in spacing around p_h cannot be verified automatically. That check is reported N/A and must be confirmed by inspection.&quot;});
   if(S.code==='ACI') N.push({code:&quot;ACI 9.6.1.3&quot;,msg:&quot;The exception allowing A_{s,min} to be waived where A_s provided is at least 4/3 of A_s required is NOT applied; the full 9.6.1.2 minimum is always enforced. This is conservative.&quot;});
+  if(S.code==='ACI') N.push({code:cbcSlab()?&quot;ACI 7.3.1&quot;:&quot;ACI 9.3.1&quot;,msg:&quot;Minimum &quot;+(cbcSlab()?&quot;thickness (Table 7.3.1.1)&quot;:&quot;depth (Table 9.3.1.1)&quot;)+&quot;: &quot;+((S.minh&amp;&amp;S.minh.span>0)?&quot;checked for a span of &quot;+fmt(S.minh.span)+&quot; ft&quot;:&quot;not checked (span not entered)&quot;)+&quot;. The table applies to members not supporting or attached to partitions or other construction likely to be damaged by large deflections (assumed); otherwise deflections must be calculated, which this tool does not do.&quot;});   /* CBMH */
   N.push({code:&quot;Scope&quot;,msg:&quot;Deflection, development length, bar cut-offs, fatigue and strut-and-tie are not evaluated. Crack control is checked as a bar-spacing limit; explicit crack-width prediction is not performed.&quot;});
   return {blockers:B,warnings:W,notes:N};
 }
@@ -2131,7 +2158,7 @@ const RCB_IN_TABS=[['project','Project'],
   ['section','Section'],['materials','Materials &amp; Cover'],['reinf','Reinforcement'],
   ['checks','Checks'],['loads','Loads'],['assume','Assumptions']];
 const RCB_IN_SEC={prjPane:'project',inSection:'section',inMat:'materials',inCover:'materials',
-  inRebar:'reinf',inSlabST:'reinf',inStir:'reinf',inTor:'checks',inCrack:'checks',
+  inRebar:'reinf',inSlabST:'reinf',inStir:'reinf',inTor:'checks',inCrack:'checks',inMinH:'checks',
   inLoads:'loads',inAssume:'assume'};
 /* validate() blockers that come from an input, mapped to the section holding it */
 const RCB_IN_BLOCK=[
@@ -2396,6 +2423,15 @@ function buildInput(){
     },P);
   }
 
+  if(S.code==='ACI') mkSection(&quot;inMinH&quot;,NT(&quot;Minimum Thickness&quot;),b=>{   /* CBMH: ACI 318-19 Table 9.3.1.1 (beam) / 7.3.1.1 (one-way slab) */
+    fRow(b,&quot;Span, ℓ (blank = not checked)&quot;,numIn(()=>S.minh.span>0?S.minh.span:&quot;&quot;,v=>{S.minh.span=Math.max(0,v);},&quot;0.5&quot;,&quot;mhSpan&quot;),&quot;ft&quot;);
+    fRow(b,&quot;Support condition&quot;,selIn([&quot;simple&quot;,&quot;one&quot;,&quot;both&quot;,&quot;cant&quot;],()=>S.minh.sup,v=>{S.minh.sup=v;},
+      o=>({simple:&quot;Simply supported&quot;,one:&quot;One end continuous&quot;,both:&quot;Both ends continuous&quot;,cant:&quot;Cantilever&quot;})[o],o=>o,&quot;mhSup&quot;),&quot;&quot;);
+    if(S.mat.lambda<1) fRow(b,&quot;Unit weight w_c (lightweight; blank = 90)&quot;,numIn(()=>S.minh.wc>0?S.minh.wc:&quot;&quot;,v=>{S.minh.wc=Math.max(0,v);},&quot;1&quot;,&quot;mhWc&quot;),&quot;pcf&quot;);
+    b.appendChild(cbNL(&quot;note&quot;,&quot;Minimum &quot;+(cbcSlab()?&quot;thickness&quot;:&quot;depth&quot;)+&quot; h for a member that does not support, and is not attached to, partitions or other construction likely to be damaged by large deflections (assumed).&quot;,
+      [[&quot;Otherwise:&quot;,&quot;deflections must be calculated (9.3.2 / 7.3.2); this tool does not calculate deflections.&quot;],[&quot;Table:&quot;,cbcSlab()?&quot;7.3.1.1: ℓ/20, ℓ/24, ℓ/28, ℓ/10.&quot;:&quot;9.3.1.1: ℓ/16, ℓ/18.5, ℓ/21, ℓ/8.&quot;],
+       [&quot;Modifiers:&quot;,&quot;× (0.4 + f_y/100,000) where f_y ≠ 60,000 psi; lightweight concrete with w_c of 90 to 115 pcf × the greater of (1.65 − 0.005w_c) and 1.09.&quot;]]));
+  },P);
   mkSection(&quot;inCrack&quot;,NT(&quot;Crack Control&quot;),b=>{
     const r=el(&quot;div&quot;,&quot;fRow chk&quot;);
     r.appendChild(chkIn(()=>S.crack.check,v=>S.crack.check=v,&quot;crkOn&quot;));
