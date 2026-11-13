@@ -1104,7 +1104,7 @@ PR #1513: https://github.com/mlococo88/All-Structural/pull/1513
 - 3a4-D3. A restored type whose shape differs from its span's other types stays as imported and is an input error (PS-8) for the user to resolve.
 
 ## 2026-11-13 — PS-19: the exterior girder's rigid cross-section factor on the real girder lines with unequal bays (ENGINE ADDITION, §4; equal bays unchanged)
-PR: (link added on merge)
+PR #1518: https://github.com/mlococo88/All-Structural/pull/1518
 ### Request
 - Engineer decision PS-19 (2026-11-13), answering the 3a-2 open item: "the exterior rigid-section check (C4.6.2.2.2d) uses the ACTUAL girder
   positions from the bays (Σx², X_ext from real positions). Identical for equal bays (prove). Keep the verbatim pbd-*.js untouched … in an
