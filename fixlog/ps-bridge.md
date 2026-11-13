@@ -1179,7 +1179,7 @@ PR #1521: https://github.com/mlococo88/All-Structural/pull/1521
 - PS20-D2. d_e computed whenever the project has the cross-section barriers (also with DC2 / DW "entered").
 
 ## 2026-11-13 — PS-22: the app's notices as inline banners above the tab content (display only; no calculation, no saved data)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1525: https://github.com/mlococo88/All-Structural/pull/1525
 ### Request
 - Engineer decision PS-22 (2026-11-13, display): notices (the import / restore notice of 3a-4 and every other app notice) become an inline
   banner in the page flow above the tab content, pushing the content down, never covering the tab bar; they stay until closed.
