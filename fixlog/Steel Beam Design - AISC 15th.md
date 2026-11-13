@@ -4049,3 +4049,185 @@ index ea4ace2..89f7db7 100644
 - **Open items:**
   - On a phone, a wide composite section is drawn small, because all its dimension strings stay outside the slab.
   - A window resized after a tab is drawn keeps its layout until the next redraw.
+
+## 2026-11-13 — PR: claude/sbeam-compression-flange (PR #1483: https://github.com/mlococo88/All-Structural/pull/1483) (SBCF) — Major Flexure: "Flange" column renamed "Compression flange", HSS walls named, sagging / hogging note   [display only]
+- **Engineer's decision (2026-11-13):** rename the per-combination column 'Flange' to 'Compression flange'. W-shapes, channels and built-up show top / bottom; rectangular HSS show top wall / bottom wall. Add a note under each table: "Sagging moment: top in compression, uses L_b,top; hogging: bottom in compression, uses L_b,bot." In member-check mode, adapt it.
+- **Where:** the active `buildMxTab` (the last definition in the file; the earlier `buildMxTab` and `buildFlexTab` copies are not called and are unchanged), and `capEnvFig`. The Minor Flexure tab and the Excel export have no flange column, so nothing changes there. The Report follows the tab, because it is built from it.
+- **Code (re-apply by hand):**
+  1. New helpers, placed just before the active `function buildMxTab(pg){`: `sbCfLbl(p,f)`, `sbCfNoun(p,f)`, `sbCfMember(p)`, `sbCfNote(p,D)`.
+     - `sbCfLbl`: `'top'`/`'bottom'`, plus `' wall'` when `p._kind==='R'`.
+     - `sbCfNoun`: `'top flange'`, or `'top wall'` for `R`.
+     - `sbCfMember`: `'top or bottom'`, or `'top or bottom wall'` for `R`.
+     - `sbCfNote`: in beam mode, the engineer's sentence (with `Lᵇ,top` / `Lᵇ,bot`). For round HSS (`P`) it adds "(Round HSS: no lateral-torsional buckling, §F8, so Lᵇ does not change φMₙ.)". In member mode: "Member check: one Lᵇ (entered) is used for whichever flange (wall) is in compression."
+  2. `perComboSections(pg,'mx_',…)`, the columns.
+     - Before: `const cols=[D.member?'Case':'Region (ft)','Flange','Lᵇ (ft)',`
+     - After: `const cols=[D.member?'Case':'Region (ft)','Compression flange','Lᵇ (ft)',`
+  3. Same table, the cell.
+     - Before: `…(fmt(r.x1,1)+' – '+fmt(r.x2,1)),r.flange,`
+     - After: `…(fmt(r.x1,1)+' – '+fmt(r.x2,1)),D.member?sbCfMember(p):sbCfLbl(p,r.flange),`
+     - Member mode showed "compression" before.
+  4. After that table's `body.appendChild(t);`, add: `body.appendChild(el('div','hint',sbCfNote(p,D)));`
+  5. The governing `dcrLine` title.
+     - Before: `g.flange+' flange, region '`
+     - After: `sbCfNoun(p,g.flange)+', region '`
+     - Same text for I-shapes, channels and round HSS; "top wall" for rectangular HSS.
+  6. `capEnvFig`, the annotation.
+     - Before: `(r.flange||'')+' flange'`
+     - After: `'compression: '+sbCfNoun(A.sect,r.flange||'')`
+     - e.g. "top flange<br>DCR 0.03" becomes "compression: top flange<br>DCR 0.03", and "compression: top wall" for rectangular HSS.
+- **Values:** unchanged. `r.flange` is still set in `regionCheck` (`reg.sign>0?'top':'bottom'`) and still picks `effLbTop()` / `effLbBot()`. Round HSS keep top / bottom, as shown before.
+- **Governing provision:** none changed. The statement matches the existing `regionCheck` (compression flange from the sign of M) and the Regions note of the Major-Axis Flexural Strength card.
+- **Check case:** W18X50; spans 20 / 24 ft plus a 6 ft cantilever; pin / roller / roller / free; default trib loads plus 4 kip LL at the tip.
+  - Per-combination table, before: `Flange` = top, bottom, top, bottom.
+  - After: `Compression flange` = top, bottom, top, bottom, with the note under each table.
+  - The same beam in HSS12X6X1/2: top wall, bottom wall, top wall, bottom wall. φMₙ is 198.0 / 196.7 kip·ft in both versions.
+- **How verified:** headless Chromium, origin/main against the branch, seven projects: W, C15X33.9, HSS12X6X1/2, HSS10.000X0.500, W with calculated C_b and L_b,top 8 ft, member-check W, member-check HSS.
+  - `AN` JSON identical in all seven.
+  - Every tab text identical except Major Flexure.
+  - The Report (`SharedReport.text`) differs only by the header, the values and the note.
+  - New smoke test: `steel-beam-compression-flange` (5 checks).
+- **Saved data (§5):** no change.
+- **Other copies:** none.
+- **Open items (not changed):** the flexure check detail string built in `designAll` ("…region a–b ft, top flange", shown on the Summary and in the Report summary) still says "flange" for rectangular HSS. It is part of `AN.design`, so it is left as it is.
+
+## 2026-11-13 — PR: claude/sbeam-xlsx-hss (PR #1487: https://github.com/mlococo88/All-Structural/pull/1487) (SBXH) — Excel export works for rectangular and round HSS and pipe, with the HSS equations   [export only; no calculation, saved key or format change]
+- **Problem:** `exportExcel` → `xlChecks` had only the W-shape steps. For any HSS, `XB.resolveF` threw "unresolved ref" and the export stopped ("Export failed"):
+  - rectangular HSS at the F2-6 `Lr` formula (`«rts»`, `«ho»`);
+  - round HSS and pipe at the minor-axis shear formula `2*«bf»*«tf»`.
+
+  The minor-axis flexure step also wrote the F6-1 formula (`MIN(Fy·Zy, 1.6Fy·Sy)`), which does not apply to HSS. W-shapes exported fine.
+- **Code (re-apply by hand)**, all in the Excel export:
+  1. `exportExcel`, after `const mem=isMember();`: add
+     ```js
+     const hssX=p._kind==='R'||p._kind==='P',xv=(v,d)=>hssX?v:N2(v,d);
+     ```
+     The five self-weight input lines (`'Shape weight'`, `'Self-weight span'`, `'Moment denominator'`, `'Shear coefficient'`, `'Dead-load factor'`) change from `N2(x,d)` to `xv(x,d)`: full precision for HSS, unchanged for W. On the Fu line, add `ref:'Fu'`.
+  2. `exportExcel`, section 4 (`Object.keys(p).filter(k=>PL[k]…`). Before the loop add the A1085 note `if(hssX&&p._a1085)X.note('ASTM A1085: design wall t = tₙₒₘ …')`. At the top of the loop body add:
+     ```js
+     if(hssX){X.line(PL[k][0],k,p[k],PL[k][1],p._src[k]==='ovr'?'user override':p._src[k]==='rule'?'A1085, t = tₙₒₘ':'',
+       {kind:p._src[k]==='ovr'?'imp':'in',dp:(Math.abs(p[k])>=100?1:3),ref:['A','Ix','Zx','Sx','Zy','Sy','ry','rx','J','B','Ht','tdes','bFlat','hFlat','btdes','htdes','Cc','OD','Dt'].indexOf(k)>=0?k:null});return;}
+     ```
+     The W line after it is unchanged.
+  3. New functions before `async function xlChecks` (anchor `SBXH (2026-11-13): the HSS steps of the Excel calc sheet`). Each formula is written with named cells (`«name»`):
+     - `xlHssFlex(X,p,cap,ax,Fy,E,ref)`: F7 about x or y, or F8.
+       - `Mp = «Fy»*«Z»/12` (F7-1 / F8-1).
+       - F7-2: `MIN(Mp,Mp-(Mp-«Fy»*«S»/12)*(3.57*«λf»*SQRT(«Fy»/«E»)-4))`.
+       - F7-4: `MIN(b,1.92*«tdes»*SQRT(«E»/«Fy»)*(1-0.38/«λf»*SQRT(«E»/«Fy»)))`. S_e is written as the app's value (`flb.d.Se`, marked "computed by app"). F7-3: `«Fy»*«Se»/12`.
+       - F7-6: `MIN(Mp,Mp-(Mp-«Fy»*«S»/12)*(0.305*«λw»*SQRT(«Fy»/«E»)-0.738))`.
+       - For x only: Lp F7-12 `0.13*«E»*«ry»*SQRT(«J»*«A»)/(«Fy»*«Zx»)/12`; Lr F7-13 `2*«E»*«ry»*SQRT(«J»*«A»)/(0.7*«Fy»*«Sx»)/12`; F7-10 `MIN(Mp,«Cb»*(Mp-(Mp-0.7*«Fy»*«Sx»/12)*(«Lb»-«Lp»)/(«Lr»-«Lp»)))`; F7-11 `MIN(Mp,2*«E»*«Cb»*SQRT(«J»*«A»)/(«Lb»*12/«ry»)/12)`.
+       - F8-2: `(0.021*«E»/«Dt»+«Fy»)*«S»/12`. F8-4/F8-3: `0.33*«E»/«Dt»`, then `Fcr*«S»/12`.
+       - M_n = `MIN(` the limit states that apply `)`, written as `ref`.
+     - `xlHssShear(X,p,sh,ax,Fy,E)`:
+       - G4: `h=«Ht»-3*«tdes»` (y axis: `«B»-3*«tdes»`); `Aw=2*h*«tdes»`; `λ=h/«tdes»`; `kv=5`; `Cv2=IF(λ<=1.1*SQRT(kv*E/Fy),1,IF(λ<=1.37*SQRT(kv*E/Fy),1.1*SQRT(kv*E/Fy)/λ,1.51*kv*E/(λ^2*Fy)))`; G4-1 `Vn=0.6*«Fy»*Aw*Cv2`.
+       - G5: `Lv` (ft; the app's value, 10⁹ in. for the minor axis); G5-2a `1.6*«E»/(SQRT(Lv*12/«OD»)*«Dt»^1.25)`; G5-2b `0.78*«E»/«Dt»^1.5`; `Fcr=MIN(0.6*«Fy»,MAX(a,b))`; G5-1 `Vn=Fcr*«A»/2`.
+       - Writes `VnX` / `VnY`.
+     - `xlHssK(X,p,D,Fy,E)`: section 13, "Concentrated forces on the HSS walls" (SBHK).
+       - For each location with a plate or bearing, rectangular HSS: `k=1.5*«tdes»`; K1-1 `Be=MIN(10/(«B»/«tdes»)*(«Fy»*«tdes»/(Fyp*tp))*Bp,Bp)`; plate yielding `0.9*Fyp*tp*Be`; punching `0.95*0.6*«Fy»*«tdes»*(2*lb+2*Be)`; sidewall yielding `2*«Fy»*«tdes»*(5|2.5*k+lb)`; `d=«Ht»-3*«tdes»`; crippling `0.75*(1.6|0.8)*«tdes»^2*(1+3*lb/d | 1+(4*lb/d-0.2))*SQRT(«E»*«Fy»)` at Q_f = 1.
+       - Round HSS: `β=Bp/D`; K2-1a `0.9*«Fy»*«tdes»^2*5.5/(1-0.81*β)` at Q_f = 1, with the Table K2.1A notes.
+       - Then a table per case or combination: R_u, U, limit state, Q_f, φR_n, DCR (the app's values).
+  4. `xlChecks`:
+     - **Section 6:** rect HSS also gets the rows `Flange (minor)` / `Web (minor)` (`cf.y`), plus equation lines for b, h, λp, λr (round: D/t).
+     - **Section 7:**
+       - before: `if(cap.blocked){…}else{ X.line('Plastic section modulus','Zx',N2(p.Zx,1),…`
+       - after: `const hssF=p._kind==='R'||p._kind==='P',xv=(v,d)=>hssF?v:N2(v,d);` then `if(cap.blocked){…}else{ if(hssF)xlHssFlex(X,p,cap,'x',Fy,E,'MnX'); else{` + the W code unchanged + `}`
+       - and `if(!hssF)X.line('Nominal flexural strength','Mn',…{ref:'MnX'})`.
+     - **Section 8:** before: `if(sh.route==='G5'){ …values… }else{ …; if(I/C){…}else{ hFlat, Aw, Cv2 values } Vn G2-1 }`. After: `if(sh.route==='G5'||p._kind==='R'){xlHssShear(X,p,sh,'x',Fy,E); round beam mode note}else{ …I/C… Vn G2-1 }`. The old rect value rows are removed.
+     - **Section 9:** `if(D.flexY&&!D.flexY.blocked&&hssF){xlHssFlex(…'y'…,'MnY'); governing; φbMn = 0.9*«MnY»}` (blocked → note). The W block now runs only for `!hssF`. The Muy table runs for both.
+     - **Section 10:** the band clause is `§G4` / `§G5` for HSS. `else if(hssF){ xlHssShear(X,p,D.shearY,'y',Fy,E); φv; φvVn = «phiVY»*«VnY»; Vuy table }` comes before the W block, which is unchanged.
+     - **Section 11:** `Fe` and `Ae` change to `xv(…)`. Tension: `if(tnC.length&&hssF){…}` writes the helper rows (case 6: H, B, `x̄=(B^2+2BH)/(4(B+H))`; case 5: D, `x̄=D/PI()`; l; `U=1-x̄/l` or 1.0; w; `An=«A»-2*«tdes»*w`), then A_n and U used with their source, then `0.9*«Fy»*«A»` and `0.75*«Fu»*U*An` (blocked: values and a BLOCKED note), then the table. The W branch follows as `else if(tnC.length)`, unchanged.
+     - **Section 12** (HSS only reaches it):
+       - before: `X.line('Torsional constant','C',N2(p.Cc,2)…)`, then the TLEN rows as values, then `X.line('Critical stress','Fcr',N2(D.tors.Fcr,2)…)`.
+       - after: C at full precision.
+       - Round: L (ref `LT`); H3-2a `1.23*«E»/(SQRT(«LT»*12/«OD»)*«Dt»^1.25)`; H3-2b `0.6*«E»/«Dt»^1.5`; `Fcr=MIN(0.6*«Fy»,MAX(a,b))`, or with no length `MIN(0.6*«Fy»,b)`.
+       - Rect: `Fcr=IF(«htdes»<=2.45*SQRT(E/Fy),0.6*Fy,IF(«htdes»<=3.07*SQRT(E/Fy),0.6*Fy*2.45*SQRT(E/Fy)/«htdes»,0.458*PI()^2*E/«htdes»^2))`.
+     - **Section 13:** before `if(D.j10){` add `if(!D.j10&&D.hssK)xlHssK(X,p,D,Fy,E);`.
+     - **Section 15:** the deflection inputs `w, L, c, I, n` change to `xv(…)`.
+  5. User Manual "Deliverables", Export Excel bullet: the last sentence now names the HSS formula steps.
+- **Governing provisions** (as the app already applies them; the export only shows them): AISC 360-16 (15th Ed.) Table B4.1b; §F7 Eqs. F7-1 to F7-6, F7-10 to F7-13; §F8 Eqs. F8-1 to F8-4; §G4, Eqs. G2-9 to G2-11; §G5 Eqs. G5-1, G5-2a/b; §H3.1 Eqs. H3-1 to H3-5; §D2, §D3 Table D3.1 cases 5/6, §B4.3b; §E3, §E7; Chapter K / J as in SBHK. No equation, factor or unit of the engine changed.
+- **Check case:** HSS12X6X1/2, A500 Gr. B (F_y 46), member mode, L_b = L_c = 12 ft, C_b = 1.
+  - Before: "Export failed: unresolved ref … «rts» …".
+  - After, sheet cells (formula [cached]):
+    - Mp `=Fy*Zx/12` [220.03]
+    - Lp `=0.13*E*ry*SQRT(J*A)/(Fy*Zx)/12` [17.11 ft] (spreadsheet 17.11)
+    - Lr `=2*E*ry*SQRT(J*A)/(0.7*Fy*Sx)/12` [477.53 ft] (spreadsheet 477.5)
+    - φbMn_x [198.03]
+    - A_w `=2*h*t` [9.863]
+    - φvV_nx [244.99]
+    - φbMn_y [121.44]
+    - φvV_ny [106.38]
+    - φcP_n [501.12]
+    - F_cr torsion H3-3 [27.6]
+    - φT_n [122.13 k·ft]
+
+    These are the values of tests/engine/sbeam-hss.test.mjs §1. By hand: φMn = 0.9(46)(57.4)/12 = 198.03; Lp = 0.13(29000)(2.44)√(227 × 15.3)/(46 × 57.4)/12 = 17.11 ft.
+- **How verified:**
+  - `tests/engine/sbeam-hss-xlsx.test.mjs` (new; runner `tests/engine/sbeam-xlsx-run.mjs`) exports 10 HSS cases with the page's own `exportExcel()` (ExcelJS 4.4.0 from tests/libs, fixed clock) and reads the file back. Cases: rect A500B, rect slender, rect noncompact, rect A1085, blocked helper / missing K input, rect beam, round beam, round member with blank span (L = ∞), round member with H3-2a governing, Pipe; member and beam mode.
+  - Every numeric cell (2,193, of them 322 formulas) is mapped to the app's result object and must equal it to its shown decimals. An unmapped numeric cell fails.
+  - Every formula is evaluated by an Excel formula evaluator in the test and must equal the app's value to 1e-9 relative.
+  - Mutation runs (a changed coefficient or written value) fail it.
+  - W-shape byte-identical: origin/main vs branch, fixed clock, 9 W/C cases (default beam, point loads + J10 + manual demands, tension, member with all demands + self-weight + deflection + J10, F2-3 LTB, built-up stiffened, channel, composite, open-section torsion): identical .xlsx bytes.
+  - `tests/smoke/steel-beam-xlsx-hss.mjs` (new): the header button in Chromium, 5 HSS/Pipe cases + W, 7 checks. It fails on main (no download).
+- **Saved data (§5):** none touched.
+- **Other copies:** none (the batch Excel export `exportBatchExcel` is separate and unchanged).
+- **Open items:**
+  - Pipe: the embedded database has no torsional constant C for Pipe (`Cc` null), so φT_n = 0 and a Pipe with T_u always fails torsion. C = 2J/D would give the value. This needs the engineer's decision (calculation change, not made here).
+  - ExcelJS stores no cached result for a formula whose result is 0 (e.g. that pipe T_n). Excel computes it on opening; existing behaviour for W too.
+
+## 2026-11-13 — PR: claude/sbeam-batch-grade (PR #1488: https://github.com/mlococo88/All-Structural/pull/1488) (SBBG) — batch Grade column reads the grade ids and the usual spellings; an unrecognised grade blocks the row   [input validation; no formula, saved key or format change]
+- **Problem:** `pickGrade` normalized the text by removing only spaces and hyphens, then compared it with the id (with `_` removed) or a part of the name. So the template's own drop-down ids for HSS (`A500B_R`, `A500C_R`, `A500B_P`, `A500C_P`) and spellings such as `A500B`, `A500 Gr B`, `A500-B`, `A572 Gr 50` were not read. Any such text **silently** took the family default. In a batch saved before SBGB (no `S.batch.hssDefB`) that default is A500 Gr. C, so a row marked `A500B_R` was checked with F_y = 50 instead of 46 (**unconservative**).
+- **Code (re-apply by hand):**
+  1. Before `function pickGrade` add:
+     ```js
+     function sbGradeKey(s){
+       return String(s==null?'':s).toUpperCase().replace(/[^A-Z0-9]/g,'').replace(/^ASTM/,'').replace(/GRADE/g,'').replace(/GR/g,'');
+     }
+     function sbGradeKeys(m){
+       return [m.id,m.id.replace(/_[RP]$/,''),m.name,m.name.replace(/\(.*\)/g,'')].map(sbGradeKey).filter(k=>k);
+     }
+     ```
+  2. `pickGrade`, before (inside `if(g){…}`):
+     ```js
+         m=list.find(x=>x.name.toUpperCase().replace(/[\s\-]/g,'').indexOf(g)>=0);
+         if(m)return m.id;
+       }
+       return defGradeFor(fam,legacy)||(list.length?list[0].id:null);
+     ```
+     after:
+     ```js
+         m=list.find(x=>x.name.toUpperCase().replace(/[\s\-]/g,'').indexOf(g)>=0);
+         if(m)return m.id;
+         const k=sbGradeKey(txt);   /* SBBG */
+         m=k?list.find(x=>sbGradeKeys(x).indexOf(k)>=0):null;
+         return m?m.id:null;
+       }
+       return defGradeFor(fam,legacy)||(list.length?list[0].id:null);
+     ```
+  3. After `pickGrade` add:
+     ```js
+     function sbGradeErr(fam,txt){
+       const k=sbGradeKey(txt),other=k?MATS.find(x=>sbGradeKeys(x).indexOf(k)>=0):null,fm=famMeta(fam);
+       return 'Grade “'+String(txt).trim()+'” '+(other?'('+other.name+') is not available for '+fm.name:'is not recognised')+
+         ' — use one of: '+gradesForFam(fam).map(x=>x.id+' ('+x.name+')').join(', ')+'; blank = the family default. The row is not checked.';
+     }
+     ```
+  4. `batchCheckRow`: before `if(!gid){R.blockers.push('No material grade available for family '+fs.fam+'.');return R;}` add:
+     ```js
+     if(!gid&&String(row.grade==null?'':row.grade).trim().replace(/[\s\-]/g,'')){R.blockers.push(sbGradeErr(fs.fam,row.grade));return R;}
+     ```
+  5. `BATCH_HELP.grade`: the sentence describing the ids, spellings and the blocked row goes before "Blank → family default …". The SBGB comment at `S.batch.hssDefB=true;` now says "a blank HSS grade".
+- **Governing provision:** none (input reading). The grades and their F_y / F_u are unchanged (`MATS`).
+- **Check case:** batch row `HSS8X6X1/2`, Grade `A500B_R`, P_u 10, M_ux 20, L_bx 8, in a batch saved before SBGB.
+  - Before: grade A500C_R (F_y 50), silently.
+  - After: A500B_R (F_y 46).
+  - `A500 Gr B` → A500B_R; `A572 Gr 50` (W) → A572_50 (before: A992).
+  - `A999` → BLOCKED, "Grade "A999" is not recognised — use one of: A500C_R (ASTM A500 Gr. C (rect)), A500B_R (…), A1085 (ASTM A1085); blank = the family default."
+  - `A992` on an HSS → BLOCKED, "… (ASTM A992) is not available for HSS — Rect / Square …".
+  - Blank → A500C_R in an old batch and A500B_R with `hssDefB`, as before.
+- **How verified:**
+  - Identity proof, origin/main vs the branch, `pickGrade` taken from each file: 980 texts (every id and name, every substring of them, case and spacing variants, spellings, junk) × 9 families × legacy/new. All 4,314 combinations that were blank or matched before give identical grades. Of the 13,326 that fell to the default before, 130 are now read and the rest block.
+  - `runBatch()` with 65 rows of recognised grades and blanks, `hssDefB` absent and set: results JSON identical.
+  - `tests/engine/sbeam-batch-grade.test.mjs` (new, 3 tests); `tests/engine/sbeam-hss.test.mjs` SBGB test updated (`'xyz'` now blocks).
+  - check-syntax; `run.mjs sbeam aisc-hss` 33/33; the five Steel Beam smoke tests pass.
+- **Saved data (§5):** no key or format change. A saved batch row whose grade text was not recognised now shows BLOCKED with the message instead of a silent default result. The row's data is kept, so the user retypes the grade.
+- **Other copies:** none.
+- **Open items:** a bare `A500` (no grade letter) is still read as before (the first A500 grade by name, i.e. Gr. C), to keep old results identical. Should it block as ambiguous? Engineer's decision.

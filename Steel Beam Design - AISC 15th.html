@@ -5496,7 +5496,7 @@ MANUAL.p1.blocks.push(
 {h:'Deliverables'},
 {ul:[
 '<b>Print report</b> (header button), Ctrl+P or the browser\u2019s Print: prints the <b>Report</b> tab from any tab \u2014 the result tabs re-rendered by the same code, every section expanded, diagrams as images, the title block and governing result first, identical combinations cross-referenced. Choose the sections with the <b>Include</b> boxes on the Report tab. In batch mode the button opens the batch print. Use the browser print dialog for PDF.',
-'<b>Export Excel</b> (header button): writes a styled .xlsx calc sheet (portrait, 80% scale, matched column widths). Section properties and bracing are named input cells; the governing F2/F3 flexure chain (M\u209A, L\u209A, L\u1D63, M\u2099 piecewise), shear, E3 compression, and the interaction equation are <b>live Excel formulas</b> referencing those cells \u2014 change F\u1D67 or Z\u2093 in the sheet and the DCRs recalculate. Routes without an Excel closed form (F7 S\u2091, G5, E7 reductions) export as values explicitly marked \u201Ccomputed by app.\u201D Requires internet once per session (ExcelJS CDN).'
+'<b>Export Excel</b> (header button): writes a styled .xlsx calc sheet (portrait, 80% scale, matched column widths). Section properties and bracing are named input cells; the governing F2/F3 flexure chain (M\u209A, L\u209A, L\u1D63, M\u2099 piecewise), shear, E3 compression, and the interaction equation are <b>live Excel formulas</b> referencing those cells \u2014 change F\u1D67 or Z\u2093 in the sheet and the DCRs recalculate. For HSS and pipe the F7 / F8 flexure, G4 / G5 shear, H3.1 torsion, D2 tension and Chapter K wall capacities are live formulas too (SBXH). Values without an Excel closed form (F7 S\u2091, E7 reductions, Qf per combination) export as the app\u2019s values, marked. Requires internet once per session (ExcelJS CDN).'
 ]});
 /* =====================================================================
    MEMBER CHECK MODE — type Mux/Vux directly; no beam analysis
@@ -7600,6 +7600,9 @@ async function exportExcel(){
   const X=new XB(ws);
   const p=AN.sect,D=AN.design,f=S.proj,Fy=p.mat.Fy,E=EKSI;
   const mem=isMember();
+  /* SBXH (2026-11-13): HSS: the input cells that formulas read carry full precision (xv), so Excel recalculates to the
+     app's values; W-shapes and channels keep their rounded cells (N2), unchanged */
+  const hssX=p._kind==='R'||p._kind==='P',xv=(v,d)=>hssX?v:N2(v,d);
   /* ---------- title block ---------- */
   X.title((mem?'STEEL MEMBER CAPACITY CHECK':'STEEL BEAM DESIGN')+' \u2014 AISC 360-16 (LRFD)');
   X.line('Project','Project',f.name||'\u2014','','','');
@@ -7625,7 +7628,7 @@ async function exportExcel(){
   X.line('Member size','Member',p.lbl,'',{kind:'in'});
   X.line('Material specification','Grade',p.mat.name,'',{kind:'in'});
   X.line('Yield strength of steel','Fy',N2(Fy,0),'ksi','Table 2-4',{kind:'in',dp:0,ref:'Fy'});
-  X.line('Tensile strength of steel','Fu',N2(p.mat.Fu,0),'ksi','Table 2-4',{kind:'in',dp:0});
+  X.line('Tensile strength of steel','Fu',N2(p.mat.Fu,0),'ksi','Table 2-4',{kind:'in',dp:0,ref:'Fu'});
   X.line('Modulus of elasticity','E',N2(E,0),'ksi','',{kind:'in',dp:0,ref:'E'});
   X.line('Shear modulus of steel','G',N2(GKSI,0),'ksi','',{kind:'in',dp:0,ref:'G'});
   X.line('Rolled or built-up section','Rolled?',p._built?'Built-up':'Rolled','','\u00A7G2.1(a)',{kind:'in'});
@@ -7656,11 +7659,11 @@ async function exportExcel(){
       {v:N2(C.man.Tu||0,2),dp:2,kind:'imp'}]));
   if(D.sw){
     X.note('Self-weight additions included in Mux and Vux above:');
-    X.line('Shape weight','W',N2(p.Wt,1),'lb/ft','',{kind:'in',dp:1,ref:'Wt'});
-    X.line('Self-weight span','L',N2(D.sw.L,2),'ft','',{kind:'in',ref:'swL'});
-    X.line('Moment denominator','k',N2(D.sw.k,1),'\u2014','',{kind:'in',dp:1,ref:'swK'});
-    X.line('Shear coefficient','c',N2(D.sw.c,2),'\u2014','',{kind:'in',ref:'swC'});
-    X.line('Dead-load factor','\u03B3',N2(D.sw.gam,2),'\u2014','',{kind:'in',ref:'swG'});
+    X.line('Shape weight','W',xv(p.Wt,1),'lb/ft','',{kind:'in',dp:1,ref:'Wt'});
+    X.line('Self-weight span','L',xv(D.sw.L,2),'ft','',{kind:'in',ref:'swL'});
+    X.line('Moment denominator','k',xv(D.sw.k,1),'\u2014','',{kind:'in',dp:1,ref:'swK'});
+    X.line('Shear coefficient','c',xv(D.sw.c,2),'\u2014','',{kind:'in',ref:'swC'});
+    X.line('Dead-load factor','\u03B3',xv(D.sw.gam,2),'\u2014','',{kind:'in',ref:'swG'});
     X.eq('\u0394Mux = \u03B3 \u00B7 (W/1000) \u00B7 L\u00B2 / k = '+S2(D.sw.gam,2)+' \u00B7 ('+S2(p.Wt,1)+'/1000) \u00B7 '+S2(D.sw.L,2)+'\u00B2 / '+S2(D.sw.k,1));
     X.line('Self-weight moment','\u0394Mux',{formula:'\u00ABswG\u00BB*\u00ABWt\u00BB/1000*\u00ABswL\u00BB^2/\u00ABswK\u00BB',result:N2(D.sw.dM,2)},'k\u00B7ft','',{ref:'swDM'});
     X.eq('\u0394Vux = \u03B3 \u00B7 c \u00B7 (W/1000) \u00B7 L = '+S2(D.sw.gam,2)+' \u00B7 '+S2(D.sw.c,2)+' \u00B7 ('+S2(p.Wt,1)+'/1000) \u00B7 '+S2(D.sw.L,2));
@@ -7684,7 +7687,11 @@ async function exportExcel(){
   /* ---------- section properties ---------- */
   X.band('4.  SECTION PROPERTIES','Manual Table 1-1');
   const PL=(typeof PROP_LABELS!=='undefined')?PROP_LABELS:{};
+  /* SBXH: HSS: full-precision property cells, the HSS dimensions as named cells, the A1085 source noted */
+  if(hssX&&p._a1085)X.note('ASTM A1085: design wall t = tₙₒₘ (§B4.2); A, Z, S, I, r, J and C are recomputed at tₙₒₘ by the app (rows marked “A1085, t = tₙₒₘ”; worked on the Section Properties tab).');
   Object.keys(p).filter(k=>PL[k]&&typeof p[k]==='number'&&isFinite(p[k])).forEach(k=>{
+    if(hssX){X.line(PL[k][0],k,p[k],PL[k][1],p._src[k]==='ovr'?'user override':p._src[k]==='rule'?'A1085, t = tₙₒₘ':'',
+      {kind:p._src[k]==='ovr'?'imp':'in',dp:(Math.abs(p[k])>=100?1:3),ref:['A','Ix','Zx','Sx','Zy','Sy','ry','rx','J','B','Ht','tdes','bFlat','hFlat','btdes','htdes','Cc','OD','Dt'].indexOf(k)>=0?k:null});return;}
     X.line(PL[k][0],k,N2(p[k],4),PL[k][1],p._src[k]==='ovr'?'user override':'',
       {kind:p._src[k]==='ovr'?'imp':'in',dp:(Math.abs(p[k])>=100?1:3),ref:['A','Ix','Zx','Sx','Zy','Sy','ry','rx','J','Cw','tw','tf','bf','d','ho','rts','htw'].indexOf(k)>=0?k:null});
   });
@@ -7719,6 +7726,158 @@ async function exportExcel(){
 /* =====================================================================
    PER-CHECK CALCULATION SECTIONS
    ===================================================================== */
+/* SBXH (2026-11-13): the HSS steps of the Excel calc sheet, as the app computes and shows them: rectangular HSS F7 (x and y),
+   round HSS / pipe F8, shear G4 / G5. Live formulas from the named cells (HSS property cells carry full precision, so each
+   formula recalculates to the app's value); a value with no closed form (F7-4 S_e) is written as the app's value and marked.
+   W-shapes and channels keep their own steps unchanged. Writes the nominal strength M_n as ref. */
+function xlHssFlex(X,p,cap,ax,Fy,E,ref){
+  const R=p._kind==='R',y=ax==='y',sf=y?'Y':'X',Zr=y?'Zy':'Zx',Sr=y?'Sy':'Sx',Z=y?p.Zy:p.Zx,mp='MpH'+sf;
+  const app=[];   /* refs of the limit states that apply (M_n = the least, as finishFlex) */
+  X.line('Plastic section modulus','Z'+(y?'y':'x'),Z,'in³','',{kind:'in',dp:3,ref:Zr});
+  X.eq('Mp = Fy · Z / 12 = '+Fy+' · '+S2(Z,3)+' / 12');
+  const yl=cap.ls.find(l=>l.name.indexOf('Yielding')===0);
+  X.line(yl&&yl.applies?'Plastic moment (yielding)':'Plastic moment (reference — not a limit state for this wall in §F8)','Mp',
+    {formula:'«Fy»*«'+Zr+'»/12',result:N2(cap.Mp/12,2)},'k·ft',R?'Eq. F7-1':'Eq. F8-1',{ref:mp});
+  if(yl&&yl.applies)app.push(mp);
+  if(R){
+    const flb=cap.ls.find(l=>l.name==='Flange local buckling'),wlb=cap.ls.find(l=>l.name==='Web local buckling');
+    const lf=y?'htdes':'btdes',lw=y?'btdes':'htdes',bw=y?'hFlat':'bFlat';
+    X.sub('Local buckling  (§F7.2, §F7.3) — compression flange '+(y?'h':'b')+'/t = '+S2(cap.cls.flange.lam,2)+', web '+(y?'b':'h')+'/t = '+S2(cap.cls.web.lam,2));
+    if(flb&&flb.applies&&flb.clause.indexOf('F7-2')>=0){
+      X.eq('Mn = Mp − (Mp − Fy·S)(3.57 (b/t)√(Fy/E) − 4.0) ≤ Mp');
+      X.line('Flange local buckling (noncompact flange)','Mn',{formula:'MIN(«'+mp+'»,«'+mp+'»-(«'+mp+'»-«Fy»*«'+Sr+'»/12)*(3.57*«'+lf+'»*SQRT(«Fy»/«E»)-4))',
+        result:N2(flb.Mn/12,2)},'k·ft','Eq. F7-2',{ref:'MnFLB'+sf});app.push('MnFLB'+sf);
+    }else if(flb&&flb.applies){
+      X.eq('be = 1.92 t √(E/Fy) [1 − 0.38/(b/t) √(E/Fy)] ≤ b');
+      X.line('Effective width of the compression flange','be',{formula:'MIN(«'+bw+'»,1.92*«tdes»*SQRT(«E»/«Fy»)*(1-0.38/«'+lf+'»*SQRT(«E»/«Fy»)))',
+        result:N2(flb.d.be,3)},'in','Eq. F7-4',{dp:3,ref:'beF'+sf});
+      X.line('Effective section modulus (computed by app: be in the compression flange)','Se',flb.d.Se,'in³','§F7.2(c)',{dp:3,ref:'SeF'+sf});
+      X.line('Flange local buckling (slender flange)','Mn',{formula:'«Fy»*«SeF'+sf+'»/12',result:N2(flb.Mn/12,2)},'k·ft','Eq. F7-3',{ref:'MnFLB'+sf});app.push('MnFLB'+sf);
+    }else X.line('Flange local buckling','Mn','N/A — compact flange','','§F7.2',{kind:'txt'});
+    if(wlb&&wlb.applies){
+      X.eq('Mn = Mp − (Mp − Fy·S)(0.305 (h/t)√(Fy/E) − 0.738) ≤ Mp');
+      X.line('Web local buckling (noncompact web)','Mn',{formula:'MIN(«'+mp+'»,«'+mp+'»-(«'+mp+'»-«Fy»*«'+Sr+'»/12)*(0.305*«'+lw+'»*SQRT(«Fy»/«E»)-0.738))',
+        result:N2(wlb.Mn/12,2)},'k·ft','Eq. F7-6',{ref:'MnWLB'+sf});app.push('MnWLB'+sf);
+    }else X.line('Web local buckling','Mn','N/A — compact web','','§F7.3',{kind:'txt'});
+    if(!y){
+      const ltb=cap.ls.find(l=>l.name.indexOf('Lateral')>=0);
+      X.sub('Lateral-torsional buckling  (§F7.4)');
+      if(ltb&&ltb.d&&ltb.d.Lp!=null){
+        X.line('Unbraced length','Lb',cap.Lb/12,'ft','',{kind:'in',ref:'LbF'});
+        X.eq('Lp = 0.13 · E · ry · √(J·A) / Mp / 12 = 0.13 · '+E+' · '+S2(p.ry,3)+' · √('+S2(p.J,2)+' · '+S2(p.A,3)+') / ('+Fy+' · '+S2(p.Zx,3)+') / 12');
+        X.line('Limiting length for yielding','Lp',{formula:'0.13*«E»*«ry»*SQRT(«J»*«A»)/(«Fy»*«Zx»)/12',result:N2(ltb.d.Lp/12,3)},'ft','Eq. F7-12',{dp:3,ref:'Lp'});
+        X.eq('Lr = 2 · E · ry · √(J·A) / (0.7 · Fy · Sx) / 12');
+        X.line('Limiting length for inelastic LTB','Lr',{formula:'2*«E»*«ry»*SQRT(«J»*«A»)/(0.7*«Fy»*«Sx»)/12',result:N2(ltb.d.Lr/12,3)},'ft','Eq. F7-13',{dp:3,ref:'Lr'});
+        X.line('Bracing classification','Region',cap.Lb<=ltb.d.Lp?'Lb ≤ Lp':(cap.Lb<=ltb.d.Lr?'Lp < Lb ≤ Lr':'Lb > Lr'),'','§F7.4',{kind:'txt'});
+        X.line('Modification factor','Cb',cap.Cb||1,'—','Eq. F1-1',{kind:'in',dp:3,ref:'CbF'});
+        if(ltb.applies&&ltb.clause.indexOf('F7-10')>=0){
+          X.eq('Mn = Cb[ Mp − (Mp − 0.7·Fy·Sx/12)(Lb − Lp)/(Lr − Lp) ] ≤ Mp');
+          X.line('Nominal LTB strength','Mn,LTB',{formula:'MIN(«'+mp+'»,«CbF»*(«'+mp+'»-(«'+mp+'»-0.7*«Fy»*«Sx»/12)*(«LbF»-«Lp»)/(«Lr»-«Lp»)))',
+            result:N2(ltb.Mn/12,2)},'k·ft','Eq. F7-10',{ref:'MnLTB'});app.push('MnLTB');
+        }else if(ltb.applies){
+          X.eq('Mn = 2 · E · Cb · √(J·A) / (Lb/ry) / 12 ≤ Mp');
+          X.line('Nominal LTB strength','Mn,LTB',{formula:'MIN(«'+mp+'»,2*«E»*«CbF»*SQRT(«J»*«A»)/(«LbF»*12/«ry»)/12)',
+            result:N2(ltb.Mn/12,2)},'k·ft','Eq. F7-11',{ref:'MnLTB'});app.push('MnLTB');
+        }else X.line('Lateral-torsional buckling','Mn,LTB','N/A — Lb ≤ Lp','','§F7.4',{kind:'txt'});
+      }else X.line('Lateral-torsional buckling','Mn,LTB','N/A — continuously braced','','§F7.4',{kind:'txt'});
+    }
+  }else{
+    const c=cap.cls,lb=cap.ls.find(l=>l.applies&&l.name==='Local buckling');
+    X.eq('D/t = '+S2(c.lam,2)+'   vs   λp = 0.07E/Fy = '+S2(c.lp,2)+',  λr = 0.31E/Fy = '+S2(c.lr,2)+',  limit 0.45E/Fy = '+S2(c.max,2)+'   →  '+c.cls+' wall');
+    if(lb&&lb.clause.indexOf('F8-2')>=0){
+      X.eq('Mn = (0.021E/(D/t) + Fy) · S / 12');
+      X.line('Local buckling (noncompact wall)','Mn',{formula:'(0.021*«E»/«Dt»+«Fy»)*«'+Sr+'»/12',result:N2(lb.Mn/12,2)},'k·ft','Eq. F8-2',{ref:'MnLB'+sf});app.push('MnLB'+sf);
+    }else if(lb){
+      X.line('Critical stress','Fcr',{formula:'0.33*«E»/«Dt»',result:N2(0.33*E/c.lam,2)},'ksi','Eq. F8-4',{ref:'FcrLB'+sf});
+      X.line('Local buckling (slender wall)','Mn',{formula:'«FcrLB'+sf+'»*«'+Sr+'»/12',result:N2(lb.Mn/12,2)},'k·ft','Eq. F8-3',{ref:'MnLB'+sf});app.push('MnLB'+sf);
+    }else X.line('Local buckling','Mn','N/A — compact wall','','§F8.2',{kind:'txt'});
+    X.note('Round HSS: no lateral-torsional buckling (§F8). As the app computes it, a noncompact or slender wall takes Mₙ from §F8.2 alone (the yielding value above is for reference).');
+  }
+  X.line('Nominal flexural strength (least of the limit states that apply)','Mn',
+    {formula:app.length>1?'MIN('+app.map(r=>'«'+r+'»').join(',')+')':'«'+app[0]+'»',result:N2(cap.Mn/12,2)},'k·ft',cap.gov?cap.gov.clause:'',{ref});
+}
+/* SBXH: HSS shear, G4 (rectangular; ax 'x': the walls of height h, 'y': the walls of width b) or G5 (round). Writes V_n as
+   ref 'VnX' / 'VnY'. */
+function xlHssShear(X,p,sh,ax,Fy,E){
+  const y=ax==='y',sf=y?'Y':'X';
+  if(sh.route==='G5'){
+    const big=!(sh.Lv<1e8);
+    X.line('Distance from maximum to zero shear','Lv',sh.Lv/12,'ft',big?(y?'not used for Vᵧ (app: 10⁹ in)':'not entered (app: very large)'):'§G5',{kind:'in',ref:'LvG'+sf});
+    X.eq('Fcr = max[ 1.60E/(√(Lv/D)(D/t)^1.25), 0.78E/(D/t)^1.5 ] ≤ 0.6Fy');
+    X.line('Critical stress, Eq. G5-2a','Fcr,a',{formula:'1.6*«E»/(SQRT(«LvG'+sf+'»*12/«OD»)*«Dt»^1.25)',result:N2(sh.F1,3)},'ksi','Eq. G5-2a',{dp:3,ref:'F1G'+sf});
+    X.line('Critical stress, Eq. G5-2b','Fcr,b',{formula:'0.78*«E»/«Dt»^1.5',result:N2(sh.F2c,3)},'ksi','Eq. G5-2b',{dp:3,ref:'F2G'+sf});
+    X.line('Critical stress','Fcr',{formula:'MIN(0.6*«Fy»,MAX(«F1G'+sf+'»,«F2G'+sf+'»))',result:N2(sh.Fcr,3)},'ksi','§G5',{dp:3,ref:'FcrG'+sf});
+    X.eq('Vn = Fcr · Ag / 2 = '+S2(sh.Fcr,3)+' · '+S2(p.A,3)+' / 2');
+    X.line('Nominal shear strength','Vn',{formula:'«FcrG'+sf+'»*«A»/2',result:N2(sh.Vn,2)},'kip','Eq. G5-1',{ref:'Vn'+sf});
+    return;
+  }
+  X.eq(y?'b = B − 3t;  Aw = 2bt (the two walls parallel to the minor-axis shear)':'h = H − 3t;  Aw = 2ht (the two walls parallel to the major-axis shear)');
+  X.line(y?'Flat width of the shear walls':'Flat height of the shear walls',y?'b':'h',{formula:y?'«B»-3*«tdes»':'«Ht»-3*«tdes»',result:N2(y?p.bFlat:p.hFlat,3)},'in','§G4',{dp:3,ref:'hG'+sf});
+  X.line('Shear area (2 walls)','Aw',{formula:'2*«hG'+sf+'»*«tdes»',result:N2(sh.Aw,3)},'in²','§G4',{dp:3,ref:'AwG'+sf});
+  X.line('Wall slenderness',y?'b/t':'h/t',{formula:'«hG'+sf+'»/«tdes»',result:N2(y?p.btdes:p.htdes,3)},'—','',{dp:3,ref:'lamG'+sf});
+  X.line('Web plate buckling coefficient','kv',5,'—','§G4',{kind:'in',dp:1,ref:'kvG'+sf});
+  X.eq('1.10√(kv·E/Fy) = '+S2(1.10*Math.sqrt(5*E/Fy),2)+',  1.37√(kv·E/Fy) = '+S2(1.37*Math.sqrt(5*E/Fy),2)+'   →  Cv2 = 1 (G2-9), 1.10√(kvE/Fy)/(h/t) (G2-10), 1.51kvE/((h/t)²Fy) (G2-11)');
+  const L='«lamG'+sf+'»',K='SQRT(«kvG'+sf+'»*«E»/«Fy»)';
+  X.line('Web shear buckling coefficient','Cv2',{formula:'IF('+L+'<=1.1*'+K+',1,IF('+L+'<=1.37*'+K+',1.1*'+K+'/'+L+',1.51*«kvG'+sf+'»*«E»/('+L+'^2*«Fy»)))',
+    result:N2(sh.Cv,3)},'—','Eqs. G2-9/10/11',{dp:3,ref:'CvG'+sf});
+  X.eq('Vn = 0.6 · Fy · Aw · Cv2 = 0.6 · '+Fy+' · '+S2(sh.Aw,3)+' · '+S2(sh.Cv,3));
+  X.line('Nominal shear strength','Vn',{formula:'0.6*«Fy»*«AwG'+sf+'»*«CvG'+sf+'»',result:N2(sh.Vn,2)},'kip','Eq. G4-1',{ref:'Vn'+sf});
+}
+/* SBXH: concentrated forces on the HSS walls (SBHK), as the Concentrated Forces tab: per location the capacities at Q_f = 1
+   as formulas, then per case / combination U, Q_f, phiR_n and the DCR (values of the app). */
+function xlHssK(X,p,D,Fy,E){
+  const L=D.hssK||[],on=L.filter(l=>l.prm.type!=='none'),R=p._kind==='R';
+  X.band('13.  CONCENTRATED FORCES ON THE HSS WALLS',R?'§K2.3 → Ch. J':'§K2.2, Table K2.1');
+  if(!on.length){X.note('No plate or bearing is stated at any support or point load — locally loaded HSS walls are not checked; reported N/A, not passing.');X.gap();return;}
+  const TY={plate:'transverse plate',bearing:'bearing (cap plate / seat)'};
+  on.forEach((lo,i)=>{
+    const pr=lo.prm,c=lo.caps,k='K'+i,q=n=>'«'+k+n+'»';
+    X.sub(lo.label+' — '+TY[pr.type]);
+    if(pr.errs.length){X.note('Input missing: '+pr.errs.join(', ')+' — this location is reported as failing until it is entered.');return;}
+    X.line('Distance to the nearer member end','end',lo.endDist>=1e5?'interior':lo.endDist,'in','',{kind:'in',dp:2});
+    if(R){
+      X.line('Bearing length along the HSS','lb',c.lb,'in',pr.lbDef?'blank → tₚ':'entered',{kind:'in',dp:3,ref:k+'lb'});
+      X.line('Corner radius (not known, taken as 1.5t)','k',{formula:'1.5*«tdes»',result:N2(c.k,4)},'in','Comm. J10',{dp:4,ref:k+'k'});
+      if(pr.type==='plate'){
+        X.line('Plate width across the face (≤ B)','Bp',c.Bp,'in',pr.Bp>c.Bp?'entered '+S2(pr.Bp,3)+', limited to B':'entered',{kind:'in',dp:3,ref:k+'Bp'});
+        X.line('Plate thickness','tp',pr.tp,'in','',{kind:'in',dp:3,ref:k+'tp'});
+        X.line('Plate yield stress','Fyp',pr.Fyp,'ksi',pr.FypDef?'blank → 36 ksi':'entered',{kind:'in',dp:0,ref:k+'Fyp'});
+        X.eq('Be = 10/(B/t) · (Fy·t)/(Fyp·tp) · Bp ≤ Bp');
+        X.line('Effective plate width','Be',{formula:'MIN(10/(«B»/«tdes»)*(«Fy»*«tdes»/('+q('Fyp')+'*'+q('tp')+'))*'+q('Bp')+','+q('Bp')+')',result:N2(c.Be,3)},'in','Eq. K1-1',{dp:3,ref:k+'Be'});
+        const ply=c.ls.find(s=>s.id==='ply'),pun=c.ls.find(s=>s.id==='pun');
+        X.line('Plate local yielding, φ = 0.90','φRn',{formula:'0.9*'+q('Fyp')+'*'+q('tp')+'*'+q('Be'),result:N2(0.9*ply.Rn,2)},'kip','§J4.1, J4.4',{});
+        if(pun)X.line('HSS face punching shear, φ = 0.95','φRn',{formula:'0.95*0.6*«Fy»*«tdes»*(2*'+q('lb')+'+2*'+q('Be')+')',result:N2(0.95*pun.Rn,2)},'kip','§J10.10, J4.2; Comm. K1.2',{});
+        else X.note('Face punching shear: Bp > B − 2t, the plate edges bear on the corners and sidewalls — not a limit state.');
+        if(c.ylNC)X.note('NOT CHECKED: β = Bp/B = '+S2(c.beta,3)+' < 0.85 — face yield-line flexure has no AISC 360-16 equation (§J10.10; AISC Manual Part 9). Verify it separately.');
+      }else X.note('Bearing on a cap plate or seat across the full width B: the sidewall limit states below.');
+      const sly=c.ls.find(s=>s.id==='sly'),slc=c.ls.find(s=>s.id==='slc');
+      X.line('Sidewall local yielding (2 walls), φ = 1.00','φRn',{formula:'1*2*«Fy»*«tdes»*('+(sly.atEnd?'2.5':'5')+'*'+q('k')+'+'+q('lb')+')',result:N2(sly.Rn,2)},'kip',(sly.atEnd?'Eq. J10-3':'Eq. J10-2')+' × 2',{});
+      X.line('Crippling depth','d',{formula:'«Ht»-3*«tdes»',result:N2(c.dF,3)},'in','d = H − 3t',{dp:3,ref:k+'d'});
+      const br=slc.clause==='J10-5b'?'(1+(4*'+q('lb')+'/'+q('d')+'-0.2))':'(1+3*'+q('lb')+'/'+q('d')+')';
+      X.line('Sidewall local crippling (2 walls), φ = 0.75, Qf = 1','φRn',{formula:'0.75*'+(slc.clause==='J10-4'?'1.6':'0.8')+'*«tdes»^2*'+br+'*SQRT(«E»*«Fy»)',
+        result:N2(0.75*slc.RnQ1,2)},'kip','Eq. '+slc.clause+' × 2; × Qf (Eq. K3-14)',{});
+    }else{
+      const rly=c.ls[0];
+      X.line('Outside diameter (label)','D',c.D,'in','',{kind:'in',dp:3,ref:k+'D'});
+      X.line(pr.type==='bearing'?'Bearing width':'Plate width','Bp',c.Bp,'in',pr.type==='bearing'&&pr.BpDef?'blank → D':'entered',{kind:'in',dp:3,ref:k+'Bp'});
+      X.line('Width ratio','β',{formula:q('Bp')+'/'+q('D'),result:N2(c.beta,4)},'—','',{dp:4,ref:k+'beta'});
+      X.line('HSS local yielding, φ = 0.90, Qf = 1','φRn',{formula:'0.9*«Fy»*«tdes»^2*5.5/(1-0.81*'+q('beta')+')',result:N2(0.9*rly.RnQ1,2)},'kip','Eq. K2-1a; × Qf (Eq. K2-3)',{});
+      if(c.lim.length)X.note('Outside the Table K2.1A limits ('+c.lim.join('; ')+'): §K1, design by rational analysis; the value is for information.');
+    }
+  });
+  const rows=[];
+  D.perCombo.forEach(C=>(C.hssK||[]).forEach(r=>{
+    const lo=L.find(l=>l.key===r.key);if(!lo||lo.prm.type==='none'||!(r.dem>1e-9))return;
+    if(lo.prm.errs.length){rows.push([C.name+' — '+r.label,{v:N2(r.F,2),dp:2},'—','input missing: '+lo.prm.errs.join(', '),'—','—',{v:'FAIL',kind:'bad'}]);return;}
+    r.states.forEach(s=>rows.push([C.name+' — '+r.label+(r.tens?' (tension)':''),{v:N2(r.F,2),dp:2},{v:N2(r.U,4),dp:4},s.name,
+      s.Qf!=null?{v:N2(s.Qf,4),dp:4}:'—',{v:N2(s.phiRn,2),dp:2},{v:N2(s.dcr,3),dp:3,kind:s.dcr>1?'bad':'ok'}]));
+  }));
+  if(rows.length)X.table(['Case / location','Ru (kip)','U','Limit state','Qf','φRn (kip)','DCR'],rows);
+  else X.note('No force at the stated locations.');
+  X.note('Ru > 0 pushes on the wall (every limit state), < 0 pulls (crippling not a limit state). U = Pro/(Fy·Ag) + |Mro|/(Fy·S) (Eq. K2-4), compressive Pu and the moment at the location; '+
+    (R?'Qf = 1.3 − 0.4U/β ≤ 1.0 (Eq. K3-14).':'Qf = 1 − 0.3U(1 + U) (Eq. K2-3).')+' Not covered: '+(R?'face yield-line flexure for Bp < 0.85B; ':'')+'web compression buckling (§J10.5); longitudinal plates; HSS-to-HSS (§K3); the plate and its welds.');
+  X.gap();
+}
 async function xlChecks(X,p,D,mem,Fy,E){
   const rt=Math.sqrt(E/Fy);
   const gov=(()=>{let b=-1,c=null;D.perCombo.forEach(C=>{if(C.flexGov&&C.flexGov.dcr>b){b=C.flexGov.dcr;c=C;}});return c||D.perCombo[0];})();
@@ -7729,20 +7888,29 @@ async function xlChecks(X,p,D,mem,Fy,E){
   const addCls=(nm,c,cs)=>clsRows.push([nm,{v:N2(c.lam,2),dp:2},{v:N2(c.lp,2),dp:2},{v:N2(c.lr,2),dp:2},'Case '+cs,
     {v:c.cls,kind:c.cls==='compact'?'ok':(c.cls==='noncompact'?'out':'bad')}]);
   if(p._kind==='I'||p._kind==='C'){addCls('Flange',cf.flange,cf.flange.case);addCls('Web',cf.web,cf.web.case);}
-  else if(p._kind==='R'){addCls('Flange (major)',cf.x.flange,cf.x.flange.case);addCls('Web (major)',cf.x.web,cf.x.web.case);}
+  else if(p._kind==='R'){addCls('Flange (major)',cf.x.flange,cf.x.flange.case);addCls('Web (major)',cf.x.web,cf.x.web.case);
+    addCls('Flange (minor)',cf.y.flange,cf.y.flange.case);addCls('Web (minor)',cf.y.web,cf.y.web.case);}   /* SBXH: F7 about y uses these */
   else addCls('Wall',cf.wall,cf.wall.case);
   X.table(['Element','\u03BB','\u03BBp','\u03BBr','Table B4.1b','Classification'],clsRows);
   if(p._kind==='I'||p._kind==='C'){
     X.eq('\u03BB flange = bf/2tf = '+S2(p.bf,2)+' / (2 \u00D7 '+S2(p.tf,3)+') = '+S2(cf.flange.lam,2));
     X.eq('\u03BBp = 0.38\u221A(E/Fy) = 0.38\u221A('+E+'/'+Fy+') = '+S2(cf.flange.lp,2)+'      \u03BBr = 1.0\u221A(E/Fy) = '+S2(cf.flange.lr,2));
     X.eq('\u03BB web = h/tw = '+S2(cf.web.lam,2)+'      \u03BBp = 3.76\u221A(E/Fy) = '+S2(cf.web.lp,2)+'      \u03BBr = 5.70\u221A(E/Fy) = '+S2(cf.web.lr,2));
+  }else if(p._kind==='R'){   /* SBXH */
+    X.eq('b = B \u2212 3t = '+S2(p.B,3)+' \u2212 3 \u00D7 '+S2(p.tdes,4)+' = '+S2(p.bFlat,3)+' in;   h = H \u2212 3t = '+S2(p.Ht,3)+' \u2212 3 \u00D7 '+S2(p.tdes,4)+' = '+S2(p.hFlat,3)+' in   (t = design wall)');
+    X.eq('Flange (compression wall): \u03BBp = 1.12\u221A(E/Fy) = '+S2(cf.x.flange.lp,2)+',  \u03BBr = 1.40\u221A(E/Fy) = '+S2(cf.x.flange.lr,2)+';   web: \u03BBp = 2.42\u221A(E/Fy) = '+S2(cf.x.web.lp,2)+',  \u03BBr = 5.70\u221A(E/Fy) = '+S2(cf.x.web.lr,2)+'.  Major axis: flange b/t, web h/t; minor axis: flange h/t, web b/t.');
+  }else{
+    X.eq('D/t = '+S2(p.OD,3)+' / '+S2(p.tdes,4)+' = '+S2(cf.wall.lam,2)+';   \u03BBp = 0.07E/Fy = '+S2(cf.wall.lp,2)+',  \u03BBr = 0.31E/Fy = '+S2(cf.wall.lr,2)+',  limit 0.45E/Fy = '+S2(cf.wall.max,2));
   }
   X.gap();
   /* ---------- major flexure ---------- */
   const cap=D.capTop;
   X.band('7.  FLEXURE ABOUT THE MAJOR AXIS','\u00A7'+cap.route);
+  const hssF=p._kind==='R'||p._kind==='P',xv=(v,d)=>hssF?v:N2(v,d);   /* SBXH: HSS F7 / F8; full-precision input cells (see exportExcel) */
   if(cap.blocked){X.note('BLOCKED: '+cap.blocked);}
   else{
+    if(hssF)xlHssFlex(X,p,cap,'x',Fy,E,'MnX');
+    else{
     X.line('Plastic section modulus','Zx',N2(p.Zx,1),'in\u00B3','',{kind:'in',dp:1,ref:'Zx'});
     X.eq('Mp = Fy \u00B7 Zx / 12 = '+Fy+' \u00B7 '+S2(p.Zx,1)+' / 12');
     X.line('Plastic moment','Mp',{formula:'\u00ABFy\u00BB*\u00ABZx\u00BB/12',result:N2(cap.Mp/12,2)},'k\u00B7ft','Eq. F2-1',{ref:'Mp'});
@@ -7777,8 +7945,9 @@ async function xlChecks(X,p,D,mem,Fy,E){
       X.line(l.name,'Mn',N2(l.Mn/12,2),'k\u00B7ft',l.clause,{});
       if(l.note)X.note('   '+l.note);
     });
+    }
     X.line('Governing limit state','\u2014',cap.gov?cap.gov.name:'Yielding','',cap.gov?cap.gov.clause:'',{kind:'txt'});
-    X.line('Nominal flexural strength','Mn',N2(cap.Mn/12,2),'k\u00B7ft','',{ref:'MnX'});
+    if(!hssF)X.line('Nominal flexural strength','Mn',N2(cap.Mn/12,2),'k\u00B7ft','',{ref:'MnX'});
     X.eq('\u03C6bMn = 0.90 \u00B7 '+S2(cap.Mn/12,2));
     X.line('Design flexural strength','\u03C6bMn',{formula:'0.9*\u00ABMnX\u00BB',result:N2(cap.phiMn/12,2)},'k\u00B7ft','\u00A7F1',{ref:'phiMnX'});
     X.sub('Demand / capacity \u2014 per '+(mem?'case':'combination'));
@@ -7793,11 +7962,9 @@ async function xlChecks(X,p,D,mem,Fy,E){
   /* ---------- major shear ---------- */
   const sh=gov.shearX;
   X.band('8.  SHEAR ABOUT THE MAJOR AXIS','\u00A7'+sh.route);
-  if(sh.route==='G5'){
-    X.line('Distance to zero shear','Lv',N2(sh.Lv/12,2),'ft','\u00A7G5',{kind:'in'});
-    X.eq('Fcr = max[ 1.60E/(\u221A(Lv/D)(D/t)^1.25), 0.78E/(D/t)^1.5 ] \u2264 0.6Fy');
-    X.line('Critical stress','Fcr',N2(sh.Fcr,2),'ksi','Eq. G5-2',{});
-    X.line('Nominal shear strength','Vn',N2(sh.Vn,2),'kip','Eq. G5-1',{ref:'VnX'});
+  if(sh.route==='G5'||p._kind==='R'){   /* SBXH: HSS G4 / G5 */
+    xlHssShear(X,p,sh,'x',Fy,E);
+    if(sh.route==='G5'&&!mem)X.note('Round HSS: Lv, Fcr and Vn above are those of the governing flexure combination ('+gov.name+'); each combination\u2019s own Lv gives the \u03C6Vn in the table below.');
   }else{
     if(p._kind==='I'||p._kind==='C'){
       X.line('Web slenderness','h/tw',N2(p.htw,2),'\u2014','',{ref:'htw'});
@@ -7820,10 +7987,6 @@ async function xlChecks(X,p,D,mem,Fy,E){
       }
       X.eq('Aw = d \u00B7 tw = '+S2(p.d,2)+' \u00B7 '+S2(p.tw,3));
       X.line('Area of web','Aw',{formula:'\u00ABd\u00BB*\u00ABtw\u00BB',result:N2(sh.Aw,3)},'in\u00B2','\u00A7G2.1',{dp:3,ref:'Aw'});
-    }else{
-      X.line('Flat web depth','h',N2(p.hFlat,3),'in','\u00A7G4',{});
-      X.line('Area of web','Aw',N2(sh.Aw,3),'in\u00B2','\u00A7G4',{dp:3,ref:'Aw'});
-      X.line('Web shear coefficient','Cv2',N2(sh.Cv,3),'\u2014','\u00A7G2.2',{dp:3,ref:'CvS'});
     }
     X.eq('Vn = 0.6 \u00B7 Fy \u00B7 Aw \u00B7 Cv = 0.6 \u00B7 '+Fy+' \u00B7 '+S2(sh.Aw,3)+' \u00B7 '+S2(sh.Cv,3));
     X.line('Nominal shear strength','Vn',{formula:'0.6*\u00ABFy\u00BB*\u00ABAw\u00BB*\u00ABCvS\u00BB',result:N2(sh.Vn,2)},'kip','Eq. G2-1',{ref:'VnX'});
@@ -7837,13 +8000,20 @@ async function xlChecks(X,p,D,mem,Fy,E){
   /* ---------- minor flexure ---------- */
   X.band('9.  FLEXURE ABOUT THE MINOR AXIS','\u00A7'+(D.flexY?D.flexY.route:'F6'));
   if(!D.perCombo.some(C=>C.man.Muy))X.note('No Muy entered \u2014 capacity shown for reference; this limit state is reported N/A, not passing.');
-  if(D.flexY&&!D.flexY.blocked){
+  if(D.flexY&&!D.flexY.blocked&&hssF){   /* SBXH: HSS F7 about y / F8 */
+    xlHssFlex(X,p,D.flexY,'y',Fy,E,'MnY');
+    X.line('Governing limit state','\u2014',D.flexY.gov?D.flexY.gov.name:'Yielding','',D.flexY.gov?D.flexY.gov.clause:'',{kind:'txt'});
+    X.line('Design flexural strength','\u03C6bMn',{formula:'0.9*\u00ABMnY\u00BB',result:N2(D.flexY.phiMn/12,2)},'k\u00B7ft','\u00A7F1',{ref:'phiMnY'});
+  }else if(D.flexY&&D.flexY.blocked&&hssF)X.note('BLOCKED: '+D.flexY.blocked);
+  if(D.flexY&&!D.flexY.blocked&&!hssF){
     X.eq('Mp = min( Fy\u00B7Zy , 1.6\u00B7Fy\u00B7Sy ) / 12 = min( '+Fy+'\u00B7'+S2(p.Zy,2)+' , 1.6\u00B7'+Fy+'\u00B7'+S2(p.Sy,2)+' ) / 12');
     X.line('Nominal yielding strength','Mn',{formula:'MIN(\u00ABFy\u00BB*\u00ABZy\u00BB,1.6*\u00ABFy\u00BB*\u00ABSy\u00BB)/12',result:N2(D.flexY.Mp/12,2)},'k\u00B7ft','Eq. F6-1',{ref:'MpY'});
     const flb=D.flexY.ls.find(l=>l.applies&&l.name.indexOf('local')>=0);
     if(flb)X.line('Flange local buckling','Mn',N2(flb.Mn/12,2),'k\u00B7ft',flb.clause,{});
     else X.line('Flange local buckling','\u2014','N/A \u2014 compact flange','','\u00A7F6.2',{kind:'txt'});
     X.line('Design flexural strength','\u03C6bMn',{formula:'0.9*'+(flb?'MIN(\u00ABMpY\u00BB,'+N2(flb.Mn/12,2)+')':'\u00ABMpY\u00BB'),result:N2(D.flexY.phiMn/12,2)},'k\u00B7ft','\u00A7F1',{ref:'phiMnY'});
+  }
+  if(D.flexY&&!D.flexY.blocked){
     if(D.perCombo.some(C=>C.man.Muy))X.table(['Case','Muy (k\u00B7ft)','\u03C6Mn (k\u00B7ft)','DCR','Status'],
       D.perCombo.filter(C=>C.man.Muy).map(C=>[C.name,{v:N2(Math.abs(C.man.Muy),2),dp:2,kind:'imp'},
         {v:N2(C.phiMny,2),dp:2},{v:N2(C.dcrMy,3),dp:3,kind:C.dcrMy>1?'bad':'ok'},
@@ -7851,9 +8021,18 @@ async function xlChecks(X,p,D,mem,Fy,E){
   }
   X.gap();
   /* ---------- minor shear ---------- */
-  X.band('10.  SHEAR ABOUT THE MINOR AXIS','\u00A7G6');
+  X.band('10.  SHEAR ABOUT THE MINOR AXIS',hssF?'\u00A7'+D.shearY.route.replace(' (weak)',''):'\u00A7G6');
   if(!D.shearY)X.note('No Vuy entered \u2014 minor-axis shear is reported N/A, not passing.');
-  else{
+  else if(hssF){   /* SBXH: HSS G4 (walls of width b) / G5 */
+    if(!D.perCombo.some(C=>C.dcrVy!=null))X.note('No Vuy entered \u2014 capacity shown for reference; this limit state is reported N/A, not passing.');
+    xlHssShear(X,p,D.shearY,'y',Fy,E);
+    X.line('Resistance factor','\u03C6v',N2(D.shearY.phi,2),'\u2014','\u00A7G1',{kind:'in',ref:'phiVY'});
+    X.line('Design shear strength','\u03C6vVn',{formula:'\u00ABphiVY\u00BB*\u00ABVnY\u00BB',result:N2(D.shearY.phi*D.shearY.Vn,2)},'kip','',{ref:'phiVnY'});
+    if(D.perCombo.some(C=>C.dcrVy!=null))X.table(['Case','Vuy (kip)','\u03C6Vn (kip)','DCR','Status'],
+      D.perCombo.filter(C=>C.dcrVy!=null).map(C=>[C.name,{v:N2(Math.abs(C.man.Vuy),2),dp:2,kind:'imp'},
+        {v:N2(D.shearY.phi*D.shearY.Vn,2),dp:2},{v:N2(C.dcrVy,3),dp:3,kind:C.dcrVy>1?'bad':'ok'},
+        {v:C.dcrVy>1?'FAIL':'OK',kind:C.dcrVy>1?'bad':'ok'}]));
+  }else{
     X.line('Shear buckling coefficient','kv',1.2,'\u2014','\u00A7G6',{kind:'in',dp:1});
     X.line('Web shear coefficient','Cv2',N2(D.shearY.Cv,3),'\u2014','\u00A7G2.2',{dp:3,ref:'CvY'});
     X.eq('Aw = 2 \u00B7 bf \u00B7 tf = 2 \u00B7 '+S2(p.bf,2)+' \u00B7 '+S2(p.tf,3)+'   (both flanges)');
@@ -7883,7 +8062,7 @@ async function xlChecks(X,p,D,mem,Fy,E){
     X.table(['Buckling mode','Clause','Lc (ft)','Lc/r','Fe (ksi)'],
       cc.modes.map(m=>[m.name,m.clause,{v:N2(m.L/12,2),dp:2},m.s?{v:N2(m.s,2),dp:2}:'\u2014',
         {v:N2(m.Fe,2),dp:2,kind:m===cc.govFe?'bad':'out'}]));
-    X.line('Governing elastic buckling stress','Fe',N2(cc.govFe.Fe,2),'ksi',cc.govFe.clause,{ref:'Fe'});
+    X.line('Governing elastic buckling stress','Fe',xv(cc.govFe.Fe,2),'ksi',cc.govFe.clause,{ref:'Fe'});
     X.eq('4.71\u221A(E/Fy) = '+S2(4.71*rt,2)+'   vs   Lc/r = '+S2(cc.slMax,2)+
       '     \u2192  '+(Fy/cc.govFe.Fe<=2.25?'Eq. E3-2 (inelastic)':'Eq. E3-3 (elastic)'));
     X.eq('Fcr = '+(Fy/cc.govFe.Fe<=2.25?'0.658^(Fy/Fe) \u00B7 Fy = 0.658^('+S2(Fy/cc.govFe.Fe,3)+') \u00B7 '+Fy:'0.877 \u00B7 Fe = 0.877 \u00B7 '+S2(cc.govFe.Fe,2)));
@@ -7896,7 +8075,7 @@ async function xlChecks(X,p,D,mem,Fy,E){
           e2.b!=null?{v:N2(e2.b,3),dp:3}:'\u2014',e2.be!=null?{v:N2(e2.be,3),dp:3}:'\u2014',{v:N2(e2.red,4),dp:4}]));
       if(p.A-cc.Ae<=1e-9)X.note('Classified slender, but \u03BB \u2264 \u03BBr\u221A(Fy/Fcr) for every element (Eq. E7-2), so be = b and Ae = Ag \u2014 no reduction applies.');
     }
-    X.line('Effective area','Ae',N2(cc.Ae,3),'in\u00B2',cc.eff.length?'\u00A7E7':'= Ag',{dp:3,ref:'Ae'});
+    X.line('Effective area','Ae',xv(cc.Ae,3),'in\u00B2',cc.eff.length?'\u00A7E7':'= Ag',{dp:3,ref:'Ae'});
     X.eq('Pn = Fcr \u00B7 Ae = '+S2(cc.Fcr,2)+' \u00B7 '+S2(cc.Ae,3));
     X.line('Nominal compressive strength','Pn',{formula:'\u00ABFcr\u00BB*\u00ABAe\u00BB',result:N2(cc.Pn,2)},'kip',cc.eff.length?'Eq. E7-1':'Eq. E3-1',{ref:'Pn'});
     X.line('Design compressive strength','\u03C6cPn',{formula:'0.9*\u00ABPn\u00BB',result:N2(cc.phiPn,2)},'kip','\u00A7E1',{ref:'phiPn'});
@@ -7906,7 +8085,42 @@ async function xlChecks(X,p,D,mem,Fy,E){
         {v:C.dcrP>1?'FAIL':'OK',kind:C.dcrP>1?'bad':'ok'}]));
   }
   const tnC=D.perCombo.filter(C=>C.dcrPt!=null);
-  if(tnC.length){const t=tnC[0].tens;
+  if(tnC.length&&hssF){const t=tnC[0].tens,h=t.hlp;   /* SBXH: HSS, with the shear-lag helper (SBTU) when it is on */
+    X.sub('Axial tension  (Chapter D)');
+    if(h){
+      X.note('Shear-lag helper: single concentric gusset plate through slots in two walls (Table D3.1 case '+h.case+', \u00A7B4.3b).');
+      if(h.kind==='R'){
+        X.line('Overall side in the plane of the gusset','H',h.H,'in','',{kind:'in',dp:3,ref:'tnH'});
+        X.line('Overall side 90\u00B0 to the gusset','B',h.B,'in','',{kind:'in',dp:3,ref:'tnB'});
+        X.eq('x\u0304 = (B\u00B2 + 2BH) / (4(B + H))');
+        X.line('Connection eccentricity','x\u0304',{formula:'(\u00ABtnB\u00BB^2+2*\u00ABtnB\u00BB*\u00ABtnH\u00BB)/(4*(\u00ABtnB\u00BB+\u00ABtnH\u00BB))',result:N2(h.xbar,3)},'in','Table D3.1 case 6',{dp:3,ref:'tnX'});
+      }else{
+        X.line('Outside diameter (label)','D',h.D,'in','',{kind:'in',dp:3,ref:'tnD'});
+        X.line('Connection eccentricity','x\u0304',{formula:'\u00ABtnD\u00BB/PI()',result:N2(h.xbar,3)},'in','Table D3.1 case 5',{dp:3,ref:'tnX'});
+      }
+      X.line('Connection length','l',h.l!=null?h.l:'\u2014','in','entered',{kind:'in',dp:2,ref:h.l!=null?'tnL':null});
+      if(h.U!=null&&h.Ufull)X.line('Shear-lag factor (helper)','U',1,'\u2014','l \u2265 1.3D, Table D3.1 case 5',{dp:3});
+      else if(h.U!=null)X.line('Shear-lag factor (helper)','U',{formula:'1-\u00ABtnX\u00BB/\u00ABtnL\u00BB',result:N2(h.U,3)},'\u2014','Table D3.1 case '+h.case+' (U = 1 \u2212 x\u0304/l)',{dp:3});
+      X.line('Slot width','w',h.w!=null?h.w:'\u2014','in',h.wDef?'blank \u2192 t\u209A + 1/8 in':'entered',{kind:'in',dp:4,ref:h.w!=null?'tnW':null});
+      if(h.An!=null)X.line('Net area (helper)','An',{formula:'\u00ABA\u00BB-2*\u00ABtdes\u00BB*\u00ABtnW\u00BB',result:N2(h.An,3)},'in\u00B2','A\u2099 = A\u1D4D \u2212 2tw, \u00A7B4.3b',{dp:3});
+      X.note('Not checked: the gusset plate, its welds, block shear (\u00A7J4.3) and the HSS wall at the end of the slot.');
+    }
+    if(t.blocked){X.note('BLOCKED: '+t.blocked+' The tension check is reported as failing until the input is complete.');
+      X.line('Tensile yielding','\u03C6tPn',N2(t.phiY,2),'kip','0.90\u00B7Fy\u00B7Ag, Eq. D2-1',{});
+      X.line('Tensile rupture (blocked)','\u03C6tPn',N2(t.phiR,2),'kip','',{});}
+    else{
+      const srcA=t.AnDef?'blank \u2192 Ag (assumed)':h&&!(t.AnTyped&&t.An<h.An)?'shear-lag helper':h?'entered (smaller than the helper)':'entered';
+      const srcU=t.UDef?'blank \u2192 1.0 (assumed)':h&&!(t.UTyped&&t.U<h.U)?'shear-lag helper':h?'Table D3.1, entered (smaller than the helper)':'Table D3.1, entered';
+      X.line('Net area used','An',t.An,'in\u00B2',srcA+(t.AnCapped?'; limited to Ag':''),{kind:t.AnDef?'out':'in',dp:3,ref:'tnAn'});
+      X.line('Shear-lag factor used','U',t.U,'\u2014',srcU+(t.UCapped?'; limited to 1.0':''),{kind:t.UDef?'out':'in',dp:3,ref:'tnU'});
+      X.line('Tensile yielding','\u03C6tPn',{formula:'0.9*\u00ABFy\u00BB*\u00ABA\u00BB',result:N2(t.phiY,2)},'kip','0.90\u00B7Fy\u00B7Ag, Eq. D2-1',{});
+      X.line('Tensile rupture','\u03C6tPn',{formula:'0.75*\u00ABFu\u00BB*\u00ABtnU\u00BB*\u00ABtnAn\u00BB',result:N2(t.phiR,2)},'kip','0.75\u00B7Fu\u00B7U\u00B7An, Eqs. D2-2, D3-1',{});
+    }
+    X.table(['Case','Pu (kip)','\u03C6tPn (kip)','DCR','Status'],
+      tnC.map(C=>[C.name,{v:N2(C.man.Pu,2),dp:2,kind:'imp'},{v:N2(C.phiPt,2),dp:2},
+        {v:N2(C.dcrPt,3),dp:3,kind:C.dcrPt>1?'bad':'ok'},{v:C.dcrPt>1?'FAIL':'OK',kind:C.dcrPt>1?'bad':'ok'}]));
+    X.note('Block shear (\u00A7J4.3) and the end connection are not checked. Combined forces use \u00A7H1.2 with Pc = \u03C6tPn.');
+  }else if(tnC.length){const t=tnC[0].tens;
     X.sub('Axial tension  (Chapter D)');
     X.line('Net area','An',N2(t.An,3),'in\u00B2',t.AnDef?'blank \u2192 Ag (assumed)':'entered',{kind:t.AnDef?'out':'in',dp:3});
     X.line('Shear-lag factor','U',N2(t.U,3),'\u2014',t.UDef?'blank \u2192 1.0 (assumed)':'Table D3.1, entered',{kind:t.UDef?'out':'in',dp:3});
@@ -7952,14 +8166,21 @@ async function xlChecks(X,p,D,mem,Fy,E){
       X.note('Ratio = fa/(0.9\u00B7Fcr,E) + (fbx + fby + \u03C3w)/(0.9\u00B7Fcr,F). Fcr,F = Mn/Sx of the governing major-axis flexure check; Fcr,E = Pn/Ag when Pu is compression; each capped at Fy. The Status column of the table above includes this check.');
     }
   }else if(D.tors&&!D.tors.blocked){
-    X.line('Torsional constant','C',N2(p.Cc,2),'in\u00B3','',{kind:'in',ref:'Chz'});
+    /* SBXH (2026-11-13): HSS only (open sections are blocked here): full-precision C and live H3.1 formulas */
+    X.line('Torsional constant','C',p.Cc,'in\u00B3','',{kind:'in',ref:'Chz'});
     if(p._kind==='P'){   /* TLEN: the H3.1(a) length and the two equations */
       const tL=D.tors.L,okL=tL>0&&isFinite(tL);
-      X.line('Member length for Eq. H3-2a ('+((D.torsL&&D.torsL.src)||'')+')','L',okL?N2(tL/12,2):'\u2014','ft','\u00A7H3.1(a)',{kind:'in'});
-      if(okL)X.line('Critical stress, Eq. H3-2a','Fcr,a',N2(D.tors.F1,2),'ksi','Eq. H3-2a');
-      X.line('Critical stress, Eq. H3-2b','Fcr,b',N2(D.tors.F2c,2),'ksi','Eq. H3-2b');
+      X.line('Member length for Eq. H3-2a ('+((D.torsL&&D.torsL.src)||'')+')','L',okL?tL/12:'\u2014','ft','\u00A7H3.1(a)',{kind:'in',ref:okL?'LT':null});
+      X.eq('Fcr = min[ 0.6Fy , max( 1.23E/(\u221A(L/D)(D/t)^1.25) , 0.60E/(D/t)^1.5 ) ]'+(okL?'':'   \u2014 no member length: Eq. H3-2a not used (L = \u221E)'));
+      if(okL)X.line('Critical stress, Eq. H3-2a','Fcr,a',{formula:'1.23*\u00ABE\u00BB/(SQRT(\u00ABLT\u00BB*12/\u00ABOD\u00BB)*\u00ABDt\u00BB^1.25)',result:N2(D.tors.F1,2)},'ksi','Eq. H3-2a',{ref:'F1T'});
+      X.line('Critical stress, Eq. H3-2b','Fcr,b',{formula:'0.6*\u00ABE\u00BB/\u00ABDt\u00BB^1.5',result:N2(D.tors.F2c,2)},'ksi','Eq. H3-2b',{ref:'F2T'});
+      X.line('Critical stress','Fcr',{formula:okL?'MIN(0.6*\u00ABFy\u00BB,MAX(\u00ABF1T\u00BB,\u00ABF2T\u00BB))':'MIN(0.6*\u00ABFy\u00BB,\u00ABF2T\u00BB)',result:N2(D.tors.Fcr,2)},'ksi',D.tors.clause,{ref:'FcrT'});
+    }else{
+      const rt2='SQRT(\u00ABE\u00BB/\u00ABFy\u00BB)',ht='\u00ABhtdes\u00BB';
+      X.eq('h/t = '+S2(p.htdes,2)+'   vs   2.45\u221A(E/Fy) = '+S2(2.45*rt,2)+',  3.07\u221A(E/Fy) = '+S2(3.07*rt,2)+',  260   \u2192  Fcr = 0.6Fy (H3-3), 0.6Fy\u00B72.45\u221A(E/Fy)/(h/t) (H3-4), 0.458\u03C0\u00B2E/(h/t)\u00B2 (H3-5)');
+      X.line('Critical stress','Fcr',{formula:'IF('+ht+'<=2.45*'+rt2+',0.6*\u00ABFy\u00BB,IF('+ht+'<=3.07*'+rt2+',0.6*\u00ABFy\u00BB*2.45*'+rt2+'/'+ht+',0.458*PI()^2*\u00ABE\u00BB/'+ht+'^2))',
+        result:N2(D.tors.Fcr,2)},'ksi','Eq. '+D.tors.clause,{ref:'FcrT'});
     }
-    X.line('Critical stress','Fcr',N2(D.tors.Fcr,2),'ksi',D.tors.clause,{ref:'FcrT'});
     X.eq('Tn = Fcr \u00B7 C / 12');
     X.line('Nominal torsional strength','Tn',{formula:'\u00ABFcrT\u00BB*\u00ABChz\u00BB/12',result:N2(D.tors.Tn/12,2)},'k\u00B7ft','Eq. H3-1',{ref:'TnT'});
     X.line('Design torsional strength','\u03C6TTn',{formula:'0.9*\u00ABTnT\u00BB',result:N2(D.tors.phiTn/12,2)},'k\u00B7ft','\u00A7H3.1',{ref:'phiTn'});
@@ -8067,6 +8288,7 @@ async function xlChecks(X,p,D,mem,Fy,E){
     }
   }
   /* ---------- J10 ---------- */
+  if(!D.j10&&D.hssK)xlHssK(X,p,D,Fy,E);   /* SBXH: HSS walls (SBHK) */
   if(D.j10){
     X.band('13.  CONCENTRATED FORCES','\u00A7J10.2 / \u00A7J10.3');
     const lo=D.j10.locs.filter(l=>l.lb!=null)[0];
@@ -8102,15 +8324,15 @@ async function xlChecks(X,p,D,mem,Fy,E){
   X.band('15.  SERVICEABILITY','IBC Table 1604.3');
   if(mem&&D.defl&&!D.defl.err){
     X.line('Configuration','\u2014',D.defl.cfgLab,'',{kind:'txt'});
-    X.line('Service load','w',N2(D.defl.w,3),D.defl.pt?'kip':'k/ft','',{kind:'in',dp:3,ref:'dw'});
-    X.line('Span','L',N2(D.defl.L,2),'ft','',{kind:'in',ref:'dL'});
-    X.line('Coefficient','c',N2(D.defl.c,5),'\u2014','',{kind:'in',dp:5,ref:'dc'});
-    X.line('Moment of inertia','I',N2(D.defl.I,1),'in\u2074','',{kind:'in',dp:1,ref:'dI'});
+    X.line('Service load','w',xv(D.defl.w,3),D.defl.pt?'kip':'k/ft','',{kind:'in',dp:3,ref:'dw'});
+    X.line('Span','L',xv(D.defl.L,2),'ft','',{kind:'in',ref:'dL'});
+    X.line('Coefficient','c',xv(D.defl.c,5),'\u2014','',{kind:'in',dp:5,ref:'dc'});
+    X.line('Moment of inertia','I',xv(D.defl.I,1),'in\u2074','',{kind:'in',dp:1,ref:'dI'});
     X.eq(D.defl.pt?'\u0394 = c\u00B7P\u00B7(L\u00B712)\u00B3/(E\u00B7I)':'\u0394 = c\u00B7w\u00B71728\u00B7L\u2074/(E\u00B7I)');
     X.line('Deflection','\u0394',{formula:D.defl.pt?'\u00ABdc\u00BB*\u00ABdw\u00BB*(\u00ABdL\u00BB*12)^3/(\u00ABE\u00BB*\u00ABdI\u00BB)':'\u00ABdc\u00BB*\u00ABdw\u00BB*1728*\u00ABdL\u00BB^4/(\u00ABE\u00BB*\u00ABdI\u00BB)',
       result:N2(D.defl.d,4)},'in','',{dp:4,ref:'dD'});
     if(D.defl.lim!=null){
-      X.line('Limit denominator','n',N2(D.defl.den,0),'\u2014','',{kind:'in',dp:0,ref:'dN'});
+      X.line('Limit denominator','n',xv(D.defl.den,0),'\u2014','',{kind:'in',dp:0,ref:'dN'});
       X.line('Allowable deflection','\u0394allow',{formula:'\u00ABdL\u00BB*12/\u00ABdN\u00BB',result:N2(D.defl.lim,4)},'in','',{dp:4,ref:'dLim'});
       X.line('Demand / capacity ratio','DCR',{formula:'\u00ABdD\u00BB/\u00ABdLim\u00BB',result:N2(D.defl.dcr,3)},'\u2014','',
         {dp:3,kind:D.defl.dcr>1?'bad':'ok'});
@@ -8167,7 +8389,7 @@ const BATCH_HELP={
   desc:'Free text, e.g. "W-Column" or "Hoist Beam". Carried through to the results and the printed report.',
   mid:'Your member mark or ID. Any text or number.',
   size:'REQUIRED. AISC label: W18X60, C15X33.9, HSS6X4X1/4, HSS8.625X0.322, Pipe8XS. Lower case and \u00D7 accepted.',
-  grade:'Blank \u2192 family default (W/HP A992, C/MC/M/S A36, rect HSS A500 Gr. B, round HSS A500 Gr. B, pipe A53 Gr. B). Rows imported before 2026-11-13 and saved with a project keep A500 Gr. C for HSS, the default when they were imported.',
+  grade:'The grade id from the drop-down (A992, A500B_R, A1085, ...) or a usual spelling (A500B, A500 Gr. B, A500-B, A572-50, A53 Gr. B); case, spaces and punctuation are ignored. A grade that is not recognised, or not made in that shape family, blocks the row with a message. Blank \u2192 family default (W/HP A992, C/MC/M/S A36, rect HSS A500 Gr. B, round HSS A500 Gr. B, pipe A53 Gr. B). Rows imported before 2026-11-13 and saved with a project keep A500 Gr. C for HSS, the default when they were imported.',
   Pu:'Axial force, kip. COMPRESSION POSITIVE. A negative value is treated as tension: the compression check is skipped and the member is checked for tensile yielding and rupture (\u00A7D2, using the Tension An and Tension U columns) and the \u00A7H1.2 interaction.',
   Vux:'Major-axis shear, kip. Sign ignored.',
   Vuy:'Minor-axis shear, kip. Sign ignored.',
@@ -8221,6 +8443,20 @@ function defGradeFor(fam,legacy){
   const fm=FAMS.find(f=>f.id===fam);
   return fm?fm.defMat:(gradesForFam(fam)[0]||{}).id;
 }
+/* SBBG (2026-11-13): a grade's spellings, for the batch Grade column: letters and digits only, upper case, without a leading
+   "ASTM" and without "GRADE" / "GR". Each grade answers to its id (A500B_R -> A500BR), its id without the _R / _P family suffix
+   (A500B), its name (ASTM A500 Gr. B (rect) -> A500BRECT) and its name without the bracket (A500B). So A500B, A500 Gr B,
+   A500-B, a500 gr. b, A500B_R, A1085, A53B, A53 Gr. B, A992, A36, A572-50, A572 Grade 50 are all read. */
+function sbGradeKey(s){
+  return String(s==null?'':s).toUpperCase().replace(/[^A-Z0-9]/g,'').replace(/^ASTM/,'').replace(/GRADE/g,'').replace(/GR/g,'');
+}
+function sbGradeKeys(m){
+  return [m.id,m.id.replace(/_[RP]$/,''),m.name,m.name.replace(/\(.*\)/g,'')].map(sbGradeKey).filter(k=>k);
+}
+/* the grade id of a batch row's Grade text. Blank -> the family default (as before, incl. S.batch.hssDefB). Otherwise the
+   earlier matches first (exact id, then a part of the name), so every text read before reads the same grade; then the
+   spellings above (SBBG). Text that is none of these returns null: batchCheckRow blocks the row and names the grade (SBBG:
+   before, it silently took the family default). */
 function pickGrade(fam,txt,legacy){
   const g=(txt||'').toString().trim().toUpperCase().replace(/[\s\-]/g,'');
   const list=gradesForFam(fam);
@@ -8229,8 +8465,17 @@ function pickGrade(fam,txt,legacy){
     if(m)return m.id;
     m=list.find(x=>x.name.toUpperCase().replace(/[\s\-]/g,'').indexOf(g)>=0);
     if(m)return m.id;
+    const k=sbGradeKey(txt);   /* SBBG */
+    m=k?list.find(x=>sbGradeKeys(x).indexOf(k)>=0):null;
+    return m?m.id:null;
   }
   return defGradeFor(fam,legacy)||(list.length?list[0].id:null);
+}
+/* SBBG: the row error for a Grade text pickGrade does not read */
+function sbGradeErr(fam,txt){
+  const k=sbGradeKey(txt),other=k?MATS.find(x=>sbGradeKeys(x).indexOf(k)>=0):null,fm=famMeta(fam);
+  return 'Grade \u201C'+String(txt).trim()+'\u201D '+(other?'('+other.name+') is not available for '+fm.name:'is not recognised')+
+    ' \u2014 use one of: '+gradesForFam(fam).map(x=>x.id+' ('+x.name+')').join(', ')+'; blank = the family default. The row is not checked.';
 }
 /* ---------------- per-row check ---------------- */
 function batchCheckRow(row){
@@ -8238,6 +8483,7 @@ function batchCheckRow(row){
   const fs=findShape(row.size);
   if(!fs){R.blockers.push('Shape "'+(row.size||'')+'" not found in '+DBVER+'.');return R;}
   const gid=pickGrade(fs.fam,row.grade,!(S.batch&&S.batch.hssDefB));   /* SBGB: rows imported before 2026-11-13 keep A500 Gr. C */
+  if(!gid&&String(row.grade==null?'':row.grade).trim().replace(/[\s\-]/g,'')){R.blockers.push(sbGradeErr(fs.fam,row.grade));return R;}   /* SBBG */
   if(!gid){R.blockers.push('No material grade available for family '+fs.fam+'.');return R;}
   const p=sectionFor(fs.fam,fs.lbl,gid);
   if(!p){R.blockers.push('Could not resolve section properties.');return R;}
@@ -8520,7 +8766,7 @@ async function importBatchFile(file){
   if(!rows.length){toast('No data rows found');return;}
   if(!S.batch)S.batch={rows:[],Cb:1};
   S.batch.rows=rows;
-  S.batch.hssDefB=true;   /* SBGB (2026-11-13): a blank or unknown HSS grade in these rows means A500 Gr. B (new field; absent = rows imported before) */
+  S.batch.hssDefB=true;   /* SBGB (2026-11-13): a blank HSS grade in these rows means A500 Gr. B (an unrecognised one blocks the row, SBBG) (new field; absent = rows imported before) */
   S.batch.src=file.name;
   S.batch.headerRow=bestRow;
   S.batch.mapped=Object.keys(bestMap);
@@ -11468,6 +11714,17 @@ function compositeFlexSections(pg,p,r){
   },pg);
 }
 /* ---- Mx tab: composite derivation, then the checks that use it ---- */
+/* SBCF (2026-11-13, engineer): the Major Flexure 'Flange' column is the compression flange; display only. The value is the
+   region's own r.flange ('top' where M > 0, 'bottom' where M < 0, regionCheck), named 'top wall' / 'bottom wall' for a rectangular
+   HSS; I-shapes, channels, built-up and round HSS as before. Member-check mode has one L_b and no sign regions. */
+function sbCfLbl(p,f){return (p&&p._kind==='R'&&(f==='top'||f==='bottom'))?f+' wall':f;}
+function sbCfNoun(p,f){return (f==='top'||f==='bottom')?(p&&p._kind==='R'?f+' wall':f+' flange'):f;}
+function sbCfMember(p){return p&&p._kind==='R'?'top or bottom wall':'top or bottom';}
+function sbCfNote(p,D){
+  if(D.member)return 'Member check: one L\u1D47 (entered) is used for whichever '+(p&&p._kind==='R'?'wall':'flange')+' is in compression.';
+  return 'Sagging moment: top in compression, uses L\u1D47,top; hogging: bottom in compression, uses L\u1D47,bot.'+
+    (p&&p._kind==='P'?' (Round HSS: no lateral-torsional buckling, \u00A7F8, so L\u1D47 does not change \u03C6M\u2099.)':'');
+}
 function buildMxTab(pg){
   const D=dOrNull(pg),p=AN.sect;if(!D)return;
   const cmp=AN.comp;
@@ -11514,12 +11771,12 @@ function buildMxTab(pg){
   },pg);
   perComboSections(pg,'mx_',isMember()?'Case ':'Combination ',(body,C)=>{
     const t=el('table','tbl');
-    const cols=[D.member?'Case':'Region (ft)','Flange','L\u1D47 (ft)','C\u1D47','M\u1D64 (kip\u00B7ft)','\u03C6M\u2099 (kip\u00B7ft)','DCR','Governing LS'];
+    const cols=[D.member?'Case':'Region (ft)','Compression flange','L\u1D47 (ft)',   /* SBCF (2026-11-13): was 'Flange' */'C\u1D47','M\u1D64 (kip\u00B7ft)','\u03C6M\u2099 (kip\u00B7ft)','DCR','Governing LS'];
     if(D.compActive)cols.splice(1,0,'Basis');
     const hd=el('tr');cols.forEach(h=>hd.appendChild(el('th',null,h)));t.appendChild(hd);
     C.regions.forEach(r=>{
       const tr=el('tr');
-      const cells=[r.x1==null?(r.tag||'\u2014'):(fmt(r.x1,1)+' \u2013 '+fmt(r.x2,1)),r.flange,
+      const cells=[r.x1==null?(r.tag||'\u2014'):(fmt(r.x1,1)+' \u2013 '+fmt(r.x2,1)),D.member?sbCfMember(p):sbCfLbl(p,r.flange),
         r.LbFt===0?'cont.':fmt(r.LbFt,1),fmt(r.Cb,2),fmt(r.Mu,1),
         r.blocked?'\u2014':fmt(r.phiMn,1),r.blocked?'BLOCKED':fmt(r.dcr,3),
         r.blocked?r.blocked:(r.cap.gov?r.cap.gov.name:'')];
@@ -11529,6 +11786,7 @@ function buildMxTab(pg){
       t.appendChild(tr);
     });
     body.appendChild(t);
+    body.appendChild(el('div','hint',sbCfNote(p,D)));   /* SBCF (2026-11-13) */
     if(!D.member&&typeof capEnvBlock==='function')capEnvBlock(body,AN,D,C);
     if(D.member&&D.sw)body.appendChild(el('div','note','M\u1D64 includes the self-weight addition \u0394M = '+fmt(D.sw.dM,2)+' kip\u00B7ft.'));
     const g=C.flexGov;
@@ -11540,7 +11798,7 @@ function buildMxTab(pg){
           lines:['C_b=\\tfrac{12.5M_{max}}{2.5M_{max}+3M_A+4M_B+3M_C}=\\tfrac{12.5('+fmt(q.Mmax,1)+')}{2.5('+fmt(q.Mmax,1)+')+3('+fmt(q.MA,1)+')+4('+fmt(q.MB,1)+')+3('+fmt(q.MC,1)+')}=\\mathbf{'+fmt(g.Cb,2)+'}'],
           vars:[['M_{max}','kip\u00B7ft','largest |M| in the window'],['M_A,M_B,M_C','kip\u00B7ft','|M| at the window quarter points']]}));
       }
-      dcrLine(body,'Governing DCR \u2014 '+(g.basis==='composite'?'composite section':(D.member?'bare steel':g.flange+' flange, region '+fmt(g.x1,1)+'\u2013'+fmt(g.x2,1)+' ft')),
+      dcrLine(body,'Governing DCR \u2014 '+(g.basis==='composite'?'composite section':(D.member?'bare steel':sbCfNoun(p,g.flange)+', region '+fmt(g.x1,1)+'\u2013'+fmt(g.x2,1)+' ft')),
         g.cap.gov?g.cap.gov.clause:'',' M',g.Mu,g.phiMn,g.dcr);
       if(!D.member)sbdWorkedIn(body,[['tabAnalysis','anC_'+C.id,'Combination '+C.name,'M\u1D64']]);   /* D11 links */
       if(g.basis==='composite')body.appendChild(el('div','note','\u03C6M\u2099 = '+fmt(g.phiMn,1)+
@@ -12296,7 +12554,7 @@ function capEnvFig(A,D,C){
     if(i>0)shapes.push({type:'line',x0:r.x1,x1:r.x1,y0:0,y1:ymax,line:{color:'#94A3B8',width:1,dash:'dot'}});
     const mid=(r.x1+r.x2)/2;
     anns.push({x:mid,y:ymax,yanchor:'top',yshift:-2,showarrow:false,
-      text:(r.basis==='composite'?'composite':(r.flange||'')+' flange')+'<br>DCR '+fmt(r.dcr,2),
+      text:(r.basis==='composite'?'composite':'compression: '+sbCfNoun(A.sect,r.flange||''))+'<br>DCR '+fmt(r.dcr,2),   /* SBCF (2026-11-13): was (r.flange)+' flange' */
       font:{size:8.5,color:r.dcr>1?'#B42318':'#334155'},bgcolor:'rgba(255,255,255,.85)'});
   });
   nodeXs().slice(1,-1).forEach(nx=>shapes.push({type:'line',x0:nx,x1:nx,y0:0,y1:ymax,
