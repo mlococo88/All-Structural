@@ -18,7 +18,10 @@ test('default project: no input error; the design inputs give the old app\'s def
   assert.equal(R.error, null);
   assert.deepEqual(J(R.checks), J(R0.checks)); assert.deepEqual(J(R.warns), J(R0.warns));
   assert.equal(i.L, 120); assert.equal(i.S, 9); assert.equal(i.nGirders, 5); assert.equal(i.loads.pos, 'interior'); assert.equal(i.proj.girderId, 'G2 (Interior)');
-  assert.deepEqual(J(P.base), J(W.mergeInputs(null)));   // inputs() changes nothing in the project
+  // inputs() changes nothing in the project; base = the old app's defaults + the PS-10 box (base.opt.hdCheck / hdFrac, PR 2d-3, filled by
+  // model.js baseInputs; this line was not updated in PR 2d-3 and failed since: corrected in PR 2e, test only)
+  const D = J(W.mergeInputs(null)); D.opt.hdCheck = true; D.opt.hdFrac = 0.75;
+  assert.deepEqual(J(P.base), D);
 });
 
 test('the bridge values of the design: span s, spacing, girder count, position, overhang side, skew, continuity (PBD.applyBridge + 3 values)', () => {

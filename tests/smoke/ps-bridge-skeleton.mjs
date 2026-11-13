@@ -19,7 +19,12 @@
 //      each) on a fourth design; their chips; the Rating chip (lowest inventory RF, not a check) opens its step; the handling stage choice;
 //   3h. PR 2d-3 (PS-10): the hold-down box on the Owner rules tab (AASHTO: on by default); the End zone tab works the PS-10 check and its chip
 //      lists it; the box off removes the check and the tab says it is not checked; saved in the project;
-//   5. 390 x 844 (phone): stacked panels, no splitter, no check summary column, no horizontal page scroll; 0 console errors.
+//   3i. PR 2e: the Report tab: 14 numbered sections in order, every number of the report = computeAll on the page as the tabs format it, every
+//      worked step rendered with KaTeX (no error, no unresolved §), a "see §" link of the summary jumps to its step, an in-app tab link opens
+//      the tab, a section left out (chip) is gone and the choice kept in psb2.ui only; Print report puts the whole report alone on the page
+//      (window.print stubbed, print media emulated: the app hidden, every step shown) and Ctrl+P on the tab prints the report without the
+//      app header and the output panel's notes; an input error blocks it;
+//   5. 390 x 844 (phone): stacked panels, no splitter, no check summary column, no horizontal page scroll (the Report too); 0 console errors.
 //   node tests/smoke/ps-bridge-skeleton.mjs [--file <index.html>] [--shots <dir>]
 import fs from 'fs';
 import path from 'path';
@@ -180,9 +185,43 @@ await p.click('#sbDashCol [data-sdgrp="end"] .sdX'); check(/Hold-down force \(PS
 await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.opt\\.hdCheck', 'false'); await p.click('#tabBar [data-otab="end"]'); await p.waitForTimeout(250);
 check(/not checked for AASHTO/.test(await p.textContent('#out')) && !(await p.$('#out [data-ev^="ps10."]')) && !/PS-10\)/.test(await p.textContent('#sbDashCol')) && JSON.parse((await lsSnap(p))['psb2.project.current']).base.opt.hdCheck === false, 'PS-10 box off: no check, saved');
 await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.opt\\.hdCheck', 'true');
+// PR 2e: the Report tab
+{ await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 60000 });
+  const r = await p.evaluate(() => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P)), M = window.PSBReportUI.state.M;
+    const at = (o, q) => q.split('.').reduce((a, k) => a == null ? a : a[k], o), fx = window.PSBOutKit.fx;
+    const bad = M.vals.filter(v => v.text !== fx(v.div ? at(R, v.path) / v.div : at(R, v.path), v.d)).map(v => v.path);
+    const nSt = M.sections.reduce((a, s) => a + s.subs.reduce((b, q) => b + q.items.filter(i => i.type === 'steps').reduce((c, i) => c + i.steps.length, 0), 0), 0);
+    return { secs: [...document.querySelectorAll('.rp-doc .rp-h1')].map(h => h.textContent.trim()), vals: M.vals.length, bad, nSt, steps: document.querySelectorAll('.rp-doc .rp-step').length,
+      kErr: document.querySelectorAll('.rp-doc .katex-error').length, unres: document.querySelectorAll('.rp-doc .rp-bad').length, katex: document.querySelectorAll('.rp-doc .rp-step .katex').length,
+      text: /NaN|undefined|\[object/.test(document.querySelector('.rp-doc').innerText), see: document.querySelectorAll('.rp-doc .rp-see').length }; });
+  check(r.secs.length === 14 && /^1\. Summary of checks/.test(r.secs[0]) && /^14\. Rating/.test(r.secs[13]), 'report sections: ' + r.secs.join(' | '));
+  check(r.vals > 1000 && !r.bad.length, `report values = computeAll (${r.vals}; differ: ${r.bad.slice(0, 5).join(', ')})`);
+  check(r.steps === r.nSt && r.steps > 200 && r.katex > 200 && !r.kErr && !r.unres && !r.text && r.see > 100, 'report steps, KaTeX, § links ' + JSON.stringify({ ...r, secs: undefined, bad: undefined }));
+  const j = await p.evaluate(() => { const a = [...document.querySelectorAll('.rp-doc section[data-rpsec="rp-s1"] .rp-see')][0], id = a.getAttribute('href').slice(1); a.click(); const el = document.getElementById(id), b = el.getBoundingClientRect(); return { id, step: el.classList.contains('rp-step'), inView: b.top >= -2 && b.top < innerHeight }; });
+  check(j.step && j.inView, 'summary "see §" link jumps to its step ' + JSON.stringify(j));
+  if (args.shots) { await p.evaluate(() => document.querySelector('.rp-doc section[data-rpsec="rp-s1"]').scrollIntoView()); await p.waitForTimeout(200); await p.screenshot({ path: path.join(args.shots, 'ps-bridge-1400-report.png') }); }
+  await p.click('.rp-doc a.rp-go[data-rpgoto="str"]'); check(await p.evaluate(() => document.querySelector('#tabBar [data-otab="str"]').getAttribute('aria-selected') === 'true'), 'report tab link opens the Stresses tab');
+  await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('.rp-doc .rp-step');
+  await p.uncheck('[data-rpinc="loss"]'); await p.waitForSelector('.rp-doc .rp-step');
+  const off = await p.evaluate(() => ({ secs: [...document.querySelectorAll('.rp-doc .rp-h1')].map(h => h.textContent), ui: JSON.parse(localStorage.getItem('psb2.ui')), unres: document.querySelectorAll('.rp-doc .rp-bad').length, proj: JSON.parse(localStorage.getItem('psb2.project.current')) }));
+  check(off.secs.length === 13 && !off.secs.some(t => /Prestress losses/.test(t)) && off.ui.rpt.inc.loss === false && !off.unres && !('rpt' in off.proj), 'section left out, kept in psb2.ui (not in the project)');
+  await p.check('[data-rpinc="loss"]'); await p.waitForSelector('.rp-doc .rp-step');
+  // print: the viewer's Print report button (the whole report alone), then Ctrl+P on the tab (the report without the app)
+  await p.evaluate(() => { window.__printed = 0; window.print = () => { window.__printed++; }; });
+  await p.click('[data-rpact="print"]'); await p.waitForFunction(() => window.__printed > 0); await p.emulateMedia({ media: 'print' });
+  const pr = await p.evaluate(() => { const vis = el => !!el && getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().height > 0, box = document.getElementById('rp-print');
+    return { box: vis(box), app: vis(document.getElementById('app')), steps: box.querySelectorAll('.rp-step').length, hidden: [...box.querySelectorAll('.rp-step')].filter(x => !vis(x)).length, kErr: box.querySelectorAll('.katex-error').length }; });
+  check(pr.box && !pr.app && pr.steps === r.steps && !pr.hidden && !pr.kErr, 'Print report: the report alone ' + JSON.stringify(pr));
+  await p.emulateMedia({ media: 'screen' }); await p.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+  check(!(await p.evaluate(() => document.body.classList.contains('rp-printing'))), 'after print');
+  await p.emulateMedia({ media: 'print' });
+  const cp = await p.evaluate(() => { const vis = el => !!el && getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().height > 0;
+    return { hdr: vis(document.getElementById('hdr')), notes: [...document.querySelectorAll('#out > .alert')].some(vis), doc: vis(document.querySelector('.rp-doc')), bar: vis(document.querySelector('#out .rp-bar')), dash: vis(document.getElementById('sbDashCol')) }; });
+  check(!cp.hdr && !cp.notes && cp.doc && !cp.bar && !cp.dash, 'Ctrl+P on the Report tab: the report only ' + JSON.stringify(cp));
+  await p.emulateMedia({ media: 'screen' }); }
 // an input error blocks every result tab
 await p.click('#inTabs [data-itab="mat"]'); await p.fill('#i_base\\.mat\\.fci', '-1'); await p.press('#i_base\\.mat\\.fci', 'Tab');
-for (const t of ['sec', 'lds', 'an', 'loss', 'str', 'flex', 'shear', 'end', 'camb', 'hand', 'deck', 'rt']) { await p.click(`#tabBar [data-otab="${t}"]`); check(/Results not shown/.test(await p.textContent('#out')) && !(await p.$('#out [data-ev]')), 'blocked ' + t); }
+for (const t of ['sec', 'lds', 'an', 'loss', 'str', 'flex', 'shear', 'end', 'camb', 'hand', 'deck', 'rt', 'rpt']) { await p.click(`#tabBar [data-otab="${t}"]`); check(/Results not shown/.test(await p.textContent('#out')) && !(await p.$('#out [data-ev]')) && !(await p.$('#out .rp-doc')), 'blocked ' + t); }
 await p.fill('#i_base\\.mat\\.fci', '6.8'); await p.press('#i_base\\.mat\\.fci', 'Tab');
 check(!o.errs.length, 'console errors (result tabs): ' + o.errs.join(' | '));
 await o.b.close();
@@ -201,6 +240,9 @@ check(ph.dash === 'none' && ph.split === 'none' && ph.i.width <= 390 && ph.o.top
 for (const t of ['layout', 'xsec', 'gird', 'mat', 'dd', 'loads', 'own']) { await p.click(`#inTabs [data-itab="${t}"]`); check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth) <= 0, 'no sideways scroll on ' + t); }
 await p.click('#inTabs [data-itab="loads"]'); await p.selectOption('#i_base\\.handling\\.on', 'true'); await p.click('#inTabs [data-itab="dd"]'); await p.selectOption('#i_base\\.deck\\.on', 'true');
 for (const t of ['sec', 'lds', 'an', 'loss', 'str', 'flex', 'shear', 'end', 'camb', 'hand', 'deck', 'rt']) { await p.click(`#tabBar [data-otab="${t}"]`); await p.waitForTimeout(300); check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth) <= 0 && (await p.$$('#out svg')).length >= 1, 'phone: no sideways scroll, graphic on ' + t); }
+await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 60000 }); await p.waitForTimeout(300);
+check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth) <= 0 && (await p.$$('.rp-doc .rp-h1')).length === 14, 'phone: the Report without sideways scroll');
+if (args.shots) await p.screenshot({ path: path.join(args.shots, 'ps-bridge-390-report.png') });
 await p.click('#inTabs [data-itab="gird"]'); await p.waitForTimeout(300); check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth) <= 0 && (await p.$$('#gfx_strands_in svg')).length >= 3, 'phone: strand pattern without sideways scroll');
 await p.click('#inTabs [data-itab="proj"]');
 if (args.shots) { await p.click('#tabBar [data-otab="str"]'); await p.waitForTimeout(300); await p.screenshot({ path: path.join(args.shots, 'ps-bridge-390-str.png'), fullPage: true }); }

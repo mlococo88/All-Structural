@@ -527,3 +527,79 @@ PR #1461: https://github.com/mlococo88/All-Structural/pull/1461
 ### Open items
 - The default project (BT-72, 12 draped strands) now shows the hold-down FAIL under AASHTO, as under MassDOT / CTDOT (real result; the default
   design is not changed). Auto-design (PR 5) uses this limit as a constraint (plan §4).
+
+## 2026-11-13 — PR 2e: Report tab (steel-style report of every result tab, check summary, assumptions); harness B on the Report (no calculation change)
+PR #1463: https://github.com/mlococo88/All-Structural/pull/1463
+### Where
+- `apps/ps-bridge/report/fromtab.js` (new, `window.PSBReportTab`, no DOM): reads the HTML a result tab's `output(ctx)` makes (the same function,
+  inputs and engine result as on screen) with a small parser for the app's own HTML and turns its cards into `shared/report.js` items:
+  `div.kv` → kv, `table.tbl` → table (header rows with rowspan / colspan joined per column), `p.note` / `.alert` → note; `<span data-ev>`
+  → the value's text, recorded `{ sec, path, d, div, text }`; `a.wk` (a link to a worked step) → "(see §x.y)"; a link to another tab →
+  an in-app link plus "(§n)" of that section; a link to an input tab → an in-app link; `<sub>` / `<sup>` → `$_{…}$` / `$^{…}$`. Skipped:
+  graphics slots (`#gfx_…`), the controls (`.fRow`), and the tab's own worked-steps list (the builder puts the steps there).
+- `apps/ps-bridge/report/data.js` (new, `window.PSBReportData`): `compute(P, rc)`: the page's own result (index.html `result()`: inputs,
+  `PSBHoldDown.compute`, the worked steps of every tab) when given, else the same calls; an input error builds nothing.
+- `apps/ps-bridge/report/builders.js` (new, `window.PSBReportBuild`): `model(B, { include })`, 14 numbered sections: 1 Summary of checks
+  (every engine check `R.checks` with x, demand, limit, ratio, PASS / FAIL and "see §" to the step that works it, from the check-summary
+  groups of `ui/dash.js`; the owner's material limits link to the Owner rules table of §2; the HL-93 inventory rating factors; key quantities
+  as in the old report; the engine's warnings), 2 Project, basis and assumptions (title block data, the bridge and the design girder, the
+  basis, the Project tab's assumptions plus the report's: handling, deck strip method, rating section and MBE labels, PS-10, continuity; the
+  Owner rules cards), 3–14 the result tabs (Section properties, Loads & LLDF, Analysis, Prestress losses, Stresses, Flexure, Shear, End zone
+  & hold-down incl. PS-10, Camber & deflection, Handling, Deck, Rating): each tab's cards (fromtab.js) and its worked steps (the same step
+  objects as on the tab, in the tab's TOPICS). Step anchors use the step ids (unique across the app), so a step note "§id" of one tab
+  finds its step in another. A section left out (chip) leaves "(section not included)" where another section linked into it. Every number
+  the builder writes itself goes through `V(path, d, div)` = `PSBOutKit.fx` of the R value (the tabs' format) and is recorded in `model.vals`.
+- `apps/ps-bridge/ui/report.js` (new, `window.PSBReportUI`): the Report tab: the shared viewer (`shared/report.js` mount: contents, numbered
+  sections, search, expand / collapse, Print report), section chips; built when the tab opens and kept while the inputs and the chips are
+  the same.
+- `apps/ps-bridge/index.html`: loads `../../shared/report.js`, `report/fromtab.js`, `report/data.js`, `report/builders.js`, `ui/report.js`
+  (the PR 1 placeholder `report/sections.js`, `window.PSBReportPlan`, removed); the Report tab mounts the report in `#rptHost` (anchor
+  `ui.otab === 'rpt'`; before: the placeholder card "Planned sections"); CSS copied from the steel app (report sized to the output panel; Ctrl+P
+  on the Report tab prints the report only) plus `#out>:not(#rptHost)` hidden in that print; the "In development" note names PR 2e.
+- `apps/ps-bridge/ui/loads.js` (display): the "DC1 deck slab" row links to its step only when the step exists. Anchor `row('DC1 deck slab'`;
+  before `wk('ld.wdeck')`; after `cp.wdkDeck > 0 || +inp.ts > 0 ? wk('ld.wdeck') : ''` (the step is made under that condition in
+  `engine/worked.js`; a box beam without topping had a link to nothing on the tab, and a "§?" in the report).
+### Copies from the Steel Bridge app (to move to shared/ later, CLAUDE.md §3)
+- `report/builders.js`: adapted from `apps/steel-bridge/report/builders.js` at e02c618 (SECTIONS with the summary first, the item helpers, gsteps,
+  model() with include and the dropped-section reference fix, title block / running header / footer).
+- `ui/report.js`: adapted from `apps/steel-bridge/ui/report.js` at e02c618 (section chips kept in the page's UI state, viewer mount, tab links).
+  Not copied: scope (every girder), detail (every station), demand source (hand-off file), Build button (the PS result is the page's own,
+  computed once per input state).
+- `report/data.js`: the pattern of `apps/steel-bridge/report/data.js` (each module's result from the function its tab uses); written for this app.
+- `index.html` CSS: the steel app's Report rules (QA2) at e02c618.
+### Shared files
+- None changed. `shared/report.js` is now loaded by this app (also by the steel app and others; unchanged).
+### Saved data (CLAUDE.md §5)
+- No new key and no project field. The section chips are kept in the page's UI state `psb2.ui` (`ui.rpt.inc`, as the steel app keeps them
+  in its UI key); absent → every section. `psbeam.*` untouched (harness B).
+### Governing provisions
+- None changed (§4). The Report quotes the tabs' citations (AASHTO LRFD 10th Ed. (2024); MBE article numbers as the old app; owner manuals).
+### Check case
+- Default project (PCI BT-72, L = 120 ft, 40 strands, AASHTO): §1 FAIL 1 of 20 checks, largest ratio 1.276 (Hold-down force (PS-10), x = 48.00 ft,
+  F_hd = 94.823 kip vs 0.75 W = 74.303 kip, see §10.6); Release comp 4.174 / 4.420 ksi = 0.944; Flexure 10,250.992 / 13,638.909 k-ft = 0.752;
+  Shear 241.190 / 334.550 kip = 0.721; key quantities: total loss 47.82 ksi (23.6 %), f_pe 154.68 ksi, DF_M / DF_V 0.719 / 0.884,
+  φM_n / M_u 13,639 / 10,251 kip-ft, camber 2.90 / 0.57 in; inventory RF flexure 1.737, shear 1.635, Service III 1.430. The old app's own
+  report (psrModel) shows the same numbers at its decimals ("47.82 ksi (23.6%)", Release comp 4.17 / 4.42, ratio 0.94); it has no PS-10 row
+  (the check is new in PR 2d-3).
+### How verified
+- `node tests/engine/run.mjs psbridge tex project-registry` (new `psbridge-report.test.mjs`, 19 tests): on the 16 tab designs, 14 sections, every
+  "see §" resolves, no duplicate anchor, no NaN / undefined; every recorded number (≈1,370–1,600 per design) = the R value as the tabs format it;
+  each tab section records exactly the values the tab shows and holds the tab's own step objects in its topics; every check in the summary with
+  a link; the assumptions present; the $…$ notation parses in KaTeX (strict); a left-out section leaves no link; nothing in R, the inputs or the
+  project changes. Also fixed: `psbridge-inputs.test.mjs` "default project …" compared `P.base` with the old defaults without the PS-10 fields
+  that PR 2d-3 adds (failing on main since #1461; test only: the expected base now has `opt.hdCheck = true`, `opt.hdFrac = 0.75`).
+- **Harness B** (`node tests/psbridge-compare.mjs`, all tabs + the Report): 16 designs, 40,826 shown values and 7,184 step values (the Report
+  23,026 values and 3,592 step values; 327 PS-10 values with the hand values, the rest with the old app exactly) and 1,480 numbers of the old
+  app's own report (psrModel "Design summary" and key quantities, at its decimals): **0 differences**; every Report number found in its rendered
+  section, every step rendered, no KaTeX error; `psbeam.*` untouched. `--control` (one tab value, one step, one Report value, one Report step,
+  one old-report number changed) reports each difference.
+- `node tests/smoke/ps-bridge-skeleton.mjs` (202 checks): the Report's 14 sections, values = computeAll on the page, steps with KaTeX, a "see §"
+  jump, a tab link, a section chip (kept in `psb2.ui`, not in the project), Print report (the report alone; print media emulated), Ctrl+P on the
+  tab (no header, no notes, no bar), blocked by an input error, 390 px without sideways scroll; file://, 0 console errors.
+  `node tests/check-syntax.mjs`.
+### Open items
+- The owner material-limit checks of the engine (girder f′c and release f′ci against the owner's range: RIDOT 5.2.1, MassDOT 3.7.2.1,
+  CTDOT 5.9.1.2) are not on any result tab and not in the check-summary column (its groups do not list them); the Report lists them in §1 with
+  a link to the Owner rules table. Example: the CTDOT tab design (f′ci = 6.8 ksi > 6.5 ksi) FAILs "Release strength f′ci (CTDOT 5.9.1.2)",
+  ratio 1.046, while the check-summary column counts only its own groups. Whether to add them to the check-summary column (display) is for the engineer.
+- No graphics in the Report yet (the tabs draw theirs after the HTML; the steel report has charts): a later display PR if wanted.

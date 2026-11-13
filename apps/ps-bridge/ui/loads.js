@@ -28,7 +28,7 @@
     const row = (lab, how, v, link) => `<tr><td class="lft">${lab}</td><td class="lft">${how}</td><td>${v}</td><td>${link || ''}</td></tr>`;
     h += k.card('Dead loads on the design girder', `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Load</th><th class="lft">Section and source</th><th>Value</th><th></th></tr></thead><tbody>
       ${row('DC1 girder self-weight w<sub>g</sub>', 'non-composite; from the section', ev('wG', 4, 'klf'), wk('sec.g.wsw', '§', 'sec'))}
-      ${row('DC1 deck slab', `non-composite; ${cp.extG ? 'exterior: (S/2 + overhang)' : 'tributary'} width`, ev('cp.wdkDeck', 4, 'klf'), wk('ld.wdeck'))}
+      ${row('DC1 deck slab', `non-composite; ${cp.extG ? 'exterior: (S/2 + overhang)' : 'tributary'} width`, ev('cp.wdkDeck', 4, 'klf'), cp.wdkDeck > 0 || +inp.ts > 0 ? wk('ld.wdeck') : '')}
       ${cp.wdkHaunch > 0 ? row('DC1 haunch', 'non-composite; top flange width × haunch', ev('cp.wdkHaunch', 4, 'klf'), wk('ld.whaunch')) : ''}
       ${row('DC1 additional (forms, …)', 'non-composite; entered (Loads tab)', `${k.fx(+inp.loads.wNC, 4)} klf`, '')}
       ${row('DC1 distributed (deck + haunch + additional)', 'on the bare girder', ev('wDk', 4, 'klf'), wk('ld.wDC1'))}
