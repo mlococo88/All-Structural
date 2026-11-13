@@ -17,6 +17,7 @@ const two = (Di, De) => { const P = M.newProject(); setD(P, 0, Di); setD(P, 1, D
 const three = (De, Dm, Dc) => { const P = M.newProject(); P.xs.nb = 6; P.xs.bays = [9.5, 9.5, 9.5, 9.5, 9.5];
   M.setLines(P, 1, [0, 5]); M.setLines(P, 0, [1, 4]); P.girders[0].label = 'Mid'; setD(P, 1, De); setD(P, 0, Dm);
   const c = M.addType(P, 0, { label: 'Core', lines: [2, 3] }); setD(P, c, Dc); return P; };
+const c0 = P => { P.crossframes.dia.clr = 0; return P; };   // SB-25: the fit clearance c = 0 (the rule of #1490, d ≤ D_0)
 const rec = (P, gi) => { const I = CF.inputsOf(P, { gi }), Env = CF.envOf(P); return { I, Env, TR: CF.cfTypeRec(I.p, Env) }; };
 // origin/main's selection (cfTypeRec before SB-22): from frac × p.dg
 const before = (p, Env) => { const r = Env.rule('dia.depth'), dg = +p.dg, f = r && dg < r.value.D - 1e-9 ? r.value.frac : 0.75, a = s => 2 * s[2] * s[3] + (s[1] - 2 * s[3]) * s[4];
@@ -45,7 +46,8 @@ test('the hand check: Interior D = 60, Exterior 66 (req 50.91 in) and 54 (46.41 
 });
 
 test('Interior D = 30, Exterior 36: W27x84 → W30x99 (0.75 × 37.88 = 28.41 in), the CFD depth check passes with it', () => {
-  for (const P of [two(30, 36), two(36, 30)]) for (const gi of [0, 1]) {
+  // SB-25 (2026-11-13): clearance c = 0, the fit of #1490 (d ≤ D_0); the default c = 2 in: tests/engine/sb-dia-fit.test.mjs
+  for (const P of [c0(two(30, 36)), c0(two(36, 30))]) for (const gi of [0, 1]) {
     const { I, Env, TR } = rec(P, gi);
     assert.equal(I.p.dg, 31.88); assert.equal(before(I.p, Env).w, 'W27x84'); assert.ok(Math.abs(TR.req - 0.75 * 37.88) < 1e-9);
     assert.equal(TR.w, 'W30x99'); assert.equal(TR.rec, 'rolled diaphragm W30x99'); assert.ok(!TR.grp, 'W30x99 (29.70 in) fits D_0 = 30 in');
@@ -58,7 +60,7 @@ test('Interior D = 30, Exterior 36: W27x84 → W30x99 (0.75 × 37.88 = 28.41 in)
 });
 
 test('three types (Exterior 30, Mid 36, Core 42): W36x135 does not fit the Exterior bays (D_0 = 30), a section per bay depth group', () => {
-  const P = three(30, 36, 42);
+  const P = c0(three(30, 36, 42));   // SB-25: c = 0, the fit of #1490
   for (const gi of P.girders.map((_, i) => i)) {
     const { TR } = rec(P, gi);
     assert.ok(Math.abs(TR.req - 0.75 * 43.88) < 1e-9); assert.equal(TR.w, 'W36x135', 'the one section for every bay (the Diaphragm switch default)');
@@ -66,7 +68,7 @@ test('three types (Exterior 30, Mid 36, Core 42): W36x135 does not fit the Exter
     assert.equal(TR.rec, 'by bay depth (one section does not fit every bay): G1–G2, G5–G6: rolled diaphragm W30x99; G2–G3, G4–G5: rolled diaphragm W36x135; G3–G4: rolled diaphragm W36x135');
   }
   // no section fits a group: the text says so
-  const Q = three(32, 40, 40), { TR } = rec(Q, 1); assert.ok(TR.grp); assert.match(TR.rec, /G1–G2, G5–G6: no channel or W of the list between 31\.41 and 32\.00 in/);
+  const Q = c0(three(32, 40, 40)), { TR } = rec(Q, 1); assert.ok(TR.grp); assert.match(TR.rec, /G1–G2, G5–G6: no channel or W of the list between 31\.41 and 32\.00 in/);
 });
 
 test('the Diaphragm switch (ui/framing.js setBrace) takes the section that meets every bay', () => {
