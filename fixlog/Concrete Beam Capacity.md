@@ -6760,7 +6760,7 @@ Before, this check did not exist.
 ### Decision (pending engineer review)
 The legs are taken as equally spaced between the outer legs, because the input has no leg positions. A layout with unequal leg spacing needs a by-hand check.
 
-## 2026-11-13 — PR: claude/cbc-tex-thinspace (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CBTS) — TeX thin space restored in the CBSZ and CBLW worked lines (a stray ";" was shown)   [display only; no computed value, key or format change]
+## 2026-11-13 — PR: claude/cbc-tex-thinspace (PR #1498: https://github.com/mlococo88/All-Structural/pull/1498) (CBTS) — TeX thin space restored in the CBSZ and CBLW worked lines (a stray ";" was shown)   [display only; no computed value, key or format change]
 
 - **Problem:** in five source lines added by CBSZ (#1495) and CBLW (#1497), the TeX thin space was written in the JS string with one backslash instead of two. JS reads a backslash before ";" as just ";", so KaTeX showed a literal ";". Example: "V_c = min(V_c, ;V_c,max)" and "V_s,req … − V_c ;≤ ;4√f′c b_w d". Values and results were not affected.
 - **Where:**
