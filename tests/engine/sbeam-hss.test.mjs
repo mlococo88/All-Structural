@@ -205,9 +205,14 @@ test('A1: HSS20.000X0.250, 60 ft: H3-2a governs, phi Tn = 240.6 kip-ft (not 291.
     near(D.perCombo[0].phiTn, 0.9 * F1 * 141 / 12, 1e-9, `member mode ${JSON.stringify(m)}`);
     assert.equal(D.torsL.src, 'member span L'); assert.equal(D.warns.length, 0);
   }
-  // span blank: the unbraced length Lb = 60 ft is used, with a warning
+  // span blank (TLS9, engineer HSS-9): L = infinity, NOT the unbraced length: Fcr = min(27.6, H3-2b 21.88) = 21.88 ksi,
+  // phi Tn = 0.9(21.88)(141)/12 = 231.4 kip-ft, with a warning (before TLS9: Lb = 60 ft gave 240.6; Lb = 30 ft gave 291.9)
   let D = member(S, { L: null, Lb: 60, Lv: null, rows: row });
-  near(D.perCombo[0].phiTn, 0.9 * F1 * 141 / 12, 1e-9, 'Lb fallback'); assert.ok(D.torsL.fallback); assert.ok(/H3-2a/.test(D.warns.join(' ')));
+  near(D.perCombo[0].phiTn, 0.9 * F2 * 141 / 12, 1e-9, 'span blank: lower bound'); assert.ok(D.torsL.fallback); assert.ok(/H3-2a/.test(D.warns.join(' ')));
+  D = member(S, { L: null, Lb: 30, Lv: null, rows: row });
+  near(D.perCombo[0].phiTn, 0.9 * F2 * 141 / 12, 1e-9, 'span blank, Lb 30 ft: lower bound'); near(D.perCombo[0].phiTn, 231.4, 0.05, '231.4 (was 291.9)');
+  assert.equal(D.torsL.v, null); assert.ok(D.warns.some(w => /L = \u221E/.test(w) && /21\.88/.test(w)));
+  // the other checks keep the L_b fallback (self-weight / deflection use memberSpan()); rectangular HSS torsion has no L
   // continuously braced, no length at all: H3-2a dropped, Fcr = min(27.6, 21.88) = 21.88 ksi, phi Tn = 231.4 kip-ft, with a warning
   D = member(S, { L: null, Lb: null, Lv: null, cont: true, rows: row });
   near(D.perCombo[0].phiTn, 0.9 * F2 * 141 / 12, 1e-9, 'no length: H3-2b'); assert.ok(/H3-2a/.test(D.warns.join(' ')));

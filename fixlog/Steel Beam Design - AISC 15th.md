@@ -3539,6 +3539,40 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
 - **Other copies:** none.
 - **Open items:** the batch keeps the HSS N/A note. Per-location inputs are keyed by support index and by point-load x (`P<x>`), so moving a load drops its own override and falls back to the group value.
 
+## 2026-11-13 — PR: claude/hss-torsion-span (PR #1482: https://github.com/mlococo88/All-Structural/pull/1482) (TLS9) — member mode, round HSS torsion with no member span L: L = ∞ (lower bound), not L_b   [calculation change, §4]
+- **Engineer's decision HSS-9 (2026-11-13):** in member check mode, a round HSS with no member span L entered uses the length-independent lower bound F_cr = min(0.6F_y, Eq. H3-2b), i.e. L = ∞, instead of falling back to L_b. A warning asks for the span. Other checks keep their L_b fallback. Closes the second open item of TLEN (#1468).
+- **Code (re-apply by hand):** `memberDesignAll`, TLEN block (anchor `TLEN (2026-11-13): Eq. H3-2a takes L`).
+  - Before:
+    ```js
+    {const sp=memberSpan(),has=sp.v>0;
+     const torsL={v:has?sp.v:null,src:has?(sp.src==='entered'?'member span L':'unbraced length Lᵇ — no member span L entered'):'no member length entered — Eq. H3-2a not used',fallback:!(has&&sp.src==='entered')};
+     D.tors=torsionHSS(p,(has?sp.v*12:Infinity));
+     … D.warns.push('Round HSS torsion: Eq. H3-2a needs the member length L (§H3.1(a)). '+(has?'No member span L is entered, so Lᵇ = …':'No length is entered, so H3-2a is not used …'));}
+    ```
+  - After (anchor `TLS9 (2026-11-13, engineer HSS-9)`):
+    ```js
+    {const sp=memberSpan(),has=sp.v>0&&sp.src==='entered';
+     const torsL={v:has?sp.v:null,src:has?'member span L':'no member span L entered — L = ∞, Eq. H3-2a not used (lower bound)',fallback:!has};
+     D.tors=torsionHSS(p,(has?sp.v*12:Infinity));
+     if(p._kind==='P')D.torsL=torsL;
+     if(p._kind==='P'&&anyTu&&torsL.fallback)D.warns.push('Round HSS torsion: Eq. H3-2a needs the member length L (§H3.1(a)). '+
+       'No member span L is entered, so L = ∞ is used: Fᶜʳ = min(0.6Fᵧ, H3-2b) = '+fmt(D.tors.Fcr,2)+' ksi, the length-independent lower bound (conservative). Enter the member span L in <b>Lateral Bracing &amp; Cᵇ</b> for the full value.');}
+    ```
+  - `torsRoundWork`: `'not entered'` → `'∞ (not entered)'`; `'F_{cr,a}\\ \\text{(H3-2a) not used: no member length}'` → `'F_{cr,a}\\ \\text{(H3-2a) not used: no member span }L\\ (L=\\infty)'`.
+- **Governing provision:** AISC 360-16 §H3.1(a), Eq. H3-2a (L = member length) and Eq. H3-2b.
+- **Check case:** HSS20.000X0.250 A500 Gr. C round (F_y 46), 60 ft member, span blank, L_b = 30 ft, T_u = 100 kip·ft. D/t = 85.84, C = 141.
+  - **Before:** L = L_b = 360 in, H3-2a = 32.18 ksi, capped at 27.60 → φT_n = 0.9(27.60)(141)/12 = **291.9 kip·ft** (DCR 0.343).
+  - **After:** L = ∞, F_cr = min(27.6, H3-2b = 21.88) = 21.88 → φT_n = 0.9(21.88)(141)/12 = **231.4 kip·ft** (DCR 0.432).
+  - H3-6 interaction: 0.1174 → 0.1868.
+  - With L_b = 60 ft and the span blank: 240.6 → 231.4. With the span 60 ft entered: 240.6, unchanged.
+- **How verified:**
+  - Headless Chromium, origin/main against the branch, 6 cases. W, rect HSS, the round span-entered case and the round beam are identical (`AN`, all texts). The round span-blank cases differ only in the torsion values, the torsion DCR, the interaction and the warning; self-weight and deflection are unchanged.
+  - Node `sbeam-hss` test 4 updated; check-syntax; `aisc-hss`.
+  - Smoke tests pass: builtup, h1-composite, analysis-summary, phone-layout, decimal-entry, project-library, start-chooser. list-input `--part sbeam` fails the same 2 baseline checks as main.
+- **Saved data:** none changed.
+- **Other copies:** none.
+- **Open item (reported, not fixed):** the Excel export (`xlChecks`) throws for every HSS. Round HSS, beam and member mode: §10 minor shear writes `2*«bf»*«tf»`. Rect HSS: the F2 L_r formula uses `«rts»` / `«ho»`. Checked on origin/main; W-shapes export.
+
 ## 2026-11-13 — PR: claude/sbeam-compression-flange (PR #1483: https://github.com/mlococo88/All-Structural/pull/1483) (SBCF) — Major Flexure: "Flange" column renamed "Compression flange", HSS walls named, sagging / hogging note   [display only]
 - **Engineer's decision (2026-11-13):** rename the per-combination column 'Flange' to 'Compression flange'. W-shapes, channels and built-up show top / bottom; rectangular HSS show top wall / bottom wall. Add a note under each table: "Sagging moment: top in compression, uses L_b,top; hogging: bottom in compression, uses L_b,bot." In member-check mode, adapt it.
 - **Where:** the active `buildMxTab` (the last definition in the file; the earlier `buildMxTab` and `buildFlexTab` copies are not called and are unchanged), and `capEnvFig`. The Minor Flexure tab and the Excel export have no flange column, so nothing changes there. The Report follows the tab, because it is built from it.
