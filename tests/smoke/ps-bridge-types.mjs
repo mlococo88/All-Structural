@@ -131,6 +131,27 @@ check(/larger is 30° or more/.test(await p.textContent('#sbDashCol')), 'skews 2
 check(!o.errs.length, 'console errors (3a-2): ' + o.errs.join(' | '));
 await o.b.close();
 
+// 7. PR 3a-3: DC2 / DW distributed (a new project): the Cross-section card (MassDOT pile-cap, barriers 0.30 klf, 25 psf) with its line table
+//    0.255 / 0.1875 / 0.12 / 0.1875 / 0.255 and DW 0.195; the Loads & LLDF tab's line table and steps (dl.*) for the line shown; the DC2 field
+//    of the Loads tab hidden; "Entered per girder type" brings back the entered values (0.30 / 0.25)
+o = await openPage(FILE, { vw: 1400, vh: 1000 }); p = o.p; await ready(p);
+await p.click('#inTabs [data-itab="xsec"]'); await p.waitForTimeout(200);
+{ const t = (await p.textContent('#card-dl')).replace(/\s+/g, ' ');
+  check(/0\.2550 0\.1875 0\.1200 0\.1875 0\.2550/.test(t) && /0\.1950 0\.1950 0\.1950 0\.1950 0\.1950/.test(t), 'Cross-section: DC2 / DW per line ' + t.slice(-200));
+  await p.click('#tabBar [data-otab="lds"]'); await p.waitForTimeout(300);
+  const r = await p.evaluate(() => ({ dc2: (document.querySelector('#out [data-ev="wBar"]') || {}).textContent, dw: (document.querySelector('#out [data-ev="wDW"]') || {}).textContent, st: !!document.getElementById('st-dl.G2.DC2'), lt: /distributed to every girder line/.test(document.getElementById('out').textContent) }));
+  check(r.dc2 === '0.1875' && r.dw === '0.1950' && r.st && r.lt, 'Loads & LLDF: G2 DC2 0.1875, DW 0.1950, the line table and the steps ' + JSON.stringify(r));
+  const e = await evCheck(p); check(e.n >= 20 && !e.bad.length, `Loads & LLDF values = computeAll: ${e.n} ${e.bad.slice(0, 3).join(' | ')}`);
+  if (args.shots) await p.screenshot({ path: path.join(args.shots, 'ps3a-1400-lds-distributed.png') });
+  await p.click('#inTabs [data-itab="loads"]'); check(!(await p.$('#i_base\\.loads\\.wBar')), 'Loads tab: no entered DC2 while distributed');
+  await p.click('#inTabs [data-itab="xsec"]'); await p.selectOption('#i_xs\\.dl\\.mode', 'entered'); await p.waitForTimeout(300);
+  const r2 = await p.evaluate(() => (document.querySelector('#out [data-ev="wBar"]') || {}).textContent); check(r2 === '0.3000', 'entered: DC2 0.3000 ' + r2);
+  await p.selectOption('#i_xs\\.dl\\.mode', 'distributed'); await p.waitForTimeout(200);
+  await p.fill('#i_xs\\.dl\\.barL\\.w', '-1'); await p.press('#i_xs\\.dl\\.barL\\.w', 'Tab'); await p.waitForTimeout(200);
+  check(/Left barrier weight must be zero or a positive number/.test(await p.textContent('#sbDashCol')), 'a negative barrier weight is an input error'); }
+check(!o.errs.length, 'console errors (3a-3): ' + o.errs.join(' | '));
+await o.b.close();
+
 // 5. phone
 o = await openPage(FILE, { vw: 390, vh: 844 }); p = o.p; await ready(p);
 await p.click('#inTabs [data-itab="gird"]'); await p.waitForTimeout(200);
