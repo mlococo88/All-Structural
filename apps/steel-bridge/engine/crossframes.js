@@ -302,7 +302,9 @@
         note: 'Brace stiffness from the diagonal (and, for K frames, the horizontal) area reduced by R = 0.65 for single-angle end-connection eccentricity; X frames taken as tension-only diagonals. β_sec is infinite when the cross-frame is at least 0.8 of the web depth. β_g = 24(n_g − 1)²S²EI_x/(n_gL³): if it alone is below the requirement, stiffer cross-frames cannot help. C = 2.4 for cross-frames at least 0.8 of the girder depth on full-depth connection plates attached to both flanges, otherwise 3.6/φ with φ = 0.75 (AISC Appendix 6 form; confirm the coefficient with the edition in use).' };
       if (!R.SB) c.naWhy = 'Stability bracing check turned off.';
       else { const S = R.SB, it = (loc, v, st, step) => c.items.push({ loc, cells: [isFinite(v) ? f0(v) : '∞', f0(S.bReq), isFinite(v) ? f2(S.bReq / v) : '0.00'], r: isFinite(v) ? S.bReq / v : 0, st, demand: S.bReq, capacity: v, step });
-        it('Brace, β_br', S.bbr, 'pass', 'cf.sb.bbr'); it('Web distortion, β_sec', S.bsec, 'pass', 'cf.sb.bsec'); it('Girder in-plane, β_g', S.bg, S.bg >= S.bReq ? 'pass' : 'fail', 'cf.sb.bg');
+        // SBBS (2026-11-13): β_sec is a term of β_T (6.7.4.2.2-6, springs in series), not a requirement of its own (6.7.4.2.2-1 is (β_T)act ≥ (β_T)req):
+        // its item had st 'pass' hard-coded (shown "OK" at a ratio above 1); now no status of its own ('na', never governs: β_T ≤ β_sec) and the label below
+        it('Brace, β_br', S.bbr, 'pass', 'cf.sb.bbr'); it('Web distortion, β_sec', S.bsec, 'na', 'cf.sb.bsec'); c.items[c.items.length - 1].lbl = 'component (see β_T)'; it('Girder in-plane, β_g', S.bg, S.bg >= S.bReq ? 'pass' : 'fail', 'cf.sb.bg');
         c.items.push({ loc: 'System, β_T', cells: [f0(S.bT), f0(S.bReq), f2(S.bReq / S.bT)], r: S.bReq / S.bT, st: S.bT >= S.bReq ? 'pass' : 'fail', demand: S.bReq, capacity: S.bT, step: 'cf.sb.bT' }); }
       out.add(c); }
     { const c = { id: 'CF9', grp: 'Members', title: 'Fatigue of cross-frame members', ref: `${ED} Art. 6.6.1.2, Table 3.4.1-1 (Fatigue I factor × 0.65 for cross-frames)`, items: [],
