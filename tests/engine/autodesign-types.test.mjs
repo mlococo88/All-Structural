@@ -18,7 +18,7 @@ const W = loadShared('units.js', 'steps.js', 'lldf.js', 'vehicles.js', 'moving-l
   'engine/shear.js', 'engine/stiffeners.js', 'engine/analysis.js', 'engine/fatigue.js', 'engine/studs.js', 'engine/framing.js', 'engine/crossframes.js', 'engine/constructibility.js', 'engine/splices.js',
   'engine/rating.js', 'engine/welds.js', 'ui/shear.js', 'ui/fatigue.js', 'ui/framing.js', 'ui/splices.js', 'ui/flexure.js', 'ui/rating.js', 'ui/welds.js', 'engine/splplace.js', 'engine/autodesign.js'].map(E));   // as tests/engine/autodesign.test.mjs adWindow
 const AD = W.SBDAutoDesign, M = W.SBDModel, AN = W.SBDAnalysis, J = o => JSON.parse(JSON.stringify(o));
-const anKey = R => JSON.stringify({ ...plain(R), girder: { ...plain(R.girder), id: null, label: null, lines: null }, gi: null });   // the girder's identity (id, label, lines; its index) aside
+const anKey = R => JSON.stringify({ ...plain(R), girder: { ...plain(R.girder), id: null, label: null, lines: null, adLines: null }, gi: null });   // adLines: SBXF2, the type's lines on a run copy   // the girder's identity (id, label, lines; its index) aside
 
 test('typeScope: a saved project (no lines) as before; a new project per type', () => {
   const P = M.defaultProject(); assert.equal(AD.typeScope(P), 'together');

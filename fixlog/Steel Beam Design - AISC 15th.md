@@ -3408,3 +3408,167 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
 - **Open items:**
   - The cross-section drawing still draws the A1085 wall at t_nom with the database corner geometry (display only).
   - `sectionWarnings` still compares A with an approximate wall-geometry area (1.5 % tolerance band, no warning now).
+
+## 2026-11-13 — PR: claude/hss-tension-u (PR #1478: https://github.com/mlococo88/All-Structural/pull/1478) (SBTU) — optional shear-lag helper for HSS with a single concentric gusset (Table D3.1 cases 5/6) and the slotted net area   [new calculation, opt-in; new optional field `S.design.ten.hlp`]
+- **Engineer's decision HSS-7 (2026-11-13):** add a Table D3.1 case 5/6 U helper and a slot A_n helper. Slot width default = gusset t + 1/8 in., editable. Typed U / A_n are still allowed and stay the default path.
+- **Code (re-apply by hand):**
+  1. New `sbTenHelper(p,ten)` and `sbTenFor(p,ten)`, with their comment block, before `/* ---------- H3 torsion (HSS only) ---------- */`.
+     - `sbTenHelper` returns null unless `ten.hlp.on` and the family is HSSR / HSSP. It computes:
+       - rect, case 6: H = the side in the gusset plane (`hlp.plane`, default 'H'), x̄ = (B² + 2BH)/(4(B + H)); l ≥ H → U = 1 − x̄/l.
+       - round, case 5: D = `hssLabelOD`, x̄ = D/π; l ≥ 1.3D → U = 1; D ≤ l < 1.3D → U = 1 − x̄/l.
+       - A_n = A_g − 2·t_des·w, with w blank → t_p + 0.125.
+       - It collects errors: no t_p (and no w), no l, l below the case limit, A_n ≤ 0.
+     - `sbTenFor`: no helper → `tensionStrength(p,An,U)` as before. Helper with errors → `t.blocked` (text), φPn = 0. Otherwise A_n = min(typed, helper) and U = min(typed, helper) when typed, else the helper's.
+  2. `designAll` and `memberDesignAll`:
+     - before: `if(!D.ten)D.ten=tensionStrength(p,dsn.ten&&dsn.ten.An,dsn.ten&&dsn.ten.U);` and `C.dcrPt=Math.abs(man.Pu)/C.phiPt;` (`r.Pu` in member mode);
+     - after: `if(!D.ten)D.ten=sbTenFor(p,dsn.ten);` and `C.dcrPt=D.ten.blocked?Infinity:Math.abs(man.Pu)/C.phiPt;`.
+  3. Checks list, Tension `detail`: `blocked — <reason>` when blocked; otherwise `(shear-lag helper, Table D3.1 case N)` is appended. The tension warning: when blocked, a new message with the reason replaces the standard one.
+  4. `secEffLen` input (card "Compression Effective Lengths"), after the "Axial tension" hint, for HSSR / HSSP: the checkbox `tenHlpOn` and, when on, `tenHlpTp`, `tenHlpW`, `tenHlpL`, `tenHlpPl` (rect only), plus a hint.
+  5. `tensionSections`, card `tnCap`: `if(t.hlp)sbTenHelperWork(body,t);` and, when blocked, an errBox with return. The rupture block's A_n / U vars name the source ("shear-lag helper (above)", "entered" or "blank").
+  6. New `sbTenHelperWork(body,t)`: the eqBlock "Shear-lag factor and net area (helper …)" [Table D3.1 case N, §B4.3b] and the notes.
+- **Governing provisions:** AISC 360-16 Table D3.1 cases 5 and 6; §B4.3b (slotted HSS welded to a gusset: A_n = A_g − thickness × total width removed); §D3 Eq. D3-1; §D2 Eq. D2-1, D2-2.
+- **Check cases:**
+  - **HSS8X6X1/2 Gr. B, case 6.** H = 8, B = 6, l = 10 in, gusset 1/2 in (w 0.625): x̄ = 2.357 in, U = 0.764, A_n = 11.6 − 2(0.465)(0.625) = 11.019 in², φPn = 0.75(58)(0.764)(11.019) = **366.3 kip**. Helper off: 480.2 kip (yielding, A_n = A_g, U = 1). Spreadsheet: 385.7 kip.
+  - **HSS10.000X0.500 Gr. C round, case 5.** l = 12 in, gusset 3/4 in (w 0.875): x̄ = 3.183 in, U = 0.7347, A_n = 13.086 in², φPn = 0.75(62)(9.614) = **447.1 kip**. With l = 13 in, U = 1.0; with l = 9 in, blocked.
+- **Decisions (pending engineer review):**
+  1. When a typed A_n or U is also present, the smaller of the typed and helper values governs.
+  2. Incomplete or out-of-range helper inputs make the tension check FAIL with the reason; there is no fallback to A_n = A_g, U = 1.
+  3. The helper is offered for HSS rect / round only (not Pipe).
+- **How verified:**
+  - Headless Chromium, origin/main against the branch, 10 cases with the helper off or absent: `AN` identical; all texts identical apart from the new checkbox label.
+  - Node `sbeam-hss` test 8; check-syntax; `aisc-hss`.
+  - Smoke tests pass: builtup, h1-composite, phone-layout, decimal-entry, project-library, start-chooser. list-input `--part sbeam` fails the same 2 baseline checks as main.
+- **Saved data (§5):** new optional field only (absent = off). No key or format changed.
+- **Other copies:** none. The batch tension columns are unchanged.
+- **Open items:** gusset plate, welds, block shear and the HSS wall at the slot end are not checked (stated on the card). Two-side-gusset case 6 is not offered.
+
+## 2026-11-13 — PR: claude/sbeam-analysis-summary (PR #1479: https://github.com/mlococo88/All-Structural/pull/1479) (SBAS) — Analysis tab: summary of all load combinations, envelope station table   [display only]
+- **Engineer's request (2026-11-13):** "the analysis results should have a summary table at the top of the tab showing all the results summarized. The tabulated results in section 8 is nice but it only shows one load case which may not be the governing one."
+- **Problem:** the Analysis tab showed the peaks and reactions of each combination only inside that combination's own card, and Tabulated Results only for the selected combination.
+- **Code (re-apply by hand):**
+  1. CSS, after `table.tbl tr.gov td{background:#FEF6E7}`: the `SBAS` block (`.sbAsWrap` scrolls a wide table inside its card; `td.sbAsGov` highlight; `tr.sbAsEnv` Governing rows; `tr.sbAsCur` the selected combination; `a.sbAsSel`).
+  2. `buildAnalysisTab`, before:
+     ```js
+     function buildAnalysisTab(pg){
+       comboSelector(pg);
+     ```
+     after:
+     ```js
+     function buildAnalysisTab(pg){
+       if(AN&&AN.combos&&AN.combos.length)mkSection('anSum','Summary of All Load Combinations',body=>sbAsSummary(body),pg);   /* SBAS (2026-11-13) */
+       comboSelector(pg);
+     ```
+  3. `buildAnalysisTab`, the card `mkSection('anTable','Tabulated Results — '+c.name,…` (before: `body.appendChild(stationTable(c));` plus the Rows hint) becomes: a "Table shows" select (`data-fkey="anTblView"`: "Selected combination (…)" / "Envelope of all combinations", disabled with one combination); `SBAS.tbl==='env'` shows `sbAsEnvTable()` in a `.sbAsWrap` with its hint; otherwise `stationTable(c)` as before, the Rows hint extended by "This table is for one combination; choose "Envelope of all combinations" above, or see the Summary of All Load Combinations at the top of this tab." (more than one combination). Title: `'Tabulated Results — '+(envT?'Envelope of All Combinations':c.name)`.
+  4. New, after `buildAnalysisTab`: `const SBAS={tbl:'combo'}` (in memory only), `sbAsWorkedId()` (combination id → the first combination with the same `sig`, where it is worked, §7.2), `sbAsPick(id)` (sets the `dispCombo` select and fires its change event: the combo selector's own path), `sbAsName`, `sbAsVal`, `sbAsSummary(body)`, `sbAsEnvTable()`.
+     - Summary columns: V max, V min, M max (+), M min (−), each with "at x"; R at each non-free node; Mᴿ at a fixed node. Values `fmt(…,3)` of `cb.Vmax.v/.x`, `cb.Vmin`, `cb.Mmax`, `cb.Mmin`, `cb.R[j].v`, `cb.R[j].m`: the same numbers and format as the combination's card.
+     - Governing per column: largest |value| (first combination on a tie; equal printed values all highlighted and all named). Rows "Governing (largest |value|)" and "Governing combination".
+     - Deflection: not computed per strength combination, so not in the table; a note and a "Worked in" link to Serviceability · Deflection Curves.
+     - Envelope rows: span tenth-points, supports, the V=0 stations of every combination, user stations; at each, every combination evaluated exactly as `stationTable` does (`evalVM(x∓1e-7, cb.R, cb.f)`), max and min of Vₗ, Vᵣ, M with the combination ("all" when every combination prints the same value).
+  5. `sbrTab`, TABLE branch, the row map: before `const t=sbrText(td);return {t,n:…,span:…};` → after: also `key` from `td.querySelector('.sbrKey[data-tab][data-sec]')` through `links(…)` (a § link to that card's first step) and `cls:'hi'` for `td.sbAsGov`. No existing table has either, so no other Report table changes.
+- **Links (§6):** on screen, each value → the worked card `anC_<id>` (sbdGoto: opens and scrolls); a combination name selects it. Report: the combination name and Governing combination cells carry "§x.y".
+- **Governing provision:** none (display only; statics as already worked per combination).
+- **Check case** (3-span: fixed A, 20 / 25 / 18 ft + 6 ft cantilever, roller B, C, D; point 12 kip LL at 10 ft in span 2, 5 kip DL at the tip; default trib loads; W18X50), combination 1.2DL + 1.6LL + 0.5SL: summary row V max 23.605 at 20.000, V min −17.595 at 45.000, M max 100.587 at 30.000, M min −91.464 at 20.000, R_A 4.140, Mᴿ_A −1.732, R_B 37.065, R_C 26.209, R_D 18.506; the same numbers as that combination's card (peaks table and reaction blocks). Before: these appeared only in the card. Governing row: V max 23.605, M max 100.587, M min −91.464 (all this combination).
+- **How verified:** headless Chromium, origin/main against the branch, five beam projects (simple span; 3 spans + cantilever with point and negative wind loads; 2 spans fixed-pin-roller with partial load and user stations; point loads only; fixed cantilever): `AN` JSON identical; Summary, Schematic and Load Derivation texts identical; Analysis and Report differ only by the new card, the extended hint and the section numbers. Branch: every summary value equals AN and the worked card (1,573 comparisons), every envelope value equals the max / min of the combinations' own station values. Member and batch modes: `AN` and every tab text identical. New smoke test `steel-beam-analysis-summary` (9 checks).
+- **Saved data (§5):** no key or format change. The Tabulated Results choice is in memory only; the new card's collapse state goes in the existing `S.ui.collapse` map under `anSum`, as every card.
+- **Other copies:** none.
+- **Open items:** the envelope table has in-app links only (no § refs in the Report, to keep it readable).
+
+## 2026-11-13 — PR: claude/hss-chapter-k (PR #1480: https://github.com/mlococo88/All-Structural/pull/1480) (SBHK) — concentrated forces on HSS walls for beam-type loads: transverse plate across the face, bearing on a cap plate / seat at supports   [new checks, §4; new optional fields `S.design.hssK`, `S.member.hssK`]
+- **Engineer's decision HSS-2 (2026-11-13):** add Chapter K checks for beam-type loads on HSS walls (HSS review gap A6).
+- **Article numbering (AISC 360-16):**
+  - Concentrated forces on HSS are §K2: §K2.2 round (Table K2.1 / K2.1A); §K2.3 rectangular, which sends the loads to the applicable limit states of Chapter J.
+  - B_e is §K1.2a, Eq. K1-1.
+  - How Chapter J applies to an HSS: Commentary J10 and K1.2.
+  - The cap-plate dispersion model is Commentary K2.3 (axial load).
+  - §K3 covers HSS-to-HSS.
+- **Code (re-apply by hand):**
+  1. New functions `hssKPrm`, `hssKCaps`, `hssKAt` and `hssKLocs`, with the SBHK comment block, plus `sbHssKCheck(D)`. All are placed before `/* ---------- J10 concentrated forces (I & C) ---------- */`.
+  2. `designAll`:
+     - before the `/* M3: J10.4 inputs …` comment: `if(p._fam==='HSSR'||p._fam==='HSSP')D.hssK=hssKLocs(p,Ltot);`;
+     - in each combination, after the J10 demands: `if(D.hssK)C.hssK=D.hssK.map(lo=>{…})`. The force is the support reaction `cb.R[node].v` or the factored sum of the point loads at x (as J10); M_u comes from `evalVM(x)`; P_u is `man.Pu`.
+  3. `memberDesignAll`:
+     - before `rows.forEach(r=>{`: `if(p._fam==='HSSR'||p._fam==='HSSP')D.hssK=hssKLocs(p,0);`;
+     - per row, after the J10 block: `C.hssK=[…hssKAt(p,lo.caps,+S.member.j10.R||0,r.Pu||0,Math.abs(r.Mux||0))]`.
+  4. `buildDesignChecks`: `}else D.checks.push({label:'Concentrated forces',ref:'J10',na:true,` becomes `}else if(D.hssK)sbHssKCheck(D); else D.checks.push({label:'Concentrated forces',ref:'J10',na:true,`.
+  5. `buildJ10Tab`: first line after `const D=dOrNull(pg),p=AN.sect;if(!D)return;` → `if(!(p._kind==='I'||p._kind==='C')&&D.hssK){sbHssKTab(pg,D,p);return;}`. New functions `sbHssKTab(pg,D,p)` and `sbHssKWork(body,p,lo)` (cards `hkCap`, `hkW<i>`, `hk_<combo>`).
+  6. `secJ10` (input card `inJ10`): before the HSS pointer hint, add `if(pk&&(pk._kind==='R'||pk._kind==='P')&&(S.section.family==='HSSR'||S.section.family==='HSSP')){sbHssKInputs(body,pk);return;}`. New function `sbHssKInputs(body,pk)`. It writes the fields only on entry, so opening a project does not change it.
+- **Equations (rect, t = design wall, k = 1.5t, ×2 walls):**
+
+  | Limit state | Equation | φ |
+  |---|---|---|
+  | Plate local yielding | B_e = (10/(B/t))(F_y t/(F_yp t_p))B_p ≤ B_p (K1-1); R_n = F_yp t_p B_e | 0.90 |
+  | Punching (B_p ≤ B − 2t) | R_n = 0.6F_y t(2l_b + 2B_e) | 0.95 |
+  | Sidewall yielding | 2F_y t(5k + l_b) (J10-2); within H of the end, 2F_y t(2.5k + l_b) (J10-3) | 1.00 |
+  | Sidewall crippling (compressive) | 2 × (J10-4 / J10-5a / J10-5b) with d = H − 3t, t_f = t_w = t; Q_f = min(1, 1.3 − 0.4U/β) (K3-14) | 0.75 |
+
+  **Round:** R_n = F_y t²[5.5/(1 − 0.81B_p/D)]Q_f (K2-1a), φ 0.90; Q_f = 1 − 0.3U(1 + U) (K2-3); the Table K2.1A limits produce warnings.
+
+  **U** = P_ro/(F_y A_g) + |M_ro|·12/(F_y S) (K2-4).
+- **Check cases:**
+  - **HSS8X8X1/2 Gr. C,** 20 ft, P = 5 D + 10 L at midspan, plate 7 × 1/2 (F_yp 36):
+    - B_e = 5.255 in;
+    - φR_n: plate 85.14, punching 152.55, sidewall yielding 185.42, crippling 383.40·Q_f;
+    - 1.2D + 1.6L: R_u 22.0, M_u 112.93, U 0.8687, Q_f 0.9029 → governing plate yielding, DCR **0.258**.
+  - **Supports,** bearing l_b = 4: J10-3 ×2 = 267.08; J10-5b ×2 = 671.21·Q_f.
+  - **HSS10.000X0.500 Gr. C,** plate 6 in: 106.43·Q_f; U 0.9303, Q_f 0.4613 → φR_n 44.18, DCR **0.498**.
+  - **Member mode,** R 30, M_ux 60: DCR 0.352.
+- **Decisions (pending engineer review):**
+  1. k = 1.5t.
+  2. Plate yielding φ 0.90 (§J4.1/J4.4).
+  3. Punching φ 0.95 (Comm. K1.2), checked whenever B_p ≤ B − 2t, with B_ep = B_e (K1-1).
+  4. Sidewall limit states checked for every β, with l_b only.
+  5. Q_f always with the loaded face in compression; tension P taken as 0.
+  6. F_yp blank → 36 ksi; l_b blank → t_p.
+  7. Rect bearing is taken across the full width (sidewalls only); round bearing uses K2-1a with B_p (default D).
+  8. Missing input at a location carrying force → FAIL. Round outside Table K2.1A → value shown with a warning.
+  9. Rect B_p < 0.85B: face yield line not checked; warning, not blocked.
+- **Not covered (stated in the tool):**
+  - rect face yield line for B_p < 0.85B (no 360-16 equation; §J10.10, Manual Part 9);
+  - §J10.5 pair of forces;
+  - longitudinal plates;
+  - cap plate loaded axially;
+  - HSS-to-HSS;
+  - plate / welds;
+  - Pipe;
+  - batch.
+- **How verified:**
+  - Headless Chromium, origin/main against the branch, 13 cases. W and Pipe: `AN` and all texts identical. HSS without input: `AN` identical apart from the new `hssK` keys and the N/A detail of the Concentrated forces row.
+  - Tab and Report: 0 KaTeX errors; 390 px: no sideways scroll; UI override and edit confirmed.
+  - Node `sbeam-hss` test 9; check-syntax; `aisc-hss`.
+  - Smoke tests pass: builtup, h1-composite, phone-layout, decimal-entry, project-library, start-chooser. list-input `--part sbeam` fails the same 2 baseline checks as main.
+- **Other copies:** none.
+- **Open items:** the batch keeps the HSS N/A note. Per-location inputs are keyed by support index and by point-load x (`P<x>`), so moving a load drops its own override and falls back to the group value.
+
+## 2026-11-13 — PR: claude/hss-torsion-span (PR #1482: https://github.com/mlococo88/All-Structural/pull/1482) (TLS9) — member mode, round HSS torsion with no member span L: L = ∞ (lower bound), not L_b   [calculation change, §4]
+- **Engineer's decision HSS-9 (2026-11-13):** in member check mode, a round HSS with no member span L entered uses the length-independent lower bound F_cr = min(0.6F_y, Eq. H3-2b), i.e. L = ∞, instead of falling back to L_b. A warning asks for the span. Other checks keep their L_b fallback. Closes the second open item of TLEN (#1468).
+- **Code (re-apply by hand):** `memberDesignAll`, TLEN block (anchor `TLEN (2026-11-13): Eq. H3-2a takes L`).
+  - Before:
+    ```js
+    {const sp=memberSpan(),has=sp.v>0;
+     const torsL={v:has?sp.v:null,src:has?(sp.src==='entered'?'member span L':'unbraced length Lᵇ — no member span L entered'):'no member length entered — Eq. H3-2a not used',fallback:!(has&&sp.src==='entered')};
+     D.tors=torsionHSS(p,(has?sp.v*12:Infinity));
+     … D.warns.push('Round HSS torsion: Eq. H3-2a needs the member length L (§H3.1(a)). '+(has?'No member span L is entered, so Lᵇ = …':'No length is entered, so H3-2a is not used …'));}
+    ```
+  - After (anchor `TLS9 (2026-11-13, engineer HSS-9)`):
+    ```js
+    {const sp=memberSpan(),has=sp.v>0&&sp.src==='entered';
+     const torsL={v:has?sp.v:null,src:has?'member span L':'no member span L entered — L = ∞, Eq. H3-2a not used (lower bound)',fallback:!has};
+     D.tors=torsionHSS(p,(has?sp.v*12:Infinity));
+     if(p._kind==='P')D.torsL=torsL;
+     if(p._kind==='P'&&anyTu&&torsL.fallback)D.warns.push('Round HSS torsion: Eq. H3-2a needs the member length L (§H3.1(a)). '+
+       'No member span L is entered, so L = ∞ is used: Fᶜʳ = min(0.6Fᵧ, H3-2b) = '+fmt(D.tors.Fcr,2)+' ksi, the length-independent lower bound (conservative). Enter the member span L in <b>Lateral Bracing &amp; Cᵇ</b> for the full value.');}
+    ```
+  - `torsRoundWork`: `'not entered'` → `'∞ (not entered)'`; `'F_{cr,a}\\ \\text{(H3-2a) not used: no member length}'` → `'F_{cr,a}\\ \\text{(H3-2a) not used: no member span }L\\ (L=\\infty)'`.
+- **Governing provision:** AISC 360-16 §H3.1(a), Eq. H3-2a (L = member length) and Eq. H3-2b.
+- **Check case:** HSS20.000X0.250 A500 Gr. C round (F_y 46), 60 ft member, span blank, L_b = 30 ft, T_u = 100 kip·ft. D/t = 85.84, C = 141.
+  - **Before:** L = L_b = 360 in, H3-2a = 32.18 ksi, capped at 27.60 → φT_n = 0.9(27.60)(141)/12 = **291.9 kip·ft** (DCR 0.343).
+  - **After:** L = ∞, F_cr = min(27.6, H3-2b = 21.88) = 21.88 → φT_n = 0.9(21.88)(141)/12 = **231.4 kip·ft** (DCR 0.432).
+  - H3-6 interaction: 0.1174 → 0.1868.
+  - With L_b = 60 ft and the span blank: 240.6 → 231.4. With the span 60 ft entered: 240.6, unchanged.
+- **How verified:**
+  - Headless Chromium, origin/main against the branch, 6 cases. W, rect HSS, the round span-entered case and the round beam are identical (`AN`, all texts). The round span-blank cases differ only in the torsion values, the torsion DCR, the interaction and the warning; self-weight and deflection are unchanged.
+  - Node `sbeam-hss` test 4 updated; check-syntax; `aisc-hss`.
+  - Smoke tests pass: builtup, h1-composite, analysis-summary, phone-layout, decimal-entry, project-library, start-chooser. list-input `--part sbeam` fails the same 2 baseline checks as main.
+- **Saved data:** none changed.
+- **Other copies:** none.
+- **Open item (reported, not fixed):** the Excel export (`xlChecks`) throws for every HSS. Round HSS, beam and member mode: §10 minor shear writes `2*«bf»*«tf»`. Rect HSS: the F2 L_r formula uses `«rts»` / `«ho»`. Checked on origin/main; W-shapes export.

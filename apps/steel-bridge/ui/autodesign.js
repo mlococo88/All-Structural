@@ -75,14 +75,17 @@
      'together' (one plate design on every plate girder: run(P) exactly as before girder types; offered only for a project saved before
      girder types, i.e. with no line assigned, where it is the default). scopeOf(P): this page view's choice (S.scope, not saved) when it
      is one of them, else the first. A project with one type and assigned lines: 'each' (that type on its lines), no select. */
-  const scopes = P => { const n = (P.girders || []).length, typed = AD().typeScope(P) === 'each'; return typed ? (n > 1 ? ['each', 'sel'] : ['each']) : (n > 1 ? ['together', 'each', 'sel'] : ['together']); };
+  // SBJD (2026-11-13; engineer decisions SB-4, SB-11): with more than one girder type 'each' is the joint run (one common web depth D, the
+  // types sized together, one Apply); the per-type choice 'sel' (the selected type only) and the per-type Apply are removed
+  const scopes = P => { const n = (P.girders || []).length, typed = AD().typeScope(P) === 'each'; return typed ? ['each'] : (n > 1 ? ['together', 'each'] : ['together']); };
+  const joint = P => (P.girders || []).length > 1;
   const scopeOf = P => { const L = scopes(P); return L.includes(S.scope) ? S.scope : L[0]; };
   const tyLab = (P, t) => { const g = P.girders[t] || {}, M = window.SBDModel, L = M.typeLines ? M.typeLines(P, t) : []; return `${g.label || g.id}${L.length ? ` (${L.map(j => 'G' + (j + 1)).join(', ')})` : ''}`; };
   const lockLab = P => ((P.girders || []).length > 1 ? AD().TYPE_LOCK : ['nb']).map(id => (AD().VARS.find(v => v.id === id) || { label: id }).label);
   function scopeHtml(P, gi) {
     const L = scopes(P), sc = scopeOf(P), o = (v, t) => L.includes(v) ? `<option value="${v}"${sc === v ? ' selected' : ''}>${esc(t)}</option>` : '';
-    const sel = L.length > 1 ? `<div class="fRow"><label for="ad_scope">Design</label><select id="ad_scope">${o('together', 'One plate design for every plate girder (as before girder types)')}${o('each', 'Every girder type, each for its worst line')}${o('sel', `The selected type only: ${tyLab(P, Math.min(gi || 0, P.girders.length - 1))}`)}</select></div>` : '';
-    return sel + (sc !== 'together' ? `<p class="note" id="ad_scopeNote">Each girder type is designed on its own lines: each line a plate girder of the run with that line's loads and distribution factors, so the worst line governs every check. Locked at the current values in this mode (${(P.girders || []).length > 1 ? 'one design of the bridge for every type' : 'a new girder count would change the lines, which you assign'}): ${lockLab(P).map(l => window.SBDSub.html(l)).join('; ')}. ${(P.girders || []).length > 1 ? 'The plates (D, t<sub>w</sub>, flanges, transitions) are each type\'s own, with the locks and ranges set below; Apply writes the type\'s plates only.' : 'Every other variable as set below.'}</p>` : '');
+    const sel = L.length > 1 ? `<div class="fRow"><label for="ad_scope">Design</label><select id="ad_scope">${o('together', 'One plate design for every plate girder (as before girder types)')}${o('each', 'Every girder type together, one common web depth D, each for its worst line')}</select></div>` : '';
+    return sel + (sc !== 'together' ? `<p class="note" id="ad_scopeNote">Each girder type is designed on its own lines: each line a plate girder of the run with that line's loads and distribution factors, so the worst line governs every check. Locked at the current values in this mode (${(P.girders || []).length > 1 ? 'one design of the bridge for every type' : 'a new girder count would change the lines, which you assign'}): ${lockLab(P).map(l => window.SBDSub.html(l)).join('; ')}. ${(P.girders || []).length > 1 ? 'One common web depth D for every type (engineer decision SB-4, 2026-11-13): pass 0 sizes each type as set; the common D is the deepest of their best D; the types are then run again in turn with D locked at it (each with the other types\' latest plates) until no type\'s plates change (at most 4 passes); a type with no passing candidate raises the common D by one depth increment. t<sub>w</sub>, flanges and transitions are each type\'s own, with the locks and ranges set below. One Apply writes every type (engineer decision SB-11).' : 'Every other variable as set below.'}</p>` : '');
   }
   function runBar(P, gi) {
     const IE = window.SBDInputCheck ? window.SBDInputCheck.collect(P).errors : [];   // SBINV (2026-11-10): Run is refused while an input error exists
@@ -217,7 +220,7 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
         ${c.spl && c.spl.chk ? `<p class="note"><b>Field splice placement rules</b> (this candidate's plates and cross-frames):</p><div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Rule</th><th>Ratio</th><th>OK</th></tr></thead><tbody>${c.spl.chk.map(q => `<tr><td class="lft">${esc(q.id)} ${esc(q.what)}</td><td>${isFinite(q.r) ? fmt(q.r, 3) : '—'}</td><td>${q.ok ? 'yes' : '<b>no</b>'}</td></tr>`).join('')}</tbody></table></div>` : ''}
         ${(c.propWarns || []).length ? `<div class="alert ad-wn"><span class="ad-warn">WARNING</span> listed, not rejected (Auto design settings, "as warning only"): ${c.propWarns.map(w => esc(`${w.label} (${w.ref}): ratio ${fmt(w.r, 3)}`)).join('; ')}.${c.propWarns.some(w => w.id !== 'depth') ? ' The Flexure tab still reports these 6.10.2 checks as FAIL after Apply.' : ''}</div>` : ''}
         ${c.warns.length ? `<div class="alert">Warnings (not failures): ${c.warns.map(w => esc(`${w.mod} ${w.id} ${w.title}`)).join('; ')}</div>` : ''}
-        <div class="fRow"><button type="button" class="primary" id="ad_apply">Apply candidate ${S.sel + 1}</button></div></div></section>
+        ${S.noApply ? '' : `<div class="fRow"><button type="button" class="primary" id="ad_apply">Apply candidate ${S.sel + 1}</button></div>`}</div></section>
         <section class="sec"><div class="secHead">Worked steps, candidate ${S.sel + 1}</div><div class="secBody"><ol class="steps">${c.steps.map(s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>`).join('')}</ol></div></section>`;
     }
     h += compareHtml(P, R);
@@ -323,9 +326,14 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
       setTimeout(() => { if (ctx.changed) ctx.changed(true); }, 0); });
     on('#ad_run', 'click', () => { const IE = window.SBDInputCheck ? window.SBDInputCheck.collect(P).errors : [];   // SBINV (2026-11-10): no run while an input error exists
       if (IE.length) { alert(`Auto design cannot run: ${IE.length} input${IE.length > 1 ? 's need' : ' needs'} fixing first.\n\n${IE.slice(0, 12).map(e => '- ' + e.msg).join('\n')}`); return; }
-      S.running = true; S.stop = false; S.err = ''; S.R = null; S.RT = null; S.selT = null; S.sel = 0; S.cmp = ['cur', '0']; S.prog = { f: 0, msg: 'Starting…' }; const k = key(P); redraw(); if (ctx.showOut) ctx.showOut();
+      S.running = true; S.stop = false; S.err = ''; S.R = null; S.RT = null; S.J = null; S.selT = null; S.sel = 0; S.cmp = ['cur', '0']; S.prog = { f: 0, msg: 'Starting…' }; const k = key(P); redraw(); if (ctx.showOut) ctx.showOut();
       const sc = scopeOf(P);
-      if (sc !== 'together') {   // SB-2 PR 3: one run per type (its own project, typeProject), one after the other
+      if (sc !== 'together' && joint(P)) {   // SBJD (SB-4, SB-11): the joint run of every type with one common web depth
+        AD().jointRun(JSON.parse(JSON.stringify(P)), p => { S.prog = p; document.querySelectorAll('.ad-bar>div').forEach(b => { b.style.width = Math.round(100 * (p.f || 0)) + '%'; }); document.querySelectorAll('.ad-bar + .note').forEach(nt => { nt.textContent = p.msg || ''; }); }, () => S.stop)
+          .then(Jr => { S.running = false; if (!Jr) { S.prog = { f: 0, msg: 'Stopped.' }; redraw(); return; } S.prog = null; S.RT = Jr.RT; S.J = Jr; S.key = k; S.selT = Jr.RT.length ? Jr.RT[0].t : null; redraw(); })
+          .catch(e => { S.running = false; S.prog = null; S.err = 'Auto design failed (joint run): ' + (e && e.message); redraw(); });
+        return; }
+      if (sc !== 'together') {   // SB-2 PR 3: one girder type (its own project, typeProject)
         const T = sc === 'sel' ? [Math.min(S.gi || 0, P.girders.length - 1)] : P.girders.map((_, t) => t), out = [];
         const one = i => { if (i >= T.length) { S.running = false; S.prog = null; S.RT = out; S.key = k; S.selT = out.length ? out[0].t : null; redraw(); return; }
           const t = T[i], Qt = AD().typeProject(JSON.parse(JSON.stringify(P)), t);
@@ -348,7 +356,20 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
     if (S.err) h += `<div class="alert err">${esc(S.err)}</div>`;
     if (P.autodesign && P.autodesign.undo) h += '<div class="fRow"><button type="button" id="ad_undo">Undo the last Apply</button></div>';
     S.wty = null;
-    if (S.RT && !S.running) {   // SB-2 PR 3: one run per girder type (S.RT: [{ t, Q (its run project), R, n (its lines) }])
+    if (S.RT && S.J && !S.running) {   // SBJD (SB-4, SB-11): the joint run, its last pass per type; one Apply for every type
+      const T = S.RT, Jr = S.J, cur = T.find(q => q.t === S.selT) || T[0], best = q => q.R.cands[0], wq = (q, c) => c.cost.w / c.L.nb * q.n, nm = t => esc(P.girders[t] ? P.girders[t].label || P.girders[t].id : `type ${t + 1}`);
+      const d0 = Jr.D0.map((d, t) => `${nm(t)} ${d == null ? '— (no passing candidate as set)' : fmt(d, 2)}`).join(', '), ok = Jr.converged && T.every(best), DD = Jr.D0.filter(d => d != null), Dm = DD.length ? Math.max(...DD) : null;
+      const pl = Jr.passes.map(q => `pass ${q.k}${q.Dc != null ? ` (D = ${fmt(q.Dc, 2)} in)` : ' (each type as set)'}: ${q.miss != null ? `no candidate for ${nm(q.miss)}, D raised` : q.changed.length ? `plates changed: ${q.changed.map(nm).join(', ')}${q.verified === true ? ', every type passes with the final plates' : q.verified === false ? `, not passing with the others' new plates: ${q.bad.map(nm).join(', ')}` : ''}` : 'no plates changed'}`).join('; ');
+      h += (S.key !== key(P) ? '<div class="alert">The project changed since this run: run again before applying.</div>' : '') + (Jr.note ? `<div class="alert${ok ? '' : ' err'}">${esc(Jr.note)}</div>` : '')
+        + `<section class="sec" id="ad_types"><div class="secHead">Girder types designed together: one common web depth D</div><div class="secBody">
+        <p>Common web depth ${Jr.Dc != null ? `<b>D<sub>c</sub> = ${fmt(Jr.Dc, 2)} in</b>` : '—'}: pass 0, each type's best D as set: ${d0}; D<sub>c</sub> = max(${DD.map(d => fmt(d, 2)).join(', ')}) = ${Dm != null ? fmt(Dm, 2) : '—'} in${Jr.Dc != null && Dm != null && Jr.Dc > Dm + 1e-9 ? `, raised to ${fmt(Jr.Dc, 2)} in where a type had no passing candidate` : ''}. ${Jr.converged ? (Jr.verified ? `Converged in pass ${Jr.passes[Jr.passes.length - 1].k}: plates still moved, but every type's #1 passes every check with the other types' final plates (checked again after the pass).` : `Converged in pass ${Jr.passes[Jr.passes.length - 1].k}: no type's plates changed.`) : '<b>Not converged.</b>'}</p>
+        <p class="note">Passes: ${esc(pl)}.</p>
+        <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Girder type (lines)</th><th>Candidates</th><th>D (in)</th><th>Weight (lb, its lines)</th><th>Governing ratio</th><th class="lft">What governs (line)</th></tr></thead><tbody>
+        ${T.map(q => { const c = best(q); return `<tr${q === cur ? ' class="sel"' : ''}><td class="lft"><a href="#" data-adty="${q.t}">${esc(tyLab(P, q.t))}</a></td><td>${q.R.cands.length}</td><td>${c ? fmt(c.D, 2) : '—'}</td><td>${c ? fmt(wq(q, c), 0) : '—'}</td><td>${c ? fmt(c.ratio, 3) : '—'}</td><td class="lft">${c && c.gov ? `${govTxt(c.gov)}${c.gov.title ? ': ' + esc(c.gov.title) : ''}${c.gov.gl ? ` (${esc(c.gov.gl)})` : ''}` : c ? '' : esc(q.R.note || 'no passing candidate')}</td></tr>`; }).join('')}
+        </tbody></table></div>${T.every(best) ? `<div class="fRow"><button type="button" class="primary" id="ad_applyJ">Apply every type (#1 of each, D = ${fmt(Jr.Dc, 2)} in)</button></div>` : ''}
+        <p class="note">Assumptions (engineer decisions SB-4 and SB-11, 2026-11-13): one web depth D for every girder type, the deepest of the types' own best D (raised by one depth increment while a type has no passing candidate); each type's run sizes its plates for its worst line with the other types' latest plates in place (the cross-frame layout and depths and the DC1 frame weights read every type), repeated until a pass changes no type's plates (at most 4 passes after pass 0); then one Apply writes every type's #1 together, and Undo the last Apply puts every type back. Below: the candidates of ${esc(tyLab(P, cur.t))} in the last pass (click a type above for another); a single candidate cannot be applied alone.</p></div></section>`;
+      S.wty = { n: cur.n, det: true }; S.noApply = true; h += resultsHtml(cur.Q, cur.R); S.wty = null; S.noApply = false;
+    } else if (S.RT && !S.running) {   // SB-2 PR 3: one girder type (S.RT: [{ t, Q (its run project), R, n (its lines) }])
       const T = S.RT, cur = T.find(q => q.t === S.selT) || T[0], best = q => q.R.cands[0], wq = (q, c) => c.cost.w / c.L.nb * q.n;
       h += (S.key !== key(P) ? '<div class="alert">The project changed since this run: run again before applying.</div>' : '')
         + `<section class="sec" id="ad_types"><div class="secHead">Girder types: the best candidate of each, sized for its worst line</div><div class="secBody"><div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Girder type (lines)</th><th>Candidates</th><th>D (in)</th><th>Weight (lb, its lines)</th><th>Governing ratio</th><th class="lft">What governs (line)</th><th></th></tr></thead><tbody>
@@ -365,19 +386,17 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
     on('[data-adcmp]', 'change', e => { const v = e.target.value, i = +e.target.dataset.adcmp; S.cmp[i] = v; redraw(); });
     on('[data-adsel]', 'click', e => { if (e.target.closest('[data-adgo]')) return; S.sel = +e.currentTarget.dataset.adsel; redraw(); });
     on('[data-adgo]', 'click', e => { e.preventDefault(); const b = document.querySelector(`#tabBar [data-otab="${e.currentTarget.dataset.adgo}"]`); if (b) b.click(); });
-    /* applyT(list) (SB-2 PR 3): list = [{ q (a type's run), c (its candidate) }]. More than one type: each type takes its plates
-       (applyType), the plates before kept for Undo (autodesign.undo = { girders }); the runs of the other types are kept for this page
-       view but out of date (their run projects held the plates before: the cross-frame model reads every type), so S.key is not renewed
-       and Apply asks first. One type: as apply() before girder types (autodesign, APPLY_KEYS). */
+    /* applyT(list) (SB-2 PR 3): list = [{ q (the type's run), c (its candidate) }], one girder type: as apply() before girder types
+       (autodesign, APPLY_KEYS). SBJD (2026-11-13, SB-11): more than one type is applied only by the joint run's one Apply (#ad_applyJ). */
     const applyT = list => { if (S.key !== key(P) && !confirm('The project changed since this run. Apply anyway?')) return;
-      if (P.girders.length > 1) { const keep = JSON.parse(JSON.stringify(P.girders)); let G = P.girders; list.forEach(({ q, c }) => { G = AD().applyType({ ...P, girders: G }, q.t, q.Q, c).girders; });
-        const a = ensure(P); P.girders = G; a.undo = { girders: keep }; a.applied = { at: new Date().toISOString(), types: list.map(({ q, c }) => ({ t: q.t, D: c.L.D, w: c.cost.w / c.L.nb * q.n })) };
-        const done = new Set(list.map(({ q }) => q.t)); S.RT = S.RT.filter(q => !done.has(q.t)); if (!S.RT.length) S.RT = null; else { S.selT = S.RT[0].t; S.sel = 0; S.cmp = ['cur', '0']; } }
-      else { const W = AD().applyType(P, list[0].q.t, list[0].q.Q, list[0].c); Object.entries(W).forEach(([k, v]) => { if (v === undefined) delete P[k]; else P[k] = v; }); S.RT = null; }
+      { const W = AD().applyType(P, list[0].q.t, list[0].q.Q, list[0].c); Object.entries(W).forEach(([k, v]) => { if (v === undefined) delete P[k]; else P[k] = v; }); S.RT = null; }
       if (ctx.changed) ctx.changed(true); else redraw(); };
+    on('#ad_applyJ', 'click', () => { const Jr = S.J; if (!Jr || !S.RT) return; if (S.key !== key(P) && !confirm('The project changed since this run. Apply anyway?')) return;   // SBJD: one Apply for every type
+      if (!Jr.converged && !confirm(`The joint run did not converge: ${Jr.note}\n\nApply the last pass anyway (check the Summary)?`)) return;
+      const A = AD().applyJoint(P, Jr), a = ensure(P); P.girders = A.girders; a.undo = A.undo; a.applied = { at: new Date().toISOString(), joint: true, D: Jr.Dc, converged: !!Jr.converged, types: S.RT.map(q => ({ t: q.t, D: q.R.cands[0].L.D, w: q.R.cands[0].cost.w / q.R.cands[0].L.nb * q.n })) };
+      S.RT = null; S.J = null; if (ctx.changed) ctx.changed(true); else redraw(); });
     on('[data-adty]', 'click', e => { e.preventDefault(); S.selT = +e.currentTarget.dataset.adty; S.sel = 0; S.cmp = ['cur', '0']; redraw(); });
     on('[data-adapt]', 'click', e => { const q = (S.RT || []).find(z => z.t === +e.currentTarget.dataset.adapt); if (q && q.R.cands[0]) applyT([{ q, c: q.R.cands[0] }]); });
-    on('#ad_applyAll', 'click', () => applyT((S.RT || []).filter(q => q.R.cands[0]).map(q => ({ q, c: q.R.cands[0] }))));
     on('#ad_apply', 'click', () => { if (S.RT) { const q = S.RT.find(z => z.t === S.selT) || S.RT[0], c = q && q.R.cands[S.sel]; if (c) applyT([{ q, c }]); return; }
       const c = S.R && S.R.cands[S.sel]; if (!c) return; if (S.key !== key(P) && !confirm('The project changed since this run. Apply anyway?')) return;
       const r = AD().apply(P, c); ['autodesign', ...AD().APPLY_KEYS].forEach(k => { if (r.project[k] === undefined) delete P[k]; else P[k] = r.project[k]; }); S.R = null; if (ctx.changed) ctx.changed(true); else redraw(); });

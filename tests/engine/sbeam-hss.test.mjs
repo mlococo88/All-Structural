@@ -205,9 +205,14 @@ test('A1: HSS20.000X0.250, 60 ft: H3-2a governs, phi Tn = 240.6 kip-ft (not 291.
     near(D.perCombo[0].phiTn, 0.9 * F1 * 141 / 12, 1e-9, `member mode ${JSON.stringify(m)}`);
     assert.equal(D.torsL.src, 'member span L'); assert.equal(D.warns.length, 0);
   }
-  // span blank: the unbraced length Lb = 60 ft is used, with a warning
+  // span blank (TLS9, engineer HSS-9): L = infinity, NOT the unbraced length: Fcr = min(27.6, H3-2b 21.88) = 21.88 ksi,
+  // phi Tn = 0.9(21.88)(141)/12 = 231.4 kip-ft, with a warning (before TLS9: Lb = 60 ft gave 240.6; Lb = 30 ft gave 291.9)
   let D = member(S, { L: null, Lb: 60, Lv: null, rows: row });
-  near(D.perCombo[0].phiTn, 0.9 * F1 * 141 / 12, 1e-9, 'Lb fallback'); assert.ok(D.torsL.fallback); assert.ok(/H3-2a/.test(D.warns.join(' ')));
+  near(D.perCombo[0].phiTn, 0.9 * F2 * 141 / 12, 1e-9, 'span blank: lower bound'); assert.ok(D.torsL.fallback); assert.ok(/H3-2a/.test(D.warns.join(' ')));
+  D = member(S, { L: null, Lb: 30, Lv: null, rows: row });
+  near(D.perCombo[0].phiTn, 0.9 * F2 * 141 / 12, 1e-9, 'span blank, Lb 30 ft: lower bound'); near(D.perCombo[0].phiTn, 231.4, 0.05, '231.4 (was 291.9)');
+  assert.equal(D.torsL.v, null); assert.ok(D.warns.some(w => /L = \u221E/.test(w) && /21\.88/.test(w)));
+  // the other checks keep the L_b fallback (self-weight / deflection use memberSpan()); rectangular HSS torsion has no L
   // continuously braced, no length at all: H3-2a dropped, Fcr = min(27.6, 21.88) = 21.88 ksi, phi Tn = 231.4 kip-ft, with a warning
   D = member(S, { L: null, Lb: null, Lv: null, cont: true, rows: row });
   near(D.perCombo[0].phiTn, 0.9 * F2 * 141 / 12, 1e-9, 'no length: H3-2b'); assert.ok(/H3-2a/.test(D.warns.join(' ')));
@@ -307,4 +312,107 @@ test('SBNT: HSS property formulas reproduce the v16.0 database at t_des; A1085 a
   // an entered property wins over the A1085 value
   const o = sb.run("(()=>{const k=S.section;S.section={family:'HSSR',label:'HSS8X8X1/2',grade:'A1085',ovr:{A:13.0}};try{const p=resolveSection();return [p.A,p._src.A,p.Zx].join();}finally{S.section=k;}})()");
   assert.equal(o.split(',')[0], '13'); assert.equal(o.split(',')[1], 'ovr'); near(+o.split(',')[2], 39.7353, 1e-4, 'Z still at t_nom');
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 8. SBTU (engineer HSS-7, 2026-11-13): optional shear-lag helper, AISC 360-16 Table D3.1 cases 5 / 6 and Sec. B4.3b
+//    (A_n = A_g - 2 t w_slot, slot w blank -> gusset t + 1/8 in.), t = design wall. Off (or absent) -> typed A_n / U as before.
+// ---------------------------------------------------------------------------------------------------------------------
+test('SBTU: Table D3.1 case 6 / case 5 helper, slot deduction, typed values, out-of-range l', () => {
+  const ten = (sec, t) => { sb.ctx.__c = { sec, t };
+    const A = sb.design(`(()=>{S=defaultState();S.mode='member';S.section=Object.assign({ovr:{}},__c.sec);S.design.ten=__c.t;S.member.L=10;S.member.Lb=10;
+      S.member.rows=[{id:'m1',name:'T',Mux:0,Vux:0,Pu:-100,Muy:0,Vuy:0,Tu:0}];return computeMember();})()`);
+    return { C: A.design.perCombo[0], chk: A.design.checks.find(c => c.label === 'Tension') }; };
+  const R = { family: 'HSSR', label: 'HSS8X6X1/2', grade: 'A500B_R' };
+  // case 6 (the spreadsheet's tension example): HSS8X6X1/2 Gr. B, H = 8 in the gusset plane, B = 6, l = 10 in, gusset 1/2 in.
+  //   x = (6^2 + 2(6)(8))/(4(6 + 8)) = 132/56 = 2.357 in; U = 1 - 2.357/10 = 0.764 (l = 10 >= H = 8)
+  //   w = 0.5 + 0.125 = 0.625; A_n = 11.6 - 2(0.465)(0.625) = 11.019 in^2; phi Pn = 0.75(58)(0.764)(11.019) = 366.3 kip
+  //   (yielding 0.9(46)(11.6) = 480.2 kip); the spreadsheet (A_n = A_g) gave 385.7 kip
+  let r = ten(R, { An: null, U: null, hlp: { on: true, tp: 0.5, l: 10 } });
+  near(r.C.tens.U, 1 - (132 / 56) / 10, 1e-12, 'U case 6'); near(r.C.tens.An, 11.6 - 2 * 0.465 * 0.625, 1e-12, 'An');
+  near(r.C.phiPt, 0.75 * 58 * (1 - 132 / 560) * (11.6 - 2 * 0.465 * 0.625), 1e-9, 'phiPn'); near(r.C.phiPt, 366.3, 0.05, 'phiPn 366.3');
+  assert.equal(r.C.tens.hlp.case, '6'); assert.ok(/case 6/.test(r.chk.detail));
+  // gusset parallel to the B walls: H = 6 in the plane, B = 8: x = (64 + 96)/(4 x 14) = 2.857; U = 0.714
+  r = ten(R, { hlp: { on: true, tp: 0.5, l: 10, plane: 'B' } }); near(r.C.tens.U, 1 - (160 / 56) / 10, 1e-12, 'U plane B');
+  // case 5: HSS10.000X0.500 Gr. C round, D = 10, l = 12 in (D <= l < 1.3D), gusset 3/4 in.: x = 10/pi = 3.183; U = 0.7347;
+  //   A_n = 13.9 - 2(0.465)(0.875) = 13.086; phi Pn = 0.75(62)(0.7347)(13.086) = 447.1 kip
+  const P = { family: 'HSSP', label: 'HSS10.000X0.500', grade: 'A500C_P' };
+  r = ten(P, { hlp: { on: true, tp: 0.75, l: 12 } });
+  near(r.C.tens.U, 1 - 10 / Math.PI / 12, 1e-12, 'U case 5'); near(r.C.tens.An, 13.9 - 2 * 0.465 * 0.875, 1e-12, 'An round');
+  near(r.C.phiPt, 447.1, 0.05, 'phiPn round'); assert.equal(r.C.tens.hlp.case, '5');
+  r = ten(P, { hlp: { on: true, tp: 0.75, l: 13 } }); near(r.C.tens.U, 1, 0, 'l >= 1.3D: U = 1.0');
+  // slot width entered; A1085 uses t_nom
+  r = ten({ family: 'HSSR', label: 'HSS8X6X1/2', grade: 'A1085' }, { hlp: { on: true, tp: 0.5, w: 0.75, l: 10 } });
+  near(r.C.tens.An, r.C.tens.Ag - 2 * 0.5 * 0.75, 1e-12, 'A1085 t = 0.5, w = 0.75');
+  // typed values: the smaller governs
+  r = ten(R, { An: 10, U: 0.9, hlp: { on: true, tp: 0.5, l: 10 } }); near(r.C.tens.An, 10, 0, 'typed An smaller'); near(r.C.tens.U, 1 - 132 / 560, 1e-12, 'helper U smaller');
+  // out of range: l < H -> FAIL with the reason (no fallback to U = 1)
+  r = ten(R, { hlp: { on: true, tp: 0.5, l: 6 } });
+  assert.ok(r.C.tens.blocked && /case 6/.test(r.C.tens.blocked)); assert.equal(r.C.dcrPt, Infinity); assert.ok(r.chk.dcr > 1);
+  r = ten(P, { hlp: { on: true, tp: 0.75, l: 9 } }); assert.ok(/case 5/.test(r.C.tens.blocked));
+  r = ten(R, { hlp: { on: true, l: 10 } }); assert.ok(/thickness/.test(r.C.tens.blocked));
+  // off / absent: as before (A_n = A_g, U = 1: yielding 0.9(46)(11.6) = 480.24)
+  for (const t of [{ An: null, U: null }, { An: null, U: null, hlp: { on: false, tp: 0.5, l: 10 } }]) {
+    r = ten(R, t); near(r.C.phiPt, 0.9 * 46 * 11.6, 1e-9, 'off'); assert.equal(r.C.tens.hlp, undefined); }
+  // W-shape: the helper is ignored
+  r = ten({ family: 'W', label: 'W18X50', grade: 'A992' }, { hlp: { on: true, tp: 0.5, l: 10 } }); assert.equal(r.C.tens.hlp, undefined);
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 9. SBHK (engineer HSS-2, 2026-11-13): concentrated forces on HSS walls, beam-type loads. AISC 360-16: rect HSS by Sec. K2.3 ->
+//    Chapter J as Commentary J10 / K1.2 apply it (k = 1.5t, t_f = t_w = t, d = H - 3t, x 2 walls, B_e by Eq. K1-1);
+//    round HSS by Table K2.1 Eq. K2-1a with Q_f by Eq. K2-3.
+// ---------------------------------------------------------------------------------------------------------------------
+test('SBHK: transverse plate and bearing on rect HSS; round HSS Table K2.1; member mode; missing input fails', () => {
+  const beam = c => { sb.ctx.__c = c;
+    const A = sb.design(`(()=>{S=defaultState();const c=__c;S.section=Object.assign({ovr:{}},c.section);S.trib.on=false;S.loads=c.loads||[];
+      if(c.hssK)S.design.hssK=c.hssK;if(c.mode==='member'){S.mode='member';Object.assign(S.member,c.member);return computeMember();}return computeAll();})()`);
+    assert.equal(A.designError, undefined, A.designError); return A.design; };
+  const pts = [{ id: 'q1', nm: 'P', type: 'point', lc: 'DL', si: 0, mag: 5, pos: 10 }, { id: 'q2', nm: 'PL', type: 'point', lc: 'LL', si: 0, mag: 10, pos: 10 }];
+  // HSS8X8X1/2 A500 Gr. C (Fy 50, t = 0.465), 20 ft simple span, P = 5 D + 10 L at midspan through a 7 x 1/2 in. plate (Fyp 36):
+  //   B/t = 17.20; B_e = (10/17.20)(50(0.465)/(36(0.5)))(7) = 5.255 in <= 7 (Eq. K1-1); plate yielding 0.90(36)(0.5)(5.255) = 85.14 kip
+  //   punching (B_p = 7 <= B - 2t = 7.07): 0.95(0.6)(50)(0.465)(2(0.5) + 2(5.255)) = 152.55 kip
+  //   sidewall yielding, k = 1.5t = 0.6975, l_b = t_p = 0.5, 120 in from the end (> H): 2(50)(0.465)(5(0.6975) + 0.5) = 185.42 kip
+  //   sidewall crippling: d = 8 - 3(0.465) = 6.605; 1.6(0.465)^2 [1 + 3(0.5/6.605)] sqrt(29000 x 50) Q_f = 511.20 Q_f kip
+  // supports: bearing l_b = 4 in at the end: 2(50)(0.465)(2.5(0.6975) + 4) = 267.08 kip (J10-3);
+  //   l_b/d = 0.606 > 0.2: 0.8(0.465)^2 [1 + (4(0.606) - 0.2)] sqrt(29000 x 50) = 671.21 Q_f kip (J10-5b)
+  let D = beam({ section: { family: 'HSSR', label: 'HSS8X8X1/2', grade: 'A500C_R' }, loads: pts,
+    hssK: { sup: { type: 'bearing', lb: 4 }, pt: { type: 'plate', Bp: 7, tp: 0.5 }, loc: {} } });
+  const P = D.hssK.find(l => l.key === 'P10.000'), Sa = D.hssK.find(l => l.key === 'S0');
+  const Be = (10 / (8 / 0.465)) * (50 * 0.465 / (36 * 0.5)) * 7, ls = id => P.caps.ls.find(s => s.id === id);
+  near(P.caps.Be, Be, 1e-12, 'Be'); near(ls('ply').Rn, 36 * 0.5 * Be, 1e-9, 'plate yielding'); near(0.9 * ls('ply').Rn, 85.14, 0.005, '85.14');
+  near(ls('pun').Rn, 0.6 * 50 * 0.465 * (2 * 0.5 + 2 * Be), 1e-9, 'punching'); near(0.95 * ls('pun').Rn, 152.55, 0.005, '152.55');
+  near(ls('sly').Rn, 2 * 50 * 0.465 * (5 * 1.5 * 0.465 + 0.5), 1e-9, 'sidewall yielding');
+  const dF = 8 - 3 * 0.465, root = Math.sqrt(29000 * 50);
+  near(ls('slc').RnQ1, 1.6 * 0.465 ** 2 * (1 + 3 * 0.5 / dF) * root, 1e-9, 'crippling J10-4 x 2'); near(ls('slc').RnQ1, 511.20, 0.005, '511.20');
+  near(Sa.caps.ls[0].Rn, 2 * 50 * 0.465 * (2.5 * 1.5 * 0.465 + 4), 1e-9, 'support J10-3'); near(Sa.caps.ls[0].Rn, 267.08, 0.005, '267.08');
+  near(Sa.caps.ls[1].RnQ1, 0.8 * 0.465 ** 2 * (1 + (4 * 4 / dF - 0.2)) * root, 1e-9, 'support J10-5b'); assert.equal(Sa.caps.ls[1].clause, 'J10-5b');
+  // 1.2D + 1.6L: P_u = 22 kip; M_u at midspan with self-weight; U = M_u(12)/(Fy Sx); Q_f = min(1, 1.3 - 0.4U/0.875)
+  const C = D.perCombo.find(c => /1\.2DL \+ 1\.6LL/.test(c.name)), r = C.hssK.find(x => x.key === 'P10.000');
+  near(r.F, 22, 1e-9, 'Pu'); near(r.U, Math.abs(r.Mu) * 12 / (50 * 31.2), 1e-12, 'U (K2-4)');
+  const qf = r.states.find(s => s.id === 'slc').Qf; near(qf, Math.min(1, 1.3 - 0.4 * r.U / 0.875), 1e-12, 'Qf K3-14');
+  assert.equal(r.gov.id, 'ply'); near(r.gov.dcr, 22 / (0.9 * 36 * 0.5 * Be), 1e-12, 'governing DCR');
+  const ck = D.checks.find(c => c.label === 'Concentrated forces'); near(ck.dcr, r.gov.dcr, 1e-12, 'check row'); assert.ok(/Plate local yielding/.test(ck.detail));
+  // narrow plate (B_p < 0.85B): face yield line not covered -> warning and the detail says so
+  D = beam({ section: { family: 'HSSR', label: 'HSS8X8X1/2', grade: 'A500C_R' }, loads: pts, hssK: { pt: { type: 'plate', Bp: 4, tp: 0.5 } } });
+  assert.ok(D.warns.some(w => /yield-line/.test(w))); assert.ok(/NOT checked/.test(D.checks.find(c => c.label === 'Concentrated forces').detail));
+  // missing plate width: FAIL with the reason
+  D = beam({ section: { family: 'HSSR', label: 'HSS8X8X1/2', grade: 'A500C_R' }, loads: pts, hssK: { pt: { type: 'plate', tp: 0.5 } } });
+  assert.equal(D.checks.find(c => c.label === 'Concentrated forces').dcr, Infinity);
+  // round HSS10.000X0.500 Gr. C (Fy 46, t 0.465), plate 6 in: beta = 0.6; R_n = 46(0.465)^2 (5.5/(1 - 0.81(0.6))) Q_f = 106.43 Q_f (K2-1a)
+  D = beam({ section: { family: 'HSSP', label: 'HSS10.000X0.500', grade: 'A500C_P' }, loads: pts, hssK: { pt: { type: 'plate', Bp: 6, tp: 0.5 } } });
+  const R0 = D.hssK.find(l => l.key === 'P10.000');
+  near(R0.caps.ls[0].RnQ1, 46 * 0.465 ** 2 * 5.5 / (1 - 0.81 * 0.6), 1e-9, 'K2-1a'); near(R0.caps.ls[0].RnQ1, 106.43, 0.005, '106.43');
+  const rr = D.perCombo.find(c => /1\.2DL \+ 1\.6LL/.test(c.name)).hssK.find(x => x.key === 'P10.000');
+  near(rr.U, Math.abs(rr.Mu) * 12 / (46 * 31.7), 1e-12, 'U round'); near(rr.states[0].Qf, 1 - 0.3 * rr.U * (1 + rr.U), 1e-12, 'Qf K2-3');
+  // member mode: R = 30 kip, M_ux 60 kip-ft: U = 60(12)/(50(31.2)) = 0.4615; Q_f = 1.3 - 0.4(0.4615)/0.875 = 1.089 -> 1.0
+  D = beam({ mode: 'member', section: { family: 'HSSR', label: 'HSS8X8X1/2', grade: 'A500C_R' },
+    member: { L: 20, Lb: 20, j10: { R: 30, lb: null, loc: 'interior' }, hssK: { type: 'plate', Bp: 7, tp: 0.5 }, rows: [{ id: 'm1', name: 'LC-1', Mux: 60, Vux: 15, Pu: 0, Muy: 0, Vuy: 0, Tu: 0 }] } });
+  const m = D.perCombo[0].hssK[0]; near(m.U, 60 * 12 / (50 * 31.2), 1e-12, 'U member'); near(m.states.find(s => s.id === 'slc').Qf, 1, 0, 'Qf capped');
+  near(m.gov.dcr, 30 / 85.13859375, 1e-9, 'member DCR');
+  // not stated: N/A, never passing; W-shape and Pipe: no HSS locations (unchanged)
+  D = beam({ section: { family: 'HSSR', label: 'HSS8X8X1/2', grade: 'A500C_R' }, loads: pts });
+  assert.ok(D.checks.find(c => c.label === 'Concentrated forces').na);
+  assert.equal(beam({ section: { family: 'W', label: 'W18X50', grade: 'A992' }, loads: pts }).hssK, undefined);
+  assert.equal(beam({ section: { family: 'PIPE', label: 'Pipe8XS', grade: 'A53B' }, loads: pts }).hssK, undefined);
 });
