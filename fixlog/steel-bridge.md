@@ -9468,3 +9468,195 @@ index f7ead04..4510749 100644
        ${ckNotes(C).map(q => `<p class="note"><b>${esc(q.id)}:</b> ${window.SBDSub.html(q.note)}${q.id === 'CF10' ? ` ${wk(rS)}` : ''}</p>`).join('')}
        <p class="note">References: ${C.map(c => `${esc(c.id)} ${esc(c.ref)}`).join('; ')}.</p></div></section>`;
 ```
+
+## 2026-11-13 — PR: claude/sb25-dia-fit (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Diaphragm fit between the girder webs: CFD item d ≤ D_0 − c (per bay depth group), c an input (default 2 in); CF10's per-group fit rule with the same c (SBFIT; engineer decision SB-25 of 2026-11-13; CALCULATION CHANGE: a new check item, and CF10 recommendations for girder types whose bays form two or more depth groups)
+- **Request:** engineer decision SB-25 (2026-11-13), open item (1) of #1503 (SBDG): CFD did not check that the diaphragm fits between the girders (e.g. W36x135, d = 35.60 in, between girders with D = 30 in passed CFD with no item about it). Add a fit check in CFD, per bay depth group: diaphragm depth d_dia ≤ web depth of the shallower girder of the bay at the frame − clearance; clearance an editable input, default 2 in total (1 in top and bottom for clips / welds); not fitting → Fail with a message. CF10's recommendation "fit" rule (#1490) uses the same clearance (recommendations may change: before / after below).
+- **Change:**
+  - `engine/crossframes.js`: new `DIA_CLR = 2`, `diaClr(q)` (the clearance of the diaphragm inputs: `q.clr`, absent / null / '' / NaN / not a number ≥ 0 → 2 in) and `diaFit(p, d)` (the web depth available: with girder types the least web depth D_0 at the first support of the shallower girder of each bay of `p.xfBay.bays` (every bay with one depth group, the group's bays in `diaGrpChecks`), else `p.D0`, else `p.sb.D`; `{ D0, clr, lim = D_0 − c, ok: d ≤ lim, b, src }`). `cfDiaChecks`: for the intermediate diaphragm (CFD, not CFE) a new item after the depth item, "Fit between the girders (engineer decision SB-25): d ≤ D_0 − c, the web depth of the shallower girder (bay G1–G2, shallower girder G2 Interior) less 2.00 in clearance in total for clips / welds[; does not fit: W36x135 d = 35.60 in > 30.00 − 2.00 = 28.00 in, a shallower section is needed]", demand d, capacity D_0 − c, ratio d/(D_0 − c), 'pass' / 'fail', step `cf.cfd.fit` (`cf.cfd.g<k>.fit` per group); tagged `sb25` (new in this app, left out of the GirderDetail parity as the `sbdx` items). `R.DIA.i.fit`. `diaSteps`: new worked step `cf.cfd.fit` (D_0 − c, every bay's shallower girder and D_0, fits / does not fit). `inputsOf`: new derived `p.D0` (web depth at the first support, rounded 0.01 in; `src.D0`). `recGroups(p, DQ, sec, clr)`: the fit is d ≤ lim = D_0 − c (was d ≤ D_0); each group's section has req ≤ d ≤ lim; groups carry `clr`, `lim` (`top` = D_0 as before). The CF10 text when a group has no section: "no section fits (the least depth … in exceeds the fit limit, web depth D_0 − clearance c = lim in, SB-25)" when lim < req, else "no channel or W of the list between req and lim in". `typeRecStep` (cf.type): the fit with c, "D_0 − c = 30.00 − 2.00 = 28.00 in". Exported `DIA_CLR, diaClr, diaFit`.
+  - `ui/framing.js`: new `clrRow` on the Framing & bracing tab (diaphragm on, after Grade): "Fit clearance c, total (d ≤ D_0 − c; blank: 2 in, 1 in top and bottom for clips / welds)", a number input of `crossframes.dia.clr`, blank with placeholder 2 when absent.
+  - `engine/model.js`: `validate`: `crossframes.dia.clr` entered must be a number ≥ 0 (blank / null / NaN: no error); the schema comment documents the field.
+- **Saved data (§5): new optional field `crossframes.dia.clr`** (in, total). **Migration:** absent (every project saved before), blank, null or not a number ≥ 0 → 2 in (`diaClr`); nothing is rewritten on load. The 2 in default applies to the new check item and to CF10's per-group fit, so a saved project's results change only where (a) its diaphragm is deeper than D_0 − 2 in (the new item fails) or (b) it has girder types whose bays form two or more depth groups, a diaphragm is recommended (d < d_min) and the one or per-group section falls in the band D_0 − 2 < d ≤ D_0 (CF10's recommendation text changes; with a saved `crossframes.dia.clr = 0` the recommendation is the one of before, see the proof). A `crossframes.dia.grp` entry saved from #1503's prefill is kept and checked as entered (it may now fail the fit, e.g. W30x99 / W36x135 in the three-type case).
+- **Governing provision:** none in AASHTO LRFD 10th Ed. (2024): Art. 6.7.4.2.1 / C6.7.4.2.1 asks for diaphragms as deep as practicable (at least about 0.75 of the plate girder depth); the fit within the web and the 2 in clearance are the engineer's decision SB-25 (2026-11-13). No formula, factor or table of an existing check changed.
+- **Before / after (expressions):** CFD, new item: before none; after d_dia ≤ D_0 − c, D_0 = min over the bays of the frame (or group) of the web depth of the bay's shallower girder at the first support, c = `dia.clr` (default 2 in); ratio d_dia/(D_0 − c); Fail when > 1. CF10 (girder types, two or more depth groups, diaphragm recommended): before "one section fits" when d ≤ D_0 of every group, per group req ≤ d ≤ D_0; after d ≤ D_0 − c, per group req ≤ d ≤ D_0 − c.
+- **Check case 1 (the engineer's: W36x135 between 30 in webs; new project, Interior and Exterior D = 30, W36x135 diaphragm):** D_0 = 30.00 in, c = 2.00 in, D_0 − c = 28.00 in; d = 35.60 in > 28.00 → **Fail**, ratio 35.60/28.00 = **1.271**, "does not fit: W36x135 d = 35.60 in > 30.00 − 2.00 = 28.00 in, a shallower section is needed". Before: no item (CFD's depth item 23.91/35.60 OK).
+- **Check case 2 (Interior D = 30, Exterior 36; one depth group, every bay's shallower girder Interior; d = 31.88, 37.88 in):** W30x99 d = 29.70 > 28.00 → **Fail, 1.061**; W27x84 d = 26.70 ≤ 28.00 → OK, 0.954; with c = 0.25 in, W30x99: 29.70 ≤ 29.75 OK. CF10 (one depth group: no fit test, #1490 decision (2), unchanged): "rolled diaphragm W30x99" before and after (its least depth 0.75 × 37.88 = 28.41 in > 28.00 in: no section can meet both the depth and the fit; see open items).
+- **Check case 3 (Exterior D = 30, Interior 36; two groups: G1–G2, G4–G5 shallower Exterior D_0 = 30; G2–G3, G3–G4 shallower Interior D_0 = 36):** CF10 before "rolled diaphragm W30x99" (29.70 ≤ 30 and ≤ 36: one section fits); after: W30x99 29.70 > 30 − 2 = 28 → per group: G1–G2, G4–G5: req 28.41 > lim 28.00 → "no section fits (the least depth 28.41 in exceeds the fit limit, web depth 30.00 − clearance 2.00 = 28.00 in, SB-25)"; G2–G3, G3–G4: req 28.41 ≤ d ≤ 34.00 → W30x99. CFD with W30x99: G1–G2, G4–G5 fit 29.70 vs 28.00 **Fail 1.061**; G2–G3, G3–G4 29.70 vs 34.00 OK 0.874.
+- **Check case 4 (three types, 6 lines at 9.5 ft: Exterior G1, G6 D = 30; Mid G2, G5 D = 36; Core G3, G4 D = 42):** CF10 before "G1–G2, G5–G6: rolled diaphragm W30x99; G2–G3, G4–G5: rolled diaphragm W36x135; G3–G4: rolled diaphragm W36x135"; after "G1–G2, G5–G6: no section fits (the least depth 28.41 in exceeds the fit limit, web depth 30.00 − clearance 2.00 = 28.00 in, SB-25); G2–G3, G4–G5: no channel or W of the list between 32.91 and 34.00 in; G3–G4: rolled diaphragm W36x135" (W33x118 32.90 < 32.91; W36x135 35.60 > 34.00). The Intermediate bracing prefill (#1503) before `{ '0,4': 'W30x99', '1,3': 'W36x135', '2': 'W36x135' }`, after `{ '2': 'W36x135' }` (the other groups take Shape). CFD with W36x135 in every group: G1–G2, G5–G6 35.60 vs 28.00 **Fail 1.271**; G2–G3, G4–G5 35.60 vs 34.00 **Fail 1.047**; G3–G4 35.60 vs 40.00 OK 0.890. With #1503's prefill (W30x99 / W36x135 / W36x135): 29.70 vs 28.00 Fail 1.061; 35.60 vs 34.00 Fail 1.047; OK 0.890.
+- **Other CF10 changes in the probe set:** CTDOT three types 24 / 30 / 30 (C15x33.9): "G1–G2, G5–G6: no channel or W of the list between 23.91 and 24.00 in" → "no section fits (the least depth 23.91 in exceeds the fit limit, web depth 24.00 − clearance 2.00 = 22.00 in, SB-25)", the other groups W27x84 unchanged; three types 32 / 40 / 40: "between 31.41 and 32.00 in" → "no section fits (the least depth 31.41 in exceeds the fit limit, web depth 32.00 − clearance 2.00 = 30.00 in, SB-25)", W33x118 unchanged.
+- **Where it does not bite: identical (proof):** Node probe of 36 projects / 72 girder-type cases, origin/main b2f5a91 (with #1510) vs this branch merged with it (the set of the #1490 / #1503 proofs as far as it is built in Node: the built-in project, it with 11 girders, CTDOT, MassDOT, with a C15x33.9 and a W21x44 diaphragm; a new project, CTDOT, MassDOT, one type on every line (and with a W21x44), C15x33.9, W21x44; equal D = 30 (AASHTO, MassDOT, CTDOT, W27x84), D = 20 (and W18x35); Interior 60 / Exterior 66 and 54 (and C15x33.9); Interior 30 / Exterior 36 with no / W30x99 / W27x84 / W36x135; the reverse with no / W30x99 / per-group W27x84 / CTDOT C15x33.9; three types 30 / 36 / 42 with no / W36x135 / per-group / W33x118; CTDOT 24 / 30 / 30 C15x33.9; 32 / 40 / 40; the GirderDetail legacy imports gd_builtin28 / gd_xsA of #1490 were not rebuilt in this probe; tests/engine/crossframes.test.mjs runs every GirderDetail recording and variation, CFD items included): `FUI.build` checks, steps, DC1 point loads, `cfTypeRec`, the Report frm section (detail all), the Drawings cross-frame sheet DXF. With the new fit item and its step removed (and the check status / governing item recomputed without it, and the step count of the Report topic ignored): byte-identical in 42 of 72 type cases and 36 of 36 sheets. The 30 that differ: 26 multi-group cases whose only difference is CF10's recommendation (item cell, note) and the cf.type step note (above), and 4 cases where the new item fails (Interior 30 / Exterior 36 with W30x99 or W36x135: the Report topic's headline step is the failing fit step). With `crossframes.dia.clr = 0` on every project: CF10's recommendation and `cfTypeRec` byte-identical to before in 72 of 72 (only the cf.type note's wording, "D_0 − c = 30.00 − 0.00 = 30.00 in", and the fit item). DC1, the sheets and every other check: identical in all. The fit item itself passes in every probe case except the cases above (and every multi-group case with a section in the band D_0 − 2 < d).
+- **Problem / direction:** more conservative (a new Fail where the diaphragm does not fit with 2 in clearance; CF10 recommends no section rather than one that does not fit with the clearance).
+- **How verified:** new tests/engine/sb-dia-fit.test.mjs (check cases 1 to 4, the clearance input / default / validation / the input row, a project saved before girder types). Updated with c = 0 (the rule of #1490 / #1503, results as before): tests/engine/xf-cf10-depth.test.mjs (Interior 30 / Exterior 36, three types, 32 / 40 / 40), tests/engine/sb-dia-groups.test.mjs (three-type prefill; the default-c prefill `{ '2': 'W36x135' }` added); tests/engine/xf-cf10-notes.test.mjs (the three-type Report cell, c = 0); tests/engine/crossframes.test.mjs (the GirderDetail parity leaves out the `sb25` item, as the `sbdx` items). Engine subsets and smoke tests: see the PR.
+- **Other copies:** none.
+- **Decisions (pending engineer review):** (1) D_0 is the web depth at the first support (as #1490's fit and the depth check's d), not the least web depth along the girder; (2) the fit is checked for the intermediate diaphragm (CFD) only, not the end diaphragm (CFE) or a separate end shape `dia.eShape`; (3) with girder types and one depth group, the binding bay is the one with the least D_0 of its shallower girder (every bay of the bridge, as the depth item); (4) a project saved before girder types takes D_0 of the girder at the first support (`p.D0`), GirderDetail's inputs `sb.D`.
+- **Open items (not changed; reported):** (1) CF10 with one depth group makes no fit test (#1490 decision (2)), so it can recommend a section that fails the new fit item (Interior 30 / Exterior 36: W30x99, d_req 28.41 > D_0 − c = 28.00: no section can satisfy both); (2) the Diaphragm switch default (`TR.ch` / `TR.w`, the one section for every bay, #1490 decision (3)) is not limited by the fit (e.g. W36x135 for three types, failing two groups); (3) CFE / the end shape not checked for fit; (4) a girder whose web depth varies along the span is checked at the first support only.
+- **Before / after (exact):**
+```diff
+diff --git a/apps/steel-bridge/engine/crossframes.js b/apps/steel-bridge/engine/crossframes.js
+index 87b87c1..765f890 100644
+--- a/apps/steel-bridge/engine/crossframes.js
++++ b/apps/steel-bridge/engine/crossframes.js
+@@ -104,14 +104,14 @@
+     const dg = nm(p.dg), dMin = nm(p.dMinXF), S = nm(p.S), h = nm(p.h), web = !!(rT && rT.value.web), dB = web && Dw ? Dw : dg, xf = (p.dia || {}).on !== 'yes';
+     const deep = rT && rT.value.strict ? dB > dMin + 1e-9 : dB >= dMin - 1e-9, frac_ = rDd && dg < rDd.value.D - 1e-9 ? rDd.value.frac : 0.75;
+     const DQ = diaDepthReq(p, E), req = DQ ? DQ.gov.req : frac_ * dg;   // SB-22: girder types: the least depth of every bay (SB-19's, the deeper girder), else as before
+-    const ch = recCh(req, Infinity), w = recW(req, Infinity), grp = DQ && !deep ? recGroups(p, DQ, ch || w) : null;
++    const ch = recCh(req, Infinity), w = recW(req, Infinity), grp = DQ && !deep ? recGroups(p, DQ, ch || w, diaClr(p.dia)) : null;   // SB-25: the fit with the clearance c
+     const skM = rT && rT.value.table ? (E.skews ? Math.max(0, ...E.skews.map(v => Math.abs(+v || 0))) : 0) : 0;
+     const tb = rT && rT.value.table && !deep ? chRow(rT, dB) : null;
+     const chT = tb && skM < rT.value.skT - 1e-9 ? tb[2] : null;
+     const sd = S / dg, kx = rT && rT.value.kHi ? (sd >= rT.value.kHi - 1e-9 ? 'K' : sd <= rT.value.xLo + 1e-9 ? 'X' : null) : null;
+     const one = q => q.ch ? `channel diaphragm ${q.ch[0]} (or a rolled W)` : q.w ? `rolled diaphragm ${q.w[0]}` : null, bl = g => g.bays.map(j => `G${j + 1}–G${j + 2}`).join(', ');
+     const rec = deep ? (kx ? `${kx === 'K' ? 'K (bottom)' : 'X'}-frame (S/d = ${f2(sd)}, ${E.cite(rT)})` : `${S / h > 1.5 ? 'K (bottom)' : 'X'}-frame (S/h = ${f2(S / h)})`)
+-      : grp ? `by bay depth (one section does not fit every bay): ${grp.map(g => `${bl(g)}: ${one(g) || `no channel or W of the list between ${f2(g.req)} and ${f2(g.top)} in`}`).join('; ')}`   // SB-22
++      : grp ? `by bay depth (one section does not fit every bay): ${grp.map(g => `${bl(g)}: ${one(g) || (g.lim < g.req - 1e-9 ? `no section fits (the least depth ${f2(g.req)} in exceeds the fit limit, web depth ${f2(g.top)} − clearance ${f2(g.clr)} = ${f2(g.lim)} in, SB-25)` : `no channel or W of the list between ${f2(g.req)} and ${f2(g.lim)} in`)}`).join('; ')}`   // SB-22; SB-25: the fit limit D_0 − c
+       : ch ? `channel diaphragm ${ch[0]} (or a rolled W)` : w ? `rolled diaphragm ${w[0]}` : 'rolled W diaphragm';
+     const DG = xf ? null : diaGroups(p), sN = v => `${CF_CH.some(s => s[0] === v) ? 'channel' : 'rolled'} diaphragm ${v === 'custom' ? 'custom W' : v}`;   // SB-24: the shape of each bay depth group, where they differ
+     const sel = xf ? ({ X: 'X-frame', Kb: 'K-frame', Kt: 'K-frame' }[p.type] || 'cross-frame') : DG && DG.some(g => g.shape !== DG[0].shape) ? `by bay depth group (SB-24): ${DG.map(g => `${bl(g)}: ${sN(g.shape)}`).join('; ')}` : sN(DG ? DG[0].shape : (p.dia || {}).shape);
+@@ -127,16 +127,38 @@
+      the d of its shallower girder) and the one section sec (the channel, else the W, for the governing req) is deeper than the web depth D_0
+      (at the first support) of the shallower girder of some group, or no section meets the governing req: per group, the section for the
+      group's own req (the largest of its bays) no deeper than the group's D_0 (Decision pending engineer review: "fit" = d ≤ D_0 of the
+-     shallower girder). Else null (one section, as recommended). */
++     shallower girder). Else null (one section, as recommended).
++     SB-25 (2026-11-13; engineer decision SB-25): the fit takes the clearance c of the diaphragm fit check (CFD, diaClr: crossframes.dia.clr,
++     default 2 in in total, 1 in top and bottom for clips / welds): a section fits a group when d ≤ lim = D_0 − c (was d ≤ D_0); each
++     group's section has req ≤ d ≤ lim. recGroups(p, DQ, sec, clr): g.top = D_0 (as before), g.clr, g.lim. */
+   const chArea = s => 2 * s[2] * s[3] + (s[1] - 2 * s[3]) * s[4];
+   const recCh = (req, top) => CF_CH.filter(s => s[1] >= req - 1e-9 && s[1] <= top + 1e-9).sort((a, b) => chArea(a) - chArea(b))[0];
+   const recW = (req, top) => CF_DIA.find(s => s[1] >= req - 1e-9 && s[1] <= top + 1e-9);
+-  function recGroups(p, DQ, sec) {
++  function recGroups(p, DQ, sec, clr) {
++    clr = isFinite(clr) ? clr : DIA_CLR;
+     const B = p.xfBay, m = new Map(), r2 = v => +(+v).toFixed(2); if (!B || !Array.isArray(B.bays)) return null;
+     B.bays.forEach(q => { if (!q) return; const k = `${q.h}|${r2(q.s.dg)}`, b = DQ.bays.find(x => x.j === q.j); if (!b) return;
+       if (!m.has(k)) m.set(k, { bays: [], req: 0, top: Infinity, s: q.s }); const g = m.get(k); g.bays.push(q.j); g.req = Math.max(g.req, b.req); g.top = Math.min(g.top, r2(q.s.D0)); });
+-    const G = [...m.values()]; if (G.length < 2 || (sec && G.every(g => sec[1] <= g.top + 1e-9))) return null;
+-    return G.map(g => ({ ...g, ch: recCh(g.req, g.top), w: recW(g.req, g.top) }));
++    const G = [...m.values()]; G.forEach(g => { g.clr = clr; g.lim = g.top - clr; }); if (G.length < 2 || (sec && G.every(g => sec[1] <= g.lim + 1e-9))) return null;   // SB-25: d ≤ D_0 − c
++    return G.map(g => ({ ...g, ch: recCh(g.req, g.lim), w: recW(g.req, g.lim) }));
++  }
++  /* SB-25 (2026-11-13; engineer decision SB-25): the diaphragm fit between the girder webs. diaClr(q): the clearance c (in, total) of the
++     diaphragm inputs q, saved field crossframes.dia.clr (optional): absent, blank (null, '') or not a number ≥ 0: DIA_CLR = 2 in (1 in at the
++     top and 1 in at the bottom for the connection-plate clips and the flange-to-web welds). diaFit(p, d): the web depth available to a
++     diaphragm of depth d between the girders of the frame checked: with girder types (p.xfBay) the web depth D_0 at the first support of the
++     shallower girder of each bay of the frame (p.xfBay.bays: every bay, or one bay depth group's in diaGrpChecks), the least (the binding
++     bay, the first on ties); else D_0 of the girder at the first support (p.D0, inputsOf), else the web depth D of the stability bracing
++     inputs (p.sb.D, GirderDetail's inputs); { D0, clr, lim = D_0 − c, ok: d ≤ lim, b (the binding bay, girder types), src }; null with no
++     web depth. */
++  const DIA_CLR = 2;
++  function diaClr(q) { const v = q ? q.clr : undefined, n = v == null || v === '' ? NaN : +v; return isFinite(n) && n >= 0 ? n : DIA_CLR; }
++  function diaFit(p, d) {
++    const clr = diaClr(p.dia), B = p.xfBay, r2 = v => +(+v).toFixed(2); let D0 = null, b = null, src = '';
++    if (B && Array.isArray(B.bays)) { B.bays.forEach(q => { if (!q || !q.s) return; const v = r2(q.s.D0); if (D0 == null || v < D0 - 1e-9) { D0 = v; b = q; } });
++      if (b) src = `bay G${b.j + 1}–G${b.j + 2}, shallower girder G${b.s.line + 1} ${b.s.label}`; }
++    if (D0 == null && nm(p.D0) > 0) { D0 = nm(p.D0); src = 'the girder at the first support'; }
++    if (D0 == null && p.sb && nm(p.sb.D) > 0) { D0 = nm(p.sb.D); src = 'the girder web depth D of the stability bracing inputs'; }
++    if (D0 == null) return null; const lim = D0 - clr; return { D0, clr, lim, d, ok: d <= lim + 1e-6, b, src };
+   }
+   /* cfTsCP(E): the Transverse stiffeners type with role "Connection plate" (most rows; a tie to Type B); null when none (CF-D13) */
+   function cfTsCP(E) {
+@@ -441,6 +463,8 @@
+     const DQ = diaDepthReq(p, E);   // SBXF2 (SB-19): girder types: every bay against the deeper of its two girders, the governing bay
+     if (DQ) { const g = DQ.gov, lim = g.req; it(`Depth (6.7.4.2: at least ${g.f === 0.75 ? '0.75 of the plate girder depth d' : `${g.f} of the depth d, ${E.cite(E.rule('dia.depth'))}`}; every bay against the deeper of its two girders, governing bay G${g.j + 1}–G${g.j + 2}: d of G${g.q.line + 1} ${g.q.label})`, `${f2(d)} in`, `${f2(lim)} in`, d >= lim - 1e-6 ? 'pass' : 'warn', lim / d, lim, d, `cf.${st}.dep`); }
+     else if (dgT > 0) it(fD === 0.75 ? 'Depth (6.7.4.2: at least 0.75 of the plate girder depth d)' : `Depth (6.7.4.2 rolled beams, ${E.cite(E.rule('dia.depth'))}: at least ${fD} of the depth d)`, `${f2(d)} in`, `${f2(fD * dgT)} in`, d >= fD * dgT - 1e-6 ? 'pass' : 'warn', fD * dgT / d, fD * dgT, d);
++    const FT = end ? null : diaFit(p, d);   // SB-25 (engineer decision SB-25): the diaphragm fits between the girder webs, d ≤ D_0 − c
++    if (FT) { it(`Fit between the girders (engineer decision SB-25): d ≤ D_0 − c, the web depth of the shallower girder (${FT.src}) less ${f2(FT.clr)} in clearance in total for clips / welds${FT.ok ? '' : `; does not fit: ${nm_} d = ${f2(d)} in > ${f2(FT.D0)} − ${f2(FT.clr)} = ${f2(FT.lim)} in, a shallower section is needed`}`, `${f2(d)} in`, `${f2(FT.lim)} in`, FT.ok ? 'pass' : 'fail', FT.lim > 0 ? d / FT.lim : 99.99, d, FT.lim, `cf.${st}.fit`); tag('sb25'); }   // sb25: new in this app (left out of the GirderDetail parity)
+     let bbr = null, bT = null;
+     if (SB) { if (!end) { bbr = 6 * Es * Ix / S; bT = 1 / (1 / bbr + (isFinite(SB.bsec) ? 1 / SB.bsec : 0) + 1 / SB.bg); const r = SB.bReq / bT;
+       it('Torsional brace system stiffness (6.7.4.2.2)', `β_T,req = ${f0(SB.bReq)} kip-in/rad`, `β_T = ${f0(bT)} (β_br = ${f0(bbr)}, β_sec = ${isFinite(SB.bsec) ? f0(SB.bsec) : '∞'}, β_g = ${f0(SB.bg)}; d_dia ${SB.deep ? '≥' : '<'} 0.8 D = ${f2(0.8 * SB.Dg)} in)`, r <= 1 ? 'pass' : 'fail', r, SB.bReq, bT); }
+@@ -471,7 +495,7 @@
+     const src = cp.src === 'bs' ? `bearing stiffener Type ${cp.bsT.k}` : cp.src === 'ts' ? `Transverse stiffeners Type ${cp.ts.k}` : 'inputs b_s, t_s', pl = `${frac(cp.bs)} × ${frac(cp.tp)} in, ${src}`;
+     it(`Connection plate fit: bolt line ${f2(G.ecc)} in from the web centerline, edge distances to the plate's free edge and to the diaphragm end (6.13.2.6.6)`, `${f2(G.edge)} in to the plate edge, ${f2(de)} in to the diaphragm end${G.gap < cp.tw / 2 + 1e-9 ? ' (diaphragm end reaches the web)' : ''}`, `≥ ${frac(em)} in (plate ${pl})`, okA ? 'pass' : 'fail', mA > 0 ? em / mA : 99.99, em, mA);
+     it(`Connection plate fit: end bolts to the plate ends (flange faces less the ${frac(cp.c)} in corner clip; 6.13.2.6.6)`, `${f2(G.vEdge)} in`, `≥ ${frac(em)} in`, G.vEdge >= em - 1e-9 ? 'pass' : 'fail', G.vEdge > 0 ? em / G.vEdge : 99.99, em, G.vEdge);
+-    (R.DIA = R.DIA || {})[end ? 'e' : 'i'] = { nm_, chS, d, bf, tf, tw, hw, A, Ix, Sx, Iy, ry, Mn, Fnc: lt.Fnc, lt, CH, AX, MnI: lt.Fnc * Sx, Fy, Vn, C, lam, wk, Fw, Mw, Vw, Mbr: SB ? SB.Mbr : null, bbr, bT, jack: end && q.end === 'yes' && +q.Rj > 0 ? { Rj: +q.Rj, aj: +q.aj } : null, nb, s, db, Ab, thr, ecc: +q.ecc || 0, ys, sy2, ym, V, Vt, M, fmax, Mc, fw, res, phiRs, phiRb, need, avail, cp, G, fD };
++    (R.DIA = R.DIA || {})[end ? 'e' : 'i'] = { nm_, chS, d, bf, tf, tw, hw, A, Ix, Sx, Iy, ry, Mn, Fnc: lt.Fnc, lt, CH, AX, MnI: lt.Fnc * Sx, Fy, Vn, C, lam, wk, Fw, Mw, Vw, Mbr: SB ? SB.Mbr : null, bbr, bT, fit: FT, jack: end && q.end === 'yes' && +q.Rj > 0 ? { Rj: +q.Rj, aj: +q.aj } : null, nb, s, db, Ab, thr, ecc: +q.ecc || 0, ys, sy2, ym, V, Vt, M, fmax, Mc, fw, res, phiRs, phiRb, need, avail, cp, G, fD };
+     diaSteps(R, end);
+     out.add(c);
+   }
+@@ -505,9 +529,9 @@
+     const each = DQ.bays.map(b => `${bn(b)}: ${b.f} × ${n2(b.d)} (${gl(b.q)}) = ${n2(b.req)} in`).join('; ');
+     const sec = (c, x, top) => c ? `channel ${c[0]} (d = ${n2(c[1])} in, the lightest channel of the list with ${top ? `${n2(x)} ≤ d ≤ ${n2(top)} in` : `d ≥ ${n2(x)} in`})` : null;
+     const wsec = (c, x, top) => c ? `rolled ${c[0]} (d = ${n2(c[1])} in, the first W of the list with ${top ? `${n2(x)} ≤ d ≤ ${n2(top)} in` : `d ≥ ${n2(x)} in`})` : null;
+-    const pick = (ch, wv, x, top) => sec(ch, x, top) || wsec(wv, x, top) || `no channel or W of the list with ${top ? `${n2(x)} ≤ d ≤ ${n2(top)} in` : `d ≥ ${n2(x)} in`}`;
++    const pick = (ch, wv, x, top) => sec(ch, x, top) || wsec(wv, x, top) || (top && top < x - 1e-9 ? `no section fits: d_req = ${n2(x)} in exceeds D_0 − c = ${n2(top)} in` : `no channel or W of the list with ${top ? `${n2(x)} ≤ d ≤ ${n2(top)} in` : `d ≥ ${n2(x)} in`}`);   // SB-25
+     const CH = TR.ch ? CF_CH.find(s => s[0] === TR.ch) : null, WW = TR.w ? CF_DIA.find(s => s[0] === TR.w) : null;
+-    const grp = TR.grp ? ` One section does not fit every bay (${CH || WW ? `${(CH || WW)[0]}, d = ${n2((CH || WW)[1])} in, is deeper than the web depth D_0 of the shallower girder of a bay group` : 'no section of the list meets the governing bay'}), so per bay depth group (the bays of the Drawings cross-frame details: the same h and the same shallower girder depth d; fit: d of the section ≤ D_0 at the first support of the shallower girder, Decision pending engineer review): ${TR.grp.map(q => `${q.bays.map(j => `G${j + 1}–G${j + 2}`).join(', ')} (shallower ${gl(q.s)}, D_0 = ${n2(q.top)} in; d_req = ${n2(q.req)} in): ${pick(q.ch, q.w, q.req, q.top)}`).join('; ')}.` : '';
++    const grp = TR.grp ? ` One section does not fit every bay (${CH || WW ? `${(CH || WW)[0]}, d = ${n2((CH || WW)[1])} in, does not fit the web depth D_0 − c of the shallower girder of a bay group` : 'no section of the list meets the governing bay'}), so per bay depth group (the bays of the Drawings cross-frame details: the same h and the same shallower girder depth d; fit: d of the section ≤ D_0 − c, D_0 the web depth at the first support of the shallower girder, Decision pending engineer review, and c = ${n2(TR.grp[0].clr)} in the clearance of the diaphragm fit check CFD, engineer decision SB-25): ${TR.grp.map(q => `${q.bays.map(j => `G${j + 1}–G${j + 2}`).join(', ')} (shallower ${gl(q.s)}, D_0 − c = ${n2(q.top)} − ${n2(q.clr)} = ${n2(q.lim)} in; d_req = ${n2(q.req)} in): ${pick(q.ch, q.w, q.req, q.lim)}`).join('; ')}.` : '';   // SB-25
+     w.add({ id: 'type', label: `Diaphragm section recommended for the girder depth (CF10): the least depth, every bay against the deeper of the two girders it connects; governing bay ${bn(g)}, ${gl(g.q)}`, sym: 'd_{req}', eq: `${g.f}\\max(d_{a},\\ d_{b})`,
+       sub: g.a && g.b ? `${g.f}\\max(${n2(g.a.dg)},\\ ${n2(g.b.dg)})` : `${g.f}(${n2(g.d)})`, value: g.req, unit: 'in', d: 2, ref,
+       note: `Assumption (engineer decision SB-22, 2026-11-13, girder types): the channel or rolled W that CF10 recommends meets the least depth of every bay (the diaphragm depth check CFD, engineer decision SB-19: ${g.f} of the deeper of the two girders, d = D_0 + t_top + t_bot at the first support), not only that of the shallower girder of the governing bay. Every bay: ${each}. One section for every bay: ${pick(CH, WW, g.req, null)}.${grp}` });
+@@ -571,6 +595,10 @@
+       const each = DQ.bays.map(b => `G${b.j + 1}–G${b.j + 2}: ${b.a && b.b ? `max(${n2(b.a.dg)}, ${n2(b.b.dg)})` : n2(b.q.dg)} = ${n2(b.d)} in (${gl(b.q)}), ${b.f} × ${n2(b.d)} = ${n2(b.req)} in`).join('; ');
+       w.add({ id: `${id}.dep`, label: `${lab}: least depth, every bay against the deeper of the two girders it connects; governing bay G${g.j + 1}–G${g.j + 2}, ${gl(g.q)}`, sym: 'd_{req}', eq: `${g.f}\\max(d_{a},\\ d_{b})`, sub: g.a && g.b ? `${g.f}\\max(${n2(g.a.dg)},\\ ${n2(g.b.dg)})` : `${g.f}(${n2(g.d)})`, value: g.req, unit: 'in', d: 2, ref: `${ED} Art. 6.7.4.2.1`, ok: D.d >= g.req - 1e-6,
+         note: `Assumption (engineer decision SB-19, 2026-11-13, girder types): a ${end ? 'bearing-line' : 'intermediate'} diaphragm between two girders of unequal depth is checked against the deeper of the two (d out-to-out of the flanges at the first support, the girder type assigned to each line), in every bay; the governing bay is the largest requirement. Every bay: ${each}. Provided d = ${n2(D.d)} in (${D.nm_}).` }); } }
++    if (!end && D.fit) { const F = D.fit, B = R.p.xfBay, gl = q => `G${q.line + 1} ${q.label}`;   // SB-25 (engineer decision SB-25): the fit between the girder webs
++      const each = B && Array.isArray(B.bays) ? B.bays.filter(q => q && q.s).map(q => `G${q.j + 1}–G${q.j + 2}: ${gl(q.s)}, D_0 = ${n2(q.s.D0)} in`).join('; ') : '';
++      w.add({ id: `${id}.fit`, label: `${lab}: web depth available between the girders (fit), ${F.src}`, sym: 'D_{0} - c', eq: 'D_{0} - c', sub: `${n2(F.D0)} - ${n2(F.clr)}`, value: F.lim, unit: 'in', d: 2, ok: F.ok, ref: 'Engineer decision SB-25 (2026-11-13)',
++        note: `Engineer decision SB-25 (2026-11-13): the diaphragm must fit between the girder webs, d ≤ D_0 − c, D_0 the web depth at the first support of the shallower girder of the bay${each ? ` (the least of the bays: ${each})` : ''} and c the clearance in total (Framing & bracing tab, default 2 in: 1 in at the top and 1 in at the bottom for the connection-plate clips and the flange-to-web welds). ${D.nm_} d = ${n2(D.d)} in ${F.ok ? '≤' : '>'} ${n2(F.lim)} in: ${F.ok ? 'fits' : 'does not fit (Fail): a shallower section is needed'}.` }); }
+     w.add({ id: `${id}.Sx`, label: `${lab} ${D.nm_}: section modulus (nominal dimensions)`, sym: 'S_{x}', eq: '\\frac{2I_{x}}{d}', sub: `\\frac{2(${n0(D.Ix)})}{${n2(D.d)}}`, value: D.Sx, unit: 'in^{3}', d: 1 });
+     if (!D.CH) w.add({ id: `${id}.Mn`, label: `${lab}: flexural resistance (6.10.8, L_b = S, C_b = 1.0; F_nc = ${n2(D.Fnc)} ksi)`, sym: '\\phi_{f}M_{n}', eq: 'F_{nc}S_{x}', sub: `${n2(D.Fnc)}(${n2(D.Sx)})`, value: D.Mn, unit: 'kip-in', d: 0, ref: `${ED} Arts. 6.10.8.2.2, 6.10.8.2.3` });
+     else { const H = D.CH, E_ = '29{,}000', Fy = D.Fy;   // SBDX: a channel per 6.12.2.2.5
+@@ -754,6 +782,7 @@
+     const BD = opt.bays === false ? null : bayDepths(P), TG = BD && !opt.bridge ? typeGov(P, BD, (P.girders || [])[opt.gi || 0] ? opt.gi || 0 : 0) : null, GV = TG ? TG.gov : BD ? BD.gov : null;   // SBXF2 (SB-18): the type's own shallowest bay (opt.bridge: the bridge's, pointLoads)
+     const gb = GV ? GV.s : null, Dh = gb ? gb.D : D, hAuto = c.h === '' || c.h == null, hOf = d => Math.round(Math.max(d - 8, d * 0.75));   // SBXF
+     p.S = r2(Math.max(...bays) * 12); p.dg = r2(gb ? gb.dg : s0.D + s0.topT + s0.botT); src.S = 'the largest girder spacing'; src.dg = 'D + t_top + t_bot at the first support';
++    p.D0 = r2(s0.D); src.D0 = 'the web depth at the first support (the diaphragm fit, SB-25)';   // SB-25
+     p.h = hAuto ? hOf(Dh) : +c.h; src.h = hAuto ? 'round(max(D − 8, 0.75D))' : 'entered';
+     if (gb) { const g0 = GV, dOwn = r2(s0.D + s0.topT + s0.botT), bn = `G${g0.j + 1}–G${g0.j + 2}`, XW = extDepth(P, nb), dW = XW ? r2(XW.q.dg) : dOwn;   // SBXF2 (SB-20): the wind on the exterior girder depth
+       p.dW = dW; src.dW = XW ? `the exterior girder: the deeper of the types on G1 and G${nb}, D + t_top + t_bot at the first support` : 'the reported girder (no girder type on G1 or G_Nb): D + t_top + t_bot at the first support';
+@@ -798,6 +827,6 @@
+     return { line, X, pts: G[line], tot: G[line].reduce((a, q) => a + q.P, 0) };
+   }
+ 
+-  window.SBDCrossframes = { ES, DEF, GD_GR, BOLT, FUB, PHI, ANGLES, CF_MEM, CF_CH, CF_DIA, angleProps, cfDiaSec, cfDiaOn, cfDiaGap, cfDiaEnd, cfTypeRec, cfTsCP, cfCPsize, cfBsCP, cfCP, cfDiaFit, bayGroups, grpOf, grpKey, grpShape, diaGroups,
++  window.SBDCrossframes = { ES, DEF, GD_GR, BOLT, FUB, PHI, ANGLES, CF_MEM, CF_CH, CF_DIA, angleProps, cfDiaSec, cfDiaOn, cfDiaGap, cfDiaEnd, cfTypeRec, cfTsCP, cfCPsize, cfBsCP, cfCP, cfDiaFit, bayGroups, grpOf, grpKey, grpShape, diaGroups, DIA_CLR, diaClr, diaFit,
+     env0, compute, checks, userModes, xfW, xfModel, xfPts, defaults, inputsOf, envOf, pointLoads, girderDepth, bayDepths, typeGov, extDepth, diaDepthReq };
+ })();
+diff --git a/apps/steel-bridge/engine/model.js b/apps/steel-bridge/engine/model.js
+index edf66d0..ab377cf 100644
+--- a/apps/steel-bridge/engine/model.js
++++ b/apps/steel-bridge/engine/model.js
+@@ -73,6 +73,10 @@
+                   crossframes.dia.grp: { '<bays of a bay depth group, 0-based, comma-separated, e.g. "0,4">': shape } (girder types whose bays
+                   form two or more depth groups: the diaphragm shape of each group; a group without an entry, or an entry that is not a shape
+                   of the lists, takes dia.shape; an entry of a grouping that no longer exists is kept in the file, unused; engine/crossframes.js grpShape)
++                  -- added 2026-11-13 (SB-25, engineer decision SB-25; optional: absent = 2 in) --
++                  crossframes.dia.clr: the clearance c (in, total) of the diaphragm fit check CFD (d ≤ D_0 − c, D_0 the web depth of the
++                  shallower girder of the bay at the first support) and of CF10's per-group fit rule; absent, blank (null, NaN) or not a number
++                  ≥ 0: 2 in (1 in top and bottom for clips / welds; engine/crossframes.js diaClr). Nothing is rewritten on load.
+      -- added 2026-10-29 (analysis PR), optional, read by engine/analysis.js (absent = its defaults) --
+      analysis:  { im, imf (%), crack: 'none' | '15' | 'dl', deflLimit (L/…), seq: 'on' | 'off', seqMod: 'n' | '3n', seqCustom (text),
+                   steelAllowPct (%; used when xs.allow is not available), haunchInStiffness (true | false; absent = the owner rule) }
+@@ -516,6 +520,7 @@
+       if (C.h !== '' && C.h != null && !(isNum(C.h) && C.h > 0)) E(`${cp}.h`, 'Chord work-point depth must be positive (or blank).');
+       ['V', 'Kz', 'G', 'Cd'].forEach(k => nn((C.wind || {})[k], `${cp}.wind.${k}`, `Wind ${k}`));
+       if (C.sb && C.sb.Mu !== '' && C.sb.Mu != null && !isNum(C.sb.Mu)) E(`${cp}.sb.Mu`, 'Deck-placement M_u must be a number (or blank: from the analysis).');
++      { const v = (C.dia || {}).clr; if (v != null && v !== '' && !Number.isNaN(v) && !(isNum(+v) && +v >= 0)) E(`${cp}.dia.clr`, 'Diaphragm fit clearance must be a number of at least 0 in (or blank: 2 in).'); }   // SB-25
+       ['StrI', 'Con'].forEach(k => { const v = (C.userMode || {})[k]; if (v != null && !['add', 'replace'].includes(v)) E(`${cp}.userMode.${k}`, 'Entered member forces: add to or replace the computed forces.'); }); }
+     // added 2026-10-29 (field splices PR): the optional field splice inputs
+     if (p.splices != null) { const Q = p.splices || {}, B = Q.bolts || {};
+diff --git a/apps/steel-bridge/ui/framing.js b/apps/steel-bridge/ui/framing.js
+index 4510749..337abc8 100644
+--- a/apps/steel-bridge/ui/framing.js
++++ b/apps/steel-bridge/ui/framing.js
+@@ -117,6 +117,10 @@
+         + [['', `Same as Shape above (${nmS(C.dia.shape)})`], ...list.map(v => [v, `${nmS(v)}${R[k] === v ? ' (CF10 recommends)' : ''}`])].map(([v, t]) => `<option value="${esc(v)}"${cur === v ? ' selected' : ''}>${esc(t)}</option>`).join('') + '</select></div>'; }).join('')}
+       <p class="note">Girder types: the bays form ${GR.length} depth groups (the same h and the same shallower girder depth d: the Drawings' cross-frame details). Each group's diaphragm is checked with its own shape on its own frame (CFD; CFE too when the end diaphragm takes the intermediate shape) and weighed in DC1 with it; the worst group governs (engineer decision SB-24, 2026-11-13). Turning the diaphragm on prefills the shapes CF10 recommends per group where one section does not fit every bay.</p>`;
+   }
++  /* clrRow(C, h) (SB-25, 2026-11-13; engineer decision SB-25): the clearance c of the diaphragm fit check (CFD: d ≤ D_0 − c) and of CF10's
++     fit rule, crossframes.dia.clr (in, total); blank or absent: 2 in (engine/crossframes.js diaClr), shown as the placeholder */
++  function clrRow(C, h) { const v = (C.dia || {}).clr, ok = v != null && v !== '' && isFinite(+v);
++    return `<div class="fRow"><label for="i_crossframes.dia.clr">Fit clearance c, total (d ≤ D<sub>0</sub> − c; blank: 2 in, 1 in top and bottom for clips / welds)</label><input type="number" step="any" id="i_crossframes.dia.clr" data-path="crossframes.dia.clr" data-kind="num" value="${ok ? esc(String(v)) : ''}" placeholder="2"><span class="unit">in</span></div>`; }
+   function inputs(P, h) {
+     ensure(P); const F = P.framing, C = P.crossframes, CF = window.SBDCrossframes, FRM = window.SBDFraming;
+     let L = null; try { L = FRM.compute(P); } catch (e) { L = { errors: [e.message] }; }
+@@ -139,7 +143,7 @@
+       + h.card('Intermediate bracing (6.7.4.2)', `${h.sel('crossframes.type', 'Intermediate bracing', BRACE, br).replace('<select ', '<select style="width:200px;max-width:100%" ')}
+         ${h.num('crossframes.dMinXF', 'Minimum girder depth for cross-frames', 'in')}${dOn ? `${h.sel('crossframes.dia.shape', 'Shape', br === 'ch' ? CF.CF_CH.map(s => [s[0], s[0]]) : [...CF.CF_DIA.map(s => [s[0], s[0]]), ['custom', 'Custom W']])}
+         ${C.dia.shape === 'custom' ? `${h.num('crossframes.dia.d', 'Depth d', 'in')}${h.num('crossframes.dia.bf', 'Flange width', 'in')}${h.num('crossframes.dia.tf', 'Flange thickness', 'in')}${h.num('crossframes.dia.tw', 'Web thickness', 'in')}` : ''}
+-        ${h.sel('crossframes.dia.gr', 'Grade', [['36', '36'], ['50', '50']])}${grpCard(P, C, br)}
++        ${h.sel('crossframes.dia.gr', 'Grade', [['36', '36'], ['50', '50']])}${clrRow(C, h)}${grpCard(P, C, br)}
+         <h4 class="sub">End connections</h4>${conn}${h.num('crossframes.dia.nb', 'Bolts per end (one row)', '')}${h.num('crossframes.dia.pitch', 'Bolt pitch', 'in')}${h.num('crossframes.dia.ecc', 'Bolt line from the girder web', 'in')}
+         <h4 class="sub">End diaphragms (bearing lines)</h4>${h.sel('crossframes.dia.end', 'Jacking at the end diaphragms', [['no', 'No'], ['yes', 'Yes']])}${h.num('crossframes.dia.Rj', 'Jacking reaction R<sub>j</sub>', 'kip')}${h.num('crossframes.dia.aj', 'at a<sub>j</sub> from the girder', 'in')}
+         <p class="note">The diaphragm is the intermediate bracing (checks CFD) and the end diaphragm at the bearing lines (CFE); the angle checks CF1 to CF9 and member forces entered from a refined analysis do not apply. S (largest girder spacing) and the girder depth d come from the project and the layout. On a change between a rolled W and a channel, the shape starts at the one last used in that family on this page, else the shape that check CF10 recommends for the girder depth, else W21x44 / MC18x42.7: a starting choice, checked by CFD like any other.</p>`
+```
