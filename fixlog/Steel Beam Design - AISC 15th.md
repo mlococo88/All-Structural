@@ -4231,3 +4231,44 @@ index ea4ace2..89f7db7 100644
 - **Saved data (§5):** no key or format change. A saved batch row whose grade text was not recognised now shows BLOCKED with the message instead of a silent default result. The row's data is kept, so the user retypes the grade.
 - **Other copies:** none.
 - **Open items:** a bare `A500` (no grade letter) is still read as before (the first A500 grade by name, i.e. Gr. C), to keep old results identical. Should it block as ambiguous? Engineer's decision.
+
+## 2026-11-13 — PR: claude/sbeam-hss11-narrow-plate (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (HSS-11) — rectangular HSS, transverse plate with Bₚ < 0.85B: not covered, the concentrated-force check is blocked (was a warning with the result shown)   [behaviour change next to §4; no formula, saved key or format change]
+- **Engineer's decision HSS-11 (2026-11-13):** for a transverse plate on a rectangular HSS with Bₚ < 0.85B, HSS face plastification (yield line) usually governs. AISC 360-16 has no equation for it, and the 360-22 reference is not available. Such a location is now "not covered": an input error that blocks the concentrated-force check (FAIL in the check summary, the Concentrated Forces tab, the Report and the Excel export), as a missing input already does (#1480, decision 8). The message: widen the plate to Bₚ ≥ 0.85B, or check HSS face plastification by hand; the app does not cover narrow plates. This replaces #1480 decision 9 (warning, not blocked).
+- **Unchanged:** Bₚ ≥ 0.85B (including Bₚ = 0.85B exactly and Bₚ > B); bearing on a cap plate / seat; round HSS (any Bₚ/D); W, C and Pipe. Batch mode does not run the HSS Chapter K check (no plate columns; #1480 "not covered: batch"), so it is unchanged.
+- **Code (re-apply by hand):**
+  1. `hssKPrm`, in the `if(type==='plate'){` branch, after `if(!o.tp)o.errs.push('plate thickness tₚ');if(!o.Bp)o.errs.push('plate width Bₚ');` add:
+     ```js
+     if(p._kind==='R'&&o.Bp&&o.Bp<0.85*p.B)o.nc={Bp:o.Bp,B:p.B,min:0.85*p.B,beta:o.Bp/p.B};
+     ```
+  2. New function after `hssKPrm` (before `/* the capacities that do not depend on Q_f, …`):
+     ```js
+     function hssKBlk(prm){
+       if(!prm||prm.type==='none')return '';
+       if(prm.errs.length)return 'input missing: '+prm.errs.join(', ');
+       if(prm.nc)return 'not covered: plate width Bₚ = '+fmt(prm.nc.Bp,3)+' in < 0.85B = '+fmt(prm.nc.min,3)+' in — widen the plate to Bₚ ≥ 0.85B, or check HSS face plastification by hand (the app does not cover narrow plates)';
+       return '';
+     }
+     ```
+  3. `hssKCaps`: `if(prm.type==='none'||prm.errs.length)return out;` → `if(prm.type==='none'||hssKBlk(prm))return out;`. Delete `if(beta<0.85)out.ylNC=true;` (now unreachable).
+  4. `sbHssKCheck`:
+     - the warning `on.filter(l=>l.caps.ylNC).forEach(l=>D.warns.push('HSS wall at '+l.label+': Bₚ/B = '+…+' it is NOT checked here — verify it separately.'));` → `on.filter(l=>l.prm.nc).forEach(l=>D.warns.push('HSS wall at '+l.label+': transverse plate Bₚ = '+fmt(l.prm.nc.Bp,3)+' in < 0.85B = '+fmt(l.prm.nc.min,3)+' in (Bₚ/B = '+fmt(l.prm.nc.beta,3)+'). For a narrow plate, HSS face plastification (yield line) usually governs; AISC 360-16 gives no equation for it (§J10.10, AISC Manual Part 9) and this app does not cover narrow plates. Widen the plate to Bₚ ≥ 0.85B = '+fmt(l.prm.nc.min,3)+' in, or check HSS face plastification by hand. This location is reported as failing (not covered) until then.'));`
+     - `if(lo&&lo.prm.type!=='none'&&lo.prm.errs.length&&r.dem>1e-9){if(!g||g.d<Infinity)g={d:Infinity,c,r,blocked:'input missing: '+lo.prm.errs.join(', ')};return;}` → `if(lo&&hssKBlk(lo.prm)&&r.dem>1e-9){if(!g||g.d<Infinity)g={d:Infinity,c,r,blocked:hssKBlk(lo.prm)};return;}`
+     - in the check-row detail delete `+(lo&&lo.caps.ylNC?'; face yield line NOT checked (Bₚ < 0.85B)':'')`.
+  5. `sbHssKTab`: the capacity-table cell `pr.errs.length?'<span class="dirty">enter '+pr.errs.join(', ')+'</span>':c.ls.map(` → `pr.errs.length?'<span class="dirty">enter '+pr.errs.join(', ')+'</span>':pr.nc?'<span class="dirty">'+hssKBlk(pr)+'</span>':c.ls.map(`; the worked sections `on.filter(l=>!l.prm.errs.length)` → `on.filter(l=>!hssKBlk(l.prm))`; the per-combination row `if(lo.prm.errs.length){… 'input missing: '+lo.prm.errs.join(', ') …}` → `if(hssKBlk(lo.prm)){… hssKBlk(lo.prm) …}`; the "Not covered (verify separately):" text for rect now says a plate narrower than 0.85B is blocked (FAIL), widen it or check it by hand.
+  6. `sbHssKWork`: delete the `if(c.ylNC)body.appendChild(el('div','warnBox','<b>Not checked:</b> …'));` line (the location has no worked section now).
+  7. `sbHssKInputs` hint: `'Not checked here: face yield lines for Bₚ < 0.85B, longitudinal plates, HSS-to-HSS. …'` → `(pk._kind==='R'?'A plate with Bₚ < 0.85B is not covered (…): the location is blocked — widen the plate to Bₚ ≥ 0.85B or check it by hand. ':'')+'Not checked here: longitudinal plates, HSS-to-HSS. …'`.
+  8. `xlHssK` (Excel): after the `if(pr.errs.length){X.note('Input missing: …');return;}` line add `if(pr.nc){X.note('NOT COVERED: plate width Bp = '+S2(pr.nc.Bp,3)+' in < 0.85B = '+S2(pr.nc.min,3)+' in (Bp/B = '+S2(pr.nc.beta,3)+'). … Widen the plate to Bp ≥ 0.85B, or check HSS face plastification by hand. This location is reported as failing until then.');return;}`; delete the `if(c.ylNC)X.note('NOT CHECKED: …');` line; the combination-table row `if(lo.prm.errs.length){rows.push([… 'input missing: '+lo.prm.errs.join(', ') …])` → `if(hssKBlk(lo.prm)){rows.push([… hssKBlk(lo.prm) …])`; the closing note's "face yield-line flexure for Bp < 0.85B; " → "face plastification for Bp < 0.85B (blocked: widen the plate or check by hand); ".
+- **Governing provision:** AISC 360-16 §K2.3 (rect HSS → Chapter J), §J10.10 and Commentary K1.2 (face plastification of a rect HSS under a transverse plate, β < 0.85: no Specification equation; AISC Manual Part 9 yield-line method). No formula, φ, unit or code reference changed.
+- **Check cases** (HSS8X8X1/2 A500 Gr. C, F_y 50, t 0.465, 20 ft simple span, P = 5 D + 10 L at midspan, t_p = 1/2 in, F_yp 36):
+  - **Bₚ = 4 in** (β = 0.500 < 0.85; 0.85B = 6.800 in), beam mode:
+    - Before: B_e = 3.003 in; φR_n plate yielding 48.65, punching 92.85, sidewall yielding 185.42, crippling 383.40·Q_f kip; governing plate yielding, 1.2D + 1.6L, R_u 22.0 → DCR **0.452**, with the warning "face yield line NOT checked".
+    - After: no capacities; check row **FAIL** (DCR ∞), "HSS wall, point loads P + PL (x = 10.00 ft) — not covered: plate width Bₚ = 4.000 in < 0.85B = 6.800 in — widen the plate to Bₚ ≥ 0.85B, or check HSS face plastification by hand (the app does not cover narrow plates)".
+  - **Bₚ = 4 in, member mode,** R = 30, M_ux 60: before DCR 0.617 (30/48.65) with the warning; after **FAIL**, same message.
+  - **Bₚ = 7 in** (β = 0.875), unchanged: B_e 5.255 in, φR_n plate yielding 85.14 kip, DCR **0.258** (1.2D + 1.6L, R_u 22.0).
+- **How verified:**
+  - Node, origin/main vs the branch, the app's `computeAll` / `computeMember` (whole `AN` JSON): 15 cases identical: W18X50 beam (J10 at supports / loads) and member, W with `hssK` fields set, Pipe8XS, round HSS10.000X0.500 beam (plate 6 + bearing; plate 2, outside Table K2.1A) and member (plate 4), rect HSS8X8X1/2 beam (plate 7 + bearing 4; plate 6.8 = 0.85B; plate 10 > B; no `hssK`; plate without Bₚ), member (plate 7; bearing 4), HSS12X6X1/2 member plate 5.1 = 0.85B. `batchCheckRow` for W18X50, HSS8X8X1/2 and HSS10.000X0.500 rows: identical. Only the two Bₚ = 4 in rect cases differ.
+  - Headless Chromium, main vs branch: Concentrated Forces tab, Summary, Report text for the 7 in, round and W cases identical; 4 in cases show the block; 0 KaTeX errors, 0 console errors.
+  - `tests/engine/sbeam-hss.test.mjs` SBHK test extended (beam and member block, Bₚ = 0.85B covered, narrow plate at a support, round narrow plate unchanged); `tests/engine/sbeam-hss-xlsx.test.mjs`: the member case with Bₚ = 5 on HSS12X6X1/2 now checks the NOT COVERED note and the FAIL row; new case Bₚ = 0.85B = 5.1 in (covered). `run.mjs sbeam aisc-hss`; check-syntax; smoke tests (see the PR).
+- **Saved data (§5):** no key or format change. A saved project with a narrow plate on a rect HSS now opens with the concentrated-force check FAIL (not covered) and the message instead of a result with a warning; its inputs are kept.
+- **Other copies:** none.
+- **Open items:** none. If the 360-22 face-plastification provision becomes available, the engineer may decide to add it (a §4 change).
