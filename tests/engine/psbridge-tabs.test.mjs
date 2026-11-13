@@ -1,6 +1,7 @@
 // apps/ps-bridge PR 2b-2: the worked steps of the Section properties, Loads & LLDF and Analysis tabs (engine/worked.js); PR 2c-1: the
 //   Losses and Stresses tabs (engine/worked-stress.js; each step's R path, used by tests/psbridge-compare.mjs, holds the step's value);
-//   PR 2c-2 Flexure and Shear (engine/worked-strength.js); PR 2d-1 End zone & hold-down and Camber & deflection (engine/worked-end.js).
+//   PR 2c-2 Flexure and Shear (engine/worked-strength.js); PR 2d-1 End zone & hold-down and Camber & deflection (engine/worked-end.js);
+//   PR 2d-2 Handling, Deck and Rating (engine/worked-hdr.js; Handling and Deck only where their module is on).
 //   Each step's value is the engine's (computeAll) value, and the step's expression evaluated from its substituted values reproduces it
 //   (the derivation shown is the engine's): every pair agrees to 1e-9 (relative), on several designs (simple / continuous with restraint,
 //   interior / exterior, skew ≥ 30°, haunch included, NEXT, box without topping, diaphragms, an owner, entered DF and LL).
@@ -12,12 +13,13 @@ import { TAB_CASES } from './psbridge-tab-cases.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared('steps.js', ...PBD, ...['model', 'design', 'fields', 'inputcheck', 'worked', 'worked-stress', 'worked-strength', 'worked-end'].map(n => path.join(APP, `engine/${n}.js`)));
+const W = loadShared('steps.js', ...PBD, ...['model', 'design', 'fields', 'inputcheck', 'worked', 'worked-stress', 'worked-strength', 'worked-end', 'worked-hdr'].map(n => path.join(APP, `engine/${n}.js`)));
 const at = (R, p) => p.split('.').reduce((o, k) => o == null ? o : o[k], R);
 const STEPS = (inp, R) => ({ section: W.PSBWorked.section(inp, R), loads: W.PSBWorked.loads(inp, R), analysis: W.PSBWorked.analysis(inp, R),
   losses: W.PSBWorkedStress.losses(inp, R), stresses: W.PSBWorkedStress.stresses(inp, R),
   flexure: W.PSBWorkedStrength.flexure(inp, R), shear: W.PSBWorkedStrength.shear(inp, R),
-  endzone: W.PSBWorkedEnd.endzone(inp, R), camber: W.PSBWorkedEnd.camber(inp, R) });
+  endzone: W.PSBWorkedEnd.endzone(inp, R), camber: W.PSBWorkedEnd.camber(inp, R),
+  handling: W.PSBWorkedHDR.handling(inp, R), deck: W.PSBWorkedHDR.deck(inp, R), rating: W.PSBWorkedHDR.rating(inp, R) });
 const CASES = TAB_CASES(() => W.PSBModel.defaultProject());
 for (const [name, P] of Object.entries(CASES)) {
   test(`worked steps = engine values: ${name}`, () => {
@@ -28,7 +30,9 @@ for (const [name, P] of Object.entries(CASES)) {
     for (const f of Object.keys(ST)) {
       const r = ST[f];
       Object.entries(r.paths || {}).forEach(([id, p]) => { const s = r.steps.find(q => q.id === id), v = at(R, p); assert.ok(s, 'path of a step ' + id); assert.ok(Object.is(s.value, v), `${id}: value ${s.value} vs R.${p} ${v}`); });
-      if (['losses', 'stresses', 'flexure', 'shear', 'endzone', 'camber'].includes(f)) assert.ok(Object.keys(r.paths).length >= (f === 'losses' || f === 'stresses' ? 20 : f === 'endzone' ? 8 : 15), f + ' paths ' + Object.keys(r.paths).length);
+      const off = (f === 'handling' && !R.handling) || (f === 'deck' && !R.deck);
+      if (off) { assert.equal(r.steps.length, 0, f + ' off: no steps'); continue; }
+      if (['losses', 'stresses', 'flexure', 'shear', 'endzone', 'camber', 'handling', 'deck', 'rating'].includes(f)) assert.ok(Object.keys(r.paths).length >= (f === 'losses' || f === 'stresses' || f === 'handling' || f === 'deck' ? 20 : f === 'endzone' ? 8 : 15), f + ' paths ' + Object.keys(r.paths).length);
       assert.ok(r.steps.length >= 8, f);
       const ids = r.steps.map(s => s.id); assert.equal(new Set(ids).size, ids.length, 'unique ids ' + f);
       r.steps.forEach(s => { if (typeof s.value === 'number') assert.ok(Number.isFinite(s.value), `${s.id} finite`); });
