@@ -3539,7 +3539,7 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
 - **Other copies:** none.
 - **Open items:** the batch keeps the HSS N/A note. Per-location inputs are keyed by support index and by point-load x (`P<x>`), so moving a load drops its own override and falls back to the group value.
 
-## 2026-11-13 — PR: claude/sbeam-compression-flange (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SBCF) — Major Flexure: "Flange" column renamed "Compression flange", HSS walls named, sagging / hogging note   [display only]
+## 2026-11-13 — PR: claude/sbeam-compression-flange (PR #1483: https://github.com/mlococo88/All-Structural/pull/1483) (SBCF) — Major Flexure: "Flange" column renamed "Compression flange", HSS walls named, sagging / hogging note   [display only]
 - **Engineer's decision (2026-11-13):** rename the per-combination column 'Flange' to 'Compression flange'. W-shapes, channels and built-up show top / bottom; rectangular HSS show top wall / bottom wall. Add a note under each table: "Sagging moment: top in compression, uses L_b,top; hogging: bottom in compression, uses L_b,bot." In member-check mode, adapt it.
 - **Where:** the active `buildMxTab` (the last definition in the file; the earlier `buildMxTab` and `buildFlexTab` copies are not called and are unchanged), and `capEnvFig`. The Minor Flexure tab and the Excel export have no flange column, so nothing changes there. The Report follows the tab, because it is built from it.
 - **Code (re-apply by hand):**
