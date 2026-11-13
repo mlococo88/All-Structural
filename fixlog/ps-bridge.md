@@ -1125,7 +1125,7 @@ PR: (link added on merge)
 ### Where
 - `apps/ps-bridge/engine/rigid.js` (new, `window.PSBRigid`): `rigidOf`, `adjust`, `run` (computeAll with the global distFactors wrapped for that
   call when `inputs.rigidX` is given, restored after; the moved files are not edited).
-- `engine/design.js` `one()`: anchor `// PS-19 (§4)` — `o.rigidX = { x, g }` only when the bays are unequal. `engine/holddown.js` `compute`:
+- `engine/design.js` `one()`: anchor `// PS-19 (§4)` — `o.rigidX = { x, g }` only for an exterior line (G1, G_Nb) when the bays are unequal (interior lines and equal bays: inputs unchanged). `engine/holddown.js` `compute`:
   `PSBRigid.run(inp)` instead of `computeAll(inp)`. `index.html`: loads `engine/rigid.js` (before holddown.js).
 - `engine/worked.js`: with `df.rigidX` the steps x̄, X_ext, Σx² and R with its substitution (the engine's equal-spacing R in the note);
   `ui/loads.js` topic ids.

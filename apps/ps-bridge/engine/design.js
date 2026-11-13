@@ -97,9 +97,9 @@
     // distributes them (P.xs.dl.mode 'distributed'); else the values entered per girder (base.loads.wBar / wDW) as before
     const DL = window.PSBBridgeDL, q = DL ? DL.line(P, d.g) : null;
     if (q) o.loads = Object.assign({}, o.loads, { wBar: q.DC2, wDW: q.DW });
-    // PS-19 (§4): with unequal bays the exterior rigid-section factor on the real girder lines (engine/rigid.js); equal bays: nothing added
+    // PS-19 (§4): with unequal bays the exterior rigid-section factor on the real girder lines (engine/rigid.js); equal bays and interior lines: nothing added
     const B = (P.xs && P.xs.bays) || [];
-    if (B.length >= 2 && B.some(v => Math.abs(v - B[0]) > 1e-9)) { const x = [0]; B.forEach(v => x.push(x[x.length - 1] + v)); o.rigidX = { x, g: d.g }; }
+    if ((d.g === 1 || d.g === P.xs.nb) && B.length >= 2 && B.some(v => Math.abs(v - B[0]) > 1e-9)) { /* exterior lines only (the rigid section is theirs) */ const x = [0]; B.forEach(v => x.push(x[x.length - 1] + v)); o.rigidX = { x, g: d.g }; }
     return o;
   }
   /* driven(P): the bridge values of the design, for display: [{ key, label, value, unit, where }] (where = the input tab that holds them) */
