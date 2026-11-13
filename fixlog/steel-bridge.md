@@ -10059,7 +10059,7 @@ index 58d25a5..b6463e8 100644
    function envOf(P, opt) {
 ```
 
-## 2026-11-13 — PR: claude/sb-cf10-near-status (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Cross-frames CF10: where CF10 names a nearest section (it fails the 0.75d depth requirement, SB-27), the CF10 row's status is Warning (the status of the CFD depth item for the same shortfall), not OK, also with a diaphragm in use (SBNS; Decision (pending engineer review), following the engineer's choice "name nearest, flag it", SB-27; status only, no value changes)
+## 2026-11-13 — PR: claude/sb-cf10-near-status (PR #1527: https://github.com/mlococo88/All-Structural/pull/1527) — Cross-frames CF10: where CF10 names a nearest section (it fails the 0.75d depth requirement, SB-27), the CF10 row's status is Warning (the status of the CFD depth item for the same shortfall), not OK, also with a diaphragm in use (SBNS; Decision (pending engineer review), following the engineer's choice "name nearest, flag it", SB-27; status only, no value changes)
 - **Request:** follow-up of SB-27 (#1523): when CF10 names a nearest section that fails the 0.75d depth requirement, the CF10 row status must not be green; set it to the app's warning status, the one the CFD depth item uses for the same shortfall, on the tab, in the Report and in the check summary. #1523 Decision (2) ("the CF10 item's status is unchanged") is replaced by this one. **Decision (pending engineer review).**
 - **Where:** `apps/steel-bridge/engine/crossframes.js`, `checks`, the CF10 block, anchor `c.items.push({ loc: 'Intermediate bracing', cells: [`.
   - Before: `st: shall ? 'fail' : TR.deep || !TR.xf ? 'pass' : 'warn', demand: TR.dB, capacity: TR.dMin, step: 'cf.type' });`
