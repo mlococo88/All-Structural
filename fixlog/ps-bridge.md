@@ -1134,3 +1134,9 @@ PR: (link added on merge)
 ### How verified
 - `tests/engine/psbridge-rigid.test.mjs` (new, 2 tests): equal bays byte-identical; the formula = the engine's on equal spacing; the check case.
   Smoke `ps-bridge-types.mjs` §6: the steps on Loads & LLDF, values = the page's result. Harness A (verbatim, parity) unchanged.
+- Harness B (`tests/psbridge-compare.mjs`, test only): the occasional `--import` time-out (on main too) caught in a run: the reloaded page's
+  storage held none of the keys the harness had put (only the seed and `psb2.ui`; the browser storage of the page reset), so the old app's
+  list had nothing. New `reloadKept(p, name, o, wait)` replaces the two `await nw.p.reload(); …` lines (normal mode: `psb2.project.current`;
+  `--import`: the old keys of the design): after the reload each key must hold the value put, else the keys are put again and the page
+  reloaded (at most 3, a `note` line in the log; an error after 3). PR 3a-4's `scanList` (a repeated "Find" click) is removed: a missed click
+  was not the cause. No comparison changed.
