@@ -2,7 +2,7 @@
 // CBSL (2026-11-13): Concrete Beam Capacity, Beam Capacity tab, service load cases (ACI 318-19 5.3.1, Table 5.3.1) and the
 // factored mode, at 1400 and 390 px, file://, 0 console errors:
 //  - a new project opens in service mode with blank cases and the Load Combinations tab;
-//  - hand check typed into the fields: D M 5 V 2, L M 3 V 1.2, W M 2 V 0.8 (reverses): 11 rows, M_u / V_u as below, flexure
+//  - hand check typed into the fields: D M 5 V 2, L M 3 V 1.2, W M 2 V 0.8 (reverses): 14 rows (3 with W omitted, 5.3.2), M_u / V_u as below, flexure
 //    governed by (5.3.1d) 1.2D + 1.0W + 1.0L + 0.5Lr (M_u 11.00, V_u 4.40);
 //  - a combination name in the input table opens its card on the Load Combinations tab; each card has the symbolic, substituted
 //    and result lines; the Flexure card links back; the Report has the "Load combinations" section after Inputs, every step
@@ -18,8 +18,9 @@ const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ?
 const FILE = path.resolve(arg('file', path.join(REPO, 'Concrete Beam Capacity.html'))), SHOTS = arg('shots', '');
 let fails = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fails++; };
 const HAND = [['1.4D', 7, 2.8], ['1.2D + 1.6L + 0.5Lr', 10.8, 4.32], ['1.2D + 1.6Lr + 1.0L', 9, 3.6], ['1.2D + 1.6Lr + 0.5W', 7, 2.8],
-  ['1.2D + 1.6Lr − 0.5W', 5, 2], ['1.2D + 1.0W + 1.0L + 0.5Lr', 11, 4.4], ['1.2D − 1.0W + 1.0L + 0.5Lr', 7, 2.8],
-  ['1.2D + 1.0E + 1.0L + 0.2S', 9, 3.6], ['0.9D + 1.0W', 6.5, 2.6], ['0.9D − 1.0W', 2.5, 1], ['0.9D + 1.0E', 4.5, 1.8]];
+  ['1.2D + 1.6Lr − 0.5W', 5, 2], ['1.2D + 1.6Lr − 0.5W, W omitted', 6, 2.4], ['1.2D + 1.0W + 1.0L + 0.5Lr', 11, 4.4], ['1.2D − 1.0W + 1.0L + 0.5Lr', 7, 2.8],
+  ['1.2D − 1.0W + 1.0L + 0.5Lr, W omitted', 9, 3.6], ['1.2D + 1.0E + 1.0L + 0.2S', 9, 3.6], ['0.9D + 1.0W', 6.5, 2.6], ['0.9D − 1.0W', 2.5, 1],
+  ['0.9D − 1.0W, W omitted', 4.5, 1.8], ['0.9D + 1.0E', 4.5, 1.8]];   // CBOM (5.3.2): the three "W omitted" rows
 const OLD = { proj: { name: 'Old', date: '2026-11-01' }, code: 'ACI', tor: { present: false }, combos: [{ name: 'A', Mu: 120, Vu: 20, Tu: 0 }, { name: 'B', Mu: -60, Vu: 12, Tu: 5 }] };
 
 const frameOf = async p => { const f = await (await p.$('#suite-frame-capacity')).contentFrame();
@@ -45,13 +46,13 @@ for (const vw of [1400, 390]) {
     'hand check: ' + r.rows.map(x => `${x[0]} ${x[1].toFixed(2)}/${x[2].toFixed(2)}`).join('; '));
   ok(r.gov === '1.2D + 1.0W + 1.0L + 0.5Lr', `flexure governed by ${r.gov} (M_u 11.00)`);
   // input link -> card
-  await f.evaluate(() => { const a = document.querySelector('#inputPanel a.wkA[data-card="ldC5"]'); a.click(); }); await p.waitForTimeout(400);
-  r = await f.evaluate(() => ({ tab: S.ui.tab, card: (document.querySelector('#ldC5') || {}).innerText || '', ann: [...document.querySelectorAll('#ldC5 annotation')].map(a => a.textContent).join(' ‖ ') }));
-  ok(r.tab === 'tabLoads' && /1\.2D \+ 1\.0W \+ 1\.0L \+ 0\.5L/.test(r.card), 'input table link opens the Load Combinations tab, card of Combination 6');
+  await f.evaluate(() => { const a = document.querySelector('#inputPanel a.wkA[data-card="ldC6"]'); a.click(); }); await p.waitForTimeout(400);
+  r = await f.evaluate(() => ({ tab: S.ui.tab, card: (document.querySelector('#ldC6') || {}).innerText || '', ann: [...document.querySelectorAll('#ldC6 annotation')].map(a => a.textContent).join(' ‖ ') }));
+  ok(r.tab === 'tabLoads' && /1\.2D \+ 1\.0W \+ 1\.0L \+ 0\.5L/.test(r.card), 'input table link opens the Load Combinations tab, card of Combination 7');
   ok(r.ann.includes('U = 1.2D + 1.0W + 1.0L + 0.5L_r') && r.ann.includes('M_u = 1.2M_{D} + 1.0M_{W} + 1.0M_{L} + 0.5M_{L_r}') && r.ann.includes('M_u = 1.2(5.00) + 1.0(2.00) + 1.0(3.00) + 0.5(0.00) = 11.00') && r.ann.includes('V_u = 1.2(2.00) + 1.0(0.80) + 1.0(1.20) + 0.5(0.00) = 4.40'),
     'card: symbolic, substituted and result lines (M_u 11.00, V_u 4.40)');
-  r = await f.evaluate(() => { S.ui.tab = 'tabFlex'; refresh(); return [...document.querySelectorAll('#flexC5 a.wkA')].map(a => a.dataset.tab + ':' + a.dataset.card); });
-  ok(r.includes('tabLoads:ldC5'), 'Flexure card of Combination 6 links to its derivation');
+  r = await f.evaluate(() => { S.ui.tab = 'tabFlex'; refresh(); return [...document.querySelectorAll('#flexC6 a.wkA')].map(a => a.dataset.tab + ':' + a.dataset.card); });
+  ok(r.includes('tabLoads:ldC6'), 'Flexure card of Combination 7 links to its derivation');
   r = await f.evaluate(() => { const M = mrModel(), t = SharedReport.text(SharedReport.build(M), { legacy: true }); return { secs: M.sections.map(s => s.title), t }; });
   const iIn = r.secs.indexOf('Inputs'), iLd = r.secs.indexOf('Load combinations');
   ok(iLd === iIn + 1, `Report: "Load combinations" right after Inputs (${r.secs.join(' | ')})`);
@@ -59,8 +60,8 @@ for (const vw of [1400, 390]) {
   const sw = await sideways(f); ok(!sw.length, 'no sideways scroll on any tab' + (sw.length ? ': ' + sw.join(', ') : ''));
   if (SHOTS) await p.screenshot({ path: path.join(SHOTS, `cbc-loads-service-${vw}.png`) });
   await p.reload(); f = await frameOf(p);
-  r = await f.evaluate(() => { const a = JSON.parse(localStorage.getItem('rcbeam_v2_auto')); return { mode: a.loadMode, D: a.svc.cases.D, n: CC.combos.length, mu: CC.combos[5].Mu }; });
-  ok(r.mode === 'service' && r.D.M === 5 && r.n === 11 && Math.abs(r.mu - 11) < 1e-9, 'after a reload: service mode, the cases and the 11 rows kept (autosave rcbeam_v2_auto)');
+  r = await f.evaluate(() => { const a = JSON.parse(localStorage.getItem('rcbeam_v2_auto')); return { mode: a.loadMode, D: a.svc.cases.D, n: CC.combos.length, mu: CC.combos[6].Mu }; });
+  ok(r.mode === 'service' && r.D.M === 5 && r.n === 14 && Math.abs(r.mu - 11) < 1e-9, 'after a reload: service mode, the cases and the 14 rows kept (autosave rcbeam_v2_auto)');
   // factored mode
   r = await f.evaluate(() => { const s = document.querySelector('[data-fkey="ldMode"]'); s.value = 'factored'; s.dispatchEvent(new Event('change'));
     return { mode: S.loadMode, rows: CC.combos.map(x => x.name), tab: TABS().some(t => t[0] === 'tabLoads'), cM0: !!document.querySelector('[data-fkey="cM0"]') }; });
@@ -80,6 +81,18 @@ for (const vw of [1400, 390]) {
   ok(r.mode === 'factored' && r.sel === 'factored' && !r.tab && JSON.stringify(r.rows) === '[["A",120,20,0],["B",-60,12,5]]', 'an older save (no loadMode) opens in factored mode with its rows');
   const sw2 = await sideways(f); ok(!sw2.length, 'factored mode: no sideways scroll on any tab' + (sw2.length ? ': ' + sw2.join(', ') : ''));
   ok(!errs.length, 'console errors (older save): ' + errs.length);
+  await b.close();
+  // CBOM (5.3.2) mixed signs: D M 5, L M −3, W ±2: governing |M_u| 7.0 (1.4D) -> 8.0 ((5.3.1d) +W, L omitted)
+  const MIX = { proj: { name: 'Mix' }, code: 'ACI', loadMode: 'service', tor: { present: false }, svc: { cases: { D: { M: 5, V: 0, T: 0 }, L: { M: -3, V: 0, T: 0 }, W: { M: 2, V: 0, T: 0 } }, rev: { W: true, E: true }, l05: false } };
+  ({ b, p, errs } = await openPage(FILE, { hash: '#capacity', vw, vh: 900, ls: { rcbeam_v2_auto: JSON.stringify(MIX) } }));
+  f = await frameOf(p);
+  r = await f.evaluate(() => { const g = CC.combos[CC.govFlexIndex], i = CC.combos.findIndex(x => x.name === '1.2D + 1.0W + 1.0L + 0.5Lr, L omitted');
+    S.ui.tab = 'tabLoads'; refresh(); const card = (document.querySelector('#ldC' + i) || {}).innerText || '';
+    const t = SharedReport.text(SharedReport.build(mrModel()), { legacy: true });
+    return { n: CC.combos.length, gov: g.name, mu: g.Mu, card: /Omitted \(5\.3\.2\)/.test(card) && /from 5\.00 to 8\.00/.test(card), t: /Omitted \(ACI 318-19 5\.3\.2\)/.test(t) && !/NaN|undefined|\[\[/.test(t) }; });
+  ok(r.n === 18 && r.gov === '1.2D + 1.0W + 1.0L + 0.5Lr, L omitted' && Math.abs(r.mu - 8) < 1e-9, `5.3.2 mixed signs: 18 rows, governing ${r.gov} M_u ${r.mu} (8.00; 7.00 without the omitted rows)`);
+  ok(r.card && r.t, '5.3.2: the card says "Omitted (5.3.2) … |M_u| from 5.00 to 8.00"; the Report has the note; no NaN');
+  ok(!errs.length, 'console errors (5.3.2): ' + errs.length);
   await b.close();
 }
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASS');
