@@ -2768,21 +2768,23 @@ function updateStatusChip(){
   if(!CC){ chip.className=&quot;blk&quot;; chip.textContent=&quot;—&quot;; return; }
   const checks=allChecks();
   let worst=0, anyFail=false, unbounded=false;
-  const detInf=[];   /* CBBS: detailing checks with an unbounded D/C (a required item not entered), by name */
+  const detInf=[];   /* CBBS: detailing checks with nothing provided (an unbounded D/C, or provided = 0), by name */
   checks.forEach(c=>{ if(c.na) return;
     const fail=(c.forceOK===false)||(c.forceOK===undefined&amp;&amp;c.dcr>1.0001);
     if(fail) anyFail=true;
+    if(c.have0){ detInf.push(c.label); anyFail=true; return; }   /* CBBS: provided = 0 (D/C need/1e-12, shown ≫1 as CBAZ) */
     if(c.dcr!=null&amp;&amp;!isFinite(c.dcr)){ if(c.tab===&quot;tabDetail&quot;) detInf.push(c.label); else unbounded=true; anyFail=true; }
     else if(isFinite(c.dcr)&amp;&amp;c.dcr>worst) worst=c.dcr; });
   CC.combos.forEach(r=>{ if(!isFinite(r.worst)){ unbounded=true; anyFail=true; }
     else if(r.worst>worst) worst=r.worst; });
   chip.className=anyFail?&quot;ng&quot;:&quot;ok&quot;;
   /* CBBS (2026-11-13, engineer report): &quot;NO CAPACITY&quot; only where a strength check has no capacity (an unbounded D/C of flexure,
-     shear or torsion). A detailing check whose provided item is not entered (e.g. slab shrinkage and temperature bars: spacing
-     \u221e) reads &quot;DCR \u226b1&quot; and the chip's tooltip names it; PASS / FAIL and every value are unchanged. */
+     shear or torsion). A detailing check with nothing provided (e.g. slab shrinkage and temperature bars not entered: spacing
+     \u221e, ratio 0; A_s,min with no bars on a face: D/C need/1e-12, which read &quot;DCR 172800000000.00&quot;) reads &quot;DCR \u226b1&quot; and the chip's tooltip
+     names it; PASS / FAIL and every value are unchanged. */
   chip.textContent=unbounded?&quot;NO CAPACITY \u2717&quot;:(detInf.length?&quot;DCR \u226b1 \u2717&quot;:(&quot;DCR &quot;+fmt(worst)+(anyFail?&quot; \u2717&quot;:&quot; \u2713&quot;)));
   chip.title=(anyFail?&quot;At least one check is not satisfied&quot;:&quot;All checks satisfied&quot;)+
-    (detInf.length?&quot; (not entered: &quot;+detInf.join(&quot;; &quot;)+&quot;)&quot;:&quot;&quot;)+
+    (detInf.length?&quot; (provided = 0 or not entered: &quot;+detInf.join(&quot;; &quot;)+&quot;)&quot;:&quot;&quot;)+
     &quot; — click for the Summary dashboard.&quot;;
 }
 function buildOutput(pg){
