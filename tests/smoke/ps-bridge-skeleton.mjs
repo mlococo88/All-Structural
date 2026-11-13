@@ -215,25 +215,28 @@ await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.opt\
 { await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 60000 });
   const r = await p.evaluate(() => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P)), M = window.PSBReportUI.state.M;
     const at = (o, q) => q.split('.').reduce((a, k) => a == null ? a : a[k], o), fx = window.PSBOutKit.fx;
-    const bad = M.vals.filter(v => v.text !== fx(v.div ? at(R, v.path) / v.div : at(R, v.path), v.d)).map(v => v.path);
+    // PS-25: the page's first project has two girder types: each worked on its governing line (units), each value = its unit's computeAll
+    const U = window.PSBReportData.compute(P, null, 'gov').units.map(u => window.PSBHoldDown.compute(JSON.parse(JSON.stringify(u.inp)))), Rv = v => v.u != null ? U[v.u] : R;
+    const bad = M.vals.filter(v => v.text !== fx(v.div ? at(Rv(v), v.path) / v.div : at(Rv(v), v.path), v.d)).map(v => v.path);
     const nSt = M.sections.reduce((a, s) => a + s.subs.reduce((b, q) => b + q.items.filter(i => i.type === 'steps').reduce((c, i) => c + i.steps.length, 0), 0), 0);
     return { secs: [...document.querySelectorAll('.rp-doc .rp-h1')].map(h => h.textContent.trim()), vals: M.vals.length, bad, nSt, steps: document.querySelectorAll('.rp-doc .rp-step').length,
       kErr: document.querySelectorAll('.rp-doc .katex-error').length, unres: document.querySelectorAll('.rp-doc .rp-bad').length, katex: document.querySelectorAll('.rp-doc .rp-step .katex').length,
       text: /NaN|undefined|\[object/.test(document.querySelector('.rp-doc').innerText), see: document.querySelectorAll('.rp-doc .rp-see').length }; });
-  check(r.secs.length === 14 && /^1\. Summary of checks/.test(r.secs[0]) && /^14\. Rating/.test(r.secs[13]), 'report sections: ' + r.secs.join(' | '));
+  check(r.secs.length === 26 && /^1\. Summary of checks/.test(r.secs[0]) && /^3\. Section properties: Interior S1 on G2, span 1$/.test(r.secs[2]) && /^14\. Rating: Interior S1 on G2, span 1$/.test(r.secs[13])
+    && /^15\. Section properties: Exterior S1 on G1, span 1$/.test(r.secs[14]) && /^26\. Rating: Exterior S1 on G1, span 1$/.test(r.secs[25]), 'report sections (PS-25: per girder type, its governing line): ' + r.secs.join(' | '));
   check(r.vals > 1000 && !r.bad.length, `report values = computeAll (${r.vals}; differ: ${r.bad.slice(0, 5).join(', ')})`);
   check(r.steps === r.nSt && r.steps > 200 && r.katex > 200 && !r.kErr && !r.unres && !r.text && r.see > 100, 'report steps, KaTeX, § links ' + JSON.stringify({ ...r, secs: undefined, bad: undefined }));
   // 2026-11-13: the graphics of each result tab in its section (the tab's own drawing), numbered Figure n.m by the section, static (no
   // read-out, no controls), the handling stage named; labels at least 10 px on the printed page (drawn at 700 px = the printed width)
   const FIGQ = () => p.evaluate(() => { const secs = [...document.querySelectorAll('.rp-doc section.rp-sec')], out = { per: {}, bad: [], n: 0, small: [], caps: [] };
-    secs.forEach(sec => { const h = sec.querySelector('.rp-h1'), n = parseInt(h.textContent, 10), title = h.textContent.replace(/^\d+\.\s*/, ''); let m = 0;
+    secs.forEach(sec => { const h = sec.querySelector('.rp-h1'), n = parseInt(h.textContent, 10), title = h.textContent.replace(/^\d+\.\s*/, '').replace(/: \S+ S\d+ on G\d+, span \d+$/, ''); let m = 0;   // PS-25: the unit in the heading
       sec.querySelectorAll('.rp-fig').forEach(f => { m++; out.n++; const cap = f.querySelector('figcaption').textContent; out.caps.push(cap); if (!cap.startsWith(`Figure ${n}.${m}: `)) out.bad.push(cap.slice(0, 40));
         if (!f.querySelector('svg') || f.querySelector('button, select, input, .va-hov, .vk-read')) out.bad.push('static ' + cap.slice(0, 30));
         const box = f.querySelector('.rp-fig-prn') || f;
         box.querySelectorAll('svg').forEach(svg => { const vb = svg.viewBox.baseVal, vbW = (vb && vb.width) || svg.getBoundingClientRect().width, wa = svg.getAttribute('width'), sc = Math.min(wa && /^[\d.]+$/.test(wa) ? +wa : vbW, 700) / vbW;
           if (vbW > 702) out.bad.push('wider than the page ' + cap.slice(0, 30));
           svg.querySelectorAll('text').forEach(t => { if (!t.textContent.trim()) return; const e = parseFloat(getComputedStyle(t).fontSize) * sc; if (e < 9.95) out.small.push(`${cap.slice(0, 12)} "${t.textContent.slice(0, 20)}" ${e.toFixed(1)}`); }); }); });
-      out.per[title] = m; });
+      out.per[title] = (out.per[title] || 0) + m; });
     return out; });
   { const f = await FIGQ(), want = ['Section properties', 'Loads & LLDF', 'Analysis', 'Prestress losses', 'Stresses', 'Flexure', 'Shear', 'End zone & hold-down', 'Camber & deflection', 'Handling', 'Deck', 'Rating'];
     check(f.n >= 20 && !f.bad.length && !f.small.length && want.every(t => f.per[t.toUpperCase()] >= 1 || f.per[t] >= 1) && !f.per['Summary of checks'.toUpperCase()] && !f.per['Summary of checks'], 'report figures: every result section, numbered, static, labels >= 10 px printed ' + JSON.stringify({ n: f.n, per: f.per, bad: f.bad.slice(0, 5), small: f.small.slice(0, 5) }));
@@ -241,18 +244,18 @@ await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.opt\
     // 2026-11-13: the handling elevation in both stages, Lifting then Hauling (the tab was left on Hauling above), and the tab's stage kept;
     // no caption speaks of the screen controls or of a table above (the Report's tables follow its figures)
     const hi = f.caps.findIndex(c => /Girder on its supports/.test(c));
-    check(hi >= 0 && /shown: Stage: Lifting$/.test(f.caps[hi]) && /^Figure 12\.3: Girder on its supports.*shown: Stage: Hauling$/.test(f.caps[hi + 1] || '') && /^Figure 12\.2: /.test(f.caps[hi]) && f.caps.filter(c => /Girder on its supports/.test(c)).length === 2, 'report: handling elevation, Lifting and Hauling ' + JSON.stringify(f.caps.slice(hi, hi + 2)));
+    check(hi >= 0 && /shown: Stage: Lifting$/.test(f.caps[hi]) && /^Figure 12\.3: Girder on its supports.*shown: Stage: Hauling$/.test(f.caps[hi + 1] || '') && /^Figure 12\.2: /.test(f.caps[hi]) && f.caps.filter(c => /Girder on its supports/.test(c)).length === 4, 'report: handling elevation, Lifting and Hauling ' + JSON.stringify(f.caps.slice(hi, hi + 2)));
     const words = await p.evaluate(() => [...document.querySelectorAll('.rp-doc .rp-fig')].map(x => x.textContent).filter(t => /click|\btap\b|point at|hover|button|select it|\bShow\b|table above/i.test(t)).map(t => t.slice(0, 60)));
     check(!words.length, 'report figures: no wording of the screen controls ' + JSON.stringify(words));
     if (args.shots) { await p.evaluate(() => { const f = [...document.querySelectorAll('.rp-doc .rp-fig')].find(x => /Strand pattern/.test(x.textContent)); f.scrollIntoView({ block: 'start' }); }); await p.waitForTimeout(200); await p.screenshot({ path: path.join(args.shots, 'ps-bridge-1400-report-figure.png') }); } }
-  const j = await p.evaluate(() => { const a = [...document.querySelectorAll('.rp-doc section[data-rpsec="rp-s1"] .rp-see')][0], id = a.getAttribute('href').slice(1); a.click(); const el = document.getElementById(id), b = el.getBoundingClientRect(); return { id, step: el.classList.contains('rp-step'), inView: b.top >= -2 && b.top < innerHeight }; });
+  const j = await p.evaluate(() => { const a = [...document.querySelectorAll('.rp-doc section[data-rpsec="rp-s1"] .rp-see')].find(x => (document.getElementById(x.getAttribute('href').slice(1)) || { classList: { contains: () => false } }).classList.contains('rp-step')), id = a.getAttribute('href').slice(1); a.click(); const el = document.getElementById(id), b = el.getBoundingClientRect(); return { id, step: el.classList.contains('rp-step'), inView: b.top >= -2 && b.top < innerHeight }; });
   check(j.step && j.inView, 'summary "see §" link jumps to its step ' + JSON.stringify(j));
   if (args.shots) { await p.evaluate(() => document.querySelector('.rp-doc section[data-rpsec="rp-s1"]').scrollIntoView()); await p.waitForTimeout(200); await p.screenshot({ path: path.join(args.shots, 'ps-bridge-1400-report.png') }); }
   await p.click('.rp-doc a.rp-go[data-rpgoto="str"]'); check(await p.evaluate(() => document.querySelector('#tabBar [data-otab="str"]').getAttribute('aria-selected') === 'true'), 'report tab link opens the Stresses tab');
   await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('.rp-doc .rp-step');
   await p.uncheck('[data-rpinc="loss"]'); await p.waitForSelector('.rp-doc .rp-step');
   const off = await p.evaluate(() => ({ secs: [...document.querySelectorAll('.rp-doc .rp-h1')].map(h => h.textContent), ui: JSON.parse(localStorage.getItem('psb2.ui')), unres: document.querySelectorAll('.rp-doc .rp-bad').length, proj: JSON.parse(localStorage.getItem('psb2.project.current')) }));
-  check(off.secs.length === 13 && !off.secs.some(t => /Prestress losses/.test(t)) && off.ui.rpt.inc.loss === false && !off.unres && !('rpt' in off.proj), 'section left out, kept in psb2.ui (not in the project)');
+  check(off.secs.length === 24 && !off.secs.some(t => /Prestress losses/.test(t)) && off.ui.rpt.inc.loss === false && !off.unres && !('rpt' in off.proj), 'section left out, kept in psb2.ui (not in the project)');
   await p.check('[data-rpinc="loss"]'); await p.waitForSelector('.rp-doc .rp-step');
   // print: the viewer's Print report button (the whole report alone), then Ctrl+P on the tab (the report without the app)
   await p.evaluate(() => { window.__printed = 0; window.print = () => { window.__printed++; }; });
@@ -296,7 +299,7 @@ await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.opt\
   await p.click('#sbDashCol [data-sdgrp="mat"] .sdX'); check(/Girder f′c \(CTDOT 5\.9\.1\.2\)[^:]*: 0\.850/.test(await p.textContent('#sbDashCol')) && /Release strength f′ci \(CTDOT 5\.9\.1\.2\)[^:]*: 1\.046/.test(await p.textContent('#sbDashCol')), 'Materials chip lists both CTDOT checks');
   if (args.shots) await p.screenshot({ path: path.join(args.shots, 'ps-bridge-1400-materials-chip.png') });
   await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 60000 });
-  const r = await p.evaluate(() => { const s1 = document.querySelector('.rp-doc section[data-rpsec="rp-s1"]'), rows = [...s1.querySelectorAll('table tbody tr')].map(tr => [...tr.children].map(td => td.textContent.trim()));
+  const r = await p.evaluate(() => { const s1 = document.querySelector('.rp-doc section[data-rpsec="rp-s1"]'), rows = [...([...s1.querySelectorAll('table')].find(t => (t.querySelector('th') || {}).textContent === 'Group') || s1).querySelectorAll('tbody tr')].map(tr => [...tr.children].map(td => td.textContent.trim()));
     return { lead: s1.textContent, nF: rows.filter(r => r[7] === 'FAIL').length, mat: rows.filter(r => r[0] === 'Owner limits').map(r => r[1] + ' ' + r[6] + ' ' + r[7]) }; });
   check(r.nF === d.rF && new RegExp(`FAIL: ${d.rF} of ${d.rAll} checks`).test(r.lead) && r.mat.some(t => /f′ci \(CTDOT 5\.9\.1\.2\) 1\.046 FAIL/.test(t)) && r.mat.length === 2 && !/Not in the check summary column/.test(r.lead), 'Report §1 = the column ' + JSON.stringify(r.mat) + ' ' + r.nF);
   await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.owner', 'AASHTO'); await p.waitForTimeout(300); while (await p.isVisible('#notices .nClose')) await p.click('#notices .nClose'); }
@@ -327,7 +330,7 @@ await p.reload(); await ready(p);
     return { vis: !document.querySelector('#inPanes [data-pane="own"]').hidden, row: el ? el.textContent : '', ev: ev.length, bad, inView: !!b && b.top >= pn.top - 2 && b.bottom <= pn.bottom + 2 }; });
   check(g.vis && g.inView && g.ev === 5 && !g.bad.length && /= 60 days; governing minimum 90 days; ratio = 90 \/ 60 = 1\.500 FAIL/.test(g.row), 'the age check opens the Owner rules tab at its row ' + JSON.stringify(g));
   await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 60000 });
-  const r = await p.evaluate(N => { const s1 = document.querySelector('.rp-doc section[data-rpsec="rp-s1"]'), rows = [...s1.querySelectorAll('table tbody tr')].map(tr => [...tr.children].map(td => td.textContent.trim()));
+  const r = await p.evaluate(N => { const s1 = document.querySelector('.rp-doc section[data-rpsec="rp-s1"]'), rows = [...([...s1.querySelectorAll('table')].find(t => (t.querySelector('th') || {}).textContent === 'Group') || s1).querySelectorAll('tbody tr')].map(tr => [...tr.children].map(td => td.textContent.trim()));
     const row = rows.find(q => q[1] === N); return { row, nF: rows.filter(q => q[7] === 'FAIL').length, note: /Not in the check summary column/.test(s1.textContent) }; }, N);
   check(r.row && r.row[0] === 'Owner limits' && r.row[6] === '1.500' && r.row[7] === 'FAIL' && /see/.test(r.row[8]) && r.nF === d.F && !r.note, 'Report §1: the age check in Owner limits, no "not in the column" note ' + JSON.stringify(r));
   if (args.shots) { await p.click('#inTabs [data-itab="own"]'); await p.waitForTimeout(150); await p.evaluate(() => document.getElementById('own-rule-cont.age').scrollIntoView({ block: 'center' })); await p.screenshot({ path: path.join(args.shots, 'ps-bridge-1400-owner-limits-age.png') }); }
@@ -407,7 +410,7 @@ for (const t of ['layout', 'xsec', 'gird', 'mat', 'dd', 'loads', 'own']) { await
 await p.click('#inTabs [data-itab="loads"]'); await p.selectOption('#i_base\\.handling\\.on', 'true'); await p.click('#inTabs [data-itab="dd"]'); await p.selectOption('#i_base\\.deck\\.on', 'true');
 for (const t of ['sec', 'lds', 'an', 'loss', 'str', 'flex', 'shear', 'end', 'camb', 'hand', 'deck', 'rt']) { await p.click(`#tabBar [data-otab="${t}"]`); await p.waitForTimeout(300); check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth) <= 0 && (await p.$$('#out svg')).length >= 1, 'phone: no sideways scroll, graphic on ' + t); }
 await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 60000 }); await p.waitForTimeout(300);
-check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth) <= 0 && (await p.$$('.rp-doc .rp-h1')).length === 14, 'phone: the Report without sideways scroll');
+check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth) <= 0 && (await p.$$('.rp-doc .rp-h1')).length === 26, 'phone: the Report without sideways scroll');
 { const ph = await p.evaluate(() => { const figs = [...document.querySelectorAll('.rp-doc .rp-fig')], vis = el => !!el && getComputedStyle(el).display !== 'none';
     return { n: figs.length, scr: figs.filter(f => vis(f.querySelector('.rp-fig-scr')) && !vis(f.querySelector('.rp-fig-prn'))).length, wide: figs.filter(f => f.getBoundingClientRect().right > innerWidth + 1).length,
       vb: [...document.querySelectorAll('.rp-doc .rp-fig-scr svg')].map(s => s.viewBox.baseVal && s.viewBox.baseVal.width).filter(w => w > 0) }; });
