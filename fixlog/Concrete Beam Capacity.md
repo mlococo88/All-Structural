@@ -6852,7 +6852,7 @@ h = 9 in, d = 6.25 in (set), #5 @ 12 in, f′c = 4 ksi, f_y = 60 ksi.
   The input panel differs only by the Member type select (ACI).
 - **Tests:** new `tests/smoke/cbc-slab.mjs`, 1400 and 390 px, 0 console errors. The suite's other tests are listed in the PR.
 
-## 2026-11-13 — PR: claude/cbc-min-thickness (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CBMH) — Beam Capacity tab, ACI mode: minimum depth / thickness check, ACI 318-19 Table 9.3.1.1 (beams) and Table 7.3.1.1 (one-way slabs), with the f_y and lightweight modifiers; new inputs span and support condition   [NEW CHECK; every existing result identical; saved format: additive `minh` with migration (absent = not checked); no new storage key]
+## 2026-11-13 — PR: claude/cbc-min-thickness (PR #1502: https://github.com/mlococo88/All-Structural/pull/1502) (CBMH) — Beam Capacity tab, ACI mode: minimum depth / thickness check, ACI 318-19 Table 9.3.1.1 (beams) and Table 7.3.1.1 (one-way slabs), with the f_y and lightweight modifiers; new inputs span and support condition   [NEW CHECK; every existing result identical; saved format: additive `minh` with migration (absent = not checked); no new storage key]
 
 The file uses CRLF line endings; keep them. All code is in the Beam Capacity srcdoc. When re-applying, escape `&` as `&amp;` and `"` as `&quot;`. Every site is tagged CBMH. This is PR 2 of 2 of engineer decision CB-6.
 
