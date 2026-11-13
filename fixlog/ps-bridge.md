@@ -1102,3 +1102,78 @@ PR #1513: https://github.com/mlococo88/All-Structural/pull/1513
   position is not kept — the difference is named per cell and its results flagged.
 - 3a4-D2. Stored lines of the old model with no design stay without a type (listed, "Assign every line"), never filled silently.
 - 3a4-D3. A restored type whose shape differs from its span's other types stays as imported and is an input error (PS-8) for the user to resolve.
+
+## 2026-11-13 — PS-19: the exterior girder's rigid cross-section factor on the real girder lines with unequal bays (ENGINE ADDITION, §4; equal bays unchanged)
+PR #1518: https://github.com/mlococo88/All-Structural/pull/1518
+### Request
+- Engineer decision PS-19 (2026-11-13), answering the 3a-2 open item: "the exterior rigid-section check (C4.6.2.2.2d) uses the ACTUAL girder
+  positions from the bays (Σx², X_ext from real positions). Identical for equal bays (prove). Keep the verbatim pbd-*.js untouched … in an
+  app-side module like holddown.js."
+### §4 callout
+- **Before** (the moved engine, `distFactors` in `pbd-lldf-flexure.js`): X_ext = (N_b − 1) S/2 and Σx² = Σ(−X_ext + iS)², i.e. N_b girders at the
+  one spacing S the line gets (3a-2: the exterior bay), R = m (N_L/N_b + X_ext Σe/Σx²), e_j = X_ext + d_e − 5 − 12j.
+- **After** (unequal bays only): the same expression on the real girder lines: x_i from the bays, x̄ = Σx_i/N_b, X_ext = |x_ext − x̄|,
+  Σx² = Σ(x_i − x̄)²; then g_M = max(e_M g_M2, g_lever, R), g_V = max(e_V g_V2, g_lever, R), × the skew factors, and the one-lane R for the fatigue
+  DF, as the engine's following lines. AASHTO LRFD 10th Ed. Art. 4.6.2.2.2d, Eq. C4.6.2.2.2d-1 (and 4.6.2.2.3b for shear).
+- **Equal bays:** nothing is added to the inputs (byte-identical inputs and results: test over the 17 harness B designs × every line; harness B
+  0 differences); the real-position formula on equal spacing = the engine's R to 1e-12 (4 bridges).
+- **Worked check case** (new project, 120 ft, BT-72, bays 8, 10, 10, 8 ft, G1, d_e 2.0 ft, N_L 2): x = 0, 8, 18, 28, 36 ft; x̄ = 18; X_ext = 18;
+  Σx² = 18² + 10² + 0 + 10² + 18² = 848 ft². One lane: e = 18 + 2 − 5 = 15, R = 1.2 (1/5 + 18 × 15/848) = 0.6221; two lanes: Σe = 15 + 3 = 18,
+  R = 1.0 (2/5 + 18 × 18/848) = **0.7821** (governs). Before (engine form at S = 8 ft): X_ext = 16, Σx² = 640, R = 0.4 + 16 × 14/640 = 0.7500.
+  g_M = max(0.9898 × 0.6612 = 0.6545, lever 0.7500, R 0.7821) = **0.7821** (before 0.7500); g_V likewise 0.7821 (before 0.7500); M_LL+IM per
+  girder 2,739.3 → **2,856.5 kip-ft**; flexure ratio 0.7063 → **0.7216**. Interior lines unchanged.
+### Where
+- `apps/ps-bridge/engine/rigid.js` (new, `window.PSBRigid`): `rigidOf`, `adjust`, `run` (computeAll with the global distFactors wrapped for that
+  call when `inputs.rigidX` is given, restored after; the moved files are not edited).
+- `engine/design.js` `one()`: anchor `// PS-19 (§4)` — `o.rigidX = { x, g }` only for an exterior line (G1, G_Nb) when the bays are unequal (interior lines and equal bays: inputs unchanged). `engine/holddown.js` `compute`:
+  `PSBRigid.run(inp)` instead of `computeAll(inp)`. `index.html`: loads `engine/rigid.js` (before holddown.js).
+- `engine/worked.js`: with `df.rigidX` the steps x̄, X_ext, Σx² and R with its substitution (the engine's equal-spacing R in the note);
+  `ui/loads.js` topic ids.
+### Saved data
+- None (inputs.rigidX is computed, not saved).
+### How verified
+- `tests/engine/psbridge-rigid.test.mjs` (new, 2 tests): equal bays byte-identical; the formula = the engine's on equal spacing; the check case.
+  Smoke `ps-bridge-types.mjs` §6: the steps on Loads & LLDF, values = the page's result. Harness A (verbatim, parity) unchanged.
+- Harness B (`tests/psbridge-compare.mjs`, test only): the occasional `--import` time-out (on main too) caught in a run: the reloaded page's
+  storage held none of the keys the harness had put (only the seed and `psb2.ui`; the browser storage of the page reset), so the old app's
+  list had nothing. New `reloadKept(p, name, o, wait)` replaces the two `await nw.p.reload(); …` lines (normal mode: `psb2.project.current`;
+  `--import`: the old keys of the design): after the reload each key must hold the value put, else the keys are put again and the page
+  reloaded (at most 3, a `note` line in the log; an error after 3). PR 3a-4's `scanList` (a repeated "Find" click) is removed: a missed click
+  was not the cause. No comparison changed.
+
+## 2026-11-13 — PS-20: d_e of each exterior girder line from the bridge cross-section; each exterior line its own LLDF, the worst line governs (CALCULATION CHANGE, §4, for projects with the cross-section barriers; equal overhangs: both lines identical)
+PR #1521: https://github.com/mlococo88/All-Structural/pull/1521
+### Request
+- Engineer decision PS-20 (2026-11-13), answering the 3a-2 open item: "d_e per exterior line computed from the bridge cross-section (that
+  line's overhang minus barrier/curb width), each exterior line its own LLDF; worst line governs. Identical when overhangs equal (prove)."
+### §4 callout
+- **Before:** `loads.de` (the distance from the exterior web to the inside face of the barrier) entered once per girder type (default 2.0 ft) and
+  used on both exterior lines (G1 and G_Nb), whatever their overhangs.
+- **After** (`engine/design.js` `deOf`, a project with the cross-section barriers `xs.dl`, i.e. every project made since PR 3a-3): an exterior
+  line's d_e = its side's overhang (girder ℄ to deck edge) − the traffic face from that edge: the barrier width, or a sidewalk 12 in or thicker
+  that reaches farther in (its curb face; a thinner sidewalk is mountable, the steel app's `llFaces` rule). AASHTO LRFD 10th Ed. Art. 4.6.2.2.1
+  (d_e: "distance from the exterior web of exterior beam to the interior edge of curb or traffic barrier"), used by the engine's lever rule,
+  e = 0.77 + d_e/9.1 (Table 4.6.2.2.2d-1), e_V = 0.6 + d_e/10 (Table 4.6.2.2.3b-1) and the rigid section (C4.6.2.2.2d), unchanged. Each
+  exterior line already has its own cell (3a-2): its own DF, the type's worst line governs.
+- **Not changed:** a project without `xs.dl` (saved before PR 3a-3, old-app imports): d_e as entered (test: 17 harness B designs, every line;
+  harness B 0 differences). Interior lines: d_e not used (left as entered).
+- **Equal overhangs:** G1 and G_Nb get the same d_e and identical inputs and results (but the girder label and the side; test).
+- **Worked check case** (new project, 5 girders at 9 ft, 120 ft, barriers 1.5 ft; overhangs **3 ft left, 4 ft right**; N_L 2):
+  - d_e: G1 = 3 − 1.5 = **1.5 ft**; G5 = 4 − 1.5 = **2.5 ft** (before: 2.0 ft entered, both).
+  - Lever rule (m 1.2; wheels at d_e − 2 and d_e − 8 ft from the exterior web): G1 1.2 × [0.5(9 − 0.5) + 0.5(9 − 6.5)]/9 = **0.7333**;
+    G5 1.2 × [0.5(9 + 0.5) + 0.5(9 − 5.5)]/9 = **0.8667** (d_e 2.0: 0.8000).
+  - e_M: G1 0.77 + 1.5/9.1 = 0.9348; G5 0.77 + 2.5/9.1 = 1.0447 → e_M g_M2 = 0.6723 / 0.7513.
+  - Rigid, 2 lanes (X_ext 18, Σx² 810): G1 Σe = 14.5 + 2.5 = 17 → 0.4 + 18 × 17/810 = **0.7778**; G5 Σe = 19 → 0.8222.
+  - DF_M: G1 max(0.6723, 0.7333, 0.7778) = **0.7778**; G5 max(0.7513, 0.8667, 0.8222) = **0.8667** (both 0.8000 before). M_LL+IM per girder
+    2,921.9 kip-ft before → G1 **2,840.8**, G5 **3,165.4**; the Exterior type's flexure governs on G5.
+### Where
+- `engine/design.js`: `deOf(P, g)` (new), `one()` anchor `// PS-20 (§4)` (`o.loads.de = deOf(...)` when not null), `driven()` row.
+- `engine/fields.js`: the d_e field only without the cross-section barriers; the card note gives each exterior line's d_e.
+### Saved data
+- None (computed from the saved cross-section).
+### How verified
+- `tests/engine/psbridge-de.test.mjs` (new, 3 tests): no barriers → as entered (17 designs, every line); equal overhangs → G1 = G5; the check case.
+  `psbridge-dl` and `psbridge-rigid` tests: their entered-d_e expectations set the barriers or remove them. Smoke `ps-bridge-types.mjs` §6.
+### Decisions (pending engineer review)
+- PS20-D1. The traffic face: the barrier width, or a ≥ 12 in sidewalk's curb face (the steel app's rule); this app has no curb input yet.
+- PS20-D2. d_e computed whenever the project has the cross-section barriers (also with DC2 / DW "entered").

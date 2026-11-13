@@ -58,7 +58,9 @@ test('saved before (no xs.dl) or "entered": engine inputs byte-identical to PR 3
     W.PSBBridge.fill(P); W0.PSBBridge.fill(P2);
     W.PSBBridge.cells(P).forEach(c => assert.equal(JSON.stringify(D.cellInputs(P, c.k, c.g)), JSON.stringify(W0.PSBDesign.cellInputs(P2, c.k, c.g)), `${name} G${c.g}/S${c.s}`));
     const Q = J(P); Q.xs.dl = Object.assign(DL.defaults(Q), { mode: 'entered' });
-    W.PSBBridge.cells(Q).forEach(c => assert.equal(JSON.stringify(D.cellInputs(Q, c.k, c.g)), JSON.stringify(W0.PSBDesign.cellInputs(P2, c.k, c.g)), `${name} entered`));
+    // PS-20: with the cross-section barriers (xs.dl), an exterior line's d_e comes from them (psbridge-de.test.mjs); everything else identical
+    const noDe = (o, c) => { const q = J(o); if (c.g === 1 || c.g === Q.xs.nb) delete q.loads.de; return JSON.stringify(q); };
+    W.PSBBridge.cells(Q).forEach(c => assert.equal(noDe(D.cellInputs(Q, c.k, c.g), c), noDe(W0.PSBDesign.cellInputs(P2, c.k, c.g), c), `${name} entered`));
   }
 });
 

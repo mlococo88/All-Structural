@@ -8,6 +8,10 @@
 //     A strength check with no capacity (torsion with no stirrups: V+T stirrup adequacy unbounded) still reads "NO CAPACITY ✗".
 //  3. A layer whose bar size is not a bar (an edited or imported file, size "99"): no page error, "INPUT INVALID", the blocker
 //     "Layer T1: choose a bar size …", the layer's Size select outlined; choosing #6 clears it and the results return.
+//  4. CBBZ (engineer decision CB-15): a saved / imported layer whose size is blank ("" or no size) opens with the data kept and the size
+//     still blank (was: #5 without a word): the same input error, the Size select blank and outlined, the autosave keeps "";
+//     choosing #5 gives the results (A_s 0.93 in²/ft). Stirrups present with a blank or unknown size (was: a page error), and an unknown
+//     shrinkage and temperature or skin bar size (was: taken as none): an input error naming the field, its select outlined.
 // 1400 and 390 px, file://, 0 console errors.
 //   node tests/smoke/cbc-bar-size.mjs [--file <Concrete Beam Capacity.html>]
 import path from 'path';
@@ -66,6 +70,38 @@ for (const vw of [1400, 390]) {
   ok(!r.blk && near(r.As, 3 * 0.44, 1e-9) && /^DCR/.test(c.t), `#6 chosen: no input error, A_s ${r.As} (1.32), chip "${c.t}"`);
   ok(!errs.length, '0 console errors (unknown size)' + (errs.length ? ': ' + errs.join(' | ') : ''));
   await b.close();
+  // CBBZ: blank layer size (""), and a layer saved without a size
+  for (const [nm, L0] of [['blank ""', { n: 3, s: 4, size: '', face: 'tension', dMan: 6.25 }], ['no size key', { n: 3, s: 4, face: 'tension', dMan: 6.25 }]]) {
+    ({ b, p, f, errs } = await open({ ...SLAB, slab: { stSize: '4', stS: 12 }, layers: [L0] }, vw));
+    r = await f.evaluate(() => { const s = document.querySelector('[data-fkey="ls0"]'); return { L: S.layers[0], blk: VALIDATION.blockers.map(x => x.msg), sel: s.selectedIndex, val: s.value, mark: s.classList.contains('cbcInErr'),
+      saved: JSON.parse(localStorage.getItem('rcbeam_v2_auto') || '{}').layers }; });
+    c = await chip(f);
+    ok(r.L.size === '' && r.L.n === 3 && r.L.s === 4 && r.L.dMan === 6.25 && r.L.face === 'tension', `${nm}: the layer opens with its data and the size blank (was #5) ${JSON.stringify(r.L)}`);
+    ok(c.t === 'INPUT INVALID' && r.blk.includes('Layer T1: choose a bar size (Reinforcement, 4. Reinforcement layers).') && r.sel === -1 && r.val === '' && r.mark,
+      `${nm}: "INPUT INVALID", "Layer T1: choose a bar size …", the Size select blank and outlined`);
+    ok(r.saved && r.saved[0].size === '', `${nm}: the autosave keeps the blank size (no data changed)`);
+    await f.evaluate(() => { const s = document.querySelector('[data-fkey="ls0"]'); s.value = '5'; s.dispatchEvent(new Event('change')); });
+    r = await f.evaluate(() => ({ blk: VALIDATION.blockers.length, As: CC && CC.combos[0].F.As }));
+    ok(!r.blk && near(r.As, 0.93, 1e-9), `${nm}: #5 chosen: results, A_s ${r.As}`);
+    ok(!errs.length, '0 console errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
+    await b.close();
+  }
+  // CBBZ: stirrups present with a blank or unknown size; unknown S&T and skin sizes
+  const BEAM = { ...SLAB, memberType: 'beam', sec: { type: 'rect', bw: 14, h: 24 }, layers: [{ n: 3, size: '8', face: 'tension', dMan: null }], combos: [{ name: 'U', Mu: 100, Vu: 30, Tu: 0 }] };
+  for (const [nm, st, key, msg] of [
+    ['stirrup size ""', { ...BEAM, stir: { present: true, size: '', legs: 2, s: 6 } }, 'ss', 'Stirrups: choose a bar size (Reinforcement, Transverse reinforcement).'],
+    ['stirrup size "99"', { ...BEAM, stir: { present: true, size: '99', legs: 2, s: 6 } }, 'ss', 'Stirrups: choose a bar size (Reinforcement, Transverse reinforcement).'],
+    ['skin size "99"', { ...BEAM, stir: { present: true, size: '4', legs: 2, s: 6 }, skin: { size: '99', s: 6 } }, 'skz', 'Skin bars: choose a bar size or None (Reinforcement, Transverse reinforcement).'],
+    ['S&T size "99"', { ...SLAB, slab: { stSize: '99', stS: 12 } }, 'stSz', 'Shrinkage and temperature bars: choose a bar size or None entered (Reinforcement, Shrinkage & Temperature).']]) {
+    ({ b, p, f, errs } = await open(st, vw));
+    r = await f.evaluate(k => { const s = document.querySelector(`[data-fkey="${k}"]`); return { blk: VALIDATION.blockers.map(x => x.msg), sel: s && s.selectedIndex, mark: s && s.classList.contains('cbcInErr') }; }, key);
+    c = await chip(f);
+    ok(c.t === 'INPUT INVALID' && r.blk.includes(msg) && r.sel === -1 && r.mark && !errs.length, `${nm}: "${msg}", select blank and outlined, no page error ${errs.join(' | ')}`);
+    await f.evaluate(k => { const s = document.querySelector(`[data-fkey="${k}"]`); s.value = '4'; s.dispatchEvent(new Event('change')); }, key);
+    r = await f.evaluate(() => ({ blk: VALIDATION.blockers.length, cc: !!CC }));
+    ok(!r.blk && r.cc, `${nm}: #4 chosen: no input error, results shown`);
+    await b.close();
+  }
 }
 console.log(fails ? `\n${fails} FAILED` : '\nall passed');
 process.exit(fails ? 1 : 0);

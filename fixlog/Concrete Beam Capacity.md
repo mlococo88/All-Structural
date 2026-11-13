@@ -7263,3 +7263,92 @@ Engineer report (screenshot): a one-way slab, layer T1 at s = 4 in, Set d 6.25 i
 ### Open items
 - A blank saved layer size opens as #5 (`mergeState`, `String(L.size||'5')`, unchanged: saved data). Making it an input error instead would change how such a file opens: engineer decision.
 - `S.stir.size` (and other single sizes) not in the bar table would still throw. This is only possible from a hand-edited file and is not changed here.
+
+## 2026-11-13 — PR: claude/cb-slab-st-drawings (PR #1519: https://github.com/mlococo88/All-Structural/pull/1519) (CBTS) — Beam Capacity, one-way slab: the shrinkage and temperature bars drawn on the sketches, the 3-D view, the Report overview and the drawing sheets / DXF   [display / drawings only; no computed value, saved key or format change; beams and slabs without T&S bars draw byte-identically]
+
+Engineer: "The transverse bars are not shown on the sketches and plans either." Every site is tagged CBTS. The file uses CRLF line endings; keep them. All code is in the Beam Capacity srcdoc (`#suite-frame-capacity`); escape `"` as `&quot;` and `&` as `&amp;` when re-applying (the text below is un-escaped).
+
+### Placement (decision, stated on the drawings)
+- The T&S bars (Reinforcement input 5: `S.slab.stSize` at `S.slab.stS`, perpendicular to the flexural bars, ACI 318-19 7.6.4.1, 7.7.6.1) are drawn directly **inside the outermost bottom (positive-moment tension face) flexural layer, resting on it**: bar centre at `yTop(main) − d_b,main/2 − d_b,T&S/2` from the top.
+- If the slab has no bottom layer, they are drawn **under the outermost top layer** (`yTop + d_b,main/2 + d_b,T&S/2`).
+- They run across the width between the clear covers (x = ±(b/2 − c_c)). This follows the usual practice of the main bars outermost.
+- `layerGeom()` (d = cover + stirrup + d_b/2 from the face) is **not changed**, so d and every result are unchanged.
+
+### Changes
+- **New `cbcStBars()`** (before `function svgSection(neg){`). It returns `{size, db, s, yTop, up, ref, x0, x1, txt:'#4 @ 12.00 in T&S (transverse)', where}`, or `null` when not a slab (ACI one-way slab mode) or when none are entered. Every drawing change below runs only when it is not null.
+- **`svgSection()`** (Input Echo schematic, Visuals, Report overview, Flexure tab): after the bars and before the skin bars, a line across the width at the T&S bar's y (stroke `#0E7490`, width d_b to scale), labelled "#4 @ 12.00 in T&S (transverse)" above it (or below it, under top bars).
+- **New `svgSlabStElev()`** and **`svgElevation()`**:
+  - A slab with T&S bars and no stirrups (before: no elevation, "No stirrups are specified …") gets an elevation along the span. It shows the flexural layers as lines and the T&S bars as circles at s_st, with h and s_st dimensioned and a label.
+  - A slab with stirrups: the T&S circles are added to the stirrup elevation.
+- **Captions:**
+  - Input Echo: "Slab elevation along the span: shrinkage and temperature bars (transverse) at their spacing, inside the main bars." (beams: as before).
+  - Visuals: "One-way slab elevation along the span: #4 @ 12.00 in T&S (transverse), resting on the bottom bars (inside them) (placement for the drawing; the flexural bars stay outermost, so d is unchanged). Checked on the Detailing tab (ACI 24.4.3.2, 24.4.3.3)."
+- **Report overview** (`cbcOvFigs`, `cbmOvSection`): `F.st` is added. A slab with T&S bars and no stirrups gets the elevation figure with a slab caption (before: the note "no stirrups … no stirrup layout to draw").
+- **3-D view** (`cbc3DScene`): T&S bars as cylinders across the width at s_st along the length, inside the main bars, in the transverse group.
+- **Drawing sheets / DXF** (`cbdwBuild`):
+  - Sheet 1, section: the T&S bar along the cut, true size (`barPath`, layer REBAR), with the callout "#4 @ 12" T&S (TRANSVERSE), ON THE BOTTOM BARS" / "ACI 318-19 7.6.4.1, 24.4.3; PLACED INSIDE THE MAIN BARS (d UNCHANGED)".
+  - Sheet 2, elevation: the T&S bars cut (circles) at s_st, the callout "… (CUT)", and the first spacing dimensioned "<> T&S".
+  - Sheet 3, bar schedule: row `TS | #4 | @ 12" | SHRINKAGE & TEMPERATURE (TRANSVERSE), ON THE BOTTOM BARS | STRAIGHT (LENGTH BY WIDTH) | 0.20 /FT`.
+  - The app has no plan view.
+
+### Check case (slab h 9 in, #5 @ 12 in bottom, c_c 0.75 in, no stirrups, T&S #4 @ 12 in)
+- Main bar: yTop = 9 − 0.75 − 0.625/2 = 7.9375 in, so d = 7.9375 in. With and without T&S entered: the same d, A_s 0.31 in²/ft and φM_n.
+- T&S centre: 7.9375 − 0.3125 − 0.25 = 7.375 in from the top (1.625 in above the bottom), across x = ±(6 − 0.75) = ±5.25 in.
+- Bar schedule A_s: 0.20 × 12/12 = 0.20 in²/ft.
+
+### How verified
+- **New test** `tests/smoke/cbc-slab-st-drawings.mjs` (1400 and 390 px, 0 console errors). It checks the position, d unchanged, every sketch, the 3-D count, the DXF texts and schedule row, the top-bars-only case and the Report.
+- **Byte-identical drawings:** origin/main vs branch with the drawings compared, for 6 projects without T&S bars (default; beam; T-beam -M with torsion; AASHTO beam; strip slab without T&S; the engineer's slab #5 @ 4 in). The SVG section and elevation, the innerHTML of every output tab, the DXF text (`SharedDxf.write`), the sheet SVGs, the Report text, `CC` and the autosave were all compared.
+- `dxf-print-sheets --tool cbc`.
+- Beam-mode audit: the stirrups are drawn on the section sketch, the stirrup elevation, the 3-D view, the DXF section and elevation, and the bar schedule (no gap).
+
+### Open items
+- Skin bars (CBM3d) are not in the 3-D view or the SVG elevation (they are in the section sketch and the DXF section and elevation). Not changed.
+- The ASD Beam Calcs Section figure is a transformed-section / stress-block figure from the total A_s (no bar detailing), so T&S bars are not drawn there.
+
+## 2026-11-13 — PR: claude/cb-blank-size (PR #1520: https://github.com/mlococo88/All-Structural/pull/1520) (CBBZ) — Beam Capacity: a blank bar size in a saved or imported file is an input error (no silent #5); stirrup, skin and S&T sizes that are not bars are input errors (engineer decision CB-15)   [validation only; no computed value, saved key or format change; only files with a blank or unknown size open differently]
+
+Engineer decision CB-15, which follows CBBS (#1517). Every site is tagged CBBZ. The file uses CRLF line endings; keep them. All code is in the Beam Capacity srcdoc (`#suite-frame-capacity`); escape `"` as `&quot;` and `&` as `&amp;` when re-applying (the text below is un-escaped).
+
+### Bar-size selects and their blank / unknown handling (origin/main)
+| Select (data-fkey) | Blank in a saved file | Unknown size (e.g. "99") |
+|---|---|---|
+| Layer Size (`ls<i>`) | **silently #5** (`mergeState`: `String(L.size||'5')`); also a layer saved with no size | input error (CBBS) |
+| Stirrup bar size (`ss`), stirrups present | **page error** (`stirDia`: `REBAR[''].d`) | **page error** |
+| Shrinkage and temperature (`stSz`) | "None entered" (the select's own choice; the S&T checks FAIL, CBSB decision) | **silently "none"** (`stOn` false) |
+| Skin bars (`skz`) | "None" (the select's own choice) | **silently "none"** |
+
+The only select whose blank defaulted silently was the layer Size. A blank S&T or skin size is an explicit choice and is unchanged.
+
+### Changes
+- **`mergeState()` layers.**
+  - Before: `size:String(L.size||'5')`.
+  - After: `size:(L.size==null||String(L.size).trim()==='')?'':String(L.size)`.
+  - All other layer data is kept as before. The select then shows blank (no option selected), and the autosave keeps `""`.
+- **`stirDia()`.**
+  - Before: `S.stir.present ? REBAR[S.stir.size].d : 0`.
+  - After: `S.stir.present ? (REBAR[S.stir.size]?REBAR[S.stir.size].d:0) : 0`.
+  - No throw before validation. A valid size gives the same value.
+- **`cbcBarSizeErrs()`** returns `[data-fkey, message, validate() code]` and adds:
+  - `['ss','Stirrups: choose a bar size (Reinforcement, Transverse reinforcement).','Stirrups']` when stirrups are present and the size is not a bar;
+  - `['skz','Skin bars: choose a bar size or None (Reinforcement, Transverse reinforcement).','Stirrups']` when a skin size is entered and is not a bar;
+  - `['stSz','Shrinkage and temperature bars: choose a bar size or None entered (Reinforcement, Shrinkage & Temperature).','Reinforcement']` when in one-way slab mode an S&T size is entered and is not a bar.
+- **Callers.** `validate()`: `cbcBarSizeErrs().forEach(([k,msg,code])=>B.push({code,msg}))`. `cbcInputErrs()`: `E.push(...cbcBarSizeErrs().map(e=>[e[0],e[1]]))`. The select is outlined with the message under it, and results are withheld ("INPUT INVALID").
+
+### Check case
+- **Saved slab, layer `{n:3, s:4, size:"", face:"tension", dMan:6.25}`** (or with no `size`):
+  - Before: it opened as #5 (A_s 0.93 in²/ft, φM_n 23.29 kip-ft/ft) with no message.
+  - After: the data is kept (n 3, s 4, d 6.25, size ""). "INPUT INVALID" and "Layer T1: choose a bar size (Reinforcement, 4. Reinforcement layers).", with the Size select blank and outlined. Choosing #5 gives A_s = 3 × 0.31 = 0.93 in²/ft.
+- **Beam with stirrups present, size "" or "99":**
+  - Before: page error "Cannot read properties of undefined (reading 'd')".
+  - After: "Stirrups: choose a bar size …". Choosing #4 gives results.
+- **Skin size "99" / S&T size "99":**
+  - Before: taken as none (the S&T checks FAIL as "none entered"; no skin bars).
+  - After: the input error naming the field. Choosing #4 gives results.
+
+### How verified
+- **`tests/smoke/cbc-bar-size.mjs` extended** (the cases above, 1400 and 390 px). On origin/main the new cases FAIL: blank opens as #5; stirrup "" gives a page error.
+- **Identity probe:** origin/main vs branch, 10 projects without a blank or unknown size (default; beam; T-beam with torsion; AASHTO; skin bars; no stirrups; strip slab without and with S&T; actual-width slab; a layer size saved as the number 8). The autosave, `CC`, `VALIDATION`, `allChecks()`, the input panel HTML, every output tab's text, the Report, the DXF and the hand-offs are all identical.
+
+### Open items
+- The Development & Splice tab's Bar Size (`barSize`): a saved project with `barSize:""` gives a page error ("reading 'd'"). It is not a silent default. Not changed here (same file, different app): make it an input error if the engineer wants.
