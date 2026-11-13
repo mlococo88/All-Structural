@@ -7305,3 +7305,50 @@ Engineer: "The transverse bars are not shown on the sketches and plans either." 
 ### Open items
 - Skin bars (CBM3d) are not in the 3-D view or the SVG elevation (they are in the section sketch and the DXF section and elevation). Not changed.
 - The ASD Beam Calcs Section figure is a transformed-section / stress-block figure from the total A_s (no bar detailing), so T&S bars are not drawn there.
+
+## 2026-11-13 — PR: claude/cb-blank-size (CBBZ) — Beam Capacity: a blank bar size in a saved or imported file is an input error (no silent #5); stirrup, skin and S&T sizes that are not bars are input errors (engineer decision CB-15)   [validation only; no computed value, saved key or format change; only files with a blank or unknown size open differently]
+
+Engineer decision CB-15, which follows CBBS (#1517). Every site is tagged CBBZ. The file uses CRLF line endings; keep them. All code is in the Beam Capacity srcdoc (`#suite-frame-capacity`); escape `"` as `&quot;` and `&` as `&amp;` when re-applying (the text below is un-escaped).
+
+### Bar-size selects and their blank / unknown handling (origin/main)
+| Select (data-fkey) | Blank in a saved file | Unknown size (e.g. "99") |
+|---|---|---|
+| Layer Size (`ls<i>`) | **silently #5** (`mergeState`: `String(L.size||'5')`); also a layer saved with no size | input error (CBBS) |
+| Stirrup bar size (`ss`), stirrups present | **page error** (`stirDia`: `REBAR[''].d`) | **page error** |
+| Shrinkage and temperature (`stSz`) | "None entered" (the select's own choice; the S&T checks FAIL, CBSB decision) | **silently "none"** (`stOn` false) |
+| Skin bars (`skz`) | "None" (the select's own choice) | **silently "none"** |
+
+The only select whose blank defaulted silently was the layer Size. A blank S&T or skin size is an explicit choice and is unchanged.
+
+### Changes
+- **`mergeState()` layers.**
+  - Before: `size:String(L.size||'5')`.
+  - After: `size:(L.size==null||String(L.size).trim()==='')?'':String(L.size)`.
+  - All other layer data is kept as before. The select then shows blank (no option selected), and the autosave keeps `""`.
+- **`stirDia()`.**
+  - Before: `S.stir.present ? REBAR[S.stir.size].d : 0`.
+  - After: `S.stir.present ? (REBAR[S.stir.size]?REBAR[S.stir.size].d:0) : 0`.
+  - No throw before validation. A valid size gives the same value.
+- **`cbcBarSizeErrs()`** returns `[data-fkey, message, validate() code]` and adds:
+  - `['ss','Stirrups: choose a bar size (Reinforcement, Transverse reinforcement).','Stirrups']` when stirrups are present and the size is not a bar;
+  - `['skz','Skin bars: choose a bar size or None (Reinforcement, Transverse reinforcement).','Stirrups']` when a skin size is entered and is not a bar;
+  - `['stSz','Shrinkage and temperature bars: choose a bar size or None entered (Reinforcement, Shrinkage & Temperature).','Reinforcement']` when in one-way slab mode an S&T size is entered and is not a bar.
+- **Callers.** `validate()`: `cbcBarSizeErrs().forEach(([k,msg,code])=>B.push({code,msg}))`. `cbcInputErrs()`: `E.push(...cbcBarSizeErrs().map(e=>[e[0],e[1]]))`. The select is outlined with the message under it, and results are withheld ("INPUT INVALID").
+
+### Check case
+- **Saved slab, layer `{n:3, s:4, size:"", face:"tension", dMan:6.25}`** (or with no `size`):
+  - Before: it opened as #5 (A_s 0.93 in²/ft, φM_n 23.29 kip-ft/ft) with no message.
+  - After: the data is kept (n 3, s 4, d 6.25, size ""). "INPUT INVALID" and "Layer T1: choose a bar size (Reinforcement, 4. Reinforcement layers).", with the Size select blank and outlined. Choosing #5 gives A_s = 3 × 0.31 = 0.93 in²/ft.
+- **Beam with stirrups present, size "" or "99":**
+  - Before: page error "Cannot read properties of undefined (reading 'd')".
+  - After: "Stirrups: choose a bar size …". Choosing #4 gives results.
+- **Skin size "99" / S&T size "99":**
+  - Before: taken as none (the S&T checks FAIL as "none entered"; no skin bars).
+  - After: the input error naming the field. Choosing #4 gives results.
+
+### How verified
+- **`tests/smoke/cbc-bar-size.mjs` extended** (the cases above, 1400 and 390 px). On origin/main the new cases FAIL: blank opens as #5; stirrup "" gives a page error.
+- **Identity probe:** origin/main vs branch, 10 projects without a blank or unknown size (default; beam; T-beam with torsion; AASHTO; skin bars; no stirrups; strip slab without and with S&T; actual-width slab; a layer size saved as the number 8). The autosave, `CC`, `VALIDATION`, `allChecks()`, the input panel HTML, every output tab's text, the Report, the DXF and the hand-offs are all identical.
+
+### Open items
+- The Development & Splice tab's Bar Size (`barSize`): a saved project with `barSize:""` gives a page error ("reading 'd'"). It is not a silent default. Not changed here (same file, different app): make it an input error if the engineer wants.
