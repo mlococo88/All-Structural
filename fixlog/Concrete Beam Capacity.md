@@ -6990,3 +6990,80 @@ D: M = 5; L: M = −3; W: M = ±2 (reverses); other cases 0; V = 0.
 
   `computeAll()`, `VALIDATION`, `allChecks`, the hand-off message, the autosave, the Report and every tab are identical, except in the same-sign service project. There the rows are identical (no omitted row is generated) and only the rules note differs.
 - **Tests:** `tests/engine/cbc-loads.test.mjs` (7 tests, 2 new) and `tests/smoke/cbc-loads.mjs` (updated rows; new mixed-sign block). The suite's other tests are listed in the PR.
+
+## 2026-11-13 — PR: claude/cbc-omit-subsets (PR #1507: https://github.com/mlococo88/All-Structural/pull/1507) (CBSS) — Beam Capacity tab, service load cases: ACI 318-19 5.3.2 omitted rows for every subset of the variable loads (engineer decision CB-8)   [CALCULATION CHANGE (service mode only: more combinations); factored mode identical; no saved key or format change]
+
+The file uses CRLF line endings; keep them. The code is in the Beam Capacity srcdoc. When re-applying, escape `&` as `&amp;` and `"` as `&quot;`. The sites are tagged CBSS.
+
+- **Engineer decision (CB-8, answering the CBOM open item):** leave out ALL subsets of the variable loads of a row (any set of L, L_r/S/R, W, E; at most 15 subsets per row). Keep only rows that increase |M_u| or |V_u| over the full row, de-duplicate, and label them e.g. "…, L and W omitted".
+- **Provision:** ACI 318-19 5.3.2 (PDF page 65; paraphrased): the effect of one or more loads not acting at the same time is to be investigated.
+- **Where:** `cbcBuildCombos`, the CBOM block after `sig[key]=r; rows.push(r);`.
+  - Before (CBOM): `terms.forEach(x=>{ if(x.k==="D"||zero(x.k)) return; const t2=terms.filter(y=>y!==x), … })`, one load at a time.
+  - After:
+    ```js
+          const vars=terms.filter(x=>x.k!=="D"&&!zero(x.k)), subs=[];
+          for(let m=1;m<(1<<vars.length);m++) subs.push(vars.filter((x,i)=>m&(1<<i)));
+          subs.sort((p,q)=>p.length-q.length);
+          subs.forEach(om=>{
+            const t2=terms.filter(y=>om.indexOf(y)<0), s2=…, M2=s2("M"), V2=s2("V");
+            …same increase test (|M| or |V|, each on its own)…
+            const ls=om.map(x=>lab[x.k]), oTx=ls.length<3?ls.join(" and "):ls.slice(0,-1).join(", ")+" and "+ls[ls.length-1];
+            …key as before; nm=name+", "+oTx+" omitted"; merged where the key exists…
+            const o={…,omit:oTx,omitK:om.map(x=>x.k),…};
+          });
+    ```
+  - The notes read "L and W are left out of …".
+  - The rules note: "every set of the variable loads of a row … is left out in turn (up to 15 sets per row)".
+- **Hand check, the CBOM mixed-sign case** (D M 5, L M −3, W M ±2):
+  - New row "(5.3.1d) 1.2D + 1.0W + 1.0L + 0.5Lr, W and L omitted" = 1.2D + 0.5Lr = 6.0 > 5.0.
+  - "(5.3.1d) −W, W and L omitted" (also 6.0) has the same loads, so it is merged into that row ("Stands for").
+  - 19 rows. The governing row stays 8.0 ("(5.3.1d) +W, L omitted").
+- **Hand check, a two-load omission governs:** D M 5, W M 4 (reverses), L M −3, L_r = S = R M −2.
+  - (5.3.1d) +W with L_r: 6 + 4 − 3 − 1 = 6.0.
+  - L omitted: 9.0. L_r omitted: 7.0. **L and L_r omitted: 10.0, which governs.** Its S and R variants are merged into it.
+  - Before (single omissions only), the governing value was 9.0.
+- **Earlier hand check** (D 5/2, L 3/1.2, W ±2/±0.8): unchanged (14 rows, governing 11.00 / 4.40).
+- **How verified:**
+  - **Probe**, origin/main vs branch, 9 projects: factored ACI and AASHTO, an AASHTO project with service mode stored, the V_s cap case with service cases stored, a slab, an old save without combinations, and a same-sign service project.
+    - Identical: `computeAll()`, `VALIDATION`, `allChecks`, the hand-off message, the autosave, the Report and every tab.
+    - Exception: the same-sign service project. Its rows (names, M_u, V_u) are identical; only the new `omitK` field and the rules note differ.
+  - **Tests:** `tests/engine/cbc-loads.test.mjs` (8 tests; 1 new, 1 updated) and `tests/smoke/cbc-loads.mjs` (19 rows in the mixed-sign block).
+
+## 2026-11-13 — PR: claude/cbc-we-strength (PR #1508: https://github.com/mlococo88/All-Structural/pull/1508) (CBWE) — service load cases: W and E labelled strength-level (ASCE 7), with notes   [display only; no computed value, key or format change]
+
+- **Engineer decision (CB-9):** W and E are strength-level (ASCE 7) effects. Label the inputs "strength-level (ASCE 7)", and add a note on the tab and in the Report: the factor 1.0 applies directly, and service-level values must be converted before entry. No calculation change.
+- **Where** (Beam Capacity srcdoc; escape as usual):
+  - `CBC_LD_NAME`: before `W:"Wind (strength level)",E:"Earthquake (strength level)"`; after `W:"Wind, strength-level (ASCE 7)",E:"Earthquake, strength-level (ASCE 7)"`. These are the labels of the input case table, the Load Combinations tab table and the Report table.
+  - `buildSvcLoads` note, item "W and E:". Before: "the strength-level wind and earthquake effects, as given (Table 5.3.1 applies a load factor of 1.0 to each)." After: "strength-level (ASCE 7) wind and earthquake effects: Table 5.3.1 applies a load factor of 1.0 to each directly. Service-level (allowable stress) values must be converted to strength level before entry."
+  - `cbcLdRules()` (Load Combinations tab card and Report section), a new first-after-reversal item "W and E: strength-level (ASCE 7) effects, as entered; the load factor 1.0 of Table 5.3.1 applies to them directly. Service-level values must be converted to strength level before entry."
+- **Provision:** none changed (ACI 318-19 Table 5.3.1 uses 1.0W and 1.0E).
+- **How verified:** probe of origin/main vs branch on 9 projects.
+  - Factored and AASHTO projects: identical in every output.
+  - Service project: `computeAll()` identical; only the labels and the note text differ on the Load Combinations tab and in the Report.
+  - `check-syntax` and `cbc-loads` pass.
+
+## 2026-11-13 — PR: claude/cbc-aashto-size-limit (PR #1509: https://github.com/mlococo88/All-Structural/pull/1509) (CBSA, CBLX) — AASHTO mode: explicit check "Section size limit (AASHTO 5.7.3.3)", V_u ≤ φ(0.25f′c b_v d_v + V_p); note that 5.7.2.6 has no across-width leg spacing limit   [NEW CHECK (can FAIL only where shear fails); shear results identical; no saved key or format change]
+
+The file uses CRLF line endings; keep them. The code is in the Beam Capacity srcdoc; escape as usual. The sites are tagged CBSA and CBLX.
+
+- **Engineer decisions:**
+  - **CB-10:** in AASHTO mode, an explicit check row V_u ≤ φ·0.25f′c·b_v·d_v (+ φV_p where applicable), with its own D/C, worked, in the summary, the all-combinations table and the Report. The failure message says to enlarge the section; stirrups will not help.
+  - **CB-11:** an AASHTO note that 5.7.2.6 has no across-width leg spacing limit.
+- **Provision:** AASHTO LRFD 10th Ed. 5.7.3.3 (read in `AASHTO LRFD 10th Edition (Chapter 5-6).pdf`; paraphrased). V_n is the lesser of V_c + V_s + V_p and 0.25f′c b_v d_v + V_p (Eq. 5.7.3.3-2). This tool designs nonprestressed members, so V_p = 0.
+- **Where:**
+  - **`computeAll`, `szA`.** Before: ACI only. After: AASHTO adds `{lim:sh.phi*sh.Vlim, aashto:true, dcr:|V_u|/lim}`. `sh.Vlim` (= 0.25f′c b_v d_v, with the f′c the shear check uses) is unchanged.
+  - **`allChecks`.** Before: `if(S.code==='ACI'){ …22.5.1.2… }`. After: an `else` adds "Section size limit (AASHTO 5.7.3.3)", ref "AASHTO Eq. 5.7.3.3-2", id `szA`.
+  - **Summary matrix.** The "D/C Size limit" column now shows in both codes; the `S.code==='ACI'` condition is removed from the header and the cell.
+  - **`cbcResultRows`.** The ref follows the code.
+  - **Shear tab.** New `cbcSzWorkA(b,r,sh)` at the end of the AASHTO steps: V_u ≤ φ(0.25f′c b_v d_v + V_p), the values, the limit, the DCR, PASS / FAIL. The failure text: "the section is too small for this shear: enlarge b_v or d_v, or raise f′c. More transverse reinforcement will not help".
+  - **Report.** `cbcRptShear`, AASHTO branch, gets a "Section size limit" topic with steps `szLim` and `szDC`. The keys `sh<ci>/szDC` were already mapped for `szA`.
+  - **`validate`, CBLX.** In AASHTO mode, the note "AASHTO 5.7.2.6 has no across-width leg spacing limit; ACI Table 9.7.6.2.2 is not applied."
+- **Why the check can FAIL only where shear fails:** φV_n = φ min(V_c + V_s, V_n,max) ≤ φV_n,max. So the size D/C ≤ the shear D/C, and the row's worst D/C is unchanged.
+- **Hand check:** AASHTO, b_v = 10 in, f′c = 4 ksi, d_v = 15.19 in (tool), #5 four legs at 3 in.
+  - 0.25(4)(10)(15.19) = 151.88 kip. Limit = 0.9(151.88) = 136.69 kip.
+  - V_u 160: D/C 1.171, FAIL. Here V_n,max governs V_n, so the shear D/C is also 1.171.
+  - V_u 40: D/C 0.293.
+  - b_v 12, d_v 18.26 in: limit 0.9(0.25)(4)(12)(18.26) = 197.18 kip.
+- **How verified:**
+  - **Probe** of origin/main vs branch, 9 projects (3 AASHTO). `computeAll()` without the AASHTO `szA`, `VALIDATION` without the new note, `allChecks` without the new row, the hand-off message and the autosave are identical in all of them.
+  - **Tests:** `tests/smoke/cbc-shear-limit.mjs` now checks the AASHTO row, column, card, Report and note (before, it asserted that no row existed). Also passing: `check-syntax`, `decimal-entry --tool cbc,cbc2`, `phone-layout --tool cbc`, `project-library --tool cbc` and `cbc-leg-width`.
