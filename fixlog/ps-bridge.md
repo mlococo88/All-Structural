@@ -1177,3 +1177,116 @@ PR #1521: https://github.com/mlococo88/All-Structural/pull/1521
 ### Decisions (pending engineer review)
 - PS20-D1. The traffic face: the barrier width, or a ≥ 12 in sidewalk's curb face (the steel app's rule); this app has no curb input yet.
 - PS20-D2. d_e computed whenever the project has the cross-section barriers (also with DC2 / DW "entered").
+
+## 2026-11-13 — PS-22: the app's notices as inline banners above the tab content (display only; no calculation, no saved data)
+PR #1525: https://github.com/mlococo88/All-Structural/pull/1525
+### Request
+- Engineer decision PS-22 (2026-11-13, display): notices (the import / restore notice of 3a-4 and every other app notice) become an inline
+  banner in the page flow above the tab content, pushing the content down, never covering the tab bar; they stay until closed.
+### Where
+- `apps/ps-bridge/index.html` only. The app's one notice mechanism is `toast(text, undo)` (callers unchanged: the owner change's inputs
+  (`IN.takeNote`), the girder types re-assigned / new spans' types (with Undo), the type controls' notes (`typesDone`), the old app's designs
+  restored (`lgCtx.replace`, PR 3a-4), the load notes `L.notes` (PR 3a-1 / 3a-4)). No other module draws a notice (no other fixed element).
+- Markup: `<div id="toast" role="status" hidden></div>` (first child of `<body>`) removed; new `<div id="notices" role="status"
+  aria-live="polite"></div>` in `#outputPanel` between `<div id="tabBar" role="tablist"></div>` and `<div id="out"></div>`.
+- CSS, anchor `/* PS-22 (engineer decision`: before
+  `#toast{position:fixed;right:14px;top:84px;max-width:min(520px,calc(100vw - 28px));max-height:60vh;overflow:auto;z-index:50;…}` and
+  `#toast[hidden]{display:none;} #toast.err{…} #toast ul{…} #toast .tBtns{…} #toast .tFld{…} #toast .tArr{…}`; after
+  `#notices:empty{display:none;} #notices{margin:6px 0 0;display:flex;flex-direction:column;gap:6px;}`,
+  `#notices .notice{display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px 10px;background:#fff;border:1px solid var(--slate-400);border-left:4px solid var(--navy-800);border-radius:6px;padding:7px 10px;font-family:var(--font-ui);font-size:9.5pt;}`,
+  `#notices .notice>div:first-child{flex:1 1 240px;min-width:0;overflow-wrap:anywhere;} #notices .nBtns{display:flex;gap:6px;margin-left:auto;}`
+  (no position: in the flow); print: `#toast` → `#notices` in the `@media print{ #hdrBtns,… {display:none!important;}` list (not printed, as before).
+- `toast(text, undo)`, anchor `function toast(text, undo) {`: before
+  ```js
+  function toast(text, undo) { const t = $('toast'); t.className = ''; t.innerHTML = `<div>${esc(text)}</div><div class="tBtns">${undo ? '<button type="button" id="tUndo">Undo</button>' : ''}<button type="button" id="tClose">Close</button></div>`; t.hidden = false; $('tClose').onclick = () => { t.hidden = true; };
+    if (undo) $('tUndo').onclick = () => { t.hidden = true; P = JSON.parse(undo); changed(); }; }
+  ```
+  after
+  ```js
+  function toast(text, undo) { const box = $('notices'), n = document.createElement('div');
+    [...box.children].forEach(c => { if (c.dataset.text === String(text)) c.remove(); else { const u = c.querySelector('.nUndo'); if (u) u.remove(); } });
+    n.className = 'notice'; n.dataset.text = String(text);
+    n.innerHTML = `<div>${esc(text)}</div><div class="nBtns">${undo ? '<button type="button" class="nUndo">Undo</button>' : ''}<button type="button" class="nClose">Close</button></div>`;
+    box.prepend(n); n.querySelector('.nClose').onclick = () => n.remove();
+    if (undo) n.querySelector('.nUndo').onclick = () => { n.remove(); P = JSON.parse(undo); changed(); };
+    const op = $('outputPanel'), top = n.offsetTop - $('tabBar').offsetHeight; if (op.scrollTop > top) op.scrollTop = Math.max(0, top); }   // brought into view below the sticky tab bar
+  ```
+  The banners live outside `#out`, so redrawing a tab or opening another keeps them; each goes only with its Close (or Undo).
+### Saved data (CLAUDE.md §5)
+- None (no key, no format; the notices are not stored, as before).
+### Governing provisions
+- None (display only; no value, formula or check changed).
+### Check case
+- New project, Owner rules tab, owner AASHTO → RIDOT: the banner "… mat.H 70 → 80 …" is drawn below the tab bar (its top ≥ the tab bar's
+  bottom), in the flow (position static), `#out` below it; opening Loads & LLDF and Summary keeps it; Close removes it. Before: the same text
+  in a box fixed at the top right over the result tabs, closed by Close or replaced by the next notice.
+### How verified
+- Smokes `ps-bridge-skeleton.mjs` (owner change: the banner's placement (inline, below the tab bar, `#out` pushed down, between `#tabBar` and
+  `#out`), kept across tab clicks, Close removes it; the 3m import's restore notice inline below the tab bar; the selectors `#toast` /
+  `#tClose` → `#notices` / `#notices .nClose`) and `ps-bridge-types.mjs` §3 (`#tUndo` → `#notices .nUndo`; Undo puts N_b and the lines back).
+- Harness B (`tests/psbridge-compare.mjs`, test only): the `--import` restore notice is read from `#notices` (the same expected text,
+  "… G1/S1x (not a girder × span cell).Close", or none); new: a notice not in the flow or above the tab bar's bottom is a difference (its text
+  gets " [over the tab bar]"); every notice then closed with its Close button. No comparison changed or removed.
+  Runs: normal 17 designs, 43,512 shown values + 7,646 step values, **0 differences** (exit 0); `--import` 17 designs (autosave 5, shared 4,
+  older 4, file 4), 0 differences (exit 0); `--control` and `--import --control`: 17 with differences, exit 1 (the controls still bite).
+- `node tests/check-syntax.mjs` (163 files); `tests/engine/psbridge-*.test.mjs` (11 files) pass; smokes skeleton 252 checks, types 52 checks, 0 failed.
+### Decisions (pending engineer review)
+- PS22-D1. The banners stack, newest first; the same text again replaces its open banner; Undo stays only on the newest (an older Undo
+  would put back a project that has changed since; before, the next notice replaced the box and its Undo).
+- PS22-D2. A new notice scrolls the output panel up just enough to show it below the sticky tab bar when the panel is scrolled past it
+  (otherwise the scroll position is kept).
+
+## 2026-11-13 — PS-23: a notice where the entered d_e differs from the d_e computed from the cross-section (PS-20); the Report lists it in its assumptions (display only; no calculation change)
+PR #1526: https://github.com/mlococo88/All-Structural/pull/1526
+### Request
+- Engineer decision PS-23 (2026-11-13, display): when a project opens and the computed per-line d_e (PS-20, #1521) differs from the
+  entered d_e, show a notice (inline banner, PS-22 style) on the Loads & LLDF tab naming each exterior line's entered vs computed d_e and
+  that the distribution factors use the computed value; it stays until dismissed for that project (the dismissal in the psb2 project or
+  the existing psb2.ui key, no new storage key); the Report always lists the same difference in its assumptions / notes.
+### Where
+- `apps/ps-bridge/engine/design.js` (new, after `deOf`, anchor `/* deDiff(P): PS-23`): `deDiff(P)` → `{ rows: [{ g, side, spans, entered,
+  computed }], sig }`: for every checked cell (`PSBBridge.cells`) on an exterior line (G1, G_Nb) with the cross-section barriers (`P.xs.dl`),
+  computed = `deOf(P, g)` (PS-20, unchanged), entered = `PSBBridge.effBase(P, k).loads.de` (the girder type's d_e on that line); a row where
+  |entered − computed| > 1e-9 ft, one per line and entered value (spans named only where the row is not every span of the line); `sig` = the
+  rows (`G1:2>1.5;G5:2>2.5`). `deText(D, sub)`: the text, with d_e's subscript as HTML or the Report's `$_{e}$`. Exported on `window.PSBDesign`.
+- `apps/ps-bridge/index.html`: `deNotice()` (new, anchor `function deNotice()`): on the Loads & LLDF tab (`drawOut`, after `TY.outBar(P)`:
+  `if (ui.otab === 'lds') h += deNotice();`) a banner `<div class="notice" id="deNotice">` with the text, a link to the Cross-section tab and
+  a Close button (`data-dedismiss`), unless `P.notices.de === deDiff(P).sig`. The `#out` click handler: Close sets
+  `P.notices = Object.assign({}, P.notices, { de: D.sig })` and `changed()` (autosaved with the project). CSS: the PS-22 banner rules extended
+  to `#out .notice` (`#out .notice{margin:8px 0;}`).
+- `apps/ps-bridge/report/builders.js` `proj()`: the Assumptions sub gets `...deNote(P)` (new `deNote(P)`: "• d$_{e}$ of the exterior girder
+  lines (PS-20): … (see [[rs.lds]])" when deDiff has rows, else nothing).
+- Before (all three files): no notice; the Report's Assumptions = the input-tab assumptions + the six ASSUME lines.
+### Saved data (CLAUDE.md §5)
+- No new storage key. The psb2 project gains an optional field `notices: { de: '<sig>' }`, written only when the user closes the notice
+  (a project without it reads as "not dismissed"; old copies of the app keep and ignore it: `importJSON` / `exportJSON` pass unknown fields).
+### Governing provisions
+- None changed. d_e: AASHTO LRFD 10th Ed. Art. 4.6.2.2.1 as PS-20 computes it (#1521); the engine inputs and every result are unchanged.
+### Check case
+- New project, 5 girders at 9 ft, overhangs 3 ft left / 4 ft right, barriers 1.5 ft, entered d_e 2.0 ft (the default):
+  G1 d_e = 3 − 1.5 = 1.5 ft; G5 = 4 − 1.5 = 2.5 ft → notice "G1: entered 2.0 ft, computed 1.5 ft (left overhang); G5: entered 2.0 ft,
+  computed 2.5 ft (right overhang). The live-load distribution factors use the computed d_e."; the same sentence in the Report's
+  Assumptions. Before: no notice, no note. Overhangs 3.5 / 3.5: 3.5 − 1.5 = 2.0 = entered → no notice, no note (identical to before).
+### How verified
+- `tests/engine/psbridge-denotice.test.mjs` (new, 3 tests): the check case (rows, sig, text; deDiff writes nothing; the cell inputs keep
+  1.5 / 2.5, PS-20); where they match (3.5 / 3.5; within 1e-9) and the 17 harness B designs without barriers: no rows; three spans with
+  span 2's exterior type entered 1.5 (= computed): rows for spans 1, 3 only, named; the key changes with the difference.
+  `node tests/engine/run.mjs psbridge`: 12 files, 114 passed, 0 failed.
+- Smoke `ps-bridge-types.mjs` §8 (new): ohR 4 → the banner on Loads & LLDF (inline, below the tab bar) with the check-case text; tab values
+  = computeAll; not on another tab; the Report lists it; Close → `P.notices.de = 'G1:2>1.5;G5:2>2.5'`, gone after a reload, the Report still
+  lists it; ohL 3.25 → shown again (G1 computed 1.75); 3.5 / 3.5 → no banner, no Report note; psb2.* keys only.
+  Smokes: types 64 checks (52 + 12 new), skeleton 252 checks, 0 failed. Harness B (unchanged by this PR): normal 17 designs, 43,512 shown +
+  7,646 step values, 0 differences (exit 0); `--import` 0 differences (exit 0); `--control` / `--import --control` 17 with differences, exit 1.
+  `node tests/check-syntax.mjs` passes.
+- Equality where they match (browser probe, origin/main 4cdcc75 vs this branch, the Loads & LLDF tab, the Report and the Summary tab's
+  `#out` HTML and `#notices`): 23 projects — new projects with 3.5 / 3.5 overhangs; barriers 1.0 ft with 3.0 overhangs; three continuous
+  spans; a 12 in sidewalk curb face (3.25 / 4 ft, barriers 1.25, sidewalk 2 ft: 2.0 both); DC2 / DW entered; G1 shown; and the 17 harness B
+  designs (no barriers) — **23 of 23 byte-identical**, deDiff rows 0 in each.
+### Decisions (pending engineer review)
+- PS23-D1. The notice shows whenever the difference exists and is not dismissed (on opening the project and after an edit that makes it);
+  a different difference (another overhang, barrier or entered d_e) shows it again; the dismissal is kept in the project (exported with it).
+- PS23-D2. "Entered d_e" is the girder type's `loads.de` on that line (base or the type's own value); a line whose types differ by span
+  names the spans.
+### Open item (question for the engineer)
+- Every new project shows the notice: its hidden entered d_e is the default 2.0 ft while the default cross-section (3.0 ft overhangs, 1.5 ft
+  barriers) computes 1.5 ft. Keep it, or not count the default (unedited) entered value as "entered"?

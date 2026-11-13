@@ -8,6 +8,8 @@
 //   3. the girder count 5 → 6: the lines re-assigned (G5 Exterior → Interior, G6 Exterior) with a notice; Undo puts N_b and the types back;
 //   4. a project saved before PR 3a (no types; design G6 in span 2 of three spans): opens as type T1 on G6/S2, the values shown = the PR 2b
 //      design's computeAll; the stored text is not rewritten by opening it; lines with no type listed;
+//   8. PS-23: the d_e notice on the Loads & LLDF tab (entered 2.0 vs computed 1.5 / 2.5 ft), the Report assumptions, the dismissal kept
+//      in the project (P.notices.de), shown again for a different difference, none where they match;
 //   5. 390 px: the Girders & strands tab and a result tab with the type / line bar without sideways scroll; 0 console errors; psb2.* keys only.
 //   node tests/smoke/ps-bridge-types.mjs [--file <index.html>] [--shots <dir>]
 import fs from 'fs';
@@ -68,10 +70,10 @@ await p.click('#inPanes [data-ty="reset"][data-key="mat.fc"]'); await p.waitForT
 await p.selectOption('#tyScope_mat', ''); await p.waitForTimeout(100);
 // 3. the girder count
 await p.click('#inTabs [data-itab="xsec"]'); await p.fill('#i_xs\\.nb', '6'); await p.press('#i_xs\\.nb', 'Tab'); await p.waitForTimeout(250);
-{ const t = await p.textContent('#toast'), sv = await stored(p);
+{ const t = await p.textContent('#notices'), sv = await stored(p);
   check(/S1 G5: Exterior S1 → Interior S1/.test(t) && /S1 G6: no type → Exterior S1/.test(t), 'notice: ' + t);
   check(JSON.stringify(sv.types.map(q => q.lines)) === '[[2,3,4,5],[1,6]]', 'lines re-assigned ' + JSON.stringify(sv.types.map(q => q.lines)));
-  await p.click('#tUndo'); await p.waitForTimeout(250);
+  await p.click('#notices .nUndo'); await p.waitForTimeout(250);
   const s2 = await stored(p); check(s2.xs.nb === 5 && JSON.stringify(s2.types.map(q => q.lines)) === '[[2,3,4],[1,5]]', 'Undo: N_b 5 and the lines back'); }
 let ls = await lsSnap(p);
 check(Object.keys(ls).every(k => k.startsWith('psb2.') || k in SEED), 'keys: ' + Object.keys(ls).join(', '));
@@ -161,6 +163,38 @@ await p.click('#inTabs [data-itab="xsec"]'); await p.waitForTimeout(200);
   await p.fill('#i_xs\\.dl\\.barL\\.w', '-1'); await p.press('#i_xs\\.dl\\.barL\\.w', 'Tab'); await p.waitForTimeout(200);
   check(/Left barrier weight must be zero or a positive number/.test(await p.textContent('#sbDashCol')), 'a negative barrier weight is an input error'); }
 check(!o.errs.length, 'console errors (3a-3): ' + o.errs.join(' | '));
+await o.b.close();
+
+// 8. PS-23 (engineer decision 2026-11-13): the entered d_e (2.0 ft) differs from the d_e computed from the cross-section (PS-20): overhangs
+//    3 / 4 ft, barriers 1.5 ft → a banner on the Loads & LLDF tab (PS-22 style, in the flow) naming G1 2.0 → 1.5 and G5 2.0 → 2.5 ft and
+//    that the DF use the computed value; the Report's assumptions list it; Close keeps the dismissal in the project (P.notices.de; no new
+//    key), a reload does not show it again, the Report still lists it; overhangs 3.5 / 3.5 (computed 2.0 = entered): no banner, no note
+o = await openPage(FILE, { vw: 1400, vh: 1000, ls: SEED }); p = o.p; await ready(p);
+{ const DE = /G1: entered 2\.0 ft, computed 1\.5 ft \(left overhang\); G5: entered 2\.0 ft, computed 2\.5 ft \(right overhang\)\. The live-load distribution factors use the computed d\s*e\./;
+  await p.click('#inTabs [data-itab="xsec"]'); await p.fill('#i_xs\\.ohR', '4'); await p.press('#i_xs\\.ohR', 'Tab'); await p.waitForTimeout(300);
+  await p.click('#tabBar [data-otab="lds"]'); await p.waitForTimeout(300);
+  const a = await p.evaluate(() => { const n = document.getElementById('deNotice'), tb = document.getElementById('tabBar').getBoundingClientRect(); if (!n) return null; const r = n.getBoundingClientRect();
+    return { t: n.textContent.replace(/\s+/g, ' '), pos: getComputedStyle(n).position, below: r.top >= tb.bottom - 0.5 }; });
+  check(a && DE.test(a.t) && a.pos === 'static' && a.below, 'Loads & LLDF: the d_e notice inline: ' + JSON.stringify(a));
+  const e = await evCheck(p); check(e.n >= 20 && !e.bad.length, `Loads & LLDF values = computeAll with the notice: ${e.n} ${e.bad.slice(0, 3).join(' | ')}`);
+  await p.click('#tabBar [data-otab="sec"]'); await p.waitForTimeout(250); check(!(await p.$('#deNotice')), 'the notice only on the Loads & LLDF tab');
+  await p.click('#tabBar [data-otab="rpt"]'); await p.waitForTimeout(1500);
+  check(DE.test((await p.textContent('#out')).replace(/\s+/g, ' ')), 'Report: the assumptions list the difference');
+  await p.click('#tabBar [data-otab="lds"]'); await p.waitForTimeout(300); await p.click('#deNotice [data-dedismiss]'); await p.waitForTimeout(300);
+  const sv = await stored(p); check(!(await p.$('#deNotice')) && sv.notices && sv.notices.de === 'G1:2>1.5;G5:2>2.5', 'Close: dismissed for this project ' + JSON.stringify(sv.notices));
+  await p.reload(); await ready(p); await p.click('#tabBar [data-otab="lds"]'); await p.waitForTimeout(300);
+  check(!(await p.$('#deNotice')), 'after a reload: not shown again');
+  await p.click('#tabBar [data-otab="rpt"]'); await p.waitForTimeout(1500);
+  check(DE.test((await p.textContent('#out')).replace(/\s+/g, ' ')), 'Report: still listed after the dismissal');
+  await p.click('#inTabs [data-itab="xsec"]'); await p.fill('#i_xs\\.ohL', '3.25'); await p.press('#i_xs\\.ohL', 'Tab'); await p.waitForTimeout(300);
+  await p.click('#tabBar [data-otab="lds"]'); await p.waitForTimeout(300);
+  check(/G1: entered 2\.0 ft, computed 1\.75 ft/.test(await p.textContent('#out')) && !!(await p.$('#deNotice')), 'a different difference: shown again');
+  await p.fill('#i_xs\\.ohL', '3.5'); await p.press('#i_xs\\.ohL', 'Tab'); await p.fill('#i_xs\\.ohR', '3.5'); await p.press('#i_xs\\.ohR', 'Tab'); await p.waitForTimeout(300);
+  check(!(await p.$('#deNotice')), 'overhangs 3.5 / 3.5 (computed 2.0 = entered): no notice');
+  await p.click('#tabBar [data-otab="rpt"]'); await p.waitForTimeout(1500);
+  check(!/the entered d\s*e differs/.test((await p.textContent('#out')).replace(/\s+/g, ' ')), 'Report: no note where they match');
+  const ls = await lsSnap(p); check(Object.keys(ls).every(k => k.startsWith('psb2.') || k in SEED), 'keys (PS-23): ' + Object.keys(ls).join(', ')); }
+check(!o.errs.length, 'console errors (PS-23): ' + o.errs.join(' | '));
 await o.b.close();
 
 // 5. phone
