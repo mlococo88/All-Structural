@@ -11,6 +11,7 @@
      camber: the prestress camber of the straight and the draped strands, the self-weight, deck, diaphragm and superimposed dead load
        deflections at midspan (PCI Design Handbook method), the net camber at release, erection, deck placement (haunch and screed), the
        beam seat and final (PCI multipliers), the live-load deflection and its limit (2.5.2.6.2), the haunch build-up at midspan.
+   PR 2d-3 (PS-10): for AASHTO / RIDOT the same hold-down steps from R.ps10 (engine/holddown.js, the engine addition), where the box is on.
    Display intermediates the engine does not keep are named in their notes (the hold-down location frac × L, the share of debonded strands
    without an owner rule, the simple-span debond length limit, which the engine checks as a warning). The expressions are those of the moved
    engine (pbd-compute.js computeAll, psbReportVals), written out for display. Code basis AASHTO LRFD 10th Ed. (2024). */
@@ -67,15 +68,16 @@
       const hp = ss.hp;
       add({ id: 'slope', label: 'Slope of the draped strands (℄ bearing to the hold-down point)', sym: '\\tan\\alpha', eq: '\\frac{y_{end} - y_{mid}}{12\\,frac\\,L}', sub: `\\frac{${n(+hp.yEnd, 2)} - ${n(+hp.yMid, 2)}}{12(${n(+hp.frac, 3)})(${n(L, 2)})}`, value: ss.slope, unit: '', d: 4, ref: 'PS-13',
         note: `Hold-down points at frac × L = ${n(hp.frac * L, 2)} ft from ℄ bearing (display; PS-13). The slope also gives V_p (Shear tab).` }, (+hp.yEnd - +hp.yMid) / (hp.frac * L * 12), 'ss.slope');
-      const hd = R.own && R.own.hd;
+      const hd = (R.own && R.own.hd) || (R.ps10 && !R.ps10.off ? R.ps10 : null), H = R.own && R.own.hd ? 'own.hd' : 'ps10';   // PR 2d-3: PS-10 for AASHTO / RIDOT
       if (hd) {
-        const k = R.checks.findIndex(c => /^Hold-down force/.test(c.n)), cite = R.checks[k].n.replace(/^Hold-down force \(|\)$/g, '');
-        add({ id: 'hd.alpha', label: 'Angle of the draped strands', sym: '\\alpha', eq: '\\tan^{-1}(\\tan\\alpha)', sub: `\\tan^{-1}(${n(ss.slope, 5)})`, value: hd.alpha, unit: 'rad', d: 5 }, Math.atan(ss.slope), 'own.hd.alpha');
-        add({ id: 'hd.Fstr', label: 'Hold-down force of one strand at one hold-down point', sym: 'F_{str}', eq: 'f_{pbt}\\,A_{b}\\sin\\alpha', sub: `${n(R.fpbt, 2)}(${n(hd.Ab, 3)})\\sin(${n(hd.alpha, 5)})`, value: hd.Fstr, unit: 'kip', d: 3, note: 'At jacking (f_pbt), before transfer.' }, R.fpbt * hd.Ab * Math.sin(hd.alpha), 'own.hd.Fstr');
-        add({ id: 'hd.F', label: 'Hold-down force of all draped strands (two hold-down points)', sym: 'F_{hd}', eq: '2\\,n_{h}\\,F_{str}', sub: `2(${hd.nh})(${n(hd.Fstr, 4)})`, value: hd.Ftot, unit: 'kip', d: 1, ref: cite }, 2 * hd.nh * hd.Fstr, 'own.hd.Ftot');
-        add({ id: 'hd.Lg', label: 'Girder length', sym: 'L_{g}', eq: 'L + 2\\,\\frac{e_{end}}{12}', sub: `${n(L, 2)} + 2\\,\\frac{${n(+o.endOh || 0, 2)}}{12}`, value: hd.Lg, unit: 'ft', d: 2, note: 'e_end: the girder end past ℄ bearing (Girders & strands tab).' }, L + 2 * (+o.endOh || 0) / 12, 'own.hd.Lg');
-        add({ id: 'hd.W', label: 'Beam weight', sym: 'W', eq: 'w_{sw}\\,L_{g}', sub: `${n(hd.wsw, 4)}(${n(hd.Lg, 2)})`, value: hd.W, unit: 'kip', d: 1 }, hd.wsw * hd.Lg, 'own.hd.W');
-        add({ id: 'hd.lim', label: `Hold-down limit (${cite})`, sym: 'F_{hd,max}', eq: `${n(hd.frac, 2)}\\,W`, sub: `${n(hd.frac, 2)}(${n(hd.W, 2)})`, value: hd.lim, unit: 'kip', d: 1, ref: cite }, hd.frac * hd.W, 'own.hd.lim');
+        const k = R.checks.findIndex(c => /^Hold-down force/.test(c.n)), ps = H === 'ps10', cite = ps ? 'PS-10 (MassDOT 3.7.2.2 / CTDOT V2 5.9.1.6 limit as an option)' : R.checks[k].n.replace(/^Hold-down force \(|\)$/g, '');
+        add({ id: 'hd.alpha', label: 'Angle of the draped strands', sym: '\\alpha', eq: '\\tan^{-1}(\\tan\\alpha)', sub: `\\tan^{-1}(${n(ss.slope, 5)})`, value: hd.alpha, unit: 'rad', d: 5 }, Math.atan(ss.slope), H + '.alpha');
+        add({ id: 'hd.Fstr', label: 'Hold-down force of one strand at one hold-down point', sym: 'F_{str}', eq: 'f_{pbt}\\,A_{b}\\sin\\alpha', sub: `${n(R.fpbt, 2)}(${n(hd.Ab, 3)})\\sin(${n(hd.alpha, 5)})`, value: hd.Fstr, unit: 'kip', d: 3, note: 'At jacking (f_pbt), before transfer.' }, R.fpbt * hd.Ab * Math.sin(hd.alpha), H + '.Fstr');
+        add({ id: 'hd.F', label: 'Hold-down force of all draped strands (two hold-down points)', sym: 'F_{hd}', eq: '2\\,n_{h}\\,F_{str}', sub: `2(${hd.nh})(${n(hd.Fstr, 4)})`, value: hd.Ftot, unit: 'kip', d: 1, ref: cite }, 2 * hd.nh * hd.Fstr, H + '.Ftot');
+        add({ id: 'hd.Lg', label: 'Girder length', sym: 'L_{g}', eq: 'L + 2\\,\\frac{e_{end}}{12}', sub: `${n(L, 2)} + 2\\,\\frac{${n(+o.endOh || 0, 2)}}{12}`, value: hd.Lg, unit: 'ft', d: 2, note: 'e_end: the girder end past ℄ bearing (Girders & strands tab).' }, L + 2 * (+o.endOh || 0) / 12, H + '.Lg');
+        add({ id: 'hd.W', label: 'Beam weight', sym: 'W', eq: 'w_{sw}\\,L_{g}', sub: `${n(hd.wsw, 4)}(${n(hd.Lg, 2)})`, value: hd.W, unit: 'kip', d: 1 }, hd.wsw * hd.Lg, H + '.W');
+        add({ id: 'hd.lim', label: `Hold-down limit (${cite})`, sym: 'F_{hd,max}', eq: `${n(hd.frac, 2)}\\,W`, sub: `${n(hd.frac, 2)}(${n(hd.W, 2)})`, value: hd.lim, unit: 'kip', d: 1, ref: cite,
+          note: ps ? `f = ${n(hd.frac, 2)} entered on the Owner rules tab (PS-10 box, default 0.75). AASHTO LRFD sets no limit on the hold-down force; the 75 % is the MassDOT 3.7.2.2 / CTDOT V2 5.9.1.6 rule.` : '' }, hd.frac * hd.W, H + '.lim');
         add({ id: 'hd.r', label: 'Ratio, hold-down force', sym: 'D/C', eq: '\\frac{F_{hd}}{F_{hd,max}}', sub: `\\frac{${n(hd.Ftot, 2)}}{${n(hd.lim, 2)}}`, value: R.checks[k].r, unit: '', d: 3, ok: R.checks[k].pass, ref: cite }, hd.lim > 0 ? hd.Ftot / hd.lim : Infinity, `checks.${k}.r`);
       }
     }

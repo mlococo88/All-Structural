@@ -22,6 +22,10 @@
      base:    { … }   added 2026-11-12 (PR 2a, plan §2.4), optional within version 1: the base girder design, an inputs object of the old
                       app's format (its DEFAULTS shape), always stored as mergeInputs(base) of the moved engine (engine/pbd-merge.js), so a
                       field added to DEFAULTS later is filled in. A project without it (saved by PR 1) reads with the old app's defaults.
+                      base.opt.hdCheck, base.opt.hdFrac: added 2026-11-13 (PR 2d-3, PS-10), optional within version 1: the optional hold-down
+                      force check for AASHTO / RIDOT (engine/holddown.js), on (true) and 0.75 (× the beam weight) by default. Not in the old
+                      app's DEFAULTS: baseInputs() fills them, so a new project and every existing psb2 project read without them get the
+                      check ON at 0.75 (the engineer's default); a value saved by the user is kept.
      design:  { g, s }  added 2026-11-12 (PR 2b), optional within version 1: the design girder line and span of the one girder design until the
                       bridge level (PR 3a); absent: G2 (G1 with one girder) in span 1. Read and checked by engine/design.js (not validated here).
    }
@@ -40,7 +44,9 @@
   const engineLoaded = () => typeof mergeInputs === 'function';
   function baseInputs(saved) {
     if (!engineLoaded()) return undefined;
-    return JSON.parse(JSON.stringify(mergeInputs(saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : null)));
+    const b = JSON.parse(JSON.stringify(mergeInputs(saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : null)));
+    if (b.opt && typeof b.opt === 'object') { if (b.opt.hdCheck === undefined) b.opt.hdCheck = true; if (b.opt.hdFrac === undefined) b.opt.hdFrac = 0.75; }   // PS-10 (PR 2d-3): default on, 75 % W
+    return b;
   }
 
   /* defaultProject(): a new project — one 120 ft simple span, 5 girders at 9.0 ft, 3.0 ft overhangs, no skew

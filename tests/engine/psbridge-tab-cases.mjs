@@ -21,5 +21,20 @@ export const TAB_CASES = base => ({
     P.base.cont.AsPos = 4; P.base.cont.restraint = true; P.base.mat.td = 10; return P; })(),
   // PR 2d-1: the owner hold-down and debonded-share checks (CTDOT), debonded rows on an I-girder, diaphragms (camber), the girder end past ℄ bearing
   'CTDOT, debonded rows, diaphragms, girder end 9 in past the bearing': (() => { const P = base(); P.base.owner = 'CTDOT';
-    P.base.rows = [{ n: 12, y: 2, nd: 4, dbnd: 8 }, { n: 12, y: 4, nd: 2, dbnd: 12 }, { n: 4, y: 6, nd: 0, dbnd: 0 }]; P.base.loads.diaph = [{ P: 3, a: 40 }, { P: 3, a: 80 }]; P.base.opt.endOh = 9; return P; })()
+    P.base.rows = [{ n: 12, y: 2, nd: 4, dbnd: 8 }, { n: 12, y: 4, nd: 2, dbnd: 12 }, { n: 4, y: 6, nd: 0, dbnd: 0 }]; P.base.loads.diaph = [{ P: 3, a: 40 }, { P: 3, a: 80 }]; P.base.opt.endOh = 9; return P; })(),
+  // PR 2d-2: the Handling and Deck modules on, rating vehicles (one with no shear, one without weight), φ_c φ_s floored at 0.85
+  'handling and deck on, rating vehicles, φc φs floored': (() => { const P = base(); P.base.handling.on = true; P.base.deck.on = true; P.base.opt.rtPhiC = 0.9; P.base.opt.rtPhiS = 0.9;
+    P.base.rateVeh = [{ name: 'Type 3S2', M: 1800, V: 90, W: 36 }, { name: 'Permit', M: 3600, V: 0, W: 0 }]; return P; })(),
+  // PR 2d-2: an owner (η, live-load multiplier) on the deck, the design section entered, a wide overhang, separate DL deck thickness; handling moved
+  // supports and a steep cross slope; two continuous spans (rating on the continuous unit), exterior girder
+  'MassDOT, continuous, exterior G1, deck design section entered, handling 8 ft lift points': (() => { const P = base(); P.base.owner = 'MassDOT';
+    P.spans = { lengths: [110, 110], continuity: 'composite' }; P.xs.skews = [0, 0, 0]; P.xs.ohL = 4.5; P.design = { g: 1, s: 1 };
+    P.base.deck.on = true; P.base.deck.xnegAuto = false; P.base.deck.xneg = 9; P.base.tsSeparate = true; P.base.tsDL = 8.5;
+    P.base.handling.on = true; P.base.handling.aLift = 8; P.base.handling.aHaul = 10; P.base.handling.theta_i = 0.06; P.base.rateVeh = [{ name: 'Type 3', M: 1500, V: 70, W: 25 }]; return P; })(),
+  // PR 2d-2: deck on a box beam with a topping (closed box: the design section at the face of the support), girder spacing below Table A4-1
+  'box BIII-36 with a 6 in topping, deck on (S below 4 ft), handling on': (() => { const P = base(); P.base.girder = 'AASHTO BIII-36 (27in)'; P.base.ts = 6; P.base.harp.n = 0;
+    P.base.rows = [{ n: 14, y: 2, nd: 0, dbnd: 0 }, { n: 8, y: 4, nd: 0, dbnd: 0 }]; P.xs.bays = [3, 3, 3, 3]; P.spans.lengths = [60]; P.base.deck.on = true; P.base.handling.on = true; return P; })(),
+  // PR 2d-3 (PS-10): the hold-down check for RIDOT with an edited limit (0.90 W) and the girder end past the bearing; AASHTO with the box off
+  'RIDOT, draped strands, hold-down limit 0.90 W, girder end 6 in past the bearing': (() => { const P = base(); P.base.owner = 'RIDOT'; P.base.opt.hdFrac = 0.9; P.base.opt.endOh = 6; P.base.harp.n = 8; P.base.harp.yEnd = 50; return P; })(),
+  'AASHTO, PS-10 hold-down box off': (() => { const P = base(); P.base.opt.hdCheck = false; return P; })()
 });

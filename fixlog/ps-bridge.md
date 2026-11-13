@@ -414,3 +414,116 @@ PR #1458: https://github.com/mlococo88/All-Structural/pull/1458
 - The hold-down limit for AASHTO / RIDOT (PS-10) is an engine addition: PR 2d-3 (own §4 callout).
 - Next: PR 2d-2 (Handling, Deck, Rating tabs; their chips; harness B).
 
+## 2026-11-13 — PR 2d-2: Handling, Deck and Rating output tabs, check chips; harness B (no calculation change)
+PR #1460: https://github.com/mlococo88/All-Structural/pull/1460
+### Where
+- `apps/ps-bridge/engine/worked-hdr.js` (new, `window.PSBWorkedHDR`, no DOM): `handling(inp, R)`, `deck(inp, R)`, `rating(inp, R)` → `{ steps, pairs, paths }`
+  (no steps for Handling / Deck when their module is off). Handling (handlingCalc): w, per stage (lifting, hauling) L_s = L − 2a, M_sup = −wa²/2,
+  M_mid = wL_s²/8 − wa²/2, the four fibre stresses P/A ∓ Pe/S ± 12M/S (P = A_ps f_pi and e at midspan and at the support: display
+  intermediates of the engine's strand profile), f_c,lim = c f′ci, f_t,lim = 0.24√f′ci, the lifting-stress ratio; I_y (flange and web
+  rectangles), z_o (Mast form) for lifting and hauling, FS_cr,lift = y_t/(z_o + e_i), y_r,h = h_r + y_b (display), FS_cr,haul = y_r,h/(z_o,h + e_i +
+  y_r,h θ_i), the two FS ratios 1/FS. Deck (deckCalc): w_DC, w_DW, M_DC/DW = wS²/11 and wS²/10, the design section x (4.6.2.1.6: b_tf/3 ≤ 15 in,
+  closed box b/2, or entered; 0–24 in), M_LL,+ and M_LL,− interpolated in Table A4-1 (the engine's table rows and columns shown), M_u (η and the
+  owner live-load multiplier where the owner sets them), for the bottom and top bars A_s, d, a, c (β_1 display), ε_t, φ (Eq. 5.5.4.2-1), M_n,
+  φM_n, ratio; overhang X, 45 + 10X, M_DC,oh, M_DW,oh, M_LL,oh = 1.33(1.20)(16)X/(SW/12), M_u,oh, φM_n,oh, ratio; distribution % = min(220/√S, 67).
+  Rating (computeAll): φ_cφ_s = min(max(φ_cφ_s, 0.85), 1.0); flexure at the governing station φM_n, M_DC = M_g + M_DC1 + M_DC2, M_DW, M_LL+IM,
+  RF_inv (γ_LL 1.75), RF_opr (1.35), RF_inv at midspan; shear φV_n = φ_v V_n, V_DC, V_DW, V_LL+IM, RF_inv, RF_opr; Service III f_ps, f_DC, f_DW, f_LL,
+  f_r, RF = (f_r + f_ps − f_DC − f_DW)/(0.8 f_LL); each entered vehicle RF_M, RF_V, RF, RT. No new formula: the expressions of the moved engine.
+- `apps/ps-bridge/ui/handling.js` (new, `PSBUiHandling`): Handling tab — graphic card (tiles; the check ratios and the lifting / hauling fibre
+  stresses, steel bar chart), Lifting and Hauling stress tables (moments, fibre stresses, limits), Lateral stability (screening) with the
+  old app's "not PCI / Mast" warning, the girder-on-supports elevation with its moment (Lifting / Hauling switch; steel detail kit), worked steps.
+  Off: a card linking to the Loads tab input.
+- `apps/ps-bridge/ui/deck.js` (new, `PSBUiDeck`): Deck tab — graphic card (tiles; ratios, M_u against φM_n), interior-bay moments table, Strength I
+  resistance table (positive, negative, overhang), Overhang, Distribution reinforcement, the deck section over the design girder (barrier, design
+  wheel, design sections, bars; steel detail kit), worked steps. Off: a card linking to the Diaphragms / deck tab.
+- `apps/ps-bridge/ui/rating.js` (new, `PSBUiRating`): Rating tab — graphic card (tiles; RF bars against 1.0), Condition and system factors, Flexure,
+  Shear, Service III, Legal / permit vehicles table, the rated sections along the span, worked steps. MBE citations as the old app (article
+  numbers, no edition) so that harness B compares like with like; **the MBE 4th Ed. (2026) labels are their own PR (plan PR 6, PS-14 e)**. The old
+  tab's "Send capacity to MCT Rating" hand-off is not on this tab (cross-tool connections move with the switch-over).
+- `apps/ps-bridge/ui/dash.js`: Handling and Deck chips (the engine's checks; "off" with a link to the input when the module is off) and a Rating
+  chip (the lowest HL-93 inventory RF of flexure, shear and Service III; RF ≥ 1 / RF < 1; not an engine check and not counted in the totals).
+- `apps/ps-bridge/index.html`: loads the new files; result() makes the three tabs' steps; the three tabs replace their placeholders; the dash
+  "off" chip opens its input tab.
+### Copies from the Steel Bridge app (to move to shared/ later, CLAUDE.md §3)
+- None new (`ui/vizkit.js`, `ui/vizalong.js` of PR 2b-2 used).
+### Shared files
+- None changed.
+### Saved data
+- None changed (no new key or field; `psb2.*` only, `psbeam.*` untouched: harness B).
+### Governing provisions
+- None changed (§4). AASHTO LRFD 10th Ed. 5.9.2.3.1a, Table 5.9.2.3.1b-1, Table 5.9.2.3.2b-1, 4.6.2.1.6, Table A4-1, Table 4.6.2.1.3-1, 3.6.1.3.1,
+  5.6.3, Eq. 5.5.4.2-1, 9.7.3.2, Table 3.4.1-1; MBE Eq. 6A.4.2.1-1, Eq. 6A.4.2.1-3, Table 6A.4.2.2-1, 6A.4.2.3, 6A.4.2.4, 6A.4.4, 6A.4.5, 6A.5.4.1, 6A.5.6
+  (old app labels); PCI / Mast (screening) as the moved engine.
+### Check case
+- Default design (PCI BT-72, L = 120 ft, 40 strands 0.6 in, f′ci = 6.8 ksi), Handling and Deck on, vehicle Type 3S2 (M 1,800 kip-ft, V 90 kip, 36 ton):
+  lifting a = 4 ft: L_s = 112 ft, M_mid = 0.8256(112)²/8 − 0.8256(4)²/2 = 1,287.9 kip-ft; P = 8.68 × 179.49 = 1,558.0 kip, e = 31.50 in;
+  f_t,mid = 1,558.0/767 − 1,558.0(31.50)/15,421 + 12(1,287.9)/15,421 = −0.149 ksi; 0.24√6.8 = 0.626 ksi; ratio 0.238. I_y = 50,344 in⁴,
+  z_o = 7.209 in, FS_lift = 35.40/(7.209 + 0.25) = 4.75. Deck S = 9 ft, t_s = 8 in: w_DC = 0.100 ksf, M_DC,+ = 0.100(81)/11 = 0.736, M_LL,+ = 6.29
+  (Table A4-1, S = 9.0 ft), M_u,+ = 1.25(0.736) + 1.50(0.184) + 1.75(6.29) = 12.20 kip-ft/ft; No. 5 bars (0.31 in²) at 6 in: A_s = 0.62 in²/ft, d = 8 − 1
+  − 0.628/2 = 6.686 in, a = 0.912 in, φ = 0.90, φM_n = 17.38 kip-ft/ft, ratio 0.702. Rating: x = 58.0 ft, RF_inv = (13,638.9 − 1.25 × 3,979.1 −
+  1.50 × 449.5)/(1.75 × 2,628.7) = 1.737, RF_opr = 2.252; shear x = 30.01 ft RF_inv = 1.635; Service III RF = (0.554 + 4.586 − 3.091 − 0.267)/(0.8 ×
+  1.558) = 1.430; Type 3S2: RF_V = (334.6 − 1.25 × 66.37 − 1.50 × 7.50)/90 = 2.670 (governs), RF_M = 4.436, rated 96.1 ton.
+### How verified
+- `node tests/engine/run.mjs psbridge tex project-registry` (59 tests): tabs on 14 designs (+ Handling and Deck on with vehicles and φ_cφ_s floored;
+  + MassDOT continuous exterior with an entered design section, a wide overhang and moved handling supports; + a box beam with a topping and
+  S below Table A4-1): every pair to 1e-9, every path value exact (Object.is); model, verbatim, parity harness A 0 differences; every step parsed
+  with KaTeX. `node tests/check-syntax.mjs`.
+- **Harness B** (`node tests/psbridge-compare.mjs`, all nine tabs): 14 designs, **15,559 values shown and 3,125 step values = the old app's
+  computeAll values, 0 differences**; `psbeam.*` untouched; 0 console errors.
+- `node tests/smoke/ps-bridge-skeleton.mjs` (187 checks): Rating on four designs; Handling and Deck "off" (card, chip) until turned on, then
+  ≥ 20 values = computeAll, ≥ 2 graphics, KaTeX; the chips (Rating = the lowest inventory RF); the Rating and Handling chips open their steps;
+  the handling stage switch; blocked by an input error; 390 px without sideways scroll on all twelve result tabs; file://, 0 console errors.
+### Open items
+- Old app behaviour kept and stated on the tabs (engine unchanged, §4): no hauling stress check (stresses shown), no compression check in
+  handling (limit shown), handling stresses on the span L (not the girder length with its ends past the bearings), the deck strip method and
+  coefficients (PS-14 a), the rating at the governing positive-moment section only (no pier region, no restraint moments).
+- MBE 4th Ed. (2026) citation labels: plan PR 6 (PS-14 e).
+- Next: PR 2d-3 (PS-10 hold-down check for AASHTO / RIDOT, engine addition with a §4 callout).
+
+## 2026-11-13 — PR 2d-3: PS-10 hold-down force check for AASHTO / RIDOT projects (ENGINE ADDITION, §4)
+PR #1461: https://github.com/mlococo88/All-Structural/pull/1461
+### §4 callout (a new check; no existing formula, factor or value changed)
+- **Before:** AASHTO and RIDOT projects: **no hold-down force check** (the moved engine checks it only for MassDOT 3.7.2.2 and CTDOT V2
+  5.9.1.6, `pbd-compute.js` "Hold-down force of all draped strands"). MassDOT / CTDOT: F_hd = 2·n_h·f_pbt·A_b·sin α ≤ 0.75 W (unchanged).
+- **After:** AASHTO and RIDOT projects with draped strands: **2·n_h·f_pbt·A_b·sin α ≤ f·W**, f = `base.opt.hdFrac` (default **0.75**, editable),
+  when the box `base.opt.hdCheck` is on (default **on**); α = atan((y_end − y_mid)/(12·frac·L)), f_pbt = jack × f_pu (at jacking, before
+  transfer), W = w_sw·(L + 2 e_end/12). Check name "Hold-down force (PS-10)", PASS when the ratio ≤ 1.0001 (as every engine check).
+- **Basis:** engineer decision PS-10 (2026-11-12, plan §6). AASHTO LRFD 10th Ed. (2024) sets **no** limit on the hold-down force; the 75 %
+  of the beam weight is the rule of MassDOT LRFD Bridge Manual 3.7.2.2 and CTDOT Bridge Design Manual V2 5.9.1.6 (as cited by the moved
+  engine's owner rules), applied here as an option.
+- **Worked check case** (default project: PCI BT-72, L = 120 ft, AASHTO, 12 draped 0.6 in strands, y_end = 60 in, y_mid = 8 in, frac = 0.40,
+  f_pbt = 0.75 × 270 = 202.50 ksi, A_b = 0.217 in², w_sw = 0.82559 klf, girder end at ℄ bearing):
+  tan α = (60 − 8)/(12 × 0.40 × 120) = 0.090278, α = 0.090033 rad, sin α = 0.089911; F_str = 202.50 × 0.217 × 0.089911 = 3.9509 kip;
+  F_hd = 2 × 12 × 3.9509 = **94.8 kip**; L_g = 120.00 ft, W = 0.82559 × 120 = 99.07 kip; limit 0.75 × 99.07 = **74.3 kip**; ratio 94.8/74.3 =
+  **1.276 FAIL**. Before: no check (the default AASHTO design showed no hold-down failure); after: FAIL 1.276, the same numbers as the MassDOT
+  owner check on this design (PENDING.md, "94.8 vs 74.3 kip", confirmed). With f = 0.90: limit 89.2 kip, ratio 1.063.
+### Where
+- `apps/ps-bridge/engine/holddown.js` (new, `window.PSBHoldDown`): `apply(inp, R)` after `computeAll` adds `R.ps10` and the check at the end of
+  `R.checks` (the moved `pbd-*.js` files are not touched: verbatim and parity harness A unchanged); `compute(inp)`; used by `index.html`
+  result(), the tab tests, the smoke test and harness B. No check when the owner has its own rule (MassDOT, CTDOT), when there are no draped
+  strands, or when the box is off (`R.ps10 = { off: true }`).
+- `apps/ps-bridge/engine/model.js` `baseInputs()`: fills `base.opt.hdCheck = true` and `base.opt.hdFrac = 0.75` when absent.
+- `apps/ps-bridge/engine/fields.js`: Owner rules card "Hold-down force limit (PS-10)" (shown for AASHTO and RIDOT): the box and the fraction.
+  `ui/inputs.js`: the PR 2d placeholder removed; the Project tab assumption updated.
+- `apps/ps-bridge/engine/worked-end.js`, `ui/endzone.js`: the hold-down steps, card, tile and graphic from `R.ps10` for AASHTO / RIDOT (as for the
+  owner check); with the box off the tab says the force is not checked. `ui/dash.js`: the check in the End zone & hold-down chip.
+### Saved data (CLAUDE.md §5)
+- New fields inside the psb2 project (no new storage key): `base.opt.hdCheck` (boolean), `base.opt.hdFrac` (number). **Migration:** a new
+  project and every existing psb2 project read without them get the check **ON** at **0.75** (filled by `baseInputs` on import / load); a value
+  the user saved is kept. Old app keys (`psbeam.*`) untouched.
+### Before / after (code)
+- `engine/model.js` baseInputs, anchor `JSON.parse(JSON.stringify(mergeInputs(`: before `return JSON.parse(JSON.stringify(mergeInputs(…)));`;
+  after the same copy, then `if (b.opt.hdCheck === undefined) b.opt.hdCheck = true; if (b.opt.hdFrac === undefined) b.opt.hdFrac = 0.75;`.
+- `index.html` result(), anchor `RC.key !== key`: before `R = computeAll(JSON.parse(key))`; after `R = window.PSBHoldDown.compute(JSON.parse(key))`.
+### How verified
+- `node tests/engine/run.mjs psbridge tex project-registry`: the hand check above to 1e-12 and as shown (94.8, 99.1, 74.3, 1.276), the engine's own
+  checks unchanged with one check appended, f = 0.90, RIDOT, box off, MassDOT / CTDOT keep their own rule only, no draped strands; migration
+  (a project without the fields reads ON / 0.75; saved false / 0.6 kept; a PR 1 project); tabs on 16 designs (+ RIDOT with f = 0.90 and the girder
+  end 6 in past the bearing; + AASHTO with the box off); parity harness A 0 differences; `node tests/check-syntax.mjs`.
+- **Harness B** (`node tests/psbridge-compare.mjs`): 16 designs, all tabs: 17,800 shown values and 3,592 step values (144 of them PS-10); the PS-10 values compared with hand values worked in the
+  harness from the inputs and the old app's f_pbt, A_b, w_sw (1e-12 and as shown), every other value with the old app exactly: 0 differences.
+- `node tests/smoke/ps-bridge-skeleton.mjs` (191 checks): the box on by default (0.75), the check worked on the End zone tab and listed in its
+  chip, the box off removes it and is saved; file://, 1400 and 390 px, 0 console errors.
+### Open items
+- The default project (BT-72, 12 draped strands) now shows the hold-down FAIL under AASHTO, as under MassDOT / CTDOT (real result; the default
+  design is not changed). Auto-design (PR 5) uses this limit as a constraint (plan §4).

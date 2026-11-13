@@ -80,8 +80,7 @@
       <select id="i_base.owner" data-path="base.owner" data-kind="owner">${P_.OWN_LIST.slice().reverse().map(k => `<option value="${k}"${k === o ? ' selected' : ''}>${k === 'AASHTO' ? 'AASHTO (no owner rules)' : `${k} (${esc(P_.OWN_RULES.owners[k].short)})`}</option>`).join('')}</select></div>
       ${rows}<p class="note">${esc(ow.manual || o)}${o !== 'AASHTO' ? ` (AASHTO LRFD ${esc(ow.aashto || '')} basis). ${esc(P_.OWN_RULES.note)}` : ': every input, factor and check is the tool\'s own.'} Strength I load modifier η = η<sub>D</sub>·η<sub>R</sub>·η<sub>I</sub> = ${fmt(OL.etaD, 2)} × ${fmt(OL.etaR, 2)} × ${fmt(OL.etaI, 2)} = <b>${fmt(OL.eta, 4)}</b>${rM ? `; LL+IM × <b>${fmt(OL.mLL, 2)}</b>` : ''} (worked on the Loads &amp; LLDF output tab).</p>
       ${rules.length ? `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Section</th><th class="lft">Requirement (paraphrase)</th><th class="lft">Kind</th><th class="lft">Applied here</th></tr></thead><tbody>${rules.map(r => `<tr><td class="lft">${esc(r.sec)}</td><td class="lft">${esc(r.text)}</td><td class="lft">${esc(K[r.kind] || r.kind)}</td><td class="lft">${applied(r)}</td></tr>`).join('')}</tbody></table></div>` : ''}`);
-    const hd = `<div class="ph"><b>Hold-down force check</b> <span class="devBadge">PR 2d</span><ul><li>F<sub>hd</sub> = 2 n<sub>h</sub> f<sub>pbt</sub> A<sub>b</sub> sin α ≤ 75 % of the beam weight: MassDOT 3.7.2.2 and CTDOT V2 5.9.1.6 are checks of the moved engine today (listed above when the owner is MassDOT or CTDOT).</li><li>AASHTO and RIDOT: optional check box, on by default, limit 75 % of the beam weight, editable (PS-10): an addition to the engine with a §4 callout, PR 2d.</li></ul></div>`;
-    return own + hd;
+    return own;
   }
   /* the Project tab's assumptions (engineer rule: every assumption is a note in its tab and in the Report) */
   function assumptions(P) {
@@ -92,7 +91,7 @@
       'One girder spacing and one skew per design until PR 3a: unequal bays and different skews at the two supports of the design span are input errors for now (PS-9; plan §7 item 3).',
       'DC2 (barrier / superimposed) and DW are entered per girder (Loads tab); the Steel Bridge distribution to each girder comes in PR 3a (PS-9).',
       'Calculations: the old Prestressed Bridge Design engine, moved unchanged (PR 2a, 0 differences on 658 cases); AASHTO LRFD 10th Ed. (2024). Normal-weight concrete; strand f<sub>pu</sub> = 270 ksi, low relaxation.',
-      'Hold-down force check for AASHTO and RIDOT (PS-10): PR 2d. MIDAS demand import by file: a later PR.'
+      'Hold-down force: F<sub>hd</sub> = 2 n<sub>h</sub> f<sub>pbt</sub> A<sub>b</sub> sin α ≤ 0.75 W, checked always for MassDOT and CTDOT (their rule) and, for AASHTO and RIDOT, when the PS-10 box is on (default on, the fraction editable; Owner rules tab). AASHTO LRFD itself sets no limit. MIDAS demand import by file: a later PR.'
     ];
     return card('assume', 'Assumptions', '', `<ul class="note asm">${items.map(t => `<li>${t}</li>`).join('')}</ul>`);
   }
