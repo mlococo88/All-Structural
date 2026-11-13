@@ -3573,7 +3573,7 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
 - **Other copies:** none.
 - **Open item (reported, not fixed):** the Excel export (`xlChecks`) throws for every HSS. Round HSS, beam and member mode: §10 minor shear writes `2*«bf»*«tf»`. Rect HSS: the F2 L_r formula uses `«rts»` / `«ho»`. Checked on origin/main; W-shapes export.
 
-## 2026-11-13 — PR: claude/sbeam-xsec-dims (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SBXD) — cross-section drawings: dimensions, callouts and notes laid out outside the shape, no overlaps   [display only]
+## 2026-11-13 — PR: claude/sbeam-xsec-dims (PR #1484: https://github.com/mlococo88/All-Structural/pull/1484) (SBXD) — cross-section drawings: dimensions, callouts and notes laid out outside the shape, no overlaps   [display only]
 - **Engineer's request (2026-11-13):** "review the cross section graphics, there are some overlapping dimensions, specifically when using an HSS beam."
 - **Graphics reviewed:** `xsecFig` (Schematic & Inputs `#xsecSchem`, Mₓ `#xsecMx`, Compression `#xsecCp`, Section Properties `#xsecSect`; the Report and print use the same figures as PNG at 2.3 × height), `compXsecFig` (`#xsecComp`, `#xsecCompSch`) and `compElevFig` (`#elevComp`, `#elevCompSch`). The tool has no DXF export of these drawings. Torsion, Validation and the input panel have no cross-section drawing; a built-up section is drawn by `xsecFig` as an I-shape.
 - **Problems (before), at 1400 px and 390 px:**
