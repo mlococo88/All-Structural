@@ -658,7 +658,7 @@ PR #1466: https://github.com/mlococo88/All-Structural/pull/1466
   so. Whether to add it to the column (e.g. to the Analysis group or the Materials chip) is for the engineer.
 
 ## 2026-11-13 — Report graphics: each result tab's graphics in its Report section, numbered "Figure n.m" (display only, no calculation change)
-PR: (link added after the PR is opened)
+PR #1467: https://github.com/mlococo88/All-Structural/pull/1467
 ### Problem
 - The Report (PR 2e) had no graphics: its sections are built from each tab's `output()` HTML, and the tabs draw their graphics afterwards in
   `after()` (open item of PR 2e). Engineer's decision (2026-11-13): put each tab's main graphic in its Report section, drawn by the tab's own
