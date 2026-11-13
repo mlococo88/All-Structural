@@ -7264,7 +7264,7 @@ Engineer report (screenshot): a one-way slab, layer T1 at s = 4 in, Set d 6.25 i
 - A blank saved layer size opens as #5 (`mergeState`, `String(L.size||'5')`, unchanged: saved data). Making it an input error instead would change how such a file opens: engineer decision.
 - `S.stir.size` (and other single sizes) not in the bar table would still throw. This is only possible from a hand-edited file and is not changed here.
 
-## 2026-11-13 — PR: claude/cb-slab-st-drawings (CBTS) — Beam Capacity, one-way slab: the shrinkage and temperature bars drawn on the sketches, the 3-D view, the Report overview and the drawing sheets / DXF   [display / drawings only; no computed value, saved key or format change; beams and slabs without T&S bars draw byte-identically]
+## 2026-11-13 — PR: claude/cb-slab-st-drawings (PR #1519: https://github.com/mlococo88/All-Structural/pull/1519) (CBTS) — Beam Capacity, one-way slab: the shrinkage and temperature bars drawn on the sketches, the 3-D view, the Report overview and the drawing sheets / DXF   [display / drawings only; no computed value, saved key or format change; beams and slabs without T&S bars draw byte-identically]
 
 Engineer: "The transverse bars are not shown on the sketches and plans either." Every site is tagged CBTS. The file uses CRLF line endings; keep them. All code is in the Beam Capacity srcdoc (`#suite-frame-capacity`); escape `"` as `&quot;` and `&` as `&amp;` when re-applying (the text below is un-escaped).
 
