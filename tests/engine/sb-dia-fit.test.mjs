@@ -18,11 +18,11 @@ const run = (P, gi = 0) => { const B = FUI.build({ P: J(P), g: gi }); return { B
 const fit = c => c.items.filter(i => /Fit between the girders/.test(i.loc));
 const TR = (P, gi = 0) => CF.cfTypeRec(CF.inputsOf(P, { gi }).p, CF.envOf(P));
 
-test('hand check: W36x135 (d = 35.60 in) between girders of D = 30 in: 35.60 > 30 − 2 = 28.00 in → Fail, with the message; CFE has no fit item', () => {
+test('hand check: W36x135 (d = 35.60 in) between girders of D = 30 in: 35.60 > 30 − 2 = 28.00 in → Fail, with the message; CFE too (SBFE, 2026-11-13)', () => {
   const { B, d, e } = run(dia(two(30, 30), 'W36x135')), F = fit(d);
   assert.equal(F.length, 1); assert.equal(F[0].st, 'fail'); assert.equal(F[0].demand, 35.6); assert.equal(F[0].capacity, 28); assert.equal(+F[0].r.toFixed(3), 1.271);
   assert.match(F[0].loc, /does not fit: W36x135 d = 35\.60 in > 30\.00 − 2\.00 = 28\.00 in, a shallower section is needed/); assert.equal(F[0].step, 'cf.cfd.fit');
-  assert.equal(d.status, 'fail'); assert.equal(fit(e).length, 0, 'CFE: not checked (SB-25 is the intermediate diaphragm)');
+  assert.equal(d.status, 'fail'); assert.equal(fit(e).length, 1, 'CFE: checked too (SBFE, Decision pending engineer review; was not checked)'); assert.equal(fit(e)[0].st, 'fail'); assert.equal(fit(e)[0].step, 'cf.cfe.fit');
   const s = B.R.steps.find(t => t.id === 'cf.cfd.fit'); assert.equal(s.value, 28); assert.equal(s.sub, '30.00 - 2.00'); assert.equal(s.ok, false); assert.match(s.note, /does not fit \(Fail\)/);
   assert.equal(CF.diaClr({}), 2); assert.equal(CF.DIA_CLR, 2);
 });
