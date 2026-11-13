@@ -187,7 +187,7 @@
     if (/^project\b/.test(p)) return 'proj';
     if (/^(spans|xs\.skews)\b/.test(p)) return 'layout';
     if (/^xs\b/.test(p)) return 'xsec';
-    if (/^design\b/.test(p)) return 'gird';
+    if (/^(design|types)\b/.test(p)) return 'gird';   // types: PR 3a-1 (the girder types card)
     if (/^base\.(owner|opt\.eta[DRI]|opt\.llMult|opt\.sidewalk)\b/.test(p)) return 'own';
     for (const t in TABLES) if (p === t || p.indexOf(t + '.') === 0) return TABLES[t].tab;
     let q = p; while (q) { if (byPath[q]) return byPath[q].card.tab; q = q.replace(/\.?[^.]*$/, ''); }

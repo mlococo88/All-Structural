@@ -17,6 +17,8 @@
    one value (unequal bays; different skews at the two supports of the design span) checks(P) returns a blocking input error until
    PR 3a (plan §7 item 3: how the steel distribution maps onto S, DC2/DW and DF is decided there with worked check cases).
    DRIVEN: the base paths the bridge sets (not edited in base; shown read-only on the Girders & strands tab).
+   PR 3a-1 (2026-11-13): girder types on the girder lines of each span (engine/bridge.js, PS-8): inputs(P) is the cell the output tabs show
+   (P.design = the line and span shown), cellInputs(P, k, g) any type on any of its lines; the code of one design (one()) is unchanged.
    Needs the moved engine (window.PBD, DEFAULTS) loaded first. */
 (function () {
   'use strict';
@@ -25,6 +27,8 @@
   const nSpans = P => ((P && P.spans && P.spans.lengths) || []).length;
   /* sel(P): the design girder and span, defaults filled in (nothing written) */
   function sel(P) {
+    const BR = window.PSBBridge;   // PR 3a-1: with girder types, the cell the output tabs show (P.design when a type is on it)
+    if (BR && BR.hasTypes(P)) { const c = BR.shown(P); if (c) return { g: c.g, s: c.s }; }
     const nb = P && P.xs && Number.isInteger(P.xs.nb) ? P.xs.nb : 0, d = (P && P.design) || {};
     return { g: Number.isInteger(d.g) ? d.g : Math.min(2, Math.max(1, nb)), s: Number.isInteger(d.s) ? d.s : 1 };
   }
@@ -49,13 +53,30 @@
     const B = (P.xs.bays || []).filter(isNum);
     if (B.length >= 2 && B.some(b => Math.abs(b - B[0]) > 1e-9))
       E('xs.bays', 'Unequal bays are designed from the bridge-level PR 3a (PS-9). Until then the one girder design uses one spacing S: enter equal bays.');
-    const k = skewOf(P, d.s);
-    if (isNum(k[0]) && isNum(k[1]) && Math.abs(Math.abs(k[0]) - Math.abs(k[1])) > 1e-9)
-      E('xs.skews', `The supports of design span ${d.s} have different skews (${k[0]}° and ${k[1]}°). The girder design uses one skew angle (4.6.2.2.2e, 4.6.2.2.3c) until PR 3a: enter the same skew at both supports of span ${d.s}.`);
+    // PR 3a-1: every span with a checked girder type × line (engine/bridge.js), else the design span as before
+    const BR = window.PSBBridge, typed = !!(BR && BR.hasTypes(P)), spans = typed ? [...new Set(BR.cells(P).map(c => c.s))] : [d.s];
+    spans.forEach(s => { const k = skewOf(P, s);
+      if (isNum(k[0]) && isNum(k[1]) && Math.abs(Math.abs(k[0]) - Math.abs(k[1])) > 1e-9)
+        E('xs.skews', `The supports of ${typed ? '' : 'design '}span ${s} have different skews (${k[0]}° and ${k[1]}°). The girder design uses one skew angle (4.6.2.2.2e, 4.6.2.2.3c) until PR 3a-2: enter the same skew at both supports of span ${s}.`); });
     return { errors };
   }
-  /* inputs(P): the engine inputs of the design girder (a new object; P is not changed) */
+  /* inputs(P): the engine inputs of the girder the output tabs show (a new object; P is not changed). PR 3a-1: with girder types
+     (engine/bridge.js) the cell shown (P.design when a type is on it, else the first checked cell): cellInputs; without (a project saved
+     before PR 3a and not yet migrated, the tests' defaultProject): the one design girder, as before (one() below). */
   function inputs(P) {
+    const B = window.PSBBridge;
+    if (B && B.hasTypes(P)) { const c = B.shown(P); if (c) return cellInputs(P, c.k, c.g); }
+    return one(P);
+  }
+  /* cellInputs(P, k, g): the engine inputs of girder type k (engine/bridge.js) on girder line g of its span: the type's inputs (the base
+     design with the type's overrides, PSBBridge.effBase) with the bridge values of that line and span, by the same code as the one design
+     girder (one()). A type with no override on the design girder's line gives exactly one(P). */
+  function cellInputs(P, k, g) {
+    const B = window.PSBBridge, T = B.types(P)[k];
+    return one(Object.assign({}, P, { base: B.effBase(P, k), design: { g, s: T.span }, types: undefined }));
+  }
+  /* one(P): the engine inputs of the design girder P.design (PR 2b; unchanged) */
+  function one(P) {
     const PBD = window.PBD, d = sel(P), b = bridge(P);
     let o = PBD.applyBridge(b, JSON.parse(JSON.stringify(P.base)), d.g, d.s);
     o.cont = Object.assign({}, o.cont, { on: P.spans.continuity === 'composite' && nSpans(P) >= 2 });
@@ -77,5 +98,5 @@
       { key: 'cont.on', label: 'Made continuous for composite loads', value: i.cont.on ? 'yes' : 'no', unit: '', where: 'layout' }
     ];
   }
-  window.PSBDesign = { DRIVEN, sel, isExt, label, bridge, checks, inputs, driven };
+  window.PSBDesign = { DRIVEN, sel, isExt, label, bridge, checks, inputs, cellInputs, one, driven };
 })();

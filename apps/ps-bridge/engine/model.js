@@ -32,6 +32,11 @@
                       nothing reads it for a calculation.
      design:  { g, s }  added 2026-11-12 (PR 2b), optional within version 1: the design girder line and span of the one girder design until the
                       bridge level (PR 3a); absent: G2 (G1 with one girder) in span 1. Read and checked by engine/design.js (not validated here).
+     types:   [{ id, label, span, lines: [g, …], ovr: { '<engine path>': value } }]  added 2026-11-13 (PR 3a-1, plan §2.4 "groups", PS-8), optional
+                      within version 1: the girder types of each span on its girder lines (engine/bridge.js): each type is the base design with
+                      its own overrides (ovr), checked on every line in lines (1-based, of nb). A project saved without it is migrated on load
+                      (importJSON → PSBBridge.migrate): its design girder becomes type T1 on that one line with no override (results unchanged);
+                      malformed stored types are kept as typesBad (never discarded). A new project (newProject) has Interior and Exterior types.
    }
    Needs the moved engine (engine/pbd-*.js) loaded first for base; without it (a test of this file alone) base is left as it is.
    From PR 2b the engine computes the design girder from base and the bridge values (engine/design.js). */
@@ -65,6 +70,16 @@
     };
   }
 
+  /* newProject(): the project the page starts a NEW project with (PR 3a-1, engineer decision PS-8, as the steel app's newProject, SB-2):
+     defaultProject() with an Interior and an Exterior girder type per span (engine/bridge.js newTypes) and the design girder shown G2 in
+     span 1. defaultProject() itself is unchanged (the tests and harnesses use it). Without engine/bridge.js loaded: defaultProject(). */
+  function newProject() {
+    const p = defaultProject(), B = typeof window !== 'undefined' && window.PSBBridge;
+    if (!B || !p.base) return p;
+    p.types = B.newTypes(p); p.design = { g: Math.min(2, p.xs.nb), s: 1 };
+    return p;
+  }
+
   /* validate(p): { errors: [{ path, msg }], warnings: [{ path, msg }] }. Errors block results; nothing is changed. */
   function validate(p) {
     const errors = [], warnings = [], E = (path, msg) => errors.push({ path, msg }), W = (path, msg) => warnings.push({ path, msg });
@@ -89,6 +104,8 @@
     if (L.length && S.length !== L.length + 1) E('xs.skews', `Enter ${L.length + 1} support skews (abutment, piers, abutment) for ${L.length} span${L.length === 1 ? '' : 's'}.`);
     S.forEach((v, i) => { if (!(isNum(v) && Math.abs(v) < 90)) E(`xs.skews.${i}`, `Skew at support ${i + 1} must be a number of degrees between −90 and 90.`); });
     if (p.base !== undefined && (!p.base || typeof p.base !== 'object' || Array.isArray(p.base))) E('base', 'The base girder design is not an inputs object.');
+    const BR = typeof window !== 'undefined' && window.PSBBridge;   // PR 3a-1: the girder types (engine/bridge.js), when present
+    if (p.types !== undefined && BR && !BR.validTypes(p.types)) E('types', 'The girder types cannot be read (each needs an id, a span, its lines and its overrides).');
     return { errors, warnings };
   }
 
@@ -124,26 +141,29 @@
     if (!obj || obj.schema !== SCHEMA) return { ok: false, error: 'Not a PS Bridge (psb2) project file.' };
     let p; try { p = migrate(obj); } catch (e) { return { ok: false, error: e.message }; }
     if (engineLoaded() && (p.base === undefined || (p.base && typeof p.base === 'object' && !Array.isArray(p.base)))) p.base = baseInputs(p.base);   // filled / merged onto DEFAULTS
+    const notes = [], BR = typeof window !== 'undefined' && window.PSBBridge;
+    if (BR && p.base && typeof p.base === 'object') { const n = BR.migrate(p); if (n) notes.push(n); }   // PR 3a-1: girder types (a project saved before: its design girder = type T1)
     const v = validate(p);
-    return { ok: true, project: p, errors: v.errors, warnings: v.warnings, notes: [] };
+    return { ok: true, project: p, errors: v.errors, warnings: v.warnings, notes };
   }
 
   /* save(storage, p): writes the project to KEYS.current. Returns true, or false if storage refused (quota, privacy mode). */
   function save(storage, p) {
     try { storage.setItem(KEYS.current, exportJSON(p)); return true; } catch (e) { return false; }
   }
-  /* load(storage, now): { project, errors, warnings, source: 'saved' | 'default', note, notes, noAutosave }. A stored text that cannot be
+  /* load(storage, now): { project, errors, warnings, source: 'saved' | 'default', note, notes, noAutosave }. No saved project: newProject()
+     (PR 3a-1; before: defaultProject(), the same design with no girder types). A stored text that cannot be
      read is copied to KEYS.backup + time before the default project is returned, so the next save does not lose it; if that copy fails
      (storage full) noAutosave is true and the page must not autosave over the original key. */
   function load(storage, now) {
     let raw = null;
     try { raw = storage.getItem(KEYS.current); } catch (e) { raw = null; }
-    if (raw == null) { const p = defaultProject(); return { project: p, ...validate(p), source: 'default', note: '', notes: [] }; }
+    if (raw == null) { const p = newProject(); return { project: p, ...validate(p), source: 'default', note: '', notes: [] }; }
     const r = importJSON(raw);
     if (r.ok) return { project: r.project, errors: r.errors, warnings: r.warnings, source: 'saved', note: '', notes: r.notes };
     const bk = KEYS.backup + (now || new Date().toISOString());
     let kept = true; try { storage.setItem(bk, raw); } catch (e) { kept = false; }
-    const p = defaultProject();
+    const p = newProject();
     return { project: p, ...validate(p), source: 'default', noAutosave: !kept, notes: [],
       note: kept ? `The saved project could not be read (${r.error}). It was kept under "${bk}"; a new project was started.`
         : `The saved project could not be read (${r.error}) and could not be backed up (storage full). It is left as it was; autosave is off until you export.` };
@@ -157,5 +177,5 @@
     return out;
   }
 
-  window.PSBModel = { SCHEMA, VERSION, KEYS, CONTINUITY, defaultProject, validate, migrate, legacyKind, exportJSON, importJSON, save, load, totalLength, girderOffsets, baseInputs };
+  window.PSBModel = { SCHEMA, VERSION, KEYS, CONTINUITY, defaultProject, newProject, validate, migrate, legacyKind, exportJSON, importJSON, save, load, totalLength, girderOffsets, baseInputs };
 })();

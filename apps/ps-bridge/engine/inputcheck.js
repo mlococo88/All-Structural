@@ -42,7 +42,28 @@
     v.errors.forEach(e => E(e.path, e.msg, 'model')); v.warnings.forEach(w => warnings.push({ path: w.path, msg: w.msg, src: 'model' }));
     if (!P || !P.base || typeof P.base !== 'object') return { errors, warnings };
     if (window.PSBDesign && P.xs && P.spans) window.PSBDesign.checks(P).errors.forEach(e => E(e.path, e.msg, 'design'));
-    const b = P.base, get = F().get, plain = F().plain;
+    const BR = window.PSBBridge;   // PR 3a-1: the girder types (engine/bridge.js): two types on one line, different shapes in a span (blocking)
+    if (BR && P.xs && P.spans) { const c = BR.checks(P); c.errors.forEach(e => E(e.path, e.msg, 'types')); c.warnings.forEach(w => warnings.push({ path: w.path, msg: w.msg, src: 'types' })); }
+    const Ls = s => P.spans && Array.isArray(P.spans.lengths) ? P.spans.lengths[s - 1] : NaN;
+    inputsOf(P, P.base, Ls(window.PSBDesign ? window.PSBDesign.sel(P).s : 1), E);
+    /* PR 3a-1: each girder type's own inputs (the base with its overrides, on its span's length) checked by the same rules; an error the base
+       does not already have is the type's: its message names the type, scope = the type's id (the page shows the field in that type's
+       scope). */
+    if (BR && BR.hasTypes(P)) {
+      const seen = new Set(errors.map(e => e.path + '|' + e.msg));
+      P.types.forEach((T, k) => {
+        if (!BR.typeLines(P, k).length) return;
+        const Pv = Object.assign({}, P, { base: BR.effBase(P, k) });
+        inputsOf(Pv, Pv.base, Ls(T.span), (path, msg, src, cell) => { if (seen.has(path + '|' + msg)) return;
+          const e = { path, msg: `Girder type ${T.label}: ${msg}`, src, scope: T.id }; if (cell != null) e.cell = cell; errors.push(e); seen.add(path + '|' + msg); });
+      });
+    }
+    return { errors, warnings };
+  }
+  /* inputsOf(P, b, L, E): the field, table and location rules on the inputs object b (P.base, or a girder type's effective inputs), with the
+     span length L of the design (PR 2b; moved into a function in PR 3a-1, the rules unchanged) */
+  function inputsOf(P, b, L, E) {
+    const get = F().get, plain = F().plain;
     // the fields of the input cards (engine/fields.js), where shown
     F().CARDS.forEach(c => {
       if (c.when && !c.when(b, P)) return;
@@ -66,7 +87,7 @@
       }));
     });
     // locations inside the girder and the span
-    const h = depthOf(b), L = P.spans && Array.isArray(P.spans.lengths) ? P.spans.lengths[(window.PSBDesign ? window.PSBDesign.sel(P).s : 1) - 1] : NaN;
+    const h = depthOf(b);
     if (isNum(h) && h > 0) {
       (Array.isArray(b.rows) ? b.rows : []).forEach((r, i) => {
         if (isNum(r.y) && r.y >= h) E(`base.rows.${i}.y`, `Straight strand rows, row ${i + 1}: y = ${r.y} in is not inside the girder (h = ${h} in).`, 'geometry', i);
@@ -81,7 +102,6 @@
     const m = b.mat || {};
     if (isNum(m.ti) && isNum(m.td) && m.td <= m.ti) E('base.mat.td', `Age at deck placement t_d (${m.td} days) must be later than the age at release t_i (${m.ti} days).`, 'geometry');
     if (isNum(m.td) && isNum(m.tfin) && m.tfin <= m.td) E('base.mat.tfin', `Final age t_f (${m.tfin} days) must be later than the age at deck placement t_d (${m.td} days).`, 'geometry');
-    return { errors, warnings };
   }
   window.PSBInputCheck = { collect, ruleMsg, depthOf };
 })();
