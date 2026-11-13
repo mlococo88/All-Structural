@@ -7067,3 +7067,98 @@ The file uses CRLF line endings; keep them. The code is in the Beam Capacity src
 - **How verified:**
   - **Probe** of origin/main vs branch, 9 projects (3 AASHTO). `computeAll()` without the AASHTO `szA`, `VALIDATION` without the new note, `allChecks` without the new row, the hand-off message and the autosave are identical in all of them.
   - **Tests:** `tests/smoke/cbc-shear-limit.mjs` now checks the AASHTO row, column, card, Report and note (before, it asserted that no row existed). Also passing: `check-syntax`, `decimal-entry --tool cbc,cbc2`, `phone-layout --tool cbc`, `project-library --tool cbc` and `cbc-leg-width`.
+
+## 2026-11-13 — PR: claude/cbc-slab-width (CBSW) — Beam Capacity tab, ACI mode, one-way slab: width basis "Per 1 ft strip (b = 12 in)" (default, as before) or "Actual width b"   [NEW OPTION (slab mode); same equations with b in place of 12 in; strip slabs and beams compute identically; saved format: additive `slab.bMode` / `slab.b` with migration (absent = 12 in strip); no new storage key]
+
+The file uses CRLF line endings; keep them. All code is in the Beam Capacity srcdoc (`#suite-frame-capacity`). When re-applying, escape `&` as `&amp;` and `"` as `&quot;` (and `>` stays `&gt;` where the line already has it); the text below is un-escaped. Every site is tagged CBSW. Engineer request (2026-11-13): "For the concrete beam, when slab is selected, I want an option to enter the actual width, not just a 12 in strip."
+
+### What the option does
+- **Strip (default):** unchanged. b = 12 in (read-only), each layer n = 12/s bars (fractional), every action and result per 1 ft.
+- **Actual width b:** the section is b wide (`S.sec.bw = S.slab.b`, rectangular). Bars are still entered as size and spacing. Each layer has **n = floor(b/s)** bars, so A_s = n·A_bar. Every action entered (M_u, V_u, T_u, service cases, crack-control service moments) and every result is for the full width b. Shear uses b_w = b.
+- **Width-dependent results** (follow b through the existing equations): A_s; a, c, φM_n (C_c = 0.85f′c·b·a); V_c (b_w = b; ρ_w = A_s/(b d) is the same as the strip's when b/s is whole); A_s,min = 0.0018·b·h (7.6.1.1); the A_v,min trigger φV_c (7.6.3.1).
+- **Not width-dependent** (unchanged): bar spacing ≤ min(3h, 18 in) (7.7.2.3); crack control s (24.3.2, the spacing entered); clear spacing s − d_b (25.2.1); shrinkage and temperature ρ = A_bar/(s_st h) and s_st ≤ min(5h, 18 in) (24.4.3.2, 24.4.3.3). The S&T bars run across the width, so their ratio is per ft of length along the span whatever b is. Also unchanged: minimum thickness (Table 7.3.1.1) and ε_t (7.3.3.1).
+
+### Changes
+- **Helpers** (after `function cbcSlab(){`, anchor `CBSW (2026-11-13, engineer request): one-way slab width basis`):
+  - `cbcSlabAct()` = `cbcSlab()&&!!S.slab&&S.slab.bMode==='actual'`.
+  - `cbcSlabN(s)`: actual → `Math.floor(b/s+1e-9)` (0 when b ≤ 0); strip → `12/s`.
+  - `cbcSlabSync()`: slab only. `S.sec.bw = actual ? (S.slab.b ?? 12) : 12`, `S.sec.type='rect'`, and every layer with s > 0 gets `L.n = cbcSlabN(L.s)`.
+  - `cbcSlabPer()`: "for b = 48.00 in (actual width)" or "per 1 ft strip (b = 12 in)".
+- **`cbcBarTxt`.**
+  - Before: `if(cbcSlab()&&L&&L.s>0) return "#"+L.size+" @ "+fmt(L.s)+…`
+  - After: `if(cbcSlab()&&L&&L.s>0) return (cbcSlabAct()?L.n+(sep||"#"):"#")+L.size+" @ "+fmt(L.s)+…`
+  - Actual width gives "4 #5 @ 12.00 in" (hand-off), "4-#5 @ 12"" (drawings). The strip text is unchanged.
+- **`mergeState()` (§5 migration).**
+  - Before:
+    ```
+    S.slab={stSize:String((st.slab&&st.slab.stSize)||""),stS:+(st.slab&&st.slab.stS)||0};
+    if(S.memberType==='slab'){ S.sec.bw=12; S.sec.type='rect'; S.layers.forEach(L=>{ if(!(L.s>0)) L.s=Math.round(12/L.n*4)/4||12; L.n=12/L.s; }); }
+    ```
+  - After:
+    ```
+    S.slab={stSize:String((st.slab&&st.slab.stSize)||""),stS:+(st.slab&&st.slab.stS)||0,
+      ...(st.slab&&st.slab.bMode==='actual'?{bMode:'actual'}:{}),...(st.slab&&st.slab.b!=null&&st.slab.b!==''&&isFinite(+st.slab.b)?{b:+st.slab.b}:{})};
+    if(S.memberType==='slab'){ S.layers.forEach(L=>{ if(!(L.s>0)) L.s=Math.round(12/L.n*4)/4||12; }); cbcSlabSync(); }
+    ```
+  - `bMode` and `b` are written only once the option has been used. A project saved before (or a strip slab, or a beam) has neither, so it opens as the 12 in strip and its autosave stays byte-identical. `defaultState()` is unchanged.
+- **Input, Section Geometry (slab):**
+  - The member type option reads "One-way slab" (was "One-way slab (per 1 ft strip)").
+  - New select "Slab width basis" (`data-fkey="slabBMode"`): "Per 1 ft strip (b = 12 in)" / "Actual width b". Choosing actual sets `S.slab.bMode='actual'` (b = 12 in the first time). Choosing strip deletes `bMode` (`slab.b` is kept for a later switch back). Both call `cbcSlabSync()`.
+  - Actual: "Slab width, b (actual)" (`data-fkey="bw"`, in, editable) sets `S.slab.b` then `cbcSlabSync()`. Strip: the read-only 12 in row as before.
+  - Actual: its own note (n = floor(b/s), every result for the full width, b_w = b, what is not width-dependent). Strip: the note as before.
+  - Beam → slab also calls `cbcSlabSync()` after the existing 12/n conversion.
+- **Input, Reinforcement Layers:** the spacing setter, before `L.n=v>0?12/v:0`, after `L.n=cbcSlabN(v)`.
+- **Input, Load Combinations** (factored and service): a slab note "One-way slab: enter the actions per 1 ft strip (b = 12 in)." or "… for b = 48.00 in (actual width) (the whole width b, not per foot)."
+- **Input, Crack control:** the service moment labels get ", for b" (actual width only).
+- **`validate()`:**
+  - Blocker (actual width) when a layer's s > b: "Slab width b = … in is less than a layer's bar spacing s: no bar would be counted (n = floor(b/s) = 0). Enter b at least s."
+  - Note (actual width): n = floor(b/s) per layer, worked ("layer 1: floor(48.00/12.00) = 4").
+- **`detailing()`, `dAsMin` (slab).**
+  - Before: `const Ag=12*h, AsS=0.0018*Ag;` with the line `0.0018(12)(h)= … in² per ft`.
+  - After: `const sAc=cbcSlabAct(), Ag=(sAc?bw:12)*h, AsS=0.0018*Ag;`. Actual width: `A_s,min=0.0018A_g=0.0018 b h`, `0.0018(48.00)(9.00)=0.778 in² for b=48.00 in`, "A_g of the actual width b = 48.00 in". Strip: as before.
+- **`dStA` note** (actual width only): "… per ft of length along the span (these bars run across the width, so the ratio does not depend on b = … in)". The value is unchanged.
+- **Flexure worked line `C_c`**, on screen (`workFlexure`) and in the Report (`cbcRptFlex`, step `Cc`). For a slab (either basis), b is substituted.
+  - On screen, before: `C_c = 0.85 f'_c b a = 18.60 kip`. After: `C_c = 0.85 f'_c b a = 0.85(4.00)(12.00)(0.46) = 18.60 kip`.
+  - Report sub, before: `0.85(4.00)\,b\,(0.46)`. After: `0.85(4.00)(12.00)(0.46)`.
+  - Beams are unchanged.
+- **`barXs(n,db,s)`:**
+  - A third argument s, the slab spacing; all five callers pass `L.s` / `Lr.s`.
+  - Slab: `sp = s>0 ? s : 12/n`. With the actual width, exactly n bars are drawn, centred at s. The strip is as before, since s = 12/n there.
+- **Bars columns** (Input Echo, Report Reinforcement table, Drawings bar schedule): actual width "4 @ 12.00 in"; strip "@ 12.00 in" as before.
+- **Width basis stated:**
+  - check summary panel, first line (class `cbdBasis`): "One-way slab: results per 1 ft strip (b = 12 in)." / "… for b = 48.00 in (actual width).";
+  - Report Inputs "Member type" row (actual: "One-way slab, actual width b = 48.00 in: A_s, actions and results for the full width b; bars per layer n = floor(b/s)");
+  - Report "Summary of results" note, which starts "One-way slab: every result …".
+- **Hand-off** (`derive()`, unchanged code): `b_w = S.sec.bw` and `as`/`as_pos`/`as_neg` = A_s of the same section. The ASD tab gets b_w 48 in with A_s 1.24 in² (actual) or 12 in with 0.31 in² (strip): always the same width. Development & Splice reads `asReq` (A_s,req/A_s,prov is a ratio, width-free) and `bars` ("4 #5 @ 12.00 in").
+
+### Hand check (the CBSB slab: h 9 in, d 6.25 in (set), #5 @ 12 in, f′c 4 ksi, f_y 60 ksi)
+
+| | Strip, b = 12 in (before = after) | Actual, b = 48 in (new) |
+|---|---|---|
+| n | 12/12 = 1 | floor(48/12) = 4 |
+| A_s | 0.31 in² | 4(0.31) = 1.24 in² |
+| a = A_s f_y/(0.85 f′c b) | 18.6/40.8 = 0.4559 in | 74.4/163.2 = 0.4559 in |
+| C_c = 0.85 f′c b a | 0.85(4)(12)(0.4559) = 18.60 kip | 0.85(4)(48)(0.4559) = 74.40 kip |
+| φM_n = 0.9 A_s f_y (d − a/2)/12 | 0.9(0.31)(60)(6.0221)/12 = 8.401 kip-ft | 0.9(1.24)(60)(6.0221)/12 = 33.603 kip-ft = 4 × 8.401 |
+| ρ_w = A_s/(b d) | 0.31/75 = 0.004133 | 1.24/300 = 0.004133 |
+| V_c = 8λ_s λ ρ_w^(1/3) √f′c b d | 6.09 kip | 24.36 kip (= 4×) |
+| φV_c | 4.57 kip | 18.27 kip |
+| A_s,min = 0.0018 b h | 0.194 in² | 0.0018(48)(9) = 0.778 in² |
+| s ≤ min(3h, 18) | 12 ≤ 18 | 12 ≤ 18 (same) |
+| S&T #4 @ 12: ρ = 0.20/(12 × 9) | 0.00185 | 0.00185 (same) |
+| Crack control s_max (f_s 40, c_c 2) | 10 < 12, FAIL | the same |
+
+b = 50 in, same bars: n = floor(50/12) = floor(4.17) = 4, A_s = 1.24 in², a = 74.4/(0.85 × 4 × 50) = 0.4376 in, φM_n = 0.9(1.24)(60)(6.25 − 0.2188)/12 = 33.654 kip-ft. b = 10 in < s: an input error.
+
+### Decisions (pending engineer review)
+- **Bars counted in the actual width: n = floor(b/s)**, rounded down, so a part bar at the edges is not counted. This is conservative for φM_n, φV_c (smaller ρ_w) and the A_s,min check. It matches a layout with the end bars at least s/2 from each edge. An exact multiple (48/12) gives the same A_s as A_bar·b/s. An alternative, if the engineer prefers it: n = b/s, unrounded (A_s = A_bar·b/s).
+- **b < s** is an input error (no bar counted), not a single bar.
+- **Shrinkage and temperature** keeps its own basis: per ft of length along the span, independent of b.
+- **The width basis is ACI mode only**, like the member type. In AASHTO mode a slab saved with an actual width is analysed as a beam b wide with n = floor(b/s) bars (`cbcSlab()` false), as the strip slab is analysed as a 12 in beam there.
+- **Display changes for existing strip slabs** (results identical): the member type option text, the check summary basis line, the Loads note, the Summary of results note and the C_c line with b substituted.
+
+### How verified
+- **Probe:** origin/main vs branch, 10 projects (default beam; factored beam; T-beam in negative bending with torsion; AASHTO beam; service-load beam with min thickness; strip slabs: the #1499 hand check, two layers with S&T and min thickness, service loads with calculated f_s, a slab without saved s; a slab in AASHTO mode).
+  - Identical in every project: the autosave (byte for byte), `computeAll()`, `VALIDATION`, `detEnvelope()`, `allChecks()`, the hand-off message, and every output tab's text except Flexure.
+  - The differences are display only, in slab projects: the C_c line with b, the basis lines in the check summary and the Report, and the input panel text. In beam projects only the member type option text differs.
+- **Tests:** `tests/smoke/cbc-slab.mjs` extended (actual width b = 48 and 50, b < s, hand-off to ASD and Development & Splice, labels, Report, save and reopen, back to the strip), 1400 and 390 px, 0 console errors. The suite's other tests are listed in the PR.
