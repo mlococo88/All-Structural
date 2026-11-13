@@ -5783,7 +5783,7 @@ function cbcRptModel(){
   /* 1. inputs */
   { const G=layerGeom(CC.govRow?CC.govRow.neg:false), subs=[];
     subs.push({title:'Section and materials',items:[{type:'table',head:['Item','Value','Unit'],rows:[
-      ['Design code',codeName,''],['Section type',S.sec.type==='tee'?'T-beam':'Rectangular',''],['Web width $b_{w}$',{t:fmt(S.sec.bw),n:true},'in'],['Overall depth h',{t:fmt(S.sec.h),n:true},'in'],
+      ['Design code',codeName,''],...(cbcSlab()?[['Member type','One-way slab: a 12 in strip; A_s, actions and results per 1 ft width (ACI 318-19 Chapter 7)','']]:[]),['Section type',S.sec.type==='tee'?'T-beam':'Rectangular',''],['Web width $b_{w}$',{t:fmt(S.sec.bw),n:true},'in'],['Overall depth h',{t:fmt(S.sec.h),n:true},'in'],
       ...(S.sec.type==='tee'?[['Flange width $b_{f}$',{t:fmt(S.sec.bf),n:true},'in'],['Flange thickness $h_{f}$',{t:fmt(S.sec.hf),n:true},'in']].concat(S.code==='ACI'?[['Beam for $A_{s,min}$, flange in tension (9.6.1.2)',S.sec.asminSupport==='indeterminate'?'statically indeterminate':'statically determinate','']]:[]):[]),
       [&quot;$f^{\\prime}_{c}$&quot;,{t:fmt(S.mat.fc),n:true},'ksi'],['$f_{y}$',{t:fmt(S.mat.fy),n:true},'ksi'],['$f_{yt}$',{t:fmt(S.mat.fyt),n:true},'ksi'],...(S.code==='AASHTO'?[['$f_{yt}$ up to 100 ksi (5.4.3.3, no torsion; 5.7.2.7)',S.mat.fyt100?'yes':'no','']]:[]),['$\\lambda$',{t:fmt(S.mat.lambda,2),n:true},''],...(S.code==='AASHTO'?[['Unit weight $w_{c}$ for $E_{c}$',S.mat.wc>0?{t:fmt(S.mat.wc,3),n:true}:(S.mat.lambda<1?'0.110 (lightweight, not entered)':'Table 3.5.1-1'),'kcf']]:[]),
       ['Aggregate size',{t:fmt(S.mat.dagg),n:true},'in'],['Clear cover provided / required',fmt(S.cover.cc)+' / '+fmt(S.cover.req),'in']]},{type:'note',text:cbcLamBasis()}]});   /* CBASM: the lambda note */

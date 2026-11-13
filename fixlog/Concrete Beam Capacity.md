@@ -6771,3 +6771,83 @@ The legs are taken as equally spaced between the outer legs, because the input h
   - before: `` `V_c = \\min(V_c,\;V_{c,max}) = …` ``
   - after: `` `V_c = \\min(V_c,\\;V_{c,max}) = …` ``
 - **How found / verified:** a scan of the file for a single backslash before ";". Only these 10 occurrences turned up, plus 2 in comments, which were left. The KaTeX annotation of the Shear card then reads `\min(V_c,\;V_{c,max})` (one backslash, as KaTeX receives it). `check-syntax`, `cbc-shear-limit` and `cbc-leg-width` pass. **Provision:** none.
+
+## 2026-11-13 — PR: claude/cbc-oneway-slab (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CBSB) — Beam Capacity tab, ACI mode: "Member type" Beam / One-way slab; the slab is a 12 in strip with bars entered as size and spacing; slab checks of ACI 318-19 Chapter 7 (A_s,min 7.6.1.1, bar spacing 7.7.2.3, shrinkage and temperature 24.4.3, A_v,min 7.6.3.1, ε_t 7.3.3.1, no skin)   [NEW FUNCTIONALITY (slab mode); beams identical; saved format: additive memberType / slab / layer s with migration (absent = beam); no new storage key]
+
+The file uses CRLF line endings; keep them. All code is in the Beam Capacity srcdoc (`#suite-frame-capacity`). When re-applying, escape `&` as `&amp;` and `"` as `&quot;`; the text below is un-escaped. Every site is tagged CBSB. This is PR 1 of 2 of engineer decision CB-6. PR 2 adds the minimum thickness (Tables 7.3.1.1 / 9.3.1.1).
+
+### Provisions (ACI 318-19, read in structural_references ACI-318-19-2019.pdf; paraphrased)
+| Article | PDF page | Requirement |
+|---|---|---|
+| 7.6.1.1 | 94 | A_s,min = 0.0018A_g. This edition has no f_y adjustment. |
+| 7.6.3.1 | 95 | A_v,min where V_u > φV_c. 7.6.3.3: amount per 9.6.3.4. |
+| 7.7.2.3 | 97 | Maximum spacing of the deformed longitudinal reinforcement: the lesser of 3h and 18 in. |
+| 7.7.5.1 | 99 | Shear reinforcement, if any, detailed per 9.7.6.2. |
+| 7.7.6.1 / 7.7.6.2.1 | 99 | Shrinkage and temperature reinforcement perpendicular to the flexural reinforcement, spacing ≤ the lesser of 5h and 18 in. |
+| 24.4.3.2 / 24.4.3.3 | 464 | ρ (gross area) ≥ 0.0018; spacing ≤ the lesser of 5h and 18 in. |
+| 7.3.3.1 | 92 | Slabs tension-controlled (Table 21.2.2), i.e. the same ε_t ≥ ε_ty + 0.003 limit as 9.3.3.1. |
+
+### Changes
+- **Helpers** (before `function fytDesign(){`):
+  - `cbcSlab()` = `S.memberType==='slab'&&S.code==='ACI'`;
+  - `cbcBarTxt(L,sep)`: "#5 @ 12.00 in" for a slab layer, else "n#size", "n #size" or "n-#size", as before.
+- **State:**
+  - `defaultState()` adds `memberType:"beam"` and `slab:{stSize:"",stS:0}`.
+  - `mergeState()` keeps a layer's `s` only where it was saved (`...(+L.s>0?{s:+L.s}:{})`), so a beam's layer objects are byte-identical.
+  - Migration: `S.memberType=(st.memberType==='slab')?'slab':'beam'`, and `S.slab` is read.
+  - For a slab, `bw=12`, `type='rect'`, and each layer gets `n=12/s`.
+- **`layerGeom`:** returns `s:L.s` (undefined for beams, so nothing is added to JSON).
+- **Input — Section Geometry** (ACI), a "Member type" select:
+  - Choosing **One-way slab** sets b = 12 in, the section rectangular and the stirrups off. Each layer becomes bars at s = 12/n, rounded to 1/4 in.
+  - In slab mode the panel shows "Strip width, b (per 1 ft strip)" = 12 (read-only), "Slab thickness, h", and a note.
+  - Choosing **Beam** sets n = round(n) and removes s.
+- **Input — Reinforcement Layers:** in slab mode the first column is "Spacing s (in)" (`data-fkey="lsp<i>"`), and n = 12/s.
+- **Input — new section "Shrinkage & Temperature (slab)"** (`inSlabST`, in the Reinforcement input tab): bar size and spacing.
+- **Validation:** a blocker when a slab layer has s ≤ 0.
+- **`detailing()`:**
+  - `dSpace`: clear spacing s − d_b for a slab.
+  - New `dSlabS`: the widest layer's s ≤ min(3h, 18).
+  - New `dStA`: ρ = A_s,st/(12h) ≥ 0.0018.
+  - New `dStS`: s_st ≤ min(5h, 18). With no S&T bars entered, both FAIL.
+  - `dAsMin`: for a slab, 0.0018(12)h, "Minimum flexural reinforcement (slab)", ACI 7.6.1.1, against the A_s of the face in tension.
+  - `dEpsMin`: ref ACI 7.3.3.1 for a slab.
+  - `dSkin`: N/A for a slab with h > 36 in.
+  - No-stirrup minimum shear: for a slab, the trigger is φV_c (ACI 7.6.3.1), and the h ≤ 10 in exemption of Table 9.6.3.1 is not used.
+  - Crack control: for a slab, s is the spacing entered, and the "only one bar" N/A branch is skipped.
+- **Display:**
+  - `barXs`: for a slab, bars at s, centred in the strip (drawings).
+  - Bar text through `cbcBarTxt` in the Input Echo, the Flexure layer table, the section / elevation / bar schedule drawings, the Report reinforcement and service tables, and the hand-off `bars` text.
+  - The Report Inputs table gets a "Member type" row for slabs only.
+  - The A_s,min reference in the hand-off (`asReqOut`) is "ACI 318-19 7.6.1.1" for a slab.
+
+### Hand check (slab)
+h = 9 in, d = 6.25 in (set), #5 @ 12 in, f′c = 4 ksi, f_y = 60 ksi.
+
+- **Flexure:**
+  - A_s = 0.31 in²/ft;
+  - a = 0.31(60)/(0.85 × 4 × 12) = 0.456 in;
+  - φM_n = 0.9(0.31)(60)(6.25 − 0.228)/12 = 8.40 kip-ft/ft.
+- **A_s,min** = 0.0018(12)(9) = 0.194 in², PASS.
+- **Bar spacing:** s = 12 ≤ min(27, 18) = 18 in, PASS.
+- **V_c**, no stirrups, row (c):
+  - λ_s = √(2/1.625) = 1.109, which is capped at 1.0;
+  - ρ_w = 0.31/75 = 0.00413;
+  - V_c = 8(1)(0.00413)^(1/3)(63.25)(12)(6.25)/1000 = 6.09 kip;
+  - φV_c = 4.57 kip.
+- **A_v,min (7.6.3.1):** at V_u 3 kip it is N/A. At V_u 5 kip it is required, and with none provided it FAILs.
+- **S&T, #4 @ 12:** ρ = 0.20/108 = 0.00185 ≥ 0.0018, PASS; s = 12 ≤ min(45, 18) = 18, PASS.
+- **Crack control** (default f_s = 40 ksi, c_c = 2.0 in): s_max = min(15 − 2.5(2.0), 12) = 10 in < 12 in, FAIL.
+
+### Decisions (pending engineer review)
+- **A_s,min for a slab** is compared with the A_s of the face in tension for each combination, not the total of both faces. This is conservative.
+- **Switching to slab** turns the stirrups off (they can be ticked back) and converts n bars to s = 12/n. Switching back to beam rounds n.
+- **Per-foot results** keep the units kip-ft and kip. The notes say "per 1 ft strip".
+- **The member type is ACI mode only.** In AASHTO mode a slab is analysed as a 12 in beam with no slab checks, because `cbcSlab()` is false.
+
+### How verified
+- **Beams unchanged.** Scratch probe of origin/main (#1498) vs branch, 15 projects (those of CBLW). These are identical:
+  - `computeAll()`, `VALIDATION`, `detEnvelope`, `allChecks`, the hand-off message, the Report model and every tab's text;
+  - the autosave, apart from the added `memberType:"beam"` and `slab`.
+
+  The input panel differs only by the Member type select (ACI).
+- **Tests:** new `tests/smoke/cbc-slab.mjs`, 1400 and 390 px, 0 console errors. The suite's other tests are listed in the PR.
