@@ -6334,3 +6334,71 @@ Headless Chromium, `file://`. Scratch probe: origin/main vs branch, 5 cases (def
 ### Open items
 - Decimal entry with the Beam Capacity Report tab open: 0 keystrokes lost. While the sweep types transient values, the section figure logs "`<rect>` attribute width: A negative value". The Input Echo tab shows the same errors on its own (unchanged code, 20 errors); the report draws the figure three times. Not changed.
 - Typing with the Report tab open rebuilds the report on each refresh (about 190 ms in the default project), as the Development & Splice Report tab already did.
+
+## 2026-11-13 — PR: claude/cb-loads-display (PR #1492: https://github.com/mlococo88/All-Structural/pull/1492) (CBTU, CBDA, CBVC) — Beam Capacity tab: a hidden T_u no longer affects the identical-combination and tie logic; detailing checks that do not depend on the factored actions name "All combinations (positive / negative moment)"; the V_c row (a) note reworded   [display only; no formula, computed value, storage key or saved-data format change]
+
+The file uses CRLF line endings; keep them. The code is in the Beam Capacity srcdoc (`#suite-frame-capacity`): when re-applying, escape `&` as `&amp;` and `"` as `&quot;` (the Before / After text below is un-escaped). Every site is tagged CBTU, CBDA or CBVC. First of the PRs for the engineer's decision to add service load cases (2026-11-13); the service-load builder follows in its own PR.
+
+### CBTU. Hidden T_u (torsion off) ignored by the identical-combination check, the torsion tie-break and the all-zero warning
+- **Problem:** the default project's first row "1.2D + 1.6L" carries T_u = 13.5 kip-ft. With "Check torsion" off (ACI) the T_u column is hidden and T_u has no effect on any check (`torsion()` returns null; `cbcTorA` runs in AASHTO mode only), but it was still part of the identical-combination key, so two rows with the same M_u and V_u were worked twice and not flagged identical. It also broke the tie of `govTorIndex` (not shown when torsion is off) and suppressed the "All factored actions are zero" warning.
+- **Where:** new `cbcTuUsed()` before `function computeAll(){`; in `computeAll` (anchor `/* §7.2 identical-result detection`); in `validate` (anchor `const allZero=`).
+- **Added:** `function cbcTuUsed(){ return (S.tor.present&&S.code==='ACI')||S.code==='AASHTO'; }`
+- **Before:**
+  ```js
+    const seen={};
+    rows.forEach(r=>{
+      const key=[r.Mu.toFixed(6),r.Vu.toFixed(6),r.Tu.toFixed(6)].join("|");
+  ...
+    const govTorIndex   = pick(r=>r.dcT,     r=>r.Tu);
+  ...
+    const allZero=S.combos.every(c=>!c.Mu&&!c.Vu&&!c.Tu);
+  ```
+- **After:**
+  ```js
+    const seen={}, tuUsed=cbcTuUsed();
+    rows.forEach(r=>{
+      const key=[r.Mu.toFixed(6),r.Vu.toFixed(6),(tuUsed?r.Tu:0).toFixed(6)].join("|");
+  ...
+    const govTorIndex   = pick(r=>r.dcT,     r=>tuUsed?r.Tu:0);   /* CBTU: a hidden T_u does not break the tie */
+  ...
+    const allZero=S.combos.every(c=>!c.Mu&&!c.Vu&&!(cbcTuUsed()&&c.Tu));   /* CBTU: a hidden T_u is not a demand */
+  ```
+- **Provision:** none (display / identification logic). **Check case:** ACI, torsion off, combinations 1.2D + 1.6L (M_u 180, V_u 30, T_u 13.5 hidden), X (180, 30, 0), Neg (−90, 20, 0): before, X was worked in full; after, X reads "identical to 1.2D + 1.6L" (sameAs 0). Every D/C, φM_n, φV_n and PASS / FAIL unchanged.
+
+### CBDA. Detailing "Governing combination": "All combinations (positive moment)" / "(negative moment)" where the check does not depend on the actions
+- **Problem:** `detEnvelope()` named the first combination on a tie, so a check that depends only on the section and the sense of bending (cover, bar spacing, A_s,min, ε_t, crack control) showed e.g. "1.2D + 1.6L" as governing, as if that combination's actions mattered.
+- **Where:** `detEnvelope()` (anchor `E.allOk=(E.na?true:E.allOk)&&d.ok; E.na=false;`), the Detailing tab card note (anchor `x.innerHTML="<b>Evaluated for "+E.combo+"</b>`), the Report's worked detailing titles (anchor `return {title:d.name+' ('+E.combo+')'`).
+- **Fix:** each evaluation is recorded (`E.ev.push({ci,neg,na,have,need,ok})`). After the loop: where every combination in the sense of bending of the governing entry has the check, none is N/A, and all give the same provided, required and status (relative tolerance 1e-9), `E.combo` becomes "All combinations (positive moment)" or "All combinations (negative moment)", or "All combinations" when the other sense also has it for every combination with the same values. `E.comboName` keeps the name; `E.ci` (link target), D/C, PASS / FAIL and the derivation are unchanged. With one combination the name is kept. A check whose values differ between combinations of that sense keeps the combination's name. The Detailing card note reads "<label>: the same result for each (this check does not depend on the factored actions)." and the Report title "<check> — <label>". The Summary, the Detailing table, the check panel and the Report read `E.combo`, so they all show the label.
+- **Before / After (detEnvelope, end):**
+  ```js
+    return order.map(id=>map[id]);
+  ```
+  ```js
+    const eqv=(a,b)=>a===b||(isFinite(a)&&isFinite(b)&&Math.abs(a-b)<=1e-9*Math.max(1,Math.abs(a),Math.abs(b)));
+    const same=(a,b)=>a.ok===b.ok&&eqv(a.have,b.have)&&eqv(a.need,b.need);
+    order.forEach(id=>{ const E=map[id]; E.comboName=E.combo; E.allC=false;
+      if(E.na||!E.ev||CC.combos.length<2) return;
+      const g=E.ev.find(x=>x.ci===E.ci); if(!g) return;
+      const nIn=neg=>CC.combos.filter(r=>!!r.neg===neg).length;
+      const sense=E.ev.filter(x=>x.neg===g.neg), other=E.ev.filter(x=>x.neg!==g.neg);
+      if(sense.length!==nIn(g.neg)||sense.some(x=>x.na)||!sense.every(x=>same(x,g))) return;
+      E.allC=true;
+      E.combo=(other.length&&other.length===nIn(!g.neg)&&other.every(x=>!x.na&&same(x,g)))?"All combinations":"All combinations ("+(g.neg?"negative":"positive")+" moment)";
+    });
+    return order.map(id=>map[id]);
+  ```
+- **Provision:** none. **Check case:** combinations A (M_u 250, V_u 35), B (−120.75, 42.5), C = A, ACI, torsion on: Clear cover "A" → "All combinations"; Bar clear spacing "A" → "All combinations (positive moment)"; Minimum flexural reinforcement "B" → "All combinations (negative moment)"; Crack control "B" → "All combinations (negative moment)"; torsion detailing (differs by T_u) keeps "A".
+
+### CBVC. Shear tab, ACI: the V_c note (engineer, 2026-11-13: wording only, no V_c method change)
+- **Problem:** the note "The simplified expression of 22.5.5.1 is used. The detailed method of Table 22.5.5.1, which credits the reinforcement ratio and axial load, would generally give a larger V_c; it is not applied here, so the result is conservative." was inaccurate: with no axial load, row (b) exceeds row (a) only when 8λ(ρ_w)^(1/3) > 2λ, i.e. ρ_w > 1/64 ≈ 0.0156. Both rows are permitted when A_v ≥ A_v,min, so using row (a) is code-compliant either way. The note also showed when row (c) (A_v < A_v,min) was used.
+- **Where:** `workShear` (anchor was the old note); `cbcRptShear`, the row (a) `Vc` step.
+- **After (Shear tab):** shown only when `sh.stirAdequate` (row (a) used): lead "Row (a) of Table 22.5.5.1 is used (A_v ≥ A_v,min)." with "Row (b): ACI also permits row (b) when A_v ≥ A_v,min; it adds ρ_w and N_u. This tool uses row (a), which the code permits." and "When (b) is larger: with no axial load (this tool has no N_u input), row (b) gives the larger V_c only when ρ_w > 1/64 ≈ 0.0156 (1.56%), or with axial compression. Here ρ_w = A_s/(b_w d) = <value> (above / not above 0.0156)."
+- **Report:** the row (a) `Vc` step gets the same statement as its note (it had no note before).
+- **Provision:** ACI 318-19 Table 22.5.5.1 rows (a), (b), (c) (paraphrased). **Check case:** default project (12 × 18 in, 3 #5, d = 15.19 in): ρ_w = 0.93/(12 × 15.19) = 0.00510, "not above 0.0156"; no-stirrup project (row (c)): no note. V_c unchanged.
+
+### Decision (pending engineer review)
+- "All combinations" (no sense) is shown where both senses give the same provided / required / status for every combination (e.g. clear cover); the request named only the "(positive moment)" / "(negative moment)" forms.
+- A demand-dependent check (e.g. A_v,min, the d/2 or d/4 spacing tier) is also labelled "All combinations (…)" when every combination of that sense happens to give the same values; the label states the fact that the result is the same for each, not that the check never depends on the actions.
+
+### How verified
+Headless Chromium, `file://`, scratch probe origin/main vs branch, 7 projects seeded as the autosave (fresh, the old default project, ACI torsion on with a duplicate row, ACI torsion off with a hidden T_u, AASHTO T-section with T_u, ACI no stirrups / negative moment only, ACI computed f_s with service moments): `computeAll()` identical apart from `sameAs` (changed only in the hidden-T_u project, as intended) and the invisible `govTorIndex` tie (no-stirrup project, torsion off); `VALIDATION`, the hand-off message to the ASD and Development & Splice frames and the autosave text identical; tab text and Report differ only in the governing-combination labels, the identical-combination notes and the V_c note. 0 console errors. Tests: listed in the PR.
