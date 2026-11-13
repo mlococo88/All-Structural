@@ -324,7 +324,7 @@ Loaded by: `apps/steel-bridge/index.html` (Report tab, `ui/report.js`). Tests: `
 - **Open items:** none for the calculations. Typing in the report search marks the Steel Bridge project "not saved" (its project chip listens to
   every `input` event; also on main) — follow-up for that app, not changed here.
 
-## 2026-11-13 — PR: claude/report-see-once — "see" printed once before a § link (SEE1; display only)
+## 2026-11-13 — PR: claude/report-see-once (PR #1471: https://github.com/mlococo88/All-Structural/pull/1471) — "see" printed once before a § link (SEE1; display only)
 - **Problem (before):** in print, every § link (`a.rp-see`) gets "see " in front (`@media print` rule `.rp-see::before{content:"see ";}`), so a
   link the text already introduces with "see" printed twice: a cell "(see [[k]])" printed "(see see §x)". Only step notes ("See §id", `noteOf`)
   were spared (class `rp-seen`). Measured in print emulation on origin/main (af6b916), the printed text of each consumer's whole report
