@@ -188,7 +188,7 @@
     const br = isObj(src && src.bridge) ? src.bridge : null;
     if (br) {
       const sk = br.sel ? 'G' + br.sel.g + '/S' + br.sel.s : '', other = Object.keys(isObj(br.designs) ? br.designs : {}).filter(k => k !== sk && isObj(br.designs[k]));
-      add('kept', `Old bridge model (${br.mode === 'mod' ? '"Design modules": each girder design kept its own span and spacing' : '"Preliminary designer"'}; ${(br.spans || []).length} span${(br.spans || []).length === 1 ? '' : 's'} × ${br.nGirders} girders; design on screen ${sk || '—'})${other.length ? `: ${other.length} other girder × span design${other.length > 1 ? 's' : ''} (${other.slice(0, 10).join(', ')}${other.length > 10 ? ', …' : ''}) kept in the project, NOT designed yet: every girder × span comes with the bridge level (PR 3a)` : ''}.`);
+      add('kept', `Old bridge model (${br.mode === 'mod' ? '"Design modules": each girder design kept its own span and spacing' : '"Preliminary designer"'}; ${(br.spans || []).length} span${(br.spans || []).length === 1 ? '' : 's'} × ${br.nGirders} girders; design on screen ${sk || '—'})${other.length ? `: ${other.length} other girder × span design${other.length > 1 ? 's' : ''} (${other.slice(0, 10).join(', ')}${other.length > 10 ? ', …' : ''}) kept in the project and restored as girder types on their lines (PS-17; listed below)` : ''}.`);
       if (Array.isArray(br.spans) && br.mode !== 'mod' && JSON.stringify(br.spans.map(Number)) !== JSON.stringify(lengths) && !extOn)
         add('note', `The old bridge bar's spans (${br.spans.join(', ')} ft) are not the spans the design was computed with (${lengths.map(fm).join(', ')} ft): imported as computed.`);
       if (isObj(src.inputs) && isObj(br.designs) && sk && isObj(br.designs[sk]) && JSON.stringify(br.designs[sk]) !== JSON.stringify(src.inputs))
@@ -243,5 +243,68 @@
     return { girder: d.girder || '', L: d.L, cells: b && isObj(b.designs) ? Object.keys(b.designs).length : 0, spans: b && Array.isArray(b.spans) ? b.spans.length : 0, nGirders: b ? b.nGirders : d.nGirders,
       ext: !!(d.external && d.external._schema === 'psbeam-external-demands') };
   }
-  window.PSBLegacy = { FROM, KEYS: K, lt, scan, fromText, convert, verify, describe, designOf, canon };
+  /* ---------- restore: the other girder × span designs of an old bridge model as girder types (PR 3a-4, engineer decision PS-17) ----------
+     restore(P[, now]): a project imported from the old app with its bridge model (P.legacy.bridge) and not yet restored (no
+     P.legacy.restored): every other stored cell 'G<g>/S<s>' of the old model whose line and span exist in this project becomes a girder
+     line of a type of span s — its girder inputs (the old app's own mergeInputs of the stored design) minus the bridge values the line gets
+     (L, S, N_b, position, skew, overhang, continuity, title: PSBDesign.DRIVEN) and the MIDAS demands are its overrides of the base design;
+     cells of one span with the same overrides share a type; a cell with no override joins the span's type of the design on screen when that
+     line has no type yet. Lines of the old model with no stored design and cells beyond this bridge are listed, not assigned. Each restored
+     cell is computed both ways (the old app's inputs of that cell: PBD.applyBridge on the old model in "Preliminary designer", the stored
+     design in "Design modules"; this project's cell inputs) and the result recorded (the same, or how it differs). P is changed (types,
+     legacy.restored, legacy.summary.items); the old data as read (legacy.inputs, legacy.bridge) is not. Returns the notice text or ''. */
+  function restore(P, now) {
+    const BR = window.PSBBridge, D = window.PSBDesign, L = P && P.legacy;
+    if (!BR || !D || !isObj(L) || !isObj(L.bridge) || L.restored || !isObj(L.bridge.designs) || !P.base) return '';
+    BR.migrate(P);
+    const br = L.bridge, sk = br.sel ? 'G' + br.sel.g + '/S' + br.sel.s : '', nb = P.xs.nb, ns = P.spans.lengths.length;
+    const DRV = D.DRIVEN.concat(['external']), drv = k => DRV.some(q => k === q || k.indexOf(q + '.') === 0);
+    const out = { at: now || new Date().toISOString(), cells: [], skipped: [], types: [] };
+    const groups = new Map();
+    Object.keys(br.designs).filter(k => k !== sk && isObj(br.designs[k])).forEach(k => {
+      const m = /^G(\d+)\/S(\d+)$/.exec(k); if (!m) { out.skipped.push({ key: k, why: 'not a girder × span cell' }); return; }
+      const g = +m[1], s = +m[2];
+      if (!(g >= 1 && g <= nb && s >= 1 && s <= ns)) { out.skipped.push({ key: k, why: `beyond this bridge (${nb} girders, ${ns} span${ns > 1 ? 's' : ''})` }); return; }
+      const oi = window.PSBModel.baseInputs(Object.assign(clone(br.designs[k]), { external: null }));
+      const ov = BR.diffOvr(P.base, oi); Object.keys(ov).forEach(q => { if (drv(q)) delete ov[q]; });
+      const pos = BR.posLabel(P, g), gk = s + '|' + pos + '|' + JSON.stringify(ov);
+      if (!groups.has(gk)) groups.set(gk, { s, pos, ov, cells: [] });
+      groups.get(gk).cells.push({ key: k, g, s, raw: br.designs[k] });
+    });
+    groups.forEach(G => {
+      const free = G.cells.filter(c => BR.typeAt(P, c.s, c.g) < 0);
+      G.cells.filter(c => !free.includes(c)).forEach(c => out.skipped.push({ key: c.key, why: `line G${c.g} of span ${c.s} already has a girder type` }));
+      if (!free.length) return;
+      let k = -1;
+      // the same overrides (none) and position as a type of the span: that type (the design on screen's, as the old app's 'pl' cells shared its inputs)
+      k = BR.spanTypes(P, G.s).find(j => JSON.stringify(P.types[j].ovr) === JSON.stringify(G.ov) && BR.typeLines(P, j).length && BR.typeLines(P, j).every(h => BR.posLabel(P, h) === G.pos));
+      if (k == null || k < 0) {
+        P.types.push({ id: BR.nextId(P), label: `${G.pos} S${G.s} (old ${free.map(c => 'G' + c.g).join(', ')})`, span: G.s, lines: [], ovr: clone(G.ov) }); k = P.types.length - 1;
+        out.types.push(P.types[k].id);
+      }
+      free.forEach(c => { BR.assignLine(P, k, c.g); out.cells.push({ key: c.key, g: c.g, s: c.s, type: P.types[k].id }); });
+    });
+    // computed both ways
+    out.cells.forEach(c => {
+      const k = BR.typeAt(P, c.s, c.g), inp = D.cellInputs(P, k, c.g);
+      let oldInp = clone(mergeInputs(clone(br.designs[c.key])));
+      if (br.mode !== 'mod') oldInp = PBD().applyBridge(br, oldInp, c.g, c.s);
+      oldInp.external = null;
+      const val = R => { const o = Object.assign({}, R); delete o.warns; if (o.cont && o.cont.unit) { o.cont = Object.assign({}, o.cont, { unit: Object.assign({}, o.cont.unit) }); ['src', 'assumed', 'Lbridge'].forEach(q => delete o.cont.unit[q]); } return o; };
+      let Ro, Rn; try { Ro = computeAll(clone(oldInp)); Rn = computeAll(clone(inp)); } catch (e) { c.same = false; c.why = e.message; return; }
+      c.same = canon(val(Ro)) === canon(val(Rn));
+      if (!c.same) { const dd = diffs(Object.assign(clone(oldInp), { proj: 0, opt: Object.assign({}, oldInp.opt, { hdCheck: 0, hdFrac: 0 }) }), Object.assign(clone(inp), { proj: 0, opt: Object.assign({}, inp.opt, { hdCheck: 0, hdFrac: 0 }) }), '', [], []);
+        c.why = dd.length ? dd.slice(0, 5).map(d => `${LBL[d.path] || d.path} old ${show(d.old)}, here ${show(d.now)}`).join('; ') : 'the same inputs; ' + firstDiffs(val(Ro), val(Rn), '', [], 3).join(', '); }
+    });
+    L.restored = out;
+    const nSame = out.cells.filter(c => c.same).length, un = BR.unassigned(P);
+    const text = out.cells.length
+      ? `Restored from the old app's bridge model (PS-17): ${out.cells.length} more girder × span design${out.cells.length > 1 ? 's' : ''} (${out.cells.map(c => c.key).join(', ')}) as girder types on their lines${out.types.length ? ` (${out.types.length} new type${out.types.length > 1 ? 's' : ''})` : ''}; ${nSame} of ${out.cells.length} compute the same as the old app${nSame < out.cells.length ? `; different: ${out.cells.filter(c => !c.same).map(c => `${c.key} (${c.why})`).join('; ')}` : ''}.`
+        + (out.skipped.length ? ` Not restored: ${out.skipped.map(q => `${q.key} (${q.why})`).join('; ')}.` : '') + (un.length ? ` Lines with no girder type (not checked): ${un.map(q => `G${q.g}/S${q.s}`).join(', ')} — Girders & strands tab, "Assign every line".` : '')
+        + (L.external ? ' The MIDAS demands stay kept, not used (PS-18).' : '')
+      : (out.skipped.length ? `The old bridge model's other designs were not restored: ${out.skipped.map(q => `${q.key} (${q.why})`).join('; ')}.` : '');
+    if (text && L.summary && Array.isArray(L.summary.items)) L.summary.items.push({ kind: out.cells.length && nSame === out.cells.length ? 'ok' : 'note', text });
+    return text;
+  }
+  window.PSBLegacy = { restore, FROM, KEYS: K, lt, scan, fromText, convert, verify, describe, designOf, canon };
 })();

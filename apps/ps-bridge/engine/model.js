@@ -148,6 +148,7 @@
     if (engineLoaded() && (p.base === undefined || (p.base && typeof p.base === 'object' && !Array.isArray(p.base)))) p.base = baseInputs(p.base);   // filled / merged onto DEFAULTS
     const notes = [], BR = typeof window !== 'undefined' && window.PSBBridge;
     if (BR && p.base && typeof p.base === 'object') { const n = BR.migrate(p); if (n) notes.push(n); }   // PR 3a-1: girder types (a project saved before: its design girder = type T1)
+    if (BR && typeof window !== 'undefined' && window.PSBLegacy && p.legacy) { const n = window.PSBLegacy.restore(p); if (n) notes.push(n); }   // PR 3a-4 (PS-17): an old bridge model's other designs as girder types
     const v = validate(p);
     return { ok: true, project: p, errors: v.errors, warnings: v.warnings, notes };
   }

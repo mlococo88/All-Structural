@@ -9660,3 +9660,60 @@ index 4510749..337abc8 100644
          <h4 class="sub">End diaphragms (bearing lines)</h4>${h.sel('crossframes.dia.end', 'Jacking at the end diaphragms', [['no', 'No'], ['yes', 'Yes']])}${h.num('crossframes.dia.Rj', 'Jacking reaction R<sub>j</sub>', 'kip')}${h.num('crossframes.dia.aj', 'at a<sub>j</sub> from the girder', 'in')}
          <p class="note">The diaphragm is the intermediate bracing (checks CFD) and the end diaphragm at the bearing lines (CFE); the angle checks CF1 to CF9 and member forces entered from a refined analysis do not apply. S (largest girder spacing) and the girder depth d come from the project and the layout. On a change between a rolled W and a channel, the shape starts at the one last used in that family on this page, else the shape that check CF10 recommends for the girder depth, else W21x44 / MC18x42.7: a starting choice, checked by CFD like any other.</p>`
 ```
+
+## 2026-11-13 — PR: claude/sb26-dia-conn-hint (PR #1514: https://github.com/mlococo88/All-Structural/pull/1514) — Diaphragm end connection: the default (4 bolts) kept; a hint next to the connection inputs and an assumption note in the Report say it is a placeholder to be designed (SBCH; engineer decision SB-26 of 2026-11-13; display only, no value changes)
+- **Request:** engineer decision SB-26 (2026-11-13): keep the 4-bolt default diaphragm connection; add a hint next to the connection inputs (and in the Report's assumptions) that the default connection is a placeholder and must be designed: it usually fails as entered (e.g. the CFD bolted connection item of the default inputs fails in the #1503 hand checks).
+- **Change (display only):**
+  - `ui/framing.js`: new constant `CONN_HINT` (exported): "Hint (engineer decision SB-26): the default end connection of the diaphragm (4 bolts per end in one row at 3 in pitch, the bolt line 3.5 in from the girder web, the bolt diameter and grade above) is a placeholder, not a design. It usually fails the CFD / CFE bolted connection checks as entered: design the connection (bolts, pitch, bolt line, connection plate) for the project." shown as a note right after the "Bolt line from the girder web" input of the diaphragm's End connections (Framing & bracing tab, diaphragm on; not for cross-frames).
+  - `report/builders.js frm`, Checks subsection (the notes below the check table, after the "Diaphragm bracing" note; diaphragm only): "Assumption: the default end connection of the diaphragm (…, the bolt diameter and grade of the Framing & bracing tab) is a placeholder, not a design. It usually fails … (Engineer decision SB-26, 2026-11-13; inputs on the Framing & bracing tab, checks CFD / CFE on the [[tab:cf|Diaphragms tab]]; this project: 4 bolts per end at 3.00 in, bolt line 3.50 in from the web.)".
+- **Values:** none changed; the default connection (`crossframes.dia` nb 4, pitch 3, ecc 3.5; `DEF`, `defaultCrossframes`) unchanged.
+- **Governing provision:** none changed (AASHTO LRFD 10th Ed. (2024) Art. 6.13.2, the CFD / CFE bolted connection items, as before).
+- **Saved data (§5):** none.
+- **Check case:** new project, rolled W diaphragm W21x44 (default connection): the Framing & bracing tab shows the hint after the bolt line input; the Report's framing checks list the assumption with "this project: 4 bolts per end at 3.00 in, bolt line 3.50 in from the web."; with 6 bolts entered, "6 bolts per end". Cross-frames: neither.
+- **How verified:** new tests/engine/sb-dia-conn-hint.test.mjs (the hint's place and text, cross-frames none, the default connection unchanged; the Report note, its link resolves, this project's values). Engine subsets and smoke tests: see the PR.
+- **Other copies:** none.
+- **Before / after (exact):**
+```diff
+diff --git a/apps/steel-bridge/report/builders.js b/apps/steel-bridge/report/builders.js
+index 8b9fa11..aef480a 100644
+--- a/apps/steel-bridge/report/builders.js
++++ b/apps/steel-bridge/report/builders.js
+@@ -409,6 +409,7 @@
+       tbl(['Check', 'Item', 'Demand', 'Resistance / limit', 'Ratio', 'Status'], C.flatMap(c => c.items.length ? c.items.map(it => [`${c.id} ${c.title}`, locR(c, it), isFinite(it.demand) ? N(it.demand, 2) : (it.cells || [])[0] || '', isFinite(it.capacity) ? N(it.capacity, 2) : (it.cells || [])[1] || '',
+         isFinite(it.r) ? R3(it.r, lk(sOf(it.step))) : { t: '—', key: lk(sOf(it.step)) }, it.lbl || { pass: 'OK', fail: 'Fail', warn: 'Warning', adv: 'Advisory', na: 'n/a' }[it.st] || it.st]) : [[`${c.id} ${c.title}`, { t: c.naWhy || 'n/a', cls: 'na' }, '', '', '', 'n/a']])),
+       C.some(c => c.id === 'CFD') ? note('Diaphragm bracing (Framing & bracing tab): checks CFD (intermediate) and CFE (end diaphragms at the bearing lines); the angle checks CF1 to CF9 and member forces entered from a refined analysis do not apply.') : null,
++      C.some(c => c.id === 'CFD') && FUI && FUI.CONN_HINT ? note(`Assumption: ${FUI.CONN_HINT.replace(/^Hint \(engineer decision SB-26\): /, '').replace(/ the bolt diameter and grade above\)/, ' the bolt diameter and grade of the Framing & bracing tab)')} (Engineer decision SB-26, 2026-11-13; inputs on the Framing & bracing tab, checks CFD / CFE on the [[tab:cf|Diaphragms tab]]; this project: ${Math.max(2, Math.round(+((I.p.dia || {}).nb) || 2))} bolts per end at ${f(+((I.p.dia || {}).pitch) || 3, 2)} in, bolt line ${f(+((I.p.dia || {}).ecc) || 3.5, 2)} in from the web.)`) : null,   // SB-26: the default connection is a placeholder
+       ...(FUI && FUI.ckNotes ? FUI.ckNotes(C).map(q => note(`${q.id}: ${tt(q.note)}${q.id === 'CF10' && rS ? ` [[${rS}]]` : ''}`)) : []),   // SBCKN: every check's note, as the tab
+       note(`References: ${C.map(c => `${c.id} ${c.ref}`).join('; ')}.`)]));
+     if (R.frames && !dOn) subs.push(sub('mf', 'Member forces (truss model)', [tbl(['Member', 'Length (in)', 'per kip of $F_{w}$', ...R.combos.map(c => `${c.id} T / C (kip)`)], R.frames.map((e, i) => [e.lbl, N(e.L, 2), { ...N(e.unit, 3), key: `cf.tr${i}` }, ...R.combos.map(c => c.off ? 'not used' : `${f(c.f[i].T, 2)} / ${f(c.f[i].Cc, 2)}`)]))]));
+diff --git a/apps/steel-bridge/ui/framing.js b/apps/steel-bridge/ui/framing.js
+index 337abc8..4e020a7 100644
+--- a/apps/steel-bridge/ui/framing.js
++++ b/apps/steel-bridge/ui/framing.js
+@@ -121,6 +121,10 @@
+      fit rule, crossframes.dia.clr (in, total); blank or absent: 2 in (engine/crossframes.js diaClr), shown as the placeholder */
+   function clrRow(C, h) { const v = (C.dia || {}).clr, ok = v != null && v !== '' && isFinite(+v);
+     return `<div class="fRow"><label for="i_crossframes.dia.clr">Fit clearance c, total (d ≤ D<sub>0</sub> − c; blank: 2 in, 1 in top and bottom for clips / welds)</label><input type="number" step="any" id="i_crossframes.dia.clr" data-path="crossframes.dia.clr" data-kind="num" value="${ok ? esc(String(v)) : ''}" placeholder="2"><span class="unit">in</span></div>`; }
++  /* CONN_HINT (SB-26, 2026-11-13; engineer decision SB-26, display only): the default diaphragm end connection (crossframes.dia nb 4, pitch
++     3 in, bolt line 3.5 in from the web; DEF) is kept as a starting value; this hint, next to the connection inputs and in the Report's
++     framing check notes (report/builders.js frm), says it is a placeholder to be designed. No value or input changes. */
++  const CONN_HINT = 'Hint (engineer decision SB-26): the default end connection of the diaphragm (4 bolts per end in one row at 3 in pitch, the bolt line 3.5 in from the girder web, the bolt diameter and grade above) is a placeholder, not a design. It usually fails the CFD / CFE bolted connection checks as entered: design the connection (bolts, pitch, bolt line, connection plate) for the project.';
+   function inputs(P, h) {
+     ensure(P); const F = P.framing, C = P.crossframes, CF = window.SBDCrossframes, FRM = window.SBDFraming;
+     let L = null; try { L = FRM.compute(P); } catch (e) { L = { errors: [e.message] }; }
+@@ -145,6 +149,7 @@
+         ${C.dia.shape === 'custom' ? `${h.num('crossframes.dia.d', 'Depth d', 'in')}${h.num('crossframes.dia.bf', 'Flange width', 'in')}${h.num('crossframes.dia.tf', 'Flange thickness', 'in')}${h.num('crossframes.dia.tw', 'Web thickness', 'in')}` : ''}
+         ${h.sel('crossframes.dia.gr', 'Grade', [['36', '36'], ['50', '50']])}${clrRow(C, h)}${grpCard(P, C, br)}
+         <h4 class="sub">End connections</h4>${conn}${h.num('crossframes.dia.nb', 'Bolts per end (one row)', '')}${h.num('crossframes.dia.pitch', 'Bolt pitch', 'in')}${h.num('crossframes.dia.ecc', 'Bolt line from the girder web', 'in')}
++        <p class="note">${CONN_HINT}</p>
+         <h4 class="sub">End diaphragms (bearing lines)</h4>${h.sel('crossframes.dia.end', 'Jacking at the end diaphragms', [['no', 'No'], ['yes', 'Yes']])}${h.num('crossframes.dia.Rj', 'Jacking reaction R<sub>j</sub>', 'kip')}${h.num('crossframes.dia.aj', 'at a<sub>j</sub> from the girder', 'in')}
+         <p class="note">The diaphragm is the intermediate bracing (checks CFD) and the end diaphragm at the bearing lines (CFE); the angle checks CF1 to CF9 and member forces entered from a refined analysis do not apply. S (largest girder spacing) and the girder depth d come from the project and the layout. On a change between a rolled W and a channel, the shape starts at the one last used in that family on this page, else the shape that check CF10 recommends for the girder depth, else W21x44 / MC18x42.7: a starting choice, checked by CFD like any other.</p>`
+         : `${h.num('crossframes.h', 'Chord work-point depth h (blank: from D)', 'in', { text: true })}
+@@ -335,5 +340,5 @@
+     host.querySelectorAll('[data-cfgo]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const t = host.querySelector('#st-' + a.dataset.cfgo.replace(/[^\w.-]/g, '').replace(/\./g, '\\.')); if (t) { t.scrollIntoView({ block: 'center' }); t.style.background = '#FFF7D6'; } }));
+   }
+ 
+-  window.SBDFramingUI = { ensure, braceOf, setBrace, inputs, windCard, layoutPlan, onChange, onClick, render, build, plan, TOPICS, groups, isDia, ckHead, diaSvg, ckRec, recStep, ckNotes };
++  window.SBDFramingUI = { ensure, braceOf, setBrace, inputs, windCard, layoutPlan, onChange, onClick, render, build, plan, TOPICS, groups, isDia, ckHead, diaSvg, ckRec, recStep, ckNotes, CONN_HINT };
+ })();
+```
