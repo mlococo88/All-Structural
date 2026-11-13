@@ -114,6 +114,27 @@ test('report: the page result is used as given (index.html result()); an input e
   const B = W.PSBReportData.compute(P, { inp, R, W: Wk }); assert.equal(B.R, R); assert.equal(B.W, Wk);
   const Q = W.PSBModel.defaultProject(); Q.spans.lengths = [-5]; assert.match(W.PSBReportData.compute(Q, null).err, /input error/);
 });
+// 2026-11-13: the Report's graphics. In the page ui/report.js draws each tab's graphics with the tab's own code (browser only: the smoke test);
+// here, figures handed in as opt.figures are put at their slots' places, numbered "Figure n.m" by the sections shown, and change no value
+test('report graphics: figures at their slots, numbered Figure n.m, the values unchanged', () => {
+  const B = W.PSBReportData.compute(CASES['continuous 3 spans, exterior G6 in span 2, skew 35°, restraint, haunch in the section'], null), M0 = RB.model(B);
+  const fig = (t) => [{ type: 'figure', svg: `<svg data-t="${t}"></svg>`, caption: t }];
+  const figs = { sec: { gfx_sec: fig('S') }, flex: { gfx_fx: fig('F1'), gfx_fxpier: fig('F2') }, rt: { gfx_rt: fig('R1'), gfx_rtx: fig('R2') }, loss: { gfx_loss: fig('L1'), gfx_loss_str: fig('L2') } };
+  const M = RB.model(B, { figures: figs });
+  assert.deepEqual(J(M.vals), J(M0.vals), 'the values are the same');
+  const capt = s => [].concat(...s.subs.map(q => q.items.filter(i => i.type === 'figure').map(i => i.caption)));
+  const by = k => M.sections.find(s => s.id === k), n = k => M.sections.findIndex(s => s.id === k) + 1;
+  assert.deepEqual(J(capt(by('sec'))), [`Figure ${n('sec')}.1: S`]); assert.deepEqual(J(capt(by('flex'))), [`Figure ${n('flex')}.1: F1`, `Figure ${n('flex')}.2: F2`]);
+  assert.deepEqual(J(capt(by('rt'))), [`Figure ${n('rt')}.1: R1`, `Figure ${n('rt')}.2: R2`]); assert.deepEqual(J(capt(by('loss'))), [`Figure ${n('loss')}.1: L1`, `Figure ${n('loss')}.2: L2`]);
+  assert.equal(by('sec').subs[0].title, 'Graphics', 'a slot outside the cards: a Graphics subsection first');
+  const pier = by('flex').subs.find(q => q.items.some(i => i.type === 'figure' && /F2/.test(i.caption))); assert.match(pier.title, /pier/i, 'a slot in a card: in that card');
+  assert.equal(figs.sec.gfx_sec[0].caption, 'S', 'the figures handed in are not changed');
+  // a section left out: the numbers follow the sections shown
+  const M2 = RB.model(B, { figures: figs, include: { sec: false, lds: false } }), f2 = M2.sections.find(s => s.id === 'flex');
+  assert.equal(capt(f2)[0], `Figure ${M2.sections.indexOf(f2) + 1}.1: F1`); assert.ok(!capt(f2)[0].startsWith(`Figure ${n('flex')}.`));
+  const doc = W.SharedReport.build(M); assert.deepEqual(J(doc.unresolved), []); assert.ok(W.SharedReport.text(doc).includes(`[Figure] Figure ${n('flex')}.2: F2`));
+  assert.equal(W.PSBReportTab.inline('t<sub>s</sub> = 8 in <a href="#" data-goin="mat">tab</a>'), 't$_{s}$ = 8 in [[tab:in:mat|tab]]');
+});
 test('report/fromtab.js: the parser and the notation', () => {
   const FT = W.PSBReportTab, X = { vals: [] };
   const C = FT.cards('<div id="gfx_x"><svg><text>skip</text></svg></div><section class="sec"><div class="secHead">Card f<sub>pe</sub></div><div class="secBody"><div class="fRow"><select><option>a</option></select></div>'

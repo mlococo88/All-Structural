@@ -8,7 +8,8 @@
    Nothing is calculated here: every number is a value of R = PSBHoldDown.compute(inputs) (computeAll + the PS-10 check), as on the tabs.
 
    model(B, opt) -> report model (shared/report.js); B = report/data.js bundle { P, inp, R, W, sel }; opt.include = { key: false } leaves a
-   section out. Every number written by this file goes through V(), which records { sec, path, d, div, text } in model.vals with the
+   section out; opt.figures = { <tab key>: { <slot id>: [{ type: 'figure', svg, caption }] } } (ui/report.js, the tabs' own graphics drawn by
+   their own code; 2026-11-13) puts each tab's graphics at their places in its section, numbered "Figure n.m". Every number written by this file goes through V(), which records { sec, path, d, div, text } in model.vals with the
    numbers the tabs record (report/fromtab.js); tests/psbridge-compare.mjs compares each with the old app's value, tests/engine/
    psbridge-report.test.mjs with R. Step anchors: scope '' (the step ids of the tabs are unique across the app: sec., ld., an., ls., st., fx.,
    sh., ez., cb., hn., dk., rt.), key = the step id, so a step note "§<id>" of one tab finds its step in another; section keys 'rs.<tab>'. */
@@ -102,9 +103,10 @@
   function tabSec(B, k, X) {
     const [ui, wk] = TABS[k], U = window[ui], FT = window.PSBReportTab;
     const html = U.output({ P: B.P, inp: B.inp, R: B.R, W: B.W, ui: {} });   // ui {}: each chooser at its default (the governing / midspan station)
-    const C = FT.cards(html, { tab: k, X, sec: k, inReport: X.inReport });
-    const subs = [];
-    if (C.top.length) subs.push(sub('n', 'Notes', C.top));
+    const C = FT.cards(html, { tab: k, X, sec: k, inReport: X.inReport, figs: X.figs && X.figs[k] });   // figs: the tab's own graphics at their slots (ui/report.js)
+    const subs = [], gTop = C.top.filter(i => i.type === 'figure'), nTop = C.top.filter(i => i.type !== 'figure');
+    if (gTop.length) subs.push(sub('g', 'Graphics', gTop));
+    if (nTop.length) subs.push(sub('n', 'Notes', nTop));
     C.subs.forEach((s, j) => {
       if (s.steps) { const W = (B.W[wk] || { steps: [] }).steps; if (W.length) subs.push(sub('w', 'Worked steps', [...s.items, gsteps('', W, U.TOPICS)])); return; }
       subs.push(sub('c' + j, s.title || '—', s.items.length ? s.items : [note('—')]));
@@ -118,7 +120,7 @@
     const inc = opt.include || null, on = k => !inc || inc[k] !== false, P = B.P, p = P.project || {}, R = B.R;
     const vals = [];
     const own = B.inp.owner && B.inp.owner !== 'AASHTO';
-    const X = { vals, inReport: t => !!TABS[t] && on(t), ownKey: own && on('proj') ? 'rs.own' : null };   // rs.own: the owner rules subsection of §2
+    const X = { vals, inReport: t => !!TABS[t] && on(t), ownKey: own && on('proj') ? 'rs.own' : null, figs: opt.figures || null };   // rs.own: the owner rules subsection of §2
     X.V = (path, d, div) => { const v = at(R, path), text = OK().fx(div ? v / div : v, d); vals.push({ sec: X.cur, path, d, div: div || 0, text }); return text; };
     const secs = [], dropped = [];
     SECTIONS.forEach(([k]) => {
@@ -142,6 +144,9 @@
         if (it.type === 'table') return { ...it, head: it.head.map(fixC), rows: it.rows.map(r => Array.isArray(r) ? r.map(fixC) : { ...r, cells: r.cells.map(fixC) }) };
         return it; }); }));
     }
+    // the figures (each tab's own graphics, opt.figures from ui/report.js; none in Node): numbered "Figure n.m" by section n (the numbers of
+    // the shared viewer: the sections shown, in order) and their order m in it, as the caption's lead
+    secs.forEach((s, i) => { let m = 0; s.subs.forEach(q => q.items.forEach(it => { if (it.type === 'figure') { m++; it.no = `${i + 1}.${m}`; it.caption = `Figure ${i + 1}.${m}: ${it.caption || ''}`; } })); });
     const d = B.sel, gid = plain(B.inp.proj && B.inp.proj.girderId);
     return { title: 'Prestressed Bridge Design', subtitle: `Calculation report: design girder ${gid}, span ${d.s}${p.name ? ', ' + p.name : ''}`,
       code: `${ED}; MBE (LRFR load rating). The design girder's results, as on the result tabs.`,
