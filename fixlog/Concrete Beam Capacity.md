@@ -7041,3 +7041,29 @@ The file uses CRLF line endings; keep them. The code is in the Beam Capacity src
   - Factored and AASHTO projects: identical in every output.
   - Service project: `computeAll()` identical; only the labels and the note text differ on the Load Combinations tab and in the Report.
   - `check-syntax` and `cbc-loads` pass.
+
+## 2026-11-13 — PR: claude/cbc-aashto-size-limit (PR #1509: https://github.com/mlococo88/All-Structural/pull/1509) (CBSA, CBLX) — AASHTO mode: explicit check "Section size limit (AASHTO 5.7.3.3)", V_u ≤ φ(0.25f′c b_v d_v + V_p); note that 5.7.2.6 has no across-width leg spacing limit   [NEW CHECK (can FAIL only where shear fails); shear results identical; no saved key or format change]
+
+The file uses CRLF line endings; keep them. The code is in the Beam Capacity srcdoc; escape as usual. The sites are tagged CBSA and CBLX.
+
+- **Engineer decisions:**
+  - **CB-10:** in AASHTO mode, an explicit check row V_u ≤ φ·0.25f′c·b_v·d_v (+ φV_p where applicable), with its own D/C, worked, in the summary, the all-combinations table and the Report. The failure message says to enlarge the section; stirrups will not help.
+  - **CB-11:** an AASHTO note that 5.7.2.6 has no across-width leg spacing limit.
+- **Provision:** AASHTO LRFD 10th Ed. 5.7.3.3 (read in `AASHTO LRFD 10th Edition (Chapter 5-6).pdf`; paraphrased). V_n is the lesser of V_c + V_s + V_p and 0.25f′c b_v d_v + V_p (Eq. 5.7.3.3-2). This tool designs nonprestressed members, so V_p = 0.
+- **Where:**
+  - **`computeAll`, `szA`.** Before: ACI only. After: AASHTO adds `{lim:sh.phi*sh.Vlim, aashto:true, dcr:|V_u|/lim}`. `sh.Vlim` (= 0.25f′c b_v d_v, with the f′c the shear check uses) is unchanged.
+  - **`allChecks`.** Before: `if(S.code==='ACI'){ …22.5.1.2… }`. After: an `else` adds "Section size limit (AASHTO 5.7.3.3)", ref "AASHTO Eq. 5.7.3.3-2", id `szA`.
+  - **Summary matrix.** The "D/C Size limit" column now shows in both codes; the `S.code==='ACI'` condition is removed from the header and the cell.
+  - **`cbcResultRows`.** The ref follows the code.
+  - **Shear tab.** New `cbcSzWorkA(b,r,sh)` at the end of the AASHTO steps: V_u ≤ φ(0.25f′c b_v d_v + V_p), the values, the limit, the DCR, PASS / FAIL. The failure text: "the section is too small for this shear: enlarge b_v or d_v, or raise f′c. More transverse reinforcement will not help".
+  - **Report.** `cbcRptShear`, AASHTO branch, gets a "Section size limit" topic with steps `szLim` and `szDC`. The keys `sh<ci>/szDC` were already mapped for `szA`.
+  - **`validate`, CBLX.** In AASHTO mode, the note "AASHTO 5.7.2.6 has no across-width leg spacing limit; ACI Table 9.7.6.2.2 is not applied."
+- **Why the check can FAIL only where shear fails:** φV_n = φ min(V_c + V_s, V_n,max) ≤ φV_n,max. So the size D/C ≤ the shear D/C, and the row's worst D/C is unchanged.
+- **Hand check:** AASHTO, b_v = 10 in, f′c = 4 ksi, d_v = 15.19 in (tool), #5 four legs at 3 in.
+  - 0.25(4)(10)(15.19) = 151.88 kip. Limit = 0.9(151.88) = 136.69 kip.
+  - V_u 160: D/C 1.171, FAIL. Here V_n,max governs V_n, so the shear D/C is also 1.171.
+  - V_u 40: D/C 0.293.
+  - b_v 12, d_v 18.26 in: limit 0.9(0.25)(4)(12)(18.26) = 197.18 kip.
+- **How verified:**
+  - **Probe** of origin/main vs branch, 9 projects (3 AASHTO). `computeAll()` without the AASHTO `szA`, `VALIDATION` without the new note, `allChecks` without the new row, the hand-off message and the autosave are identical in all of them.
+  - **Tests:** `tests/smoke/cbc-shear-limit.mjs` now checks the AASHTO row, column, card, Report and note (before, it asserted that no row existed). Also passing: `check-syntax`, `decimal-entry --tool cbc,cbc2`, `phone-layout --tool cbc`, `project-library --tool cbc` and `cbc-leg-width`.
