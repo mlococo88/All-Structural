@@ -6690,7 +6690,7 @@ Before: no section size check. The V_s cap of 22.5.1.2 was already applied, and 
   - New `tests/smoke/cbc-shear-limit.mjs`, 1400 and 390 px, 0 console errors.
   - The suite's other tests are listed in the PR.
 
-## 2026-11-13 — PR: claude/cbc-stirrup-leg-width (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CBLW) — Beam Capacity tab, ACI mode: new detailing check "Stirrup leg spacing across the width" (ACI 318-19 Table 9.7.6.2.2)   [NEW CHECK; every existing result identical; a row's detailing D/C, worst D/C and status change only where the new check fails; no saved key or format change]
+## 2026-11-13 — PR: claude/cbc-stirrup-leg-width (PR #1497: https://github.com/mlococo88/All-Structural/pull/1497) (CBLW) — Beam Capacity tab, ACI mode: new detailing check "Stirrup leg spacing across the width" (ACI 318-19 Table 9.7.6.2.2)   [NEW CHECK; every existing result identical; a row's detailing D/C, worst D/C and status change only where the new check fails; no saved key or format change]
 
 The file uses CRLF line endings; keep them. All code is in the Beam Capacity srcdoc (`#suite-frame-capacity`). When re-applying, escape `&` as `&amp;` and `"` as `&quot;`; the text below is un-escaped. Every site is tagged CBLW.
 
