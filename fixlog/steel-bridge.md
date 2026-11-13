@@ -8603,3 +8603,134 @@ index f714674..2145d31 100644
      return false;
    }
 ```
+
+## 2026-11-13 — PR: sbfu-d-misc (PR #1486: https://github.com/mlococo88/All-Structural/pull/1486) — Girder types: N_b change re-assigns the lines with a notice and Undo (SB-14); two types on one line is an input error (SB-15); the live-load shortcut of the superReactions hand-off stated as an assumption (SB-13); SB-17 kept as built (SBNB, SBTT; engineer's direction 2026-11-13 "use your judgment"; no formula changed)
+- **Request:** engineer's answers of 2026-11-13: SB-13 keep the hand-off's live-load shortcut and state it as an assumption in the hand-off note and the Report; SB-14 to SB-17 "use your judgment" (conservative choices, recorded here as decisions pending engineer review).
+- **Change:**
+  - `engine/model.js`: new `renumberLines(P, LT0)` — after N_b changed (LT0 = the line types before): the outer lines take the types that were on the old outer lines (G1's on G1, the old last line's on the new last line); an inner line keeps its type when it was an inner line before, else takes the "Interior" type (the type on the most old inner lines, the first on ties; none: the first type of position interior, else the first); every assignment beyond N_b removed; each type's design line kept when still one of its lines, else its first. Only for a project with girder types (else null: the N_b offer of before). Returns the lines whose type changed and the Interior type.
+  - `index.html`: the N_b input: `renumberLines` before the save, so Undo puts back N_b and the assignments in one step; `nbNotice` lists each line whose type changed (old → new, new lines), the lines removed beyond N_b, with Undo. A project saved before girder types: `nbOffer` as before.
+  - `engine/inputcheck.js` `collect`: a line with two or more girder types is an input error ("Line Gj has 2 girder types (A, B): a line takes one girder type…", path girders.<second>.lines): results, Auto design and the hand-off sends are blocked until it is fixed (the existing input-error rule, SBINV).
+  - `ui/handoffs.js` superReactions notes: the assumption (SB-13) for the lines other than their type's design line (or a borrowed line): their LL+IM reactions are the design-line run's HL-93 per-lane envelope × that line's own g_V, not a separate moving-load run. `report/builders.js` (Analysis, Settings and loads): the same assumption for a type on more than one line.
+- **Saved data (§5):** none (girders[i].lines / line written as an assignment already writes them; no new field).
+- **Governing provision:** none (assignments and messages). SB-13: AASHTO LRFD 10th Ed. Art. 3.6.1 (HL-93) and 4.6.2.2.3a (g_V) as before.
+- **Check case:** new project (Interior G2–G4, Exterior G1, G5). N_b 5 → 6: G5 Exterior → Interior, new G6 Exterior; G1–G4 unchanged. N_b 5 → 3: G3 Interior → Exterior (lines 3, 4 removed): Interior [G2], Exterior [G1, G3]. Three types (Core on G3), N_b 5 → 7: G2 Interior, G3 Core, G4 Interior kept, G5, G6 Interior, G7 Exterior. Interior on G2–G5 and Exterior on G1, G5: input error "Line G5 has 2 girder types (Interior, Exterior)".
+- **How verified:** new tests/engine/sb-nb-types.test.mjs (the cases above; a project saved before types not re-assigned). See the PR for the runs.
+- **Other copies:** none.
+- **Decisions (pending engineer review):** SB-14: (1) on an N_b change the outer lines take the old outer lines' types, inner lines keep theirs or take the Interior type (most old inner lines), assignments beyond N_b are dropped (before: kept, not checked), a notice lists every change with Undo; (2) applied only to projects with girder types. SB-15: two types on one line is a blocking input error naming the line (before: flagged on the Girders & plates tab, the first type used). SB-13: the shortcut kept and stated. SB-16 was done in the Auto design PR (#1481). SB-17: kept as built — a new project starts with Interior / Exterior types; a project saved before types keeps one design (the legacy default); the Auto design variable chips show the user's settings with the lock note above Run.
+- **Before / after (exact):**
+```diff
+diff --git a/apps/steel-bridge/engine/inputcheck.js b/apps/steel-bridge/engine/inputcheck.js
+index a3625ce..3a65b59 100644
+--- a/apps/steel-bridge/engine/inputcheck.js
++++ b/apps/steel-bridge/engine/inputcheck.js
+@@ -160,6 +160,9 @@
+         return; }
+       const c = cellOf(P, e); add('model', e.path, e.msg, c != null ? { cell: c } : null); });
+     v.warnings.forEach(w => warnings.push({ path: w.path, msg: w.msg, src: 'model' }));
++    // SBTT (2026-11-13; engineer's direction SB-15, 2026-11-13: use judgment): two girder types on one line is an input error naming the line; it blocks
++    // the results and the hand-offs until one type is assigned (before: the Girders & plates tab flagged it and the checks took the first type)
++    if (M && M.lineTypes && P && Array.isArray(P.girders) && P.girders.some(g => g && Array.isArray(g.lines))) { try { M.lineTypes(P).forEach((t, j) => { if (t.length > 1) add('pending', `girders.${t[1]}.lines`, `Line G${j + 1} has ${t.length} girder types (${t.map(gi => (P.girders[gi].label || P.girders[gi].id)).join(', ')}): a line takes one girder type. Choose one for G${j + 1} (Cross-section tab, "Girder type of each line").`); }); } catch (e) { /* a malformed lines field: validate reports it */ } }
+     if (P && typeof P === 'object' && P.spans && Array.isArray(P.girders)) {
+       const modelPaths = new Set(errors.map(e => e.path));
+       const guard = f => { try { f(); } catch (e) { /* a check that throws on a malformed project: the model checks above report it */ } };
+diff --git a/apps/steel-bridge/engine/model.js b/apps/steel-bridge/engine/model.js
+index 0c60b37..c1273fa 100644
+--- a/apps/steel-bridge/engine/model.js
++++ b/apps/steel-bridge/engine/model.js
+@@ -264,6 +264,23 @@
+     fix(gi, want);
+     function fix(k, L) { const q = G[k], dl = designLine(P, q); q.lines = L; if (L.length) q.line = L.includes(dl) ? dl : L[0]; }
+   }
++  /* renumberLines(P, LT0) (SBNB, 2026-11-13; engineer's direction SB-14, 2026-11-13: use judgment): after N_b changed from LT0.length lines (LT0 =
++     lineTypes(P) before the change) to xs.nb: the two outer lines take the type that was on the old outer lines (G1's type on G1, the old
++     last line's type on the new last line); an inner line keeps its type when it was an inner line before, else (a new line, or an old outer
++     line now inner) takes the "Interior" type (the type on the most old inner lines, the first on ties; none: the first type of position
++     'interior', else the first type); assignments beyond N_b are dropped (were kept, not checked). Only for a project with girder types
++     (some girders[i].lines); returns [{ j, from: [gi], to: gi }] (every line whose type changed, the new lines included; .I the Interior type) or null. */
++  function renumberLines(P, LT0) {
++    const G = (P && P.girders) || [], nb = nbOf(P), nb0 = (LT0 || []).length; if (!G.some(g => Array.isArray(g.lines)) || !nb || nb === nb0) return null;
++    const one = t => (t && t.length ? t[0] : null), A = one(LT0[0]), B = one(LT0[nb0 - 1]), cnt = new Map();
++    LT0.slice(1, nb0 - 1).forEach(t => { const q = one(t); if (q != null) cnt.set(q, (cnt.get(q) || 0) + 1); });
++    let I = null; cnt.forEach((n, q) => { if (I == null || n > cnt.get(I) || (n === cnt.get(I) && q < I)) I = q; });
++    if (I == null) { const k = G.findIndex(g => g.position === 'interior'); I = k >= 0 ? k : 0; }
++    const want = Array.from({ length: nb }, (_, j) => j === 0 ? (A != null ? A : I) : j === nb - 1 ? (B != null ? B : A != null ? A : I) : (j < nb0 - 1 && one(LT0[j]) != null ? one(LT0[j]) : I));
++    const ch = []; want.forEach((q, j) => { const was = j < nb0 ? LT0[j] : []; if (!(was.length === 1 && was[0] === q)) ch.push({ j, from: was.slice(), to: q }); });
++    G.forEach((g, gi) => { const L = want.map((q, j) => (q === gi ? j : -1)).filter(j => j >= 0), dl = designLine(P, g); g.lines = L; if (L.length) g.line = L.includes(dl) ? dl : L[0]; });
++    ch.I = I; return ch;   // ch.I: the "Interior" type taken
++  }
+   /* assignLine(P, j, gi): line j to type gi (removed from the type it had) */
+   function assignLine(P, j, gi) { setLines(P, gi, [...typeLines(P, gi), j]); }
+   /* addType(P, src, o): a new type, a copy of type src's plates, b_eff, position and its stiffener bays and splice plate entries (the
+@@ -616,5 +633,5 @@
+      (ownerRules.owner) when it is not AASHTO, else '' (as before the owner card moved to the Project tab). Display only; nothing computed or saved. */
+   const clientName = P => { const t = String(((P || {}).project || {}).owner == null ? '' : P.project.owner).trim(), o = ((P || {}).ownerRules || {}).owner;
+     return t || (o && o !== 'AASHTO' ? o : ''); };
+-  window.SBDModel = { clientName, SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, newProject, designLine, typeLines, lineTypes, unassigned, isExtLine, tribBeff, setLines, assignLine, addType, deleteType, atLine, LO_KEYS, lineOv, lineOvEntry, lineOvReset, effective, customAt, migrateLineOv, defaultXs, equalSpacing, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, migrateNbList, legacyKind, importLegacy, exportJSON, importJSON, save, load };
++  window.SBDModel = { clientName, SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, newProject, designLine, typeLines, lineTypes, unassigned, isExtLine, tribBeff, setLines, assignLine, renumberLines, addType, deleteType, atLine, LO_KEYS, lineOv, lineOvEntry, lineOvReset, effective, customAt, migrateLineOv, defaultXs, equalSpacing, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, migrateNbList, legacyKind, importLegacy, exportJSON, importJSON, save, load };
+ })();
+diff --git a/apps/steel-bridge/index.html b/apps/steel-bridge/index.html
+index e71ccbd..a997faf 100644
+--- a/apps/steel-bridge/index.html
++++ b/apps/steel-bridge/index.html
+@@ -538,7 +538,7 @@
+     if (el.id === 'i__lnLd') { ui.ln = +el.value; saveUi(); drawInputs(); return; }   // SB-2: the line of the Loads tab's cards (display only)
+     if (el.id === 'i__lovLd') { ui.lov = el.value === 'line'; saveUi(); drawInputs(); return; }   // SBLO: entered for the type or the line only (UI choice, sbd2.ui)
+     if (window.SBDAnalysisUI.onInputChange(el, P, Math.min(ui.g, P.girders.length - 1), { lov: lovOn() ? { j: lnSel() } : null })) { changed(true); return; }   // AIN: the analysis inputs (ui/analysis.js)
+-    if (el.dataset.path === 'xs.nb') { const nb0 = M.lineTypes(P).length; if (UL.onChange(el, P)) { changed(true); nbOffer(nb0); return; } }   // SB-2: N_b changed: offer to assign the new lines
++    if (el.dataset.path === 'xs.nb') { const LT0 = M.lineTypes(P), nb0 = LT0.length; if (UL.onChange(el, P)) { const ch = M.renumberLines(P, LT0); changed(true); if (ch) nbNotice(nb0, ch); else nbOffer(nb0); return; } }   // SB-2: N_b changed; SBNB (SB-14): typed projects re-assigned at once, with a notice and Undo
+     if (UL.onChange(el, P)) { changed(true); return; }
+     if (el.dataset.ltype != null) { if (el.value !== '') { M.assignLine(P, +el.dataset.ltype, +el.value); changed(true); } return; }   // SB-2: Cross-section tab, the type of a line
+     if (el.dataset.gline != null) { if (el.checked) { M.assignLine(P, +el.dataset.gline, Math.min(ui.g, P.girders.length - 1)); changed(true); } return; }   // SB-2: a line checked on the selected type
+@@ -618,6 +618,15 @@
+     toast(`<strong>N<sub>b</sub> is now ${nb}.</strong>${U.length ? ` Line${U.length > 1 ? 's' : ''} ${lnList(U)} ${U.length > 1 ? 'have' : 'has'} no girder type and ${U.length > 1 ? 'are' : 'is'} not checked until assigned:<div>${P.girders.map((q, gi) => `<button type="button" data-tasg="${gi}">Assign to ${esc(tyName(gi))}</button>`).join(' ')}</div>` : ''}`
+       + (gone.length ? `<div class="note">No longer on the bridge (kept with the type, not checked): ${gone.map(([gi, L]) => `${esc(tyName(gi))} ${lnList(L)}`).join('; ')}. The exterior lines changed too: check each type's lines and position (Girders &amp; plates tab).</div>` : ''));
+   }
++  /* nbNotice(nb0, ch) (SBNB, 2026-11-13; engineer's direction SB-14, 2026-11-13: use judgment): what the N_b change did to the girder types of the lines
++     (engine/model.js renumberLines): each line whose type changed, the lines dropped beyond N_b, and Undo (the N_b change and the re-assignment
++     together, one step) */
++  function nbNotice(nb0, ch) {
++    const nb = M.lineTypes(P).length, tn = L => L.length ? L.map(tyName).join(' + ') : '— none —';
++    toast(`<strong>N<sub>b</sub> ${nb0} → ${nb}: girder types re-assigned.</strong> The outer lines take the type that was on the outer lines; the inner lines keep their type, a new or formerly outer inner line takes ${esc(tyName(ch.I))}.
++      <div>${ch.map(c => `${lnName(c.j)}: ${c.j >= nb0 ? 'new line' : esc(tn(c.from))} → <b>${esc(tyName(c.to))}</b>`).join('; ') || 'no line changed'}.${nb < nb0 ? ` Lines ${lnList(Array.from({ length: nb0 - nb }, (_, k) => nb + k))} are no longer on the bridge: their assignments were removed.` : ''}</div>
++      <div class="note">Check each type's lines, position and b<sub>eff</sub> on the Girders &amp; plates tab. Undo puts back N<sub>b</sub> and the types of the lines.</div>`, { undo: true });
++  }
+   function closeToast() { $('toast').hidden = true; }
+   /* loadNotes(notes): the one-line notices of the field migrations run on load (engine/model.js importJSON notes, e.g. migrateNbList) */
+   const loadNotes = n => { if (n && n.length) toast(n.map(t => esc(t)).join('<br>')); };
+diff --git a/apps/steel-bridge/report/builders.js b/apps/steel-bridge/report/builders.js
+index d74ba33..b72c966 100644
+--- a/apps/steel-bridge/report/builders.js
++++ b/apps/steel-bridge/report/builders.js
+@@ -121,6 +121,10 @@
+     const nums = (k, L) => Object.keys(o[k] || {}).filter(q => typeof o[k][q] === 'number').map(q => `${L} ${q} = ${o[k][q]}`), b = k => typeof o[k] === 'boolean' ? [`${k === 'loadsOverride' ? 'dead-load' : k === 'dfOverride' ? 'distribution factor' : 'construction live load'} override ${o[k] ? 'on' : 'off'}`] : [];
+     const it = [...nums('loadsManual', 'dead load (klf)'), ...nums('dfManual', 'factor'), ...b('loadsOverride'), ...b('dfOverride'), ...b('clOverride'), ...(o.dfPull ? ['the LL & DL factors pulled for this line'] : []), ...Object.keys(o.custom || {}).filter(m => (o.custom[m].rows || []).length).map(m => `the Custom demands (${m}) of this line`)];
+     return note(`Values entered for line G${j + 1} only (engineer decisions SB-7, SB-9, SB-10, 2026-11-13: per-line values over the girder type ${g.label || g.id}; a blank value takes the type's): ${it.join('; ')}. The analysis and every check of this line use them; the type's other lines keep the type's values. As on the [[tab:loads|Loads tab]] (marked ● G${j + 1}).`); };
++  /* sb13Note(B) (2026-11-13, engineer decision SB-13): the live load of the other lines in the superReactions hand-off, stated as an assumption
++     (as the hand-off note), for a girder type on more than one line; null otherwise */
++  const sb13Note = B => { const M = window.SBDModel, P = B.P, g = P && P.girders && P.girders[B.g]; if (!M || !g || !Array.isArray(g.lines) || g.lines.length < 2) return null;
++    return note(`Assumption (engineer decision SB-13, 2026-11-13), hand-off to Substructure Loading (superReactions, for information only; live load is not sent): the LL+IM reactions of a line other than the type's design line G${M.designLine(P, g) + 1} are the design-line run's HL-93 per-lane reaction envelope (the same plates and spans, so the same per-lane envelope) times that line's own shear distribution factor g_V, not a separate moving-load run; each line's dead loads come from its own run. The checks of every line here use that line's own full analysis.`); };
+   const clNote = A => { const L = A.loads || {}, src = (L.src || {}).CL, C = L.cl || {};
+     const how = src === 'calc' ? `calculated, $w_{CL}$ = $q_{CL}$ × $b_{trib}$ [[an.CL.w]], $q_{CL}$ = ${f(C.q, 1)} psf (${C.qSrc === 'entered' ? 'entered' : C.qSrc === 'owner' ? `owner rule ${C.qCite}` : "this app's default, the overhang bracket construction load"})`
+       : src === 'manual' ? 'entered on the Loads tab (Override calculated value)' : src === 'girder' ? 'from the girder loads (hand-off)' : `none${C.on ? '' : ' (not calculated: a project saved before the calculation was added, 2026-11-09)'}`;
+@@ -140,7 +144,7 @@
+       ['LL deflection limit', `L/${S.deflLimit} (2.5.2.6.2)`], ['Deck placement sequence', S.seq === 'off' ? 'off' : 'on'], ['Dead loads', A.loads && A.loads.source], ['Distribution factors', A.df && A.df.src]]),
+       A.warnings.length ? note(A.warnings.join(' '), true) : null,
+       note(`Unfactored effects per girder: DC1 (steel, then the wet deck) on the steel section, DC2 and DW on 3n, LL+IM on n; ${Nn} stations (GirderDetail's grid), shared beam elements, loads applied exactly. As on the [[tab:an|Analysis tab]].`),
+-      clNote(A), lovNote(B)]));
++      clNote(A), lovNote(B), sb13Note(B)]));
+     const Mser = [{ name: 'DC1', y: s.DC1.M }, { name: 'DC2', y: s.DC2.M }, { name: 'DW', y: s.DW.M }];
+     if (ll) Mser.push({ name: 'LL+IM max', y: ll.Mpos, c: '#DC2626' }, { name: 'LL+IM min', y: ll.Mneg, c: '#DC2626', dash: '4 3' });
+     const Vser = [{ name: 'DC1', y: Vr(s.DC1) }, { name: 'DC2', y: Vr(s.DC2) }, { name: 'DW', y: Vr(s.DW) }];
+diff --git a/apps/steel-bridge/ui/handoffs.js b/apps/steel-bridge/ui/handoffs.js
+index 2145d31..0453d86 100644
+--- a/apps/steel-bridge/ui/handoffs.js
++++ b/apps/steel-bridge/ui/handoffs.js
+@@ -195,6 +195,7 @@
+       `Whole bridge: every girder (G1 to G${nb}) from this app's analysis (Steel Bridge Design, apps/steel-bridge, engine/analysis.js), ${model} line-girder model${R0.cont ? ', continuous' : ', simple spans'}, run once per girder with the same settings; each girder with its own loads and distribution factors (Loads & LLDF). Each girder is labelled by its number, left to right.${typed.length ? ` Girder types (Girders & plates): each line is worked with the girder type assigned to it, on that line, as this app checks it: ${typed.map(q => `G${q.j + 1} ${q.label}`).join(', ')}${conf.length ? ` (${conf.map(q => `G${q.j + 1}`).join(', ')}: two types assigned, the first taken)` : ''}.` : ''}${borrowed.length ? ` ${typed.length ? 'Lines with no girder type' : 'Girders without plates of their own'} take the plates of the first plate girder of the same position (else the first plate girder): ${borrowed.join(', ')}.` : ''}`,
+       `Unfactored, kip, + up. DC1 = girder steel (490 pcf x (1 + ${f0(R0.loads.steelAllowPct)}% detail allowance)), cross-frames and diaphragms (point loads at the girder's frames), deck, haunch, SIP forms and other DC1 loads, on the steel section; DC2 and DW on the long-term composite section; each load on the stage that carries it.`,
+       `Live load is not sent (liveLoad null): Substructure Loading computes its own. For information, this app's LL+IM reactions per girder (HL-93, IM ${f0(S0.im)}% on the truck and tandem, x the girder's shear distribution factor with the skew correction, the larger of the adjacent spans; 90% of two trucks plus lane at interior supports), max / min, kip: ${per((R, k) => R.llR ? `${f2(R.llR[k].max)} / ${f2(R.llR[k].min)}` : 'n/a')}.`,
++      ...(LN.some(q => !(q.own && q.P === P)) ? [`Assumption (engineer decision SB-13, 2026-11-13): the LL+IM values above for ${LN.filter(q => !(q.own && q.P === P)).map(q => `G${q.j + 1}`).join(', ')} (a line other than its girder type's design line${borrowed.length ? ', or a line that borrows a plate girder' : ''}) are the HL-93 per-lane reaction envelope of the design-line run of the same plates times that line's own shear distribution factor g_V (the larger of the adjacent spans), not a separate moving-load run of the line: the per-lane envelope depends only on the spans and the plates (live-load stiffness); each line's dead loads come from its own run.`] : []),
+       ...(hasPL ? [`Pedestrian load: no field in this hand-off, not sent as a load. This app's pedestrian load reactions, max / min, kip: ${per((R, k) => R.pl && R.pl.R ? `${f2(R.pl.R[k].max)} / ${f2(R.pl.R[k].min)}` : '0.00 / 0.00')}.`] : []),
+       ...(gUT.length || gUF.length ? [`MassDOT utilities (OWN16; MassDOT LRFD Bridge Manual Part I 3.5.5.2, 3.5.5.4) are NOT in DC1, DC2 or DW; they are sent as their own fields girders[].UT (existing) and girders[].UF (future allowance), unfactored, on the girders that carry them (0 on the others). ${gUT.length ? `Existing utilities (UT; factored as DW: Strength 1.50 where they add, 0.65 where they relieve), kip: ${per((R, k) => f2(R.st.UT ? R.st.UT.R[k] : 0), gUT)}.` : 'No existing utilities.'} ${gUF.length ? `Future utility allowance (UF; Strength 1.25 where it adds, 0 where it relieves), kip: ${per((R, k) => f2(R.st.UF ? R.st.UF.R[k] : 0), gUF)}.` : 'No future utility allowance.'}`] : []),
+       ...(P.girders.some(g => g.dfPull && g.dfPull.use !== false) ? ['Distribution factors pulled from LL & DL apply to their own plate girder only; only the LL+IM values in these notes depend on them.'] : []),
+```
