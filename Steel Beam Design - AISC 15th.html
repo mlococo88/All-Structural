@@ -2190,6 +2190,140 @@ function torsRoundWork(D,p){
   out.lines.push('F_{cr}=\\min\\left[0.6F_y,\\ \\max(F_{cr,a},F_{cr,b})\\right]=\\min\\left('+fmt(0.6*p.mat.Fy,2)+',\\ '+fmt(hasL?Math.max(t.F1,t.F2c):t.F2c,2)+'\\right)=\\mathbf{'+fmt(t.Fcr,2)+'\\ \\text{ksi}}');
   return out;
 }
+/* ---------- SBHK (2026-11-13, engineer HSS-2): concentrated forces on HSS walls, beam-type loads ----------
+   AISC 360-16 (15th Ed.). Rectangular HSS: Sec. K2.3 sends concentrated loads to the applicable limit states of Chapter J;
+   Commentary J10 and K1.2 say how they apply to an HSS: k = outside corner radius, taken as 1.5t (the radius is not known),
+   t_f = t_w = t, d = the flat H - 3t in the crippling equations, strength x 2 walls; plate effective width B_e by Eq. K1-1.
+   Round HSS: Sec. K2.2, Table K2.1 (transverse plate T-connection, HSS local yielding, Eq. K2-1a) within Table K2.1A.
+   Connection types per location (S.design.hssK in beam mode, S.member.hssK in member mode; new optional fields, absent =
+   not checked): 'plate' = a transverse plate welded across the loaded face (width B_p across the HSS, thickness t_p,
+   bearing length l_b along the HSS, default t_p, plate F_yp, default 36 ksi); 'bearing' = bearing on a cap plate or seat at
+   a support across the full width over l_b (rect: B_p = B; round: B_p entered, default D).
+   Limit states (rect), phi: plate local yielding R_n = F_yp t_p B_e (Sec. J4.1 / J4.4 on the effective plate, 0.90);
+   face punching shear R_n = 0.6 F_y t (2 l_b + 2 B_e), for B_p <= B - 2t (Sec. J10.10 -> J4.2, Comm. K1.2; 0.95);
+   sidewall local yielding 2 F_y t (5k + l_b) or, within H of the member end, 2 F_y t (2.5k + l_b) (Eq. J10-2 / J10-3 x 2; 1.00);
+   sidewall local crippling (compressive force) 2 x Eq. J10-4 / J10-5a / J10-5b with Q_f by Eq. K3-14 (0.75).
+   Round: R_n = F_y t^2 [5.5/(1 - 0.81 B_p/D)] Q_f (Eq. K2-1a; 0.90), Q_f by Eq. K2-3.
+   Q_f: U = P_ro/(F_y A_g) + |M_ro|/(F_y S) (Eq. K2-4) with the compressive P_u and the moment at the location; the
+   connecting face is taken in compression whatever the sign of M (conservative). Not covered (stated): the rect face
+   yield-line flexure for B_p < 0.85B (no Specification equation; Sec. J10.10 / Manual Part 9), web compression buckling
+   (Sec. J10.5, a pair of opposing forces), longitudinal plates, cap plates loaded along the member axis, HSS-to-HSS. */
+function hssKPrm(p,raw,isSup){
+  const r=raw||{},type=r.type||'none',o={type,errs:[],notes:[]};
+  if(type==='none')return o;
+  o.Fyp=r.Fyp>0?+r.Fyp:36;o.FypDef=!(r.Fyp>0);
+  if(type==='plate'){
+    o.tp=r.tp>0?+r.tp:null;o.Bp=r.Bp>0?+r.Bp:null;o.lb=r.lb>0?+r.lb:o.tp;o.lbDef=!(r.lb>0);
+    if(!o.tp)o.errs.push('plate thickness tₚ');if(!o.Bp)o.errs.push('plate width Bₚ');
+  }else{   /* bearing */
+    o.lb=r.lb>0?+r.lb:null;o.lbDef=false;
+    if(!o.lb)o.errs.push('bearing length lᵇ');
+    if(p._kind==='R')o.Bp=p.B;else{o.Bp=r.Bp>0?+r.Bp:hssLabelOD(p.lbl,p.OD,p._src&&p._src.OD);o.BpDef=!(r.Bp>0);}
+  }
+  return o;
+}
+/* the capacities that do not depend on Q_f, and the parameters of those that do */
+function hssKCaps(p,prm,endDist){
+  const Fy=p.mat.Fy,E=EKSI,t=p.tdes,out={prm,endDist,ls:[]};
+  if(prm.type==='none'||prm.errs.length)return out;
+  if(p._kind==='R'){
+    const B=p.B,H=p.Ht,Bp=Math.min(prm.Bp,B),beta=Bp/B,lb=prm.lb,k=1.5*t;
+    out.B=B;out.H=H;out.t=t;out.Bp=Bp;out.beta=beta;out.lb=lb;out.k=k;
+    if(prm.type==='plate'){
+      const BeRaw=(10/(B/t))*(Fy*t/(prm.Fyp*prm.tp))*Bp,Be=Math.min(BeRaw,Bp);
+      out.Be=Be;out.BeRaw=BeRaw;
+      out.ls.push({id:'ply',name:'Plate local yielding (effective width)',ref:'§K1.2a Eq. K1-1; §J4.1, J4.4',phi:0.90,Rn:prm.Fyp*prm.tp*Be,both:true});
+      if(Bp<=B-2*t)out.ls.push({id:'pun',name:'HSS face punching shear',ref:'§J10.10, J4.2; Comm. K1.2',phi:0.95,Rn:0.6*Fy*t*(2*lb+2*Be),both:true});
+      else out.punNA=true;
+      if(beta<0.85)out.ylNC=true;
+    }
+    const atEndY=endDist<=H;
+    out.ls.push({id:'sly',name:'Sidewall local yielding (2 walls)',ref:(atEndY?'Eq. J10-3':'Eq. J10-2')+' × 2; Comm. J10',phi:1.00,
+      Rn:2*Fy*t*((atEndY?2.5:5)*k+lb),both:true,atEnd:atEndY});
+    const dF=H-3*t,atEndC=endDist<H/2,r=lb/dF,root=Math.sqrt(E*Fy);
+    let base,clause;
+    if(!atEndC){base=1.6*t*t*(1+3*r)*root;clause='J10-4';}
+    else if(r<=0.2){base=0.8*t*t*(1+3*r)*root;clause='J10-5a';}
+    else{base=0.8*t*t*(1+(4*r-0.2))*root;clause='J10-5b';}
+    out.dF=dF;
+    out.ls.push({id:'slc',name:'Sidewall local crippling (2 walls)',ref:'Eq. '+clause+' × 2, Qₓ Eq. K3-14; Comm. J10',phi:0.75,RnQ1:base,qf:'rect',comp:true,clause,atEnd:atEndC});
+  }else{
+    const D=hssLabelOD(p.lbl,p.OD,p._src&&p._src.OD),Bp=Math.min(prm.Bp,D),beta=Bp/D;
+    out.D=D;out.t=t;out.Bp=Bp;out.beta=beta;
+    out.ls.push({id:'rly',name:'HSS local yielding (transverse plate)',ref:'Table K2.1, Eq. K2-1a, Qₓ Eq. K2-3',phi:0.90,RnQ1:Fy*t*t*5.5/(1-0.81*beta),qf:'round',both:true});
+    /* Table K2.1A limits of applicability */
+    const lim=[];
+    if(D/t>50)lim.push('D/t = '+fmt(D/t,1)+' > 50');
+    if(!(beta>0.2&&beta<=1))lim.push('Bₚ/D = '+fmt(beta,3)+' outside 0.2 < Bₚ/D ≤ 1.0');
+    if(Fy>52)lim.push('Fᵧ = '+Fy+' ksi > 52 ksi');
+    if(Fy/p.mat.Fu>0.8&&!/A500C/.test(p.mat.id))lim.push('Fᵧ/Fᵤ = '+fmt(Fy/p.mat.Fu,3)+' > 0.8');
+    const lend=D*(1.25-beta/2);if(endDist<lend)lim.push('end distance '+fmt(endDist,2)+' in < D(1.25 − β/2) = '+fmt(lend,2)+' in');
+    out.lim=lim;
+  }
+  return out;
+}
+/* one location, one combination: F > 0 compressive force on the wall (downward load on top, upward reaction below), F < 0 tensile */
+function hssKAt(p,caps,F,Pu,Mu){
+  const r={F,dem:Math.abs(F),tens:F<0,states:[]};
+  if(!caps||!caps.ls.length||!(Math.abs(F)>1e-9))return r;
+  const Fy=p.mat.Fy,U=Math.max(0,Pu||0)/(Fy*p.A)+Math.abs(Mu||0)*12/(Fy*p.Sx);   /* M_u in kip-ft */
+  r.U=U<1e-9?0:U;
+  caps.ls.forEach(L=>{
+    if(L.comp&&F<0)return;
+    let Qf=1,Rn=L.Rn;
+    if(L.qf==='rect'){Qf=Math.min(1,1.3-0.4*U/caps.beta);Rn=L.RnQ1*Math.max(0,Qf);}
+    else if(L.qf==='round'){Qf=Math.max(0,1-0.3*U*(1+U));Rn=L.RnQ1*Qf;}
+    const s={id:L.id,name:L.name,ref:L.ref,phi:L.phi,Rn,Qf:L.qf?Qf:null,phiRn:L.phi*Rn};
+    s.dcr=s.phiRn>0?r.dem/s.phiRn:Infinity;
+    r.states.push(s);
+  });
+  r.gov=r.states.reduce((m,s)=>(!m||s.dcr>m.dcr)?s:m,null);
+  return r;
+}
+/* the locations: beam mode = every support and every point-load x (as J10); member mode = the one stated force */
+function hssKLocs(p,Ltot){
+  const locs=[];
+  if(isMember()){
+    const h=S.member.hssK||{},j=S.member.j10||{};
+    const dIn=j.dist,hasD=dIn!=null&&dIn!==''&&isFinite(dIn)&&+dIn>=0,endDist=hasD?+dIn:(j.loc==='end'?0:1e6);
+    const prm=hssKPrm(p,h,false);
+    locs.push({kind:'user',key:'M',label:'concentrated force ('+(hasD?fmt(+dIn,2)+' in from the end':(j.loc||'interior'))+')',x:null,endDist,prm,caps:hssKCaps(p,prm,endDist)});
+    return locs;
+  }
+  const K=S.design.hssK||{},nX=nodeXs();
+  const res=(key,grp)=>{const g=K[grp]||{},o=(K.loc&&K.loc[key])||{},m={};
+    ['type','Bp','tp','lb','Fyp'].forEach(f=>{const v=o[f];m[f]=(v!=null&&v!==''&&!(f==='type'&&v==='group'))?v:g[f];});return m;};
+  S.geom.nodes.forEach((nd2,j)=>{if(nd2.t==='free')return;
+    locs.push({kind:'support',key:'S'+j,grp:'sup',label:'support '+NN[j],x:nX[j],node:j});});
+  S.loads.forEach(ld=>{
+    if(ld.off||ld.type!=='point')return;
+    const si=Math.min(ld.si||0,S.geom.spans.length-1),x=nX[si]+Math.max(0,Math.min(S.geom.spans[si].L,ld.pos||0));
+    const g=locs.find(l=>l.kind==='load'&&Math.abs(l.x-x)<=1e-6);
+    if(g){g.loads.push(ld);g.label='point loads '+g.loads.map(q=>q.nm||q.lc).join(' + ')+' (x = '+fmt(x,2)+' ft)';}
+    else locs.push({kind:'load',key:'P'+x.toFixed(3),grp:'pt',label:'point load '+(ld.nm||'')+' (x = '+fmt(x,2)+' ft)',x,loads:[ld]});
+  });
+  locs.forEach(lo=>{lo.endDist=Math.min(lo.x,Ltot-lo.x)*12;lo.prm=hssKPrm(p,res(lo.key,lo.grp),lo.kind==='support');lo.caps=hssKCaps(p,lo.prm,lo.endDist);});
+  return locs;
+}
+/* SBHK: the check row, the warnings */
+function sbHssKCheck(D){
+  const L=D.hssK,on=L.filter(l=>l.prm.type!=='none');
+  if(!on.length){D.checks.push({label:'Concentrated forces',ref:'Ch. K / J10',na:true,tab:'tabJ10',
+    detail:'HSS \u2014 no plate or bearing stated at the supports / point loads (Concentrated Forces input); locally loaded HSS walls not checked'});return;}
+  on.filter(l=>l.prm.errs.length).forEach(l=>D.warns.push('Concentrated force on the HSS wall at '+l.label+': enter '+l.prm.errs.join(', ')+' (Concentrated Forces input). This location is reported as failing until then.'));
+  on.filter(l=>l.caps.ylNC).forEach(l=>D.warns.push('HSS wall at '+l.label+': B\u209A/B = '+fmt(l.caps.beta,3)+' < 0.85, so the load must pass through the face in bending. AISC 360-16 gives no equation for this face yield-line limit state (\u00A7J10.10: flexure by yield-line theory, AISC Manual Part 9); it is NOT checked here \u2014 verify it separately.'));
+  on.filter(l=>l.caps.lim&&l.caps.lim.length).forEach(l=>D.warns.push('Round HSS wall at '+l.label+': outside the Table K2.1A limits of applicability ('+l.caps.lim.join('; ')+'). \u00A7K1: such a connection is designed by rational analysis; the Table K2.1 value is shown for information.'));
+  let g=null;
+  D.perCombo.forEach(c=>(c.hssK||[]).forEach(r=>{
+    const lo=L.find(l=>l.key===r.key);
+    if(lo&&lo.prm.type!=='none'&&lo.prm.errs.length&&r.dem>1e-9){if(!g||g.d<Infinity)g={d:Infinity,c,r,blocked:'input missing: '+lo.prm.errs.join(', ')};return;}
+    if(r.gov&&(!g||r.gov.dcr>g.d))g={d:r.gov.dcr,c,r};}));
+  if(!g){D.checks.push({label:'Concentrated forces',ref:'Ch. K / J10',na:true,tab:'tabJ10',detail:'HSS \u2014 no force at the locations with a plate or bearing stated'});return;}
+  if(g.blocked){D.checks.push({label:'Concentrated forces',ref:'Ch. K / J10',dcr:Infinity,fail:true,combo:g.c.name,tab:'tabJ10',detail:'HSS wall, '+g.r.label+' \u2014 '+g.blocked});return;}
+  const lo=L.find(l=>l.key===g.r.key);
+  D.checks.push({label:'Concentrated forces',ref:g.r.gov.ref,dcr:g.d,combo:g.c.name,tab:'tabJ10',dem:g.r.dem,cap:g.r.gov.phiRn,unit:'kip',capSym:'\u03C6R\u2099',
+    detail:'HSS wall: '+g.r.gov.name+', '+g.r.label+(g.r.tens?' (tension)':'')+(lo&&lo.caps.ylNC?'; face yield line NOT checked (B\u209A < 0.85B)':'')});
+}
 /* ---------- J10 concentrated forces (I & C) ---------- */
 function j10WLY(p,lbIn,endDistIn){
   const Fy=p.mat.Fy,k=p.kdes,atEnd=endDistIn<=p.d;
@@ -2425,6 +2559,7 @@ function designAll(A){
       if(lo.lb!=null&&lo.lb>0){lo.wly=j10WLY(p,lo.lb,lo.endDist);lo.wlc=j10WLC(p,lo.lb,lo.endDist);}});
     D.j10={locs,lbSup:dsn.lbSup,lbPt:dsn.lbPt};
   }
+  if(p._fam==='HSSR'||p._fam==='HSSP')D.hssK=hssKLocs(p,Ltot);   /* SBHK: HSS walls, Chapter K / J */
   /* M3: J10.4 inputs (L_b = largest unbraced length along either flange); kept out of D.j10 (unchanged structure) */
   const wsbMode=dsn.wsb||'env',LbWsb=Math.max(D.LbTop||0,D.LbBot||0)*12;
   /* ---- per combination ---- */
@@ -2523,6 +2658,14 @@ function designAll(A){
         return r;
       });
     }
+    /* SBHK: the force at each HSS location, as J10 (support: reaction up = compressive; point loads: factored sum, down = compressive) */
+    if(D.hssK)C.hssK=D.hssK.map(lo=>{
+      let F=0;
+      if(lo.kind==='support')F=cb.R[lo.node].v;
+      else F=lo.loads.reduce((s2,q)=>s2+(cb.f[q.lc]||0)*(q.mag||0),0);
+      const Mu=evalVM(Math.min(Ltot,lo.x),cb.R,cb.f).M;
+      return Object.assign({key:lo.key,label:lo.label,x:lo.x,Mu,Pu:man.Pu||0},hssKAt(p,lo.caps,F,man.Pu,Mu));
+    });
     D.perCombo.push(C);
   });
   if(typeof applyCompositeToRegions==='function')applyCompositeToRegions(A,D);
@@ -2638,7 +2781,8 @@ function buildDesignChecks(D,A){
     const bGov=gv(c=>{let m=null;(c.j10||[]).forEach(r=>{if(r.dcrFLB!=null&&(!m||r.dcrFLB>m.d))m={d:r.dcrFLB,c,r};});return m;});
     if(bGov)D.checks.push({label:'Flange local bending',ref:'J10.1',dcr:bGov.d,combo:bGov.c.name,detail:bGov.r.label+' (tension)',tab:'tabJ10',
       dem:bGov.r.demT,cap:bGov.r.flb.phi*bGov.r.flb.Rn,unit:'kip',capSym:'\u03C6R\u2099'});
-  }else D.checks.push({label:'Concentrated forces',ref:'J10',na:true,
+  }else if(D.hssK)sbHssKCheck(D);   /* SBHK */
+  else D.checks.push({label:'Concentrated forces',ref:'J10',na:true,
     detail:(D.p._kind==='I'||D.p._kind==='C')?'bearing length / concentrated force not entered':'HSS \u2014 J10 web provisions do not apply; verify locally loaded faces separately',
     tab:'tabComp'});
   if(!D.member&&A&&A.svc&&A.svc.length){
@@ -5295,6 +5439,7 @@ function memberDesignAll(A){
       wly:j10WLY(p,S.member.j10.lb,endDist),wlc:j10WLC(p,S.member.j10.lb,endDist)}],
       lbSup:S.member.j10.lb,lbPt:S.member.j10.lb};
   }
+  if(p._fam==='HSSR'||p._fam==='HSSP')D.hssK=hssKLocs(p,0);   /* SBHK: HSS walls, the one stated force */
   rows.forEach(r=>{
     const C={id:r.id,name:r.name||r.id,man:{Pu:r.Pu||0,Muy:r.Muy||0,Vuy:r.Vuy||0,Tu:r.Tu||0}};
     const cap=D.capTop;
@@ -5334,6 +5479,9 @@ function memberDesignAll(A){
         wly:lo.wly,wlc:lo.wlc,
         dcrWLY:S.member.j10.R/(lo.wly.phi*lo.wly.Rn),dcrWLC:S.member.j10.R/(lo.wlc.phi*lo.wlc.Rn)}];
     }
+    /* SBHK: R_u entered (> 0 compressive on the wall, < 0 tensile); the case's M_ux (kip-ft) and P_u for Q_f */
+    if(D.hssK){const lo=D.hssK[0],F=+S.member.j10.R||0;
+      C.hssK=[Object.assign({key:lo.key,label:lo.label,x:null,Mu:Math.abs(r.Mux||0),Pu:r.Pu||0},hssKAt(p,lo.caps,F,r.Pu||0,Math.abs(r.Mux||0)))];}
     D.perCombo.push(C);
   });
   if(typeof applyCompositeToRegions==='function')applyCompositeToRegions(A,D);
@@ -5878,8 +6026,96 @@ function buildTorsTab(pg){
 /* =====================================================================
    J10 — CONCENTRATED FORCES
    ===================================================================== */
+/* SBHK: the HSS concentrated-force tab (Concentrated Forces), worked per location and per combination */
+function sbHssKTab(pg,D,p){
+  const L=D.hssK,on=L.filter(l=>l.prm.type!=='none'),f=(v,n)=>fmt(v,n==null?2:n),E=EKSI,Fy=p.mat.Fy;
+  const TY={none:'not checked',plate:'transverse plate',bearing:'bearing (cap plate / seat)'};
+  mkSection('hkCap','HSS Wall Strength at Each Location (AISC 360-16 Chapter K / Chapter J)',body=>{
+    body.appendChild(el('div','note sbNL',sbNL('Concentrated forces on the HSS walls, at every support and point load'+(isMember()?' (member mode: the one stated force)':'')+':',[
+      p._kind==='R'?['Rectangular HSS:','\u00A7K2.3 sends concentrated loads to the applicable limit states of Chapter J. As Commentary J10 and K1.2 apply them to an HSS: k = outside corner radius, taken as 1.5t (not known); t\u2093 = t\u1D65 = t; d = H \u2212 3t in the crippling equations; strength \u00D7 2 sidewalls; plate effective width B\u2091 by Eq. K1-1. The sidewall limit states are checked for every B\u209A/B (Commentary K1.2 names them for B\u209A > 0.85B; conservative), with l\u1D47 only (no dispersion through the plate or welds).']:
+        ['Round HSS:','\u00A7K2.2, Table K2.1 transverse plate (HSS local yielding, Eq. K2-1a) within the limits of Table K2.1A; a bearing uses the same equation with its width B\u209A.'],
+      ['Q<sub>f</sub>:','U = P\u1D63\u2092/(F\u1D67A\u1D4D) + |M\u1D63\u2092|/(F\u1D67S) (Eq. K2-4) with the compressive P\u1D64 and the moment at the location; the loaded face is taken in compression whatever the sign of M (conservative).'],
+      ['Direction:','a downward point load or an upward reaction pushes on the wall (compressive: every limit state); an upward point load or uplift pulls (tensile: crippling is not a limit state).'],
+      ['Not covered (verify separately):',(p._kind==='R'?'face flexure by yield lines for B\u209A < 0.85B (no Specification equation; \u00A7J10.10, AISC Manual Part 9); ':'')+'web compression buckling of the walls under a pair of opposing forces (\u00A7J10.5); longitudinal plates; a cap plate loaded along the member axis; HSS-to-HSS connections (\u00A7K3); the plate and its welds.']])));
+    if(!on.length){body.appendChild(el('div','warnBox','No plate or bearing is stated at any location \u2014 enter them in the <b>Concentrated Forces</b> section of the input panel (Checks tab). The check is reported N/A, never as passing.'));return;}
+    const t=el('table','tbl'),hd=el('tr');
+    ['Location',isMember()?null:'x (ft)','Type','B\u209A (in)','t\u209A (in)','l\u1D47 (in)','End dist. (in)','\u03C6R\u2099 by limit state (kip; Q<sub>f</sub> = 1)'].filter(x=>x!=null).forEach(h=>hd.appendChild(el('th',null,h)));t.appendChild(hd);
+    L.forEach(lo=>{const tr=el('tr'),pr=lo.prm,c=lo.caps;
+      const cells=[lo.label];if(!isMember())cells.push(f(lo.x,2));
+      cells.push(TY[pr.type],pr.Bp!=null?f(pr.Bp,3):'\u2014',pr.tp!=null?f(pr.tp,3):'\u2014',pr.lb!=null?f(pr.lb,3):'\u2014',lo.endDist>=1e5?'interior':f(lo.endDist,1),
+        pr.type==='none'?'\u2014':pr.errs.length?'<span class="dirty">enter '+pr.errs.join(', ')+'</span>':c.ls.map(s=>s.name+': '+f(s.phi*(s.Rn!=null?s.Rn:s.RnQ1),1)).join('<br>'));
+      cells.forEach((v,i)=>tr.appendChild(el('td',i===0||i===cells.length-1?'lft':null,''+v)));t.appendChild(tr);});
+    body.appendChild(t);
+  },pg);
+  on.filter(l=>!l.prm.errs.length).forEach((lo,i)=>mkSection('hkW'+i,'Worked: '+lo.label,body=>sbHssKWork(body,p,lo),pg));
+  if(!on.length)return;
+  perComboSections(pg,'hk_',isMember()?'Case ':'Combination ',(body,C)=>{
+    const rows=(C.hssK||[]).filter(r=>{const lo=L.find(l=>l.key===r.key);return lo&&lo.prm.type!=='none';});
+    if(!rows.some(r=>r.dem>1e-9)){body.appendChild(el('div','note','No force at the stated locations for this '+(isMember()?'case':'combination')+'.'));return;}
+    const t=el('table','tbl'),hd=el('tr');
+    ['Location','R\u1D64 (kip)','U','Limit state','Q<sub>f</sub>','\u03C6R\u2099 (kip)','DCR'].forEach(h=>hd.appendChild(el('th',null,h)));t.appendChild(hd);
+    rows.forEach(r=>{const lo=L.find(l=>l.key===r.key);
+      if(!(r.dem>1e-9))return;
+      if(lo.prm.errs.length){const tr=el('tr','gov');[r.label,f(r.F,2),'\u2014','input missing: '+lo.prm.errs.join(', '),'\u2014','\u2014','FAIL'].forEach((v,i)=>tr.appendChild(el('td',i===0||i===3?'lft':null,v)));t.appendChild(tr);return;}
+      r.states.forEach((s,j)=>{const tr=el('tr');
+        [j?'':r.label+(r.tens?' (tension)':''),j?'':f(r.F,2),j?'':f(r.U,4),s.name,s.Qf!=null?f(s.Qf,4):'\u2014',f(s.phiRn,1),f(s.dcr,3)].forEach((v,i)=>tr.appendChild(el('td',i===0||i===3?'lft':null,v)));
+        if(s.dcr>1)tr.className='gov';t.appendChild(tr);});});
+    body.appendChild(t);
+    const g=rows.filter(r=>r.gov).reduce((m,r)=>(!m||r.gov.dcr>m.gov.dcr)?r:m,null);
+    if(g){
+      const lines=['U=\\tfrac{P_{ro}}{F_yA_g}+\\tfrac{|M_{ro}|}{F_yS}=\\tfrac{'+f(Math.max(0,g.Pu),2)+'}{'+Fy+'('+f(p.A,3)+')}+\\tfrac{'+f(Math.abs(g.Mu),2)+'(12)}{'+Fy+'('+f(p.Sx,3)+')}=\\mathbf{'+f(g.U,4)+'}'];
+      const lo=L.find(l=>l.key===g.key),sq=g.states.find(s=>s.Qf!=null);
+      if(sq)lines.push(p._kind==='R'?'Q_f=1.3-0.4\\tfrac{U}{\\beta}=1.3-0.4\\tfrac{'+f(g.U,4)+'}{'+f(lo.caps.beta,4)+'}\\le 1.0\\ \\Rightarrow\\ Q_f=\\mathbf{'+f(sq.Qf,4)+'}\\quad\\text{(Eq. K3-14)}':
+        'Q_f=1-0.3U(1+U)=1-0.3('+f(g.U,4)+')(1+'+f(g.U,4)+')=\\mathbf{'+f(sq.Qf,4)+'}\\quad\\text{(Eq. K2-3)}');
+      lines.push('\\text{DCR}=\\tfrac{R_u}{\\phi R_n}=\\tfrac{'+f(g.dem,2)+'}{'+f(g.gov.phiRn,2)+'}=\\mathbf{'+f(g.gov.dcr,3)+'}'+(g.gov.dcr>1?'\\ \\color{#B42318}{>1.0\\ \\text{FAIL}}':'\\ \\le 1.0\\ \\checkmark'));
+      body.appendChild(eqBlock({title:'Governing: '+g.gov.name+' \u2014 '+g.label,ref:g.gov.ref,lines,
+        vars:[['M_{ro}',f(g.Mu,2)+' kip\u00B7ft','moment at the location ('+(isMember()?'the case\u2019s M\u1D64\u2093':'analysis')+')'],['P_{ro}',f(Math.max(0,g.Pu),2)+' kip','compressive P\u1D64 (tension taken as 0)']]}));
+    }
+  },C=>JSON.stringify((C.hssK||[]).map(r=>[r.key,r.F,r.Mu,r.Pu])));
+}
+function sbHssKWork(body,p,lo){
+  const c=lo.caps,pr=lo.prm,f=(v,n)=>fmt(v,n==null?3:n),Fy=p.mat.Fy,E=EKSI,t=c.t;
+  const vars=[['t',f(t,4)+' in','design wall'],['F_y',Fy+' ksi','HSS']];
+  if(p._kind==='R'){
+    vars.push(['B, H',f(c.B)+', '+f(c.H)+' in','loaded face width, sidewall height'],['l_b',f(c.lb)+' in',pr.lbDef?'blank \u2192 t\u209A':'entered'],['k','1.5t = '+f(c.k,4)+' in','outside corner radius not known (Comm. J10)']);
+    if(pr.type==='plate'){
+      vars.push(['B_p, t_p',f(c.Bp)+', '+f(pr.tp)+' in','plate'],['F_{yp}',pr.Fyp+' ksi',pr.FypDef?'blank \u2192 36 ksi':'entered']);
+      const ply=c.ls.find(s=>s.id==='ply'),pun=c.ls.find(s=>s.id==='pun');
+      body.appendChild(eqBlock({title:'Plate effective width and plate local yielding',ref:'Eq. K1-1; \u00A7J4.1, J4.4 (\u03C6 = 0.90)',
+        lines:[subEq('B_e','\\tfrac{10}{B/t}\\left(\\tfrac{F_yt}{F_{yp}t_p}\\right)B_p\\le B_p','\\tfrac{10}{'+f(c.B/t,2)+'}\\left(\\tfrac{'+Fy+'('+f(t,4)+')}{'+pr.Fyp+'('+f(pr.tp)+')}\\right)('+f(c.Bp)+')='+f(c.BeRaw),f(c.Be),'in'),
+          subEq('R_n','F_{yp}t_pB_e',pr.Fyp+'('+f(pr.tp)+')('+f(c.Be)+')',f(ply.Rn,2),'kip'),subEq('\\phi R_n','0.90R_n','',f(0.9*ply.Rn,2),'kip')],vars}));
+      if(pun)body.appendChild(eqBlock({title:'HSS face punching shear (B\u209A \u2264 B \u2212 2t = '+f(c.B-2*t)+' in)',ref:'\u00A7J10.10, J4.2; Comm. K1.2 (\u03C6 = 0.95)',
+        lines:[subEq('R_n','0.6F_yt\\left(2l_b+2B_e\\right)','0.6('+Fy+')('+f(t,4)+')\\left(2('+f(c.lb)+')+2('+f(c.Be)+')\\right)',f(pun.Rn,2),'kip'),subEq('\\phi R_n','0.95R_n','',f(0.95*pun.Rn,2),'kip')]}));
+      else body.appendChild(el('div','hint','Face punching shear: B\u209A = '+f(c.Bp)+' in > B \u2212 2t = '+f(c.B-2*t)+' in, so the plate edges bear on the corners and sidewalls: not a limit state (the sidewall checks below apply).'));
+      if(c.ylNC)body.appendChild(el('div','warnBox','<b>Not checked:</b> \u03B2 = B\u209A/B = '+f(c.beta,3)+' < 0.85 \u2014 the force passes through the face in bending. AISC 360-16 gives no equation for this face yield-line limit state (\u00A7J10.10: yield-line theory, AISC Manual Part 9). Verify it separately.'));
+    }else body.appendChild(el('div','hint','Bearing on a cap plate or seat across the full width B: the sidewall limit states below.'));
+    const sly=c.ls.find(s=>s.id==='sly'),slc=c.ls.find(s=>s.id==='slc'),r=c.lb/c.dF;
+    body.appendChild(eqBlock({title:'Sidewall local yielding (2 walls)',ref:(sly.atEnd?'Eq. J10-3':'Eq. J10-2')+' \u00D7 2 (\u03C6 = 1.00)',
+      lines:[subEq('R_n','2F_yt\\left('+(sly.atEnd?'2.5':'5')+'k+l_b\\right)','2('+Fy+')('+f(t,4)+')\\left('+(sly.atEnd?'2.5':'5')+'('+f(c.k,4)+')+'+f(c.lb)+'\\right)',f(sly.Rn,2),'kip'),
+        subEq('\\phi R_n','1.00R_n','',f(sly.Rn,2),'kip')],
+      vars:[['\\text{location}',sly.atEnd?'within H = '+f(c.H)+' in of the member end':'more than H from the member end','sets 2.5k or 5k']]}));
+    const brk=slc.clause==='J10-5b'?'1+\\left(\\tfrac{4l_b}{d}-0.2\\right)':'1+3\\tfrac{l_b}{d}';
+    const brkS=slc.clause==='J10-5b'?'1+\\left(4('+f(r,4)+')-0.2\\right)':'1+3('+f(r,4)+')';
+    const co=slc.clause==='J10-4'?'1.60':'0.80';
+    body.appendChild(eqBlock({title:'Sidewall local crippling (2 walls, compressive force)',ref:'Eq. '+slc.clause+' \u00D7 2 (\u03C6 = 0.75)',
+      lines:[subEq('d','H-3t',f(c.H)+'-3('+f(t,4)+')',f(c.dF),'in'),
+        subEq('R_n',co+'t^2\\left['+brk+'\\right]\\sqrt{EF_y}\\,Q_f',co+'('+f(t,4)+')^2\\left['+brkS+'\\right]\\sqrt{'+E+'('+Fy+')}\\,Q_f',f(slc.RnQ1,2)+'\\,Q_f','kip'),
+        '\\phi R_n=0.75('+f(slc.RnQ1,2)+')Q_f=\\mathbf{'+f(0.75*slc.RnQ1,2)+'\\,Q_f}\\ \\text{kip}\\quad(Q_f\\text{ per combination, Eq. K3-14})'],
+      vars:[['t_f=t_w','t','HSS walls (Comm. J10), so the J10 factors (t\u1D65/t\u2093)^1.5 = 1 and \u221A(EF\u1D67t\u2093/t\u1D65) = \u221A(EF\u1D67)'],['\\text{location}',slc.atEnd?'within H/2 of the member end':'at least H/2 from the member end','J10-4 or J10-5']]}));
+  }else{
+    const rly=c.ls[0];
+    vars.push(['D',f(c.D)+' in','outside diameter (label)'],['B_p',f(c.Bp)+' in',pr.type==='bearing'?(pr.BpDef?'bearing width: blank \u2192 D':'bearing width'):'plate width']);
+    body.appendChild(eqBlock({title:'Round HSS local yielding under a transverse plate',ref:'Table K2.1, Eq. K2-1a (\u03C6 = 0.90)',
+      lines:[subEq('\\beta','B_p/D',f(c.Bp)+'/'+f(c.D),f(c.beta,4),''),
+        subEq('R_n','F_yt^2\\left(\\tfrac{5.5}{1-0.81\\beta}\\right)Q_f',Fy+'('+f(t,4)+')^2\\left(\\tfrac{5.5}{1-0.81('+f(c.beta,4)+')}\\right)Q_f',f(rly.RnQ1,2)+'\\,Q_f','kip'),
+        '\\phi R_n=0.90('+f(rly.RnQ1,2)+')Q_f=\\mathbf{'+f(0.9*rly.RnQ1,2)+'\\,Q_f}\\ \\text{kip}\\quad(Q_f\\text{ per combination, Eq. K2-3})'],vars}));
+    if(c.lim.length)body.appendChild(el('div','warnBox','<b>Outside Table K2.1A:</b> '+c.lim.join('; ')+'. \u00A7K1: design by rational analysis; the value above is for information.'));
+    else body.appendChild(el('div','hint','Within the Table K2.1A limits (D/t \u2264 50, 0.2 < B\u209A/D \u2264 1.0, F\u1D67 \u2264 52 ksi, F\u1D67/F\u1D64 \u2264 0.8 or A500 Gr. C, l\u2091\u2099\u2094 \u2265 D(1.25 \u2212 \u03B2/2)).'));
+  }
+}
 function buildJ10Tab(pg){
   const D=dOrNull(pg),p=AN.sect;if(!D)return;
+  if(!(p._kind==='I'||p._kind==='C')&&D.hssK){sbHssKTab(pg,D,p);return;}   /* SBHK */
   if(!(p._kind==='I'||p._kind==='C')){
     naBox(pg,'Concentrated forces (J10)','The J10 web provisions apply to I-shapes and channels; the current section is an HSS. Locally loaded HSS faces must be verified separately (Ch. K or manufacturer data).');return;}
   if(!D.j10){naBox(pg,'Web local yielding & crippling (J10.2 / J10.3)',isMember()?
@@ -6952,10 +7188,55 @@ function secStiffeners(P){
 function secTorsion(P){
   mkSection('inTor','Torsion',body=>{torsionInputs(body);},P,secOpts());
 }
+/* SBHK: inputs for the HSS walls (new optional fields S.design.hssK / S.member.hssK; absent = not checked; created on the
+   first entry, so a project is not changed by opening it) */
+function sbHssKInputs(body,pk){
+  const TY=['none','plate','bearing'],TL={none:'Not checked',plate:'Transverse plate across the face',bearing:'Bearing on a cap plate / seat',group:'As the group above'};
+  /* get(): the object or {}; mk(): the object, created */
+  const fields=(get,mk,keyPfx,ty)=>{
+    const row=el('div');row.style.cssText='display:grid;grid-template-columns:repeat(2,1fr);gap:2px 8px';
+    const showB=ty==='plate'||ty==='group'||(ty==='bearing'&&pk._kind==='P');
+    [['Bp','Bₚ (in)',0.25],['tp','tₚ (in)',0.0625],['lb','lᵇ (in)',0.25],['Fyp','Fᵧₚ (ksi)',1]].forEach(([k,lab,st])=>{
+      if(!showB&&k==='Bp')return;if(ty==='bearing'&&(k==='tp'||k==='Fyp'))return;
+      const r=el('div','fRow');r.style.gridTemplateColumns='minmax(40px,.8fr) 1fr';r.appendChild(el('label','small',lab));
+      r.appendChild(numInput(()=>get()[k],v=>{mk()[k]=v;},st,keyPfx+k));row.appendChild(r);});
+    return row;};
+  if(isMember()){
+    const get=()=>S.member.hssK||{},mk=()=>S.member.hssK||(S.member.hssK={type:'none'});
+    fRow(body,'Concentrated force  Rᵤ',numInput(()=>S.member.j10.R,v=>{S.member.j10.R=v;},1,'memJR'),'kip','> 0 pushes on the wall, < 0 pulls');
+    fRow(body,'Location',selInput(['interior','end'],()=>S.member.j10.loc,v=>{S.member.j10.loc=v;},
+      o2=>o2==='interior'?'Interior (away from member end)':'At or near member end',null,'memJloc'),'');
+    fRow(body,'Distance from member end',numInput(()=>S.member.j10.dist,v=>{S.member.j10.dist=v;},0.5,'memJdist'),'in','Optional; blank uses Location');
+    fRow(body,'Load delivered by',selInput(TY,()=>get().type||'none',v=>{mk().type=v;rebuildInputs();},x=>TL[x],null,'hkMType'),'');
+    if((get().type||'none')!=='none')body.appendChild(fields(get,mk,'hkM',get().type));
+  }else{
+    const KK=()=>S.design.hssK||(S.design.hssK={sup:{type:'none'},pt:{type:'none'},loc:{}});
+    const g0=g=>(S.design.hssK&&S.design.hssK[g])||{},gm=g=>{const K=KK();if(!K[g])K[g]={type:'none'};return K[g];};
+    [['sup','All supports'],['pt','All point loads']].forEach(([g,lab])=>{
+      fRow(body,lab,selInput(TY,()=>g0(g).type||'none',v=>{gm(g).type=v;rebuildInputs();},x=>TL[x],null,'hk'+g+'Type'),'');
+      if((g0(g).type||'none')!=='none')body.appendChild(fields(()=>g0(g),()=>gm(g),'hk'+g,g0(g).type));
+    });
+    const locs=(AN&&AN.design&&AN.design.hssK)||[];
+    if(locs.length){
+      const det=el('details');det.appendChild(el('summary','hint','Per location (blank = the group value) — '+locs.length+' location(s)'));
+      const lg=key=>(S.design.hssK&&S.design.hssK.loc&&S.design.hssK.loc[key])||{},lm=key=>{const K=KK();if(!K.loc)K.loc={};return K.loc[key]||(K.loc[key]={});};
+      locs.forEach(lo=>{
+        fRow(det,lo.label,selInput(['group'].concat(TY),()=>lg(lo.key).type||'group',v=>{lm(lo.key).type=v;rebuildInputs();},x=>TL[x],null,'hkL'+lo.key),'');
+        const ty=lg(lo.key).type;
+        if(ty&&ty!=='group'&&ty!=='none')det.appendChild(fields(()=>lg(lo.key),()=>lm(lo.key),'hkL'+lo.key,ty));
+      });
+      body.appendChild(det);
+    }
+  }
+  body.appendChild(el('div','hint',(pk._kind==='R'?'Rectangular HSS: plate local yielding (Eq. K1-1), face punching, sidewall local yielding and crippling (Chapter J as Commentary J10 / K1.2 apply it). ':'Round HSS: Table K2.1, Eq. K2-1a. ')+
+    'Bₚ = plate width across the HSS; tₚ = plate thickness; lᵇ = bearing length along the HSS (blank → tₚ for a plate); Fᵧₚ blank → 36 ksi. '+(pk._kind==='R'?'A bearing is taken across the full width B. ':'')+
+    'Not checked here: face yield lines for Bₚ < 0.85B, longitudinal plates, HSS-to-HSS. Worked on the Concentrated Forces tab.'));
+}
 /* ---------- 7. concentrated forces ---------- */
 function secJ10(P){
   mkSection('inJ10','Concentrated Forces (J10)',body=>{
     const pk=AN&&AN.sect;
+    if(pk&&(pk._kind==='R'||pk._kind==='P')&&(S.section.family==='HSSR'||S.section.family==='HSSP')){sbHssKInputs(body,pk);return;}   /* SBHK */
     if(pk&&!(pk._kind==='I'||pk._kind==='C')){
       body.appendChild(el('div','hint','The \u00A7J10 web provisions apply to I-shapes and channels. For HSS, verify locally loaded faces separately.'));return;
     }
