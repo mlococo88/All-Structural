@@ -172,6 +172,15 @@ table.tbl th{background:#DCE6F1;color:var(--navy-900);font-family:var(--font-ui)
 table.tbl td{padding:2.5px 6px;border:1px solid var(--line);text-align:center}
 table.tbl td.lft{text-align:left}
 table.tbl tr.gov td{background:#FEF6E7}
+/* SBAS (2026-11-13): Analysis tab, summary of all load combinations and the envelope station table (display only) */
+.sbAsWrap{overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch}
+.sbAsWrap table.tbl{width:auto;min-width:100%}
+.sbAsWrap table.tbl td,.sbAsWrap table.tbl th{white-space:nowrap}
+table.tbl td.sbAsGov{background:#FDE7B0;font-weight:700}
+table.tbl tr.sbAsEnv td{background:#EEF4FA;font-weight:600}
+table.tbl tr.sbAsCur td.lft{box-shadow:inset 3px 0 0 var(--accent)}
+a.sbAsSel{color:var(--accent);text-decoration:none;cursor:pointer;font-weight:600} a.sbAsSel:hover{text-decoration:underline}
+@media print{table.tbl td.sbAsGov,table.tbl tr.sbAsEnv td{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 table.cfg{border-collapse:collapse;width:100%;font-size:9pt}
 table.cfg th{font-family:var(--font-ui);font-size:8pt;color:#64748B;text-align:left;padding:2px 4px;border-bottom:1px solid var(--line)}
 table.cfg td{padding:2px 4px}
@@ -3462,6 +3471,7 @@ function buildDeriveTab(pg){
    TAB — ANALYSIS RESULTS  (§7.1 every combination fully worked)
    ===================================================================== */
 function buildAnalysisTab(pg){
+  if(AN&&AN.combos&&AN.combos.length)mkSection('anSum','Summary of All Load Combinations',body=>sbAsSummary(body),pg);   /* SBAS (2026-11-13) */
   comboSelector(pg);
   pg.appendChild(el('div','hint sbNL',sbNL('Strength combinations are those of the Load Combinations input.',[   /* SBASM (2026-11-10): SW3 and Q3 basis */
     ['Preset "ASCE 7 LRFD basics" (ASCE 7-16 \u00A72.3.1):','L is taken at 1.0 where it is a companion load (the 0.5L exception is not used); 1.2D + 1.6S + 0.5W is included only when cases SL and WL both exist.'],
@@ -3513,10 +3523,142 @@ function buildAnalysisTab(pg){
         cb.negR.map(r=>fmt(r[0],2)+'\u2013'+fmt(r[1],2)+' ft (len '+fmt(r[1]-r[0],2)+' ft)').join('; ')));
     },pg);
   });
-  mkSection('anTable','Tabulated Results \u2014 '+c.name,body=>{
-    body.appendChild(stationTable(c));
-    body.appendChild(el('div','hint','Rows: span tenth-points, supports, V=0 stations, load points and user stations. Shear at a point-load station is reported just left / just right of the load.'));
+  const envT=SBAS.tbl==='env'&&AN.combos.length>1;   /* SBAS (2026-11-13): the selected combination (as before) or the envelope of all */
+  mkSection('anTable','Tabulated Results \u2014 '+(envT?'Envelope of All Combinations':c.name),body=>{
+    const vs=document.createElement('select');tagField(vs,'anTblView');
+    [['combo','Selected combination ('+c.name+')'],['env','Envelope of all combinations']].forEach(o=>{const op=document.createElement('option');op.value=o[0];op.textContent=o[1];vs.appendChild(op);});
+    vs.value=envT?'env':'combo';if(AN.combos.length<2)vs.disabled=true;
+    vs.addEventListener('change',()=>{SBAS.tbl=vs.value;renderTab();});
+    fRow(body,'Table shows',vs,'');
+    if(envT){
+      const w=el('div','sbAsWrap');w.appendChild(sbAsEnvTable());body.appendChild(w);
+      body.appendChild(el('div','hint sbNL',sbNL('Envelope of the '+AN.combos.length+' strength combinations at each station:',[
+        ['Values:','each combination\u2019s own V\u2097, V\u1D63 and M at the station (the numbers its own table shows); the largest and smallest of them, with the combination that gives each.'],
+        ['"all":','every combination gives the same value there.'],
+        ['Rows:','span tenth-points, supports, the V=0 stations of every combination and user stations.'],
+        ['Links:','a combination name opens its worked section.']])));
+    }else{
+      body.appendChild(stationTable(c));
+      body.appendChild(el('div','hint','Rows: span tenth-points, supports, V=0 stations, load points and user stations. Shear at a point-load station is reported just left / just right of the load.'+(AN.combos.length>1?' This table is for one combination; choose "Envelope of all combinations" above, or see the Summary of All Load Combinations at the top of this tab.':'')));
+    }
   },pg);
+}
+/* SBAS (2026-11-13, engineer: "the analysis results should have a summary table at the top of the tab showing all the results
+   summarized"). Display only: every number is an existing analysis value (AN.combos[i].Vmax / Vmin / Mmax / Mmin, R[j]), formatted
+   as the combination's own section prints it (3 decimals); the envelope table evaluates each combination at the stations exactly as
+   stationTable does. A value links to the section where its combination is worked (identical combinations: the first one, §7.2);
+   a combination name selects that combination for the tab (the combo selector's path). SBAS.tbl (the Tabulated Results choice) is
+   kept in memory only (not saved, no storage key). */
+const SBAS={tbl:'combo'};
+function sbAsWorkedId(){const m={},o={};AN.combos.forEach(cb=>{if(!m[cb.sig])m[cb.sig]=cb.id;o[cb.id]=m[cb.sig];});return o;}
+function sbAsPick(id){
+  const s=document.querySelector('#tabPages select[data-fkey="dispCombo"]');
+  if(s&&Array.from(s.options).some(o=>o.value===id)){s.value=id;s.dispatchEvent(new Event('change'));}
+  else{S.disp.combo=id;schedule(true);}
+}
+function sbAsName(cb,wid){
+  const a=el('a','sbAsSel sbrKey');a.href='#';a.textContent=cb.name;
+  a.title='Show combination '+cb.name+' in the diagrams and tables of this tab';
+  a.dataset.tab='tabAnalysis';a.dataset.sec='anC_'+wid;
+  a.addEventListener('click',e=>{e.preventDefault();sbAsPick(cb.id);});
+  return a;
+}
+function sbAsVal(txt,wid,nm){
+  const a=el('a','wkA');a.href='#';a.textContent=txt;a.title='Worked in Combination '+nm;
+  a.dataset.tab='tabAnalysis';a.dataset.sec='anC_'+wid;a.dataset.card='Combination '+nm;
+  return a;
+}
+function sbAsSummary(body){
+  const W=sbAsWorkedId(),cur=curCombo(),gid=governingComboId();
+  const nm=id=>{const c=AN.combos.find(x=>x.id===id);return c?c.name:id;};
+  const cols=[
+    {h:'V max',u:'kip',g:cb=>cb.Vmax.v,x:cb=>cb.Vmax.x},
+    {h:'V min',u:'kip',g:cb=>cb.Vmin.v,x:cb=>cb.Vmin.x},
+    {h:'M max (+)',u:'kip\u00B7ft',g:cb=>cb.Mmax.v,x:cb=>cb.Mmax.x},
+    {h:'M min (\u2212)',u:'kip\u00B7ft',g:cb=>cb.Mmin.v,x:cb=>cb.Mmin.x}];
+  S.geom.nodes.forEach((nd2,j)=>{
+    if(nd2.t==='free')return;
+    cols.push({h:'R'+NN[j],u:'kip',g:cb=>cb.R[j].v});
+    if(nd2.t==='fixed')cols.push({h:'M\u1D3F'+NN[j],u:'kip\u00B7ft',g:cb=>cb.R[j].m});
+  });
+  /* governing per column: the largest magnitude (first combination on a tie, the order of the list) */
+  cols.forEach(cl=>{let b=null;AN.combos.forEach(cb=>{const v=cl.g(cb);if(isFinite(v)&&(!b||Math.abs(v)>Math.abs(cl.g(b))))b=cb;});cl.gov=b;});
+  const isGov=(cl,cb)=>cl.gov&&fmt(cl.g(cb),3)===fmt(cl.g(cl.gov),3)&&Math.abs(cl.g(cl.gov))>0;
+  const t=el('table','tbl');
+  const h1=el('tr');h1.appendChild(el('th',null,'Combination'));   /* one header row: the Report reads the first row as the head */
+  cols.forEach(cl=>{h1.appendChild(el('th',null,cl.h+' ('+cl.u+')'));if(cl.x)h1.appendChild(el('th',null,'at x (ft)'));});
+  t.appendChild(h1);
+  AN.combos.forEach(cb=>{
+    const tr=el('tr');if(cur&&cb.id===cur.id)tr.className='sbAsCur';
+    const td0=el('td','lft');td0.appendChild(sbAsName(cb,W[cb.id]));
+    if(cb.id===gid)td0.appendChild(el('span','hint',' (governing |M|)'));
+    if(W[cb.id]!==cb.id)td0.appendChild(el('span','hint',' (= '+sbdEsc(nm(W[cb.id]))+')'));
+    tr.appendChild(td0);
+    cols.forEach(cl=>{
+      const td=el('td');td.appendChild(sbAsVal(fmt(cl.g(cb),3),W[cb.id],nm(W[cb.id])));
+      if(isGov(cl,cb))td.className='sbAsGov';
+      tr.appendChild(td);
+      if(cl.x)tr.appendChild(el('td',null,fmt(cl.x(cb),3)));
+    });
+    t.appendChild(tr);
+  });
+  if(AN.combos.length>1){
+    const tv=el('tr','sbAsEnv'),tc=el('tr','sbAsEnv');
+    tv.appendChild(el('td','lft','Governing (largest |value|)'));tc.appendChild(el('td','lft','Governing combination'));
+    cols.forEach(cl=>{
+      const g=cl.gov,td=el('td'),tn=el('td');if(cl.x)tn.colSpan=2;
+      if(g){td.appendChild(sbAsVal(fmt(cl.g(g),3),W[g.id],nm(W[g.id])));
+        const ties=AN.combos.filter(cb=>isGov(cl,cb));
+        if(Math.abs(cl.g(g))>0)ties.forEach((cb,i)=>{if(i)tn.appendChild(document.createTextNode(' / '));tn.appendChild(sbAsName(cb,W[cb.id]));});
+        else tn.textContent='\u2014 (zero)';}
+      else{td.textContent='\u2014';tn.textContent='\u2014';}
+      tv.appendChild(td);if(cl.x)tv.appendChild(el('td',null,g?fmt(cl.x(g),3):'\u2014'));
+      tc.appendChild(tn);
+    });
+    t.appendChild(tv);t.appendChild(tc);
+  }
+  const w=el('div','sbAsWrap');w.appendChild(t);body.appendChild(w);
+  body.appendChild(el('div','hint sbNL',sbNL('One row per enabled strength combination (factored):',[
+    ['Values:','the peaks and support reactions of each combination, as its own section below works them (sagging M +, reactions + up, M\u1D3F at a fixed support).'],
+    ['Highlighted:','the largest magnitude in each column; the Governing rows repeat it with its combination.'],
+    ['Links:','a value opens the section where its combination is worked; a combination name shows that combination in the diagrams and the Tabulated Results.'],
+    ['Deflection:','computed under the service combinations, not the strength combinations (Serviceability tab).']])));
+  if(AN.svc&&AN.svc.length)sbdWorkedIn(body,[['tabService','svPlot','Deflection Curves','Deflections (service combinations)']]);
+}
+function sbAsEnvTable(){
+  const nX=nodeXs(),W=sbAsWorkedId(),L=totalL();
+  const rows=[];
+  S.geom.spans.forEach((sp,i)=>{
+    for(let k=0;k<=10;k++)rows.push({x:nX[i]+k/10*sp.L,tag:k===0?('node '+NN[i]):k===10?('node '+NN[i+1]):('sp'+(i+1)+' 0.'+k+'L')});
+  });
+  AN.combos.forEach(cb=>cb.zV.forEach(x=>rows.push({x,tag:'V=0'})));
+  userXList().forEach(x=>rows.push({x,tag:'user'}));
+  const seen={};
+  const list=rows.filter(r=>{const k=r.x.toFixed(5);if(seen[k])return false;seen[k]=1;return true;}).sort((a,b)=>a.x-b.x);
+  const t=el('table','tbl');
+  const h1=el('tr');['x (ft)',''].forEach(h=>h1.appendChild(el('th',null,h)));
+  [['V\u2097','kip'],['V\u1D63','kip'],['M','kip\u00B7ft']].forEach(h=>['max','min'].forEach(q=>{
+    h1.appendChild(el('th',null,h[0]+' '+q+' ('+h[1]+')'));h1.appendChild(el('th',null,'combination'));}));
+  t.appendChild(h1);
+  const nmOf=id=>{const c=AN.combos.find(x=>x.id===id);return c?c.name:id;};
+  list.forEach(r=>{
+    const vals=AN.combos.map(cb=>{const eL=evalVM(Math.max(0,r.x-1e-7),cb.R,cb.f),eR=evalVM(Math.min(L,r.x+1e-7),cb.R,cb.f);return{cb,VL:eL.V,VR:eR.V,M:eR.M};});
+    const tr=el('tr');
+    tr.appendChild(el('td',null,fmt(r.x,3)));tr.appendChild(el('td','lft',r.tag));
+    ['VL','VR','M'].forEach(k=>{
+      [1,-1].forEach(sg=>{
+        let b=vals[0];vals.forEach(v=>{if(sg*v[k]>sg*b[k])b=v;});
+        tr.appendChild(el('td',null,fmt(b[k],3)));
+        const td=el('td','lft');
+        if(vals.every(v=>fmt(v[k],3)===fmt(b[k],3)))td.textContent='all';
+        else{const a=el('a','wkA');a.href='#';a.textContent=b.cb.name;a.title='Worked in Combination '+nmOf(W[b.cb.id]);
+          a.dataset.tab='tabAnalysis';a.dataset.sec='anC_'+W[b.cb.id];a.dataset.card='Combination '+nmOf(W[b.cb.id]);td.appendChild(a);}
+        tr.appendChild(td);
+      });
+    });
+    t.appendChild(tr);
+  });
+  return t;
 }
 function stationTable(cb){
   const nX=nodeXs();
@@ -10188,7 +10330,8 @@ function sbrTab(tab,holder,links){
       if(cl.contains('plotHold')){flush(c);c.list.push({type:'note',text:'Diagram (Plotly not loaded): see the '+(TABS().find(x=>x[0]===tab)||[0,tab])[1]+' tab. [[tab:'+tab+'|Open the tab]]'});return;}
       if(tag==='TABLE'){flush(c);const rows=Array.from(ch.rows);if(!rows.length)return;
         const hr=rows[0].querySelector('th')?rows.shift():null;
-        c.list.push({type:'table',head:hr?Array.from(hr.cells).map(sbrText):[],rows:rows.map(r=>Array.from(r.cells).map(td=>{const t=sbrText(td);return {t,n:/^[-−]?[\d.,]+$/.test(t),span:td.colSpan>1?td.colSpan:undefined};}))});return;}
+        c.list.push({type:'table',head:hr?Array.from(hr.cells).map(sbrText):[],rows:rows.map(r=>Array.from(r.cells).map(td=>{const t=sbrText(td),kk=td.querySelector('.sbrKey[data-tab][data-sec]'),key=kk?links(kk.dataset.tab,kk.dataset.sec):null;   /* SBAS: .sbrKey -> a § link */
+          return {t,n:/^[-−]?[\d.,]+$/.test(t),span:td.colSpan>1?td.colSpan:undefined,key:key||undefined,cls:td.classList.contains('sbAsGov')?'hi':undefined};}))});return;}
       if(tag==='svg'||tag==='SVG'){flush(c);c.list.push({type:'figure',svg:ch.outerHTML});return;}
       if(cl.contains('wkLink')){flush(c);const as=Array.from(ch.querySelectorAll('a.wkA'));
         c.list.push({type:'note',text:'Worked in: '+as.map(a=>{const L=links(a.dataset.tab,a.dataset.sec);return (a.dataset.txt?a.dataset.txt+' ':'')+(L?'[['+L+']]':'[[tab:'+a.dataset.tab+'|'+a.dataset.card+']]');}).join(' · ')});return;}
