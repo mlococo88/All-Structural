@@ -480,7 +480,7 @@
       stf: window.SBDShearUI.inputs(P, { num, sel, card, esc }, ui),
       fs: window.SBDFatigueUI.inputs(P, { num, sel, card, esc }, ui),
       spl: window.SBDSplicesUI.inputs(P, { num, sel, card, esc }, ui),
-      ad: ui.itab === 'ad' ? window.SBDAutoDesignUI.inputs(P) : ''   // drawn when open (P.autodesign; no data-path inputs: data-ad / data-adv, ui/autodesign.js wire)
+      ad: ui.itab === 'ad' ? window.SBDAutoDesignUI.inputs(P, ui.g) : ''   // drawn when open (P.autodesign; no data-path inputs: data-ad / data-adv, ui/autodesign.js wire)
     };
   }
   function drawInputs() {
