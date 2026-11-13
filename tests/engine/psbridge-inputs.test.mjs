@@ -43,12 +43,12 @@ test('the bridge values of the design: span s, spacing, girder count, position, 
   const R = W.computeAll(W.PSBDesign.inputs(P)); assert.equal(R.error, null);
 });
 
-test('PR 2b limits and the design choice are blocking errors with their path', () => {
+test('the design choice is a blocking error with its path; PR 3a-2: unequal bays and skews below 30° allowed, different skews ≥ 30° with the DF computed blocking', () => {
   const P = W.PSBModel.defaultProject();
   P.xs.bays = [9, 10, 9, 9]; P.xs.skews = [0, 15]; P.design = { g: 7, s: 2 };
   const p = errs(P).map(e => e.path);
-  ['xs.bays', 'design.g', 'design.s'].forEach(k => assert.ok(p.includes(k), k));
-  P.design = { g: 2, s: 1 }; assert.ok(errs(P).some(e => e.path === 'xs.skews' && /different skews/.test(e.msg)));
+  ['design.g', 'design.s'].forEach(k => assert.ok(p.includes(k), k)); assert.ok(!p.includes('xs.bays') && !p.includes('xs.skews'));
+  P.design = { g: 2, s: 1 }; P.xs.skews = [0, 35]; assert.ok(errs(P).some(e => e.path === 'xs.skews' && /different skews/.test(e.msg)));
   P.xs = { nb: 1, bays: [], ohL: 3, ohR: 3, skews: [0, 0] }; assert.ok(errs(P).some(e => e.path === 'xs.nb'));
 });
 

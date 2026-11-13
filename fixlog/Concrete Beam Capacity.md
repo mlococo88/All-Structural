@@ -6689,3 +6689,222 @@ Before: no section size check. The V_s cap of 22.5.1.2 was already applied, and 
 - **Tests:**
   - New `tests/smoke/cbc-shear-limit.mjs`, 1400 and 390 px, 0 console errors.
   - The suite's other tests are listed in the PR.
+
+## 2026-11-13 — PR: claude/cbc-stirrup-leg-width (PR #1497: https://github.com/mlococo88/All-Structural/pull/1497) (CBLW) — Beam Capacity tab, ACI mode: new detailing check "Stirrup leg spacing across the width" (ACI 318-19 Table 9.7.6.2.2)   [NEW CHECK; every existing result identical; a row's detailing D/C, worst D/C and status change only where the new check fails; no saved key or format change]
+
+The file uses CRLF line endings; keep them. All code is in the Beam Capacity srcdoc (`#suite-frame-capacity`). When re-applying, escape `&` as `&amp;` and `"` as `&quot;`; the text below is un-escaped. Every site is tagged CBLW.
+
+### Engineer decision CB-4 (2026-11-13)
+Check the maximum spacing of the stirrup legs across the width:
+- min(d, 24 in);
+- min(d/2, 12 in) where the tighter condition applies.
+
+Use exactly the tight / standard switch of the along-length check: V_s required = V_u/φ − V_c, which the engineer confirmed keeping.
+
+### Provision (ACI 318-19 Table 9.7.6.2.2, nonprestressed beam, "Across width" column; read in structural_references ACI-318-19-2019.pdf, PDF page 149; paraphrased)
+
+| Required V_s | Maximum spacing across the width |
+|---|---|
+| ≤ 4√f′c b_w d | the lesser of d and 24 in |
+| > 4√f′c b_w d | the lesser of d/2 and 12 in |
+
+### Leg spacing
+The input gives the stirrup bar size and the number of legs, not leg positions. The legs are taken as equally spaced between the centrelines of the two outer legs, which sit at the clear cover plus half the stirrup bar from each side face:
+
+s_w = (b_w − 2c_c − d_s)/(n − 1)
+
+### Where
+In `detailing()`, in the stirrup block:
+- **Before** (anchor):
+  ```js
+      let sMax,ref,dv2;
+  ...
+        const tight=VsReq>thr;
+  ...
+      add("dStirS","Maximum stirrup spacing",ref,s,sMax,"\\le","in",s<=sMax+1e-6,dv2);
+  ```
+- **After:** `let sMax,ref,dv2,legT=null;`, then `legT={tight,VsReq,thr};` after `const tight=VsReq>thr;`. After the `dStirS` add:
+  ```js
+      if(code==='ACI'&&legT){
+        const n=Math.max(2,Math.round(+S.stir.legs||2)), sw=(bw-2*cc-ds)/(n-1), swMax=legT.tight?Math.min(d/2,12):Math.min(d,24);
+        add("dStirLeg","Stirrup leg spacing across the width","ACI 9.7.6.2.2",sw,swMax,"\\le","in",sw<=swMax+1e-6,[ …three worked lines: s_w, the switch, s_w,max… ]);
+      }
+  ```
+- **Without stirrups** (after the N/A `dStirS`): `if(code==='ACI') add("dStirLeg",…,true,[],true,"No stirrups are specified, so there are no legs to space.");`
+- **Detailing card link** (`DL` map): `dStirLeg:["tabShear","shC","V_c, d"]`.
+- **Check panel condition** (`CBDC_COND`): `dStirLeg:'leg spacing > s_max'`.
+- **Unchanged generic code:** the check summary, Summary tab, All Combinations × Limit States (Detailing column), Detailing tab and Report pick the row up through `detEnvelope` / `allChecks`, as for the other detailing checks.
+
+### AASHTO mode
+Not added. AASHTO LRFD 10th Ed. 5.7.2.6 gives only the spacing along the member (Eqs. 5.7.2.6-1 and -2). It also has a segmental box-girder torsion limit, and no across-width limit. I read the article text in `AASHTO LRFD 10th Edition (Chapter 5-6).pdf`.
+
+### Hand check
+Inputs: b_w = 36 in, d = 20 in, c_c = 1.5 in, #4 stirrups (d_s = 0.5 in), V_u = 60 kip, so V_s,req ≤ 4√f′c b_w d.
+
+| Case | s_w | Limit | Result |
+|---|---|---|---|
+| 2 legs | (36 − 3 − 0.5)/1 = 32.50 in | min(20, 24) = 20 in | FAIL |
+| 3 legs | 32.5/2 = 16.25 in | 20 in | PASS |
+| #5 three legs at 4 in, V_u 250 kip (V_s,req > 4√f′c b_w d) | (36 − 3 − 0.625)/2 = 16.19 in | min(d/2, 12) = 10 in | FAIL |
+
+Before, this check did not exist.
+
+### How verified
+- **Scratch probe:** origin/main (#1495) vs branch, 15 projects, including the 12 of CBSZ and the three hand-check cases.
+  - `computeAll()` with the new `dStirLeg` entries removed is identical.
+  - `VALIDATION`, the hand-off message and the autosave are identical.
+  - `worst` / `detWorst` are identical except in the two cases where the new check fails (2 legs; tight switch).
+  - AASHTO projects have no row; no-stirrup projects show N/A.
+- **Tests:** new `tests/smoke/cbc-leg-width.mjs`, 1400 and 390 px, 0 console errors. The suite's other tests are listed in the PR.
+
+### Decision (pending engineer review)
+The legs are taken as equally spaced between the outer legs, because the input has no leg positions. A layout with unequal leg spacing needs a by-hand check.
+
+## 2026-11-13 — PR: claude/cbc-tex-thinspace (PR #1498: https://github.com/mlococo88/All-Structural/pull/1498) (CBTS) — TeX thin space restored in the CBSZ and CBLW worked lines (a stray ";" was shown)   [display only; no computed value, key or format change]
+
+- **Problem:** in five source lines added by CBSZ (#1495) and CBLW (#1497), the TeX thin space was written in the JS string with one backslash instead of two. JS reads a backslash before ";" as just ";", so KaTeX showed a literal ";". Example: "V_c = min(V_c, ;V_c,max)" and "V_s,req … − V_c ;≤ ;4√f′c b_w d". Values and results were not affected.
+- **Where:**
+  - `cbcVcMaxWork` (anchor `V_c = \\min(V_c,`);
+  - `cbcRptShear`, step `VcUse`;
+  - `detailing()`, the `dStirLeg` derivation lines (anchor `V_{s,req}=\\dfrac{V_u}{\\phi}-V_c`).
+- **Before / After:** each `\;` in those lines becomes `\\;`, 10 occurrences. Un-escaped source, for example:
+  - before: `` `V_c = \\min(V_c,\;V_{c,max}) = …` ``
+  - after: `` `V_c = \\min(V_c,\\;V_{c,max}) = …` ``
+- **How found / verified:** a scan of the file for a single backslash before ";". Only these 10 occurrences turned up, plus 2 in comments, which were left. The KaTeX annotation of the Shear card then reads `\min(V_c,\;V_{c,max})` (one backslash, as KaTeX receives it). `check-syntax`, `cbc-shear-limit` and `cbc-leg-width` pass. **Provision:** none.
+
+## 2026-11-13 — PR: claude/cbc-oneway-slab (PR #1499: https://github.com/mlococo88/All-Structural/pull/1499) (CBSB) — Beam Capacity tab, ACI mode: "Member type" Beam / One-way slab; the slab is a 12 in strip with bars entered as size and spacing; slab checks of ACI 318-19 Chapter 7 (A_s,min 7.6.1.1, bar spacing 7.7.2.3, shrinkage and temperature 24.4.3, A_v,min 7.6.3.1, ε_t 7.3.3.1, no skin)   [NEW FUNCTIONALITY (slab mode); beams identical; saved format: additive memberType / slab / layer s with migration (absent = beam); no new storage key]
+
+The file uses CRLF line endings; keep them. All code is in the Beam Capacity srcdoc (`#suite-frame-capacity`). When re-applying, escape `&` as `&amp;` and `"` as `&quot;`; the text below is un-escaped. Every site is tagged CBSB. This is PR 1 of 2 of engineer decision CB-6. PR 2 adds the minimum thickness (Tables 7.3.1.1 / 9.3.1.1).
+
+### Provisions (ACI 318-19, read in structural_references ACI-318-19-2019.pdf; paraphrased)
+| Article | PDF page | Requirement |
+|---|---|---|
+| 7.6.1.1 | 94 | A_s,min = 0.0018A_g. This edition has no f_y adjustment. |
+| 7.6.3.1 | 95 | A_v,min where V_u > φV_c. 7.6.3.3: amount per 9.6.3.4. |
+| 7.7.2.3 | 97 | Maximum spacing of the deformed longitudinal reinforcement: the lesser of 3h and 18 in. |
+| 7.7.5.1 | 99 | Shear reinforcement, if any, detailed per 9.7.6.2. |
+| 7.7.6.1 / 7.7.6.2.1 | 99 | Shrinkage and temperature reinforcement perpendicular to the flexural reinforcement, spacing ≤ the lesser of 5h and 18 in. |
+| 24.4.3.2 / 24.4.3.3 | 464 | ρ (gross area) ≥ 0.0018; spacing ≤ the lesser of 5h and 18 in. |
+| 7.3.3.1 | 92 | Slabs tension-controlled (Table 21.2.2), i.e. the same ε_t ≥ ε_ty + 0.003 limit as 9.3.3.1. |
+
+### Changes
+- **Helpers** (before `function fytDesign(){`):
+  - `cbcSlab()` = `S.memberType==='slab'&&S.code==='ACI'`;
+  - `cbcBarTxt(L,sep)`: "#5 @ 12.00 in" for a slab layer, else "n#size", "n #size" or "n-#size", as before.
+- **State:**
+  - `defaultState()` adds `memberType:"beam"` and `slab:{stSize:"",stS:0}`.
+  - `mergeState()` keeps a layer's `s` only where it was saved (`...(+L.s>0?{s:+L.s}:{})`), so a beam's layer objects are byte-identical.
+  - Migration: `S.memberType=(st.memberType==='slab')?'slab':'beam'`, and `S.slab` is read.
+  - For a slab, `bw=12`, `type='rect'`, and each layer gets `n=12/s`.
+- **`layerGeom`:** returns `s:L.s` (undefined for beams, so nothing is added to JSON).
+- **Input — Section Geometry** (ACI), a "Member type" select:
+  - Choosing **One-way slab** sets b = 12 in, the section rectangular and the stirrups off. Each layer becomes bars at s = 12/n, rounded to 1/4 in.
+  - In slab mode the panel shows "Strip width, b (per 1 ft strip)" = 12 (read-only), "Slab thickness, h", and a note.
+  - Choosing **Beam** sets n = round(n) and removes s.
+- **Input — Reinforcement Layers:** in slab mode the first column is "Spacing s (in)" (`data-fkey="lsp<i>"`), and n = 12/s.
+- **Input — new section "Shrinkage & Temperature (slab)"** (`inSlabST`, in the Reinforcement input tab): bar size and spacing.
+- **Validation:** a blocker when a slab layer has s ≤ 0.
+- **`detailing()`:**
+  - `dSpace`: clear spacing s − d_b for a slab.
+  - New `dSlabS`: the widest layer's s ≤ min(3h, 18).
+  - New `dStA`: ρ = A_s,st/(12h) ≥ 0.0018.
+  - New `dStS`: s_st ≤ min(5h, 18). With no S&T bars entered, both FAIL.
+  - `dAsMin`: for a slab, 0.0018(12)h, "Minimum flexural reinforcement (slab)", ACI 7.6.1.1, against the A_s of the face in tension.
+  - `dEpsMin`: ref ACI 7.3.3.1 for a slab.
+  - `dSkin`: N/A for a slab with h > 36 in.
+  - No-stirrup minimum shear: for a slab, the trigger is φV_c (ACI 7.6.3.1), and the h ≤ 10 in exemption of Table 9.6.3.1 is not used.
+  - Crack control: for a slab, s is the spacing entered, and the "only one bar" N/A branch is skipped.
+- **Display:**
+  - `barXs`: for a slab, bars at s, centred in the strip (drawings).
+  - Bar text through `cbcBarTxt` in the Input Echo, the Flexure layer table, the section / elevation / bar schedule drawings, the Report reinforcement and service tables, and the hand-off `bars` text.
+  - The Report Inputs table gets a "Member type" row for slabs only.
+  - The A_s,min reference in the hand-off (`asReqOut`) is "ACI 318-19 7.6.1.1" for a slab.
+
+### Hand check (slab)
+h = 9 in, d = 6.25 in (set), #5 @ 12 in, f′c = 4 ksi, f_y = 60 ksi.
+
+- **Flexure:**
+  - A_s = 0.31 in²/ft;
+  - a = 0.31(60)/(0.85 × 4 × 12) = 0.456 in;
+  - φM_n = 0.9(0.31)(60)(6.25 − 0.228)/12 = 8.40 kip-ft/ft.
+- **A_s,min** = 0.0018(12)(9) = 0.194 in², PASS.
+- **Bar spacing:** s = 12 ≤ min(27, 18) = 18 in, PASS.
+- **V_c**, no stirrups, row (c):
+  - λ_s = √(2/1.625) = 1.109, which is capped at 1.0;
+  - ρ_w = 0.31/75 = 0.00413;
+  - V_c = 8(1)(0.00413)^(1/3)(63.25)(12)(6.25)/1000 = 6.09 kip;
+  - φV_c = 4.57 kip.
+- **A_v,min (7.6.3.1):** at V_u 3 kip it is N/A. At V_u 5 kip it is required, and with none provided it FAILs.
+- **S&T, #4 @ 12:** ρ = 0.20/108 = 0.00185 ≥ 0.0018, PASS; s = 12 ≤ min(45, 18) = 18, PASS.
+- **Crack control** (default f_s = 40 ksi, c_c = 2.0 in): s_max = min(15 − 2.5(2.0), 12) = 10 in < 12 in, FAIL.
+
+### Decisions (pending engineer review)
+- **A_s,min for a slab** is compared with the A_s of the face in tension for each combination, not the total of both faces. This is conservative.
+- **Switching to slab** turns the stirrups off (they can be ticked back) and converts n bars to s = 12/n. Switching back to beam rounds n.
+- **Per-foot results** keep the units kip-ft and kip. The notes say "per 1 ft strip".
+- **The member type is ACI mode only.** In AASHTO mode a slab is analysed as a 12 in beam with no slab checks, because `cbcSlab()` is false.
+
+### How verified
+- **Beams unchanged.** Scratch probe of origin/main (#1498) vs branch, 15 projects (those of CBLW). These are identical:
+  - `computeAll()`, `VALIDATION`, `detEnvelope`, `allChecks`, the hand-off message, the Report model and every tab's text;
+  - the autosave, apart from the added `memberType:"beam"` and `slab`.
+
+  The input panel differs only by the Member type select (ACI).
+- **Tests:** new `tests/smoke/cbc-slab.mjs`, 1400 and 390 px, 0 console errors. The suite's other tests are listed in the PR.
+
+## 2026-11-13 — PR: claude/cbc-min-thickness (PR #1502: https://github.com/mlococo88/All-Structural/pull/1502) (CBMH) — Beam Capacity tab, ACI mode: minimum depth / thickness check, ACI 318-19 Table 9.3.1.1 (beams) and Table 7.3.1.1 (one-way slabs), with the f_y and lightweight modifiers; new inputs span and support condition   [NEW CHECK; every existing result identical; saved format: additive `minh` with migration (absent = not checked); no new storage key]
+
+The file uses CRLF line endings; keep them. All code is in the Beam Capacity srcdoc. When re-applying, escape `&` as `&amp;` and `"` as `&quot;`. Every site is tagged CBMH. This is PR 2 of 2 of engineer decision CB-6.
+
+### Provisions (ACI 318-19, read in structural_references ACI-318-19-2019.pdf, PDF pages 131 (Table 9.3.1.1, 9.3.1.1.1, 9.3.1.1.2) and 92 (Table 7.3.1.1, 7.3.1.1.1, 7.3.1.1.2); paraphrased)
+
+| Support condition | Beam h_min | Slab h_min |
+|---|---|---|
+| Simply supported | ℓ/16 | ℓ/20 |
+| One end continuous | ℓ/18.5 | ℓ/24 |
+| Both ends continuous | ℓ/21 | ℓ/28 |
+| Cantilever | ℓ/8 | ℓ/10 |
+
+- **f_y modifier:** where f_y ≠ 60,000 psi, multiply by (0.4 + f_y/100,000).
+- **Lightweight modifier:** for lightweight concrete with w_c of 90 to 115 pcf, multiply by the greater of 1.65 − 0.005w_c and 1.09.
+- **Scope:** the tables apply to members not supporting, and not attached to, partitions or other construction likely to be damaged by large deflections (9.3.1.1, 7.3.1).
+
+### Changes
+- **State:** `defaultState()` adds `minh:{span:0,sup:"simple",wc:0}`. `mergeState()` reads `minh`; absent means span 0, i.e. not checked.
+- **Input:** new "Minimum Thickness" section (ACI, Checks input tab, `inMinH`):
+  - span ℓ (ft; blank = not checked);
+  - support condition;
+  - w_c (pcf), shown only for lightweight concrete (λ < 1);
+  - a note stating the assumption and the table.
+- **`detailing()`**, after `dEpsMin`: `dMinH` ("Minimum beam depth" / "Minimum slab thickness").
+  - h_min = (ℓ × 12/k) × f_y factor × lightweight factor, against h.
+  - Worked lines: ℓ/k, the modifiers, and h ≥ h_min with the assumption.
+  - With no span it is N/A: "Not checked: the span is not entered".
+- **`validate()`:** an ACI note gives the min-thickness status and the partitions assumption.
+- **No other changes needed:** the check summary, Summary, All Combinations × Limit States (Detailing), Detailing tab and Report pick the row up as the other detailing checks do.
+
+### Hand checks
+| Member | Span and support | Calculation | h_min | h | Result |
+|---|---|---|---|---|---|
+| Slab | 12 ft, simply supported | 144/20 | 7.20 in | 9 in | PASS |
+| Slab | 12 ft, simply supported | 144/20 | 7.20 in | 7 in | FAIL |
+| Beam | 20 ft, both ends continuous | 240/21 | 11.43 in | 18 in | PASS |
+| Beam, f_y 80 ksi | 20 ft, both ends continuous | 11.43 × (0.4 + 0.8) | 13.71 in | — | — |
+| Beam | 10 ft cantilever | 120/8 | 15.00 in | — | — |
+| Beam, lightweight (λ 0.85), w_c not entered (90 pcf) | 10 ft cantilever | 15.00 × max(1.65 − 0.45, 1.09) = 15.00 × 1.20 | 18.00 in | — | — |
+| Beam, lightweight, w_c 110 pcf | 10 ft cantilever | 15.00 × 1.10 | 16.50 in | — | — |
+
+Before: no minimum-thickness check.
+
+### Decisions (pending engineer review)
+- **Lightweight concrete without an entered w_c** is taken as w_c = 90 pcf, the end of the 90–115 range that gives the larger factor (1.20). An entered w_c outside 90–115 is taken within that range; above 115 pcf this gives 1.09, which is conservative because the code gives no modifier there.
+- **No span entered:** the check reads N/A "not checked" in the check summary, and a Validation note says so. It is not a PASS.
+- **The partitions condition** is stated as an assumption on the input, the card and in Validation. Deflections are not calculated.
+- **ACI mode only.**
+
+### How verified
+- **Probe:** origin/main (#1499) vs branch, 15 projects. These are identical in every project once the new `dMinH` row (N/A, not checked) and its Validation note are removed:
+  - `computeAll()`, `VALIDATION`, `allChecks`, `detEnvelope`;
+  - the hand-off message;
+  - the autosave, apart from the added `minh`.
+- **Tests:** new `tests/smoke/cbc-min-thickness.mjs`, 1400 and 390 px, 0 console errors. The suite's other tests are listed in the PR.

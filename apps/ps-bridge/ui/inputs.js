@@ -98,15 +98,23 @@
   }
   /* the Project tab's assumptions (engineer rule: every assumption is a note in its tab and in the Report) */
   function assumptions(P) {
-    const d = D().sel(P), nb = P.xs.nb;
-    const items = [
+    const d = D().sel(P), nb = P.xs.nb, BR = window.PSBBridge, typed = !!(BR && BR.hasTypes(P));
+    const items = typed ? [   // PR 3a-1: girder types (engine/bridge.js)
+      `Girder types (Girders &amp; strands tab, PS-8): each span has its girder types (new projects: Interior and Exterior); each type is the base design with the inputs it has of its own and is checked on every girder line assigned to it. ${BR.cells(P).length} type × line cell${BR.cells(P).length === 1 ? '' : 's'}; the output tabs show the one chosen above them. A line with no type is not checked (listed on the Girders &amp; strands tab).`,
+      'The bridge gives each type on each line its span length, girder spacing, number of girders, position (G1 and the last girder exterior), the support skew of its span, the deck overhang on its side and the continuity (as the old app\'s bridge bar).',
+      'Unequal bays (PS-9; plan §7 item 3): each girder line takes as its spacing S the bay next to it (G1 and the last girder) or the mean of its two bays (an interior girder: its tributary width), the rule of the Steel Bridge app (shared/lldf.js); the engine then uses that S for its distribution factors, b<sub>eff</sub> and the deck weight. The exterior girder\'s rigid-section check (C4.6.2.2.2d) in the engine takes the girders at an equal spacing S (the exterior bay): with unequal bays it is an approximation (pending engineer review).',
+      'Different skews at the two supports of a span: the larger |θ| (the obtuse-corner shear correction, 4.6.2.2.3c); below 30° the moment DF has no skew reduction (Table 4.6.2.2.2e-1), so one θ is exact; 30° or more with the DF computed is an input error (enter equal skews or the DF).',
+      'Every girder of a span has the same shape (PS-8); the deck, the diaphragms, the owner rules and the continuity steel are entered once for the bridge.'
+    ] : [
       `One girder design: G${d.g} (${d.g === 1 || d.g === nb ? 'exterior' : 'interior'}) in span ${d.s} (Girders &amp; strands tab). Every girder × span and the interior / exterior groups (PS-8) come with the bridge level, PR 3a.`,
       'The bridge gives the design its span length, girder spacing, number of girders, position (G1 and the last girder exterior), the support skew of its span, the deck overhang on its side and the continuity (as the old app\'s bridge bar; Girders &amp; strands tab, Design girder card).',
-      'One girder spacing and one skew per design until PR 3a: unequal bays and different skews at the two supports of the design span are input errors for now (PS-9; plan §7 item 3).',
+      'One girder spacing and one skew per design until PR 3a: unequal bays and different skews at the two supports of the design span are input errors for now (PS-9; plan §7 item 3).'
+    ];
+    items.push(
       'DC2 (barrier / superimposed) and DW are entered per girder (Loads tab); the Steel Bridge distribution to each girder comes in PR 3a (PS-9).',
       'Calculations: the old Prestressed Bridge Design engine, moved unchanged (PR 2a, 0 differences on 658 cases); AASHTO LRFD 10th Ed. (2024). Normal-weight concrete; strand f<sub>pu</sub> = 270 ksi, low relaxation.',
       'Hold-down force: F<sub>hd</sub> = 2 n<sub>h</sub> f<sub>pbt</sub> A<sub>b</sub> sin α ≤ 0.75 W, checked always for MassDOT and CTDOT (their rule) and, for AASHTO and RIDOT, when the PS-10 box is on (default on, the fraction editable; Owner rules tab). AASHTO LRFD itself sets no limit. MIDAS demand import by file: a later PR.'
-    ];
+    );
     return card('assume', 'Assumptions', '', `<ul class="note asm">${items.map(t => `<li>${t}</li>`).join('')}</ul>`);
   }
   /* cards(tab, P): the HTML of the tab's girder-design cards */
@@ -114,7 +122,7 @@
     if (!P.base) return '';
     let h = '';
     if (tab === 'proj') return assumptions(P);
-    if (tab === 'gird') h += designCard(P);
+    if (tab === 'gird' && !(window.PSBBridge && window.PSBBridge.hasTypes(P))) h += designCard(P);   // PR 3a-1: with girder types, ui/types.js
     if (tab === 'own') h += ownerCard(P, R);
     F().CARDS.filter(c => c.tab === tab).forEach(c => {
       if (c.when && !c.when(P.base, P)) return;

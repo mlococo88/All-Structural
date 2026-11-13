@@ -75,12 +75,12 @@ check(Object.keys(ls).every(k => k.startsWith('psb2.') || k in SEED || k === '__
 Object.entries(SEED).forEach(([k, v]) => check(ls[k] === v, 'untouched ' + k));
 await p.reload(); await ready(p);
 check((await p.inputValue('#i_spans\\.lengths')) === '100, 125, 100', 'reload keeps the spans');
-// 3. invalid input (model): a negative bay; the PR 2b limit (unequal bays) is listed with it
+// 3. invalid input (model): a negative bay (PR 3a-2: unequal bays are no longer an input error)
 await p.click('#inTabs [data-itab="xsec"]');
 await p.fill('#i_xs\\.bays', '9, -2, 9, 9'); await p.press('#i_xs\\.bays', 'Tab');
 check(await p.$eval('#i_xs\\.bays', e => e.classList.contains('bad')), 'bad field marked');
-check((await p.textContent('#inTabs [data-itab="xsec"] .inDot')) === '2', 'tab count ' + await p.textContent('#inTabs [data-itab="xsec"] .inDot'));
-check(/Bay 2 spacing must be a positive number/.test(await p.textContent('#out')) && /Unequal bays/.test(await p.textContent('#out')) && /2 to fix/.test(await p.textContent('#sbDashCol')), 'errors listed');
+check((await p.textContent('#inTabs [data-itab="xsec"] .inDot')) === '1', 'tab count ' + await p.textContent('#inTabs [data-itab="xsec"] .inDot'));
+check(/Bay 2 spacing must be a positive number/.test(await p.textContent('#out')) && /1 to fix/.test(await p.textContent('#sbDashCol')), 'errors listed');
 check(/Results not shown/.test(await p.textContent('#out')), 'results blocked');
 await p.click('#inTabs [data-itab="proj"]'); await p.click('#out [data-icgo="0"]');
 check(await p.isVisible('#inPanes [data-pane="xsec"]') && await p.evaluate(() => document.activeElement && document.activeElement.id === 'i_xs.bays'), 'error link opens the field');
@@ -120,7 +120,7 @@ o = await openPage(FILE, { vw: 1400, vh: 1000, ls: SEED }); p = o.p; await ready
 // 3c. PR 2b-2: the Section properties, Loads & LLDF and Analysis tabs, three designs: every engine value shown (data-ev) equals computeAll of
 // the design inputs, evaluated on the page; the graphics are drawn; the worked steps are KaTeX; links to a step of another tab open it
 const evCheck = async () => p.evaluate(() => {
-  const s0 = localStorage.getItem('psb2.project.current'), P = s0 ? window.PSBModel.importJSON(s0).project : window.PSBModel.defaultProject(), R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
+  const s0 = localStorage.getItem('psb2.project.current'), P = s0 ? window.PSBModel.importJSON(s0).project : window.PSBModel.newProject(), R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
   const f = (v, d) => typeof v === 'number' && isFinite(v) ? v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }).replace(/^-(0(\.0*)?)$/, '$1') : '—';
   const bad = [], els = [...document.querySelectorAll('#out [data-ev]')];
   els.forEach(el => { let v = el.dataset.ev.split('.').reduce((o, k) => o == null ? o : o[k], R); if (el.dataset.div) v = v / +el.dataset.div;
@@ -130,7 +130,9 @@ const evCheck = async () => p.evaluate(() => {
 const DESIGNS = [['default', null], ['continuous, exterior G1 in span 2, restraint', async () => {
     await p.click('#inTabs [data-itab="layout"]'); await p.fill('#i_spans\\.lengths', '100, 125, 100'); await p.press('#i_spans\\.lengths', 'Tab');
     await p.selectOption('#i_spans\\.continuity', 'composite'); await p.selectOption('#i_base\\.cont\\.restraint', 'true');
-    await p.click('#inTabs [data-itab="gird"]'); await p.selectOption('#i_design\\.s', '2'); await p.selectOption('#i_design\\.g', '1'); }],
+    // PR 3a-1: the new spans got copies of span 1's girder types (notice); the type and line are chosen above the output tabs
+    if (await p.isVisible('#tClose')) await p.click('#tClose');
+    await p.click('#tabBar [data-otab="sec"]'); await p.selectOption('#tyOutT', { label: 'Exterior S2 (span 2)' }); await p.selectOption('#tyOutL', '1'); }],
   ['NEXT 36F, skew 35 deg, one span', async () => {
     await p.click('#inTabs [data-itab="layout"]'); await p.fill('#i_spans\\.lengths', '90'); await p.press('#i_spans\\.lengths', 'Tab'); await p.fill('#i_xs\\.skews', '35, 35'); await p.press('#i_xs\\.skews', 'Tab');
     await p.click('#inTabs [data-itab="xsec"]'); await p.fill('#i_xs\\.bays', '10, 10, 10, 10'); await p.press('#i_xs\\.bays', 'Tab');
@@ -153,15 +155,18 @@ for (const [lab, setup] of DESIGNS) {
     if (args.shots && ['loss', 'str', 'flex', 'shear', 'end', 'camb', 'hand', 'deck', 'rt'].includes(t)) await p.screenshot({ path: path.join(args.shots, `ps-bridge-1400-${t}-${lab.split(',')[0].replace(/[^A-Za-z0-9]+/g, '_')}.png`) });
   }
   // the check summary column: a chip per built group with the engine's governing ratio
-  const dash = await p.evaluate(() => { const s0 = localStorage.getItem('psb2.project.current'), P = s0 ? window.PSBModel.importJSON(s0).project : window.PSBModel.defaultProject(), R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
+  const dash = await p.evaluate(() => { const s0 = localStorage.getItem('psb2.project.current'), P = s0 ? window.PSBModel.importJSON(s0).project : window.PSBModel.newProject(), R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
+    // PR 3a-2: each chip governs over every girder type × line (PSBBridge.results)
+    const A = window.PSBBridge.hasTypes(P) ? window.PSBBridge.results(P, i => window.PSBHoldDown.compute(JSON.parse(JSON.stringify(i)))) : { cells: [{ R }] };
     const grp = window.PSBDashUI.GROUPS.filter(g => g.checks), bad = [];
-    grp.forEach(g => { const cs = g.checks.map(q => R.checks.find(c => c.n === q[0])).filter(Boolean); if (!cs.length) return; const gov = cs.reduce((b, c) => c.r > b.r ? c : b);
+    grp.forEach(g => { const cs = A.cells.flatMap(z => g.checks.map(q => z.R.checks.find(c => c.n === q[0]))).filter(Boolean); if (!cs.length) return; const gov = cs.reduce((b, c) => c.r > b.r ? c : b);
       const el = document.querySelector(`#sbDashCol [data-sdgrp="${g.id}"] .sdVal`); if (!el || el.textContent !== gov.r.toFixed(3)) bad.push(`${g.id}: ${el && el.textContent} vs ${gov.r}`); });
     return { n: grp.length, bad }; });
   check(!dash.bad.length, `${lab}: check summary chips ${dash.bad.join(' | ')}`);
   // PR 2d-2: the Rating chip = the lowest HL-93 inventory RF of the engine
-  const rc = await p.evaluate(() => { const s0 = localStorage.getItem('psb2.project.current'), P = s0 ? window.PSBModel.importJSON(s0).project : window.PSBModel.defaultProject(), R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
-    const v = window.PSBDashUI.RATING.rf.map(q => q[1](R)).filter(x => x < 99), el = document.querySelector('#sbDashCol [data-sdgrp="rt"] .sdVal'); return { want: Math.min(...v).toFixed(3), got: el && el.textContent }; });
+  const rc = await p.evaluate(() => { const s0 = localStorage.getItem('psb2.project.current'), P = s0 ? window.PSBModel.importJSON(s0).project : window.PSBModel.newProject(), R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
+    const A = window.PSBBridge.hasTypes(P) ? window.PSBBridge.results(P, i => window.PSBHoldDown.compute(JSON.parse(JSON.stringify(i)))) : { cells: [{ R }] };   // PR 3a-2: the lowest over every type × line
+    const v = A.cells.flatMap(z => window.PSBDashUI.RATING.rf.map(q => q[1](z.R))).filter(x => x < 99), el = document.querySelector('#sbDashCol [data-sdgrp="rt"] .sdVal'); return { want: Math.min(...v).toFixed(3), got: el && el.textContent }; });
   check(rc.want === rc.got, `${lab}: rating chip ${rc.got} vs ${rc.want}`);
 }
 // PR 2d-2: the handling stage choice; the Rating chip opens its step; the Handling chip opens its step
@@ -264,11 +269,13 @@ await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.opt\
 { check(!(await p.$('#sbDashCol [data-sdgrp="mat"]')), 'AASHTO: no Materials chip');
   await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.owner', 'CTDOT'); await p.waitForTimeout(300); if (await p.isVisible('#tClose')) await p.click('#tClose');
   const d = await p.evaluate(() => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
-    const N = new Set(window.PSBDashUI.GROUPS.flatMap(g => g.checks.map(q => q[0]))), cs = R.checks.filter(c => N.has(c.n)), c = R.checks.find(q => q.n === 'Release strength f′ci (CTDOT 5.9.1.2)');
+    const N = new Set(window.PSBDashUI.GROUPS.flatMap(g => g.checks.map(q => q[0]))), c = R.checks.find(q => q.n === 'Release strength f′ci (CTDOT 5.9.1.2)');
+    // PR 3a-2: the column counts one per girder type per check (its worst line, SB-5)
+    const A = window.PSBBridge.results(P, i => window.PSBHoldDown.compute(JSON.parse(JSON.stringify(i)))), cs = A.types.flatMap(t => Object.values(t.gov).map(v => v.c).filter(q => N.has(q.n)));
     const f = (v, d) => typeof v === 'number' && isFinite(v) ? v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—';
     const ev = [...document.querySelectorAll('#inPanes [data-pane="own"] [data-ev]')], bad = ev.filter(el => { let v = el.dataset.ev.split('.').reduce((o, k) => o == null ? o : o[k], R); return el.textContent !== f(v, +el.dataset.d); }).map(el => el.dataset.ev);
     const chip = document.querySelector('#sbDashCol [data-sdgrp="mat"]'), F = document.querySelector('#sbDashHead .sdF'), Pp = document.querySelector('#sbDashHead .sdP');
-    return { c, all: R.checks.length, n: cs.length, nF: cs.filter(q => !q.pass).length, chip: chip && chip.className, val: chip && chip.querySelector('.sdVal').textContent, st: chip && chip.querySelector('.sdSt').textContent,
+    return { c, all: cs.length, rAll: R.checks.length, rF: R.checks.filter(q => !q.pass).length, n: cs.length, nF: cs.filter(q => !q.pass).length, chip: chip && chip.className, val: chip && chip.querySelector('.sdVal').textContent, st: chip && chip.querySelector('.sdSt').textContent,
       F: F ? parseInt(F.textContent, 10) : 0, Pn: Pp ? parseInt(Pp.textContent, 10) : 0, ev: ev.length, bad, row: (document.getElementById('own-rule-fci.range') || {}).textContent || '' }; });
   check(d.c && d.c.v === 6.8 && d.c.lim === 6.5 && !d.c.pass && /sd-fail/.test(d.chip) && d.val === '1.046' && d.st === 'FAIL', 'Materials chip: CTDOT f′ci FAIL 1.046 ' + JSON.stringify({ chip: d.chip, val: d.val, st: d.st }));
   check(d.n === d.all && d.F === d.nF && d.F + d.Pn === d.n, `column totals count the material checks: ${d.F} FAIL + ${d.Pn} PASS of ${d.n} (${d.all} engine checks)`);
@@ -277,12 +284,12 @@ await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.opt\
   const g = await p.evaluate(() => { const el = document.getElementById('own-rule-fci.range'), b = el && el.getBoundingClientRect(), pn = document.getElementById('inputPanel').getBoundingClientRect();
     return { vis: !document.querySelector('#inPanes [data-pane="own"]').hidden, row: !!el, inView: !!b && b.top >= pn.top - 2 && b.bottom <= pn.bottom + 2, flash: !!el && el.classList.contains('sdFlash') }; });
   check(g.vis && g.row && g.inView && g.flash, 'Materials chip opens the Owner rules tab at the f′ci row ' + JSON.stringify(g));
-  await p.click('#sbDashCol [data-sdgrp="mat"] .sdX'); check(/Girder f′c \(CTDOT 5\.9\.1\.2\): 0\.850/.test(await p.textContent('#sbDashCol')) && /Release strength f′ci \(CTDOT 5\.9\.1\.2\): 1\.046/.test(await p.textContent('#sbDashCol')), 'Materials chip lists both CTDOT checks');
+  await p.click('#sbDashCol [data-sdgrp="mat"] .sdX'); check(/Girder f′c \(CTDOT 5\.9\.1\.2\)[^:]*: 0\.850/.test(await p.textContent('#sbDashCol')) && /Release strength f′ci \(CTDOT 5\.9\.1\.2\)[^:]*: 1\.046/.test(await p.textContent('#sbDashCol')), 'Materials chip lists both CTDOT checks');
   if (args.shots) await p.screenshot({ path: path.join(args.shots, 'ps-bridge-1400-materials-chip.png') });
   await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 60000 });
   const r = await p.evaluate(() => { const s1 = document.querySelector('.rp-doc section[data-rpsec="rp-s1"]'), rows = [...s1.querySelectorAll('table tbody tr')].map(tr => [...tr.children].map(td => td.textContent.trim()));
     return { lead: s1.textContent, nF: rows.filter(r => r[7] === 'FAIL').length, mat: rows.filter(r => r[0] === 'Owner limits').map(r => r[1] + ' ' + r[6] + ' ' + r[7]) }; });
-  check(r.nF === d.F && new RegExp(`FAIL: ${d.F} of ${d.all} checks`).test(r.lead) && r.mat.some(t => /f′ci \(CTDOT 5\.9\.1\.2\) 1\.046 FAIL/.test(t)) && r.mat.length === 2 && !/Not in the check summary column/.test(r.lead), 'Report §1 = the column ' + JSON.stringify(r.mat) + ' ' + r.nF);
+  check(r.nF === d.rF && new RegExp(`FAIL: ${d.rF} of ${d.rAll} checks`).test(r.lead) && r.mat.some(t => /f′ci \(CTDOT 5\.9\.1\.2\) 1\.046 FAIL/.test(t)) && r.mat.length === 2 && !/Not in the check summary column/.test(r.lead), 'Report §1 = the column ' + JSON.stringify(r.mat) + ' ' + r.nF);
   await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.owner', 'AASHTO'); await p.waitForTimeout(300); if (await p.isVisible('#tClose')) await p.click('#tClose'); }
 // an input error blocks every result tab
 await p.click('#inTabs [data-itab="mat"]'); await p.fill('#i_base\\.mat\\.fci', '-1'); await p.press('#i_base\\.mat\\.fci', 'Tab');
