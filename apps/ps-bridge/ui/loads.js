@@ -12,6 +12,8 @@
   const TOPICS = [
     { key: 'own', title: 'Owner load rules (η, m)', ref: A + '1.3.2.1', ids: /^ld\.(eta|mLL)$/, res: /^ld\.eta$/ },
     { key: 'dl', title: 'Dead loads per girder (DC1, DC2, DW)', ref: A + '3.5.1', ids: /^ld\.(wg|wdeck|whaunch|wDC1|Pdia|wDC2|wDW)$/, res: /^ld\.wDC1$/ },
+    // PR 3a-3: the Steel Bridge app's DC2 / DW distribution to each line (engine/bridge-dl.js, steps dl.*; only when distributed)
+    { key: 'dld', title: 'DC2 and DW distributed to the girder lines (the Steel Bridge app\'s method)', ref: A + '3.5.1, 4.6.2.2.1; MassDOT BDM 3.5.3; RIDOT BDM 3.3.1', ids: /^dl\./, res: /^dl\.G\d+\.DC2$/ },
     { key: 'hlm', title: 'HL-93 moment per lane (simple span)', ref: A + '3.6.1.2, 3.6.1.3', ids: /^ld\.(Mtr|Mtd|Mln|M)$/, res: /^ld\.M$/ },
     { key: 'hlv', title: 'HL-93 shear per lane (simple span)', ref: A + '3.6.1.2, 3.6.1.3', ids: /^ld\.(Vtr|Vtd|Vln|V)$/, res: /^ld\.V$/ },
     { key: 'kg', title: 'Stiffness parameter', ref: A + '4.6.2.2.1', ids: /^ld\.(Sf|eg|Kg)$/, res: /^ld\.Kg$/ },
@@ -21,7 +23,7 @@
     { key: 'll', title: 'Live load per girder', ref: A + '3.6.1.3, 4.6.2.2', ids: /^ld\.(MLL|VLL)$/, res: /^ld\.MLL$/ }];
   function output(ctx) {
     const { R, inp, P } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, df = R.df, cp = R.cp, own = R.own;
-    const simple = !R.fe && !R.useExt;
+    const simple = !R.fe && !R.useExt, DL = window.PSBBridgeDL, dist = !!(DL && DL.on(P)), dg = window.PSBDesign.sel(P).g;   // PR 3a-3
     let h = '<div id="gfx_ld"></div>';
     h += k.card('Owner load rules', k.kv([['Owner', k.esc(own ? own.owner : 'AASHTO')], ['Load modifier η (Strength I)', `${own ? ev('own.eta', 4) : '1.0000'} ${wk('ld.eta')}`],
       ['HL-93 design load multiplier m', `${own ? ev('own.mLL', 2) : '1.00'} ${wk('ld.mLL')}`]]) + '<p class="note">Owner and its questions: <a href="#" data-goin="own">Owner rules tab</a>.</p>');
@@ -33,9 +35,10 @@
       ${row('DC1 additional (forms, …)', 'non-composite; entered (Loads tab)', `${k.fx(+inp.loads.wNC, 4)} klf`, '')}
       ${row('DC1 distributed (deck + haunch + additional)', 'on the bare girder', ev('wDk', 4, 'klf'), wk('ld.wDC1'))}
       ${R.nDiaph ? row(`DC1 diaphragms (${R.nDiaph} point loads)`, 'non-composite simple span; entered (Diaphragms / deck tab)', ev('Pdia', 2, 'kip'), wk('ld.Pdia')) : ''}
-      ${row('DC2 barrier / superimposed', `composite${R.fe ? ', continuous unit' : ''}; entered per girder`, ev('wBar', 4, 'klf'), wk('ld.wDC2'))}
-      ${row('DW wearing surface', `composite${R.fe ? ', continuous unit' : ''}; entered per girder`, ev('wDW', 4, 'klf'), wk('ld.wDW'))}
-      </tbody></table></div><p class="note">DC2 and DW are entered per girder until the Steel Bridge distribution with unequal bays (PR 3a, PS-9).</p>`);
+      ${row('DC2 barrier / superimposed', `composite${R.fe ? ', continuous unit' : ''}; ${dist ? `distributed to G${dg} (Cross-section tab)` : 'entered per girder'}`, ev('wBar', 4, 'klf'), dist ? wk(`dl.G${dg}.DC2`) : wk('ld.wDC2'))}
+      ${row('DW wearing surface', `composite${R.fe ? ', continuous unit' : ''}; ${dist ? `distributed to G${dg} (Cross-section tab)` : 'entered per girder'}`, ev('wDW', 4, 'klf'), dist ? wk(`dl.G${dg}.DW`) : wk('ld.wDW'))}
+      </tbody></table></div><p class="note">${dist ? 'DC2 and DW: the Steel Bridge app\'s distribution of the barriers, sidewalks and wearing surface to each girder line (PS-9; table below).' : 'DC2 and DW are entered per girder type (Loads tab); the Cross-section tab can distribute them to each girder line (PS-9).'}</p>`);
+    if (dist) h += window.PSBBridgeDLUI.lineTable(P, dg, k);
     h += k.card('HL-93 per lane (simple span L = ' + k.fx(R.L, 2) + ' ft)', k.kv([['Truck M<sub>tr</sub> (midspan)', `${ev('hl.Mtr', 1, 'kip-ft')} ${wk('ld.Mtr')}`], ['Tandem M<sub>td</sub>', `${ev('hl.Mtd', 1, 'kip-ft')} ${wk('ld.Mtd')}`], ['Lane M<sub>ln</sub>', `${ev('hl.Mln', 1, 'kip-ft')} ${wk('ld.Mln')}`],
       ['M<sub>LL+IM</sub> per lane', `${ev('hl.M', 1, 'kip-ft')} ${wk('ld.M')}`], ['Truck V<sub>tr</sub> (support)', `${ev('hl.Vtr', 2, 'kip')} ${wk('ld.Vtr')}`], ['Tandem V<sub>td</sub>', `${ev('hl.Vtd', 2, 'kip')} ${wk('ld.Vtd')}`], ['Lane V<sub>ln</sub>', `${ev('hl.Vln', 2, 'kip')} ${wk('ld.Vln')}`],
       ['V<sub>LL+IM</sub> per lane', `${ev('hl.V', 2, 'kip')} ${wk('ld.V')}`], ['Fatigue truck M (one lane, no IM)', ev('hl.Mfat', 1, 'kip-ft')]])

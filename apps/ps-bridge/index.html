@@ -18,7 +18,8 @@
      the Report tab (report/*.js on shared/report.js: every result tab's cards and worked steps, the check summary, the assumptions). PR 2f:
      "From the old app" on the Project tab (engine/legacy.js, ui/legacy.js): the old app's saved designs read (never written) and imported.
      PR 3a-1: the bridge level, girder types on the girder lines of each span (engine/bridge.js, ui/types.js; PS-8). PR 3a-2: every type
-     checked on every line (the check summary, the Summary tab's table, the Report's §1); unequal bays and different end skews.
+     checked on every line (the check summary, the Summary tab's table, the Report's §1); unequal bays and different end skews. PR 3a-3:
+     DC2 and DW distributed to each girder line by the Steel Bridge app's method (engine/bridge-dl.js, ui/bridgedl.js; §4).
      The old Prestressed Bridge Design.html stays the working tool. -->
 <!-- KaTeX for the worked-step equations: the steel app's pinned version and URL (CLAUDE.md §2; used from PR 2b) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
@@ -45,6 +46,7 @@
     'engine/holddown.js',    // PR 2d-3: the optional hold-down check for AASHTO / RIDOT (PS-10), an engine addition after computeAll (§4)
     'engine/design.js',      // PR 2b: the one girder design and its engine inputs (base + the bridge values, PBD.applyBridge)
     'engine/bridge.js',      // PR 3a-1: the girder types on the girder lines of each span (PS-8)
+    'engine/bridge-dl.js',   // PR 3a-3: DC2 and DW to each girder line by the Steel Bridge app's method (PS-9; copy of its dead())
     'engine/fields.js',      // PR 2b: every engine input on its input tab (label, unit, tooltip, rule)
     'engine/inputcheck.js',  // PR 2b: the blocking input errors (the steel app's pattern)
     'engine/legacy.js',      // PR 2f: "From the old app": read-only import of the old app's saved designs and Export JSON files
@@ -59,6 +61,7 @@
     'report/data.js',        // PR 2e: the report's results (the page's own result, as the tabs)
     'report/builders.js',    // PR 2e: the report model (adapted copy of apps/steel-bridge/report/builders.js)
     'ui/inputs.js',      // PR 2b: the girder design's input cards
+    'ui/bridgedl.js',    // PR 3a-3: the Cross-section tab's DC2 / DW distribution card and the Loads & LLDF line table
     'ui/types.js',       // PR 3a-1: the girder types card, the "entered values for" choice, the type and line choice above the output tabs
     'ui/legacy.js',      // PR 2f: the Project tab's "From the old app" card and the import summary
     'ui/inputcheck.js',  // PR 2b: the input errors on the page (copy of apps/steel-bridge/ui/inputcheck.js)
@@ -308,7 +311,7 @@
      autosaved to psb2.project.current on every change; the input tabs on the left, the output tabs on the right; the page's tab choices in
      psb2.ui. Only the Project, Bridge layout and Cross-section inputs of schema v1 are editable; every other tab is a placeholder naming
      what it will hold and the PR that brings it (docs/ps-bridge-plan.md §2.2, §2.3, §5). Nothing is calculated. */
-  const M = window.PSBModel, BR = window.PSBBridge, TY = window.PSBTypesUI;
+  const M = window.PSBModel, BR = window.PSBBridge, TY = window.PSBTypesUI, DLUI = window.PSBBridgeDLUI;
   const $ = id => document.getElementById(id), esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const store = (() => { try { const k = '__psb2_probe'; localStorage.setItem(k, '1'); localStorage.removeItem(k); return localStorage; } catch (e) { return null; } })();
   const memStore = { getItem: () => null, setItem: () => {}, removeItem: () => {} }, LS = store || memStore;
@@ -361,7 +364,7 @@
       xsec: card('Girders', `${num('xs.nb', 'Number of girders', '')}${list('xs.bays', 'Girder spacings (bays)', 'ft')}${num('xs.ohL', 'Left overhang', 'ft')}${num('xs.ohR', 'Right overhang', 'ft')}
           <p class="note">Bays left to right (${Math.max(0, (P.xs.nb | 0) - 1)} values). Unequal bays (PS-9): each girder's spacing S is the bay next to it (exterior) or the mean of its two bays (interior); see Loads &amp; LLDF. Overhangs from the exterior girder centreline. Deck width ${fmt(deckW, 2)} ft. A change of the girder count re-assigns the girder types' lines (the outer lines keep the exterior types; a notice lists each change, with Undo).</p>`)
         + IN.cards('xsec', P)
-        + ph('Barriers, sidewalks and dead-load distribution', '3a', ['DC2 and DW to each girder by the Steel Bridge app\'s method, with unequal bays (PS-9; a calculation change against the old app, with §4 callouts)']),
+        + DLUI.card(P),   // PR 3a-3: DC2 / DW to each girder line (PS-9)
       gird: TY.card(P, ui) + TY.shownCard(P) + TY.scopeBar(P, ui, 'gird') + IN.cards('gird', V)
         + `<section class="sec"><div class="secHead">Strand pattern${sk >= 0 ? ` of ${esc(P.types[sk].label)}` : ''}</div><div class="secBody" id="gfx_strands_in"><p class="note">Shown when the inputs have no error.</p></div></section>`
         + ph('Girder library', '4', ['girder library from the standard sheets (NEBT, NEDBT, NEXT, boxes): PR 4, waits for the sheets (PS-2)']),
@@ -410,6 +413,7 @@
   $('inPanes').addEventListener('change', e => {
     const el = e.target;
     if (el.dataset.ty) { typesDone(TY.onChange(el, P, ui)); return; }   // PR 3a-1
+    if (el.dataset.dl && DLUI.onChange(el, P)) { changed(); return; }   // PR 3a-3
     const path = el.dataset.path, k = el.dataset.kind; if (!path) return;
     // PR 3a-1: in a girder type's scope the edit goes to the type's own inputs (its overrides of the base design)
     const sk = TY.SCOPED.includes(ui.itab) ? scopeK() : -1, V = viewOf(sk);
@@ -438,6 +442,7 @@
     const t = e.target, go = t.closest('[data-goin]');
     if (go) { e.preventDefault(); ui.itab = go.dataset.goin; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; return; }
     if (LGUI.onClick(e, lgCtx)) return;
+    if (DLUI.onClick(e, P)) { changed(); return; }   // PR 3a-3: the added line loads
     if (t.closest('[data-ty]') && !t.closest('select, input')) { typesDone(TY.onClick(e, P, ui)); return; }   // PR 3a-1
     { const sk = TY.SCOPED.includes(ui.itab) ? scopeK() : -1, V = viewOf(sk);
       if (IN.onClick(e, V)) { if (sk >= 0) BR.setOvr(P, sk, V.base); changed(); return; } }
@@ -467,7 +472,8 @@
     if (!RC.R.error && !RC.W) { const PW = window.PSBWorked, PS = window.PSBWorkedStress; try { RC.W = { section: PW.section(RC.inp, RC.R), loads: PW.loads(RC.inp, RC.R), analysis: PW.analysis(RC.inp, RC.R),
       losses: PS.losses(RC.inp, RC.R), stresses: PS.stresses(RC.inp, RC.R), flexure: window.PSBWorkedStrength.flexure(RC.inp, RC.R), shear: window.PSBWorkedStrength.shear(RC.inp, RC.R),
       endzone: window.PSBWorkedEnd.endzone(RC.inp, RC.R), camber: window.PSBWorkedEnd.camber(RC.inp, RC.R),
-      handling: window.PSBWorkedHDR.handling(RC.inp, RC.R), deck: window.PSBWorkedHDR.deck(RC.inp, RC.R), rating: window.PSBWorkedHDR.rating(RC.inp, RC.R) }; } catch (e) { RC.R = { error: 'Worked steps: ' + e.message }; } }
+      handling: window.PSBWorkedHDR.handling(RC.inp, RC.R), deck: window.PSBWorkedHDR.deck(RC.inp, RC.R), rating: window.PSBWorkedHDR.rating(RC.inp, RC.R) };
+      window.PSBBridgeDL.withSteps(RC.W.loads, P); /* PR 3a-3: + the DC2 / DW distribution steps of the line shown */ } catch (e) { RC.R = { error: 'Worked steps: ' + e.message }; } }
     return RC;
   }
   /* PR 3a-1: the engine result of any girder type × line (computeAll + the PS-10 check), kept by its inputs (the last 300) */

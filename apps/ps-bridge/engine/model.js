@@ -32,6 +32,10 @@
                       nothing reads it for a calculation.
      design:  { g, s }  added 2026-11-12 (PR 2b), optional within version 1: the design girder line and span of the one girder design until the
                       bridge level (PR 3a); absent: G2 (G1 with one girder) in span 1. Read and checked by engine/design.js (not validated here).
+     xs.dl:   { mode, method, barL, barR, swL, swR, fws, extra }  added 2026-11-13 (PR 3a-3, PS-9), optional within version 1: DC2 and DW
+                      distributed to each girder line by the Steel Bridge app's method (engine/bridge-dl.js). Absent (every project saved
+                      before) = 'entered': the values entered per girder type, as before (no migration needed: absence keeps the results).
+                      A new project (newProject) has it 'distributed' with the defaults of PSBBridgeDL.defaults.
      types:   [{ id, label, span, lines: [g, …], ovr: { '<engine path>': value } }]  added 2026-11-13 (PR 3a-1, plan §2.4 "groups", PS-8), optional
                       within version 1: the girder types of each span on its girder lines (engine/bridge.js): each type is the base design with
                       its own overrides (ovr), checked on every line in lines (1-based, of nb). A project saved without it is migrated on load
@@ -77,6 +81,7 @@
     const p = defaultProject(), B = typeof window !== 'undefined' && window.PSBBridge;
     if (!B || !p.base) return p;
     p.types = B.newTypes(p); p.design = { g: Math.min(2, p.xs.nb), s: 1 };
+    if (window.PSBBridgeDL) p.xs.dl = window.PSBBridgeDL.defaults(p);   // PR 3a-3: DC2 / DW distributed (PS-9)
     return p;
   }
 
