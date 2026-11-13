@@ -1,5 +1,6 @@
 // apps/ps-bridge PR 2b-2: the worked steps of the Section properties, Loads & LLDF and Analysis tabs (engine/worked.js); PR 2c-1: the
-//   Losses and Stresses tabs (engine/worked-stress.js; each step's R path, used by tests/psbridge-compare.mjs, holds the step's value).
+//   Losses and Stresses tabs (engine/worked-stress.js; each step's R path, used by tests/psbridge-compare.mjs, holds the step's value);
+//   PR 2c-2 Flexure and Shear (engine/worked-strength.js); PR 2d-1 End zone & hold-down and Camber & deflection (engine/worked-end.js).
 //   Each step's value is the engine's (computeAll) value, and the step's expression evaluated from its substituted values reproduces it
 //   (the derivation shown is the engine's): every pair agrees to 1e-9 (relative), on several designs (simple / continuous with restraint,
 //   interior / exterior, skew ≥ 30°, haunch included, NEXT, box without topping, diaphragms, an owner, entered DF and LL).
@@ -11,11 +12,12 @@ import { TAB_CASES } from './psbridge-tab-cases.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared('steps.js', ...PBD, ...['model', 'design', 'fields', 'inputcheck', 'worked', 'worked-stress', 'worked-strength'].map(n => path.join(APP, `engine/${n}.js`)));
+const W = loadShared('steps.js', ...PBD, ...['model', 'design', 'fields', 'inputcheck', 'worked', 'worked-stress', 'worked-strength', 'worked-end'].map(n => path.join(APP, `engine/${n}.js`)));
 const at = (R, p) => p.split('.').reduce((o, k) => o == null ? o : o[k], R);
 const STEPS = (inp, R) => ({ section: W.PSBWorked.section(inp, R), loads: W.PSBWorked.loads(inp, R), analysis: W.PSBWorked.analysis(inp, R),
   losses: W.PSBWorkedStress.losses(inp, R), stresses: W.PSBWorkedStress.stresses(inp, R),
-  flexure: W.PSBWorkedStrength.flexure(inp, R), shear: W.PSBWorkedStrength.shear(inp, R) });
+  flexure: W.PSBWorkedStrength.flexure(inp, R), shear: W.PSBWorkedStrength.shear(inp, R),
+  endzone: W.PSBWorkedEnd.endzone(inp, R), camber: W.PSBWorkedEnd.camber(inp, R) });
 const CASES = TAB_CASES(() => W.PSBModel.defaultProject());
 for (const [name, P] of Object.entries(CASES)) {
   test(`worked steps = engine values: ${name}`, () => {
@@ -26,7 +28,7 @@ for (const [name, P] of Object.entries(CASES)) {
     for (const f of Object.keys(ST)) {
       const r = ST[f];
       Object.entries(r.paths || {}).forEach(([id, p]) => { const s = r.steps.find(q => q.id === id), v = at(R, p); assert.ok(s, 'path of a step ' + id); assert.ok(Object.is(s.value, v), `${id}: value ${s.value} vs R.${p} ${v}`); });
-      if (['losses', 'stresses', 'flexure', 'shear'].includes(f)) assert.ok(Object.keys(r.paths).length >= (f === 'losses' || f === 'stresses' ? 20 : 15), f + ' paths ' + Object.keys(r.paths).length);
+      if (['losses', 'stresses', 'flexure', 'shear', 'endzone', 'camber'].includes(f)) assert.ok(Object.keys(r.paths).length >= (f === 'losses' || f === 'stresses' ? 20 : f === 'endzone' ? 8 : 15), f + ' paths ' + Object.keys(r.paths).length);
       assert.ok(r.steps.length >= 8, f);
       const ids = r.steps.map(s => s.id); assert.equal(new Set(ids).size, ids.length, 'unique ids ' + f);
       r.steps.forEach(s => { if (typeof s.value === 'number') assert.ok(Number.isFinite(s.value), `${s.id} finite`); });
@@ -35,6 +37,14 @@ for (const [name, P] of Object.entries(CASES)) {
     assert.ok(n >= 100, 'pairs ' + n);
   });
 }
+test('PR 2d-1: the owner hold-down check worked (MassDOT, default BT-72: F_hd = 94.8 kip > 0.75 W = 74.3 kip)', () => {
+  const P = W.PSBModel.defaultProject(); P.base.owner = 'MassDOT'; const inp = W.PSBDesign.inputs(P), R = W.computeAll(inp), E = W.PSBWorkedEnd.endzone(inp, R);
+  const v = id => E.steps.find(s => s.id === id).value;
+  assert.equal(v('ez.hd.F'), R.own.hd.Ftot); assert.equal(v('ez.hd.lim'), R.own.hd.lim);
+  assert.equal(v('ez.hd.F').toFixed(1), '94.8'); assert.equal(v('ez.hd.lim').toFixed(1), '74.3'); assert.equal(v('ez.hd.r').toFixed(3), '1.276');
+  const A = W.PSBWorkedEnd.endzone(W.PSBDesign.inputs(W.PSBModel.defaultProject()), W.computeAll(W.PSBDesign.inputs(W.PSBModel.defaultProject())));
+  assert.ok(A.steps.some(s => s.id === 'ez.slope') && !A.steps.some(s => s.id === 'ez.hd.F'), 'AASHTO: slope, no hold-down limit (PS-10 in PR 2d-3)');
+});
 test('the step values are the engine\'s own numbers (spot check of paths)', () => {
   const P = CASES['continuous 3 spans, exterior G6 in span 2, skew 35°, restraint, haunch in the section'], inp = W.PSBDesign.inputs(P), R = W.computeAll(inp);
   const v = (f, id) => W.PSBWorked[f](inp, R).steps.find(s => s.id === id).value;

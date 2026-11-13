@@ -12,7 +12,8 @@
 //   3. each shown value must equal the old value: the text = the old value formatted as the tab formats it (÷ divisor, decimals), and the
 //      number the new page holds = the old number exactly (Object.is: NaN, ±∞ and −0 kept); each step value = the old value exactly.
 //   4. every psbeam.* key seeded in the new app's page is byte-identical after all the designs (the new app reads and writes psb2.* only).
-//   node tests/psbridge-compare.mjs [--tabs loss,str,flex,shear] [--case <part of a name>] [--old <file>] [--new <index.html>] [--verbose]
+//   Tabs: Losses, Stresses (PR 2c-1), Flexure, Shear (PR 2c-2), End zone & hold-down, Camber & deflection (PR 2d-1).
+//   node tests/psbridge-compare.mjs [--tabs loss,str,flex,shear,end,camb] [--case <part of a name>] [--old <file>] [--new <index.html>] [--verbose]
 //     --control: changes one shown value by 1e-9 (relative) and one step value before comparing: the run must report both (the harness sees a difference)
 // Exit code: 0 every value equal, 1 a difference, 2 an error (a page did not load, a console error).
 import fs from 'fs';
@@ -25,7 +26,7 @@ for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; con
 const NEW = path.resolve(args.new || path.join(REPO, 'apps/ps-bridge/index.html'));
 const OLD = path.resolve(args.old || path.join(REPO, 'Prestressed Bridge Design.html'));
 /* the tabs compared and the worked steps each shows (RC.W key of the page) */
-const TABS = { loss: 'losses', str: 'stresses', flex: 'flexure', shear: 'shear' };
+const TABS = { loss: 'losses', str: 'stresses', flex: 'flexure', shear: 'shear', end: 'endzone', camb: 'camber' };
 const tabs = (args.tabs ? String(args.tabs).split(',') : Object.keys(TABS)).filter(t => TABS[t]);
 const SEED = { 'psbeam.inputs.v1': '{"girder":"PCI BT-72","L":118}', 'psbeam.ui.v1': '{"tab":"losses"}' };
 let fails = 0, errors = 0;
@@ -52,7 +53,7 @@ for (const name of names) {
       const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, inp = window.PSBDesign.inputs(P), R = computeAll(inp);
       const at = (o, p) => p.split('.').reduce((q, k) => q == null ? q : q[k], o);
       const ev = [...document.querySelectorAll('#out [data-ev]')].map(el => ({ tab: t, path: el.dataset.ev, d: +el.dataset.d, div: el.dataset.div ? +el.dataset.div : 0, text: el.textContent, v: at(R, el.dataset.ev) }));
-      const W = (wk === 'losses' || wk === 'stresses' ? window.PSBWorkedStress : wk === 'flexure' || wk === 'shear' ? window.PSBWorkedStrength : window.PSBWorked)[wk](inp, R);
+      const W = (wk === 'losses' || wk === 'stresses' ? window.PSBWorkedStress : wk === 'flexure' || wk === 'shear' ? window.PSBWorkedStrength : wk === 'endzone' || wk === 'camber' ? window.PSBWorkedEnd : window.PSBWorked)[wk](inp, R);
       const st = Object.entries(W.paths).map(([id, p]) => { const s = W.steps.find(q => q.id === id); return { tab: t, id, path: p, v: s.value, onTab: !!document.getElementById('st-' + id) }; });
       return { ev, st, err: R.error };
     }, [t, TABS[t]]);

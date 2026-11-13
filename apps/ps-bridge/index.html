@@ -13,7 +13,7 @@
      engine moved in unchanged (engine/pbd-*.js) and the project's base design (model base). PR 2b: the input tabs wired to base (one design
      girder, engine/design.js) with the input checks (engine/inputcheck.js, ui/inputcheck.js); the Section properties, Loads & LLDF and
      Analysis tabs. PR 2c-1: the Losses and Stresses tabs, the strand-pattern graphic, the check chips of their checks. PR 2c-2: the
-     Flexure and Shear tabs and their chips.
+     Flexure and Shear tabs and their chips. PR 2d-1: the End zone & hold-down and Camber & deflection tabs and their chips.
      The old Prestressed Bridge Design.html stays the working tool. -->
 <!-- KaTeX for the worked-step equations: the steel app's pinned version and URL (CLAUDE.md §2; used from PR 2b) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
@@ -43,6 +43,7 @@
     'engine/worked.js',      // PR 2b-2: the worked steps of the Section properties, Loads & LLDF and Analysis tabs (values = the engine's)
     'engine/worked-stress.js', // PR 2c-1: the worked steps of the Losses and Stresses tabs (values = the engine's)
     'engine/worked-strength.js', // PR 2c-2: the worked steps of the Flexure and Shear tabs (values = the engine's)
+    'engine/worked-end.js',  // PR 2d-1: the worked steps of the End zone & hold-down and Camber & deflection tabs (values = the engine's)
     'report/sections.js',
     '../../shared/steps.js', // the worked-step format and renderer (shared; also used by the steel app)
     'ui/inputs.js',      // PR 2b: the girder design's input cards
@@ -58,6 +59,8 @@
     'ui/stresses.js',    // PR 2c-1: Stresses tab
     'ui/flexure.js',     // PR 2c-2: Flexure tab (with the pier section and the positive moment connection)
     'ui/shear.js',       // PR 2c-2: Shear tab
+    'ui/endzone.js',     // PR 2d-1: End zone & hold-down tab
+    'ui/camber.js',      // PR 2d-1: Camber & deflection tab
     'ui/dash.js',     // the check summary column (adapted copy of apps/steel-bridge/ui/dash.js)
     'ui/splitter.js'  // the splitter between the input and output panels (copy of apps/steel-bridge/ui/splitter.js)
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
@@ -380,8 +383,6 @@
 
   /* ---------- outputs (placeholders; docs/ps-bridge-plan.md §2.3, §5) ---------- */
   const OUT = {
-    end: ['2d', ['splitting and confinement steel, debonding rules', 'draped strands and the hold-down force against its limit (PS-1, PS-10)']],
-    camb: ['2d', ['camber at release and erection, final camber, live-load deflection']],
     hand: ['2d', ['lifting and hauling checks, where on']],
     deck: ['2d', ['strip-method deck design, where on']],
     rt: ['2d', ['LRFR rating factors']],
@@ -396,17 +397,19 @@
     const inp = window.PSBDesign.inputs(P), key = JSON.stringify(inp);
     if (RC.key !== key) { let R; try { R = computeAll(JSON.parse(key)); } catch (e) { R = { error: e.message }; } RC = { key, inp, R, W: null }; }
     if (!RC.R.error && !RC.W) { const PW = window.PSBWorked, PS = window.PSBWorkedStress; try { RC.W = { section: PW.section(RC.inp, RC.R), loads: PW.loads(RC.inp, RC.R), analysis: PW.analysis(RC.inp, RC.R),
-      losses: PS.losses(RC.inp, RC.R), stresses: PS.stresses(RC.inp, RC.R), flexure: window.PSBWorkedStrength.flexure(RC.inp, RC.R), shear: window.PSBWorkedStrength.shear(RC.inp, RC.R) }; } catch (e) { RC.R = { error: 'Worked steps: ' + e.message }; } }
+      losses: PS.losses(RC.inp, RC.R), stresses: PS.stresses(RC.inp, RC.R), flexure: window.PSBWorkedStrength.flexure(RC.inp, RC.R), shear: window.PSBWorkedStrength.shear(RC.inp, RC.R),
+      endzone: window.PSBWorkedEnd.endzone(RC.inp, RC.R), camber: window.PSBWorkedEnd.camber(RC.inp, RC.R) }; } catch (e) { RC.R = { error: 'Worked steps: ' + e.message }; } }
     return RC;
   }
-  const TABUI = { sec: () => window.PSBUiSection, lds: () => window.PSBUiLoads, an: () => window.PSBUiAnalysis, loss: () => window.PSBUiLosses, str: () => window.PSBUiStresses, flex: () => window.PSBUiFlexure, shear: () => window.PSBUiShear };
+  const TABUI = { sec: () => window.PSBUiSection, lds: () => window.PSBUiLoads, an: () => window.PSBUiAnalysis, loss: () => window.PSBUiLosses, str: () => window.PSBUiStresses, flex: () => window.PSBUiFlexure, shear: () => window.PSBUiShear,
+    end: () => window.PSBUiEndZone, camb: () => window.PSBUiCamber };
   let ctxOut = null;
   function drawOut() {
     $('tabBar').innerHTML = OTABS.map(([k, t]) => `<button type="button" role="tab" data-otab="${k}" aria-selected="${ui.otab === k}">${t}</button>`).join('');
     let h = '';
     if (L.note) h += `<div class="alert err">${esc(L.note)}</div>`;
     if (errs.length) h += window.PSBInputCheckUI.blocked(errs, icO());
-    h += `<div class="alert">In development (PR 2c): Section properties, Loads &amp; LLDF, Analysis, Losses, Stresses, Flexure and Shear show the design girder's results; the other checks follow (PR 2d). Use the old <a href="../../Prestressed%20Bridge%20Design.html">Prestressed Bridge Design</a> for design work.</div>`;
+    h += `<div class="alert">In development (PR 2d): Section properties, Loads &amp; LLDF, Analysis, Losses, Stresses, Flexure, Shear, End zone &amp; hold-down and Camber &amp; deflection show the design girder's results; Handling, Deck and Rating follow (PR 2d-2). Use the old <a href="../../Prestressed%20Bridge%20Design.html">Prestressed Bridge Design</a> for design work.</div>`;
     const name = (OTABS.find(t => t[0] === ui.otab) || [, ''])[1];
     let rc = null; ctxOut = null;
     if (!errs.length) { rc = result(); if (rc.R.error) h += `<div class="alert err" role="alert"><b>The engine could not compute this design:</b> ${esc(rc.R.error)}. Results not shown.</div>`; }

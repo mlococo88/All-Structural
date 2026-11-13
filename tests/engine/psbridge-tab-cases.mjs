@@ -1,4 +1,4 @@
-// apps/ps-bridge: the designs on which the result tabs are tested (PR 2b-2, 2c): tests/engine/psbridge-tabs.test.mjs (worked steps = engine values,
+// apps/ps-bridge: the designs on which the result tabs are tested (PR 2b-2, 2c, 2d): tests/engine/psbridge-tabs.test.mjs (worked steps = engine values,
 // Node) and tests/psbridge-compare.mjs (harness B: the values the new tabs show = the old app's computeAll on the same inputs, browser).
 // TAB_CASES(base) -> { name: project }; base() returns a default psb2.project (PSBModel.defaultProject of the context that uses it).
 export const TAB_CASES = base => ({
@@ -18,5 +18,8 @@ export const TAB_CASES = base => ({
     P.spans = { lengths: [120, 120], continuity: 'composite' }; P.xs.skews = [0, 0, 0]; P.base.cont.restraint = true; P.base.cont.AsTop = 3; return P; })(),
   'flanged flexure (thin deck, 46 strands), two spans, young girder (positive restraint), positive moment connection steel': (() => { const P = base(); P.base.ts = 5; P.xs.bays = [6, 6, 6, 6];
     P.base.rows = [{ n: 16, y: 2, nd: 0, dbnd: 0 }, { n: 16, y: 4, nd: 0, dbnd: 0 }, { n: 14, y: 6, nd: 0, dbnd: 0 }]; P.spans = { lengths: [120, 120], continuity: 'composite' }; P.xs.skews = [0, 0, 0];
-    P.base.cont.AsPos = 4; P.base.cont.restraint = true; P.base.mat.td = 10; return P; })()
+    P.base.cont.AsPos = 4; P.base.cont.restraint = true; P.base.mat.td = 10; return P; })(),
+  // PR 2d-1: the owner hold-down and debonded-share checks (CTDOT), debonded rows on an I-girder, diaphragms (camber), the girder end past ℄ bearing
+  'CTDOT, debonded rows, diaphragms, girder end 9 in past the bearing': (() => { const P = base(); P.base.owner = 'CTDOT';
+    P.base.rows = [{ n: 12, y: 2, nd: 4, dbnd: 8 }, { n: 12, y: 4, nd: 2, dbnd: 12 }, { n: 4, y: 6, nd: 0, dbnd: 0 }]; P.base.loads.diaph = [{ P: 3, a: 40 }, { P: 3, a: 80 }]; P.base.opt.endOh = 9; return P; })()
 });
