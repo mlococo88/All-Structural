@@ -6598,7 +6598,7 @@ Inputs: D: M = 5 kip-ft, V = 2 kip; L: M = 3, V = 1.2; W: M = ±2, V = ±0.8 (re
   - `decimal-entry.mjs`, which now also types the service D moment and checks 1.4D;
   - the suite's other tests, as listed in the PR.
 
-## 2026-11-13 — PR: claude/cbc-shear-size-limit (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CBSZ) — Beam Capacity tab, ACI mode: explicit "Section size limit (ACI 22.5.1.2)" check, V_u ≤ φ(V_c + 8√f′c·b_w·d), per combination; the 22.5.5.1.1 upper limit V_c ≤ 5λ√f′c·b_w·d applied and worked   [NEW CHECK (can FAIL only where shear already fails); V_c limit applied but never governing; every existing result identical; no saved key or format change]
+## 2026-11-13 — PR: claude/cbc-shear-size-limit (PR #1495: https://github.com/mlococo88/All-Structural/pull/1495) (CBSZ) — Beam Capacity tab, ACI mode: explicit "Section size limit (ACI 22.5.1.2)" check, V_u ≤ φ(V_c + 8√f′c·b_w·d), per combination; the 22.5.5.1.1 upper limit V_c ≤ 5λ√f′c·b_w·d applied and worked   [NEW CHECK (can FAIL only where shear already fails); V_c limit applied but never governing; every existing result identical; no saved key or format change]
 
 The file uses CRLF line endings; keep them. All code is in the Beam Capacity srcdoc (`#suite-frame-capacity`). When re-applying, escape `&` as `&amp;` and `"` as `&quot;`; the text below is un-escaped. Every site is tagged CBSZ.
 
