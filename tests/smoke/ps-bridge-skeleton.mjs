@@ -130,7 +130,9 @@ const evCheck = async () => p.evaluate(() => {
 const DESIGNS = [['default', null], ['continuous, exterior G1 in span 2, restraint', async () => {
     await p.click('#inTabs [data-itab="layout"]'); await p.fill('#i_spans\\.lengths', '100, 125, 100'); await p.press('#i_spans\\.lengths', 'Tab');
     await p.selectOption('#i_spans\\.continuity', 'composite'); await p.selectOption('#i_base\\.cont\\.restraint', 'true');
-    await p.click('#inTabs [data-itab="gird"]'); await p.selectOption('#i_design\\.s', '2'); await p.selectOption('#i_design\\.g', '1'); }],
+    // PR 3a-1: the new spans got copies of span 1's girder types (notice); the type and line are chosen above the output tabs
+    if (await p.isVisible('#tClose')) await p.click('#tClose');
+    await p.click('#tabBar [data-otab="sec"]'); await p.selectOption('#tyOutT', { label: 'Exterior S2 (span 2)' }); await p.selectOption('#tyOutL', '1'); }],
   ['NEXT 36F, skew 35 deg, one span', async () => {
     await p.click('#inTabs [data-itab="layout"]'); await p.fill('#i_spans\\.lengths', '90'); await p.press('#i_spans\\.lengths', 'Tab'); await p.fill('#i_xs\\.skews', '35, 35'); await p.press('#i_xs\\.skews', 'Tab');
     await p.click('#inTabs [data-itab="xsec"]'); await p.fill('#i_xs\\.bays', '10, 10, 10, 10'); await p.press('#i_xs\\.bays', 'Tab');

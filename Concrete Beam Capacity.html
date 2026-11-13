@@ -1354,7 +1354,7 @@ function detailing(F,sh,neg,govMu,Vu,tor,torD){
   /* stirrup detailing */
   if(S.stir.present){
     const d=sh.d, Av=sh.Av, s=S.stir.s;
-    let sMax,ref,dv2;
+    let sMax,ref,dv2,legT=null;   /* legT: CBLW, the along-length switch of 9.7.6.2.2 reused across the width */
     if(code==='ACI'){
       /* 9.7.6.2.2 keys the tighter limit to V_s. Taken as the shear the stirrups
          are REQUIRED to carry (Vu/phi - Vc), not the nominal capacity they happen
@@ -1365,6 +1365,7 @@ function detailing(F,sh,neg,govMu,Vu,tor,torD){
       const thr=4*rt*bw*d/1000;
       const VsReq=Math.max(0,(Vu||0)/0.75 - sh.Vc);
       const tight=VsReq>thr;
+      legT={tight,VsReq,thr};
       sMax=tight?Math.min(d/4,12):Math.min(d/2,24); ref=&quot;ACI 9.7.6.2.2&quot;;
       dv2=[[&quot;V_{s,req}=\\dfrac{V_u}{\\phi}-V_c&quot;,
         `V_{s,req}=\\dfrac{${fmt(Vu||0)}\\text{ kip}}{0.75}-${fmt(sh.Vc)}\\text{ kip}=${fmt(VsReq)}\\text{ kip}`,
@@ -1392,6 +1393,22 @@ function detailing(F,sh,neg,govMu,Vu,tor,torD){
         `\\min(${fmt((tight?0.4:0.8)*sh.dv)},\\;${tight?&quot;12&quot;:&quot;24&quot;})=${fmt(sMax)}\\text{ in}`,&quot;&quot;]];
     }
     add(&quot;dStirS&quot;,&quot;Maximum stirrup spacing&quot;,ref,s,sMax,&quot;\\le&quot;,&quot;in&quot;,s<=sMax+1e-6,dv2);
+    /* CBLW (2026-11-13, engineer decision CB-4): ACI 318-19 Table 9.7.6.2.2, maximum spacing of the legs of the shear reinforcement
+       ACROSS the width of a nonprestressed beam: min(d, 24 in), or min(d/2, 12 in) where V_s > 4√f'c·b_w·d, with exactly the switch of
+       the along-length check above (V_s required = V_u/φ − V_c, engineer confirmed). The app enters the stirrup as a bar size and a
+       number of legs, without leg positions: the legs are taken as equally spaced between the centrelines of the two outer legs,
+       which sit at the clear cover plus half the stirrup bar from each side face, s_w = (b_w − 2c_c − d_s)/(n − 1). ACI mode only
+       (AASHTO 10th Ed. 5.7.2.6 has no across-width limit). */
+    if(code==='ACI'&amp;&amp;legT){
+      const n=Math.max(2,Math.round(+S.stir.legs||2)), sw=(bw-2*cc-ds)/(n-1), swMax=legT.tight?Math.min(d/2,12):Math.min(d,24);
+      add(&quot;dStirLeg&quot;,&quot;Stirrup leg spacing across the width&quot;,&quot;ACI 9.7.6.2.2&quot;,sw,swMax,&quot;\\le&quot;,&quot;in&quot;,sw<=swMax+1e-6,
+        [[&quot;s_{w}=\\dfrac{b_w-2c_c-d_s}{n_{legs}-1}&quot;,`s_{w}=\\dfrac{${fmt(bw)}-2(${fmt(cc)})-${fmt(ds,3)}}{${n}-1}=${fmt(sw)}\\text{ in}`,
+          `${n} legs of #${S.stir.size}, taken as equally spaced between the centrelines of the two outer legs (at the clear cover plus half the stirrup bar from each side face); the input gives the number of legs, not their positions.`],
+         [&quot;V_{s,req}=\\dfrac{V_u}{\\phi}-V_c\\;&quot;+(legT.tight?&quot;>&quot;:&quot;\\le&quot;)+&quot;\\;4\\sqrt{f'_c}b_w d&quot;,`${fmt(legT.VsReq)}\\text{ kip}\\;${legT.tight?&quot;>&quot;:&quot;\\le&quot;}\\;${fmt(legT.thr)}\\text{ kip}`,
+          &quot;The same switch as the spacing along the length (Maximum stirrup spacing, Table 9.7.6.2.2).&quot;],
+         [&quot;s_{w,max}=\\min\\left(&quot;+(legT.tight?&quot;d/2&quot;:&quot;d&quot;)+&quot;,\\;&quot;+(legT.tight?&quot;12&quot;:&quot;24&quot;)+&quot;\\text{ in}\\right)&quot;,
+          `\\min\\left(${fmt(legT.tight?d/2:d)},\\;${legT.tight?&quot;12&quot;:&quot;24&quot;}\\right)=${fmt(swMax)}\\text{ in}`,legT.tight?&quot;Tighter limit applies.&quot;:&quot;Standard limit applies.&quot;]]);
+    }
 
     const av=Av/s;
     let avMin,dv3;
@@ -1414,6 +1431,8 @@ function detailing(F,sh,neg,govMu,Vu,tor,torD){
   } else {
     add(&quot;dStirS&quot;,&quot;Maximum stirrup spacing&quot;,&quot;—&quot;,0,0,&quot;\\le&quot;,&quot;in&quot;,true,[],true,
       &quot;No stirrups are specified, so there is no spacing to limit.&quot;);
+    if(code==='ACI') add(&quot;dStirLeg&quot;,&quot;Stirrup leg spacing across the width&quot;,&quot;ACI 9.7.6.2.2&quot;,0,0,&quot;\\le&quot;,&quot;in&quot;,true,[],true,
+      &quot;No stirrups are specified, so there are no legs to space.&quot;);   /* CBLW */
 
     /* ---- minimum shear reinforcement with NO stirrups ----------------
        The ABSENCE of stirrups is precisely the condition ACI 9.6.3.1 /
@@ -3319,7 +3338,7 @@ function cbcVcMaxWork(b,sh){
   const fc=S.mat.fc, rtS=sh.rtVc<sqrtfc_psi(fc)-1e-9?&quot;(100\\text{ psi, max per 22.5.3.1})&quot;:&quot;\\sqrt{&quot;+fmt(fc*1000,0)+&quot;\\text{ psi}}&quot;;
   b.appendChild(eqBlock({title:&quot;Upper limit on V_c&quot;,ref:&quot;ACI 22.5.5.1.1&quot;,
     lines:[`V_{c,max} = 5\\lambda\\sqrt{f'_c}\\,b_w d = 5(${fmt(S.mat.lambda,2)})${rtS}(${fmt(S.sec.bw)}\\text{ in})(${fmt(sh.d)}\\text{ in}) = ${fmt(sh.VcMax*1000,0)}\\text{ lb} = ${fmt(sh.VcMax)}\\text{ kip}`,
-      `V_c = \\min(V_c,\;V_{c,max}) = \\min(${fmt(sh.Vc_row)},\;${fmt(sh.VcMax)}) = ${fmt(sh.Vc)}\\text{ kip}`],
+      `V_c = \\min(V_c,\\;V_{c,max}) = \\min(${fmt(sh.Vc_row)},\\;${fmt(sh.VcMax)}) = ${fmt(sh.Vc)}\\text{ kip}`],
     vars:[[&quot;V_{c,max}&quot;,&quot;Upper limit on V_c (the same \u221af\u2032c as the row above)&quot;,fmt(sh.VcMax),&quot;kip&quot;]]}));
 }
 function cbcSzWork(b,r,sh){
@@ -3913,7 +3932,7 @@ function buildDetailTab(pg){
       v.innerHTML=&quot;<b>&quot;+(d.ok?&quot;PASS&quot;:&quot;FAIL&quot;)+&quot;</b> — &quot;+d.name+&quot; (&quot;+d.ref+&quot;).&quot;;
       b.appendChild(v);
       /* D11 link: quantities quoted here that are worked on another tab, for the combination evaluated */
-      const DL={dStirS:[&quot;tabShear&quot;,&quot;shC&quot;,S.code==='ACI'?&quot;V_c&quot;:&quot;\u03c6, d_v&quot;],
+      const DL={dStirS:[&quot;tabShear&quot;,&quot;shC&quot;,S.code==='ACI'?&quot;V_c&quot;:&quot;\u03c6, d_v&quot;],dStirLeg:[&quot;tabShear&quot;,&quot;shC&quot;,&quot;V_c, d&quot;],   /* CBLW */
         dAvMin:S.stir.present?null:[&quot;tabShear&quot;,&quot;shC&quot;,S.code==='ACI'?&quot;d&quot;:&quot;V_c&quot;],dEpsMin:[&quot;tabFlex&quot;,&quot;flexC&quot;,&quot;\u03b5_t&quot;],
         dTorS:[&quot;tabTor&quot;,&quot;torC&quot;,&quot;p_h&quot;],dTorAl:[&quot;tabTor&quot;,&quot;torC&quot;,&quot;A_cp, A_t/s, p_h&quot;],dTorAlReq:[&quot;tabTor&quot;,&quot;torC&quot;,&quot;A_o, p_h&quot;],
         dTorAts:[&quot;tabTor&quot;,&quot;torC&quot;,&quot;A_t/s&quot;]}[d.id];
@@ -5611,7 +5630,7 @@ function cbcRptShear(r){
       cS({id:'rhow',label:'Longitudinal reinforcement ratio',sym:'\\rho_{w}',eq:'\\dfrac{A_s}{b_w d}',sub:'\\dfrac{'+fmt(r.F.As)+'}{'+fmt(bw)+'('+fmt(sh.d)+')}',value:sh.rho_w,d:5}),
       cS({id:'Vc',label:'Concrete shear, Table 22.5.5.1 row (c)'+(sqrtfc_psi(fc)>100?' (√f′c ≤ 100 psi, 22.5.3.1)':''),sym:'V_{c}',eq:&quot;8\\lambda_s\\lambda(\\rho_w)^{1/3}\\sqrt{f'_c}\\,b_w d&quot;,sub:'8('+fmt(sh.lam_s,3)+')('+fmt(S.mat.lambda,2)+')('+fmt(sh.rho_w,5)+')^{1/3}('+fmt(Math.min(sqrtfc_psi(fc),100),1)+')('+fmt(bw)+')('+fmt(sh.d)+')/1000',value:sh.Vc,unit:'kip',ref:cRef('ACI Table 22.5.5.1(c)')}));
     cs.push(cS({id:'VcMax',label:'Upper limit on V_c (the same √f′c as the row)',sym:'V_{c,max}',eq:&quot;5\\lambda\\sqrt{f'_c}\\,b_w d&quot;,sub:'5('+fmt(S.mat.lambda,2)+')'+(sh.rtVc<sqrtfc_psi(fc)-1e-9?'(100)':'\\sqrt{'+fmt(fc*1000,0)+'}')+'('+fmt(bw)+')('+fmt(sh.d)+')/1000',value:sh.VcMax,unit:'kip',ref:cRef('ACI 22.5.5.1.1')}),
-      cS({id:'VcUse',label:'V_c used',sym:'V_{c}',eq:'\\min(V_c,\;V_{c,max})',sub:'\\min('+fmt(sh.Vc_row)+',\;'+fmt(sh.VcMax)+')',value:sh.Vc,unit:'kip'}));   /* CBSZ */
+      cS({id:'VcUse',label:'V_c used',sym:'V_{c}',eq:'\\min(V_c,\\;V_{c,max})',sub:'\\min('+fmt(sh.Vc_row)+',\\;'+fmt(sh.VcMax)+')',value:sh.Vc,unit:'kip'}));   /* CBSZ */
     T.push({title:'Concrete contribution',ref:cRef('ACI 22.5.5.1'),steps:cs});
     if(S.stir.present) T.push({title:'Transverse reinforcement contribution',ref:cRef('ACI 22.5.10.5.3, 22.5.1.2'),steps:[
       cS({id:'Vs',label:'Shear strength provided by the stirrups',sym:'V_{s}',eq:'\\dfrac{A_v f_{yt} d}{s}',sub:'\\dfrac{('+fmt(sh.Av)+')('+fmt(fyt)+')('+fmt(sh.d)+')}{'+fmt(sh.s)+'}',value:sh.Vs,unit:'kip',ref:cRef('ACI Eq. 22.5.10.5.3')}),
@@ -5863,7 +5882,7 @@ CBDC.coll=lsGet(CBDC.key)==='1';
 const CBDC_ST={pass:'PASS',fail:'FAIL',na:'N/A'};
 /* the condition a detailing check (or the torsion cross-section limit) states when it is not satisfied */
 const CBDC_COND={dCover:'c_c < c_c,req',dSpace:'s_clear < s_min',dLayer:'layer gap < 1 in',dAsMin:'A_s < A_s,min',
-  dEpsMin:'ε_t < ε_ty + 0.003',dStirS:'s > s_max',dAvMin:'A_v/s < (A_v/s)_min',dTorS:'s > s_max (torsion)',
+  dEpsMin:'ε_t < ε_ty + 0.003',dStirS:'s > s_max',dStirLeg:'leg spacing > s_max',dAvMin:'A_v/s < (A_v/s)_min',dTorS:'s > s_max (torsion)',
   dTorAl:'A_ℓ < A_ℓ,min',dTorAlReq:'A_ℓ < A_ℓ,req',dTorAts:'A_t/s < 25b_w/f_yt',dTorAlDist:'spacing > 12 in',dCrack:'s > s_max (crack)',dSkin:'s > s_max (skin)',dSkinA:'A_sk < A_sk,req',dSkinS:'s > s_max (skin)'};   /* CBM3 */
 function cbcDashDC(c){   /* the D/C as the Summary tab prints it (heatTD, CBAZ) */
   if(c.na||c.dcr==null) return '';

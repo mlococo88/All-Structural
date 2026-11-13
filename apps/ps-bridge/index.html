@@ -17,6 +17,7 @@
      Handling, Deck and Rating tabs and their chips. PR 2d-3: the PS-10 hold-down check for AASHTO / RIDOT (engine/holddown.js). PR 2e:
      the Report tab (report/*.js on shared/report.js: every result tab's cards and worked steps, the check summary, the assumptions). PR 2f:
      "From the old app" on the Project tab (engine/legacy.js, ui/legacy.js): the old app's saved designs read (never written) and imported.
+     PR 3a-1: the bridge level, girder types on the girder lines of each span (engine/bridge.js, ui/types.js; PS-8).
      The old Prestressed Bridge Design.html stays the working tool. -->
 <!-- KaTeX for the worked-step equations: the steel app's pinned version and URL (CLAUDE.md §2; used from PR 2b) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
@@ -42,6 +43,7 @@
     'engine/model.js',
     'engine/holddown.js',    // PR 2d-3: the optional hold-down check for AASHTO / RIDOT (PS-10), an engine addition after computeAll (§4)
     'engine/design.js',      // PR 2b: the one girder design and its engine inputs (base + the bridge values, PBD.applyBridge)
+    'engine/bridge.js',      // PR 3a-1: the girder types on the girder lines of each span (PS-8)
     'engine/fields.js',      // PR 2b: every engine input on its input tab (label, unit, tooltip, rule)
     'engine/inputcheck.js',  // PR 2b: the blocking input errors (the steel app's pattern)
     'engine/legacy.js',      // PR 2f: "From the old app": read-only import of the old app's saved designs and Export JSON files
@@ -56,6 +58,7 @@
     'report/data.js',        // PR 2e: the report's results (the page's own result, as the tabs)
     'report/builders.js',    // PR 2e: the report model (adapted copy of apps/steel-bridge/report/builders.js)
     'ui/inputs.js',      // PR 2b: the girder design's input cards
+    'ui/types.js',       // PR 3a-1: the girder types card, the "entered values for" choice, the type and line choice above the output tabs
     'ui/legacy.js',      // PR 2f: the Project tab's "From the old app" card and the import summary
     'ui/inputcheck.js',  // PR 2b: the input errors on the page (copy of apps/steel-bridge/ui/inputcheck.js)
     'ui/vizkit.js',      // PR 2b-2: the steel graphic style (copy of apps/steel-bridge/ui/vizkit.js)
@@ -235,6 +238,14 @@
   @media print{#sbSplit{display:none!important}}
   /* this app (PR 1) */
   .ph{border:1px dashed var(--slate-400);border-radius:6px;background:var(--slate-50);padding:8px 10px;margin:10px 0;font-family:var(--font-ui);font-size:9pt;color:#475569;}
+  /* this app (PR 3a-1): girder types (ui/types.js) */
+  .tyScope,.tyOut{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0;padding:6px 8px;border:1px solid var(--color-border);border-radius:6px;background:var(--slate-100);font-family:var(--font-ui);font-size:9pt;}
+  .tyScope.on{background:#FEF9C3;border-color:#EAB308;} .tyScope .note{flex-basis:100%;margin:0;}
+  .tyMark{font-family:var(--font-ui);font-size:8pt;font-weight:600;color:#A16207;margin-left:6px;text-transform:none;letter-spacing:0;} .tyMark.base{color:#64748b;font-weight:400;}
+  .tySpan{margin:8px 0 4px;font-family:var(--font-ui);font-size:9.5pt;} .tyRow{border:1px solid var(--color-border);border-radius:5px;padding:5px 7px;margin:4px 0;} .tyRow.tyShown{background:#EFF6FF;border-color:#93C5FD;}
+  .tyHead{display:flex;flex-wrap:wrap;align-items:center;gap:6px;} .tyHead input[type=text]{width:130px;} .tyLines{display:flex;flex-wrap:wrap;gap:2px 8px;font-family:var(--font-ui);font-size:9pt;}
+  .tyLn{display:inline-flex;align-items:center;gap:2px;white-space:nowrap;} .tyLn.ext{font-weight:600;} .tyLn input{margin:0;}
+  .tyAct{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin-top:4px;} .tyAct .note{flex:1 1 180px;margin:0;}
   .ph b{color:var(--color-primary);} .ph ul{margin:4px 0 0;padding-left:18px;}
   .devBadge{display:inline-block;font-family:var(--font-ui);font-size:8pt;font-weight:700;letter-spacing:.04em;padding:1px 6px;border-radius:3px;background:#FDE68A;color:#78350F;margin-left:6px;vertical-align:2px;}
   input.wide{width:180px;}
@@ -296,7 +307,7 @@
      autosaved to psb2.project.current on every change; the input tabs on the left, the output tabs on the right; the page's tab choices in
      psb2.ui. Only the Project, Bridge layout and Cross-section inputs of schema v1 are editable; every other tab is a placeholder naming
      what it will hold and the PR that brings it (docs/ps-bridge-plan.md §2.2, §2.3, §5). Nothing is calculated. */
-  const M = window.PSBModel;
+  const M = window.PSBModel, BR = window.PSBBridge, TY = window.PSBTypesUI;
   const $ = id => document.getElementById(id), esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const store = (() => { try { const k = '__psb2_probe'; localStorage.setItem(k, '1'); localStorage.removeItem(k); return localStorage; } catch (e) { return null; } })();
   const memStore = { getItem: () => null, setItem: () => {}, removeItem: () => {} }, LS = store || memStore;
@@ -326,8 +337,12 @@
   const ph = (title, pr, items) => `<div class="ph"><b>${title}</b> <span class="devBadge">PR ${pr}</span><ul>${items.map(t => `<li>${t}</li>`).join('')}</ul></div>`;
   const fmt = (x, d) => (typeof x === 'number' && isFinite(x)) ? x.toFixed(d) : '—';
 
+  /* PR 3a-1: the inputs the Girders & strands, Materials and Loads tabs show: the base design, or (ui.scope = a girder type) that type's own
+     inputs (the base with its overrides; edits become its overrides, engine/bridge.js setOvr) */
+  const scopeK = () => TY.scopeOf(P, ui);
+  const viewOf = k => k >= 0 ? Object.assign({}, P, { base: BR.effBase(P, k) }) : P;
   function panes() {
-    const nS = P.spans.lengths.length, off = M.girderOffsets(P), deckW = off[off.length - 1] + (+P.xs.ohR || 0);
+    const nS = P.spans.lengths.length, off = M.girderOffsets(P), deckW = off[off.length - 1] + (+P.xs.ohR || 0), sk = scopeK(), V = viewOf(sk);
     return {
       proj: card('Save and open', `<div class="fRow"><button type="button" id="bExport" title="Save the open project as a .json file">Export JSON</button><button type="button" id="bImport" title="Open a PS Bridge (.psb2.json) project file">Import JSON</button><button type="button" id="bNew" title="Start a new project (export the open one first to keep it)">New</button></div>
           <p class="note">The open project is kept in this browser automatically. The saved-projects list (Save, Save as…, Saved projects…) comes in a later PR. Import JSON also opens an old-app Export JSON file (as "From the old app" below).</p>`)
@@ -343,15 +358,15 @@
         + IN.cards('layout', P)
         + ph('Plan', '3a', ['the plan of the girders and supports']),
       xsec: card('Girders', `${num('xs.nb', 'Number of girders', '')}${list('xs.bays', 'Girder spacings (bays)', 'ft')}${num('xs.ohL', 'Left overhang', 'ft')}${num('xs.ohR', 'Right overhang', 'ft')}
-          <p class="note">Bays left to right (${Math.max(0, (P.xs.nb | 0) - 1)} values). Unequal bays can be entered (PS-9); the one girder design of PR 2b needs equal bays (unequal from PR 3a). Overhangs from the exterior girder centreline. Deck width ${fmt(deckW, 2)} ft.</p>`)
+          <p class="note">Bays left to right (${Math.max(0, (P.xs.nb | 0) - 1)} values). Unequal bays can be entered (PS-9); the girder designs need equal bays until PR 3a-2. Overhangs from the exterior girder centreline. Deck width ${fmt(deckW, 2)} ft. A change of the girder count re-assigns the girder types' lines (the outer lines keep the exterior types; a notice lists each change, with Undo).</p>`)
         + IN.cards('xsec', P)
         + ph('Barriers, sidewalks and dead-load distribution', '3a', ['DC2 and DW to each girder by the Steel Bridge app\'s method, with unequal bays (PS-9; a calculation change against the old app, with §4 callouts)']),
-      gird: IN.cards('gird', P)
-        + '<section class="sec"><div class="secHead">Strand pattern</div><div class="secBody" id="gfx_strands_in"><p class="note">Shown when the inputs have no error.</p></div></section>'
-        + ph('Girder groups', '3a', ['the same shape for every girder of a span; interior and exterior design per span, optional per-girder override (PS-8, PR 3a)', 'girder library from the standard sheets (NEBT, NEDBT, NEXT, boxes): PR 4, waits for the sheets (PS-2)']),
-      mat: IN.cards('mat', P),
+      gird: TY.card(P, ui) + TY.shownCard(P) + TY.scopeBar(P, ui, 'gird') + IN.cards('gird', V)
+        + `<section class="sec"><div class="secHead">Strand pattern${sk >= 0 ? ` of ${esc(P.types[sk].label)}` : ''}</div><div class="secBody" id="gfx_strands_in"><p class="note">Shown when the inputs have no error.</p></div></section>`
+        + ph('Girder library', '4', ['girder library from the standard sheets (NEBT, NEDBT, NEXT, boxes): PR 4, waits for the sheets (PS-2)']),
+      mat: TY.scopeBar(P, ui, 'mat') + IN.cards('mat', V),
       dd: IN.cards('dd', P),
-      loads: IN.cards('loads', P),
+      loads: TY.scopeBar(P, ui, 'loads') + IN.cards('loads', V),
       own: IN.cards('own', P, ownRes()),
       ad: ph('Auto design', '5', ['waits for the girder library (PR 4, PS-2)', 'strands in symmetric pairs (PS-12) → draping, hold-down 0.33–0.45 L (PS-5) → f′<sub>ci</sub> / f′<sub>c</sub> in 0.5 ksi steps (PS-11)', 'locked fields never changed; Apply with Undo'])
     };
@@ -363,8 +378,9 @@
     const p = panes();
     $('inPanes').innerHTML = TABS.map(([k]) => `<div class="pane" data-pane="${k}"${ui.itab === k ? '' : ' hidden'}>${p[k]}</div>`).join('');
     markErrors();
+    try { TY.mark($('inPanes'), P, ui); } catch (e) { console.warn(e); }   // PR 3a-1: the fields a girder type has of its own
     // PR 2c-1: the strand-pattern graphic of the design (the engine's strand system), on the Girders & strands tab, when the inputs have no error
-    if (ui.itab === 'gird' && !errs.length && window.PSBStrandGfx) { const rc = result(); if (!rc.R.error) { try { window.PSBStrandGfx.mount($('gfx_strands_in'), { R: rc.R, inp: rc.inp }, { id: 'inStrandFig', title: 'Strand pattern of the design girder', compact: true }); } catch (e) { console.warn(e); } } }
+    if (ui.itab === 'gird' && !errs.length && window.PSBStrandGfx) { const rc = scopeK() >= 0 ? scopeResult() : result(); if (rc && !rc.R.error) { try { window.PSBStrandGfx.mount($('gfx_strands_in'), { R: rc.R, inp: rc.inp }, { id: 'inStrandFig', title: 'Strand pattern of the design girder', compact: true }); } catch (e) { console.warn(e); } } }
   }
   /* the blocking input errors (engine/inputcheck.js collect: the model, the design girder, every field of the input cards): their fields
      marked with their message (ui/inputcheck.js, the steel app's pattern), counted on their input tab; no results while one exists */
@@ -372,13 +388,14 @@
   const icO = () => ({ P, ui, tabOf });
   function markErrors() {
     errs = window.PSBInputCheck.collect(P).errors;
-    window.PSBInputCheckUI.mark(errs, icO());
+    const sc = (scopeK() >= 0 && P.types[scopeK()].id) || '';   // PR 3a-1: a girder type's own errors are marked in its scope only
+    window.PSBInputCheckUI.mark(errs.filter(e => !e.scope || e.scope === sc), icO());
     const cnt = {};
     errs.forEach(e => { const t = tabOf(e.path); cnt[t] = (cnt[t] || 0) + 1; });
     document.querySelectorAll('#inTabs [data-itab]').forEach(b => { const n = cnt[b.dataset.itab] || 0, d = b.querySelector('.inDot');
       b.classList.toggle('has-err', n > 0); if (d) d.textContent = n ? String(n) : ''; if (n) b.title = `${n} input${n > 1 ? 's' : ''} to fix on this tab`; else b.removeAttribute('title'); });
   }
-  function gotoErr(i) { const e = errs[i]; if (!e) return; ui.itab = tabOf(e.path); saveUi(); drawInputs(); window.PSBInputCheckUI.focus(e, icO()); }
+  function gotoErr(i) { const e = errs[i]; if (!e) return; ui.itab = tabOf(e.path); if (/^base\./.test(e.path) && TY.SCOPED.includes(ui.itab)) ui.scope = e.scope || ''; saveUi(); drawInputs(); window.PSBInputCheckUI.focus(e, icO()); }
   const parseList = v => String(v).split(/[,;\s]+/).filter(Boolean).map(Number);
   /* resize(a, n, fill): a list kept at n values when the span or girder count changes (new values: the last one, else fill) */
   const resize = (a, n, fill) => { const b = (a || []).slice(0, Math.max(0, n)); while (b.length < n) b.push(b.length ? b[b.length - 1] : fill); return b; };
@@ -386,29 +403,46 @@
   const IN = window.PSBInputsUI, LGUI = window.PSBLegacyUI;
   /* PR 2f: "From the old app" (ui/legacy.js): an import replaces the open project, as Import JSON does (asked first there) */
   const lgCtx = { store: LS, gotoOut: t => gotoOut(t), pickFile: () => $('fImport').click(),
-    replace: Q => { P = Q; autosave = true; ui.itab = 'proj'; saveUi(); changed(); } };
+    replace: Q => { BR.migrate(Q); P = Q; autosave = true; ui.itab = 'proj'; ui.scope = ''; saveUi(); changed(); } };
+  /* typesDone(r): a girder-type control was handled (ui/types.js): redraw (ui only) or save and redraw, with its message */
+  function typesDone(r) { if (!r || r.cancel) return; if (r.ui && !r.note) { saveUi(); if (!r.keep) drawInputs(); return; } saveUi(); changed(); if (r.note) toast(r.note); }
   $('inPanes').addEventListener('change', e => {
-    const el = e.target, path = el.dataset.path, k = el.dataset.kind; if (!path) return;
-    if (IN.onChange(el, P)) { changed(); const n = IN.takeNote(); if (n) toast(n); return; }
-    const v = el.value;
+    const el = e.target;
+    if (el.dataset.ty) { typesDone(TY.onChange(el, P, ui)); return; }   // PR 3a-1
+    const path = el.dataset.path, k = el.dataset.kind; if (!path) return;
+    // PR 3a-1: in a girder type's scope the edit goes to the type's own inputs (its overrides of the base design)
+    const sk = TY.SCOPED.includes(ui.itab) ? scopeK() : -1, V = viewOf(sk);
+    if (IN.onChange(el, V)) { if (sk >= 0) BR.setOvr(P, sk, V.base); changed(); const n = IN.takeNote(); if (n) toast(n); return; }
+    const v = el.value, nb0 = P.xs.nb, LT0 = BR.hasTypes(P) ? BR.snapshot(P) : null, undo = JSON.stringify(P);
     if (k === 'num') set(path, v === '' ? NaN : Number(v));
     else if (k === 'list') set(path, parseList(v));
     else set(path, v);
     if (path === 'spans.lengths' && P.spans.lengths.length) P.xs.skews = resize(P.xs.skews, P.spans.lengths.length + 1, 0);   // one skew per support
     if (path === 'xs.nb' && Number.isInteger(P.xs.nb) && P.xs.nb >= 1) P.xs.bays = resize(P.xs.bays, P.xs.nb - 1, 9);         // one spacing per bay
+    // PR 3a-1: the girder types follow a girder count change (the steel app's SB-14 rule, engine/bridge.js renumber) and a span count
+    // change (a new span: copies of the types of the span before it; engine/bridge.js syncSpans), with a notice (and Undo)
+    let tyNote = '';
+    if (LT0 && path === 'xs.nb' && Number.isInteger(P.xs.nb) && P.xs.nb >= 1 && P.xs.nb !== nb0) {
+      const ch = BR.renumber(P, nb0, LT0);
+      if (ch.length) tyNote = `Girder count ${nb0} → ${P.xs.nb}: the girder types' lines were re-assigned (the outer lines keep the exterior types): ${ch.map(q => `S${q.s} G${q.g}: ${q.from || 'no type'} → ${q.to || 'removed'}`).join('; ')}.`;
+    }
+    if (LT0 && path === 'spans.lengths') { const ch = BR.syncSpans(P); if (ch.length) tyNote = ch.map(q => `Span ${q.s}: new girder types ${q.labels.join(', ')} (copies of the span before it).`).join(' '); }
     // the design girder and span follow a smaller girder or span count (as the old app's bridge bar did)
     if (P.design && Number.isInteger(P.xs.nb) && P.xs.nb >= 1 && P.design.g > P.xs.nb) P.design.g = P.xs.nb;
     if (P.design && P.spans.lengths.length && P.design.s > P.spans.lengths.length) P.design.s = P.spans.lengths.length;
     changed();
+    if (tyNote) toast(tyNote, undo);
   });
   $('inPanes').addEventListener('click', e => {
     const t = e.target, go = t.closest('[data-goin]');
     if (go) { e.preventDefault(); ui.itab = go.dataset.goin; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; return; }
     if (LGUI.onClick(e, lgCtx)) return;
-    if (IN.onClick(e, P)) { changed(); return; }
+    if (t.closest('[data-ty]') && !t.closest('select, input')) { typesDone(TY.onClick(e, P, ui)); return; }   // PR 3a-1
+    { const sk = TY.SCOPED.includes(ui.itab) ? scopeK() : -1, V = viewOf(sk);
+      if (IN.onClick(e, V)) { if (sk >= 0) BR.setOvr(P, sk, V.base); changed(); return; } }
     if (t.id === 'bExport') exportFile(P);
     else if (t.id === 'bImport') $('fImport').click();
-    else if (t.id === 'bNew') { if (confirm('Start a new project? The open project is replaced here (export it first to keep it).')) { P = M.defaultProject(); autosave = true; changed(); } }
+    else if (t.id === 'bNew') { if (confirm('Start a new project? The open project is replaced here (export it first to keep it).')) { P = M.newProject(); ui.scope = ''; autosave = true; saveUi(); changed(); } }
   });
   function changed() {
     if (autosave) autoFailed = !M.save(LS, P);
@@ -434,6 +468,15 @@
       handling: window.PSBWorkedHDR.handling(RC.inp, RC.R), deck: window.PSBWorkedHDR.deck(RC.inp, RC.R), rating: window.PSBWorkedHDR.rating(RC.inp, RC.R) }; } catch (e) { RC.R = { error: 'Worked steps: ' + e.message }; } }
     return RC;
   }
+  /* PR 3a-1: the engine result of any girder type × line (computeAll + the PS-10 check), kept by its inputs (the last 300) */
+  const CELLS = new Map();
+  function cellR(inp) {
+    const key = JSON.stringify(inp); let R = CELLS.get(key);
+    if (!R) { try { R = window.PSBHoldDown.compute(JSON.parse(key)); } catch (e) { R = { error: e.message }; } CELLS.set(key, R); if (CELLS.size > 300) CELLS.delete(CELLS.keys().next().value); }
+    return R;
+  }
+  /* the result of the girder type whose inputs are shown (ui.scope), on its first line: the strand pattern of the Girders & strands tab */
+  function scopeResult() { const k = scopeK(), L = k >= 0 ? BR.typeLines(P, k) : []; if (!L.length) return null; const inp = window.PSBDesign.cellInputs(P, k, L[0]); return { inp, R: cellR(inp) }; }
   const TABUI = { sec: () => window.PSBUiSection, lds: () => window.PSBUiLoads, an: () => window.PSBUiAnalysis, loss: () => window.PSBUiLosses, str: () => window.PSBUiStresses, flex: () => window.PSBUiFlexure, shear: () => window.PSBUiShear,
     end: () => window.PSBUiEndZone, camb: () => window.PSBUiCamber, hand: () => window.PSBUiHandling, deck: () => window.PSBUiDeck, rt: () => window.PSBUiRating };
   let ctxOut = null;
@@ -442,21 +485,24 @@
     let h = '';
     if (L.note) h += `<div class="alert err">${esc(L.note)}</div>`;
     if (errs.length) h += window.PSBInputCheckUI.blocked(errs, icO());
-    h += `<div class="alert">In development (PR 2e): Section properties, Loads &amp; LLDF, Analysis, Losses, Stresses, Flexure, Shear, End zone &amp; hold-down, Camber &amp; deflection, Handling, Deck and Rating show the design girder's results, and the Report all of them. Use the old <a href="../../Prestressed%20Bridge%20Design.html">Prestressed Bridge Design</a> for design work.</div>`;
+    h += `<div class="alert">In development (PR 3a-1): Section properties, Loads &amp; LLDF, Analysis, Losses, Stresses, Flexure, Shear, End zone &amp; hold-down, Camber &amp; deflection, Handling, Deck and Rating show the results of the girder type and line chosen above them, and the Report all of them. Use the old <a href="../../Prestressed%20Bridge%20Design.html">Prestressed Bridge Design</a> for design work.</div>`;
     const name = (OTABS.find(t => t[0] === ui.otab) || [, ''])[1];
     let rc = null; ctxOut = null;
     if (!errs.length) { rc = result(); if (rc.R.error) h += `<div class="alert err" role="alert"><b>The engine could not compute this design:</b> ${esc(rc.R.error)}. Results not shown.</div>`; }
     const ok = rc && !rc.R.error;
+    if (TABUI[ui.otab] || ui.otab === 'rpt') h += TY.outBar(P);   // PR 3a-1: the girder type and line shown
     if (TABUI[ui.otab]) {
       if (ok) { ctxOut = { P, inp: rc.inp, R: rc.R, W: rc.W, ui, redraw: () => { saveUi(); drawOut(); } };
         const d = window.PSBDesign.sel(P);
-        h += `<p class="note">Design girder ${esc(rc.inp.proj.girderId)}, span ${d.s} (L = ${fmt(rc.R.L, 2)} ft): <a href="#" data-goin="gird">Girders &amp; strands tab</a>.</p>` + TABUI[ui.otab]().output(ctxOut); }
+        const sh = BR.hasTypes(P) ? BR.shown(P) : null;
+        h += `<p class="note">${sh ? `Girder type ${esc(P.types[sh.k].label)} on ` : 'Design girder '}${esc(rc.inp.proj.girderId)}, span ${d.s} (L = ${fmt(rc.R.L, 2)} ft): <a href="#" data-goin="gird">Girders &amp; strands tab</a>.</p>` + TABUI[ui.otab]().output(ctxOut); }
     } else if (ui.otab === 'sum') {
       const off = M.girderOffsets(P);
       h += errs.length ? '' : card('Project', `<div class="kv"><div><span>Project</span><span>${esc(P.project.name)}</span></div><div><span>Spans</span><span>${P.spans.lengths.map(x => fmt(x, 1)).join(' – ')} ft</span></div>
           <div><span>Continuity</span><span>${P.spans.continuity === 'composite' ? 'made continuous for composite loads' : 'simple spans'}</span></div><div><span>Girders</span><span>${P.xs.nb}</span></div>
-          <div><span>Bays</span><span>${P.xs.bays.map(x => fmt(x, 2)).join(', ')} ft</span></div><div><span>Girder lines from the left deck edge</span><span>${off.map(x => fmt(x, 2)).join(', ')} ft</span></div></div>
-          <p class="note">Entered values.</p>`)
+          <div><span>Bays</span><span>${P.xs.bays.map(x => fmt(x, 2)).join(', ')} ft</span></div><div><span>Girder lines from the left deck edge</span><span>${off.map(x => fmt(x, 2)).join(', ')} ft</span></div>
+          ${BR.hasTypes(P) ? P.types.map((t, k) => `<div><span>Girder type ${esc(t.label)} (span ${t.span})</span><span>${BR.typeLines(P, k).map(g => 'G' + g).join(', ') || 'no line'}</span></div>`).join('') : ''}</div>
+          <p class="note">Entered values.${BR.hasTypes(P) && BR.unassigned(P).length ? ` <b style="color:var(--fail)">Not checked (no girder type): ${BR.unassigned(P).map(q => `G${q.g}/S${q.s}`).join(', ')}</b> (<a href="#" data-goin="gird">Girder types</a>).` : ''}</p>`)
         + (ok ? card(`Design girder: ${esc(rc.inp.proj.girderId)}, span ${window.PSBDesign.sel(P).s}`, `<div class="kv"><div><span>Section</span><span>${esc(rc.inp.girder)}, ${rc.R.ss.Ntot} strands</span></div><div><span>Composite I<sub>c</sub></span><span>${fmt(rc.R.cp.Ic, 0)} in⁴ <a href="#" data-gotab="sec">Section properties</a></span></div>
             <div><span>DF<sub>M</sub> / DF<sub>V</sub></span><span>${fmt(rc.R.dfm, 3)} / ${fmt(rc.R.dfv, 3)} <a href="#" data-gotab="lds">Loads &amp; LLDF</a></span></div><div><span>M<sub>u</sub> at midspan</span><span>${fmt(rc.R.diagrams.reduce((b, r) => Math.abs(r.x - rc.R.L / 2) < Math.abs(b.x - rc.R.L / 2) ? r : b).M_StrI_pos, 0)} kip-ft <a href="#" data-gotab="an">Analysis</a></span></div></div>
             ${rc.R.warns.length ? `<div class="alert"><b>Design warnings of the engine (${rc.R.warns.length})</b><ul>${rc.R.warns.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>` : '<p class="note">No design warnings.</p>'}`) : '')
@@ -483,10 +529,13 @@
     const gt = e.target.closest('[data-gotab]'); if (gt) { e.preventDefault(); gotoOut(gt.dataset.gotab); const h = gt.getAttribute('href') || '';
       if (/^#st-/.test(h)) { const el = window.SharedSteps.reveal($('out'), h.slice(4)); if (el) el.scrollIntoView({ block: 'center' }); } }
   });
-  $('out').addEventListener('change', e => { if (Object.values(TABUI).some(f => f().onOutChange && f().onOutChange(e, ui))) { saveUi(); drawOut(); } });
+  $('out').addEventListener('change', e => { if (e.target.dataset.ty) { typesDone(TY.onChange(e.target, P, ui)); return; }   // PR 3a-1: the type and line shown
+    if (Object.values(TABUI).some(f => f().onOutChange && f().onOutChange(e, ui))) { saveUi(); drawOut(); } });
 
-  /* toast(text): a message (the inputs an owner change set), closed by its button */
-  function toast(text) { const t = $('toast'); t.className = ''; t.innerHTML = `<div>${esc(text)}</div><div class="tBtns"><button type="button" id="tClose">Close</button></div>`; t.hidden = false; $('tClose').onclick = () => { t.hidden = true; }; }
+  /* toast(text, undo): a message (the inputs an owner change set; PR 3a-1: the girder types re-assigned), closed by its button; undo (the
+     project text before the change) adds an Undo button that puts it back */
+  function toast(text, undo) { const t = $('toast'); t.className = ''; t.innerHTML = `<div>${esc(text)}</div><div class="tBtns">${undo ? '<button type="button" id="tUndo">Undo</button>' : ''}<button type="button" id="tClose">Close</button></div>`; t.hidden = false; $('tClose').onclick = () => { t.hidden = true; };
+    if (undo) $('tUndo').onclick = () => { t.hidden = true; P = JSON.parse(undo); changed(); }; }
   /* ---------- file ---------- */
   function exportFile(Q) {
     const a = document.createElement('a'), name = (Q.project.name || 'ps-bridge').replace(/[^\w.-]+/g, '_');
