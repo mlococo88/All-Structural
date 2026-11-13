@@ -9717,3 +9717,45 @@ index 337abc8..4e020a7 100644
 +  window.SBDFramingUI = { ensure, braceOf, setBrace, inputs, windCard, layoutPlan, onChange, onClick, render, build, plan, TOPICS, groups, isDia, ckHead, diaSvg, ckRec, recStep, ckNotes, CONN_HINT };
  })();
 ```
+
+## 2026-11-13 — PR: claude/sb-dia-shape-prefill (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Diaphragm Shape set to the governing group's shape when the per-group shapes are prefilled (SBSP; Decision (pending engineer review): display / input consistency; the groups without an entry follow it)
+- **Problem:** turning the rolled W (or channel) diaphragm on prefills the shape of each bay depth group (SB-24, `ui/framing.js setBrace` → `grpFill`), but the main Shape select (`crossframes.dia.shape`) kept its old value, e.g. W21x44 of a new project beside groups prefilled W36x135. Every group without an entry (no section of the list fits it, SB-25) takes Shape, so it was checked with that old value.
+- **Decision (pending engineer review):** at the moment of the prefill only, Shape is set to the governing group's shape: of the groups prefilled, the one with the largest least depth d_req (CF10's `TR.grp[].req`), the first in bay order on ties (the group of the governing bay of the depth check). A loaded project, a later edit of a group select or of Shape, and the setBrace paths without a prefill (one depth group, no fitting section of the family) are unchanged.
+- **Change (`ui/framing.js`):** new `govKey(TR, o)`; `grpFill(P, q, v)`: after `q.grp = o`, `q.shape = o[govKey(R.TR, o)]`.
+- **Saved data (§5):** none (the same fields, written by the user's choice as before; no key or format change; nothing rewritten on load).
+- **Governing provision:** none changed. This is an input default at the moment of the user's choice. The groups without an entry are then checked (CFD, CFE, DC1, drawings) with the new Shape.
+- **Check case (new projects, Rolled W diaphragm chosen; default clearance 2 in, SB-25):**
+  - Three types 30 / 36 / 42: prefill `{ '2': 'W36x135' }`. Shape before W21x44, after **W36x135**.
+    - Groups G1–G2, G5–G6 and G2–G3, G4–G5 have no entry. Before they were W21x44: depth warning 1.372 / 1.590, fit OK 0.739 / 0.609. After they are W36x135: depth OK 0.798 / 0.924, fit **Fail** 1.271 / 1.047.
+    - CFD Fail before and after (the bolted connection of the default inputs fails in every case).
+  - With c = 0 (prefill `{ '0,4': 'W30x99', '1,3': 'W36x135', '2': 'W36x135' }`): Shape W21x44 → W36x135 (G2–G3, G4–G5 and G3–G4 tie at 32.91 in; the first in bay order). Every group has an entry, so the checks are unchanged. DC1 is unchanged too: `X.ab` now lists only the bays whose group shape differs from Shape (the W30x99 bays), with the same weights.
+  - Exterior 30 / Interior 36: prefill `{ '1,2': 'W30x99' }`; Shape W21x44 → **W30x99**. The exterior bays (no entry) go from W21x44 (depth warning 1.372, fit OK) to W30x99 (depth OK 0.957, fit **Fail** 1.061).
+  - CTDOT three types 24 / 30 / 30: prefill `{ '1,2,3': 'W27x84' }`; Shape W21x44 → **W27x84**. The exterior bays go from depth warning 1.155 to depth OK 0.896 and fit **Fail** 1.214.
+  - No change where nothing is prefilled: one depth group (Interior 30 / Exterior 36), equal depths, the built-in project, channel diaphragms (no channel deep enough in these cases).
+- **How verified:** new tests/engine/sb-dia-shape-prefill.test.mjs (the cases above; no prefill, a loaded project and a later group edit unchanged). Updated tests/engine/sb-dia-groups.test.mjs (three-type prefill: Shape W36x135; `X.ab` lists only the bays differing from Shape; a stale or invalid entry now falls back to W36x135). Engine subsets and smoke tests: see the PR.
+- **Other copies:** none.
+- **Open items (reported):** when no section of the list fits a group (SB-25), that group still takes Shape, which here is a section that fails its fit (or, before, one that failed its depth). Whether such a group should be flagged on the input card, or Shape left alone in that case, is the engineer's call.
+- **Before / after (exact):**
+```diff
+diff --git a/apps/steel-bridge/ui/framing.js b/apps/steel-bridge/ui/framing.js
+index 4e020a7..58cd4b0 100644
+--- a/apps/steel-bridge/ui/framing.js
++++ b/apps/steel-bridge/ui/framing.js
+@@ -103,8 +103,15 @@
+     GR.forEach(g => { const k = CF.grpKey(g), t = TR.grp ? TR.grp.find(x => x.bays.join(',') === k) : null, sec = t ? (br === 'ch' ? t.ch : t.w) : null, one = br === 'ch' ? TR.ch : TR.w;
+       if (t ? sec : one) out[k] = t ? sec[0] : one; }); out.TR = TR; return out;
+   }
++  /* SBSP (2026-11-13; Decision pending engineer review: display / input consistency): when grpFill prefills the shapes per group, the
++     main Shape (dia.shape, which every group without an entry takes) is set at that moment to the shape of the governing group: of the
++     groups prefilled, the one with the largest least depth d_req (CF10's TR.grp req; the first in bay order on ties: the group of the
++     governing bay of the depth check). Before, Shape kept its old value (e.g. W21x44 of a new project) beside the prefilled groups.
++     Only on the prefill (setBrace); a loaded project or a later edit is never changed. govKey(TR, o): that group's key, null if none. */
++  const govKey = (TR, o) => { let best = null; (TR.grp || []).forEach(g => { const k = g.bays.join(','); if (o[k] && (!best || g.req > best.req + 1e-9)) best = { k, req: g.req }; }); return best ? best.k : null; };
+   function grpFill(P, q, v) {
+-    const R = grpRec(P, v); if (!R.TR || !R.TR.grp) return; const o = {}; Object.keys(R).forEach(k => { if (k !== 'TR') o[k] = R[k]; }); if (Object.keys(o).length) q.grp = o;
++    const R = grpRec(P, v); if (!R.TR || !R.TR.grp) return; const o = {}; Object.keys(R).forEach(k => { if (k !== 'TR') o[k] = R[k]; });
++    if (Object.keys(o).length) { q.grp = o; const k = govKey(R.TR, o); if (k) q.shape = o[k]; }   // SBSP: Shape = the governing group's shape
+   }
+   /* grpCard(P, C, br): the inputs of the shape per bay depth group (two or more groups; '' with one): a select per group, "Same as Shape above"
+      (no entry) or a shape of the family, the one CF10 recommends marked */
+```
