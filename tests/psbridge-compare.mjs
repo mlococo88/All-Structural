@@ -37,6 +37,8 @@
 //     inputs must equal the old inputs (but the title block's girder label and the PS-10 box of this app).
 //     --control with --import also puts one changed input (f′c + 0.1 ksi) in the first design's old data while the old app computes the
 //     unchanged inputs: the run must report differences.
+//     PR 3a-4 (PS-17): the import's restore notice must be the expected one (autosave / shared: the one more stored design 'G1/S1x' not
+//     restored, not a girder × span cell; older / file: none); it is then closed (it lies over the tab bar).
 //   PR 2d-3 (PS-10): the new page's results are computeAll + engine/holddown.js (PSBHoldDown.compute). The values of that addition (paths
 //   ps10.* and its check) have no counterpart in the old app: they are compared with hand values worked here from the inputs and the old
 //   app's own f_pbt, A_b and w_sw (F_hd = 2 n_h f_pbt A_b sin α, α = atan((y_end − y_mid)/(12 frac L)), W = w_sw (L + 2 e_end/12), limit f W),
@@ -62,6 +64,16 @@ let nImp = 0, nImpKeys = 0; const impNotes = [];
 const SEED = { 'psbeam.inputs.v1': '{"girder":"PCI BT-72","L":118}', 'psbeam.ui.v1': '{"tab":"losses"}' };
 let fails = 0, errors = 0;
 const log = s => console.log(s);
+// scanList(p): "Find the old app's designs" clicked until its list (or its "none found") is drawn. 2026-11-13 (PR 3a-4): a run now and then
+// timed out waiting for the list's radio after one click (on main too, not reproduced in 4 reruns): the click is read only (the list is read
+// again on each click), so a click that drew nothing is repeated, at most 3 times, and said in the log; the list itself is checked as before.
+async function scanList(p, name) {
+  for (let t = 1; ; t++) {
+    await p.click('[data-lg="scan"]');
+    try { await p.waitForSelector('#lgListHost #lgList, #lgListHost #lgNone', { timeout: 10000 }); if (t > 1) log(`note ${name}: the list was drawn on click ${t}`); return; }
+    catch (e) { if (t >= 3) throw e; }
+  }
+}
 
 // the projects: the new page builds them (PSBModel.defaultProject of the page), from the same TAB_CASES source
 const caseSrc = fs.readFileSync(path.join(REPO, 'tests/engine/psbridge-tab-cases.mjs'), 'utf8').replace(/^export const TAB_CASES = /m, 'window.__TAB_CASES = ');
@@ -100,12 +112,17 @@ for (const name of names) {
     await nw.p.reload(); await nw.p.waitForSelector('#tabBar [data-otab]'); await nw.p.waitForTimeout(200);
     await nw.p.click('#inTabs [data-itab="proj"]');
     if (how === 'file') { const f = path.join(TMP, 'old-export.json'); fs.writeFileSync(f, seed.file); await nw.p.click('[data-lg="file"]').catch(() => {}); await nw.p.setInputFiles('#fImport', f); }
-    else { await nw.p.click('[data-lg="scan"]'); const id = { autosave: 'autosave', shared: 'reg:bp_h', older: 'lib:old1' }[how]; await nw.p.check(`input[name="lgPick"][value="${id}"]`); await nw.p.click('[data-lg="imp"]'); }
+    else { await scanList(nw.p, name); const id = { autosave: 'autosave', shared: 'reg:bp_h', older: 'lib:old1' }[how]; await nw.p.check(`input[name="lgPick"][value="${id}"]`); await nw.p.click('[data-lg="imp"]'); }
     await nw.p.waitForSelector('#lgSum', { timeout: 120000 }); await nw.p.waitForTimeout(200);
     const imp = await nw.p.evaluate(o => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, i = window.PSBDesign.inputs(P), changed = Object.keys(o).filter(k => localStorage.getItem(k) !== o[k]);
-      return { res: (document.getElementById('lgRes') || {}).textContent || '', i, changed, src: P.legacy && P.legacy.source.key }; }, seed.o);
+      const t = document.getElementById('toast');
+      return { res: (document.getElementById('lgRes') || {}).textContent || '', i, changed, src: P.legacy && P.legacy.source.key, note: t && !t.hidden ? t.textContent : '' }; }, seed.o);
+    // PR 3a-4 (PS-17): with a bridge model (autosave, shared) the restore notice names the harness's one more stored design 'G1/S1x' as not
+    // restored (not a girder × span cell); without one (older, file) no notice. The notice is read, then closed (it lies over the tab bar).
+    const wantNote = how === 'autosave' || how === 'shared' ? "The old bridge model's other designs were not restored: G1/S1x (not a girder × span cell).Close" : '';
+    if (imp.note) await nw.p.click('#tClose');
     const strip = x => { const y = JSON.parse(JSON.stringify(x)); delete y.proj; if (y.opt) { delete y.opt.hdCheck; delete y.opt.hdFrac; } return y; };
-    impNotes.push({ name, how, ok: /Results: the same as the old app/.test(imp.res), res: imp.res.slice(0, 160), sameInp: JSON.stringify(strip(imp.i)) === JSON.stringify(strip(inp)), changed: imp.changed, ctl });
+    impNotes.push({ name, how, ok: /Results: the same as the old app/.test(imp.res), res: imp.res.slice(0, 160), sameInp: JSON.stringify(strip(imp.i)) === JSON.stringify(strip(inp)), changed: imp.changed, ctl, note: imp.note, wantNote });
     nImpKeys += Object.keys(seed.o).length + (how === 'file' ? 1 : 0);
   }
   const shown = [], steps = []; let ps10 = null, k10 = -1, colOwn = null;
@@ -229,7 +246,8 @@ for (const name of names) {
   total += shown.length; totalSteps += steps.length;
   const per = tabs.map(t => `${t} ${shown.filter(q => q.tab === t).length} values + ${steps.filter(q => q.tab === t).length} steps`).join(', ') + (colOwn ? `, own ${colOwn.ev.length} values (column ${colOwn.F} FAIL + ${colOwn.Pn} PASS)` : '') + (rpt ? `, rpt ${rpt.ev.length} values + ${rpt.st.length} steps (${rpt.nSteps} shown), old report ${nOld} numbers` : '');
   if (imp) { if (!imp.ok) bad.push(`import (${imp.how}): the summary does not say the results are the same: "${imp.res}"`); if (!imp.sameInp) bad.push(`import (${imp.how}): the imported project's engine inputs are not the old inputs`);
-    if (imp.changed.length) bad.push(`import (${imp.how}): old keys changed: ${imp.changed.join(', ')}`); }
+    if (imp.changed.length) bad.push(`import (${imp.how}): old keys changed: ${imp.changed.join(', ')}`);
+    if (imp.note !== imp.wantNote) bad.push(`import (${imp.how}): the restore notice "${imp.note}", expected "${imp.wantNote}"`); }
   if (bad.length) { fails++; log(`DIFF ${name}: ${bad.length} of ${shown.length + steps.length}`); bad.slice(0, 25).forEach(b => log('    ' + b)); }
   else log(`same ${name}${imp ? ` [imported: ${imp.how}]` : ''}: ${per}${same ? '' : ' (note: the old app changed the stored inputs on load; compared on the new app\'s inputs)'}`);
   if (args.verbose && !same) log('    inputs the old app stored: ' + JSON.stringify(o.loaded).slice(0, 400));
