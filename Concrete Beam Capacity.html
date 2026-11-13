@@ -727,17 +727,21 @@ function cbcBuildCombos(svc){
       const sum=a=>terms.reduce((s,x)=>s+x.f*x.s*val(x.k,a),0);
       const r={eq:t.eq,terms,Mu:sum(&quot;M&quot;),Vu:sum(&quot;V&quot;),Tu:sum(&quot;T&quot;),name,merged:[]};
       sig[key]=r; rows.push(r);
-      /* CBOM (2026-11-13, engineer decision CB-7): ACI 318-19 5.3.2, loads not acting at the same time. For each variable load of
-         the row (not D; a non-zero case), the row with that load left out is added where leaving it out increases |M_u| or |V_u|
-         (each checked on its own), right after its full row, named &quot;<full row>, <load> omitted&quot;. Same skipping rule as above. */
-      terms.forEach(x=>{
-        if(x.k===&quot;D&quot;||zero(x.k)) return;
-        const t2=terms.filter(y=>y!==x), s2=a=>t2.reduce((s,y)=>s+y.f*y.s*val(y.k,a),0), M2=s2(&quot;M&quot;), V2=s2(&quot;V&quot;);
+      /* CBOM (2026-11-13, engineer decision CB-7) and CBSS (2026-11-13, CB-8): ACI 318-19 5.3.2, loads not acting at the same time.
+         Every non-empty subset of the row's variable loads (not D; non-zero cases; at most 4, so at most 15 subsets) is left out; the
+         row is added where that increases |M_u| or |V_u| over the full row (each checked on its own), right after its full row, smaller
+         subsets first, named &quot;<full row>, <loads> omitted&quot; (e.g. &quot;…, L and W omitted&quot;). Same skipping rule as above. */
+      const vars=terms.filter(x=>x.k!==&quot;D&quot;&amp;&amp;!zero(x.k)), subs=[];
+      for(let m=1;m<(1<<vars.length);m++) subs.push(vars.filter((x,i)=>m&amp;(1<<i)));
+      subs.sort((p,q)=>p.length-q.length);
+      subs.forEach(om=>{
+        const t2=terms.filter(y=>om.indexOf(y)<0), s2=a=>t2.reduce((s,y)=>s+y.f*y.s*val(y.k,a),0), M2=s2(&quot;M&quot;), V2=s2(&quot;V&quot;);
         const why=[]; if(Math.abs(M2)>Math.abs(r.Mu)+1e-9) why.push(&quot;M&quot;); if(Math.abs(V2)>Math.abs(r.Vu)+1e-9) why.push(&quot;V&quot;);
         if(!why.length) return;
-        const k2=t.eq+&quot;|&quot;+t2.filter(y=>!zero(y.k)).map(y=>y.k+&quot;:&quot;+y.f+&quot;:&quot;+y.s).join(&quot;,&quot;), nm=name+&quot;, &quot;+lab[x.k]+&quot; omitted&quot;;
+        const ls=om.map(x=>lab[x.k]), oTx=ls.length<3?ls.join(&quot; and &quot;):ls.slice(0,-1).join(&quot;, &quot;)+&quot; and &quot;+ls[ls.length-1];
+        const k2=t.eq+&quot;|&quot;+t2.filter(y=>!zero(y.k)).map(y=>y.k+&quot;:&quot;+y.f+&quot;:&quot;+y.s).join(&quot;,&quot;), nm=name+&quot;, &quot;+oTx+&quot; omitted&quot;;
         if(sig[k2]){ sig[k2].merged.push(nm); return; }
-        const o={eq:t.eq,terms:t2,Mu:M2,Vu:V2,Tu:s2(&quot;T&quot;),name:nm,merged:[],omit:x.k,why,of:name,full:{Mu:r.Mu,Vu:r.Vu}};
+        const o={eq:t.eq,terms:t2,Mu:M2,Vu:V2,Tu:s2(&quot;T&quot;),name:nm,merged:[],omit:oTx,omitK:om.map(x=>x.k),why,of:name,full:{Mu:r.Mu,Vu:r.Vu}};
         sig[k2]=o; rows.push(o);
       });
     });
@@ -3099,7 +3103,7 @@ function cbcLdRules(){ const SV=S.svc;
       [&quot;Load factor on L:&quot;,SV.l05?&quot;0.5 in Eqs. (5.3.1c), (5.3.1d) and (5.3.1e), as selected (5.3.3: not for garages, places of public assembly, or L over 100 psf).&quot;:&quot;1.0 in every equation; the 0.5 permitted by 5.3.3 is not taken (conservative).&quot;],
       [&quot;Rows left out:&quot;,&quot;a row is left out only where, once the zero load cases are dropped, an earlier row of the same equation has the same loads, factors and signs (e.g. L_r = S = R = 0 leaves one row of Eq. (5.3.1b)); that row names the alternatives it stands for. Rows of different equations are all kept; identical actions are flagged on the result tabs and worked once.&quot;],
       [&quot;Signs:&quot;,&quot;+M is sagging; V and T are combined with their signs and the checks use |V_u| and |T_u|.&quot;],
-      [&quot;Loads left out (5.3.2):&quot;,&quot;the effect of loads not acting at the same time is investigated: for each variable load of a row (L, L_r, S, R, W, E; D is always present), the row with that load left out is added where that increases |M_u| or |V_u| (each checked on its own). It follows its full row, named “…, L omitted”; one load is left out at a time.&quot;],
+      [&quot;Loads left out (5.3.2):&quot;,&quot;the effect of loads not acting at the same time is investigated: every set of the variable loads of a row (L, L_r, S, R, W, E; D is always present) is left out in turn (up to 15 sets per row), and the row is added where that increases |M_u| or |V_u| (each checked on its own). It follows its full row, named “…, L omitted” or “…, L and W omitted”.&quot;],
       [&quot;Not included:&quot;,&quot;other loads of 5.3 (fluid, lateral earth pressure, self-straining effects, flood, ice and others) are not built; enter such cases in factored mode.&quot;]];
 }
 function buildLoadsTab(pg){
@@ -3135,7 +3139,7 @@ function buildLoadsTab(pg){
         vars:g.terms.map(t=>[CBC_LD_SYM[t.k],CBC_LD_NAME[t.k]+&quot; (M, V&quot;+(tuShow?&quot;, T&quot;:&quot;&quot;)+&quot;)&quot;,fmt(SV.cases[t.k].M)+&quot;, &quot;+fmt(SV.cases[t.k].V)+(tuShow?&quot;, &quot;+fmt(SV.cases[t.k].T):&quot;&quot;),&quot;k-ft, kip&quot;])}));
       const notes=[];
       if(g.merged.length) notes.push([&quot;Stands for:&quot;,g.merged.join(&quot;; &quot;)+&quot; (the alternative load cases are zero, so these rows are the same).&quot;]);
-      if(g.omit) notes.push([&quot;Omitted (5.3.2):&quot;,g.omit+&quot; is left out of &quot;+g.of+&quot;: the load may not act with the others, and leaving it out increases &quot;+g.why.map(a=>&quot;|&quot;+a+&quot;_u| from &quot;+fmt(Math.abs(a===&quot;M&quot;?g.full.Mu:g.full.Vu))+&quot; to &quot;+fmt(Math.abs(a===&quot;M&quot;?g.Mu:g.Vu))).join(&quot; and &quot;)+&quot;.&quot;]);   /* CBOM */
+      if(g.omit) notes.push([&quot;Omitted (5.3.2):&quot;,g.omit+(g.omitK&amp;&amp;g.omitK.length>1?&quot; are&quot;:&quot; is&quot;)+&quot; left out of &quot;+g.of+&quot;: it may not act with the others, and leaving it out increases &quot;+g.why.map(a=>&quot;|&quot;+a+&quot;_u| from &quot;+fmt(Math.abs(a===&quot;M&quot;?g.full.Mu:g.full.Vu))+&quot; to &quot;+fmt(Math.abs(a===&quot;M&quot;?g.Mu:g.Vu))).join(&quot; and &quot;)+&quot;.&quot;]);   /* CBOM */
       if(g.terms.some(t=>t.s<0)) notes.push([&quot;Reversed:&quot;,g.terms.filter(t=>t.s<0).map(t=>t.k).join(&quot;, &quot;)+&quot; with its sign reversed (−1 × the entered M, V, T).&quot;]);
       if(SV.l05&amp;&amp;/5\.3\.1[cde]/.test(g.eq)&amp;&amp;g.terms.some(t=>t.k===&quot;L&quot;)) notes.push([&quot;L:&quot;,&quot;load factor 0.5 by 5.3.3, as selected.&quot;]);
       if(r.sameAs!==undefined) notes.push([&quot;Identical actions:&quot;,&quot;the same factored actions as Combination &quot;+(r.sameAs+1)+&quot;; the result tabs work it once.&quot;]);
@@ -5860,7 +5864,7 @@ function cbcRptModel(){
         return cS({id:a+'u',label:'Factored '+({M:'moment',V:'shear',T:'torsion'}[a])+' (U = '+r.name+')',sym:a+'_{u}',eq:x.sym,sub:x.sub,value:x.val,unit:a==='V'?'kip':'kip-ft'}); });
       const nt=[];
       if(g.merged.length) nt.push({type:'note',text:'Stands for: '+g.merged.join('; ')+' (the alternative load cases are zero).'});
-      if(g.omit) nt.push({type:'note',text:'Omitted (ACI 318-19 5.3.2): '+g.omit+' is left out of '+g.of+'; leaving it out increases '+g.why.map(a=>'|'+a+'_u| from '+fmt(Math.abs(a==='M'?g.full.Mu:g.full.Vu))+' to '+fmt(Math.abs(a==='M'?g.Mu:g.Vu))).join(' and ')+'.'});   /* CBOM */
+      if(g.omit) nt.push({type:'note',text:'Omitted (ACI 318-19 5.3.2): '+g.omit+(g.omitK&amp;&amp;g.omitK.length>1?' are':' is')+' left out of '+g.of+'; leaving it out increases '+g.why.map(a=>'|'+a+'_u| from '+fmt(Math.abs(a==='M'?g.full.Mu:g.full.Vu))+' to '+fmt(Math.abs(a==='M'?g.Mu:g.Vu))).join(' and ')+'.'});   /* CBOM */
       if(g.terms.some(t=>t.s<0)) nt.push({type:'note',text:'Reversed: '+g.terms.filter(t=>t.s<0).map(t=>t.k).join(', ')+' (−1 × the entered M, V, T).'});
       if(S.svc.l05&amp;&amp;/5\.3\.1[cde]/.test(g.eq)&amp;&amp;g.terms.some(t=>t.k==='L')) nt.push({type:'note',text:'Load factor 0.5 on L by 5.3.3, as selected.'});
       if(r.sameAs!==undefined) nt.push({type:'note',text:'The same factored actions as Combination '+(r.sameAs+1)+'.'});
