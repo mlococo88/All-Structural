@@ -2734,8 +2734,7 @@ function rebuildInputs(){
     }
     if(SB_BU_NOTE)body.appendChild(el('div','warnBox','This project was saved without the built-up setting (a Validation / Report tab visit dropped it before 2026-11-06), so it opens as <b>rolled</b>. If this section is a built-up (welded) girder, tick the box above.'));
     fRow(body,'Shape family',selInput(FAMS.map(f=>f.id),()=>S.section.family,v=>{
-      S.section.family=v;S.section.grade=famMeta(v).defMat;S.section.ovr={};
-      const list=shapesOf(v);if(!list.find(r=>r[0]===S.section.label))S.section.label=list[Math.min(8,list.length-1)][0];
+      sbSetFamily(v);   /* SBHSS: the same three steps, shared with the HSS entry point */
       rebuildInputs();
     },id=>famMeta(id).name,null,'fam'),'');
     /* filter + shape select */
@@ -4565,6 +4564,7 @@ function init(){
   buildTabs();
   hist=[JSON.stringify(S)];hIdx=0;
   sbStdSave();   /* STDS */
+  sbHssEntry();   /* SBHSS (2026-11-13): opened from the tools page's "HSS Beam Design" card (#hss) */
   document.addEventListener('keydown',e=>{
     if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='z'){e.preventDefault();undo();}
     if((e.ctrlKey||e.metaKey)&&(e.key.toLowerCase()==='y'||(e.shiftKey&&e.key.toLowerCase()==='z'))){e.preventDefault();redo();}
@@ -4575,6 +4575,53 @@ function init(){
     if(window.katex){clearInterval(kt);renderTab();}
     else if(++tries>100)clearInterval(kt);
   },150);
+}
+/* =====================================================================
+   SBHSS (2026-11-13, engineer: improve this tool for HSS, no separate HSS app): the tools page's "HSS Beam Design" card
+   opens this file as "Steel Beam Design - AISC 15th.html#hss". The saved project is never changed without the user:
+   - a new / blank project on screen (no autosave, or an autosave equal to the default inputs): the section family is set to
+     HSS rect / square, exactly as picking it in the Shape family list (the family's default material, A500 Gr. C, and its
+     default shape); nothing else changes;
+   - any other project: it stays as it is, and a notice offers "Start a new HSS beam", which runs the existing New path of the
+     "Save and open" card (SBPL.pb.newProject, with its unsaved-changes confirm) and then picks the family. A project that is
+     not in the saved list is said so, with the card's "Save as..." first (New does not ask for an untouched unsaved project).
+   No storage key, saved field or format is added; the #hss is removed from the address after it is read (where allowed).
+   ===================================================================== */
+function sbSetFamily(v){
+  S.section.family=v;S.section.grade=famMeta(v).defMat;S.section.ovr={};
+  const list=shapesOf(v);if(!list.find(r=>r[0]===S.section.label))S.section.label=list[Math.min(8,list.length-1)][0];
+}
+/* blank = the default inputs as they stand after a calculation (computeAll adds the generated loads), fresh or restored
+   from an autosave; the view (S.ui), the project date and empty design.man entries are not compared */
+function sbIsBlank(){
+  const f=x=>{const c=JSON.parse(JSON.stringify(x));delete c.ui;if(c.proj)c.proj.date='';
+    const m=c.design&&c.design.man;if(m)Object.keys(m).forEach(k=>{if(m[k]&&typeof m[k]==='object'&&!Object.keys(m[k]).length)delete m[k];});   /* empty per-combination entries the tabs add */
+    return JSON.stringify(c);};
+  const keep=S,now=f(S),ref=[];
+  try{S=defaultState();computeAll();ref.push(f(S));S=mergeState(defaultState(),JSON.parse(JSON.stringify(S)));computeAll();ref.push(f(S));}
+  catch(e){}
+  finally{S=keep;computeAll();}
+  return ref.includes(now);
+}
+function sbHssEntry(){
+  let h='';try{h=String(location.hash||'').toLowerCase();}catch(e){}
+  if(h!=='#hss')return;
+  try{history.replaceState(null,'',location.href.split('#')[0]);}catch(e){}
+  if(sbIsBlank()){sbSetFamily('HSSR');fullRebuild();toast('New HSS beam: HSS rect / square selected');return;}
+  const old=document.getElementById('sbHssNote');if(old)old.remove();
+  const box=el('div','warnBox noPrint');box.id='sbHssNote';box.setAttribute('role','status');
+  box.style.cssText='position:fixed;top:84px;right:16px;z-index:60;font-family:var(--font-ui);max-width:min(430px,calc(100vw - 32px));box-shadow:0 4px 14px rgba(0,0,0,.18);margin:0';
+  const pb=SBPL&&SBPL.pb,cur=pb&&pb.current&&pb.current(),inList=!!(cur&&SBPL.store&&SBPL.store.has(cur));
+  const nm=(S.proj&&S.proj.name)||'Untitled Beam',sec=(S.section&&S.section.label)||'';
+  box.appendChild(el('div',null,'<b>HSS Beam Design:</b> your last project is open (<b>'+sbdEsc(nm)+'</b>'+(sec?', '+sbdEsc(sec):'')+') and has not been changed. '+
+    (inList?'':'It is not in the saved projects list: use <b>Save as…</b> first to keep it. ')+
+    'To design an HSS beam, start a new project with an HSS section, or pick the family in <b>Section &amp; Material</b>.'));
+  const row=el('div','btnRow');row.style.cssText='margin-top:6px;display:flex;gap:6px;flex-wrap:wrap';
+  const btn=(t,fn)=>{const b=el('button','btn sm',t);b.type='button';b.addEventListener('click',fn);row.appendChild(b);return b;};
+  if(pb&&!inList&&pb.saveAs)btn('Save as…',()=>pb.saveAs());
+  if(pb&&pb.newProject)btn('Start a new HSS beam',()=>{const before=S;pb.newProject();if(S!==before){sbSetFamily('HSSR');fullRebuild();toast('New HSS beam: HSS rect / square selected');box.remove();}});
+  btn('Keep this project',()=>box.remove());
+  box.appendChild(row);document.body.appendChild(box);
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 /* =====================================================================

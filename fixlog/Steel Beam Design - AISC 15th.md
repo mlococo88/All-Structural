@@ -3245,3 +3245,32 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
 - **Provisions:** AISC 360-16 Table B4.1a/b, F7, F8, G4, G5, G2.1 (Cv2), E3, E7, H1.1, H3.1, H3.2; AISC Design Examples F.7B.
 - **Saved data:** none. **Calculation change:** none.
 - **Open item found (not changed):** round HSS D/t is recomputed as OD/tdes with the database's *rounded* OD. Example: HSS10.750X0.500 has OD 10.8, so D/t = 23.23 against the tabulated 23.1. This makes D/t about 0.5% high, which is slightly conservative for F8-2/3, G5 and H3-2. The test fixture records the value as is.
+## 2026-11-13 — PR: claude/sbeam-hss-entry (PR #1473: https://github.com/mlococo88/All-Structural/pull/1473) (SBHSS) — HSS entry point: the tools page's "HSS Beam Design" card opens this tool with an HSS section for a new project   [navigation / start-up only; no calculation, saved key or format change]
+- **Engineer's decision (2026-11-13):** no separate HSS app. Instead, a visible HSS starting point into this tool (HSS review, recommendation (e)).
+- **Where:**
+  1. **New functions** `sbSetFamily(v)`, `sbIsBlank()` and `sbHssEntry()`, with their comment block (anchor `SBHSS (2026-11-13, engineer: improve this tool for HSS`). They sit just before `if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();`.
+  2. **`init()`:** after `sbStdSave();   /* STDS */` add `sbHssEntry();`.
+  3. **Section & Material, "Shape family" select (pure refactor, same steps):**
+     - before: `S.section.family=v;S.section.grade=famMeta(v).defMat;S.section.ovr={}; const list=shapesOf(v);if(!list.find(r=>r[0]===S.section.label))S.section.label=list[Math.min(8,list.length-1)][0]; rebuildInputs();`
+     - after: `sbSetFamily(v); rebuildInputs();`. `sbSetFamily` holds those same three statements.
+- **Behavior:** only when the address ends in `#hss` (the card's link). Without `#hss` nothing runs.
+  - **A blank project on screen** means either no autosave, or an autosave equal to the default inputs after a calculation. Not compared: `S.ui`, the project date, and empty `design.man` entries. In that case `sbSetFamily('HSSR')` runs, then `fullRebuild()`. This is exactly what picking "HSS — Rect / Square" in the list does:
+    - material: the family's default **A500 Gr. C (unchanged)**;
+    - shape: the family's default pick (the 9th shape, HSS30X10X1/2);
+    - nothing else changes.
+  - **Any other project** is left as it is: S and the autosave are byte-identical. A small notice (fixed, top right) says the last project is open and unchanged, and offers three buttons:
+    - **Start a new HSS beam:** the existing New path of the "Save and open" card (`SBPL.pb.newProject()`, with its unsaved-changes confirm). If that path went ahead, it then runs `sbSetFamily('HSSR')`;
+    - **Save as…:** the card's `saveAs`, shown only when the project is not in the saved list. The New path does not ask for an untouched project that is not in the saved list, so the notice says so and offers Save as first;
+    - **Keep this project:** closes the notice.
+  - `#hss` is removed from the address with `history.replaceState`, in a try block.
+- **Saved data (§5):** none. No new key, field or format, and the saved list is never written.
+- **Other copies:** the tools page card is in `tools.html` (`fixlog/tools.md`, same PR).
+- **How verified:** headless Chromium from file://, fresh profiles, 25 checks:
+  - fresh profile + `#hss` → HSSR, A500C_R, autosave HSS, no notice, hash removed;
+  - no hash → W18X50 as before;
+  - default autosave → treated as blank;
+  - an unsaved project → kept byte-identical, notice with Save as / Start / Keep. Keep: unchanged. Start: new HSS beam;
+  - a saved project, edited on the page → Start asks once. Cancel keeps it; OK starts the HSS beam, and the saved list is unchanged;
+  - the tools.html card link opens the tool with HSS.
+  - check-syntax; phone-layout / decimal-entry `--tool sbeam`; project-library `--tool steelbeam`; steel-beam-builtup; steel-beam-h1-composite; home-projects. 0 console errors.
+- **Open items:** none.
