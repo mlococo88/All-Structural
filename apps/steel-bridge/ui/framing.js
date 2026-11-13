@@ -124,6 +124,10 @@
         + [['', `Same as Shape above (${nmS(C.dia.shape)})`], ...list.map(v => [v, `${nmS(v)}${R[k] === v ? ' (CF10 recommends)' : ''}`])].map(([v, t]) => `<option value="${esc(v)}"${cur === v ? ' selected' : ''}>${esc(t)}</option>`).join('') + '</select></div>'; }).join('')}
       <p class="note">Girder types: the bays form ${GR.length} depth groups (the same h and the same shallower girder depth d: the Drawings' cross-frame details). Each group's diaphragm is checked with its own shape on its own frame (CFD; CFE too when the end diaphragm takes the intermediate shape) and weighed in DC1 with it; the worst group governs (engineer decision SB-24, 2026-11-13). Turning the diaphragm on prefills the shapes CF10 recommends per group where one section does not fit every bay.</p>`;
   }
+  /* clrRow(C, h) (SB-25, 2026-11-13; engineer decision SB-25): the clearance c of the diaphragm fit check (CFD: d ≤ D_0 − c) and of CF10's
+     fit rule, crossframes.dia.clr (in, total); blank or absent: 2 in (engine/crossframes.js diaClr), shown as the placeholder */
+  function clrRow(C, h) { const v = (C.dia || {}).clr, ok = v != null && v !== '' && isFinite(+v);
+    return `<div class="fRow"><label for="i_crossframes.dia.clr">Fit clearance c, total (d ≤ D<sub>0</sub> − c; blank: 2 in, 1 in top and bottom for clips / welds)</label><input type="number" step="any" id="i_crossframes.dia.clr" data-path="crossframes.dia.clr" data-kind="num" value="${ok ? esc(String(v)) : ''}" placeholder="2"><span class="unit">in</span></div>`; }
   function inputs(P, h) {
     ensure(P); const F = P.framing, C = P.crossframes, CF = window.SBDCrossframes, FRM = window.SBDFraming;
     let L = null; try { L = FRM.compute(P); } catch (e) { L = { errors: [e.message] }; }
@@ -146,7 +150,7 @@
       + h.card('Intermediate bracing (6.7.4.2)', `${h.sel('crossframes.type', 'Intermediate bracing', BRACE, br).replace('<select ', '<select style="width:200px;max-width:100%" ')}
         ${h.num('crossframes.dMinXF', 'Minimum girder depth for cross-frames', 'in')}${dOn ? `${h.sel('crossframes.dia.shape', 'Shape', br === 'ch' ? CF.CF_CH.map(s => [s[0], s[0]]) : [...CF.CF_DIA.map(s => [s[0], s[0]]), ['custom', 'Custom W']])}
         ${C.dia.shape === 'custom' ? `${h.num('crossframes.dia.d', 'Depth d', 'in')}${h.num('crossframes.dia.bf', 'Flange width', 'in')}${h.num('crossframes.dia.tf', 'Flange thickness', 'in')}${h.num('crossframes.dia.tw', 'Web thickness', 'in')}` : ''}
-        ${h.sel('crossframes.dia.gr', 'Grade', [['36', '36'], ['50', '50']])}${grpCard(P, C, br)}
+        ${h.sel('crossframes.dia.gr', 'Grade', [['36', '36'], ['50', '50']])}${clrRow(C, h)}${grpCard(P, C, br)}
         <h4 class="sub">End connections</h4>${conn}${h.num('crossframes.dia.nb', 'Bolts per end (one row)', '')}${h.num('crossframes.dia.pitch', 'Bolt pitch', 'in')}${h.num('crossframes.dia.ecc', 'Bolt line from the girder web', 'in')}
         <h4 class="sub">End diaphragms (bearing lines)</h4>${h.sel('crossframes.dia.end', 'Jacking at the end diaphragms', [['no', 'No'], ['yes', 'Yes']])}${h.num('crossframes.dia.Rj', 'Jacking reaction R<sub>j</sub>', 'kip')}${h.num('crossframes.dia.aj', 'at a<sub>j</sub> from the girder', 'in')}
         <p class="note">The diaphragm is the intermediate bracing (checks CFD) and the end diaphragm at the bearing lines (CFE); the angle checks CF1 to CF9 and member forces entered from a refined analysis do not apply. S (largest girder spacing) and the girder depth d come from the project and the layout. On a change between a rolled W and a channel, the shape starts at the one last used in that family on this page, else the shape that check CF10 recommends for the girder depth, else W21x44 / MC18x42.7: a starting choice, checked by CFD like any other.</p>`
