@@ -215,3 +215,20 @@ test('A1: HSS20.000X0.250, 60 ft: H3-2a governs, phi Tn = 240.6 kip-ft (not 291.
   D = member(S, { L: 30, Lb: 30, rows: row });
   near(D.perCombo[0].phiTn, 291.87, 1e-9, '30 ft: 0.6Fy cap');
 });
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 5. SBLR (engineer HSS-4, HSS-5, 2026-11-13): "LRFD only" and the biaxial reading of Eq. H3-6 are stated (input tab, Interaction
+//    Basis card, Report). The texts are checked here; the H3-6 arithmetic they describe is checked in test 2 (both axes summed).
+// ---------------------------------------------------------------------------------------------------------------------
+test('SBLR: LRFD-only statement and the H3-6 biaxial assumption text', () => {
+  const L = sb.run('SB_LRFD_ONLY'), H = sb.run('SB_H36_BIAX');
+  assert.ok(/LRFD only/.test(L) && /§B3\.1/.test(L) && /ASD/.test(L) && /§B3\.2/.test(L), L);
+  assert.ok(/H3-6/.test(H) && /§H3\.2/.test(H) && /both axes/.test(H) && /conservative/.test(H), H);
+  // the stated reading is what the engine does: member mode, M and V about both axes, T > 0.2 phiTn -> H3-6 with summed terms
+  const D = member({ family: 'HSSR', label: 'HSS12X6X1/2', grade: 'A500B_R' },
+    { L: 12, Lb: 12, rows: [{ id: 'm1', name: 'LC-1', Mux: 150, Vux: 60, Pu: 150, Muy: 40, Vuy: 20, Tu: 40 }] });
+  const C = D.perCombo[0], T = C.inter.terms;
+  assert.equal(C.inter.eq, 'H3-6');
+  near(T.V, C.dcrVx + C.dcrVy, 1e-12, 'shear group = Vx + Vy'); near(T.My, C.dcrMy, 1e-12, 'My in the flexure group');
+  near(C.inter.value, (T.P + T.Mx + T.My) + (T.V + T.T) ** 2, 1e-12, 'H3-6 as stated');
+});

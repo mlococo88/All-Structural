@@ -330,6 +330,9 @@ function sbNL(lead,items,o){o=o||{};const L=o.ol?'ol':'ul';
   const li=(items||[]).filter(Boolean).map(x=>'<li>'+(Array.isArray(x)?'<b class="sbNLk">'+x[0]+'</b> '+x[1]:x)+'</li>').join('');
   return (o.act||[]).filter(Boolean).map(a=>'<div class="sbNLa">'+a+'</div>').join('')+(lead?'<div class="sbNLl">'+lead+'</div>':'')+(li?'<'+L+' class="sbNLu">'+li+'</'+L+'>':'');}
 const SB_NLW=new Map();
+/* SBLR (2026-11-13, engineer HSS-4, HSS-5): stated on the input tab (Section & Material), the Interaction Basis card and the Report */
+const SB_LRFD_ONLY='Design method: <b>LRFD only</b>. Every strength is a design strength \u03C6R\u2099 with the resistance factors of AISC 360-16 (\u00A7B3.1), checked against factored (LRFD) demands. ASD (R\u2099/\u03A9, \u00A7B3.2) is not available: do not enter service-level (ASD) forces as demands.';
+const SB_H36_BIAX='Eq. H3-6 (\u00A7H3.2) has one flexure term M\u1D63/M\u1D9C and one shear term V\u1D63/V\u1D9C. With bending and shear about both axes the app sums both axes inside each group: M\u1D63\u2093/M\u1D9C\u2093 + M\u1D63\u1D67/M\u1D9C\u1D67 in the flexure group and V\u1D63\u2093/V\u1D9C\u2093 + V\u1D63\u1D67/V\u1D9C\u1D67 in the shear group (the shear sum is added to T\u1D63/T\u1D9C before squaring). Each ratio is the largest of its combination, not taken at one common point (conservative).';
 function sbWarnEl(n,cls){cls=cls||'warnBox';const f=SB_NLW.get(n);return f?el('div',cls+' sbNL',sbNL(f[0],f[1],f[2])):el('div',cls,n);}
 function fmt(v,d){if(v===undefined||v===null||!isFinite(v))return'\u2014';const p=(d===undefined)?2:d;
   const a=Math.abs(v);let s=v.toFixed(p);
@@ -2753,6 +2756,8 @@ function rebuildInputs(){
     body.appendChild(el('div','hint','F<sub>y</sub> = '+m.Fy+' ksi, F<sub>u</sub> = '+m.Fu+' ksi, E = 29,000 ksi'+(m.tRule==='nom'?' \u2014 A1085: design wall = nominal wall':'')+'. '+DBVER+'.'+
       /* L3 (2026-11-07): material edition note, no value changed */
       (m.id==='A500C_P'?' A500 Gr. C round: F<sub>y</sub> = 46 ksi is the ASTM A500-13 value referenced by AISC 360-16 (Table C-A3.1). Later A500 editions, used by the AISC Manual 16th Ed. and the v16.0 Design Examples, give 50 ksi; 46 ksi is kept (conservative).':'')));
+    /* SBLR (2026-11-13, engineer HSS-4, HSS-5): design method and the H3-6 reading for HSS, stated on the input tab (display only) */
+    body.appendChild(el('div','hint sbNL',sbNL(SB_LRFD_ONLY,DBKIND[S.section.family]==='R'||DBKIND[S.section.family]==='P'?[['HSS torsion with biaxial loads (Eq. H3-6):',SB_H36_BIAX]]:null)));
     /* overrides */
     const p=resolveSection();
     if(p){
@@ -5826,6 +5831,7 @@ function buildInterTab(pg){
   const D=dOrNull(pg);if(!D)return;
   mkSection('itBasis','Interaction Basis',body=>{
     body.appendChild(el('div','note sbNL',sbNL('M\u1D63\u2093/M\u1D9C\u2093 is taken as the <b>governing major-axis flexural DCR</b> across all regions.',[['Why this is safe:','each region is already divided by its own capacity, so the composition is safe.'],['HSS torsion:','where T\u1D64 > 0.2\u03C6T\u2099 on an HSS, Eq. H3-6 replaces H1 and brings the shear ratio in with it.'],
+      AN.sect&&(AN.sect._kind==='R'||AN.sect._kind==='P')?['HSS torsion with biaxial loads:',SB_H36_BIAX]:null,   /* SBLR (2026-11-13): HSS-4 */
       isMember()?null:['Second-order (P-\u03B4):','in beam mode, where P\u1D64 is compression, the ratio is the governing flexure DCR \u00D7 B\u2081 = C\u2098/(1 \u2212 P\u1D63/P\u2091\u2081) \u2265 1 (AISC 360-16 \u00A7C1, Appendix 8), with C\u2098 = 1.0, EI* = EI and L\u1D9C\u2081 = the compression effective length L\u1D9C\u2093; the M\u2093 flexure check itself is not amplified.'],
       ['Entered moments:',(isMember()?'M\u1D64\u2093 and M\u1D64\u1D67 are':'M\u1D64\u1D67 is')+' entered and taken as already including second-order effects.'],
       D.compActive?['Composite action:','the ratio is the governing flexure DCR of the M\u2093 tab: against the composite \u03c6M\u2099 (Chapter I, \u00a7I3.2a) in positive-moment regions, and against the bare steel section (Chapter F, \u00a7I3.2b) in negative-moment regions, where the slab is in tension and is not counted'+
@@ -10147,6 +10153,7 @@ function sbrxCover(secs){
   if(isBatch())return;
   const items=[],f=S.proj||{};
   if(typeof bxSourceLine==='function'&&bxSourceLine())items.push({type:'note',text:sbrText(el('div',null,bxSourceLine()))});
+  items.push({type:'note',text:sbrText(el('div',null,SB_LRFD_ONLY))});   /* SBLR (2026-11-13): HSS-5, LRFD only stated in the Report */
   if(isMember())items.push({type:'note',warn:true,text:'MEMBER CHECK MODE — section capacity only. Demands were entered directly; no structural model was solved. Equilibrium, reactions, moment distribution and deflection are not verified by this document.'});
   const govAll=(AN&&AN.design&&AN.design.checks||[]).filter(c=>!c.na),worst=govAll.reduce((m,c)=>c.dcr>(m?m.dcr:-1)?c:m,null);
   if(worst){const g=sbdChkTarget(worst);items.push({type:'note',warn:worst.dcr>1||undefined,text:'Governing: '+worst.label+' — DCR = '+fmt(worst.dcr,3)+(worst.combo?' ('+worst.combo+')':'')+(worst.dcr>1?' — DESIGN FAILS':' — all implemented checks pass')+(g&&SBRX.first&&SBRX.first[g[0]+'|'+g[1]]?' (worked in [['+SBRX.first[g[0]+'|'+g[1]]+']])':'')});}
