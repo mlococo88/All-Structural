@@ -13,7 +13,7 @@ import { TAB_CASES } from './psbridge-tab-cases.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBDF = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared(...PBDF, ...['model', 'holddown', 'design', 'fields', 'inputcheck', 'legacy'].map(n => path.join(APP, `engine/${n}.js`)));
+const W = loadShared(...PBDF, ...['model', 'holddown', 'design', 'bridge', 'fields', 'inputcheck', 'legacy'].map(n => path.join(APP, `engine/${n}.js`)));
 const LG = W.PSBLegacy, M = W.PSBModel, D = W.PSBDesign;
 const J = v => JSON.parse(JSON.stringify(v));
 // an independent exact comparison (Object.is per number: NaN, ±∞, −0 kept; functions left out)
@@ -98,7 +98,7 @@ test('storage is read only: scan lists the design on screen, the shared projects
   r.items.forEach(i => { const c = LG.convert(i); assert.equal(c.ok, true, i.id); LG.verify(c); });
   const c = LG.convert(LG.scan(s).items[2]);
   assert.equal(c.project.project.name, 'Shared B'); assert.deepEqual(J(c.project.spans.lengths), [90]); assert.equal(c.project.design.g, 3);
-  assert.ok(kinds(c, 'kept').some(t => /1 other girder × span design \(G1\/S2\) kept in the project, NOT designed yet/.test(t)));
+  assert.ok(kinds(c, 'kept').some(t => /1 other girder × span design \(G1\/S2\) kept in the project and restored as girder types on their lines/.test(t)));
   assert.ok(kinds(c, 'note').some(t => /old bridge bar's spans \(90, 110 ft\) are not the spans the design was computed with/.test(t)));
   assert.deepEqual(J(c.project.legacy.bridge), bridge);
   assert.deepEqual(s.m, before);
@@ -163,4 +163,39 @@ test('MIDAS demands: kept in the import record, not in the base design; spans fr
   assert.equal(r.project.base.external, null); assert.deepEqual(J(r.project.legacy.external), J(ext));
   assert.deepEqual(J(r.project.spans.lengths), J(W.PBD.extSpans(ext).map(q => q.len)).map((x, i) => i === r.project.design.s - 1 ? rec.saved.L : x));
   assert.equal(LG.verify(r).values, false);
+});
+
+// PR 3a-4 (PS-17): an old bridge model's other girder × span designs restored as girder types
+test('3a-4 restore: the other cells of an old bridge model become girder types on their lines; each computed = the old app\'s cell (pl and mod)', () => {
+  const B = W.PSBBridge, base = J(W.mergeInputs(null));
+  const mk = (o) => Object.assign(J(base), o);
+  // three spans, 5 girders: on screen G2/S1; stored G1/S1 (same inputs: exterior), G3/S1 (same), G4/S1 (f′c 9: its own type), G2/S2 (12 more ft? no: span from the bridge),
+  // G5/S2 (shape AASHTO Type IV with y_end 44 → a shape different from G2/S2's type in span 2: input error PS-8), G7/S1 (beyond 5 girders), 'notes' (not a cell)
+  const on = mk({ L: 100, S: 8, nGirders: 5, proj: { name: 'Old multi', girderId: 'G2 (Interior)' }, cont: Object.assign(J(base.cont), { on: false }) });
+  const br = { v: 1, mode: 'pl', title: { name: 'Old multi' }, spans: [100, 110, 100], nGirders: 5, S: 8, sel: { g: 2, s: 1 },
+    designs: { 'G2/S1': on, 'G1/S1': J(on), 'G3/S1': J(on), 'G4/S1': mk(Object.assign({}, J(on), { mat: Object.assign(J(base.mat), { fc: 9 }) })), 'G2/S2': J(on), 'G7/S1': J(on), notes: { a: 1 } } };
+  const c = LG.convert({ inputs: J(on), bridge: J(br), kind: 'autosave', key: 'psbeam.inputs.v1 + psbeam.bridge.v1' });
+  assert.equal(c.ok, true);
+  const P = c.project; P.spans.lengths = [100, 110, 100]; P.xs.skews = [0, 0, 0, 0];   // the bridge of the old model (the import takes the design's spans)
+  const text = LG.restore(P, '2026-11-13T12:00:00Z');
+  assert.match(text, /Restored from the old app's bridge model \(PS-17\): 4 more girder × span designs/);
+  assert.match(text, /G7\/S1 \(beyond this bridge/); assert.match(text, /notes \(not a girder × span cell\)/);
+  const lab = P.types.map(t => `${t.label}:${t.span}:${t.lines.join('')}:${Object.keys(t.ovr).join(',')}`);
+  assert.deepEqual(J(lab), ['Interior S1:1:23:', 'Exterior S1 (old G1):1:1:', 'Interior S1 (old G4):1:4:mat.fc', 'Interior S2 (old G2):2:2:']);
+  // each restored cell = the old app's 'pl' cell (PBD.applyBridge on the old model), every value
+  P.legacy.restored.cells.forEach(q => assert.equal(q.same, true, `${q.key}: ${q.why}`));
+  const k = B.typeAt(P, 1, 4), a = W.computeAll(J(D.cellInputs(P, k, 4))), b = W.computeAll(J(W.PBD.applyBridge(br, J(W.mergeInputs(J(br.designs['G4/S1']))), 4, 1)));
+  assert.equal(LG.canon(Object.assign({}, a, { warns: 0 })), LG.canon(Object.assign({}, b, { warns: 0 })));
+  // the design on screen unchanged
+  assert.equal(B.shown(P).g, 2); assert.equal(P.legacy.restored.cells.length, 4);
+  // not twice; the old data as read untouched
+  assert.equal(LG.restore(P), ''); assert.deepEqual(J(P.legacy.bridge), J(br));
+  // opened from a saved file (an import made before 3a-4): restored on load, with the notice
+  const Q = c.project; delete Q.legacy.restored; Q.types = undefined; delete Q.types;
+  const r = M.importJSON(M.exportJSON(Object.assign(J(c.project), { types: undefined, legacy: Object.assign(J(c.project.legacy), { restored: undefined }) })));
+  assert.equal(r.ok, true); assert.ok(r.notes.some(n => /Restored from the old app's bridge model/.test(n))); assert.ok(r.project.types.length >= 3);
+  // 'mod' (Design modules): each cell keeps its own L / S: restored on this bridge's values, the difference named
+  const brm = Object.assign(J(br), { mode: 'mod', designs: { 'G2/S1': on, 'G3/S1': Object.assign(J(on), { S: 9.5 }) } });
+  const cm = LG.convert({ inputs: J(on), bridge: brm, kind: 'autosave', key: 'k' }); cm.project.spans.lengths = [100, 110, 100]; cm.project.xs.skews = [0, 0, 0, 0];
+  const tm = LG.restore(cm.project); assert.match(tm, /0 of 1 compute the same as the old app; different: G3\/S1 \(girder spacing S old 9\.5, here 8/);
 });
