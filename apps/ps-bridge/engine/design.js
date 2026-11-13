@@ -60,6 +60,30 @@
     const face = Math.max(b, +sw.w > 0 && +sw.t >= 12 - 1e-9 ? +sw.w : 0);
     return oh - face;
   }
+  /* deDiff(P): PS-23 (engineer decision 2026-11-13; display only, no value changed): where the d_e computed from the cross-section (deOf,
+     PS-20) differs from the d_e entered (loads.de of the girder type on that exterior line; the field is not shown with the cross-section
+     barriers), { rows: [{ g, side, spans, entered, computed }], sig } (one row per exterior line and entered value; spans: the spans of
+     that row when it is not every span of the line, else null); { rows: [], sig: '' } where they match or nothing is
+     computed (no barriers: d_e as entered). Equal within 1e-9 ft. The distribution factors use the computed value (one(), PS-20).
+     sig: the dismissal key of the notice (the rows: a different difference shows the notice again). */
+  function deDiff(P) {
+    const x = P && P.xs, B = window.PSBBridge, none = { rows: [], sig: '' };
+    if (!x || !x.dl || !B || !P.base) return none;
+    const m = new Map();
+    B.cells(P).forEach(c => { if (!(c.g === 1 || c.g === x.nb)) return; const comp = deOf(P, c.g), b = B.effBase(P, c.k), ent = b && b.loads ? +b.loads.de : NaN;
+      if (comp == null || !isNum(comp) || !isNum(ent) || Math.abs(ent - comp) <= 1e-9) return;
+      const k = `${c.g}|${ent}`; if (!m.has(k)) m.set(k, { g: c.g, side: c.g === x.nb && c.g !== 1 ? 'right' : 'left', spans: [], entered: ent, computed: comp });
+      const r = m.get(k); if (!r.spans.includes(c.s)) r.spans.push(c.s); });
+    const rows = [...m.values()].sort((a, b) => a.g - b.g || a.spans[0] - b.spans[0]);
+    const all = g => new Set(B.cells(P).filter(c => c.g === g).map(c => c.s)).size;
+    rows.forEach(r => { if (r.spans.length >= all(r.g)) r.spans = null; });   // the spans named only where the row is not every span of the line
+    return rows.length ? { rows, sig: rows.map(r => `G${r.g}${r.spans ? '/' + r.spans.join('.') : ''}:${r.entered}>${r.computed}`).join(';') } : none;
+  }
+  /* deText(D, sub): the notice / Report text of deDiff's rows (PS-23); sub(t) writes the subscript t (HTML <sub> or the Report's $_{t}$) */
+  function deText(D, sub) {
+    const f = v => { let s = (+v).toFixed(3).replace(/0+$/, ''); if (s.endsWith('.')) s += '0'; return s; }, de = 'd' + sub('e');
+    return `${de} of the exterior girder lines (PS-20): the entered ${de} differs from the ${de} computed from the bridge cross-section (that side's overhang − the barrier / curb face): ${D.rows.map(r => `G${r.g}${r.spans ? ` (span${r.spans.length > 1 ? 's' : ''} ${r.spans.join(', ')})` : ''}: entered ${f(r.entered)} ft, computed ${f(r.computed)} ft (${r.side} overhang)`).join('; ')}. The live-load distribution factors use the computed ${de}.`;
+  }
   /* skewOf(P, s): the skews at the two supports of span s (deg, as entered) */
   const skewOf = (P, s) => { const k = (P.xs && P.xs.skews) || []; return [k[s - 1], k[s]]; };
   /* checks(P): { errors: [{ path, msg }] } the design selection and the PR 2b limits (one design: one spacing, one skew) */
@@ -129,5 +153,5 @@
       { key: 'cont.on', label: 'Made continuous for composite loads', value: i.cont.on ? 'yes' : 'no', unit: '', where: 'layout' }
     ];
   }
-  window.PSBDesign = { deOf, lineS, DRIVEN, sel, isExt, label, bridge, checks, inputs, cellInputs, one, driven };
+  window.PSBDesign = { deOf, deDiff, deText, lineS, DRIVEN, sel, isExt, label, bridge, checks, inputs, cellInputs, one, driven };
 })();
