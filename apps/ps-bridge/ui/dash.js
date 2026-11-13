@@ -11,9 +11,11 @@
    The Rating chip (PR 2d-2) is not an engine check: it shows the lowest HL-93 inventory rating factor of the engine (R.rating, R.shrRating,
    R.svcRating; RF ≥ 1.0 or < 1.0) and is not counted in the PASS / FAIL totals.
    Owner material limits (engineer, 2026-11-13; display only): the engine's checks of the girder f′c and the release f′ci against the owner's
-   limits (RIDOT 5.2.1, MassDOT 3.7.2.1, CTDOT V2 5.9.1.2) are the chip "Materials (owner limits)", counted in the PASS / FAIL totals like
+   limits (RIDOT 5.2.1, MassDOT 3.7.2.1, CTDOT V2 5.9.1.2) are the chip "Materials (owner limits)" (now "Owner limits"), counted in the PASS / FAIL totals like
    every other group; its group has input: the chip and its checks open the Owner rules input tab at the rule's row of the rules table
    (ui/inputs.js, row id own-rule-<rule id>), where the limit and the engine's value, limit and ratio are shown. No chip for AASHTO.
+   2026-11-13 (display; decision pending the engineer's review): the RIDOT check "Girder age at continuity (RIDOT 5.6.3.3)" (continuity on)
+   joins that group, renamed "Owner limits" (it holds more than the materials); the same Owner rules row (own-rule-cont.age) and counts.
 
    init(o): o = { el, store (localStorage or null), getP(), errors() ([{ path, msg }]), result() (computeAll of the design or null),
    goto(tab, step), fix(i) }; refresh() after the page draws. */
@@ -35,9 +37,10 @@
     { id: 'camb', name: 'Camber & deflection', tab: 'camb', checks: [['LL deflection', 'cb.ll.r']] },
     { id: 'hand', name: 'Handling', tab: 'hand', off: 'loads', checks: [['Lifting stress', 'hn.lift.r'], ['Lifting FS (crack, screening)', 'hn.FSl.r'], ['Hauling FS (crack, screening)', 'hn.FSh.r']] },
     { id: 'deck', name: 'Deck', tab: 'deck', off: 'dd', checks: [['Deck +M', 'dk.pos.r'], ['Deck −M', 'dk.neg.r'], ['Deck overhang', 'dk.oh.r']] },
-    // the owner's material limits (engine PBD-E checks): on the Owner rules input tab (input: the tab; each check's st = its row of the rules table)
-    { id: 'mat', name: 'Materials (owner limits)', tab: 'own', input: true, checks: [['Girder f′c (RIDOT 5.2.1)', 'own-rule-fc.min'], ['Girder f′c (CTDOT 5.9.1.2)', 'own-rule-fc.range'],
-      ['Release strength f′ci (MassDOT 3.7.2.1)', 'own-rule-fci.max'], ['Release strength f′ci (CTDOT 5.9.1.2)', 'own-rule-fci.range']] }];
+    // the owner's limits (engine PBD-E checks): on the Owner rules input tab (input: the tab; each check's st = its row of the rules table):
+    // the material limits and (2026-11-13) the RIDOT girder age at continuity
+    { id: 'mat', name: 'Owner limits', tab: 'own', input: true, checks: [['Girder f′c (RIDOT 5.2.1)', 'own-rule-fc.min'], ['Girder f′c (CTDOT 5.9.1.2)', 'own-rule-fc.range'],
+      ['Release strength f′ci (MassDOT 3.7.2.1)', 'own-rule-fci.max'], ['Release strength f′ci (CTDOT 5.9.1.2)', 'own-rule-fci.range'], ['Girder age at continuity (RIDOT 5.6.3.3)', 'own-rule-cont.age']] }];
   /* the Rating chip: the HL-93 inventory rating factors of the engine (not checks), the lowest governs */
   const RATING = { id: 'rt', name: 'Rating', tab: 'rt', rf: [['Flexure, inventory', R => R.rating.RFinv, 'rt.RFinv'], ['Shear, inventory', R => R.shrRating.RFinv, 'rt.RFvInv'], ['Service III', R => R.svcRating.RF, 'rt.RFs3']] };
   /* the link of a check: its output tab and step, or (a group on an input tab) the input tab and the element id */

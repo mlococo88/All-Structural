@@ -708,3 +708,68 @@ PR #1467: https://github.com/mlococo88/All-Structural/pull/1467
 ### Open items
 - No dark mode in this app (none to support). In print, the shared report adds "see " before every § link, so a table cell that already says
   "(see §x)" prints "(see see §x)" (shared/report.js `.rp-see::before`, since PR 2e; the steel report has the same): not changed here.
+
+## 2026-11-13 — Follow-ups of the Report: the RIDOT girder age at continuity in the check summary ("Owner limits"); the handling elevation in both stages in the Report; Report captions for a static figure (display only, no calculation change)
+PR #1469: https://github.com/mlococo88/All-Structural/pull/1469
+### Problem
+- a) The engine check "Girder age at continuity (RIDOT 5.6.3.3)" (RIDOT, continuity on; engine `pbd-compute.js` anchor `const rAge=rr('cont.age')`,
+  v = t_d, lim = 90 days, r = 90 / t_d) was on no result tab and in no group of the check-summary column, so the column's PASS / FAIL totals did
+  not count it; Report §1 listed it with the note "Not in the check summary column and not counted in its totals" (open item of #1466).
+- b) The Report's handling elevation (Figure 12.2) showed only the stage last chosen on the Handling tab ("shown: Stage: Lifting" or "Hauling").
+- c) Report figure captions copied the tab's wording for the screen: "click a station to select it" (Analysis, Stresses), "Stage buttons select
+  the stage and its governing station" (stress distribution), the series chips' label "Show" (Shear, Camber), and "the table above" (Analysis
+  envelopes, the strand pattern title), where in the Report the section's tables follow the figure.
+### Decisions (pending engineer review; the engineer said to use judgment)
+- a) The age check joins the owner-rules group of the column (the Owner rules table holds its rule, row `own-rule-cont.age`); the chip
+  "Materials (owner limits)" is renamed "Owner limits", because it now holds more than the materials (one chip, not a second "Owner rules"
+  chip, so the column has one place for every owner limit and "Owner rules" stays the name of the input tab the chip opens). The chip's group
+  id stays `mat` (internal only).
+- b) The Report draws the handling elevation once per stage, Lifting then Hauling (Figures 12.2 and 12.3), whatever stage the tab last showed;
+  the tab's own stage is put back. Only this graphic: the stress distribution (Figure 7.2) still shows the default stage (Release), as before.
+- c) Reworded in the Report only (the tabs unchanged): "; click a station to select it." → "." ; "Click a station to select it." → removed;
+  "Stage buttons select the stage and its governing station." → "Drawn at the governing station of the stage named in the caption."; chip
+  label "Show" / "Also show" → "Shown:"; "the table above" → "the table in this section".
+### Where
+- `apps/ps-bridge/ui/dash.js` GROUPS, anchor `{ id: 'mat', name:`: before
+  `{ id: 'mat', name: 'Materials (owner limits)', tab: 'own', input: true, checks: [[…f′c / f′ci…]] }`; after
+  `{ id: 'mat', name: 'Owner limits', tab: 'own', input: true, checks: [[…the same four…], ['Girder age at continuity (RIDOT 5.6.3.3)', 'own-rule-cont.age']] }`.
+  Totals, verdict, governing line and the click to the Owner rules row are the group's existing code.
+- `apps/ps-bridge/ui/inputs.js` matCell (anchor `const MAT = [`): before `['fc.min', 'fc.range', 'fci.max', 'fci.range']`; after `+ 'cont.age'`;
+  for `cont.age` the cell reads "t_d (girder age at continuity) = 60 days; governing minimum 90 days; ratio = 90 / 60 = 1.500 FAIL" (decimals 0,
+  unit days; always a minimum: `isMin = age || (…)`); "(check summary: Materials (owner limits))" → "(check summary: Owner limits)". Before, the
+  row said "Check of the design (output tabs)".
+- `apps/ps-bridge/report/builders.js` summary(): the §1 note "the owner's material limits (group Materials (owner limits))" → "the owner's limits
+  (group Owner limits: the material limits and, RIDOT with continuity, the girder age at continuity)". The "Not in the check summary column …"
+  note is no longer made for any engine check (it stays, with the OWNG fallback, as a guard for an owner check in no group: none today).
+- `apps/ps-bridge/ui/report.js`: new `ALLSEG = new Set(['gfx_hnel'])`, `STATIC` (the rewordings of c), `still()`, `chipLab()`, `one(card)` (the
+  old body of `grab` for one card, plus `still` on title, sub-title and captions); `grab(host)`: for a slot in ALLSEG, clicks each button of the
+  card's segmented control in order, takes `one(card)` after each, then clicks the button that was pressed (the tab's state back).
+### Shared files
+- None.
+### Saved data (CLAUDE.md §5)
+- No key, no project field, no format change. The Handling tab's stage (module state `ST.stage`, not saved) is the same after the Report.
+### Governing provisions
+- None changed (§4). The age check is the engine's (RIDOT BDM 5.6.3.3, minimum girder age 90 days), cited as before.
+### Check case
+- RIDOT, two continuous spans 110 + 110 ft, default BT-72, t_d = 60 days (new tab case): engine "Girder age at continuity (RIDOT 5.6.3.3)"
+  v = 60, lim = 90 days, r = 90 / 60 = 1.500 FAIL (loc 110 ft). Engine: 25 checks, 3 FAIL (Neg flexure (pier) 1.075, the age check 1.500,
+  Hold-down force (PS-10) 1.518). Before: column 2 FAIL + 22 PASS (24, the age check outside), §1 "FAIL: 3 of 25" with the "not in the column"
+  note; after: the Owner limits chip FAIL 1.500 (the governing of its two checks: the RIDOT f′c minimum and the age), column 3 FAIL + 22 PASS =
+  25, §1 row "Owner limits | Girder age at continuity (RIDOT 5.6.3.3) | 110.00 | 60.000 | 90.000 | days | 1.500 | FAIL | see §2.x", no note.
+  t_d = 90 days (default): r = 90 / 90 = 1.000 PASS, shown "governing minimum 90 days".
+- Report, default BT-72 with Handling on (tab left on Hauling): before Figure 12.2 "…; shown: Stage: Hauling" only; after 12.2 "…; shown:
+  Stage: Lifting" and 12.3 "…; shown: Stage: Hauling", the Handling tab still on Hauling.
+### How verified
+- `node tests/engine/run.mjs psbridge tex project-registry`: 105 passed (101 + the new tab case in the per-case loops, + 1 new test: the age
+  check's values, its Owner rules cell, group, §1 row, no note, t_d 90 PASS as a minimum).
+- Harness B (`node tests/psbridge-compare.mjs`): 17 designs (new: RIDOT, two continuous spans, continuity at a girder age of 60 days), 43,512
+  shown values and 7,646 step values, 0 differences; its Owner rules row compared with the old app (own 10 values), the chip shown when a
+  design has an owner-limit check, §1's Owner limits rows = the design's owner-limit checks, no "not in the column" note. `--control` reports
+  each planted difference (exit 1).
+- `node tests/smoke/ps-bridge-skeleton.mjs` (223 checks, + 9): handling elevation Lifting then Hauling (12.2, 12.3), the tab keeps Hauling; no
+  figure wording of the screen controls or "table above"; RIDOT continuity t_d 60: Owner limits chip FAIL 1.500, totals, the chip list opens the
+  Owner rules row (5 engine values = computeAll), §1 row, no note, 0 console errors. `node tests/check-syntax.mjs`.
+### Open items
+- matCell (unchanged for the material rules): when the value equals the limit (r = 1.000) it cannot tell a minimum from a maximum by the ratio
+  and says "maximum"; the age check is fixed as a minimum, the f′c / f′ci rules are not changed here.
+- The stress distribution figure (7.2) shows one stage (Release, the default) in the Report; all stages could be drawn as for handling, if wanted.
