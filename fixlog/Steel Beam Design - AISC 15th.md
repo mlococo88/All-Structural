@@ -3180,7 +3180,7 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
 - **Decisions (pending engineer review):** "Last sent" is read from the channel key in this browser (no new record).
 - **Other copies:** none.
 
-## 2026-11-13 — PR: claude/sbeam-hss-a1 (PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__) (TLEN) — Member check mode: round HSS torsion (Eq. H3-2a) uses the member length L, not the shear length Lᵥ   [calculation change, §4]
+## 2026-11-13 — PR: claude/sbeam-hss-a1 (PR #1468: https://github.com/mlococo88/All-Structural/pull/1468) (TLEN) — Member check mode: round HSS torsion (Eq. H3-2a) uses the member length L, not the shear length Lᵥ   [calculation change, §4]
 - **Engineer's decision (2026-11-13):** improve the existing app for HSS; fix review item A1 (HSS review of 2026-11-13).
 - **Problem:** `memberDesignAll` called `torsionHSS(p,(S.member.Lv!=null?S.member.Lv:0)*12)`. Eq. H3-2a needs L = the member length (§H3.1(a)); member mode passed the shear length Lᵥ, or **0 when Lᵥ was blank**. With L = 0, H3-2a is infinite, so F_cr = 0.6F_y for any length. **Unconservative** for long, thin round HSS where H3-2a governs. Beam mode (total length) and batch (`Lx`, blank → `Lbx`) were already right.
 - **Code (re-apply by hand):**
@@ -3205,7 +3205,7 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
   - H3-2b: 0.60(29000)/85.84^1.5 = 17,400/795.3 = **21.88 ksi**.
   - **Before:** L = 0 → H3-2a = ∞ → F_cr = 0.6(46) = 27.60 ksi; φTn = 0.9 × 27.60 × 141/12 = **291.9 kip·ft** (DCR 0.343).
   - **After:** F_cr = min(27.60, max(22.75, 21.88)) = 22.75 ksi; Tn = 22.75 × 141 = 3208 kip·in; φTn = 0.9 × 3208/12 = **240.6 kip·ft** (DCR 0.416). Before was 21% unconservative.
-  - Span blank, Lᵇ = 60 ft: 240.6 (with the warning). Span 30 ft: H3-2a = 32.2 ksi > 27.6 → 291.9, unchanged. HSS10.750X0.500 at 60 ft: H3-2a = 47.6 ksi > 27.6 → 153.4, unchanged. Continuously braced, no length: F_cr = min(27.6, 21.88) = 21.88 ksi, φTn = 231.4 kip·ft (warning).
+  - Span blank, Lᵇ = 60 ft: 240.6 (with the warning). Span 30 ft: H3-2a = 32.2 ksi > 27.6 → 291.9, unchanged. HSS10.750X0.500 at 60 ft: H3-2a = 86.0 ksi, H3-2b = 156.5 ksi, both > 27.6 → 153.4, unchanged. Continuously braced, no length: F_cr = min(27.6, 21.88) = 21.88 ksi, φTn = 231.4 kip·ft (warning).
 - **Saved data (§5):** no new field or key; the existing `S.member.L` is read.
 - **How verified:** headless Chromium, origin/main vs branch, 50 cases (member mode with 4 L / Lᵇ / Lᵥ combinations and beam mode × 10 sections): the 40 rectangular-HSS (A500 B/C, A1085) and W-shape cases are **identical** in the whole `AN` JSON (every key) and in the `textContent` of every result tab; the 10 round-HSS cases differ only in the torsion values, the new lines and the warning. Torsion tab, Report tab: 0 KaTeX errors; Excel rows checked in the workbook (see the open item on Excel export). check-syntax; engine `aisc-hss`; smoke steel-beam-builtup, steel-beam-h1-composite, phone-layout / decimal-entry `--tool sbeam`, project-library `--tool steelbeam` pass; list-input `--part sbeam` fails the same 2 checks on origin/main (baseline drift, not this change).
 - **Other copies:** none. `buildAxialTab` (the dead earlier layout) and the first `buildTorsTab` (overridden by the second) are not changed.
