@@ -20,7 +20,11 @@
      girder.loadsManual, girder.dfManual; new: girder.loadsOverride, girder.dfOverride, the "Override calculated value" boxes) ---------- */
   const IM_SRC = 'AASHTO LRFD 10th Ed. Table 3.6.2.1-1';
   const blank = v => v == null || v === '' || (typeof v === 'number' && Number.isNaN(v));
-  const numIn = (scope, k, label, unit, v, ph) => `<div class="fRow"><label for="an_${scope}_${k}">${label}</label><input type="number" step="any" id="an_${scope}_${k}" data-an="${scope}" data-k="${k}" value="${blank(v) ? '' : esc(v)}"${ph != null && ph !== '' ? ` placeholder="${esc(ph)}"` : ''}><span class="unit">${unit}</span></div>`;
+  const numIn = (scope, k, label, unit, v, ph, mk) => `<div class="fRow${mk ? ' lov-on' : ''}"><label for="an_${scope}_${k}">${label}${mk || ''}</label><input type="number" step="any" id="an_${scope}_${k}" data-an="${scope}" data-k="${k}" value="${blank(v) ? '' : esc(v)}"${ph != null && ph !== '' ? ` placeholder="${esc(ph)}"` : ''}><span class="unit">${unit}</span></div>`;
+  /* SBLO (2026-11-13; engineer decisions SB-7, SB-9): entering a line's overrides (opt.lov = { j, o (the line's entry or {}), T (the type) }):
+     an override box is a choice "as the type (on / off) | on | off"; a field the line overrides carries the marker (lovMk). */
+  const lovMk = j => ` <span class="lov-mk" title="Entered for line G${j + 1} only (overrides the girder type)">● G${j + 1}</span>`;
+  const lovSel = (id, label, k, typeOn, own, j) => `<div class="fRow${typeof own === 'boolean' ? ' lov-on' : ''}"><label for="${id}">${label}${typeof own === 'boolean' ? lovMk(j) : ''}</label><select id="${id}" data-an="lovb" data-k="${k}"><option value=""${typeof own !== 'boolean' ? ' selected' : ''}>As the girder type (${typeOn ? 'on' : 'off'})</option><option value="true"${own === true ? ' selected' : ''}>On, line G${j + 1}</option><option value="false"${own === false ? ' selected' : ''}>Off, line G${j + 1}</option></select></div>`;
   const chk = (id, label, on, k, sc, unit) => `<div class="fRow"><label for="${id}">${label}</label><input type="checkbox" id="${id}" data-an="${sc || 'ov'}" data-k="${k || (id === 'an_ov_l' ? 'loadsOverride' : 'dfOverride')}"${on ? ' checked' : ''}><span class="unit">${unit || 'off: the calculated value is used'}</span></div>`;
   const kf = v => isFinite(v) ? f(v, 4) : '—';
   /* ctxOf(P, gi): the girder, its loads module result, its loads and factors (engine/analysis.js), and whether each override is on */
@@ -34,8 +38,12 @@
   const calcL = (C, k) => C.M ? ({ DC1wet: C.M.DC1, DC2: C.M.DC2, DW: C.M.DW, UT: C.M.UT, UF: C.M.UF, PL: C.M.PL })[k] : null;
   const calcD = (C, k) => { if (!C.rgOk || !C.mod) return null; const R = C.mod.R, j = C.mod.j, s0 = R.regions.find(r => r.id === 's0'), p1 = R.regions.find(r => r.id === 'p1');
     if (!s0) return null; return k === 'gDef' ? s0.gDef : k === 'gMpier' ? (p1 ? p1.members[j].gM : null) : s0.members[j][k]; };
-  function inputs(P, gi) {
-    const S = AN().settings(P), A0 = P.analysis || {}, C = ctxOf(P, gi), g = C.g, Lm = g.loadsManual || {}, Dm = g.dfManual || {}, LD = C.LD, gl = esc(g.label || g.id);
+  function inputs(P, gi, opt) {
+    const S = AN().settings(P), A0 = P.analysis || {}, C = ctxOf(P, gi), g = C.g, LV = opt && opt.lov ? opt.lov : null, T = LV ? LV.T : g;
+    const Lm = LV ? (LV.o.loadsManual || {}) : g.loadsManual || {}, Dm = LV ? (LV.o.dfManual || {}) : g.dfManual || {}, LD = C.LD, gl = esc(g.label || g.id) + (LV ? `, line G${LV.j + 1}` : '');
+    const TL = T.loadsManual || {}, TD = T.dfManual || {}, mk = (o, k) => LV && isFinite(o[k]) && o[k] != null && o[k] !== '' ? lovMk(LV.j) : '';
+    const phL = (k, c) => LV && TL[k] != null && TL[k] !== '' && isFinite(TL[k]) ? `type: ${TL[k]}` : c, phD = (k, c) => LV && TD[k] != null && TD[k] !== '' && isFinite(TD[k]) ? `type: ${TD[k]}` : c;
+    const ovBox = (id, label, on, k, typeOn) => LV ? lovSel(id, label, k, typeOn, LV.o[k], LV.j) : chk(id, label, on, k);
     const sel = (k, label, opts) => `<div class="fRow"><label for="an_a_${k}">${label}</label><select id="an_a_${k}" data-an="a" data-k="${k}">${opts.map(([v, t]) => `<option value="${v}"${String(S[k] == null ? '' : S[k]) === v ? ' selected' : ''}>${t}</option>`).join('')}</select></div>`;
     const imSrc = (k, d) => blank(A0[k]) ? `blank: ${d} % (${IM_SRC})` : `entered (${IM_SRC}: ${d} %)`;
     const line = C.mod && C.mod.j != null ? C.mod.j : AN().lineOf(P, g), see = '<a href="#" data-gotab="loads">Loads &amp; LLDF tab</a>';
@@ -53,8 +61,8 @@
     const rowsL = [['DC1wet', 'DC1 wet deck (deck, haunch, SIP, other)'], ['DC2', 'DC2 (barriers, curbs, …)'], ['DW', 'DW (wearing surface)'], ['UT', 'Existing utilities (steel section)']];
     const xfStored = Array.isArray(Lm.xf) && Lm.xf.length, xfShow = xfStored && LD.src.xf !== 'module' && LD.src.xf !== 'girder';
     h += card(`Dead loads for the analysis, girder ${gl}`, `<p class="note">Calculated: <b>${C.M ? `loads module, cross-section girder G${line + 1}` : 'none (the loads module gives none: ' + esc(C.mod && C.mod.errors ? C.mod.errors[0] : 'the cross-section is not complete') + ')'}</b>${C.M ? `, worked on the ${see} (girder G${line + 1})` : ''}. Used: <b>${esc(LD.source)}</b>.</p>
-      ${chk('an_ov_l', 'Override calculated value', C.ovL)}
-      ${C.ovL ? rowsL.map(([k, t]) => numIn('l', k, t, 'klf', Lm[k], isFinite(calcL(C, k)) ? f(calcL(C, k), 4) : '')).join('') + `<p class="note">Blank: the calculated value (in grey)${C.M ? '' : '; none here, so blank = 0'}.</p>` : `<p class="note">${rowsL.map(([k, t]) => `${t}: ${kf(LD[k])} klf`).join('; ')}.</p>`}
+      ${ovBox('an_ov_l', 'Override calculated value', C.ovL, 'loadsOverride', AN().deadOverride(T, C.M))}
+      ${C.ovL ? rowsL.map(([k, t]) => numIn('l', k, t, 'klf', Lm[k], phL(k, isFinite(calcL(C, k)) ? f(calcL(C, k), 4) : ''), mk(Lm, k))).join('') + `<p class="note">Blank: the calculated value (in grey)${C.M ? '' : '; none here, so blank = 0'}.</p>` : `<p class="note">${rowsL.map(([k, t]) => `${t}: ${kf(LD[k])} klf`).join('; ')}.</p>`}
       ${xfShow ? `<div class="fRow"><label for="an_l_xf">Cross-frame point loads (stored entry)</label><input type="text" id="an_l_xf" data-an="l" data-k="xf" value="${esc((Lm.xf || []).map(q => `${q.x}:${q.P}`).join(', '))}" style="width:180px"><span class="unit">one load per row</span></div>
         <p class="note">Kept because this project stored it and has no framing: it is used until the framing is set (<a href="#" data-itgo="framing">Framing &amp; bracing tab</a>); then the frames give the point loads.</p>`
         : `<p class="note">Cross-frame point loads: ${LD.src.xf === 'module' && LD.xfInfo ? `${LD.xfInfo.n} frames, ${LD.xfInfo.tot.toFixed(2)} kip in all, from the framing and the cross-frame weights (<a href="#" data-itgo="framing">Framing &amp; bracing tab</a>)` : LD.src.xf === 'girder' ? 'from the girder loads' : 'none (the project has no framing: <a href="#" data-itgo="framing">Framing &amp; bracing tab</a>)'}.</p>`}`, 'an-dead');
@@ -63,8 +71,8 @@
     h += card(`Construction live load, girder ${gl}`, `${chk('an_a_clCalc', 'Calculate the construction live load', CL.on, 'clCalc', 'a', CL.on ? 'w<sub>CL</sub> = q<sub>CL</sub> × tributary deck width' : 'off: a project saved before 2026-11-09 (0 unless entered below)')}
       ${CL.on ? numIn('a', 'qCL', 'Construction live load on the deck q<sub>CL</sub>', `psf — ${CL.qSrc === 'entered' ? 'entered' : CL.qSrc === 'owner' ? `blank: owner rule ${esc(CL.qCite)}, ${CL.q} psf` : 'blank: 20 psf (AASHTO LRFD 3.4.2.1 gives no value; this app\'s default)'}${CL.own ? `; owner minimum ${CL.own} psf (${esc(CL.ownCite)})` : ''}`, A0.qCL, qPh)
         + `<p class="note">Calculated: w<sub>CL</sub> = q<sub>CL</sub>/1000 × b<sub>trib</sub> = ${f(CL.q, 1)}/1000 × ${isFinite(CL.trib) ? f(CL.trib, 3) : '—'} ft = <b>${isFinite(CL.w) ? f(CL.w, 4) + ' klf' : '— (the tributary width needs a complete cross-section)'}</b> (b<sub>trib</sub>: cross-section girder G${line + 1}, worked on the ${see}; w<sub>CL</sub> worked on the <a href="#" data-gotab="an">Analysis tab</a>, steps an.CL.q, an.CL.w).</p>` : ''}
-      ${chk('an_ov_c', 'Override calculated value', ovC, 'clOverride')}
-      ${ovC ? numIn('l', 'CL', 'Construction live load w<sub>CL</sub>', `klf${CL.on && isFinite(CL.w) ? ` — calculated ${kf(CL.w)}` : ''}; blank: ${CL.on ? 'calculated' : '0'}`, Lm.CL, CL.on && isFinite(CL.w) ? f(CL.w, 4) : '') : ''}
+      ${ovBox('an_ov_c', 'Override calculated value', ovC, 'clOverride', typeof T.clOverride === 'boolean' ? T.clOverride : !!(T.loadsManual && isFinite(T.loadsManual.CL) && T.loadsManual.CL != null))}
+      ${ovC ? numIn('l', 'CL', 'Construction live load w<sub>CL</sub>', `klf${CL.on && isFinite(CL.w) ? ` — calculated ${kf(CL.w)}` : ''}; blank: ${LV ? 'the type\'s value, else ' : ''}${CL.on ? 'calculated' : '0'}`, Lm.CL, phL('CL', CL.on && isFinite(CL.w) ? f(CL.w, 4) : ''), mk(Lm, 'CL')) : ''}
       <p class="note">Used: <b>${kf(LD.CL)} klf</b> (${{ girder: 'girder loads', manual: 'entered (override)', calc: 'calculated', none: 'none' }[LD.src.CL]}). The construction live load enters the deck placement checks (Constructibility tab, γ construction) on the steel section. AASHTO LRFD 10th Ed. Art. 3.4.2.1 requires construction loads but gives no value: q<sub>CL</sub> left blank is the owner's value, else 20 psf (this app's default, the overhang bracket construction load). A project saved before this calculation (2026-11-09) is not switched to it: tick the box above. The overhang bracket checks keep their own q<sub>CL</sub> (Constructibility tab, OH inputs). An entered q<sub>CL</sub> below zero is an input error: every result is withheld until q<sub>CL</sub> is zero, positive or blank.</p>`, 'an-cl');
     h += card('Finishing machine (optional)', `${numIn('fm', 'P', 'Load P<sub>fm</sub>, each of the pair', 'kip (blank: none)', fm.P)}${numIn('fm', 'e', 'Each load from its deck edge e<sub>fm</sub>', 'ft (on the overhang; blank: 0, at the edge)', fm.e)}
       <p class="note">A pair of equal point loads, one on each overhang, moving together along the bridge. Each girder takes its lever-rule share (AASHTO LRFD 10th Ed. Art. 4.6.2.2.1): with a load outside the exterior girder, P(1 + a/S) on it and the uplift −Pa/S on the first interior girder; the share moves along the steel section; the moments and shears are added to M<sub>CL</sub>, V<sub>CL</sub> where they add to the deck placement effects (worked on the <a href="#" data-gotab="an">Analysis tab</a>, steps an.fm.*). The overhang bracket checks keep their own finishing machine load per bracket (Constructibility tab, OH inputs). A load P<sub>fm</sub> below zero is an input error: every result is withheld until P<sub>fm</sub> is zero, positive or blank.</p>`, 'an-fm');
@@ -72,14 +80,21 @@
     const rowsD = [['gM', 'g moment (spans)'], ['gMpier', 'g moment (pier regions)'], ['gV', 'g shear'], ['fatM', 'g fatigue moment'], ['fatV', 'g fatigue shear'], ['gDef', 'g deflection (all lanes, all girders)']];
     const DF = C.DF, s0 = DF.spans[0] || {};
     h += card(`Live load distribution factors for the analysis, girder ${gl}`, `<p class="note">Calculated: <b>${C.rgOk ? `loads module (LLDF), cross-section girder G${line + 1}` : 'none (the loads module gives none)'}</b>${C.rgOk ? `, worked on the ${see}` : ''}. Used: <b>${esc(DF.src)}</b> (lanes per girder, multiple presence included; fatigue: one lane ÷ 1.2, 3.6.1.4.3b).</p>
-      ${chk('an_ov_d', 'Override calculated value', C.ovD)}
-      ${C.ovD ? rowsD.map(([k, t]) => numIn('d', k, t, C.rgOk ? '' : k === 'gMpier' ? 'blank = spans' : 'blank = 1', Dm[k], C.rgOk && isFinite(calcD(C, k)) ? f(calcD(C, k), 3) : '')).join('') + `<p class="note">One value for every span. ${C.rgOk ? 'Blank: the calculated value (span 1 in grey; the pier g moment: blank = the entered span value, else calculated).' : ''}</p>`
+      ${ovBox('an_ov_d', 'Override calculated value', C.ovD, 'dfOverride', AN().dfOverride(T, C.rgOk))}
+      ${C.ovD ? rowsD.map(([k, t]) => numIn('d', k, t, C.rgOk ? '' : k === 'gMpier' ? 'blank = spans' : 'blank = 1', Dm[k], phD(k, C.rgOk && isFinite(calcD(C, k)) ? f(calcD(C, k), 3) : ''), mk(Dm, k))).join('') + `<p class="note">One value for every span. ${C.rgOk ? 'Blank: the calculated value (span 1 in grey; the pier g moment: blank = the entered span value, else calculated).' : ''}</p>`
         : `<p class="note">Span 1: g<sub>M</sub> ${f(s0.gM, 3)}, g<sub>V</sub> ${f(s0.gV, 3)}, fatigue ${f(s0.fatM, 3)} / ${f(s0.fatV, 3)}, g<sub>Δ</sub> ${f(s0.gDef, 3)}${DF.piers.length ? `; pier 1 g<sub>M</sub> ${f(DF.piers[0].gM, 3)}` : ''} (every span: <a href="#" data-gotab="an">Analysis tab</a>).</p>`}`, 'an-df');
     return h;
   }
   /* onInputChange(el, P, gi): a change on the Loads input tab; true when it was one of these inputs (the project is changed) */
-  function onInputChange(el, P, gi) {
+  function onInputChange(el, P, gi, opt) {
     const sc = el.dataset && el.dataset.an, k = el.dataset && el.dataset.k; if (!sc || !k) return false;
+    // SBLO: entering a line's overrides (opt.lov = { j }): the entered values and the boxes go to girders[gi].lineOv[j] (blank: the type's)
+    const LV = opt && opt.lov && (sc === 'l' || sc === 'd' || sc === 'lovb') ? opt.lov : null, M = window.SBDModel;
+    if (LV) { const o = M.lineOvEntry(P, gi, LV.j);
+      if (sc === 'lovb') { if (el.value === '') delete o[k]; else o[k] = el.value === 'true'; }
+      else { const f0 = sc === 'l' ? 'loadsManual' : 'dfManual', m = { ...(o[f0] || {}) }; if (el.value === '' || !isFinite(Number(el.value))) delete m[k]; else m[k] = Number(el.value); if (Object.keys(m).length) o[f0] = m; else delete o[f0]; }
+      if (!M.lineOv(P, gi, LV.j)) M.lineOvReset(P, gi, LV.j);
+      return true; }
     const g = P.girders[gi];
     if (sc === 'a' && el.type !== 'checkbox') { P.analysis = P.analysis || {}; const v = el.value; P.analysis[k] = el.tagName === 'SELECT' ? (v === 'true' ? true : v === 'false' ? false : v === '' ? null : v) : k === 'seqCustom' ? v : (v === '' ? null : Number(v)); }
     else if (sc === 'a' && el.type === 'checkbox') { P.analysis = P.analysis || {}; P.analysis[k] = !!el.checked; }

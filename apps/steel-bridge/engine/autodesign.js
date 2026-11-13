@@ -908,10 +908,14 @@
   const TYPE_LOCK = ['nb', 'oh', 'spl', 'splPl', 'tsSp', 'tsA_b', 'tsA_t', 'tsB_b', 'tsB_t', 'bsA_n', 'bsA_b', 'bsA_t', 'bsB_n', 'bsB_b', 'bsB_t', 'scP', 'scN', 'cf', 'weld'];
   const typeScope = P => (P.girders || []).some(g => Array.isArray(g.lines)) ? 'each' : 'together';
   const linesOf = (P, t) => { const M = MD(), L = M.typeLines(P, t); return L.length ? L : [M.designLine(P, P.girders[t])]; };
+  /* lineVals(P, t, j) (SBLO, 2026-11-13): the fields line j overrides for type t (girders[t].lineOv), as its copy in the run reads them (the
+     effective values the Summary works on that line through SBDModel.atLine); {} for a line without overrides (as before) */
+  const lineVals = (P, t, j) => { const M = MD(), o = M && M.lineOv ? M.lineOv(P, t, j) : null; if (!o) return {}; const g = P.girders[t], out = {};
+    M.LO_KEYS.forEach(k => { const v = M.effective(g, o, k); if (v !== undefined) out[k] = clone(v); }); return out; };
   function typeProject(P, t) {
     const Q = clone(P), G = P.girders, g = G[t], L = linesOf(P, t), at = [], out = [];   // at[k]: the new indices of old girder k
     G.forEach((q, k) => { if (k !== t) { at[k] = [out.length]; out.push({ ...clone(q), adFixed: true }); return; }
-      at[k] = L.map((j, n) => out.push({ ...clone(g), id: n ? `${g.id}@${j + 1}` : g.id, label: L.length > 1 ? `${g.label || g.id} on G${j + 1}` : (g.label || g.id), line: j, lines: [j], adLines: L.slice() }) - 1); });   // SBXF2 (SB-18): adLines, the type's lines (its brace checks use the frames attached to any of them, as the Summary)
+      at[k] = L.map((j, n) => out.push({ ...clone(g), id: n ? `${g.id}@${j + 1}` : g.id, label: L.length > 1 ? `${g.label || g.id} on G${j + 1}` : (g.label || g.id), line: j, lines: [j], adLines: L.slice(), ...lineVals(P, t, j) }) - 1); });   // SBXF2 (SB-18): adLines, the type's lines (its brace checks use the frames attached to any of them, as the Summary)
     Q.girders = out;
     const ly = Q.stiffeners && Q.stiffeners.layout; if (ly && Array.isArray(ly.bays)) ly.bays = ly.bays.flatMap(q => (at[+q.g - 1] || []).map(i => ({ ...clone(q), g: i + 1 })));   // by girder number
     const S = Q.splices; if (S && Array.isArray(S.plates)) S.plates = S.plates.flatMap(q => !q || q.g == null ? [q] : (at[+q.g] || []).map(i => ({ ...clone(q), g: i })));   // by girder index
