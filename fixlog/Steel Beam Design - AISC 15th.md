@@ -3245,7 +3245,7 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
 - **Provisions:** AISC 360-16 Table B4.1a/b, F7, F8, G4, G5, G2.1 (Cv2), E3, E7, H1.1, H3.1, H3.2; AISC Design Examples F.7B.
 - **Saved data:** none. **Calculation change:** none.
 - **Open item found (not changed):** round HSS D/t is recomputed as OD/tdes with the database's *rounded* OD. Example: HSS10.750X0.500 has OD 10.8, so D/t = 23.23 against the tabulated 23.1. This makes D/t about 0.5% high, which is slightly conservative for F8-2/3, G5 and H3-2. The test fixture records the value as is.
-## 2026-11-13 — PR: claude/sbeam-hss-entry (PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__) (SBHSS) — HSS entry point: the tools page's "HSS Beam Design" card opens this tool with an HSS section for a new project   [navigation / start-up only; no calculation, saved key or format change]
+## 2026-11-13 — PR: claude/sbeam-hss-entry (PR #1473: https://github.com/mlococo88/All-Structural/pull/1473) (SBHSS) — HSS entry point: the tools page's "HSS Beam Design" card opens this tool with an HSS section for a new project   [navigation / start-up only; no calculation, saved key or format change]
 - **Engineer's decision (2026-11-13):** no separate HSS app. Instead, a visible HSS starting point into this tool (HSS review, recommendation (e)).
 - **Where:**
   1. **New functions** `sbSetFamily(v)`, `sbIsBlank()` and `sbHssEntry()`, with their comment block (anchor `SBHSS (2026-11-13, engineer: improve this tool for HSS`). They sit just before `if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();`.

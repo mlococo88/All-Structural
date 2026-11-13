@@ -114,7 +114,7 @@
 - **Formulas, factors, units, code references:** none. **Saved data:** none.
 - **How verified:** headless Chromium: the card shows the new name, the filter "canopy" finds it, 0 console errors. **Other copies:** none. **Open items:** none.
 
-## 2026-11-13 — PR: claude/sbeam-hss-entry (PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__) (SBHSS) — card "HSS Beam Design" (an entry into Steel Beam Design)   [navigation only]
+## 2026-11-13 — PR: claude/sbeam-hss-entry (PR #1473: https://github.com/mlococo88/All-Structural/pull/1473) (SBHSS) — card "HSS Beam Design" (an entry into Steel Beam Design)   [navigation only]
 - **Where:** "Members & detailing" section, right after the card `href="Steel%20Beam%20Design%20-%20AISC%2015th.html"` (anchor `Multi-span steel beam analysis and design, composite, torsion, batch.`).
 - **Before:** no HSS card.
 - **After:** `<a class="card" href="Steel%20Beam%20Design%20-%20AISC%2015th.html#hss" target="_blank"><div class="name">HSS Beam Design</div><div class="desc">Rectangular, square and round HSS: … Part of Steel Beam Design: opens it with an HSS section for a new project; a project already open is kept.</div><span class="tag">AISC 360-16</span></a>`. This is the same pattern as the `Concrete%20Beam%20Capacity.html#dev` card. The link is relative, so it works from file://.
