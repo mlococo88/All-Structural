@@ -9008,3 +9008,90 @@ index caf8749..e3277a1 100644
      if (!putC(host, 'welds', ctx, TX => TX.welds(B, ctx.P, { gi: gi(ctx), sel }), 'welds', { P: ctx.P, gi: gi(ctx), R: B, sel, onSel })) put(host, 'welds', ctx, TX => TX.welds(B, ctx.P, { gi: gi(ctx), sel }), onSel);
      const oW = { i: sel && sel.k === 'fw' ? sel.i : undefined };
 ```
+
+## 2026-11-13 — PR: claude/sb-cf10-notes (PR #1500: https://github.com/mlococo88/All-Structural/pull/1500) — Cross-frames tab and Report: CF10's recommendation (cross-frame or diaphragm, which shape, by bay depth group) and the bracing in use shown in its row, linked to its worked step; every check's note shown below the check table (SBCKN; display only, CLAUDE.md §6; no value changes)
+- **Problem:** the check table of the Cross-frames tab (`ui/framing.js results`) and of the Report (`report/builders.js frm`) shows an item's demand and resistance numbers (or, where they are not numbers, its first two text cells `cells[0]`, `cells[1]`). Two things the engine writes were therefore never shown: (1) CF10's recommendation and the bracing in use, the third and fourth cells of its item (`TR.rec`, `TR.sel` of `cfTypeRec`: the cross-frame type by S/h or S/d, or the channel / rolled W diaphragm, and since #1490 (SB-22) the section per bay depth group); (2) every check's note `c.note` (the basis and assumptions of CF1, CF2, CF3, CF4, CF6, CF7, CF8, CF9, CF10 (with the SB-22 sentence and the owner rule), CF11 (the owner rules), CFD and CFE (the section properties, the flexure basis, the wind load path)). CF5 has no note. Also, CF10's (and CF11's S/d item's) § link pointed at `cf.type`, a step that exists only for girder types with a diaphragm recommended and unequal depths (#1490): elsewhere the tab's § went nowhere and the Report showed no link.
+- **Change (display only):**
+  - `ui/framing.js`: new `ckRec(c, it)` (CF10's two texts, `{ rec: cells[2], sel: cells[3] }`, null for any other item), `recStep(ids)` (the step that works the recommendation: `cf.type` when the steps have it, else the girder depth `cf.dg` it is chosen from), `ckNotes(C)` (`[{ id, note }]` of the checks with a note); exported. The table's Item cell of CF10 adds a line "Recommended: … In use: … §" (§ to `recStep`); the § column maps a `cf.type` link that has no step to `recStep`; below the table one paragraph per check note, "CF10: … §".
+  - `report/builders.js frm`: the same, from the same helpers: CF10's Item cell "Intermediate bracing. Recommended: …. In use: …. [[cf.type]]" (or `[[cf.dg]]`), the ratio cell's link through the same mapping, and a note "CFx: …" per check below the table (CF10's with its link).
+- **Values:** none changed (no engine file touched; the cells and notes printed are the strings `SBDCrossframes.checks` already returns).
+- **Proof (no value changes):** Node probe of 34 projects (the 33 project/type cases of #1490 (the built-in project, it with one field splice, 11 girders, CTDOT, MassDOT, a C15x33.9 and a W21x44 diaphragm, gd_builtin28, gd_xsA, two girders saved before types of unequal depth, a new project, CTDOT, MassDOT, one type on every line, C15x33.9, W21x44, equal D = 30 in AASHTO / MassDOT / CTDOT / with a W27x84, equal D = 20 in) plus 13 more (a pre-types project with a W27x84, equal D = 30 CTDOT with a C15x33.9, Interior 60 / Exterior 66 and 54, Interior 30 / Exterior 36 and the reverse, with and without a W30x99 and a CTDOT C15x33.9, three types 30 / 36 / 42 with and without a W36x135, three types 24 / 30 / 30 CTDOT C15x33.9): 62 girder-type cases. origin/main cc12d90 vs the branch: `inputsOf` p, `cfTypeRec`, every check (id, status, items, cells, notes), every worked step, the DC1 point loads, the DC1 moments of the analysis, the tab Download DXF and the Drawings cross-frame sheet: byte-identical in all 62 (and 34 sheets). The Report's frm section: identical in all 62 once the added text is taken out (the "Recommended … In use …" of CF10's Item cell, the "CFx: …" notes, and the CF10 ratio cell's link `null` → `cf.dg` where `cf.type` does not exist).
+- **Check case (Report, three types: Exterior G1, G6 D = 30, Mid G2, G5 D = 36, Core G3, G4 D = 42; Mid reported):** CF10 row before: Item "Intermediate bracing", Demand 31.88, Resistance 48.00, —, Warning. After: Item "Intermediate bracing. Recommended: by bay depth (one section does not fit every bay): G1–G2, G5–G6: rolled diaphragm W30x99; G2–G3, G4–G5: rolled diaphragm W36x135; G3–G4: rolled diaphragm W36x135. In use: X-frame. §(cf.type)", the same numbers and status. Built-in project: "… Recommended: K (bottom)-frame (S/h = 2.19). In use: X-frame. §(cf.dg)".
+- **Governing provision:** none changed (AASHTO LRFD 10th Ed. (2024) Art. 6.7.4.2 and the checks' own articles, as before).
+- **Saved data (§5):** none.
+- **How verified:** new tests/engine/xf-cf10-notes.test.mjs (the Report's CF10 cell for three types and the built-in project, the links resolve, every check's note shown, the demand cells equal the checks' numbers). Engine subsets and smoke tests: see the PR.
+- **Other copies:** none.
+- **Open items (not changed; reported):** other text cells of the items are still not shown where the item has numbers (e.g. CF6's "(g = …)" gage, CF8's and CFD's β_br / β_sec / β_g breakdown, CFD's "φ_f M_n = … (6.12.2.2.5, L_b ≤ L_p)" basis); each is worked in its step, which the row links.
+- **Before / after (exact):**
+```diff
+diff --git a/apps/steel-bridge/report/builders.js b/apps/steel-bridge/report/builders.js
+index b72c966..d914eff 100644
+--- a/apps/steel-bridge/report/builders.js
++++ b/apps/steel-bridge/report/builders.js
+@@ -393,6 +393,10 @@
+       return { kv: [[Bq.scope === 'type' ? `Governing bay (shallowest attached to ${tl})` : 'Governing bay (shallowest)', bt, 'cf.xfD'], [`$d_{W}$ (wind, ${wl})`, `${f(I.p.dW, 2)} in`, 'cf.dW']],
+         note: note(`Assumption (engineer decision 2026-11-13): each ${bn.replace(/s$/, '')} bay takes the depth of the shallower of the two girders it connects, by the girder type assigned to each line. The frame checked is the governing bay, ${Bq.scope === 'type' ? `the shallowest attached to any line of ${Bq.rep} (${tl}; engineer decision SB-18, 2026-11-13: the frames that brace this type)` : 'the shallowest'} (${bt}), with the largest girder spacing S and the largest $L_{b}$ as before; the ${bn.replace(/s$/, '')} weights in DC1 take each bay's own $h$${Bq.hAuto ? '' : ' ($h$ entered: the same in every bay)'}. ${Bq.ext ? 'The wind acts on the exterior girder depth $d_{W}$, the deeper of the girder types on G1 and the last line, whatever type is reported (engineer decision SB-20, 2026-11-13)' : 'The wind acts on the reported girder’s own depth $d_{W}$ (no girder type on an exterior line)'}; the stability bracing check braces the reported girder (${Bq.rep}).${dOn ? ' The diaphragm depth (CFD, CFE) is checked in every bay against the deeper of its two girders (engineer decision SB-19, 2026-11-13).' : ''} The depths are worked in the worked steps below (web depth of the governing bay, cross-frame depth h, girder depth d).`) }; })();
+     const work = [...L.steps, ...fl.steps, ...(R.steps || [])], ids = new Set(work.map(t => t.id)), lk = id => (id && ids.has(id) ? id : null);   // an item's step, where the work has it
++    // SBCKN (2026-11-13; display only): CF10's recommendation and the bracing in use in its Item cell, linked to the step that works it
++    // (cf.type, else d), and every check's note below the table, as the tab (ui/framing.js ckRec, recStep, ckNotes)
++    const rS = FUI && FUI.recStep ? FUI.recStep(ids) : null, sOf = id => (id === 'cf.type' && !ids.has(id) ? rS : id);
++    const locR = (c, it) => { const x = FUI && FUI.ckRec ? FUI.ckRec(c, it) : null; return x ? `${it.loc}. Recommended: ${tt(x.rec)}. In use: ${tt(x.sel)}.${rS ? ` [[${rS}]]` : ''}` : it.loc; };
+     if (gov) X.gov.push({ mod: dOn ? 'Diaphragms' : 'Cross-frames', grp: 'Cross-frames', check: `${gov.c.id} ${tt(gov.c.title)}`, loc: tt(gov.it.loc), r: gov.it.r, key: lk(gov.it.step) });
+     subs.push(sub('pl', 'Framing plan (6.7.4.2.1)', [svg ? { type: 'figure', svg, caption: `Plan: girders, bearing lines, ${bn} and field splices` } : null,
+       tbl(['Span', 'Skew θ (°)', 'Orientation', 'Frames', 'Spacing (ft)'], FR.orient.map(o => [String(o.k + 1), N(o.th, 2), o.o === 'normal' ? `normal, ${o.flat ? 'contiguous' : o.arr}` : 'parallel to the skew', String(o.n), { ...N(o.s, 3), key: `fr.k${o.k}.s` }])),
+@@ -402,9 +406,10 @@
+     subs.push(sub('fl', `Flange lateral bending from skew and ${dOn ? 'diaphragm' : 'cross-frame'} loads`, [kv([[`$f_{\\ell}$ from skew, G${line + 1} (C6.10.1)`, `${f(fl.fl, 2)} ksi`, 'flsk.fl'], [`${dOn ? 'Diaphragm' : 'Cross-frame'} point loads on G${line + 1}`, XF ? `${XF.pts.length}, ${f(XF.tot, 2)} kip` : 'not included']])]));
+     if (C) subs.push(sub('ck', FUI && FUI.ckHead ? FUI.ckHead(C, dOn) : `Checks (CF1 to CF11${C.some(c => c.id === 'CFD') ? ', CFD, CFE' : ''})`, [kv([['S (largest spacing)', `${f(I.p.S, 2)} in`], ['h / d', `${f(I.p.h, 2)} / ${f(I.p.dg, 2)} in`, I.p.xfBay ? 'cf.h' : 'cf.dg'], ...xb.kv, ['$L_{b}$ (largest)', `${f(I.p.Lb, 2)} ft`, 'cf.Lb']]), xb.note,
+       R.errors && R.errors.length ? note(R.errors.join(' '), true) : null,
+-      tbl(['Check', 'Item', 'Demand', 'Resistance / limit', 'Ratio', 'Status'], C.flatMap(c => c.items.length ? c.items.map(it => [`${c.id} ${c.title}`, it.loc, isFinite(it.demand) ? N(it.demand, 2) : (it.cells || [])[0] || '', isFinite(it.capacity) ? N(it.capacity, 2) : (it.cells || [])[1] || '',
+-        isFinite(it.r) ? R3(it.r, lk(it.step)) : { t: '—', key: lk(it.step) }, { pass: 'OK', fail: 'Fail', warn: 'Warning', adv: 'Advisory', na: 'n/a' }[it.st] || it.st]) : [[`${c.id} ${c.title}`, { t: c.naWhy || 'n/a', cls: 'na' }, '', '', '', 'n/a']])),
++      tbl(['Check', 'Item', 'Demand', 'Resistance / limit', 'Ratio', 'Status'], C.flatMap(c => c.items.length ? c.items.map(it => [`${c.id} ${c.title}`, locR(c, it), isFinite(it.demand) ? N(it.demand, 2) : (it.cells || [])[0] || '', isFinite(it.capacity) ? N(it.capacity, 2) : (it.cells || [])[1] || '',
++        isFinite(it.r) ? R3(it.r, lk(sOf(it.step))) : { t: '—', key: lk(sOf(it.step)) }, { pass: 'OK', fail: 'Fail', warn: 'Warning', adv: 'Advisory', na: 'n/a' }[it.st] || it.st]) : [[`${c.id} ${c.title}`, { t: c.naWhy || 'n/a', cls: 'na' }, '', '', '', 'n/a']])),
+       C.some(c => c.id === 'CFD') ? note('Diaphragm bracing (Framing & bracing tab): checks CFD (intermediate) and CFE (end diaphragms at the bearing lines); the angle checks CF1 to CF9 and member forces entered from a refined analysis do not apply.') : null,
++      ...(FUI && FUI.ckNotes ? FUI.ckNotes(C).map(q => note(`${q.id}: ${tt(q.note)}${q.id === 'CF10' && rS ? ` [[${rS}]]` : ''}`)) : []),   // SBCKN: every check's note, as the tab
+       note(`References: ${C.map(c => `${c.id} ${c.ref}`).join('; ')}.`)]));
+     if (R.frames && !dOn) subs.push(sub('mf', 'Member forces (truss model)', [tbl(['Member', 'Length (in)', 'per kip of $F_{w}$', ...R.combos.map(c => `${c.id} T / C (kip)`)], R.frames.map((e, i) => [e.lbl, N(e.L, 2), { ...N(e.unit, 3), key: `cf.tr${i}` }, ...R.combos.map(c => c.off ? 'not used' : `${f(c.f[i].T, 2)} / ${f(c.f[i].Cc, 2)}`)]))]));
+     subs.push(sub('w', 'Worked steps', [gsteps('SBDFramingUI:x', '', work)]));
+diff --git a/apps/steel-bridge/ui/framing.js b/apps/steel-bridge/ui/framing.js
+index 445bedc..d38359e 100644
+--- a/apps/steel-bridge/ui/framing.js
++++ b/apps/steel-bridge/ui/framing.js
+@@ -200,6 +200,16 @@
+      ckHead(C): the checks heading, as before for a cross-frame. */
+   const isDia = q => !!q && window.SBDCrossframes.cfDiaOn(q.crossframes || q);
+   const ckHead = (C, dOn) => dOn ? `Checks (${C.map(c => c.id).join(', ')})` : `Checks (CF1 to CF11${C.some(c => c.id === 'CFD') ? ', CFD, CFE' : ''})`;
++  /* SBCKN (2026-11-13; display only, CLAUDE.md §6): the check table shows an item's demand and resistance (or its first two text cells), so
++     two things the engine writes were never shown: CF10's recommendation and the bracing in use (its item's third and fourth cells: the
++     cross-frame or diaphragm, which shape, by bay depth group with girder types, SB-22) and every check's note (c.note: the basis and
++     assumptions of CF1 to CF11, CFD, CFE, e.g. CF10's SB-22 sentence and the owner rule). ckRec(c, it): CF10's two texts, null for any other
++     item; recStep(ids): the step that works the recommendation, cf.type (SB-22, #1490: girder types, a diaphragm recommended, unequal
++     depths) when the steps have it, else the girder depth d (cf.dg) it is chosen from; ckNotes(C): [{ id, note }] of the checks with a note.
++     Used by the tab and the Report (report/builders.js frm); the values are those of CF.checks, unchanged. */
++  const ckRec = (c, it) => c && c.id === 'CF10' && it && Array.isArray(it.cells) && it.cells.length >= 4 ? { rec: String(it.cells[2]), sel: String(it.cells[3]) } : null;
++  const recStep = ids => ids.has('cf.type') ? 'cf.type' : ids.has('cf.dg') ? 'cf.dg' : null;
++  const ckNotes = C => (C || []).filter(c => c && c.note).map(c => ({ id: c.id, note: String(c.note) }));
+   /* diaSvg(B): a simple elevation of the intermediate diaphragm between two girders (nominal shape, centred on the girder depth, as the
+      Drawings sheet), the connection plates and the bolt rows; the governing check below it. Not to scale vertically when d ≫ S. */
+   function diaSvg(B) {
+@@ -262,9 +272,12 @@
+       ${XF ? `<div><span>Weight model</span><span>${esc(XF.X.kind === 'ovr' ? 'entered per frame' : XF.X.kind === 'dia' ? 'diaphragms' : 'angles')}${XF.X.allow ? ` + ${fmt(XF.X.allow, 0)} %` : ''}</span></div>` : ''}</div>
+       ${XF ? `<details><summary class="note">Point loads (x ft : P kip)</summary><p class="note">${XF.pts.map(q => `${fmt(q.x, 2)} : ${fmt(q.P, 3)}${q.end ? ' (bearing line)' : ''}`).join('; ')}</p></details>` : ''}</div></section>`;
+     // checks
++    const sIds = new Set((R.steps || []).map(t => t.id)), rS = recStep(sIds), sOf = id => (id === 'cf.type' && !sIds.has(id) ? rS : id);   // SBCKN: CF10's § to the step that exists
++    const locH = (c, it) => { const x = ckRec(c, it); return window.SBDSub.html(it.loc) + (x ? `<div class="note">Recommended: ${window.SBDSub.html(x.rec)}. In use: ${window.SBDSub.html(x.sel)}. ${wk(rS)}</div>` : ''); };
+     if (C) h += `<section class="sec"><div class="secHead">${ckHead(C, dOn)}</div><div class="secBody"><div class="tscroll"><table class="tbl"><thead><tr><th>Check</th><th class="lft">Item</th><th>Demand</th><th>Resistance / limit</th><th>Ratio</th><th>Status</th><th></th></tr></thead><tbody>
+-      ${C.map(c => c.items.length ? c.items.map((it, j) => `<tr>${j === 0 ? `<td rowspan="${c.items.length}" title="${esc(c.ref)}"><b>${esc(c.id)}</b><br><span class="note">${window.SBDSub.html(c.title)}</span></td>` : ''}<td class="lft">${window.SBDSub.html(it.loc)}</td><td>${isFinite(it.demand) ? big(it.demand) : esc((it.cells || [])[0] || '')}</td><td>${isFinite(it.capacity) ? big(it.capacity) : it.capacity === Infinity ? '∞' : esc((it.cells || [])[1] || '')}</td><td class="${cls(it.r)}">${isFinite(it.r) ? fmt(it.r, 3) : '—'}</td><td class="${it.st === 'fail' ? 'fx-ng' : it.st === 'warn' ? 'fx-hi' : it.st === 'na' ? 'fx-na' : 'fx-ok'}">${stName(it.st)}</td><td>${wk(it.step)}</td></tr>`).join('')
++      ${C.map(c => c.items.length ? c.items.map((it, j) => `<tr>${j === 0 ? `<td rowspan="${c.items.length}" title="${esc(c.ref)}"><b>${esc(c.id)}</b><br><span class="note">${window.SBDSub.html(c.title)}</span></td>` : ''}<td class="lft">${locH(c, it)}</td><td>${isFinite(it.demand) ? big(it.demand) : esc((it.cells || [])[0] || '')}</td><td>${isFinite(it.capacity) ? big(it.capacity) : it.capacity === Infinity ? '∞' : esc((it.cells || [])[1] || '')}</td><td class="${cls(it.r)}">${isFinite(it.r) ? fmt(it.r, 3) : '—'}</td><td class="${it.st === 'fail' ? 'fx-ng' : it.st === 'warn' ? 'fx-hi' : it.st === 'na' ? 'fx-na' : 'fx-ok'}">${stName(it.st)}</td><td>${wk(sOf(it.step))}</td></tr>`).join('')
+         : `<tr><td title="${esc(c.ref)}"><b>${esc(c.id)}</b></td><td class="lft fx-na" colspan="6">${window.SBDSub.html(c.title)}: ${esc(c.naWhy || 'n/a')}</td></tr>`).join('')}</tbody></table></div>
++      ${ckNotes(C).map(q => `<p class="note"><b>${esc(q.id)}:</b> ${window.SBDSub.html(q.note)}${q.id === 'CF10' ? ` ${wk(rS)}` : ''}</p>`).join('')}
+       <p class="note">References: ${C.map(c => `${esc(c.id)} ${esc(c.ref)}`).join('; ')}.</p></div></section>`;
+     // member forces
+     if (R.frames && !dOn) h += `<section class="sec"><div class="secHead">Member forces (truss model)</div><div class="secBody"><div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Member</th><th>Length (in)</th><th>per kip of F<sub>w</sub></th>${R.combos.map(c => `<th>${esc(c.id)} T / C (kip)</th>`).join('')}</tr></thead><tbody>
+@@ -289,5 +302,5 @@
+     host.querySelectorAll('[data-cfgo]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const t = host.querySelector('#st-' + a.dataset.cfgo.replace(/[^\w.-]/g, '').replace(/\./g, '\\.')); if (t) { t.scrollIntoView({ block: 'center' }); t.style.background = '#FFF7D6'; } }));
+   }
+ 
+-  window.SBDFramingUI = { ensure, braceOf, setBrace, inputs, windCard, layoutPlan, onChange, onClick, render, build, plan, TOPICS, groups, isDia, ckHead, diaSvg };
++  window.SBDFramingUI = { ensure, braceOf, setBrace, inputs, windCard, layoutPlan, onChange, onClick, render, build, plan, TOPICS, groups, isDia, ckHead, diaSvg, ckRec, recStep, ckNotes };
+ })();
+```

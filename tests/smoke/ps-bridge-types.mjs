@@ -101,6 +101,36 @@ if (args.shots) await p.screenshot({ path: path.join(args.shots, 'ps3a-1400-type
 check(!o.errs.length, 'console errors (saved before 3a): ' + o.errs.join(' | '));
 await o.b.close();
 
+// 6. PR 3a-2: every type on every line — unequal bays 8, 10, 10, 8 ft: S per line, the check summary over every type and line (named), the
+//    Summary tab's table (a row per type and per line, weights and the bridge total), a ratio opens its tab with that type and line; the
+//    Report's §1 table of every type and line; different end skews below 30° allowed, 30° or more with the DF computed an input error
+o = await openPage(FILE, { vw: 1400, vh: 1000 }); p = o.p; await ready(p);
+await p.click('#inTabs [data-itab="xsec"]'); await p.fill('#i_xs\\.bays', '8, 10, 10, 8'); await p.press('#i_xs\\.bays', 'Tab'); await p.waitForTimeout(400);
+check(!/to fix/.test(await p.textContent('#sbDashCol')), 'unequal bays: no input error');
+{ const r = await p.evaluate(() => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, BR = window.PSBBridge;
+    const A = BR.results(P, i => window.PSBHoldDown.compute(JSON.parse(JSON.stringify(i)))), fl = A.cells.flatMap(c => c.R.checks.filter(q => q.n === 'Flexure').map(q => ({ r: q.r, g: c.g, lab: c.label })));
+    const gov = fl.reduce((b, z) => !b || z.r > b.r ? z : b, null), chip = document.querySelector('#sbDashCol [data-sdgrp="flex"] .sdVal').textContent;
+    return { S: A.cells.map(c => c.inp.S), gov, chip, n: A.n, W: A.W }; });
+  check(r.S.join(',') === '9,10,9,8,8' && r.n === 5, 'S per line ' + r.S.join(','));
+  check(r.chip === r.gov.r.toFixed(3), `flexure chip = the worst of every type and line ${r.chip} vs ${r.gov.r} (${r.gov.lab} G${r.gov.g})`);
+  await p.click('#sbDashCol [data-sdgrp="flex"] .sdX'); check(/Flexure — (Interior|Exterior) S1 on G\d: /.test(await p.textContent('#sbDashCol')), 'chip list names the type and line');
+  await p.click('#tabBar [data-otab="sum"]'); await p.waitForTimeout(300);
+  const t = (await p.textContent('#card-tysum')).replace(/\s+/g, ' ');
+  check(/Interior S1/.test(t) && /on line G3/.test(t) && /Bridge total \(5 girders\)/.test(t) && t.includes(r.W.toFixed(1)), 'Summary table: types, lines, bridge total ' + r.W.toFixed(1));
+  await p.click('#card-tysum a[data-tycell^="0|3|flex"]'); await p.waitForTimeout(300);
+  check(await p.evaluate(() => document.querySelector('#tabBar [data-otab="flex"]').getAttribute('aria-selected') === 'true' && document.querySelector('#tyOutL option:checked').value === '3'), 'a ratio opens Flexure with Interior S1 on G3');
+  const e = await evCheck(p); check(e.n >= 20 && !e.bad.length, `Interior on G3 (S = 10 ft): ${e.n} values ${e.bad.slice(0, 3).join(' | ')}`);
+  if (args.shots) { await p.click('#tabBar [data-otab="sum"]'); await p.waitForTimeout(300); await p.screenshot({ path: path.join(args.shots, 'ps3a-1400-summary-types.png') }); }
+  await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 60000 }); await p.waitForTimeout(200);
+  const rp = await p.evaluate(() => { const s1 = document.querySelector('.rp-doc section[data-rpsec="rp-s1"]'); return s1 ? s1.textContent.replace(/\s+/g, ' ') : ''; });
+  check(/Every girder type and line/.test(rp) && /2 girder types on 5 girder lines/.test(rp) && /girder type Interior S1 on line G3, span 1/.test(rp), 'Report §1: every type and line, the reported cell named'); }
+await p.click('#inTabs [data-itab="layout"]'); await p.fill('#i_xs\\.skews', '10, 20'); await p.press('#i_xs\\.skews', 'Tab'); await p.waitForTimeout(300);
+check(!/to fix/.test(await p.textContent('#sbDashCol')), 'skews 10, 20: allowed');
+await p.fill('#i_xs\\.skews', '20, 35'); await p.press('#i_xs\\.skews', 'Tab'); await p.waitForTimeout(300);
+check(/larger is 30° or more/.test(await p.textContent('#sbDashCol')), 'skews 20, 35 with the DF computed: input error');
+check(!o.errs.length, 'console errors (3a-2): ' + o.errs.join(' | '));
+await o.b.close();
+
 // 5. phone
 o = await openPage(FILE, { vw: 390, vh: 844 }); p = o.p; await ready(p);
 await p.click('#inTabs [data-itab="gird"]'); await p.waitForTimeout(200);

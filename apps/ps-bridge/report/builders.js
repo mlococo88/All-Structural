@@ -67,7 +67,19 @@
     const kq = kv([['Girder', `${plain(B.inp.girder)}, span L = ${V('L', 2)} ft, ${V('ss.Ntot', 0)} strands`], ['Total loss Δf$_{pT}$', `${V('totalLoss', 2)} ksi (${V('pctLoss', 1)} %) (see [[ls.total]])`],
       ['Effective prestress f$_{pe}$', `${V('fpe', 2)} ksi (see [[ls.fpe]])`], ['DF$_{M}$ / DF$_{V}$', `${V('dfm', 3)} / ${V('dfv', 3)} (see [[ld.dfm]])`],
       ['φM$_{n}$ / M$_{u}$ at midspan', `${V('fMid.phiMn', 0, 12)} / ${V('MuMid', 0, 12)} kip-ft (see [[fx.phiMn]])`], ['Camber at release / final', `${V('cam.rel', 2)} / ${V('cam.final', 2)} in (see [[cb.rel]])`]]);
-    const subs = [sub('chk', 'Design checks of the design girder', items), sub('kq', 'Key quantities', [kq])];
+    const subs = [sub('chk', B.cell ? `Design checks of girder type ${plain(B.P.types[B.cell.k].label)} on line G${B.cell.g}, span ${B.cell.s}` : 'Design checks of the design girder', items), sub('kq', 'Key quantities', [kq])];
+    // PR 3a-2: every girder type on every line (several cells): each type's governing check, its worst line, and each line's; this report
+    // works the type and line chosen above the tabs (the others: choose them there; the same steps)
+    if (B.all && B.all.n > 1) {
+      const fx = (v, d) => (typeof v === 'number' && isFinite(v) ? v.toFixed(d) : '—'), gv = cs => cs.reduce((b, q) => (!b || q.r > b.r ? q : b), null);
+      const trs = []; B.all.types.forEach(t => { const top = Object.values(t.gov).reduce((b, v) => (!b || v.c.r > b.c.r ? v : b), null), nF = Object.values(t.gov).filter(v => !v.c.pass).length;
+        trs.push({ cells: [plain(t.label), String(t.span), top ? `G${top.g}` : '—', top ? plain(top.c.n) : '—', { t: top ? fx(top.c.r, 3) : '—', n: true, cls: top && !top.c.pass ? 'ng' : 'ok' }, nF ? `FAIL (${nF})` : 'PASS', { t: fx(t.W, 1), n: true }], cls: nF ? 'gov' : '' });
+        if (t.cells.length > 1) t.cells.forEach(c => { const q = c.R && c.R.checks ? gv(c.R.checks) : null;
+          trs.push(['', '', `G${c.g}`, q ? plain(q.n) : (c.R && c.R.error ? 'engine error' : '—'), { t: q ? fx(q.r, 3) : '—', n: true, cls: q && !q.pass ? 'ng' : '' }, q ? (c.R.checks.some(z => !z.pass) ? 'FAIL' : 'PASS') : '—', { t: fx(c.W, 1), n: true }]); }); });
+      trs.push({ cells: ['Bridge total', '', `${B.all.n} lines`, '', '', '', { t: fx(B.all.W, 1), n: true }], cls: '' });
+      subs.splice(1, 0, sub('all', 'Every girder type and line', [note(`${B.all.types.length} girder types on ${B.all.n} girder lines (every span). Each type is checked on every line assigned to it with that line's span, spacing, position, overhang and skew; the worst line governs (its row first, then a row per line). This report works ${B.cell ? `girder type ${plain(B.P.types[B.cell.k].label)} on line G${B.cell.g}, span ${B.cell.s}` : 'the girder shown'} (the summary above and every section below); the other types and lines are worked the same way on the result tabs (choose the type and line above them) and listed on the [[tab:sum|Summary tab]]. Weight: w$_{sw}$ (L + 2 e$_{end}$/12) per line (see [[rs.end]] for W), the type's the sum over its lines.`),
+        tbl(['Girder type', 'Span', 'Line', 'Governing check', 'Ratio', 'Status', 'Weight (kip)'], trs, { wide: true })]));
+    }
     if ((R.warns || []).length) subs.push(sub('warn', `Design warnings of the engine (${R.warns.length})`, R.warns.map(w => note(plain(w), true))));
     return { title: 'Summary of checks', subs };
   }
@@ -149,7 +161,7 @@
     // the figures (each tab's own graphics, opt.figures from ui/report.js; none in Node): numbered "Figure n.m" by section n (the numbers of
     // the shared viewer: the sections shown, in order) and their order m in it, as the caption's lead
     secs.forEach((s, i) => { let m = 0; s.subs.forEach(q => q.items.forEach(it => { if (it.type === 'figure') { m++; it.no = `${i + 1}.${m}`; it.caption = `Figure ${i + 1}.${m}: ${it.caption || ''}`; } })); });
-    const d = B.sel, gid = plain(B.inp.proj && B.inp.proj.girderId);
+    const d = B.sel, gid = (B.cell ? `type ${plain(B.P.types[B.cell.k].label)}, ` : '') + plain(B.inp.proj && B.inp.proj.girderId);   // PR 3a-2: the girder type named
     return { title: 'Prestressed Bridge Design', subtitle: `Calculation report: design girder ${gid}, span ${d.s}${p.name ? ', ' + p.name : ''}`,
       code: `${ED}; MBE (LRFR load rating). The design girder's results, as on the result tabs.`,
       info: [['Project No', p.number], ['Computed by', p.designer], ['Date', p.date], ['Project', p.name], ['Checked by', p.checker], ['Girder', `${gid}, span ${d.s}`]],

@@ -144,3 +144,44 @@ test('stored types that cannot be read are kept (typesBad), the design girder ma
   assert.equal(r.ok, true); assert.deepEqual(J(r.project.typesBad), J(P.types)); assert.equal(r.project.types.length, 1); assert.equal(r.notes.length, 1);
   assert.ok(M.validate(Object.assign(J(r.project), { types: 'x' })).errors.some(e => e.path === 'types'));
 });
+
+// ---------- PR 3a-2: every type on every line; unequal bays; different end skews ----------
+test('3a-2 unequal bays: S per line = the exterior bay / the mean of the two bays; an interior line with mean 9 ft = the 9 ft equal-bay design exactly', () => {
+  const P = M.newProject(); P.xs.bays = [8, 10, 10, 8];
+  assert.deepEqual(J(errs(P)), []);
+  assert.deepEqual([1, 2, 3, 4, 5].map(g => D.lineS(P, g)), [8, 9, 10, 9, 8]);
+  const Q = M.newProject();   // equal 9 ft bays
+  const a = D.cellInputs(P, 0, 2), b = D.cellInputs(Q, 0, 2);
+  assert.equal(a.S, 9); assert.equal(JSON.stringify(a), JSON.stringify(b), 'G2 of 8-10-10-8 = G2 of 9-9-9-9 (inputs)');
+  assert.equal(C(W.computeAll(J(a))), C(W.computeAll(J(b))));
+  const g3 = W.computeAll(J(D.cellInputs(P, 0, 3))), r3 = W.computeAll(J(Object.assign(D.cellInputs(Q, 0, 3), { S: 10 })));
+  assert.equal(C(g3), C(r3), 'G3: the 10 ft design');
+  const e = D.cellInputs(P, 1, 1); assert.equal(e.S, 8); assert.equal(e.loads.pos, 'exterior');
+});
+
+test('3a-2 different skews at a span\'s supports: the larger |θ|; ≥ 30° with the DF computed an input error, entered DF allowed', () => {
+  const P = M.newProject(); P.xs.skews = [10, 20];
+  assert.deepEqual(J(errs(P)), []); assert.equal(D.inputs(P).loads.skew, 20);
+  const Q = M.newProject(); Q.xs.skews = [20, 20]; assert.equal(C(W.computeAll(J(D.inputs(P)))), C(W.computeAll(J(D.inputs(Q)))), 'below 30°: = the 20° design');
+  P.xs.skews = [20, 35];
+  assert.ok(errs(P).some(x => x.path === 'xs.skews' && /larger is 30° or more/.test(x.msg)));
+  P.base.loads.dfAuto = false; P.base.loads.dfm = 0.7; P.base.loads.dfv = 0.8;
+  assert.deepEqual(J(errs(P)), []);
+  P.base.loads.dfAuto = true; P.types.forEach(t => { t.ovr['loads.dfAuto'] = false; t.ovr['loads.dfm'] = 0.7; t.ovr['loads.dfv'] = 0.8; });
+  assert.deepEqual(J(errs(P)), [], 'every type of the span with its DF entered');
+});
+
+test('3a-2 results: every type on every line, each check\'s worst line, weights per line and the bridge total', () => {
+  const P = M.newProject(); P.xs.bays = [8, 10, 10, 8];
+  const A = B.results(P, i => W.PSBHoldDown.compute(J(i)));
+  assert.equal(A.n, 5); assert.equal(A.types.length, 2);
+  A.cells.forEach(c => assert.equal(C(c.R), C(W.PSBHoldDown.compute(J(D.cellInputs(P, c.k, c.g)))), `G${c.g}`));
+  const I = A.types[0];
+  for (const [n, v] of Object.entries(I.gov)) {
+    const rs = I.cells.map(c => c.R.checks.find(q => q.n === n)).filter(Boolean), mx = Math.max(...rs.map(q => q.r));
+    assert.equal(v.c.r, mx, n); assert.equal(v.cell.R.checks.find(q => q.n === n).r, mx);
+  }
+  assert.equal(I.gov['Flexure'].g, 3, 'interior flexure governs on G3 (S = 10 ft)');
+  const w = A.cells[0].R.g.wsw * 120; A.cells.forEach(c => assert.ok(Math.abs(c.W - w) < 1e-9));
+  assert.ok(Math.abs(A.W - 5 * w) < 1e-9); assert.ok(Math.abs(I.W - 3 * w) < 1e-9);
+});

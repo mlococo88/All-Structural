@@ -200,6 +200,16 @@
      ckHead(C): the checks heading, as before for a cross-frame. */
   const isDia = q => !!q && window.SBDCrossframes.cfDiaOn(q.crossframes || q);
   const ckHead = (C, dOn) => dOn ? `Checks (${C.map(c => c.id).join(', ')})` : `Checks (CF1 to CF11${C.some(c => c.id === 'CFD') ? ', CFD, CFE' : ''})`;
+  /* SBCKN (2026-11-13; display only, CLAUDE.md §6): the check table shows an item's demand and resistance (or its first two text cells), so
+     two things the engine writes were never shown: CF10's recommendation and the bracing in use (its item's third and fourth cells: the
+     cross-frame or diaphragm, which shape, by bay depth group with girder types, SB-22) and every check's note (c.note: the basis and
+     assumptions of CF1 to CF11, CFD, CFE, e.g. CF10's SB-22 sentence and the owner rule). ckRec(c, it): CF10's two texts, null for any other
+     item; recStep(ids): the step that works the recommendation, cf.type (SB-22, #1490: girder types, a diaphragm recommended, unequal
+     depths) when the steps have it, else the girder depth d (cf.dg) it is chosen from; ckNotes(C): [{ id, note }] of the checks with a note.
+     Used by the tab and the Report (report/builders.js frm); the values are those of CF.checks, unchanged. */
+  const ckRec = (c, it) => c && c.id === 'CF10' && it && Array.isArray(it.cells) && it.cells.length >= 4 ? { rec: String(it.cells[2]), sel: String(it.cells[3]) } : null;
+  const recStep = ids => ids.has('cf.type') ? 'cf.type' : ids.has('cf.dg') ? 'cf.dg' : null;
+  const ckNotes = C => (C || []).filter(c => c && c.note).map(c => ({ id: c.id, note: String(c.note) }));
   /* diaSvg(B): a simple elevation of the intermediate diaphragm between two girders (nominal shape, centred on the girder depth, as the
      Drawings sheet), the connection plates and the bolt rows; the governing check below it. Not to scale vertically when d ≫ S. */
   function diaSvg(B) {
@@ -262,9 +272,12 @@
       ${XF ? `<div><span>Weight model</span><span>${esc(XF.X.kind === 'ovr' ? 'entered per frame' : XF.X.kind === 'dia' ? 'diaphragms' : 'angles')}${XF.X.allow ? ` + ${fmt(XF.X.allow, 0)} %` : ''}</span></div>` : ''}</div>
       ${XF ? `<details><summary class="note">Point loads (x ft : P kip)</summary><p class="note">${XF.pts.map(q => `${fmt(q.x, 2)} : ${fmt(q.P, 3)}${q.end ? ' (bearing line)' : ''}`).join('; ')}</p></details>` : ''}</div></section>`;
     // checks
+    const sIds = new Set((R.steps || []).map(t => t.id)), rS = recStep(sIds), sOf = id => (id === 'cf.type' && !sIds.has(id) ? rS : id);   // SBCKN: CF10's § to the step that exists
+    const locH = (c, it) => { const x = ckRec(c, it); return window.SBDSub.html(it.loc) + (x ? `<div class="note">Recommended: ${window.SBDSub.html(x.rec)}. In use: ${window.SBDSub.html(x.sel)}. ${wk(rS)}</div>` : ''); };
     if (C) h += `<section class="sec"><div class="secHead">${ckHead(C, dOn)}</div><div class="secBody"><div class="tscroll"><table class="tbl"><thead><tr><th>Check</th><th class="lft">Item</th><th>Demand</th><th>Resistance / limit</th><th>Ratio</th><th>Status</th><th></th></tr></thead><tbody>
-      ${C.map(c => c.items.length ? c.items.map((it, j) => `<tr>${j === 0 ? `<td rowspan="${c.items.length}" title="${esc(c.ref)}"><b>${esc(c.id)}</b><br><span class="note">${window.SBDSub.html(c.title)}</span></td>` : ''}<td class="lft">${window.SBDSub.html(it.loc)}</td><td>${isFinite(it.demand) ? big(it.demand) : esc((it.cells || [])[0] || '')}</td><td>${isFinite(it.capacity) ? big(it.capacity) : it.capacity === Infinity ? '∞' : esc((it.cells || [])[1] || '')}</td><td class="${cls(it.r)}">${isFinite(it.r) ? fmt(it.r, 3) : '—'}</td><td class="${it.st === 'fail' ? 'fx-ng' : it.st === 'warn' ? 'fx-hi' : it.st === 'na' ? 'fx-na' : 'fx-ok'}">${stName(it.st)}</td><td>${wk(it.step)}</td></tr>`).join('')
+      ${C.map(c => c.items.length ? c.items.map((it, j) => `<tr>${j === 0 ? `<td rowspan="${c.items.length}" title="${esc(c.ref)}"><b>${esc(c.id)}</b><br><span class="note">${window.SBDSub.html(c.title)}</span></td>` : ''}<td class="lft">${locH(c, it)}</td><td>${isFinite(it.demand) ? big(it.demand) : esc((it.cells || [])[0] || '')}</td><td>${isFinite(it.capacity) ? big(it.capacity) : it.capacity === Infinity ? '∞' : esc((it.cells || [])[1] || '')}</td><td class="${cls(it.r)}">${isFinite(it.r) ? fmt(it.r, 3) : '—'}</td><td class="${it.st === 'fail' ? 'fx-ng' : it.st === 'warn' ? 'fx-hi' : it.st === 'na' ? 'fx-na' : 'fx-ok'}">${stName(it.st)}</td><td>${wk(sOf(it.step))}</td></tr>`).join('')
         : `<tr><td title="${esc(c.ref)}"><b>${esc(c.id)}</b></td><td class="lft fx-na" colspan="6">${window.SBDSub.html(c.title)}: ${esc(c.naWhy || 'n/a')}</td></tr>`).join('')}</tbody></table></div>
+      ${ckNotes(C).map(q => `<p class="note"><b>${esc(q.id)}:</b> ${window.SBDSub.html(q.note)}${q.id === 'CF10' ? ` ${wk(rS)}` : ''}</p>`).join('')}
       <p class="note">References: ${C.map(c => `${esc(c.id)} ${esc(c.ref)}`).join('; ')}.</p></div></section>`;
     // member forces
     if (R.frames && !dOn) h += `<section class="sec"><div class="secHead">Member forces (truss model)</div><div class="secBody"><div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Member</th><th>Length (in)</th><th>per kip of F<sub>w</sub></th>${R.combos.map(c => `<th>${esc(c.id)} T / C (kip)</th>`).join('')}</tr></thead><tbody>
@@ -289,5 +302,5 @@
     host.querySelectorAll('[data-cfgo]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const t = host.querySelector('#st-' + a.dataset.cfgo.replace(/[^\w.-]/g, '').replace(/\./g, '\\.')); if (t) { t.scrollIntoView({ block: 'center' }); t.style.background = '#FFF7D6'; } }));
   }
 
-  window.SBDFramingUI = { ensure, braceOf, setBrace, inputs, windCard, layoutPlan, onChange, onClick, render, build, plan, TOPICS, groups, isDia, ckHead, diaSvg };
+  window.SBDFramingUI = { ensure, braceOf, setBrace, inputs, windCard, layoutPlan, onChange, onClick, render, build, plan, TOPICS, groups, isDia, ckHead, diaSvg, ckRec, recStep, ckNotes };
 })();
