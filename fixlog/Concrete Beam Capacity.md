@@ -7029,7 +7029,7 @@ The file uses CRLF line endings; keep them. The code is in the Beam Capacity src
     - Exception: the same-sign service project. Its rows (names, M_u, V_u) are identical; only the new `omitK` field and the rules note differ.
   - **Tests:** `tests/engine/cbc-loads.test.mjs` (8 tests; 1 new, 1 updated) and `tests/smoke/cbc-loads.mjs` (19 rows in the mixed-sign block).
 
-## 2026-11-13 — PR: claude/cbc-we-strength (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CBWE) — service load cases: W and E labelled strength-level (ASCE 7), with notes   [display only; no computed value, key or format change]
+## 2026-11-13 — PR: claude/cbc-we-strength (PR #1508: https://github.com/mlococo88/All-Structural/pull/1508) (CBWE) — service load cases: W and E labelled strength-level (ASCE 7), with notes   [display only; no computed value, key or format change]
 
 - **Engineer decision (CB-9):** W and E are strength-level (ASCE 7) effects. Label the inputs "strength-level (ASCE 7)", and add a note on the tab and in the Report: the factor 1.0 applies directly, and service-level values must be converted before entry. No calculation change.
 - **Where** (Beam Capacity srcdoc; escape as usual):
