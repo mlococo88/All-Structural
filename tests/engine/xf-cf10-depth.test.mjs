@@ -50,7 +50,7 @@ test('Interior D = 30, Exterior 36: W27x84 → W30x99 (0.75 × 37.88 = 28.41 in)
     assert.equal(I.p.dg, 31.88); assert.equal(before(I.p, Env).w, 'W27x84'); assert.ok(Math.abs(TR.req - 0.75 * 37.88) < 1e-9);
     assert.equal(TR.w, 'W30x99'); assert.equal(TR.rec, 'rolled diaphragm W30x99'); assert.ok(!TR.grp, 'W30x99 (29.70 in) fits D_0 = 30 in');
     const Q = JSON.parse(JSON.stringify(P)); Object.assign(Q.crossframes.dia, { on: 'yes', shape: TR.w }); const q = rec(Q, gi), R = CF.compute(q.I.p, q.Env), C = CF.checks(R);
-    const dep = C.find(c => c.id === 'CFD').items.find(i => /^Depth/.test(i.loc)); assert.equal(dep.st, 'pass'); assert.ok(Math.abs(dep.demand - 28.41) < 1e-9 && dep.capacity === 29.7, `${dep.demand} ${dep.capacity}`);
+    const dep = C.find(c => c.id === 'CFD').items.find(i => /Depth \(6\.7\.4\.2/.test(i.loc)); assert.equal(dep.st, 'pass');   // SB-24: Exterior 30 / Interior 36 has two depth groups (items prefixed with the group); each 28.41 in assert.ok(Math.abs(dep.demand - 28.41) < 1e-9 && dep.capacity === 29.7, `${dep.demand} ${dep.capacity}`);
     const st = R.steps.find(s => s.id === 'cf.type'); assert.ok(st, 'the step'); assert.ok(Math.abs(st.value - 28.41) < 1e-9); assert.match(st.sub, /0\.75\\max\(31\.88,\\ 37\.88\)|0\.75\\max\(37\.88,\\ 31\.88\)/);
     assert.match(st.note, /engineer decision SB-22/); assert.match(st.note, /W30x99 \(d = 29\.70 in/);
     assert.match(C.find(c => c.id === 'CF10').note, /SB-22/);
