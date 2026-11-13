@@ -7306,7 +7306,7 @@ Engineer: "The transverse bars are not shown on the sketches and plans either." 
 - Skin bars (CBM3d) are not in the 3-D view or the SVG elevation (they are in the section sketch and the DXF section and elevation). Not changed.
 - The ASD Beam Calcs Section figure is a transformed-section / stress-block figure from the total A_s (no bar detailing), so T&S bars are not drawn there.
 
-## 2026-11-13 — PR: claude/cb-blank-size (CBBZ) — Beam Capacity: a blank bar size in a saved or imported file is an input error (no silent #5); stirrup, skin and S&T sizes that are not bars are input errors (engineer decision CB-15)   [validation only; no computed value, saved key or format change; only files with a blank or unknown size open differently]
+## 2026-11-13 — PR: claude/cb-blank-size (PR #1520: https://github.com/mlococo88/All-Structural/pull/1520) (CBBZ) — Beam Capacity: a blank bar size in a saved or imported file is an input error (no silent #5); stirrup, skin and S&T sizes that are not bars are input errors (engineer decision CB-15)   [validation only; no computed value, saved key or format change; only files with a blank or unknown size open differently]
 
 Engineer decision CB-15, which follows CBBS (#1517). Every site is tagged CBBZ. The file uses CRLF line endings; keep them. All code is in the Beam Capacity srcdoc (`#suite-frame-capacity`); escape `"` as `&quot;` and `&` as `&amp;` when re-applying (the text below is un-escaped).
 
