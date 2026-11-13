@@ -26,7 +26,7 @@ const stored = async p => JSON.parse((await lsSnap(p))['psb2.project.current'] |
 const SEED = { 'psbeam.inputs.v1': '{"girder":"PCI BT-72","L":120}', 'sbd2.project.current': '{"schema":"sbd2.project"}' };
 /* every engine value on the output panel = computeAll (+ PS-10) of PSBDesign.inputs(P) on the page (the cell shown) */
 const evCheck = p => p.evaluate(() => {
-  const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
+  const s0 = localStorage.getItem('psb2.project.current'), P = s0 ? window.PSBModel.importJSON(s0).project : window.PSBModel.newProject(), R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));   // nothing stored yet: the new project the page opened
   const f = (v, d) => typeof v === 'number' && isFinite(v) ? v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }).replace(/^-(0(\.0*)?)$/, '$1') : '—';
   const bad = [], els = [...document.querySelectorAll('#out [data-ev]')];
   els.forEach(el => { let v = el.dataset.ev.split('.').reduce((o, k) => o == null ? o : o[k], R); if (el.dataset.div) v = v / +el.dataset.div;
@@ -137,15 +137,15 @@ await o.b.close();
 o = await openPage(FILE, { vw: 1400, vh: 1000 }); p = o.p; await ready(p);
 await p.click('#inTabs [data-itab="xsec"]'); await p.waitForTimeout(200);
 { const t = (await p.textContent('#card-dl')).replace(/\s+/g, ' ');
-  check(/0\.2550 0\.1875 0\.1200 0\.1875 0\.2550/.test(t) && /0\.1950 0\.1950 0\.1950 0\.1950 0\.1950/.test(t), 'Cross-section: DC2 / DW per line ' + t.slice(-200));
+  check(/0\.2550\s*0\.1875\s*0\.1200\s*0\.1875\s*0\.2550/.test(t) && /(0\.1950\s*){5}/.test(t), 'Cross-section: DC2 / DW per line ' + t.slice(-200));
   await p.click('#tabBar [data-otab="lds"]'); await p.waitForTimeout(300);
   const r = await p.evaluate(() => ({ dc2: (document.querySelector('#out [data-ev="wBar"]') || {}).textContent, dw: (document.querySelector('#out [data-ev="wDW"]') || {}).textContent, st: !!document.getElementById('st-dl.G2.DC2'), lt: /distributed to every girder line/.test(document.getElementById('out').textContent) }));
-  check(r.dc2 === '0.1875' && r.dw === '0.1950' && r.st && r.lt, 'Loads & LLDF: G2 DC2 0.1875, DW 0.1950, the line table and the steps ' + JSON.stringify(r));
+  check(r.dc2 === '0.188' && r.dw === '0.195' && r.st && r.lt, 'Loads & LLDF: G2 DC2 0.188, DW 0.195 (the tile, 3 decimals), the line table and the steps ' + JSON.stringify(r));
   const e = await evCheck(p); check(e.n >= 20 && !e.bad.length, `Loads & LLDF values = computeAll: ${e.n} ${e.bad.slice(0, 3).join(' | ')}`);
   if (args.shots) await p.screenshot({ path: path.join(args.shots, 'ps3a-1400-lds-distributed.png') });
   await p.click('#inTabs [data-itab="loads"]'); check(!(await p.$('#i_base\\.loads\\.wBar')), 'Loads tab: no entered DC2 while distributed');
   await p.click('#inTabs [data-itab="xsec"]'); await p.selectOption('#i_xs\\.dl\\.mode', 'entered'); await p.waitForTimeout(300);
-  const r2 = await p.evaluate(() => (document.querySelector('#out [data-ev="wBar"]') || {}).textContent); check(r2 === '0.3000', 'entered: DC2 0.3000 ' + r2);
+  const r2 = await p.evaluate(() => (document.querySelector('#out [data-ev="wBar"]') || {}).textContent); check(r2 === '0.300', 'entered: DC2 0.300 ' + r2);
   await p.selectOption('#i_xs\\.dl\\.mode', 'distributed'); await p.waitForTimeout(200);
   await p.fill('#i_xs\\.dl\\.barL\\.w', '-1'); await p.press('#i_xs\\.dl\\.barL\\.w', 'Tab'); await p.waitForTimeout(200);
   check(/Left barrier weight must be zero or a positive number/.test(await p.textContent('#sbDashCol')), 'a negative barrier weight is an input error'); }
