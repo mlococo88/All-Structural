@@ -1334,3 +1334,303 @@ PR #1528: https://github.com/mlococo88/All-Structural/pull/1528
   (65 checks, 0 failed). Skeleton smoke 252 checks, 0 failed.
   Harness B: normal 17 designs 0 differences (exit 0); `--import` 0 differences (exit 0); `--control` / `--import --control` 17 with
   differences, exit 1. `node tests/check-syntax.mjs` passes.
+
+## 2026-11-13 — PR 3b: the Summary tab — girder × span grid, governing ratio of each check group per girder type (worst line named), weights per line and bridge total, links to the worked steps; every girder type × line computed in chunks with Stop / Run all (display only; no calculation change)
+PR #1529: https://github.com/mlococo88/All-Structural/pull/1529
+### Request
+- Plan §5 row 3b: "Summary tab and check-summary chips (girder × span grid), run all (chunked, Stop)", display. The Steel Bridge app's
+  Summary as the pattern (`apps/steel-bridge/ui/summary.js`, SUMT #1271, DASH #1272, girder types SB-2 PR 2 #1454): the verdict and its
+  counts, the governing check as a link, the run state ("Up to date" / running / Re-run all), the overview with the girder weight, the
+  table with a row per girder type and per line, the governing check per column, the warnings. Engineer decisions SB-5 (one count per type
+  per check, its worst line), SB-6 (weight per line, bridge total), PS-8 (types per span), CLAUDE.md §6 (every value linked to its work).
+### What the Summary tab shows (`apps/ps-bridge/ui/summary.js`, new, `window.PSBSummaryUI`; adapted copy of the steel file's layout and CSS)
+1. **Verdict**: PASS / FAIL badge; FAIL / PASS / off counts = the check summary column's (`PSBDashUI.grp`, one per girder type per check,
+   its worst line); the governing check with its group, type, line and span, its ratio a link; the lowest HL-93 inventory RF (not counted);
+   lines with no type (red); the run line ("Up to date: n girder type × line results of this project state (computed in t s)" / "Running
+   … (i / n)" with Stop / "Stopped: i of n …" with Run all), Re-run all, a link to the Report.
+2. **Project overview**: the entered values (as the PR 3a-2 Project card) and the girder weight per line, per type and the bridge total
+   (engine/bridge.js `results` W = w_sw (L + 2 e_end/12) per line, SB-6) with a § link to the hold-down step W (End zone & hold-down).
+3. **Girder × span grid** (`#sum-grid`): a row per girder line (exterior / interior), a column per span (L); each cell the girder type on
+   it, its governing ratio (the largest of all its checks), the group, PASS or FAIL (n checks over 1.0); "not checked" where no type.
+4. **Governing ratio of each check group, per girder type** (`#sum-table`, replaces PR 3a-2's `#card-tysum`): grouped by span; per type the
+   group's largest ratio over its lines with PASS / FAIL and the line named (SB-5), a row per line, the lowest RF, the weight; footer the
+   bridge total.
+5. **Governing check of each group, per girder type** (`#sum-checks`, one `<details>` per type): check, line, x, demand, limit, unit,
+   ratio, status.
+6. The design girder card of PR 2b-2 (the type and line shown on the output tabs) — unchanged.
+7. **Lines not checked, groups off (Handling, Deck: link to turn on), engine errors, the engine's design warnings per type (lines named).**
+- Every value links (`data-sumgo="k|g|tab|step|input"`) to its tab with that girder type and line shown (P.design, as the check summary
+  column's links) and its worked step opened (`gotoStep`); an owner limit opens the Owner rules tab at its row (as the column).
+- Nothing is calculated in the UI: each number is an engine value (`R.checks[i].r / v / lim / loc`, `R.rating…`) of that cell's
+  `PSBHoldDown.compute` (computeAll + PS-10), or a weight of engine/bridge.js; the UI only chooses the largest (RF: the smallest). Each
+  number carries `data-sv="k|g|<R path>"` (weights `data-sw`) for the tests.
+### Run all (chunked, Stop) — `apps/ps-bridge/index.html` `allResults(force)`, `runAll`, `runCtl`, `runState`
+- Before: `allResults()` computed every girder type × line at once (`BR.results(P, cellR)`) whenever the project text changed.
+- After: when more than 8 cells are not in the cell cache (`CELLS`, the PR 3a-1 cache of `PSBHoldDown.compute` by input text), they are
+  computed one per timer tick (`runAll`: `cellR(inputs)`, progress written in place in `#sumRunMsg` and the check summary column), then
+  `BR.results(P, cellR)` over the filled cache — **the same call on the same inputs, so the same values**; up to 8 at once as before. While
+  it runs `allResults()` returns null: the check summary column shows the chips of the type and line shown with "Running every girder type
+  × line (i / n)… [Stop]"; the Summary tab shows the run line. Stop keeps the cells computed; Run all goes on; Re-run all drops this
+  project's cells from the cache and computes them again. The Report tab computes at once (`allResults(true)`). Memory only, nothing saved.
+- Measured (headless Chromium, file://): about 8 ms per cell — 5 cells 0.04 s, 15 cells (3 spans) 0.25 s, 40 cells 0.30 s, 72 cells 0.59 s.
+### Report (`apps/ps-bridge/report/builders.js` summary(), sub "Every girder type and line", several cells)
+- Before: one table (type, span, worst line, governing check, ratio, status, weight; a row per line).
+- After: the verdict sentence (FAIL / PASS counted as the Summary, SB-5); the **girder × span grid** (each cell type, ratio, PASS / FAIL,
+  group and "see §n" of the section that works it); the **group table** (type, span, group, governing check, line, ratio, status, "see §n";
+  the owner limits "see" the Owner rules subsection; the lowest RF "see §14"); the **weights** per line, per type and the bridge total
+  (see §10 for W). The values are `PSBSummaryUI.model` of the same results (`B.all`). The report still works the type and line shown; the
+  note says the other lines' steps are on the tabs with that type and line chosen.
+### Other changes
+- `ui/dash.js`: exports `grp` (the Summary's counts); `runTxt(o)` (the running / stopped line with Stop / Run all, `o.run`, `o.runCtl`).
+- `ui/types.js`: `summaryCard` removed (moved into ui/summary.js as the group table).
+- `index.html`: loads `ui/summary.js`; the Summary branch of `drawOut` (the Project card, design girder card, `TY.summaryCard` and the
+  "PR 3b" placeholder replaced by `PSBSummaryUI.html`); `#out` click handler: `data-sumgo`, `data-sumrun`; dash init `run`, `runCtl`.
+### Saved data (CLAUDE.md §5)
+- None: no key, no field, no format change; the run state is memory only; the chosen type and line of a link is P.design (as PR 3a-2).
+### Governing provisions
+- None changed (display only). The checks, ratios and limits are the engine's as before (AASHTO LRFD 10th Ed. articles cited at each step).
+### Check case (new project: 120 ft, 5 girders at 9 ft, BT-72, Interior S1 on G2–G4, Exterior S1 on G1, G5)
+- Summary verdict FAIL, **2 FAIL / 38 PASS / 2 off** (the column's counts); governing "End zone & hold-down, girder type Interior S1 on G2
+  (span 1): Hold-down force (PS-10) — ratio 1.276"; lowest RF Shear, inventory 1.735. Grid: every line 1.276 "End zone & hold-down · FAIL
+  (1)". Weights 99.1 kip per line; Interior S1 297.2, Exterior S1 198.1, bridge total 495.4 kip. Before (3a-2) the same ratios and weights
+  in the type table; after the same numbers plus the grid.
+- Three spans 100 + 120 + 100 ft made continuous (6 types, 15 cells): chunked run, "Up to date: 15 … (0.13 s)"; Report §1 grid G1/S1
+  "Exterior S1: 2.208 FAIL (3), End zone & hold-down (see §10)".
+### How verified
+- Results identical: no file under `apps/ps-bridge/engine/` changed; the chunked run fills the same cache that `BR.results` reads.
+  Harness B (`tests/psbridge-compare.mjs`): normal 17 designs, 0 with differences, exit 0; `--import` 17 designs imported, 0 with differences, exit 0; `--control` 17 with differences, exit 1; `--import --control` 17 with differences, exit 1.
+- New `tests/engine/psbridge-summary.test.mjs` (4 tests) over 22 projects (the 17 harness B designs migrated, a new project, one type on
+  every line, three types with own inputs on unequal bays, three spans continuous, two spans with G5/S2 not checked): every Summary number
+  (data-sv) = an independent PSBHoldDown.compute of that type × line, exactly; every weight; the grid, the type × group values, the RF and
+  the verdict counts (= the column's) from the engine checks; every link names a type × line of the project and a worked step its tab shows
+  for that cell (or the owner row); the Report's grid and group table carry the same ratios with "see §" references. Controls: a ratio
+  shown × 1.001 fails test 1; the group choice made "first" instead of "largest" fails test 2.
+- `node tests/engine/run.mjs psbridge tex project-registry`: 16 files, 142 passed, 0 failed; `psbridge-model.test.mjs` page script list + ui/summary.js.
+- Smokes: `ps-bridge-types.mjs` §6 (the table now `#sum-table`, its line link) and new §9: five projects (new, single type, three types,
+  three spans continuous, a line not checked) on file:// at 1400 px — values and weights = the page's computeAll per cell, counts = the
+  column's, grid lines × spans and "not checked", a grid link opens its tab with that type, line and step shown, the tab's values = that
+  cell's; Stop (no grid, the column says Stopped), Run all (the same values), the column during a run; §5 390 px Summary without sideways
+  scroll; 0 console errors: 95 checks, 0 failed. `ps-bridge-skeleton.mjs`: 252 checks, 0 failed. `node tests/check-syntax.mjs` passes.
+### Decisions (pending engineer review)
+- 3b-D1. Chunked run threshold: more than 8 cells not yet computed run in chunks (one cell per tick); up to 8 at once (about 0.07 s). The
+  Report tab computes at once. Stop keeps what was computed; a later input change starts a new run (as the steel Summary runs on a change).
+- 3b-D2. Grid cell: the largest ratio of all the cell's checks (a ratio that is not a number first, as engine/bridge.js `gov`); its FAIL
+  number counts that line's checks over 1.0 (information; the verdict counts once per type per check, SB-5).
+- 3b-D3. The Summary's rating column / verdict line: the lowest HL-93 inventory RF per type (as the Rating chip), not a check, not counted.
+- 3b-D4. Report §1 references each group to the section that works it for the reported type and line ("see §n"); the other lines are
+  worked on the tabs, not repeated in the report.
+- 3b-D5. While a run is in progress or stopped, the check summary column shows the chips of the type and line shown (not the last
+  results as out of date, the steel column's way), with the running / stopped line.
+### Other copies
+- `ui/summary.js` is an adapted copy of `apps/steel-bridge/ui/summary.js` (layout, CSS, wording; to move to shared/ later, CLAUDE.md §3).
+  apps/steel-bridge not changed.
+### Open items
+- None new.
+### Before / after (exact; `ui/summary.js` and the test are new files)
+```diff
+diff --git a/apps/ps-bridge/index.html b/apps/ps-bridge/index.html
+index 4ef7f84..435c64f 100644
+--- a/apps/ps-bridge/index.html
++++ b/apps/ps-bridge/index.html
+@@ -22,3 +22,5 @@
+      DC2 and DW distributed to each girder line by the Steel Bridge app's method (engine/bridge-dl.js, ui/bridgedl.js; §4). PR 3a-4: an
+-     imported old bridge model's other designs restored as girder types (engine/legacy.js restore, PS-17).
++     imported old bridge model's other designs restored as girder types (engine/legacy.js restore, PS-17). PR 3b: the Summary tab
++     (ui/summary.js: verdict, girder × span grid, type × check-group table, weights, links to the worked steps) and the run of every type
++     × line in chunks with Stop / Run all / Re-run all.
+      The old Prestressed Bridge Design.html stays the working tool. -->
+@@ -87,2 +89,3 @@
+     'ui/dash.js',     // the check summary column (adapted copy of apps/steel-bridge/ui/dash.js)
++    'ui/summary.js',  // PR 3b: the Summary tab (adapted copy of apps/steel-bridge/ui/summary.js): verdict, girder × span grid, type × check table
+     'ui/splitter.js'  // the splitter between the input and output panels (copy of apps/steel-bridge/ui/splitter.js)
+@@ -477,3 +480,3 @@
+     if (RC.key !== key) { let R; try { R = window.PSBHoldDown.compute(JSON.parse(key)); } catch (e) { R = { error: e.message }; } RC = { key, inp, R, W: null }; }
+-    RC.all = allResults(); RC.allKey = ALL.key;   // PR 3a-2: the Report's table of every type and line
++    RC.all = allResults(ui.otab === 'rpt'); RC.allKey = ALL.key;   // PR 3a-2: the Report's table of every type and line (PR 3b: computed at once on the Report tab)
+     if (!RC.R.error && !RC.W) { const PW = window.PSBWorked, PS = window.PSBWorkedStress; try { RC.W = { section: PW.section(RC.inp, RC.R), loads: PW.loads(RC.inp, RC.R), analysis: PW.analysis(RC.inp, RC.R),
+@@ -492,5 +495,43 @@
+   }
+-  /* PR 3a-2: every girder type on every line (engine/bridge.js results over cellR), kept while the project text is the same */
+-  let ALL = { key: '', A: null };
+-  function allResults() { if (errs.length) return null; const key = JSON.stringify(P); if (ALL.key !== key) ALL = { key, A: BR.hasTypes(P) ? BR.results(P, cellR) : null }; return ALL.A; }
++  /* PR 3a-2: every girder type on every line (engine/bridge.js results over cellR), kept while the project text is the same.
++     PR 3b (docs/ps-bridge-plan.md §5 row 3b, "run all (chunked, Stop)"; the steel Summary's run, apps/steel-bridge/ui/summary.js start()):
++     when more than SYNC_N cells are not yet in the cell cache, the cells are computed one per timer tick (the page stays responsive; the
++     Summary tab and the check summary column show "Running … (i / n)" with Stop), then BR.results over the filled cache, the same call and
++     the same values as computed at once (only the time of computing changes). Until then allResults() returns null (the chips: the girder
++     type and line shown). The Report tab computes at once (force). Stop keeps the cells computed so far; Run all goes on; Re-run all
++     computes every cell of this project state again. Nothing is saved (memory only, as the steel Summary). */
++  const SYNC_N = 8;
++  let ALL = { key: '', A: null }, RUN = { key: '', busy: false, stopped: false, i: 0, n: 0, ms: null, gen: 0 };
++  const cellKeys = () => BR.cells(P).map(c => { try { return JSON.stringify(window.PSBDesign.cellInputs(P, c.k, c.g)); } catch (e) { return ''; } });
++  function allResults(force) {
++    if (errs.length) return null; const key = JSON.stringify(P); if (ALL.key === key) return ALL.A;
++    if (!BR.hasTypes(P)) { ALL = { key, A: null }; return null; }
++    if (RUN.key === key && (RUN.busy || RUN.stopped) && !force) return null;
++    const miss = cellKeys().filter(k => k && !CELLS.has(k));
++    if (force || miss.length <= SYNC_N) { const t0 = performance.now(); ALL = { key, A: BR.results(P, cellR) }; RUN = { key, busy: false, stopped: false, i: miss.length, n: miss.length, ms: performance.now() - t0, gen: RUN.gen + 1 }; return ALL.A; }   // gen + 1: a run of this state stops
++    runAll(key, miss); return null;
++  }
++  /* runAll(key, list): compute the cells of list (their engine inputs as text) one per tick; at the end the results of every cell */
++  function runAll(key, list) {
++    const gen = RUN.gen + 1, t0 = performance.now(); RUN = { key, busy: true, stopped: false, i: 0, n: list.length, ms: null, gen, list };
++    const step = () => {
++      if (RUN.gen !== gen || !RUN.busy) return;
++      if (JSON.stringify(P) !== key || errs.length) { RUN.busy = false; return; }   // the project changed: its own run was started by its redraw
++      if (RUN.i < RUN.n) { cellR(JSON.parse(RUN.list[RUN.i])); RUN.i++; runMsg(); setTimeout(step, 0); return; }
++      ALL = { key, A: BR.results(P, cellR) }; RUN.busy = false; RUN.ms = performance.now() - t0;
++      if (ui.otab === 'sum') drawOut(); else if (window.PSBDashUI) window.PSBDashUI.refresh();
++    };
++    setTimeout(step, 0);
++  }
++  /* the progress, in place (no redraw of the tab) */
++  function runMsg() { const el = $('sumRunMsg'); if (el && RUN.busy) el.lastChild.textContent = `Running every girder type × line (${RUN.i} / ${RUN.n})…`; if (window.PSBDashUI) window.PSBDashUI.refresh(); }
++  /* runCtl(what): the Stop / Run all / Re-run all buttons (Summary tab, check summary column) */
++  function runCtl(what) {
++    if (what === 'stop') { if (RUN.busy) { RUN.busy = false; RUN.stopped = true; RUN.gen++; } }
++    else if (what === 'run') { RUN.stopped = false; RUN.key = ''; ALL.key = ''; }
++    else if (what === 'rerun') { cellKeys().forEach(k => CELLS.delete(k)); RC.key = ''; ALL.key = ''; RUN.stopped = false; RUN.busy = false; RUN.gen++;
++      const key = JSON.stringify(P); if (!errs.length && BR.hasTypes(P)) runAll(key, cellKeys().filter(Boolean)); }
++    drawOut();
++  }
++  const runState = () => ({ busy: RUN.busy, stopped: RUN.stopped, i: RUN.i, n: RUN.n, ms: RUN.ms });
+   /* pick(k, g): show girder type k on line g (the output tabs' choice, P.design) */
+@@ -520,13 +561,7 @@
+     } else if (ui.otab === 'sum') {
+-      const off = M.girderOffsets(P);
+-      h += errs.length ? '' : card('Project', `<div class="kv"><div><span>Project</span><span>${esc(P.project.name)}</span></div><div><span>Spans</span><span>${P.spans.lengths.map(x => fmt(x, 1)).join(' – ')} ft</span></div>
+-          <div><span>Continuity</span><span>${P.spans.continuity === 'composite' ? 'made continuous for composite loads' : 'simple spans'}</span></div><div><span>Girders</span><span>${P.xs.nb}</span></div>
+-          <div><span>Bays</span><span>${P.xs.bays.map(x => fmt(x, 2)).join(', ')} ft</span></div><div><span>Girder lines from the left deck edge</span><span>${off.map(x => fmt(x, 2)).join(', ')} ft</span></div>
+-          ${BR.hasTypes(P) ? P.types.map((t, k) => `<div><span>Girder type ${esc(t.label)} (span ${t.span})</span><span>${BR.typeLines(P, k).map(g => 'G' + g).join(', ') || 'no line'}</span></div>`).join('') : ''}</div>
+-          <p class="note">Entered values.${BR.hasTypes(P) && BR.unassigned(P).length ? ` <b style="color:var(--fail)">Not checked (no girder type): ${BR.unassigned(P).map(q => `G${q.g}/S${q.s}`).join(', ')}</b> (<a href="#" data-goin="gird">Girder types</a>).` : ''}</p>`)
+-        + (ok ? card(`Design girder: ${esc(rc.inp.proj.girderId)}, span ${window.PSBDesign.sel(P).s}`, `<div class="kv"><div><span>Section</span><span>${esc(rc.inp.girder)}, ${rc.R.ss.Ntot} strands</span></div><div><span>Composite I<sub>c</sub></span><span>${fmt(rc.R.cp.Ic, 0)} in⁴ <a href="#" data-gotab="sec">Section properties</a></span></div>
++      // PR 3b: the Summary tab (ui/summary.js): verdict and run state, project overview and weights, girder × span grid, type × check-group
++      // table, the governing check per type, the girder type shown (the design girder card of PR 2b-2, unchanged), warnings
++      if (!errs.length) h += window.PSBSummaryUI.html({ P, A: ok ? allResults() : null, run: runState(), shown: (ok ? card(`Design girder: ${esc(rc.inp.proj.girderId)}, span ${window.PSBDesign.sel(P).s}`, `<div class="kv"><div><span>Section</span><span>${esc(rc.inp.girder)}, ${rc.R.ss.Ntot} strands</span></div><div><span>Composite I<sub>c</sub></span><span>${fmt(rc.R.cp.Ic, 0)} in⁴ <a href="#" data-gotab="sec">Section properties</a></span></div>
+             <div><span>DF<sub>M</sub> / DF<sub>V</sub></span><span>${fmt(rc.R.dfm, 3)} / ${fmt(rc.R.dfv, 3)} <a href="#" data-gotab="lds">Loads &amp; LLDF</a></span></div><div><span>M<sub>u</sub> at midspan</span><span>${fmt(rc.R.diagrams.reduce((b, r) => Math.abs(r.x - rc.R.L / 2) < Math.abs(b.x - rc.R.L / 2) ? r : b).M_StrI_pos, 0)} kip-ft <a href="#" data-gotab="an">Analysis</a></span></div></div>
+-            ${rc.R.warns.length ? `<div class="alert"><b>Design warnings of the engine (${rc.R.warns.length})</b><ul>${rc.R.warns.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>` : '<p class="note">No design warnings.</p>'}`) : '')
+-        + (ok && allResults() ? TY.summaryCard(allResults()) : '')   // PR 3a-2: every girder type and line
+-        + ph('Summary', '3b', ['the girder × span grid coloured by ratio, run all (chunked, Stop)', 'the check summary column (left, screens 1200 px and wider) shows the same values']);
++            ${rc.R.warns.length ? `<div class="alert"><b>Design warnings of the engine (${rc.R.warns.length})</b><ul>${rc.R.warns.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>` : '<p class="note">No design warnings.</p>'}`) : '') });
+     } else if (ui.otab === 'rpt') {
+@@ -549,2 +584,8 @@
+     const a = e.target.closest('[data-icgo]'); if (a) { e.preventDefault(); gotoErr(+a.dataset.icgo); return; }
++    // PR 3b: a Summary value: its girder type and line shown, then its tab at the worked step (a group on an input tab: that tab and its row, as the
++    // check summary column); the run buttons
++    const sg = e.target.closest('[data-sumgo]'); if (sg) { e.preventDefault(); const [k, g, tab, st, inp] = sg.dataset.sumgo.split('|'); if (k !== '' && P.types && P.types[+k]) pick(+k, +g);
++      if (inp === '1') { ui.itab = tab; saveUi(); drawInputs(); const el = document.getElementById(st); if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('sdFlash'); setTimeout(() => el.classList.remove('sdFlash'), 1600); } }
++      else gotoStep(tab, st); return; }
++    const sr = e.target.closest('[data-sumrun]'); if (sr) { e.preventDefault(); runCtl(sr.dataset.sumrun); return; }
+     const tc = e.target.closest('[data-tycell]'); if (tc) { e.preventDefault(); const [k, g, tab] = tc.dataset.tycell.split('|'); P.design = { g: +g, s: P.types[+k].span }; if (autosave) autoFailed = !M.save(LS, P); gotoOut(tab); drawInputs(); return; }   // PR 3a-2
+@@ -595,3 +636,3 @@
+   if (L.notes && L.notes.length) toast(L.notes.join(' '));   // PR 3a-1 / 3a-4: what the load migrated or restored (stored with the next change)
+-  if (window.PSBDashUI) window.PSBDashUI.init({ el: $('sbDashCol'), store, getP: () => P, errors: () => errs, result: () => { if (errs.length) return null; const rc = result(); return rc.R.error ? null : rc.R; }, all: allResults, pick, goto: gotoStep, fix: gotoErr, goin: t => { ui.itab = t; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; } });
++  if (window.PSBDashUI) window.PSBDashUI.init({ el: $('sbDashCol'), store, getP: () => P, errors: () => errs, result: () => { if (errs.length) return null; const rc = result(); return rc.R.error ? null : rc.R; }, all: allResults, run: runState, runCtl, pick, goto: gotoStep, fix: gotoErr, goin: t => { ui.itab = t; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; } });
+ })();
+diff --git a/apps/ps-bridge/report/builders.js b/apps/ps-bridge/report/builders.js
+index d123fe5..fac40f8 100644
+--- a/apps/ps-bridge/report/builders.js
++++ b/apps/ps-bridge/report/builders.js
+@@ -71,12 +71,25 @@
+     // PR 3a-2: every girder type on every line (several cells): each type's governing check, its worst line, and each line's; this report
+-    // works the type and line chosen above the tabs (the others: choose them there; the same steps)
+-    if (B.all && B.all.n > 1) {
+-      const fx = (v, d) => (typeof v === 'number' && isFinite(v) ? v.toFixed(d) : '—'), gv = cs => cs.reduce((b, q) => (!b || q.r > b.r ? q : b), null);
+-      const trs = []; B.all.types.forEach(t => { const top = Object.values(t.gov).reduce((b, v) => (!b || v.c.r > b.c.r ? v : b), null), nF = Object.values(t.gov).filter(v => !v.c.pass).length;
+-        trs.push({ cells: [plain(t.label), String(t.span), top ? `G${top.g}` : '—', top ? plain(top.c.n) : '—', { t: top ? fx(top.c.r, 3) : '—', n: true, cls: top && !top.c.pass ? 'ng' : 'ok' }, nF ? `FAIL (${nF})` : 'PASS', { t: fx(t.W, 1), n: true }], cls: nF ? 'gov' : '' });
+-        if (t.cells.length > 1) t.cells.forEach(c => { const q = c.R && c.R.checks ? gv(c.R.checks) : null;
+-          trs.push(['', '', `G${c.g}`, q ? plain(q.n) : (c.R && c.R.error ? 'engine error' : '—'), { t: q ? fx(q.r, 3) : '—', n: true, cls: q && !q.pass ? 'ng' : '' }, q ? (c.R.checks.some(z => !z.pass) ? 'FAIL' : 'PASS') : '—', { t: fx(c.W, 1), n: true }]); }); });
+-      trs.push({ cells: ['Bridge total', '', `${B.all.n} lines`, '', '', '', { t: fx(B.all.W, 1), n: true }], cls: '' });
+-      subs.splice(1, 0, sub('all', 'Every girder type and line', [note(`${B.all.types.length} girder types on ${B.all.n} girder lines (every span). Each type is checked on every line assigned to it with that line's span, spacing, position, overhang and skew; the worst line governs (its row first, then a row per line). This report works ${B.cell ? `girder type ${plain(B.P.types[B.cell.k].label)} on line G${B.cell.g}, span ${B.cell.s}` : 'the girder shown'} (the summary above and every section below); the other types and lines are worked the same way on the result tabs (choose the type and line above them) and listed on the [[tab:sum|Summary tab]]. Weight: w$_{sw}$ (L + 2 e$_{end}$/12) per line (see [[rs.end]] for W), the type's the sum over its lines.`),
+-        tbl(['Girder type', 'Span', 'Line', 'Governing check', 'Ratio', 'Status', 'Weight (kip)'], trs, { wide: true })]));
++    // works the type and line chosen above the tabs (the others: choose them there; the same steps).
++    // PR 3b: the Summary tab's tables (ui/summary.js model: the same choices among the same engine values): the girder × span grid, the
++    // governing ratio of each check group per girder type with its line and a "see §" reference to the section that works the group, and
++    // the weights per line, per type and the bridge total (SB-6)
++    if (B.all && B.all.n > 1 && window.PSBSummaryUI) {
++      const SM = window.PSBSummaryUI.model(B.P, B.all), fx = (v, d) => (typeof v === 'number' && isFinite(v) ? v.toFixed(d) : '—');
++      const ref = gp => (gp.input ? (X.ownKey ? `see [[${X.ownKey}]]` : '—') : `see [[rs.${gp.tab}]]`);
++      const shown = B.cell ? `girder type ${plain(B.P.types[B.cell.k].label)} on line G${B.cell.g}, span ${B.cell.s}` : 'the girder shown';
++      const gRows = SM.grid.map((row, i) => [`G${i + 1}`, ...row.map(z => (!z ? { t: 'no type: not checked', cls: 'ng' } : z.err ? { t: `${plain(z.c.label)}: engine error`, cls: 'ng' } : !z.gov ? `${plain(z.c.label)}: no check`
++        : { t: `${plain(z.c.label)}: ${fx(z.gov.q.r, 3)} ${z.nF ? `FAIL (${z.nF})` : 'PASS'}, ${z.gov.gp.name} (${ref(z.gov.gp)})`, cls: z.nF ? 'ng' : 'ok' }))]);
++      const trs = []; SM.types.forEach(T => { SM.used.forEach(gp => { const z = T.groups[gp.id]; if (!z) return;
++        trs.push({ cells: [plain(T.label), String(T.span), gp.name, plain(z.q.n), `G${z.g}`, { t: fx(z.q.r, 3), n: true, cls: z.q.pass ? 'ok' : 'ng' }, { t: z.q.pass ? 'PASS' : 'FAIL', cls: z.q.pass ? 'ok' : 'ng' }, ref(gp)], cls: z.q.pass ? '' : 'gov' }); });
++        if (T.rf) trs.push([plain(T.label), String(T.span), 'Rating (RF, not a check)', plain(T.rf.n), `G${T.rf.g}`, { t: fx(T.rf.v, 3), n: true, cls: T.rf.v < 1 ? 'ng' : 'ok' }, T.rf.v >= 1 ? 'RF ≥ 1' : 'RF < 1', 'see [[rs.rt]]']); });
++      const wrs = SM.types.map(T => [plain(T.label), String(T.span), T.lines.map(z => `G${z.c.g} ${fx(z.c.W, 1)}`).join(', '), { t: fx(T.W, 1), n: true }]);
++      wrs.push({ cells: ['Bridge total', '', `${SM.n} lines`, { t: fx(SM.W, 1), n: true }], cls: '' });
++      subs.splice(1, 0, sub('all', 'Every girder type and line', [
++        note(`${B.all.types.length} girder types on ${B.all.n} girder lines (every span): ${SM.nF ? `FAIL: ${SM.nF} check${SM.nF > 1 ? 's' : ''} of the girder types do not pass` : 'PASS: every check of every girder type passes'} (counted once per girder type and check, its worst line, SB-5; ${SM.nP} PASS). Each type is checked on every line assigned to it with that line's span, spacing, position, overhang and skew; the worst line governs. This report works ${shown} (the summary above and every section below); the other types and lines are worked the same way on the result tabs (choose the type and line above them) and listed on the [[tab:sum|Summary tab]].`, SM.nF > 0),
++        tbl(['Line', ...B.P.spans.lengths.map((L, j) => `Span ${j + 1} (L = ${fx(+L, 2)} ft)`)], gRows, { wide: true }),
++        note('Girder × span grid: each cell the girder type on that line, its governing ratio (the largest of its checks, demand / limit, the engine\'s), PASS or FAIL (the number of its checks over 1.0) and the check group, with the section that works it.'),
++        tbl(['Girder type', 'Span', 'Check group', 'Governing check', 'Line', 'Ratio', 'Status', 'Worked'], trs, { wide: true }),
++        note(`Each check group: the check with the largest ratio over the girder type's lines, the line named (SB-5). Worked: the section of this report that works the group, for ${shown}; for another type or line the same steps are on the result tab with that type and line chosen. Rating: the lowest HL-93 inventory rating factor (not a check, not counted).`),
++        tbl(['Girder type', 'Span', 'Weight per line (kip)', 'Weight (kip)'], wrs),
++        note('Weight: w$_{sw}$ (L + 2 e$_{end}$/12) per line, the weight W of the hold-down check (see [[rs.end]]); a girder type\'s weight the sum over its lines, the bridge total the sum over every checked line (SB-6).')]));
+     }
+diff --git a/apps/ps-bridge/ui/dash.js b/apps/ps-bridge/ui/dash.js
+index b9587fb..9bee4e3 100644
+--- a/apps/ps-bridge/ui/dash.js
++++ b/apps/ps-bridge/ui/dash.js
+@@ -22,4 +22,8 @@
+ 
++   PR 3b (2026-11-13): o.run() = the page's run of every girder type × line ({ busy, i, n, stopped }); while it runs (chunked) or after
++   Stop, all() is null and the chips are those of the girder type and line shown, the line under the verdict says so with Stop / Run all
++   (o.runCtl('stop' | 'run')). grp is exported for the Summary tab (ui/summary.js), whose counts are these.
++
+    init(o): o = { el, store (localStorage or null), getP(), errors() ([{ path, msg }]), result() (computeAll of the design or null),
+-   all() (PR 3a-2, or absent), pick(k, g), goto(tab, step), fix(i) }; refresh() after the page draws. */
++   all() (PR 3a-2, or absent), run(), runCtl(what) (PR 3b), pick(k, g), goto(tab, step), fix(i) }; refresh() after the page draws. */
+ (function () {
+@@ -99,5 +103,13 @@
+       + `<div class="sdVerd"><b class="sd-${verd}">${nF ? 'FAIL' : 'PASS'}</b>${top ? ` · max ratio ${fx(top.c.r, 3)}` : ''}</div>${top ? `<div class="sdGov">Governing: <a href="#" ${go(top.gp, top.st, top.cell)}>${esc(top.c.n + on(top))}: ${fx(top.c.r, 3)}</a></div>` : ''}
+-        <div class="sdRun">${A ? `${A.types.length} girder type${A.types.length === 1 ? '' : 's'} on ${A.n} line${A.n === 1 ? '' : 's'} (every span); each counted once per check, its worst line.` : 'In development: the checks of the design girder only.'}</div>`
++        <div class="sdRun">${A ? `${A.types.length} girder type${A.types.length === 1 ? '' : 's'} on ${A.n} line${A.n === 1 ? '' : 's'} (every span); each counted once per check, its worst line.` : runTxt(o)}</div>`
+       + `<div id="sbDash">${chips}</div><p class="sdNote">Each chip: the governing ratio of its checks${A && A.n > 1 ? ' over every girder type and line (the type and line named)' : ''} (demand / capacity, OK ≤ 1.0), the engine's value. Click: its tab with that type and line, and the worked step of the value. Summary tab: every type and line.</p>`;
+   }
++  /* PR 3b: while every girder type × line is being computed (index.html, chunked) or after Stop, the chips are those of the girder type
++     and line shown (R); the line says so, with Stop / Run all (the Summary tab's buttons, o.runCtl) */
++  function runTxt(o) {
++    const r = o.run ? o.run() : null;
++    if (r && r.busy) return `Running every girder type × line (${r.i} / ${r.n})… Until then the chips are those of the girder type and line shown. <button type="button" data-sumrun="stop">Stop</button>`;
++    if (r && r.stopped) return `Stopped (${r.i} of ${r.n} girder type × line results): the chips are those of the girder type and line shown only. <button type="button" data-sumrun="run">Run all</button>`;
++    return 'In development: the checks of the design girder only.';
++  }
+   /* the Rating chip (not a check): the lowest of the HL-93 inventory rating factors; 99 = not applicable */
+@@ -121,2 +133,3 @@
+       if (t.dataset.icgo != null) { if (o.fix) o.fix(+t.dataset.icgo); return; }
++      if (t.dataset.sumrun) { if (o.runCtl) o.runCtl(t.dataset.sumrun); return; }   // PR 3b: Stop / Run all
+       if (t.dataset.sdx) { const k = t.dataset.sdx; if (D.open.has(k)) D.open.delete(k); else D.open.add(k); draw(); return; }
+@@ -131,3 +144,3 @@
+   }
+-  window.PSBDashUI = { init, refresh: draw, KEY, GROUPS, RATING };
++  window.PSBDashUI = { init, refresh: draw, KEY, GROUPS, RATING, grp };   // PR 3b: grp for the Summary tab's counts (the same counts)
+ })();
+diff --git a/apps/ps-bridge/ui/types.js b/apps/ps-bridge/ui/types.js
+index cf2e96f..56f91c4 100644
+--- a/apps/ps-bridge/ui/types.js
++++ b/apps/ps-bridge/ui/types.js
+@@ -129,21 +129,4 @@
+   }
+-  /* summaryCard(A): the Summary tab's table of every girder type and line (PR 3a-2; the steel app's type × check table, SB-2 PR 2): a row per
+-     type (each check group's worst line, named) and a row per line; the girder weight per line, per type and the bridge total (SB-6).
+-     A = PSBBridge.results. Each ratio links to its tab with that type and line (data-tycell). Display only: the engine's ratios. */
+-  function summaryCard(A) {
+-    const GR = (window.PSBDashUI && window.PSBDashUI.GROUPS) || [], fx = (v, d) => typeof v === 'number' && isFinite(v) ? v.toFixed(d) : '—';
+-    const used = GR.filter(gp => A.cells.some(c => c.R && c.R.checks && gp.checks.some(([n]) => c.R.checks.some(q => q.n === n))));
+-    const worst = (checks, gp) => checks.filter(q => gp.checks.some(([n]) => n === q.n)).reduce((b, q) => !b || q.r > b.r ? q : b, null);
+-    const cell = (q, k, g, tab, sub) => q ? `<td class="${q.pass ? 'ok' : 'ngt'}"><a href="#" data-tycell="${k}|${g}|${tab}" title="${esc(q.n)}${sub ? ' on G' + g : ''}">${fx(q.r, 3)}</a>${sub ? `<br><span class="note">G${g}</span>` : ''}</td>` : '<td>—</td>';
+-    const rows = A.types.map(t => {
+-      const top = `<tr class="tyTop"><td class="lft"><b>${esc(t.label)}</b> (span ${t.span})</td>${used.map(gp => { const z = Object.values(t.gov).filter(v => gp.checks.some(([n]) => n === v.c.n)).reduce((b, v) => !b || v.c.r > b.c.r ? v : b, null);
+-        return z ? cell(z.c, t.k, z.g, gp.tab, true) : '<td>—</td>'; }).join('')}<td>${fx(t.W, 1)}</td></tr>`;
+-      const lines = t.cells.length > 1 ? t.cells.map(c => `<tr><td class="lft">&nbsp;&nbsp;on line G${c.g}</td>${used.map(gp => cell(c.R && c.R.checks ? worst(c.R.checks, gp) : null, t.k, c.g, gp.tab, false)).join('')}<td>${fx(c.W, 1)}</td></tr>`).join('') : '';
+-      return top + lines;
+-    }).join('');
+-    return box('tysum', 'Girder types and lines', 'every type on every line; the worst line governs', `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Girder type / line</th>${used.map(gp => `<th>${esc(gp.name)}</th>`).join('')}<th>Weight (kip)</th></tr></thead><tbody>${rows}</tbody>
+-      <tfoot><tr><td class="lft"><b>Bridge total (${A.n} girder${A.n === 1 ? '' : 's'})</b></td>${used.map(() => '<td></td>').join('')}<td><b>${fx(A.W, 1)}</b></td></tr></tfoot></table></div>
+-      <p class="note">Each ratio: the largest of the group's checks (demand / limit, OK ≤ 1.0, the engine's), the type's row its worst line (named), then a row per line. Click: the tab of the group with that type and line. Weight: the girder's own weight on the line, w<sub>sw</sub> (L + 2 e<sub>end</sub>/12), the weight W of the hold-down check (End zone &amp; hold-down tab); the type's weight is the sum over its lines and the bridge total the sum over every checked line (lines with no type not counted).</p>`);
+-  }
+-  window.PSBTypesUI = { summaryCard, SCOPED, card, shownCard, scopeBar, outBar, mark, onChange, onClick, scopeOf, keyLabel };
++  /* summaryCard (PR 3a-2) moved to ui/summary.js (PR 3b: the Summary tab's type × check-group table, with the girder × span grid) */
++  window.PSBTypesUI = { SCOPED, card, shownCard, scopeBar, outBar, mark, onChange, onClick, scopeOf, keyLabel };
+ })();
+```

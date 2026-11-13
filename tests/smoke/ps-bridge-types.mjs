@@ -10,7 +10,9 @@
 //      design's computeAll; the stored text is not rewritten by opening it; lines with no type listed;
 //   8. PS-23: the d_e notice on the Loads & LLDF tab (entered 2.0 vs computed 1.5 / 2.5 ft), the Report assumptions, the dismissal kept
 //      in the project (P.notices.de), shown again for a different difference, none where they match;
-//   5. 390 px: the Girders & strands tab and a result tab with the type / line bar without sideways scroll; 0 console errors; psb2.* keys only.
+//   9. PR 3b: the Summary tab on five projects (single type, new, three types, three spans continuous, a line not checked): values and
+//      weights = the engine's, counts = the check summary column's, the grid, a grid link opens its tab / type / line / step; Stop, Run all;
+//   5. 390 px: the Girders & strands tab and a result tab with the type / line bar and (PR 3b) the Summary tab without sideways scroll; 0 console errors; psb2.* keys only.
 //   node tests/smoke/ps-bridge-types.mjs [--file <index.html>] [--shots <dir>]
 import fs from 'fs';
 import path from 'path';
@@ -117,9 +119,9 @@ check(!/to fix/.test(await p.textContent('#sbDashCol')), 'unequal bays: no input
   check(r.chip === r.gov.r.toFixed(3), `flexure chip = the worst of every type and line ${r.chip} vs ${r.gov.r} (${r.gov.lab} G${r.gov.g})`);
   await p.click('#sbDashCol [data-sdgrp="flex"] .sdX'); check(/Flexure — (Interior|Exterior) S1 on G\d: /.test(await p.textContent('#sbDashCol')), 'chip list names the type and line');
   await p.click('#tabBar [data-otab="sum"]'); await p.waitForTimeout(300);
-  const t = (await p.textContent('#card-tysum')).replace(/\s+/g, ' ');
-  check(/Interior S1/.test(t) && /on line G3/.test(t) && /Bridge total \(5 girders\)/.test(t) && t.includes(r.W.toFixed(1)), 'Summary table: types, lines, bridge total ' + r.W.toFixed(1));
-  await p.click('#card-tysum a[data-tycell^="0|3|flex"]'); await p.waitForTimeout(300);
+  const t = (await p.textContent('#sum-table')).replace(/\s+/g, ' ');   // PR 3b: the Summary tab's type × check-group table (ui/summary.js)
+  check(/Interior S1/.test(t) && /on line G3/.test(t) && /Bridge total \(5 girder lines\)/.test(t) && t.includes(r.W.toFixed(1)), 'Summary table: types, lines, bridge total ' + r.W.toFixed(1));
+  await p.click('#sum-table tr.sum-line a[data-sumgo^="0|3|flex|"]'); await p.waitForTimeout(300);
   check(await p.evaluate(() => document.querySelector('#tabBar [data-otab="flex"]').getAttribute('aria-selected') === 'true' && document.querySelector('#tyOutL option:checked').value === '3'), 'a ratio opens Flexure with Interior S1 on G3');
   const e = await evCheck(p); check(e.n >= 20 && !e.bad.length, `Interior on G3 (S = 10 ft): ${e.n} values ${e.bad.slice(0, 3).join(' | ')}`);
   if (args.shots) { await p.click('#tabBar [data-otab="sum"]'); await p.waitForTimeout(300); await p.screenshot({ path: path.join(args.shots, 'ps3a-1400-summary-types.png') }); }
@@ -202,6 +204,73 @@ await p.reload(); await ready(p);
 check(!o.errs.length, 'console errors (PS-23): ' + o.errs.join(' | '));
 await o.b.close();
 
+// 9. PR 3b: the Summary tab (ui/summary.js) on four projects written on the page and reopened (file://): one girder type on every line,
+//    Interior + Exterior (a new project), three types with their own inputs on unequal bays, three spans made continuous (15 cells: the
+//    chunked run, Stop / Run all / Re-run all), two spans with a line not checked. Each: the verdict counts = the check summary column's;
+//    every number (data-sv) = computeAll (+ PS-10) of that type × line on the page; every weight; the grid's rows × spans; a grid link opens
+//    its tab with that type and line and its worked step revealed; 0 console errors; screenshots 1400 px.
+const sumCheck = (p, tag) => p.evaluate(() => {
+  const s0 = localStorage.getItem('psb2.project.current'), P = s0 ? window.PSBModel.importJSON(s0).project : window.PSBModel.newProject(), BR = window.PSBBridge, D = window.PSBDesign, I = new Map();
+  BR.cells(P).forEach(c => { const inp = D.cellInputs(P, c.k, c.g); I.set(`${c.k}|${c.g}`, { c, inp, R: window.PSBHoldDown.compute(JSON.parse(JSON.stringify(inp))) }); });
+  const at = (R, q) => q.split('.').reduce((o, k) => o == null ? o : o[k], R), f = (v, d) => typeof v === 'number' && isFinite(v) ? v.toFixed(d) : '—', bad = [];
+  const sv = [...document.querySelectorAll('#out [data-sv]')]; sv.forEach(el => { const [k, g, q] = el.dataset.sv.split('|'), x = I.get(`${k}|${g}`); const v = x && at(x.R, q);
+    if (!x || el.textContent !== f(v, /\.loc$/.test(q) ? 2 : 3)) bad.push(`${el.dataset.sv}: ${el.textContent} vs ${v}`); });
+  const wOf = x => x.R.g.wsw * (x.inp.L + 2 * (+x.inp.opt.endOh || 0) / 12);
+  const sw = [...document.querySelectorAll('#out [data-sw]')]; sw.forEach(el => { const [k, g] = el.dataset.sw.split('|'), xs = [...I.values()].filter(x => (k === '' || x.c.k === +k) && (g === '' || x.c.g === +g));
+    if (!xs.length || el.textContent !== xs.reduce((a, x) => a + wOf(x), 0).toFixed(1)) bad.push(`W ${el.dataset.sw}: ${el.textContent}`); });
+  const cnt = s => { const m = (document.querySelector(s) || {}).textContent || ''; return [(m.match(/(\d+) FAIL/) || [])[1], (m.match(/(\d+) PASS/) || [])[1]].join('/'); };
+  const rows = document.querySelectorAll('#sum-grid tbody tr').length, cols = document.querySelectorAll('#sum-grid thead th').length - 1;
+  return { nv: sv.length, nw: sw.length, bad, sum: cnt('#sum-verdict .sum-cnt'), dash: cnt('#sbDashCol .sdC'), rows, cols, nb: P.xs.nb, ns: P.spans.lengths.length,
+    nc: (document.querySelector('#sum-grid') || { textContent: '' }).textContent.split('not checked').length - 1, un: BR.unassigned(P).length, up: /Up to date/.test(document.getElementById('sumRunMsg').textContent) };
+});
+const write = (p, fn) => p.evaluate(fn);
+o = await openPage(FILE, { vw: 1400, vh: 1000 }); p = o.p; await ready(p);
+const SUMP = {
+  single: () => { const P = window.PSBModel.newProject(); P.types = [{ id: 'T1', label: 'All S1', span: 1, lines: [1, 2, 3, 4, 5], ovr: {} }]; localStorage.setItem('psb2.project.current', window.PSBModel.exportJSON(P)); },
+  multi: () => { const B = window.PSBBridge, P = window.PSBModel.newProject(); P.xs.bays = [8, 10, 10, 8]; P.types[1].ovr = { 'mat.fc': 9 }; const k = B.addType(P, 0, { label: 'G3 own' }); P.types[k].ovr = { 'mat.fc': 7 }; B.assignLine(P, k, 3);
+    localStorage.setItem('psb2.project.current', window.PSBModel.exportJSON(P)); },
+  cont3: () => { const P = window.PSBModel.newProject(); P.spans.lengths = [100, 120, 100]; P.spans.continuity = 'composite'; P.xs.skews = [0, 0, 0, 0]; window.PSBBridge.syncSpans(P); localStorage.setItem('psb2.project.current', window.PSBModel.exportJSON(P)); },
+  cont2un: () => { const P = window.PSBModel.newProject(); P.spans.lengths = [90, 90]; P.spans.continuity = 'composite'; P.xs.skews = [0, 0, 0]; window.PSBBridge.syncSpans(P); P.types.find(t => t.span === 2 && /Exterior/.test(t.label)).lines = [1];
+    localStorage.setItem('psb2.project.current', window.PSBModel.exportJSON(P)); }
+};
+for (const [tag, fn] of [['new', null], ...Object.entries(SUMP)]) {
+  if (fn) { await write(p, fn); await p.reload(); await ready(p); }
+  await p.click('#tabBar [data-otab="sum"]'); await p.waitForFunction(() => /Up to date/.test((document.getElementById('sumRunMsg') || {}).textContent || ''), null, { timeout: 30000 }); await p.waitForTimeout(150);
+  const r = await sumCheck(p, tag);
+  check(r.up && r.nv >= 30 && r.nw >= 3 && !r.bad.length, `3b ${tag}: ${r.nv} values, ${r.nw} weights = the engine's ${r.bad.slice(0, 3).join(' | ')}`);
+  check(r.sum === r.dash && /^\d+\/\d+$/.test(r.sum), `3b ${tag}: verdict counts = the check summary column's (${r.sum} vs ${r.dash})`);
+  check(r.rows === r.nb && r.cols === r.ns && r.nc === r.un, `3b ${tag}: grid ${r.rows} lines × ${r.cols} spans, ${r.nc} not checked (${r.un})`);
+  if (args.shots) { await p.screenshot({ path: path.join(args.shots, `ps3b-1400-summary-${tag}.png`) });
+    await p.evaluate(() => { const op = document.getElementById('outputPanel'), g = document.getElementById('sum-grid'); op.scrollTop += g.getBoundingClientRect().top - document.getElementById('tabBar').getBoundingClientRect().bottom - 8; });
+    await p.screenshot({ path: path.join(args.shots, `ps3b-1400-summary-${tag}-grid.png`) }); }
+  // a grid link: the last line of the last span that has a type → its tab with that type and line, the step revealed
+  const ln = await p.evaluate(() => { const a = [...document.querySelectorAll('#sum-grid a[data-sumgo]')].filter(x => !x.dataset.sumgo.endsWith('|1')).pop(); a.click(); return a.dataset.sumgo; });
+  await p.waitForTimeout(400);
+  const [k, g, tab, st] = ln.split('|');
+  const q = await p.evaluate(([tab, st]) => { const el = document.getElementById('st-' + st); return { sel: document.querySelector(`#tabBar [data-otab="${tab}"]`).getAttribute('aria-selected'), line: (document.querySelector('#tyOutL option:checked') || {}).value,
+    type: (document.querySelector('#tyOutT option:checked') || {}).value, step: !!el && el.offsetParent !== null }; }, [tab, st]);
+  check(q.sel === 'true' && q.line === g && q.type === k && q.step, `3b ${tag}: grid link ${ln} opens ${tab} with type ${k} on G${g}, step ${st} shown ` + JSON.stringify(q));
+  const e = await evCheck(p); check(!e.bad.length, `3b ${tag}: the tab's values = that cell's computeAll ${e.bad.slice(0, 2).join(' | ')}`);
+}
+// the chunked run: Re-run all then Stop at once (before the first cell): "Stopped", the check summary says so; Run all → up to date, same values
+await p.click('#tabBar [data-otab="sum"]'); await p.waitForTimeout(200);
+{ const before = await p.evaluate(() => [...document.querySelectorAll('#out [data-sv]')].map(e => e.dataset.sv + '=' + e.textContent).join(';'));
+  await p.evaluate(() => { document.querySelector('[data-sumrun="rerun"]').click(); document.querySelector('#out [data-sumrun="stop"]').click(); });
+  await p.waitForTimeout(200);
+  const s = await p.evaluate(() => ({ msg: document.getElementById('sumRunMsg').textContent, dash: document.querySelector('#sbDashCol .sdRun').textContent, grid: !!document.getElementById('sum-grid') }));
+  check(/Stopped: \d+ of 9 /.test(s.msg) && /Stopped/.test(s.dash) && !s.grid, '3b: Stop → stopped, no grid, the check summary says so ' + JSON.stringify(s));
+  await p.click('#out [data-sumrun="run"]');
+  await p.waitForFunction(() => /Up to date/.test((document.getElementById('sumRunMsg') || {}).textContent || ''), null, { timeout: 30000 });
+  const after = await p.evaluate(() => [...document.querySelectorAll('#out [data-sv]')].map(e => e.dataset.sv + '=' + e.textContent).join(';'));
+  check(after === before && after.length > 100, '3b: Run all → up to date, the same values');
+  // while running: the check summary column shows the run
+  await p.evaluate(() => document.querySelector('[data-sumrun="rerun"]').click());
+  const d = await p.evaluate(() => document.querySelector('#sbDashCol .sdRun').textContent);
+  check(/Running every girder type × line \(\d+ \/ 9\)/.test(d), '3b: the check summary during the run: ' + d);
+  await p.waitForFunction(() => /Up to date/.test((document.getElementById('sumRunMsg') || {}).textContent || ''), null, { timeout: 30000 }); }
+check(!o.errs.length, 'console errors (3b): ' + o.errs.join(' | '));
+await o.b.close();
+
 // 5. phone
 o = await openPage(FILE, { vw: 390, vh: 844 }); p = o.p; await ready(p);
 await p.click('#inTabs [data-itab="gird"]'); await p.waitForTimeout(200);
@@ -209,6 +278,9 @@ check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.sc
 await p.click('#tabBar [data-otab="str"]'); await p.waitForTimeout(300);
 check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth) <= 0 && await p.isVisible('#tyOutT'), 'phone: Stresses with the type / line bar without sideways scroll');
 if (args.shots) await p.screenshot({ path: path.join(args.shots, 'ps3a-390-gird.png'), fullPage: false });
+await p.click('#tabBar [data-otab="sum"]'); await p.waitForTimeout(400);   // PR 3b: the Summary tab at 390 px
+check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth) <= 0 && await p.isVisible('#sum-grid') && await p.isVisible('#sum-table'), 'phone: Summary (grid and table) without sideways scroll');
+if (args.shots) { await p.screenshot({ path: path.join(args.shots, 'ps3b-390-summary.png'), fullPage: false }); await p.evaluate(() => document.getElementById('sum-grid').scrollIntoView()); await p.screenshot({ path: path.join(args.shots, 'ps3b-390-summary-grid.png'), fullPage: false }); }
 check(!o.errs.length, 'console errors (390 px): ' + o.errs.join(' | '));
 await o.b.close();
 console.log(`${checks} checks, ${failures} failed`);
