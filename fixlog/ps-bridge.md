@@ -986,7 +986,7 @@ PR #1501: https://github.com/mlococo88/All-Structural/pull/1501
   d_e for both (enter a type per side, or the larger d_e).
 
 ## 2026-11-13 — PR 3a-3: the bridge level, part 3 — DC2 and DW distributed to each girder line by the Steel Bridge app's method (CALCULATION CHANGE, §4, for projects that use it; projects saved before keep their entered values)
-PR: (link added on merge)
+PR #1506: https://github.com/mlococo88/All-Structural/pull/1506
 ### Request
 - Engineer decision PS-9 ("unequal bays + the steel app's DL distribution from the start; results differ from the old app where they
   apply, §4 callouts"); task: "Dead load distribution: use the steel app's DC2/DW distribution method"; plan §7 item 3.
