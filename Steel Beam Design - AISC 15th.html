@@ -2215,7 +2215,7 @@ function torsRoundWork(D,p){
    Round: R_n = F_y t^2 [5.5/(1 - 0.81 B_p/D)] Q_f (Eq. K2-1a; 0.90), Q_f by Eq. K2-3.
    Q_f: U = P_ro/(F_y A_g) + |M_ro|/(F_y S) (Eq. K2-4) with the compressive P_u and the moment at the location; the
    connecting face is taken in compression whatever the sign of M (conservative). Not covered (stated): the rect face
-   yield-line flexure for B_p < 0.85B (no Specification equation; Sec. J10.10 / Manual Part 9), web compression buckling
+   yield-line flexure for B_p < 0.85B (no Specification equation; Sec. J10.10 / Manual Part 9; HSS-11: such a plate blocks the location), web compression buckling
    (Sec. J10.5, a pair of opposing forces), longitudinal plates, cap plates loaded along the member axis, HSS-to-HSS. */
 function hssKPrm(p,raw,isSup){
   const r=raw||{},type=r.type||'none',o={type,errs:[],notes:[]};
@@ -2224,6 +2224,9 @@ function hssKPrm(p,raw,isSup){
   if(type==='plate'){
     o.tp=r.tp>0?+r.tp:null;o.Bp=r.Bp>0?+r.Bp:null;o.lb=r.lb>0?+r.lb:o.tp;o.lbDef=!(r.lb>0);
     if(!o.tp)o.errs.push('plate thickness tₚ');if(!o.Bp)o.errs.push('plate width Bₚ');
+    /* HSS-11 (engineer, 2026-11-13): rect HSS, B_p < 0.85B -> face plastification (yield line) usually governs; no AISC 360-16
+       equation, so the app does not cover it: an input error that blocks the location (as a missing input) */
+    if(p._kind==='R'&&o.Bp&&o.Bp<0.85*p.B)o.nc={Bp:o.Bp,B:p.B,min:0.85*p.B,beta:o.Bp/p.B};
   }else{   /* bearing */
     o.lb=r.lb>0?+r.lb:null;o.lbDef=false;
     if(!o.lb)o.errs.push('bearing length lᵇ');
@@ -2231,10 +2234,17 @@ function hssKPrm(p,raw,isSup){
   }
   return o;
 }
+/* HSS-11: why a location is blocked ('' = not blocked): input missing, or a narrow plate on a rect HSS (not covered) */
+function hssKBlk(prm){
+  if(!prm||prm.type==='none')return '';
+  if(prm.errs.length)return 'input missing: '+prm.errs.join(', ');
+  if(prm.nc)return 'not covered: plate width B\u209A = '+fmt(prm.nc.Bp,3)+' in < 0.85B = '+fmt(prm.nc.min,3)+' in \u2014 widen the plate to B\u209A \u2265 0.85B, or check HSS face plastification by hand (the app does not cover narrow plates)';
+  return '';
+}
 /* the capacities that do not depend on Q_f, and the parameters of those that do */
 function hssKCaps(p,prm,endDist){
   const Fy=p.mat.Fy,E=EKSI,t=p.tdes,out={prm,endDist,ls:[]};
-  if(prm.type==='none'||prm.errs.length)return out;
+  if(prm.type==='none'||hssKBlk(prm))return out;
   if(p._kind==='R'){
     const B=p.B,H=p.Ht,Bp=Math.min(prm.Bp,B),beta=Bp/B,lb=prm.lb,k=1.5*t;
     out.B=B;out.H=H;out.t=t;out.Bp=Bp;out.beta=beta;out.lb=lb;out.k=k;
@@ -2244,7 +2254,6 @@ function hssKCaps(p,prm,endDist){
       out.ls.push({id:'ply',name:'Plate local yielding (effective width)',ref:'§K1.2a Eq. K1-1; §J4.1, J4.4',phi:0.90,Rn:prm.Fyp*prm.tp*Be,both:true});
       if(Bp<=B-2*t)out.ls.push({id:'pun',name:'HSS face punching shear',ref:'§J10.10, J4.2; Comm. K1.2',phi:0.95,Rn:0.6*Fy*t*(2*lb+2*Be),both:true});
       else out.punNA=true;
-      if(beta<0.85)out.ylNC=true;
     }
     const atEndY=endDist<=H;
     out.ls.push({id:'sly',name:'Sidewall local yielding (2 walls)',ref:(atEndY?'Eq. J10-3':'Eq. J10-2')+' × 2; Comm. J10',phi:1.00,
@@ -2320,18 +2329,18 @@ function sbHssKCheck(D){
   if(!on.length){D.checks.push({label:'Concentrated forces',ref:'Ch. K / J10',na:true,tab:'tabJ10',
     detail:'HSS \u2014 no plate or bearing stated at the supports / point loads (Concentrated Forces input); locally loaded HSS walls not checked'});return;}
   on.filter(l=>l.prm.errs.length).forEach(l=>D.warns.push('Concentrated force on the HSS wall at '+l.label+': enter '+l.prm.errs.join(', ')+' (Concentrated Forces input). This location is reported as failing until then.'));
-  on.filter(l=>l.caps.ylNC).forEach(l=>D.warns.push('HSS wall at '+l.label+': B\u209A/B = '+fmt(l.caps.beta,3)+' < 0.85, so the load must pass through the face in bending. AISC 360-16 gives no equation for this face yield-line limit state (\u00A7J10.10: flexure by yield-line theory, AISC Manual Part 9); it is NOT checked here \u2014 verify it separately.'));
+  on.filter(l=>l.prm.nc).forEach(l=>D.warns.push('HSS wall at '+l.label+': transverse plate B\u209A = '+fmt(l.prm.nc.Bp,3)+' in < 0.85B = '+fmt(l.prm.nc.min,3)+' in (B\u209A/B = '+fmt(l.prm.nc.beta,3)+'). For a narrow plate, HSS face plastification (yield line) usually governs; AISC 360-16 gives no equation for it (\u00A7J10.10, AISC Manual Part 9) and this app does not cover narrow plates. Widen the plate to B\u209A \u2265 0.85B = '+fmt(l.prm.nc.min,3)+' in, or check HSS face plastification by hand. This location is reported as failing (not covered) until then.'));
   on.filter(l=>l.caps.lim&&l.caps.lim.length).forEach(l=>D.warns.push('Round HSS wall at '+l.label+': outside the Table K2.1A limits of applicability ('+l.caps.lim.join('; ')+'). \u00A7K1: such a connection is designed by rational analysis; the Table K2.1 value is shown for information.'));
   let g=null;
   D.perCombo.forEach(c=>(c.hssK||[]).forEach(r=>{
     const lo=L.find(l=>l.key===r.key);
-    if(lo&&lo.prm.type!=='none'&&lo.prm.errs.length&&r.dem>1e-9){if(!g||g.d<Infinity)g={d:Infinity,c,r,blocked:'input missing: '+lo.prm.errs.join(', ')};return;}
+    if(lo&&hssKBlk(lo.prm)&&r.dem>1e-9){if(!g||g.d<Infinity)g={d:Infinity,c,r,blocked:hssKBlk(lo.prm)};return;}
     if(r.gov&&(!g||r.gov.dcr>g.d))g={d:r.gov.dcr,c,r};}));
   if(!g){D.checks.push({label:'Concentrated forces',ref:'Ch. K / J10',na:true,tab:'tabJ10',detail:'HSS \u2014 no force at the locations with a plate or bearing stated'});return;}
   if(g.blocked){D.checks.push({label:'Concentrated forces',ref:'Ch. K / J10',dcr:Infinity,fail:true,combo:g.c.name,tab:'tabJ10',detail:'HSS wall, '+g.r.label+' \u2014 '+g.blocked});return;}
   const lo=L.find(l=>l.key===g.r.key);
   D.checks.push({label:'Concentrated forces',ref:g.r.gov.ref,dcr:g.d,combo:g.c.name,tab:'tabJ10',dem:g.r.dem,cap:g.r.gov.phiRn,unit:'kip',capSym:'\u03C6R\u2099',
-    detail:'HSS wall: '+g.r.gov.name+', '+g.r.label+(g.r.tens?' (tension)':'')+(lo&&lo.caps.ylNC?'; face yield line NOT checked (B\u209A < 0.85B)':'')});
+    detail:'HSS wall: '+g.r.gov.name+', '+g.r.label+(g.r.tens?' (tension)':'')});
 }
 /* ---------- J10 concentrated forces (I & C) ---------- */
 function j10WLY(p,lbIn,endDistIn){
@@ -6181,18 +6190,18 @@ function sbHssKTab(pg,D,p){
         ['Round HSS:','\u00A7K2.2, Table K2.1 transverse plate (HSS local yielding, Eq. K2-1a) within the limits of Table K2.1A; a bearing uses the same equation with its width B\u209A.'],
       ['Q<sub>f</sub>:','U = P\u1D63\u2092/(F\u1D67A\u1D4D) + |M\u1D63\u2092|/(F\u1D67S) (Eq. K2-4) with the compressive P\u1D64 and the moment at the location; the loaded face is taken in compression whatever the sign of M (conservative).'],
       ['Direction:','a downward point load or an upward reaction pushes on the wall (compressive: every limit state); an upward point load or uplift pulls (tensile: crippling is not a limit state).'],
-      ['Not covered (verify separately):',(p._kind==='R'?'face flexure by yield lines for B\u209A < 0.85B (no Specification equation; \u00A7J10.10, AISC Manual Part 9); ':'')+'web compression buckling of the walls under a pair of opposing forces (\u00A7J10.5); longitudinal plates; a cap plate loaded along the member axis; HSS-to-HSS connections (\u00A7K3); the plate and its welds.']])));
+      ['Not covered (verify separately):',(p._kind==='R'?'a transverse plate narrower than 0.85B: HSS face plastification (yield lines) usually governs and has no Specification equation (\u00A7J10.10, AISC Manual Part 9), so such a location is blocked (FAIL) \u2014 widen the plate to B\u209A \u2265 0.85B or check it by hand; ':'')+'web compression buckling of the walls under a pair of opposing forces (\u00A7J10.5); longitudinal plates; a cap plate loaded along the member axis; HSS-to-HSS connections (\u00A7K3); the plate and its welds.']])));
     if(!on.length){body.appendChild(el('div','warnBox','No plate or bearing is stated at any location \u2014 enter them in the <b>Concentrated Forces</b> section of the input panel (Checks tab). The check is reported N/A, never as passing.'));return;}
     const t=el('table','tbl'),hd=el('tr');
     ['Location',isMember()?null:'x (ft)','Type','B\u209A (in)','t\u209A (in)','l\u1D47 (in)','End dist. (in)','\u03C6R\u2099 by limit state (kip; Q<sub>f</sub> = 1)'].filter(x=>x!=null).forEach(h=>hd.appendChild(el('th',null,h)));t.appendChild(hd);
     L.forEach(lo=>{const tr=el('tr'),pr=lo.prm,c=lo.caps;
       const cells=[lo.label];if(!isMember())cells.push(f(lo.x,2));
       cells.push(TY[pr.type],pr.Bp!=null?f(pr.Bp,3):'\u2014',pr.tp!=null?f(pr.tp,3):'\u2014',pr.lb!=null?f(pr.lb,3):'\u2014',lo.endDist>=1e5?'interior':f(lo.endDist,1),
-        pr.type==='none'?'\u2014':pr.errs.length?'<span class="dirty">enter '+pr.errs.join(', ')+'</span>':c.ls.map(s=>s.name+': '+f(s.phi*(s.Rn!=null?s.Rn:s.RnQ1),1)).join('<br>'));
+        pr.type==='none'?'\u2014':pr.errs.length?'<span class="dirty">enter '+pr.errs.join(', ')+'</span>':pr.nc?'<span class="dirty">'+hssKBlk(pr)+'</span>':c.ls.map(s=>s.name+': '+f(s.phi*(s.Rn!=null?s.Rn:s.RnQ1),1)).join('<br>'));
       cells.forEach((v,i)=>tr.appendChild(el('td',i===0||i===cells.length-1?'lft':null,''+v)));t.appendChild(tr);});
     body.appendChild(t);
   },pg);
-  on.filter(l=>!l.prm.errs.length).forEach((lo,i)=>mkSection('hkW'+i,'Worked: '+lo.label,body=>sbHssKWork(body,p,lo),pg));
+  on.filter(l=>!hssKBlk(l.prm)).forEach((lo,i)=>mkSection('hkW'+i,'Worked: '+lo.label,body=>sbHssKWork(body,p,lo),pg));
   if(!on.length)return;
   perComboSections(pg,'hk_',isMember()?'Case ':'Combination ',(body,C)=>{
     const rows=(C.hssK||[]).filter(r=>{const lo=L.find(l=>l.key===r.key);return lo&&lo.prm.type!=='none';});
@@ -6201,7 +6210,7 @@ function sbHssKTab(pg,D,p){
     ['Location','R\u1D64 (kip)','U','Limit state','Q<sub>f</sub>','\u03C6R\u2099 (kip)','DCR'].forEach(h=>hd.appendChild(el('th',null,h)));t.appendChild(hd);
     rows.forEach(r=>{const lo=L.find(l=>l.key===r.key);
       if(!(r.dem>1e-9))return;
-      if(lo.prm.errs.length){const tr=el('tr','gov');[r.label,f(r.F,2),'\u2014','input missing: '+lo.prm.errs.join(', '),'\u2014','\u2014','FAIL'].forEach((v,i)=>tr.appendChild(el('td',i===0||i===3?'lft':null,v)));t.appendChild(tr);return;}
+      if(hssKBlk(lo.prm)){const tr=el('tr','gov');[r.label,f(r.F,2),'\u2014',hssKBlk(lo.prm),'\u2014','\u2014','FAIL'].forEach((v,i)=>tr.appendChild(el('td',i===0||i===3?'lft':null,v)));t.appendChild(tr);return;}
       r.states.forEach((s,j)=>{const tr=el('tr');
         [j?'':r.label+(r.tens?' (tension)':''),j?'':f(r.F,2),j?'':f(r.U,4),s.name,s.Qf!=null?f(s.Qf,4):'\u2014',f(s.phiRn,1),f(s.dcr,3)].forEach((v,i)=>tr.appendChild(el('td',i===0||i===3?'lft':null,v)));
         if(s.dcr>1)tr.className='gov';t.appendChild(tr);});});
@@ -6232,7 +6241,6 @@ function sbHssKWork(body,p,lo){
       if(pun)body.appendChild(eqBlock({title:'HSS face punching shear (B\u209A \u2264 B \u2212 2t = '+f(c.B-2*t)+' in)',ref:'\u00A7J10.10, J4.2; Comm. K1.2 (\u03C6 = 0.95)',
         lines:[subEq('R_n','0.6F_yt\\left(2l_b+2B_e\\right)','0.6('+Fy+')('+f(t,4)+')\\left(2('+f(c.lb)+')+2('+f(c.Be)+')\\right)',f(pun.Rn,2),'kip'),subEq('\\phi R_n','0.95R_n','',f(0.95*pun.Rn,2),'kip')]}));
       else body.appendChild(el('div','hint','Face punching shear: B\u209A = '+f(c.Bp)+' in > B \u2212 2t = '+f(c.B-2*t)+' in, so the plate edges bear on the corners and sidewalls: not a limit state (the sidewall checks below apply).'));
-      if(c.ylNC)body.appendChild(el('div','warnBox','<b>Not checked:</b> \u03B2 = B\u209A/B = '+f(c.beta,3)+' < 0.85 \u2014 the force passes through the face in bending. AISC 360-16 gives no equation for this face yield-line limit state (\u00A7J10.10: yield-line theory, AISC Manual Part 9). Verify it separately.'));
     }else body.appendChild(el('div','hint','Bearing on a cap plate or seat across the full width B: the sidewall limit states below.'));
     const sly=c.ls.find(s=>s.id==='sly'),slc=c.ls.find(s=>s.id==='slc'),r=c.lb/c.dF;
     body.appendChild(eqBlock({title:'Sidewall local yielding (2 walls)',ref:(sly.atEnd?'Eq. J10-3':'Eq. J10-2')+' \u00D7 2 (\u03C6 = 1.00)',
@@ -7375,7 +7383,7 @@ function sbHssKInputs(body,pk){
   }
   body.appendChild(el('div','hint',(pk._kind==='R'?'Rectangular HSS: plate local yielding (Eq. K1-1), face punching, sidewall local yielding and crippling (Chapter J as Commentary J10 / K1.2 apply it). ':'Round HSS: Table K2.1, Eq. K2-1a. ')+
     'Bₚ = plate width across the HSS; tₚ = plate thickness; lᵇ = bearing length along the HSS (blank → tₚ for a plate); Fᵧₚ blank → 36 ksi. '+(pk._kind==='R'?'A bearing is taken across the full width B. ':'')+
-    'Not checked here: face yield lines for Bₚ < 0.85B, longitudinal plates, HSS-to-HSS. Worked on the Concentrated Forces tab.'));
+    (pk._kind==='R'?'A plate with Bₚ < 0.85B is not covered (face plastification usually governs; no AISC 360-16 equation): the location is blocked \u2014 widen the plate to Bₚ \u2265 0.85B or check it by hand. ':'')+'Not checked here: longitudinal plates, HSS-to-HSS. Worked on the Concentrated Forces tab.'));
 }
 /* ---------- 7. concentrated forces ---------- */
 function secJ10(P){
@@ -7834,6 +7842,7 @@ function xlHssK(X,p,D,Fy,E){
     const pr=lo.prm,c=lo.caps,k='K'+i,q=n=>'«'+k+n+'»';
     X.sub(lo.label+' — '+TY[pr.type]);
     if(pr.errs.length){X.note('Input missing: '+pr.errs.join(', ')+' — this location is reported as failing until it is entered.');return;}
+    if(pr.nc){X.note('NOT COVERED: plate width Bp = '+S2(pr.nc.Bp,3)+' in < 0.85B = '+S2(pr.nc.min,3)+' in (Bp/B = '+S2(pr.nc.beta,3)+'). HSS face plastification (yield line) usually governs and AISC 360-16 has no equation for it; the app does not cover narrow plates. Widen the plate to Bp ≥ 0.85B, or check HSS face plastification by hand. This location is reported as failing until then.');return;}
     X.line('Distance to the nearer member end','end',lo.endDist>=1e5?'interior':lo.endDist,'in','',{kind:'in',dp:2});
     if(R){
       X.line('Bearing length along the HSS','lb',c.lb,'in',pr.lbDef?'blank → tₚ':'entered',{kind:'in',dp:3,ref:k+'lb'});
@@ -7848,7 +7857,6 @@ function xlHssK(X,p,D,Fy,E){
         X.line('Plate local yielding, φ = 0.90','φRn',{formula:'0.9*'+q('Fyp')+'*'+q('tp')+'*'+q('Be'),result:N2(0.9*ply.Rn,2)},'kip','§J4.1, J4.4',{});
         if(pun)X.line('HSS face punching shear, φ = 0.95','φRn',{formula:'0.95*0.6*«Fy»*«tdes»*(2*'+q('lb')+'+2*'+q('Be')+')',result:N2(0.95*pun.Rn,2)},'kip','§J10.10, J4.2; Comm. K1.2',{});
         else X.note('Face punching shear: Bp > B − 2t, the plate edges bear on the corners and sidewalls — not a limit state.');
-        if(c.ylNC)X.note('NOT CHECKED: β = Bp/B = '+S2(c.beta,3)+' < 0.85 — face yield-line flexure has no AISC 360-16 equation (§J10.10; AISC Manual Part 9). Verify it separately.');
       }else X.note('Bearing on a cap plate or seat across the full width B: the sidewall limit states below.');
       const sly=c.ls.find(s=>s.id==='sly'),slc=c.ls.find(s=>s.id==='slc');
       X.line('Sidewall local yielding (2 walls), φ = 1.00','φRn',{formula:'1*2*«Fy»*«tdes»*('+(sly.atEnd?'2.5':'5')+'*'+q('k')+'+'+q('lb')+')',result:N2(sly.Rn,2)},'kip',(sly.atEnd?'Eq. J10-3':'Eq. J10-2')+' × 2',{});
@@ -7868,14 +7876,14 @@ function xlHssK(X,p,D,Fy,E){
   const rows=[];
   D.perCombo.forEach(C=>(C.hssK||[]).forEach(r=>{
     const lo=L.find(l=>l.key===r.key);if(!lo||lo.prm.type==='none'||!(r.dem>1e-9))return;
-    if(lo.prm.errs.length){rows.push([C.name+' — '+r.label,{v:N2(r.F,2),dp:2},'—','input missing: '+lo.prm.errs.join(', '),'—','—',{v:'FAIL',kind:'bad'}]);return;}
+    if(hssKBlk(lo.prm)){rows.push([C.name+' — '+r.label,{v:N2(r.F,2),dp:2},'—',hssKBlk(lo.prm),'—','—',{v:'FAIL',kind:'bad'}]);return;}
     r.states.forEach(s=>rows.push([C.name+' — '+r.label+(r.tens?' (tension)':''),{v:N2(r.F,2),dp:2},{v:N2(r.U,4),dp:4},s.name,
       s.Qf!=null?{v:N2(s.Qf,4),dp:4}:'—',{v:N2(s.phiRn,2),dp:2},{v:N2(s.dcr,3),dp:3,kind:s.dcr>1?'bad':'ok'}]));
   }));
   if(rows.length)X.table(['Case / location','Ru (kip)','U','Limit state','Qf','φRn (kip)','DCR'],rows);
   else X.note('No force at the stated locations.');
   X.note('Ru > 0 pushes on the wall (every limit state), < 0 pulls (crippling not a limit state). U = Pro/(Fy·Ag) + |Mro|/(Fy·S) (Eq. K2-4), compressive Pu and the moment at the location; '+
-    (R?'Qf = 1.3 − 0.4U/β ≤ 1.0 (Eq. K3-14).':'Qf = 1 − 0.3U(1 + U) (Eq. K2-3).')+' Not covered: '+(R?'face yield-line flexure for Bp < 0.85B; ':'')+'web compression buckling (§J10.5); longitudinal plates; HSS-to-HSS (§K3); the plate and its welds.');
+    (R?'Qf = 1.3 − 0.4U/β ≤ 1.0 (Eq. K3-14).':'Qf = 1 − 0.3U(1 + U) (Eq. K2-3).')+' Not covered: '+(R?'face plastification for Bp < 0.85B (blocked: widen the plate or check by hand); ':'')+'web compression buckling (§J10.5); longitudinal plates; HSS-to-HSS (§K3); the plate and its welds.');
   X.gap();
 }
 async function xlChecks(X,p,D,mem,Fy,E){

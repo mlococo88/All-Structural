@@ -394,9 +394,27 @@ test('SBHK: transverse plate and bearing on rect HSS; round HSS Table K2.1; memb
   const qf = r.states.find(s => s.id === 'slc').Qf; near(qf, Math.min(1, 1.3 - 0.4 * r.U / 0.875), 1e-12, 'Qf K3-14');
   assert.equal(r.gov.id, 'ply'); near(r.gov.dcr, 22 / (0.9 * 36 * 0.5 * Be), 1e-12, 'governing DCR');
   const ck = D.checks.find(c => c.label === 'Concentrated forces'); near(ck.dcr, r.gov.dcr, 1e-12, 'check row'); assert.ok(/Plate local yielding/.test(ck.detail));
-  // narrow plate (B_p < 0.85B): face yield line not covered -> warning and the detail says so
+  // HSS-11: narrow plate (B_p = 4 < 0.85B = 6.8): face plastification not covered -> an input error that blocks the location
+  // (before HSS-11: plate yielding 48.65 kip shown, DCR 0.452, with a warning only)
   D = beam({ section: { family: 'HSSR', label: 'HSS8X8X1/2', grade: 'A500C_R' }, loads: pts, hssK: { pt: { type: 'plate', Bp: 4, tp: 0.5 } } });
-  assert.ok(D.warns.some(w => /yield-line/.test(w))); assert.ok(/NOT checked/.test(D.checks.find(c => c.label === 'Concentrated forces').detail));
+  let nc = D.hssK.find(l => l.key === 'P10.000'), ckN = D.checks.find(c => c.label === 'Concentrated forces');
+  near(nc.prm.nc.min, 6.8, 1e-12, '0.85B'); near(nc.prm.nc.beta, 0.5, 1e-12, 'Bp/B'); assert.equal(nc.caps.ls.length, 0);
+  assert.equal(ckN.dcr, Infinity); assert.equal(ckN.fail, true); assert.equal(ckN.cap, undefined);
+  assert.ok(/not covered/.test(ckN.detail) && /0\.85B/.test(ckN.detail) && /face plastification by hand/.test(ckN.detail), ckN.detail);
+  assert.ok(D.warns.some(w => /does not cover narrow plates/.test(w) && /Widen the plate/.test(w) && /6\.800/.test(w)));
+  D.perCombo.forEach(C => C.hssK.forEach(r => assert.equal(r.states.length, 0)));
+  // ... at B_p = 0.85B exactly (6.8 in): covered, results as before
+  D = beam({ section: { family: 'HSSR', label: 'HSS8X8X1/2', grade: 'A500C_R' }, loads: pts, hssK: { pt: { type: 'plate', Bp: 6.8, tp: 0.5 } } });
+  assert.equal(D.hssK.find(l => l.key === 'P10.000').prm.nc, undefined); assert.ok(isFinite(D.checks.find(c => c.label === 'Concentrated forces').dcr));
+  // ... a narrow plate at a support blocks the check through the reaction; a narrow plate on a round HSS is unchanged
+  D = beam({ section: { family: 'HSSR', label: 'HSS8X8X1/2', grade: 'A500C_R' }, loads: pts, hssK: { sup: { type: 'plate', Bp: 4, tp: 0.5 }, pt: { type: 'plate', Bp: 7, tp: 0.5 } } });
+  assert.equal(D.checks.find(c => c.label === 'Concentrated forces').dcr, Infinity, 'reaction on the narrow support plate: blocked');
+  D = beam({ section: { family: 'HSSP', label: 'HSS10.000X0.500', grade: 'A500C_P' }, loads: pts, hssK: { pt: { type: 'plate', Bp: 4, tp: 0.5 } } });
+  assert.equal(D.hssK.find(l => l.key === 'P10.000').prm.nc, undefined); assert.ok(isFinite(D.checks.find(c => c.label === 'Concentrated forces').dcr));
+  // ... member mode: blocked the same way
+  D = beam({ mode: 'member', section: { family: 'HSSR', label: 'HSS8X8X1/2', grade: 'A500C_R' },
+    member: { L: 20, Lb: 20, j10: { R: 30, lb: null, loc: 'interior' }, hssK: { type: 'plate', Bp: 4, tp: 0.5 }, rows: [{ id: 'm1', name: 'LC-1', Mux: 60, Vux: 15, Pu: 0, Muy: 0, Vuy: 0, Tu: 0 }] } });
+  ckN = D.checks.find(c => c.label === 'Concentrated forces'); assert.equal(ckN.dcr, Infinity); assert.ok(ckN.fail && /not covered/.test(ckN.detail));
   // missing plate width: FAIL with the reason
   D = beam({ section: { family: 'HSSR', label: 'HSS8X8X1/2', grade: 'A500C_R' }, loads: pts, hssK: { pt: { type: 'plate', tp: 0.5 } } });
   assert.equal(D.checks.find(c => c.label === 'Concentrated forces').dcr, Infinity);
