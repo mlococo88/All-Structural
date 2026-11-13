@@ -605,7 +605,7 @@ PR #1463: https://github.com/mlococo88/All-Structural/pull/1463
 - No graphics in the Report yet (the tabs draw theirs after the HTML; the steel report has charts): a later display PR if wanted.
 
 ## 2026-11-13 — Owner material-limit checks in the check summary column ("Materials (owner limits)"); Report §1 consistent with the column (display only, no calculation change)
-PR: (link added after the PR is opened)
+PR #1466: https://github.com/mlococo88/All-Structural/pull/1466
 ### Problem
 - The engine checks the girder f′c and the release f′ci against the owner's limits (RIDOT 5.2.1, MassDOT 3.7.2.1, CTDOT V2 5.9.1.2; engine
   PBD-E, `pbd-compute.js` anchor `const rFcMin=rr('fc.min')`), but these checks were on no result tab and in no group of the check-summary
