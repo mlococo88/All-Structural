@@ -911,7 +911,7 @@
   function typeProject(P, t) {
     const Q = clone(P), G = P.girders, g = G[t], L = linesOf(P, t), at = [], out = [];   // at[k]: the new indices of old girder k
     G.forEach((q, k) => { if (k !== t) { at[k] = [out.length]; out.push({ ...clone(q), adFixed: true }); return; }
-      at[k] = L.map((j, n) => out.push({ ...clone(g), id: n ? `${g.id}@${j + 1}` : g.id, label: L.length > 1 ? `${g.label || g.id} on G${j + 1}` : (g.label || g.id), line: j, lines: [j] }) - 1); });
+      at[k] = L.map((j, n) => out.push({ ...clone(g), id: n ? `${g.id}@${j + 1}` : g.id, label: L.length > 1 ? `${g.label || g.id} on G${j + 1}` : (g.label || g.id), line: j, lines: [j], adLines: L.slice() }) - 1); });   // SBXF2 (SB-18): adLines, the type's lines (its brace checks use the frames attached to any of them, as the Summary)
     Q.girders = out;
     const ly = Q.stiffeners && Q.stiffeners.layout; if (ly && Array.isArray(ly.bays)) ly.bays = ly.bays.flatMap(q => (at[+q.g - 1] || []).map(i => ({ ...clone(q), g: i + 1 })));   // by girder number
     const S = Q.splices; if (S && Array.isArray(S.plates)) S.plates = S.plates.flatMap(q => !q || q.g == null ? [q] : (at[+q.g] || []).map(i => ({ ...clone(q), g: i })));   // by girder index

@@ -386,10 +386,24 @@
   }
 
   /* ---------- cross-frame or diaphragm (dxfCF) ---------- */
-  /* SBXF (2026-11-13): drawn from the first plate girder's depth as before (inputsOf bays: false): the engineer's rule, no DXF change; with
-     girder types of unequal depth the Cross-frames tab checks the governing bay's depth (engine/crossframes.js bayDepths) */
+  /* SBXF (2026-11-13): drawn from the first plate girder's depth as before (inputsOf bays: false) when every bay has one depth; SBXF2 below */
+  /* SBXF2 (2026-11-13; engineer decision SB-21, the engineer's request for this DXF change): with girder types whose bays differ in depth
+     (each bay the shallower of its two girders, engine/crossframes.js bayDepths), one detail per distinct bay depth (h and the girder depth d
+     of the bay's shallower girder), drawn with that girder's plates and labelled with its bays, one below the other. One distinct depth (equal
+     depths) or a project saved before girder types: cfDetail(D, C, null), the drawing as before, byte for byte. */
+  function cfGroups(P) {
+    const CF = window.SBDCrossframes, X = CF.bayDepths && CF.bayDepths(P); if (!X) return null;
+    const B = CF.inputsOf(P, { bridge: true }).p.xfBay; if (!B) return null; const m = new Map(), r2 = v => +(+v).toFixed(2);
+    B.bays.forEach(q => { if (!q) return; const k = `${q.h}|${r2(q.s.dg)}`; if (!m.has(k)) m.set(k, { h: q.h, s: q.s, dg: r2(q.s.dg), bays: [] }); m.get(k).bays.push(q.j); });
+    return m.size > 1 ? [...m.values()] : null;
+  }
   function cf(D, C) {
-    const G = C.G, CF = window.SBDCrossframes, I = CF.inputsOf(C.P, { bays: false }), p = I.p, E = CF.envOf(C.P), s0 = G.girders[0].segs[0], h = D.h;
+    const GR = cfGroups(C.P); if (!GR) return cfDetail(D, C, null);
+    let yb = null; GR.forEach(g => { const i0 = D.mark(); cfDetail(D, C, g); if (yb != null) { const b = D.bbox(i0); D.move(i0, 0, yb - 16 * D.h - b[3]); } yb = D.bbox(i0)[1]; });
+  }
+  function cfDetail(D, C, grp) {
+    const G = C.G, CF = window.SBDCrossframes, I = CF.inputsOf(C.P, { bays: false }), p = grp ? { ...I.p, h: grp.h, dg: grp.dg } : I.p, E = CF.envOf(C.P), s0 = G.girders[grp ? grp.s.line : 0].segs[0], h = D.h;
+    const sfx = grp ? ` - BAYS ${grp.bays.map(j => `G${j + 1}-G${j + 2}`).join(', ')} (DEPTH OF G${grp.s.line + 1}, ${str(grp.s.label).toUpperCase()})` : '';   // SBXF2: the bays of this detail
     const ly = { g: D.layer('GRDR', 5), x: D.layer('XFRM', 3), cp: D.layer('GRDR-STIF', 30), bo: D.layer('BOLT', 2), d: D.layer('DIMS', 7), t: D.layer('ANNO-TEXT', 7), c: D.layer('CNTR', 8) }, cl = D.ltype('CENTER');
     const S = +p.S, hh = +p.h, tf = { b: s0.topB, t: s0.topT }, bf = { b: s0.botB, t: s0.botT }, Dm = s0.D, Dt = Dm + tf.t + bf.t, yb = (Dt - hh) / 2, yt = yb + hh, tw = s0.tw, cn = p.conn || {}, rb = (+cn.d || 0.875) / 2 + 0.0625;
     const cpts = (q, x0, sg, y0, y1) => [[x0 + sg * q.tw / 2, y0 + q.c], [x0 + sg * (q.tw / 2 + q.c), y0], [x0 + sg * (q.tw / 2 + q.bs), y0], [x0 + sg * (q.tw / 2 + q.bs), y1], [x0 + sg * (q.tw / 2 + q.c), y1], [x0 + sg * q.tw / 2, y1 - q.c]];   // GirderDetail cfCPpts
@@ -406,13 +420,13 @@
       D.rect(ly.x, g, y0, S - g, y1); D.line(ly.x, g, y0 + Xs.tf, S - g, y0 + Xs.tf); D.line(ly.x, g, y1 - Xs.tf, S - g, y1 - Xs.tf); D.line(ly.c, 0, Dt / 2, S, Dt / 2, cl);
       [ec, S - ec].forEach(x => { for (let i = 0; i < nbl; i++) D.circle(ly.bo, x, Dt / 2 + (i - (nbl - 1) / 2) * sp, rb); });
       D.text(ly.t, S / 2 - 12 * h, y1 + 1.2 * h, h * 0.8, Xs.nm_); D.dimH(ly.d, 0, S, Dt + 4 * h, Dt, 'GIRDER SPACING <>'); D.dimV(ly.d, y0, y1, S + tf.b / 2 + 4 * h, S, 'DIAPHRAGM <>'); D.dimV(ly.d, 0, y0, S + tf.b / 2 + 4 * h, S); D.dimH(ly.d, 0, ec, y0 - 3 * h, y0, '<>');
-      D.text(ly.t, 0, Dt + 8 * h, h * 1.3, `INTERMEDIATE DIAPHRAGM (${Xs.chS ? 'CHANNEL' : 'ROLLED W'})`);
+      D.text(ly.t, 0, Dt + 8 * h, h * 1.3, `INTERMEDIATE DIAPHRAGM (${Xs.chS ? 'CHANNEL' : 'ROLLED W'})${sfx}`);
       const qe = CF.cfDiaEnd(q), Xe = CF.cfDiaSec(qe), ge = CF.cfDiaGap(qe), e0 = (Dt - Xe.d) / 2, e1 = e0 + Xe.d, ece = +qe.ecc || 3.5, nbe = Math.max(2, Math.round(+qe.nb || 2)), spe = +qe.pitch || 3;
       [0, Se].forEach(x => { gird(x); D.pline(ly.cp, cpts(cpED, ox + x, x ? -1 : 1, bf.t, bf.t + Dm), true); });
       D.rect(ly.x, ox + ge, e0, ox + Se - ge, e1); D.line(ly.x, ox + ge, e0 + Xe.tf, ox + Se - ge, e0 + Xe.tf); D.line(ly.x, ox + ge, e1 - Xe.tf, ox + Se - ge, e1 - Xe.tf); D.line(ly.c, ox, Dt / 2, ox + Se, Dt / 2, cl);
       [ece, Se - ece].forEach(x => { for (let i = 0; i < nbe; i++) D.circle(ly.bo, ox + x, Dt / 2 + (i - (nbe - 1) / 2) * spe, rb); });
       D.text(ly.t, ox + Se / 2 - 12 * h, e1 + 1.2 * h, h * 0.8, Xe.nm_); D.dimV(ly.d, e0, e1, ox + Se + tf.b / 2 + 4 * h, ox + Se, 'DIAPHRAGM <>');
-      D.dimH(ly.d, ox, ox + Se, Dt + 4 * h, Dt, 'ALONG SKEW <>'); D.text(ly.t, ox, Dt + 8 * h, h * 1.3, `END DIAPHRAGM AT BEARINGS (${Xe.chS ? 'CHANNEL' : 'ROLLED W'}, ${thT})`); if (skN) D.text(ly.t, ox, -8.8 * h, h * 0.8, skN);
+      D.dimH(ly.d, ox, ox + Se, Dt + 4 * h, Dt, 'ALONG SKEW <>'); D.text(ly.t, ox, Dt + 8 * h, h * 1.3, `END DIAPHRAGM AT BEARINGS (${Xe.chS ? 'CHANNEL' : 'ROLLED W'}, ${thT})${sfx}`); if (skN) D.text(ly.t, ox, -8.8 * h, h * 0.8, skN);
       D.text(ly.t, ox, -6 * h, h * 0.8, `END DIAPHRAGM ${Xe.nm_} ASTM A709 GR. ${qe.gr || 50}; WEB BOLTED WITH ${nbe} - ${dIn(+cn.d || 0.875)} DIA. H.S. BOLTS EACH END IN ONE ROW @ ${dIn(spe)}, ${dIn(ece)} FROM GIRDER WEB; CENTERED ON GIRDER DEPTH; ${cpE.src === 'bs' ? `BEARING STIFFENERS ${dIn(cpE.bs)} x ${dIn(cpE.tp)} SERVE AS CONNECTION PLATES, CORNER CLIPS ${dIn(cpE.c)} (SKEWED OR BENT PLATES PER DESIGN).` : `BEARING STIFFENERS SERVE AS CONNECTION PLATES (SKEWED OR BENT PLATES PER DESIGN; DRAWN AT ${dIn(cpE.bs)} x ${dIn(cpE.tp)}).`}`);
       const Fe = R ? CF.cfDiaFit(R, qe, cpE, bf.t, tf.t) : null; if (Fe && Fe.bad.length) D.text(ly.t, ox, -7.4 * h, h * 0.8, `CHECK END DIAPHRAGM CONNECTION GEOMETRY: ${Fe.bad.join('; ')}.`.toUpperCase());
       D.text(ly.t, 0, -4 * h, h * 0.8, `DIAPHRAGM ${Xs.nm_} ASTM A709 GR. ${q.gr || 50}; WEB BOLTED TO CONNECTION PLATE WITH ${nbl} - ${dIn(+cn.d || 0.875)} DIA. H.S. BOLTS EACH END IN ONE ROW @ ${dIn(sp)}, ${dIn(ec)} FROM GIRDER WEB; CENTERED ON GIRDER DEPTH; COPE FLANGES AS REQUIRED; ${cpN}; DIAPHRAGM END ${dIn(g)} FROM GIRDER WEB CL.`);
@@ -427,10 +441,10 @@
       const n = Math.max(1, +cn.n || 2); [a2].concat(b[0] === S / 2 ? [] : [b2]).forEach((q, e) => { const sgn = e ? -1 : 1; for (let i = 0; i < n; i++) D.circle(ly.bo, q[0] + sgn * u[0] * ((+cn.e || 1.5) + i * (+cn.s || 3)), q[1] + sgn * u[1] * ((+cn.e || 1.5) + i * (+cn.s || 3)), rb); });
       const mid = [(a[0] + b[0]) / 2 + nv[0] * (w / 2 + 1.2 * h), (a[1] + b[1]) / 2 + nv[1] * (w / 2 + 1.2 * h)], ang = Math.atan2(u[1], u[0]) * 180 / Math.PI; D.text(ly.t, mid[0], mid[1], h * 0.8, mm.sec || '', 1, ang > 90 || ang < -90 ? ang + 180 : ang); });
     D.dimH(ly.d, 0, S, Dt + 4 * h, Dt, 'GIRDER SPACING <>'); D.dimV(ly.d, yb, yt, S + tf.b / 2 + 4 * h, S, 'WORK PT. <>'); D.dimV(ly.d, 0, yb, S + tf.b / 2 + 4 * h, S);
-    D.text(ly.t, 0, Dt + 8 * h, h * 1.3, `INTERMEDIATE CROSS-FRAME (TYPE ${/^K/.test(p.type) ? 'K' : 'X'})`);
+    D.text(ly.t, 0, Dt + 8 * h, h * 1.3, `INTERMEDIATE CROSS-FRAME (TYPE ${/^K/.test(p.type) ? 'K' : 'X'})${sfx}`);
     [0, Se].forEach(x => { gird(x); D.rect(ly.cp, ox + x + (x ? -1 : 1) * (tw / 2), bf.t, ox + x + (x ? -1 : 1) * (tw / 2 + 0.75), bf.t + Dm); });
     [[[0, yt], [Se, yt]], [[0, yb], [Se, yb]], [[0, yb], [Se, yt]], [[0, yt], [Se, yb]]].forEach(([a, b]) => D.line(ly.x, ox + a[0], a[1], ox + b[0], b[1]));
-    D.dimH(ly.d, ox, ox + Se, Dt + 4 * h, Dt, 'ALONG SKEW <>'); D.text(ly.t, ox, Dt + 8 * h, h * 1.3, `END CROSS-FRAME AT BEARINGS (${thT})`); if (skN) D.text(ly.t, ox, -5.4 * h, h * 0.8, skN);
+    D.dimH(ly.d, ox, ox + Se, Dt + 4 * h, Dt, 'ALONG SKEW <>'); D.text(ly.t, ox, Dt + 8 * h, h * 1.3, `END CROSS-FRAME AT BEARINGS (${thT})${sfx}`); if (skN) D.text(ly.t, ox, -5.4 * h, h * 0.8, skN);
     D.text(ly.t, ox, -4 * h, h * 0.8, 'MEMBERS PER THE CROSS-FRAME DESIGN; BEARING STIFFENERS SERVE AS CONNECTION PLATES (SKEWED OR BENT PLATES PER DESIGN).');
     const cx = 0, cy = -18 * h, n = Math.max(1, +cn.n || 2), sp = +cn.s || 3, e0 = +cn.e || 1.5, Lc = e0 * 2 + (n - 1) * sp + 4, mm = p.mem.diag || {};
     D.rect(ly.cp, cx, cy - Lc / 2 - 3, cx + 0.625, cy + Lc / 2 + 3); D.rect(ly.x, cx + 0.625, cy - (+mm.b1 || 4) / 2, cx + 0.625 + Lc + 6, cy + (+mm.b1 || 4) / 2);
