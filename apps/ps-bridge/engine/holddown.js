@@ -33,6 +33,6 @@
     R.checks.push({ n: NAME, v: Ftot, lim, r, loc: ss.hp.frac * L, u: 'kip', pass: r <= 1.0001 });
     return R;
   }
-  const compute = inp => apply(inp, computeAll(inp));
+  const compute = inp => apply(inp, window.PSBRigid ? window.PSBRigid.run(inp) : computeAll(inp));   // PS-19: the rigid section on the real girder lines (engine/rigid.js)
   window.PSBHoldDown = { NAME, FRAC, apply, compute, fracOf };
 })();

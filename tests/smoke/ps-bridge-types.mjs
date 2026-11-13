@@ -124,6 +124,11 @@ check(!/to fix/.test(await p.textContent('#sbDashCol')), 'unequal bays: no input
   await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 60000 }); await p.waitForTimeout(200);
   const rp = await p.evaluate(() => { const s1 = document.querySelector('.rp-doc section[data-rpsec="rp-s1"]'); return s1 ? s1.textContent.replace(/\s+/g, ' ') : ''; });
   check(/Every girder type and line/.test(rp) && /2 girder types on 5 girder lines/.test(rp) && /girder type Interior S1 on line G3, span 1/.test(rp), 'Report §1: every type and line, the reported cell named'); }
+// PS-19: the exterior rigid section on the real girder lines (8, 10, 10, 8 ft): Exterior S1 on G1, Loads & LLDF: X_ext 18, Σx² 848, R = DF_M 0.7821
+await p.click('#tabBar [data-otab="lds"]'); await p.selectOption('#tyOutT', { label: 'Exterior S1 (span 1)' }); await p.waitForTimeout(150); await p.selectOption('#tyOutL', '1'); await p.waitForTimeout(300);
+{ const r = await p.evaluate(() => ({ s: !!document.getElementById('st-ld.rigSx2'), x: !!document.getElementById('st-ld.rigXext'), dfm: (document.querySelector('#out .kv [data-ev="dfm"]') || document.querySelector('#out [data-ev="dfm"]') || {}).textContent }));
+  check(r.s && r.x && /^0\.78/.test(r.dfm || ''), 'PS-19: the rigid-section steps on the real girder lines, DF_M ' + JSON.stringify(r));
+  const e = await evCheck(p); check(e.n >= 20 && !e.bad.length, `PS-19 Loads & LLDF values = computeAll + rigid: ${e.n} ${e.bad.slice(0, 3).join(' | ')}`); }
 await p.click('#inTabs [data-itab="layout"]'); await p.fill('#i_xs\\.skews', '10, 20'); await p.press('#i_xs\\.skews', 'Tab'); await p.waitForTimeout(300);
 check(!/to fix/.test(await p.textContent('#sbDashCol')), 'skews 10, 20: allowed');
 await p.fill('#i_xs\\.skews', '20, 35'); await p.press('#i_xs\\.skews', 'Tab'); await p.waitForTimeout(300);
