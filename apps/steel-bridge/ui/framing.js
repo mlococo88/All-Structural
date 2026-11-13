@@ -103,8 +103,15 @@
     GR.forEach(g => { const k = CF.grpKey(g), t = TR.grp ? TR.grp.find(x => x.bays.join(',') === k) : null, sec = t ? (br === 'ch' ? t.ch : t.w) : null, one = br === 'ch' ? TR.ch : TR.w;
       if (t ? sec : one) out[k] = t ? sec[0] : one; }); out.TR = TR; return out;
   }
+  /* SBSP (2026-11-13; Decision pending engineer review: display / input consistency): when grpFill prefills the shapes per group, the
+     main Shape (dia.shape, which every group without an entry takes) is set at that moment to the shape of the governing group: of the
+     groups prefilled, the one with the largest least depth d_req (CF10's TR.grp req; the first in bay order on ties: the group of the
+     governing bay of the depth check). Before, Shape kept its old value (e.g. W21x44 of a new project) beside the prefilled groups.
+     Only on the prefill (setBrace); a loaded project or a later edit is never changed. govKey(TR, o): that group's key, null if none. */
+  const govKey = (TR, o) => { let best = null; (TR.grp || []).forEach(g => { const k = g.bays.join(','); if (o[k] && (!best || g.req > best.req + 1e-9)) best = { k, req: g.req }; }); return best ? best.k : null; };
   function grpFill(P, q, v) {
-    const R = grpRec(P, v); if (!R.TR || !R.TR.grp) return; const o = {}; Object.keys(R).forEach(k => { if (k !== 'TR') o[k] = R[k]; }); if (Object.keys(o).length) q.grp = o;
+    const R = grpRec(P, v); if (!R.TR || !R.TR.grp) return; const o = {}; Object.keys(R).forEach(k => { if (k !== 'TR') o[k] = R[k]; });
+    if (Object.keys(o).length) { q.grp = o; const k = govKey(R.TR, o); if (k) q.shape = o[k]; }   // SBSP: Shape = the governing group's shape
   }
   /* grpCard(P, C, br): the inputs of the shape per bay depth group (two or more groups; '' with one): a select per group, "Same as Shape above"
      (no entry) or a shape of the family, the one CF10 recommends marked */
