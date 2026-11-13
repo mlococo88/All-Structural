@@ -24,7 +24,7 @@ const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBDF = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
 const W = loadShared('steps.js', 'report.js', ...PBDF,
   ...['model', 'rigid', 'holddown', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'legacy', 'worked', 'worked-stress', 'worked-strength', 'worked-end', 'worked-hdr'].map(n => path.join(APP, `engine/${n}.js`)),
-  ...['inputs', 'vizkit', 'vizalong', 'outkit', 'section', 'loads', 'analysis', 'strands', 'losses', 'stresses', 'flexure', 'shear', 'endzone', 'camber', 'handling', 'deck', 'rating', 'dash', 'summary'].map(n => path.join(APP, `ui/${n}.js`)),
+  ...['inputs', 'vizkit', 'vizalong', 'outkit', 'section', 'loads', 'analysis', 'strands', 'losses', 'stresses', 'flexure', 'shear', 'endzone', 'camber', 'handling', 'deck', 'rating', 'dash', 'summary', 'bridgedl'].map(n => path.join(APP, `ui/${n}.js`)),   // bridgedl: the Loads & LLDF tab of a girder type (its DC2 / DW line table), as on the page
   ...['fromtab', 'data', 'builders'].map(n => path.join(APP, `report/${n}.js`)));
 const M = W.PSBModel, D = W.PSBDesign, B = W.PSBBridge, SU = W.PSBSummaryUI, DU = W.PSBDashUI;
 const J = v => JSON.parse(JSON.stringify(v));
@@ -178,7 +178,7 @@ test('Report, PS-25: each girder type on its governing line (default) or every g
       const one = B.units.length === 1 && B.cell && B.units[0].k === B.cell.k && B.units[0].g === B.cell.g;
       assert.equal(B.multi, !one, `${name} ${mode}: several units`);
       const M = W.PSBReportBuild.model(B, {}), ks = keysOf(M);
-      const bad = refsOf(M).filter(k => !ks.has(k) && !/(^|\/)ld\.dfm$/.test(k));   // ld.dfm: an older dangling key of §1 (open item, not PS-25)
+      const bad = refsOf(M).filter(k => !ks.has(k));   // PS-26: ui/bridgedl.js loaded, so the Loads & LLDF sections (and §1's [[ld.dfm]]) are built here too
       assert.deepEqual([...new Set(bad)], [], `${name} ${mode}: every reference resolves`);
       if (!B.multi) { assert.equal(M.sections.length, 14, name); assert.ok(M.sections.every(s => !/ on G\d+, span \d+$/.test(s.title)), `${name}: one girder, no unit headings`);
         // and the model equals the one-girder model (the PS-25 code not used)
@@ -188,7 +188,7 @@ test('Report, PS-25: each girder type on its governing line (default) or every g
       B.units.forEach((u, i) => { const ss = M.sections.slice(2 + 12 * i, 14 + 12 * i);   // numbered per unit: §(3 + 12 i) – §(14 + 12 i)
         ss.forEach(s => { assert.ok(s.title.endsWith(`: ${u.label} on G${u.g}, span ${u.s}`), `${name}: heading ${s.title}`); assert.match(s.key, new RegExp(`@u${i}$`)); }); });
       // every number recorded: the value of its unit's engine result (sections §3+ and §1's unit tables)
-      M.vals.forEach(v => { const R = v.u != null ? B.units[v.u].R : B.R, x = v.path.split('.').reduce((o, k) => o == null ? o : o[k], R);
+      M.vals.forEach(v => { const R = v.u != null ? B.units[v.u].R : v.cell ? A.cells.find(c => `${c.k}|${c.g}` === v.cell).R : B.R, x = v.path.split('.').reduce((o, k) => o == null ? o : o[k], R);
         assert.equal(v.text, OKF(v.div ? x / v.div : x, v.d), `${name} ${mode}: ${v.sec} u${v.u} ${v.path}`); nv++; });
       assert.ok(M.vals.filter(v => v.u === B.units.length - 1).length > 300, `${name} ${mode}: the last unit's values`);
       // §1's "see §": the unit that works that type (gov) or that type × line (all)
@@ -206,4 +206,85 @@ test('Report, PS-25: a section left out is left out for every unit; its referenc
   assert.ok(!M.sections.some(s => /^Flexure/.test(s.title)));
   assert.deepEqual(refsOf(M).filter(k => /^(u\d+\/fx\.|rs\.flex)/.test(k)), []);
   assert.ok(JSON.stringify(M.sections).includes('(section not included)'));
+});
+
+/* PS-26 (engineer decision 2026-11-13) and the Report's links. The test projects above, each also under RIDOT, CTDOT and MassDOT, plus the
+   three-type project under CTDOT with one type's f′ci above the CTDOT range (a FAIL in one type's column only). */
+const OWNERS = ['RIDOT', 'CTDOT', 'MassDOT'];
+function ownProjects() {
+  const out = {};
+  Object.entries(PS).forEach(([n, P]) => { out[n] = P; OWNERS.forEach(o => { const Q = J(P); Q.base.owner = o; if (!W.PSBInputCheck.collect(Q).errors.length) out[`${n} [${o}]`] = Q; }); });
+  { const Q = J(PS['three types, own inputs, unequal bays']); Q.base.owner = 'CTDOT'; Q.types[2].ovr['mat.fci'] = 6.8; out['three types, G3 own f′ci 6.8 ksi [CTDOT]'] = Q; }
+  return out;
+}
+const ownTable = M => { const s = M.sections.find(x => x.id === 'proj'); if (!s) return null; const q = s.subs.find(x => x.key === 'rs.own'); return q ? { q, tb: q.items.find(i => i.type === 'table' && /^Applied here/.test(i.head[3] || '')) } : null; };
+const cellsOf = r => (Array.isArray(r) ? r : r.cells);
+test('Report, PS-26: §2 Owner rules — one "Applied here" column per girder type where the types differ, each its type\'s values on its governing line; one column (the same §2) otherwise', () => {
+  const OP = ownProjects(), IN = W.PSBInputsUI, FT = W.PSBReportTab, matG = DU.GROUPS.find(g => g.id === 'mat');
+  let nCols = 0, nOne = 0, nFail = 0;
+  for (const [name, P] of Object.entries(OP)) for (const mode of ['gov', 'all']) {
+    const Bn = W.PSBReportData.compute(P, null, mode); assert.equal(Bn.err, '', name);
+    const M = W.PSBReportBuild.model(Bn, {}), T = ownTable(M); if (!T || !T.tb) continue;
+    const types = Bn.multi ? SU.model(P, Bn.all).types.filter(t => t.lines.some(z => !z.err)) : [];
+    // each type's own column, as its Owner rules tab shows it for each of its lines
+    const colOf = (t, z) => { const PV = Object.assign({}, P, { design: { g: z.c.g, s: z.c.s } }), q = FT.cards(IN.cards('own', PV, z.c.R), { tab: 'proj', X: { vals: [] }, sec: 'proj', inReport: () => true }).subs.find(s => s.items.some(i => i.type === 'table'));
+      return JSON.stringify(q.items.find(i => i.type === 'table').rows.map(r => cellsOf(r)[3])); };
+    const perType = types.map(t => new Set(t.lines.filter(z => !z.err).map(z => colOf(t, z))));
+    perType.forEach((s, i) => assert.equal(s.size, 1, `${name}: ${types[i].label}: the owner rules are the same on every line of the type`));
+    const differ = types.length > 1 && new Set(perType.map(s => [...s][0])).size > 1;
+    if (!differ) {   // one column: the same §2 as with no PS-26 (PSBSummaryUI hidden from §2's owner table only)
+      assert.equal(T.tb.head.length, 4, `${name} ${mode}: one column`); nOne++;
+      const su = W.PSBSummaryUI; let M0; W.PSBSummaryUI = undefined;   // report/builders.js ownTypes: no PSBSummaryUI, no per-type columns (§1's tables need it, §2 does not)
+      try { M0 = W.PSBReportBuild.model(Bn, {}); } finally { W.PSBSummaryUI = su; }
+      assert.ok(!M0.sections[0].subs.some(q => q.id === 'all') || !Bn.multi, 'PSBSummaryUI hidden');
+      assert.equal(JSON.stringify(M.sections.find(s => s.id === 'proj')), JSON.stringify(M0.sections.find(s => s.id === 'proj')), `${name} ${mode}: §2 unchanged`);
+      assert.ok(!M.vals.some(v => v.cell), name);
+      continue;
+    }
+    nCols++;
+    assert.equal(T.tb.head.length, 3 + types.length, `${name} ${mode}: one column per girder type`); assert.ok(T.tb.wide);
+    assert.ok(T.q.items.some(i => i.type === 'note' && /One "Applied here" column per girder type/.test(i.text)), name);
+    types.forEach((t, j) => {
+      const h = T.tb.head[3 + j], m = /^Applied here: (.+) on G(\d+), span (\d+) \(see \[\[rs\.sec@u(\d+)\]\]–\[\[rs\.rt@u\4\]\]\)$/.exec(h);
+      assert.ok(m && m[1] === t.label, `${name} ${mode}: heading ${h}`);
+      const z = t.lines.find(q => q.c.g === +m[2] && q.c.s === +m[3]); assert.ok(z, `${name}: G${m[2]} is a line of ${t.label}`);
+      const u = Bn.units[+m[4]]; assert.ok(u && u.k === t.k && (mode !== 'all' || u.g === +m[2]), `${name} ${mode}: ${t.label} points to its own sections (u${m[4]})`);
+      assert.equal(JSON.stringify(T.tb.rows.map(r => cellsOf(r)[3 + j])), colOf(t, z), `${name} ${mode}: ${t.label}: the cells of its Owner rules tab`);
+      // the governing line: no line of the type has a larger owner-limit ratio
+      const top = q => Math.max(-Infinity, ...q.c.R.checks.filter(c => matG.checks.some(([n]) => n === c.n)).map(c => c.r));
+      t.lines.filter(q => !q.err).forEach(q => assert.ok(top(q) <= top(z), `${name}: ${t.label} G${q.c.g} ${top(q)} > G${z.c.g} ${top(z)}`));
+    });
+    // the statuses of the columns = the check summary column's Owner limits entries (one per girder type per check, its worst line)
+    const G = DU.grp(null, matG, Bn.all), st = { PASS: 0, FAIL: 0 };
+    T.tb.rows.forEach(r => cellsOf(r).slice(3).forEach(c => { const x = /ratio = .* = ([\d.]+) (PASS|FAIL)/.exec(c.t); if (x) st[x[2]]++; }));
+    if (G.all) { assert.equal(st.FAIL, G.all.filter(z => !z.c.pass).length, `${name} ${mode}: FAIL count`); assert.equal(st.PASS, G.all.filter(z => z.c.pass).length, `${name} ${mode}: PASS count`); nFail += st.FAIL; }
+    // every value of §2 is its type's engine value (u: its unit; cell: a line not worked in full)
+    M.vals.filter(v => v.sec === 'proj').forEach(v => { const R = v.u != null ? Bn.units[v.u].R : Bn.all.cells.find(c => `${c.k}|${c.g}` === v.cell).R;
+      assert.equal(v.text, OKF(v.div ? at(R, v.path) / v.div : at(R, v.path), v.d), `${name} ${mode}: ${v.path}`); });
+  }
+  assert.ok(nCols >= 6 && nOne >= 40 && nFail >= 2, `${nCols} per-type tables, ${nOne} one-column tables, ${nFail} FAIL cells`);
+});
+
+test('Report links: no [[…]] or "§step" reference of any test project points to a missing step or section; §1 Key quantities DF_M / DF_V → the Moment distribution factor step of its unit', () => {
+  const OP = ownProjects(); let n = 0, nd = 0;
+  for (const [name, P] of Object.entries(OP)) for (const mode of ['gov', 'all']) {
+    const Bn = W.PSBReportData.compute(P, null, mode), M = W.PSBReportBuild.model(Bn, {}), doc = W.SharedReport.build(M), ks = keysOf(M);
+    assert.deepEqual(J(doc.unresolved), [], `${name} ${mode}: unresolved`); assert.deepEqual(J(doc.dup), [], `${name} ${mode}: duplicate anchors`);
+    assert.deepEqual([...new Set(refsOf(M).filter(k => !ks.has(k)))], [], `${name} ${mode}: references to a missing key`);
+    assert.ok(!W.SharedReport.text(doc).includes('§?'), `${name} ${mode}: §?`);
+    M.sections[0].subs.filter(q => /^kq/.test(q.id)).forEach(q => { const r = q.items[0].rows.find(x => /^DF/.test(x[0])), k = /\[\[([^\]]+)\]\]/.exec(r[1])[1];
+      const i = /^u(\d+)\//.exec(k), sec = M.sections.find(s => s.key === (i ? `rs.lds@u${i[1]}` : 'rs.lds'));
+      const stp = [].concat(...sec.subs.map(s => s.items.filter(it => it.type === 'steps').map(it => it.steps))).flat().find(s => s.id === 'ld.dfm');
+      assert.ok(k === (i ? `u${i[1]}/ld.dfm` : 'ld.dfm') && stp && stp.label === 'Moment distribution factor', `${name} ${mode}: ${q.title} → ${k}`); nd++; });
+    n++;
+  }
+  // each section left out in turn (a three-type project, every line): the [[…]] references into it say "(section not included)", none dangles.
+  // Open item (pre-existing, not changed here): a worked step's own note "§<step id>" (engine text, e.g. a Loads step's "§sec.g.wsw") that
+  // names a step of the section left out has no target (shared/report.js shows §?); listed here so that it is the only kind
+  const P = OP['three types, G3 own f′ci 6.8 ksi [CTDOT]'];
+  W.PSBReportBuild.SECTIONS.forEach(([k]) => { const Bn = W.PSBReportData.compute(P, null, 'all'), M = W.PSBReportBuild.model(Bn, { include: { [k]: false } }), doc = W.SharedReport.build(M), ks = keysOf(M);
+    assert.deepEqual([...new Set(refsOf(M).filter(x => !ks.has(x)))], [], `without ${k}: [[…]] references to a missing key`);
+    const M1 = W.PSBReportBuild.model(Bn, {}), gone = new Set([...keysOf(M1)].filter(x => !ks.has(x)));
+    doc.unresolved.forEach(u => assert.ok(gone.has(u.key) && /Worked steps/.test(u.where), `without ${k}: ${u.key} at ${u.where}`)); n++; });
+  assert.ok(n > 150 && nd > 300, `${n} reports, ${nd} DF links`);
 });

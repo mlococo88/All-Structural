@@ -1936,3 +1936,146 @@ index 990a696..2f04f1b 100644
 +    box.querySelectorAll('[data-rpworked]').forEach(el => el.addEventListener('change', () => { if (!el.checked) return; o.worked = el.dataset.rpworked; if (ctx.save) ctx.save(); render(host, ctx); }));
      box.querySelectorAll('[data-rpinc]').forEach(el => el.addEventListener('change', () => { o.inc = o.inc || {}; o.inc[el.dataset.rpinc] = el.checked; if (ctx.save) ctx.save(); render(host, ctx); }));
 ```
+
+## 2026-11-13 — PS-26: Report §2 Owner rules table — one "Applied here" column per girder type where the types' values differ; §1 Key quantities DF link checked (display only; no calculation change)
+PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+### Request
+- Engineer decision PS-26 (2026-11-13): the Report §2 Owner rules table shows one value + status column per girder type: each type's own owner checks (f′c, f′ci, girder age at continuity, …) on its governing line where relevant. One type, or the same values for every type: a single column exactly as before. Each column's "see §" points to that type's sections. The in-app Owner rules tab: leave it if it shows only the type shown; check consistency.
+- Fix the dead link in §1 "Key quantities" (`[[ld.dfm]]`, PS-25 open item).
+### What changed
+- `report/builders.js`:
+  - New `ownTypes(B, U, range, scope)` (called by `multiSecs` before §2): per girder type of the project (Summary model order), its governing line for the owner checks = the line with the largest ratio of the check summary's "Owner limits" checks (ui/dash.js GROUPS id 'mat'); a tie or no such check: the line the report works for the type (`B.units`). It returns the line's engine result, `P` with `design` = that line, the unit that works it (`u`, or null), and the column title "<type> on G<g>, span <s> (see §a–§b)" (the type's worked sections, the same `range()` as §1's list).
+  - New `ownCols(ownSubs, X, o, nv0)` (called by `proj` when `X.ownT` has more than one type): for each type, the Owner rules tab card (`PSBInputsUI.cards('own', P_type, R_type)`, the same HTML as the tab) is converted (report/fromtab.js). If every type's "Applied here" column is the same, **nothing changes** (return before any change). Otherwise the table keeps Section / Requirement / Kind and gets one column per type "Applied here: <type> on G<g>, span <s> (see §a–§b)", `wide`, with a note under it; the §2 owner values recorded (`X.vals`) are replaced by each type's (tagged `u` = its unit, or `cell` = 'k|g' for a line not worked in full). References inside a type's cells are scoped to that type's unit.
+  - `multiSecs`: `range()` moved out of the §1 `try` (same text); `X.ownT` set before §2 and cleared after; §2 values keep a `u`/`cell` already set (`if (v.u == null && v.cell == null) v.u = 0`, the same result as before for every value it set before).
+  - One-girder reports (`B.multi` false) never reach this code.
+- Item 2 (`[[ld.dfm]]`): **no app change needed.** The reference is correct and resolves in the app: `ld.dfm` is the "Moment distribution factor" step (DF_M = r_M g_M, topic "Distribution factors used", 4.6.2.2.2e) of the Loads & LLDF steps, in the one-girder report (`ld.dfm`) and in each unit (`u<i>/ld.dfm`, scoped by `scopeU`). The PS-25 open item came from `tests/engine/psbridge-summary.test.mjs` loading the app without `ui/bridgedl.js`: in Node the Loads & LLDF section of every girder-type report failed ("Cannot read properties of undefined (reading 'lineTable')", shown as "Not available"), so the step was missing there only. The browser smoke (`ps-bridge-types.mjs` §10) already found no unresolved reference. Fixed in the test: `ui/bridgedl.js` loaded, the `ld.dfm` exemption removed.
+- In-app Owner rules tab (`ui/inputs.js` ownerCard): unchanged; it shows one "Applied here" column, for the girder type and line shown above the output tabs (the page's R). Its cell equals that type's column in the Report (Node test and smoke). Column counts: the PASS / FAIL cells of the Report's per-type columns = the check summary column's Owner limits entries (one per girder type per check, its worst line; `PSBDashUI.grp`), tested. In the one-column case the single column stands for every type (the same values), so it has one status per row, not one per type.
+### Saved data (CLAUDE.md §5)
+- None: no key, no field, no format.
+### Governing provisions
+- None changed (display only; every value is the engine's, as on the Owner rules tab).
+### Check case (new project, RIDOT, Exterior S1's own f′c = 9.0 ksi; base f′c 8.5 ksi)
+- Before: §2 Owner rules, one column "Applied here" (unit 0 = Interior S1): RIDOT 5.2.1 row "f′c = 8.50 ksi; governing minimum 5.00 ksi; ratio = 5.00 / 8.50 = 0.588 PASS".
+- After: columns "Applied here: Interior S1 on G2, span 1 (see §3–§14)" → 5.00 / 8.50 = 0.588 PASS, and "Applied here: Exterior S1 on G1, span 1 (see §15–§26)" → 5.00 / 9.00 = 0.556 PASS; every other row the same text in both columns; the Exterior heading's link jumps to §15.
+- Same project with f′c 8.5 ksi for both types: one column, byte-identical to before.
+### How verified
+- **Byte-identical where nothing should change**: Node probe, `model()` JSON of origin/main b38dc51's `report/builders.js` vs this branch's, 88 projects × 2 modes = 176 reports (the 17 harness B designs, a new project, one type on every line, three types with own inputs, three continuous spans, two spans with a line not checked — each as built and under RIDOT, CTDOT and MassDOT): 170 identical; the 6 that differ are exactly "three types, own inputs, unequal bays" under RIDOT / CTDOT / MassDOT × 2 modes (the types' f′c differ: the per-type columns).
+- `tests/engine/psbridge-summary.test.mjs`:
+  - `ui/bridgedl.js` loaded; the `ld.dfm` exemption removed; values tagged `cell` resolved;
+  - new "Report, PS-26": every project above (+ the three-type project under CTDOT with one type's f′ci 6.8 ksi, a FAIL in one column) × both modes: one column when the types' Owner rules tab cells are the same, and then §2 equal to §2 built with no per-type columns; otherwise 3 + n columns, each heading the type, a line of it, its own sections; each column = that type's Owner rules tab cells; no line of the type with a larger owner ratio; PASS / FAIL counts = the check summary column's; every §2 value = its type's engine value;
+  - new "Report links": every [[…]] and step-note "§id" reference of every report above resolves (`SharedReport.build().unresolved` empty, no "§?"), no duplicate anchor; each §1 Key quantities DF link → the "Moment distribution factor" step of its unit's Loads & LLDF section; each section left out in turn: no [[…]] reference dangles.
+- `node tests/engine/run.mjs psbridge tex project-registry`: 16 files, 146 passed, 0 failed. `node tests/check-syntax.mjs`: all scripts pass.
+- `tests/smoke/ps-bridge-types.mjs` §10 (+3 checks): the RIDOT two-type project: §2 table 5 columns, both f′c cells, no unresolved link, the Exterior heading's link → §15; §1 both DF links → "Moment distribution factor"; the Owner rules tab: one column, its f′c cell = the type's Report column. 106 checks, 0 failed. `ps-bridge-skeleton.mjs`: SKELRES.
+- Harness B: HBRES.
+### Decisions (pending engineer review)
+- PS26-D1. "Governing line" of a type for its owner checks = the line with the largest Owner limits ratio; a tie (the owner rules use type inputs, so every line ties today) keeps the line the report works for the type. The heading names that line.
+- PS26-D2. Per-type columns are shown only in the multi-unit report (PS-25), when at least one row's "Applied here" text differs between types; otherwise one column, as before.
+- PS26-D3. Each column heading's "see §a–§b" points to the range of that type's worked sections (the type's unit; in "every girder line" mode the unit of that line).
+### Open items
+- Pre-existing, not changed: with a section left out (e.g. Section properties), a worked step's own engine note "§<step id>" that names a step of that section (the Loads & LLDF step note "§sec.g.wsw") has no target and the shared viewer shows "§?" (one-girder and per-type reports alike; on origin/main too). Fixing it means changing the engine step notes or shared/report.js; not done here. The new link test pins it as the only kind of dangling reference.
+- §1 Key quantities "DF_M / DF_V (see §)" links to the DF_M step only (DF_V is the next step in the same topic); unchanged.
+### Other copies
+- None.
+### Before / after (exact)
+```diff
+diff --git a/apps/ps-bridge/report/builders.js b/apps/ps-bridge/report/builders.js
+index fc6b5ce..ef8084a 100644
+--- a/apps/ps-bridge/report/builders.js
++++ b/apps/ps-bridge/report/builders.js
+@@ -115,7 +115,8 @@
+     const ownR = window.PBD && window.PBD.OWN_RULES && window.PBD.OWN_RULES.owners[own];
+     const o = { tab: 'proj', X, sec: 'proj', inReport: X.inReport };
+     const asm = IN ? FT.cards(IN.cards('proj', P), o).subs.find(s => /Assumptions/.test(s.title)) : null;
+-    const ownSubs = IN ? FT.cards(IN.cards('own', P, B.R), o).subs.filter(s => s.items.length) : [];   // R: the owner's material checks in the rules table
++    const nv0 = X.vals.length, ownSubs = IN ? FT.cards(IN.cards('own', P, B.R), o).subs.filter(s => s.items.length) : [];   // R: the owner's material checks in the rules table
++    if (IN && X.ownT && X.ownT.length > 1) ownCols(ownSubs, X, o, nv0);   // PS-26: one "Applied here" column per girder type (when they differ)
+     const subs = [
+       sub('p', 'Project', [kv([['Project', p.name || '—'], ['Project No', p.number || '—'], ['Client / owner', p.owner || (ownR ? ownR.manual : own)], ['Computed by', p.designer || '—'], ['Checked by', p.checker || '—'], ['Date', p.date || '—']]),
+         p.notes ? note(plain(p.notes)) : null]),
+@@ -130,6 +131,29 @@
+     return { title: 'Project, basis and assumptions', subs };
+   }
+   const V0 = (X, p, d, div) => X.V(p, d, div);
++  /* ownCols(ownSubs, X, o, nv0): PS-26 (engineer decision 2026-11-13): several girder types (the report of PS-25): the Owner rules table of §2
++     gets one "Applied here" column per girder type, each the type's own owner checks (the Owner rules tab's cell, ui/inputs.js ownerCard, made
++     with that type's inputs and engine result) on its governing line (X.ownT, made by multiSecs), the column heading naming the type and
++     line and pointing to the sections that work that type. Where every type's column is the same (or one type), nothing changes: the
++     single column as before. The values of the replaced column are replaced by each type's (recorded with u = its unit, or cell = 'k|g' for
++     a line the report does not work in full). Display only: the cells are those of the Owner rules tab. */
++  function ownCols(ownSubs, X, o, nv0) {
++    const IN = window.PSBInputsUI, FT = window.PSBReportTab, isT = it => it.type === 'table' && /^Applied here/.test(String(it.head[it.head.length - 1]));
++    const q0 = ownSubs.find(q => q.items.some(isT)); if (!q0) return;
++    const cols = X.ownT.map(T => { const vals = [], q = FT.cards(IN.cards('own', T.P, T.R), { ...o, X: { vals } }).subs.find(s => s.items.some(isT)); return q ? { T, vals, q } : null; });
++    if (cols.some(c => !c)) return;
++    const rowsOf = tb => tb.rows.map(r => (Array.isArray(r) ? r : r.cells)), tbOf = c => c.q.items.find(isT);
++    const last = c => JSON.stringify(rowsOf(tbOf(c)).map(r => r[r.length - 1])), lead = c => JSON.stringify([tbOf(c).head, rowsOf(tbOf(c)).map(r => r.slice(0, -1))]);
++    if (cols.every(c => last(c) === last(cols[0]))) return;   // the same values for every girder type: one column, as before
++    if (cols.some(c => lead(c) !== lead(cols[0]))) return;   // (the rules are the owner's, the same for every type: a guard)
++    cols.forEach(c => c.T.scope([c.q]));   // a reference in a type's cell: to that type's sections
++    const t0 = tbOf(cols[0]), nh = t0.head.length, i0 = q0.items.findIndex(isT);
++    const rows = t0.rows.map((r, i) => { const cells = [...rowsOf(t0)[i].slice(0, -1), ...cols.map(c => { const rr = rowsOf(tbOf(c))[i]; return rr[rr.length - 1]; })]; return Array.isArray(r) ? cells : { ...r, cells }; });
++    q0.items.splice(i0, 1, { ...t0, head: [...t0.head.slice(0, -1), ...cols.map(c => `${t0.head[nh - 1]}: ${c.T.title}`)], rows, wide: true },
++      note('One "Applied here" column per girder type: the type\'s owner checks and values on its governing line (the line with its largest owner-limit ratio), with the sections that work the type. Where every girder type has the same values, the table has one column.'));
++    X.vals.splice(nv0);
++    cols.forEach(c => c.vals.forEach(v => X.vals.push({ ...v, ...(c.T.u != null ? { u: c.T.u } : { cell: `${c.T.k}|${c.T.g}` }) })));
++  }
+   /* deNote(P): PS-23 (engineer decision 2026-11-13): the entered d_e that differs from the d_e computed from the cross-section (PS-20), the
+      same rows as the Loads & LLDF tab's notice, listed in the assumptions always (also after the notice is dismissed); none where they match */
+   function deNote(P) { const DS = window.PSBDesign, D = DS && DS.deDiff ? DS.deDiff(P) : { rows: [] }; return D.rows.length ? [note(`• ${DS.deText(D, t => `$_{${t}}$`)} (see [[rs.lds]])`)] : []; }
+@@ -175,6 +199,22 @@
+       return it; }); });
+     return subs;
+   }
++  /* ownTypes(B, U, range, scope): PS-26: the girder types of §2's Owner rules columns, in the order of the types: each type's governing line
++     for its owner checks (the line with the largest ratio of the check summary's Owner limits checks; a tie, or none: the line the report
++     works for the type, its first in "every line"), its engine result, the unit that works it (u; null for a line not worked in full) and
++     the unit whose sections the column points to (the type's, that line's in "every line") */
++  function ownTypes(B, U, range, scope) {
++    const SU = window.PSBSummaryUI, DU = window.PSBDashUI; if (!SU || !B.all) return null;
++    const gp = (DU && DU.GROUPS || []).find(g => g.id === 'mat'), isOwn = n => !!gp && gp.checks.some(([cn]) => cn === n);
++    const top = z => z.c.R.checks.filter(q => isOwn(q.n) && typeof q.r === 'number' && !isNaN(q.r)).reduce((a, q) => Math.max(a, q.r), -Infinity);
++    return SU.model(B.P, B.all).types.map(T => {
++      const ls = T.lines.filter(z => !z.err), ju = U.findIndex(u => u.k === T.k); if (!ls.length || ju < 0) return null;
++      const b = ls.reduce((b, z) => (top(z) > top(b) ? z : b), ls.find(z => z.c.g === U[ju].g) || ls[0]), c = b.c;
++      const u = U.findIndex(q => q.k === T.k && q.g === c.g), j = u >= 0 ? u : ju;
++      return { k: T.k, g: c.g, s: c.s, u: u >= 0 ? u : null, P: Object.assign({}, B.P, { design: { g: c.g, s: c.s } }), R: c.R,
++        title: `${plain(c.label)} on G${c.g}, span ${c.s} (see ${range(j)})`, scope: subs => scope(subs, j) };
++    }).filter(Boolean);
++  }
+   function multiSecs(B, X, opt, on, secs, dropped) {
+     const vals = X.vals, U = B.units, figs = Array.isArray(opt.figures) ? opt.figures : [];
+     const Bu = u => ({ P: u.P, inp: u.inp, R: u.R, W: u.W, sel: { g: u.g, s: u.s }, cell: { k: u.k, g: u.g, s: u.s }, all: null });
+@@ -189,6 +229,7 @@
+         out.push({ k, s, n0, n1: vals.length }); });
+       return { u, out, keys };
+     });
++    const range = i => { const ks = SECTIONS.filter(([k]) => TABS[k] && on(k)).map(([k]) => `rs.${k}@u${i}`); return ks.length ? `[[${ks[0]}]]–[[${ks[ks.length - 1]}]]` : '(sections not included)'; };
+     const secKey = (tab, k, g) => { const j = U.findIndex(u => u.k === k && (B.mode !== 'all' || u.g === g)); return `rs.${tab}@u${j >= 0 ? j : 0}`; };
+     // §1: the tables of every type and line, then each unit's design checks, key quantities and warnings
+     X.cur = 'sum'; let s1;
+@@ -197,7 +238,6 @@
+       U.forEach((u, i) => { X.u = i; X.R = u.R; const n0 = vals.length; const s = summary(Bu(u), X); vals.slice(n0).forEach(v => { v.sec = 'sum'; v.u = i; });
+         scopeU(s.subs, unitSecs[i].keys, i).forEach(q => subs.push({ ...q, id: q.id + i, title: q.id === 'kq' ? `Key quantities: ${uTitle(u)}` : q.id === 'warn' ? `${q.title}: ${uTitle(u)}` : q.title })); });
+       X.u = null; X.R = null;
+-      const range = i => { const ks = SECTIONS.filter(([k]) => TABS[k] && on(k)).map(([k]) => `rs.${k}@u${i}`); return ks.length ? `[[${ks[0]}]]–[[${ks[ks.length - 1]}]]` : '(sections not included)'; };
+       const list = U.map((u, i) => `${uTitle(u)} (${range(i)})`).join('; ');
+       const M = { sec: (tab, k, g) => (k == null ? `rs.${tab}@u0` : secKey(tab, k, g)), shown: B.mode === 'all' ? 'each girder type on each of its lines' : 'each girder type on its governing line',
+         works: `This report works ${B.mode === 'all' ? 'every girder type on every line' : 'each girder type on its governing line (the line with its largest check ratio; on a tie, the next largest)'}: ${list}. ${B.mode === 'all' ? '' : 'The other lines are the rows of the tables below, each pointing to its type\'s sections; their steps are on the result tabs with that type and line chosen (the [[tab:sum|Summary tab]] lists them).'}`,
+@@ -206,12 +246,13 @@
+       s1 = { title: 'Summary of checks', subs };
+     } catch (e) { X.u = null; X.R = null; s1 = fail('sum', e); }
+     if (on('sum')) secs.push({ id: 'sum', key: 'rs.sum', ...s1 }); else { dropped.push({ key: 'rs.sum', ...s1 }); for (let j = vals.length - 1; j >= 0; j--) if (vals[j].sec === 'sum') vals.splice(j, 1); }
+-    // §2 once (the bridge, basis, assumptions; the owner rules table with the first unit's engine values)
++    // §2 once (the bridge, basis, assumptions; the owner rules table with the first unit's engine values, or PS-26 one column per girder type)
++    X.ownT = ownTypes(B, U, range, (subs, j) => scopeU(subs, unitSecs[j].keys, j));
+     X.cur = 'proj'; X.u = 0; X.R = U[0].R; { const n0 = vals.length; let s; try { s = proj(Object.assign(Bu(U[0]), { P: B.P }), X); s.subs = s.subs.map(q => q.id !== 'b' ? q : { ...q, title: 'Bridge and the worked girders', items: q.items.map(it => it.type !== 'kv' ? it
+         : { ...it, rows: it.rows.map(r => r[0] !== 'Design girder' ? r : ['Worked girders', U.map((u, i) => `${uTitle(u)}: ${plain(u.inp.girder)}, L = ${OK().fx(u.R.L, 2)} ft, S = ${OK().fx(+u.inp.S, 3)} ft, ${u.inp.loads.pos === 'exterior' ? 'exterior' : 'interior'} (see [[rs.sec@u${i}]])`).join('; ')]) }) }); } catch (e) { s = fail('proj', e); }
+-      vals.slice(n0).forEach(v => { v.sec = 'proj'; v.u = 0; }); scopeU(s.subs, unitSecs[0].keys, 0);   // §2's references to a result section: the first unit's
++      vals.slice(n0).forEach(v => { v.sec = 'proj'; if (v.u == null && v.cell == null) v.u = 0; }); scopeU(s.subs, unitSecs[0].keys, 0);   // §2's references to a result section: the first unit's
+       if (on('proj')) secs.push({ id: 'proj', key: 'rs.proj', ...s }); else { dropped.push({ key: 'rs.proj', ...s }); vals.splice(n0); } }
+-    X.u = null; X.R = null; X.figs = null;
++    X.u = null; X.R = null; X.figs = null; X.ownT = null;
+     // the worked sections, unit by unit, each heading naming its type and line
+     const gone = [];
+     unitSecs.forEach(({ u, out, keys }, i) => out.forEach(({ k, s, n0, n1 }) => {
+```
