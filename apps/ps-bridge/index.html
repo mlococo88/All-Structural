@@ -19,7 +19,8 @@
      "From the old app" on the Project tab (engine/legacy.js, ui/legacy.js): the old app's saved designs read (never written) and imported.
      PR 3a-1: the bridge level, girder types on the girder lines of each span (engine/bridge.js, ui/types.js; PS-8). PR 3a-2: every type
      checked on every line (the check summary, the Summary tab's table, the Report's §1); unequal bays and different end skews. PR 3a-3:
-     DC2 and DW distributed to each girder line by the Steel Bridge app's method (engine/bridge-dl.js, ui/bridgedl.js; §4).
+     DC2 and DW distributed to each girder line by the Steel Bridge app's method (engine/bridge-dl.js, ui/bridgedl.js; §4). PR 3a-4: an
+     imported old bridge model's other designs restored as girder types (engine/legacy.js restore, PS-17).
      The old Prestressed Bridge Design.html stays the working tool. -->
 <!-- KaTeX for the worked-step equations: the steel app's pinned version and URL (CLAUDE.md §2; used from PR 2b) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
@@ -407,7 +408,7 @@
   const IN = window.PSBInputsUI, LGUI = window.PSBLegacyUI;
   /* PR 2f: "From the old app" (ui/legacy.js): an import replaces the open project, as Import JSON does (asked first there) */
   const lgCtx = { store: LS, gotoOut: t => gotoOut(t), pickFile: () => $('fImport').click(),
-    replace: Q => { BR.migrate(Q); P = Q; autosave = true; ui.itab = 'proj'; ui.scope = ''; saveUi(); changed(); } };
+    replace: Q => { BR.migrate(Q); const rn = window.PSBLegacy.restore(Q); P = Q; autosave = true; ui.itab = 'proj'; ui.scope = ''; saveUi(); changed(); if (rn) toast(rn); } };   // PR 3a-4 (PS-17): the old model's other designs restored
   /* typesDone(r): a girder-type control was handled (ui/types.js): redraw (ui only) or save and redraw, with its message */
   function typesDone(r) { if (!r || r.cancel) return; if (r.ui && !r.note) { saveUi(); if (!r.keep) drawInputs(); return; } saveUi(); changed(); if (r.note) toast(r.note); }
   $('inPanes').addEventListener('change', e => {
@@ -567,6 +568,7 @@
     rd.readAsText(f); });
 
   drawInputs(); drawOut(); syncBar();
+  if (L.notes && L.notes.length) toast(L.notes.join(' '));   // PR 3a-1 / 3a-4: what the load migrated or restored (stored with the next change)
   if (window.PSBDashUI) window.PSBDashUI.init({ el: $('sbDashCol'), store, getP: () => P, errors: () => errs, result: () => { if (errs.length) return null; const rc = result(); return rc.R.error ? null : rc.R; }, all: allResults, pick, goto: gotoStep, fix: gotoErr, goin: t => { ui.itab = t; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; } });
 })();
 </script>

@@ -1057,3 +1057,42 @@ PR #1506: https://github.com/mlococo88/All-Structural/pull/1506
 - 3a3-D4. The deck design (Diaphragms / deck tab) keeps its own barrier weight and wearing surface (not tied to the distribution inputs).
 ### Open items
 - None of this PR (the default-method question answered by PS-21).
+
+## 2026-11-13 — PR 3a-4: the bridge level, part 4 — the old app's kept girder × span designs restored as girder types (PS-17; no formula change)
+PR: (link added on merge)
+### Request
+- Engineer decision PS-17 (2026-11-13): "Multi-design import: wait for bridge level 3a; kept designs restored automatically as girder
+  types/spans at 3a." PS-18: MIDAS demands stay kept (restored when the MIDAS import arrives). Replaces 2f decision D4 ("kept, NOT designed yet").
+### Where
+- `apps/ps-bridge/engine/legacy.js` `restore(P, now)` (new, anchor `/* ---------- restore:`): for a project with `P.legacy.bridge` and no
+  `P.legacy.restored`: every other stored cell `G<g>/S<s>` of the old model inside this bridge (g ≤ N_b, s ≤ spans) → its girder inputs (the
+  old app's `mergeInputs` via `PSBModel.baseInputs`, MIDAS demands left out) minus the bridge-driven paths (`PSBDesign.DRIVEN`: L, S, N_b,
+  position, skew, overhang, continuity, title) = its overrides of the base; cells of one span with the same position and overrides share a
+  type; a cell with no override and the position of a span type with no override joins it (the old 'pl' cells shared the design's inputs);
+  else a new type "<Interior|Exterior> S<s> (old G…)". Lines already typed, cells beyond the bridge and keys that are not cells are listed, not
+  assigned. Each restored cell computed both ways: the old app's inputs of that cell (`PBD.applyBridge` on the old model in "Preliminary
+  designer"; the stored design in "Design modules") and this project's `cellInputs` — every value compared (warnings and the continuous-unit
+  record apart, as 2f's `verify`); the result and any input difference recorded in `P.legacy.restored` and a summary item.
+- `engine/legacy.js` `convert`: the kept-cells text now "kept in the project and restored as girder types on their lines (PS-17; listed below)".
+- `engine/model.js` `importJSON`: after `PSBBridge.migrate`, `PSBLegacy.restore` (a project imported before this PR is restored when it opens,
+  with its notice in `notes`). `index.html`: an import from the old app restores before it opens (toast); the load notes are shown once (toast).
+### Saved data (CLAUDE.md §5)
+- No new key. `P.legacy.restored` (new optional field of the import record: what was restored, when, and the comparison); `P.types` gains the
+  restored types. The old data as read (`P.legacy.inputs`, `P.legacy.bridge`) is never changed (test); restore runs once.
+### Governing provisions
+- None changed (§4): the restored cells' inputs are the old app's; the engine is the moved one.
+### Check case
+- Old model 'pl', 3 spans × 5 girders, S = 8 ft; on screen G2/S1; stored G1/S1 and G3/S1 (= the design), G4/S1 (f′c 9.0), G2/S2, G7/S1, a key
+  "notes" → types Interior S1 on G2, G3; "Exterior S1 (old G1)" on G1; "Interior S1 (old G4)" on G4 with f′c 9.0; "Interior S2 (old G2)";
+  not restored: G7/S1 (beyond 5 girders), "notes"; 4 of 4 compute the same as the old app (every value). 'mod' model with G3/S1 S = 9.5 ft:
+  restored on this bridge's S = 8 ft, "0 of 1 compute the same … girder spacing S old 9.5, here 8".
+### How verified
+- `tests/engine/psbridge-legacy.test.mjs` + 1 test (the check case; computeAll of a restored cell = the old app's applyBridge cell exactly;
+  restore once; old data untouched; on load with the notice; 'mod'). Smoke `ps-bridge-skeleton.mjs` 3m: the import restores G2/S1 as
+  "Interior S1 (old G2)", "1 of 1 compute the same". Harness B `--import` (its extra stored cell is not a valid cell key: listed, the design on
+  screen unchanged): 0 differences.
+### Decisions (pending engineer review)
+- 3a4-D1. Restored cells take this project's bridge (spans, S, overhangs, skews of the imported design); in 'mod' models a cell's own L / S /
+  position is not kept — the difference is named per cell and its results flagged.
+- 3a4-D2. Stored lines of the old model with no design stay without a type (listed, "Assign every line"), never filled silently.
+- 3a4-D3. A restored type whose shape differs from its span's other types stays as imported and is an input error (PS-8) for the user to resolve.

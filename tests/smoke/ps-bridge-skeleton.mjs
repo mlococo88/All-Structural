@@ -345,8 +345,11 @@ await o.b.close();
   await p.check('input[name="lgPick"][value="autosave"]'); await p.click('[data-lg="imp"]'); await p.waitForSelector('#lgSum', { timeout: 60000 });
   check(o.dialogs.some(d => /Import "Old bridge A" from the old app\? It replaces the open project/.test(d)), 'asked first: ' + o.dialogs.join(' | '));
   const sm = await p.textContent('#lgSum'), P2 = await p.evaluate(() => JSON.parse(localStorage.getItem('psb2.project.current')));
-  check(/Results: the same as the old app/.test(sm) && /psbeam\.inputs\.v1 \+ psbeam\.bridge\.v1/.test(sm) && /1 other girder × span design \(G2\/S1\) kept in the project, NOT designed yet/.test(sm) && /Not imported/.test(sm), 'import summary: ' + sm.slice(0, 300));
+  check(/Results: the same as the old app/.test(sm) && /psbeam\.inputs\.v1 \+ psbeam\.bridge\.v1/.test(sm) && /1 other girder × span design \(G2\/S1\) kept in the project and restored as girder types on their lines/.test(sm) && /Not imported/.test(sm), 'import summary: ' + sm.slice(0, 300));
   check(P2.project.name === 'Old bridge A' && P2.project.number === '1234' && P2.spans.lengths.join() === '85' && P2.xs.nb === 4 && P2.xs.bays.join() === '8.5,8.5,8.5' && P2.xs.skews.join() === '10,10' && P2.design.g === 1 && P2.base.girder === 'AASHTO Type IV' && P2.legacy && P2.legacy.bridge.designs['G2/S1'], 'imported project saved ' + JSON.stringify({ n: P2.project.name, s: P2.spans, xs: P2.xs, d: P2.design }));
+  // PR 3a-4 (PS-17): the old model's other design G2/S1 restored as a girder type on its line, computed the same as the old app
+  check(/Restored from the old app's bridge model \(PS-17\): 1 more girder × span design \(G2\/S1\)/.test(sm) && /1 of 1 compute the same as the old app/.test(sm)
+    && Array.isArray(P2.types) && P2.types.some(t => t.label === 'Interior S1 (old G2)' && t.lines.join() === '2') && P2.legacy.restored && P2.legacy.restored.cells[0].same === true, 'restored: ' + JSON.stringify(P2.types));
   // the imported design's results: the old inputs computed = the shown values (computeAll of the page on the old inputs)
   await p.click('#tabBar [data-otab="flex"]'); await p.waitForTimeout(400);
   const fv = await p.evaluate(OLD => { const R = computeAll(JSON.parse(JSON.stringify(OLD))), fx = window.PSBOutKit.fx, at = (o, q) => q.split('.').reduce((a, k) => a == null ? a : a[k], o);
