@@ -6908,3 +6908,85 @@ Before: no minimum-thickness check.
   - the hand-off message;
   - the autosave, apart from the added `minh`.
 - **Tests:** new `tests/smoke/cbc-min-thickness.mjs`, 1400 and 390 px, 0 console errors. The suite's other tests are listed in the PR.
+
+## 2026-11-13 — PR: claude/cbc-loads-omit (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CBOM) — Beam Capacity tab, service load cases: ACI 318-19 5.3.2, rows with a variable load left out where that increases |M_u| or |V_u|   [CALCULATION CHANGE (service mode only: more combinations); factored mode and saved factored projects identical; no saved key or format change]
+
+The file uses CRLF line endings; keep them. All code is in the Beam Capacity srcdoc (`#suite-frame-capacity`). When re-applying, escape `&` as `&amp;` and `"` as `&quot;`. Every site is tagged CBOM.
+
+### Engineer decision CB-7 (2026-11-13)
+The service-load builder also generates rows with each variable load (L, L_r / S / R, W, E) left out, but only where leaving it out increases |M_u| or |V_u|.
+- M and V are checked separately; a row may be generated for either.
+- D is always present with its factor.
+- Each such row is worked and labelled.
+- Duplicates are flagged identical.
+- Full-load rows are unchanged.
+
+### Provision
+ACI 318-19 5.3.2 (read in structural_references ACI-318-19-2019.pdf, PDF page 65; paraphrased): the effect of one or more loads not acting at the same time is to be investigated.
+
+### Where
+In `cbcBuildCombos`, after `sig[key]=r; rows.push(r);` in the row loop:
+- **Before:** nothing.
+- **After:**
+  ```js
+        terms.forEach(x=>{
+          if(x.k==="D"||zero(x.k)) return;
+          const t2=terms.filter(y=>y!==x), s2=a=>t2.reduce((s,y)=>s+y.f*y.s*val(y.k,a),0), M2=s2("M"), V2=s2("V");
+          const why=[]; if(Math.abs(M2)>Math.abs(r.Mu)+1e-9) why.push("M"); if(Math.abs(V2)>Math.abs(r.Vu)+1e-9) why.push("V");
+          if(!why.length) return;
+          const k2=t.eq+"|"+t2.filter(y=>!zero(y.k)).map(y=>y.k+":"+y.f+":"+y.s).join(","), nm=name+", "+lab[x.k]+" omitted";
+          if(sig[k2]){ sig[k2].merged.push(nm); return; }
+          const o={eq:t.eq,terms:t2,Mu:M2,Vu:V2,Tu:s2("T"),name:nm,merged:[],omit:x.k,why,of:name,full:{Mu:r.Mu,Vu:r.Vu}};
+          sig[k2]=o; rows.push(o);
+        });
+  ```
+- **Behaviour:**
+  - One load is left out at a time.
+  - The new row follows its full row.
+  - The same within-equation skipping rule applies: a row with the same loads, factors and signs as an earlier row of the same equation is merged into it ("Stands for").
+  - Equal actions across equations are flagged by `sameAs`.
+- **Load Combinations tab** (combination card) and **Report** (combination subsection): a note "Omitted (5.3.2): <load> is left out of <full row> …; leaving it out increases |M_u| from a to b (and |V_u| …)".
+- **`cbcLdRules()`:** the "Loads left out (5.3.2)" item replaces the earlier statement that 5.3.2 was covered only by the 0.9D equations and the reversal.
+
+### Hand check (mixed signs; Node test and smoke test)
+D: M = 5; L: M = −3; W: M = ±2 (reverses); other cases 0; V = 0.
+
+| Full row (M_u) | Omitted row added (M_u) |
+|---|---|
+| (a) 1.4D = 7.0 | — |
+| (b) 1.2D + 1.6L + 0.5Lr = 6 − 4.8 = 1.2 | L omitted: 6.0 |
+| (c) 1.2D + 1.6Lr + 1.0L = 3.0 | L omitted: 6.0 |
+| (c) 1.2D + 1.6Lr + 0.5W = 7.0 | none (6.0 < 7.0) |
+| (c) 1.2D + 1.6Lr − 0.5W = 5.0 | W omitted: 6.0, the same loads as "(c) +1.0L, L omitted", so merged ("Stands for") |
+| (d) 1.2D + 1.0W + 1.0L + 0.5Lr = 5.0 | L omitted: 8.0; W omitted (3.0) not added |
+| (d) 1.2D − 1.0W + 1.0L + 0.5Lr = 1.0 | W omitted: 3.0; L omitted: 4.0 |
+| (e) 1.2D + 1.0E + 1.0L + 0.2S = 3.0 | L omitted: 6.0 |
+| (f) 0.9D + 1.0W = 6.5 | none |
+| (f) 0.9D − 1.0W = 2.5 | W omitted: 4.5 |
+| (g) 0.9D + 1.0E = 4.5 | — |
+
+- 18 rows in all.
+- **Governing |M_u|:** before 7.0 (1.4D, tied with (c) +0.5W). After 8.0: "(5.3.1d) 1.2D + 1.0W + 1.0L + 0.5Lr, L omitted" = 1.2D + 1.0W + 0.5Lr = 6 + 2 = 8.0.
+- **V checked on its own:** D M 5 V 4, L M 3 V −2. In (5.3.1b), L omitted gives M 6.0 < 10.8 but V 4.8 > 1.6, so the row is added for V only (`why: ["V"]`).
+- **Earlier PR's hand check** (D 5/2, L 3/1.2, W ±2/±0.8): three rows are added:
+  - (c) −0.5W, W omitted, 6.0 / 2.4;
+  - (d) −W, W omitted, 9.0 / 3.6;
+  - (f) −W, W omitted, 4.5 / 1.8.
+
+  The governing combination is unchanged: (5.3.1d) +W, 11.00 kip-ft / 4.40 kip.
+
+### Decisions (pending engineer review)
+- **One load is left out at a time.** Rows with two relieving loads left out together are not generated. For example, in (5.3.1d) −W with L negative, leaving out both W and L would give 6.0, more than either single omission (3.0, 4.0). That case is lower than the governing 8.0 here, but it is not covered in general.
+- **T_u is not used** to decide whether an omitted row is added, as asked: M and V only.
+- **Service projects saved since #1494 get the new rows when opened.** This is a result change in service mode only.
+
+### How verified
+- **Scratch probe**, origin/main (#1503) vs branch, 9 projects:
+  - factored ACI and AASHTO projects, including one with service cases stored but factored mode selected;
+  - an AASHTO project with loadMode service;
+  - a slab;
+  - an old save without combinations;
+  - a same-sign service project.
+
+  `computeAll()`, `VALIDATION`, `allChecks`, the hand-off message, the autosave, the Report and every tab are identical, except in the same-sign service project. There the rows are identical (no omitted row is generated) and only the rules note differs.
+- **Tests:** `tests/engine/cbc-loads.test.mjs` (7 tests, 2 new) and `tests/smoke/cbc-loads.mjs` (updated rows; new mixed-sign block). The suite's other tests are listed in the PR.
