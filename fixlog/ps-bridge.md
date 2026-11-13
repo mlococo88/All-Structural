@@ -1636,7 +1636,7 @@ index cf2e96f..56f91c4 100644
 ```
 
 ## 2026-11-13 — PS-25: the Report works every girder type — the full worked sections (§3–§14, figures included) once per girder type on its governing line, numbered per type, the type and line in each heading; a Report-tab choice "Worked sections: each type's governing line (default) | every girder line" (display only; no calculation change)
-PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__
+PR #1530: https://github.com/mlococo88/All-Structural/pull/1530
 ### Request
 - Engineer decision PS-25 (2026-11-13), answering the 3b question (#1529):
   - The Report prints the full worked sections (§3–§14, figures included) once per girder type, for that type's governing (worst) line.
