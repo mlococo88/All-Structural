@@ -113,7 +113,8 @@
     const rec = deep ? (kx ? `${kx === 'K' ? 'K (bottom)' : 'X'}-frame (S/d = ${f2(sd)}, ${E.cite(rT)})` : `${S / h > 1.5 ? 'K (bottom)' : 'X'}-frame (S/h = ${f2(S / h)})`)
       : grp ? `by bay depth (one section does not fit every bay): ${grp.map(g => `${bl(g)}: ${one(g) || `no channel or W of the list between ${f2(g.req)} and ${f2(g.top)} in`}`).join('; ')}`   // SB-22
       : ch ? `channel diaphragm ${ch[0]} (or a rolled W)` : w ? `rolled diaphragm ${w[0]}` : 'rolled W diaphragm';
-    const sel = xf ? ({ X: 'X-frame', Kb: 'K-frame', Kt: 'K-frame' }[p.type] || 'cross-frame') : `${CF_CH.some(s => s[0] === (p.dia || {}).shape) ? 'channel' : 'rolled'} diaphragm ${(p.dia || {}).shape === 'custom' ? 'custom W' : (p.dia || {}).shape}`;
+    const DG = xf ? null : diaGroups(p), sN = v => `${CF_CH.some(s => s[0] === v) ? 'channel' : 'rolled'} diaphragm ${v === 'custom' ? 'custom W' : v}`;   // SB-24: the shape of each bay depth group, where they differ
+    const sel = xf ? ({ X: 'X-frame', Kb: 'K-frame', Kt: 'K-frame' }[p.type] || 'cross-frame') : DG && DG.some(g => g.shape !== DG[0].shape) ? `by bay depth group (SB-24): ${DG.map(g => `${bl(g)}: ${sN(g.shape)}`).join('; ')}` : sN(DG ? DG[0].shape : (p.dia || {}).shape);
     return { dg, dMin, deep, xf, rec, sel, ch: ch && ch[0], w: w && w[0], frac: frac_, dB, web, Dw, sd, kx, chT, skM, rT, rDd, ...(DQ ? { req, DQ, grp, show: !!grp || Math.abs(req - frac_ * dg) > 1e-9 || DQ.bays.some(b => Math.abs(b.req - req) > 1e-9) } : {}) };   // show: the SB-22 work (not for equal depths: as before)
   }
   /* SB-22 (2026-11-13; engineer decision SB-22): the section CF10 recommends meets the least diaphragm depth of every bay (SB-19: f × the
@@ -307,7 +308,9 @@
       Ms.forEach(m => c.items.push(rc(`${m.l} (${m.name})`, [f2(m.dP), f2(m.df), f2(R.FT), f2(m.df / R.FT)], m.df, R.FT, `cf.${m.k}.fat`))); out.add(c); }
     // diaphragm used: the angle checks CF1 to CF9 do not apply and are not listed (GirderDetail 2026-10-13)
     if (cfDiaOn(R.p)) for (let i = out.length - 1; i >= 0; i--) if (/^CF[1-9]$/.test(out[i].id)) out.splice(i, 1);
-    cfDiaChecks(R, out); cfDiaChecks(R, out, true);
+    { const DG = diaGroups(R.p);   // SB-24: two or more bay depth groups: CFD (and CFE when the end diaphragm takes the intermediate shape) per group
+      if (DG) { diaGrpChecks(R, out, DG); if ((R.p.dia || {}).eShape) cfDiaChecks(R, out, true); else diaGrpChecks(R, out, DG, true); }
+      else { cfDiaChecks(R, out); cfDiaChecks(R, out, true); } }
     { const TR = cfTypeRec(R.p, E), c = { id: 'CF10', grp: 'Bracing type', title: 'Intermediate bracing type for the girder depth', ref: TR.rT || TR.rDd ? `${[TR.rT, TR.rDd].filter(Boolean).map(E.cite).join('; ')}; ${ED} Art. 6.7.4.2` : `Common practice (e.g. AISC/NSBA G13.1 guidance; owner standards govern); ${ED} Art. 6.7.4.2`, items: [],
         note: 'Basis: the girder depth d (out-to-out of the flanges), not the web depth. Below the minimum, a channel or rolled W diaphragm at least 0.75 of the girder depth (6.7.4.2, plate girders) is used.' };
       if (TR.DQ && !TR.deep && TR.show) c.note += ` Girder types: the recommended section meets the least depth of every bay, ${TR.DQ.gov.f} of the deeper of the two girders it connects (governing bay G${TR.DQ.gov.j + 1}–G${TR.DQ.gov.j + 2}: ${f2(TR.req)} in; engineer decision SB-22, 2026-11-13)${TR.grp ? '; one section does not fit every bay, so a section per bay depth group' : ''}.`;   // SB-22
@@ -320,17 +323,50 @@
           note: [rT, rB].filter(Boolean).map(r => `${E.cite(r)}: ${r.text}.`).join(' ') + ' The member and connection checks above are unchanged by these items.' };
         if (rT && rT.value.kHi && !dOn) { const ty = R.p.type, isK = ty === 'Kb' || ty === 'Kt', bad = (TR.kx === 'K' && !isK) || (TR.kx === 'X' && isK);
           c.items.push({ loc: 'X or K by girder spacing to girder depth S/d', cells: [`S/d = ${f2(TR.sd)}, ${isK ? 'K' : 'X'}-frame`, `X when S/d ≤ ${f2(rT.value.xLo)}, K when ≥ ${f2(rT.value.kHi)}`], st: bad ? 'fail' : 'pass', step: 'cf.type' }); }
-        if (rT && rT.value.members) { c.items.push({ loc: 'Single members (no back-to-back members)', cells: [dOn ? `${q.shape === 'custom' ? 'custom W' : q.shape || 'diaphragm'} (single section)` : 'single angles', 'single angles, tees, channels or W sections'], st: 'pass' });
+        const DG = dOn ? diaGroups(R.p) : null, bl = g => g.bays.map(j => `G${j + 1}–G${j + 2}`).join(', '), sN = v => (v === 'custom' ? 'custom W' : v);   // SB-24: the shape of each bay depth group
+        if (rT && rT.value.members) { c.items.push({ loc: 'Single members (no back-to-back members)', cells: [dOn ? (DG ? `${DG.map(g => `${bl(g)}: ${sN(g.shape)}`).join('; ')} (single sections)` : `${q.shape === 'custom' ? 'custom W' : q.shape || 'diaphragm'} (single section)`) : 'single angles', 'single angles, tees, channels or W sections'], st: 'pass' });
           c.items.push({ loc: 'Bottom chord (under-clearance less than 16 ft 3 in)', cells: [dOn ? 'diaphragm (full section)' : `${{ X: 'X', Kb: 'K (bottom)', Kt: 'K (top)' }[R.p.type] || ''}-frame with a bottom chord`, 'a bottom chord on every cross-frame'], st: 'pass' }); }
         if (rT && rT.value.table && dOn && !TR.deep) { const ok = !TR.chT || q.shape === TR.chT;
           c.items.push({ loc: 'Intermediate channel diaphragm (Table 6.7.4.2-1)', cells: [String(q.shape === 'custom' ? 'custom W' : q.shape || '—'), TR.chT ? `${TR.chT} for D = ${f2(TR.dB)} in` : TR.skM >= rT.value.skT - 1e-9 ? `skew ${f2(TR.skM)}° ≥ ${rT.value.skT}°: designed` : `D = ${f2(TR.dB)} in outside the table: designed`], st: ok ? 'pass' : 'adv' }); }
-        if (rT && rT.value.endCh) { if (dOn) { const e = cfDiaEnd(q), ok = rT.value.endCh.includes(e.shape);
-            c.items.push({ loc: 'End bearing diaphragms (6.7.4.2.1bCT)', cells: [String(cfDiaSec(e).nm_), `channel, preferably ${rT.value.endCh.join(' or ')}`], st: ok ? 'pass' : 'warn' }); }
+        if (rT && rT.value.endCh) { if (dOn) (DG && !q.eShape ? DG.map(g => [g, cfDiaEnd({ ...q, shape: g.shape })]) : [[null, cfDiaEnd(q)]]).forEach(([g, e]) => { const ok = rT.value.endCh.includes(e.shape);   // SB-24: each group's end diaphragm when it takes the intermediate shape
+            c.items.push({ loc: `End bearing diaphragms (6.7.4.2.1bCT)${g ? `, bays ${bl(g)}` : ''}`, cells: [String(cfDiaSec(e).nm_), `channel, preferably ${rT.value.endCh.join(' or ')}`], st: ok ? 'pass' : 'warn' }); });
           else c.items.push({ loc: 'End bearing cross-frames (6.7.4.2.2bCT)', cells: ['the intermediate type (this module)', 'K-frame with a channel top chord'], st: 'adv' }); }
         if (rB) { const n = dOn ? Math.max(2, Math.round(+q.nb || 2)) : Math.round(+(R.p.conn || {}).n || 0), ok = n >= rB.value.n;
           c.items.push({ loc: dOn ? 'Bolts per diaphragm end' : 'Bolts per cross-frame member end', cells: [String(n), `at least ${rB.value.n}`], st: ok ? 'pass' : 'warn', r: rB.value.n / Math.max(n, 1), demand: rB.value.n, capacity: n }); }
         if (c.items.length) out.add(c); } }
     return out;
+  }
+  /* diaGrpChecks(R, out, DG, end) (SB-24, 2026-11-13; engineer decision SB-24): with two or more bay depth groups the diaphragm checks CFD
+     (end: CFE) are made for each group (DG = diaGroups(R.p)) with the group's own shape, on the frame of the group: the inputs of the frame
+     checked with the group's h and d (the group's shallower girder; as the Drawings detail and the tab Download DXF of each group, SB-21,
+     SB-23) and only the group's bays for the least depth (SB-19: f × the deeper girder of each of its bays, the largest). compute() of those
+     inputs gives the group's stability bracing values (C and M_br with the group's diaphragm depth, 6.7.4.2.2) and the wind (unchanged:
+     the exterior girder depth, SB-20); cfDiaChecks makes the items and steps, operation for operation. One check CFD (CFE) lists every
+     group's items, "G1–G2, G5–G6 (W30x99): …": the worst item governs (ckNew). The steps of group k are cf.cfd.g<k+1>.… (cf.cfe.…), the
+     group's C, M_br, β_sec added where they differ from the frame checked's. R.DIA: the group of the frame checked; R.DIAg: every group. */
+  function diaGrpChecks(R, out, DG, end) {
+    const E = R.E || env0(), P0 = R.p, B = P0.xfBay, st = end ? 'cfe' : 'cfd', bl = g => g.bays.map(j => `G${j + 1}–G${j + 2}`).join(', ');
+    const parts = DG.map(g => {
+      const p = { ...P0, h: g.h, dg: g.dg, dia: { ...P0.dia, shape: g.shape }, xfBay: { ...B, bays: B.bays.map(q => (q && g.bays.includes(q.j) ? q : null)) } };
+      const Rg = compute(p, E); if (Rg.errors && Rg.errors.length) return null; const n0 = Rg.steps.length, tmp = ckNew(); cfDiaChecks(Rg, tmp, end);
+      const pre = `cf.${st}.g${g.k + 1}`, ren = id => (id === `cf.${st}` ? pre : id && id.startsWith(`cf.${st}.`) ? pre + id.slice(`cf.${st}`.length) : id);
+      const steps = Rg.steps.slice(n0).map(t => ({ ...t, id: ren(t.id), label: `${bl(g)} (${g.shape === 'custom' ? 'custom W' : g.shape}): ${t.label}` }));
+      if (!end && R.SB && Rg.SB) [['sb.C', 'C'], ['sb.Mbr', 'Mbr'], ['sb.bsec', 'bsec']].forEach(([id, k]) => { if (Rg.SB[k] !== R.SB[k]) { const t = Rg.steps.find(x => x.id === `cf.${id}`);
+        if (t) steps.unshift({ ...t, id: `${pre}.${id}`, label: `${bl(g)} (${g.shape === 'custom' ? 'custom W' : g.shape}): ${t.label} (this group's diaphragm depth)` }); } });
+      return { g, Rg, c: tmp[0], steps, ren };
+    }).filter(Boolean);
+    if (!parts.length) return cfDiaChecks(R, out, end);
+    const c0 = parts[0].c, nm_ = q => q.Rg.DIA[end ? 'e' : 'i'].nm_, list = parts.map(q => `${bl(q.g)}: ${nm_(q)}`).join('; ');
+    const refs = [...new Set(parts.flatMap(q => q.c.ref.replace(`${ED} Arts. `, '').split(', ')))];
+    const c = { id: c0.id, grp: c0.grp, title: end ? `End diaphragms at the bearing lines by bay depth group (${list}; in place of the end cross-frames)` : `Diaphragms by bay depth group (${list}; intermediate bracing used in place of the cross-frame)`,
+      ref: `${ED} Arts. ${refs.join(', ')}`, items: [],
+      note: `By bay depth group (engineer decision SB-24, 2026-11-13, girder types): each group of bays of one depth (the same h and the same shallower girder depth d, the Drawings' grouping) has its own ${end ? 'end ' : ''}diaphragm shape and is checked on its own frame (its h and d, its bays' least depth); the worst group governs. ${parts.map(q => `${bl(q.g)} (${nm_(q)}): ${q.c.note}`).join(' ')}` };
+    parts.forEach(q => q.c.items.forEach(it => c.items.push({ ...it, loc: `${bl(q.g)} (${nm_(q)}): ${it.loc}`, step: q.ren(it.step) })));
+    parts.forEach(q => R.steps.push(...q.steps));
+    const own = parts.find(q => q.g.bays.includes(B.j)) || parts[0];
+    (R.DIA = R.DIA || {})[end ? 'e' : 'i'] = own.Rg.DIA[end ? 'e' : 'i'];
+    (R.DIAg = R.DIAg || []); parts.forEach(q => { let e = R.DIAg.find(x => x.key === q.g.key); if (!e) R.DIAg.push(e = { key: q.g.key, bays: q.g.bays, shape: q.g.shape, h: q.g.h, dg: q.g.dg, s: q.g.s, p: q.Rg.p, DIA: {} }); e.DIA[end ? 'e' : 'i'] = q.Rg.DIA[end ? 'e' : 'i']; });
+    out.add(c);
   }
   /* SBDX (2026-11-10, engineer approval "yes do all three"): two additions to the diaphragm checks, from nominal dimensions (fillets neglected),
      thin-walled centerline values for J and C_w:
@@ -595,7 +631,7 @@
   function xfPts(b, X) {
     if (!X || !X.on || !b || !b.xf || !Array.isArray(b.xf.f) || !Array.isArray(b.xf.g)) return null;
     const sp = b.spans, X0 = [0]; sp.forEach(L => X0.push(X0[X0.length - 1] + L)); const G = b.xf.g.map(() => []);
-    b.xf.f.forEach(([sup, k, bay, sa, sc, Lf]) => { const end = !!sup, W = xfW(X.hb && X.hb[bay] > 0 ? { ...X, h: X.hb[bay] } : X, Lf, end);   // SBXF: X.hb, each bay's h
+    b.xf.f.forEach(([sup, k, bay, sa, sc, Lf]) => { const end = !!sup, W = xfW(X.ab && X.ab[bay] ? { ...X, ...X.ab[bay] } : X.hb && X.hb[bay] > 0 ? { ...X, h: X.hb[bay] } : X, Lf, end);   // SBXF: X.hb, each bay's h; SB-24: X.ab, each bay's diaphragm area
       [[bay, sa], [bay + 1, sc]].forEach(([g, st]) => { const B = b.xf.g[g]; if (!B || !G[g]) return; let x;
         if (end) x = X0[k]; else { const a = B[k], c = B[k + 1]; x = Math.max(X0[k], Math.min(X0[k + 1], X0[k] + (c > a ? (st - a) / (c - a) : 0.5) * sp[k])); }
         G[g].push({ x, P: W / 2, end, W, Lf }); }); });
@@ -639,9 +675,28 @@
      by the Drawings cross-frame sheet and the Cross-frames tab graphic's Download DXF. */
   function bayGroups(P) {
     const X = bayDepths(P); if (!X) return null;
-    const B = inputsOf(P, { bridge: true }).p.xfBay; if (!B) return null; const m = new Map(), r2 = v => +(+v).toFixed(2);
+    const B = inputsOf(P, { bridge: true }).p.xfBay; if (!B) return null; return grpOf(B);
+  }
+  /* grpOf(B) (SB-24: bayGroups' grouping, moved out unchanged): the groups of the bays of B = p.xfBay (inputsOf) by h and the d of the
+     shallower girder (rounded to 0.01 in), in bay order; null for one group */
+  function grpOf(B) {
+    const m = new Map(), r2 = v => +(+v).toFixed(2); if (!B || !Array.isArray(B.bays)) return null;
     B.bays.forEach(q => { if (!q) return; const k = `${q.h}|${r2(q.s.dg)}`; if (!m.has(k)) m.set(k, { h: q.h, s: q.s, dg: r2(q.s.dg), bays: [] }); m.get(k).bays.push(q.j); });
     return m.size > 1 ? [...m.values()] : null;
+  }
+  /* SB-24 (2026-11-13; engineer decision SB-24): the diaphragm shape per bay depth group. Saved field crossframes.dia.grp (optional):
+     { '<the group's bays, 0-based, comma-separated, e.g. "0,4">': shape (a CF_CH or CF_DIA name, or 'custom': the custom W of dia.d, bf,
+     tf, tw) }. Absent (every project saved before), no entry for a group, or an entry that is not a shape of the lists: dia.shape, the one
+     shape of before (the migration, CLAUDE.md §5: nothing is rewritten or discarded; an entry of a grouping that no longer exists stays in the
+     file, unused). grpKey(g): the key of group g; grpShape(q, g): the shape of group g of the diaphragm inputs q; diaGroups(p): with a
+     diaphragm and girder types whose bays form two or more depth groups (grpOf(p.xfBay)), [{ h, s, dg, bays, k (0-based), key, shape }];
+     null otherwise (one depth group, equal depths, a project saved before girder types, a cross-frame): every check exactly as before. */
+  const grpKey = g => g.bays.join(',');
+  const isShape = v => v === 'custom' || CF_CH.some(s => s[0] === v) || CF_DIA.some(s => s[0] === v);
+  function grpShape(q, g) { const m = q && q.grp, v = m && typeof m === 'object' && !Array.isArray(m) ? m[grpKey(g)] : null; return typeof v === 'string' && isShape(v) ? v : (q || {}).shape; }
+  function diaGroups(p) {
+    if (!cfDiaOn(p) || !p.xfBay) return null; const G = grpOf(p.xfBay); if (!G) return null;
+    return G.map((g, k) => ({ ...g, k, key: grpKey(g), shape: grpShape(p.dia, g) }));
   }
   /* typeGov(P, BD, gi) (SBXF2, 2026-11-13; engineer decision SB-18): the frame the brace checks of girder type gi use: of the bays attached to
      any of its lines (bays j − 1 and j of each line j), the shallowest (the rule of bayDepths, the first on ties). The lines: the type's
@@ -726,11 +781,14 @@
     const c = Object.assign(defaults(), P.crossframes || {}), L = (opt && opt.L) || FRM.compute(P); if (!L || L.errors.length) return null;
     const hAuto = c.h === '' || c.h == null, I = hAuto ? inputsOf(P, { L, bridge: true }) : null, X = xfModel(c.weight, { ...c, h: hAuto ? I.p.h : +c.h }); if (!X.on) return null;
     if (I && I.p.xfBay && X.kind === 'xf' && !X.bad) X.hb = I.p.xfBay.bays.map(q => q ? q.h : X.h);   // SBXF: each bay's own h (the shallower of its two girders)
+    if (X.kind === 'dia' && !X.bad) { const GR = bayGroups(P), q = c.dia;   // SB-24: each bay's own diaphragm (its depth group's shape; the end diaphragm too when it takes the intermediate shape)
+      if (GR && GR.some(g => grpShape(q, g) !== q.shape)) { const ab = []; GR.forEach(g => { const sh = grpShape(q, g); if (sh === q.shape) return; const Xg = cfDiaSec({ ...q, shape: sh }), Xe = q.eShape ? null : Xg;
+        if (!(Xg.A > 0)) return; g.bays.forEach(j => { ab[j] = { A: Xg.A, ...(Xe ? { Ae: Xe.A } : {}), nm: Xg.nm_ }; }); }); if (ab.length) X.ab = ab; } }
     const G = xfPts({ spans: P.spans.lengths.map(Number), xf: L.xf }, X); if (!G) return null;
     const line = Math.min(FRM.lineOf(P, P.girders[gi]), G.length - 1);
     return { line, X, pts: G[line], tot: G[line].reduce((a, q) => a + q.P, 0) };
   }
 
-  window.SBDCrossframes = { ES, DEF, GD_GR, BOLT, FUB, PHI, ANGLES, CF_MEM, CF_CH, CF_DIA, angleProps, cfDiaSec, cfDiaOn, cfDiaGap, cfDiaEnd, cfTypeRec, cfTsCP, cfCPsize, cfBsCP, cfCP, cfDiaFit, bayGroups,
+  window.SBDCrossframes = { ES, DEF, GD_GR, BOLT, FUB, PHI, ANGLES, CF_MEM, CF_CH, CF_DIA, angleProps, cfDiaSec, cfDiaOn, cfDiaGap, cfDiaEnd, cfTypeRec, cfTsCP, cfCPsize, cfBsCP, cfCP, cfDiaFit, bayGroups, grpOf, grpKey, grpShape, diaGroups,
     env0, compute, checks, userModes, xfW, xfModel, xfPts, defaults, inputsOf, envOf, pointLoads, girderDepth, bayDepths, typeGov, extDepth, diaDepthReq };
 })();

@@ -69,6 +69,10 @@
                   ecc, end, Rj, aj, eShape, eNb }, wind: { V, Kz, G, Cd }, mem: { top, bot, diag: { sec, b1, b2, t } }, conn: { d, gr, thr, n, s, e, tg },
                   user: { StrI, Con, Fat: { top, bot, diag } (kip) }, userMode: { StrI, Con: 'add' | 'replace' } (added 2026-11-01, optional: absent = 'add'), fatCat, sb: { on, full: 'auto' | 'yes' | 'no', Mu (kip-ft; '' = from the analysis), Cb,
                   bs, tsp }, weight: { mode: 'auto' | 'ovr' | 'off', allow (%), Wi, We (kip per frame) } } (engine/crossframes.js)
+                  -- added 2026-11-13 (SB-24, engineer decision SB-24; optional: absent = dia.shape in every bay, as before) --
+                  crossframes.dia.grp: { '<bays of a bay depth group, 0-based, comma-separated, e.g. "0,4">': shape } (girder types whose bays
+                  form two or more depth groups: the diaphragm shape of each group; a group without an entry, or an entry that is not a shape
+                  of the lists, takes dia.shape; an entry of a grouping that no longer exists is kept in the file, unused; engine/crossframes.js grpShape)
      -- added 2026-10-29 (analysis PR), optional, read by engine/analysis.js (absent = its defaults) --
      analysis:  { im, imf (%), crack: 'none' | '15' | 'dl', deflLimit (L/…), seq: 'on' | 'off', seqMod: 'n' | '3n', seqCustom (text),
                   steelAllowPct (%; used when xs.allow is not available), haunchInStiffness (true | false; absent = the owner rule) }
