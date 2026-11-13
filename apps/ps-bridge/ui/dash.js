@@ -20,8 +20,12 @@
    PR 3a-2 (2026-11-13): o.all() = PSBBridge.results of every girder type × line: each chip governs over every type and line, one count per type
    per check (its worst line, SB-5), each entry naming its type and line (several cells); a click first shows that type and line (o.pick).
 
+   PR 3b (2026-11-13): o.run() = the page's run of every girder type × line ({ busy, i, n, stopped }); while it runs (chunked) or after
+   Stop, all() is null and the chips are those of the girder type and line shown, the line under the verdict says so with Stop / Run all
+   (o.runCtl('stop' | 'run')). grp is exported for the Summary tab (ui/summary.js), whose counts are these.
+
    init(o): o = { el, store (localStorage or null), getP(), errors() ([{ path, msg }]), result() (computeAll of the design or null),
-   all() (PR 3a-2, or absent), pick(k, g), goto(tab, step), fix(i) }; refresh() after the page draws. */
+   all() (PR 3a-2, or absent), run(), runCtl(what) (PR 3b), pick(k, g), goto(tab, step), fix(i) }; refresh() after the page draws. */
 (function () {
   'use strict';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -97,8 +101,16 @@
     const verd = nF ? 'fail' : 'pass';
     o.el.innerHTML = head(cnt)
       + `<div class="sdVerd"><b class="sd-${verd}">${nF ? 'FAIL' : 'PASS'}</b>${top ? ` · max ratio ${fx(top.c.r, 3)}` : ''}</div>${top ? `<div class="sdGov">Governing: <a href="#" ${go(top.gp, top.st, top.cell)}>${esc(top.c.n + on(top))}: ${fx(top.c.r, 3)}</a></div>` : ''}
-        <div class="sdRun">${A ? `${A.types.length} girder type${A.types.length === 1 ? '' : 's'} on ${A.n} line${A.n === 1 ? '' : 's'} (every span); each counted once per check, its worst line.` : 'In development: the checks of the design girder only.'}</div>`
+        <div class="sdRun">${A ? `${A.types.length} girder type${A.types.length === 1 ? '' : 's'} on ${A.n} line${A.n === 1 ? '' : 's'} (every span); each counted once per check, its worst line.` : runTxt(o)}</div>`
       + `<div id="sbDash">${chips}</div><p class="sdNote">Each chip: the governing ratio of its checks${A && A.n > 1 ? ' over every girder type and line (the type and line named)' : ''} (demand / capacity, OK ≤ 1.0), the engine's value. Click: its tab with that type and line, and the worked step of the value. Summary tab: every type and line.</p>`;
+  }
+  /* PR 3b: while every girder type × line is being computed (index.html, chunked) or after Stop, the chips are those of the girder type
+     and line shown (R); the line says so, with Stop / Run all (the Summary tab's buttons, o.runCtl) */
+  function runTxt(o) {
+    const r = o.run ? o.run() : null;
+    if (r && r.busy) return `Running every girder type × line (${r.i} / ${r.n})… Until then the chips are those of the girder type and line shown. <button type="button" data-sumrun="stop">Stop</button>`;
+    if (r && r.stopped) return `Stopped (${r.i} of ${r.n} girder type × line results): the chips are those of the girder type and line shown only. <button type="button" data-sumrun="run">Run all</button>`;
+    return 'In development: the checks of the design girder only.';
   }
   /* the Rating chip (not a check): the lowest of the HL-93 inventory rating factors; 99 = not applicable */
   function rtChip(R, A) {
@@ -119,6 +131,7 @@
       if (t.id === 'sbDashTgl') { setColl(!D.coll); return; }
       e.preventDefault();
       if (t.dataset.icgo != null) { if (o.fix) o.fix(+t.dataset.icgo); return; }
+      if (t.dataset.sumrun) { if (o.runCtl) o.runCtl(t.dataset.sumrun); return; }   // PR 3b: Stop / Run all
       if (t.dataset.sdx) { const k = t.dataset.sdx; if (D.open.has(k)) D.open.delete(k); else D.open.add(k); draw(); return; }
       if (t.dataset.sdcell && o.pick) { const [k, g] = t.dataset.sdcell.split('|').map(Number); o.pick(k, g); }   // PR 3a-2: that type and line first
       if (t.dataset.sdgo) { const [tab, st] = t.dataset.sdgo.split('|'); o.goto(tab, st); return; }
@@ -129,5 +142,5 @@
     });
     draw();
   }
-  window.PSBDashUI = { init, refresh: draw, KEY, GROUPS, RATING };
+  window.PSBDashUI = { init, refresh: draw, KEY, GROUPS, RATING, grp };   // PR 3b: grp for the Summary tab's counts (the same counts)
 })();

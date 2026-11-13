@@ -127,23 +127,6 @@
     if (t === 'reset') { BR.resetKey(P, k, b.dataset.key); return { note: '' }; }
     return null;
   }
-  /* summaryCard(A): the Summary tab's table of every girder type and line (PR 3a-2; the steel app's type × check table, SB-2 PR 2): a row per
-     type (each check group's worst line, named) and a row per line; the girder weight per line, per type and the bridge total (SB-6).
-     A = PSBBridge.results. Each ratio links to its tab with that type and line (data-tycell). Display only: the engine's ratios. */
-  function summaryCard(A) {
-    const GR = (window.PSBDashUI && window.PSBDashUI.GROUPS) || [], fx = (v, d) => typeof v === 'number' && isFinite(v) ? v.toFixed(d) : '—';
-    const used = GR.filter(gp => A.cells.some(c => c.R && c.R.checks && gp.checks.some(([n]) => c.R.checks.some(q => q.n === n))));
-    const worst = (checks, gp) => checks.filter(q => gp.checks.some(([n]) => n === q.n)).reduce((b, q) => !b || q.r > b.r ? q : b, null);
-    const cell = (q, k, g, tab, sub) => q ? `<td class="${q.pass ? 'ok' : 'ngt'}"><a href="#" data-tycell="${k}|${g}|${tab}" title="${esc(q.n)}${sub ? ' on G' + g : ''}">${fx(q.r, 3)}</a>${sub ? `<br><span class="note">G${g}</span>` : ''}</td>` : '<td>—</td>';
-    const rows = A.types.map(t => {
-      const top = `<tr class="tyTop"><td class="lft"><b>${esc(t.label)}</b> (span ${t.span})</td>${used.map(gp => { const z = Object.values(t.gov).filter(v => gp.checks.some(([n]) => n === v.c.n)).reduce((b, v) => !b || v.c.r > b.c.r ? v : b, null);
-        return z ? cell(z.c, t.k, z.g, gp.tab, true) : '<td>—</td>'; }).join('')}<td>${fx(t.W, 1)}</td></tr>`;
-      const lines = t.cells.length > 1 ? t.cells.map(c => `<tr><td class="lft">&nbsp;&nbsp;on line G${c.g}</td>${used.map(gp => cell(c.R && c.R.checks ? worst(c.R.checks, gp) : null, t.k, c.g, gp.tab, false)).join('')}<td>${fx(c.W, 1)}</td></tr>`).join('') : '';
-      return top + lines;
-    }).join('');
-    return box('tysum', 'Girder types and lines', 'every type on every line; the worst line governs', `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Girder type / line</th>${used.map(gp => `<th>${esc(gp.name)}</th>`).join('')}<th>Weight (kip)</th></tr></thead><tbody>${rows}</tbody>
-      <tfoot><tr><td class="lft"><b>Bridge total (${A.n} girder${A.n === 1 ? '' : 's'})</b></td>${used.map(() => '<td></td>').join('')}<td><b>${fx(A.W, 1)}</b></td></tr></tfoot></table></div>
-      <p class="note">Each ratio: the largest of the group's checks (demand / limit, OK ≤ 1.0, the engine's), the type's row its worst line (named), then a row per line. Click: the tab of the group with that type and line. Weight: the girder's own weight on the line, w<sub>sw</sub> (L + 2 e<sub>end</sub>/12), the weight W of the hold-down check (End zone &amp; hold-down tab); the type's weight is the sum over its lines and the bridge total the sum over every checked line (lines with no type not counted).</p>`);
-  }
-  window.PSBTypesUI = { summaryCard, SCOPED, card, shownCard, scopeBar, outBar, mark, onChange, onClick, scopeOf, keyLabel };
+  /* summaryCard (PR 3a-2) moved to ui/summary.js (PR 3b: the Summary tab's type × check-group table, with the girder × span grid) */
+  window.PSBTypesUI = { SCOPED, card, shownCard, scopeBar, outBar, mark, onChange, onClick, scopeOf, keyLabel };
 })();
