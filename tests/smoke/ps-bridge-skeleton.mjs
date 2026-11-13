@@ -24,6 +24,9 @@
 //      the tab, a section left out (chip) is gone and the choice kept in psb2.ui only; Print report puts the whole report alone on the page
 //      (window.print stubbed, print media emulated: the app hidden, every step shown) and Ctrl+P on the tab prints the report without the
 //      app header and the output panel's notes; an input error blocks it;
+//   3j. 2026-11-13: the owner's material limits: no chip for AASHTO; CTDOT: the "Materials (owner limits)" chip FAILs f′ci 6.8 > 6.5 ksi (1.046),
+//      counted in the column's totals (= every engine check), opens the Owner rules tab at the rule's row (engine values = computeAll),
+//      and the Report's §1 counts and groups the same;
 //   5. 390 x 844 (phone): stacked panels, no splitter, no check summary column, no horizontal page scroll (the Report too); 0 console errors.
 //   node tests/smoke/ps-bridge-skeleton.mjs [--file <index.html>] [--shots <dir>]
 import fs from 'fs';
@@ -219,6 +222,31 @@ await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.opt\
     return { hdr: vis(document.getElementById('hdr')), notes: [...document.querySelectorAll('#out > .alert')].some(vis), doc: vis(document.querySelector('.rp-doc')), bar: vis(document.querySelector('#out .rp-bar')), dash: vis(document.getElementById('sbDashCol')) }; });
   check(!cp.hdr && !cp.notes && cp.doc && !cp.bar && !cp.dash, 'Ctrl+P on the Report tab: the report only ' + JSON.stringify(cp));
   await p.emulateMedia({ media: 'screen' }); }
+// 2026-11-13: the owner's material limits in the check summary ("Materials (owner limits)", counted in the totals; opens the Owner rules
+// table at its row, where the engine's value, limit and ratio are shown) and the Report's §1 the same; CTDOT f′ci 6.8 > 6.5 ksi FAILs, 1.046
+{ check(!(await p.$('#sbDashCol [data-sdgrp="mat"]')), 'AASHTO: no Materials chip');
+  await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.owner', 'CTDOT'); await p.waitForTimeout(300); if (await p.isVisible('#tClose')) await p.click('#tClose');
+  const d = await p.evaluate(() => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
+    const N = new Set(window.PSBDashUI.GROUPS.flatMap(g => g.checks.map(q => q[0]))), cs = R.checks.filter(c => N.has(c.n)), c = R.checks.find(q => q.n === 'Release strength f′ci (CTDOT 5.9.1.2)');
+    const f = (v, d) => typeof v === 'number' && isFinite(v) ? v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—';
+    const ev = [...document.querySelectorAll('#inPanes [data-pane="own"] [data-ev]')], bad = ev.filter(el => { let v = el.dataset.ev.split('.').reduce((o, k) => o == null ? o : o[k], R); return el.textContent !== f(v, +el.dataset.d); }).map(el => el.dataset.ev);
+    const chip = document.querySelector('#sbDashCol [data-sdgrp="mat"]'), F = document.querySelector('#sbDashHead .sdF'), Pp = document.querySelector('#sbDashHead .sdP');
+    return { c, all: R.checks.length, n: cs.length, nF: cs.filter(q => !q.pass).length, chip: chip && chip.className, val: chip && chip.querySelector('.sdVal').textContent, st: chip && chip.querySelector('.sdSt').textContent,
+      F: F ? parseInt(F.textContent, 10) : 0, Pn: Pp ? parseInt(Pp.textContent, 10) : 0, ev: ev.length, bad, row: (document.getElementById('own-rule-fci.range') || {}).textContent || '' }; });
+  check(d.c && d.c.v === 6.8 && d.c.lim === 6.5 && !d.c.pass && /sd-fail/.test(d.chip) && d.val === '1.046' && d.st === 'FAIL', 'Materials chip: CTDOT f′ci FAIL 1.046 ' + JSON.stringify({ chip: d.chip, val: d.val, st: d.st }));
+  check(d.n === d.all && d.F === d.nF && d.F + d.Pn === d.n, `column totals count the material checks: ${d.F} FAIL + ${d.Pn} PASS of ${d.n} (${d.all} engine checks)`);
+  check(d.ev >= 10 && !d.bad.length && /6\.80/.test(d.row) && /6\.50/.test(d.row) && /1\.046/.test(d.row) && /FAIL/.test(d.row), 'Owner rules table: the engine values (data-ev = computeAll) ' + JSON.stringify({ ev: d.ev, bad: d.bad, row: d.row.slice(0, 200) }));
+  await p.click('#inTabs [data-itab="proj"]'); await p.click('#sbDashCol [data-sdgrp="mat"] .sdMain'); await p.waitForTimeout(200);
+  const g = await p.evaluate(() => { const el = document.getElementById('own-rule-fci.range'), b = el && el.getBoundingClientRect(), pn = document.getElementById('inputPanel').getBoundingClientRect();
+    return { vis: !document.querySelector('#inPanes [data-pane="own"]').hidden, row: !!el, inView: !!b && b.top >= pn.top - 2 && b.bottom <= pn.bottom + 2, flash: !!el && el.classList.contains('sdFlash') }; });
+  check(g.vis && g.row && g.inView && g.flash, 'Materials chip opens the Owner rules tab at the f′ci row ' + JSON.stringify(g));
+  await p.click('#sbDashCol [data-sdgrp="mat"] .sdX'); check(/Girder f′c \(CTDOT 5\.9\.1\.2\): 0\.850/.test(await p.textContent('#sbDashCol')) && /Release strength f′ci \(CTDOT 5\.9\.1\.2\): 1\.046/.test(await p.textContent('#sbDashCol')), 'Materials chip lists both CTDOT checks');
+  if (args.shots) await p.screenshot({ path: path.join(args.shots, 'ps-bridge-1400-materials-chip.png') });
+  await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 60000 });
+  const r = await p.evaluate(() => { const s1 = document.querySelector('.rp-doc section[data-rpsec="rp-s1"]'), rows = [...s1.querySelectorAll('table tbody tr')].map(tr => [...tr.children].map(td => td.textContent.trim()));
+    return { lead: s1.textContent, nF: rows.filter(r => r[7] === 'FAIL').length, mat: rows.filter(r => r[0] === 'Materials (owner limits)').map(r => r[1] + ' ' + r[6] + ' ' + r[7]) }; });
+  check(r.nF === d.F && new RegExp(`FAIL: ${d.F} of ${d.all} checks`).test(r.lead) && r.mat.some(t => /f′ci \(CTDOT 5\.9\.1\.2\) 1\.046 FAIL/.test(t)) && r.mat.length === 2 && !/Not in the check summary column/.test(r.lead), 'Report §1 = the column ' + JSON.stringify(r.mat) + ' ' + r.nF);
+  await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.owner', 'AASHTO'); await p.waitForTimeout(300); if (await p.isVisible('#tClose')) await p.click('#tClose'); }
 // an input error blocks every result tab
 await p.click('#inTabs [data-itab="mat"]'); await p.fill('#i_base\\.mat\\.fci', '-1'); await p.press('#i_base\\.mat\\.fci', 'Tab');
 for (const t of ['sec', 'lds', 'an', 'loss', 'str', 'flex', 'shear', 'end', 'camb', 'hand', 'deck', 'rt', 'rpt']) { await p.click(`#tabBar [data-otab="${t}"]`); check(/Results not shown/.test(await p.textContent('#out')) && !(await p.$('#out [data-ev]')) && !(await p.$('#out .rp-doc')), 'blocked ' + t); }
