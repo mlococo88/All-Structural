@@ -104,14 +104,14 @@
     const dg = nm(p.dg), dMin = nm(p.dMinXF), S = nm(p.S), h = nm(p.h), web = !!(rT && rT.value.web), dB = web && Dw ? Dw : dg, xf = (p.dia || {}).on !== 'yes';
     const deep = rT && rT.value.strict ? dB > dMin + 1e-9 : dB >= dMin - 1e-9, frac_ = rDd && dg < rDd.value.D - 1e-9 ? rDd.value.frac : 0.75;
     const DQ = diaDepthReq(p, E), req = DQ ? DQ.gov.req : frac_ * dg;   // SB-22: girder types: the least depth of every bay (SB-19's, the deeper girder), else as before
-    const ch = recCh(req, Infinity), w = recW(req, Infinity), grp = DQ && !deep ? recGroups(p, DQ, ch || w) : null;
+    const ch = recCh(req, Infinity), w = recW(req, Infinity), grp = DQ && !deep ? recGroups(p, DQ, ch || w, diaClr(p.dia)) : null;   // SB-25: the fit with the clearance c
     const skM = rT && rT.value.table ? (E.skews ? Math.max(0, ...E.skews.map(v => Math.abs(+v || 0))) : 0) : 0;
     const tb = rT && rT.value.table && !deep ? chRow(rT, dB) : null;
     const chT = tb && skM < rT.value.skT - 1e-9 ? tb[2] : null;
     const sd = S / dg, kx = rT && rT.value.kHi ? (sd >= rT.value.kHi - 1e-9 ? 'K' : sd <= rT.value.xLo + 1e-9 ? 'X' : null) : null;
     const one = q => q.ch ? `channel diaphragm ${q.ch[0]} (or a rolled W)` : q.w ? `rolled diaphragm ${q.w[0]}` : null, bl = g => g.bays.map(j => `G${j + 1}–G${j + 2}`).join(', ');
     const rec = deep ? (kx ? `${kx === 'K' ? 'K (bottom)' : 'X'}-frame (S/d = ${f2(sd)}, ${E.cite(rT)})` : `${S / h > 1.5 ? 'K (bottom)' : 'X'}-frame (S/h = ${f2(S / h)})`)
-      : grp ? `by bay depth (one section does not fit every bay): ${grp.map(g => `${bl(g)}: ${one(g) || `no channel or W of the list between ${f2(g.req)} and ${f2(g.top)} in`}`).join('; ')}`   // SB-22
+      : grp ? `by bay depth (one section does not fit every bay): ${grp.map(g => `${bl(g)}: ${one(g) || (g.lim < g.req - 1e-9 ? `no section fits (the least depth ${f2(g.req)} in exceeds the fit limit, web depth ${f2(g.top)} − clearance ${f2(g.clr)} = ${f2(g.lim)} in, SB-25)` : `no channel or W of the list between ${f2(g.req)} and ${f2(g.lim)} in`)}`).join('; ')}`   // SB-22; SB-25: the fit limit D_0 − c
       : ch ? `channel diaphragm ${ch[0]} (or a rolled W)` : w ? `rolled diaphragm ${w[0]}` : 'rolled W diaphragm';
     const DG = xf ? null : diaGroups(p), sN = v => `${CF_CH.some(s => s[0] === v) ? 'channel' : 'rolled'} diaphragm ${v === 'custom' ? 'custom W' : v}`;   // SB-24: the shape of each bay depth group, where they differ
     const sel = xf ? ({ X: 'X-frame', Kb: 'K-frame', Kt: 'K-frame' }[p.type] || 'cross-frame') : DG && DG.some(g => g.shape !== DG[0].shape) ? `by bay depth group (SB-24): ${DG.map(g => `${bl(g)}: ${sN(g.shape)}`).join('; ')}` : sN(DG ? DG[0].shape : (p.dia || {}).shape);
@@ -127,16 +127,38 @@
      the d of its shallower girder) and the one section sec (the channel, else the W, for the governing req) is deeper than the web depth D_0
      (at the first support) of the shallower girder of some group, or no section meets the governing req: per group, the section for the
      group's own req (the largest of its bays) no deeper than the group's D_0 (Decision pending engineer review: "fit" = d ≤ D_0 of the
-     shallower girder). Else null (one section, as recommended). */
+     shallower girder). Else null (one section, as recommended).
+     SB-25 (2026-11-13; engineer decision SB-25): the fit takes the clearance c of the diaphragm fit check (CFD, diaClr: crossframes.dia.clr,
+     default 2 in in total, 1 in top and bottom for clips / welds): a section fits a group when d ≤ lim = D_0 − c (was d ≤ D_0); each
+     group's section has req ≤ d ≤ lim. recGroups(p, DQ, sec, clr): g.top = D_0 (as before), g.clr, g.lim. */
   const chArea = s => 2 * s[2] * s[3] + (s[1] - 2 * s[3]) * s[4];
   const recCh = (req, top) => CF_CH.filter(s => s[1] >= req - 1e-9 && s[1] <= top + 1e-9).sort((a, b) => chArea(a) - chArea(b))[0];
   const recW = (req, top) => CF_DIA.find(s => s[1] >= req - 1e-9 && s[1] <= top + 1e-9);
-  function recGroups(p, DQ, sec) {
+  function recGroups(p, DQ, sec, clr) {
+    clr = isFinite(clr) ? clr : DIA_CLR;
     const B = p.xfBay, m = new Map(), r2 = v => +(+v).toFixed(2); if (!B || !Array.isArray(B.bays)) return null;
     B.bays.forEach(q => { if (!q) return; const k = `${q.h}|${r2(q.s.dg)}`, b = DQ.bays.find(x => x.j === q.j); if (!b) return;
       if (!m.has(k)) m.set(k, { bays: [], req: 0, top: Infinity, s: q.s }); const g = m.get(k); g.bays.push(q.j); g.req = Math.max(g.req, b.req); g.top = Math.min(g.top, r2(q.s.D0)); });
-    const G = [...m.values()]; if (G.length < 2 || (sec && G.every(g => sec[1] <= g.top + 1e-9))) return null;
-    return G.map(g => ({ ...g, ch: recCh(g.req, g.top), w: recW(g.req, g.top) }));
+    const G = [...m.values()]; G.forEach(g => { g.clr = clr; g.lim = g.top - clr; }); if (G.length < 2 || (sec && G.every(g => sec[1] <= g.lim + 1e-9))) return null;   // SB-25: d ≤ D_0 − c
+    return G.map(g => ({ ...g, ch: recCh(g.req, g.lim), w: recW(g.req, g.lim) }));
+  }
+  /* SB-25 (2026-11-13; engineer decision SB-25): the diaphragm fit between the girder webs. diaClr(q): the clearance c (in, total) of the
+     diaphragm inputs q, saved field crossframes.dia.clr (optional): absent, blank (null, '') or not a number ≥ 0: DIA_CLR = 2 in (1 in at the
+     top and 1 in at the bottom for the connection-plate clips and the flange-to-web welds). diaFit(p, d): the web depth available to a
+     diaphragm of depth d between the girders of the frame checked: with girder types (p.xfBay) the web depth D_0 at the first support of the
+     shallower girder of each bay of the frame (p.xfBay.bays: every bay, or one bay depth group's in diaGrpChecks), the least (the binding
+     bay, the first on ties); else D_0 of the girder at the first support (p.D0, inputsOf), else the web depth D of the stability bracing
+     inputs (p.sb.D, GirderDetail's inputs); { D0, clr, lim = D_0 − c, ok: d ≤ lim, b (the binding bay, girder types), src }; null with no
+     web depth. */
+  const DIA_CLR = 2;
+  function diaClr(q) { const v = q ? q.clr : undefined, n = v == null || v === '' ? NaN : +v; return isFinite(n) && n >= 0 ? n : DIA_CLR; }
+  function diaFit(p, d) {
+    const clr = diaClr(p.dia), B = p.xfBay, r2 = v => +(+v).toFixed(2); let D0 = null, b = null, src = '';
+    if (B && Array.isArray(B.bays)) { B.bays.forEach(q => { if (!q || !q.s) return; const v = r2(q.s.D0); if (D0 == null || v < D0 - 1e-9) { D0 = v; b = q; } });
+      if (b) src = `bay G${b.j + 1}–G${b.j + 2}, shallower girder G${b.s.line + 1} ${b.s.label}`; }
+    if (D0 == null && nm(p.D0) > 0) { D0 = nm(p.D0); src = 'the girder at the first support'; }
+    if (D0 == null && p.sb && nm(p.sb.D) > 0) { D0 = nm(p.sb.D); src = 'the girder web depth D of the stability bracing inputs'; }
+    if (D0 == null) return null; const lim = D0 - clr; return { D0, clr, lim, d, ok: d <= lim + 1e-6, b, src };
   }
   /* cfTsCP(E): the Transverse stiffeners type with role "Connection plate" (most rows; a tie to Type B); null when none (CF-D13) */
   function cfTsCP(E) {
@@ -439,6 +461,8 @@
     const DQ = diaDepthReq(p, E);   // SBXF2 (SB-19): girder types: every bay against the deeper of its two girders, the governing bay
     if (DQ) { const g = DQ.gov, lim = g.req; it(`Depth (6.7.4.2: at least ${g.f === 0.75 ? '0.75 of the plate girder depth d' : `${g.f} of the depth d, ${E.cite(E.rule('dia.depth'))}`}; every bay against the deeper of its two girders, governing bay G${g.j + 1}–G${g.j + 2}: d of G${g.q.line + 1} ${g.q.label})`, `${f2(d)} in`, `${f2(lim)} in`, d >= lim - 1e-6 ? 'pass' : 'warn', lim / d, lim, d, `cf.${st}.dep`); }
     else if (dgT > 0) it(fD === 0.75 ? 'Depth (6.7.4.2: at least 0.75 of the plate girder depth d)' : `Depth (6.7.4.2 rolled beams, ${E.cite(E.rule('dia.depth'))}: at least ${fD} of the depth d)`, `${f2(d)} in`, `${f2(fD * dgT)} in`, d >= fD * dgT - 1e-6 ? 'pass' : 'warn', fD * dgT / d, fD * dgT, d);
+    const FT = end ? null : diaFit(p, d);   // SB-25 (engineer decision SB-25): the diaphragm fits between the girder webs, d ≤ D_0 − c
+    if (FT) { it(`Fit between the girders (engineer decision SB-25): d ≤ D_0 − c, the web depth of the shallower girder (${FT.src}) less ${f2(FT.clr)} in clearance in total for clips / welds${FT.ok ? '' : `; does not fit: ${nm_} d = ${f2(d)} in > ${f2(FT.D0)} − ${f2(FT.clr)} = ${f2(FT.lim)} in, a shallower section is needed`}`, `${f2(d)} in`, `${f2(FT.lim)} in`, FT.ok ? 'pass' : 'fail', FT.lim > 0 ? d / FT.lim : 99.99, d, FT.lim, `cf.${st}.fit`); tag('sb25'); }   // sb25: new in this app (left out of the GirderDetail parity)
     let bbr = null, bT = null;
     if (SB) { if (!end) { bbr = 6 * Es * Ix / S; bT = 1 / (1 / bbr + (isFinite(SB.bsec) ? 1 / SB.bsec : 0) + 1 / SB.bg); const r = SB.bReq / bT;
       it('Torsional brace system stiffness (6.7.4.2.2)', `β_T,req = ${f0(SB.bReq)} kip-in/rad`, `β_T = ${f0(bT)} (β_br = ${f0(bbr)}, β_sec = ${isFinite(SB.bsec) ? f0(SB.bsec) : '∞'}, β_g = ${f0(SB.bg)}; d_dia ${SB.deep ? '≥' : '<'} 0.8 D = ${f2(0.8 * SB.Dg)} in)`, r <= 1 ? 'pass' : 'fail', r, SB.bReq, bT); }
@@ -469,7 +493,7 @@
     const src = cp.src === 'bs' ? `bearing stiffener Type ${cp.bsT.k}` : cp.src === 'ts' ? `Transverse stiffeners Type ${cp.ts.k}` : 'inputs b_s, t_s', pl = `${frac(cp.bs)} × ${frac(cp.tp)} in, ${src}`;
     it(`Connection plate fit: bolt line ${f2(G.ecc)} in from the web centerline, edge distances to the plate's free edge and to the diaphragm end (6.13.2.6.6)`, `${f2(G.edge)} in to the plate edge, ${f2(de)} in to the diaphragm end${G.gap < cp.tw / 2 + 1e-9 ? ' (diaphragm end reaches the web)' : ''}`, `≥ ${frac(em)} in (plate ${pl})`, okA ? 'pass' : 'fail', mA > 0 ? em / mA : 99.99, em, mA);
     it(`Connection plate fit: end bolts to the plate ends (flange faces less the ${frac(cp.c)} in corner clip; 6.13.2.6.6)`, `${f2(G.vEdge)} in`, `≥ ${frac(em)} in`, G.vEdge >= em - 1e-9 ? 'pass' : 'fail', G.vEdge > 0 ? em / G.vEdge : 99.99, em, G.vEdge);
-    (R.DIA = R.DIA || {})[end ? 'e' : 'i'] = { nm_, chS, d, bf, tf, tw, hw, A, Ix, Sx, Iy, ry, Mn, Fnc: lt.Fnc, lt, CH, AX, MnI: lt.Fnc * Sx, Fy, Vn, C, lam, wk, Fw, Mw, Vw, Mbr: SB ? SB.Mbr : null, bbr, bT, jack: end && q.end === 'yes' && +q.Rj > 0 ? { Rj: +q.Rj, aj: +q.aj } : null, nb, s, db, Ab, thr, ecc: +q.ecc || 0, ys, sy2, ym, V, Vt, M, fmax, Mc, fw, res, phiRs, phiRb, need, avail, cp, G, fD };
+    (R.DIA = R.DIA || {})[end ? 'e' : 'i'] = { nm_, chS, d, bf, tf, tw, hw, A, Ix, Sx, Iy, ry, Mn, Fnc: lt.Fnc, lt, CH, AX, MnI: lt.Fnc * Sx, Fy, Vn, C, lam, wk, Fw, Mw, Vw, Mbr: SB ? SB.Mbr : null, bbr, bT, fit: FT, jack: end && q.end === 'yes' && +q.Rj > 0 ? { Rj: +q.Rj, aj: +q.aj } : null, nb, s, db, Ab, thr, ecc: +q.ecc || 0, ys, sy2, ym, V, Vt, M, fmax, Mc, fw, res, phiRs, phiRb, need, avail, cp, G, fD };
     diaSteps(R, end);
     out.add(c);
   }
@@ -503,9 +527,9 @@
     const each = DQ.bays.map(b => `${bn(b)}: ${b.f} × ${n2(b.d)} (${gl(b.q)}) = ${n2(b.req)} in`).join('; ');
     const sec = (c, x, top) => c ? `channel ${c[0]} (d = ${n2(c[1])} in, the lightest channel of the list with ${top ? `${n2(x)} ≤ d ≤ ${n2(top)} in` : `d ≥ ${n2(x)} in`})` : null;
     const wsec = (c, x, top) => c ? `rolled ${c[0]} (d = ${n2(c[1])} in, the first W of the list with ${top ? `${n2(x)} ≤ d ≤ ${n2(top)} in` : `d ≥ ${n2(x)} in`})` : null;
-    const pick = (ch, wv, x, top) => sec(ch, x, top) || wsec(wv, x, top) || `no channel or W of the list with ${top ? `${n2(x)} ≤ d ≤ ${n2(top)} in` : `d ≥ ${n2(x)} in`}`;
+    const pick = (ch, wv, x, top) => sec(ch, x, top) || wsec(wv, x, top) || (top && top < x - 1e-9 ? `no section fits: d_req = ${n2(x)} in exceeds D_0 − c = ${n2(top)} in` : `no channel or W of the list with ${top ? `${n2(x)} ≤ d ≤ ${n2(top)} in` : `d ≥ ${n2(x)} in`}`);   // SB-25
     const CH = TR.ch ? CF_CH.find(s => s[0] === TR.ch) : null, WW = TR.w ? CF_DIA.find(s => s[0] === TR.w) : null;
-    const grp = TR.grp ? ` One section does not fit every bay (${CH || WW ? `${(CH || WW)[0]}, d = ${n2((CH || WW)[1])} in, is deeper than the web depth D_0 of the shallower girder of a bay group` : 'no section of the list meets the governing bay'}), so per bay depth group (the bays of the Drawings cross-frame details: the same h and the same shallower girder depth d; fit: d of the section ≤ D_0 at the first support of the shallower girder, Decision pending engineer review): ${TR.grp.map(q => `${q.bays.map(j => `G${j + 1}–G${j + 2}`).join(', ')} (shallower ${gl(q.s)}, D_0 = ${n2(q.top)} in; d_req = ${n2(q.req)} in): ${pick(q.ch, q.w, q.req, q.top)}`).join('; ')}.` : '';
+    const grp = TR.grp ? ` One section does not fit every bay (${CH || WW ? `${(CH || WW)[0]}, d = ${n2((CH || WW)[1])} in, does not fit the web depth D_0 − c of the shallower girder of a bay group` : 'no section of the list meets the governing bay'}), so per bay depth group (the bays of the Drawings cross-frame details: the same h and the same shallower girder depth d; fit: d of the section ≤ D_0 − c, D_0 the web depth at the first support of the shallower girder, Decision pending engineer review, and c = ${n2(TR.grp[0].clr)} in the clearance of the diaphragm fit check CFD, engineer decision SB-25): ${TR.grp.map(q => `${q.bays.map(j => `G${j + 1}–G${j + 2}`).join(', ')} (shallower ${gl(q.s)}, D_0 − c = ${n2(q.top)} − ${n2(q.clr)} = ${n2(q.lim)} in; d_req = ${n2(q.req)} in): ${pick(q.ch, q.w, q.req, q.lim)}`).join('; ')}.` : '';   // SB-25
     w.add({ id: 'type', label: `Diaphragm section recommended for the girder depth (CF10): the least depth, every bay against the deeper of the two girders it connects; governing bay ${bn(g)}, ${gl(g.q)}`, sym: 'd_{req}', eq: `${g.f}\\max(d_{a},\\ d_{b})`,
       sub: g.a && g.b ? `${g.f}\\max(${n2(g.a.dg)},\\ ${n2(g.b.dg)})` : `${g.f}(${n2(g.d)})`, value: g.req, unit: 'in', d: 2, ref,
       note: `Assumption (engineer decision SB-22, 2026-11-13, girder types): the channel or rolled W that CF10 recommends meets the least depth of every bay (the diaphragm depth check CFD, engineer decision SB-19: ${g.f} of the deeper of the two girders, d = D_0 + t_top + t_bot at the first support), not only that of the shallower girder of the governing bay. Every bay: ${each}. One section for every bay: ${pick(CH, WW, g.req, null)}.${grp}` });
@@ -569,6 +593,10 @@
       const each = DQ.bays.map(b => `G${b.j + 1}–G${b.j + 2}: ${b.a && b.b ? `max(${n2(b.a.dg)}, ${n2(b.b.dg)})` : n2(b.q.dg)} = ${n2(b.d)} in (${gl(b.q)}), ${b.f} × ${n2(b.d)} = ${n2(b.req)} in`).join('; ');
       w.add({ id: `${id}.dep`, label: `${lab}: least depth, every bay against the deeper of the two girders it connects; governing bay G${g.j + 1}–G${g.j + 2}, ${gl(g.q)}`, sym: 'd_{req}', eq: `${g.f}\\max(d_{a},\\ d_{b})`, sub: g.a && g.b ? `${g.f}\\max(${n2(g.a.dg)},\\ ${n2(g.b.dg)})` : `${g.f}(${n2(g.d)})`, value: g.req, unit: 'in', d: 2, ref: `${ED} Art. 6.7.4.2.1`, ok: D.d >= g.req - 1e-6,
         note: `Assumption (engineer decision SB-19, 2026-11-13, girder types): a ${end ? 'bearing-line' : 'intermediate'} diaphragm between two girders of unequal depth is checked against the deeper of the two (d out-to-out of the flanges at the first support, the girder type assigned to each line), in every bay; the governing bay is the largest requirement. Every bay: ${each}. Provided d = ${n2(D.d)} in (${D.nm_}).` }); } }
+    if (!end && D.fit) { const F = D.fit, B = R.p.xfBay, gl = q => `G${q.line + 1} ${q.label}`;   // SB-25 (engineer decision SB-25): the fit between the girder webs
+      const each = B && Array.isArray(B.bays) ? B.bays.filter(q => q && q.s).map(q => `G${q.j + 1}–G${q.j + 2}: ${gl(q.s)}, D_0 = ${n2(q.s.D0)} in`).join('; ') : '';
+      w.add({ id: `${id}.fit`, label: `${lab}: web depth available between the girders (fit), ${F.src}`, sym: 'D_{0} - c', eq: 'D_{0} - c', sub: `${n2(F.D0)} - ${n2(F.clr)}`, value: F.lim, unit: 'in', d: 2, ok: F.ok, ref: 'Engineer decision SB-25 (2026-11-13)',
+        note: `Engineer decision SB-25 (2026-11-13): the diaphragm must fit between the girder webs, d ≤ D_0 − c, D_0 the web depth at the first support of the shallower girder of the bay${each ? ` (the least of the bays: ${each})` : ''} and c the clearance in total (Framing & bracing tab, default 2 in: 1 in at the top and 1 in at the bottom for the connection-plate clips and the flange-to-web welds). ${D.nm_} d = ${n2(D.d)} in ${F.ok ? '≤' : '>'} ${n2(F.lim)} in: ${F.ok ? 'fits' : 'does not fit (Fail): a shallower section is needed'}.` }); }
     w.add({ id: `${id}.Sx`, label: `${lab} ${D.nm_}: section modulus (nominal dimensions)`, sym: 'S_{x}', eq: '\\frac{2I_{x}}{d}', sub: `\\frac{2(${n0(D.Ix)})}{${n2(D.d)}}`, value: D.Sx, unit: 'in^{3}', d: 1 });
     if (!D.CH) w.add({ id: `${id}.Mn`, label: `${lab}: flexural resistance (6.10.8, L_b = S, C_b = 1.0; F_nc = ${n2(D.Fnc)} ksi)`, sym: '\\phi_{f}M_{n}', eq: 'F_{nc}S_{x}', sub: `${n2(D.Fnc)}(${n2(D.Sx)})`, value: D.Mn, unit: 'kip-in', d: 0, ref: `${ED} Arts. 6.10.8.2.2, 6.10.8.2.3` });
     else { const H = D.CH, E_ = '29{,}000', Fy = D.Fy;   // SBDX: a channel per 6.12.2.2.5
@@ -752,6 +780,7 @@
     const BD = opt.bays === false ? null : bayDepths(P), TG = BD && !opt.bridge ? typeGov(P, BD, (P.girders || [])[opt.gi || 0] ? opt.gi || 0 : 0) : null, GV = TG ? TG.gov : BD ? BD.gov : null;   // SBXF2 (SB-18): the type's own shallowest bay (opt.bridge: the bridge's, pointLoads)
     const gb = GV ? GV.s : null, Dh = gb ? gb.D : D, hAuto = c.h === '' || c.h == null, hOf = d => Math.round(Math.max(d - 8, d * 0.75));   // SBXF
     p.S = r2(Math.max(...bays) * 12); p.dg = r2(gb ? gb.dg : s0.D + s0.topT + s0.botT); src.S = 'the largest girder spacing'; src.dg = 'D + t_top + t_bot at the first support';
+    p.D0 = r2(s0.D); src.D0 = 'the web depth at the first support (the diaphragm fit, SB-25)';   // SB-25
     p.h = hAuto ? hOf(Dh) : +c.h; src.h = hAuto ? 'round(max(D − 8, 0.75D))' : 'entered';
     if (gb) { const g0 = GV, dOwn = r2(s0.D + s0.topT + s0.botT), bn = `G${g0.j + 1}–G${g0.j + 2}`, XW = extDepth(P, nb), dW = XW ? r2(XW.q.dg) : dOwn;   // SBXF2 (SB-20): the wind on the exterior girder depth
       p.dW = dW; src.dW = XW ? `the exterior girder: the deeper of the types on G1 and G${nb}, D + t_top + t_bot at the first support` : 'the reported girder (no girder type on G1 or G_Nb): D + t_top + t_bot at the first support';
@@ -796,6 +825,6 @@
     return { line, X, pts: G[line], tot: G[line].reduce((a, q) => a + q.P, 0) };
   }
 
-  window.SBDCrossframes = { ES, DEF, GD_GR, BOLT, FUB, PHI, ANGLES, CF_MEM, CF_CH, CF_DIA, angleProps, cfDiaSec, cfDiaOn, cfDiaGap, cfDiaEnd, cfTypeRec, cfTsCP, cfCPsize, cfBsCP, cfCP, cfDiaFit, bayGroups, grpOf, grpKey, grpShape, diaGroups,
+  window.SBDCrossframes = { ES, DEF, GD_GR, BOLT, FUB, PHI, ANGLES, CF_MEM, CF_CH, CF_DIA, angleProps, cfDiaSec, cfDiaOn, cfDiaGap, cfDiaEnd, cfTypeRec, cfTsCP, cfCPsize, cfBsCP, cfCP, cfDiaFit, bayGroups, grpOf, grpKey, grpShape, diaGroups, DIA_CLR, diaClr, diaFit,
     env0, compute, checks, userModes, xfW, xfModel, xfPts, defaults, inputsOf, envOf, pointLoads, girderDepth, bayDepths, typeGov, extDepth, diaDepthReq };
 })();

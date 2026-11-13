@@ -83,9 +83,10 @@ function compareCF(P, where) {
   assert.deepEqual(J(C.map(c => c.id)), J(g.C.map(c => c.id)), `${where} check list`);
   // SBDX (2026-11-10, engineer approval): CFD / CFE have items new in this app (sbdx: axial, slenderness, axial + flexure) and a channel's M_n
   // per 6.12.2.2.5 (GirderDetail: 6.10.8): those are left out of the parity here (tests/engine/sb-diaphragm.test.mjs checks them by hand);
+  // SB-25 (2026-11-13): the diaphragm fit item (sb25, CFD) is new in this app too and is left out the same way (tests/engine/sb-dia-fit.test.mjs).
   // every other item equals GirderDetail's. The check's status and governing item include the new items, so they are compared for the rest only.
   const dia = id => /^CF[DE]$/.test(id), chOf = id => !!CF.cfDiaSec(id === 'CFE' ? CF.cfDiaEnd(P.cf.dia || {}) : P.cf.dia || {}).chS;
-  g.C.forEach((c, i) => { const m0 = C[i], m = dia(c.id) ? { ...m0, items: m0.items.filter(it => !it.sbdx) } : m0, skipMn = dia(c.id) && chOf(c.id);
+  g.C.forEach((c, i) => { const m0 = C[i], m = dia(c.id) ? { ...m0, items: m0.items.filter(it => !it.sbdx && !it.sb25) } : m0, skipMn = dia(c.id) && chOf(c.id);
     assert.equal(m.items.length, c.items.length, `${where} ${c.id} items`);
     if (!dia(c.id)) { assert.equal(m.status, c.status, `${where} ${c.id} status`); assert.equal(m.gov, c.gov, `${where} ${c.id} governing item`); }
     assert.equal(!!m.naWhy, !!c.naWhy, `${where} ${c.id} naWhy`);

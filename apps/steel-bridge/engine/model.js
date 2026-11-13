@@ -73,6 +73,10 @@
                   crossframes.dia.grp: { '<bays of a bay depth group, 0-based, comma-separated, e.g. "0,4">': shape } (girder types whose bays
                   form two or more depth groups: the diaphragm shape of each group; a group without an entry, or an entry that is not a shape
                   of the lists, takes dia.shape; an entry of a grouping that no longer exists is kept in the file, unused; engine/crossframes.js grpShape)
+                  -- added 2026-11-13 (SB-25, engineer decision SB-25; optional: absent = 2 in) --
+                  crossframes.dia.clr: the clearance c (in, total) of the diaphragm fit check CFD (d ≤ D_0 − c, D_0 the web depth of the
+                  shallower girder of the bay at the first support) and of CF10's per-group fit rule; absent, blank (null, NaN) or not a number
+                  ≥ 0: 2 in (1 in top and bottom for clips / welds; engine/crossframes.js diaClr). Nothing is rewritten on load.
      -- added 2026-10-29 (analysis PR), optional, read by engine/analysis.js (absent = its defaults) --
      analysis:  { im, imf (%), crack: 'none' | '15' | 'dl', deflLimit (L/…), seq: 'on' | 'off', seqMod: 'n' | '3n', seqCustom (text),
                   steelAllowPct (%; used when xs.allow is not available), haunchInStiffness (true | false; absent = the owner rule) }
@@ -516,6 +520,7 @@
       if (C.h !== '' && C.h != null && !(isNum(C.h) && C.h > 0)) E(`${cp}.h`, 'Chord work-point depth must be positive (or blank).');
       ['V', 'Kz', 'G', 'Cd'].forEach(k => nn((C.wind || {})[k], `${cp}.wind.${k}`, `Wind ${k}`));
       if (C.sb && C.sb.Mu !== '' && C.sb.Mu != null && !isNum(C.sb.Mu)) E(`${cp}.sb.Mu`, 'Deck-placement M_u must be a number (or blank: from the analysis).');
+      { const v = (C.dia || {}).clr; if (v != null && v !== '' && !Number.isNaN(v) && !(isNum(+v) && +v >= 0)) E(`${cp}.dia.clr`, 'Diaphragm fit clearance must be a number of at least 0 in (or blank: 2 in).'); }   // SB-25
       ['StrI', 'Con'].forEach(k => { const v = (C.userMode || {})[k]; if (v != null && !['add', 'replace'].includes(v)) E(`${cp}.userMode.${k}`, 'Entered member forces: add to or replace the computed forces.'); }); }
     // added 2026-10-29 (field splices PR): the optional field splice inputs
     if (p.splices != null) { const Q = p.splices || {}, B = Q.bolts || {};

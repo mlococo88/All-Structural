@@ -23,7 +23,8 @@ const ckSub = (P, gi) => { const B = W.SBDReportData.compute(P, gi, { want: { fr
 
 test('CF10: the recommendation and the bracing in use, in the Report Item cell and linked to the step that works them', () => {
   // three types (Exterior 30, Mid 36, Core 42): a diaphragm is recommended per bay depth group (SB-22), worked in cf.type
-  const { sub, B } = ckSub(three(), 0), row = sub.items.find(i => i.type === 'table').rows.find(r => /^CF10 /.test(r[0]));
+  const T3 = three(); T3.crossframes.dia.clr = 0;   // SB-25 (2026-11-13): fit clearance c = 0, the CF10 per-group sections of #1490 (the default c = 2 in: tests/engine/sb-dia-fit.test.mjs)
+  const { sub, B } = ckSub(T3, 0), row = sub.items.find(i => i.type === 'table').rows.find(r => /^CF10 /.test(r[0]));
   const it = B.frm.C.find(c => c.id === 'CF10').items[0];
   assert.equal(row[1], `Intermediate bracing. Recommended: ${it.cells[2]}. In use: ${it.cells[3]}. [[cf.type]]`);
   assert.match(row[1], /G1–G2, G5–G6: rolled diaphragm W30x99; G2–G3, G4–G5: rolled diaphragm W36x135; G3–G4: rolled diaphragm W36x135\. In use: X-frame\./);
