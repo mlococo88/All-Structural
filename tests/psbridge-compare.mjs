@@ -24,9 +24,19 @@
 //   2026-11-13 (display): the group renamed "Owner limits" and the RIDOT girder age at continuity (RIDOT 5.6.3.3, continuity on) in it: its
 //   Owner rules row (t_d, the minimum, the ratio) compared as above, the chip shown when the design has any of the owner-limit checks, and
 //   the Report's §1 row of each in group "Owner limits".
-//   node tests/psbridge-compare.mjs [--tabs loss,str,flex,shear,end,camb,hand,deck,rt,rpt,own] [--case <part of a name>] [--old <file>] [--new <index.html>] [--verbose]
+//   node tests/psbridge-compare.mjs [--import] [--tabs loss,str,flex,shear,end,camb,hand,deck,rt,rpt,own] [--case <part of a name>] [--old <file>] [--new <index.html>] [--verbose]
 //     --control: changes one shown value by 1e-9 (relative) and one step value before comparing (and, with the Report, one Report value, one
 //     Report step value and one number given to the old report's comparison): the run must report each (the harness sees a difference)
+//   PR 2f (--import): each design reaches the new app through the real import path ("From the old app", engine/legacy.js, ui/legacy.js) instead
+//     of a written psb2 project: the old app's inputs of the design (PSBDesign.inputs of the case) are put where the old app keeps them, in turn
+//     (design i mod 4): 0 its design on screen psbeam.inputs.v1 with its bridge model psbeam.bridge.v1 (PBD.migrate + one more stored cell),
+//     1 a shared Bridge Suite project (bridgeSuite.v1.projects slices psbeam + psbeamBridge), 2 the older list psbeam.projects.v1, 3 an old
+//     Export JSON file (Import JSON, the file picker); the Project tab's list is read, the design chosen and imported (the confirm accepted) and
+//     the import summary must say "Results: the same as the old app". The old app then opens with those same old inputs and every shown value
+//     and step is compared as above. Every old key put there must be byte-identical after the import, and the imported project's engine
+//     inputs must equal the old inputs (but the title block's girder label and the PS-10 box of this app).
+//     --control with --import also puts one changed input (f′c + 0.1 ksi) in the first design's old data while the old app computes the
+//     unchanged inputs: the run must report differences.
 //   PR 2d-3 (PS-10): the new page's results are computeAll + engine/holddown.js (PSBHoldDown.compute). The values of that addition (paths
 //   ps10.* and its check) have no counterpart in the old app: they are compared with hand values worked here from the inputs and the old
 //   app's own f_pbt, A_b and w_sw (F_hd = 2 n_h f_pbt A_b sin α, α = atan((y_end − y_mid)/(12 frac L)), W = w_sw (L + 2 e_end/12), limit f W),
@@ -46,6 +56,9 @@ const TABS = { loss: 'losses', str: 'stresses', flex: 'flexure', shear: 'shear',
 const tabs = (args.tabs ? String(args.tabs).split(',') : Object.keys(TABS)).filter(t => TABS[t]);
 const REPORT = !args.tabs || String(args.tabs).split(',').includes('rpt');   // PR 2e
 const OWN = !args.tabs || String(args.tabs).split(',').includes('own');   // 2026-11-13: the Owner rules table and the check summary column
+const IMPORT = !!args.import, IMP_WAYS = ['autosave', 'shared', 'older', 'file'];   // PR 2f
+const TMP = IMPORT ? fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'psb2f-b-')) : '';
+let nImp = 0, nImpKeys = 0; const impNotes = [];
 const SEED = { 'psbeam.inputs.v1': '{"girder":"PCI BT-72","L":118}', 'psbeam.ui.v1': '{"tab":"losses"}' };
 let fails = 0, errors = 0;
 const log = s => console.log(s);
@@ -54,6 +67,9 @@ const log = s => console.log(s);
 const caseSrc = fs.readFileSync(path.join(REPO, 'tests/engine/psbridge-tab-cases.mjs'), 'utf8').replace(/^export const TAB_CASES = /m, 'window.__TAB_CASES = ');
 const names = Object.keys(TAB_CASES(() => ({ base: { opt: {}, loads: {}, cont: {}, harp: {}, mat: {}, handling: {}, deck: {} }, spans: {}, xs: {} }))).filter(n => !args.case || n.includes(args.case));
 
+// --import: the harness puts each design's psbeam.inputs.v1 itself (checked per design), so the page is not seeded with one (its init script
+// would put the seed back on a reload before the import)
+if (IMPORT) delete SEED['psbeam.inputs.v1'];
 const nw = await openPage(NEW, { vw: 1400, vh: 1000, ls: SEED });
 await nw.p.waitForSelector('#tabBar [data-otab]');
 const old = await openPage(OLD, { vw: 1400, vh: 1000, timeout: 120000 });
@@ -61,9 +77,37 @@ await old.p.waitForFunction(() => typeof computeAll === 'function', null, { time
 let total = 0, totalSteps = 0, total10 = 0, totalRpt = 0, totalRptSteps = 0, totalOldRpt = 0;
 for (const name of names) {
   // 1. the new app on the project
-  const P = await nw.p.evaluate(([src, nm]) => { eval(src); const P = window.__TAB_CASES(() => window.PSBModel.defaultProject())[nm]; localStorage.setItem('psb2.project.current', window.PSBModel.exportJSON(P)); return P; }, [caseSrc, name]);
-  await nw.p.reload(); await nw.p.waitForSelector('#tabBar [data-otab]'); await nw.p.waitForTimeout(300);
-  const inp = await nw.p.evaluate(() => window.PSBDesign.inputs(window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project));
+  let inp, P;
+  if (!IMPORT) {
+    P = await nw.p.evaluate(([src, nm]) => { eval(src); const P = window.__TAB_CASES(() => window.PSBModel.defaultProject())[nm]; localStorage.setItem('psb2.project.current', window.PSBModel.exportJSON(P)); return P; }, [caseSrc, name]);
+    await nw.p.reload(); await nw.p.waitForSelector('#tabBar [data-otab]'); await nw.p.waitForTimeout(300);
+    inp = await nw.p.evaluate(() => window.PSBDesign.inputs(window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project));
+  } else {
+    // PR 2f: the old app's inputs of the design, put where the old app keeps them, imported through the Project tab
+    const how = IMP_WAYS[nImp++ % 4], ctl = args.control && nImp === 1;
+    const seed = await nw.p.evaluate(([src, nm, how, ctl]) => { eval(src); const P = window.__TAB_CASES(() => window.PSBModel.defaultProject())[nm], inp = window.PSBDesign.inputs(P);
+      const saved = JSON.parse(JSON.stringify(inp)); if (ctl) saved.mat.fc = +saved.mat.fc + 0.1;
+      const br = window.PBD.migrate(saved, 'pl'); br.projId = how === 'shared' ? 'bp_h' : null; br.designs['G1/S1x'] = saved;   // + one more stored design
+      const o = {};
+      for (let i = localStorage.length - 1; i >= 0; i--) { const k = localStorage.key(i); if (/^(psbeam\.(inputs|bridge|projects)\.v1|bridgeSuite\.)/.test(k)) localStorage.removeItem(k); }
+      if (how === 'autosave') { o['psbeam.inputs.v1'] = JSON.stringify(saved); o['psbeam.bridge.v1'] = JSON.stringify(br); }
+      if (how === 'shared') { o['bridgeSuite.v1.projects'] = JSON.stringify({ bp_h: { name: nm.slice(0, 40), savedAt: '2026-11-13T12:00:00Z', slices: { psbeam: saved, psbeamBridge: br } } }); o['bridgeSuite.v1.currentProjectId'] = 'bp_h'; }
+      if (how === 'older') o['psbeam.projects.v1'] = JSON.stringify({ old1: { name: nm.slice(0, 40), savedAt: '2026-09-01T00:00:00Z', inp: saved } });
+      Object.entries(o).forEach(([k, v]) => localStorage.setItem(k, v));
+      return { o, inp, file: how === 'file' ? JSON.stringify(saved, null, 1) : null };   // the old Export JSON: JSON.stringify(inp, null, 1)
+    }, [caseSrc, name, how, ctl]);
+    inp = seed.inp;
+    await nw.p.reload(); await nw.p.waitForSelector('#tabBar [data-otab]'); await nw.p.waitForTimeout(200);
+    await nw.p.click('#inTabs [data-itab="proj"]');
+    if (how === 'file') { const f = path.join(TMP, 'old-export.json'); fs.writeFileSync(f, seed.file); await nw.p.click('[data-lg="file"]').catch(() => {}); await nw.p.setInputFiles('#fImport', f); }
+    else { await nw.p.click('[data-lg="scan"]'); const id = { autosave: 'autosave', shared: 'reg:bp_h', older: 'lib:old1' }[how]; await nw.p.check(`input[name="lgPick"][value="${id}"]`); await nw.p.click('[data-lg="imp"]'); }
+    await nw.p.waitForSelector('#lgSum', { timeout: 120000 }); await nw.p.waitForTimeout(200);
+    const imp = await nw.p.evaluate(o => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, i = window.PSBDesign.inputs(P), changed = Object.keys(o).filter(k => localStorage.getItem(k) !== o[k]);
+      return { res: (document.getElementById('lgRes') || {}).textContent || '', i, changed, src: P.legacy && P.legacy.source.key }; }, seed.o);
+    const strip = x => { const y = JSON.parse(JSON.stringify(x)); delete y.proj; if (y.opt) { delete y.opt.hdCheck; delete y.opt.hdFrac; } return y; };
+    impNotes.push({ name, how, ok: /Results: the same as the old app/.test(imp.res), res: imp.res.slice(0, 160), sameInp: JSON.stringify(strip(imp.i)) === JSON.stringify(strip(inp)), changed: imp.changed, ctl });
+    nImpKeys += Object.keys(seed.o).length + (how === 'file' ? 1 : 0);
+  }
   const shown = [], steps = []; let ps10 = null, k10 = -1, colOwn = null;
   for (const t of tabs) {
     await nw.p.click(`#tabBar [data-otab="${t}"]`); await nw.p.waitForTimeout(250);
@@ -133,6 +177,7 @@ for (const name of names) {
   if (o.err) { log(`ERROR ${name}: the old app's engine: ${o.err}`); errors++; continue; }
   const same = JSON.stringify(o.loaded) === JSON.stringify(inp);
   // 3. compare
+  const imp = IMPORT ? impNotes[impNotes.length - 1] : null;
   if (args.control && shown.length && steps.length) { shown[0].v *= 1 + 1e-9; steps[0].v = steps[0].v * (1 + 1e-9); }
   if (args.control && rpt) { const a = shown.find(q => /^rpt:/.test(q.tab) && !isPS10(q.path)), b = steps.find(q => /^rpt:/.test(q.tab) && !isPS10(q.path)); if (a) a.v *= 1 + 1e-9; if (b) b.v *= 1 + 1e-9; rpt.sum.kq.fpe += 0.01; }
   const fx = (v, d) => typeof v === 'number' && isFinite(v) ? v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }).replace(/^-(0(\.0*)?)$/, '$1') : '—';
@@ -183,18 +228,21 @@ for (const name of names) {
   }
   total += shown.length; totalSteps += steps.length;
   const per = tabs.map(t => `${t} ${shown.filter(q => q.tab === t).length} values + ${steps.filter(q => q.tab === t).length} steps`).join(', ') + (colOwn ? `, own ${colOwn.ev.length} values (column ${colOwn.F} FAIL + ${colOwn.Pn} PASS)` : '') + (rpt ? `, rpt ${rpt.ev.length} values + ${rpt.st.length} steps (${rpt.nSteps} shown), old report ${nOld} numbers` : '');
+  if (imp) { if (!imp.ok) bad.push(`import (${imp.how}): the summary does not say the results are the same: "${imp.res}"`); if (!imp.sameInp) bad.push(`import (${imp.how}): the imported project's engine inputs are not the old inputs`);
+    if (imp.changed.length) bad.push(`import (${imp.how}): old keys changed: ${imp.changed.join(', ')}`); }
   if (bad.length) { fails++; log(`DIFF ${name}: ${bad.length} of ${shown.length + steps.length}`); bad.slice(0, 25).forEach(b => log('    ' + b)); }
-  else log(`same ${name}: ${per}${same ? '' : ' (note: the old app changed the stored inputs on load; compared on the new app\'s inputs)'}`);
+  else log(`same ${name}${imp ? ` [imported: ${imp.how}]` : ''}: ${per}${same ? '' : ' (note: the old app changed the stored inputs on load; compared on the new app\'s inputs)'}`);
   if (args.verbose && !same) log('    inputs the old app stored: ' + JSON.stringify(o.loaded).slice(0, 400));
   void P;
 }
 // 4. the old app's keys in the new app's storage
 const ls = await nw.p.evaluate(() => { const o = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); o[k] = localStorage.getItem(k); } return o; });
-Object.entries(SEED).forEach(([k, v]) => { if (ls[k] !== v) { fails++; log(`DIFF storage: ${k} changed by the new app`); } });
-const other = Object.keys(ls).filter(k => !k.startsWith('psb2.') && !(k in SEED));
+Object.entries(SEED).forEach(([k, v]) => { if (ls[k] !== v) { fails++; log(`DIFF storage: ${k} changed by the new app`); } });   // --import: the harness itself puts each design's old data there (checked per design)
+const other = Object.keys(ls).filter(k => !k.startsWith('psb2.') && !(k in SEED) && !(IMPORT && /^(psbeam\.(inputs|bridge|projects)\.v1|bridgeSuite\.v1\.(projects|currentProjectId))$/.test(k)));
 if (other.length) { fails++; log('DIFF storage: keys other than psb2.* written: ' + other.join(', ')); }
 const cerr = nw.errs.concat(old.errs.filter(e => !/Failed to load resource|deoptimised the styling/.test(e)));
 if (cerr.length) { errors++; log('ERROR console: ' + cerr.slice(0, 5).join(' | ')); }
 await nw.b.close(); await old.b.close();
-log(`${names.length} designs, tabs ${tabs.join(', ')}${REPORT ? ', rpt' : ''}${OWN ? ', own (the Owner rules table and the check summary column)' : ''}: ${total} shown values and ${totalSteps} step values compared (of them ${total10} PS-10 values with the hand values, the rest with the old app; the Report ${totalRpt} values and ${totalRptSteps} step values, and ${totalOldRpt} numbers of the old app's own report); ${fails} with differences, ${errors} errors`);
+if (IMPORT) fs.rmSync(TMP, { recursive: true, force: true });
+log(`${names.length} designs${IMPORT ? ` imported through "From the old app" (${IMP_WAYS.map(w => `${w} ${impNotes.filter(q => q.how === w).length}`).join(', ')}; ${nImpKeys} old keys / files, each unchanged; ${impNotes.filter(q => q.ok).length} summaries "the same")` : ''}, tabs ${tabs.join(', ')}${REPORT ? ', rpt' : ''}${OWN ? ', own (the Owner rules table and the check summary column)' : ''}: ${total} shown values and ${totalSteps} step values compared (of them ${total10} PS-10 values with the hand values, the rest with the old app; the Report ${totalRpt} values and ${totalRptSteps} step values, and ${totalOldRpt} numbers of the old app's own report); ${fails} with differences, ${errors} errors`);
 process.exit(errors ? 2 : fails ? 1 : 0);

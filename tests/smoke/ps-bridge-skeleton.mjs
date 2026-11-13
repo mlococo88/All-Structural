@@ -33,6 +33,9 @@
 //   3k. 2026-11-13: the Report's graphics: each result section holds its tab's graphics (the tab's own drawing), numbered Figure n.m,
 //      static, the handling stage named, labels >= 10 px on the printed page; Print report prints every figure; on the phone the figures are
 //      drawn at the screen width and print at 700 px;
+//   3m. PR 2f: "From the old app": the old app's design on screen (with its bridge model), a shared project and the older list are listed; the
+//      chosen one imported (asked first), the summary (results the same, the other stored design kept), the project saved, a result tab's values
+//      = the old inputs computed; an old Export JSON through Import JSON; a MIDAS demands file refused; every old key byte-identical; 390 px;
 //   5. 390 x 844 (phone): stacked panels, no splitter, no check summary column, no horizontal page scroll (the Report too); 0 console errors.
 //   node tests/smoke/ps-bridge-skeleton.mjs [--file <index.html>] [--shots <dir>]
 import fs from 'fs';
@@ -314,6 +317,59 @@ await p.reload(); await ready(p);
   if (args.shots) { await p.click('#inTabs [data-itab="own"]'); await p.waitForTimeout(150); await p.evaluate(() => document.getElementById('own-rule-cont.age').scrollIntoView({ block: 'center' })); await p.screenshot({ path: path.join(args.shots, 'ps-bridge-1400-owner-limits-age.png') }); }
   check(!o.errs.length, 'console errors (RIDOT continuity age): ' + o.errs.join(' | ')); }
 await o.b.close();
+// 3m. PR 2f: "From the old app" (engine/legacy.js, ui/legacy.js): the old app's saved designs listed and imported, read only
+{ // old data as the old app keeps it: the design on screen (an AASHTO Type IV exterior girder, 85 ft, 4 girders at 8.5 ft, skew 10°) with its
+  // bridge model (one more stored design), a shared Bridge Suite project and the older project list
+  const OLD = JSON.parse(JSON.stringify(await (async () => { const q = await openPage(FILE, { vw: 1400, vh: 1000 }); await ready(q.p);
+    const d = await q.p.evaluate(() => { const i = JSON.parse(JSON.stringify(mergeInputs(null))); i.girder = 'AASHTO Type IV'; i.L = 85; i.S = 8.5; i.nGirders = 4; i.loads.pos = 'exterior'; i.loads.skew = 10;
+      i.proj = { name: 'Old bridge A', girderId: 'G1 (Exterior)', by: 'ABC', date: '2026-10-01', job: '1234' }; i.harp.yEnd = 44; return i; }); await q.b.close(); return d; })()));
+  const br = { v: 1, mode: 'pl', title: {}, spans: [85], nGirders: 4, S: 8.5, sel: { g: 1, s: 1 }, designs: { 'G1/S1': OLD, 'G2/S1': Object.assign({}, OLD, { loads: Object.assign({}, OLD.loads, { pos: 'interior' }) }) }, projId: null };
+  const shared = Object.assign({}, OLD, { L: 95, proj: Object.assign({}, OLD.proj, { name: 'Shared C' }) });
+  const OLDLS = { 'psbeam.inputs.v1': JSON.stringify(OLD), 'psbeam.bridge.v1': JSON.stringify(br), 'psbeam.ui.v1': '{"tab":"losses"}',
+    'bridgeSuite.v1.projects': JSON.stringify({ bp_9: { name: 'Shared C', savedAt: '2026-11-02T12:00:00Z', slices: { psbeam: shared, mct: { x: 1 } } } }),
+    'psbeam.projects.v1': JSON.stringify({ q1: { name: 'Older D', savedAt: '2026-09-01T00:00:00Z', inp: Object.assign({}, OLD, { L: 70 }) } }) };
+  o = await openPage(FILE, { vw: 1400, vh: 1000, ls: OLDLS }); p = o.p; await ready(p);
+  await p.click('#inTabs [data-itab="proj"]');
+  check(await p.isVisible('#lgCard') && !(await p.$('#lgSum')), 'Project tab: the "From the old app" card, no import record yet');
+  await p.click('[data-lg="scan"]');
+  const rows = await p.$$eval('#lgList tbody tr', t => t.map(r => r.textContent));
+  check(rows.length === 3 && /Design on screen/.test(rows[0]) && /bridge model 1 span × 4 girders, 2 designs stored/.test(rows[0]) && /Shared Bridge Suite project/.test(rows[1]) && /with mct/.test(rows[1]) && /Older project list/.test(rows[2]), 'the old designs listed: ' + rows.map(r => r.slice(0, 60)).join(' | '));
+  check(await p.$eval('[data-lg="imp"]', b => b.disabled), 'Import disabled until a design is chosen');
+  await p.check('input[name="lgPick"][value="autosave"]'); await p.click('[data-lg="imp"]'); await p.waitForSelector('#lgSum', { timeout: 60000 });
+  check(o.dialogs.some(d => /Import "Old bridge A" from the old app\? It replaces the open project/.test(d)), 'asked first: ' + o.dialogs.join(' | '));
+  const sm = await p.textContent('#lgSum'), P2 = await p.evaluate(() => JSON.parse(localStorage.getItem('psb2.project.current')));
+  check(/Results: the same as the old app/.test(sm) && /psbeam\.inputs\.v1 \+ psbeam\.bridge\.v1/.test(sm) && /1 other girder × span design \(G2\/S1\) kept in the project, NOT designed yet/.test(sm) && /Not imported/.test(sm), 'import summary: ' + sm.slice(0, 300));
+  check(P2.project.name === 'Old bridge A' && P2.project.number === '1234' && P2.spans.lengths.join() === '85' && P2.xs.nb === 4 && P2.xs.bays.join() === '8.5,8.5,8.5' && P2.xs.skews.join() === '10,10' && P2.design.g === 1 && P2.base.girder === 'AASHTO Type IV' && P2.legacy && P2.legacy.bridge.designs['G2/S1'], 'imported project saved ' + JSON.stringify({ n: P2.project.name, s: P2.spans, xs: P2.xs, d: P2.design }));
+  // the imported design's results: the old inputs computed = the shown values (computeAll of the page on the old inputs)
+  await p.click('#tabBar [data-otab="flex"]'); await p.waitForTimeout(400);
+  const fv = await p.evaluate(OLD => { const R = computeAll(JSON.parse(JSON.stringify(OLD))), fx = window.PSBOutKit.fx, at = (o, q) => q.split('.').reduce((a, k) => a == null ? a : a[k], o);
+    const ev = [...document.querySelectorAll('#out [data-ev]')].filter(e => !/^ps10\./.test(e.dataset.ev)); return { n: ev.length, bad: ev.filter(e => e.textContent !== fx(e.dataset.div ? at(R, e.dataset.ev) / +e.dataset.div : at(R, e.dataset.ev), +e.dataset.d)).map(e => e.dataset.ev).slice(0, 5) }; }, OLD);
+  check(fv.n > 20 && !fv.bad.length, 'Flexure tab of the imported design = the old inputs computed ' + JSON.stringify(fv));
+  if (args.shots) { await p.click('#inTabs [data-itab="proj"]'); await p.evaluate(() => document.getElementById('lgCard').scrollIntoView({ block: 'start' })); await p.screenshot({ path: path.join(args.shots, 'ps-bridge-2f-import-1400.png') }); }
+  // an old Export JSON file through Import JSON; a MIDAS demands file refused
+  const dir = fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'psb2f-')), f1 = path.join(dir, 'Old_bridge_E.json'), f2 = path.join(dir, 'midas.json');
+  fs.writeFileSync(f1, JSON.stringify(Object.assign({}, OLD, { L: 77, proj: Object.assign({}, OLD.proj, { name: 'Old bridge E' }) }), null, 1));
+  fs.writeFileSync(f2, JSON.stringify({ _schema: 'psbeam-external-demands', stations: [{ x: 0 }] }));
+  await p.setInputFiles('#fImport', f1); await p.waitForFunction(() => /Old_bridge_E\.json/.test((document.getElementById('lgSum') || {}).textContent || ''), null, { timeout: 60000 });
+  check(/Results: the same as the old app/.test(await p.textContent('#lgSum')) && (await p.evaluate(() => JSON.parse(localStorage.getItem('psb2.project.current')).spans.lengths.join())) === '77', 'old Export JSON imported by Import JSON');
+  await p.setInputFiles('#fImport', f2); await p.waitForTimeout(300);
+  check(o.dialogs.some(d => /MIDAS demands file of the old app, not a design/.test(d)) && (await p.evaluate(() => JSON.parse(localStorage.getItem('psb2.project.current')).spans.lengths.join())) === '77', 'MIDAS demands file refused, project unchanged');
+  fs.rmSync(dir, { recursive: true, force: true });
+  ls = await lsSnap(p);
+  Object.entries(OLDLS).forEach(([k, v]) => check(ls[k] === v, 'old key untouched after import: ' + k));
+  check(Object.keys(ls).every(k => k.startsWith('psb2.') || k in OLDLS || k === '__seeded'), 'keys written: psb2.* only ' + Object.keys(ls).join(', '));
+  check(!o.errs.length, 'console errors (From the old app): ' + o.errs.join(' | '));
+  await o.b.close();
+  // 390 px: the list and the summary without sideways scroll
+  o = await openPage(FILE, { vw: 390, vh: 844, ls: OLDLS }); p = o.p; await ready(p);
+  await p.click('#inTabs [data-itab="proj"]'); await p.click('[data-lg="scan"]');
+  check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth) <= 0, 'phone: the old designs list without sideways scroll');
+  await p.check('input[name="lgPick"][value="reg:bp_9"]'); await p.click('[data-lg="imp"]'); await p.waitForSelector('#lgSum', { timeout: 60000 });
+  check(await p.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth) <= 0 && /Shared C/.test(await p.inputValue('#i_project\\.name')), 'phone: the shared project imported, summary without sideways scroll');
+  if (args.shots) { await p.evaluate(() => document.getElementById('lgSum').scrollIntoView({ block: 'start' })); await p.screenshot({ path: path.join(args.shots, 'ps-bridge-2f-import-390.png') }); }
+  ls = await lsSnap(p); Object.entries(OLDLS).forEach(([k, v]) => check(ls[k] === v, 'phone: old key untouched ' + k));
+  check(!o.errs.length, 'console errors (390 px, From the old app): ' + o.errs.join(' | '));
+  await o.b.close(); }
 // 4. unreadable saved project
 o = await openPage(FILE, { vw: 1400, vh: 1000, ls: { 'psb2.project.current': '{broken' } }); p = o.p; await ready(p);
 ls = await lsSnap(p);

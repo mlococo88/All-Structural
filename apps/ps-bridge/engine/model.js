@@ -26,6 +26,10 @@
                       force check for AASHTO / RIDOT (engine/holddown.js), on (true) and 0.75 (× the beam weight) by default. Not in the old
                       app's DEFAULTS: baseInputs() fills them, so a new project and every existing psb2 project read without them get the
                       check ON at 0.75 (the engineer's default); a value saved by the user is kept.
+     legacy:  { from, source, importedAt, inputs, bridge, external, summary }  added 2026-11-13 (PR 2f, plan §2.4), optional within version 1:
+                      the import record of a design imported from the old app (engine/legacy.js): the old data exactly as read (the inputs object,
+                      the old bridge model with every girder × span design, the MIDAS demands not used yet) and the import summary. Kept as it is;
+                      nothing reads it for a calculation.
      design:  { g, s }  added 2026-11-12 (PR 2b), optional within version 1: the design girder line and span of the one girder design until the
                       bridge level (PR 3a); absent: G2 (G1 with one girder) in span 1. Read and checked by engine/design.js (not validated here).
    }
@@ -101,8 +105,8 @@
   }
 
   /* legacyKind(obj): 'Prestressed Bridge Design' for a file of the old app (its Export JSON: a psbeam inputs object, or a
-     psbeam.bridge.v1 bridge), else ''. The import itself ("From old app", read only) comes in PR 2f; until then such a file is refused
-     with that message and nothing is changed. */
+     psbeam.bridge.v1 bridge), else ''. importJSON refuses such a file (nothing changed); the page then imports it with engine/legacy.js
+     ("From the old app", PR 2f). */
   function legacyKind(obj) {
     if (!obj || typeof obj !== 'object' || obj.schema === SCHEMA) return '';
     if (obj.girder != null && obj.mat && obj.str && Array.isArray(obj.rows)) return 'Prestressed Bridge Design';   // psbeam.inputs.v1 shape (DEFAULTS)
@@ -116,7 +120,7 @@
     let obj;
     try { obj = JSON.parse(text); } catch (e) { return { ok: false, error: `Not a JSON file: ${e.message}` }; }
     const k = legacyKind(obj);
-    if (k) return { ok: false, legacy: k, error: `${k} (old app) files are imported in a later version of this app. The file was not changed.` };
+    if (k) return { ok: false, legacy: k, error: `${k} (old app) file: import it with "From the old app" on the Project tab. The file was not changed.` };
     if (!obj || obj.schema !== SCHEMA) return { ok: false, error: 'Not a PS Bridge (psb2) project file.' };
     let p; try { p = migrate(obj); } catch (e) { return { ok: false, error: e.message }; }
     if (engineLoaded() && (p.base === undefined || (p.base && typeof p.base === 'object' && !Array.isArray(p.base)))) p.base = baseInputs(p.base);   // filled / merged onto DEFAULTS
