@@ -12,6 +12,9 @@
 //     still blank (was: #5 without a word): the same input error, the Size select blank and outlined, the autosave keeps "";
 //     choosing #5 gives the results (A_s 0.93 in²/ft). Stirrups present with a blank or unknown size (was: a page error), and an unknown
 //     shrinkage and temperature or skin bar size (was: taken as none): an input error naming the field, its select outlined.
+//  5. RBBZ (CB-15): Development & Splice tab, a saved project whose Bar Size is blank or unknown ("99") (was: a page error): opens with
+//     the data kept (the autosave keeps "" / "99"), the select blank and outlined, "Bar size: choose a bar size …", no results on the
+//     output tab, the check summary panel or Beam Capacity's Drawings; choosing #8 gives the results (tension l_d shown).
 // 1400 and 390 px, file://, 0 console errors.
 //   node tests/smoke/cbc-bar-size.mjs [--file <Concrete Beam Capacity.html>]
 import path from 'path';
@@ -100,6 +103,27 @@ for (const vw of [1400, 390]) {
     await f.evaluate(k => { const s = document.querySelector(`[data-fkey="${k}"]`); s.value = '4'; s.dispatchEvent(new Event('change')); }, key);
     r = await f.evaluate(() => ({ blk: VALIDATION.blockers.length, cc: !!CC }));
     ok(!r.blk && r.cc, `${nm}: #4 chosen: no input error, results shown`);
+    await b.close();
+  }
+  // RBBZ: Development & Splice tab, blank / unknown Bar Size in the saved project
+  for (const bs of ['', '99']) {
+    const o = await openPage(FILE, { hash: '#dev', vw, vh: 900, ls: { 'rcsuite.rebar_autosave_v1': JSON.stringify({ inp: { projName: 'Dev', barSize: bs, fc: 4000, fy: 60000 }, currentTab: 'tension' }) } });
+    ({ b, p, errs } = o);
+    await p.waitForTimeout(4000);
+    const g = await (await p.$('#suite-frame-dev')).contentFrame();
+    r = await g.evaluate(() => { const s = document.getElementById('barSize'); return { idx: s.selectedIndex, mark: s.classList.contains('rbInErr'), msg: (document.querySelector('#inputPanel .rbInErrMsg') || {}).textContent || '',
+      out: document.getElementById('tabcontent').innerText, dash: document.getElementById('dashboard').innerText, saved: JSON.parse(localStorage.getItem('rcsuite.rebar_autosave_v1') || '{}').inp }; });
+    ok(!errs.length && r.idx === -1 && r.mark && /^Bar size: choose a bar size/.test(r.msg) && /Input error: no results/.test(r.out) && /Bar size: choose a bar size/.test(r.out) && /Input error/.test(r.dash),
+      `Development & Splice, saved Bar Size "${bs}": no page error, select blank and outlined, "Bar size: choose a bar size …", no results ${errs.join(' | ')}`);
+    ok(r.saved && r.saved.barSize === bs && r.saved.projName === 'Dev' && r.saved.fc === 4000, `Development & Splice: the autosave keeps Bar Size "${bs}" and the other data`);
+    const cap = await (await p.$('#suite-frame-capacity')).contentFrame();
+    r = await cap.evaluate(() => { try { const DV = cbdwDev(); return DV ? (DV.err ? 'err' : 'ok') : 'none'; } catch (e) { return 'throw ' + e.message; } });
+    ok(r === 'err' || r === 'none', `Beam Capacity Drawings read the Development & Splice tab as "input error" (${r}), no throw`);
+    await g.evaluate(() => { const s = document.getElementById('barSize'); s.value = '8'; s.dispatchEvent(new Event('change', { bubbles: true })); });
+    await p.waitForTimeout(500);
+    r = await g.evaluate(() => ({ out: document.getElementById('tabcontent').innerText, mark: document.getElementById('barSize').classList.contains('rbInErr') }));
+    ok(!/Input error/.test(r.out) && !r.mark && /\d+\.\d+ in/.test(r.out), 'Development & Splice: #8 chosen: results shown, no mark');
+    ok(!errs.length, '0 console errors (Development & Splice)' + (errs.length ? ': ' + errs.join(' | ') : ''));
     await b.close();
   }
 }

@@ -9602,7 +9602,7 @@ body.rbNoExcess .rbExcessOnly{display:none!important}
 /* CBLA (2026-11-05): the λ box is disabled in ACI mode (development uses 0.75 per Tables 25.4.2.5 / 25.4.3.2 / 25.4.9.3) */
 .field input:disabled{background:#F1F5F9; color:#64748B; cursor:not-allowed;}
 /* RBIE (2026-11-05): a required input that is blank or invalid is outlined red, with the message under it */
-.field input.rbInErr{border-color:var(--fail)!important; background:#FEF2F2!important;}
+.field input.rbInErr,.field select.rbInErr{border-color:var(--fail)!important; background:#FEF2F2!important;}   /* RBBZ: select too */
 .rbInErrMsg{grid-column:1/-1; font-size:8.5pt; color:#991B1B; margin:2px 0 0; padding:2px 6px; border-left:3px solid var(--fail); background:#FEF2F2; font-family:var(--font-ui);}
 /* RBIE: on a phone the two wide optional boxes (c-c spacing, bend radius R) leave room for their label and unit */
 @media screen and (max-width:600px){ .field input[type=number][placeholder]{width:150px;} }
@@ -9681,7 +9681,7 @@ function readInputs(){
     assumptions:g('assumptions').value,
     // design params
     code:g('codeSel').value,          // 'ACI' or 'AASHTO'
-    barSize:g('barSize').value,
+    barSize:g('barSize').value||g('barSize').dataset.rbRaw||'',   // RBBZ: an unknown saved size is kept (rbRaw) and is an input error
     fy:num('fy'),
     fc:num('fc'),
     lightweight:g('lightweight').checked,
@@ -9714,7 +9714,7 @@ function readInputs(){
 
 /* ---------- Derived factors (code-aware) ---------- */
 function computeFactors(inp){
-  const bar = BAR[inp.barSize];
+  const bar = BAR[inp.barSize]||{d:NaN,a:NaN};   // RBBZ: a blank or unknown size is an input error (rbInputErrors), not a throw
   const db = bar.d, Ab = bar.a;
   const barNum = parseInt(inp.barSize);
   // λ for lightweight concrete: the entered value, limited to 0.75-1.0 (ACI 318-19 19.2.4.1, Tables 19.2.4.1(a)/(b);
@@ -11104,6 +11104,9 @@ function rbrDashColl(v,save){
    Optional boxes (bar c-c spacing, β_t, bend radius R, λ) keep their documented blank behaviour. Valid inputs: no change. */
 function rbInputErrors(inp,f){
   const E=[], num=v=>typeof v==='number'&amp;&amp;isFinite(v);
+  /* RBBZ (2026-11-13, engineer decision CB-15, as CBBZ in Beam Capacity): a saved or imported project whose Bar Size is blank or not
+     a bar (before: a page error, &quot;reading 'd'&quot;) opens with its data kept, the select blank and outlined, and no results. */
+  if(!BAR[inp.barSize]){ E.push(['barSize',&quot;Bar size: choose a bar size (Code &amp; Material, B. Design Code &amp; Material).&quot;]); return E; }
   if(!num(inp.fc)||inp.fc<=0) E.push(['fc',&quot;f′c must be greater than 0.&quot;]);
   const atrOk=num(inp.Atr)&amp;&amp;inp.Atr>=0;
   if(!num(inp.cb)||inp.cb<0) E.push(['cb',&quot;c_b must be entered (0 or greater).&quot;]);
@@ -11252,7 +11255,8 @@ function applyState(st){
   const set=(id,v)=>{const e=document.getElementById(id); if(e!=null&amp;&amp;v!=null){ if(e.type===&quot;checkbox&quot;)e.checked=!!v; else e.value=v; }};
   set('projName',inp.projName);set('projNo',inp.projNo);set('calcBy',inp.calcBy);set('calcDate',inp.calcDate);
   set('chkBy',inp.chkBy);set('chkDate',inp.chkDate);set('assumptions',inp.assumptions);
-  set('barSize',inp.barSize);set('fy',inp.fy);set('fc',inp.fc);set('lightweight',inp.lightweight);
+  set('barSize',inp.barSize);{ const e=document.getElementById('barSize'); if(e) e.dataset.rbRaw=(inp.barSize!=null&amp;&amp;e.value!==String(inp.barSize))?String(inp.barSize):''; }   // RBBZ
+  set('fy',inp.fy);set('fc',inp.fc);set('lightweight',inp.lightweight);
   set('codeSel',inp.code);
   set('epoxy',inp.epoxy);set('topBar',inp.topBar);set('cb',inp.cb);set('Atr',inp.Atr);
   set('sTr',inp.sTr);set('nBars',inp.nBars);set('hookEpoxy',inp.hookEpoxy);
