@@ -493,6 +493,7 @@ body dialog.spLib{font-family:var(--font-ui)}
   .cbdCh.pass .cbdS{color:var(--pass)} .cbdCh.fail .cbdS{color:var(--fail)} .cbdCh.na .cbdS{color:#64748b}
   .cbdCh .cbdV,.cbdCh .cbdDC,.cbdCh .cbdRef{grid-column:1/-1;display:none;padding-left:16px;overflow-wrap:anywhere}
   .cbdCh .cbdDC,.cbdCh .cbdRef{color:#475569;font-size:8pt} .cbdCh .cbdRef{font-style:italic}
+  .cbdBasis{grid-column:1/-1;color:#475569;font-size:8pt;padding:0 2px}   /* CBSW: the slab width basis */
   .cbdCh.cbdOpen .cbdV,.cbdCh.cbdOpen .cbdDC,.cbdCh.cbdOpen .cbdRef{display:block}
   .cbdCh.cbdOpen .cbdN{white-space:normal}
   .cbdMsg{grid-column:1/-1;font-size:8.5pt;padding:5px 8px;border:1px solid var(--color-border);border-left:4px solid var(--fail);background:#FEF2F2;color:#7F1D1D;border-radius:3px}
@@ -655,7 +656,18 @@ function fytLimAASHTO(){ return S.mat.fyt100 ? 100 : (S.mat.fyt<=60 ? 60 : Math.
    Saved projects without memberType are beams (mergeState). */
 function cbcSlab(){ return S.memberType==='slab'&amp;&amp;S.code==='ACI'; }
 /* a layer's bars as text: beams &quot;n#size&quot; (sep &quot;#&quot;), &quot;n #size&quot; (&quot; #&quot;), &quot;n-#size&quot; (&quot;-#&quot;); slabs &quot;#size @ s in&quot; */
-function cbcBarTxt(L,sep){ if(cbcSlab()&amp;&amp;L&amp;&amp;L.s>0) return &quot;#&quot;+L.size+&quot; @ &quot;+fmt(L.s)+(sep===&quot;-#&quot;?&quot;\&quot;&quot;:&quot; in&quot;); return L.n+(sep||&quot;#&quot;)+L.size; }
+function cbcBarTxt(L,sep){ if(cbcSlab()&amp;&amp;L&amp;&amp;L.s>0) return (cbcSlabAct()?L.n+(sep||&quot;#&quot;):&quot;#&quot;)+L.size+&quot; @ &quot;+fmt(L.s)+(sep===&quot;-#&quot;?&quot;\&quot;&quot;:&quot; in&quot;); return L.n+(sep||&quot;#&quot;)+L.size; }   /* CBSW: actual width, &quot;n #size @ s&quot; */
+/* CBSW (2026-11-13, engineer request): one-way slab width basis. S.slab.bMode absent = per 1 ft strip (b = 12 in, as before);
+   'actual' = the actual width b (S.slab.b, in): the section is b wide (S.sec.bw = b, b_w = b in shear), each layer has
+   n = floor(b/s) bars (rounded down, so a part bar is not counted: Decision (pending engineer review)), and every action
+   entered and every result is for the width b. Same equations as the strip; only b and A_s change. */
+function cbcSlabAct(){ return cbcSlab()&amp;&amp;!!S.slab&amp;&amp;S.slab.bMode==='actual'; }
+function cbcSlabN(s){ if(!(s>0)) return 0;
+  if(S.slab&amp;&amp;S.slab.bMode==='actual'){ const b=+S.sec.bw||0; return b>0?Math.floor(b/s+1e-9):0; }
+  return 12/s; }
+function cbcSlabSync(){ if(S.memberType!=='slab') return; const act=!!S.slab&amp;&amp;S.slab.bMode==='actual';
+  S.sec.bw=act?(S.slab.b!=null?+S.slab.b:12):12; S.sec.type='rect'; S.layers.forEach(L=>{ if(L.s>0) L.n=cbcSlabN(L.s); }); }
+function cbcSlabPer(){ return cbcSlabAct()?'for b = '+fmt(S.sec.bw)+' in (actual width)':'per 1 ft strip (b = 12 in)'; }
 function fytDesign(){ return S.code==='ACI' ? Math.min(S.mat.fyt,60) : Math.min(S.mat.fyt,fytLimAASHTO()); }
 
 /* =====================================================================
@@ -825,8 +837,10 @@ function mergeState(st){
      per strip follow from its spacing. */
   S.memberType=(st.memberType==='slab')?'slab':'beam';
   S.minh={span:+(st.minh&amp;&amp;st.minh.span)||0,sup:[&quot;simple&quot;,&quot;one&quot;,&quot;both&quot;,&quot;cant&quot;].indexOf(st.minh&amp;&amp;st.minh.sup)>=0?st.minh.sup:&quot;simple&quot;,wc:+(st.minh&amp;&amp;st.minh.wc)||0};   /* CBMH: absent = not entered */
-  S.slab={stSize:String((st.slab&amp;&amp;st.slab.stSize)||&quot;&quot;),stS:+(st.slab&amp;&amp;st.slab.stS)||0};
-  if(S.memberType==='slab'){ S.sec.bw=12; S.sec.type='rect'; S.layers.forEach(L=>{ if(!(L.s>0)) L.s=Math.round(12/L.n*4)/4||12; L.n=12/L.s; }); }
+  S.slab={stSize:String((st.slab&amp;&amp;st.slab.stSize)||&quot;&quot;),stS:+(st.slab&amp;&amp;st.slab.stS)||0,
+    ...(st.slab&amp;&amp;st.slab.bMode==='actual'?{bMode:'actual'}:{}),...(st.slab&amp;&amp;st.slab.b!=null&amp;&amp;st.slab.b!==''&amp;&amp;isFinite(+st.slab.b)?{b:+st.slab.b}:{})};
+  /* CBSW migration (2026-11-13): no slab.bMode -> per 1 ft strip, b = 12 in (results as before); 'actual' -> b = slab.b (cbcSlabSync) */
+  if(S.memberType==='slab'){ S.layers.forEach(L=>{ if(!(L.s>0)) L.s=Math.round(12/L.n*4)/4||12; }); cbcSlabSync(); }
   /* CBSL migration (2026-11-13): a save, project or Export JSON made before service load cases has no loadMode: it opens in
      factored mode with its combinations as saved, so its results are unchanged (none saved: the old default rows, as before).
      S.svc is read (missing or partial: blank cases, W and E reversible, 5.3.3 off). */
@@ -1221,9 +1235,9 @@ function fsDeriv(SS){
 }
 /* service-moment inputs for the Crack Control section of the input column */
 function crackMsInputs(b){
-  fRow(b,&quot;Service moment, +M (sagging)&quot;,
+  fRow(b,&quot;Service moment, +M (sagging)&quot;+(cbcSlabAct()?&quot;, for b&quot;:&quot;&quot;),   /* CBSW */
     numIn(()=>S.crack.MsPos,v=>S.crack.MsPos=Math.abs(v),&quot;1&quot;,&quot;crkMsP&quot;),&quot;k-ft&quot;);
-  fRow(b,&quot;Service moment, −M (hogging)&quot;,
+  fRow(b,&quot;Service moment, −M (hogging)&quot;+(cbcSlabAct()?&quot;, for b&quot;:&quot;&quot;),
     numIn(()=>S.crack.MsNeg,v=>S.crack.MsNeg=Math.abs(v),&quot;1&quot;,&quot;crkMsN&quot;),&quot;k-ft&quot;);
   let P=null,N=null;
   try{ P=serviceSteelStress(false,Math.abs(S.crack.MsPos||0)); }catch(e){}
@@ -1324,7 +1338,7 @@ function detailing(F,sh,neg,govMu,Vu,tor,torD){
       noSt=&quot;No shrinkage and temperature bars are entered (Reinforcement input): they are required perpendicular to the span (7.6.4.1, 24.4).&quot;;
     add(&quot;dStA&quot;,&quot;Shrinkage and temperature reinforcement ratio&quot;,&quot;ACI 24.4.3.2&quot;,rho,0.0018,&quot;\\ge&quot;,&quot;&quot;,stOn&amp;&amp;rho>=0.0018-1e-9,
       [[&quot;\\rho=\\dfrac{A_s}{b\\,h}\\ge 0.0018&quot;,stOn?`\\dfrac{${fmt(REBAR[S.slab.stSize].a,2)}(12/${fmt(S.slab.stS)})}{12(${fmt(h)})}=\\dfrac{${fmt(Ast,3)}}{${fmt(12*h,1)}}=${fmt(rho,5)}`:&quot;\\text{none entered}&quot;,
-        stOn?&quot;#&quot;+S.slab.stSize+&quot; at &quot;+fmt(S.slab.stS)+&quot; in perpendicular to the span; A_g of the slab, per ft.&quot;:noSt]]);
+        stOn?&quot;#&quot;+S.slab.stSize+&quot; at &quot;+fmt(S.slab.stS)+&quot; in perpendicular to the span; A_g of the slab, per ft&quot;+(cbcSlabAct()?&quot; of length along the span (these bars run across the width, so the ratio does not depend on b = &quot;+fmt(bw)+&quot; in; CBSW).&quot;:&quot;.&quot;):noSt]]);
     const stMx=Math.min(5*h,18);
     add(&quot;dStS&quot;,&quot;Shrinkage and temperature bar spacing&quot;,&quot;ACI 24.4.3.3, 7.7.6.2.1&quot;,stOn?S.slab.stS:Infinity,stMx,&quot;\\le&quot;,&quot;in&quot;,stOn&amp;&amp;S.slab.stS<=stMx+1e-6,
       [[&quot;s_{max}=\\min(5h,\\;18\\text{ in})&quot;,`\\min(5(${fmt(h)}),\\;18)=${fmt(stMx)}\\text{ in}`,stOn?&quot;&quot;:noSt],
@@ -1342,9 +1356,9 @@ function detailing(F,sh,neg,govMu,Vu,tor,torD){
     const t1=3*rt/(fyA*1000)*bwA*F.dCent, t2=200/(fyA*1000)*bwA*F.dCent;
     const AsMin=Math.max(t1,t2);
     if(cbcSlab()){   /* CBSB: ACI 318-19 7.6.1.1, one-way slab: A_s,min = 0.0018A_g of the 12 in strip, compared with the A_s of the face in tension */
-      const Ag=12*h, AsS=0.0018*Ag;
+      const sAc=cbcSlabAct(), Ag=(sAc?bw:12)*h, AsS=0.0018*Ag;   /* CBSW: the actual width b, else the 12 in strip */
       add(&quot;dAsMin&quot;,&quot;Minimum flexural reinforcement (slab)&quot;,&quot;ACI 7.6.1.1&quot;,F.As,AsS,&quot;\\ge&quot;,&quot;in²&quot;,F.As>=AsS-1e-9,
-        [[&quot;A_{s,min}=0.0018A_g&quot;,`0.0018(12)(${fmt(h)})=${fmt(AsS,3)}\\text{ in}^2\\text{ per ft}`,&quot;A_g of the 12 in strip; compared with A_s of the face in tension for this combination.&quot;],
+        [[&quot;A_{s,min}=0.0018A_g&quot;+(sAc?&quot;=0.0018\\,b\\,h&quot;:&quot;&quot;),sAc?`0.0018(${fmt(bw)})(${fmt(h)})=${fmt(AsS,3)}\\text{ in}^2\\text{ for }b=${fmt(bw)}\\text{ in}`:`0.0018(12)(${fmt(h)})=${fmt(AsS,3)}\\text{ in}^2\\text{ per ft}`,(sAc?&quot;A_g of the actual width b = &quot;+fmt(bw)+&quot; in&quot;:&quot;A_g of the 12 in strip&quot;)+&quot;; compared with A_s of the face in tension for this combination.&quot;],
          [&quot;A_s\\ge A_{s,min}&quot;,`${fmt(F.As,3)}\\;${F.As>=AsS-1e-9?&quot;\\ge&quot;:&quot;<&quot;}\\;${fmt(AsS,3)}\\text{ in}^2`,&quot;&quot;]]);
     } else
     add(&quot;dAsMin&quot;,&quot;Minimum flexural reinforcement&quot;,&quot;ACI 9.6.1.2&quot;,
@@ -1945,6 +1959,7 @@ function validate(){
   }
   if(!S.layers.length) B.push({code:&quot;Reinforcement&quot;,msg:&quot;At least one reinforcement layer is required.&quot;});
   if(cbcSlab()&amp;&amp;S.layers.some(L=>!(L.s>0))) B.push({code:&quot;Reinforcement&quot;,msg:&quot;Slab bar spacing s must be greater than 0 in every layer.&quot;});   /* CBSB */
+  if(cbcSlabAct()&amp;&amp;S.sec.bw>0&amp;&amp;S.layers.some(L=>L.s>0&amp;&amp;L.s>S.sec.bw+1e-9)) B.push({code:&quot;Reinforcement&quot;,msg:&quot;Slab width b = &quot;+fmt(S.sec.bw)+&quot; in is less than a layer's bar spacing s: no bar would be counted (n = floor(b/s) = 0). Enter b at least s.&quot;});   /* CBSW */
   const G=layerGeom(false);
   G.forEach((L,i)=>{ if(L.d<=0||L.d>=h)
     B.push({code:&quot;Geometry&quot;,msg:`Layer ${i+1} depth d = ${fmt(L.d)} in falls outside the section (0 to ${fmt(h)} in). Check the manual depth override.`}); });
@@ -2026,6 +2041,7 @@ function validate(){
   if(S.tor.present &amp;&amp; S.code==='ACI')
     N.push({code:&quot;ACI 9.7.5.1&quot;,msg:&quot;Longitudinal torsion steel is entered as a total area, so the requirement for a bar at every corner of the closed stirrup and a maximum 12 in spacing around p_h cannot be verified automatically. That check is reported N/A and must be confirmed by inspection.&quot;});
   if(S.code==='ACI') N.push({code:&quot;ACI 9.6.1.3&quot;,msg:&quot;The exception allowing A_{s,min} to be waived where A_s provided is at least 4/3 of A_s required is NOT applied; the full 9.6.1.2 minimum is always enforced. This is conservative.&quot;});
+  if(cbcSlabAct()) N.push({code:&quot;Slab width&quot;,msg:&quot;One-way slab, actual width b = &quot;+fmt(S.sec.bw)+&quot; in: each layer has n = floor(b/s) bars (&quot;+S.layers.map((L,i)=>&quot;layer &quot;+(i+1)+&quot;: floor(&quot;+fmt(S.sec.bw)+&quot;/&quot;+fmt(L.s)+&quot;) = &quot;+L.n).join(&quot;; &quot;)+&quot;; rounded down, a part bar is not counted). The actions entered and every result are for the full width b.&quot;});   /* CBSW */
   if(S.code==='ACI') N.push({code:cbcSlab()?&quot;ACI 7.3.1&quot;:&quot;ACI 9.3.1&quot;,msg:&quot;Minimum &quot;+(cbcSlab()?&quot;thickness (Table 7.3.1.1)&quot;:&quot;depth (Table 9.3.1.1)&quot;)+&quot;: &quot;+((S.minh&amp;&amp;S.minh.span>0)?&quot;checked for a span of &quot;+fmt(S.minh.span)+&quot; ft&quot;:&quot;not checked (span not entered)&quot;)+&quot;. The table applies to members not supporting or attached to partitions or other construction likely to be damaged by large deflections (assumed); otherwise deflections must be calculated, which this tool does not do.&quot;});   /* CBMH */
   N.push({code:&quot;Scope&quot;,msg:&quot;Deflection, development length, bar cut-offs, fatigue and strut-and-tie are not evaluated. Crack control is checked as a bar-spacing limit; explicit crack-width prediction is not performed.&quot;});
   return {blockers:B,warnings:W,notes:N};
@@ -2308,12 +2324,22 @@ function buildInput(){
        (12/n in, to 1/4 in) and the stirrups off (they can be ticked back); choosing beam keeps b = 12 in and the bars per layer. */
     if(S.code==='ACI') fRow(b,&quot;Member type&quot;,selIn([&quot;beam&quot;,&quot;slab&quot;],()=>S.memberType||&quot;beam&quot;,v=>{
         if(v==='slab'&amp;&amp;S.memberType!=='slab'){ S.memberType='slab'; S.sec.bw=12; S.sec.type='rect'; S.stir.present=false;
-          S.layers.forEach(L=>{ L.s=Math.round(12/L.n*4)/4||12; L.n=12/L.s; }); }
+          S.layers.forEach(L=>{ L.s=Math.round(12/L.n*4)/4||12; L.n=12/L.s; }); cbcSlabSync(); }   /* CBSW: the width basis kept in S.slab */
         else if(v==='beam'&amp;&amp;S.memberType==='slab'){ S.memberType='beam'; S.layers.forEach(L=>{ L.n=Math.max(1,Math.round(L.n)); delete L.s; }); } },
-      o=>o===&quot;beam&quot;?&quot;Beam&quot;:&quot;One-way slab (per 1 ft strip)&quot;,o=>o,&quot;memberType&quot;),&quot;&quot;);
+      o=>o===&quot;beam&quot;?&quot;Beam&quot;:&quot;One-way slab&quot;,o=>o,&quot;memberType&quot;),&quot;&quot;);   /* CBSW: the width basis is its own input */
     if(cbcSlab()){
+      /* CBSW (2026-11-13): width basis, per 1 ft strip (default; projects saved before) or the actual width b */
+      fRow(b,&quot;Slab width basis&quot;,selIn([&quot;strip&quot;,&quot;actual&quot;],()=>cbcSlabAct()?&quot;actual&quot;:&quot;strip&quot;,v=>{
+          if(v==='actual'){ S.slab.bMode='actual'; if(S.slab.b==null) S.slab.b=12; } else delete S.slab.bMode; cbcSlabSync(); },
+        o=>o===&quot;strip&quot;?&quot;Per 1 ft strip (b = 12 in)&quot;:&quot;Actual width b&quot;,o=>o,&quot;slabBMode&quot;),&quot;&quot;);
+      if(cbcSlabAct()) fRow(b,&quot;Slab width, b (actual)&quot;,numIn(()=>S.sec.bw,v=>{ S.slab.b=v; cbcSlabSync(); },&quot;1&quot;,&quot;bw&quot;),&quot;in&quot;);
+      else
       fRow(b,&quot;Strip width, b (per 1 ft strip)&quot;,(()=>{ const i=numIn(()=>12,v=>{},&quot;1&quot;,&quot;bw&quot;); i.readOnly=true; i.classList.add(&quot;autoD&quot;); return i; })(),&quot;in&quot;);
       fRow(b,&quot;Slab thickness, h&quot;,numIn(()=>S.sec.h,v=>S.sec.h=v,&quot;0.5&quot;,&quot;h&quot;),&quot;in&quot;);
+      if(cbcSlabAct()) b.appendChild(cbNL(&quot;note&quot;,&quot;One-way slab (ACI 318-19 Chapter 7): the actual width b = &quot;+fmt(S.sec.bw)+&quot; in.&quot;,[[&quot;Width b:&quot;,&quot;bars are entered as size and spacing; each layer has n = floor(b/s) bars (rounded down: a part bar is not counted). A_s, M_u, V_u, T_u and every result are for the full width b; shear uses b_w = b.&quot;],
+        [&quot;Not width-dependent:&quot;,&quot;bar spacing limits (7.7.2.3, 24.3.2) and the shrinkage and temperature bars (24.4.3, per ft of length along the span).&quot;],
+        [&quot;Checks:&quot;,&quot;A_s,min 0.0018A_g = 0.0018 b h (7.6.1.1), bar spacing ≤ min(3h, 18 in) (7.7.2.3), shrinkage and temperature bars (24.4.3), A_v,min only where V_u > φV_c (7.6.3.1); skin reinforcement does not apply.&quot;]]));
+      else
       b.appendChild(cbNL(&quot;note&quot;,&quot;One-way slab (ACI 318-19 Chapter 7): a 12 in strip.&quot;,[[&quot;Per foot:&quot;,&quot;bars are entered as size and spacing; A_s, M_u, V_u, T_u and every result are per 1 ft width of slab.&quot;],
         [&quot;Checks:&quot;,&quot;A_s,min 0.0018A_g (7.6.1.1), bar spacing ≤ min(3h, 18 in) (7.7.2.3), shrinkage and temperature bars (24.4.3), A_v,min only where V_u > φV_c (7.6.3.1); skin reinforcement does not apply.&quot;]]));
     } else {
@@ -2369,7 +2395,7 @@ function buildInput(){
     S.layers.forEach((L,i)=>{
       const tr=el(&quot;tr&quot;); hlRowWire(tr,i);
       const c0=el(&quot;td&quot;); const tg=el(&quot;span&quot;,&quot;lyrTag &quot;+G[i].side,G[i].side+(i+1)); c0.appendChild(tg); tr.appendChild(c0);
-      const c1=el(&quot;td&quot;); c1.appendChild(cbcSlab()?numIn(()=>L.s,v=>{ L.s=v; L.n=v>0?12/v:0; },&quot;0.5&quot;,&quot;lsp&quot;+i)   /* CBSB: slab, bars at s (per ft: n = 12/s) */
+      const c1=el(&quot;td&quot;); c1.appendChild(cbcSlab()?numIn(()=>L.s,v=>{ L.s=v; L.n=cbcSlabN(v); },&quot;0.5&quot;,&quot;lsp&quot;+i)   /* CBSB: slab, bars at s (per ft: n = 12/s); CBSW: actual width n = floor(b/s) */
         :numIn(()=>L.n,v=>L.n=Math.max(1,Math.round(v)),&quot;1&quot;,&quot;ln&quot;+i)); tr.appendChild(c1);
       const c2=el(&quot;td&quot;); c2.appendChild(selIn(BAR_SIZES,()=>L.size,v=>L.size=v,o=>&quot;#&quot;+o,o=>o,&quot;ls&quot;+i)); tr.appendChild(c2);
       const c3=el(&quot;td&quot;); c3.appendChild(selIn([&quot;tension&quot;,&quot;compression&quot;],()=>L.face,v=>L.face=v,
@@ -2494,6 +2520,7 @@ function buildInput(){
     if(S.code==='ACI') fRow(b,&quot;Loads&quot;,selIn([&quot;service&quot;,&quot;factored&quot;],()=>S.loadMode,v=>{S.loadMode=(v==='service'?'service':'factored');},
       o=>o===&quot;service&quot;?&quot;Service load cases (the tool builds the combinations)&quot;:&quot;Factored actions typed per combination&quot;,o=>o,&quot;ldMode&quot;),&quot;&quot;);
     else if(S.loadMode==='service') b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;AASHTO LRFD mode: enter factored actions below; this tool builds the ACI 318-19 combinations only. The service load cases entered in ACI mode are kept and used again when the design code is set back to ACI 318-19.&quot;));
+    if(cbcSlab()) b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;One-way slab: enter the actions &quot;+cbcSlabPer()+(cbcSlabAct()?&quot; (the whole width b, not per foot).&quot;:&quot;.&quot;)));   /* CBSW */
     if(cbcSvcOn()){ buildSvcLoads(b); return; }
     b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Enter factored actions for each combination. Every combination is worked in full in the output.&quot;));
     const t=el(&quot;table&quot;,&quot;cbT&quot;);
@@ -3291,7 +3318,7 @@ function workFlexure(b,r){
     title:&quot;Axial equilibrium solved for the neutral-axis depth&quot;,
     ref:&quot;ACI 22.2.1.1&quot;,
     lines:[`\\sum F = 0:\\quad C_c + \\sum F_{s,comp} - \\sum F_{s,tens} = 0`,
-      `C_c = ${fmt(F.A1,2)} f'_c \\, b \\, a = ${fmt(F.Cc)}\\text{ kip}`,
+      `C_c = ${fmt(F.A1,2)} f'_c \\, b \\, a = ${cbcSlab()?`${fmt(F.A1,2)}(${fmt(fc)})(${fmt(S.sec.bw)})(${fmt(F.a)}) = `:&quot;&quot;}${fmt(F.Cc)}\\text{ kip}`,   /* CBSW: slab, b substituted */
       `c = ${fmt(F.c)}\\text{ in},\\qquad a = \\beta_1 c = ${fmt(F.B1,3)}(${fmt(F.c)}) = ${fmt(F.a)}\\text{ in}`],
     vars:[[&quot;C_c&quot;,&quot;Resultant concrete compressive force&quot;,fmt(F.Cc),&quot;kip&quot;],
           [&quot;a&quot;,&quot;Depth of the equivalent stress block&quot;,fmt(F.a),&quot;in&quot;],
@@ -4191,7 +4218,7 @@ function buildInputEchoTab(pg){
     t.innerHTML=&quot;<tr><th>Layer</th><th>Bars</th><th>Size</th><th>A_s (in\u00b2)</th><th>Face</th><th>d (in)</th><th>Source</th></tr>&quot;;
     G.forEach((L,i)=>{ const tr=el(&quot;tr&quot;);
       tr.appendChild(el(&quot;td&quot;,null,L.side+(i+1)));
-      tr.appendChild(el(&quot;td&quot;,null,cbcSlab()&amp;&amp;L.s&gt;0?&quot;@ &quot;+fmt(L.s)+&quot; in&quot;:String(L.n)));
+      tr.appendChild(el(&quot;td&quot;,null,cbcSlab()&amp;&amp;L.s&gt;0?(cbcSlabAct()?L.n+&quot; &quot;:&quot;&quot;)+&quot;@ &quot;+fmt(L.s)+&quot; in&quot;:String(L.n)));   /* CBSW */
       tr.appendChild(el(&quot;td&quot;,null,&quot;#&quot;+L.size));
       tr.appendChild(el(&quot;td&quot;,null,fmt(L.As)));
       tr.appendChild(el(&quot;td&quot;,null,L.face==='tension'?&quot;Tension&quot;:&quot;Compression&quot;));
@@ -4241,10 +4268,10 @@ function buildInputEchoTab(pg){
 let VIS3D={theta:0.7,phi:0.35,r:null,opacity:0.45,show:{conc:true,ten:true,comp:true,stir:true},raf:0};
 var CBOV={sec:null,elev:null,snap:null,snapKey:null};   /* CBOV (2026-11-05): the Report overview (scales of the drawings, 3-D snapshot cache); see cbcOvFigs */
 
-function barXs(n,db){                       /* x-centres across the web, in */
+function barXs(n,db,s){                     /* x-centres across the web, in; s: slab bar spacing (CBSW) */
   const cc=S.cover.cc, ds=stirDia(), bw=S.sec.bw;
   const x0=-bw/2+cc+ds+db/2, x1=bw/2-cc-ds-db/2;
-  if(cbcSlab()&amp;&amp;n>0){ const sp=12/n, m=Math.max(1,Math.floor((x1-x0)/sp+1e-9)+1), ys=[]; for(let i=0;i<m;i++) ys.push((i-(m-1)/2)*sp); return ys; }   /* CBSB: slab bars at s, centred in the strip */
+  if(cbcSlab()&amp;&amp;n>0){ const sp=(s>0)?s:12/n, m=cbcSlabAct()?Math.round(n):Math.max(1,Math.floor((x1-x0)/sp+1e-9)+1), ys=[];   /* CBSW: actual width, the n bars counted */ for(let i=0;i<m;i++) ys.push((i-(m-1)/2)*sp); return ys; }   /* CBSB: slab bars at s, centred in the strip */
   const xs=[]; for(let i=0;i<n;i++) xs.push(n===1?0:x0+i*(x1-x0)/(n-1));
   return xs;
 }
@@ -4296,7 +4323,7 @@ function svgSection(neg){
   const G=layerGeom(neg);
   G.forEach(L=>{
     const rr=Math.max(2.4,L.db/2*sc);
-    barXs(L.n,L.db).forEach(x=>{
+    barXs(L.n,L.db,L.s).forEach(x=>{
       s+= L.side==='T'
         ? `<circle data-layer=&quot;${L.i}&quot; cx=&quot;${X(x)}&quot; cy=&quot;${Y(L.yTop)}&quot; r=&quot;${rr}&quot; fill=&quot;#DC2626&quot;/>`
         : `<circle data-layer=&quot;${L.i}&quot; cx=&quot;${X(x)}&quot; cy=&quot;${Y(L.yTop)}&quot; r=&quot;${rr}&quot; fill=&quot;#fff&quot; stroke=&quot;#2563EB&quot; stroke-width=&quot;1.8&quot;/>`;
@@ -4434,7 +4461,7 @@ function cbcForceSVG(r){
   const yb1=Math.min(neg?h-F.a:0,h), yb2=neg?h:Math.min(F.a,h);
   [[0,tee?hf:h,secW],[tee?hf:h,h,bw]].forEach(q=>{ const y1=Math.max(yb1,q[0]), y2=Math.min(yb2,q[1]); if(y2>y1+1e-9) s+=`<rect x=&quot;${X(-q[2]/2)}&quot; y=&quot;${Yp(y1)}&quot; width=&quot;${q[2]*sc}&quot; height=&quot;${(y2-y1)*sc}&quot; fill=&quot;#93c5fd&quot; opacity=&quot;0.6&quot;/>`; });
   F.detail.forEach(L=>{ const rr=Math.max(2.4,L.db/2*sc);
-    barXs(L.n,L.db).forEach(x=>{ s+=`<circle data-layer=&quot;${L.i}&quot; cx=&quot;${X(x)}&quot; cy=&quot;${Yp(L.yTop)}&quot; r=&quot;${rr}&quot; fill=&quot;${L.F>0?'#DC2626':'#fff'}&quot; stroke=&quot;${L.F>0?'#991B1B':'#2563EB'}&quot; stroke-width=&quot;1.4&quot;/>`; }); });
+    barXs(L.n,L.db,L.s).forEach(x=>{ s+=`<circle data-layer=&quot;${L.i}&quot; cx=&quot;${X(x)}&quot; cy=&quot;${Yp(L.yTop)}&quot; r=&quot;${rr}&quot; fill=&quot;${L.F>0?'#DC2626':'#fff'}&quot; stroke=&quot;${L.F>0?'#991B1B':'#2563EB'}&quot; stroke-width=&quot;1.4&quot;/>`; }); });
   s+=T(xA,MT-30,'Section, '+(neg?'\u2212M':'+M'),' font-weight=&quot;bold&quot;');
   s+=T(xA,MT-16,'shaded: stress block, depth a',' font-size=&quot;12&quot; fill=&quot;#334155&quot;');
   /* neutral axis across the panels */
@@ -4581,7 +4608,7 @@ function cbc3DScene(neg,opacity,mats){
     const geo=new THREE.CylinderGeometry(L.db/2,L.db/2,Lb,12);
     const mat=new THREE.MeshLambertMaterial({color:L.side==='T'?0xb91c1c:0x1d4ed8});
     mats[String(L.i)]=mat;
-    barXs(L.n,L.db).forEach(x=>{
+    barXs(L.n,L.db,L.s).forEach(x=>{
       const m=new THREE.Mesh(geo,mat);
       m.rotation.x=Math.PI/2;
       m.position.set(x,h/2-L.yTop,0);
@@ -5075,7 +5102,7 @@ function cbdwBuild(){
     if(tee) D.pline(L.conc,[[-bw/2,0],[bw/2,0],[bw/2,h-hf],[bf/2,h-hf],[bf/2,h],[-bf/2,h],[-bf/2,h-hf],[-bw/2,h-hf]],true);
     else D.rect(L.conc,-bw/2,0,bw/2,h);
     /* longitudinal bars, true size, at their positions (layerGeom, positive-moment convention: physical) */
-    G.forEach(Lr=>{ barXs(Lr.n,Lr.db).forEach(x=>D.circle(L.bar,x,h-Lr.yTop,Lr.db/2)); });
+    G.forEach(Lr=>{ barXs(Lr.n,Lr.db,Lr.s).forEach(x=>D.circle(L.bar,x,h-Lr.yTop,Lr.db/2)); });
     /* CBM3d: skin bars (entered), both side faces, zone of the governing combination's sense; callout to the right */
     if(SKd){ SKd.ys.forEach(y=>[-SKd.x,SKd.x].forEach(x=>D.circle(L.bar,x,h-y,SKd.db/2)));
       const yk=h-SKd.ys[0], tx=(tee?bf:bw)/2+1.6*P, ty=h*0.62-0.75*P;
@@ -5107,7 +5134,7 @@ function cbdwBuild(){
     }
     /* bar callouts per layer: left of the section, leader to the first bar */
     const xl=-(tee?bf:bw)/2-1.2*P;
-    G.slice().sort((a,b)=>a.yTop-b.yTop).forEach((Lr,j,A)=>{ const y=h-Lr.yTop, xs=barXs(Lr.n,Lr.db), yy=y+(j-(A.length-1)/2)*0.0;
+    G.slice().sort((a,b)=>a.yTop-b.yTop).forEach((Lr,j,A)=>{ const y=h-Lr.yTop, xs=barXs(Lr.n,Lr.db,Lr.s), yy=y+(j-(A.length-1)/2)*0.0;
       D.text(L.txt,xl,yy-0.04*P,th,cbcBarTxt(Lr,'-#')+' '+layerName(Lr),2); D.line(L.ldr,xl+0.05*P,yy,xs[0]-Lr.db/2,y); D.circle(L.ldr,xs[0],y,0.02*P); });
     /* dimensions: b_w, h, b_f / h_f, clear cover to the stirrup (or to the bars without stirrups), d per layer from the top */
     D.dimH(L.dim,-bw/2,bw/2,-0.5*P,0);
@@ -5173,7 +5200,7 @@ function cbdwBuild(){
     notes.forEach((s,j)=>D.text(L.txt,0,-(0.05+0.2*j)*P,th,(j+1)+'. '+s,0));
     let y=-(0.3+0.2*notes.length)*P;
     D.text(L.txt,0,y,0.15*P,'BAR SCHEDULE (ONE CROSS SECTION)',0); y-=0.15*P;
-    const rows=G.map((Lr,j)=>['L'+(j+1),'#'+Lr.size,cbcSlab()&amp;&amp;Lr.s&gt;0?'@ '+fmt(Lr.s)+'&quot;':String(Lr.n),layerName(Lr),'STRAIGHT (LENGTH BY SPAN)',fmt(Lr.As,2)]);
+    const rows=G.map((Lr,j)=>['L'+(j+1),'#'+Lr.size,cbcSlab()&amp;&amp;Lr.s&gt;0?(cbcSlabAct()?Lr.n+' ':'')+'@ '+fmt(Lr.s)+'&quot;':String(Lr.n),layerName(Lr),'STRAIGHT (LENGTH BY SPAN)',fmt(Lr.As,2)]);
     if(SKd) rows.push(['SK','#'+SKd.size,String(2*SKd.ys.length),'SKIN, EACH SIDE FACE @ '+cbdwIn(SKd.s),'STRAIGHT (LENGTH BY SPAN)',fmt(2*SKd.ys.length*REBAR[SKd.size].a,2)]);   /* CBM3d */
     if(hk) rows.push(['S1','#'+S.stir.size,S.stir.legs+' LEGS','CLOSED STIRRUP @ '+cbdwIn(S.stir.s),'135° HOOKS '+cbdwIn(hk.ext)+', BEND Ø '+cbdwIn(hk.Di),fmt(S.stir.legs*REBAR[S.stir.size].a,2)+' (A_v)']);
     const t1=table(0,y,['MARK','SIZE','NO.','LOCATION','SHAPE','A_s (IN²)'],rows,th,[5]); y-=t1.h+0.45*P;
@@ -5717,7 +5744,7 @@ function cbcRptFlex(r){
     cS({id:'disp'+L.i+'.F',label:'Net force in the layer (f′s < 0 in compression)',sym:'F',eq:&quot;A'_s f'_s + \\Delta C&quot;,sub:fmt(L.As)+'('+fmt(L.fs,1)+') + '+fmt(L.disp,2),value:L.F,unit:'kip'})]}));
   const na=[cS({id:'B1',label:'Equivalent rectangular stress-block factor',sym:'\\beta_{1}',eq:fc<=4?'0.85':&quot;0.85-0.05(f'_c-4)&quot;,sub:fc<=4?'':'0.85-0.05('+fmt(fc)+'-4)',value:F.B1,d:3,ref:cRef('ACI 22.2.2.4.3')})];
   if(F.A1!==0.85) na.push(cS({id:'A1',label:'Stress-block intensity factor',sym:'\\alpha_{1}',eq:&quot;0.85-0.02(f'_c-10) \\ge 0.75&quot;,sub:'0.85-0.02('+fmt(fc)+'-10)',value:F.A1,d:3,ref:'AASHTO LRFD 10th Ed. 5.6.2.2'}));
-  na.push(cS({id:'Cc',label:'Resultant concrete compressive force',sym:'C_{c}',eq:&quot;\\alpha_1 f'_c\\, b\\, a&quot;,sub:fmt(F.A1,2)+'('+fmt(fc)+')\\,b\\,('+fmt(F.a)+')',value:F.Cc,unit:'kip',ref:cRef('ACI 22.2.1.1')}),
+  na.push(cS({id:'Cc',label:'Resultant concrete compressive force',sym:'C_{c}',eq:&quot;\\alpha_1 f'_c\\, b\\, a&quot;,sub:fmt(F.A1,2)+'('+fmt(fc)+')'+(cbcSlab()?'('+fmt(S.sec.bw)+')':'\\,b\\,')+'('+fmt(F.a)+')',value:F.Cc,unit:'kip',ref:cRef('ACI 22.2.1.1')}),
     cS({id:'c',label:'Neutral-axis depth from axial equilibrium (C_c + ΣF_s,comp − ΣF_s,tens = 0, solved by bisection)',sym:'c',value:F.c,unit:'in',ref:cRef('ACI 22.2.1.1')}),
     cS({id:'a',label:'Depth of the equivalent stress block',sym:'a',eq:'\\beta_1 c',sub:fmt(F.B1,3)+'('+fmt(F.c)+')',value:F.a,unit:'in'}));
   T.push({title:'Neutral axis by axial equilibrium',ref:cRef('ACI 22.2.1.1'),steps:na});
@@ -5869,11 +5896,11 @@ function cbcRptModel(){
   /* 1. inputs */
   { const G=layerGeom(CC.govRow?CC.govRow.neg:false), subs=[];
     subs.push({title:'Section and materials',items:[{type:'table',head:['Item','Value','Unit'],rows:[
-      ['Design code',codeName,''],...(cbcSlab()?[['Member type','One-way slab: a 12 in strip; A_s, actions and results per 1 ft width (ACI 318-19 Chapter 7)','']]:[]),['Section type',S.sec.type==='tee'?'T-beam':'Rectangular',''],['Web width $b_{w}$',{t:fmt(S.sec.bw),n:true},'in'],['Overall depth h',{t:fmt(S.sec.h),n:true},'in'],
+      ['Design code',codeName,''],...(cbcSlab()?[['Member type',cbcSlabAct()?'One-way slab, actual width b = '+fmt(S.sec.bw)+' in: A_s, actions and results for the full width b; bars per layer n = floor(b/s) (ACI 318-19 Chapter 7)':'One-way slab: a 12 in strip; A_s, actions and results per 1 ft width (ACI 318-19 Chapter 7)','']]:[]),['Section type',S.sec.type==='tee'?'T-beam':'Rectangular',''],['Web width $b_{w}$',{t:fmt(S.sec.bw),n:true},'in'],['Overall depth h',{t:fmt(S.sec.h),n:true},'in'],
       ...(S.sec.type==='tee'?[['Flange width $b_{f}$',{t:fmt(S.sec.bf),n:true},'in'],['Flange thickness $h_{f}$',{t:fmt(S.sec.hf),n:true},'in']].concat(S.code==='ACI'?[['Beam for $A_{s,min}$, flange in tension (9.6.1.2)',S.sec.asminSupport==='indeterminate'?'statically indeterminate':'statically determinate','']]:[]):[]),
       [&quot;$f^{\\prime}_{c}$&quot;,{t:fmt(S.mat.fc),n:true},'ksi'],['$f_{y}$',{t:fmt(S.mat.fy),n:true},'ksi'],['$f_{yt}$',{t:fmt(S.mat.fyt),n:true},'ksi'],...(S.code==='AASHTO'?[['$f_{yt}$ up to 100 ksi (5.4.3.3, no torsion; 5.7.2.7)',S.mat.fyt100?'yes':'no','']]:[]),['$\\lambda$',{t:fmt(S.mat.lambda,2),n:true},''],...(S.code==='AASHTO'?[['Unit weight $w_{c}$ for $E_{c}$',S.mat.wc>0?{t:fmt(S.mat.wc,3),n:true}:(S.mat.lambda<1?'0.110 (lightweight, not entered)':'Table 3.5.1-1'),'kcf']]:[]),
       ['Aggregate size',{t:fmt(S.mat.dagg),n:true},'in'],['Clear cover provided / required',fmt(S.cover.cc)+' / '+fmt(S.cover.req),'in']]},{type:'note',text:cbcLamBasis()}]});   /* CBASM: the lambda note */
-    subs.push({title:'Reinforcement',items:[{type:'table',head:['Layer','Bars','Size','$A_{s}$ (in²)','Face','d (in)','Source'],rows:G.map((L,i)=>[L.side+(i+1),cbcSlab()&amp;&amp;L.s&gt;0?'@ '+fmt(L.s)+' in':String(L.n),'#'+L.size,{t:fmt(L.As),n:true},L.face==='tension'?'Tension':'Compression',{t:fmt(L.d),n:true},L.manual?'manual override':'auto-stacked'])},
+    subs.push({title:'Reinforcement',items:[{type:'table',head:['Layer','Bars','Size','$A_{s}$ (in²)','Face','d (in)','Source'],rows:G.map((L,i)=>[L.side+(i+1),cbcSlab()&amp;&amp;L.s&gt;0?(cbcSlabAct()?L.n+' ':'')+'@ '+fmt(L.s)+' in':String(L.n),'#'+L.size,{t:fmt(L.As),n:true},L.face==='tension'?'Tension':'Compression',{t:fmt(L.d),n:true},L.manual?'manual override':'auto-stacked'])},
       ...cbrNL('Other reinforcement:',[S.stir.present?['Transverse:',S.stir.legs+'-leg #'+S.stir.size+' closed stirrup at '+fmt(S.stir.s)+' in. ($A_{v}$ = '+fmt(S.stir.legs*REBAR[S.stir.size].a)+' in²).']:'No transverse reinforcement specified.',S.tor.present&amp;&amp;ACI?['Torsion:',(S.tor.kind==='compatibility'?'compatibility':'equilibrium')+' torsion, θ = '+fmt(S.tor.theta,0)+'°, $A_{\\ell}$ = '+fmt(S.tor.Al)+' in².']:null,S.skin&amp;&amp;S.skin.size&amp;&amp;S.skin.s>0?['Skin bars:','#'+S.skin.size+' at '+fmt(S.skin.s)+' in on each side face (drawn over the zone of 9.7.2.3 / 5.6.7 only, the first one spacing from the outermost tension layer).']:['Skin bars:','none entered.'],['Clear spacing between layers:',fmt(S.layerClear)+' in.']])]});   /* CBM3: skin bars; CBNL: as a list */
     const hasT=(S.tor.present&amp;&amp;ACI)||!ACI;   /* CBH1b: T_u shown in AASHTO mode (as the Loads input) */
     if(cbcSvcOn()){   /* CBSL: the service load cases, then the combinations built (each value links to its worked step) */
@@ -6085,6 +6112,7 @@ function cbcDashRender(){
     if(cnt) cnt.innerHTML=blocked?'<span class=&quot;cbdCf&quot;>input error</span>':'';
     return;
   }
+  if(cbcSlab()) box.appendChild(el('div','cbdBasis','One-way slab: results '+cbcSlabPer()+'.'));   /* CBSW: the width basis */
   let nF=0;
   items.forEach(it=>{
     if(it.st==='fail') nF++;
@@ -6525,7 +6553,7 @@ var CBMR_CFG={name:'Beam Capacity',title:'Beam Capacity — Calculation Report',
       ks=ks.concat(ks.length?['omit-'+ks[0].split('/')[0]]:[],c.tab?['cbro:'+c.tab]:[]);
       var det=it.text+(it.cond&amp;&amp;it.dc?'; '+it.dc+(it.within?' (the ratio is within its limit; the status comes from the condition)':''):'');
       rows.push(row(it.name,it.cond||it.dc,it.st,det,it.ref,ks)); });
-    return {rows:rows,note:'Result: the D/C, or, where a limit or condition is not met, that condition (its D/C is under Detail). Every load combination is enveloped; the tables by combination are in the Summary of checks section ([[cbro:tabSummary]]).'};
+    return {rows:rows,note:(cbcSlab()?'One-way slab: every result '+cbcSlabPer()+'. ':'')+'Result: the D/C, or, where a limit or condition is not met, that condition (its D/C is under Detail). Every load combination is enveloped; the tables by combination are in the Summary of checks section ([[cbro:tabSummary]]).'};   /* CBSW: the width basis */
   },
   overview:function(){ return cbmOvSection(); }, note:null};
 /* ---------- CBOV (2026-11-05; in this tab's report since CBMR): &quot;Overview of the beam&quot;, section 2, after the Summary of results:
