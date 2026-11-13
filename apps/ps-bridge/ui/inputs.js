@@ -61,13 +61,15 @@
   /* the owner card (Owner rules): owner, the η questions, the design load multiplier, the sidewalk question and the rules list.
      R (when given): the owner's material checks (MAT rule ids, the engine's R.checks by the rule's check name) show the engine's value, limit
      and ratio in "Applied here", worked as ratio = value / limit (a maximum) or limit / value (a minimum), the engine's rule; each rules row
-     has id own-rule-<rule id> (the check summary's Materials chip opens it). Display only: every number is an engine value (data-ev). */
-  const MAT = ['fc.min', 'fc.range', 'fci.max', 'fci.range'];
+     has id own-rule-<rule id> (the check summary's Owner limits chip opens it). Display only: every number is an engine value (data-ev).
+     2026-11-13: also the RIDOT girder age at continuity (cont.age, continuity on): t_d in days, the minimum 90 days, ratio = limit / t_d. */
+  const MAT = ['fc.min', 'fc.range', 'fci.max', 'fci.range', 'cont.age'];
   function matCell(r, R) {
     const i = R && R.checks ? R.checks.findIndex(c => c.n === r.nm) : -1; if (i < 0) return '';
-    const c = R.checks[i], K = window.PSBOutKit, ev = (k, d) => K.ev(R, `checks.${i}.${k}`, d), sym = /f′ci/.test(r.nm) ? 'f′<sub>ci</sub>' : 'f′<sub>c</sub>';
-    const isMin = Object.is(c.r, c.lim / c.v) && !Object.is(c.r, c.v / c.lim);   // the engine's ratio for a minimum is limit / value
-    return `<br>${sym} = ${ev('v', 2)} ksi; governing ${isMin ? 'minimum' : 'maximum'} ${ev('lim', 2)} ksi; ratio = ${isMin ? `${ev('lim', 2)} / ${ev('v', 2)}` : `${ev('v', 2)} / ${ev('lim', 2)}`} = <b>${ev('r', 3)}</b> ${c.pass ? 'PASS' : '<b style="color:var(--fail)">FAIL</b>'} (check summary: Materials (owner limits))`;
+    const c = R.checks[i], K = window.PSBOutKit, age = r.id === 'cont.age', dv = age ? 0 : 2, u = age ? 'days' : 'ksi', ev = (k, d) => K.ev(R, `checks.${i}.${k}`, d);
+    const sym = age ? 't<sub>d</sub> (girder age at continuity)' : /f′ci/.test(r.nm) ? 'f′<sub>ci</sub>' : 'f′<sub>c</sub>';
+    const isMin = age || (Object.is(c.r, c.lim / c.v) && !Object.is(c.r, c.v / c.lim));   // the engine's ratio for a minimum is limit / value (the age: a minimum, r = 90 / t_d)
+    return `<br>${sym} = ${ev('v', dv)} ${u}; governing ${isMin ? 'minimum' : 'maximum'} ${ev('lim', dv)} ${u}; ratio = ${isMin ? `${ev('lim', dv)} / ${ev('v', dv)}` : `${ev('v', dv)} / ${ev('lim', dv)}`} = <b>${ev('r', 3)}</b> ${c.pass ? 'PASS' : '<b style="color:var(--fail)">FAIL</b>'} (check summary: Owner limits)`;
   }
   function ownerCard(P, R) {
     const P_ = PB(), b = P.base, o = P_.ownerOf(b), ow = P_.OWN_RULES.owners[o] || {}, rules = P_.ownRules(o);

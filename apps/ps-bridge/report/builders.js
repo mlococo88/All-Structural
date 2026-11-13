@@ -39,10 +39,12 @@
   /* ---------- 1. summary of checks ---------- */
   function summary(B, X) {
     const { R } = B, V = X.V, GR = (window.PSBDashUI && window.PSBDashUI.GROUPS) || [], RT = window.PSBDashUI && window.PSBDashUI.RATING;
-    // each check's group of the check-summary column; a group on an input tab (input: the owner's material limits, "Materials (owner limits)",
-    // 2026-11-13) links to the Owner rules table of §2, where the rule, the engine's value, limit and ratio are shown (no link when §2 is left out)
+    // each check's group of the check-summary column; a group on an input tab (input: the owner's limits, "Owner limits": the material limits and
+    // the RIDOT girder age at continuity, 2026-11-13) links to the Owner rules table of §2, where the rule, the engine's value, limit and ratio
+    // are shown (no link when §2 is left out)
     const where = new Map(); GR.forEach(gp => (gp.checks || []).forEach(([n, st]) => { if (!where.has(n)) where.set(n, { gp, st: gp.input ? X.ownKey : st }); }));
-    // any other owner check in no group of the column: the Owner rules table of §2 (link to that subsection)
+    // any other owner check in no group of the column (none today: every owner check is in "Owner limits" or a result group; kept as a
+    // guard, with the note below naming it): the Owner rules table of §2 (link to that subsection)
     const OWNG = { name: 'Owner rules', tab: 'own' };
     R.checks.forEach(c => { if (!where.has(c.n) && /\((MassDOT|CTDOT|RIDOT) [\d.]+\)/.test(c.n) && X.ownKey) where.set(c.n, { gp: OWNG, st: X.ownKey }); });
     const gi = w => (!w ? 99 : w.gp === OWNG ? 98 : GR.indexOf(w.gp));
@@ -54,7 +56,7 @@
     const tw = top && where.get(top.c.n), outCol = R.checks.filter(c => { const w = where.get(c.n); return !w || w.gp === OWNG; });   // checks the column does not count
     const items = [
       note(`${nF ? `FAIL: ${nF} of ${R.checks.length} checks do not pass.` : `PASS: all ${R.checks.length} checks pass.`}${top ? ` Largest ratio ${V(`checks.${top.i}.r`, 3)} (${plain(top.c.n)}, x = ${V(`checks.${top.i}.loc`, 2)} ft)${tw && tw.st ? `, see [[${tw.st}]]` : ''}.` : ''}`, nF > 0),
-      note(`Each check at its governing station, as the engine reports it (the design girder only; every girder × span comes with the bridge level). Ratio = demand / limit, OK ≤ 1.0 (PASS when the ratio ≤ 1.0001, the engine\'s rule); stresses + compression, − tension. Each row links to the step that works it; the owner\'s material limits (group Materials (owner limits)) link to the Owner rules table of §2. The groups are those of the check summary column of the app, whose PASS / FAIL totals count the same checks${outCol.length ? ' except those named below' : ''}.`),
+      note(`Each check at its governing station, as the engine reports it (the design girder only; every girder × span comes with the bridge level). Ratio = demand / limit, OK ≤ 1.0 (PASS when the ratio ≤ 1.0001, the engine\'s rule); stresses + compression, − tension. Each row links to the step that works it; the owner\'s limits (group Owner limits: the material limits and, RIDOT with continuity, the girder age at continuity) link to the Owner rules table of §2. The groups are those of the check summary column of the app, whose PASS / FAIL totals count the same checks${outCol.length ? ' except those named below' : ''}.`),
       ...(outCol.length ? [note(`Not in the check summary column and not counted in its totals: ${outCol.map(c => plain(c.n)).join('; ')} (listed here, with a link to the Owner rules table).`, true)] : []),
       tbl(['Group', 'Check', 'x (ft)', 'Demand', 'Limit', 'Unit', 'Ratio', 'Status', 'Worked'], rows, { wide: true })];
     if (RT && R.rating) {

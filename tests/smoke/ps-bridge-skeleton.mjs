@@ -24,9 +24,12 @@
 //      the tab, a section left out (chip) is gone and the choice kept in psb2.ui only; Print report puts the whole report alone on the page
 //      (window.print stubbed, print media emulated: the app hidden, every step shown) and Ctrl+P on the tab prints the report without the
 //      app header and the output panel's notes; an input error blocks it;
-//   3j. 2026-11-13: the owner's material limits: no chip for AASHTO; CTDOT: the "Materials (owner limits)" chip FAILs f′ci 6.8 > 6.5 ksi (1.046),
+//   3j. 2026-11-13: the owner's material limits: no chip for AASHTO; CTDOT: the "Materials (owner limits)" (now "Owner limits") chip FAILs f′ci 6.8 > 6.5 ksi (1.046),
 //      counted in the column's totals (= every engine check), opens the Owner rules tab at the rule's row (engine values = computeAll),
 //      and the Report's §1 counts and groups the same;
+//   3l. 2026-11-13: RIDOT, continuity on: the girder age at continuity in the "Owner limits" chip (renamed from "Materials (owner limits)"),
+//      counted, opening its Owner rules row; the Report §1 row in that group; the handling elevation in both stages in the Report, the
+//      tab's stage kept; no figure wording of the screen controls;
 //   3k. 2026-11-13: the Report's graphics: each result section holds its tab's graphics (the tab's own drawing), numbered Figure n.m,
 //      static, the handling stage named, labels >= 10 px on the printed page; Print report prints every figure; on the phone the figures are
 //      drawn at the screen width and print at 700 px;
@@ -217,7 +220,13 @@ await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.opt\
     return out; });
   { const f = await FIGQ(), want = ['Section properties', 'Loads & LLDF', 'Analysis', 'Prestress losses', 'Stresses', 'Flexure', 'Shear', 'End zone & hold-down', 'Camber & deflection', 'Handling', 'Deck', 'Rating'];
     check(f.n >= 20 && !f.bad.length && !f.small.length && want.every(t => f.per[t.toUpperCase()] >= 1 || f.per[t] >= 1) && !f.per['Summary of checks'.toUpperCase()] && !f.per['Summary of checks'], 'report figures: every result section, numbered, static, labels >= 10 px printed ' + JSON.stringify({ n: f.n, per: f.per, bad: f.bad.slice(0, 5), small: f.small.slice(0, 5) }));
-    check(f.caps.some(c => /Girder on its supports.*shown: Stage: (Lifting|Hauling)/.test(c)) && f.caps.some(c => /Strand pattern/.test(c)) && f.caps.some(c => /Deck section/.test(c)) && f.caps.some(c => /Camber/.test(c)) && f.caps.some(c => /Rated sections/.test(c)), 'report figures: handling elevation with its stage, strand pattern, deck section, camber, rating locations ' + f.caps.filter(c => /supports/.test(c)).join(' | '));
+    check(f.caps.some(c => /Girder on its supports.*shown: Stage: Lifting/.test(c)) && f.caps.some(c => /Strand pattern/.test(c)) && f.caps.some(c => /Deck section/.test(c)) && f.caps.some(c => /Camber/.test(c)) && f.caps.some(c => /Rated sections/.test(c)), 'report figures: handling elevation with its stage, strand pattern, deck section, camber, rating locations ' + f.caps.filter(c => /supports/.test(c)).join(' | '));
+    // 2026-11-13: the handling elevation in both stages, Lifting then Hauling (the tab was left on Hauling above), and the tab's stage kept;
+    // no caption speaks of the screen controls or of a table above (the Report's tables follow its figures)
+    const hi = f.caps.findIndex(c => /Girder on its supports/.test(c));
+    check(hi >= 0 && /shown: Stage: Lifting$/.test(f.caps[hi]) && /^Figure 12\.3: Girder on its supports.*shown: Stage: Hauling$/.test(f.caps[hi + 1] || '') && /^Figure 12\.2: /.test(f.caps[hi]) && f.caps.filter(c => /Girder on its supports/.test(c)).length === 2, 'report: handling elevation, Lifting and Hauling ' + JSON.stringify(f.caps.slice(hi, hi + 2)));
+    const words = await p.evaluate(() => [...document.querySelectorAll('.rp-doc .rp-fig')].map(x => x.textContent).filter(t => /click|\btap\b|point at|hover|button|select it|\bShow\b|table above/i.test(t)).map(t => t.slice(0, 60)));
+    check(!words.length, 'report figures: no wording of the screen controls ' + JSON.stringify(words));
     if (args.shots) { await p.evaluate(() => { const f = [...document.querySelectorAll('.rp-doc .rp-fig')].find(x => /Strand pattern/.test(x.textContent)); f.scrollIntoView({ block: 'start' }); }); await p.waitForTimeout(200); await p.screenshot({ path: path.join(args.shots, 'ps-bridge-1400-report-figure.png') }); } }
   const j = await p.evaluate(() => { const a = [...document.querySelectorAll('.rp-doc section[data-rpsec="rp-s1"] .rp-see')][0], id = a.getAttribute('href').slice(1); a.click(); const el = document.getElementById(id), b = el.getBoundingClientRect(); return { id, step: el.classList.contains('rp-step'), inView: b.top >= -2 && b.top < innerHeight }; });
   check(j.step && j.inView, 'summary "see §" link jumps to its step ' + JSON.stringify(j));
@@ -244,7 +253,9 @@ await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.opt\
   const cp = await p.evaluate(() => { const vis = el => !!el && getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().height > 0;
     return { hdr: vis(document.getElementById('hdr')), notes: [...document.querySelectorAll('#out > .alert')].some(vis), doc: vis(document.querySelector('.rp-doc')), bar: vis(document.querySelector('#out .rp-bar')), dash: vis(document.getElementById('sbDashCol')) }; });
   check(!cp.hdr && !cp.notes && cp.doc && !cp.bar && !cp.dash, 'Ctrl+P on the Report tab: the report only ' + JSON.stringify(cp));
-  await p.emulateMedia({ media: 'screen' }); }
+  await p.emulateMedia({ media: 'screen' });
+  await p.click('#tabBar [data-otab="hand"]'); await p.waitForTimeout(200);
+  check(await p.evaluate(() => document.querySelector('#hnElFig [data-vkseg="haul"]').getAttribute('aria-pressed') === 'true' && /hauling/.test(document.querySelector('#hnElFig svg').getAttribute('aria-label'))), 'the Handling tab keeps its stage (Hauling) after the Report'); }
 // 2026-11-13: the owner's material limits in the check summary ("Materials (owner limits)", counted in the totals; opens the Owner rules
 // table at its row, where the engine's value, limit and ratio are shown) and the Report's §1 the same; CTDOT f′ci 6.8 > 6.5 ksi FAILs, 1.046
 { check(!(await p.$('#sbDashCol [data-sdgrp="mat"]')), 'AASHTO: no Materials chip');
@@ -267,7 +278,7 @@ await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.opt\
   if (args.shots) await p.screenshot({ path: path.join(args.shots, 'ps-bridge-1400-materials-chip.png') });
   await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 60000 });
   const r = await p.evaluate(() => { const s1 = document.querySelector('.rp-doc section[data-rpsec="rp-s1"]'), rows = [...s1.querySelectorAll('table tbody tr')].map(tr => [...tr.children].map(td => td.textContent.trim()));
-    return { lead: s1.textContent, nF: rows.filter(r => r[7] === 'FAIL').length, mat: rows.filter(r => r[0] === 'Materials (owner limits)').map(r => r[1] + ' ' + r[6] + ' ' + r[7]) }; });
+    return { lead: s1.textContent, nF: rows.filter(r => r[7] === 'FAIL').length, mat: rows.filter(r => r[0] === 'Owner limits').map(r => r[1] + ' ' + r[6] + ' ' + r[7]) }; });
   check(r.nF === d.F && new RegExp(`FAIL: ${d.F} of ${d.all} checks`).test(r.lead) && r.mat.some(t => /f′ci \(CTDOT 5\.9\.1\.2\) 1\.046 FAIL/.test(t)) && r.mat.length === 2 && !/Not in the check summary column/.test(r.lead), 'Report §1 = the column ' + JSON.stringify(r.mat) + ' ' + r.nF);
   await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.owner', 'AASHTO'); await p.waitForTimeout(300); if (await p.isVisible('#tClose')) await p.click('#tClose'); }
 // an input error blocks every result tab
@@ -275,6 +286,33 @@ await p.click('#inTabs [data-itab="mat"]'); await p.fill('#i_base\\.mat\\.fci', 
 for (const t of ['sec', 'lds', 'an', 'loss', 'str', 'flex', 'shear', 'end', 'camb', 'hand', 'deck', 'rt', 'rpt']) { await p.click(`#tabBar [data-otab="${t}"]`); check(/Results not shown/.test(await p.textContent('#out')) && !(await p.$('#out [data-ev]')) && !(await p.$('#out .rp-doc')), 'blocked ' + t); }
 await p.fill('#i_base\\.mat\\.fci', '6.8'); await p.press('#i_base\\.mat\\.fci', 'Tab');
 check(!o.errs.length, 'console errors (result tabs): ' + o.errs.join(' | '));
+await o.b.close();
+// 3l. 2026-11-13: the RIDOT girder age at continuity (RIDOT 5.6.3.3, continuity on) in the "Owner limits" chip: t_d = 60 < 90 days FAILs (1.500),
+// counted in the totals, opens the Owner rules tab at its row (engine values), the Report's §1 row in group Owner limits, no "not in the column" note
+o = await openPage(FILE, { vw: 1400, vh: 1000 }); p = o.p; await ready(p);
+await p.evaluate(() => { const P = window.PSBModel.defaultProject(); P.base.owner = 'RIDOT'; P.spans = { lengths: [110, 110], continuity: 'composite' }; P.xs.skews = [0, 0, 0]; P.base.mat.td = 60;
+  localStorage.setItem('psb2.project.current', window.PSBModel.exportJSON(P)); });
+await p.reload(); await ready(p);
+{ const N = 'Girder age at continuity (RIDOT 5.6.3.3)';
+  const d = await p.evaluate(N => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P)), c = R.checks.find(q => q.n === N);
+    const chip = document.querySelector('#sbDashCol [data-sdgrp="mat"]'), F = document.querySelector('#sbDashHead .sdF'), Pp = document.querySelector('#sbDashHead .sdP');
+    return { c, all: R.checks.length, nF: R.checks.filter(q => !q.pass).length, name: chip && chip.querySelector('.sdName').textContent, cls: chip && chip.className, val: chip && chip.querySelector('.sdVal').textContent,
+      F: F ? parseInt(F.textContent, 10) : 0, Pn: Pp ? parseInt(Pp.textContent, 10) : 0 }; }, N);
+  check(d.c && d.c.v === 60 && d.c.lim === 90 && !d.c.pass && d.name === 'Owner limits' && /sd-fail/.test(d.cls) && d.val === '1.500', 'Owner limits chip: RIDOT girder age 60 < 90 days FAIL 1.500 ' + JSON.stringify({ name: d.name, val: d.val }));
+  check(d.F === d.nF && d.F + d.Pn === d.all, `column totals count the age check: ${d.F} FAIL + ${d.Pn} PASS of ${d.all}`);
+  await p.click('#sbDashCol [data-sdgrp="mat"] .sdX'); check((await p.textContent('#sbDashCol')).includes(N + ': 1.500'), 'Owner limits chip lists the age check');
+  await p.click('#sbDashCol [data-sdgrp="mat"] .sdList a[data-sdown="own|own-rule-cont.age"]'); await p.waitForTimeout(200);
+  const g = await p.evaluate(() => { const el = document.getElementById('own-rule-cont.age'), b = el && el.getBoundingClientRect(), pn = document.getElementById('inputPanel').getBoundingClientRect();
+    const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, RR = window.PSBHoldDown.compute(window.PSBDesign.inputs(P)), fx = window.PSBOutKit.fx;
+    const ev = el ? [...el.querySelectorAll('[data-ev]')] : [], bad = ev.filter(e => e.textContent !== fx(e.dataset.ev.split('.').reduce((o, k) => o == null ? o : o[k], RR), +e.dataset.d)).map(e => e.dataset.ev);
+    return { vis: !document.querySelector('#inPanes [data-pane="own"]').hidden, row: el ? el.textContent : '', ev: ev.length, bad, inView: !!b && b.top >= pn.top - 2 && b.bottom <= pn.bottom + 2 }; });
+  check(g.vis && g.inView && g.ev === 5 && !g.bad.length && /= 60 days; governing minimum 90 days; ratio = 90 \/ 60 = 1\.500 FAIL/.test(g.row), 'the age check opens the Owner rules tab at its row ' + JSON.stringify(g));
+  await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 60000 });
+  const r = await p.evaluate(N => { const s1 = document.querySelector('.rp-doc section[data-rpsec="rp-s1"]'), rows = [...s1.querySelectorAll('table tbody tr')].map(tr => [...tr.children].map(td => td.textContent.trim()));
+    const row = rows.find(q => q[1] === N); return { row, nF: rows.filter(q => q[7] === 'FAIL').length, note: /Not in the check summary column/.test(s1.textContent) }; }, N);
+  check(r.row && r.row[0] === 'Owner limits' && r.row[6] === '1.500' && r.row[7] === 'FAIL' && /see/.test(r.row[8]) && r.nF === d.F && !r.note, 'Report §1: the age check in Owner limits, no "not in the column" note ' + JSON.stringify(r));
+  if (args.shots) { await p.click('#inTabs [data-itab="own"]'); await p.waitForTimeout(150); await p.evaluate(() => document.getElementById('own-rule-cont.age').scrollIntoView({ block: 'center' })); await p.screenshot({ path: path.join(args.shots, 'ps-bridge-1400-owner-limits-age.png') }); }
+  check(!o.errs.length, 'console errors (RIDOT continuity age): ' + o.errs.join(' | ')); }
 await o.b.close();
 // 4. unreadable saved project
 o = await openPage(FILE, { vw: 1400, vh: 1000, ls: { 'psb2.project.current': '{broken' } }); p = o.p; await ready(p);
