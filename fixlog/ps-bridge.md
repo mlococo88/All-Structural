@@ -1292,7 +1292,7 @@ PR #1526: https://github.com/mlococo88/All-Structural/pull/1526
   barriers) computes 1.5 ft. Keep it, or not count the default (unedited) entered value as "entered"?
 
 ## 2026-11-13 — PS-24: a new project's entered d_e = the d_e computed from its default cross-section (1.5 ft), so a fresh project shows no PS-23 notice (new projects only; results unchanged)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1528: https://github.com/mlococo88/All-Structural/pull/1528
 ### Request
 - Engineer decision PS-24 (2026-11-13), answering the PS-23 (#1526) open item: new PS Bridge projects set each girder type's entered d_e
   (loads.de) to the value computed from the default cross-section (1.5 ft for the default 3.0 ft overhangs / 1.5 ft barriers), so no d_e
