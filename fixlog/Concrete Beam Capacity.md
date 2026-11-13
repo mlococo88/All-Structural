@@ -7164,7 +7164,7 @@ b = 50 in, same bars: n = floor(50/12) = floor(4.17) = 4, A_s = 1.24 in², a = 7
 - **Tests:** `tests/smoke/cbc-slab.mjs` extended (actual width b = 48 and 50, b < s, hand-off to ASD and Development & Splice, labels, Report, save and reopen, back to the strip), 1400 and 390 px, 0 console errors. The suite's other tests are listed in the PR.
 
 
-## 2026-11-13 — PR: claude/cb-input-widths (CBIF) — Beam Capacity and Development & Splice tabs: no input select cut off (layer table Size / Face, long selects)   [display only; no computed value, saved key or format change]
+## 2026-11-13 — PR: claude/cb-input-widths (PR #1515: https://github.com/mlococo88/All-Structural/pull/1515) (CBIF) — Beam Capacity and Development & Splice tabs: no input select cut off (layer table Size / Face, long selects)   [display only; no computed value, saved key or format change]
 
 Engineer report (screenshot, laptop about 1500 px wide): in Beam Capacity, Reinforcement, "4. Reinforcement layers", the Size select showed only "#" and the Face select "Te". Every site is tagged CBIF. The file uses CRLF line endings; keep them. Beam Capacity code is in the `#suite-frame-capacity` srcdoc and Development & Splice code in the `#suite-frame-dev` srcdoc: when re-applying, escape `"` as `&quot;` and `&` as `&amp;` (the text below is un-escaped).
 
