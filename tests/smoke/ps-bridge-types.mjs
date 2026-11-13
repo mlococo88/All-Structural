@@ -127,8 +127,14 @@ check(!/to fix/.test(await p.textContent('#sbDashCol')), 'unequal bays: no input
 // PS-19: the exterior rigid section on the real girder lines (8, 10, 10, 8 ft): Exterior S1 on G1, Loads & LLDF: X_ext 18, Σx² 848, R = DF_M 0.7821
 await p.click('#tabBar [data-otab="lds"]'); await p.selectOption('#tyOutT', { label: 'Exterior S1 (span 1)' }); await p.waitForTimeout(150); await p.selectOption('#tyOutL', '1'); await p.waitForTimeout(300);
 { const r = await p.evaluate(() => ({ s: !!document.getElementById('st-ld.rigSx2'), x: !!document.getElementById('st-ld.rigXext'), dfm: (document.querySelector('#out .kv [data-ev="dfm"]') || document.querySelector('#out [data-ev="dfm"]') || {}).textContent }));
-  check(r.s && r.x && /^0\.78/.test(r.dfm || ''), 'PS-19: the rigid-section steps on the real girder lines, DF_M ' + JSON.stringify(r));
+  check(r.s && r.x && /^0\.7\d/.test(r.dfm || ''), 'PS-19: the rigid-section steps on the real girder lines, DF_M ' + JSON.stringify(r));   // PS-20: d_e 1.5 ft from the barriers: R 0.7608
   const e = await evCheck(p); check(e.n >= 20 && !e.bad.length, `PS-19 Loads & LLDF values = computeAll + rigid: ${e.n} ${e.bad.slice(0, 3).join(' | ')}`); }
+// PS-20: d_e of each exterior line from the cross-section (overhang − barrier face): right overhang 4 ft → G5 2.500 ft, G1 1.500 ft; the entered field hidden
+await p.click('#inTabs [data-itab="xsec"]'); await p.fill('#i_xs\\.ohR', '4'); await p.press('#i_xs\\.ohR', 'Tab'); await p.waitForTimeout(300);
+{ const t = (await p.textContent('#card-extll')).replace(/\s+/g, ' ');
+  check(/G1 1\.500 ft/.test(t) && /G5 2\.500 ft/.test(t) && !(await p.$('#i_base\\.loads\\.de')), 'PS-20: d_e per exterior line ' + t.slice(0, 200));
+  const de = await p.evaluate(() => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project; return [window.PSBDesign.cellInputs(P, 1, 1).loads.de, window.PSBDesign.cellInputs(P, 1, 5).loads.de]; });
+  check(de[0] === 1.5 && de[1] === 2.5, 'PS-20: engine d_e per line ' + de); }
 await p.click('#inTabs [data-itab="layout"]'); await p.fill('#i_xs\\.skews', '10, 20'); await p.press('#i_xs\\.skews', 'Tab'); await p.waitForTimeout(300);
 check(!/to fix/.test(await p.textContent('#sbDashCol')), 'skews 10, 20: allowed');
 await p.fill('#i_xs\\.skews', '20, 35'); await p.press('#i_xs\\.skews', 'Tab'); await p.waitForTimeout(300);

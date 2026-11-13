@@ -25,15 +25,16 @@ test('equal bays: no rigidX, inputs and results byte-identical to before PS-19 (
       if (c.g === 1) assert.equal(C(W.PSBHoldDown.compute(J(a))), C(W0.PSBHoldDown.compute(J(b))), `${name} G1 result`); });
   }
   for (const [nb, S, de, NL] of [[5, 9, 2, 2], [6, 8.5, 1.25, 3], [4, 10, 3.5, 4], [7, 7, -0.5, 2]]) {
-    const P = M.newProject(); P.xs.nb = nb; P.xs.bays = Array(nb - 1).fill(S); P.types = W.PSBBridge.newTypes(P); P.base.loads.de = de; P.base.loads.NL = NL;
+    const P = M.newProject(); delete P.xs.dl;   // PS-20: no cross-section barriers → d_e as entered
+    P.xs.nb = nb; P.xs.bays = Array(nb - 1).fill(S); P.types = W.PSBBridge.newTypes(P); P.base.loads.de = de; P.base.loads.NL = NL;
     const i = D.cellInputs(P, 1, 1), R = W.computeAll(J(i)), x = Array.from({ length: nb }, (_, j) => j * S), r = RG.rigidOf(x, 1, de, NL);
     assert.ok(Math.abs(r.R - R.df.rigid) < 1e-12 && r.NL === R.df.rigidNL && Math.abs(r.R1 - R.df.rigid1) < 1e-12, `${nb} @ ${S}: ${r.R} vs ${R.df.rigid}`);
   }
 });
 
 test('hand check 8 / 10 / 10 / 8 ft, G1 (d_e 2.0, N_L 2): X_ext 18, Σx² 848, R = 0.78208 (engine form 0.75); DF_M of G1 = R; interior lines unchanged', () => {
-  const P = M.newProject(); P.xs.bays = [8, 10, 10, 8];
-  const i = D.cellInputs(P, 1, 1); assert.deepEqual(J(i.rigidX), { x: [0, 8, 18, 28, 36], g: 1 });
+  const P = M.newProject(); P.xs.bays = [8, 10, 10, 8]; P.xs.dl.barL.bw = 1; P.xs.dl.barR.bw = 1;   // PS-20: d_e = 3 − 1 = 2.0 ft from the cross-section
+  const i = D.cellInputs(P, 1, 1); assert.equal(i.loads.de, 2); assert.deepEqual(J(i.rigidX), { x: [0, 8, 18, 28, 36], g: 1 });
   const R = W.PSBHoldDown.compute(J(i)), q = R.df.rigidX, near = (a, b, t) => assert.ok(Math.abs(a - b) < (t || 1e-9), `${a} vs ${b}`);
   near(q.xbar, 18); near(q.Xext, 18); near(q.sumX2, 848);
   // N_L = 1: e = 18 + 2 − 5 = 15; R = 1.2 (1/5 + 18 × 15 / 848) = 0.62208; N_L = 2: Σe = 15 + 3 = 18; R = 1.0 (2/5 + 18 × 18 / 848) = 0.78208

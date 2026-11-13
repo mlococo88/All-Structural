@@ -49,6 +49,17 @@
     if (g <= 1) return B[0]; if (g >= nb) return B[B.length - 1];
     return (B[g - 2] + B[g - 1]) / 2;
   }
+  /* deOf(P, g): d_e of exterior line g (ft), PS-20 (engineer decision 2026-11-13): the distance from the exterior web (the girder ℄) to the
+     inside face of the barrier = the overhang on its side − the traffic face from that deck edge: the barrier width, or a sidewalk 12 in or
+     thicker when it reaches farther in (its curb face; a thinner sidewalk is mountable: the steel app's llFaces rule). AASHTO LRFD 10th Ed.
+     Art. 4.6.2.2.1 (d_e) and 4.6.2.2.2d. null: an interior line, or a project without the cross-section's barriers (P.xs.dl absent: every
+     project saved before PR 3a-3): d_e as entered (unchanged). */
+  function deOf(P, g) {
+    const x = P && P.xs, q = x && x.dl; if (!q || !(g === 1 || g === x.nb)) return null;
+    const s = g === x.nb && g !== 1 ? 'R' : 'L', oh = +(s === 'R' ? x.ohR : x.ohL), b = +((q['bar' + s] || {}).bw) || 0, sw = q['sw' + s] || {};
+    const face = Math.max(b, +sw.w > 0 && +sw.t >= 12 - 1e-9 ? +sw.w : 0);
+    return oh - face;
+  }
   /* skewOf(P, s): the skews at the two supports of span s (deg, as entered) */
   const skewOf = (P, s) => { const k = (P.xs && P.xs.skews) || []; return [k[s - 1], k[s]]; };
   /* checks(P): { errors: [{ path, msg }] } the design selection and the PR 2b limits (one design: one spacing, one skew) */
@@ -97,6 +108,8 @@
     // distributes them (P.xs.dl.mode 'distributed'); else the values entered per girder (base.loads.wBar / wDW) as before
     const DL = window.PSBBridgeDL, q = DL ? DL.line(P, d.g) : null;
     if (q) o.loads = Object.assign({}, o.loads, { wBar: q.DC2, wDW: q.DW });
+    // PS-20 (§4): d_e of an exterior line from the bridge cross-section (deOf) when the project has its barriers (P.xs.dl); else as entered
+    const de = deOf(P, d.g); if (de != null) o.loads = Object.assign({}, o.loads, { de });
     // PS-19 (§4): with unequal bays the exterior rigid-section factor on the real girder lines (engine/rigid.js); equal bays and interior lines: nothing added
     const B = (P.xs && P.xs.bays) || [];
     if ((d.g === 1 || d.g === P.xs.nb) && B.length >= 2 && B.some(v => Math.abs(v - B[0]) > 1e-9)) { /* exterior lines only (the rigid section is theirs) */ const x = [0]; B.forEach(v => x.push(x[x.length - 1] + v)); o.rigidX = { x, g: d.g }; }
@@ -111,9 +124,10 @@
       { key: 'nGirders', label: 'Number of girders', value: i.nGirders, d: 0, unit: '', where: 'xsec' },
       { key: 'loads.pos', label: 'Position', value: i.loads.pos, unit: '', where: 'gird' },
       { key: 'deck.oh', label: `Deck overhang (${d.g === P.xs.nb && d.g !== 1 ? 'right' : 'left'}), girder ℄ to deck edge`, value: i.deck.oh, unit: 'ft', where: 'xsec' },
+      ...(deOf(P, d.g) != null ? [{ key: 'loads.de', label: `d_e: exterior web to the barrier face (${d.g === P.xs.nb && d.g !== 1 ? 'right' : 'left'} overhang − traffic face)`, value: i.loads.de, d: 3, unit: 'ft', where: 'xsec' }] : []),
       { key: 'loads.skew', label: `Skew θ (supports of span ${d.s}: the larger)`, value: i.loads.skew, d: 1, unit: 'deg', where: 'layout' },
       { key: 'cont.on', label: 'Made continuous for composite loads', value: i.cont.on ? 'yes' : 'no', unit: '', where: 'layout' }
     ];
   }
-  window.PSBDesign = { lineS, DRIVEN, sel, isExt, label, bridge, checks, inputs, cellInputs, one, driven };
+  window.PSBDesign = { deOf, lineS, DRIVEN, sel, isExt, label, bridge, checks, inputs, cellInputs, one, driven };
 })();
