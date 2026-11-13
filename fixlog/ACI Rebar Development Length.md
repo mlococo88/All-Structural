@@ -2197,3 +2197,6 @@ function schematicSVG(inp,f){
 
 ## 2026-11-10 — PR: claude/cbc-lap-cite-asd-ed (PR #1336: https://github.com/mlococo88/All-Structural/pull/1336) (CBLC) — pointer only (no change to the redirect page)
 - AASHTO #14/#18: the validation notice, the dashboard check "Lap splice permitted" and its link entry, and the all-tabs summary row now cite 5.10.8.4.2a for tension and 5.10.8.4.5a for compression (AASHTO LRFD 10th Ed.); the unreachable AASHTO banner in `tabCSplice()` matches `tabCSpliceAASHTO()`. N/P flags and every length unchanged. This closes the open items of CBCL. Edits, anchors, before/after and check case are in `fixlog/Concrete Beam Capacity.md`, entry CBLC.
+
+## 2026-11-13 — PR: claude/cb-dev-blank-size (PR #1522: https://github.com/mlococo88/All-Structural/pull/1522) (RBBZ) — pointer only (no change to the redirect page)
+- Development & Splice tab of Concrete Beam Capacity.html: a saved or imported project whose Bar Size is blank or not a bar opens with its data kept and the input error "Bar size: choose a bar size (Code & Material, B. Design Code & Material)." (select outlined, no results); before, a page error. Full entry: fixlog/Concrete Beam Capacity.md (RBBZ).

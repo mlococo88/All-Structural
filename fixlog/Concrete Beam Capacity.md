@@ -7352,3 +7352,35 @@ The only select whose blank defaulted silently was the layer Size. A blank S&T o
 
 ### Open items
 - The Development & Splice tab's Bar Size (`barSize`): a saved project with `barSize:""` gives a page error ("reading 'd'"). It is not a silent default. Not changed here (same file, different app): make it an input error if the engineer wants.
+
+## 2026-11-13 — PR: claude/cb-dev-blank-size (PR #1522: https://github.com/mlococo88/All-Structural/pull/1522) (RBBZ) — Development & Splice tab: a saved or imported project whose Bar Size is blank or not a bar is an input error (was a page error) (engineer decision CB-15, as CBBZ)   [validation only; no computed value, saved key or format change; only projects with a blank or unknown Bar Size open differently]
+
+Every site is tagged RBBZ. The file uses CRLF line endings; keep them. The code is in the Development & Splice srcdoc (`#suite-frame-dev`); escape `"` as `&quot;` and `&` as `&amp;` when re-applying (the text below is un-escaped). A pointer is in `fixlog/ACI Rebar Development Length.md`.
+
+### Problem
+`applyState()` sets the Bar Size select to the saved `inp.barSize`. A blank `""` or an unknown value (e.g. `"99"`) leaves the select with no option, `readInputs()` reads `""`, and `computeFactors()` threw at `BAR[inp.barSize].d` ("Cannot read properties of undefined (reading 'd')"). The tab then stopped with no output. A project saved without `barSize` keeps the default #8 (unchanged).
+
+### Changes
+- **`computeFactors()`**:
+  - Before: `const bar = BAR[inp.barSize];`
+  - After: `const bar = BAR[inp.barSize]||{d:NaN,a:NaN};`
+  - It no longer throws. A valid size gives identical values.
+- **`rbInputErrors()`**, first check:
+  - Code: `if(!BAR[inp.barSize]){ E.push(['barSize',"Bar size: choose a bar size (Code & Material, B. Design Code & Material)."]); return E; }`
+  - The other required-input checks need d_b, so they wait for a valid size.
+  - As for every RBIE error: the select is outlined with the message under it; the output tab, the check summary panel, the Report and Beam Capacity's Drawings ("THE DEVELOPMENT & SPLICE TAB HAS AN INPUT ERROR") show no results.
+- **The unknown value is kept:**
+  - `applyState()`, after `set('barSize',inp.barSize)`: `e.dataset.rbRaw` = the saved value when the select could not take it, else `''`.
+  - `readInputs()`: `barSize:g('barSize').value||g('barSize').dataset.rbRaw||''`.
+  - So the autosave keeps `"99"`, as it keeps `""`. Choosing a size replaces it.
+- **CSS:** `.field input.rbInErr` → `.field input.rbInErr,.field select.rbInErr`.
+
+### Check case
+- **Saved `{inp:{projName:"Dev", barSize:"", fc:4000, fy:60000}}`:**
+  - Before: page error, no output.
+  - After: the select is blank and outlined; "Bar size: choose a bar size …"; "Input error: no results"; the autosave keeps `barSize:""`, `projName`, `f′c`. Choosing #8 gives the tension l_d.
+- **The same with `barSize:"99"`:** the same result, and the autosave keeps `"99"`.
+
+### How verified
+- **`tests/smoke/cbc-bar-size.mjs` extended** (both cases, 1400 and 390 px, 0 console errors; Beam Capacity's `cbdwDev()` reads the tab as an input error, no throw).
+- **Identity probe:** origin/main vs branch, 6 Development & Splice projects (default; ACI #8 top bar with A_tr; AASHTO #6 epoxy, Hook tab; #14 tension splice; excess reinforcement with Class A; a project saved without `barSize`). The autosave, `readInputs()`, `computeFactors()`, `rbInputErrors()`, the check summary panel, the text of every output tab and Beam Capacity's `cbdwDev()` are all identical.
