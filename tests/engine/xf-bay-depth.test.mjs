@@ -143,7 +143,9 @@ test('SB-19: the diaphragm depth in every bay against the deeper of its two gird
   assert.equal(it.demand, 0.75 * 67.88); assert.match(it.loc, /governing bay G1–G2: d of G1 Exterior/); assert.equal(item(b, 'CFD').demand, 0.75 * 61.88);
   assert.ok(Math.abs(it.r - 0.75 * 67.88 / 15) < 1e-12); assert.equal(it.st, 'warn', '50.91 > 15');
   const st = a.R.steps.find(s => s.id === 'cf.cfd.dep'); assert.equal(st.value, 0.75 * 67.88); assert.match(st.sub, /\\max\(67\.88,\\ 61\.88\)/);
-  const P2 = dia(withExt(-6)), it2 = item(run(P2, 0), 'CFD'); assert.equal(it2.demand, 0.75 * 61.88, 'Exterior shallower: G1–G2 deeper = Interior'); assert.match(it2.loc, /G1–G2: d of G2 Interior/);
+  // SB-24 (2026-11-13): Exterior shallower forms two bay depth groups: CFD per group, each item prefixed with its bays and shape
+  const P2 = dia(withExt(-6)), D2 = run(P2, 0).C.find(c => c.id === 'CFD').items.filter(i => /Depth \(6\.7\.4\.2/.test(i.loc)), it2 = D2[0];
+  assert.equal(D2.length, 2); assert.equal(it2.demand, 0.75 * 61.88, 'Exterior shallower: G1–G2 deeper = Interior'); assert.match(it2.loc, /^G1–G2, G4–G5 \(C15x33\.9\): Depth.*G1–G2: d of G2 Interior/); assert.equal(D2[1].demand, 0.75 * 61.88);
 });
 function loadAD() { return loadShared('units.js', 'steps.js', 'lldf.js', 'vehicles.js', 'moving-load.js', ...['engine/model.js', 'engine/sections.js', 'engine/flexure.js', 'engine/owners.js', 'engine/lldf.js', 'engine/loads.js',
   'engine/analysis.js', 'engine/framing.js', 'engine/crossframes.js', 'engine/autodesign.js'].map(E)); }
