@@ -65,14 +65,16 @@
      project's, girder sel.line), else the stations entered, else evenly at most L_b in each span */
   function framesOf(P, sel, sup, ly) { const FRM = window.SBDFraming, b = FRM && P.framing ? FRM.forGirder(P, sel, sup) : null;
     return b ? b.ints : (ly.frames && ly.frames.at) || window.SBDStiffeners.framesDefault(sup, (ly.frames && ly.frames.Lb) || 25); }
+  // SB-16 (2026-11-13): an Auto design run copy (adLines: a girder type on one line) named by that line, not the run's girder number
+  const runLab = (P, g) => { const G = (P.girders || [])[g]; return G && Array.isArray(G.adLines) && Number.isInteger(G.line) ? `G${G.line + 1}` : undefined; };
   function geom(P, g, pl) {
     const st = ensure(P), SB = window.SBDStiffeners, ly = st.layout;
     if (pl) { const sup = (pl.member || {}).supports || [], zones = (pl.section || {}).zones || [], dem = window.SBDShear.demands(pl);
-      return { sup, cont: sup.length > 2, zAt: dem.zAt, chg: zones.slice(0, -1).map(z => z.endX), D: Math.max(...zones.map(z => z.web.depth)), gNo: +((pl.girderDetail || {}).girder) || g + 1, dem, frames: framesOf(P, { line: (+((pl.girderDetail || {}).girder) || g + 1) - 1 }, sup, ly) }; }
+      return { sup, cont: sup.length > 2, zAt: dem.zAt, chg: zones.slice(0, -1).map(z => z.endX), D: Math.max(...zones.map(z => z.web.depth)), gNo: +((pl.girderDetail || {}).girder) || g + 1, gLab: runLab(P, g), dem, frames: framesOf(P, { line: (+((pl.girderDetail || {}).girder) || g + 1) - 1 }, sup, ly) }; }
     const sup = [0]; P.spans.lengths.forEach(L => sup.push(+(sup[sup.length - 1] + +L).toFixed(6)));
     const G = P.girders[g] || P.girders[0], segAt = x => G.segments.find(s => x >= s.x0 - 1e-9 && x < s.x1) || G.segments[G.segments.length - 1];
     return { sup, cont: P.spans.continuity === 'continuous' && sup.length > 2, zAt: x => { const s = segAt(x); return { D: s.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT }; },
-      chg: G.segments.slice(0, -1).map(s => s.x1), D: Math.max(...G.segments.map(s => s.D)), gNo: g + 1, dem: null, frames: framesOf(P, { gi: g }, sup, ly) };
+      chg: G.segments.slice(0, -1).map(s => s.x1), D: Math.max(...G.segments.map(s => s.D)), gNo: g + 1, gLab: runLab(P, g) || `G${g + 1}`, dem: null, frames: framesOf(P, { gi: g }, sup, ly) };
   }
   function onClick(e, P, ui) {
     if (e.target.id !== 'stf_fill') return false;
@@ -141,7 +143,7 @@
       return { ...L, do: q && on ? q.d : 0, end: !!(q && q.end && on), Vpan: Vp, pan: q ? q.i : null, ...(Object.keys(plT).length ? { pl: plT } : {}) }; });
     const stations = locs.map(L => { const r = SH.location(L, { mat: { Fyw }, G }); r.pan = L.pan; return r; });
     // transverse stiffeners: every intermediate stiffener and connection plate of the layout (file), GirderDetail's built-in rows (example)
-    let tsRows = gm.dem ? SB.stiffenerRows(bays, gm.zAt, gm.dem, { label: `G${gm.gNo}` }) : JSON.parse(JSON.stringify(SB.TS_DEFAULT.rows));
+    let tsRows = gm.dem ? SB.stiffenerRows(bays, gm.zAt, gm.dem, { label: gm.gLab || `G${gm.gNo}` }) : JSON.parse(JSON.stringify(SB.TS_DEFAULT.rows));
     if (C) tsRows = tsRows.filter(r => { const a = pans.find(q => Math.abs(q.q - r.x) <= 0.01), b = pans.find(q => Math.abs(q.p - r.x) <= 0.01); return a && b && inPan(C.xs, a) && inPan(C.xs, b); });   // both panels reached
     const TS = tsRows.length ? SB.transverse({ gW: P.materials.steel.web, gS: st.transverse.gS, Fexx: st.transverse.Fexx, gam: { dc: G0.dc, dw: G0.dw, ll: G0.ll, fat: fatI(P) }, types: st.transverse.types, rows: tsRows }, env) : null;
     // bearings: one per support
@@ -150,7 +152,7 @@
     // (DC, DW) and the sum of the two LL+IM shear envelopes (an upper bound, SB2-O16 interim; the file path is kept as it is)
     const rxn = pl && Array.isArray(pl.reactions) && pl.reactions.length === gm.sup.length ? pl.reactions : null;
     if (gm.dem) bsRows = gm.sup.map((x, k) => { const end = k === 0 || k === gm.sup.length - 1 || !gm.cont, s = gm.zAt(Math.min(Math.max(x + (k === gm.sup.length - 1 ? -0.01 : 0.01), 0), gm.sup[gm.sup.length - 1])), R = rxn ? rxn[k] || { DC1: 0, DC2: 0, DW: 0, LL: 0 } : gm.dem.reaction(x);   // custom: a support without reactions entered is dropped below
-      return { name: `${k === 0 ? 'Abut. 1' : k === gm.sup.length - 1 ? 'Abut. 2' : 'Pier ' + k}, G${gm.gNo}`, type: end ? 'A' : 'B', tw: s.tw, bft: s.topB, bfb: s.botB, tfb: s.botT, ed: end ? st.bearing.ed : 0,
+      return { name: `${k === 0 ? 'Abut. 1' : k === gm.sup.length - 1 ? 'Abut. 2' : 'Pier ' + k}, ${gm.gLab || `G${gm.gNo}`}`, type: end ? 'A' : 'B', tw: s.tw, bft: s.topB, bfb: s.botB, tfb: s.botT, ed: end ? st.bearing.ed : 0,
         RDC1: R.DC1, RDC2: R.DC2, RDW: R.DW, RLL: R.LL, ...(R.UT || R.UF ? { ut: { VUT: R.UT, VUF: R.UF } } : {}), ...(R.PL ? { pl: { RLL: [R.PL, R.LL] } } : {}) }; });   // GD45: R_PL part (sb-ped-owner PR)
     else bsRows = JSON.parse(JSON.stringify(SB.BS_DEFAULT.rows));
     if (C) bsRows = bsRows.filter((r, k) => rxn && rxn[k]);   // the supports with reactions entered
@@ -273,7 +275,7 @@
       ${R.TS && R.TS.errors && R.TS.errors.length ? `<div class="alert err">Transverse stiffeners: ${R.TS.errors.map(esc).join('; ')}</div>` : ''}${R.BS.errors && R.BS.errors.length ? `<div class="alert err">Bearing stiffeners: ${R.BS.errors.map(esc).join('; ')}</div>` : ''}</div></section>`;
     h += `<section class="sec"><div class="secHead">Shear &amp; stiffeners: graphics</div><div class="secBody"><div data-gfxb="shear"></div><div data-gfxb="shear-detail"></div><div data-gfxb="shear-bearing"></div><div data-d3="bearing"></div></div></section>`;   // drawn by ui/tabgraphics-b.js (engine/tabgraphics-b.js) from the results below
     // panels
-    h += `<section class="sec"><div class="secHead">Web panels of the layout (G${R.gm.gNo}, D = ${fmt(R.D, 2)} in, F<sub>yw</sub> = ${fmt(R.Fyw, 0)} ksi)</div><div class="secBody">
+    h += `<section class="sec"><div class="secHead">Web panels of the layout (${R.gm.gLab || `G${R.gm.gNo}`}, D = ${fmt(R.D, 2)} in, F<sub>yw</sub> = ${fmt(R.Fyw, 0)} ksi)</div><div class="secBody">
       <p class="note">${R.bays.length} bays, ${R.panels.rows.length} panels. V<sub>u</sub>: the largest Strength I shear in the panel (6.10.9.3.1)${R.gm.dem ? '' : ' (needs a hand-off file)'}; t<sub>w</sub> the thinnest web and 2Dt<sub>w</sub>/(b<sub>fc</sub>t<sub>fc</sub> + b<sub>ft</sub>t<sub>ft</sub>) the largest in the panel.</p>
       <div class="tscroll fx-list"><table class="tbl"><thead><tr><th>Panel (ft)</th><th>d<sub>o</sub> (in)</th><th>Type</th><th>k</th><th>C</th><th>φV<sub>n</sub> (kip)</th><th>Eq.</th><th>V<sub>u</sub> (kip)</th><th>Ratio</th></tr></thead><tbody>
       ${R.panels.rows.map((q, i) => `<tr data-sh="pan:${i}" class="${S.sel && S.sel.k === 'pan' && S.sel.i === i ? 'sel' : ''}${q === R.panels.gov && R.gm.dem ? ' fx-gov' : ''}"><td>${fmt(q.p, 2)}–${fmt(q.q, 2)}</td><td>${fmt(q.d, 2)}</td><td>${q.end ? 'end' : q.stiff ? 'interior' : 'unstiffened'}</td><td>${fmt(q.k, 3)}</td><td>${fmt(q.C, 4)}</td><td>${fmt(q.phVn, 1)}</td><td>${esc(q.eq.replace(/,.*$/, ''))}</td><td>${R.gm.dem ? fmt(q.Vu, 1) : '—'}</td><td class="${R.gm.dem ? cls(q.r) : ''}">${R.gm.dem ? fmt(q.r, 3) : '—'}</td></tr>`).join('')}
