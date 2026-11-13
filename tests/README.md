@@ -205,6 +205,12 @@ node tests/smoke/sbd-standard-save.mjs [--a origin/main] [--shots <dir>]
 # notice; 0 console errors. Fails on main before SBSF (at "after Validation"). ~1 min
 node tests/smoke/steel-beam-builtup.mjs [--file <tool html>]
 
+# Steel Beam Design - AISC 15th (SBXH): the header's Export Excel button for HSS (rect A500 B, rect A1085, round beam and member mode,
+# round torsion with no member span, Pipe) and a W-shape: the download arrives, reads back as .xlsx, has the HSS steps and the app's
+# phiMn / phiVn / phiTn in its formula cells; 0 console errors. Fails on main before SBXH (no download: "unresolved ref"). ~30 s.
+# The sheet's every numeric cell against the app: node tests/engine/run.mjs sbeam-hss-xlsx (Node, ExcelJS from tests/libs).
+node tests/smoke/steel-beam-xlsx-hss.mjs [--file <tool html>]
+
 # Editable list tables (shared/list-input.js, LIST): the widget on a test page (typing, Enter, ",", paste from Excel, remove, checks,
 # labels, bindInput, the React wrapper) and every tool that loads it: the reference commit (BASE in the script; --a <ref> for another,
 # --orig for each tool's commit before its table landed) vs the working tree on the default project and one with custom stations
