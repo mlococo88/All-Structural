@@ -9718,7 +9718,7 @@ index 337abc8..4e020a7 100644
  })();
 ```
 
-## 2026-11-13 — PR: claude/sb-dia-shape-prefill (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Diaphragm Shape set to the governing group's shape when the per-group shapes are prefilled (SBSP; Decision (pending engineer review): display / input consistency; the groups without an entry follow it)
+## 2026-11-13 — PR: claude/sb-dia-shape-prefill (PR #1516: https://github.com/mlococo88/All-Structural/pull/1516) — Diaphragm Shape set to the governing group's shape when the per-group shapes are prefilled (SBSP; Decision (pending engineer review): display / input consistency; the groups without an entry follow it)
 - **Problem:** turning the rolled W (or channel) diaphragm on prefills the shape of each bay depth group (SB-24, `ui/framing.js setBrace` → `grpFill`), but the main Shape select (`crossframes.dia.shape`) kept its old value, e.g. W21x44 of a new project beside groups prefilled W36x135. Every group without an entry (no section of the list fits it, SB-25) takes Shape, so it was checked with that old value.
 - **Decision (pending engineer review):** at the moment of the prefill only, Shape is set to the governing group's shape: of the groups prefilled, the one with the largest least depth d_req (CF10's `TR.grp[].req`), the first in bay order on ties (the group of the governing bay of the depth check). A loaded project, a later edit of a group select or of Shape, and the setBrace paths without a prefill (one depth group, no fitting section of the family) are unchanged.
 - **Change (`ui/framing.js`):** new `govKey(TR, o)`; `grpFill(P, q, v)`: after `q.grp = o`, `q.shape = o[govKey(R.TR, o)]`.
