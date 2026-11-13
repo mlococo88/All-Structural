@@ -14,7 +14,8 @@
      girder, engine/design.js) with the input checks (engine/inputcheck.js, ui/inputcheck.js); the Section properties, Loads & LLDF and
      Analysis tabs. PR 2c-1: the Losses and Stresses tabs, the strand-pattern graphic, the check chips of their checks. PR 2c-2: the
      Flexure and Shear tabs and their chips. PR 2d-1: the End zone & hold-down and Camber & deflection tabs and their chips. PR 2d-2: the
-     Handling, Deck and Rating tabs and their chips. PR 2d-3: the PS-10 hold-down check for AASHTO / RIDOT (engine/holddown.js).
+     Handling, Deck and Rating tabs and their chips. PR 2d-3: the PS-10 hold-down check for AASHTO / RIDOT (engine/holddown.js). PR 2e:
+     the Report tab (report/*.js on shared/report.js: every result tab's cards and worked steps, the check summary, the assumptions).
      The old Prestressed Bridge Design.html stays the working tool. -->
 <!-- KaTeX for the worked-step equations: the steel app's pinned version and URL (CLAUDE.md §2; used from PR 2b) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
@@ -47,8 +48,11 @@
     'engine/worked-strength.js', // PR 2c-2: the worked steps of the Flexure and Shear tabs (values = the engine's)
     'engine/worked-end.js',  // PR 2d-1: the worked steps of the End zone & hold-down and Camber & deflection tabs (values = the engine's)
     'engine/worked-hdr.js',  // PR 2d-2: the worked steps of the Handling, Deck and Rating tabs (values = the engine's)
-    'report/sections.js',
     '../../shared/steps.js', // the worked-step format and renderer (shared; also used by the steel app)
+    '../../shared/report.js', // PR 2e: the calculation report viewer (shared; also used by the steel app)
+    'report/fromtab.js',     // PR 2e: an output tab's cards as report items (the tab's own HTML and values)
+    'report/data.js',        // PR 2e: the report's results (the page's own result, as the tabs)
+    'report/builders.js',    // PR 2e: the report model (adapted copy of apps/steel-bridge/report/builders.js)
     'ui/inputs.js',      // PR 2b: the girder design's input cards
     'ui/inputcheck.js',  // PR 2b: the input errors on the page (copy of apps/steel-bridge/ui/inputcheck.js)
     'ui/vizkit.js',      // PR 2b-2: the steel graphic style (copy of apps/steel-bridge/ui/vizkit.js)
@@ -67,6 +71,7 @@
     'ui/handling.js',    // PR 2d-2: Handling tab
     'ui/deck.js',        // PR 2d-2: Deck tab
     'ui/rating.js',      // PR 2d-2: Rating tab
+    'ui/report.js',      // PR 2e: Report tab (adapted copy of apps/steel-bridge/ui/report.js)
     'ui/dash.js',     // the check summary column (adapted copy of apps/steel-bridge/ui/dash.js)
     'ui/splitter.js'  // the splitter between the input and output panels (copy of apps/steel-bridge/ui/splitter.js)
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
@@ -239,6 +244,15 @@
   button:disabled{opacity:.45;cursor:default;}
   /* this app (PR 2c-1): check status in the tables of the result tabs */
   table.tbl tr.ng td{background:#FEF2F2;} table.tbl td.ok{color:var(--pass);font-weight:600;} table.tbl td.ngt{color:var(--fail);font-weight:700;} b.drp{color:#B45309;font-weight:600;font-size:8.5pt;}
+  /* this app (PR 2e): the Report tab. COPY of apps/steel-bridge/index.html at e02c618 (QA2, display only): the report sizes to the output panel
+     (the contents list above the report where the panel is narrower than 1000 px); Ctrl+P on the Report tab prints the report only (here
+     also without the output panel's notes above it). shared/report.js unchanged. */
+  #out .rp-host{container-type:inline-size;}
+  @media screen{
+    #out .rp-doc{max-width:11in;}
+    @container (max-width:999.98px){ #out .rp-body{grid-template-columns:minmax(0,1fr);} #out .rp-toc{position:static;max-height:220px;} #out .rp-doc{padding:0.3in 0.35in 0.5in;} }
+  }
+  @media print{ body:has(#tabBar [data-otab="rpt"][aria-selected="true"]) #hdr,body:has(#tabBar [data-otab="rpt"][aria-selected="true"]) #out .rp-host>:not(.rp),body:has(#tabBar [data-otab="rpt"][aria-selected="true"]) #out>:not(#rptHost){display:none!important;} }
 </style>
 </head>
 <body>
@@ -413,7 +427,7 @@
     let h = '';
     if (L.note) h += `<div class="alert err">${esc(L.note)}</div>`;
     if (errs.length) h += window.PSBInputCheckUI.blocked(errs, icO());
-    h += `<div class="alert">In development (PR 2d): Section properties, Loads &amp; LLDF, Analysis, Losses, Stresses, Flexure, Shear, End zone &amp; hold-down, Camber &amp; deflection, Handling, Deck and Rating show the design girder's results; the Report follows (PR 2e). Use the old <a href="../../Prestressed%20Bridge%20Design.html">Prestressed Bridge Design</a> for design work.</div>`;
+    h += `<div class="alert">In development (PR 2e): Section properties, Loads &amp; LLDF, Analysis, Losses, Stresses, Flexure, Shear, End zone &amp; hold-down, Camber &amp; deflection, Handling, Deck and Rating show the design girder's results, and the Report all of them. Use the old <a href="../../Prestressed%20Bridge%20Design.html">Prestressed Bridge Design</a> for design work.</div>`;
     const name = (OTABS.find(t => t[0] === ui.otab) || [, ''])[1];
     let rc = null; ctxOut = null;
     if (!errs.length) { rc = result(); if (rc.R.error) h += `<div class="alert err" role="alert"><b>The engine could not compute this design:</b> ${esc(rc.R.error)}. Results not shown.</div>`; }
@@ -433,10 +447,14 @@
             ${rc.R.warns.length ? `<div class="alert"><b>Design warnings of the engine (${rc.R.warns.length})</b><ul>${rc.R.warns.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>` : '<p class="note">No design warnings.</p>'}`) : '')
         + ph('Summary', '3b', ['every girder × span × check, coloured by ratio; a cell opens the tab and card that works it', 'the check summary column (left, screens 1200 px and wider) shows the same values']);
     } else if (ui.otab === 'rpt') {
-      h += ph('Report', '2e', ['the calculation report in the Steel Bridge style (shared/report.js), every value from the prestressed engine, with § references to its derivation']) + card('Planned sections', `<ol>${window.PSBReportPlan.SECTIONS.map(s => `<li><b>${esc(s.title)}</b>: ${esc(s.what)}</li>`).join('')}</ol>`);
+      if (ok) h += '<div id="rptHost"></div>';   // PR 2e: the Report (ui/report.js), mounted below
     } else { const o = OUT[ui.otab]; h += ph(esc(name), o[0], o[1]); }
     $('out').innerHTML = h;
     if (ctxOut && TABUI[ui.otab]) { try { TABUI[ui.otab]().after($('out'), ctxOut); } catch (e) { console.warn(e); } }
+    // PR 2e: the Report of the design girder (ui/report.js): the page's own result; the section choices kept in ui.rpt (psb2.ui), as the steel app
+    if (ui.otab === 'rpt' && ok && $('rptHost')) { ui.rpt = ui.rpt || {};
+      try { window.PSBReportUI.render($('rptHost'), { P, rc, opts: ui.rpt, save: saveUi, goto: t => gotoOut(t), goin: t => { ui.itab = t; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; } }); }
+      catch (e) { $('rptHost').innerHTML = `<div class="alert err" role="alert">Report error: ${esc(e && e.message)}</div>`; console.warn(e); } }
     if (window.PSBDashUI) window.PSBDashUI.refresh();
   }
   const gotoOut = t => { ui.otab = t; saveUi(); drawOut(); $('outputPanel').scrollTop = 0; };
