@@ -213,6 +213,11 @@ node tests/smoke/cbc-leg-width.mjs [--file <Concrete Beam Capacity.html>]
 # (7.6.3.1), S&T rho 0.00185 / s <= 18 (24.4.3)); back to beam; Input Echo, Report, 1400 and 390 px, 0 console errors. ~30 s
 node tests/smoke/cbc-slab.mjs [--file <Concrete Beam Capacity.html>]
 
+# Concrete Beam Capacity suite: no input select or box cuts off its value (CBIF): every visible select / number / text input of Beam Capacity
+# (beam and slab, every input and output tab), ASD Beam Calcs and Development & Splice measured (text width in its font vs the content box,
+# less a native select's arrow; scrollWidth vs clientWidth) at 1400, 1500, 1920 and 390 px; 0 console errors. ~3 min
+node tests/smoke/cbc-input-fit.mjs [--file <Concrete Beam Capacity.html>] [--w 1400,1500,1920,390] [--shots <dir>]
+
 # Beam Capacity tab, ACI: minimum thickness, Tables 9.3.1.1 / 7.3.1.1 (CBMH): span blank = N/A "not checked"; beam 20 ft both ends continuous
 # 11.43 in (f_y 80: 13.71), cantilever 10 ft 15.00 (lightweight, w_c 90: 18.00; w_c 110: 16.50); slab 12 ft simply supported 7.20 PASS at
 # h 9, FAIL at h 7; check summary, card, Report; AASHTO without the row; 1400 and 390 px, 0 console errors. ~30 s
