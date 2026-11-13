@@ -3442,7 +3442,7 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
 - **Other copies:** none. The batch tension columns are unchanged.
 - **Open items:** gusset plate, welds, block shear and the HSS wall at the slot end are not checked (stated on the card). Two-side-gusset case 6 is not offered.
 
-## 2026-11-13 — PR: sbsum (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SBAS) — Analysis tab: summary of all load combinations, envelope station table   [display only]
+## 2026-11-13 — PR: claude/sbeam-analysis-summary (PR #1479: https://github.com/mlococo88/All-Structural/pull/1479) (SBAS) — Analysis tab: summary of all load combinations, envelope station table   [display only]
 - **Engineer's request (2026-11-13):** "the analysis results should have a summary table at the top of the tab showing all the results summarized. The tabulated results in section 8 is nice but it only shows one load case which may not be the governing one."
 - **Problem:** the Analysis tab showed the peaks and reactions of each combination only inside that combination's own card, and Tabulated Results only for the selected combination.
 - **Code (re-apply by hand):**
