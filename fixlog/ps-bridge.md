@@ -710,7 +710,7 @@ PR #1467: https://github.com/mlococo88/All-Structural/pull/1467
   "(see §x)" prints "(see see §x)" (shared/report.js `.rp-see::before`, since PR 2e; the steel report has the same): not changed here.
 
 ## 2026-11-13 — Follow-ups of the Report: the RIDOT girder age at continuity in the check summary ("Owner limits"); the handling elevation in both stages in the Report; Report captions for a static figure (display only, no calculation change)
-PR: (this PR)
+PR #1469: https://github.com/mlococo88/All-Structural/pull/1469
 ### Problem
 - a) The engine check "Girder age at continuity (RIDOT 5.6.3.3)" (RIDOT, continuity on; engine `pbd-compute.js` anchor `const rAge=rr('cont.age')`,
   v = t_d, lim = 90 days, r = 90 / t_d) was on no result tab and in no group of the check-summary column, so the column's PASS / FAIL totals did
