@@ -232,3 +232,27 @@ test('SBLR: LRFD-only statement and the H3-6 biaxial assumption text', () => {
   near(T.V, C.dcrVx + C.dcrVy, 1e-12, 'shear group = Vx + Vy'); near(T.My, C.dcrMy, 1e-12, 'My in the flexure group');
   near(C.inter.value, (T.P + T.Mx + T.My) + (T.V + T.T) ** 2, 1e-12, 'H3-6 as stated');
 });
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 6. SBGB (engineer HSS-8, 2026-11-13): the HSS family default is A500 Gr. B (rect Fy 46 / Fu 58, round 42 / 58; AISC 360-16
+//    Table C-A3.1). Saved projects keep their grade: S.section.grade is stored; batch rows imported before (no S.batch.hssDefB)
+//    keep the old default A500 Gr. C for a blank or unknown grade.
+// ---------------------------------------------------------------------------------------------------------------------
+test('SBGB: HSS default A500 Gr. B; old batch rows keep Gr. C; saved grade kept', () => {
+  assert.equal(sb.run("famMeta('HSSR').defMat"), 'A500B_R'); assert.equal(sb.run("famMeta('HSSP').defMat"), 'A500B_P');
+  assert.equal(sb.run("[matOf('A500B_R').Fy,matOf('A500B_R').Fu,matOf('A500B_P').Fy,matOf('A500B_P').Fu].join()"), '46,58,42,58');
+  assert.equal(sb.run("famMeta('W').defMat"), 'A992'); assert.equal(sb.run("famMeta('PIPE').defMat"), 'A53B');
+  // picking the family in the list (and the #hss entry, which runs the same sbSetFamily) gives Gr. B
+  assert.equal(sb.run("S=defaultState();sbSetFamily('HSSR');S.section.grade"), 'A500B_R');
+  assert.equal(sb.run("S=defaultState();sbSetFamily('HSSP');S.section.grade"), 'A500B_P');
+  // batch: blank / unknown grade
+  const row = g => sb.run(`batchCheckRow({size:'HSS8X8X1/2',grade:${JSON.stringify(g)},Pu:100,Mux:50,Lbx:12}).grade`);
+  sb.run('S=defaultState();S.batch={rows:[],Cb:1}');            // a project saved before SBGB: no hssDefB
+  assert.equal(row(''), 'A500C_R'); assert.equal(row('xyz'), 'A500C_R'); assert.equal(row('A500 Gr. C'), 'A500C_R'); assert.equal(row('A500 Gr. B'), 'A500B_R');
+  sb.run('S.batch.hssDefB=true');                               // rows imported from now on
+  assert.equal(row(''), 'A500B_R'); assert.equal(row('xyz'), 'A500B_R'); assert.equal(row('A500 Gr. C'), 'A500C_R');
+  assert.equal(sb.run("batchCheckRow({size:'W18X50',Pu:20,Mux:100,Lbx:10}).grade"), 'A992');
+  // a saved section grade is used as stored, whatever the default
+  const D = member({ family: 'HSSR', label: 'HSS12X6X1/2', grade: 'A500C_R' }, { L: 12, Lb: 12, rows: [{ id: 'm1', name: 'T', Mux: 100, Vux: 0, Pu: 0, Muy: 0, Vuy: 0, Tu: 0 }] });
+  near(D.perCombo[0].flexGov.phiMn, 215.25, 1e-9, 'Gr. C saved: phi Mnx = 0.9(50)(57.4)/12');
+});
