@@ -62,7 +62,7 @@ test('JSON export / import; newer versions refused; old Prestressed Bridge Desig
   assert.equal(M.importJSON('nope').ok, false);
   assert.match(M.importJSON(JSON.stringify({ schema: 'sbd2.project', version: 1 })).error, /Not a PS Bridge/);
   const inp = { girder: 'PCI BT-72', mat: { fci: 6.8 }, str: { size: '0.6 in' }, rows: [{ n: 10, y: 2 }] }, br = { mode: 'pl', spans: [120], designs: {} };
-  [inp, br].forEach(o => { const t = JSON.stringify(o), a = M.importJSON(t); assert.equal(a.ok, false); assert.equal(a.legacy, 'Prestressed Bridge Design'); assert.match(a.error, /later version/); assert.equal(t, JSON.stringify(o)); });
+  [inp, br].forEach(o => { const t = JSON.stringify(o), a = M.importJSON(t); assert.equal(a.ok, false); assert.equal(a.legacy, 'Prestressed Bridge Design'); assert.match(a.error, /From the old app/); assert.equal(t, JSON.stringify(o)); });
   assert.equal(M.migrate(p), p);   // version 1: nothing to migrate
 });
 
@@ -71,7 +71,7 @@ test('the page: classic scripts by relative path (file://), no modules or fetch,
   assert.ok(!/type\s*=\s*["']module["']|\bimport\s*\(|\bfetch\s*\(|XMLHttpRequest|text\/babel/.test(html));
   const list = [...html.matchAll(/^\s*'([^']+\.js)',?/gm)].map(m => m[1]);
   const pbd = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => `engine/pbd-${n}.js`);
-  assert.deepEqual(list, [...pbd, 'engine/model.js', 'engine/holddown.js', 'engine/design.js', 'engine/fields.js', 'engine/inputcheck.js', 'engine/worked.js', 'engine/worked-stress.js', 'engine/worked-strength.js', 'engine/worked-end.js', 'engine/worked-hdr.js', '../../shared/steps.js', '../../shared/report.js', 'report/fromtab.js', 'report/data.js', 'report/builders.js', 'ui/inputs.js', 'ui/inputcheck.js', 'ui/vizkit.js', 'ui/vizalong.js', 'ui/outkit.js', 'ui/section.js', 'ui/loads.js', 'ui/analysis.js', 'ui/strands.js', 'ui/losses.js', 'ui/stresses.js', 'ui/flexure.js', 'ui/shear.js', 'ui/endzone.js', 'ui/camber.js', 'ui/handling.js', 'ui/deck.js', 'ui/rating.js', 'ui/report.js', 'ui/dash.js', 'ui/splitter.js']);   // PR 2a: the moved engine first; PR 2b: the inputs and three result tabs; PR 2c-1: Losses, Stresses; PR 2c-2: Flexure, Shear; PR 2d: End zone, Camber, Handling, Deck, Rating
+  assert.deepEqual(list, [...pbd, 'engine/model.js', 'engine/holddown.js', 'engine/design.js', 'engine/fields.js', 'engine/inputcheck.js', 'engine/legacy.js', 'engine/worked.js', 'engine/worked-stress.js', 'engine/worked-strength.js', 'engine/worked-end.js', 'engine/worked-hdr.js', '../../shared/steps.js', '../../shared/report.js', 'report/fromtab.js', 'report/data.js', 'report/builders.js', 'ui/inputs.js', 'ui/legacy.js', 'ui/inputcheck.js', 'ui/vizkit.js', 'ui/vizalong.js', 'ui/outkit.js', 'ui/section.js', 'ui/loads.js', 'ui/analysis.js', 'ui/strands.js', 'ui/losses.js', 'ui/stresses.js', 'ui/flexure.js', 'ui/shear.js', 'ui/endzone.js', 'ui/camber.js', 'ui/handling.js', 'ui/deck.js', 'ui/rating.js', 'ui/report.js', 'ui/dash.js', 'ui/splitter.js']);   // PR 2a: the moved engine first; PR 2b: the inputs and three result tabs; PR 2c-1: Losses, Stresses; PR 2c-2: Flexure, Shear; PR 2d: End zone, Camber, Handling, Deck, Rating; PR 2f: legacy (From the old app)
   list.forEach(f => { assert.ok(!f.startsWith('/') && !/^\w+:/.test(f), f); assert.ok(fs.existsSync(path.join(APP, f)), f); });
   const cdn = s => [...s.matchAll(/(?:src|href)="(https:[^"]+)"/g)].map(m => m[1]).sort();
   const ours = cdn(html); assert.equal(ours.length, 4); ours.forEach(u => assert.ok(cdn(steel).includes(u), u));   // KaTeX 0.16.9, three r128 + OrbitControls 0.128.0
@@ -82,7 +82,10 @@ test('the page: classic scripts by relative path (file://), no modules or fetch,
   for (const f of ['index.html', ...list.filter(f => !pbd.includes(f))]) {
     const c = code(fs.readFileSync(path.join(APP, f), 'utf8'));
     assert.ok(!/sbd2[.:]|window\.SBD|\bSBD[A-Z]/.test(c), `${f}: a steel key or namespace is used`);
-    [...c.matchAll(/'((?:psb2|psbeam)\.[\w.]+)'/g)].forEach(m => assert.ok(m[1].startsWith('psb2.'), `${f}: ${m[1]}`));
+    // PR 2f: engine/legacy.js reads the old app's keys (psbeam.*, bridgeSuite.v1.projects / currentProjectId) and never writes a key
+    if (f === 'engine/legacy.js') assert.ok(!/\.\s*(setItem|removeItem|clear)\s*\(/.test(c), `${f}: writes storage`);
+    else [...c.matchAll(/'((?:psb2|psbeam)\.[\w.]+)'/g)].forEach(m => assert.ok(m[1].startsWith('psb2.'), `${f}: ${m[1]}`));
+    if (f !== 'engine/legacy.js') assert.ok(!/'bridgeSuite\./.test(c), `${f}: a Bridge Suite key`);
     assert.ok(!/PBD\s*\.\s*(load|save|select|edit)\b|bridgeNav\s*\(/.test(c), `${f}: calls the old app's storage or navigation`);
   }
 });

@@ -773,3 +773,85 @@ PR #1469: https://github.com/mlococo88/All-Structural/pull/1469
 - matCell (unchanged for the material rules): when the value equals the limit (r = 1.000) it cannot tell a minimum from a maximum by the ratio
   and says "maximum"; the age check is fixed as a minimum, the f′c / f′ci rules are not changed here.
 - The stress distribution figure (7.2) shows one stage (Release, the default) in the Report; all stages could be drawn as for handling, if wanted.
+
+## 2026-11-13 — PR 2f: "From the old app" — read-only import of the old Prestressed Bridge Design's saved designs and Export JSON files (no calculation change)
+PR #1489: https://github.com/mlococo88/All-Structural/pull/1489
+### Where
+- `apps/ps-bridge/engine/legacy.js` (new, `window.PSBLegacy`, no DOM): `scan(storage)` lists every design the old app keeps, reading with
+  `getItem` only: the design on screen `psbeam.inputs.v1` with the bridge model the old app opens with it (the old `App()` rule:
+  `psbeam.bridge.v1` when its `projId` is the open shared project `bridgeSuite.v1.currentProjectId`, else that project's `psbeamBridge` slice),
+  every shared project of `bridgeSuite.v1.projects` with a `psbeam` or `psbeamBridge` slice, and the older list `psbeam.projects.v1`; an
+  unreadable key is named and left as it is. `fromText(text, name)`: an old Export JSON (the inputs object) or a bridge model object; a MIDAS
+  demands file, a psb2 file and other files are refused with their reason. `convert(src)`: a `psb2.project` from one old design (below).
+  `verify(c)`: the old saved inputs (the old app's own `mergeInputs`) and the imported project's engine inputs (`PSBDesign.inputs`) computed
+  with the same moved engine; every value, the warnings and the continuous-unit record compared exactly (Object.is per number), the result kept
+  in the summary; the PS-10 check this app adds reported apart.
+- Mapping (`convert`): base = `PSBModel.baseInputs(saved)` (= `mergeInputs`, + the PS-10 box on at 0.75 W as every psb2 project) without
+  `external`; spans = the old continuous unit as the old engine's `contUnit` takes it (`cont.spans` with the design's L in span `cont.span`;
+  continuity 'composite' when `cont.on`), else [L]; with MIDAS demands the imported member's spans (`PBD.extSpans`, as `PBD.migrate`);
+  xs = `nGirders` girders, every bay `S`, both overhangs `deck.oh`, every skew `loads.skew`; design = G<n> of the old girder label when it
+  agrees with the position, else G1 (exterior) / G2 (interior); title block name, by → designer, date, job → number. `P.legacy` (new optional
+  field of schema v1, `engine/model.js` header) = `{ from, source, importedAt, inputs (as read), bridge (as read: every girder × span design),
+  external (MIDAS demands), summary }`. Every engine input of the imported design is compared with the old one; any difference is listed.
+- `apps/ps-bridge/ui/legacy.js` (new, `window.PSBLegacyUI`): the Project tab card "From the old app (Prestressed Bridge Design)": "Find the old
+  app's designs" (a table: where, name, saved, contents and the key it was read from; one chosen with a radio button, "Import the chosen
+  design"), "Import an old-app JSON file…"; the card "Imported from the old app" (while the project has `legacy`): the results verdict, Imported,
+  the PS-10 addition (link to the End zone & hold-down tab), Differences from the old app, Input errors in this app, Kept in the project, not
+  used yet, Read as the old app reads older saved designs, Notes, Not imported. Times in the viewer's local time.
+- `apps/ps-bridge/index.html`: loads `engine/legacy.js` (after `engine/inputcheck.js`) and `ui/legacy.js` (after `ui/inputs.js`); the Project
+  tab: the cards after "Save and open" (anchor `+ LGUI.card(P)`), the note no longer says "From old app" comes later; the click handler
+  (anchor `if (LGUI.onClick(e, lgCtx)) return;`); Import JSON of an old file or an old MIDAS file goes to the old-app import (anchor
+  `r.legacy || /"_schema"`). An import replaces the open project after a confirm, as Import JSON and New do.
+- `apps/ps-bridge/engine/model.js`: header documents `legacy`; `legacyKind`'s refusal text, before `… files are imported in a later version of
+  this app. The file was not changed.`, after `… file: import it with "From the old app" on the Project tab. The file was not changed.`
+### Saved data (CLAUDE.md §5)
+- No new key. Read only: `psbeam.inputs.v1`, `psbeam.bridge.v1`, `psbeam.projects.v1`, `bridgeSuite.v1.projects`,
+  `bridgeSuite.v1.currentProjectId`; never written, renamed or deleted (tests: a storage stand-in that throws on any write; the smoke test and
+  harness B compare every old key byte for byte after the import). Not read: `psbeam.ui.v1`, `psbeam.inputTab.v1`, `psbeam.fold.*`,
+  `psbeam.redirect.offered.v1`, hand-off keys. `psb2.project` v1 gains the optional `legacy`; nothing reads it for a calculation.
+### Decisions (pending engineer review)
+- D1. One design at a time, into the open project (it replaces it after a confirm, "export it first to keep it"), as Import JSON does: the
+  saved-projects list (`psb2.lib.*`) is a later PR, so several designs cannot be held at once yet.
+- D2. MIDAS demands of an old design are kept in `P.legacy.external` and NOT used (base `external` = null): this app has no MIDAS import, inputs
+  or display yet, and demands nobody can see should not drive the results. The design is computed with the built-in analysis on the member's
+  spans; the summary says the results differ, and the verdict shows it.
+- D3. An old design made continuous with one span entered (the old app assumed two equal spans [L, L], this girder in span 1, and warned) is
+  imported as two spans of L, made continuous: every value the same; only the old warning and the record `cont.unit.src / assumed / Lbridge`
+  differ (named in the verdict and a note). Likewise a bridge-bar span other than L (the old app used L and warned): imported with L.
+- D4. Of an old bridge model only the design on screen (the selected cell; the saved design on screen when both exist, as the old app opens it)
+  is imported now; every other girder × span design is kept in `P.legacy.bridge` and listed ("NOT designed yet", PR 3a).
+- D5. The imported project has the PS-10 hold-down box on at 0.75 W (as every psb2 project, PS-10); for AASHTO / RIDOT with draped strands the
+  summary names it as the one check added to the old app's list, with its ratio and a link to where it is worked.
+- D6. What the bridge cannot give is imported with the difference listed and the results flagged (not refused): interior position with 2
+  girders (every girder exterior), a negative skew (|θ| here), blank text where the bridge needs a number (also an input error).
+- D7. Girder label: G<n> of the old label when it agrees with the position, else G1 / G2; a different label is noted; the old label kept in
+  the record. Overhangs: `deck.oh` on both sides; skews: `loads.skew` at every support; bays: `S` everywhere.
+- D8. The old data as read is kept whole in the project (`P.legacy.inputs`, `.bridge`), so nothing is discarded; unknown fields are also kept in
+  the base design (the old `mergeInputs` keeps them) and listed.
+### Governing provisions
+- None changed (§4): no formula, factor or unit. The import copies inputs; the results are the moved engine's (PR 2a).
+### Check case
+- Old design on screen: AASHTO Type IV, L = 85 ft, 4 girders at S = 8.5 ft, exterior, skew 10°, label "G1 (Exterior)", bridge model with one
+  more stored design G2/S1 → project span [85] simple, nb 4, bays 8.5 / 8.5 / 8.5, overhangs 3 ft, skews 10 / 10, design G1 in span 1; summary
+  "Results: the same as the old app … (19 checks)", PS-10 "ratio 1.712 FAIL" (AASHTO), "1 other girder × span design (G2/S1) kept in the
+  project, NOT designed yet"; the Flexure tab's values = `computeAll` of the old inputs.
+- Old default design with `cont.on = true` and no spans: project spans [120, 120] made continuous; every value the same; record differs in
+  `cont.unit.src` ('assumed' → 'bridge'), `assumed`, `Lbridge`, and the old warning "Continuity is on but the bridge has one span …".
+### How verified
+- `node tests/engine/run.mjs psbridge tex project-registry`: 111 passed (new `psbridge-legacy.test.mjs`, 6 tests): the 17 harness B designs as
+  the old app's inputs: engine inputs identical (but the girder label's source and the PS-10 box), `computeAll` identical (independent exact
+  comparison), checks with PS-10 identical, `verify` same; the 658 harness A cases (38 recorded old saved designs, 600 seeded, 20 edge):
+  552 identical, 57 MIDAS (named: not used), 48 one-span continuity (values identical, named), 1 blank text (named, with its input error) — none
+  unnamed; scan / file / edge cases (missing fields filled as the old app, `opt.longAs`, unknown fields, labels, 2 girders interior, negative
+  skew, an input error, JSON round trip keeps `legacy`); storage read only. `psbridge-model.test.mjs`: script list, `engine/legacy.js` the only
+  file naming old keys and it writes none.
+- Harness B `node tests/psbridge-compare.mjs --import`: the 17 designs imported through the Project tab (autosave + bridge model 5, shared
+  project 4, older list 4, Export JSON file 4; 26 old keys / files each unchanged; 17 summaries "the same"): 43,512 shown values and 7,646 step
+  values (the Report 24,544 + 3,823, the old app's own report 1,582 numbers), 0 differences. `--import --control` (f′c + 0.1 ksi in the old data,
+  the old app on the unchanged inputs) reports the difference (exit 1). Without `--import`: 17 designs, 0 differences; `--control` exit 1.
+- `node tests/smoke/ps-bridge-skeleton.mjs` (247 checks, + 24): the list (3 sources), asked first, summary, the saved project, Flexure values =
+  the old inputs computed, an Export JSON through Import JSON, a MIDAS file refused, every old key unchanged, psb2.* only, 390 px without
+  sideways scroll; file://, 0 console errors. `node tests/check-syntax.mjs`.
+### Open items
+- Several old designs at once (into the saved-projects list) when `psb2.lib.*` comes; the MIDAS demands from `P.legacy.external` when the MIDAS
+  import comes; the other girder × span designs of `P.legacy.bridge` at PR 3a.

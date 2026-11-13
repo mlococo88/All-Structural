@@ -15,7 +15,8 @@
      Analysis tabs. PR 2c-1: the Losses and Stresses tabs, the strand-pattern graphic, the check chips of their checks. PR 2c-2: the
      Flexure and Shear tabs and their chips. PR 2d-1: the End zone & hold-down and Camber & deflection tabs and their chips. PR 2d-2: the
      Handling, Deck and Rating tabs and their chips. PR 2d-3: the PS-10 hold-down check for AASHTO / RIDOT (engine/holddown.js). PR 2e:
-     the Report tab (report/*.js on shared/report.js: every result tab's cards and worked steps, the check summary, the assumptions).
+     the Report tab (report/*.js on shared/report.js: every result tab's cards and worked steps, the check summary, the assumptions). PR 2f:
+     "From the old app" on the Project tab (engine/legacy.js, ui/legacy.js): the old app's saved designs read (never written) and imported.
      The old Prestressed Bridge Design.html stays the working tool. -->
 <!-- KaTeX for the worked-step equations: the steel app's pinned version and URL (CLAUDE.md §2; used from PR 2b) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
@@ -43,6 +44,7 @@
     'engine/design.js',      // PR 2b: the one girder design and its engine inputs (base + the bridge values, PBD.applyBridge)
     'engine/fields.js',      // PR 2b: every engine input on its input tab (label, unit, tooltip, rule)
     'engine/inputcheck.js',  // PR 2b: the blocking input errors (the steel app's pattern)
+    'engine/legacy.js',      // PR 2f: "From the old app": read-only import of the old app's saved designs and Export JSON files
     'engine/worked.js',      // PR 2b-2: the worked steps of the Section properties, Loads & LLDF and Analysis tabs (values = the engine's)
     'engine/worked-stress.js', // PR 2c-1: the worked steps of the Losses and Stresses tabs (values = the engine's)
     'engine/worked-strength.js', // PR 2c-2: the worked steps of the Flexure and Shear tabs (values = the engine's)
@@ -54,6 +56,7 @@
     'report/data.js',        // PR 2e: the report's results (the page's own result, as the tabs)
     'report/builders.js',    // PR 2e: the report model (adapted copy of apps/steel-bridge/report/builders.js)
     'ui/inputs.js',      // PR 2b: the girder design's input cards
+    'ui/legacy.js',      // PR 2f: the Project tab's "From the old app" card and the import summary
     'ui/inputcheck.js',  // PR 2b: the input errors on the page (copy of apps/steel-bridge/ui/inputcheck.js)
     'ui/vizkit.js',      // PR 2b-2: the steel graphic style (copy of apps/steel-bridge/ui/vizkit.js)
     'ui/vizalong.js',    // PR 2b-2: the steel along-girder charts (copy of apps/steel-bridge/ui/vizalong.js)
@@ -327,7 +330,8 @@
     const nS = P.spans.lengths.length, off = M.girderOffsets(P), deckW = off[off.length - 1] + (+P.xs.ohR || 0);
     return {
       proj: card('Save and open', `<div class="fRow"><button type="button" id="bExport" title="Save the open project as a .json file">Export JSON</button><button type="button" id="bImport" title="Open a PS Bridge (.psb2.json) project file">Import JSON</button><button type="button" id="bNew" title="Start a new project (export the open one first to keep it)">New</button></div>
-          <p class="note">The open project is kept in this browser automatically. The saved-projects list (Save, Save as…, Saved projects…) and "From old app" (read-only import of the old Prestressed Bridge Design data) come in later PRs.</p>`)
+          <p class="note">The open project is kept in this browser automatically. The saved-projects list (Save, Save as…, Saved projects…) comes in a later PR. Import JSON also opens an old-app Export JSON file (as "From the old app" below).</p>`)
+        + LGUI.card(P)
         + card('Project', ['name', 'number', 'owner', 'designer', 'checker', 'date'].map(k => num('project.' + k, k === 'owner' ? 'Client name (title block, optional)' : k[0].toUpperCase() + k.slice(1), '', { text: true })).join('')
           + num('project.notes', 'Notes', '', { text: true }))
         + IN.cards('proj', P)
@@ -379,7 +383,10 @@
   /* resize(a, n, fill): a list kept at n values when the span or girder count changes (new values: the last one, else fill) */
   const resize = (a, n, fill) => { const b = (a || []).slice(0, Math.max(0, n)); while (b.length < n) b.push(b.length ? b[b.length - 1] : fill); return b; };
   $('inTabs').addEventListener('click', e => { const b = e.target.closest('[data-itab]'); if (!b) return; ui.itab = b.dataset.itab; saveUi(); drawInputs(); });
-  const IN = window.PSBInputsUI;
+  const IN = window.PSBInputsUI, LGUI = window.PSBLegacyUI;
+  /* PR 2f: "From the old app" (ui/legacy.js): an import replaces the open project, as Import JSON does (asked first there) */
+  const lgCtx = { store: LS, gotoOut: t => gotoOut(t), pickFile: () => $('fImport').click(),
+    replace: Q => { P = Q; autosave = true; ui.itab = 'proj'; saveUi(); changed(); } };
   $('inPanes').addEventListener('change', e => {
     const el = e.target, path = el.dataset.path, k = el.dataset.kind; if (!path) return;
     if (IN.onChange(el, P)) { changed(); const n = IN.takeNote(); if (n) toast(n); return; }
@@ -397,6 +404,7 @@
   $('inPanes').addEventListener('click', e => {
     const t = e.target, go = t.closest('[data-goin]');
     if (go) { e.preventDefault(); ui.itab = go.dataset.goin; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; return; }
+    if (LGUI.onClick(e, lgCtx)) return;
     if (IN.onClick(e, P)) { changed(); return; }
     if (t.id === 'bExport') exportFile(P);
     else if (t.id === 'bImport') $('fImport').click();
@@ -487,6 +495,8 @@
   }
   $('fImport').addEventListener('change', e => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
     rd.onload = () => { const r = M.importJSON(String(rd.result)); e.target.value = '';
+      // PR 2f: an old-app file (or an old MIDAS demands file, refused there with its reason): "From the old app"
+      if (!r.ok && (r.legacy || /"_schema"\s*:\s*"psbeam-external-demands"/.test(String(rd.result)))) { LGUI.importText(String(rd.result), f.name, lgCtx); return; }
       if (!r.ok) { alert(r.error); return; }
       if (!confirm('Open this project? It replaces the open project here (export it first to keep it).')) return;
       P = r.project; autosave = true; changed(); };
