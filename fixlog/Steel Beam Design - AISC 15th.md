@@ -3274,3 +3274,37 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
   - the tools.html card link opens the tool with HSS.
   - check-syntax; phone-layout / decimal-entry `--tool sbeam`; project-library `--tool steelbeam`; steel-beam-builtup; steel-beam-h1-composite; home-projects. 0 console errors.
 - **Open items:** none.
+
+## 2026-11-13 — PR: claude/hss-lrfd-note (PR #1474: https://github.com/mlococo88/All-Structural/pull/1474) (SBLR) — "LRFD only" and the biaxial reading of Eq. H3-6 stated on the input tab and in the Report   [display only; no result, saved key or format change]
+- **Engineer's decisions (2026-11-13):**
+  - **HSS-4:** keep summing both axes in Eq. H3-6, and state it as an assumption on the input tab and in the Report.
+  - **HSS-5:** LRFD only, stated clearly on the input tab and in the Report.
+- **Where (anchors are the code before the change):**
+  1. After `const SB_NLW=new Map();`, two new constants: `SB_LRFD_ONLY` (design method text) and `SB_H36_BIAX` (Eq. H3-6 biaxial reading). Their text:
+     - LRFD: "Design method: LRFD only. Every strength is a design strength φRₙ with the resistance factors of AISC 360-16 (§B3.1), checked against factored (LRFD) demands. ASD (Rₙ/Ω, §B3.2) is not available: do not enter service-level (ASD) forces as demands."
+     - H3-6: "Eq. H3-6 (§H3.2) has one flexure term Mᵣ/Mᶜ and one shear term Vᵣ/Vᶜ. With bending and shear about both axes the app sums both axes inside each group: Mᵣₓ/Mᶜₓ + Mᵣᵧ/Mᶜᵧ in the flexure group and Vᵣₓ/Vᶜₓ + Vᵣᵧ/Vᶜᵧ in the shear group (the shear sum is added to Tᵣ/Tᶜ before squaring). Each ratio is the largest of its combination, not taken at one common point (conservative)."
+  2. `rebuildInputs`, card `inSect` (Section & Material). After the material hint, the one ending `give 50 ksi; 46 ksi is kept (conservative).':'')));`, add:
+     ```js
+     body.appendChild(el('div','hint sbNL',sbNL(SB_LRFD_ONLY,DBKIND[S.section.family]==='R'||DBKIND[S.section.family]==='P'?[['HSS torsion with biaxial loads (Eq. H3-6):',SB_H36_BIAX]]:null)));
+     ```
+  3. `buildInterTab`, card `itBasis`. After the item `['HSS torsion:','where Tᵤ > 0.2φTₙ on an HSS, Eq. H3-6 replaces H1 and brings the shear ratio in with it.'],`, add:
+     ```js
+     AN.sect&&(AN.sect._kind==='R'||AN.sect._kind==='P')?['HSS torsion with biaxial loads:',SB_H36_BIAX]:null,
+     ```
+     The Report's Interaction section is built from this card.
+  4. `sbrxCover` (Report page 1, "Governing result"). Before `if(isMember())items.push({type:'note',warn:true,text:'MEMBER CHECK MODE…`, add:
+     ```js
+     items.push({type:'note',text:sbrText(el('div',null,SB_LRFD_ONLY))});
+     ```
+- **Governing provision:** AISC 360-16 §B3.1 (LRFD), §B3.2 (ASD, not provided), §H3.2 Eq. H3-6. The engine code is unchanged: `memberDesignAll` / `designAll` already use `vr=(C.dcrVx||0)+(C.dcrVy||0)` and `(rp+rx+ry)+Math.pow(vr+C.dcrT,2)`.
+- **Check case:** HSS12X6X1/2 A500 Gr. B, member mode, L = Lᵇ = 12 ft, LC-1: Mᵤₓ 150, Mᵤᵧ 40 kip·ft, Vᵤₓ 60, Vᵤᵧ 20, Pᵤ 150 kip, Tᵤ 40 kip·ft.
+  - H3-6 = (0.2993 + 0.7575 + 0.3294) + (0.2449 + 0.1880 + 0.3276)² = **1.964**, unchanged.
+  - The statement now appears on the Section input tab, in Interaction Basis and in the Report.
+- **How verified:**
+  - Headless Chromium, origin/main against the branch, four cases: W default beam; the check case above; HSS10.750X0.500 beam; HSS8X8X1/2 A1085 beam.
+  - `AN` JSON is identical in all four.
+  - The input panel, every result tab and the built Report are identical once the inserted sentences are removed. 0 console errors.
+  - Node `sbeam-hss` test 5 passes. check-syntax passes.
+  - Smoke tests pass: builtup, h1-composite, phone-layout, decimal-entry, project-library, start-chooser. list-input `--part sbeam` fails the same 2 baseline checks as main.
+- **Other copies:** none.
+- **Open items:** none.
