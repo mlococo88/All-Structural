@@ -10,6 +10,12 @@
    PR 2d-2: a group whose module is off for the design (Handling, Deck: no engine check) shows an "off" chip that opens its input tab.
    The Rating chip (PR 2d-2) is not an engine check: it shows the lowest HL-93 inventory rating factor of the engine (R.rating, R.shrRating,
    R.svcRating; RF ≥ 1.0 or < 1.0) and is not counted in the PASS / FAIL totals.
+   Owner material limits (engineer, 2026-11-13; display only): the engine's checks of the girder f′c and the release f′ci against the owner's
+   limits (RIDOT 5.2.1, MassDOT 3.7.2.1, CTDOT V2 5.9.1.2) are the chip "Materials (owner limits)" (now "Owner limits"), counted in the PASS / FAIL totals like
+   every other group; its group has input: the chip and its checks open the Owner rules input tab at the rule's row of the rules table
+   (ui/inputs.js, row id own-rule-<rule id>), where the limit and the engine's value, limit and ratio are shown. No chip for AASHTO.
+   2026-11-13 (display; decision pending the engineer's review): the RIDOT check "Girder age at continuity (RIDOT 5.6.3.3)" (continuity on)
+   joins that group, renamed "Owner limits" (it holds more than the materials); the same Owner rules row (own-rule-cont.age) and counts.
 
    init(o): o = { el, store (localStorage or null), getP(), errors() ([{ path, msg }]), result() (computeAll of the design or null),
    goto(tab, step), fix(i) }; refresh() after the page draws. */
@@ -30,9 +36,15 @@
       ['Hold-down force (MassDOT 3.7.2.2)', 'ez.hd.r'], ['Hold-down force (CTDOT 5.9.1.6)', 'ez.hd.r'], ['Hold-down force (PS-10)', 'ez.hd.r'], ['Debonded strands (CTDOT 5.9.4.3.3)', 'ez.db.r']] },
     { id: 'camb', name: 'Camber & deflection', tab: 'camb', checks: [['LL deflection', 'cb.ll.r']] },
     { id: 'hand', name: 'Handling', tab: 'hand', off: 'loads', checks: [['Lifting stress', 'hn.lift.r'], ['Lifting FS (crack, screening)', 'hn.FSl.r'], ['Hauling FS (crack, screening)', 'hn.FSh.r']] },
-    { id: 'deck', name: 'Deck', tab: 'deck', off: 'dd', checks: [['Deck +M', 'dk.pos.r'], ['Deck −M', 'dk.neg.r'], ['Deck overhang', 'dk.oh.r']] }];
+    { id: 'deck', name: 'Deck', tab: 'deck', off: 'dd', checks: [['Deck +M', 'dk.pos.r'], ['Deck −M', 'dk.neg.r'], ['Deck overhang', 'dk.oh.r']] },
+    // the owner's limits (engine PBD-E checks): on the Owner rules input tab (input: the tab; each check's st = its row of the rules table):
+    // the material limits and (2026-11-13) the RIDOT girder age at continuity
+    { id: 'mat', name: 'Owner limits', tab: 'own', input: true, checks: [['Girder f′c (RIDOT 5.2.1)', 'own-rule-fc.min'], ['Girder f′c (CTDOT 5.9.1.2)', 'own-rule-fc.range'],
+      ['Release strength f′ci (MassDOT 3.7.2.1)', 'own-rule-fci.max'], ['Release strength f′ci (CTDOT 5.9.1.2)', 'own-rule-fci.range'], ['Girder age at continuity (RIDOT 5.6.3.3)', 'own-rule-cont.age']] }];
   /* the Rating chip: the HL-93 inventory rating factors of the engine (not checks), the lowest governs */
   const RATING = { id: 'rt', name: 'Rating', tab: 'rt', rf: [['Flexure, inventory', R => R.rating.RFinv, 'rt.RFinv'], ['Shear, inventory', R => R.shrRating.RFinv, 'rt.RFvInv'], ['Service III', R => R.svcRating.RF, 'rt.RFs3']] };
+  /* the link of a check: its output tab and step, or (a group on an input tab) the input tab and the element id */
+  const go = (gp, st) => gp.input ? `data-sdown="${gp.tab}|${st}"` : `data-sdgo="${gp.tab}|${st}"`;
   const fx = (v, d) => typeof v === 'number' && isFinite(v) ? v.toFixed(d) : v === Infinity ? '∞' : '—';
   /* the checks of a group in R (those the engine made for this design) and the governing one (largest ratio) */
   function grp(R, gp) {
@@ -57,22 +69,22 @@
     if (!R) { o.el.innerHTML = head('<span class="sdC"><span class="sdN">not run</span></span>') + (D.coll ? '' : '<p class="sdNote">The engine could not compute this design: no checks (see the output panel).</p>'); return; }
     const G = GROUPS.map(gp => gp.pr ? { gp, st: 'notrun' } : { gp, ...grp(R, gp) }), run = G.filter(q => q.st === 'pass' || q.st === 'fail'), nOff = G.filter(q => q.st === 'na' && q.gp.off).length;
     const nF = run.reduce((a, q) => a + q.all.filter(z => !z.c.pass).length, 0), nP = run.reduce((a, q) => a + q.all.filter(z => z.c.pass).length, 0);
-    const top = run.map(q => q.gov).filter(Boolean).reduce((b, z) => !b || z.c.r > b.c.r ? z : b, null);
+    const top = run.map(q => q.gov && { ...q.gov, gp: q.gp }).filter(Boolean).reduce((b, z) => !b || z.c.r > b.c.r ? z : b, null);
     const cnt = `<span class="sdC">${nF ? `<span class="sdF">${nF} FAIL</span>` : ''}${nP ? `<span class="sdP">${nP} PASS</span>` : ''}${nOff ? `<span class="sdN">${nOff} off</span>` : ''}</span>`;
     if (D.coll) { o.el.innerHTML = head(cnt); return; }
-    const LBL = { pass: 'PASS', fail: 'FAIL' }, tabOf = st => GROUPS.find(gp => gp.checks && gp.checks.some(q => q[1] === st)).tab;
+    const LBL = { pass: 'PASS', fail: 'FAIL' };
     const chips = G.map(q => {
       const gp = q.gp;
       if (gp.pr) return `<div class="sdChip sd-notrun"><span></span><a href="#" class="sdMain" data-sdtab="${gp.tab}" title="Not built yet: comes in PR ${gp.pr} (docs/ps-bridge-plan.md §5)"><span class="sdName">${esc(gp.name)}</span><span class="sdVal">not run</span><span class="sdSt">PR ${gp.pr}</span></a></div>`;
       if (q.st === 'na') return gp.off ? `<div class="sdChip sd-notrun" data-sdgrp="${gp.id}"><span></span><a href="#" class="sdMain" data-sdin="${gp.off}" title="Off for this design: turn it on on its input tab"><span class="sdName">${esc(gp.name)}</span><span class="sdVal">off</span><span class="sdSt">input</span></a></div>` : '';
       const op = D.open.has(gp.id), g = q.gov;
-      const rows = q.all.map(z => `<li><a href="#" data-sdgo="${gp.tab}|${z.st}" class="sd-${z.c.pass ? 'pass' : 'fail'}">${esc(z.c.n)}: ${fx(z.c.r, 3)}</a></li>`).join('');
-      return `<div class="sdChip sd-${q.st}" data-sdgrp="${gp.id}"><button type="button" class="sdX" data-sdx="${gp.id}" aria-expanded="${op}" title="${op ? 'Hide' : 'Show'} each check">${op ? '▾' : '▸'}</button><a href="#" class="sdMain" data-sdgo="${gp.tab}|${g.st}" title="${esc(`${g.c.n}: ${fx(g.c.v, 3)} vs ${fx(g.c.lim, 3)} ${g.c.u} at x = ${fx(g.c.loc, 2)} ft`)}">
+      const rows = q.all.map(z => `<li><a href="#" ${go(gp, z.st)} class="sd-${z.c.pass ? 'pass' : 'fail'}">${esc(z.c.n)}: ${fx(z.c.r, 3)}</a></li>`).join('');
+      return `<div class="sdChip sd-${q.st}" data-sdgrp="${gp.id}"><button type="button" class="sdX" data-sdx="${gp.id}" aria-expanded="${op}" title="${op ? 'Hide' : 'Show'} each check">${op ? '▾' : '▸'}</button><a href="#" class="sdMain" ${go(gp, g.st)} title="${esc(`${g.c.n}: ${fx(g.c.v, 3)} vs ${fx(g.c.lim, 3)} ${g.c.u}${gp.input ? ' (Owner rules tab)' : ` at x = ${fx(g.c.loc, 2)} ft`}`)}">
         <span class="sdName">${esc(gp.name)}</span><span class="sdVal">${fx(g.c.r, 3)}</span><span class="sdSt">${LBL[q.st]}</span></a>${op ? `<ul class="sdList">${rows}</ul>` : ''}</div>`;
     }).join('') + rtChip(R);
     const verd = nF ? 'fail' : 'pass';
     o.el.innerHTML = head(cnt)
-      + `<div class="sdVerd"><b class="sd-${verd}">${nF ? 'FAIL' : 'PASS'}</b>${top ? ` · max ratio ${fx(top.c.r, 3)}` : ''}</div>${top ? `<div class="sdGov">Governing: <a href="#" data-sdgo="${tabOf(top.st)}|${top.st}">${esc(top.c.n)}: ${fx(top.c.r, 3)}</a></div>` : ''}
+      + `<div class="sdVerd"><b class="sd-${verd}">${nF ? 'FAIL' : 'PASS'}</b>${top ? ` · max ratio ${fx(top.c.r, 3)}` : ''}</div>${top ? `<div class="sdGov">Governing: <a href="#" ${go(top.gp, top.st)}>${esc(top.c.n)}: ${fx(top.c.r, 3)}</a></div>` : ''}
         <div class="sdRun">In development: the checks of the design girder only (every girder and span: PR 3b).</div>`
       + `<div id="sbDash">${chips}</div><p class="sdNote">Each chip: the governing ratio of its checks for the design girder (demand / capacity, OK ≤ 1.0), the engine's value. Click: its tab and the worked step of the value. The bridge-level Summary (every girder and span) comes with PR 3b.</p>`;
   }
@@ -96,6 +108,8 @@
       if (t.dataset.sdx) { const k = t.dataset.sdx; if (D.open.has(k)) D.open.delete(k); else D.open.add(k); draw(); return; }
       if (t.dataset.sdgo) { const [tab, st] = t.dataset.sdgo.split('|'); o.goto(tab, st); return; }
       if (t.dataset.sdin) { if (o.goin) o.goin(t.dataset.sdin); return; }
+      if (t.dataset.sdown) { const [tab, id] = t.dataset.sdown.split('|'); if (o.goin) o.goin(tab); const el = document.getElementById(id);   // the input tab, then its row
+        if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('sdFlash'); setTimeout(() => el.classList.remove('sdFlash'), 1600); } return; }
       if (t.dataset.sdtab) o.goto(t.dataset.sdtab);
     });
     draw();

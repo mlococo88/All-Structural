@@ -603,3 +603,173 @@ PR #1463: https://github.com/mlococo88/All-Structural/pull/1463
   a link to the Owner rules table. Example: the CTDOT tab design (f′ci = 6.8 ksi > 6.5 ksi) FAILs "Release strength f′ci (CTDOT 5.9.1.2)",
   ratio 1.046, while the check-summary column counts only its own groups. Whether to add them to the check-summary column (display) is for the engineer.
 - No graphics in the Report yet (the tabs draw theirs after the HTML; the steel report has charts): a later display PR if wanted.
+
+## 2026-11-13 — Owner material-limit checks in the check summary column ("Materials (owner limits)"); Report §1 consistent with the column (display only, no calculation change)
+PR #1466: https://github.com/mlococo88/All-Structural/pull/1466
+### Problem
+- The engine checks the girder f′c and the release f′ci against the owner's limits (RIDOT 5.2.1, MassDOT 3.7.2.1, CTDOT V2 5.9.1.2; engine
+  PBD-E, `pbd-compute.js` anchor `const rFcMin=rr('fc.min')`), but these checks were on no result tab and in no group of the check-summary
+  column, so the column's PASS / FAIL totals did not count them (open item of PR 2e). Example: the CTDOT tab design FAILs "Release strength
+  f′ci (CTDOT 5.9.1.2)" (6.8 > 6.5 ksi, ratio 1.046) while the column showed only the hold-down FAIL. Engineer's decision (2026-11-13): a chip
+  "Materials (owner limits)", counted in the totals, that opens the Owner rules table.
+### Where
+- `apps/ps-bridge/ui/dash.js` GROUPS, anchor `{ id: 'deck', name: 'Deck'`: after it, a new group
+  `{ id: 'mat', name: 'Materials (owner limits)', tab: 'own', input: true, checks: [['Girder f′c (RIDOT 5.2.1)', 'own-rule-fc.min'], ['Girder f′c (CTDOT 5.9.1.2)', 'own-rule-fc.range'], ['Release strength f′ci (MassDOT 3.7.2.1)', 'own-rule-fci.max'], ['Release strength f′ci (CTDOT 5.9.1.2)', 'own-rule-fci.range']] }`
+  (the names are the engine's `OWN_RULES` `nm`). The totals, the verdict and the governing line take it like every group (no chip when the
+  design has none of the checks, e.g. AASHTO). New helper `go(gp, st)`: a group with `input` links with `data-sdown="own|<row id>"` instead of
+  `data-sdgo="<tab>|<step>"`; the click handler opens the input tab (`o.goin`), scrolls the row into view and marks it (`sdFlash`, 1.6 s).
+  The governing line: before `data-sdgo="${tabOf(top.st)}|${top.st}"` (tabOf removed); after `${go(top.gp, top.st)}` (top keeps its group).
+  The chip's tooltip names the Owner rules tab instead of "at x = 0.00 ft".
+- `apps/ps-bridge/ui/inputs.js` ownerCard (anchor `const applied = r =>`): `cards(tab, P, R)` / `ownerCard(P, R)` take the design's engine result
+  (optional); each rules row gets `id="own-rule-<rule id>"`; for the four material rules (`MAT`) "Applied here" was "Check of the design (output
+  tabs)", now "Check of the design" + `matCell(r, R)`: f′c or f′ci = value, the governing minimum or maximum, "ratio = value / limit" (maximum) or
+  "limit / value" (minimum; the engine's rule, chosen by which of the two equals the engine's ratio), the engine's ratio and PASS / FAIL, each
+  number a `data-ev` of `checks.<i>.v / .lim / .r`; "(shown when the inputs have no error)" without a result.
+- `apps/ps-bridge/index.html`: `own: IN.cards('own', P, ownRes())`, `ownRes()` = the page's `result()` when the inputs have no error; CSS
+  `tr.sdFlash>td`.
+- `apps/ps-bridge/report/builders.js` summary(): a check in a group with `input` links to `X.ownKey` (the Owner rules subsection of §2, `rs.own`;
+  no link when §2 is left out) and its Group column reads "Materials (owner limits)" (before: "Owner rules", via the OWNG fallback, which is
+  kept for any other owner check in no column group); the note says the groups and the totals are the column's, and a check outside the
+  column (today only "Girder age at continuity (RIDOT 5.6.3.3)", RIDOT with continuity on) is named in a warning note, not counted by the
+  column. §2's Owner rules table is built with `B.R` (the same values as the tab).
+### Shared files
+- None.
+### Saved data (CLAUDE.md §5)
+- No key, no project field, no format change.
+### Governing provisions
+- None changed (§4). The checks are the engine's, cited as before (RIDOT BDM 5.2.1, MassDOT LRFD BM 3.7.2.1, CTDOT BRSDM V2 5.9.1.2).
+### Check case
+- CTDOT tab design (PCI BT-72, f′c 8.5 ksi, f′ci 6.8 ksi, 40 strands): engine "Release strength f′ci (CTDOT 5.9.1.2)": limits 0.70 f′c = 5.95,
+  0.80 f′c = 6.80, cap 6.5 ksi; ratios 5.95 / 6.8 = 0.875, 6.8 / 6.8 = 1.000, 6.8 / 6.5 = 1.046 → governing cap, ratio 1.046 FAIL.
+  "Girder f′c (CTDOT 5.9.1.2)" 6.0–10.0 ksi: 6.0 / 8.5 = 0.706, 8.5 / 10.0 = 0.850 → 0.850 PASS. Before: column 1 FAIL + 20 PASS (hold-down
+  only); after: the Materials chip FAIL 1.046, column 2 FAIL + 21 PASS = the engine's 23 checks; Report §1 "FAIL: 2 of 23 checks", both
+  material rows in group "Materials (owner limits)", linked to the Owner rules table, which shows 6.80 / 6.50 = 1.046 FAIL.
+### How verified
+- `node tests/engine/run.mjs psbridge tex project-registry` (100 tests; `psbridge-report.test.mjs` + 18: on the 16 tab designs every engine check
+  is in a column group, §1 has the same groups and FAIL rows as the column, the material rows link to `rs.own`; the CTDOT case above, the RIDOT
+  minimum (limit / value), AASHTO without a material check, the RIDOT continuity-age check named in §1 as outside the column).
+- Harness B (`node tests/psbridge-compare.mjs`, new `own`): the Owner rules table values compared with the old app (30 values on 5 owner designs),
+  the column totals = the engine's checks, Report §1 FAIL rows = the column's: 16 designs, 40,886 shown values and 7,184 step values,
+  0 differences; `--control` still reports each planted difference.
+- `node tests/smoke/ps-bridge-skeleton.mjs` (209 checks; + 7: no chip for AASHTO; CTDOT chip FAIL 1.046, totals, the chip opens the Owner rules
+  tab at the f′ci row, the table values = computeAll, the chip lists both checks, Report §1 = the column); `node tests/check-syntax.mjs`.
+### Open items
+- "Girder age at continuity (RIDOT 5.6.3.3)" (RIDOT, continuity on) is still on no result tab and in no column group; §1 lists it and says
+  so. Whether to add it to the column (e.g. to the Analysis group or the Materials chip) is for the engineer.
+
+## 2026-11-13 — Report graphics: each result tab's graphics in its Report section, numbered "Figure n.m" (display only, no calculation change)
+PR #1467: https://github.com/mlococo88/All-Structural/pull/1467
+### Problem
+- The Report (PR 2e) had no graphics: its sections are built from each tab's `output()` HTML, and the tabs draw their graphics afterwards in
+  `after()` (open item of PR 2e). Engineer's decision (2026-11-13): put each tab's main graphic in its Report section, drawn by the tab's own
+  code, sized to the page in print, readable labels, captions and numbering as the steel report's figures where sensible.
+### Where
+- `apps/ps-bridge/ui/report.js` (new functions `grab`, `figures`, constant `PW = 700`): `figures(B, inc, wScr)` draws each included result
+  tab off screen (a hidden host 700 px wide, `U.output(ctx)` then `U.after(host, ctx)`, ctx = the report's `{ P, inp, R, W, ui: {} }`: the
+  same defaults as the Report's cards) and takes each graphic card the tab mounts (`.vk.va-card` of `PSBVizAlong.mount`, `.vk.vk-det` of
+  `PSBVizKit.detCard`) with the id of its slot `#gfx_…`: the drawn figure (`.vk-fig`, the read-out overlay `.va-hov` removed), the series chips as
+  a static legend of the series shown, the tab's legend (`.va-leg`) and captions (`.vk-cap`), links as text; the caption = the card's title
+  (sub-title in brackets) and, for a graphic with a state control, "shown: <control>: <state>" (e.g. the handling elevation "shown: Stage:
+  Lifting", the stage last chosen on the Handling tab). On a screen narrower than 660 px (phone) each tab is drawn a second time at the report's
+  width: that copy is shown on screen (`.rp-fig-scr`) and the 700 px one printed (`.rp-fig-prn`). `render()`: anchor
+  `if (S.key !== key || !S.M)`: before `S.M = window.PSBReportBuild.model(B, { include: inc })`; after `figs = figures(B, inc, narrow ? wScr : 0)`
+  then `model(B, { include: inc, figures: figs })`; the cache key also holds the narrow width. No drawing code is added or copied.
+- `apps/ps-bridge/report/fromtab.js`: `cards(html, o)` / `blocks()`: a graphics slot `#gfx_…` (before: skipped) gives `o.figs[<slot id>]`
+  (copies) at its place when given (a slot outside the cards goes to `top`); new `inline(html)` (a title as report text, sub / sup as $…$).
+- `apps/ps-bridge/report/builders.js`: `tabSec()` passes `X.figs[k]` to `FT.cards` and puts the figures outside the cards in a first
+  subsection "Graphics" (before: only notes, "Notes"); `model()` takes `opt.figures` and numbers every figure "Figure n.m: " + caption (n = the
+  section's number among the sections shown, m = its order in the section).
+- `apps/ps-bridge/index.html` CSS (anchor `.rp-fig .rp-vk`): the figure body without the card frame, svg max-width 100 %, the two-section
+  rows of the strand pattern kept side by side (`flex-wrap:nowrap`), screen / print copies (`.rp-fig-scr`, `.rp-fig-prn`).
+- Figures (default project, every module on): 3.1 composite section and strands, 4.1 cross-section and design girder, 5.1 moment and shear
+  envelopes, 6.1 losses, 6.2 strand pattern (elevation and the two sections), 7.1 stresses along the span, 7.2 stress distribution on the section
+  (stage shown), 8.1 moments and resistance (8.2 pier section when continuous), 9.1 shear, 10.1–10.3 end-zone checks, girder end, hold-down,
+  11.1–11.2 camber, 12.1–12.2 handling checks and elevation (stage shown), 13.1–13.2 deck checks and deck section, 14.1–14.2 rating factors and
+  rated sections. Handling and Deck have none when the module is off (the tab shows no graphic either).
+### Shared files
+- None changed (`shared/report.js` renders `{ type: 'figure', svg, caption }` items as before).
+### Saved data (CLAUDE.md §5)
+- No key, no project field, no format change.
+### Governing provisions
+- None (§4): no value is computed or recorded by the figures; `model.vals` are unchanged with and without figures (test).
+### Check case
+- Default project: the Report shows 16 figures (20 with Handling and Deck on and two continuous spans), Figure 3.1 to 14.2; the printed labels
+  are 10.0–12.0 px (drawn at 700 px = 7.3 in, the letter page between the report's 0.6 in margins); before: no figure.
+### How verified
+- `node tests/engine/run.mjs psbridge tex project-registry` (101 tests; `psbridge-report.test.mjs` + 1: figures at their slots (a top slot
+  in "Graphics", the pier slot in its card), numbered by the sections shown (also with sections left out), the values unchanged, the handed-in
+  figures not changed, `[Figure]` in the text).
+- `node tests/smoke/ps-bridge-skeleton.mjs` (214 checks; + 5): every result section has its figures, numbered Figure n.m by its section,
+  static (no button, read-out or control), the strand pattern, deck section, camber, rating and handling elevation (with its stage) present,
+  every label ≥ 10 px on the printed page and no figure wider than the page; Print report prints every figure; 390 px: the figures drawn at the
+  screen width, no sideways scroll, print uses the 700 px ones; file://, 0 console errors.
+- Harness B (`node tests/psbridge-compare.mjs`): 16 designs, 0 differences (the Report's numbers and steps as before, with the figures in the
+  rendered sections). `node tests/check-syntax.mjs`.
+### Open items
+- No dark mode in this app (none to support). In print, the shared report adds "see " before every § link, so a table cell that already says
+  "(see §x)" prints "(see see §x)" (shared/report.js `.rp-see::before`, since PR 2e; the steel report has the same): not changed here.
+
+## 2026-11-13 — Follow-ups of the Report: the RIDOT girder age at continuity in the check summary ("Owner limits"); the handling elevation in both stages in the Report; Report captions for a static figure (display only, no calculation change)
+PR #1469: https://github.com/mlococo88/All-Structural/pull/1469
+### Problem
+- a) The engine check "Girder age at continuity (RIDOT 5.6.3.3)" (RIDOT, continuity on; engine `pbd-compute.js` anchor `const rAge=rr('cont.age')`,
+  v = t_d, lim = 90 days, r = 90 / t_d) was on no result tab and in no group of the check-summary column, so the column's PASS / FAIL totals did
+  not count it; Report §1 listed it with the note "Not in the check summary column and not counted in its totals" (open item of #1466).
+- b) The Report's handling elevation (Figure 12.2) showed only the stage last chosen on the Handling tab ("shown: Stage: Lifting" or "Hauling").
+- c) Report figure captions copied the tab's wording for the screen: "click a station to select it" (Analysis, Stresses), "Stage buttons select
+  the stage and its governing station" (stress distribution), the series chips' label "Show" (Shear, Camber), and "the table above" (Analysis
+  envelopes, the strand pattern title), where in the Report the section's tables follow the figure.
+### Decisions (pending engineer review; the engineer said to use judgment)
+- a) The age check joins the owner-rules group of the column (the Owner rules table holds its rule, row `own-rule-cont.age`); the chip
+  "Materials (owner limits)" is renamed "Owner limits", because it now holds more than the materials (one chip, not a second "Owner rules"
+  chip, so the column has one place for every owner limit and "Owner rules" stays the name of the input tab the chip opens). The chip's group
+  id stays `mat` (internal only).
+- b) The Report draws the handling elevation once per stage, Lifting then Hauling (Figures 12.2 and 12.3), whatever stage the tab last showed;
+  the tab's own stage is put back. Only this graphic: the stress distribution (Figure 7.2) still shows the default stage (Release), as before.
+- c) Reworded in the Report only (the tabs unchanged): "; click a station to select it." → "." ; "Click a station to select it." → removed;
+  "Stage buttons select the stage and its governing station." → "Drawn at the governing station of the stage named in the caption."; chip
+  label "Show" / "Also show" → "Shown:"; "the table above" → "the table in this section".
+### Where
+- `apps/ps-bridge/ui/dash.js` GROUPS, anchor `{ id: 'mat', name:`: before
+  `{ id: 'mat', name: 'Materials (owner limits)', tab: 'own', input: true, checks: [[…f′c / f′ci…]] }`; after
+  `{ id: 'mat', name: 'Owner limits', tab: 'own', input: true, checks: [[…the same four…], ['Girder age at continuity (RIDOT 5.6.3.3)', 'own-rule-cont.age']] }`.
+  Totals, verdict, governing line and the click to the Owner rules row are the group's existing code.
+- `apps/ps-bridge/ui/inputs.js` matCell (anchor `const MAT = [`): before `['fc.min', 'fc.range', 'fci.max', 'fci.range']`; after `+ 'cont.age'`;
+  for `cont.age` the cell reads "t_d (girder age at continuity) = 60 days; governing minimum 90 days; ratio = 90 / 60 = 1.500 FAIL" (decimals 0,
+  unit days; always a minimum: `isMin = age || (…)`); "(check summary: Materials (owner limits))" → "(check summary: Owner limits)". Before, the
+  row said "Check of the design (output tabs)".
+- `apps/ps-bridge/report/builders.js` summary(): the §1 note "the owner's material limits (group Materials (owner limits))" → "the owner's limits
+  (group Owner limits: the material limits and, RIDOT with continuity, the girder age at continuity)". The "Not in the check summary column …"
+  note is no longer made for any engine check (it stays, with the OWNG fallback, as a guard for an owner check in no group: none today).
+- `apps/ps-bridge/ui/report.js`: new `ALLSEG = new Set(['gfx_hnel'])`, `STATIC` (the rewordings of c), `still()`, `chipLab()`, `one(card)` (the
+  old body of `grab` for one card, plus `still` on title, sub-title and captions); `grab(host)`: for a slot in ALLSEG, clicks each button of the
+  card's segmented control in order, takes `one(card)` after each, then clicks the button that was pressed (the tab's state back).
+### Shared files
+- None.
+### Saved data (CLAUDE.md §5)
+- No key, no project field, no format change. The Handling tab's stage (module state `ST.stage`, not saved) is the same after the Report.
+### Governing provisions
+- None changed (§4). The age check is the engine's (RIDOT BDM 5.6.3.3, minimum girder age 90 days), cited as before.
+### Check case
+- RIDOT, two continuous spans 110 + 110 ft, default BT-72, t_d = 60 days (new tab case): engine "Girder age at continuity (RIDOT 5.6.3.3)"
+  v = 60, lim = 90 days, r = 90 / 60 = 1.500 FAIL (loc 110 ft). Engine: 25 checks, 3 FAIL (Neg flexure (pier) 1.075, the age check 1.500,
+  Hold-down force (PS-10) 1.518). Before: column 2 FAIL + 22 PASS (24, the age check outside), §1 "FAIL: 3 of 25" with the "not in the column"
+  note; after: the Owner limits chip FAIL 1.500 (the governing of its two checks: the RIDOT f′c minimum and the age), column 3 FAIL + 22 PASS =
+  25, §1 row "Owner limits | Girder age at continuity (RIDOT 5.6.3.3) | 110.00 | 60.000 | 90.000 | days | 1.500 | FAIL | see §2.x", no note.
+  t_d = 90 days (default): r = 90 / 90 = 1.000 PASS, shown "governing minimum 90 days".
+- Report, default BT-72 with Handling on (tab left on Hauling): before Figure 12.2 "…; shown: Stage: Hauling" only; after 12.2 "…; shown:
+  Stage: Lifting" and 12.3 "…; shown: Stage: Hauling", the Handling tab still on Hauling.
+### How verified
+- `node tests/engine/run.mjs psbridge tex project-registry`: 105 passed (101 + the new tab case in the per-case loops, + 1 new test: the age
+  check's values, its Owner rules cell, group, §1 row, no note, t_d 90 PASS as a minimum).
+- Harness B (`node tests/psbridge-compare.mjs`): 17 designs (new: RIDOT, two continuous spans, continuity at a girder age of 60 days), 43,512
+  shown values and 7,646 step values, 0 differences; its Owner rules row compared with the old app (own 10 values), the chip shown when a
+  design has an owner-limit check, §1's Owner limits rows = the design's owner-limit checks, no "not in the column" note. `--control` reports
+  each planted difference (exit 1).
+- `node tests/smoke/ps-bridge-skeleton.mjs` (223 checks, + 9): handling elevation Lifting then Hauling (12.2, 12.3), the tab keeps Hauling; no
+  figure wording of the screen controls or "table above"; RIDOT continuity t_d 60: Owner limits chip FAIL 1.500, totals, the chip list opens the
+  Owner rules row (5 engine values = computeAll), §1 row, no note, 0 console errors. `node tests/check-syntax.mjs`.
+### Open items
+- matCell (unchanged for the material rules): when the value equals the limit (r = 1.000) it cannot tell a minimum from a maximum by the ratio
+  and says "maximum"; the age check is fixed as a minimum, the f′c / f′ci rules are not changed here.
+- The stress distribution figure (7.2) shows one stage (Release, the default) in the Report; all stages could be drawn as for handling, if wanted.

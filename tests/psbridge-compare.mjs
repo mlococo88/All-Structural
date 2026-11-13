@@ -18,7 +18,13 @@
 //   must be in the rendered section's text and every step rendered; and the old app's own report (psrModel of the frozen page, its "Design
 //   summary" table and key quantities) must show the Report's numbers: each old cell's text = the Report's number in the old report's format
 //   (SharedSteps.n at the old report's decimals).
-//   node tests/psbridge-compare.mjs [--tabs loss,str,flex,shear,end,camb,hand,deck,rt,rpt] [--case <part of a name>] [--old <file>] [--new <index.html>] [--verbose]
+//   2026-11-13 ('own'): the Owner rules input tab's engine values (the owner's material checks in its rules table: value, limit, ratio) are
+//   compared as above; the check summary column's PASS / FAIL totals must count every engine check (each in a group; the material limits in
+//   "Materials (owner limits)", shown when the design has one) and the Report's §1 the same FAIL rows.
+//   2026-11-13 (display): the group renamed "Owner limits" and the RIDOT girder age at continuity (RIDOT 5.6.3.3, continuity on) in it: its
+//   Owner rules row (t_d, the minimum, the ratio) compared as above, the chip shown when the design has any of the owner-limit checks, and
+//   the Report's §1 row of each in group "Owner limits".
+//   node tests/psbridge-compare.mjs [--tabs loss,str,flex,shear,end,camb,hand,deck,rt,rpt,own] [--case <part of a name>] [--old <file>] [--new <index.html>] [--verbose]
 //     --control: changes one shown value by 1e-9 (relative) and one step value before comparing (and, with the Report, one Report value, one
 //     Report step value and one number given to the old report's comparison): the run must report each (the harness sees a difference)
 //   PR 2d-3 (PS-10): the new page's results are computeAll + engine/holddown.js (PSBHoldDown.compute). The values of that addition (paths
@@ -39,6 +45,7 @@ const OLD = path.resolve(args.old || path.join(REPO, 'Prestressed Bridge Design.
 const TABS = { loss: 'losses', str: 'stresses', flex: 'flexure', shear: 'shear', end: 'endzone', camb: 'camber', hand: 'handling', deck: 'deck', rt: 'rating' };
 const tabs = (args.tabs ? String(args.tabs).split(',') : Object.keys(TABS)).filter(t => TABS[t]);
 const REPORT = !args.tabs || String(args.tabs).split(',').includes('rpt');   // PR 2e
+const OWN = !args.tabs || String(args.tabs).split(',').includes('own');   // 2026-11-13: the Owner rules table and the check summary column
 const SEED = { 'psbeam.inputs.v1': '{"girder":"PCI BT-72","L":118}', 'psbeam.ui.v1': '{"tab":"losses"}' };
 let fails = 0, errors = 0;
 const log = s => console.log(s);
@@ -57,7 +64,7 @@ for (const name of names) {
   const P = await nw.p.evaluate(([src, nm]) => { eval(src); const P = window.__TAB_CASES(() => window.PSBModel.defaultProject())[nm]; localStorage.setItem('psb2.project.current', window.PSBModel.exportJSON(P)); return P; }, [caseSrc, name]);
   await nw.p.reload(); await nw.p.waitForSelector('#tabBar [data-otab]'); await nw.p.waitForTimeout(300);
   const inp = await nw.p.evaluate(() => window.PSBDesign.inputs(window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project));
-  const shown = [], steps = []; let ps10 = null, k10 = -1;
+  const shown = [], steps = []; let ps10 = null, k10 = -1, colOwn = null;
   for (const t of tabs) {
     await nw.p.click(`#tabBar [data-otab="${t}"]`); await nw.p.waitForTimeout(250);
     const r = await nw.p.evaluate(([t, wk]) => {
@@ -71,6 +78,19 @@ for (const name of names) {
     }, [t, TABS[t]]);
     if (r.err) { log(`ERROR ${name} / ${t}: the new page's engine: ${r.err}`); errors++; }
     shown.push(...r.ev); steps.push(...r.st); ps10 = r.ps10; k10 = r.k10;
+  }
+  // 2026-11-13: the Owner rules input tab (the owner's material checks: the engine's value, limit and ratio in its rules table) and the check
+  // summary column (its PASS / FAIL totals count every engine check of the design, the owner's limits in "Owner limits")
+  if (OWN) {
+    await nw.p.click('#inTabs [data-itab="own"]'); await nw.p.waitForTimeout(200);
+    const r = await nw.p.evaluate(() => {
+      const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P)), at = (o, p) => p.split('.').reduce((q, k) => q == null ? q : q[k], o);
+      const ev = [...document.querySelectorAll('#inPanes [data-pane="own"] [data-ev]')].map(el => ({ tab: 'own', path: el.dataset.ev, d: +el.dataset.d, div: 0, text: el.textContent, v: at(R, el.dataset.ev) }));
+      const N = new Set(window.PSBDashUI.GROUPS.flatMap(g => g.checks.map(q => q[0]))), num = s => { const el = document.querySelector('#sbDashHead ' + s); return el ? parseInt(el.textContent, 10) : 0; };
+      return { ev, all: R.checks.length, out: R.checks.filter(c => !N.has(c.n)).map(c => c.n), nF: R.checks.filter(c => !c.pass).length, F: num('.sdF'), Pn: num('.sdP'),
+        mat: R.checks.filter(c => /^(Girder f′c|Release strength f′ci|Girder age at continuity) \((RIDOT|MassDOT|CTDOT) /.test(c.n)).length, chip: !!document.querySelector('#sbDashCol [data-sdgrp="mat"]') };
+    });
+    shown.push(...r.ev); colOwn = r;
   }
   // PR 2e: the Report (the model the tab mounted; its numbers in the rendered sections)
   let rpt = null;
@@ -87,7 +107,9 @@ for (const name of names) {
       const num = p => { const v = M.vals.find(q => q.sec === 'sum' && q.path === p); return v ? at(R, p) : undefined; };
       const sum = { checks: R.checks.map((c, i) => ({ loc: num(`checks.${i}.loc`), v: num(`checks.${i}.v`), lim: num(`checks.${i}.lim`), r: num(`checks.${i}.r`) })),
         kq: Object.fromEntries(['totalLoss', 'pctLoss', 'fpe', 'dfm', 'dfv', 'fMid.phiMn', 'MuMid', 'cam.rel', 'cam.final', 'L'].map(p => [p, num(p)])) };
-      return { ev, st, nSteps, domSteps: document.querySelectorAll('.rp-doc .rp-step').length, k10, sum, kErr: document.querySelectorAll('.rp-doc .katex-error').length, bad: document.querySelectorAll('.rp-doc .rp-bad').length };
+      const nF = [...document.querySelectorAll('.rp-doc section[data-rpsec="rp-s1"] table tbody tr')].filter(tr => tr.children[7] && tr.children[7].textContent.trim() === 'FAIL').length;
+      const s1 = document.querySelector('.rp-doc section[data-rpsec="rp-s1"]'), ownRows = s1 ? [...s1.querySelectorAll('table tbody tr')].filter(tr => tr.children[0] && tr.children[0].textContent.trim() === 'Owner limits').length : 0;
+      return { nF, ownRows, notCol: !!s1 && /Not in the check summary column/.test(s1.textContent), ev, st, nSteps, domSteps: document.querySelectorAll('.rp-doc .rp-step').length, k10, sum, kErr: document.querySelectorAll('.rp-doc .katex-error').length, bad: document.querySelectorAll('.rp-doc .rp-bad').length };
     });
     shown.push(...rpt.ev); steps.push(...rpt.st);
   }
@@ -127,6 +149,15 @@ for (const name of names) {
   shown.filter(q => !isPS10(q.path)).forEach(q => { const ov = o.vals[q.path], want = fx(q.div ? ov / q.div : ov, q.d);
     if (typeof ov !== 'number' || q.text !== want || !Object.is(q.v, ov)) bad.push(`${q.tab} ${q.path}: shown "${q.text}" (${q.v}) vs old ${ov} -> "${want}"`); });
   steps.filter(q => !isPS10(q.path)).forEach(q => { const ov = o.vals[q.path]; if (!q.onTab) bad.push(`${q.tab} step ${q.id} not on the tab`); if (!Object.is(q.v, ov)) bad.push(`${q.tab} step ${q.id} (${q.path}): ${q.v} vs old ${ov}`); });
+  if (colOwn) {
+    if (colOwn.out.length) bad.push('check summary column: not in a group: ' + colOwn.out.join('; '));
+    if (colOwn.F !== colOwn.nF || colOwn.F + colOwn.Pn !== colOwn.all) bad.push(`check summary column: ${colOwn.F} FAIL + ${colOwn.Pn} PASS, the engine ${colOwn.nF} failing of ${colOwn.all}`);
+    if (!!colOwn.mat !== colOwn.chip) bad.push(`Owner limits chip ${colOwn.chip ? 'shown' : 'missing'} with ${colOwn.mat} material checks`);
+    if (colOwn.mat && colOwn.ev.length < 3 * colOwn.mat) bad.push(`Owner rules table: ${colOwn.ev.length} values for ${colOwn.mat} owner-limit checks`);
+    if (rpt && rpt.ownRows !== colOwn.mat) bad.push(`Report §1: ${rpt.ownRows} rows in group Owner limits, the design has ${colOwn.mat} owner-limit checks`);
+    if (rpt && rpt.notCol) bad.push('Report §1: a "not in the check summary column" note');
+    if (rpt && rpt.nF !== colOwn.F) bad.push(`Report §1 FAIL rows ${rpt.nF} vs the column's ${colOwn.F}`);
+  }
   // PR 2e: the Report rendered (every number in its section, every step, no KaTeX error, no unresolved §) and the old app's report
   let nOld = 0;
   if (rpt) {
@@ -151,7 +182,7 @@ for (const name of names) {
     totalRpt += rpt.ev.length; totalRptSteps += rpt.st.length; totalOldRpt += nOld;
   }
   total += shown.length; totalSteps += steps.length;
-  const per = tabs.map(t => `${t} ${shown.filter(q => q.tab === t).length} values + ${steps.filter(q => q.tab === t).length} steps`).join(', ') + (rpt ? `, rpt ${rpt.ev.length} values + ${rpt.st.length} steps (${rpt.nSteps} shown), old report ${nOld} numbers` : '');
+  const per = tabs.map(t => `${t} ${shown.filter(q => q.tab === t).length} values + ${steps.filter(q => q.tab === t).length} steps`).join(', ') + (colOwn ? `, own ${colOwn.ev.length} values (column ${colOwn.F} FAIL + ${colOwn.Pn} PASS)` : '') + (rpt ? `, rpt ${rpt.ev.length} values + ${rpt.st.length} steps (${rpt.nSteps} shown), old report ${nOld} numbers` : '');
   if (bad.length) { fails++; log(`DIFF ${name}: ${bad.length} of ${shown.length + steps.length}`); bad.slice(0, 25).forEach(b => log('    ' + b)); }
   else log(`same ${name}: ${per}${same ? '' : ' (note: the old app changed the stored inputs on load; compared on the new app\'s inputs)'}`);
   if (args.verbose && !same) log('    inputs the old app stored: ' + JSON.stringify(o.loaded).slice(0, 400));
@@ -165,5 +196,5 @@ if (other.length) { fails++; log('DIFF storage: keys other than psb2.* written: 
 const cerr = nw.errs.concat(old.errs.filter(e => !/Failed to load resource|deoptimised the styling/.test(e)));
 if (cerr.length) { errors++; log('ERROR console: ' + cerr.slice(0, 5).join(' | ')); }
 await nw.b.close(); await old.b.close();
-log(`${names.length} designs, tabs ${tabs.join(', ')}${REPORT ? ', rpt' : ''}: ${total} shown values and ${totalSteps} step values compared (of them ${total10} PS-10 values with the hand values, the rest with the old app; the Report ${totalRpt} values and ${totalRptSteps} step values, and ${totalOldRpt} numbers of the old app's own report); ${fails} with differences, ${errors} errors`);
+log(`${names.length} designs, tabs ${tabs.join(', ')}${REPORT ? ', rpt' : ''}${OWN ? ', own (the Owner rules table and the check summary column)' : ''}: ${total} shown values and ${totalSteps} step values compared (of them ${total10} PS-10 values with the hand values, the rest with the old app; the Report ${totalRpt} values and ${totalRptSteps} step values, and ${totalOldRpt} numbers of the old app's own report); ${fails} with differences, ${errors} errors`);
 process.exit(errors ? 2 : fails ? 1 : 0);

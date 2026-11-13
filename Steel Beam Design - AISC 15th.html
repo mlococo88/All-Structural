@@ -2049,10 +2049,24 @@ function torsionHSS(p,Lin){
     const F1=1.23*E/(SQ(Lin/p.OD)*Math.pow(p.Dt,1.25));
     const F2c=0.60*E/Math.pow(p.Dt,1.5);
     out.Fcr=Math.min(0.6*Fy,Math.max(F1,F2c));out.clause='H3-2a/b';
+    out.L=Lin;out.F1=F1;out.F2c=F2c;   /* TLEN (2026-11-13): kept for the show-the-work lines (L, H3-2a, H3-2b) */
   }else{out.blocked='Torsion on an open section (I-shape or channel) is governed by \u00A7H3.3, which requires the normal and shear stresses from a warping-torsion analysis (AISC Design Guide 9) \u2014 outside the scope of this tool. Check the axial, flexural and shear stresses independently per \u00A7H3.3, or use an HSS, for which \u00A7H3.1/H3.2 is implemented here.';
     SB_NLW.set('Torsion: '+out.blocked,['Torsion: torsion on an open section (I-shape or channel) is outside the scope of this tool.',[['Why:','it is governed by \u00A7H3.3, which requires the normal and shear stresses from a warping-torsion analysis (AISC Design Guide 9).'],['Instead:','check the axial, flexural and shear stresses independently per \u00A7H3.3, or use an HSS, for which \u00A7H3.1/H3.2 is implemented here.']]]);   /* SBNL: display form of the errBox */
     return out;}
   out.Tn=out.Fcr*p.Cc;out.phiTn=0.9*out.Tn;
+  return out;
+}
+/* TLEN (2026-11-13): show the work of H3.1(a) for a round HSS: the member length L and its source, H3-2a, H3-2b and the
+   0.6Fy cap. Returns no lines for a rectangular HSS (H3.1(b) unchanged). */
+function torsRoundWork(D,p){
+  const t=D&&D.tors,out={lines:[],vars:[]};
+  if(!t||t.blocked||p._kind!=='P')return out;
+  const L=t.L,src=(D.torsL&&D.torsL.src)||'',hasL=L>0&&isFinite(L);
+  out.vars.push(['L',hasL?fmt(L/12,2)+' ft = '+fmt(L,1)+' in':'not entered',src+' (\u00A7H3.1(a): L = member length)']);
+  out.lines.push(hasL?'F_{cr,a}=\\dfrac{1.23E}{\\sqrt{L/D}\\,(D/t)^{5/4}}=\\dfrac{1.23\\times '+fmt(EKSI,0)+'}{\\sqrt{'+fmt(L,1)+'/'+fmt(p.OD,3)+'}\\times '+fmt(p.Dt,2)+'^{5/4}}=\\mathbf{'+fmt(t.F1,2)+'\\ \\text{ksi}}\\quad(\\text{H3-2a})'
+    :'F_{cr,a}\\ \\text{(H3-2a) not used: no member length}');
+  out.lines.push('F_{cr,b}=\\dfrac{0.60E}{(D/t)^{3/2}}=\\dfrac{0.60\\times '+fmt(EKSI,0)+'}{'+fmt(p.Dt,2)+'^{3/2}}=\\mathbf{'+fmt(t.F2c,2)+'\\ \\text{ksi}}\\quad(\\text{H3-2b})');
+  out.lines.push('F_{cr}=\\min\\left[0.6F_y,\\ \\max(F_{cr,a},F_{cr,b})\\right]=\\min\\left('+fmt(0.6*p.mat.Fy,2)+',\\ '+fmt(hasL?Math.max(t.F1,t.F2c):t.F2c,2)+'\\right)=\\mathbf{'+fmt(t.Fcr,2)+'\\ \\text{ksi}}');
   return out;
 }
 /* ---------- J10 concentrated forces (I & C) ---------- */
@@ -2264,6 +2278,7 @@ function designAll(A){
   D.Lcz=(dsn.Lcz!=null?dsn.Lcz:(D.LbTop||longestSpan()))*(dsn.Kz||1)*12;
   D.comp=(D.Lcx>0&&D.Lcy>0)?compStrength(p,D.Lcx,D.Lcy,D.Lcz):null;
   D.tors=torsionHSS(p,Ltot*12);
+  if(p._kind==='P')D.torsL={v:Ltot,src:'total member length'};   /* TLEN: the L of Eq. H3-2a (round HSS only), shown with the torsion step */
   D.torOpen=(typeof openTorsionFor==='function')?openTorsionFor(A):null;
   if(typeof compositeFor==='function'){try{A.comp=compositeFor(A);}catch(e){A.comp={blocked:'Composite engine error: '+e.message};}}
   if(A.comp&&!A.comp.blocked&&typeof constructionStage==='function'){
@@ -5079,7 +5094,17 @@ function memberDesignAll(A){
   if(anyPu&&!(D.Lcx>0&&D.Lcy>0))
     D.warns.push('P\u1D64 is entered but the compression effective lengths are zero \u2014 set L\u1D9C\u2093 and L\u1D9C\u1D67 in the <b>Compression Effective Lengths</b> section. Compression results are withheld until they are.');
   D.comp=(D.Lcx>0&&D.Lcy>0)?compStrength(p,D.Lcx,D.Lcy,D.Lcz):null;
-  D.tors=torsionHSS(p,(S.member.Lv!=null?S.member.Lv:0)*12);
+  /* TLEN (2026-11-13): Eq. H3-2a takes L = the member length (AISC 360-16 Sec. H3.1(a)), as beam mode (total length) and
+     batch (Lx) do. It was the shear length Lv, or 0 when Lv was blank, so H3-2a never governed. The member span L of the
+     bracing section is used (memberSpan(): blank -> the unbraced length Lb, as for self-weight and deflection); with no
+     length at all, H3-2a is dropped (L -> infinity), which leaves the lower bound Fcr = min(0.6Fy, H3-2b). */
+  {const sp=memberSpan(),has=sp.v>0;
+   const torsL={v:has?sp.v:null,src:has?(sp.src==='entered'?'member span L':'unbraced length L\u1D47 \u2014 no member span L entered'):'no member length entered \u2014 Eq. H3-2a not used',fallback:!(has&&sp.src==='entered')};
+   D.tors=torsionHSS(p,(has?sp.v*12:Infinity));
+   if(p._kind==='P')D.torsL=torsL;   /* round HSS only: H3.1(b) and open sections do not use L */
+   if(p._kind==='P'&&anyTu&&torsL.fallback)D.warns.push('Round HSS torsion: Eq. H3-2a needs the member length L (\u00A7H3.1(a)). '+
+     (has?'No member span L is entered, so L\u1D47 = '+fmt(sp.v,2)+' ft is used \u2014 enter the member span L in <b>Lateral Bracing &amp; C\u1D47</b>.':
+      'No length is entered, so H3-2a is not used (F\u1D9C\u02B3 = min(0.6F\u1D67, H3-2b), conservative) \u2014 enter the member span L in <b>Lateral Bracing &amp; C\u1D47</b>.'));}
   D.torOpen=(typeof openTorsionFor==='function')?openTorsionFor(A):null;
   if(typeof compositeFor==='function'){try{A.comp=compositeFor(A);}catch(e){A.comp={blocked:'Composite engine error: '+e.message};}}
   if(A.comp&&!A.comp.blocked&&typeof constructionStage==='function'){
@@ -6439,11 +6464,12 @@ function buildTorsTab(pg){
     if(!any){naBox(pg,'Torsion','No T\u1D64 was entered on any '+(isMember()?'load case':'combination')+'.');return;}
     if(D.tors&&D.tors.blocked){pg.appendChild(el('div','errBox',D.tors.blocked));return;}
     mkSection('toCap','Torsional Strength (\u00A7H3.1)',body=>{
+      const rw=torsRoundWork(D,p);   /* TLEN */
       body.appendChild(eqBlock({title:'Critical stress and nominal torsional strength',ref:'\u00A7H3.1 ('+D.tors.clause+')',
-        lines:['F_{cr}=\\mathbf{'+fmt(D.tors.Fcr,1)+'\\ \\text{ksi}}',
+        lines:rw.lines.concat(['F_{cr}=\\mathbf{'+fmt(D.tors.Fcr,1)+'\\ \\text{ksi}}',
           'T_n=F_{cr}C='+fmt(D.tors.Fcr,1)+'\\times '+fmt(p.Cc,1)+'=\\mathbf{'+fmt(D.tors.Tn,0)+'\\ \\text{kip\u00B7in}}',
-          '\\phi_TT_n=0.90\\times '+fmt(D.tors.Tn,0)+'=\\mathbf{'+fmt(D.tors.phiTn/12,1)+'\\ \\text{kip\u00B7ft}}'],
-        vars:[['C',fmt(p.Cc,1)+' in\u00B3','HSS torsional constant']]}));
+          '\\phi_TT_n=0.90\\times '+fmt(D.tors.Tn,0)+'=\\mathbf{'+fmt(D.tors.phiTn/12,1)+'\\ \\text{kip\u00B7ft}}']),
+        vars:rw.vars.concat([['C',fmt(p.Cc,1)+' in\u00B3','HSS torsional constant']])}));
       body.appendChild(el('div','note','<b>Interaction threshold:</b> where T\u1D64 \u2264 0.2\u03C6T\u2099 = '+fmt(0.2*D.tors.phiTn/12,2)+
         ' kip\u00B7ft, torsion may be neglected and H1 governs; above it, Eq. H3-6 replaces H1.'));
     },pg);
@@ -7286,6 +7312,12 @@ async function xlChecks(X,p,D,mem,Fy,E){
     }
   }else if(D.tors&&!D.tors.blocked){
     X.line('Torsional constant','C',N2(p.Cc,2),'in\u00B3','',{kind:'in',ref:'Chz'});
+    if(p._kind==='P'){   /* TLEN: the H3.1(a) length and the two equations */
+      const tL=D.tors.L,okL=tL>0&&isFinite(tL);
+      X.line('Member length for Eq. H3-2a ('+((D.torsL&&D.torsL.src)||'')+')','L',okL?N2(tL/12,2):'\u2014','ft','\u00A7H3.1(a)',{kind:'in'});
+      if(okL)X.line('Critical stress, Eq. H3-2a','Fcr,a',N2(D.tors.F1,2),'ksi','Eq. H3-2a');
+      X.line('Critical stress, Eq. H3-2b','Fcr,b',N2(D.tors.F2c,2),'ksi','Eq. H3-2b');
+    }
     X.line('Critical stress','Fcr',N2(D.tors.Fcr,2),'ksi',D.tors.clause,{ref:'FcrT'});
     X.eq('Tn = Fcr \u00B7 C / 12');
     X.line('Nominal torsional strength','Tn',{formula:'\u00ABFcrT\u00BB*\u00ABChz\u00BB/12',result:N2(D.tors.Tn/12,2)},'k\u00B7ft','Eq. H3-1',{ref:'TnT'});
