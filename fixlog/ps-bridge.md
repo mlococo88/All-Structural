@@ -984,3 +984,76 @@ PR #1501: https://github.com/mlococo88/All-Structural/pull/1501
   positions (an engine change, §4)?
 - `loads.de` (d_e for the exterior girder) is entered per type; with different left and right overhangs an exterior type on G1 and G_Nb uses one
   d_e for both (enter a type per side, or the larger d_e).
+
+## 2026-11-13 — PR 3a-3: the bridge level, part 3 — DC2 and DW distributed to each girder line by the Steel Bridge app's method (CALCULATION CHANGE, §4, for projects that use it; projects saved before keep their entered values)
+PR #1506: https://github.com/mlococo88/All-Structural/pull/1506
+### Request
+- Engineer decision PS-9 ("unequal bays + the steel app's DL distribution from the start; results differ from the old app where they
+  apply, §4 callouts"); task: "Dead load distribution: use the steel app's DC2/DW distribution method"; plan §7 item 3.
+### §4 callout
+- **Before** (the old app and PRs 2a–3a-2): DC2 (`loads.wBar`, klf per girder) and DW (`loads.wDW`) were entered per girder design (default
+  0.30 / 0.25 klf) and applied unchanged to every girder line.
+- **After**, when the project distributes them (`P.xs.dl.mode = 'distributed'`, Cross-section tab; every NEW project): each girder line's
+  DC2 and DW = the Steel Bridge app's `dead()` (apps/steel-bridge/engine/loads.js, copied verbatim into `engine/bridge-dl.js`) of the bridge's
+  line loads, fed to the engine as that line's `loads.wBar` / `loads.wDW`; nothing else of the engine changes:
+  - line loads: each barrier w (klf) at bw/2 from its deck edge (DC2); each sidewalk slab b × t/12 × w_c (DC2, deck concrete for loads);
+    added line loads (DC2 or DW at x); the future wearing surface q × (deck width − both traffic faces) (DW);
+  - distribution (`METHODS`): MassDOT Bridge Manual Part I 3.5.3 pile-cap P/N_b + max(0, P e c_i / Σc²) for DC2 (wearing surface equally);
+    "Typical AASHTO" all loads equally (AASHTO LRFD 10th Ed. Art. 4.6.2.2.1: permanent loads of the deck may be distributed uniformly among
+    the beams where the conditions of that article are met); RIDOT BDM 3.3.1 barriers and sidewalks 60 % to the fascia beams, 40 % evenly to
+    the interior beams. Dead loads: AASHTO LRFD 10th Ed. Art. 3.5.1, Table 3.5.1-1.
+  - **Not** changed: a project saved before this PR (no `xs.dl`) or set to "Entered per girder type" — DC2 / DW as entered, byte-identical
+    engine inputs (test over the 17 harness B designs × every line); every old-app import (harness B `--import`: 0 differences).
+- **Worked check case** (new project: 120 ft simple span, PCI BT-72, 5 girders at 9 ft, overhangs 3 ft, deck 42 ft; MassDOT pile-cap;
+  barriers 0.30 klf × 1.5 ft each side; FWS 25 psf):
+  - x̄ = 3 + (0 + 9 + 18 + 27 + 36)/5 = 21 ft; c = −18, −9, 0, 9, 18 ft; Σc² = 810 ft². Left barrier at x = 0.75 ft: e = −20.25 ft.
+  - G1: 0.30/5 + 0.30(−20.25)(−18)/810 = 0.060 + 0.135 = 0.195 klf from the left barrier, + 0.060 from the right (its pile-cap term negative →
+    0) = **DC2 0.255 klf**; G2: 0.060 + 0.30(20.25)(9)/810 = 0.0675 → 0.1275 + 0.060 = **0.1875**; G3: 0.060 + 0.060 = **0.120**; G4, G5 symmetric.
+  - DW: 25 psf × (42 − 1.5 − 1.5) ft = 0.975 klf, equally: **0.195 klf** each line.
+  - G2 (interior, the old default design): before DC2 0.30, DW 0.25 → M_DC2 = 0.30 × 120²/8 = 540.0, M_DW = 450.0 kip-ft, Strength I M_u =
+    10,251.0 kip-ft, flexure ratio 0.7516; after DC2 0.1875, DW 0.195 → M_DC2 = 0.1875 × 1800 = 337.5, M_DW = 351.0 kip-ft, M_u = 10,251.0 −
+    1.25 × 202.5 − 1.50 × 99.0 = **9,849.4 kip-ft** (engine 9,849.4), flexure ratio **0.7222**.
+  - G1 (exterior): DC2 0.255 → M_DC2 459.0, M_u 10,430.3 → 10,180.6, flexure 0.7754 → 0.7568. G3: DC2 0.120 → M_u 9,697.5, flexure 0.7110.
+  (For a project that entered 0.30 / 0.25 per girder these are less conservative; they follow the entered barrier and wearing-surface weights.)
+### Where
+- `apps/ps-bridge/engine/bridge-dl.js` (new, `window.PSBBridgeDL`): header (source, pin `58204bac99b576db79d1dc3ac8eed0b47cf70018`, lines 116-217,
+  blob 108476a…), the constants dead() reads, the DEAD-VERBATIM slice, `defaults`, `on`, `checks`, `distribute`, `line`, `stepsFor`, `withSteps`.
+- `engine/design.js` `one()`: anchor `// PR 3a-3 (PS-9, §4): DC2 and DW of this girder line` — `if (q) o.loads = Object.assign({}, o.loads, { wBar:
+  q.DC2, wDW: q.DW });` (before: no such line; the entered values stayed).
+- `engine/model.js`: `xs.dl` documented; `newProject()` sets `xs.dl = PSBBridgeDL.defaults(p)`. `engine/inputcheck.js`: the distribution
+  checks. `engine/fields.js`: the Loads tab's DC2 / DW fields only when entered (`distOff`), the card note.
+- `ui/bridgedl.js` (new, `window.PSBBridgeDLUI`): the Cross-section card (mode, method, barriers, sidewalks, wearing surface, added line
+  loads, the per-line DC2 / DW table) and the Loads & LLDF line table (each load's share per line, the line shown marked, § links).
+- `ui/loads.js`: topic "DC2 and DW distributed …" (steps dl.*), the dead-load rows say "distributed to G<g>" with links, the line table.
+- `index.html`, `report/data.js`: the Loads & LLDF steps + the distribution steps of the line shown (`withSteps`), so the tab and the Report
+  work them.
+### Copies (CLAUDE.md §3; to move to shared/ later)
+- `dead()` / `deadSteps()` of `apps/steel-bridge/engine/loads.js` (byte for byte, verbatim test) and its `ED`, `St`, `n2`–`n4`, `DIST`, `CLS`,
+  `METHODS` constants. Keep the copies in step until the move.
+### Saved data (CLAUDE.md §5)
+- New optional `xs.dl` within `psb2.project` v1; absent = "entered" (the old behaviour; no migration needed, results unchanged). No new key.
+### How verified
+- `tests/engine/psbridge-dl.test.mjs` (new, 5 tests): verbatim slice; the same DC2 / DW / steps as the steel app's `SBDLoads.dead` (12 cases: 3
+  methods × equal / unequal bays × sidewalk); every line's engine inputs take them; saved-before and "entered" byte-identical over the 17 harness
+  B designs and every line; the check case above (hand values to 1e-12, M_u 10,251.0 → 9,849.4); input checks. Smoke `ps-bridge-types.mjs` §7.
+### Engineer decision PS-21 (2026-11-13, added in this PR before merge)
+- The distribution method of a NEW project follows its owner: AASHTO (no owner rule) → "Typical AASHTO" equal share (AASHTO LRFD 10th Ed.
+  Art. 4.6.2.2.1); MassDOT → pile-cap (MassDOT Bridge Manual Part I 3.5.3); RIDOT → its 60/40 rule (RIDOT BDM 3.3.1, the steel app's owner
+  rule); CTDOT → equal share (the steel app's CTDOT rule: no CTDOT method). A project keeps its stored method. `engine/bridge-dl.js`
+  `OWNER_METHOD`, `ownerMethod`, `defaults` (method), `onOwner`; `ui/inputs.js` owner change: a method still at the old owner's default takes
+  the new owner's (as the old app's owner defaults; a chosen method is kept), named in the owner-change message (decision pending review: the
+  owner-change rule).
+- **Check case, new AASHTO project (the default now):** DC2 = (0.30 + 0.30)/5 = **0.120 klf** on every line; DW 0.195 klf. G2: before (entered
+  0.30 / 0.25) M_DC2 540.0, M_DW 450.0, M_u 10,251.0 kip-ft, flexure 0.7516 → after M_DC2 = 0.12 × 120²/8 = **216.0**, M_DW 351.0, M_u =
+  10,251.0 − 1.25 (324.0) − 1.50 (99.0) = **9,697.5** kip-ft (engine 9,697.5), flexure **0.7110**. G1: M_u 10,430.3 → **9,876.8**, flexure
+  0.7754 → **0.7343**. The pile-cap case above remains the check of that method (MassDOT projects).
+### Decisions (pending engineer review)
+- 3a3-D1. New projects distribute (method by owner, PS-21); saved projects and old-app imports keep their entered DC2 / DW until the user
+  switches.
+- 3a3-D2. Default barriers = the old app's own barrier (`deck.wBar` 0.30 klf, `deck.bBar` 18 in); FWS 25 psf (the old `deck.wsFut` and the
+  steel default).
+- 3a3-D3. Inputs offered now: barriers, sidewalk slabs, wearing surface, added line loads (DC2 / DW). Not yet: curbs and railings, fences,
+  medians, overlays by thickness, beam-class and per-load overrides (the steel app has them).
+- 3a3-D4. The deck design (Diaphragms / deck tab) keeps its own barrier weight and wearing surface (not tied to the distribution inputs).
+### Open items
+- None of this PR (the default-method question answered by PS-21).

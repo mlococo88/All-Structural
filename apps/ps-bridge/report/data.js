@@ -27,7 +27,7 @@
     if (rc && rc.R && rc.W && !rc.R.error) { B.inp = rc.inp; B.R = rc.R; B.W = rc.W; return B; }
     try { B.inp = W().PSBDesign.inputs(P); B.R = W().PSBHoldDown.compute(JSON.parse(JSON.stringify(B.inp))); } catch (e) { B.err = 'The engine could not compute this design: ' + (e && e.message); return B; }
     if (B.R.error) { B.err = 'The engine could not compute this design: ' + B.R.error; return B; }
-    try { B.W = worked(B.inp, B.R); } catch (e) { B.err = 'Worked steps: ' + (e && e.message); }
+    try { B.W = worked(B.inp, B.R); if (W().PSBBridgeDL) W().PSBBridgeDL.withSteps(B.W.loads, P); } catch (e) { B.err = 'Worked steps: ' + (e && e.message); }   // PR 3a-3: + the DC2 / DW distribution steps
     return B;
   }
   window.PSBReportData = { compute, worked };

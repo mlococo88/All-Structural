@@ -44,6 +44,7 @@
     if (window.PSBDesign && P.xs && P.spans) window.PSBDesign.checks(P).errors.forEach(e => E(e.path, e.msg, 'design'));
     const BR = window.PSBBridge;   // PR 3a-1: the girder types (engine/bridge.js): two types on one line, different shapes in a span (blocking)
     if (BR && P.xs && P.spans) { const c = BR.checks(P); c.errors.forEach(e => E(e.path, e.msg, 'types')); c.warnings.forEach(w => warnings.push({ path: w.path, msg: w.msg, src: 'types' })); }
+    if (window.PSBBridgeDL && P.xs) window.PSBBridgeDL.checks(P).forEach(e => E(e.path, e.msg, 'dl'));   // PR 3a-3: the DC2 / DW distribution inputs
     const Ls = s => P.spans && Array.isArray(P.spans.lengths) ? P.spans.lengths[s - 1] : NaN;
     inputsOf(P, P.base, Ls(window.PSBDesign ? window.PSBDesign.sel(P).s : 1), E);
     /* PR 3a-1: each girder type's own inputs (the base with its overrides, on its span's length) checked by the same rules; an error the base
