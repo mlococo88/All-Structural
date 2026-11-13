@@ -6909,7 +6909,7 @@ Before: no minimum-thickness check.
   - the autosave, apart from the added `minh`.
 - **Tests:** new `tests/smoke/cbc-min-thickness.mjs`, 1400 and 390 px, 0 console errors. The suite's other tests are listed in the PR.
 
-## 2026-11-13 — PR: claude/cbc-loads-omit (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CBOM) — Beam Capacity tab, service load cases: ACI 318-19 5.3.2, rows with a variable load left out where that increases |M_u| or |V_u|   [CALCULATION CHANGE (service mode only: more combinations); factored mode and saved factored projects identical; no saved key or format change]
+## 2026-11-13 — PR: claude/cbc-loads-omit (PR #1505: https://github.com/mlococo88/All-Structural/pull/1505) (CBOM) — Beam Capacity tab, service load cases: ACI 318-19 5.3.2, rows with a variable load left out where that increases |M_u| or |V_u|   [CALCULATION CHANGE (service mode only: more combinations); factored mode and saved factored projects identical; no saved key or format change]
 
 The file uses CRLF line endings; keep them. All code is in the Beam Capacity srcdoc (`#suite-frame-capacity`). When re-applying, escape `&` as `&amp;` and `"` as `&quot;`. Every site is tagged CBOM.
 
