@@ -363,7 +363,7 @@ PR #1457: https://github.com/mlococo88/All-Structural/pull/1457
 - Next: PR 2d (End zone & hold-down, Camber & deflection, Handling, Deck, Rating tabs; their chips; harness B on them).
 
 ## 2026-11-13 — PR 2d-1: End zone & hold-down and Camber & deflection output tabs, check chips; harness B (no calculation change)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1458: https://github.com/mlococo88/All-Structural/pull/1458
 ### Where
 - `apps/ps-bridge/engine/worked-end.js` (new, `window.PSBWorkedEnd`, no DOM): `endzone(inp, R)`, `camber(inp, R)` → `{ steps, pairs, paths }`.
   End zone: P_i, 0.04 P_i, A_s,req = 0.04 P_i/20, h/4 (h = overall height, or width of a slab), A_s,prov = n A_v, P_r = 20 A_s,prov, legs needed,
