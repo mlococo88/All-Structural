@@ -415,7 +415,7 @@ PR #1458: https://github.com/mlococo88/All-Structural/pull/1458
 - Next: PR 2d-2 (Handling, Deck, Rating tabs; their chips; harness B).
 
 ## 2026-11-13 — PR 2d-2: Handling, Deck and Rating output tabs, check chips; harness B (no calculation change)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1460: https://github.com/mlococo88/All-Structural/pull/1460
 ### Where
 - `apps/ps-bridge/engine/worked-hdr.js` (new, `window.PSBWorkedHDR`, no DOM): `handling(inp, R)`, `deck(inp, R)`, `rating(inp, R)` → `{ steps, pairs, paths }`
   (no steps for Handling / Deck when their module is off). Handling (handlingCalc): w, per stage (lifting, hauling) L_s = L − 2a, M_sup = −wa²/2,
