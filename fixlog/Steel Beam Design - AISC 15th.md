@@ -4172,3 +4172,62 @@ index ea4ace2..89f7db7 100644
 - **Open items:**
   - Pipe: the embedded database has no torsional constant C for Pipe (`Cc` null), so φT_n = 0 and a Pipe with T_u always fails torsion. C = 2J/D would give the value. This needs the engineer's decision (calculation change, not made here).
   - ExcelJS stores no cached result for a formula whose result is 0 (e.g. that pipe T_n). Excel computes it on opening; existing behaviour for W too.
+
+## 2026-11-13 — PR: claude/sbeam-batch-grade (PR #1488: https://github.com/mlococo88/All-Structural/pull/1488) (SBBG) — batch Grade column reads the grade ids and the usual spellings; an unrecognised grade blocks the row   [input validation; no formula, saved key or format change]
+- **Problem:** `pickGrade` normalized the text by removing only spaces and hyphens, then compared it with the id (with `_` removed) or a part of the name. So the template's own drop-down ids for HSS (`A500B_R`, `A500C_R`, `A500B_P`, `A500C_P`) and spellings such as `A500B`, `A500 Gr B`, `A500-B`, `A572 Gr 50` were not read. Any such text **silently** took the family default. In a batch saved before SBGB (no `S.batch.hssDefB`) that default is A500 Gr. C, so a row marked `A500B_R` was checked with F_y = 50 instead of 46 (**unconservative**).
+- **Code (re-apply by hand):**
+  1. Before `function pickGrade` add:
+     ```js
+     function sbGradeKey(s){
+       return String(s==null?'':s).toUpperCase().replace(/[^A-Z0-9]/g,'').replace(/^ASTM/,'').replace(/GRADE/g,'').replace(/GR/g,'');
+     }
+     function sbGradeKeys(m){
+       return [m.id,m.id.replace(/_[RP]$/,''),m.name,m.name.replace(/\(.*\)/g,'')].map(sbGradeKey).filter(k=>k);
+     }
+     ```
+  2. `pickGrade`, before (inside `if(g){…}`):
+     ```js
+         m=list.find(x=>x.name.toUpperCase().replace(/[\s\-]/g,'').indexOf(g)>=0);
+         if(m)return m.id;
+       }
+       return defGradeFor(fam,legacy)||(list.length?list[0].id:null);
+     ```
+     after:
+     ```js
+         m=list.find(x=>x.name.toUpperCase().replace(/[\s\-]/g,'').indexOf(g)>=0);
+         if(m)return m.id;
+         const k=sbGradeKey(txt);   /* SBBG */
+         m=k?list.find(x=>sbGradeKeys(x).indexOf(k)>=0):null;
+         return m?m.id:null;
+       }
+       return defGradeFor(fam,legacy)||(list.length?list[0].id:null);
+     ```
+  3. After `pickGrade` add:
+     ```js
+     function sbGradeErr(fam,txt){
+       const k=sbGradeKey(txt),other=k?MATS.find(x=>sbGradeKeys(x).indexOf(k)>=0):null,fm=famMeta(fam);
+       return 'Grade “'+String(txt).trim()+'” '+(other?'('+other.name+') is not available for '+fm.name:'is not recognised')+
+         ' — use one of: '+gradesForFam(fam).map(x=>x.id+' ('+x.name+')').join(', ')+'; blank = the family default. The row is not checked.';
+     }
+     ```
+  4. `batchCheckRow`: before `if(!gid){R.blockers.push('No material grade available for family '+fs.fam+'.');return R;}` add:
+     ```js
+     if(!gid&&String(row.grade==null?'':row.grade).trim().replace(/[\s\-]/g,'')){R.blockers.push(sbGradeErr(fs.fam,row.grade));return R;}
+     ```
+  5. `BATCH_HELP.grade`: the sentence describing the ids, spellings and the blocked row goes before "Blank → family default …". The SBGB comment at `S.batch.hssDefB=true;` now says "a blank HSS grade".
+- **Governing provision:** none (input reading). The grades and their F_y / F_u are unchanged (`MATS`).
+- **Check case:** batch row `HSS8X6X1/2`, Grade `A500B_R`, P_u 10, M_ux 20, L_bx 8, in a batch saved before SBGB.
+  - Before: grade A500C_R (F_y 50), silently.
+  - After: A500B_R (F_y 46).
+  - `A500 Gr B` → A500B_R; `A572 Gr 50` (W) → A572_50 (before: A992).
+  - `A999` → BLOCKED, "Grade "A999" is not recognised — use one of: A500C_R (ASTM A500 Gr. C (rect)), A500B_R (…), A1085 (ASTM A1085); blank = the family default."
+  - `A992` on an HSS → BLOCKED, "… (ASTM A992) is not available for HSS — Rect / Square …".
+  - Blank → A500C_R in an old batch and A500B_R with `hssDefB`, as before.
+- **How verified:**
+  - Identity proof, origin/main vs the branch, `pickGrade` taken from each file: 980 texts (every id and name, every substring of them, case and spacing variants, spellings, junk) × 9 families × legacy/new. All 4,314 combinations that were blank or matched before give identical grades. Of the 13,326 that fell to the default before, 130 are now read and the rest block.
+  - `runBatch()` with 65 rows of recognised grades and blanks, `hssDefB` absent and set: results JSON identical.
+  - `tests/engine/sbeam-batch-grade.test.mjs` (new, 3 tests); `tests/engine/sbeam-hss.test.mjs` SBGB test updated (`'xyz'` now blocks).
+  - check-syntax; `run.mjs sbeam aisc-hss` 33/33; the five Steel Beam smoke tests pass.
+- **Saved data (§5):** no key or format change. A saved batch row whose grade text was not recognised now shows BLOCKED with the message instead of a silent default result. The row's data is kept, so the user retypes the grade.
+- **Other copies:** none.
+- **Open items:** a bare `A500` (no grade letter) is still read as before (the first A500 grade by name, i.e. Gr. C), to keep old results identical. Should it block as ambiguous? Engineer's decision.

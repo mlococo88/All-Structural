@@ -8389,7 +8389,7 @@ const BATCH_HELP={
   desc:'Free text, e.g. "W-Column" or "Hoist Beam". Carried through to the results and the printed report.',
   mid:'Your member mark or ID. Any text or number.',
   size:'REQUIRED. AISC label: W18X60, C15X33.9, HSS6X4X1/4, HSS8.625X0.322, Pipe8XS. Lower case and \u00D7 accepted.',
-  grade:'Blank \u2192 family default (W/HP A992, C/MC/M/S A36, rect HSS A500 Gr. B, round HSS A500 Gr. B, pipe A53 Gr. B). Rows imported before 2026-11-13 and saved with a project keep A500 Gr. C for HSS, the default when they were imported.',
+  grade:'The grade id from the drop-down (A992, A500B_R, A1085, ...) or a usual spelling (A500B, A500 Gr. B, A500-B, A572-50, A53 Gr. B); case, spaces and punctuation are ignored. A grade that is not recognised, or not made in that shape family, blocks the row with a message. Blank \u2192 family default (W/HP A992, C/MC/M/S A36, rect HSS A500 Gr. B, round HSS A500 Gr. B, pipe A53 Gr. B). Rows imported before 2026-11-13 and saved with a project keep A500 Gr. C for HSS, the default when they were imported.',
   Pu:'Axial force, kip. COMPRESSION POSITIVE. A negative value is treated as tension: the compression check is skipped and the member is checked for tensile yielding and rupture (\u00A7D2, using the Tension An and Tension U columns) and the \u00A7H1.2 interaction.',
   Vux:'Major-axis shear, kip. Sign ignored.',
   Vuy:'Minor-axis shear, kip. Sign ignored.',
@@ -8443,6 +8443,20 @@ function defGradeFor(fam,legacy){
   const fm=FAMS.find(f=>f.id===fam);
   return fm?fm.defMat:(gradesForFam(fam)[0]||{}).id;
 }
+/* SBBG (2026-11-13): a grade's spellings, for the batch Grade column: letters and digits only, upper case, without a leading
+   "ASTM" and without "GRADE" / "GR". Each grade answers to its id (A500B_R -> A500BR), its id without the _R / _P family suffix
+   (A500B), its name (ASTM A500 Gr. B (rect) -> A500BRECT) and its name without the bracket (A500B). So A500B, A500 Gr B,
+   A500-B, a500 gr. b, A500B_R, A1085, A53B, A53 Gr. B, A992, A36, A572-50, A572 Grade 50 are all read. */
+function sbGradeKey(s){
+  return String(s==null?'':s).toUpperCase().replace(/[^A-Z0-9]/g,'').replace(/^ASTM/,'').replace(/GRADE/g,'').replace(/GR/g,'');
+}
+function sbGradeKeys(m){
+  return [m.id,m.id.replace(/_[RP]$/,''),m.name,m.name.replace(/\(.*\)/g,'')].map(sbGradeKey).filter(k=>k);
+}
+/* the grade id of a batch row's Grade text. Blank -> the family default (as before, incl. S.batch.hssDefB). Otherwise the
+   earlier matches first (exact id, then a part of the name), so every text read before reads the same grade; then the
+   spellings above (SBBG). Text that is none of these returns null: batchCheckRow blocks the row and names the grade (SBBG:
+   before, it silently took the family default). */
 function pickGrade(fam,txt,legacy){
   const g=(txt||'').toString().trim().toUpperCase().replace(/[\s\-]/g,'');
   const list=gradesForFam(fam);
@@ -8451,8 +8465,17 @@ function pickGrade(fam,txt,legacy){
     if(m)return m.id;
     m=list.find(x=>x.name.toUpperCase().replace(/[\s\-]/g,'').indexOf(g)>=0);
     if(m)return m.id;
+    const k=sbGradeKey(txt);   /* SBBG */
+    m=k?list.find(x=>sbGradeKeys(x).indexOf(k)>=0):null;
+    return m?m.id:null;
   }
   return defGradeFor(fam,legacy)||(list.length?list[0].id:null);
+}
+/* SBBG: the row error for a Grade text pickGrade does not read */
+function sbGradeErr(fam,txt){
+  const k=sbGradeKey(txt),other=k?MATS.find(x=>sbGradeKeys(x).indexOf(k)>=0):null,fm=famMeta(fam);
+  return 'Grade \u201C'+String(txt).trim()+'\u201D '+(other?'('+other.name+') is not available for '+fm.name:'is not recognised')+
+    ' \u2014 use one of: '+gradesForFam(fam).map(x=>x.id+' ('+x.name+')').join(', ')+'; blank = the family default. The row is not checked.';
 }
 /* ---------------- per-row check ---------------- */
 function batchCheckRow(row){
@@ -8460,6 +8483,7 @@ function batchCheckRow(row){
   const fs=findShape(row.size);
   if(!fs){R.blockers.push('Shape "'+(row.size||'')+'" not found in '+DBVER+'.');return R;}
   const gid=pickGrade(fs.fam,row.grade,!(S.batch&&S.batch.hssDefB));   /* SBGB: rows imported before 2026-11-13 keep A500 Gr. C */
+  if(!gid&&String(row.grade==null?'':row.grade).trim().replace(/[\s\-]/g,'')){R.blockers.push(sbGradeErr(fs.fam,row.grade));return R;}   /* SBBG */
   if(!gid){R.blockers.push('No material grade available for family '+fs.fam+'.');return R;}
   const p=sectionFor(fs.fam,fs.lbl,gid);
   if(!p){R.blockers.push('Could not resolve section properties.');return R;}
@@ -8742,7 +8766,7 @@ async function importBatchFile(file){
   if(!rows.length){toast('No data rows found');return;}
   if(!S.batch)S.batch={rows:[],Cb:1};
   S.batch.rows=rows;
-  S.batch.hssDefB=true;   /* SBGB (2026-11-13): a blank or unknown HSS grade in these rows means A500 Gr. B (new field; absent = rows imported before) */
+  S.batch.hssDefB=true;   /* SBGB (2026-11-13): a blank HSS grade in these rows means A500 Gr. B (an unrecognised one blocks the row, SBBG) (new field; absent = rows imported before) */
   S.batch.src=file.name;
   S.batch.headerRow=bestRow;
   S.batch.mapped=Object.keys(bestMap);
