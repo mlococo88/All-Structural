@@ -3572,3 +3572,480 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
 - **Saved data:** none changed.
 - **Other copies:** none.
 - **Open item (reported, not fixed):** the Excel export (`xlChecks`) throws for every HSS. Round HSS, beam and member mode: §10 minor shear writes `2*«bf»*«tf»`. Rect HSS: the F2 L_r formula uses `«rts»` / `«ho»`. Checked on origin/main; W-shapes export.
+
+## 2026-11-13 — PR: claude/sbeam-xsec-dims (PR #1484: https://github.com/mlococo88/All-Structural/pull/1484) (SBXD) — cross-section drawings: dimensions, callouts and notes laid out outside the shape, no overlaps   [display only]
+- **Engineer's request (2026-11-13):** "review the cross section graphics, there are some overlapping dimensions, specifically when using an HSS beam."
+- **Graphics reviewed:** `xsecFig` (Schematic & Inputs `#xsecSchem`, Mₓ `#xsecMx`, Compression `#xsecCp`, Section Properties `#xsecSect`; the Report and print use the same figures as PNG at 2.3 × height), `compXsecFig` (`#xsecComp`, `#xsecCompSch`) and `compElevFig` (`#elevComp`, `#elevCompSch`). The tool has no DXF export of these drawings. Torsion, Validation and the input panel have no cross-section drawing; a built-up section is drawn by `xsecFig` as an I-shape.
+- **Problems (before), at 1400 px and 390 px:**
+  - rectangular HSS: the `t` callout (arrow to the right at mid-height) ran into the `H` dimension on the right and its text; the `H` line ran through the `t` text; `b = B − 3t` was written inside the tube over the top wall; for the wide-flat case `t` and `H` overlapped;
+  - round HSS: the `t` callout ran past the plot edge (large D);
+  - W / C: `d` (right) and the `t_w` callout overlapped; the `t_f` leader crossed the `d` label; `k` and `h` labels sat on the web (narrow flanges) and the `t_w` leader crossed `h`; "compression flange" was written over the flange; the channel's `t_f` ran off the plot;
+  - composite section / elevation: the stud callout ran off the left edge and over `t`; `PNA` over `a`; the rib note over the deck lines; `h_r`, `t`, `Y_con` texts crossed by neighbouring dimension lines; the elevation title was cut off; `d` outside the plot;
+  - all dimension texts 8.5–9 px.
+- **Fix (display only, `AN` unchanged):** new helpers `sbxdW`, `sbxdWref`, `sbxdWrap`, `sbxdLayout`, `sbxdPlace` (before `xsecFig`).
+  - Overall width below, depth on the left, HSS flat width `b = B − 3t` on top, with extension lines; thickness and detail callouts (`t`, `t_f`, `k`, `t_w`, `h`) in a column on the right with leaders, stacked so they never touch; composite labels (0.85f′c / C, PNA, F_y tension, rib note) as coloured note rows under the drawing; stud and `w_r` callouts above.
+  - Dimensions on a side go in tiers (those whose text fits between the ends nearest the shape, shortest first). A text that does not fit is placed past an end with the dimension line carried to it, so that no extension line crosses a text.
+  - Offsets are set in px and converted to inches at the smallest scale the figure can be drawn at: the tab width (`#tabPages`) or the Report's 2.3 × height, whichever is smaller, so the layout holds on a phone and in the Report.
+  - Texts are 10 px (were 8.5–9). Long titles wrap at their ` · ` separators. Margins 14 px (were 26/28); the pads are inside the axis ranges.
+  - Shapes drawn by the layout are named `sbxd`, the steel outline `steel` (for the test).
+- **Code (re-apply by hand):** the full diff of the tool file:
+```diff
+diff --git a/Steel Beam Design - AISC 15th.html b/Steel Beam Design - AISC 15th.html
+index ea4ace2..89f7db7 100644
+--- a/Steel Beam Design - AISC 15th.html	
++++ b/Steel Beam Design - AISC 15th.html	
+@@ -9213,4 +9213,168 @@ function xsecGeom(p){
+ }
+ function pathStr(pts){return 'M '+pts.map(q=>fmt(q[0],4)+','+fmt(q[1],4)).join(' L ')+' Z';}
++/* SBXD (2026-11-13): layout of the dimensions, callouts and notes of the cross-section drawings (display only).
++   Every text is placed outside the drawn geometry, on its own side: dimension strings in tiers offset outward
++   (shortest nearest the shape), thickness / detail callouts in a column with leaders, notes in rows under the
++   drawing. Offsets are set in screen pixels and converted to inches at the smallest scale the figure can be
++   shown at (the tab width on screen, 2.3 x the height in the Report), so nothing overlaps at any width. */
++const SBXD={fs:10,th:14,gap:9,pitch:24,col:'#64748B',tc:'#334155',ext:'#94A3B8'};
++function sbxdW(html,fs){   /* estimated text width, px */
++  const t=String(html).replace(/<br>/g,'\n').replace(/<[^>]+>/g,'').split('\n');
++  return Math.max.apply(null,t.map(x=>x.length))*(fs||SBXD.fs)*0.6+8;
++}
++function sbxdWref(h,ml,mr){   /* narrowest plot width the figure is drawn at, px */
++  const tp=document.getElementById('tabPages');
++  const w=(tp&&tp.clientWidth>0)?tp.clientWidth-32:Math.min(window.innerWidth||800,800)-60;
++  return Math.max(150,Math.min(w,2.3*h-8)-ml-mr);
++}
++function sbxdWrap(txt,maxW,fs){   /* break a title so that each line fits maxW px: at its ' · ' separators, else at spaces */
++  if(sbxdW(txt,fs)<=maxW)return txt;
++  const fill=(parts,sep)=>{const lines=[];let cur='';
++    parts.forEach(w=>{const c=cur?cur+sep+w:w;if(cur&&sbxdW(c,fs)>maxW){lines.push(cur);cur=w;}else cur=c;});
++    if(cur)lines.push(cur);return lines;};
++  let lines=fill(String(txt).split('  \u00B7  '),'  \u00B7  ');
++  if(lines.some(l=>sbxdW(l,fs)>maxW))lines=fill(String(txt).split(' '),' ');
++  return lines.join(' <br>');   /* the space keeps the words apart where the Report strips the tags */
++}
++/* o: {bb:{x0,x1,y0,y1} inches, h, mt, mb, ml, mr (px), title,
++       dims:[{side:'B'|'T'|'L'|'R', a, b, txt, e?, ea?, eb?, ext?}]   (a, b along the side; ea / eb: where the extension
++            lines start, across the side; ext:false: no extension lines)
++       calls:[{side:'R'|'L'|'T'|'B', x, y, txt, col?, arrow?}]       (x, y: the point the leader ends at)
++       notes:[{txt, col?}]}                                          (rows under the drawing, left-aligned)
++   returns {shapes, anns, xr, yr, mt, title} */
++function sbxdLayout(o){
++  const bb=o.bb,Wg=Math.max(bb.x1-bb.x0,1e-6),Hg=Math.max(bb.y1-bb.y0,1e-6);
++  let mt=o.mt,title=o.title||null,L=null;
++  for(let pass=0;pass<3;pass++){
++    const plotH=o.h-mt-o.mb,Wref=sbxdWref(o.h,o.ml,o.mr);
++    let s=Math.min(plotH/Hg,Wref/Wg);
++    for(let it=0;it<40;it++){
++      L=sbxdPlace(o,s,Wref);
++      const sN=Math.min((plotH-L.py)/Hg,(Wref-L.px)/Wg);
++      if(sN>=s*0.999)break;
++      s=Math.max(sN,s*0.6,1e-3);
++    }
++    if(!title)break;
++    const svgW=Math.min(Wref,(plotH)*(L.xr[1]-L.xr[0])/(L.yr[1]-L.yr[0]))+o.ml+o.mr;
++    const tw=sbxdWrap(o.title,svgW-12,11),n=tw.split('<br>').length;
++    const mt2=o.mt+(n-1)*14;
++    title=tw;
++    if(mt2===mt)break;
++    mt=mt2;
++  }
++  L.mt=mt;L.title=title;
++  return L;
++}
++function sbxdPlace(o,s,Wref){
++  const bb=o.bb,u=v=>v/s,th=SBXD.th,fs=SBXD.fs;
++  const shapes=[],anns=[];
++  const pad={L:0,R:0,T:0,B:0};   /* px used outward of each side of bb */
++  const over={L:0,R:0,T:0,B:0};  /* px of text running past bb along a side (adds to the neighbouring side) */
++  const ln=(x0,y0,x1,y1,c,w,d)=>shapes.push({type:'line',x0,x1,y0,y1,name:'sbxd',line:{color:c||SBXD.col,width:w||1,dash:d}});
++  const horiz=sd=>sd==='B'||sd==='T';
++  const edge=sd=>sd==='B'?bb.y0:sd==='T'?bb.y1:sd==='L'?bb.x0:bb.x1;
++  const sgn=sd=>(sd==='B'||sd==='L')?-1:1;
++  /* ---- dimension strings, in tiers ---- */
++  ['B','T','L','R'].forEach(sd=>{
++    const ds=(o.dims||[]).filter(d=>d.side===sd&&isFinite(d.a)&&isFinite(d.b)&&Math.abs(d.b-d.a)>1e-9)
++      .map(d=>({d,lo:Math.min(d.a,d.b),hi:Math.max(d.a,d.b),w:sbxdW(d.txt)}));
++    /* strings whose text fits between the ends first (shortest nearest the shape), then the others outermost */
++    const fits=q=>(q.hi-q.lo)*s>=q.w+8;
++    ds.sort((p,q)=>(fits(q)-fits(p))||((p.hi-p.lo)-(q.hi-q.lo)));
++    const tiers=[];
++    ds.forEach(q=>{
++      const mid=(q.lo+q.hi)/2,hw=u(q.w/2),gp=u(6);
++      /* text centre: between the ends if it fits, else just past an end (the dimension line is carried to it) */
++      /* (centred anyway when no other string on this side has an end under the centred text) */
++      const clear=!ds.some(r=>r!==q&&[r.lo,r.hi].some(v=>v>mid-hw-u(2)&&v<mid+hw+u(2)));
++      const cands=(fits(q)||clear)?[mid]:[q.hi+gp+hw,q.lo-gp-hw,mid];
++      let pick=null;
++      for(let k=0;k<=tiers.length&&!pick;k++){
++        for(const c of cands){
++          const t0=c-hw,t1=c+hw,e0=Math.min(q.lo,t0)-u(4),e1=Math.max(q.hi,t1)+u(4);
++          const T=tiers[k]||[];
++          if(T.some(r=>r.e0<e1&&e0<r.e1))continue;                                       /* same tier: no overlap */
++          if(tiers.slice(0,k).some(T2=>T2.some(r=>[q.lo,q.hi].some(v=>v>r.t0&&v<r.t1))))continue;   /* own extension lines vs nearer texts */
++          if(tiers.slice(k+1).some(T2=>T2.some(r=>[r.lo,r.hi].some(v=>v>t0&&v<t1))))continue;      /* farther extension lines vs own text */
++          pick={k,c,t0,t1,e0,e1};break;
++        }
++      }
++      if(!pick){const c=mid;pick={k:tiers.length,c,t0:c-hw,t1:c+hw,e0:Math.min(q.lo,c-hw)-u(4),e1:Math.max(q.hi,c+hw)+u(4)};}
++      if(!tiers[pick.k])tiers[pick.k]=[];
++      tiers[pick.k].push(Object.assign(q,pick));
++    });
++    const E=edge(sd),g=sgn(sd);
++    tiers.forEach((T,k)=>{
++      const off=SBXD.gap+k*SBXD.pitch,P=E+g*u(off);
++      T.forEach(q=>{
++        const d=q.d,tick=u(4),tc=P+g*u(3+th/2);
++        /* line from end to end, carried to text placed past an end */
++        const l0=Math.min(q.lo,q.t0+u(2)),l1=Math.max(q.hi,q.t1-u(2));
++        if(horiz(sd)){
++          ln(l0,P,l1,P);
++          [q.lo,q.hi].forEach(x=>ln(x,P-tick,x,P+tick));
++          if(d.ext!==false)[[q.lo,d.a<d.b?d.ea:d.eb],[q.hi,d.a<d.b?d.eb:d.ea]].forEach(([x,e])=>{
++            const e0=(e!=null?e:E)+g*u(2);ln(x,e0,x,P+g*u(3),SBXD.ext,0.8);});
++          anns.push({x:q.c,y:tc,text:d.txt,showarrow:false,xanchor:'center',yanchor:'middle',
++            font:{size:fs,color:d.col||SBXD.tc},bgcolor:'rgba(255,255,255,.85)'});
++          over.L=Math.max(over.L,(bb.x0-q.e0)*s);over.R=Math.max(over.R,(q.e1-bb.x1)*s);
++        }else{
++          ln(P,l0,P,l1);
++          [q.lo,q.hi].forEach(y=>ln(P-tick,y,P+tick,y));
++          if(d.ext!==false)[[q.lo,d.a<d.b?d.ea:d.eb],[q.hi,d.a<d.b?d.eb:d.ea]].forEach(([y,e])=>{
++            const e0=(e!=null?e:E)+g*u(2);ln(e0,y,P+g*u(3),y,SBXD.ext,0.8);});
++          anns.push({x:tc,y:q.c,text:d.txt,showarrow:false,textangle:-90,xanchor:'center',yanchor:'middle',
++            font:{size:fs,color:d.col||SBXD.tc},bgcolor:'rgba(255,255,255,.85)'});
++          over.B=Math.max(over.B,(bb.y0-q.e0)*s);over.T=Math.max(over.T,(q.e1-bb.y1)*s);
++        }
++      });
++    });
++    if(tiers.length)pad[sd]=SBXD.gap+(tiers.length-1)*SBXD.pitch+3+th;
++  });
++  /* ---- callouts: a column (R / L) or rows (T / B), with leaders ---- */
++  const arrow=(c,ax,ay)=>Object.assign({x:c.x,y:c.y,ax,ay,axref:'x',ayref:'y',text:c.txt,showarrow:true,arrowhead:2,arrowsize:0.8,
++    arrowwidth:1,arrowcolor:SBXD.col,xanchor:'center',yanchor:'middle',font:{size:fs,color:c.col||SBXD.tc},bgcolor:'rgba(255,255,255,.85)'});
++  const plain=(c,x,y)=>({x,y,text:c.txt,showarrow:false,xanchor:'center',yanchor:'middle',font:{size:fs,color:c.col||SBXD.tc},bgcolor:'rgba(255,255,255,.85)'});
++  ['R','L'].forEach(sd=>{
++    const cs=(o.calls||[]).filter(c=>c.side===sd).map(c=>Object.assign({},c,{w:sbxdW(c.txt)})).sort((p,q)=>q.y-p.y);
++    if(!cs.length)return;
++    const off=pad[sd]+(pad[sd]?10:16),sep=u(th+3),E=edge(sd),g=sgn(sd);
++    let prev=Infinity;
++    cs.forEach(c=>{c.yy=Math.min(c.y,prev-sep);prev=c.yy;});
++    /* centre the column on its targets where the stacking pushed it down */
++    const sh=cs.reduce((a,c)=>a+(c.y-c.yy),0)/cs.length;
++    cs.forEach(c=>{c.yy+=sh;});
++    let wmax=0;
++    cs.forEach(c=>{
++      const cx=E+g*u(off+c.w/2);wmax=Math.max(wmax,c.w);
++      anns.push(c.arrow===false?plain(c,cx,c.yy):arrow(c,cx,c.yy));
++      over.T=Math.max(over.T,(c.yy-bb.y1)*s+th/2+2);over.B=Math.max(over.B,(bb.y0-c.yy)*s+th/2+2);
++    });
++    pad[sd]=off+wmax;
++  });
++  ['T','B'].forEach(sd=>{
++    const cs=(o.calls||[]).filter(c=>c.side===sd);
++    const E=edge(sd),g=sgn(sd);
++    cs.forEach(c=>{
++      const w=sbxdW(c.txt),off=pad[sd]+(pad[sd]?8:(c.arrow===false?6:14));
++      const cy=E+g*u(off+th/2);
++      anns.push(c.arrow===false?plain(c,c.x,cy):arrow(c,c.x,cy));
++      over.L=Math.max(over.L,(bb.x0-c.x)*s+w/2+2);over.R=Math.max(over.R,(c.x-bb.x1)*s+w/2+2);
++      pad[sd]=off+th;
++    });
++  });
++  const P={L:Math.max(pad.L,over.L)+4,R:Math.max(pad.R,over.R)+4,T:Math.max(pad.T,over.T)+4,B:Math.max(pad.B,over.B)+4};
++  /* ---- notes: rows under everything, left-aligned at the left edge of the plot ---- */
++  (o.notes||[]).forEach(n=>{
++    const w=sbxdW(n.txt),need=w+2-((bb.x1-bb.x0)*s+P.L+P.R);
++    if(need>0)P.R+=need;
++    const y=bb.y0-u(P.B+3+th/2);
++    anns.push({x:bb.x0-u(P.L-2),y,text:n.txt,showarrow:false,xanchor:'left',yanchor:'middle',
++      font:{size:fs,color:n.col||SBXD.tc},bgcolor:'rgba(255,255,255,.85)'});
++    P.B+=3+th;
++  });
++  const xr=[bb.x0-u(P.L),bb.x1+u(P.R)],yr=[bb.y0-u(P.B),bb.y1+u(P.T)];
++  return{shapes,anns,xr,yr,px:P.L+P.R,py:P.T+P.B};
++}
+ function xsecFig(p,opts){
+   opts=opts||{};
+@@ -9218,55 +9382,42 @@ function xsecFig(p,opts){
+   const shapes=[],anns=[],data=[];
+   const STEEL='#5B7290',EDGE='#16304F';
+-  shapes.push({type:'path',path:g.paths.map(pathStr).join(' '),
++  shapes.push({type:'path',name:'steel',path:g.paths.map(pathStr).join(' '),
+     fillcolor:STEEL,opacity:0.55,fillrule:'evenodd',
+     line:{color:EDGE,width:1.6},layer:'below'});
+-  const pad=Math.max(g.W,g.H)*0.26;
+-  const xr=[-g.W/2-pad,g.W/2+pad],yr=[-g.H/2-pad*0.55,g.H/2+pad*0.55];
+-  /* ---- dimension helper ---- */
+-  const dimH=(x0,x1,y,txt)=>{
+-    shapes.push({type:'line',x0,x1,y0:y,y1:y,line:{color:'#64748B',width:1}});
+-    [x0,x1].forEach(x=>shapes.push({type:'line',x0:x,x1:x,y0:y-g.H*0.012,y1:y+g.H*0.012,line:{color:'#64748B',width:1}}));
+-    anns.push({x:(x0+x1)/2,y,text:txt,showarrow:false,yshift:9,font:{size:9,color:'#334155'},bgcolor:'rgba(255,255,255,.85)'});
+-  };
+-  const dimV=(y0,y1,x,txt)=>{
+-    shapes.push({type:'line',x0:x,x1:x,y0,y1,line:{color:'#64748B',width:1}});
+-    [y0,y1].forEach(y=>shapes.push({type:'line',x0:x-g.W*0.012,x1:x+g.W*0.012,y0:y,y1:y,line:{color:'#64748B',width:1}}));
+-    anns.push({x,y:(y0+y1)/2,text:txt,showarrow:false,textangle:-90,xshift:-10,
+-      font:{size:9,color:'#334155'},bgcolor:'rgba(255,255,255,.85)'});
+-  };
++  /* ---- dimensions and callouts (SBXD): overall width below, depth on the left, flat width on top,
++     thickness and detail callouts on the right with leaders; laid out by sbxdLayout ---- */
++  const dims=[],calls=[],notes=[];
+   const hov=[];
+   const addHov=(x,y,t)=>hov.push({x,y,t});
++  let bb;
+   if(g.kind==='I'||g.kind==='C'){
+     const d=p.d,bf=p.bf,tf=p.tf,tw=p.tw;
+     const xL=(g.kind==='C')?-(g.xbar||0):-bf/2, xR=xL+bf;
+-    dimH(xL,xR,-d/2-pad*0.42,'b<sub>f</sub> = '+fmt(bf,2)+'"');
+-    dimV(-d/2,d/2,xR+pad*0.46,'d = '+fmt(d,2)+'"');
+-    anns.push({x:xR+bf*0.02,y:d/2-tf/2,ax:34,ay:-22,text:'t<sub>f</sub> = '+fmt(tf,3)+'"',
+-      showarrow:true,arrowhead:2,arrowsize:0.8,arrowcolor:'#64748B',font:{size:9,color:'#334155'},bgcolor:'rgba(255,255,255,.85)'});
+-    anns.push({x:(g.kind==='C'?(tw/2-(g.xbar||0)):0),y:0,ax:44,ay:0,text:'t<sub>w</sub> = '+fmt(tw,3)+'"',
+-      showarrow:true,arrowhead:2,arrowsize:0.8,arrowcolor:'#64748B',font:{size:9,color:'#334155'},bgcolor:'rgba(255,255,255,.85)'});
++    bb={x0:xL,x1:xR,y0:-d/2,y1:d/2};
++    dims.push({side:'B',a:xL,b:xR,txt:'b<sub>f</sub> = '+fmt(bf,2)+'"'});
++    dims.push({side:'L',a:-d/2,b:d/2,txt:'d = '+fmt(d,2)+'"'});
++    calls.push({side:'R',x:xR,y:d/2-tf/2,txt:'t<sub>f</sub> = '+fmt(tf,3)+'"'});
++    calls.push({side:'R',x:(g.kind==='C'?(tw-(g.xbar||0)):tw/2),y:0,txt:'t<sub>w</sub> = '+fmt(tw,3)+'"'});
+     if(p.kdes>0){
+       [1,-1].forEach(s=>shapes.push({type:'line',x0:xL,x1:xR,y0:s*(d/2-p.kdes),y1:s*(d/2-p.kdes),
+         line:{color:'#B45309',width:1,dash:'dot'}}));
+-      anns.push({x:xL+bf*0.06,y:d/2-p.kdes,text:'k = '+fmt(p.kdes,3)+'"',showarrow:false,
+-        yshift:-8,xanchor:'left',font:{size:8.5,color:'#B45309'},bgcolor:'rgba(255,255,255,.85)'});
+-      if(p.hClear)anns.push({x:xL+bf*0.06,y:0,text:'h = '+fmt(p.hClear,2)+'"',showarrow:false,
+-        xanchor:'left',font:{size:8.5,color:'#B45309'},bgcolor:'rgba(255,255,255,.85)'});
++      calls.push({side:'R',x:xR,y:d/2-p.kdes,txt:'k = '+fmt(p.kdes,3)+'"',col:'#B45309'});
++      if(p.hClear)calls.push({side:'R',x:xR,y:-1e-9,txt:'h = '+fmt(p.hClear,2)+'"',col:'#B45309',arrow:false});
+     }
+     addHov(0,d/2-tf/2,'Top flange<br>b<sub>f</sub>/2t<sub>f</sub> = '+fmt(p.bf/(2*p.tf),2));
+     addHov(0,0,'Web<br>h/t<sub>w</sub> = '+fmt(p.htw,2));
+-    if(g.kind==='C')addHov(0,-d/2+tf/2,'x\u0304 = '+fmt(p.xbar,3)+'"  (centroid at x = 0)');
++    if(g.kind==='C')addHov(0,-d/2+tf/2,'x̄ = '+fmt(p.xbar,3)+'"  (centroid at x = 0)');
+   }else if(g.kind==='R'){
+-    dimH(-p.B/2,p.B/2,-p.Ht/2-pad*0.42,'B = '+fmt(p.B,2)+'"');
+-    dimV(-p.Ht/2,p.Ht/2,p.B/2+pad*0.46,'H = '+fmt(p.Ht,2)+'"');
+-    anns.push({x:p.B/2-p.tdes/2,y:0,ax:44,ay:0,text:'t = '+fmt(p.tdes,3)+'"',
+-      showarrow:true,arrowhead:2,arrowsize:0.8,arrowcolor:'#64748B',font:{size:9,color:'#334155'},bgcolor:'rgba(255,255,255,.85)'});
+-    dimH(-p.bFlat/2,p.bFlat/2,p.Ht/2-p.tdes*1.9,'b = B \u2212 3t = '+fmt(p.bFlat,2)+'"');
++    bb={x0:-p.B/2,x1:p.B/2,y0:-p.Ht/2,y1:p.Ht/2};
++    dims.push({side:'B',a:-p.B/2,b:p.B/2,txt:'B = '+fmt(p.B,2)+'"'});
++    dims.push({side:'L',a:-p.Ht/2,b:p.Ht/2,txt:'H = '+fmt(p.Ht,2)+'"'});
++    calls.push({side:'R',x:p.B/2-p.tdes/2,y:0,txt:'t = '+fmt(p.tdes,3)+'"'});
++    dims.push({side:'T',a:-p.bFlat/2,b:p.bFlat/2,txt:'b = B − 3t = '+fmt(p.bFlat,2)+'"'});
+     addHov(0,p.Ht/2-p.tdes/2,'Flange (major)<br>b/t = '+fmt(p.btdes,2));
+     addHov(p.B/2-p.tdes/2,0,'Web (major)<br>h/t = '+fmt(p.htdes,2));
+   }else{
+-    dimH(-p.OD/2,p.OD/2,-p.OD/2-pad*0.42,'D = '+fmt(p.OD,3)+'"');
+-    anns.push({x:p.OD/2-p.tdes/2,y:0,ax:46,ay:-14,text:'t = '+fmt(p.tdes,3)+'"',
+-      showarrow:true,arrowhead:2,arrowsize:0.8,arrowcolor:'#64748B',font:{size:9,color:'#334155'},bgcolor:'rgba(255,255,255,.85)'});
++    bb={x0:-p.OD/2,x1:p.OD/2,y0:-p.OD/2,y1:p.OD/2};
++    dims.push({side:'B',a:-p.OD/2,b:p.OD/2,ea:0,eb:0,txt:'D = '+fmt(p.OD,3)+'"'});
++    calls.push({side:'R',x:p.OD/2-p.tdes/2,y:0,txt:'t = '+fmt(p.tdes,3)+'"'});
+     addHov(0,p.OD/2-p.tdes/2,'Wall<br>D/t = '+fmt(p.Dt,2));
+   }
+@@ -9277,6 +9428,5 @@ function xsecFig(p,opts){
+     shapes.push({type:'rect',x0:xL,x1:xL+p.bf,y0:s*(p.d/2-p.tf),y1:s*p.d/2,
+       fillcolor:'#B42318',opacity:0.30,line:{width:0}});
+-    anns.push({x:xL+p.bf/2,y:s*(p.d/2-p.tf/2),text:'compression flange',showarrow:false,
+-      font:{size:8.5,color:'#7A1710'},bgcolor:'rgba(255,255,255,.8)'});
++    calls.push({side:s>0?'T':'B',x:xL+p.bf/2,y:s*p.d/2,txt:'compression flange',col:'#7A1710',arrow:false});
+   }
+   /* ---- ineffective areas (E7 compression / F7 flexure) ---- */
+@@ -9308,16 +9458,17 @@ function xsecFig(p,opts){
+       line:{color:'#7A1710',width:0.8}});
+   });
+-  if(inef.length)anns.push({x:xr[0],y:yr[1],xanchor:'left',yanchor:'top',
+-    text:'\u25a0 ineffective (removed from A<sub>e</sub>)',showarrow:false,
+-    font:{size:8.5,color:'#7A1710'},bgcolor:'rgba(255,255,255,.85)'});
++  if(inef.length)notes.push({txt:'■ ineffective (removed from A<sub>e</sub>)',col:'#7A1710'});
+   data.push({x:hov.map(h=>h.x),y:hov.map(h=>h.y),mode:'markers',
+     marker:{size:14,color:'rgba(0,0,0,0)'},hoverinfo:'text',
+     text:hov.map(h=>h.t),showlegend:false});
++  const height=opts.height||330;
++  const lay=sbxdLayout({bb,h:height,mt:opts.title?28:14,mb:14,ml:14,mr:14,title:opts.title,dims,calls,notes});
++  lay.shapes.forEach(x=>shapes.push(x));lay.anns.forEach(x=>anns.push(x));
+   const layout={
+-    title:opts.title?{text:opts.title,font:{size:11,family:'Arial'},x:0}:undefined,
+-    margin:{l:26,r:26,t:opts.title?28:14,b:26},
+-    height:opts.height||330,
+-    xaxis:{range:xr,visible:false,fixedrange:false},
+-    yaxis:{range:yr,visible:false,scaleanchor:'x',scaleratio:1},
++    title:lay.title?{text:lay.title,font:{size:11,family:'Arial'},x:0.01,xanchor:'left'}:undefined,
++    margin:{l:14,r:14,t:lay.mt,b:14},
++    height,
++    xaxis:{range:lay.xr,visible:false,fixedrange:false},
++    yaxis:{range:lay.yr,visible:false,scaleanchor:'x',scaleratio:1},
+     shapes,annotations:anns,showlegend:false,
+     paper_bgcolor:'#fff',plot_bgcolor:'#fff',hovermode:'closest'
+@@ -9916,5 +10067,5 @@ function compXsecFig(p,r,opts){
+   opts=opts||{};
+   const c=compCfg(),g=slabGeom(c);
+-  const shapes=[],anns=[],data=[];
++  const shapes=[],anns=[],data=[],notes=[],calls=[];   /* SBXD: notes under the drawing, callouts outside it */
+   const beff=r.ew.beff, Ycon=g.Ycon, hr=g.hr, ha=g.haunch, ts=g.tSolid;
+   const STEEL='#5B7290',EDGE='#16304F',CONC='#C9CFD6',CEDGE='#8A929B';
+@@ -9941,7 +10092,6 @@ function compXsecFig(p,r,opts){
+       shapes.push({type:'line',x0:-beff/2,x1:beff/2,y0:ha+hr,y1:ha+hr,line:{color:DECK,width:1,dash:'dash'}});
+     }
+-    anns.push({x:beff/2,y:ha+hr/2,text:(c.orient==='para'?(fill>0?('A<sub>c</sub> includes the rib concrete (w<sub>r</sub>/s<sub>r</sub> = '+fmt(fill,2)+') '):
+-      'rib concrete not counted in A<sub>c</sub> \u2014 enter s<sub>r</sub> '):'rib concrete neglected in A<sub>c</sub> (\u00A7I3.2c) '),showarrow:false,
+-      xanchor:'right',font:{size:8.5,color:'#5A6B80'},bgcolor:'rgba(255,255,255,.8)'});
++    notes.push({txt:(c.orient==='para'?(fill>0?('A<sub>c</sub> includes the rib concrete (w<sub>r</sub>/s<sub>r</sub> = '+fmt(fill,2)+')'):
++      'rib concrete not counted in A<sub>c</sub> \u2014 enter s<sub>r</sub>'):'rib concrete neglected in A<sub>c</sub> (\u00A7I3.2c)'),col:'#5A6B80'});
+   }
+   if(ha>0)shapes.push({type:'rect',x0:-p.bf/2*1.3,x1:p.bf/2*1.3,y0:0,y1:ha,
+@@ -9950,5 +10100,5 @@ function compXsecFig(p,r,opts){
+   const gm=xsecGeom(p);
+   const sPath=gm.paths.map(pa=>'M '+pa.map(q=>fmt(q[0],4)+','+fmt(q[1]-p.d/2,4)).join(' L ')+' Z').join(' ');
+-  shapes.push({type:'path',path:sPath,fillcolor:STEEL,opacity:.6,fillrule:'evenodd',
++  shapes.push({type:'path',name:'steel',path:sPath,fillcolor:STEEL,opacity:.6,fillrule:'evenodd',
+     line:{color:EDGE,width:1.5}});
+   /* --- headed studs across the flange (drawing only): studs per rib for perpendicular deck, else one --- */
+@@ -9957,6 +10107,5 @@ function compXsecFig(p,r,opts){
+     const sp=n>1?Math.min(4*c.dia,(p.bf-1.6*c.dia)/(n-1)):0;
+     for(let i=0;i<n;i++)studShapes(shapes,(i-(n-1)/2)*sp,0,sd.Ls,c.dia);
+-    anns.push({x:-(n-1)/2*sp-0.8*c.dia,y:sd.Ls,ax:-34,ay:-16,text:'stud \u00D8'+fmt(c.dia,3)+'" \u00D7 '+fmt(sd.Ls,2)+'"'+(sd.given?'':' (length illustrative)'),
+-      showarrow:true,arrowhead:2,arrowsize:0.8,arrowcolor:'#64748B',xanchor:'right',font:{size:8.5,color:'#334155'},bgcolor:'rgba(255,255,255,.85)'});
++    calls.push({side:'T',x:-(n-1)/2*sp,y:sd.Ls,txt:'stud \u00D8'+fmt(c.dia,3)+'" \u00D7 '+fmt(sd.Ls,2)+'"'+(sd.given?'':' (length illustrative)')});
+   }
+   /* --- stress blocks --- */
+@@ -9970,6 +10119,5 @@ function compXsecFig(p,r,opts){
+     shapes.push({type:'rect',x0:-beff/2,x1:beff/2,y0:Ycon-r.a,y1:Ycon,
+       fillcolor:COMP,opacity:.35,line:{color:COMP,width:1}});
+-    anns.push({x:beff/2,y:Ycon-r.a/2,text:'0.85f\u2032c   C = '+fmt(r.C,0)+' kip ',showarrow:false,
+-      xanchor:'right',font:{size:9,color:'#7A1710'},bgcolor:'rgba(255,255,255,.85)'});
++    notes.push({txt:'\u25a0 0.85f\u2032c   C = '+fmt(r.C,0)+' kip',col:'#7A1710'});
+     if(r.x>0){
+       shapes.push({type:'rect',x0:-p.bf/2,x1:p.bf/2,y0:-Math.min(r.x,p.tf),y1:0,
+@@ -9984,6 +10132,5 @@ function compXsecFig(p,r,opts){
+     if(r.x<p.tf)shapes.push({type:'rect',x0:-p.bf/2,x1:p.bf/2,y0:-p.tf,y1:-r.x,
+       fillcolor:TENS,opacity:.35,line:{width:0}});
+-    anns.push({x:p.bf/2,y:-p.d+p.tf/2,text:' F\u1D67 tension ',showarrow:false,xanchor:'left',
+-      font:{size:8.5,color:'#123A8A'},bgcolor:'rgba(255,255,255,.85)'});
++    notes.push({txt:'\u25a0 F\u1D67 tension',col:'#123A8A'});
+   }
+   /* --- PNA --- */
+@@ -9992,26 +10139,14 @@ function compXsecFig(p,r,opts){
+   shapes.push({type:'line',x0:-beff/2,x1:beff/2,y0:yPNA,y1:yPNA,
+     line:{color:'#B45309',width:2,dash:'dashdot'}});
+-  anns.push({x:-beff/2,y:yPNA,text:'PNA'+(r.x>0?(' \u2014 '+fmt(r.x,3)+' in below top of steel'):' in the slab')+' ',
+-    showarrow:false,xanchor:'left',yshift:9,font:{size:9,color:'#B45309'},bgcolor:'rgba(255,255,255,.9)'});
+-  }
+-  /* --- dimensions --- */
+-  const padX=beff*0.09, padY=(Ycon+p.d)*0.30, pad=Math.min(padX,padY);
+-  const dimH=(x0,x1,y,txt)=>{
+-    shapes.push({type:'line',x0,x1,y0:y,y1:y,line:{color:'#64748B',width:1}});
+-    [x0,x1].forEach(x=>shapes.push({type:'line',x0:x,x1:x,y0:y-pad*0.18,y1:y+pad*0.18,line:{color:'#64748B',width:1}}));
+-    anns.push({x:(x0+x1)/2,y,text:txt,showarrow:false,yshift:10,font:{size:9,color:'#334155'},bgcolor:'rgba(255,255,255,.9)'});
+-  };
+-  const dimV=(y0,y1,x,txt)=>{
+-    shapes.push({type:'line',x0:x,x1:x,y0,y1,line:{color:'#64748B',width:1}});
+-    [y0,y1].forEach(y=>shapes.push({type:'line',x0:x-pad*0.18,x1:x+pad*0.18,y0:y,y1:y,line:{color:'#64748B',width:1}}));
+-    anns.push({x,y:(y0+y1)/2,text:txt,showarrow:false,textangle:-90,xshift:-11,
+-      font:{size:9,color:'#334155'},bgcolor:'rgba(255,255,255,.9)'});
+-  };
+-  dimH(-beff/2,beff/2,-p.d-padY*0.55,'b<sub>eff</sub> = '+fmt(beff,1)+'" = '+fmt(r.ew.beffFt,2)+' ft');
+-  dimV(0,Ycon,beff/2+padX*0.80,'Y<sub>con</sub> = '+fmt(Ycon,2)+'"');
+-  dimV(-p.d,0,-beff/2-padX*0.80,'d = '+fmt(p.d,2)+'"');
+-  if(hr>0)dimV(ha,ha+hr,-beff/2-padX*0.32,'h<sub>r</sub> = '+fmt(hr,2)+'"');
+-  if(!opts.geomOnly)dimV(Ycon-r.a,Ycon,-beff/2+padX*0.32,'a = '+fmt(r.a,2)+'"');
+-  else dimV(ha+hr,Ycon,-beff/2+padX*0.32,'t = '+fmt(ts,2)+'"');
++  notes.push({txt:'\u2014 \u00B7 PNA'+(r.x>0?(' \u2014 '+fmt(r.x,3)+' in below top of steel'):' in the slab'),col:'#B45309'});
++  }
++  /* --- dimensions (SBXD): d, h_r and t on the left, Y_con and a on the right, b_eff below --- */
++  const dims=[];
++  dims.push({side:'B',a:-beff/2,b:beff/2,txt:'b<sub>eff</sub> = '+fmt(beff,1)+'" = '+fmt(r.ew.beffFt,2)+' ft'});
++  dims.push({side:'R',a:0,b:Ycon,txt:'Y<sub>con</sub> = '+fmt(Ycon,2)+'"'});
++  dims.push({side:'L',a:-p.d,b:0,ea:-p.bf/2,eb:-p.bf/2,txt:'d = '+fmt(p.d,2)+'"'});
++  if(hr>0)dims.push({side:'L',a:ha,b:ha+hr,txt:'h<sub>r</sub> = '+fmt(hr,2)+'"'});
++  if(!opts.geomOnly)dims.push({side:'R',a:Ycon-r.a,b:Ycon,txt:'a = '+fmt(r.a,2)+'"'});
++  else dims.push({side:'L',a:ha+hr,b:Ycon,txt:'t = '+fmt(ts,2)+'"'});
+   const hov=[{x:0,y:Ycon-r.a/2,t:opts.geomOnly?('Concrete slab<br>Y<sub>con</sub> = '+fmt(Ycon,2)+' in'):('Compression block<br>a = '+fmt(r.a,3)+' in<br>C = '+fmt(r.C,1)+' kip')},
+     {x:0,y:-p.d/2,t:p.lbl+'<br>A\u209b = '+fmt(p.A,2)+' in\u00B2<br>A\u209bF\u1D67 = '+fmt(r.Py,0)+' kip'},
+@@ -10019,10 +10154,13 @@ function compXsecFig(p,r,opts){
+   data.push({x:hov.map(h=>h.x),y:hov.map(h=>h.y),mode:'markers',
+     marker:{size:16,color:'rgba(0,0,0,0)'},hoverinfo:'text',text:hov.map(h=>h.t),showlegend:false});
+-  const xr=[-beff/2-padX*1.6,beff/2+padX*1.6],yr=[-p.d-padY*1.0,Ycon+padY*0.45];
++  const height=opts.height||400;
++  const lay=sbxdLayout({bb:{x0:-beff/2,x1:beff/2,y0:-p.d,y1:Ycon},h:height,mt:opts.title?28:14,mb:14,ml:14,mr:14,
++    title:opts.title,dims,calls,notes});
++  lay.shapes.forEach(x=>shapes.push(x));lay.anns.forEach(x=>anns.push(x));
+   return{data,layout:{
+-    title:opts.title?{text:opts.title,font:{size:11,family:'Arial'},x:0}:undefined,
+-    margin:{l:28,r:28,t:opts.title?28:14,b:26},height:opts.height||400,
+-    xaxis:{range:xr,visible:false},
+-    yaxis:{range:yr,visible:false,scaleanchor:'x',scaleratio:1},
++    title:lay.title?{text:lay.title,font:{size:11,family:'Arial'},x:0.01,xanchor:'left'}:undefined,
++    margin:{l:14,r:14,t:lay.mt,b:14},height,
++    xaxis:{range:lay.xr,visible:false},
++    yaxis:{range:lay.yr,visible:false,scaleanchor:'x',scaleratio:1},
+     shapes,annotations:anns,showlegend:false,
+     paper_bgcolor:'#fff',plot_bgcolor:'#fff',hovermode:'closest'}};
+@@ -10073,27 +10211,17 @@ function compElevFig(p,r,opts){
+   /* break lines at the ends of the partial view */
+   [x0,x1].forEach(x=>shapes.push({type:'line',x0:x,x1:x,y0:-p.d-1,y1:Ycon+1,line:{color:'#94A3B8',width:1,dash:'dashdot'}}));
+-  const padX=Lw*0.07,padY=(Ycon+p.d)*0.28,pad=Math.min(padX,padY);
+-  const dimH=(a,b,y,txt)=>{
+-    shapes.push({type:'line',x0:a,x1:b,y0:y,y1:y,line:{color:'#64748B',width:1}});
+-    [a,b].forEach(x=>shapes.push({type:'line',x0:x,x1:x,y0:y-pad*0.18,y1:y+pad*0.18,line:{color:'#64748B',width:1}}));
+-    anns.push({x:(a+b)/2,y,text:txt,showarrow:false,yshift:-10,font:{size:9,color:'#334155'},bgcolor:'rgba(255,255,255,.9)'});
+-  };
+-  const dimV=(a,b,x,txt)=>{
+-    shapes.push({type:'line',x0:x,x1:x,y0:a,y1:b,line:{color:'#64748B',width:1}});
+-    [a,b].forEach(y=>shapes.push({type:'line',x0:x-pad*0.18,x1:x+pad*0.18,y0:y,y1:y,line:{color:'#64748B',width:1}}));
+-    anns.push({x,y:(a+b)/2,text:txt,showarrow:false,textangle:-90,xshift:-11,font:{size:9,color:'#334155'},bgcolor:'rgba(255,255,255,.9)'});
+-  };
+-  dimV(0,Ycon,x1+padX*0.85,'Y<sub>con</sub> = '+fmt(Ycon,2)+'"');
+-  dimV(ha+hr,Ycon,x1+padX*0.35,'t = '+fmt(ts,2)+'"');
+-  if(hr>0)dimV(ha,ha+hr,x0-padX*0.35,'h<sub>r</sub> = '+fmt(hr,2)+'"');
+-  dimV(-p.d,0,x0-padX*0.85,'d = '+fmt(p.d,2)+'"');
++  /* dimensions (SBXD): t and Y_con on the right, h_r and d on the left, the rib or stud spacing below */
++  const dims=[],calls=[];
++  dims.push({side:'R',a:0,b:Ycon,txt:'Y<sub>con</sub> = '+fmt(Ycon,2)+'"'});
++  dims.push({side:'R',a:ha+hr,b:Ycon,txt:'t = '+fmt(ts,2)+'"'});
++  if(hr>0)dims.push({side:'L',a:ha,b:ha+hr,txt:'h<sub>r</sub> = '+fmt(hr,2)+'"'});
++  dims.push({side:'L',a:-p.d,b:0,txt:'d = '+fmt(p.d,2)+'"'});
+   if(hr>0&&c.orient==='perp'&&cs.length>1){
+     const i0=Math.max(0,Math.floor(cs.length/2)-1);
+-    dimH(cs[i0],cs[i0+1],-p.d-padY*0.45,(dg.pitchGiven?'s<sub>r</sub> = ':'rib spacing ')+fmt(dg.pitch,1)+'"'+(dg.pitchGiven?'':' (illustrative)'));
+-    anns.push({x:cs[i0+1],y:ha+0.05*hr,ax:36,ay:34,text:'w<sub>r</sub> = '+fmt(c.wr,2)+'" (average)',showarrow:true,arrowhead:2,
+-      arrowsize:0.8,arrowcolor:'#64748B',font:{size:9,color:'#334155'},bgcolor:'rgba(255,255,255,.9)'});
++    dims.push({side:'B',a:cs[i0],b:cs[i0+1],ext:false,txt:(dg.pitchGiven?'s<sub>r</sub> = ':'rib spacing ')+fmt(dg.pitch,1)+'"'+(dg.pitchGiven?'':' (illustrative)')});
++    calls.push({side:'T',x:cs[i0+1],y:ha+0.05*hr,txt:'w<sub>r</sub> = '+fmt(c.wr,2)+'" (average)'});
+   }else if(studX.length>1){
+     const i0=Math.max(0,Math.floor(studX.length/2)-1);
+-    dimH(studX[i0],studX[i0+1],-p.d-padY*0.45,'stud pitch '+fmt(sPitch,1)+'"'+(pitchGiven?'':' (not entered \u2014 illustrative)'));
++    dims.push({side:'B',a:studX[i0],b:studX[i0+1],ext:false,txt:'stud pitch '+fmt(sPitch,1)+'"'+(pitchGiven?'':' (not entered \u2014 illustrative)')});
+   }
+   const hov=[{x:0,y:(ha+hr+Ycon)/2,t:'Solid slab '+fmt(ts,2)+' in above the deck'},{x:0,y:-p.d/2,t:p.lbl+' (elevation)'}];
+@@ -10101,10 +10229,13 @@ function compElevFig(p,r,opts){
+   data.push({x:hov.map(h=>h.x),y:hov.map(h=>h.y),mode:'markers',marker:{size:16,color:'rgba(0,0,0,0)'},
+     hoverinfo:'text',text:hov.map(h=>h.t),showlegend:false});
+-  const xr=[x0-padX*1.5,x1+padX*1.5],yr=[-p.d-padY*0.9,Ycon+padY*0.5];
++  const height=opts.height||320;
++  const lay=sbxdLayout({bb:{x0,x1,y0:-p.d-1,y1:Ycon+1},h:height,mt:opts.title?28:14,mb:14,ml:14,mr:14,
++    title:opts.title,dims,calls});
++  lay.shapes.forEach(x=>shapes.push(x));lay.anns.forEach(x=>anns.push(x));
+   return{data,layout:{
+-    title:opts.title?{text:opts.title,font:{size:11,family:'Arial'},x:0}:undefined,
+-    margin:{l:28,r:28,t:opts.title?28:14,b:20},height:opts.height||320,
+-    xaxis:{range:xr,visible:false},
+-    yaxis:{range:yr,visible:false,scaleanchor:'x',scaleratio:1},
++    title:lay.title?{text:lay.title,font:{size:11,family:'Arial'},x:0.01,xanchor:'left'}:undefined,
++    margin:{l:14,r:14,t:lay.mt,b:14},height,
++    xaxis:{range:lay.xr,visible:false},
++    yaxis:{range:lay.yr,visible:false,scaleanchor:'x',scaleratio:1},
+     shapes,annotations:anns,showlegend:false,
+     paper_bgcolor:'#fff',plot_bgcolor:'#fff',hovermode:'closest'}};
+```
+- **Check case:** HSS8X8X1/2 (Section Properties tab, 1400 px). Before: "H = 8.00"" and "t = 0.465"" boxes overlap; "b = B − 3t = 6.61"" lies on the top wall. After: H on the left, B below, b above, t to the right of the tube with a leader to the mid-wall; no box overlaps. Values shown are unchanged (B 8.00, H 8.00, t 0.465, b 6.61).
+- **Results unchanged, how proved:** headless Chromium, origin/main against the branch: `JSON.stringify(AN)` identical for HSS12X4X3/16, HSS20.000X0.250, W24X62, W24X62 composite, C10X15.3.
+- **Tests:** new smoke test `tests/smoke/steel-beam-xsec-graphics.mjs`. It covers 16 sections (rectangular HSS square / tall / small / large / wide-flat override, round HSS small and large D/t, W8X10 to W44X335, C10X15.3, and three composite beams), on every tab with a cross-section drawing, at 1400 px and 390 px and as the Report draws it. It asserts:
+  - no two text boxes overlap;
+  - no dimension, extension, leader or geometry line runs through a text;
+  - no text sits on the steel or inside the drawn geometry;
+  - every text is inside the figure, and is at least 10 px.
+
+  It fails on origin/main (345 problems for HSS8X8X1/2 and W24X62 alone) and passes on the branch. Also passing: check-syntax; `node tests/engine/run.mjs aisc-hss`; the smoke tests steel-beam-analysis-summary, builtup, h1-composite, phone-layout `--tool sbeam` and project-library `--tool steelbeam`.
+- **Saved data:** no change.
+- **Other copies:** none. The first `xsecBlock` definition (before `mnLbFig`) is overridden by the later one and was left as is.
+- **Open items:**
+  - On a phone, a wide composite section is drawn small, because all its dimension strings stay outside the slab.
+  - A window resized after a tab is drawn keeps its layout until the next redraw.
