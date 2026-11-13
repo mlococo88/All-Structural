@@ -37,9 +37,10 @@
       F('base.tsSeparate', 'Separate deck thickness for the dead load', '', 'For example a sacrificial or integral wearing course: weight from this thickness, section and capacity from t_s.', 'bool', { o: YN }),
       F('base.tsDL', 'Deck thickness, dead load', 'in', 'Deck thickness used for the DC1 deck weight only.', 'num', { when: b => !!b.tsSeparate })] },
     { tab: 'xsec', id: 'extll', title: 'Exterior girder live load', ref: 'AASHTO LRFD 10th Ed. 4.6.2.2.2d', fields: [
-      F('base.loads.de', 'd<sub>e</sub>: exterior web to the inside face of the barrier', 'ft', 'Distance from the centreline of the exterior web to the inside face of the curb or barrier (positive inside the barrier), for e = 0.77 + d_e/9.1 and the lever rule.', 'num', { v: 'any' }),
+      F('base.loads.de', 'd<sub>e</sub>: exterior web to the inside face of the barrier', 'ft', 'Distance from the centreline of the exterior web to the inside face of the curb or barrier (positive inside the barrier), for e = 0.77 + d_e/9.1 and the lever rule.', 'num', { v: 'any', when: (b, P) => !(P && P.xs && P.xs.dl) }),
       F('base.loads.NL', 'Design lanes N<sub>L</sub> (rigid cross-section check)', '', 'Number of design lanes loaded in the rigid cross-section special analysis of an exterior girder (C4.6.2.2.2d), 1 to 4.', 'num', { v: 'i1', max: 4 })],
-      note: () => 'Used when the design girder is an exterior girder (G1 or the last girder).' },
+      note: (b, P) => P && P.xs && P.xs.dl && window.PSBDesign ? `d<sub>e</sub> from the cross-section for each exterior line (PS-20): G1 ${(+window.PSBDesign.deOf(P, 1)).toFixed(3)} ft (left overhang − barrier face), G${P.xs.nb} ${(+window.PSBDesign.deOf(P, P.xs.nb)).toFixed(3)} ft (right); the barriers are in the card below. Used for an exterior girder (G1 or the last girder).`
+        : 'Used when the design girder is an exterior girder (G1 or the last girder). Entered: the project has no cross-section barriers (saved before PR 3a-3).' },
     // ---- Girders & strands ----
     { tab: 'gird', id: 'shape', title: 'Girder shape', ref: 'PCI / AASHTO shapes (the old app\'s library)', fields: [
       F('base.girder', 'Girder section', '', 'Girder shape from the library (gross properties per PCI / AASHTO). The library of the engineer\'s standard sheets (NEBT, NEDBT, NEXT, boxes) comes in PR 4 (PS-2).', 'sel', { o: () => Object.keys(typeof GIRDERS !== 'undefined' ? GIRDERS : {}).map(k => [k, k]) }),

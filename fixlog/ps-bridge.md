@@ -1140,3 +1140,40 @@ PR #1518: https://github.com/mlococo88/All-Structural/pull/1518
   `--import`: the old keys of the design): after the reload each key must hold the value put, else the keys are put again and the page
   reloaded (at most 3, a `note` line in the log; an error after 3). PR 3a-4's `scanList` (a repeated "Find" click) is removed: a missed click
   was not the cause. No comparison changed.
+
+## 2026-11-13 — PS-20: d_e of each exterior girder line from the bridge cross-section; each exterior line its own LLDF, the worst line governs (CALCULATION CHANGE, §4, for projects with the cross-section barriers; equal overhangs: both lines identical)
+PR #1521: https://github.com/mlococo88/All-Structural/pull/1521
+### Request
+- Engineer decision PS-20 (2026-11-13), answering the 3a-2 open item: "d_e per exterior line computed from the bridge cross-section (that
+  line's overhang minus barrier/curb width), each exterior line its own LLDF; worst line governs. Identical when overhangs equal (prove)."
+### §4 callout
+- **Before:** `loads.de` (the distance from the exterior web to the inside face of the barrier) entered once per girder type (default 2.0 ft) and
+  used on both exterior lines (G1 and G_Nb), whatever their overhangs.
+- **After** (`engine/design.js` `deOf`, a project with the cross-section barriers `xs.dl`, i.e. every project made since PR 3a-3): an exterior
+  line's d_e = its side's overhang (girder ℄ to deck edge) − the traffic face from that edge: the barrier width, or a sidewalk 12 in or thicker
+  that reaches farther in (its curb face; a thinner sidewalk is mountable, the steel app's `llFaces` rule). AASHTO LRFD 10th Ed. Art. 4.6.2.2.1
+  (d_e: "distance from the exterior web of exterior beam to the interior edge of curb or traffic barrier"), used by the engine's lever rule,
+  e = 0.77 + d_e/9.1 (Table 4.6.2.2.2d-1), e_V = 0.6 + d_e/10 (Table 4.6.2.2.3b-1) and the rigid section (C4.6.2.2.2d), unchanged. Each
+  exterior line already has its own cell (3a-2): its own DF, the type's worst line governs.
+- **Not changed:** a project without `xs.dl` (saved before PR 3a-3, old-app imports): d_e as entered (test: 17 harness B designs, every line;
+  harness B 0 differences). Interior lines: d_e not used (left as entered).
+- **Equal overhangs:** G1 and G_Nb get the same d_e and identical inputs and results (but the girder label and the side; test).
+- **Worked check case** (new project, 5 girders at 9 ft, 120 ft, barriers 1.5 ft; overhangs **3 ft left, 4 ft right**; N_L 2):
+  - d_e: G1 = 3 − 1.5 = **1.5 ft**; G5 = 4 − 1.5 = **2.5 ft** (before: 2.0 ft entered, both).
+  - Lever rule (m 1.2; wheels at d_e − 2 and d_e − 8 ft from the exterior web): G1 1.2 × [0.5(9 − 0.5) + 0.5(9 − 6.5)]/9 = **0.7333**;
+    G5 1.2 × [0.5(9 + 0.5) + 0.5(9 − 5.5)]/9 = **0.8667** (d_e 2.0: 0.8000).
+  - e_M: G1 0.77 + 1.5/9.1 = 0.9348; G5 0.77 + 2.5/9.1 = 1.0447 → e_M g_M2 = 0.6723 / 0.7513.
+  - Rigid, 2 lanes (X_ext 18, Σx² 810): G1 Σe = 14.5 + 2.5 = 17 → 0.4 + 18 × 17/810 = **0.7778**; G5 Σe = 19 → 0.8222.
+  - DF_M: G1 max(0.6723, 0.7333, 0.7778) = **0.7778**; G5 max(0.7513, 0.8667, 0.8222) = **0.8667** (both 0.8000 before). M_LL+IM per girder
+    2,921.9 kip-ft before → G1 **2,840.8**, G5 **3,165.4**; the Exterior type's flexure governs on G5.
+### Where
+- `engine/design.js`: `deOf(P, g)` (new), `one()` anchor `// PS-20 (§4)` (`o.loads.de = deOf(...)` when not null), `driven()` row.
+- `engine/fields.js`: the d_e field only without the cross-section barriers; the card note gives each exterior line's d_e.
+### Saved data
+- None (computed from the saved cross-section).
+### How verified
+- `tests/engine/psbridge-de.test.mjs` (new, 3 tests): no barriers → as entered (17 designs, every line); equal overhangs → G1 = G5; the check case.
+  `psbridge-dl` and `psbridge-rigid` tests: their entered-d_e expectations set the barriers or remove them. Smoke `ps-bridge-types.mjs` §6.
+### Decisions (pending engineer review)
+- PS20-D1. The traffic face: the barrier width, or a ≥ 12 in sidewalk's curb face (the steel app's rule); this app has no curb input yet.
+- PS20-D2. d_e computed whenever the project has the cross-section barriers (also with DC2 / DW "entered").
