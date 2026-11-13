@@ -17,6 +17,8 @@
 //   3f. PR 2d-1: End zone & hold-down and Camber & deflection the same way (>= 2 graphics each); their chips; the end-zone chip opens its step;
 //   3g. PR 2d-2: Rating the same way on every design; Handling and Deck "off" (card, chip) until turned on, then the same way (>= 2 graphics
 //      each) on a fourth design; their chips; the Rating chip (lowest inventory RF, not a check) opens its step; the handling stage choice;
+//   3h. PR 2d-3 (PS-10): the hold-down box on the Owner rules tab (AASHTO: on by default); the End zone tab works the PS-10 check and its chip
+//      lists it; the box off removes the check and the tab says it is not checked; saved in the project;
 //   5. 390 x 844 (phone): stacked panels, no splitter, no check summary column, no horizontal page scroll; 0 console errors.
 //   node tests/smoke/ps-bridge-skeleton.mjs [--file <index.html>] [--shots <dir>]
 import fs from 'fs';
@@ -101,7 +103,7 @@ o = await openPage(FILE, { vw: 1400, vh: 1000, ls: SEED }); p = o.p; await ready
 // 3c. PR 2b-2: the Section properties, Loads & LLDF and Analysis tabs, three designs: every engine value shown (data-ev) equals computeAll of
 // the design inputs, evaluated on the page; the graphics are drawn; the worked steps are KaTeX; links to a step of another tab open it
 const evCheck = async () => p.evaluate(() => {
-  const s0 = localStorage.getItem('psb2.project.current'), P = s0 ? window.PSBModel.importJSON(s0).project : window.PSBModel.defaultProject(), R = computeAll(window.PSBDesign.inputs(P));
+  const s0 = localStorage.getItem('psb2.project.current'), P = s0 ? window.PSBModel.importJSON(s0).project : window.PSBModel.defaultProject(), R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
   const f = (v, d) => typeof v === 'number' && isFinite(v) ? v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }).replace(/^-(0(\.0*)?)$/, '$1') : '—';
   const bad = [], els = [...document.querySelectorAll('#out [data-ev]')];
   els.forEach(el => { let v = el.dataset.ev.split('.').reduce((o, k) => o == null ? o : o[k], R); if (el.dataset.div) v = v / +el.dataset.div;
@@ -134,14 +136,14 @@ for (const [lab, setup] of DESIGNS) {
     if (args.shots && ['loss', 'str', 'flex', 'shear', 'end', 'camb', 'hand', 'deck', 'rt'].includes(t)) await p.screenshot({ path: path.join(args.shots, `ps-bridge-1400-${t}-${lab.split(',')[0].replace(/[^A-Za-z0-9]+/g, '_')}.png`) });
   }
   // the check summary column: a chip per built group with the engine's governing ratio
-  const dash = await p.evaluate(() => { const s0 = localStorage.getItem('psb2.project.current'), P = s0 ? window.PSBModel.importJSON(s0).project : window.PSBModel.defaultProject(), R = computeAll(window.PSBDesign.inputs(P));
+  const dash = await p.evaluate(() => { const s0 = localStorage.getItem('psb2.project.current'), P = s0 ? window.PSBModel.importJSON(s0).project : window.PSBModel.defaultProject(), R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
     const grp = window.PSBDashUI.GROUPS.filter(g => g.checks), bad = [];
     grp.forEach(g => { const cs = g.checks.map(q => R.checks.find(c => c.n === q[0])).filter(Boolean); if (!cs.length) return; const gov = cs.reduce((b, c) => c.r > b.r ? c : b);
       const el = document.querySelector(`#sbDashCol [data-sdgrp="${g.id}"] .sdVal`); if (!el || el.textContent !== gov.r.toFixed(3)) bad.push(`${g.id}: ${el && el.textContent} vs ${gov.r}`); });
     return { n: grp.length, bad }; });
   check(!dash.bad.length, `${lab}: check summary chips ${dash.bad.join(' | ')}`);
   // PR 2d-2: the Rating chip = the lowest HL-93 inventory RF of the engine
-  const rc = await p.evaluate(() => { const s0 = localStorage.getItem('psb2.project.current'), P = s0 ? window.PSBModel.importJSON(s0).project : window.PSBModel.defaultProject(), R = computeAll(window.PSBDesign.inputs(P));
+  const rc = await p.evaluate(() => { const s0 = localStorage.getItem('psb2.project.current'), P = s0 ? window.PSBModel.importJSON(s0).project : window.PSBModel.defaultProject(), R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
     const v = window.PSBDashUI.RATING.rf.map(q => q[1](R)).filter(x => x < 99), el = document.querySelector('#sbDashCol [data-sdgrp="rt"] .sdVal'); return { want: Math.min(...v).toFixed(3), got: el && el.textContent }; });
   check(rc.want === rc.got, `${lab}: rating chip ${rc.got} vs ${rc.want}`);
 }
@@ -167,6 +169,17 @@ if (args.shots) { await p.click('#tabBar [data-otab="str"]'); await p.waitForTim
 await p.click('#tabBar [data-otab="sum"]'); await p.click('#sbDashCol [data-sdgrp="end"] .sdMain');
 check(await p.evaluate(() => document.querySelector('#tabBar [data-otab="end"]').getAttribute('aria-selected') === 'true' && [...document.querySelectorAll('#out details[open] li[id^="st-ez."]')].length > 0), 'chip opens the End zone tab and the step');
 check(!!(await p.$('#sbDashCol [data-sdgrp="camb"] .sdVal')), 'camber chip');
+// PR 2d-3 (PS-10): the hold-down box (AASHTO, default on), the check on the End zone tab and in its chip; off removes it
+await p.click('#inTabs [data-itab="own"]');
+check(await p.isVisible('#i_base\\.opt\\.hdCheck') && (await p.inputValue('#i_base\\.opt\\.hdCheck')) === 'true' && (await p.inputValue('#i_base\\.opt\\.hdFrac')) === '0.75', 'PS-10 box on, 0.75');
+await p.click('#tabBar [data-otab="end"]'); await p.waitForTimeout(250);
+{ const r = await p.evaluate(() => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
+    return { has: !!(R.ps10 && !R.ps10.off), F: R.ps10 && R.ps10.Ftot, t: document.getElementById('out').textContent, step: !!document.getElementById('st-ez.hd.F'), ev: !!document.querySelector('#out [data-ev="ps10.Ftot"]') }; });
+  check(r.has && r.step && r.ev && /PS-10/.test(r.t), 'PS-10 check worked on the End zone tab'); }
+await p.click('#sbDashCol [data-sdgrp="end"] .sdX'); check(/Hold-down force \(PS-10\)/.test(await p.textContent('#sbDashCol')), 'PS-10 in the End zone chip');
+await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.opt\\.hdCheck', 'false'); await p.click('#tabBar [data-otab="end"]'); await p.waitForTimeout(250);
+check(/not checked for AASHTO/.test(await p.textContent('#out')) && !(await p.$('#out [data-ev^="ps10."]')) && !/PS-10\)/.test(await p.textContent('#sbDashCol')) && JSON.parse((await lsSnap(p))['psb2.project.current']).base.opt.hdCheck === false, 'PS-10 box off: no check, saved');
+await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.opt\\.hdCheck', 'true');
 // an input error blocks every result tab
 await p.click('#inTabs [data-itab="mat"]'); await p.fill('#i_base\\.mat\\.fci', '-1'); await p.press('#i_base\\.mat\\.fci', 'Tab');
 for (const t of ['sec', 'lds', 'an', 'loss', 'str', 'flex', 'shear', 'end', 'camb', 'hand', 'deck', 'rt']) { await p.click(`#tabBar [data-otab="${t}"]`); check(/Results not shown/.test(await p.textContent('#out')) && !(await p.$('#out [data-ev]')), 'blocked ' + t); }

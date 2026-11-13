@@ -6,8 +6,8 @@
    in engine/worked-end.js endzone(). The graphics: the end-zone checks against 1.0 (the steel bar chart, PSBVizAlong.hbars), the girder-end
    elevation (splitting steel within h/4, confinement over 1.5d, ℄ bearing, transfer length, the strands; the steel detail kit) and the draped
    strands with the hold-down points (and forces, where the owner check applies).
-   AASHTO and RIDOT have no hold-down limit in the moved engine: the optional check (PS-10: a box, default on, 75 % of the beam weight) is
-   added by PR 2d-3; until then the tab says so.
+   AASHTO and RIDOT have no hold-down limit in the moved engine: the optional check (PS-10: a box, default on, 75 % of the beam weight,
+   editable) is the engine addition engine/holddown.js (PR 2d-3, R.ps10), shown here the same way as the owner check.
      output(ctx) -> HTML; after(el, ctx). ctx = { P, inp, R, W, ui, redraw } */
 (function () {
   'use strict';
@@ -48,16 +48,17 @@
         + '<p class="note">Claimed for the higher release tension limit 0.24√f′<sub>ci</sub> (Stresses tab): the bonded steel carries the concrete tensile force of the uncracked section at f<sub>s</sub>.</p>'
       : '<p class="note">The bonded-steel option is off: the release tension limit is min(0.0948√f′<sub>ci</sub>, 0.2 ksi) (5.9.2.3.1b) and no end-region tension steel is needed for it. Turn it on (<a href="#" data-goin="gird">Girders &amp; strands tab</a>) to claim 0.24√f′<sub>ci</sub> and check the steel here.</p>', 'card-ezrel');
     // draped strands and the hold-down force
-    const hd = R.own && R.own.hd, wH = warnsOf(R, HD_RE), owner = R.own ? R.own.owner : (inp.owner || 'AASHTO');
+    const hd = (R.own && R.own.hd) || (R.ps10 && !R.ps10.off ? R.ps10 : null), H = R.own && R.own.hd ? 'own.hd' : 'ps10', wH = warnsOf(R, HD_RE), owner = R.own ? R.own.owner : (window.PBD ? window.PBD.ownerOf(inp) : (inp.owner || 'AASHTO'));
     let hb = '';
     if (ss.nh > 0) {
       hb += k.kv([['Draped strands n<sub>h</sub>', `${ev('ss.nh', 0)} (centroid y<sub>end</sub> = ${ev('ss.hp.yEnd', 2, 'in')} at ℄ bearing, y<sub>mid</sub> = ${ev('ss.hp.yMid', 2, 'in')})`],
         ['Hold-down points', `two, at frac × L = ${ev('ss.hp.frac', 3)} × ${ev('L', 2)} = ${k.fx(ss.hp.frac * R.L, 2)} ft from ℄ bearing (PS-13)`], ['Slope tan α', `${ev('ss.slope', 4)} ${wk('ez.slope')}`]]);
-      if (hd) hb += k.kv([['α', `${ev('own.hd.alpha', 5, 'rad')} ${wk('ez.hd.alpha')}`], ['Force per strand and point F<sub>str</sub> = f<sub>pbt</sub> A<sub>b</sub> sin α', `${ev('own.hd.Fstr', 3, 'kip')} ${wk('ez.hd.Fstr')}`],
-        ['Hold-down force F<sub>hd</sub> = 2 n<sub>h</sub> F<sub>str</sub>', `<b>${ev('own.hd.Ftot', 1, 'kip')}</b> ${wk('ez.hd.F')}`], ['Girder length L<sub>g</sub>', `${ev('own.hd.Lg', 2, 'ft')} ${wk('ez.hd.Lg')}`], ['Beam weight W = w<sub>sw</sub> L<sub>g</sub>', `${ev('own.hd.W', 1, 'kip')} ${wk('ez.hd.W')}`],
-        [`Limit ${ev('own.hd.frac', 2)} W`, `${ev('own.hd.lim', 1, 'kip')} ${wk('ez.hd.lim')}`], [`Ratio (${k.esc(qH.c.n.replace(/^Hold-down force \(|\)$/g, ''))})`, `<b>${ev(`checks.${qH.i}.r`, 3)}</b> ${pf(qH.c.pass)} ${wk('ez.hd.r')}`]])
-        + `<p class="note">${k.esc(owner)}: the total hold-down force of all draped strands of a beam, at jacking (f<sub>pbt</sub>), shall not exceed 75 % of the beam weight (the owner rule of the moved engine). Each strand bends at two hold-down points, F<sub>str</sub> at each.</p>`;
-      else hb += `<p class="note"><b>Hold-down limit: not checked for ${k.esc(owner)}.</b> AASHTO LRFD sets no limit on the hold-down force; the moved engine checks the 75 % of beam weight rule only for MassDOT (3.7.2.2) and CTDOT (V2 5.9.1.6). The optional check for AASHTO and RIDOT projects (PS-10: a box on the Owner rules tab, default on, limit 75 % of the beam weight, editable) comes in PR 2d-3.</p>`;
+      if (hd) hb += k.kv([['α', `${ev(H + '.alpha', 5, 'rad')} ${wk('ez.hd.alpha')}`], ['Force per strand and point F<sub>str</sub> = f<sub>pbt</sub> A<sub>b</sub> sin α', `${ev(H + '.Fstr', 3, 'kip')} ${wk('ez.hd.Fstr')}`],
+        ['Hold-down force F<sub>hd</sub> = 2 n<sub>h</sub> F<sub>str</sub>', `<b>${ev(H + '.Ftot', 1, 'kip')}</b> ${wk('ez.hd.F')}`], ['Girder length L<sub>g</sub>', `${ev(H + '.Lg', 2, 'ft')} ${wk('ez.hd.Lg')}`], ['Beam weight W = w<sub>sw</sub> L<sub>g</sub>', `${ev(H + '.W', 1, 'kip')} ${wk('ez.hd.W')}`],
+        [`Limit ${ev(H + '.frac', 2)} W`, `${ev(H + '.lim', 1, 'kip')} ${wk('ez.hd.lim')}`], [`Ratio (${k.esc(qH.c.n.replace(/^Hold-down force \(|\)$/g, ''))})`, `<b>${ev(`checks.${qH.i}.r`, 3)}</b> ${pf(qH.c.pass)} ${wk('ez.hd.r')}`]])
+        + (H === 'ps10' ? `<p class="note">${k.esc(owner)}: AASHTO LRFD sets no limit on the hold-down force. PS-10 (engineer, 2026-11-12): the MassDOT 3.7.2.2 / CTDOT V2 5.9.1.6 rule is checked as an option, on by default, limit ${k.fx(hd.frac, 2)} × the beam weight (<a href="#" data-goin="own">Owner rules tab</a>). Each strand bends at two hold-down points, F<sub>str</sub> at each.</p>`
+          : `<p class="note">${k.esc(owner)}: the total hold-down force of all draped strands of a beam, at jacking (f<sub>pbt</sub>), shall not exceed 75 % of the beam weight (the owner rule of the moved engine). Each strand bends at two hold-down points, F<sub>str</sub> at each.</p>`);
+      else hb += `<p class="note"><b>Hold-down limit: not checked for ${k.esc(owner)}</b> (the PS-10 box is off on the <a href="#" data-goin="own">Owner rules tab</a>). AASHTO LRFD sets no limit on the hold-down force; MassDOT 3.7.2.2 and CTDOT V2 5.9.1.6 limit it to 75 % of the beam weight.</p>`;
       hb += '<div id="gfx_ezhd"></div>';
     } else hb += '<p class="note">No draped strands: no hold-down force (straight strands only).</p>';
     if (wH.length) hb += `<div class="alert"><b>Engine warnings (draped strands)</b><ul>${wH.map(w => `<li>${k.esc(w)}</li>`).join('')}</ul></div>`;
@@ -113,7 +114,7 @@
   /* the draped strands from ℄ bearing to midspan (vertical scale exaggerated) with the hold-down points and, where the owner check applies,
      the force n_h F_str at each */
   function hdFig(R, W) {
-    const V = VK(), S = V.scene(), ss = R.ss, L = R.L, a = ss.hp.frac * L, G = R.g, H = 0.16 * L, Y = y => y / G.h * H, hd = R.own && R.own.hd, ye = Y(+ss.hp.yEnd), ym = Y(+ss.hp.yMid);
+    const V = VK(), S = V.scene(), ss = R.ss, L = R.L, a = ss.hp.frac * L, G = R.g, H = 0.16 * L, Y = y => y / G.h * H, hd = (R.own && R.own.hd) || (R.ps10 && !R.ps10.off ? R.ps10 : null), ye = Y(+ss.hp.yEnd), ym = Y(+ss.hp.yMid);
     S.rect(0, 0, L / 2 * 1.06, H, 'dt-cc');
     S.line(L / 2, -0.04 * L, L / 2, H + 0.02 * L, 'dt-cl'); S.text(L / 2, H, '℄ span', { a: 'middle', dy: -8, sz: 10.5, cls: 'dt-m' });
     S.line(0, -0.04 * L, 0, H + 0.02 * L, 'dt-cl'); S.text(0, H, '℄ brg', { a: 'middle', dy: -8, sz: 10.5, cls: 'dt-m' });
@@ -142,7 +143,7 @@
         controls: VK().tiles([{ label: 'Splitting', value: ev(`checks.${qS.i}.r`, 3), unit: qS.c.pass ? 'PASS' : 'FAIL', tone: qS.c.pass ? 'c' : 't' }, { label: 'A<sub>s,req</sub>', value: ev('AsSplit', 2), unit: 'in²' }, { label: 'h/4', value: ev('splitZone', 1), unit: 'in' },
           { label: 'Confinement', value: cf.exempt ? 'n/a' : ev('conf.dc', 3), unit: cf.exempt ? 'box / slab' : (cf.pass ? 'PASS' : 'FAIL'), tone: cf.exempt || cf.pass ? '' : 't' },
           { label: 'Draped n<sub>h</sub>', value: ev('ss.nh', 0), unit: ss.nh ? `tan α ${k.fx(ss.slope, 4)}` : 'none' },
-          qH ? { label: 'Hold-down', value: ev(`checks.${qH.i}.r`, 3), unit: qH.c.pass ? 'PASS' : 'FAIL', tone: qH.c.pass ? '' : 't' } : { label: 'Hold-down', value: '—', unit: ss.nh ? 'no limit (PR 2d-3)' : 'no draped strands' }]),
+          qH ? { label: 'Hold-down', value: ev(`checks.${qH.i}.r`, 3), unit: qH.c.pass ? 'PASS' : 'FAIL', tone: qH.c.pass ? '' : 't' } : { label: 'Hold-down', value: '—', unit: ss.nh ? 'not checked (box off)' : 'no draped strands' }]),
         draw: W => VA().hbars({ aria: 'End-zone check ratios', panels: [{ label: 'Demand / capacity (D/C)', unit: 'D/C', limit: { v: 1, label: '1.0' }, items }] }, W),
         hint: 'Point at (or tap) a bar for its value.', legend: VA().legend('ratio'),
         caption: '<p class="vk-cap">The engine\'s ratios (cards below). Confinement: the three detailing limits of 5.9.4.4.2; hold-down and debonded share: the owner rules where they apply. Display only.</p>' });
@@ -154,7 +155,7 @@
     const s3 = el.querySelector('#gfx_ezhd');
     if (s3 && VK() && VK().detCard && ss.nh > 0) VK().detCard(s3, { id: 'ezHdFig', title: 'Draped strands and the hold-down point', sub: 'half span, vertical scale exaggerated',
       draw: W => ({ html: hdFig(R, W), nar: W < 560 }), hint: 'Point at (or tap) the draped strands for their values.',
-      cap: `<p class="vk-cap">${R.own && R.own.hd ? 'The arrow: the hold-down force of the draped strands at one hold-down point, n<sub>h</sub> F<sub>str</sub> (two points per beam: F<sub>hd</sub> = 2 n<sub>h</sub> F<sub>str</sub>).' : 'No hold-down force is computed for this owner (PS-10 check in PR 2d-3).'} The other half of the span is symmetric. Display only.</p>` });
+      cap: `<p class="vk-cap">${(R.own && R.own.hd) || (R.ps10 && !R.ps10.off) ? 'The arrow: the hold-down force of the draped strands at one hold-down point, n<sub>h</sub> F<sub>str</sub> (two points per beam: F<sub>hd</sub> = 2 n<sub>h</sub> F<sub>str</sub>).' : 'No hold-down force is computed: the PS-10 box is off (Owner rules tab).'} The other half of the span is symmetric. Display only.</p>` });
   }
   window.PSBUiEndZone = { output, after, TOPICS };
 })();
