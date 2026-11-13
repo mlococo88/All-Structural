@@ -361,3 +361,56 @@ PR #1457: https://github.com/mlococo88/All-Structural/pull/1457
   chips, 390 px), `node tests/check-syntax.mjs`.
 ### Open items
 - Next: PR 2d (End zone & hold-down, Camber & deflection, Handling, Deck, Rating tabs; their chips; harness B on them).
+
+## 2026-11-13 — PR 2d-1: End zone & hold-down and Camber & deflection output tabs, check chips; harness B (no calculation change)
+PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+### Where
+- `apps/ps-bridge/engine/worked-end.js` (new, `window.PSBWorkedEnd`, no DOM): `endzone(inp, R)`, `camber(inp, R)` → `{ steps, pairs, paths }`.
+  End zone: P_i, 0.04 P_i, A_s,req = 0.04 P_i/20, h/4 (h = overall height, or width of a slab), A_s,prov = n A_v, P_r = 20 A_s,prov, legs needed,
+  the ratio (5.9.4.4.1); confinement d_b, the size / spacing / extent ratios, 1.5d, (n − 1)s, bars needed, governing (5.9.4.4.2; not for box and
+  slab beams); the bonded release-tension steel f_s = min(0.5f_y, 30), T_top, T_bot (the engine's integration, named in the note), A_s,req, ratio
+  (5.9.2.3.1b, where claimed); the draped-strand slope; where the owner rule applies (MassDOT 3.7.2.2, CTDOT V2 5.9.1.6) α, F_str = f_pbt A_b sin α,
+  F_hd = 2 n_h F_str, L_g, W = w_sw L_g, 0.75 W and the ratio; debonding: ℓ_d (κ = 2.0), the owner share (CTDOT), and as display intermediates the
+  share without an owner rule and the simple-span limit min(0.20L, L/2 − ℓ_d) of 5.9.4.3.3(G) (an engine warning). Camber: P_s, e_s, Δ_ps,s,
+  P_h, e_hm, e_he, a, Δ_ps,h, Δ_ps, Δ_sw, Δ_dk, Δ_dia, Δ_sd, Δ_rel, Δ_erect, Δ_deck, Δ_seat, Δ_final (PCI multipliers), Δ_LL, L/800 (or the
+  MassDOT L/1000 / L/800), the ratio, the haunch build-up at midspan. No new formula: the expressions of the moved engine (computeAll, psbReportVals).
+- `apps/ps-bridge/ui/endzone.js` (new, `PSBUiEndZone`): End zone & hold-down tab — graphic card (tiles; the end-zone ratios against 1.0, the steel
+  bar chart), Splitting / bursting, Confinement (table of the three limits), Bonded release-tension steel, Draped strands and the hold-down force
+  (geometry; the owner check where it applies; for AASHTO / RIDOT the note that the optional PS-10 check comes in PR 2d-3; the engine's hold-down
+  warnings) with the half-span hold-down graphic (force arrow n_h F_str where computed), Debonded strands (row table, ℓ_d, owner share, the
+  5.9.4.3.3 warnings of the engine), the girder-end elevation (true scale: splitting legs within h/4, confinement bars and 1.5d, ℓ_t, strands,
+  debonded lengths, ℄ bearing; steel detail kit), worked steps. As the old app's Anchorage Zone tab plus the hold-down and debonding
+  (old: report and warnings).
+- `apps/ps-bridge/ui/camber.js` (new, `PSBUiCamber`): Camber & deflection tab — graphic card (tiles; camber by stage and the elastic
+  components, bar chart), Net camber by stage (what each is used for), Elastic components, Live-load deflection, camber and haunch build-up
+  along the girder (steel along-girder chart), the tenth-point haunch / seat table, worked steps. As the old app's Camber tab.
+- `apps/ps-bridge/ui/dash.js`: the End zone & hold-down chip (splitting, confinement, release steel, owner hold-down, owner debonded share)
+  and the Camber & deflection chip (LL deflection).
+- `apps/ps-bridge/index.html`: loads the new files; result() makes the two tabs' steps; the two tabs replace their placeholders.
+### Copies from the Steel Bridge app (to move to shared/ later, CLAUDE.md §3)
+- None new (the PR 2b-2 copies `ui/vizkit.js`, `ui/vizalong.js` are used).
+### Shared files
+- None changed.
+### Governing provisions
+- None changed (§4). AASHTO LRFD 10th Ed. 5.9.4.4.1, 5.9.4.4.2, 5.9.2.3.1b, 5.9.4.3.2, 5.9.4.3.3, 2.5.2.6.2; PCI Design Handbook camber
+  multipliers; MassDOT 3.7.2.2 / CTDOT V2 5.9.1.6 (hold-down), CTDOT V2 5.9.4.3.3 (debonded share), MassDOT 3.5.6.1 (LL deflection) as in the
+  moved engine's owner rules.
+### Check case
+- Default design (PCI BT-72, L = 120 ft, 40 strands 0.6 in, 12 draped): P_i = 8.680 × 179.49 = 1,558.0 kip; 0.04 P_i = 62.3 kip; A_s,req = 62.32/20
+  = 3.12 in²; A_s,prov = 12 × 0.31 = 3.72 in²; P_r = 74.4 kip; ratio 0.838. Confinement No. 4 at 6.00 in, 19 bars: extent 108.0 in = 1.5 × 72.0,
+  spacing ratio 1.000 (governing). Camber: Δ_ps = 4.388 in, Δ_sw = 1.486 in, Δ_dk = 1.818 in, Δ_sd = 0.446 in; Δ_erect = 1.80(4.388) − 1.85(1.486)
+  = 5.150 in; Δ_deck = 5.150 − 1.818 = 3.332 in; Δ_seat = 2.886 in; Δ_final = 0.570 in; Δ_LL = 1.182 in ≤ L/800 = 1.800 in (0.657).
+- MassDOT on the same design (the engine's owner check): tan α = (60 − 8)/(12 × 0.40 × 120) = 0.09028, α = 0.09003 rad, F_str = 202.50 × 0.217 ×
+  sin α = 3.951 kip, F_hd = 2 × 12 × 3.951 = 94.8 kip; W = 0.82559 × 120.00 = 99.1 kip; 0.75 W = 74.3 kip; ratio 1.276 FAIL (as PENDING.md).
+### How verified
+- `node tests/engine/run.mjs psbridge-tabs` (11 designs, + CTDOT with debonded rows on an I-girder, diaphragms and the girder end past ℄ bearing;
+  + the MassDOT hold-down spot check): every pair to 1e-9, every path value exact; `tex.test.mjs`; `psbridge` (model, verbatim, parity 0
+  differences), `project-registry`.
+- **Harness B** (`node tests/psbridge-compare.mjs`, now Losses, Stresses, Flexure, Shear, End zone & hold-down, Camber & deflection): 11 designs,
+  **11,575 values shown and 2,086 step values = the old app's computeAll values, 0 differences**; `psbeam.*` untouched; 0 console errors.
+- `node tests/smoke/ps-bridge-skeleton.mjs` (154 checks: the two tabs on three designs, ≥ 2 graphics and KaTeX each, the chips, a chip opens
+  its step, 390 px without sideways scroll, file://, 0 console errors), `node tests/check-syntax.mjs`.
+### Open items
+- The hold-down limit for AASHTO / RIDOT (PS-10) is an engine addition: PR 2d-3 (own §4 callout).
+- Next: PR 2d-2 (Handling, Deck, Rating tabs; their chips; harness B).
+
