@@ -350,6 +350,8 @@ await o.b.close();
   // PR 3a-4 (PS-17): the old model's other design G2/S1 restored as a girder type on its line, computed the same as the old app
   check(/Restored from the old app's bridge model \(PS-17\): 1 more girder × span design \(G2\/S1\)/.test(sm) && /1 of 1 compute the same as the old app/.test(sm)
     && Array.isArray(P2.types) && P2.types.some(t => t.label === 'Interior S1 (old G2)' && t.lines.join() === '2') && P2.legacy.restored && P2.legacy.restored.cells[0].same === true, 'restored: ' + JSON.stringify(P2.types));
+  check(/Restored from the old app's bridge model/.test(await p.textContent('#toast')), 'the restore notice shown');
+  if (await p.isVisible('#tClose')) await p.click('#tClose');
   // the imported design's results: the old inputs computed = the shown values (computeAll of the page on the old inputs)
   await p.click('#tabBar [data-otab="flex"]'); await p.waitForTimeout(400);
   const fv = await p.evaluate(OLD => { const R = computeAll(JSON.parse(JSON.stringify(OLD))), fx = window.PSBOutKit.fx, at = (o, q) => q.split('.').reduce((a, k) => a == null ? a : a[k], o);

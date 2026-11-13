@@ -1089,8 +1089,12 @@ PR: (link added on merge)
 ### How verified
 - `tests/engine/psbridge-legacy.test.mjs` + 1 test (the check case; computeAll of a restored cell = the old app's applyBridge cell exactly;
   restore once; old data untouched; on load with the notice; 'mod'). Smoke `ps-bridge-skeleton.mjs` 3m: the import restores G2/S1 as
-  "Interior S1 (old G2)", "1 of 1 compute the same". Harness B `--import` (its extra stored cell is not a valid cell key: listed, the design on
-  screen unchanged): 0 differences.
+  "Interior S1 (old G2)", "1 of 1 compute the same"; the notice is asserted, then closed (it lay over a button). Harness B `--import` (its
+  extra stored cell 'G1/S1x' is not a valid cell key: listed, the design on screen unchanged): the restore notice now shown at import lies
+  over the result tab bar (`#toast`, fixed top-right), so the harness's next tab click timed out (exit 1, no count). Harness fix
+  (`tests/psbridge-compare.mjs`, after the import summary is read): the notice text must be exactly "The old bridge model's other designs
+  were not restored: G1/S1x (not a girder × span cell)." for autosave / shared and none for older / file (a new difference otherwise), then
+  closed with its Close button; no comparison changed. 0 differences.
 ### Decisions (pending engineer review)
 - 3a4-D1. Restored cells take this project's bridge (spans, S, overhangs, skews of the imported design); in 'mod' models a cell's own L / S /
   position is not kept — the difference is named per cell and its results flagged.
