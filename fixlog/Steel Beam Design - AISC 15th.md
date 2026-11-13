@@ -3472,3 +3472,43 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
 - **Saved data (§5):** no key or format change. The Tabulated Results choice is in memory only; the new card's collapse state goes in the existing `S.ui.collapse` map under `anSum`, as every card.
 - **Other copies:** none.
 - **Open items:** the envelope table has in-app links only (no § refs in the Report, to keep it readable).
+
+## 2026-11-13 — PR: claude/sbeam-compression-flange (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SBCF) — Major Flexure: "Flange" column renamed "Compression flange", HSS walls named, sagging / hogging note   [display only]
+- **Engineer's decision (2026-11-13):** rename the per-combination column 'Flange' to 'Compression flange'. W-shapes, channels and built-up show top / bottom; rectangular HSS show top wall / bottom wall. Add a note under each table: "Sagging moment: top in compression, uses L_b,top; hogging: bottom in compression, uses L_b,bot." In member-check mode, adapt it.
+- **Where:** the active `buildMxTab` (the last definition in the file; the earlier `buildMxTab` and `buildFlexTab` copies are not called and are unchanged), and `capEnvFig`. The Minor Flexure tab and the Excel export have no flange column, so nothing changes there. The Report follows the tab, because it is built from it.
+- **Code (re-apply by hand):**
+  1. New helpers, placed just before the active `function buildMxTab(pg){`: `sbCfLbl(p,f)`, `sbCfNoun(p,f)`, `sbCfMember(p)`, `sbCfNote(p,D)`.
+     - `sbCfLbl`: `'top'`/`'bottom'`, plus `' wall'` when `p._kind==='R'`.
+     - `sbCfNoun`: `'top flange'`, or `'top wall'` for `R`.
+     - `sbCfMember`: `'top or bottom'`, or `'top or bottom wall'` for `R`.
+     - `sbCfNote`: in beam mode, the engineer's sentence (with `Lᵇ,top` / `Lᵇ,bot`). For round HSS (`P`) it adds "(Round HSS: no lateral-torsional buckling, §F8, so Lᵇ does not change φMₙ.)". In member mode: "Member check: one Lᵇ (entered) is used for whichever flange (wall) is in compression."
+  2. `perComboSections(pg,'mx_',…)`, the columns.
+     - Before: `const cols=[D.member?'Case':'Region (ft)','Flange','Lᵇ (ft)',`
+     - After: `const cols=[D.member?'Case':'Region (ft)','Compression flange','Lᵇ (ft)',`
+  3. Same table, the cell.
+     - Before: `…(fmt(r.x1,1)+' – '+fmt(r.x2,1)),r.flange,`
+     - After: `…(fmt(r.x1,1)+' – '+fmt(r.x2,1)),D.member?sbCfMember(p):sbCfLbl(p,r.flange),`
+     - Member mode showed "compression" before.
+  4. After that table's `body.appendChild(t);`, add: `body.appendChild(el('div','hint',sbCfNote(p,D)));`
+  5. The governing `dcrLine` title.
+     - Before: `g.flange+' flange, region '`
+     - After: `sbCfNoun(p,g.flange)+', region '`
+     - Same text for I-shapes, channels and round HSS; "top wall" for rectangular HSS.
+  6. `capEnvFig`, the annotation.
+     - Before: `(r.flange||'')+' flange'`
+     - After: `'compression: '+sbCfNoun(A.sect,r.flange||'')`
+     - e.g. "top flange<br>DCR 0.03" becomes "compression: top flange<br>DCR 0.03", and "compression: top wall" for rectangular HSS.
+- **Values:** unchanged. `r.flange` is still set in `regionCheck` (`reg.sign>0?'top':'bottom'`) and still picks `effLbTop()` / `effLbBot()`. Round HSS keep top / bottom, as shown before.
+- **Governing provision:** none changed. The statement matches the existing `regionCheck` (compression flange from the sign of M) and the Regions note of the Major-Axis Flexural Strength card.
+- **Check case:** W18X50; spans 20 / 24 ft plus a 6 ft cantilever; pin / roller / roller / free; default trib loads plus 4 kip LL at the tip.
+  - Per-combination table, before: `Flange` = top, bottom, top, bottom.
+  - After: `Compression flange` = top, bottom, top, bottom, with the note under each table.
+  - The same beam in HSS12X6X1/2: top wall, bottom wall, top wall, bottom wall. φMₙ is 198.0 / 196.7 kip·ft in both versions.
+- **How verified:** headless Chromium, origin/main against the branch, seven projects: W, C15X33.9, HSS12X6X1/2, HSS10.000X0.500, W with calculated C_b and L_b,top 8 ft, member-check W, member-check HSS.
+  - `AN` JSON identical in all seven.
+  - Every tab text identical except Major Flexure.
+  - The Report (`SharedReport.text`) differs only by the header, the values and the note.
+  - New smoke test: `steel-beam-compression-flange` (5 checks).
+- **Saved data (§5):** no change.
+- **Other copies:** none.
+- **Open items (not changed):** the flexure check detail string built in `designAll` ("…region a–b ft, top flange", shown on the Summary and in the Report summary) still says "flange" for rectangular HSS. It is part of `AN.design`, so it is left as it is.
