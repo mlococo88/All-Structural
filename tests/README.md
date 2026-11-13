@@ -207,6 +207,11 @@ node tests/smoke/cbc-shear-limit.mjs [--file <Concrete Beam Capacity.html>]
 # summary, Detailing card, Report; 1400 and 390 px, 0 console errors. ~30 s
 node tests/smoke/cbc-leg-width.mjs [--file <Concrete Beam Capacity.html>]
 
+# Beam Capacity tab, ACI: member type One-way slab (CBSB): a saved project opens as a beam; slab = 12 in strip, bars at a spacing; hand
+# check h 9, d 6.25, #5 @ 12, f'c 4 (phi M_n 8.40, A_s,min 0.194 (7.6.1.1), s <= 18 (7.7.2.3), V_c 6.09, A_v,min only where V_u > phi V_c
+# (7.6.3.1), S&T rho 0.00185 / s <= 18 (24.4.3)); back to beam; Input Echo, Report, 1400 and 390 px, 0 console errors. ~30 s
+node tests/smoke/cbc-slab.mjs [--file <Concrete Beam Capacity.html>]
+
 # Pile Designer's saved-project library is in IndexedDB (not covered above): page text and autosave main vs the working tree, Undo / Redo,
 # Save as new / rename / duplicate / refused write / load / delete (React 18.3.1 served from the kit's 18.2.0, test-only). ~1 min
 node tests/smoke/pile-library.mjs [--a origin/main]
