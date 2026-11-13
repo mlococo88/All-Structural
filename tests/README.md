@@ -223,6 +223,11 @@ node tests/smoke/cbc-input-fit.mjs [--file <Concrete Beam Capacity.html>] [--w 1
 # torsion with no stirrups still NO CAPACITY; an imported unknown size: INPUT INVALID "Layer T1: choose a bar size", no page error; 1400 / 390 px. ~1 min
 node tests/smoke/cbc-bar-size.mjs [--file <Concrete Beam Capacity.html>]
 
+# Beam Capacity, one-way slab: shrinkage and temperature bars drawn (CBTS): h 9, #5 @ 12 bottom, c_c 0.75, T&S #4 @ 12: T&S bar on the
+# bottom bars at 7.375 in from the top, d unchanged (7.9375); section sketch, slab elevation, Input Echo / Visuals / Report overview, 3-D,
+# DXF section, elevation and bar schedule row TS; top bars only: under them; 1400 and 390 px, 0 console errors. ~1 min
+node tests/smoke/cbc-slab-st-drawings.mjs [--file <Concrete Beam Capacity.html>] [--shots <dir>]
+
 # Beam Capacity tab, ACI: minimum thickness, Tables 9.3.1.1 / 7.3.1.1 (CBMH): span blank = N/A "not checked"; beam 20 ft both ends continuous
 # 11.43 in (f_y 80: 13.71), cantilever 10 ft 15.00 (lightweight, w_c 90: 18.00; w_c 110: 16.50); slab 12 ft simply supported 7.20 PASS at
 # h 9, FAIL at h 7; check summary, card, Report; AASHTO without the row; 1400 and 390 px, 0 console errors. ~30 s

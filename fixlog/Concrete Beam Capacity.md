@@ -7263,3 +7263,45 @@ Engineer report (screenshot): a one-way slab, layer T1 at s = 4 in, Set d 6.25 i
 ### Open items
 - A blank saved layer size opens as #5 (`mergeState`, `String(L.size||'5')`, unchanged: saved data). Making it an input error instead would change how such a file opens: engineer decision.
 - `S.stir.size` (and other single sizes) not in the bar table would still throw. This is only possible from a hand-edited file and is not changed here.
+
+## 2026-11-13 — PR: claude/cb-slab-st-drawings (CBTS) — Beam Capacity, one-way slab: the shrinkage and temperature bars drawn on the sketches, the 3-D view, the Report overview and the drawing sheets / DXF   [display / drawings only; no computed value, saved key or format change; beams and slabs without T&S bars draw byte-identically]
+
+Engineer: "The transverse bars are not shown on the sketches and plans either." Every site is tagged CBTS. The file uses CRLF line endings; keep them. All code is in the Beam Capacity srcdoc (`#suite-frame-capacity`); escape `"` as `&quot;` and `&` as `&amp;` when re-applying (the text below is un-escaped).
+
+### Placement (decision, stated on the drawings)
+- The T&S bars (Reinforcement input 5: `S.slab.stSize` at `S.slab.stS`, perpendicular to the flexural bars, ACI 318-19 7.6.4.1, 7.7.6.1) are drawn directly **inside the outermost bottom (positive-moment tension face) flexural layer, resting on it**: bar centre at `yTop(main) − d_b,main/2 − d_b,T&S/2` from the top.
+- If the slab has no bottom layer, they are drawn **under the outermost top layer** (`yTop + d_b,main/2 + d_b,T&S/2`).
+- They run across the width between the clear covers (x = ±(b/2 − c_c)). This follows the usual practice of the main bars outermost.
+- `layerGeom()` (d = cover + stirrup + d_b/2 from the face) is **not changed**, so d and every result are unchanged.
+
+### Changes
+- **New `cbcStBars()`** (before `function svgSection(neg){`). It returns `{size, db, s, yTop, up, ref, x0, x1, txt:'#4 @ 12.00 in T&S (transverse)', where}`, or `null` when not a slab (ACI one-way slab mode) or when none are entered. Every drawing change below runs only when it is not null.
+- **`svgSection()`** (Input Echo schematic, Visuals, Report overview, Flexure tab): after the bars and before the skin bars, a line across the width at the T&S bar's y (stroke `#0E7490`, width d_b to scale), labelled "#4 @ 12.00 in T&S (transverse)" above it (or below it, under top bars).
+- **New `svgSlabStElev()`** and **`svgElevation()`**:
+  - A slab with T&S bars and no stirrups (before: no elevation, "No stirrups are specified …") gets an elevation along the span. It shows the flexural layers as lines and the T&S bars as circles at s_st, with h and s_st dimensioned and a label.
+  - A slab with stirrups: the T&S circles are added to the stirrup elevation.
+- **Captions:**
+  - Input Echo: "Slab elevation along the span: shrinkage and temperature bars (transverse) at their spacing, inside the main bars." (beams: as before).
+  - Visuals: "One-way slab elevation along the span: #4 @ 12.00 in T&S (transverse), resting on the bottom bars (inside them) (placement for the drawing; the flexural bars stay outermost, so d is unchanged). Checked on the Detailing tab (ACI 24.4.3.2, 24.4.3.3)."
+- **Report overview** (`cbcOvFigs`, `cbmOvSection`): `F.st` is added. A slab with T&S bars and no stirrups gets the elevation figure with a slab caption (before: the note "no stirrups … no stirrup layout to draw").
+- **3-D view** (`cbc3DScene`): T&S bars as cylinders across the width at s_st along the length, inside the main bars, in the transverse group.
+- **Drawing sheets / DXF** (`cbdwBuild`):
+  - Sheet 1, section: the T&S bar along the cut, true size (`barPath`, layer REBAR), with the callout "#4 @ 12" T&S (TRANSVERSE), ON THE BOTTOM BARS" / "ACI 318-19 7.6.4.1, 24.4.3; PLACED INSIDE THE MAIN BARS (d UNCHANGED)".
+  - Sheet 2, elevation: the T&S bars cut (circles) at s_st, the callout "… (CUT)", and the first spacing dimensioned "<> T&S".
+  - Sheet 3, bar schedule: row `TS | #4 | @ 12" | SHRINKAGE & TEMPERATURE (TRANSVERSE), ON THE BOTTOM BARS | STRAIGHT (LENGTH BY WIDTH) | 0.20 /FT`.
+  - The app has no plan view.
+
+### Check case (slab h 9 in, #5 @ 12 in bottom, c_c 0.75 in, no stirrups, T&S #4 @ 12 in)
+- Main bar: yTop = 9 − 0.75 − 0.625/2 = 7.9375 in, so d = 7.9375 in. With and without T&S entered: the same d, A_s 0.31 in²/ft and φM_n.
+- T&S centre: 7.9375 − 0.3125 − 0.25 = 7.375 in from the top (1.625 in above the bottom), across x = ±(6 − 0.75) = ±5.25 in.
+- Bar schedule A_s: 0.20 × 12/12 = 0.20 in²/ft.
+
+### How verified
+- **New test** `tests/smoke/cbc-slab-st-drawings.mjs` (1400 and 390 px, 0 console errors). It checks the position, d unchanged, every sketch, the 3-D count, the DXF texts and schedule row, the top-bars-only case and the Report.
+- **Byte-identical drawings:** origin/main vs branch with the drawings compared, for 6 projects without T&S bars (default; beam; T-beam -M with torsion; AASHTO beam; strip slab without T&S; the engineer's slab #5 @ 4 in). The SVG section and elevation, the innerHTML of every output tab, the DXF text (`SharedDxf.write`), the sheet SVGs, the Report text, `CC` and the autosave were all compared.
+- `dxf-print-sheets --tool cbc`.
+- Beam-mode audit: the stirrups are drawn on the section sketch, the stirrup elevation, the 3-D view, the DXF section and elevation, and the bar schedule (no gap).
+
+### Open items
+- Skin bars (CBM3d) are not in the 3-D view or the SVG elevation (they are in the section sketch and the DXF section and elevation). Not changed.
+- The ASD Beam Calcs Section figure is a transformed-section / stress-block figure from the total A_s (no bar detailing), so T&S bars are not drawn there.

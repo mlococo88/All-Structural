@@ -53,9 +53,9 @@ for (const vw of [1400, 390]) {
   r = await f.evaluate(() => { if (!window.THREE) return { na: true }; const o = cbc3DScene(false, 0.45, {}); let n = 0; o.gStir.children.forEach(m => { if (m.material && m.material.color && m.material.color.getHex() === 0x0e7490) n++; }); return { n, Lb: o.Lb }; });
   ok(r.na || r.n === Math.floor(r.Lb / 12) + 1, r.na ? '3-D: three.js not loaded (skipped)' : `3-D view: ${r.n} T&S bars across the width (L ${r.Lb} in at 12 in)`);
   // drawing sheets / DXF
-  r = await f.evaluate(() => { const B = cbdwBuild(), dxf = SharedDxf.write(B.D);
-    return { sec: /#4 @ 12" T&S \(TRANSVERSE\), ON THE BOTTOM BARS/.test(dxf), cut: /#4 @ 12" T&S \(TRANSVERSE\) \(CUT\)/.test(dxf), ts: /SHRINKAGE & TEMPERATURE \(TRANSVERSE\), ON THE BOTTOM BARS/.test(dxf), dim: /T&S/.test(dxf), valid: SharedDxf.validate ? JSON.stringify(SharedDxf.validate(dxf)) : '' }; });
-  ok(r.sec && r.cut && r.ts, 'DXF: section callout "#4 @ 12" T&S (TRANSVERSE), ON THE BOTTOM BARS", elevation "(CUT)", bar schedule row TS ' + JSON.stringify(r));
+  r = await f.evaluate(() => { const B = cbdwBuild(), dxf = B.D.toDXF({ ltscale: 1 });
+    return { sec: /#4 @ 12" T&S \(TRANSVERSE\), ON THE BOTTOM BARS/.test(dxf), cut: /#4 @ 12" T&S \(TRANSVERSE\) \(CUT\)/.test(dxf), ts: /SHRINKAGE & TEMPERATURE \(TRANSVERSE\), ON THE BOTTOM BARS/.test(dxf), dim: /T&S/.test(dxf), valid: SharedDxf.validate(dxf).ok }; });
+  ok(r.sec && r.cut && r.ts && r.valid, 'DXF (structure check ok): section callout "#4 @ 12" T&S (TRANSVERSE), ON THE BOTTOM BARS", elevation "(CUT)", bar schedule row TS ' + JSON.stringify(r));
   if (SHOTS) {
     await f.evaluate(() => { S.ui.tab = 'tabInputEcho'; refresh(); }); await p.waitForTimeout(300);
     const sc = await f.$('#ieSchematic'); if (sc) { await sc.scrollIntoViewIfNeeded(); await sc.screenshot({ path: path.join(SHOTS, `st-inputecho-${vw}.png`) }); }
