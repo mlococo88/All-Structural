@@ -1177,3 +1177,61 @@ PR #1521: https://github.com/mlococo88/All-Structural/pull/1521
 ### Decisions (pending engineer review)
 - PS20-D1. The traffic face: the barrier width, or a ≥ 12 in sidewalk's curb face (the steel app's rule); this app has no curb input yet.
 - PS20-D2. d_e computed whenever the project has the cross-section barriers (also with DC2 / DW "entered").
+
+## 2026-11-13 — PS-22: the app's notices as inline banners above the tab content (display only; no calculation, no saved data)
+PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+### Request
+- Engineer decision PS-22 (2026-11-13, display): notices (the import / restore notice of 3a-4 and every other app notice) become an inline
+  banner in the page flow above the tab content, pushing the content down, never covering the tab bar; they stay until closed.
+### Where
+- `apps/ps-bridge/index.html` only. The app's one notice mechanism is `toast(text, undo)` (callers unchanged: the owner change's inputs
+  (`IN.takeNote`), the girder types re-assigned / new spans' types (with Undo), the type controls' notes (`typesDone`), the old app's designs
+  restored (`lgCtx.replace`, PR 3a-4), the load notes `L.notes` (PR 3a-1 / 3a-4)). No other module draws a notice (no other fixed element).
+- Markup: `<div id="toast" role="status" hidden></div>` (first child of `<body>`) removed; new `<div id="notices" role="status"
+  aria-live="polite"></div>` in `#outputPanel` between `<div id="tabBar" role="tablist"></div>` and `<div id="out"></div>`.
+- CSS, anchor `/* PS-22 (engineer decision`: before
+  `#toast{position:fixed;right:14px;top:84px;max-width:min(520px,calc(100vw - 28px));max-height:60vh;overflow:auto;z-index:50;…}` and
+  `#toast[hidden]{display:none;} #toast.err{…} #toast ul{…} #toast .tBtns{…} #toast .tFld{…} #toast .tArr{…}`; after
+  `#notices:empty{display:none;} #notices{margin:6px 0 0;display:flex;flex-direction:column;gap:6px;}`,
+  `#notices .notice{display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px 10px;background:#fff;border:1px solid var(--slate-400);border-left:4px solid var(--navy-800);border-radius:6px;padding:7px 10px;font-family:var(--font-ui);font-size:9.5pt;}`,
+  `#notices .notice>div:first-child{flex:1 1 240px;min-width:0;overflow-wrap:anywhere;} #notices .nBtns{display:flex;gap:6px;margin-left:auto;}`
+  (no position: in the flow); print: `#toast` → `#notices` in the `@media print{ #hdrBtns,… {display:none!important;}` list (not printed, as before).
+- `toast(text, undo)`, anchor `function toast(text, undo) {`: before
+  ```js
+  function toast(text, undo) { const t = $('toast'); t.className = ''; t.innerHTML = `<div>${esc(text)}</div><div class="tBtns">${undo ? '<button type="button" id="tUndo">Undo</button>' : ''}<button type="button" id="tClose">Close</button></div>`; t.hidden = false; $('tClose').onclick = () => { t.hidden = true; };
+    if (undo) $('tUndo').onclick = () => { t.hidden = true; P = JSON.parse(undo); changed(); }; }
+  ```
+  after
+  ```js
+  function toast(text, undo) { const box = $('notices'), n = document.createElement('div');
+    [...box.children].forEach(c => { if (c.dataset.text === String(text)) c.remove(); else { const u = c.querySelector('.nUndo'); if (u) u.remove(); } });
+    n.className = 'notice'; n.dataset.text = String(text);
+    n.innerHTML = `<div>${esc(text)}</div><div class="nBtns">${undo ? '<button type="button" class="nUndo">Undo</button>' : ''}<button type="button" class="nClose">Close</button></div>`;
+    box.prepend(n); n.querySelector('.nClose').onclick = () => n.remove();
+    if (undo) n.querySelector('.nUndo').onclick = () => { n.remove(); P = JSON.parse(undo); changed(); };
+    const op = $('outputPanel'), top = n.offsetTop - $('tabBar').offsetHeight; if (op.scrollTop > top) op.scrollTop = Math.max(0, top); }   // brought into view below the sticky tab bar
+  ```
+  The banners live outside `#out`, so redrawing a tab or opening another keeps them; each goes only with its Close (or Undo).
+### Saved data (CLAUDE.md §5)
+- None (no key, no format; the notices are not stored, as before).
+### Governing provisions
+- None (display only; no value, formula or check changed).
+### Check case
+- New project, Owner rules tab, owner AASHTO → RIDOT: the banner "… mat.H 70 → 80 …" is drawn below the tab bar (its top ≥ the tab bar's
+  bottom), in the flow (position static), `#out` below it; opening Loads & LLDF and Summary keeps it; Close removes it. Before: the same text
+  in a box fixed at the top right over the result tabs, closed by Close or replaced by the next notice.
+### How verified
+- Smokes `ps-bridge-skeleton.mjs` (owner change: the banner's placement (inline, below the tab bar, `#out` pushed down, between `#tabBar` and
+  `#out`), kept across tab clicks, Close removes it; the 3m import's restore notice inline below the tab bar; the selectors `#toast` /
+  `#tClose` → `#notices` / `#notices .nClose`) and `ps-bridge-types.mjs` §3 (`#tUndo` → `#notices .nUndo`; Undo puts N_b and the lines back).
+- Harness B (`tests/psbridge-compare.mjs`, test only): the `--import` restore notice is read from `#notices` (the same expected text,
+  "… G1/S1x (not a girder × span cell).Close", or none); new: a notice not in the flow or above the tab bar's bottom is a difference (its text
+  gets " [over the tab bar]"); every notice then closed with its Close button. No comparison changed or removed.
+  Runs: normal 17 designs, 43,512 shown values + 7,646 step values, **0 differences** (exit 0); `--import` 17 designs (autosave 5, shared 4,
+  older 4, file 4), 0 differences (exit 0); `--control` and `--import --control`: 17 with differences, exit 1 (the controls still bite).
+- `node tests/check-syntax.mjs` (163 files); `tests/engine/psbridge-*.test.mjs` (11 files) pass; smokes skeleton 252 checks, types 52 checks, 0 failed.
+### Decisions (pending engineer review)
+- PS22-D1. The banners stack, newest first; the same text again replaces its open banner; Undo stays only on the newest (an older Undo
+  would put back a project that has changed since; before, the next notice replaced the box and its Undo).
+- PS22-D2. A new notice scrolls the output panel up just enough to show it below the sticky tab bar when the panel is scrolled past it
+  (otherwise the scroll position is kept).
