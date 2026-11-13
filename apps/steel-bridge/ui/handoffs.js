@@ -113,12 +113,16 @@
     return { err: [...new Set(err)], warn, rows, unused, j, ext, tKey, basis, bySpan: !!bySpan, basisLbl, pull };
   }
   /* lldfApply(P, gi, plan, now): writes girders[gi].dfPull (GirderDetail gdLldfApply); returns the girder */
-  function lldfApply(P, gi, plan, now) {
+  function lldfApply(P, gi, plan, now, j) {
     const g = P.girders[gi], u = JSON.parse(JSON.stringify(plan.pull));
     u.source.adoptedAt = now || new Date().toISOString();
     u.source.fields = plan.rows.filter(r => r.nu != null).map(r => r.lbl);
+    if (Number.isInteger(j)) { window.SBDModel.lineOvEntry(P, gi, j).dfPull = u; return g; }   // SBLO (SB-9): pulled for one line of the type (girders[gi].lineOv[j].dfPull)
     g.dfPull = u; return g;
   }
+  /* lovT() (SBLO, 2026-11-13; engineer decision SB-9): the line the pull goes to: the Loads tab's line when "Line … only" is chosen there
+     ({ gi, j }), else null (the girder type, as before) */
+  const lovT = () => (ctx && ctx.lov ? ctx.lov() : null);
 
   /* ---------- 3. superReactions ---------- */
   /* lines(P): for each cross-section girder j, the plate girder that is analyzed for it: { j, gi, P (the project to analyze), own }.
@@ -279,7 +283,8 @@
   const lastSent = (P, ch) => { try { const H = HS(); if (!H) return null; const pid = H.pidOf({ name: String((P.project || {}).name || ''), bridgeId: '' }); if (!pid) return null;
     const t = localStorage.getItem(H.copyKey(ch, GEO.id, pid)); const p = t ? JSON.parse(t) : null; return p && p.producedAt ? p : null; } catch (e) { return null; } };
   const lldfAt = () => { try { return localStorage.getItem(BX().NS + LLDF.ch + '.updatedAt') || ''; } catch (e) { return ''; } };
-  function card(P, ui) {
+  function card(P0, ui) {
+    const T = lovT(), P = T && T.gi === ((ui && ui.g) || 0) ? window.SBDModel.atLine(P0, T.gi, T.j) : P0;   // SBLO: the line's view when the pull goes to one line
     const g = P.girders[(ui && ui.g) || 0] || P.girders[0], u = g && g.dfPull, nb = P.xs ? Math.round(P.xs.nb) : 0, j = g && AN() ? AN().lineOf(P, g) : 0;
     const pname = P.project && String(P.project.name || '').trim();
     const src = u ? `<p class="note"><b>Last received for ${esc(g.label || g.id)}:</b> ${u.use === false ? '<b>not in use</b> (' : ''}pulled from ${esc(u.source.producer)} (${esc(u.source.producerFile)}), produced ${esc(when(u.source.producedAt))}${u.source.project ? `, project "${esc(u.source.project)}"` : ''}; pulled ${esc(when(u.source.adoptedAt))}, ${esc(u.source.basisLbl)}${u.use === false ? ')' : ''}.${u.source.line !== j ? ` <b>Check:</b> this plate girder now takes cross-section girder G${j + 1}; the factors were pulled for ${esc(u.source.girder)}. Pull again.` : ''} Worked in the <a href="#" data-ho="goAn">Analysis tab</a> (Live load distribution factors).</p>`
@@ -295,7 +300,7 @@
       ${row('Shared project info', 'from any tool', `<div class="fRow"><button type="button" data-ho="pmUse">Use shared project info</button></div>
         <p class="note">Fills project name, number, client, designer, checker and date from bridgeSuite.v1.projectMeta. You see what changes and confirm first.</p>`)}
       ${row('Live load distribution factors', 'from LL &amp; DL Distribution (lldf.html)', `${gSel}<div class="fRow"><button type="button" data-ho="lldfPull">Pull from LL &amp; DL <span class="badge"${isNew() ? '' : ' hidden'} data-ho-new>new data</span></button> <button type="button" data-ho="lldfFile">Import hand-off (JSON)</button>${u ? ` <button type="button" data-ho="lldfDrop">Stop using pulled factors</button>` : ''}<input type="file" data-ho="lldfInput" accept=".json,application/json" hidden></div>
-        <p class="note">Fills the live load distribution factors of the plate girder selected ${P.girders.length > 1 ? 'here (the same choice as' : '(as'} the Girders &amp; plates tab: ${esc(g ? g.label || g.id : '')}, cross-section girder G${j + 1} of ${nb}) from those LL &amp; DL Distribution publishes. You see what changes and confirm first.</p>
+        <p class="note">Fills the live load distribution factors of the plate girder selected ${P.girders.length > 1 ? 'here (the same choice as' : '(as'} the Girders &amp; plates tab: ${esc(g ? g.label || g.id : '')}, cross-section girder G${j + 1} of ${nb}) from those LL &amp; DL Distribution publishes. ${T && T.gi === ((ui && ui.g) || 0) ? `<b>For line G${T.j + 1} only</b> (the Loads tab's "Entered values for" choice); the type's other lines keep their factors. ` : (P.girders[(ui && ui.g) || 0] || {}).lines ? 'For the girder type, every line of it (to pull for one line only, choose "Line … only" on the Loads tab). ' : ''}You see what changes and confirm first.</p>
         ${st ? `<p class="note"><b>Status:</b> ${st}.</p>` : ''}${src}`)}
       <div class="hoGrp">Send to other tools</div>
       ${row('Shared project info', 'to every tool', `<div class="fRow"><button type="button" data-ho="pmShare">Share project info</button></div>
@@ -313,12 +318,12 @@
     dlg.innerHTML = html; if (!dlg.open) { try { dlg.showModal(); } catch (e) { dlg.setAttribute('open', ''); } }
   }
   function showLldf() {
-    const P = ctx.getP(), gi = ctx.ui().g || 0, pl = pend.pl, plan = lldfPlan(P, gi, pl, pend.basis), notes = [].concat(Array.isArray(pl.notes) ? pl.notes : [], pl.note ? [pl.note] : []);
+    const P0 = ctx.getP(), gi = ctx.ui().g || 0, T = lovT(), P = T && T.gi === gi ? window.SBDModel.atLine(P0, gi, T.j) : P0, pl = pend.pl, plan = lldfPlan(P, gi, pl, pend.basis), notes = [].concat(Array.isArray(pl.notes) ? pl.notes : [], pl.note ? [pl.note] : []);
     const sameNb = Number(pl.Nb) === Math.round(P.xs.nb), li = a => a.length ? `<ul>${a.map(s => `<li>${esc(s)}</li>`).join('')}</ul>` : '', g = P.girders[gi];
     pend.plan = plan;
     dialog(`<h3>Pull from LL &amp; DL Distribution</h3>
       <p><b>From:</b> ${esc(pl.producer || 'LL & DL Distribution')} (${esc(pl.producerFile || 'lldf.html')}), produced ${esc(when(pl.producedAt))}${projOf(pl) ? `, project "${esc(projOf(pl))}"` : ''}; via ${esc(pend.via)}.</p>
-      <p><b>For:</b> ${esc(g.label || g.id)}, cross-section girder G${plan.j != null ? plan.j + 1 : '?'}${plan.j != null ? ` (${plan.ext ? 'exterior' : 'interior'})` : ''}, the plate girder selected on the Girders &amp; plates tab.</p>
+      <p><b>For:</b> ${esc(g.label || g.id)}, cross-section girder G${plan.j != null ? plan.j + 1 : '?'}${plan.j != null ? ` (${plan.ext ? 'exterior' : 'interior'})` : ''}, the plate girder selected on the Girders &amp; plates tab${T && T.gi === gi ? ` — <b>for line G${T.j + 1} only</b> (the Loads tab's "Entered values for: Line G${T.j + 1} only"; the type's other lines keep their factors)` : ''}.</p>
       <fieldset style="border:0;padding:0;margin:6px 0"><legend><b>Which LL &amp; DL factors to use</b></legend>
         <label style="display:block"><input type="radio" name="hoBasis" value="type"${pend.basis === 'type' ? ' checked' : ''}> Envelope of LL &amp; DL's ${plan.tKey || 'interior / exterior'} girders (default; does not depend on the girder numbering)</label>
         <label style="display:block"><input type="radio" name="hoBasis" value="beam"${pend.basis === 'beam' ? ' checked' : ''}${sameNb ? '' : ' disabled'}> LL &amp; DL's beam with the same number${sameNb ? '' : ' (needs the same number of girders)'}</label></fieldset>
@@ -329,8 +334,8 @@
       <div class="fRow"><button type="button" data-hod="apply"${plan.err.length ? ' disabled' : ''}>Apply these factors</button> <button type="button" data-hod="cancel">Cancel</button></div>`);
   }
   function applyPend() {
-    if (!pend || !pend.plan || pend.plan.err.length) return; const P = ctx.getP(), gi = ctx.ui().g || 0, pl = pend.pl;
-    lldfApply(P, gi, pend.plan); try { BX().markAdopted(LLDF.ch, RX, pl.producedAt); } catch (e) { /* marker only */ }
+    if (!pend || !pend.plan || pend.plan.err.length) return; const P = ctx.getP(), gi = ctx.ui().g || 0, pl = pend.pl, T = lovT();
+    lldfApply(P, gi, pend.plan, null, T && T.gi === gi ? T.j : null); try { BX().markAdopted(LLDF.ch, RX, pl.producedAt); } catch (e) { /* marker only */ }
     pend = null; dlg.close(); ctx.changed(true);
   }
   function onClick(e, P, ui) {
@@ -349,7 +354,9 @@
       pend = { pl: r.payload, via: 'shared browser storage', basis: 'type' }; showLldf(); return false; }
     if (a === 'lldfFile') { const f = b.parentNode.querySelector('[data-ho="lldfInput"]'); if (f) { f.value = ''; f.onchange = () => { const file = f.files && f.files[0]; if (!file) return;
       BX().importFile(file, LLDF.schema, LLDF.ver, r => { if (r.error) { alert(`Cannot import the hand-off file: ${r.error}`); return; } pend = { pl: r.payload, via: `file ${file.name}`, basis: 'type' }; showLldf(); }); }; f.click(); } return false; }
-    if (a === 'lldfDrop') { const g = P.girders[ui.g || 0]; if (!g || !g.dfPull) return false; if (!confirm(`Stop using the factors pulled from LL & DL for ${g.label || g.id}? Its factors come from the Loads & LLDF tab again (Undo restores them).`)) return false; delete g.dfPull; return true; }
+    if (a === 'lldfDrop') { const T = lovT(), o = T && T.gi === (ui.g || 0) ? window.SBDModel.lineOv(P, T.gi, T.j) : null;   // SBLO: the line's own pull first
+      if (o && o.dfPull) { if (!confirm(`Stop using the factors pulled from LL & DL for line G${T.j + 1} only? The line takes the type's factors again (Undo restores them).`)) return false; window.SBDModel.lineOvReset(P, T.gi, T.j, 'dfPull'); return true; }
+      const g = P.girders[ui.g || 0]; if (!g || !g.dfPull) return false; if (!confirm(`Stop using the factors pulled from LL & DL for ${g.label || g.id}? Its factors come from the Loads & LLDF tab again (Undo restores them).`)) return false; delete g.dfPull; return true; }
     if (a === 'subSend' || a === 'subFile') { subSend(P, a === 'subFile'); return false; }
     return false;
   }

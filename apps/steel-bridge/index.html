@@ -166,6 +166,7 @@
   .sec>.secBody{padding:8px 10px;}
   .fRow{display:flex;align-items:center;gap:6px;margin:4px 0;flex-wrap:wrap;}
   .fRow label{min-width:170px;font-size:10pt;}
+  .lov-mk{color:#8a4b00;font-weight:600;font-size:9pt;white-space:nowrap;} .fRow.lov-on input,.fRow.lov-on select{border-color:#c47a1d;background:#fff8ef;}   /* SBLO: a field entered for the line only */
   /* QAF (2026-11-09): a long label wraps inside its own column instead of pushing its input or unit onto a line of their own (display only);
      a drop-down widens into the free space of its row up to its longest choice, so its text is not cut at 110 px */
   .fRow>label:first-child{flex:0 1 auto;max-width:calc(100% - 150px);}
@@ -436,12 +437,24 @@
   const lnSel = () => { const gi = Math.min(ui.g, P.girders.length - 1), L = M.typeLines(P, gi); return L.includes(ui.ln) ? ui.ln : M.designLine(P, P.girders[gi]); };
   let viewMemo = null;
   const loadsView = () => { const gi = Math.min(ui.g, P.girders.length - 1), j = lnSel();   // SB-2 PR 2: the same view object while P, the type and the line stay
-    if (!viewMemo || viewMemo.P !== P || viewMemo.gi !== gi || viewMemo.j !== j) viewMemo = { P, gi, j, V: M.atLine(P, gi, j) }; return viewMemo.V; };
+    const ov = !!M.lineOv(P, gi, j);   // SBLO: a view again when the line's overrides start or end (the design line's view is P itself without them)
+    if (!viewMemo || viewMemo.P !== P || viewMemo.gi !== gi || viewMemo.j !== j || viewMemo.ov !== ov) viewMemo = { P, gi, j, ov, V: M.atLine(P, gi, j) }; return viewMemo.V; };
   function loadsPick() {
     const gi = Math.min(ui.g, P.girders.length - 1), L = M.typeLines(P, gi), j = lnSel();
     return card('Girder type and line', `<div class="fRow"><label for="i__gLd">Girder type</label><select id="i__gLd">${P.girders.map((q, i) => `<option value="${i}"${i === gi ? ' selected' : ''}>${esc(q.label || q.id)}</option>`).join('')}</select><span class="unit">the same choice as the Girders &amp; plates tab</span></div>
       <div class="fRow"><label for="i__lnLd">Line</label><select id="i__lnLd">${(L.includes(j) ? L : [j, ...L]).map(k => `<option value="${k}"${k === j ? ' selected' : ''}>${lnName(k)}${k === M.designLine(P, P.girders[gi]) ? ' (design line)' : ''}</option>`).join('')}</select><span class="unit">${L.length > 1 ? `the type is on ${lnList(L)}` : L.length ? '' : 'no line assigned: its design line'}</span></div>
-      <p class="note">The calculated values below are those of line ${lnName(j)}. Entered values and the override boxes belong to the type and apply on every line of it.</p>${M.unassigned(P).length ? `<p class="note">Line(s) ${lnList(M.unassigned(P))} have no girder type: <a href="#" data-itgo="gird">Girders &amp; plates tab</a>.</p>` : ''}`);
+      ${lovPick(gi, j)}${M.unassigned(P).length ? `<p class="note">Line(s) ${lnList(M.unassigned(P))} have no girder type: <a href="#" data-itgo="gird">Girders &amp; plates tab</a>.</p>` : ''}`);
+  }
+  /* SBLO (2026-11-13; engineer decisions SB-7, SB-9, SB-10): what the entered values of the Loads tab (and the LL & DL pull, the Custom demand
+     tables) are entered for: the girder type (every line of it; ui.lov off, the default) or the line of the picker only (ui.lov on: the line's
+     overrides, girders[gi].lineOv[j]; a blank field takes the type's value; a marker on each field the line overrides; "Reset to the type"). */
+  const lovOn = () => !!ui.lov;
+  const lovCtx = () => { if (!lovOn()) return null; const gi = Math.min(ui.g, P.girders.length - 1), j = lnSel(); return { gi, j, o: (P.girders[gi].lineOv || {})[String(j)] || {}, T: P.girders[gi] }; };
+  function lovPick(gi, j) {
+    const o = M.lineOv(P, gi, j), ovL = M.typeLines(P, gi).filter(k => M.lineOv(P, gi, k)), ty = esc(tyName(gi));
+    return `<div class="fRow"><label for="i__lovLd">Entered values for</label><select id="i__lovLd"><option value="type"${lovOn() ? '' : ' selected'}>The girder type ${ty} (every line of it)</option><option value="line"${lovOn() ? ' selected' : ''}>Line ${lnName(j)} only (overrides the type)</option></select></div>
+      <p class="note">The calculated values below are those of line ${lnName(j)}. ${lovOn() ? `Entered here: line ${lnName(j)} only. A blank field takes the type's value (shown in grey); a field marked <span class="lov-mk">● ${lnName(j)}</span> is this line's own. The LL &amp; DL pull (Project tab) and the Custom demand tables of the output tabs also go to this line while this is chosen.` : `Entered here: the type ${ty}, on every line of it, except where a line has its own value (choose "Line … only").`}
+      ${ovL.length ? ` Lines with their own values: ${ovL.map(k => `<b>${lnName(k)}</b>`).join(', ')}.` : ''}</p>${o ? `<div class="fRow"><button type="button" data-lovreset="${j}">Reset line ${lnName(j)} to the type</button><span class="unit">removes every value entered for this line only (loads, factors, override boxes, the LL &amp; DL pull, Custom demands)</span></div>` : ''}`;
   }
   function panes() {
     const g = P.girders[ui.g] || P.girders[0];
@@ -476,7 +489,7 @@
           </tbody></table></div><button type="button" id="bAddSeg">Add segment</button><p class="note">Segments are contiguous: each starts where the one before ends. Plate thicknesses may be typed as decimals (0.5625).</p>`),
       framing: window.SBDFramingUI.inputs(P, { num, sel, card, esc }, ui),   // framing.* and crossframes.* (the wind card: Loads tab)
       loads: xsp.ws + xsp.extra + xsp.dist + window.SBDFramingUI.windCard(P, { num, sel, card, esc })
-        + loadsPick() + window.SBDAnalysisUI.inputs(loadsView(), Math.min(ui.g, P.girders.length - 1)),   // AIN (2026-11-09): the analysis inputs, moved here from the Analysis output tab
+        + loadsPick() + window.SBDAnalysisUI.inputs(loadsView(), Math.min(ui.g, P.girders.length - 1), { lov: lovCtx() }),   // AIN (2026-11-09): the analysis inputs, moved here from the Analysis output tab
       stf: window.SBDShearUI.inputs(P, { num, sel, card, esc }, ui),
       fs: window.SBDFatigueUI.inputs(P, { num, sel, card, esc }, ui),
       spl: window.SBDSplicesUI.inputs(P, { num, sel, card, esc }, ui),
@@ -523,7 +536,8 @@
     const el = e.target;
     if (el.id === 'i__g' || el.id === 'i__gHo' || el.id === 'i__gLd') { ui.g = +el.value; ui.seg = 0; delete ui.ln; delAsk = null; saveUi(); drawInputs(); markStale(); return; }
     if (el.id === 'i__lnLd') { ui.ln = +el.value; saveUi(); drawInputs(); return; }   // SB-2: the line of the Loads tab's cards (display only)
-    if (window.SBDAnalysisUI.onInputChange(el, P, Math.min(ui.g, P.girders.length - 1))) { changed(true); return; }   // AIN: the analysis inputs (ui/analysis.js)
+    if (el.id === 'i__lovLd') { ui.lov = el.value === 'line'; saveUi(); drawInputs(); return; }   // SBLO: entered for the type or the line only (UI choice, sbd2.ui)
+    if (window.SBDAnalysisUI.onInputChange(el, P, Math.min(ui.g, P.girders.length - 1), { lov: lovOn() ? { j: lnSel() } : null })) { changed(true); return; }   // AIN: the analysis inputs (ui/analysis.js)
     if (el.dataset.path === 'xs.nb') { const nb0 = M.lineTypes(P).length; if (UL.onChange(el, P)) { changed(true); nbOffer(nb0); return; } }   // SB-2: N_b changed: offer to assign the new lines
     if (UL.onChange(el, P)) { changed(true); return; }
     if (el.dataset.ltype != null) { if (el.value !== '') { M.assignLine(P, +el.dataset.ltype, +el.value); changed(true); } return; }   // SB-2: Cross-section tab, the type of a line
@@ -540,6 +554,7 @@
   });
   $('inPanes').addEventListener('click', e => {
     const og = e.target.closest('[data-gotab]'); if (og) { e.preventDefault(); const b = document.querySelector(`#tabBar [data-otab="${og.dataset.gotab}"]`); if (b) b.click(); return; }   // AIN: a link to an output tab
+    const lr = e.target.closest('[data-lovreset]'); if (lr) { const gi = Math.min(ui.g, P.girders.length - 1), j = +lr.dataset.lovreset; if (confirm(`Reset line ${lnName(j)} to the girder type ${tyName(gi)}? Every value entered for this line only is removed.`)) { M.lineOvReset(P, gi, j); changed(true); } return; }   // SBLO
     const ig = e.target.closest('[data-itgo]'); if (ig) { e.preventDefault(); ui.itab = ig.dataset.itgo; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; return; }   // TABR: a link to another input tab
     if (UL.onClick(e, P)) { changed(true); const od = UL.takeOwnerDefaults(); if (od) showOwnDef(od); return; }
     if (window.SBDShearUI.onClick(e, P, ui)) { changed(true); return; }
@@ -568,7 +583,8 @@
     if (!restoring) { const t = JSON.stringify(P); if (t !== snap) { undoS.push(snap); if (undoS.length > UNDO_MAX) undoS.shift(); redoS.length = 0; snap = t; stepNo++; if (toastStep !== stepNo) closeToast(); } }   // one undo step per input change; a message with an Undo button closes when a later change is made
     syncBar();
   }
-  if (window.SBDHandoffUI) window.SBDHandoffUI.init({ getP: () => P, ui: () => ui, changed: r => changed(r) });   // B2: the LL & DL pull dialog applies after its confirm
+  if (window.SBDCustomDemands && window.SBDCustomDemands.setLovTarget) window.SBDCustomDemands.setLovTarget(() => (lovOn() ? { gi: Math.min(ui.g, P.girders.length - 1), j: lnSel() } : null));   // SBLO (SB-10): the Custom demand edits for one line
+  if (window.SBDHandoffUI) window.SBDHandoffUI.init({ getP: () => P, ui: () => ui, changed: r => changed(r), lov: () => (lovOn() ? { gi: Math.min(ui.g, P.girders.length - 1), j: lnSel() } : null) });   // SBLO: the pull for one line   // B2: the LL & DL pull dialog applies after its confirm
   /* ---------- undo / redo (session only: nothing is stored) ---------- */
   function restore(from, to) {
     if (!from.length) return; to.push(snap); snap = from.pop(); P = JSON.parse(snap);

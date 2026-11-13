@@ -8123,3 +8123,483 @@ index 5b633f0..3fff473 100644
        <div class="tscroll fx-list"><table class="tbl"><thead><tr><th>Panel (ft)</th><th>d<sub>o</sub> (in)</th><th>Type</th><th>k</th><th>C</th><th>φV<sub>n</sub> (kip)</th><th>Eq.</th><th>V<sub>u</sub> (kip)</th><th>Ratio</th></tr></thead><tbody>
        ${R.panels.rows.map((q, i) => `<tr data-sh="pan:${i}" class="${S.sel && S.sel.k === 'pan' && S.sel.i === i ? 'sel' : ''}${q === R.panels.gov && R.gm.dem ? ' fx-gov' : ''}"><td>${fmt(q.p, 2)}–${fmt(q.q, 2)}</td><td>${fmt(q.d, 2)}</td><td>${q.end ? 'end' : q.stiff ? 'interior' : 'unstiffened'}</td><td>${fmt(q.k, 3)}</td><td>${fmt(q.C, 4)}</td><td>${fmt(q.phVn, 1)}</td><td>${esc(q.eq.replace(/,.*$/, ''))}</td><td>${R.gm.dem ? fmt(q.Vu, 1) : '—'}</td><td class="${R.gm.dem ? cls(q.r) : ''}">${R.gm.dem ? fmt(q.r, 3) : '—'}</td></tr>`).join('')}
 ```
+
+## 2026-11-13 — PR: sbfu-c-lov (PR #1485: https://github.com/mlococo88/All-Structural/pull/1485) — Per-line values of a girder type: entered loads and factors, the override boxes, the LL & DL pull and the Custom demands entered for one line over the type's (SB-7, SB-9, SB-10) (SBLO; engineer decisions 2026-11-13; new optional saved field with a load migration; no formula changed; results change only where a line value is entered)
+- **Request:** engineer decisions of 2026-11-13: SB-7 entered loads per line as overrides of the girder type (blank = the type's value, a marker on overridden fields, "reset to type"; saved projects: their current values are the type values, results unchanged; new field + migration); SB-9 the LL & DL pull per line with the same pattern (old pulls = the type's); SB-10 Custom demands / imports per line (blank = the type's, then the app's analysis; old = the type's). The Loads tab's type / line picker selects the line; Checks, Summary and hand-offs use each line's effective values.
+- **Change:**
+  - `engine/model.js`: new optional saved field `girders[i].lineOv = { '<line j>': { loadsManual, dfManual, loadsOverride, dfOverride, clOverride, dfPull, custom: { <module>: { mode, rows, sup } } } }` (schema comment, `validate`: an object of line entries). `LO_KEYS`, `lineOv(P, gi, j)` (the line's entry when it overrides anything), `lineOvEntry`, `lineOvReset(P, gi, j, key)`, `effective(g, o, k)` (numbers: the type's object with the line's numeric keys laid over it; the boxes: the line's boolean, else the type's; dfPull: the line's, else the type's), `customAt` (P.custom with the type's entry of a module replaced by the line's table where it has rows), `migrateLineOv(P)` (load migration, run by `importJSON` with `migrateNbList`: a malformed lineOv kept as `lineOvBad`, never discarded; empty entries dropped; a project saved before has none: no change, no notice). `atLine(P, gi, j)`: a line with overrides is a view on the design line too, its girders[gi] reading each overridden field as `effective` and P.custom as `customAt` (read when used); a line without overrides: exactly as before (the design line: P itself).
+  - `engine/autodesign.js` `typeProject`: each line's copy takes its line's effective fields (`lineVals`), so a run computes what the Summary computes on that line.
+  - `index.html` (Loads tab "Girder type and line" card): "Entered values for: the girder type (every line of it) | Line Gj only (overrides the type)" (`sbd2.ui` `lov`, a UI choice; default the type, as before); the lines with values of their own listed; "Reset line Gj to the type". The Loads tab view memo renews when a line's overrides start or end. `ui/analysis.js` `inputs` / `onInputChange` with `opt.lov`: the dead-load, construction live load and distribution factor fields show the line's own values (blank: the type's value in grey as `type: …`), the field marked "● Gj"; the override boxes become "As the girder type (on / off) | On, line Gj | Off, line Gj"; edits go to `lineOv[j]`.
+  - `ui/handoffs.js`: the LL & DL pull goes to the line when "Line Gj only" is chosen (`lldfApply(…, j)` writes `lineOv[j].dfPull`; the plan is made on the line's view; the dialog and card say "for line Gj only"); "Stop using pulled factors" removes the line's pull first.
+  - `ui/demands.js`: with "Line Gj only" the Custom demand table of the type is the line's own (`lineOv[j].custom[module]`, the first edit starts it as a copy of the table in use); the card says which table is used and offers "Reset line Gj to the type". A girderDemands hand-off file is still not saved (page view, as before) and applies to the line on screen.
+  - `report/builders.js` (Analysis, Settings and loads): `lovNote` lists the values entered for the reported line only.
+  - `engine/sheets.js` `results`: the Drawings' per-type results on the type's design line view (`atLine`; P itself without line overrides, so unchanged).
+- **Saved data (§5):** new optional field `girders[i].lineOv` inside the existing sbd2 version 1 format; no key change; migration `migrateLineOv` on load (a project saved before: nothing to migrate, results unchanged). UI state `sbd2.ui.lov` (existing per-tool key).
+- **Governing provision:** none changed. The per-line values are inputs; AASHTO LRFD 10th Ed. Art. 4.6.2.2 (distribution factors) and 3.5 / 3.4.1 (loads) as before.
+- **Check case:** new project, Interior on G2–G4. Interior entered for line G3 only: DC2 = 0.45 klf, DW = 0.31 klf with the dead-load override on; g_M = 0.72, g_V = 0.90 with the factor override on. The analysis of Interior on G3 equals the analysis of a project storing those values on the type itself (engine test, every number identical); Interior on G4 (no values of its own) equals the analysis before. Hand: M_DC2 at a station = 0.45 / (DC2 of the type) × M_DC2 of the type there (linear), likewise DW and LL+IM × 0.72 / g_M.
+- **Unchanged (proof):** a project without `lineOv` (every saved project, every new project): `atLine` returns P itself on the design line and the same view as before elsewhere; `importJSON` adds no notice; tests/engine/girder-types, handoffs, analysis, loads, sb-summary, autodesign-types pass unchanged; the Summary of the smoke tests unchanged.
+- **How verified:** new tests/engine/line-overrides.test.mjs (no overrides as before; effective values per line and per key; the analysis equality above; Auto design's copies; the LL & DL pull and the Custom demands for one line; reset; migration; validate). See the PR for the runs.
+- **Other copies:** none.
+- **Decisions (pending engineer review):** (1) the Loads tab's mode "Entered values for: the type | Line … only" (default the type) decides where the entered values, the LL & DL pull and the Custom demand edits go; (2) a line's override box is a three-way choice (as the type / on / off); (3) a line's Custom demand table, once started, replaces the type's table for that module (rows are not merged); (4) the stored cross-frame point loads (loadsManual.xf) stay per type; (5) a line value is checked as the type's entered values are (no range check on either, as before).
+- **Before / after (exact):**
+```diff
+diff --git a/apps/steel-bridge/engine/autodesign.js b/apps/steel-bridge/engine/autodesign.js
+index 0b41dfc..5f03b4d 100644
+--- a/apps/steel-bridge/engine/autodesign.js
++++ b/apps/steel-bridge/engine/autodesign.js
+@@ -908,10 +908,14 @@
+   const TYPE_LOCK = ['nb', 'oh', 'spl', 'splPl', 'tsSp', 'tsA_b', 'tsA_t', 'tsB_b', 'tsB_t', 'bsA_n', 'bsA_b', 'bsA_t', 'bsB_n', 'bsB_b', 'bsB_t', 'scP', 'scN', 'cf', 'weld'];
+   const typeScope = P => (P.girders || []).some(g => Array.isArray(g.lines)) ? 'each' : 'together';
+   const linesOf = (P, t) => { const M = MD(), L = M.typeLines(P, t); return L.length ? L : [M.designLine(P, P.girders[t])]; };
++  /* lineVals(P, t, j) (SBLO, 2026-11-13): the fields line j overrides for type t (girders[t].lineOv), as its copy in the run reads them (the
++     effective values the Summary works on that line through SBDModel.atLine); {} for a line without overrides (as before) */
++  const lineVals = (P, t, j) => { const M = MD(), o = M && M.lineOv ? M.lineOv(P, t, j) : null; if (!o) return {}; const g = P.girders[t], out = {};
++    M.LO_KEYS.forEach(k => { const v = M.effective(g, o, k); if (v !== undefined) out[k] = clone(v); }); return out; };
+   function typeProject(P, t) {
+     const Q = clone(P), G = P.girders, g = G[t], L = linesOf(P, t), at = [], out = [];   // at[k]: the new indices of old girder k
+     G.forEach((q, k) => { if (k !== t) { at[k] = [out.length]; out.push({ ...clone(q), adFixed: true }); return; }
+-      at[k] = L.map((j, n) => out.push({ ...clone(g), id: n ? `${g.id}@${j + 1}` : g.id, label: L.length > 1 ? `${g.label || g.id} on G${j + 1}` : (g.label || g.id), line: j, lines: [j], adLines: L.slice() }) - 1); });   // SBXF2 (SB-18): adLines, the type's lines (its brace checks use the frames attached to any of them, as the Summary)
++      at[k] = L.map((j, n) => out.push({ ...clone(g), id: n ? `${g.id}@${j + 1}` : g.id, label: L.length > 1 ? `${g.label || g.id} on G${j + 1}` : (g.label || g.id), line: j, lines: [j], adLines: L.slice(), ...lineVals(P, t, j) }) - 1); });   // SBXF2 (SB-18): adLines, the type's lines (its brace checks use the frames attached to any of them, as the Summary)
+     Q.girders = out;
+     const ly = Q.stiffeners && Q.stiffeners.layout; if (ly && Array.isArray(ly.bays)) ly.bays = ly.bays.flatMap(q => (at[+q.g - 1] || []).map(i => ({ ...clone(q), g: i + 1 })));   // by girder number
+     const S = Q.splices; if (S && Array.isArray(S.plates)) S.plates = S.plates.flatMap(q => !q || q.g == null ? [q] : (at[+q.g] || []).map(i => ({ ...clone(q), g: i })));   // by girder index
+diff --git a/apps/steel-bridge/engine/model.js b/apps/steel-bridge/engine/model.js
+index 9cef5eb..0c60b37 100644
+--- a/apps/steel-bridge/engine/model.js
++++ b/apps/steel-bridge/engine/model.js
+@@ -97,6 +97,9 @@
+      girders[i].dfPull (added 2026-11-01, B2 hand-offs; optional): { use, spans: [{ gM, gV, fatM, fatV }], piers: [{ gM }], source: { producer,
+                   producerFile, producedAt, project, adoptedAt, line, girder, basis, basisLbl, fields } }: the factors pulled from LL & DL Distribution
+                   (bridgeSuite.v1.lldf, ui/handoffs.js), laid over this girder's factors field by field (engine/analysis.js dfOf); absent: unchanged
++     girders[i].lineOv (added 2026-11-13, SBLO; engineer decisions SB-7, SB-9, SB-10; optional): the values entered for one line of the type
++                  only, { '<line j>': { loadsManual, dfManual, loadsOverride, dfOverride, clOverride, dfPull, custom: { <module>: { mode, rows, sup } } } },
++                  each over the type's own (a blank / absent value: the type's); absent: the type's values on every line, as before. See lineOv below.
+      -- added 2026-10-29 (constructibility PR), optional, read by engine/constructibility.js (absent = GirderDetail's Deck overhang defaults) --
+      constr:    { oh: { a, hb (in, bracket projections), wOH, tOH (in), wc (kcf), qForm (ksf), wScreed, wRail, wWalk (klf), qCL (ksf), bCL (in),
+                   Pfm (kip per bracket), Rh, Cb, gam: { dc, cl } (not used since 2026-11-01, ETAC: the deck placement factors × η; kept) } }: the overhang
+@@ -296,17 +299,69 @@
+     p.girders.push({ id: 'G2', label: 'Exterior', position: 'exterior', line: 0, lines: [0, nb - 1], beff: tribBeff(p.xs, 0), segments: JSON.parse(JSON.stringify(g.segments)) });
+     return p;
+   }
++  /* ---------- per-line overrides of a girder type (SBLO, 2026-11-13; engineer decisions SB-7, SB-9, SB-10 of 2026-11-13) ----------
++     girders[i].lineOv (optional; absent in every project saved before: the type's values on every line, exactly as before): { '<line j>': {
++       loadsManual: { DC1wet, DC2, DW, CL, UT, UF (klf) }, dfManual: { gM, gMpier, gV, fatM, fatV, gDef } (entered values of that line; a key
++       absent or blank: the type's value), loadsOverride, dfOverride, clOverride (true | false; absent: the type's box), dfPull (the LL & DL
++       factors pulled for that line; absent: the type's pull), custom: { <module>: { mode, rows, sup } } (the Custom demands of that line;
++       absent or no rows: the type's table, then the app's analysis) } }. The type's own fields (loadsManual, dfManual, the boxes, dfPull,
++       custom[module][type id]) stay the type values: a project saved before this field reads them on every line, results unchanged.
++     LO_KEYS: the girder fields a line can override. lineOv(P, gi, j): the line's entry when it overrides anything, else null. lineOvEntry(P,
++     gi, j): the entry, created (a user action only). lineOvReset(P, gi, j, key): removes the line's override of key (every key when absent).
++     effective(g, o, k): the value of field k of type g on a line with overrides o. migrateLineOv(P): the load-time migration (§5): an entry
++     of a line beyond N_b is kept (it comes back with the line); a malformed lineOv (not an object) is moved to lineOvBad, never discarded;
++     empty entries dropped; returns a one-line notice when it changed the project, else null (a project saved before: never). */
++  const LO_KEYS = ['loadsManual', 'dfManual', 'loadsOverride', 'dfOverride', 'clOverride', 'dfPull'];
++  const LO_NUM = ['loadsManual', 'dfManual'], LO_BOOL = ['loadsOverride', 'dfOverride', 'clOverride'];
++  const numKeys = o => o && typeof o === 'object' ? Object.keys(o).filter(k => isNum(o[k])) : [];
++  function loHas(o) {
++    if (!o || typeof o !== 'object') return false;
++    return LO_NUM.some(k => numKeys(o[k]).length) || LO_BOOL.some(k => typeof o[k] === 'boolean') || !!(o.dfPull && typeof o.dfPull === 'object')
++      || !!(o.custom && Object.values(o.custom).some(e => e && Array.isArray(e.rows) && e.rows.length));
++  }
++  function lineOv(P, gi, j) { const g = ((P && P.girders) || [])[gi], o = g && g.lineOv && typeof g.lineOv === 'object' ? g.lineOv[String(j)] : null; return loHas(o) ? o : null; }
++  function lineOvEntry(P, gi, j) { const g = P.girders[gi]; if (!g.lineOv || typeof g.lineOv !== 'object') g.lineOv = {}; const k = String(j); if (!g.lineOv[k] || typeof g.lineOv[k] !== 'object') g.lineOv[k] = {}; return g.lineOv[k]; }
++  function lineOvReset(P, gi, j, key) {
++    const g = ((P && P.girders) || [])[gi], L = g && g.lineOv; if (!L || !L[String(j)]) return; const o = L[String(j)];
++    if (key == null) delete L[String(j)]; else if (key.startsWith('custom.')) { if (o.custom) delete o.custom[key.slice(7)]; } else delete o[key];
++    if (L[String(j)] && !loHas(L[String(j)])) delete L[String(j)]; if (!Object.keys(L).length) delete g.lineOv;
++  }
++  function effective(g, o, k) {
++    if (!o) return g[k];
++    if (LO_NUM.includes(k)) { const L = o[k], ks = numKeys(L); if (!ks.length) return g[k]; const out = { ...(g[k] || {}) }; ks.forEach(q => { out[q] = L[q]; }); return out; }
++    if (LO_BOOL.includes(k)) return typeof o[k] === 'boolean' ? o[k] : g[k];
++    if (k === 'dfPull') return o.dfPull && typeof o.dfPull === 'object' ? o.dfPull : g[k];
++    return g[k];
++  }
++  /* customAt(P, g, o): P.custom as seen on the line (each module's entry of the type's id replaced by the line's, where it has rows) */
++  function customAt(P, g, o) {
++    const C = P.custom, own = o && o.custom ? Object.keys(o.custom).filter(m => o.custom[m] && Array.isArray(o.custom[m].rows) && o.custom[m].rows.length) : [];
++    if (!own.length) return C; const out = { ...(C || {}) }, id = String(g.id || ''); own.forEach(m => { out[m] = { ...(out[m] || {}), [id]: o.custom[m] }; }); return out;
++  }
++  function migrateLineOv(P) {
++    let ch = false; ((P && P.girders) || []).forEach(g => { if (g.lineOv == null) return;
++      if (typeof g.lineOv !== 'object' || Array.isArray(g.lineOv)) { g.lineOvBad = g.lineOv; delete g.lineOv; ch = `Girder type ${g.label || g.id}: the per-line values could not be read; kept in the file as lineOvBad (not used).`; return; }
++      Object.keys(g.lineOv).forEach(k => { if (!loHas(g.lineOv[k])) { delete g.lineOv[k]; ch = ch || null; } }); if (!Object.keys(g.lineOv).length) delete g.lineOv; });
++    return ch || null;
++  }
+   /* atLine(P, gi, j): P as seen with type gi on line j (a read view: girders[gi].line reads j; every write goes to P itself). P itself when
+-     j is the type's design line, so the design line's results are those of P exactly. */
++     j is the type's design line, so the design line's results are those of P exactly.
++     SBLO (2026-11-13): with overrides of line j (lineOv), the view's girders[gi] reads each overridden field as effective() (and P.custom as
++     customAt) — on the design line too; a line without overrides as before (the design line: P itself). */
+   function atLine(P, gi, j) {
+-    const g = P && P.girders && P.girders[gi]; if (!g || !Number.isInteger(j) || j === designLine(P, g)) return P;
+-    const gp = new Proxy(g, { get: (t, k) => k === 'line' ? j : Reflect.get(t, k), has: (t, k) => k === 'line' || Reflect.has(t, k),
+-      ownKeys: t => { const K = Reflect.ownKeys(t); return K.includes('line') ? K : [...K, 'line']; },
+-      getOwnPropertyDescriptor: (t, k) => k === 'line' ? { value: j, writable: true, enumerable: true, configurable: true } : Reflect.getOwnPropertyDescriptor(t, k) });
++    const g = P && P.girders && P.girders[gi]; if (!g || !Number.isInteger(j) || (j === designLine(P, g) && !lineOv(P, gi, j))) return P;
++    const O = () => lineOv(P, gi, j), ok = k => k === 'line' || (LO_KEYS.includes(k) && !!O() && effective(g, O(), k) !== undefined), val = k => k === 'line' ? j : effective(g, O(), k);   // read when used: a value entered later shows
++    const gp = new Proxy(g, { get: (t, k) => ok(k) ? val(k) : Reflect.get(t, k), has: (t, k) => ok(k) || Reflect.has(t, k),
++      ownKeys: t => { const K = Reflect.ownKeys(t); return [...K, ...['line', ...LO_KEYS].filter(k => ok(k) && !K.includes(k))]; },
++      getOwnPropertyDescriptor: (t, k) => ok(k) ? { value: val(k), writable: true, enumerable: true, configurable: true } : Reflect.getOwnPropertyDescriptor(t, k) });
+     const ga = new Proxy(P.girders, { get: (t, k) => String(k) === String(gi) ? gp : Reflect.get(t, k) });
+-    return new Proxy(P, { get: (t, k) => k === 'girders' ? ga : Reflect.get(t, k) });
++    const cu = () => { const o = O(); return o && o.custom ? customAt(P, g, o) : P.custom; }, hasC = () => cu() !== undefined;
++    return new Proxy(P, { get: (t, k) => k === 'girders' ? ga : k === 'custom' ? cu() : Reflect.get(t, k), has: (t, k) => (k === 'custom' && hasC()) || Reflect.has(t, k),
++      ownKeys: t => { const K = Reflect.ownKeys(t); return K.includes('custom') || !hasC() ? K : [...K, 'custom']; },
++      getOwnPropertyDescriptor: (t, k) => k === 'custom' && hasC() ? { value: cu(), writable: true, enumerable: true, configurable: true } : Reflect.getOwnPropertyDescriptor(t, k) });
+   }
+ 
++
+   const isNum = v => typeof v === 'number' && isFinite(v);
+   /* equalSpacing(xs) (EQSP, 2026-11-09; engineer's definition 2026-11-09): equally spaced girders from the exterior girder spacing.
+      S = W_cc / (N_b − 1): W_cc the exterior girder spacing (℄ to ℄ of the two exterior girders, ft), N_b − 1 the number of bays.
+@@ -354,6 +409,7 @@
+       if (!g.id || ids.has(g.id)) E(`${gp}.id`, 'Each girder needs its own id.'); ids.add(g.id);
+       if (!['interior', 'exterior'].includes(g.position)) E(`${gp}.position`, 'Position must be "interior" or "exterior".');
+       if (g.lines != null && !(Array.isArray(g.lines) && g.lines.every(j => Number.isInteger(j) && j >= 0))) E(`${gp}.lines`, `${g.label || g.id}: the girder lines of the type must be a list of line numbers.`);   // SB-2
++      if (g.lineOv != null && (typeof g.lineOv !== 'object' || Array.isArray(g.lineOv) || Object.keys(g.lineOv).some(k => !/^\d+$/.test(k) || !g.lineOv[k] || typeof g.lineOv[k] !== 'object'))) E(`${gp}.lineOv`, `${g.label || g.id}: the per-line values must be an object of line entries.`);   // SBLO
+       if (d.composite) pos(g.beff, `${gp}.beff`, 'Effective flange width');
+       const S = Array.isArray(g.segments) ? g.segments : [];
+       if (!S.length) E(`${gp}.segments`, `${g.label || g.id}: enter at least one plate segment.`);
+@@ -530,7 +586,7 @@
+     if (legacyKind(obj)) return importLegacy(obj);
+     if (!obj || obj.schema !== SCHEMA) return { ok: false, error: 'Not a Steel Bridge Design (sbd2) project file.' };
+     let p; try { p = migrate(obj); } catch (e) { return { ok: false, error: e.message }; }
+-    const notes = [migrateNbList(p)].filter(Boolean);   // field migrations within version 1 (2026-11-02)
++    const notes = [migrateNbList(p), migrateLineOv(p)].filter(Boolean);   // field migrations within version 1 (2026-11-02; SBLO 2026-11-13: per-line values)
+     const v = validate(p);
+     return { ok: true, project: p, errors: v.errors, warnings: v.warnings, notes };
+   }
+@@ -560,5 +616,5 @@
+      (ownerRules.owner) when it is not AASHTO, else '' (as before the owner card moved to the Project tab). Display only; nothing computed or saved. */
+   const clientName = P => { const t = String(((P || {}).project || {}).owner == null ? '' : P.project.owner).trim(), o = ((P || {}).ownerRules || {}).owner;
+     return t || (o && o !== 'AASHTO' ? o : ''); };
+-  window.SBDModel = { clientName, SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, newProject, designLine, typeLines, lineTypes, unassigned, isExtLine, tribBeff, setLines, assignLine, addType, deleteType, atLine, defaultXs, equalSpacing, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, migrateNbList, legacyKind, importLegacy, exportJSON, importJSON, save, load };
++  window.SBDModel = { clientName, SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, newProject, designLine, typeLines, lineTypes, unassigned, isExtLine, tribBeff, setLines, assignLine, addType, deleteType, atLine, LO_KEYS, lineOv, lineOvEntry, lineOvReset, effective, customAt, migrateLineOv, defaultXs, equalSpacing, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, migrateNbList, legacyKind, importLegacy, exportJSON, importJSON, save, load };
+ })();
+diff --git a/apps/steel-bridge/engine/sheets.js b/apps/steel-bridge/engine/sheets.js
+index 27d12c7..72de0d5 100644
+--- a/apps/steel-bridge/engine/sheets.js
++++ b/apps/steel-bridge/engine/sheets.js
+@@ -54,7 +54,8 @@
+     if (AN) AN.analyzeGirder = (P_, gi, o) => { if (P_ !== P) return orig(P_, gi, o); const k = gi + '|' + JSON.stringify(o || {}); if (!memo.has(k)) memo.set(k, orig(P_, gi, o)); return memo.get(k); };
+     try {
+       pgs.forEach(pg => { const r = { pg, err: {} };
+-        try { const B = window.SBDReportData.compute(P, pg); r.B = B; Object.assign(r.err, B.err); r.an = B.an || null; r.spl = B.spl || null; r.fat = B.fat || null;
++        try { const MD = window.SBDModel, Pv = MD && MD.atLine && P.girders[pg] ? MD.atLine(P, pg, MD.designLine(P, P.girders[pg])) : P;   // SBLO: the design line's own values (P itself without line overrides)
++          const B = window.SBDReportData.compute(Pv, pg); r.B = B; Object.assign(r.err, B.err); r.an = B.an || null; r.spl = B.spl || null; r.fat = B.fat || null;
+           try { r.gov = window.SBDReportBuild.model(B).gov; } catch (e) { r.err.sum = e.message; } } catch (e) { r.err.all = e.message; }
+         try { const w = window.SBDWeldsUI.build({ P, g: pg }); if (w.err) r.err.wt = w.err; else r.wt = w; } catch (e) { r.err.wt = e.message; }
+         out.pg[pg] = r; });
+diff --git a/apps/steel-bridge/index.html b/apps/steel-bridge/index.html
+index 11f0bc0..e71ccbd 100644
+--- a/apps/steel-bridge/index.html
++++ b/apps/steel-bridge/index.html
+@@ -166,6 +166,7 @@
+   .sec>.secBody{padding:8px 10px;}
+   .fRow{display:flex;align-items:center;gap:6px;margin:4px 0;flex-wrap:wrap;}
+   .fRow label{min-width:170px;font-size:10pt;}
++  .lov-mk{color:#8a4b00;font-weight:600;font-size:9pt;white-space:nowrap;} .fRow.lov-on input,.fRow.lov-on select{border-color:#c47a1d;background:#fff8ef;}   /* SBLO: a field entered for the line only */
+   /* QAF (2026-11-09): a long label wraps inside its own column instead of pushing its input or unit onto a line of their own (display only);
+      a drop-down widens into the free space of its row up to its longest choice, so its text is not cut at 110 px */
+   .fRow>label:first-child{flex:0 1 auto;max-width:calc(100% - 150px);}
+@@ -436,12 +437,24 @@
+   const lnSel = () => { const gi = Math.min(ui.g, P.girders.length - 1), L = M.typeLines(P, gi); return L.includes(ui.ln) ? ui.ln : M.designLine(P, P.girders[gi]); };
+   let viewMemo = null;
+   const loadsView = () => { const gi = Math.min(ui.g, P.girders.length - 1), j = lnSel();   // SB-2 PR 2: the same view object while P, the type and the line stay
+-    if (!viewMemo || viewMemo.P !== P || viewMemo.gi !== gi || viewMemo.j !== j) viewMemo = { P, gi, j, V: M.atLine(P, gi, j) }; return viewMemo.V; };
++    const ov = !!M.lineOv(P, gi, j);   // SBLO: a view again when the line's overrides start or end (the design line's view is P itself without them)
++    if (!viewMemo || viewMemo.P !== P || viewMemo.gi !== gi || viewMemo.j !== j || viewMemo.ov !== ov) viewMemo = { P, gi, j, ov, V: M.atLine(P, gi, j) }; return viewMemo.V; };
+   function loadsPick() {
+     const gi = Math.min(ui.g, P.girders.length - 1), L = M.typeLines(P, gi), j = lnSel();
+     return card('Girder type and line', `<div class="fRow"><label for="i__gLd">Girder type</label><select id="i__gLd">${P.girders.map((q, i) => `<option value="${i}"${i === gi ? ' selected' : ''}>${esc(q.label || q.id)}</option>`).join('')}</select><span class="unit">the same choice as the Girders &amp; plates tab</span></div>
+       <div class="fRow"><label for="i__lnLd">Line</label><select id="i__lnLd">${(L.includes(j) ? L : [j, ...L]).map(k => `<option value="${k}"${k === j ? ' selected' : ''}>${lnName(k)}${k === M.designLine(P, P.girders[gi]) ? ' (design line)' : ''}</option>`).join('')}</select><span class="unit">${L.length > 1 ? `the type is on ${lnList(L)}` : L.length ? '' : 'no line assigned: its design line'}</span></div>
+-      <p class="note">The calculated values below are those of line ${lnName(j)}. Entered values and the override boxes belong to the type and apply on every line of it.</p>${M.unassigned(P).length ? `<p class="note">Line(s) ${lnList(M.unassigned(P))} have no girder type: <a href="#" data-itgo="gird">Girders &amp; plates tab</a>.</p>` : ''}`);
++      ${lovPick(gi, j)}${M.unassigned(P).length ? `<p class="note">Line(s) ${lnList(M.unassigned(P))} have no girder type: <a href="#" data-itgo="gird">Girders &amp; plates tab</a>.</p>` : ''}`);
++  }
++  /* SBLO (2026-11-13; engineer decisions SB-7, SB-9, SB-10): what the entered values of the Loads tab (and the LL & DL pull, the Custom demand
++     tables) are entered for: the girder type (every line of it; ui.lov off, the default) or the line of the picker only (ui.lov on: the line's
++     overrides, girders[gi].lineOv[j]; a blank field takes the type's value; a marker on each field the line overrides; "Reset to the type"). */
++  const lovOn = () => !!ui.lov;
++  const lovCtx = () => { if (!lovOn()) return null; const gi = Math.min(ui.g, P.girders.length - 1), j = lnSel(); return { gi, j, o: (P.girders[gi].lineOv || {})[String(j)] || {}, T: P.girders[gi] }; };
++  function lovPick(gi, j) {
++    const o = M.lineOv(P, gi, j), ovL = M.typeLines(P, gi).filter(k => M.lineOv(P, gi, k)), ty = esc(tyName(gi));
++    return `<div class="fRow"><label for="i__lovLd">Entered values for</label><select id="i__lovLd"><option value="type"${lovOn() ? '' : ' selected'}>The girder type ${ty} (every line of it)</option><option value="line"${lovOn() ? ' selected' : ''}>Line ${lnName(j)} only (overrides the type)</option></select></div>
++      <p class="note">The calculated values below are those of line ${lnName(j)}. ${lovOn() ? `Entered here: line ${lnName(j)} only. A blank field takes the type's value (shown in grey); a field marked <span class="lov-mk">● ${lnName(j)}</span> is this line's own. The LL &amp; DL pull (Project tab) and the Custom demand tables of the output tabs also go to this line while this is chosen.` : `Entered here: the type ${ty}, on every line of it, except where a line has its own value (choose "Line … only").`}
++      ${ovL.length ? ` Lines with their own values: ${ovL.map(k => `<b>${lnName(k)}</b>`).join(', ')}.` : ''}</p>${o ? `<div class="fRow"><button type="button" data-lovreset="${j}">Reset line ${lnName(j)} to the type</button><span class="unit">removes every value entered for this line only (loads, factors, override boxes, the LL &amp; DL pull, Custom demands)</span></div>` : ''}`;
+   }
+   function panes() {
+     const g = P.girders[ui.g] || P.girders[0];
+@@ -476,7 +489,7 @@
+           </tbody></table></div><button type="button" id="bAddSeg">Add segment</button><p class="note">Segments are contiguous: each starts where the one before ends. Plate thicknesses may be typed as decimals (0.5625).</p>`),
+       framing: window.SBDFramingUI.inputs(P, { num, sel, card, esc }, ui),   // framing.* and crossframes.* (the wind card: Loads tab)
+       loads: xsp.ws + xsp.extra + xsp.dist + window.SBDFramingUI.windCard(P, { num, sel, card, esc })
+-        + loadsPick() + window.SBDAnalysisUI.inputs(loadsView(), Math.min(ui.g, P.girders.length - 1)),   // AIN (2026-11-09): the analysis inputs, moved here from the Analysis output tab
++        + loadsPick() + window.SBDAnalysisUI.inputs(loadsView(), Math.min(ui.g, P.girders.length - 1), { lov: lovCtx() }),   // AIN (2026-11-09): the analysis inputs, moved here from the Analysis output tab
+       stf: window.SBDShearUI.inputs(P, { num, sel, card, esc }, ui),
+       fs: window.SBDFatigueUI.inputs(P, { num, sel, card, esc }, ui),
+       spl: window.SBDSplicesUI.inputs(P, { num, sel, card, esc }, ui),
+@@ -523,7 +536,8 @@
+     const el = e.target;
+     if (el.id === 'i__g' || el.id === 'i__gHo' || el.id === 'i__gLd') { ui.g = +el.value; ui.seg = 0; delete ui.ln; delAsk = null; saveUi(); drawInputs(); markStale(); return; }
+     if (el.id === 'i__lnLd') { ui.ln = +el.value; saveUi(); drawInputs(); return; }   // SB-2: the line of the Loads tab's cards (display only)
+-    if (window.SBDAnalysisUI.onInputChange(el, P, Math.min(ui.g, P.girders.length - 1))) { changed(true); return; }   // AIN: the analysis inputs (ui/analysis.js)
++    if (el.id === 'i__lovLd') { ui.lov = el.value === 'line'; saveUi(); drawInputs(); return; }   // SBLO: entered for the type or the line only (UI choice, sbd2.ui)
++    if (window.SBDAnalysisUI.onInputChange(el, P, Math.min(ui.g, P.girders.length - 1), { lov: lovOn() ? { j: lnSel() } : null })) { changed(true); return; }   // AIN: the analysis inputs (ui/analysis.js)
+     if (el.dataset.path === 'xs.nb') { const nb0 = M.lineTypes(P).length; if (UL.onChange(el, P)) { changed(true); nbOffer(nb0); return; } }   // SB-2: N_b changed: offer to assign the new lines
+     if (UL.onChange(el, P)) { changed(true); return; }
+     if (el.dataset.ltype != null) { if (el.value !== '') { M.assignLine(P, +el.dataset.ltype, +el.value); changed(true); } return; }   // SB-2: Cross-section tab, the type of a line
+@@ -540,6 +554,7 @@
+   });
+   $('inPanes').addEventListener('click', e => {
+     const og = e.target.closest('[data-gotab]'); if (og) { e.preventDefault(); const b = document.querySelector(`#tabBar [data-otab="${og.dataset.gotab}"]`); if (b) b.click(); return; }   // AIN: a link to an output tab
++    const lr = e.target.closest('[data-lovreset]'); if (lr) { const gi = Math.min(ui.g, P.girders.length - 1), j = +lr.dataset.lovreset; if (confirm(`Reset line ${lnName(j)} to the girder type ${tyName(gi)}? Every value entered for this line only is removed.`)) { M.lineOvReset(P, gi, j); changed(true); } return; }   // SBLO
+     const ig = e.target.closest('[data-itgo]'); if (ig) { e.preventDefault(); ui.itab = ig.dataset.itgo; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; return; }   // TABR: a link to another input tab
+     if (UL.onClick(e, P)) { changed(true); const od = UL.takeOwnerDefaults(); if (od) showOwnDef(od); return; }
+     if (window.SBDShearUI.onClick(e, P, ui)) { changed(true); return; }
+@@ -568,7 +583,8 @@
+     if (!restoring) { const t = JSON.stringify(P); if (t !== snap) { undoS.push(snap); if (undoS.length > UNDO_MAX) undoS.shift(); redoS.length = 0; snap = t; stepNo++; if (toastStep !== stepNo) closeToast(); } }   // one undo step per input change; a message with an Undo button closes when a later change is made
+     syncBar();
+   }
+-  if (window.SBDHandoffUI) window.SBDHandoffUI.init({ getP: () => P, ui: () => ui, changed: r => changed(r) });   // B2: the LL & DL pull dialog applies after its confirm
++  if (window.SBDCustomDemands && window.SBDCustomDemands.setLovTarget) window.SBDCustomDemands.setLovTarget(() => (lovOn() ? { gi: Math.min(ui.g, P.girders.length - 1), j: lnSel() } : null));   // SBLO (SB-10): the Custom demand edits for one line
++  if (window.SBDHandoffUI) window.SBDHandoffUI.init({ getP: () => P, ui: () => ui, changed: r => changed(r), lov: () => (lovOn() ? { gi: Math.min(ui.g, P.girders.length - 1), j: lnSel() } : null) });   // SBLO: the pull for one line   // B2: the LL & DL pull dialog applies after its confirm
+   /* ---------- undo / redo (session only: nothing is stored) ---------- */
+   function restore(from, to) {
+     if (!from.length) return; to.push(snap); snap = from.pop(); P = JSON.parse(snap);
+diff --git a/apps/steel-bridge/report/builders.js b/apps/steel-bridge/report/builders.js
+index f3e6611..d74ba33 100644
+--- a/apps/steel-bridge/report/builders.js
++++ b/apps/steel-bridge/report/builders.js
+@@ -115,6 +115,12 @@
+     return g + `<text x="12" y="${(t + H - b) / 2}" transform="rotate(-90 12 ${(t + H - b) / 2})" text-anchor="middle" fill="#333">${o.unit}</text></svg>`;
+   }
+   /* the construction live load basis (CLC, 2026-11-09), as the Loads input tab states it */
++  /* lovNote(B) (SBLO, 2026-11-13; engineer decisions SB-7, SB-9, SB-10): the values entered for the reported line only (girders[g].lineOv), over
++     the girder type's, as the Loads tab marks them; null when the line has none (every project saved before) */
++  const lovNote = B => { const M = window.SBDModel, P = B.P, gi = B.g, g = P && P.girders && P.girders[gi]; if (!M || !M.lineOv || !g) return null; const j = window.SBDAnalysis ? window.SBDAnalysis.lineOf(P, g) : g.line, o = M.lineOv(P, gi, j); if (!o) return null;
++    const nums = (k, L) => Object.keys(o[k] || {}).filter(q => typeof o[k][q] === 'number').map(q => `${L} ${q} = ${o[k][q]}`), b = k => typeof o[k] === 'boolean' ? [`${k === 'loadsOverride' ? 'dead-load' : k === 'dfOverride' ? 'distribution factor' : 'construction live load'} override ${o[k] ? 'on' : 'off'}`] : [];
++    const it = [...nums('loadsManual', 'dead load (klf)'), ...nums('dfManual', 'factor'), ...b('loadsOverride'), ...b('dfOverride'), ...b('clOverride'), ...(o.dfPull ? ['the LL & DL factors pulled for this line'] : []), ...Object.keys(o.custom || {}).filter(m => (o.custom[m].rows || []).length).map(m => `the Custom demands (${m}) of this line`)];
++    return note(`Values entered for line G${j + 1} only (engineer decisions SB-7, SB-9, SB-10, 2026-11-13: per-line values over the girder type ${g.label || g.id}; a blank value takes the type's): ${it.join('; ')}. The analysis and every check of this line use them; the type's other lines keep the type's values. As on the [[tab:loads|Loads tab]] (marked ● G${j + 1}).`); };
+   const clNote = A => { const L = A.loads || {}, src = (L.src || {}).CL, C = L.cl || {};
+     const how = src === 'calc' ? `calculated, $w_{CL}$ = $q_{CL}$ × $b_{trib}$ [[an.CL.w]], $q_{CL}$ = ${f(C.q, 1)} psf (${C.qSrc === 'entered' ? 'entered' : C.qSrc === 'owner' ? `owner rule ${C.qCite}` : "this app's default, the overhang bracket construction load"})`
+       : src === 'manual' ? 'entered on the Loads tab (Override calculated value)' : src === 'girder' ? 'from the girder loads (hand-off)' : `none${C.on ? '' : ' (not calculated: a project saved before the calculation was added, 2026-11-09)'}`;
+@@ -134,7 +140,7 @@
+       ['LL deflection limit', `L/${S.deflLimit} (2.5.2.6.2)`], ['Deck placement sequence', S.seq === 'off' ? 'off' : 'on'], ['Dead loads', A.loads && A.loads.source], ['Distribution factors', A.df && A.df.src]]),
+       A.warnings.length ? note(A.warnings.join(' '), true) : null,
+       note(`Unfactored effects per girder: DC1 (steel, then the wet deck) on the steel section, DC2 and DW on 3n, LL+IM on n; ${Nn} stations (GirderDetail's grid), shared beam elements, loads applied exactly. As on the [[tab:an|Analysis tab]].`),
+-      clNote(A)]));
++      clNote(A), lovNote(B)]));
+     const Mser = [{ name: 'DC1', y: s.DC1.M }, { name: 'DC2', y: s.DC2.M }, { name: 'DW', y: s.DW.M }];
+     if (ll) Mser.push({ name: 'LL+IM max', y: ll.Mpos, c: '#DC2626' }, { name: 'LL+IM min', y: ll.Mneg, c: '#DC2626', dash: '4 3' });
+     const Vser = [{ name: 'DC1', y: Vr(s.DC1) }, { name: 'DC2', y: Vr(s.DC2) }, { name: 'DW', y: Vr(s.DW) }];
+diff --git a/apps/steel-bridge/ui/analysis.js b/apps/steel-bridge/ui/analysis.js
+index 687424b..0ff150d 100644
+--- a/apps/steel-bridge/ui/analysis.js
++++ b/apps/steel-bridge/ui/analysis.js
+@@ -20,7 +20,11 @@
+      girder.loadsManual, girder.dfManual; new: girder.loadsOverride, girder.dfOverride, the "Override calculated value" boxes) ---------- */
+   const IM_SRC = 'AASHTO LRFD 10th Ed. Table 3.6.2.1-1';
+   const blank = v => v == null || v === '' || (typeof v === 'number' && Number.isNaN(v));
+-  const numIn = (scope, k, label, unit, v, ph) => `<div class="fRow"><label for="an_${scope}_${k}">${label}</label><input type="number" step="any" id="an_${scope}_${k}" data-an="${scope}" data-k="${k}" value="${blank(v) ? '' : esc(v)}"${ph != null && ph !== '' ? ` placeholder="${esc(ph)}"` : ''}><span class="unit">${unit}</span></div>`;
++  const numIn = (scope, k, label, unit, v, ph, mk) => `<div class="fRow${mk ? ' lov-on' : ''}"><label for="an_${scope}_${k}">${label}${mk || ''}</label><input type="number" step="any" id="an_${scope}_${k}" data-an="${scope}" data-k="${k}" value="${blank(v) ? '' : esc(v)}"${ph != null && ph !== '' ? ` placeholder="${esc(ph)}"` : ''}><span class="unit">${unit}</span></div>`;
++  /* SBLO (2026-11-13; engineer decisions SB-7, SB-9): entering a line's overrides (opt.lov = { j, o (the line's entry or {}), T (the type) }):
++     an override box is a choice "as the type (on / off) | on | off"; a field the line overrides carries the marker (lovMk). */
++  const lovMk = j => ` <span class="lov-mk" title="Entered for line G${j + 1} only (overrides the girder type)">● G${j + 1}</span>`;
++  const lovSel = (id, label, k, typeOn, own, j) => `<div class="fRow${typeof own === 'boolean' ? ' lov-on' : ''}"><label for="${id}">${label}${typeof own === 'boolean' ? lovMk(j) : ''}</label><select id="${id}" data-an="lovb" data-k="${k}"><option value=""${typeof own !== 'boolean' ? ' selected' : ''}>As the girder type (${typeOn ? 'on' : 'off'})</option><option value="true"${own === true ? ' selected' : ''}>On, line G${j + 1}</option><option value="false"${own === false ? ' selected' : ''}>Off, line G${j + 1}</option></select></div>`;
+   const chk = (id, label, on, k, sc, unit) => `<div class="fRow"><label for="${id}">${label}</label><input type="checkbox" id="${id}" data-an="${sc || 'ov'}" data-k="${k || (id === 'an_ov_l' ? 'loadsOverride' : 'dfOverride')}"${on ? ' checked' : ''}><span class="unit">${unit || 'off: the calculated value is used'}</span></div>`;
+   const kf = v => isFinite(v) ? f(v, 4) : '—';
+   /* ctxOf(P, gi): the girder, its loads module result, its loads and factors (engine/analysis.js), and whether each override is on */
+@@ -34,8 +38,12 @@
+   const calcL = (C, k) => C.M ? ({ DC1wet: C.M.DC1, DC2: C.M.DC2, DW: C.M.DW, UT: C.M.UT, UF: C.M.UF, PL: C.M.PL })[k] : null;
+   const calcD = (C, k) => { if (!C.rgOk || !C.mod) return null; const R = C.mod.R, j = C.mod.j, s0 = R.regions.find(r => r.id === 's0'), p1 = R.regions.find(r => r.id === 'p1');
+     if (!s0) return null; return k === 'gDef' ? s0.gDef : k === 'gMpier' ? (p1 ? p1.members[j].gM : null) : s0.members[j][k]; };
+-  function inputs(P, gi) {
+-    const S = AN().settings(P), A0 = P.analysis || {}, C = ctxOf(P, gi), g = C.g, Lm = g.loadsManual || {}, Dm = g.dfManual || {}, LD = C.LD, gl = esc(g.label || g.id);
++  function inputs(P, gi, opt) {
++    const S = AN().settings(P), A0 = P.analysis || {}, C = ctxOf(P, gi), g = C.g, LV = opt && opt.lov ? opt.lov : null, T = LV ? LV.T : g;
++    const Lm = LV ? (LV.o.loadsManual || {}) : g.loadsManual || {}, Dm = LV ? (LV.o.dfManual || {}) : g.dfManual || {}, LD = C.LD, gl = esc(g.label || g.id) + (LV ? `, line G${LV.j + 1}` : '');
++    const TL = T.loadsManual || {}, TD = T.dfManual || {}, mk = (o, k) => LV && isFinite(o[k]) && o[k] != null && o[k] !== '' ? lovMk(LV.j) : '';
++    const phL = (k, c) => LV && TL[k] != null && TL[k] !== '' && isFinite(TL[k]) ? `type: ${TL[k]}` : c, phD = (k, c) => LV && TD[k] != null && TD[k] !== '' && isFinite(TD[k]) ? `type: ${TD[k]}` : c;
++    const ovBox = (id, label, on, k, typeOn) => LV ? lovSel(id, label, k, typeOn, LV.o[k], LV.j) : chk(id, label, on, k);
+     const sel = (k, label, opts) => `<div class="fRow"><label for="an_a_${k}">${label}</label><select id="an_a_${k}" data-an="a" data-k="${k}">${opts.map(([v, t]) => `<option value="${v}"${String(S[k] == null ? '' : S[k]) === v ? ' selected' : ''}>${t}</option>`).join('')}</select></div>`;
+     const imSrc = (k, d) => blank(A0[k]) ? `blank: ${d} % (${IM_SRC})` : `entered (${IM_SRC}: ${d} %)`;
+     const line = C.mod && C.mod.j != null ? C.mod.j : AN().lineOf(P, g), see = '<a href="#" data-gotab="loads">Loads &amp; LLDF tab</a>';
+@@ -53,8 +61,8 @@
+     const rowsL = [['DC1wet', 'DC1 wet deck (deck, haunch, SIP, other)'], ['DC2', 'DC2 (barriers, curbs, …)'], ['DW', 'DW (wearing surface)'], ['UT', 'Existing utilities (steel section)']];
+     const xfStored = Array.isArray(Lm.xf) && Lm.xf.length, xfShow = xfStored && LD.src.xf !== 'module' && LD.src.xf !== 'girder';
+     h += card(`Dead loads for the analysis, girder ${gl}`, `<p class="note">Calculated: <b>${C.M ? `loads module, cross-section girder G${line + 1}` : 'none (the loads module gives none: ' + esc(C.mod && C.mod.errors ? C.mod.errors[0] : 'the cross-section is not complete') + ')'}</b>${C.M ? `, worked on the ${see} (girder G${line + 1})` : ''}. Used: <b>${esc(LD.source)}</b>.</p>
+-      ${chk('an_ov_l', 'Override calculated value', C.ovL)}
+-      ${C.ovL ? rowsL.map(([k, t]) => numIn('l', k, t, 'klf', Lm[k], isFinite(calcL(C, k)) ? f(calcL(C, k), 4) : '')).join('') + `<p class="note">Blank: the calculated value (in grey)${C.M ? '' : '; none here, so blank = 0'}.</p>` : `<p class="note">${rowsL.map(([k, t]) => `${t}: ${kf(LD[k])} klf`).join('; ')}.</p>`}
++      ${ovBox('an_ov_l', 'Override calculated value', C.ovL, 'loadsOverride', AN().deadOverride(T, C.M))}
++      ${C.ovL ? rowsL.map(([k, t]) => numIn('l', k, t, 'klf', Lm[k], phL(k, isFinite(calcL(C, k)) ? f(calcL(C, k), 4) : ''), mk(Lm, k))).join('') + `<p class="note">Blank: the calculated value (in grey)${C.M ? '' : '; none here, so blank = 0'}.</p>` : `<p class="note">${rowsL.map(([k, t]) => `${t}: ${kf(LD[k])} klf`).join('; ')}.</p>`}
+       ${xfShow ? `<div class="fRow"><label for="an_l_xf">Cross-frame point loads (stored entry)</label><input type="text" id="an_l_xf" data-an="l" data-k="xf" value="${esc((Lm.xf || []).map(q => `${q.x}:${q.P}`).join(', '))}" style="width:180px"><span class="unit">one load per row</span></div>
+         <p class="note">Kept because this project stored it and has no framing: it is used until the framing is set (<a href="#" data-itgo="framing">Framing &amp; bracing tab</a>); then the frames give the point loads.</p>`
+         : `<p class="note">Cross-frame point loads: ${LD.src.xf === 'module' && LD.xfInfo ? `${LD.xfInfo.n} frames, ${LD.xfInfo.tot.toFixed(2)} kip in all, from the framing and the cross-frame weights (<a href="#" data-itgo="framing">Framing &amp; bracing tab</a>)` : LD.src.xf === 'girder' ? 'from the girder loads' : 'none (the project has no framing: <a href="#" data-itgo="framing">Framing &amp; bracing tab</a>)'}.</p>`}`, 'an-dead');
+@@ -63,8 +71,8 @@
+     h += card(`Construction live load, girder ${gl}`, `${chk('an_a_clCalc', 'Calculate the construction live load', CL.on, 'clCalc', 'a', CL.on ? 'w<sub>CL</sub> = q<sub>CL</sub> × tributary deck width' : 'off: a project saved before 2026-11-09 (0 unless entered below)')}
+       ${CL.on ? numIn('a', 'qCL', 'Construction live load on the deck q<sub>CL</sub>', `psf — ${CL.qSrc === 'entered' ? 'entered' : CL.qSrc === 'owner' ? `blank: owner rule ${esc(CL.qCite)}, ${CL.q} psf` : 'blank: 20 psf (AASHTO LRFD 3.4.2.1 gives no value; this app\'s default)'}${CL.own ? `; owner minimum ${CL.own} psf (${esc(CL.ownCite)})` : ''}`, A0.qCL, qPh)
+         + `<p class="note">Calculated: w<sub>CL</sub> = q<sub>CL</sub>/1000 × b<sub>trib</sub> = ${f(CL.q, 1)}/1000 × ${isFinite(CL.trib) ? f(CL.trib, 3) : '—'} ft = <b>${isFinite(CL.w) ? f(CL.w, 4) + ' klf' : '— (the tributary width needs a complete cross-section)'}</b> (b<sub>trib</sub>: cross-section girder G${line + 1}, worked on the ${see}; w<sub>CL</sub> worked on the <a href="#" data-gotab="an">Analysis tab</a>, steps an.CL.q, an.CL.w).</p>` : ''}
+-      ${chk('an_ov_c', 'Override calculated value', ovC, 'clOverride')}
+-      ${ovC ? numIn('l', 'CL', 'Construction live load w<sub>CL</sub>', `klf${CL.on && isFinite(CL.w) ? ` — calculated ${kf(CL.w)}` : ''}; blank: ${CL.on ? 'calculated' : '0'}`, Lm.CL, CL.on && isFinite(CL.w) ? f(CL.w, 4) : '') : ''}
++      ${ovBox('an_ov_c', 'Override calculated value', ovC, 'clOverride', typeof T.clOverride === 'boolean' ? T.clOverride : !!(T.loadsManual && isFinite(T.loadsManual.CL) && T.loadsManual.CL != null))}
++      ${ovC ? numIn('l', 'CL', 'Construction live load w<sub>CL</sub>', `klf${CL.on && isFinite(CL.w) ? ` — calculated ${kf(CL.w)}` : ''}; blank: ${LV ? 'the type\'s value, else ' : ''}${CL.on ? 'calculated' : '0'}`, Lm.CL, phL('CL', CL.on && isFinite(CL.w) ? f(CL.w, 4) : ''), mk(Lm, 'CL')) : ''}
+       <p class="note">Used: <b>${kf(LD.CL)} klf</b> (${{ girder: 'girder loads', manual: 'entered (override)', calc: 'calculated', none: 'none' }[LD.src.CL]}). The construction live load enters the deck placement checks (Constructibility tab, γ construction) on the steel section. AASHTO LRFD 10th Ed. Art. 3.4.2.1 requires construction loads but gives no value: q<sub>CL</sub> left blank is the owner's value, else 20 psf (this app's default, the overhang bracket construction load). A project saved before this calculation (2026-11-09) is not switched to it: tick the box above. The overhang bracket checks keep their own q<sub>CL</sub> (Constructibility tab, OH inputs). An entered q<sub>CL</sub> below zero is an input error: every result is withheld until q<sub>CL</sub> is zero, positive or blank.</p>`, 'an-cl');
+     h += card('Finishing machine (optional)', `${numIn('fm', 'P', 'Load P<sub>fm</sub>, each of the pair', 'kip (blank: none)', fm.P)}${numIn('fm', 'e', 'Each load from its deck edge e<sub>fm</sub>', 'ft (on the overhang; blank: 0, at the edge)', fm.e)}
+       <p class="note">A pair of equal point loads, one on each overhang, moving together along the bridge. Each girder takes its lever-rule share (AASHTO LRFD 10th Ed. Art. 4.6.2.2.1): with a load outside the exterior girder, P(1 + a/S) on it and the uplift −Pa/S on the first interior girder; the share moves along the steel section; the moments and shears are added to M<sub>CL</sub>, V<sub>CL</sub> where they add to the deck placement effects (worked on the <a href="#" data-gotab="an">Analysis tab</a>, steps an.fm.*). The overhang bracket checks keep their own finishing machine load per bracket (Constructibility tab, OH inputs). A load P<sub>fm</sub> below zero is an input error: every result is withheld until P<sub>fm</sub> is zero, positive or blank.</p>`, 'an-fm');
+@@ -72,14 +80,21 @@
+     const rowsD = [['gM', 'g moment (spans)'], ['gMpier', 'g moment (pier regions)'], ['gV', 'g shear'], ['fatM', 'g fatigue moment'], ['fatV', 'g fatigue shear'], ['gDef', 'g deflection (all lanes, all girders)']];
+     const DF = C.DF, s0 = DF.spans[0] || {};
+     h += card(`Live load distribution factors for the analysis, girder ${gl}`, `<p class="note">Calculated: <b>${C.rgOk ? `loads module (LLDF), cross-section girder G${line + 1}` : 'none (the loads module gives none)'}</b>${C.rgOk ? `, worked on the ${see}` : ''}. Used: <b>${esc(DF.src)}</b> (lanes per girder, multiple presence included; fatigue: one lane ÷ 1.2, 3.6.1.4.3b).</p>
+-      ${chk('an_ov_d', 'Override calculated value', C.ovD)}
+-      ${C.ovD ? rowsD.map(([k, t]) => numIn('d', k, t, C.rgOk ? '' : k === 'gMpier' ? 'blank = spans' : 'blank = 1', Dm[k], C.rgOk && isFinite(calcD(C, k)) ? f(calcD(C, k), 3) : '')).join('') + `<p class="note">One value for every span. ${C.rgOk ? 'Blank: the calculated value (span 1 in grey; the pier g moment: blank = the entered span value, else calculated).' : ''}</p>`
++      ${ovBox('an_ov_d', 'Override calculated value', C.ovD, 'dfOverride', AN().dfOverride(T, C.rgOk))}
++      ${C.ovD ? rowsD.map(([k, t]) => numIn('d', k, t, C.rgOk ? '' : k === 'gMpier' ? 'blank = spans' : 'blank = 1', Dm[k], phD(k, C.rgOk && isFinite(calcD(C, k)) ? f(calcD(C, k), 3) : ''), mk(Dm, k))).join('') + `<p class="note">One value for every span. ${C.rgOk ? 'Blank: the calculated value (span 1 in grey; the pier g moment: blank = the entered span value, else calculated).' : ''}</p>`
+         : `<p class="note">Span 1: g<sub>M</sub> ${f(s0.gM, 3)}, g<sub>V</sub> ${f(s0.gV, 3)}, fatigue ${f(s0.fatM, 3)} / ${f(s0.fatV, 3)}, g<sub>Δ</sub> ${f(s0.gDef, 3)}${DF.piers.length ? `; pier 1 g<sub>M</sub> ${f(DF.piers[0].gM, 3)}` : ''} (every span: <a href="#" data-gotab="an">Analysis tab</a>).</p>`}`, 'an-df');
+     return h;
+   }
+   /* onInputChange(el, P, gi): a change on the Loads input tab; true when it was one of these inputs (the project is changed) */
+-  function onInputChange(el, P, gi) {
++  function onInputChange(el, P, gi, opt) {
+     const sc = el.dataset && el.dataset.an, k = el.dataset && el.dataset.k; if (!sc || !k) return false;
++    // SBLO: entering a line's overrides (opt.lov = { j }): the entered values and the boxes go to girders[gi].lineOv[j] (blank: the type's)
++    const LV = opt && opt.lov && (sc === 'l' || sc === 'd' || sc === 'lovb') ? opt.lov : null, M = window.SBDModel;
++    if (LV) { const o = M.lineOvEntry(P, gi, LV.j);
++      if (sc === 'lovb') { if (el.value === '') delete o[k]; else o[k] = el.value === 'true'; }
++      else { const f0 = sc === 'l' ? 'loadsManual' : 'dfManual', m = { ...(o[f0] || {}) }; if (el.value === '' || !isFinite(Number(el.value))) delete m[k]; else m[k] = Number(el.value); if (Object.keys(m).length) o[f0] = m; else delete o[f0]; }
++      if (!M.lineOv(P, gi, LV.j)) M.lineOvReset(P, gi, LV.j);
++      return true; }
+     const g = P.girders[gi];
+     if (sc === 'a' && el.type !== 'checkbox') { P.analysis = P.analysis || {}; const v = el.value; P.analysis[k] = el.tagName === 'SELECT' ? (v === 'true' ? true : v === 'false' ? false : v === '' ? null : v) : k === 'seqCustom' ? v : (v === '' ? null : Number(v)); }
+     else if (sc === 'a' && el.type === 'checkbox') { P.analysis = P.analysis || {}; P.analysis[k] = !!el.checked; }
+diff --git a/apps/steel-bridge/ui/demands.js b/apps/steel-bridge/ui/demands.js
+index 3c27016..ed90839 100644
+--- a/apps/steel-bridge/ui/demands.js
++++ b/apps/steel-bridge/ui/demands.js
+@@ -66,7 +66,16 @@
+   };
+   const gidOf = (P, g) => { const G = (P.girders || [])[g] || (P.girders || [])[0] || {}; return String(G.id || 'G' + (g + 1)); };
+   function get(P, mod, g) { const E = ((P.custom || {})[mod] || {})[gidOf(P, g)]; return { mode: E && E.mode === 'fac' && SPECS[mod].fac ? 'fac' : 'unf', rows: E && Array.isArray(E.rows) ? E.rows : [], sup: E && Array.isArray(E.sup) ? E.sup : [] }; }
+-  function entry(P, mod, g) { if (!P.custom) P.custom = {}; if (!P.custom[mod]) P.custom[mod] = {}; const k = gidOf(P, g); if (!P.custom[mod][k]) P.custom[mod][k] = { mode: 'unf', rows: [], sup: [] };
++  /* SBLO (2026-11-13; engineer decision SB-10): with the Loads tab's "Entered values for: Line … only" (lovTarget(): { gi, j } from the page)
++     the table of type gi is that line's own: girders[gi].lineOv[j].custom[mod] (the first edit starts it as a copy of the table in use, the
++     type's); a line without its own table uses the type's, then the app's analysis. lovOf(P, g): the target when it is this type. */
++  let lovTarget = () => null;
++  const lovOf = (P, g) => { const T = lovTarget(); return T && T.gi === g && window.SBDModel && window.SBDModel.lineOvEntry ? T : null; };
++  const lineOwn = (P, mod, g, j) => { const o = window.SBDModel.lineOv(P, g, j), E = o && o.custom && o.custom[mod]; return E && Array.isArray(E.rows) && E.rows.length ? E : null; };
++  function entry(P, mod, g) { const T = lovOf(P, g);
++    if (T) { const o = window.SBDModel.lineOvEntry(P, g, T.j); o.custom = o.custom || {}; if (!o.custom[mod] || !Array.isArray(o.custom[mod].rows) || !o.custom[mod].rows.length) { const C = get(P, mod, g); o.custom[mod] = JSON.parse(JSON.stringify({ mode: C.mode, rows: C.rows, sup: C.sup })); }
++      const E = o.custom[mod]; if (!Array.isArray(E.rows)) E.rows = []; if (!Array.isArray(E.sup)) E.sup = []; return E; }
++    if (!P.custom) P.custom = {}; if (!P.custom[mod]) P.custom[mod] = {}; const k = gidOf(P, g); if (!P.custom[mod][k]) P.custom[mod][k] = { mode: 'unf', rows: [], sup: [] };
+     const E = P.custom[mod][k]; if (!Array.isArray(E.rows)) E.rows = []; if (!Array.isArray(E.sup)) E.sup = []; return E; }
+   const SRC = ['analysis', 'example', 'project', 'custom'];
+   function srcGet(P, mod) { const v = ((P && P.demandSrc) || {})[mod]; return SRC.includes(v) ? v : null; }
+@@ -146,7 +155,9 @@
+     const cell = (id, v, lab) => `<input type="text" inputmode="decimal" data-cd="${id}" value="${isN(v) ? esc(String(v)) : ''}" aria-label="${esc(lab)}">`;
+     const head = cols.map(([k, lab, u]) => `<th title="${esc(k)}">${lab}<span class="u">${esc(u)}</span></th>`).join('');
+     const rows = E.rows.length ? E.rows : [{}];
+-    let h = `<section class="sec" id="cd_${mod}"><div class="secHead">Custom demands, ${esc(SP.name)}: ${esc(G.label || G.id || '')}</div><div class="secBody">
++    const T = lovOf(P, g), own = T ? lineOwn(P, mod, g, T.j) : null;   // SBLO: the line's own table, or the type's in use
++    let h = `<section class="sec" id="cd_${mod}"><div class="secHead">Custom demands, ${esc(SP.name)}: ${esc(G.label || G.id || '')}${T ? `, line G${T.j + 1}` : ''}</div><div class="secBody">
++      ${T ? `<p class="note">${own ? `<span class="lov-mk">● G${T.j + 1}</span> Line G${T.j + 1}'s own table (entered for this line only; it overrides the girder type's). <button type="button" data-cdact="lovreset">Reset line G${T.j + 1} to the type</button>` : `Entered values for line G${T.j + 1} only (the Loads tab's choice): this line has no table of its own, so the girder type's table${E.rows.length ? '' : ' (none: the app\'s analysis)'} is used. An edit here starts line G${T.j + 1}'s own table as a copy of it.`}</p>` : ''}
+       ${F ? `<div class="fRow"><label for="cd_mode_${mod}">Values entered</label><select id="cd_mode_${mod}" data-cdmode="1" style="width:auto;max-width:100%"><option value="unf"${E.mode === 'unf' ? ' selected' : ''}>Unfactored, by load case</option><option value="fac"${E.mode === 'fac' ? ' selected' : ''}>Factored: ${esc(F.combo)}</option></select></div>` : ''}
+       <p class="note">${(E.mode === 'fac' && F ? F : SP.unf).note}</p>
+       <p class="note">Stations x from the left end of the girder (ft). Plates, deck, materials and brace points: this project's, at each station. Paste from Excel: copy the cells (x first, then the columns in this order; a header row is skipped) and paste into a cell (Ctrl+V): the rows fill from there. A blank cell is 0. Saved with the project for this girder.</p>
+@@ -190,7 +201,9 @@
+       fire();
+     });
+     root.addEventListener('click', e => {
+-      const b = e.target.closest('[data-cdact]'); if (!b) return; const E = entry(P, mod, g), a = b.dataset.cdact;
++      const b = e.target.closest('[data-cdact]'); if (!b) return;
++      if (b.dataset.cdact === 'lovreset') { const T = lovOf(P, g); if (T && confirm(`Reset line G${T.j + 1} to the girder type? Its own ${SPECS[mod].name} table is removed.`)) { window.SBDModel.lineOvReset(P, g, T.j, 'custom.' + mod); fire(); } return; }   // SBLO
++      const E = entry(P, mod, g), a = b.dataset.cdact;
+       if (a === 'add') { if (!E.rows.length) E.rows.push({}); E.rows.push({}); refocus = `r:${E.rows.length - 1}:x`; setTimeout(changed, 0); return; }   // an empty table shows one blank row: keep it
+       if (a === 'sort') { E.rows.sort((p, q) => (isN(p.x) ? p.x : Infinity) - (isN(q.x) ? q.x : Infinity)); fire(); return; }
+       if (a === 'clear') { if (typeof confirm === 'function' && !confirm('Remove every row of this table?')) return; E.rows = []; fire(); return; }
+@@ -221,5 +234,6 @@
+     return out;
+   }
+ 
+-  window.SBDCustomDemands = { SPECS, get, entry, srcGet, srcSet, rowsOf, payload, keepAt, step, card, wire, paste, report, supsOf };
++  const setLovTarget = f => { lovTarget = typeof f === 'function' ? f : () => null; };
++  window.SBDCustomDemands = { setLovTarget, SPECS, get, entry, srcGet, srcSet, rowsOf, payload, keepAt, step, card, wire, paste, report, supsOf };
+ })();
+diff --git a/apps/steel-bridge/ui/handoffs.js b/apps/steel-bridge/ui/handoffs.js
+index f714674..2145d31 100644
+--- a/apps/steel-bridge/ui/handoffs.js
++++ b/apps/steel-bridge/ui/handoffs.js
+@@ -113,12 +113,16 @@
+     return { err: [...new Set(err)], warn, rows, unused, j, ext, tKey, basis, bySpan: !!bySpan, basisLbl, pull };
+   }
+   /* lldfApply(P, gi, plan, now): writes girders[gi].dfPull (GirderDetail gdLldfApply); returns the girder */
+-  function lldfApply(P, gi, plan, now) {
++  function lldfApply(P, gi, plan, now, j) {
+     const g = P.girders[gi], u = JSON.parse(JSON.stringify(plan.pull));
+     u.source.adoptedAt = now || new Date().toISOString();
+     u.source.fields = plan.rows.filter(r => r.nu != null).map(r => r.lbl);
++    if (Number.isInteger(j)) { window.SBDModel.lineOvEntry(P, gi, j).dfPull = u; return g; }   // SBLO (SB-9): pulled for one line of the type (girders[gi].lineOv[j].dfPull)
+     g.dfPull = u; return g;
+   }
++  /* lovT() (SBLO, 2026-11-13; engineer decision SB-9): the line the pull goes to: the Loads tab's line when "Line … only" is chosen there
++     ({ gi, j }), else null (the girder type, as before) */
++  const lovT = () => (ctx && ctx.lov ? ctx.lov() : null);
+ 
+   /* ---------- 3. superReactions ---------- */
+   /* lines(P): for each cross-section girder j, the plate girder that is analyzed for it: { j, gi, P (the project to analyze), own }.
+@@ -279,7 +283,8 @@
+   const lastSent = (P, ch) => { try { const H = HS(); if (!H) return null; const pid = H.pidOf({ name: String((P.project || {}).name || ''), bridgeId: '' }); if (!pid) return null;
+     const t = localStorage.getItem(H.copyKey(ch, GEO.id, pid)); const p = t ? JSON.parse(t) : null; return p && p.producedAt ? p : null; } catch (e) { return null; } };
+   const lldfAt = () => { try { return localStorage.getItem(BX().NS + LLDF.ch + '.updatedAt') || ''; } catch (e) { return ''; } };
+-  function card(P, ui) {
++  function card(P0, ui) {
++    const T = lovT(), P = T && T.gi === ((ui && ui.g) || 0) ? window.SBDModel.atLine(P0, T.gi, T.j) : P0;   // SBLO: the line's view when the pull goes to one line
+     const g = P.girders[(ui && ui.g) || 0] || P.girders[0], u = g && g.dfPull, nb = P.xs ? Math.round(P.xs.nb) : 0, j = g && AN() ? AN().lineOf(P, g) : 0;
+     const pname = P.project && String(P.project.name || '').trim();
+     const src = u ? `<p class="note"><b>Last received for ${esc(g.label || g.id)}:</b> ${u.use === false ? '<b>not in use</b> (' : ''}pulled from ${esc(u.source.producer)} (${esc(u.source.producerFile)}), produced ${esc(when(u.source.producedAt))}${u.source.project ? `, project "${esc(u.source.project)}"` : ''}; pulled ${esc(when(u.source.adoptedAt))}, ${esc(u.source.basisLbl)}${u.use === false ? ')' : ''}.${u.source.line !== j ? ` <b>Check:</b> this plate girder now takes cross-section girder G${j + 1}; the factors were pulled for ${esc(u.source.girder)}. Pull again.` : ''} Worked in the <a href="#" data-ho="goAn">Analysis tab</a> (Live load distribution factors).</p>`
+@@ -295,7 +300,7 @@
+       ${row('Shared project info', 'from any tool', `<div class="fRow"><button type="button" data-ho="pmUse">Use shared project info</button></div>
+         <p class="note">Fills project name, number, client, designer, checker and date from bridgeSuite.v1.projectMeta. You see what changes and confirm first.</p>`)}
+       ${row('Live load distribution factors', 'from LL &amp; DL Distribution (lldf.html)', `${gSel}<div class="fRow"><button type="button" data-ho="lldfPull">Pull from LL &amp; DL <span class="badge"${isNew() ? '' : ' hidden'} data-ho-new>new data</span></button> <button type="button" data-ho="lldfFile">Import hand-off (JSON)</button>${u ? ` <button type="button" data-ho="lldfDrop">Stop using pulled factors</button>` : ''}<input type="file" data-ho="lldfInput" accept=".json,application/json" hidden></div>
+-        <p class="note">Fills the live load distribution factors of the plate girder selected ${P.girders.length > 1 ? 'here (the same choice as' : '(as'} the Girders &amp; plates tab: ${esc(g ? g.label || g.id : '')}, cross-section girder G${j + 1} of ${nb}) from those LL &amp; DL Distribution publishes. You see what changes and confirm first.</p>
++        <p class="note">Fills the live load distribution factors of the plate girder selected ${P.girders.length > 1 ? 'here (the same choice as' : '(as'} the Girders &amp; plates tab: ${esc(g ? g.label || g.id : '')}, cross-section girder G${j + 1} of ${nb}) from those LL &amp; DL Distribution publishes. ${T && T.gi === ((ui && ui.g) || 0) ? `<b>For line G${T.j + 1} only</b> (the Loads tab's "Entered values for" choice); the type's other lines keep their factors. ` : (P.girders[(ui && ui.g) || 0] || {}).lines ? 'For the girder type, every line of it (to pull for one line only, choose "Line … only" on the Loads tab). ' : ''}You see what changes and confirm first.</p>
+         ${st ? `<p class="note"><b>Status:</b> ${st}.</p>` : ''}${src}`)}
+       <div class="hoGrp">Send to other tools</div>
+       ${row('Shared project info', 'to every tool', `<div class="fRow"><button type="button" data-ho="pmShare">Share project info</button></div>
+@@ -313,12 +318,12 @@
+     dlg.innerHTML = html; if (!dlg.open) { try { dlg.showModal(); } catch (e) { dlg.setAttribute('open', ''); } }
+   }
+   function showLldf() {
+-    const P = ctx.getP(), gi = ctx.ui().g || 0, pl = pend.pl, plan = lldfPlan(P, gi, pl, pend.basis), notes = [].concat(Array.isArray(pl.notes) ? pl.notes : [], pl.note ? [pl.note] : []);
++    const P0 = ctx.getP(), gi = ctx.ui().g || 0, T = lovT(), P = T && T.gi === gi ? window.SBDModel.atLine(P0, gi, T.j) : P0, pl = pend.pl, plan = lldfPlan(P, gi, pl, pend.basis), notes = [].concat(Array.isArray(pl.notes) ? pl.notes : [], pl.note ? [pl.note] : []);
+     const sameNb = Number(pl.Nb) === Math.round(P.xs.nb), li = a => a.length ? `<ul>${a.map(s => `<li>${esc(s)}</li>`).join('')}</ul>` : '', g = P.girders[gi];
+     pend.plan = plan;
+     dialog(`<h3>Pull from LL &amp; DL Distribution</h3>
+       <p><b>From:</b> ${esc(pl.producer || 'LL & DL Distribution')} (${esc(pl.producerFile || 'lldf.html')}), produced ${esc(when(pl.producedAt))}${projOf(pl) ? `, project "${esc(projOf(pl))}"` : ''}; via ${esc(pend.via)}.</p>
+-      <p><b>For:</b> ${esc(g.label || g.id)}, cross-section girder G${plan.j != null ? plan.j + 1 : '?'}${plan.j != null ? ` (${plan.ext ? 'exterior' : 'interior'})` : ''}, the plate girder selected on the Girders &amp; plates tab.</p>
++      <p><b>For:</b> ${esc(g.label || g.id)}, cross-section girder G${plan.j != null ? plan.j + 1 : '?'}${plan.j != null ? ` (${plan.ext ? 'exterior' : 'interior'})` : ''}, the plate girder selected on the Girders &amp; plates tab${T && T.gi === gi ? ` — <b>for line G${T.j + 1} only</b> (the Loads tab's "Entered values for: Line G${T.j + 1} only"; the type's other lines keep their factors)` : ''}.</p>
+       <fieldset style="border:0;padding:0;margin:6px 0"><legend><b>Which LL &amp; DL factors to use</b></legend>
+         <label style="display:block"><input type="radio" name="hoBasis" value="type"${pend.basis === 'type' ? ' checked' : ''}> Envelope of LL &amp; DL's ${plan.tKey || 'interior / exterior'} girders (default; does not depend on the girder numbering)</label>
+         <label style="display:block"><input type="radio" name="hoBasis" value="beam"${pend.basis === 'beam' ? ' checked' : ''}${sameNb ? '' : ' disabled'}> LL &amp; DL's beam with the same number${sameNb ? '' : ' (needs the same number of girders)'}</label></fieldset>
+@@ -329,8 +334,8 @@
+       <div class="fRow"><button type="button" data-hod="apply"${plan.err.length ? ' disabled' : ''}>Apply these factors</button> <button type="button" data-hod="cancel">Cancel</button></div>`);
+   }
+   function applyPend() {
+-    if (!pend || !pend.plan || pend.plan.err.length) return; const P = ctx.getP(), gi = ctx.ui().g || 0, pl = pend.pl;
+-    lldfApply(P, gi, pend.plan); try { BX().markAdopted(LLDF.ch, RX, pl.producedAt); } catch (e) { /* marker only */ }
++    if (!pend || !pend.plan || pend.plan.err.length) return; const P = ctx.getP(), gi = ctx.ui().g || 0, pl = pend.pl, T = lovT();
++    lldfApply(P, gi, pend.plan, null, T && T.gi === gi ? T.j : null); try { BX().markAdopted(LLDF.ch, RX, pl.producedAt); } catch (e) { /* marker only */ }
+     pend = null; dlg.close(); ctx.changed(true);
+   }
+   function onClick(e, P, ui) {
+@@ -349,7 +354,9 @@
+       pend = { pl: r.payload, via: 'shared browser storage', basis: 'type' }; showLldf(); return false; }
+     if (a === 'lldfFile') { const f = b.parentNode.querySelector('[data-ho="lldfInput"]'); if (f) { f.value = ''; f.onchange = () => { const file = f.files && f.files[0]; if (!file) return;
+       BX().importFile(file, LLDF.schema, LLDF.ver, r => { if (r.error) { alert(`Cannot import the hand-off file: ${r.error}`); return; } pend = { pl: r.payload, via: `file ${file.name}`, basis: 'type' }; showLldf(); }); }; f.click(); } return false; }
+-    if (a === 'lldfDrop') { const g = P.girders[ui.g || 0]; if (!g || !g.dfPull) return false; if (!confirm(`Stop using the factors pulled from LL & DL for ${g.label || g.id}? Its factors come from the Loads & LLDF tab again (Undo restores them).`)) return false; delete g.dfPull; return true; }
++    if (a === 'lldfDrop') { const T = lovT(), o = T && T.gi === (ui.g || 0) ? window.SBDModel.lineOv(P, T.gi, T.j) : null;   // SBLO: the line's own pull first
++      if (o && o.dfPull) { if (!confirm(`Stop using the factors pulled from LL & DL for line G${T.j + 1} only? The line takes the type's factors again (Undo restores them).`)) return false; window.SBDModel.lineOvReset(P, T.gi, T.j, 'dfPull'); return true; }
++      const g = P.girders[ui.g || 0]; if (!g || !g.dfPull) return false; if (!confirm(`Stop using the factors pulled from LL & DL for ${g.label || g.id}? Its factors come from the Loads & LLDF tab again (Undo restores them).`)) return false; delete g.dfPull; return true; }
+     if (a === 'subSend' || a === 'subFile') { subSend(P, a === 'subFile'); return false; }
+     return false;
+   }
+```

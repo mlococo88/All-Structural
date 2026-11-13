@@ -97,6 +97,9 @@
      girders[i].dfPull (added 2026-11-01, B2 hand-offs; optional): { use, spans: [{ gM, gV, fatM, fatV }], piers: [{ gM }], source: { producer,
                   producerFile, producedAt, project, adoptedAt, line, girder, basis, basisLbl, fields } }: the factors pulled from LL & DL Distribution
                   (bridgeSuite.v1.lldf, ui/handoffs.js), laid over this girder's factors field by field (engine/analysis.js dfOf); absent: unchanged
+     girders[i].lineOv (added 2026-11-13, SBLO; engineer decisions SB-7, SB-9, SB-10; optional): the values entered for one line of the type
+                  only, { '<line j>': { loadsManual, dfManual, loadsOverride, dfOverride, clOverride, dfPull, custom: { <module>: { mode, rows, sup } } } },
+                  each over the type's own (a blank / absent value: the type's); absent: the type's values on every line, as before. See lineOv below.
      -- added 2026-10-29 (constructibility PR), optional, read by engine/constructibility.js (absent = GirderDetail's Deck overhang defaults) --
      constr:    { oh: { a, hb (in, bracket projections), wOH, tOH (in), wc (kcf), qForm (ksf), wScreed, wRail, wWalk (klf), qCL (ksf), bCL (in),
                   Pfm (kip per bracket), Rh, Cb, gam: { dc, cl } (not used since 2026-11-01, ETAC: the deck placement factors × η; kept) } }: the overhang
@@ -296,16 +299,68 @@
     p.girders.push({ id: 'G2', label: 'Exterior', position: 'exterior', line: 0, lines: [0, nb - 1], beff: tribBeff(p.xs, 0), segments: JSON.parse(JSON.stringify(g.segments)) });
     return p;
   }
-  /* atLine(P, gi, j): P as seen with type gi on line j (a read view: girders[gi].line reads j; every write goes to P itself). P itself when
-     j is the type's design line, so the design line's results are those of P exactly. */
-  function atLine(P, gi, j) {
-    const g = P && P.girders && P.girders[gi]; if (!g || !Number.isInteger(j) || j === designLine(P, g)) return P;
-    const gp = new Proxy(g, { get: (t, k) => k === 'line' ? j : Reflect.get(t, k), has: (t, k) => k === 'line' || Reflect.has(t, k),
-      ownKeys: t => { const K = Reflect.ownKeys(t); return K.includes('line') ? K : [...K, 'line']; },
-      getOwnPropertyDescriptor: (t, k) => k === 'line' ? { value: j, writable: true, enumerable: true, configurable: true } : Reflect.getOwnPropertyDescriptor(t, k) });
-    const ga = new Proxy(P.girders, { get: (t, k) => String(k) === String(gi) ? gp : Reflect.get(t, k) });
-    return new Proxy(P, { get: (t, k) => k === 'girders' ? ga : Reflect.get(t, k) });
+  /* ---------- per-line overrides of a girder type (SBLO, 2026-11-13; engineer decisions SB-7, SB-9, SB-10 of 2026-11-13) ----------
+     girders[i].lineOv (optional; absent in every project saved before: the type's values on every line, exactly as before): { '<line j>': {
+       loadsManual: { DC1wet, DC2, DW, CL, UT, UF (klf) }, dfManual: { gM, gMpier, gV, fatM, fatV, gDef } (entered values of that line; a key
+       absent or blank: the type's value), loadsOverride, dfOverride, clOverride (true | false; absent: the type's box), dfPull (the LL & DL
+       factors pulled for that line; absent: the type's pull), custom: { <module>: { mode, rows, sup } } (the Custom demands of that line;
+       absent or no rows: the type's table, then the app's analysis) } }. The type's own fields (loadsManual, dfManual, the boxes, dfPull,
+       custom[module][type id]) stay the type values: a project saved before this field reads them on every line, results unchanged.
+     LO_KEYS: the girder fields a line can override. lineOv(P, gi, j): the line's entry when it overrides anything, else null. lineOvEntry(P,
+     gi, j): the entry, created (a user action only). lineOvReset(P, gi, j, key): removes the line's override of key (every key when absent).
+     effective(g, o, k): the value of field k of type g on a line with overrides o. migrateLineOv(P): the load-time migration (§5): an entry
+     of a line beyond N_b is kept (it comes back with the line); a malformed lineOv (not an object) is moved to lineOvBad, never discarded;
+     empty entries dropped; returns a one-line notice when it changed the project, else null (a project saved before: never). */
+  const LO_KEYS = ['loadsManual', 'dfManual', 'loadsOverride', 'dfOverride', 'clOverride', 'dfPull'];
+  const LO_NUM = ['loadsManual', 'dfManual'], LO_BOOL = ['loadsOverride', 'dfOverride', 'clOverride'];
+  const numKeys = o => o && typeof o === 'object' ? Object.keys(o).filter(k => isNum(o[k])) : [];
+  function loHas(o) {
+    if (!o || typeof o !== 'object') return false;
+    return LO_NUM.some(k => numKeys(o[k]).length) || LO_BOOL.some(k => typeof o[k] === 'boolean') || !!(o.dfPull && typeof o.dfPull === 'object')
+      || !!(o.custom && Object.values(o.custom).some(e => e && Array.isArray(e.rows) && e.rows.length));
   }
+  function lineOv(P, gi, j) { const g = ((P && P.girders) || [])[gi], o = g && g.lineOv && typeof g.lineOv === 'object' ? g.lineOv[String(j)] : null; return loHas(o) ? o : null; }
+  function lineOvEntry(P, gi, j) { const g = P.girders[gi]; if (!g.lineOv || typeof g.lineOv !== 'object') g.lineOv = {}; const k = String(j); if (!g.lineOv[k] || typeof g.lineOv[k] !== 'object') g.lineOv[k] = {}; return g.lineOv[k]; }
+  function lineOvReset(P, gi, j, key) {
+    const g = ((P && P.girders) || [])[gi], L = g && g.lineOv; if (!L || !L[String(j)]) return; const o = L[String(j)];
+    if (key == null) delete L[String(j)]; else if (key.startsWith('custom.')) { if (o.custom) delete o.custom[key.slice(7)]; } else delete o[key];
+    if (L[String(j)] && !loHas(L[String(j)])) delete L[String(j)]; if (!Object.keys(L).length) delete g.lineOv;
+  }
+  function effective(g, o, k) {
+    if (!o) return g[k];
+    if (LO_NUM.includes(k)) { const L = o[k], ks = numKeys(L); if (!ks.length) return g[k]; const out = { ...(g[k] || {}) }; ks.forEach(q => { out[q] = L[q]; }); return out; }
+    if (LO_BOOL.includes(k)) return typeof o[k] === 'boolean' ? o[k] : g[k];
+    if (k === 'dfPull') return o.dfPull && typeof o.dfPull === 'object' ? o.dfPull : g[k];
+    return g[k];
+  }
+  /* customAt(P, g, o): P.custom as seen on the line (each module's entry of the type's id replaced by the line's, where it has rows) */
+  function customAt(P, g, o) {
+    const C = P.custom, own = o && o.custom ? Object.keys(o.custom).filter(m => o.custom[m] && Array.isArray(o.custom[m].rows) && o.custom[m].rows.length) : [];
+    if (!own.length) return C; const out = { ...(C || {}) }, id = String(g.id || ''); own.forEach(m => { out[m] = { ...(out[m] || {}), [id]: o.custom[m] }; }); return out;
+  }
+  function migrateLineOv(P) {
+    let ch = false; ((P && P.girders) || []).forEach(g => { if (g.lineOv == null) return;
+      if (typeof g.lineOv !== 'object' || Array.isArray(g.lineOv)) { g.lineOvBad = g.lineOv; delete g.lineOv; ch = `Girder type ${g.label || g.id}: the per-line values could not be read; kept in the file as lineOvBad (not used).`; return; }
+      Object.keys(g.lineOv).forEach(k => { if (!loHas(g.lineOv[k])) { delete g.lineOv[k]; ch = ch || null; } }); if (!Object.keys(g.lineOv).length) delete g.lineOv; });
+    return ch || null;
+  }
+  /* atLine(P, gi, j): P as seen with type gi on line j (a read view: girders[gi].line reads j; every write goes to P itself). P itself when
+     j is the type's design line, so the design line's results are those of P exactly.
+     SBLO (2026-11-13): with overrides of line j (lineOv), the view's girders[gi] reads each overridden field as effective() (and P.custom as
+     customAt) — on the design line too; a line without overrides as before (the design line: P itself). */
+  function atLine(P, gi, j) {
+    const g = P && P.girders && P.girders[gi]; if (!g || !Number.isInteger(j) || (j === designLine(P, g) && !lineOv(P, gi, j))) return P;
+    const O = () => lineOv(P, gi, j), ok = k => k === 'line' || (LO_KEYS.includes(k) && !!O() && effective(g, O(), k) !== undefined), val = k => k === 'line' ? j : effective(g, O(), k);   // read when used: a value entered later shows
+    const gp = new Proxy(g, { get: (t, k) => ok(k) ? val(k) : Reflect.get(t, k), has: (t, k) => ok(k) || Reflect.has(t, k),
+      ownKeys: t => { const K = Reflect.ownKeys(t); return [...K, ...['line', ...LO_KEYS].filter(k => ok(k) && !K.includes(k))]; },
+      getOwnPropertyDescriptor: (t, k) => ok(k) ? { value: val(k), writable: true, enumerable: true, configurable: true } : Reflect.getOwnPropertyDescriptor(t, k) });
+    const ga = new Proxy(P.girders, { get: (t, k) => String(k) === String(gi) ? gp : Reflect.get(t, k) });
+    const cu = () => { const o = O(); return o && o.custom ? customAt(P, g, o) : P.custom; }, hasC = () => cu() !== undefined;
+    return new Proxy(P, { get: (t, k) => k === 'girders' ? ga : k === 'custom' ? cu() : Reflect.get(t, k), has: (t, k) => (k === 'custom' && hasC()) || Reflect.has(t, k),
+      ownKeys: t => { const K = Reflect.ownKeys(t); return K.includes('custom') || !hasC() ? K : [...K, 'custom']; },
+      getOwnPropertyDescriptor: (t, k) => k === 'custom' && hasC() ? { value: cu(), writable: true, enumerable: true, configurable: true } : Reflect.getOwnPropertyDescriptor(t, k) });
+  }
+
 
   const isNum = v => typeof v === 'number' && isFinite(v);
   /* equalSpacing(xs) (EQSP, 2026-11-09; engineer's definition 2026-11-09): equally spaced girders from the exterior girder spacing.
@@ -354,6 +409,7 @@
       if (!g.id || ids.has(g.id)) E(`${gp}.id`, 'Each girder needs its own id.'); ids.add(g.id);
       if (!['interior', 'exterior'].includes(g.position)) E(`${gp}.position`, 'Position must be "interior" or "exterior".');
       if (g.lines != null && !(Array.isArray(g.lines) && g.lines.every(j => Number.isInteger(j) && j >= 0))) E(`${gp}.lines`, `${g.label || g.id}: the girder lines of the type must be a list of line numbers.`);   // SB-2
+      if (g.lineOv != null && (typeof g.lineOv !== 'object' || Array.isArray(g.lineOv) || Object.keys(g.lineOv).some(k => !/^\d+$/.test(k) || !g.lineOv[k] || typeof g.lineOv[k] !== 'object'))) E(`${gp}.lineOv`, `${g.label || g.id}: the per-line values must be an object of line entries.`);   // SBLO
       if (d.composite) pos(g.beff, `${gp}.beff`, 'Effective flange width');
       const S = Array.isArray(g.segments) ? g.segments : [];
       if (!S.length) E(`${gp}.segments`, `${g.label || g.id}: enter at least one plate segment.`);
@@ -530,7 +586,7 @@
     if (legacyKind(obj)) return importLegacy(obj);
     if (!obj || obj.schema !== SCHEMA) return { ok: false, error: 'Not a Steel Bridge Design (sbd2) project file.' };
     let p; try { p = migrate(obj); } catch (e) { return { ok: false, error: e.message }; }
-    const notes = [migrateNbList(p)].filter(Boolean);   // field migrations within version 1 (2026-11-02)
+    const notes = [migrateNbList(p), migrateLineOv(p)].filter(Boolean);   // field migrations within version 1 (2026-11-02; SBLO 2026-11-13: per-line values)
     const v = validate(p);
     return { ok: true, project: p, errors: v.errors, warnings: v.warnings, notes };
   }
@@ -560,5 +616,5 @@
      (ownerRules.owner) when it is not AASHTO, else '' (as before the owner card moved to the Project tab). Display only; nothing computed or saved. */
   const clientName = P => { const t = String(((P || {}).project || {}).owner == null ? '' : P.project.owner).trim(), o = ((P || {}).ownerRules || {}).owner;
     return t || (o && o !== 'AASHTO' ? o : ''); };
-  window.SBDModel = { clientName, SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, newProject, designLine, typeLines, lineTypes, unassigned, isExtLine, tribBeff, setLines, assignLine, addType, deleteType, atLine, defaultXs, equalSpacing, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, migrateNbList, legacyKind, importLegacy, exportJSON, importJSON, save, load };
+  window.SBDModel = { clientName, SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, newProject, designLine, typeLines, lineTypes, unassigned, isExtLine, tribBeff, setLines, assignLine, addType, deleteType, atLine, LO_KEYS, lineOv, lineOvEntry, lineOvReset, effective, customAt, migrateLineOv, defaultXs, equalSpacing, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, migrateNbList, legacyKind, importLegacy, exportJSON, importJSON, save, load };
 })();

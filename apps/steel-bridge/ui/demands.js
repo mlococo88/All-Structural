@@ -66,7 +66,16 @@
   };
   const gidOf = (P, g) => { const G = (P.girders || [])[g] || (P.girders || [])[0] || {}; return String(G.id || 'G' + (g + 1)); };
   function get(P, mod, g) { const E = ((P.custom || {})[mod] || {})[gidOf(P, g)]; return { mode: E && E.mode === 'fac' && SPECS[mod].fac ? 'fac' : 'unf', rows: E && Array.isArray(E.rows) ? E.rows : [], sup: E && Array.isArray(E.sup) ? E.sup : [] }; }
-  function entry(P, mod, g) { if (!P.custom) P.custom = {}; if (!P.custom[mod]) P.custom[mod] = {}; const k = gidOf(P, g); if (!P.custom[mod][k]) P.custom[mod][k] = { mode: 'unf', rows: [], sup: [] };
+  /* SBLO (2026-11-13; engineer decision SB-10): with the Loads tab's "Entered values for: Line … only" (lovTarget(): { gi, j } from the page)
+     the table of type gi is that line's own: girders[gi].lineOv[j].custom[mod] (the first edit starts it as a copy of the table in use, the
+     type's); a line without its own table uses the type's, then the app's analysis. lovOf(P, g): the target when it is this type. */
+  let lovTarget = () => null;
+  const lovOf = (P, g) => { const T = lovTarget(); return T && T.gi === g && window.SBDModel && window.SBDModel.lineOvEntry ? T : null; };
+  const lineOwn = (P, mod, g, j) => { const o = window.SBDModel.lineOv(P, g, j), E = o && o.custom && o.custom[mod]; return E && Array.isArray(E.rows) && E.rows.length ? E : null; };
+  function entry(P, mod, g) { const T = lovOf(P, g);
+    if (T) { const o = window.SBDModel.lineOvEntry(P, g, T.j); o.custom = o.custom || {}; if (!o.custom[mod] || !Array.isArray(o.custom[mod].rows) || !o.custom[mod].rows.length) { const C = get(P, mod, g); o.custom[mod] = JSON.parse(JSON.stringify({ mode: C.mode, rows: C.rows, sup: C.sup })); }
+      const E = o.custom[mod]; if (!Array.isArray(E.rows)) E.rows = []; if (!Array.isArray(E.sup)) E.sup = []; return E; }
+    if (!P.custom) P.custom = {}; if (!P.custom[mod]) P.custom[mod] = {}; const k = gidOf(P, g); if (!P.custom[mod][k]) P.custom[mod][k] = { mode: 'unf', rows: [], sup: [] };
     const E = P.custom[mod][k]; if (!Array.isArray(E.rows)) E.rows = []; if (!Array.isArray(E.sup)) E.sup = []; return E; }
   const SRC = ['analysis', 'example', 'project', 'custom'];
   function srcGet(P, mod) { const v = ((P && P.demandSrc) || {})[mod]; return SRC.includes(v) ? v : null; }
@@ -146,7 +155,9 @@
     const cell = (id, v, lab) => `<input type="text" inputmode="decimal" data-cd="${id}" value="${isN(v) ? esc(String(v)) : ''}" aria-label="${esc(lab)}">`;
     const head = cols.map(([k, lab, u]) => `<th title="${esc(k)}">${lab}<span class="u">${esc(u)}</span></th>`).join('');
     const rows = E.rows.length ? E.rows : [{}];
-    let h = `<section class="sec" id="cd_${mod}"><div class="secHead">Custom demands, ${esc(SP.name)}: ${esc(G.label || G.id || '')}</div><div class="secBody">
+    const T = lovOf(P, g), own = T ? lineOwn(P, mod, g, T.j) : null;   // SBLO: the line's own table, or the type's in use
+    let h = `<section class="sec" id="cd_${mod}"><div class="secHead">Custom demands, ${esc(SP.name)}: ${esc(G.label || G.id || '')}${T ? `, line G${T.j + 1}` : ''}</div><div class="secBody">
+      ${T ? `<p class="note">${own ? `<span class="lov-mk">● G${T.j + 1}</span> Line G${T.j + 1}'s own table (entered for this line only; it overrides the girder type's). <button type="button" data-cdact="lovreset">Reset line G${T.j + 1} to the type</button>` : `Entered values for line G${T.j + 1} only (the Loads tab's choice): this line has no table of its own, so the girder type's table${E.rows.length ? '' : ' (none: the app\'s analysis)'} is used. An edit here starts line G${T.j + 1}'s own table as a copy of it.`}</p>` : ''}
       ${F ? `<div class="fRow"><label for="cd_mode_${mod}">Values entered</label><select id="cd_mode_${mod}" data-cdmode="1" style="width:auto;max-width:100%"><option value="unf"${E.mode === 'unf' ? ' selected' : ''}>Unfactored, by load case</option><option value="fac"${E.mode === 'fac' ? ' selected' : ''}>Factored: ${esc(F.combo)}</option></select></div>` : ''}
       <p class="note">${(E.mode === 'fac' && F ? F : SP.unf).note}</p>
       <p class="note">Stations x from the left end of the girder (ft). Plates, deck, materials and brace points: this project's, at each station. Paste from Excel: copy the cells (x first, then the columns in this order; a header row is skipped) and paste into a cell (Ctrl+V): the rows fill from there. A blank cell is 0. Saved with the project for this girder.</p>
@@ -190,7 +201,9 @@
       fire();
     });
     root.addEventListener('click', e => {
-      const b = e.target.closest('[data-cdact]'); if (!b) return; const E = entry(P, mod, g), a = b.dataset.cdact;
+      const b = e.target.closest('[data-cdact]'); if (!b) return;
+      if (b.dataset.cdact === 'lovreset') { const T = lovOf(P, g); if (T && confirm(`Reset line G${T.j + 1} to the girder type? Its own ${SPECS[mod].name} table is removed.`)) { window.SBDModel.lineOvReset(P, g, T.j, 'custom.' + mod); fire(); } return; }   // SBLO
+      const E = entry(P, mod, g), a = b.dataset.cdact;
       if (a === 'add') { if (!E.rows.length) E.rows.push({}); E.rows.push({}); refocus = `r:${E.rows.length - 1}:x`; setTimeout(changed, 0); return; }   // an empty table shows one blank row: keep it
       if (a === 'sort') { E.rows.sort((p, q) => (isN(p.x) ? p.x : Infinity) - (isN(q.x) ? q.x : Infinity)); fire(); return; }
       if (a === 'clear') { if (typeof confirm === 'function' && !confirm('Remove every row of this table?')) return; E.rows = []; fire(); return; }
@@ -221,5 +234,6 @@
     return out;
   }
 
-  window.SBDCustomDemands = { SPECS, get, entry, srcGet, srcSet, rowsOf, payload, keepAt, step, card, wire, paste, report, supsOf };
+  const setLovTarget = f => { lovTarget = typeof f === 'function' ? f : () => null; };
+  window.SBDCustomDemands = { setLovTarget, SPECS, get, entry, srcGet, srcSet, rowsOf, payload, keepAt, step, card, wire, paste, report, supsOf };
 })();
