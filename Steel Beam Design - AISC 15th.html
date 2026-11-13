@@ -2192,9 +2192,9 @@ function torsRoundWork(D,p){
   const t=D&&D.tors,out={lines:[],vars:[]};
   if(!t||t.blocked||p._kind!=='P')return out;
   const L=t.L,src=(D.torsL&&D.torsL.src)||'',hasL=L>0&&isFinite(L);
-  out.vars.push(['L',hasL?fmt(L/12,2)+' ft = '+fmt(L,1)+' in':'not entered',src+' (\u00A7H3.1(a): L = member length)']);
+  out.vars.push(['L',hasL?fmt(L/12,2)+' ft = '+fmt(L,1)+' in':'\u221E (not entered)',src+' (\u00A7H3.1(a): L = member length)']);
   out.lines.push(hasL?'F_{cr,a}=\\dfrac{1.23E}{\\sqrt{L/D}\\,(D/t)^{5/4}}=\\dfrac{1.23\\times '+fmt(EKSI,0)+'}{\\sqrt{'+fmt(L,1)+'/'+fmt(p.OD,3)+'}\\times '+fmt(p.Dt,2)+'^{5/4}}=\\mathbf{'+fmt(t.F1,2)+'\\ \\text{ksi}}\\quad(\\text{H3-2a})'
-    :'F_{cr,a}\\ \\text{(H3-2a) not used: no member length}');
+    :'F_{cr,a}\\ \\text{(H3-2a) not used: no member span }L\\ (L=\\infty)');
   out.lines.push('F_{cr,b}=\\dfrac{0.60E}{(D/t)^{3/2}}=\\dfrac{0.60\\times '+fmt(EKSI,0)+'}{'+fmt(p.Dt,2)+'^{3/2}}=\\mathbf{'+fmt(t.F2c,2)+'\\ \\text{ksi}}\\quad(\\text{H3-2b})');
   out.lines.push('F_{cr}=\\min\\left[0.6F_y,\\ \\max(F_{cr,a},F_{cr,b})\\right]=\\min\\left('+fmt(0.6*p.mat.Fy,2)+',\\ '+fmt(hasL?Math.max(t.F1,t.F2c):t.F2c,2)+'\\right)=\\mathbf{'+fmt(t.Fcr,2)+'\\ \\text{ksi}}');
   return out;
@@ -5556,13 +5556,16 @@ function memberDesignAll(A){
      batch (Lx) do. It was the shear length Lv, or 0 when Lv was blank, so H3-2a never governed. The member span L of the
      bracing section is used (memberSpan(): blank -> the unbraced length Lb, as for self-weight and deflection); with no
      length at all, H3-2a is dropped (L -> infinity), which leaves the lower bound Fcr = min(0.6Fy, H3-2b). */
-  {const sp=memberSpan(),has=sp.v>0;
-   const torsL={v:has?sp.v:null,src:has?(sp.src==='entered'?'member span L':'unbraced length L\u1D47 \u2014 no member span L entered'):'no member length entered \u2014 Eq. H3-2a not used',fallback:!(has&&sp.src==='entered')};
+  /* TLS9 (2026-11-13, engineer HSS-9): only an ENTERED member span L is used. With no span entered, L = infinity (H3-2a
+     dropped): F_cr = min(0.6F_y, H3-2b), the length-independent lower bound, with a warning. The unbraced length L_b is no
+     longer used here (it can be shorter than the member, which is unconservative for H3-2a); self-weight and deflection keep
+     their L_b fallback through memberSpan(). */
+  {const sp=memberSpan(),has=sp.v>0&&sp.src==='entered';
+   const torsL={v:has?sp.v:null,src:has?'member span L':'no member span L entered \u2014 L = \u221E, Eq. H3-2a not used (lower bound)',fallback:!has};
    D.tors=torsionHSS(p,(has?sp.v*12:Infinity));
    if(p._kind==='P')D.torsL=torsL;   /* round HSS only: H3.1(b) and open sections do not use L */
    if(p._kind==='P'&&anyTu&&torsL.fallback)D.warns.push('Round HSS torsion: Eq. H3-2a needs the member length L (\u00A7H3.1(a)). '+
-     (has?'No member span L is entered, so L\u1D47 = '+fmt(sp.v,2)+' ft is used \u2014 enter the member span L in <b>Lateral Bracing &amp; C\u1D47</b>.':
-      'No length is entered, so H3-2a is not used (F\u1D9C\u02B3 = min(0.6F\u1D67, H3-2b), conservative) \u2014 enter the member span L in <b>Lateral Bracing &amp; C\u1D47</b>.'));}
+     'No member span L is entered, so L = \u221E is used: F\u1D9C\u02B3 = min(0.6F\u1D67, H3-2b) = '+fmt(D.tors.Fcr,2)+' ksi, the length-independent lower bound (conservative). Enter the member span L in <b>Lateral Bracing &amp; C\u1D47</b> for the full value.');}
   D.torOpen=(typeof openTorsionFor==='function')?openTorsionFor(A):null;
   if(typeof compositeFor==='function'){try{A.comp=compositeFor(A);}catch(e){A.comp={blocked:'Composite engine error: '+e.message};}}
   if(A.comp&&!A.comp.blocked&&typeof constructionStage==='function'){
