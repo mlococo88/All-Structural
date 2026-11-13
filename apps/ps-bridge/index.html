@@ -190,9 +190,13 @@
   a.wk{font-family:var(--font-ui);font-size:8.5pt;}
   .kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:4px 14px;margin:6px 0;}
   .kv div{display:flex;justify-content:space-between;border-bottom:1px dotted var(--line);padding:2px 0;}
-  #toast{position:fixed;right:14px;top:84px;max-width:min(520px,calc(100vw - 28px));max-height:60vh;overflow:auto;z-index:50;background:#fff;border:1px solid var(--slate-400);border-left:4px solid var(--navy-800);border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.25);padding:8px 12px;font-family:var(--font-ui);font-size:9.5pt;}
-  #toast[hidden]{display:none;} #toast.err{border-left-color:var(--fail);} #toast ul{margin:4px 0 6px;padding-left:18px;} #toast .tBtns{display:flex;gap:6px;justify-content:flex-end;margin-top:4px;} #toast .tFld{font-weight:600;} #toast .tArr{color:#475569;}
-  @media print{ #hdrBtns,#toast,#libDlg,.inTabs,#tabBar,#autoBar,#inputPanel{display:none!important;} html,body{overflow:visible;height:auto;} #app{height:auto;box-shadow:none;} #outputPanel{overflow:visible;}
+  /* PS-22 (engineer decision, 2026-11-13; display): the app's notices (an owner change's inputs, the girder types re-assigned, the old app's
+     designs restored, the load notes) are inline banners in the output panel, in the page flow between the tab bar and the tab content: they
+     push the content down, never lie over the tab bar, and stay until closed (was #toast, fixed at the top right over the tabs) */
+  #notices:empty{display:none;} #notices{margin:6px 0 0;display:flex;flex-direction:column;gap:6px;}
+  #notices .notice{display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px 10px;background:#fff;border:1px solid var(--slate-400);border-left:4px solid var(--navy-800);border-radius:6px;padding:7px 10px;font-family:var(--font-ui);font-size:9.5pt;}
+  #notices .notice>div:first-child{flex:1 1 240px;min-width:0;overflow-wrap:anywhere;} #notices .nBtns{display:flex;gap:6px;margin-left:auto;}
+  @media print{ #hdrBtns,#notices,#libDlg,.inTabs,#tabBar,#autoBar,#inputPanel{display:none!important;} html,body{overflow:visible;height:auto;} #app{height:auto;box-shadow:none;} #outputPanel{overflow:visible;}
     .steps li{break-inside:avoid;} .katex,.katex *{-webkit-print-color-adjust:exact;print-color-adjust:exact;} .katex .frac-line,.katex .overline-line,.katex .underline-line{border-bottom-color:#000!important;min-height:1px;} .katex-display{overflow:visible;} }
   /* DASH (2026-11-09): the left check summary column (ui/dash.js), as the other apps' (RW/SF/LP #984/#988/#991, GirderDetail #1196): at the far
      left from 1200 px, 240 px (280 px from 1500 px), 42 px when shrunk; the input panel keeps a third of the rest. Not shown below 1200 px, not printed. */
@@ -281,7 +285,6 @@
 </style>
 </head>
 <body>
-<div id="toast" role="status" hidden></div>
 <div id="app">
   <header id="hdr">
     <div class="titleRow">
@@ -302,6 +305,7 @@
     <div id="sbSplit" role="separator" aria-orientation="vertical" aria-controls="inputPanel outputPanel" aria-label="Width of the input and output panels (arrow keys move it, Home / End to the limits, double-click or Enter resets)" tabindex="0" title="Drag to change the width of the input and output panels; double-click to reset"></div><!-- ui/splitter.js -->
     <main id="outputPanel">
       <div id="tabBar" role="tablist"></div>
+      <div id="notices" role="status" aria-live="polite"></div><!-- PS-22: the notices, inline banners above the tab content -->
       <div id="out"></div>
     </main>
   </div>
@@ -550,9 +554,16 @@
     if (Object.values(TABUI).some(f => f().onOutChange && f().onOutChange(e, ui))) { saveUi(); drawOut(); } });
 
   /* toast(text, undo): a message (the inputs an owner change set; PR 3a-1: the girder types re-assigned), closed by its button; undo (the
-     project text before the change) adds an Undo button that puts it back */
-  function toast(text, undo) { const t = $('toast'); t.className = ''; t.innerHTML = `<div>${esc(text)}</div><div class="tBtns">${undo ? '<button type="button" id="tUndo">Undo</button>' : ''}<button type="button" id="tClose">Close</button></div>`; t.hidden = false; $('tClose').onclick = () => { t.hidden = true; };
-    if (undo) $('tUndo').onclick = () => { t.hidden = true; P = JSON.parse(undo); changed(); }; }
+     project text before the change) adds an Undo button that puts it back. PS-22 (engineer decision, 2026-11-13; display): an inline banner
+     in #notices (between the tab bar and the tab content, in the page flow), newest first; each stays until its Close (or Undo) is clicked;
+     the same text again replaces its open banner; Undo only on the newest (an older Undo would put back a project changed since). */
+  function toast(text, undo) { const box = $('notices'), n = document.createElement('div');
+    [...box.children].forEach(c => { if (c.dataset.text === String(text)) c.remove(); else { const u = c.querySelector('.nUndo'); if (u) u.remove(); } });
+    n.className = 'notice'; n.dataset.text = String(text);
+    n.innerHTML = `<div>${esc(text)}</div><div class="nBtns">${undo ? '<button type="button" class="nUndo">Undo</button>' : ''}<button type="button" class="nClose">Close</button></div>`;
+    box.prepend(n); n.querySelector('.nClose').onclick = () => n.remove();
+    if (undo) n.querySelector('.nUndo').onclick = () => { n.remove(); P = JSON.parse(undo); changed(); };
+    const op = $('outputPanel'), top = n.offsetTop - $('tabBar').offsetHeight; if (op.scrollTop > top) op.scrollTop = Math.max(0, top); }   // brought into view below the sticky tab bar
   /* ---------- file ---------- */
   function exportFile(Q) {
     const a = document.createElement('a'), name = (Q.project.name || 'ps-bridge').replace(/[^\w.-]+/g, '_');

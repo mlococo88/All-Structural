@@ -97,9 +97,18 @@ ls = await lsSnap(p); sv = JSON.parse(ls['psb2.project.current']);
 check(sv.base.mat.fc === 9 && !/to fix/.test(await p.textContent('#sbDashCol')), 'base input saved: ' + sv.base.mat.fc);
 await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.owner', 'RIDOT');
 ls = await lsSnap(p); sv = JSON.parse(ls['psb2.project.current']);
-check(sv.base.owner === 'RIDOT' && sv.base.mat.H === 80 && /mat\.H 70 → 80/.test(await p.textContent('#toast')), 'owner defaults set: ' + sv.base.mat.H);
+check(sv.base.owner === 'RIDOT' && sv.base.mat.H === 80 && /mat\.H 70 → 80/.test(await p.textContent('#notices')), 'owner defaults set: ' + sv.base.mat.H);
 check(await p.isVisible('#i_base\\.opt\\.etaR'), 'owner question shown');
-await p.click('#tClose');
+// PS-22 (engineer decision, 2026-11-13): the notice is an inline banner between the tab bar and the tab content (in the page flow, below the
+// tab bar, the content pushed down), it stays when other output tabs are opened, and goes only with its Close button
+{ const pl = async () => p.evaluate(() => { const n = document.querySelector('#notices .notice'), tb = document.getElementById('tabBar').getBoundingClientRect(), o = document.getElementById('out').getBoundingClientRect();
+    if (!n) return null; const r = n.getBoundingClientRect(), pos = getComputedStyle(n).position, box = getComputedStyle(document.getElementById('notices')).position;
+    return { inFlow: pos === 'static' && box === 'static', below: r.top >= tb.bottom - 0.5, pushed: o.top >= r.bottom - 0.5, next: n.parentElement.nextElementSibling.id, prev: n.parentElement.previousElementSibling.id }; });
+  const a = await pl(); check(a && a.inFlow && a.below && a.pushed && a.prev === 'tabBar' && a.next === 'out', 'notice inline below the tab bar, content pushed down: ' + JSON.stringify(a));
+  await p.click('#tabBar [data-otab="lds"]'); await p.waitForTimeout(150); await p.click('#tabBar [data-otab="sum"]'); await p.waitForTimeout(150);
+  const b = await pl(); check(b && b.below && b.pushed && /mat\.H 70 → 80/.test(await p.textContent('#notices')), 'the notice stays across tab clicks until closed'); }
+await p.click('#notices .nClose');
+check((await p.$$('#notices .notice')).length === 0, 'Close removes the notice');
 await p.click('#inTabs [data-itab="gird"]'); await p.click('[data-act="add"][data-tbl="base.rows"]');
 ls = await lsSnap(p); sv = JSON.parse(ls['psb2.project.current']);
 check(sv.base.rows.length === 4 && sv.base.rows[3].y === 8, 'strand row added');
@@ -131,7 +140,7 @@ const DESIGNS = [['default', null], ['continuous, exterior G1 in span 2, restrai
     await p.click('#inTabs [data-itab="layout"]'); await p.fill('#i_spans\\.lengths', '100, 125, 100'); await p.press('#i_spans\\.lengths', 'Tab');
     await p.selectOption('#i_spans\\.continuity', 'composite'); await p.selectOption('#i_base\\.cont\\.restraint', 'true');
     // PR 3a-1: the new spans got copies of span 1's girder types (notice); the type and line are chosen above the output tabs
-    if (await p.isVisible('#tClose')) await p.click('#tClose');
+    while (await p.isVisible('#notices .nClose')) await p.click('#notices .nClose');
     await p.click('#tabBar [data-otab="sec"]'); await p.selectOption('#tyOutT', { label: 'Exterior S2 (span 2)' }); await p.selectOption('#tyOutL', '1'); }],
   ['NEXT 36F, skew 35 deg, one span', async () => {
     await p.click('#inTabs [data-itab="layout"]'); await p.fill('#i_spans\\.lengths', '90'); await p.press('#i_spans\\.lengths', 'Tab'); await p.fill('#i_xs\\.skews', '35, 35'); await p.press('#i_xs\\.skews', 'Tab');
@@ -267,7 +276,7 @@ await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.opt\
 // 2026-11-13: the owner's material limits in the check summary ("Materials (owner limits)", counted in the totals; opens the Owner rules
 // table at its row, where the engine's value, limit and ratio are shown) and the Report's §1 the same; CTDOT f′ci 6.8 > 6.5 ksi FAILs, 1.046
 { check(!(await p.$('#sbDashCol [data-sdgrp="mat"]')), 'AASHTO: no Materials chip');
-  await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.owner', 'CTDOT'); await p.waitForTimeout(300); if (await p.isVisible('#tClose')) await p.click('#tClose');
+  await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.owner', 'CTDOT'); await p.waitForTimeout(300); while (await p.isVisible('#notices .nClose')) await p.click('#notices .nClose');
   const d = await p.evaluate(() => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
     const N = new Set(window.PSBDashUI.GROUPS.flatMap(g => g.checks.map(q => q[0]))), c = R.checks.find(q => q.n === 'Release strength f′ci (CTDOT 5.9.1.2)');
     // PR 3a-2: the column counts one per girder type per check (its worst line, SB-5)
@@ -290,7 +299,7 @@ await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.opt\
   const r = await p.evaluate(() => { const s1 = document.querySelector('.rp-doc section[data-rpsec="rp-s1"]'), rows = [...s1.querySelectorAll('table tbody tr')].map(tr => [...tr.children].map(td => td.textContent.trim()));
     return { lead: s1.textContent, nF: rows.filter(r => r[7] === 'FAIL').length, mat: rows.filter(r => r[0] === 'Owner limits').map(r => r[1] + ' ' + r[6] + ' ' + r[7]) }; });
   check(r.nF === d.rF && new RegExp(`FAIL: ${d.rF} of ${d.rAll} checks`).test(r.lead) && r.mat.some(t => /f′ci \(CTDOT 5\.9\.1\.2\) 1\.046 FAIL/.test(t)) && r.mat.length === 2 && !/Not in the check summary column/.test(r.lead), 'Report §1 = the column ' + JSON.stringify(r.mat) + ' ' + r.nF);
-  await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.owner', 'AASHTO'); await p.waitForTimeout(300); if (await p.isVisible('#tClose')) await p.click('#tClose'); }
+  await p.click('#inTabs [data-itab="own"]'); await p.selectOption('#i_base\\.owner', 'AASHTO'); await p.waitForTimeout(300); while (await p.isVisible('#notices .nClose')) await p.click('#notices .nClose'); }
 // an input error blocks every result tab
 await p.click('#inTabs [data-itab="mat"]'); await p.fill('#i_base\\.mat\\.fci', '-1'); await p.press('#i_base\\.mat\\.fci', 'Tab');
 for (const t of ['sec', 'lds', 'an', 'loss', 'str', 'flex', 'shear', 'end', 'camb', 'hand', 'deck', 'rt', 'rpt']) { await p.click(`#tabBar [data-otab="${t}"]`); check(/Results not shown/.test(await p.textContent('#out')) && !(await p.$('#out [data-ev]')) && !(await p.$('#out .rp-doc')), 'blocked ' + t); }
@@ -350,8 +359,8 @@ await o.b.close();
   // PR 3a-4 (PS-17): the old model's other design G2/S1 restored as a girder type on its line, computed the same as the old app
   check(/Restored from the old app's bridge model \(PS-17\): 1 more girder × span design \(G2\/S1\)/.test(sm) && /1 of 1 compute the same as the old app/.test(sm)
     && Array.isArray(P2.types) && P2.types.some(t => t.label === 'Interior S1 (old G2)' && t.lines.join() === '2') && P2.legacy.restored && P2.legacy.restored.cells[0].same === true, 'restored: ' + JSON.stringify(P2.types));
-  check(/Restored from the old app's bridge model/.test(await p.textContent('#toast')), 'the restore notice shown');
-  if (await p.isVisible('#tClose')) await p.click('#tClose');
+  check(/Restored from the old app's bridge model/.test(await p.textContent('#notices')) && await p.evaluate(() => { const n = document.querySelector('#notices .notice'); return !!n && n.getBoundingClientRect().top >= document.getElementById('tabBar').getBoundingClientRect().bottom - 0.5; }), 'the restore notice shown (inline, below the tab bar, PS-22)');
+  while (await p.isVisible('#notices .nClose')) await p.click('#notices .nClose');
   // the imported design's results: the old inputs computed = the shown values (computeAll of the page on the old inputs)
   await p.click('#tabBar [data-otab="flex"]'); await p.waitForTimeout(400);
   const fv = await p.evaluate(OLD => { const R = computeAll(JSON.parse(JSON.stringify(OLD))), fx = window.PSBOutKit.fx, at = (o, q) => q.split('.').reduce((a, k) => a == null ? a : a[k], o);
