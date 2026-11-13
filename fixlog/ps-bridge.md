@@ -479,3 +479,51 @@ PR #1460: https://github.com/mlococo88/All-Structural/pull/1460
   coefficients (PS-14 a), the rating at the governing positive-moment section only (no pier region, no restraint moments).
 - MBE 4th Ed. (2026) citation labels: plan PR 6 (PS-14 e).
 - Next: PR 2d-3 (PS-10 hold-down check for AASHTO / RIDOT, engine addition with a §4 callout).
+
+## 2026-11-13 — PR 2d-3: PS-10 hold-down force check for AASHTO / RIDOT projects (ENGINE ADDITION, §4)
+PR #1461: https://github.com/mlococo88/All-Structural/pull/1461
+### §4 callout (a new check; no existing formula, factor or value changed)
+- **Before:** AASHTO and RIDOT projects: **no hold-down force check** (the moved engine checks it only for MassDOT 3.7.2.2 and CTDOT V2
+  5.9.1.6, `pbd-compute.js` "Hold-down force of all draped strands"). MassDOT / CTDOT: F_hd = 2·n_h·f_pbt·A_b·sin α ≤ 0.75 W (unchanged).
+- **After:** AASHTO and RIDOT projects with draped strands: **2·n_h·f_pbt·A_b·sin α ≤ f·W**, f = `base.opt.hdFrac` (default **0.75**, editable),
+  when the box `base.opt.hdCheck` is on (default **on**); α = atan((y_end − y_mid)/(12·frac·L)), f_pbt = jack × f_pu (at jacking, before
+  transfer), W = w_sw·(L + 2 e_end/12). Check name "Hold-down force (PS-10)", PASS when the ratio ≤ 1.0001 (as every engine check).
+- **Basis:** engineer decision PS-10 (2026-11-12, plan §6). AASHTO LRFD 10th Ed. (2024) sets **no** limit on the hold-down force; the 75 %
+  of the beam weight is the rule of MassDOT LRFD Bridge Manual 3.7.2.2 and CTDOT Bridge Design Manual V2 5.9.1.6 (as cited by the moved
+  engine's owner rules), applied here as an option.
+- **Worked check case** (default project: PCI BT-72, L = 120 ft, AASHTO, 12 draped 0.6 in strands, y_end = 60 in, y_mid = 8 in, frac = 0.40,
+  f_pbt = 0.75 × 270 = 202.50 ksi, A_b = 0.217 in², w_sw = 0.82559 klf, girder end at ℄ bearing):
+  tan α = (60 − 8)/(12 × 0.40 × 120) = 0.090278, α = 0.090033 rad, sin α = 0.089911; F_str = 202.50 × 0.217 × 0.089911 = 3.9509 kip;
+  F_hd = 2 × 12 × 3.9509 = **94.8 kip**; L_g = 120.00 ft, W = 0.82559 × 120 = 99.07 kip; limit 0.75 × 99.07 = **74.3 kip**; ratio 94.8/74.3 =
+  **1.276 FAIL**. Before: no check (the default AASHTO design showed no hold-down failure); after: FAIL 1.276, the same numbers as the MassDOT
+  owner check on this design (PENDING.md, "94.8 vs 74.3 kip", confirmed). With f = 0.90: limit 89.2 kip, ratio 1.063.
+### Where
+- `apps/ps-bridge/engine/holddown.js` (new, `window.PSBHoldDown`): `apply(inp, R)` after `computeAll` adds `R.ps10` and the check at the end of
+  `R.checks` (the moved `pbd-*.js` files are not touched: verbatim and parity harness A unchanged); `compute(inp)`; used by `index.html`
+  result(), the tab tests, the smoke test and harness B. No check when the owner has its own rule (MassDOT, CTDOT), when there are no draped
+  strands, or when the box is off (`R.ps10 = { off: true }`).
+- `apps/ps-bridge/engine/model.js` `baseInputs()`: fills `base.opt.hdCheck = true` and `base.opt.hdFrac = 0.75` when absent.
+- `apps/ps-bridge/engine/fields.js`: Owner rules card "Hold-down force limit (PS-10)" (shown for AASHTO and RIDOT): the box and the fraction.
+  `ui/inputs.js`: the PR 2d placeholder removed; the Project tab assumption updated.
+- `apps/ps-bridge/engine/worked-end.js`, `ui/endzone.js`: the hold-down steps, card, tile and graphic from `R.ps10` for AASHTO / RIDOT (as for the
+  owner check); with the box off the tab says the force is not checked. `ui/dash.js`: the check in the End zone & hold-down chip.
+### Saved data (CLAUDE.md §5)
+- New fields inside the psb2 project (no new storage key): `base.opt.hdCheck` (boolean), `base.opt.hdFrac` (number). **Migration:** a new
+  project and every existing psb2 project read without them get the check **ON** at **0.75** (filled by `baseInputs` on import / load); a value
+  the user saved is kept. Old app keys (`psbeam.*`) untouched.
+### Before / after (code)
+- `engine/model.js` baseInputs, anchor `JSON.parse(JSON.stringify(mergeInputs(`: before `return JSON.parse(JSON.stringify(mergeInputs(…)));`;
+  after the same copy, then `if (b.opt.hdCheck === undefined) b.opt.hdCheck = true; if (b.opt.hdFrac === undefined) b.opt.hdFrac = 0.75;`.
+- `index.html` result(), anchor `RC.key !== key`: before `R = computeAll(JSON.parse(key))`; after `R = window.PSBHoldDown.compute(JSON.parse(key))`.
+### How verified
+- `node tests/engine/run.mjs psbridge tex project-registry`: the hand check above to 1e-12 and as shown (94.8, 99.1, 74.3, 1.276), the engine's own
+  checks unchanged with one check appended, f = 0.90, RIDOT, box off, MassDOT / CTDOT keep their own rule only, no draped strands; migration
+  (a project without the fields reads ON / 0.75; saved false / 0.6 kept; a PR 1 project); tabs on 16 designs (+ RIDOT with f = 0.90 and the girder
+  end 6 in past the bearing; + AASHTO with the box off); parity harness A 0 differences; `node tests/check-syntax.mjs`.
+- **Harness B** (`node tests/psbridge-compare.mjs`): 16 designs, all tabs: 17,800 shown values and 3,592 step values (144 of them PS-10); the PS-10 values compared with hand values worked in the
+  harness from the inputs and the old app's f_pbt, A_b, w_sw (1e-12 and as shown), every other value with the old app exactly: 0 differences.
+- `node tests/smoke/ps-bridge-skeleton.mjs` (191 checks): the box on by default (0.75), the check worked on the End zone tab and listed in its
+  chip, the box off removes it and is saved; file://, 1400 and 390 px, 0 console errors.
+### Open items
+- The default project (BT-72, 12 draped strands) now shows the hold-down FAIL under AASHTO, as under MassDOT / CTDOT (real result; the default
+  design is not changed). Auto-design (PR 5) uses this limit as a constraint (plan §4).

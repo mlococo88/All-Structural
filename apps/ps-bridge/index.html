@@ -14,7 +14,7 @@
      girder, engine/design.js) with the input checks (engine/inputcheck.js, ui/inputcheck.js); the Section properties, Loads & LLDF and
      Analysis tabs. PR 2c-1: the Losses and Stresses tabs, the strand-pattern graphic, the check chips of their checks. PR 2c-2: the
      Flexure and Shear tabs and their chips. PR 2d-1: the End zone & hold-down and Camber & deflection tabs and their chips. PR 2d-2: the
-     Handling, Deck and Rating tabs and their chips.
+     Handling, Deck and Rating tabs and their chips. PR 2d-3: the PS-10 hold-down check for AASHTO / RIDOT (engine/holddown.js).
      The old Prestressed Bridge Design.html stays the working tool. -->
 <!-- KaTeX for the worked-step equations: the steel app's pinned version and URL (CLAUDE.md §2; used from PR 2b) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
@@ -38,6 +38,7 @@
     'engine/pbd-optimize.js',
     'engine/pbd-merge.js',
     'engine/model.js',
+    'engine/holddown.js',    // PR 2d-3: the optional hold-down check for AASHTO / RIDOT (PS-10), an engine addition after computeAll (§4)
     'engine/design.js',      // PR 2b: the one girder design and its engine inputs (base + the bridge values, PBD.applyBridge)
     'engine/fields.js',      // PR 2b: every engine input on its input tab (label, unit, tooltip, rule)
     'engine/inputcheck.js',  // PR 2b: the blocking input errors (the steel app's pattern)
@@ -397,7 +398,7 @@
   let RC = { key: '', inp: null, R: null, W: null };
   function result() {
     const inp = window.PSBDesign.inputs(P), key = JSON.stringify(inp);
-    if (RC.key !== key) { let R; try { R = computeAll(JSON.parse(key)); } catch (e) { R = { error: e.message }; } RC = { key, inp, R, W: null }; }
+    if (RC.key !== key) { let R; try { R = window.PSBHoldDown.compute(JSON.parse(key)); } catch (e) { R = { error: e.message }; } RC = { key, inp, R, W: null }; }
     if (!RC.R.error && !RC.W) { const PW = window.PSBWorked, PS = window.PSBWorkedStress; try { RC.W = { section: PW.section(RC.inp, RC.R), loads: PW.loads(RC.inp, RC.R), analysis: PW.analysis(RC.inp, RC.R),
       losses: PS.losses(RC.inp, RC.R), stresses: PS.stresses(RC.inp, RC.R), flexure: window.PSBWorkedStrength.flexure(RC.inp, RC.R), shear: window.PSBWorkedStrength.shear(RC.inp, RC.R),
       endzone: window.PSBWorkedEnd.endzone(RC.inp, RC.R), camber: window.PSBWorkedEnd.camber(RC.inp, RC.R),

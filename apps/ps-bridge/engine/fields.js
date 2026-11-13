@@ -160,6 +160,12 @@
       F('base.handling.hr', 'Roll centre height (haul)', 'in', 'Height of the roll centre of the hauling rig above the road.', 'num', { v: 'nn', when: b => !!b.handling.on }),
       F('base.handling.theta_i', 'Road cross slope θ<sub>i</sub>', 'rad', 'Superelevation / cross slope during hauling.', 'num', { v: 'nn', when: b => !!b.handling.on })] },
     // ---- Owner rules ----
+    // PS-10 (PR 2d-3, engine/holddown.js): the hold-down force limit for an owner without its own rule (AASHTO, RIDOT)
+    { tab: 'own', id: 'hd', title: 'Hold-down force limit (PS-10)', ref: 'MassDOT 3.7.2.2 / CTDOT V2 5.9.1.6 rule as an option; AASHTO LRFD sets none',
+      when: b => !(window.PBD && window.PBD.ownRule && window.PBD.ownRule(window.PBD.ownerOf(b), 'hd.max')), fields: [
+      F('base.opt.hdCheck', 'Check the hold-down force', '', 'Total hold-down force of the draped strands at jacking, F_hd = 2 n_h f_pbt A_b sin α, against a fraction of the beam weight (PS-10, engineer 2026-11-12: on by default for AASHTO and RIDOT projects).', 'bool', { o: [['true', 'Check (default)'], ['false', 'Do not check']] }),
+      F('base.opt.hdFrac', 'Limit, × the beam weight W', '× W', 'F_hd ≤ this fraction × W, W = w_sw × the girder length. 0.75 is the MassDOT 3.7.2.2 / CTDOT V2 5.9.1.6 value (default); enter the precaster\'s or owner\'s value if different.', 'num', { when: b => b.opt.hdCheck !== false })],
+      note: () => 'AASHTO LRFD sets no limit on the hold-down force; MassDOT and CTDOT require F<sub>hd</sub> ≤ 0.75 W and the engine checks that for those owners whatever this box says. Worked on the End zone &amp; hold-down output tab.' },
     { tab: 'own', id: 'limits', title: 'Stress limits', ref: 'AASHTO LRFD 10th Ed. 5.9.2.3', fields: [
       F('base.opt.relCfac', 'Release compression limit, × f′<sub>ci</sub>', '× f′ci', '0.65 per 5.9.2.3.1a (0.70 at component extremities where lateral bending is included); some owners require 0.60. Blank = 0.65.', 'opt'),
       F('base.opt.corrosion', 'Corrosion exposure (Service III tension limit)', '', 'Table 5.9.2.3.2b-1, λ = 1.0: moderate 0.19√f′c ≤ 0.6 ksi; severe 0.0948√f′c ≤ 0.3 ksi. Owner defaults: RIDOT, CTDOT, MassDOT severe.', 'sel', { o: [['normal', 'Moderate'], ['severe', 'Severe']] })] }

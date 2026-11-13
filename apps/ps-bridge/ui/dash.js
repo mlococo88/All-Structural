@@ -27,7 +27,7 @@
     { id: 'flex', name: 'Flexure', tab: 'flex', checks: [['Flexure', 'fx.gov'], ['Min reinf', 'fx.min.r'], ['Neg flexure (pier)', 'fx.pier.r'], ['Pos. moment connection (5.12.3.3.8)', 'fx.conn.r']] },
     { id: 'shear', name: 'Shear', tab: 'shear', checks: [['Shear', 'sh.gov'], ['Long. reinf (5.7.3.5)', 'sh.Tr'], ['Interface shear (5.7.4)', 'sh.ifr']] },
     { id: 'end', name: 'End zone & hold-down', tab: 'end', checks: [['Splitting steel (5.9.4.4)', 'ez.dc'], ['Confinement steel (5.9.4.4.2)', 'ez.conf.gov'], ['Release tens. steel (5.9.2.3.1b)', 'ez.rel.dc'],
-      ['Hold-down force (MassDOT 3.7.2.2)', 'ez.hd.r'], ['Hold-down force (CTDOT 5.9.1.6)', 'ez.hd.r'], ['Debonded strands (CTDOT 5.9.4.3.3)', 'ez.db.r']] },
+      ['Hold-down force (MassDOT 3.7.2.2)', 'ez.hd.r'], ['Hold-down force (CTDOT 5.9.1.6)', 'ez.hd.r'], ['Hold-down force (PS-10)', 'ez.hd.r'], ['Debonded strands (CTDOT 5.9.4.3.3)', 'ez.db.r']] },
     { id: 'camb', name: 'Camber & deflection', tab: 'camb', checks: [['LL deflection', 'cb.ll.r']] },
     { id: 'hand', name: 'Handling', tab: 'hand', off: 'loads', checks: [['Lifting stress', 'hn.lift.r'], ['Lifting FS (crack, screening)', 'hn.FSl.r'], ['Hauling FS (crack, screening)', 'hn.FSh.r']] },
     { id: 'deck', name: 'Deck', tab: 'deck', off: 'dd', checks: [['Deck +M', 'dk.pos.r'], ['Deck −M', 'dk.neg.r'], ['Deck overhang', 'dk.oh.r']] }];
