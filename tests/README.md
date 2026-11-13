@@ -202,6 +202,11 @@ node tests/smoke/cbc-loads.mjs [--file <Concrete Beam Capacity.html>] [--shots <
 # Combinations x Limit States column, Shear tab, Report, AASHTO without the row, 1400 and 390 px, 0 console errors. ~30 s
 node tests/smoke/cbc-shear-limit.mjs [--file <Concrete Beam Capacity.html>]
 
+# Beam Capacity tab, ACI: stirrup leg spacing across the width, Table 9.7.6.2.2 (CBLW): b_w 36, d 20, #4: 2 legs 32.50 in > 20 FAIL, 3 legs
+# 16.25 PASS; the tight switch of the along-length check (#5, V_u 250: 16.19 > 10 FAIL); N/A without stirrups; no row in AASHTO mode; check
+# summary, Detailing card, Report; 1400 and 390 px, 0 console errors. ~30 s
+node tests/smoke/cbc-leg-width.mjs [--file <Concrete Beam Capacity.html>]
+
 # Pile Designer's saved-project library is in IndexedDB (not covered above): page text and autosave main vs the working tree, Undo / Redo,
 # Save as new / rename / duplicate / refused write / load / delete (React 18.3.1 served from the kit's 18.2.0, test-only). ~1 min
 node tests/smoke/pile-library.mjs [--a origin/main]
