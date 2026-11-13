@@ -392,12 +392,7 @@
      (each bay the shallower of its two girders, engine/crossframes.js bayDepths), one detail per distinct bay depth (h and the girder depth d
      of the bay's shallower girder), drawn with that girder's plates and labelled with its bays, one below the other. One distinct depth (equal
      depths) or a project saved before girder types: cfDetail(D, C, null), the drawing as before, byte for byte. */
-  function cfGroups(P) {
-    const CF = window.SBDCrossframes, X = CF.bayDepths && CF.bayDepths(P); if (!X) return null;
-    const B = CF.inputsOf(P, { bridge: true }).p.xfBay; if (!B) return null; const m = new Map(), r2 = v => +(+v).toFixed(2);
-    B.bays.forEach(q => { if (!q) return; const k = `${q.h}|${r2(q.s.dg)}`; if (!m.has(k)) m.set(k, { h: q.h, s: q.s, dg: r2(q.s.dg), bays: [] }); m.get(k).bays.push(q.j); });
-    return m.size > 1 ? [...m.values()] : null;
-  }
+  const cfGroups = P => window.SBDCrossframes.bayGroups(P);   // SB-23: the grouping moved to engine/crossframes.js bayGroups (unchanged), shared with the Cross-frames tab's Download DXF
   function cf(D, C) {
     const GR = cfGroups(C.P); if (!GR) return cfDetail(D, C, null);
     let yb = null; GR.forEach(g => { const i0 = D.mark(); cfDetail(D, C, g); if (yb != null) { const b = D.bbox(i0); D.move(i0, 0, yb - 16 * D.h - b[3]); } yb = D.bbox(i0)[1]; });

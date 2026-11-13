@@ -6597,3 +6597,95 @@ Inputs: D: M = 5 kip-ft, V = 2 kip; L: M = 3, V = 1.2; W: M = ±2, V = ±0.8 (re
   - new `tests/smoke/cbc-loads.mjs`, 1400 and 390 px;
   - `decimal-entry.mjs`, which now also types the service D moment and checks 1.4D;
   - the suite's other tests, as listed in the PR.
+
+## 2026-11-13 — PR: claude/cbc-shear-size-limit (PR #1495: https://github.com/mlococo88/All-Structural/pull/1495) (CBSZ) — Beam Capacity tab, ACI mode: explicit "Section size limit (ACI 22.5.1.2)" check, V_u ≤ φ(V_c + 8√f′c·b_w·d), per combination; the 22.5.5.1.1 upper limit V_c ≤ 5λ√f′c·b_w·d applied and worked   [NEW CHECK (can FAIL only where shear already fails); V_c limit applied but never governing; every existing result identical; no saved key or format change]
+
+The file uses CRLF line endings; keep them. All code is in the Beam Capacity srcdoc (`#suite-frame-capacity`). When re-applying, escape `&` as `&amp;` and `"` as `&quot;`; the text below is un-escaped. Every site is tagged CBSZ.
+
+### Engineer decisions
+- **CB-2:** an explicit section size check per combination. It must use the same V_c and φ as the shear check and appear in the check summary, the All Combinations × Limit States table and the Report. The fail message says to enlarge b_w or d or raise f′c, and that stirrups will not help. The existing V_s cap stays unchanged.
+- **CB-3:** apply and show the 22.5.5.1.1 upper limit on V_c, with the same √f′c as the row of Table 22.5.5.1 in use.
+
+### Provisions (ACI 318-19, read in structural_references ACI-318-19-2019.pdf, PDF pages 404–407; paraphrased)
+- **22.5.1.2 (Eq. 22.5.1.2):** the cross-section is to be sized so that V_u ≤ φ(V_c + 8√f′c·b_w·d).
+- **22.5.5.1.1:** V_c is not to be taken greater than 5λ√f′c·b_w·d.
+- **22.5.3.1:** √f′c ≤ 100 psi for V_c. Row (c) uses that cap; row (a) with A_v ≥ A_v,min does not (22.5.3.2).
+
+### CBSZ-1. V_c limit (`shear()`, ACI branch)
+- **Before:**
+  ```js
+    const Vc=stirAdequate? Vc_a : Vc_c;
+  ```
+- **After:**
+  ```js
+    const Vc_row=stirAdequate? Vc_a : Vc_c;
+    const rtVc=stirAdequate? rt : Math.min(rt,100);
+    const VcMax=5*lam*rtVc*bw*d/1000;
+    const Vc=Math.min(Vc_row,VcMax);
+  ```
+  The return object adds `Vc_row`, `VcMax` and `rtVc`.
+- **Why it never governs:**
+  - row (a): 2λ√f′c < 5λ√f′c;
+  - row (c): 8λ_s λ(ρ_w)^(1/3) > 5λ only when ρ_w > (5/8)^3 ≈ 0.244, since λ_s ≤ 1.
+
+  So V_c is unchanged.
+- **Shown:**
+  - Shear tab: `cbcVcMaxWork(b,sh)` after the row's block. Lines: V_c,max = 5λ√f′c b_w d → values → result; V_c = min(V_c, V_c,max).
+  - Report: steps `VcMax`, `VcUse` after the row's `Vc` step.
+
+### CBSZ-2. Section size limit
+- **`computeAll`** (after `const dcV=`):
+  ```js
+    const szA=(S.code==='ACI')?(()=>{ const lim=sh.phi*(sh.Vc+sh.VsMax);
+      return {lim,dcr:lim>0?Math.abs(c.Vu)/lim:(Math.abs(c.Vu)>0?Infinity:0)}; })():null;
+  ```
+  - `sh.VsMax = 8√f′c·b_w·d` is the existing V_s cap, unchanged. The row gets `szA`.
+  - `worst = Math.max(dcM,dcV_eff,dcT,detWorst,szA?szA.dcr:0)`.
+- **Why it can fail only where shear fails:** φV_n = φ(V_c + min(V_s, V_s,max)) ≤ φ(V_c + 8√f′c b_w d). Also φV_n,avail ≤ φV_n. So szA.dcr ≤ dcV ≤ dcV_eff, and `worst` is unchanged.
+- **`allChecks`** (ACI): after "Shear capacity", the check "Section size limit (ACI 22.5.1.2)", id `szA`, tab `tabShear`. It is N/A where V_u = 0.
+- **`cbcDashItems`:** a failing `szA` shows "section too small (stirrups will not help)".
+- **Summary tab, All Combinations × Limit States:** ACI column "D/C Size limit" after "D/C Shear".
+- **`cbcResultRows('tabShear')`:** one "Section size limit — Combination n" row per combination.
+- **Shear tab:** `cbcSzWork(b,r,sh)` at the end of the ACI steps, titled "Section size limit (ACI 22.5.1.2)". It shows:
+  - the equation, then 8√f′c b_w d, the limit and the DCR, each as symbolic → values → result;
+  - PASS, or FAIL with "the section is too small for this shear: enlarge b_w or d, or raise f′c. More stirrups will not help";
+  - a note on why it cannot fail alone.
+- **Report:**
+  - topic "Section size limit" in each ACI shear subsection, with steps `sz8`, `szLim` and `szDC` (with its fail note);
+  - Summary of checks / Summary of results keys `sh<ci>/szDC`, via `cbcComboCi`.
+- **AASHTO mode (not changed; report only):**
+  - The 5.7.3.3 limit V_n ≤ 0.25f′c b_v d_v (Eq. 5.7.3.3-2) is applied as the cap in V_n = min(V_c + V_s, V_n,max). It is worked on the Shear tab as "Crushing limit on the web" and in the Report step `Vlim`. It is not a separate check row.
+  - With torsion above the 5.7.2.1 threshold, "Section limit with torsion" (5.7.3.4.2) is already an explicit row.
+
+### Hand check
+b_w = 12 in, d = 20 in, f′c = 4 ksi, λ = 1.0, #4 two-leg stirrups at 8 in (A_v ≥ A_v,min, so row (a)).
+
+| Step | Expression | Result |
+|---|---|---|
+| √f′c | √4000 | 63.246 psi |
+| V_c, row (a) | 2(1.0)(63.246)(12)(20)/1000 | 30.36 kip |
+| V_c,max | 5(1.0)(63.246)(240)/1000 | 75.89 kip; V_c = min(30.36, 75.89) = 30.36 |
+| 8√f′c b_w d | 8(63.246)(240)/1000 | 121.43 kip |
+| Limit | 0.75(30.36 + 121.43) | 113.84 kip |
+| V_u = 50 kip | D/C = 50/113.84 | 0.439, PASS (shear D/C 0.738) |
+| V_u = 120 kip | D/C = 120/113.84 | 1.054, FAIL (shear D/C 1.771, also FAIL) |
+
+Before: no section size check. The V_s cap of 22.5.1.2 was already applied, and still is.
+
+### How verified
+- **Scratch probe**, origin/main (#1494) vs branch, headless Chromium, `file://`. Twelve projects, among them:
+  - the new default and the old default;
+  - ACI torsion on;
+  - ACI hidden T_u;
+  - the AASHTO T-section;
+  - no stirrups (row (c));
+  - computed f_s;
+  - an old save without combinations;
+  - AASHTO without torsion;
+  - a case where the V_s cap governs (b_w 10, h 16, #5 four legs at 3 in, V_u 100 and 45: section D/C = shear D/C 1.891 and 0.851);
+  - row (c) with f′c 12 ksi (√f′c capped at 100 psi in V_c, V_c,max 164.62 > V_c 44.26);
+  - the hand check.
+- **What matched:** `computeAll()` without the new fields (`szA`, `Vc_row`, `VcMax`, `rtVc`), `worst`, `VALIDATION`, the hand-off message and the autosave were identical in all 12. `allChecks` was identical once the new row was removed.
+- **Tests:**
+  - New `tests/smoke/cbc-shear-limit.mjs`, 1400 and 390 px, 0 console errors.
+  - The suite's other tests are listed in the PR.
