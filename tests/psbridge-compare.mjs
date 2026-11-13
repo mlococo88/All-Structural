@@ -64,6 +64,16 @@ let nImp = 0, nImpKeys = 0; const impNotes = [];
 const SEED = { 'psbeam.inputs.v1': '{"girder":"PCI BT-72","L":118}', 'psbeam.ui.v1': '{"tab":"losses"}' };
 let fails = 0, errors = 0;
 const log = s => console.log(s);
+// scanList(p): "Find the old app's designs" clicked until its list (or its "none found") is drawn. 2026-11-13 (PR 3a-4): a run now and then
+// timed out waiting for the list's radio after one click (on main too, not reproduced in 4 reruns): the click is read only (the list is read
+// again on each click), so a click that drew nothing is repeated, at most 3 times, and said in the log; the list itself is checked as before.
+async function scanList(p, name) {
+  for (let t = 1; ; t++) {
+    await p.click('[data-lg="scan"]');
+    try { await p.waitForSelector('#lgListHost #lgList, #lgListHost #lgNone', { timeout: 10000 }); if (t > 1) log(`note ${name}: the list was drawn on click ${t}`); return; }
+    catch (e) { if (t >= 3) throw e; }
+  }
+}
 
 // the projects: the new page builds them (PSBModel.defaultProject of the page), from the same TAB_CASES source
 const caseSrc = fs.readFileSync(path.join(REPO, 'tests/engine/psbridge-tab-cases.mjs'), 'utf8').replace(/^export const TAB_CASES = /m, 'window.__TAB_CASES = ');
@@ -102,7 +112,7 @@ for (const name of names) {
     await nw.p.reload(); await nw.p.waitForSelector('#tabBar [data-otab]'); await nw.p.waitForTimeout(200);
     await nw.p.click('#inTabs [data-itab="proj"]');
     if (how === 'file') { const f = path.join(TMP, 'old-export.json'); fs.writeFileSync(f, seed.file); await nw.p.click('[data-lg="file"]').catch(() => {}); await nw.p.setInputFiles('#fImport', f); }
-    else { await nw.p.click('[data-lg="scan"]'); const id = { autosave: 'autosave', shared: 'reg:bp_h', older: 'lib:old1' }[how]; await nw.p.check(`input[name="lgPick"][value="${id}"]`); await nw.p.click('[data-lg="imp"]'); }
+    else { await scanList(nw.p, name); const id = { autosave: 'autosave', shared: 'reg:bp_h', older: 'lib:old1' }[how]; await nw.p.check(`input[name="lgPick"][value="${id}"]`); await nw.p.click('[data-lg="imp"]'); }
     await nw.p.waitForSelector('#lgSum', { timeout: 120000 }); await nw.p.waitForTimeout(200);
     const imp = await nw.p.evaluate(o => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, i = window.PSBDesign.inputs(P), changed = Object.keys(o).filter(k => localStorage.getItem(k) !== o[k]);
       const t = document.getElementById('toast');
