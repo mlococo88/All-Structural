@@ -11468,6 +11468,17 @@ function compositeFlexSections(pg,p,r){
   },pg);
 }
 /* ---- Mx tab: composite derivation, then the checks that use it ---- */
+/* SBCF (2026-11-13, engineer): the Major Flexure 'Flange' column is the compression flange; display only. The value is the
+   region's own r.flange ('top' where M > 0, 'bottom' where M < 0, regionCheck), named 'top wall' / 'bottom wall' for a rectangular
+   HSS; I-shapes, channels, built-up and round HSS as before. Member-check mode has one L_b and no sign regions. */
+function sbCfLbl(p,f){return (p&&p._kind==='R'&&(f==='top'||f==='bottom'))?f+' wall':f;}
+function sbCfNoun(p,f){return (f==='top'||f==='bottom')?(p&&p._kind==='R'?f+' wall':f+' flange'):f;}
+function sbCfMember(p){return p&&p._kind==='R'?'top or bottom wall':'top or bottom';}
+function sbCfNote(p,D){
+  if(D.member)return 'Member check: one L\u1D47 (entered) is used for whichever '+(p&&p._kind==='R'?'wall':'flange')+' is in compression.';
+  return 'Sagging moment: top in compression, uses L\u1D47,top; hogging: bottom in compression, uses L\u1D47,bot.'+
+    (p&&p._kind==='P'?' (Round HSS: no lateral-torsional buckling, \u00A7F8, so L\u1D47 does not change \u03C6M\u2099.)':'');
+}
 function buildMxTab(pg){
   const D=dOrNull(pg),p=AN.sect;if(!D)return;
   const cmp=AN.comp;
@@ -11514,12 +11525,12 @@ function buildMxTab(pg){
   },pg);
   perComboSections(pg,'mx_',isMember()?'Case ':'Combination ',(body,C)=>{
     const t=el('table','tbl');
-    const cols=[D.member?'Case':'Region (ft)','Flange','L\u1D47 (ft)','C\u1D47','M\u1D64 (kip\u00B7ft)','\u03C6M\u2099 (kip\u00B7ft)','DCR','Governing LS'];
+    const cols=[D.member?'Case':'Region (ft)','Compression flange','L\u1D47 (ft)',   /* SBCF (2026-11-13): was 'Flange' */'C\u1D47','M\u1D64 (kip\u00B7ft)','\u03C6M\u2099 (kip\u00B7ft)','DCR','Governing LS'];
     if(D.compActive)cols.splice(1,0,'Basis');
     const hd=el('tr');cols.forEach(h=>hd.appendChild(el('th',null,h)));t.appendChild(hd);
     C.regions.forEach(r=>{
       const tr=el('tr');
-      const cells=[r.x1==null?(r.tag||'\u2014'):(fmt(r.x1,1)+' \u2013 '+fmt(r.x2,1)),r.flange,
+      const cells=[r.x1==null?(r.tag||'\u2014'):(fmt(r.x1,1)+' \u2013 '+fmt(r.x2,1)),D.member?sbCfMember(p):sbCfLbl(p,r.flange),
         r.LbFt===0?'cont.':fmt(r.LbFt,1),fmt(r.Cb,2),fmt(r.Mu,1),
         r.blocked?'\u2014':fmt(r.phiMn,1),r.blocked?'BLOCKED':fmt(r.dcr,3),
         r.blocked?r.blocked:(r.cap.gov?r.cap.gov.name:'')];
@@ -11529,6 +11540,7 @@ function buildMxTab(pg){
       t.appendChild(tr);
     });
     body.appendChild(t);
+    body.appendChild(el('div','hint',sbCfNote(p,D)));   /* SBCF (2026-11-13) */
     if(!D.member&&typeof capEnvBlock==='function')capEnvBlock(body,AN,D,C);
     if(D.member&&D.sw)body.appendChild(el('div','note','M\u1D64 includes the self-weight addition \u0394M = '+fmt(D.sw.dM,2)+' kip\u00B7ft.'));
     const g=C.flexGov;
@@ -11540,7 +11552,7 @@ function buildMxTab(pg){
           lines:['C_b=\\tfrac{12.5M_{max}}{2.5M_{max}+3M_A+4M_B+3M_C}=\\tfrac{12.5('+fmt(q.Mmax,1)+')}{2.5('+fmt(q.Mmax,1)+')+3('+fmt(q.MA,1)+')+4('+fmt(q.MB,1)+')+3('+fmt(q.MC,1)+')}=\\mathbf{'+fmt(g.Cb,2)+'}'],
           vars:[['M_{max}','kip\u00B7ft','largest |M| in the window'],['M_A,M_B,M_C','kip\u00B7ft','|M| at the window quarter points']]}));
       }
-      dcrLine(body,'Governing DCR \u2014 '+(g.basis==='composite'?'composite section':(D.member?'bare steel':g.flange+' flange, region '+fmt(g.x1,1)+'\u2013'+fmt(g.x2,1)+' ft')),
+      dcrLine(body,'Governing DCR \u2014 '+(g.basis==='composite'?'composite section':(D.member?'bare steel':sbCfNoun(p,g.flange)+', region '+fmt(g.x1,1)+'\u2013'+fmt(g.x2,1)+' ft')),
         g.cap.gov?g.cap.gov.clause:'',' M',g.Mu,g.phiMn,g.dcr);
       if(!D.member)sbdWorkedIn(body,[['tabAnalysis','anC_'+C.id,'Combination '+C.name,'M\u1D64']]);   /* D11 links */
       if(g.basis==='composite')body.appendChild(el('div','note','\u03C6M\u2099 = '+fmt(g.phiMn,1)+
@@ -12296,7 +12308,7 @@ function capEnvFig(A,D,C){
     if(i>0)shapes.push({type:'line',x0:r.x1,x1:r.x1,y0:0,y1:ymax,line:{color:'#94A3B8',width:1,dash:'dot'}});
     const mid=(r.x1+r.x2)/2;
     anns.push({x:mid,y:ymax,yanchor:'top',yshift:-2,showarrow:false,
-      text:(r.basis==='composite'?'composite':(r.flange||'')+' flange')+'<br>DCR '+fmt(r.dcr,2),
+      text:(r.basis==='composite'?'composite':'compression: '+sbCfNoun(A.sect,r.flange||''))+'<br>DCR '+fmt(r.dcr,2),   /* SBCF (2026-11-13): was (r.flange)+' flange' */
       font:{size:8.5,color:r.dcr>1?'#B42318':'#334155'},bgcolor:'rgba(255,255,255,.85)'});
   });
   nodeXs().slice(1,-1).forEach(nx=>shapes.push({type:'line',x0:nx,x1:nx,y0:0,y1:ymax,
