@@ -36,5 +36,8 @@ export const TAB_CASES = base => ({
     P.base.rows = [{ n: 14, y: 2, nd: 0, dbnd: 0 }, { n: 8, y: 4, nd: 0, dbnd: 0 }]; P.xs.bays = [3, 3, 3, 3]; P.spans.lengths = [60]; P.base.deck.on = true; P.base.handling.on = true; return P; })(),
   // PR 2d-3 (PS-10): the hold-down check for RIDOT with an edited limit (0.90 W) and the girder end past the bearing; AASHTO with the box off
   'RIDOT, draped strands, hold-down limit 0.90 W, girder end 6 in past the bearing': (() => { const P = base(); P.base.owner = 'RIDOT'; P.base.opt.hdFrac = 0.9; P.base.opt.endOh = 6; P.base.harp.n = 8; P.base.harp.yEnd = 50; return P; })(),
-  'AASHTO, PS-10 hold-down box off': (() => { const P = base(); P.base.opt.hdCheck = false; return P; })()
+  'AASHTO, PS-10 hold-down box off': (() => { const P = base(); P.base.opt.hdCheck = false; return P; })(),
+  // 2026-11-13: the RIDOT girder age at continuity (RIDOT 5.6.3.3; continuity on): deck / continuity placed at t_d = 60 days < 90 days (FAIL, 90 / 60 = 1.500)
+  'RIDOT, two continuous spans, continuity at a girder age of 60 days': (() => { const P = base(); P.base.owner = 'RIDOT'; P.spans = { lengths: [110, 110], continuity: 'composite' }; P.xs.skews = [0, 0, 0];
+    P.base.mat.td = 60; return P; })()
 });

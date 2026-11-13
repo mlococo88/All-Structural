@@ -16,7 +16,10 @@
    caption (links as text, no read-out, no controls; the series chips as a legend of the series shown), and its title and state shown (the pressed segment of its control) as the caption.
    Drawn at PW = 700 px, the printed text width (letter, 0.6 in margins: 7.3 in), so the labels print at their own size (10.5 px and up);
    on a narrower screen (phone) also at the report's width for the screen (print uses the 700 px one). report/builders.js puts them
-   at the slots' places and numbers them "Figure n.m". No drawing code here; no value is computed or recorded. */
+   at the slots' places and numbers them "Figure n.m". No drawing code here; no value is computed or recorded.
+   2026-11-13: the handling elevation in both stages (Lifting, Hauling: two figures, whatever stage the tab last showed); the captions that
+   speak of the screen controls ("click a station to select it", "Stage buttons …", the chip label "Show") or of the tab's layout ("the table
+   above": in the Report the section's tables follow its figures) reworded for a static figure. */
 (function () {
   'use strict';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -28,21 +31,37 @@
   }
   const PW = 700;
   const plainA = el => { el.querySelectorAll('a').forEach(a => { const sp = document.createElement('span'); sp.innerHTML = a.innerHTML; a.replaceWith(sp); }); return el; };
+  /* 2026-11-13 (display; decisions pending the engineer's review): a graphic drawn once per state of its control in the Report, in the
+     control's order and whatever state the tab last showed (the handling elevation: Lifting, then Hauling; the tab's own state is put back);
+     and the tabs' caption wording for the screen (click, buttons, "Show", "the table above") reworded for a static figure, in the Report only */
+  const ALLSEG = new Set(['gfx_hnel']);
+  const STATIC = [[/; click a station to select it\./g, '.'], [/\s*Click a station to select it\./g, ''], [/Stage buttons select the stage and its governing station\./g, 'Drawn at the governing station of the stage named in the caption.'],
+    [/the table above/g, 'the table in this section']];   // on the tab the table is above the graphic; in the Report it follows the figure
+  const still = h => STATIC.reduce((t, [re, w]) => t.replace(re, w), h);
+  const chipLab = h => /^(Also )?show$/i.test(String(h).trim()) ? 'Shown:' : h;
+  /* one graphic card as it is drawn now: { title, sub, shown, html } */
+  function one(card) {
+    const h3 = card.querySelector('.vk-hd h3'), sm = h3 && h3.querySelector('small'), t = h3 ? h3.cloneNode(true) : null; if (t && t.querySelector('small')) t.querySelector('small').remove();
+    const seg = card.querySelector('.vk-seg button[aria-pressed="true"]'), segL = seg && seg.closest('[role="group"]');
+    const fig = card.querySelector('.vk-fig'); if (!fig || !fig.querySelector('svg')) return null;
+    const f = plainA(fig.cloneNode(true)); f.querySelectorAll('.va-hov').forEach(n => n.remove()); f.removeAttribute('style');
+    // the series chips (screen controls) as a static legend of the series shown (their swatches); then the tab's legend and captions
+    const chips = [...card.querySelectorAll(':scope > .vk-chips')].map(c => { const on = [...c.querySelectorAll('button[aria-pressed="true"]')]; if (!on.length) return '';
+      const lab = c.querySelector('.vk-cl'); return `<div class="va-leg">${lab ? `<span><b>${chipLab(lab.innerHTML)}</b></span>` : ''}${on.map(b => `<span>${b.innerHTML}</span>`).join('')}</div>`; }).join('');
+    const extra = chips + [...card.querySelectorAll(':scope > .va-leg, :scope > .vk-cap')].map(n => still(plainA(n.cloneNode(true)).outerHTML)).join('');
+    return { title: t ? still(t.innerHTML.trim()) : '', sub: sm ? still(sm.innerHTML.trim()) : '', shown: seg ? `${segL && segL.getAttribute('aria-label') ? segL.getAttribute('aria-label') + ': ' : ''}${seg.textContent.trim()}` : '',
+      html: `<div class="vk-fig">${f.innerHTML}</div>${extra}` };
+  }
   /* the graphic cards of a tab drawn in host: { <slot id>: [{ title, sub, shown, html }] } */
   function grab(host) {
     const out = {};
     host.querySelectorAll('.vk.va-card, .vk.vk-det').forEach(card => {
       const slot = card.closest('[id^="gfx_"]'); if (!slot) return;
-      const h3 = card.querySelector('.vk-hd h3'), sm = h3 && h3.querySelector('small'), t = h3 ? h3.cloneNode(true) : null; if (t && t.querySelector('small')) t.querySelector('small').remove();
-      const seg = card.querySelector('.vk-seg button[aria-pressed="true"]'), segL = seg && seg.closest('[role="group"]');
-      const fig = card.querySelector('.vk-fig'); if (!fig || !fig.querySelector('svg')) return;
-      const f = plainA(fig.cloneNode(true)); f.querySelectorAll('.va-hov').forEach(n => n.remove()); f.removeAttribute('style');
-      // the series chips (screen controls) as a static legend of the series shown (their swatches); then the tab's legend and captions
-      const chips = [...card.querySelectorAll(':scope > .vk-chips')].map(c => { const on = [...c.querySelectorAll('button[aria-pressed="true"]')]; if (!on.length) return '';
-        const lab = c.querySelector('.vk-cl'); return `<div class="va-leg">${lab ? `<span><b>${lab.innerHTML}</b></span>` : ''}${on.map(b => `<span>${b.innerHTML}</span>`).join('')}</div>`; }).join('');
-      const extra = chips + [...card.querySelectorAll(':scope > .va-leg, :scope > .vk-cap')].map(n => plainA(n.cloneNode(true)).outerHTML).join('');
-      (out[slot.id] = out[slot.id] || []).push({ title: t ? t.innerHTML.trim() : '', sub: sm ? sm.innerHTML.trim() : '', shown: seg ? `${segL && segL.getAttribute('aria-label') ? segL.getAttribute('aria-label') + ': ' : ''}${seg.textContent.trim()}` : '',
-        html: `<div class="vk-fig">${f.innerHTML}</div>${extra}` });
+      const list = out[slot.id] = out[slot.id] || [], btns = ALLSEG.has(slot.id) ? [...card.querySelectorAll('.vk-seg button[data-vkseg]')] : [];
+      if (btns.length < 2) { const g = one(card); if (g) list.push(g); return; }
+      const cur = btns.find(b => b.getAttribute('aria-pressed') === 'true');
+      btns.forEach(b => { b.click(); const g = one(card); if (g) list.push(g); });
+      if (cur) cur.click();   // the tab's own state as it was
     });
     return out;
   }

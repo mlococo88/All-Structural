@@ -21,6 +21,9 @@
 //   2026-11-13 ('own'): the Owner rules input tab's engine values (the owner's material checks in its rules table: value, limit, ratio) are
 //   compared as above; the check summary column's PASS / FAIL totals must count every engine check (each in a group; the material limits in
 //   "Materials (owner limits)", shown when the design has one) and the Report's §1 the same FAIL rows.
+//   2026-11-13 (display): the group renamed "Owner limits" and the RIDOT girder age at continuity (RIDOT 5.6.3.3, continuity on) in it: its
+//   Owner rules row (t_d, the minimum, the ratio) compared as above, the chip shown when the design has any of the owner-limit checks, and
+//   the Report's §1 row of each in group "Owner limits".
 //   node tests/psbridge-compare.mjs [--tabs loss,str,flex,shear,end,camb,hand,deck,rt,rpt,own] [--case <part of a name>] [--old <file>] [--new <index.html>] [--verbose]
 //     --control: changes one shown value by 1e-9 (relative) and one step value before comparing (and, with the Report, one Report value, one
 //     Report step value and one number given to the old report's comparison): the run must report each (the harness sees a difference)
@@ -77,7 +80,7 @@ for (const name of names) {
     shown.push(...r.ev); steps.push(...r.st); ps10 = r.ps10; k10 = r.k10;
   }
   // 2026-11-13: the Owner rules input tab (the owner's material checks: the engine's value, limit and ratio in its rules table) and the check
-  // summary column (its PASS / FAIL totals count every engine check of the design, the material limits in "Materials (owner limits)")
+  // summary column (its PASS / FAIL totals count every engine check of the design, the owner's limits in "Owner limits")
   if (OWN) {
     await nw.p.click('#inTabs [data-itab="own"]'); await nw.p.waitForTimeout(200);
     const r = await nw.p.evaluate(() => {
@@ -85,7 +88,7 @@ for (const name of names) {
       const ev = [...document.querySelectorAll('#inPanes [data-pane="own"] [data-ev]')].map(el => ({ tab: 'own', path: el.dataset.ev, d: +el.dataset.d, div: 0, text: el.textContent, v: at(R, el.dataset.ev) }));
       const N = new Set(window.PSBDashUI.GROUPS.flatMap(g => g.checks.map(q => q[0]))), num = s => { const el = document.querySelector('#sbDashHead ' + s); return el ? parseInt(el.textContent, 10) : 0; };
       return { ev, all: R.checks.length, out: R.checks.filter(c => !N.has(c.n)).map(c => c.n), nF: R.checks.filter(c => !c.pass).length, F: num('.sdF'), Pn: num('.sdP'),
-        mat: R.checks.filter(c => /^(Girder f′c|Release strength f′ci) \((RIDOT|MassDOT|CTDOT) /.test(c.n)).length, chip: !!document.querySelector('#sbDashCol [data-sdgrp="mat"]') };
+        mat: R.checks.filter(c => /^(Girder f′c|Release strength f′ci|Girder age at continuity) \((RIDOT|MassDOT|CTDOT) /.test(c.n)).length, chip: !!document.querySelector('#sbDashCol [data-sdgrp="mat"]') };
     });
     shown.push(...r.ev); colOwn = r;
   }
@@ -105,7 +108,8 @@ for (const name of names) {
       const sum = { checks: R.checks.map((c, i) => ({ loc: num(`checks.${i}.loc`), v: num(`checks.${i}.v`), lim: num(`checks.${i}.lim`), r: num(`checks.${i}.r`) })),
         kq: Object.fromEntries(['totalLoss', 'pctLoss', 'fpe', 'dfm', 'dfv', 'fMid.phiMn', 'MuMid', 'cam.rel', 'cam.final', 'L'].map(p => [p, num(p)])) };
       const nF = [...document.querySelectorAll('.rp-doc section[data-rpsec="rp-s1"] table tbody tr')].filter(tr => tr.children[7] && tr.children[7].textContent.trim() === 'FAIL').length;
-      return { nF, ev, st, nSteps, domSteps: document.querySelectorAll('.rp-doc .rp-step').length, k10, sum, kErr: document.querySelectorAll('.rp-doc .katex-error').length, bad: document.querySelectorAll('.rp-doc .rp-bad').length };
+      const s1 = document.querySelector('.rp-doc section[data-rpsec="rp-s1"]'), ownRows = s1 ? [...s1.querySelectorAll('table tbody tr')].filter(tr => tr.children[0] && tr.children[0].textContent.trim() === 'Owner limits').length : 0;
+      return { nF, ownRows, notCol: !!s1 && /Not in the check summary column/.test(s1.textContent), ev, st, nSteps, domSteps: document.querySelectorAll('.rp-doc .rp-step').length, k10, sum, kErr: document.querySelectorAll('.rp-doc .katex-error').length, bad: document.querySelectorAll('.rp-doc .rp-bad').length };
     });
     shown.push(...rpt.ev); steps.push(...rpt.st);
   }
@@ -148,8 +152,10 @@ for (const name of names) {
   if (colOwn) {
     if (colOwn.out.length) bad.push('check summary column: not in a group: ' + colOwn.out.join('; '));
     if (colOwn.F !== colOwn.nF || colOwn.F + colOwn.Pn !== colOwn.all) bad.push(`check summary column: ${colOwn.F} FAIL + ${colOwn.Pn} PASS, the engine ${colOwn.nF} failing of ${colOwn.all}`);
-    if (!!colOwn.mat !== colOwn.chip) bad.push(`Materials chip ${colOwn.chip ? 'shown' : 'missing'} with ${colOwn.mat} material checks`);
-    if (colOwn.mat && colOwn.ev.length < 3 * colOwn.mat) bad.push(`Owner rules table: ${colOwn.ev.length} values for ${colOwn.mat} material checks`);
+    if (!!colOwn.mat !== colOwn.chip) bad.push(`Owner limits chip ${colOwn.chip ? 'shown' : 'missing'} with ${colOwn.mat} material checks`);
+    if (colOwn.mat && colOwn.ev.length < 3 * colOwn.mat) bad.push(`Owner rules table: ${colOwn.ev.length} values for ${colOwn.mat} owner-limit checks`);
+    if (rpt && rpt.ownRows !== colOwn.mat) bad.push(`Report §1: ${rpt.ownRows} rows in group Owner limits, the design has ${colOwn.mat} owner-limit checks`);
+    if (rpt && rpt.notCol) bad.push('Report §1: a "not in the check summary column" note');
     if (rpt && rpt.nF !== colOwn.F) bad.push(`Report §1 FAIL rows ${rpt.nF} vs the column's ${colOwn.F}`);
   }
   // PR 2e: the Report rendered (every number in its section, every step, no KaTeX error, no unresolved §) and the old app's report

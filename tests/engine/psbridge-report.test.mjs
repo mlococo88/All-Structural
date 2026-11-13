@@ -63,8 +63,8 @@ for (const [name, P] of Object.entries(CASES)) {
     assert.equal(JSON.stringify(B.R), R0); assert.equal(JSON.stringify(B.inp), I0); assert.equal(JSON.stringify(P), P0);
   });
 }
-// 2026-11-13 (display): the owner's material limits in the check summary column ("Materials (owner limits)", counted in its totals) and the
-// Report's §1 consistent with the column: the same groups, the same checks counted (any check outside the column is named in §1)
+// 2026-11-13 (display): the owner's limits in the check summary column ("Materials (owner limits)", renamed "Owner limits" when the RIDOT girder
+// age at continuity joined it; counted in its totals) and the Report's §1 consistent with the column: the same groups, the same checks counted
 const MATG = () => W.PSBDashUI.GROUPS.find(g => g.id === 'mat');
 const colCount = R => { const N = new Set(W.PSBDashUI.GROUPS.flatMap(g => g.checks.map(q => q[0]))), cs = R.checks.filter(c => N.has(c.n)); return { n: cs.length, nF: cs.filter(c => !c.pass).length, out: R.checks.filter(c => !N.has(c.n)) }; };
 for (const [name, P] of Object.entries(CASES)) {
@@ -73,10 +73,11 @@ for (const [name, P] of Object.entries(CASES)) {
     assert.deepEqual(J(cc.out.map(c => c.n)), [], 'every check of the tab designs is in a group of the column');
     assert.equal(rows.filter(r => r.cells[0] !== '—').length, cc.n); assert.equal(rows.filter(r => r.cells[7].t === 'FAIL').length, cc.nF);
     rows.forEach(r => { const g = W.PSBDashUI.GROUPS.find(q => q.checks.some(z => z[0] === r.cells[1])); assert.equal(r.cells[0], g.name, r.cells[1]); });
-    B.R.checks.filter(c => MATG().checks.some(q => q[0] === c.n)).forEach(c => { const r = rows.find(q => q.cells[1] === c.n); assert.equal(r.cells[0], 'Materials (owner limits)'); assert.equal(r.cells[8], 'see [[rs.own]]'); });
+    B.R.checks.filter(c => MATG().checks.some(q => q[0] === c.n)).forEach(c => { const r = rows.find(q => q.cells[1] === c.n); assert.equal(r.cells[0], 'Owner limits'); assert.equal(r.cells[8], 'see [[rs.own]]'); });
+    assert.ok(!W.SharedReport.text(W.SharedReport.build(M)).includes('Not in the check summary column'));
   });
 }
-test('Materials (owner limits): CTDOT f′ci 6.8 > 6.5 ksi FAILs (ratio 1.046), counted in the column; the Owner rules table shows the engine values', () => {
+test('Owner limits: CTDOT f′ci 6.8 > 6.5 ksi FAILs (ratio 1.046), counted in the column; the Owner rules table shows the engine values', () => {
   const P = CASES['CTDOT, debonded rows, diaphragms, girder end 9 in past the bearing'], B = W.PSBReportData.compute(P, null), R = B.R;
   const i = R.checks.findIndex(c => c.n === 'Release strength f′ci (CTDOT 5.9.1.2)'), c = R.checks[i];
   assert.equal(c.v, 6.8); assert.equal(c.lim, 6.5); assert.equal(fx(c.r, 3), '1.046'); assert.equal(c.pass, false);
@@ -94,14 +95,33 @@ test('Materials (owner limits): CTDOT f′ci 6.8 > 6.5 ksi FAILs (ratio 1.046), 
   // without a result (an input error) the table says so and shows no number
   assert.match(W.PSBInputsUI.cards('own', P), /shown when the inputs have no error/);
 });
-test('Materials (owner limits): RIDOT f′c minimum (limit / value); AASHTO has no material check; a check outside the column is named in §1', () => {
+test('Owner limits: RIDOT f′c minimum (limit / value); AASHTO has no owner-limit check', () => {
   const P = CASES['box BIII-36, no topping, debonded row, diaphragm, RIDOT'], B = W.PSBReportData.compute(P, null), R = B.R, h = W.PSBInputsUI.cards('own', P, R);
   const i = R.checks.findIndex(c => c.n === 'Girder f′c (RIDOT 5.2.1)'); assert.ok(i >= 0); assert.match(h, /governing minimum/);
   assert.ok(h.includes(`ratio = <span data-ev="checks.${i}.lim" data-d="2">5.00</span> / <span data-ev="checks.${i}.v"`));
+  assert.ok(!R.checks.some(c => c.n === 'Girder age at continuity (RIDOT 5.6.3.3)'), 'simple span: no age check');
   const A = W.PSBReportData.compute(CASES['default (BT-72, interior, simple)'], null); assert.ok(!A.R.checks.some(c => MATG().checks.some(q => q[0] === c.n)));
-  const Q = W.PSBModel.defaultProject(); Q.base.owner = 'RIDOT'; Q.spans = { lengths: [110, 110], continuity: 'composite' }; Q.xs.skews = [0, 0, 0];
-  const C = W.PSBReportData.compute(Q, null), cc = colCount(C.R); assert.deepEqual(J(cc.out.map(c => c.n)), ['Girder age at continuity (RIDOT 5.6.3.3)']);
-  const T = W.SharedReport.text(W.SharedReport.build(RB.model(C))); assert.ok(T.includes('Not in the check summary column and not counted in its totals: Girder age at continuity (RIDOT 5.6.3.3)'));
+});
+// 2026-11-13 (display; decision pending the engineer's review): the RIDOT girder age at continuity (RIDOT 5.6.3.3, continuity on) in the
+// "Owner limits" group: counted in the column, its Owner rules row (own-rule-cont.age) shows t_d, the minimum and the ratio; §1 has no
+// "not in the column" note
+test('Owner limits: RIDOT girder age at continuity (t_d 60 < 90 days FAILs, 1.500; t_d 90 PASSes, 1.000), counted, in the Owner rules table, §1', () => {
+  const N = 'Girder age at continuity (RIDOT 5.6.3.3)', P = CASES['RIDOT, two continuous spans, continuity at a girder age of 60 days'], B = W.PSBReportData.compute(P, null), R = B.R;
+  const i = R.checks.findIndex(c => c.n === N), c = R.checks[i]; assert.ok(i >= 0);
+  assert.equal(c.v, 60); assert.equal(c.lim, 90); assert.equal(c.u, 'days'); assert.equal(fx(c.r, 3), '1.500'); assert.equal(c.pass, false);
+  assert.deepEqual(J(MATG().checks.find(q => q[0] === N)), ['Girder age at continuity (RIDOT 5.6.3.3)', 'own-rule-cont.age']); assert.equal(MATG().name, 'Owner limits');
+  const cc = colCount(R); assert.deepEqual(J(cc.out.map(q => q.n)), []); assert.equal(cc.n, R.checks.length); assert.ok(cc.nF >= 1);
+  const h = W.PSBInputsUI.cards('own', P, R), row = h.slice(h.indexOf('<tr id="own-rule-cont.age">')); assert.ok(h.includes('<tr id="own-rule-cont.age">'));
+  const cell = row.slice(0, row.indexOf('</tr>'));
+  assert.ok(cell.includes(`t<sub>d</sub> (girder age at continuity) = <span data-ev="checks.${i}.v" data-d="0">60</span> days; governing minimum <span data-ev="checks.${i}.lim" data-d="0">90</span> days; ratio = <span data-ev="checks.${i}.lim" data-d="0">90</span> / <span data-ev="checks.${i}.v" data-d="0">60</span> = <b><span data-ev="checks.${i}.r" data-d="3">1.500</span></b>`), cell);
+  assert.match(cell, /FAIL/); assert.match(cell, /check summary: Owner limits/);
+  const M = RB.model(B), rows = M.sections[0].subs[0].items.find(q => q.type === 'table').rows, r = rows.find(q => q.cells[1] === N);
+  assert.equal(r.cells[0], 'Owner limits'); assert.equal(r.cells[8], 'see [[rs.own]]'); assert.equal(r.cells[7].t, 'FAIL'); assert.equal(r.cells[6].t, '1.500');
+  const T = W.SharedReport.text(W.SharedReport.build(M)); assert.ok(!T.includes('Not in the check summary column')); assert.ok(T.includes('Owner limits'));
+  assert.ok(M.vals.some(v => v.sec === 'proj' && v.path === `checks.${i}.r` && v.text === '1.500'));
+  // t_d = 90 days (the default): PASS, ratio 1.000, worked as a minimum
+  const Q = JSON.parse(JSON.stringify(P)); Q.base.mat.td = 90; const C = W.PSBReportData.compute(Q, null), k = C.R.checks.findIndex(q => q.n === N);
+  assert.equal(fx(C.R.checks[k].r, 3), '1.000'); assert.equal(C.R.checks[k].pass, true); assert.match(W.PSBInputsUI.cards('own', Q, C.R), /governing minimum <span data-ev="checks\.\d+\.lim" data-d="0">90<\/span> days/);
 });
 test('report: a section left out keeps no link into it; the rest is unchanged', () => {
   const B = W.PSBReportData.compute(W.PSBModel.defaultProject(), null), all = RB.model(B), M = RB.model(B, { include: { loss: false, rt: false } }), doc = W.SharedReport.build(M);
