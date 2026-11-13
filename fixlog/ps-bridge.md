@@ -1938,7 +1938,7 @@ index 990a696..2f04f1b 100644
 ```
 
 ## 2026-11-13 — PS-26: Report §2 Owner rules table — one "Applied here" column per girder type where the types' values differ; §1 Key quantities DF link checked (display only; no calculation change)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1531: https://github.com/mlococo88/All-Structural/pull/1531
 ### Request
 - Engineer decision PS-26 (2026-11-13): the Report §2 Owner rules table shows one value + status column per girder type: each type's own owner checks (f′c, f′ci, girder age at continuity, …) on its governing line where relevant. One type, or the same values for every type: a single column exactly as before. Each column's "see §" points to that type's sections. The in-app Owner rules tab: leave it if it shows only the type shown; check consistency.
 - Fix the dead link in §1 "Key quantities" (`[[ld.dfm]]`, PS-25 open item).
@@ -1965,8 +1965,8 @@ PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
   - new "Report, PS-26": every project above (+ the three-type project under CTDOT with one type's f′ci 6.8 ksi, a FAIL in one column) × both modes: one column when the types' Owner rules tab cells are the same, and then §2 equal to §2 built with no per-type columns; otherwise 3 + n columns, each heading the type, a line of it, its own sections; each column = that type's Owner rules tab cells; no line of the type with a larger owner ratio; PASS / FAIL counts = the check summary column's; every §2 value = its type's engine value;
   - new "Report links": every [[…]] and step-note "§id" reference of every report above resolves (`SharedReport.build().unresolved` empty, no "§?"), no duplicate anchor; each §1 Key quantities DF link → the "Moment distribution factor" step of its unit's Loads & LLDF section; each section left out in turn: no [[…]] reference dangles.
 - `node tests/engine/run.mjs psbridge tex project-registry`: 16 files, 146 passed, 0 failed. `node tests/check-syntax.mjs`: all scripts pass.
-- `tests/smoke/ps-bridge-types.mjs` §10 (+3 checks): the RIDOT two-type project: §2 table 5 columns, both f′c cells, no unresolved link, the Exterior heading's link → §15; §1 both DF links → "Moment distribution factor"; the Owner rules tab: one column, its f′c cell = the type's Report column. 106 checks, 0 failed. `ps-bridge-skeleton.mjs`: SKELRES.
-- Harness B: HBRES.
+- `tests/smoke/ps-bridge-types.mjs` §10 (+3 checks): the RIDOT two-type project: §2 table 5 columns, both f′c cells, no unresolved link, the Exterior heading's link → §15; §1 both DF links → "Moment distribution factor"; the Owner rules tab: one column, its f′c cell = the type's Report column. 106 checks, 0 failed. `ps-bridge-skeleton.mjs`: 252 checks, 0 failed.
+- Harness B: normal 17 designs, 0 with differences, exit 0; `--import` 17 imported, 0 with differences, exit 0; `--control` 17 with differences, exit 1; `--import --control` 17 with differences, exit 1.
 ### Decisions (pending engineer review)
 - PS26-D1. "Governing line" of a type for its owner checks = the line with the largest Owner limits ratio; a tie (the owner rules use type inputs, so every line ties today) keeps the line the report works for the type. The heading names that line.
 - PS26-D2. Per-type columns are shown only in the multi-unit report (PS-25), when at least one row's "Applied here" text differs between types; otherwise one column, as before.
