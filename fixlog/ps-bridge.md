@@ -1059,7 +1059,7 @@ PR #1506: https://github.com/mlococo88/All-Structural/pull/1506
 - None of this PR (the default-method question answered by PS-21).
 
 ## 2026-11-13 — PR 3a-4: the bridge level, part 4 — the old app's kept girder × span designs restored as girder types (PS-17; no formula change)
-PR: https://github.com/mlococo88/All-Structural/pull/1513
+PR #1513: https://github.com/mlococo88/All-Structural/pull/1513
 ### Request
 - Engineer decision PS-17 (2026-11-13): "Multi-design import: wait for bridge level 3a; kept designs restored automatically as girder
   types/spans at 3a." PS-18: MIDAS demands stay kept (restored when the MIDAS import arrives). Replaces 2f decision D4 ("kept, NOT designed yet").
