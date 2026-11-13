@@ -56,8 +56,8 @@ test('Exterior 6 in shallower: the governing bay G1–G2, h = 46 in, d = 55.88 i
   assert.deepEqual(J(BD.bays.map(q => q.s.D)), [54, 60, 60, 54]); assert.deepEqual(J(BD.bays.map(q => q.s.label)), ['Exterior', 'Interior', 'Interior', 'Exterior']);
   assert.equal(BD.gov.j, 0);
   const a = run(P, 0), b = run(P, 0, false), p = a.I.p;
-  assert.equal(p.h, 46); assert.equal(b.I.p.h, 52); assert.equal(p.dg, 55.88); assert.equal(b.I.p.dg, 61.88); assert.equal(p.dW, 61.88, 'wind on Interior as before');
-  assert.equal(a.R.W.III.Fw, b.R.W.III.Fw, 'wind force unchanged');
+  assert.equal(p.h, 46); assert.equal(b.I.p.h, 52); assert.equal(p.dg, 55.88); assert.equal(b.I.p.dg, 61.88); assert.equal(p.dW, 55.88, 'SB-20: the wind on the exterior girder (Exterior, d = 55.88 in)'); assert.equal(b.I.p.dW, undefined);
+  assert.ok(Math.abs(a.R.W.III.Fw / b.R.W.III.Fw - 55.88 / 61.88) < 1e-12, 'SB-20: F_w ∝ d_W');
   assert.equal(p.sb.D, 60); assert.equal(p.sb.full, 'no'); assert.equal(b.I.p.sb.full, 'yes'); assert.equal(a.R.SB.C, 3.6); assert.equal(b.R.SB.C, 2.4);
   assert.ok(Math.abs(a.R.SB.Mbr / b.R.SB.Mbr - 1.5) < 1e-12, 'M_br ∝ C');
   const top = R => R.combos.find(c => c.id === 'Con').f.find(q => q.e.k === 'top').br;
@@ -79,7 +79,9 @@ test('Exterior 6 in shallower: the governing bay G1–G2, h = 46 in, d = 55.88 i
 
 test('Exterior 6 in deeper: Interior reported as before; Exterior reported takes Interior\'s depth, its wind as before', () => {
   const P = withExt(6);
-  { const a = run(P, 0), b = run(P, 0, false); assert.equal(vals(a), vals(b)); assert.equal(a.I.p.xfBay.vary, false); }
+  { const a = run(P, 0), b = run(P, 0, false); assert.equal(a.I.p.xfBay.vary, false); assert.equal(a.I.p.h, b.I.p.h); assert.equal(a.I.p.dg, b.I.p.dg);
+    assert.equal(a.I.p.dW, 67.88, 'SB-20: Interior reported, the wind on the exterior girder (Exterior, 67.88 in; was 61.88)'); assert.ok(Math.abs(a.R.W.III.Fw / b.R.W.III.Fw - 67.88 / 61.88) < 1e-12);
+    assert.equal(a.R.SB.Mbr, b.R.SB.Mbr); assert.equal(a.R.SB.bT, b.R.SB.bT); }
   const a = run(P, 1), b = run(P, 1, false);
   assert.equal(b.I.p.h, 58); assert.equal(a.I.p.h, 52); assert.equal(b.I.p.dg, 67.88); assert.equal(a.I.p.dg, 61.88); assert.equal(a.I.p.dW, 67.88);
   assert.equal(a.R.W.III.Fw, b.R.W.III.Fw); assert.equal(a.I.p.sb.D, 66); assert.equal(a.I.p.sb.full, 'no', 'h = 52 < 0.8 × 66 = 52.8'); assert.equal(a.I.p.xfBay.vary, true);
@@ -103,3 +105,43 @@ test('ui/framing.js build: the Download DXF model as before (dxfB) only when the
   const P = withExt(-6), B = FUI.build({ P, g: 0 }); assert.ok(B.dxfB); assert.equal(B.dxfB.I.p.h, 52); assert.equal(B.I.p.h, 46); assert.equal(B.dxfB.line, B.line);
   assert.equal(FUI.build({ P: withExt(-6), g: 1 }).dxfB, undefined, 'Exterior reported: its own depth governs');
 });
+
+// ---------- SBXF2 (2026-11-13; engineer decisions SB-18, SB-19, SB-20) ----------
+// three types on 6 lines: Ext (G1, G6) D = 54, Mid (G2, G5) D = 60, Core (G3, G4) D = 66; bays: 54, 60, 66, 60, 54
+const three = () => { const P = M.newProject(); P.xs.nb = 6; P.xs.bays = [9.5, 9.5, 9.5, 9.5, 9.5];
+  M.setLines(P, 1, [0, 5]); M.setLines(P, 0, [1, 4]); P.girders[0].label = 'Mid'; P.girders[1].segments.forEach(s => { s.D -= 6; });
+  const c = M.addType(P, 0, { label: 'Core', lines: [2, 3] }); P.girders[c].segments.forEach(s => { s.D += 6; }); return P; };
+test('SB-18: each type\'s frame is the shallowest bay attached to its own lines', () => {
+  const P = three(), BD = CF.bayDepths(P); assert.deepEqual(J(BD.bays.map(q => q.s.D)), [54, 60, 66, 60, 54]); assert.equal(BD.gov.j, 0);
+  const core = run(P, 2), mid = run(P, 0), ext = run(P, 1), br = CF.inputsOf(P, { gi: 2, bridge: true });
+  // Core (G3, G4): bays G2–G3, G3–G4, G4–G5 → min 60 (G2–G3): h = round(max(52, 45)) = 52 in (bridge: 46)
+  assert.equal(core.I.p.xfBay.scope, 'type'); assert.deepEqual(J(core.I.p.xfBay.tl), [2, 3]); assert.equal(core.I.p.xfBay.j, 1); assert.equal(core.I.p.h, 52); assert.equal(br.p.h, 46);
+  assert.equal(core.I.p.dg, 61.88); assert.equal(core.I.p.sb.D, 66); assert.equal(core.R.SB.C, 3.6, '52 < 0.8 × 66 = 52.8');
+  assert.equal(mid.I.p.h, 46); assert.equal(mid.I.p.xfBay.j, 0); assert.equal(ext.I.p.h, 46);
+  const top = R => R.combos.find(c => c.id === 'Con').f.find(q => q.e.k === 'top').br; assert.ok(Math.abs(top(core.R) - core.R.SB.Mbr / 52) < 1e-9, 'chord M_br / h with the type\'s h');
+  assert.match(core.R.steps.find(s => s.id === 'cf.xfD').label, /shallowest attached to G3, G4/);
+  // the DC1 weights stay per bay (bridge view)
+  assert.deepEqual(J(CF.pointLoads(P, 2).X.hb), [46, 52, 58, 52, 46]);
+  // Auto design's run copies carry the type's lines (adLines): the same frame as the Summary's type
+  const AD = loadAD(), Q = AD.SBDAutoDesign.typeProject(P, 2), k = Q.girders.findIndex(g => g.id === P.girders[2].id);
+  assert.deepEqual(J(Q.girders[k].adLines), [2, 3]); assert.equal(AD.SBDCrossframes.inputsOf(Q, { gi: k }).p.h, 52); assert.equal(AD.SBDCrossframes.inputsOf(Q, { gi: k + 1 }).p.h, 52);
+});
+test('SB-20: the wind on the exterior girder depth, whatever type is reported; no type on an exterior line: the reported girder', () => {
+  const P = three(); for (const gi of [0, 1, 2]) assert.equal(run(P, gi).I.p.dW, 55.88);
+  const Q = withExt(6); Q.girders[0].lines = [1, 2, 3, 4]; M.setLines(Q, 1, [0]); const c = M.addType(Q, 1, { label: 'Ext2', lines: [4] }); Q.girders[c].segments.forEach(s => { s.D -= 10; });
+  assert.equal(run(Q, 0).I.p.dW, 67.88, 'G1 Exterior 67.88, G5 Ext2 57.88: the deeper'); const st = run(Q, 0).R.steps.find(s => s.id === 'cf.dW'); assert.match(st.sub, /\\max\(67\.88,\\ 57\.88\)/);
+  const N = withExt(-6); N.girders[1].lines = []; N.girders[0].lines = [1, 2, 3]; assert.equal(run(N, 0).I.p.dW, 61.88, 'no exterior type: the reported girder');
+});
+test('SB-19: the diaphragm depth in every bay against the deeper of its two girders; equal depths: the same requirement', () => {
+  const dia = P => { P.crossframes = { ...M.defaultCrossframes(), dia: { ...M.defaultCrossframes().dia, on: 'yes', shape: 'C15x33.9' } }; return P; };
+  const item = (X, id) => X.C.find(c => c.id === id).items.find(i => /^Depth/.test(i.loc));
+  for (const Q of [dia(M.newProject()), dia(M.defaultProject())]) { const a = run(Q, 0), b = run(Q, 0, false);
+    for (const id of ['CFD']) { assert.equal(item(a, id).demand, item(b, id).demand); assert.equal(item(a, id).r, item(b, id).r); } }
+  const P = dia(withExt(6)), a = run(P, 0), b = run(P, 0, false), it = item(a, 'CFD');   // Interior 60 (d 61.88), Exterior 66 (d 67.88)
+  assert.equal(it.demand, 0.75 * 67.88); assert.match(it.loc, /governing bay G1–G2: d of G1 Exterior/); assert.equal(item(b, 'CFD').demand, 0.75 * 61.88);
+  assert.ok(Math.abs(it.r - 0.75 * 67.88 / 15) < 1e-12); assert.equal(it.st, 'warn', '50.91 > 15');
+  const st = a.R.steps.find(s => s.id === 'cf.cfd.dep'); assert.equal(st.value, 0.75 * 67.88); assert.match(st.sub, /\\max\(67\.88,\\ 61\.88\)/);
+  const P2 = dia(withExt(-6)), it2 = item(run(P2, 0), 'CFD'); assert.equal(it2.demand, 0.75 * 61.88, 'Exterior shallower: G1–G2 deeper = Interior'); assert.match(it2.loc, /G1–G2: d of G2 Interior/);
+});
+function loadAD() { return loadShared('units.js', 'steps.js', 'lldf.js', 'vehicles.js', 'moving-load.js', ...['engine/model.js', 'engine/sections.js', 'engine/flexure.js', 'engine/owners.js', 'engine/lldf.js', 'engine/loads.js',
+  'engine/analysis.js', 'engine/framing.js', 'engine/crossframes.js', 'engine/autodesign.js'].map(E)); }

@@ -3442,6 +3442,37 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
 - **Other copies:** none. The batch tension columns are unchanged.
 - **Open items:** gusset plate, welds, block shear and the HSS wall at the slot end are not checked (stated on the card). Two-side-gusset case 6 is not offered.
 
+## 2026-11-13 — PR: claude/sbeam-analysis-summary (PR #1479: https://github.com/mlococo88/All-Structural/pull/1479) (SBAS) — Analysis tab: summary of all load combinations, envelope station table   [display only]
+- **Engineer's request (2026-11-13):** "the analysis results should have a summary table at the top of the tab showing all the results summarized. The tabulated results in section 8 is nice but it only shows one load case which may not be the governing one."
+- **Problem:** the Analysis tab showed the peaks and reactions of each combination only inside that combination's own card, and Tabulated Results only for the selected combination.
+- **Code (re-apply by hand):**
+  1. CSS, after `table.tbl tr.gov td{background:#FEF6E7}`: the `SBAS` block (`.sbAsWrap` scrolls a wide table inside its card; `td.sbAsGov` highlight; `tr.sbAsEnv` Governing rows; `tr.sbAsCur` the selected combination; `a.sbAsSel`).
+  2. `buildAnalysisTab`, before:
+     ```js
+     function buildAnalysisTab(pg){
+       comboSelector(pg);
+     ```
+     after:
+     ```js
+     function buildAnalysisTab(pg){
+       if(AN&&AN.combos&&AN.combos.length)mkSection('anSum','Summary of All Load Combinations',body=>sbAsSummary(body),pg);   /* SBAS (2026-11-13) */
+       comboSelector(pg);
+     ```
+  3. `buildAnalysisTab`, the card `mkSection('anTable','Tabulated Results — '+c.name,…` (before: `body.appendChild(stationTable(c));` plus the Rows hint) becomes: a "Table shows" select (`data-fkey="anTblView"`: "Selected combination (…)" / "Envelope of all combinations", disabled with one combination); `SBAS.tbl==='env'` shows `sbAsEnvTable()` in a `.sbAsWrap` with its hint; otherwise `stationTable(c)` as before, the Rows hint extended by "This table is for one combination; choose "Envelope of all combinations" above, or see the Summary of All Load Combinations at the top of this tab." (more than one combination). Title: `'Tabulated Results — '+(envT?'Envelope of All Combinations':c.name)`.
+  4. New, after `buildAnalysisTab`: `const SBAS={tbl:'combo'}` (in memory only), `sbAsWorkedId()` (combination id → the first combination with the same `sig`, where it is worked, §7.2), `sbAsPick(id)` (sets the `dispCombo` select and fires its change event: the combo selector's own path), `sbAsName`, `sbAsVal`, `sbAsSummary(body)`, `sbAsEnvTable()`.
+     - Summary columns: V max, V min, M max (+), M min (−), each with "at x"; R at each non-free node; Mᴿ at a fixed node. Values `fmt(…,3)` of `cb.Vmax.v/.x`, `cb.Vmin`, `cb.Mmax`, `cb.Mmin`, `cb.R[j].v`, `cb.R[j].m`: the same numbers and format as the combination's card.
+     - Governing per column: largest |value| (first combination on a tie; equal printed values all highlighted and all named). Rows "Governing (largest |value|)" and "Governing combination".
+     - Deflection: not computed per strength combination, so not in the table; a note and a "Worked in" link to Serviceability · Deflection Curves.
+     - Envelope rows: span tenth-points, supports, the V=0 stations of every combination, user stations; at each, every combination evaluated exactly as `stationTable` does (`evalVM(x∓1e-7, cb.R, cb.f)`), max and min of Vₗ, Vᵣ, M with the combination ("all" when every combination prints the same value).
+  5. `sbrTab`, TABLE branch, the row map: before `const t=sbrText(td);return {t,n:…,span:…};` → after: also `key` from `td.querySelector('.sbrKey[data-tab][data-sec]')` through `links(…)` (a § link to that card's first step) and `cls:'hi'` for `td.sbAsGov`. No existing table has either, so no other Report table changes.
+- **Links (§6):** on screen, each value → the worked card `anC_<id>` (sbdGoto: opens and scrolls); a combination name selects it. Report: the combination name and Governing combination cells carry "§x.y".
+- **Governing provision:** none (display only; statics as already worked per combination).
+- **Check case** (3-span: fixed A, 20 / 25 / 18 ft + 6 ft cantilever, roller B, C, D; point 12 kip LL at 10 ft in span 2, 5 kip DL at the tip; default trib loads; W18X50), combination 1.2DL + 1.6LL + 0.5SL: summary row V max 23.605 at 20.000, V min −17.595 at 45.000, M max 100.587 at 30.000, M min −91.464 at 20.000, R_A 4.140, Mᴿ_A −1.732, R_B 37.065, R_C 26.209, R_D 18.506; the same numbers as that combination's card (peaks table and reaction blocks). Before: these appeared only in the card. Governing row: V max 23.605, M max 100.587, M min −91.464 (all this combination).
+- **How verified:** headless Chromium, origin/main against the branch, five beam projects (simple span; 3 spans + cantilever with point and negative wind loads; 2 spans fixed-pin-roller with partial load and user stations; point loads only; fixed cantilever): `AN` JSON identical; Summary, Schematic and Load Derivation texts identical; Analysis and Report differ only by the new card, the extended hint and the section numbers. Branch: every summary value equals AN and the worked card (1,573 comparisons), every envelope value equals the max / min of the combinations' own station values. Member and batch modes: `AN` and every tab text identical. New smoke test `steel-beam-analysis-summary` (9 checks).
+- **Saved data (§5):** no key or format change. The Tabulated Results choice is in memory only; the new card's collapse state goes in the existing `S.ui.collapse` map under `anSum`, as every card.
+- **Other copies:** none.
+- **Open items:** the envelope table has in-app links only (no § refs in the Report, to keep it readable).
+
 ## 2026-11-13 — PR: claude/hss-chapter-k (PR #1480: https://github.com/mlococo88/All-Structural/pull/1480) (SBHK) — concentrated forces on HSS walls for beam-type loads: transverse plate across the face, bearing on a cap plate / seat at supports   [new checks, §4; new optional fields `S.design.hssK`, `S.member.hssK`]
 - **Engineer's decision HSS-2 (2026-11-13):** add Chapter K checks for beam-type loads on HSS walls (HSS review gap A6).
 - **Article numbering (AISC 360-16):**
