@@ -175,7 +175,7 @@
   const TOPICS = { x: () => [...TPX('own', 'n', 'steel', 'c3', 'cn', 'cr'),
     { key: 'lay', title: 'Cross-frame spacing and orientation', ref: A + '6.7.4.2.1', ids: /^fr\.(s|k\d+\.)/, res: /^fr\.s$/ },
     { key: 'lb', title: 'Unbraced lengths of the girders', ref: A + '6.7.4.2.1', ids: /^fr\.g\d+\./ },
-    { key: 'geo', title: 'Girder depth, spacing and connection geometry', ref: A + '6.7.4.2.1', ids: /^cf\.(xfD|h|dg|dW|Lb|geo)$/ },   // SBXF: xfD, h, dW (girder types)
+    { key: 'geo', title: 'Girder depth, spacing and connection geometry', ref: A + '6.7.4.2.1', ids: /^cf\.(xfD|h|dg|dW|type|Lb|geo)$/ },   // SBXF: xfD, h, dW (girder types); SB-22: type (the CF10 section for every bay)
     { key: 'lat', title: 'Flange lateral bending from skew', ref: A + 'C6.10.1', ids: /^flsk\./ },
     { key: 'w3', title: 'Wind on the girders, Strength III', ref: A + '3.8.1.2, 4.6.2.7', ids: /^cf\.wIII\./, res: /^cf\.wIII\.Fw$/ },
     { key: 'w5', title: 'Wind on the girders, Strength V', ref: A + '3.8.1.2, 4.6.2.7', ids: /^cf\.wV\./, res: /^cf\.wV\.Fw$/ },
