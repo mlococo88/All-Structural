@@ -7162,3 +7162,45 @@ b = 50 in, same bars: n = floor(50/12) = floor(4.17) = 4, A_s = 1.24 in², a = 7
   - Identical in every project: the autosave (byte for byte), `computeAll()`, `VALIDATION`, `detEnvelope()`, `allChecks()`, the hand-off message, and every output tab's text except Flexure.
   - The differences are display only, in slab projects: the C_c line with b, the basis lines in the check summary and the Report, and the input panel text. In beam projects only the member type option text differs.
 - **Tests:** `tests/smoke/cbc-slab.mjs` extended (actual width b = 48 and 50, b < s, hand-off to ASD and Development & Splice, labels, Report, save and reopen, back to the strip), 1400 and 390 px, 0 console errors. The suite's other tests are listed in the PR.
+
+
+## 2026-11-13 — PR: claude/cb-input-widths (CBIF) — Beam Capacity and Development & Splice tabs: no input select cut off (layer table Size / Face, long selects)   [display only; no computed value, saved key or format change]
+
+Engineer report (screenshot, laptop about 1500 px wide): in Beam Capacity, Reinforcement, "4. Reinforcement layers", the Size select showed only "#" and the Face select "Te". Every site is tagged CBIF. The file uses CRLF line endings; keep them. Beam Capacity code is in the `#suite-frame-capacity` srcdoc and Development & Splice code in the `#suite-frame-dev` srcdoc: when re-applying, escape `"` as `&quot;` and `&` as `&amp;` (the text below is un-escaped).
+
+### What was cut off (origin/main, measured by tests/smoke/cbc-input-fit.mjs)
+| Field | 1400 px | 1500 px | 1920 px | 390 px |
+|---|---|---|---|---|
+| Layer table Size (`ls0`, `ls1`), "#11" needs 17 px of text | 3–4 px | 4–5 px | 13 px | 4–5 px |
+| Layer table Face (`lf0`, `lf1`), "Comp" needs 34 px | 10–11 px | 11–12 px | 23–24 px | 10–11 px |
+| Exposure (`expo`), "Exposed to earth/weather (#6+)" 192 px | 167 | 177 | fits | 172 |
+| Torsion type (`tkind`), "Equilibrium (cannot redistribute)" 192 px | 167 | 177 | fits | 172 |
+| Loads (`ldMode`), "Service load cases (the tool builds the combinations)" 317 px | 167 | 177 | 260 | 172 |
+| Development & Splice ψo (`hookLoc`), 411 px of text | 208 | 165 | 252 | 151 |
+| Development & Splice ψe (`epoxy`), "Uncoated / black bar (1.0)" 154 px | fits | fits | fits | 151 |
+
+ASD Beam Calcs: nothing cut off. No number or text input was cut off.
+
+Cause: in the layer table every control has `width:100%`, so the table's automatic layout gave the two selects almost nothing and the spacing / bars and d columns the rest. In a `.fRow`, a select could shrink (`flex:0 1 auto; max-width:60%`) when its label was long.
+
+### Changes
+- **Layer table CSS** (Beam Capacity, after `table.lyrT td.x{width:22px;text-align:center}`):
+  - Before: none.
+  - After: `table.lyrT td:nth-child(2) input,table.lyrT td:nth-child(6) input{min-width:46px}`, `table.lyrT td:nth-child(3) select{min-width:50px}`, `table.lyrT td:nth-child(4) select{min-width:68px}`. The spacing / bars and d columns take what is left (they were oversized). The face labels stay "Tens" / "Comp".
+- **`.fRow` selects** (Beam Capacity, after `.fRow.chk input{margin-right:0}`, anchor `CBIF (2026-11-13, engineer: selects cut off): a select keeps its natural width`):
+  - Before: `.fRow select{width:auto;max-width:60%}`, `.fRow input,.fRow select,.fRow textarea{flex:0 1 auto;min-width:0}`, `.fRow>select:last-child{margin-right:42px}`.
+  - After (added, later in the sheet): `.fRow:has(>select){flex-wrap:wrap;row-gap:0}`, `.fRow:has(>select)>label{flex:1 1 0;min-width:calc(40% - 50px)}`, `.fRow>select{flex:0 0 auto;max-width:100%;margin-left:auto}`, `.fRow>select:last-child{margin-right:0}`, `.fRow:has(>select:last-child)::after{content:"";flex:0 0 34px;height:0}`.
+  - Effect: a select up to 60% of the row stays beside its label with its right edge where it was (the 34 px spacer + 8 px gap = the old 42 px margin). A wider select goes under its label, right-aligned, up to the full row.
+- **Loads option label** (`ldMode`, anchor `o=>o==="service"?"Service load cases`): before "Service load cases (the tool builds the combinations)", after "Service load cases (combinations built)". The value `service` is unchanged.
+- **Development & Splice ψo** (`hookLoc`, anchor `<select id="hookLoc"`):
+  - The field gets class `rbSelWide` (the select spans the row under its label).
+  - The 1.0 option text, before: `Inside column/wall core w/ side cover ≥2.5", or side cover ≥6db (1.0)`; after: `In core, side cover ≥2.5" or ≥6db (1.0)`. The full wording is in the select's `title`: `1.0: anchored inside a column or wall core with side cover ≥2.5", or side cover ≥6d_b (ACI 318-19 Table 25.4.3.2). 1.25: other.`. The value `1.0` and ψo are unchanged.
+- **Development & Splice CSS** (after `.field select{max-width:100%; min-width:0;}`): `.field.rbSelWide>select{grid-column:1/-1; justify-self:stretch;}`; at 600 px and below, a field with a select puts the select under its label at full width (`.field:has(>select){grid-template-columns:minmax(0,1fr)}`), as the title block does on a phone (CBTH).
+
+### Check case
+No computed value changes. Layer table at 1500 px, slab, T1 #11 / C2 #10: before "#" and "Te" / "Cc"; after "#11 Tens" and "#10 Comp" in full. The engineer's slab (#5 @ 4 in, Set d 6.25 in): A_s = 0.93 in²/ft, φM_n = 23.29 kip-ft/ft, before and after.
+
+### How verified
+- **New test** `tests/smoke/cbc-input-fit.mjs`: at 1400, 1500, 1920 and 390 px, in Beam Capacity (beam and slab, every input tab and every output tab), ASD Beam Calcs and Development & Splice (every input tab), each visible select / number / text input is measured. The text of its selected option or value, in its own font, must fit the content box (less the native arrow of a select), and scrollWidth must not exceed clientWidth. Before: 12 failures (the fields above). After: all pass.
+- **Results identical:** origin/main vs branch, 8 projects (default; beam; T-beam in negative bending with torsion; AASHTO beam; strip slab without S&T; strip slab with S&T and top bars; actual-width slab; the engineer's slab). The autosave, `CC`, `VALIDATION`, `allChecks()`, every output tab's text, the Report text, the ASD state and the Development & Splice hand-off are all identical.
+- Screenshots: layer table and input tabs before and after, at 1400, 1500, 1920 and 390 px.
