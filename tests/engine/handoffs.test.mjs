@@ -8,6 +8,7 @@
 // 5. projectMeta: the fields shared and the title-block fields a pull changes.
 // 6. superReactions: the payload's shape (§4.4, GirderDetail's), the reactions of the plate girder's own line equal its analysis, the DW
 //    reactions of every girder sum to w_DW × L_total (statics), and a borrowed line's LL+IM reactions equal a full run of that line.
+//    SB-2 PR 4 (girder types): each assigned line is its type on that line (SBDModel.atLine), as the Summary checks it.
 import assert from 'node:assert/strict';
 // 7. superGeometry (GXF, 2026-11-09, HANDOFF.md §4.14): sgPayload of the default bridge (hand values), a curb edge, simple spans, per-support and
 //    per-span depths with a deeper pier segment, the shared check and content hash, refusals; saved projects compute as before.
@@ -129,6 +130,25 @@ test('superReactions: GirderDetail\'s payload shape, reactions from the analysis
   const ll = p.notes.find(n => /LL\+IM reactions per girder/.test(n));
   R3.llR.forEach((q, k) => assert.ok(ll.includes(`${p.supports[k].id}: `) && ll.includes(`G3 ${q.max.toFixed(2)} / ${q.min.toFixed(2)}`), `support ${k}`));
   p.supports.forEach((s, k) => ['DC1', 'DC2', 'DW'].forEach(c => assert.equal(s.girders[2][c], Math.round(R3.st[c].R[k] * 1000) / 1000)));
+});
+
+test('superReactions with girder types (SB-2 PR 4): each line its type on that line (atLine); a line with no type as before; a saved project unchanged', () => {
+  // a new project, Exterior deeper than Interior (so a borrowed or alone run would differ): Interior on G2–G4, Exterior on G1 and G5
+  const P = M.newProject(); P.girders[1].segments.forEach(s => { s.D = +s.D + 6; s.botT = +s.botT + 0.25; });
+  const r = H.srPayload(P); assert.ok(r.ok, r.error); const p = r.payload;
+  deq(p.supports[0].girders.map(g => [g.label, g.position]), [['G1', 'exterior'], ['G2', 'interior'], ['G3', 'interior'], ['G4', 'interior'], ['G5', 'exterior']]);
+  const T = [1, 0, 0, 0, 1];
+  T.forEach((gi, j) => { const R = AN.analyzeGirder(M.atLine(P, gi, j), gi);
+    p.supports.forEach((s, k) => ['DC1', 'DC2', 'DW'].forEach(c => assert.equal(s.girders[j][c], Math.round(R.st[c].R[k] * 1000) / 1000, `G${j + 1} ${s.id} ${c}`))); });
+  const n0 = p.notes[0]; assert.match(n0, /Girder types \(Girders & plates\): each line is worked with the girder type assigned to it, on that line, as this app checks it: G1 Exterior, G2 Interior, G3 Interior, G4 Interior, G5 Exterior\./);
+  assert.ok(!/take the plates/.test(n0), 'no borrowed line');
+  deq(H.lines(P).map(q => [q.j, q.gi, q.own, !!q.type]), [[0, 1, true, true], [1, 0, true, true], [2, 0, true, true], [3, 0, true, true], [4, 1, true, true]]);
+  // a line with no type: borrowed as before, the note says so
+  const U = J(P); U.girders[0].lines = [1, 2]; const ru = H.srPayload(U); assert.ok(ru.ok, ru.error);
+  assert.match(ru.payload.notes[0], /Lines with no girder type take the plates of the first plate girder of the same position .*G4 \(plates of plate girder "Interior"\)/);
+  // a project saved before girder types: lines() and the payload as before (no type note)
+  const S = M.defaultProject(); deq(H.lines(S).map(q => [q.j, q.gi, q.own, !!q.type]), [[0, 0, false, false], [1, 0, true, false], [2, 0, false, false], [3, 0, false, false], [4, 0, false, false]]);
+  assert.ok(!/Girder types/.test(H.srPayload(S).payload.notes[0]));
 });
 
 /* RWPX (2026-11-07, Phase 8f): the Retaining Wall Designer's foundationLoads (revision 2) and pileResults engine, read from the tool's

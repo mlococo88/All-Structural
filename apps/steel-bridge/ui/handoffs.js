@@ -21,6 +21,8 @@
       of the first plate girder of the same position (exterior: G1 and Gn), with its own loads and factors (girders[i].line = that girder).
       Since 2026-11-09 (GXF) also the per-project copy bridgeSuite.v1.superReactions.by.steelbridge.<project id> and its GitHub upload
       (shared/handoff-store.js, HANDOFF.md §5.1).
+      SB-2 PR 4 (2026-11-13, girder types): once lines are assigned, each line is the girder type assigned to it, worked on that line
+      (SBDModel.atLine: its own loads and factors), as the Summary checks it; lines() names them. The payload format is unchanged.
    4. superGeometry (HANDOFF.md §4.14, schema bridge-super-geometry; added 2026-11-09, GXF): sgPayload, the bridge geometry from the inputs
       (spans, skews, joints, girder layout, deck edges, deck, girder section) for Bridge Substructure Loading. One "Send to Substructure
       Loading" button with the Geometry and Reactions boxes (both ticked by default) and "Export hand-off (JSON)"; click only. Keys: the
@@ -119,10 +121,16 @@
   }
 
   /* ---------- 3. superReactions ---------- */
-  /* lines(P): for each cross-section girder j, the plate girder that is analyzed for it: { j, gi, P (the project to analyze), own } */
+  /* lines(P): for each cross-section girder j, the plate girder that is analyzed for it: { j, gi, P (the project to analyze), own }.
+     SB-2 PR 4 (2026-11-13; engineer decision SB-2, 2026-11-12: girder types): once a line is assigned (girders[i].lines), each assigned
+     line j is its girder type gi worked on that line, the view SBDModel.atLine(P, gi, j) the Summary and the output tabs use (its own loads
+     and distribution factors; the type's plates, entered loads and factors): { j, gi, P: atLine(P, gi, j), own: true, type: true }; two types
+     on one line (a conflict the Girders & plates tab flags): the first. A line with no type, and every line of a project saved before
+     girder types (no lines), as before. */
   function lines(P) {
-    const nb = Math.round(P.xs.nb), out = [];
+    const nb = Math.round(P.xs.nb), out = [], M = window.SBDModel, LT = M && M.lineTypes && (P.girders || []).some(g => Array.isArray(g.lines)) ? M.lineTypes(P) : null;
     for (let j = 0; j < nb; j++) {
+      if (LT && LT[j] && LT[j].length) { const gi = LT[j][0], g = P.girders[gi]; out.push({ j, gi, P: M.atLine(P, gi, j), own: true, type: true, conflict: LT[j].length > 1, label: g.label || g.id }); continue; }   // SB-2 PR 4
       const gi = P.girders.findIndex(g => AN().lineOf(P, g) === j);
       if (gi >= 0) { out.push({ j, gi, P, own: true, label: P.girders[gi].label || P.girders[gi].id }); continue; }
       const pos = ext0(j, nb) ? 'exterior' : 'interior', src = P.girders.findIndex(g => (g.position || 'interior') === pos), si = src >= 0 ? src : 0;
@@ -154,7 +162,7 @@
     const run = (Q, gi, o) => { const R = AN().analyzeGirder(Q, gi, o); if (R.errors && R.errors.length) throw new Error(R.errors[0]); return R; };
     try {
       for (const q of LN) {
-        if (q.own) { if (!full.has(q.gi)) full.set(q.gi, run(P, q.gi)); Rs.push(full.get(q.gi)); continue; }
+        if (q.own) { const fk = q.P === P ? q.gi : `${q.gi}@${q.j}`; if (!full.has(fk)) full.set(fk, run(q.P, q.gi)); Rs.push(full.get(fk)); continue; }   // SB-2 PR 4: a type on another line (atLine), its own run
         if (!full.has(q.src)) full.set(q.src, run(P, q.src));
         const D = full.get(q.src), R = run(q.P, 0, { ll: false }), ns0 = R.spans.length;
         if (D.llR) R.llR = D.llR.map((r, k) => { const adj = [k - 1, k].filter(i => i >= 0 && i < ns0), gV = Math.max(...adj.map(i => R.df.spans[i].gV)); return { k, gV, max: gV * r.perLane.max, min: gV * r.perLane.min, perLane: r.perLane, two: r.two }; });
@@ -175,9 +183,10 @@
     const ORD = ownerRulesData(P), L = ORD ? ORD._L : { o: 'AASHTO', m: 1, eta: 1, etaN: 1, eD: 1, eR: 1, eI: 1, h0: false }; if (ORD) delete ORD._L;
     const lfId = L.m === 1 && L.eta === 1 && L.etaN === 1 && !L.h0;
     const S0 = AN().settings(P), model = 'staged, variable stiffness (steel / 3n / n)';
+    const typed = LN.filter(q => q.type), conf = typed.filter(q => q.conflict);   // SB-2 PR 4: the lines worked with their girder type
     const borrowed = LN.filter(q => !q.own).map(q => `G${q.j + 1} (plates of plate girder "${q.label}"${q.samePos ? '' : ', no plate girder of its position'})`);
     const notes = [
-      `Whole bridge: every girder (G1 to G${nb}) from this app's analysis (Steel Bridge Design, apps/steel-bridge, engine/analysis.js), ${model} line-girder model${R0.cont ? ', continuous' : ', simple spans'}, run once per girder with the same settings; each girder with its own loads and distribution factors (Loads & LLDF). Each girder is labelled by its number, left to right.${borrowed.length ? ` Girders without plates of their own take the plates of the first plate girder of the same position (else the first plate girder): ${borrowed.join(', ')}.` : ''}`,
+      `Whole bridge: every girder (G1 to G${nb}) from this app's analysis (Steel Bridge Design, apps/steel-bridge, engine/analysis.js), ${model} line-girder model${R0.cont ? ', continuous' : ', simple spans'}, run once per girder with the same settings; each girder with its own loads and distribution factors (Loads & LLDF). Each girder is labelled by its number, left to right.${typed.length ? ` Girder types (Girders & plates): each line is worked with the girder type assigned to it, on that line, as this app checks it: ${typed.map(q => `G${q.j + 1} ${q.label}`).join(', ')}${conf.length ? ` (${conf.map(q => `G${q.j + 1}`).join(', ')}: two types assigned, the first taken)` : ''}.` : ''}${borrowed.length ? ` ${typed.length ? 'Lines with no girder type' : 'Girders without plates of their own'} take the plates of the first plate girder of the same position (else the first plate girder): ${borrowed.join(', ')}.` : ''}`,
       `Unfactored, kip, + up. DC1 = girder steel (490 pcf x (1 + ${f0(R0.loads.steelAllowPct)}% detail allowance)), cross-frames and diaphragms (point loads at the girder's frames), deck, haunch, SIP forms and other DC1 loads, on the steel section; DC2 and DW on the long-term composite section; each load on the stage that carries it.`,
       `Live load is not sent (liveLoad null): Substructure Loading computes its own. For information, this app's LL+IM reactions per girder (HL-93, IM ${f0(S0.im)}% on the truck and tandem, x the girder's shear distribution factor with the skew correction, the larger of the adjacent spans; 90% of two trucks plus lane at interior supports), max / min, kip: ${per((R, k) => R.llR ? `${f2(R.llR[k].max)} / ${f2(R.llR[k].min)}` : 'n/a')}.`,
       ...(hasPL ? [`Pedestrian load: no field in this hand-off, not sent as a load. This app's pedestrian load reactions, max / min, kip: ${per((R, k) => R.pl && R.pl.R ? `${f2(R.pl.R[k].max)} / ${f2(R.pl.R[k].min)}` : '0.00 / 0.00')}.`] : []),
