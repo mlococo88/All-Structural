@@ -7353,7 +7353,7 @@ The only select whose blank defaulted silently was the layer Size. A blank S&T o
 ### Open items
 - The Development & Splice tab's Bar Size (`barSize`): a saved project with `barSize:""` gives a page error ("reading 'd'"). It is not a silent default. Not changed here (same file, different app): make it an input error if the engineer wants.
 
-## 2026-11-13 — PR: claude/cb-dev-blank-size (RBBZ) — Development & Splice tab: a saved or imported project whose Bar Size is blank or not a bar is an input error (was a page error) (engineer decision CB-15, as CBBZ)   [validation only; no computed value, saved key or format change; only projects with a blank or unknown Bar Size open differently]
+## 2026-11-13 — PR: claude/cb-dev-blank-size (PR #1522: https://github.com/mlococo88/All-Structural/pull/1522) (RBBZ) — Development & Splice tab: a saved or imported project whose Bar Size is blank or not a bar is an input error (was a page error) (engineer decision CB-15, as CBBZ)   [validation only; no computed value, saved key or format change; only projects with a blank or unknown Bar Size open differently]
 
 Every site is tagged RBBZ. The file uses CRLF line endings; keep them. The code is in the Development & Splice srcdoc (`#suite-frame-dev`); escape `"` as `&quot;` and `&` as `&amp;` when re-applying (the text below is un-escaped). A pointer is in `fixlog/ACI Rebar Development Length.md`.
 
