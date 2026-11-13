@@ -603,3 +603,56 @@ PR #1463: https://github.com/mlococo88/All-Structural/pull/1463
   a link to the Owner rules table. Example: the CTDOT tab design (f′ci = 6.8 ksi > 6.5 ksi) FAILs "Release strength f′ci (CTDOT 5.9.1.2)",
   ratio 1.046, while the check-summary column counts only its own groups. Whether to add them to the check-summary column (display) is for the engineer.
 - No graphics in the Report yet (the tabs draw theirs after the HTML; the steel report has charts): a later display PR if wanted.
+
+## 2026-11-13 — Owner material-limit checks in the check summary column ("Materials (owner limits)"); Report §1 consistent with the column (display only, no calculation change)
+PR: (link added after the PR is opened)
+### Problem
+- The engine checks the girder f′c and the release f′ci against the owner's limits (RIDOT 5.2.1, MassDOT 3.7.2.1, CTDOT V2 5.9.1.2; engine
+  PBD-E, `pbd-compute.js` anchor `const rFcMin=rr('fc.min')`), but these checks were on no result tab and in no group of the check-summary
+  column, so the column's PASS / FAIL totals did not count them (open item of PR 2e). Example: the CTDOT tab design FAILs "Release strength
+  f′ci (CTDOT 5.9.1.2)" (6.8 > 6.5 ksi, ratio 1.046) while the column showed only the hold-down FAIL. Engineer's decision (2026-11-13): a chip
+  "Materials (owner limits)", counted in the totals, that opens the Owner rules table.
+### Where
+- `apps/ps-bridge/ui/dash.js` GROUPS, anchor `{ id: 'deck', name: 'Deck'`: after it, a new group
+  `{ id: 'mat', name: 'Materials (owner limits)', tab: 'own', input: true, checks: [['Girder f′c (RIDOT 5.2.1)', 'own-rule-fc.min'], ['Girder f′c (CTDOT 5.9.1.2)', 'own-rule-fc.range'], ['Release strength f′ci (MassDOT 3.7.2.1)', 'own-rule-fci.max'], ['Release strength f′ci (CTDOT 5.9.1.2)', 'own-rule-fci.range']] }`
+  (the names are the engine's `OWN_RULES` `nm`). The totals, the verdict and the governing line take it like every group (no chip when the
+  design has none of the checks, e.g. AASHTO). New helper `go(gp, st)`: a group with `input` links with `data-sdown="own|<row id>"` instead of
+  `data-sdgo="<tab>|<step>"`; the click handler opens the input tab (`o.goin`), scrolls the row into view and marks it (`sdFlash`, 1.6 s).
+  The governing line: before `data-sdgo="${tabOf(top.st)}|${top.st}"` (tabOf removed); after `${go(top.gp, top.st)}` (top keeps its group).
+  The chip's tooltip names the Owner rules tab instead of "at x = 0.00 ft".
+- `apps/ps-bridge/ui/inputs.js` ownerCard (anchor `const applied = r =>`): `cards(tab, P, R)` / `ownerCard(P, R)` take the design's engine result
+  (optional); each rules row gets `id="own-rule-<rule id>"`; for the four material rules (`MAT`) "Applied here" was "Check of the design (output
+  tabs)", now "Check of the design" + `matCell(r, R)`: f′c or f′ci = value, the governing minimum or maximum, "ratio = value / limit" (maximum) or
+  "limit / value" (minimum; the engine's rule, chosen by which of the two equals the engine's ratio), the engine's ratio and PASS / FAIL, each
+  number a `data-ev` of `checks.<i>.v / .lim / .r`; "(shown when the inputs have no error)" without a result.
+- `apps/ps-bridge/index.html`: `own: IN.cards('own', P, ownRes())`, `ownRes()` = the page's `result()` when the inputs have no error; CSS
+  `tr.sdFlash>td`.
+- `apps/ps-bridge/report/builders.js` summary(): a check in a group with `input` links to `X.ownKey` (the Owner rules subsection of §2, `rs.own`;
+  no link when §2 is left out) and its Group column reads "Materials (owner limits)" (before: "Owner rules", via the OWNG fallback, which is
+  kept for any other owner check in no column group); the note says the groups and the totals are the column's, and a check outside the
+  column (today only "Girder age at continuity (RIDOT 5.6.3.3)", RIDOT with continuity on) is named in a warning note, not counted by the
+  column. §2's Owner rules table is built with `B.R` (the same values as the tab).
+### Shared files
+- None.
+### Saved data (CLAUDE.md §5)
+- No key, no project field, no format change.
+### Governing provisions
+- None changed (§4). The checks are the engine's, cited as before (RIDOT BDM 5.2.1, MassDOT LRFD BM 3.7.2.1, CTDOT BRSDM V2 5.9.1.2).
+### Check case
+- CTDOT tab design (PCI BT-72, f′c 8.5 ksi, f′ci 6.8 ksi, 40 strands): engine "Release strength f′ci (CTDOT 5.9.1.2)": limits 0.70 f′c = 5.95,
+  0.80 f′c = 6.80, cap 6.5 ksi; ratios 5.95 / 6.8 = 0.875, 6.8 / 6.8 = 1.000, 6.8 / 6.5 = 1.046 → governing cap, ratio 1.046 FAIL.
+  "Girder f′c (CTDOT 5.9.1.2)" 6.0–10.0 ksi: 6.0 / 8.5 = 0.706, 8.5 / 10.0 = 0.850 → 0.850 PASS. Before: column 1 FAIL + 20 PASS (hold-down
+  only); after: the Materials chip FAIL 1.046, column 2 FAIL + 21 PASS = the engine's 23 checks; Report §1 "FAIL: 2 of 23 checks", both
+  material rows in group "Materials (owner limits)", linked to the Owner rules table, which shows 6.80 / 6.50 = 1.046 FAIL.
+### How verified
+- `node tests/engine/run.mjs psbridge tex project-registry` (100 tests; `psbridge-report.test.mjs` + 18: on the 16 tab designs every engine check
+  is in a column group, §1 has the same groups and FAIL rows as the column, the material rows link to `rs.own`; the CTDOT case above, the RIDOT
+  minimum (limit / value), AASHTO without a material check, the RIDOT continuity-age check named in §1 as outside the column).
+- Harness B (`node tests/psbridge-compare.mjs`, new `own`): the Owner rules table values compared with the old app (30 values on 5 owner designs),
+  the column totals = the engine's checks, Report §1 FAIL rows = the column's: 16 designs, 40,886 shown values and 7,184 step values,
+  0 differences; `--control` still reports each planted difference.
+- `node tests/smoke/ps-bridge-skeleton.mjs` (209 checks; + 7: no chip for AASHTO; CTDOT chip FAIL 1.046, totals, the chip opens the Owner rules
+  tab at the f′ci row, the table values = computeAll, the chip lists both checks, Report §1 = the column); `node tests/check-syntax.mjs`.
+### Open items
+- "Girder age at continuity (RIDOT 5.6.3.3)" (RIDOT, continuity on) is still on no result tab and in no column group; §1 lists it and says
+  so. Whether to add it to the column (e.g. to the Analysis group or the Materials chip) is for the engineer.

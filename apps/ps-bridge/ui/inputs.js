@@ -2,7 +2,8 @@
    Created 2026-11-12 (PR 2b, docs/ps-bridge-plan.md §2.2). Draws the cards of engine/fields.js (every engine input the old app exposes, with
    its label, unit and tooltip), the table inputs (straight strand rows, diaphragms, rating vehicles), the design girder card, the owner card
    and the Project tab's assumptions. The page (index.html) calls:
-     cards(tab, P)       the HTML of this tab's girder-design cards (after the page's own bridge-level cards)
+     cards(tab, P, R)    the HTML of this tab's girder-design cards (after the page's own bridge-level cards); R (optional, the Owner rules
+                         tab): the design's engine result, for the owner's material checks in the rules table (display only, 2026-11-13)
      onChange(el, P)     an input of these cards changed: the project is updated; true = handled (the page then saves, checks and redraws)
      onClick(e, P)       a button of these cards (add / delete a table row); true = handled
      takeNote()          the message of the last owner change (the inputs it set to the owner's defaults), once; or ''
@@ -57,8 +58,18 @@
       ${s('design.s', 'Span', sOpts, d.s, 'The span designed (spans on the Bridge layout tab).')}${kv}
       <p class="note">The bridge gives the design these values (the old app's "Preliminary designer" bridge values, PBD.applyBridge, plus continuity, skew and the overhang): they are entered on the tab named. Every other girder input is on the input tabs. Girder groups by cross-section line (interior / exterior per span, PS-8) replace this choice in PR 3a.</p>`);
   }
-  /* the owner card (Owner rules): owner, the η questions, the design load multiplier, the sidewalk question and the rules list */
-  function ownerCard(P) {
+  /* the owner card (Owner rules): owner, the η questions, the design load multiplier, the sidewalk question and the rules list.
+     R (when given): the owner's material checks (MAT rule ids, the engine's R.checks by the rule's check name) show the engine's value, limit
+     and ratio in "Applied here", worked as ratio = value / limit (a maximum) or limit / value (a minimum), the engine's rule; each rules row
+     has id own-rule-<rule id> (the check summary's Materials chip opens it). Display only: every number is an engine value (data-ev). */
+  const MAT = ['fc.min', 'fc.range', 'fci.max', 'fci.range'];
+  function matCell(r, R) {
+    const i = R && R.checks ? R.checks.findIndex(c => c.n === r.nm) : -1; if (i < 0) return '';
+    const c = R.checks[i], K = window.PSBOutKit, ev = (k, d) => K.ev(R, `checks.${i}.${k}`, d), sym = /f′ci/.test(r.nm) ? 'f′<sub>ci</sub>' : 'f′<sub>c</sub>';
+    const isMin = Object.is(c.r, c.lim / c.v) && !Object.is(c.r, c.v / c.lim);   // the engine's ratio for a minimum is limit / value
+    return `<br>${sym} = ${ev('v', 2)} ksi; governing ${isMin ? 'minimum' : 'maximum'} ${ev('lim', 2)} ksi; ratio = ${isMin ? `${ev('lim', 2)} / ${ev('v', 2)}` : `${ev('v', 2)} / ${ev('lim', 2)}`} = <b>${ev('r', 3)}</b> ${c.pass ? 'PASS' : '<b style="color:var(--fail)">FAIL</b>'} (check summary: Materials (owner limits))`;
+  }
+  function ownerCard(P, R) {
     const P_ = PB(), b = P.base, o = P_.ownerOf(b), ow = P_.OWN_RULES.owners[o] || {}, rules = P_.ownRules(o);
     let inp = null; try { inp = D().inputs(P); } catch (e) { inp = b; }
     const OL = P_.ownLoads(inp);
@@ -72,6 +83,7 @@
     const applied = r => {
       if (r.kind === 'default') { const cur = F().get(inp, r.key), over = String(cur) !== String(r.value); return over ? `<span class="own-over">Your value ${esc(showV(cur))} (owner: ${esc(r.show)})</span>` : `Owner default: ${esc(r.show)}`; }
       if (r.kind === 'load') return r.value.fixed ? `η = ${fmt(r.value.f, 2)} (fixed)` : `${esc(r.value.q)}: ${inp.opt['eta' + r.id.slice(-1)] === true ? 'yes, η = ' + fmt(r.value.f, 2) : 'no, η = 1.00'}`;
+      if (r.kind === 'shall-check' && MAT.includes(r.id)) return 'Check of the design' + (R ? matCell(r, R) || ' (not made for this design)' : ' (shown when the inputs have no error)');
       if (r.kind === 'shall-check') return 'Check of the design (output tabs)';
       if (r.kind === 'should-warning') return 'Warning of the design';
       return 'Reported with the design';
@@ -79,7 +91,7 @@
     const own = card('owner', 'Owner (DOT)', 'load modifiers and owner rules', `<div class="fRow"><label for="i_base.owner" title="The bridge owner's rules on top of AASHTO LRFD 10th Ed. Changing the owner sets each input still at its default to the new owner's default; values you entered are kept.">Owner</label>
       <select id="i_base.owner" data-path="base.owner" data-kind="owner">${P_.OWN_LIST.slice().reverse().map(k => `<option value="${k}"${k === o ? ' selected' : ''}>${k === 'AASHTO' ? 'AASHTO (no owner rules)' : `${k} (${esc(P_.OWN_RULES.owners[k].short)})`}</option>`).join('')}</select></div>
       ${rows}<p class="note">${esc(ow.manual || o)}${o !== 'AASHTO' ? ` (AASHTO LRFD ${esc(ow.aashto || '')} basis). ${esc(P_.OWN_RULES.note)}` : ': every input, factor and check is the tool\'s own.'} Strength I load modifier η = η<sub>D</sub>·η<sub>R</sub>·η<sub>I</sub> = ${fmt(OL.etaD, 2)} × ${fmt(OL.etaR, 2)} × ${fmt(OL.etaI, 2)} = <b>${fmt(OL.eta, 4)}</b>${rM ? `; LL+IM × <b>${fmt(OL.mLL, 2)}</b>` : ''} (worked on the Loads &amp; LLDF output tab).</p>
-      ${rules.length ? `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Section</th><th class="lft">Requirement (paraphrase)</th><th class="lft">Kind</th><th class="lft">Applied here</th></tr></thead><tbody>${rules.map(r => `<tr><td class="lft">${esc(r.sec)}</td><td class="lft">${esc(r.text)}</td><td class="lft">${esc(K[r.kind] || r.kind)}</td><td class="lft">${applied(r)}</td></tr>`).join('')}</tbody></table></div>` : ''}`);
+      ${rules.length ? `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Section</th><th class="lft">Requirement (paraphrase)</th><th class="lft">Kind</th><th class="lft">Applied here</th></tr></thead><tbody>${rules.map(r => `<tr id="own-rule-${esc(r.id)}"><td class="lft">${esc(r.sec)}</td><td class="lft">${esc(r.text)}</td><td class="lft">${esc(K[r.kind] || r.kind)}</td><td class="lft">${applied(r)}</td></tr>`).join('')}</tbody></table></div>` : ''}`);
     return own;
   }
   /* the Project tab's assumptions (engineer rule: every assumption is a note in its tab and in the Report) */
@@ -96,12 +108,12 @@
     return card('assume', 'Assumptions', '', `<ul class="note asm">${items.map(t => `<li>${t}</li>`).join('')}</ul>`);
   }
   /* cards(tab, P): the HTML of the tab's girder-design cards */
-  function cards(tab, P) {
+  function cards(tab, P, R) {
     if (!P.base) return '';
     let h = '';
     if (tab === 'proj') return assumptions(P);
     if (tab === 'gird') h += designCard(P);
-    if (tab === 'own') h += ownerCard(P);
+    if (tab === 'own') h += ownerCard(P, R);
     F().CARDS.filter(c => c.tab === tab).forEach(c => {
       if (c.when && !c.when(P.base, P)) return;
       let body = c.fields.filter(f => !f.when || f.when(P.base, P)).map(f => field(f, P)).join('');

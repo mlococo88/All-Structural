@@ -239,6 +239,7 @@
   .secRef{font-weight:400;text-transform:none;letter-spacing:0;color:#64748b;margin-left:6px;}
   .fHint{flex-basis:100%;font-size:8.5pt;color:#475569;margin:-2px 0 2px;} .fHint.over{color:var(--warn);}
   .own-over{color:var(--warn);font-weight:600;}
+  tr.sdFlash>td{background:#FEF9C3;outline:2px solid var(--warn)}   /* a row the check summary opened (Materials chip) */
   ul.asm{margin:4px 0;padding-left:18px;} ul.asm li{margin:3px 0;}
   #inPanes table.tbl td input{width:70px;}
   button:disabled{opacity:.45;cursor:default;}
@@ -343,10 +344,12 @@
       mat: IN.cards('mat', P),
       dd: IN.cards('dd', P),
       loads: IN.cards('loads', P),
-      own: IN.cards('own', P),
+      own: IN.cards('own', P, ownRes()),
       ad: ph('Auto design', '5', ['waits for the girder library (PR 4, PS-2)', 'strands in symmetric pairs (PS-12) → draping, hold-down 0.33–0.45 L (PS-5) → f′<sub>ci</sub> / f′<sub>c</sub> in 0.5 ksi steps (PS-11)', 'locked fields never changed; Apply with Undo'])
     };
   }
+  /* the engine result for the Owner rules tab (the owner's material checks in its rules table), when the inputs have no error */
+  const ownRes = () => { if (window.PSBInputCheck.collect(P).errors.length) return null; const rc = result(); return rc.R.error ? null : rc.R; };
   function drawInputs() {
     $('inTabs').innerHTML = TABS.map(([k, t]) => `<button type="button" role="tab" data-itab="${k}" aria-selected="${ui.itab === k}">${t}<span class="inDot"></span></button>`).join('');
     const p = panes();
