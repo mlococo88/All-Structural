@@ -163,9 +163,13 @@
     const C = R.errors ? (R.errors.length ? null : CF.checks(R)) : null;
     const G = P.girders[gi] || P.girders[0], line = Math.min(FRM.lineOf(P, G), L.FR.girders.length - 1), ext = line === 0 || line === L.FR.girders.length - 1;
     const fl = FRM.flSkew(L.m.skews, ext, P.framing), XF = CF.pointLoads(P, gi, { L }), br = FRM.girderBraces(P, gi, L);
-    // SBXF (2026-11-13): the governing bay's depth differs from the reported girder's: the tab graphic's Download DXF drawn as before (dxfB, the reported girder's own depth)
-    let dxfB; if (I.p.xfBay && I.p.xfBay.vary) { const I0 = CF.inputsOf(P, { L, A, gi, bays: false }), R0 = CF.compute(I0.p, env); dxfB = { L, I: I0, R: R0, C: R0.errors && !R0.errors.length ? CF.checks(R0) : null, line }; }
-    return { L, I, R, C, fl, XF, br, line, G, A, dxfB };
+    // SB-23 (2026-11-13; the engineer's request for this DXF change): the tab graphic's Download DXF draws one cross-frame per distinct bay depth,
+    // as the Drawings cross-frame sheet (CF.bayGroups): each group's frame is the reported type's inputs with the group's h and d, computed and
+    // checked, at the group's first bay (dxfG). One depth, or a project saved before girder types: the frame checked (B), as before for equal
+    // depths. (Was SBXF dxfB: the reported girder's own depth when the governing bay's differed.)
+    let dxfG; if (I.p.xfBay) { const GR = CF.bayGroups(P); if (GR) dxfG = GR.map(g => { const p = { ...I.p, h: g.h, dg: g.dg }, Rg = CF.compute(p, env);
+      return { L, I: { ...I, p }, R: Rg, C: Rg.errors && !Rg.errors.length ? CF.checks(Rg) : null, line: g.bays[0], grp: g }; }); }
+    return { L, I, R, C, fl, XF, br, line, G, A, dxfG };
   }
   const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>`;
   const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);

@@ -9,7 +9,7 @@
 //    (h = 46, 52, 52, 46); the wind on the reported girder as before.
 // 4. Exterior 6 in deeper: Interior reported unchanged; Exterior reported h = 52 (Interior's D = 60), d = 61.88, d_W = 67.88 (wind unchanged).
 // 5. A line with no type: the other girder; two types on one line: the shallower. 6. CF10 with an owner's web-depth rule (CTDOT): the bay D.
-// 7. ui/framing.js build: dxfB (the Download DXF as before) only when the governing bay's depth differs from the reported girder's.
+// 7. ui/framing.js build: dxfG (SB-23: the Download DXF, one frame per bay depth group) only when the bays differ in depth (was dxfB, SBXF).
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { loadShared, test, ROOT } from './harness.mjs';
@@ -99,11 +99,13 @@ test('a line with no type: the other girder; two types on one line: the shallowe
   assert.equal(CF.cfTypeRec(CF.inputsOf(M.newProject(), { gi: 0 }).p, E).dB, CF.cfTypeRec(CF.inputsOf(M.newProject(), { gi: 0, bays: false }).p, E).dB);
 });
 
-test('ui/framing.js build: the Download DXF model as before (dxfB) only when the governing bay\'s depth differs', () => {
+// SB-23 (2026-11-13; the engineer's request): the tab's Download DXF model is one frame per bay depth group (dxfG; was dxfB, the reported girder's own depth)
+test('ui/framing.js build: the Download DXF models (dxfG) one frame per distinct bay depth, only when the bays differ in depth', () => {
   const FUI = W.SBDFramingUI;
-  const e = FUI.build({ P: M.newProject(), g: 0 }); assert.equal(e.dxfB, undefined);
-  const P = withExt(-6), B = FUI.build({ P, g: 0 }); assert.ok(B.dxfB); assert.equal(B.dxfB.I.p.h, 52); assert.equal(B.I.p.h, 46); assert.equal(B.dxfB.line, B.line);
-  assert.equal(FUI.build({ P: withExt(-6), g: 1 }).dxfB, undefined, 'Exterior reported: its own depth governs');
+  const e = FUI.build({ P: M.newProject(), g: 0 }); assert.equal(e.dxfG, undefined); assert.equal(e.dxfB, undefined);
+  for (const gi of [0, 1]) { const B = FUI.build({ P: withExt(-6), g: gi }); assert.equal(B.dxfB, undefined);
+    assert.deepEqual(J(B.dxfG.map(q => [q.I.p.h, q.I.p.dg, q.line, q.grp.bays])), [[46, 55.88, 0, [0, 3]], [52, 61.88, 1, [1, 2]]]); assert.equal(B.I.p.h, 46); }
+  assert.equal(FUI.build({ P: withExt(6), g: 1 }).dxfG, undefined, 'Exterior 6 in deeper: every bay at Interior\'s depth, one group (the frame checked)');
 });
 
 // ---------- SBXF2 (2026-11-13; engineer decisions SB-18, SB-19, SB-20) ----------
