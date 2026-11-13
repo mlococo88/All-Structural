@@ -177,6 +177,18 @@ const CHECKS = {
     const leave = () => F.evaluate(() => document.activeElement.blur()).then(() => p.waitForTimeout(60));
     const shown = key => F.evaluate(k => document.querySelector(`[data-fkey="${k}"]`).value, key);
     const chk = (c, m) => { if (!c) out.push(m); console.log(`   ${c ? 'ok  ' : 'FAIL'} ${m}`); };
+    // CBSL (2026-11-13): a new project opens with service load cases; the dead-load moment first (Eq. (5.3.1a) 1.4D), then the
+    // factored table (the M_u checks below) in factored mode
+    const code0 = await F.evaluate(() => { const c = S.code; if (typeof cbcSvcOn === 'function') { S.code = 'ACI'; S.loadMode = 'service'; refresh(); } return c; });
+    if (await F.evaluate(() => typeof cbcSvcOn === 'function' && cbcSvcOn())) {
+      for (const [s, np] of [['9.6'], ['9.6', 1], ['-12.25']]) {
+        await typeIn('svMD', s, np);
+        const q = await F.evaluate(() => ({ M: S.svc.cases.D.M, u: computeAll().combos[0].Mu, v: document.activeElement.value }));
+        chk(q.v === s && q.M === +s && Math.abs(q.u - 1.4 * +s) < 1e-9, `service D, M typed "${s}"${np ? ' (number pad)' : ''}: field "${q.v}", stored ${q.M}, Eq. (5.3.1a) M_u ${q.u} = 1.4 × ${s}`);
+        await leave();
+      }
+      await F.evaluate(c => { S.loadMode = 'factored'; S.code = c; refresh(); }, code0);
+    }
     for (const [s, np] of [['9.6'], ['9.6', 1], ['-12.25'], ['.5']]) {
       await typeIn('cM0', s, np);
       const r = await F.evaluate(() => ({ Mu: S.combos[0].Mu, v: document.activeElement.value, k: document.activeElement.getAttribute('data-fkey'), Mrow: computeAll().combos[0].Mu }));
