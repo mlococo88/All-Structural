@@ -934,7 +934,7 @@ PR #1496: https://github.com/mlococo88/All-Structural/pull/1496
 - Next: PR 3a-2 (each type on every line, worst line governs; check summary / Summary / Report per type and line; unequal bays, different skews).
 
 ## 2026-11-13 — PR 3a-2: the bridge level, part 2 — every girder type checked on every line (worst line governs), check summary / Summary / Report per type and line; unequal bays and different end skews allowed (S and θ per line: §4 callout, no existing result changed)
-PR: (link added on merge)
+PR #1501: https://github.com/mlococo88/All-Structural/pull/1501
 ### Request
 - Plan §5 PR 3a, §7 item 3 (how S maps onto the engine); PS-9 (unequal bays from the bridge step); PS-15 (the interim blocking errors end
   at the bridge step); SB-2 PR 2 #1454 (each type on every line, worst line governs), SB-5 (one count per type per check), SB-6 (weight per
