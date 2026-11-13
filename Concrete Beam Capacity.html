@@ -276,6 +276,9 @@ table.lyrT td{padding:2px 3px;border-bottom:1px solid #eef1f4}
 table.lyrT input,table.lyrT select{width:100%;font-size:9pt;padding:2px 3px;
   border:1px solid var(--color-border);border-radius:3px;font-family:var(--font-ui)}
 table.lyrT td.x{width:22px;text-align:center}
+table.lyrT td:nth-child(2) input,table.lyrT td:nth-child(6) input{min-width:46px}   /* CBIF (2026-11-13): no cell narrower than its value */
+table.lyrT td:nth-child(3) select{min-width:50px}
+table.lyrT td:nth-child(4) select{min-width:68px}
 table.lyrT button{border:none;background:none;cursor:pointer;color:#94a3b8;font-size:11pt;padding:0 2px}
 table.lyrT button:hover{color:var(--red-600)}
 .lyrTag{display:inline-block;font-family:var(--font-ui);font-size:7.5pt;font-weight:700;
@@ -415,6 +418,15 @@ h2.secTitle{font-size:inherit;font-weight:inherit;letter-spacing:inherit;line-he
 .fRow>input:last-child,.fRow>select:last-child{margin-right:42px}
 .fRow.chk{border-bottom:0}
 .fRow.chk input{margin-right:0}
+/* CBIF (2026-11-13, engineer: selects cut off): a select keeps its natural width (its longest option, up to the row); a row whose
+   select does not fit beside its label puts the select on the next line. The 34 px spacer keeps the select's right edge in line
+   with the number boxes (was margin-right 42 px = 34 + the 8 px gap); a select on a line of its own is right-aligned and the spacer
+   wraps away when the select needs the full width. */
+.fRow:has(>select){flex-wrap:wrap;row-gap:0}
+.fRow:has(>select)>label{flex:1 1 0;min-width:calc(40% - 50px)}   /* a select up to 60% stays beside its label, as before */
+.fRow>select{flex:0 0 auto;max-width:100%;margin-left:auto}
+.fRow>select:last-child{margin-right:0}
+.fRow:has(>select:last-child)::after{content:&quot;&quot;;flex:0 0 34px;height:0}
 table.vt th,table.rt th,table.dt th,table.lyrT th,table.cbT th{background:#EEF2F6}
 /* HDR (2026-11-05): the title block, project file and shared project info buttons are in the Project input tab (#prjPane);
    the header keeps the title, the status chip, a read-only project line (a link to that tab), Undo / Redo and Print */
@@ -2519,7 +2531,7 @@ function buildInput(){
     /* CBSL (2026-11-13): the Loads mode, ACI mode only. Service: the load cases, the tool builds the combinations (buildSvcLoads);
        factored: the table below, as before. */
     if(S.code==='ACI') fRow(b,&quot;Loads&quot;,selIn([&quot;service&quot;,&quot;factored&quot;],()=>S.loadMode,v=>{S.loadMode=(v==='service'?'service':'factored');},
-      o=>o===&quot;service&quot;?&quot;Service load cases (the tool builds the combinations)&quot;:&quot;Factored actions typed per combination&quot;,o=>o,&quot;ldMode&quot;),&quot;&quot;);
+      o=>o===&quot;service&quot;?&quot;Service load cases (combinations built)&quot;:&quot;Factored actions typed per combination&quot;,o=>o,&quot;ldMode&quot;),&quot;&quot;);
     else if(S.loadMode==='service') b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;AASHTO LRFD mode: enter factored actions below; this tool builds the ACI 318-19 combinations only. The service load cases entered in ACI mode are kept and used again when the design code is set back to ACI 318-19.&quot;));
     if(cbcSlab()) b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;One-way slab: enter the actions &quot;+cbcSlabPer()+(cbcSlabAct()?&quot; (the whole width b, not per foot).&quot;:&quot;.&quot;)));   /* CBSW */
     if(cbcSvcOn()){ buildSvcLoads(b); return; }
@@ -9404,6 +9416,10 @@ input,select,textarea,button{font-family:var(--font-ui);}
 .field input[type=text],.field input[type=date]{width:150px;}
 .field input[type=number][placeholder]{width:230px; text-align:left;}
 .field select{max-width:100%; min-width:0;}
+/* CBIF (2026-11-13, engineer: selects cut off): the ψo select spans the row under its label; on a phone every select row puts
+   the select under its label (as the title block, CBTH), so no option text is cut off */
+.field.rbSelWide>select{grid-column:1/-1; justify-self:stretch;}
+@media screen and (max-width:600px){ .field:has(>select){grid-template-columns:minmax(0,1fr);} .field:has(>select)>select{grid-column:1; justify-self:stretch;} }
 .field textarea{width:100%;}
 .field input:focus,.field select:focus,.field textarea:focus{outline:none; border-color:var(--blue-600);
   box-shadow:0 0 0 2px rgba(37,99,235,.25);}
@@ -9968,9 +9984,9 @@ function buildInputPanel(){
   ${panel(&quot;E&quot;,&quot;Standard Hook Factors&quot;,true,`
     <div class=&quot;field&quot;><label>Epoxy Coating (&amp;psi;<sub>e</sub>)</label>
       <select id=&quot;hookEpoxy&quot;><option value=&quot;1.0&quot; selected>Uncoated (1.0)</option><option value=&quot;1.2&quot;>Epoxy/zinc-epoxy (1.2)</option></select></div>
-    <div class=&quot;field rbAciOnly&quot;><label>Location (&amp;psi;<sub>o</sub>)</label>
-      <select id=&quot;hookLoc&quot;>
-        <option value=&quot;1.0&quot; selected>Inside column/wall core w/ side cover ≥2.5&amp;quot;, or side cover ≥6db (1.0)</option>
+    <div class=&quot;field rbAciOnly rbSelWide&quot;><label>Location (&amp;psi;<sub>o</sub>)</label>
+      <select id=&quot;hookLoc&quot; title=&quot;1.0: anchored inside a column or wall core with side cover ≥2.5&amp;quot;, or side cover ≥6d_b (ACI 318-19 Table 25.4.3.2). 1.25: other.&quot;>
+        <option value=&quot;1.0&quot; selected>In core, side cover ≥2.5&amp;quot; or ≥6db (1.0)</option>
         <option value=&quot;1.25&quot;>Other, e.g. side cover &amp;lt;2.5&amp;quot; (1.25)</option>
       </select></div>
     <div class=&quot;chk&quot;><input id=&quot;hookConfined&quot; type=&quot;checkbox&quot;><label for=&quot;hookConfined&quot;>Confining reinf. present &amp;rarr; &amp;psi;<sub>r</sub>=1.0 (else 1.6)</label></div>
