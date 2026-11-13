@@ -857,7 +857,7 @@ PR #1489: https://github.com/mlococo88/All-Structural/pull/1489
   import comes; the other girder × span designs of `P.legacy.bridge` at PR 3a.
 
 ## 2026-11-13 — PR 3a-1: the bridge level, part 1 — girder types on the girder lines of each span (model, inputs, the type / line shown; no result change)
-PR: (link added on merge)
+PR #1496: https://github.com/mlococo88/All-Structural/pull/1496
 ### Request
 - Plan §5 PR 3a; engineer decisions PS-8 (interior + exterior design per span, the same shape per span, optional per-girder override), PS-15
   (the interim one design girder until the bridge step), PS-17 (kept multi-design imports restored at 3a: PR 3a-4). Modelled on the Steel Bridge
