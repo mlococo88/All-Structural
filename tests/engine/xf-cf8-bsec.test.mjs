@@ -24,11 +24,11 @@ test('three types 30 / 36 / 42, Mid: β_sec ratio 1.235 is labelled a component 
   assert.equal(sec.loc, 'Web distortion, β_sec'); assert.equal(sec.st, 'na'); assert.equal(sec.lbl, 'component (see β_T)'); assert.equal(sec.step, 'cf.sb.bsec');
   assert.equal(sec.cells[2], '1.23'); assert.ok(Math.abs(sec.r - 31420 / 25447) < 5e-4, `r = ${sec.r}`);   // β_T,req / β_sec = 31,420 / 25,447 = 1.235
   assert.equal(T.loc, 'System, β_T'); assert.equal(T.st, 'fail'); assert.ok(T.r > sec.r, 'β_T ≤ β_sec: the system ratio is the larger');
-  assert.equal(c.status, 'fail'); assert.equal(c.gov, 3, 'the system row governs'); assert.equal(br.st, 'pass'); assert.equal(g.st, 'pass');
+  assert.equal(c.status, 'fail'); assert.equal(c.gov, 3, 'the system row governs'); assert.equal(br.st, 'na'); assert.equal(g.st, 'na'); assert.equal(br.lbl, 'component (see β_T)'); assert.equal(g.lbl, 'component (see β_T)');   // SBBG (2026-11-13): β_br and β_g too (were 'pass')
   // the Report's check table: the status cell of the β_sec row is the label
   const RB = W.SBDReportData.compute(three(), 0, { want: { frm: true } }), Mo = W.SBDReportBuild.model(RB, { detail: 'gov', include: NO });
   const rows = Mo.sections[0].subs.find(s => s.id === 'ck').items.find(i => i.type === 'table').rows.filter(r => /^CF8 /.test(r[0]));
-  assert.equal(rows.length, 4); assert.equal(rows[1][5], 'component (see β_T)'); assert.equal(rows[3][5], 'Fail');
+  assert.equal(rows.length, 4); assert.equal(rows[1][5], 'component (see β_T)'); assert.equal(rows[3][5], 'Fail'); assert.equal(rows[0][5], 'component (see β_T)'); assert.equal(rows[2][5], 'component (see β_T)');   // SBBG
 });
 
 test('β_sec below the requirement (Exterior, ratio 0.72) and β_sec infinite (bracing ≥ 0.8 D): the same label; CF8 passes as before', () => {
