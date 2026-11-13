@@ -3213,7 +3213,7 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
   - Excel export throws for a round HSS in member mode on origin/main (`xlChecks`: `unresolved ref: 2*«bf»*«tf»`), so the new Excel rows are reached only once that is fixed.
   - The fallback to Lᵇ when no member span is entered (shared with self-weight and deflection) is unconservative for H3-2a when Lᵇ < the member length; the warning asks for L. Engineer to confirm, or block torsion without an entered span.
 
-## 2026-11-13 — PR: claude/sbeam-hss-tests (PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__) (SBHT) — Node tests for the HSS path (review item A7)   [tests only; the tool is not changed]
+## 2026-11-13 — PR: claude/sbeam-hss-tests (PR #1470: https://github.com/mlococo88/All-Structural/pull/1470) (SBHT) — Node tests for the HSS path (review item A7)   [tests only; the tool is not changed]
 - **What:** `tests/engine/sbeam-source.mjs` loads the tool's own engine functions from the page's inline scripts into a Node vm. It uses the method of `lp-source.mjs`, with three differences:
   - it takes the *last* declaration of a name, because the browser runs the last of the functions declared twice (`shearMajor`, `openTorsionFor`, `compositeFor`, …);
   - data constants such as `DB` are read while their brackets are open;
