@@ -1336,7 +1336,7 @@ PR #1528: https://github.com/mlococo88/All-Structural/pull/1528
   differences, exit 1. `node tests/check-syntax.mjs` passes.
 
 ## 2026-11-13 — PR 3b: the Summary tab — girder × span grid, governing ratio of each check group per girder type (worst line named), weights per line and bridge total, links to the worked steps; every girder type × line computed in chunks with Stop / Run all (display only; no calculation change)
-PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__
+PR #1529: https://github.com/mlococo88/All-Structural/pull/1529
 ### Request
 - Plan §5 row 3b: "Summary tab and check-summary chips (girder × span grid), run all (chunked, Stop)", display. The Steel Bridge app's
   Summary as the pattern (`apps/steel-bridge/ui/summary.js`, SUMT #1271, DASH #1272, girder types SB-2 PR 2 #1454): the verdict and its
