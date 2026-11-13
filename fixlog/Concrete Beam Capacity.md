@@ -6689,3 +6689,73 @@ Before: no section size check. The V_s cap of 22.5.1.2 was already applied, and 
 - **Tests:**
   - New `tests/smoke/cbc-shear-limit.mjs`, 1400 and 390 px, 0 console errors.
   - The suite's other tests are listed in the PR.
+
+## 2026-11-13 — PR: claude/cbc-stirrup-leg-width (PR #1497: https://github.com/mlococo88/All-Structural/pull/1497) (CBLW) — Beam Capacity tab, ACI mode: new detailing check "Stirrup leg spacing across the width" (ACI 318-19 Table 9.7.6.2.2)   [NEW CHECK; every existing result identical; a row's detailing D/C, worst D/C and status change only where the new check fails; no saved key or format change]
+
+The file uses CRLF line endings; keep them. All code is in the Beam Capacity srcdoc (`#suite-frame-capacity`). When re-applying, escape `&` as `&amp;` and `"` as `&quot;`; the text below is un-escaped. Every site is tagged CBLW.
+
+### Engineer decision CB-4 (2026-11-13)
+Check the maximum spacing of the stirrup legs across the width:
+- min(d, 24 in);
+- min(d/2, 12 in) where the tighter condition applies.
+
+Use exactly the tight / standard switch of the along-length check: V_s required = V_u/φ − V_c, which the engineer confirmed keeping.
+
+### Provision (ACI 318-19 Table 9.7.6.2.2, nonprestressed beam, "Across width" column; read in structural_references ACI-318-19-2019.pdf, PDF page 149; paraphrased)
+
+| Required V_s | Maximum spacing across the width |
+|---|---|
+| ≤ 4√f′c b_w d | the lesser of d and 24 in |
+| > 4√f′c b_w d | the lesser of d/2 and 12 in |
+
+### Leg spacing
+The input gives the stirrup bar size and the number of legs, not leg positions. The legs are taken as equally spaced between the centrelines of the two outer legs, which sit at the clear cover plus half the stirrup bar from each side face:
+
+s_w = (b_w − 2c_c − d_s)/(n − 1)
+
+### Where
+In `detailing()`, in the stirrup block:
+- **Before** (anchor):
+  ```js
+      let sMax,ref,dv2;
+  ...
+        const tight=VsReq>thr;
+  ...
+      add("dStirS","Maximum stirrup spacing",ref,s,sMax,"\\le","in",s<=sMax+1e-6,dv2);
+  ```
+- **After:** `let sMax,ref,dv2,legT=null;`, then `legT={tight,VsReq,thr};` after `const tight=VsReq>thr;`. After the `dStirS` add:
+  ```js
+      if(code==='ACI'&&legT){
+        const n=Math.max(2,Math.round(+S.stir.legs||2)), sw=(bw-2*cc-ds)/(n-1), swMax=legT.tight?Math.min(d/2,12):Math.min(d,24);
+        add("dStirLeg","Stirrup leg spacing across the width","ACI 9.7.6.2.2",sw,swMax,"\\le","in",sw<=swMax+1e-6,[ …three worked lines: s_w, the switch, s_w,max… ]);
+      }
+  ```
+- **Without stirrups** (after the N/A `dStirS`): `if(code==='ACI') add("dStirLeg",…,true,[],true,"No stirrups are specified, so there are no legs to space.");`
+- **Detailing card link** (`DL` map): `dStirLeg:["tabShear","shC","V_c, d"]`.
+- **Check panel condition** (`CBDC_COND`): `dStirLeg:'leg spacing > s_max'`.
+- **Unchanged generic code:** the check summary, Summary tab, All Combinations × Limit States (Detailing column), Detailing tab and Report pick the row up through `detEnvelope` / `allChecks`, as for the other detailing checks.
+
+### AASHTO mode
+Not added. AASHTO LRFD 10th Ed. 5.7.2.6 gives only the spacing along the member (Eqs. 5.7.2.6-1 and -2). It also has a segmental box-girder torsion limit, and no across-width limit. I read the article text in `AASHTO LRFD 10th Edition (Chapter 5-6).pdf`.
+
+### Hand check
+Inputs: b_w = 36 in, d = 20 in, c_c = 1.5 in, #4 stirrups (d_s = 0.5 in), V_u = 60 kip, so V_s,req ≤ 4√f′c b_w d.
+
+| Case | s_w | Limit | Result |
+|---|---|---|---|
+| 2 legs | (36 − 3 − 0.5)/1 = 32.50 in | min(20, 24) = 20 in | FAIL |
+| 3 legs | 32.5/2 = 16.25 in | 20 in | PASS |
+| #5 three legs at 4 in, V_u 250 kip (V_s,req > 4√f′c b_w d) | (36 − 3 − 0.625)/2 = 16.19 in | min(d/2, 12) = 10 in | FAIL |
+
+Before, this check did not exist.
+
+### How verified
+- **Scratch probe:** origin/main (#1495) vs branch, 15 projects, including the 12 of CBSZ and the three hand-check cases.
+  - `computeAll()` with the new `dStirLeg` entries removed is identical.
+  - `VALIDATION`, the hand-off message and the autosave are identical.
+  - `worst` / `detWorst` are identical except in the two cases where the new check fails (2 legs; tight switch).
+  - AASHTO projects have no row; no-stirrup projects show N/A.
+- **Tests:** new `tests/smoke/cbc-leg-width.mjs`, 1400 and 390 px, 0 console errors. The suite's other tests are listed in the PR.
+
+### Decision (pending engineer review)
+The legs are taken as equally spaced between the outer legs, because the input has no leg positions. A layout with unequal leg spacing needs a by-hand check.
