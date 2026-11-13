@@ -545,6 +545,16 @@ function resolveSection(){
   /* HSS design wall thickness rule: A1085 uses nominal wall */
   if((kind==='R'||kind==='P')&&mat.tRule==='nom'&&src.tdes!=='ovr')
     {p.tdes=p.tnom;src.tdes='rule';}
+  /* SBNT (2026-11-13, engineer HSS-3): A1085, the section properties at the nominal wall too (AISC 360-16 \u00A7B4.2: t = t_nom
+     for A1085). The database values are computed with t_des = 0.93 t_nom (A500); they are recomputed here with t = t_nom by
+     the same geometry (hssPropsRect / hssPropsRound), each property only where not entered as an override. */
+  if(src.tdes==='rule'){
+    const D=kind==='P'?hssLabelOD(db.lbl,p.OD,src.OD):null;
+    const q=kind==='R'?hssPropsRect(p.B,p.Ht,p.tdes):hssPropsRound(D,p.tdes);
+    (kind==='R'?['A','Ix','Zx','Sx','rx','Iy','Zy','Sy','ry','J','Cc']:['A','Ix','Zx','Sx','rx','J','Cc']).forEach(k=>{
+      if(src[k]!=='ovr'){p[k]=q[k];src[k]='rule';}});
+    p._a1085=q;
+  }
   /* Tier 2 — slenderness ratios recomputed from resolved geometry */
   if(kind==='I'||kind==='C'){
     p.bf2tf=p.bf/(2*p.tf);
@@ -589,6 +599,75 @@ function resolveSection(){
   p._src=src;
   p.overridden=Object.keys(S.section.ovr).filter(k=>S.section.ovr[k]!=null&&S.section.ovr[k]!=='');
   return p;
+}
+/* SBNT (2026-11-13, engineer HSS-3): rectangular / round HSS section properties from the outside dimensions and a wall t.
+   Rectangular: the AISC Manual Part 1 basis, outside corner radius r_o = 2t, inside r_i = t (midline 1.5t, as Commentary
+   H3 Eq. C-H3-2). Each property is the outer rounded rectangle (B x H, r_o) less the inner one ((B-2t) x (H-2t), r_i); a rounded
+   rectangle b x h with corner radius r is a central b x (h-2r) rectangle, two (b-2r) x r strips and four quarter circles.
+   J = 4 A_p^2 t / p (thin-walled closed section; A_p and p on the midline, midline corner radius 1.5t); C by Eq. C-H3-3.
+   Round: A, I, Z of the annulus; J = 2I; C = J/(D/2) (= 2J/D). With t = t_des (0.93 t_nom, tabulated) these reproduce the
+   AISC Shapes Database v16.0 values to their rounding (A, Z, J, C of every rectangular size; I, S, r within 1 %; tested in
+   tests/engine/sbeam-hss.test.mjs). Used for A1085 at t = t_nom. */
+function hssRR(b,h,r){
+  const qa=Math.PI*r*r/4,e=4*r/(3*Math.PI),Iq=(Math.PI/16-4/(9*Math.PI))*Math.pow(r,4),yq=h/2-r+e;
+  return{A:b*h-(4-Math.PI)*r*r,
+    I:b*Math.pow(h-2*r,3)/12+2*((b-2*r)*Math.pow(r,3)/12+(b-2*r)*r*Math.pow(h/2-r/2,2))+4*(Iq+qa*yq*yq),
+    Q:b*Math.pow(h/2-r,2)/2+(b-2*r)*r*(h/2-r/2)+2*qa*yq};
+}
+function hssPropsRect(B,H,t){
+  const ox=hssRR(B,H,2*t),ix=hssRR(B-2*t,H-2*t,t),oy=hssRR(H,B,2*t),iy=hssRR(H-2*t,B-2*t,t);
+  const A=ox.A-ix.A,Ix=ox.I-ix.I,Iy=oy.I-iy.I,rm=1.5*t;
+  const Ap=(B-t)*(H-t)-(4-Math.PI)*rm*rm,pm=2*(B-t)+2*(H-t)-2*(4-Math.PI)*rm;
+  return{kind:'R',B,H,t,ro:2*t,ri:t,Ao:ox.A,Ai:ix.A,Ixo:ox.I,Ixi:ix.I,Iyo:oy.I,Iyi:iy.I,Qxo:ox.Q,Qxi:ix.Q,Qyo:oy.Q,Qyi:iy.Q,Ap,pm,
+    A,Ix,Zx:2*(ox.Q-ix.Q),Sx:Ix/(H/2),rx:Math.sqrt(Ix/A),Iy,Zy:2*(oy.Q-iy.Q),Sy:Iy/(B/2),ry:Math.sqrt(Iy/A),
+    J:4*Ap*Ap*t/pm,Cc:2*t*(B-t)*(H-t)-4.5*Math.pow(t,3)*(4-Math.PI)};
+}
+function hssPropsRound(D,t){
+  const Di=D-2*t,A=Math.PI/4*(D*D-Di*Di),I=Math.PI/64*(Math.pow(D,4)-Math.pow(Di,4));
+  return{kind:'P',D,t,Di,A,Ix:I,Zx:(Math.pow(D,3)-Math.pow(Di,3))/6,Sx:2*I/D,rx:Math.sqrt(I/A),J:2*I,Cc:4*I/D};
+}
+/* SBNT: the A1085 properties worked (Section Properties tab and Report): symbolic, values substituted, result */
+function sbA1085Work(body,p){
+  const q=p._a1085,f3=v=>fmt(v,3),f4=v=>fmt(v,4),u=(v,n)=>fmt(v,n==null?3:n);
+  body.appendChild(el('div','hint sbNL',sbNL('ASTM A1085: the design wall thickness is the nominal wall, t = t\u2099\u2092\u2098 (AISC 360-16 \u00A7B4.2). The database properties (AISC Shapes Database v16.0) are computed with t_des = 0.93t\u2099\u2092\u2098 (A500), so each one is recomputed here with t = t\u2099\u2092\u2098:',
+    [['Used for:','every strength of this section (A, Z, S, I, r, J, C); a property entered as an override is used as entered.'],
+     q.kind==='R'?['Geometry basis:','AISC Manual Part 1: outside corner radius r\u2092 = 2t, inside r\u1D62 = t (midline 1.5t, as Commentary \u00A7H3 Eq. C-H3-2). With t = t_des these formulas reproduce the database values to their rounding.']:
+       ['Geometry basis:','plain annulus, D from the label ('+f3(q.D)+' in; the database OD is rounded). With t = t_des these formulas reproduce the database values to their rounding.'],
+     ['Weight:','the tabulated weight W\u209C is already based on the nominal wall (e.g. HSS8X8X1/2: 48.85 lb/ft = 14.36 in\u00B2 \u00D7 3.40) and is used as tabulated.']])));
+  if(q.kind==='R'){
+    const RR='A_{rr}(b,h,r)=bh-(4-\\pi)r^2';
+    body.appendChild(eqBlock({title:'Area and moments of inertia (rounded rectangles, outer minus inner)',ref:'\u00A7B4.2; Manual Part 1',
+      lines:[RR,
+        'I_{rr}(b,h,r)=\\tfrac{b(h-2r)^3}{12}+2\\left[\\tfrac{(b-2r)r^3}{12}+(b-2r)r\\left(\\tfrac{h-r}{2}\\right)^2\\right]+4\\left[\\left(\\tfrac{\\pi}{16}-\\tfrac{4}{9\\pi}\\right)r^4+\\tfrac{\\pi r^2}{4}\\left(\\tfrac{h}{2}-r+\\tfrac{4r}{3\\pi}\\right)^2\\right]',
+        'A=A_{rr}(B,H,2t)-A_{rr}(B-2t,H-2t,t)='+f4(q.Ao)+'-'+f4(q.Ai)+'='+u(q.A)+'\\ \\text{in}^2',
+        'I_x=I_{rr}(B,H,2t)-I_{rr}(B-2t,H-2t,t)='+u(q.Ixo,2)+'-'+u(q.Ixi,2)+'='+u(q.Ix,2)+'\\ \\text{in}^4',
+        'I_y=I_{rr}(H,B,2t)-I_{rr}(H-2t,B-2t,t)='+u(q.Iyo,2)+'-'+u(q.Iyi,2)+'='+u(q.Iy,2)+'\\ \\text{in}^4'],
+      vars:[['B',f3(q.B)+' in','overall width'],['H',f3(q.H)+' in','overall height'],['t',f4(q.t)+' in','t\u2099\u2092\u2098 (A1085)'],['r_o, r_i',f4(q.ro)+', '+f4(q.ri)+' in','2t, t']]}));
+    body.appendChild(eqBlock({title:'Plastic and elastic section moduli, radii of gyration',ref:'Manual Part 1',
+      lines:['Q_{rr}(b,h,r)=\\tfrac{b}{2}\\left(\\tfrac{h}{2}-r\\right)^2+(b-2r)r\\tfrac{h-r}{2}+\\tfrac{\\pi r^2}{2}\\left(\\tfrac{h}{2}-r+\\tfrac{4r}{3\\pi}\\right)',
+        'Z_x=2\\left[Q_{rr}(B,H,2t)-Q_{rr}(B-2t,H-2t,t)\\right]=2('+f4(q.Qxo)+'-'+f4(q.Qxi)+')='+u(q.Zx)+'\\ \\text{in}^3',
+        'Z_y=2\\left[Q_{rr}(H,B,2t)-Q_{rr}(H-2t,B-2t,t)\\right]=2('+f4(q.Qyo)+'-'+f4(q.Qyi)+')='+u(q.Zy)+'\\ \\text{in}^3',
+        'S_x=\\tfrac{I_x}{H/2}=\\tfrac{'+u(q.Ix,2)+'}{'+f3(q.H/2)+'}='+u(q.Sx)+'\\ \\text{in}^3,\\quad S_y=\\tfrac{I_y}{B/2}=\\tfrac{'+u(q.Iy,2)+'}{'+f3(q.B/2)+'}='+u(q.Sy)+'\\ \\text{in}^3',
+        'r_x=\\sqrt{I_x/A}='+u(q.rx)+'\\ \\text{in},\\quad r_y=\\sqrt{I_y/A}='+u(q.ry)+'\\ \\text{in}']}));
+    body.appendChild(eqBlock({title:'Torsional constants',ref:'Comm. \u00A7H3 Eq. C-H3-2, C-H3-3',
+      lines:['A_p=(B-t)(H-t)-(4-\\pi)(1.5t)^2='+f4(q.Ap)+'\\ \\text{in}^2,\\quad p=2(B-t)+2(H-t)-2(4-\\pi)(1.5t)='+f4(q.pm)+'\\ \\text{in}',
+        'J=\\tfrac{4A_p^2t}{p}=\\tfrac{4('+f4(q.Ap)+')^2('+f4(q.t)+')}{'+f4(q.pm)+'}='+u(q.J,2)+'\\ \\text{in}^4',
+        'C=2t(B-t)(H-t)-4.5t^3(4-\\pi)='+u(q.Cc,2)+'\\ \\text{in}^3']}));
+  }else{
+    body.appendChild(eqBlock({title:'Round HSS properties (annulus)',ref:'\u00A7B4.2; Comm. \u00A7H3 Eq. C-H3-1',
+      lines:['D_i=D-2t='+f3(q.D)+'-2('+f4(q.t)+')='+f4(q.Di)+'\\ \\text{in}',
+        'A=\\tfrac{\\pi}{4}(D^2-D_i^2)='+u(q.A)+'\\ \\text{in}^2,\\quad I=\\tfrac{\\pi}{64}(D^4-D_i^4)='+u(q.Ix,2)+'\\ \\text{in}^4',
+        'Z=\\tfrac{D^3-D_i^3}{6}='+u(q.Zx)+'\\ \\text{in}^3,\\quad S=\\tfrac{2I}{D}='+u(q.Sx)+'\\ \\text{in}^3,\\quad r=\\sqrt{I/A}='+u(q.rx)+'\\ \\text{in}',
+        'J=2I='+u(q.J,2)+'\\ \\text{in}^4,\\quad C=\\tfrac{2J}{D}='+u(q.Cc,2)+'\\ \\text{in}^3'],
+      vars:[['D',f3(q.D)+' in','outside diameter (label)'],['t',f4(q.t)+' in','t\u2099\u2092\u2098 (A1085)']]}));
+  }
+}
+/* the outside diameter for the properties: the label's (HSS10.750X0.500 -> 10.750), the database OD being rounded (10.8);
+   an entered OD wins */
+function hssLabelOD(lbl,OD,srcOD){
+  if(srcOD==='ovr')return OD;
+  const m=/^HSS(\d+(?:\.\d+)?)X/.exec(String(lbl||''));const v=m?+m[1]:NaN;
+  return (isFinite(v)&&Math.abs(v-OD)<0.06)?v:OD;
 }
 /* Consistency checks — idealized re-derivation vs resolved values (§8) */
 function sectionWarnings(p){
@@ -3586,6 +3665,7 @@ function buildSectionTab(pg){
     const aw=f13.L.find(x=>x.id==='aw');
     if(aw&&aw.v>10)body.appendChild(el('div','hint','R\u209A\u1D4D (Eq. F5-6) uses a\u1D65 capped at 10 by its definition; the limit itself is reported above.'));
   },pg);
+  if(p._a1085)mkSection('sctA1085','A1085 Section Properties at the Nominal Wall',body=>sbA1085Work(body,p),pg);   /* SBNT (2026-11-13) */
   mkSection('sctTbl','Resolved Properties',body=>{
     const t=el('table','tbl');
     const hd=el('tr');['Property','Value','Units','Source'].forEach(h=>hd.appendChild(el('th',null,h)));t.appendChild(hd);
@@ -3629,7 +3709,7 @@ function buildSectionTab(pg){
         Object.keys(E).filter(k=>p._src[k]==='plates').map(k=>E[k]))));   /* SBNL: one item per property */
     }
     if(p._kind==='I'||p._kind==='C')body.appendChild(el('div','hint sbNL',sbNL('<b>h clear</b> is the clear web depth driving h/t\u1D65 and, where transverse stiffeners are entered, a/h.',[['Value:','backed out of the tabulated h/t\u1D65 at database thickness.'],['To model a built-up plate girder,','override it together with d, t\u1D65, b\u1DA0 and t\u1DA0.']])));
-    if(p._kind==='R')body.appendChild(el('div','hint sbNL',sbNL('HSS wall and flat widths:',[['Flat widths:','use the AISC convention b = B \u2212 3t, h = H \u2212 3t when corner radii are unknown (Spec. \u00A7B4.1b(d), G4).'],['A500:','the tabulated design wall t_des = 0.93\u00B7t_nom is used; selecting A1085 switches to the nominal wall.']])));
+    if(p._kind==='R')body.appendChild(el('div','hint sbNL',sbNL('HSS wall and flat widths:',[['Flat widths:','use the AISC convention b = B \u2212 3t, h = H \u2212 3t when corner radii are unknown (Spec. \u00A7B4.1b(d), G4).'],['A500:','the tabulated design wall t_des = 0.93\u00B7t_nom is used; selecting A1085 switches to the nominal wall, and A, Z, S, I, r, J and C are recomputed with it (card \u2018A1085 Section Properties at the Nominal Wall\u2019).']])));
   },pg);
   mkSection('sctBr','Bracing Summary',body=>{
     const t=el('table','tbl');
@@ -4455,7 +4535,7 @@ manPart('p2','II. Input Reference',[
 {h:'Section & Material'},
 {tbl:{head:['Input','Units','Meaning'],rows:[
 ['Shape family','\u2014','W, M, S, HP, C, MC, HSS rect, HSS round, Pipe \u2014 '+DBVER+' embedded in full'],
-['Material','\u2014','Sets F\u1D67/F\u1D64; the family filters valid grades; A1085 switches HSS design wall from 0.93t\u2099\u2092\u2098 to t\u2099\u2092\u2098'],
+['Material','\u2014','Sets F\u1D67/F\u1D64; the family filters valid grades; A1085 switches HSS design wall from 0.93t\u2099\u2092\u2098 to t\u2099\u2092\u2098 and its A, Z, S, I, r, J and C are recomputed at t\u2099\u2092\u2098 (SBNT)'],
 ['Overrides','in, in\u00B2\u2026','Any property; slenderness ratios always recomputed from resolved geometry; consistency warnings fire on \u22655% disagreement with idealized re-derivation'],
 ]}},
 {h:'Loads'},
@@ -4498,7 +4578,7 @@ manPart('p4','IV. Methodology',[
 {h:'IV.5 Tributary conversion'},
 {eq:'w_{case}=\\frac{p_{case}\\,(TW_L+TW_R)}{1000}+w_{line}\\,,\\qquad w_{sw}=\\frac{W_{shape}}{1000}'},
 {h:'IV.6 Section resolution'},
-{p:'Three tiers: (1) geometry \u2014 overridable; (2) slenderness ratios \u2014 <i>always</i> recomputed from resolved geometry (for I-shapes the clear web h is backed out of the tabulated h/t\u1D65 at database thickness, then re-ratioed); (3) properties \u2014 individually overridable with provenance displayed. HSS flat widths use b = B\u22123t, h = H\u22123t per Spec. \u00A7B4.1b(d)/G4 when corner radii are unknown. A500 design wall = 0.93t\u2099\u2092\u2098 (as tabulated); A1085 uses the nominal wall.'},
+{p:'Three tiers: (1) geometry \u2014 overridable; (2) slenderness ratios \u2014 <i>always</i> recomputed from resolved geometry (for I-shapes the clear web h is backed out of the tabulated h/t\u1D65 at database thickness, then re-ratioed); (3) properties \u2014 individually overridable with provenance displayed. HSS flat widths use b = B\u22123t, h = H\u22123t per Spec. \u00A7B4.1b(d)/G4 when corner radii are unknown. A500 design wall = 0.93t\u2099\u2092\u2098 (as tabulated); A1085 uses the nominal wall and its A, Z, S, I, r, J and C are recomputed at t\u2099\u2092\u2098 (SBNT).'},
 {h:'IV.7 Stage-2 interfaces already in place'},
 {ul:['Per-combination exact M/V evaluation at arbitrary x (C\u1D47 quarter-point sampling)','V = 0 station list (round-HSS L\u1D65)','Negative-moment region maps (compression-flange selection)','Per-span EI slots (composite staging)','Combination stage tags (construction vs final)']}
 ]);
@@ -4656,7 +4736,7 @@ MANUAL.p0.blocks=[
 {h3:'Euler-Bernoulli bending; deflection integration'},
 {p:'Shear deformation neglected (error < ~3% at span/depth \u2265 10). Deflections integrate M/EI numerically (600 stations); interior-support residuals are reported on the Validation tab.'},
 {h3:'Section resolution'},
-{p:'Slenderness ratios are always recomputed from resolved geometry, so overrides propagate consistently; HSS flats use b = B \u2212 3t; A500 design wall = 0.93t\u2099\u2092\u2098, A1085 uses t\u2099\u2092\u2098.'},
+{p:'Slenderness ratios are always recomputed from resolved geometry, so overrides propagate consistently; HSS flats use b = B \u2212 3t; A500 design wall = 0.93t\u2099\u2092\u2098, A1085 uses t\u2099\u2092\u2098 and its A, Z, S, I, r, J and C are recomputed at t\u2099\u2092\u2098 (SBNT).'},
 {warn:'<b>This application is an engineering aid, not a substitute for engineering judgment.</b> The user is responsible for the design, for the manually entered demands, for load factors versus the governing code edition, and for independent review by a licensed engineer.'}
 ];
 MANUAL.p5.blocks=[

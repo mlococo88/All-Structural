@@ -3353,3 +3353,58 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
 - **Open items (not changed):**
   - Batch grade matching. `pickGrade` strips `_` from the ids but not from the typed text, so "A500B_R", "A500C_R" and "A500B" are not recognized. They fall back to the family default without a warning; "A500 Gr. B" is recognized. Pre-existing.
   - `matOf` falls back to `MATS[0]` (A992) for an unknown saved grade id. Pre-existing and unchanged.
+
+## 2026-11-13 — PR: claude/hss-a1085-props (PR #1476: https://github.com/mlococo88/All-Structural/pull/1476) (SBNT) — A1085: A, Z, S, I, r, J, C computed at the nominal wall   [calculation change, §4; A1085 only]
+- **Engineer's decision HSS-3 (2026-11-13):** for A1085, recompute all section properties at the nominal t (HSS review item A2).
+- **Problem:** A1085 set t_des = t_nom (§B4.2). A, Z, S, I, r, J and C stayed at the database values, which are computed with 0.93t_nom. Strengths that use these properties were about 6–7 % low (conservative), and E7 / F7-4 mixed the two bases.
+- **Code (re-apply by hand):**
+  1. `resolveSection`, right after
+     ```js
+     if((kind==='R'||kind==='P')&&mat.tRule==='nom'&&src.tdes!=='ovr')
+       {p.tdes=p.tnom;src.tdes='rule';}
+     ```
+     add:
+     ```js
+     if(src.tdes==='rule'){
+       const D=kind==='P'?hssLabelOD(db.lbl,p.OD,src.OD):null;
+       const q=kind==='R'?hssPropsRect(p.B,p.Ht,p.tdes):hssPropsRound(D,p.tdes);
+       (kind==='R'?['A','Ix','Zx','Sx','rx','Iy','Zy','Sy','ry','J','Cc']:['A','Ix','Zx','Sx','rx','J','Cc']).forEach(k=>{
+         if(src[k]!=='ovr'){p[k]=q[k];src[k]='rule';}});
+       p._a1085=q;
+     }
+     ```
+  2. New functions `hssRR(b,h,r)`, `hssPropsRect(B,H,t)`, `hssPropsRound(D,t)` and `hssLabelOD(lbl,OD,srcOD)`, placed before `/* Consistency checks — idealized re-derivation vs resolved values (§8) */`. They use `Math.PI`.
+     - `hssRR` returns A = bh − (4−π)r², the I and the half-section first moment Q of a rounded rectangle. It is built from a central b×(h−2r) rectangle, two (b−2r)×r strips and four quarter circles; each quarter circle has I_c = (π/16 − 4/(9π))r⁴ and its centroid at h/2 − r + 4r/(3π).
+     - `hssPropsRect`: outer `hssRR(B,H,2t)` minus inner `hssRR(B−2t,H−2t,t)` (and the same with B and H swapped for the y-axis). Z = 2ΔQ, S = I/(H/2), r = √(I/A). J = 4A_p²t/p with A_p = (B−t)(H−t) − (4−π)(1.5t)² and p = 2(B−t) + 2(H−t) − 2(4−π)(1.5t). C = 2t(B−t)(H−t) − 4.5t³(4−π).
+     - `hssPropsRound`: A = π(D²−Dᵢ²)/4, I = π(D⁴−Dᵢ⁴)/64, Z = (D³−Dᵢ³)/6, S = 2I/D, J = 2I, C = 4I/D.
+     - `hssLabelOD`: D from the label, if it is within 0.06 in of the database OD; an entered OD wins.
+  3. New `sbA1085Work(body,p)` (worked card) and, in `buildSectionTab` before `mkSection('sctTbl','Resolved Properties',…`, the line `if(p._a1085)mkSection('sctA1085','A1085 Section Properties at the Nominal Wall',body=>sbA1085Work(body,p),pg);`.
+  4. Texts (each sentence is appended after the old text):
+     - Section tab hint: `selecting A1085 switches to the nominal wall.` → `…, and A, Z, S, I, r, J and C are recomputed with it (card 'A1085 Section Properties at the Nominal Wall').`
+     - Inputs table "Material" row, and two User Manual paragraphs: `… and its A, Z, S, I, r, J and C are recomputed at tₙₒₘ (SBNT)`.
+- **Basis:**
+  - AISC 360-16 §B4.2 (A1085: t = t_nom).
+  - Outside corner radius 2t per AISC Manual Part 1. The v16 Design Examples I.x say "outside corner radii of two times the design wall thickness in accordance with AISC Manual Part 1"; Commentary §H3 uses midline radius 1.5t (Eq. C-H3-2).
+  - Commentary Eq. C-H3-1 and C-H3-3.
+  - W_t is used as tabulated: it is already on the nominal wall (48.85 lb/ft = 14.36 in² × 3.40 for HSS8X8X1/2).
+- **Database check (t = tabulated t_des):**
+  - 525 rectangular sizes: A, Zx, Zy, J and C within 1 unit of the 3rd significant figure; Ix, Iy, Sx, Sy, rx and ry within 1 % (max 0.93 %, small thick sizes, e.g. HSS8X2X1/2 Iy 4.159 exact against 4.19 tabulated).
+  - 189 round sizes: within 1 % (max 0.93 %, C).
+- **Check cases (before → after):**
+  - **HSS8X8X1/2 A1085:**
+    - Properties: A 13.5 → 14.356; Zx 37.5 → 39.735; Ix 125 → 131.44; Sx 31.2 → 32.86; rx 3.04 → 3.026; J 204 → 216.63; C 52.4 → 55.767.
+    - Strengths: φMnx 140.63 → 149.01 kip·ft; φTn 117.90 → 125.48 kip·ft; φPn at L_c = 12 ft 515.6 → 547.4 kip.
+    - Member-mode interaction (H3-6), LC-1 (Mux 100, Muy 20, Vux 30, Vuy 10, Pu 200, Tu 30): 1.4739 → 1.3888.
+  - **HSS10.000X0.500 A1085:**
+    - Properties: A 13.9 → 14.923; I 159 → 168.81; Z 42.3 → 45.167; S 31.7 → 33.762; J 317 → 337.62; C 63.5 → 67.52.
+    - Strength: φMn 158.63 → 169.38 kip·ft.
+  - Hand arithmetic is in PR #1476.
+- **How verified:**
+  - Headless Chromium, origin/main against the branch. Six non-A1085 cases (W, A500 B and C rect and round, beam and member, Pipe): `AN` identical; all tab and Report texts identical apart from the one appended Section-tab sentence.
+  - Node `sbeam-hss` test 7; `aisc-hss` 7/7; check-syntax.
+  - Smoke tests pass: builtup, h1-composite, phone-layout, decimal-entry, project-library, start-chooser. list-input `--part sbeam` fails the same 2 baseline checks as main.
+- **Saved data:** no change of key or format.
+- **Other copies:** `shared/aisc-hss.js` (Steel Canopy Designer) has no A1085 grade, so it is not affected.
+- **Open items:**
+  - The cross-section drawing still draws the A1085 wall at t_nom with the database corner geometry (display only).
+  - `sectionWarnings` still compares A with an approximate wall-geometry area (1.5 % tolerance band, no warning now).
