@@ -175,7 +175,7 @@ function tableExpect(band, heads, cx) {
     const rows = [];
     D.perCombo.forEach(C => (C.hssK || []).forEach(r => {
       const lo = D.hssK.find(l => l.key === r.key); if (!lo || lo.prm.type === 'none' || !(r.dem > 1e-9)) return;
-      if (lo.prm.errs.length) { rows.push(['', r.F, '', '', '', '', '']); return; }
+      if (lo.prm.errs.length || lo.prm.nc) { rows.push(['', r.F, '', '', '', '', '']); return; }
       r.states.forEach(s => rows.push(['', r.F, r.U, '', s.Qf != null ? s.Qf : null, s.phiRn, s.dcr]));
     }));
     return rows;
@@ -258,12 +258,17 @@ const cases = [];
 const C = (name, setup, chk) => cases.push({ name, setup: `()=>{${setup}}`, chk });
 const routes = D => D.capTop.ls.filter(l => l.applies).map(l => l.clause).join(',');
 
-C('rect A500B member: compact, Lb < Lp, H3-6, tension helper case 6, self-weight, deflection, Chapter K plate',
+C('rect A500B member: compact, Lb < Lp, H3-6, tension helper case 6, self-weight, deflection, Chapter K narrow plate (not covered)',
   RECT('HSS12X6X1/2', 'A500B_R') + MEM({ L: 20, Lb: 12, Cb: 1, sw: { on: true, L: 20, cfg: 'simple', k: 8, c: 0.5, gam: 1.2 },
     defl: { on: true, w: 1.2, L: 20, cfg: 'simple', c: null, den: 360, I: null }, j10: { R: 30, lb: null, loc: 'interior' }, hssK: { type: 'plate', Bp: 5, tp: 0.5 } },
   [{ id: 'm1', name: 'big', Mux: 150, Vux: 60, Pu: 150, Muy: 40, Vuy: 20, Tu: 0 }, { id: 'm2', name: 'tors', Mux: 50, Vux: 20, Pu: 10, Muy: 5, Vuy: 4, Tu: 40 },
     { id: 'm3', name: 'tension', Mux: 20, Vux: 5, Pu: -100, Muy: 0, Vuy: 0, Tu: 0 }]) + `S.design.ten={An:null,U:null,hlp:{on:true,tp:0.5,l:14}};`,
-  ({ D }) => { assert.equal(D.perCombo[1].inter.eq, 'H3-6'); assert.equal(D.perCombo[0].inter.eq, 'H1-1a'); assert.equal(D.perCombo[2].tens.hlp.case, '6'); assert.ok(D.hssK[0].caps.ylNC); });
+  ({ D, log }) => { assert.equal(D.perCombo[1].inter.eq, 'H3-6'); assert.equal(D.perCombo[0].inter.eq, 'H1-1a'); assert.equal(D.perCombo[2].tens.hlp.case, '6'); assert.ok(D.hssK[0].prm.nc);
+    const t = log.map(e => JSON.stringify(e.a)).join('\n'); assert.ok(/NOT COVERED: plate width Bp = 5\.000 in < 0\.85B = 5\.100 in/.test(t) && /check HSS face plastification by hand/.test(t), t); });
+C('rect member: plate Bp = 0.85B (5.1 in, covered), at the member end',
+  RECT('HSS12X6X1/2', 'A500B_R') + MEM({ L: 20, Lb: 12, j10: { R: 30, lb: null, loc: 'end' }, hssK: { type: 'plate', Bp: 5.1, tp: 0.5 } },
+  [{ id: 'm1', name: 'A', Mux: 100, Vux: 30, Pu: 40, Muy: 0, Vuy: 0, Tu: 0 }]),
+  ({ D }) => { assert.equal(D.hssK[0].prm.nc, undefined); assert.ok(D.perCombo[0].hssK[0].states.length >= 3); });
 C('rect slender A500B member: F7-3 slender flange, F7-6 web, F7-10 LTB, E7, H3-4',
   RECT('HSS24X20X3/8', 'A500B_R') + MEM({ Lb: 100, Cb: 1.1 }, [{ id: 'm1', name: 'A', Mux: 300, Vux: 50, Pu: 100, Muy: 100, Vuy: 30, Tu: 30 }]),
   ({ D }) => { assert.match(routes(D), /F7-3/); assert.match(routes(D), /F7-6/); assert.match(routes(D), /F7-10/); assert.ok(D.comp.eff.length === 2); assert.equal(D.tors.clause, 'H3-4');
