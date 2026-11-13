@@ -323,3 +323,32 @@ Loaded by: `apps/steel-bridge/index.html` (Report tab, `ui/report.js`). Tests: `
 - **Other copies:** none (no tool has its own report search; the Prestressed Bridge Design Nomenclature tab has a variable filter, not a report search).
 - **Open items:** none for the calculations. Typing in the report search marks the Steel Bridge project "not saved" (its project chip listens to
   every `input` event; also on main) — follow-up for that app, not changed here.
+
+## 2026-11-13 — PR: claude/report-see-once — "see" printed once before a § link (SEE1; display only)
+- **Problem (before):** in print, every § link (`a.rp-see`) gets "see " in front (`@media print` rule `.rp-see::before{content:"see ";}`), so a
+  link the text already introduces with "see" printed twice: a cell "(see [[k]])" printed "(see see §x)". Only step notes ("See §id", `noteOf`)
+  were spared (class `rp-seen`). Measured in print emulation on origin/main (af6b916), the printed text of each consumer's whole report
+  (Print report, every lazy item filled): Prestressed Bridge (apps/ps-bridge) 219 "see see" (Report §1 Worked column, key quantities, notes),
+  Bridge Substructure Loading 32, ASCE7-16 Load Generator 19, abutment_calculator 7 (one "See see"), Spread Footing 1; the other 17 consumers 0.
+- **Where:** `shared/report.js`, before `function rich(`: new `SEE_BEFORE = /\bsee(?:\s+also)?\s*$/i`, `SEE_RUN = /^\s*(?:,|;|\/|&|and|or|to|–|-)\s*$/i`,
+  `seenA(a)` (adds `rp-seen` to the link's class) and, after `rich`, `keyLink(doc, before, key)`.
+  - `rich()`: before, each `[[key]]` part became `<a href="#…" class="rp-see" data-rpjump="…">§x</a>` whatever text came before it; after, it
+    tracks the text part just before the link (`prev`) and whether the last link was introduced by "see" (`seen`): the link gets
+    `class="rp-see rp-seen"` when `prev` ends with "see" / "see also" (any case), or when the previous link was so introduced and only a
+    separator ("," ";" "/" "&" "and" "or" "to" "–" "-") stands between them ("see [[a]], [[b]] and [[c]]"). A `$…$` part or a `[[tab:…]]` link
+    ends the run. Plain-text output (`html` false) unchanged.
+  - `cellHtml()`: before `const lk = o.key ? ' ' + rich(doc, `[[${o.key}]]`, true) : '';` after `… ' ' + keyLink(doc, o.t, o.key) …`; kv rows
+    (`itemBody`, type kv): before `' ' + rich(doc, `[[${r[2]}]]`, true)` after `' ' + keyLink(doc, r[1], r[2])` (no "see " when the cell /
+    value text ends with "see").
+  - CSS unchanged (`.rp-seen::before{content:none;}` exists since the step-note fix). Screen unchanged (the "see " is print only).
+- **Governing provision:** none (display only). No formula, factor, unit, value, code reference, storage key or saved format changes.
+- **Check case:** Prestressed Bridge default project, Report §1, row "Release comp": printed Worked cell before "see see §7.7", after "see §7.7";
+  key quantity "47.82 ksi (23.6 %) (see see §6.7)" → "(see §6.7)". Bridge Substructure Loading: "Values (envelopes of the combination table):
+  see see §15.32" → "see §15.32". Spread Footing: "(see see §11)" → "(see §11)". A bare link cell "[[k]]" still prints "see §x"; "Length [[k]]"
+  prints "Length see §x" as before.
+- **How verified:** every tool that loads `shared/report.js` (22: see the PR), print emulation in headless Chromium, main vs branch: the whole
+  printed report text with the `::before` content inserted; after = before with each "see see" made one "see", nothing else changed (only
+  timestamps / run time differ between the runs); 0 "see see" in every tool after. `tests/engine/report.test.mjs` new test (SEE1): which links
+  get `rp-seen` for 14 cell texts, kv keys and a note; the plain text unchanged. Full `node tests/engine/run.mjs`; the report smoke tests (see the PR).
+- **Other copies:** none (the rule is only in this file).
+- **Open items:** none.
