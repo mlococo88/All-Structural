@@ -650,6 +650,12 @@ function sqrtfc_psi(fc){ return Math.sqrt(fc*1000); }
    elements and connections of 5.4.3.3 under flexural shear without torsion (the user ticks S.mat.fyt100); otherwise
    f_yt where f_yt <= 60 ksi, and above 60 ksi the stress at a strain of 0.0035 (E_s x 0.0035 = 101.5 ksi) but not over 75 ksi. */
 function fytLimAASHTO(){ return S.mat.fyt100 ? 100 : (S.mat.fyt<=60 ? 60 : Math.min(29000*0.0035,75)); }
+/* CBSB (2026-11-13, engineer decision CB-6): member type, ACI mode only. &quot;slab&quot; = a one-way slab designed as a 12 in strip: b = 12 in,
+   each layer entered as bar size and spacing s (L.s), L.n = 12/s bars per strip (may be fractional), so A_s is per ft of width.
+   Saved projects without memberType are beams (mergeState). */
+function cbcSlab(){ return S.memberType==='slab'&amp;&amp;S.code==='ACI'; }
+/* a layer's bars as text: beams &quot;n#size&quot; (sep &quot;#&quot;), &quot;n #size&quot; (&quot; #&quot;), &quot;n-#size&quot; (&quot;-#&quot;); slabs &quot;#size @ s in&quot; */
+function cbcBarTxt(L,sep){ if(cbcSlab()&amp;&amp;L&amp;&amp;L.s>0) return &quot;#&quot;+L.size+&quot; @ &quot;+fmt(L.s)+(sep===&quot;-#&quot;?&quot;\&quot;&quot;:&quot; in&quot;); return L.n+(sep||&quot;#&quot;)+L.size; }
 function fytDesign(){ return S.code==='ACI' ? Math.min(S.mat.fyt,60) : Math.min(S.mat.fyt,fytLimAASHTO()); }
 
 /* =====================================================================
@@ -757,6 +763,8 @@ function defaultState(){
           by:&quot;M. Lococo&quot;,date:new Date().toISOString().slice(0,10),
           chk:&quot;&quot;,chkDate:&quot;&quot;,sheet:&quot;S-1&quot;},
     code:&quot;ACI&quot;,
+    memberType:&quot;beam&quot;,   /* CBSB: &quot;beam&quot; | &quot;slab&quot; (one-way slab, ACI mode) */
+    slab:{stSize:&quot;&quot;,stS:0},   /* CBSB: shrinkage and temperature bars perpendicular to the span (&quot;&quot; = none entered) */
     sec:{type:&quot;rect&quot;,bw:12,h:18,bf:36,hf:6,asminSupport:&quot;determinate&quot;},   /* asminSupport: CBM4, ACI 9.6.1.2 flange in tension */
     mat:{fc:4,fy:60,fyt:60,dagg:1.0,lambda:1.0,gamma3:0.67,fyt100:false,wc:0},   /* wc: CBL7b, AASHTO unit weight (kcf), 0 = not entered */
     cover:{cc:2.0,exposure:&quot;exposed&quot;,req:2.0,userEdited:false},
@@ -794,7 +802,12 @@ function mergeState(st){
   if(!Array.isArray(S.layers)||!S.layers.length) S.layers=d.layers;
   S.layers=S.layers.map(L=>({n:+L.n||1,size:String(L.size||'5'),
     face:(L.face==='compression'?'compression':'tension'),
-    dMan:(L.dMan==null||L.dMan==='')?null:+L.dMan}));
+    dMan:(L.dMan==null||L.dMan==='')?null:+L.dMan,...(+L.s>0?{s:+L.s}:{})}));   /* CBSB: s (slab bar spacing) kept only where saved */
+  /* CBSB migration (2026-11-13): no memberType -> beam (results as before). A slab is a 12 in rectangular strip; each layer's bars
+     per strip follow from its spacing. */
+  S.memberType=(st.memberType==='slab')?'slab':'beam';
+  S.slab={stSize:String((st.slab&amp;&amp;st.slab.stSize)||&quot;&quot;),stS:+(st.slab&amp;&amp;st.slab.stS)||0};
+  if(S.memberType==='slab'){ S.sec.bw=12; S.sec.type='rect'; S.layers.forEach(L=>{ if(!(L.s>0)) L.s=Math.round(12/L.n*4)/4||12; L.n=12/L.s; }); }
   /* CBSL migration (2026-11-13): a save, project or Export JSON made before service load cases has no loadMode: it opens in
      factored mode with its combinations as saved, so its results are unchanged (none saved: the old default rows, as before).
      S.svc is read (missing or partial: blank cases, W and E reversible, 5.3.3 off). */
@@ -840,7 +853,7 @@ function layerGeom(neg,layersOv){
        bottom for -M). */
     const isT = neg ? (anchor==='compression') : (anchor==='tension');
     const d = neg ? (h - yPhys) : yPhys;
-    return {i,n:L.n,size:L.size,db,As,face:anchor,
+    return {i,n:L.n,s:L.s,size:L.size,db,As,face:anchor,
             side:isT?'T':'C',
             fromFace:ff,d,yTop:yPhys,manual:L.dMan!=null};
   });
@@ -1252,8 +1265,9 @@ function detailing(F,sh,neg,govMu,Vu,tor,torD){
   /* outer-layer bar clear spacing */
   const T=F.T;
   const outer=T.length?T.reduce((a,b)=>a.d>b.d?a:b):null;
-  if(outer &amp;&amp; outer.n>1){
-    const sClear=(bw-2*cc-2*ds-outer.n*outer.db)/(outer.n-1);
+  if(outer &amp;&amp; (outer.n>1||cbcSlab())){
+    const slS=cbcSlab()&amp;&amp;outer.s>0;   /* CBSB: slab, clear spacing = s − d_b */
+    const sClear=slS?outer.s-outer.db:(bw-2*cc-2*ds-outer.n*outer.db)/(outer.n-1);
     const sMin = code==='ACI' ? Math.max(1.0,outer.db,(4/3)*dagg)
                               : Math.max(1.5*outer.db,1.5*dagg,1.5);
     const govTerm = code==='ACI'
@@ -1261,7 +1275,7 @@ function detailing(F,sh,neg,govMu,Vu,tor,torD){
       : (Math.abs(sMin-1.5*outer.db)<1e-9?&quot;1.5d_b controls&quot;:(Math.abs(sMin-1.5*dagg)<1e-9?&quot;1.5d_{agg} controls&quot;:&quot;1.5 in controls&quot;));
     add(&quot;dSpace&quot;,&quot;Bar clear spacing (outer layer)&quot;,code==='ACI'?&quot;ACI 25.2.1&quot;:&quot;AASHTO 5.10.3.1.1&quot;,
       sClear,sMin,&quot;\\ge&quot;,&quot;in&quot;,sClear>=sMin-1e-6,
-      [[&quot;s_{clear}=\\dfrac{b_w-2c_c-2d_s-n\\,d_b}{n-1}&quot;,
+      [slS?[&quot;s_{clear}=s-d_b&quot;,`${fmt(outer.s)}-${fmt(outer.db,3)}=${fmt(sClear)}\\text{ in}`,`#${outer.size} at ${fmt(outer.s)} in (one-way slab).`]:[&quot;s_{clear}=\\dfrac{b_w-2c_c-2d_s-n\\,d_b}{n-1}&quot;,
         `\\dfrac{${fmt(bw)}-2(${fmt(cc)})-2(${fmt(ds,3)})-${outer.n}(${fmt(outer.db,3)})}{${outer.n}-1}=${fmt(sClear)}\\text{ in}`,
         `${outer.n} bars of #${outer.size} across the web.`],
        code==='ACI'
@@ -1279,6 +1293,25 @@ function detailing(F,sh,neg,govMu,Vu,tor,torD){
         `${T.length} tension layers are present.`]]);
   }
 
+  /* CBSB (2026-11-13): one-way slab, ACI 318-19 7.7.2.3 (maximum spacing of the deformed longitudinal reinforcement, the lesser of
+     3h and 18 in; the widest layer) and 24.4.3 shrinkage and temperature reinforcement perpendicular to the span (7.6.4.1, 7.7.6.1):
+     ρ = A_s/A_g ≥ 0.0018 (24.4.3.2) and s ≤ the lesser of 5h and 18 in (24.4.3.3, 7.7.6.2.1). Bars not entered: FAIL. */
+  if(cbcSlab()){
+    const sMx=Math.min(3*h,18), Ls=S.layers.map((L,i)=>({i,s:+L.s||0,size:L.size})), w=Ls.reduce((a,x)=>x.s>a.s?x:a,Ls[0]);
+    add(&quot;dSlabS&quot;,&quot;Slab flexural bar spacing&quot;,&quot;ACI 7.7.2.3&quot;,w.s,sMx,&quot;\\le&quot;,&quot;in&quot;,w.s>0&amp;&amp;w.s<=sMx+1e-6,
+      [[&quot;s_{max}=\\min(3h,\\;18\\text{ in})&quot;,`\\min(3(${fmt(h)}),\\;18)=${fmt(sMx)}\\text{ in}`,&quot;&quot;],
+       [&quot;s\\le s_{max}&quot;,`${fmt(w.s)}\\text{ in}\\;${w.s<=sMx+1e-6?&quot;\\le&quot;:&quot;>&quot;}\\;${fmt(sMx)}\\text{ in}`,&quot;The widest spacing of the layers entered: #&quot;+w.size+&quot; at &quot;+fmt(w.s)+&quot; in (layer &quot;+(w.i+1)+&quot;).&quot;]]);
+    const stOn=!!(S.slab&amp;&amp;S.slab.stSize&amp;&amp;REBAR[S.slab.stSize]&amp;&amp;S.slab.stS>0), Ast=stOn?REBAR[S.slab.stSize].a*12/S.slab.stS:0, rho=Ast/(12*h),
+      noSt=&quot;No shrinkage and temperature bars are entered (Reinforcement input): they are required perpendicular to the span (7.6.4.1, 24.4).&quot;;
+    add(&quot;dStA&quot;,&quot;Shrinkage and temperature reinforcement ratio&quot;,&quot;ACI 24.4.3.2&quot;,rho,0.0018,&quot;\\ge&quot;,&quot;&quot;,stOn&amp;&amp;rho>=0.0018-1e-9,
+      [[&quot;\\rho=\\dfrac{A_s}{b\\,h}\\ge 0.0018&quot;,stOn?`\\dfrac{${fmt(REBAR[S.slab.stSize].a,2)}(12/${fmt(S.slab.stS)})}{12(${fmt(h)})}=\\dfrac{${fmt(Ast,3)}}{${fmt(12*h,1)}}=${fmt(rho,5)}`:&quot;\\text{none entered}&quot;,
+        stOn?&quot;#&quot;+S.slab.stSize+&quot; at &quot;+fmt(S.slab.stS)+&quot; in perpendicular to the span; A_g of the slab, per ft.&quot;:noSt]]);
+    const stMx=Math.min(5*h,18);
+    add(&quot;dStS&quot;,&quot;Shrinkage and temperature bar spacing&quot;,&quot;ACI 24.4.3.3, 7.7.6.2.1&quot;,stOn?S.slab.stS:Infinity,stMx,&quot;\\le&quot;,&quot;in&quot;,stOn&amp;&amp;S.slab.stS<=stMx+1e-6,
+      [[&quot;s_{max}=\\min(5h,\\;18\\text{ in})&quot;,`\\min(5(${fmt(h)}),\\;18)=${fmt(stMx)}\\text{ in}`,stOn?&quot;&quot;:noSt],
+       ...(stOn?[[&quot;s\\le s_{max}&quot;,`${fmt(S.slab.stS)}\\text{ in}\\;${S.slab.stS<=stMx+1e-6?&quot;\\le&quot;:&quot;>&quot;}\\;${fmt(stMx)}\\text{ in}`,&quot;&quot;]]:[])]);
+  }
+
   /* minimum flexural steel */
   if(code==='ACI'){
     /* CBH4 (2026-11-07): ACI 318-19 9.6.1.2 limits f_y to 80,000 psi in (a) and (b) */
@@ -1289,6 +1322,12 @@ function detailing(F,sh,neg,govMu,Vu,tor,torD){
     const bwA=(flgT &amp;&amp; detm) ? Math.min(S.sec.bf,2*bw) : bw;
     const t1=3*rt/(fyA*1000)*bwA*F.dCent, t2=200/(fyA*1000)*bwA*F.dCent;
     const AsMin=Math.max(t1,t2);
+    if(cbcSlab()){   /* CBSB: ACI 318-19 7.6.1.1, one-way slab: A_s,min = 0.0018A_g of the 12 in strip, compared with the A_s of the face in tension */
+      const Ag=12*h, AsS=0.0018*Ag;
+      add(&quot;dAsMin&quot;,&quot;Minimum flexural reinforcement (slab)&quot;,&quot;ACI 7.6.1.1&quot;,F.As,AsS,&quot;\\ge&quot;,&quot;in²&quot;,F.As>=AsS-1e-9,
+        [[&quot;A_{s,min}=0.0018A_g&quot;,`0.0018(12)(${fmt(h)})=${fmt(AsS,3)}\\text{ in}^2\\text{ per ft}`,&quot;A_g of the 12 in strip; compared with A_s of the face in tension for this combination.&quot;],
+         [&quot;A_s\\ge A_{s,min}&quot;,`${fmt(F.As,3)}\\;${F.As>=AsS-1e-9?&quot;\\ge&quot;:&quot;<&quot;}\\;${fmt(AsS,3)}\\text{ in}^2`,&quot;&quot;]]);
+    } else
     add(&quot;dAsMin&quot;,&quot;Minimum flexural reinforcement&quot;,&quot;ACI 9.6.1.2&quot;,
       F.As,AsMin,&quot;\\ge&quot;,&quot;in²&quot;,F.As>=AsMin-1e-9,
       [[&quot;A_{s,min}=\\max\\left(\\dfrac{3\\sqrt{f'_c}}{f_y}b_w d,\\;\\dfrac{200}{f_y}b_w d\\right)&quot;,
@@ -1308,7 +1347,9 @@ function detailing(F,sh,neg,govMu,Vu,tor,torD){
   if(outer){
     const skSz=S.skin&amp;&amp;S.skin.size?String(S.skin.size):&quot;&quot;, skS=+(S.skin&amp;&amp;S.skin.s)||0, skOn=!!(skSz&amp;&amp;REBAR[skSz]&amp;&amp;skS>0);
     const noSk=&quot;No skin reinforcement entered (Transverse Reinforcement input): it is required here.&quot;;
-    if(code==='ACI' &amp;&amp; h>36){
+    if(code==='ACI' &amp;&amp; h>36 &amp;&amp; cbcSlab()) add(&quot;dSkin&quot;,&quot;Skin reinforcement spacing (h > 36 in)&quot;,&quot;ACI 9.7.2.3&quot;,0,0,&quot;\\le&quot;,&quot;in&quot;,true,[],true,
+      &quot;Skin reinforcement (9.7.2.3) is a beam requirement; this member is a one-way slab.&quot;);   /* CBSB */
+    else if(code==='ACI' &amp;&amp; h>36){
       const fsk=(2/3)*fy*1000, cck=cc+ds;
       const k1=15*(40000/fsk)-2.5*cck, k2=12*(40000/fsk), skMax=Math.min(k1,k2);
       add(&quot;dSkin&quot;,&quot;Skin reinforcement spacing (h > 36 in)&quot;,&quot;ACI 9.7.2.3, 24.3.2&quot;,
@@ -1341,7 +1382,7 @@ function detailing(F,sh,neg,govMu,Vu,tor,torD){
      members (ductility is handled through phi, 5.5.4.2), so for AASHTO this is ADVISORY only (N/A in pass/fail). */
   /* ACI 318-19 9.3.3.1: eps_t >= eps_ty + 0.003 (318-14: 0.004). */
   const epsMinACI=fy/ES+0.003;
-  add(&quot;dEpsMin&quot;,&quot;Minimum net tensile strain&quot;,code==='ACI'?&quot;ACI 9.3.3.1&quot;:&quot;Advisory (no AASHTO limit)&quot;,
+  add(&quot;dEpsMin&quot;,&quot;Minimum net tensile strain&quot;,code==='ACI'?(cbcSlab()?&quot;ACI 7.3.3.1&quot;:&quot;ACI 9.3.3.1&quot;):&quot;Advisory (no AASHTO limit)&quot;,   /* CBSB: slab 7.3.3.1 */
     F.eps_t,code==='ACI'?epsMinACI:0.004,&quot;\\ge&quot;,&quot;&quot;,code==='ACI'?F.eps_t>=epsMinACI:F.eps_t>=0.004,
     code==='ACI'
     ? [[&quot;\\varepsilon_t\\ge \\varepsilon_{ty}+0.003&quot;,&quot;\\varepsilon_t=&quot;+fmt(F.eps_t,5)+(F.eps_t>=epsMinACI?&quot;\\ge&quot;:&quot;<&quot;)+&quot; &quot;+fmt(fy/ES,5)+&quot;+0.003 = &quot;+fmt(epsMinACI,5),
@@ -1404,10 +1445,10 @@ function detailing(F,sh,neg,govMu,Vu,tor,torD){
       add(&quot;dStirLeg&quot;,&quot;Stirrup leg spacing across the width&quot;,&quot;ACI 9.7.6.2.2&quot;,sw,swMax,&quot;\\le&quot;,&quot;in&quot;,sw<=swMax+1e-6,
         [[&quot;s_{w}=\\dfrac{b_w-2c_c-d_s}{n_{legs}-1}&quot;,`s_{w}=\\dfrac{${fmt(bw)}-2(${fmt(cc)})-${fmt(ds,3)}}{${n}-1}=${fmt(sw)}\\text{ in}`,
           `${n} legs of #${S.stir.size}, taken as equally spaced between the centrelines of the two outer legs (at the clear cover plus half the stirrup bar from each side face); the input gives the number of legs, not their positions.`],
-         [&quot;V_{s,req}=\\dfrac{V_u}{\\phi}-V_c\;&quot;+(legT.tight?&quot;>&quot;:&quot;\\le&quot;)+&quot;\;4\\sqrt{f'_c}b_w d&quot;,`${fmt(legT.VsReq)}\\text{ kip}\;${legT.tight?&quot;>&quot;:&quot;\\le&quot;}\;${fmt(legT.thr)}\\text{ kip}`,
+         [&quot;V_{s,req}=\\dfrac{V_u}{\\phi}-V_c\\;&quot;+(legT.tight?&quot;>&quot;:&quot;\\le&quot;)+&quot;\\;4\\sqrt{f'_c}b_w d&quot;,`${fmt(legT.VsReq)}\\text{ kip}\\;${legT.tight?&quot;>&quot;:&quot;\\le&quot;}\\;${fmt(legT.thr)}\\text{ kip}`,
           &quot;The same switch as the spacing along the length (Maximum stirrup spacing, Table 9.7.6.2.2).&quot;],
-         [&quot;s_{w,max}=\\min\\left(&quot;+(legT.tight?&quot;d/2&quot;:&quot;d&quot;)+&quot;,\;&quot;+(legT.tight?&quot;12&quot;:&quot;24&quot;)+&quot;\\text{ in}\\right)&quot;,
-          `\\min\\left(${fmt(legT.tight?d/2:d)},\;${legT.tight?&quot;12&quot;:&quot;24&quot;}\\right)=${fmt(swMax)}\\text{ in}`,legT.tight?&quot;Tighter limit applies.&quot;:&quot;Standard limit applies.&quot;]]);
+         [&quot;s_{w,max}=\\min\\left(&quot;+(legT.tight?&quot;d/2&quot;:&quot;d&quot;)+&quot;,\\;&quot;+(legT.tight?&quot;12&quot;:&quot;24&quot;)+&quot;\\text{ in}\\right)&quot;,
+          `\\min\\left(${fmt(legT.tight?d/2:d)},\\;${legT.tight?&quot;12&quot;:&quot;24&quot;}\\right)=${fmt(swMax)}\\text{ in}`,legT.tight?&quot;Tighter limit applies.&quot;:&quot;Standard limit applies.&quot;]]);
     }
 
     const av=Av/s;
@@ -1447,13 +1488,14 @@ function detailing(F,sh,neg,govMu,Vu,tor,torD){
     const phiV   = code==='ACI' ? 0.75 : sh.phi;
     const halfVc = 0.5*phiV*(sh.Vc||0);
     /* ACI 318-19 9.6.3.1: A_v,min where V_u > phi*lambda*sqrt(f'c)*b_w*d (318-14: 0.5 phi V_c); sqrt(f'c) <= 100 psi */
-    const trigV  = code==='ACI' ? phiV*S.mat.lambda*Math.min(rt,100)*bw*sh.d/1000 : halfVc;
+    const slabV  = cbcSlab();   /* CBSB: one-way slab, ACI 318-19 7.6.3.1: A_v,min where V_u > φV_c (V_c row (c) without stirrups) */
+    const trigV  = code==='ACI' ? (slabV?phiV*(sh.Vc||0):phiV*S.mat.lambda*Math.min(rt,100)*bw*sh.d/1000) : halfVc;
     const VuA    = Math.abs(Vu||0);
     const needAv = VuA > trigV + 1e-9 || !!torD;   /* CBH1b: AASHTO 5.7.2.3, also where torsion must be considered (5.7.2.1) */
-    const smallH = code==='ACI' &amp;&amp; h <= 10+1e-9;
-    const trigRef= code==='ACI' ? &quot;ACI 9.6.3.1&quot; : &quot;AASHTO 5.7.2.3&quot;;
+    const smallH = code==='ACI' &amp;&amp; !slabV &amp;&amp; h <= 10+1e-9;   /* CBSB: the Table 9.6.3.1 exemption is a beam rule */
+    const trigRef= code==='ACI' ? (slabV?&quot;ACI 7.6.3.1&quot;:&quot;ACI 9.6.3.1&quot;) : &quot;AASHTO 5.7.2.3&quot;;
     const trigTx = (torD?&quot;Torsion must be considered (5.7.2.1, Eq. 5.7.2.1-3); &quot;:&quot;&quot;)+fmt(VuA)+&quot; kip &quot;+(VuA > trigV + 1e-9?&quot;exceeds&quot;:&quot;does not exceed&quot;)+
-                   (code==='ACI' ? &quot; φλ√f′c·b_w·d = &quot;+fmt(trigV)+&quot; kip&quot; : &quot; 0.5φV_c = &quot;+fmt(halfVc)+&quot; kip&quot;);
+                   (code==='ACI' ? (slabV?&quot; φV_c = &quot;:&quot; φλ√f′c·b_w·d = &quot;)+fmt(trigV)+&quot; kip&quot; : &quot; 0.5φV_c = &quot;+fmt(halfVc)+&quot; kip&quot;);
 
     let avMin0, avMinLine;
     if(code==='ACI'){
@@ -1469,13 +1511,14 @@ function detailing(F,sh,neg,govMu,Vu,tor,torD){
     }
 
     const dvA=[
-      [code==='ACI' ? &quot;\\text{A}_{v,min}\\text{ required where }|V_u| > \\phi\\lambda\\sqrt{f'_c}\\,b_w d&quot;
+      [code==='ACI' ? (slabV?&quot;\\text{A}_{v,min}\\text{ required where }|V_u| > \\phi V_c&quot;:&quot;\\text{A}_{v,min}\\text{ required where }|V_u| > \\phi\\lambda\\sqrt{f'_c}\\,b_w d&quot;)
                     : &quot;\\text{Transverse reinf. required where }|V_u| > 0.5\\phi\\left(V_c+V_p\\right)&quot;,
-       code==='ACI'
+       code==='ACI'&amp;&amp;slabV ? `${fmt(VuA)}\\text{ kip}\\;${needAv?&quot;>&quot;:&quot;\\le&quot;}\\;${fmt(phiV,2)}(${fmt(sh.Vc)}) = ${fmt(trigV)}\\text{ kip}`
+       : code==='ACI'
          ? `${fmt(VuA)}\\text{ kip}\\;${needAv?&quot;>&quot;:&quot;\\le&quot;}\\;${fmt(phiV,2)}(${fmt(S.mat.lambda,2)})\\sqrt{${fmt(Math.min(fc*1000,10000),0)}\\text{ psi}}(${fmt(bw)})(${fmt(sh.d)})/1000 = ${fmt(trigV)}\\text{ kip}`
          : `${fmt(VuA)}\\text{ kip}\\;${VuA>trigV+1e-9?&quot;>&quot;:&quot;\\le&quot;}\\;0.5(${fmt(phiV,2)})(${fmt(sh.Vc)}) = ${fmt(halfVc)}\\text{ kip}`,
        (torD &amp;&amp; !(VuA>trigV+1e-9)) ? trigRef+&quot; is triggered because torsion must be considered (5.7.2.1), and no stirrups are provided.&quot;   /* CBH1b */
-       : needAv ? trigRef+&quot; is triggered: the factored shear exceeds &quot;+(code==='ACI'?&quot;\u03c6\u03bb\u221af\u2032c\u00b7b_w\u00b7d (ACI 318-19)&quot;:&quot;half the design concrete capacity&quot;)+&quot;, and no stirrups are provided.&quot;
+       : needAv ? trigRef+&quot; is triggered: the factored shear exceeds &quot;+(code==='ACI'&amp;&amp;slabV?&quot;φV_c (ACI 318-19 7.6.3.1)&quot;:code==='ACI'?&quot;\u03c6\u03bb\u221af\u2032c\u00b7b_w\u00b7d (ACI 318-19)&quot;:&quot;half the design concrete capacity&quot;)+&quot;, and no stirrups are provided.&quot;
               : trigRef+&quot; is not triggered.&quot;],
       avMinLine,
       [&quot;\\dfrac{A_v}{s} \\ge \\left(\\dfrac{A_v}{s}\\right)_{min}&quot;,
@@ -1561,7 +1604,7 @@ function detailing(F,sh,neg,govMu,Vu,tor,torD){
         &quot;This combination puts the &quot;+faceTxt+&quot; in tension and no reinforcement is provided there, &quot;+
         &quot;so a bar-spacing limit cannot be evaluated for it. Crack control is still evaluated for &quot;+
         &quot;every combination that bends the reinforced face into tension.&quot;);
-    } else if(outer.n<2){
+    } else if(outer.n<2&amp;&amp;!(cbcSlab()&amp;&amp;outer.s>0)){
       add(&quot;dCrack&quot;,&quot;Crack control — tension-face bar spacing&quot;,
         code==='ACI'?&quot;ACI 24.3.2&quot;:&quot;AASHTO 5.6.7&quot;,0,0,&quot;\\le&quot;,&quot;in&quot;,true,[],true,
         &quot;Only one bar in the layer closest to the &quot;+faceTxt+&quot;; a centre-to-centre spacing limit &quot;+
@@ -1572,8 +1615,9 @@ function detailing(F,sh,neg,govMu,Vu,tor,torD){
          is the tension face (a T-section in hogging). */
       const flangeTension=(S.sec.type==='tee' &amp;&amp; neg);
       const bDist=flangeTension?S.sec.bf:bw;
-      const sAct=(bDist-2*(cc+ds)-outer.db)/(outer.n-1);
-      const sActDeriv=[&quot;s = \\dfrac{b-2(c_c+d_s)-d_b}{n-1}&quot;,
+      const slC=cbcSlab()&amp;&amp;outer.s>0;   /* CBSB: slab, the spacing entered */
+      const sAct=slC?outer.s:(bDist-2*(cc+ds)-outer.db)/(outer.n-1);
+      const sActDeriv=slC?[&quot;s&quot;,`s = ${fmt(outer.s)}\\text{ in}`,&quot;Bar spacing entered for the slab layer closest to the &quot;+faceTxt+&quot; (#&quot;+outer.size+&quot;).&quot;]:[&quot;s = \\dfrac{b-2(c_c+d_s)-d_b}{n-1}&quot;,
         `s = \\dfrac{${fmt(bDist)}-2(${fmt(cc)}+${fmt(ds,3)})-${fmt(outer.db,3)}}{${outer.n}-1} = ${fmt(sAct)}\\text{ in}`,
         `Centre-to-centre spacing of the ${outer.n} #${outer.size} bars closest to the ${faceTxt}, `+
         `distributed across b = ${fmt(bDist)} in (`+
@@ -1853,6 +1897,7 @@ function validate(){
     if(hf>=h) B.push({code:&quot;Geometry&quot;,msg:&quot;Flange thickness h_f must be less than the overall depth h.&quot;});
   }
   if(!S.layers.length) B.push({code:&quot;Reinforcement&quot;,msg:&quot;At least one reinforcement layer is required.&quot;});
+  if(cbcSlab()&amp;&amp;S.layers.some(L=>!(L.s>0))) B.push({code:&quot;Reinforcement&quot;,msg:&quot;Slab bar spacing s must be greater than 0 in every layer.&quot;});   /* CBSB */
   const G=layerGeom(false);
   G.forEach((L,i)=>{ if(L.d<=0||L.d>=h)
     B.push({code:&quot;Geometry&quot;,msg:`Layer ${i+1} depth d = ${fmt(L.d)} in falls outside the section (0 to ${fmt(h)} in). Check the manual depth override.`}); });
@@ -2086,7 +2131,7 @@ const RCB_IN_TABS=[['project','Project'],
   ['section','Section'],['materials','Materials &amp; Cover'],['reinf','Reinforcement'],
   ['checks','Checks'],['loads','Loads'],['assume','Assumptions']];
 const RCB_IN_SEC={prjPane:'project',inSection:'section',inMat:'materials',inCover:'materials',
-  inRebar:'reinf',inStir:'reinf',inTor:'checks',inCrack:'checks',
+  inRebar:'reinf',inSlabST:'reinf',inStir:'reinf',inTor:'checks',inCrack:'checks',
   inLoads:'loads',inAssume:'assume'};
 /* validate() blockers that come from an input, mapped to the section holding it */
 const RCB_IN_BLOCK=[
@@ -2210,6 +2255,19 @@ function buildInput(){
   let __n=0; const NT=t=>(++__n)+&quot;. &quot;+t;   /* §3: visible sections renumber with no gaps */
 
   mkSection(&quot;inSection&quot;,NT(&quot;Section Geometry&quot;),b=>{
+    /* CBSB: member type (ACI mode). Choosing a one-way slab sets a 12 in rectangular strip, each layer to bars at a spacing
+       (12/n in, to 1/4 in) and the stirrups off (they can be ticked back); choosing beam keeps b = 12 in and the bars per layer. */
+    if(S.code==='ACI') fRow(b,&quot;Member type&quot;,selIn([&quot;beam&quot;,&quot;slab&quot;],()=>S.memberType||&quot;beam&quot;,v=>{
+        if(v==='slab'&amp;&amp;S.memberType!=='slab'){ S.memberType='slab'; S.sec.bw=12; S.sec.type='rect'; S.stir.present=false;
+          S.layers.forEach(L=>{ L.s=Math.round(12/L.n*4)/4||12; L.n=12/L.s; }); }
+        else if(v==='beam'&amp;&amp;S.memberType==='slab'){ S.memberType='beam'; S.layers.forEach(L=>{ L.n=Math.max(1,Math.round(L.n)); delete L.s; }); } },
+      o=>o===&quot;beam&quot;?&quot;Beam&quot;:&quot;One-way slab (per 1 ft strip)&quot;,o=>o,&quot;memberType&quot;),&quot;&quot;);
+    if(cbcSlab()){
+      fRow(b,&quot;Strip width, b (per 1 ft strip)&quot;,(()=>{ const i=numIn(()=>12,v=>{},&quot;1&quot;,&quot;bw&quot;); i.readOnly=true; i.classList.add(&quot;autoD&quot;); return i; })(),&quot;in&quot;);
+      fRow(b,&quot;Slab thickness, h&quot;,numIn(()=>S.sec.h,v=>S.sec.h=v,&quot;0.5&quot;,&quot;h&quot;),&quot;in&quot;);
+      b.appendChild(cbNL(&quot;note&quot;,&quot;One-way slab (ACI 318-19 Chapter 7): a 12 in strip.&quot;,[[&quot;Per foot:&quot;,&quot;bars are entered as size and spacing; A_s, M_u, V_u, T_u and every result are per 1 ft width of slab.&quot;],
+        [&quot;Checks:&quot;,&quot;A_s,min 0.0018A_g (7.6.1.1), bar spacing ≤ min(3h, 18 in) (7.7.2.3), shrinkage and temperature bars (24.4.3), A_v,min only where V_u > φV_c (7.6.3.1); skin reinforcement does not apply.&quot;]]));
+    } else {
     fRow(b,&quot;Section type&quot;,selIn([&quot;rect&quot;,&quot;tee&quot;],()=>S.sec.type,v=>{S.sec.type=v;},
       o=>o===&quot;rect&quot;?&quot;Rectangular&quot;:&quot;T-beam&quot;,o=>o,&quot;secType&quot;),&quot;&quot;);
     fRow(b,&quot;Web width, b_w&quot;,numIn(()=>S.sec.bw,v=>S.sec.bw=v,&quot;0.5&quot;,&quot;bw&quot;),&quot;in&quot;);
@@ -2224,6 +2282,7 @@ function buildInput(){
       }
     }
     b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;The sign of M_u in each load combination sets which face is in tension. A T-section in negative bending is analysed with the web in compression, since the flange cracks.&quot;));
+    }   /* CBSB: beam */
   },P);
 
   mkSection(&quot;inMat&quot;,NT(&quot;Materials&quot;),b=>{
@@ -2255,13 +2314,14 @@ function buildInput(){
   mkSection(&quot;inRebar&quot;,NT(&quot;Reinforcement Layers&quot;),b=>{
     const G=layerGeom(false);
     const t=el(&quot;table&quot;,&quot;lyrT&quot;);
-    t.innerHTML=&quot;<tr><th></th><th>Bars</th><th>Size</th><th title='Named for POSITIVE moment: Tension = bottom face, Compression = top face. Faces swap automatically when M_u is negative.'>Face</th>&quot;+
+    t.innerHTML=&quot;<tr><th></th><th>&quot;+(cbcSlab()?&quot;Spacing s (in)&quot;:&quot;Bars&quot;)+&quot;</th><th>Size</th><th title='Named for POSITIVE moment: Tension = bottom face, Compression = top face. Faces swap automatically when M_u is negative.'>Face</th>&quot;+   /* CBSB */
       &quot;<th title='Tick to type an exact depth instead of letting the tool stack the layer from the face'>Set d</th>&quot;+
       &quot;<th>d (in)</th><th></th></tr>&quot;;
     S.layers.forEach((L,i)=>{
       const tr=el(&quot;tr&quot;); hlRowWire(tr,i);
       const c0=el(&quot;td&quot;); const tg=el(&quot;span&quot;,&quot;lyrTag &quot;+G[i].side,G[i].side+(i+1)); c0.appendChild(tg); tr.appendChild(c0);
-      const c1=el(&quot;td&quot;); c1.appendChild(numIn(()=>L.n,v=>L.n=Math.max(1,Math.round(v)),&quot;1&quot;,&quot;ln&quot;+i)); tr.appendChild(c1);
+      const c1=el(&quot;td&quot;); c1.appendChild(cbcSlab()?numIn(()=>L.s,v=>{ L.s=v; L.n=v>0?12/v:0; },&quot;0.5&quot;,&quot;lsp&quot;+i)   /* CBSB: slab, bars at s (per ft: n = 12/s) */
+        :numIn(()=>L.n,v=>L.n=Math.max(1,Math.round(v)),&quot;1&quot;,&quot;ln&quot;+i)); tr.appendChild(c1);
       const c2=el(&quot;td&quot;); c2.appendChild(selIn(BAR_SIZES,()=>L.size,v=>L.size=v,o=>&quot;#&quot;+o,o=>o,&quot;ls&quot;+i)); tr.appendChild(c2);
       const c3=el(&quot;td&quot;); c3.appendChild(selIn([&quot;tension&quot;,&quot;compression&quot;],()=>L.face,v=>L.face=v,
         o=>o===&quot;tension&quot;?&quot;Tens&quot;:&quot;Comp&quot;,o=>o,&quot;lf&quot;+i)); tr.appendChild(c3);
@@ -2287,7 +2347,7 @@ function buildInput(){
     const br=el(&quot;div&quot;,&quot;btnRow&quot;);
     const add=el(&quot;button&quot;,&quot;b&quot;,&quot;+ Add layer&quot;);
     add.addEventListener(&quot;click&quot;,()=>{ const l=S.layers[S.layers.length-1];
-      S.layers.push({n:l.n,size:l.size,face:l.face,dMan:null}); refresh(); });
+      S.layers.push(Object.assign({n:l.n,size:l.size,face:l.face,dMan:null},l.s>0?{s:l.s}:{})); refresh(); });   /* CBSB: a slab layer keeps s */
     br.appendChild(add); b.appendChild(br);
     fRow(b,&quot;Clear spacing between layers&quot;,numIn(()=>S.layerClear,v=>S.layerClear=Math.max(1,v),&quot;0.25&quot;,&quot;lclr&quot;),&quot;in&quot;);
     var noteD=cbNL(&quot;note&quot;,&quot;Layer depth d and face names:&quot;,[[&quot;Depth d:&quot;,&quot;each layer’s <b>d</b> is computed automatically from the clear cover, stirrup diameter and bar size, and updates live as you change inputs.&quot;],
@@ -2296,6 +2356,11 @@ function buildInput(){
       [&quot;Negative M_u:&quot;,&quot;when a load combination has a negative M_u (hogging), the faces swap automatically, so a “tension” layer is then analysed at the top.&quot;]]); b.appendChild(noteD);   /* CBNL */
   },P);
 
+  if(cbcSlab()) mkSection(&quot;inSlabST&quot;,NT(&quot;Shrinkage &amp; Temperature (slab)&quot;),b=>{   /* CBSB: 7.6.4.1, 24.4.3, perpendicular to the span */
+    fRow(b,&quot;Bar size&quot;,selIn([&quot;&quot;].concat(BAR_SIZES),()=>S.slab.stSize||&quot;&quot;,v=>{S.slab.stSize=v;},o=>o?&quot;#&quot;+o:&quot;None entered&quot;,o=>o,&quot;stSz&quot;),&quot;&quot;);
+    fRow(b,&quot;Spacing&quot;,numIn(()=>S.slab.stS,v=>{S.slab.stS=v;},&quot;0.5&quot;,&quot;stS&quot;),&quot;in&quot;);
+    b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Bars perpendicular to the flexural reinforcement (7.7.6.1). Checked: ρ = A_s/(b h) ≥ 0.0018 (24.4.3.2) and s ≤ min(5h, 18 in) (24.4.3.3, 7.7.6.2.1). Blank = none entered: the check FAILs.&quot;));
+  },P);
   mkSection(&quot;inStir&quot;,NT(&quot;Transverse Reinforcement&quot;),b=>{
     const r=el(&quot;div&quot;,&quot;fRow chk&quot;);
     r.appendChild(chkIn(()=>S.stir.present,v=>S.stir.present=v,&quot;stirOn&quot;));
@@ -3084,7 +3149,7 @@ function workFlexure(b,r){
   F.detail.forEach((L,i)=>{
     const tr=el(&quot;tr&quot;); hlRowWire(tr,i);
     tr.appendChild(el(&quot;td&quot;,null,L.side+(i+1)));
-    tr.appendChild(el(&quot;td&quot;,null,L.n+&quot;#&quot;+L.size));
+    tr.appendChild(el(&quot;td&quot;,null,cbcBarTxt(L,&quot;#&quot;)));
     tr.appendChild(el(&quot;td&quot;,null,fmt(L.As)));
     tr.appendChild(el(&quot;td&quot;,null,L.face==='tension'?&quot;Tension face&quot;:&quot;Compression face&quot;));
     tr.appendChild(el(&quot;td&quot;,null,fmt(L.d)));
@@ -3338,7 +3403,7 @@ function cbcVcMaxWork(b,sh){
   const fc=S.mat.fc, rtS=sh.rtVc<sqrtfc_psi(fc)-1e-9?&quot;(100\\text{ psi, max per 22.5.3.1})&quot;:&quot;\\sqrt{&quot;+fmt(fc*1000,0)+&quot;\\text{ psi}}&quot;;
   b.appendChild(eqBlock({title:&quot;Upper limit on V_c&quot;,ref:&quot;ACI 22.5.5.1.1&quot;,
     lines:[`V_{c,max} = 5\\lambda\\sqrt{f'_c}\\,b_w d = 5(${fmt(S.mat.lambda,2)})${rtS}(${fmt(S.sec.bw)}\\text{ in})(${fmt(sh.d)}\\text{ in}) = ${fmt(sh.VcMax*1000,0)}\\text{ lb} = ${fmt(sh.VcMax)}\\text{ kip}`,
-      `V_c = \\min(V_c,\;V_{c,max}) = \\min(${fmt(sh.Vc_row)},\;${fmt(sh.VcMax)}) = ${fmt(sh.Vc)}\\text{ kip}`],
+      `V_c = \\min(V_c,\\;V_{c,max}) = \\min(${fmt(sh.Vc_row)},\\;${fmt(sh.VcMax)}) = ${fmt(sh.Vc)}\\text{ kip}`],
     vars:[[&quot;V_{c,max}&quot;,&quot;Upper limit on V_c (the same \u221af\u2032c as the row above)&quot;,fmt(sh.VcMax),&quot;kip&quot;]]}));
 }
 function cbcSzWork(b,r,sh){
@@ -3852,7 +3917,7 @@ function buildServTab(pg){
         t.innerHTML=&quot;<tr><th>Layer</th><th>d (in)</th><th>A_s (in²)</th><th>f_s (ksi)</th><th>f_s/f_y</th></tr>&quot;;
         SS.layers.forEach(L=>{
           const tr=el(&quot;tr&quot;);
-          tr.appendChild(el(&quot;td&quot;,null,L.n+&quot; #&quot;+L.size+&quot; (&quot;+L.face+&quot; face)&quot;));
+          tr.appendChild(el(&quot;td&quot;,null,cbcBarTxt(L,&quot; #&quot;)+&quot; (&quot;+L.face+&quot; face)&quot;));
           tr.appendChild(el(&quot;td&quot;,null,fmt(L.d)));
           tr.appendChild(el(&quot;td&quot;,null,fmt(L.As)));
           tr.appendChild(el(&quot;td&quot;,null,fmt(L.fs,1)));
@@ -4046,7 +4111,7 @@ function buildInputEchoTab(pg){
     t.innerHTML=&quot;<tr><th>Layer</th><th>Bars</th><th>Size</th><th>A_s (in\u00b2)</th><th>Face</th><th>d (in)</th><th>Source</th></tr>&quot;;
     G.forEach((L,i)=>{ const tr=el(&quot;tr&quot;);
       tr.appendChild(el(&quot;td&quot;,null,L.side+(i+1)));
-      tr.appendChild(el(&quot;td&quot;,null,String(L.n)));
+      tr.appendChild(el(&quot;td&quot;,null,cbcSlab()&amp;&amp;L.s&gt;0?&quot;@ &quot;+fmt(L.s)+&quot; in&quot;:String(L.n)));
       tr.appendChild(el(&quot;td&quot;,null,&quot;#&quot;+L.size));
       tr.appendChild(el(&quot;td&quot;,null,fmt(L.As)));
       tr.appendChild(el(&quot;td&quot;,null,L.face==='tension'?&quot;Tension&quot;:&quot;Compression&quot;));
@@ -4099,6 +4164,7 @@ var CBOV={sec:null,elev:null,snap:null,snapKey:null};   /* CBOV (2026-11-05): th
 function barXs(n,db){                       /* x-centres across the web, in */
   const cc=S.cover.cc, ds=stirDia(), bw=S.sec.bw;
   const x0=-bw/2+cc+ds+db/2, x1=bw/2-cc-ds-db/2;
+  if(cbcSlab()&amp;&amp;n>0){ const sp=12/n, m=Math.max(1,Math.floor((x1-x0)/sp+1e-9)+1), ys=[]; for(let i=0;i<m;i++) ys.push((i-(m-1)/2)*sp); return ys; }   /* CBSB: slab bars at s, centred in the strip */
   const xs=[]; for(let i=0;i<n;i++) xs.push(n===1?0:x0+i*(x1-x0)/(n-1));
   return xs;
 }
@@ -4962,7 +5028,7 @@ function cbdwBuild(){
     /* bar callouts per layer: left of the section, leader to the first bar */
     const xl=-(tee?bf:bw)/2-1.2*P;
     G.slice().sort((a,b)=>a.yTop-b.yTop).forEach((Lr,j,A)=>{ const y=h-Lr.yTop, xs=barXs(Lr.n,Lr.db), yy=y+(j-(A.length-1)/2)*0.0;
-      D.text(L.txt,xl,yy-0.04*P,th,Lr.n+'-#'+Lr.size+' '+layerName(Lr),2); D.line(L.ldr,xl+0.05*P,yy,xs[0]-Lr.db/2,y); D.circle(L.ldr,xs[0],y,0.02*P); });
+      D.text(L.txt,xl,yy-0.04*P,th,cbcBarTxt(Lr,'-#')+' '+layerName(Lr),2); D.line(L.ldr,xl+0.05*P,yy,xs[0]-Lr.db/2,y); D.circle(L.ldr,xs[0],y,0.02*P); });
     /* dimensions: b_w, h, b_f / h_f, clear cover to the stirrup (or to the bars without stirrups), d per layer from the top */
     D.dimH(L.dim,-bw/2,bw/2,-0.5*P,0);
     D.dimV(L.dim,0,h,(tee?bf:bw)/2+0.5*P,(tee?bf:bw)/2);
@@ -4978,7 +5044,7 @@ function cbdwBuild(){
     const rows=[['b_w × h',cbdwIn(bw)+' × '+cbdwIn(h)],...(tee?[['b_f × h_f',cbdwIn(bf)+' × '+cbdwIn(hf)]]:[]),
       ['A_g',fmt(tee?bf*hf+bw*(h-hf):bw*h,1)+' in²'],['I_g (gross, bars neglected)',fmt(svc.Ig,0)+' in⁴'],
       ['A_s bottom / top',fmt(AsF('tension'),2)+' / '+fmt(AsF('compression'),2)+' in²'],
-      ...G.map(Lr=>['TOP OF SECTION TO '+Lr.n+'-#'+Lr.size+' '+layerName(Lr)+' (BAR CENTRE)',cbdwIn(Lr.yTop)]),
+      ...G.map(Lr=>['TOP OF SECTION TO '+cbcBarTxt(Lr,'-#')+' '+layerName(Lr)+' (BAR CENTRE)',cbdwIn(Lr.yTop)]),
       ['CLEAR COVER (PROVIDED / REQUIRED)',cbdwIn(cc)+' / '+cbdwIn(S.cover.req)],
       ['φM_n POSITIVE / NEGATIVE',fmt(B2.pos.phiMn,1)+' / '+fmt(B2.neg.phiMn,1)+' kip-ft']];
     const t=table(nx,ny,['ITEM','VALUE'],rows,0.085*P);
@@ -5005,7 +5071,7 @@ function cbdwBuild(){
       D.text(L.txt,0,h+1.0*P,th,zt,0);
     } else D.text(L.txt,0,h+0.6*P,th,'NO STIRRUPS SPECIFIED',0);
     D.dimV(L.dim,0,h,-0.5*P,0);
-    G.forEach((Lr,j)=>{ const y=h-Lr.yTop; D.text(L.txt,Lel+0.35*P,y-0.04*P,th,Lr.n+'-#'+Lr.size+' '+layerName(Lr)+' (CONT.)',0); D.line(L.ldr,Lel+0.3*P,y,Lel-0.2*P,y); });
+    G.forEach((Lr,j)=>{ const y=h-Lr.yTop; D.text(L.txt,Lel+0.35*P,y-0.04*P,th,cbcBarTxt(Lr,'-#')+' '+layerName(Lr)+' (CONT.)',0); D.line(L.ldr,Lel+0.3*P,y,Lel-0.2*P,y); });
     const sb=D.bbox();
     D.text(L.txt,Lel/2,-1.5*P,0.16*P,'TYPICAL BEAM ELEVATION',1);
     D.text(L.txt,Lel/2,-1.72*P,0.09*P,'SCALE '+cbdwScName(P)+';  THE TOOL CHECKS ONE CROSS SECTION: NO SPAN, SUPPORTS OR BAR CUTOFFS ARE MODELLED (SECTION A-A, SHEET 1)',1);
@@ -5027,7 +5093,7 @@ function cbdwBuild(){
     notes.forEach((s,j)=>D.text(L.txt,0,-(0.05+0.2*j)*P,th,(j+1)+'. '+s,0));
     let y=-(0.3+0.2*notes.length)*P;
     D.text(L.txt,0,y,0.15*P,'BAR SCHEDULE (ONE CROSS SECTION)',0); y-=0.15*P;
-    const rows=G.map((Lr,j)=>['L'+(j+1),'#'+Lr.size,String(Lr.n),layerName(Lr),'STRAIGHT (LENGTH BY SPAN)',fmt(Lr.As,2)]);
+    const rows=G.map((Lr,j)=>['L'+(j+1),'#'+Lr.size,cbcSlab()&amp;&amp;Lr.s&gt;0?'@ '+fmt(Lr.s)+'&quot;':String(Lr.n),layerName(Lr),'STRAIGHT (LENGTH BY SPAN)',fmt(Lr.As,2)]);
     if(SKd) rows.push(['SK','#'+SKd.size,String(2*SKd.ys.length),'SKIN, EACH SIDE FACE @ '+cbdwIn(SKd.s),'STRAIGHT (LENGTH BY SPAN)',fmt(2*SKd.ys.length*REBAR[SKd.size].a,2)]);   /* CBM3d */
     if(hk) rows.push(['S1','#'+S.stir.size,S.stir.legs+' LEGS','CLOSED STIRRUP @ '+cbdwIn(S.stir.s),'135° HOOKS '+cbdwIn(hk.ext)+', BEND Ø '+cbdwIn(hk.Di),fmt(S.stir.legs*REBAR[S.stir.size].a,2)+' (A_v)']);
     const t1=table(0,y,['MARK','SIZE','NO.','LOCATION','SHAPE','A_s (IN²)'],rows,th,[5]); y-=t1.h+0.45*P;
@@ -5587,7 +5653,7 @@ function cbcRptFlex(r){
   else cap.push(cS({id:'DCR',label:'No factored moment in this combination: flexure is not checked',sym:'',value:'n/a'}));
   T.push({title:'Nominal and design flexural strength',ref:cRef(ACI?'ACI 9.3.3 / 22.2':'AASHTO 5.6.3.2'),steps:cap});
   const tbl={type:'table',caption:'Layer geometry, strain and stress',head:['Layer','Bars','$A_{s}$ (in²)','Face','d (in)','$\\varepsilon_{s}$','State','$f_{s}$ (ksi)','F (kip)','arm (in)','M (kip-ft)'],
-    rows:F.detail.map(L=>[Ln(L),L.n+' #'+L.size,{t:fmt(L.As),n:true},L.face==='tension'?'tension face':'compression face',{t:fmt(L.d),n:true},{t:fmt(L.eps,5),n:true},(L.tension?'tension':'compression')+(L.yielded?', yielded':''),{t:fmt(L.fs,1),n:true},{t:fmt(L.F),n:true},{t:fmt(L.arm),n:true},{t:fmt(L.M),n:true}])};
+    rows:F.detail.map(L=>[Ln(L),cbcBarTxt(L,' #'),{t:fmt(L.As),n:true},L.face==='tension'?'tension face':'compression face',{t:fmt(L.d),n:true},{t:fmt(L.eps,5),n:true},(L.tension?'tension':'compression')+(L.yielded?', yielded':''),{t:fmt(L.fs,1),n:true},{t:fmt(L.F),n:true},{t:fmt(L.arm),n:true},{t:fmt(L.M),n:true}])};
   /* CBVL (2026-11-05): the strain, stress and force diagram of the Visuals tab, for the combination that governs flexure */
   const gi=CC.govFlexIndex!=null?CC.govFlexIndex:CC.govIndex, sfd=[];
   if(r.ci===gi){ const k='fx'+r.ci+'/';
@@ -5630,7 +5696,7 @@ function cbcRptShear(r){
       cS({id:'rhow',label:'Longitudinal reinforcement ratio',sym:'\\rho_{w}',eq:'\\dfrac{A_s}{b_w d}',sub:'\\dfrac{'+fmt(r.F.As)+'}{'+fmt(bw)+'('+fmt(sh.d)+')}',value:sh.rho_w,d:5}),
       cS({id:'Vc',label:'Concrete shear, Table 22.5.5.1 row (c)'+(sqrtfc_psi(fc)>100?' (√f′c ≤ 100 psi, 22.5.3.1)':''),sym:'V_{c}',eq:&quot;8\\lambda_s\\lambda(\\rho_w)^{1/3}\\sqrt{f'_c}\\,b_w d&quot;,sub:'8('+fmt(sh.lam_s,3)+')('+fmt(S.mat.lambda,2)+')('+fmt(sh.rho_w,5)+')^{1/3}('+fmt(Math.min(sqrtfc_psi(fc),100),1)+')('+fmt(bw)+')('+fmt(sh.d)+')/1000',value:sh.Vc,unit:'kip',ref:cRef('ACI Table 22.5.5.1(c)')}));
     cs.push(cS({id:'VcMax',label:'Upper limit on V_c (the same √f′c as the row)',sym:'V_{c,max}',eq:&quot;5\\lambda\\sqrt{f'_c}\\,b_w d&quot;,sub:'5('+fmt(S.mat.lambda,2)+')'+(sh.rtVc<sqrtfc_psi(fc)-1e-9?'(100)':'\\sqrt{'+fmt(fc*1000,0)+'}')+'('+fmt(bw)+')('+fmt(sh.d)+')/1000',value:sh.VcMax,unit:'kip',ref:cRef('ACI 22.5.5.1.1')}),
-      cS({id:'VcUse',label:'V_c used',sym:'V_{c}',eq:'\\min(V_c,\;V_{c,max})',sub:'\\min('+fmt(sh.Vc_row)+',\;'+fmt(sh.VcMax)+')',value:sh.Vc,unit:'kip'}));   /* CBSZ */
+      cS({id:'VcUse',label:'V_c used',sym:'V_{c}',eq:'\\min(V_c,\\;V_{c,max})',sub:'\\min('+fmt(sh.Vc_row)+',\\;'+fmt(sh.VcMax)+')',value:sh.Vc,unit:'kip'}));   /* CBSZ */
     T.push({title:'Concrete contribution',ref:cRef('ACI 22.5.5.1'),steps:cs});
     if(S.stir.present) T.push({title:'Transverse reinforcement contribution',ref:cRef('ACI 22.5.10.5.3, 22.5.1.2'),steps:[
       cS({id:'Vs',label:'Shear strength provided by the stirrups',sym:'V_{s}',eq:'\\dfrac{A_v f_{yt} d}{s}',sub:'\\dfrac{('+fmt(sh.Av)+')('+fmt(fyt)+')('+fmt(sh.d)+')}{'+fmt(sh.s)+'}',value:sh.Vs,unit:'kip',ref:cRef('ACI Eq. 22.5.10.5.3')}),
@@ -5721,7 +5787,7 @@ function cbcRptModel(){
       ...(S.sec.type==='tee'?[['Flange width $b_{f}$',{t:fmt(S.sec.bf),n:true},'in'],['Flange thickness $h_{f}$',{t:fmt(S.sec.hf),n:true},'in']].concat(S.code==='ACI'?[['Beam for $A_{s,min}$, flange in tension (9.6.1.2)',S.sec.asminSupport==='indeterminate'?'statically indeterminate':'statically determinate','']]:[]):[]),
       [&quot;$f^{\\prime}_{c}$&quot;,{t:fmt(S.mat.fc),n:true},'ksi'],['$f_{y}$',{t:fmt(S.mat.fy),n:true},'ksi'],['$f_{yt}$',{t:fmt(S.mat.fyt),n:true},'ksi'],...(S.code==='AASHTO'?[['$f_{yt}$ up to 100 ksi (5.4.3.3, no torsion; 5.7.2.7)',S.mat.fyt100?'yes':'no','']]:[]),['$\\lambda$',{t:fmt(S.mat.lambda,2),n:true},''],...(S.code==='AASHTO'?[['Unit weight $w_{c}$ for $E_{c}$',S.mat.wc>0?{t:fmt(S.mat.wc,3),n:true}:(S.mat.lambda<1?'0.110 (lightweight, not entered)':'Table 3.5.1-1'),'kcf']]:[]),
       ['Aggregate size',{t:fmt(S.mat.dagg),n:true},'in'],['Clear cover provided / required',fmt(S.cover.cc)+' / '+fmt(S.cover.req),'in']]},{type:'note',text:cbcLamBasis()}]});   /* CBASM: the lambda note */
-    subs.push({title:'Reinforcement',items:[{type:'table',head:['Layer','Bars','Size','$A_{s}$ (in²)','Face','d (in)','Source'],rows:G.map((L,i)=>[L.side+(i+1),String(L.n),'#'+L.size,{t:fmt(L.As),n:true},L.face==='tension'?'Tension':'Compression',{t:fmt(L.d),n:true},L.manual?'manual override':'auto-stacked'])},
+    subs.push({title:'Reinforcement',items:[{type:'table',head:['Layer','Bars','Size','$A_{s}$ (in²)','Face','d (in)','Source'],rows:G.map((L,i)=>[L.side+(i+1),cbcSlab()&amp;&amp;L.s&gt;0?'@ '+fmt(L.s)+' in':String(L.n),'#'+L.size,{t:fmt(L.As),n:true},L.face==='tension'?'Tension':'Compression',{t:fmt(L.d),n:true},L.manual?'manual override':'auto-stacked'])},
       ...cbrNL('Other reinforcement:',[S.stir.present?['Transverse:',S.stir.legs+'-leg #'+S.stir.size+' closed stirrup at '+fmt(S.stir.s)+' in. ($A_{v}$ = '+fmt(S.stir.legs*REBAR[S.stir.size].a)+' in²).']:'No transverse reinforcement specified.',S.tor.present&amp;&amp;ACI?['Torsion:',(S.tor.kind==='compatibility'?'compatibility':'equilibrium')+' torsion, θ = '+fmt(S.tor.theta,0)+'°, $A_{\\ell}$ = '+fmt(S.tor.Al)+' in².']:null,S.skin&amp;&amp;S.skin.size&amp;&amp;S.skin.s>0?['Skin bars:','#'+S.skin.size+' at '+fmt(S.skin.s)+' in on each side face (drawn over the zone of 9.7.2.3 / 5.6.7 only, the first one spacing from the outermost tension layer).']:['Skin bars:','none entered.'],['Clear spacing between layers:',fmt(S.layerClear)+' in.']])]});   /* CBM3: skin bars; CBNL: as a list */
     const hasT=(S.tor.present&amp;&amp;ACI)||!ACI;   /* CBH1b: T_u shown in AASHTO mode (as the Loads input) */
     if(cbcSvcOn()){   /* CBSL: the service load cases, then the combinations built (each value links to its worked step) */
@@ -5844,7 +5910,7 @@ function cbcRptModel(){
         const D=fsDeriv(SS), ids=['Ec','n','kd','Icr','fs'], vals=[SS.Ec,SS.n,SS.kd,SS.Icr,SS.fsOuter], un=['ksi','','in','in^{4}','ksi'], dd=[0,2,3,0,1];
         subs.push({title:'Service-load steel stress: '+cse[1]+' ($M_{s}$ = '+fmt(SS.Ms)+' kip-ft)',items:[{type:'topics',scope:'fs'+cse[3],title:'Worked steps',list:[{title:'Cracked transformed section',ref:cRef(ACI?'ACI 24.3.2.1':'AASHTO 5.6.7'),
           steps:D.map((q,i)=>cS({id:ids[i],label:q[2],sym:'',eq:q[0],sub:q[1],value:vals[i],unit:un[i],d:dd[i],ref:i===0?SS.Eref:''}))}]},
-          {type:'table',head:['Layer','d (in)','$A_{s}$ (in²)','$f_{s}$ (ksi)','$f_{s}/f_{y}$'],rows:SS.layers.map(L=>[L.n+' #'+L.size+' ('+L.face+' face)',{t:fmt(L.d),n:true},{t:fmt(L.As),n:true},{t:fmt(L.fs,1),n:true},{t:fmt(L.fs/S.mat.fy,3),n:true}])},
+          {type:'table',head:['Layer','d (in)','$A_{s}$ (in²)','$f_{s}$ (ksi)','$f_{s}/f_{y}$'],rows:SS.layers.map(L=>[cbcBarTxt(L,' #')+' ('+L.face+' face)',{t:fmt(L.d),n:true},{t:fmt(L.As),n:true},{t:fmt(L.fs,1),n:true},{t:fmt(L.fs/S.mat.fy,3),n:true}])},
           {type:'note',warn:SS.fsOuter>0.6*S.mat.fy,text:'$f_{s}$ = '+fmt(SS.fsOuter,1)+' ksi at the bar closest to the tension face ('+fmt(100*SS.fsOuter/S.mat.fy,0)+'% of $f_{y}$); 0.6 $f_{y}$ = '+fmt(0.6*S.mat.fy,1)+' ksi.'}]});
       });
     }
@@ -6557,7 +6623,7 @@ else init();
       if(S.code==='ACI'){
         var best=null;
         same.forEach(function(x){ var e=(x.det||[]).find(function(y){return y.id==='dAsMin';}); if(e&amp;&amp;!e.na&amp;&amp;(!best||e.need>best.e.need)) best={e:e,x:x}; });
-        mn={code:'ACI', ref:'ACI 318-19 9.6.1.2', as:best?best.e.need:0, ci:best?best.x.ci:r.ci, combo:best?best.x.name:r.name};
+        mn={code:'ACI', ref:cbcSlab()?'ACI 318-19 7.6.1.1':'ACI 318-19 9.6.1.2',   /* CBSB */ as:best?best.e.need:0, ci:best?best.x.ci:r.ci, combo:best?best.x.name:r.name};
       } else {
         var bx=null;
         same.forEach(function(x){ if(x.mr&amp;&amp;(!bx||x.mr.need>bx.mr.need)) bx=x; });
@@ -6570,7 +6636,7 @@ else init();
       var fc=(typeof cbcComboCard==='function')?cbcComboCard('flexC',r.ci):null;
       return {ok:true, code:S.code, ci:r.ci, combo:r.name, sense:r.neg?'neg':'pos', Mu:Mu, phiMn:r.phiMn, dcM:r.dcM,
               asProv:F.As, asFlex:asFlex, asMin:mn.as, min:mn, asReq:asReq, gov:(asFlex>=mn.as?'flexure':'minimum'),
-              bars:T.map(function(L){return L.n+' #'+L.size;}).join(' + '), bar:sizes.length===1?sizes[0]:null,
+              bars:T.map(function(L){return cbcBarTxt(L,' #');}).join(' + '), bar:sizes.length===1?sizes[0]:null,
               fc:S.mat.fc, fy:S.mat.fy,
               links:{flex:fc?{tab:'tabFlex', card:fc.card, name:fc.name}:null,
                      min:S.code==='ACI'?{tab:'tabDetail', card:'detdAsMin', name:'Minimum flexural reinforcement'}
