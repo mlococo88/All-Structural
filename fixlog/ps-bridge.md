@@ -529,7 +529,7 @@ PR #1461: https://github.com/mlococo88/All-Structural/pull/1461
   design is not changed). Auto-design (PR 5) uses this limit as a constraint (plan §4).
 
 ## 2026-11-13 — PR 2e: Report tab (steel-style report of every result tab, check summary, assumptions); harness B on the Report (no calculation change)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1463: https://github.com/mlococo88/All-Structural/pull/1463
 ### Where
 - `apps/ps-bridge/report/fromtab.js` (new, `window.PSBReportTab`, no DOM): reads the HTML a result tab's `output(ctx)` makes (the same function,
   inputs and engine result as on screen) with a small parser for the app's own HTML and turns its cards into `shared/report.js` items:
