@@ -6759,3 +6759,15 @@ Before, this check did not exist.
 
 ### Decision (pending engineer review)
 The legs are taken as equally spaced between the outer legs, because the input has no leg positions. A layout with unequal leg spacing needs a by-hand check.
+
+## 2026-11-13 — PR: claude/cbc-tex-thinspace (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CBTS) — TeX thin space restored in the CBSZ and CBLW worked lines (a stray ";" was shown)   [display only; no computed value, key or format change]
+
+- **Problem:** in five source lines added by CBSZ (#1495) and CBLW (#1497), the TeX thin space was written in the JS string with one backslash instead of two. JS reads a backslash before ";" as just ";", so KaTeX showed a literal ";". Example: "V_c = min(V_c, ;V_c,max)" and "V_s,req … − V_c ;≤ ;4√f′c b_w d". Values and results were not affected.
+- **Where:**
+  - `cbcVcMaxWork` (anchor `V_c = \\min(V_c,`);
+  - `cbcRptShear`, step `VcUse`;
+  - `detailing()`, the `dStirLeg` derivation lines (anchor `V_{s,req}=\\dfrac{V_u}{\\phi}-V_c`).
+- **Before / After:** each `\;` in those lines becomes `\;`, 10 occurrences. Un-escaped source, for example:
+  - before: `` `V_c = \\min(V_c,\;V_{c,max}) = …` ``
+  - after: `` `V_c = \\min(V_c,\;V_{c,max}) = …` ``
+- **How found / verified:** a scan of the file for a single backslash before ";". Only these 10 occurrences turned up, plus 2 in comments, which were left. The KaTeX annotation of the Shear card then reads `\min(V_c,\;V_{c,max})`. `check-syntax`, `cbc-shear-limit` and `cbc-leg-width` pass. **Provision:** none.
