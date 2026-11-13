@@ -3572,3 +3572,86 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
 - **Saved data:** none changed.
 - **Other copies:** none.
 - **Open item (reported, not fixed):** the Excel export (`xlChecks`) throws for every HSS. Round HSS, beam and member mode: §10 minor shear writes `2*«bf»*«tf»`. Rect HSS: the F2 L_r formula uses `«rts»` / `«ho»`. Checked on origin/main; W-shapes export.
+
+## 2026-11-13 — PR: claude/sbeam-xlsx-hss (PR #1487: https://github.com/mlococo88/All-Structural/pull/1487) (SBXH) — Excel export works for rectangular and round HSS and pipe, with the HSS equations   [export only; no calculation, saved key or format change]
+- **Problem:** `exportExcel` → `xlChecks` had only the W-shape steps. For any HSS, `XB.resolveF` threw "unresolved ref" and the export stopped ("Export failed"):
+  - rectangular HSS at the F2-6 `Lr` formula (`«rts»`, `«ho»`);
+  - round HSS and pipe at the minor-axis shear formula `2*«bf»*«tf»`.
+
+  The minor-axis flexure step also wrote the F6-1 formula (`MIN(Fy·Zy, 1.6Fy·Sy)`), which does not apply to HSS. W-shapes exported fine.
+- **Code (re-apply by hand)**, all in the Excel export:
+  1. `exportExcel`, after `const mem=isMember();`: add
+     ```js
+     const hssX=p._kind==='R'||p._kind==='P',xv=(v,d)=>hssX?v:N2(v,d);
+     ```
+     The five self-weight input lines (`'Shape weight'`, `'Self-weight span'`, `'Moment denominator'`, `'Shear coefficient'`, `'Dead-load factor'`) change from `N2(x,d)` to `xv(x,d)`: full precision for HSS, unchanged for W. On the Fu line, add `ref:'Fu'`.
+  2. `exportExcel`, section 4 (`Object.keys(p).filter(k=>PL[k]…`). Before the loop add the A1085 note `if(hssX&&p._a1085)X.note('ASTM A1085: design wall t = tₙₒₘ …')`. At the top of the loop body add:
+     ```js
+     if(hssX){X.line(PL[k][0],k,p[k],PL[k][1],p._src[k]==='ovr'?'user override':p._src[k]==='rule'?'A1085, t = tₙₒₘ':'',
+       {kind:p._src[k]==='ovr'?'imp':'in',dp:(Math.abs(p[k])>=100?1:3),ref:['A','Ix','Zx','Sx','Zy','Sy','ry','rx','J','B','Ht','tdes','bFlat','hFlat','btdes','htdes','Cc','OD','Dt'].indexOf(k)>=0?k:null});return;}
+     ```
+     The W line after it is unchanged.
+  3. New functions before `async function xlChecks` (anchor `SBXH (2026-11-13): the HSS steps of the Excel calc sheet`). Each formula is written with named cells (`«name»`):
+     - `xlHssFlex(X,p,cap,ax,Fy,E,ref)`: F7 about x or y, or F8.
+       - `Mp = «Fy»*«Z»/12` (F7-1 / F8-1).
+       - F7-2: `MIN(Mp,Mp-(Mp-«Fy»*«S»/12)*(3.57*«λf»*SQRT(«Fy»/«E»)-4))`.
+       - F7-4: `MIN(b,1.92*«tdes»*SQRT(«E»/«Fy»)*(1-0.38/«λf»*SQRT(«E»/«Fy»)))`. S_e is written as the app's value (`flb.d.Se`, marked "computed by app"). F7-3: `«Fy»*«Se»/12`.
+       - F7-6: `MIN(Mp,Mp-(Mp-«Fy»*«S»/12)*(0.305*«λw»*SQRT(«Fy»/«E»)-0.738))`.
+       - For x only: Lp F7-12 `0.13*«E»*«ry»*SQRT(«J»*«A»)/(«Fy»*«Zx»)/12`; Lr F7-13 `2*«E»*«ry»*SQRT(«J»*«A»)/(0.7*«Fy»*«Sx»)/12`; F7-10 `MIN(Mp,«Cb»*(Mp-(Mp-0.7*«Fy»*«Sx»/12)*(«Lb»-«Lp»)/(«Lr»-«Lp»)))`; F7-11 `MIN(Mp,2*«E»*«Cb»*SQRT(«J»*«A»)/(«Lb»*12/«ry»)/12)`.
+       - F8-2: `(0.021*«E»/«Dt»+«Fy»)*«S»/12`. F8-4/F8-3: `0.33*«E»/«Dt»`, then `Fcr*«S»/12`.
+       - M_n = `MIN(` the limit states that apply `)`, written as `ref`.
+     - `xlHssShear(X,p,sh,ax,Fy,E)`:
+       - G4: `h=«Ht»-3*«tdes»` (y axis: `«B»-3*«tdes»`); `Aw=2*h*«tdes»`; `λ=h/«tdes»`; `kv=5`; `Cv2=IF(λ<=1.1*SQRT(kv*E/Fy),1,IF(λ<=1.37*SQRT(kv*E/Fy),1.1*SQRT(kv*E/Fy)/λ,1.51*kv*E/(λ^2*Fy)))`; G4-1 `Vn=0.6*«Fy»*Aw*Cv2`.
+       - G5: `Lv` (ft; the app's value, 10⁹ in. for the minor axis); G5-2a `1.6*«E»/(SQRT(Lv*12/«OD»)*«Dt»^1.25)`; G5-2b `0.78*«E»/«Dt»^1.5`; `Fcr=MIN(0.6*«Fy»,MAX(a,b))`; G5-1 `Vn=Fcr*«A»/2`.
+       - Writes `VnX` / `VnY`.
+     - `xlHssK(X,p,D,Fy,E)`: section 13, "Concentrated forces on the HSS walls" (SBHK).
+       - For each location with a plate or bearing, rectangular HSS: `k=1.5*«tdes»`; K1-1 `Be=MIN(10/(«B»/«tdes»)*(«Fy»*«tdes»/(Fyp*tp))*Bp,Bp)`; plate yielding `0.9*Fyp*tp*Be`; punching `0.95*0.6*«Fy»*«tdes»*(2*lb+2*Be)`; sidewall yielding `2*«Fy»*«tdes»*(5|2.5*k+lb)`; `d=«Ht»-3*«tdes»`; crippling `0.75*(1.6|0.8)*«tdes»^2*(1+3*lb/d | 1+(4*lb/d-0.2))*SQRT(«E»*«Fy»)` at Q_f = 1.
+       - Round HSS: `β=Bp/D`; K2-1a `0.9*«Fy»*«tdes»^2*5.5/(1-0.81*β)` at Q_f = 1, with the Table K2.1A notes.
+       - Then a table per case or combination: R_u, U, limit state, Q_f, φR_n, DCR (the app's values).
+  4. `xlChecks`:
+     - **Section 6:** rect HSS also gets the rows `Flange (minor)` / `Web (minor)` (`cf.y`), plus equation lines for b, h, λp, λr (round: D/t).
+     - **Section 7:**
+       - before: `if(cap.blocked){…}else{ X.line('Plastic section modulus','Zx',N2(p.Zx,1),…`
+       - after: `const hssF=p._kind==='R'||p._kind==='P',xv=(v,d)=>hssF?v:N2(v,d);` then `if(cap.blocked){…}else{ if(hssF)xlHssFlex(X,p,cap,'x',Fy,E,'MnX'); else{` + the W code unchanged + `}`
+       - and `if(!hssF)X.line('Nominal flexural strength','Mn',…{ref:'MnX'})`.
+     - **Section 8:** before: `if(sh.route==='G5'){ …values… }else{ …; if(I/C){…}else{ hFlat, Aw, Cv2 values } Vn G2-1 }`. After: `if(sh.route==='G5'||p._kind==='R'){xlHssShear(X,p,sh,'x',Fy,E); round beam mode note}else{ …I/C… Vn G2-1 }`. The old rect value rows are removed.
+     - **Section 9:** `if(D.flexY&&!D.flexY.blocked&&hssF){xlHssFlex(…'y'…,'MnY'); governing; φbMn = 0.9*«MnY»}` (blocked → note). The W block now runs only for `!hssF`. The Muy table runs for both.
+     - **Section 10:** the band clause is `§G4` / `§G5` for HSS. `else if(hssF){ xlHssShear(X,p,D.shearY,'y',Fy,E); φv; φvVn = «phiVY»*«VnY»; Vuy table }` comes before the W block, which is unchanged.
+     - **Section 11:** `Fe` and `Ae` change to `xv(…)`. Tension: `if(tnC.length&&hssF){…}` writes the helper rows (case 6: H, B, `x̄=(B^2+2BH)/(4(B+H))`; case 5: D, `x̄=D/PI()`; l; `U=1-x̄/l` or 1.0; w; `An=«A»-2*«tdes»*w`), then A_n and U used with their source, then `0.9*«Fy»*«A»` and `0.75*«Fu»*U*An` (blocked: values and a BLOCKED note), then the table. The W branch follows as `else if(tnC.length)`, unchanged.
+     - **Section 12** (HSS only reaches it):
+       - before: `X.line('Torsional constant','C',N2(p.Cc,2)…)`, then the TLEN rows as values, then `X.line('Critical stress','Fcr',N2(D.tors.Fcr,2)…)`.
+       - after: C at full precision.
+       - Round: L (ref `LT`); H3-2a `1.23*«E»/(SQRT(«LT»*12/«OD»)*«Dt»^1.25)`; H3-2b `0.6*«E»/«Dt»^1.5`; `Fcr=MIN(0.6*«Fy»,MAX(a,b))`, or with no length `MIN(0.6*«Fy»,b)`.
+       - Rect: `Fcr=IF(«htdes»<=2.45*SQRT(E/Fy),0.6*Fy,IF(«htdes»<=3.07*SQRT(E/Fy),0.6*Fy*2.45*SQRT(E/Fy)/«htdes»,0.458*PI()^2*E/«htdes»^2))`.
+     - **Section 13:** before `if(D.j10){` add `if(!D.j10&&D.hssK)xlHssK(X,p,D,Fy,E);`.
+     - **Section 15:** the deflection inputs `w, L, c, I, n` change to `xv(…)`.
+  5. User Manual "Deliverables", Export Excel bullet: the last sentence now names the HSS formula steps.
+- **Governing provisions** (as the app already applies them; the export only shows them): AISC 360-16 (15th Ed.) Table B4.1b; §F7 Eqs. F7-1 to F7-6, F7-10 to F7-13; §F8 Eqs. F8-1 to F8-4; §G4, Eqs. G2-9 to G2-11; §G5 Eqs. G5-1, G5-2a/b; §H3.1 Eqs. H3-1 to H3-5; §D2, §D3 Table D3.1 cases 5/6, §B4.3b; §E3, §E7; Chapter K / J as in SBHK. No equation, factor or unit of the engine changed.
+- **Check case:** HSS12X6X1/2, A500 Gr. B (F_y 46), member mode, L_b = L_c = 12 ft, C_b = 1.
+  - Before: "Export failed: unresolved ref … «rts» …".
+  - After, sheet cells (formula [cached]):
+    - Mp `=Fy*Zx/12` [220.03]
+    - Lp `=0.13*E*ry*SQRT(J*A)/(Fy*Zx)/12` [17.11 ft] (spreadsheet 17.11)
+    - Lr `=2*E*ry*SQRT(J*A)/(0.7*Fy*Sx)/12` [477.53 ft] (spreadsheet 477.5)
+    - φbMn_x [198.03]
+    - A_w `=2*h*t` [9.863]
+    - φvV_nx [244.99]
+    - φbMn_y [121.44]
+    - φvV_ny [106.38]
+    - φcP_n [501.12]
+    - F_cr torsion H3-3 [27.6]
+    - φT_n [122.13 k·ft]
+
+    These are the values of tests/engine/sbeam-hss.test.mjs §1. By hand: φMn = 0.9(46)(57.4)/12 = 198.03; Lp = 0.13(29000)(2.44)√(227 × 15.3)/(46 × 57.4)/12 = 17.11 ft.
+- **How verified:**
+  - `tests/engine/sbeam-hss-xlsx.test.mjs` (new; runner `tests/engine/sbeam-xlsx-run.mjs`) exports 10 HSS cases with the page's own `exportExcel()` (ExcelJS 4.4.0 from tests/libs, fixed clock) and reads the file back. Cases: rect A500B, rect slender, rect noncompact, rect A1085, blocked helper / missing K input, rect beam, round beam, round member with blank span (L = ∞), round member with H3-2a governing, Pipe; member and beam mode.
+  - Every numeric cell (2,193, of them 322 formulas) is mapped to the app's result object and must equal it to its shown decimals. An unmapped numeric cell fails.
+  - Every formula is evaluated by an Excel formula evaluator in the test and must equal the app's value to 1e-9 relative.
+  - Mutation runs (a changed coefficient or written value) fail it.
+  - W-shape byte-identical: origin/main vs branch, fixed clock, 9 W/C cases (default beam, point loads + J10 + manual demands, tension, member with all demands + self-weight + deflection + J10, F2-3 LTB, built-up stiffened, channel, composite, open-section torsion): identical .xlsx bytes.
+  - `tests/smoke/steel-beam-xlsx-hss.mjs` (new): the header button in Chromium, 5 HSS/Pipe cases + W, 7 checks. It fails on main (no download).
+- **Saved data (§5):** none touched.
+- **Other copies:** none (the batch Excel export `exportBatchExcel` is separate and unchanged).
+- **Open items:**
+  - Pipe: the embedded database has no torsional constant C for Pipe (`Cc` null), so φT_n = 0 and a Pipe with T_u always fails torsion. C = 2J/D would give the value. This needs the engineer's decision (calculation change, not made here).
+  - ExcelJS stores no cached result for a formula whose result is 0 (e.g. that pipe T_n). Excel computes it on opening; existing behaviour for W too.
