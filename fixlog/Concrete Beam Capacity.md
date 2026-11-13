@@ -6767,7 +6767,7 @@ The legs are taken as equally spaced between the outer legs, because the input h
   - `cbcVcMaxWork` (anchor `V_c = \\min(V_c,`);
   - `cbcRptShear`, step `VcUse`;
   - `detailing()`, the `dStirLeg` derivation lines (anchor `V_{s,req}=\\dfrac{V_u}{\\phi}-V_c`).
-- **Before / After:** each `\;` in those lines becomes `\;`, 10 occurrences. Un-escaped source, for example:
+- **Before / After:** each `\;` in those lines becomes `\\;`, 10 occurrences. Un-escaped source, for example:
   - before: `` `V_c = \\min(V_c,\;V_{c,max}) = …` ``
-  - after: `` `V_c = \\min(V_c,\;V_{c,max}) = …` ``
-- **How found / verified:** a scan of the file for a single backslash before ";". Only these 10 occurrences turned up, plus 2 in comments, which were left. The KaTeX annotation of the Shear card then reads `\min(V_c,\;V_{c,max})`. `check-syntax`, `cbc-shear-limit` and `cbc-leg-width` pass. **Provision:** none.
+  - after: `` `V_c = \\min(V_c,\\;V_{c,max}) = …` ``
+- **How found / verified:** a scan of the file for a single backslash before ";". Only these 10 occurrences turned up, plus 2 in comments, which were left. The KaTeX annotation of the Shear card then reads `\min(V_c,\;V_{c,max})` (one backslash, as KaTeX receives it). `check-syntax`, `cbc-shear-limit` and `cbc-leg-width` pass. **Provision:** none.
