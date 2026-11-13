@@ -894,7 +894,7 @@
      of it (a copy of the type with that line, so its loads and LLDF are that line's; a type with no line: its design line), so that run()'s
      one layout for every plate girder is governed by the type's worst line; the other types kept in their places with their own plates
      (adFixed: not designed, not checked), because the bridge-wide models read every girder (engine/framing.js the cross-frame layout from
-     every girder's plates, engine/crossframes.js the cross-frame depth from girders[0]): each line of the run then computes exactly what
+     every girder's plates, engine/crossframes.js the cross-frame depth of each bay from the shallower of its two girders, SBXF 2026-11-13; before, from girders[0]): each line of the run then computes exactly what
      the Summary computes for the type on that line (atLine; tests/engine/autodesign-types.test.mjs). The stiffener bays (by girder
      number) and splice plate entries (by girder index) renumbered with them, those of type t on each of its copies. With more than one
      type, the bridge-wide variables (TYPE_LOCK: girder count, overhang, field splices and their plates, stiffeners, studs, cross-frames,
