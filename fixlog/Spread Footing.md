@@ -8968,7 +8968,7 @@ index 850967d..32153e4 100644
   "<b>6.x</b> Pedestal classification table and, per pedestal, axial capacity, the P\u2013M views (uniaxial P\u2013M<sub>x</sub> / P\u2013M<sub>y</sub> diagrams, the load contour with every combo\u2019s demand point, P\u2013M along the governing angle, a 3D surface), tie spacing, slenderness with moment magnification where slender, shear, torsion, crossties and cover.",
 ```
 
-## 2026-11-14 — PR: claude/sf-boussinesq-hover (SFBQ-H) — Bearing card 3.5: hover / tap readout on the Boussinesq figures (engineer request 2026-11-14)   [DISPLAY ONLY; no computed result, Report content, saved key or saved-data format changed]
+## 2026-11-14 — PR: claude/sf-boussinesq-hover (PR #1539: https://github.com/mlococo88/All-Structural/pull/1539) (SFBQ-H) — Bearing card 3.5: hover / tap readout on the Boussinesq figures (engineer request 2026-11-14)   [DISPLAY ONLY; no computed result, Report content, saved key or saved-data format changed]
 - **Engineer (2026-11-14):** "For the Boussinesq heat map, I want to be able to hover over a point and get info like the factor and the actual stress at that depth."
 - **Where (to re-apply by hand):**
   - `sfbqFieldSVG(M,o)`: before its final `return s+'</svg>';` (after the colour bar line `s+=narrow?sfbqBarH(...)`): `if(!o.print)o.map={kind:plan?'plan':'sec',W,H,ml,mt,pw,ph,sc,hx,v0,v1,alongL,zp:plan?M.planZ:null};` — the plot geometry for the readout; the SVG string is unchanged.
