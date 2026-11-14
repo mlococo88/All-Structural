@@ -661,7 +661,7 @@
       try { window.PSBReportUI.render($('rptHost'), { P, rc, opts: ui.rpt, save: saveUi, goto: t => gotoOut(t), goin: t => { ui.itab = t; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; } }); }
       catch (e) { $('rptHost').innerHTML = `<div class="alert err" role="alert">Report error: ${esc(e && e.message)}</div>`; console.warn(e); } }
     // PR 3c: the 3D view of the bridge (display only; its layer and camera choices kept in ui.v3d, psb2.ui)
-    if (ui.otab === '3d' && $('v3dHost')) { try { window.PSB3DUI.render($('v3dHost'), { P, ui, saveUi }); } catch (e) { $('v3dHost').innerHTML = `<div class="alert err" role="alert">3D view error: ${esc(e && e.message)}</div>`; console.warn(e); } }
+    if (ui.otab === '3d' && $('v3dHost')) { try { window.PSB3DUI.render($('v3dHost'), { P, ui, saveUi, res: (k, g) => cellR(window.PSBDesign.cellInputs(P, k, g)) });   /* res (PR 8b): each girder type × line's engine result, for the diagrams (cached, cellR) */ } catch (e) { $('v3dHost').innerHTML = `<div class="alert err" role="alert">3D view error: ${esc(e && e.message)}</div>`; console.warn(e); } }
     if (window.PSBDashUI) window.PSBDashUI.refresh();
   }
   const gotoOut = t => { ui.otab = t; saveUi(); drawOut(); $('outputPanel').scrollTop = 0; };

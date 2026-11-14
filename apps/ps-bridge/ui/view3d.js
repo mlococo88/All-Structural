@@ -32,8 +32,20 @@
   'use strict';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const LAY = [['girder', 'Girders', true], ['deck', 'Deck and haunch', true], ['app', 'Barriers and sidewalks', true], ['dia', 'Diaphragms', true],
-    ['brg', 'Bearings and supports', true], ['str', 'Strands (type shown)', true], ['lbl', 'Labels', true]];
+    ['brg', 'Bearings and supports', true], ['str', 'Strands (type shown)', true], ['lbl', 'Labels', true], ['dg', 'Diagram', true]];
   /* the girder types' colours (concrete tints), in type order */
+  /* PR 8b (2026-11-14; the Steel Bridge app's 3D view, apps/steel-bridge/ui/view3d.js DG / V3B_DG): the diagrams drawn as a fence beside
+     each girder drawn, from each girder type × line's engine result (R.diagrams: k-ft, kip at the engine's stations, x from the left ℄
+     bearing; the envelopes as the engine combines them: Strength I with η and the owner's LL multiplier, Service I), the + moment drawn down
+     by default, a Scale; the value under the pointer. Display only. */
+  const DG = [['off', 'No diagram'], ['mStr', 'Moment: Strength I envelope', 'M_StrI_pos', 'M_StrI_neg', 'k-ft'], ['mSvc', 'Moment: Service I envelope', 'M_SrvI_pos', 'M_SrvI_neg', 'k-ft'],
+    ['mLL', 'Moment: LL+IM envelope (per girder)', 'M_LLpos', 'M_LLneg', 'k-ft'], ['mDC', 'Moment: DC (girder, DC1, DC2)', 'M_DC', null, 'k-ft'], ['mDW', 'Moment: DW', 'M_DW', null, 'k-ft'],
+    ['vStr', 'Shear: Strength I envelope', 'V_StrI_pos', 'V_StrI_neg', 'kip'], ['vLL', 'Shear: LL+IM envelope (per girder)', 'V_LLpos', 'V_LLneg', 'kip'], ['vDC', 'Shear: DC (girder, DC1, DC2)', 'V_DC', null, 'kip']];
+  /* series(R, d): the diagram d of a result: { x (ft), hi, lo, u } (lo: the second branch of an envelope) */
+  function series(R, d) {
+    const D = DG.find(q => q[0] === d), rows = (R && R.diagrams) || []; if (!D || !D[2] || !rows.length) return null;
+    return { x: rows.map(r => +r.x), hi: rows.map(r => +r[D[2]]), lo: D[3] ? rows.map(r => +r[D[3]]) : null, u: D[4], L: +R.L };
+  }
   const TCOL = ['#a9b4c2', '#c9a27e', '#9fb89a', '#c2a3c4', '#d1c38a', '#8fb3c9', '#c79494', '#a6a6a6'];
   const BAR_H = 32, SW_CURB = 0, DIA_T = 10, CONT_T = 24, PAD_T = 3, SEAT = 42;   // schematic sizes (in): PS3c-D2 … D5
   const isNum = v => typeof v === 'number' && isFinite(v);
@@ -41,7 +53,7 @@
 
   /* geom(P): the bridge in numbers (see the header). { errors, nb, ns, spans, sup, skews, ys, yc, girders, deck, haunch, app, dia, cont, pads,
      seats, strands, labels, types } */
-  function geom(P) {
+  function geom(P, o) {   // o (2026-11-14, PR 8b): { strLine: g } the strands of every girder on line g (the close-up) in place of the type shown
     const out = { errors: [], girders: [], dia: [], cont: [], pads: [], seats: [], strands: [], app: [], haunch: [], types: [] };
     const BR = window.PSBBridge, DS = window.PSBDesign, SG = window.PSBStrandGfx;
     if (!P || !P.xs || !P.spans || !BR || !DS) { out.errors.push('No project.'); return out; }
@@ -92,7 +104,7 @@
     sup.forEach((_, k) => { const gs = out.girders.filter(q => q.s === k || q.s === k + 1), yb = Math.min(...gs.map(q => q.yBot)) - PAD_T;
       out.seats.push({ k, xa: xb(k, -out.ohL - 1), xc: xb(k, ys[nb - 1] + out.ohR + 1), za: zL - 12, zc: zR + 12, y1: yb, y0: yb - SEAT, w: SEAT }); });
     // strands of the girder type shown, on each of its lines (positions: PSBStrandGfx.xy, the strand-pattern graphic's); that type's girders are drawn see-through
-    if (SG && SG.xy) out.girders.filter(q => q.shown).forEach(q => {
+    if (SG && SG.xy) out.girders.filter(q => o && o.strLine ? q.g === o.strLine : q.shown).forEach(q => {
       const R = { g: q.gg, ss: strandSys(q.inp, q.gg) }, ss = R.ss, Lb = q.xb - q.xa, a = (+ss.hp.frac || 0) * (+q.inp.L) * 12;
       const yE = +ss.hp.yEnd, yM = +ss.hp.yMid, dir = Lb / Math.max(Math.abs(Lb), 1e-9);
       SG.xy(R, yM).forEach(p => { const z = q.z - p.x;
@@ -109,7 +121,7 @@
   }
 
   /* ---------- three.js (the steel app's view3d.js pattern) ---------- */
-  const V = { r: null, scene: null, cam: null, ctl: null, root: null, groups: {}, key: '', raf: 0, home: null, ro: null, ctx: null, info: '', counts: null };
+  const V = { r: null, scene: null, cam: null, ctl: null, root: null, groups: {}, key: '', raf: 0, home: null, ro: null, ctx: null, info: '', counts: null, fences: [], dgLbl: '', focus: null, tg: null, mode: null };
   function label(txt, size, color) {   // (steel view3d.js label)
     const c = document.createElement('canvas'), g = c.getContext('2d'); g.font = 'bold 40px system-ui, sans-serif'; const w = Math.ceil(g.measureText(txt).width) + 16; c.width = w; c.height = 56;
     g.font = 'bold 40px system-ui, sans-serif'; g.fillStyle = 'rgba(255,255,255,0.85)'; g.fillRect(0, 0, w, 56); g.fillStyle = color || '#222'; g.fillText(txt, 8, 42);
@@ -135,8 +147,10 @@
   }
   function resize(host) { const W = host.clientWidth || 900, H = host.clientHeight || 560; V.r.setSize(W, H); V.cam.aspect = W / H; V.cam.updateProjectionMatrix(); }
 
-  /* build(G): the scene of geom(P) */
-  function build(G) {
+  /* build(G, o): the scene of geom(P); o (PR 8b) = { line (0: the whole bridge; g: the close-up of girder line g: its girders in every span,
+     its tributary deck strip, haunch, bearings, the diaphragms beside it, its strands), dg, dsc, eng, res(k, g) -> the engine result } */
+  function build(G, o) {
+    o = o || {}; const line = o.line || 0, on = q => !line || q.g === line;
     const T = THREE;
     if (V.root) { V.scene.remove(V.root); V.root.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material.map) o.material.map.dispose(); }); }
     const root = new T.Group(); V.root = root; V.scene.add(root); V.groups = {};
@@ -150,7 +164,7 @@
     const wall = (g, xa, za, xc, zc, t, y0, y1, mt) => { const dx = xc - xa, dz = zc - za, L = Math.hypot(dx, dz); if (!(L > 1e-6 && y1 > y0)) return;
       const m = add(g, new T.Mesh(new T.BoxGeometry(L, y1 - y0, t), mt)); m.position.set((xa + xc) / 2, (y0 + y1) / 2, (za + zc) / 2); m.rotation.y = Math.atan2(-dz, dx); };
     // girders: the section outline (voids as holes) extruded between the girder ends
-    G.girders.forEach(q => { const sh = new T.Shape(), full = q.half.concat(q.half.slice().reverse().map(p => [-p[0], p[1]]));
+    G.girders.filter(on).forEach(q => { const sh = new T.Shape(), full = q.half.concat(q.half.slice().reverse().map(p => [-p[0], p[1]]));
       full.forEach((p, i) => (i ? sh.lineTo(p[0], p[1]) : sh.moveTo(p[0], p[1])));
       q.voids.forEach(v => { const hp = new T.Path(); if (v.type === 'rect') { hp.moveTo(v.x - v.w / 2, v.y - v.h / 2); hp.lineTo(v.x + v.w / 2, v.y - v.h / 2); hp.lineTo(v.x + v.w / 2, v.y + v.h / 2); hp.lineTo(v.x - v.w / 2, v.y + v.h / 2); hp.lineTo(v.x - v.w / 2, v.y - v.h / 2); } else hp.absarc(v.x, v.y, v.d / 2, 0, 2 * Math.PI, true); sh.holes.push(hp); });
       const L = q.x1 - q.x0, geo = new T.ExtrudeGeometry(sh, { depth: L, bevelEnabled: false, curveSegments: 16 });
@@ -160,13 +174,15 @@
     const d = G.deck, prism = (g, za, zb, yb, hgt, mt) => { if (!(zb - za > 1e-6) || !(hgt > 1e-6)) return; const ex = (k, z) => G.xb(k, z / 12), sh = new T.Shape();
       sh.moveTo(ex(0, za), za); sh.lineTo(ex(G.ns, za), za); sh.lineTo(ex(G.ns, zb), zb); sh.lineTo(ex(0, zb), zb); sh.lineTo(ex(0, za), za);
       const geo = new T.ExtrudeGeometry(sh, { depth: hgt, bevelEnabled: false }); geo.rotateX(Math.PI / 2); const ms = new T.Mesh(geo, mt); ms.position.y = yb + hgt; grp(g).add(ms); };
-    if (d.ts > 0) prism('deck', d.zL, d.zR, d.yBot, d.ts, MT.deck);
-    G.haunch.forEach(h => box('deck', (h.x0 + h.x1) / 2, (h.y0 + h.y1) / 2, h.z, h.x1 - h.x0, h.y1 - h.y0, h.w, MT.haunch));
-    G.app.forEach(a => prism('app', a.z0, a.z1, a.y0, a.h, MT.app));
+    // the close-up: the line's tributary deck strip (half the bays beside it; to the deck edge at an exterior line), its barrier or sidewalk
+    const zl = line ? (line === 1 ? d.zL : (G.ys[line - 2] + G.ys[line - 1]) / 2 * 12) : d.zL, zr = line ? (line === G.nb ? d.zR : (G.ys[line - 1] + G.ys[line]) / 2 * 12) : d.zR;
+    if (d.ts > 0) prism('deck', zl, zr, d.yBot, d.ts, MT.deck);
+    G.haunch.filter(on).forEach(h => box('deck', (h.x0 + h.x1) / 2, (h.y0 + h.y1) / 2, h.z, h.x1 - h.x0, h.y1 - h.y0, h.w, MT.haunch));
+    G.app.filter(a => !line || (a.z1 > zl && a.z0 < zr)).forEach(a => prism('app', Math.max(a.z0, zl), Math.min(a.z1, zr), a.y0, a.h, MT.app));
     // diaphragms, continuity diaphragms, bearings, seats and pier caps
-    G.dia.forEach(q => wall('dia', q.xa, q.za, q.xc, q.zc, q.t, q.y0, q.y1, MT.dia));
-    G.cont.forEach(q => wall('dia', q.xa, q.za, q.xc, q.zc, q.t, q.y0, q.y1, MT.cont));
-    G.pads.forEach(p => box('brg', p.x, (p.y0 + p.y1) / 2, p.z, p.l, p.y1 - p.y0, p.w, MT.brg));
+    G.dia.filter(q => !line || q.bay === line || q.bay === line - 1).forEach(q => wall('dia', q.xa, q.za, q.xc, q.zc, q.t, q.y0, q.y1, MT.dia));
+    G.cont.forEach(q => { if (!line) { wall('dia', q.xa, q.za, q.xc, q.zc, q.t, q.y0, q.y1, MT.cont); return; } const f = z => q.xa + (q.xc - q.xa) * (z - q.za) / ((q.zc - q.za) || 1); wall('dia', f(zl), zl, f(zr), zr, q.t, q.y0, q.y1, MT.cont); });
+    G.pads.filter(p => !line || Math.abs(p.z - G.ys[line - 1] * 12) <= 60).forEach(p => box('brg', p.x, (p.y0 + p.y1) / 2, p.z, p.l, p.y1 - p.y0, p.w, MT.brg));
     G.seats.forEach(q => wall('brg', q.xa, q.za, q.xc, q.zc, q.w, q.y0, q.y1, MT.sup));
     // strands of the type shown: lines (straight, debonded length, draped)
     const SC = { s: 0x8a5a44, db: 0xdc6b2f, h: 0xb45309 };
@@ -174,14 +190,40 @@
       if (!pos.length) return; const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); add('str', new T.LineSegments(geo, new T.LineBasicMaterial({ color: SC[kd], depthTest: kd !== 'x' }))); });
     // labels: the girder lines at the Abut. 1 end, the supports, the spans
     const Hm = Math.max(...G.girders.map(q => q.h)), Ltot = G.sup[G.sup.length - 1] * 12, lsz = Math.max(16, Hm * 0.35, 0.012 * Ltot);
-    for (let g = 1; g <= G.nb; g++) { const q = G.girders.filter(r => r.g === g).sort((a, b) => a.s - b.s)[0]; if (!q) continue; const sp = label(`G${g}`, lsz, '#1f4e8c'); sp.position.set(q.x0 - 4 * lsz, q.yBot + q.h / 2, q.z); grp('lbl').add(sp); }
+    for (let g = 1; g <= G.nb; g++) { if (line && g !== line) continue; const q = G.girders.filter(r => r.g === g).sort((a, b) => a.s - b.s)[0]; if (!q) continue; const sp = label(`G${g}`, lsz, '#1f4e8c'); sp.position.set(q.x0 - 4 * lsz, q.yBot + q.h / 2, q.z); grp('lbl').add(sp); }
     G.sup.forEach((_, k) => { const sp = label(k === 0 ? 'Abut. 1' : k === G.ns ? 'Abut. 2' : `Pier ${k}`, lsz, '#333'); sp.position.set(G.xb(k, G.ys[G.nb - 1] + G.ohR), d.yTop + 3 * lsz, d.zR + 2 * lsz); grp('lbl').add(sp); });
-    G.spans.forEach((L, i) => { const sp = label(`Span ${i + 1}: L = ${(+L).toFixed(2)} ft${G.ns > 1 ? (G.cont.length ? ' (continuous)' : ' (simple)') : ''}`, lsz, '#333'); sp.position.set((G.xb(i, G.yc) + G.xb(i + 1, G.yc)) / 2, d.yTop + 5 * lsz, G.yc * 12); grp('lbl').add(sp); });
+    G.spans.forEach((L, i) => { const zc = line ? G.ys[line - 1] : G.yc, sp = label(`Span ${i + 1}: L = ${(+L).toFixed(2)} ft${G.ns > 1 ? (G.cont.length ? ' (continuous)' : ' (simple)') : ''}`, lsz, '#333'); sp.position.set((G.xb(i, zc) + G.xb(i + 1, zc)) / 2, d.yTop + 5 * lsz, zc * 12); grp('lbl').add(sp); });
+    // PR 8b: the diagrams, a fence beside each girder drawn (+ moment drawn down by default), the peak values labelled
+    V.fences = []; V.dgLbl = ''; const dg = o.dg || 'off', DGd = DG.find(q => q[0] === dg);
+    if (dg !== 'off' && DGd && o.res) {
+      const all = []; G.girders.filter(on).forEach(q => { let R = null; try { R = o.res(q.k, q.g); } catch (e) { R = null; } const sr = R && !R.error ? series(R, dg) : null; if (sr) all.push([q, sr]); });
+      if (all.length) {
+        const sgn = (o.eng !== false && dg[0] === 'm') ? -1 : 1, Lsp = Math.max(...G.spans) * 12, mx = Math.max(1e-9, ...all.flatMap(([, q]) => [...q.hi, ...(q.lo || [])].map(Math.abs)));
+        const amp = (+o.dsc || 1) * Math.max(1.2 * Hm, (line ? 0.12 : 0.08) * Lsp) / mx, fs = line ? Math.max(20, Hm * 0.6) : 1.2 * lsz;
+        const fill = c => new T.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.22, side: T.DoubleSide, depthWrite: false, depthTest: false });
+        all.forEach(([q, sr]) => { const i = q.g - 1, S0 = (G.nb > 1 ? (i < G.nb - 1 ? G.ys[i + 1] - G.ys[i] : G.ys[i] - G.ys[i - 1]) : 8) * 12, zf = q.z + (i === G.nb - 1 && G.nb > 1 ? -1 : 1) * (line ? S0 / 2 + 36 : 0.3 * S0);
+          const X = x => q.xa + (x / sr.L) * (q.xb - q.xa), y0 = q.yBot + q.h / 2, Y = v => y0 + sgn * v * amp;
+          const band = (vals, col) => { const pos = []; for (let k = 0; k < vals.length - 1; k++) { const a = [X(sr.x[k]), y0, zf], b = [X(sr.x[k + 1]), y0, zf], c2 = [X(sr.x[k + 1]), Y(vals[k + 1]), zf], d2 = [X(sr.x[k]), Y(vals[k]), zf]; pos.push(...a, ...b, ...c2, ...a, ...c2, ...d2); }
+            const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); const ms = new T.Mesh(geo, fill(col)); ms.renderOrder = 5; ms.userData = { q, sr, X }; grp('dg').add(ms); V.fences.push(ms);
+            const ln = new T.Line(new T.BufferGeometry().setFromPoints(sr.x.map((x, k) => new T.Vector3(X(x), Y(vals[k]), zf))), new T.LineBasicMaterial({ color: col, depthTest: false })); ln.renderOrder = 6; grp('dg').add(ln); };
+          grp('dg').add(new T.Line(new T.BufferGeometry().setFromPoints([new T.Vector3(X(sr.x[0]), y0, zf), new T.Vector3(X(sr.x[sr.x.length - 1]), y0, zf)]), new T.LineBasicMaterial({ color: 0x555555, depthTest: false })));
+          band(sr.hi, 0xb23a2a); if (sr.lo) band(sr.lo, 0x1f4e8c);
+          const lab = (k, vals, col) => { const v = vals[k]; if (!(Math.abs(v) > 1e-6)) return; const sp = label(`${v.toFixed(0)}`, fs, col); sp.position.set(X(sr.x[k]), Y(v) + sgn * Math.sign(v) * fs * 0.8, zf); grp('dg').add(sp); };
+          const peak = (vals, col, want) => { let bi = 0; vals.forEach((v, k) => { if (want * v > want * vals[bi]) bi = k; }); lab(bi, vals, col); };
+          peak(sr.hi, '#b23a2a', 1); if (sr.lo) peak(sr.lo, '#1f4e8c', -1); });
+        V.dgLbl = `${DGd[1]} (${DGd[4]}${dg[0] === 'm' ? (o.eng !== false ? '; + moment drawn down' : '; + moment drawn up') : ''})`;
+      }
+    }
     // camera home (steel build's end)
     const bb = new T.Box3().setFromObject(root), c = bb.getCenter(new T.Vector3()), sz = bb.getSize(new T.Vector3()), R = Math.max(sz.x, sz.y * 4, sz.z) * 0.62, Dh = () => R * 2.1 / Math.min(1, Math.max(0.35, V.cam.aspect || 1));   // farther on a narrow (phone) canvas
-    V.home = () => { V.cam.position.copy(c.clone().add(new T.Vector3(-0.55, 0.55, 1).normalize().multiplyScalar(Dh()))); V.cam.near = Math.max(0.5, R / 500); V.cam.far = R * 40; V.cam.updateProjectionMatrix(); if (V.ctl) { V.ctl.target.copy(c); V.ctl.update(); } else V.cam.lookAt(c); };
+    V.home = () => { V.cam.position.copy(c.clone().add((line ? new T.Vector3(-0.35, 0.28, 1) : new T.Vector3(-0.55, 0.55, 1)).normalize().multiplyScalar(Dh() * (line ? 0.75 : 1)))); V.cam.near = Math.max(0.5, R / 500); V.cam.far = R * 40; V.cam.updateProjectionMatrix(); if (V.ctl) { V.ctl.target.copy(c); V.ctl.update(); } else V.cam.lookAt(c); };
     V.cam.near = Math.max(0.5, R / 500); V.cam.far = R * 40; V.cam.updateProjectionMatrix();
-    V.counts = { girders: G.girders.length, dia: G.dia.length, cont: G.cont.length, pads: G.pads.length, strands: G.strands.length, app: G.app.length };
+    // PR 8b: the close-up's zoom targets: the whole line, each span's ends and hold-down points (the Steel Bridge app's V3B.focus)
+    V.focus = (x, z, span) => { const tgt = new T.Vector3(x, Hm / 2, z), r = span || 240; V.cam.position.copy(tgt.clone().add(new T.Vector3(-0.55, 0.35, 1).normalize().multiplyScalar(r * 1.5))); V.cam.near = r / 400; V.cam.far = Math.max(r * 60, R * 40); V.cam.updateProjectionMatrix(); if (V.ctl) { V.ctl.target.copy(tgt); V.ctl.update(); } };
+    V.tg = line ? [['all', `Whole girder line G${line}`, null]].concat(...G.girders.filter(on).sort((a, b) => a.s - b.s).map(q => { const ss = q.inp && q.gg ? strandSys(q.inp, q.gg) : null, a = ss && ss.nh > 0 ? (+ss.hp.frac || 0) * q.L * 12 : 0;
+      return [[`s${q.s}a`, `Span ${q.s}: left end`, [q.xa, q.z, 3 * Hm]], ...(a > 0 ? [[`s${q.s}h`, `Span ${q.s}: hold-down point`, [q.xa + a, q.z, 4 * Hm]]] : []), [`s${q.s}m`, `Span ${q.s}: midspan`, [(q.xa + q.xb) / 2, q.z, 6 * Hm]], [`s${q.s}b`, `Span ${q.s}: right end`, [q.xb, q.z, 3 * Hm]]]; })) : null;
+    V.counts = { girders: G.girders.filter(on).length, dia: G.dia.length, cont: G.cont.length, pads: G.pads.length, strands: G.strands.length, app: G.app.length };
+    if (line) Object.assign(V.counts, { dia: G.dia.filter(q => q.bay === line || q.bay === line - 1).length, pads: G.pads.filter(p => Math.abs(p.z - G.ys[line - 1] * 12) <= 60).length });
   }
 
   function css() {
@@ -198,35 +240,57 @@
     if (typeof THREE === 'undefined' && document.readyState === 'loading') {   // three.js is loaded with defer: it runs after the page's own script
       host.innerHTML = '<p class="note">Loading the 3D library…</p>'; document.addEventListener('DOMContentLoaded', () => { if (host.isConnected && ctx.ui.otab === '3d') render(host, ctx); }, { once: true }); return; }
     if (typeof THREE === 'undefined' || !THREE.WebGLRenderer) { host.innerHTML = `<section class="sec"><div class="secHead">3D view</div><div class="secBody"><div class="alert err">The 3D library (three.js r128 from cdnjs) could not be loaded: this view needs an internet connection the first time.</div></div></section>`; return; }
-    let G; try { G = geom(ctx.P); } catch (e) { G = { errors: [`The model could not be built: ${e.message}`] }; }
+    // PR 8b: the View (whole bridge, or the close-up of one girder line), the diagram, its scale and sign (kept in ui.v3d, psb2.ui, as the layers)
+    const st = ui.v3d, nbx = Math.max(0, Math.round((ctx.P.xs || {}).nb || 0)); if (!/^(bridge|g\d+)$/.test(st.mode || '') || (st.mode !== 'bridge' && +String(st.mode).slice(1) > nbx)) st.mode = 'bridge';
+    if (!DG.some(d => d[0] === st.dg)) st.dg = 'off';
+    const line = st.mode === 'bridge' ? 0 : +st.mode.slice(1), opt = (v, t, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${esc(t)}</option>`;
+    const bar0 = `<div class="v3d-bar"><label for="v3d_mode">View</label><select id="v3d_mode">${opt('bridge', 'Whole bridge', st.mode)}${[...Array(nbx)].map((_, i) => opt(`g${i + 1}`, `Girder line G${i + 1} close-up`, st.mode)).join('')}</select>
+      <select id="v3d_focus" hidden aria-label="Zoom to"></select>
+      <label for="v3d_dg">Diagram</label><select id="v3d_dg">${DG.map(([k, l]) => opt(k, l, st.dg)).join('')}</select>
+      <label>Scale <input type="range" id="v3d_dsc" min="0.25" max="4" step="0.25" value="${+st.dsc || 1}" style="width:90px"></label><label><input type="checkbox" id="v3d_eng"${st.eng !== false ? ' checked' : ''}> + moment down</label></div>`;
+    let G; try { G = geom(ctx.P, line ? { strLine: line } : null); } catch (e) { G = { errors: [`The model could not be built: ${e.message}`] }; }
     if (G.errors.length) { host.innerHTML = `<section class="sec"><div class="secHead">3D view</div><div class="secBody"><div class="alert err">${G.errors.map(esc).join('<br>')}</div></div></section>`; return; }
     const sh = G.girders.find(q => q.shown), tp = G.types.filter(t => t.lines.length && t.span <= G.ns);
     const key3 = `<div class="v3d-key">${tp.map(t => { const q = G.girders.find(r => r.k === t.k); return `<span><i style="background:${t.col}"></i>${esc(t.label)}: ${esc(q ? q.girder : '')}, span ${t.span}, ${lines(t.lines)}</span>`; }).join('')}</div>`;
     const bar = `<div class="v3d-bar">${LAY.map(([k, l]) => `<label><input type="checkbox" data-v3d="${k}"${ui.v3d.lay[k] ? ' checked' : ''}> ${esc(l)}</label>`).join('')}
       <span style="flex:1"></span><button type="button" id="v3d_reset">Reset view</button><button type="button" id="v3d_png">Save PNG</button></div>`;
-    host.innerHTML = `<section class="sec"><div class="secHead">3D view</div><div class="secBody">${bar}<div id="v3d-host" class="v3d-host"></div>${key3}
-      <p class="note" id="v3d-note"></p>
+    host.innerHTML = `<section class="sec"><div class="secHead">3D view</div><div class="secBody">${bar0}${bar}<div id="v3d-host" class="v3d-host"></div>${key3}
+      <p class="note" id="v3d-note"></p><p class="note" id="v3d-dg"></p>
+      <p class="note">View: the whole bridge, or the close-up of one girder line (its girders in every span, its tributary deck strip, haunch, bearings, the diaphragms beside it and every strand of its girders; Zoom to: its span ends, hold-down points and midspans). Diagram: from each girder type × line's engine result (the Analysis tab's stations, x from the left ℄ bearing), a fence beside each girder drawn; point at it to read the value; Scale stretches it. Moments k-ft, shears kip, per girder.</p>
       <p class="note">Drag to rotate, right-drag (or two fingers) to pan, wheel (or pinch) to zoom. The view keeps its camera when the inputs change; Reset view frames the bridge. Display only: the girder lines (Cross-section tab), spans, skews and continuity (Bridge layout tab), each girder type's shape (shape library) on its lines (Girders &amp; strands tab); strands of the girder type shown above the output tabs${sh ? ` (${esc(sh.label)}, its girders see-through)` : ''}, at the positions of its <a href="#" data-gotab="loss">strand-pattern graphic</a>. Barrier and sidewalk heights, diaphragm and continuity diaphragm depths, bearing pads and supports are schematic.</p></div></section>`;
     const h = host.querySelector('#v3d-host');
     try {
       if (!V.r) init();
       h.appendChild(V.r.domElement); resize(h);
-      const key = JSON.stringify(ctx.P), first = !V.root;
-      if (key !== V.key || first) { build(G); V.key = key; }
+      const key = JSON.stringify([ctx.P, st.mode, st.dg, +st.dsc || 1, st.eng !== false]), first = !V.root, modeChg = V.mode != null && V.mode !== st.mode;
+      if (key !== V.key || first) { build(G, { line, dg: st.dg, dsc: st.dsc, eng: st.eng, res: ctx.res }); V.key = key; }
       LAY.forEach(([k]) => { V.groups[k].visible = !!ui.v3d.lay[k]; });
       if (first) { const cm = ui.v3d.cam; if (cm && cm.p && cm.t) { V.cam.position.fromArray(cm.p); if (V.ctl) { V.ctl.target.fromArray(cm.t); V.ctl.update(); } } else V.home(); }
+      else if (modeChg) { V.home(); saveCam(); }
+      V.mode = st.mode;
+      const fs = host.querySelector('#v3d_focus'); if (V.tg) { fs.innerHTML = V.tg.map(t => `<option value="${t[0]}">${esc(t[1])}</option>`).join(''); fs.hidden = false; }
+      host.querySelector('#v3d-dg').textContent = V.dgLbl ? `Diagram: ${V.dgLbl}.` : (st.dg !== 'off' ? 'Diagram: no result to draw (the girder types need results; see the Summary).' : '');
       const sk = [...new Set(G.skews.map(v => (+v).toFixed(1)))];
-      V.info = `${G.nb} girder lines (bays ${G.ys.slice(1).map((y, i) => (y - G.ys[i]).toFixed(2)).join(' / ')} ft), ${G.ns} span${G.ns > 1 ? `s ${G.spans.map(v => (+v).toFixed(2)).join(' + ')} ft, ${G.cont.length ? 'made continuous for composite loads (continuity diaphragms at the piers)' : 'simple'}` : ` of ${(+G.spans[0]).toFixed(2)} ft`}; skew${sk.length > 1 ? 's' : ''} ${G.skews.map(v => (+v).toFixed(1)).join(' / ')}°; deck ${G.deck.ts > 0 ? `${(+G.deck.ts).toFixed(2)} in` : 'none'}; ${G.dia.length} diaphragm${G.dia.length === 1 ? '' : 's'} between girders${sh ? `; ${G.strands.length} strand lines of ${sh.label}` : ''}.`;
+      V.info = `${G.nb} girder lines (bays ${G.ys.slice(1).map((y, i) => (y - G.ys[i]).toFixed(2)).join(' / ')} ft), ${G.ns} span${G.ns > 1 ? `s ${G.spans.map(v => (+v).toFixed(2)).join(' + ')} ft, ${G.cont.length ? 'made continuous for composite loads (continuity diaphragms at the piers)' : 'simple'}` : ` of ${(+G.spans[0]).toFixed(2)} ft`}; skew${sk.length > 1 ? 's' : ''} ${G.skews.map(v => (+v).toFixed(1)).join(' / ')}°; deck ${G.deck.ts > 0 ? `${(+G.deck.ts).toFixed(2)} in` : 'none'}; ${G.dia.length} diaphragm${G.dia.length === 1 ? '' : 's'} between girders${sh ? `; ${G.strands.length} strand lines of ${line ? `G${line} (every span)` : sh.label}` : ''}.`;
       host.querySelector('#v3d-note').textContent = V.info;
       if (window.ResizeObserver) { if (V.ro) V.ro.disconnect(); V.ro = new ResizeObserver(() => resize(h)); V.ro.observe(h); }
       loop();
     } catch (e) { h.innerHTML = `<div class="alert err">The 3D view could not start (WebGL): ${esc(e.message)}</div>`; return; }
     host.querySelectorAll('[data-v3d]').forEach(el => el.addEventListener('change', () => { ui.v3d.lay[el.dataset.v3d] = el.checked; if (V.groups[el.dataset.v3d]) V.groups[el.dataset.v3d].visible = el.checked; ctx.saveUi && ctx.saveUi(); }));
     host.querySelector('#v3d_reset').addEventListener('click', () => { if (V.home) { V.home(); saveCam(); } });
+    const re = () => { ctx.saveUi && ctx.saveUi(); render(host, ctx); };
+    host.querySelector('#v3d_mode').addEventListener('change', e => { st.mode = e.target.value; re(); });
+    host.querySelector('#v3d_dg').addEventListener('change', e => { st.dg = e.target.value; re(); });
+    host.querySelector('#v3d_dsc').addEventListener('change', e => { st.dsc = +e.target.value; re(); });
+    host.querySelector('#v3d_eng').addEventListener('change', e => { st.eng = e.target.checked; re(); });
+    host.querySelector('#v3d_focus').addEventListener('change', e => { const t = (V.tg || []).find(q => q[0] === e.target.value); if (!t) return; if (t[2] == null) V.home(); else V.focus(t[2][0], t[2][1], t[2][2]); saveCam(); });
+    V.r.domElement.onpointermove = e => { if (!V.fences.length) return; const r = V.r.domElement.getBoundingClientRect(), rc = new THREE.Raycaster(), mv = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      rc.setFromCamera(mv, V.cam); const hit = rc.intersectObjects(V.fences)[0], nt = host.querySelector('#v3d-dg'); if (!hit || !nt) return; const { q, sr, X } = hit.object.userData; let k = 0, best = Infinity; sr.x.forEach((x, j) => { const d = Math.abs(X(x) - hit.point.x); if (d < best) { best = d; k = j; } });
+      nt.textContent = `${q.label} on G${q.g}, span ${q.s}, x = ${sr.x[k].toFixed(2)} ft from the left ℄ bearing: ${sr.lo ? `max ${sr.hi[k].toFixed(0)}, min ${sr.lo[k].toFixed(0)}` : sr.hi[k].toFixed(0)} ${sr.u} (${V.dgLbl})`; };
     host.querySelector('#v3d_png').addEventListener('click', () => { V.r.render(V.scene, V.cam); const a = document.createElement('a'); a.href = V.r.domElement.toDataURL('image/png');
       a.download = ((ctx.P.project && ctx.P.project.name) || 'ps-bridge').replace(/[^\w.-]+/g, '_') + '_3d.png'; document.body.appendChild(a); a.click(); a.remove(); });
   }
   /* for tests: the camera, the counts of the last build */
   const camera = () => (V.cam ? { p: V.cam.position.toArray(), t: V.ctl ? V.ctl.target.toArray() : null } : null);
-  window.PSB3DUI = { render, geom, camera, LAY, state: () => ({ counts: V.counts, info: V.info }) };
+  window.PSB3DUI = { render, geom, camera, LAY, DG, series, state: () => ({ counts: V.counts, info: V.info, fences: V.fences.length, dg: V.dgLbl, tg: V.tg ? V.tg.map(t => t[0]) : null, mode: V.mode }) };
 })();
