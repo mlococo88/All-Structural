@@ -226,14 +226,15 @@
     const r = stress(ld, x, y, z);
     add({ id: 'bq.pt', label: 'Point (from the footing centre, below the base)', sym: '(x,\\,y,\\,z)', eq: '', sub: '',
       value: '(' + N(x, 2) + ', ' + N(y, 2) + ', ' + N(z, 2) + ')', unit: 'ft', d: 2 });
-    T.terms.forEach((t, k) => {
-      add({ id: 'bq.I' + (k + 1), label: 'Corner rectangle ' + (k + 1) + ': |X| × |Y| = ' + N(Math.abs(t.X), 3) + ' × ' + N(Math.abs(t.Y), 3) + ' ft, sign ' + (t.s > 0 ? '+' : t.s < 0 ? '−' : '0'),
+    const nz = T.terms.map((t, k) => Object.assign({ k: k + 1 }, t)).filter(t => t.s !== 0);   // a zero term (the point on that rectangle's side) is left out
+    nz.forEach(t => { const k = t.k - 1;
+      add({ id: 'bq.I' + (k + 1), label: 'Corner rectangle ' + (k + 1) + ': |X| × |Y| = ' + Math.abs(t.X).toFixed(3) + ' × ' + Math.abs(t.Y).toFixed(3) + ' ft, sign ' + (t.s > 0 ? '+' : '−'),
         sym: 'I_{' + (k + 1) + '}', eq: z > 0 ? 'I(m,n),\\; m = \\frac{|X|}{z},\\; n = \\frac{|Y|}{z}' : '\\tfrac{1}{4}\\;(z = 0)',
-        sub: z > 0 ? 'm = ' + N(t.m, 3) + ',\\; n = ' + N(t.n, 3) : '', value: t.I, unit: '', d: 4, ref,
+        sub: z > 0 ? 'I(' + N(t.m, 3) + ',\\, ' + N(t.n, 3) + ')' : '', value: t.I, unit: '', d: 4, ref,
         note: 'I(m, n) = 1/(4π)·[2mn√V/(V + m²n²)·(V + 1)/V + atan2(2mn√V, V − m²n²)], V = m² + n² + 1' });
     });
     add({ id: 'bq.Iu', label: 'Uniform-load influence at the point (superposition of the corner rectangles)', sym: 'I_{u}',
-      eq: '\\sum s_{k} I_{k}', sub: T.terms.map((t, k) => (k ? (t.s < 0 ? ' \\minus ' : ' + ') : (t.s < 0 ? '\\minus ' : '')) + N(t.I, 4)).join(''),
+      eq: '\\sum s_{k} I_{k}', sub: nz.length ? nz.map((t, k) => (k ? (t.s < 0 ? ' \\minus ' : ' + ') : (t.s < 0 ? '\\minus ' : '')) + N(t.I, 4)).join('') : '0',
       value: T.I, unit: '', d: 4, ref: 'superposition, GEC 6 §5.3.2' });
     let gross;
     if (r.method === 'uniform') {
@@ -243,9 +244,11 @@
       const L = linearRect({ B: ld.B, L: ld.L, q0: ld.q0, gx, gy }, x, y, z);
       add({ id: 'bq.qP', label: 'Base pressure above the point (pressure plane of the bearing solution)', sym: 'q(x,y)',
         eq: 'q_{0} + g_{x} x + g_{y} y', sub: N(ld.q0, 3) + ' + ' + P(gx, 4) + '\\cdot ' + P(x, 2) + ' + ' + P(gy, 4) + '\\cdot ' + P(y, 2), value: L.qP, unit: 'ksf', d: 3 });
-      add({ id: 'bq.J', label: 'First moments of the kernel over the footing (closed form)', sym: 'J_{u},\\; J_{v}',
-        eq: '\\sum \\pm \\frac{\\minus z^{3}\\, v}{2\\pi (u^{2}+z^{2})\\sqrt{u^{2}+v^{2}+z^{2}}},\\; \\sum \\pm \\frac{\\minus z^{3}\\, u}{2\\pi (v^{2}+z^{2})\\sqrt{u^{2}+v^{2}+z^{2}}}',
-        sub: '', value: N(L.Ju, 4) + ', ' + N(L.Jv, 4), unit: 'ft', d: 4, note: 'u, v measured from the point to the footing corners' });
+      add({ id: 'bq.Ju', label: 'First moment of the kernel over the footing, in x (closed form)', sym: 'J_{u}',
+        eq: '\\sum \\pm \\frac{\\minus z^{3}\\, v}{2\\pi (u^{2}+z^{2})\\sqrt{u^{2}+v^{2}+z^{2}}}', sub: '', value: L.Ju, unit: 'ft', d: 4,
+        note: 'u, v measured from the point to the footing corners; the signs as for the corner rectangles' });
+      add({ id: 'bq.Jv', label: 'First moment of the kernel over the footing, in y (closed form)', sym: 'J_{v}',
+        eq: '\\sum \\pm \\frac{\\minus z^{3}\\, u}{2\\pi (v^{2}+z^{2})\\sqrt{u^{2}+v^{2}+z^{2}}}', sub: '', value: L.Jv, unit: 'ft', d: 4 });
       gross = add({ id: 'bq.g', label: 'Stress increase from the base pressure (linear, full contact; closed form)', sym: '\\Delta\\sigma_{z,q}',
         eq: 'q(x,y)\\, I_{u} + g_{x} J_{u} + g_{y} J_{v}', sub: P(L.qP, 3) + '\\cdot ' + N(T.I, 4) + ' + ' + P(gx, 4) + '\\cdot ' + P(L.Ju, 4) + ' + ' + P(gy, 4) + '\\cdot ' + P(L.Jv, 4),
         value: r.gross, unit: 'ksf', d: 3, ref: 'Boussinesq point load integrated over the rectangle' });
