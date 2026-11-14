@@ -175,6 +175,8 @@
   button:hover{background:var(--slate-100);border-color:var(--slate-400);}
   #hdrBtns button{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.35);color:#fff;}
   #hdrBtns button:hover{background:rgba(255,255,255,.18);}
+  /* PR 6: Undo / Redo in the header (copy of apps/steel-bridge/index.html's #hdrUR and disabled-button rules) */
+  #hdrUR{display:inline-flex;gap:6px;align-items:center;white-space:nowrap;} #hdrBtns button:disabled{opacity:.4;cursor:default;}
   button.primary{background:var(--color-secondary);color:#fff;border-color:var(--color-secondary);}
   table.tbl{border-collapse:collapse;width:100%;font-size:10pt;margin:6px 0;}
   table.tbl th,table.tbl td{border:1px solid var(--line);padding:3px 5px;text-align:center;}
@@ -310,7 +312,13 @@
         <div class="byline">AASHTO LRFD 10th Ed. (2024) <span id="saveState" aria-live="polite"></span></div>
         <a class="allToolsLink" href="../../tools.html" title="Open the list of all tools">&larr; All tools</a>
       </div>
-      <div id="hdrBtns"><input type="file" id="fImport" accept=".json,application/json" hidden></div>
+      <div id="hdrBtns">
+        <span id="hdrUR"><!-- PR 6: Undo and Redo (the steel app's header, apps/steel-bridge/index.html), kept together when the header wraps -->
+        <button type="button" id="bUndo" title="Undo the last input change (Ctrl+Z)" disabled>Undo</button>
+        <button type="button" id="bRedo" title="Redo (Ctrl+Y or Ctrl+Shift+Z)" disabled>Redo</button>
+        </span>
+        <input type="file" id="fImport" accept=".json,application/json" hidden>
+      </div>
     </div>
   </header>
   <div id="main">
@@ -347,6 +355,11 @@
      from; cur.text = its file text then (M.exportJSON; null: not saved anywhere in the browser). pb: the standard save controls (below). */
   const LIB = window.PSBLibrary, norm = Q => M.exportJSON(Q);
   let pb = null, cur = { id: null, text: null };
+  /* PR 6: Undo / Redo (the steel app's, apps/steel-bridge/index.html "undo / redo"): snapshots of the project text (JSON.stringify(P)), one
+     per project change, the last UNDO_MAX kept, in this page's memory only (nothing is stored: the steel app stores none either). snap = the
+     text of the project on screen; stepNo counts the steps (a notice's Undo is offered only while its change is the last step). */
+  let snap = '', undoS = [], redoS = [], stepNo = 0;
+  const UNDO_MAX = 100;
 
   /* ---------- tabs (docs/ps-bridge-plan.md §2.2 and §2.3) ---------- */
   const TABS = [['proj', 'Project'], ['layout', 'Bridge layout'], ['xsec', 'Cross-section'], ['gird', 'Girders & strands'], ['mat', 'Materials'],
@@ -477,7 +490,7 @@
     // PR 3a-1: in a girder type's scope the edit goes to the type's own inputs (its overrides of the base design)
     const sk = TY.SCOPED.includes(ui.itab) ? scopeK() : -1, V = viewOf(sk);
     if (IN.onChange(el, V)) { if (sk >= 0) BR.setOvr(P, sk, V.base); changed(); const n = IN.takeNote(); if (n) toast(n); return; }
-    const v = el.value, nb0 = P.xs.nb, LT0 = BR.hasTypes(P) ? BR.snapshot(P) : null, undo = JSON.stringify(P);
+    const v = el.value, nb0 = P.xs.nb, LT0 = BR.hasTypes(P) ? BR.snapshot(P) : null;
     if (k === 'num') set(path, v === '' ? NaN : Number(v));
     else if (k === 'list') set(path, parseList(v));
     else set(path, v);
@@ -499,7 +512,7 @@
     if (P.design && Number.isInteger(P.xs.nb) && P.xs.nb >= 1 && P.design.g > P.xs.nb) P.design.g = P.xs.nb;
     if (P.design && P.spans.lengths.length && P.design.s > P.spans.lengths.length) P.design.s = P.spans.lengths.length;
     changed();
-    if (tyNote) toast(tyNote, undo);
+    if (tyNote) toast(tyNote, true);   // PR 6: Undo = the header's Undo of this one step (the count change and the re-assignment together)
   });
   $('inPanes').addEventListener('click', e => {
     const t = e.target, go = t.closest('[data-goin]');
@@ -511,11 +524,30 @@
     { const sk = TY.SCOPED.includes(ui.itab) ? scopeK() : -1, V = viewOf(sk);
       if (IN.onClick(e, V)) { if (sk >= 0) BR.setOvr(P, sk, V.base); changed(); return; } }
   });   // PR 5: Export JSON, Import JSON and New are the standard card's buttons (projectBar, below)
-  function changed() {
+  function changed(restoring) {
     if (autosave) autoFailed = !M.save(LS, P);
+    if (!restoring) record();   // PR 6: one undo step per project change
     drawInputs(); drawOut(); syncBar();
   }
-  function syncBar() { const el = $('saveState'); el.className = autoFailed ? 'err' : ''; el.textContent = autoFailed ? '· Autosave failed: browser storage is full. Export JSON now.' : !autosave ? '· Autosave off (see the note on the output panel).' : '';
+  /* record() (PR 6): the project text now against snap: a change is an undo step (the redo list cleared; the oldest step dropped past
+     UNDO_MAX; the notices' Undo buttons removed, their change is no longer the last). A change of the girder type and line shown only
+     (P.design: the output tabs' choice) is not a step: snap follows it (as the steel app's girder shown, ui.g, is no step). */
+  function record() {
+    const t = JSON.stringify(P); if (t === snap) return;
+    if (snap && onlyShown(snap, t)) { snap = t; return; }
+    undoS.push(snap); if (undoS.length > UNDO_MAX) undoS.shift(); redoS.length = 0; snap = t; stepNo++;
+    document.querySelectorAll('#notices .nUndo').forEach(u => u.remove());
+  }
+  const onlyShown = (a, b) => { try { const x = JSON.parse(a), y = JSON.parse(b); delete x.design; delete y.design; return JSON.stringify(x) === JSON.stringify(y); } catch (e) { return false; } };
+  /* restore(from, to): the newest snapshot of from back on screen (the one on screen goes to to); the results follow (every result is
+     computed from the project on screen, keyed by its inputs: result(), allResults()) */
+  function restore(from, to) {
+    if (!from.length) return; to.push(snap); snap = from.pop(); P = JSON.parse(snap);
+    document.querySelectorAll('#notices .nUndo').forEach(u => u.remove());
+    changed(true);
+  }
+  const undo = () => restore(undoS, redoS), redo = () => restore(redoS, undoS);
+  function syncBar() { $('bUndo').disabled = !undoS.length; $('bRedo').disabled = !redoS.length; const el = $('saveState'); el.className = autoFailed ? 'err' : ''; el.textContent = autoFailed ? '· Autosave failed: browser storage is full. Export JSON now.' : !autosave ? '· Autosave off (see the note on the output panel).' : '';
     if (pb) { pb.refresh(); pb.dialog.refresh(); } }   // PR 5: the saved / unsaved state is the header chip (projectBar)
 
   /* ---------- outputs (placeholders; docs/ps-bridge-plan.md §2.3, §5) ---------- */
@@ -586,7 +618,7 @@
   }
   const runState = () => ({ busy: RUN.busy, stopped: RUN.stopped, i: RUN.i, n: RUN.n, ms: RUN.ms });
   /* pick(k, g): show girder type k on line g (the output tabs' choice, P.design) */
-  function pick(k, g) { const T = P.types && P.types[k]; if (!T) return; P.design = { g, s: T.span }; if (autosave) autoFailed = !M.save(LS, P); drawInputs(); drawOut(); syncBar(); }
+  function pick(k, g) { const T = P.types && P.types[k]; if (!T) return; P.design = { g, s: T.span }; if (autosave) autoFailed = !M.save(LS, P); record(); drawInputs(); drawOut(); syncBar(); }   // PR 6: record (snap follows; no step)
   /* the result of the girder type whose inputs are shown (ui.scope), on its first line: the strand pattern of the Girders & strands tab */
   function scopeResult() { const k = scopeK(), L = k >= 0 ? BR.typeLines(P, k) : []; if (!L.length) return null; const inp = window.PSBDesign.cellInputs(P, k, L[0]); return { inp, R: cellR(inp) }; }
   const TABUI = { sec: () => window.PSBUiSection, lds: () => window.PSBUiLoads, an: () => window.PSBUiAnalysis, loss: () => window.PSBUiLosses, str: () => window.PSBUiStresses, flex: () => window.PSBUiFlexure, shear: () => window.PSBUiShear,
@@ -646,7 +678,7 @@
       if (inp === '1') { ui.itab = tab; saveUi(); drawInputs(); const el = document.getElementById(st); if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('sdFlash'); setTimeout(() => el.classList.remove('sdFlash'), 1600); } }
       else gotoStep(tab, st); return; }
     const sr = e.target.closest('[data-sumrun]'); if (sr) { e.preventDefault(); runCtl(sr.dataset.sumrun); return; }
-    const tc = e.target.closest('[data-tycell]'); if (tc) { e.preventDefault(); const [k, g, tab] = tc.dataset.tycell.split('|'); P.design = { g: +g, s: P.types[+k].span }; if (autosave) autoFailed = !M.save(LS, P); gotoOut(tab); drawInputs(); return; }   // PR 3a-2
+    const tc = e.target.closest('[data-tycell]'); if (tc) { e.preventDefault(); const [k, g, tab] = tc.dataset.tycell.split('|'); P.design = { g: +g, s: P.types[+k].span }; if (autosave) autoFailed = !M.save(LS, P); record(); gotoOut(tab); drawInputs(); return; }   // PR 3a-2
     const gi = e.target.closest('[data-goin]'); if (gi) { e.preventDefault(); ui.itab = gi.dataset.goin; saveUi(); drawInputs(); $('inputPanel').scrollIntoView({ block: 'start' }); return; }
     // a link to another output tab (and to a worked step there): that tab, then the step with its topic opened
     const gt = e.target.closest('[data-gotab]'); if (gt) { e.preventDefault(); gotoOut(gt.dataset.gotab); const h = gt.getAttribute('href') || '';
@@ -656,8 +688,9 @@
     if (window.PSBSumElev && window.PSBSumElev.onChange(e.target)) { drawOut(); return; }   // 2026-11-14: the Summary elevation's girder type (the page session only)
     if (Object.values(TABUI).some(f => f().onOutChange && f().onOutChange(e, ui))) { saveUi(); drawOut(); } });
 
-  /* toast(text, undo): a message (the inputs an owner change set; PR 3a-1: the girder types re-assigned), closed by its button; undo (the
-     project text before the change) adds an Undo button that puts it back. PS-22 (engineer decision, 2026-11-13; display): an inline banner
+  /* toast(text, undo): a message (the inputs an owner change set; PR 3a-1: the girder types re-assigned), closed by its button; undo (true)
+     adds an Undo button that puts back the project before the change (PR 6: the change is the last undo step, made just before the notice:
+     its Undo is the header's Undo, so it can be redone; the button is removed at the next step or Undo / Redo). PS-22 (engineer decision, 2026-11-13; display): an inline banner
      in #notices (between the tab bar and the tab content, in the page flow), newest first; each stays until its Close (or Undo) is clicked;
      the same text again replaces its open banner; Undo only on the newest (an older Undo would put back a project changed since). */
   function toast(text, undo) { const box = $('notices'), n = document.createElement('div');
@@ -665,7 +698,7 @@
     n.className = 'notice'; n.dataset.text = String(text);
     n.innerHTML = `<div>${esc(text)}</div><div class="nBtns">${undo ? '<button type="button" class="nUndo">Undo</button>' : ''}<button type="button" class="nClose">Close</button></div>`;
     box.prepend(n); n.querySelector('.nClose').onclick = () => n.remove();
-    if (undo) n.querySelector('.nUndo').onclick = () => { n.remove(); P = JSON.parse(undo); changed(); };
+    if (undo) { const at = stepNo; n.querySelector('.nUndo').onclick = () => { n.remove(); if (stepNo === at && undoS.length) restore(undoS, redoS); }; }   // PR 6: one step of the history
     const op = $('outputPanel'), top = n.offsetTop - $('tabBar').offsetHeight; if (op.scrollTop > top) op.scrollTop = Math.max(0, top); }   // brought into view below the sticky tab bar
   /* deNotice(): PS-23 (engineer decision, 2026-11-13; display only): on the Loads & LLDF tab, when an exterior line's d_e computed from the
      cross-section (PS-20) differs from the d_e entered, a banner (PS-22 style) naming each line's entered and computed d_e and that the
@@ -711,7 +744,7 @@
      nothing and makes no request. Tool id 'ps-bridge-app' (engineer decision; not the old app's 'bridge-suite'): files
      projects/ps-bridge-app/<name>.json = the stored item text. The token is entered only in that dialog and handled only by
      shared/github-sync.js (sent only to api.github.com); this page never reads it, and it is never in a project or its Export JSON. */
-  const loadAs = (proj, id, textFn) => { P = proj; ui.scope = ''; autosave = true; saveUi(); changed(); cur = { id, text: textFn ? textFn(P) : null }; LIB.setCur(LS, id); syncBar(); };
+  const loadAs = (proj, id, textFn) => { P = proj; ui.scope = ''; autosave = true; saveUi(); undoS = []; redoS = []; snap = JSON.stringify(P); stepNo++; document.querySelectorAll('#notices .nUndo').forEach(u => u.remove()); changed(true); cur = { id, text: textFn ? textFn(P) : null }; LIB.setCur(LS, id); syncBar(); };   // PR 6: a different project: the undo history starts again
   const loadNotes = n => { if (n && n.length) toast(n.join(' ')); };
   const ghIds = () => { const m = new Map(); LIB.list(LS).forEach(i => { if (!m.has(i.name)) m.set(i.name, i.id); }); return m; };   // newest first
   const ghStore = { key: M.KEYS.libIndex, read: () => ({ ok: true, map: {} }), list: () => [...ghIds().keys()].map(name => ({ name })),
@@ -764,6 +797,7 @@
     const r = LIB.save(LS, P, id);
     if (!r.ok) { syncBar(); return { ok: false, message: r.message }; }
     cur = { id: r.id, text: norm(P) }; LIB.setCur(LS, r.id); if (autosave) autoFailed = !M.save(LS, P);
+    record();   // PR 6: the name change, if any (as the steel app)
     drawInputs(); syncBar(); return { ok: true, name: vName(r.id) };
   }
   const snapC = new Map();   // file text of a saved item, by id and saved time ("unsaved changes" and the start-up match)
@@ -787,7 +821,7 @@
     importFile: () => $('fImport').click(),
     exportOne: v => { const i = vItem(v); if (!i) return; const t = LIB.text(LS, i.id); if (t != null) SPUI.download(String(i.name || 'ps-bridge').replace(/[^\w.-]+/g, '_') + '.psb2.json', t); },
     fileButtons: [B_EX, B_IM],
-    header: $('hdrBtns'), card: true,
+    header: $('hdrBtns'), chipBefore: $('hdrUR'), card: true,   // PR 6: chip · Undo · Redo (the steel app's order)
     // the header has the chip only (HDRS, as the steel app): Save and Saved projects… are in the card; Ctrl+S / Ctrl+Shift+S work from anywhere
     headerSave: false, chipClick: () => { const t = document.querySelector('#inTabs [data-itab="proj"]'); if (t) t.click(); const c = $('pbHost'); if (c) c.scrollIntoView({ block: 'nearest' }); }, chipHint: 'the Project tab (Save and open)',
     renamed: () => { if (lastRen && lastRen.id === cur.id) { const q = M.importJSON(lastRen.text); if (q.ok) { P.project.name = q.project.project.name; cur.text = norm(q.project); } changed(); } lastRen = null; },
@@ -798,6 +832,19 @@
       fromFile: (j, n) => { const r = M.importJSON(JSON.stringify(j)); if (!r.ok) throw new Error(r.error); r.project.project.name = n; return r.project; } } } : {}) });
   B_EX.addEventListener('click', () => exportFile(P));
   B_IM.addEventListener('click', () => pb.importJSON());   // asks first on unsaved changes, then the file chooser
+  /* PR 6: Undo / Redo buttons and keys, as the steel app: Ctrl+Z undo, Ctrl+Y or Ctrl+Shift+Z redo (⌘ on a Mac). Text being typed in a field
+     (an input event since its last change / blur) keeps the browser's own undo of that field; nothing while a dialog is open. */
+  $('bUndo').addEventListener('click', undo); $('bRedo').addEventListener('click', redo);
+  document.addEventListener('input', e => { if (e.target && e.target.dataset) e.target.dataset.typing = '1'; }, true);
+  document.addEventListener('change', e => { if (e.target && e.target.dataset) delete e.target.dataset.typing; }, true);
+  document.addEventListener('blur', e => { if (e.target && e.target.dataset) delete e.target.dataset.typing; }, true);
+  document.addEventListener('keydown', e => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return; const k = (e.key || '').toLowerCase(), t = e.target;
+    if (t && t.dataset && t.dataset.typing) return;   // text being typed in a field: the browser's own undo for that field
+    if (document.querySelector('dialog[open]')) return;   // a dialog is open (Saved projects, Save as, Cloud sync)
+    if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); } else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
+  });
+  snap = JSON.stringify(P);   // PR 6: the project as opened is the start of the history
 
   drawInputs(); drawOut(); syncBar();
   if (L.notes && L.notes.length) toast(L.notes.join(' '));   // PR 3a-1 / 3a-4: what the load migrated or restored (stored with the next change)
