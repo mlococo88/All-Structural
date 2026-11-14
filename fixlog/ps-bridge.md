@@ -3439,7 +3439,7 @@ PR #1550: https://github.com/mlococo88/All-Structural/pull/1550
 - LL-D4. DXF download of the figure: not done (optional in the request). shared/dxf.js would need a second drawing of the same figure in CAD primitives.
 
 ## 2026-11-14 — PR 8a: Summary girder elevation, one per girder type (picker), with the strand profile, ℓ_t / ℓ_d and the governing checks where they govern (display only)
-PR: (link below)
+PR #1552: https://github.com/mlococo88/All-Structural/pull/1552
 ### Request
 - PS Bridge catch-up to the Steel Bridge app, item 8, Summary elevation. Engineer's choice, corrected on 2026-11-14: one elevation per girder type, chosen with a picker, not one per span.
 - Each elevation is drawn for that type's governing line and span. It shows the girder elevation, the strand profile (draped, debonded, hold-down points), the transfer and development lengths, and the governing check of each kind marked where it governs, each linking to its check's tab. Steel's `SBDAlongGfx.summarySvg` is the reference.
