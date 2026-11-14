@@ -3354,7 +3354,7 @@ PR #1549: https://github.com/mlococo88/All-Structural/pull/1549
 - SUMG-D2. The Report shows the plan once, in §2 (Project, basis and assumptions), and refers to the existing cross-section figure of the Loads & LLDF section (§4, one per worked girder) rather than drawing it twice.
 
 ## 2026-11-14 — Loads & LLDF: lanes, wheels and the lever-rule influence line, with an LLDF case switch (display only)
-PR: (link below)
+PR #1550: https://github.com/mlococo88/All-Structural/pull/1550
 ### Request
 - PS Bridge catch-up to the Steel Bridge app, item 7:
   - on the Loads & LLDF sketch, a case switch like Steel's (lever rule one lane / multi-lane / rigid section, where the engine uses each);
