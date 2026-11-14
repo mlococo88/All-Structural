@@ -50,6 +50,7 @@ const pickRows = p => p.evaluate(() => [...document.querySelectorAll('#bxFlPkOve
 const snap = p => p.evaluate(() => {
   const js = v => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(v, (k, x) => { if (typeof x === 'function') return undefined; if (x && typeof x === 'object') { if (seen.has(x)) return '[cyc]'; seen.add(x); } return (typeof x === 'number' && !isFinite(x)) ? String(x) : x; })); };
   const st = js(state); if (st.bxSrc && st.bxSrc.foundationLoads) delete st.bxSrc.foundationLoads.adoptedAt;
+  delete st.bous;   // SFBQ (2026-11-14): the Bearing 3.5 display inputs (absent on a main before SFBQ-2; no result depends on them)
   const Rj = js(R); (Rj.peds || []).forEach(q => delete q.pf); return { state: st, R: Rj, P2: js(P2) }; });
 // origin/main has the SFPK picker since #1422: on main, take its preselected row when it opens
 async function mainPull(p) { await pull(p); await p.waitForSelector('#bxFlPkOverlay, #bxFlGo', { timeout: 15000 }); if (await p.$('#bxFlPkOverlay')) await p.click('#bxFlPkNext'); return importNow(p); }
