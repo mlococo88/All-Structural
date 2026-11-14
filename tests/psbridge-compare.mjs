@@ -44,6 +44,12 @@
 //   ps10.* and its check) have no counterpart in the old app: they are compared with hand values worked here from the inputs and the old
 //   app's own f_pbt, A_b and w_sw (F_hd = 2 n_h f_pbt A_b sin α, α = atan((y_end − y_mid)/(12 frac L)), W = w_sw (L + 2 e_end/12), limit f W),
 //   to 1e-12 (relative) and as shown; every other value is compared with the old app exactly, as before.
+//   PS-30 / PS-31 (engineer decisions 2026-11-14): a design on a standard box beam / voided slab of the CTDOT plates (engine/sections.js;
+//   the frozen old app has the old, wrong entries): the old app's engine computes the same inputs with the plate's entry put in its GIRDERS
+//   under the new name (every other value compared as before), the new page's gross section must be the plate's, and the old app's values
+//   with the old entry are logged (before / after). The old page is opened on the inputs with the old library name. --import: the old app's
+//   data hold the old name; the import summary must say the results are the same (the import, with the old app's section values) and show
+//   the section-corrected alert (#lgSec, old → new name); the imported project's inputs = the case's (the corrected name).
 // Exit code: 0 every value equal, 1 a difference, 2 an error (a page did not load, a console error).
 import fs from 'fs';
 import path from 'path';

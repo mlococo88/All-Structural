@@ -13,6 +13,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { loadShared, test, ROOT } from './harness.mjs';
+import { TAB_CASES } from './psbridge-tab-cases.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
@@ -92,7 +93,7 @@ test('PS-31 (3): every old name migrates on open (importJSON) to the standard se
     const it = Q.legacySection.items[0];
     assert.deepEqual(J(it), { where: 'base', label: 'Base design', from, to, old: { h: S.LEGACY[from].h, w: S.LEGACY[from].w, A: S.LEGACY[from].A, I: S.LEGACY[from].I, yb: S.LEGACY[from].yb },
       now: { h: G[to].h, w: G[to].w, A: G[to].A, I: G[to].I, yb: G[to].yb } });
-    assert.match(r.notes.join(' '), new RegExp(`section corrected \\(PS-31\\): "${from.replace(/[()]/g, '\\$&')}" → "${to.replace(/[()]/g, '\\$&')}"`));
+    assert.ok(r.notes.join(' ').includes(`Girder section corrected on open (PS-31): Base design "${from}" → "${to}". See the notice above the results.`), r.notes.join(' '));
     assert.equal(t, W.PSBModel.exportJSON(P), 'the stored text is not changed by reading it');
     // a second open: nothing more
     const r2 = W.PSBModel.importJSON(W.PSBModel.exportJSON(Q)); assert.deepEqual(J(r2.project.legacySection), J(Q.legacySection)); assert.equal(r2.notes.filter(n => /PS-31/.test(n)).length, 0);
@@ -161,9 +162,9 @@ test('PS-31 §4 check cases: before / after (printed)', () => {
         checks: R.checks.map(c => `${c.n}: v ${(+c.v).toFixed(3)} lim ${(+c.lim).toFixed(3)} r ${(+c.r).toFixed(3)} ${c.pass ? 'PASS' : 'FAIL'}`) }; };
     rows.push({ label, before: k(Ro), after: k(Rn) });
   };
-  const P1 = proj('AASHTO BIII-36 (39in)'); P1.base.deck.on = true; P1.base.handling.on = true;   // = harness B "box BIII-36 with a 6 in topping …"
+  const P1 = TAB_CASES(() => W.PSBModel.defaultProject())['box BIII-36 with a 6 in topping, deck on (S below 4 ft), handling on'];   // the harness B design
   run('BIII-36 with a 6 in topping (harness B)', P1, 'AASHTO BIII-36 (27in)');
-  const P2 = W.PSBModel.newProject(); P2.base.girder = 'AASHTO BI-36 (27in)'; P2.xs.bays = [3, 3, 3, 3]; P2.spans.lengths = [60]; P2.base.harp.n = 0; P2.base.ts = 0;
-  run('BI-36 default strand rows, no topping, 60 ft', P2, 'AASHTO BI-36 (12in)');
+  const P2 = W.PSBModel.defaultProject(); P2.base.girder = 'AASHTO BI-36 (27in)'; P2.xs.bays = [3, 3, 3, 3]; P2.spans.lengths = [60]; P2.base.harp.n = 0; P2.base.ts = 6;
+  run('BI-36 default strand rows, 6 in topping, 60 ft', P2, 'AASHTO BI-36 (12in)');
   fs.writeFileSync(path.join(process.env.TMPDIR || '/tmp', 'ps31-checkcases.json'), JSON.stringify(rows, null, 1));
 });

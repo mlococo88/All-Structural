@@ -148,7 +148,7 @@
     if (!found.length) return '';
     if (!isObj(P.legacySection) || !Array.isArray(P.legacySection.items)) P.legacySection = { decision: 'PS-31 (engineer 2026-11-14)', items: [] };
     found.forEach(it => { if (!P.legacySection.items.some(q => q.where === it.where && q.from === it.from)) P.legacySection.items.push(it); });
-    return found.map(text).join(' ');
+    return `Girder section corrected on open (PS-31): ${found.map(it => `${it.label} "${it.from}" → ${it.to ? `"${it.to}"` : 'removed from the library (input error)'}`).join('; ')}. See the notice above the results.`;
   }
   const items = P => (isObj(P) && isObj(P.legacySection) && Array.isArray(P.legacySection.items) ? P.legacySection.items.filter(isObj) : []);
   const cite = n => { const s = STD[n] && STD[n].src; return s ? `CTDOT BDM plate ${s.plate}, PDF p. ${s.page}` : ''; };
