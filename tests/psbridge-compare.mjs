@@ -63,7 +63,7 @@ const IMPORT = !!args.import, IMP_WAYS = ['autosave', 'shared', 'older', 'file']
 const TMP = IMPORT ? fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'psb2f-b-')) : '';
 let nImp = 0, nImpKeys = 0; const impNotes = [];
 const SEED = { 'psbeam.inputs.v1': '{"girder":"PCI BT-72","L":118}', 'psbeam.ui.v1': '{"tab":"losses"}' };
-let fails = 0, errors = 0;
+let fails = 0, errors = 0, n29 = 0; const d29 = [];   // PS-29
 const log = s => console.log(s);
 // reloadKept(p, name, o, wait): reload the new page and check that the keys o the harness just put are in the reloaded page's storage, each
 // value as put. 2026-11-13 (PR PS-19): now and then the reloaded page saw a store with none of them (only the seed and psb2.ui: the page's
@@ -134,7 +134,7 @@ for (const name of names) {
     impNotes.push({ name, how, ok: /Results: the same as the old app/.test(imp.res), res: imp.res.slice(0, 160), sameInp: JSON.stringify(strip(imp.i)) === JSON.stringify(strip(inp)), changed: imp.changed, ctl, note: imp.note, wantNote });
     nImpKeys += Object.keys(seed.o).length + (how === 'file' ? 1 : 0);
   }
-  const shown = [], steps = []; let ps10 = null, k10 = -1, colOwn = null;
+  const shown = [], steps = []; let ps10 = null, k10 = -1, colOwn = null, ps29 = null;
   for (const t of tabs) {
     await nw.p.click(`#tabBar [data-otab="${t}"]`); await nw.p.waitForTimeout(250);
     const r = await nw.p.evaluate(([t, wk]) => {
@@ -148,6 +148,8 @@ for (const name of names) {
     }, [t, TABS[t]]);
     if (r.err) { log(`ERROR ${name} / ${t}: the new page's engine: ${r.err}`); errors++; }
     shown.push(...r.ev); steps.push(...r.st); ps10 = r.ps10; k10 = r.k10;
+    if (t === 'loss') ps29 = await nw.p.evaluate(() => { const c = document.getElementById('card-gain'), e = c && c.querySelector('[data-ev="fpeGain"]'), n = document.getElementById('gain-ss-note');
+      return { gain: e ? e.textContent : null, note: n ? n.textContent : null }; });
   }
   // 2026-11-13: the Owner rules input tab (the owner's material checks: the engine's value, limit and ratio in its rules table) and the check
   // summary column (its PASS / FAIL totals count every engine check of the design, the owner's limits in "Owner limits")
@@ -198,7 +200,10 @@ for (const name of names) {
     const hand = { alpha: al, Fstr, Ftot, Lg, W: Wb, lim, frac: f, nh: +h.n, slope: Math.tan(al), r: Ftot / lim, loc: R.ss.hp.frac * L, applies: !(R.own && R.own.hd) && i.opt.hdCheck !== false && +h.n > 0 };
     // PR 2e: the old app's own report (psrModel): the "Design summary" table and key quantities, as text
     let orpt = null; try { const M = psrModel(i, R), it = M.sections[0].subs[0].items; orpt = { rows: it[0].rows.map(r => r.cells.map(c => (c && typeof c === 'object' ? c.t : c))), kv: it[1].rows.map(r => [r[0], r[1]]) }; } catch (e) { orpt = { err: String(e && e.message) }; }
-    return { vals, err: R.error, loaded, hand, oldChecks: R.checks.length, orpt };
+    // PS-29: the old Losses tab's displayed "f_pe with permanent gains credited" (f_pe + Δf_p,perm + Δf_pSS, its line ~6663) and the parts
+    // of the new value worked here from the old app's components
+    const ps29 = { fpe: R.fpe, pc: R.gains.precast, cmp: R.gains.composite, ss: R.gains.deckShr, refd: i.opt.lossMethod === 'refined', oldShown: R.fpeGain + R.gains.deckShr };
+    return { vals, err: R.error, loaded, hand, oldChecks: R.checks.length, orpt, ps29 };
   }, [inp, paths]);
   if (o.err) { log(`ERROR ${name}: the old app's engine: ${o.err}`); errors++; continue; }
   const same = JSON.stringify(o.loaded) === JSON.stringify(inp);
@@ -217,6 +222,15 @@ for (const name of names) {
     if (!near(q.v, hv) || q.text !== want) bad.push(`PS-10 ${q.tab} ${q.path}: shown "${q.text}" (${q.v}) vs hand ${hv} -> "${want}"`); });
   steps.filter(q => isPS10(q.path)).forEach(q => { n10++; const hv = handOf(q.path); if (!q.onTab) bad.push(`${q.tab} step ${q.id} not on the tab`); if (!near(q.v, hv)) bad.push(`PS-10 step ${q.id} (${q.path}): ${q.v} vs hand ${hv}`); });
   total10 += n10;
+  // PS-29 (engineer decision, 2026-11-14): the one intended difference from the old app's display. The old Losses tab shows f_pe with the
+  // permanent gains as f_pe + Δf_p,perm + Δf_pSS (Δf_pSS counted twice in the refined method, credited without a loss term in the
+  // approximate one); the new tab shows f_pe + Δf_p,DC1 + Δf_p,SD, computed here independently from the old app's components, and the note
+  // states Δf_pSS (refined: already in Δf_pLT, 5.9.3.4.3; approximate: not credited). The engine's fpeGain (compared above) is unchanged.
+  if (ps29 && tabs.includes('loss')) { const q = o.ps29, want = q.fpe + q.pc + q.cmp + (args.control ? 0.01 : 0), wantTxt = fx(want, 2);
+    n29++; if (ps29.gain !== wantTxt) bad.push(`PS-29 loss: f_pe with the permanent gains shown "${ps29.gain}" vs f_pe + Δf_p,DC1 + Δf_p,SD = ${wantTxt}`);
+    if (fx(q.oldShown, 2) !== wantTxt) d29.push(`${name}: old display ${fx(q.oldShown, 2)} (+ Δf_pSS ${fx(q.ss, 2)}) -> new ${wantTxt} ksi`);
+    const ssTxt = fx(q.ss, 2) + ' ksi', re = q.refd ? /^Δf.?pSS = .* is already in the long-term loss Δf.?pLT \(refined method, 5\.9\.3\.4\.3/ : /^Δf.?pSS \(.*\) is not credited: the approximate method \(5\.9\.3\.3\)/;
+    if (!ps29.note || !ps29.note.includes(ssTxt) || !re.test(ps29.note)) bad.push(`PS-29 loss: the Δf_pSS note "${ps29.note}" (expected ${q.refd ? 'refined' : 'approximate'}, Δf_pSS = ${ssTxt})`); }
   shown.filter(q => !isPS10(q.path)).forEach(q => { const ov = o.vals[q.path], want = fx(q.div ? ov / q.div : ov, q.d);
     if (typeof ov !== 'number' || q.text !== want || !Object.is(q.v, ov)) bad.push(`${q.tab} ${q.path}: shown "${q.text}" (${q.v}) vs old ${ov} -> "${want}"`); });
   steps.filter(q => !isPS10(q.path)).forEach(q => { const ov = o.vals[q.path]; if (!q.onTab) bad.push(`${q.tab} step ${q.id} not on the tab`); if (!Object.is(q.v, ov)) bad.push(`${q.tab} step ${q.id} (${q.path}): ${q.v} vs old ${ov}`); });
@@ -269,6 +283,7 @@ const other = Object.keys(ls).filter(k => !k.startsWith('psb2.') && !(k in SEED)
 if (other.length) { fails++; log('DIFF storage: keys other than psb2.* written: ' + other.join(', ')); }
 const cerr = nw.errs.concat(old.errs.filter(e => !/Failed to load resource|deoptimised the styling/.test(e)));
 if (cerr.length) { errors++; log('ERROR console: ' + cerr.slice(0, 5).join(' | ')); }
+if (n29) { log(`PS-29: ${n29} designs, the shown f_pe with the permanent gains = f_pe + Δf_p,DC1 + Δf_p,SD (worked here); intended differences from the old app's display (Δf_pSS no longer added): ${d29.length}`); d29.forEach(t => log('    ' + t)); }
 await nw.b.close(); await old.b.close();
 if (IMPORT) fs.rmSync(TMP, { recursive: true, force: true });
 log(`${names.length} designs${IMPORT ? ` imported through "From the old app" (${IMP_WAYS.map(w => `${w} ${impNotes.filter(q => q.how === w).length}`).join(', ')}; ${nImpKeys} old keys / files, each unchanged; ${impNotes.filter(q => q.ok).length} summaries "the same")` : ''}, tabs ${tabs.join(', ')}${REPORT ? ', rpt' : ''}${OWN ? ', own (the Owner rules table and the check summary column)' : ''}: ${total} shown values and ${totalSteps} step values compared (of them ${total10} PS-10 values with the hand values, the rest with the old app; the Report ${totalRpt} values and ${totalRptSteps} step values, and ${totalOldRpt} numbers of the old app's own report); ${fails} with differences, ${errors} errors`);

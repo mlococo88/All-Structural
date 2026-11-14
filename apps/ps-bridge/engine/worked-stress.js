@@ -113,7 +113,10 @@
     const MllG = epc !== 0 ? gn.live * Ecf * cp.Ic / (Ep * epc) : NaN;
     add({ id: 'gain.ll', label: 'Elastic gain from LL+IM on the composite section (transient)', sym: '\\Delta f_{p,LL}', eq: '\\frac{E_{p}}{E_{c}}\\frac{M_{LL+IM}\\,e_{pc}}{I_{c}}', sub: `\\frac{${n(Ep, 0)}}{${n(Ecf, 0)}}\\frac{${g(MllG, 0)}(${n(epc, 3)})}{${g(cp.Ic, 0)}}`, value: gn.live, unit: 'ksi', d: 3, note: 'M_LL+IM: the engine\'s live-load envelope at midspan (kip-in). Credited only in combinations with live load; not used by the checks.' }, undefined, 'gains.live');
     add({ id: 'gain.perm', label: 'Permanent elastic gains', sym: '\\Delta f_{p,perm}', eq: '\\Delta f_{p,DC1} + \\Delta f_{p,SD}', sub: `${n(gn.precast, 3)} + ${n(gn.composite, 3)}`, value: gn.permanent, unit: 'ksi', d: 3 }, gn.precast + gn.composite, 'gains.permanent');
-    add({ id: 'gain.fpe', label: 'Effective prestress with the permanent elastic gains credited', sym: 'f_{pe,gain}', eq: 'f_{pe} + \\Delta f_{p,perm}', sub: `${n(R.fpe, 2)} + ${n(gn.permanent, 3)}`, value: R.fpeGain, unit: 'ksi', d: 2, note: 'The margin the gains give: the service checks use f_pe without gains (conservative).' }, R.fpe + gn.permanent, 'fpeGain');
+    const fx2 = v => (Math.abs(v) < 0.005 ? 0 : v).toFixed(2);   // PS-29: plain-text value in the step's note
+    add({ id: 'gain.fpe', label: 'Effective prestress with the permanent elastic gains credited', sym: 'f_{pe,gain}', eq: 'f_{pe} + \\Delta f_{p,perm}', sub: `${n(R.fpe, 2)} + ${n(gn.permanent, 3)}`, value: R.fpeGain, unit: 'ksi', d: 2, note: 'The margin the gains give: the service checks use f_pe without gains (conservative). ' + (inp.opt.lossMethod === 'refined'
+        ? `The deck shrinkage gain Δf_pSS = ${fx2(gn.deckShr)} ksi is already in the long-term loss Δf_pLT (refined method, 5.9.3.4.3) and is not added again.`
+        : `The deck shrinkage gain Δf_pSS (${fx2(gn.deckShr)} ksi) is not credited: the approximate method (5.9.3.3) has no deck shrinkage term.`) }, R.fpe + gn.permanent, 'fpeGain');
     // stages of one strand row (the table covers every row)
     const S = R.strandStages, r0 = S.rows[0];
     if (r0) {
