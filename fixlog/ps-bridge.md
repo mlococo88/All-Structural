@@ -3618,7 +3618,9 @@ PR #1556: https://github.com/mlococo88/All-Structural/pull/1556
 - Adjacent boxes as drawn: A −0.98 to −1.80, I −0.82 to +0.29, y_b +0.16 to +0.26. With the chamfers but no shear keys: A +0.72 to +1.31 % (a constant 7.13 in² over every depth and both widths), I +0.95 to +1.29 %: the table removes a fixed key area; the key size of dwg 10.2.9 is not read with confidence (listed).
 - Deck beams as drawn: A +1.60 to +4.49, I +1.17 to +2.15, y_b +0.29 to +0.48 (S36-21 and S48-21 the most): the shear keys of dwg 10.1.9 (a recess growing with the depth: about 7.9 in² at 12 in to 21.9 in² at 21 in) are not drawn (listed).
 ### How verified
-- RESULTS_PLACEHOLDER
+- `node tests/check-syntax.mjs`: all scripts pass. `node tests/engine/run.mjs psbridge tex project-registry`: 32 files, 341 passed, 0 failed (after merging main); new `tests/engine/psbridge-massdot.test.mjs` (5 tests: the library = the sheets, transcribed again; the outline integration table above; every section computes with no input error, its distribution type, the NEXT D width, worked steps = engine; the picker's optgroups; every existing shape byte-identical with the wrappers); updated: ps33, sections, strandfit, voidnote (the MassDOT entries in their loops).
+- Harness B: normal 19 designs, 48,356 shown values and 8,392 step values, 0 differences (exit 0); `--import` 0 differences (exit 0); `--control` and `--import --control`: 19 with differences, exit 1. No harness design uses a MassDOT section: no difference expected.
+- Smokes (one at a time): ps-bridge-skeleton 271 / 0 failed, ps-bridge-types 106 / 0, ps-bridge-3d 101 / 0, ps-bridge-figures 225 / 0, ps-bridge-library 11 / 0.
 ### Decisions (pending engineer review)
 - PS37-D1. Names and groups: "MassDOT …" names; the old library's 'NEXT 24F'–'36F' keep their names and values (group "PCI Northeast — NEXT F (old library)"); the MassDOT NEXT F are separate entries with the sheet's 4 in flange (the old entries' flangeT 8 is not the sheet's: open item).
 - PS37-D2. NEDBT 80: y_b = 46.40 in, not the printed 46.60 (y_t 33.60 in, the 80 in depth and S_b = I / y_b = 25,944 in³ all give 46.40).
