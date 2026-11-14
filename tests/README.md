@@ -14,6 +14,10 @@ The tools stay single, self-contained HTML files with no build step and no npm (
 ## Commands (run from the repository root)
 
 ```bash
+# tests/lib.mjs openPage(file, { ls }): the localStorage seed is written once, before the first load (a blank file:// page, then the tool),
+# never again on a reload (SEED1, 2026-11-14: before, an init script re-seeded whenever Chromium had dropped the tab's sessionStorage marker)
+node tests/smoke/lib-seed-once.mjs
+
 # GirderDetail: origin/main vs the working tree, built-in project, owner AASHTO (Tier 1)
 node tests/compare.mjs --tool gd
 
