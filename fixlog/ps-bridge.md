@@ -3211,7 +3211,7 @@ PR #1544: https://github.com/mlococo88/All-Structural/pull/1544
 - `Prestressed Bridge Design.html` (frozen): type (k) for the solid slabs; not changed.
 
 ## 2026-11-14 — PR 5: saved projects and GitHub sync (the steel app's standard save: header chip, Save / Save as… / Saved projects…, Ctrl+S; Cloud sync as 'ps-bridge-app') (no calculation change)
-PR #PR5NUM: https://github.com/mlococo88/All-Structural/pull/PR5NUM
+PR #1546: https://github.com/mlococo88/All-Structural/pull/1546
 ### Request
 - Catch-up to the Steel Bridge app (apps/steel-bridge/, STDS-B 2026-11-06 and GHS2 2026-11-05): a saved-project list in the browser with the standard save controls, and GitHub sync of that list. Engineer's decision: the new app syncs under its own tool id `'ps-bridge-app'` (not the old app's `'bridge-suite'`).
 ### Problem
@@ -3233,7 +3233,7 @@ PR #PR5NUM: https://github.com/mlococo88/All-Structural/pull/PR5NUM
 - The open project's autosave `psb2.project.current` is unchanged (key, format, when it is written): an existing user's project opens exactly as before (smoke 1: the text byte-identical after the page opens; the chip says "not saved" until it is saved to the list). `psb2.ui` unchanged.
 - New keys, written only on Save / Save as / Rename / Duplicate / Delete / Open: `psb2.lib.index` (`{ schema: 'psb2.library', version: 1, items: [{ id, name, number, saved, size }] }`), `psb2.lib.p.<id>` (the Export JSON text), `psb2.lib.current` (`{ id }`), and `psb2.lib.index.unreadable.<ISO time>` (only if the index cannot be read: its text kept). All `psb2.`-prefixed (Chromium's shared file:// origin).
 - Only once Cloud sync is set up by the user (shared/github-sync.js, unchanged): `bridgeSuite.v1.githubSync` (the one setup of every tool in this browser, with the token), `bridgeSuite.v1.githubSync.tool.ps-bridge-app`, `bridgeSuite.v1.githubSync.presence.ps-bridge-app`, `.live`, `.deviceId`. Named per tool by the shared file; nothing is written while sync is off.
-- The JSON export format is unchanged: the Export JSON text = the stored item text = `M.exportJSON(P)`; export → import → export is byte-identical for the 20 result-tab designs, `newProject`, `defaultProject` and an old-app import (Node test).
+- The JSON export format is unchanged: the Export JSON text = the stored item text = `M.exportJSON(P)`; export → import → export is byte-identical for the 19 result-tab designs, `newProject`, `defaultProject` and an old-app import (Node test).
 - The token: typed only in the Cloud sync dialog, kept and sent only by shared/github-sync.js (Authorization header to api.github.com). This page never reads it; it is not in a project, an exported file, a URL, the page text or the console (smoke 7).
 ### Governing provisions (CLAUDE.md §4)
 - None: no formula, factor, unit or reference changed; no result changes (harness B 0 differences).
