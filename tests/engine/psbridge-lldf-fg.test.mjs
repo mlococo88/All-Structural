@@ -64,9 +64,10 @@ test('PS-35 (2) BIII-36 (39in), 60 ft, 6 in topping: type (f), composite I_c and
 
 test('PS-35 (3) SIV-48 (21in), 50 ft, 6 beams: the voided slab as one closed cell (plate voids); I < 40,000 in⁴: shear = max(shear eq., moment), flagged', () => {
   const { R } = run(proj('AASHTO SIV-48 (21in)', 0, 50, 6, 3)), f = R.df.fg;
-  // voids Ø12 at ±14, Ø10 at 0 (y = 10.5): t_w = 23.75 − 14 − 6 = 3.75; t_b = t_t = 10.5 − 6 = 4.5; b0 = 43.75; h0 = 21 − 4.5 = 16.5
-  near(f.jw.tw, 3.75); near(f.jw.tb, 4.5); near(f.jw.tt, 4.5); near(f.jw.b0, 43.75); near(f.jw.h0, 16.5);
-  const S = 2 * 43.75 / 4.5 + 2 * 16.5 / 3.75, Jh = 4 * (43.75 * 16.5) ** 2 / S; near(f.J, Jh); near(Jh, 73799.3, 1e-5);
+  // voids Ø12 at ±14.25 (PS-40; ±14 before: t_w 3.75, J 73,799.3), Ø10 at 0 (y = 10.5): t_w = 23.75 − 14.25 − 6 = 3.5; t_b = t_t = 10.5 − 6 = 4.5;
+  // b0 = 44; h0 = 21 − 4.5 = 16.5
+  near(f.jw.tw, 3.5); near(f.jw.tb, 4.5); near(f.jw.tt, 4.5); near(f.jw.b0, 44); near(f.jw.h0, 16.5);
+  const S = 2 * 44 / 4.5 + 2 * 16.5 / 3.5, Jh = 4 * (44 * 16.5) ** 2 / S; near(f.J, Jh); near(Jh, 72739.95, 1e-6);
   const IJ = 33759 / Jh, k = 2.5 * 6 ** -0.2, b = 47.5, L = 50;
   const m1 = k * (b / (33.3 * L)) ** 0.5 * IJ ** 0.25, m2 = k * (b / 305) ** 0.6 * (b / (12 * L)) ** 0.2 * IJ ** 0.06;
   const v1 = (b / (130 * L)) ** 0.15 * IJ ** 0.05, v2 = (b / 156) ** 0.4 * (b / (12 * L)) ** 0.1 * IJ ** 0.05 * Math.max(b / 48, 1);

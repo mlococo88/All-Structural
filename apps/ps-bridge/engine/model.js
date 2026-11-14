@@ -50,6 +50,12 @@
                       engine/sections.js migrate): base.girder / types[].ovr.girder become the corrected standard section of the same name (to;
                       null for 'Deck slab 27×48 (voided)': no standard within ±3 in, left as it is and an input error) and the old library
                       values are kept here (old). Nothing reads it for a calculation; the page's notice and the Report's §2 state it.
+                      2026-11-14 (PS-38 / PS-40): items { kind: 'rev', rev: 'PS-38' | 'PS-40', where, label, from, to (the same name), old, now }
+                      record a section whose library values changed since the project was saved (NEXT 28F I at 144 in; a CTDOT voided slab's
+                      void spacing): written once on open when secLib is below the library's (below).
+     secLib:  number  added 2026-11-14 (PS-38 / PS-40), optional within version 1: the section library revision the project was last opened
+                      with (engine/sections.js LIB, 2). Absent (every project saved before): the open-time check above runs once and writes it;
+                      a new project (newProject) has it. Nothing reads it for a calculation.
    }
    Needs the moved engine (engine/pbd-*.js) loaded first for base; without it (a test of this file alone) base is left as it is.
    From PR 2b the engine computes the design girder from base and the bridge values (engine/design.js). */
@@ -88,6 +94,7 @@
      span 1. defaultProject() itself is unchanged (the tests and harnesses use it). Without engine/bridge.js loaded: defaultProject(). */
   function newProject() {
     const p = defaultProject(), B = typeof window !== 'undefined' && window.PSBBridge;
+    if (typeof window !== 'undefined' && window.PSBSections && p.base) p.secLib = window.PSBSections.LIB;   // PS-38 / PS-40: today's section library
     if (!B || !p.base) return p;
     p.types = B.newTypes(p); p.design = { g: Math.min(2, p.xs.nb), s: 1 };
     if (window.PSBBridgeDL) p.xs.dl = window.PSBBridgeDL.defaults(p);   // PR 3a-3: DC2 / DW distributed (PS-9)
