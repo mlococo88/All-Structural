@@ -3437,3 +3437,33 @@ PR #1550: https://github.com/mlococo88/All-Structural/pull/1550
 - LL-D2. In the rigid case the lanes are drawn from the traffic face with each lane resultant 5 ft inside its lane edge. This is the engine's e_j = X_ext + d_e − 5 − 12 j: the wheel pair 2 ft and 8 ft inside each lane. The engine places no wheels for it; the wheels drawn are those the resultant implies.
 - LL-D3. The case choice is per page session (not saved). The Report shows both cases for an exterior unit.
 - LL-D4. DXF download of the figure: not done (optional in the request). shared/dxf.js would need a second drawing of the same figure in CAD primitives.
+
+## 2026-11-14 — PR 6: Undo / Redo in the header (100 steps, Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z, as the Steel Bridge app); the girder count notice's Undo is a step of it (no calculation change)
+PR #1551: https://github.com/mlococo88/All-Structural/pull/1551
+### Request
+- Catch-up to the Steel Bridge app (apps/steel-bridge/index.html, "undo / redo"): header Undo / Redo with a 100-step history and Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z; typing in a field keeps its own undo; integrated with the girder count change notice's Undo (PR 3a-1); results follow an Undo.
+### Problem
+- No Undo / Redo except the girder count notice's own Undo, which put back a stored project text (`P = JSON.parse(undo); changed();`): that "undo" was itself a new change and could not be redone.
+### What changed (`apps/ps-bridge/index.html` only)
+- Header: in `#hdrBtns` before `#fImport`, `<span id="hdrUR"><button id="bUndo" title="Undo the last input change (Ctrl+Z)" disabled>Undo</button><button id="bRedo" title="Redo (Ctrl+Y or Ctrl+Shift+Z)" disabled>Redo</button></span>` (the steel app's markup); CSS `#hdrUR{display:inline-flex;gap:6px;align-items:center;white-space:nowrap;} #hdrBtns button:disabled{opacity:.4;cursor:default;}` (the steel app's rules); projectBar `chipBefore: $('hdrUR')` (order chip · Undo · Redo).
+- State after `let pb = null, cur = …`: `let snap = '', undoS = [], redoS = [], stepNo = 0; const UNDO_MAX = 100;` (memory only).
+- `changed()` → `changed(restoring)`: `if (!restoring) record();` after the autosave. New `record()`: `t = JSON.stringify(P)`; unchanged → nothing; only `P.design` differs (the girder type / line shown) → `snap = t` (no step); else `undoS.push(snap)` (oldest dropped past 100), `redoS.length = 0`, `snap = t`, `stepNo++`, the notices' Undo buttons removed. New `restore(from, to)`, `undo`, `redo` (the steel app's: `to.push(snap); snap = from.pop(); P = JSON.parse(snap); changed(true)`).
+- `syncBar()`: `$('bUndo').disabled = !undoS.length; $('bRedo').disabled = !redoS.length;` first.
+- `pick()` and the `[data-tycell]` click: `record()` after their autosave (P.design only: snap follows).
+- `toast(text, undo)`: `undo` is now `true` (not the project text). Before: `n.querySelector('.nUndo').onclick = () => { n.remove(); P = JSON.parse(undo); changed(); };` After: `const at = stepNo; … onclick = () => { n.remove(); if (stepNo === at && undoS.length) restore(undoS, redoS); };` (the history's Undo; `restore` because the parameter `undo` hides the function `undo` there). The `#inPanes` change handler: `undo = JSON.stringify(P)` removed; `toast(tyNote, undo)` → `toast(tyNote, true)`.
+- `loadAs` (open, New, Import, From the old app): the history starts again (`undoS = []; redoS = []; snap = JSON.stringify(P); stepNo++`, notices' Undo removed, `changed(true)`).
+- `pbSave`: `record()` after the save (a Save as name change is a step, as the steel app).
+- Keys (the steel app's handlers): `#bUndo` / `#bRedo` clicks; `input` / `change` / `blur` (capture) set / clear `data-typing` on the field; `keydown`: Ctrl/⌘+Z undo, Ctrl/⌘+Y or Ctrl/⌘+Shift+Z redo, not while a field has `data-typing` or a dialog is open. At start-up `snap = JSON.stringify(P)`.
+- Tests: new smoke `tests/smoke/ps-bridge-undo.mjs`.
+### Saved data (CLAUDE.md §5)
+- None: the history is in the page's memory only (the steel app stores none either); no key, no format changed. Every Undo / Redo writes the restored project to the autosave `psb2.project.current` as any change does.
+### Governing provisions (CLAUDE.md §4)
+- None: no formula, factor, unit or reference changed. Results follow the project on screen (`result()` keyed by the design's engine inputs, `allResults()` by the project text): an Undo shows exactly the results before the change (smoke 2: the Analysis tab's text identical).
+### Check case
+- New project; Analysis tab; Span lengths 120 → 100: the tab's results change. Undo (or Ctrl+Z): span 120 and the tab's text identical to before; Redo (Ctrl+Y / Ctrl+Shift+Z): span 100 and the changed text. Number of girders 5 → 6: notice "Girder count 5 → 6: … re-assigned" with Undo; its Undo gives the project text before the change byte for byte, and Redo puts the change back.
+### How verified
+- See the PR.
+### Decisions (pending engineer review)
+- PS6-D1. As the steel app: the history is not stored (memory only; a reload starts with none), 100 steps, one step per project change, Save as's name change a step, opening a project / New / Import starts a new history.
+- PS6-D2. A change of the girder type and line shown only (P.design, the output tabs' choice; stored in the project) is not an undo step (as the steel app's girder shown, ui.g); an Undo restores the snapshot as it was, with the line shown then.
+- PS6-D3. The girder count notice's Undo is the header's Undo of that one step (so it can be redone); it is removed once another step is made or the history moves (Undo / Redo, open, New), where before it stayed on the newest notice.
