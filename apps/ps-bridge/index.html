@@ -57,6 +57,7 @@
     'engine/fields.js',      // PR 2b: every engine input on its input tab (label, unit, tooltip, rule)
     'engine/inputcheck.js',  // PR 2b: the blocking input errors (the steel app's pattern)
     'engine/legacy.js',      // PR 2f: "From the old app": read-only import of the old app's saved designs and Export JSON files
+    'engine/autodesign.js',  // item A (2026-11-14): Auto design, a search over each girder type's inputs judged by the page's own engine call (no new formula)
     'engine/worked.js',      // PR 2b-2: the worked steps of the Section properties, Loads & LLDF and Analysis tabs (values = the engine's)
     'engine/worked-stress.js', // PR 2c-1: the worked steps of the Losses and Stresses tabs (values = the engine's)
     'engine/worked-strength.js', // PR 2c-2: the worked steps of the Flexure and Shear tabs (values = the engine's)
@@ -103,6 +104,7 @@
     'ui/sheets.js',   // item 10, part 1: the drawing set (typical section of each span, framing plan) with border and title block (adapted from the steel app's sheets)
     'ui/drawings.js', // item 10, part 1: the Drawings tab (previews, Download DXF, Print; the steel app's Drawings tab pattern)
     'ui/sumelev.js',  // 2026-11-14 (item 8a): the Summary's girder elevation of each girder type (picker; the governing checks where they govern)
+    'ui/autodesign.js', // item A (2026-11-14): the Auto design input tab (settings, Run) and output tab (candidates, Apply as one Undo step)
     'ui/summary.js',  // PR 3b: the Summary tab (adapted copy of apps/steel-bridge/ui/summary.js): verdict, girder × span grid, type × check table
     'ui/splitter.js'  // the splitter between the input and output panels (copy of apps/steel-bridge/ui/splitter.js)
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
@@ -417,7 +419,7 @@
       dd: IN.cards('dd', P),
       loads: TY.scopeBar(P, ui, 'loads') + IN.cards('loads', V),
       own: IN.cards('own', P, ownRes()),
-      ad: ph('Auto design', '5', ['waits for the girder library (PR 4, PS-2)', 'strands in symmetric pairs (PS-12) → draping, hold-down 0.33–0.45 L (PS-5) → f′<sub>ci</sub> / f′<sub>c</sub> in 0.5 ksi steps (PS-11)', 'locked fields never changed; Apply with Undo'])
+      ad: window.PSBAutoDesignUI.inputs(P)   // item A (2026-11-14): settings and Run (ui/autodesign.js)
     };
   }
   /* 2026-11-14 (equal spacing, the Steel Bridge app's EQSP, apps/steel-bridge/ui/loads.js equalRows): W_cc and the worked step
@@ -486,6 +488,7 @@
   function typesDone(r) { if (!r || r.cancel) return; if (r.ui && !r.note) { saveUi(); if (!r.keep) drawInputs(); return; } saveUi(); changed(); if (r.note) toast(r.note); }
   $('inPanes').addEventListener('change', e => {
     const el = e.target;
+    if (el.dataset.ad) { if (window.PSBAutoDesignUI.onChange(el, P)) changed(); return; }   // item A: the Auto design settings (P.autodesign)
     if (el.dataset.ty) { typesDone(TY.onChange(el, P, ui)); return; }   // PR 3a-1
     if (el.dataset.dl && DLUI.onChange(el, P)) { changed(); return; }   // PR 3a-3
     if (el.dataset.lt) { const [s, g] = el.dataset.lt.split('|').map(Number), k = +el.value; if (el.value !== '' && P.types[k] && P.types[k].span === s) { BR.assignLine(P, k, g); changed(); } return; }   // 2026-11-14: girder type of each line
@@ -522,6 +525,7 @@
     if (go) { e.preventDefault(); ui.itab = go.dataset.goin; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; return; }
     { const gt = t.closest('[data-gotab]'); if (gt) { e.preventDefault(); gotoOut(gt.dataset.gotab); return; } }   // PS-35: an input note's link to an output tab (the Loads input tab's J note)
     if (LGUI.onClick(e, lgCtx)) return;
+    if (window.PSBAutoDesignUI.onClick(e, adCtx())) return;   // item A: Run / Stop / the output tab
     if (DLUI.onClick(e, P)) { changed(); return; }   // PR 3a-3: the added line loads
     if (t.closest('[data-ty]') && !t.closest('select, input')) { typesDone(TY.onClick(e, P, ui)); return; }   // PR 3a-1
     { const sk = TY.SCOPED.includes(ui.itab) ? scopeK() : -1, V = viewOf(sk);
@@ -554,9 +558,9 @@
     if (pb) { pb.refresh(); pb.dialog.refresh(); } }   // PR 5: the saved / unsaved state is the header chip (projectBar)
 
   /* ---------- outputs (placeholders; docs/ps-bridge-plan.md §2.3, §5) ---------- */
-  const OUT = {
-    ad: ['5', ['the auto-design proposal per design group and its trial log (Run on the Auto design input tab)']]
-  };
+  const OUT = {};
+  /* item A (2026-11-14): the Auto design tabs' context (ui/autodesign.js): Apply is one change() = one undo step, its notice's Undo that step */
+  const adCtx = () => ({ P, changed: () => changed(), toast: (t, u) => toast(t, u), redraw: () => { drawInputs(); drawOut(); }, gotoOut: t => gotoOut(t), errors: () => errs });
   /* the design's engine results (PR 2b-2): computeAll of the design inputs (engine/design.js), kept while the inputs are the same; the worked
      steps of the three result tabs (engine/worked.js) made once per result. Only when there is no input error. */
   let RC = { key: '', inp: null, R: null, W: null };
@@ -654,6 +658,8 @@
       if (!errs.length) h += '<div id="v3dHost"></div>';   // PR 3c: the 3D view (ui/view3d.js), mounted below
     } else if (ui.otab === 'dwg') {
       if (!errs.length) h += '<div id="dwgHost"></div><p class="note">Part 2 (a later PR, after the auto design): the girder sheet, strand and draping schedule (hold-down from ℄ bearing and from the girder end, PS-13) and camber table.</p>';   // item 10, part 1 (ui/drawings.js), mounted below
+    } else if (ui.otab === 'ad') {
+      h += '<div id="adHost"></div>';   // item A: the Auto design output tab (ui/autodesign.js), mounted below
     } else if (ui.otab === 'rpt') {
       if (ok) h += '<div id="rptHost"></div>';   // PR 2e: the Report (ui/report.js), mounted below
     } else { const o = OUT[ui.otab]; h += ph(esc(name), o[0], o[1]); }
@@ -664,6 +670,7 @@
     if (ui.otab === 'rpt' && ok && $('rptHost')) { ui.rpt = ui.rpt || {};
       try { window.PSBReportUI.render($('rptHost'), { P, rc, opts: ui.rpt, save: saveUi, goto: t => gotoOut(t), goin: t => { ui.itab = t; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; } }); }
       catch (e) { $('rptHost').innerHTML = `<div class="alert err" role="alert">Report error: ${esc(e && e.message)}</div>`; console.warn(e); } }
+    if (ui.otab === 'ad' && $('adHost')) { try { window.PSBAutoDesignUI.render($('adHost'), adCtx()); } catch (e) { $('adHost').innerHTML = `<div class="alert err" role="alert">Auto design error: ${esc(e && e.message)}</div>`; console.warn(e); } }
     // item 10, part 1: the Drawings tab (display and export only; its choices kept in ui.dwg, psb2.ui)
     if (ui.otab === 'dwg' && $('dwgHost')) { try { window.PSBDrawingsUI.render($('dwgHost'), { P, ui, saveUi, goto: t => gotoOut(t), goin: t => { ui.itab = t; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; } }); }
       catch (e) { $('dwgHost').innerHTML = `<div class="alert err" role="alert">Drawings error: ${esc(e && e.message)}</div>`; console.warn(e); } }
