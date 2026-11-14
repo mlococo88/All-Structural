@@ -3528,6 +3528,23 @@ PR #1553: https://github.com/mlococo88/All-Structural/pull/1553
 - 3D-D2. The diagrams are per girder line and span. For spans made continuous, the engine's diagrams of each span cell are shown (as the Analysis tab of that cell); the continuous unit is not redrawn as one curve.
 - 3D-D3. Close-up Zoom to targets: the span ends, the hold-down points and the midspans. The steel app's targets are its splices and bearings; this app has no splices.
 
+## 2026-11-14 — Smoke ps-bridge-library: the intermittent `'unsaved' !== 'saved'` after the reload (test fix; no app change)
+PR #1555: https://github.com/mlococo88/All-Structural/pull/1555
+### Problem
+- `tests/smoke/ps-bridge-library.mjs` failed about one run in two (5 of 10 runs here, also on clean origin/main) at step 4, the check after `p.reload()`: `assert.equal(await state(), 'saved')` got `'unsaved'`.
+- Root cause (found, not guessed): the page was opened with `openPage(FILE, { ls: … })` (tests/lib.mjs), whose init script seeds localStorage on every navigation unless `sessionStorage.__seeded` is set. Chromium does not always keep a tab's sessionStorage across a `file://` reload. Shown in a debug run: a marker put in sessionStorage before the reload was `null` after it in exactly the failing runs. The init script then wrote the seed again, so `psb2.project.current` went back to the seeded "Existing bridge" (checker "") while `psb2.lib.current` still named "Route 2 alt (renamed)". The chip then correctly said "unsaved changes": the inputs on screen were not the saved project.
+- So the app was right and the test was wrong: no race in the save or the autosave (both are synchronous; the chip compares `M.exportJSON(P)` with the saved item's text).
+### What changed (`tests/smoke/ps-bridge-library.mjs` only)
+- Anchor: `const { b, p, errs } = await openPage(FILE, { vw: 1280, vh: 900`.
+- Before: `const { b, p, errs } = await openPage(FILE, { vw: 1280, vh: 900, ls: { ...OLD, 'psb2.project.current': seeded } });`
+- After: `const SEED = { ...OLD, 'psb2.project.current': seeded }; const { b, p, errs } = await openPage(FILE, { vw: 1280, vh: 900 }); await p.waitForSelector('#inTabs [data-itab]'); await p.evaluate(o => { localStorage.clear(); for (const [k, v] of Object.entries(o)) localStorage.setItem(k, v); }, SEED); await p.reload();` (with a comment giving the reason). The seed is written once; no init script re-seeds on the later reload. Step 1 still checks what it checked: the first page load with the seed keeps `psb2.project.current` byte-identical and shows "not saved".
+### Saved data (CLAUDE.md §5) / Governing provisions (CLAUDE.md §4)
+- None: test only; no app file changed.
+### Check case
+- Before: 10 runs, 5 failed at line 129 (`'unsaved' !== 'saved'`). After: 10 runs, 10 passed (11 checks each).
+### Open items
+- `tests/lib.mjs` `openPage`'s `ls` seed has the same weakness for every smoke that seeds and then reloads, expecting the page's own later writes to survive (the list in the PR). It is not changed here: it is shared test tooling used by every smoke. A fix there (for example, seed then reload, as here) is a separate change.
+
 ## 2026-11-14 — PS-38 / PS-39 / PS-40: NEXT 28F I at 144 in, strand-to-void clearance 1.25 in, the CTDOT voided slabs' void spacing from the MassDOT sheets; projects saved before told once on open (CALCULATION CHANGE, §4; SAVED DATA, §5)
 PR #1554: https://github.com/mlococo88/All-Structural/pull/1554
 ### Request
