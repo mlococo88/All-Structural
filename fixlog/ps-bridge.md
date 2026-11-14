@@ -2621,7 +2621,7 @@ index a30b678..63db1bf 100644
 ```
 
 ## 2026-11-14 — Flexure tab, pier section of a NEXT: the negative-moment compression block drawn in the two stems (display only; no calculation change)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1536: https://github.com/mlococo88/All-Structural/pull/1536
 ### Request
 - Open item of PS-27 (orchestrated fix list 2026-11-14): on the Flexure tab's pier section (negative moment at the pier of a span made continuous) of a NEXT, the compression block was drawn 2B wide centred on the girder ℄, i.e. in the empty gap between the two stems. Draw it in the two stems (the bottom of each stem), consistent with the width the engine uses; display only; report, do not change, the engine's compression width if it looks wrong.
 ### Problem
@@ -2706,7 +2706,7 @@ index 496c609..2f7ab16 100644
 ```
 
 ## 2026-11-14 — Box beam and voided deck slab voids: drawn where the engine places them, and the Section properties tab and the Report's assumptions say so (display only; decision pending engineer review)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1536: https://github.com/mlococo88/All-Structural/pull/1536
 ### Request
 - Open item of PS-27 (fix list 2026-11-14): the new app draws the box void where the engine's `sectionVoids` places it (on the bottom wall), while the old app's section graphic centred it on the depth. Keep the graphics consistent with the engine, confirm it, and note it in the Section tab / Report assumptions. If the engine's position disagrees with the girder library's published void position, report it; do not change calculations.
 ### Findings (confirmed)
