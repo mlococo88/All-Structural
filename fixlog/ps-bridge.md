@@ -3270,7 +3270,7 @@ PR #1547: https://github.com/mlococo88/All-Structural/pull/1547
 - None.
 
 ## 2026-11-14 — Bridge layout: framing plan, span / skew / bay rows, equal spacing, girder type of each line (display and input only)
-PR: (link below)
+PR #1548: https://github.com/mlococo88/All-Structural/pull/1548
 ### Request
 - PS Bridge catch-up to the Steel Bridge app, item 3:
   - a true-scale skewed framing Plan card in place of the placeholder, with a ×2 width option and links to the related tabs;
