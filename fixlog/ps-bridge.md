@@ -3268,3 +3268,55 @@ PR #1547: https://github.com/mlococo88/All-Structural/pull/1547
 - XS-D3. A sidewalk runs from the deck edge (x 0 … w), as `engine/bridge-dl.js` loads it, with the barrier drawn on top of it at the edge. The 3D view (ui/view3d.js) places the sidewalk inside the barrier instead. That is display only, and was left as it is (one tool per change; noted here).
 ### Other copies
 - None.
+
+## 2026-11-14 — Bridge layout: framing plan, span / skew / bay rows, equal spacing, girder type of each line (display and input only)
+PR #1548: https://github.com/mlococo88/All-Structural/pull/1548
+### Request
+- PS Bridge catch-up to the Steel Bridge app, item 3:
+  - a true-scale skewed framing Plan card in place of the placeholder, with a ×2 width option and links to the related tabs;
+  - row inputs (shared/list-input.js) for the spans and skews in place of the comma text fields, with the saved format unchanged;
+  - an equal-spacing mode (W_cc), with its worked step;
+  - a "Girder type of each line" table on the Cross-section tab;
+  - §5: a Node test that an old saved project round-trips unchanged.
+### What changed
+- New `ui/plan.js` (`window.PSBPlan`):
+  - `model(P)` takes every position from `PSB3DUI.geom(P)` (the 3D view's numbers): girder lines from ℄ bearing to ℄ bearing (girder ends thinner), skewed support lines from deck edge to deck edge at x = station + (z − z_mid) tan θ, diaphragms at a from each line's left ℄ bearing (none between adjacent units), and continuity diaphragms on the pier lines of spans made continuous.
+  - `svg(P, W, { vex })` draws one scale across and up. With "Width ×2" the angles are not to scale and θ labels the true skew. Labels: Abut. / Pier names, θ, "Span n: L ft", the bays (or the deck width where the bays are too close to label), and G1 … Gn (G1 and Gn only where the lines are too close).
+  - `mount(slot, P)` is a detail card with True scale / Width ×2. The choice is kept for the page session only and is not saved, as Steel's.
+  - `card(P)` holds the links to the Cross-section, Girders & strands, Diaphragms / deck, 3D view and Loads & LLDF tabs.
+- New `ui/lists.js` (`window.PSBListsUI`), a COPY of apps/steel-bridge/ui/lists.js with this app's selectors: `[id="i_spans.lengths"]`, `[id="i_xs.skews"]`, `[id="i_xs.bays"]`.
+  - The page's `<input data-kind="list">` stays, hidden, holding the text "a, b, c" that the page's own `parseList` reads, so the arrays are stored as before.
+  - One change from the copy, in `bind()`'s focusout: when the page was redrawn before the deferred commit ran (a click on an input tab), the edit is committed through the input of the same id. Before, it was lost.
+- `index.html`:
+  - Scripts: `../../shared/list-input.js`, `ui/lists.js`, `ui/plan.js`.
+  - Bridge layout tab: `ph('Plan', …)` → `planCard()`. The list notes say "One row per …". The list units are now in the table headers, so `list(…, '')`.
+  - Cross-section tab: `sel('xs.spMode', 'Girder spacing', [individual, equal])`. In equal mode, `equalRows()` (W_cc, the step `xs.eqS` S = W_cc / (N_b − 1), the deck width out to out) replaces the bay list.
+  - New card `lineTypeCard()`: a select per line and span (`data-lt="s|g"`) → `BR.assignLine(P, k, g)`, the same data as the Girders & strands line boxes. A line keeps a type once it has one, as the boxes.
+  - Change handler: `xs.spMode` to equal sets `xs.Wcc` = Σ bays, then `M.applyEqual(P)` runs on every change.
+  - `drawInputs()` mounts the plan on the Bridge layout tab.
+- `engine/model.js`:
+  - `equalSpacing(xs)`, a byte-for-byte COPY of apps/steel-bridge/engine/model.js equalSpacing;
+  - `applyEqual(P)`;
+  - `validate()`: `xs.spMode` must be individual / equal; in equal mode `xs.Wcc` > 0 and N_b ≥ 2;
+  - the header documents `xs.spMode` / `xs.Wcc`.
+- `ui/inputcheck.js`: the steel app's list handling (`isList`, `cellIn`). An error on `xs.bays.1` marks and focuses that row's cell of the table.
+- Tests:
+  - `tests/engine/psbridge-layout.test.mjs` (4 tests; see below). `psbridge-model.test.mjs` has the script list updated.
+  - The skeleton and types smokes now set the three lists through their hidden input (`setList`). The skeleton smoke's "error link opens the field" now expects the bay's row cell of the table.
+  - `ps-bridge-figures.mjs`: the plan (lines, continuity diaphragm, diaphragms, labels, ×2, not saved), a span typed into its row, + Add, equal spacing, back to individual, and the girder type of each line.
+### Saved data (CLAUDE.md §5)
+- The stored fields and formats are unchanged: `spans.lengths`, `xs.skews` and `xs.bays` stay arrays of numbers. The row tables write the same text into the page's input, and the page parses it as before.
+- New optional fields `xs.spMode` ('individual' | 'equal') and `xs.Wcc` (ft). Absent means individual bays, today's behaviour. They change no result by themselves: in equal mode the page writes S into every `xs.bays` entry, which everything reads as before.
+- No new key. The ×2 choice is not stored.
+- Test (§5): an old project (no spMode / Wcc; two spans made continuous, unequal bays, different skews, girder types) gives the same text through save → load → export and import → export. The list tables give back the same arrays through the page's parser, and `applyEqual` changes nothing. There is no new input error, and every cell's engine inputs are the same.
+### Governing provisions (CLAUDE.md §4)
+- None changed. Equal spacing only writes the bays the engineer would otherwise type: S = W_cc / (N_b − 1), the Steel Bridge app's definition. No formula of a result changed.
+### Check case
+- N_b = 5, W_cc = 38 ft: S = 38 / 4 = 9.500 ft, so bays [9.5, 9.5, 9.5, 9.5]. With overhangs 3.5 / 3.0 ft, the deck is 44.50 ft out to out. N_b = 4, W_cc = 40 ft: S = 13.333 ft.
+### Decisions (pending engineer review)
+- LAY-D1. Plan diaphragms: drawn as the 3D view places them (at the entered a from each line's left ℄ bearing, parallel to the supports, across the bays next to a line whose type has one; none between adjacent boxes, slabs or NEXT beams). End diaphragms at the bearings are not drawn, because the project has no input for them.
+- LAY-D2. "Width ×2" is always offered (Steel offers its exaggeration only for a long, thin plan). The choice is not saved, as Steel's.
+- LAY-D3. Girder type of each line: a line that has a type can only be moved to another type of its span, not left without one, as the Girders & strands line boxes.
+- LAY-D4. Equal spacing: back to individual keeps the bays as written. A change of N_b in equal mode rewrites every bay to the new S, as Steel.
+### Other copies
+- `ui/lists.js` and `engine/model.js` `equalSpacing` are copies of the Steel Bridge app's, to move to shared/ later (CLAUDE.md §3). The focusout fix in `ui/lists.js` is not in the steel copy, which has the same race; that tool was not changed.
