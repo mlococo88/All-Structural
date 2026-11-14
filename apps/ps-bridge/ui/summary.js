@@ -94,6 +94,7 @@
 .sum-badge.fail{color:#991B1B;background:#FEF2F2;border-color:var(--fail)} .sum-badge.pass{color:#065F46;background:#ECFDF5;border-color:var(--pass)} .sum-badge.none{color:#475569;background:var(--slate-100);border-color:var(--slate-400)}
 .sum-cnt{display:inline-flex;gap:5px;flex-wrap:wrap} .sum-cnt span{font-size:8.5pt;font-weight:700;padding:1px 6px;border:1px solid;border-radius:3px;white-space:nowrap}
 .sum-cnt .c-fail{color:#991B1B;background:#FEF2F2;border-color:var(--fail)} .sum-cnt .c-pass{color:#065F46;background:#ECFDF5;border-color:var(--pass)} .sum-cnt .c-na{color:#475569;background:var(--slate-100);border-color:var(--slate-400)}
+#sum-project .kv div{gap:10px} #sum-project .kv div>span:last-child{text-align:right}   /* the label and its value never run together (display only) */
 .sum-gov{margin:8px 0 2px;font-size:10pt} .sum-gov .sum-low{display:block;margin-top:3px} .sum-run{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px;font-family:var(--font-ui);font-size:9pt;color:#475569}
 .sum-run .spin{display:inline-block;width:12px;height:12px;border:2px solid #CBD5E1;border-top-color:var(--color-primary);border-radius:50%;animation:sbspin .8s linear infinite;vertical-align:-2px;margin-right:6px}
 @media (prefers-reduced-motion:reduce){.sum-run .spin{animation:none}}
@@ -189,7 +190,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
       <p><b>Off for this project</b>${M.off.length ? `: ${M.off.map(g => `${esc(g.name)} (<a href="#" data-goin="${g.off}">turn it on</a>)`).join(', ')}.` : ': none.'}</p>
       ${errs.length ? `<p><b>Engine errors</b> (no result for these lines):</p><ul class="sum-list">${errs.map(t => `<li>${t}</li>`).join('')}</ul>` : ''}
       <p><b>Design warnings of the engine</b>${ws.length ? '' : ': none.'}</p>${ws.length ? `<ul class="sum-list">${ws.join('')}</ul>` : ''}
-      <p class="note">Not in the Summary: Section properties, Loads &amp; LLDF, Analysis and Losses (inputs to the checks: worked on their tabs), the Drawings, Auto design and 3D view (later PRs).</p>`);
+      <p class="note">Not in the Summary: Section properties, Loads &amp; LLDF, Analysis and Losses (inputs to the checks: worked on their tabs), the 3D view (its own tab), the Drawings and Auto design (later PRs, placeholders on their tabs).</p>`);
   }
   function html(o) {
     css();

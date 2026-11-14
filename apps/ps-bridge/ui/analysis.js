@@ -44,7 +44,7 @@
           ${tr('M<sub>g</sub>: girder weight as if continuous', 'Mg')}${tr('M<sub>ps</sub>: prestress at transfer as if continuous', 'Mps')}${tr('M<sub>deck</sub>: deck weight as if continuous', 'Mdk')}
           ${tr('M<sub>rc</sub> = δ<sub>1</sub>(M<sub>g</sub> + M<sub>ps</sub>) + δ<sub>2</sub> M<sub>deck</sub>', 'Mrc')}${tr('M<sub>sh</sub>: differential shrinkage', 'Msh')}${tr('<b>M<sub>res</sub> = M<sub>rc</sub> + M<sub>sh</sub></b>', 'Mres')}</tbody></table></div>`;
       } else body += `<p class="note">Restraint moments not computed (Bridge layout tab, continuity card${inp.owner === 'MassDOT' || inp.owner === 'RIDOT' ? `; ${k.esc(inp.owner)} default off` : ''}).</p>`;
-      body += '<p class="note">The pier section\'s resistance (negative moment, deck bars) and the positive moment connection are worked on the Flexure tab (PR 2c).</p>';
+      body += '<p class="note">The pier section\'s resistance (negative moment, deck bars) and the positive moment connection are worked on the <a href="#" data-gotab="flex">Flexure tab</a>.</p>';
       h += k.card('Continuity for composite loads (5.12.3.3)', body);
     } else h += k.card('Continuity', `<p class="note">${R.L && ctx.P.spans.lengths.length > 1 ? 'Simple spans for all loads' : 'One span'} (Bridge layout tab). Made continuous: girder and DC1 on the simple span; DC2, DW and live load on the continuous unit; restraint moments switchable (5.12.3.3, PS-7).</p>`);
     h += k.card('Worked steps: analysis', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value; midspan = the engine's station at x = ${k.fx(D[midOf(R)].x, 2)} ft (${D.length} stations).</p>${k.steps(ctx.W.analysis.steps, TOPICS, OPEN)}`);

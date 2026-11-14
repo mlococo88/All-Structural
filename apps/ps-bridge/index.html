@@ -352,7 +352,7 @@
   const list = (path, label, unit, o) => `<div class="fRow"><label for="i_${path}">${label}</label><input type="text" class="wide" id="i_${path}" data-path="${path}" data-kind="list"${o && o.int ? ' data-int="1"' : ''} value="${esc((get(path) || []).join(', '))}"><span class="unit">${unit || ''}</span></div>`;
   const card = (title, body) => `<section class="sec"><div class="secHead">${title}</div><div class="secBody">${body}</div></section>`;
   /* ph(title, pr, items): a placeholder card: what the card will hold and the PR that brings it */
-  const ph = (title, pr, items) => `<div class="ph"><b>${title}</b> <span class="devBadge">PR ${pr}</span><ul>${items.map(t => `<li>${t}</li>`).join('')}</ul></div>`;
+  const ph = (title, pr, items) => `<div class="ph"><b>${title}</b> <span class="devBadge">${/^\d/.test(pr) ? 'PR ' + pr : pr}</span><ul>${items.map(t => `<li>${t}</li>`).join('')}</ul></div>`;
   const fmt = (x, d) => (typeof x === 'number' && isFinite(x)) ? x.toFixed(d) : '—';
 
   /* PR 3a-1: the inputs the Girders & strands, Materials and Loads tabs show: the base design, or (ui.scope = a girder type) that type's own
@@ -374,7 +374,7 @@
           <p class="note">Left to right, separated by commas. Total ${fmt(M.totalLength(P), 2)} ft. Made continuous: girder and DC1 simple; DC2, DW and live load continuous; restraint moments switchable (as the old app, PS-7).</p>`)
         + card('Support skews', `${list('xs.skews', 'Skews', 'deg')}<p class="note">One per support, left to right: abutment, ${nS > 1 ? 'piers, ' : ''}abutment (${nS + 1} values).</p>`)
         + IN.cards('layout', P)
-        + ph('Plan', '3a', ['the plan of the girders and supports']),
+        + ph('Plan', 'planned', ['the framing plan of the girders and supports (not built yet)']),
       xsec: card('Girders', `${num('xs.nb', 'Number of girders', '')}${list('xs.bays', 'Girder spacings (bays)', 'ft')}${num('xs.ohL', 'Left overhang', 'ft')}${num('xs.ohR', 'Right overhang', 'ft')}
           <p class="note">Bays left to right (${Math.max(0, (P.xs.nb | 0) - 1)} values). Unequal bays (PS-9): each girder's spacing S is the bay next to it (exterior) or the mean of its two bays (interior); see Loads &amp; LLDF. Overhangs from the exterior girder centreline. Deck width ${fmt(deckW, 2)} ft. A change of the girder count re-assigns the girder types' lines (the outer lines keep the exterior types; a notice lists each change, with Undo).</p>`)
         + IN.cards('xsec', P)
@@ -551,7 +551,7 @@
     if (L.note) h += `<div class="alert err">${esc(L.note)}</div>`;
     h += secNotice();   // PS-31: the old box / voided slab section corrected (or removed)
     if (errs.length) h += window.PSBInputCheckUI.blocked(errs, icO());
-    h += `<div class="alert">In development (PR 3a-2): Section properties, Loads &amp; LLDF, Analysis, Losses, Stresses, Flexure, Shear, End zone &amp; hold-down, Camber &amp; deflection, Handling, Deck and Rating show the results of the girder type and line chosen above them, and the Report all of them. Use the old <a href="../../Prestressed%20Bridge%20Design.html">Prestressed Bridge Design</a> for design work.</div>`;
+    h += `<div class="alert">In development: Section properties, Loads &amp; LLDF, Analysis, Losses, Stresses, Flexure, Shear, End zone &amp; hold-down, Camber &amp; deflection, Handling, Deck and Rating show the results of the girder type and line chosen above them; the Summary, the check summary column and the Report cover every girder type on every line. Use the old <a href="../../Prestressed%20Bridge%20Design.html">Prestressed Bridge Design</a> for design work.</div>`;
     const name = (OTABS.find(t => t[0] === ui.otab) || [, ''])[1];
     let rc = null; ctxOut = null;
     if (!errs.length) { rc = result(); if (rc.R.error) h += `<div class="alert err" role="alert"><b>The engine could not compute this design:</b> ${esc(rc.R.error)}. Results not shown.</div>`; }
