@@ -38,7 +38,7 @@
   /* 2026-11-13 (display; decisions pending the engineer's review): a graphic drawn once per state of its control in the Report, in the
      control's order and whatever state the tab last showed (the handling elevation: Lifting, then Hauling; the tab's own state is put back);
      and the tabs' caption wording for the screen (click, buttons, "Show", "the table above") reworded for a static figure, in the Report only */
-  const ALLSEG = new Set(['gfx_hnel']);
+  const ALLSEG = new Set(['gfx_hnel', 'gfx_ld']);   // gfx_ld (2026-11-14): the Loads & LLDF cross-section in each LLDF case (lever rule, rigid section)
   const STATIC = [[/; click a station to select it\./g, '.'], [/\s*Click a station to select it\./g, ''], [/Stage buttons select the stage and its governing station\./g, 'Drawn at the governing station of the stage named in the caption.'],
     [/the table above/g, 'the table in this section']];   // on the tab the table is above the graphic; in the Report it follows the figure
   const still = h => STATIC.reduce((t, [re, w]) => t.replace(re, w), h);
