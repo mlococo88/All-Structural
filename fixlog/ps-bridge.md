@@ -3766,3 +3766,44 @@ PR #1558: https://github.com/mlococo88/All-Structural/pull/1558
 - XS9-D5. An entered edge to traffic face also moves the start of the wearing surface (dead()'s fL), as in the steel app. The deck design (Diaphragms / deck tab) keeps its own barrier weight and wearing surface (unchanged).
 ### Other copies
 - apps/steel-bridge/engine/loads.js lines 30-114 (EDGE-VERBATIM) and 116-217 (DEAD-VERBATIM): keep in step. The pin test checks both.
+
+## 2026-11-14 — PR 10: the Drawings tab, part 1 — typical section of each span and framing plan on sheets with border and title block, DXF download and print (the Steel Bridge app's Drawings tab pattern) (display and export only)
+PR #1560: https://github.com/mlococo88/All-Structural/pull/1560
+### Request
+- PS Bridge catch-up item 10, part 1: the Drawings tab (a placeholder until now) with the typical section, the framing plan and a DXF download, modelled on the Steel Bridge app's Drawings tab (apps/steel-bridge/ui/drawings.js, engine/sheets.js).
+- Reuse the app's existing figure code (ui/xsfig.js, the framing plan of PR #1548/#1549 ui/plan.js, ui/vizkit.js) rather than duplicating it.
+- Part 2 (the girder, strand and elevation sheets after the auto design) is not in scope.
+### What changed
+- New `ui/sheets.js` (`window.PSBSheets`):
+  - `build(P, { paper, date, half })` returns `{ D, sheets, miss, errors }`.
+  - The typical section of each span (one sheet, or one per span when there are several) and the framing plan are drawn as DXF entities (shared/dxf.js `SharedDxf.drawing`).
+  - Every position is read from the existing figure models, with no second geometry:
+    - `PSBXsFig.model(P, s)`: the girder outlines (library halfPolygon) and voids, deck, haunches, barriers / curbs / railings / sidewalks / fences / median, the traffic faces at d_e = `PSBDesign.deOf`;
+    - `PSBPlan.model(P)`: the girder lines, the skewed support lines, the diaphragms, the continuity diaphragms, the deck outline.
+  - Dimensions are DIMENSION entities: the spacing chain (runs of equal bays as n@s), the deck width, d_e; the spans and the bays / overhangs on the plan.
+  - Each sheet has notes (wrapped to the paper).
+  - The sheet frame is an adapted copy of the steel app's `sheet()` (apps/steel-bridge/engine/sheets.js, anchor `function sheet(D, S, ox, C) {`) with its SCALES / SCALE_NAME / TXT (engine/drawings.js): paper D 34 × 22 or B 17 × 11 in; the smallest plot scale of the list at which the sheet fits; border, inner border, title block (PROJECT, PROJECT NO., SHEET TITLE, SCALE, DESIGNED / CHECKED, SHEET n OF N); footer. The footer names this app; the half-size print is as the steel app's.
+- New `ui/drawings.js` (`window.PSBDrawingsUI.render(host, ctx)`): the steel app's Drawings bar (Paper, Sheet, Preview zoom, Download DXF (validated first), Print sheet, Print all sheets), the preview (`SharedDxf.toSVG` of the same entities as the file, `SharedDxf.viewer`), and the sheet index with "Entered and worked on" links (§6). The section links to the Loads & LLDF tab (cross-section, d_e) and the Cross-section input tab; the plan to the Bridge layout input tab. "Not in this set" names part 2. No "Calculate results": part 1 needs no results.
+- `index.html`:
+  - Script list: after `'ui/view3d.js',` new `'../../shared/dxf.js'` (shared, unchanged), `'ui/sheets.js'`, `'ui/drawings.js'`.
+  - `OUT.dwg` (the placeholder) removed.
+  - `drawOut()`: `else if (ui.otab === 'dwg') { if (!errs.length) h += '<div id="dwgHost"></div><p class="note">Part 2 (a later PR …</p>'; }`, and after the Report's mount, `PSBDrawingsUI.render($('dwgHost'), { P, ui, saveUi, goto, goin })`.
+- `ui/summary.js`: the "Not in the Summary" note names the Drawings as its own tab.
+- Tests: new `tests/engine/psbridge-drawings.test.mjs` (3 tests); new smoke `tests/smoke/ps-bridge-drawings.mjs` (6 checks); `psbridge-model.test.mjs` (the script list).
+### Saved data (CLAUDE.md §5)
+- None in the project. `ui.dwg = { paper, sheet, z }` is a new optional UI choice in the existing per-browser `psb2.ui` key, as the steel app's `ui.dwg`. An old `psb2.ui` without it opens on paper D and the first sheet.
+### Governing provisions (CLAUDE.md §4)
+- None: no formula, factor, unit or reference changed; no result changes (harness B 0 differences). The d_e drawn is `PSBDesign.deOf` (PS-20; worked on the Loads & LLDF tab).
+### Check case
+- New project:
+  - sheet 1, TYPICAL SECTION at 1/2" = 1'-0" (paper D): 5 girder outlines; the chain 3'-0", 4@9'-0", 3'-0"; DECK 42'-0"; DE = 1'-6" at G1 and G5;
+  - sheet 2, FRAMING PLAN at 1/4" = 1'-0": 5 girder lines, Abut. 1 and Abut. 2 at skew 0.00°, SPAN 1: 120'-0".
+  - Paper B: 1/4" = 1'-0" and 1" = 10'-0".
+  - The DXF passes `SharedDxf.validate`.
+### Decisions (pending engineer review)
+- DW10-D1. One typical section sheet per span when there are several spans (the girder types are per span); one sheet for a single span.
+- DW10-D2. The barrier profile, the railing and fence post heights and the barrier height are schematic, as on the screen figure (XS-D1, XS9-D4); a note on the sheet says so.
+- DW10-D3. The sheet frame is an adapted copy of the steel app's (no shared/ change). Moving it to shared/ is planned work (§3).
+- DW10-D4. No girder elevation, strand or camber sheet yet (part 2, after the auto design); the tab lists it under "Not in this set".
+### Other copies
+- apps/steel-bridge/engine/sheets.js `sheet()` and apps/steel-bridge/engine/drawings.js SCALES / SCALE_NAME / TXT; apps/steel-bridge/ui/drawings.js (the tab's bar, viewer and print wiring). Keep in step.

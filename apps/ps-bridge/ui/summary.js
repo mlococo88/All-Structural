@@ -192,7 +192,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
       <p><b>Off for this project</b>${M.off.length ? `: ${M.off.map(g => `${esc(g.name)} (<a href="#" data-goin="${g.off}">turn it on</a>)`).join(', ')}.` : ': none.'}</p>
       ${errs.length ? `<p><b>Engine errors</b> (no result for these lines):</p><ul class="sum-list">${errs.map(t => `<li>${t}</li>`).join('')}</ul>` : ''}
       <p><b>Design warnings of the engine</b>${ws.length ? '' : ': none.'}</p>${ws.length ? `<ul class="sum-list">${ws.join('')}</ul>` : ''}
-      <p class="note">Not in the Summary: Section properties, Loads &amp; LLDF, Analysis and Losses (inputs to the checks: worked on their tabs), the 3D view (its own tab), the Drawings and Auto design (later PRs, placeholders on their tabs).</p>`);
+      <p class="note">Not in the Summary: Section properties, Loads &amp; LLDF, Analysis and Losses (inputs to the checks: worked on their tabs), the 3D view and the Drawings (their own tabs; the Drawings part 1: typical section and framing plan) and Auto design (a later PR, a placeholder on its tab).</p>`);
   }
   function html(o) {
     css();

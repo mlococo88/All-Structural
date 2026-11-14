@@ -99,6 +99,9 @@
     'ui/plan.js',     // 2026-11-14: the framing plan of the Bridge layout tab (girder lines, skewed supports, diaphragms; true scale or ×2 width)
     'ui/xsfig.js',    // 2026-11-14: the whole-bridge cross-section figure (Loads & LLDF tab, Report): the girder sections at their offsets
     'ui/view3d.js',   // PR 3c: the 3D view tab (the Steel Bridge app's 3D view pattern, apps/steel-bridge/ui/view3d.js; three.js r128 below)
+    '../../shared/dxf.js',  // item 10: the DXF R12 writer, previews and sheet printing (shared, unchanged; also used by the steel app's Drawings tab)
+    'ui/sheets.js',   // item 10, part 1: the drawing set (typical section of each span, framing plan) with border and title block (adapted from the steel app's sheets)
+    'ui/drawings.js', // item 10, part 1: the Drawings tab (previews, Download DXF, Print; the steel app's Drawings tab pattern)
     'ui/sumelev.js',  // 2026-11-14 (item 8a): the Summary's girder elevation of each girder type (picker; the governing checks where they govern)
     'ui/summary.js',  // PR 3b: the Summary tab (adapted copy of apps/steel-bridge/ui/summary.js): verdict, girder × span grid, type × check table
     'ui/splitter.js'  // the splitter between the input and output panels (copy of apps/steel-bridge/ui/splitter.js)
@@ -552,7 +555,6 @@
 
   /* ---------- outputs (placeholders; docs/ps-bridge-plan.md §2.3, §5) ---------- */
   const OUT = {
-    dwg: ['7', ['girder sheet, strand and draping schedule (hold-down from ℄ bearing and from the girder end, PS-13), camber table; DXF']],
     ad: ['5', ['the auto-design proposal per design group and its trial log (Run on the Auto design input tab)']]
   };
   /* the design's engine results (PR 2b-2): computeAll of the design inputs (engine/design.js), kept while the inputs are the same; the worked
@@ -650,6 +652,8 @@
             ${rc.R.warns.length ? `<div class="alert"><b>Design warnings of the engine (${rc.R.warns.length})</b><ul>${rc.R.warns.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>` : '<p class="note">No design warnings.</p>'}`) : '') });
     } else if (ui.otab === '3d') {
       if (!errs.length) h += '<div id="v3dHost"></div>';   // PR 3c: the 3D view (ui/view3d.js), mounted below
+    } else if (ui.otab === 'dwg') {
+      if (!errs.length) h += '<div id="dwgHost"></div><p class="note">Part 2 (a later PR, after the auto design): the girder sheet, strand and draping schedule (hold-down from ℄ bearing and from the girder end, PS-13) and camber table.</p>';   // item 10, part 1 (ui/drawings.js), mounted below
     } else if (ui.otab === 'rpt') {
       if (ok) h += '<div id="rptHost"></div>';   // PR 2e: the Report (ui/report.js), mounted below
     } else { const o = OUT[ui.otab]; h += ph(esc(name), o[0], o[1]); }
@@ -660,6 +664,9 @@
     if (ui.otab === 'rpt' && ok && $('rptHost')) { ui.rpt = ui.rpt || {};
       try { window.PSBReportUI.render($('rptHost'), { P, rc, opts: ui.rpt, save: saveUi, goto: t => gotoOut(t), goin: t => { ui.itab = t; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; } }); }
       catch (e) { $('rptHost').innerHTML = `<div class="alert err" role="alert">Report error: ${esc(e && e.message)}</div>`; console.warn(e); } }
+    // item 10, part 1: the Drawings tab (display and export only; its choices kept in ui.dwg, psb2.ui)
+    if (ui.otab === 'dwg' && $('dwgHost')) { try { window.PSBDrawingsUI.render($('dwgHost'), { P, ui, saveUi, goto: t => gotoOut(t), goin: t => { ui.itab = t; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; } }); }
+      catch (e) { $('dwgHost').innerHTML = `<div class="alert err" role="alert">Drawings error: ${esc(e && e.message)}</div>`; console.warn(e); } }
     // PR 3c: the 3D view of the bridge (display only; its layer and camera choices kept in ui.v3d, psb2.ui)
     if (ui.otab === '3d' && $('v3dHost')) { try { window.PSB3DUI.render($('v3dHost'), { P, ui, saveUi, res: (k, g) => cellR(window.PSBDesign.cellInputs(P, k, g)) });   /* res (PR 8b): each girder type × line's engine result, for the diagrams (cached, cellR) */ } catch (e) { $('v3dHost').innerHTML = `<div class="alert err" role="alert">3D view error: ${esc(e && e.message)}</div>`; console.warn(e); } }
     if (window.PSBDashUI) window.PSBDashUI.refresh();
