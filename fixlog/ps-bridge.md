@@ -3807,3 +3807,109 @@ PR #1560: https://github.com/mlococo88/All-Structural/pull/1560
 - DW10-D4. No girder elevation, strand or camber sheet yet (part 2, after the auto design); the tab lists it under "Not in this set".
 ### Other copies
 - apps/steel-bridge/engine/sheets.js `sheet()` and apps/steel-bridge/engine/drawings.js SCALES / SCALE_NAME / TXT; apps/steel-bridge/ui/drawings.js (the tab's bar, viewer and print wiring). Keep in step.
+
+## 2026-11-14 — Item A: Auto design (engine/autodesign.js, ui/autodesign.js): a search over each girder type's section, strands, draping and f′c / f′ci, judged by the page's own engine call; candidates per span, Apply as one Undo step (inputs only; no calculation change)
+PR #1562: https://github.com/mlococo88/All-Structural/pull/1562
+### Request
+- PS Bridge catch-up to the Steel Bridge app, item A: Auto design (the steel app's apps/steel-bridge/engine/autodesign.js, ui/autodesign.js are the pattern: settings with Auto / Lock variables and Run on the input tab; ranked candidates with the governing check, Apply as one change, on the output tab).
+- For each girder type: the library sections of the owner, strand counts and rows, draping, f′c / f′ci within the allowed ranges; the lightest / shallowest section and the fewest strands that pass every engine check; every candidate computed by the existing engine; no new design formula. docs/ps-bridge-plan.md §4 (PS-1, PS-5, PS-10 to PS-12).
+### What changed
+- New `engine/autodesign.js` (`window.PSBAutoDesign`; classic script, no DOM): `settings`, `family`, `sections`, `conc`, `rowsOf`, `fill`, `drapes`, `lineInputs`, `fitErrors`, `evalCand`, `search` (generator), `run` (generator), `runSync`, `apply`.
+  - A candidate's engine inputs on line g: `PSBDesign.one(Object.assign({}, P, { base: eff, design: { g, s: span }, types: undefined }))` — the body of `PSBDesign.cellInputs` with the candidate's inputs `eff` in place of `PSBBridge.effBase(P, k)` (test: equal for the type's own inputs); result `PSBHoldDown.compute` (computeAll + PS-10 + the app's additions, as the tabs and the check summary).
+  - PASS: no engine error, every `R.checks` entry `pass` on every line of the type, and no `PSBInputCheck.collect` error on `base.rows.*` / `base.harp.*` (the strand fit PS-28 / PS-39 on the type's first line, as the page checks a type).
+  - Sections (`sections`): MassDOT projects the MassDOT sections; other owners every other library section; of the current shape's family (I-girders and bulb tees incl. NEBT; NEDBT; NEXT F; NEXT D; spread boxes; adjacent boxes; deck slabs) and, for adjacent members, the same nominal width; sorted by gross A then h (lightest) or h then A (shallowest), A and h from the engine's `girderGross`. Locked, Custom or a section property override: the current shape only. One section per span (PS-8): a section is a candidate when every girder type of the span passes on it; the first `topN` (default 3) are listed.
+  - Strands: straight rows on the row grid (`PSBSections.rowGrid`, PS-41, else 2 in + 2 in), each filled bottom-up to its capacity = the largest even count that fits (the input check's fit); rows with a capacity below 4 not used; entered rows in the upper half (top strands) kept as entered at the same distance below the top; entered debonding kept row by row (PS-12, never added).
+  - Drapes: n_h = 0, 2, …; rows of two at x = ±1 in (the drawn positions); y_mid = top straight row + 2 + (rows of two − 1) in; y_end = y_mid + 2j; the bundle must fit at every height 1 in apart between them (no drape through a void); frac 0.33 … 0.45 by 0.01 (PS-5).
+  - Strengths: f′c grid 0.5 ksi through the entered f′c, from the owner's minimum (AASHTO 4.0 ksi, 10th Ed. 5.4.2.1; RIDOT 5.0, 5.2.1; CTDOT 6.0, V2 5.9.1.2; MassDOT 6.5, 3.7.2.1 standard) to the owner's maximum (AASHTO 10.0, C5.4.2.1 basis; CTDOT 10.0; RIDOT 8.0; MassDOT 8.0), read from `PBD.ownRule`; f′ci grid 0.5 ksi through the entered f′ci, from 4.0 ksi, ≤ f′c, within MassDOT ≤ 0.80 f′c, CTDOT 0.70–0.80 f′c and ≤ 6.5, RIDOT ≤ 0.70 f′c, and ≤ the plant value (setting, blank = none). Each limit editable.
+  - Search per type and section: a quick reject at the highest strengths with every row full (LL deflection, Strength I flexure or Service III tension failing); then at the entered f′c / f′ci, else the entered f′c with its highest f′ci, else the highest f′c and f′ci: (1) the fewest straight strands N1 passing flexure and Service III tension with no drape (bisection); (2) N = N1, N1 + 2, …, n_h = 0, 2, …, for each frac from 0.45 down the lowest y_end at which every check but the hold-down force passes (bisection), only drapes flatter than the best found; the first (N, n_h) with a passing drape; N grows only while a trial failed only on checks in GROW (Flexure, Srv III tens, Min reinf, Shear, Long. reinf, Fatigue I strand); (3) the lowest f′c with its highest f′ci, then the lowest f′ci.
+  - Choice (lexicographic): section (A, h; or h, A), N, n_h, drape slope (y_end − y_mid)/frac (orders F_hd exactly for one n_h), |frac − 0.40|, f′c, f′ci; deterministic.
+  - No candidate for a span: `blocked` = the checks failing on the current design and on the closest trial of every section tried.
+  - `apply(P, Res, choice)`: each type of each span: `effBase` with girder, rows, harp, mat.fc, mat.fci of its candidate → `PSBBridge.setOvr` (one call per type; the shape for every type of the span).
+- New `ui/autodesign.js` (`window.PSBAutoDesignUI`): the input tab (objective, sections to list, the four variables Auto / Lock, f′c / f′ci limits with the owner's values as placeholders, Run / Stop with progress; the run steps the generator ≈ 40 ms per timer tick on a copy of the project) and the output tab (per span: every section tried with each type's strands, f′c / f′ci and governing check (ratio, line) or the reason it has none; the current design and its failing checks; the selected candidate's rows, drape, F_hd / limit, weight and every check (worst line) linked to its tab and worked step (ui/dash.js GROUPS); the assumptions; the trial log; "The project changed since this run" disables Apply). Apply: `PSBAutoDesign.apply`, then the page's `changed()` (one undo step, PR 6) and a notice whose Undo is that step.
+- `index.html`: `'engine/autodesign.js'` after `'engine/legacy.js'`, `'ui/autodesign.js'` before `'ui/summary.js'`; the Auto design input pane `PSBAutoDesignUI.inputs(P)` (was a placeholder); `#inPanes` change: `data-ad` → `onChange` + `changed()`; click: `onClick(e, adCtx())`; `OUT = {}` (the Auto design placeholder removed); `drawOut`: `ui.otab === 'ad'` → `#adHost` + `render`; `adCtx()`.
+- `ui/summary.js`: the "Not in the Summary" note names Auto design as its own tabs.
+- Tests: new `tests/engine/psbridge-autodesign.test.mjs` (5 tests), new smoke `tests/smoke/ps-bridge-autodesign.mjs` (7 checks); `psbridge-model.test.mjs` (the script list).
+### Saved data (CLAUDE.md §5)
+- New optional `P.autodesign = { objective, topN, vars: { section, strands, drape, conc }, fcLo, fcHi, fciLo, fciHi }` (absent = the defaults; nothing reads it for a calculation). No key added or changed (psb2.project.current as before). Apply writes the girder types' existing `ovr` (the same fields the Girders & strands / Materials tabs write).
+### Governing provisions (CLAUDE.md §4)
+- None changed: no formula, factor, unit or reference; harness B 0 differences. The search's limits cite AASHTO LRFD 10th Ed. 5.4.2.1 and the owner rules already in the engine (RIDOT 5.2.1 / 5.6.1, CTDOT V2 5.9.1.2, MassDOT 3.7.2.1).
+### Check case
+- New project (BT-72, 120 ft, 5 girders; Interior S1 and Exterior S1, both 40 strands with 12 draped, f′c 8.5 / f′ci 6.8, failing Hold-down force (PS-10) 1.276): Type I–III, BT-54 and Type IV fail the LL deflection at 10 ksi (rejected); #1 PCI BT-63: Interior 36 strands (6 draped), f′c 8.5 / f′ci 7.8; Exterior 34 (6 draped), 9.5 / 9.3; #2 PCI BT-72: 32 (6) 6.5 / 6.3 and 30 (6) 7.5 / 7.3; #3 AASHTO Type V. After Apply of #1 the Summary shows PASS, 0 FAIL (smoke).
+### How verified
+- See the PR (Node exhaustive cases, 19 harness designs, smoke, harness B).
+### Decisions (pending engineer review)
+- AD-D1. The sections are searched (the parent request); docs/ps-bridge-plan.md §4 had "section fixed". Lock "Girder section" keeps it fixed.
+- AD-D2. The owner's library: MassDOT → MassDOT sections only; any other owner → every non-MassDOT section; the same family; adjacent members (boxes, slabs) the same width (their width sets the girder lines; the cross-section is not changed).
+- AD-D3. The strand count is searched at the entered f′c / f′ci first (plan §4 step 1), then the entered f′c with its highest f′ci, then the highest f′c and f′ci; the fewest strands at the first of these that has a passing pattern, then the lowest f′c and f′ci at that pattern (so fewer strands needing a stronger concrete are not preferred while a pattern passes at the entered strengths).
+- AD-D4. Symmetric pairs: every straight row and the drape hold even counts (a row of odd capacity holds one less).
+- AD-D5. Draped strands at midspan sit directly above the top straight row (the drawn bundle never overlaps a straight row); y_end on the 2 in grid; frac by 0.01.
+- AD-D6. Rows with a capacity below 4 strands are not used (no straight strands up the web); entered top strands (rows in the upper half) are kept as entered.
+- AD-D7. No plant f′ci limit by default (the setting is blank); RIDOT's f′ci ≈ 0.70 f′c (a warning in the engine) is applied as a limit; f′ci not below 4.0 ksi.
+- AD-D8. Assumed monotone (pending review): a higher f′c / f′ci is not worse for any check; a higher y_end relieves the end (the bisection); more strands improve only GROW. The Node exhaustive cases confirm the result on two small cases.
+- AD-D9. A span with no passing section has no Apply; its blocked checks are listed. The Report has no "Auto design basis" section yet (plan §4): a later PR.
+
+## 2026-11-14 — Item B: the Drawings tab, part 2 — each girder type's elevation and strand pattern sheets and the strand and girder schedule, DXF and print as part 1 (display and export only)
+PR #1563: https://github.com/mlococo88/All-Structural/pull/1563
+### Request
+- PS Bridge catch-up item B (Drawings part 2, after the auto design): strand pattern and girder elevation sheets and a strand / girder schedule.
+  - Strand pattern sheets: the sections at midspan and at the end, with the strand grid and the debonded and draped strands.
+  - Girder elevation sheets: the hold-down points, the debond lengths and the camber.
+  - The sheets are modelled on the Steel Bridge app's girder sheets. They reuse the app's figure code and the part 1 sheet frame (PR #1560) and load shared/dxf.js unchanged.
+- Every dimension comes from the existing model and figure data. DXF download and print work as in part 1. The "Not in this set" part-2 line is removed. No calculation change.
+### What changed
+- `ui/sheets.js` (`PSBSheets`): new `typeModels(P, opt)`, `elevation(D, C)`, `strands(D, C)`, `schedule(D, C)`. In `build()`, the line `miss.push(['GIRDER, STRAND AND ELEVATION SHEETS', 'PART 2 (AFTER THE AUTO DESIGN), NOT YET'])` is replaced by:
+  - for each girder type with lines, the sheets `elev<k>` "GIRDER <LABEL>: ELEVATION" (kmin 12) and `strd<k>` "GIRDER <LABEL>: STRAND PATTERN" (kmin 2);
+  - then `sched` "STRAND AND GIRDER SCHEDULE" (kmin 1; the table is fitted to the paper's width).
+  - New `opt.res(k, g)`: the page's cached result. Without it, the sheets compute the same call (`PSBHoldDown.compute` of `PSBDesign.cellInputs`).
+  - Data, for each type on its first line:
+    - outline `halfPolygon(R.g)`, mirrored, and voids `sectionVoids(R.g)`;
+    - strand positions `PSBStrandGfx.pattern(R, end)`;
+    - rows, draped strands and hold-down points from `R.ss`, as in ui/sumelev.js;
+    - L = `R.L`; e_end = `opt.endOh`;
+    - camber `R.cam` (rel, erect, afterDeck, seat, final);
+    - weight w_sw (L + 2 e_end / 12), as `PSBBridge.results`.
+  - Elevation:
+    - true length, with the depth exaggerated × round(L_g / 5h) (noted on the sheet);
+    - ℄ bearings and midspan;
+    - a line per strand row, with the debonded lengths dashed (as ui/sumelev.js draws them);
+    - the draped profile and the hold-down points;
+    - DIMENSIONs: hold-down from ℄ bearing (frac L) and from the girder end (frac L + e_end, PS-13); ℄ bearing to ℄ bearing; the girder length;
+    - notes: the camber at release, at erection, after the deck, at the beam seat and final, and the weight.
+  - Strand pattern:
+    - sections at ℄ bearing (the girder end) and at midspan, true scale;
+    - symbols: bonded strand (double circle), debonded at the end (circle with X), draped strand (circle with a dot);
+    - DIMENSIONs: the row chain from the soffit, Y END / Y MID, H and the bottom width;
+    - the counts.
+  - Schedule: one row per type with:
+    - type, span, lines, section, L, strands and size;
+    - straight rows, debonded rows, draped strands (n, y_end / y_mid);
+    - hold-down from ℄ bearing / from the end;
+    - f′c / f′ci, camber at release / erection, weight.
+  - New layers: S-STRD, S-STRD-DEBOND, S-STRD-DRAPE, S-TBL.
+- `ui/drawings.js`:
+  - builds with `res: ctx.res` (and the half-size print the same);
+  - the heading no longer says "part 1";
+  - index links for elev (Girders & strands, Camber & deflection, End zone & hold-down), strd (Girders & strands, Losses, Stresses) and sched (Girders & strands, Materials, Camber & deflection);
+  - the layer and source note.
+- `index.html`: the part-2 note under the tab is removed; `PSBDrawingsUI.render(…, { …, res: (k, g) => cellR(PSBDesign.cellInputs(P, k, g)) })`; the script comment.
+- `ui/summary.js`: the note names the Drawings' sheets.
+- Tests:
+  - `psbridge-drawings.test.mjs`: the sheet list includes part 2 and nothing is left out. New test "part 2": every dimension equals its engine value, as does the strand count per section and the schedule row of each type.
+  - New smoke `ps-bridge-drawings2.mjs` (7 checks).
+  - `ps-bridge-drawings.mjs`: the sheet lists and "Not in this set" updated.
+### Saved data (CLAUDE.md §5)
+- None: no key or field. `ui.dwg` as in part 1.
+### Governing provisions (CLAUDE.md §4)
+- None changed: display and export only. Harness B: 0 differences.
+### Check case
+- New project (BT-72, 120 ft, Interior S1 and Exterior S1, 40 strands with 12 draped, y_end 60 in, y_mid 8 in, frac 0.40, e_end 0):
+  - elevation: CL BRG TO CL BRG 120'-0"; HOLD-DOWN 48'-0" FROM CL BRG; 48'-0" FROM GIRDER END; vertical scale × 4 (L_g / 5h = 1440 / (5 × 72) = 4);
+  - strand pattern: 28 bonded and 12 draped (40 strands); H = 6'-0";
+  - schedule: INTERIOR S1 | 1 | G2 G3 G4 | PCI BT-72 | 120.00 | 40 0.6" | 10@2.00, 10@4.00, 8@6.00 | - | 12, 60.00 / 8.00 | 48.00 / 48.00 | 8.50 / 6.80 | camber 2.90 / 5.15 | 99.1 kip.
+### Decisions (pending engineer review)
+- DW2-D1. One elevation and one strand pattern sheet per girder type, drawn from the type's first line: the strands, the profile and the release / erection camber do not depend on the line. The camber after the deck, at the beam seat and final are those of that line (named on the sheet).
+- DW2-D2. The elevation is drawn at true length with the depth exaggerated (× round(L_g / 5h), noted), so its vertical dimensions are text, not DIMENSION entities.
+- DW2-D3. The debonded lengths are drawn as on the Summary elevation (ui/sumelev.js) and labelled with the entered length.
+- DW2-D4. The schedule is one row per girder type (the same girder on every line listed); each line's camber after the deck is on the Camber & deflection tab.
+### Other copies
+- None new: the sheet frame is part 1's adapted copy of the steel app's `sheet()` (unchanged here).
