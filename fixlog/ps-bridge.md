@@ -3394,7 +3394,7 @@ PR #1546: https://github.com/mlococo88/All-Structural/pull/1546
 - `apps/steel-bridge/engine/library.js` and the STDS-B wiring of `apps/steel-bridge/index.html`: the originals of this adapted copy (not changed). Keep a fix to one in step with the other where it applies.
 
 ## 2026-11-14 — PR 6: Undo / Redo in the header (100 steps, Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z, as the Steel Bridge app); the girder count notice's Undo is a step of it (no calculation change)
-PR #PR6NUM: https://github.com/mlococo88/All-Structural/pull/PR6NUM
+PR #1551: https://github.com/mlococo88/All-Structural/pull/1551
 ### Request
 - Catch-up to the Steel Bridge app (apps/steel-bridge/index.html, "undo / redo"): header Undo / Redo with a 100-step history and Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z; typing in a field keeps its own undo; integrated with the girder count change notice's Undo (PR 3a-1); results follow an Undo.
 ### Problem
