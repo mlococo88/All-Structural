@@ -1,7 +1,7 @@
 // apps/ps-bridge PS-23 (engineer decision 2026-11-13; display only): the notice where an exterior line's d_e computed from the bridge
 //   cross-section (PS-20, engine/design.js deOf) differs from the d_e entered (engine/design.js deDiff / deText).
 //   1. The hand check: overhangs 3 / 4 ft, barriers 1.5 ft, entered d_e 2.0 ft → G1 2.0 → 1.5 ft, G5 2.0 → 2.5 ft.
-//   2. Where they match (overhangs 3.5 ft, barriers 1.5 ft, entered 2.0) and with no cross-section barriers (17 harness B designs): no rows.
+//   2. Where they match (overhangs 3.5 ft, barriers 1.5 ft, entered 2.0) and with no cross-section barriers (18 harness B designs): no rows.
 //   3. A line whose types in different spans have different entered values: one row per entered value, its spans named (where not every span).
 //   4. The dismissal key changes with the difference; the computed engine inputs are not changed by deDiff (nothing written to P).
 import assert from 'node:assert/strict';

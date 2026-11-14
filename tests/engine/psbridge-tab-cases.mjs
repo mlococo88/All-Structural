@@ -38,12 +38,12 @@ export const TAB_CASES = base => ({
   'box BIII-36 with a 6 in topping, deck on (S below 4 ft), handling on': (() => { const P = base(); P.base.girder = 'AASHTO BIII-36 (39in)'; P.base.ts = 6; P.base.harp.n = 0;
     P.base.rows = [{ n: 16, y: 2, nd: 0, dbnd: 0 }]; P.xs.bays = [3, 3, 3, 3]; P.spans.lengths = [60]; P.base.deck.on = true; P.base.handling.on = true; return P; })(),
   // PR A (engineer request 2026-11-14): a BIII-36 design that PASSES on the real 39 in section (the case above is kept: it fails, which checks
-  // the failure reporting). CTDOT BDM plate 5.2.3 strand pattern (2 in grid; 16 strands per row in the 36 series): 16 @ 2 in and 16 @ 4 in
-  // (4 + 4 debonded 10 ft) and 6 draped strands in the web columns (y 31 in at the end, 9 in between the hold-downs at 0.4 L, plate 5.2.3: hold-
-  // downs 0.2 L apart about midspan); ten 3 ft boxes, interior G5, 80 ft, 6 in topping; no forms (DC1 add. 0), DC2 0.10 klf (two barriers / 10
-  // boxes), DW 0.075 klf (25 psf × 3 ft)
-  'box BIII-36 (39in), CTDOT plate pattern 16 + 16 strands and 6 draped, 6 in topping, 80 ft, 10 boxes: passes': (() => { const P = base(); P.base.girder = 'AASHTO BIII-36 (39in)'; P.base.ts = 6;
-    P.base.rows = [{ n: 16, y: 2, nd: 4, dbnd: 10 }, { n: 16, y: 4, nd: 4, dbnd: 10 }]; P.base.harp.n = 6; P.base.harp.yEnd = 31; P.base.harp.yMid = 9;
+  // the failure reporting). CTDOT BDM plate 5.2.3 strand rows (2 in grid; 16 strands per row in the 36 series): 16 @ 2 in (4 debonded 10 ft)
+  // and 16 @ 4 in (4 debonded 6 ft: the terminations staggered, 5.9.4.3.3(B)), and 4 top strands at y = 37 in (2 in below the top, 3.5 in above
+  // the void) for the release tension at the ends (the plate's draped web columns cannot be entered: contiguous centred rows, PS33-D1);
+  // ten 3 ft boxes, interior G5, 80 ft, 6 in topping; no forms (DC1 additional 0), DC2 0.10 klf (two barriers / 10 boxes), DW 0.075 klf (25 psf × 3 ft)
+  'box BIII-36 (39in), CTDOT plate rows 16 + 16 strands and 4 top strands, 6 in topping, 80 ft, 10 boxes: passes': (() => { const P = base(); P.base.girder = 'AASHTO BIII-36 (39in)'; P.base.ts = 6; P.base.harp.n = 0;
+    P.base.rows = [{ n: 16, y: 2, nd: 4, dbnd: 10 }, { n: 16, y: 4, nd: 4, dbnd: 6 }, { n: 4, y: 37, nd: 0, dbnd: 0 }];
     P.xs.nb = 10; P.xs.bays = [3, 3, 3, 3, 3, 3, 3, 3, 3]; P.xs.ohL = 1.5; P.xs.ohR = 1.5; P.design = { g: 5, s: 1 }; P.spans.lengths = [80];
     P.base.loads.wNC = 0; P.base.loads.wBar = 0.10; P.base.loads.wDW = 0.075; return P; })(),
   // PR 2d-3 (PS-10): the hold-down check for RIDOT with an edited limit (0.90 W) and the girder end past the bearing; AASHTO with the box off
