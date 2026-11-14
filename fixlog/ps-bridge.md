@@ -3157,12 +3157,53 @@ See the PR for the full tables (inputs, J working, I, k, each term). Summary (de
 - PS35-D3. Voided slab J: one closed thin-walled cell of the outer walls (Eq. C4.6.2.2.1-3: t_w the concrete outside the outermost void, t_b and t_t the thinnest concrete below / above the voids; the concrete between the voids is not counted). Smaller J than the section has (conservative, larger factors). Alternatives considered: the solid-section formula A⁴ / 40 I_p with net A and I_p (C4.6.2.2.1-2) gives J = 32,937 in⁴ for SIV-48 (I / J 1.025: g_M1 about 22 % and g_M2 about 5 % larger; physically too low: the voids take 30 % of the area but little torsional stiffness) and Table 4.6.2.2.1-3's simplified I / J (0.54 d / b + 0.16 = 0.399, J = 84,600 in⁴; needs the Owner's concurrence). For the boxes the cell J agrees with the simplified value within 1 % (BI-36 0.5666 / 0.5707; BIII-36 0.7448 / 0.7532).
 - PS35-D4. I or J outside Table 4.6.2.2.3a-1 (25,000 ≤ J ≤ 610,000, 40,000 ≤ I ≤ 610,000 in⁴; every standard voided slab has I < 40,000): 4.6.2.2.3a lets the shear factor be taken as the moment factor; the LARGER of the shear equations and the moment factor is used (the equations stay where they give more), and the limit is flagged.
 - PS35-D5. Skew: the moment reduction (Table 4.6.2.2.2e-1, any θ for (f)/(g)) with the SMALLER skew of the span's supports, none where they differ by more than 10° (4.6.2.2.2e); the shear correction with the larger (the engine's θ), over the whole span as the engine applies its own c_V; d = the precast depth h (the smaller d, the larger c_V). Unequal skews with the larger ≥ 30° remain the existing input error (design.js), unchanged.
-- PS35-D6. Solid deck slabs ('Deck slab 12×48 / 18×48 (solid)') are unchanged (the brief): the old app and the engine give them type (k), with the same t_s = 0 blow-up; AASHTO lists precast solid boxes under (f)/(g) too. Open item.
+- PS35-D6. Solid deck slabs ('Deck slab 12×48 / 18×48 (solid)') are unchanged (the brief): the old app and the engine give them type (k), with the same t_s = 0 blow-up; AASHTO lists precast solid boxes under (f)/(g) too. Open item. **Resolved by PS-36** (engineer 2026-11-14: the solid slabs get the type (f) / (g) override too; entry below).
 - PS35-D7. d_e: as the engine takes it for every shape (from the girder centreline, deOf / entered), not from the exterior web centreline of the box (AASHTO's d_e for (f)/(g)): the larger d_e, the larger e (conservative).
 - PS35-D8. Out of range (b, L, N_b, I, J, d_e > 2.0 ft, θ > 60°, d outside 17–60 in with a skew): computed all the same, listed on the Loads & LLDF tab (#fgRange), on the Loads input tab (#fgInNote) and as a design warning (R.warns: the check summary and the Report's warnings).
 ### Open items
-- Solid deck slabs: type (k) with t_s = 0 (PS35-D6).
+- Solid deck slabs: type (k) with t_s = 0 (PS35-D6). Resolved by PS-36.
 - The DOT sheets' J values: to be added to `DOT_J` (engine/sections.js) when the engineer provides them; whether they apply with a composite topping (PS35-D2).
 - Found while checking PR A's design: CTDOT BDM plate 5.2.3 (BIII, BIV; PDF p. 329) shows ONE bottom row of 16 strands at 2 in plus the web columns; the two rows at 2 in and 4 in are plate 5.2.2 (BI, BII; p. 328). The PR A harness design's 4 in row is therefore not on the BIII plate (it fits the 5½ in slab under PS-33's 1.5 in void clearance).
 ### Other copies
 - `Prestressed Bridge Design.html` (frozen) keeps type (k) for boxes and slabs; not changed. `lldf.html` has its own box choices (separate tool); not touched.
+
+## 2026-11-14 — PS-36: the solid deck slabs get the type (f) / (g) live-load distribution factors too; J = A⁴ / (40 I_p) of the rectangle (CALCULATION CHANGE, §4)
+PR #PRC: https://github.com/mlococo88/All-Structural/pull/PRC
+### Request
+- Engineer decision 2026-11-14 (answer to PS35-D6): the solid deck slabs ('Deck slab 12×48 (solid)', 'Deck slab 18×48 (solid)') switch to the PS-35 type (f) / (g) override. J of the solid rectangle from the AASHTO commentary expression (checked against the 10th Ed. PDF); with a topping, the PS35-D2 composite convention adapted; the same J override and order (entered → library → computed), the same labels, flags and display.
+### Problem
+- PS-35 left the solid slabs on the moved engine's type (k) equations, with (K_g / 12 L t_s³)^0.1 and t_s = 0 guarded to 1e-6: Deck slab 12×48 (solid), 30 ft, no topping: DF_M 2.6808.
+### What changed
+- `engine/lldf-fg.js`:
+  - `isFG`: Before: `(!!g.isBox || (!!g.isDeck && !g.box.solid && (+g.box.voids || 0) > 0 && (+g.box.voidD || 0) > 0))` After: `(!!g.isBox || (!!g.isDeck && (!!g.box.solid || ((+g.box.voids || 0) > 0 && (+g.box.voidD || 0) > 0))))`.
+  - `jOutline`: first, for a solid slab (`g.isDeck && g.box.solid`): h_J = h (no topping) or h + n t_s (topping); A = w h_J, I_x = w h_J³ / 12, I_y = h_J w³ / 12, I_p = I_x + I_y, J = A⁴ / (40 I_p); returns `{ kind: 'solid', h, w, n, ts, comp, hJ, A, Ix, Iy, Ip, J }`.
+  - New `kindOf(g)` ('box beam' | 'solid slab' | 'voided slab'), used in the warning, the Loads & LLDF card title ("…, type (g) (PS-35, PS-36)") and the Report §2 note ("Live-load distribution (PS-35, PS-36): solid slab, …").
+- `engine/worked.js` `fgSteps`: for `jw.kind === 'solid'` the J steps are `ld.JhJ` (with a topping: h + n t_s), `ld.JA`, `ld.JIx`, `ld.JIy`, `ld.JIp`, `ld.Jc` = A⁴ / (40 I_p) (ref Eq. C4.6.2.2.1-2), in place of the cell steps (`Jtw` … `Jst`), which are wrapped in `else { … }`.
+- `ui/loads.js`: TOPICS `fgj` takes the new ids (title "Box beam / slab: I and J (types f / g)", ref Eqs. C4.6.2.2.1-2, C4.6.2.2.1-3); the card title via `kindOf`; the type (k) card's solid-slab sentence removed (no shape reaches it now).
+- `engine/fields.js`: `fgShape` includes the solid slabs (the J override card on the Loads tab, "Box beam / deck slab live load distribution (types f / g)"); the J tooltip names both expressions; the dfAuto option "…box beams and deck slabs types f / g".
+- `report/builders.js` `fgNotes`: the shape name via `kindOf`, "(PS-35, PS-36)" for a solid slab.
+- Tests: `psbridge-lldf-fg.test.mjs` (PS-35 (4): I-girders and NEXT only; (7), (8) updated; new PS-36 (1), (2): the hand checks below, the J steps and pairs, the Report, the J override, the input card); harness B (`psbridge-tab-cases.mjs`): new design "solid deck slab 18×48 with a 5 in topping, 40 ft, 6 slabs" (an intended difference, compared as the PS-35 box designs: the old app's engine with its distFactors wrapped by lldf-fg.js); the harness B design counts 18 → 19 (legacy, strandfit, types, de, denotice, dl, rigid tests).
+### Saved data (CLAUDE.md §5)
+- None new: the PS-35 field `base.loads.Jfg` now also applies to a solid slab. No key or format changed.
+### Governing provisions (CLAUDE.md §4)
+- AASHTO LRFD 10th Ed. (2024) Eq. C4.6.2.2.1-2 (J = A⁴ / 40.0 I_p for stocky open and solid sections; checked in the PDF, p. 4-31: Eq. C4.6.2.2.1-1 is J = (1/3) Σ b t³ for thin-walled open sections; the 10th Ed. gives no β b t³ form), and the PS-35 tables (4.6.2.2.2b-1, 4.6.2.2.2d-1, 4.6.2.2.3a-1, 4.6.2.2.3b-1, 4.6.2.2.2e-1, 4.6.2.2.3c-1) in place of the type (k) rows for the solid slabs.
+### Check cases (hand; n = 0.8345, d_e = 2.0 ft, no skew, b = 48 in)
+
+| Design | Type | I (in⁴) | J (in⁴) | I / J (simplified 0.54 d/b + 0.16) | k | g_M1 / g_M2 | g_V1 / g_V2 | DF_M before → after | DF_V before → after |
+|---|---|---|---|---|---|---|---|---|---|
+| 12×48 solid, 30 ft, no topping, N_b 6, interior | g | 6,912 (< 40,000: flagged) | 23,419 (< 25,000: flagged) | 0.29514 (0.29500) | 1.74707 | 0.2823 / 0.3578 | 0.4864 / 0.4800 | 2.6808 → 0.3578 | 0.5203 → 0.4864 |
+| 18×48 solid, 40 ft, 5 in topping, N_b 6, interior | f | 45,248 (composite) | 129,362 | 0.34977 (0.36250) | 1.74707 | 0.2550 / 0.3413 | 0.4699 / 0.4704 | 0.5019 → 0.3413 | 0.5203 → 0.4704 |
+| same, exterior G1 (e_M 1.1917 / 1.1200; e_V 1.3500 / 1.3162) | f | | | | | | | 0.6000 → 0.3822 | 0.6000 → 0.6343 |
+
+- 12×48: A = 576 in², I_x = 48 × 12³ / 12 = 6,912, I_y = 12 × 48³ / 12 = 110,592, I_p = 117,504 in⁴; J = 576⁴ / (40 × 117,504) = 23,419 in⁴. Terms: (b / 33.3 L)^0.5 = 0.21920, (I/J)^0.25 = 0.73707, g_M1 = 1.74707 × 0.21920 × 0.73707 = 0.2823; (b/305)^0.6 = 0.32973, (b / 12 L)^0.2 = 0.66833, (I/J)^0.06 = 0.92940, g_M2 = 0.3578; (b / 130 L)^0.15 = 0.51704, (I/J)^0.05 = 0.94081, g_V1 = 0.4864; (b/156)^0.4 = 0.62409, (b / 12 L)^0.1 = 0.81751, × 1.0, g_V2 = 0.4800; DF_V = max(0.4864, 0.4800, g_M 0.3578) = 0.4864 (J and I out of range: PS35-D4).
+- 18×48 with 5 in topping: h_J = 18 + 0.8345 × 5 = 22.172 in; A = 1,064.28 in²; I_x = 43,601, I_y = 204,341, I_p = 247,942 in⁴; J = 129,362 in⁴. (I/J)^0.25 = 0.76904, (b / 33.3 L)^0.5 = 0.18983 → g_M1 = 0.2550; (b / 12 L)^0.2 = 0.63096, (I/J)^0.06 = 0.93892 → g_M2 = 0.3413; g_V1 = 0.49521 × 0.94883 = 0.4699; g_V2 = 0.62409 × 0.79433 × 0.94883 = 0.4704. Exterior: max(1.1917 × 0.2550, 1.12 × 0.3413) = 0.3822; max(1.35 × 0.4699, 1.3162 × 0.4704) = 0.6343 (higher than the type (k) lever rule's 0.6000: this exterior shear factor INCREASES).
+### How verified
+- See the PR.
+### Decisions (pending engineer review)
+- PS36-D1. J of the solid slab: Eq. C4.6.2.2.1-2, J = A⁴ / (40 I_p) of the w × h rectangle (the 10th Ed. has no β b t³ form; Eq. C4.6.2.2.1-1 is the thin-walled open (1/3) Σ b t³). Check: 12×48 gives I/J = 0.2951 against Table 4.6.2.2.1-3's 0.2950; the exact St. Venant value (β ≈ 0.281 for b/t = 4) is 23,307 in⁴ against 23,419 (0.5 %).
+- PS36-D2. With a topping (type f): I = the composite I_c (as PS35-D2) and J of the rectangle w × (h + n t_s) (the topping transformed by n on its thickness over the slab width, as the box's top wall in PS35-D2). It gives I/J 0.350 for the 18×48 with 5 in topping (simplified 0.363 on the precast d/b; the slab alone 23,328 / 73,627 = 0.317): composite I/J larger than the slab alone, conservative as PS35-D2.
+- PS36-D3. The solid slabs' library width is the nominal 48 in (b = 48 in, as the old library; not the CTDOT 47.5 in actual width). Unchanged.
+### Open items
+- None new (the DOT J values: PS-35 open item).
+### Other copies
+- `Prestressed Bridge Design.html` (frozen): type (k) for the solid slabs; not changed.

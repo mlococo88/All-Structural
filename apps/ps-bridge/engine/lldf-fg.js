@@ -6,9 +6,10 @@
    AN ENGINE CHANGE MADE APP-SIDE (CLAUDE.md §4; fixlog/ps-bridge.md PS-35), as engine/rigid.js (PS-19): the moved engine (engine/pbd-*.js,
    verbatim, frozen) is NOT edited. Its distFactors (pbd-lldf-flexure.js) gives every shape but NEXT the I-girder type (k) equations, with
    K_g / (12 L t_s³); with no topping (t_s = 0, guarded to 1e-6) that term grows without bound (BI-36, 60 ft: DF_M ≈ 1.8–2.0). For a box beam
-   or a VOIDED deck slab (girderGross: isBox, or isDeck with voids and not solid) this file replaces the engine's result by the type (f)
+   or a deck slab (girderGross: isBox, or isDeck: voided, and from PS-36 (2026-11-14) solid too) this file replaces the engine's result by the type (f)
    (precast boxes with shear keys and a cast-in-place overlay: t_s > 0) / (g) (integral concrete deck: t_s = 0) factors. I-girders, NEXT and
-   the solid deck slabs keep the engine's own result, byte for byte (the old app gives the solid slabs type (k) as well: unchanged, PS35-D6).
+   the solid deck slabs kept the engine's own result until PS-36 (engineer 2026-11-14: they get (f) / (g) too; J = A⁴ / (40 I_p) of the
+   rectangle, Eq. C4.6.2.2.1-2 "solid sections", with a topping on the depth h + n t_s). I-girders and NEXT: the engine's result, byte for byte.
 
    The equations (AASHTO LRFD 10th Ed.; b = beam width in, L = span ft, N_b = beams, I, J in⁴, d_e ft, d = beam depth in; cited, not copied):
      interior moment  Table 4.6.2.2.2b-1, (f)/(g):  k = max(2.5 N_b^−0.2, 1.5);  one lane g_M1 = k (b / 33.3 L)^0.5 (I / J)^0.25;
