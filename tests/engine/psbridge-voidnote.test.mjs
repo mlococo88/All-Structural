@@ -29,7 +29,7 @@ test('void note: the numbers of the library and of sectionVoids, for every box b
         && t.includes(`${L.voidW.toFixed(1)} × ${L.voidH.toFixed(1)} in cell`) && /where the engine places it \(sectionVoids\)/.test(t) && /are the plate's values \(AASHTO B[IV]+-(36|48), CTDOT BDM plate 5\.2\.1b, PDF p\. 327\)/.test(t), `${n}: ${t}`);
     } else if (L.deck && L.voids) {   // PS-32: the CTDOT voided slabs (the plate's voids)
       const e = W.PSBSections.STD[n]; assert.ok(e, n);
-      assert.ok(v.every(q => q.y === L.h / 2)); assert.ok(t.startsWith(`Voids: ${e.src.voids.map(q => `Ø${q.d.toFixed(1)} in at x = ${q.x.toFixed(1)} in`).join(', ')}, on mid-depth (y = ${(L.h / 2).toFixed(1)} in)`), `${n}: ${t}`);
+      assert.ok(v.every(q => q.y === L.h / 2)); assert.ok(t.startsWith(`Voids: ${e.src.voids.map(q => `Ø${q.d.toFixed(1)} in at x = ${q.x.toFixed(2)} in`).join(', ')}, on mid-depth (y = ${(L.h / 2).toFixed(1)} in)`), `${n}: ${t}`);
     } else assert.equal(t, '', n);
   }
 });

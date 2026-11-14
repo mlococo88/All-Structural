@@ -708,10 +708,10 @@
   /* secNotice(): PS-31 (engineer decision 2026-11-14): a project that used one of the old library's box beams or voided deck slabs was
      migrated on open to the corrected standard section (engine/sections.js; the old values in P.legacySection). A banner above the content of
      every output tab states, per base design / girder type, "section corrected: old A / I / y_b → new" (or that the section was removed),
-     until closed (P.notices.sec = the items closed; optional field, nothing else changed); the Report's §2 states it too. */
+     until closed (P.notices.sec = the items closed; optional field, nothing else changed); the Report's §2 states it too. PS-38 / PS-40 (2026-11-14): also a section value revised since the project was saved (title: the decisions, PSBSections.tags). */
   function secNotice() {
     const SC = window.PSBSections, its = SC ? SC.items(P) : []; if (!its.length || (P.notices && P.notices.sec === SC.sig(P))) return '';
-    return `<div class="notice" id="secNotice" role="alert" style="border-left-color:var(--fail)"><div><b>Girder section corrected (PS-31).</b> ${its.map(x => esc(SC.text(x))).join(' ')} <a href="#" data-goin="gird">Girders &amp; strands tab</a>; <a href="#" data-gotab="sec">Section properties</a>.</div><div class="nBtns"><button type="button" data-secdismiss>Close</button></div></div>`;
+    return `<div class="notice" id="secNotice" role="alert" style="border-left-color:var(--fail)"><div><b>Girder section corrected (${esc(SC.tags(P))}).</b> ${its.map(x => esc(SC.text(x))).join(' ')} <a href="#" data-goin="gird">Girders &amp; strands tab</a>; <a href="#" data-gotab="sec">Section properties</a>.</div><div class="nBtns"><button type="button" data-secdismiss>Close</button></div></div>`;
   }
   function deNotice() {
     const D = window.PSBDesign.deDiff(P); if (!D.rows.length || (P.notices && P.notices.de === D.sig)) return '';

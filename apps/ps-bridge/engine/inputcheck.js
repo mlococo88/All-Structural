@@ -117,8 +117,10 @@
        (1) inside the concrete outline (halfPolygon mirrored about the girder ℄),
        (2) not inside a void (sectionVoids),
        (3) at least COVER = 2 in from every edge of the outline, and
-       (4) at least VOID = 1.5 in from the edge of every void (PS-33, engineer decision 2026-11-14: the void faces are interior formed faces;
-           the CTDOT standard box pattern's 4 in row in the 5½ in bottom slab is 1.5 in from the void, plates 5.2.2 / 5.2.3; 2 in until then),
+       (4) at least VOID = 1.25 in from the edge of every void (PS-39, engineer decision 2026-11-14: 1.25 in everywhere; the MassDOT deep
+           adjacent box beams' inner draped column is 1.25 in from the void face, Part II dwg 10.2.8, p. 227: 6 in web, columns 2¾ and 4¾ in
+           from the outer face. Before: 1.5 in, PS-33 (the CTDOT standard box pattern's 4 in row in the 5½ in bottom slab, plates 5.2.2 /
+           5.2.3); 2 in until PS-33; the void faces are interior formed faces),
      each distance measured from the strand CENTRE (not from its surface; no half strand diameter taken off): the engine's "2″ grid with
      2″ edge cover" of its row-capacity warning (pbd-compute.js: floor((b − 4)/2) + 1 strands across a width b) and the criterion of
      tests/engine/psbridge-strandgfx.test.mjs (PS-27, fitsAt). Equal to 2 in fits (1e-9 in tolerance).
@@ -128,7 +130,7 @@
      inside the depth): those have their own messages. Not checked: a Custom shape (its outline is drawn with the library's default flange
      thicknesses, not entered: PS28-D1, pending engineer review). Only inputs are read: nothing is written, so a pattern that does not fit
      (an imported old-app design too) is kept as entered and shows this error until it is fixed. */
-  const COVER = 2, VOID = 1.5;   // PS-28: exterior faces 2 in; PS-33: void faces 1.5 in (strand centre)
+  const COVER = 2, VOID = 1.25;   // PS-28: exterior faces 2 in; PS-39 (was 1.5 in, PS-33): void faces 1.25 in (strand centre)
   const fx = v => { const s = (Math.round(v * 100) / 100).toFixed(2).replace(/\.?0+$/, ''); return s === '-0' ? '0' : s; };
   function insidePoly(poly, x, y) { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j];
     if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; }
