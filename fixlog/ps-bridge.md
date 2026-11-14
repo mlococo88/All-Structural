@@ -3211,7 +3211,7 @@ PR #1544: https://github.com/mlococo88/All-Structural/pull/1544
 - `Prestressed Bridge Design.html` (frozen): type (k) for the solid slabs; not changed.
 
 ## 2026-11-14 — Stale "PR n" texts and the Summary's run-together label (display only)
-PR: (link below)
+PR #1545: https://github.com/mlococo88/All-Structural/pull/1545
 ### Request
 - Review of 2026-11-14 (PS Bridge catch-up to the Steel Bridge app, item 1): texts that still say a feature "comes in PR 3a" (or another PR) for features that exist now; the Summary's project-overview grid printed "Continuitymade continuous" (label and value touching).
 ### What changed (text and CSS only; no value, key or format changed)
