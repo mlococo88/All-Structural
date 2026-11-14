@@ -2280,7 +2280,7 @@ index b3bbd3d..211cb2b 100644
 ```
 
 ## 2026-11-14 — PR 3c: the 3D view tab — the bridge in three.js (girder lines by type with their library shapes, deck, haunch, barriers, diaphragms, supports and skews, continuity, the strands of the type shown), the Steel Bridge app's 3D view pattern (display only; no calculation change)
-PR: (this PR)
+PR #1533: https://github.com/mlococo88/All-Structural/pull/1533
 ### Request
 - docs/ps-bridge-plan.md §5 row 3c ("3D view (three.js r128, steel `view3d` pattern) | display"), §2.3 (output tab "3D view"), PS-3 / PS-6 (looks and works like the Steel Bridge app).
 ### What changed
