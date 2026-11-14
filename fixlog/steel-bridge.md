@@ -10073,3 +10073,29 @@ index 58d25a5..b6463e8 100644
 - **How verified:** new tests/engine/sb-cf10-near-status.test.mjs (the two check cases on the tab, Report and Summary; unchanged where a section meets both, with c = 0, with cross-frames and the built-in project; it fails on origin/main, 2 of 3). Engine: `node tests/engine/run.mjs crossframes xf- sb-diaphragm sb-dia- sb-cf10 framing drawings dxf- report ownerdef sb-summary`: 25 files, 145 passed, 0 failed (the existing sb-cf10-nearest, sb-dia-*, xf-cf10-*, crossframes GirderDetail parity unchanged). Smokes steel-bridge-diaphragm, -report, -summary, -dash: all passed, 0 console errors.
 - **Other copies:** none (GirderDetail's ST-Girder has no CF10 nearest rule).
 - **Decision (pending engineer review):** SBNS-D1: the Warning applies whenever CF10 names a nearest section (per group: any group), whatever diaphragm is in use, since CF10's own recommendation fails the depth requirement; with a section that meets both it stays OK.
+
+## 2026-11-14 — PR: claude/steel-list-race (PR #1561: https://github.com/mlococo88/All-Structural/pull/1561) — a list edit committed by clicking an input tab is kept (SBLC; the race fixed in the PS Bridge app's copy by PR #1548; input only, no calculation change)
+- **Request:** the list tables (span lengths, girder spacings, skews, field splice stations, …) lost an edit when the next thing clicked was an input tab: the value typed into a row went back to the old one. The PS Bridge app fixed the same race in its copy of this file (`apps/ps-bridge/ui/lists.js`, PR #1548); apply the same fix here.
+- **Problem:** `ui/lists.js` `bind()` commits a table edit on `focusout`, deferred by `setTimeout(…, 0)` (a redraw by Enter or × moves the focus inside the table). A mouse-down on an input tab blurs the table, and the tab's click handler (`index.html`, `$('inTabs')` click → `drawInputs()`) redraws every pane before the deferred commit runs. The commit then saw its table detached (`!ctl.el.isConnected`) and returned, so the hidden input's new text never fired `change`, and the project kept the old list. Shared code: none (`shared/list-input.js` is not involved: the race is in this file's deferred commit).
+- **Where:** `apps/steel-bridge/ui/lists.js`, `bind()`, the `focusout` handler, anchor `ctl.el.addEventListener('focusout', () => setTimeout(() => {`.
+  - Before:
+    ```js
+          if (!ctl.el.isConnected || ctl.el.contains(document.activeElement)) return;
+          if (el.value !== was) { was = el.value; el.dispatchEvent(new Event('change', { bubbles: true })); }
+    ```
+  - After (the PS copy's lines, with this file's comment):
+    ```js
+          if (ctl.el.isConnected && ctl.el.contains(document.activeElement)) return;
+          if (el.value === was) return; was = el.value;
+          // SBLC (2026-11-14): when the page was redrawn before this ran (a click on an input tab redraws every pane), the edit is committed
+          // through the input of the same id drawn in its place (before, it was lost); the PS Bridge app's copy has the same fix (PR #1548)
+          let t = el; if (!el.isConnected) { t = document.getElementById(el.id); if (!t) return; t.value = el.value; }
+          t.dispatchEvent(new Event('change', { bubbles: true }));
+    ```
+  - The new input of the same id is the one the module drew in the redraw (same id, data attributes and handler, in the hidden pane of the tab left); the edited text is put into it and its `change` fires, which the module's own handler reads exactly as for a commit before the redraw (`index.html` `kind === 'spans'`, `xs.bays`, `xs.skews`, …). With no redraw, behaviour is as before (the detached case only).
+- **Saved data (§5):** none changed: the same handlers write the same fields in the same formats (arrays stay arrays, text stays text).
+- **Governing provision:** none (input handling only). No formula, factor or value changed.
+- **Check case (built-in project, browser, `tests/smoke/steel-bridge-list-commit.mjs`):** Bridge layout tab, span 1 typed 110 → 111, then a click on the Cross-section tab: saved `spans.lengths` before **[] (not saved: the edit was lost, the table showed 110 again on return)**, after **[111, 140, 110]**; the same with Tab out of the cell first (112): before lost, after [112, 140, 110]; Cross-section tab, bay 2 typed 9.25 then a click on the Bridge layout tab: before lost, after `xs.bays` [9.5, 9.25, 9.5, 9.5]. The plain commit (focus to another input of the same tab): [113, 140, 110] before and after.
+- **How verified:** new smoke `tests/smoke/steel-bridge-list-commit.mjs`: on origin/main 3 of 6 checks fail (the three tab-click cases), with the fix 6 of 6 pass, 0 console errors. Engine: `node tests/engine/run.mjs list-input steps-groups-tabs model paths tex handoff equal-spacing library report-wiring` 13 files, 110 passed, 0 failed; `node tests/check-syntax.mjs` all scripts pass; smokes steel-bridge-equal-spacing, -taberrors, -invalid, -wiring, sbd-undo, steel-bridge-splices, -splice-addrow pass (see the PR).
+- **Other copies:** `apps/ps-bridge/ui/lists.js` (already has the fix, PR #1548). The two copies now differ only in their header comments, selector lists and namespace (to move to `shared/` later, CLAUDE.md §3).
+- **Open items:** a list drawn only while its tab is open (the Auto design tab's Station windows, `#ad_win`) or on an output tab (Analysis `#an_a_seqCustom`, `#an_l_xf`), when the click that redraws goes to a tab that does not draw that input again: no input of the same id exists after the redraw, so the edit is still not committed (as before; same in the PS copy). Not changed here.
