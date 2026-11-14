@@ -3320,3 +3320,35 @@ PR #1548: https://github.com/mlococo88/All-Structural/pull/1548
 - LAY-D4. Equal spacing: back to individual keeps the bays as written. A change of N_b in equal mode rewrites every bay to the new S, as Steel.
 ### Other copies
 - `ui/lists.js` and `engine/model.js` `equalSpacing` are copies of the Steel Bridge app's, to move to shared/ later (CLAUDE.md §3). The focusout fix in `ui/lists.js` is not in the steel copy, which has the same race; that tool was not changed.
+
+## 2026-11-14 — Summary "Cross-section and plan" card; the Report's framing plan in §2 (display only)
+PR #1549: https://github.com/mlococo88/All-Structural/pull/1549
+### Request
+- PS Bridge catch-up to the Steel Bridge app, item 4:
+  - near the top of Summary, the whole-bridge cross-section (item 2) and the framing plan (item 3), stacked at full width with a height cap like Steel's;
+  - each figure links to its input and output tabs;
+  - the same figures in the Report where sensible, with a "see §" link.
+### What changed
+- `ui/summary.js`:
+  - `gfxBox(o)`, written between the verdict and the project overview: card `#sum-gfx` "Cross-section and plan". Each figure has its caption links: Cross-section and Girders & strands input tabs and the Loads & LLDF output tab for the section; Bridge layout, Cross-section and Diaphragms / deck input tabs and the 3D view for the plan.
+  - New `after(el, o)` draws them at the card's width: the section of the span shown (`PSBXsFig.svg`, G<line> outlined) as a detail card, and the plan through `PSBPlan.mount`, both with `maxH` = the steel Summary's cap `max(360, min(760, 0.8 × window height))`.
+  - CSS for `#sum-gfx`.
+- `index.html` `drawOut()`: after `$('out').innerHTML = h`, the Summary tab calls `PSBSummaryUI.after($('out'), { P })`.
+- `ui/plan.js`:
+  - `mount(slot, P, o)` passes `o.maxH` to `svg()`;
+  - the bay labels: the bays are labelled when they all have room, and an overhang too short for its label gets the tick only (before: one short overhang dropped every bay label).
+- Report:
+  - `ui/report.js` `planFig(P, wScr)` draws the plan at 700 px, plus a copy at the screen width on a narrow screen, as the tabs' figures.
+  - It goes to `PSBReportBuild.model(B, { …, planFig })`. `report/builders.js` `proj()`, subsection "Bridge and the design girder", gets the figure (Figure 2.1) and a note: the plan's legend, then "The cross-section of each worked girder's span, with the girder sections, barriers and d_e: see [[rs.lds]]" (the Loads & LLDF section's figure).
+  - Nothing is added in Node (no drawing code). The section numbers and the numbers compared by harness B are unchanged.
+- Tests: `tests/smoke/ps-bridge-figures.mjs` checks:
+  - the card above the overview; one section per cell of the span and one plan line per cell; heights within the cap, full width;
+  - the six links, the cross-section link opening Loads & LLDF with its figure, and the plan link opening the Bridge layout tab with its plan;
+  - Report §2 has "Figure 2.1: Framing plan" with 10 lines and the "see §4" reference.
+### Saved data (CLAUDE.md §5)
+- None. The ×2 choice of the plan is shared with the Bridge layout tab's for the page session (not saved).
+### Governing provisions (CLAUDE.md §4)
+- None changed.
+### Decisions (pending engineer review)
+- SUMG-D1. The Summary's cross-section is the span of the line shown on the output tabs (as on Loads & LLDF). With several spans, the other spans are drawn when another type or line is chosen.
+- SUMG-D2. The Report shows the plan once, in §2 (Project, basis and assumptions), and refers to the existing cross-section figure of the Loads & LLDF section (§4, one per worked girder) rather than drawing it twice.

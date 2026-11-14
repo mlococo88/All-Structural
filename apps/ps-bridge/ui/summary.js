@@ -94,6 +94,7 @@
 .sum-badge.fail{color:#991B1B;background:#FEF2F2;border-color:var(--fail)} .sum-badge.pass{color:#065F46;background:#ECFDF5;border-color:var(--pass)} .sum-badge.none{color:#475569;background:var(--slate-100);border-color:var(--slate-400)}
 .sum-cnt{display:inline-flex;gap:5px;flex-wrap:wrap} .sum-cnt span{font-size:8.5pt;font-weight:700;padding:1px 6px;border:1px solid;border-radius:3px;white-space:nowrap}
 .sum-cnt .c-fail{color:#991B1B;background:#FEF2F2;border-color:var(--fail)} .sum-cnt .c-pass{color:#065F46;background:#ECFDF5;border-color:var(--pass)} .sum-cnt .c-na{color:#475569;background:var(--slate-100);border-color:var(--slate-400)}
+#sum-gfx figure.sum-g1{margin:0 0 14px} #sum-gfx figcaption{font-family:var(--font-ui);font-size:9pt;color:#475569;margin:0 0 4px} #sum-gfx .vk-det{margin:0}   /* 2026-11-14: the cross-section and plan card */
 #sum-project .kv div{gap:10px} #sum-project .kv div>span:last-child{text-align:right}   /* the label and its value never run together (display only) */
 .sum-gov{margin:8px 0 2px;font-size:10pt} .sum-gov .sum-low{display:block;margin-top:3px} .sum-run{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px;font-family:var(--font-ui);font-size:9pt;color:#475569}
 .sum-run .spin{display:inline-block;width:12px;height:12px;border:2px solid #CBD5E1;border-top-color:var(--color-primary);border-radius:50%;animation:sbspin .8s linear infinite;vertical-align:-2px;margin-right:6px}
@@ -195,12 +196,32 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
   function html(o) {
     css();
     const A = o.A, M = A ? model(o.P, A) : null;
-    let h = verdict(M, o) + overview(M, o);
+    let h = verdict(M, o) + gfxBox(o) + overview(M, o);
     if (A) h += grid(M, o) + table(M) + checks(M);
     else h += box('sum-wait', 'Girder × span grid', `<p class="note">${o.run && o.run.busy ? 'Computing every girder type on every line…' : o.run && o.run.stopped ? 'Stopped: Run all (above) to compute the rest.' : 'No girder type results.'}</p>`);
     h += o.shown || '';
     if (A) h += notes(M, o);
     return h;
   }
-  window.PSBSummaryUI = { html, model, css, worse, where };
+  /* 2026-11-14 (PS Bridge catch-up to the Steel Bridge app, item 4; the steel Summary's gfxCard, GFXS / SBSF): the "Cross-section and plan"
+     card near the top: the whole-bridge cross-section of the span shown (ui/xsfig.js, the Loads & LLDF figure) and the framing plan (ui/plan.js,
+     the Bridge layout figure), stacked at full width, each drawn at the card's width with its height capped (80 % of the window, 360 to
+     760 px, as the steel Summary); each links to its input and output tabs. Display only. html() writes the slots, after(el, o) draws them. */
+  const GFX_CAP = () => Math.max(360, Math.min(760, 0.8 * ((typeof window !== 'undefined' && window.innerHeight) || 900)));
+  function gfxBox(o) {
+    if (typeof window === 'undefined' || !window.PSBXsFig || !window.PSBPlan || !window.PSBVizKit) return '';
+    const d = window.PSBDesign.sel(o.P);
+    return `<section class="sec" id="sum-gfx"><div class="secHead">Cross-section and plan</div><div class="secBody">
+      <figure class="sum-g1" id="sum-xs"><figcaption><b>Cross-section, span ${d.s}</b> (G${d.g} outlined: the line shown on the output tabs): entered on the <a href="#" data-goin="xsec">Cross-section</a> and <a href="#" data-goin="gird">Girders &amp; strands</a> input tabs; d<sub>e</sub> and the distribution factors worked on the <a href="#" data-gotab="lds">Loads &amp; LLDF</a> tab, where this figure is drawn too.</figcaption><div id="gfx_sumxs"></div></figure>
+      <figure class="sum-g1" id="sum-plan"><figcaption><b>Framing plan</b>: entered on the <a href="#" data-goin="layout">Bridge layout</a>, <a href="#" data-goin="xsec">Cross-section</a> and <a href="#" data-goin="dd">Diaphragms / deck</a> input tabs (drawn on the Bridge layout tab too); in 3D on the <a href="#" data-gotab="3d">3D view</a> tab.</figcaption><div id="gfx_sumplan"></div></figure>
+    </div></section>`;
+  }
+  function after(el, o) {
+    const V = window.PSBVizKit, X = window.PSBXsFig, PL = window.PSBPlan; if (!el || !V || !X || !PL) return;
+    const sx = el.querySelector('#gfx_sumxs'), sp = el.querySelector('#gfx_sumplan'), P = o.P, d = window.PSBDesign.sel(P);
+    if (sx) { try { V.detCard(sx, { id: 'sumXsFig', title: 'Bridge cross-section', sub: `span ${d.s}, looking ahead`, draw: W => { const q = X.svg(P, d.s, W, { shown: d.g, maxH: GFX_CAP() }); return { html: q.svg, nar: q.nar }; },
+      hint: 'Point at a girder, the deck, a barrier or a d_e dimension to read it.', cap: X.legend(X.model(P, d.s)) }); } catch (e) { sx.innerHTML = `<div class="alert">Cross-section: ${esc(e && e.message)}</div>`; } }
+    if (sp) { try { PL.mount(sp, P, { id: 'sumPlanFig', title: 'Framing plan', maxH: GFX_CAP() }); } catch (e) { sp.innerHTML = `<div class="alert">Plan: ${esc(e && e.message)}</div>`; } }
+  }
+  window.PSBSummaryUI = { html, after, model, css, worse, where };
 })();

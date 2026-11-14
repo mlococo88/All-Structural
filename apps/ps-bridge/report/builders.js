@@ -123,12 +123,20 @@
       sub('b', 'Bridge and the design girder', [kv([['Spans', `${P.spans.lengths.map(L => OK().fx(+L, 2)).join(' + ')} ft (${P.spans.continuity === 'composite' && nS > 1 ? 'made continuous for composite loads, 5.12.3.3' : 'simple spans'})`],
         ['Girders', `${P.xs.nb}; bays ${(P.xs.bays || []).map(x => OK().fx(+x, 2)).join(', ')} ft; overhangs ${OK().fx(+P.xs.ohL, 2)} / ${OK().fx(+P.xs.ohR, 2)} ft`], ['Support skews', `${(P.xs.skews || []).map(x => OK().fx(+x, 1)).join(', ')}°`],
         ['Design girder', `${plain(inp.proj && inp.proj.girderId)} in span ${sel.s}: ${plain(inp.girder)}, L = ${V0(X, 'L', 2)} ft, S = ${OK().fx(+inp.S, 3)} ft, ${inp.loads.pos === 'exterior' ? 'exterior' : 'interior'} girder`],
-        ['Owner', ownR ? `${own} (${ownR.manual})` : own]]), note('Entered values (Project, Bridge layout, Cross-section and Girders & strands tabs); the engine inputs of the design girder are those of the [[tab:in:gird|Girders & strands tab]].')]),
+        ['Owner', ownR ? `${own} (${ownR.manual})` : own]]), note('Entered values (Project, Bridge layout, Cross-section and Girders & strands tabs); the engine inputs of the design girder are those of the [[tab:in:gird|Girders & strands tab]].'), ...planFig(P, X)]),
       sub('c', 'Basis', [kv([['Design specification', ED], ['Load rating', 'AASHTO Manual for Bridge Evaluation (MBE), LRFR; article numbers as the old app'], ['Owner manual', ownR && !ownR.none ? `${ownR.manual} (AASHTO LRFD ${ownR.aashto} basis); its rules as listed below` : 'none (AASHTO only)'],
         ['Units', 'in, kip, ksi, ft, klf, kip-ft'], ['Sign convention', 'stresses + compression, − tension; moments + sagging']])]),
       sub('a', 'Assumptions', [...(asm ? asm.items : []), ...ASSUME.map(t => note('• ' + t)), ...deNote(P), ...voidNotes(B), ...tbcNotes(B), ...fgNotes(B), ...secNotes(B)])];
     ownSubs.forEach((s, j) => subs.push({ ...sub('o' + j, `Owner rules: ${s.title}`, s.items), ...(j === 0 ? { key: X.ownKey } : {}) }));
     return { title: 'Project, basis and assumptions', subs };
+  }
+  /* planFig(P, X): 2026-11-14 (PS Bridge catch-up, item 4): the framing plan of the Bridge layout tab and the Summary (ui/plan.js, its own
+     drawing, true scale; opt.planFig = { svg (the screen and the printed copies, as the tabs' figures), cap } from ui/report.js) as a figure
+     of §2, and where the cross-section of the span is drawn (the Loads & LLDF section's figure, "see §"). Display only; none in Node. */
+  function planFig(P, X) {
+    const f = X.planFig; if (!f || !f.svg) return [];
+    return [{ type: 'figure', caption: 'Framing plan: girder lines, skewed supports and diaphragms (true scale; the Bridge layout tab and the Summary)', svg: f.svg },
+      note(`${f.cap || ''} The cross-section of each worked girder's span, with the girder sections, barriers and d$_{e}$: see [[${X.inReport('lds') ? 'rs.lds' : 'tab:lds|Loads & LLDF tab'}]].`)];
   }
   const V0 = (X, p, d, div) => X.V(p, d, div);
   /* ownCols(ownSubs, X, o, nv0): PS-26 (engineer decision 2026-11-13): several girder types (the report of PS-25): the Owner rules table of §2
@@ -306,7 +314,7 @@
     const inc = opt.include || null, on = k => !inc || inc[k] !== false, P = B.P, p = P.project || {}, R = B.R;
     const vals = [];
     const own = B.inp.owner && B.inp.owner !== 'AASHTO';
-    const X = { vals, inReport: t => !!TABS[t] && on(t), ownKey: own && on('proj') ? 'rs.own' : null, figs: opt.figures || null };   // rs.own: the owner rules subsection of §2
+    const X = { vals, inReport: t => !!TABS[t] && on(t), ownKey: own && on('proj') ? 'rs.own' : null, figs: opt.figures || null, planFig: opt.planFig || null };   // planFig (2026-11-14): §2's framing plan (ui/report.js); rs.own: the owner rules subsection of §2
     X.V = (path, d, div) => { const v = at(X.R || R, path), text = OK().fx(div ? v / div : v, d); vals.push({ sec: X.cur, path, d, div: div || 0, text, ...(X.u != null ? { u: X.u } : {}) }); return text; };   // PS-25: X.R / X.u = the worked unit's result
     const secs = [], dropped = [];
     if (B.multi) multiSecs(B, X, opt, on, secs, dropped);   // PS-25: the worked sections once per girder type (or per line)
