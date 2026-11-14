@@ -3392,3 +3392,48 @@ PR #1546: https://github.com/mlococo88/All-Structural/pull/1546
 - PS5-D5. "From the old app" keeps its own card and confirm (ui/legacy.js unchanged); its file button now asks first on unsaved changes (pb.importJSON). An import is not a saved project (chip "not saved").
 ### Other copies
 - `apps/steel-bridge/engine/library.js` and the STDS-B wiring of `apps/steel-bridge/index.html`: the originals of this adapted copy (not changed). Keep a fix to one in step with the other where it applies.
+## 2026-11-14 — Loads & LLDF: lanes, wheels and the lever-rule influence line, with an LLDF case switch (display only)
+PR #1550: https://github.com/mlococo88/All-Structural/pull/1550
+### Request
+- PS Bridge catch-up to the Steel Bridge app, item 7:
+  - on the Loads & LLDF sketch, a case switch like Steel's (lever rule one lane / multi-lane / rigid section, where the engine uses each);
+  - the wheels placed by the lever-rule placement the engine uses;
+  - a required Node test that the drawn ordinates and wheel positions reproduce the engine's lever value (with m as the engine applies it) for several layouts;
+  - types (f) / (g): no wheels, with a note.
+### What the engine does (read from engine/pbd-lldf-flexure.js distFactors, frozen; not edited)
+- Exterior I-girder (`ld.pos === 'exterior'`), one lane:
+  - `[de-2, de-8].forEach(x => { if (x > -S) R += 0.5*(S+x)/S; }); lever = 1.2*R`;
+  - x is the wheel's distance outboard of the exterior girder ℄; the wheels are 2 ft and 8 ft inboard of the traffic face; S = the line's S (the adjacent bay).
+- Rigid section: `e_j = Xext + de − 5 − 12 j`, `R = mpf[NL−1] (NL/Nb + Xext Σe/Σx²)`, the largest over NL = 1 … ld.NL. With unequal bays, PS-19 `engine/rigid.js` uses the real lines.
+- Two or more lanes: `e_M g_M2` / `e_V g_V2` (equations: no wheel placement).
+- Not used: interior lines (equations), NEXT (`isNext`: no lever, no rigid), box beams and slabs (`df.fg`, PS-35: neither).
+### What changed
+- `ui/xsfig.js`:
+  - New `lldf(P, s, g, inp, df)`: the model of line g's cases from the engine's own inputs (`inp.S`, `inp.loads.de`) and results (`df.rigidNL`, `df.rigidX`):
+    - lever case: the traffic face d_e outboard of the girder; wheels at 2 and 8 ft inboard of it; terms `{ xo, ord = (S + xo)/S if xo > −S else 0 }`; value = 1.2 Σ 0.5 ord;
+    - rigid case: N_L = df.rigidNL lanes of 12 ft from the face; resultants 5 ft inside each lane; e_j from the girder centroid (the lines, or df.rigidX); value = m (N_L/N_b + X_ext Σe/Σx²);
+    - kind 'int' / 'next' / 'fg' with a note and no case.
+  - `svg(…, { ll })` + `drawLL()`: the lanes and wheels (arrows to the deck) above the barriers, with the d_e and deck dimensions moved up. For the lever case, the exterior girder's influence line under the chain (1.0 at the girder, 0 at the next girder, the ordinates at the wheels, a hover read-out each). For the rigid case, the lane resultants (brown ticks) and e in the lane labels. The Steel Bridge app's lldfSvg layout.
+- `ui/loads.js`:
+  - `after()`: the detail card gets the "LLDF case" switch (Lever rule, one lane / Rigid section, N lanes) for an exterior I-girder line. The choice is kept for the page session, not saved.
+  - Caption `#ldLLNote`: the worked comparison, e.g. "g_lever = 1.2 × 0.5 × (1.0000 + 0.2941) = 0.7765 = the engine's 0.7765 §ld.lever"; for the rigid case, R with e, X_ext, Σx² against `df.rigid` §ld.rigid. For other lines, the note why there are no wheels.
+- `ui/report.js`: `ALLSEG` adds `gfx_ld`. For an exterior unit the Report's Loads & LLDF section draws the cross-section in each case (Figure 4.1 lever rule, 4.2 rigid section). Interior units are unchanged.
+- Tests:
+  - New `tests/engine/psbridge-lldffig.test.mjs` (5 tests), checked against `PSBHoldDown.compute` of each line:
+    - the face, the wheels (2 / 8 ft, 6 ft apart) and the next girder at S;
+    - each ordinate, and m Σ 0.5 ord = df.lever with m = 1.2;
+    - N_L = df.rigidNL, the resultants, and R from the drawn resultants = df.rigid.
+  - Layouts: equal bays G1 and G5; unequal bays (PS-19) on both sides with N_L up to 3; a 6 ft × 12 in sidewalk (d_e = −3, the second wheel not counted); a 2.5 ft barrier; no cross-section barriers (the entered d_e) with N_L = 1; interior lines, NEXT and box beams (no case).
+  - `ps-bridge-figures.mjs`: the switch, the wheels and influence line, the caption value = the engine's, the rigid lanes, G5 on the sidewalk side, interior G3 (no case), and Report §4 holding both cases.
+### Saved data (CLAUDE.md §5)
+- None.
+### Governing provisions (CLAUDE.md §4)
+- None changed. The figure draws the engine's own placement (AASHTO LRFD 10th Ed. 4.6.2.2.2d lever rule, m = 1.2 of Table 3.6.1.1.2-1; C4.6.2.2.2d rigid section). Its values are recomputed only to show that they equal the engine's, which the test checks.
+### Check case (new project, 5 BT-72, bays 8.5 / 9.5 / 9.5 / 8.5 ft, overhang 3.5 ft, d_e = 2.00 ft, G1)
+- Lever: x_w = 0.00 and −6.00 ft; ordinates (8.5 + 0)/8.5 = 1.0000 and (8.5 − 6)/8.5 = 0.2941; g_lever = 1.2 × 0.5 × 1.2941 = 0.7765 (the engine's 0.7765).
+- Rigid, 2 lanes: e = 18 + 2 − 5 = 15.000 and 3.000 ft; Σx² = 2 × 18² + 2 × 9.5² = 828.50 ft²; R = 1.00 (2/5 + 18 × 18 / 828.5) = 0.7911 (the engine's 0.7911).
+### Decisions (pending engineer review)
+- LL-D1. No "multi-lane" lever case: the engine's two-or-more-lane exterior factor is e × g_interior (equations, Table 4.6.2.2.2d-1), with no wheel placement to draw. The switch offers only the cases the engine uses: lever (one lane) and rigid section (its governing N_L).
+- LL-D2. In the rigid case the lanes are drawn from the traffic face with each lane resultant 5 ft inside its lane edge. This is the engine's e_j = X_ext + d_e − 5 − 12 j: the wheel pair 2 ft and 8 ft inside each lane. The engine places no wheels for it; the wheels drawn are those the resultant implies.
+- LL-D3. The case choice is per page session (not saved). The Report shows both cases for an exterior unit.
+- LL-D4. DXF download of the figure: not done (optional in the request). shared/dxf.js would need a second drawing of the same figure in CAD primitives.

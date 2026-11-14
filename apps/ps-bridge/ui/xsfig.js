@@ -66,6 +66,47 @@
     return out;
   }
 
+  /* lldf(P, s, g, inp, df): 2026-11-14 (PS Bridge catch-up, item 7; the Steel Bridge app's LLDF cross-section, apps/steel-bridge/ui/gfxdet.js
+     lldfModel): the lanes, wheels and lever-rule influence line of line g's live-load distribution case, placed as the moved engine places
+     them (engine/pbd-lldf-flexure.js distFactors, which returns only the values). No DOM; tests/engine/psbridge-lldffig.test.mjs.
+       Lever rule (exterior I-girder, one lane, m = 1.2; 4.6.2.2.2d): wheels 6 ft apart, the outer one 2 ft inboard of the traffic face:
+         x_w = d_e − 2 and d_e − 8 ft outboard of the exterior girder ℄; reaction ordinate (S + x_w) / S (1.0 at the exterior girder, 0 at
+         the next girder S away), counted where x_w > −S; g_lever = 1.2 Σ 0.5 (S + x_w) / S. S, d_e: the engine's inputs of line g (inp.S,
+         inp.loads.de).
+       Rigid cross-section (C4.6.2.2.2d): N_L lanes of 12 ft from the traffic face (N_L = the engine's governing count, rigidNL), the lane
+         resultant 5 ft inboard of the face plus 12 j; e_j its distance from the girder centroid toward the exterior girder (= X_ext + d_e − 5
+         − 12 j); R = m (N_L / N_b + X_ext Σe / Σx²) with m = 1.2, 1.0, 0.85, 0.65; the girder positions the engine uses (equal bays: the
+         lines; unequal bays: df.rigidX, PS-19).
+       None: an interior girder (the equations), NEXT (types (i) / (j): no lever rule in the engine), box beams and slabs (types (f) / (g),
+         PS-35: no lever rule and no rigid-section check). Returns { kind: 'ext' | 'int' | 'next' | 'fg', note, cases: [...] } (positions in
+         inches from the left deck edge, as model()). */
+  const MPF = [1.2, 1.0, 0.85, 0.65];
+  function lldf(P, s, g, inp, df) {
+    const m = model(P, s), out = { kind: 'int', note: '', cases: [], m };
+    if (m.errors.length || !df) { out.note = m.errors.join(' '); return out; }
+    if (df.fg) { out.kind = 'fg'; out.note = `Box beams and slabs, cross-section type (${df.fg.type}) (PS-35): the distribution factors are the AASHTO equations of Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1 and 4.6.2.2.3a-1 with the multiple presence in them; no lever rule and no rigid-section check, so no wheels are placed.`; return out; }
+    if (df.isNext) { out.kind = 'next'; out.note = 'NEXT beams, cross-section types (i) / (j): the engine uses the AASHTO equations on the beam width; it applies no lever rule and no rigid-section check, so no wheels are placed.'; return out; }
+    if (!df.ext) { out.note = `G${g} is an interior girder: the distribution factors are the AASHTO equations (Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1); no lever rule or rigid-section check, so no wheels are placed.`; return out; }
+    out.kind = 'ext';
+    const nb = m.nb, side = g === nb && g !== 1 ? 'R' : 'L', dir = side === 'L' ? 1 : -1;   // dir: inboard (+x for the left girder)
+    const S = +inp.S, de = +inp.loads.de || 0, xg = m.off[g - 1], xf = xg - dir * de * 12, xa = xg + dir * S * 12;   // girder, traffic face, the next girder (S away)
+    const xOut = x => dir * (xg - x) / 12;   // ft outboard of the exterior girder ℄
+    const ord = x => { const xo = xOut(x); return xo > -S ? (S + xo) / S : 0; };
+    const roadL = Math.min(...m.faces.map(f => f.x)), roadR = Math.max(...m.faces.map(f => f.x));
+    // lever rule, one lane
+    const wl = [2, 8].map(d => xf + dir * d * 12), terms = wl.map(x => ({ x, xo: xOut(x), ord: ord(x), on: xOut(x) > -S }));
+    const lever = 1.2 * terms.reduce((a, t) => a + (t.on ? 0.5 * t.ord : 0), 0);
+    out.cases.push({ key: 'lever', label: 'Lever rule, one lane', m: 1.2, lanes: [[xf, xf + dir * 144].sort((a, b) => a - b)], wheels: wl, terms, value: lever, engine: df.lever, S, de, xg, xa, xf, side, dir, il: true });
+    // rigid section, the governing number of lanes
+    const NL = Math.max(1, +df.rigidNL || 1), X = df.rigidX ? df.rigidX.x.map(v => (v + (+P.xs.ohL || 0)) * 12) : m.off.slice();
+    const xbar = X.reduce((a, v) => a + v, 0) / nb, Xext = Math.abs(xg - xbar) / 12, sumX2 = X.reduce((a, v) => a + ((v - xbar) / 12) ** 2, 0);
+    const lanes = [], wheels = [], res = [];
+    for (let j = 0; j < NL; j++) { const a = xf + dir * 144 * j, b = a + dir * 144; lanes.push([a, b].sort((p, q) => p - q)); wheels.push(a + dir * 24, a + dir * 96); res.push(a + dir * 60); }
+    const e = res.map(x => dir * (xbar - x) / 12), sumE = e.reduce((a, v) => a + v, 0), mp = MPF[NL - 1], rigid = mp * (NL / nb + Xext * sumE / sumX2);
+    out.cases.push({ key: 'rigid', label: `Rigid section, ${NL} lane${NL > 1 ? 's' : ''}`, m: mp, NL, nb, lanes, wheels, res, e, sumE, Xext, sumX2, xbar, value: rigid, engine: df.rigid, side, dir, xg, xf, unequal: !!df.rigidX });
+    out.road = [roadL, roadR];
+    return out;
+  }
   function svg(P, s, W, o) {
     o = o || {}; const V = window.PSBVizKit, S = V.scene(), m = model(P, s), nar = W < 560;
     if (m.errors.length) return { svg: `<p class="note">${esc(m.errors.join(' '))}</p>`, nar, m };
@@ -95,20 +136,47 @@
     // the chain under the girders: overhangs and bays (true values)
     const ch = [[0, m.off[0]], ...m.off.slice(1).map((x, i) => [m.off[i], x]), [m.off[m.nb - 1], m.Wd]];
     ch.forEach(([a, b]) => { if (b - a > 1e-6) S.dimH(a, b, yMin, -(sz + 30), f2((b - a) / 12, 2), { yr: yMin, sz }); });
-    // traffic faces (dashed) and d_e of each exterior line, above the barriers
-    const yA = Math.max(m.yTop, ...m.app.map(a => a.y1));
+    // traffic faces (dashed) and d_e of each exterior line, above the barriers (with a live-load case: above its lanes and wheels)
+    const yA = Math.max(m.yTop, ...m.app.map(a => a.y1)), C = o.ll || null, up = C ? 64 : 0;
     m.faces.forEach(f => { S.line(f.x, m.yTop, f.x, yA + 6, 'dt-tf');
       const a = Math.min(f.x, f.xg), b = Math.max(f.x, f.xg), lab = `d_e = ${f2(f.de, 2)} ft`;
-      if (b - a >= 1) S.dimH(a, b, yA, 16, lab, { yr: m.yTop, sz });
-      else S.text(f.x, yA, lab, { a: f.side === 'L' ? 'start' : 'end', dx: f.side === 'L' ? 4 : -4, dy: -10, sz });   // d_e ≈ 0: the face at the girder ℄
+      if (b - a >= 1) S.dimH(a, b, yA, 16 + up, lab, { yr: m.yTop, sz });
+      else S.text(f.x, yA, lab, { a: f.side === 'L' ? 'start' : 'end', dx: f.side === 'L' ? 4 : -4, dy: -10 - up, sz });   // d_e ≈ 0: the face at the girder ℄
       S.region(a, m.yTop, b, yA, `G${f.g}: d_e = ${f2(f.de, 3)} ft, ${f.side === 'L' ? 'left' : 'right'} traffic face (${f.src}); positive when the girder ℄ is inside the face`); });
     // the deck width over all
-    S.dimH(0, m.Wd, yA, nar ? 44 : 46, `Deck ${ft(m.Wd)}`, { yr: m.yTop, sz });
+    S.dimH(0, m.Wd, yA, (nar ? 44 : 46) + up, `Deck ${ft(m.Wd)}`, { yr: m.yTop, sz });
+    if (C) drawLL(S, m, C, yA, yMin, sz, nar);
     // deck thickness and haunch: a callout at the right deck edge
     const hq = m.haunch[0];
     S.callout(m.Wd, (m.yD + m.yTop) / 2, 14, -18, [`t_s = ${f2(m.ts, 2)} in`].concat(hq ? [`haunch ${f2(hq.y1 - hq.y0, 2)} in`] : []), { sz: nar ? 9.5 : 10.5 });
     const r = S.render({ W, maxH: o.maxH || (nar ? 300 : 340), label: o.label || `Bridge cross-section, span ${s}: the girder sections at their offsets, deck, barriers, traffic faces and d_e` });
     return { svg: r.svg, nar, m };
+  }
+  /* drawLL(S, m, C, yA, yMin, sz, nar): a live-load case of lldf() on the cross-section: the lanes (12 ft) and wheels (arrows to the deck) above
+     the barriers, the traffic faces carried up; the lever rule's influence line of the exterior girder under the chain, its ordinates under
+     the wheels (the Steel Bridge app's lldfSvg layout). */
+  function drawLL(S, m, C, yA, yMin, sz, nar) {
+    const V = window.PSBVizKit, r2 = v => +(+v).toFixed(2), txt = (x, y, t, a, cls, w) => `<text x="${r2(x)}" y="${r2(y)}"${a ? ` text-anchor="${a}"` : ''} class="${cls || 'dt-t'} halo" style="font-size:${sz}px"${w ? ' font-weight="600"' : ''} fill="${cls === 'dt-m' ? '#475569' : '#0F172A'}">${esc(t)}</text>`;
+    const rL = 46, rW = 26;   // px above yA: the lane row, the wheel row
+    m.faces.forEach(f => S.raw(T => `<line x1="${r2(T.X(f.x))}" y1="${r2(T.Y(yA))}" x2="${r2(T.X(f.x))}" y2="${r2(T.Y(yA) - rL - 10)}" class="dt-tf" fill="none" stroke="#15803D" stroke-width="1" stroke-dasharray="6 3"/>`, T => [[T.X(f.x) - 1, T.Y(yA) - rL - 10], [T.X(f.x) + 1, T.Y(yA)]]));
+    C.lanes.forEach(([a, b], i) => S.raw(T => { const x0 = T.X(a), x1 = T.X(b), y = T.Y(yA) - rL; return `<rect x="${r2(x0 + 1)}" y="${r2(y - 9)}" width="${r2(Math.max(2, x1 - x0 - 2))}" height="18" rx="3" class="dt-lane" fill="#EEF2F7" stroke="#CBD5E1"/>` + txt((x0 + x1) / 2, y + 4, C.e ? (nar ? `e = ${f2(C.e[i], 2)}` : `Lane ${i + 1}: e = ${f2(C.e[i], 2)} ft`) : (nar ? `L${i + 1}` : `Lane ${i + 1}`), 'middle', 'dt-m')
+      + `<rect x="${r2(x0)}" y="${r2(y - 9)}" width="${r2(x1 - x0)}" height="18" class="dt-reg" fill="transparent" data-dtr="${esc(`Lane ${i + 1}: 12 ft from ${i ? 'the lane before it' : 'the traffic face'}`)}"/>`; }, T => [[T.X(a), T.Y(yA) - rL - 10], [T.X(b), T.Y(yA) - rL + 10]]));
+    C.wheels.forEach((x, i) => S.raw(T => { const px = T.X(x), py = T.Y(m.yTop), yt = T.Y(yA) - rW; return `<circle cx="${r2(px)}" cy="${r2(yt)}" r="5" class="dt-wh xs-wh" fill="#0F172A"/><line x1="${r2(px)}" y1="${r2(yt + 5)}" x2="${r2(px)}" y2="${r2(py - 7)}" class="dt-ld" stroke="#1E3A5F" stroke-width="1.4"/><polygon points="${r2(px)},${r2(py)} ${r2(px - 3.5)},${r2(py - 7)} ${r2(px + 3.5)},${r2(py - 7)}" class="dt-ldh" fill="#1E3A5F"/>`
+      + `<rect x="${r2(px - 6)}" y="${r2(yt - 6)}" width="12" height="${r2(py - yt + 6)}" class="dt-reg" fill="transparent" data-dtr="${esc(`Wheel ${i + 1}: ${f2(Math.abs(x - C.xf) / 12, 2)} ft inboard of the traffic face${C.terms ? `; ordinate ${f2(C.terms[i].ord, 3)}` : ''}`)}"/>`; },
+      T => [[T.X(x) - 6, T.Y(yA) - rW - 6], [T.X(x) + 6, T.Y(m.yTop)]]));
+    if (C.res) C.res.forEach((x, j) => S.raw(T => { const px = T.X(x), y = T.Y(yA) - rW; return `<line x1="${r2(px)}" y1="${r2(y - 8)}" x2="${r2(px)}" y2="${r2(y + 8)}" class="xs-res" stroke="#B45309" stroke-width="1.6"/><rect x="${r2(px - 5)}" y="${r2(y - 8)}" width="10" height="16" class="dt-reg" fill="transparent" data-dtr="${esc(`Lane ${j + 1} resultant: 5 ft inside the lane edge, e = ${f2(C.e[j], 3)} ft from the girder centroid`)}"/>`; }, T => [[T.X(x) - 5, T.Y(yA) - rW - 8], [T.X(x) + 5, T.Y(yA) - rW + 8]]));
+    if (!C.il) return;
+    // the lever rule's influence line of the exterior girder: 1.0 at it, 0 at the next girder (S away), linear, 0 beyond; ordinates at the wheels
+    const ilx = x => { const xo = C.dir * (C.xg - x) / 12; return xo > -C.S ? (C.S + xo) / C.S : 0; };
+    const edge = C.dir > 0 ? 0 : m.Wd, far = C.dir > 0 ? m.Wd : 0, pts = [edge, C.xg, C.xa, far], vmax = Math.max(1, ilx(edge)), U = nar ? 34 : 42;
+    S.raw(T => { const y0 = T.Y(yMin) + sz + 30 + 34 + vmax * U, Yv = v => y0 - v * U, o = [];
+      o.push(`<polygon points="${pts.map(x => r2(T.X(x)) + ',' + r2(Yv(ilx(x)))).join(' ')} ${r2(T.X(far))},${r2(y0)} ${r2(T.X(edge))},${r2(y0)}" class="dt-ilf" fill="#F3EEFF"/>`,
+        `<line x1="${r2(T.X(0))}" y1="${r2(y0)}" x2="${r2(T.X(m.Wd))}" y2="${r2(y0)}" class="dt-ext" stroke="#CBD5E1"/>`, `<polyline points="${pts.map(x => r2(T.X(x)) + ',' + r2(Yv(ilx(x)))).join(' ')}" class="dt-il" fill="none" stroke="#7C3AED" stroke-width="1.4"/>`);
+      [[C.xg, 1, `1.0 (G${C.side === 'L' ? 1 : m.nb})`], [C.xa, 0, '0']].forEach(([x, v, t]) => o.push(`<circle cx="${r2(T.X(x))}" cy="${r2(Yv(v))}" r="3.5" class="dt-pl" fill="#fff" stroke="#7C3AED"/>`, txt(T.X(x) + C.dir * 6, Yv(v) - 6, t, C.dir > 0 ? 'start' : 'end', 'dt-m')));
+      C.terms.forEach((q, i) => { const px = T.X(q.x), py = Yv(q.ord); o.push(`<line x1="${r2(px)}" y1="${r2(y0)}" x2="${r2(px)}" y2="${r2(py)}" class="dt-il" stroke="#7C3AED" stroke-width="1" stroke-dasharray="3 2"/><circle cx="${r2(px)}" cy="${r2(py)}" r="3" fill="#7C3AED" class="dt-band"/>`,
+        txt(px + C.dir * 5, py + 14 + i * 12, q.on ? f2(q.ord, 3) : '0 (beyond the next girder)', C.dir > 0 ? 'start' : 'end', 'dt-t', true), `<rect x="${r2(px - 7)}" y="${r2(py - 7)}" width="14" height="14" class="dt-reg" fill="transparent" data-dtr="${esc(`Wheel ${i + 1}: x = ${f2(q.xo, 3)} ft outboard of the girder ℄, ordinate (S + x) / S = ${f2(q.ord, 4)}${q.on ? '' : ' (not counted: beyond the next girder)'}`)}"/>`); });
+      o.push(txt(T.X(0), T.Y(yMin) + sz + 30 + 24, nar ? `Lever-rule influence line (S = ${f2(C.S, 3)} ft)` : `Influence line of the exterior girder (lever rule about the next girder, S = ${f2(C.S, 3)} ft); ordinates under the wheels`, 'start', 'dt-m'));
+      return o.join(''); }, T => { const y0 = T.Y(yMin) + sz + 30 + 34 + vmax * U; return [[T.X(0), T.Y(yMin) + sz + 30 + 10], [T.X(m.Wd), y0 + 2 * 12 + 14]]; });
   }
   /* the type colours, the scale and the schematic items (the figure's caption) */
   function legend(m) {
@@ -118,5 +186,5 @@
       + `Drawn to scale (one scale across and up; dimensions in ft); the girder outlines and voids are the library's; the barrier height (${BAR_H} in) and its profile are schematic. `
       + `Traffic faces dashed; d<sub>e</sub> from the exterior girder ℄ to the face (${m.faces.map(f => `G${f.g}: ${esc(f.src)}`).join('; ')}).</p>`;
   }
-  window.PSBXsFig = { model, svg, legend, BAR_H, TCOL };
+  window.PSBXsFig = { model, svg, legend, lldf, BAR_H, TCOL };
 })();
