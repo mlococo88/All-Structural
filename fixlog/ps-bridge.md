@@ -2834,7 +2834,7 @@ index bc9935b..f6b657e 100644
 ```
 
 ## 2026-11-14 — PS-29: "f_pe with the permanent gains" — Δf_pSS not counted twice; the Losses tab and its worked step state where Δf_pSS is (display only; no check result changes)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1538: https://github.com/mlococo88/All-Structural/pull/1538
 ### Request
 - Engineer decision PS-29 (2026-11-14): "f_pe with permanent gains" must not count the deck shrinkage gain Δf_pSS twice, in either loss method. Refined: show f_pe + the elastic gains only (DC1 on the girder + DC2/DW on the composite section) and state "Δf_pSS = x ksi is already in the long-term loss (5.9.3.4.3)". Approximate: do not credit Δf_pSS, and say so. The value the checks use is unchanged.
 ### Problem (old app, frozen)
@@ -2867,7 +2867,9 @@ PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
 - `node tests/engine/run.mjs psbridge tex project-registry`: 21 files, 195 passed, 0 failed (the step `gain.fpe` still = `fpeGain` exactly; its TeX parses).
 - `node tests/check-syntax.mjs`: all scripts pass. `node tests/smoke/ps-bridge-skeleton.mjs`: 257 checks, 0 failed (every data-ev on the Losses tab = computeAll on the page, including the new Δf_pSS value).
 - Harness B (`tests/psbridge-compare.mjs`, 17 designs). New PS-29 part: on each design the Losses tab's shown "f_pe with the permanent gains" must equal f_pe + Δf_p,DC1 + Δf_p,SD worked by the harness from the old app's own components (old `R.fpe`, `R.gains.precast`, `R.gains.composite`, formatted as shown), and the `#gain-ss-note` must state the method's sentence and Δf_pSS (old `R.gains.deckShr`) as shown; the harness lists, as the intended documented difference, every design where the old display (f_pe + Δf_p,perm + Δf_pSS) differs. `--control` also shifts the expected value by 0.01 ksi.
-  - RESULTS_HB
+  - Normal: 17 designs, 43,555 shown values + 7,650 step values, 0 with differences, exit 0; PS-29: 17 designs equal to the hand value, 16 intended differences from the old display (the one without one: the box BIII-36 without topping, Δf_pSS = 0).
+  - `--import`: 17 designs (autosave 5, shared 4, older 4, file 4), 0 with differences, exit 0.
+  - `--control`: 17 with differences (each design also reports the PS-29 shift), exit 1; `--import --control`: 17 with differences, exit 1.
 ### Other copies
 - None (the Report renders the tab's worked steps, so `gain.fpe`'s note appears there too). The old app is frozen and keeps its display.
 ### Open items
