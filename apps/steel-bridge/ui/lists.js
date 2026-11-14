@@ -35,8 +35,12 @@
     const parse = cfg.colSplit ? (t => W.SharedListInput.fromText(t, { rowSplit: cfg.rowSplit, colSplit: cfg.colSplit, ncol: cfg.columns.length })) : undefined;
     const ctl = W.SharedListInput.bindInput(el, Object.assign({ events: ['input'], parse }, cfg));
     ctl.el.addEventListener('focusout', () => setTimeout(() => {   // after the event: a redraw (Enter, ×) moves the focus within the table
-      if (!ctl.el.isConnected || ctl.el.contains(document.activeElement)) return;
-      if (el.value !== was) { was = el.value; el.dispatchEvent(new Event('change', { bubbles: true })); }
+      if (ctl.el.isConnected && ctl.el.contains(document.activeElement)) return;
+      if (el.value === was) return; was = el.value;
+      // SBLC (2026-11-14): when the page was redrawn before this ran (a click on an input tab redraws every pane), the edit is committed
+      // through the input of the same id drawn in its place (before, it was lost); the PS Bridge app's copy has the same fix (PR #1548)
+      let t = el; if (!el.isConnected) { t = document.getElementById(el.id); if (!t) return; t.value = el.value; }
+      t.dispatchEvent(new Event('change', { bubbles: true }));
     }, 0));
     el._sli = ctl;
   }
