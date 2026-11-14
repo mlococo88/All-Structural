@@ -3010,7 +3010,7 @@ Voided slabs, plates 5.1.1c (36 in, PDF p. 314) and 5.1.2c (48 in, p. 317); outl
 - `lldf.html` has its own BI–BIV box choices (separate data); not touched.
 
 ## 2026-11-14 — PS-33 / PS-34: the strand fit measures 1.5 in to a void face (exterior faces 2 in); the pier compression block checked against each family's own thickness (input validation and a warning; no calculation change)
-PR #PR33: https://github.com/mlococo88/All-Structural/pull/PR33
+PR #1541: https://github.com/mlococo88/All-Structural/pull/1541
 ### Request
 - Engineer decisions 2026-11-14:
   - PS-33: strand-fit (PS-28) clearance to VOID faces = 1.5 in to the strand centre (exterior faces stay 2 in), for boxes and voided slabs; the CTDOT box standard pattern rows at 2 in and 4 in in the 5½ in slab must then fit (plates 5.2.2 / 5.2.3, PDF p. 328 / 329, as far as the contiguous-row model represents them).
@@ -3040,7 +3040,8 @@ PR #PR33: https://github.com/mlococo88/All-Structural/pull/PR33
 - PS-34, NEXT 36F, the same: b_bf = 2 × 13 = 26 in, a = 960 / (0.85 × 8.5 × 26) = 5.110 in; t = 36 − 8 = 28 in (engine: 8 in): no warning either way. SIV-48: a = 960 / (0.85 × 8.5 × 47.5) = 2.797 in, t = 10.5 − 6 = 4.5 in (below the Ø12 voids): no warning (before: 0.0″, warned).
 - Every computed value (cont.*, φM_n at the pier, all checks) is the same before and after (test: R without ps34 / warns identical).
 ### How verified
-- See the PR.
+- `node tests/engine/run.mjs psbridge tex project-registry`: 23 files, 215 passed, 0 failed (new `psbridge-ps33.test.mjs`: the plate box patterns on all 8 boxes, the slab 2 in rows on all 6 slabs, the gapped-row / web-column limitation, the tab note, PS-34 per family with no other value changed, the Flexure row and step). `check-syntax`: all pass. Smokes: skeleton 265 / 0, types 106 / 0, 3d 101 / 0.
+- Harness B: normal and `--import` 17 designs, 0 differences, exit 0; `--control` and `--import --control` exit 1. `ps34.*` values compared with the thickness worked from the old app's girder (no harness design is continuous on a NEXT / box / slab: checked in the browser with a scratch run — BIII-36 A_s 16 / 40, NEXT 36F, SIV-48, BT-72 on two 80 ft continuous spans: shown 5.50 / 28.00 / 4.50 in, the BT-72 row unchanged, the warning only for a = 9.36 > 5.5 in, 0 console errors).
 ### Decisions (pending engineer review)
 - PS33-D1. Row model kept (contiguous centred rows); the tab states the limitation (above). The standard box web columns and the slabs' gapped 4 in rows are not representable; a contiguous row there is an input error (it would put strands in a void), as tested.
 - PS34-D1. The voided-slab thickness is the concrete below the LOWEST void bottom (SIV-48: 4.5 in under the Ø12 voids, not 5.5 in under the Ø10), conservative.
