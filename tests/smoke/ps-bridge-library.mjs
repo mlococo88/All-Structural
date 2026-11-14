@@ -38,7 +38,14 @@ let seeded;
     assert.deepEqual(s.errs, []);
   } finally { await s.b.close(); } }
 
-const { b, p, errs } = await openPage(FILE, { vw: 1280, vh: 900, ls: { ...OLD, 'psb2.project.current': seeded } });
+// The seed is written once, then the page is reloaded (not openPage's ls seed: its init script re-seeds on every navigation where Chromium
+// has not kept the tab's sessionStorage across a file:// reload, which it sometimes does not; step 4's reload then put the old autosave
+// back, and the chip rightly said "unsaved changes": the flaky 'unsaved' !== 'saved').
+const SEED = { ...OLD, 'psb2.project.current': seeded };
+const { b, p, errs } = await openPage(FILE, { vw: 1280, vh: 900 });
+await p.waitForSelector('#inTabs [data-itab]');
+await p.evaluate(o => { localStorage.clear(); for (const [k, v] of Object.entries(o)) localStorage.setItem(k, v); }, SEED);
+await p.reload();
 const consoleAll = []; p.on('console', m => consoleAll.push(m.text()));
 const dl = []; let reply = [];   // dialogs seen; replies: prompt text / true / false in order (default: accept)
 p.removeAllListeners('dialog');
