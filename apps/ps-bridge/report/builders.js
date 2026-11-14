@@ -126,7 +126,7 @@
         ['Owner', ownR ? `${own} (${ownR.manual})` : own]]), note('Entered values (Project, Bridge layout, Cross-section and Girders & strands tabs); the engine inputs of the design girder are those of the [[tab:in:gird|Girders & strands tab]].')]),
       sub('c', 'Basis', [kv([['Design specification', ED], ['Load rating', 'AASHTO Manual for Bridge Evaluation (MBE), LRFR; article numbers as the old app'], ['Owner manual', ownR && !ownR.none ? `${ownR.manual} (AASHTO LRFD ${ownR.aashto} basis); its rules as listed below` : 'none (AASHTO only)'],
         ['Units', 'in, kip, ksi, ft, klf, kip-ft'], ['Sign convention', 'stresses + compression, − tension; moments + sagging']])]),
-      sub('a', 'Assumptions', [...(asm ? asm.items : []), ...ASSUME.map(t => note('• ' + t)), ...deNote(P), ...voidNotes(B), ...secNotes(B)])];
+      sub('a', 'Assumptions', [...(asm ? asm.items : []), ...ASSUME.map(t => note('• ' + t)), ...deNote(P), ...voidNotes(B), ...tbcNotes(B), ...secNotes(B)])];
     ownSubs.forEach((s, j) => subs.push({ ...sub('o' + j, `Owner rules: ${s.title}`, s.items), ...(j === 0 ? { key: X.ownKey } : {}) }));
     return { title: 'Project, basis and assumptions', subs };
   }
@@ -176,6 +176,17 @@
     const seen = new Set();
     return gs.filter(([n]) => !seen.has(n) && seen.add(n)).map(([n, g]) => [n, SU.voidNote(g)]).filter(([, t]) => t)
       .map(([n, t]) => note(`• ${plain(n)}: ${t.replace(/<sub>(.*?)<\/sub>/g, '$_{$1}$').replace(/&lt;/g, '<')} (see [[rs.sec]])`));
+  }
+
+  /* tbcNotes(B): PR A (engineer request 2026-11-14): for each standard box beam / voided slab of the CTDOT plates in the report (the design
+     girder and every girder type on a line), the "to be confirmed" note of the Girders & strands tab (engine/sections.js tbcNote) */
+  function tbcNotes(B) {
+    const SC = window.PSBSections, BR = window.PSBBridge, DS = window.PSBDesign; if (!SC || !SC.tbcNote) return [];
+    const ns = [B.inp.girder];
+    if (BR && BR.hasTypes(B.P) && DS) BR.types(B.P).forEach((T, k) => { const l = BR.typeLines(B.P, k); if (!l.length) return;
+      try { ns.push(DS.cellInputs(B.P, k, l[0]).girder); } catch (e) { /* its own input errors */ } });
+    return [...new Set(ns)].map(n => [n, SC.tbcNote(n)]).filter(([, t]) => t)
+      .map(([n, t]) => note(`• ${plain(n)}: ${t.replace(/<sub>(.*?)<\/sub>/g, '$_{$1}$')} (see [[rs.sec]])`));
   }
 
   /* ---------- 3–14. the result tabs ---------- */

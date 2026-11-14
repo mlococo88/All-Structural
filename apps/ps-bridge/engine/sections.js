@@ -40,7 +40,8 @@
      migrate(P)       PS-31 on a project: '' or the note; P.legacySection recorded (idempotent)
      withLegacy(fn)   fn() with the old entries in GIRDERS again (the old app's results of an imported design; removed after)
      items(P)         P.legacySection items; text(it) the notice text of one; retiredMsg(name) the input error of an unmatched old name
-     src(name)        the plate data of a corrected section (null for any other); outline(entry) A, I, y_b of the drawn outline */
+     src(name)        the plate data of a corrected section (null for any other); outline(entry) A, I, y_b of the drawn outline
+     tbcNote(name)    the "to be confirmed" note of a standard section (HTML; '' for any other) */
 (function () {
   'use strict';
   const BOXW = { 36: 35.5, 48: 47.5 }, SLAB = 5.5;
@@ -168,7 +169,19 @@
     try { return fn(); } finally { added.forEach(k => { delete GIRDERS[k]; }); }
   }
   const src = n => (STD[n] ? STD[n].src : null);
+  /* tbcNote(name): the "to be confirmed" note of a standard box beam / voided slab (engineer request 2026-11-14, PR A; the one exception to
+     the no-pending-in-app rule): the plate the properties come from, the old library they replace (found inconsistent), and that the
+     engineer is to confirm them against the DOT reference sheets; voided slabs: the void spacing scaled from the plate. HTML ('' for any other
+     shape). Shown on the Girders & strands tab (ui/inputs.js, #secTbcNote) and in the Report's assumptions (report/builders.js tbcNotes). */
+  function tbcNote(name) {
+    const e = STD[name]; if (!e) return '';
+    const s = e.src, box = s.kind === 'box';
+    return `To be confirmed: A, I and y<sub>b</sub> of ${box ? 'this box beam' : 'this voided slab'} are taken from CTDOT BDM plate ${s.plate} (PDF p. ${s.page}). `
+      + 'They replace the old app\'s box beam and voided slab library, which was found inconsistent (e.g. the old "BIII-36 (27in)" gave I = 97,756 in⁴, more than a solid 36 × 27 in rectangle at 59,049 in⁴). '
+      + 'The replacement is to be confirmed by the engineer against the DOT reference sheets.'
+      + (box ? '' : ` The void spacing (void centres at ${[...new Set(s.voids.map(v => Math.abs(v.x)))].sort((a, b) => a - b).map(x => x === 0 ? '0' : `±${x}`).join(', ')} in from the ℄) is scaled from the plate drawing, not dimensioned on it, and is to be confirmed.`);
+  }
 
   install(); wrapVoids();
-  window.PSBSections = { STD, LEGACY, MAP, ORDER_BOX, ORDER_SLAB, install, migrate, items, text, retiredMsg, sig, withLegacy, src, outline, slabOf, stdOf, engineOf };
+  window.PSBSections = { STD, LEGACY, MAP, ORDER_BOX, ORDER_SLAB, install, migrate, items, text, retiredMsg, sig, withLegacy, src, tbcNote, outline, slabOf, stdOf, engineOf };
 })();

@@ -134,7 +134,9 @@
     F().CARDS.filter(c => c.tab === tab).forEach(c => {
       if (c.when && !c.when(P.base, P)) return;
       let body = c.fields.filter(f => !f.when || f.when(P.base, P)).map(f => field(f, P)).join('');
-      h += card(c.id, c.title, c.ref, body + (c.note ? `<p class="note">${c.note(P.base, P)}</p>` : ''));
+      // PR A (engineer 2026-11-14): a standard box beam / voided slab of the CTDOT plates: the "to be confirmed" note (engine/sections.js tbcNote)
+      const tbc = c.id === 'shape' && window.PSBSections && window.PSBSections.tbcNote ? window.PSBSections.tbcNote(P.base.girder) : '';
+      h += card(c.id, c.title, c.ref, body + (c.note ? `<p class="note">${c.note(P.base, P)}</p>` : '') + (tbc ? `<p class="note" id="secTbcNote"><b>${tbc}</b></p>` : ''));
       if (c.id === 'shape') h += card('rows', 'Straight strand rows', 'y from the soffit; debonding entered only (auto-design never adds it, PS-12)', table('base.rows', P)
         + `<p class="note">${(P.base.rows || []).reduce((a, r) => a + (+r.n || 0), 0)} straight strands + ${+P.base.harp.n || 0} draped = ${(P.base.rows || []).reduce((a, r) => a + (+r.n || 0), 0) + (+P.base.harp.n || 0)} strands. Debonding rules (5.9.4.3.3) are checked as warnings of the design.</p>`
         + `<p class="note" id="rowsFitNote">Each row is drawn and checked as a contiguous group of strands on the 2 in grid, centred on the girder ℄. A strand centre must be inside the concrete, at least 2 in from its edges (PS-28) and at least 1.5 in from the face of a void (PS-33).${rowModelNote(P.base)}</p>`);

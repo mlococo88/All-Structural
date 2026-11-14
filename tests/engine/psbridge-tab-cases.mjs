@@ -37,6 +37,15 @@ export const TAB_CASES = base => ({
   // PS-28 (2026-11-14): the strand rows fit the 5 in bottom wall (8 strands at y = 4 in were 1 in from the void, now an input error): 16 at y = 2 in
   'box BIII-36 with a 6 in topping, deck on (S below 4 ft), handling on': (() => { const P = base(); P.base.girder = 'AASHTO BIII-36 (39in)'; P.base.ts = 6; P.base.harp.n = 0;
     P.base.rows = [{ n: 16, y: 2, nd: 0, dbnd: 0 }]; P.xs.bays = [3, 3, 3, 3]; P.spans.lengths = [60]; P.base.deck.on = true; P.base.handling.on = true; return P; })(),
+  // PR A (engineer request 2026-11-14): a BIII-36 design that PASSES on the real 39 in section (the case above is kept: it fails, which checks
+  // the failure reporting). CTDOT BDM plate 5.2.3 strand pattern (2 in grid; 16 strands per row in the 36 series): 16 @ 2 in and 16 @ 4 in
+  // (4 + 4 debonded 10 ft) and 6 draped strands in the web columns (y 31 in at the end, 9 in between the hold-downs at 0.4 L, plate 5.2.3: hold-
+  // downs 0.2 L apart about midspan); ten 3 ft boxes, interior G5, 80 ft, 6 in topping; no forms (DC1 add. 0), DC2 0.10 klf (two barriers / 10
+  // boxes), DW 0.075 klf (25 psf × 3 ft)
+  'box BIII-36 (39in), CTDOT plate pattern 16 + 16 strands and 6 draped, 6 in topping, 80 ft, 10 boxes: passes': (() => { const P = base(); P.base.girder = 'AASHTO BIII-36 (39in)'; P.base.ts = 6;
+    P.base.rows = [{ n: 16, y: 2, nd: 4, dbnd: 10 }, { n: 16, y: 4, nd: 4, dbnd: 10 }]; P.base.harp.n = 6; P.base.harp.yEnd = 31; P.base.harp.yMid = 9;
+    P.xs.nb = 10; P.xs.bays = [3, 3, 3, 3, 3, 3, 3, 3, 3]; P.xs.ohL = 1.5; P.xs.ohR = 1.5; P.design = { g: 5, s: 1 }; P.spans.lengths = [80];
+    P.base.loads.wNC = 0; P.base.loads.wBar = 0.10; P.base.loads.wDW = 0.075; return P; })(),
   // PR 2d-3 (PS-10): the hold-down check for RIDOT with an edited limit (0.90 W) and the girder end past the bearing; AASHTO with the box off
   'RIDOT, draped strands, hold-down limit 0.90 W, girder end 6 in past the bearing': (() => { const P = base(); P.base.owner = 'RIDOT'; P.base.opt.hdFrac = 0.9; P.base.opt.endOh = 6; P.base.harp.n = 8; P.base.harp.yEnd = 50; return P; })(),
   'AASHTO, PS-10 hold-down box off': (() => { const P = base(); P.base.opt.hdCheck = false; return P; })(),
