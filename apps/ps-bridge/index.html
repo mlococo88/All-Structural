@@ -64,6 +64,7 @@
     'engine/worked-hdr.js',  // PR 2d-2: the worked steps of the Handling, Deck and Rating tabs (values = the engine's)
     '../../shared/steps.js', // the worked-step format and renderer (shared; also used by the steel app)
     '../../shared/report.js', // PR 2e: the calculation report viewer (shared; also used by the steel app)
+    '../../shared/list-input.js', // 2026-11-14: the list inputs as tables (shared; also used by the steel app)
     'report/fromtab.js',     // PR 2e: an output tab's cards as report items (the tab's own HTML and values)
     'report/data.js',        // PR 2e: the report's results (the page's own result, as the tabs)
     'report/builders.js',    // PR 2e: the report model (adapted copy of apps/steel-bridge/report/builders.js)
@@ -90,6 +91,8 @@
     'ui/rating.js',      // PR 2d-2: Rating tab
     'ui/report.js',      // PR 2e: Report tab (adapted copy of apps/steel-bridge/ui/report.js)
     'ui/dash.js',     // the check summary column (adapted copy of apps/steel-bridge/ui/dash.js)
+    'ui/lists.js',    // 2026-11-14: the span, skew and bay lists as tables of rows (copy of apps/steel-bridge/ui/lists.js)
+    'ui/plan.js',     // 2026-11-14: the framing plan of the Bridge layout tab (girder lines, skewed supports, diaphragms; true scale or ×2 width)
     'ui/xsfig.js',    // 2026-11-14: the whole-bridge cross-section figure (Loads & LLDF tab, Report): the girder sections at their offsets
     'ui/view3d.js',   // PR 3c: the 3D view tab (the Steel Bridge app's 3D view pattern, apps/steel-bridge/ui/view3d.js; three.js r128 below)
     'ui/summary.js',  // PR 3b: the Summary tab (adapted copy of apps/steel-bridge/ui/summary.js): verdict, girder × span grid, type × check table
@@ -371,13 +374,14 @@
         + IN.cards('proj', P)
         + ph('Hand-offs', '9', ['to and from the other tools, from the switch-over (PS-14): bearings to Elastomeric Bearing Design, every girder\'s reactions to Substructure Loading; before that, by file only']),
       layout: card('Spans', `${sel('spans.continuity', 'Continuity', [['simple', 'Simple spans'], ['composite', 'Made continuous for composite loads (5.12.3.3)']])}
-          ${list('spans.lengths', 'Span lengths', 'ft')}
-          <p class="note">Left to right, separated by commas. Total ${fmt(M.totalLength(P), 2)} ft. Made continuous: girder and DC1 simple; DC2, DW and live load continuous; restraint moments switchable (as the old app, PS-7).</p>`)
-        + card('Support skews', `${list('xs.skews', 'Skews', 'deg')}<p class="note">One per support, left to right: abutment, ${nS > 1 ? 'piers, ' : ''}abutment (${nS + 1} values).</p>`)
+          ${list('spans.lengths', 'Span lengths', '')}
+          <p class="note">One row per span, left to right (Enter adds a row; a pasted list is split into rows). Total ${fmt(M.totalLength(P), 2)} ft. Made continuous: girder and DC1 simple; DC2, DW and live load continuous; restraint moments switchable (as the old app, PS-7).</p>`)
+        + card('Support skews', `${list('xs.skews', 'Skews', '')}<p class="note">One row per support, left to right: abutment, ${nS > 1 ? 'piers, ' : ''}abutment (${nS + 1} values); skew θ from the normal to the girders.</p>`)
         + IN.cards('layout', P)
-        + ph('Plan', 'planned', ['the framing plan of the girders and supports (not built yet)']),
-      xsec: card('Girders', `${num('xs.nb', 'Number of girders', '')}${list('xs.bays', 'Girder spacings (bays)', 'ft')}${num('xs.ohL', 'Left overhang', 'ft')}${num('xs.ohR', 'Right overhang', 'ft')}
-          <p class="note">Bays left to right (${Math.max(0, (P.xs.nb | 0) - 1)} values). Unequal bays (PS-9): each girder's spacing S is the bay next to it (exterior) or the mean of its two bays (interior); see Loads &amp; LLDF. Overhangs from the exterior girder centreline. Deck width ${fmt(deckW, 2)} ft. A change of the girder count re-assigns the girder types' lines (the outer lines keep the exterior types; a notice lists each change, with Undo).</p>`)
+        + planCard(),   // 2026-11-14: the framing plan (ui/plan.js), true scale or ×2 width
+      xsec: card('Girders', `${sel('xs.spMode', 'Girder spacing', [['individual', 'Individual spacings'], ['equal', 'Equal spacing']])}${num('xs.nb', 'Number of girders N<sub>b</sub>', '')}${P.xs.spMode === 'equal' ? equalRows() : list('xs.bays', 'Girder spacings (bays)', '')}${num('xs.ohL', 'Left overhang', 'ft')}${num('xs.ohR', 'Right overhang', 'ft')}
+          <p class="note">${P.xs.spMode === 'equal' ? '' : `Bays left to right (${Math.max(0, (P.xs.nb | 0) - 1)} values). `} Unequal bays (PS-9): each girder's spacing S is the bay next to it (exterior) or the mean of its two bays (interior); see Loads &amp; LLDF. Overhangs from the exterior girder centreline. Deck width ${fmt(deckW, 2)} ft. A change of the girder count re-assigns the girder types' lines (the outer lines keep the exterior types; a notice lists each change, with Undo).</p>`)
+        + lineTypeCard()   // 2026-11-14: the girder type of each line (the Girders & strands tab's line boxes, the same data)
         + IN.cards('xsec', P)
         + DLUI.card(P),   // PR 3a-3: DC2 / DW to each girder line (PS-9)
       gird: TY.card(P, ui) + TY.shownCard(P) + TY.scopeBar(P, ui, 'gird') + IN.cards('gird', V)
@@ -390,6 +394,33 @@
       ad: ph('Auto design', '5', ['waits for the girder library (PR 4, PS-2)', 'strands in symmetric pairs (PS-12) → draping, hold-down 0.33–0.45 L (PS-5) → f′<sub>ci</sub> / f′<sub>c</sub> in 0.5 ksi steps (PS-11)', 'locked fields never changed; Apply with Undo'])
     };
   }
+  /* 2026-11-14 (equal spacing, the Steel Bridge app's EQSP, apps/steel-bridge/ui/loads.js equalRows): W_cc and the worked step
+     S = W_cc / (N_b − 1); every bay takes S (M.applyEqual on each change); the deck width out to out shown */
+  function equalRows() {
+    const x = P.xs, Q = M.equalSpacing(x), st = Q.step, Wd = +x.ohL + Q.Wcc + +x.ohR, S = window.SharedSteps;
+    return `${num('xs.Wcc', 'Exterior girder spacing W<sub>cc</sub>', 'ft, ℄ to ℄ of G1 and G' + (isFinite(Q.nb) ? Q.nb : 'n'))}
+      <ul class="steps"><li id="st-xs.eqS"><div class="lbl">${esc(st.label)}</div><div>${S ? S.line(st, true) : esc(fmt(Q.S, 3)) + ' ft'}</div></li></ul>
+      ${isFinite(Q.S) && !(Q.S > 0) ? '<div class="alert">The girder spacing S must be positive: enter an exterior girder spacing W<sub>cc</sub> greater than zero.</div>' : ''}
+      <p class="note">All ${isFinite(Q.nb) && Q.nb >= 2 ? Q.nb - 1 : ''} bays take S; the bays are written from it (choose Individual spacings to edit them, starting from these values). Deck width out to out = oh<sub>L</sub> + W<sub>cc</sub> + oh<sub>R</sub> = ${fmt(+x.ohL, 2)} + ${fmt(Q.Wcc, 2)} + ${fmt(+x.ohR, 2)} = ${fmt(Wd, 2)} ft.</p>`;
+  }
+  /* 2026-11-14: the Cross-section tab's "Girder type of each line" (the Steel Bridge app's lineTypeCard): a select per line and span, the same
+     data as the Girders & strands tab's line boxes (types[k].lines; engine/bridge.js assignLine): choosing a type moves the line to it; a
+     line with no type shows "— none —" until one is chosen (as the boxes, a line keeps a type once it has one) */
+  function lineTypeCard() {
+    if (!BR.hasTypes(P) || !Number.isInteger(P.xs.nb) || P.xs.nb < 1) return '';
+    const nS = P.spans.lengths.length, T = BR.types(P), LT = Array.from({ length: nS }, (_, i) => BR.lineTypes(P, i + 1));
+    const cell = (s, g) => { const t = LT[s - 1][g] || [], opts = T.map((q, k) => [k, q]).filter(([, q]) => q.span === s);
+      return `<td class="lft"><select data-lt="${s}|${g}" aria-label="girder type of line G${g}, span ${s}" style="width:auto">${t.length === 1 ? '' : `<option value="" selected>${t.length ? esc(t.map(k => T[k].label).join(' + ')) + ' (conflict)' : '— none —'}</option>`}${opts.map(([k, q]) => `<option value="${k}"${t.length === 1 && t[0] === k ? ' selected' : ''}>${esc(q.label)}</option>`).join('')}</select></td>`; };
+    const rows = Array.from({ length: P.xs.nb }, (_, i) => i + 1).map(g => `<tr><td>G${g}${g === 1 || g === P.xs.nb ? ' (exterior)' : ''}</td>${Array.from({ length: nS }, (_, i) => cell(i + 1, g)).join('')}</tr>`).join('');
+    return card('Girder type of each line', `<div class="tscroll"><table class="tbl"><thead><tr><th>Line</th>${Array.from({ length: nS }, (_, i) => `<th class="lft">Span ${i + 1}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="note">The same choice as the line boxes of the girder types on the <a href="#" data-goin="gird">Girders &amp; strands tab</a> (each type's inputs are there): a line moves to the type chosen here.</p>`);
+  }
+  /* 2026-11-14: the Bridge layout tab's framing plan (ui/plan.js), when the project has no model error */
+  function planCard() {
+    if (!window.PSBPlan) return '';
+    if (M.validate(P).errors.length) return card('Plan', '<p class="note">Shown when the spans, skews and girder lines have no input error.</p>');
+    try { return window.PSBPlan.card(P); } catch (e) { console.warn(e); return card('Plan', `<div class="alert err">The plan could not be drawn: ${esc(e.message)}</div>`); }
+  }
   /* the engine result for the Owner rules tab (the owner's material checks in its rules table), when the inputs have no error */
   const ownRes = () => { if (window.PSBInputCheck.collect(P).errors.length) return null; const rc = result(); return rc.R.error ? null : rc.R; };
   function drawInputs() {
@@ -398,6 +429,7 @@
     $('inPanes').innerHTML = TABS.map(([k]) => `<div class="pane" data-pane="${k}"${ui.itab === k ? '' : ' hidden'}>${p[k]}</div>`).join('');
     markErrors();
     try { TY.mark($('inPanes'), P, ui); } catch (e) { console.warn(e); }   // PR 3a-1: the fields a girder type has of its own
+    if (ui.itab === 'layout' && window.PSBPlan && $('gfx_plan')) { try { window.PSBPlan.mount($('gfx_plan'), P); } catch (e) { console.warn(e); } }   // 2026-11-14: the framing plan at the panel's width
     // PR 2c-1: the strand-pattern graphic of the design (the engine's strand system), on the Girders & strands tab, when the inputs have no error
     if (ui.itab === 'gird' && !errs.length && window.PSBStrandGfx) { const rc = scopeK() >= 0 ? scopeResult() : result(); if (rc && !rc.R.error) { try { window.PSBStrandGfx.mount($('gfx_strands_in'), { R: rc.R, inp: rc.inp }, { id: 'inStrandFig', title: 'Strand pattern of the design girder', compact: true }); } catch (e) { console.warn(e); } } }
   }
@@ -429,6 +461,7 @@
     const el = e.target;
     if (el.dataset.ty) { typesDone(TY.onChange(el, P, ui)); return; }   // PR 3a-1
     if (el.dataset.dl && DLUI.onChange(el, P)) { changed(); return; }   // PR 3a-3
+    if (el.dataset.lt) { const [s, g] = el.dataset.lt.split('|').map(Number), k = +el.value; if (el.value !== '' && P.types[k] && P.types[k].span === s) { BR.assignLine(P, k, g); changed(); } return; }   // 2026-11-14: girder type of each line
     const path = el.dataset.path, k = el.dataset.kind; if (!path) return;
     // PR 3a-1: in a girder type's scope the edit goes to the type's own inputs (its overrides of the base design)
     const sk = TY.SCOPED.includes(ui.itab) ? scopeK() : -1, V = viewOf(sk);
@@ -439,6 +472,10 @@
     else set(path, v);
     if (path === 'spans.lengths' && P.spans.lengths.length) P.xs.skews = resize(P.xs.skews, P.spans.lengths.length + 1, 0);   // one skew per support
     if (path === 'xs.nb' && Number.isInteger(P.xs.nb) && P.xs.nb >= 1) P.xs.bays = resize(P.xs.bays, P.xs.nb - 1, 9);         // one spacing per bay
+    // 2026-11-14 (equal spacing): to Equal, W_cc starts at the present Σ bays (the same girder lines when the bays are equal); back to
+    // Individual keeps the bays; in Equal a W_cc or girder count change writes S into every bay (the Steel Bridge app's rule)
+    if (path === 'xs.spMode') { if (v === 'equal') P.xs.Wcc = Math.round((P.xs.bays || []).reduce((a, b) => a + +b, 0) * 1e6) / 1e6; else P.xs.spMode = 'individual'; }
+    M.applyEqual(P);
     // PR 3a-1: the girder types follow a girder count change (the steel app's SB-14 rule, engine/bridge.js renumber) and a span count
     // change (a new span: copies of the types of the span before it; engine/bridge.js syncSpans), with a notice (and Undo)
     let tyNote = '';

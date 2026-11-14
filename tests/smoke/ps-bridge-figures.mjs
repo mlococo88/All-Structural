@@ -80,5 +80,59 @@ for (const vw of [1400, 390]) for (const name of Object.keys(PROJECTS)) {
   check(pg.blocked.size === 0, `${tag}: blocked ${[...pg.blocked].join(' ')}`);
   await pg.b.close();
 }
+
+// ---------- 2026-11-14 (item 3): the Bridge layout tab: the framing plan, the list tables, equal spacing, the girder type of each line ----------
+for (const vw of [1400, 390]) {
+  const tag = `layout @ ${vw}`, pg = await open('ibeam', vw, 'lds'), { p } = pg;
+  const before = (await lsSnap(p))['psb2.project.current'];
+  await p.click('#inTabs [data-itab="layout"]'); await p.waitForTimeout(400);
+  check((await lsSnap(p))['psb2.project.current'] === before, `${tag}: opening the tab changes nothing saved`);
+  const r = await p.evaluate(() => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, m = window.PSBPlan.model(P), svg = document.querySelector('#planFig svg');
+    return { cells: window.PSBBridge.cells(P).length, gl: svg ? svg.querySelectorAll('line.xs-gl').length : -1, dia: svg ? svg.querySelectorAll('line.xs-dia').length : -1, cd: svg ? svg.querySelectorAll('line.xs-cd').length : -1,
+      mdia: m.dia.length, mcd: m.cont.length, txt: svg ? svg.textContent : '', h: svg ? svg.viewBox.baseVal.height : 0, label: svg ? svg.getAttribute('aria-label') : '', sideways: document.documentElement.scrollWidth > window.innerWidth + 1,
+      tables: ['spans.lengths', 'xs.skews'].map(id => { const el = document.getElementById('i_' + id); return !!(el && el.nextElementSibling && el.nextElementSibling.querySelector('table.sli-t')); }) }; });
+  check(r.gl === r.cells && r.cells === 10, `${tag}: plan: a girder line per type × line (${r.gl} / ${r.cells})`);
+  check(r.cd === r.mcd && r.mcd === 1, `${tag}: plan: the continuity diaphragm on the pier (${r.cd})`);
+  check(r.dia === r.mdia, `${tag}: plan: diaphragms = model (${r.dia} / ${r.mdia})`);
+  check(['Abut. 1', 'Pier 1', 'Abut. 2', 'θ = 15.0°', 'θ = 20.0°', 'Span 1: 110.00 ft', 'Span 2: 130.00 ft'].every(t => r.txt.includes(t)), `${tag}: plan labels (${r.txt.slice(0, 120)})`);
+  check(!/exaggerated/.test(r.label), `${tag}: plan true scale by default`);
+  check(r.tables.every(Boolean), `${tag}: spans and skews are tables of rows`);
+  await p.click('#planFig [data-vkseg="2"]'); await p.waitForTimeout(300);
+  const x2 = await p.evaluate(() => { const svg = document.querySelector('#planFig svg'); return { h: svg.viewBox.baseVal.height, label: svg.getAttribute('aria-label'), cap: (document.querySelector('#planFig [data-plancap]') || {}).textContent || '', on: (document.querySelector('#planFig [data-vkseg="2"]') || {}).getAttribute('aria-pressed') }; });
+  check(/exaggerated ×2/.test(x2.label) && x2.h > r.h && /angles are not to scale/.test(x2.cap) && x2.on === 'true', `${tag}: Width ×2 (${r.h} → ${x2.h} high)`);
+  check((await lsSnap(p))['psb2.project.current'] === before, `${tag}: Width ×2 is not saved`);
+  check(!r.sideways, `${tag}: no sideways scroll`);
+  if (args.shots) await (await p.$('#psbPlan')).screenshot({ path: path.join(args.shots, `plan-ibeam-${vw}.png`) });
+  if (vw === 1400) {
+    // a span typed into its row (the table writes the text back, the page reads it): 110 → 115; + Add: a third span and a fourth skew
+    const cell = await p.$('[id="i_spans.lengths"] + [data-sli="host"] tr[data-sli-r="0"] input.sli-in'); await cell.fill('115'); await cell.press('Tab'); await p.click('#inTabs [data-itab="layout"]'); await p.waitForTimeout(400);
+    let Q = await p.evaluate(() => window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project);
+    check(JSON.stringify(Q.spans.lengths) === '[115,130]' && Q.xs.skews.length === 3, `typed span saved as a number array (${JSON.stringify(Q.spans.lengths)})`);
+    await p.click('[id="i_spans.lengths"] + [data-sli="host"] button.sli-add'); const c3 = await p.$('[id="i_spans.lengths"] + [data-sli="host"] tr[data-sli-r="2"] input.sli-in'); await c3.fill('90'); await c3.press('Tab'); await p.click('#inTabs [data-itab="layout"]'); await p.waitForTimeout(500);
+    Q = await p.evaluate(() => window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project);
+    check(JSON.stringify(Q.spans.lengths) === '[115,130,90]' && Q.xs.skews.length === 4, `a span added: ${JSON.stringify(Q.spans.lengths)}, ${Q.xs.skews.length} skews`);
+    // equal spacing: W_cc = Σ bays first, then 38 ft → 9.5 ft bays, the worked step; back to individual keeps them
+    await p.click('#inTabs [data-itab="xsec"]'); await p.selectOption('[id="i_xs.spMode"]', 'equal'); await p.waitForTimeout(300);
+    Q = await p.evaluate(() => window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project);
+    check(Q.xs.spMode === 'equal' && Math.abs(Q.xs.Wcc - 36) < 1e-9 && Q.xs.bays.every(b => Math.abs(b - 9) < 1e-9), `equal: W_cc = Σ bays 36 → S 9 (${JSON.stringify(Q.xs.bays)})`);
+    await p.fill('[id="i_xs.Wcc"]', '38'); await p.press('[id="i_xs.Wcc"]', 'Tab'); await p.waitForTimeout(300);
+    Q = await p.evaluate(() => window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project);
+    const stx = await p.evaluate(() => (document.getElementById('st-xs.eqS') || {}).textContent || '');
+    check(JSON.stringify(Q.xs.bays) === '[9.5,9.5,9.5,9.5]' && /9\.500/.test(stx), `W_cc 38: bays ${JSON.stringify(Q.xs.bays)}; step "${stx.slice(0, 60)}"`);
+    check(!(await p.$('[id="i_xs.bays"]')), 'equal: no bay list');
+    await p.selectOption('[id="i_xs.spMode"]', 'individual'); await p.waitForTimeout(300);
+    Q = await p.evaluate(() => window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project);
+    check(Q.xs.spMode === 'individual' && JSON.stringify(Q.xs.bays) === '[9.5,9.5,9.5,9.5]' && !!(await p.$('[id="i_xs.bays"]')), 'back to individual keeps the bays');
+    // the girder type of each line: G3 in span 1 to the exterior type; the Girders & strands tab's line box follows
+    const k = await p.evaluate(() => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project; return P.types.findIndex(t => t.span === 1 && t.lines.includes(1)); });
+    await p.selectOption('select[data-lt="1|3"]', String(k)); await p.waitForTimeout(300);
+    Q = await p.evaluate(() => window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project);
+    check(Q.types[k].lines.includes(3) && Q.types.filter(t => t.span === 1 && t.lines.includes(3)).length === 1, `G3 / span 1 moved to type ${k} (${JSON.stringify(Q.types.map(t => [t.span, t.lines]))})`);
+    await p.click('#inTabs [data-itab="gird"]'); await p.waitForTimeout(300);
+    check(await p.evaluate(kk => { const b = document.querySelector(`input[data-ty="line"][data-k="${kk}"][data-g="3"]`); return !!(b && b.checked); }, k), 'the Girders & strands line box of G3 is ticked for that type');
+  }
+  check(pg.errs.length === 0, `${tag}: console errors ${pg.errs.slice(0, 3).join(' | ')}`);
+  await pg.b.close();
+}
 console.log(`${checks} checks, ${failures} failed`);
 process.exit(failures ? 1 : 0);

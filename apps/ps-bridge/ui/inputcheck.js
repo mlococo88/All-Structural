@@ -20,6 +20,7 @@
     const st = document.createElement('style'); st.id = 'ic-css';
     st.textContent = `select.bad,input.bad{border-color:var(--fail)!important;background:#FEF2F2;outline:2px solid var(--fail);outline-offset:1px;}
       .alert.err.ic-msg{margin:2px 0 6px;padding:3px 8px;}
+      .sli input.sli-in.ic-cell{border-color:#dc2626;background:rgba(220,38,38,.08);outline:2px solid #dc2626;outline-offset:0;}
       .inTabs button.has-err{border-color:var(--fail);color:#991B1B;}
       .inTabs button.has-err .inDot{display:inline-block;width:auto;height:auto;min-width:15px;padding:0 4px;border-radius:8px;color:#fff;font-size:7.5pt;font-weight:700;line-height:14px;text-align:center;vertical-align:1px;}
       .ic-banner ul{margin:4px 0 2px;padding-left:18px;} .ic-banner li{margin:2px 0;} .ic-banner a{color:#991B1B;} .ic-banner .ic-where{font-weight:600;}
@@ -36,6 +37,12 @@
     let up = p; while (!els.length && /\./.test(up)) { up = up.replace(/\.[^.]*$/, ''); els = q(document, `${IP}[data-path="${qa(up)}"]`); }   // a list entry (xs.bays.1): the list's input
     return els;
   }
+  /* 2026-11-14: the list inputs as tables (ui/lists.js; the steel app's isList / cellIn): the hidden input is the field, its table follows
+     it; a list entry's error (xs.bays.1) marks and focuses that row's cell */
+  const LSEL = () => window.PSBListsUI ? window.PSBListsUI.LISTS.map(l => l[0]).join(',') : '';
+  const isList = el => { const s = LSEL(); try { return !!(el && s && el.matches(s)); } catch (e) { return false; } };
+  const cellIn = (el, i) => { const h = el && el.nextElementSibling; return h && h.querySelector ? h.querySelector(`tr[data-sli-r="${i}"] input.sli-in`) : null; };
+  const cellOf = p => { const m = String(p || '').match(/\.(\d+)$/); return m ? +m[1] : null; };
   /* the field's label (the banner): its <label>, an aria-label, or the column head of its table cell */
   function labelOf(el) {
     if (!el) return '';
@@ -49,13 +56,18 @@
     q(document, '.ic-msg').forEach(n => n.remove());
     q(document, '.ic-bad').forEach(n => n.classList.remove('bad', 'ic-bad'));
     q(document, '#inPanes [data-path].bad').forEach(n => n.classList.remove('bad'));
+    q(document, '.ic-cell').forEach(n => n.classList.remove('ic-cell'));
     const after = new Map();   // the node after which a message goes -> its messages
+    const cells = [];
     errors.forEach(e => {
       const els = fieldsOf(e.path, o); if (!els.length) return;
       els.forEach(el => { el.classList.add('bad', 'ic-bad'); el.setAttribute('aria-invalid', 'true'); });
       const el = els[0], td = el.closest('td'), at = td ? (el.closest('.tscroll') || el.closest('table')) : (el.closest('.fRow') || el);
       if (!after.has(at)) after.set(at, []); after.get(at).push(e.msg);
+      if (isList(el)) cells.push([el, cellOf(e.path)]);
     });
+    // the list tables are bound after the page draws (ui/lists.js MutationObserver): their cells are marked once they exist
+    if (cells.length) setTimeout(() => cells.forEach(([el, i]) => { const c = i != null ? cellIn(el, i) : null; if (c) c.classList.add('ic-cell'); }), 0);
     q(document, '#inPanes [aria-invalid]').forEach(n => { if (!n.classList.contains('bad')) n.removeAttribute('aria-invalid'); });
     after.forEach((msgs, at) => { const d = document.createElement('div'); d.className = 'alert err ic-msg'; d.setAttribute('role', 'alert');
       d.innerHTML = [...new Set(msgs)].map(esc).join('<br>'); at.insertAdjacentElement('afterend', d); });
@@ -81,8 +93,10 @@
   /* focus(e, o): scrolls to and focuses the field (its tab is drawn first by the page) */
   function focus(e, o) {
     const el = fieldsOf(e.path, o)[0]; if (!el) return false;
-    el.scrollIntoView({ block: 'center' }); try { el.focus({ preventScroll: true }); } catch (er) { el.focus(); }
-    return true;
+    const go = t => { if (!t) return; t.scrollIntoView({ block: 'center' }); try { t.focus({ preventScroll: true }); } catch (er) { t.focus(); } };
+    // 2026-11-14: a list (a hidden input and its table): the row's cell when known, else the first cell (the steel app's focus)
+    if (isList(el) || el.type === 'hidden' || el.offsetParent === null) { setTimeout(() => { const i = cellOf(e.path), c = (i != null && cellIn(el, i)) || (el.nextElementSibling && el.nextElementSibling.querySelector && el.nextElementSibling.querySelector('input.sli-in')) || el; go(c); }, 0); return true; }
+    go(el); return true;
   }
   window.PSBInputCheckUI = { css, mark, banner, blocked, dash, fieldsOf, focus, labelOf, where };
 })();

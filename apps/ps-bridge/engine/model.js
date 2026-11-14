@@ -19,6 +19,10 @@
                                                                                continuous for DC2, DW and LL (AASHTO 5.12.3.3; today's cont.on, PS-7)
      xs:      { nb (girders), bays: [ft, …] (nb − 1 girder spacings, left to right, unequal allowed, PS-9),
                 ohL, ohR (deck overhang from the exterior girder centreline, ft), skews: [deg, …] (one per support: abutment, piers, abutment) },
+     xs.spMode, xs.Wcc  added 2026-11-14 (the Steel Bridge app's equal spacing, EQSP), optional within version 1: spMode 'individual' | 'equal'
+                      (absent = individual: every project saved before, unchanged), Wcc (ft; 'equal' only: ℄ to ℄ of the two exterior girders).
+                      In 'equal' the page writes S = Wcc / (nb − 1) into every xs.bays entry (applyEqual); everything computed reads xs.bays
+                      as before, so spMode and Wcc change no result by themselves.
      base:    { … }   added 2026-11-12 (PR 2a, plan §2.4), optional within version 1: the base girder design, an inputs object of the old
                       app's format (its DEFAULTS shape), always stored as mergeInputs(base) of the moved engine (engine/pbd-merge.js), so a
                       field added to DEFAULTS later is filled in. A project without it (saved by PR 1) reads with the old app's defaults.
@@ -115,6 +119,9 @@
     if (Number.isInteger(x.nb) && x.nb >= 1 && B.length !== x.nb - 1) E('xs.bays', `Enter ${x.nb - 1} girder spacing${x.nb - 1 === 1 ? '' : 's'} (one per bay) for ${x.nb} girders.`);
     B.forEach((v, i) => pos(v, `xs.bays.${i}`, `Bay ${i + 1} spacing`));
     nn(x.ohL, 'xs.ohL', 'Left overhang'); nn(x.ohR, 'xs.ohR', 'Right overhang');
+    // 2026-11-14 (equal spacing, the Steel Bridge app's EQSP): optional xs.spMode / xs.Wcc; absent = individual bays (as before)
+    if (x.spMode != null && !['individual', 'equal'].includes(x.spMode)) E('xs.spMode', 'Girder spacing: choose individual spacings or equal spacing.');
+    if (x.spMode === 'equal') { pos(x.Wcc, 'xs.Wcc', 'Exterior girder spacing W_cc (℄ to ℄ of the exterior girders)'); if (Number.isInteger(x.nb) && x.nb < 2) E('xs.spMode', 'Equal spacing needs 2 girders or more.'); }
     const S = Array.isArray(x.skews) ? x.skews : [];
     if (L.length && S.length !== L.length + 1) E('xs.skews', `Enter ${L.length + 1} support skews (abutment, piers, abutment) for ${L.length} span${L.length === 1 ? '' : 's'}.`);
     S.forEach((v, i) => { if (!(isNum(v) && Math.abs(v) < 90)) E(`xs.skews.${i}`, `Skew at support ${i + 1} must be a number of degrees between −90 and 90.`); });
@@ -188,11 +195,24 @@
 
   /* totalLength(p), girderOffsets(p): display helpers (ft) — the bridge length and each girder's distance from the left deck edge. */
   const totalLength = p => ((p && p.spans && p.spans.lengths) || []).reduce((a, b) => a + (isNum(b) ? b : 0), 0);
+  /* equalSpacing(xs): COPY of apps/steel-bridge/engine/model.js equalSpacing (EQSP, 2026-11-09), to move to shared/ later (CLAUDE.md §3):
+     the equal girder spacing S = W_cc / (N_b − 1) of xs.Wcc (exterior girder spacing, ℄ to ℄ of G1 and G<nb>) and xs.nb, written by the
+     page into every xs.bays entry when xs.spMode = 'equal' (applyEqual). -> { nb, Wcc, S (ft; NaN when nb < 2 or W_cc is not a number),
+     bays: [S × (nb − 1)], step (SharedSteps form, id 'xs.eqS') }. */
+  function equalSpacing(xs) {
+    const x = xs || {}, nb = Math.round(+x.nb), Wcc = x.Wcc == null || x.Wcc === '' ? NaN : +x.Wcc, ok = Number.isInteger(nb) && nb >= 2 && nb < 100;
+    const S = ok && isFinite(Wcc) ? Wcc / (nb - 1) : NaN, fm = (v, d) => isFinite(v) ? (+v).toFixed(d) : '\\text{—}';
+    const step = { id: 'xs.eqS', label: 'Girder spacing, girders equally spaced', sym: 'S', eq: '\\frac{W_{cc}}{N_{b} \\minus 1}', sub: `\\frac{${fm(Wcc, 3)}}{${ok ? nb : '\\text{—}'} \\minus 1}`,
+      value: S, unit: 'ft', d: 3, ref: '', note: 'W_cc: exterior girder spacing, centreline to centreline of the two exterior girders; N_b − 1 bays, all at S.' };
+    return { nb, Wcc, S, bays: ok ? new Array(nb - 1).fill(S) : [], step };
+  }
+  /* applyEqual(P): in equal spacing, every bay = S (the Steel Bridge app's applyEqual, ui/loads.js); individual (or absent): nothing */
+  const applyEqual = P => { if (P && P.xs && P.xs.spMode === 'equal') { const Q = equalSpacing(P.xs); if (Q.bays.length) P.xs.bays = Q.bays; } };
   function girderOffsets(p) {
     const x = (p && p.xs) || {}, out = [isNum(x.ohL) ? x.ohL : 0];
     (x.bays || []).forEach(b => out.push(out[out.length - 1] + (isNum(b) ? b : 0)));
     return out;
   }
 
-  window.PSBModel = { SCHEMA, VERSION, KEYS, CONTINUITY, defaultProject, newProject, validate, migrate, legacyKind, exportJSON, importJSON, save, load, totalLength, girderOffsets, baseInputs };
+  window.PSBModel = { SCHEMA, VERSION, KEYS, CONTINUITY, defaultProject, newProject, validate, migrate, legacyKind, exportJSON, importJSON, save, load, totalLength, girderOffsets, baseInputs, equalSpacing, applyEqual };
 })();

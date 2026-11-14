@@ -50,6 +50,8 @@ const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
 const FILE = path.resolve(args.file || path.join(REPO, 'apps/ps-bridge/index.html'));
 if (args.shots) fs.mkdirSync(args.shots, { recursive: true });
+/* 2026-11-14: the span, skew and bay lists are tables of rows (ui/lists.js); the page's hidden input keeps the text: set it (the table follows) and commit */
+const setList = (p, sel, text) => p.evaluate(([q, t]) => { const el = document.querySelector(q); el.value = t; el.dispatchEvent(new Event('change', { bubbles: true })); }, [sel, text]);
 let failures = 0, checks = 0;
 const check = (ok, msg) => { checks++; if (!ok) { failures++; console.log('  FAIL ' + msg); } };
 const lsSnap = p => p.evaluate(() => { const o = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); o[k] = localStorage.getItem(k); } return o; });
@@ -71,7 +73,7 @@ for (const t of ['proj', 'layout', 'xsec', 'gird', 'mat', 'dd', 'loads', 'own', 
 for (let i = 0; i < otabs.length; i++) { await p.click(`#tabBar [data-otab]:nth-child(${i + 1})`); check((await p.textContent('#out')).length > 50, 'output tab ' + otabs[i]); }
 // 2. edit, autosave, reload
 await p.click('#inTabs [data-itab="layout"]');
-await p.fill('#i_spans\\.lengths', '100, 125, 100'); await p.press('#i_spans\\.lengths', 'Tab');
+await setList(p, '#i_spans\\.lengths', '100, 125, 100');
 await p.selectOption('#i_spans\\.continuity', 'composite');
 let ls = await lsSnap(p), sv = JSON.parse(ls['psb2.project.current'] || 'null');
 check(sv && sv.spans.lengths.join() === '100,125,100' && sv.spans.continuity === 'composite' && sv.xs.skews.length === 4, 'autosaved ' + JSON.stringify(sv && sv.spans));
@@ -81,14 +83,14 @@ await p.reload(); await ready(p);
 check((await p.inputValue('#i_spans\\.lengths')) === '100, 125, 100', 'reload keeps the spans');
 // 3. invalid input (model): a negative bay (PR 3a-2: unequal bays are no longer an input error)
 await p.click('#inTabs [data-itab="xsec"]');
-await p.fill('#i_xs\\.bays', '9, -2, 9, 9'); await p.press('#i_xs\\.bays', 'Tab');
+await setList(p, '#i_xs\\.bays', '9, -2, 9, 9');
 check(await p.$eval('#i_xs\\.bays', e => e.classList.contains('bad')), 'bad field marked');
 check((await p.textContent('#inTabs [data-itab="xsec"] .inDot')) === '1', 'tab count ' + await p.textContent('#inTabs [data-itab="xsec"] .inDot'));
 check(/Bay 2 spacing must be a positive number/.test(await p.textContent('#out')) && /1 to fix/.test(await p.textContent('#sbDashCol')), 'errors listed');
 check(/Results not shown/.test(await p.textContent('#out')), 'results blocked');
 await p.click('#inTabs [data-itab="proj"]'); await p.click('#out [data-icgo="0"]');
-check(await p.isVisible('#inPanes [data-pane="xsec"]') && await p.evaluate(() => document.activeElement && document.activeElement.id === 'i_xs.bays'), 'error link opens the field');
-await p.fill('#i_xs\\.bays', '9, 9, 9, 9'); await p.press('#i_xs\\.bays', 'Tab');
+check(await p.isVisible('#inPanes [data-pane="xsec"]') && await p.evaluate(() => { const a = document.activeElement, t = a && a.closest('[data-sli="host"]'); return !!(t && t.previousElementSibling && t.previousElementSibling.id === 'i_xs.bays' && a.closest('tr').getAttribute('data-sli-r') === '1'); }), 'error link opens the field (2026-11-14: the bay\'s row of the list table)');
+await setList(p, '#i_xs\\.bays', '9, 9, 9, 9');
 check(!(await p.$eval('#i_xs\\.bays', e => e.classList.contains('bad'))) && !/to fix/.test(await p.textContent('#sbDashCol')), 'fixed');
 // 3b. PR 2b: a girder-design input (base) is saved; a blank f'c is marked with its message, counted on Materials, blocks results; the
 // owner change sets an input still at its default to the owner's default (RIDOT: H 80 %) and says so
@@ -154,14 +156,14 @@ const evCheck = async () => p.evaluate(() => {
   return { n: els.length, bad, svg: document.querySelectorAll('#out svg').length, katex: document.querySelectorAll('#out .katex').length };
 });
 const DESIGNS = [['default', null], ['continuous, exterior G1 in span 2, restraint', async () => {
-    await p.click('#inTabs [data-itab="layout"]'); await p.fill('#i_spans\\.lengths', '100, 125, 100'); await p.press('#i_spans\\.lengths', 'Tab');
+    await p.click('#inTabs [data-itab="layout"]'); await setList(p, '#i_spans\\.lengths', '100, 125, 100');
     await p.selectOption('#i_spans\\.continuity', 'composite'); await p.selectOption('#i_base\\.cont\\.restraint', 'true');
     // PR 3a-1: the new spans got copies of span 1's girder types (notice); the type and line are chosen above the output tabs
     while (await p.isVisible('#notices .nClose')) await p.click('#notices .nClose');
     await p.click('#tabBar [data-otab="sec"]'); await p.selectOption('#tyOutT', { label: 'Exterior S2 (span 2)' }); await p.selectOption('#tyOutL', '1'); }],
   ['NEXT 36F, skew 35 deg, one span', async () => {
-    await p.click('#inTabs [data-itab="layout"]'); await p.fill('#i_spans\\.lengths', '90'); await p.press('#i_spans\\.lengths', 'Tab'); await p.fill('#i_xs\\.skews', '35, 35'); await p.press('#i_xs\\.skews', 'Tab');
-    await p.click('#inTabs [data-itab="xsec"]'); await p.fill('#i_xs\\.bays', '10, 10, 10, 10'); await p.press('#i_xs\\.bays', 'Tab');
+    await p.click('#inTabs [data-itab="layout"]'); await setList(p, '#i_spans\\.lengths', '90'); await setList(p, '#i_xs\\.skews', '35, 35');
+    await p.click('#inTabs [data-itab="xsec"]'); await setList(p, '#i_xs\\.bays', '10, 10, 10, 10');
     await p.click('#inTabs [data-itab="gird"]'); await p.selectOption('#i_base\\.girder', 'NEXT 36F'); await p.fill('#i_base\\.harp\\.n', '0'); await p.press('#i_base\\.harp\\.n', 'Tab'); }],
   ['handling and deck on, BT-72, one span', async () => {
     await p.click('#inTabs [data-itab="gird"]'); await p.selectOption('#i_base\\.girder', 'PCI BT-72'); await p.fill('#i_base\\.harp\\.n', '12'); await p.press('#i_base\\.harp\\.n', 'Tab');

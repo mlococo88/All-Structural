@@ -23,6 +23,8 @@ const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
 const FILE = path.resolve(args.file || path.join(REPO, 'apps/ps-bridge/index.html'));
 if (args.shots) fs.mkdirSync(args.shots, { recursive: true });
+/* 2026-11-14: the span, skew and bay lists are tables of rows (ui/lists.js); the page's hidden input keeps the text: set it (the table follows) and commit */
+const setList = (p, sel, text) => p.evaluate(([q, t]) => { const el = document.querySelector(q); el.value = t; el.dispatchEvent(new Event('change', { bubbles: true })); }, [sel, text]);
 let failures = 0, checks = 0;
 const check = (ok, msg) => { checks++; if (!ok) { failures++; console.log('  FAIL ' + msg); } };
 const lsSnap = p => p.evaluate(() => { const o = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); o[k] = localStorage.getItem(k); } return o; });
@@ -110,7 +112,7 @@ await o.b.close();
 //    Summary tab's table (a row per type and per line, weights and the bridge total), a ratio opens its tab with that type and line; the
 //    Report's §1 table of every type and line; different end skews below 30° allowed, 30° or more with the DF computed an input error
 o = await openPage(FILE, { vw: 1400, vh: 1000 }); p = o.p; await ready(p);
-await p.click('#inTabs [data-itab="xsec"]'); await p.fill('#i_xs\\.bays', '8, 10, 10, 8'); await p.press('#i_xs\\.bays', 'Tab'); await p.waitForTimeout(400);
+await p.click('#inTabs [data-itab="xsec"]'); await setList(p, '#i_xs\\.bays', '8, 10, 10, 8'); await p.waitForTimeout(400);
 check(!/to fix/.test(await p.textContent('#sbDashCol')), 'unequal bays: no input error');
 { const r = await p.evaluate(() => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, BR = window.PSBBridge;
     const A = BR.results(P, i => window.PSBHoldDown.compute(JSON.parse(JSON.stringify(i)))), fl = A.cells.flatMap(c => c.R.checks.filter(q => q.n === 'Flexure').map(q => ({ r: q.r, g: c.g, lab: c.label })));
@@ -140,9 +142,9 @@ await p.click('#inTabs [data-itab="xsec"]'); await p.fill('#i_xs\\.ohR', '4'); a
   check(/G1 1\.500 ft/.test(t) && /G5 2\.500 ft/.test(t) && !(await p.$('#i_base\\.loads\\.de')), 'PS-20: d_e per exterior line ' + t.slice(0, 200));
   const de = await p.evaluate(() => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project; return [window.PSBDesign.cellInputs(P, 1, 1).loads.de, window.PSBDesign.cellInputs(P, 1, 5).loads.de]; });
   check(de[0] === 1.5 && de[1] === 2.5, 'PS-20: engine d_e per line ' + de); }
-await p.click('#inTabs [data-itab="layout"]'); await p.fill('#i_xs\\.skews', '10, 20'); await p.press('#i_xs\\.skews', 'Tab'); await p.waitForTimeout(300);
+await p.click('#inTabs [data-itab="layout"]'); await setList(p, '#i_xs\\.skews', '10, 20'); await p.waitForTimeout(300);
 check(!/to fix/.test(await p.textContent('#sbDashCol')), 'skews 10, 20: allowed');
-await p.fill('#i_xs\\.skews', '20, 35'); await p.press('#i_xs\\.skews', 'Tab'); await p.waitForTimeout(300);
+await setList(p, '#i_xs\\.skews', '20, 35'); await p.waitForTimeout(300);
 check(/larger is 30° or more/.test(await p.textContent('#sbDashCol')), 'skews 20, 35 with the DF computed: input error');
 check(!o.errs.length, 'console errors (3a-2): ' + o.errs.join(' | '));
 await o.b.close();
