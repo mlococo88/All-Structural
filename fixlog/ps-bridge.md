@@ -2079,3 +2079,202 @@ index fc6b5ce..ef8084a 100644
      const gone = [];
      unitSecs.forEach(({ u, out, keys }, i) => out.forEach(({ k, s, n0, n1 }) => {
 ```
+
+## 2026-11-14 — PS-27: the NEXT strands drawn in the two stems (strand pattern, Section properties and Stresses graphics; the Report's figures) — the old app's strand positions ported (display only; no calculation change)
+PR: (this PR)
+### Request
+- Engineer report (2026-11-13): "Look at the graphic for the NEXT beam section and make sure the strands are actually within the beam webs. This was correct in the psgirder app."
+### Problem
+- Every section graphic of the new app placed each strand row centred on the girder ℄ on a 2 in grid, whatever the shape. For the NEXT F double tee (two stems at 60 in c/c, each B = 13.0–13.75 in wide) the strands were drawn in the empty gap between the stems (x within ±9 in of the ℄; the stems' inner faces are at ±23.1 to ±23.5 in). The old app (`strandXY`, "Prestressed Bridge Design.html" @ 8fe8650 :4877-4914) splits each row between the two stems.
+- Graphics affected (all three drawing functions; the Report draws its figures with the same functions): `ui/strands.js` `section()` (strand pattern at ℄ bearing and at midspan: Girders & strands input tab, Losses tab, Report §Losses), `ui/section.js` `figure()` (Section properties tab, Report), `ui/stresses.js` `secFig()` (Stresses tab, Report). Not affected: the elevations (strand profile, end zone, hold-down: rows by y only), the Loads & LLDF cross-section (girder rectangles, no strands), the Flexure pier section (no strands), the Deck tab.
+- Other shapes (I-girders, bulb tees, boxes, deck beams) were already drawn at the old app's straight-strand positions; two smaller differences from the old app, also corrected by the port: the Section properties graphic stacked the draped strands upward from y_mid (`y_mid + 2i`) instead of centring them on y_mid (12 draped at y_mid = 8 in: drawn 8–18 in; old app and now: 3–13 in), and drew 2·round(n_h/2) of them (an odd n_h one too many); the strand pattern and Stresses graphics drew the last strand of an odd n_h at x = 0 (old app: x = −1 in).
+- The engine is not involved: it uses only each row's y and count (`strandSys`, `tensionSideArea` uses the outline and voids only), the same in the old and the new app (verbatim slices, harness A). No calculation difference was found between the apps for NEXT strands.
+### What changed
+- `ui/strands.js`: new `xy(R, cg)`: a port of the old app's `strandXY` (positions, row index, debonded flags; the draped strands about their centroid `cg`), the one source of the drawn positions; `pattern(R, end)` now maps it; `rowBox` / `drapedBox` (the point-at regions and the "draped" callout follow the drawn strands); `debondedSlot` removed (the port's own "outermost first" order is the same set); exported `xy`, `rowBox`, `drapedBox`, `section` (tests); caption: "each row split between the two stems about each stem's ℄" and "draped strands in a row in each stem" for NEXT.
+- `ui/section.js` `figure()`: the strands drawn from `PSBStrandGfx.pattern(R, false)` (midspan) instead of its own loop; `figure` exported (tests).
+- `ui/stresses.js` `secFig()`: the strands drawn from `PSBStrandGfx.xy(R, yh)` (the draped centroid at the station, as before) instead of its own loop; `secFig` exported (tests).
+### Saved data (CLAUDE.md §5)
+- None: no key, no field, no format.
+### Governing provisions
+- None changed (display only). Engine values unchanged (harness B below).
+### Check case (the engineer's NEXT 36F; S = 8 ft → flange 96 in; L = 60 ft; rows 10 @ 2 in, 10 @ 4 in, 6 @ 6 in with 2 debonded 8 ft; 4 draped, y_end 24 in, y_mid 10 in)
+- Stems: ℄ at ±stemCC/2 = ±30 in, B = 13.0 in (faces ±23.5 and ±36.5 in); columns per stem = floor((13.0 − 4)/2) + 1 = 5 on a 2 in grid.
+- Before: rows 1–2 at x = −9, −7, …, +9 in; row 3 at −5 … +5 in; draped at ±1 in — all in the 47 in gap between the stems (|x| < 23.5 in).
+- After (= old app): rows 1–2: 5 per stem at x = ±30 + {−4, −2, 0, 2, 4} in (outermost 34 in: 2.5 in from the outer face, 2.5 in from the inner face at 26 in); row 3: 3 per stem at ±30 + {−2, 0, 2}; debonded (2): −32 and +28 in (each stem's first outermost column, as the old app); draped: 2 per stem at ±30 ± 1 in, y = y_mid (midspan) or y_end (℄ bearing).
+- Strand centroid at midspan 4.53 in, at ℄ bearing 6.43 in: the same before and after (engine values).
+### How verified
+- New `tests/engine/psbridge-strandgfx.test.mjs` (27 tests): every library shape (AASHTO I–VI, PCI BT-54/63/72, NEXT 24F–36F at the 96 in and 144 in flange, AASHTO BI–BIV boxes, the four deck slabs) × three strand patterns ("raw": the app's default pattern as is; "default": cut to what fits; "full": every 2 in row from the soffit filled to what fits, two strands of the bottom row debonded, draped strands where they fit; "fits" = every strand centre inside the girder outline (halfPolygon, the drawing data) at least 2 in from its edges and 2 in clear of a void, as the old app draws it). Each of the three graphics is drawn with the app's drawing kit and its strand circles recorded: (1) each graphic draws exactly `xy`'s strands (count = the engine's N per row + n_h; Stresses at three stations); (2) `xy` = the old app's `strandXY` run from its own text at the pin (positions and debonded strands, at ℄ bearing and midspan); (3) default / full: every drawn strand inside the concrete with the 2 in cover; no strand of a NEXT between the stems; (4) the engine's strand values (N, cgs, e, `ss.at`, checks) the same before and after drawing. Hand check of the case above; PS27-D1 (odd counts). Mutation check: with the NEXT branch of `xy` disabled the 8 NEXT tests and the two NEXT hand checks fail.
+- `node tests/engine/run.mjs psbridge tex project-registry`: 17 files, 173 passed, 0 failed. `node tests/check-syntax.mjs`: all scripts pass.
+- Harness B (`tests/psbridge-compare.mjs`): normal 17 designs, 0 with differences, exit 0; `--import` 0 with differences, exit 0; `--control` 17 with differences, exit 1; `--import --control` 17 with differences, exit 1 (the engine values every tab and the Report show are unchanged).
+- Smokes: `ps-bridge-skeleton.mjs` 252 checks, 0 failed; `ps-bridge-types.mjs` 106 checks, 0 failed.
+- Screenshots (headless Chromium, file://): the old app's "SECTION A–A" at midspan and at the end vs the new app's strand pattern before and after; Section properties, Stresses and Losses graphics before / after.
+### Decisions (pending engineer review)
+- PS27-D1. An odd strand count in a NEXT row (straight, debonded or draped) is drawn ⌈n/2⌉ in the left stem and ⌊n/2⌋ in the right, each stem centred on its own count. The old app drew round(n/2) in each stem (one strand more than entered: 7 drawn as 8). Even counts: the old app's positions exactly.
+- PS27-D2. The Stresses graphic keeps the draped strands at their centroid at the station (interpolated between y_end and y_mid, as before); the old app's stress section drew them at y_end within L/4 of a bearing and at y_mid elsewhere. Only their x positions follow the old app.
+- PS27-D3. Debonded strands stay drawn hollow at ℄ bearing only (as before); which strands are debonded follows the old app (outermost first; NEXT: per stem).
+### Open items (not changed; display, for the engineer)
+- A strand pattern that does not fit the shape is drawn as entered, outside the concrete, as the old app drew it (e.g. the app's default rows of 10 strands on an AASHTO Type I, or the default draped strands at y_end = 60 in on a shallower girder, which the input check stops when y_end ≥ h). The engine warns only when a row exceeds the strands that fit the bottom width ("≈N that fit … with 2″ edge cover"); a row inside a box void (e.g. y = 6 in on a BI-36, whose void starts 5 in above the soffit) is not warned. Should the input check warn for strands outside the outline or in a void?
+- Box beam voids: the new app draws the void where the engine places it (`sectionVoids`: on the bottom wall, y = wall … wall + voidH); the old app's section graphic drew it centred on the depth ((h − voidH)/2 …). Not changed.
+- Flexure tab, pier section of a NEXT: the negative-moment compression block is drawn across b_bf = 2B centred on the ℄ (between the stems); the engine's b_bf for NEXT is 2B (both stems). Display only; not changed here.
+### Other copies
+- None (the old app is frozen; its `strandXY` is the reference, unchanged).
+### Before / after (exact)
+```diff
+diff --git a/apps/ps-bridge/ui/section.js b/apps/ps-bridge/ui/section.js
+index 1e69915..bc9935b 100644
+--- a/apps/ps-bridge/ui/section.js
++++ b/apps/ps-bridge/ui/section.js
+@@ -47,10 +47,13 @@
+     sectionVoids(G).forEach(v => { if (v.type === 'rect') S.rect(v.x - v.w / 2, v.y - v.h / 2, v.x + v.w / 2, v.y + v.h / 2, 'dt-cc', { fill: '#fff' }); else S.circ(v.x, v.y, v.d / 2, 'dt-cc', { fill: '#fff' }); });
+     if (th > 0) S.rect(-G.btf / 2, G.h, G.btf / 2, G.h + th, 'dt-cc', { op: 0.85 });
+     if (ts > 0) { S.rect(-cp.beff / 2, G.h + th, cp.beff / 2, G.h + th + ts, 'dt-cc'); S.region(-cp.beff / 2, G.h + th, cp.beff / 2, G.h + th + ts, `Deck: b_eff = ${V.fx(cp.beff, 1)} in, t_s = ${V.fx(ts, 2)} in, n = ${V.fx(cp.n, 3)}`); }
+-    // straight strands on a 2 in grid (display), the draped strands at midspan
+-    ss.rows.forEach(r => { for (let i = 0; i < r.n; i++) S.circ((i - (r.n - 1) / 2) * 2, r.y, ss.st.db / 2, 'dt-bar'); S.region(-(r.n - 1) - 1, r.y - 1, (r.n - 1) + 1, r.y + 1, `${r.n} strands at y = ${r.y} in${r.nd ? `, ${r.nd} debonded ${r.dbnd} ft` : ''}`); });
+-    if (ss.nh > 0) { const n2 = Math.max(1, Math.round(ss.nh / 2)); for (let i = 0; i < n2; i++) { S.circ(-1, +ss.hp.yMid + i * 2, ss.st.db / 2, 'dt-bolt'); S.circ(1, +ss.hp.yMid + i * 2, ss.st.db / 2, 'dt-bolt'); }
+-      S.region(-2, +ss.hp.yMid - 1, 2, +ss.hp.yMid + n2 * 2, `${ss.nh} draped strands, centroid y_mid = ${ss.hp.yMid} in at midspan (y_end = ${ss.hp.yEnd} in)`); }
++    // straight strands on a 2 in grid (display), the draped strands at midspan: the positions of the strand-pattern graphic (PSBStrandGfx.xy, the
++    // old app's strandXY; NEXT: in the two stems, PS-27)
++    const SG = window.PSBStrandGfx, pts = SG.pattern(R, false);
++    pts.forEach(q => S.circ(q.x, q.y, ss.st.db / 2, q.kind === 'h' ? 'dt-bolt' : 'dt-bar'));
++    ss.rows.forEach((r, ri) => { const [x0, x1] = SG.rowBox(pts, ri); S.region(x0, r.y - 1, x1, r.y + 1, `${r.n} strands at y = ${r.y} in${r.nd ? `, ${r.nd} debonded ${r.dbnd} ft` : ''}`); });
++    if (ss.nh > 0) { const [x0, x1, y0, y1] = SG.drapedBox(pts);
++      S.region(x0, y0, x1, y1, `${ss.nh} draped strands, centroid y_mid = ${ss.hp.yMid} in at midspan (y_end = ${ss.hp.yEnd} in)`); }
+     const xr = Math.max(G.bbf || 0, G.btf || 0, cp.beff || 0) / 2 + 4;
+     const cl = (y, txt, cls) => { S.line(-xr, y, xr, y, cls || 'dt-cl'); S.text(xr, y, txt, { dx: 4, vc: true, sz: 11 }); };
+     cl(G.yb, `y_b = ${V.fx(G.yb, 2)} in (girder)`); cl(cp.ybc, `y_bc = ${V.fx(cp.ybc, 2)} in (composite)`, 'dt-hid'); cl(ss.cgsMid, `y_ps = ${V.fx(ss.cgsMid, 2)} in (strands, midspan)`, 'dt-tf');
+@@ -69,5 +72,5 @@
+       draw: W => figure(ctx, W), hint: 'Point at the deck or a strand row for its values.',
+       cap: '<p class="vk-cap">Shape as the engine uses it (outline and voids of the shape library); straight strands drawn on a 2 in grid, draped strands at midspan. Display only.</p>' });
+   }
+-  window.PSBUiSection = { output, after, TOPICS };
++  window.PSBUiSection = { output, after, TOPICS, figure };   // figure: also for tests/engine/psbridge-strandgfx.test.mjs (PS-27)
+ })();
+diff --git a/apps/ps-bridge/ui/strands.js b/apps/ps-bridge/ui/strands.js
+index 91146ee..23bea5a 100644
+--- a/apps/ps-bridge/ui/strands.js
++++ b/apps/ps-bridge/ui/strands.js
+@@ -5,24 +5,62 @@
+      Elevation (vertical scale exaggerated): ℄ bearings, girder ends (overhang opt.endOh), the straight rows (debonded lengths dashed),
+        the draped strands labelled "draped" with the two hold-down points at frac × L_span from ℄ bearing (PS-13), dimensioned.
+      Cross-sections at the girder end (℄ bearing) and at midspan: the outline and voids of the shape library, straight strands on a 2 in grid
+-       (debonded ones hollow at the end), draped strands as pairs on a 2 in grid about their centroid (y_end at the end, y_mid at midspan).
++       (debonded ones hollow at the end), draped strands as pairs on a 2 in grid about their centroid (y_end at the end, y_mid at midspan);
++       NEXT: each row split between the two stems (xy below, the old app's strandXY; PS-27, 2026-11-13).
+    mount(slot, ctx, o) -> the detCard; ctx = { R, inp }; o = { id, title, compact } (compact: the input panel). */
+ (function () {
+   'use strict';
+   const VK = () => window.PSBVizKit;
+   const BAR = '#8A5A44', DRP = '#B45309', DB = '#DC6B2F';
+   const fx = (v, d) => VK().fx(v, d);
+-  /* positions of the strands of the section at the end (end true) or at midspan: [{ x, y, kind: 's' | 'd' (debonded at the end) | 'h' (draped) }] */
++  /* xy(R, cg): the drawn position of every strand, in girder coordinates (in; x from the girder ℄, y up from the soffit):
++     [{ x, y, h (draped), ri (row), db (debonded), slot }], the draped strands about their centroid cg (in).
++     PS-27 (engineer report 2026-11-13: "make sure the strands are actually within the beam webs; this was correct in the psgirder app"):
++     a port of the old app's strandXY ("Prestressed Bridge Design.html" @ 8fe8650, :4877-4914), the reference for the drawn positions:
++       NEXT (two stems at stemCC c/c, width B): each row's strands split between the two stems, on a 2 in grid about each stem's ℄
++         (at most floor((B - 4) / 2) + 1 columns a stem, 2 in edge cover; more wrap onto the same columns, as the old app), the outermost
++         columns of each stem debonded first; the draped strands in one row in each stem about its ℄ at y = cg;
++       every other shape: each row centred on the girder ℄ on a 2 in grid, the outermost strands debonded first; the draped strands two
++         a row (x = ∓1 in), the rows 2 in apart about cg.
++     One change from the old code (PS27-D1, pending engineer review): an odd count in a NEXT row (straight, debonded or draped) is drawn as
++     ⌈n/2⌉ in the left stem and ⌊n/2⌋ in the right, each stem centred on its own count; the old app drew round(n/2) in each stem (one
++     strand more than entered). Even counts: the old app's positions exactly. Display only: the engine uses only each row's y and count. */
++  function xy(R, cg) {
++    const pts = [], g = R.g, ss = R.ss;
++    if (g.isNext && g.next) {
++      const sCL = g.next.stemCC / 2, B = g.next.B, perStemCols = Math.max(1, Math.floor((B - 4) / 2) + 1);   // 2 in grid, 2 in edge cover
++      const split = n => [Math.ceil(n / 2), Math.floor(n / 2)];   // [left stem, right stem] (PS27-D1)
++      ss.rows.forEach((r, ri) => {
++        const nd = r.dbnd > 0 ? Math.min(r.nd || 0, r.n) : 0, hs = split(r.n), ds = split(nd);
++        [-sCL, sCL].forEach((stemX, k) => {
++          const half = hs[k], w = (Math.min(half, perStemCols) - 1) / 2;
++          const order = [...Array(half).keys()].map(i => ({ i, x: stemX + (i % perStemCols - w) * 2 })).sort((a, b) => Math.abs(b.x - stemX) - Math.abs(a.x - stemX));   // outermost columns debonded first
++          const dbSet = new Set(order.slice(0, ds[k]).map(o => o.i));
++          for (let i = 0; i < half; i++) pts.push({ x: stemX + (i % perStemCols - w) * 2, y: r.y, h: false, ri, db: dbSet.has(i), slot: k * half + i });
++        });
++      });
++      if (ss.nh > 0) { const hs = split(ss.nh);
++        [-sCL, sCL].forEach((stemX, k) => { for (let i = 0; i < hs[k]; i++) pts.push({ x: stemX + (i - (hs[k] - 1) / 2) * 2, y: cg, h: true }); }); }
++      return pts;
++    }
++    ss.rows.forEach((r, ri) => {
++      const n = r.n, xs = [...Array(n)].map((_, i) => (i - (n - 1) / 2) * 2), nd = r.dbnd > 0 ? Math.min(r.nd || 0, r.n) : 0;
++      const order = xs.map((x, i) => ({ x, i })).sort((a, b) => Math.abs(b.x) - Math.abs(a.x));   // outermost strands debonded first
++      const dbSet = new Set(order.slice(0, nd).map(o => o.i));
++      xs.forEach((x, i) => pts.push({ x, y: r.y, h: false, ri, db: dbSet.has(i), slot: i }));
++    });
++    if (ss.nh > 0) { const n = ss.nh, rows = Math.ceil(n / 2);
++      for (let i = 0; i < n; i++) { const row = Math.floor(i / 2), col = i % 2; pts.push({ x: (col - 0.5) * 2, y: cg + (row - (rows - 1) / 2) * 2, h: true }); } }
++    return pts;
++  }
++  /* positions of the strands of the section at the end (end true) or at midspan: [{ x, y, kind: 's' | 'd' (debonded at the end) | 'h' (draped), ri }] (xy) */
+   function pattern(R, end) {
+-    const ss = R.ss, out = [];
+-    ss.rows.forEach(r => { const nd = end && r.dbnd > 0 ? r.nd : 0;
+-      for (let i = 0; i < r.n; i++) out.push({ x: (i - (r.n - 1) / 2) * 2, y: r.y, kind: nd > 0 && debondedSlot(i, r.n, nd) ? 'd' : 's' }); });
+-    if (ss.nh > 0) { const yc = end ? +ss.hp.yEnd : +ss.hp.yMid, np = Math.ceil(ss.nh / 2);
+-      for (let j = 0; j < np; j++) { const y = yc + (j - (np - 1) / 2) * 2, two = 2 * j + 1 < ss.nh; out.push({ x: two ? -1 : 0, y, kind: 'h' }); if (two) out.push({ x: 1, y, kind: 'h' }); } }
+-    return out;
++    const ss = R.ss, cg = ss.nh > 0 ? (end ? +ss.hp.yEnd : +ss.hp.yMid) : 0;
++    return xy(R, cg).map(p => ({ x: p.x, y: p.y, kind: p.h ? 'h' : end && p.db ? 'd' : 's', ri: p.ri }));
+   }
+-  /* the debonded strands of a row drawn symmetrically from the outside in (display; the engine needs only their number) */
+-  function debondedSlot(i, n, nd) { const ord = []; for (let k = 0; ord.length < n; k++) { ord.push(k); if (n - 1 - k !== k && ord.length < n) ord.push(n - 1 - k); } return ord.slice(0, nd).indexOf(i) >= 0; }
++  /* rowBox(pts, ri) / drapedBox(pts): the extent of a row's (or the draped strands') drawn positions, for the point-at regions: [x0, x1, y0, y1] */
++  function box(q) { return q.length ? [Math.min(...q.map(p => p.x)) - 1, Math.max(...q.map(p => p.x)) + 1, Math.min(...q.map(p => p.y)) - 1, Math.max(...q.map(p => p.y)) + 1] : [-1, 1, -1, 1]; }
++  const rowBox = (pts, ri) => box(pts.filter(p => p.kind !== 'h' && !p.h && p.ri === ri)), drapedBox = pts => box(pts.filter(p => p.kind === 'h' || p.h === true));
+   function section(R, end, W) {
+     const V = VK(), S = V.scene(), G = R.g, ss = R.ss;
+     const half = halfPolygon(G), poly = half.concat(half.slice().reverse().map(p => [-p[0], p[1]]));
+@@ -31,11 +69,11 @@
+     const rr = Math.max(ss.st.db / 2, 0.25), pts = pattern(R, end);
+     pts.forEach(p => S.circ(p.x, p.y, rr, 'dt-bar', p.kind === 'h' ? { fill: DRP } : p.kind === 'd' ? { fill: '#fff', stroke: DB, sw: 1.2 } : {}));
+     const xr = Math.max(G.bbf || 0, G.btf || 0) / 2;
+-    ss.rows.forEach(r => S.region(-r.n - 1, r.y - 1, r.n + 1, r.y + 1, `${r.n} straight strands at y = ${fx(r.y, 2)} in${r.nd && r.dbnd ? `, ${r.nd} debonded ${fx(r.dbnd, 2)} ft from each end` : ''}`));
++    ss.rows.forEach((r, ri) => { const [x0, x1] = rowBox(pts, ri); S.region(x0, r.y - 1, x1, r.y + 1, `${r.n} straight strands at y = ${fx(r.y, 2)} in${r.nd && r.dbnd ? `, ${r.nd} debonded ${fx(r.dbnd, 2)} ft from each end` : ''}`); });
+     if (ss.nh > 0) {
+-      const yc = end ? +ss.hp.yEnd : +ss.hp.yMid, np = Math.ceil(ss.nh / 2), top = yc + (np - 1);
+-      S.callout(1.2, top, 34, -14, [`draped (${ss.nh})`, `${end ? 'y_end' : 'y_mid'} = ${fx(yc, 2)} in`], { sz: 11 });
+-      S.region(-2, yc - np, 2, yc + np, `${ss.nh} draped strands, centroid at ${end ? '℄ bearing y_end' : 'midspan y_mid'} = ${fx(yc, 2)} in`);
++      const yc = end ? +ss.hp.yEnd : +ss.hp.yMid, [dx0, dx1, dy0, dy1] = drapedBox(pts);
++      S.callout(dx1 + 0.2, dy1 - 1, 34, -14, [`draped (${ss.nh})`, `${end ? 'y_end' : 'y_mid'} = ${fx(yc, 2)} in`], { sz: 11 });
++      S.region(dx0 - 1, dy0 - 1, dx1 + 1, dy1 + 1, `${ss.nh} draped strands, centroid at ${end ? '℄ bearing y_end' : 'midspan y_mid'} = ${fx(yc, 2)} in`);
+     }
+     const nDb = end ? ss.rows.reduce((a, r) => a + (r.dbnd > 0 ? r.nd : 0), 0) : 0;
+     S.dimV(0, G.h, -xr, -14, `h = ${fx(G.h, 1)} in`, { sz: 11 });
+@@ -84,7 +122,7 @@
+     const { R } = ctx, ss = R.ss, dr = ss.nh > 0;
+     return V.detCard(slot, { id: o.id || 'strandFig', title: o.title || 'Strand pattern', sub: `${ctx.inp.girder}: ${ss.Ntot} strands (${ss.Nbond} straight${ss.Ndebond ? `, ${ss.Ndebond} debonded` : ''}${dr ? `, ${ss.nh} draped` : ''}), ${ctx.inp.str.size}`,
+       draw: W => draw(ctx, W, !!o.compact), hint: 'Point at (or tap) a strand row or the draped strands for their values.',
+-      cap: `<p class="vk-cap">Elevation: vertical scale exaggerated. ${dr ? `Draped strands: straight from ℄ bearing (y<sub>end</sub>) to the two hold-down points at frac × L<sub>span</sub> = ${fx(+ss.hp.frac, 3)} × ${fx(R.L, 2)} ft = ${fx(ss.hp.frac * R.L, 2)} ft from ℄ bearing (PS-13), level between them (y<sub>mid</sub>). ` : 'No draped strands. '}Sections: straight strands on a 2 in grid; ${dr ? 'draped strands as pairs on a 2 in grid about their centroid; ' : ''}debonded strands hollow at the end (which strands of a row are debonded is not an input: drawn from the outside in). Display only.</p>` });
++      cap: `<p class="vk-cap">Elevation: vertical scale exaggerated. ${dr ? `Draped strands: straight from ℄ bearing (y<sub>end</sub>) to the two hold-down points at frac × L<sub>span</sub> = ${fx(+ss.hp.frac, 3)} × ${fx(R.L, 2)} ft = ${fx(ss.hp.frac * R.L, 2)} ft from ℄ bearing (PS-13), level between them (y<sub>mid</sub>). ` : 'No draped strands. '}Sections: straight strands on a 2 in grid${R.g.isNext ? ', each row split between the two stems about each stem\'s ℄' : ''}; ${dr ? (R.g.isNext ? 'draped strands in a row in each stem at their centroid; ' : 'draped strands as pairs on a 2 in grid about their centroid; ') : ''}debonded strands hollow at the end (which strands of a row are debonded is not an input: drawn from the outside in). Display only.</p>` });
+   }
+-  window.PSBStrandGfx = { mount, pattern, draw };
++  window.PSBStrandGfx = { mount, pattern, draw, xy, rowBox, drapedBox, section };
+ })();
+diff --git a/apps/ps-bridge/ui/stresses.js b/apps/ps-bridge/ui/stresses.js
+index b3bbd3d..211cb2b 100644
+--- a/apps/ps-bridge/ui/stresses.js
++++ b/apps/ps-bridge/ui/stresses.js
+@@ -84,9 +84,10 @@
+     S.poly(poly, 'dt-cc'); sectionVoids(G).forEach(v => { if (v.type === 'rect') S.rect(v.x - v.w / 2, v.y - v.h / 2, v.x + v.w / 2, v.y + v.h / 2, 'dt-cc', { fill: '#fff' }); else S.circ(v.x, v.y, v.d / 2, 'dt-cc', { fill: '#fff' }); });
+     // strands at the station (straight rows; the draped strands at their centroid at x)
+     const xm = Math.min(r.x, R.L - r.x), a = +ss.hp.frac * R.L, yh = ss.nh > 0 ? (xm >= a ? +ss.hp.yMid : +ss.hp.yEnd + (+ss.hp.yMid - +ss.hp.yEnd) * xm / a) : 0;
+-    ss.rows.forEach(q => { for (let j = 0; j < q.n; j++) S.circ((j - (q.n - 1) / 2) * 2, q.y, Math.max(ss.st.db / 2, 0.25), 'dt-bar'); });
+-    if (ss.nh > 0) { const np = Math.ceil(ss.nh / 2); for (let j = 0; j < np; j++) { const y = yh + (j - (np - 1) / 2) * 2; S.circ(-1, y, ss.st.db / 2, 'dt-bar', { fill: '#B45309' }); if (2 * j + 1 < ss.nh) S.circ(1, y, ss.st.db / 2, 'dt-bar', { fill: '#B45309' }); }
+-      S.callout(1.2, yh + np - 1, 30, -12, [`draped (${ss.nh})`], { sz: 10.5 }); }
++    // the drawn positions of the strand-pattern graphic (PSBStrandGfx.xy, the old app's strandXY; NEXT: in the two stems, PS-27), the draped ones about yh
++    const pts = window.PSBStrandGfx.xy(R, yh);
++    pts.forEach(q => S.circ(q.x, q.y, q.h ? ss.st.db / 2 : Math.max(ss.st.db / 2, 0.25), 'dt-bar', q.h ? { fill: '#B45309' } : undefined));
++    if (ss.nh > 0) { const [, dx1, , dy1] = window.PSBStrandGfx.drapedBox(pts); S.callout(dx1 + 0.2, dy1 - 1, 30, -12, [`draped (${ss.nh})`], { sz: 10.5 }); }
+     // the stress profile beside the section (linear between the two fibres; + compression to the right)
+     const lims = stage === 'rel' ? [[lim.relC, `${V.fx(lim.relCfac, 2)} f′_ci`], [-lim.relT, 'tension limit']] : stage === 's1' ? [[lim.srvC1, '0.45 f′_c'], [-lim.srvT, 'tension limit']] : [[lim.srvC2, '0.60 f′_c'], [-lim.srvT, 'tension limit']];
+     const fmax = Math.max(Math.abs(fT), Math.abs(fB), ...lims.map(q => Math.abs(q[0])), 0.05), xr = Math.max(G.bbf || 0, G.btf || 0) / 2, X0 = xr + 0.55 * h, kx = 0.28 * h / fmax, X = f => X0 + kx * f;
+@@ -138,5 +139,5 @@
+     const ge = el.querySelector('#o_stGov'); if (ge) ge.addEventListener('click', () => { ui.stSel = null; if (ctx.redraw) ctx.redraw(); });
+   }
+   function onOutChange(e, ui) { if (e.target.id === 'o_stSel') { ui.stSel = +e.target.value; return true; } return false; }
+-  window.PSBUiStresses = { output, after, onOutChange, TOPICS, CHECKS };
++  window.PSBUiStresses = { output, after, onOutChange, TOPICS, CHECKS, secFig };   // secFig: also for tests/engine/psbridge-strandgfx.test.mjs (PS-27)
+ })();
+```

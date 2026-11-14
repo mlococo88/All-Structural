@@ -47,10 +47,13 @@
     sectionVoids(G).forEach(v => { if (v.type === 'rect') S.rect(v.x - v.w / 2, v.y - v.h / 2, v.x + v.w / 2, v.y + v.h / 2, 'dt-cc', { fill: '#fff' }); else S.circ(v.x, v.y, v.d / 2, 'dt-cc', { fill: '#fff' }); });
     if (th > 0) S.rect(-G.btf / 2, G.h, G.btf / 2, G.h + th, 'dt-cc', { op: 0.85 });
     if (ts > 0) { S.rect(-cp.beff / 2, G.h + th, cp.beff / 2, G.h + th + ts, 'dt-cc'); S.region(-cp.beff / 2, G.h + th, cp.beff / 2, G.h + th + ts, `Deck: b_eff = ${V.fx(cp.beff, 1)} in, t_s = ${V.fx(ts, 2)} in, n = ${V.fx(cp.n, 3)}`); }
-    // straight strands on a 2 in grid (display), the draped strands at midspan
-    ss.rows.forEach(r => { for (let i = 0; i < r.n; i++) S.circ((i - (r.n - 1) / 2) * 2, r.y, ss.st.db / 2, 'dt-bar'); S.region(-(r.n - 1) - 1, r.y - 1, (r.n - 1) + 1, r.y + 1, `${r.n} strands at y = ${r.y} in${r.nd ? `, ${r.nd} debonded ${r.dbnd} ft` : ''}`); });
-    if (ss.nh > 0) { const n2 = Math.max(1, Math.round(ss.nh / 2)); for (let i = 0; i < n2; i++) { S.circ(-1, +ss.hp.yMid + i * 2, ss.st.db / 2, 'dt-bolt'); S.circ(1, +ss.hp.yMid + i * 2, ss.st.db / 2, 'dt-bolt'); }
-      S.region(-2, +ss.hp.yMid - 1, 2, +ss.hp.yMid + n2 * 2, `${ss.nh} draped strands, centroid y_mid = ${ss.hp.yMid} in at midspan (y_end = ${ss.hp.yEnd} in)`); }
+    // straight strands on a 2 in grid (display), the draped strands at midspan: the positions of the strand-pattern graphic (PSBStrandGfx.xy, the
+    // old app's strandXY; NEXT: in the two stems, PS-27)
+    const SG = window.PSBStrandGfx, pts = SG.pattern(R, false);
+    pts.forEach(q => S.circ(q.x, q.y, ss.st.db / 2, q.kind === 'h' ? 'dt-bolt' : 'dt-bar'));
+    ss.rows.forEach((r, ri) => { const [x0, x1] = SG.rowBox(pts, ri); S.region(x0, r.y - 1, x1, r.y + 1, `${r.n} strands at y = ${r.y} in${r.nd ? `, ${r.nd} debonded ${r.dbnd} ft` : ''}`); });
+    if (ss.nh > 0) { const [x0, x1, y0, y1] = SG.drapedBox(pts);
+      S.region(x0, y0, x1, y1, `${ss.nh} draped strands, centroid y_mid = ${ss.hp.yMid} in at midspan (y_end = ${ss.hp.yEnd} in)`); }
     const xr = Math.max(G.bbf || 0, G.btf || 0, cp.beff || 0) / 2 + 4;
     const cl = (y, txt, cls) => { S.line(-xr, y, xr, y, cls || 'dt-cl'); S.text(xr, y, txt, { dx: 4, vc: true, sz: 11 }); };
     cl(G.yb, `y_b = ${V.fx(G.yb, 2)} in (girder)`); cl(cp.ybc, `y_bc = ${V.fx(cp.ybc, 2)} in (composite)`, 'dt-hid'); cl(ss.cgsMid, `y_ps = ${V.fx(ss.cgsMid, 2)} in (strands, midspan)`, 'dt-tf');
@@ -69,5 +72,5 @@
       draw: W => figure(ctx, W), hint: 'Point at the deck or a strand row for its values.',
       cap: '<p class="vk-cap">Shape as the engine uses it (outline and voids of the shape library); straight strands drawn on a 2 in grid, draped strands at midspan. Display only.</p>' });
   }
-  window.PSBUiSection = { output, after, TOPICS };
+  window.PSBUiSection = { output, after, TOPICS, figure };   // figure: also for tests/engine/psbridge-strandgfx.test.mjs (PS-27)
 })();

@@ -5,24 +5,62 @@
      Elevation (vertical scale exaggerated): ℄ bearings, girder ends (overhang opt.endOh), the straight rows (debonded lengths dashed),
        the draped strands labelled "draped" with the two hold-down points at frac × L_span from ℄ bearing (PS-13), dimensioned.
      Cross-sections at the girder end (℄ bearing) and at midspan: the outline and voids of the shape library, straight strands on a 2 in grid
-       (debonded ones hollow at the end), draped strands as pairs on a 2 in grid about their centroid (y_end at the end, y_mid at midspan).
+       (debonded ones hollow at the end), draped strands as pairs on a 2 in grid about their centroid (y_end at the end, y_mid at midspan);
+       NEXT: each row split between the two stems (xy below, the old app's strandXY; PS-27, 2026-11-13).
    mount(slot, ctx, o) -> the detCard; ctx = { R, inp }; o = { id, title, compact } (compact: the input panel). */
 (function () {
   'use strict';
   const VK = () => window.PSBVizKit;
   const BAR = '#8A5A44', DRP = '#B45309', DB = '#DC6B2F';
   const fx = (v, d) => VK().fx(v, d);
-  /* positions of the strands of the section at the end (end true) or at midspan: [{ x, y, kind: 's' | 'd' (debonded at the end) | 'h' (draped) }] */
-  function pattern(R, end) {
-    const ss = R.ss, out = [];
-    ss.rows.forEach(r => { const nd = end && r.dbnd > 0 ? r.nd : 0;
-      for (let i = 0; i < r.n; i++) out.push({ x: (i - (r.n - 1) / 2) * 2, y: r.y, kind: nd > 0 && debondedSlot(i, r.n, nd) ? 'd' : 's' }); });
-    if (ss.nh > 0) { const yc = end ? +ss.hp.yEnd : +ss.hp.yMid, np = Math.ceil(ss.nh / 2);
-      for (let j = 0; j < np; j++) { const y = yc + (j - (np - 1) / 2) * 2, two = 2 * j + 1 < ss.nh; out.push({ x: two ? -1 : 0, y, kind: 'h' }); if (two) out.push({ x: 1, y, kind: 'h' }); } }
-    return out;
+  /* xy(R, cg): the drawn position of every strand, in girder coordinates (in; x from the girder ℄, y up from the soffit):
+     [{ x, y, h (draped), ri (row), db (debonded), slot }], the draped strands about their centroid cg (in).
+     PS-27 (engineer report 2026-11-13: "make sure the strands are actually within the beam webs; this was correct in the psgirder app"):
+     a port of the old app's strandXY ("Prestressed Bridge Design.html" @ 8fe8650, :4877-4914), the reference for the drawn positions:
+       NEXT (two stems at stemCC c/c, width B): each row's strands split between the two stems, on a 2 in grid about each stem's ℄
+         (at most floor((B - 4) / 2) + 1 columns a stem, 2 in edge cover; more wrap onto the same columns, as the old app), the outermost
+         columns of each stem debonded first; the draped strands in one row in each stem about its ℄ at y = cg;
+       every other shape: each row centred on the girder ℄ on a 2 in grid, the outermost strands debonded first; the draped strands two
+         a row (x = ∓1 in), the rows 2 in apart about cg.
+     One change from the old code (PS27-D1, pending engineer review): an odd count in a NEXT row (straight, debonded or draped) is drawn as
+     ⌈n/2⌉ in the left stem and ⌊n/2⌋ in the right, each stem centred on its own count; the old app drew round(n/2) in each stem (one
+     strand more than entered). Even counts: the old app's positions exactly. Display only: the engine uses only each row's y and count. */
+  function xy(R, cg) {
+    const pts = [], g = R.g, ss = R.ss;
+    if (g.isNext && g.next) {
+      const sCL = g.next.stemCC / 2, B = g.next.B, perStemCols = Math.max(1, Math.floor((B - 4) / 2) + 1);   // 2 in grid, 2 in edge cover
+      const split = n => [Math.ceil(n / 2), Math.floor(n / 2)];   // [left stem, right stem] (PS27-D1)
+      ss.rows.forEach((r, ri) => {
+        const nd = r.dbnd > 0 ? Math.min(r.nd || 0, r.n) : 0, hs = split(r.n), ds = split(nd);
+        [-sCL, sCL].forEach((stemX, k) => {
+          const half = hs[k], w = (Math.min(half, perStemCols) - 1) / 2;
+          const order = [...Array(half).keys()].map(i => ({ i, x: stemX + (i % perStemCols - w) * 2 })).sort((a, b) => Math.abs(b.x - stemX) - Math.abs(a.x - stemX));   // outermost columns debonded first
+          const dbSet = new Set(order.slice(0, ds[k]).map(o => o.i));
+          for (let i = 0; i < half; i++) pts.push({ x: stemX + (i % perStemCols - w) * 2, y: r.y, h: false, ri, db: dbSet.has(i), slot: k * half + i });
+        });
+      });
+      if (ss.nh > 0) { const hs = split(ss.nh);
+        [-sCL, sCL].forEach((stemX, k) => { for (let i = 0; i < hs[k]; i++) pts.push({ x: stemX + (i - (hs[k] - 1) / 2) * 2, y: cg, h: true }); }); }
+      return pts;
+    }
+    ss.rows.forEach((r, ri) => {
+      const n = r.n, xs = [...Array(n)].map((_, i) => (i - (n - 1) / 2) * 2), nd = r.dbnd > 0 ? Math.min(r.nd || 0, r.n) : 0;
+      const order = xs.map((x, i) => ({ x, i })).sort((a, b) => Math.abs(b.x) - Math.abs(a.x));   // outermost strands debonded first
+      const dbSet = new Set(order.slice(0, nd).map(o => o.i));
+      xs.forEach((x, i) => pts.push({ x, y: r.y, h: false, ri, db: dbSet.has(i), slot: i }));
+    });
+    if (ss.nh > 0) { const n = ss.nh, rows = Math.ceil(n / 2);
+      for (let i = 0; i < n; i++) { const row = Math.floor(i / 2), col = i % 2; pts.push({ x: (col - 0.5) * 2, y: cg + (row - (rows - 1) / 2) * 2, h: true }); } }
+    return pts;
   }
-  /* the debonded strands of a row drawn symmetrically from the outside in (display; the engine needs only their number) */
-  function debondedSlot(i, n, nd) { const ord = []; for (let k = 0; ord.length < n; k++) { ord.push(k); if (n - 1 - k !== k && ord.length < n) ord.push(n - 1 - k); } return ord.slice(0, nd).indexOf(i) >= 0; }
+  /* positions of the strands of the section at the end (end true) or at midspan: [{ x, y, kind: 's' | 'd' (debonded at the end) | 'h' (draped), ri }] (xy) */
+  function pattern(R, end) {
+    const ss = R.ss, cg = ss.nh > 0 ? (end ? +ss.hp.yEnd : +ss.hp.yMid) : 0;
+    return xy(R, cg).map(p => ({ x: p.x, y: p.y, kind: p.h ? 'h' : end && p.db ? 'd' : 's', ri: p.ri }));
+  }
+  /* rowBox(pts, ri) / drapedBox(pts): the extent of a row's (or the draped strands') drawn positions, for the point-at regions: [x0, x1, y0, y1] */
+  function box(q) { return q.length ? [Math.min(...q.map(p => p.x)) - 1, Math.max(...q.map(p => p.x)) + 1, Math.min(...q.map(p => p.y)) - 1, Math.max(...q.map(p => p.y)) + 1] : [-1, 1, -1, 1]; }
+  const rowBox = (pts, ri) => box(pts.filter(p => p.kind !== 'h' && !p.h && p.ri === ri)), drapedBox = pts => box(pts.filter(p => p.kind === 'h' || p.h === true));
   function section(R, end, W) {
     const V = VK(), S = V.scene(), G = R.g, ss = R.ss;
     const half = halfPolygon(G), poly = half.concat(half.slice().reverse().map(p => [-p[0], p[1]]));
@@ -31,11 +69,11 @@
     const rr = Math.max(ss.st.db / 2, 0.25), pts = pattern(R, end);
     pts.forEach(p => S.circ(p.x, p.y, rr, 'dt-bar', p.kind === 'h' ? { fill: DRP } : p.kind === 'd' ? { fill: '#fff', stroke: DB, sw: 1.2 } : {}));
     const xr = Math.max(G.bbf || 0, G.btf || 0) / 2;
-    ss.rows.forEach(r => S.region(-r.n - 1, r.y - 1, r.n + 1, r.y + 1, `${r.n} straight strands at y = ${fx(r.y, 2)} in${r.nd && r.dbnd ? `, ${r.nd} debonded ${fx(r.dbnd, 2)} ft from each end` : ''}`));
+    ss.rows.forEach((r, ri) => { const [x0, x1] = rowBox(pts, ri); S.region(x0, r.y - 1, x1, r.y + 1, `${r.n} straight strands at y = ${fx(r.y, 2)} in${r.nd && r.dbnd ? `, ${r.nd} debonded ${fx(r.dbnd, 2)} ft from each end` : ''}`); });
     if (ss.nh > 0) {
-      const yc = end ? +ss.hp.yEnd : +ss.hp.yMid, np = Math.ceil(ss.nh / 2), top = yc + (np - 1);
-      S.callout(1.2, top, 34, -14, [`draped (${ss.nh})`, `${end ? 'y_end' : 'y_mid'} = ${fx(yc, 2)} in`], { sz: 11 });
-      S.region(-2, yc - np, 2, yc + np, `${ss.nh} draped strands, centroid at ${end ? '℄ bearing y_end' : 'midspan y_mid'} = ${fx(yc, 2)} in`);
+      const yc = end ? +ss.hp.yEnd : +ss.hp.yMid, [dx0, dx1, dy0, dy1] = drapedBox(pts);
+      S.callout(dx1 + 0.2, dy1 - 1, 34, -14, [`draped (${ss.nh})`, `${end ? 'y_end' : 'y_mid'} = ${fx(yc, 2)} in`], { sz: 11 });
+      S.region(dx0 - 1, dy0 - 1, dx1 + 1, dy1 + 1, `${ss.nh} draped strands, centroid at ${end ? '℄ bearing y_end' : 'midspan y_mid'} = ${fx(yc, 2)} in`);
     }
     const nDb = end ? ss.rows.reduce((a, r) => a + (r.dbnd > 0 ? r.nd : 0), 0) : 0;
     S.dimV(0, G.h, -xr, -14, `h = ${fx(G.h, 1)} in`, { sz: 11 });
@@ -84,7 +122,7 @@
     const { R } = ctx, ss = R.ss, dr = ss.nh > 0;
     return V.detCard(slot, { id: o.id || 'strandFig', title: o.title || 'Strand pattern', sub: `${ctx.inp.girder}: ${ss.Ntot} strands (${ss.Nbond} straight${ss.Ndebond ? `, ${ss.Ndebond} debonded` : ''}${dr ? `, ${ss.nh} draped` : ''}), ${ctx.inp.str.size}`,
       draw: W => draw(ctx, W, !!o.compact), hint: 'Point at (or tap) a strand row or the draped strands for their values.',
-      cap: `<p class="vk-cap">Elevation: vertical scale exaggerated. ${dr ? `Draped strands: straight from ℄ bearing (y<sub>end</sub>) to the two hold-down points at frac × L<sub>span</sub> = ${fx(+ss.hp.frac, 3)} × ${fx(R.L, 2)} ft = ${fx(ss.hp.frac * R.L, 2)} ft from ℄ bearing (PS-13), level between them (y<sub>mid</sub>). ` : 'No draped strands. '}Sections: straight strands on a 2 in grid; ${dr ? 'draped strands as pairs on a 2 in grid about their centroid; ' : ''}debonded strands hollow at the end (which strands of a row are debonded is not an input: drawn from the outside in). Display only.</p>` });
+      cap: `<p class="vk-cap">Elevation: vertical scale exaggerated. ${dr ? `Draped strands: straight from ℄ bearing (y<sub>end</sub>) to the two hold-down points at frac × L<sub>span</sub> = ${fx(+ss.hp.frac, 3)} × ${fx(R.L, 2)} ft = ${fx(ss.hp.frac * R.L, 2)} ft from ℄ bearing (PS-13), level between them (y<sub>mid</sub>). ` : 'No draped strands. '}Sections: straight strands on a 2 in grid${R.g.isNext ? ', each row split between the two stems about each stem\'s ℄' : ''}; ${dr ? (R.g.isNext ? 'draped strands in a row in each stem at their centroid; ' : 'draped strands as pairs on a 2 in grid about their centroid; ') : ''}debonded strands hollow at the end (which strands of a row are debonded is not an input: drawn from the outside in). Display only.</p>` });
   }
-  window.PSBStrandGfx = { mount, pattern, draw };
+  window.PSBStrandGfx = { mount, pattern, draw, xy, rowBox, drapedBox, section };
 })();
