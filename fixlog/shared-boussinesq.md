@@ -1,6 +1,6 @@
 # Fix log — shared/boussinesq.js (window.SharedBoussinesq)
 
-## 2026-11-14 — PR: claude/sf-boussinesq (PR #__PR1__) (SFBQ-1) — new shared file: vertical stress increase below a footing (Boussinesq, Newmark, 2:1)   [NEW CALCULATION; no tool loads it yet; no existing result changes]
+## 2026-11-14 — PR: claude/sf-boussinesq (PR #1534: https://github.com/mlococo88/All-Structural/pull/1534) (SFBQ-1) — new shared file: vertical stress increase below a footing (Boussinesq, Newmark, 2:1)   [NEW CALCULATION; no tool loads it yet; no existing result changes]
 ### Where
 - New file `shared/boussinesq.js` (classic script, one namespace `window.SharedBoussinesq`, no DOM). Functions:
   - `pointLoad(P, r, z)` = 3Pz³/(2πR⁵), R = √(r² + z²).
@@ -54,7 +54,7 @@
   The numeric integration over the clipped area equals the closed form on the 7.5 × 10 ft contact rectangle (centre x = 1.25 ft) to 1e-6:
   Δσ(5, 0, 5) = 2.151 ksf, Δσ(1.25, 0, 5) = 2.476 ksf, Δσ(0, 0, 10) = 0.987 ksf, Δσ(−5, 0, 5) = 0.341 ksf.
 ### How verified
-- `node tests/engine/run.mjs boussinesq`: 13 pass — chart readings (GEC 6 Fig. 5-11, ±0.002), the hand checks above, AASHTO Fig. 10.6.2.4.1-1(b)
+- `node tests/engine/run.mjs boussinesq tex`: 29 pass (the 13 new) — chart readings (GEC 6 Fig. 5-11, ±0.002), the hand checks above, AASHTO Fig. 10.6.2.4.1-1(b)
   (0.2q and 0.1q isobars cross the centreline at 1.1–1.5B and 1.9–2.3B), symmetry, superposition (two halves = whole, closed form and numeric),
   numeric vs closed form on 420 points incl. z = 0, points on edges, outside and deep (worst 1e-6·q; the < 0.5 % criterion is met by a wide margin),
   brute-force point-load sums (< 0.5 %), far field (z = 200B: the point-load value of the total load, < 0.1 %), partial contact = closed form
