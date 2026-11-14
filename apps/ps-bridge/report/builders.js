@@ -126,7 +126,7 @@
         ['Owner', ownR ? `${own} (${ownR.manual})` : own]]), note('Entered values (Project, Bridge layout, Cross-section and Girders & strands tabs); the engine inputs of the design girder are those of the [[tab:in:gird|Girders & strands tab]].')]),
       sub('c', 'Basis', [kv([['Design specification', ED], ['Load rating', 'AASHTO Manual for Bridge Evaluation (MBE), LRFR; article numbers as the old app'], ['Owner manual', ownR && !ownR.none ? `${ownR.manual} (AASHTO LRFD ${ownR.aashto} basis); its rules as listed below` : 'none (AASHTO only)'],
         ['Units', 'in, kip, ksi, ft, klf, kip-ft'], ['Sign convention', 'stresses + compression, − tension; moments + sagging']])]),
-      sub('a', 'Assumptions', [...(asm ? asm.items : []), ...ASSUME.map(t => note('• ' + t)), ...deNote(P), ...voidNotes(B), ...tbcNotes(B), ...secNotes(B)])];
+      sub('a', 'Assumptions', [...(asm ? asm.items : []), ...ASSUME.map(t => note('• ' + t)), ...deNote(P), ...voidNotes(B), ...tbcNotes(B), ...fgNotes(B), ...secNotes(B)])];
     ownSubs.forEach((s, j) => subs.push({ ...sub('o' + j, `Owner rules: ${s.title}`, s.items), ...(j === 0 ? { key: X.ownKey } : {}) }));
     return { title: 'Project, basis and assumptions', subs };
   }
@@ -187,6 +187,15 @@
       try { ns.push(DS.cellInputs(B.P, k, l[0]).girder); } catch (e) { /* its own input errors */ } });
     return [...new Set(ns)].map(n => [n, SC.tbcNote(n)]).filter(([, t]) => t)
       .map(([n, t]) => note(`• ${plain(n)}: ${t.replace(/<sub>(.*?)<\/sub>/g, '$_{$1}$')} (see [[rs.sec]])`));
+  }
+
+  /* fgNotes(B): PS-35 (engineer decision 2026-11-14): a box beam / voided slab design: its live-load distribution is AASHTO type (f) / (g),
+     with the J used and its source and any limit of applicability outside which the equations were used (the Loads & LLDF section works it) */
+  function fgNotes(B) {
+    const f = B.R && B.R.df && B.R.df.fg; if (!f) return [];
+    const src = f.Jsrc === 'user' ? 'user/DOT value' : f.Jsrc === 'library' ? 'library (DOT) value' : 'computed from outline';
+    const fx = (v, d) => (+v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+    return [note(`• Live-load distribution (PS-35): ${B.R.g.isBox ? 'box beam' : 'voided slab'}, AASHTO LRFD 10th Ed. cross-section type (${f.type}) of Table 4.6.2.2.1-1 (Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1, 4.6.2.2.3a-1, 4.6.2.2.3b-1; skew 4.6.2.2.2e, 4.6.2.2.3c), not the I-girder type (k) of the old app; I = ${fx(f.I, 0)} in⁴ (${f.Isrc === 'composite' ? 'composite section' : 'girder'}), J = ${fx(f.J, 0)} in⁴ (${src}).${f.out.length ? ` Outside the range of applicability: ${f.out.map(o => o.text).join('; ')}.` : ''} (see [[rs.lds]])`, !!f.out.length)];
   }
 
   /* ---------- 3–14. the result tabs ---------- */

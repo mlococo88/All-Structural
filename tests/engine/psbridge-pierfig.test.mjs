@@ -10,7 +10,7 @@ import { loadShared, test, ROOT } from './harness.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared(...PBD, ...['sections', 'model', 'holddown', 'pierblock', 'design'].map(n => path.join(APP, `engine/${n}.js`)), ...['vizkit', 'flexure'].map(n => path.join(APP, `ui/${n}.js`)));
+const W = loadShared(...PBD, ...['sections', 'model', 'lldf-fg', 'holddown', 'pierblock', 'design'].map(n => path.join(APP, `engine/${n}.js`)), ...['vizkit', 'flexure'].map(n => path.join(APP, `ui/${n}.js`)));
 
 function record(fn) {
   const VK = W.PSBVizKit, s0 = VK.scene, got = [];

@@ -41,7 +41,8 @@
      withLegacy(fn)   fn() with the old entries in GIRDERS again (the old app's results of an imported design; removed after)
      items(P)         P.legacySection items; text(it) the notice text of one; retiredMsg(name) the input error of an unmatched old name
      src(name)        the plate data of a corrected section (null for any other); outline(entry) A, I, y_b of the drawn outline
-     tbcNote(name)    the "to be confirmed" note of a standard section (HTML; '' for any other) */
+     tbcNote(name)    the "to be confirmed" note of a standard section (HTML; '' for any other)
+     dotJ(name)       PS-35: the DOT sheet's J of a standard section ({ J, src }), or null (none listed yet: DOT_J) */
 (function () {
   'use strict';
   const BOXW = { 36: 35.5, 48: 47.5 }, SLAB = 5.5;
@@ -169,6 +170,12 @@
     try { return fn(); } finally { added.forEach(k => { delete GIRDERS[k]; }); }
   }
   const src = n => (STD[n] ? STD[n].src : null);
+  /* DOT_J (PS-35, engineer 2026-11-14): the St. Venant torsional constant J of a standard section from the DOT reference sheets, which the
+     engineer provides later: { '<name>': { J: <in⁴>, src: '<sheet, page>' } }. A value here is used for the type (f) / (g) live-load
+     distribution (engine/lldf-fg.js) in place of the J computed from the drawn outline; a J entered for a girder type (loads.Jfg) takes
+     precedence over both. None yet. dotJ(name): the entry, or null. */
+  const DOT_J = {};
+  const dotJ = n => (Object.prototype.hasOwnProperty.call(DOT_J, n) && +DOT_J[n].J > 0 ? DOT_J[n] : null);
   /* tbcNote(name): the "to be confirmed" note of a standard box beam / voided slab (engineer request 2026-11-14, PR A; the one exception to
      the no-pending-in-app rule): the plate the properties come from, the old library they replace (found inconsistent), and that the
      engineer is to confirm them against the DOT reference sheets; voided slabs: the void spacing scaled from the plate. HTML ('' for any other
@@ -183,5 +190,5 @@
   }
 
   install(); wrapVoids();
-  window.PSBSections = { STD, LEGACY, MAP, ORDER_BOX, ORDER_SLAB, install, migrate, items, text, retiredMsg, sig, withLegacy, src, tbcNote, outline, slabOf, stdOf, engineOf };
+  window.PSBSections = { STD, LEGACY, MAP, ORDER_BOX, ORDER_SLAB, install, migrate, items, text, retiredMsg, sig, withLegacy, src, tbcNote, DOT_J, dotJ, outline, slabOf, stdOf, engineOf };
 })();

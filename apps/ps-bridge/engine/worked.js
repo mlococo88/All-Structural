@@ -92,6 +92,80 @@
     return K.done();
   }
 
+  /* PS-35 (engine/lldf-fg.js): the type (f) / (g) distribution factors of a box beam or a voided slab, worked (the values are R.df's) */
+  function fgSteps(add, inp, R) {
+    const df = R.df, f = df.fg, jw = f.jw, L = f.L, b = f.b, T = A10 + 'Table 4.6.2.2.';
+    const tyN = f.type === 'f' ? 'type (f): precast boxes with shear keys and a cast-in-place overlay' : 'type (g): precast boxes with shear keys, integral concrete deck';
+    add({ id: 'fgI', label: `Moment of inertia, ${f.ts > 0 ? 'the composite section (traffic on the topping)' : 'the girder (no topping)'}`, sym: 'I', value: f.I, unit: 'in^{4}', d: 0, ref: A10 + '4.6.2.2.1',
+      note: f.ts > 0 ? `Cross-section ${tyN}; the composite I_c, worked on the Section properties tab (§sec.Ic).` : `Cross-section ${tyN}; the gross girder I (Section properties tab).` });
+    // J of the drawn outline: a closed thin-walled cell on the wall midlines (Eq. C4.6.2.2.1-3)
+    const box = jw.kind === 'box', v = jw.v;
+    if (box) {
+      add({ id: 'Jtw', label: 'J (outline): web thickness', sym: 't_{w}', eq: '\\frac{w - w_{v}}{2}', sub: `\\frac{${n(jw.w, 2)} - ${n(v.w, 2)}}{2}`, value: jw.tw, unit: 'in', d: 2, note: 'w_v: the void width (Section properties tab).' }, (jw.w - v.w) / 2);
+      add({ id: 'Jtb', label: 'J (outline): bottom slab', sym: 't_{b}', eq: 'y_{v} - \\frac{h_{v}}{2}', sub: `${n(v.y, 3)} - \\frac{${n(v.h, 2)}}{2}`, value: jw.tb, unit: 'in', d: 2 }, v.y - v.h / 2);
+      add({ id: 'Jtt', label: 'J (outline): top slab', sym: 't_{t}', eq: 'h - y_{v} - \\frac{h_{v}}{2}', sub: `${n(jw.h, 2)} - ${n(v.y, 3)} - \\frac{${n(v.h, 2)}}{2}`, value: jw.tt, unit: 'in', d: 2 }, jw.h - v.y - v.h / 2);
+    } else {
+      const o = v.out, lo = v.lo, hi = v.hi;
+      add({ id: 'Jtw', label: 'J (outline): side wall, the concrete outside the outermost void', sym: 't_{w}', eq: '\\frac{w}{2} - |x_{v}| - \\frac{d_{v}}{2}', sub: `\\frac{${n(jw.w, 2)}}{2} - ${n(Math.abs(o.x), 2)} - \\frac{${n(o.d, 2)}}{2}`, value: jw.tw, unit: 'in', d: 2,
+        note: 'Void positions as drawn (Section properties tab; a standard slab: the plate\'s, the spacing scaled from the plate).' }, jw.w / 2 - Math.abs(o.x) - o.d / 2);
+      add({ id: 'Jtb', label: 'J (outline): bottom wall, the concrete below the voids', sym: 't_{b}', eq: 'y_{v} - \\frac{d_{v}}{2}', sub: `${n(lo.y, 3)} - \\frac{${n(lo.d, 2)}}{2}`, value: jw.tb, unit: 'in', d: 2 }, lo.y - lo.d / 2);
+      add({ id: 'Jtt', label: 'J (outline): top wall, the concrete above the voids', sym: 't_{t}', eq: 'h - y_{v} - \\frac{d_{v}}{2}', sub: `${n(jw.h, 2)} - ${n(hi.y, 3)} - \\frac{${n(hi.d, 2)}}{2}`, value: jw.tt, unit: 'in', d: 2,
+        note: 'The voided slab is taken as one closed cell of its outer walls (the concrete between the voids is not counted: a smaller J).' }, jw.h - hi.y - hi.d / 2);
+    }
+    if (jw.comp) {
+      add({ id: 'JtT', label: 'J (outline): top wall with the topping (transformed by n)', sym: 't_{top}', eq: 't_{t} + n\\,t_{s}', sub: `${n(jw.tt, 2)} + ${n(jw.n, 4)}(${n(jw.ts, 2)})`, value: jw.tT, unit: 'in', d: 3, note: 'n: §sec.n (Section properties tab).' }, jw.tt + jw.n * jw.ts);
+      add({ id: 'JyT', label: 'J (outline): midline of the top wall above the soffit', sym: '\\bar{y}_{top}', eq: '\\frac{t_{t}(h - t_{t}/2) + n\\,t_{s}(h + t_{s}/2)}{t_{top}}',
+        sub: `\\frac{${n(jw.tt, 2)}(${n(jw.h, 2)} - ${n(jw.tt / 2, 3)}) + ${n(jw.n, 4)}(${n(jw.ts, 2)})(${n(jw.h, 2)} + ${n(jw.ts / 2, 3)})}{${n(jw.tT, 3)}}`, value: jw.yT, unit: 'in', d: 3 },
+        (jw.tt * (jw.h - jw.tt / 2) + jw.n * jw.ts * (jw.h + jw.ts / 2)) / jw.tT);
+    } else add({ id: 'JyT', label: 'J (outline): midline of the top wall above the soffit', sym: '\\bar{y}_{top}', eq: 'h - \\frac{t_{t}}{2}', sub: `${n(jw.h, 2)} - \\frac{${n(jw.tt, 2)}}{2}`, value: jw.yT, unit: 'in', d: 3 }, jw.h - jw.tt / 2);
+    add({ id: 'Jb0', label: 'J (outline): cell width between the web midlines', sym: 'b_{0}', eq: 'w - t_{w}', sub: `${n(jw.w, 2)} - ${n(jw.tw, 2)}`, value: jw.b0, unit: 'in', d: 2 }, jw.w - jw.tw);
+    add({ id: 'Jh0', label: 'J (outline): cell height between the wall midlines', sym: 'h_{0}', eq: '\\bar{y}_{top} - \\frac{t_{b}}{2}', sub: `${n(jw.yT, 3)} - \\frac{${n(jw.tb, 2)}}{2}`, value: jw.h0, unit: 'in', d: 3 }, jw.yT - jw.tb / 2);
+    add({ id: 'JA0', label: 'J (outline): area enclosed by the wall midlines', sym: 'A_{0}', eq: 'b_{0}\\,h_{0}', sub: `${n(jw.b0, 2)}(${n(jw.h0, 3)})`, value: jw.A0, unit: 'in^{2}', d: 1 }, jw.b0 * jw.h0);
+    add({ id: 'Jst', label: 'J (outline): sum of side length over thickness', sym: '\\sum \\frac{s}{t}', eq: `\\frac{b_{0}}{t_{${jw.comp ? 'top' : 't'}}} + \\frac{b_{0}}{t_{b}} + \\frac{2\\,h_{0}}{t_{w}}`,
+      sub: `\\frac{${n(jw.b0, 2)}}{${n(jw.tT, 3)}} + \\frac{${n(jw.b0, 2)}}{${n(jw.tb, 2)}} + \\frac{2(${n(jw.h0, 3)})}{${n(jw.tw, 2)}}`, value: jw.sum, unit: '', d: 3 }, jw.b0 / jw.tT + jw.b0 / jw.tb + 2 * jw.h0 / jw.tw);
+    add({ id: 'Jc', label: 'St. Venant torsional constant, computed from outline (closed thin-walled section)', sym: 'J_{outline}', eq: '\\frac{4\\,A_{0}^{2}}{\\sum s/t}', sub: `\\frac{4(${n(jw.A0, 1)})^{2}}{${n(jw.sum, 3)}}`, value: jw.J, unit: 'in^{4}', d: 0, ref: A10 + 'Eq. C4.6.2.2.1-3' }, 4 * jw.A0 * jw.A0 / jw.sum);
+    if (f.Jsrc === 'user') add({ id: 'J', label: 'J used: user/DOT value', sym: 'J', value: f.J, unit: 'in^{4}', d: 0, note: 'Entered for this girder type (Loads tab, "J (override)"); the value computed from the outline above is not used.' });
+    else if (f.Jsrc === 'library') add({ id: 'J', label: 'J used: library (DOT) value', sym: 'J', value: f.J, unit: 'in^{4}', d: 0, note: `The library's value for ${inp.girder}${f.Jlib && f.Jlib.src ? ` (${f.Jlib.src})` : ''}; the value computed from the outline above is not used.` });
+    else add({ id: 'J', label: 'J used: computed from outline', sym: 'J', eq: 'J_{outline}', sub: n(jw.J, 0), value: f.J, unit: 'in^{4}', d: 0 }, jw.J);
+    add({ id: 'IJ', label: 'Stiffness ratio', sym: '\\frac{I}{J}', eq: '\\frac{I}{J}', sub: `\\frac{${g(f.I, 0)}}{${g(f.J, 0)}}`, value: f.IJ, unit: '', d: 4,
+      note: `For comparison only (not used): the simplified value of Table 4.6.2.2.1-3 for (f)/(g), 0.54 d/b + 0.16 = 0.54(${n(f.d, 2)}/${n(b, 2)}) + 0.16 = ${n(0.54 * f.d / b + 0.16, 4)} (with the Owner's concurrence, 4.6.2.2.1).` }, f.I / f.J);
+    add({ id: 'k', label: 'Factor k (number of beams)', sym: 'k', eq: '\\max(2.5\\,N_{b}^{-0.2},\\ 1.5)', sub: `\\max(2.5(${f.Nb})^{-0.2},\\ 1.5)`, value: f.k, unit: '', d: 4, ref: T + '2b-1' }, Math.max(2.5 * Math.pow(f.Nb, -0.2), 1.5));
+    add({ id: 'm1', label: 'Interior moment DF, one lane loaded', sym: 'g_{M1}', eq: 'k\\left(\\frac{b}{33.3\\,L}\\right)^{0.5}\\left(\\frac{I}{J}\\right)^{0.25}', sub: `${n(f.k, 4)}\\left(\\frac{${n(b, 2)}}{33.3(${n(L, 2)})}\\right)^{0.5}(${n(f.IJ, 4)})^{0.25}`, value: f.m1, unit: '', d: 4, ref: T + '2b-1, (f)/(g)' },
+      f.k * Math.pow(b / (33.3 * L), 0.5) * Math.pow(f.IJ, 0.25));
+    add({ id: 'm2', label: 'Interior moment DF, two or more lanes loaded', sym: 'g_{M2}', eq: 'k\\left(\\frac{b}{305}\\right)^{0.6}\\left(\\frac{b}{12\\,L}\\right)^{0.2}\\left(\\frac{I}{J}\\right)^{0.06}', sub: `${n(f.k, 4)}\\left(\\frac{${n(b, 2)}}{305}\\right)^{0.6}\\left(\\frac{${n(b, 2)}}{12(${n(L, 2)})}\\right)^{0.2}(${n(f.IJ, 4)})^{0.06}`, value: f.m2, unit: '', d: 4, ref: T + '2b-1, (f)/(g)' },
+      f.k * Math.pow(b / 305, 0.6) * Math.pow(b / (12 * L), 0.2) * Math.pow(f.IJ, 0.06));
+    add({ id: 'v1', label: 'Interior shear DF, one lane loaded', sym: 'g_{V1}', eq: '\\left(\\frac{b}{130\\,L}\\right)^{0.15}\\left(\\frac{I}{J}\\right)^{0.05}', sub: `\\left(\\frac{${n(b, 2)}}{130(${n(L, 2)})}\\right)^{0.15}(${n(f.IJ, 4)})^{0.05}`, value: f.v1, unit: '', d: 4, ref: T + '3a-1, (f)/(g)' },
+      Math.pow(b / (130 * L), 0.15) * Math.pow(f.IJ, 0.05));
+    add({ id: 'v2', label: 'Interior shear DF, two or more lanes loaded', sym: 'g_{V2}', eq: '\\left(\\frac{b}{156}\\right)^{0.4}\\left(\\frac{b}{12\\,L}\\right)^{0.1}\\left(\\frac{I}{J}\\right)^{0.05}\\max\\left(\\frac{b}{48},\\ 1.0\\right)',
+      sub: `\\left(\\frac{${n(b, 2)}}{156}\\right)^{0.4}\\left(\\frac{${n(b, 2)}}{12(${n(L, 2)})}\\right)^{0.1}(${n(f.IJ, 4)})^{0.05}\\max\\left(\\frac{${n(b, 2)}}{48},\\ 1.0\\right)`, value: f.v2, unit: '', d: 4, ref: T + '3a-1, (f)/(g)' },
+      Math.pow(b / 156, 0.4) * Math.pow(b / (12 * L), 0.1) * Math.pow(f.IJ, 0.05) * Math.max(b / 48, 1));
+    if (f.ext) {
+      const de = f.de;
+      add({ id: 'eM1', label: 'Exterior correction, moment, one lane', sym: 'e_{M1}', eq: '\\max\\left(1.125 + \\frac{d_{e}}{30},\\ 1.0\\right)', sub: `\\max\\left(1.125 + \\frac{${n(de, 3)}}{30},\\ 1.0\\right)`, value: f.eM1, unit: '', d: 4, ref: T + '2d-1, (f)/(g)',
+        note: 'd_e from the centreline of the exterior beam (as the engine takes it for every shape; the exterior web centreline would give a smaller d_e).' }, Math.max(1.125 + de / 30, 1));
+      add({ id: 'eM2', label: 'Exterior correction, moment, two or more lanes', sym: 'e_{M2}', eq: '\\max\\left(1.04 + \\frac{d_{e}}{25},\\ 1.0\\right)', sub: `\\max\\left(1.04 + \\frac{${n(de, 3)}}{25},\\ 1.0\\right)`, value: f.eM2, unit: '', d: 4, ref: T + '2d-1, (f)/(g)' }, Math.max(1.04 + de / 25, 1));
+      add({ id: 'eV1', label: 'Exterior correction, shear, one lane', sym: 'e_{V1}', eq: '\\max\\left(1.25 + \\frac{d_{e}}{20},\\ 1.0\\right)', sub: `\\max\\left(1.25 + \\frac{${n(de, 3)}}{20},\\ 1.0\\right)`, value: f.eV1, unit: '', d: 4, ref: T + '3b-1, (f)/(g)' }, Math.max(1.25 + de / 20, 1));
+      add({ id: 'eV2', label: 'Exterior correction, shear, two or more lanes', sym: 'e_{V2}', eq: '\\max\\left(1 + \\left(\\frac{d_{e} + b/12 - 2.0}{40}\\right)^{0.5},\\ 1.0\\right)', sub: `\\max\\left(1 + \\left(\\frac{${n(de, 3)} + ${n(b / 12, 4)} - 2.0}{40}\\right)^{0.5},\\ 1.0\\right)`, value: f.eV2, unit: '', d: 4, ref: T + '3b-1, (f)/(g)',
+        note: f.qV > 0 ? '' : 'The root\'s argument is negative: taken as 0 (e = 1.0).' }, Math.max(1 + (f.qV > 0 ? Math.sqrt(f.qV) : 0), 1));
+      add({ id: 'f48', label: 'Exterior shear, two or more lanes: width factor', sym: '\\frac{48}{b}', eq: '\\min\\left(\\frac{48}{b},\\ 1.0\\right)', sub: `\\min\\left(\\frac{48}{${n(b, 2)}},\\ 1.0\\right)`, value: f.f48, unit: '', d: 4, ref: T + '3b-1, (f)/(g)' }, Math.min(48 / b, 1));
+      add({ id: 'dfmRaw', label: 'Exterior moment DF before skew (larger of one lane and two or more)', sym: 'g_{M}', eq: '\\max(e_{M1}\\,g_{M1},\\ e_{M2}\\,g_{M2})', sub: `\\max(${n(f.eM1, 4)}(${n(f.m1, 4)}),\\ ${n(f.eM2, 4)}(${n(f.m2, 4)}))`, value: df.dfmRaw, unit: '', d: 4,
+        note: 'No lever rule and no rigid-section check for types (f) and (g) (Table 4.6.2.2.2d-1).' }, Math.max(f.eM1 * f.m1, f.eM2 * f.m2));
+      const vq = Math.max(f.eV1 * f.v1, f.eV2 * f.v2 * f.f48);
+      if (f.IJout) add({ id: 'dfvRaw', label: 'Exterior shear DF before skew (I or J outside the range of Table 4.6.2.2.3a-1: the larger of the shear equations and the moment factor)', sym: 'g_{V}', eq: '\\max(e_{V1}\\,g_{V1},\\ e_{V2}\\,g_{V2}\\,\\frac{48}{b},\\ g_{M})',
+        sub: `\\max(${n(f.eV1, 4)}(${n(f.v1, 4)}),\\ ${n(f.eV2, 4)}(${n(f.v2, 4)})(${n(f.f48, 4)}),\\ ${n(f.gM, 4)})`, value: df.dfvRaw, unit: '', d: 4, ref: A10 + '4.6.2.2.3a' }, Math.max(vq, f.gM));
+      else add({ id: 'dfvRaw', label: 'Exterior shear DF before skew (larger of one lane and two or more)', sym: 'g_{V}', eq: '\\max(e_{V1}\\,g_{V1},\\ e_{V2}\\,g_{V2}\\,\\frac{48}{b})', sub: `\\max(${n(f.eV1, 4)}(${n(f.v1, 4)}),\\ ${n(f.eV2, 4)}(${n(f.v2, 4)})(${n(f.f48, 4)}))`, value: df.dfvRaw, unit: '', d: 4 }, vq);
+    } else {
+      add({ id: 'dfmRaw', label: 'Interior moment DF before skew (larger of one lane and two or more)', sym: 'g_{M}', eq: '\\max(g_{M1},\\ g_{M2})', sub: `\\max(${n(f.m1, 4)},\\ ${n(f.m2, 4)})`, value: df.dfmRaw, unit: '', d: 4 }, Math.max(f.m1, f.m2));
+      if (f.IJout) add({ id: 'dfvRaw', label: 'Interior shear DF before skew (I or J outside the range of Table 4.6.2.2.3a-1: the larger of the shear equations and the moment factor)', sym: 'g_{V}', eq: '\\max(g_{V1},\\ g_{V2},\\ g_{M})', sub: `\\max(${n(f.v1, 4)},\\ ${n(f.v2, 4)},\\ ${n(f.gM, 4)})`, value: df.dfvRaw, unit: '', d: 4, ref: A10 + '4.6.2.2.3a' }, Math.max(f.v1, f.v2, f.gM));
+      else add({ id: 'dfvRaw', label: 'Interior shear DF before skew (larger of one lane and two or more)', sym: 'g_{V}', eq: '\\max(g_{V1},\\ g_{V2})', sub: `\\max(${n(f.v1, 4)},\\ ${n(f.v2, 4)})`, value: df.dfvRaw, unit: '', d: 4 }, Math.max(f.v1, f.v2));
+    }
+    const tM = Math.tan(f.thM * Math.PI / 180), tV = Math.tan(f.thV * Math.PI / 180);
+    add({ id: 'skM', label: `Skew reduction, moment (θ_M = ${n(f.thM, 1)}°)`, sym: 'r_{M}', eq: '\\min(1.05 - 0.25\\tan\\theta_{M},\\ 1.0)', sub: `\\min(1.05 - 0.25(${n(tM, 4)}),\\ 1.0)`, value: df.skM, unit: '', d: 4, ref: T + '2e-1, (f)/(g)',
+      note: f.thLo < f.thV - 1e-9 ? (f.skewDiff > 10 + 1e-9 ? `The skews of the span's supports differ by more than 10° (${n(f.thLo, 1)}° and ${n(f.thV, 1)}°): no reduction (4.6.2.2.2e).` : `The smaller skew of the span's supports (${n(f.thLo, 1)}°; they differ by 10° or less, 4.6.2.2.2e).`) : (f.rawSkew > 60 ? 'θ > 60° is taken as 60°.' : '') }, Math.min(1.05 - 0.25 * tM, 1));
+    add({ id: 'skV', label: `Skew correction, shear (θ = ${n(f.thV, 1)}°)`, sym: 'c_{V}', eq: '1 + \\frac{12\\,L}{90\\,d}\\sqrt{\\tan\\theta}', sub: `1 + \\frac{12(${n(L, 2)})}{90(${n(f.d, 2)})}\\sqrt{${n(tV, 4)}}`, value: df.skV, unit: '', d: 4, ref: T + '3c-1, (f)/(g)',
+      note: 'd = the precast depth h; θ the larger skew of the span\'s supports; applied over the span as the engine applies its shear correction.' }, 1 + 12 * L / (90 * f.d) * Math.sqrt(tV));
+  }
+
   /* ---------- Loads & LLDF (computeAll loads, hl93, distFactors, ownLoads) ---------- */
   function loads(inp, R) {
     const K = kit('ld'), add = K.add, G = R.g, cp = R.cp, L = R.L, hl = R.hl, df = R.df, m = inp.mat, wdL = +m.wcdLoad || +m.wcd, tsL = cp.tsLoad, th = +inp.th;
@@ -119,7 +193,8 @@
     add({ id: 'Vtd', label: 'Design tandem shear at the support, per lane', sym: 'V_{td}', eq: '25 + \\frac{25(L - 4)}{L}', sub: `25 + \\frac{25(${n(L, 2)} - 4)}{${n(L, 2)}}`, value: hl.Vtd, unit: 'kip', d: 2 }, 25 + 25 * (L - 4) / L);
     add({ id: 'Vln', label: 'Design lane shear at the support, per lane', sym: 'V_{ln}', eq: '\\frac{0.64\\,L}{2}', sub: `\\frac{0.64(${n(L, 2)})}{2}`, value: hl.Vln, unit: 'kip', d: 2 }, 0.64 * L / 2);
     add({ id: 'V', label: 'HL-93 shear with impact, per lane', sym: 'V_{LL+IM}', eq: '1.33\\max(V_{tr}, V_{td}) + V_{ln}', sub: `1.33\\max(${n(hl.Vtr, 2)}, ${n(hl.Vtd, 2)}) + ${n(hl.Vln, 2)}`, value: hl.V, unit: 'kip', d: 2 }, 1.33 * Math.max(hl.Vtr, hl.Vtd) + hl.Vln);
-    // distribution factors (pbd-lldf-flexure.js distFactors)
+    // distribution factors (pbd-lldf-flexure.js distFactors; PS-35: a box beam or voided slab, types (f) / (g), engine/lldf-fg.js)
+    if (df.fg) fgSteps(add, inp, R); else {
     const ts = +inp.ts, Sx = df.isNext ? df.Sf : inp.S;
     if (df.isNext) add({ id: 'Sf', label: 'NEXT beam: beam (flange) width used as S', sym: 'S', eq: '\\frac{b_{f}}{12}', sub: `\\frac{${n(G.btf, 2)}}{12}`, value: df.Sf, unit: 'ft', d: 3 }, G.btf / 12);
     if (!df.isNext || !df.kgOmitted) {
@@ -163,6 +238,7 @@
     add({ id: 'skM', label: `Skew reduction, moment (θ = ${n(df.th, 1)}°)`, sym: 'r_{M}', eq: '1 - c_{1}(\\tan\\theta)^{1.5}', sub: `1 - ${n(c1, 4)}(${n(tanT, 4)})^{1.5}`, value: df.skM, unit: '', d: 4, ref: A10 + 'Table 4.6.2.2.2e-1', note: df.th < 30 ? 'θ < 30°: c_1 = 0, no reduction.' : '' }, 1 - c1 * Math.pow(tanT, 1.5));
     add({ id: 'skV', label: `Skew correction, shear (θ = ${n(df.th, 1)}°)`, sym: 'c_{V}', eq: '1 + 0.20\\left(\\frac{12\\,L\\,t_{s}^{3}}{K_{g}}\\right)^{0.3}\\tan\\theta', sub: df.isNext && df.kgOmitted ? '' : `1 + 0.20\\left(\\frac{12(${n(L, 2)})(${n(ts, 2)})^{3}}{${g(df.Kg, 0)}}\\right)^{0.3}(${n(tanT, 4)})`, value: df.skV, unit: '', d: 4, ref: A10 + 'Table 4.6.2.2.3c-1' },
       df.isNext && df.kgOmitted ? 1 + 0.2 * tanT : 1 + 0.2 * Math.pow(12 * L * ts3 / df.Kg, 0.3) * tanT);
+    }
     add({ id: 'dfm', label: 'Moment distribution factor', sym: 'DF_{M}', eq: inp.loads.dfAuto ? 'r_{M}\\,g_{M}' : '', sub: inp.loads.dfAuto ? `${n(df.skM, 4)}(${n(df.dfmRaw, 4)})` : '', value: R.dfm, unit: 'lanes', d: 4, note: inp.loads.dfAuto ? '' : 'Entered on the Loads tab.' }, inp.loads.dfAuto ? df.skM * df.dfmRaw : +inp.loads.dfm);
     add({ id: 'dfv', label: 'Shear distribution factor', sym: 'DF_{V}', eq: inp.loads.dfAuto ? 'c_{V}\\,g_{V}' : '', sub: inp.loads.dfAuto ? `${n(df.skV, 4)}(${n(df.dfvRaw, 4)})` : '', value: R.dfv, unit: 'lanes', d: 4, note: inp.loads.dfAuto ? '' : 'Entered on the Loads tab.' }, inp.loads.dfAuto ? df.skV * df.dfvRaw : +inp.loads.dfv);
     const simple = !R.fe && !R.useExt;

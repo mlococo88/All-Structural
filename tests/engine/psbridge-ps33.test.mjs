@@ -16,7 +16,7 @@ import { loadShared, test, ROOT } from './harness.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const ENG = n => ['sections', 'model', 'rigid', 'holddown', ...n, 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'legacy', 'worked', 'worked-stress', 'worked-strength'].map(f => path.join(APP, `engine/${f}.js`));
+const ENG = n => ['sections', 'model', 'rigid', 'lldf-fg', 'holddown', ...n, 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'legacy', 'worked', 'worked-stress', 'worked-strength'].map(f => path.join(APP, `engine/${f}.js`));
 const UI = ['vizkit', 'outkit', 'strands', 'inputs', 'flexure'].map(n => path.join(APP, `ui/${n}.js`));
 const W = loadShared('steps.js', ...PBD, ...ENG(['pierblock']), ...UI), W0 = loadShared('steps.js', ...PBD, ...ENG([]), ...UI);   // W0: without PS-34
 const G = vm.runInContext('GIRDERS', W), IC = W.PSBInputCheck, J = v => JSON.parse(JSON.stringify(v));

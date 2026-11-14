@@ -127,6 +127,9 @@
     o.cont = Object.assign({}, o.cont, { on: P.spans.continuity === 'composite' && nSpans(P) >= 2 });
     const k = skewOf(P, d.s);
     o.loads = Object.assign({}, o.loads, { skew: Math.max(Math.abs(+k[0] || 0), Math.abs(+k[1] || 0)) });   // PR 3a-2: the larger |θ| of the span's supports (equal: as before)
+    // PS-35 (§4): a box beam / voided slab with unequal support skews also gets the smaller |θ| (the type (f) / (g) moment reduction,
+    // 4.6.2.2.2e, engine/lldf-fg.js); equal skews and every other shape: nothing added (inputs as before)
+    if (Math.abs(Math.abs(+k[0] || 0) - Math.abs(+k[1] || 0)) > 1e-9 && window.PSBLldfFG && window.PSBLldfFG.isFGInputs(o)) o.loads = Object.assign({}, o.loads, { skewLo: Math.min(Math.abs(+k[0] || 0), Math.abs(+k[1] || 0)) });
     o.deck = Object.assign({}, o.deck, { oh: d.g === P.xs.nb && d.g !== 1 ? +P.xs.ohR : +P.xs.ohL });
     // PR 3a-3 (PS-9, §4): DC2 and DW of this girder line from the Steel Bridge app's distribution (engine/bridge-dl.js) when the project
     // distributes them (P.xs.dl.mode 'distributed'); else the values entered per girder (base.loads.wBar / wDW) as before

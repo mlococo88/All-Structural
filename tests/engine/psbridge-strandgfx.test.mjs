@@ -22,7 +22,7 @@ import { pinText } from './psbridge-source.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared(...PBD, ...['sections', 'model', 'holddown', 'pierblock', 'design'].map(n => path.join(APP, `engine/${n}.js`)), ...['vizkit', 'strands', 'section', 'stresses'].map(n => path.join(APP, `ui/${n}.js`)));
+const W = loadShared(...PBD, ...['sections', 'model', 'lldf-fg', 'holddown', 'pierblock', 'design'].map(n => path.join(APP, `engine/${n}.js`)), ...['vizkit', 'strands', 'section', 'stresses'].map(n => path.join(APP, `ui/${n}.js`)));
 const COVER = 2, VOIDC = 1.5;   // PS-33 (2026-11-14): 1.5 in from a void face (strand centre); 2 in from the concrete edges
 const GIRDERS = vm.runInContext('GIRDERS', W), DEFAULTS = vm.runInContext('DEFAULTS', W);   // the engine's const globals (not on the context object)
 

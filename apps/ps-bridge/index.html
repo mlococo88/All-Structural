@@ -48,6 +48,7 @@
     'engine/sections.js',    // PS-30 / PS-32: the box beams and voided deck slabs of the CTDOT BDM plates (an app-side library correction, §4); PS-31 migration
     'engine/model.js',
     'engine/rigid.js',       // PS-19: the exterior rigid-section factor on the real girder lines (unequal bays; an engine addition, §4)
+    'engine/lldf-fg.js',     // PS-35: box beams and voided slabs, live-load distribution types (f) / (g) (an app-side override of distFactors, §4)
     'engine/holddown.js',    // PR 2d-3: the optional hold-down check for AASHTO / RIDOT (PS-10), an engine addition after computeAll (§4)
     'engine/pierblock.js',   // PS-34: the pier compression block against the family's thickness (NEXT stems, box bottom slab, slabs; a warning only)
     'engine/design.js',      // PR 2b: the one girder design and its engine inputs (base + the bridge values, PBD.applyBridge)
@@ -454,6 +455,7 @@
   $('inPanes').addEventListener('click', e => {
     const t = e.target, go = t.closest('[data-goin]');
     if (go) { e.preventDefault(); ui.itab = go.dataset.goin; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; return; }
+    { const gt = t.closest('[data-gotab]'); if (gt) { e.preventDefault(); gotoOut(gt.dataset.gotab); return; } }   // PS-35: an input note's link to an output tab (the Loads input tab's J note)
     if (LGUI.onClick(e, lgCtx)) return;
     if (DLUI.onClick(e, P)) { changed(); return; }   // PR 3a-3: the added line loads
     if (t.closest('[data-ty]') && !t.closest('select, input')) { typesDone(TY.onClick(e, P, ui)); return; }   // PR 3a-1

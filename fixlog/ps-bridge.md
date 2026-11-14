@@ -3089,3 +3089,80 @@ PR #1542: https://github.com/mlococo88/All-Structural/pull/1542
 - None.
 ### Other copies
 - None.
+
+## 2026-11-14 — PS-35: adjacent box beams and voided slabs get the AASHTO type (f) / (g) live-load distribution factors (app-side override of the frozen distFactors; J from the drawn outline or entered) (CALCULATION CHANGE, §4)
+PR #1543: https://github.com/mlococo88/All-Structural/pull/1543
+### Request
+- Engineer decision 2026-11-14 (PS-35): box beams and voided slabs use their own superstructure type of AASHTO LRFD 10th Ed. Table 4.6.2.2.1-1, (f) precast boxes with shear keys and a cast-in-place overlay, (g) the same with an integral concrete deck: interior moment Table 4.6.2.2.2b-1 (k = 2.5 N_b^−0.2 ≥ 1.5, b, L, I, J), exterior moment 4.6.2.2.2d-1, interior shear 4.6.2.2.3a-1, exterior shear 4.6.2.2.3b-1, the skew corrections 4.6.2.2.2e / 4.6.2.2.3c for (f)/(g). App-side override of the frozen distFactors (engine/rigid.js the precedent); I-girders, NEXT and the solid slabs unchanged. Out-of-range N_b, b, L, I, J: computed, flagged on the tab, the input tab and the Report. J computed from the drawn outline (boxes: 4 A₀² / Σ s/t on the wall midlines; voided slabs: a defensible method, cited), worked; a J override per girder type ("user/DOT value"); a library J (DOT sheets, later) over the computed one.
+### Problem
+- The moved engine (`distFactors`, pbd-lldf-flexure.js, verbatim) gives every shape but NEXT the I-girder type (k) equations with K_g / (12 L t_s³); for adjacent beams with no topping t_s = 0 is guarded to 1e-6 (t_s³), so (K_g / 12 L t_s³)^0.1 is about 10× too large: BI-36, 60 ft: DF_M 2.0175 (should be about 0.26). With a topping the factors are type (k) values for a beam that is not type (k). The old app does the same (frozen).
+### What changed
+- New `apps/ps-bridge/engine/lldf-fg.js` (`window.PSBLldfFG`), loaded after `engine/rigid.js` (index.html script list). `run(inp, inner)` calls `inner(inp)` with the global `distFactors` wrapped for that call (restored after; the rigid.js pattern): for a box beam or a VOIDED deck slab (`isFG(g)`: girderGross `isBox`, or `isDeck` with voids and not `solid`) the engine's result is replaced by `compute(inp, g, cp, df0)`; every other shape gets the engine's own object (byte-identical results, tested). After the call, an out-of-range warning is added to `R.warns`.
+  - Equations (cited, not copied): k = max(2.5 N_b^−0.2, 1.5); g_M1 = k (b / 33.3 L)^0.5 (I / J)^0.25; g_M2 = k (b / 305)^0.6 (b / 12 L)^0.2 (I / J)^0.06; g_V1 = (b / 130 L)^0.15 (I / J)^0.05; g_V2 = (b / 156)^0.4 (b / 12 L)^0.1 (I / J)^0.05 max(b / 48, 1); exterior e_M1 = max(1.125 + d_e / 30, 1), e_M2 = max(1.04 + d_e / 25, 1), e_V1 = max(1.25 + d_e / 20, 1), e_V2 = max(1 + ((d_e + b / 12 − 2) / 40)^0.5, 1) (root of a negative argument taken as 0), shear two lanes × min(48 / b, 1); interior g = max(one, two or more), exterior max(e₁ g₁, e₂ g₂); no lever rule, no rigid-section check; r_M = min(1.05 − 0.25 tan θ_M, 1); c_V = 1 + (12 L / 90 d) (tan θ)^0.5, θ ≤ 60°.
+  - Mapping to the engine's fields: `m1, m2, v1, v2` (the (f)/(g) interior values), `skM = r_M`, `skV = c_V`, `eM = e_M2`, `eV = e_V2`, `lever = 0`, `rigid = 0`, `rigid1 = e_M1 g_M1` (the engine's exterior fatigue factor is max(lever, rigid1) / 1.2), `dfmRaw, dfvRaw, dfm, dfv`; the working in `df.fg` (type, b, L, N_b, d, I and its source, J and its source, the outline working `jw`, k, e's, ranges `out`, the engine's own type (k) values in `fg.engine`).
+- `engine/holddown.js`: `compute0` runs the engine through `PSBLldfFG.run`.
+  - Before: `const compute0 = inp => apply(inp, window.PSBRigid ? window.PSBRigid.run(inp) : computeAll(inp));`
+  - After: `const engine = inp => (window.PSBRigid ? window.PSBRigid.run(inp) : computeAll(inp));` `const compute0 = inp => apply(inp, window.PSBLldfFG ? window.PSBLldfFG.run(inp, engine) : engine(inp));`
+- `engine/rigid.js` `adjust`: no rigid-section terms for (f)/(g).
+  - Before: `if (!df || !df.ext || df.isNext || !q || !Array.isArray(q.x)) return df;` After: `if (!df || !df.ext || df.isNext || df.fg || !q || !Array.isArray(q.x)) return df;`
+- `engine/design.js` `one()`: a box beam / voided slab whose span has unequal support skews also gets `loads.skewLo` (the smaller |θ|), for the moment reduction (4.6.2.2.2e: only where the two skews differ by 10° or less). Added after the `skew:` line: `if (Math.abs(Math.abs(+k[0] || 0) - Math.abs(+k[1] || 0)) > 1e-9 && window.PSBLldfFG && window.PSBLldfFG.isFGInputs(o)) o.loads = Object.assign({}, o.loads, { skewLo: Math.min(…) });` Equal skews and every other shape: the inputs unchanged (tested).
+- `engine/sections.js`: `DOT_J = {}` and `dotJ(name)` (a library J per standard section from the DOT sheets; none yet), exported.
+- `engine/fields.js`: new Loads input card `fglldf` "Box beam / voided slab live load distribution (types f / g)" (shown for a box / voided slab), field `base.loads.Jfg` ('opt', > 0), note `PSBLldfFG.inputNote(b, P)` (type, I, J and its source, the out-of-range limits; a link to the Loads & LLDF tab); `dfAuto` option text "AASHTO equations (type k; box beams and voided slabs types f / g)".
+- `engine/worked.js` `loads()`: `if (df.fg) fgSteps(add, inp, R); else { …the type (k) steps as before… }`; new `fgSteps`: I, the outline J (t_w, t_b, t_t, with a topping t_top = t_t + n t_s and its midline, b₀, h₀, A₀, Σ s/t, J_outline, Eq. C4.6.2.2.1-3), the J used (computed / library / user), I / J (with the Table 4.6.2.2.1-3 simplified value for comparison, not used), k, g_M1, g_M2, g_V1, g_V2, exterior e's and 48/b, g_M, g_V, r_M, c_V. Each step's value is the engine's and its substituted expression reproduces it (test).
+- `engine/worked-stress.js`: the exterior fatigue DF step for (f)/(g): DF_fat = e_M1 g_M1 / 1.2.
+- `ui/loads.js`: the (f)/(g) card "Live load distribution factors: interior | exterior box beam | voided slab, type (f | g) (PS-35)" with the range alert `#fgRange`; TOPICS `fgj` (I and J) and the new ids in `int` / `ext`; the solid-slab note reworded (type (k) as the old app, unchanged).
+- `report/builders.js`: new `fgNotes(B)` in §2 Assumptions (after `tbcNotes`): "• Live-load distribution (PS-35): box beam | voided slab, AASHTO LRFD 10th Ed. cross-section type (f | g) of Table 4.6.2.2.1-1 (…), not the I-girder type (k) of the old app; I = … (composite section | girder), J = … (computed from outline | library (DOT) value | user/DOT value). [Outside the range of applicability: ….] (see [[rs.lds]])" (a warning note when out of range).
+  - Before: `...voidNotes(B), ...tbcNotes(B), ...secNotes(B)])];` After: `...voidNotes(B), ...tbcNotes(B), ...fgNotes(B), ...secNotes(B)])];`
+- `index.html`: the script; the input panel follows `data-gotab` links (the J note's link to the Loads & LLDF tab).
+  - Added in the `inPanes` click handler after the `data-goin` line: `{ const gt = t.closest('[data-gotab]'); if (gt) { e.preventDefault(); gotoOut(gt.dataset.gotab); return; } }`
+- Tests: new `tests/engine/psbridge-lldf-fg.test.mjs` (8 tests: the hand checks below, unchanged shapes byte-identical, skew, J precedence and saving per type, ranges and the input card, worked steps / tab / Report); `lldf-fg` in every test loader that loads `holddown`; `psbridge-model.test.mjs` script list; harness B (`tests/psbridge-compare.mjs`): a box / voided slab design is compared with the old app's engine with its distFactors wrapped by this module (the file added to the old page), its type (k) factors logged; `tests/smoke/ps-bridge-skeleton.mjs` 3n: the (f) card, the J override used / labelled / saved, the link.
+### Saved data (CLAUDE.md §5)
+- New optional field within schema version 1: `base.loads.Jfg` (in⁴; blank or absent = not entered), saved per girder type as `types[k].ovr['loads.Jfg']` (the existing override mechanism). No key, field or format changed; nothing migrated: a project without it reads, computes (J from the library / outline) and saves unchanged (tested: export → import → export identical). `loads.skewLo` is an engine input built on the fly (design.js), never saved.
+### Governing provisions (CLAUDE.md §4)
+- AASHTO LRFD 10th Ed. (2024): Table 4.6.2.2.1-1 (types f, g), 4.6.2.2.1 (I, J of the section traffic is applied to), Eq. C4.6.2.2.1-3 (closed thin-walled J), Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1, 4.6.2.2.3a-1 (and 4.6.2.2.3a: I or J out of range), 4.6.2.2.3b-1, 4.6.2.2.2e-1 (and 4.6.2.2.2e: skews within 10°), 4.6.2.2.3c-1. Before: the same tables' type (a, e, k) rows (the engine), for every shape.
+### Check cases (hand; before = the moved engine's type (k), after = (f)/(g))
+See the PR for the full tables (inputs, J working, I, k, each term). Summary (default materials: f′c 8.5 ksi girder, 4.0 ksi deck, n = 0.8345; d_e = 2.0 ft; no skew):
+
+| Design | Type | I (in⁴) | J (in⁴) | I / J | k | g_M1 / g_M2 | g_V1 / g_V2 | DF_M before → after | DF_V before → after |
+|---|---|---|---|---|---|---|---|---|---|
+| BI-36 (27in), 60 ft, no topping, N_b 5, interior | g | 49,495 | 87,352 | 0.56662 | 1.81195 | 0.2095 / 0.2639 | 0.4329 / 0.3979 | 2.0175 → 0.2639 | 0.4800 → 0.4329 |
+| same, exterior G1 | g | | | | | e_M 1.1917 / 1.1200 | e_V 1.3500 / 1.2720 | 1.9968 → 0.2956 | 0.6000 → 0.5844 |
+| BIII-36 (39in), 60 ft, 6 in topping, N_b 5, interior | f | 207,226 (composite) | 225,750 | 0.91794 | 1.81195 | 0.2364 / 0.2717 | 0.4435 / 0.4076 | 0.3945 → 0.2717 | 0.4800 → 0.4435 |
+| SIV-48 (21in), 50 ft, no topping, N_b 6, interior | g | 33,759 (< 40,000: flagged) | 73,799 | 0.45744 | 1.74707 | 0.2427 / 0.3289 | 0.4598 / 0.4638 | 2.5894 → 0.3289 | 0.5203 → 0.4638 |
+
+- BI-36 J: t_w = (35.5 − 25.5) / 2 = 5.0, t_b = t_t = 5.5; b₀ = 35.5 − 5 = 30.5; h₀ = 27 − 5.5 = 21.5; A₀ = 655.75 in²; Σ s/t = 2 × 30.5 / 5.5 + 2 × 21.5 / 5 = 19.6909; J = 4 × 655.75² / 19.6909 = 87,352 in⁴ (Table 4.6.2.2.1-3's simplified I / J: 0.54 × 27 / 35.5 + 0.16 = 0.5707, against 0.5666 here).
+- SIV-48 J (one closed cell of the outer walls): t_w = 23.75 − 14 − 6 = 3.75; t_b = t_t = 10.5 − 6 = 4.5; b₀ = 43.75; h₀ = 16.5; A₀ = 721.88; Σ s/t = 2 × 43.75 / 4.5 + 2 × 16.5 / 3.75 = 28.2444; J = 73,799 in⁴.
+### How verified
+- `node tests/engine/run.mjs psbridge tex project-registry`: 24 files, 227 passed, 0 failed. This includes the new `psbridge-lldf-fg.test.mjs` (8 tests):
+  - the hand checks (1)–(3);
+  - I-girders, NEXT and solid slabs byte-identical with and without the override (every non-box harness B design, plus a solid slab);
+  - skew handling (smaller / larger skew, more than 10° apart; `skewLo` only for box and slab designs);
+  - J precedence (user over library over outline), J saved per girder type, and an old project round-tripping unchanged;
+  - the range flags in `R.warns` and on the Loads input card, and the input rule;
+  - the worked steps: every derivation reproduces the engine value to 1e-9, plus the tab card, the Report section and the §2 assumption.
+- `lldf-fg` was added to every test loader that loads `holddown`, and `psbridge-model` checks the script list.
+- `node tests/check-syntax.mjs`: all scripts pass (169 files).
+- Harness B `tests/psbridge-compare.mjs`:
+  - normal: 18 designs, 45,966 shown values and 8,020 step values, **0 differences**, exit 0. The I-girder and NEXT designs are compared with the old app directly; the 3 box designs with the old engine wrapped by the module, and their DFs are logged before and after (table above).
+  - `--import`: 18 designs, 0 differences, exit 0.
+  - `--control` on a box design: exit 1. `--import --control`: exit 1.
+  - After the Report change, `--case box` (4 designs) was rerun: 0 differences.
+- Smokes:
+  - `ps-bridge-skeleton.mjs`: 271 checks, 0 failed. New 3n checks: the type (f) card and the worked J on Loads & LLDF; the J override on the Loads input tab is used, labelled "user/DOT value" and saved; the note's link opens Loads & LLDF.
+  - `ps-bridge-types.mjs`: 106 / 0.
+  - `ps-bridge-3d.mjs`: 101 / 0.
+### Decisions (pending engineer review)
+- PS35-D1. Type (f) when the structural topping t_s > 0, (g) when t_s = 0 (the equations are the same; the type sets I and J).
+- PS35-D2. I and J of the section to which traffic is applied (4.6.2.2.1, "usually the composite section"): with a topping, I = the composite I_c (the engine's, topping transformed by n) and J with the topping added to the top wall as n t_s at its own height; without, the girder's I and J. The composite I / J is larger than the precast-only I / J (BIII-36 with 6 in topping: 0.918 against 0.745), i.e. the larger (conservative) factors. A library (DOT) J or an entered J is used as given, with the same I.
+- PS35-D3. Voided slab J: one closed thin-walled cell of the outer walls (Eq. C4.6.2.2.1-3: t_w the concrete outside the outermost void, t_b and t_t the thinnest concrete below / above the voids; the concrete between the voids is not counted). Smaller J than the section has (conservative, larger factors). Alternatives considered: the solid-section formula A⁴ / 40 I_p with net A and I_p (C4.6.2.2.1-2) gives J = 32,937 in⁴ for SIV-48 (I / J 1.025: g_M1 about 22 % and g_M2 about 5 % larger; physically too low: the voids take 30 % of the area but little torsional stiffness) and Table 4.6.2.2.1-3's simplified I / J (0.54 d / b + 0.16 = 0.399, J = 84,600 in⁴; needs the Owner's concurrence). For the boxes the cell J agrees with the simplified value within 1 % (BI-36 0.5666 / 0.5707; BIII-36 0.7448 / 0.7532).
+- PS35-D4. I or J outside Table 4.6.2.2.3a-1 (25,000 ≤ J ≤ 610,000, 40,000 ≤ I ≤ 610,000 in⁴; every standard voided slab has I < 40,000): 4.6.2.2.3a lets the shear factor be taken as the moment factor; the LARGER of the shear equations and the moment factor is used (the equations stay where they give more), and the limit is flagged.
+- PS35-D5. Skew: the moment reduction (Table 4.6.2.2.2e-1, any θ for (f)/(g)) with the SMALLER skew of the span's supports, none where they differ by more than 10° (4.6.2.2.2e); the shear correction with the larger (the engine's θ), over the whole span as the engine applies its own c_V; d = the precast depth h (the smaller d, the larger c_V). Unequal skews with the larger ≥ 30° remain the existing input error (design.js), unchanged.
+- PS35-D6. Solid deck slabs ('Deck slab 12×48 / 18×48 (solid)') are unchanged (the brief): the old app and the engine give them type (k), with the same t_s = 0 blow-up; AASHTO lists precast solid boxes under (f)/(g) too. Open item.
+- PS35-D7. d_e: as the engine takes it for every shape (from the girder centreline, deOf / entered), not from the exterior web centreline of the box (AASHTO's d_e for (f)/(g)): the larger d_e, the larger e (conservative).
+- PS35-D8. Out of range (b, L, N_b, I, J, d_e > 2.0 ft, θ > 60°, d outside 17–60 in with a skew): computed all the same, listed on the Loads & LLDF tab (#fgRange), on the Loads input tab (#fgInNote) and as a design warning (R.warns: the check summary and the Report's warnings).
+### Open items
+- Solid deck slabs: type (k) with t_s = 0 (PS35-D6).
+- The DOT sheets' J values: to be added to `DOT_J` (engine/sections.js) when the engineer provides them; whether they apply with a composite topping (PS35-D2).
+- Found while checking PR A's design: CTDOT BDM plate 5.2.3 (BIII, BIV; PDF p. 329) shows ONE bottom row of 16 strands at 2 in plus the web columns; the two rows at 2 in and 4 in are plate 5.2.2 (BI, BII; p. 328). The PR A harness design's 4 in row is therefore not on the BIII plate (it fits the 5½ in slab under PS-33's 1.5 in void clearance).
+### Other copies
+- `Prestressed Bridge Design.html` (frozen) keeps type (k) for boxes and slabs; not changed. `lldf.html` has its own box choices (separate tool); not touched.

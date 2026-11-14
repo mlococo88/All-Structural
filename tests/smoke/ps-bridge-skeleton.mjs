@@ -36,6 +36,7 @@
 //   3m. PR 2f: "From the old app": the old app's design on screen (with its bridge model), a shared project and the older list are listed; the
 //      chosen one imported (asked first), the summary (results the same, the other stored design kept), the project saved, a result tab's values
 //      = the old inputs computed; an old Export JSON through Import JSON; a MIDAS demands file refused; every old key byte-identical; 390 px;
+//   3n. (PS-35, 2026-11-14: the box's type (f) live-load distribution on the Loads & LLDF tab; the J override on the Loads input tab, used and saved)
 //   3n. PS-30 / PS-31 (2026-11-14): a saved project with an old library box beam opens on the corrected CTDOT section: the banner on the output
 //      tabs (old → new A / I / y_b) until closed (stays closed), the old values kept (legacySection), Section properties = the plate, the
 //      Report's assumption; the removed 27 in voided slab: an input error naming it and the notice; no console error on any tab;
@@ -427,6 +428,21 @@ await o.b.close();
   await p.click('#inTabs [data-itab="gird"]'); await p.waitForTimeout(300);
   const tbc = (await p.textContent('#secTbcNote').catch(() => '')) || '';
   check(/^To be confirmed: A, I and yb of this box beam are taken from CTDOT BDM plate 5\.2\.1b \(PDF p\. 327\)\. They replace the old app's box beam and voided slab library, which was found inconsistent \(e\.g\. the old "BIII-36 \(27in\)" gave I = 97,756 in⁴, more than a solid 36 × 27 in rectangle at 59,049 in⁴\)\. The replacement is to be confirmed by the engineer against the DOT reference sheets\.$/.test(tbc) && await p.isVisible('#secTbcNote'), 'PR A: the to-be-confirmed note on the Girders & strands tab ' + tbc.slice(0, 200));
+  // PS-35 (2026-11-14): the box beam's live-load distribution, type (f) (6 in topping): the Loads & LLDF card and worked J, the Loads input
+  // tab's J override and note (its link opens the Loads & LLDF tab), a J entered for the base design used and labelled, saved
+  await p.click('#tabBar [data-otab="lds"]'); await p.waitForTimeout(400);
+  const ld = await p.evaluate(() => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
+    return { t: document.getElementById('out').textContent, J: R.df.fg && R.df.fg.J, dfm: R.dfm, shown: (document.querySelector('#out [data-ev="df.fg.J"]') || {}).textContent || '', step: !!document.getElementById('st-ld.Jc') }; });
+  check(/Live load distribution factors: interior box beam, type \(f\) \(PS-35\)/.test(ld.t) && /computed from outline/.test(ld.t) && ld.shown === Math.round(ld.J).toLocaleString('en-US') && ld.step && !/this engine applies type \(k\)/.test(ld.t), 'PS-35: the Loads & LLDF tab (type (f) card, J worked) ' + JSON.stringify({ J: ld.J, shown: ld.shown, step: ld.step }));
+  await p.click('#inTabs [data-itab="loads"]'); await p.waitForTimeout(300);
+  check(await p.isVisible('[data-path="base.loads.Jfg"]') && /type \(f\)/.test((await p.textContent('#fgInNote').catch(() => '')) || ''), 'PS-35: the Loads input tab: J override and its note');
+  await p.fill('[data-path="base.loads.Jfg"]', '150000'); await p.press('[data-path="base.loads.Jfg"]', 'Tab'); await p.waitForTimeout(500);
+  const jx = await p.evaluate(() => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P)); return { J: R.df.fg.J, src: R.df.fg.Jsrc, saved: P.base.loads.Jfg }; });
+  check(jx.J === 150000 && jx.src === 'user' && jx.saved === 150000, 'PS-35: the J entered is used (user/DOT value) and saved ' + JSON.stringify(jx));
+  await p.click('#fgInNote [data-gotab="lds"]'); await p.waitForTimeout(400);
+  check(/J used: user\/DOT value/.test(await p.textContent('#out')) && /user\/DOT value \(Loads tab\)/.test(await p.textContent('#out')), 'PS-35: the note links to the Loads & LLDF tab, J labelled user/DOT value');
+  await p.fill('[data-path="base.loads.Jfg"]', ''); await p.press('[data-path="base.loads.Jfg"]', 'Tab'); await p.waitForTimeout(400);
+  await p.click('#inTabs [data-itab="gird"]'); await p.waitForTimeout(300);
   await p.click('#tabBar [data-otab="flex"]'); await p.waitForTimeout(300); check(await p.isVisible('#secNotice'), 'PS-31: the banner on another output tab');
   await p.click('[data-secdismiss]'); await p.waitForTimeout(300);
   let sv = JSON.parse((await lsSnap(p))['psb2.project.current']);
