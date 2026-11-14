@@ -3768,7 +3768,7 @@ PR #1558: https://github.com/mlococo88/All-Structural/pull/1558
 - apps/steel-bridge/engine/loads.js lines 30-114 (EDGE-VERBATIM) and 116-217 (DEAD-VERBATIM): keep in step. The pin test checks both.
 
 ## 2026-11-14 — PR 10: the Drawings tab, part 1 — typical section of each span and framing plan on sheets with border and title block, DXF download and print (the Steel Bridge app's Drawings tab pattern) (display and export only)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1560: https://github.com/mlococo88/All-Structural/pull/1560
 ### Request
 - PS Bridge catch-up item 10, part 1: the Drawings tab (a placeholder until now) with the typical section, the framing plan and a DXF download, modelled on the Steel Bridge app's Drawings tab (apps/steel-bridge/ui/drawings.js, engine/sheets.js).
 - Reuse the app's existing figure code (ui/xsfig.js, the framing plan of PR #1548/#1549 ui/plan.js, ui/vizkit.js) rather than duplicating it.
