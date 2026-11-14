@@ -227,10 +227,6 @@
      precedence over both. None yet. dotJ(name): the entry, or null. */
   const DOT_J = {};
   const dotJ = n => (Object.prototype.hasOwnProperty.call(DOT_J, n) && +DOT_J[n].J > 0 ? DOT_J[n] : null);
-  /* tbcNote(name): the "to be confirmed" note of a standard box beam / voided slab (engineer request 2026-11-14, PR A; the one exception to
-     the no-pending-in-app rule): the plate the properties come from, the old library they replace (found inconsistent), and that the
-     engineer is to confirm them against the DOT reference sheets; voided slabs: the void spacing scaled from the plate. HTML ('' for any other
-     shape). Shown on the Girders & strands tab (ui/inputs.js, #secTbcNote) and in the Report's assumptions (report/builders.js tbcNotes). */
   /* XCHK: the MassDOT Bridge Manual Part II section of the same nominal size as each CTDOT standard section, the engineer's cross-check of
      the CTDOT values (2026-11-14): adjacent box beams dwg 10.2.4 (36 in, p. 223) / 10.2.5 (48 in, p. 224); deck beams dwg 10.1.4 (p. 193) /
      10.1.5 (p. 194). [MassDOT name, dwg, page, A, I, y_b] as printed. The MassDOT adjacent box has a 6 in bottom slab (CTDOT 5½ in): the CTDOT
