@@ -2832,3 +2832,79 @@ index bc9935b..f6b657e 100644
 +  window.PSBUiSection = { output, after, TOPICS, figure, voidNote };   // figure: also for tests/engine/psbridge-strandgfx.test.mjs (PS-27); voidNote: the Report §2 assumptions
  })();
 ```
+
+## 2026-11-14 — PS-29: "f_pe with the permanent gains" — Δf_pSS not counted twice; the Losses tab and its worked step state where Δf_pSS is (display only; no check result changes)
+PR #1538: https://github.com/mlococo88/All-Structural/pull/1538
+### Request
+- Engineer decision PS-29 (2026-11-14): "f_pe with permanent gains" must not count the deck shrinkage gain Δf_pSS twice, in either loss method. Refined: show f_pe + the elastic gains only (DC1 on the girder + DC2/DW on the composite section) and state "Δf_pSS = x ksi is already in the long-term loss (5.9.3.4.3)". Approximate: do not credit Δf_pSS, and say so. The value the checks use is unchanged.
+### Problem (old app, frozen)
+- `Prestressed Bridge Design.html` (frozen; not changed), Losses tab, Elastic Gains card (:6660, :6663): "f_pe with permanent gains credited = f_pe + (gains.permanent + gains.deckShr)", and the "Permanent gains" total row adds gains.deckShr too; the strand-stage note (:6691) says "add ≈ gains.permanent + gains.deckShr". In the refined method the long-term loss already subtracts Δf_pSS (`finishRefined`, pbd-losses-ll.js: `total = dfSR + dfCR + dfR1 + dfSD + dfCD + dfR2 − dfSS`, AASHTO LRFD 10th Ed. Eq. 5.9.3.4.1-1 / 5.9.3.4.3d), so f_pe already contains it: counted twice. In the approximate method (5.9.3.3) there is no Δf_pSS term, so adding it credits a gain the method does not have.
+- Old report worked step 'gPerm' (:8468, `terms.gainPerm` of :4563 = pbd-compute.js:1144): f_pe + (gains.permanent + inp.opt.dfpSS). It adds the *entered* Δf_pSS field (0 by default) even when Δf_pSS is computed: double count when entered (refined), credit without a loss term (approximate), and nothing when computed.
+- New app before this PR: the Losses tab note and its worked step `ls.gain.fpe` already showed the engine's `fpeGain` = f_pe + Δf_p,DC1 + Δf_p,SD (since PR 2c-1; the open item of that entry asked the engineer to confirm the old double count). `terms.gainPerm` is not used by the new app. What was missing: the statement of where Δf_pSS is. The old note said "The deck shrinkage gain Δf_pSS is part of the refined Δf_pLT" only when refined and |Δf_pSS| > 0.005, without its value, and nothing in the approximate method.
+### What changed
+- `apps/ps-bridge/ui/losses.js` `output`, Elastic gains card (`card-gain`), anchor `The checks use f<sub>pe</sub> without gains (conservative); the gains show the margin.`: the conditional sentence replaced by `<span id="gain-ss-note">`, always shown:
+  - refined: "Δf_pSS = x ksi is already in the long-term loss Δf_pLT (refined method, 5.9.3.4.3: it reduces the loss) [worked step ls.ss.dfSS], so it is not added again here." (x = `gains.deckShr`, a data-ev value);
+  - approximate: "Δf_pSS (x ksi) is not credited: the approximate method (5.9.3.3) has no deck shrinkage term, and it is not added as a gain here."
+- `apps/ps-bridge/engine/worked-stress.js` `losses`, step `gain.fpe` ("Effective prestress with the permanent elastic gains credited"): its note gets the same statement (plain text, value to 2 decimals). Equation, substitution and value unchanged (f_pe + Δf_p,perm, Δf_p,perm = Δf_p,DC1 + Δf_p,SD).
+- `tests/psbridge-compare.mjs` (harness B): the PS-29 comparison (see How verified).
+- Not changed: the engine (pbd-*.js verbatim, `fpeGain = fpe + gains.permanent`, `terms.gainPerm`), every check, the gains table rows (the deck shrinkage row already says "in Δf_pLT (refined)" / "not in Δf_pLT (approximate)", and the total row is DC1 + DC2 + DW), the loss graphics (they plot `fpeGain`).
+### Governing provisions (§4 callout)
+- AASHTO LRFD 10th Ed. (2024) Eq. 5.9.3.4.1-1 and Art. 5.9.3.4.3d (Δf_pSS is a term of the refined Δf_pLT); Art. 5.9.3.3 (approximate method: no Δf_pSS); C5.9.3.4.3 (elastic gains).
+- Displayed "f_pe with the permanent gains", before (old app display) → after (both apps' engine value, now the only one shown):
+  - refined: f_pe + Δf_p,DC1 + Δf_p,SD + Δf_pSS → f_pe + Δf_p,DC1 + Δf_p,SD (Δf_pSS stated as already in Δf_pLT);
+  - approximate: f_pe + Δf_p,DC1 + Δf_p,SD + Δf_pSS → f_pe + Δf_p,DC1 + Δf_p,SD (Δf_pSS stated as not credited).
+- No formula, factor, unit or check changes: the checks use f_pe without gains (and `fpeGain` where used is unchanged).
+### Check cases (hand)
+- Default design (PCI BT-72, L = 120 ft, refined, Δf_pSS computed): f_pe = 202.50 − 23.01 − 24.810 = 154.68 ksi, where Δf_pLT = 5.300 + 16.605 + 1.129 + 1.956 − 0.052 + 1.129 − **1.257** (Δf_pSS) = 24.810 ksi. Gains: Δf_p,DC1 = 7.556, Δf_p,SD = 2.974, Δf_p,perm = 10.530 ksi.
+  - Old app display: 154.68 + (10.530 + 1.257) = **166.47 ksi** (Δf_pSS a second time).
+  - New: 154.68 + 10.530 = **165.21 ksi**; note "Δf_pSS = 1.26 ksi is already in the long-term loss Δf_pLT (refined method, 5.9.3.4.3 …)". Difference 1.26 ksi = Δf_pSS.
+- Harness B design "approximate losses, transformed release, …" (approximate, Δf_pSS entered 1.50 ksi): f_pe = 154.71, Δf_p,perm = 7.556 + 2.974 = 10.530 ksi.
+  - Old display (hint and the old report step gPerm): 154.71 + 10.530 + 1.500 = **166.74 ksi**.
+  - New: 154.71 + 10.530 = **165.24 ksi**; note "Δf_pSS (1.50 ksi) is not credited: the approximate method (5.9.3.3) has no deck shrinkage term …".
+### Saved data (CLAUDE.md §5)
+- None changed.
+### How verified
+- `node tests/engine/run.mjs psbridge tex project-registry`: 21 files, 195 passed, 0 failed (the step `gain.fpe` still = `fpeGain` exactly; its TeX parses).
+- `node tests/check-syntax.mjs`: all scripts pass. `node tests/smoke/ps-bridge-skeleton.mjs`: 257 checks, 0 failed (every data-ev on the Losses tab = computeAll on the page, including the new Δf_pSS value).
+- Harness B (`tests/psbridge-compare.mjs`, 17 designs). New PS-29 part: on each design the Losses tab's shown "f_pe with the permanent gains" must equal f_pe + Δf_p,DC1 + Δf_p,SD worked by the harness from the old app's own components (old `R.fpe`, `R.gains.precast`, `R.gains.composite`, formatted as shown), and the `#gain-ss-note` must state the method's sentence and Δf_pSS (old `R.gains.deckShr`) as shown; the harness lists, as the intended documented difference, every design where the old display (f_pe + Δf_p,perm + Δf_pSS) differs. `--control` also shifts the expected value by 0.01 ksi.
+  - Normal: 17 designs, 43,555 shown values + 7,650 step values, 0 with differences, exit 0; PS-29: 17 designs equal to the hand value, 16 intended differences from the old display (the one without one: the box BIII-36 without topping, Δf_pSS = 0).
+  - `--import`: 17 designs (autosave 5, shared 4, older 4, file 4), 0 with differences, exit 0.
+  - `--control`: 17 with differences (each design also reports the PS-29 shift), exit 1; `--import --control`: 17 with differences, exit 1.
+### Other copies
+- None (the Report renders the tab's worked steps, so `gain.fpe`'s note appears there too). The old app is frozen and keeps its display.
+### Open items
+- None for PS-29. Old-app code `terms.gainPerm` (pbd-compute.js:1144) remains in the verbatim engine, unused by the new app.
+### Before / after (exact)
+```diff
+diff --git a/apps/ps-bridge/engine/worked-stress.js b/apps/ps-bridge/engine/worked-stress.js
+index 601ed33..46fd766 100644
+--- a/apps/ps-bridge/engine/worked-stress.js
++++ b/apps/ps-bridge/engine/worked-stress.js
+@@ -113,7 +113,10 @@
+     const MllG = epc !== 0 ? gn.live * Ecf * cp.Ic / (Ep * epc) : NaN;
+     add({ id: 'gain.ll', label: 'Elastic gain from LL+IM on the composite section (transient)', sym: '\\Delta f_{p,LL}', eq: '\\frac{E_{p}}{E_{c}}\\frac{M_{LL+IM}\\,e_{pc}}{I_{c}}', sub: `\\frac{${n(Ep, 0)}}{${n(Ecf, 0)}}\\frac{${g(MllG, 0)}(${n(epc, 3)})}{${g(cp.Ic, 0)}}`, value: gn.live, unit: 'ksi', d: 3, note: 'M_LL+IM: the engine\'s live-load envelope at midspan (kip-in). Credited only in combinations with live load; not used by the checks.' }, undefined, 'gains.live');
+     add({ id: 'gain.perm', label: 'Permanent elastic gains', sym: '\\Delta f_{p,perm}', eq: '\\Delta f_{p,DC1} + \\Delta f_{p,SD}', sub: `${n(gn.precast, 3)} + ${n(gn.composite, 3)}`, value: gn.permanent, unit: 'ksi', d: 3 }, gn.precast + gn.composite, 'gains.permanent');
+-    add({ id: 'gain.fpe', label: 'Effective prestress with the permanent elastic gains credited', sym: 'f_{pe,gain}', eq: 'f_{pe} + \\Delta f_{p,perm}', sub: `${n(R.fpe, 2)} + ${n(gn.permanent, 3)}`, value: R.fpeGain, unit: 'ksi', d: 2, note: 'The margin the gains give: the service checks use f_pe without gains (conservative).' }, R.fpe + gn.permanent, 'fpeGain');
++    const fx2 = v => (Math.abs(v) < 0.005 ? 0 : v).toFixed(2);   // PS-29: plain-text value in the step's note
++    add({ id: 'gain.fpe', label: 'Effective prestress with the permanent elastic gains credited', sym: 'f_{pe,gain}', eq: 'f_{pe} + \\Delta f_{p,perm}', sub: `${n(R.fpe, 2)} + ${n(gn.permanent, 3)}`, value: R.fpeGain, unit: 'ksi', d: 2, note: 'The margin the gains give: the service checks use f_pe without gains (conservative). ' + (inp.opt.lossMethod === 'refined'
++        ? `The deck shrinkage gain Δf_pSS = ${fx2(gn.deckShr)} ksi is already in the long-term loss Δf_pLT (refined method, 5.9.3.4.3) and is not added again.`
++        : `The deck shrinkage gain Δf_pSS (${fx2(gn.deckShr)} ksi) is not credited: the approximate method (5.9.3.3) has no deck shrinkage term.`) }, R.fpe + gn.permanent, 'fpeGain');
+     // stages of one strand row (the table covers every row)
+     const S = R.strandStages, r0 = S.rows[0];
+     if (r0) {
+diff --git a/apps/ps-bridge/ui/losses.js b/apps/ps-bridge/ui/losses.js
+index 8161f8a..68c3ef3 100644
+--- a/apps/ps-bridge/ui/losses.js
++++ b/apps/ps-bridge/ui/losses.js
+@@ -32,7 +32,9 @@
+       ${gRow('DC1 (deck, haunch, diaphragms)', 'girder', 'precast', 'permanent', 'ls.gain.pc')}${gRow('DC2 + DW', 'composite', 'composite', 'permanent', 'ls.gain.cmp')}${gRow('LL + IM', 'composite', 'live', 'transient', 'ls.gain.ll')}
+       ${dss ? gRow(`Deck shrinkage (${inp.opt.dfpSSauto ? 'computed' : 'entered'})`, 'composite', 'deckShr', refd ? 'in Δf<sub>pLT</sub> (refined)' : 'not in Δf<sub>pLT</sub> (approximate)', 'ls.ss.dfSS') : ''}
+       <tr><td class="lft"><b>Permanent gains (DC1 + DC2 + DW)</b></td><td></td><td><b>${ev('gains.permanent', 2)}</b></td><td>${k.fx(gn.permanent * ss.Aps, 0)}</td><td></td><td>${wk('ls.gain.perm')}</td></tr></tbody></table></div>
+-      <p class="note">Δf<sub>p</sub> = (E<sub>p</sub>/E<sub>c</sub>) M e / I on the section that carries each load; + = a gain. f<sub>pe</sub> with the permanent gains credited = ${ev('fpe', 2)} + ${ev('gains.permanent', 2)} = <b>${ev('fpeGain', 2, 'ksi')}</b> ${wk('ls.gain.fpe')}. The live-load gain applies only in combinations with live load. The checks use f<sub>pe</sub> without gains (conservative); the gains show the margin.${dss && refd ? ' The deck shrinkage gain Δf<sub>pSS</sub> is part of the refined Δf<sub>pLT</sub> (it reduces the loss).' : ''}</p>`, 'card-gain');
++      <p class="note">Δf<sub>p</sub> = (E<sub>p</sub>/E<sub>c</sub>) M e / I on the section that carries each load; + = a gain. f<sub>pe</sub> with the permanent gains credited = ${ev('fpe', 2)} + ${ev('gains.permanent', 2)} = <b>${ev('fpeGain', 2, 'ksi')}</b> ${wk('ls.gain.fpe')}. The live-load gain applies only in combinations with live load. The checks use f<sub>pe</sub> without gains (conservative); the gains show the margin. <span id="gain-ss-note">${refd
++        ? `Δf<sub>pSS</sub> = ${ev('gains.deckShr', 2, 'ksi')} is already in the long-term loss Δf<sub>pLT</sub> (refined method, 5.9.3.4.3: it reduces the loss) ${wk('ls.ss.dfSS')}, so it is not added again here.`
++        : `Δf<sub>pSS</sub> (${ev('gains.deckShr', 2, 'ksi')}) is not credited: the approximate method (5.9.3.3) has no deck shrinkage term, and it is not added as a gain here.`}</span></p>`, 'card-gain');
+     const S = R.strandStages;
+     h += k.card('Strand force and stress by row and stage', `<div class="tscroll"><table class="tbl"><thead><tr><th rowspan="2">Row y<br>in</th><th rowspan="2">e<br>in</th><th rowspan="2">n</th><th colspan="2">At release</th><th colspan="2">Transfer to deck</th><th colspan="2">Permanent (final)</th></tr>
+       <tr><th>f<sub>pt</sub> ksi</th><th>P kip</th><th>f<sub>pD</sub> ksi</th><th>P kip</th><th>f<sub>pe</sub> ksi</th><th>P kip</th></tr></thead><tbody>
+```
