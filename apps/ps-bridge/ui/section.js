@@ -61,7 +61,7 @@
         ['Slope of the draped strands', `${ev('ss.slope', 4)} ${wk('sec.slope')}`]] : []),
       ['Strand centroid at midspan y<sub>ps</sub>', `${ev('ss.cgsMid', 3, 'in')} ${wk('sec.cgsMid')}`], ['Eccentricity at midspan e<sub>m</sub>', `${ev('ss.eMid', 3, 'in')} ${wk('sec.eMid')}`],
       ['Eccentricity at the end e<sub>end</sub>', ev('ss.eEnd', 3, 'in')], ['Transfer length ℓ<sub>t</sub>', `${ev('ss.lt', 1, 'in')} ${wk('sec.lt')}`]])
-      + '<p class="note">Strand rows and draped strands: <a href="#" data-goin="gird">Girders &amp; strands tab</a>. The strand-pattern graphic in the steel style comes with PR 2c.</p>', 'card-str');
+      + '<p class="note">Strand rows and draped strands: <a href="#" data-goin="gird">Girders &amp; strands tab</a>. The strands are drawn in the section figure above and in the strand-pattern graphic of the Losses tab.</p>', 'card-str');
     h += k.card('Worked steps: section properties', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value (the moved Prestressed Bridge Design engine).</p>${k.steps(ctx.W.section.steps, TOPICS, OPEN)}`);
     return h;
   }
