@@ -54,7 +54,7 @@ for (const vw of [1400, 390]) for (const name of Object.keys(PROJECTS)) {
     return { cells: window.PSBBridge.cells(P).filter(c => c.s === d.s).length, n: outl.length, shown: outl.filter(e => e.getAttribute('stroke') === '#2563EB').length,
       voids: svg ? svg.querySelectorAll('.xs-v').length : 0, mv: m.girders.reduce((a, q) => a + q.voids.length, 0), txt: svg ? svg.textContent : '',
       de: m.faces.map(f => ({ g: f.g, de: f.de, eng: window.PSBDesign.deOf(P, f.g) })), Wd: m.Wd, ts: m.ts, deckRatio: db ? db.width / db.height : 0,
-      cap: (document.querySelector('#ldFig .vk-cap') || {}).textContent || '', sideways: document.documentElement.scrollWidth > window.innerWidth + 1, err: !!document.querySelector('#out .alert.err') };
+      cap: [...document.querySelectorAll('#ldFig .vk-cap')].map(e => e.textContent).join(' '), sideways: document.documentElement.scrollWidth > window.innerWidth + 1, err: !!document.querySelector('#out .alert.err') };
   });
   check(!r.err, `${tag}: no error alert`);
   check(r.n === r.cells && r.n >= 4, `${tag}: one section outline per type × line of the span (${r.n} / ${r.cells})`);
@@ -162,6 +162,38 @@ for (const vw of [1400, 390]) {
       return { fig: /Figure 2\.1: Framing plan/.test(t), n: svg.length, lines: svg[0] ? svg[0].querySelectorAll('line.xs-gl').length : 0, see: /cross-section of each worked girder's span[^.]*: see §4/.test(t) }; });
     check(q.fig && q.n === 1 && q.lines === 10, `Report §2: Figure 2.1 framing plan (${q.n}, ${q.lines} lines)`);
     check(q.see, 'Report §2: the cross-section "see §4" reference');
+  }
+  check(pg.errs.length === 0, `${tag}: console errors ${pg.errs.slice(0, 3).join(' | ')}`);
+  await pg.b.close();
+}
+
+// ---------- 2026-11-14 (item 7): the LLDF case on the Loads & LLDF cross-section: lever rule (wheels, influence line), rigid section ----------
+for (const vw of [1400, 390]) {
+  const tag = `lldf @ ${vw}`, pg = await open('ibeam', vw, 'lds'), { p } = pg;
+  const show = (g, s) => p.evaluate(([g, s]) => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project; P.design = { g, s }; window.PSBModel.save(localStorage, P); }, [g, s]);
+  await show(1, 1); await p.reload(); await p.waitForSelector('#ldFig svg'); await p.waitForTimeout(600);
+  const rd = () => p.evaluate(() => { const svg = document.querySelector('#ldFig svg'), P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, d = window.PSBDesign.sel(P);
+    const c = window.PSBBridge.cells(P).find(q => q.g === d.g && q.s === d.s), R = window.PSBHoldDown.compute(JSON.parse(JSON.stringify(window.PSBDesign.cellInputs(P, c.k, d.g))));
+    return { seg: [...document.querySelectorAll('#ldFig [data-vkseg]')].map(b => b.dataset.vkseg + ':' + b.getAttribute('aria-pressed')), wh: svg.querySelectorAll('.xs-wh').length, il: svg.querySelectorAll('.dt-il').length, res: svg.querySelectorAll('.xs-res').length,
+      note: (document.getElementById('ldLLNote') || {}).textContent || '', lever: R.df.lever, rigid: R.df.rigid, NL: R.df.rigidNL, sideways: document.documentElement.scrollWidth > window.innerWidth + 1 }; });
+  let r = await rd();
+  check(r.seg.join() === 'lever:true,rigid:false', `${tag}: G1: the LLDF case switch (${r.seg.join()})`);
+  check(r.wh === 2 && r.il >= 2, `${tag}: lever: two wheels and the influence line (${r.wh}, ${r.il})`);
+  check(r.note.includes(`= ${r.lever.toFixed(4)} = the engine's ${r.lever.toFixed(4)}`), `${tag}: lever value = the engine's (${r.note.slice(-90)})`);
+  if (args.shots) await (await p.$('#ldFig')).screenshot({ path: path.join(args.shots, `lldf-lever-g1-${vw}.png`) });
+  await p.click('#ldFig [data-vkseg="rigid"]'); await p.waitForTimeout(300); r = await rd();
+  check(r.wh === 2 * r.NL && r.res === r.NL && r.il === 0 && r.seg.join() === 'lever:false,rigid:true', `${tag}: rigid: ${r.NL} lanes, wheels ${r.wh}, resultants ${r.res}`);
+  check(r.note.includes(`= ${r.rigid.toFixed(4)} = the engine's ${r.rigid.toFixed(4)}`), `${tag}: rigid R = the engine's`);
+  check(!r.sideways, `${tag}: no sideways scroll`);
+  if (args.shots) await (await p.$('#ldFig')).screenshot({ path: path.join(args.shots, `lldf-rigid-g1-${vw}.png`) });
+  await show(5, 2); await p.reload(); await p.waitForSelector('#ldFig svg'); await p.waitForTimeout(600); r = await rd();
+  check(r.note.includes(`= ${r.lever.toFixed(4)} = the engine's ${r.lever.toFixed(4)}`) || /rigid/i.test(r.seg.join()) && r.wh > 0, `${tag}: G5 (sidewalk side): the drawn case = the engine's (${r.note.slice(-70)})`);
+  await show(3, 1); await p.reload(); await p.waitForSelector('#ldFig svg'); await p.waitForTimeout(600); r = await rd();
+  check(r.seg.length === 0 && r.wh === 0 && /interior girder/.test(r.note), `${tag}: interior G3: no case, no wheels, the note`);
+  if (vw === 1400) {
+    await show(1, 1); await p.reload(); await p.waitForSelector('#ldFig svg'); await p.click('#tabBar [data-otab="rpt"]'); await p.waitForTimeout(3000);
+    const q = await p.evaluate(() => [...document.querySelectorAll('#rptHost .rp-fig')].map(f => f.textContent).filter(t => /Cross-section: girder sections/.test(t)).map(t => /shown: ([^)\n]+)/.exec(t) ? /shown: ([^)\n]+)/.exec(t)[1].trim() : '?'));
+    check(q.some(t => /Lever rule/.test(t)) && q.some(t => /Rigid section/.test(t)), `Report §4: the cross-section in each LLDF case of the exterior unit (${q.join(' | ')})`);
   }
   check(pg.errs.length === 0, `${tag}: console errors ${pg.errs.slice(0, 3).join(' | ')}`);
   await pg.b.close();

@@ -76,20 +76,37 @@
     return h;
   }
   /* the cross-section of the design span (ui/xsfig.js, PSBXsFig): each line's girder section at its offset, deck, haunch, barriers,
-     sidewalks, traffic faces and d_e, to scale; the line shown on the output tabs outlined. Display only. Also the Report's figure. */
-  function figure(ctx, W) {
-    const d = window.PSBDesign.sel(ctx.P), q = window.PSBXsFig.svg(ctx.P, d.s, W, { shown: d.g });
+     sidewalks, traffic faces and d_e, to scale; the line shown on the output tabs outlined. Display only. Also the Report's figure.
+     2026-11-14 (item 7): with the live-load case of the line shown (PSBXsFig.lldf: the engine's lever-rule wheel placement and its influence
+     line, or the rigid-section lanes; the Steel Bridge app's LLDF case switch), chosen with LL.cur (the page session only). */
+  const LL = { cur: 'lever' };
+  const llOf = ctx => { const d = window.PSBDesign.sel(ctx.P); return window.PSBXsFig.lldf(ctx.P, d.s, d.g, ctx.inp, ctx.R.df); };
+  function figure(ctx, W, L) {
+    const d = window.PSBDesign.sel(ctx.P), C = L && L.cases.find(c => c.key === LL.cur);
+    const q = window.PSBXsFig.svg(ctx.P, d.s, W, { shown: d.g, ll: C || null, maxH: C ? (W < 560 ? 420 : 470) : undefined });
     return { html: q.svg, nar: q.nar };
+  }
+  /* the case's caption: how the drawn wheels give the engine's value (the worked step linked) */
+  function llCap(ctx, L) {
+    const k = K(), fx = (v, dd) => k.fx(v, dd);
+    if (!L || L.kind !== 'ext') return L && L.note ? `<p class="vk-cap" id="ldLLNote">${k.esc(L.note)}</p>` : '';
+    const C = L.cases.find(c => c.key === LL.cur) || L.cases[0];
+    if (C.key === 'lever') return `<p class="vk-cap" id="ldLLNote"><b>Lever rule, one lane (4.6.2.2.2d), m = 1.2:</b> the wheels 2 ft and 8 ft inboard of the traffic face are x<sub>w</sub> = ${C.terms.map(t => fx(t.xo, 2)).join(' and ')} ft outboard of the exterior girder ℄ (d<sub>e</sub> = ${fx(C.de, 3)} ft); ordinates (S + x<sub>w</sub>) / S = ${C.terms.map(t => t.on ? fx(t.ord, 4) : '0 (not counted)').join(' and ')} with S = ${fx(C.S, 3)} ft; g<sub>lever</sub> = 1.2 × 0.5 × (${C.terms.filter(t => t.on).map(t => fx(t.ord, 4)).join(' + ') || '0'}) = <b>${fx(C.value, 4)}</b> = the engine's ${k.ev(ctx.R, 'df.lever', 4)} ${k.wk('ld.lever')}.</p>`;
+    return `<p class="vk-cap" id="ldLLNote"><b>Rigid cross-section (C4.6.2.2.2d), ${C.NL} lane${C.NL > 1 ? 's' : ''} (the engine's governing count), m = ${fx(C.m, 2)}:</b> lanes of 12 ft from the traffic face, each lane's resultant (brown tick) 5 ft inside its edge; e = ${C.e.map(v => fx(v, 3)).join(', ')} ft from the centroid of the ${C.nb} girders${C.unequal ? ' (the actual girder lines, PS-19)' : ''}, X<sub>ext</sub> = ${fx(C.Xext, 3)} ft, Σx² = ${fx(C.sumX2, 2)} ft²; R = ${fx(C.m, 2)} (${C.NL} / ${C.nb} + ${fx(C.Xext, 3)} × ${fx(C.sumE, 3)} / ${fx(C.sumX2, 2)}) = <b>${fx(C.value, 4)}</b> = the engine's ${k.ev(ctx.R, 'df.rigid', 4)} ${k.wk('ld.rigid')}.</p>`;
   }
   function after(el, ctx) {
     K().after(el, OPEN);
     const slot = el.querySelector('#gfx_ld'); if (!slot || !VK() || !VK().detCard) return;
     const { R } = ctx, k = K(), ev = (p, d) => k.ev(R, p, d);
-    VK().detCard(slot, { id: 'ldFig', title: 'Cross-section: girder sections, deck, barriers and d<sub>e</sub>', sub: `span ${window.PSBDesign.sel(ctx.P).s}, girder lines from the left deck edge`,
+    let L = null; try { L = llOf(ctx); } catch (e) { console.warn(e); }
+    const ext = L && L.kind === 'ext'; if (ext && !L.cases.some(c => c.key === LL.cur)) LL.cur = 'lever';
+    const cap = () => window.PSBXsFig.legend(window.PSBXsFig.model(ctx.P, window.PSBDesign.sel(ctx.P).s)) + `<p class="vk-cap">G${window.PSBDesign.sel(ctx.P).g} (outlined) is the line shown on the output tabs. Entered on the <a href="#" data-goin="xsec">Cross-section tab</a> (bays, overhangs, barriers, sidewalks) and the <a href="#" data-goin="gird">Girders &amp; strands tab</a> (girder types and sections). Display only.</p>`;
+    const H = VK().detCard(slot, { id: 'ldFig', title: 'Cross-section: girder sections, lanes and wheels, d<sub>e</sub>', sub: `span ${window.PSBDesign.sel(ctx.P).s}, girder lines from the left deck edge`,
+      seg: ext ? { label: 'LLDF case', items: L.cases.map(c => [c.key, k.esc(c.label)]), cur: LL.cur, on: key => { LL.cur = key; slot.querySelectorAll('[data-vkseg]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.vkseg === key))); H.redraw(); const n = slot.querySelector('#ldLLNote'); if (n) n.outerHTML = llCap(ctx, L); } } : null,
       top: VK().tiles([{ label: 'DC1 w<sub>DC1</sub>', value: ev('wDk', 3), unit: 'klf' }, { label: 'DC2', value: ev('wBar', 3), unit: 'klf' }, { label: 'DW', value: ev('wDW', 3), unit: 'klf' },
         { label: 'DF<sub>M</sub>', value: ev('dfm', 3), unit: 'lanes', tone: 'c' }, { label: 'DF<sub>V</sub>', value: ev('dfv', 3), unit: 'lanes', tone: 'c' }, { label: 'M<sub>LL+IM</sub>', value: ev('MLL', 0), unit: 'k-ft', tone: 't' }]),
-      draw: W => figure(ctx, W), hint: 'Point at a girder, the deck, a barrier or a d_e dimension to read it.',
-      cap: window.PSBXsFig.legend(window.PSBXsFig.model(ctx.P, window.PSBDesign.sel(ctx.P).s)) + `<p class="vk-cap">G${window.PSBDesign.sel(ctx.P).g} (outlined) is the line shown on the output tabs. Entered on the <a href="#" data-goin="xsec">Cross-section tab</a> (bays, overhangs, barriers, sidewalks) and the <a href="#" data-goin="gird">Girders &amp; strands tab</a> (girder types and sections). Display only.</p>` });
+      draw: W => figure(ctx, W, L), hint: 'Point at a girder, a wheel, a lane or a d_e dimension to read it.',
+      cap: llCap(ctx, L) + cap() });
   }
   window.PSBUiLoads = { output, after, TOPICS };
 })();
