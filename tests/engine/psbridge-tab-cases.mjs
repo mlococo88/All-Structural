@@ -16,8 +16,10 @@ export const TAB_CASES = base => ({
     P.base.opt.corrosion = 'severe'; P.base.opt.relBondedReinf = true; P.base.opt.relAs = 2; P.base.loads.fatM = 0.45; P.base.opt.dfpSSauto = false; P.base.opt.dfpSS = 1.5; return P; })(),
   'cracked under Service III (few strands), continuous with top steel, two spans': (() => { const P = base(); P.base.rows = [{ n: 10, y: 2, nd: 0, dbnd: 0 }, { n: 8, y: 4, nd: 0, dbnd: 0 }]; P.base.harp.n = 4;
     P.spans = { lengths: [120, 120], continuity: 'composite' }; P.xs.skews = [0, 0, 0]; P.base.cont.restraint = true; P.base.cont.AsTop = 3; return P; })(),
+  // PS-28 (2026-11-14): the strand rows fit the BT-72 (16 / 16 / 14 at y = 2 / 4 / 6 in drew strands outside its 26 in bottom flange, now an
+  // input error): 12 / 12 / 8 / 2 at y = 2 / 4 / 6 / 8 in + the 12 draped = 46 strands; the section is still flanged (b1 c > h_f)
   'flanged flexure (thin deck, 46 strands), two spans, young girder (positive restraint), positive moment connection steel': (() => { const P = base(); P.base.ts = 5; P.xs.bays = [6, 6, 6, 6];
-    P.base.rows = [{ n: 16, y: 2, nd: 0, dbnd: 0 }, { n: 16, y: 4, nd: 0, dbnd: 0 }, { n: 14, y: 6, nd: 0, dbnd: 0 }]; P.spans = { lengths: [120, 120], continuity: 'composite' }; P.xs.skews = [0, 0, 0];
+    P.base.rows = [{ n: 12, y: 2, nd: 0, dbnd: 0 }, { n: 12, y: 4, nd: 0, dbnd: 0 }, { n: 8, y: 6, nd: 0, dbnd: 0 }, { n: 2, y: 8, nd: 0, dbnd: 0 }]; P.spans = { lengths: [120, 120], continuity: 'composite' }; P.xs.skews = [0, 0, 0];
     P.base.cont.AsPos = 4; P.base.cont.restraint = true; P.base.mat.td = 10; return P; })(),
   // PR 2d-1: the owner hold-down and debonded-share checks (CTDOT), debonded rows on an I-girder, diaphragms (camber), the girder end past ℄ bearing
   'CTDOT, debonded rows, diaphragms, girder end 9 in past the bearing': (() => { const P = base(); P.base.owner = 'CTDOT';
@@ -32,8 +34,9 @@ export const TAB_CASES = base => ({
     P.base.deck.on = true; P.base.deck.xnegAuto = false; P.base.deck.xneg = 9; P.base.tsSeparate = true; P.base.tsDL = 8.5;
     P.base.handling.on = true; P.base.handling.aLift = 8; P.base.handling.aHaul = 10; P.base.handling.theta_i = 0.06; P.base.rateVeh = [{ name: 'Type 3', M: 1500, V: 70, W: 25 }]; return P; })(),
   // PR 2d-2: deck on a box beam with a topping (closed box: the design section at the face of the support), girder spacing below Table A4-1
+  // PS-28 (2026-11-14): the strand rows fit the 5 in bottom wall (8 strands at y = 4 in were 1 in from the void, now an input error): 16 at y = 2 in
   'box BIII-36 with a 6 in topping, deck on (S below 4 ft), handling on': (() => { const P = base(); P.base.girder = 'AASHTO BIII-36 (27in)'; P.base.ts = 6; P.base.harp.n = 0;
-    P.base.rows = [{ n: 14, y: 2, nd: 0, dbnd: 0 }, { n: 8, y: 4, nd: 0, dbnd: 0 }]; P.xs.bays = [3, 3, 3, 3]; P.spans.lengths = [60]; P.base.deck.on = true; P.base.handling.on = true; return P; })(),
+    P.base.rows = [{ n: 16, y: 2, nd: 0, dbnd: 0 }]; P.xs.bays = [3, 3, 3, 3]; P.spans.lengths = [60]; P.base.deck.on = true; P.base.handling.on = true; return P; })(),
   // PR 2d-3 (PS-10): the hold-down check for RIDOT with an edited limit (0.90 W) and the girder end past the bearing; AASHTO with the box off
   'RIDOT, draped strands, hold-down limit 0.90 W, girder end 6 in past the bearing': (() => { const P = base(); P.base.owner = 'RIDOT'; P.base.opt.hdFrac = 0.9; P.base.opt.endOh = 6; P.base.harp.n = 8; P.base.harp.yEnd = 50; return P; })(),
   'AASHTO, PS-10 hold-down box off': (() => { const P = base(); P.base.opt.hdCheck = false; return P; })(),

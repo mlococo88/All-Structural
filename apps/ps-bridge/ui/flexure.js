@@ -56,7 +56,11 @@
     h += k.card('Worked steps: flexure', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value. f<sub>pe</sub>: <a href="#st-ls.fpe" data-gotab="loss">Losses tab</a>; h<sub>c</sub>, b<sub>eff</sub>: <a href="#st-sec.hc" data-gotab="sec">Section properties tab</a>; moments: <a href="#st-an.MuS" data-gotab="an">Analysis tab</a>.</p>${k.steps(ctx.W.flexure.steps, TOPICS, OPEN)}`);
     return h;
   }
-  /* the pier section: girder, deck with the bars in tension, the compression block in the bottom flange */
+  /* the pier section: girder, deck with the bars in tension, the compression block in the bottom flange.
+     NEXT (2026-11-14, display only): the block is drawn at the bottom of each of the two stems, B wide each (x = ±stemCC/2 ± B/2), the
+     width the engine uses for the compression zone (pbd-compute.js: a = A_s f_y / (0.85 f′c b_bf), b_bf = 2B for NEXT, girderGrossBase);
+     before, one block 2B wide centred on the girder ℄, i.e. in the gap between the stems. blocks(G): [[x0, x1]] of the block(s). */
+  const blocks = G => (G.isNext && G.next ? [-1, 1].map(s => [s * G.next.stemCC / 2 - G.next.B / 2, s * G.next.stemCC / 2 + G.next.B / 2]) : [[-G.bbf / 2, G.bbf / 2]]);
   function pierFig(R, inp, W) {
     const V = VK(), S = V.scene(), G = R.g, cp = R.cp, c = R.cont, ts = +inp.ts, th = (G.isBox || G.isDeck) ? 0 : +inp.th, bE = Math.min(cp.beff, Math.max(G.btf, G.bbf) * 2.2);
     const half = halfPolygon(G), poly = half.concat(half.slice().reverse().map(p => [-p[0], p[1]]));
@@ -65,11 +69,12 @@
     if (ts > 0) S.rect(-bE / 2, G.h + th, bE / 2, G.h + th + ts, 'dt-cc');
     const yb = c.dN, nb = 9; for (let i = 0; i < nb; i++) S.circ(-bE / 2 + 2 + i * (bE - 4) / (nb - 1), yb, 0.45, 'dt-bar');
     S.callout(bE / 2 - 2, yb, 26, -16, [`deck bars A_s = ${V.fx(c.As, 2)} in², f_y = ${V.fx(c.fyr, 0)} ksi`], { sz: 10.5 });
-    S.rect(-G.bbf / 2, 0, G.bbf / 2, Math.min(c.aN, G.h), 'dt-ng', { op: 0.9 });
-    S.callout(G.bbf / 2, c.aN / 2, 26, 10, [`compression block a = ${V.fx(c.aN, 2)} in (t_bf = ${V.fx(c.tbf, 1)} in)`], { sz: 10.5, gov: !c.aOK });
+    const bk = blocks(G), xr = bk[bk.length - 1][1];
+    bk.forEach(([x0, x1]) => S.rect(x0, 0, x1, Math.min(c.aN, G.h), 'dt-ng', { op: 0.9 }));
+    S.callout(xr, c.aN / 2, 26, 10, [`compression block a = ${V.fx(c.aN, 2)} in${G.isNext ? ` in each stem (b = 2 × ${V.fx(G.next.B, 2)} in)` : ''} (t_bf = ${V.fx(c.tbf, 1)} in)`], { sz: 10.5, gov: !c.aOK });
     S.dimV(0, yb, -Math.max(G.bbf, G.btf) / 2, -16, `d = ${V.fx(c.dN, 2)} in`, { sz: 10.5 });
     if (cp.beff > bE + 0.01) S.text(0, G.h + th + ts, `deck drawn ${V.fx(bE, 0)} in wide (b_eff = ${V.fx(cp.beff, 1)} in)`, { a: 'middle', dy: -8, sz: 10, cls: 'dt-m' });
-    S.region(-G.bbf / 2, 0, G.bbf / 2, Math.max(c.aN, 1), `a = A_s f_y / (0.85 f'c b_bf) = ${V.fx(c.aN, 3)} in, c = ${V.fx(c.cN, 3)} in`);
+    bk.forEach(([x0, x1]) => S.region(x0, 0, x1, Math.max(c.aN, 1), `a = A_s f_y / (0.85 f'c b_bf) = ${V.fx(c.aN, 3)} in, c = ${V.fx(c.cN, 3)} in${G.isNext ? `; b_bf = 2 stems × B = 2 × ${V.fx(G.next.B, 2)} = ${V.fx(G.bbf, 2)} in` : ''}`));
     return { html: S.render({ W: Math.min(W, 640), maxH: 330, label: 'Pier section, negative moment' }).svg, nar: W < 560 };
   }
   const HIDE = { cmp: { sw: true, dc1: true, dc2: true, dw: true, llp: true, lln: true } };
@@ -98,7 +103,7 @@
     }
     const sp = el.querySelector('#gfx_fxpier');
     if (sp && c && VK() && VK().detCard) VK().detCard(sp, { id: 'fxPierFig', title: 'Pier section (negative moment)', sub: `${k.esc(ctx.inp.girder)} with the deck; girder f′c ${k.fx(+ctx.inp.mat.fc, 2)} ksi`, draw: W => pierFig(R, ctx.inp, W), hint: 'Point at the compression block for its values.',
-      cap: '<p class="vk-cap">Deck bars (A<sub>s</sub> within b<sub>eff</sub>) in tension, the rectangular compression block in the girder bottom flange; bar positions drawn for display. Display only.</p>' });
+      cap: `<p class="vk-cap">Deck bars (A<sub>s</sub> within b<sub>eff</sub>) in tension, the rectangular compression block in the girder bottom flange${R.g.isNext ? ' (NEXT: at the bottom of each of the two stems, b<sub>bf</sub> = 2B, the width the engine uses)' : ''}; bar positions drawn for display. Display only.</p>` });
   }
-  window.PSBUiFlexure = { output, after, TOPICS };
+  window.PSBUiFlexure = { output, after, TOPICS, pierFig, blocks };   // pierFig, blocks: also for tests/engine/psbridge-pierfig.test.mjs
 })();

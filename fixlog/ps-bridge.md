@@ -2394,3 +2394,441 @@ index 435c64f..004eb8c 100644
    }
    const gotoOut = t => { ui.otab = t; saveUi(); drawOut(); $('outputPanel').scrollTop = 0; };
 ```
+
+## 2026-11-14 — PS-28: a strand pattern that does not fit the girder shape is a blocking input error naming its row (input validation; no calculation change)
+PR #1535: https://github.com/mlococo88/All-Structural/pull/1535
+### Request
+- Engineer decision PS-28 (2026-11-14), the open item of PS-27: strands drawn outside the concrete, in a void, or too close to an edge become an input error naming the row; results are blocked until it is fixed (the same style as the other input errors: message, field outlined, check summary, Report blocked). Patterns that fit: identical results.
+### Problem
+- The engine places strands by row y and count only; nothing stopped a pattern that cannot be built: e.g. the default rows of 10 strands on an AASHTO Type I (16 in bottom flange: x = ±9 in is outside it), a row at y = 6 in in an AASHTO BI-36 (inside the void, which starts 5 in above the soffit), or a NEXT draped row wider than a stem. The engine's own warning covers only the row count against the bottom width ("≈N that fit … with 2″ edge cover"), not voids, tapers or the draped strands.
+### What changed
+- `apps/ps-bridge/engine/inputcheck.js`:
+  - New `fitOf(b, L, S, E)`, called from `inputsOf` for the base inputs and for each girder type's own inputs (so a type with its own shape is checked on that shape, its error named for the type, in its scope).
+  - New helpers `misfit`, `insidePoly`, `edgeDist`, `COVER = 2`; `misfit` and `COVER` exported for the tests.
+  - `inputsOf(P, b, L, E)` gets a fifth argument `S`: the girder spacing of a line of those inputs, which sets the NEXT flange width. `collect` passes `PSBDesign.lineS` of the design girder line for the base, and of the type's first line for a type.
+  - Positions: `PSBStrandGfx.xy` (ui/strands.js), the single source of the drawn positions (PS-27, the old app's `strandXY`). It is evaluated on the engine's own `girderGross` (NEXT flange from S) and `strandSys` of the inputs. Each row is placed on its own (positions do not depend on the other rows). The draped strands are placed about y_end (℄ bearing) and about y_mid (midspan), the two sections the graphic draws.
+- Criterion. A strand fits when its centre is:
+  1. inside the concrete outline (`halfPolygon` mirrored about the ℄);
+  2. not inside a void (`sectionVoids`);
+  3. at least 2 in from every edge of the outline;
+  4. at least 2 in from the edge of every void.
+
+  Each distance is measured from the strand **centre**, with no half strand diameter taken off. This is the PS-27 test's `fitsAt` (tests/engine/psbridge-strandgfx.test.mjs) and the engine's "2″ grid with 2″ edge cover" (row capacity floor((b − 4)/2) + 1). Exactly 2 in fits (1e-9 in tolerance).
+- Error per straight row. The path is `base.rows.<i>.y` when one strand of the row does not fit at that y (NEXT: one in each stem), else `base.rows.<i>.n`. The cell is the row. The message names the row, the count, y, the shape, the first strand that does not fit (x) and why, and the rule. Example: "Straight strand rows, row 1: 10 strands at y = 2 in do not fit the AASHTO Type I: the strand at x = -9 in is outside the concrete outline; each strand centre must be inside the concrete, outside the voids and at least 2 in from the edges of the concrete and of the voids (the positions the strand pattern draws)."
+- Draped strands: one error at `base.harp.yEnd` and/or `base.harp.yMid`. The message names n_h, the centroid and the strand (x, y).
+- Not checked:
+  - a row or draped centroid that already has its own error (not a whole count, y blank or ≥ h);
+  - a row of 0 strands;
+  - a Custom shape (PS28-D1).
+- Only inputs are read; no project field is written. A design that does not fit (an imported old-app design too) is kept as entered and opens with the error. The import summary lists it with the other input errors (legacy.js already lists `collect`'s errors).
+- `tests/engine/psbridge-tab-cases.mjs`: two of harness B's 17 designs did not fit, so they are now input errors. Their strand rows were changed to patterns that fit, keeping what each case tests:
+  - "flanged flexure (thin deck, 46 strands)": rows 16 / 16 / 14 at y = 2 / 4 / 6 in drew strands at x = ±15 in, outside the BT-72's 26 in bottom flange. Now 12 / 12 / 8 / 2 at y = 2 / 4 / 6 / 8 in plus the 12 draped = 46 strands. Still flanged: at midspan rect = false, a = 12.77 in (before 16.96 in) against h_f = 7 in.
+  - "box BIII-36 with a 6 in topping": a row of 8 at y = 4 in was 1 in from the void. Now 16 at y = 2 in.
+  
+  Harness B compares the new app with the old app for the same inputs, so both cases are still compared value for value.
+### Saved data (CLAUDE.md §5)
+- None changed: no key, no field, no format. Nothing is written by the check; stored projects and imported old designs keep their strands as entered.
+### Governing provisions
+- None changed. No engineering formula, factor, unit or reference changes; no computed value changes (the engine files are not touched; see How verified). The 2 in centre-to-edge criterion is the engineer's PS-28 decision, the same rule as the PS-27 test and as the engine's row-capacity warning.
+### Check cases (hand)
+- AASHTO Type I (b_bf = 16 in, x = ±8 in; d = [4, 3, 5, 5]), one row of 10 at y = 2 in:
+  - Positions on the 2 in grid about the ℄: x = ±1, ±3, …, ±9 in; ±9 > 8 → outside → error on the count (`base.rows.0.n`), "the strand at x = -9 in is outside the concrete outline".
+  - 7 strands: x = ±6, 8 − 6 = 2 in ≥ 2 → fits (no error).
+  - 8 strands: x = ±7, 1 in → error "is 1 in from the edge of the concrete".
+  - Before: no error, results shown.
+- AASHTO BI-36 (36 × 12 in, wall 5 in, void 26 × 5 in, y = 5 to 10 in): rows 10 @ 2 in, 4 @ 6 in:
+  - Row 2 at x = ±1, ±3 in, y = 6 in is inside the void → error on y (`base.rows.1.y`), "the strand at x = -3 in is inside a void".
+  - At y = 3 in: 5 − 3 = 2 in to the void → fits.
+  - Before: no error.
+- AASHTO Type II girder type in span 2 (b_bf 18 in, taper (9, 6) to (3, 12)) with the base's 10 / 10 / 8 rows:
+  - Rows 1–2 at x = ±9 → 0 in from the side;
+  - row 3 at (±7, 6): 2 sin 45° = 1.41 in from the taper → three errors, "Girder type Interior S2: …", scope T3.
+### How verified
+- New `tests/engine/psbridge-strandfit.test.mjs` (7 tests):
+  1. The criterion at hand-picked points (Type I, BI-36, voided slab).
+  2. `collect`'s verdict = an independent copy of the PS-27 test's `fitsAt` over `xy`, for every library shape (NEXT at 96 and 144 in flanges), every row count up to two more than the engine's row capacity, y = 1…11 in and every 4 in above, and draped strands (n_h 2–12, four y_end, four y_mid). Over 1 500 cases, over 300 of them not fitting; the field chosen (n or y) is checked too.
+  3. The two hand checks above.
+  4. The defaults fit: a new project, the default project (the old app's DEFAULTS of pbd-library.js on its PCI BT-72), and the 17 designs of harness B.
+  5. The girder type's own shape (scoped error).
+  6. An old-app Export JSON (Type I, 10 @ 2 in) through `PSBLegacy.fromText` / `convert`: the error, the rows / harp / `legacy.inputs` kept as read, the import summary naming it, the same after export and import of the project.
+  7. Nothing written; `computeAll` identical with and without the check loaded (all 17 designs + the default); the page loads `ui/strands.js`.
+
+  Mutation check: with the `fitOf` call commented out, tests 2, 3, 5 and 6 fail.
+- `tests/smoke/ps-bridge-skeleton.mjs` (PS-28 part, on the page):
+  - 16 strands in row 1 of the BT-72: the count outlined with its message;
+  - counted on the Girders & strands tab (1) and listed in the check summary;
+  - the entered 16 kept in `psb2.project.current`;
+  - the Report tab shows "Results not shown" with the error, no Report;
+  - 10 again: no errors.
+- Results: `node tests/engine/run.mjs psbridge tex project-registry`: 19 files, 185 passed, 0 failed. `node tests/check-syntax.mjs`: all scripts pass. Smokes: `ps-bridge-skeleton.mjs` 257 checks, 0 failed (5 new PS-28 checks); `ps-bridge-types.mjs` 106 checks, 0 failed; `ps-bridge-3d.mjs` 101 checks, 0 failed. Harness B (`tests/psbridge-compare.mjs`, 17 designs): normal 0 with differences, exit 0; `--import` 0 with differences, exit 0; `--control` 17 with differences, exit 1; `--import --control` 17 with differences, exit 1. Identical results for patterns that fit: the engine files are not changed (only engine/inputcheck.js, which reads inputs); test 7 above computes the 17 designs and the default with and without the check loaded: `computeAll` the same; harness B: the values shown = the old app's for all 17 designs.
+- Information (not changed; for the engineer): of the 658 old-app designs of parity harness A imported through "From the old app", 228 now open with a PS-28 error:
+  - 8 of the 38 recorded designs (`tests/projects/ps/shape_*`: the four boxes with a second row at y = 4 in, 1 in from the void; AASHTO Type I and II with 6 / 8 strands at y = 6 in in the flange taper; the two voided deck slabs with 10 strands at y = 4 in, 1.2 in from the round voids);
+  - 219 of the 600 seeded designs;
+  - 1 of the 20 edge cases.
+
+  Their data is kept; they show the error until fixed.
+### Decisions (pending engineer review)
+- PS28-D1. A Custom shape is not checked: its outline is drawn with the default flange thicknesses d = [4, 3, 5, 5] (not entered), so a real flange could be thicker than drawn and the check would flag strands that fit.
+- PS28-D2. The draped strands are checked at ℄ bearing (about y_end) and at midspan (about y_mid), the two sections drawn; not in between (in the library's shapes a path between two sections that fit stays in the concrete: the draped strands sit at x = ±1 in (NEXT: in the stems), and in a box they fit only in the bottom wall, the top walls being 2 in thick; the voided slabs' voids are at x = ±12 in or wider).
+- PS28-D3. The field outlined for a straight row is y when a single strand of the row (NEXT: one in each stem) does not fit at that y (the row's height is the problem), else the count n; for the draped strands y_end or y_mid (the section that does not fit).
+- PS28-D4. Strands overlapping each other (e.g. a draped strand 1 in from a straight strand at midspan) are not part of the criterion (concrete fit only, as the PS-27 test).
+### Other copies
+- None.
+### Before / after (exact)
+```diff
+diff --git a/apps/ps-bridge/engine/inputcheck.js b/apps/ps-bridge/engine/inputcheck.js
+index eebf31a..da4ab5f 100644
+--- a/apps/ps-bridge/engine/inputcheck.js
++++ b/apps/ps-bridge/engine/inputcheck.js
+@@ -46,24 +46,26 @@
+     if (BR && P.xs && P.spans) { const c = BR.checks(P); c.errors.forEach(e => E(e.path, e.msg, 'types')); c.warnings.forEach(w => warnings.push({ path: w.path, msg: w.msg, src: 'types' })); }
+     if (window.PSBBridgeDL && P.xs) window.PSBBridgeDL.checks(P).forEach(e => E(e.path, e.msg, 'dl'));   // PR 3a-3: the DC2 / DW distribution inputs
+     const Ls = s => P.spans && Array.isArray(P.spans.lengths) ? P.spans.lengths[s - 1] : NaN;
+-    inputsOf(P, P.base, Ls(window.PSBDesign ? window.PSBDesign.sel(P).s : 1), E);
++    const lS = g => (window.PSBDesign && P.xs ? window.PSBDesign.lineS(P, g) : NaN);   // PS-28: the girder spacing of a line (a NEXT flange width)
++    inputsOf(P, P.base, Ls(window.PSBDesign ? window.PSBDesign.sel(P).s : 1), E, lS(window.PSBDesign ? window.PSBDesign.sel(P).g : 1));
+     /* PR 3a-1: each girder type's own inputs (the base with its overrides, on its span's length) checked by the same rules; an error the base
+        does not already have is the type's: its message names the type, scope = the type's id (the page shows the field in that type's
+        scope). */
+     if (BR && BR.hasTypes(P)) {
+       const seen = new Set(errors.map(e => e.path + '|' + e.msg));
+       P.types.forEach((T, k) => {
+-        if (!BR.typeLines(P, k).length) return;
++        const tl = BR.typeLines(P, k); if (!tl.length) return;
+         const Pv = Object.assign({}, P, { base: BR.effBase(P, k) });
+         inputsOf(Pv, Pv.base, Ls(T.span), (path, msg, src, cell) => { if (seen.has(path + '|' + msg)) return;
+-          const e = { path, msg: `Girder type ${T.label}: ${msg}`, src, scope: T.id }; if (cell != null) e.cell = cell; errors.push(e); seen.add(path + '|' + msg); });
++          const e = { path, msg: `Girder type ${T.label}: ${msg}`, src, scope: T.id }; if (cell != null) e.cell = cell; errors.push(e); seen.add(path + '|' + msg); }, lS(tl[0]));
+       });
+     }
+     return { errors, warnings };
+   }
+-  /* inputsOf(P, b, L, E): the field, table and location rules on the inputs object b (P.base, or a girder type's effective inputs), with the
+-     span length L of the design (PR 2b; moved into a function in PR 3a-1, the rules unchanged) */
+-  function inputsOf(P, b, L, E) {
++  /* inputsOf(P, b, L, E, S): the field, table and location rules on the inputs object b (P.base, or a girder type's effective inputs), with the
++     span length L of the design (PR 2b; moved into a function in PR 3a-1, the rules unchanged); S: the girder spacing of a line of these
++     inputs (ft; the NEXT flange width of the strand fit, PS-28) */
++  function inputsOf(P, b, L, E, S) {
+     const get = F().get, plain = F().plain;
+     // the fields of the input cards (engine/fields.js), where shown
+     F().CARDS.forEach(c => {
+@@ -98,11 +100,76 @@
+       if (+b.harp.n > 0) ['yEnd', 'yMid'].forEach(k => { const y = b.harp[k]; if (isNum(y) && y >= h) E(`base.harp.${k}`, `Draped strand centroid y_${k === 'yEnd' ? 'end' : 'mid'} = ${y} in is not inside the girder (h = ${h} in).`, 'geometry'); });
+       if (b.ovr && b.ovr.on && isNum(+b.ovr.yb) && b.ovr.yb !== '' && +b.ovr.yb >= h) E('base.ovr.yb', `y_b (override) = ${b.ovr.yb} in is not inside the girder (h = ${h} in).`, 'geometry');
+     }
++    fitOf(b, L, S, E);   // PS-28: every strand of the pattern inside the concrete of the shape
+     if (b.girder === 'Custom' && b.cust && isNum(b.cust.yb) && isNum(b.cust.h) && b.cust.yb >= b.cust.h) E('base.cust.yb', `Custom section: y_b = ${b.cust.yb} in must be less than h = ${b.cust.h} in.`, 'geometry');
+     if (isNum(L) && Array.isArray(b.loads && b.loads.diaph)) b.loads.diaph.forEach((d, i) => { if (isNum(d.a) && d.a > L) E(`base.loads.diaph.${i}.a`, `Diaphragms, row ${i + 1}: a = ${d.a} ft is beyond the span (L = ${L} ft).`, 'geometry', i); });
+     const m = b.mat || {};
+     if (isNum(m.ti) && isNum(m.td) && m.td <= m.ti) E('base.mat.td', `Age at deck placement t_d (${m.td} days) must be later than the age at release t_i (${m.ti} days).`, 'geometry');
+     if (isNum(m.td) && isNum(m.tfin) && m.tfin <= m.td) E('base.mat.tfin', `Final age t_f (${m.tfin} days) must be later than the age at deck placement t_d (${m.td} days).`, 'geometry');
+   }
+-  window.PSBInputCheck = { collect, ruleMsg, depthOf };
++  /* PS-28 (engineer decision 2026-11-14): a strand pattern that does not fit the girder shape is a blocking input error naming its row.
++     The positions are the drawn ones: PSBStrandGfx.xy (ui/strands.js, the single source of the drawn strand positions: the old app's
++     strandXY, PS-27) of the engine's own girder (girderGross, NEXT flange width from S) and strand system (strandSys) of these inputs.
++     A strand fits when its centre is
++       (1) inside the concrete outline (halfPolygon mirrored about the girder ℄),
++       (2) not inside a void (sectionVoids),
++       (3) at least COVER = 2 in from every edge of the outline, and
++       (4) at least COVER = 2 in from the edge of every void,
++     each distance measured from the strand CENTRE (not from its surface; no half strand diameter taken off): the engine's "2″ grid with
++     2″ edge cover" of its row-capacity warning (pbd-compute.js: floor((b − 4)/2) + 1 strands across a width b) and the criterion of
++     tests/engine/psbridge-strandgfx.test.mjs (PS-27, fitsAt). Equal to 2 in fits (1e-9 in tolerance).
++     Checked: each straight row at its y (an error per row: the field y when a single strand of the row (NEXT: one in each stem) does not
++     fit at that y, else the count n); the draped strands about y_end (at ℄ bearing) and about y_mid (midspan; the hold-down points), the
++     two sections the graphic draws (an error each: y_end, y_mid). Only where the other rules of the row pass (a whole count, y a number
++     inside the depth): those have their own messages. Not checked: a Custom shape (its outline is drawn with the library's default flange
++     thicknesses, not entered: PS28-D1, pending engineer review). Only inputs are read: nothing is written, so a pattern that does not fit
++     (an imported old-app design too) is kept as entered and shows this error until it is fixed. */
++  const COVER = 2;
++  const fx = v => { const s = (Math.round(v * 100) / 100).toFixed(2).replace(/\.?0+$/, ''); return s === '-0' ? '0' : s; };
++  function insidePoly(poly, x, y) { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j];
++    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; }
++  function edgeDist(poly, x, y) { let d = Infinity; for (let i = 0; i < poly.length; i++) { const a = poly[i], q = poly[(i + 1) % poly.length], dx = q[0] - a[0], dy = q[1] - a[1], L2 = dx * dx + dy * dy;
++    const t = L2 ? Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / L2)) : 0; d = Math.min(d, Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy)); } return d; }
++  /* misfit(g, poly, q): '' when the strand centre q fits (1)-(4), else why it does not */
++  function misfit(g, poly, q) {
++    if (!insidePoly(poly, q.x, q.y)) return 'is outside the concrete outline';
++    const vs = sectionVoids(g);
++    if (vs.some(v => v.type === 'rect' ? Math.abs(q.x - v.x) < v.w / 2 && Math.abs(q.y - v.y) < v.h / 2 : Math.hypot(q.x - v.x, q.y - v.y) < v.d / 2)) return 'is inside a void';
++    const de = edgeDist(poly, q.x, q.y); if (de < COVER - 1e-9) return `is ${fx(de)} in from the edge of the concrete (less than ${COVER} in)`;
++    const dv = vs.reduce((m, v) => Math.min(m, v.type === 'rect' ? Math.hypot(Math.max(Math.abs(q.x - v.x) - v.w / 2, 0), Math.max(Math.abs(q.y - v.y) - v.h / 2, 0)) : Math.hypot(q.x - v.x, q.y - v.y) - v.d / 2), Infinity);
++    if (dv < COVER - 1e-9) return `is ${fx(dv)} in from a void (less than ${COVER} in)`;
++    return '';
++  }
++  /* fitOf(b, L, S, E): the PS-28 errors of the inputs b (span L ft, line spacing S ft) */
++  function fitOf(b, L, S, E) {
++    const SG = window.PSBStrandGfx;
++    if (!SG || typeof GIRDERS === 'undefined' || typeof STRANDS === 'undefined' || typeof girderGross !== 'function' || typeof strandSys !== 'function') return;
++    const raw = b && b.girder !== 'Custom' ? GIRDERS[b.girder] : null; if (!raw || raw.custom) return;
++    if (raw.next && !(isNum(S) && S > 0)) return;
++    if (!b.str || !STRANDS[b.str.size] || !b.mat) return;
++    const h = +raw.h, base = Object.assign({}, b, { S, L: isNum(L) && L > 0 ? L : 100 });
++    let g, poly; try { g = girderGross(base); const hp = halfPolygon(g); poly = hp.concat(hp.slice().reverse().map(p => [-p[0], p[1]])); } catch (e) { return; }
++    const pos = (rows, harp, cg) => { const inp = Object.assign({}, base, { rows, harp }); return SG.xy({ g, ss: strandSys(inp, g) }, cg); };
++    const bad = pts => { for (const q of pts) { const w = misfit(g, poly, q); if (w) return { q, w }; } return null; };
++    const at = q => (q.h ? `(x, y) = (${fx(q.x)}, ${fx(q.y)}) in` : `x = ${fx(q.x)} in`);
++    const RULE = `each strand centre must be inside the concrete, outside the voids and at least ${COVER} in from the edges of the concrete and of the voids (the positions the strand pattern draws)`;
++    const noHarp = { n: 0, yEnd: 0, yMid: 0, frac: 0.4 };
++    (Array.isArray(b.rows) ? b.rows : []).forEach((r, i) => {
++      if (!r || !(Number.isInteger(r.n) && r.n > 0 && isNum(r.y) && r.y > 0 && r.y < h)) return;
++      try {
++        const f = bad(pos([{ n: r.n, y: r.y, dbnd: 0, nd: 0 }], noHarp, 0)); if (!f) return;
++        const one = bad(pos([{ n: Math.min(r.n, raw.next ? 2 : 1), y: r.y, dbnd: 0, nd: 0 }], noHarp, 0));
++        E(`base.rows.${i}.${one ? 'y' : 'n'}`, `Straight strand rows, row ${i + 1}: ${r.n} strand${r.n === 1 ? '' : 's'} at y = ${fx(r.y)} in do not fit the ${b.girder}: the strand at ${at(f.q)} ${f.w}; ${RULE}.`, 'geometry', i);
++      } catch (e) { /* the engine could not place them: other rules report the inputs */ }
++    });
++    const hp = b.harp || {}, n = hp.n;
++    if (Number.isInteger(n) && n > 0) ['yEnd', 'yMid'].forEach(k => {
++      const y = hp[k]; if (!(isNum(hp.yEnd) && isNum(hp.yMid) && isNum(y) && y > 0 && y < h)) return;
++      try {
++        const f = bad(pos([], { n, yEnd: hp.yEnd, yMid: hp.yMid, frac: isNum(+hp.frac) && +hp.frac > 0 ? +hp.frac : 0.4 }, y).filter(q => q.h)); if (!f) return;
++        E(`base.harp.${k}`, `Draped strands: the ${n} draped strands about y_${k === 'yEnd' ? 'end' : 'mid'} = ${fx(y)} in (${k === 'yEnd' ? 'at ℄ bearing' : 'at midspan'}) do not fit the ${b.girder}: the strand at ${at(f.q)} ${f.w}; ${RULE}.`, 'geometry');
++      } catch (e) { /* as above */ }
++    });
++  }
++  window.PSBInputCheck = { collect, ruleMsg, depthOf, COVER, misfit };
+ })();
+diff --git a/tests/engine/psbridge-tab-cases.mjs b/tests/engine/psbridge-tab-cases.mjs
+index a30b678..63db1bf 100644
+--- a/tests/engine/psbridge-tab-cases.mjs
++++ b/tests/engine/psbridge-tab-cases.mjs
+@@ -16,8 +16,10 @@ export const TAB_CASES = base => ({
+     P.base.opt.corrosion = 'severe'; P.base.opt.relBondedReinf = true; P.base.opt.relAs = 2; P.base.loads.fatM = 0.45; P.base.opt.dfpSSauto = false; P.base.opt.dfpSS = 1.5; return P; })(),
+   'cracked under Service III (few strands), continuous with top steel, two spans': (() => { const P = base(); P.base.rows = [{ n: 10, y: 2, nd: 0, dbnd: 0 }, { n: 8, y: 4, nd: 0, dbnd: 0 }]; P.base.harp.n = 4;
+     P.spans = { lengths: [120, 120], continuity: 'composite' }; P.xs.skews = [0, 0, 0]; P.base.cont.restraint = true; P.base.cont.AsTop = 3; return P; })(),
++  // PS-28 (2026-11-14): the strand rows fit the BT-72 (16 / 16 / 14 at y = 2 / 4 / 6 in drew strands outside its 26 in bottom flange, now an
++  // input error): 12 / 12 / 8 / 2 at y = 2 / 4 / 6 / 8 in + the 12 draped = 46 strands; the section is still flanged (b1 c > h_f)
+   'flanged flexure (thin deck, 46 strands), two spans, young girder (positive restraint), positive moment connection steel': (() => { const P = base(); P.base.ts = 5; P.xs.bays = [6, 6, 6, 6];
+-    P.base.rows = [{ n: 16, y: 2, nd: 0, dbnd: 0 }, { n: 16, y: 4, nd: 0, dbnd: 0 }, { n: 14, y: 6, nd: 0, dbnd: 0 }]; P.spans = { lengths: [120, 120], continuity: 'composite' }; P.xs.skews = [0, 0, 0];
++    P.base.rows = [{ n: 12, y: 2, nd: 0, dbnd: 0 }, { n: 12, y: 4, nd: 0, dbnd: 0 }, { n: 8, y: 6, nd: 0, dbnd: 0 }, { n: 2, y: 8, nd: 0, dbnd: 0 }]; P.spans = { lengths: [120, 120], continuity: 'composite' }; P.xs.skews = [0, 0, 0];
+     P.base.cont.AsPos = 4; P.base.cont.restraint = true; P.base.mat.td = 10; return P; })(),
+   // PR 2d-1: the owner hold-down and debonded-share checks (CTDOT), debonded rows on an I-girder, diaphragms (camber), the girder end past ℄ bearing
+   'CTDOT, debonded rows, diaphragms, girder end 9 in past the bearing': (() => { const P = base(); P.base.owner = 'CTDOT';
+@@ -32,8 +34,9 @@ export const TAB_CASES = base => ({
+     P.base.deck.on = true; P.base.deck.xnegAuto = false; P.base.deck.xneg = 9; P.base.tsSeparate = true; P.base.tsDL = 8.5;
+     P.base.handling.on = true; P.base.handling.aLift = 8; P.base.handling.aHaul = 10; P.base.handling.theta_i = 0.06; P.base.rateVeh = [{ name: 'Type 3', M: 1500, V: 70, W: 25 }]; return P; })(),
+   // PR 2d-2: deck on a box beam with a topping (closed box: the design section at the face of the support), girder spacing below Table A4-1
++  // PS-28 (2026-11-14): the strand rows fit the 5 in bottom wall (8 strands at y = 4 in were 1 in from the void, now an input error): 16 at y = 2 in
+   'box BIII-36 with a 6 in topping, deck on (S below 4 ft), handling on': (() => { const P = base(); P.base.girder = 'AASHTO BIII-36 (27in)'; P.base.ts = 6; P.base.harp.n = 0;
+-    P.base.rows = [{ n: 14, y: 2, nd: 0, dbnd: 0 }, { n: 8, y: 4, nd: 0, dbnd: 0 }]; P.xs.bays = [3, 3, 3, 3]; P.spans.lengths = [60]; P.base.deck.on = true; P.base.handling.on = true; return P; })(),
++    P.base.rows = [{ n: 16, y: 2, nd: 0, dbnd: 0 }]; P.xs.bays = [3, 3, 3, 3]; P.spans.lengths = [60]; P.base.deck.on = true; P.base.handling.on = true; return P; })(),
+   // PR 2d-3 (PS-10): the hold-down check for RIDOT with an edited limit (0.90 W) and the girder end past the bearing; AASHTO with the box off
+   'RIDOT, draped strands, hold-down limit 0.90 W, girder end 6 in past the bearing': (() => { const P = base(); P.base.owner = 'RIDOT'; P.base.opt.hdFrac = 0.9; P.base.opt.endOh = 6; P.base.harp.n = 8; P.base.harp.yEnd = 50; return P; })(),
+   'AASHTO, PS-10 hold-down box off': (() => { const P = base(); P.base.opt.hdCheck = false; return P; })(),
+```
+
+## 2026-11-14 — Flexure tab, pier section of a NEXT: the negative-moment compression block drawn in the two stems (display only; no calculation change)
+PR #1536: https://github.com/mlococo88/All-Structural/pull/1536
+### Request
+- Open item of PS-27 (orchestrated fix list 2026-11-14): on the Flexure tab's pier section (negative moment at the pier of a span made continuous) of a NEXT, the compression block was drawn 2B wide centred on the girder ℄, i.e. in the empty gap between the two stems. Draw it in the two stems (the bottom of each stem), consistent with the width the engine uses; display only; report, do not change, the engine's compression width if it looks wrong.
+### Problem
+- `ui/flexure.js` `pierFig` drew one rectangle from x = −b_bf/2 to +b_bf/2 for every shape. For a NEXT, `girderGrossBase` sets b_bf = 2B (the two stems' bottom width), so the block was a 2B-wide rectangle on the ℄ (NEXT 36F: −13 to +13 in), where there is no concrete (the stems' inner faces are at ±23.5 in).
+- The engine (pbd-compute.js, the pier section): a = A_s f_y / (0.85 f′c b_bf), with b_bf = 2B for a NEXT. That is the two stems' bottom width, so the compression zone is the bottom of each stem, B wide. The drawing now shows that.
+### What changed
+- `ui/flexure.js`:
+  - New `blocks(G)`: the x ranges of the block. For a NEXT, one per stem: x = ±stemCC/2 ± B/2. For every other shape, as before: [−b_bf/2, b_bf/2].
+  - `pierFig` draws a rectangle (and a point-at region) for each range, height min(a, h) as before.
+  - The callout says "in each stem (b = 2 × B in)" for a NEXT, and the region text gives "b_bf = 2 stems × B".
+  - The caption adds "(NEXT: at the bottom of each of the two stems, b_bf = 2B, the width the engine uses)".
+  - `pierFig` and `blocks` are exported for the test.
+- I-girders, bulb tees, boxes and deck beams: drawn exactly as before.
+### Saved data (CLAUDE.md §5)
+- None.
+### Governing provisions
+- None changed. Display only: AASHTO LRFD 10th Ed. 5.12.3.3 / 5.6.3 values (a, c, φM_n) unchanged.
+### Check case (NEXT 36F, S = 9 ft (default bays), two 80 ft spans made continuous, deck bars A_s = 16 in², f_y = 60 ksi, girder f′c = 8.5 ksi)
+- Stems: ℄ at ±30 in, B = 13 in, so b_bf = 2 × 13 = 26 in. a = 16 × 60 / (0.85 × 8.5 × 26) = 960 / 187.85 = 5.110 in (the engine: 5.110).
+- Before: one block from x = −13 to +13 in, 5.11 in high (between the stems).
+- After: two blocks, x = −36.5 to −23.5 in and +23.5 to +36.5 in, each 5.11 in high; total width 26 in = the engine's b_bf.
+### How verified
+- New `tests/engine/psbridge-pierfig.test.mjs` (6 tests). The block rectangles of `pierFig` (class dt-ng, recorded from the drawing kit) are checked for:
+  - NEXT 36F and NEXT 24F: two blocks, one at each stem, none between the stems;
+  - PCI BT-72, AASHTO Type IV, AASHTO BIII-36: one block, b_bf wide on the ℄;
+  - every shape: total width = the engine's b_bf, height = the engine's a;
+  - the engine's a, c, φM_n and Mu/φM_n the same before and after drawing;
+  - the NEXT 36F hand check above.
+
+  Mutation check: with the NEXT branch of `blocks` disabled, the 3 NEXT tests fail.
+- Results: Batched with the void note in one PR (engineer speed policy 2026-11-14: display only, reduced verification). `node tests/check-syntax.mjs`: all scripts pass. `node tests/engine/run.mjs psbridge tex project-registry`: 21 files, 195 passed, 0 failed. `ps-bridge-skeleton.mjs`: 257 checks, 0 failed. Harness B normal (17 designs): 0 with differences, exit 0 (no value changes). `--import` and the controls not run (display-only policy).
+### Open items (not changed; engine, for the engineer)
+- NEXT pier section, the a ≤ t_bf check (`cont.aOK`, pbd-compute.js `tbf = g.isNext ? g.next.ft : g.d[2]`). For a NEXT, t_bf is the flange thickness (8 in), and that flange is the deck flange at the top. In negative moment the compression is at the bottom of the stems, where there is no bottom flange. The rectangular block of width 2B stays valid while a ≤ the stem depth h − ft (NEXT 36F: 28 in), with B the stems' bottom width (the stems widen upward, so 2B is conservative). The check compares a with the wrong element. The compression width itself (2B) looks right.
+- Box beams, the same check (seen while checking the other shapes): `g.d` is [0, 0, 0, 0] for boxes and deck beams, so t_bf = 0. `aOK` is always false, and every continuous box design carries the warning "Negative-moment compression block a = … exceeds the bottom-flange thickness (0.0″)". For AASHTO BIII-36, two 80 ft spans made continuous, A_s = 16 in²: a = 3.69 in against the 5 in bottom wall. The engine's b_bf for a box is the full width w (36 in); the bottom wall is 36 in wide, so that width is consistent. Should t_bf be the box wall (`box.wall`) and, for a NEXT, the stem depth?
+### Other copies
+- None. The Report draws the tab's own figure (ui/report.js figure slots), so it shows the same blocks.
+### Before / after (exact)
+```diff
+diff --git a/apps/ps-bridge/ui/flexure.js b/apps/ps-bridge/ui/flexure.js
+index 496c609..2f7ab16 100644
+--- a/apps/ps-bridge/ui/flexure.js
++++ b/apps/ps-bridge/ui/flexure.js
+@@ -56,7 +56,11 @@
+     h += k.card('Worked steps: flexure', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value. f<sub>pe</sub>: <a href="#st-ls.fpe" data-gotab="loss">Losses tab</a>; h<sub>c</sub>, b<sub>eff</sub>: <a href="#st-sec.hc" data-gotab="sec">Section properties tab</a>; moments: <a href="#st-an.MuS" data-gotab="an">Analysis tab</a>.</p>${k.steps(ctx.W.flexure.steps, TOPICS, OPEN)}`);
+     return h;
+   }
+-  /* the pier section: girder, deck with the bars in tension, the compression block in the bottom flange */
++  /* the pier section: girder, deck with the bars in tension, the compression block in the bottom flange.
++     NEXT (2026-11-14, display only): the block is drawn at the bottom of each of the two stems, B wide each (x = ±stemCC/2 ± B/2), the
++     width the engine uses for the compression zone (pbd-compute.js: a = A_s f_y / (0.85 f′c b_bf), b_bf = 2B for NEXT, girderGrossBase);
++     before, one block 2B wide centred on the girder ℄, i.e. in the gap between the stems. blocks(G): [[x0, x1]] of the block(s). */
++  const blocks = G => (G.isNext && G.next ? [-1, 1].map(s => [s * G.next.stemCC / 2 - G.next.B / 2, s * G.next.stemCC / 2 + G.next.B / 2]) : [[-G.bbf / 2, G.bbf / 2]]);
+   function pierFig(R, inp, W) {
+     const V = VK(), S = V.scene(), G = R.g, cp = R.cp, c = R.cont, ts = +inp.ts, th = (G.isBox || G.isDeck) ? 0 : +inp.th, bE = Math.min(cp.beff, Math.max(G.btf, G.bbf) * 2.2);
+     const half = halfPolygon(G), poly = half.concat(half.slice().reverse().map(p => [-p[0], p[1]]));
+@@ -65,11 +69,12 @@
+     if (ts > 0) S.rect(-bE / 2, G.h + th, bE / 2, G.h + th + ts, 'dt-cc');
+     const yb = c.dN, nb = 9; for (let i = 0; i < nb; i++) S.circ(-bE / 2 + 2 + i * (bE - 4) / (nb - 1), yb, 0.45, 'dt-bar');
+     S.callout(bE / 2 - 2, yb, 26, -16, [`deck bars A_s = ${V.fx(c.As, 2)} in², f_y = ${V.fx(c.fyr, 0)} ksi`], { sz: 10.5 });
+-    S.rect(-G.bbf / 2, 0, G.bbf / 2, Math.min(c.aN, G.h), 'dt-ng', { op: 0.9 });
+-    S.callout(G.bbf / 2, c.aN / 2, 26, 10, [`compression block a = ${V.fx(c.aN, 2)} in (t_bf = ${V.fx(c.tbf, 1)} in)`], { sz: 10.5, gov: !c.aOK });
++    const bk = blocks(G), xr = bk[bk.length - 1][1];
++    bk.forEach(([x0, x1]) => S.rect(x0, 0, x1, Math.min(c.aN, G.h), 'dt-ng', { op: 0.9 }));
++    S.callout(xr, c.aN / 2, 26, 10, [`compression block a = ${V.fx(c.aN, 2)} in${G.isNext ? ` in each stem (b = 2 × ${V.fx(G.next.B, 2)} in)` : ''} (t_bf = ${V.fx(c.tbf, 1)} in)`], { sz: 10.5, gov: !c.aOK });
+     S.dimV(0, yb, -Math.max(G.bbf, G.btf) / 2, -16, `d = ${V.fx(c.dN, 2)} in`, { sz: 10.5 });
+     if (cp.beff > bE + 0.01) S.text(0, G.h + th + ts, `deck drawn ${V.fx(bE, 0)} in wide (b_eff = ${V.fx(cp.beff, 1)} in)`, { a: 'middle', dy: -8, sz: 10, cls: 'dt-m' });
+-    S.region(-G.bbf / 2, 0, G.bbf / 2, Math.max(c.aN, 1), `a = A_s f_y / (0.85 f'c b_bf) = ${V.fx(c.aN, 3)} in, c = ${V.fx(c.cN, 3)} in`);
++    bk.forEach(([x0, x1]) => S.region(x0, 0, x1, Math.max(c.aN, 1), `a = A_s f_y / (0.85 f'c b_bf) = ${V.fx(c.aN, 3)} in, c = ${V.fx(c.cN, 3)} in${G.isNext ? `; b_bf = 2 stems × B = 2 × ${V.fx(G.next.B, 2)} = ${V.fx(G.bbf, 2)} in` : ''}`));
+     return { html: S.render({ W: Math.min(W, 640), maxH: 330, label: 'Pier section, negative moment' }).svg, nar: W < 560 };
+   }
+   const HIDE = { cmp: { sw: true, dc1: true, dc2: true, dw: true, llp: true, lln: true } };
+@@ -98,7 +103,7 @@
+     }
+     const sp = el.querySelector('#gfx_fxpier');
+     if (sp && c && VK() && VK().detCard) VK().detCard(sp, { id: 'fxPierFig', title: 'Pier section (negative moment)', sub: `${k.esc(ctx.inp.girder)} with the deck; girder f′c ${k.fx(+ctx.inp.mat.fc, 2)} ksi`, draw: W => pierFig(R, ctx.inp, W), hint: 'Point at the compression block for its values.',
+-      cap: '<p class="vk-cap">Deck bars (A<sub>s</sub> within b<sub>eff</sub>) in tension, the rectangular compression block in the girder bottom flange; bar positions drawn for display. Display only.</p>' });
++      cap: `<p class="vk-cap">Deck bars (A<sub>s</sub> within b<sub>eff</sub>) in tension, the rectangular compression block in the girder bottom flange${R.g.isNext ? ' (NEXT: at the bottom of each of the two stems, b<sub>bf</sub> = 2B, the width the engine uses)' : ''}; bar positions drawn for display. Display only.</p>` });
+   }
+-  window.PSBUiFlexure = { output, after, TOPICS };
++  window.PSBUiFlexure = { output, after, TOPICS, pierFig, blocks };   // pierFig, blocks: also for tests/engine/psbridge-pierfig.test.mjs
+ })();
+```
+
+## 2026-11-14 — Box beam and voided deck slab voids: drawn where the engine places them, and the Section properties tab and the Report's assumptions say so (display only; decision pending engineer review)
+PR #1536: https://github.com/mlococo88/All-Structural/pull/1536
+### Request
+- Open item of PS-27 (fix list 2026-11-14): the new app draws the box void where the engine's `sectionVoids` places it (on the bottom wall), while the old app's section graphic centred it on the depth. Keep the graphics consistent with the engine, confirm it, and note it in the Section tab / Report assumptions. If the engine's position disagrees with the girder library's published void position, report it; do not change calculations.
+### Findings (confirmed)
+- The engine (`sectionVoids`, pbd-section.js, verbatim from the old app at 8fe8650 :2648-2649) puts the box cell on the bottom wall: y = wall … wall + voidH (wall = 5 in for every library box). The top wall is h − wall − voidH = 2 in for all four boxes (BI-36: void 5–10 in in a 12 in depth).
+- The old app's section graphic (`Prestressed Bridge Design.html` :4998, `bot=(g.h-vh)/2;  // void centered vertically`) drew it centred: walls (h − voidH)/2 = 3.5 in top and bottom.
+- Every graphic of the new app draws `sectionVoids` (ui/section.js, ui/strands.js, ui/stresses.js, ui/flexure.js, ui/view3d.js), and so does the PS-28 strand fit. Voided deck slabs: round voids on mid-depth in both apps.
+- What the void position is used for in the engine: only `tensionSideArea` (A_ct, the concrete below h/2 for the shear ε_s recompute when ε_s < 0, 5.7.3.4.2, pbd-compute.js `const Act=tensionSideArea(g)`). The gross A, I and y_b are the library's published values (`girderGrossBase`), not computed from the outline. `weakAxisAndJ` (handling) uses the void width and height but not its vertical position.
+- **The library's published values disagree with its own outline and void (reported, not changed):**
+
+  | Box | Published A (in²) | Published I (in⁴) | Published y_b (in) | Outline − void A (in²) | I, void on the bottom wall (in⁴) | y_b, void on the bottom wall (in) | I, void centred (in⁴) | y_b, void centred (in) |
+  |---|---|---|---|---|---|---|---|---|
+  | BI-36 (12 in) | 560 | 12 897 | 6.00 | 302 | 4 495 | 5.35 | 4 913 | 6.00 |
+  | BII-36 (18 in) | 693 | 36 434 | 9.00 | 362 | 13 460 | 7.81 | 14 612 | 9.00 |
+  | BIII-36 (27 in) | 812 | 97 756 | 13.14 | 452 | 39 200 | 11.77 | 41 716 | 13.50 |
+  | BIV-48 (33 in) | 1 097 | 200 631 | 16.11 | 596 | 82 183 | 14.01 | 88 091 | 16.50 |
+
+  - The published A is larger than the outline's (BI-36: 560 in² against a solid 36 × 12 = 432 in²).
+  - The published I is 2.3 to 2.9 times the outline's.
+  - The published y_b of BI-36 and BII-36 is h/2, i.e. a symmetric section (a centred void, or none). BIII-36 and BIV-48 are between the two positions.
+
+  The library has no void position of its own (only voidW, voidH, wall). Its gross properties match neither placement of the drawn void. They look like the properties of other sections, e.g. the standard AASHTO BI-36 of 27 in depth has A = 560.5 in². This needs the engineer: which box sections are meant, with which properties and void.
+- Effect of the void position on A_ct (BI-36, below h/2 = 6 in): engine (void 5–10 in) 36 × 6 − 26 × 1 = 190 in²; centred (3.5–8.5 in) 36 × 6 − 26 × 2.5 = 151 in². Not changed.
+### What changed
+- `ui/section.js`: new `voidNote(G)` (exported), shown under the gross-section card (`#sec-void-note`) for a box beam or a voided deck slab. It gives:
+  - where the void is (box: the cell size, y = wall to wall + voidH above the soffit, the bottom and top walls; voided slab: the count, the diameter, mid-depth);
+  - that it is where the engine places it (sectionVoids) and as drawn, and that the old app's graphic centred the box void;
+  - that A, I, y_b are the library's published values, not computed from the outline;
+  - what the void position is used for (A_ct in 5.7.3.4.2, the PS-28 strand fit, the graphics).
+
+  The Report's §3 Section properties shows the tab's card, so the note is there too.
+- `report/builders.js`: new `voidNotes(B)` in §2 Assumptions: the same note for each shape with voids (the design girder and every girder type on a line), with "(see §3 …)" (`[[rs.sec]]`).
+### Saved data (CLAUDE.md §5)
+- None.
+### Governing provisions
+- None changed. Display only: no computed value changes; the engine's void position (sectionVoids) is kept.
+### Check case (AASHTO BI-36 (12in): h = 12, w = 36, wall = 5, voidW = 26, voidH = 5 in)
+- Note: "Void: one 26.0 × 5.0 in cell on the bottom wall, y = 5.0 to 10.0 in above the soffit (bottom wall 5.0 in, top wall h − wall − void = 2.0 in) …".
+- The Section properties graphic draws the void rectangle from (−13, 5) to (13, 10) in. The old app: (−13, 3.5) to (13, 8.5).
+- Before / after: no value changes (A = 560 in², I = 12 897 in⁴, y_b = 6.00 in, as published).
+### How verified
+- New `tests/engine/psbridge-voidnote.test.mjs` (4 tests):
+  1. the note's numbers = the library's and `sectionVoids`' for every box and voided slab; no note for any other shape;
+  2. the Section properties graphic draws the BI-36 void at (−13, 5)–(13, 10);
+  3. the tab card and the Report §2 carry the note (with its link, resolved) for BIII-36 and the 21 in voided slab, and not for the BT-72; R is unchanged;
+  4. a bridge with a BT-72 span and a BIII-36 span (girder types; Report on each type's governing line): the box note once, no BT-72 note, every link resolved.
+- Results: Batched with the void note in one PR (engineer speed policy 2026-11-14: display only, reduced verification). `node tests/check-syntax.mjs`: all scripts pass. `node tests/engine/run.mjs psbridge tex project-registry`: 21 files, 195 passed, 0 failed. `ps-bridge-skeleton.mjs`: 257 checks, 0 failed. Harness B normal (17 designs): 0 with differences, exit 0 (no value changes). `--import` and the controls not run (display-only policy).
+### Decisions (pending engineer review)
+- PSV-D1. The graphics keep the engine's void position (on the bottom wall), not the old app's centred drawing: the drawing shows the void that A_ct and the PS-28 strand fit use.
+### Open items (not changed; for the engineer)
+- The box library's A, I, y_b disagree with its outline and void (table above). Which sections are meant, with which properties and void position? A change would be a calculation change (CLAUDE.md §4) in the verbatim library slice.
+### Other copies
+- None.
+### Before / after (exact)
+```diff
+diff --git a/apps/ps-bridge/report/builders.js b/apps/ps-bridge/report/builders.js
+index ef8084a..329443d 100644
+--- a/apps/ps-bridge/report/builders.js
++++ b/apps/ps-bridge/report/builders.js
+@@ -126,7 +126,7 @@
+         ['Owner', ownR ? `${own} (${ownR.manual})` : own]]), note('Entered values (Project, Bridge layout, Cross-section and Girders & strands tabs); the engine inputs of the design girder are those of the [[tab:in:gird|Girders & strands tab]].')]),
+       sub('c', 'Basis', [kv([['Design specification', ED], ['Load rating', 'AASHTO Manual for Bridge Evaluation (MBE), LRFR; article numbers as the old app'], ['Owner manual', ownR && !ownR.none ? `${ownR.manual} (AASHTO LRFD ${ownR.aashto} basis); its rules as listed below` : 'none (AASHTO only)'],
+         ['Units', 'in, kip, ksi, ft, klf, kip-ft'], ['Sign convention', 'stresses + compression, − tension; moments + sagging']])]),
+-      sub('a', 'Assumptions', [...(asm ? asm.items : []), ...ASSUME.map(t => note('• ' + t)), ...deNote(P)])];
++      sub('a', 'Assumptions', [...(asm ? asm.items : []), ...ASSUME.map(t => note('• ' + t)), ...deNote(P), ...voidNotes(B)])];
+     ownSubs.forEach((s, j) => subs.push({ ...sub('o' + j, `Owner rules: ${s.title}`, s.items), ...(j === 0 ? { key: X.ownKey } : {}) }));
+     return { title: 'Project, basis and assumptions', subs };
+   }
+@@ -158,6 +158,19 @@
+      same rows as the Loads & LLDF tab's notice, listed in the assumptions always (also after the notice is dismissed); none where they match */
+   function deNote(P) { const DS = window.PSBDesign, D = DS && DS.deDiff ? DS.deDiff(P) : { rows: [] }; return D.rows.length ? [note(`• ${DS.deText(D, t => `$_{${t}}$`)} (see [[rs.lds]])`)] : []; }
+ 
++  /* voidNotes(B): 2026-11-14 (decision pending engineer review): for each shape of the report with voids (a box beam, a voided deck slab: the
++     design girder and every girder type on a line), where the void is (the Section properties tab's note, ui/section.js voidNote: the
++     engine's sectionVoids position, as drawn); none for shapes without voids */
++  function voidNotes(B) {
++    const SU = window.PSBUiSection, BR = window.PSBBridge, DS = window.PSBDesign; if (!SU || !SU.voidNote) return [];
++    const gs = [[B.inp.girder, B.R.g]];
++    if (BR && BR.hasTypes(B.P) && DS) BR.types(B.P).forEach((T, k) => { const l = BR.typeLines(B.P, k); if (!l.length) return;
++      try { const i = DS.cellInputs(B.P, k, l[0]); gs.push([i.girder, girderGross(i)]); } catch (e) { /* its own input errors */ } });
++    const seen = new Set();
++    return gs.filter(([n]) => !seen.has(n) && seen.add(n)).map(([n, g]) => [n, SU.voidNote(g)]).filter(([, t]) => t)
++      .map(([n, t]) => note(`• ${plain(n)}: ${t.replace(/<sub>(.*?)<\/sub>/g, '$_{$1}$').replace(/&lt;/g, '<')} (see [[rs.sec]])`));
++  }
++
+   /* ---------- 3–14. the result tabs ---------- */
+   function tabSec(B, k, X) {
+     const [ui, wk] = TABS[k], U = window[ui], FT = window.PSBReportTab;
+diff --git a/apps/ps-bridge/ui/section.js b/apps/ps-bridge/ui/section.js
+index bc9935b..f6b657e 100644
+--- a/apps/ps-bridge/ui/section.js
++++ b/apps/ps-bridge/ui/section.js
+@@ -12,6 +12,15 @@
+     { key: 'ec', title: 'Moduli of elasticity and modular ratio', ref: 'AASHTO LRFD 10th Ed. 5.4.2.4', ids: /^sec\.(Ecg|Ecd|n)$/, res: /^sec\.n$/ },
+     { key: 'comp', title: 'Composite section (transformed deck)', ref: 'AASHTO LRFD 10th Ed. 4.6.2.6', ids: /^sec\.(beff|Ad|yd|Ah|Ac|ybc|Ic|hc|Sbc|Stg|Std)$/, res: /^sec\.Ic$/ },
+     { key: 'str', title: 'Prestressing strands', ref: 'AASHTO LRFD 10th Ed. 5.9.4.3.1', ids: /^sec\./, res: /^sec\.eMid$/ }];
++  /* voidNote(G): 2026-11-14 (decision pending engineer review, PS28/void note): where the void of a box beam or a voided deck slab is, as the
++     engine places it (sectionVoids, pbd-section.js) and every graphic draws it; '' for a shape without voids. The old app's section graphic
++     centred the box void on the depth; the engine (and so every value that uses the void position) puts it on the bottom wall. */
++  function voidNote(G) {
++    const b = G && G.box, f = v => K().fx(v, 1); if (!b) return '';
++    if (G.isBox && b.voidW > 0 && b.voidH > 0) return `Void: one ${f(b.voidW)} × ${f(b.voidH)} in cell on the bottom wall, y = ${f(b.wall)} to ${f(b.wall + b.voidH)} in above the soffit (bottom wall ${f(b.wall)} in, top wall h − wall − void = ${f(G.h - b.wall - b.voidH)} in), where the engine places it (sectionVoids) and as drawn here; the old app's section graphic centred it on the depth. A, I and y<sub>b</sub> above are the library's published values, not computed from the outline: the void position is used for the concrete area on the tension side A<sub>ct</sub> (shear, 5.7.3.4.2, when ε<sub>s</sub> &lt; 0), the strand fit of the input check (PS-28) and the graphics.`;
++    if (G.isDeck && b.voids > 0 && b.voidD > 0) return `Voids: ${b.voids} round voids of ${f(b.voidD)} in diameter on mid-depth (y = ${f(G.h / 2)} in), evenly spaced across the width, where the engine places them (sectionVoids) and as drawn here. A, I and y<sub>b</sub> above are the library's published values, not computed from the outline: the void positions are used for A<sub>ct</sub> (shear, 5.7.3.4.2, when ε<sub>s</sub> &lt; 0), the strand fit of the input check (PS-28) and the graphics.`;
++    return '';
++  }
+   function output(ctx) {
+     const { R, inp } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, G = R.g, ss = R.ss;
+     const kind = G.isNext ? 'NEXT F double tee' : G.isBox ? 'adjacent box beam' : G.isDeck ? 'adjacent deck beam' : 'I-girder / bulb tee';
+@@ -20,7 +29,8 @@
+       ['Shape', `${k.esc(inp.girder)} (${kind})${G.ovr && G.ovr.any ? ', with overrides' : ''}`], ['Depth h', ev('g.h', 2, 'in')], ['Area A', ev('g.A', 1, 'in²')], ['Moment of inertia I', ev('g.I', 0, 'in⁴')],
+       ['y<sub>b</sub> (centroid above the soffit)', ev('g.yb', 3, 'in')], ['y<sub>t</sub>', `${ev('g.yt', 3, 'in')} ${wk('sec.g.yt')}`], ['S<sub>b</sub>', `${ev('g.Sb', 0, 'in³')} ${wk('sec.g.Sb')}`], ['S<sub>t</sub>', `${ev('g.St', 0, 'in³')} ${wk('sec.g.St')}`],
+       ['Web width b<sub>w</sub>', ev('g.bw', 2, 'in')], ['Top / bottom flange width', `${ev('g.btf', 2)} / ${ev('g.bbf', 2, 'in')}`], ['Self-weight w<sub>g</sub>', `${ev('g.wsw', 4, 'klf')} ${wk('sec.g.wsw')}`]])
+-      + `<p class="note">Gross properties of the shape library (the old app's GIRDERS${G.isNext ? '; NEXT: interpolated on the flange width' : ''})${G.ovr && G.ovr.any ? '; overridden values as entered (Girders &amp; strands tab)' : ''}.</p>`, 'card-gross');
++      + `<p class="note">Gross properties of the shape library (the old app's GIRDERS${G.isNext ? '; NEXT: interpolated on the flange width' : ''})${G.ovr && G.ovr.any ? '; overridden values as entered (Girders &amp; strands tab)' : ''}.</p>`
++      + (voidNote(G) ? `<p class="note" id="sec-void-note">${voidNote(G)}</p>` : ''), 'card-gross');
+     h += k.card('Composite section', k.kv([
+       ['E<sub>c</sub> girder', `${ev('cp.Ecg', 0, 'ksi')} ${wk('sec.Ecg')}`], ['E<sub>c</sub> deck', `${ev('cp.Ecd', 0, 'ksi')} ${wk('sec.Ecd')}`], ['Modular ratio n', `${ev('cp.n', 4)} ${wk('sec.n')}`],
+       ['Effective flange width b<sub>eff</sub>', `${ev('cp.beff', 2, 'in')} ${wk('sec.beff')}`], ['A<sub>c</sub>', `${ev('cp.Ac', 1, 'in²')} ${wk('sec.Ac')}`], ['y<sub>bc</sub>', `${ev('cp.ybc', 3, 'in')} ${wk('sec.ybc')}`],
+@@ -72,5 +82,5 @@
+       draw: W => figure(ctx, W), hint: 'Point at the deck or a strand row for its values.',
+       cap: '<p class="vk-cap">Shape as the engine uses it (outline and voids of the shape library); straight strands drawn on a 2 in grid, draped strands at midspan. Display only.</p>' });
+   }
+-  window.PSBUiSection = { output, after, TOPICS, figure };   // figure: also for tests/engine/psbridge-strandgfx.test.mjs (PS-27)
++  window.PSBUiSection = { output, after, TOPICS, figure, voidNote };   // figure: also for tests/engine/psbridge-strandgfx.test.mjs (PS-27); voidNote: the Report §2 assumptions
+ })();
+```
