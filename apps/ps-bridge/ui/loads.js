@@ -1,8 +1,8 @@
 /* apps/ps-bridge/ui/loads.js — the Loads & LLDF output tab (window.PSBUiLoads). Classic script; display only. Created 2026-11-12 (PR 2b-2,
    docs/ps-bridge-plan.md §2.3). Every number is the engine's (computeAll R: wG, wDk, wBar, wDW, Pdia, cp.wdk*, hl (HL-93 per lane), df (the
    distribution factor terms), dfm, dfv, MLL, VLL, own), worked in engine/worked.js loads(). The graphic (the cross-section of the girder lines
-   with the design girder, the steel app's detail style) draws the bridge's entered geometry. The Steel Bridge DC2 / DW distribution to every
-   girder (unequal bays, PS-9) comes with PR 3a; DC2 and DW are entered per girder until then.
+   with the design girder, the steel app's detail style) draws the bridge's entered geometry. DC2 / DW: entered per girder type, or distributed
+   to every girder line by the Steel Bridge app's method (engine/bridge-dl.js, PS-9).
      output(ctx) -> HTML; after(el, ctx). ctx = { P, inp, R, W, ui } */
 (function () {
   'use strict';
