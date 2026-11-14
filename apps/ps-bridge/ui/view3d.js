@@ -47,6 +47,7 @@
     return { x: rows.map(r => +r.x), hi: rows.map(r => +r[D[2]]), lo: D[3] ? rows.map(r => +r[D[3]]) : null, u: D[4], L: +R.L };
   }
   const TCOL = ['#a9b4c2', '#c9a27e', '#9fb89a', '#c2a3c4', '#d1c38a', '#8fb3c9', '#c79494', '#a6a6a6'];
+  const RAIL_H = 42, POST = 3;   // PR 9: a railing or fence post (schematic)
   const BAR_H = 32, SW_CURB = 0, DIA_T = 10, CONT_T = 24, PAD_T = 3, SEAT = 42;   // schematic sizes (in): PS3c-D2 … D5
   const isNum = v => typeof v === 'number' && isFinite(v);
   const tan = d => Math.tan((+d || 0) * Math.PI / 180);
@@ -85,9 +86,17 @@
     out.deck = { ts, yBot: yD, yTop, zL, zR, x: [xb(0, -out.ohL), xb(ns, -out.ohL), xb(ns, ys[nb - 1] + out.ohR), xb(0, ys[nb - 1] + out.ohR)] };
     // barriers and sidewalks (Cross-section tab, P.xs.dl; without it the base design's barrier base width)
     const dl = P.xs.dl, bw = s => dl ? (+((dl['bar' + s] || {}).bw) || 0) * 12 : (+((P.base && P.base.deck && P.base.deck.bBar) || 0)), sw = s => dl ? (dl['sw' + s] || {}) : {};
-    [['L', zL, 1], ['R', zR, -1]].forEach(([s, ze, dir]) => { const b = bw(s), w = (+sw(s).w || 0) * 12, t = +sw(s).t || 0;
-      if (b > 0) out.app.push({ kind: 'bar', side: s, z0: Math.min(ze, ze + dir * b), z1: Math.max(ze, ze + dir * b), y0: yTop, h: BAR_H });
-      if (w > 0 && t > 0) { const a = ze + dir * b; out.app.push({ kind: 'sw', side: s, z0: Math.min(a, a + dir * w), z1: Math.max(a, a + dir * w), y0: yTop, h: t + SW_CURB }); } });
+    // PR 9: the sidewalk from the deck edge (as engine/bridge-dl.js loads it and the cross-section figure draws it; XS-D3 resolved), the
+    // barrier or curb on it where it is under; a curb and railing deck edge; a railing or fence on the sidewalk; the raised median
+    const zr = (ze, dir, a, b) => ({ z0: Math.min(ze + dir * a, ze + dir * b), z1: Math.max(ze + dir * a, ze + dir * b) });
+    [['L', zL, 1], ['R', zR, -1]].forEach(([s, ze, dir]) => { const b = bw(s), w = (+sw(s).w || 0) * 12, t = +sw(s).t || 0, e = dl ? (dl['bar' + s] || {}) : {}, on = d => w > 0 && t > 0 && d <= w + 1e-9 ? t : 0;
+      if (e.type === 'curb') { const cw = +e.cw || 0, ch = +e.ch || 0, rp = (+e.rp || 0) * 12;
+        if (cw > 0 && ch > 0) out.app.push({ kind: 'curb', side: s, ...zr(ze, dir, 0, cw), y0: yTop + on(cw), h: ch });
+        if (+e.rw > 0) out.app.push({ kind: 'rail', side: s, ...zr(ze, dir, rp - POST / 2, rp + POST / 2), y0: yTop + Math.max(on(rp), rp <= cw + 1e-9 ? on(cw) + ch : 0), h: RAIL_H }); }
+      else if (b > 0) out.app.push({ kind: 'bar', side: s, ...zr(ze, dir, 0, b), y0: yTop + (w > 0 && t > 0 && w >= b ? t : 0), h: BAR_H });
+      if (w > 0 && t > 0) out.app.push({ kind: 'sw', side: s, ...zr(ze, dir, 0, w), y0: yTop, h: t + SW_CURB });
+      const fx = (+sw(s).fenceX || 0) * 12; if (w > 0 && fx > 0 && (+sw(s).fence > 0 || sw(s).fence == null)) out.app.push({ kind: 'fence', side: s, ...zr(ze, dir, fx - POST / 2, fx + POST / 2), y0: yTop + t, h: RAIL_H }); });
+    { const md = dl && dl.med, zc = (zL + zR) / 2; if (md && +md.w > 0 && +md.t > 0) out.app.push({ kind: 'med', z0: zc - md.w * 6, z1: zc + md.w * 6, y0: yTop, h: +md.t }); }
     // diaphragms: in each bay next to a line whose type has one at a (from the left ℄ bearing of each line, parallel to the supports)
     const at = (s, g) => out.girders.find(q => q.s === s && q.g === g);
     for (let s = 1; s <= ns; s++) for (let g = 1; g < nb; g++) { const A = at(s, g), B = at(s, g + 1); if (!A || !B) continue;

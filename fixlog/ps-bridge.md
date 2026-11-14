@@ -3544,3 +3544,83 @@ PR #1555: https://github.com/mlococo88/All-Structural/pull/1555
 - Before: 10 runs, 5 failed at line 129 (`'unsaved' !== 'saved'`). After: 10 runs, 10 passed (11 checks each).
 ### Open items
 - `tests/lib.mjs` `openPage`'s `ls` seed has the same weakness for every smoke that seeds and then reloads, expecting the page's own later writes to survive (the list in the PR). It is not changed here: it is shared test tooling used by every smoke. A fix there (for example, seed then reload, as here) is a separate change.
+
+## 2026-11-14 — PR 9: cross-section load items matching the Steel Bridge app (deck edge barrier or curb and railing, edge to traffic face, sidewalk fences, raised median, appurtenance w_c, wearing surface by thickness, overlays, a distribution per added line load, DC1 line loads) (CALCULATION CHANGE, §4, for projects that use them; projects saved before unchanged)
+PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+### Request
+- Engineer's choice "Match Steel" (catch-up item 9): the Cross-section tab's DC2 / DW inputs should offer the Steel Bridge app's cross-section load items (apps/steel-bridge/ui/loads.js parts(): Deck edges, Sidewalks and median, Wearing surface, Utilities and other line loads, Distribution) and distribute them the same way.
+- Projects saved before must open with identical results (§5): the new fields are optional and default to the current behaviour. A round-trip test is required.
+### What changed
+- `engine/bridge-dl.js`:
+  - New block EDGE: lines 30-114 of apps/steel-bridge/engine/loads.js at 58204ba (the same pin as DEAD-VERBATIM), byte for byte, in a scope of its own (`const EDGE = (function () { … return { edgeIn, bridgeEff, edgeLoads, xsIn, llFaces, CATS }; })();`). These are the steel app's deck edge, cross-section input and traffic face functions.
+  - New `edgesOf(q)`, `xsInOf(q, sw)`: P.xs.dl → the steel module's inputs.
+  - New `edgeFace(P, s)` (Ed[s].f, the steel edgeIn rule) and `llFace(P, s)` = max(edge face, a sidewalk ≥ 12 in, a fence on the sidewalk) (the steel llFaces rule).
+  - `checks(P)`: path-named checks of the new fields.
+  - `distribute(P)` anchor `const Wd = deckWidth(P)`.
+    - Before: the barrier edge loads built by hand (`if (+bL.w > 0) edges.push({ id: 'barL', … x: +bL.bw / 2, plf: +bL.w })`), `fL: +bL.bw || 0`, `medW: 0`, `uwcA: null`, `ovl: []`, `dist: 'auto'`.
+    - After: `Ed = EDGE.edgeIn(edgesOf(q), err)`, `xi = EDGE.xsIn(xsInOf(q, sw), err)`, `edges = EDGE.edgeLoads(EDGE.bridgeEff({ wc }, Ed), xi.wcA)`, `fL: Ed.L.f`, `fR: Ed.R.f`, the median / fences / wsThk / wsGam / ovl / wcA passed, `fws: xi.fws !== null ? xi.fws : +q.fws || 0`, `dist: r.dist || 'auto'`.
+    - A barrier with none of the new fields gives the same objects as before (`edgeLoads` builds `{ id, desc, cat, side, x: bw / 2, plf: w }` in the same key order).
+  - `line(P, g)`: + `DC1` (the line's share of the added DC1 line loads) when there are any.
+  - `withSteps`: a new step `dl.G<g>.DC1x` and a note on `ld.wDC1` when there are DC1 line loads.
+- `engine/design.js`:
+  - `deOf` anchor `const face = `. Before: `Math.max(b, +sw.w > 0 && +sw.t >= 12 - 1e-9 ? +sw.w : 0)`. After: `DL.llFace(P, s)` (same value without the new fields).
+  - `one()` after `wBar: q.DC2, wDW: q.DW`: `if (q && q.DC1 != null) o.loads.wNC = +o.loads.wNC + q.DC1`.
+- `ui/bridgedl.js`: the card gets the steel app's groups. The new kinds are `type`, `opt` (blank = null) and `bool`. Overlays and line loads can be added and deleted. `lineTable` gets a DC1 total row.
+- `ui/loads.js`: the "DC1 additional" row names the line's DC1 share and links to `§dl.G<g>.DC1x`.
+- `ui/xsfig.js`, `ui/view3d.js` (display): the curb, railing and fence posts and the median are drawn.
+  - XS-D3 resolved: the 3D sidewalk now runs from the deck edge, with the barrier on it, as dead() loads it and the cross-section figure draws it.
+- `engine/fields.js`: the d_e note says "traffic face". `engine/model.js`: comment only.
+- Tests: new `tests/engine/psbridge-xsloads.test.mjs` (7 tests), with `tests/engine/psbridge-xsloads.before/` (bridge-dl.js and design.js of origin/main 2d61437, the "before" of test 2).
+### Saved data (CLAUDE.md §5)
+- New optional fields in `P.xs.dl` (psb2.project v1):
+  - `barL/barR.type ('barrier' | 'curb'), cw, ch, rw, rp, rf, face`;
+  - `swL/swR.fence, fenceX`;
+  - `med { w, t, joint }`, `wcA`, `wsMode ('psf' | 'thk'), wsThk, wsGam`;
+  - `ovl [{ name, mode, psf, thk, gam }]`;
+  - `extra[i].dist`, and category `'DC1'`.
+- Absent = as before. No migration; no key changed. A new project writes none of them (byte-identical `xs.dl`).
+- Test 2: every girder line's engine inputs are byte-identical to before for the 19 harness B designs (without xs.dl and with the default distribution) and 6 distributed layouts (3 methods × equal / unequal bays, sidewalks, added loads); the worked steps too.
+- Test 5: export → import → export is byte-identical with every new field (same engine inputs), and an old project text too.
+### Governing provisions (CLAUDE.md §4)
+- AASHTO LRFD 10th Ed. Art. 3.5.1 (DC and DW); Art. 4.6.2.2.1 (permanent loads distributed equally: the "Typical AASHTO" method; d_e); Art. 4.6.2.2.2d (exterior girder: lever rule, rigid section, through d_e); Art. 3.6.1.1.1 (traffic face).
+- MassDOT LRFD Bridge Manual Part I 3.5.3 (pile-cap) and RIDOT BDM 3.3.1 (60/40) as before. The formulas are the steel app's (verbatim), unchanged.
+- Before / after (only with the new inputs):
+  - the curb (c_w/12 × c_h/12 × w_c at c_w/2) and railing (w at its load point) line loads: before there was no curb, only a barrier;
+  - the traffic face: the railing face when the curb is < 12 in, else the curb or railing face, or the entered face; before, the barrier width. This moves the start of the wearing surface (dead()'s fL) and d_e (deOf);
+  - a fence on the sidewalk: a DC2 line load, and a traffic face candidate;
+  - the median, overlays and wearing surface by thickness (q = t/12 × γ × 1000): DC2 / DW line loads;
+  - the distribution per added line load (auto / pile-cap / equal / two adjacent): before always 'auto';
+  - DC1 line loads: the line's share added to w_NC (before: no DC1 category).
+### Check case (new AASHTO project: 5 BT-72 at 9 ft, overhangs 3 ft, deck 42 ft, L = 120 ft, w_c 0.150 kcf, w_NC 0.10 klf; barriers 0.30 klf × 1.5 ft, 25 psf)
+- After: the left edge is a 12 × 10 in curb + a 0.05 klf railing at 1.0 ft, plus a 0.05 klf DC1 conduit at 21 ft.
+- Before:
+  - DC2 = 2 × 0.30 / 5 = 0.120 klf per line;
+  - DW = 0.025 × (42 − 1.5 − 1.5) / 5 = 0.975 / 5 = 0.195;
+  - d_e G1 = 3 − 1.5 = 1.5 ft.
+- After:
+  - curb = 12/12 × 10/12 × 0.150 = 0.125 klf at 0.5 ft;
+  - ΣDC2 = 0.125 + 0.05 + 0.30 = 0.475, so DC2 = 0.095 per line;
+  - the traffic face = the railing face 1.0 ft (the 10 in curb is mountable);
+  - DW = 0.025 × (42 − 1.0 − 1.5) / 5 = 0.9875 / 5 = 0.1975;
+  - DC1 = 0.05 / 5 = 0.010, so w_NC = 0.110;
+  - d_e G1 = 3 − 1.0 = 2.0 ft.
+- G2 midspan:
+  - M_DC2 = 0.095 × 120² / 8 = 171.0 (before 216.0) kip-ft;
+  - M_DW = 355.5 (before 351.0);
+  - M_DC1 = 1975.5 (before 1957.5);
+  - Strength I M_u = 9697.49 + 1.25 (−45.0 + 18.0) + 1.50 (4.5) = 9670.49 kip-ft (before 9697.49).
+- G1:
+  - lever rule: before 1.2 × 0.5 × (8.5/9 + 2.5/9) = 0.7333; after 1.2 × 0.5 × (9/9 + 3/9) = 0.8000;
+  - rigid section (2 lanes): before 2/5 + 18 × (14.5 + 2.5)/810 = 0.7778; after 2/5 + 18 × (15 + 3)/810 = 0.8000;
+  - g_M 0.7778 → 0.8000; Strength I midspan 9734.78 → 9849.81 kip-ft.
+- All of these are asserted in `psbridge-xsloads.test.mjs`.
+### How verified
+- See the PR: `node tests/check-syntax.mjs`; `node tests/engine/run.mjs psbridge tex project-registry`; harness B normal, `--import` and `--control`; smokes ps-bridge-skeleton, -types, -3d, -figures, -library, -undo.
+### Decisions (pending engineer review)
+- XS9-D1. Not offered, because the moved engine has no input for them: the steel app's pedestrian live load (PL), utilities on the noncomposite section with DW factors (UT), the future utility allowance (UF), stay-in-place forms by area, the steel detail allowance. The steel engine's load overrides and beam classes are not offered either; the steel app has no inputs for them.
+- XS9-D2. A DC1 line load goes on the bare girder: each line's share is added to its w_NC (the "DC1 additional" input, DC factors), the closest input of the moved engine.
+- XS9-D3. A curb's sizes start blank (a blocking input error names them until entered); no value is assumed. New projects keep the barrier defaults (no new field written).
+- XS9-D4. Railing and fence posts are drawn 42 in high (schematic), as the barrier height is (XS-D1).
+- XS9-D5. An entered edge to traffic face also moves the start of the wearing surface (dead()'s fL), as in the steel app. The deck design (Diaphragms / deck tab) keeps its own barrier weight and wearing surface (unchanged).
+### Other copies
+- apps/steel-bridge/engine/loads.js lines 30-114 (EDGE-VERBATIM) and 116-217 (DEAD-VERBATIM): keep in step. The pin test checks both.

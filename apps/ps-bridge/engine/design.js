@@ -57,7 +57,9 @@
   function deOf(P, g) {
     const x = P && P.xs, q = x && x.dl; if (!q || !(g === 1 || g === x.nb)) return null;
     const s = g === x.nb && g !== 1 ? 'R' : 'L', oh = +(s === 'R' ? x.ohR : x.ohL), b = +((q['bar' + s] || {}).bw) || 0, sw = q['sw' + s] || {};
-    const face = Math.max(b, +sw.w > 0 && +sw.t >= 12 - 1e-9 ? +sw.w : 0);
+    // PR 9 (§4, for the new cross-section inputs only): the traffic face by the steel app's rule (engine/bridge-dl.js llFace: a curb and
+    // railing edge, an entered edge to traffic face, a railing or fence on the sidewalk); a barrier with none of them: the same value as before
+    const DL = window.PSBBridgeDL, face = DL && DL.llFace ? DL.llFace(P, s) : Math.max(b, +sw.w > 0 && +sw.t >= 12 - 1e-9 ? +sw.w : 0);
     return oh - face;
   }
   /* deDiff(P): PS-23 (engineer decision 2026-11-13; display only, no value changed): where the d_e computed from the cross-section (deOf,
@@ -135,6 +137,9 @@
     // distributes them (P.xs.dl.mode 'distributed'); else the values entered per girder (base.loads.wBar / wDW) as before
     const DL = window.PSBBridgeDL, q = DL ? DL.line(P, d.g) : null;
     if (q) o.loads = Object.assign({}, o.loads, { wBar: q.DC2, wDW: q.DW });
+    // PR 9 (§4, only with added line loads of category DC1 on the Cross-section tab): the line's share of them added to w_NC (the
+    // non-composite DC1 on the bare girder); no DC1 line load: w_NC as entered (unchanged)
+    if (q && q.DC1 != null) o.loads = Object.assign({}, o.loads, { wNC: +o.loads.wNC + q.DC1 });
     // PS-20 (§4): d_e of an exterior line from the bridge cross-section (deOf) when the project has its barriers (P.xs.dl); else as entered
     const de = deOf(P, d.g); if (de != null) o.loads = Object.assign({}, o.loads, { de });
     // PS-19 (§4): with unequal bays the exterior rigid-section factor on the real girder lines (engine/rigid.js); equal bays and interior lines: nothing added

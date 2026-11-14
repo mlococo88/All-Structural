@@ -34,7 +34,9 @@
       ${row('DC1 girder self-weight w<sub>g</sub>', 'non-composite; from the section', ev('wG', 4, 'klf'), wk('sec.g.wsw', '§', 'sec'))}
       ${row('DC1 deck slab', `non-composite; ${cp.extG ? 'exterior: (S/2 + overhang)' : 'tributary'} width`, ev('cp.wdkDeck', 4, 'klf'), cp.wdkDeck > 0 || +inp.ts > 0 ? wk('ld.wdeck') : '')}
       ${cp.wdkHaunch > 0 ? row('DC1 haunch', 'non-composite; top flange width × haunch', ev('cp.wdkHaunch', 4, 'klf'), wk('ld.whaunch')) : ''}
-      ${row('DC1 additional (forms, …)', 'non-composite; entered (Loads tab)', `${k.fx(+inp.loads.wNC, 4)} klf`, '')}
+      ${(() => { const q1 = dist ? DL.line(P, dg) : null; return q1 && q1.DC1 != null   // PR 9: + the line's share of the added DC1 line loads
+        ? row('DC1 additional (forms, …)', `non-composite; entered (Loads tab) + G${dg}'s share of the DC1 line loads (Cross-section tab), ${k.fx(q1.DC1, 4)} klf`, `${k.fx(+inp.loads.wNC, 4)} klf`, wk(`dl.G${dg}.DC1x`))
+        : row('DC1 additional (forms, …)', 'non-composite; entered (Loads tab)', `${k.fx(+inp.loads.wNC, 4)} klf`, ''); })()}
       ${row('DC1 distributed (deck + haunch + additional)', 'on the bare girder', ev('wDk', 4, 'klf'), wk('ld.wDC1'))}
       ${R.nDiaph ? row(`DC1 diaphragms (${R.nDiaph} point loads)`, 'non-composite simple span; entered (Diaphragms / deck tab)', ev('Pdia', 2, 'kip'), wk('ld.Pdia')) : ''}
       ${row('DC2 barrier / superimposed', `composite${R.fe ? ', continuous unit' : ''}; ${dist ? `distributed to G${dg} (Cross-section tab)` : 'entered per girder'}`, ev('wBar', 4, 'klf'), dist ? wk(`dl.G${dg}.DC2`) : wk('ld.wDC2'))}

@@ -20,6 +20,7 @@
 (function () {
   'use strict';
   const BAR_H = 32;   // in, the barrier height drawn (schematic; Decision XS-D1)
+  const RAIL_H = 42, POST = 3;   // in, a railing or fence post drawn (schematic; PR 9, Decision XS9-D4)
   const TCOL = ['#a9b4c2', '#c9a27e', '#9fb89a', '#c2a3c4', '#d1c38a', '#8fb3c9', '#c79494', '#a6a6a6'];   // the 3D view's type colours
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const f2 = (v, d) => (typeof v === 'number' && isFinite(v)) ? v.toFixed(d == null ? 2 : d) : '—';
@@ -50,8 +51,16 @@
       const sw = dl ? (dl['sw' + sd] || {}) : {}, w = (+sw.w || 0) * 12, t = w > 0 ? (+sw.t || 0) : 0;
       const at = d => sd === 'L' ? d : Wd - d;   // a distance from this side's deck edge → x
       if (w > 0 && t > 0) out.app.push({ kind: 'sw', side: sd, x0: Math.min(at(0), at(w)), x1: Math.max(at(0), at(w)), y0: yTop, y1: yTop + t, w, t });
-      if (bw > 0) { const yb = yTop + (w > 0 && t > 0 && w >= bw ? t : 0); out.app.push({ kind: 'bar', side: sd, x0: Math.min(at(0), at(bw)), x1: Math.max(at(0), at(bw)), y0: yb, y1: yb + BAR_H, bw, edge: at(0), inner: at(bw) }); }
+      const e = dl ? (dl['bar' + sd] || {}) : {}, onSw = d => w > 0 && t > 0 && d <= w + 1e-9 ? t : 0;   // on the sidewalk slab where it is under
+      if (e.type === 'curb') {   // PR 9: a curb (c_w × c_h) and its railing at its load point (the post drawn schematic: RAIL_H)
+        const cw = +e.cw || 0, ch = +e.ch || 0, rp = (+e.rp || 0) * 12, y = yTop + onSw(cw);
+        if (cw > 0 && ch > 0) out.app.push({ kind: 'curb', side: sd, x0: Math.min(at(0), at(cw)), x1: Math.max(at(0), at(cw)), y0: y, y1: y + ch, cw, ch });
+        if (+e.rw > 0) { const yr = yTop + Math.max(onSw(rp), rp <= cw + 1e-9 ? onSw(cw) + ch : 0); out.app.push({ kind: 'rail', side: sd, x0: at(rp) - POST / 2, x1: at(rp) + POST / 2, y0: yr, y1: yr + RAIL_H, rp, rw: +e.rw }); }
+      } else if (bw > 0) { const yb = yTop + (w > 0 && t > 0 && w >= bw ? t : 0); out.app.push({ kind: 'bar', side: sd, x0: Math.min(at(0), at(bw)), x1: Math.max(at(0), at(bw)), y0: yb, y1: yb + BAR_H, bw, edge: at(0), inner: at(bw) }); }
+      const fx = (+sw.fenceX || 0) * 12;   // PR 9: a railing or fence on the sidewalk
+      if (w > 0 && fx > 0 && (+sw.fence > 0 || sw.fence == null)) out.app.push({ kind: 'fence', side: sd, x0: at(fx) - POST / 2, x1: at(fx) + POST / 2, y0: yTop + t, y1: yTop + t + RAIL_H, fx });
     });
+    const md = dl && dl.med; if (md && +md.w > 0 && +md.t > 0) out.app.push({ kind: 'med', x0: Wd / 2 - md.w * 6, x1: Wd / 2 + md.w * 6, y0: yTop, y1: yTop + +md.t, w: md.w * 12, t: +md.t, joint: !!md.joint });   // PR 9: the raised median
     // traffic faces and d_e of the exterior lines (PS-20 deOf; else the entered d_e of the type on that line)
     [[1, 'L'], [nb, 'R']].forEach(([g, sd]) => {
       if (sd === 'R' && nb === 1) return;
@@ -122,6 +131,11 @@
       S.poly([[e, y0], [i, y0], [i - 0.25 * d, y0 + 0.25 * H], [e + 0.45 * d, y0 + H], [e, y0 + H]], 'dt-cc');
       S.region(a.x0, a.y0, a.x1, a.y1, `${a.side === 'L' ? 'Left' : 'Right'} barrier: ${ft(a.bw)} wide at the deck (the traffic face); height drawn ${BAR_H} in (schematic)`);
     });
+    // PR 9: curbs, railings, fences, the median (schematic heights of the posts)
+    m.app.filter(a => a.kind === 'curb' || a.kind === 'med').forEach(a => { S.rect(a.x0, a.y0, a.x1, a.y1, 'dt-cc');
+      S.region(a.x0, a.y0, a.x1, a.y1, a.kind === 'curb' ? `${a.side === 'L' ? 'Left' : 'Right'} curb ${f2(a.cw, 1)} × ${f2(a.ch, 1)} in` : `Raised median ${ft(a.w)} × ${f2(a.t, 1)} in${a.joint ? ', longitudinal joint' : ''}`); });
+    m.app.filter(a => a.kind === 'rail' || a.kind === 'fence').forEach(a => { S.rect(a.x0, a.y0, a.x1, a.y1, 'xs-post', { fill: '#64748b', stroke: '#334155', sw: 0.6 });
+      S.region(a.x0, a.y0, a.x1, a.y1, a.kind === 'rail' ? `${a.side === 'L' ? 'Left' : 'Right'} railing at ${ft(a.rp)} from the deck edge, ${f2(a.rw, 3)} klf (height drawn ${RAIL_H} in, schematic)` : `${a.side === 'L' ? 'Left' : 'Right'} sidewalk railing or fence at ${ft(a.fx)} from the deck edge (height drawn ${RAIL_H} in, schematic)`); });
     // girders: the library outline at the line's offset, voids white
     m.girders.forEach(q => {
       const on = o.shown === q.g;
@@ -183,7 +197,7 @@
     if (!m || m.errors.length) return '';
     const sw = t => `<span style="display:inline-block;width:11px;height:11px;border:1px solid #475569;background:${t.col};vertical-align:-1px;margin:0 3px 0 8px"></span>${esc(t.label)}`;
     return `<p class="vk-cap">Span ${m.s}, looking ahead. Girder types: ${m.types.map(sw).join('')}${m.missing.length ? `; no type on ${m.missing.map(q => 'G' + q.g).join(', ')} (dashed ℄, not checked)` : ''}. `
-      + `Drawn to scale (one scale across and up; dimensions in ft); the girder outlines and voids are the library's; the barrier height (${BAR_H} in) and its profile are schematic. `
+      + `Drawn to scale (one scale across and up; dimensions in ft); the girder outlines and voids are the library's; the barrier height (${BAR_H} in) and its profile are schematic${m.app.some(a => a.kind === 'rail' || a.kind === 'fence') ? `, as are the railing and fence posts (${RAIL_H} in)` : ''}. `
       + `Traffic faces dashed; d<sub>e</sub> from the exterior girder ℄ to the face (${m.faces.map(f => `G${f.g}: ${esc(f.src)}`).join('; ')}).</p>`;
   }
   window.PSBXsFig = { model, svg, legend, lldf, BAR_H, TCOL };

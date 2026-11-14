@@ -132,6 +132,103 @@
 
 /* ---- end of DEAD-VERBATIM ---- */
 
+  /* EDGE (2026-11-14, PR 9 "cross-section loads matching the Steel Bridge app"; engineer's choice "Match Steel"): the steel app's deck-edge,
+     cross-section-input and traffic-face functions, in a scope of their own (their constant names DIST / CLS / METHODS are the same as
+     above). COPY, to move to shared/ later (CLAUDE.md §3): the lines between EDGE-VERBATIM and its end are lines 30-114 of
+     apps/steel-bridge/engine/loads.js at the same commit as DEAD-VERBATIM, byte for byte (tests/engine/psbridge-dl.test.mjs). Used:
+     edgeIn, bridgeEff, edgeLoads (the barrier or curb + railing of each deck edge, its traffic face), xsIn (appurtenance w_c, sidewalk
+     fences, wearing surface by thickness, overlays) and llFaces' rule (in llFace below). */
+  const EDGE = (function () {
+/* ---- EDGE-VERBATIM: the code below is the slice named above, byte for byte; do not edit it ---- */
+  const f2 = x => (typeof x === 'number' && isFinite(x) ? x : NaN).toFixed(2);   // GirderDetail f2 (text of a message)
+
+  /* GirderDetail parseDim / nm: a number, or text such as "1 1/2" */
+  function parseDim(v) { if (typeof v === 'number') return v; if (v == null) return NaN; let s = String(v).trim().replace(/["”]/g, '').replace(/(\d)-(\d)/g, '$1 $2').replace(/\s+/g, ' '); if (!s) return NaN;
+    let m = s.match(/^(-?\d+(?:\.\d+)?) (\d+)\/(\d+)$/); if (m) return +m[1] + m[2] / m[3]; m = s.match(/^(\d+)\/(\d+)$/); if (m) return m[1] / m[2]; const n = Number(s); return isFinite(n) ? n : NaN; }
+  const nm = v => typeof v === 'number' ? v : parseDim(v);
+  const opt = v => (v == null || v === '' || (typeof v === 'number' && isNaN(v))) ? null : nm(v);   // GirderDetail dfOpt
+  function numRows(rows, spec, lbl, errors) { return (rows || []).map((r0, i) => { const r = { i, name: r0.name || `${lbl} ${i + 1}` };
+    spec.forEach(([k, label, ty, o]) => { if (ty === 'text' || ty === 'sel') { r[k] = r0[k]; return; }
+      if (o && o.opt && (r0[k] == null || r0[k] === '' || (typeof r0[k] === 'number' && isNaN(r0[k])))) { r[k] = null; return; }
+      const v = nm(r0[k]); r[k] = v; const min = o && o.min !== undefined ? o.min : 1e-12;
+      if (!isFinite(v) || v < min) errors.push(`${r.name}: "${label}" must be ${min === 0 ? 'zero or positive' : 'positive'}.`); }); return r; }); }
+  // GirderDetail GM.df.rowSpec / rowSpec2 (name, label, type, options)
+  const CATS = { DC2: 'DC2', DW: 'DW', DC1: 'DC1', PL: 'Pedestrian LL', UT: 'Utility (noncomposite, DW factors)', UF: 'Future utility allowance (noncomposite, γ 1.25/0)' };
+  const ROW_EXTRA = [['name', 'Description', 'text'], ['cat', 'Category', 'sel'], ['x', 'Location from left deck edge', 'num', { min: 0 }], ['plf', 'Line load', 'num', { min: 0 }], ['dist', 'Distribution', 'sel']];
+  const ROW_OVL = [['name', 'Description', 'text'], ['mode', 'Entered as', 'sel'], ['psf', 'Weight', 'num', { min: 0, opt: true }], ['thk', 'Thickness', 'num', { min: 0, opt: true }], ['gam', 'Unit weight', 'num', { min: 0, opt: true }]];
+  const DIST = { pilecap: 'MassDOT pile-cap', equal: 'Equal', two: 'Two adjacent', r64: 'RIDOT 60/40' };
+  const CLS = { 'ext-curb': 'Exterior safety curb beam', interior: 'Interior beam', 'first-int': '1st interior roadway beam', 'ext-sw': 'Exterior sidewalk beam', 'int-sw': 'Interior sidewalk beam', 'median-int': 'Median beam (continuous slab, interior)', 'median-ext': 'Median beam (joint, exterior)' };
+  const METHODS = { massdot: 'MassDOT 3.5.3 (pile-cap for superimposed DC; wearing surface equally)', aashto: 'Typical AASHTO (all loads equally to all beams)', ridot: 'RIDOT BDM 3.3.1 (barriers and sidewalks 60% fascia beams, 40% interior beams)' };
+  const STEEL_PLF = 490 / 144;   // lb per ft per in² of steel: 490 pcf / 144 in²/ft² = 3.4028 (Table 3.5.1-1; SB2-A2, 2026-10-29: GirderDetail's SA_PLF rounds it to 3.4)
+
+  /* optional cross-section inputs (GirderDetail dfXsIn): appurtenance concrete w_c, sidewalk fences, wearing surface by thickness, overlays */
+  function xsIn(p, errors) {
+    const dl = p.dl || {}, o = { wcA: null, fenceL: null, fenceXL: null, fenceR: null, fenceXR: null, wsThk: null, wsGam: null, fws: null, ovl: [] };
+    const wcA = opt(dl.wcA); if (wcA !== null) { if (wcA > 0) o.wcA = wcA; else errors.push('Appurtenance concrete unit weight must be positive (or blank for the deck w_c).'); }
+    ['L', 'R'].forEach(sd => { const w = opt(dl['fence' + sd]), x = opt(dl['fenceX' + sd]), sw = nm(dl['sw' + sd]) > 0 ? nm(dl['sw' + sd]) : 0, nm_ = sd === 'L' ? 'Left' : 'Right';
+      if (w === null && x === null) return;
+      if (w !== null && !(w >= 0)) errors.push(`${nm_} sidewalk railing or fence: the weight must be zero or positive.`);
+      if (!(x > 0 && x <= sw + 1e-9)) errors.push(`${nm_} sidewalk railing or fence: its position from the deck edge must be on the ${sd === 'L' ? 'left' : 'right'} sidewalk (0 < x ≤ ${sw > 0 ? sw + ' ft' : 'the sidewalk width; no sidewalk is entered'}).`);
+      o['fence' + sd] = w !== null && w > 0 ? w : 0; o['fenceX' + sd] = x; });
+    if (dl.wsMode === 'thk') { const t = opt(dl.wsThk), g = opt(dl.wsGam);
+      if (!(t > 0) || !(g > 0)) errors.push('Wearing surface by thickness: enter a positive thickness and unit weight.'); else { o.wsThk = t; o.wsGam = g; o.fws = t / 12 * g * 1000; } }
+    const ov = numRows(Array.isArray(p.ovl) ? p.ovl : [], ROW_OVL, 'Overlay', errors);
+    o.ovl = ov.map(r => { if (r.mode === 'thk') { if (!(r.thk > 0) || !(r.gam > 0)) { errors.push(`${r.name}: enter a positive thickness and unit weight.`); return null; } return { name: r.name, q: r.thk / 12 * r.gam * 1000, thk: r.thk, gam: r.gam }; }
+      if (r.psf === null) { errors.push(`${r.name}: enter its weight in psf.`); return null; } return { name: r.name, q: r.psf }; }).filter(Boolean);
+    return o;
+  }
+
+  /* deck edges (GirderDetail dfEdgeIn): per side a barrier (bw width at the deck ft, bwt klf) or a curb (cw, ch in) and railing (rw klf at
+     rp ft; traffic face rf, blank = rp). Traffic face at the deck edge: the barrier width; a curb lower than 12 in is mountable and the railing
+     face governs; 12 in or higher, the curb face (or the railing face if farther in). An entered "edge to traffic face" governs. */
+  const EDGE_K = ['bw', 'bwt', 'cw', 'ch', 'rw', 'rp', 'rf', 'face'];
+  const EDGE_LBL = { bw: 'the barrier width', bwt: 'the barrier weight', cw: 'the curb width', ch: 'the curb height', rw: 'the railing weight', rp: 'the railing load point', rf: 'the railing traffic face', face: 'the edge to traffic face' };
+  function edgeIn(E, errors) {
+    if (!E || !E.L || !E.R) return null; const o = {};
+    ['L', 'R'].forEach(sd => { const e = E[sd] || {}, nm_ = sd === 'L' ? 'Left' : 'Right', q = { type: e.type === 'curb' ? 'curb' : 'barrier' };
+      EDGE_K.forEach(k => { q[k] = opt(e[k]); });
+      (q.type === 'curb' ? ['cw', 'ch', 'rw', 'rp'] : ['bw', 'bwt']).forEach(k => { if (!(q[k] !== null && q[k] >= 0)) errors.push(`${nm_} deck edge: enter ${EDGE_LBL[k]} (zero or positive).`); });
+      ['rf', 'face'].forEach(k => { if (q[k] !== null && !(q[k] >= 0)) errors.push(`${nm_} deck edge: ${EDGE_LBL[k]} must be zero or positive (or blank).`); });
+      if (q.type === 'barrier') { q.fAuto = q.bw; q.fbyAuto = 'barrier face'; }
+      else { const rf = q.rf !== null ? q.rf : q.rp, cf = q.cw / 12; q.mount = !(q.ch >= 12 - 1e-9);
+        if (q.mount) { q.fAuto = rf; q.fbyAuto = `railing face (the ${f2(q.ch)} in curb is mountable, < 12 in)`; }
+        else if (rf > cf + 1e-9) { q.fAuto = rf; q.fbyAuto = 'railing face'; } else { q.fAuto = cf; q.fbyAuto = `curb face (${f2(q.ch)} in ≥ 12 in)`; } }
+      if (q.face !== null) { q.f = q.face; q.fby = 'edge to traffic face entered'; } else { q.f = q.fAuto; q.fby = q.fbyAuto; }
+      o[sd] = q; });
+    return o;
+  }
+  /* the bridge with the module's deck edges in place of the ones sent (GirderDetail dfBridgeEff) */
+  function bridgeEff(b, Ed) {
+    if (!Ed) return b; const edge = {};
+    ['L', 'R'].forEach(sd => { const q = Ed[sd]; edge[sd] = q.type === 'curb' ? { mode: 'curb', cw: q.cw, ch: q.ch, rp: q.rp, rw: q.rw, fby: q.fby } : { mode: 'barrier', bw: q.bw, w: q.bwt, fby: q.fby }; });
+    return { ...b, edge, faceL: Ed.L.f, faceR: Ed.R.f, gdEdges: Ed };
+  }
+  /* edge line loads (GirderDetail dfEdges): a barrier, or a curb (cw/12 × ch/12 × w_c) plus a railing, per side; x from that side's edge */
+  function edgeLoads(b, wcA) {
+    const out = [];
+    ['L', 'R'].forEach(sd => { const e = b.edge && b.edge[sd], nm_ = sd === 'L' ? 'Left' : 'Right';
+      if (e && e.mode === 'curb') { if (e.cw > 0 && e.ch > 0) out.push({ id: 'curb' + sd, desc: `${nm_} curb`, cat: 'DC2', side: sd, x: e.cw / 24, plf: e.cw / 12 * e.ch / 12 * (wcA > 0 ? wcA : b.wc), def: { kind: 'curb', cw: e.cw, ch: e.ch, wc: wcA > 0 ? wcA : b.wc } });
+        if (e.rw > 0) out.push({ id: 'rail' + sd, desc: `${nm_} railing`, cat: 'DC2', side: sd, x: e.rp, plf: e.rw }); }
+      else if (e && e.mode === 'barrier') { if (e.w > 0) out.push({ id: 'bar' + sd, desc: `${nm_} barrier`, cat: 'DC2', side: sd, x: e.bw / 2, plf: e.w }); }
+      else if (b.barW > 0) out.push({ id: 'bar' + sd, desc: `${nm_} barrier`, cat: 'DC2', side: sd, x: b.barrier / 2, plf: b.barW }); });
+    return out;
+  }
+  /* live-load traffic face each side (GirderDetail dfLLFace): the innermost non-mountable element: the deck-edge face, a sidewalk
+     12 in or thicker (its curb face), or a railing or fence on the sidewalk; a sidewalk thinner than 12 in is mountable and ignored */
+  function llFaces(b, dl, xs, fL, fR) {
+    const o = {};
+    ['L', 'R'].forEach(sd => { const f = sd === 'L' ? fL : fR, sw = nm(dl['sw' + sd]) > 0 ? nm(dl['sw' + sd]) : 0, t = nm(dl['swThk' + sd]), curb = !!(b.edge && b.edge[sd] && b.edge[sd].mode === 'curb');
+      const mount = sw > 0 && !(t >= 12 - 1e-9), c = [{ x: f, by: b.edge && b.edge[sd] && b.edge[sd].fby ? b.edge[sd].fby : curb ? 'curb and railing traffic face' : 'barrier face' }];
+      if (sw > 0 && !mount) c.push({ x: sw, by: `sidewalk curb face (${f2(t)} in ≥ 12 in)` });
+      const fx = xs && xs['fenceX' + sd]; if (sw > 0 && fx > 0) c.push({ x: fx, by: 'railing or fence on the sidewalk' });
+      const g = c.reduce((a, q) => q.x > a.x + 1e-9 ? q : a);
+      o[sd] = { r: g.x, by: g.by, mount, sw, t, rOld: Math.max(f, sw) }; });
+    return o;
+  }
+/* ---- end of EDGE-VERBATIM ---- */
+    return { edgeIn, bridgeEff, edgeLoads, xsIn, llFaces, CATS };
+  })();
+
   const isNum = v => typeof v === 'number' && isFinite(v);
   /* OWNER_METHOD (engineer decision PS-21, 2026-11-13): the distribution method of a NEW project by its owner: AASHTO (no owner rule) the
      "Typical AASHTO" equal share (AASHTO LRFD 10th Ed. Art. 4.6.2.2.1); MassDOT the pile-cap method (MassDOT Bridge Manual Part I 3.5.3);
@@ -158,16 +255,33 @@
     const E = [], e = (path, msg) => E.push({ path, msg }); if (!on(P)) return E;
     const q = P.xs.dl, nn = (v, path, lab) => { if (!(isNum(v) && v >= 0)) e(path, `${lab} must be zero or a positive number.`); };
     if (!METHODS[q.method]) e('xs.dl.method', 'Choose a dead load distribution method.');
+    const blank = v => v == null || v === '' || (typeof v === 'number' && isNaN(v)), on0 = (v, path, lab) => { if (!blank(v)) nn(v, path, lab); };
     ['L', 'R'].forEach(s => { const side = s === 'L' ? 'Left' : 'Right', b = q['bar' + s] || {}, w = q['sw' + s] || {};
-      nn(b.bw, `xs.dl.bar${s}.bw`, `${side} barrier width`); nn(b.w, `xs.dl.bar${s}.w`, `${side} barrier weight`);
-      nn(w.w, `xs.dl.sw${s}.w`, `${side} sidewalk width`); if (+w.w > 0) nn(w.t, `xs.dl.sw${s}.t`, `${side} sidewalk thickness`); });
-    nn(q.fws, 'xs.dl.fws', 'Wearing surface');
+      if (b.type === 'curb') {   // PR 9 (the steel app's deck edge "Curb and railing", edgeIn)
+        nn(b.cw, `xs.dl.bar${s}.cw`, `${side} curb width`); nn(b.ch, `xs.dl.bar${s}.ch`, `${side} curb height`); nn(b.rw, `xs.dl.bar${s}.rw`, `${side} railing weight`); nn(b.rp, `xs.dl.bar${s}.rp`, `${side} railing load point`);
+        on0(b.rf, `xs.dl.bar${s}.rf`, `${side} railing traffic face`);
+      } else { if (b.type != null && b.type !== 'barrier') e(`xs.dl.bar${s}.type`, `${side} deck edge: choose Barrier or Curb and railing.`);
+        nn(b.bw, `xs.dl.bar${s}.bw`, `${side} barrier width`); nn(b.w, `xs.dl.bar${s}.w`, `${side} barrier weight`); }
+      on0(b.face, `xs.dl.bar${s}.face`, `${side} edge to traffic face`);
+      nn(w.w, `xs.dl.sw${s}.w`, `${side} sidewalk width`); if (+w.w > 0) nn(w.t, `xs.dl.sw${s}.t`, `${side} sidewalk thickness`);
+      if (!blank(w.fence) || !blank(w.fenceX)) {   // PR 9: a railing or fence on the sidewalk (xsIn)
+        on0(w.fence, `xs.dl.sw${s}.fence`, `${side} sidewalk railing or fence weight`);
+        if (!(isNum(w.fenceX) && w.fenceX > 0 && w.fenceX <= (+w.w > 0 ? +w.w : 0) + 1e-9)) e(`xs.dl.sw${s}.fenceX`, `${side} sidewalk railing or fence: its position from the deck edge must be on the sidewalk (0 < x ≤ ${+w.w > 0 ? w.w + ' ft' : 'the sidewalk width; no sidewalk is entered'}).`); } });
+    if (q.med) { nn(q.med.w, 'xs.dl.med.w', 'Raised median width'); if (+q.med.w > 0) nn(q.med.t, 'xs.dl.med.t', 'Median thickness'); }   // PR 9
+    if (!blank(q.wcA) && !(isNum(q.wcA) && q.wcA > 0)) e('xs.dl.wcA', 'Curb / sidewalk / median concrete unit weight must be positive (or blank for the deck w_c).');
+    if (q.wsMode === 'thk') { if (!(isNum(q.wsThk) && q.wsThk > 0)) e('xs.dl.wsThk', 'Wearing surface by thickness: enter a positive thickness.'); if (!(isNum(q.wsGam) && q.wsGam > 0)) e('xs.dl.wsGam', 'Wearing surface by thickness: enter a positive unit weight.'); }
+    else { if (q.wsMode != null && q.wsMode !== 'psf') e('xs.dl.wsMode', 'Choose how the wearing surface is entered.'); nn(q.fws, 'xs.dl.fws', 'Wearing surface'); }
+    (Array.isArray(q.ovl) ? q.ovl : []).forEach((r, i) => { const L = `Overlay ${i + 1}`;
+      if (r.mode === 'thk') { if (!(isNum(r.thk) && r.thk > 0)) e(`xs.dl.ovl.${i}.thk`, `${L}: enter a positive thickness.`); if (!(isNum(r.gam) && r.gam > 0)) e(`xs.dl.ovl.${i}.gam`, `${L}: enter a positive unit weight.`); }
+      else nn(r.psf, `xs.dl.ovl.${i}.psf`, `${L}: the weight`); });
     const Wd = deckWidth(P);
     (Array.isArray(q.extra) ? q.extra : []).forEach((r, i) => {
-      if (!['DC2', 'DW'].includes(r.cat)) e(`xs.dl.extra.${i}.cat`, `Added line load ${i + 1}: choose DC2 or DW.`);
+      if (!CATS.includes(r.cat)) e(`xs.dl.extra.${i}.cat`, `Added line load ${i + 1}: choose DC2, DW or DC1.`);
+      if (r.dist != null && !XDIST.includes(r.dist)) e(`xs.dl.extra.${i}.dist`, `Added line load ${i + 1}: choose its distribution.`);
       if (!(isNum(r.x) && r.x >= 0 && (!isNum(Wd) || r.x <= Wd + 1e-9))) e(`xs.dl.extra.${i}.x`, `Added line load ${i + 1}: x must be from 0 to the deck width${isNum(Wd) ? ` ${Wd.toFixed(2)} ft` : ''}.`);
       nn(r.plf, `xs.dl.extra.${i}.plf`, `Added line load ${i + 1}: the line load`); });
-    if (isNum(Wd) && (+(q.barL || {}).bw || 0) + (+(q.barR || {}).bw || 0) >= Wd) e('xs.dl.barL.bw', 'The two barriers are as wide as the deck.');
+    const ew = s => { const b = q['bar' + s] || {}; return b.type === 'curb' ? (+b.cw || 0) / 12 : (+b.bw || 0); };   // PR 9: a curb's width
+    if (isNum(Wd) && ew('L') + ew('R') >= Wd) e(q.barL && q.barL.type === 'curb' ? 'xs.dl.barL.cw' : 'xs.dl.barL.bw', 'The two deck edges (barriers or curbs) are as wide as the deck.');
     return E;
   }
   function deckWidth(P) { const x = P.xs || {}, B = Array.isArray(x.bays) ? x.bays : []; return (+x.ohL || 0) + B.reduce((a, b) => a + (+b || 0), 0) + (+x.ohR || 0); }
@@ -176,24 +290,54 @@
      shown only), the traffic faces = the barrier widths; geo: the girder lines from G1 (pos) and the deck width; a: the method, the two
      barriers (DC2, at half their width from their edge), the sidewalk slabs (DC2, w_c of the deck for loads), the wearing surface (DW,
      between max(traffic face, sidewalk) on each side, always equally) and the added line loads (DC2 / DW, the method's distribution). */
+  /* PR 9 (the steel app's cross-section load items, engineer's choice "Match Steel"). Optional within psb2.project v1 (all absent in a
+     project saved before: the results as before):
+       barL / barR: + type ('barrier' default | 'curb'), cw, ch (in, curb width and height), rw (klf, railing), rp (ft, railing load point
+         from the edge), rf (ft, railing traffic face, blank = rp), face (ft, edge to traffic face entered; blank = computed);
+       swL / swR: + fence (klf), fenceX (ft from the deck edge, on the sidewalk);
+       med: { w (ft), t (in), joint (true / false) } (raised median at the deck centre); wcA (kcf, curb / sidewalk / median concrete,
+       blank = the deck's w_c for loads); wsMode ('psf' default | 'thk') with wsThk (in), wsGam (kcf); ovl: [{ name, mode ('psf' | 'thk'),
+       psf, thk, gam }] (overlays, DW); extra[i].dist ('auto' default | 'pilecap' | 'equal' | 'two'); extra[i].cat also 'DC1'.
+     Not offered (the moved engine has no input for them): the steel app's pedestrian live load (PL), utilities on the noncomposite
+     section with DW factors (UT) and the future utility allowance (UF), stay-in-place forms by area and the steel detail allowance. */
+  const CATS = ['DC2', 'DW', 'DC1'], XDIST = ['auto', 'pilecap', 'equal', 'two'];
+  const edgesOf = q => { const o = {}; ['L', 'R'].forEach(s => { const b = q['bar' + s] || {};
+    o[s] = { type: b.type === 'curb' ? 'curb' : 'barrier', bw: b.bw, bwt: b.w, cw: b.cw, ch: b.ch, rw: b.rw, rp: b.rp, rf: b.rf, face: b.face }; }); return o; };
+  const xsInOf = (q, sw) => ({ dl: { wcA: q.wcA, swL: sw('L'), swR: sw('R'), fenceL: (q.swL || {}).fence, fenceXL: (q.swL || {}).fenceX, fenceR: (q.swR || {}).fence, fenceXR: (q.swR || {}).fenceX,
+    wsMode: q.wsMode, wsThk: q.wsThk, wsGam: q.wsGam }, ovl: Array.isArray(q.ovl) ? q.ovl : [] });
+  /* edgeFace(P, s): the deck edge's traffic face from that edge (ft; the steel app's edgeIn: the barrier width; a curb lower than 12 in is
+     mountable, the railing face; else the curb face or the railing face if farther in; an entered edge to traffic face governs), with how
+     it is found; null without P.xs.dl. llFace(P, s): the live-load traffic face (the steel app's llFaces rule): the largest of the edge face,
+     a sidewalk 12 in or thicker (its curb face) and a railing or fence on the sidewalk. Used by PSBDesign.deOf (PS-20). */
+  function edgeFace(P, s) { const q = P && P.xs && P.xs.dl; if (!q) return null; const E = EDGE.edgeIn(edgesOf(q), [])[s]; return { f: isNum(E.f) ? E.f : 0, by: E.fby, type: E.type }; }
+  function llFace(P, s) {
+    const q = P && P.xs && P.xs.dl; if (!q) return null; const sw = q['sw' + s] || {}, f = edgeFace(P, s).f;
+    return Math.max(f, +sw.w > 0 && +sw.t >= 12 - 1e-9 ? +sw.w : 0, +sw.w > 0 && isNum(sw.fenceX) && sw.fenceX > 0 ? sw.fenceX : 0);
+  }
   const CACHE = { key: '', R: null };
   function distribute(P) {
     if (!on(P) || checks(P).length || !P.base) return null;
     const x = P.xs, q = x.dl, b = P.base, m = b.mat || {}, wc = +m.wcdLoad || +m.wcd, ts = b.tsSeparate ? +b.tsDL : +b.ts;
     const key = JSON.stringify([x.nb, x.bays, x.ohL, x.ohR, q, wc, ts]); if (CACHE.key === key) return CACHE.R;
     const N = x.nb, pos = [0]; (x.bays || []).forEach(s => pos.push(pos[pos.length - 1] + s));
-    const Wd = deckWidth(P), bL = q.barL || {}, bR = q.barR || {};
-    const edges = []; if (+bL.w > 0) edges.push({ id: 'barL', desc: 'Left barrier', cat: 'DC2', side: 'L', x: +bL.bw / 2, plf: +bL.w });
-    if (+bR.w > 0) edges.push({ id: 'barR', desc: 'Right barrier', cat: 'DC2', side: 'R', x: +bR.bw / 2, plf: +bR.w });
+    const Wd = deckWidth(P), err = [];
     const sw = s => { const v = q['sw' + s] || {}; return +v.w > 0 ? +v.w : 0; }, swt = s => +((q['sw' + s] || {}).t) || 0;
-    const R = dead({ Nb: N, OL: +x.ohL, ts, fL: +bL.bw || 0, fR: +bR.bw || 0 }, { pos, Wdeck: Wd },
-      { method: q.method, ped: 0, swL: sw('L'), swThkL: swt('L'), swR: sw('R'), swThkR: swt('R'), medW: 0, medThk: 0, fws: +q.fws || 0, uwc: wc, uwcA: null, hh: 0, sip: 0, bf: 0,
-        edges, extra: (q.extra || []).map((r, i) => ({ desc: r.name || `Added line load ${i + 1}`, cat: r.cat, x: +r.x, plf: +r.plf, dist: 'auto' })), ovl: [], ovr: null, bcls: null });
-    const out = Object.assign({}, R, { wc, ts, Wd });
+    // PR 9: the deck edges (barrier, or curb and railing) and the optional cross-section inputs through the steel app's own functions
+    // (EDGE: edgeIn, bridgeEff, edgeLoads, xsIn). A barrier with none of the new inputs gives the same line load, x and traffic face as before.
+    const Ed = EDGE.edgeIn(edgesOf(q), err), xi = EDGE.xsIn(xsInOf(q, sw), err); if (err.length) return null;
+    const edges = EDGE.edgeLoads(EDGE.bridgeEff({ wc }, Ed), xi.wcA), med = q.med || {};
+    const R = dead({ Nb: N, OL: +x.ohL, ts, fL: Ed.L.f, fR: Ed.R.f }, { pos, Wdeck: Wd },
+      { method: q.method, ped: 0, swL: sw('L'), swThkL: swt('L'), swR: sw('R'), swThkR: swt('R'), medW: +med.w > 0 ? +med.w : 0, medThk: +med.w > 0 ? +med.t || 0 : 0, medJoint: med.joint ? 'yes' : 'no',
+        fws: xi.fws !== null ? xi.fws : +q.fws || 0, uwc: wc, uwcA: xi.wcA, hh: 0, sip: 0, bf: 0,
+        fenceL: xi.fenceL, fenceXL: xi.fenceXL, fenceR: xi.fenceR, fenceXR: xi.fenceXR, wsThk: xi.wsThk, wsGam: xi.wsGam,
+        edges, extra: (q.extra || []).map((r, i) => ({ desc: r.name || `Added line load ${i + 1}`, cat: r.cat, x: +r.x, plf: +r.plf, dist: r.dist || 'auto' })), ovl: xi.ovl, ovr: null, bcls: null });
+    const out = Object.assign({}, R, { wc, ts, Wd, edge: Ed });
     CACHE.key = key; CACHE.R = out; return out;
   }
-  /* line(P, g): { DC2, DW } of girder line g (1-based) when distributed, else null */
-  function line(P, g) { const R = distribute(P); return R ? { DC2: R.dc2[g - 1], DW: R.dw[g - 1] } : null; }
+  /* line(P, g): { DC2, DW } of girder line g (1-based) when distributed, else null. PR 9: with added line loads of category DC1, also
+     DC1 = the line's share of them (added to the engine's w_NC, the non-composite DC1 on the bare girder; engine/design.js one()). */
+  function line(P, g) { const R = distribute(P); if (!R) return null; const o = { DC2: R.dc2[g - 1], DW: R.dw[g - 1] };
+    const d1 = R.per.filter(L => L.cat === 'DC1'); if (d1.length) o.DC1 = d1.reduce((a, L) => a + L.r[g - 1], 0); return o; }
   /* stepsFor(P, g): the worked steps of the distribution that give line g its DC2 and DW (ids dl.*): x̄, Σc² (pile-cap), each line load,
      the line's share of each and its DC2 and DW sums (dead()'s DC1 steps left out: the engine's own DC1 is worked on the Loads & LLDF tab) */
   function stepsFor(P, g) {
@@ -209,7 +353,13 @@
     const g = window.PSBDesign.sel(P).g;
     Wl.steps = Wl.steps.map(s => s.id === 'ld.wDC2' || s.id === 'ld.wDW' ? Object.assign({}, s, { label: `${s.id === 'ld.wDC2' ? 'DC2 superimposed dead load' : 'DW wearing surface'} (distributed to G${g})`,
       note: `Distributed to girder line G${g} by the Steel Bridge app's method (§dl.G${g}.${s.id === 'ld.wDC2' ? 'DC2' : 'DW'}); on the composite section.` }) : s).concat(stepsFor(P, g));
+    const q = line(P, g);   // PR 9: added DC1 line loads: the line's share, added to w_NC (§dl.G<g>.DC1x)
+    if (q && q.DC1 != null) {
+      const R = distribute(P), parts = R.per.filter(L => L.cat === 'DC1'), n4 = v => St().n(v, 4);
+      Wl.steps = Wl.steps.map(s => s.id === 'ld.wDC1' ? Object.assign({}, s, { note: `${s.note ? s.note + ' ' : ''}w_NC includes G${g}'s share of the added DC1 line loads of the Cross-section tab, ${n4(q.DC1)} klf (§dl.G${g}.DC1x).` }) : s);
+      Wl.steps.push(St().step({ id: `dl.G${g}.DC1x`, label: `G${g}: added DC1 line loads (Cross-section tab), on the bare girder (added to w_NC)`, sym: 'w_{DC1,x}', eq: '\\sum w', sub: parts.map(L => n4(L.r[g - 1])).join(' + '), value: q.DC1, unit: 'klf', d: 4, ref: `${ED} Art. 3.5.1` }));
+    }
     return Wl;
   }
-  window.PSBBridgeDL = { OWNER_METHOD, ownerMethod, onOwner, withSteps, METHODS, DIST, defaults, on, checks, distribute, line, stepsFor, deckWidth, dead };
+  window.PSBBridgeDL = { edgeFace, llFace, CATS, XDIST, OWNER_METHOD, ownerMethod, onOwner, withSteps, METHODS, DIST, defaults, on, checks, distribute, line, stepsFor, deckWidth, dead };
 })();
