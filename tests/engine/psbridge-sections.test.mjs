@@ -57,7 +57,7 @@ test('PS-30 / PS-32 (1): the library = the CTDOT plates (A, I, y_b, h, width; S 
   }
   OLD.forEach(n => { assert.ok(!(n in G), n + ' removed'); assert.deepEqual(J(S.LEGACY[n]), J(G0[n]), n + ': kept in PSBSections.LEGACY byte for byte'); });
   const rest = Object.keys(G0).filter(n => !OLD.includes(n)); rest.forEach(n => assert.deepEqual(J(G[n]), n === 'NEXT 28F' ? J(Object.assign({}, G0[n], { pMax: Object.assign({}, G0[n].pMax, { I: 92836 }) })) : J(G0[n]), n + ' unchanged'));   // PS-38: NEXT 28F I at 144 in (psbridge-ps38.test.mjs)
-  assert.deepEqual(Object.keys(G), [...rest.slice(0, rest.indexOf('Deck slab 12×48 (solid)')), ...PLATE.slice(0, 8).map(r => r[0]), 'Deck slab 12×48 (solid)', 'Deck slab 18×48 (solid)', ...PLATE.slice(8).map(r => r[0]), 'Custom'], 'order');
+  assert.deepEqual(Object.keys(G), [...rest.slice(0, rest.indexOf('Deck slab 12×48 (solid)')), ...PLATE.slice(0, 8).map(r => r[0]), 'Deck slab 12×48 (solid)', 'Deck slab 18×48 (solid)', ...PLATE.slice(8).map(r => r[0]), ...S.ORDER_MD, 'Custom'], 'order');   // PS-37: the MassDOT sections before Custom
   // the box webs follow from the plate areas: A = w h − (w − 2 t_w)(h − 11) + 18 (void chamfers) − 13.9 (keys, ¾ in chamfers)
   PLATE.slice(0, 8).forEach(([n, h, w, A]) => { const tw = G[n].bw / 2; assert.equal(tw, /BIII|BIV/.test(n) ? 6 : 5, n); assert.ok(Math.abs(w * h - (w - 2 * tw) * (h - 11) + 18 - 13.9 - A) < 0.06, n + ': area from the walls'); });
 });

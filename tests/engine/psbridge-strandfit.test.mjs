@@ -102,7 +102,7 @@ test('PS-28 (2): collect\'s verdict = the PS-27 criterion over PSBStrandGfx.xy, 
       const want = [...(okAt(yE) ? [] : ['base.harp.yEnd']), ...(okAt(yM) ? [] : ['base.harp.yMid'])];
       const rowBad = !refFits(project(girder, [{ n: 2, y: 2 }], { n: 0 }, S)) ? ['base.rows.0.' + (refFits(project(girder, [{ n: G.next ? 2 : 1, y: 2 }], { n: 0 }, S)) ? 'n' : 'y')] : [];
       assert.deepEqual(e.map(x => x.path), [...rowBad, ...want], `${girder} S ${S}: ${nh} draped about ${yE} / ${yM}`); nCase++;
-      e.filter(x => /^base\.harp/.test(x.path)).forEach(x => assert.match(x.msg, new RegExp(`^Draped strands: the ${nh} draped strands about y_(end|mid) = \\d+ in \\(at (℄ bearing|midspan)\\) do not fit the `)));
+      e.filter(x => /^base\.harp/.test(x.path)).forEach(x => assert.match(x.msg, new RegExp(`^Draped strands: the ${nh} draped strands about y_(end|mid) = [\\d.]+ in \\(at (℄ bearing|midspan)\\) do not fit the `)));
     }
   }
   assert.ok(nCase > 1500 && nBad > 300, `${nCase} cases, ${nBad} that do not fit`);

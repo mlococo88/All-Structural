@@ -29,7 +29,12 @@
     let ctl;
     if (f.k === 'sel' || f.k === 'bool') {
       const o = typeof f.o === 'function' ? f.o() : f.o;
-      ctl = `<select id="${id}" data-path="${f.p}" data-kind="${f.k}" title="${tip}">${o.map(([k, t]) => `<option value="${esc(k)}"${String(v) === String(k) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
+      // PS-37 (2026-11-14): an option with a third element (its group) is listed in an <optgroup> of that label (consecutive options of a group)
+      const opt = ([k, t]) => `<option value="${esc(k)}"${String(v) === String(k) ? ' selected' : ''}>${esc(t)}</option>`;
+      let body = '', cur = null;
+      o.forEach(q => { const gq = q[2] || null; if (gq !== cur) { if (cur) body += '</optgroup>'; if (gq) body += `<optgroup label="${esc(gq)}">`; cur = gq; } body += opt(q); });
+      if (cur) body += '</optgroup>';
+      ctl = `<select id="${id}" data-path="${f.p}" data-kind="${f.k}" title="${tip}">${body}</select>`;
     } else ctl = `<input type="number" step="any" id="${id}" data-path="${f.p}" data-kind="${f.k}" title="${tip}" value="${esc(v == null || (typeof v === 'number' && isNaN(v)) ? '' : v)}"${f.k === 'opt' ? ' placeholder="blank"' : ''}>`;
     const od = /^base\./.test(f.p) ? ownDef(P, f.p.slice(5)) : null;
     const hint = od ? `<span class="fHint${od.over ? ' over' : ''}">${od.over ? `overrides the ${esc(od.r.owner)} default (${esc(od.r.show)})` : `${esc(od.r.owner)} default`} · ${esc(PB().ownCite(od.r))}</span>` : '';

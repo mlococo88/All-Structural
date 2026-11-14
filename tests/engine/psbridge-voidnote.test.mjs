@@ -22,6 +22,11 @@ const BOX = { ts: 6, harp: { n: 0, yEnd: 8, yMid: 4, frac: 0.4 }, rows: [{ n: 10
 
 test('void note: the numbers of the library and of sectionVoids, for every box beam and voided deck slab; none for the other shapes', () => {
   for (const [n, L] of Object.entries(GIRDERS).filter(([k]) => k !== 'Custom')) {
+    if (W.PSBSections.MD[n]) {   // PS-37: a MassDOT section: its own note where it has a void (the sheet, what is drawn), none for the others
+      const g = W.girderGross({ girder: n, S: 9, mat: { wc: 0.15 } }), t = W.PSBUiSection.voidNote(g), f = W.PSBSections.MD[n].src.fam;
+      if (['spread', 'adj', 'slab'].includes(f)) assert.ok(t.startsWith(`${n}: A, I and y<sub>b</sub> from MassDOT Bridge Manual Part II dwg `) && t === W.PSBSections.mdNote(g), n); else assert.equal(t, '', n);
+      continue;
+    }
     const g = W.girderGross({ girder: n, S: 8, mat: { wc: 0.15 } }), t = W.PSBUiSection.voidNote(g), v = W.sectionVoids(g);
     if (L.box) {   // PS-30: every box is a CTDOT plate section: the void centred between the 5½ in slabs
       assert.equal(v.length, 1); assert.equal(v[0].y - v[0].h / 2, L.wall, `${n}: the void starts on the bottom wall`); assert.equal(L.wall, 5.5); assert.equal(L.h - L.wall - L.voidH, 5.5, n + ': top slab 5½ in');
