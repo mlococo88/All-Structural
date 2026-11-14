@@ -2396,7 +2396,7 @@ index 435c64f..004eb8c 100644
 ```
 
 ## 2026-11-14 — PS-28: a strand pattern that does not fit the girder shape is a blocking input error naming its row (input validation; no calculation change)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1535: https://github.com/mlococo88/All-Structural/pull/1535
 ### Request
 - Engineer decision PS-28 (2026-11-14), the open item of PS-27: strands drawn outside the concrete, in a void, or too close to an edge become an input error naming the row; results are blocked until it is fixed (the same style as the other input errors: message, field outlined, check summary, Report blocked). Patterns that fit: identical results.
 ### Problem
