@@ -2,7 +2,7 @@
 //   engineer decision PS-9; a §4 change against the old app where it applies: fixlog/ps-bridge.md PR 3a-3).
 //   1. dead() / deadSteps() of bridge-dl.js = lines 116-217 of apps/steel-bridge/engine/loads.js at the pinned commit, byte for byte, and give
 //      the same results as window.SBDLoads.dead of that file on the same inputs (MassDOT, AASHTO, RIDOT; sidewalks, added loads, unequal bays).
-//   2. A project saved before (no xs.dl) and 'entered': the engine inputs unchanged (byte-identical to PR 3a-2's, the 18 harness B designs).
+//   2. A project saved before (no xs.dl) and 'entered': the engine inputs unchanged (byte-identical to PR 3a-2's, the 19 harness B designs).
 //   3. The §4 check case (new project): DC2 / DW per line by hand, the engine inputs and the midspan moments.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -50,7 +50,7 @@ test('the same results as the steel app\'s SBDLoads.dead (3 methods, sidewalks, 
   assert.equal(n, 12);
 });
 
-test('saved before (no xs.dl) or "entered": engine inputs byte-identical to PR 3a-2 (the 18 harness B designs, every line)', () => {
+test('saved before (no xs.dl) or "entered": engine inputs byte-identical to PR 3a-2 (the 19 harness B designs, every line)', () => {
   const cases = TAB_CASES(() => M.defaultProject());
   for (const [name, P0] of Object.entries(cases)) {
     const P = M.importJSON(M.exportJSON(P0)).project, P2 = W0.PSBModel.importJSON(M.exportJSON(P0)).project;

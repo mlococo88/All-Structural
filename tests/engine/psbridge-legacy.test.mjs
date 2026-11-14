@@ -1,6 +1,6 @@
 // apps/ps-bridge PR 2f: "From the old app" (engine/legacy.js, window.PSBLegacy; docs/ps-bridge-plan.md §5 PR 2f, §2.4).
 //   The converter over every harness case: the 658 cases of parity harness A (tests/engine/psbridge-cases.mjs: 38 recorded old saved designs,
-//   600 seeded, 20 edge) as the old app saved them, and the 18 designs of harness B (tests/engine/psbridge-tab-cases.mjs) as the old app's
+//   600 seeded, 20 edge) as the old app saved them, and the 19 designs of harness B (tests/engine/psbridge-tab-cases.mjs) as the old app's
 //   inputs. For each: the imported project's engine inputs computed = the old saved inputs computed (the moved engine, proven identical to
 //   the old page by harness A), checked here independently of PSBLegacy.verify; where they differ the summary names why. Edge cases: missing
 //   fields, the old app's own migrations (mergeInputs, opt.longAs, the older project list, a bridge model without inputs), unknown fields
@@ -26,9 +26,9 @@ function store(init) {
 }
 const kinds = (r, k) => J(r.summary.items.filter(i => i.kind === k).map(i => i.text));
 
-test('harness B designs (18) as the old app\'s inputs: imported, the engine inputs and every value identical (results.same), PS-10 the only addition', () => {
+test('harness B designs (19) as the old app\'s inputs: imported, the engine inputs and every value identical (results.same), PS-10 the only addition', () => {
   const cases = TAB_CASES(() => M.defaultProject());
-  assert.equal(Object.keys(cases).length, 18);   // 18: PR A added the passing BIII-36 design
+  assert.equal(Object.keys(cases).length, 19);   // 18: PR A added the passing BIII-36 design; 19: PS-36 a solid slab
   for (const [name, P0] of Object.entries(cases)) {
     const old = D.inputs(P0), raw = J(old);   // what the old app saves (psbeam.inputs.v1) for this design
     const r = LG.convert({ inputs: raw, kind: 'autosave', key: 'psbeam.inputs.v1' });

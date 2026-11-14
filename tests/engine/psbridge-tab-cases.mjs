@@ -46,6 +46,10 @@ export const TAB_CASES = base => ({
     P.base.rows = [{ n: 16, y: 2, nd: 4, dbnd: 10 }, { n: 16, y: 4, nd: 4, dbnd: 6 }, { n: 4, y: 37, nd: 0, dbnd: 0 }];
     P.xs.nb = 10; P.xs.bays = [3, 3, 3, 3, 3, 3, 3, 3, 3]; P.xs.ohL = 1.5; P.xs.ohR = 1.5; P.design = { g: 5, s: 1 }; P.spans.lengths = [80];
     P.base.loads.wNC = 0; P.base.loads.wBar = 0.10; P.base.loads.wDW = 0.075; return P; })(),
+  // PS-36 (2026-11-14): a solid deck slab with a topping (types (f) / (g) live-load distribution, engine/lldf-fg.js: J = A⁴ / 40 I_p)
+  'solid deck slab 18×48 with a 5 in topping, 40 ft, 6 slabs': (() => { const P = base(); P.base.girder = 'Deck slab 18×48 (solid)'; P.base.ts = 5; P.base.harp.n = 0;
+    P.base.rows = [{ n: 12, y: 2, nd: 0, dbnd: 0 }, { n: 8, y: 4, nd: 0, dbnd: 0 }]; P.xs.nb = 6; P.xs.bays = [4, 4, 4, 4, 4]; P.xs.ohL = 2; P.xs.ohR = 2; P.design = { g: 3, s: 1 }; P.spans.lengths = [40];
+    P.base.loads.wNC = 0; P.base.loads.wBar = 0.15; P.base.loads.wDW = 0.1; return P; })(),
   // PR 2d-3 (PS-10): the hold-down check for RIDOT with an edited limit (0.90 W) and the girder end past the bearing; AASHTO with the box off
   'RIDOT, draped strands, hold-down limit 0.90 W, girder end 6 in past the bearing': (() => { const P = base(); P.base.owner = 'RIDOT'; P.base.opt.hdFrac = 0.9; P.base.opt.endOh = 6; P.base.harp.n = 8; P.base.harp.yEnd = 50; return P; })(),
   'AASHTO, PS-10 hold-down box off': (() => { const P = base(); P.base.opt.hdCheck = false; return P; })(),

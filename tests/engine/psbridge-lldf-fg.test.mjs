@@ -75,9 +75,8 @@ test('PS-35 (3) SIV-48 (21in), 50 ft, 6 beams: the voided slab as one closed cel
   assert.ok(R.warns.some(w => /^Live load distribution, type \(g\) adjacent voided slab equations \(PS-35\) used outside their range of applicability: I = 33,759 in⁴ is outside 40,000 ≤ I ≤ 610,000 in⁴/.test(w)), R.warns.join('|'));
 });
 
-test('PS-35 (4) I-girders, NEXT and solid deck slabs: results byte-identical with and without the override (every harness B design that is not a box; a solid slab)', () => {
+test('PS-35 (4) I-girders and NEXT: results byte-identical with and without the override (every harness B design that is not a box; PS-36: the solid slabs are no longer)', () => {
   const C = TAB_CASES(() => W.PSBModel.defaultProject());
-  const P = proj('Deck slab 18×48 (solid)', 0, 40, 6, 3); C['solid slab'] = P;
   let n = 0;
   for (const [name, Q] of Object.entries(C)) {
     const inp = W.PSBDesign.inputs(Q), g = W.girderGross(inp); if (FG.isFG(g)) continue; n++;
@@ -136,7 +135,7 @@ test('PS-35 (7) out of range: N_b < 5, L > 120, d_e > 2 listed with their limits
   const P = proj('AASHTO BI-36 (27in)', 0, 125, 4, 2), html = W.PSBInputsUI.cards('loads', P);
   assert.ok(/data-path="base\.loads\.Jfg"/.test(html)); assert.ok(/id="fgInNote"/.test(html) && /Outside the range of applicability/.test(html) && /N_b = 4 is outside 5 ≤ N_b ≤ 20/.test(html), html.slice(html.indexOf('fglldf'), html.indexOf('fglldf') + 1500));
   const ok = W.PSBInputsUI.cards('loads', proj('AASHTO BI-36 (27in)', 0, 60, 5, 2)); assert.ok(/id="fgInNote"/.test(ok) && /Within the ranges of applicability/.test(ok));
-  ['PCI BT-72', 'NEXT 36F', 'Deck slab 12×48 (solid)'].forEach(n => { const Q = W.PSBModel.defaultProject(); Q.base.girder = n; assert.ok(!/base\.loads\.Jfg/.test(W.PSBInputsUI.cards('loads', Q)), n); });
+  ['PCI BT-72', 'NEXT 36F'].forEach(n => { const Q = W.PSBModel.defaultProject(); Q.base.girder = n; assert.ok(!/base\.loads\.Jfg/.test(W.PSBInputsUI.cards('loads', Q)), n); });
   // the input rule: blank or > 0
   const Q = proj('AASHTO BI-36 (27in)', 0, 60, 5, 2); Q.base.loads.Jfg = -5;
   assert.ok(W.PSBInputCheck.collect(Q).errors.some(e => e.path === 'base.loads.Jfg'));
@@ -165,7 +164,40 @@ test('PS-35 (8) the worked steps (Loads & LLDF) = the engine values, every deriv
   assert.ok(at.includes('Live-load distribution (PS-35): box beam, AASHTO LRFD 10th Ed. cross-section type (g) of Table 4.6.2.2.1-1') && at.includes('J = 87,352 in⁴ (computed from outline). (see [[rs.lds]])'), at.slice(0, 600));
   const B2 = W.PSBReportData.compute(proj('PCI BT-72', 8, 100, 5, 2, P => { P.xs.bays = [9, 9, 9, 9]; }), null), a2 = W.PSBReportBuild.model(B2).sections.find(q => q.id === 'proj').subs.find(q => /Assumptions/.test(q.title));
   assert.ok(!/PS-35/.test(JSON.stringify(a2.items)));
-  // a solid slab keeps the engine's type (k) and its note
+  // PS-36: a solid slab gets the (f) / (g) card too
   const S = proj('Deck slab 18×48 (solid)', 0, 40, 6, 3), r = run(S), hs = W.PSBUiLoads.output({ P: S, inp: r.inp, R: r.R, W: { loads: W.PSBWorked.loads(r.inp, r.R) }, ui: {} });
-  assert.ok(/this engine applies type \(k\)/.test(hs) || /type \(k\)/.test(hs));
+  assert.ok(/Live load distribution factors: interior solid slab, type \(g\) \(PS-35, PS-36\)/.test(hs));
+});
+
+// PS-36 (engineer decision 2026-11-14): the solid deck slabs get the type (f) / (g) factors too; J = A⁴ / (40 I_p) of the rectangle
+// (Eq. C4.6.2.2.1-2, solid sections), with a topping on h + n t_s. Hand checks of the PR's §4 callout.
+const SOL = (girder, ts, L, g) => proj(girder, ts, L, 6, g, P => { P.xs.bays = [4, 4, 4, 4, 4]; });
+test('PS-36 (1) Deck slab 12×48 (solid), 30 ft, no topping, 6 beams: type (g); J = A⁴ / 40 I_p by hand; J and I out of the shear range', () => {
+  const { inp, R } = run(SOL('Deck slab 12×48 (solid)', 0, 30, 3)), f = R.df.fg;
+  assert.equal(f.type, 'g'); assert.equal(f.jw.kind, 'solid'); assert.equal(f.Isrc, 'girder');
+  const A = 48 * 12, Ix = 48 * 12 ** 3 / 12, Iy = 12 * 48 ** 3 / 12, Jh = A ** 4 / (40 * (Ix + Iy));
+  near(f.jw.A, 576); near(f.jw.Ix, 6912); near(f.jw.Iy, 110592); near(f.J, Jh); near(Jh, 23419.48, 1e-6);
+  const IJ = 6912 / Jh, k = 2.5 * 6 ** -0.2, b = 48, L = 30;
+  const m1 = k * (b / (33.3 * L)) ** 0.5 * IJ ** 0.25, m2 = k * (b / 305) ** 0.6 * (b / (12 * L)) ** 0.2 * IJ ** 0.06;
+  const v1 = (b / (130 * L)) ** 0.15 * IJ ** 0.05, v2 = (b / 156) ** 0.4 * (b / (12 * L)) ** 0.1 * IJ ** 0.05 * 1.0;
+  near(R.dfm, Math.max(m1, m2)); near(R.dfv, Math.max(v1, v2, m1, m2)); near(R.dfm, 0.3578194, 1e-6); near(R.dfv, 0.4864384, 1e-6);
+  assert.deepEqual(J(f.out.map(o => o.key)), ['J', 'I']);
+  const R0 = vm.runInContext('computeAll', W)(J(inp)); near(R0.dfm, 2.6808003, 1e-6); near(f.engine.dfm, R0.dfm);
+  assert.ok(R.warns.some(w => /type \(g\) adjacent solid slab equations \(PS-35\)/.test(w)));
+});
+test('PS-36 (2) Deck slab 18×48 (solid), 40 ft, 5 in topping: type (f), composite I_c, J of w × (h + n t_s); exterior; worked steps and the Report', () => {
+  const { inp, R } = run(SOL('Deck slab 18×48 (solid)', 5, 40, 3)), f = R.df.fg, n = R.cp.n;
+  assert.equal(f.type, 'f'); near(f.I, R.cp.Ic);
+  const hJ = 18 + n * 5, A = 48 * hJ, Ip = 48 * hJ ** 3 / 12 + hJ * 48 ** 3 / 12; near(f.jw.hJ, hJ); near(f.J, A ** 4 / (40 * Ip)); near(f.J, 129362.0, 1e-5);
+  near(R.dfm, 0.3412730, 1e-6); near(R.dfv, 0.4703661, 1e-6); assert.deepEqual(J(f.out), []);
+  const X = run(SOL('Deck slab 18×48 (solid)', 5, 40, 1)).R; near(X.dfm, Math.max(X.df.fg.eM1 * X.df.m1, X.df.fg.eM2 * X.df.m2)); near(X.dfm, 0.3822257, 1e-6); near(X.dfv, 0.6343207, 1e-6);
+  const w = W.PSBWorked.loads(inp, R), ids = w.steps.map(s => s.id);
+  ['ld.JhJ', 'ld.JA', 'ld.JIx', 'ld.JIy', 'ld.JIp', 'ld.Jc', 'ld.J'].forEach(id => assert.ok(ids.includes(id), id));
+  assert.ok(!ids.includes('ld.Jtw')); w.pairs.forEach(p => near(p.shown, p.engine, 1e-9, p.id));
+  assert.match(w.steps.find(s => s.id === 'ld.Jc').ref, /Eq\. C4\.6\.2\.2\.1-2/);
+  const B = W.PSBReportData.compute(SOL('Deck slab 18×48 (solid)', 5, 40, 3), null), a = W.PSBReportBuild.model(B).sections.find(q => q.id === 'proj').subs.find(q => /Assumptions/.test(q.title));
+  assert.ok(JSON.stringify(a.items).includes('Live-load distribution (PS-35, PS-36): solid slab, AASHTO LRFD 10th Ed. cross-section type (f)'));
+  // the J override and the input card apply to the solid slab as to a box
+  const Q = SOL('Deck slab 18×48 (solid)', 5, 40, 3); Q.base.loads.Jfg = 100000; const u = run(Q).R; assert.equal(u.df.fg.Jsrc, 'user'); assert.equal(u.df.fg.J, 100000);
+  const html = W.PSBInputsUI.cards('loads', SOL('Deck slab 12×48 (solid)', 0, 30, 3)); assert.ok(/data-path="base\.loads\.Jfg"/.test(html) && /J = 23,419 in⁴ is outside/.test(html));
 });
