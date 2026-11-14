@@ -132,7 +132,7 @@
       const src = f.Jsrc === 'user' ? 'user/DOT value' : f.Jsrc === 'library' ? 'library (DOT) value' : 'computed from outline';
       const out = f.out.length ? `<span class="alert" style="display:block"><b>Outside the range of applicability:</b> ${f.out.map(o => o.text).join('; ')}. The equations are used all the same (flagged on the Loads &amp; LLDF tab, in the design warnings and the Report).</span>`
         : 'Within the ranges of applicability of the type (f) / (g) equations (b, L, N<sub>b</sub>, I, J, d<sub>e</sub>, θ, d).';
-      return `<span id="fgInNote">These inputs on G${d.g}, span ${d.s}: type (${f.type}) (${f.type === 'f' ? 'cast-in-place topping' : 'no topping'}); I = ${fx(f.I, 0)} in⁴ (${f.Isrc === 'composite' ? 'composite section' : 'girder'}), J = ${fx(f.J, 0)} in⁴ (${src}${f.Jsrc !== 'computed' ? `; the outline gives ${fx(f.jw.J, 0)} in⁴` : ''}), b = ${fx(f.b, 1)} in, L = ${fx(f.L, 2)} ft, N<sub>b</sub> = ${f.Nb}. ${out} Worked on the <a href="#" data-gout="ld">Loads &amp; LLDF tab</a>.</span>`;
+      return `<span id="fgInNote">These inputs on G${d.g}, span ${d.s}: type (${f.type}) (${f.type === 'f' ? 'cast-in-place topping' : 'no topping'}); I = ${fx(f.I, 0)} in⁴ (${f.Isrc === 'composite' ? 'composite section' : 'girder'}), J = ${fx(f.J, 0)} in⁴ (${src}${f.Jsrc !== 'computed' ? `; the outline gives ${fx(f.jw.J, 0)} in⁴` : ''}), b = ${fx(f.b, 1)} in, L = ${fx(f.L, 2)} ft, N<sub>b</sub> = ${f.Nb}. ${out} Worked on the <a href="#" data-gotab="lds">Loads &amp; LLDF tab</a>.</span>`;
     } catch (e) { return ''; }
   }
   window.PSBLldfFG = { LIM, isFG, isFGInputs, jOutline, compute, ranges, warnText, run, inputNote };

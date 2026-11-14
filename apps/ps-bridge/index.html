@@ -455,6 +455,7 @@
   $('inPanes').addEventListener('click', e => {
     const t = e.target, go = t.closest('[data-goin]');
     if (go) { e.preventDefault(); ui.itab = go.dataset.goin; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; return; }
+    { const gt = t.closest('[data-gotab]'); if (gt) { e.preventDefault(); gotoOut(gt.dataset.gotab); return; } }   // PS-35: an input note's link to an output tab (the Loads input tab's J note)
     if (LGUI.onClick(e, lgCtx)) return;
     if (DLUI.onClick(e, P)) { changed(); return; }   // PR 3a-3: the added line loads
     if (t.closest('[data-ty]') && !t.closest('select, input')) { typesDone(TY.onClick(e, P, ui)); return; }   // PR 3a-1

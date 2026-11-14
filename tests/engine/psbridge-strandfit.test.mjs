@@ -17,7 +17,7 @@ import { TAB_CASES } from './psbridge-tab-cases.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const ENG = ['sections', 'model', 'rigid', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'legacy'].map(n => path.join(APP, `engine/${n}.js`));
+const ENG = ['sections', 'model', 'rigid', 'lldf-fg', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'legacy'].map(n => path.join(APP, `engine/${n}.js`));
 const W = loadShared(...PBD, ...ENG, ...['vizkit', 'strands'].map(n => path.join(APP, `ui/${n}.js`)));
 const W0 = loadShared(...PBD, ...ENG);   // without ui/strands.js: the check is not made (the page always loads it, test 7)
 const GIRDERS = vm.runInContext('GIRDERS', W);

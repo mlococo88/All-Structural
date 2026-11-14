@@ -53,6 +53,9 @@
 //   PS-34 (2026-11-14): the pier block's family thickness of a NEXT / box / slab (ps34.t, engine/pierblock.js; the old app's t_bf is the
 //   I-girder bottom flange) is compared with the thickness worked here from the old app's girder (NEXT h − t_f, box the bottom slab, voided
 //   slab (h − D)/2, solid slab h); every other value with the old app, as before.
+//   PS-35 (2026-11-14): a box beam / voided slab design gets the type (f) / (g) distribution factors (engine/lldf-fg.js): the old page computes
+//   with that module wrapping its own distFactors (the module file added to the old page), so every value downstream is compared as before;
+//   the (f) / (g) factors are checked by hand in tests/engine/psbridge-lldf-fg.test.mjs; the old app's type (k) factors logged (before / after).
 // Exit code: 0 every value equal, 1 a difference, 2 an error (a page did not load, a console error).
 import fs from 'fs';
 import path from 'path';
@@ -74,6 +77,7 @@ let nImp = 0, nImpKeys = 0; const impNotes = [];
 const SEED = { 'psbeam.inputs.v1': '{"girder":"PCI BT-72","L":118}', 'psbeam.ui.v1': '{"tab":"losses"}' };
 let fails = 0, errors = 0, n29 = 0; const d29 = [];   // PS-29
 let nStd = 0; const dStd = [], bad0 = [];   // PS-30 / PS-31
+let nFG = 0; const dFG = [];   // PS-35
 let total34 = 0;   // PS-34
 const log = s => console.log(s);
 // reloadKept(p, name, o, wait): reload the new page and check that the keys o the harness just put are in the reloaded page's storage, each
@@ -207,22 +211,31 @@ for (const name of names) {
     const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
     return { entry: S.engineOf(S.STD[g]), src: S.STD[g].src, leg: Object.keys(S.MAP).find(k => S.MAP[k] === g) || null, g: { h: R.g.h, A: R.g.A, I: R.g.I, yb: R.g.yb, w: R.g.w } }; }, inp.girder);
   const oldStore = std ? Object.assign({}, inp, { girder: std.leg || 'PCI BT-72' }) : inp;
+  // PS-35 (engineer decision 2026-11-14): a box beam / voided slab gets the type (f) / (g) distribution factors (engine/lldf-fg.js, an
+  // app-side override of the engine's distFactors). The intended difference: the old app's engine computes the same inputs with its own
+  // distFactors wrapped by that module (the module file put in the old page), so every value downstream of DF_M, DF_V is compared as before;
+  // the (f) / (g) factors themselves are checked by hand in tests/engine/psbridge-lldf-fg.test.mjs. The old app's own type (k) factors are
+  // logged (before / after).
+  const fgNew = await nw.p.evaluate(() => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
+    return R.df && R.df.fg ? { dfm: R.dfm, dfv: R.dfv, type: R.df.fg.type, J: R.df.fg.J, Jsrc: R.df.fg.Jsrc } : null; });
   // 2. the old app on the same inputs
   await old.p.evaluate(i => { localStorage.clear(); localStorage.setItem('psbeam.inputs.v1', JSON.stringify(i)); }, oldStore);
   await old.p.reload(); await old.p.waitForFunction(() => typeof computeAll === 'function', null, { timeout: 120000 }); await old.p.waitForTimeout(1500);
+  if (fgNew) await old.p.addScriptTag({ path: path.join(path.dirname(NEW), 'engine/lldf-fg.js') });   // PS-35 (see above)
   const isPS10 = p => /^ps10\./.test(p) || (k10 >= 0 && new RegExp(`^checks\\.${k10}\\.`).test(p));
   // PS-34 (engineer decision 2026-11-14): the pier block's thickness of a NEXT / box / slab (ps34.*, engine/pierblock.js) has no counterpart
   // in the old app (its t_bf is the I-girder bottom flange): compared with the family thickness worked here from the old app's own girder
   // (NEXT h − t_f; box the bottom slab; voided slab (h − D)/2 below the largest void; solid slab h)
   const isPS34 = p => /^ps34\./.test(p);
   const paths = [...new Set(shown.map(q => q.path).concat(steps.map(q => q.path)))].filter(p => !isPS10(p) && !isPS34(p));
-  const o = await old.p.evaluate(([i, paths, std]) => {
+  const o = await old.p.evaluate(([i, paths, std, fgNew]) => {
     let loaded = null; try { loaded = JSON.parse(localStorage.getItem('psbeam.inputs.v1')); } catch (e) { /* none */ }
     let before = null;
     if (std) { GIRDERS[i.girder] = std.entry;   // PS-30 / PS-31: the plate's entry (see above)
       if (std.leg) { const Rb = computeAll(Object.assign({}, i, { girder: std.leg })), Ra = computeAll(i), pick = R => ({ h: R.g.h, A: R.g.A, I: R.g.I, yb: R.g.yb, Sb: R.g.Sb, St: R.g.St, phiMn: R.fMid.phiMn / 12, MuMid: R.MuMid / 12,
         checks: R.checks.map(c => [c.n, c.r, c.pass]) }); before = { old: pick(Rb), now: pick(Ra) }; } }
-    const R = computeAll(i), at = (o, p) => p.split('.').reduce((q, k) => q == null ? q : q[k], o), vals = {};
+    let fg0 = null; if (fgNew) { const R0 = computeAll(i); fg0 = { dfm: R0.dfm, dfv: R0.dfv }; }   // PS-35: the old app's own type (k) factors (before)
+    const R = fgNew ? window.PSBLldfFG.run(i, computeAll) : computeAll(i), at = (o, p) => p.split('.').reduce((q, k) => q == null ? q : q[k], o), vals = {};
     paths.forEach(p => { vals[p] = at(R, p); });
     // PS-10 hand values (no counterpart in the old app): from the inputs and the old app's f_pbt, A_b, w_sw
     const h = i.harp, L = +i.L, al = Math.atan((+h.yEnd - +h.yMid) / (12 * +h.frac * L)), Fstr = R.fpbt * R.ss.st.Ab * Math.sin(al), Ftot = 2 * +h.n * Fstr, Lg = L + 2 * (+i.opt.endOh || 0) / 12, Wb = R.g.wsw * Lg;
@@ -234,8 +247,8 @@ for (const name of names) {
     // of the new value worked here from the old app's components
     const ps29 = { fpe: R.fpe, pc: R.gains.precast, cmp: R.gains.composite, ss: R.gains.deckShr, refd: i.opt.lossMethod === 'refined', oldShown: R.fpeGain + R.gains.deckShr };
     const g = R.g, t34 = g.isNext ? g.h - g.next.ft : g.isBox ? g.box.wall : g.isDeck ? (g.box.voids > 0 ? (g.h - g.box.voidD) / 2 : g.h) : null;   // PS-34
-    return { vals, err: R.error, loaded, hand, oldChecks: R.checks.length, orpt, ps29, before, t34 };
-  }, [inp, paths, std]);
+    return { vals, err: R.error, loaded, hand, oldChecks: R.checks.length, orpt, ps29, before, t34, fg0, fg1: R.df && R.df.fg ? { dfm: R.dfm, dfv: R.dfv } : null };
+  }, [inp, paths, std, fgNew]);
   if (o.err) { log(`ERROR ${name}: the old app's engine: ${o.err}`); errors++; continue; }
   const same = JSON.stringify(o.loaded) === JSON.stringify(oldStore);
   if (std) { nStd++; const want = { h: std.entry.h, A: std.entry.A, I: std.entry.I, yb: std.entry.yb, w: std.entry.w };
@@ -243,6 +256,9 @@ for (const name of names) {
     if (o.before) { const b = o.before, f = (v, d) => (+v).toFixed(d); dStd.push(`${name}: ${std.leg} -> ${inp.girder} (plate ${std.src.plate}, PDF p. ${std.src.page}): h ${b.old.h} -> ${b.now.h} in, A ${b.old.A} -> ${b.now.A} in², I ${b.old.I} -> ${b.now.I} in⁴, y_b ${b.old.yb} -> ${b.now.yb} in, S_b ${f(b.old.Sb, 0)} -> ${f(b.now.Sb, 0)} in³, S_t ${f(b.old.St, 0)} -> ${f(b.now.St, 0)} in³, φM_n ${f(b.old.phiMn, 0)} -> ${f(b.now.phiMn, 0)} k-ft (M_u ${f(b.old.MuMid, 0)} -> ${f(b.now.MuMid, 0)}); ratios changed: ${b.old.checks.map((c, j) => [c, b.now.checks[j]]).filter(([c, d]) => d && Math.abs(c[1] - d[1]) > 5e-4).map(([c, d]) => `${c[0]} ${f(c[1], 3)}${c[2] ? '' : ' FAIL'} -> ${f(d[1], 3)}${d[2] ? '' : ' FAIL'}`).join('; ')}`); }
     if (IMPORT && std.leg) { const q = impNotes[impNotes.length - 1];
       if (!/^Section corrected after the import \(PS-31\)/.test(q.sec) || !q.sec.includes(`"${std.leg}" → "${inp.girder}"`)) bad0.push(`PS-31 import (${q.how}): the summary's section-corrected alert "${q.sec.slice(0, 200)}"`); } }
+  if (fgNew) { nFG++; const f = (v, d) => (+v).toFixed(d);
+    if (!o.fg1 || o.fg1.dfm !== fgNew.dfm || o.fg1.dfv !== fgNew.dfv) bad0.push(`PS-35: the old page with the (f) / (g) module gives DF_M ${o.fg1 && o.fg1.dfm}, DF_V ${o.fg1 && o.fg1.dfv}; the new page ${fgNew.dfm}, ${fgNew.dfv}`);
+    dFG.push(`${name}: DF_M ${f(o.fg0.dfm, 4)} -> ${f(fgNew.dfm, 4)}, DF_V ${f(o.fg0.dfv, 4)} -> ${f(fgNew.dfv, 4)} (type (${fgNew.type}), J ${f(fgNew.J, 0)} in⁴ ${fgNew.Jsrc})`); }
   // 3. compare
   const imp = IMPORT ? impNotes[impNotes.length - 1] : null;
   if (args.control && shown.length && steps.length) { shown[0].v *= 1 + 1e-9; steps[0].v = steps[0].v * (1 + 1e-9); }
@@ -323,6 +339,7 @@ if (other.length) { fails++; log('DIFF storage: keys other than psb2.* written: 
 const cerr = nw.errs.concat(old.errs.filter(e => !/Failed to load resource|deoptimised the styling/.test(e)));
 if (cerr.length) { errors++; log('ERROR console: ' + cerr.slice(0, 5).join(' | ')); }
 if (total34) log(`PS-34: ${total34} shown values of the pier block's family thickness compared with the thickness worked here from the old app's girder`);
+if (nFG) { log(`PS-35: ${nFG} designs on a box beam / voided slab, compared with the old app's engine with its distFactors wrapped by engine/lldf-fg.js (types (f) / (g); intended difference from its type (k) factors; before = the old app's own factors):`); dFG.forEach(t => log('    ' + t)); }
 if (nStd) { log(`PS-30 / PS-31: ${nStd} designs with a standard box / voided slab of the CTDOT plates, compared with the old app's engine computing the plate's entry (intended difference from its own wrong table; before = the old app with the old entry):`); dStd.forEach(t => log('    ' + t)); }
 if (n29) { log(`PS-29: ${n29} designs, the shown f_pe with the permanent gains = f_pe + Δf_p,DC1 + Δf_p,SD (worked here); intended differences from the old app's display (Δf_pSS no longer added): ${d29.length}`); d29.forEach(t => log('    ' + t)); }
 await nw.b.close(); await old.b.close();
