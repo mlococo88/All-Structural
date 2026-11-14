@@ -38,6 +38,7 @@ let seeded;
     assert.deepEqual(s.errs, []);
   } finally { await s.b.close(); } }
 
+// (Since SEED1, 2026-11-14, tests/lib.mjs writes its ls seed once as well; this smoke keeps its own seed as written in PR #1555.)
 // The seed is written once, then the page is reloaded (not openPage's ls seed: its init script re-seeds on every navigation where Chromium
 // has not kept the tab's sessionStorage across a file:// reload, which it sometimes does not; step 4's reload then put the old autosave
 // back, and the chip rightly said "unsaved changes": the flaky 'unsaved' !== 'saved').

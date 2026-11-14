@@ -54,7 +54,16 @@ export async function openPage(file, { ls, vw = 1400, vh = 1000, hash = '', time
   p.on('console', m => { if (m.type() === 'error') errs.push(m.text().slice(0, 400)); });
   p.on('pageerror', e => errs.push('pageerror: ' + e.message.slice(0, 400)));
   p.on('dialog', async d => { dialogs.push(d.message().slice(0, 400)); await d.accept(); });
-  if (ls) await p.addInitScript(o => { if (!sessionStorage.getItem('__seeded')) { sessionStorage.setItem('__seeded', '1'); for (const [k, v] of Object.entries(o)) localStorage.setItem(k, v); } }, ls);
+  // ls: the localStorage seed, written once before the tool's first load (SEED1, 2026-11-14). The page first opens a blank file:// page (every
+  // file:// page shares one localStorage origin in Chromium), the seed is written there, then the tool is opened. Before, an init script wrote
+  // the seed on every load unless a sessionStorage marker survived, and Chromium sometimes drops sessionStorage across a file:// reload, so a
+  // smoke that seeds and then reloads could get its seed back over the page's own later writes (PR #1555).
+  if (ls) {
+    const blank = path.join(os.tmpdir(), 'allstruct-tests', 'seed-blank.html');
+    if (!fs.existsSync(blank)) { fs.mkdirSync(path.dirname(blank), { recursive: true }); fs.writeFileSync(blank, '<!doctype html><meta charset="utf-8"><title>seed</title>'); }
+    await p.goto('file://' + blank);
+    await p.evaluate(o => { for (const [k, v] of Object.entries(o)) localStorage.setItem(k, v); }, ls);
+  }
   await p.goto('file://' + file + hash, timeout ? { timeout } : undefined);
   return { b, ctx, p, errs, dialogs, blocked };
 }

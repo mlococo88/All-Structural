@@ -111,6 +111,32 @@ test('project-registry: Steel Bridge app view (items by id): list, file text, ho
   s.setItem('sbd2.lib.index', '{bad'); const u = R2.list(e, s); assert.equal(u.ok, false); assert.equal(u.error, 'unreadable'); assert.equal(s.getItem('sbd2.lib.index'), '{bad');
 });
 
+// PS5-D3 (2026-11-14): the PS Bridge app's list (apps/ps-bridge/engine/library.js, the same structure as the Steel Bridge app's: items by id,
+// psb2.lib.index + psb2.lib.p.<id>); the same checks as the Steel Bridge app view above, with its keys and GitHub folder 'ps-bridge-app'.
+test('project-registry: PS Bridge app view (items by id): list, file text, home upload then synced; reads only', async () => {
+  const e = R2.get('ps-bridge-app'), s = mem(); GS.saveSettings(s, { owner: 'mlococo88', repo: 'structural-projects', branch: 'main', token: TOKEN });
+  assert.equal(e.key, 'psb2.lib.index'); assert.equal(e.href, 'apps/ps-bridge/index.html');
+  const all = R2.all().map(x => x.tool); assert.equal(all.indexOf('ps-bridge-app'), all.indexOf('bridge-suite') + 1, 'card after the Bridge Suite (and the Steel Bridge app)');
+  const t1 = '{\n  "schema": "psb2.project",\n  "project": {\n    "name": "Mill River"\n  }\n}', t0 = '{"schema":"psb2.project","project":{"name":"Mill River","old":1}}', t2 = '{"schema":"psb2.project","project":{"name":"Alt ü"}}';
+  s.setItem('psb2.lib.index', JSON.stringify({ schema: 'psb2.library', version: 1, items: [{ id: 'pa', name: 'Mill River', number: '', saved: '2026-11-01T00:00:00Z', size: t0.length },
+    { id: 'pb', name: 'Mill River', number: '', saved: '2026-11-05T00:00:00Z', size: t1.length }, { id: 'pc', name: 'Alt ü', number: '', saved: '2026-11-03T00:00:00Z', size: t2.length }] }));
+  s.setItem('psb2.lib.p.pa', t0); s.setItem('psb2.lib.p.pb', t1); s.setItem('psb2.lib.p.pc', t2);
+  s.setItem('sbd2.lib.index', JSON.stringify({ schema: 'sbd2.library', version: 1, items: [{ id: 'sa', name: 'Steel one', saved: '2026-11-02T00:00:00Z', size: 2 }] })); s.setItem('sbd2.lib.p.sa', '{}');
+  const before = JSON.stringify([...s.m].filter(([k]) => k.startsWith('psb2.') || k.startsWith('sbd2.')));
+  const l = R2.list(e, s); assert.equal(l.ok, true); assert.equal(l.items.map(i => i.name).join('|'), 'Mill River|Alt ü'); assert.equal(l.items[0].saved, '2026-11-05T00:00:00Z');
+  assert.equal(R2.list(R2.get('steel-bridge-app'), s).items.map(i => i.name).join('|'), 'Steel one', 'the Steel Bridge app view is unchanged and lists its own only');
+  assert.equal(R2.fileText(e, R2.store(e, s).item('Mill River'), 'Mill River'), t1, 'the newest item of the name, its text as stored');
+  const gh = makeGitHubMock({ token: TOKEN }), home = R2.engine(e, s, gh.fetch);
+  const r = await home.uploadAll(); assert.equal(r.ok, true); assert.equal(r.done, 2);
+  assert.equal(gh.files.get('projects/ps-bridge-app/Mill River.json'), t1); assert.equal(gh.files.get('projects/ps-bridge-app/Alt %C3%BC.json'), t2);
+  const tool = GS.engine({ tool: e.tool, label: e.label, store: R2.store(e, s), storage: s, fetch: gh.fetch, toFile: t => t });
+  const n0 = gh.log.length; tool.scan(); await tool.flush(true); await tool.refreshCloud();
+  assert.equal(gh.log.slice(n0).filter(x => x.method !== 'GET').length, 0); assert.equal(tool.statusOf('Mill River'), 'synced');
+  assert.equal(R2.store(e, s).save('X', {}).ok, false, 'save refused (open the app)'); assert.equal(R2.store(e, s).duplicate('Mill River', 'Y').ok, false);
+  assert.equal(JSON.stringify([...s.m].filter(([k]) => k.startsWith('psb2.') || k.startsWith('sbd2.'))), before, 'the app keys unchanged');
+  s.setItem('psb2.lib.index', '{bad'); const u = R2.list(e, s); assert.equal(u.ok, false); assert.equal(u.error, 'unreadable'); assert.equal(s.getItem('psb2.lib.index'), '{bad');
+});
+
 test('project-registry: Steel Bridge Design two-list view (STDS-G): names of both lists, file with pl only when saved; gd only = the GHS2 file; reads only', async () => {
   const e = R2.get('steel-bridge-design'), s = mem();
   const g = { 'Both': { mod: 'girder', x: 1 }, 'Modules only': { mod: 'splice', y: 2 } }, p = { 'PL only': { girder: { a: 1 } }, 'Both': { girder: { b: 2 } } };
