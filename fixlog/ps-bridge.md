@@ -3498,7 +3498,7 @@ PR #1552: https://github.com/mlococo88/All-Structural/pull/1552
 - SE-D3. The groups with no station along the girder (the owner's input limits, e.g. f′ci) are listed under the figure, not marked on it.
 
 ## 2026-11-14 — PR 8b: 3D view: View (whole bridge / girder line close-up, Zoom to), diagram overlays, Scale (display only)
-PR: (link below)
+PR #1553: https://github.com/mlococo88/All-Structural/pull/1553
 ### Request
 - PS Bridge catch-up to the Steel Bridge app, item 8, 3D view:
   - Steel's View choices (close-up per girder);
