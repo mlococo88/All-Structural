@@ -3111,7 +3111,10 @@ PR #1543: https://github.com/mlococo88/All-Structural/pull/1543
 - `engine/worked.js` `loads()`: `if (df.fg) fgSteps(add, inp, R); else { …the type (k) steps as before… }`; new `fgSteps`: I, the outline J (t_w, t_b, t_t, with a topping t_top = t_t + n t_s and its midline, b₀, h₀, A₀, Σ s/t, J_outline, Eq. C4.6.2.2.1-3), the J used (computed / library / user), I / J (with the Table 4.6.2.2.1-3 simplified value for comparison, not used), k, g_M1, g_M2, g_V1, g_V2, exterior e's and 48/b, g_M, g_V, r_M, c_V. Each step's value is the engine's and its substituted expression reproduces it (test).
 - `engine/worked-stress.js`: the exterior fatigue DF step for (f)/(g): DF_fat = e_M1 g_M1 / 1.2.
 - `ui/loads.js`: the (f)/(g) card "Live load distribution factors: interior | exterior box beam | voided slab, type (f | g) (PS-35)" with the range alert `#fgRange`; TOPICS `fgj` (I and J) and the new ids in `int` / `ext`; the solid-slab note reworded (type (k) as the old app, unchanged).
+- `report/builders.js`: new `fgNotes(B)` in §2 Assumptions (after `tbcNotes`): "• Live-load distribution (PS-35): box beam | voided slab, AASHTO LRFD 10th Ed. cross-section type (f | g) of Table 4.6.2.2.1-1 (…), not the I-girder type (k) of the old app; I = … (composite section | girder), J = … (computed from outline | library (DOT) value | user/DOT value). [Outside the range of applicability: ….] (see [[rs.lds]])" (a warning note when out of range).
+  - Before: `...voidNotes(B), ...tbcNotes(B), ...secNotes(B)])];` After: `...voidNotes(B), ...tbcNotes(B), ...fgNotes(B), ...secNotes(B)])];`
 - `index.html`: the script; the input panel follows `data-gotab` links (the J note's link to the Loads & LLDF tab).
+  - Added in the `inPanes` click handler after the `data-goin` line: `{ const gt = t.closest('[data-gotab]'); if (gt) { e.preventDefault(); gotoOut(gt.dataset.gotab); return; } }`
 - Tests: new `tests/engine/psbridge-lldf-fg.test.mjs` (8 tests: the hand checks below, unchanged shapes byte-identical, skew, J precedence and saving per type, ranges and the input card, worked steps / tab / Report); `lldf-fg` in every test loader that loads `holddown`; `psbridge-model.test.mjs` script list; harness B (`tests/psbridge-compare.mjs`): a box / voided slab design is compared with the old app's engine with its distFactors wrapped by this module (the file added to the old page), its type (k) factors logged; `tests/smoke/ps-bridge-skeleton.mjs` 3n: the (f) card, the J override used / labelled / saved, the link.
 ### Saved data (CLAUDE.md §5)
 - New optional field within schema version 1: `base.loads.Jfg` (in⁴; blank or absent = not entered), saved per girder type as `types[k].ovr['loads.Jfg']` (the existing override mechanism). No key, field or format changed; nothing migrated: a project without it reads, computes (J from the library / outline) and saves unchanged (tested: export → import → export identical). `loads.skewLo` is an engine input built on the fly (design.js), never saved.
@@ -3130,7 +3133,24 @@ See the PR for the full tables (inputs, J working, I, k, each term). Summary (de
 - BI-36 J: t_w = (35.5 − 25.5) / 2 = 5.0, t_b = t_t = 5.5; b₀ = 35.5 − 5 = 30.5; h₀ = 27 − 5.5 = 21.5; A₀ = 655.75 in²; Σ s/t = 2 × 30.5 / 5.5 + 2 × 21.5 / 5 = 19.6909; J = 4 × 655.75² / 19.6909 = 87,352 in⁴ (Table 4.6.2.2.1-3's simplified I / J: 0.54 × 27 / 35.5 + 0.16 = 0.5707, against 0.5666 here).
 - SIV-48 J (one closed cell of the outer walls): t_w = 23.75 − 14 − 6 = 3.75; t_b = t_t = 10.5 − 6 = 4.5; b₀ = 43.75; h₀ = 16.5; A₀ = 721.88; Σ s/t = 2 × 43.75 / 4.5 + 2 × 16.5 / 3.75 = 28.2444; J = 73,799 in⁴.
 ### How verified
-- See the PR.
+- `node tests/engine/run.mjs psbridge tex project-registry`: 24 files, 227 passed, 0 failed. This includes the new `psbridge-lldf-fg.test.mjs` (8 tests):
+  - the hand checks (1)–(3);
+  - I-girders, NEXT and solid slabs byte-identical with and without the override (every non-box harness B design, plus a solid slab);
+  - skew handling (smaller / larger skew, more than 10° apart; `skewLo` only for box and slab designs);
+  - J precedence (user over library over outline), J saved per girder type, and an old project round-tripping unchanged;
+  - the range flags in `R.warns` and on the Loads input card, and the input rule;
+  - the worked steps: every derivation reproduces the engine value to 1e-9, plus the tab card, the Report section and the §2 assumption.
+- `lldf-fg` was added to every test loader that loads `holddown`, and `psbridge-model` checks the script list.
+- `node tests/check-syntax.mjs`: all scripts pass (169 files).
+- Harness B `tests/psbridge-compare.mjs`:
+  - normal: 18 designs, 45,966 shown values and 8,020 step values, **0 differences**, exit 0. The I-girder and NEXT designs are compared with the old app directly; the 3 box designs with the old engine wrapped by the module, and their DFs are logged before and after (table above).
+  - `--import`: 18 designs, 0 differences, exit 0.
+  - `--control` on a box design: exit 1. `--import --control`: exit 1.
+  - After the Report change, `--case box` (4 designs) was rerun: 0 differences.
+- Smokes:
+  - `ps-bridge-skeleton.mjs`: 271 checks, 0 failed. New 3n checks: the type (f) card and the worked J on Loads & LLDF; the J override on the Loads input tab is used, labelled "user/DOT value" and saved; the note's link opens Loads & LLDF.
+  - `ps-bridge-types.mjs`: 106 / 0.
+  - `ps-bridge-3d.mjs`: 101 / 0.
 ### Decisions (pending engineer review)
 - PS35-D1. Type (f) when the structural topping t_s > 0, (g) when t_s = 0 (the equations are the same; the type sets I and J).
 - PS35-D2. I and J of the section to which traffic is applied (4.6.2.2.1, "usually the composite section"): with a topping, I = the composite I_c (the engine's, topping transformed by n) and J with the topping added to the top wall as n t_s at its own height; without, the girder's I and J. The composite I / J is larger than the precast-only I / J (BIII-36 with 6 in topping: 0.918 against 0.745), i.e. the larger (conservative) factors. A library (DOT) J or an entered J is used as given, with the same I.
