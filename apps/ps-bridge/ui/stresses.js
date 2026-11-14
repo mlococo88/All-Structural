@@ -84,9 +84,10 @@
     S.poly(poly, 'dt-cc'); sectionVoids(G).forEach(v => { if (v.type === 'rect') S.rect(v.x - v.w / 2, v.y - v.h / 2, v.x + v.w / 2, v.y + v.h / 2, 'dt-cc', { fill: '#fff' }); else S.circ(v.x, v.y, v.d / 2, 'dt-cc', { fill: '#fff' }); });
     // strands at the station (straight rows; the draped strands at their centroid at x)
     const xm = Math.min(r.x, R.L - r.x), a = +ss.hp.frac * R.L, yh = ss.nh > 0 ? (xm >= a ? +ss.hp.yMid : +ss.hp.yEnd + (+ss.hp.yMid - +ss.hp.yEnd) * xm / a) : 0;
-    ss.rows.forEach(q => { for (let j = 0; j < q.n; j++) S.circ((j - (q.n - 1) / 2) * 2, q.y, Math.max(ss.st.db / 2, 0.25), 'dt-bar'); });
-    if (ss.nh > 0) { const np = Math.ceil(ss.nh / 2); for (let j = 0; j < np; j++) { const y = yh + (j - (np - 1) / 2) * 2; S.circ(-1, y, ss.st.db / 2, 'dt-bar', { fill: '#B45309' }); if (2 * j + 1 < ss.nh) S.circ(1, y, ss.st.db / 2, 'dt-bar', { fill: '#B45309' }); }
-      S.callout(1.2, yh + np - 1, 30, -12, [`draped (${ss.nh})`], { sz: 10.5 }); }
+    // the drawn positions of the strand-pattern graphic (PSBStrandGfx.xy, the old app's strandXY; NEXT: in the two stems, PS-27), the draped ones about yh
+    const pts = window.PSBStrandGfx.xy(R, yh);
+    pts.forEach(q => S.circ(q.x, q.y, q.h ? ss.st.db / 2 : Math.max(ss.st.db / 2, 0.25), 'dt-bar', q.h ? { fill: '#B45309' } : undefined));
+    if (ss.nh > 0) { const [, dx1, , dy1] = window.PSBStrandGfx.drapedBox(pts); S.callout(dx1 + 0.2, dy1 - 1, 30, -12, [`draped (${ss.nh})`], { sz: 10.5 }); }
     // the stress profile beside the section (linear between the two fibres; + compression to the right)
     const lims = stage === 'rel' ? [[lim.relC, `${V.fx(lim.relCfac, 2)} f′_ci`], [-lim.relT, 'tension limit']] : stage === 's1' ? [[lim.srvC1, '0.45 f′_c'], [-lim.srvT, 'tension limit']] : [[lim.srvC2, '0.60 f′_c'], [-lim.srvT, 'tension limit']];
     const fmax = Math.max(Math.abs(fT), Math.abs(fB), ...lims.map(q => Math.abs(q[0])), 0.05), xr = Math.max(G.bbf || 0, G.btf || 0) / 2, X0 = xr + 0.55 * h, kx = 0.28 * h / fmax, X = f => X0 + kx * f;
@@ -138,5 +139,5 @@
     const ge = el.querySelector('#o_stGov'); if (ge) ge.addEventListener('click', () => { ui.stSel = null; if (ctx.redraw) ctx.redraw(); });
   }
   function onOutChange(e, ui) { if (e.target.id === 'o_stSel') { ui.stSel = +e.target.value; return true; } return false; }
-  window.PSBUiStresses = { output, after, onOutChange, TOPICS, CHECKS };
+  window.PSBUiStresses = { output, after, onOutChange, TOPICS, CHECKS, secFig };   // secFig: also for tests/engine/psbridge-strandgfx.test.mjs (PS-27)
 })();
