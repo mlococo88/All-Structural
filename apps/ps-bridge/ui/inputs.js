@@ -29,7 +29,12 @@
     let ctl;
     if (f.k === 'sel' || f.k === 'bool') {
       const o = typeof f.o === 'function' ? f.o() : f.o;
-      ctl = `<select id="${id}" data-path="${f.p}" data-kind="${f.k}" title="${tip}">${o.map(([k, t]) => `<option value="${esc(k)}"${String(v) === String(k) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
+      // PS-37 (2026-11-14): an option with a third element (its group) is listed in an <optgroup> of that label (consecutive options of a group)
+      const opt = ([k, t]) => `<option value="${esc(k)}"${String(v) === String(k) ? ' selected' : ''}>${esc(t)}</option>`;
+      let body = '', cur = null;
+      o.forEach(q => { const gq = q[2] || null; if (gq !== cur) { if (cur) body += '</optgroup>'; if (gq) body += `<optgroup label="${esc(gq)}">`; cur = gq; } body += opt(q); });
+      if (cur) body += '</optgroup>';
+      ctl = `<select id="${id}" data-path="${f.p}" data-kind="${f.k}" title="${tip}">${body}</select>`;
     } else ctl = `<input type="number" step="any" id="${id}" data-path="${f.p}" data-kind="${f.k}" title="${tip}" value="${esc(v == null || (typeof v === 'number' && isNaN(v)) ? '' : v)}"${f.k === 'opt' ? ' placeholder="blank"' : ''}>`;
     const od = /^base\./.test(f.p) ? ownDef(P, f.p.slice(5)) : null;
     const hint = od ? `<span class="fHint${od.over ? ' over' : ''}">${od.over ? `overrides the ${esc(od.r.owner)} default (${esc(od.r.show)})` : `${esc(od.r.owner)} default`} · ${esc(PB().ownCite(od.r))}</span>` : '';
@@ -39,6 +44,8 @@
      rows are entered: the CTDOT standard patterns' gapped rows (slab strands between the voids) and web columns (box webs) are entered as the
      nearest contiguous rows; the results use only each row's height and count. Per-row strand positions are a later PR (plan). */
   function rowModelNote(b) {
+    const SC = window.PSBSections, rn = SC && SC.rowNote && b ? SC.rowNote(b.girder) : '';
+    if (rn) return `</p><p class="note" id="mdRowNote">${rn}`;   // PS-41: a MassDOT section: its row heights (and the 48 in box flag)
     const G = typeof GIRDERS !== 'undefined' && b ? GIRDERS[b.girder] : null; if (!G || !(G.box || G.deck)) return '';
     return ` ${G.box ? 'Box beam' : 'Deck slab'}: the standard strand patterns (CTDOT BDM plates ${G.box ? '5.2.2 / 5.2.3' : '5.1.3–5.1.6'}) have ${G.box ? 'strands in vertical columns in the webs' : 'rows with strands only between and outside the voids'}; enter them as the nearest contiguous rows (same height and count). The results use only each row's height y and count n (the strand centroid and area); the drawn positions are used for the fit check and the graphics only.`;
   }
@@ -139,7 +146,7 @@
       h += card(c.id, c.title, c.ref, body + (c.note ? `<p class="note">${c.note(P.base, P)}</p>` : '') + (tbc ? `<p class="note" id="secTbcNote"><b>${tbc}</b></p>` : ''));
       if (c.id === 'shape') h += card('rows', 'Straight strand rows', 'y from the soffit; debonding entered only (auto-design never adds it, PS-12)', table('base.rows', P)
         + `<p class="note">${(P.base.rows || []).reduce((a, r) => a + (+r.n || 0), 0)} straight strands + ${+P.base.harp.n || 0} draped = ${(P.base.rows || []).reduce((a, r) => a + (+r.n || 0), 0) + (+P.base.harp.n || 0)} strands. Debonding rules (5.9.4.3.3) are checked as warnings of the design.</p>`
-        + `<p class="note" id="rowsFitNote">Each row is drawn and checked as a contiguous group of strands on the 2 in grid, centred on the girder ℄. A strand centre must be inside the concrete, at least 2 in from its edges (PS-28) and at least 1.5 in from the face of a void (PS-33).${rowModelNote(P.base)}</p>`);
+        + `<p class="note" id="rowsFitNote">Each row is drawn and checked as a contiguous group of strands on the 2 in grid, centred on the girder ℄. A strand centre must be inside the concrete, at least 2 in from its edges (PS-28) and at least 1.25 in from the face of a void (PS-39; 1.5 in before, PS-33).${rowModelNote(P.base)}</p>`);
     });
     if (tab === 'dd') h = card('diaph', 'Diaphragms (DC1 point loads)', 'entered once (PS-14)', table('base.loads.diaph', P) + '<p class="note">Point loads on the non-composite simple span of the design girder, from the left ℄ bearing; the same diaphragms apply to every girder line (PS-14).</p>') + h;
     if (tab === 'loads') h += card('veh', 'Legal / permit vehicles', 'MBE 6A.4.4, 6A.4.5, Strength I', table('base.rateVeh', P) + '<p class="note">Fully factored live-load moment and shear per vehicle (DF, IM, MPF and the LRFR live-load factor applied, from your own analysis); the app supplies the capacity and the dead loads.</p>')
@@ -167,6 +174,8 @@
     }
     else if (k === 'text') setp(P, path, v);
     else setp(P, path, v);
+    // PS-41 (2026-11-14): a MassDOT section chosen: the straight rows move to its row heights (counts kept), with a notice
+    if (path === 'base.girder' && window.PSBSections && window.PSBSections.applyRows) { const t = window.PSBSections.applyRows(P.base); if (t) note = t; }
     return true;
   }
   const NEW = { 'base.rows': rows => ({ n: 2, y: (rows.length ? +rows[rows.length - 1].y || 0 : 0) + 2, dbnd: 0, nd: 0 }), 'base.loads.diaph': () => ({ P: 0.66, a: 0 }), 'base.rateVeh': () => ({ name: '', M: 0, V: 0, W: 0 }) };

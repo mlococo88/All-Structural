@@ -56,8 +56,8 @@ test('PS-30 / PS-32 (1): the library = the CTDOT plates (A, I, y_b, h, width; S 
     assert.equal(g.wsw, A / 144 * (+D0.mat.wcLoad || +D0.mat.wc), `${n}: self-weight A / 144 × w_c (the engine's load unit weight)`);
   }
   OLD.forEach(n => { assert.ok(!(n in G), n + ' removed'); assert.deepEqual(J(S.LEGACY[n]), J(G0[n]), n + ': kept in PSBSections.LEGACY byte for byte'); });
-  const rest = Object.keys(G0).filter(n => !OLD.includes(n)); rest.forEach(n => assert.deepEqual(J(G[n]), J(G0[n]), n + ' unchanged'));
-  assert.deepEqual(Object.keys(G), [...rest.slice(0, rest.indexOf('Deck slab 12×48 (solid)')), ...PLATE.slice(0, 8).map(r => r[0]), 'Deck slab 12×48 (solid)', 'Deck slab 18×48 (solid)', ...PLATE.slice(8).map(r => r[0]), 'Custom'], 'order');
+  const rest = Object.keys(G0).filter(n => !OLD.includes(n)); rest.forEach(n => assert.deepEqual(J(G[n]), n === 'NEXT 28F' ? J(Object.assign({}, G0[n], { pMax: Object.assign({}, G0[n].pMax, { I: 92836 }) })) : J(G0[n]), n + ' unchanged'));   // PS-38: NEXT 28F I at 144 in (psbridge-ps38.test.mjs)
+  assert.deepEqual(Object.keys(G), [...rest.slice(0, rest.indexOf('Deck slab 12×48 (solid)')), ...PLATE.slice(0, 8).map(r => r[0]), 'Deck slab 12×48 (solid)', 'Deck slab 18×48 (solid)', ...PLATE.slice(8).map(r => r[0]), ...S.ORDER_MD, 'Custom'], 'order');   // PS-37: the MassDOT sections before Custom
   // the box webs follow from the plate areas: A = w h − (w − 2 t_w)(h − 11) + 18 (void chamfers) − 13.9 (keys, ¾ in chamfers)
   PLATE.slice(0, 8).forEach(([n, h, w, A]) => { const tw = G[n].bw / 2; assert.equal(tw, /BIII|BIV/.test(n) ? 6 : 5, n); assert.ok(Math.abs(w * h - (w - 2 * tw) * (h - 11) + 18 - 13.9 - A) < 0.06, n + ': area from the walls'); });
 });
@@ -134,7 +134,8 @@ test('PS-30 / PS-31 (4): the Section properties note (plate, void, drawn outline
   assert.match(t, /^Void: one 23\.5 × 28\.0 in cell, y = 5\.5 to 33\.5 in above the soffit, centred between the 5\.5 in top and bottom slabs; webs 6\.0 in; actual width 35\.5 in \(nominal 36 in\) \(CTDOT BDM plate 5\.2\.1a, PDF p\. 326\)/);
   assert.match(t, /plate's values \(AASHTO BIII-36, CTDOT BDM plate 5\.2\.1b, PDF p\. 327\); the drawn outline .* gives A = 726\.5 in² \(−0\.6 %\), I = 132,496 in⁴ \(−0\.3 %\)/);
   const s = W.PSBUiSection.voidNote(gOf('AASHTO SIV-48 (21in)'));
-  assert.match(s, /^Voids: Ø12\.0 in at x = -14\.0 in, Ø10\.0 in at x = 0\.0 in, Ø12\.0 in at x = 14\.0 in, on mid-depth \(y = 10\.5 in\)/);
+  assert.match(s, /^Voids: Ø12\.0 in at x = -14\.25 in, Ø10\.0 in at x = 0\.00 in, Ø12\.0 in at x = 14\.25 in, on mid-depth \(y = 10\.5 in\)/);   // PS-40
+  assert.ok(s.includes("MassDOT's dimensioned spacing, Part II dwg 10.1.5, p. 194, PS-40"), s);
   assert.equal(W.PSBUiSection.voidNote(gOf('PCI BT-72')), '');
   const P = W.PSBModel.importJSON(W.PSBModel.exportJSON(proj('AASHTO BIII-36 (27in)'))).project, B = W.PSBReportData.compute(P, null, 'gov'); assert.equal(B.err, '');
   const M = W.PSBReportBuild.model(B, {}), doc = W.SharedReport.build(M), a = M.sections.find(q => q.id === 'proj').subs.find(q => /Assumptions/.test(q.title)), at = JSON.stringify(a.items);
@@ -153,10 +154,14 @@ test('PS-30 / PS-31 (4): the Section properties note (plate, void, drawn outline
 test('PR A: the "to be confirmed" note of every standard box / voided slab (Girders & strands tab, Report assumptions); none for other shapes', () => {
   const OLDI = /the old "BIII-36 \(27in\)" gave I = 97,756 in⁴, more than a solid 36 × 27 in rectangle at 59,049 in⁴/;
   [...S.ORDER_BOX, ...S.ORDER_SLAB].forEach(n => {
-    const t = S.tbcNote(n), box = S.STD[n].box, sp = S.STD[n].w > 40 ? '0, ±14' : '±8';
+    // PS-40 (2026-11-14): the void spacing is MassDOT's dimensioned one (dwg 10.1.4 / 10.1.5)
+    const t = S.tbcNote(n), box = S.STD[n].box, sp = S.STD[n].w > 40 ? (/SII-/.test(n) ? '0, ±13.75' : '0, ±14.25') : '±7.75';
     assert.match(t, new RegExp(`^To be confirmed: A, I and y<sub>b</sub> of this ${box ? 'box beam' : 'voided slab'} are taken from CTDOT BDM plate ${box ? '5\\.2\\.1b' : S.STD[n].w > 40 ? '5\\.1\\.2c' : '5\\.1\\.1c'} `), n);
-    assert.match(t, OLDI, n); assert.match(t, /to be confirmed by the engineer against the DOT reference sheets\./, n);
-    if (box) assert.ok(!/void spacing/.test(t), n); else assert.ok(t.includes(`The void spacing (void centres at ${sp} in from the ℄) is scaled from the plate drawing, not dimensioned on it, and is to be confirmed.`), n + ': ' + t);
+    assert.match(t, OLDI, n); assert.match(t, /The CTDOT values are to be confirmed by the engineer\./, n);
+    // the MassDOT cross-check (PS-38 / PS-40 update): the section of the same size, its sheet, and the differences
+    const x = S.xchk(n); assert.ok(x, n); assert.ok(t.includes(`Cross-check: the MassDOT Bridge Manual Part II ${box ? 'adjacent box beam' : 'deck beam'} of the same size, ${x.md} (dwg ${x.dwg}, p. ${x.page})`), n);
+    if (box) { assert.ok(x.dA < -0.02 && x.dA > -0.035 && x.dI < -0.014 && x.dI > -0.025, `${n}: CTDOT 2–3 % below MassDOT: ${x.dA} ${x.dI}`); assert.ok(t.includes('about 2–3 % below the MassDOT adjacent boxes'), n); }
+    if (box) assert.ok(!/void spacing/.test(t), n); else assert.ok(t.includes(`The void spacing (void centres at ${sp} in from the ℄) is not dimensioned on the CTDOT plate: it is MassDOT's dimensioned spacing for this void size and width (dwg ${S.STD[n].w > 40 ? '10.1.5, p. 194' : '10.1.4, p. 193'}; PS-40).`), n + ': ' + t);
     // the Girders & strands tab's shape card (base design)
     const html = W.PSBInputsUI.cards('gird', proj(n));
     assert.ok(html.includes(`id="secTbcNote"><b>${t}</b>`), n);

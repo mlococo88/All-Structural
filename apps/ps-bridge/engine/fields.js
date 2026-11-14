@@ -45,7 +45,7 @@
         : 'Used when the design girder is an exterior girder (G1 or the last girder). Entered: the project has no cross-section barriers (saved before the DC2 / DW distribution, 2026-11-13).' },
     // ---- Girders & strands ----
     { tab: 'gird', id: 'shape', title: 'Girder shape', ref: 'PCI / AASHTO shapes (the old app\'s library)', fields: [
-      F('base.girder', 'Girder section', '', 'Girder shape from the library (gross properties per PCI / AASHTO). The library of the engineer\'s standard sheets (NEBT, NEDBT, NEXT, boxes) comes in PR 4 (PS-2).', 'sel', { o: () => Object.keys(typeof GIRDERS !== 'undefined' ? GIRDERS : {}).map(k => [k, k]) }),
+      F('base.girder', 'Girder section', '', 'Girder shape from the library, grouped by owner (PS-37): the old app\'s AASHTO / PCI shapes and NEXT F, the CTDOT box beams and voided slabs (BDM plates), and the MassDOT Bridge Manual Part II standard sections (NEBT, NEDBT, NEXT F, NEXT D, spread and adjacent box beams, deck beams).', 'sel', { o: () => Object.keys(typeof GIRDERS !== 'undefined' ? GIRDERS : {}).map(k => [k, k, window.PSBSections && window.PSBSections.group ? window.PSBSections.group(k) : undefined]) }),
       F('base.cust.h', 'Overall depth h', 'in', 'Custom section: overall girder depth.', 'num', { when: b => b.girder === 'Custom' }),
       F('base.cust.A', 'Gross area A', 'in²', 'Custom section: gross area.', 'num', { when: b => b.girder === 'Custom' }),
       F('base.cust.I', 'Moment of inertia I', 'in⁴', 'Custom section: gross moment of inertia about the centroid.', 'num', { when: b => b.girder === 'Custom' }),
