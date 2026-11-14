@@ -3635,7 +3635,7 @@ PR #1556: https://github.com/mlococo88/All-Structural/pull/1556
 - None (the old app is frozen).
 
 ## 2026-11-14 — PS-41: a MassDOT section moves the straight strand rows to the MassDOT row heights (2.25 / 4.25 / 6.25 in boxes and deck beams; 2.5 / 4.5 / 6.5 in NEBT, NEDBT, NEXT); the 48 in boxes' extrapolated pattern flagged (input default; no formula change)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1557: https://github.com/mlococo88/All-Structural/pull/1557
 ### Request
 - Engineer decision 2026-11-14 (PS-41): MassDOT sections default to the MassDOT strand row heights, 2.25 / 4.25 / 6.25 in for boxes and slabs, a 2.5 in start for NEBT / NEXT (verify on the sheets); the 48 in adjacent / spread box pattern is extrapolated from the 36 in sheet: flag it on the Strands tab and in the Report. CTDOT keeps its rows.
 ### Sheets read (MassDOT Bridge Manual Part II, April 2024; PDF 2 of 3)
@@ -3654,7 +3654,9 @@ PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
 ### Check case
 - Rows 10 @ 4, 12 @ 2 (2 debonded 10 ft), 6 @ 6 in; MassDOT B36-27 adj. chosen: 10 @ 4.25, 12 @ 2.25 (2 debonded 10 ft), 6 @ 6.25 in; then MassDOT NEBT 1200: 4.5, 2.5, 6.5 in; then a CTDOT box: unchanged. The sheets' bottom rows fit at these heights: boxes 16 / 22 at 2.25 in and 14 / 20 at 4.25 in (36 / 48 in), deck beams 16 / 22, NEBT / NEDBT 14 at 2.5 and 4.5 in, NEXT 10 a row (tested).
 ### How verified
-- RESULTS_PLACEHOLDER
+- `node tests/check-syntax.mjs`: all scripts pass. `node tests/engine/run.mjs psbridge tex project-registry`: 33 files, 345 passed, 0 failed (after merging main); new `tests/engine/psbridge-ps41.test.mjs` (4 tests: the grid per family, the move on choosing a section (base and a girder type) with its notice, the sheets' bottom rows fit, the 48 in flag on the tab and in the Report §2).
+- Harness B: normal and `--import` 19 designs, 0 differences (exit 0); `--control`, `--import --control` exit 1. No harness design chooses a MassDOT section: no difference expected.
+- Smokes (one at a time): ps-bridge-skeleton 271 / 0 failed, ps-bridge-types 106 / 0 (a first run stopped on the intermittent seeded-reload issue noted in #1555, before any PS-41 step; passed on the re-run), ps-bridge-3d 101 / 0, ps-bridge-figures 225 / 0, ps-bridge-library 11 / 0.
 ### Decisions (pending engineer review)
 - PS41-D1. The rows move whenever a MassDOT section is chosen and a row is off its grid (the k-th row by height to first + 2 k); the counts are kept, so a count that does not fit the new shape shows the strand-fit error (PS-28); the draped strands are not moved.
 - PS41-D2. The 48 in boxes use the 36 in sheets' rule (2¼ in bottom row, 2¾ in to the outer face, 2 in grid): flagged as extrapolated (tab and Report), to be confirmed.
