@@ -44,6 +44,8 @@
      rows are entered: the CTDOT standard patterns' gapped rows (slab strands between the voids) and web columns (box webs) are entered as the
      nearest contiguous rows; the results use only each row's height and count. Per-row strand positions are a later PR (plan). */
   function rowModelNote(b) {
+    const SC = window.PSBSections, rn = SC && SC.rowNote && b ? SC.rowNote(b.girder) : '';
+    if (rn) return `</p><p class="note" id="mdRowNote">${rn}`;   // PS-41: a MassDOT section: its row heights (and the 48 in box flag)
     const G = typeof GIRDERS !== 'undefined' && b ? GIRDERS[b.girder] : null; if (!G || !(G.box || G.deck)) return '';
     return ` ${G.box ? 'Box beam' : 'Deck slab'}: the standard strand patterns (CTDOT BDM plates ${G.box ? '5.2.2 / 5.2.3' : '5.1.3–5.1.6'}) have ${G.box ? 'strands in vertical columns in the webs' : 'rows with strands only between and outside the voids'}; enter them as the nearest contiguous rows (same height and count). The results use only each row's height y and count n (the strand centroid and area); the drawn positions are used for the fit check and the graphics only.`;
   }
@@ -172,6 +174,8 @@
     }
     else if (k === 'text') setp(P, path, v);
     else setp(P, path, v);
+    // PS-41 (2026-11-14): a MassDOT section chosen: the straight rows move to its row heights (counts kept), with a notice
+    if (path === 'base.girder' && window.PSBSections && window.PSBSections.applyRows) { const t = window.PSBSections.applyRows(P.base); if (t) note = t; }
     return true;
   }
   const NEW = { 'base.rows': rows => ({ n: 2, y: (rows.length ? +rows[rows.length - 1].y || 0 : 0) + 2, dbnd: 0, nd: 0 }), 'base.loads.diaph': () => ({ P: 0.66, a: 0 }), 'base.rateVeh': () => ({ name: '', M: 0, V: 0, W: 0 }) };

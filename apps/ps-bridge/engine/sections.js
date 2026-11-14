@@ -407,6 +407,32 @@
     return `${head}${s.voids.length ? `: voids ${s.voids.map(v => `Ø${fx(v.d, 0)} in at x = ${f2(v.x)} in`).join(', ')} on mid-depth (dimensioned on the sheet)` : ' (solid)'}; the shear keys of dwg ${s.keys.dwg} and the ¾ in chamfers not drawn.`;
   }
 
+  /* PS-41 (engineer decision 2026-11-14): a MassDOT section's strand row heights (its strand pattern layout sheet): the bottom row 2¼ in above
+     the soffit for the box beams and deck beams (dwg 9.3.7 / 9.3.8 spread, 10.2.7 / 10.2.8 adjacent, 10.1.7 / 10.1.8 deck beams), 2½ in for
+     the NEBT, NEDBT and NEXT (dwg 9.1.6, 11.1.7, 9.2.5, 11.2.7); the rows above every 2 in (2.25 / 4.25 / 6.25 in; 2.5 / 4.5 / 6.5 in). The box
+     sheets draw the 36 in box: the 48 in boxes' pattern (2¾ in to the outer face, the 2 in grid) is extrapolated from them (flagged on the
+     Girders & strands tab and in the Report). CTDOT and the old library: the rows as entered (no default moves them).
+       rowGrid(name)  { first, step, dwg, page, extrap } of a MassDOT section, or null
+       applyRows(b)   b (the inputs of the base design or of a girder type's view) on a MassDOT section: its straight rows, in order of height,
+                      moved to the grid (counts and debonding kept); '' or the notice text
+       rowNote(name)  the Girders & strands tab's note (HTML; '' for any other section); extrapText(name) the 48 in box flag ('' otherwise) */
+  function rowGrid(name) {
+    const e = Object.prototype.hasOwnProperty.call(MD, name) ? MD[name] : null; if (!e) return null; const s = e.src, f = s.fam;
+    return { first: ['nebt', 'nedbt', 'nextf', 'nextd'].includes(f) ? 2.5 : 2.25, step: 2, dwg: s.strands.dwg, page: s.strands.page, extrap: (f === 'adj' || f === 'spread') && s.wNom === 48 };
+  }
+  const extrapText = name => { const r = rowGrid(name); return r && r.extrap ? `The MassDOT strand pattern sheets for box beams (dwg ${r.dwg}, p. ${r.page}) draw the 36 in box: the strand pattern of this 48 in box (bottom row 2¼ in, 2¾ in to the outer face, the 2 in grid) is extrapolated from that sheet, not shown on a MassDOT sheet; to be confirmed.` : ''; };
+  function applyRows(b) {
+    const r = isObj(b) ? rowGrid(b.girder) : null; if (!r || !Array.isArray(b.rows) || !b.rows.length) return '';
+    const idx = b.rows.map((q, i) => i).filter(i => isObj(b.rows[i])).sort((i, j) => (+b.rows[i].y || 0) - (+b.rows[j].y || 0) || i - j), ch = [];
+    idx.forEach((i, k) => { const y = R2(r.first + r.step * k), q = b.rows[i]; if (+q.y !== y) { ch.push([i, `row ${i + 1} y = ${q.y} → ${y} in`]); q.y = y; } });
+    if (!ch.length) return '';
+    return `Strand rows moved to the MassDOT row heights of ${b.girder} (PS-41: the bottom row ${r.first} in above the soffit, then every 2 in; dwg ${r.dwg}, p. ${r.page}): ${ch.sort((p, q) => p[0] - q[0]).map(c => c[1]).join(', ')}. The counts are kept: check the strand fit on the Girders & strands tab.${r.extrap ? ' ' + extrapText(b.girder) : ''}`;
+  }
+  function rowNote(name) {
+    const r = rowGrid(name); if (!r) return '';
+    return `MassDOT strand rows (PS-41): the bottom row ${r.first} in above the soffit and the rows above every 2 in (${[0, 1, 2].map(k => R2(r.first + 2 * k)).join(' / ')} in), as on dwg ${r.dwg} (p. ${r.page}); a section chosen from this group moves the rows to these heights (counts kept).${r.extrap ? ` <b>${extrapText(name)}</b>` : ''}`;
+  }
+
   /* tbcNote(name): the "to be confirmed" note of a standard box beam / voided slab (engineer request 2026-11-14, PR A; the one exception to
      the no-pending-in-app rule): the plate the properties come from, the old library they replace (found inconsistent), the MassDOT section
      of the same size as the cross-check (XCHK; updated 2026-11-14 with PS-38 / PS-40); voided slabs: the void spacing, dimensioned on the
@@ -423,5 +449,5 @@
   }
 
   install(); wrapVoids(); wrapMD();
-  window.PSBSections = { STD, LEGACY, MAP, ORDER_BOX, ORDER_SLAB, NEXT_FIX, LIB, XCHK, xchk, uses, stamp, MD, ORDER_MD, group, mdOf, mdHalf, mdVoids, mdNote, roundPoly, nxW, install, migrate, items, tags, text, retiredMsg, sig, withLegacy, src, tbcNote, DOT_J, dotJ, outline, slabOf, stdOf, engineOf };
+  window.PSBSections = { STD, LEGACY, MAP, ORDER_BOX, ORDER_SLAB, NEXT_FIX, LIB, XCHK, xchk, uses, stamp, MD, ORDER_MD, group, rowGrid, applyRows, rowNote, extrapText, mdOf, mdHalf, mdVoids, mdNote, roundPoly, nxW, install, migrate, items, tags, text, retiredMsg, sig, withLegacy, src, tbcNote, DOT_J, dotJ, outline, slabOf, stdOf, engineOf };
 })();
