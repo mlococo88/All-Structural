@@ -3322,7 +3322,7 @@ PR #1548: https://github.com/mlococo88/All-Structural/pull/1548
 - `ui/lists.js` and `engine/model.js` `equalSpacing` are copies of the Steel Bridge app's, to move to shared/ later (CLAUDE.md §3). The focusout fix in `ui/lists.js` is not in the steel copy, which has the same race; that tool was not changed.
 
 ## 2026-11-14 — Summary "Cross-section and plan" card; the Report's framing plan in §2 (display only)
-PR: (link below)
+PR #1549: https://github.com/mlococo88/All-Structural/pull/1549
 ### Request
 - PS Bridge catch-up to the Steel Bridge app, item 4:
   - near the top of Summary, the whole-bridge cross-section (item 2) and the framing plan (item 3), stacked at full width with a height cap like Steel's;
