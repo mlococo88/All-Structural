@@ -3849,7 +3849,7 @@ PR #1562: https://github.com/mlococo88/All-Structural/pull/1562
 - AD-D9. A span with no passing section has no Apply; its blocked checks are listed. The Report has no "Auto design basis" section yet (plan §4): a later PR.
 
 ## 2026-11-14 — Item B: the Drawings tab, part 2 — each girder type's elevation and strand pattern sheets and the strand and girder schedule, DXF and print as part 1 (display and export only)
-PR #TBD: https://github.com/mlococo88/All-Structural/pull/TBD
+PR #1563: https://github.com/mlococo88/All-Structural/pull/1563
 ### Request
 - PS Bridge catch-up item B (Drawings part 2, after the auto design): strand pattern and girder elevation sheets and a strand / girder schedule.
   - Strand pattern sheets: the sections at midspan and at the end, with the strand grid and the debonded and draped strands.
