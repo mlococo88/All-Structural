@@ -22,7 +22,7 @@ import { pinText } from './psbridge-source.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared(...PBD, ...['model', 'holddown', 'design'].map(n => path.join(APP, `engine/${n}.js`)), ...['vizkit', 'strands', 'section', 'stresses'].map(n => path.join(APP, `ui/${n}.js`)));
+const W = loadShared(...PBD, ...['sections', 'model', 'holddown', 'design'].map(n => path.join(APP, `engine/${n}.js`)), ...['vizkit', 'strands', 'section', 'stresses'].map(n => path.join(APP, `ui/${n}.js`)));
 const COVER = 2;
 const GIRDERS = vm.runInContext('GIRDERS', W), DEFAULTS = vm.runInContext('DEFAULTS', W);   // the engine's const globals (not on the context object)
 
@@ -92,7 +92,10 @@ for (const [girder, S] of SHAPES) {
   const name = `${girder}${S ? ` (S = ${S} ft, flange ${Math.min(144, Math.max(96, S * 12))} in)` : ''}`;
   test(`PS-27 strand graphics: ${name}`, () => {
     const C = cases(girder, S);
-    assert.ok(C.full.rows.length >= 1 && C.full.rows[0].n >= 2, `${name}: a full pattern ${JSON.stringify(C.full)}`);
+    // PS-32: the CTDOT SII-48 (Ø8 voids, bottom 3.5 in above the soffit, one on the ℄) has no centred row 2 in from its voids (PS-28's 2 in;
+    // the void clearance of the next PR, PS-33, admits its standard 2 in row)
+    if (girder === 'AASHTO SII-48 (15in)' && !C.full.rows.length) { delete C.full; assert.equal(C.default.rows.length, 0); }
+    else assert.ok(C.full.rows.length >= 1 && C.full.rows[0].n >= 2, `${name}: a full pattern ${JSON.stringify(C.full)}`);
     for (const [cn, c] of Object.entries(C)) {
       const d = design(girder, c.rows, c.harp, S), R = d.R, G = R.g, poly = outline(G), ss = R.ss, tag = `${name} ${cn}`;
       const before = JSON.stringify([ss.Ntot, ss.cgsMid, ss.eMid, ss.eEnd, ss.at(0.001), ss.at(R.L / 2), R.checks]);

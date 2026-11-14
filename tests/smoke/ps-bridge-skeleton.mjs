@@ -36,6 +36,9 @@
 //   3m. PR 2f: "From the old app": the old app's design on screen (with its bridge model), a shared project and the older list are listed; the
 //      chosen one imported (asked first), the summary (results the same, the other stored design kept), the project saved, a result tab's values
 //      = the old inputs computed; an old Export JSON through Import JSON; a MIDAS demands file refused; every old key byte-identical; 390 px;
+//   3n. PS-30 / PS-31 (2026-11-14): a saved project with an old library box beam opens on the corrected CTDOT section: the banner on the output
+//      tabs (old → new A / I / y_b) until closed (stays closed), the old values kept (legacySection), Section properties = the plate, the
+//      Report's assumption; the removed 27 in voided slab: an input error naming it and the notice; no console error on any tab;
 //   5. 390 x 844 (phone): stacked panels, no splitter, no check summary column, no horizontal page scroll (the Report too); 0 console errors.
 //   node tests/smoke/ps-bridge-skeleton.mjs [--file <index.html>] [--shots <dir>]
 import fs from 'fs';
@@ -406,6 +409,35 @@ await o.b.close();
   if (args.shots) { await p.evaluate(() => document.getElementById('lgSum').scrollIntoView({ block: 'start' })); await p.screenshot({ path: path.join(args.shots, 'ps-bridge-2f-import-390.png') }); }
   ls = await lsSnap(p); Object.entries(OLDLS).forEach(([k, v]) => check(ls[k] === v, 'phone: old key untouched ' + k));
   check(!o.errs.length, 'console errors (390 px, From the old app): ' + o.errs.join(' | '));
+  await o.b.close(); }
+// 3n. PS-30 / PS-31 (engineer decisions 2026-11-14): a saved project with one of the old library's box beams opens on the corrected CTDOT
+// section (engine/sections.js): the girder migrated, the loud banner on every output tab ("section corrected", old → new A / I / y_b) until
+// closed, the old values kept in the project (legacySection), the Report's §2 assumption, the results computed; the removed 27 in voided slab
+// is an input error naming it
+{ o = await openPage(FILE, { vw: 1400, vh: 1000 }); p = o.p; await ready(p);
+  await p.evaluate(() => { const P = window.PSBModel.newProject(); Object.assign(P.base, { girder: 'AASHTO BIII-36 (27in)', ts: 6, rows: [{ n: 16, y: 2, nd: 0, dbnd: 0 }], harp: { n: 0, yEnd: 20, yMid: 8, frac: 0.4 } });
+    P.xs.bays = [3, 3, 3, 3]; P.spans.lengths = [60]; localStorage.setItem('psb2.project.current', window.PSBModel.exportJSON(P)); });
+  await p.reload(); await ready(p); await p.click('#tabBar [data-otab="sec"]'); await p.waitForTimeout(300);
+  const t = (await p.textContent('#secNotice').catch(() => '')) || '';
+  check(/Girder section corrected \(PS-31\)\. Base design: section corrected \(PS-31\): "AASHTO BIII-36 \(27in\)" → "AASHTO BIII-36 \(39in\)" \(CTDOT BDM plate 5\.2\.1b, PDF p\. 327\): h 27 → 39 in, A 812\.0 → 730\.6 in², I 97,756 → 132,895 in⁴, y_b 13\.14 → 19\.28 in/.test(t), 'PS-31: the banner ' + t.slice(0, 300));
+  const r = await p.evaluate(() => ({ g: [...document.querySelectorAll('#out [data-ev="g.A"], #out [data-ev="g.I"]')].map(e => e.textContent), note: (document.getElementById('sec-void-note') || {}).textContent || '', sel: document.getElementById('i_base.girder') ? document.getElementById('i_base.girder').value : null }));
+  check(r.g[0] === '730.6' && r.g[1] === '132,895' && /centred between the 5\.5 in top and bottom slabs/.test(r.note), 'PS-30: Section properties A, I = the plate; the note ' + JSON.stringify(r).slice(0, 300));
+  if (args.shots) await p.screenshot({ path: path.join(args.shots, 'ps-bridge-ps31-banner.png') });
+  await p.click('#tabBar [data-otab="flex"]'); await p.waitForTimeout(300); check(await p.isVisible('#secNotice'), 'PS-31: the banner on another output tab');
+  await p.click('[data-secdismiss]'); await p.waitForTimeout(300);
+  let sv = JSON.parse((await lsSnap(p))['psb2.project.current']);
+  check(!(await p.isVisible('#secNotice')) && sv.base.girder === 'AASHTO BIII-36 (39in)' && sv.legacySection.items[0].old.I === 97756 && sv.notices.sec === 'base|AASHTO BIII-36 (27in)|AASHTO BIII-36 (39in)', 'PS-31: closed, saved with the corrected girder and the old values ' + JSON.stringify(sv.legacySection).slice(0, 200));
+  await p.reload(); await ready(p); check(!(await p.isVisible('#secNotice')), 'PS-31: stays closed after a reload');
+  await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 60000 });
+  check(/section corrected \(PS-31\)/.test(await p.textContent('.rp-doc')), 'PS-31: the Report states it');
+  await p.evaluate(() => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project; P.base.girder = 'Deck slab 27×48 (voided)'; localStorage.setItem('psb2.project.current', window.PSBModel.exportJSON(P)); });
+  await p.reload(); await ready(p); await p.click('#tabBar [data-otab="sec"]'); await p.waitForTimeout(300);
+  const e = await p.textContent('#out');
+  check(/Girder section "Deck slab 27×48 \(voided\)" was removed from the library \(PS-31\)/.test(e) && await p.isVisible('#secNotice') && /removed from the library/.test(await p.textContent('#secNotice')), 'PS-31: the 27 in voided slab: input error and notice');
+  if (args.shots) await p.screenshot({ path: path.join(args.shots, 'ps-bridge-ps31-removed.png') });
+  for (const t of ['sum', '3d', 'str']) { await p.click(`#tabBar [data-otab="${t}"]`); await p.waitForTimeout(300); }
+  await p.click('#inTabs [data-itab="gird"]'); await p.waitForTimeout(300);
+  check(!o.errs.length, 'console errors (PS-31): ' + o.errs.join(' | '));
   await o.b.close(); }
 // 4. unreadable saved project
 o = await openPage(FILE, { vw: 1400, vh: 1000, ls: { 'psb2.project.current': '{broken' } }); p = o.p; await ready(p);

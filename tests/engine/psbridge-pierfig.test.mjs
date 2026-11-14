@@ -10,7 +10,7 @@ import { loadShared, test, ROOT } from './harness.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared(...PBD, ...['model', 'holddown', 'design'].map(n => path.join(APP, `engine/${n}.js`)), ...['vizkit', 'flexure'].map(n => path.join(APP, `ui/${n}.js`)));
+const W = loadShared(...PBD, ...['sections', 'model', 'holddown', 'design'].map(n => path.join(APP, `engine/${n}.js`)), ...['vizkit', 'flexure'].map(n => path.join(APP, `ui/${n}.js`)));
 
 function record(fn) {
   const VK = W.PSBVizKit, s0 = VK.scene, got = [];
@@ -28,7 +28,7 @@ const CASES = {
   'NEXT 24F (default bays)': ['NEXT 24F', { ts: 6, harp: { n: 0, yEnd: 16, yMid: 8, frac: 0.4 } }],
   'PCI BT-72': ['PCI BT-72', {}],
   'AASHTO Type IV': ['AASHTO Type IV', { harp: { n: 8, yEnd: 44, yMid: 8, frac: 0.4 } }],
-  'AASHTO BIII-36': ['AASHTO BIII-36 (27in)', { ts: 6, harp: { n: 0, yEnd: 20, yMid: 8, frac: 0.4 }, rows: [{ n: 16, y: 2, nd: 0, dbnd: 0 }] }]
+  'AASHTO BIII-36': ['AASHTO BIII-36 (39in)', { ts: 6, harp: { n: 0, yEnd: 20, yMid: 8, frac: 0.4 }, rows: [{ n: 16, y: 2, nd: 0, dbnd: 0 }] }]
 };
 for (const [name, [girder, o]] of Object.entries(CASES)) test(`pier section compression block where the engine's b_bf is: ${name}`, () => {
   const { inp, R } = design(girder, o), G = R.g, c = R.cont, before = JSON.stringify([c.aN, c.cN, c.phiMnN, c.dc, G.bbf]);

@@ -19,7 +19,7 @@ const katex = createRequire(import.meta.url)(path.join(ROOT, 'tests/libs/katex@0
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
 const W = loadShared('steps.js', 'report.js', ...PBD,
-  ...['model', 'holddown', 'design', 'fields', 'inputcheck', 'worked', 'worked-stress', 'worked-strength', 'worked-end', 'worked-hdr'].map(n => path.join(APP, `engine/${n}.js`)),
+  ...['sections', 'model', 'holddown', 'design', 'fields', 'inputcheck', 'worked', 'worked-stress', 'worked-strength', 'worked-end', 'worked-hdr'].map(n => path.join(APP, `engine/${n}.js`)),
   ...['inputs', 'vizkit', 'vizalong', 'outkit', 'section', 'loads', 'analysis', 'strands', 'losses', 'stresses', 'flexure', 'shear', 'endzone', 'camber', 'handling', 'deck', 'rating', 'dash'].map(n => path.join(APP, `ui/${n}.js`)),
   ...['fromtab', 'data', 'builders'].map(n => path.join(APP, `report/${n}.js`)));
 const J = x => JSON.parse(JSON.stringify(x));   // vm objects to this realm (deepEqual compares prototypes)

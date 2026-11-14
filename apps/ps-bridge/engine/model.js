@@ -41,6 +41,11 @@
                       its own overrides (ovr), checked on every line in lines (1-based, of nb). A project saved without it is migrated on load
                       (importJSON → PSBBridge.migrate): its design girder becomes type T1 on that one line with no override (results unchanged);
                       malformed stored types are kept as typesBad (never discarded). A new project (newProject) has Interior and Exterior types.
+     legacySection: { decision, items: [{ where, label, from, to, old: { h, w, A, I, yb }, now }] }  added 2026-11-14 (PS-31), optional within
+                      version 1: written when a project that uses one of the old library's box beams or voided deck slabs is opened (importJSON,
+                      engine/sections.js migrate): base.girder / types[].ovr.girder become the corrected standard section of the same name (to;
+                      null for 'Deck slab 27×48 (voided)': no standard within ±3 in, left as it is and an input error) and the old library
+                      values are kept here (old). Nothing reads it for a calculation; the page's notice and the Report's §2 state it.
    }
    Needs the moved engine (engine/pbd-*.js) loaded first for base; without it (a test of this file alone) base is left as it is.
    From PR 2b the engine computes the design girder from base and the bridge values (engine/design.js). */
@@ -154,6 +159,7 @@
     const notes = [], BR = typeof window !== 'undefined' && window.PSBBridge;
     if (BR && p.base && typeof p.base === 'object') { const n = BR.migrate(p); if (n) notes.push(n); }   // PR 3a-1: girder types (a project saved before: its design girder = type T1)
     if (BR && typeof window !== 'undefined' && window.PSBLegacy && p.legacy) { const n = window.PSBLegacy.restore(p); if (n) notes.push(n); }   // PR 3a-4 (PS-17): an old bridge model's other designs as girder types
+    if (typeof window !== 'undefined' && window.PSBSections) { const n = window.PSBSections.migrate(p); if (n) notes.push(n); }   // PS-31: an old box / voided slab name -> the corrected standard section (P.legacySection)
     const v = validate(p);
     return { ok: true, project: p, errors: v.errors, warnings: v.warnings, notes };
   }
