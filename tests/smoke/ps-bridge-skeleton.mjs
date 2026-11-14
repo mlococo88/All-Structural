@@ -6,7 +6,7 @@
 //      a reload shows it; localStorage holds psb2.* keys only, and a seeded psbeam.* / sbd2.* key is byte-identical;
 //   3. an invalid input (a negative bay) marks its field, counts on its input tab, lists it on the output panel and in the check summary,
 //      and its link opens the field; fixing it clears them; PR 2b: a girder-design (base) input saved, a blank f'c marked / counted /
-//      blocking, an owner change setting its defaults, a strand row added / outside the girder / deleted, psbeam.* keys untouched;
+//      blocking, an owner change setting its defaults, a strand row added / outside the girder / deleted, PS-28 a row that does not fit the shape, psbeam.* keys untouched;
 //   4. an unreadable saved project is kept under psb2.project.unreadable.<time> and the page says so;
 //   3c. PR 2b-2: Section properties, Loads & LLDF, Analysis for three designs: every shown engine value (data-ev) = computeAll on the page;
 //      graphics and KaTeX steps drawn; a link to another tab's step; the station choice; an input error blocks the three tabs;
@@ -116,6 +116,19 @@ await p.fill('[data-path="base.rows.3.y"]', '90'); await p.press('[data-path="ba
 check(await p.$eval('[data-path="base.rows.3.y"]', e => e.classList.contains('bad')) && /not inside the girder/.test(await p.textContent('#inPanes')), 'row outside the girder marked');
 await p.click('[data-act="del"][data-tbl="base.rows"][data-i="3"]');
 check(!/to fix/.test(await p.textContent('#sbDashCol')), 'row deleted, no errors');
+// PS-28 (engineer decision 2026-11-14): a row that does not fit the shape (16 strands on the BT-72's 26 in bottom flange: x = ±15 in) is a
+// blocking input error naming the row: the count outlined with its message, counted on the tab, listed in the check summary; the Report shows
+// no results; the project keeps the value; 10 again clears it
+await p.fill('[data-path="base.rows.0.n"]', '16'); await p.press('[data-path="base.rows.0.n"]', 'Tab');
+{ const t = await p.textContent('#inPanes');
+  check(await p.$eval('[data-path="base.rows.0.n"]', e => e.classList.contains('bad')) && /row 1: 16 strands at y = 2 in do not fit the PCI BT-72: the strand at x = -15 in is outside the concrete outline/.test(t), 'PS-28: a row that does not fit marked with its message');
+  check((await p.textContent('#inTabs [data-itab="gird"] .inDot')) === '1' && /do not fit the PCI BT-72/.test(await p.textContent('#sbDashCol')) && /to fix/.test(await p.textContent('#sbDashCol')), 'PS-28: counted on the tab and listed in the check summary');
+  ls = await lsSnap(p); sv = JSON.parse(ls['psb2.project.current']); check(sv.base.rows[0].n === 16, 'PS-28: the entered count kept: ' + sv.base.rows[0].n);
+  await p.click('#tabBar [data-otab="rpt"]'); await p.waitForTimeout(200);
+  check(!!(await p.$('#out #icNone')) && !(await p.$('#rptHost')) && /do not fit the PCI BT-72/.test(await p.textContent('#out')), 'PS-28: the Report blocked with the error listed');
+  await p.click('#tabBar [data-otab="sum"]'); await p.waitForTimeout(150); await p.click('#inTabs [data-itab="gird"]'); }
+await p.fill('[data-path="base.rows.0.n"]', '10'); await p.press('[data-path="base.rows.0.n"]', 'Tab');
+check(!/to fix/.test(await p.textContent('#sbDashCol')) && !(await p.$eval('[data-path="base.rows.0.n"]', e => e.classList.contains('bad'))), 'PS-28: 10 strands fit again, no errors');
 await p.click('#inTabs [data-itab="gird"]'); await p.waitForTimeout(200);
 { const t = (await p.textContent('#gfx_strands_in')).replace(/\s+/g, ' ');
   check(/draped/.test(t) && /0\.400 L/.test(t) && /hold-down/.test(t), 'strand pattern on the input tab: draped, hold-down at frac x L: ' + t.slice(0, 200)); }
