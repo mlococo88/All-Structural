@@ -40,6 +40,9 @@
                       distributed to each girder line by the Steel Bridge app's method (engine/bridge-dl.js). Absent (every project saved
                       before) = 'entered': the values entered per girder type, as before (no migration needed: absence keeps the results).
                       A new project (newProject) has it 'distributed' with the defaults of PSBBridgeDL.defaults.
+                      2026-11-14 (PR 9, the Steel Bridge app's cross-section load items), optional within it: barL / barR type ('barrier'
+                      | 'curb'), cw, ch, rw, rp, rf, face; swL / swR fence, fenceX; med { w, t, joint }; wcA; wsMode, wsThk, wsGam; ovl [];
+                      extra[i].dist and category 'DC1' (engine/bridge-dl.js). Absent = as before (no migration needed; no result changes).
      types:   [{ id, label, span, lines: [g, …], ovr: { '<engine path>': value } }]  added 2026-11-13 (PR 3a-1, plan §2.4 "groups", PS-8), optional
                       within version 1: the girder types of each span on its girder lines (engine/bridge.js): each type is the base design with
                       its own overrides (ovr), checked on every line in lines (1-based, of nb). A project saved without it is migrated on load
