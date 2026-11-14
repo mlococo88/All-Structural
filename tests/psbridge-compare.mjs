@@ -339,7 +339,7 @@ if (other.length) { fails++; log('DIFF storage: keys other than psb2.* written: 
 const cerr = nw.errs.concat(old.errs.filter(e => !/Failed to load resource|deoptimised the styling/.test(e)));
 if (cerr.length) { errors++; log('ERROR console: ' + cerr.slice(0, 5).join(' | ')); }
 if (total34) log(`PS-34: ${total34} shown values of the pier block's family thickness compared with the thickness worked here from the old app's girder`);
-if (nFG) { log(`PS-35: ${nFG} designs on a box beam / voided slab, compared with the old app's engine with its distFactors wrapped by engine/lldf-fg.js (types (f) / (g); intended difference from its type (k) factors; before = the old app's own factors):`); dFG.forEach(t => log('    ' + t)); }
+if (nFG) { log(`PS-35: ${nFG} designs on a box beam / deck slab (PS-36: solid slabs too), compared with the old app's engine with its distFactors wrapped by engine/lldf-fg.js (types (f) / (g); intended difference from its type (k) factors; before = the old app's own factors):`); dFG.forEach(t => log('    ' + t)); }
 if (nStd) { log(`PS-30 / PS-31: ${nStd} designs with a standard box / voided slab of the CTDOT plates, compared with the old app's engine computing the plate's entry (intended difference from its own wrong table; before = the old app with the old entry):`); dStd.forEach(t => log('    ' + t)); }
 if (n29) { log(`PS-29: ${n29} designs, the shown f_pe with the permanent gains = f_pe + Δf_p,DC1 + Δf_p,SD (worked here); intended differences from the old app's display (Δf_pSS no longer added): ${d29.length}`); d29.forEach(t => log('    ' + t)); }
 await nw.b.close(); await old.b.close();

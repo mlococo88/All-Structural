@@ -3168,7 +3168,7 @@ See the PR for the full tables (inputs, J working, I, k, each term). Summary (de
 - `Prestressed Bridge Design.html` (frozen) keeps type (k) for boxes and slabs; not changed. `lldf.html` has its own box choices (separate tool); not touched.
 
 ## 2026-11-14 — PS-36: the solid deck slabs get the type (f) / (g) live-load distribution factors too; J = A⁴ / (40 I_p) of the rectangle (CALCULATION CHANGE, §4)
-PR #PRC: https://github.com/mlococo88/All-Structural/pull/PRC
+PR #1544: https://github.com/mlococo88/All-Structural/pull/1544
 ### Request
 - Engineer decision 2026-11-14 (answer to PS35-D6): the solid deck slabs ('Deck slab 12×48 (solid)', 'Deck slab 18×48 (solid)') switch to the PS-35 type (f) / (g) override. J of the solid rectangle from the AASHTO commentary expression (checked against the 10th Ed. PDF); with a topping, the PS35-D2 composite convention adapted; the same J override and order (entered → library → computed), the same labels, flags and display.
 ### Problem
@@ -3198,7 +3198,9 @@ PR #PRC: https://github.com/mlococo88/All-Structural/pull/PRC
 - 12×48: A = 576 in², I_x = 48 × 12³ / 12 = 6,912, I_y = 12 × 48³ / 12 = 110,592, I_p = 117,504 in⁴; J = 576⁴ / (40 × 117,504) = 23,419 in⁴. Terms: (b / 33.3 L)^0.5 = 0.21920, (I/J)^0.25 = 0.73707, g_M1 = 1.74707 × 0.21920 × 0.73707 = 0.2823; (b/305)^0.6 = 0.32973, (b / 12 L)^0.2 = 0.66833, (I/J)^0.06 = 0.92940, g_M2 = 0.3578; (b / 130 L)^0.15 = 0.51704, (I/J)^0.05 = 0.94081, g_V1 = 0.4864; (b/156)^0.4 = 0.62409, (b / 12 L)^0.1 = 0.81751, × 1.0, g_V2 = 0.4800; DF_V = max(0.4864, 0.4800, g_M 0.3578) = 0.4864 (J and I out of range: PS35-D4).
 - 18×48 with 5 in topping: h_J = 18 + 0.8345 × 5 = 22.172 in; A = 1,064.28 in²; I_x = 43,601, I_y = 204,341, I_p = 247,942 in⁴; J = 129,362 in⁴. (I/J)^0.25 = 0.76904, (b / 33.3 L)^0.5 = 0.18983 → g_M1 = 0.2550; (b / 12 L)^0.2 = 0.63096, (I/J)^0.06 = 0.93892 → g_M2 = 0.3413; g_V1 = 0.49521 × 0.94883 = 0.4699; g_V2 = 0.62409 × 0.79433 × 0.94883 = 0.4704. Exterior: max(1.1917 × 0.2550, 1.12 × 0.3413) = 0.3822; max(1.35 × 0.4699, 1.3162 × 0.4704) = 0.6343 (higher than the type (k) lever rule's 0.6000: this exterior shear factor INCREASES).
 ### How verified
-- See the PR.
+- `node tests/engine/run.mjs psbridge tex project-registry`: 24 files, 232 passed, 0 failed (`psbridge-lldf-fg.test.mjs` 10 tests). `node tests/check-syntax.mjs`: all pass.
+- Harness B: normal 19 designs, 0 differences, exit 0 (the solid slab design an intended difference: DF_M 0.5019 → 0.3413, DF_V 0.5203 → 0.4704 logged); `--import` 19 designs, 0 differences; `--control` and `--import --control` on the solid slab design: exit 1.
+- Smokes: skeleton 271 / 0, types 106 / 0, 3d 101 / 0.
 ### Decisions (pending engineer review)
 - PS36-D1. J of the solid slab: Eq. C4.6.2.2.1-2, J = A⁴ / (40 I_p) of the w × h rectangle (the 10th Ed. has no β b t³ form; Eq. C4.6.2.2.1-1 is the thin-walled open (1/3) Σ b t³). Check: 12×48 gives I/J = 0.2951 against Table 4.6.2.2.1-3's 0.2950; the exact St. Venant value (β ≈ 0.281 for b/t = 4) is 23,307 in⁴ against 23,419 (0.5 %).
 - PS36-D2. With a topping (type f): I = the composite I_c (as PS35-D2) and J of the rectangle w × (h + n t_s) (the topping transformed by n on its thickness over the slab width, as the box's top wall in PS35-D2). It gives I/J 0.350 for the 18×48 with 5 in topping (simplified 0.363 on the precast d/b; the slab alone 23,328 / 73,627 = 0.317): composite I/J larger than the slab alone, conservative as PS35-D2.
