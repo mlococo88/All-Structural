@@ -3591,7 +3591,7 @@ PR #1554: https://github.com/mlococo88/All-Structural/pull/1554
 - `Prestressed Bridge Design.html` (frozen) keeps 88,218 and its own voided slabs; not changed.
 
 ## 2026-11-14 — PS-37: the MassDOT Bridge Manual Part II standard sections in the library (NEBT, NEDBT, NEXT F, NEXT D, spread and adjacent box beams, deck beams), grouped by owner in the girder picker (LIBRARY ADDITION, §4)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1556: https://github.com/mlococo88/All-Structural/pull/1556
 ### Request
 - Engineer decision 2026-11-14 (PS-37): the MassDOT families, tagged by owner under distinct names; the picker grouped by owner; CTDOT and every existing name untouched; NEDBT 80 y_b 46.40 in (sheet misprint, a judgment recorded here); every table property checked against an integration of the drawn outline (A, I, y_b within ~1 %), any disagreement listed; each family with its live load distribution type (adjacent boxes and slabs (f)/(g), spread boxes per the engine, NEBT / NEDBT / NEXT the engine's I-girder / double-tee handling).
 ### What changed
