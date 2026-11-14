@@ -17,6 +17,8 @@
   const F = (p, l, u, t, k, o) => Object.assign({ p, l, u: u || '', t: t || '', k: k || 'num', v: 'pos' }, o || {});
   const distOff = (b, P) => !(window.PSBBridgeDL && window.PSBBridgeDL.on(P));   // PR 3a-3: DC2 / DW entered per girder (not distributed)
   const cont = (b, P) => P && P.spans && P.spans.continuity === 'composite' && P.spans.lengths.length >= 2;
+  // PS-35: a box beam or voided slab of the library (types (f) / (g) live-load distribution, engine/lldf-fg.js)
+  const fgShape = b => { const G = b && typeof GIRDERS !== 'undefined' ? GIRDERS[b.girder] : null; return !!G && (!!G.box || (!!G.deck && !G.solid && +G.voids > 0 && +G.voidD > 0)); };
   const CARDS = [
     // ---- Bridge layout ----
     { tab: 'layout', id: 'cont', title: 'Continuity for composite loads', ref: 'AASHTO LRFD 10th Ed. 5.12.3.3', when: cont, fields: [
@@ -143,11 +145,15 @@
       F('base.loads.llAuto', 'Live load moment and shear', '', 'Automatic: HL-93 (truck or tandem with IM = 33 %, plus lane) × the distribution factor; Entered: your M_LL+IM and V_LL+IM per girder (simple span).', 'bool', { o: [['true', 'HL-93 × distribution factor'], ['false', 'Entered']] }),
       F('base.loads.MLL', 'M<sub>LL+IM</sub> at midspan (per girder)', 'k-ft', 'Entered live load moment including impact and distribution.', 'num', { v: 'nn', when: b => !b.loads.llAuto }),
       F('base.loads.VLL', 'V<sub>LL+IM</sub> at the support (per girder)', 'kip', 'Entered live load shear including impact and distribution.', 'num', { v: 'nn', when: b => !b.loads.llAuto }),
-      F('base.loads.dfAuto', 'Distribution factors', '', 'AASHTO equations (Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1; exterior 4.6.2.2.2d), or entered.', 'bool', { o: [['true', 'AASHTO equations (type k)'], ['false', 'Entered']], when: b => !!b.loads.llAuto }),
+      F('base.loads.dfAuto', 'Distribution factors', '', 'AASHTO equations (Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1; exterior 4.6.2.2.2d), or entered.', 'bool', { o: [['true', 'AASHTO equations (type k; box beams and voided slabs types f / g)'], ['false', 'Entered']], when: b => !!b.loads.llAuto }),
       F('base.loads.dfm', 'DF moment, entered', 'lanes', 'Live load distribution factor for moment (lanes per girder, multiple presence included).', 'num', { when: b => !!b.loads.llAuto && !b.loads.dfAuto }),
       F('base.loads.dfv', 'DF shear, entered', 'lanes', 'Live load distribution factor for shear.', 'num', { when: b => !!b.loads.llAuto && !b.loads.dfAuto }),
       F('base.loads.fatM', 'Fatigue DF (single lane), entered', 'lanes', 'Single-lane fatigue distribution factor without multiple presence; 0 = from the design DF (÷ 1.2).', 'num', { v: 'nn' })],
       note: () => 'Skew and the exterior / interior position come from the bridge (Bridge layout and Cross-section tabs); d<sub>e</sub> and N<sub>L</sub>: <a href="#" data-goin="xsec">Cross-section tab</a>. Imported MIDAS demands (by file) come in a later PR.' },
+    // PS-35 (2026-11-14): adjacent box beams and voided slabs, types (f) / (g): the J override (saved per girder type) and the range notice
+    { tab: 'loads', id: 'fglldf', title: 'Box beam / voided slab live load distribution (types f / g)', ref: 'AASHTO LRFD 10th Ed. Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1; Eq. C4.6.2.2.1-3', when: fgShape, fields: [
+      F('base.loads.Jfg', 'St. Venant torsional constant J (override)', 'in⁴', 'Blank: J from the library (a DOT value, where one is listed) or computed from the drawn outline as a closed thin-walled cell (Eq. C4.6.2.2.1-3). Enter a value (e.g. from the DOT sheets) to use it for this girder type: labelled "user/DOT value".', 'opt', { v: 'pos' })],
+      note: (b, P) => (window.PSBLldfFG && window.PSBLldfFG.inputNote ? window.PSBLldfFG.inputNote(b, P) : '') },
     { tab: 'loads', id: 'stress', title: 'Service stress analysis', ref: 'AASHTO LRFD 10th Ed. 5.9.2.3, Table 3.4.1-1', fields: [
       F('base.opt.useTrans', 'Release stress section', '', 'Gross girder section, or transformed for the strands, at release.', 'bool', { o: [['false', 'Gross'], ['true', 'Transformed']] }),
       F('base.opt.gLLs3', 'γ<sub>LL</sub> for Service III', '', '1.0 only with refined losses taking the elastic gains; 0.8 otherwise (Table 3.4.1-4).')] },

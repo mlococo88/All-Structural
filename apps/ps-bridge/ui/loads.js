@@ -17,8 +17,10 @@
     { key: 'hlm', title: 'HL-93 moment per lane (simple span)', ref: A + '3.6.1.2, 3.6.1.3', ids: /^ld\.(Mtr|Mtd|Mln|M)$/, res: /^ld\.M$/ },
     { key: 'hlv', title: 'HL-93 shear per lane (simple span)', ref: A + '3.6.1.2, 3.6.1.3', ids: /^ld\.(Vtr|Vtd|Vln|V)$/, res: /^ld\.V$/ },
     { key: 'kg', title: 'Stiffness parameter', ref: A + '4.6.2.2.1', ids: /^ld\.(Sf|eg|Kg)$/, res: /^ld\.Kg$/ },
-    { key: 'int', title: 'Interior girder equations', ref: A + 'Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1', ids: /^ld\.(m1|m2|v1|v2)$/ },
-    { key: 'ext', title: 'Exterior girder: lever rule, e, rigid section', ref: A + '4.6.2.2.2d, 4.6.2.2.3b', ids: /^ld\.(lever|eM|eV|rigid|rigXbar|rigXext|rigSx2)$/ },
+    // PS-35: box beams and voided slabs, types (f) / (g): I, J of the outline (closed cell), the J used, I / J
+    { key: 'fgj', title: 'Box beam / voided slab: I and J (types f / g)', ref: A + '4.6.2.2.1, Eq. C4.6.2.2.1-3', ids: /^ld\.(fgI|Jtw|Jtb|Jtt|JtT|JyT|Jb0|Jh0|JA0|Jst|Jc|J|IJ)$/, res: /^ld\.J$/ },
+    { key: 'int', title: 'Interior girder equations', ref: A + 'Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1', ids: /^ld\.(k|m1|m2|v1|v2)$/ },
+    { key: 'ext', title: 'Exterior girder: lever rule, e, rigid section', ref: A + '4.6.2.2.2d, 4.6.2.2.3b', ids: /^ld\.(lever|eM|eV|rigid|rigXbar|rigXext|rigSx2|eM1|eM2|eV1|eV2|f48)$/ },
     { key: 'df', title: 'Distribution factors used', ref: A + '4.6.2.2.2e, 4.6.2.2.3c', ids: /^ld\.(dfmRaw|dfvRaw|c1|skM|skV|dfm|dfv)$/, res: /^ld\.dfm$/ },
     { key: 'll', title: 'Live load per girder', ref: A + '3.6.1.3, 4.6.2.2', ids: /^ld\.(MLL|VLL)$/, res: /^ld\.MLL$/ }];
   function output(ctx) {
@@ -49,8 +51,27 @@
       ['Skew θ', ev('df.th', 1, '°')], ['Moment skew reduction r<sub>M</sub>', `${ev('df.skM', 4)} ${wk('ld.skM')}`], ['Shear skew correction', `${ev('df.skV', 4)} ${wk('ld.skV')}`],
       ['DF<sub>M</sub> used', `<b>${ev('dfm', 4, 'lanes')}</b> ${wk('ld.dfm')}`], ['DF<sub>V</sub> used', `<b>${ev('dfv', 4, 'lanes')}</b> ${wk('ld.dfv')}`],
       ['M<sub>LL+IM</sub> per girder, midspan', `<b>${ev('MLL', 1, 'kip-ft')}</b> ${wk('ld.MLL')}`], ['V<sub>LL+IM</sub> per girder, support', `<b>${ev('VLL', 2, 'kip')}</b> ${wk('ld.VLL')}`]];
+    // PS-35 (engine/lldf-fg.js): a box beam or voided slab: the type (f) / (g) factors
+    const fg = df.fg;
+    if (fg) {
+      const jsrc = fg.Jsrc === 'user' ? 'user/DOT value (Loads tab)' : fg.Jsrc === 'library' ? 'library (DOT) value' : 'computed from outline';
+      const rows = [['Cross-section type (Table 4.6.2.2.1-1)', `(${fg.type}) ${fg.type === 'f' ? 'precast boxes with shear keys, cast-in-place overlay' : 'precast boxes with shear keys, integral concrete deck'}`],
+        ['b (beam width) / N<sub>b</sub> / L', `${k.fx(fg.b, 2)} in / ${fg.Nb} / ${k.fx(fg.L, 2)} ft`],
+        ['I', `${ev('df.fg.I', 0, 'in⁴')} (${fg.Isrc === 'composite' ? 'composite section' : 'girder'}) ${wk('ld.fgI')}`],
+        ['J', `${ev('df.fg.J', 0, 'in⁴')} (${jsrc}) ${wk('ld.J')}`],
+        ...(fg.Jsrc !== 'computed' ? [['J computed from outline (not used)', `${ev('df.fg.jw.J', 0, 'in⁴')} ${wk('ld.Jc')}`]] : []),
+        ['k', `${ev('df.fg.k', 4)} ${wk('ld.k')}`],
+        ['g<sub>M</sub>: one lane / two or more', `${ev('df.m1', 4)} / ${ev('df.m2', 4)} ${wk('ld.m1')}`], ['g<sub>V</sub>: one lane / two or more', `${ev('df.v1', 4)} / ${ev('df.v2', 4)} ${wk('ld.v1')}`],
+        ...(ext ? [['e<sub>M</sub>: one lane / two or more', `${ev('df.fg.eM1', 4)} / ${ev('df.fg.eM2', 4)} ${wk('ld.eM1')}`], ['e<sub>V</sub>: one lane / two or more', `${ev('df.fg.eV1', 4)} / ${ev('df.fg.eV2', 4)} ${wk('ld.eV1')}`]] : []),
+        ['Skew θ (shear) / θ<sub>M</sub> (moment)', `${ev('df.fg.thV', 1, '°')} / ${ev('df.fg.thM', 1, '°')}`], ['Moment skew reduction r<sub>M</sub>', `${ev('df.skM', 4)} ${wk('ld.skM')}`], ['Shear skew correction c<sub>V</sub>', `${ev('df.skV', 4)} ${wk('ld.skV')}`],
+        ['DF<sub>M</sub> used', `<b>${ev('dfm', 4, 'lanes')}</b> ${wk('ld.dfm')}`], ['DF<sub>V</sub> used', `<b>${ev('dfv', 4, 'lanes')}</b> ${wk('ld.dfv')}`],
+        ['M<sub>LL+IM</sub> per girder, midspan', `<b>${ev('MLL', 1, 'kip-ft')}</b> ${wk('ld.MLL')}`], ['V<sub>LL+IM</sub> per girder, support', `<b>${ev('VLL', 2, 'kip')}</b> ${wk('ld.VLL')}`]];
+      const out = fg.out.length ? `<div class="alert" id="fgRange"><b>Outside the range of applicability (PS-35)</b><ul>${fg.out.map(o => `<li>${k.esc(o.text)}</li>`).join('')}</ul>The equations are used all the same (flagged here, in the design warnings and the Report): check the factors (refined analysis, 4.6.3, or enter them on the Loads tab).</div>` : '';
+      h += k.card(`Live load distribution factors: ${ext ? 'exterior' : 'interior'} ${R.g.isBox ? 'box beam' : 'voided slab'}, type (${fg.type}) (PS-35)`, k.kv(rows) + out
+        + `<p class="note" id="fgNote">${inp.loads.dfAuto ? `AASHTO LRFD 10th Ed. equations for concrete beams in multibeam decks, cross-section type (${fg.type}) of Table 4.6.2.2.1-1 (Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1, 4.6.2.2.3a-1, 4.6.2.2.3b-1; skew 4.6.2.2.2e, 4.6.2.2.3c): the multiple presence is in the equations; no lever rule or rigid-section check. I and J of the section to which traffic is applied (4.6.2.2.1); J ${jsrc}. The moved engine's type (k) factors are not used (DF<sub>M</sub> ${k.fx(fg.engine.dfm, 4)}, DF<sub>V</sub> ${k.fx(fg.engine.dfv, 4)}: K<sub>g</sub> / 12 L t<sub>s</sub>³ does not apply to adjacent beams).` : 'Distribution factors entered on the Loads tab (the type (f) / (g) values are shown for reference).'} Position and skew from the bridge (<a href="#" data-goin="gird">Design girder card</a>); J override: <a href="#" data-goin="loads">Loads tab</a>.</p>`);
+    } else
     h += k.card(`Live load distribution factors: ${ext ? 'exterior' : 'interior'} girder${df.isNext ? ' (NEXT)' : ''}`, k.kv(dfr)
-      + `<p class="note">${inp.loads.dfAuto ? `AASHTO equations, cross-section type ${df.isNext ? '(i)/(j)' : '(k)'}; S = ${k.fx(df.isNext ? df.Sf : inp.S, 3)} ft, L = ${k.fx(R.L, 2)} ft, N<sub>b</sub> = ${inp.nGirders}.` : 'Distribution factors entered on the Loads tab.'}${(R.g.isBox || R.g.isDeck) && inp.loads.dfAuto ? ' <b>Adjacent box / deck beams use other equations (types f/g with J); this engine applies type (k): enter the factors for these beams.</b>' : ''} Position and skew from the bridge (<a href="#" data-goin="gird">Design girder card</a>).</p>`);
+      + `<p class="note">${inp.loads.dfAuto ? `AASHTO equations, cross-section type ${df.isNext ? '(i)/(j)' : '(k)'}; S = ${k.fx(df.isNext ? df.Sf : inp.S, 3)} ft, L = ${k.fx(R.L, 2)} ft, N<sub>b</sub> = ${inp.nGirders}.` : 'Distribution factors entered on the Loads tab.'}${(R.g.isBox || R.g.isDeck) && inp.loads.dfAuto ? ' <b>Solid deck slab: the moved engine applies type (k), as the old app did (PS-35 gives box beams and voided slabs types (f) / (g); solid slabs unchanged): adjacent beams use other equations (types f/g with J); check the factors or enter them.</b>' : ''} Position and skew from the bridge (<a href="#" data-goin="gird">Design girder card</a>).</p>`);
     h += k.card('Worked steps: loads and distribution factors', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value.</p>${k.steps(ctx.W.loads.steps, TOPICS, OPEN)}`);
     return h;
   }

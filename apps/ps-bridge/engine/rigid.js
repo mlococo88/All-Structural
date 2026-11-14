@@ -32,7 +32,7 @@
   }
   /* adjust(df, inp): the engine's distFactors result with the rigid-section terms on the real girder lines (exterior I-girder only) */
   function adjust(df, inp) {
-    const q = inp && inp.rigidX; if (!df || !df.ext || df.isNext || !q || !Array.isArray(q.x)) return df;
+    const q = inp && inp.rigidX; if (!df || !df.ext || df.isNext || df.fg || !q || !Array.isArray(q.x)) return df;   // df.fg (PS-35): types (f) / (g) have no rigid-section check
     const r = rigidOf(q.x, q.g, +inp.loads.de || 0, inp.loads.NL);
     const dfmRaw = Math.max(df.eM * df.m2, df.lever, r.R), dfvRaw = Math.max(df.eV * df.v2, df.lever, r.R);
     return Object.assign({}, df, { rigid: r.R, rigidNL: r.NL, rigid1: r.R1, dfmRaw, dfvRaw, dfm: dfmRaw * df.skM, dfv: dfvRaw * df.skV,
