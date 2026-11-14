@@ -3663,7 +3663,7 @@ PR #1557: https://github.com/mlococo88/All-Structural/pull/1557
 ### Other copies
 - None.
 ## 2026-11-14 — PR 9: cross-section load items matching the Steel Bridge app (deck edge barrier or curb and railing, edge to traffic face, sidewalk fences, raised median, appurtenance w_c, wearing surface by thickness, overlays, a distribution per added line load, DC1 line loads) (CALCULATION CHANGE, §4, for projects that use them; projects saved before unchanged)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1558: https://github.com/mlococo88/All-Structural/pull/1558
 ### Request
 - Engineer's choice "Match Steel" (catch-up item 9): the Cross-section tab's DC2 / DW inputs should offer the Steel Bridge app's cross-section load items (apps/steel-bridge/ui/loads.js parts(): Deck edges, Sidewalks and median, Wearing surface, Utilities and other line loads, Distribution) and distribute them the same way.
 - Projects saved before must open with identical results (§5): the new fields are optional and default to the current behaviour. A round-trip test is required.
