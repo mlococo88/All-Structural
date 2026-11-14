@@ -195,7 +195,7 @@
     const f = B.R && B.R.df && B.R.df.fg; if (!f) return [];
     const src = f.Jsrc === 'user' ? 'user/DOT value' : f.Jsrc === 'library' ? 'library (DOT) value' : 'computed from outline';
     const fx = (v, d) => (+v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
-    return [note(`• Live-load distribution (PS-35): ${B.R.g.isBox ? 'box beam' : 'voided slab'}, AASHTO LRFD 10th Ed. cross-section type (${f.type}) of Table 4.6.2.2.1-1 (Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1, 4.6.2.2.3a-1, 4.6.2.2.3b-1; skew 4.6.2.2.2e, 4.6.2.2.3c), not the I-girder type (k) of the old app; I = ${fx(f.I, 0)} in⁴ (${f.Isrc === 'composite' ? 'composite section' : 'girder'}), J = ${fx(f.J, 0)} in⁴ (${src}).${f.out.length ? ` Outside the range of applicability: ${f.out.map(o => o.text).join('; ')}.` : ''} (see [[rs.lds]])`, !!f.out.length)];
+    return [note(`• Live-load distribution (PS-35${B.R.g.box && B.R.g.box.solid ? ', PS-36' : ''}): ${window.PSBLldfFG ? window.PSBLldfFG.kindOf(B.R.g) : 'box beam'}, AASHTO LRFD 10th Ed. cross-section type (${f.type}) of Table 4.6.2.2.1-1 (Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1, 4.6.2.2.3a-1, 4.6.2.2.3b-1; skew 4.6.2.2.2e, 4.6.2.2.3c), not the I-girder type (k) of the old app; I = ${fx(f.I, 0)} in⁴ (${f.Isrc === 'composite' ? 'composite section' : 'girder'}), J = ${fx(f.J, 0)} in⁴ (${src}).${f.out.length ? ` Outside the range of applicability: ${f.out.map(o => o.text).join('; ')}.` : ''} (see [[rs.lds]])`, !!f.out.length)];
   }
 
   /* ---------- 3–14. the result tabs ---------- */

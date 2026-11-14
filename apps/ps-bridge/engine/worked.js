@@ -98,6 +98,16 @@
     const tyN = f.type === 'f' ? 'type (f): precast boxes with shear keys and a cast-in-place overlay' : 'type (g): precast boxes with shear keys, integral concrete deck';
     add({ id: 'fgI', label: `Moment of inertia, ${f.ts > 0 ? 'the composite section (traffic on the topping)' : 'the girder (no topping)'}`, sym: 'I', value: f.I, unit: 'in^{4}', d: 0, ref: A10 + '4.6.2.2.1',
       note: f.ts > 0 ? `Cross-section ${tyN}; the composite I_c, worked on the Section properties tab (§sec.Ic).` : `Cross-section ${tyN}; the gross girder I (Section properties tab).` });
+    // PS-36: a solid deck slab: J of the solid rectangle, A⁴ / (40 I_p) (Eq. C4.6.2.2.1-2)
+    if (jw.kind === 'solid') {
+      if (jw.comp) add({ id: 'JhJ', label: 'J (outline): depth with the topping transformed by n', sym: 'h_{J}', eq: 'h + n\\,t_{s}', sub: `${n(jw.h, 2)} + ${n(jw.n, 4)}(${n(jw.ts, 2)})`, value: jw.hJ, unit: 'in', d: 3, note: 'n: §sec.n (Section properties tab).' }, jw.h + jw.n * jw.ts);
+      const hs = jw.comp ? 'h_{J}' : 'h', hv = n(jw.hJ, 3);
+      add({ id: 'JA', label: 'J (outline): area of the solid rectangle', sym: 'A', eq: `w\\,${hs}`, sub: `${n(jw.w, 2)}(${hv})`, value: jw.A, unit: 'in^{2}', d: 1 }, jw.w * jw.hJ);
+      add({ id: 'JIx', label: 'J (outline): moment of inertia about the horizontal axis', sym: 'I_{x}', eq: `\\frac{w\\,${hs}^{3}}{12}`, sub: `\\frac{${n(jw.w, 2)}(${hv})^{3}}{12}`, value: jw.Ix, unit: 'in^{4}', d: 0 }, jw.w * Math.pow(jw.hJ, 3) / 12);
+      add({ id: 'JIy', label: 'J (outline): moment of inertia about the vertical axis', sym: 'I_{y}', eq: `\\frac{${hs}\\,w^{3}}{12}`, sub: `\\frac{${hv}(${n(jw.w, 2)})^{3}}{12}`, value: jw.Iy, unit: 'in^{4}', d: 0 }, jw.hJ * Math.pow(jw.w, 3) / 12);
+      add({ id: 'JIp', label: 'J (outline): polar moment of inertia', sym: 'I_{p}', eq: 'I_{x} + I_{y}', sub: `${g(jw.Ix, 0)} + ${g(jw.Iy, 0)}`, value: jw.Ip, unit: 'in^{4}', d: 0 }, jw.Ix + jw.Iy);
+      add({ id: 'Jc', label: 'St. Venant torsional constant, computed from outline (solid section)', sym: 'J_{outline}', eq: '\\frac{A^{4}}{40\\,I_{p}}', sub: `\\frac{(${n(jw.A, 1)})^{4}}{40(${g(jw.Ip, 0)})}`, value: jw.J, unit: 'in^{4}', d: 0, ref: A10 + 'Eq. C4.6.2.2.1-2' }, Math.pow(jw.A, 4) / (40 * jw.Ip));
+    } else {
     // J of the drawn outline: a closed thin-walled cell on the wall midlines (Eq. C4.6.2.2.1-3)
     const box = jw.kind === 'box', v = jw.v;
     if (box) {
@@ -124,6 +134,7 @@
     add({ id: 'Jst', label: 'J (outline): sum of side length over thickness', sym: '\\sum \\frac{s}{t}', eq: `\\frac{b_{0}}{t_{${jw.comp ? 'top' : 't'}}} + \\frac{b_{0}}{t_{b}} + \\frac{2\\,h_{0}}{t_{w}}`,
       sub: `\\frac{${n(jw.b0, 2)}}{${n(jw.tT, 3)}} + \\frac{${n(jw.b0, 2)}}{${n(jw.tb, 2)}} + \\frac{2(${n(jw.h0, 3)})}{${n(jw.tw, 2)}}`, value: jw.sum, unit: '', d: 3 }, jw.b0 / jw.tT + jw.b0 / jw.tb + 2 * jw.h0 / jw.tw);
     add({ id: 'Jc', label: 'St. Venant torsional constant, computed from outline (closed thin-walled section)', sym: 'J_{outline}', eq: '\\frac{4\\,A_{0}^{2}}{\\sum s/t}', sub: `\\frac{4(${n(jw.A0, 1)})^{2}}{${n(jw.sum, 3)}}`, value: jw.J, unit: 'in^{4}', d: 0, ref: A10 + 'Eq. C4.6.2.2.1-3' }, 4 * jw.A0 * jw.A0 / jw.sum);
+    }
     if (f.Jsrc === 'user') add({ id: 'J', label: 'J used: user/DOT value', sym: 'J', value: f.J, unit: 'in^{4}', d: 0, note: 'Entered for this girder type (Loads tab, "J (override)"); the value computed from the outline above is not used.' });
     else if (f.Jsrc === 'library') add({ id: 'J', label: 'J used: library (DOT) value', sym: 'J', value: f.J, unit: 'in^{4}', d: 0, note: `The library's value for ${inp.girder}${f.Jlib && f.Jlib.src ? ` (${f.Jlib.src})` : ''}; the value computed from the outline above is not used.` });
     else add({ id: 'J', label: 'J used: computed from outline', sym: 'J', eq: 'J_{outline}', sub: n(jw.J, 0), value: f.J, unit: 'in^{4}', d: 0 }, jw.J);

@@ -17,7 +17,7 @@ const J = v => JSON.parse(JSON.stringify(v));
 const C = v => typeof v === 'number' ? (Object.is(v, -0) ? '-0' : String(v)) : v === null || typeof v !== 'object' ? (typeof v === 'function' ? '' : JSON.stringify(v))
   : Array.isArray(v) ? '[' + v.map(C).join(',') + ']' : '{' + Object.keys(v).filter(k => typeof v[k] !== 'function').map(k => JSON.stringify(k) + ':' + C(v[k])).join(',') + '}';
 
-test('equal bays: no rigidX, inputs and results byte-identical to before PS-19 (18 harness B designs × every line); the real-position formula = the engine\'s on equal spacing', () => {
+test('equal bays: no rigidX, inputs and results byte-identical to before PS-19 (19 harness B designs × every line); the real-position formula = the engine\'s on equal spacing', () => {
   for (const [name, P0] of Object.entries(TAB_CASES(() => M.defaultProject()))) {
     const P = M.importJSON(M.exportJSON(P0)).project, P2 = W0.PSBModel.importJSON(M.exportJSON(P0)).project; W.PSBBridge.fill(P); W0.PSBBridge.fill(P2);
     W.PSBBridge.cells(P).forEach(c => { const a = D.cellInputs(P, c.k, c.g), b = W0.PSBDesign.cellInputs(P2, c.k, c.g);

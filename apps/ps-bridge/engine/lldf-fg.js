@@ -1,4 +1,5 @@
-/* apps/ps-bridge/engine/lldf-fg.js — PS-35: the live-load distribution factors of adjacent box beams and voided slabs, AASHTO LRFD 10th Ed.
+/* apps/ps-bridge/engine/lldf-fg.js — PS-35: the live-load distribution factors of adjacent box beams and voided slabs (PS-36: and the solid
+   deck slabs, engineer decision 2026-11-14; J = A⁴ / (40 I_p), Eq. C4.6.2.2.1-2, of the rectangle; see jOutline), AASHTO LRFD 10th Ed.
    cross-section types (f) and (g) of Table 4.6.2.2.1-1 (window.PSBLldfFG). Classic script, no DOM. Created 2026-11-14 (engineer decision
    PS-35, 2026-11-14).
 
@@ -46,12 +47,19 @@
   const RAD = Math.PI / 180, clampTh = v => Math.min(Math.max(Math.abs(+v || 0), 0), 60);
   const LIM = { b: [35, 60], L: [20, 120], Nb: [5, 20], J: [25000, 610000], I: [40000, 610000], d: [17, 60] };
   /* isFG(g): a box beam or a voided deck slab of girderGross (not NEXT, not a solid slab, not an I-girder) */
-  const isFG = g => !!g && !g.isNext && !!g.box && (!!g.isBox || (!!g.isDeck && !g.box.solid && (+g.box.voids || 0) > 0 && (+g.box.voidD || 0) > 0));
+  const isFG = g => !!g && !g.isNext && !!g.box && (!!g.isBox || (!!g.isDeck && (!!g.box.solid || ((+g.box.voids || 0) > 0 && (+g.box.voidD || 0) > 0))));   // PS-36: the solid slabs too
   /* isFGInputs(inp): the engine inputs' girder is one (engine/design.js: the smaller skew is passed only for these) */
   function isFGInputs(inp) { try { return typeof girderGross === 'function' && isFG(girderGross(inp)); } catch (e) { return false; } }
 
   /* jOutline(g, cp, ts): the closed-cell J of the drawn outline (sectionVoids: the engine's voids, the plate's for a standard slab) */
   function jOutline(g, cp, ts) {
+    // PS-36 (2026-11-14): a SOLID deck slab: the solid-section expression J = A⁴ / (40 I_p) (Eq. C4.6.2.2.1-2) of the rectangle w × h_J, with a
+    // topping h_J = h + n t_s (the topping transformed by n on its thickness, the PS35-D2 convention; PS36-D2)
+    if (g.isDeck && g.box && g.box.solid) {
+      const h = +g.h, w = +g.w, n = cp && cp.n > 0 ? cp.n : 1, comp = ts > 0, hJ = comp ? h + n * ts : h;
+      const A = w * hJ, Ix = w * hJ * hJ * hJ / 12, Iy = hJ * w * w * w / 12, Ip = Ix + Iy, J = A * A * A * A / (40 * Ip);
+      return { kind: 'solid', h, w, n, ts: comp ? ts : 0, comp, hJ, A, Ix, Iy, Ip, J };
+    }
     const W = typeof window !== 'undefined' ? window : globalThis, sv = W.sectionVoids || (typeof sectionVoids === 'function' ? sectionVoids : null);
     const vs = sv ? sv(g) : [], h = +g.h, w = +g.w;
     let tw, tb, tt, kind, ov = null;
@@ -114,12 +122,14 @@
   }
   /* warnText(f): the design warning for the out-of-range limits ('' when none) */
   const warnText = f => (f && f.out && f.out.length ? `Live load distribution, type (${f.type}) adjacent ${f.kind || 'beam'} equations (PS-35) used outside their range of applicability: ${f.out.map(o => o.text).join('; ')}. Computed all the same; check the factors (refined analysis, 4.6.3, or enter them on the Loads tab).` : '');
+  /* kindOf(g): the shape's name in the texts (PS-36: the solid slab) */
+  const kindOf = g => (g && g.isBox ? 'box beam' : g && g.box && g.box.solid ? 'solid slab' : 'voided slab');
   /* run(inp, inner): inner(inp) with the global distFactors giving (f)/(g) for a box beam / voided slab; the out-of-range warning added */
   function run(inp, inner) {
     const W = typeof window !== 'undefined' ? window : globalThis, orig = W.distFactors;
     W.distFactors = function (i, g, cp) { const df = orig(i, g, cp); return isFG(g) ? compute(i, g, cp, df) : df; };
     let R; try { R = inner(inp); } finally { W.distFactors = orig; }
-    if (R && !R.error && R.df && R.df.fg) { R.df.fg.kind = R.g && R.g.isBox ? 'box beam' : 'voided slab'; const t = warnText(R.df.fg); if (t && Array.isArray(R.warns)) R.warns.push(t); }
+    if (R && !R.error && R.df && R.df.fg) { R.df.fg.kind = kindOf(R.g); const t = warnText(R.df.fg); if (t && Array.isArray(R.warns)) R.warns.push(t); }
     return R;
   }
   /* inputNote(b, P): the Loads input tab's note (fields.js card 'fglldf'): for the entered values b on the design girder P.design, the type,
@@ -135,5 +145,5 @@
       return `<span id="fgInNote">These inputs on G${d.g}, span ${d.s}: type (${f.type}) (${f.type === 'f' ? 'cast-in-place topping' : 'no topping'}); I = ${fx(f.I, 0)} in⁴ (${f.Isrc === 'composite' ? 'composite section' : 'girder'}), J = ${fx(f.J, 0)} in⁴ (${src}${f.Jsrc !== 'computed' ? `; the outline gives ${fx(f.jw.J, 0)} in⁴` : ''}), b = ${fx(f.b, 1)} in, L = ${fx(f.L, 2)} ft, N<sub>b</sub> = ${f.Nb}. ${out} Worked on the <a href="#" data-gotab="lds">Loads &amp; LLDF tab</a>.</span>`;
     } catch (e) { return ''; }
   }
-  window.PSBLldfFG = { LIM, isFG, isFGInputs, jOutline, compute, ranges, warnText, run, inputNote };
+  window.PSBLldfFG = { LIM, kindOf, isFG, isFGInputs, jOutline, compute, ranges, warnText, run, inputNote };
 })();

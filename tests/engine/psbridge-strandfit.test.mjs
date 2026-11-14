@@ -5,7 +5,7 @@
 //   (1) the criterion at hand-picked points; (2) collect's verdict = an independent copy of the PS-27 test's fitsAt over xy, for every shape of
 //   the library (NEXT at the narrowest and widest flange), every row count up to two more than the engine's row capacity, the rows of a 2 in
 //   grid, and draped strands; (3) the engineer's hand checks (AASHTO Type I with a 10-strand row; BI-36 with a row at y = 6 in); (4) the
-//   defaults fit: a new project, the default project, the 18 designs of harness B; (5) a girder type's own shape (scoped error);
+//   defaults fit: a new project, the default project, the 19 designs of harness B; (5) a girder type's own shape (scoped error);
 //   (6) an imported old-app design that does not fit opens with the error, its data kept as read; (7) nothing is written, the engine is
 //   not involved (computeAll the same with and without the check loaded).
 import assert from 'node:assert/strict';
@@ -126,10 +126,10 @@ test('PS-28 (3): the engineer\'s hand checks: AASHTO Type I with a 10-strand row
   assert.equal(e.length, 1); assert.match(e[0].msg, /is not inside the girder/);
 });
 
-test('PS-28 (4): the defaults fit: a new project, the default project (the old app\'s DEFAULTS on the PCI BT-72), the 18 designs of harness B', () => {
+test('PS-28 (4): the defaults fit: a new project, the default project (the old app\'s DEFAULTS on the PCI BT-72), the 19 designs of harness B', () => {
   assert.deepEqual(fitErrs(M.newProject()), []); assert.deepEqual(J(IC.collect(M.newProject()).errors), []);
   assert.deepEqual(fitErrs(M.defaultProject()), []); assert.equal(M.defaultProject().base.girder, 'PCI BT-72');
-  const C = TAB_CASES(() => M.defaultProject()); assert.equal(Object.keys(C).length, 18);
+  const C = TAB_CASES(() => M.defaultProject()); assert.equal(Object.keys(C).length, 19);
   for (const [k, P] of Object.entries(C)) { assert.deepEqual(fitErrs(P), [], k); assert.equal(refFits(P), true, k); }
 });
 
