@@ -3529,7 +3529,7 @@ PR #1553: https://github.com/mlococo88/All-Structural/pull/1553
 - 3D-D3. Close-up Zoom to targets: the span ends, the hold-down points and the midspans. The steel app's targets are its splices and bearings; this app has no splices.
 
 ## 2026-11-14 — Smoke ps-bridge-library: the intermittent `'unsaved' !== 'saved'` after the reload (test fix; no app change)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1555: https://github.com/mlococo88/All-Structural/pull/1555
 ### Problem
 - `tests/smoke/ps-bridge-library.mjs` failed about one run in two (5 of 10 runs here, also on clean origin/main) at step 4, the check after `p.reload()`: `assert.equal(await state(), 'saved')` got `'unsaved'`.
 - Root cause (found, not guessed): the page was opened with `openPage(FILE, { ls: … })` (tests/lib.mjs), whose init script seeds localStorage on every navigation unless `sessionStorage.__seeded` is set. Chromium does not always keep a tab's sessionStorage across a `file://` reload. Shown in a debug run: a marker put in sessionStorage before the reload was `null` after it in exactly the failing runs. The init script then wrote the seed again, so `psb2.project.current` went back to the seeded "Existing bridge" (checker "") while `psb2.lib.current` still named "Route 2 alt (renamed)". The chip then correctly said "unsaved changes": the inputs on screen were not the saved project.
