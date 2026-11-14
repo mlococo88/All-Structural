@@ -3633,3 +3633,32 @@ PR #1556: https://github.com/mlococo88/All-Structural/pull/1556
 - The old library's NEXT F `flangeT: 8` (engine/pbd-library.js) is not the sheet's 4 in (used for the drawn flange, the pier block thickness h − t_f of PS-34 and the no-topping flange depth); not changed here (a calculation change of existing entries).
 ### Other copies
 - None (the old app is frozen).
+
+## 2026-11-14 — PS-41: a MassDOT section moves the straight strand rows to the MassDOT row heights (2.25 / 4.25 / 6.25 in boxes and deck beams; 2.5 / 4.5 / 6.5 in NEBT, NEDBT, NEXT); the 48 in boxes' extrapolated pattern flagged (input default; no formula change)
+PR #1557: https://github.com/mlococo88/All-Structural/pull/1557
+### Request
+- Engineer decision 2026-11-14 (PS-41): MassDOT sections default to the MassDOT strand row heights, 2.25 / 4.25 / 6.25 in for boxes and slabs, a 2.5 in start for NEBT / NEXT (verify on the sheets); the 48 in adjacent / spread box pattern is extrapolated from the 36 in sheet: flag it on the Strands tab and in the Report. CTDOT keeps its rows.
+### Sheets read (MassDOT Bridge Manual Part II, April 2024; PDF 2 of 3)
+- Bottom row 2¼ in above the soffit, rows 2 in apart: spread boxes dwg 9.3.7 / 9.3.8 (p. 156 / 157), adjacent boxes dwg 10.2.7 / 10.2.8 (p. 226 / 227), deck beams dwg 10.1.7 / 10.1.8 (p. 196 / 197); 2¾ in from the outer face to the outer strand column.
+- Bottom row 2½ in, rows 2 in apart: NEBT dwg 9.1.6 (p. 93; 2.95 in to the bottom flange edge), NEDBT dwg 11.1.7 (p. 257), NEXT F dwg 9.2.5 (p. 126), NEXT D dwg 11.2.7 (p. 299). So the "2.5 in grid" is a 2½ in bottom row with 2 in spacing (2.5 / 4.5 / 6.5 in).
+- The box strand sheets are drawn for the 36 in box (by depth: 24–36 in, 39–48 in); no sheet shows a 48 in box's strands.
+### What changed
+- `apps/ps-bridge/engine/sections.js`: `rowGrid(name)` ({ first 2.25 | 2.5, step 2, the strand sheet, extrap: a 48 in adjacent / spread box }), `applyRows(b)` (the straight rows of b, in order of height, moved to first + 2 k; counts and debonding kept; '' or the notice text), `rowNote(name)` (the tab's note), `extrapText(name)` (the 48 in box flag).
+- `apps/ps-bridge/ui/inputs.js`: `onChange`: after `base.girder` is set, `PSBSections.applyRows(P.base)` (its notice through `takeNote`, the page's toast with the header's Undo); in a girder type's scope the type's view is moved and stored as its override (index.html, unchanged). `rowModelNote(b)`: a MassDOT section shows `#mdRowNote` (the heights, the sheet, and in bold the 48 in flag) instead of the CTDOT plate text.
+- `apps/ps-bridge/report/builders.js`: new `rowNotes(B)` in §2 Assumptions after `tbcNotes` (each 48 in MassDOT box of the report: the flag, "see §3").
+  - Before: `...voidNotes(B), ...tbcNotes(B), ...fgNotes(B), ...secNotes(B)])];` After: `...voidNotes(B), ...tbcNotes(B), ...rowNotes(B), ...fgNotes(B), ...secNotes(B)])];`
+### Saved data (CLAUDE.md §5)
+- None: the rows are moved only when the user chooses a MassDOT section (an edit, undoable); saved projects open unchanged; no key or format changed.
+### Governing provisions (CLAUDE.md §4)
+- No formula, factor or computed value changed: an input default. The strand fit (PS-28 / PS-39) is unchanged and checks the moved rows.
+### Check case
+- Rows 10 @ 4, 12 @ 2 (2 debonded 10 ft), 6 @ 6 in; MassDOT B36-27 adj. chosen: 10 @ 4.25, 12 @ 2.25 (2 debonded 10 ft), 6 @ 6.25 in; then MassDOT NEBT 1200: 4.5, 2.5, 6.5 in; then a CTDOT box: unchanged. The sheets' bottom rows fit at these heights: boxes 16 / 22 at 2.25 in and 14 / 20 at 4.25 in (36 / 48 in), deck beams 16 / 22, NEBT / NEDBT 14 at 2.5 and 4.5 in, NEXT 10 a row (tested).
+### How verified
+- `node tests/check-syntax.mjs`: all scripts pass. `node tests/engine/run.mjs psbridge tex project-registry`: 33 files, 345 passed, 0 failed (after merging main); new `tests/engine/psbridge-ps41.test.mjs` (4 tests: the grid per family, the move on choosing a section (base and a girder type) with its notice, the sheets' bottom rows fit, the 48 in flag on the tab and in the Report §2).
+- Harness B: normal and `--import` 19 designs, 0 differences (exit 0); `--control`, `--import --control` exit 1. No harness design chooses a MassDOT section: no difference expected.
+- Smokes (one at a time): ps-bridge-skeleton 271 / 0 failed, ps-bridge-types 106 / 0 (a first run stopped on the intermittent seeded-reload issue noted in #1555, before any PS-41 step; passed on the re-run), ps-bridge-3d 101 / 0, ps-bridge-figures 225 / 0, ps-bridge-library 11 / 0.
+### Decisions (pending engineer review)
+- PS41-D1. The rows move whenever a MassDOT section is chosen and a row is off its grid (the k-th row by height to first + 2 k); the counts are kept, so a count that does not fit the new shape shows the strand-fit error (PS-28); the draped strands are not moved.
+- PS41-D2. The 48 in boxes use the 36 in sheets' rule (2¼ in bottom row, 2¾ in to the outer face, 2 in grid): flagged as extrapolated (tab and Report), to be confirmed.
+### Other copies
+- None.

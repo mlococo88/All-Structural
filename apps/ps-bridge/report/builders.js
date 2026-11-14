@@ -126,7 +126,7 @@
         ['Owner', ownR ? `${own} (${ownR.manual})` : own]]), note('Entered values (Project, Bridge layout, Cross-section and Girders & strands tabs); the engine inputs of the design girder are those of the [[tab:in:gird|Girders & strands tab]].'), ...planFig(P, X)]),
       sub('c', 'Basis', [kv([['Design specification', ED], ['Load rating', 'AASHTO Manual for Bridge Evaluation (MBE), LRFR; article numbers as the old app'], ['Owner manual', ownR && !ownR.none ? `${ownR.manual} (AASHTO LRFD ${ownR.aashto} basis); its rules as listed below` : 'none (AASHTO only)'],
         ['Units', 'in, kip, ksi, ft, klf, kip-ft'], ['Sign convention', 'stresses + compression, − tension; moments + sagging']])]),
-      sub('a', 'Assumptions', [...(asm ? asm.items : []), ...ASSUME.map(t => note('• ' + t)), ...deNote(P), ...voidNotes(B), ...tbcNotes(B), ...fgNotes(B), ...secNotes(B)])];
+      sub('a', 'Assumptions', [...(asm ? asm.items : []), ...ASSUME.map(t => note('• ' + t)), ...deNote(P), ...voidNotes(B), ...tbcNotes(B), ...rowNotes(B), ...fgNotes(B), ...secNotes(B)])];
     ownSubs.forEach((s, j) => subs.push({ ...sub('o' + j, `Owner rules: ${s.title}`, s.items), ...(j === 0 ? { key: X.ownKey } : {}) }));
     return { title: 'Project, basis and assumptions', subs };
   }
@@ -186,6 +186,15 @@
       .map(([n, t]) => note(`• ${plain(n)}: ${t.replace(/<sub>(.*?)<\/sub>/g, '$_{$1}$').replace(/&lt;/g, '<')} (see [[rs.sec]])`));
   }
 
+  /* rowNotes(B): PS-41 (engineer decision 2026-11-14): for each 48 in MassDOT box beam of the report (the design girder and every girder type on
+     a line), the flag that its default strand pattern is extrapolated from the 36 in strand sheet (engine/sections.js extrapText) */
+  function rowNotes(B) {
+    const SC = window.PSBSections, BR = window.PSBBridge, DS = window.PSBDesign; if (!SC || !SC.extrapText) return [];
+    const ns = [B.inp.girder];
+    if (BR && BR.hasTypes(B.P) && DS) BR.types(B.P).forEach((T, k) => { const l = BR.typeLines(B.P, k); if (!l.length) return;
+      try { ns.push(DS.cellInputs(B.P, k, l[0]).girder); } catch (e) { /* its own input errors */ } });
+    return [...new Set(ns)].map(n => [n, SC.extrapText(n)]).filter(([, t]) => t).map(([n, t]) => note(`• ${plain(n)}: ${t} (see [[rs.sec]])`));
+  }
   /* tbcNotes(B): PR A (engineer request 2026-11-14): for each standard box beam / voided slab of the CTDOT plates in the report (the design
      girder and every girder type on a line), the "to be confirmed" note of the Girders & strands tab (engine/sections.js tbcNote) */
   function tbcNotes(B) {
