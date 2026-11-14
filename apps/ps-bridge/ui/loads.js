@@ -69,9 +69,13 @@
       const out = fg.out.length ? `<div class="alert" id="fgRange"><b>Outside the range of applicability (PS-35)</b><ul>${fg.out.map(o => `<li>${k.esc(o.text)}</li>`).join('')}</ul>The equations are used all the same (flagged here, in the design warnings and the Report): check the factors (refined analysis, 4.6.3, or enter them on the Loads tab).</div>` : '';
       h += k.card(`Live load distribution factors: ${ext ? 'exterior' : 'interior'} ${window.PSBLldfFG.kindOf(R.g)}, type (${fg.type}) (PS-35${R.g.box && R.g.box.solid ? ', PS-36' : ''})`, k.kv(rows) + out
         + `<p class="note" id="fgNote">${inp.loads.dfAuto ? `AASHTO LRFD 10th Ed. equations for concrete beams in multibeam decks, cross-section type (${fg.type}) of Table 4.6.2.2.1-1 (Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1, 4.6.2.2.3a-1, 4.6.2.2.3b-1; skew 4.6.2.2.2e, 4.6.2.2.3c): the multiple presence is in the equations; no lever rule or rigid-section check. I and J of the section to which traffic is applied (4.6.2.2.1); J ${jsrc}. The moved engine's type (k) factors are not used (DF<sub>M</sub> ${k.fx(fg.engine.dfm, 4)}, DF<sub>V</sub> ${k.fx(fg.engine.dfv, 4)}: K<sub>g</sub> / 12 L t<sub>s</sub>³ does not apply to adjacent beams).` : 'Distribution factors entered on the Loads tab (the type (f) / (g) values are shown for reference).'} Position and skew from the bridge (<a href="#" data-goin="gird">Design girder card</a>); J override: <a href="#" data-goin="loads">Loads tab</a>.</p>`);
-    } else
+    } else {
+    // PS-42 (engineer decision 2026-11-14): a MassDOT NEDBT with no topping keeps the engine's type (k) factors, flagged next to the DF
+    const SCn = window.PSBSections, nt = SCn && SCn.noTopText ? SCn.noTopText(inp) : '';
     h += k.card(`Live load distribution factors: ${ext ? 'exterior' : 'interior'} girder${df.isNext ? ' (NEXT)' : ''}`, k.kv(dfr)
+      + (nt ? `<div class="alert" id="nedbtNoTop"><b>NEDBT without a topping: the distribution factor is likely very conservative</b> ${nt} The moment factors g<sub>M1</sub> ${wk('ld.m1')} and g<sub>M2</sub> ${wk('ld.m2')} are worked in the Loads &amp; LLDF steps.</div>` : '')
       + `<p class="note">${inp.loads.dfAuto ? `AASHTO equations, cross-section type ${df.isNext ? '(i)/(j)' : '(k)'}; S = ${k.fx(df.isNext ? df.Sf : inp.S, 3)} ft, L = ${k.fx(R.L, 2)} ft, N<sub>b</sub> = ${inp.nGirders}.` : 'Distribution factors entered on the Loads tab.'} Position and skew from the bridge (<a href="#" data-goin="gird">Design girder card</a>).</p>`);
+    }
     h += k.card('Worked steps: loads and distribution factors', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value.</p>${k.steps(ctx.W.loads.steps, TOPICS, OPEN)}`);
     return h;
   }
