@@ -2619,3 +2619,216 @@ index a30b678..63db1bf 100644
    'RIDOT, draped strands, hold-down limit 0.90 W, girder end 6 in past the bearing': (() => { const P = base(); P.base.owner = 'RIDOT'; P.base.opt.hdFrac = 0.9; P.base.opt.endOh = 6; P.base.harp.n = 8; P.base.harp.yEnd = 50; return P; })(),
    'AASHTO, PS-10 hold-down box off': (() => { const P = base(); P.base.opt.hdCheck = false; return P; })(),
 ```
+
+## 2026-11-14 — Flexure tab, pier section of a NEXT: the negative-moment compression block drawn in the two stems (display only; no calculation change)
+PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+### Request
+- Open item of PS-27 (orchestrated fix list 2026-11-14): on the Flexure tab's pier section (negative moment at the pier of a span made continuous) of a NEXT, the compression block was drawn 2B wide centred on the girder ℄, i.e. in the empty gap between the two stems. Draw it in the two stems (the bottom of each stem), consistent with the width the engine uses; display only; report, do not change, the engine's compression width if it looks wrong.
+### Problem
+- `ui/flexure.js` `pierFig` drew one rectangle from x = −b_bf/2 to +b_bf/2 for every shape. For a NEXT, `girderGrossBase` sets b_bf = 2B (the two stems' bottom width), so the block was a 2B-wide rectangle on the ℄ (NEXT 36F: −13 to +13 in), where there is no concrete (the stems' inner faces are at ±23.5 in).
+- The engine (pbd-compute.js, the pier section): a = A_s f_y / (0.85 f′c b_bf), with b_bf = 2B for a NEXT. That is the two stems' bottom width, so the compression zone is the bottom of each stem, B wide. The drawing now shows that.
+### What changed
+- `ui/flexure.js`:
+  - New `blocks(G)`: the x ranges of the block. For a NEXT, one per stem: x = ±stemCC/2 ± B/2. For every other shape, as before: [−b_bf/2, b_bf/2].
+  - `pierFig` draws a rectangle (and a point-at region) for each range, height min(a, h) as before.
+  - The callout says "in each stem (b = 2 × B in)" for a NEXT, and the region text gives "b_bf = 2 stems × B".
+  - The caption adds "(NEXT: at the bottom of each of the two stems, b_bf = 2B, the width the engine uses)".
+  - `pierFig` and `blocks` are exported for the test.
+- I-girders, bulb tees, boxes and deck beams: drawn exactly as before.
+### Saved data (CLAUDE.md §5)
+- None.
+### Governing provisions
+- None changed. Display only: AASHTO LRFD 10th Ed. 5.12.3.3 / 5.6.3 values (a, c, φM_n) unchanged.
+### Check case (NEXT 36F, S = 9 ft (default bays), two 80 ft spans made continuous, deck bars A_s = 16 in², f_y = 60 ksi, girder f′c = 8.5 ksi)
+- Stems: ℄ at ±30 in, B = 13 in, so b_bf = 2 × 13 = 26 in. a = 16 × 60 / (0.85 × 8.5 × 26) = 960 / 187.85 = 5.110 in (the engine: 5.110).
+- Before: one block from x = −13 to +13 in, 5.11 in high (between the stems).
+- After: two blocks, x = −36.5 to −23.5 in and +23.5 to +36.5 in, each 5.11 in high; total width 26 in = the engine's b_bf.
+### How verified
+- New `tests/engine/psbridge-pierfig.test.mjs` (6 tests). The block rectangles of `pierFig` (class dt-ng, recorded from the drawing kit) are checked for:
+  - NEXT 36F and NEXT 24F: two blocks, one at each stem, none between the stems;
+  - PCI BT-72, AASHTO Type IV, AASHTO BIII-36: one block, b_bf wide on the ℄;
+  - every shape: total width = the engine's b_bf, height = the engine's a;
+  - the engine's a, c, φM_n and Mu/φM_n the same before and after drawing;
+  - the NEXT 36F hand check above.
+
+  Mutation check: with the NEXT branch of `blocks` disabled, the 3 NEXT tests fail.
+- Results: Batched with the void note in one PR (engineer speed policy 2026-11-14: display only, reduced verification). `node tests/check-syntax.mjs`: all scripts pass. `node tests/engine/run.mjs psbridge tex project-registry`: 21 files, 195 passed, 0 failed. `ps-bridge-skeleton.mjs`: 257 checks, 0 failed. Harness B normal (17 designs): 0 with differences, exit 0 (no value changes). `--import` and the controls not run (display-only policy).
+### Open items (not changed; engine, for the engineer)
+- NEXT pier section, the a ≤ t_bf check (`cont.aOK`, pbd-compute.js `tbf = g.isNext ? g.next.ft : g.d[2]`). For a NEXT, t_bf is the flange thickness (8 in), and that flange is the deck flange at the top. In negative moment the compression is at the bottom of the stems, where there is no bottom flange. The rectangular block of width 2B stays valid while a ≤ the stem depth h − ft (NEXT 36F: 28 in), with B the stems' bottom width (the stems widen upward, so 2B is conservative). The check compares a with the wrong element. The compression width itself (2B) looks right.
+- Box beams, the same check (seen while checking the other shapes): `g.d` is [0, 0, 0, 0] for boxes and deck beams, so t_bf = 0. `aOK` is always false, and every continuous box design carries the warning "Negative-moment compression block a = … exceeds the bottom-flange thickness (0.0″)". For AASHTO BIII-36, two 80 ft spans made continuous, A_s = 16 in²: a = 3.69 in against the 5 in bottom wall. The engine's b_bf for a box is the full width w (36 in); the bottom wall is 36 in wide, so that width is consistent. Should t_bf be the box wall (`box.wall`) and, for a NEXT, the stem depth?
+### Other copies
+- None. The Report draws the tab's own figure (ui/report.js figure slots), so it shows the same blocks.
+### Before / after (exact)
+```diff
+diff --git a/apps/ps-bridge/ui/flexure.js b/apps/ps-bridge/ui/flexure.js
+index 496c609..2f7ab16 100644
+--- a/apps/ps-bridge/ui/flexure.js
++++ b/apps/ps-bridge/ui/flexure.js
+@@ -56,7 +56,11 @@
+     h += k.card('Worked steps: flexure', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value. f<sub>pe</sub>: <a href="#st-ls.fpe" data-gotab="loss">Losses tab</a>; h<sub>c</sub>, b<sub>eff</sub>: <a href="#st-sec.hc" data-gotab="sec">Section properties tab</a>; moments: <a href="#st-an.MuS" data-gotab="an">Analysis tab</a>.</p>${k.steps(ctx.W.flexure.steps, TOPICS, OPEN)}`);
+     return h;
+   }
+-  /* the pier section: girder, deck with the bars in tension, the compression block in the bottom flange */
++  /* the pier section: girder, deck with the bars in tension, the compression block in the bottom flange.
++     NEXT (2026-11-14, display only): the block is drawn at the bottom of each of the two stems, B wide each (x = ±stemCC/2 ± B/2), the
++     width the engine uses for the compression zone (pbd-compute.js: a = A_s f_y / (0.85 f′c b_bf), b_bf = 2B for NEXT, girderGrossBase);
++     before, one block 2B wide centred on the girder ℄, i.e. in the gap between the stems. blocks(G): [[x0, x1]] of the block(s). */
++  const blocks = G => (G.isNext && G.next ? [-1, 1].map(s => [s * G.next.stemCC / 2 - G.next.B / 2, s * G.next.stemCC / 2 + G.next.B / 2]) : [[-G.bbf / 2, G.bbf / 2]]);
+   function pierFig(R, inp, W) {
+     const V = VK(), S = V.scene(), G = R.g, cp = R.cp, c = R.cont, ts = +inp.ts, th = (G.isBox || G.isDeck) ? 0 : +inp.th, bE = Math.min(cp.beff, Math.max(G.btf, G.bbf) * 2.2);
+     const half = halfPolygon(G), poly = half.concat(half.slice().reverse().map(p => [-p[0], p[1]]));
+@@ -65,11 +69,12 @@
+     if (ts > 0) S.rect(-bE / 2, G.h + th, bE / 2, G.h + th + ts, 'dt-cc');
+     const yb = c.dN, nb = 9; for (let i = 0; i < nb; i++) S.circ(-bE / 2 + 2 + i * (bE - 4) / (nb - 1), yb, 0.45, 'dt-bar');
+     S.callout(bE / 2 - 2, yb, 26, -16, [`deck bars A_s = ${V.fx(c.As, 2)} in², f_y = ${V.fx(c.fyr, 0)} ksi`], { sz: 10.5 });
+-    S.rect(-G.bbf / 2, 0, G.bbf / 2, Math.min(c.aN, G.h), 'dt-ng', { op: 0.9 });
+-    S.callout(G.bbf / 2, c.aN / 2, 26, 10, [`compression block a = ${V.fx(c.aN, 2)} in (t_bf = ${V.fx(c.tbf, 1)} in)`], { sz: 10.5, gov: !c.aOK });
++    const bk = blocks(G), xr = bk[bk.length - 1][1];
++    bk.forEach(([x0, x1]) => S.rect(x0, 0, x1, Math.min(c.aN, G.h), 'dt-ng', { op: 0.9 }));
++    S.callout(xr, c.aN / 2, 26, 10, [`compression block a = ${V.fx(c.aN, 2)} in${G.isNext ? ` in each stem (b = 2 × ${V.fx(G.next.B, 2)} in)` : ''} (t_bf = ${V.fx(c.tbf, 1)} in)`], { sz: 10.5, gov: !c.aOK });
+     S.dimV(0, yb, -Math.max(G.bbf, G.btf) / 2, -16, `d = ${V.fx(c.dN, 2)} in`, { sz: 10.5 });
+     if (cp.beff > bE + 0.01) S.text(0, G.h + th + ts, `deck drawn ${V.fx(bE, 0)} in wide (b_eff = ${V.fx(cp.beff, 1)} in)`, { a: 'middle', dy: -8, sz: 10, cls: 'dt-m' });
+-    S.region(-G.bbf / 2, 0, G.bbf / 2, Math.max(c.aN, 1), `a = A_s f_y / (0.85 f'c b_bf) = ${V.fx(c.aN, 3)} in, c = ${V.fx(c.cN, 3)} in`);
++    bk.forEach(([x0, x1]) => S.region(x0, 0, x1, Math.max(c.aN, 1), `a = A_s f_y / (0.85 f'c b_bf) = ${V.fx(c.aN, 3)} in, c = ${V.fx(c.cN, 3)} in${G.isNext ? `; b_bf = 2 stems × B = 2 × ${V.fx(G.next.B, 2)} = ${V.fx(G.bbf, 2)} in` : ''}`));
+     return { html: S.render({ W: Math.min(W, 640), maxH: 330, label: 'Pier section, negative moment' }).svg, nar: W < 560 };
+   }
+   const HIDE = { cmp: { sw: true, dc1: true, dc2: true, dw: true, llp: true, lln: true } };
+@@ -98,7 +103,7 @@
+     }
+     const sp = el.querySelector('#gfx_fxpier');
+     if (sp && c && VK() && VK().detCard) VK().detCard(sp, { id: 'fxPierFig', title: 'Pier section (negative moment)', sub: `${k.esc(ctx.inp.girder)} with the deck; girder f′c ${k.fx(+ctx.inp.mat.fc, 2)} ksi`, draw: W => pierFig(R, ctx.inp, W), hint: 'Point at the compression block for its values.',
+-      cap: '<p class="vk-cap">Deck bars (A<sub>s</sub> within b<sub>eff</sub>) in tension, the rectangular compression block in the girder bottom flange; bar positions drawn for display. Display only.</p>' });
++      cap: `<p class="vk-cap">Deck bars (A<sub>s</sub> within b<sub>eff</sub>) in tension, the rectangular compression block in the girder bottom flange${R.g.isNext ? ' (NEXT: at the bottom of each of the two stems, b<sub>bf</sub> = 2B, the width the engine uses)' : ''}; bar positions drawn for display. Display only.</p>` });
+   }
+-  window.PSBUiFlexure = { output, after, TOPICS };
++  window.PSBUiFlexure = { output, after, TOPICS, pierFig, blocks };   // pierFig, blocks: also for tests/engine/psbridge-pierfig.test.mjs
+ })();
+```
+
+## 2026-11-14 — Box beam and voided deck slab voids: drawn where the engine places them, and the Section properties tab and the Report's assumptions say so (display only; decision pending engineer review)
+PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+### Request
+- Open item of PS-27 (fix list 2026-11-14): the new app draws the box void where the engine's `sectionVoids` places it (on the bottom wall), while the old app's section graphic centred it on the depth. Keep the graphics consistent with the engine, confirm it, and note it in the Section tab / Report assumptions. If the engine's position disagrees with the girder library's published void position, report it; do not change calculations.
+### Findings (confirmed)
+- The engine (`sectionVoids`, pbd-section.js, verbatim from the old app at 8fe8650 :2648-2649) puts the box cell on the bottom wall: y = wall … wall + voidH (wall = 5 in for every library box). The top wall is h − wall − voidH = 2 in for all four boxes (BI-36: void 5–10 in in a 12 in depth).
+- The old app's section graphic (`Prestressed Bridge Design.html` :4998, `bot=(g.h-vh)/2;  // void centered vertically`) drew it centred: walls (h − voidH)/2 = 3.5 in top and bottom.
+- Every graphic of the new app draws `sectionVoids` (ui/section.js, ui/strands.js, ui/stresses.js, ui/flexure.js, ui/view3d.js), and so does the PS-28 strand fit. Voided deck slabs: round voids on mid-depth in both apps.
+- What the void position is used for in the engine: only `tensionSideArea` (A_ct, the concrete below h/2 for the shear ε_s recompute when ε_s < 0, 5.7.3.4.2, pbd-compute.js `const Act=tensionSideArea(g)`). The gross A, I and y_b are the library's published values (`girderGrossBase`), not computed from the outline. `weakAxisAndJ` (handling) uses the void width and height but not its vertical position.
+- **The library's published values disagree with its own outline and void (reported, not changed):**
+
+  | Box | Published A (in²) | Published I (in⁴) | Published y_b (in) | Outline − void A (in²) | I, void on the bottom wall (in⁴) | y_b, void on the bottom wall (in) | I, void centred (in⁴) | y_b, void centred (in) |
+  |---|---|---|---|---|---|---|---|---|
+  | BI-36 (12 in) | 560 | 12 897 | 6.00 | 302 | 4 495 | 5.35 | 4 913 | 6.00 |
+  | BII-36 (18 in) | 693 | 36 434 | 9.00 | 362 | 13 460 | 7.81 | 14 612 | 9.00 |
+  | BIII-36 (27 in) | 812 | 97 756 | 13.14 | 452 | 39 200 | 11.77 | 41 716 | 13.50 |
+  | BIV-48 (33 in) | 1 097 | 200 631 | 16.11 | 596 | 82 183 | 14.01 | 88 091 | 16.50 |
+
+  - The published A is larger than the outline's (BI-36: 560 in² against a solid 36 × 12 = 432 in²).
+  - The published I is 2.3 to 2.9 times the outline's.
+  - The published y_b of BI-36 and BII-36 is h/2, i.e. a symmetric section (a centred void, or none). BIII-36 and BIV-48 are between the two positions.
+
+  The library has no void position of its own (only voidW, voidH, wall). Its gross properties match neither placement of the drawn void. They look like the properties of other sections, e.g. the standard AASHTO BI-36 of 27 in depth has A = 560.5 in². This needs the engineer: which box sections are meant, with which properties and void.
+- Effect of the void position on A_ct (BI-36, below h/2 = 6 in): engine (void 5–10 in) 36 × 6 − 26 × 1 = 190 in²; centred (3.5–8.5 in) 36 × 6 − 26 × 2.5 = 151 in². Not changed.
+### What changed
+- `ui/section.js`: new `voidNote(G)` (exported), shown under the gross-section card (`#sec-void-note`) for a box beam or a voided deck slab. It gives:
+  - where the void is (box: the cell size, y = wall to wall + voidH above the soffit, the bottom and top walls; voided slab: the count, the diameter, mid-depth);
+  - that it is where the engine places it (sectionVoids) and as drawn, and that the old app's graphic centred the box void;
+  - that A, I, y_b are the library's published values, not computed from the outline;
+  - what the void position is used for (A_ct in 5.7.3.4.2, the PS-28 strand fit, the graphics).
+
+  The Report's §3 Section properties shows the tab's card, so the note is there too.
+- `report/builders.js`: new `voidNotes(B)` in §2 Assumptions: the same note for each shape with voids (the design girder and every girder type on a line), with "(see §3 …)" (`[[rs.sec]]`).
+### Saved data (CLAUDE.md §5)
+- None.
+### Governing provisions
+- None changed. Display only: no computed value changes; the engine's void position (sectionVoids) is kept.
+### Check case (AASHTO BI-36 (12in): h = 12, w = 36, wall = 5, voidW = 26, voidH = 5 in)
+- Note: "Void: one 26.0 × 5.0 in cell on the bottom wall, y = 5.0 to 10.0 in above the soffit (bottom wall 5.0 in, top wall h − wall − void = 2.0 in) …".
+- The Section properties graphic draws the void rectangle from (−13, 5) to (13, 10) in. The old app: (−13, 3.5) to (13, 8.5).
+- Before / after: no value changes (A = 560 in², I = 12 897 in⁴, y_b = 6.00 in, as published).
+### How verified
+- New `tests/engine/psbridge-voidnote.test.mjs` (4 tests):
+  1. the note's numbers = the library's and `sectionVoids`' for every box and voided slab; no note for any other shape;
+  2. the Section properties graphic draws the BI-36 void at (−13, 5)–(13, 10);
+  3. the tab card and the Report §2 carry the note (with its link, resolved) for BIII-36 and the 21 in voided slab, and not for the BT-72; R is unchanged;
+  4. a bridge with a BT-72 span and a BIII-36 span (girder types; Report on each type's governing line): the box note once, no BT-72 note, every link resolved.
+- Results: Batched with the void note in one PR (engineer speed policy 2026-11-14: display only, reduced verification). `node tests/check-syntax.mjs`: all scripts pass. `node tests/engine/run.mjs psbridge tex project-registry`: 21 files, 195 passed, 0 failed. `ps-bridge-skeleton.mjs`: 257 checks, 0 failed. Harness B normal (17 designs): 0 with differences, exit 0 (no value changes). `--import` and the controls not run (display-only policy).
+### Decisions (pending engineer review)
+- PSV-D1. The graphics keep the engine's void position (on the bottom wall), not the old app's centred drawing: the drawing shows the void that A_ct and the PS-28 strand fit use.
+### Open items (not changed; for the engineer)
+- The box library's A, I, y_b disagree with its outline and void (table above). Which sections are meant, with which properties and void position? A change would be a calculation change (CLAUDE.md §4) in the verbatim library slice.
+### Other copies
+- None.
+### Before / after (exact)
+```diff
+diff --git a/apps/ps-bridge/report/builders.js b/apps/ps-bridge/report/builders.js
+index ef8084a..329443d 100644
+--- a/apps/ps-bridge/report/builders.js
++++ b/apps/ps-bridge/report/builders.js
+@@ -126,7 +126,7 @@
+         ['Owner', ownR ? `${own} (${ownR.manual})` : own]]), note('Entered values (Project, Bridge layout, Cross-section and Girders & strands tabs); the engine inputs of the design girder are those of the [[tab:in:gird|Girders & strands tab]].')]),
+       sub('c', 'Basis', [kv([['Design specification', ED], ['Load rating', 'AASHTO Manual for Bridge Evaluation (MBE), LRFR; article numbers as the old app'], ['Owner manual', ownR && !ownR.none ? `${ownR.manual} (AASHTO LRFD ${ownR.aashto} basis); its rules as listed below` : 'none (AASHTO only)'],
+         ['Units', 'in, kip, ksi, ft, klf, kip-ft'], ['Sign convention', 'stresses + compression, − tension; moments + sagging']])]),
+-      sub('a', 'Assumptions', [...(asm ? asm.items : []), ...ASSUME.map(t => note('• ' + t)), ...deNote(P)])];
++      sub('a', 'Assumptions', [...(asm ? asm.items : []), ...ASSUME.map(t => note('• ' + t)), ...deNote(P), ...voidNotes(B)])];
+     ownSubs.forEach((s, j) => subs.push({ ...sub('o' + j, `Owner rules: ${s.title}`, s.items), ...(j === 0 ? { key: X.ownKey } : {}) }));
+     return { title: 'Project, basis and assumptions', subs };
+   }
+@@ -158,6 +158,19 @@
+      same rows as the Loads & LLDF tab's notice, listed in the assumptions always (also after the notice is dismissed); none where they match */
+   function deNote(P) { const DS = window.PSBDesign, D = DS && DS.deDiff ? DS.deDiff(P) : { rows: [] }; return D.rows.length ? [note(`• ${DS.deText(D, t => `$_{${t}}$`)} (see [[rs.lds]])`)] : []; }
+ 
++  /* voidNotes(B): 2026-11-14 (decision pending engineer review): for each shape of the report with voids (a box beam, a voided deck slab: the
++     design girder and every girder type on a line), where the void is (the Section properties tab's note, ui/section.js voidNote: the
++     engine's sectionVoids position, as drawn); none for shapes without voids */
++  function voidNotes(B) {
++    const SU = window.PSBUiSection, BR = window.PSBBridge, DS = window.PSBDesign; if (!SU || !SU.voidNote) return [];
++    const gs = [[B.inp.girder, B.R.g]];
++    if (BR && BR.hasTypes(B.P) && DS) BR.types(B.P).forEach((T, k) => { const l = BR.typeLines(B.P, k); if (!l.length) return;
++      try { const i = DS.cellInputs(B.P, k, l[0]); gs.push([i.girder, girderGross(i)]); } catch (e) { /* its own input errors */ } });
++    const seen = new Set();
++    return gs.filter(([n]) => !seen.has(n) && seen.add(n)).map(([n, g]) => [n, SU.voidNote(g)]).filter(([, t]) => t)
++      .map(([n, t]) => note(`• ${plain(n)}: ${t.replace(/<sub>(.*?)<\/sub>/g, '$_{$1}$').replace(/&lt;/g, '<')} (see [[rs.sec]])`));
++  }
++
+   /* ---------- 3–14. the result tabs ---------- */
+   function tabSec(B, k, X) {
+     const [ui, wk] = TABS[k], U = window[ui], FT = window.PSBReportTab;
+diff --git a/apps/ps-bridge/ui/section.js b/apps/ps-bridge/ui/section.js
+index bc9935b..f6b657e 100644
+--- a/apps/ps-bridge/ui/section.js
++++ b/apps/ps-bridge/ui/section.js
+@@ -12,6 +12,15 @@
+     { key: 'ec', title: 'Moduli of elasticity and modular ratio', ref: 'AASHTO LRFD 10th Ed. 5.4.2.4', ids: /^sec\.(Ecg|Ecd|n)$/, res: /^sec\.n$/ },
+     { key: 'comp', title: 'Composite section (transformed deck)', ref: 'AASHTO LRFD 10th Ed. 4.6.2.6', ids: /^sec\.(beff|Ad|yd|Ah|Ac|ybc|Ic|hc|Sbc|Stg|Std)$/, res: /^sec\.Ic$/ },
+     { key: 'str', title: 'Prestressing strands', ref: 'AASHTO LRFD 10th Ed. 5.9.4.3.1', ids: /^sec\./, res: /^sec\.eMid$/ }];
++  /* voidNote(G): 2026-11-14 (decision pending engineer review, PS28/void note): where the void of a box beam or a voided deck slab is, as the
++     engine places it (sectionVoids, pbd-section.js) and every graphic draws it; '' for a shape without voids. The old app's section graphic
++     centred the box void on the depth; the engine (and so every value that uses the void position) puts it on the bottom wall. */
++  function voidNote(G) {
++    const b = G && G.box, f = v => K().fx(v, 1); if (!b) return '';
++    if (G.isBox && b.voidW > 0 && b.voidH > 0) return `Void: one ${f(b.voidW)} × ${f(b.voidH)} in cell on the bottom wall, y = ${f(b.wall)} to ${f(b.wall + b.voidH)} in above the soffit (bottom wall ${f(b.wall)} in, top wall h − wall − void = ${f(G.h - b.wall - b.voidH)} in), where the engine places it (sectionVoids) and as drawn here; the old app's section graphic centred it on the depth. A, I and y<sub>b</sub> above are the library's published values, not computed from the outline: the void position is used for the concrete area on the tension side A<sub>ct</sub> (shear, 5.7.3.4.2, when ε<sub>s</sub> &lt; 0), the strand fit of the input check (PS-28) and the graphics.`;
++    if (G.isDeck && b.voids > 0 && b.voidD > 0) return `Voids: ${b.voids} round voids of ${f(b.voidD)} in diameter on mid-depth (y = ${f(G.h / 2)} in), evenly spaced across the width, where the engine places them (sectionVoids) and as drawn here. A, I and y<sub>b</sub> above are the library's published values, not computed from the outline: the void positions are used for A<sub>ct</sub> (shear, 5.7.3.4.2, when ε<sub>s</sub> &lt; 0), the strand fit of the input check (PS-28) and the graphics.`;
++    return '';
++  }
+   function output(ctx) {
+     const { R, inp } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, G = R.g, ss = R.ss;
+     const kind = G.isNext ? 'NEXT F double tee' : G.isBox ? 'adjacent box beam' : G.isDeck ? 'adjacent deck beam' : 'I-girder / bulb tee';
+@@ -20,7 +29,8 @@
+       ['Shape', `${k.esc(inp.girder)} (${kind})${G.ovr && G.ovr.any ? ', with overrides' : ''}`], ['Depth h', ev('g.h', 2, 'in')], ['Area A', ev('g.A', 1, 'in²')], ['Moment of inertia I', ev('g.I', 0, 'in⁴')],
+       ['y<sub>b</sub> (centroid above the soffit)', ev('g.yb', 3, 'in')], ['y<sub>t</sub>', `${ev('g.yt', 3, 'in')} ${wk('sec.g.yt')}`], ['S<sub>b</sub>', `${ev('g.Sb', 0, 'in³')} ${wk('sec.g.Sb')}`], ['S<sub>t</sub>', `${ev('g.St', 0, 'in³')} ${wk('sec.g.St')}`],
+       ['Web width b<sub>w</sub>', ev('g.bw', 2, 'in')], ['Top / bottom flange width', `${ev('g.btf', 2)} / ${ev('g.bbf', 2, 'in')}`], ['Self-weight w<sub>g</sub>', `${ev('g.wsw', 4, 'klf')} ${wk('sec.g.wsw')}`]])
+-      + `<p class="note">Gross properties of the shape library (the old app's GIRDERS${G.isNext ? '; NEXT: interpolated on the flange width' : ''})${G.ovr && G.ovr.any ? '; overridden values as entered (Girders &amp; strands tab)' : ''}.</p>`, 'card-gross');
++      + `<p class="note">Gross properties of the shape library (the old app's GIRDERS${G.isNext ? '; NEXT: interpolated on the flange width' : ''})${G.ovr && G.ovr.any ? '; overridden values as entered (Girders &amp; strands tab)' : ''}.</p>`
++      + (voidNote(G) ? `<p class="note" id="sec-void-note">${voidNote(G)}</p>` : ''), 'card-gross');
+     h += k.card('Composite section', k.kv([
+       ['E<sub>c</sub> girder', `${ev('cp.Ecg', 0, 'ksi')} ${wk('sec.Ecg')}`], ['E<sub>c</sub> deck', `${ev('cp.Ecd', 0, 'ksi')} ${wk('sec.Ecd')}`], ['Modular ratio n', `${ev('cp.n', 4)} ${wk('sec.n')}`],
+       ['Effective flange width b<sub>eff</sub>', `${ev('cp.beff', 2, 'in')} ${wk('sec.beff')}`], ['A<sub>c</sub>', `${ev('cp.Ac', 1, 'in²')} ${wk('sec.Ac')}`], ['y<sub>bc</sub>', `${ev('cp.ybc', 3, 'in')} ${wk('sec.ybc')}`],
+@@ -72,5 +82,5 @@
+       draw: W => figure(ctx, W), hint: 'Point at the deck or a strand row for its values.',
+       cap: '<p class="vk-cap">Shape as the engine uses it (outline and voids of the shape library); straight strands drawn on a 2 in grid, draped strands at midspan. Display only.</p>' });
+   }
+-  window.PSBUiSection = { output, after, TOPICS, figure };   // figure: also for tests/engine/psbridge-strandgfx.test.mjs (PS-27)
++  window.PSBUiSection = { output, after, TOPICS, figure, voidNote };   // figure: also for tests/engine/psbridge-strandgfx.test.mjs (PS-27); voidNote: the Report §2 assumptions
+ })();
+```
