@@ -75,27 +75,21 @@
     h += k.card('Worked steps: loads and distribution factors', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value.</p>${k.steps(ctx.W.loads.steps, TOPICS, OPEN)}`);
     return h;
   }
-  /* the cross-section: deck, girder lines (rectangles), the design girder highlighted; display only (ft) */
+  /* the cross-section of the design span (ui/xsfig.js, PSBXsFig): each line's girder section at its offset, deck, haunch, barriers,
+     sidewalks, traffic faces and d_e, to scale; the line shown on the output tabs outlined. Display only. Also the Report's figure. */
   function figure(ctx, W) {
-    const { P, inp } = ctx, V = VK(), S = V.scene(), off = window.PSBModel.girderOffsets(P), Wd = off[off.length - 1] + (+P.xs.ohR || 0), d = window.PSBDesign.sel(P);
-    const t = 0.7, hg = 3;
-    S.rect(0, 0, Wd, t, 'dt-cc');
-    off.forEach((x, i) => { S.rect(x - 0.6, -hg, x + 0.6, 0, i + 1 === d.g ? 'dt-govf' : 'dt-pl'); S.text(x, -hg, `G${i + 1}`, { a: 'middle', dy: 14, sz: 11, w: i + 1 === d.g });
-      S.region(x - 0.8, -hg, x + 0.8, t, `G${i + 1} at ${V.fx(x, 2)} ft from the left deck edge${i + 1 === d.g ? ' (design girder)' : ''}`); });
-    for (let i = 0; i + 1 < off.length; i++) S.dimH(off[i], off[i + 1], t, 16, `${V.fx(off[i + 1] - off[i], 2)} ft`);
-    S.dimH(0, off[0], t, 16, `${V.fx(off[0], 2)}`); S.dimH(off[off.length - 1], Wd, t, 16, `${V.fx(Wd - off[off.length - 1], 2)}`);
-    S.text(off[d.g - 1], t, `design girder (${inp.loads.pos})`, { a: 'middle', dy: -44, sz: 11, cls: 'dt-g' });
-    const r = S.render({ W, maxH: 220, label: 'Bridge cross-section with the design girder' });
-    return { html: r.svg, nar: W < 560 };
+    const d = window.PSBDesign.sel(ctx.P), q = window.PSBXsFig.svg(ctx.P, d.s, W, { shown: d.g });
+    return { html: q.svg, nar: q.nar };
   }
   function after(el, ctx) {
     K().after(el, OPEN);
     const slot = el.querySelector('#gfx_ld'); if (!slot || !VK() || !VK().detCard) return;
     const { R } = ctx, k = K(), ev = (p, d) => k.ev(R, p, d);
-    VK().detCard(slot, { id: 'ldFig', title: 'Cross-section and design girder', sub: 'girder lines from the left deck edge',
+    VK().detCard(slot, { id: 'ldFig', title: 'Cross-section: girder sections, deck, barriers and d<sub>e</sub>', sub: `span ${window.PSBDesign.sel(ctx.P).s}, girder lines from the left deck edge`,
       top: VK().tiles([{ label: 'DC1 w<sub>DC1</sub>', value: ev('wDk', 3), unit: 'klf' }, { label: 'DC2', value: ev('wBar', 3), unit: 'klf' }, { label: 'DW', value: ev('wDW', 3), unit: 'klf' },
         { label: 'DF<sub>M</sub>', value: ev('dfm', 3), unit: 'lanes', tone: 'c' }, { label: 'DF<sub>V</sub>', value: ev('dfv', 3), unit: 'lanes', tone: 'c' }, { label: 'M<sub>LL+IM</sub>', value: ev('MLL', 0), unit: 'k-ft', tone: 't' }]),
-      draw: W => figure(ctx, W), hint: 'Point at a girder for its location.', cap: '<p class="vk-cap">Entered bridge cross-section (Cross-section tab); the design girder outlined. Display only.</p>' });
+      draw: W => figure(ctx, W), hint: 'Point at a girder, the deck, a barrier or a d_e dimension to read it.',
+      cap: window.PSBXsFig.legend(window.PSBXsFig.model(ctx.P, window.PSBDesign.sel(ctx.P).s)) + `<p class="vk-cap">G${window.PSBDesign.sel(ctx.P).g} (outlined) is the line shown on the output tabs. Entered on the <a href="#" data-goin="xsec">Cross-section tab</a> (bays, overhangs, barriers, sidewalks) and the <a href="#" data-goin="gird">Girders &amp; strands tab</a> (girder types and sections). Display only.</p>` });
   }
   window.PSBUiLoads = { output, after, TOPICS };
 })();
