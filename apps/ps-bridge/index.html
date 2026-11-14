@@ -99,6 +99,7 @@
     'ui/plan.js',     // 2026-11-14: the framing plan of the Bridge layout tab (girder lines, skewed supports, diaphragms; true scale or ×2 width)
     'ui/xsfig.js',    // 2026-11-14: the whole-bridge cross-section figure (Loads & LLDF tab, Report): the girder sections at their offsets
     'ui/view3d.js',   // PR 3c: the 3D view tab (the Steel Bridge app's 3D view pattern, apps/steel-bridge/ui/view3d.js; three.js r128 below)
+    'ui/sumelev.js',  // 2026-11-14 (item 8a): the Summary's girder elevation of each girder type (picker; the governing checks where they govern)
     'ui/summary.js',  // PR 3b: the Summary tab (adapted copy of apps/steel-bridge/ui/summary.js): verdict, girder × span grid, type × check table
     'ui/splitter.js'  // the splitter between the input and output panels (copy of apps/steel-bridge/ui/splitter.js)
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
@@ -684,6 +685,7 @@
       if (/^#st-/.test(h)) { const el = window.SharedSteps.reveal($('out'), h.slice(4)); if (el) el.scrollIntoView({ block: 'center' }); } }
   });
   $('out').addEventListener('change', e => { if (e.target.dataset.ty) { typesDone(TY.onChange(e.target, P, ui)); return; }   // PR 3a-1: the type and line shown
+    if (window.PSBSumElev && window.PSBSumElev.onChange(e.target)) { drawOut(); return; }   // 2026-11-14: the Summary elevation's girder type (the page session only)
     if (Object.values(TABUI).some(f => f().onOutChange && f().onOutChange(e, ui))) { saveUi(); drawOut(); } });
 
   /* toast(text, undo): a message (the inputs an owner change set; PR 3a-1: the girder types re-assigned), closed by its button; undo (true)
