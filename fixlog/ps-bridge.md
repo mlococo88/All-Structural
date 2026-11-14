@@ -3664,7 +3664,7 @@ PR #1557: https://github.com/mlococo88/All-Structural/pull/1557
 - None.
 
 ## 2026-11-14 — PS-42: a MassDOT NEDBT with no cast-in-place topping flagged next to its distribution factor (Loads & LLDF tab, Girders & strands shape card, Report Loads & LLDF section) (DISPLAY ONLY; no calculation change)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1559: https://github.com/mlococo88/All-Structural/pull/1559
 ### Request
 - Engineer decision 2026-11-14 (PS-42, follows PS37-D4): an NEDBT with no topping keeps the current behaviour (the engine's type (k) LLDF evaluated with t_s = 0, a very conservative moment DF, about 4.4–5.2) but is flagged: a clear warning next to the DF on the Loads & LLDF tab, on the girder card, and a matching line in the Report's Loads & LLDF section with a "see §" reference (CLAUDE.md §6). Paraphrased wording, no "pending review" wording; for every girder type / line on an NEDBT with zero topping, none otherwise.
 ### What changed
