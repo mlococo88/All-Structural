@@ -61,9 +61,9 @@
       const TABN = { layout: 'Bridge layout', xsec: 'Cross-section', gird: 'Girders & strands' };
       kv = `<div class="kv">${D().driven(P).map(q => `<div><span>${esc(q.label)}</span><span data-dv="${esc(q.key)}">${esc(fmt(q.value, q.d == null ? 2 : q.d))}${q.unit ? ' ' + esc(q.unit) : ''} <a href="#" data-goin="${q.where}" title="Entered on the ${esc(TABN[q.where])} tab">${esc(TABN[q.where])}</a></span></div>`).join('')}</div>`;
     }
-    return card('design', 'Design girder', 'one design until PR 3a', `${s('design.g', 'Girder', gOpts, d.g, 'The girder line designed (G1 = left exterior). Interior and exterior designs per span (PS-8) come with the bridge level, PR 3a.')}
+    return card('design', 'Design girder', 'one design (no girder types)', `${s('design.g', 'Girder', gOpts, d.g, 'The girder line designed (G1 = left exterior). With girder types (PS-8, Girders &amp; strands tab) every type is checked on its own lines.')}
       ${s('design.s', 'Span', sOpts, d.s, 'The span designed (spans on the Bridge layout tab).')}${kv}
-      <p class="note">The bridge gives the design these values (the old app's "Preliminary designer" bridge values, PBD.applyBridge, plus continuity, skew and the overhang): they are entered on the tab named. Every other girder input is on the input tabs. Girder groups by cross-section line (interior / exterior per span, PS-8) replace this choice in PR 3a.</p>`);
+      <p class="note">The bridge gives the design these values (the old app's "Preliminary designer" bridge values, PBD.applyBridge, plus continuity, skew and the overhang): they are entered on the tab named. Every other girder input is on the input tabs. Girder types (interior / exterior per span, PS-8; Girders &amp; strands tab) replace this choice.</p>`);
   }
   /* the owner card (Owner rules): owner, the η questions, the design load multiplier, the sidewalk question and the rules list.
      R (when given): the owner's material checks (MAT rule ids, the engine's R.checks by the rule's check name) show the engine's value, limit
@@ -113,12 +113,12 @@
       'Different skews at the two supports of a span: the larger |θ| (the obtuse-corner shear correction, 4.6.2.2.3c); below 30° the moment DF has no skew reduction (Table 4.6.2.2.2e-1), so one θ is exact; 30° or more with the DF computed is an input error (enter equal skews or the DF).',
       'Every girder of a span has the same shape (PS-8); the deck, the diaphragms, the owner rules and the continuity steel are entered once for the bridge.'
     ] : [
-      `One girder design: G${d.g} (${d.g === 1 || d.g === nb ? 'exterior' : 'interior'}) in span ${d.s} (Girders &amp; strands tab). Every girder × span and the interior / exterior groups (PS-8) come with the bridge level, PR 3a.`,
+      `One girder design: G${d.g} (${d.g === 1 || d.g === nb ? 'exterior' : 'interior'}) in span ${d.s} (Girders &amp; strands tab): this project has no valid girder types. With girder types (Girders &amp; strands tab, PS-8) every type is checked on every line assigned to it.`,
       'The bridge gives the design its span length, girder spacing, number of girders, position (G1 and the last girder exterior), the support skew of its span, the deck overhang on its side and the continuity (as the old app\'s bridge bar; Girders &amp; strands tab, Design girder card).',
-      'One girder spacing and one skew per design until PR 3a: unequal bays and different skews at the two supports of the design span are input errors for now (PS-9; plan §7 item 3).'
+      'Unequal bays (PS-9): the design girder takes as its spacing S the bay next to it (exterior) or the mean of its two bays (interior); different skews at the two supports of the design span: the larger |θ| (Loads &amp; LLDF tab).'
     ];
     items.push(
-      'DC2 (barrier / superimposed) and DW are entered per girder (Loads tab); the Steel Bridge distribution to each girder comes in PR 3a (PS-9).',
+      (window.PSBBridgeDL && window.PSBBridgeDL.on(P) ? 'DC2 (barriers, sidewalks, superimposed) and DW (wearing surface) are distributed to each girder line from the Cross-section tab by the Steel Bridge app\'s method (PS-9), shown per line on the Loads &amp; LLDF tab.' : 'DC2 (barrier / superimposed) and DW are entered per girder type (Loads tab; Cross-section tab: dead load distribution "Entered per girder type"); the Steel Bridge distribution to each girder line is the other choice there (PS-9).'),
       'Calculations: the old Prestressed Bridge Design engine, moved unchanged (PR 2a, 0 differences on 658 cases); AASHTO LRFD 10th Ed. (2024). Normal-weight concrete; strand f<sub>pu</sub> = 270 ksi, low relaxation.',
       'Hold-down force: F<sub>hd</sub> = 2 n<sub>h</sub> f<sub>pbt</sub> A<sub>b</sub> sin α ≤ 0.75 W, checked always for MassDOT and CTDOT (their rule) and, for AASHTO and RIDOT, when the PS-10 box is on (default on, the fraction editable; Owner rules tab). AASHTO LRFD itself sets no limit. MIDAS demand import by file: a later PR.'
     );
@@ -141,7 +141,7 @@
         + `<p class="note">${(P.base.rows || []).reduce((a, r) => a + (+r.n || 0), 0)} straight strands + ${+P.base.harp.n || 0} draped = ${(P.base.rows || []).reduce((a, r) => a + (+r.n || 0), 0) + (+P.base.harp.n || 0)} strands. Debonding rules (5.9.4.3.3) are checked as warnings of the design.</p>`
         + `<p class="note" id="rowsFitNote">Each row is drawn and checked as a contiguous group of strands on the 2 in grid, centred on the girder ℄. A strand centre must be inside the concrete, at least 2 in from its edges (PS-28) and at least 1.5 in from the face of a void (PS-33).${rowModelNote(P.base)}</p>`);
     });
-    if (tab === 'dd') h = card('diaph', 'Diaphragms (DC1 point loads)', 'entered once (PS-14)', table('base.loads.diaph', P) + '<p class="note">Point loads on the non-composite simple span of the design girder, from the left ℄ bearing; the same diaphragms apply to every girder from PR 3a (PS-14).</p>') + h;
+    if (tab === 'dd') h = card('diaph', 'Diaphragms (DC1 point loads)', 'entered once (PS-14)', table('base.loads.diaph', P) + '<p class="note">Point loads on the non-composite simple span of the design girder, from the left ℄ bearing; the same diaphragms apply to every girder line (PS-14).</p>') + h;
     if (tab === 'loads') h += card('veh', 'Legal / permit vehicles', 'MBE 6A.4.4, 6A.4.5, Strength I', table('base.rateVeh', P) + '<p class="note">Fully factored live-load moment and shear per vehicle (DF, IM, MPF and the LRFR live-load factor applied, from your own analysis); the app supplies the capacity and the dead loads.</p>')
       + '<div class="ph"><b>External demands (MIDAS) by file</b> <span class="devBadge">later PR</span><ul><li>the composite-stage DC2, DW and LL+IM envelopes of a MIDAS model (schema psbeam-external-demands), with the DF and multiple presence per effect</li></ul></div>';
     return h;

@@ -3209,3 +3209,30 @@ PR #1544: https://github.com/mlococo88/All-Structural/pull/1544
 - None new (the DOT J values: PS-35 open item).
 ### Other copies
 - `Prestressed Bridge Design.html` (frozen): type (k) for the solid slabs; not changed.
+
+## 2026-11-14 — Stale "PR n" texts and the Summary's run-together label (display only)
+PR #1545: https://github.com/mlococo88/All-Structural/pull/1545
+### Request
+- Review of 2026-11-14 (PS Bridge catch-up to the Steel Bridge app, item 1): texts that still say a feature "comes in PR 3a" (or another PR) for features that exist now; the Summary's project-overview grid printed "Continuitymade continuous" (label and value touching).
+### What changed (text and CSS only; no value, key or format changed)
+- `ui/inputs.js` `assumptions(P)` (the Project tab's assumptions, also the Report's §2):
+  - Before: `'DC2 (barrier / superimposed) and DW are entered per girder (Loads tab); the Steel Bridge distribution to each girder comes in PR 3a (PS-9).'`
+  - After: when `PSBBridgeDL.on(P)`: "DC2 (barriers, sidewalks, superimposed) and DW (wearing surface) are distributed to each girder line from the Cross-section tab by the Steel Bridge app's method (PS-9), shown per line on the Loads & LLDF tab."; else "DC2 (barrier / superimposed) and DW are entered per girder type (Loads tab; Cross-section tab: dead load distribution "Entered per girder type"); the Steel Bridge distribution to each girder line is the other choice there (PS-9)."
+  - The no-types branch (a project whose girder types are unreadable): "Every girder × span … come with the bridge level, PR 3a." → "…: this project has no valid girder types. With girder types (Girders & strands tab, PS-8) every type is checked on every line assigned to it."; "One girder spacing and one skew per design until PR 3a: unequal bays and different skews … are input errors for now" → the rule the engine applies now (S = the adjacent bay / the mean of the two bays; the larger |θ|; engine/design.js since PR 3a-2).
+- `ui/inputs.js` `designCard` (shown only without girder types): sub-title "one design until PR 3a" → "one design (no girder types)"; the girder tooltip and the note no longer promise PR 3a. `table('base.loads.diaph')` note: "apply to every girder from PR 3a" → "apply to every girder line".
+- `index.html`:
+  - the output banner `In development (PR 3a-2): … and the Report all of them.` → `In development: … chosen above them; the Summary, the check summary column and the Report cover every girder type on every line.` (the old-app link kept);
+  - the Bridge layout tab's Plan placeholder `ph('Plan', '3a', …)` → `ph('Plan', 'planned', ['the framing plan of the girders and supports (not built yet)'])`; `ph()` shows "PR n" only for a number, else the text given.
+- `ui/summary.js` `css()`: `#sum-project .kv div{gap:10px} #sum-project .kv div>span:last-child{text-align:right}` (anchor `.sum-gov{margin:8px 0 2px`); the "Not in the Summary" note: "the Drawings, Auto design and 3D view (later PRs)" → "the 3D view (its own tab), the Drawings and Auto design (later PRs, placeholders on their tabs)".
+- `ui/section.js` strands card note: "The strand-pattern graphic in the steel style comes with PR 2c." → "The strands are drawn in the section figure above and in the strand-pattern graphic of the Losses tab."
+- `ui/analysis.js` continuity card: "worked on the Flexure tab (PR 2c)." → a link `<a href="#" data-gotab="flex">Flexure tab</a>`. `ui/shear.js` worked-steps note: "End zone & hold-down tab (PR 2d)" → a link `data-gotab="end"`.
+- `ui/types.js`: "the worst line governs (PR 3a-2)." → "the worst line governs.".
+- `engine/fields.js` (tooltips and notes only): "(PR 3a-3, PS-9)" → "(PS-9)" (wBar, wDW, the dead-load note); the d_e note "saved before PR 3a-3" → "saved before the DC2 / DW distribution, 2026-11-13".
+- `ui/loads.js` header comment: the DC2 / DW sentence brought up to date.
+- Left as they are (genuine future items, labels checked against docs/ps-bridge-plan.md §5): Girder library (PR 4), Auto design (PR 5), Drawings (PR 7), Hand-offs (PR 9), MIDAS demands by file (later PR), the saved-projects sentence of the Project tab (being built in parallel).
+### Governing provisions (CLAUDE.md §4)
+- None: no formula, factor, unit or reference changed.
+### How verified
+- See the PR: check-syntax, the engine tests, the three PS Bridge smokes and harness B (normal) unchanged in counts; the Summary screenshot shows "Continuity" and its value apart.
+### Decisions (pending engineer review)
+- None.
