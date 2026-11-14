@@ -3662,8 +3662,33 @@ PR #1557: https://github.com/mlococo88/All-Structural/pull/1557
 - PS41-D2. The 48 in boxes use the 36 in sheets' rule (2¼ in bottom row, 2¾ in to the outer face, 2 in grid): flagged as extrapolated (tab and Report), to be confirmed.
 ### Other copies
 - None.
+
+## 2026-11-14 — PS-42: a MassDOT NEDBT with no cast-in-place topping flagged next to its distribution factor (Loads & LLDF tab, Girders & strands shape card, Report Loads & LLDF section) (DISPLAY ONLY; no calculation change)
+PR #1559: https://github.com/mlococo88/All-Structural/pull/1559
+### Request
+- Engineer decision 2026-11-14 (PS-42, follows PS37-D4): an NEDBT with no topping keeps the current behaviour (the engine's type (k) LLDF evaluated with t_s = 0, a very conservative moment DF, about 4.4–5.2) but is flagged: a clear warning next to the DF on the Loads & LLDF tab, on the girder card, and a matching line in the Report's Loads & LLDF section with a "see §" reference (CLAUDE.md §6). Paraphrased wording, no "pending review" wording; for every girder type / line on an NEDBT with zero topping, none otherwise.
+### What changed
+- `apps/ps-bridge/engine/sections.js` (anchor `function noTop(inp)`, before `install(); wrapVoids(); wrapMD();`): new
+  `noTop(inp)` = the girder is a MassDOT NEDBT (`MD[inp.girder].src.fam === 'nedbt'`) and `!(+inp.ts > 0)` and `inp.loads.llAuto && inp.loads.dfAuto` (the DF is computed); `noTopText(inp)` the warning (HTML, '' otherwise): "No cast-in-place topping is entered for this <girder> (deck thickness t_s = 0, PS-42): the type (k) distribution factor equations are evaluated with t_s = 0 in their deck-slab term K_g / (12 L t_s³), so the moment distribution factor comes out very large and is likely very conservative. Add the topping (deck thickness t_s, Cross-section tab) or review the distribution factor by hand (for example a refined analysis) and enter it (Loads tab)." Both exported on `window.PSBSections` (after `mdNote`).
+- `apps/ps-bridge/ui/loads.js` `output()`: the type (k) / NEXT branch `} else h += k.card(\`Live load distribution factors: …\`, k.kv(dfr) + \`<p class="note">…\`);` becomes a block that adds, after `k.kv(dfr)` (below "DF_M used" / "DF_V used"), when `PSBSections.noTopText(inp)` is not '':
+  `<div class="alert" id="nedbtNoTop"><b>NEDBT without a topping: the distribution factor is likely very conservative</b> ${nt} The moment factors g<sub>M1</sub> ${wk('ld.m1')} and g<sub>M2</sub> ${wk('ld.m2')} are worked in the Loads &amp; LLDF steps.</div>`. The Report's Loads & LLDF section is made from this card (report/fromtab.js: an `.alert` is a warning note; each `wk` link prints "(see §x.y)" to the worked g_M1 / g_M2 step), once per worked girder type / line.
+- `apps/ps-bridge/ui/inputs.js` `cards()` (anchor `id="secTbcNote"`): the Girders & strands tab's shape card also gets `<div class="alert" id="secNoTopNote">${noTopText(P.base)} Worked on the <a href="#" data-gotab="lds">Loads &amp; LLDF tab</a>.</div>` when the condition holds.
+### Saved data (CLAUDE.md §5)
+- None: no key, field or format read or written.
+### Governing provisions (CLAUDE.md §4)
+- None changed. AASHTO LRFD 10th Ed. Table 4.6.2.2.2b-1 (type (k), K_g / 12 L t_s³ term) and Eq. 4.6.2.2.1-1 (K_g) as the engine already evaluates them; the engine's `ts³ = max(ts³, 1e-6)` guard (engine/pbd-lldf-flexure.js, not edited).
+### Check case (values unchanged; the warning shown)
+- MassDOT NEDBT 64, S = 8 ft, L = 80 ft, 5 girders, t_s = 0, interior G2: K_g = 2,041,398 in⁴ (n = 1.1983, e_g = 28.590 in); g_M2 = 0.075 + (8 / 9.5)^0.6 (8 / 80)^0.2 (2,041,398 / (12 × 80 × 10⁻⁶))^0.1 = 0.075 + 0.9020 × 0.6310 × 8.566 = 4.9501 = DF_M (g_M1 3.4920); DF_V 0.8144: warning shown (tab, shape card, Report). Exterior G1: DF_M 4.8995: shown. NEDBT 40 / 80: DF_M 4.4429 / 5.2202. Same girder with t_s = 8 in: DF_M 0.7421: no warning. Every value the same before and after (display only).
+### How verified
+- `node tests/check-syntax.mjs`: all scripts pass (174 files). `node tests/engine/run.mjs psbridge tex project-registry`: 34 files, 349 passed, 0 failed; new `tests/engine/psbridge-ps42.test.mjs` (4 tests: the condition for every NEDBT and every other shape, t_s > 0, entered DF / live load; the Loads & LLDF card's warning after the DF with the worked-step links and the engine's DF unchanged; the Report's Loads & LLDF section: one warning note per worked unit (governing line per type, and every line: 5), its "see §" references, none elsewhere and none with a topping or another shape; the shape card's warning).
+- Harness B (`node tests/psbridge-compare.mjs`): 19 designs, 48,356 shown values and 8,392 step values, 0 with differences, 0 errors (exit 0). No harness design uses an NEDBT: no difference expected or found.
+- Smokes (one at a time): ps-bridge-skeleton 271 / 0 failed, ps-bridge-types 106 / 0. Screenshot of the Loads & LLDF tab (NEDBT 64, t_s = 0): the warning below DF_M / DF_V used, 0 console errors.
+### Decisions (pending engineer review)
+- PS42-D1. The warning is shown only when the distribution factors are computed (HL-93 × DF with the AASHTO equations): with an entered DF or entered live load moment and shear, the type (k) value is not used and no warning is shown.
+### Other copies
+- None.
 ## 2026-11-14 — PR 9: cross-section load items matching the Steel Bridge app (deck edge barrier or curb and railing, edge to traffic face, sidewalk fences, raised median, appurtenance w_c, wearing surface by thickness, overlays, a distribution per added line load, DC1 line loads) (CALCULATION CHANGE, §4, for projects that use them; projects saved before unchanged)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1558: https://github.com/mlococo88/All-Structural/pull/1558
 ### Request
 - Engineer's choice "Match Steel" (catch-up item 9): the Cross-section tab's DC2 / DW inputs should offer the Steel Bridge app's cross-section load items (apps/steel-bridge/ui/loads.js parts(): Deck edges, Sidewalks and median, Wearing surface, Utilities and other line loads, Distribution) and distribute them the same way.
 - Projects saved before must open with identical results (§5): the new fields are optional and default to the current behaviour. A round-trip test is required.
