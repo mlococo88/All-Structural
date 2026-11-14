@@ -448,6 +448,18 @@
       + (box ? '' : ` The void spacing (void centres at ${xs(s.voids.map(v => v.x))} in from the ℄) is not dimensioned on the CTDOT plate: it is MassDOT's dimensioned spacing for this void size and width (dwg ${s.voidSrc.dwg}, p. ${s.voidSrc.page}; PS-40).`);
   }
 
+  /* PS-42 (engineer decision 2026-11-14, PS37-D4): a MassDOT NEDBT with no cast-in-place topping (t_s = 0) keeps the engine's type (k)
+     distribution factors (no calculation change) but is flagged: the Loads & LLDF tab's distribution factor card (ui/loads.js, #nedbtNoTop),
+     so the Report's Loads & LLDF section, and the Girders & strands tab's shape card (ui/inputs.js, #secNoTopNote).
+       noTop(inp)      true for inputs (the base design, a girder type's or a line's) on a MassDOT NEDBT with t_s = 0 whose distribution
+                       factors are computed (HL-93 × DF, the AASHTO equations); false otherwise (a topping, entered DF or live load, any other shape)
+       noTopText(inp)  the warning (HTML; '' when noTop is false) */
+  function noTop(inp) {
+    const nm = isObj(inp) ? inp.girder : null, e = typeof nm === 'string' && Object.prototype.hasOwnProperty.call(MD, nm) ? MD[nm] : null;
+    return !!(e && e.src.fam === 'nedbt' && !(+inp.ts > 0) && isObj(inp.loads) && inp.loads.llAuto && inp.loads.dfAuto);
+  }
+  const noTopText = inp => noTop(inp) ? `No cast-in-place topping is entered for this ${inp.girder} (deck thickness t<sub>s</sub> = 0, PS-42): the type (k) distribution factor equations are evaluated with t<sub>s</sub> = 0 in their deck-slab term K<sub>g</sub> / (12 L t<sub>s</sub>³), so the moment distribution factor comes out very large and is likely very conservative. Add the topping (deck thickness t<sub>s</sub>, <a href="#" data-goin="xsec">Cross-section tab</a>) or review the distribution factor by hand (for example a refined analysis) and enter it (<a href="#" data-goin="loads">Loads tab</a>).` : '';
+
   install(); wrapVoids(); wrapMD();
-  window.PSBSections = { STD, LEGACY, MAP, ORDER_BOX, ORDER_SLAB, NEXT_FIX, LIB, XCHK, xchk, uses, stamp, MD, ORDER_MD, group, rowGrid, applyRows, rowNote, extrapText, mdOf, mdHalf, mdVoids, mdNote, roundPoly, nxW, install, migrate, items, tags, text, retiredMsg, sig, withLegacy, src, tbcNote, DOT_J, dotJ, outline, slabOf, stdOf, engineOf };
+  window.PSBSections = { STD, LEGACY, MAP, ORDER_BOX, ORDER_SLAB, NEXT_FIX, LIB, XCHK, xchk, uses, stamp, MD, ORDER_MD, group, rowGrid, applyRows, rowNote, extrapText, mdOf, mdHalf, mdVoids, mdNote, noTop, noTopText, roundPoly, nxW, install, migrate, items, tags, text, retiredMsg, sig, withLegacy, src, tbcNote, DOT_J, dotJ, outline, slabOf, stdOf, engineOf };
 })();
