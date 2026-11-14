@@ -161,6 +161,10 @@ test('PS-35 (8) the worked steps (Loads & LLDF) = the engine values, every deriv
   // the Report: the Loads & LLDF section carries the card and the worked J
   const B = W.PSBReportData.compute(designs[0], null), M = W.PSBReportBuild.model(B, {}), t = JSON.stringify(M);
   assert.ok(t.includes('type (g) (PS-35)') && t.includes('computed from outline'), 'report');
+  const a = M.sections.find(q => q.id === 'proj').subs.find(q => /Assumptions/.test(q.title)), at = JSON.stringify(a.items);
+  assert.ok(at.includes('Live-load distribution (PS-35): box beam, AASHTO LRFD 10th Ed. cross-section type (g) of Table 4.6.2.2.1-1') && at.includes('J = 87,352 in⁴ (computed from outline). (see [[rs.lds]])'), at.slice(0, 600));
+  const B2 = W.PSBReportData.compute(proj('PCI BT-72', 8, 100, 5, 2, P => { P.xs.bays = [9, 9, 9, 9]; }), null), a2 = W.PSBReportBuild.model(B2).sections.find(q => q.id === 'proj').subs.find(q => /Assumptions/.test(q.title));
+  assert.ok(!/PS-35/.test(JSON.stringify(a2.items)));
   // a solid slab keeps the engine's type (k) and its note
   const S = proj('Deck slab 18×48 (solid)', 0, 40, 6, 3), r = run(S), hs = W.PSBUiLoads.output({ P: S, inp: r.inp, R: r.R, W: { loads: W.PSBWorked.loads(r.inp, r.R) }, ui: {} });
   assert.ok(/this engine applies type \(k\)/.test(hs) || /type \(k\)/.test(hs));

@@ -3091,7 +3091,7 @@ PR #1542: https://github.com/mlococo88/All-Structural/pull/1542
 - None.
 
 ## 2026-11-14 — PS-35: adjacent box beams and voided slabs get the AASHTO type (f) / (g) live-load distribution factors (app-side override of the frozen distFactors; J from the drawn outline or entered) (CALCULATION CHANGE, §4)
-PR #PRB: https://github.com/mlococo88/All-Structural/pull/PRB
+PR #1543: https://github.com/mlococo88/All-Structural/pull/1543
 ### Request
 - Engineer decision 2026-11-14 (PS-35): box beams and voided slabs use their own superstructure type of AASHTO LRFD 10th Ed. Table 4.6.2.2.1-1, (f) precast boxes with shear keys and a cast-in-place overlay, (g) the same with an integral concrete deck: interior moment Table 4.6.2.2.2b-1 (k = 2.5 N_b^−0.2 ≥ 1.5, b, L, I, J), exterior moment 4.6.2.2.2d-1, interior shear 4.6.2.2.3a-1, exterior shear 4.6.2.2.3b-1, the skew corrections 4.6.2.2.2e / 4.6.2.2.3c for (f)/(g). App-side override of the frozen distFactors (engine/rigid.js the precedent); I-girders, NEXT and the solid slabs unchanged. Out-of-range N_b, b, L, I, J: computed, flagged on the tab, the input tab and the Report. J computed from the drawn outline (boxes: 4 A₀² / Σ s/t on the wall midlines; voided slabs: a defensible method, cited), worked; a J override per girder type ("user/DOT value"); a library J (DOT sheets, later) over the computed one.
 ### Problem
