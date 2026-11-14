@@ -94,6 +94,7 @@
 .sum-badge.fail{color:#991B1B;background:#FEF2F2;border-color:var(--fail)} .sum-badge.pass{color:#065F46;background:#ECFDF5;border-color:var(--pass)} .sum-badge.none{color:#475569;background:var(--slate-100);border-color:var(--slate-400)}
 .sum-cnt{display:inline-flex;gap:5px;flex-wrap:wrap} .sum-cnt span{font-size:8.5pt;font-weight:700;padding:1px 6px;border:1px solid;border-radius:3px;white-space:nowrap}
 .sum-cnt .c-fail{color:#991B1B;background:#FEF2F2;border-color:var(--fail)} .sum-cnt .c-pass{color:#065F46;background:#ECFDF5;border-color:var(--pass)} .sum-cnt .c-na{color:#475569;background:var(--slate-100);border-color:var(--slate-400)}
+#sum-elev .se-list{margin:6px 0;padding-left:18px} .se-ok{color:#2F6E4E} .se-hi{color:#8A5A0B} .se-ng{color:#A3322A}   /* 2026-11-14 (item 8a): the elevation's check list */
 #sum-gfx figure.sum-g1{margin:0 0 14px} #sum-gfx figcaption{font-family:var(--font-ui);font-size:9pt;color:#475569;margin:0 0 4px} #sum-gfx .vk-det{margin:0}   /* 2026-11-14: the cross-section and plan card */
 #sum-project .kv div{gap:10px} #sum-project .kv div>span:last-child{text-align:right}   /* the label and its value never run together (display only) */
 .sum-gov{margin:8px 0 2px;font-size:10pt} .sum-gov .sum-low{display:block;margin-top:3px} .sum-run{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px;font-family:var(--font-ui);font-size:9pt;color:#475569}
@@ -196,8 +197,9 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
   function html(o) {
     css();
     const A = o.A, M = A ? model(o.P, A) : null;
+    LAST.M = M;
     let h = verdict(M, o) + gfxBox(o) + overview(M, o);
-    if (A) h += grid(M, o) + table(M) + checks(M);
+    if (A) h += grid(M, o) + table(M) + checks(M) + (window.PSBSumElev ? window.PSBSumElev.html(M, o) : '');   // 2026-11-14 (item 8a): the elevation of each girder type
     else h += box('sum-wait', 'Girder × span grid', `<p class="note">${o.run && o.run.busy ? 'Computing every girder type on every line…' : o.run && o.run.stopped ? 'Stopped: Run all (above) to compute the rest.' : 'No girder type results.'}</p>`);
     h += o.shown || '';
     if (A) h += notes(M, o);
@@ -207,6 +209,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
      card near the top: the whole-bridge cross-section of the span shown (ui/xsfig.js, the Loads & LLDF figure) and the framing plan (ui/plan.js,
      the Bridge layout figure), stacked at full width, each drawn at the card's width with its height capped (80 % of the window, 360 to
      760 px, as the steel Summary); each links to its input and output tabs. Display only. html() writes the slots, after(el, o) draws them. */
+  const LAST = { M: null };   // the Summary model of the last html() (its elevation is drawn by after())
   const GFX_CAP = () => Math.max(360, Math.min(760, 0.8 * ((typeof window !== 'undefined' && window.innerHeight) || 900)));
   function gfxBox(o) {
     if (typeof window === 'undefined' || !window.PSBXsFig || !window.PSBPlan || !window.PSBVizKit) return '';
@@ -222,6 +225,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
     if (sx) { try { V.detCard(sx, { id: 'sumXsFig', title: 'Bridge cross-section', sub: `span ${d.s}, looking ahead`, draw: W => { const q = X.svg(P, d.s, W, { shown: d.g, maxH: GFX_CAP() }); return { html: q.svg, nar: q.nar }; },
       hint: 'Point at a girder, the deck, a barrier or a d_e dimension to read it.', cap: X.legend(X.model(P, d.s)) }); } catch (e) { sx.innerHTML = `<div class="alert">Cross-section: ${esc(e && e.message)}</div>`; } }
     if (sp) { try { PL.mount(sp, P, { id: 'sumPlanFig', title: 'Framing plan', maxH: GFX_CAP() }); } catch (e) { sp.innerHTML = `<div class="alert">Plan: ${esc(e && e.message)}</div>`; } }
+    if (window.PSBSumElev && LAST.M) { try { window.PSBSumElev.after(el, LAST.M, o); } catch (e) { const s = el.querySelector('#gfx_sumelev'); if (s) s.innerHTML = `<div class="alert">Elevation: ${esc(e && e.message)}</div>`; } }
   }
   window.PSBSummaryUI = { html, after, model, css, worse, where };
 })();
