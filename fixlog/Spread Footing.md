@@ -8967,3 +8967,149 @@ index 850967d..32153e4 100644
   "<b>5.1\u20135.7</b> Design basis and effective depths; flexure and one-way shear per direction with critical-section diagrams, the shear/moment plot along each axis and, for a combined footing, the transverse strip under each pedestal; bar development; punching with the perimeter/frustum diagrams and the three-term v<sub>u</sub> decomposition; interface bearing, dowels and shear friction; short-direction band reinforcement (advisory).",
   "<b>6.x</b> Pedestal classification table and, per pedestal, axial capacity, the P\u2013M views (uniaxial P\u2013M<sub>x</sub> / P\u2013M<sub>y</sub> diagrams, the load contour with every combo\u2019s demand point, P\u2013M along the governing angle, a 3D surface), tie spacing, slenderness with moment magnification where slender, shear, torsion, crossties and cover.",
 ```
+
+## 2026-11-14 — PR: claude/sf-boussinesq-hover (SFBQ-H) — Bearing card 3.5: hover / tap readout on the Boussinesq figures (engineer request 2026-11-14)   [DISPLAY ONLY; no computed result, Report content, saved key or saved-data format changed]
+- **Engineer (2026-11-14):** "For the Boussinesq heat map, I want to be able to hover over a point and get info like the factor and the actual stress at that depth."
+- **Where (to re-apply by hand):**
+  - `sfbqFieldSVG(M,o)`: before its final `return s+'</svg>';` (after the colour bar line `s+=narrow?sfbqBarH(...)`): `if(!o.print)o.map={kind:plan?'plan':'sec',W,H,ml,mt,pw,ph,sc,hx,v0,v1,alongL,zp:plan?M.planZ:null};` — the plot geometry for the readout; the SVG string is unchanged.
+  - `sfbqProfileSVG(M,o)`: before its final return (after the legend `'2:1 (average)'`): `if(!o.print)o.map={kind:'prof',W,H,ml,mt,pw,ph,zm,rmin,rmax};`.
+  - New functions before `function sfbqWire(det){`: `sfbqAt(M,x,y,z)` (the values at one point), `sfbqTip(M,mp,a)` (the readout HTML), `sfbqHover(fig,M,mp)` (crosshair, readout, pin, "Use this point").
+  - `sfbqCard()`: the profile, section and plan figures are drawn with an options object (`o1`, `o2`, `o3`) and `sfbqHover(fig,M,oN.map)` is called after each; the (c) note gains the sentence "Hover over (or tap) a figure for the values at that point, computed there; click or tap to keep the readout and use the point in (a)."
+- **What the readout shows** (at the exact pointer position, on the card's figures only):
+  - the point: x, y from the footing centre and z below the base, in ft and as a multiple of B (section along B: y = 0; along L: x = 0; plan: z = the plan depth; profile: the profile point, z from the pointer);
+  - Δσ_z/q_ref, and for a uniform pressure (full contact, g_x = g_y = 0) I = Σ corner factors (`SharedBoussinesq.rectTerms(...).I`);
+  - Δσ_z in ksf and psf (`SharedBoussinesq.stress(M.ld,x,y,z).value`: the same function as the point query (a), the profile and the isobar grid);
+  - the basis (Net or Gross) and q_ref;
+  - the 2:1 average at that depth (`SharedBoussinesq.twoToOne(M.Q,B,L,z)`), ksf and /q_ref;
+  - σ′_v0 at D_f + z below grade and σ′_v0 + Δσ_z,net (see decision 2).
+  - A crosshair and a marker at the point (profile: a marker on the Boussinesq curve and on the 2:1 line at that depth).
+- **Behaviour:** mouse: the readout follows the pointer inside the plot area (one evaluation per animation frame); a click keeps it ("pinned") with "Use this point" (fills x, y, z of the point query (a), rounded to 0.01 ft, saved in `state.bous.qx/qy/qz` as typing them would) and × (close). Touch: a tap pins (a touch move alone shows nothing, so the page still scrolls). The readout is placed beside the point and kept inside the figure (flipped and clamped), 11 px text, max width min(300 px, figure − 8 px). The card is `noprint` and the readout carries `noprint`; the Report's figures (drawn with `print:true`) get no geometry and no readout. Uplift / no-bulb cases draw no figure, so there is no readout.
+- **§4:** no formula, factor, unit or reference changed. Two values are new on screen only:
+  - σ′_v0(z) = γ_s·min(d_w, D) + (γ_s − γ_w)·max(D − d_w, 0), D = D_f + z: the expression of `sfbqQsur` (the direct net bearing check's q_sur, §3.3) evaluated at D instead of D_f;
+  - Δσ_z,net = Δσ_gross − q_sur·I_u (`stress(...).gross − M.qsur·rectTerms(...).I`): the net basis of the card, also when the gross basis is selected.
+- **Check case (tests/smoke/spread-footing-boussinesq.mjs, part 6):** 10 × 10 ft, D_f = 4 ft, γ_s = 120 pcf, no water table, q_net = 3 ksf (P = 348 kip).
+  - Section, pointer at (0, 0, z = 5 ft): Δσ = 4·0.17522·3 = **2.103 ksf** (2103 psf), Δσ/q_ref = **0.701**, I = 0.701 (uniform), 2:1 = 300/(15·15) = 1.333 ksf (0.444 q_ref),
+    σ′_v0 = 0.120·(4 + 5) = 1.080 ksf, σ′_v0 + Δσ = **3.183 ksf**.
+  - Plan at z = 10 ft, pointer at the corner (5, 5): I(1, 1)·3 = **0.526 ksf**; profile at the corner, z = 10 ft: 0.526 ksf, 2:1 = 300/(20·20) = 0.750 ksf.
+  - The readout value equals `SharedBoussinesq.stress` at the point it reports, exactly (no interpolation); "Use this point" gives the same Δσ in (a) at the rounded point.
+- **How verified:** `node tests/check-syntax.mjs`; `node tests/smoke/spread-footing-boussinesq.mjs` at 1400 and 390 px (all pass; hover at known points by pointer events with fractional coordinates, a real mouse move, click-pin, Use this point, touch move ignored, tap, print hidden, partial contact, uplift; readout inside the figure, 11 px; 0 console errors; one readout ≈ 0.005 ms uniform, 0.02 ms partial contact). Equality, origin/main vs this branch (default; square with plan; partial contact, gross, section along L, plan): the Report text including S-bous, the S-bous figure SVGs, R and the card 3.5 text (without the new sentence) are identical.
+- **Saved data (§5):** none added; "Use this point" writes the existing fields `state.bous.qx`, `qy`, `qz`.
+- **Decisions (pending engineer review):**
+  1. Values at the pointer are computed exactly; "Use this point" rounds to 0.01 ft (so (a) can differ from the readout in the 3rd decimal at whole-pixel steps).
+  2. σ′_v0 uses γ_s above the water table and γ′ = γ_s − γ_w below it, from grade (D_f + z), as q_sur; the soil cover γ_EV is not used. The final stress is σ′_v0 + Δσ_z,net whatever basis is shown (the gross increase would count the excavated overburden twice).
+- **Other copies:** none.
+- **Open items:** none.
+- **Diff (`Spread Footing.html`):**
+```diff
+diff --git a/Spread Footing.html b/Spread Footing.html
+index 32153e4..953d349 100644
+--- a/Spread Footing.html	
++++ b/Spread Footing.html	
+@@ -3571,6 +3571,7 @@ function sfbqFieldSVG(M,o){
+  s+=sfbqT(14,mt+ph/2,(plan?'y/B':'z/B (depth below the base)'),{fs:11,anchor:'middle',rot:-90});
+  s+=sfbqHd(M,plan?('Isobars \u0394\u03c3_z/q_ref in plan at z = '+f2(M.planZ)+' ft ('+f2(M.planZ/B)+'B)'):('Isobars \u0394\u03c3_z/q_ref, section along '+(alongL?'L (x = 0)':'B (y = 0)')));
+  s+=narrow?sfbqBarH(ml,mt+ph+56,pw):sfbqBar(ml+pw+52,mt+14,Math.min(ph-20,240));
++ if(!o.print)o.map={kind:plan?'plan':'sec',W,H,ml,mt,pw,ph,sc,hx,v0,v1,alongL,zp:plan?M.planZ:null};   /* SFBQ-H: the plot geometry for the hover readout (screen only; the SVG text is unchanged) */
+  return s+'</svg>';}
+ /* profile chart: Δσ_z/q_ref vs depth at the profile point, Boussinesq and 2:1 */
+ function sfbqProfileSVG(M,o){
+@@ -3591,6 +3592,7 @@ function sfbqProfileSVG(M,o){
+  const lx=ml+pw-150,ly=mt+ph-40;
+  s+='<rect x="'+lx+'" y="'+ly+'" width="146" height="36" fill="#fff" stroke="#999" stroke-width="0.6"/><line x1="'+(lx+6)+'" y1="'+(ly+12)+'" x2="'+(lx+30)+'" y2="'+(ly+12)+'" stroke="#1f4e79" stroke-width="2.2"/>'+sfbqT(lx+34,ly+16,'Boussinesq',{fs:10})+
+   '<line x1="'+(lx+6)+'" y1="'+(ly+27)+'" x2="'+(lx+30)+'" y2="'+(ly+27)+'" stroke="#c0392b" stroke-width="1.6" stroke-dasharray="7,4"/>'+sfbqT(lx+34,ly+31,'2:1 (average)',{fs:10});
++ if(!o.print)o.map={kind:'prof',W,H,ml,mt,pw,ph,zm,rmin,rmax};   /* SFBQ-H: as sfbqFieldSVG */
+  return s+'</svg>';}
+ /* one worked step on screen (eqBlock): label, sym = eq, = substituted, = result */
+ function sfbqEq(st){st=Object.assign({},st);['sym','eq','sub'].forEach(k=>{if(typeof st[k]==='string')st[k]=st[k].replace(/\\minus\b ?/g,'-');});   /* \\minus is the steps subset's macro; the tab's KaTeX (kt) has none */
+@@ -3650,19 +3652,86 @@ function sfbqCard(T){
+  const pc=el('div','');pc.style.cssText='display:flex;flex-wrap:wrap;align-items:center;margin:2px 0';
+  pc.innerHTML=sfbqCtl('Point',sfbqSel('prof',[['c','Centre'],['k','Corner (+B/2, +L/2)'],['ex','Middle of the +x edge (B/2, 0)'],['ey','Middle of the +y edge (0, L/2)'],['u','Custom (x, y)']],s.prof))+(s.prof==='u'?sfbqCtl('x',sfbqInp('px',s.px,'0')+' ft')+sfbqCtl('y',sfbqInp('py',s.py,'0')+' ft'):'');
+  b.appendChild(pc);
+- const f1=el('div','sfbqFig');f1.innerHTML=sfbqProfileSVG(M,{});b.appendChild(f1);
++ const o1={},f1=el('div','sfbqFig');f1.innerHTML=sfbqProfileSVG(M,o1);b.appendChild(f1);sfbqHover(f1,M,o1.map);   /* SFBQ-H */
+  b.appendChild(sfbqTable(M));
+  b.appendChild(el('p','note','2:1: \u0394\u03c3 = Q/((B + z)(L + z)), Q = '+(M.basis==='net'?'\u03a3P \u2212 q_sur\u00b7B\u00b7L = '+f2(M.P)+' \u2212 '+f3(M.qsur)+'\u00b7'+f2(M.B)+'\u00b7'+f2(M.L):'\u03a3P')+' = '+f2(M.Q)+' kip (GEC 6 Eq. 5-17): an average over the spread area, the same at every point of the profile.'));
+  /* (c) section */
+  b.appendChild(el('h3','','(c) Isobars on a vertical section'));
+- const f2d=el('div','sfbqFig');f2d.innerHTML=sfbqFieldSVG(M,{});b.appendChild(f2d);
+- b.appendChild(el('p','note','Contours at 0.9, 0.8, \u2026, 0.2, 0.15, 0.1 and 0.05 q_ref; equal horizontal and vertical scales. Grey: net decrease (the base pressure is below the overburden removed). The footing is drawn above the base.'));
++ const o2={},f2d=el('div','sfbqFig');f2d.innerHTML=sfbqFieldSVG(M,o2);b.appendChild(f2d);sfbqHover(f2d,M,o2.map);   /* SFBQ-H */
++ b.appendChild(el('p','note','Contours at 0.9, 0.8, \u2026, 0.2, 0.15, 0.1 and 0.05 q_ref; equal horizontal and vertical scales. Grey: net decrease (the base pressure is below the overburden removed). The footing is drawn above the base. Hover over (or tap) a figure for the values at that point, computed there; click or tap to keep the readout and use the point in (a).'));
+  /* (d) plan */
+- if(s.plan==='on'){b.appendChild(el('h3','','(d) Isobars in plan at z = '+f2(M.planZ)+' ft'));const f3d=el('div','sfbqFig');f3d.innerHTML=sfbqFieldSVG(M,{plan:true});b.appendChild(f3d);
++ if(s.plan==='on'){b.appendChild(el('h3','','(d) Isobars in plan at z = '+f2(M.planZ)+' ft'));const o3={plan:true},f3d=el('div','sfbqFig');f3d.innerHTML=sfbqFieldSVG(M,o3);b.appendChild(f3d);sfbqHover(f3d,M,o3.map);   /* SFBQ-H */
+   b.appendChild(el('p','note','Dashed: the footing outline'+(M.ld.mode==='partial'?'; blue: the contact area':'')+'.'));}
+  if(old)old.replaceWith(det);else T.appendChild(det);
+  sfbqWire(det);
+ }
++/* SFBQ-H (2026-11-14, engineer: "hover over a point and get info like the factor and the actual stress at that depth"). Display only:
++   a readout on the card's figures (profile, section, plan; not the Report's). Every value is computed at the exact pointer
++   position by SharedBoussinesq (no grid interpolation), once per animation frame. Mouse: follows the pointer; a click keeps it
++   (pinned) with "Use this point", which fills the point query (a). Touch: a tap pins. The card is noprint. */
++function sfbqAt(M,x,y,z){
++ const st=SharedBoussinesq.stress(M.ld,x,y,z), Iu=SharedBoussinesq.rectTerms(M.B,M.L,x,y,z).I, t=SharedBoussinesq.twoToOne(M.Q,M.B,M.L,z);
++ /* effective overburden at D_f + z below grade: the expression of sfbqQsur (γ_s, γ′ = γ_s − γ_w below the water table) at that depth */
++ const D=R.Df+z, dw=R.dw, sv0=R.gs*Math.min(dw,D)+(R.gs-R.gw)*Math.max(D-dw,0);
++ return {x,y,z,v:st.value,r:st.value/M.qref,uni:st.method==='uniform',Iu,t,tr:t/M.qref,D,sv0,net:st.gross-M.qsur*Iu};}
++function sfbqTip(M,mp,a){
++ const B=M.B,g=v=>(Math.abs(v)<5e-4?0:v),c=(n,v)=>{v=Math.abs(v)<0.005?0:v;return n+' = '+f2(v)+' ft ('+(+(v/B).toFixed(3))+'B)';};
++ const head=mp.kind==='prof'?'Profile at the '+M.pname.replace(/ \(x = .*$/,''):mp.kind==='plan'?'Plan at z = '+f2(mp.zp)+' ft':'Section along '+(mp.alongL?'L (x = 0)':'B (y = 0)');
++ const row=(k,v)=>'<tr><td style="padding:0 6px 0 0;color:#555;white-space:nowrap">'+k+'</td><td>'+v+'</td></tr>';
++ return '<div style="font-weight:bold;margin-bottom:2px">'+sfEsc(head)+'</div><table style="border-collapse:collapse;font-size:11px">'+
++  row('Point',c('x',a.x)+', '+c('y',a.y)+', '+c('z',a.z)+' below the base')+
++  row('Δσ<sub>z</sub>/q<sub>ref</sub>','<b>'+f3(g(a.r))+'</b>'+(a.uni?' &nbsp;(uniform: I = Σ corner factors = '+f3(a.Iu)+')':''))+
++  row('Δσ<sub>z</sub>','<b>'+f3(g(a.v))+' ksf</b> = '+Math.round(1000*a.v)+' psf')+
++  row('Basis',(M.basis==='net'?'Net, q<sub>ref</sub> = q<sub>max</sub> − q<sub>sur</sub> = ':'Gross, q<sub>ref</sub> = q<sub>max</sub> = ')+f3(M.qref)+' ksf')+
++  row('2:1 at this z',f3(a.t)+' ksf = '+f3(a.tr)+' q<sub>ref</sub> (average)')+
++  row('σ′<sub>v0</sub>',f3(a.sv0)+' ksf (at D<sub>f</sub> + z = '+f2(a.D)+' ft below grade, γ<sub>s</sub>'+(a.D>R.dw?', γ′ below the water table':'')+')')+
++  row('σ′<sub>v0</sub> + Δσ<sub>z,net</sub>',f3(a.sv0+a.net)+' ksf'+(M.basis==='gross'?' (net increase '+f3(g(a.net))+' ksf)':''))+'</table>';}
++function sfbqHover(fig,M,mp){
++ if(!mp||!M||!M.ld)return;
++ const svg=fig.querySelector('svg');if(!svg)return;
++ fig.style.position='relative';fig.sfbqMap=mp;   /* the geometry, read by tests/smoke/spread-footing-boussinesq.mjs */
++ const NS='http://www.w3.org/2000/svg',mk=(t,at)=>{const e=document.createElementNS(NS,t);Object.keys(at).forEach(k=>e.setAttribute(k,at[k]));return e;};
++ const gr=mk('g',{'pointer-events':'none',style:'display:none'}),lh=mk('line',{stroke:'#000','stroke-width':'0.8','stroke-dasharray':'4,3'}),lv=mk('line',{stroke:'#000','stroke-width':'0.8','stroke-dasharray':'4,3'}),
++  dot=mk('circle',{r:'4',fill:'#fff',stroke:'#000','stroke-width':'1.5'}),dot2=mk('circle',{r:'3.5',fill:'#fff',stroke:'#c0392b','stroke-width':'1.5'});
++ gr.append(lh,lv,dot,dot2);svg.appendChild(gr);
++ const tip=document.createElement('div');tip.className='sfbqTip noprint';
++ tip.style.cssText='position:absolute;display:none;z-index:5;background:#fffffb;border:1px solid #888;border-radius:4px;box-shadow:0 2px 6px rgba(0,0,0,.25);padding:5px 7px;font:11px/1.35 Arial,Helvetica,sans-serif;color:#111;pointer-events:none';
++ fig.appendChild(tip);
++ let pend=null,raf=0,pin=false,last=null;
++ /* pointer → plot coordinates (SVG user units = px of the viewBox) → footing coordinates; null outside the plot */
++ const loc=e=>{const r=svg.getBoundingClientRect();if(!r.width)return null;const u=(e.clientX-r.left)*mp.W/r.width,w=(e.clientY-r.top)*mp.H/r.height;
++  if(u<mp.ml||u>mp.ml+mp.pw||w<mp.mt||w>mp.mt+mp.ph)return null;
++  if(mp.kind==='prof')return {u,w,x:M.px,y:M.py,z:(w-mp.mt)/mp.ph*mp.zm};
++  const h=(u-mp.ml)/mp.sc-mp.hx;
++  if(mp.kind==='plan')return {u,w,x:h,y:mp.v1-(w-mp.mt)/mp.sc,z:mp.zp};
++  const z=(w-mp.mt)/mp.sc+mp.v0;return mp.alongL?{u,w,x:0,y:h,z}:{u,w,x:h,y:0,z};};
++ const hide=()=>{gr.style.display='none';tip.style.display='none';last=null;};
++ const show=p=>{
++  const a=sfbqAt(M,p.x,p.y,p.z);last=a;fig.sfbqLast=a;
++  const set=(e,at)=>Object.keys(at).forEach(k=>e.setAttribute(k,(+at[k]).toFixed(1)));
++  if(mp.kind==='prof'){const PX=r=>mp.ml+(r-mp.rmin)/(mp.rmax-mp.rmin)*mp.pw;
++   set(lh,{x1:mp.ml,x2:mp.ml+mp.pw,y1:p.w,y2:p.w});lv.style.display='none';set(dot,{cx:PX(a.r),cy:p.w});dot2.style.display='';set(dot2,{cx:PX(a.tr),cy:p.w});}
++  else{set(lh,{x1:mp.ml,x2:mp.ml+mp.pw,y1:p.w,y2:p.w});lv.style.display='';set(lv,{x1:p.u,x2:p.u,y1:mp.mt,y2:mp.mt+mp.ph});set(dot,{cx:p.u,cy:p.w});dot2.style.display='none';}
++  gr.style.display='';
++  tip.innerHTML=sfbqTip(M,mp,a)+(pin?'<div style="margin-top:4px;display:flex;gap:6px;align-items:center"><button type="button" data-sfbqh="use" style="font-size:11px;padding:2px 6px">Use this point</button><button type="button" data-sfbqh="x" style="font-size:11px;padding:2px 6px" title="Close">×</button><span style="color:#666">fills (a)'+(mp.kind==='prof'?'':' (rounded to 0.01 ft)')+'</span></div>':'<div style="color:#666;margin-top:2px">Click or tap to keep this readout</div>');
++  tip.style.pointerEvents=pin?'auto':'none';
++  /* place inside the figure: right/below of the point, flipped when it would overflow */
++  const fr=fig.getBoundingClientRect(),sr=svg.getBoundingClientRect(),cw=fig.clientWidth||sr.width;
++  tip.style.maxWidth=Math.max(160,Math.min(300,cw-8))+'px';tip.style.display='block';tip.style.left='0px';tip.style.top='0px';
++  const tw=tip.offsetWidth,th=tip.offsetHeight,fh=Math.max(fig.clientHeight,sr.height);
++  const px=sr.left-fr.left+p.u*sr.width/mp.W,py=sr.top-fr.top+p.w*sr.height/mp.H;
++  let lx=px+14;if(lx+tw>cw-2)lx=px-14-tw;lx=Math.max(2,Math.min(lx,cw-tw-2));
++  let ly=py+14;if(ly+th>fh-2)ly=py-14-th;ly=Math.max(2,Math.min(ly,fh-th-2));
++  tip.style.left=lx.toFixed(0)+'px';tip.style.top=ly.toFixed(0)+'px';};
++ const run=()=>{raf=0;const p=pend;pend=null;if(!p)return;if(p==='hide'){hide();return;}show(p);};
++ const queue=p=>{pend=p;if(!raf)raf=requestAnimationFrame(run);};
++ svg.addEventListener('pointermove',e=>{if(pin||e.pointerType==='touch')return;queue(loc(e)||'hide');});
++ svg.addEventListener('pointerleave',e=>{if(!pin)queue('hide');});
++ svg.addEventListener('click',e=>{const p=loc(e);if(!p){pin=false;queue('hide');return;}pin=true;pend=null;if(raf){cancelAnimationFrame(raf);raf=0;}show(p);});
++ tip.addEventListener('click',e=>{const k=e.target&&e.target.dataset&&e.target.dataset.sfbqh;if(!k)return;e.stopPropagation();
++  if(k==='x'){pin=false;hide();return;}
++  if(k==='use'&&last){const s=sfbqS(),r2=v=>Math.round(v*100)/100||0;s.qx=r2(last.x);s.qy=r2(last.y);s.qz=r2(last.z);saveAuto();sfbqCard(document.getElementById('tab-bearing'));
++   const h=[...document.querySelectorAll('#o-br-bous h3')].find(q=>/^\(a\)/.test(q.textContent));if(h&&h.scrollIntoView)h.scrollIntoView({block:'start'});}});}
+ function sfbqWire(det){
+  det.querySelectorAll('[data-sfbq]').forEach(x=>{
+   const k=x.dataset.sfbq, ev='change';
+```
