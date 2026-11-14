@@ -17,7 +17,7 @@ import { TAB_CASES } from './psbridge-tab-cases.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const ENG = ['sections', 'model', 'rigid', 'holddown', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'legacy'].map(n => path.join(APP, `engine/${n}.js`));
+const ENG = ['sections', 'model', 'rigid', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'legacy'].map(n => path.join(APP, `engine/${n}.js`));
 const W = loadShared(...PBD, ...ENG, ...['vizkit', 'strands'].map(n => path.join(APP, `ui/${n}.js`)));
 const W0 = loadShared(...PBD, ...ENG);   // without ui/strands.js: the check is not made (the page always loads it, test 7)
 const GIRDERS = vm.runInContext('GIRDERS', W);
@@ -26,14 +26,14 @@ const IC = W.PSBInputCheck, M = W.PSBModel;
 const fitErrs = P => J(IC.collect(P).errors.filter(e => /do not fit the /.test(e.msg)));
 
 // an independent copy of the PS-27 test's criterion (tests/engine/psbridge-strandgfx.test.mjs: outline, inside, edgeDist, voidClear, fitsAt)
-const COVER = 2;
+const COVER = 2, VOIDC = 1.5;   // PS-33 (2026-11-14): 1.5 in from a void face (strand centre); 2 in from the concrete edges
 const outline = G => { const h = W.halfPolygon(G); return h.concat(h.slice().reverse().map(p => [-p[0], p[1]])); };
 function inside(poly, x, y) { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; }
 function edgeDist(poly, x, y) { let d = Infinity; for (let i = 0; i < poly.length; i++) { const a = poly[i], b = poly[(i + 1) % poly.length], dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy;
   const t = L2 ? Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / L2)) : 0; d = Math.min(d, Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy)); } return d; }
 function voidClear(G, x, y) { return W.sectionVoids(G).reduce((m, v) => Math.min(m, v.type === 'rect' ? Math.hypot(Math.max(Math.abs(x - v.x) - v.w / 2, 0), Math.max(Math.abs(y - v.y) - v.h / 2, 0)) * (Math.abs(x - v.x) <= v.w / 2 && Math.abs(y - v.y) <= v.h / 2 ? -1 : 1)
   : Math.hypot(x - v.x, y - v.y) - v.d / 2), Infinity); }
-const fitsAt = (G, poly, q) => inside(poly, q.x, q.y) && edgeDist(poly, q.x, q.y) >= COVER - 1e-9 && voidClear(G, q.x, q.y) >= COVER - 1e-9;
+const fitsAt = (G, poly, q) => inside(poly, q.x, q.y) && edgeDist(poly, q.x, q.y) >= COVER - 1e-9 && voidClear(G, q.x, q.y) >= VOIDC - 1e-9;
 
 /* a project of the library shape with the given strands (NEXT flange width from S) */
 function project(girder, rows, harp, S) {
@@ -60,18 +60,20 @@ test('PS-28 (1): the criterion at hand-picked points (centre distances, 2 in; = 
   const B1 = g('AASHTO BI-36 (27in)'), pb = outline(B1);
   assert.deepEqual(J(W.sectionVoids(B1)), [{ type: 'rect', x: 0, y: 13.5, w: 25.5, h: 16 }]);
   assert.equal(mf(B1, pb, 0, 6), 'is inside a void');
-  assert.equal(mf(B1, pb, 0, 4), 'is 1.5 in from a void (less than 2 in)');
-  assert.equal(mf(B1, pb, 0, 3.5), '', 'y = 3.5: 2 in below the void: fits');
+  assert.equal(mf(B1, pb, 0, 4), '', 'PS-33: y = 4 (the standard second row): 1.5 in below the void: fits');
+  assert.equal(mf(B1, pb, 0, 4.5), 'is 1 in from a void (less than 1.5 in)');
   assert.equal(mf(B1, pb, 15, 6), '', 'in the web: 2.25 in from the void, 2.75 in from the outer face: fits');
-  assert.equal(mf(B1, pb, 14, 6), 'is 1.25 in from a void (less than 2 in)');
+  assert.equal(mf(B1, pb, 14, 6), 'is 1.25 in from a void (less than 1.5 in)');
+  assert.equal(mf(B1, pb, 16, 6), 'is 1.75 in from the edge of the concrete (less than 2 in)', 'the outer face keeps 2 in');
   // PS-32: the CTDOT SIV-48: 47.5 × 21 in, voids Ø12 / Ø10 / Ø12 at x = −14 / 0 / 14 in on mid-depth (y = 10.5 in)
   const D21 = g('AASHTO SIV-48 (21in)'), pd = outline(D21);
   assert.equal(mf(D21, pd, -14, 10.5), 'is inside a void');
-  assert.equal(mf(D21, pd, -6.5, 10.5), 'is 1.5 in from a void (less than 2 in)');
-  assert.equal(mf(D21, pd, -14, 3), 'is 1.5 in from a void (less than 2 in)');
-  assert.equal(mf(D21, pd, -14, 2.5), '', '2 in below the Ø12 void (bottom at 4.5 in)');
-  assert.equal(mf(D21, pd, 0, 3.5), '', '2 in below the Ø10 void (bottom at 5.5 in)');
-  assert.equal(IC.COVER, 2);
+  assert.equal(mf(D21, pd, -6.5, 10.5), '', 'PS-33: 1.5 in from both voids: fits');
+  assert.equal(mf(D21, pd, -6.75, 10.5), 'is 1.25 in from a void (less than 1.5 in)');
+  assert.equal(mf(D21, pd, -14, 3), '', 'PS-33: 1.5 in below the Ø12 void (bottom at 4.5 in): fits');
+  assert.equal(mf(D21, pd, -14, 3.5), 'is 1 in from a void (less than 1.5 in)');
+  assert.equal(mf(D21, pd, 0, 4), '', '1.5 in below the Ø10 void (bottom at 5.5 in)');
+  assert.equal(IC.COVER, 2); assert.equal(IC.VOID, 1.5);
 });
 
 test('PS-28 (2): collect\'s verdict = the PS-27 criterion over PSBStrandGfx.xy, every shape, counts and rows of a 2 in grid, draped strands', () => {
@@ -105,7 +107,7 @@ test('PS-28 (3): the engineer\'s hand checks: AASHTO Type I with a 10-strand row
   // Type I, b_bf = 16 in: 10 strands on the 2 in grid about the ℄ at x = ±1, ±3, …, ±9 in: ±9 is past the flange side (8 in): error on the count
   let P = project('AASHTO Type I', [{ n: 10, y: 2 }], { n: 0 }), e = fitErrs(P);
   assert.deepEqual(e.map(x => x.path), ['base.rows.0.n']);
-  assert.equal(e[0].msg, 'Straight strand rows, row 1: 10 strands at y = 2 in do not fit the AASHTO Type I: the strand at x = -9 in is outside the concrete outline; each strand centre must be inside the concrete, outside the voids and at least 2 in from the edges of the concrete and of the voids (the positions the strand pattern draws).');
+  assert.equal(e[0].msg, 'Straight strand rows, row 1: 10 strands at y = 2 in do not fit the AASHTO Type I: the strand at x = -9 in is outside the concrete outline; each strand centre must be inside the concrete, outside the voids, at least 2 in from the edges of the concrete and at least 1.5 in from the edges of the voids (the positions the strand pattern draws).');
   // the engine's row capacity floor((16 − 4)/2) + 1 = 7: x = ±6, 2 in from the side: fits; 8 (x = ±7, 1 in): error
   assert.deepEqual(fitErrs(project('AASHTO Type I', [{ n: 7, y: 2 }], { n: 0 })), []);
   assert.match(fitErrs(project('AASHTO Type I', [{ n: 8, y: 2 }], { n: 0 }))[0].msg, /x = -7 in is 1 in from the edge of the concrete/);
@@ -115,7 +117,7 @@ test('PS-28 (3): the engineer\'s hand checks: AASHTO Type I with a 10-strand row
   P = project('AASHTO BI-36 (27in)', [{ n: 10, y: 2 }, { n: 4, y: 6 }], { n: 0 }); e = fitErrs(P);
   assert.deepEqual(e.map(x => x.path), ['base.rows.1.y']); assert.equal(e[0].cell, 1);
   assert.match(e[0].msg, /^Straight strand rows, row 2: 4 strands at y = 6 in do not fit the AASHTO BI-36 \(27in\): the strand at x = -3 in is inside a void;/);
-  assert.deepEqual(fitErrs(project('AASHTO BI-36 (27in)', [{ n: 10, y: 2 }, { n: 4, y: 3.5 }], { n: 0 })), [], 'y = 3.5 in: 2 in below the void');
+  assert.deepEqual(fitErrs(project('AASHTO BI-36 (27in)', [{ n: 10, y: 2 }, { n: 4, y: 4 }], { n: 0 })), [], 'PS-33: y = 4 in: 1.5 in below the void');
   // a row of zero strands is skipped; the rows keep their own numbers (row 3 is the third entered row)
   e = fitErrs(project('AASHTO BI-36 (27in)', [{ n: 10, y: 2 }, { n: 0, y: 4 }, { n: 4, y: 6 }], { n: 0 }));
   assert.deepEqual(e.map(x => x.path), ['base.rows.2.y']);

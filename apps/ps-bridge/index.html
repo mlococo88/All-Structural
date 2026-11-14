@@ -49,6 +49,7 @@
     'engine/model.js',
     'engine/rigid.js',       // PS-19: the exterior rigid-section factor on the real girder lines (unequal bays; an engine addition, §4)
     'engine/holddown.js',    // PR 2d-3: the optional hold-down check for AASHTO / RIDOT (PS-10), an engine addition after computeAll (§4)
+    'engine/pierblock.js',   // PS-34: the pier compression block against the family's thickness (NEXT stems, box bottom slab, slabs; a warning only)
     'engine/design.js',      // PR 2b: the one girder design and its engine inputs (base + the bridge values, PBD.applyBridge)
     'engine/bridge.js',      // PR 3a-1: the girder types on the girder lines of each span (PS-8)
     'engine/bridge-dl.js',   // PR 3a-3: DC2 and DW to each girder line by the Steel Bridge app's method (PS-9; copy of its dead())

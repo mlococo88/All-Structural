@@ -33,6 +33,8 @@
     R.checks.push({ n: NAME, v: Ftot, lim, r, loc: ss.hp.frac * L, u: 'kip', pass: r <= 1.0001 });
     return R;
   }
-  const compute = inp => apply(inp, window.PSBRigid ? window.PSBRigid.run(inp) : computeAll(inp));   // PS-19: the rigid section on the real girder lines (engine/rigid.js)
+  const compute0 = inp => apply(inp, window.PSBRigid ? window.PSBRigid.run(inp) : computeAll(inp));   // PS-19: the rigid section on the real girder lines (engine/rigid.js)
+  // PS-34 (2026-11-14): the pier compression block checked against the family's thickness (engine/pierblock.js; a warning only)
+  const compute = inp => { const R = compute0(inp); return window.PSBPierBlock ? window.PSBPierBlock.apply(inp, R) : R; };
   window.PSBHoldDown = { NAME, FRAC, apply, compute, fracOf };
 })();
