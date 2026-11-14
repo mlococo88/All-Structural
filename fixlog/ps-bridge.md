@@ -2278,3 +2278,119 @@ index b3bbd3d..211cb2b 100644
 +  window.PSBUiStresses = { output, after, onOutChange, TOPICS, CHECKS, secFig };   // secFig: also for tests/engine/psbridge-strandgfx.test.mjs (PS-27)
  })();
 ```
+
+## 2026-11-14 — PR 3c: the 3D view tab — the bridge in three.js (girder lines by type with their library shapes, deck, haunch, barriers, diaphragms, supports and skews, continuity, the strands of the type shown), the Steel Bridge app's 3D view pattern (display only; no calculation change)
+PR #1533: https://github.com/mlococo88/All-Structural/pull/1533
+### Request
+- docs/ps-bridge-plan.md §5 row 3c ("3D view (three.js r128, steel `view3d` pattern) | display"), §2.3 (output tab "3D view"), PS-3 / PS-6 (looks and works like the Steel Bridge app).
+### What changed
+- New `apps/ps-bridge/ui/view3d.js` (`window.PSB3DUI`: `render`, `geom`, `camera`, `LAY`, `state`). These parts are copied from `apps/steel-bridge/ui/view3d.js` (`SBD3DUI`): `label`, `init` (renderer, lights, OrbitControls with damping and touch), `saveCam`, `loop`, `resize`, the camera home at the end of `build`, `css`, and the `render` frame (the "Loading the 3D library…" wait for the deferred three.js, the no-library and no-WebGL messages, layer toggles, Reset view, Save PNG). They are to move to `shared/` later (CLAUDE.md §3). The steel files are not changed.
+- `geom(P)` (no DOM, no three.js) reads the project and the moved engine's pure geometry functions only:
+  - each girder type × line cell (`PSBBridge.cells`) with its engine inputs (`PSBDesign.cellInputs`) and its shape (`girderGross`, `halfPolygon`, `sectionVoids`; NEXT flange from that line's S);
+  - line offsets from the bays;
+  - bearings on the skewed support lines: x = support station + (z − z_mid) tan θ, the Steel Bridge framing rule;
+  - the girder past ℄ bearing by `opt.endOh` at the abutments;
+  - deck t_s, haunch t_h (none for box / deck beams, as the engine), barriers and sidewalks (`P.xs.dl`);
+  - diaphragms (`loads.diaph`, a from each line's left bearing);
+  - continuity diaphragms on the pier lines when the spans are made continuous;
+  - bearing pads (`opt.Lpad`; NEXT: one per stem), seats and caps;
+  - the strands of the girder type shown above the output tabs, on each of its lines. Positions come from `PSBStrandGfx.xy` (PS-27), y = the soffit + the row's engine y. Debonded lengths are drawn in their own colour. Draped strands run from y_end at ℄ bearing to y_mid at frac × L from each ℄ bearing (PS-13).
+- `render(host, ctx)` draws `geom` with three.js:
+  - girders extruded from the outline with the voids as holes, coloured by type with a key (type: shape, span, lines); the type shown is see-through so its strands show;
+  - the deck as a skewed prism, plus haunch, barriers, diaphragms, pads, seats and caps;
+  - strands as line segments;
+  - sprite labels G1…Gn, Abut. 1 / Pier k / Abut. 2, and "Span s: L = … ft (continuous | simple)";
+  - a summary note of the bridge.
+  - Phone layout: the controls wrap; the canvas is min(68vh, 680 px) high, at least 320 px; the home camera is set farther back on a narrow canvas.
+- `index.html`: `ui/view3d.js` added to the script list; the 3D view placeholder is replaced by the tab (`#v3dHost`, `PSB3DUI.render`, only when there is no input error). The three.js r128 + OrbitControls 0.128.0 tags were already in the page at the steel app's pins (no new library, no version change).
+### Saved data (CLAUDE.md §5)
+- No new key. The layer choices and the camera are kept in the page's ui state `psb2.ui` (field `v3d: { lay, cam }`), as the steel app keeps them in `sbd2.ui`. The project format is unchanged.
+### Governing provisions
+- None (display only; no engineering value is computed; the engine is not called). Harness B unchanged (below).
+### Check case (new project: one 120 ft span, 5 PCI BT-72 at 9.0 ft, overhangs 3.0 ft, no skew, t_s 8 in, t_h 2 in)
+- Girders: z = 0, 108, 216, 324, 432 in (G1–G5). Bearings at x = 0 and 1440 in (120 ft × 12). Depth 72 in. Deck soffit at 72 + 2 = 74 in above the girder soffits; deck top at 82 in. Deck width (3 + 36 + 3) × 12 = 504 in from z = −36 to 468 in.
+- 25° skew (110 ft span, the same bays): G1's bearings at x = (0 + (0 − 18) tan 25°) × 12 = −100.7 in and 1320 − 100.7 = 1219.3 in. Bearing to bearing = 1320 in = the span. Diaphragms at a = 36.67 ft: x = G1's bearing + 440 in, on each of the 4 bays.
+### How verified
+- New `tests/engine/psbridge-view3d.test.mjs` (5 tests). Bridges covered:
+  - a new project;
+  - two simple spans with a different shape in span 2, unequal bays and endOh 9 in;
+  - NEXT 36F adjacent;
+  - 25° skew with diaphragms, and unequal skews 10° / 20°;
+  - three spans made continuous at 10° skew, and the same as simple spans.
+- For every cell the test checks:
+  - z = the line's offset;
+  - bearings on the support lines; bearing to bearing = span, or span + (z − z_mid)(tan θ₂ − tan θ₁); the engine's L = span;
+  - endOh at the abutments only;
+  - outline and voids = the library's; haunch;
+  - deck width and t_s;
+  - strands: one line per strand on the lines of the type shown, at `xy`'s positions; draped strands at ℄ bearing and at frac × L; NEXT strands inside the stems;
+  - diaphragm and continuity-diaphragm positions.
+- New `tests/smoke/ps-bridge-3d.mjs` (101 checks, 0 failed). Five bridges (new, multi-type, NEXT, skewed, continuous) at 1400 and 390 px, headless Chromium from file://. It checks:
+  - the WebGL canvas is drawn (not blank);
+  - the build's counts = `geom` of the stored project;
+  - one girder per cell; strands are drawn;
+  - the key lists every type;
+  - continuity diaphragms at both piers; 8 diaphragms on the skewed bridge; the NEXT pads per stem;
+  - no sideways scroll; 0 console errors; nothing blocked;
+  - a layer toggle and the camera are kept in `psb2.ui` and restored on reload;
+  - only `psb2.*` keys are written.
+- `tests/engine/psbridge-model.test.mjs`: the page's script list now includes `ui/view3d.js`.
+- `node tests/engine/run.mjs psbridge tex project-registry`: 18 files, 178 passed, 0 failed. `node tests/check-syntax.mjs`: all scripts pass.
+- Smokes: `ps-bridge-skeleton.mjs` 252 checks, 0 failed; `ps-bridge-types.mjs` 106 checks, 0 failed. Harness B: normal 17 designs, 0 with differences, exit 0; `--import` 0 with differences, exit 0; `--control` 17 with differences, exit 1; `--import --control` 17 with differences, exit 1.
+- Screenshots: the five bridges at 1400 and 390 px; a rotated view with the deck layer off.
+### Decisions (pending engineer review)
+- PS3c-D1. Only girder lines with a girder type are drawn (a line with no type is listed on the Girders & strands tab, not drawn).
+- PS3c-D2. Barrier height is 32 in (schematic: the Cross-section tab enters only its width). Sidewalk height = its entered thickness.
+- PS3c-D3. Diaphragms are entered per girder type as a point load at a from the left ℄ bearing (no size). They are drawn in each bay next to a line whose type has one, parallel to the supports: 10 in thick, 0.75 × the shallower girder's depth, hung from the girder tops. None where the clear gap between adjacent units is 1 in or less (adjacent NEXT, boxes, deck beams).
+- PS3c-D4. Spans made continuous for composite loads: one continuity diaphragm on each pier line, 24 in thick, from the deepest girder soffit to the deck soffit, between the exterior girder lines (schematic). Simple spans: none.
+- PS3c-D5. Bearing pads are L_pad (opt.Lpad) long, the bottom width wide (NEXT: one per stem, B wide), 3 in thick. Seats and pier caps are 42 × 42 in along the support lines, as in the steel view.
+- PS3c-D6. Girder ends are square to the girder at the ℄ bearing, extended by opt.endOh at the abutments only. At a pier, the girders of the two spans meet at the support line (the model's spans are ℄ bearing to ℄ bearing).
+- PS3c-D7. The deck is drawn with the largest t_s of the girder types (the types share one deck).
+- PS3c-D8. With unequal skews at a span's two supports, each line is drawn between its own bearings on the skewed support lines (its length differs from the span by (z − z_mid)(tan θ₂ − tan θ₁)). The engine designs every line with L = the span (unchanged; noted here only).
+- PS3c-D9. Strands are shown for the girder type shown above the output tabs, on each of its lines. That type's girders are drawn see-through.
+### Other copies
+- `apps/steel-bridge/ui/view3d.js`: the copied pieces listed above (to move to `shared/` later; the steel file is not changed).
+### Before / after (exact)
+- New file `apps/ps-bridge/ui/view3d.js` (the whole file is new). `apps/ps-bridge/index.html`:
+```diff
+diff --git a/apps/ps-bridge/index.html b/apps/ps-bridge/index.html
+index 435c64f..004eb8c 100644
+--- a/apps/ps-bridge/index.html
++++ b/apps/ps-bridge/index.html
+@@ -87,6 +87,7 @@
+     'ui/rating.js',      // PR 2d-2: Rating tab
+     'ui/report.js',      // PR 2e: Report tab (adapted copy of apps/steel-bridge/ui/report.js)
+     'ui/dash.js',     // the check summary column (adapted copy of apps/steel-bridge/ui/dash.js)
++    'ui/view3d.js',   // PR 3c: the 3D view tab (the Steel Bridge app's 3D view pattern, apps/steel-bridge/ui/view3d.js; three.js r128 below)
+     'ui/summary.js',  // PR 3b: the Summary tab (adapted copy of apps/steel-bridge/ui/summary.js): verdict, girder × span grid, type × check table
+     'ui/splitter.js'  // the splitter between the input and output panels (copy of apps/steel-bridge/ui/splitter.js)
+   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
+@@ -469,8 +470,7 @@
+   /* ---------- outputs (placeholders; docs/ps-bridge-plan.md §2.3, §5) ---------- */
+   const OUT = {
+     dwg: ['7', ['girder sheet, strand and draping schedule (hold-down from ℄ bearing and from the girder end, PS-13), camber table; DXF']],
+-    ad: ['5', ['the auto-design proposal per design group and its trial log (Run on the Auto design input tab)']],
+-    '3d': ['3c', ['the bridge in 3D (three.js, as the Steel Bridge app)']]
++    ad: ['5', ['the auto-design proposal per design group and its trial log (Run on the Auto design input tab)']]
+   };
+   /* the design's engine results (PR 2b-2): computeAll of the design inputs (engine/design.js), kept while the inputs are the same; the worked
+      steps of the three result tabs (engine/worked.js) made once per result. Only when there is no input error. */
+@@ -564,6 +564,8 @@
+       if (!errs.length) h += window.PSBSummaryUI.html({ P, A: ok ? allResults() : null, run: runState(), shown: (ok ? card(`Design girder: ${esc(rc.inp.proj.girderId)}, span ${window.PSBDesign.sel(P).s}`, `<div class="kv"><div><span>Section</span><span>${esc(rc.inp.girder)}, ${rc.R.ss.Ntot} strands</span></div><div><span>Composite I<sub>c</sub></span><span>${fmt(rc.R.cp.Ic, 0)} in⁴ <a href="#" data-gotab="sec">Section properties</a></span></div>
+             <div><span>DF<sub>M</sub> / DF<sub>V</sub></span><span>${fmt(rc.R.dfm, 3)} / ${fmt(rc.R.dfv, 3)} <a href="#" data-gotab="lds">Loads &amp; LLDF</a></span></div><div><span>M<sub>u</sub> at midspan</span><span>${fmt(rc.R.diagrams.reduce((b, r) => Math.abs(r.x - rc.R.L / 2) < Math.abs(b.x - rc.R.L / 2) ? r : b).M_StrI_pos, 0)} kip-ft <a href="#" data-gotab="an">Analysis</a></span></div></div>
+             ${rc.R.warns.length ? `<div class="alert"><b>Design warnings of the engine (${rc.R.warns.length})</b><ul>${rc.R.warns.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>` : '<p class="note">No design warnings.</p>'}`) : '') });
++    } else if (ui.otab === '3d') {
++      if (!errs.length) h += '<div id="v3dHost"></div>';   // PR 3c: the 3D view (ui/view3d.js), mounted below
+     } else if (ui.otab === 'rpt') {
+       if (ok) h += '<div id="rptHost"></div>';   // PR 2e: the Report (ui/report.js), mounted below
+     } else { const o = OUT[ui.otab]; h += ph(esc(name), o[0], o[1]); }
+@@ -573,6 +575,8 @@
+     if (ui.otab === 'rpt' && ok && $('rptHost')) { ui.rpt = ui.rpt || {};
+       try { window.PSBReportUI.render($('rptHost'), { P, rc, opts: ui.rpt, save: saveUi, goto: t => gotoOut(t), goin: t => { ui.itab = t; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; } }); }
+       catch (e) { $('rptHost').innerHTML = `<div class="alert err" role="alert">Report error: ${esc(e && e.message)}</div>`; console.warn(e); } }
++    // PR 3c: the 3D view of the bridge (display only; its layer and camera choices kept in ui.v3d, psb2.ui)
++    if (ui.otab === '3d' && $('v3dHost')) { try { window.PSB3DUI.render($('v3dHost'), { P, ui, saveUi }); } catch (e) { $('v3dHost').innerHTML = `<div class="alert err" role="alert">3D view error: ${esc(e && e.message)}</div>`; console.warn(e); } }
+     if (window.PSBDashUI) window.PSBDashUI.refresh();
+   }
+   const gotoOut = t => { ui.otab = t; saveUi(); drawOut(); $('outputPanel').scrollTop = 0; };
+```
