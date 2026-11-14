@@ -204,6 +204,16 @@ export const TOOLS = {
     names: p => p.evaluate(() => (JSON.parse(localStorage.getItem('sbd2.lib.index') || '{"items":[]}').items || []).map(i => i.name)),
     // STDS-B: the standard Saved projects dialog (no own ui entry since 2026-11-06)
   },
+  psbapp: {
+    // PS Bridge app (apps/ps-bridge; PS5-D3, 2026-11-14): used by tests/smoke/home-projects.mjs and home-sync.mjs, as sbapp above (its list is
+    // engine/library.js, items by id, an adapted copy of the steel app's: tests/smoke/ps-bridge-library.mjs tests it). Not run by this file.
+    file: 'apps/ps-bridge/index.html', list: null, auto: 'psb2.project.current', noRun: true,
+    ready: p => p.waitForFunction(() => document.querySelector('[data-sp=chip]') && document.getElementById('out') && document.getElementById('out').innerText.length > 50, null, { timeout: 120000 }),
+    results: async p => { await p.waitForTimeout(800); return p.evaluate(() => { const q = JSON.parse(localStorage.getItem('psb2.project.current') || 'null'); const n = q && q.project ? q.project.name : '';
+      if (q && q.project) delete q.project.name; return { P: q, out: document.getElementById('out').innerText.split(n || '\u0000').join('NAME') }; }); },
+    save: async (p, name) => { await stdSave(p, name); await p.waitForTimeout(400); },
+    names: p => p.evaluate(() => (JSON.parse(localStorage.getItem('psb2.lib.index') || '{"items":[]}').items || []).map(i => i.name)),
+  },
   pile: {
     // Pile Designer (STDS-P, 2026-11-06): its list is IndexedDB (tests/smoke/pile-library.mjs tests it); used by github-sync-tools.mjs and
     // home-projects.mjs. Results: the autosaved inputs and LPILE import (the GitHub copy carries no title-block change); save = the
