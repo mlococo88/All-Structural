@@ -3529,7 +3529,7 @@ PR #1553: https://github.com/mlococo88/All-Structural/pull/1553
 - 3D-D3. Close-up Zoom to targets: the span ends, the hold-down points and the midspans. The steel app's targets are its splices and bearings; this app has no splices.
 
 ## 2026-11-14 — PS-38 / PS-39 / PS-40: NEXT 28F I at 144 in, strand-to-void clearance 1.25 in, the CTDOT voided slabs' void spacing from the MassDOT sheets; projects saved before told once on open (CALCULATION CHANGE, §4; SAVED DATA, §5)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1554: https://github.com/mlococo88/All-Structural/pull/1554
 ### Request
 - Engineer decisions 2026-11-14 (MassDOT Part II integration, the calc fixes first):
   - PS-38: NEXT 28F at 144 in width: I 88,218 → 92,836 in⁴ (MassDOT Bridge Manual Part II dwg 9.2.3, p. 124). App-side, with a notice and a Report line for the projects that use it; the old-app import comparison keeps the old value. Check the other NEXT F widths against p. 124 ("fix it, with notice" for any other mismatch).
@@ -3562,7 +3562,9 @@ PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
 - PS-40, SIV-48 (21in), 50 ft, no topping (type g), 6 slabs, interior: t_w = 23.75 − 14.25 − 6 = 3.5 in (before 23.75 − 14 − 6 = 3.75); t_b = t_t = 4.5; b₀ = 47.5 − 3.5 = 44 (43.75); h₀ = 16.5; A₀ = 726.0 (721.9) in²; Σ s/t = 2 (44 / 4.5) + 2 (16.5 / 3.5) = 28.984 (28.244); J = 4 A₀² / Σ = 73,799 → 72,740 in⁴ (−1.4 %); I / J 0.45744 → 0.46411; k = 2.5 × 6^−0.2 = 1.74707; g_M2 = k (47.5 / 305)^0.6 (47.5 / 600)^0.2 (I / J)^0.06: DF_M 0.3289 → 0.3292; g_V2 = (47.5 / 156)^0.4 (47.5 / 600)^0.1 (I / J)^0.05: DF_V 0.4638 → 0.4641. Other cases: SII-36, 40 ft, 8 slabs: J 22,295 → 22,250; DF_M 0.2565 → 0.2565, DF_V 0.4541 → 0.4541. SIII-48, 45 ft, 5 in topping (type f): J 85,233 → 84,474; DF_M 0.3373 → 0.3375.
 - PS-39 / PS-40, strand fit: BI-36 a strand at (14, 6) in the web, 1.25 in from the void: rejected → fits; at (0, 4.25): 1.25 in below the void: fits. SIV-48 a 12-strand row at 4 in: rejected (x = ±11 was 1.04 in from the Ø12 voids at ±14) → fits (1.27 in from the voids at ±14.25). SII-48 at y = 2.25: 1.25 in below the Ø8 voids: rejected → fits.
 ### How verified
-- RESULTS_PLACEHOLDER
+- `node tests/check-syntax.mjs`: all scripts pass (174 files). `node tests/engine/run.mjs psbridge tex project-registry`: 31 files, 265 passed, 0 failed (after merging main); new `tests/engine/psbridge-ps38.test.mjs` (5 tests: the sheet transcribed again, both check cases, the notice / migration / Report, the old-app import faithful); updated: ps33, strandfit, sections, lldf-fg, voidnote, smoke skeleton (the note's new text).
+- Harness B: normal 19 designs, 48,356 shown values and 8,392 step values, 0 differences (exit 0); `--import` 19 designs, 0 differences (exit 0); `--control` and `--import --control` exit 1. No harness design uses the NEXT 28F above 96 in or a CTDOT voided slab, and every harness pattern fitted at 1.5 in: no difference expected or found.
+- Smokes: ps-bridge-skeleton 271 / 0 failed, ps-bridge-types 106 / 0, ps-bridge-3d 101 / 0, ps-bridge-figures 225 / 0, ps-bridge-library 11 / 0.
 ### Decisions (pending engineer review)
 - PS38-D1. The notice goes to every project opened from before that uses the NEXT 28F, whatever its width (at 96 in nothing changes; the text says so), and to every project on a CTDOT voided slab (PS-40). A project's girder chosen after this change and saved gets no notice (secLib).
 - PS40-D1. MassDOT's dimensioned void spacing is applied to the CTDOT voided slabs of the same width and void sizes (the CTDOT plates are not dimensioned): engineer decision; the drawn void positions and the strand fit follow.
