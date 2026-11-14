@@ -19,6 +19,8 @@
      cell centred: its 5½ in bottom slab is the engine's wall and voidH = h − 11), the plate it comes from, and the drawn outline's A, I, y_b
      against the plate's. */
   function voidNote(G) {
+    const SCm = window.PSBSections;
+    if (SCm && SCm.mdOf && SCm.mdOf(G)) return ['spread', 'adj', 'slab'].includes(SCm.mdOf(G)[1].src.fam) ? SCm.mdNote(G) : '';   // PS-37: a MassDOT section with a void
     const b = G && G.box, f = v => K().fx(v, 1); if (!b) return '';
     const SC = window.PSBSections, st = SC && SC.stdOf ? SC.stdOf(G) : null;
     if (st) {
@@ -35,18 +37,24 @@
   /* stdSrc(G): PS-30 / PS-32: the plate a standard box beam or voided slab's A, I, y_b come from ('' for any other shape) */
   function stdSrc(G) {
     const SC = window.PSBSections, st = SC && SC.stdOf ? SC.stdOf(G) : null; if (!st) return '';
+    if (st[1].src.owner === 'MassDOT') { const m = st[1].src; return `MassDOT ${m.beam}: A, I, y<sub>b</sub> from MassDOT Bridge Manual Part II dwg ${m.dwg} (p. ${m.page}) (PS-37)${st[1].next ? ', interpolated on the beam width' : ''}; S<sub>b</sub>, S<sub>t</sub> and the self-weight computed from them below`; }   // PS-37
     const s = st[1].src; return `AASHTO ${s.beam}: A, I, y<sub>b</sub> from CTDOT Bridge Design Manual plate ${s.plate} (PDF p. ${s.page}), an app-side correction of the old library (PS-30 / PS-32); S<sub>b</sub>, S<sub>t</sub> and the self-weight computed from them below`;
   }
   function output(ctx) {
     const { R, inp } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, G = R.g, ss = R.ss;
-    const kind = G.isNext ? 'NEXT F double tee' : G.isBox ? 'adjacent box beam' : G.isDeck ? 'adjacent deck beam' : 'I-girder / bulb tee';
+    const SCm = window.PSBSections, md = SCm && SCm.mdOf ? SCm.mdOf(G) : null;   // PS-37: a MassDOT section's own kind and note
+    const kind = md ? { nebt: 'NEBT bulb tee', nedbt: 'NEDBT decked bulb tee', nextf: 'NEXT F double tee', nextd: 'NEXT D double tee (integral deck)', spread: 'spread box beam, computed as an I-girder', adj: 'adjacent box beam', slab: 'adjacent deck beam', solid: 'adjacent deck beam' }[md[1].src.fam]
+      : G.isNext ? 'NEXT F double tee' : G.isBox ? 'adjacent box beam' : G.isDeck ? 'adjacent deck beam' : 'I-girder / bulb tee';
+    const vn = voidNote(G) || (md ? SCm.mdNote(G) : ''), mx = !!(md && md[1].next && G.nxw);
     let h = '<div id="gfx_sec"></div>';
     h += k.card(`Gross girder section: ${k.esc(inp.girder)}`, k.kv([
-      ['Shape', `${k.esc(inp.girder)} (${kind})${G.ovr && G.ovr.any ? ', with overrides' : ''}`], ['Depth h', ev('g.h', 2, 'in')], ['Area A', ev('g.A', 1, 'in²')], ['Moment of inertia I', ev('g.I', 0, 'in⁴')],
-      ['y<sub>b</sub> (centroid above the soffit)', ev('g.yb', 3, 'in')], ['y<sub>t</sub>', `${ev('g.yt', 3, 'in')} ${wk('sec.g.yt')}`], ['S<sub>b</sub>', `${ev('g.Sb', 0, 'in³')} ${wk('sec.g.Sb')}`], ['S<sub>t</sub>', `${ev('g.St', 0, 'in³')} ${wk('sec.g.St')}`],
+      ['Shape', `${k.esc(inp.girder)} (${kind})${G.ovr && G.ovr.any ? ', with overrides' : ''}`], ['Depth h', ev('g.h', 2, 'in')],
+      ...(mx ? [['Beam width b<sub>f</sub>', `${ev('g.btf', 2, 'in')} ${wk('sec.g.bf')}`]] : []),   // PS-37: a MassDOT NEXT's width and interpolated properties, worked
+      ['Area A', `${ev('g.A', 1, 'in²')}${mx && !(G.ovr && G.ovr.A) ? ' ' + wk('sec.g.A') : ''}`], ['Moment of inertia I', `${ev('g.I', 0, 'in⁴')}${mx && !(G.ovr && G.ovr.I) ? ' ' + wk('sec.g.I') : ''}`],
+      ['y<sub>b</sub> (centroid above the soffit)', `${ev('g.yb', 3, 'in')}${mx && !(G.ovr && G.ovr.yb) ? ' ' + wk('sec.g.yb') : ''}`], ['y<sub>t</sub>', `${ev('g.yt', 3, 'in')} ${wk('sec.g.yt')}`], ['S<sub>b</sub>', `${ev('g.Sb', 0, 'in³')} ${wk('sec.g.Sb')}`], ['S<sub>t</sub>', `${ev('g.St', 0, 'in³')} ${wk('sec.g.St')}`],
       ['Web width b<sub>w</sub>', ev('g.bw', 2, 'in')], ['Top / bottom flange width', `${ev('g.btf', 2)} / ${ev('g.bbf', 2, 'in')}`], ['Self-weight w<sub>g</sub>', `${ev('g.wsw', 4, 'klf')} ${wk('sec.g.wsw')}`]])
       + `<p class="note">Gross properties of the shape library (${stdSrc(G) || `the old app's GIRDERS${G.isNext ? '; NEXT: interpolated on the flange width' : ''}`})${G.ovr && G.ovr.any ? '; overridden values as entered (Girders &amp; strands tab)' : ''}.</p>`
-      + (voidNote(G) ? `<p class="note" id="sec-void-note">${voidNote(G)}</p>` : ''), 'card-gross');
+      + (vn ? `<p class="note" id="sec-void-note">${vn}</p>` : ''), 'card-gross');
     h += k.card('Composite section', k.kv([
       ['E<sub>c</sub> girder', `${ev('cp.Ecg', 0, 'ksi')} ${wk('sec.Ecg')}`], ['E<sub>c</sub> deck', `${ev('cp.Ecd', 0, 'ksi')} ${wk('sec.Ecd')}`], ['Modular ratio n', `${ev('cp.n', 4)} ${wk('sec.n')}`],
       ['Effective flange width b<sub>eff</sub>', `${ev('cp.beff', 2, 'in')} ${wk('sec.beff')}`], ['A<sub>c</sub>', `${ev('cp.Ac', 1, 'in²')} ${wk('sec.Ac')}`], ['y<sub>bc</sub>', `${ev('cp.ybc', 3, 'in')} ${wk('sec.ybc')}`],

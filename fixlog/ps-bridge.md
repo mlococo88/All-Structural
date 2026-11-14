@@ -3510,3 +3510,45 @@ PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
 - None found in the NEXT F table beyond PS-38.
 ### Other copies
 - `Prestressed Bridge Design.html` (frozen) keeps 88,218 and its own voided slabs; not changed.
+
+## 2026-11-14 — PS-37: the MassDOT Bridge Manual Part II standard sections in the library (NEBT, NEDBT, NEXT F, NEXT D, spread and adjacent box beams, deck beams), grouped by owner in the girder picker (LIBRARY ADDITION, §4)
+PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+### Request
+- Engineer decision 2026-11-14 (PS-37): the MassDOT families, tagged by owner under distinct names; the picker grouped by owner; CTDOT and every existing name untouched; NEDBT 80 y_b 46.40 in (sheet misprint, a judgment recorded here); every table property checked against an integration of the drawn outline (A, I, y_b within ~1 %), any disagreement listed; each family with its live load distribution type (adjacent boxes and slabs (f)/(g), spread boxes per the engine, NEBT / NEDBT / NEXT the engine's I-girder / double-tee handling).
+### What changed
+- `apps/ps-bridge/engine/sections.js` (app-side; no engine file edited):
+  - `MD` / `ORDER_MD`: 63 entries added to GIRDERS before `'Custom'` (install): `MassDOT NEBT 1000`–`1800` (dwg 9.1.4, p. 91), `MassDOT NEDBT 40`–`80` (dwg 11.1.3, p. 253), `MassDOT NEXT 24F`–`36F` (dwg 9.2.3, p. 124; flange 4 in), `MassDOT NEXT 28D`–`40D` (dwg 11.2.3, p. 295; 96–120 in), `MassDOT B36-24 spread` … `MassDOT B48-48 spread` (dwg 9.3.4 / 9.3.5, p. 153 / 154), `MassDOT B36-24 adj.` … `MassDOT B48-48 adj.` (dwg 10.2.4 / 10.2.5, p. 223 / 224), `MassDOT S36-12` … `MassDOT S48-21` (dwg 10.1.4 / 10.1.5, p. 193 / 194). A, I, y_b as printed (NEDBT 80: 46.40, PS37-D2). Engine fields: NEBT / NEDBT the engine's I-girder `{ h, A, I, yb, bw 7.09, btf 47.24 | 60, bbf 31.89, d [3.35 | 8, 1.97 | 2.19, 8.66, 3.94] }`; NEXT `{ next, h, B, wMin 96, wMax 144 | 120, pMin, pMax, flangeT 4 | 8, strandRow }`; spread box the I-girder `{ bw 2 t_w, btf = bbf = 35.5 | 47.5, d [5.5, 0, 6, 0] }`; adjacent box `{ box, w, wall 6, voidW w − 2 t_w, voidH h − 11.5, bw 2 t_w }` (t_w 5 / 6 in); deck beams `{ deck, voids, voidD }` or `{ deck, solid }`.
+  - `wrapMD()`: the engine's `girderGrossBase`, `halfPolygon`, `sectionVoids` wrapped for the MassDOT names only (every other shape: the engine's own result, tested byte-identical): the girder object tagged `g.std` (its name) and, for a NEXT, `g.nxw`; a NEXT D's engine width from S − 13 in (dwg 11.2.3 note 2: spacing = beam width + 13 in): `b_f = min(max(12 S − 13, 96), 120)`; the drawn outlines `mdHalf` (NEBT / NEDBT with the flange tapers, R 7.87 web fillets, R 3.94 flange corners, chamfers; NEXT with stems B → 15 in and R 4 in fillets; spread box rectangle with ¾ in bottom chamfers) and `mdVoids` (spread box cell; deck beam voids at the sheet's dimensioned positions). `roundPoly` rounds polygon corners.
+  - `group(name)`: the picker's optgroup by owner; `mdOf(g)`, `mdNote(g)` (Section properties note), `nxW`; `stdOf(g)` / `slabOf(g)` take a tagged MassDOT section first.
+- `apps/ps-bridge/engine/fields.js` `base.girder`: options `[name, name, group]`; tooltip reworded (no "comes in PR 4").
+- `apps/ps-bridge/ui/inputs.js` `field()`: a select whose options carry a group is rendered with `<optgroup>`s (consecutive options of a group).
+- `apps/ps-bridge/engine/worked.js` `section()`: for a MassDOT NEXT, new steps `sec.g.bf` (b_f), `sec.g.tw` (t = (b_f − w_min) / (w_max − w_min)), `sec.g.A`, `sec.g.I`, `sec.g.yb` (the sheet's two widths interpolated; values = the engine's).
+- `apps/ps-bridge/ui/section.js`: the shape's kind and source sentence for a MassDOT section; its note (`#sec-void-note`); `b_f`, `A`, `I`, `y_b` linked to their worked steps for a MassDOT NEXT.
+### Saved data (CLAUDE.md §5)
+- None: new library names only. No key, field or format changed; every existing name and value unchanged (tested).
+### Governing provisions (CLAUDE.md §4)
+- MassDOT Bridge Manual Part II (April 2024), the drawings above (numeric properties entered as data). AASHTO LRFD 10th Ed. Table 4.6.2.2.1-1 for the distribution types (unchanged engine / PS-35 handling). No formula, factor or existing value changed.
+### Check case
+- NEXT 32D, S = 10 ft: b_f = min(max(12 × 10 − 13, 96), 120) = 107 in; t = (107 − 96) / 24 = 0.45833; A = 1,457 + 0.45833 (1,649 − 1,457) = 1,545.0 in²; I = 126,319 + 0.45833 (136,722 − 126,319) = 131,087 in⁴; y_b = 20.56 + 0.45833 (21.43 − 20.56) = 20.959 in (worked steps; tested).
+- Library spot checks (tested for all 63): NEBT 1000 A 746, I 149,196, y_b 19.02 (S_b 7,844); B36-27 adj. 573 / 50,267 / 13.29; B48-48 spread 1,056 / 304,874 / 23.72; S48-21 670 / 33,597 / 10.47; NEDBT 80 1,355 / 1,203,781 / 46.40.
+### Drawn outline against the sheets (A, I, y_b, %)
+- NEBT: +0.15 to +0.23, −0.25 to +0.11, +0.03 to +0.11 (within 1 %).
+- NEDBT: A −0.86 to −1.14 (disagrees slightly: a constant about 12.5 in² not on the drawing), I −0.35 to +0.16, y_b −0.15 to −0.40.
+- NEXT F (MassDOT, 4 in flange): A −0.17 to −0.43, I −0.09 to +0.07, y_b +0.15 to +0.22. NEXT D: A +0.29 to +0.44, I +0.05 to +0.17, y_b +0.16 to +0.24.
+- Spread boxes as drawn (the cell a rectangle): A −1.66 to −3.09, I −1.03 to −2.21, y_b −0.02 to −0.12. With the sheet's 3 × 3 in cell chamfers and ¾ in bottom chamfers the outline gives A, I, y_b within 0.1 % of every table entry (the dimensions confirmed).
+- Adjacent boxes as drawn: A −0.98 to −1.80, I −0.82 to +0.29, y_b +0.16 to +0.26. With the chamfers but no shear keys: A +0.72 to +1.31 % (a constant 7.13 in² over every depth and both widths), I +0.95 to +1.29 %: the table removes a fixed key area; the key size of dwg 10.2.9 is not read with confidence (listed).
+- Deck beams as drawn: A +1.60 to +4.49, I +1.17 to +2.15, y_b +0.29 to +0.48 (S36-21 and S48-21 the most): the shear keys of dwg 10.1.9 (a recess growing with the depth: about 7.9 in² at 12 in to 21.9 in² at 21 in) are not drawn (listed).
+### How verified
+- RESULTS_PLACEHOLDER
+### Decisions (pending engineer review)
+- PS37-D1. Names and groups: "MassDOT …" names; the old library's 'NEXT 24F'–'36F' keep their names and values (group "PCI Northeast — NEXT F (old library)"); the MassDOT NEXT F are separate entries with the sheet's 4 in flange (the old entries' flangeT 8 is not the sheet's: open item).
+- PS37-D2. NEDBT 80: y_b = 46.40 in, not the printed 46.60 (y_t 33.60 in, the 80 in depth and S_b = I / y_b = 25,944 in³ all give 46.40).
+- PS37-D3. Spread boxes are computed as the engine's I-girder: tributary deck width, haunch, and the engine's type (k) live load distribution, not AASHTO type (b) (no such equations in the engine). Check, B36-36 spread, S 8 ft, L 80 ft, t_s 8 in, interior: type (k) DF_M 0.658 against type (b) (S / 6.3)^0.6 (S d / 12 L²)^0.125 = 0.574; DF_V 0.814 against (S / 7.4)^0.8 (d / 12 L)^0.1 = 0.766: type (k) is the larger (conservative). The MassDOT f′c 6.5 ksi warning for box beams (engine owner rule) is not given for a spread box (the engine keys it to its box shape).
+- PS37-D4. NEDBT and NEBT use the engine's I-girder handling (type (k)). An NEDBT with no cast-in-place topping (t_s = 0) gets the engine's guarded K_g / (12 L t_s³) term: DF_M about 4.4–5.2 (S 8 ft, L 80 ft): very conservative, not changed (existing engine behaviour); a refined analysis or entered factors are expected for an NEDBT deck.
+- PS37-D5. NEXT D and NEXT F use the engine's NEXT handling (types (i)/(j) per beam, S = b_f / 12; no topping: K_g term omitted). NEXT D width b_f = 12 S − 13 in (dwg 11.2.3 note 2), within 96–120 in; the 13 in closure pour's weight is not added automatically (enter it as a non-composite load).
+- PS37-D6. The drawings leave out the shear keys, the cells' 3 × 3 in chamfers and the ¾ in corner chamfers of the boxes and deck beams (a larger void: conservative for A_ct and the strand fit); the computation uses the sheet's A, I, y_b.
+### Open items
+- Uncertain readings: the shear key sizes of dwg 10.2.9 (boxes) and 10.1.9 (deck beams) (the residuals above); dwg 9.2.3 note 1 says the NEXT F maximum width is 120 in while its table gives 144 in (the table used).
+- The old library's NEXT F `flangeT: 8` (engine/pbd-library.js) is not the sheet's 4 in (used for the drawn flange, the pier block thickness h − t_f of PS-34 and the no-topping flange depth); not changed here (a calculation change of existing entries).
+### Other copies
+- None (the old app is frozen).

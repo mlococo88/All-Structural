@@ -32,6 +32,21 @@
     const K = kit('sec'), add = K.add, G = R.g, cp = R.cp, ss = R.ss, ov = G.ovr || {};
     const ts = +inp.ts, th = +inp.th, m = inp.mat, wcL = +m.wcLoad || +m.wc, wdL = +m.wcdLoad || +m.wcd;
     // gross girder
+    // PS-37 (2026-11-14): a MassDOT NEXT (engine/sections.js): the beam width from the girder spacing and the sheet's A, I, y_b interpolated on it
+    const SCm = window.PSBSections, md = SCm && SCm.mdOf ? SCm.mdOf(G) : null;
+    if (md && md[1].next && G.nxw) {
+      const e = md[1], x = G.nxw, t = (G.btf - e.wMin) / (e.wMax - e.wMin), dw = `MassDOT Part II dwg ${e.src.dwg}`;
+      add({ id: 'g.bf', label: `Beam width (${md[0]}: ${x.gap ? 'the girder spacing less the closure' : 'the girder spacing'}, within ${e.wMin} to ${e.wMax} in)`, sym: 'b_{f}',
+        eq: x.gap ? `\\min\\left(\\max\\left(12\\,S - ${x.gap},\\ ${e.wMin}\\right),\\ ${e.wMax}\\right)` : `\\min\\left(\\max\\left(12\\,S,\\ ${e.wMin}\\right),\\ ${e.wMax}\\right)`,
+        sub: x.gap ? `\\min\\left(\\max\\left(12(${n(x.S, 3)}) - ${x.gap},\\ ${e.wMin}\\right),\\ ${e.wMax}\\right)` : `\\min\\left(\\max\\left(12(${n(x.S, 3)}),\\ ${e.wMin}\\right),\\ ${e.wMax}\\right)`,
+        value: G.btf, unit: 'in', d: 2, ref: dw + (x.gap ? ' note 2 (spacing = beam width + 13 in)' : ' note 2 (spacing = the nominal width)') }, Math.min(e.wMax, Math.max(e.wMin, 12 * x.S - x.gap)));
+      add({ id: 'g.tw', label: 'Interpolation factor on the beam width', sym: 't', eq: `\\frac{b_{f} - ${e.wMin}}{${e.wMax} - ${e.wMin}}`, sub: `\\frac{${n(G.btf, 2)} - ${e.wMin}}{${e.wMax - e.wMin}}`, value: t, unit: '', d: 4 }, (G.btf - e.wMin) / (e.wMax - e.wMin));
+      const ip = (id, lbl, sym, k, d, u) => { const a = e.pMin[k], b = e.pMax[k], at = w => (k === 'yb' ? `y_{b,${w}}` : `${sym}_{${w}}`);
+        add({ id, label: `${lbl} (the sheet's ${e.wMin} and ${e.wMax} in values interpolated)`, sym, eq: `${at(e.wMin)} + t\\left(${at(e.wMax)} - ${at(e.wMin)}\\right)`, sub: `${g(a, d)} + ${n(t, 4)}\\left(${g(b, d)} - ${g(a, d)}\\right)`, value: G[k], unit: u, d, ref: dw }, a + (b - a) * t); };
+      if (!ov.A) ip('g.A', 'Gross area', 'A', 'A', 1, 'in^{2}');
+      if (!ov.I) ip('g.I', 'Moment of inertia', 'I', 'I', 0, 'in^{4}');
+      if (!ov.yb) ip('g.yb', 'Centroid above the soffit', 'y_{b}', 'yb', 3, 'in');
+    }
     add({ id: 'g.yt', label: 'Distance from the centroid to the top of the girder', sym: 'y_{t}', eq: 'h - y_{b}', sub: `${n(G.h, 2)} - ${n(G.yb, 3)}`, value: G.yt, unit: 'in', d: 3 }, G.h - G.yb);
     if (ov.Sb) add({ id: 'g.Sb', label: 'Section modulus, bottom of the girder (entered override)', sym: 'S_{b}', value: G.Sb, unit: 'in^{3}', d: 0, note: 'Entered on the Girders & strands tab.' });
     else add({ id: 'g.Sb', label: 'Section modulus, bottom of the girder', sym: 'S_{b}', eq: '\\frac{I}{y_{b}}', sub: `\\frac{${g(G.I, 0)}}{${n(G.yb, 3)}}`, value: G.Sb, unit: 'in^{3}', d: 0 }, G.I / G.yb);

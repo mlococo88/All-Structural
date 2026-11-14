@@ -48,7 +48,7 @@
      dotJ(name)       PS-35: the DOT sheet's J of a standard section ({ J, src }), or null (none listed yet: DOT_J) */
 (function () {
   'use strict';
-  const BOXW = { 36: 35.5, 48: 47.5 }, SLAB = 5.5;
+  const BOXW = { 36: 35.5, 48: 47.5 }, SLAB = 5.5, R2 = v => Math.round(v * 1e6) / 1e6;
   /* plate 5.2.1b (PDF p. 327): [beam, series, h, web t_w, A, I, y_b, y_t, S_b, S_t, weight lb/ft] */
   const BOXES = [
     ['BI', 36, 27, 5, 554.6, 49495, 13.35, 13.65, 3709, 3625, 578], ['BI', 48, 27, 5, 686.6, 65085, 13.38, 13.62, 4886, 4777, 715],
@@ -122,7 +122,7 @@
     keys.forEach((k, i) => {
       const g = keep[k];
       if (k in LEGACY) { if (g && g.box) putBoxes(); return; }
-      if (k === 'Custom') { putBoxes(); putSlabs(); }
+      if (k === 'Custom') { putBoxes(); putSlabs(); ORDER_MD.forEach(n => { GIRDERS[n] = engineOf(MD[n]); }); }   // PS-37: the MassDOT sections before Custom
       GIRDERS[k] = g;
       if (g && g.deck && g.solid && !keys.slice(i + 1).some(q => keep[q] && keep[q].deck && keep[q].solid)) putSlabs();   // after the last solid slab
     });
@@ -134,9 +134,11 @@
   /* the slab voids of the plates: the engine draws n equal voids evenly spaced across w (sectionVoids); a standard slab's are at the plate's
      x with its diameters. A slab of the engine's girder (girderGross) is found by its h, w, voids and voidD (each standard slab has its own). */
   const slabOf = g => { if (!g || !g.isDeck || !g.box) return null; const b = g.box;
+    if (typeof g.std === 'string' && MD[g.std]) return MD[g.std].src.fam === 'slab' ? MD[g.std] : null;   // PS-37: a MassDOT deck beam, by its name
     for (const n of ORDER_SLAB) { const e = STD[n]; if (e.h === +g.h && e.w === +b.w && e.voids === +b.voids && e.voidD === +b.voidD) return e; } return null; };
   /* stdOf(g): the standard section [name, entry] of the engine's girder g (girderGross), or null */
   function stdOf(g) {
+    if (g && typeof g.std === 'string' && MD[g.std]) return [g.std, MD[g.std]];   // PS-37: a MassDOT section (tagged by name)
     if (!g || !g.box) return null; const b = g.box;
     for (const n of ORDER_BOX) { const e = STD[n]; if (g.isBox && e.h === +g.h && e.w === +b.w && e.wall === +b.wall && e.voidW === +b.voidW && e.voidH === +b.voidH) return [n, e]; }
     const e = slabOf(g); if (!e) return null; return [ORDER_SLAB.find(n => STD[n] === e), e];
@@ -244,6 +246,167 @@
     const e = STD[name], x = XCHK[name]; if (!e || !x) return null;
     return { md: x[0], dwg: x[1], page: x[2], A: x[3], I: x[4], yb: x[5], dA: e.A / x[3] - 1, dI: e.I / x[4] - 1, dyb: e.yb / x[5] - 1 };
   }
+
+  /* ================= PS-37 (engineer decision 2026-11-14): the MassDOT Bridge Manual Part II (April 2024) standard sections =================
+     Added to GIRDERS before 'Custom', under their own names ("MassDOT …"), grouped by owner in the girder picker (group(name)); every
+     existing name and value is unchanged. A, I, y_b are the sheet's (S = I / y and the weight A × w_c as the engine computes them). Sheets
+     (Part II PDF 2 of 3, its page numbers; the numeric section properties entered as data, the notes paraphrased):
+       NEBT 1000–1800    dwg 9.1.4 (p. 91)    top flange 47.24 in, 3.35 in at the tip, a 1.97 in taper to the web; web 7.09 in; bottom flange
+                                              31.89 in × 8.66 in, a 3.94 in taper; R 7.87 in web fillets, R 3.94 in bottom flange corners,
+                                              0.79 in chamfers / radii
+       NEDBT 40–80       dwg 11.1.3 (p. 253)  the NEBT web and bottom flange with a 60 in × 8 in top flange and a 2.19 in taper. NEDBT 80: the
+                                              sheet's y_b 46.60 in is a misprint (its y_t 33.60 in, the depth and S_b = I / y_b = 25,944 in³ give
+                                              46.40 in): 46.40 in used (PS37-D2)
+       NEXT 24F–36F      dwg 9.2.3 (p. 124)   flange 4 in (the area difference of the two tabulated widths: (1,164 − 972) / 48 = 4.0 in), stems
+                                              B at the bottom to 15 in at the flange, 60 in apart, R 4 in fillets, ¾ in chamfers; 96 to 144 in
+                                              (the engine's interpolation on S × 12, as the old library's NEXT F)
+       NEXT 28D–40D      dwg 11.2.3 (p. 295)  flange 8 in, stems as the NEXT F (dwg 11.2.8, p. 300: 15 in at the flange, R 4 in); 96 to 120 in
+                                              wide; the beam width = the girder spacing − 13 in (dwg 11.2.3 note 2; the girderGrossBase wrapper)
+       spread box B36 / B48, 24–48 in  dwg 9.3.4 / 9.3.5 (p. 153 / 154): 35.5 / 47.5 in wide, top slab 5½ in, bottom slab 6 in, webs 5¾ in
+                                              (24–36 in deep) / 6¾ in (39–48 in), 3 × 3 in cell chamfers, ¾ in bottom chamfers. Computed as the
+                                              engine's I-girder (tributary deck, haunch, type (k) live load distribution; PS37-D3); the box outline
+                                              and cell drawn by the wrappers below
+       adjacent box B36 / B48, 24–48 in dwg 10.2.4 / 10.2.5 (p. 223 / 224): the same slabs, webs 5 in (24–36 in) / 6 in (39–48 in), shear
+                                              keys (dwg 10.2.9, p. 228; not drawn); the engine's box (types (f) / (g), engine/lldf-fg.js)
+       deck beams S36 / S48, 12–21 in   dwg 10.1.4 / 10.1.5 (p. 193 / 194): S36-12 / S48-12 solid; the voided ones with the sheet's void sizes
+                                              and dimensioned spacing; shear keys (dwg 10.1.9, p. 198) not drawn
+     The drawn outlines are checked against the sheets' A, I, y_b in tests/engine/psbridge-massdot.test.mjs. */
+  const MDW = { 36: 35.5, 48: 47.5 };
+  const MD = {}, ORDER_MD = [];
+  const mdAdd = (name, e) => { MD[name] = e; ORDER_MD.push(name); };
+  /* [beam, h, A, I, y_b] as printed (y_t = h − y_b agrees to 0.01 in) */
+  [['1000', 39.37, 746, 149196, 19.02], ['1200', 47.24, 801, 238089, 22.63], ['1400', 55.12, 857, 353169, 26.26], ['1600', 62.99, 913, 492515, 29.96], ['1800', 70.87, 969, 660691, 33.66]]
+    .forEach(([b, h, A, I, yb]) => mdAdd(`MassDOT NEBT ${b}`, { h, A, I, yb, bw: 7.09, btf: 47.24, bbf: 31.89, d: [3.35, 1.97, 8.66, 3.94],
+      src: { owner: 'MassDOT', fam: 'nebt', beam: `NEBT ${b}`, dwg: '9.1.4', page: 91, strands: { dwg: '9.1.6', page: 93 } } }));
+  [['40', 40, 1072, 202908, 23.55], ['48', 48, 1128, 328913, 28.23], ['56', 56, 1185, 490067, 32.85], ['64', 64, 1242, 688318, 37.41], ['72', 72, 1298, 925587, 41.93], ['80', 80, 1355, 1203781, 46.40]]
+    .forEach(([b, h, A, I, yb]) => mdAdd(`MassDOT NEDBT ${b}`, { h, A, I, yb, bw: 7.09, btf: 60, bbf: 31.89, d: [8, 2.19, 8.66, 3.94],
+      src: Object.assign({ owner: 'MassDOT', fam: 'nedbt', beam: `NEDBT ${b}`, dwg: '11.1.3', page: 253, strands: { dwg: '11.1.7', page: 257 } }, b === '80' ? { ybPrinted: 46.60 } : {}) }));
+  /* NEXT: [beam, h, B, [A, I, y_b] at the minimum width, [A, I, y_b] at the maximum, strand edge distance (dwg 9.2.5 / 11.2.7)] */
+  [['24F', 24, 13.75, [972, 51905, 14.94], [1164, 60159, 16.10], '2.875'], ['28F', 28, 13.50, [1082, 80037, 17.23], [1274, 92836, 18.55], '2.75'],
+    ['32F', 32, 13.25, [1190, 116036, 19.50], [1382, 134523, 20.96], '2.625'], ['36F', 36, 13.00, [1296, 160602, 21.75], [1488, 186000, 23.34], '2.5']]
+    .forEach(([b, h, B, a, c, sr]) => mdAdd(`MassDOT NEXT ${b}`, { next: true, h, B, wMin: 96, wMax: 144, pMin: { A: a[0], I: a[1], yb: a[2], yt: R2(h - a[2]) },
+      pMax: { A: c[0], I: c[1], yb: c[2], yt: R2(h - c[2]) }, flangeT: 4, strandRow: sr,
+      src: { owner: 'MassDOT', fam: 'nextf', beam: `NEXT ${b}`, dwg: '9.2.3', page: 124, stemTop: 15, fillet: 4, strands: { dwg: '9.2.5', page: 126 } } }));
+  [['28D', 28, 13.75, [1348, 85775, 18.06], [1540, 92724, 18.80], '2.875'], ['32D', 32, 13.50, [1457, 126319, 20.56], [1649, 136722, 21.43], '2.75'],
+    ['36D', 36, 13.25, [1564, 176999, 23.02], [1756, 191801, 24.01], '2.625'], ['40D', 40, 13.00, [1669, 238511, 25.45], [1861, 258692, 26.54], '2.5']]
+    .forEach(([b, h, B, a, c, sr]) => mdAdd(`MassDOT NEXT ${b}`, { next: true, h, B, wMin: 96, wMax: 120, pMin: { A: a[0], I: a[1], yb: a[2], yt: R2(h - a[2]) },
+      pMax: { A: c[0], I: c[1], yb: c[2], yt: R2(h - c[2]) }, flangeT: 8, strandRow: sr,
+      src: { owner: 'MassDOT', fam: 'nextd', beam: `NEXT ${b}`, dwg: '11.2.3', page: 295, stemTop: 15, fillet: 4, gap: 13, strands: { dwg: '11.2.7', page: 299 } } }));
+  /* boxes: [h, A, I, y_b] per series, spread (dwg 9.3.4 / 9.3.5) and adjacent (dwg 10.2.4 / 10.2.5) */
+  const SPREAD = {
+    36: [[24, 569, 37392, 11.89], [27, 604, 51478, 13.37], [30, 638, 68281, 14.85], [33, 673, 87958, 16.33], [36, 707, 110661, 17.81], [39, 797, 140025, 19.33], [42, 837, 170514, 20.82], [45, 878, 204772, 22.31], [48, 918, 242981, 23.80]],
+    48: [[24, 707, 49247, 11.86], [27, 742, 67415, 13.33], [30, 776, 88921, 14.80], [33, 811, 113920, 16.28], [36, 845, 142567, 17.76], [39, 935, 178498, 19.27], [42, 975, 216174, 20.75], [45, 1016, 258238, 22.24], [48, 1056, 304874, 23.72]] };
+  const ADJ = {
+    36: [[24, 543, 36609, 11.82], [27, 573, 50267, 13.29], [30, 603, 66503, 14.77], [33, 633, 85453, 16.24], [36, 663, 107251, 17.72], [39, 748, 135514, 19.24], [42, 784, 164680, 20.73], [45, 820, 197374, 22.21], [48, 856, 233759, 23.70]],
+    48: [[24, 681, 48461, 11.80], [27, 711, 66201, 13.27], [30, 741, 87139, 14.73], [33, 771, 111410, 16.20], [36, 801, 139151, 17.68], [39, 886, 173980, 19.19], [42, 922, 210330, 20.67], [45, 958, 250828, 22.15], [48, 994, 295638, 23.63]] };
+  const MD_TOP = 5.5, MD_BOT = 6;
+  [36, 48].forEach(s => SPREAD[s].forEach(([h, A, I, yb]) => { const w = MDW[s], tw = h <= 36 ? 5.75 : 6.75;
+    mdAdd(`MassDOT B${s}-${h} spread`, { h, A, I, yb, bw: 2 * tw, btf: w, bbf: w, d: [MD_TOP, 0, MD_BOT, 0],
+      src: { owner: 'MassDOT', fam: 'spread', beam: `B${s}-${h}`, dwg: s === 36 ? '9.3.4' : '9.3.5', page: s === 36 ? 153 : 154, wNom: s, web: tw, top: MD_TOP, bot: MD_BOT, w,
+        strands: h <= 36 ? { dwg: '9.3.7', page: 156 } : { dwg: '9.3.8', page: 157 } } }); }));
+  [36, 48].forEach(s => ADJ[s].forEach(([h, A, I, yb]) => { const w = MDW[s], tw = h <= 36 ? 5 : 6;
+    mdAdd(`MassDOT B${s}-${h} adj.`, { box: true, h, w, A, I, yb, bw: 2 * tw, wall: MD_BOT, voidW: w - 2 * tw, voidH: h - MD_TOP - MD_BOT,
+      src: { owner: 'MassDOT', fam: 'adj', beam: `B${s}-${h}`, dwg: s === 36 ? '10.2.4' : '10.2.5', page: s === 36 ? 223 : 224, wNom: s, web: tw, top: MD_TOP, bot: MD_BOT, w, keys: { dwg: '10.2.9', page: 228 },
+        strands: h <= 36 ? { dwg: '10.2.7', page: 226 } : { dwg: '10.2.8', page: 227 } } }); }));
+  /* deck beams: [beam, series, h, voids [x, d] (dimensioned on the sheet), A, I, y_b] (dwg 10.1.4 / 10.1.5) */
+  [['S36-12', 36, 12, [], 417, 5033, 5.98], ['S36-15', 36, 15, [[-7.75, 8], [7.75, 8]], 419, 9419, 7.47], ['S36-18', 36, 18, [[-7.75, 10], [7.75, 10]], 464, 15963, 8.96],
+    ['S36-21', 36, 21, [[-7.75, 12], [7.75, 12]], 497, 24827, 10.45], ['S48-12', 48, 12, [], 561, 6761, 5.98], ['S48-15', 48, 15, [[-13.75, 8], [0, 8], [13.75, 8]], 548, 12593, 7.47],
+    ['S48-18', 48, 18, [[-14.25, 10], [0, 10], [14.25, 10]], 601, 21303, 8.97], ['S48-21', 48, 21, [[-14.25, 12], [0, 10], [14.25, 12]], 670, 33597, 10.47]]
+    .forEach(([b, s, h, vs, A, I, yb]) => { const w = MDW[s], ds = vs.map(v => v[1]), src = { owner: 'MassDOT', fam: vs.length ? 'slab' : 'solid', beam: b, dwg: s === 36 ? '10.1.4' : '10.1.5',
+      page: s === 36 ? 193 : 194, wNom: s, w, voids: vs.map(([x, d]) => ({ x, d })), keys: { dwg: '10.1.9', page: 198 }, strands: s === 36 ? { dwg: '10.1.7', page: 196 } : { dwg: '10.1.8', page: 197 } };
+      mdAdd(`MassDOT ${b}`, vs.length ? { deck: true, h, w, A, I, yb, bw: w - ds.reduce((p, q) => p + q, 0), voids: vs.length, voidD: Math.max(...ds), src }
+        : { deck: true, h, w, A, I, yb, bw: w, solid: true, src }); });
+
+  /* group(name): the girder picker's group (optgroup) of a library name, by owner (PS-37) */
+  const GROUP_MD = { nebt: 'MassDOT — NEBT (dwg 9.1.4)', nedbt: 'MassDOT — NEDBT (dwg 11.1.3)', nextf: 'MassDOT — NEXT F (dwg 9.2.3)', nextd: 'MassDOT — NEXT D (dwg 11.2.3)',
+    spread: 'MassDOT — spread box beams (dwg 9.3.4 / 9.3.5)', adj: 'MassDOT — adjacent box beams (dwg 10.2.4 / 10.2.5)', slab: 'MassDOT — deck beams (dwg 10.1.4 / 10.1.5)', solid: 'MassDOT — deck beams (dwg 10.1.4 / 10.1.5)' };
+  function group(name) {
+    if (Object.prototype.hasOwnProperty.call(MD, name)) return GROUP_MD[MD[name].src.fam];
+    if (STD[name]) return STD[name].box ? 'CTDOT — box beams (BDM plate 5.2.1b)' : 'CTDOT — voided slabs (BDM plates 5.1.1c / 5.1.2c)';
+    if (name === 'Custom') return 'Custom';
+    const e = typeof GIRDERS !== 'undefined' ? GIRDERS[name] : null;
+    if (e && e.next) return 'PCI Northeast — NEXT F (old library)';
+    if (e && e.deck) return 'Solid deck slabs (old library)';
+    return 'AASHTO / PCI — I-girders and bulb tees (old library)';
+  }
+  /* mdOf(g): the MassDOT entry [name, entry] of the engine's girder g (girderGross tags it: g.std), or null */
+  const mdOf = g => (g && typeof g.std === 'string' && Object.prototype.hasOwnProperty.call(MD, g.std) ? [g.std, MD[g.std]] : null);
+  /* nxW(S, e): a MassDOT NEXT's beam width from the girder spacing S (ft): NEXT D b_f = 12 S − 13 in (dwg 11.2.3 note 2), NEXT F 12 S (the
+     nominal width, dwg 9.2.3 note 2), within the sheet's minimum and maximum: { S, raw, bf } */
+  const nxW = (S, e) => { const raw = 12 * S - (e.src.gap || 0); return { S, gap: e.src.gap || 0, raw, bf: Math.min(e.wMax, Math.max(e.wMin, raw)) }; };
+
+  /* roundPoly(pts, rad, seg): the polygon pts with its corner i rounded to radius rad[i] (an arc of seg chords; 0: sharp) */
+  function roundPoly(pts, rad, seg) {
+    const out = [], n = pts.length;
+    for (let i = 0; i < n; i++) {
+      const r = rad[i] || 0, p = pts[i]; if (!r) { out.push(p); continue; }
+      const a = pts[(i - 1 + n) % n], b = pts[(i + 1) % n], u = [a[0] - p[0], a[1] - p[1]], v = [b[0] - p[0], b[1] - p[1]], lu = Math.hypot(u[0], u[1]), lv = Math.hypot(v[0], v[1]);
+      const ux = [u[0] / lu, u[1] / lu], vx = [v[0] / lv, v[1] / lv], th = Math.acos(Math.max(-1, Math.min(1, ux[0] * vx[0] + ux[1] * vx[1])));
+      const t = r / Math.tan(th / 2), p1 = [p[0] + ux[0] * t, p[1] + ux[1] * t], p2 = [p[0] + vx[0] * t, p[1] + vx[1] * t];
+      const bis = [ux[0] + vx[0], ux[1] + vx[1]], lb = Math.hypot(bis[0], bis[1]), dc = r / Math.sin(th / 2), c = [p[0] + bis[0] / lb * dc, p[1] + bis[1] / lb * dc];
+      const a1 = Math.atan2(p1[1] - c[1], p1[0] - c[0]); let dA = Math.atan2(p2[1] - c[1], p2[0] - c[0]) - a1; while (dA > Math.PI) dA -= 2 * Math.PI; while (dA < -Math.PI) dA += 2 * Math.PI;
+      for (let k = 0; k <= seg; k++) { const q = a1 + dA * k / seg; out.push([c[0] + r * Math.cos(q), c[1] + r * Math.sin(q)]); }
+    }
+    return out.map(q => [R2(q[0]), R2(q[1])]);
+  }
+  /* mdHalf(g, e): the right half of the drawn outline (x from the ℄, y up from the soffit; from the ℄ at the soffit (NEXT: at the flange
+     underside) to the ℄ at the top, as the engine's halfPolygon; callers mirror it); null: the engine's own (adjacent box, deck beams) */
+  function mdHalf(g, e) {
+    const f = e.src.fam, h = +g.h, c = 0.79;
+    if (f === 'nebt' || f === 'nedbt') { const [tt, tt2, tb, tb2] = e.d, bw = e.bw / 2, bb = e.bbf / 2, bt = e.btf / 2;
+      return roundPoly([[0, 0], [bb - c, 0], [bb, c], [bb, tb], [bw, tb + tb2], [bw, h - tt - tt2], [bt, h - tt], [bt, h], [0, h]], [0, 0, 0, 3.94, 7.87, 7.87, f === 'nebt' ? 0.79 : 0, 0, 0], 8); }
+    if (f === 'nextf' || f === 'nextd') { const s = 30, B = +e.B, Bt = e.src.stemTop, ft = e.flangeT, w = +g.btf / 2, k = 0.75;
+      return roundPoly([[0, h - ft], [s - Bt / 2, h - ft], [s - B / 2, k], [s - B / 2 + k, 0], [s + B / 2 - k, 0], [s + B / 2, k], [s + Bt / 2, h - ft], [w, h - ft], [w, h], [0, h]], [0, e.src.fillet, 0, 0, 0, 0, e.src.fillet, 0, 0, 0], 8); }
+    if (f === 'spread') { const w = e.src.w / 2, k = 0.75; return [[0, 0], [w - k, 0], [w, k], [w, h], [0, h]]; }
+    return null;
+  }
+  /* mdVoids(g, e): the spread box's cell (a rectangle; its 3 × 3 in chamfers not drawn) and the deck beams' voids; null: the engine's */
+  function mdVoids(g, e) {
+    const s = e.src;
+    if (s.fam === 'spread') { const vh = +g.h - s.top - s.bot; return [{ type: 'rect', x: 0, y: s.bot + vh / 2, w: s.w - 2 * s.web, h: vh }]; }
+    if (s.fam === 'slab') return s.voids.map(v => ({ type: 'circle', x: v.x, y: +g.h / 2, d: v.d }));
+    if (s.fam === 'solid' || s.fam === 'nebt' || s.fam === 'nedbt' || s.fam === 'nextf' || s.fam === 'nextd') return [];
+    return null;
+  }
+  /* wrapMD(): the engine's girderGrossBase, halfPolygon and sectionVoids wrapped for the MassDOT entries only (every other shape: the
+     engine's own result, untouched): the girder object is tagged g.std = its name (and a NEXT's g.nxw); a NEXT D gets the engine's width
+     from S − 13 in */
+  function wrapMD() {
+    const W = typeof window !== 'undefined' ? window : globalThis;
+    if (typeof girderGrossBase === 'function' && !girderGrossBase.__psbMD) {
+      const g0 = girderGrossBase;
+      const gb = function (inp) {
+        const nm = inp && inp.girder, e = typeof nm === 'string' && Object.prototype.hasOwnProperty.call(MD, nm) ? MD[nm] : null; if (!e) return g0(inp);
+        const nx = e.next ? nxW(+inp.S, e) : null;
+        const g = g0(nx && nx.gap && isFinite(nx.raw) ? Object.assign({}, inp, { S: nx.raw / 12 }) : inp);
+        g.std = nm; if (nx) g.nxw = nx;
+        return g;
+      };
+      Object.defineProperty(gb, '__psbMD', { value: true }); W.girderGrossBase = gb;
+    }
+    if (typeof halfPolygon === 'function' && !halfPolygon.__psbMD) {
+      const h0 = halfPolygon;
+      const hp = function (g) { const m = mdOf(g), q = m ? mdHalf(g, m[1]) : null; return q || h0(g); };
+      Object.defineProperty(hp, '__psbMD', { value: true }); W.halfPolygon = hp;
+    }
+    if (typeof sectionVoids === 'function' && !sectionVoids.__psbMD) {
+      const v0 = sectionVoids;
+      const sv = function (g) { const m = mdOf(g), q = m ? mdVoids(g, m[1]) : null; return q || v0(g); };
+      Object.defineProperty(sv, '__psbMD', { value: true }); Object.defineProperty(sv, '__psbSections', { value: true }); W.sectionVoids = sv;
+    }
+  }
+  /* mdNote(g): the Section properties tab's note of a MassDOT section (HTML; '' for any other): the sheet, what is drawn, what is not */
+  function mdNote(g) {
+    const m = mdOf(g); if (!m) return ''; const [nm, e] = m, s = e.src, f = s.fam, f2 = v => fx(v, 2);
+    const head = `${nm}: A, I and y<sub>b</sub> from MassDOT Bridge Manual Part II dwg ${s.dwg} (p. ${s.page}), ${s.beam}`;
+    if (f === 'nebt' || f === 'nedbt') return `${head}${s.ybPrinted ? ` (y<sub>b</sub> = ${f2(e.yb)} in: the sheet prints ${f2(s.ybPrinted)} in, a misprint; its y<sub>t</sub> = 33.60 in, the depth and S<sub>b</sub> = I / y<sub>b</sub> = 25,944 in³ give 46.40 in)` : ''}. Drawn with the sheet's flange tapers, web fillets and corner radii.`;
+    if (f === 'nextf' || f === 'nextd') { const x = g.nxw || {};
+      return `${head}: interpolated on the beam width b<sub>f</sub> = ${fx(+g.btf, 2)} in between ${e.wMin} and ${e.wMax} in (worked under Gross girder section${f === 'nextd' ? `; b<sub>f</sub> = 12 S − 13 in, the girder spacing less the 13 in closure, dwg ${s.dwg} note 2` : ''}); flange ${e.flangeT} in, stems ${f2(e.B)} in at the bottom to ${s.stemTop} in at the flange with R ${s.fillet} in fillets (drawn).`; }
+    if (f === 'spread') return `${head}. Computed as an I-girder (tributary deck width, haunch and the engine's type (k) live load distribution); drawn as the box: ${f2(s.w)} in wide, top slab ${s.top} in, bottom slab ${s.bot} in, webs ${f2(s.web)} in, the cell a ${f2(s.w - 2 * s.web)} × ${f2(+g.h - s.top - s.bot)} in rectangle (its 3 × 3 in chamfers not drawn: a larger void, conservative for A<sub>ct</sub> and the strand fit).`;
+    if (f === 'adj') return `${head}. Webs ${f2(s.web)} in, top slab ${s.top} in, bottom slab ${s.bot} in; the cell drawn as a ${f2(e.voidW)} × ${f2(e.voidH)} in rectangle (its 3 × 3 in chamfers, the ¾ in corner chamfers and the shear keys of dwg ${s.keys.dwg} not drawn).`;
+    return `${head}${s.voids.length ? `: voids ${s.voids.map(v => `Ø${fx(v.d, 0)} in at x = ${f2(v.x)} in`).join(', ')} on mid-depth (dimensioned on the sheet)` : ' (solid)'}; the shear keys of dwg ${s.keys.dwg} and the ¾ in chamfers not drawn.`;
+  }
+
   /* tbcNote(name): the "to be confirmed" note of a standard box beam / voided slab (engineer request 2026-11-14, PR A; the one exception to
      the no-pending-in-app rule): the plate the properties come from, the old library they replace (found inconsistent), the MassDOT section
      of the same size as the cross-check (XCHK; updated 2026-11-14 with PS-38 / PS-40); voided slabs: the void spacing, dimensioned on the
@@ -259,6 +422,6 @@
       + (box ? '' : ` The void spacing (void centres at ${xs(s.voids.map(v => v.x))} in from the ℄) is not dimensioned on the CTDOT plate: it is MassDOT's dimensioned spacing for this void size and width (dwg ${s.voidSrc.dwg}, p. ${s.voidSrc.page}; PS-40).`);
   }
 
-  install(); wrapVoids();
-  window.PSBSections = { STD, LEGACY, MAP, ORDER_BOX, ORDER_SLAB, NEXT_FIX, LIB, XCHK, xchk, uses, stamp, install, migrate, items, tags, text, retiredMsg, sig, withLegacy, src, tbcNote, DOT_J, dotJ, outline, slabOf, stdOf, engineOf };
+  install(); wrapVoids(); wrapMD();
+  window.PSBSections = { STD, LEGACY, MAP, ORDER_BOX, ORDER_SLAB, NEXT_FIX, LIB, XCHK, xchk, uses, stamp, MD, ORDER_MD, group, mdOf, mdHalf, mdVoids, mdNote, roundPoly, nxW, install, migrate, items, tags, text, retiredMsg, sig, withLegacy, src, tbcNote, DOT_J, dotJ, outline, slabOf, stdOf, engineOf };
 })();

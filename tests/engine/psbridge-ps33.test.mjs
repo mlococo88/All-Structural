@@ -24,7 +24,8 @@ const G = vm.runInContext('GIRDERS', W), IC = W.PSBInputCheck, J = v => JSON.par
 const project = (girder, rows, harp) => { const P = W.PSBModel.newProject(); P.base.girder = girder; P.base.rows = rows.map(r => ({ nd: 0, dbnd: 0, ...r })); P.base.harp = { n: 0, yEnd: 8, yMid: 4, frac: 0.4, ...(harp || {}) };
   P.base.ts = 6; P.xs.bays = [4, 4, 4, 4]; P.spans.lengths = [60]; return P; };
 const fitErrs = P => J(IC.collect(P).errors).filter(e => e.src === 'geometry' && /do not fit/.test(e.msg));
-const BOXES = Object.keys(G).filter(k => G[k].box), SLABS = Object.keys(G).filter(k => G[k].deck && G[k].voids);
+const CT = k => !W.PSBSections.MD[k];   // PS-37: the CTDOT shapes (the MassDOT ones: psbridge-massdot.test.mjs)
+const BOXES = Object.keys(G).filter(k => G[k].box && CT(k)), SLABS = Object.keys(G).filter(k => G[k].deck && G[k].voids && CT(k));
 
 test('PS-33 (1): the CTDOT standard box patterns (plates 5.2.2 / 5.2.3): rows at 2 in and 4 in fit every box; the void face 1.5 in, the outer face 2 in', () => {
   assert.equal(IC.COVER, 2); assert.equal(IC.VOID, 1.25); assert.equal(BOXES.length, 8);   // PS-39
