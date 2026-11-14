@@ -3467,6 +3467,66 @@ PR #1551: https://github.com/mlococo88/All-Structural/pull/1551
 - PS6-D1. As the steel app: the history is not stored (memory only; a reload starts with none), 100 steps, one step per project change, Save as's name change a step, opening a project / New / Import starts a new history.
 - PS6-D2. A change of the girder type and line shown only (P.design, the output tabs' choice; stored in the project) is not an undo step (as the steel app's girder shown, ui.g); an Undo restores the snapshot as it was, with the line shown then.
 - PS6-D3. The girder count notice's Undo is the header's Undo of that one step (so it can be redone); it is removed once another step is made or the history moves (Undo / Redo, open, New), where before it stayed on the newest notice.
+## 2026-11-14 — PR 8a: Summary girder elevation, one per girder type (picker), with the strand profile, ℓ_t / ℓ_d and the governing checks where they govern (display only)
+PR #1552: https://github.com/mlococo88/All-Structural/pull/1552
+### Request
+- PS Bridge catch-up to the Steel Bridge app, item 8, Summary elevation. Engineer's choice, corrected on 2026-11-14: one elevation per girder type, chosen with a picker, not one per span.
+- Each elevation is drawn for that type's governing line and span. It shows the girder elevation, the strand profile (draped, debonded, hold-down points), the transfer and development lengths, and the governing check of each kind marked where it governs, each linking to its check's tab. Steel's `SBDAlongGfx.summarySvg` is the reference.
+### What changed
+- New `ui/sumelev.js` (`window.PSBSumElev`):
+  - `model(M, P, k)` reads girder type k of the Summary model (`ui/summary.js model()`). Its governing line is the line of its largest group ratio, in its span. All values are that cell's engine values: L, h; the strand rows (y, n, debonded count and length); the draped strands (y_end, y_mid, hold-down points at frac × L); ℓ_t = R.ss.lt; ℓ_d = R.ldBonded (κ 1.6) and R.ldDebond (κ 2.0).
+  - Each group's governing check (`T.groups`, the worst over the type's lines, the line named) is placed at its station `q.loc`. Groups with no station (the owner's input limits) are listed only.
+  - `svg(m, W)`:
+    - the girder (vertical scale exaggerated) and the strands (debonded lengths dashed; draped strands and hold-down points);
+    - ℓ_t and ℓ_d bars under the girder from each end, and from each debond point;
+    - the checks as flags above the girder in rows that do not overlap, coloured by ratio (< 0.90, 0.90 to 1.00, > 1.00), the type's governing check outlined; each flag is a `data-sumgo` link (its tab and worked step with that type and line, the Summary's own link handling);
+    - dimensions: the hold-down distance, L, h.
+  - `html(M, o)` is the card "Girder elevation of each girder type" with the picker `#sumElevK`. It defaults to the type of the Summary's governing check; the choice is kept for the page session and not saved. `after(el, M, o)` draws the detail card and lists every group's check with its link.
+- `ui/summary.js`: `html()` adds the card after "Governing check of each group, per girder type" and keeps the model (`LAST.M`); `after()` draws it. CSS `.se-*`.
+- `index.html`: `ui/sumelev.js` is loaded before `ui/summary.js`. In the output change handler, the picker redraws the tab.
+- Tests:
+  - `tests/engine/psbridge-sumelev.test.mjs` (3 tests) covers every type of: a new project; three spans made continuous with pier checks, debonded rows and a third type; CTDOT owner limits (listed, no station); and box beams with no draped strands. It checks the governing line and span; L, h, ℓ_t, ℓ_d, the rows and the draped strands = the engine's; each group's ratio, line, station and link = the Summary model's; and one marker per check with a station.
+  - `psbridge-model.test.mjs`: the script list.
+  - `ps-bridge-figures.mjs`: the picker lists every type; the markers and the list; the title names the governing line; ℓ, L and h are drawn; the picker draws another type; a marker opens its tab; 1400 and 390 px.
+### Saved data (CLAUDE.md §5)
+- None. The picker's choice is not stored.
+### Governing provisions (CLAUDE.md §4)
+- None changed. Shown as the engine computes them: transfer length 5.9.4.3.1; development length 5.9.4.3.2 (κ = 1.6) and of debonded strands 5.9.4.3.3 (κ = 2.0).
+### Decisions (pending engineer review)
+- SE-D1. The type's governing line is the line of its largest group ratio. The checks of the other groups may govern on another line of the same type, and each marker names its line.
+- SE-D2. ℓ_t and ℓ_d are drawn from each girder end for the bonded strands and from each debond point for the debonded ones. The engine reports one ℓ_t (R.ss.lt) for all strands.
+- SE-D3. The groups with no station along the girder (the owner's input limits, e.g. f′ci) are listed under the figure, not marked on it.
+
+## 2026-11-14 — PR 8b: 3D view: View (whole bridge / girder line close-up, Zoom to), diagram overlays, Scale (display only)
+PR #1553: https://github.com/mlococo88/All-Structural/pull/1553
+### Request
+- PS Bridge catch-up to the Steel Bridge app, item 8, 3D view:
+  - Steel's View choices (close-up per girder);
+  - the diagram overlays (moment / shear envelopes from the results);
+  - the Scale control;
+  - readable labels.
+### What changed (`ui/view3d.js`, the Steel Bridge app's apps/steel-bridge/ui/view3d.js pattern: DG, V3B_DG, the close-up and V3B.focus)
+- New bar: View (Whole bridge / Girder line G1 … Gn close-up), Zoom to (close-up only), Diagram, Scale (0.25 to 4), + moment down. The choices are kept in `ui.v3d` (psb2.ui, the key the layers and the camera already use; nothing new in the project).
+- Close-up of line g:
+  - its girders in every span; its tributary deck strip (half the bays beside it, to the deck edge on an exterior line) with its barrier or sidewalk; its haunch and bearings; the diaphragms in the bays beside it; the continuity diaphragm cut to the strip;
+  - every strand of its girders: `geom(P, { strLine: g })`. The default `geom(P)` is unchanged: the strands of the type shown.
+  - Zoom to: the whole line; each span's left end, hold-down point (when draped), midspan and right end. The home view is closer.
+- Diagrams (`DG`, `series(R, d)`): Strength I and Service I moment envelopes, LL+IM moment envelope, DC moment, DW moment, Strength I shear envelope, LL+IM shear envelope, DC shear.
+  - The values are each girder type × line's engine result (`R.diagrams`, k-ft / kip at the engine's stations, x from the left ℄ bearing), through `ctx.res(k, g)`, which is the page's cached `cellR`.
+  - Each is drawn as a fence beside each girder drawn (+ moment down by default), with the peak values labelled (larger in the close-up, 1.2 × the label size in the whole view) and a pointer read-out.
+  - The `dg` layer toggle is added to the layer list.
+- `index.html`: `PSB3DUI.render(…, { …, res: (k, g) => cellR(PSBDesign.cellInputs(P, k, g)) })`.
+- Tests:
+  - `tests/engine/psbridge-3dviews.test.mjs` (2 tests). The close-up strands: only line g, every span, the same as the default view's for the type shown; the default is unchanged. Each Diagram choice equals the engine's `R.diagrams` columns at its stations (both branches, unit, L).
+  - `ps-bridge-figures.mjs`, at 1400 and 390 px: no diagram by default; Strength I fences beside every girder; the G1 close-up (2 girders, 4 fences, Zoom to targets, its strands); Zoom to moves the camera; the shear envelope; Scale and + moment down kept; the view kept on reload; psb2.* keys only.
+### Saved data (CLAUDE.md §5)
+- None in the project. `ui.v3d.mode / dg / dsc / eng` are new optional UI choices in the existing per-browser `psb2.ui` key (as `ui.v3d.lay` and `ui.v3d.cam`). An old `psb2.ui` without them opens on the whole bridge with no diagram.
+### Governing provisions (CLAUDE.md §4)
+- None changed. The diagrams are the engine's values; the combinations are as the engine forms them (Strength I with η and the owner's LL multiplier; Service I).
+### Decisions (pending engineer review)
+- 3D-D1. No diagram by default (Steel opens on Strength I moment). This keeps the default view as before and computes no other cell until asked.
+- 3D-D2. The diagrams are per girder line and span. For spans made continuous, the engine's diagrams of each span cell are shown (as the Analysis tab of that cell); the continuous unit is not redrawn as one curve.
+- 3D-D3. Close-up Zoom to targets: the span ends, the hold-down points and the midspans. The steel app's targets are its splices and bearings; this app has no splices.
 
 ## 2026-11-14 — PS-38 / PS-39 / PS-40: NEXT 28F I at 144 in, strand-to-void clearance 1.25 in, the CTDOT voided slabs' void spacing from the MassDOT sheets; projects saved before told once on open (CALCULATION CHANGE, §4; SAVED DATA, §5)
 PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM

@@ -198,5 +198,61 @@ for (const vw of [1400, 390]) {
   check(pg.errs.length === 0, `${tag}: console errors ${pg.errs.slice(0, 3).join(' | ')}`);
   await pg.b.close();
 }
+
+// ---------- 2026-11-14 (item 8a): the Summary's girder elevation, one per girder type (picker) ----------
+for (const vw of [1400, 390]) {
+  const tag = `elevation @ ${vw}`, pg = await open('ibeam', vw, 'sum'), { p } = pg;
+  await p.waitForSelector('#sumElevFig svg', { timeout: 20000 }).catch(() => {}); await p.waitForTimeout(500);
+  const rd = () => p.evaluate(() => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, A = window.PSBBridge.results(P, i => window.PSBHoldDown.compute(JSON.parse(JSON.stringify(i))));
+    const SM = window.PSBSummaryUI.model(P, A), k = +document.getElementById('sumElevK').value, m = window.PSBSumElev.model(SM, P, k), svg = document.querySelector('#sumElevFig svg');
+    return { types: SM.types.length, opts: document.querySelectorAll('#sumElevK option').length, k, label: m.label, g: m.g, marks: m.marks.length, drawn: svg ? svg.querySelectorAll('.se-mark').length : -1,
+      list: document.querySelectorAll('#sum-elev .se-list a[data-sumgo]').length, groups: m.marks.length + m.other.length, title: (document.querySelector('#sumElevFig h3') || {}).textContent || '',
+      txt: svg ? svg.textContent : '', sideways: document.documentElement.scrollWidth > window.innerWidth + 1 }; });
+  let r = await rd();
+  check(r.opts === r.types && r.types === 4, `${tag}: a picker of every girder type (${r.opts})`);
+  check(r.drawn === r.marks && r.marks >= 4 && r.list === r.groups, `${tag}: the governing check of each group marked (${r.drawn}) and listed (${r.list})`);
+  check(r.title.includes(`${r.label} on G${r.g}`), `${tag}: the type's governing line in the title (${r.title})`);
+  check(/ℓ/.test(r.txt) && /L = 110\.00 ft/.test(r.txt) && /h = 72\.0 in/.test(r.txt), `${tag}: ℓ_t / ℓ_d and the dimensions drawn`);
+  check(!r.sideways, `${tag}: no sideways scroll`);
+  if (args.shots) await (await p.$('#sum-elev')).screenshot({ path: path.join(args.shots, `sum-elev-${vw}.png`) });
+  const k2 = await p.evaluate(() => { const o = [...document.querySelectorAll('#sumElevK option')].map(x => x.value); return o.find(v => v !== document.getElementById('sumElevK').value); });
+  await p.selectOption('#sumElevK', k2); await p.waitForTimeout(500); const r2 = await rd();
+  check(String(r2.k) === k2 && r2.label !== r.label && r2.drawn === r2.marks, `${tag}: the picker draws another type (${r2.label} on G${r2.g})`);
+  if (vw === 1400) {
+    const go = await p.evaluate(() => { const g = document.querySelector('#sumElevFig .se-mark'); return g && g.getAttribute('data-sumgo'); });
+    await p.$eval('#sumElevFig .se-mark rect.dt-reg', e => { e.scrollIntoView({ block: 'center' }); e.dispatchEvent(new MouseEvent('click', { bubbles: true })); }); await p.waitForTimeout(600);
+    const tab = await p.evaluate(() => document.querySelector('#tabBar [aria-selected="true"]').dataset.otab);
+    check(go && (tab === go.split('|')[2] || go.split('|')[4] === '1'), `a marker opens its check's tab (${go} → ${tab})`);
+  }
+  check(pg.errs.length === 0, `${tag}: console errors ${pg.errs.slice(0, 3).join(' | ')}`);
+  await pg.b.close();
+}
+
+// ---------- 2026-11-14 (item 8b): the 3D view: View (whole bridge / girder line close-up), Zoom to, Diagram, Scale, + moment down ----------
+for (const vw of [1400, 390]) {
+  const tag = `3d @ ${vw}`, pg = await open('ibeam', vw, '3d'), { p } = pg;
+  await p.waitForSelector('#v3d-host canvas', { timeout: 20000 }).catch(() => {}); await p.waitForTimeout(1200);
+  const st = () => p.evaluate(() => Object.assign(window.PSB3DUI.state(), { ui: JSON.parse(localStorage.getItem('psb2.ui') || '{}').v3d || {}, dgTxt: (document.getElementById('v3d-dg') || {}).textContent || '', sideways: document.documentElement.scrollWidth > window.innerWidth + 1,
+    focus: !(document.getElementById('v3d_focus') || {}).hidden, cells: (() => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project; return window.PSBBridge.cells(P).length; })() }));
+  let r = await st();
+  check(r.counts && r.counts.girders === r.cells && r.fences === 0 && !r.focus, `${tag}: whole bridge, no diagram by default (${r.counts && r.counts.girders} girders)`);
+  await p.selectOption('#v3d_dg', 'mStr'); await p.waitForTimeout(1500); r = await st();
+  check(r.fences === 2 * r.cells && /Strength I envelope/.test(r.dgTxt) && r.ui.dg === 'mStr', `${tag}: Strength I moment fences beside every girder (${r.fences})`);
+  await p.selectOption('#v3d_mode', 'g1'); await p.waitForTimeout(1500); r = await st();
+  check(r.mode === 'g1' && r.counts.girders === 2 && r.fences === 4 && r.focus && r.tg.includes('s1h') && r.tg.includes('s2m') && r.ui.mode === 'g1', `${tag}: G1 close-up: its 2 girders, 4 fences, Zoom to ${r.tg && r.tg.join(',')}`);
+  check(r.counts.strands > 0 && /strand lines of G1/.test(r.info), `${tag}: the close-up's strands (${r.counts.strands})`);
+  const cam0 = await p.evaluate(() => window.PSB3DUI.camera()); await p.selectOption('#v3d_focus', 's1h'); await p.waitForTimeout(400); const cam1 = await p.evaluate(() => window.PSB3DUI.camera());
+  check(JSON.stringify(cam0.t) !== JSON.stringify(cam1.t), `${tag}: Zoom to the hold-down point moves the camera`);
+  await p.selectOption('#v3d_dg', 'vStr'); await p.waitForTimeout(1200); r = await st(); check(/Shear: Strength I/.test(r.dgTxt) && r.fences === 4, `${tag}: shear envelope`);
+  await p.$eval('#v3d_dsc', e => { e.value = '2'; e.dispatchEvent(new Event('change', { bubbles: true })); }); await p.waitForTimeout(800); r = await st(); check(r.ui.dsc === 2 && r.fences === 4, `${tag}: Scale kept (${r.ui.dsc})`);
+  await p.click('#v3d_eng'); await p.waitForTimeout(800); r = await st(); check(r.ui.eng === false, `${tag}: + moment down off kept`);
+  await p.reload(); await p.waitForSelector('#v3d-host canvas', { timeout: 20000 }).catch(() => {}); await p.waitForTimeout(1500); r = await st();
+  check(r.mode === 'g1' && r.fences === 4 && r.ui.dg === 'vStr', `${tag}: the view and diagram kept on reload`);
+  check(!r.sideways, `${tag}: no sideways scroll`);
+  if (args.shots) await (await p.$('#v3dHost')).screenshot({ path: path.join(args.shots, `3d-closeup-${vw}.png`) });
+  const keys = Object.keys(await lsSnap(p)); check(keys.every(k => /^psb2\./.test(k) || k === '__psb2_probe'), `${tag}: keys ${keys.join(',')}`);
+  check(pg.errs.length === 0, `${tag}: console errors ${pg.errs.slice(0, 3).join(' | ')}`);
+  await pg.b.close();
+}
 console.log(`${checks} checks, ${failures} failed`);
 process.exit(failures ? 1 : 0);
