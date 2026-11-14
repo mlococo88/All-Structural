@@ -104,8 +104,10 @@
      place at install (no engine file edited); withLegacy puts the old value back (the old app's results of an imported design). */
   const NEXT_FIX = [{ name: 'NEXT 28F', at: 'pMax', key: 'I', old: 88218, now: 92836, w: 144, dwg: '9.2.3', page: 124 }];
   /* LIB: the section library revision of P.secLib (optional project field, added 2026-11-14 with PS-38 / PS-40): a project opened without it
-     (or below LIB) that uses a section whose values changed since (NEXT_FIX; a voided slab's void spacing, PS-40) is told so once on open
-     (migrate: a 'rev' item in P.legacySection); P.secLib = LIB is then written, and a new project has it (PSBModel.newProject). */
+     (or below LIB) that uses a section whose values changed since (NEXT_FIX; a CTDOT voided slab's void spacing, PS-40) is told so once on
+     open (migrate: a 'rev' item in P.legacySection) and P.secLib = LIB is written. It is written only on a project that uses such a section
+     (stamp: on open, and when the project is written, PSBModel.exportJSON, i.e. the section was chosen with today's library), so the stored
+     text of any other project is not changed by opening it; a new project has it (PSBModel.newProject). */
   const LIB = 2;
 
   /* install(): GIRDERS with the old box / voided slab entries replaced, the order kept: I-girders, NEXT, the boxes (BI–BIV, 36 then 48 per
@@ -175,7 +177,7 @@
       if (f) rev.push({ kind: 'rev', rev: 'PS-38', where, label, from: nm, to: nm, old: { [f.key]: f.old, w: f.w }, now: { [f.key]: f.now, w: f.w } });
       const e = STD[nm]; if (e && e.deck && e.src.voidOld) rev.push({ kind: 'rev', rev: 'PS-40', where, label, from: nm, to: nm, old: { voids: e.src.voidOld.slice() }, now: { voids: e.src.voids.map(v => v.x) } }); };
     two('base', 'Base design', P.base.girder); tys.forEach(T => two('type:' + T.id, `Girder type ${T.label || T.id}`, T.ovr.girder));
-    P.secLib = LIB;
+    stamp(P);
     if (!found.length && !rev.length) return '';
     if (!isObj(P.legacySection) || !Array.isArray(P.legacySection.items)) P.legacySection = { decision: found.length ? 'PS-31 (engineer 2026-11-14)' : 'PS-38 / PS-40 (engineer 2026-11-14)', items: [] };
     found.concat(rev).forEach(it => { if (!P.legacySection.items.some(q => q.where === it.where && q.from === it.from && (q.rev || '') === (it.rev || ''))) P.legacySection.items.push(it); });
@@ -183,6 +185,11 @@
     const n2 = rev.length ? `Girder section values revised since this project was saved (${[...new Set(rev.map(it => it.rev))].join(', ')}): ${rev.map(it => `${it.label} "${it.from}" (${it.rev === 'PS-38' ? 'I at 144 in' : 'void spacing'})`).join('; ')}.` : '';
     return `${[n1, n2].filter(Boolean).join(' ')} See the notice above the results.`;
   }
+  /* uses(P): the project's base design or a girder type's own girder is a section revised in LIB (NEXT_FIX; a CTDOT voided slab, PS-40);
+     stamp(P): P.secLib = LIB on such a project (nothing on any other) */
+  const revised = nm => typeof nm === 'string' && (NEXT_FIX.some(f => f.name === nm) || !!(STD[nm] && STD[nm].src && STD[nm].src.voidOld));
+  const uses = P => isObj(P) && isObj(P.base) && (revised(P.base.girder) || (Array.isArray(P.types) ? P.types : []).some(T => isObj(T) && isObj(T.ovr) && revised(T.ovr.girder)));
+  function stamp(P) { if (uses(P) && !(+P.secLib >= LIB)) P.secLib = LIB; return P; }
   /* tags(P): the decisions of the project's items ('PS-31', 'PS-38', 'PS-40'), for the notice titles */
   const tags = P => [...new Set(items(P).map(it => it.rev || 'PS-31'))].join(', ');
   const items = P => (isObj(P) && isObj(P.legacySection) && Array.isArray(P.legacySection.items) ? P.legacySection.items.filter(isObj) : []);
@@ -257,5 +264,5 @@
   }
 
   install(); wrapVoids();
-  window.PSBSections = { STD, LEGACY, MAP, ORDER_BOX, ORDER_SLAB, NEXT_FIX, LIB, XCHK, xchk, install, migrate, items, tags, text, retiredMsg, sig, withLegacy, src, tbcNote, DOT_J, dotJ, outline, slabOf, stdOf, engineOf };
+  window.PSBSections = { STD, LEGACY, MAP, ORDER_BOX, ORDER_SLAB, NEXT_FIX, LIB, XCHK, xchk, uses, stamp, install, migrate, items, tags, text, retiredMsg, sig, withLegacy, src, tbcNote, DOT_J, dotJ, outline, slabOf, stdOf, engineOf };
 })();

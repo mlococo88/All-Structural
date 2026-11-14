@@ -53,9 +53,11 @@
                       2026-11-14 (PS-38 / PS-40): items { kind: 'rev', rev: 'PS-38' | 'PS-40', where, label, from, to (the same name), old, now }
                       record a section whose library values changed since the project was saved (NEXT 28F I at 144 in; a CTDOT voided slab's
                       void spacing): written once on open when secLib is below the library's (below).
-     secLib:  number  added 2026-11-14 (PS-38 / PS-40), optional within version 1: the section library revision the project was last opened
-                      with (engine/sections.js LIB, 2). Absent (every project saved before): the open-time check above runs once and writes it;
-                      a new project (newProject) has it. Nothing reads it for a calculation.
+     secLib:  number  added 2026-11-14 (PS-38 / PS-40), optional within version 1: the section library revision (engine/sections.js LIB, 2)
+                      of a project that uses a revised section (the NEXT 28F, a CTDOT voided slab). Absent (every project saved before): the
+                      open-time check above runs once and writes it; written also when such a project is written (exportJSON: the section
+                      chosen with today's library); a new project (newProject) has it. Any other project's stored text is not changed by
+                      opening it. Nothing reads it for a calculation.
    }
    Needs the moved engine (engine/pbd-*.js) loaded first for base; without it (a test of this file alone) base is left as it is.
    From PR 2b the engine computes the design girder from base and the bridge values (engine/design.js). */
@@ -161,7 +163,10 @@
   }
 
   /* exportJSON(p): the file text (pretty-printed). importJSON(text): { ok, project, errors, warnings, notes } or { ok: false, error }. */
-  function exportJSON(p) { return JSON.stringify(p, null, 2); }
+  function exportJSON(p) {
+    if (typeof window !== 'undefined' && window.PSBSections && window.PSBSections.stamp) window.PSBSections.stamp(p);   // PS-38 / PS-40: secLib on a project that uses a revised section (chosen with today's library)
+    return JSON.stringify(p, null, 2);
+  }
   function importJSON(text) {
     let obj;
     try { obj = JSON.parse(text); } catch (e) { return { ok: false, error: `Not a JSON file: ${e.message}` }; }

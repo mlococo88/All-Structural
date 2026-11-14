@@ -77,29 +77,34 @@ test('PS-40: void centres = MassDOT dwg 10.1.4 / 10.1.5; A, I, y_b unchanged; J 
 
 test('PS-38 / PS-40 saved data: the open-time notice once (rev items, secLib), a type\'s own girder, new projects none, idempotent; Report §2', () => {
   // a project saved before (no secLib) on the NEXT 28F
+  const old = X => JSON.stringify(X, null, 2);   // a file written before this change (exportJSON now stamps secLib)
   const P = proj('NEXT 28F'); assert.equal(P.secLib, undefined);
-  const t = W.PSBModel.exportJSON(P), r = W.PSBModel.importJSON(t), Q = r.project;
+  const t = old(P), r = W.PSBModel.importJSON(t), Q = r.project;
   assert.equal(Q.secLib, 2); assert.equal(Q.base.girder, 'NEXT 28F');
   assert.deepEqual(J(Q.legacySection), { decision: 'PS-38 / PS-40 (engineer 2026-11-14)', items: [{ kind: 'rev', rev: 'PS-38', where: 'base', label: 'Base design', from: 'NEXT 28F', to: 'NEXT 28F', old: { I: 88218, w: 144 }, now: { I: 92836, w: 144 } }] });
   assert.ok(r.notes.join(' ').includes('Girder section values revised since this project was saved (PS-38): Base design "NEXT 28F" (I at 144 in). See the notice above the results.'), r.notes.join(' '));
   assert.equal(S.tags(Q), 'PS-38');
   assert.match(S.text(Q.legacySection.items[0]), /^Base design: section value corrected \(PS-38\): "NEXT 28F" at the maximum width \(144 in nominal\): I 88,218 → 92,836 in⁴ \(MassDOT Bridge Manual Part II dwg 9\.2\.3, p\. 124;/);
-  assert.equal(t, W.PSBModel.exportJSON(P), 'the stored text not changed by reading it');
+  assert.equal(t, old(P), 'the stored text not changed by reading it');
   const r2 = W.PSBModel.importJSON(W.PSBModel.exportJSON(Q)); assert.deepEqual(J(r2.project.legacySection), J(Q.legacySection)); assert.equal(r2.notes.length, 0, 'once');
   // a new project: secLib = 2, no notice when it is saved with the NEXT 28F and opened again
   const N = W.PSBModel.newProject(); assert.equal(N.secLib, 2); N.base.girder = 'NEXT 28F';
   const rn = W.PSBModel.importJSON(W.PSBModel.exportJSON(N)); assert.equal(rn.project.legacySection, undefined); assert.equal(rn.notes.length, 0);
-  // a project from before on another shape: secLib written, nothing else
-  const rb = W.PSBModel.importJSON(W.PSBModel.exportJSON(proj('PCI BT-72'))); assert.equal(rb.project.secLib, 2); assert.equal(rb.project.legacySection, undefined); assert.equal(rb.notes.length, 0);
+  // a project from before on another shape: nothing written (its stored text unchanged by opening and writing it); the NEXT 28F chosen
+  // later with today's library: exportJSON writes secLib, no notice when it is opened again
+  const B0 = proj('PCI BT-72'), rb = W.PSBModel.importJSON(old(B0)); assert.equal(rb.project.secLib, undefined); assert.equal(rb.project.legacySection, undefined); assert.equal(rb.notes.length, 0);
+  assert.equal(JSON.parse(W.PSBModel.exportJSON(rb.project)).secLib, undefined, 'not written');
+  rb.project.base.girder = 'NEXT 28F'; const tb = W.PSBModel.exportJSON(rb.project); assert.equal(JSON.parse(tb).secLib, 2);
+  const rb2 = W.PSBModel.importJSON(tb); assert.equal(rb2.notes.length, 0); assert.equal(rb2.project.legacySection, undefined);
   // a voided slab (base) and the NEXT 28F as a girder type's own girder
   const P2 = proj('AASHTO SIV-48 (21in)', X => { X.types = W.PSBBridge.newTypes(X); X.types[1].ovr.girder = 'NEXT 28F'; });
-  const Q2 = W.PSBModel.importJSON(W.PSBModel.exportJSON(P2)).project;
+  const Q2 = W.PSBModel.importJSON(old(P2)).project;
   assert.deepEqual(J(Q2.legacySection.items.map(i => [i.rev, i.where, i.from, i.old, i.now])), [['PS-40', 'base', 'AASHTO SIV-48 (21in)', { voids: [-14, 0, 14] }, { voids: [-14.25, 0, 14.25] }],
     ['PS-38', `type:${P2.types[1].id}`, 'NEXT 28F', { I: 88218, w: 144 }, { I: 92836, w: 144 }]]);
   assert.equal(S.tags(Q2), 'PS-40, PS-38');
   assert.match(S.text(Q2.legacySection.items[0]), /^Base design: void spacing of "AASHTO SIV-48 \(21in\)" revised \(PS-40\): void centres 0, ±14 → 0, ±14\.25 in from the ℄ \(dimensioned on MassDOT Bridge Manual Part II dwg 10\.1\.5, p\. 194;/);
   // a PS-31 migration in the same open (21×48 voided → SIV-48): told once, by PS-31
-  const Q3 = W.PSBModel.importJSON(W.PSBModel.exportJSON(proj('Deck slab 21×48 (voided)'))).project;
+  const Q3 = W.PSBModel.importJSON(old(proj('Deck slab 21×48 (voided)'))).project;
   assert.deepEqual(J(Q3.legacySection.items.map(i => [i.rev || 'PS-31', i.from, i.to])), [['PS-31', 'Deck slab 21×48 (voided)', 'AASHTO SIV-48 (21in)']]);
   // the notice's dismissal key: the PS-31 items' as before, a rev item adds its decision
   assert.equal(S.sig(Q2), `base|AASHTO SIV-48 (21in)|AASHTO SIV-48 (21in)|PS-40;type:${P2.types[1].id}|NEXT 28F|NEXT 28F|PS-38`);
