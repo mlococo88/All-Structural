@@ -3238,7 +3238,7 @@ PR #1545: https://github.com/mlococo88/All-Structural/pull/1545
 - None.
 
 ## 2026-11-14 — Loads & LLDF cross-section and the Report's figure: the real girder sections, deck, barriers, traffic faces and d_e (display only)
-PR: (link below)
+PR #1547: https://github.com/mlococo88/All-Structural/pull/1547
 ### Request
 - PS Bridge catch-up to the Steel Bridge app, item 2. Draw each line's actual section at its offset: I-girders, bulb-tees, NEXT (both stems), box beams with their voids, voided and solid slabs. Show the deck and haunch, the barriers and sidewalks of `xs.dl`, the traffic faces and d_e of each side, all dimensioned. Use true scale, and keep the Report's figure the same drawing.
 ### Problem
