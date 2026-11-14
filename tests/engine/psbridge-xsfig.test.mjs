@@ -10,6 +10,7 @@ import { loadShared, test, ROOT } from './harness.mjs';
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
 const W = loadShared('steps.js', ...PBD, ...['sections', 'model', 'rigid', 'lldf-fg', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl'].map(n => path.join(APP, `engine/${n}.js`)), ...['vizkit', 'strands', 'view3d', 'xsfig'].map(n => path.join(APP, `ui/${n}.js`)));
+W.PSBSections.install();   // the corrected box / slab library, as the page installs it
 const J = v => JSON.parse(JSON.stringify(v));
 const close = (a, b, msg, tol = 1e-9) => assert.ok(Math.abs(a - b) <= tol * Math.max(1, Math.abs(b)), `${msg}: ${a} vs ${b}`);
 function project(o) {
@@ -62,13 +63,13 @@ test('xsfig: no cross-section barriers (project saved before them): the entered 
   m.faces.forEach(f => { close(f.de, 1.25, 'entered d_e'); assert.match(f.src, /entered/); });
   close(m.app.find(a => a.kind === 'bar').x1 - m.app.find(a => a.kind === 'bar').x0, +P.base.deck.bBar || 0, 'barrier = base bBar');
 });
-test('xsfig: NEXT 36F (both stems), box BIII-36 (void, no haunch), voided slab (two voids), solid slab', () => {
+test('xsfig: NEXT 36F (both stems), box BIII-36 (void, no haunch), voided slab SIV-48 (its voids), solid slab', () => {
   const N = project({ bays: [10, 10, 10, 10], base: { girder: 'NEXT 36F', ts: 6 } }), mn = common(N, 1);
   assert.equal(mn.girders[0].poly.length, 16, 'NEXT: two stems and the flange'); assert.equal(mn.girders[0].kind, 'next');
   const B = project({ bays: [3, 3, 3, 3, 3], ohL: 1.5, ohR: 1.5, base: { girder: 'AASHTO BIII-36 (39in)', ts: 0 } }), mb = common(B, 1);
   assert.ok(mb.girders.every(q => q.kind === 'box' && q.voids.length >= 1)); assert.equal(mb.haunch.length, 0); close(mb.ts, 0, 'no topping');
-  const V = project({ bays: [4, 4, 4], ohL: 2, ohR: 2, base: { girder: 'Deck slab 21×48 (voided)', ts: 5 } }), mv = common(V, 1);
-  assert.ok(mv.girders.every(q => q.voids.length === 2 && q.kind === 'deck'));
+  const V = project({ bays: [4, 4, 4], ohL: 2, ohR: 2, base: { girder: 'AASHTO SIV-48 (21in)', ts: 5 } }), mv = common(V, 1);
+  assert.ok(mv.girders.every(q => q.voids.length >= 2 && q.kind === 'deck'), 'voided slab: its voids');
   const S = project({ bays: [4, 4, 4], ohL: 2, ohR: 2, base: { girder: 'Deck slab 18×48 (solid)', ts: 5 } }), ms = common(S, 1);
   assert.ok(ms.girders.every(q => q.voids.length === 0 && q.kind === 'solid'));
 });

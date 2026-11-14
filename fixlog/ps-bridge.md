@@ -3236,3 +3236,35 @@ PR #1545: https://github.com/mlococo88/All-Structural/pull/1545
 - See the PR: check-syntax, the engine tests, the three PS Bridge smokes and harness B (normal) unchanged in counts; the Summary screenshot shows "Continuity" and its value apart.
 ### Decisions (pending engineer review)
 - None.
+
+## 2026-11-14 — Loads & LLDF cross-section and the Report's figure: the real girder sections, deck, barriers, traffic faces and d_e (display only)
+PR: (link below)
+### Request
+- PS Bridge catch-up to the Steel Bridge app, item 2. Draw each line's actual section at its offset: I-girders, bulb-tees, NEXT (both stems), box beams with their voids, voided and solid slabs. Show the deck and haunch, the barriers and sidewalks of `xs.dl`, the traffic faces and d_e of each side, all dimensioned. Use true scale, and keep the Report's figure the same drawing.
+### Problem
+- `ui/loads.js` `figure()` drew a fixed 1.2 × 3 ft rectangle for every line, with a 0.7 ft deck slab and no barriers or d_e. The Report reuses the tab's drawing as its Figure 4.1.
+### What changed
+- New `ui/xsfig.js` (`window.PSBXsFig`; loaded after `ui/view3d.js` in index.html):
+  - `model(P, s)` (no DOM): the girders of span s from `PSB3DUI.geom(P)`. That gives the cell's engine inputs, `girderGross`, `halfPolygon` and `sectionVoids`, i.e. the shape library's outline and voids. They are mirrored about each line's offset from the left deck edge (`PSBModel.girderOffsets`).
+  - The deck t_s (the largest in the span) runs from edge to edge, with its soffit on the deepest girder + haunch. A haunch is drawn over each top flange; boxes and slabs get none, as the engine.
+  - Barriers come from `xs.dl.barL/R.bw`, or from `base.deck.bBar` without `xs.dl`. Sidewalks are `xs.dl.swL/R` w × t, measured from the deck edge as `engine/bridge-dl.js dead()` takes them. Lines with no type in the span are listed.
+  - Traffic faces and d_e use `PSBDesign.deOf(P, g)` when the project has the cross-section barriers, else the d_e entered for the type on that line.
+  - `svg(P, s, W, o)` draws at one scale across and up. The span's sections get their type colours, the line shown is outlined, voids are white, and an absent line is a dashed ℄. Dimensions: the chain of overhangs and bays under the girders, d_e of each side to the dashed traffic face, the deck width, and a t_s / haunch callout. Every item has a hover read-out. `legend(m)` gives the caption.
+- `ui/loads.js` `figure(ctx, W)`:
+  - Before: `S.rect(0, 0, Wd, t, 'dt-cc'); off.forEach((x, i) => { S.rect(x - 0.6, -hg, x + 0.6, 0, …`
+  - After: `const d = window.PSBDesign.sel(ctx.P), q = window.PSBXsFig.svg(ctx.P, d.s, W, { shown: d.g }); return { html: q.svg, nar: q.nar };`
+  - The card's title, subtitle, hint and caption are updated; the caption links to the Cross-section and Girders & strands tabs. The Report's Figure 4.1 is the same drawing (`ui/report.js` figures() unchanged).
+- Tests: `tests/engine/psbridge-xsfig.test.mjs` (5 tests) checks each outline point against halfPolygon, the voids, the offsets, the deck soffit and haunch, the faces at d_e = deOf, the entered d_e without `xs.dl`, NEXT, box, voided and solid slab, two spans with different shapes, and a missing line. New smoke `tests/smoke/ps-bridge-figures.mjs`: four bridges at 1400 and 390 px, the outlines, voids, the line shown, the d_e labels, the deck label, true scale, the caption, the Report figure, keys and console.
+### Saved data (CLAUDE.md §5)
+- None: no key or format; the figure reads the project only.
+### Governing provisions (CLAUDE.md §4)
+- None changed. d_e is shown as the engine takes it (AASHTO LRFD 10th Ed. Art. 4.6.2.2.1; PS-20); nothing is computed for a result.
+### Check case
+- New project (5 PCI BT-72 at 9 ft, overhangs 3 ft, barriers 1.75 ft): d_e = 3 − 1.75 = 1.25 ft at G1 and G5 (deOf). The deck is 42 ft by 8 in, the haunch 2 in over the 42 in top flange. The drawn deck's width / depth ratio is 42 × 12 / 8 = 63.0 (true scale).
+- With a 6 ft × 12 in right sidewalk and a 3 ft overhang: the face is at the curb, 6 ft in, so d_e = 3 − 6 = −3.00 ft (the girder ℄ is outside the face). The figure shows it.
+### Decisions (pending engineer review)
+- XS-D1. The barrier height (32 in) and its profile (the inner face sloped) are schematic: the project stores only the width at the deck (= the traffic face). The caption says so.
+- XS-D2. The section drawn is the span of the line shown on the output tabs (`PSBDesign.sel`), looking ahead. Other spans are drawn when another line is chosen.
+- XS-D3. A sidewalk runs from the deck edge (x 0 … w), as `engine/bridge-dl.js` loads it, with the barrier drawn on top of it at the edge. The 3D view (ui/view3d.js) places the sidewalk inside the barrier instead. That is display only, and was left as it is (one tool per change; noted here).
+### Other copies
+- None.

@@ -41,6 +41,7 @@
         poly: sideR.concat(sideL), voids: (q.voids || []).map(v => Object.assign({}, v, { x: x + v.x, y: yb + v.y })), col: TCOL[q.k % TCOL.length] });
       if (q.th > 0) out.haunch.push({ g: q.g, x0: x - q.top / 2, x1: x + q.top / 2, y0: yb + q.h, y1: yD });
     });
+    out.girders.sort((a, b) => a.g - b.g);
     for (let g = 1; g <= nb; g++) if (!gs.some(q => q.g === g)) out.missing.push({ g, x: off[g - 1] });
     // barriers and sidewalks (Cross-section tab, P.xs.dl; without it the base design's barrier base width, in)
     const dl = P.xs.dl;
@@ -98,7 +99,8 @@
     const yA = Math.max(m.yTop, ...m.app.map(a => a.y1));
     m.faces.forEach(f => { S.line(f.x, m.yTop, f.x, yA + 6, 'dt-tf');
       const a = Math.min(f.x, f.xg), b = Math.max(f.x, f.xg), lab = `d_e = ${f2(f.de, 2)} ft`;
-      S.dimH(a, b, yA, 16, lab, { yr: m.yTop, sz });
+      if (b - a >= 1) S.dimH(a, b, yA, 16, lab, { yr: m.yTop, sz });
+      else S.text(f.x, yA, lab, { a: f.side === 'L' ? 'start' : 'end', dx: f.side === 'L' ? 4 : -4, dy: -10, sz });   // d_e ≈ 0: the face at the girder ℄
       S.region(a, m.yTop, b, yA, `G${f.g}: d_e = ${f2(f.de, 3)} ft, ${f.side === 'L' ? 'left' : 'right'} traffic face (${f.src}); positive when the girder ℄ is inside the face`); });
     // the deck width over all
     S.dimH(0, m.Wd, yA, nar ? 44 : 46, `Deck ${ft(m.Wd)}`, { yr: m.yTop, sz });
