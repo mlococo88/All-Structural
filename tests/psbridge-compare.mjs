@@ -50,6 +50,9 @@
 //   with the old entry are logged (before / after). The old page is opened on the inputs with the old library name. --import: the old app's
 //   data hold the old name; the import summary must say the results are the same (the import, with the old app's section values) and show
 //   the section-corrected alert (#lgSec, old → new name); the imported project's inputs = the case's (the corrected name).
+//   PS-34 (2026-11-14): the pier block's family thickness of a NEXT / box / slab (ps34.t, engine/pierblock.js; the old app's t_bf is the
+//   I-girder bottom flange) is compared with the thickness worked here from the old app's girder (NEXT h − t_f, box the bottom slab, voided
+//   slab (h − D)/2, solid slab h); every other value with the old app, as before.
 // Exit code: 0 every value equal, 1 a difference, 2 an error (a page did not load, a console error).
 import fs from 'fs';
 import path from 'path';
