@@ -111,6 +111,33 @@
   }
   TOOLS.unshift({ tool: 'steel-bridge-app', label: 'Steel Bridge Design (new app)', name: 'Steel Bridge Design (new app)', href: 'apps/steel-bridge/index.html',
     key: 'sbd2.lib.index', toFile: t => t, view: sbd2View });   // card order: before Moving Load Generator; its own list (items by id): the file is the stored item text (= Export JSON)
+  /* psb2View(storage) (PS5-D3, 2026-11-14): apps/ps-bridge's list, the same structure as the Steel Bridge app's (its engine/library.js is an
+     adapted copy: psb2.lib.index { schema: 'psb2.library', items: [{ id, name, number, saved, size }] } + one key psb2.lib.p.<id> per item,
+     holding the Export JSON text), by name as the app's own sync (apps/ps-bridge/index.html ghStore) sees it: each name is its newest item.
+     A copy of sbd2View above with the app's keys and name (sbd2View is unchanged). Reads only. */
+  function psb2View(storage) {
+    const IDX = 'psb2.lib.index', PRE = 'psb2.lib.p.';
+    function idx() {
+      let raw = null; try { raw = storage ? storage.getItem(IDX) : null; } catch (e) { return { ok: false, error: 'storage', items: [] }; }
+      if (raw == null || raw === '') return { ok: true, items: [] };
+      try { const o = JSON.parse(raw); if (o && o.schema === 'psb2.library' && Array.isArray(o.items)) return { ok: true, items: o.items.filter(i => i && typeof i.id === 'string') }; } catch (e) { /* below */ }
+      return { ok: false, error: 'unreadable', items: [] };
+    }
+    function byName() { const r = idx(), m = new Map();
+      r.items.slice().sort((a, b) => a.saved < b.saved ? 1 : a.saved > b.saved ? -1 : 0).forEach(i => { if (!m.has(i.name)) m.set(i.name, i); });
+      return { r, m }; }
+    const no = () => ({ ok: false, error: 'readonly', message: 'Open Prestressed Bridge Design (new app) to change its saved projects.' });
+    return { key: IDX,
+      read: () => { const r = idx(); return r.ok ? { ok: true, map: {} } : { ok: false, error: r.error, map: {} }; },
+      list: () => [...byName().m.values()].map(i => ({ name: i.name, saved: i.saved && i.saved > '1971' ? i.saved : null, size: i.size || 0 })),
+      has: n => byName().m.has(n),
+      item: n => { const i = byName().m.get(n); if (!i) return undefined; let t = null; try { t = storage.getItem(PRE + i.id); } catch (e) { t = null; } return t == null ? undefined : t; },
+      get: () => null, save: no, duplicate: no, rename: no, remove: no };
+  }
+  // card order: right after the Steel Bridge app's card. tool / label / toFile = the app's own ctx.cloud (apps/ps-bridge/index.html projectBar:
+  // tool 'ps-bridge-app', label 'Prestressed Bridge Design (new app)', toFile t => t: the file is the stored item text = Export JSON)
+  TOOLS.splice(TOOLS.findIndex(e => e.tool === 'steel-bridge-app') + 1, 0, { tool: 'ps-bridge-app', label: 'Prestressed Bridge Design (new app)',
+    name: 'Prestressed Bridge Design (new app)', href: 'apps/ps-bridge/index.html', key: 'psb2.lib.index', toFile: t => t, view: psb2View });
   /* sbdPairView(storage) (STDS-G, 2026-11-06): Steel Bridge Design's saved projects. One project = the modules' part in
      girderdetail_projects_v1 and Preliminary sizing's part in plateline_projects_v1, under the same name (both keys and formats as
      before). By name, as the tool's own store (Steel Bridge Design.html sbdPairStore) sees them: item = { gd?: <first list's item>,
