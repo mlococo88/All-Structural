@@ -2081,7 +2081,7 @@ index fc6b5ce..ef8084a 100644
 ```
 
 ## 2026-11-14 — PS-27: the NEXT strands drawn in the two stems (strand pattern, Section properties and Stresses graphics; the Report's figures) — the old app's strand positions ported (display only; no calculation change)
-PR: (this PR)
+PR #1532: https://github.com/mlococo88/All-Structural/pull/1532
 ### Request
 - Engineer report (2026-11-13): "Look at the graphic for the NEXT beam section and make sure the strands are actually within the beam webs. This was correct in the psgirder app."
 ### Problem
