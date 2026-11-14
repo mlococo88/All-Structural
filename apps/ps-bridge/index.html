@@ -65,6 +65,10 @@
     '../../shared/steps.js', // the worked-step format and renderer (shared; also used by the steel app)
     '../../shared/report.js', // PR 2e: the calculation report viewer (shared; also used by the steel app)
     '../../shared/list-input.js', // 2026-11-14: the list inputs as tables (shared; also used by the steel app)
+    'engine/library.js',     // PR 5: the saved-project list in this browser (psb2.lib.*; adapted copy of apps/steel-bridge/engine/library.js)
+    '../../shared/projects.js',    // PR 5: the standard save (shared, unchanged; as the steel app)
+    '../../shared/projects-ui.js', // PR 5: projectBar: header chip, Save / Save as… / Saved projects…, the "Save and open" card, the Saved projects dialog
+    '../../shared/github-sync.js', // PR 5: Cloud sync of the saved projects to a private GitHub repository (off until set up; tool 'ps-bridge-app')
     'report/fromtab.js',     // PR 2e: an output tab's cards as report items (the tab's own HTML and values)
     'report/data.js',        // PR 2e: the report's results (the page's own result, as the tabs)
     'report/builders.js',    // PR 2e: the report model (adapted copy of apps/steel-bridge/report/builders.js)
@@ -338,6 +342,10 @@
   let ui = { itab: 'proj', otab: 'sum' };
   try { Object.assign(ui, JSON.parse((store && store.getItem(M.KEYS.ui)) || '{}')); } catch (e) { /* default tabs */ }
   const saveUi = () => { try { store && store.setItem(M.KEYS.ui, JSON.stringify(ui)); } catch (e) { /* not kept */ } };
+  /* PR 5: the saved-project link (engine/library.js, as the steel app): cur.id = the library item the open project was last saved to / opened
+     from; cur.text = its file text then (M.exportJSON; null: not saved anywhere in the browser). pb: the standard save controls (below). */
+  const LIB = window.PSBLibrary, norm = Q => M.exportJSON(Q);
+  let pb = null, cur = { id: null, text: null };
 
   /* ---------- tabs (docs/ps-bridge-plan.md §2.2 and §2.3) ---------- */
   const TABS = [['proj', 'Project'], ['layout', 'Bridge layout'], ['xsec', 'Cross-section'], ['gird', 'Girders & strands'], ['mat', 'Materials'],
@@ -366,8 +374,9 @@
   function panes() {
     const nS = P.spans.lengths.length, off = M.girderOffsets(P), deckW = off[off.length - 1] + (+P.xs.ohR || 0), sk = scopeK(), V = viewOf(sk);
     return {
-      proj: card('Save and open', `<div class="fRow"><button type="button" id="bExport" title="Save the open project as a .json file">Export JSON</button><button type="button" id="bImport" title="Open a PS Bridge (.psb2.json) project file">Import JSON</button><button type="button" id="bNew" title="Start a new project (export the open one first to keep it)">New</button></div>
-          <p class="note">The open project is kept in this browser automatically. The saved-projects list (Save, Save as…, Saved projects…) comes in a later PR. Import JSON also opens an old-app Export JSON file (as "From the old app" below).</p>`)
+      // PR 5: the standard card (shared/projects-ui.js projectBar, mounted after each redraw): Save · Save as… · Saved projects… · New;
+      // Export JSON · Import JSON (as the steel app's STDS-B card)
+      proj: card('Save and open', `<div id="pbHost"></div><p class="note">Import JSON also opens an old-app Export JSON file (as "From the old app" below).</p>`)
         + LGUI.card(P)
         + card('Project', ['name', 'number', 'owner', 'designer', 'checker', 'date'].map(k => num('project.' + k, k === 'owner' ? 'Client name (title block, optional)' : k[0].toUpperCase() + k.slice(1), '', { text: true })).join('')
           + num('project.notes', 'Notes', '', { text: true }))
@@ -430,6 +439,7 @@
     markErrors();
     try { TY.mark($('inPanes'), P, ui); } catch (e) { console.warn(e); }   // PR 3a-1: the fields a girder type has of its own
     if (ui.itab === 'layout' && window.PSBPlan && $('gfx_plan')) { try { window.PSBPlan.mount($('gfx_plan'), P); } catch (e) { console.warn(e); } }   // 2026-11-14: the framing plan at the panel's width
+    if (pb && $('pbHost')) pb.mount($('pbHost'));   // PR 5: the standard save card
     // PR 2c-1: the strand-pattern graphic of the design (the engine's strand system), on the Girders & strands tab, when the inputs have no error
     if (ui.itab === 'gird' && !errs.length && window.PSBStrandGfx) { const rc = scopeK() >= 0 ? scopeResult() : result(); if (rc && !rc.R.error) { try { window.PSBStrandGfx.mount($('gfx_strands_in'), { R: rc.R, inp: rc.inp }, { id: 'inStrandFig', title: 'Strand pattern of the design girder', compact: true }); } catch (e) { console.warn(e); } } }
   }
@@ -453,8 +463,8 @@
   $('inTabs').addEventListener('click', e => { const b = e.target.closest('[data-itab]'); if (!b) return; ui.itab = b.dataset.itab; saveUi(); drawInputs(); });
   const IN = window.PSBInputsUI, LGUI = window.PSBLegacyUI;
   /* PR 2f: "From the old app" (ui/legacy.js): an import replaces the open project, as Import JSON does (asked first there) */
-  const lgCtx = { store: LS, gotoOut: t => gotoOut(t), pickFile: () => $('fImport').click(),
-    replace: Q => { BR.migrate(Q); const rn = window.PSBLegacy.restore(Q); if (window.PSBSections) window.PSBSections.migrate(Q); P = Q; autosave = true; ui.itab = 'proj'; ui.scope = ''; saveUi(); changed(); if (rn) toast(rn); } };   // PR 3a-4 (PS-17): the old model's other designs restored
+  const lgCtx = { store: LS, gotoOut: t => gotoOut(t), pickFile: () => pb.importJSON(),   // PR 5: asks first on unsaved changes, then the file chooser
+    replace: Q => { BR.migrate(Q); const rn = window.PSBLegacy.restore(Q); if (window.PSBSections) window.PSBSections.migrate(Q); ui.itab = 'proj'; loadAs(Q, null); if (rn) toast(rn); } };   // PR 3a-4 (PS-17): the old model's other designs restored; PR 5: not a saved project (chip "not saved")
   /* typesDone(r): a girder-type control was handled (ui/types.js): redraw (ui only) or save and redraw, with its message */
   function typesDone(r) { if (!r || r.cancel) return; if (r.ui && !r.note) { saveUi(); if (!r.keep) drawInputs(); return; } saveUi(); changed(); if (r.note) toast(r.note); }
   $('inPanes').addEventListener('change', e => {
@@ -499,15 +509,13 @@
     if (t.closest('[data-ty]') && !t.closest('select, input')) { typesDone(TY.onClick(e, P, ui)); return; }   // PR 3a-1
     { const sk = TY.SCOPED.includes(ui.itab) ? scopeK() : -1, V = viewOf(sk);
       if (IN.onClick(e, V)) { if (sk >= 0) BR.setOvr(P, sk, V.base); changed(); return; } }
-    if (t.id === 'bExport') exportFile(P);
-    else if (t.id === 'bImport') $('fImport').click();
-    else if (t.id === 'bNew') { if (confirm('Start a new project? The open project is replaced here (export it first to keep it).')) { P = M.newProject(); ui.scope = ''; autosave = true; saveUi(); changed(); } }
-  });
+  });   // PR 5: Export JSON, Import JSON and New are the standard card's buttons (projectBar, below)
   function changed() {
     if (autosave) autoFailed = !M.save(LS, P);
     drawInputs(); drawOut(); syncBar();
   }
-  function syncBar() { const el = $('saveState'); el.className = autoFailed ? 'err' : ''; el.textContent = autoFailed ? '· Autosave failed: browser storage is full. Export JSON now.' : !autosave ? '· Autosave off (see the note on the output panel).' : ''; }
+  function syncBar() { const el = $('saveState'); el.className = autoFailed ? 'err' : ''; el.textContent = autoFailed ? '· Autosave failed: browser storage is full. Export JSON now.' : !autosave ? '· Autosave off (see the note on the output panel).' : '';
+    if (pb) { pb.refresh(); pb.dialog.refresh(); } }   // PR 5: the saved / unsaved state is the header chip (projectBar)
 
   /* ---------- outputs (placeholders; docs/ps-bridge-plan.md §2.3, §5) ---------- */
   const OUT = {
@@ -685,9 +693,109 @@
       // PR 2f: an old-app file (or an old MIDAS demands file, refused there with its reason): "From the old app"
       if (!r.ok && (r.legacy || /"_schema"\s*:\s*"psbeam-external-demands"/.test(String(rd.result)))) { LGUI.importText(String(rd.result), f.name, lgCtx); return; }
       if (!r.ok) { alert(r.error); return; }
-      if (!confirm('Open this project? It replaces the open project here (export it first to keep it).')) return;
-      P = r.project; autosave = true; changed(); };
+      loadAs(r.project, null); };   // PR 5: asked first on unsaved changes (pb.importJSON, as the steel app); not a saved project (chip "not saved")
     rd.readAsText(f); });
+
+  /* ---------- saved projects (PR 5; the steel app's STDS-B standard save and GHS2 GitHub sync, apps/steel-bridge/index.html) ----------
+     shared/projects-ui.js projectBar over engine/library.js (items by id: psb2.lib.index + psb2.lib.p.<id>, psb2.lib.current): the header chip
+     (the project open now · saved / unsaved changes / not saved; a click opens the Project tab's card); the Project tab's first card "Save and
+     open" (Save (Ctrl+S) · Save as… (Ctrl+Shift+S) · Saved projects… · New; Export JSON · Import JSON); the standard Saved projects dialog
+     (open, rename, duplicate, export, delete with confirm). Open, New and Import ask first when the project on screen has unsaved changes
+     (askUnsaved 'always'). The autosave of the open project (psb2.project.current) is unchanged: it is still what the page opens with, and
+     a project that is only autosaved shows "not saved". A library item's text is M.exportJSON(project), the same text as Export JSON.
+     By-name view for the dialog (vStore, as the steel app): every item is a row; the newest item of a name is listed under the name, an older
+     item with the same name under "<name> (older, saved <time>)" (a list name only: nothing is stored or renamed).
+     Cloud sync (shared/github-sync.js, unchanged): off until set up in the Cloud sync dialog (Saved projects…); with no settings it writes
+     nothing and makes no request. Tool id 'ps-bridge-app' (engineer decision; not the old app's 'bridge-suite'): files
+     projects/ps-bridge-app/<name>.json = the stored item text. The token is entered only in that dialog and handled only by
+     shared/github-sync.js (sent only to api.github.com); this page never reads it, and it is never in a project or its Export JSON. */
+  const loadAs = (proj, id, textFn) => { P = proj; ui.scope = ''; autosave = true; saveUi(); changed(); cur = { id, text: textFn ? textFn(P) : null }; LIB.setCur(LS, id); syncBar(); };
+  const loadNotes = n => { if (n && n.length) toast(n.join(' ')); };
+  const ghIds = () => { const m = new Map(); LIB.list(LS).forEach(i => { if (!m.has(i.name)) m.set(i.name, i.id); }); return m; };   // newest first
+  const ghStore = { key: M.KEYS.libIndex, read: () => ({ ok: true, map: {} }), list: () => [...ghIds().keys()].map(name => ({ name })),
+    has: n => ghIds().has(n), item: n => { const id = ghIds().get(n); if (id == null) return undefined; const t = LIB.text(LS, id); return t == null ? undefined : t; },
+    save: (n, q) => { q.project.name = n; const r = LIB.save(LS, q, ghIds().get(n) || null); return r.ok ? { ok: true, name: n } : r; },
+    duplicate: (n, to) => { const id = ghIds().get(n); if (id == null) return { ok: false, error: 'missing', message: 'That saved project is not in this browser any more.' };
+      const r = LIB.duplicate(LS, id, to); return r.ok ? { ok: true, name: to } : r; } };
+  function view() {   // { byV: list name -> index item, vOf: id -> list name }; LIB.list is newest first
+    const items = LIB.list(LS), used = new Set(items.map(i => i.name)), seen = new Set(), byV = new Map(), vOf = new Map();
+    items.forEach(i => {
+      let v = i.name;
+      if (seen.has(i.name)) { const t = i.saved && i.saved > '1971' ? LIB.etTime(i.saved) : '', base = `${i.name} (older${t ? ', saved ' + t : ' copy'})`; v = base; let k = 2; while (used.has(v) || byV.has(v)) v = `${base} #${k++}`; }
+      seen.add(i.name); byV.set(v, i); vOf.set(i.id, v);
+    });
+    return { byV, vOf };
+  }
+  const vItem = v => view().byV.get(v), vName = id => id ? view().vOf.get(id) || null : null;
+  const MISS = { ok: false, error: 'missing', message: 'That saved project is not in this browser any more.' };
+  const EXISTS = n => ({ ok: false, error: 'exists', message: `A saved project named "${n}" already exists.` });
+  const clean = n => String(n == null ? '' : n).trim();
+  let lastRen = null;   // the item a dialog Rename just renamed (its new file text), for the open project's name
+  const vStore = { key: M.KEYS.libIndex,
+    keys: () => [M.KEYS.libIndex, ...LIB.list(LS).map(i => M.KEYS.libItem + i.id)],
+    read: () => ({ ok: true, map: {} }),
+    list: () => [...view().byV].map(([v, i]) => ({ name: v, saved: i.saved && i.saved > '1971' ? i.saved : null, size: i.size || 0 })),
+    has: v => view().byV.has(v),
+    item: v => { const i = vItem(v); if (!i) return undefined; const t = LIB.text(LS, i.id); return t == null ? undefined : t; },
+    get: v => { const i = vItem(v); if (!i) return null; const r = LIB.open(LS, i.id); return r.ok ? r.project : null; },
+    save: v => pbSave(v),
+    rename: (v, to, o) => { const { byV } = view(), i = byV.get(v); if (!i) return MISS; to = clean(to); if (!to) return { ok: false, error: 'empty', message: 'Enter a name.' };
+      if (to === v) return { ok: true, name: to };
+      const t = byV.get(to); if (t && t.id !== i.id && !(o && o.replace)) return EXISTS(to);
+      const r = LIB.rename(LS, i.id, to); if (!r.ok) return r;
+      if (t && t.id !== i.id) LIB.remove(LS, t.id);   // "Replace it" (confirmed in the dialog): the item listed under that name
+      lastRen = { id: i.id, text: r.text }; return { ok: true, name: vName(i.id) }; },
+    duplicate: (v, to, o) => { const { byV } = view(), i = byV.get(v); if (!i) return MISS; to = clean(to) || vStore.copyName(v);
+      const t = byV.get(to); if (t && !(o && o.replace)) return EXISTS(to);
+      const r = LIB.duplicate(LS, i.id, to); if (!r.ok) return r;
+      if (t) LIB.remove(LS, t.id); return { ok: true, name: vName(r.id) }; },
+    remove: v => { const i = vItem(v); return i ? LIB.remove(LS, i.id) : { ok: true }; },
+    copyName: v => { const m = view().byV, base = (m.get(v) || { name: v }).name; let n = `${base} (copy)`, k = 2; while (m.has(n)) n = `${base} (copy ${k++})`; return n; },
+    stamp: () => { try { return LS.getItem(M.KEYS.libIndex); } catch (e) { return null; } } };
+  /* pbSave(v): Save (v = the open project's list name: saved to that item; the project's own name field is its list name) or Save as
+     (another name: that item when the name is in the list, after "Replace it"; else a new item). As the steel app's pbSave. */
+  function pbSave(v) {
+    const i = vItem(v), id = i ? i.id : null, plain = !!(id && id === cur.id && v === vName(cur.id));
+    if (!plain) P.project.name = i ? i.name : v;
+    else if (!clean(P.project.name)) P.project.name = i.name;
+    else { const o = vItem(clean(P.project.name)); if (o && o.id !== id && clean(P.project.name) !== i.name) return { ok: false, message: `Not saved: the project name (Project tab) "${clean(P.project.name)}" is the name of another saved project. Change the name, or use Save as… to replace that project.` }; }
+    const r = LIB.save(LS, P, id);
+    if (!r.ok) { syncBar(); return { ok: false, message: r.message }; }
+    cur = { id: r.id, text: norm(P) }; LIB.setCur(LS, r.id); if (autosave) autoFailed = !M.save(LS, P);
+    drawInputs(); syncBar(); return { ok: true, name: vName(r.id) };
+  }
+  const snapC = new Map();   // file text of a saved item, by id and saved time ("unsaved changes" and the start-up match)
+  const SPUI = window.SharedProjectsUI, mkBtn = (id, text, title) => { const b = document.createElement('button'); b.type = 'button'; b.id = id; b.textContent = text; b.title = title; return b; };
+  const B_EX = mkBtn('bExport', 'Export JSON', 'Save the open project as a .json file'), B_IM = mkBtn('bImport', 'Import JSON', 'Open a PS Bridge (.psb2.json) project file, or an old-app Export JSON file');
+  { const lc = LIB.getCur(LS);   // which saved project the autosave belongs to (as the steel app)
+    if (L.source === 'saved' && lc) { const r = LIB.open(LS, lc); if (r.ok) cur = { id: lc, text: norm(r.project) }; }
+    else if (L.source === 'default') cur = { id: null, text: norm(P) }; }
+  pb = SPUI.projectBar({ store: vStore, storage: LS, label: 'Prestressed Bridge Design (new app)', id: 'psbLibDlg', askUnsaved: 'always',
+    snapshot: () => norm(P),
+    snapOf: v => { const i = vItem(v); if (!i) return null; if (i.id === cur.id && cur.text != null) return cur.text;
+      const k = i.id + '|' + i.saved; if (!snapC.has(k)) { const r = LIB.open(LS, i.id); snapC.set(k, r.ok ? norm(r.project) : null); } return snapC.get(k); },
+    current: () => vName(cur.id) || '',
+    setCurrent: v => { const id = v ? (vItem(v) || {}).id : null;
+      if (id && id !== cur.id) { cur = { id, text: norm(P) }; LIB.setCur(LS, id); } else if (!v && cur.id) { cur = { id: null, text: null }; LIB.setCur(LS, null); } },
+    displayName: () => clean(P.project.name),
+    save: pbSave,
+    open: v => { const i = vItem(v); if (!i) return false; const r = LIB.open(LS, i.id); if (!r.ok) { alert(r.error); return false; } loadAs(r.project, i.id, norm); loadNotes(r.notes); return true; },
+    newProject: () => loadAs(M.newProject(), null, norm),
+    exportFile: v => { if (!v || v === vName(cur.id) || v === P.project.name) { exportFile(P); return; } const Q = JSON.parse(JSON.stringify(P)); Q.project.name = v; exportFile(Q); },
+    importFile: () => $('fImport').click(),
+    exportOne: v => { const i = vItem(v); if (!i) return; const t = LIB.text(LS, i.id); if (t != null) SPUI.download(String(i.name || 'ps-bridge').replace(/[^\w.-]+/g, '_') + '.psb2.json', t); },
+    fileButtons: [B_EX, B_IM],
+    header: $('hdrBtns'), card: true,
+    // the header has the chip only (HDRS, as the steel app): Save and Saved projects… are in the card; Ctrl+S / Ctrl+Shift+S work from anywhere
+    headerSave: false, chipClick: () => { const t = document.querySelector('#inTabs [data-itab="proj"]'); if (t) t.click(); const c = $('pbHost'); if (c) c.scrollIntoView({ block: 'nearest' }); }, chipHint: 'the Project tab (Save and open)',
+    renamed: () => { if (lastRen && lastRen.id === cur.id) { const q = M.importJSON(lastRen.text); if (q.ok) { P.project.name = q.project.project.name; cur.text = norm(q.project); } changed(); } lastRen = null; },
+    deleted: () => { if (cur.id && !LIB.list(LS).some(i => i.id === cur.id)) cur = { id: null, text: null }; syncBar(); },
+    changed: () => syncBar(),
+    ghNote: v => { const i = vItem(v); return i && v !== i.name ? '<span class="note" data-sp="gh-cell">not synced: a newer saved project has the same name (Rename this one to sync it)</span>' : ''; },
+    ...(store && window.SharedGitHubSync ? { cloud: { tool: 'ps-bridge-app', label: 'Prestressed Bridge Design (new app)', toFile: t => t, store: ghStore,   // no browser storage: no sync
+      fromFile: (j, n) => { const r = M.importJSON(JSON.stringify(j)); if (!r.ok) throw new Error(r.error); r.project.project.name = n; return r.project; } } } : {}) });
+  B_EX.addEventListener('click', () => exportFile(P));
+  B_IM.addEventListener('click', () => pb.importJSON());   // asks first on unsaved changes, then the file chooser
 
   drawInputs(); drawOut(); syncBar();
   if (L.notes && L.notes.length) toast(L.notes.join(' '));   // PR 3a-1 / 3a-4: what the load migrated or restored (stored with the next change)

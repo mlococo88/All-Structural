@@ -57,7 +57,7 @@
   'use strict';
   const SCHEMA = 'psb2.project', VERSION = 1;
   const KEYS = { current: 'psb2.project.current', backup: 'psb2.project.unreadable.', ui: 'psb2.ui',   // backup + ISO time; ui: the page's tab choices
-    libIndex: 'psb2.lib.index', libItem: 'psb2.lib.p.', libCur: 'psb2.lib.current',   // reserved for the saved-project list (a later PR)
+    libIndex: 'psb2.lib.index', libItem: 'psb2.lib.p.', libCur: 'psb2.lib.current',   // the saved-project list (engine/library.js, PR 5; reserved in PR 1)
     split: 'psb2.splitRatio_v1', dash: 'psb2.dashCollapsed_v1' };   // per-browser UI keys (ui/splitter.js, ui/dash.js); not in the project
   const CONTINUITY = ['simple', 'composite'];
   const isNum = v => typeof v === 'number' && isFinite(v);
