@@ -3847,3 +3847,69 @@ PR #1562: https://github.com/mlococo88/All-Structural/pull/1562
 - AD-D7. No plant f′ci limit by default (the setting is blank); RIDOT's f′ci ≈ 0.70 f′c (a warning in the engine) is applied as a limit; f′ci not below 4.0 ksi.
 - AD-D8. Assumed monotone (pending review): a higher f′c / f′ci is not worse for any check; a higher y_end relieves the end (the bisection); more strands improve only GROW. The Node exhaustive cases confirm the result on two small cases.
 - AD-D9. A span with no passing section has no Apply; its blocked checks are listed. The Report has no "Auto design basis" section yet (plan §4): a later PR.
+
+## 2026-11-14 — Item B: the Drawings tab, part 2 — each girder type's elevation and strand pattern sheets and the strand and girder schedule, DXF and print as part 1 (display and export only)
+PR #TBD: https://github.com/mlococo88/All-Structural/pull/TBD
+### Request
+- PS Bridge catch-up item B (Drawings part 2, after the auto design): strand pattern and girder elevation sheets and a strand / girder schedule.
+  - Strand pattern sheets: the sections at midspan and at the end, with the strand grid and the debonded and draped strands.
+  - Girder elevation sheets: the hold-down points, the debond lengths and the camber.
+  - The sheets are modelled on the Steel Bridge app's girder sheets. They reuse the app's figure code and the part 1 sheet frame (PR #1560) and load shared/dxf.js unchanged.
+- Every dimension comes from the existing model and figure data. DXF download and print work as in part 1. The "Not in this set" part-2 line is removed. No calculation change.
+### What changed
+- `ui/sheets.js` (`PSBSheets`): new `typeModels(P, opt)`, `elevation(D, C)`, `strands(D, C)`, `schedule(D, C)`. In `build()`, the line `miss.push(['GIRDER, STRAND AND ELEVATION SHEETS', 'PART 2 (AFTER THE AUTO DESIGN), NOT YET'])` is replaced by:
+  - for each girder type with lines, the sheets `elev<k>` "GIRDER <LABEL>: ELEVATION" (kmin 12) and `strd<k>` "GIRDER <LABEL>: STRAND PATTERN" (kmin 2);
+  - then `sched` "STRAND AND GIRDER SCHEDULE" (kmin 1; the table is fitted to the paper's width).
+  - New `opt.res(k, g)`: the page's cached result. Without it, the sheets compute the same call (`PSBHoldDown.compute` of `PSBDesign.cellInputs`).
+  - Data, for each type on its first line:
+    - outline `halfPolygon(R.g)`, mirrored, and voids `sectionVoids(R.g)`;
+    - strand positions `PSBStrandGfx.pattern(R, end)`;
+    - rows, draped strands and hold-down points from `R.ss`, as in ui/sumelev.js;
+    - L = `R.L`; e_end = `opt.endOh`;
+    - camber `R.cam` (rel, erect, afterDeck, seat, final);
+    - weight w_sw (L + 2 e_end / 12), as `PSBBridge.results`.
+  - Elevation:
+    - true length, with the depth exaggerated × round(L_g / 5h) (noted on the sheet);
+    - ℄ bearings and midspan;
+    - a line per strand row, with the debonded lengths dashed (as ui/sumelev.js draws them);
+    - the draped profile and the hold-down points;
+    - DIMENSIONs: hold-down from ℄ bearing (frac L) and from the girder end (frac L + e_end, PS-13); ℄ bearing to ℄ bearing; the girder length;
+    - notes: the camber at release, at erection, after the deck, at the beam seat and final, and the weight.
+  - Strand pattern:
+    - sections at ℄ bearing (the girder end) and at midspan, true scale;
+    - symbols: bonded strand (double circle), debonded at the end (circle with X), draped strand (circle with a dot);
+    - DIMENSIONs: the row chain from the soffit, Y END / Y MID, H and the bottom width;
+    - the counts.
+  - Schedule: one row per type with:
+    - type, span, lines, section, L, strands and size;
+    - straight rows, debonded rows, draped strands (n, y_end / y_mid);
+    - hold-down from ℄ bearing / from the end;
+    - f′c / f′ci, camber at release / erection, weight.
+  - New layers: S-STRD, S-STRD-DEBOND, S-STRD-DRAPE, S-TBL.
+- `ui/drawings.js`:
+  - builds with `res: ctx.res` (and the half-size print the same);
+  - the heading no longer says "part 1";
+  - index links for elev (Girders & strands, Camber & deflection, End zone & hold-down), strd (Girders & strands, Losses, Stresses) and sched (Girders & strands, Materials, Camber & deflection);
+  - the layer and source note.
+- `index.html`: the part-2 note under the tab is removed; `PSBDrawingsUI.render(…, { …, res: (k, g) => cellR(PSBDesign.cellInputs(P, k, g)) })`; the script comment.
+- `ui/summary.js`: the note names the Drawings' sheets.
+- Tests:
+  - `psbridge-drawings.test.mjs`: the sheet list includes part 2 and nothing is left out. New test "part 2": every dimension equals its engine value, as does the strand count per section and the schedule row of each type.
+  - New smoke `ps-bridge-drawings2.mjs` (7 checks).
+  - `ps-bridge-drawings.mjs`: the sheet lists and "Not in this set" updated.
+### Saved data (CLAUDE.md §5)
+- None: no key or field. `ui.dwg` as in part 1.
+### Governing provisions (CLAUDE.md §4)
+- None changed: display and export only. Harness B: 0 differences.
+### Check case
+- New project (BT-72, 120 ft, Interior S1 and Exterior S1, 40 strands with 12 draped, y_end 60 in, y_mid 8 in, frac 0.40, e_end 0):
+  - elevation: CL BRG TO CL BRG 120'-0"; HOLD-DOWN 48'-0" FROM CL BRG; 48'-0" FROM GIRDER END; vertical scale × 4 (L_g / 5h = 1440 / (5 × 72) = 4);
+  - strand pattern: 28 bonded and 12 draped (40 strands); H = 6'-0";
+  - schedule: INTERIOR S1 | 1 | G2 G3 G4 | PCI BT-72 | 120.00 | 40 0.6" | 10@2.00, 10@4.00, 8@6.00 | - | 12, 60.00 / 8.00 | 48.00 / 48.00 | 8.50 / 6.80 | camber 2.90 / 5.15 | 99.1 kip.
+### Decisions (pending engineer review)
+- DW2-D1. One elevation and one strand pattern sheet per girder type, drawn from the type's first line: the strands, the profile and the release / erection camber do not depend on the line. The camber after the deck, at the beam seat and final are those of that line (named on the sheet).
+- DW2-D2. The elevation is drawn at true length with the depth exaggerated (× round(L_g / 5h), noted), so its vertical dimensions are text, not DIMENSION entities.
+- DW2-D3. The debonded lengths are drawn as on the Summary elevation (ui/sumelev.js) and labelled with the entered length.
+- DW2-D4. The schedule is one row per girder type (the same girder on every line listed); each line's camber after the deck is on the Camber & deflection tab.
+### Other copies
+- None new: the sheet frame is part 1's adapted copy of the steel app's `sheet()` (unchanged here).

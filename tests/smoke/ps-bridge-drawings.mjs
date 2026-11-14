@@ -2,7 +2,7 @@
 // PS Bridge (apps/ps-bridge/index.html), item 10 part 1: the Drawings tab (ui/drawings.js over ui/sheets.js and shared/dxf.js). Headless
 // Chromium, file://, the CDN libraries from tests/libs.
 //   1. a new project: the tab shows the sheet set (typical section, framing plan), the preview (SVG of the sheet with its title block),
-//      the sheet index with its links; "Not in this set" names part 2;
+//      the sheet index with its links; nothing "Not in this set" (part 2, item B, draws the girder sheets: ps-bridge-drawings2.mjs);
 //   2. a three-span continuous project with a curb and a sidewalk: one typical section per span + the plan; choosing a sheet in the
 //      index draws it; paper B changes the scale; the choices are kept in psb2.ui (ui.dwg) after a reload;
 //   3. Download DXF: the file passes SharedDxf.validate, its name from the project name, its sheets' titles in it;
@@ -29,14 +29,14 @@ try {
   let r = await p.evaluate(() => ({ opts: [...document.querySelectorAll('#dwg_sheet option')].map(o => o.textContent), idx: document.querySelectorAll('.dwg-idx tbody tr').length,
     txt: [...document.querySelectorAll('.dwg-box svg text')].map(t => t.textContent), miss: (document.querySelector('#out').innerText.match(/Not in this set:[^\n]*/) || [''])[0],
     links: [...document.querySelectorAll('.dwg-idx a')].map(a => a.dataset.dgo || a.dataset.dgi) }));
-  assert.deepEqual(r.opts, ['1. TYPICAL SECTION', '2. FRAMING PLAN']); assert.equal(r.idx, 2);
-  ['TYPICAL SECTION', '1 OF 2', 'ROUTE 9 OVER THE MILL RIVER', 'B-123', 'G1', 'G5'].forEach(t => assert.ok(r.txt.includes(t), t + ' in ' + r.txt.slice(0, 40).join('|')));
-  assert.match(r.miss, /part 2/i); assert.deepEqual(r.links, ['lds', 'xsec', 'layout']);
-  ok('a new project: typical section and framing plan, the preview with its title block, the index with its links, part 2 listed');
+  assert.deepEqual(r.opts, ['1. TYPICAL SECTION', '2. FRAMING PLAN', '3. GIRDER INTERIOR S1: ELEVATION', '4. GIRDER INTERIOR S1: STRAND PATTERN', '5. GIRDER EXTERIOR S1: ELEVATION', '6. GIRDER EXTERIOR S1: STRAND PATTERN', '7. STRAND AND GIRDER SCHEDULE']); assert.equal(r.idx, 7);   // part 2 (item B): the girder sheets
+  ['TYPICAL SECTION', '1 OF 7', 'ROUTE 9 OVER THE MILL RIVER', 'B-123', 'G1', 'G5'].forEach(t => assert.ok(r.txt.includes(t), t + ' in ' + r.txt.slice(0, 40).join('|')));
+  assert.equal(r.miss, '', 'nothing "Not in this set" (part 2 drawn)'); assert.deepEqual(r.links.slice(0, 3), ['lds', 'xsec', 'layout']);
+  ok('a new project: typical section and framing plan (and the part 2 girder sheets), the preview with its title block, the index with its links, nothing left out');
   await shot('pr10-dwg-section');
   await p.click('.dwg-idx tr[data-dsheet="plan"] td.lft'); await p.waitForTimeout(300);
   r = await p.evaluate(() => ({ sel: document.querySelector('#dwg_sheet').value, txt: [...document.querySelectorAll('.dwg-box svg text')].map(t => t.textContent) }));
-  assert.equal(r.sel, 'plan'); ['FRAMING PLAN', '2 OF 2', 'ABUT. 1', 'ABUT. 2'].forEach(t => assert.ok(r.txt.includes(t), t));
+  assert.equal(r.sel, 'plan'); ['FRAMING PLAN', '2 OF 7', 'ABUT. 1', 'ABUT. 2'].forEach(t => assert.ok(r.txt.includes(t), t));
   ok('the index row draws its sheet (the framing plan: Abut. 1, Abut. 2)');
   await shot('pr10-dwg-plan');
 
@@ -46,7 +46,7 @@ try {
     localStorage.setItem('psb2.project.current', PSBModel.exportJSON(P)); });
   await dwg();
   r = await p.evaluate(() => [...document.querySelectorAll('#dwg_sheet option')].map(o => o.textContent));
-  assert.deepEqual(r, ['1. TYPICAL SECTION, SPAN 1', '2. TYPICAL SECTION, SPAN 2', '3. TYPICAL SECTION, SPAN 3', '4. FRAMING PLAN']);
+  assert.deepEqual(r.slice(0, 4), ['1. TYPICAL SECTION, SPAN 1', '2. TYPICAL SECTION, SPAN 2', '3. TYPICAL SECTION, SPAN 3', '4. FRAMING PLAN']); assert.equal(r[r.length - 1], `${r.length}. STRAND AND GIRDER SCHEDULE`);
   const scale = () => p.evaluate(() => document.querySelector('.dwg-box').closest('.sec').querySelector('.secHead').textContent);
   await p.selectOption('#dwg_sheet', 'plan'); await p.waitForTimeout(300); const sD = await scale();
   await p.selectOption('#dwg_paper', 'B'); await p.waitForTimeout(300); const sB = await scale();
