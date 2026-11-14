@@ -12,6 +12,15 @@
     { key: 'ec', title: 'Moduli of elasticity and modular ratio', ref: 'AASHTO LRFD 10th Ed. 5.4.2.4', ids: /^sec\.(Ecg|Ecd|n)$/, res: /^sec\.n$/ },
     { key: 'comp', title: 'Composite section (transformed deck)', ref: 'AASHTO LRFD 10th Ed. 4.6.2.6', ids: /^sec\.(beff|Ad|yd|Ah|Ac|ybc|Ic|hc|Sbc|Stg|Std)$/, res: /^sec\.Ic$/ },
     { key: 'str', title: 'Prestressing strands', ref: 'AASHTO LRFD 10th Ed. 5.9.4.3.1', ids: /^sec\./, res: /^sec\.eMid$/ }];
+  /* voidNote(G): 2026-11-14 (decision pending engineer review, PS28/void note): where the void of a box beam or a voided deck slab is, as the
+     engine places it (sectionVoids, pbd-section.js) and every graphic draws it; '' for a shape without voids. The old app's section graphic
+     centred the box void on the depth; the engine (and so every value that uses the void position) puts it on the bottom wall. */
+  function voidNote(G) {
+    const b = G && G.box, f = v => K().fx(v, 1); if (!b) return '';
+    if (G.isBox && b.voidW > 0 && b.voidH > 0) return `Void: one ${f(b.voidW)} × ${f(b.voidH)} in cell on the bottom wall, y = ${f(b.wall)} to ${f(b.wall + b.voidH)} in above the soffit (bottom wall ${f(b.wall)} in, top wall h − wall − void = ${f(G.h - b.wall - b.voidH)} in), where the engine places it (sectionVoids) and as drawn here; the old app's section graphic centred it on the depth. A, I and y<sub>b</sub> above are the library's published values, not computed from the outline: the void position is used for the concrete area on the tension side A<sub>ct</sub> (shear, 5.7.3.4.2, when ε<sub>s</sub> &lt; 0), the strand fit of the input check (PS-28) and the graphics.`;
+    if (G.isDeck && b.voids > 0 && b.voidD > 0) return `Voids: ${b.voids} round voids of ${f(b.voidD)} in diameter on mid-depth (y = ${f(G.h / 2)} in), evenly spaced across the width, where the engine places them (sectionVoids) and as drawn here. A, I and y<sub>b</sub> above are the library's published values, not computed from the outline: the void positions are used for A<sub>ct</sub> (shear, 5.7.3.4.2, when ε<sub>s</sub> &lt; 0), the strand fit of the input check (PS-28) and the graphics.`;
+    return '';
+  }
   function output(ctx) {
     const { R, inp } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, G = R.g, ss = R.ss;
     const kind = G.isNext ? 'NEXT F double tee' : G.isBox ? 'adjacent box beam' : G.isDeck ? 'adjacent deck beam' : 'I-girder / bulb tee';
@@ -20,7 +29,8 @@
       ['Shape', `${k.esc(inp.girder)} (${kind})${G.ovr && G.ovr.any ? ', with overrides' : ''}`], ['Depth h', ev('g.h', 2, 'in')], ['Area A', ev('g.A', 1, 'in²')], ['Moment of inertia I', ev('g.I', 0, 'in⁴')],
       ['y<sub>b</sub> (centroid above the soffit)', ev('g.yb', 3, 'in')], ['y<sub>t</sub>', `${ev('g.yt', 3, 'in')} ${wk('sec.g.yt')}`], ['S<sub>b</sub>', `${ev('g.Sb', 0, 'in³')} ${wk('sec.g.Sb')}`], ['S<sub>t</sub>', `${ev('g.St', 0, 'in³')} ${wk('sec.g.St')}`],
       ['Web width b<sub>w</sub>', ev('g.bw', 2, 'in')], ['Top / bottom flange width', `${ev('g.btf', 2)} / ${ev('g.bbf', 2, 'in')}`], ['Self-weight w<sub>g</sub>', `${ev('g.wsw', 4, 'klf')} ${wk('sec.g.wsw')}`]])
-      + `<p class="note">Gross properties of the shape library (the old app's GIRDERS${G.isNext ? '; NEXT: interpolated on the flange width' : ''})${G.ovr && G.ovr.any ? '; overridden values as entered (Girders &amp; strands tab)' : ''}.</p>`, 'card-gross');
+      + `<p class="note">Gross properties of the shape library (the old app's GIRDERS${G.isNext ? '; NEXT: interpolated on the flange width' : ''})${G.ovr && G.ovr.any ? '; overridden values as entered (Girders &amp; strands tab)' : ''}.</p>`
+      + (voidNote(G) ? `<p class="note" id="sec-void-note">${voidNote(G)}</p>` : ''), 'card-gross');
     h += k.card('Composite section', k.kv([
       ['E<sub>c</sub> girder', `${ev('cp.Ecg', 0, 'ksi')} ${wk('sec.Ecg')}`], ['E<sub>c</sub> deck', `${ev('cp.Ecd', 0, 'ksi')} ${wk('sec.Ecd')}`], ['Modular ratio n', `${ev('cp.n', 4)} ${wk('sec.n')}`],
       ['Effective flange width b<sub>eff</sub>', `${ev('cp.beff', 2, 'in')} ${wk('sec.beff')}`], ['A<sub>c</sub>', `${ev('cp.Ac', 1, 'in²')} ${wk('sec.Ac')}`], ['y<sub>bc</sub>', `${ev('cp.ybc', 3, 'in')} ${wk('sec.ybc')}`],
@@ -72,5 +82,5 @@
       draw: W => figure(ctx, W), hint: 'Point at the deck or a strand row for its values.',
       cap: '<p class="vk-cap">Shape as the engine uses it (outline and voids of the shape library); straight strands drawn on a 2 in grid, draped strands at midspan. Display only.</p>' });
   }
-  window.PSBUiSection = { output, after, TOPICS, figure };   // figure: also for tests/engine/psbridge-strandgfx.test.mjs (PS-27)
+  window.PSBUiSection = { output, after, TOPICS, figure, voidNote };   // figure: also for tests/engine/psbridge-strandgfx.test.mjs (PS-27); voidNote: the Report §2 assumptions
 })();
