@@ -3053,7 +3053,7 @@ PR #1541: https://github.com/mlococo88/All-Structural/pull/1541
 - `Prestressed Bridge Design.html` (frozen): still the 0.0″ warning for boxes / slabs and the NEXT top flange; not fixed.
 
 ## 2026-11-14 — PR A: "to be confirmed" note for the CTDOT box beams and voided slabs (Girders & strands tab, Report assumptions); harness B: a BIII-36 design that passes (display and tests only; no calculation change)
-PR #PRA: https://github.com/mlococo88/All-Structural/pull/PRA
+PR #1542: https://github.com/mlococo88/All-Structural/pull/1542
 ### Request
 - Engineer, 2026-11-14 (explicitly asked for; an exception to the usual rule of no "pending" text in the app): wherever a CTDOT box beam or standard voided slab is selected on the Girders & strands tab, and in the Report's assumptions for those sections, state that the section properties come from CTDOT BDM plate 5.2.1b (boxes) or 5.1.1c / 5.1.2c (slabs), that they replace the old app's box library (found inconsistent: the old "BIII-36 (27in)" gave I = 97,756 in⁴, more than a solid 36 × 27 in rectangle at 59,049 in⁴), and that the replacement is to be confirmed by the engineer against the DOT reference sheets; for the voided slabs, that the void spacing (±8 in; 0, ±14 in) is scaled from the plate, not dimensioned, and is to be confirmed.
 - Harness B: keep the failing "box BIII-36 with a 6 in topping" design (it checks the failure reporting) and add a BIII-36 design that passes on the real 39 in section with the CTDOT plate strand pattern.
@@ -3079,7 +3079,10 @@ PR #PRA: https://github.com/mlococo88/All-Structural/pull/PRA
 - Solid 36 × 27 in rectangle: I = b h³ / 12 = 36 × 27³ / 12 = 36 × 19,683 / 12 = 59,049 in⁴ < 97,756 in⁴ (the old entry).
 - The note's plates and pages are those of `STD[n].src` (PS-30 / PS-32 table above); slab spacings ±8 in (36 series) and 0, ±14 in (48 series) as PS32-D1.
 ### How verified
-- See the PR. 
+- `node tests/engine/run.mjs psbridge tex project-registry`: 23 files, 219 passed, 0 failed (new PR A test in `psbridge-sections.test.mjs`; the harness B design counts 17 → 18 in `psbridge-legacy`, `psbridge-strandfit`, `psbridge-types` and descriptions).
+- `node tests/check-syntax.mjs`: all scripts pass (168 files).
+- Smokes: `ps-bridge-skeleton.mjs` 267 checks, 0 failed (3n: the note on the Girders & strands tab and in the Report); `ps-bridge-types.mjs` 106 / 0; `ps-bridge-3d.mjs` 101 / 0.
+- Harness B: normal, 18 designs, 45,960 shown values and 8,020 step values, 0 differences, exit 0; `--control` on the new design: exit 1; `--import` on the new design: 0 differences, exit 0.
 ### Decisions (pending engineer review)
 - PRA-D1. The harness B passing design adds 4 top strands (y = 37 in) and debonding (4 strands 10 ft, 4 strands 6 ft) to the plate's two 16-strand rows: with the two rows alone the release tension at the ends fails at every span tried (50–90 ft), and the plate's draped web columns cannot be entered with the contiguous-row model (PS33-D1). Top strands are not on plate 5.2.3; they stand in for the draped strands' release-tension relief.
 ### Open items
