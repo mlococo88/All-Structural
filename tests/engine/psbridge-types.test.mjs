@@ -1,7 +1,7 @@
 // apps/ps-bridge PR 3a-1: girder types on the girder lines of each span (engine/bridge.js, window.PSBBridge; docs/ps-bridge-plan.md §5 PR 3a;
 //   engineer decision PS-8; the Steel Bridge app's girder types SB-2, SB-14, SB-15 as the pattern).
 //   1. A project saved before PR 3a (no types) is migrated on load: its design girder = type T1 on that line, no override; the engine inputs
-//      of every saved design (the 17 harness B designs, each girder line of each) are byte-identical to PR 2b's (PSBDesign.one) and so is
+//      of every saved design (the 18 harness B designs, each girder line of each) are byte-identical to PR 2b's (PSBDesign.one) and so is
 //      computeAll (independent exact comparison).
 //   2. A new project: Interior and Exterior per span; each cell = the old app's 'pl' design of that girder × span (PSBDesign.one).
 //   3. Overrides (effBase / diffOvr / setOvr / resetKey), the same shape per span (PS-8), assignments (setLines, addType, deleteType, fill),
@@ -23,7 +23,7 @@ const C = v => typeof v === 'number' ? (Object.is(v, -0) ? '-0' : String(v)) : v
 const errs = P => W.PSBInputCheck.collect(P).errors;
 const load = P => M.importJSON(M.exportJSON(P)).project;   // what the page opens (load = importJSON of the stored text)
 
-test('a project saved before PR 3a: migrated on load to type T1 on its design line; engine inputs byte-identical (17 designs), computeAll identical', () => {
+test('a project saved before PR 3a: migrated on load to type T1 on its design line; engine inputs byte-identical (18 designs), computeAll identical', () => {
   const cases = TAB_CASES(() => M.defaultProject());
   let n = 0;
   for (const [name, P0] of Object.entries(cases)) {
@@ -41,10 +41,10 @@ test('a project saved before PR 3a: migrated on load to type T1 on its design li
     const o = J(P0), q = J(P); delete q.types; assert.deepEqual(q, Object.assign(o, { design: q.design }), name + ': nothing else changed');
     n++;
   }
-  assert.equal(n, 17);
+  assert.equal(n, 18);
 });
 
-test('every girder line of every span of the 17 designs as a type: cell inputs = the PR 2b design of that girder × span (PSBDesign.one)', () => {
+test('every girder line of every span of the 18 designs as a type: cell inputs = the PR 2b design of that girder × span (PSBDesign.one)', () => {
   const cases = TAB_CASES(() => M.defaultProject());
   let cells = 0;
   for (const [name, P0] of Object.entries(cases)) {

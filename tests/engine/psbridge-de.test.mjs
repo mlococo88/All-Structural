@@ -1,6 +1,6 @@
 // apps/ps-bridge PS-20 (engineer decision 2026-11-13): d_e of each exterior girder line from the bridge cross-section (that line's overhang −
 //   the barrier / curb traffic face), each exterior line its own distribution factors, the worst line governs (engine/design.js deOf).
-//   1. A project without the cross-section barriers (saved before PR 3a-3): d_e as entered, inputs byte-identical (17 harness B designs).
+//   1. A project without the cross-section barriers (saved before PR 3a-3): d_e as entered, inputs byte-identical (18 harness B designs).
 //   2. Equal overhangs: G1 and G_Nb take the same d_e and give the same results (but their label and side).
 //   3. The hand check: overhangs 3 ft / 4 ft, barriers 1.5 ft: d_e 1.5 / 2.5 ft; lever rule, e_M, rigid section, DF_M per line.
 import assert from 'node:assert/strict';
@@ -17,7 +17,7 @@ const C = v => typeof v === 'number' ? (Object.is(v, -0) ? '-0' : String(v)) : v
   : Array.isArray(v) ? '[' + v.map(C).join(',') + ']' : '{' + Object.keys(v).filter(k => typeof v[k] !== 'function').map(k => JSON.stringify(k) + ':' + C(v[k])).join(',') + '}';
 const near = (a, b, t) => assert.ok(Math.abs(a - b) < (t || 1e-9), `${a} vs ${b}`);
 
-test('no cross-section barriers (saved before 3a-3): d_e as entered, inputs byte-identical to D.one of the old design (17 designs, every line)', () => {
+test('no cross-section barriers (saved before 3a-3): d_e as entered, inputs byte-identical to D.one of the old design (18 designs, every line)', () => {
   for (const [name, P0] of Object.entries(TAB_CASES(() => M.defaultProject()))) {
     const P = M.importJSON(M.exportJSON(P0)).project; W.PSBBridge.fill(P); assert.equal(P.xs.dl, undefined);
     W.PSBBridge.cells(P).forEach(c => { const i = D.cellInputs(P, c.k, c.g); assert.equal(i.loads.de, P0.base.loads.de, `${name} G${c.g}`); assert.equal(D.deOf(P, c.g), null); });

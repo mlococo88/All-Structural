@@ -3051,3 +3051,41 @@ PR #1541: https://github.com/mlococo88/All-Structural/pull/1541
 - The I-girder taper question of the audit (2 in measured perpendicular to the 45° taper; Type I / II rows at 6 in) is not changed.
 ### Other copies
 - `Prestressed Bridge Design.html` (frozen): still the 0.0″ warning for boxes / slabs and the NEXT top flange; not fixed.
+
+## 2026-11-14 — PR A: "to be confirmed" note for the CTDOT box beams and voided slabs (Girders & strands tab, Report assumptions); harness B: a BIII-36 design that passes (display and tests only; no calculation change)
+PR #1542: https://github.com/mlococo88/All-Structural/pull/1542
+### Request
+- Engineer, 2026-11-14 (explicitly asked for; an exception to the usual rule of no "pending" text in the app): wherever a CTDOT box beam or standard voided slab is selected on the Girders & strands tab, and in the Report's assumptions for those sections, state that the section properties come from CTDOT BDM plate 5.2.1b (boxes) or 5.1.1c / 5.1.2c (slabs), that they replace the old app's box library (found inconsistent: the old "BIII-36 (27in)" gave I = 97,756 in⁴, more than a solid 36 × 27 in rectangle at 59,049 in⁴), and that the replacement is to be confirmed by the engineer against the DOT reference sheets; for the voided slabs, that the void spacing (±8 in; 0, ±14 in) is scaled from the plate, not dimensioned, and is to be confirmed.
+- Harness B: keep the failing "box BIII-36 with a 6 in topping" design (it checks the failure reporting) and add a BIII-36 design that passes on the real 39 in section with the CTDOT plate strand pattern.
+### What changed
+- `engine/sections.js`: new `tbcNote(name)` (exported on `window.PSBSections`): the note for a standard entry of `STD` ('' for any other shape). Text: "To be confirmed: A, I and y<sub>b</sub> of this box beam | voided slab are taken from CTDOT BDM plate <5.2.1b | 5.1.1c | 5.1.2c> (PDF p. <327 | 314 | 317>). They replace the old app's box beam and voided slab library, which was found inconsistent (e.g. the old "BIII-36 (27in)" gave I = 97,756 in⁴, more than a solid 36 × 27 in rectangle at 59,049 in⁴). The replacement is to be confirmed by the engineer against the DOT reference sheets." + for a slab " The void spacing (void centres at ±8 | 0, ±14 in from the ℄) is scaled from the plate drawing, not dimensioned on it, and is to be confirmed."
+  - Anchor: `const src = n => (STD[n] ? STD[n].src : null);` — the function added after it; `tbcNote` added to the export list after `src`.
+- `ui/inputs.js` `cards()`: the shape card (`c.id === 'shape'`) gets `<p class="note" id="secTbcNote"><b>…</b></p>` when `tbcNote(P.base.girder)` is not empty (the base design, or a girder type's own inputs when "Entered values for" is a type: `cards('gird', V)`).
+  - Before: `h += card(c.id, c.title, c.ref, body + (c.note ? \`<p class="note">${c.note(P.base, P)}</p>\` : ''));`
+  - After: `const tbc = c.id === 'shape' && window.PSBSections && window.PSBSections.tbcNote ? window.PSBSections.tbcNote(P.base.girder) : '';` then `h += card(c.id, c.title, c.ref, body + (c.note ? … : '') + (tbc ? \`<p class="note" id="secTbcNote"><b>${tbc}</b></p>\` : ''));`
+- `report/builders.js`: new `tbcNotes(B)` (each standard shape of the report once: the design girder and every girder type on a line, as `voidNotes`), "• <name>: <note> (see [[rs.sec]])"; added to §2 Assumptions after `voidNotes(B)`.
+  - Before: `...voidNotes(B), ...secNotes(B)])];` After: `...voidNotes(B), ...tbcNotes(B), ...secNotes(B)])];`
+- `tests/engine/psbridge-tab-cases.mjs`: new design "box BIII-36 (39in), CTDOT plate rows 16 + 16 strands and 4 top strands, 6 in topping, 80 ft, 10 boxes: passes" (used by `psbridge-tabs.test.mjs` and harness B).
+- Tests: `psbridge-sections.test.mjs` new test "PR A" (the note of all 14 standard sections, none for other shapes, on the shape card and in the Report §2); `tests/smoke/ps-bridge-skeleton.mjs` 3n: the note on the Girders & strands tab and in the Report.
+### The new harness B design (CTDOT BDM plate 5.2.3, PDF p. 329)
+- AASHTO BIII-36 (39in), 6 in topping, one 80 ft simple span, ten boxes at 3 ft (ohL = ohR = 1.5 ft), interior G5; strands (0.6 in, the default): 16 @ y = 2 in (4 debonded 10 ft) + 16 @ y = 4 in (4 debonded 6 ft: the terminations staggered, 5.9.4.3.3(B)) on the plate's 2 in grid (plate 5.2.3: 15 spaces @ 2 in for the 2′-11½″ beam), + 4 top strands at y = 37 in (2 in below the top, 3.5 in above the void); DC1 additional 0 (no forms), DC2 0.10 klf, DW 0.075 klf; the rest the default project.
+- Every check passes (largest ratio: Release comp 0.901; the engine's only warning: midspan in the φ transition zone, ε_t = 4.22‰, φ = 0.935).
+- Layouts tried that do not pass: the two 16-strand rows alone fail the release tension at the ends (Release tens 1.86–1.93 and 5.9.2.3.1b at 50–90 ft: no self-weight moment there); with debonding only (up to 7 + 7 strands) 5.9.2.3.1b still fails; the plate's draped web columns (6 draped, y 31 / 9 in) cannot be entered (the draped group is drawn centred, inside the void: an input error; PS33-D1).
+### Saved data (CLAUDE.md §5)
+- None: no key, field or format.
+### Governing provisions
+- None changed (display text and tests only).
+### Check cases (hand)
+- Solid 36 × 27 in rectangle: I = b h³ / 12 = 36 × 27³ / 12 = 36 × 19,683 / 12 = 59,049 in⁴ < 97,756 in⁴ (the old entry).
+- The note's plates and pages are those of `STD[n].src` (PS-30 / PS-32 table above); slab spacings ±8 in (36 series) and 0, ±14 in (48 series) as PS32-D1.
+### How verified
+- `node tests/engine/run.mjs psbridge tex project-registry`: 23 files, 219 passed, 0 failed (new PR A test in `psbridge-sections.test.mjs`; the harness B design counts 17 → 18 in `psbridge-legacy`, `psbridge-strandfit`, `psbridge-types` and descriptions).
+- `node tests/check-syntax.mjs`: all scripts pass (168 files).
+- Smokes: `ps-bridge-skeleton.mjs` 267 checks, 0 failed (3n: the note on the Girders & strands tab and in the Report); `ps-bridge-types.mjs` 106 / 0; `ps-bridge-3d.mjs` 101 / 0.
+- Harness B: normal, 18 designs, 45,960 shown values and 8,020 step values, 0 differences, exit 0; `--control` on the new design: exit 1; `--import` on the new design: 0 differences, exit 0.
+### Decisions (pending engineer review)
+- PRA-D1. The harness B passing design adds 4 top strands (y = 37 in) and debonding (4 strands 10 ft, 4 strands 6 ft) to the plate's two 16-strand rows: with the two rows alone the release tension at the ends fails at every span tried (50–90 ft), and the plate's draped web columns cannot be entered with the contiguous-row model (PS33-D1). Top strands are not on plate 5.2.3; they stand in for the draped strands' release-tension relief.
+### Open items
+- None.
+### Other copies
+- None.

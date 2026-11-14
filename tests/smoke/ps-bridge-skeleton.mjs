@@ -423,6 +423,10 @@ await o.b.close();
   const r = await p.evaluate(() => ({ g: [...document.querySelectorAll('#out [data-ev="g.A"], #out [data-ev="g.I"]')].map(e => e.textContent), note: (document.getElementById('sec-void-note') || {}).textContent || '', sel: document.getElementById('i_base.girder') ? document.getElementById('i_base.girder').value : null }));
   check(r.g[0] === '730.6' && r.g[1] === '132,895' && /centred between the 5\.5 in top and bottom slabs/.test(r.note), 'PS-30: Section properties A, I = the plate; the note ' + JSON.stringify(r).slice(0, 300));
   if (args.shots) await p.screenshot({ path: path.join(args.shots, 'ps-bridge-ps31-banner.png') });
+  // PR A (engineer request 2026-11-14): the "to be confirmed" note in the Girders & strands tab's shape card
+  await p.click('#inTabs [data-itab="gird"]'); await p.waitForTimeout(300);
+  const tbc = (await p.textContent('#secTbcNote').catch(() => '')) || '';
+  check(/^To be confirmed: A, I and yb of this box beam are taken from CTDOT BDM plate 5\.2\.1b \(PDF p\. 327\)\. They replace the old app's box beam and voided slab library, which was found inconsistent \(e\.g\. the old "BIII-36 \(27in\)" gave I = 97,756 in⁴, more than a solid 36 × 27 in rectangle at 59,049 in⁴\)\. The replacement is to be confirmed by the engineer against the DOT reference sheets\.$/.test(tbc) && await p.isVisible('#secTbcNote'), 'PR A: the to-be-confirmed note on the Girders & strands tab ' + tbc.slice(0, 200));
   await p.click('#tabBar [data-otab="flex"]'); await p.waitForTimeout(300); check(await p.isVisible('#secNotice'), 'PS-31: the banner on another output tab');
   await p.click('[data-secdismiss]'); await p.waitForTimeout(300);
   let sv = JSON.parse((await lsSnap(p))['psb2.project.current']);
@@ -430,6 +434,7 @@ await o.b.close();
   await p.reload(); await ready(p); check(!(await p.isVisible('#secNotice')), 'PS-31: stays closed after a reload');
   await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 60000 });
   check(/section corrected \(PS-31\)/.test(await p.textContent('.rp-doc')), 'PS-31: the Report states it');
+  check(/AASHTO BIII-36 \(39in\): To be confirmed: A, I and .{1,12} of this box beam are taken from CTDOT BDM plate 5\.2\.1b/.test(await p.textContent('.rp-doc')), 'PR A: the Report assumptions state the to-be-confirmed note');
   await p.evaluate(() => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project; P.base.girder = 'Deck slab 27×48 (voided)'; localStorage.setItem('psb2.project.current', window.PSBModel.exportJSON(P)); });
   await p.reload(); await ready(p); await p.click('#tabBar [data-otab="sec"]'); await p.waitForTimeout(300);
   const e = await p.textContent('#out');

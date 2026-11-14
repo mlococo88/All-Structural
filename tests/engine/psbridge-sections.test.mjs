@@ -18,7 +18,7 @@ import { TAB_CASES } from './psbridge-tab-cases.mjs';
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
 const ENG = ['sections', 'model', 'rigid', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'legacy', 'worked', 'worked-stress', 'worked-strength', 'worked-end', 'worked-hdr'].map(n => path.join(APP, `engine/${n}.js`));
-const UI = ['outkit', 'vizkit', 'section'].map(n => path.join(APP, `ui/${n}.js`));
+const UI = ['outkit', 'vizkit', 'section', 'inputs'].map(n => path.join(APP, `ui/${n}.js`));
 const W = loadShared('steps.js', ...PBD, ...ENG, ...UI, 'report.js', ...['fromtab', 'data', 'builders'].map(n => path.join(APP, `report/${n}.js`)));
 const W0 = loadShared(...PBD);   // the moved engine alone: the old library
 const G = vm.runInContext('GIRDERS', W), G0 = vm.runInContext('GIRDERS', W0), D0 = vm.runInContext('DEFAULTS', W);
@@ -146,6 +146,29 @@ test('PS-30 / PS-31 (4): the Section properties note (plate, void, drawn outline
   // no PS-31 assumption for a project that never had an old name
   const B2 = W.PSBReportData.compute(proj('AASHTO BIII-36 (39in)'), null), a2 = W.PSBReportBuild.model(B2).sections.find(q => q.id === 'proj').subs.find(q => /Assumptions/.test(q.title));
   assert.ok(!/PS-31/.test(JSON.stringify(a2.items)));
+});
+
+/* PR A (engineer request 2026-11-14): the "to be confirmed" note on the Girders & strands tab (the shape card, wherever a standard box beam
+   or voided slab is selected: the base design or a girder type's own inputs) and in the Report's assumptions (each standard shape once) */
+test('PR A: the "to be confirmed" note of every standard box / voided slab (Girders & strands tab, Report assumptions); none for other shapes', () => {
+  const OLDI = /the old "BIII-36 \(27in\)" gave I = 97,756 in⁴, more than a solid 36 × 27 in rectangle at 59,049 in⁴/;
+  [...S.ORDER_BOX, ...S.ORDER_SLAB].forEach(n => {
+    const t = S.tbcNote(n), box = S.STD[n].box, sp = S.STD[n].w > 40 ? '0, ±14' : '±8';
+    assert.match(t, new RegExp(`^To be confirmed: A, I and y<sub>b</sub> of this ${box ? 'box beam' : 'voided slab'} are taken from CTDOT BDM plate ${box ? '5\\.2\\.1b' : S.STD[n].w > 40 ? '5\\.1\\.2c' : '5\\.1\\.1c'} `), n);
+    assert.match(t, OLDI, n); assert.match(t, /to be confirmed by the engineer against the DOT reference sheets\./, n);
+    if (box) assert.ok(!/void spacing/.test(t), n); else assert.ok(t.includes(`The void spacing (void centres at ${sp} in from the ℄) is scaled from the plate drawing, not dimensioned on it, and is to be confirmed.`), n + ': ' + t);
+    // the Girders & strands tab's shape card (base design)
+    const html = W.PSBInputsUI.cards('gird', proj(n));
+    assert.ok(html.includes(`id="secTbcNote"><b>${t}</b>`), n);
+  });
+  ['PCI BT-72', 'NEXT 36F', 'Deck slab 12×48 (solid)', 'Custom'].forEach(n => assert.equal(S.tbcNote(n), '', n));
+  assert.ok(!W.PSBInputsUI.cards('gird', proj('PCI BT-72')).includes('secTbcNote'));
+  // the Report §2 assumptions: one note per standard shape of the report (the base design here)
+  const B = W.PSBReportData.compute(proj('AASHTO SIV-48 (21in)'), null), a = W.PSBReportBuild.model(B).sections.find(q => q.id === 'proj').subs.find(q => /Assumptions/.test(q.title)), at = JSON.stringify(a.items);
+  assert.ok(at.includes('AASHTO SIV-48 (21in): To be confirmed: A, I and y$_{b}$ of this voided slab are taken from CTDOT BDM plate 5.1.2c (PDF p. 317).'), at.slice(0, 900));
+  assert.equal((at.match(/To be confirmed/g) || []).length, 1);
+  const B2 = W.PSBReportData.compute(proj('PCI BT-72'), null), a2 = W.PSBReportBuild.model(B2).sections.find(q => q.id === 'proj').subs.find(q => /Assumptions/.test(q.title));
+  assert.ok(!/To be confirmed/.test(JSON.stringify(a2.items)));
 });
 
 /* §4 check cases (the PR's before / after): harness B "box BIII-36 with a 6 in topping" and a default-strand BI-36. "Before" = the old library
