@@ -11,7 +11,7 @@ import { TAB_CASES } from './psbridge-tab-cases.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBDF = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared('steps.js', ...PBDF, ...['model', 'rigid', 'holddown', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck'].map(n => path.join(APP, `engine/${n}.js`)));
+const W = loadShared('steps.js', ...PBDF, ...['sections', 'model', 'rigid', 'holddown', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck'].map(n => path.join(APP, `engine/${n}.js`)));
 const M = W.PSBModel, D = W.PSBDesign;
 const J = v => JSON.parse(JSON.stringify(v));
 const sub = t => `_${t}`;

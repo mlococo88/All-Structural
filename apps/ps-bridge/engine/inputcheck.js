@@ -75,7 +75,10 @@
         const x = get(P, f.p), lab = plain(f.l);
         if (f.k === 'bool') { if (x !== undefined && typeof x !== 'boolean')   // undefined: a switch the old DEFAULTS lack (cont.topRC), read as off by the engine (!!)
           E(f.p, `${lab}: choose one of the options.`, 'field'); return; }
-        if (f.k === 'sel') { const o = typeof f.o === 'function' ? f.o() : f.o; if (!o.some(q => String(q[0]) === String(x))) E(f.p, `${lab}: choose one of the options.`, 'field'); return; }
+        if (f.k === 'sel') { const o = typeof f.o === 'function' ? f.o() : f.o;
+          // PS-31: an old library section with no corrected standard (Deck slab 27×48 (voided)) is named in the message (engine/sections.js)
+          const rm = f.p === 'base.girder' && window.PSBSections ? window.PSBSections.retiredMsg(x) : '';
+          if (!o.some(q => String(q[0]) === String(x))) E(f.p, rm || `${lab}: choose one of the options.`, 'field'); return; }
         if (f.k === 'opt' && (x === '' || x == null)) return;
         const m = ruleMsg(x, f); if (m) E(f.p, `${lab} ${m}.`, 'field');
       });

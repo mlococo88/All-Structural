@@ -2295,3 +2295,7 @@ const PbdListTable = window.SharedListInput ? SharedListInput.react(React) : nul
   blob `00a3a34e1421b28ad12c760d113f597f1a3a7c60`), and `tests/engine/psbridge-parity.test.mjs` compares the two. A fix made here later must
   be made in the moved copy too, with the pin in `tests/engine/psbridge-source.mjs` moved and the parity harness rerun (see `fixlog/ps-bridge.md`).
 - `Prestressed Bridge Design.html` itself is unchanged by this PR.
+
+## 2026-11-14 — NOTE: the box beam and voided deck slab entries of this file's girder library are wrong (PS-30 / PS-32 of PS Bridge, PR #PR30: https://github.com/mlococo88/All-Structural/pull/PR30)   [no change to this file]
+- This file is frozen (PS-14 g): it is NOT fixed here. Its `GIRDERS` entries 'AASHTO BI-36 (12in)', 'AASHTO BII-36 (18in)', 'AASHTO BIII-36 (27in)', 'AASHTO BIV-48 (33in)', 'Deck slab 21×48 (voided)' and 'Deck slab 27×48 (voided)' (anchor `'AASHTO BI-36 (12in)':{box:true,h:12,w:36,A:560, I:12897`) have depths that are not AASHTO box depths and published I greater than the I of the solid h × w rectangle (impossible); their A / I / y_b match neither the drawn shape nor a standard section. Every box / voided-slab result of this file is unreliable.
+- The PS Bridge app (`apps/ps-bridge/`) replaces them with the CTDOT Bridge Design Manual plate sections (plates 5.2.1a/b, 5.1.1a–c, 5.1.2a–c) in an app-side module (`engine/sections.js`) and migrates saved projects; see `fixlog/ps-bridge.md` (PS-30 / PS-31 / PS-32). The solid deck slabs and the I-girder / bulb-tee / NEXT entries are unchanged.

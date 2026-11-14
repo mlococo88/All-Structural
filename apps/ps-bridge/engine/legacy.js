@@ -222,7 +222,10 @@
   /* verify(c): computes the old inputs (the old app's) and the imported project's engine inputs with the same moved engine; records in
      c.summary.results { same, values, warns, nChecks, diffs, ps10 } and returns it. Values = everything computeAll returns but its warnings. */
   function verify(c) {
-    const Ro = computeAll(clone(c.old)), inp = window.PSBDesign.inputs(c.project), Rn = computeAll(clone(inp));
+    // PS-31: an old box / voided slab name is computed with the old library entry (engine/sections.js withLegacy): the comparison is of the
+    // import (the old inputs and this project's, both before the section correction); the correction itself is applied after (ui/legacy.js)
+    const WL = fn => (window.PSBSections ? window.PSBSections.withLegacy(fn) : fn());
+    const Ro = WL(() => computeAll(clone(c.old))), inp = window.PSBDesign.inputs(c.project), Rn = WL(() => computeAll(clone(inp)));
     // the record of how the continuous unit was found (contUnit: src 'assumed' / 'bridge', assumed, Lbridge) differs where the old design had
     // one span entered or a bridge-bar span other than L (imported as computed, see convert): compared apart from the values
     const REC = ['src', 'assumed', 'Lbridge'];
@@ -291,7 +294,8 @@
       if (br.mode !== 'mod') oldInp = PBD().applyBridge(br, oldInp, c.g, c.s);
       oldInp.external = null;
       const val = R => { const o = Object.assign({}, R); delete o.warns; if (o.cont && o.cont.unit) { o.cont = Object.assign({}, o.cont, { unit: Object.assign({}, o.cont.unit) }); ['src', 'assumed', 'Lbridge'].forEach(q => delete o.cont.unit[q]); } return o; };
-      let Ro, Rn; try { Ro = computeAll(clone(oldInp)); Rn = computeAll(clone(inp)); } catch (e) { c.same = false; c.why = e.message; return; }
+      let Ro, Rn; try { const WL = fn => (window.PSBSections ? window.PSBSections.withLegacy(fn) : fn());   // PS-31: old names with the old entries (as verify)
+        Ro = WL(() => computeAll(clone(oldInp))); Rn = WL(() => computeAll(clone(inp))); } catch (e) { c.same = false; c.why = e.message; return; }
       c.same = canon(val(Ro)) === canon(val(Rn));
       if (!c.same) { const dd = diffs(Object.assign(clone(oldInp), { proj: 0, opt: Object.assign({}, oldInp.opt, { hdCheck: 0, hdFrac: 0 }) }), Object.assign(clone(inp), { proj: 0, opt: Object.assign({}, inp.opt, { hdCheck: 0, hdFrac: 0 }) }), '', [], []);
         c.why = dd.length ? dd.slice(0, 5).map(d => `${LBL[d.path] || d.path} old ${show(d.old)}, here ${show(d.now)}`).join('; ') : 'the same inputs; ' + firstDiffs(val(Ro), val(Rn), '', [], 3).join(', '); }

@@ -64,6 +64,7 @@ const TMP = IMPORT ? fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'psb
 let nImp = 0, nImpKeys = 0; const impNotes = [];
 const SEED = { 'psbeam.inputs.v1': '{"girder":"PCI BT-72","L":118}', 'psbeam.ui.v1': '{"tab":"losses"}' };
 let fails = 0, errors = 0, n29 = 0; const d29 = [];   // PS-29
+let nStd = 0; const dStd = [], bad0 = [];   // PS-30 / PS-31
 const log = s => console.log(s);
 // reloadKept(p, name, o, wait): reload the new page and check that the keys o the harness just put are in the reloaded page's storage, each
 // value as put. 2026-11-13 (PR PS-19): now and then the reloaded page saw a store with none of them (only the seed and psb2.ui: the page's
@@ -105,6 +106,7 @@ for (const name of names) {
     const how = IMP_WAYS[nImp++ % 4], ctl = args.control && nImp === 1;
     const seed = await nw.p.evaluate(([src, nm, how, ctl]) => { eval(src); const P = window.__TAB_CASES(() => window.PSBModel.defaultProject())[nm], inp = window.PSBDesign.inputs(P);
       const saved = JSON.parse(JSON.stringify(inp)); if (ctl) saved.mat.fc = +saved.mat.fc + 0.1;
+      const SC = window.PSBSections, leg = SC && SC.STD[saved.girder] ? Object.keys(SC.MAP).find(k => SC.MAP[k] === saved.girder) : null; if (leg) saved.girder = leg;   // PS-31: the old app saved the old library's name
       const br = window.PBD.migrate(saved, 'pl'); br.projId = how === 'shared' ? 'bp_h' : null; br.designs['G1/S1x'] = saved;   // + one more stored design
       const o = {};
       for (let i = localStorage.length - 1; i >= 0; i--) { const k = localStorage.key(i); if (/^(psbeam\.(inputs|bridge|projects)\.v1|bridgeSuite\.)/.test(k)) localStorage.removeItem(k); }
@@ -123,7 +125,7 @@ for (const name of names) {
     const imp = await nw.p.evaluate(o => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, i = window.PSBDesign.inputs(P), changed = Object.keys(o).filter(k => localStorage.getItem(k) !== o[k]);
       const t = document.getElementById('notices'), tb = document.getElementById('tabBar').getBoundingClientRect();
       const ns = t ? [...t.querySelectorAll('.notice')] : [], below = ns.every(n => getComputedStyle(n).position === 'static' && n.getBoundingClientRect().top >= tb.bottom - 0.5);
-      return { res: (document.getElementById('lgRes') || {}).textContent || '', i, changed, src: P.legacy && P.legacy.source.key, note: t ? t.textContent : '', place: below ? '' : 'over the tab bar' }; }, seed.o);
+      return { res: (document.getElementById('lgRes') || {}).textContent || '', sec: (document.getElementById('lgSec') || {}).textContent || '', i, changed, src: P.legacy && P.legacy.source.key, note: t ? t.textContent : '', place: below ? '' : 'over the tab bar' }; }, seed.o);
     // PR 3a-4 (PS-17): with a bridge model (autosave, shared) the restore notice names the harness's one more stored design 'G1/S1x' as not
     // restored (not a girder × span cell); without one (older, file) no notice. PS-22: the notice is an inline banner below the tab bar (a
     // notice over the tab bar is a difference); it is read, then closed with its Close button.
@@ -131,7 +133,7 @@ for (const name of names) {
     if (imp.place) imp.note += ' [' + imp.place + ']';
     while (await nw.p.isVisible('#notices .nClose')) await nw.p.click('#notices .nClose');
     const strip = x => { const y = JSON.parse(JSON.stringify(x)); delete y.proj; if (y.opt) { delete y.opt.hdCheck; delete y.opt.hdFrac; } return y; };
-    impNotes.push({ name, how, ok: /Results: the same as the old app/.test(imp.res), res: imp.res.slice(0, 160), sameInp: JSON.stringify(strip(imp.i)) === JSON.stringify(strip(inp)), changed: imp.changed, ctl, note: imp.note, wantNote });
+    impNotes.push({ name, how, sec: imp.sec, ok: /Results: the same as the old app/.test(imp.res), res: imp.res.slice(0, 160), sameInp: JSON.stringify(strip(imp.i)) === JSON.stringify(strip(inp)), changed: imp.changed, ctl, note: imp.note, wantNote });
     nImpKeys += Object.keys(seed.o).length + (how === 'file' ? 1 : 0);
   }
   const shown = [], steps = []; let ps10 = null, k10 = -1, colOwn = null, ps29 = null;
@@ -185,13 +187,27 @@ for (const name of names) {
     });
     shown.push(...rpt.ev); steps.push(...rpt.st);
   }
+  // PS-30 / PS-31 (engineer decisions 2026-11-14): a standard box beam / voided slab of the CTDOT plates (engine/sections.js) is not in the
+  // frozen old app's library (it has the old, wrong entries). The intended difference: the expected values are the old app's own engine with
+  // the plate's entry put in its GIRDERS under the new name (computeAll of the same inputs: every other value as before), independent of
+  // this app's library module and migration; the new page's gross section must be the plate's A, I, y_b. The old page is opened on the inputs
+  // with the old library name of that section (one it knows; else the BT-72), then computes the real inputs. The old app's values with the old
+  // entry are logged (before / after).
+  const std = await nw.p.evaluate(g => { const S = window.PSBSections; if (!S || !S.STD[g]) return null;
+    const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, R = window.PSBHoldDown.compute(window.PSBDesign.inputs(P));
+    return { entry: S.engineOf(S.STD[g]), src: S.STD[g].src, leg: Object.keys(S.MAP).find(k => S.MAP[k] === g) || null, g: { h: R.g.h, A: R.g.A, I: R.g.I, yb: R.g.yb, w: R.g.w } }; }, inp.girder);
+  const oldStore = std ? Object.assign({}, inp, { girder: std.leg || 'PCI BT-72' }) : inp;
   // 2. the old app on the same inputs
-  await old.p.evaluate(i => { localStorage.clear(); localStorage.setItem('psbeam.inputs.v1', JSON.stringify(i)); }, inp);
+  await old.p.evaluate(i => { localStorage.clear(); localStorage.setItem('psbeam.inputs.v1', JSON.stringify(i)); }, oldStore);
   await old.p.reload(); await old.p.waitForFunction(() => typeof computeAll === 'function', null, { timeout: 120000 }); await old.p.waitForTimeout(1500);
   const isPS10 = p => /^ps10\./.test(p) || (k10 >= 0 && new RegExp(`^checks\\.${k10}\\.`).test(p));
   const paths = [...new Set(shown.map(q => q.path).concat(steps.map(q => q.path)))].filter(p => !isPS10(p));
-  const o = await old.p.evaluate(([i, paths]) => {
+  const o = await old.p.evaluate(([i, paths, std]) => {
     let loaded = null; try { loaded = JSON.parse(localStorage.getItem('psbeam.inputs.v1')); } catch (e) { /* none */ }
+    let before = null;
+    if (std) { GIRDERS[i.girder] = std.entry;   // PS-30 / PS-31: the plate's entry (see above)
+      if (std.leg) { const Rb = computeAll(Object.assign({}, i, { girder: std.leg })), Ra = computeAll(i), pick = R => ({ h: R.g.h, A: R.g.A, I: R.g.I, yb: R.g.yb, Sb: R.g.Sb, St: R.g.St, phiMn: R.fMid.phiMn / 12, MuMid: R.MuMid / 12,
+        checks: R.checks.map(c => [c.n, c.r, c.pass]) }); before = { old: pick(Rb), now: pick(Ra) }; } }
     const R = computeAll(i), at = (o, p) => p.split('.').reduce((q, k) => q == null ? q : q[k], o), vals = {};
     paths.forEach(p => { vals[p] = at(R, p); });
     // PS-10 hand values (no counterpart in the old app): from the inputs and the old app's f_pbt, A_b, w_sw
@@ -203,16 +219,21 @@ for (const name of names) {
     // PS-29: the old Losses tab's displayed "f_pe with permanent gains credited" (f_pe + Δf_p,perm + Δf_pSS, its line ~6663) and the parts
     // of the new value worked here from the old app's components
     const ps29 = { fpe: R.fpe, pc: R.gains.precast, cmp: R.gains.composite, ss: R.gains.deckShr, refd: i.opt.lossMethod === 'refined', oldShown: R.fpeGain + R.gains.deckShr };
-    return { vals, err: R.error, loaded, hand, oldChecks: R.checks.length, orpt, ps29 };
-  }, [inp, paths]);
+    return { vals, err: R.error, loaded, hand, oldChecks: R.checks.length, orpt, ps29, before };
+  }, [inp, paths, std]);
   if (o.err) { log(`ERROR ${name}: the old app's engine: ${o.err}`); errors++; continue; }
-  const same = JSON.stringify(o.loaded) === JSON.stringify(inp);
+  const same = JSON.stringify(o.loaded) === JSON.stringify(oldStore);
+  if (std) { nStd++; const want = { h: std.entry.h, A: std.entry.A, I: std.entry.I, yb: std.entry.yb, w: std.entry.w };
+    if (JSON.stringify(std.g) !== JSON.stringify(want)) bad0.push(`PS-30: the new page's gross section ${JSON.stringify(std.g)} vs the plate's ${JSON.stringify(want)} (CTDOT BDM plate ${std.src.plate})`);
+    if (o.before) { const b = o.before, f = (v, d) => (+v).toFixed(d); dStd.push(`${name}: ${std.leg} -> ${inp.girder} (plate ${std.src.plate}, PDF p. ${std.src.page}): h ${b.old.h} -> ${b.now.h} in, A ${b.old.A} -> ${b.now.A} in², I ${b.old.I} -> ${b.now.I} in⁴, y_b ${b.old.yb} -> ${b.now.yb} in, S_b ${f(b.old.Sb, 0)} -> ${f(b.now.Sb, 0)} in³, S_t ${f(b.old.St, 0)} -> ${f(b.now.St, 0)} in³, φM_n ${f(b.old.phiMn, 0)} -> ${f(b.now.phiMn, 0)} k-ft (M_u ${f(b.old.MuMid, 0)} -> ${f(b.now.MuMid, 0)}); ratios changed: ${b.old.checks.map((c, j) => [c, b.now.checks[j]]).filter(([c, d]) => d && Math.abs(c[1] - d[1]) > 5e-4).map(([c, d]) => `${c[0]} ${f(c[1], 3)}${c[2] ? '' : ' FAIL'} -> ${f(d[1], 3)}${d[2] ? '' : ' FAIL'}`).join('; ')}`); }
+    if (IMPORT && std.leg) { const q = impNotes[impNotes.length - 1];
+      if (!/^Section corrected after the import \(PS-31\)/.test(q.sec) || !q.sec.includes(`"${std.leg}" → "${inp.girder}"`)) bad0.push(`PS-31 import (${q.how}): the summary's section-corrected alert "${q.sec.slice(0, 200)}"`); } }
   // 3. compare
   const imp = IMPORT ? impNotes[impNotes.length - 1] : null;
   if (args.control && shown.length && steps.length) { shown[0].v *= 1 + 1e-9; steps[0].v = steps[0].v * (1 + 1e-9); }
   if (args.control && rpt) { const a = shown.find(q => /^rpt:/.test(q.tab) && !isPS10(q.path)), b = steps.find(q => /^rpt:/.test(q.tab) && !isPS10(q.path)); if (a) a.v *= 1 + 1e-9; if (b) b.v *= 1 + 1e-9; rpt.sum.kq.fpe += 0.01; }
   const fx = (v, d) => typeof v === 'number' && isFinite(v) ? v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }).replace(/^-(0(\.0*)?)$/, '$1') : '—';
-  const bad = [], near = (a, b) => typeof a === 'number' && Math.abs(a - b) <= 1e-12 * Math.max(1, Math.abs(b));
+  const bad = bad0.splice(0), near = (a, b) => typeof a === 'number' && Math.abs(a - b) <= 1e-12 * Math.max(1, Math.abs(b));
   // PS-10: applies where the hand rule says so; its values = the hand values
   if (!!(ps10 && !ps10.off) !== o.hand.applies) bad.push(`PS-10: the new app ${ps10 && !ps10.off ? 'checks' : 'does not check'}, the hand rule says ${o.hand.applies ? 'check' : 'no check'}`);
   if (k10 >= 0 && k10 !== o.oldChecks) bad.push(`PS-10 check index ${k10}, the old app has ${o.oldChecks} checks (the addition must come last)`);
@@ -283,6 +304,7 @@ const other = Object.keys(ls).filter(k => !k.startsWith('psb2.') && !(k in SEED)
 if (other.length) { fails++; log('DIFF storage: keys other than psb2.* written: ' + other.join(', ')); }
 const cerr = nw.errs.concat(old.errs.filter(e => !/Failed to load resource|deoptimised the styling/.test(e)));
 if (cerr.length) { errors++; log('ERROR console: ' + cerr.slice(0, 5).join(' | ')); }
+if (nStd) { log(`PS-30 / PS-31: ${nStd} designs with a standard box / voided slab of the CTDOT plates, compared with the old app's engine computing the plate's entry (intended difference from its own wrong table; before = the old app with the old entry):`); dStd.forEach(t => log('    ' + t)); }
 if (n29) { log(`PS-29: ${n29} designs, the shown f_pe with the permanent gains = f_pe + Δf_p,DC1 + Δf_p,SD (worked here); intended differences from the old app's display (Δf_pSS no longer added): ${d29.length}`); d29.forEach(t => log('    ' + t)); }
 await nw.b.close(); await old.b.close();
 if (IMPORT) fs.rmSync(TMP, { recursive: true, force: true });

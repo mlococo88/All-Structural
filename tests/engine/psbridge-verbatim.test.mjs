@@ -40,5 +40,6 @@ test('each file compiles alone as a classic script; the page loads them first, i
   const html = fs.readFileSync(path.join(ROOT, 'apps/ps-bridge/index.html'), 'utf8');
   const list = [...html.matchAll(/^\s*'([^']+\.js)',?/gm)].map(m => m[1]);
   assert.deepEqual(list.slice(0, SLICES.length), SLICES.map(s => 'engine/' + s.file));
-  assert.equal(list[SLICES.length], 'engine/model.js');
+  assert.equal(list[SLICES.length], 'engine/sections.js');   // PS-30 / PS-32 (2026-11-14): the app-side library correction, right after the moved engine
+  assert.equal(list[SLICES.length + 1], 'engine/model.js');
 });

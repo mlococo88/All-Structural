@@ -45,6 +45,7 @@
     'engine/pbd-compute.js',
     'engine/pbd-optimize.js',
     'engine/pbd-merge.js',
+    'engine/sections.js',    // PS-30 / PS-32: the box beams and voided deck slabs of the CTDOT BDM plates (an app-side library correction, §4); PS-31 migration
     'engine/model.js',
     'engine/rigid.js',       // PS-19: the exterior rigid-section factor on the real girder lines (unequal bays; an engine addition, §4)
     'engine/holddown.js',    // PR 2d-3: the optional hold-down check for AASHTO / RIDOT (PS-10), an engine addition after computeAll (§4)
@@ -418,7 +419,7 @@
   const IN = window.PSBInputsUI, LGUI = window.PSBLegacyUI;
   /* PR 2f: "From the old app" (ui/legacy.js): an import replaces the open project, as Import JSON does (asked first there) */
   const lgCtx = { store: LS, gotoOut: t => gotoOut(t), pickFile: () => $('fImport').click(),
-    replace: Q => { BR.migrate(Q); const rn = window.PSBLegacy.restore(Q); P = Q; autosave = true; ui.itab = 'proj'; ui.scope = ''; saveUi(); changed(); if (rn) toast(rn); } };   // PR 3a-4 (PS-17): the old model's other designs restored
+    replace: Q => { BR.migrate(Q); const rn = window.PSBLegacy.restore(Q); if (window.PSBSections) window.PSBSections.migrate(Q); P = Q; autosave = true; ui.itab = 'proj'; ui.scope = ''; saveUi(); changed(); if (rn) toast(rn); } };   // PR 3a-4 (PS-17): the old model's other designs restored
   /* typesDone(r): a girder-type control was handled (ui/types.js): redraw (ui only) or save and redraw, with its message */
   function typesDone(r) { if (!r || r.cancel) return; if (r.ui && !r.note) { saveUi(); if (!r.keep) drawInputs(); return; } saveUi(); changed(); if (r.note) toast(r.note); }
   $('inPanes').addEventListener('change', e => {
@@ -545,6 +546,7 @@
     $('tabBar').innerHTML = OTABS.map(([k, t]) => `<button type="button" role="tab" data-otab="${k}" aria-selected="${ui.otab === k}">${t}</button>`).join('');
     let h = '';
     if (L.note) h += `<div class="alert err">${esc(L.note)}</div>`;
+    h += secNotice();   // PS-31: the old box / voided slab section corrected (or removed)
     if (errs.length) h += window.PSBInputCheckUI.blocked(errs, icO());
     h += `<div class="alert">In development (PR 3a-2): Section properties, Loads &amp; LLDF, Analysis, Losses, Stresses, Flexure, Shear, End zone &amp; hold-down, Camber &amp; deflection, Handling, Deck and Rating show the results of the girder type and line chosen above them, and the Report all of them. Use the old <a href="../../Prestressed%20Bridge%20Design.html">Prestressed Bridge Design</a> for design work.</div>`;
     const name = (OTABS.find(t => t[0] === ui.otab) || [, ''])[1];
@@ -584,6 +586,7 @@
   const gotoStep = (t, id) => { gotoOut(t); if (id) { const el = window.SharedSteps.reveal($('out'), id); if (el) el.scrollIntoView({ block: 'center' }); } };
   $('tabBar').addEventListener('click', e => { const b = e.target.closest('[data-otab]'); if (b) gotoOut(b.dataset.otab); });
   $('out').addEventListener('click', e => {
+    if (e.target.closest('[data-secdismiss]')) { P.notices = Object.assign({}, P.notices, { sec: window.PSBSections.sig(P) }); changed(); return; }   // PS-31: closed for this project (shown again if another section is corrected)
     if (e.target.closest('[data-dedismiss]')) { const D = window.PSBDesign.deDiff(P); P.notices = Object.assign({}, P.notices, { de: D.sig }); changed(); return; }   // PS-23: dismissed for this project
     const a = e.target.closest('[data-icgo]'); if (a) { e.preventDefault(); gotoErr(+a.dataset.icgo); return; }
     // PR 3b: a Summary value: its girder type and line shown, then its tab at the worked step (a group on an input tab: that tab and its row, as the
@@ -617,6 +620,14 @@
      distribution factors use the computed value; it stays until dismissed for this project: the dismissal is kept in the project
      (P.notices.de = the difference dismissed, PSBDesign.deDiff sig; optional field, nothing else changed) and a different difference shows
      it again. None where they match (or no cross-section barriers). The Report lists the same difference in its assumptions (always). */
+  /* secNotice(): PS-31 (engineer decision 2026-11-14): a project that used one of the old library's box beams or voided deck slabs was
+     migrated on open to the corrected standard section (engine/sections.js; the old values in P.legacySection). A banner above the content of
+     every output tab states, per base design / girder type, "section corrected: old A / I / y_b → new" (or that the section was removed),
+     until closed (P.notices.sec = the items closed; optional field, nothing else changed); the Report's §2 states it too. */
+  function secNotice() {
+    const SC = window.PSBSections, its = SC ? SC.items(P) : []; if (!its.length || (P.notices && P.notices.sec === SC.sig(P))) return '';
+    return `<div class="notice" id="secNotice" role="alert" style="border-left-color:var(--fail)"><div><b>Girder section corrected (PS-31).</b> ${its.map(x => esc(SC.text(x))).join(' ')} <a href="#" data-goin="gird">Girders &amp; strands tab</a>; <a href="#" data-gotab="sec">Section properties</a>.</div><div class="nBtns"><button type="button" data-secdismiss>Close</button></div></div>`;
+  }
   function deNotice() {
     const D = window.PSBDesign.deDiff(P); if (!D.rows.length || (P.notices && P.notices.de === D.sig)) return '';
     return `<div class="notice" id="deNotice" role="status"><div>${window.PSBDesign.deText(D, t => `<sub>${t}</sub>`)} <a href="#" data-goin="xsec">Cross-section tab</a>.</div><div class="nBtns"><button type="button" data-dedismiss>Close</button></div></div>`;

@@ -13,7 +13,7 @@ import { TAB_CASES } from './psbridge-tab-cases.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBDF = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared(...PBDF, ...['model', 'holddown', 'design', 'bridge', 'fields', 'inputcheck', 'legacy'].map(n => path.join(APP, `engine/${n}.js`)));
+const W = loadShared(...PBDF, ...['sections', 'model', 'holddown', 'design', 'bridge', 'fields', 'inputcheck', 'legacy'].map(n => path.join(APP, `engine/${n}.js`)));
 const LG = W.PSBLegacy, M = W.PSBModel, D = W.PSBDesign;
 const J = v => JSON.parse(JSON.stringify(v));
 // an independent exact comparison (Object.is per number: NaN, ±∞, −0 kept; functions left out)
@@ -56,7 +56,7 @@ test('harness A cases (658 old saved designs): every value identical, or the dif
   for (const c of cases) {
     const raw = c.saved == null ? {} : J(c.saved), r = LG.convert({ inputs: raw, kind: 'file', label: c.name });
     assert.equal(r.ok, true, c.name);
-    const old = J(W.mergeInputs(J(raw))), inp = D.inputs(r.project), Ro = W.computeAll(J(old)), Rn = W.computeAll(J(inp));
+    const old = J(W.mergeInputs(J(raw))), inp = D.inputs(r.project), WL = f => W.PSBSections.withLegacy(f), Ro = WL(() => W.computeAll(J(old))), Rn = WL(() => W.computeAll(J(inp)));   // PS-31: the old box / voided slab names with the old entries (as verify)
     const vs = C(vals(Ro)) === C(vals(Rn)), all = C(Ro) === C(Rn), v = LG.verify(r);
     assert.equal(v.same, all, c.name + ': verify'); assert.equal(v.values, vs, c.name + ': verify values');
     if (kinds(r, 'err').length) tally.inputErr++;

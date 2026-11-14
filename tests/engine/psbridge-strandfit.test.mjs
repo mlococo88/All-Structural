@@ -17,7 +17,7 @@ import { TAB_CASES } from './psbridge-tab-cases.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const ENG = ['model', 'rigid', 'holddown', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'legacy'].map(n => path.join(APP, `engine/${n}.js`));
+const ENG = ['sections', 'model', 'rigid', 'holddown', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'legacy'].map(n => path.join(APP, `engine/${n}.js`));
 const W = loadShared(...PBD, ...ENG, ...['vizkit', 'strands'].map(n => path.join(APP, `ui/${n}.js`)));
 const W0 = loadShared(...PBD, ...ENG);   // without ui/strands.js: the check is not made (the page always loads it, test 7)
 const GIRDERS = vm.runInContext('GIRDERS', W);
@@ -56,17 +56,21 @@ test('PS-28 (1): the criterion at hand-picked points (centre distances, 2 in; = 
   assert.equal(mf(T1, p1, -6, 2), '', 'x = −6: 2 in from the flange side (8 − 6) and 2 in above the soffit: fits');
   assert.equal(mf(T1, p1, -7, 2), 'is 1 in from the edge of the concrete (less than 2 in)');
   assert.equal(mf(T1, p1, 0, 1.5), 'is 1.5 in from the edge of the concrete (less than 2 in)');
-  const B1 = g('AASHTO BI-36 (12in)'), pb = outline(B1);   // 36 × 12 in, void 26 × 5 in on the 5 in bottom wall (y 5 to 10 in)
-  assert.deepEqual(J(W.sectionVoids(B1)), [{ type: 'rect', x: 0, y: 7.5, w: 26, h: 5 }]);
+  // PS-30 (2026-11-14): the CTDOT BI-36: 35.5 × 27 in, 5 in webs, void 25.5 × 16 in centred between the 5½ in slabs (x ±12.75, y 5.5 to 21.5 in)
+  const B1 = g('AASHTO BI-36 (27in)'), pb = outline(B1);
+  assert.deepEqual(J(W.sectionVoids(B1)), [{ type: 'rect', x: 0, y: 13.5, w: 25.5, h: 16 }]);
   assert.equal(mf(B1, pb, 0, 6), 'is inside a void');
-  assert.equal(mf(B1, pb, 0, 4), 'is 1 in from a void (less than 2 in)');
-  assert.equal(mf(B1, pb, 0, 3), '', 'y = 3: 2 in below the void: fits');
-  assert.equal(mf(B1, pb, 15, 6), '', 'in the side wall: 2 in from the void, 3 in from the outer face: fits');
-  assert.equal(mf(B1, pb, 14, 6), 'is 1 in from a void (less than 2 in)');
-  const D21 = g('Deck slab 21×48 (voided)'), pd = outline(D21);   // two 12 in round voids at x = ±12, y = 10.5
-  assert.equal(mf(D21, pd, -12, 10.5), 'is inside a void');
-  assert.equal(mf(D21, pd, 0, 10.5), '', '12 − 6 = 6 in from each void');
-  assert.equal(mf(D21, pd, -12, 3), 'is 1.5 in from a void (less than 2 in)');
+  assert.equal(mf(B1, pb, 0, 4), 'is 1.5 in from a void (less than 2 in)');
+  assert.equal(mf(B1, pb, 0, 3.5), '', 'y = 3.5: 2 in below the void: fits');
+  assert.equal(mf(B1, pb, 15, 6), '', 'in the web: 2.25 in from the void, 2.75 in from the outer face: fits');
+  assert.equal(mf(B1, pb, 14, 6), 'is 1.25 in from a void (less than 2 in)');
+  // PS-32: the CTDOT SIV-48: 47.5 × 21 in, voids Ø12 / Ø10 / Ø12 at x = −14 / 0 / 14 in on mid-depth (y = 10.5 in)
+  const D21 = g('AASHTO SIV-48 (21in)'), pd = outline(D21);
+  assert.equal(mf(D21, pd, -14, 10.5), 'is inside a void');
+  assert.equal(mf(D21, pd, -6.5, 10.5), 'is 1.5 in from a void (less than 2 in)');
+  assert.equal(mf(D21, pd, -14, 3), 'is 1.5 in from a void (less than 2 in)');
+  assert.equal(mf(D21, pd, -14, 2.5), '', '2 in below the Ø12 void (bottom at 4.5 in)');
+  assert.equal(mf(D21, pd, 0, 3.5), '', '2 in below the Ø10 void (bottom at 5.5 in)');
   assert.equal(IC.COVER, 2);
 });
 
@@ -97,7 +101,7 @@ test('PS-28 (2): collect\'s verdict = the PS-27 criterion over PSBStrandGfx.xy, 
   assert.ok(nCase > 1500 && nBad > 300, `${nCase} cases, ${nBad} that do not fit`);
 });
 
-test('PS-28 (3): the engineer\'s hand checks: AASHTO Type I with a 10-strand row; BI-36 with a row at y = 6 in', () => {
+test('PS-28 (3): the engineer\'s hand checks: AASHTO Type I with a 10-strand row; BI-36 (PS-30: the 27 in CTDOT section) with a row at y = 6 in', () => {
   // Type I, b_bf = 16 in: 10 strands on the 2 in grid about the ℄ at x = ±1, ±3, …, ±9 in: ±9 is past the flange side (8 in): error on the count
   let P = project('AASHTO Type I', [{ n: 10, y: 2 }], { n: 0 }), e = fitErrs(P);
   assert.deepEqual(e.map(x => x.path), ['base.rows.0.n']);
@@ -107,13 +111,13 @@ test('PS-28 (3): the engineer\'s hand checks: AASHTO Type I with a 10-strand row
   assert.match(fitErrs(project('AASHTO Type I', [{ n: 8, y: 2 }], { n: 0 }))[0].msg, /x = -7 in is 1 in from the edge of the concrete/);
   // the error blocks: it is in collect's errors (the page shows no results while errors[] is not empty)
   assert.ok(IC.collect(P).errors.some(x => x.path === 'base.rows.0.n'));
-  // BI-36: the void is 5 in to 10 in above the soffit (5 in wall); a row at y = 6 in is in it: error on y
-  P = project('AASHTO BI-36 (12in)', [{ n: 10, y: 2 }, { n: 4, y: 6 }], { n: 0 }); e = fitErrs(P);
+  // BI-36 (PS-30: 27 in, the void 5.5 in to 21.5 in above the soffit): a row at y = 6 in is in it: error on y
+  P = project('AASHTO BI-36 (27in)', [{ n: 10, y: 2 }, { n: 4, y: 6 }], { n: 0 }); e = fitErrs(P);
   assert.deepEqual(e.map(x => x.path), ['base.rows.1.y']); assert.equal(e[0].cell, 1);
-  assert.match(e[0].msg, /^Straight strand rows, row 2: 4 strands at y = 6 in do not fit the AASHTO BI-36 \(12in\): the strand at x = -3 in is inside a void;/);
-  assert.deepEqual(fitErrs(project('AASHTO BI-36 (12in)', [{ n: 10, y: 2 }, { n: 4, y: 3 }], { n: 0 })), [], 'y = 3 in: 2 in below the void');
+  assert.match(e[0].msg, /^Straight strand rows, row 2: 4 strands at y = 6 in do not fit the AASHTO BI-36 \(27in\): the strand at x = -3 in is inside a void;/);
+  assert.deepEqual(fitErrs(project('AASHTO BI-36 (27in)', [{ n: 10, y: 2 }, { n: 4, y: 3.5 }], { n: 0 })), [], 'y = 3.5 in: 2 in below the void');
   // a row of zero strands is skipped; the rows keep their own numbers (row 3 is the third entered row)
-  e = fitErrs(project('AASHTO BI-36 (12in)', [{ n: 10, y: 2 }, { n: 0, y: 4 }, { n: 4, y: 6 }], { n: 0 }));
+  e = fitErrs(project('AASHTO BI-36 (27in)', [{ n: 10, y: 2 }, { n: 0, y: 4 }, { n: 4, y: 6 }], { n: 0 }));
   assert.deepEqual(e.map(x => x.path), ['base.rows.2.y']);
   // a row y outside the depth keeps its own message only (no second error on that row)
   e = J(IC.collect(project('AASHTO Type I', [{ n: 4, y: 30 }], { n: 0 })).errors).filter(x => /^base\.rows\.0/.test(x.path));

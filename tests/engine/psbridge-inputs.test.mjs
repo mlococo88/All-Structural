@@ -7,7 +7,7 @@ import { loadShared, test, ROOT } from './harness.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared(...PBD, ...['model', 'design', 'fields', 'inputcheck'].map(n => path.join(APP, `engine/${n}.js`)));
+const W = loadShared(...PBD, ...['sections', 'model', 'design', 'fields', 'inputcheck'].map(n => path.join(APP, `engine/${n}.js`)));
 const J = v => JSON.parse(JSON.stringify(v));
 const errs = P => W.PSBInputCheck.collect(P).errors;
 
