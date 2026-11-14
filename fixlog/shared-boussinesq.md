@@ -71,3 +71,7 @@
 - None.
 ### Open items
 - None.
+
+## 2026-11-14 — PR: claude/sf-boussinesq-2 (PR #1537: https://github.com/mlococo88/All-Structural/pull/1537) (SFBQ-2) — Spread Footing now loads this file (no change to the file)
+- `Spread Footing.html` loads `shared/boussinesq.js` for Bearing card 3.5 "Stress below footing (Boussinesq)" and the Report subsection S-bous (see fixlog/Spread Footing.md, SFBQ-2). Consumers: Spread Footing.
+- Tests: `node tests/engine/run.mjs boussinesq`, `node tests/smoke/spread-footing-boussinesq.mjs`, `node tests/smoke/spread-footing-boussinesq-probe.mjs --a <origin/main checkout>`.

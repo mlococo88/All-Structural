@@ -62,6 +62,16 @@ node tests/smoke/dxf-print-sheets.mjs [--tool sf,...] [--out <dir for the PDFs>]
 # Spread Footing: the page itself never scrolls in the two-panel layout (links, scrollIntoView, focus, wheel, touch; 3 window sizes)
 node tests/smoke/spread-footing-scroll.mjs [--libs <folder with the pinned katex, plotly, three; default tests/libs>]
 
+# Spread Footing: Bearing 3.5 "Stress below footing (Boussinesq)" (SFBQ): the hand checks in the card (square 10 x 10 ft, q_net = 3 ksf:
+# centre z = 5, 10, 20 ft, corner z = 10 ft), gross basis, section along L, plan view, custom profile point, net uplift (no bulb, card and
+# Report), a picked uplift combination, partial contact, the migration of a save without the field, R / P2 independent of it; 1400 and
+# 390 px, figure text >= 10 px, no horizontal scroll, 0 console errors
+node tests/smoke/spread-footing-boussinesq.mjs [--file <file or git ref>] [--shots <dir>]
+
+# Spread Footing SFBQ probe: origin/main (a checkout with its shared/ folder) vs the working tree on 11 projects: R, P2, dashboard, every
+# result tab without card 3.5, the Report model without S-bous (anchor numbers and Plotly's random ids masked): identical
+node tests/smoke/spread-footing-boussinesq-probe.mjs --a <folder with the origin/main checkout> [--b <folder>]
+
 # Spread Footing: no service combination with a bearing solution (SFNB): no console error, Bearing FAIL with a reason, card 2.6, Report;
 # a renderer that throws marks its tab "Out of date"
 node tests/smoke/spread-footing-nobear.mjs [--file <file or git ref>] [--shots <dir>]

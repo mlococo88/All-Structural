@@ -8598,3 +8598,372 @@ index 58fb573..567da1c 100644
 - **Check case:** default project, Load input mode = Direct: option "Direct factored (ASCE 7 / indicative)"; the note under it starts "Direct factored mode, ASCE 7 basis / indicative:" and ends with "Bridge (AASHTO) work: …"; card 1.5 "Direct factored load mode is active (ASCE 7 basis / indicative)."; Report 3.1 Load input "Direct factored (LRFD envelope) per pedestal; ASCE 7 basis / indicative (1.2 / 0.9 dead-load bracket; stability indicative)". With an imported Strength I case on pedestal 1 (`state.bxSrc.foundationLoads`, applied = pedestal 1's direct set): option "Direct factored (imported AASHTO case)", 1.5 "… active (imported AASHTO case; stability indicative).", no "Bridge (AASHTO) work" line, Report 3.1 "…; imported AASHTO case "Str I max" (Strength I), AASHTO LRFD 10th Ed. factors on self-weight, EV and surcharge; stability indicative". Every value unchanged.
 - **How verified:** origin/main vs branch, headless Chromium (tests/lib.mjs `openPage`), five scenarios: default (By load type), default in Direct mode, and an imported AASHTO case on pedestal 1 (Strength I with a combination record, Strength I without one (both γp sides run), Extreme Event I): `R` (computeAll), `P2` (computePhase2), the dashboard text and the saved `state` JSON identical in all five; the only text differences in the Schematic, Load Combinations and Report tabs are the lines above; 0 console errors. Tests: `check-syntax "Spread Footing.html"`, the `spread-footing-*` smoke tests, `project-library --tool` (Spread Footing).
 - **Other copies:** none.
+
+## 2026-11-14 — PR: claude/sf-boussinesq-2 (PR #1537: https://github.com/mlococo88/All-Structural/pull/1537) (SFBQ-2) — Bearing card 3.5 "Stress below footing (Boussinesq)" and the Report subsection (engineer request 2026-11-14)   [NEW OUTPUT, information only; §4: new calculation in shared/boussinesq.js (SFBQ-1, #1534); no existing value, check, saved key or format changed; one new optional project field]
+- **Engineer (2026-11-14):** "a Boussinesq-type pressure contour diagram so we can calculate the stress in the soil at any distance below the footing". The engineer's reference image (another program) had three bugs, all avoided here and tested:
+  - an uplift case (P = −504 kN, q0 = 0) still drew a full bulb — here: "No compressive bearing pressure … no stress increase", no figure;
+  - the profile curve read 0 while its labels said 0.93 q0 — here the curve, the markers and the table come from the same function;
+  - the isobars looked like a strip solution for a square footing — here a rectangle solution (the AASHTO Fig. 10.6.2.4.1-1(b) square isobars are checked in the engine tests).
+- **Where (to re-apply by hand):**
+  - `<head>`: `<script src="shared/boussinesq.js"></script>` after `shared/steps.js`.
+  - `defaultState()`: after `manPrint:false,manPart:'p0',lrRefRpt:true,pedCbRpt:true,ovRpt:true,` the field `bous:{basis:'net',combo:'',qx:0,qy:0,qz:'',prof:'c',px:0,py:0,sec:'B',plan:'off',planZ:''}`.
+  - `migrateState()`: after `if(!state.manPart)state.manPart='p0';` the backfill of `state.bous` (`sfbqS()`; absent keys = the defaults).
+  - `renderBearing()`: `sfbqCard(T);` before the `return;` of the no-governing-combination branch and after `sfdLrBearCard(T);`.
+  - New `<script>` block after the Tab 3 script (anchor `const SFBQ_LV=`): `sfbqDefaults`, `sfbqS`, `sfbqQsur`, `sfbqModel`, `sfbqZmax`, `sfbqIso` (marching squares), `sfbqBand`, `sfbqW`, `sfbqT`, `sfbqHead`, `sfbqHd`, `sfbqBarH`, `sfbqBar`, `sfbqFieldSVG` (section or plan isobars), `sfbqProfileSVG`, `sfbqEq`, `sfbqTable`, `sfbqCtl` / `sfbqInp` / `sfbqSel`, `sfbqCard`, `sfbqWire`, `sfbqNoBous`, `sfrBous`.
+  - `sfrModel()`, Bearing section: before `secs.push({title:'Bearing',subs});` the subsection from `sfrBous()` (key `S-bous`).
+  - `sfxApply()` and `sfrfMove()`: the report text they compare the tab copies against is built from `sfbqNoBous(secs)` (without S-bous), so the "As printed" copies are chosen exactly as before (without it, the new subsection's numbers hid one pedestal P–M table in the partial-contact probe case).
+  - User Manual, Output tabs list: the 3.1–3.4 item gains a sentence on 3.5.
+- **What the card does:** see the note at the top of the new script block. Selected service combination (default: the governing bearing combination; a saved name not in the run falls back to it with a warning); basis Net (default) or Gross; q_ref = q_max of the basis; (a) point query worked step by step (the corner rectangles, I_u, the linear terms J_u, J_v or the partial-contact integral, the overburden term, Δσ_z, Δσ_z/q_ref); (b) profile at the centre / corner / edge middle / custom point, Boussinesq and 2:1, table at B/4, B/2, 3B/4, B, 1.5B, 2B, 3B, 5B; (c) isobars 0.9 … 0.05 q_ref on the vertical section through the centre along B or L, equal scales, x/B and z/B with ft; (d) optional plan isobars at a chosen depth. Figures are SVG drawn by the tool (no new library; no Plotly ids), sized to the card so the 10–11 px labels stay ≥ 10 px; on a narrow screen the colour scale goes under the plot. The card is `noprint` (the Report prints S-bous with the same figures and steps; the tab is not copied into the Report's appendix).
+- **Pressure and basis (§4):** the pressure is the service combination's own bearing solution (§3.2: `bp.plane`, `bp.contactPoly`). Net basis: q_sur = γ_s·min(d_w, D_f) + (γ_s − γ_w)·max(D_f − d_w, 0), the same expression as the direct net bearing check (anchor `const qsur=(dwc<=Df)`), removed uniformly over B × L. The soil unit weight γ_s of the Soil tab is used (not the cover soil γ_EV), with γ′ = γ_s − γ_w below the water table.
+- **Governing provisions / references:** FHWA GEC 6 (2002) §5.3.2, Fig. 5-11, Eq. 5-17; AASHTO LRFD 10th Ed. (2024) Art. 10.6.2.4.1, Fig. 10.6.2.4.1-1; Newmark (1935); Boussinesq (1885). See fixlog/shared-boussinesq.md (what was and was not verified in the reference PDFs).
+- **Check case (tests/smoke/spread-footing-boussinesq.mjs, in the app):** square 10 × 10 ft, one centred pedestal, D_f = 4 ft, γ_s = 120 pcf, no water table, P = 348 kip (footing self-weight entered as 0): q = 3.48 ksf, q_sur = 0.120·4 = 0.48 ksf, q_net = 3.00 ksf. Δσ_z(0, 0, 5) = 2.103, (0, 0, 10) = 1.008, (0, 0, 20) = 0.324, corner (5, 5, 10) = 0.526 ksf (hand: fixlog/shared-boussinesq.md). Gross basis at (0, 0, 10): 3.48·0.33611 = 1.170 ksf.
+- **Probe vs origin/main (tests/smoke/spread-footing-boussinesq-probe.mjs):** 11 projects (default; two pedestals with wind; partial contact; Vesić with a water table and depth factors; direct net; direct factored; net uplift; wall per ft; plain strip; hooked bar ends with a top mat; an old save without the field): R, P2, dashboard, every result tab without card 3.5 and the Report model without S-bous are identical (the viewer's step anchor numbers and Plotly's random element ids masked; main vs main gives the same).
+- **Saved data (§5):** one new optional field `bous` in the project state (autosave `sfd_auto`, saved projects, Export / Import JSON). Absent = the defaults; no storage key added or changed; no result depends on it.
+- **Decisions (pending engineer review):**
+  1. **Card, not a new tab:** card 3.5 on the Bearing tab (the tab numbering of the other tabs is kept).
+  2. **q_ref = q_max of the basis** (net: q_max − q_sur) for the ratios and isobars; uniform pressure: q_ref = q.
+  3. **Net basis:** q_sur removed over the whole B × L; regions where the base pressure is below the overburden show a net decrease (grey, "< 0"). Where q_max ≤ q_sur the card says there is no net stress increase and draws nothing (the gross basis still shows the stress from the base pressure).
+  4. **Unit weight for q_sur:** γ_s (Soil tab) with γ′ below the water table, as the bearing check; the soil-cover unit weight γ_EV is not used.
+  5. **Section:** through the footing centre (y = 0 along B, x = 0 along L), also for an eccentric load. The axes are normalised by the tool's B (x-dimension) in both directions.
+  6. **Direct factored mode:** the factored envelope's pressure is used, with a warning (conservative for a service stress).
+  7. **2:1** shown as the average over (B + z)(L + z) with Q = ΣP (net: ΣP − q_sur·B·L), the same at every profile point.
+  8. **Figures drawn as SVG by the tool** (not Plotly): they print in the Report as on screen and need no library.
+- **How verified:** see the PR (check-syntax; the new smoke test and the probe; the existing Spread Footing smoke tests; phone-layout --tool sf; project-library --tool spreadfooting; dxf-print-sheets --tool sf; engine tests boussinesq + tex).
+- **Open items:** none in the code. Questions to the engineer: decisions 2–5 above.
+- **Diff (`Spread Footing.html`):**
+```diff
+diff --git a/Spread Footing.html b/Spread Footing.html
+index 850967d..32153e4 100644
+--- a/Spread Footing.html	
++++ b/Spread Footing.html	
+@@ -13,6 +13,7 @@
+      Report's own beforeprint listener -->
+ <script>window.addEventListener("beforeprint",function(){try{if(window.sfPrintPrep)window.sfPrintPrep();}catch(e){}});</script>
+ <script src="shared/steps.js"></script>
++<script src="shared/boussinesq.js"></script><!-- SFBQ: stress below the footing (Bearing tab 3.5, Report) -->
+ <script src="shared/report.js"></script>
+ <script src="shared/dxf.js"></script><!-- SFDW: DXF writer and drawing preview (Drawings tab) -->
+ <!-- PLIB (2026-11-02): saved-project list dialog (Open / Rename / Duplicate / Delete), shared with the other tools -->
+@@ -815,6 +816,7 @@ function defaultState(){
+  freinf:{botX:{size:8,spc:9,mode:'spacing'},botY:{size:8,spc:9,mode:'spacing'},topX:{size:0,spc:12,mode:'spacing'},topY:{size:0,spc:12,mode:'spacing'},botOuter:'y'},
+  stab:{muMode:'phi',mu:0.45,pf:0,FSot:2,FSsl:1.5,FSfl:1.25,shearCouple:'on',otGate:'off',eccMode:'kern',eccCustom:0.25,windSim:'on',SDS:0},
+  manPrint:false,manPart:'p0',lrRefRpt:true,pedCbRpt:true,ovRpt:true,
++ bous:{basis:'net',combo:'',qx:0,qy:0,qz:'',prof:'c',px:0,py:0,sec:'B',plan:'off',planZ:''},   /* SFBQ: Bearing 3.5 inputs (display only) */
+  assump:'',peds:[p1,p2]};}
+ let state=defaultState(), collapseState={};
+ function getPath(o,p){return p.split('.').reduce((a,k)=>a&&a[k],o);}
+@@ -859,6 +861,7 @@ function migrateState(){
+  if(state.pedCbRpt===undefined)state.pedCbRpt=true;   /* SFPC: Report Include box, pedestal loads by combination (default on) */
+  if(state.ovRpt===undefined)state.ovRpt=true;   /* SFOV: Report Include box, overview figures (default on) */
+  if(!state.manPart)state.manPart='p0';
++ if(typeof sfbqS==='function')sfbqS();else if(!state.bous)state.bous={basis:'net',combo:'',qx:0,qy:0,qz:'',prof:'c',px:0,py:0,sec:'B',plan:'off',planZ:''};   /* SFBQ: saves without the field get the defaults (no result depends on it) */
+  if(!state.freinf)state.freinf=defaultState().freinf;
+  ['botX','botY','topX','topY'].forEach(k=>{const m=state.freinf[k];if(m&&!m.mode)m.mode='spacing';});   /* SFRQ: older saves entered a spacing */
+  if(state.freinf.botOuter!=='x')state.freinf.botOuter='y';   /* SFBO: outer bottom layer; saves without the field: y-bars outermost (as before) */
+@@ -3216,6 +3219,7 @@ function renderBearing(){
+   b0.appendChild(el('div','errbox','<b>Bearing: FAIL.</b> No service combination has a bearing solution, so there is no governing combination, no base pressure and no bearing D/C. The reason for each combination is below. The other checks (Stability tab: overturning, sliding, flotation) still run.'));
+   b0.appendChild(sfdNoBearTable());
+   b0.appendChild(el('p','note','Resultants and eccentricities: '+sfdLink('o-cb-asd','')+'. A resultant off the footing (|e| \u2265 B/2 or L/2) or a net load that is not downward means the footing is unstable under that combination; zero bearing capacity means the allowable pressure is zero or could not be computed.'));
++  sfbqCard(T);   /* SFBQ */
+   return;}
+  const govIdx=R.asd.indexOf(R.govBear);
+  // selector bar (skip in direct mode — single envelope)
+@@ -3427,6 +3431,262 @@ function renderBearing(){
+   if(g.DCR===Infinity)b2.appendChild(el('div','errbox','<b>D/C = \u221e (FAIL):</b> '+sfEsc(sfdBearWhy(g))+'.'));   /* SFNB-2 */
+  }
+  sfdLrBearCard(T);   /* SFLR: reference only */
++ sfbqCard(T);   /* SFBQ: 3.5 Stress below footing (Boussinesq), information only */
++}
++</script>
++<script>
++/* ================= SFBQ (2026-11-14, engineer: "a Boussinesq-type pressure contour diagram so we can calculate the stress in the
++   soil at any distance below the footing"). Bearing tab card 3.5 "Stress below footing (Boussinesq)" and the Report subsection
++   S-bous. Calculation in shared/boussinesq.js (SharedBoussinesq; tests/engine/boussinesq.test.mjs). Information only: no check,
++   no D/C, no dashboard chip; nothing else reads it.
++   Pressure: the service combination's own rigid-footing base pressure from the bearing solver (§3.2: bp.plane q0 + gx·x + gy·y over
++   the full footing, or max(0, plane) over bp.contactPoly in partial contact). Basis (state.bous.basis): 'net' (default) = that
++   pressure minus the overburden at the base q_sur = γ·D_f (γ′ = γ_s − γ_w below the water table: the same expression as the
++   direct net bearing check, §3.3) removed over the whole B × L; 'gross' = the base pressure. q_ref = q_max of the basis.
++   Saved inputs state.bous (absent = the defaults, migrateState): basis, combo ('' = the governing bearing combination, else its
++   name), qx, qy, qz (point query; qz '' = B), prof ('c' centre, 'k' corner, 'ex' / 'ey' edge middles, 'u' custom), px, py, sec
++   ('B' section along x, 'L' along y), plan ('off' / 'on'), planZ ('' = B/2). Coordinates from the footing centre, x along B, y along L,
++   z down from the base. ================= */
++const SFBQ_LV=[0.05,0.1,0.15,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9];
++const SFBQ_COL=['#eef6fb','#d0e6f2','#a9d3e8','#7fbfdc','#5ea9c9','#4f93b0','#e8d36b','#f0b14a','#ec8a3a','#d9612f','#b83a2a'];   /* bands [L_k, L_k+1): 0.05 → 0.1 first; ≥ 0.9 last */
++const SFBQ_NEG='#d9d9d9';
++function sfbqDefaults(){return {basis:'net',combo:'',qx:0,qy:0,qz:'',prof:'c',px:0,py:0,sec:'B',plan:'off',planZ:''};}
++function sfbqS(){if(!state.bous||typeof state.bous!=='object')state.bous={};const d=sfbqDefaults();Object.keys(d).forEach(k=>{if(state.bous[k]===undefined||state.bous[k]===null)state.bous[k]=d[k];});return state.bous;}
++const sfbqNum=(v,d)=>{if(v===''||v===null||v===undefined)return d;const x=parseFloat(v);return isFinite(x)?x:d;};
++/* the overburden at the base: the expression of the direct bearing check (computeAll, anchor "const qsur=(dwc<=Df)") */
++function sfbqQsur(){const Df=R.Df,gs=R.gs,gw=R.gw,dwc=R.dw;return (dwc<=Df)?(gs*Math.min(dwc,Df)+(gs-gw)*Math.max(Df-dwc,0)):gs*Df;}
++/* the model of the selected case: everything the card and the Report show */
++function sfbqModel(){
++ const s=sfbqS(), B=R.B, L=R.L, list=R.asd||[];
++ let a=null, picked=false;
++ if(s.combo){a=list.find(z=>z.cb.name===s.combo)||null;picked=!!a;}
++ if(!a)a=R.govBear||null;
++ const M={s,B,L,a,picked,missing:!!(s.combo&&!picked),basis:s.basis==='gross'?'gross':'net',qsur:sfbqQsur(),list};
++ M.gov=a&&a===R.govBear;
++ if(!a){M.why='No governing service combination has a bearing solution: pick a combination above.';return M;}
++ const bp=a.bear;M.bp=bp;M.P=a.r.P;
++ if(a.r.P<=1e-9||bp.mode==='tension'){M.why='No compressive bearing pressure (\u03a3P = '+f2(a.r.P)+' kip, net load not downward): no stress increase in the soil. No pressure bulb is drawn.';M.none=true;return M;}
++ if(bp.mode==='unstable'||!bp.plane){M.why='Resultant off the footing (|e| \u2265 B/2 or L/2): no bearing pressure solution, so no stress below the footing is computed. No pressure bulb is drawn.';M.none=true;return M;}
++ const qs=M.basis==='net'?M.qsur:0;
++ M.ld={B,L,q0:bp.plane.q0,gx:bp.plane.gx,gy:bp.plane.gy,mode:bp.mode==='partial'?'partial':'full',poly:bp.mode==='partial'?bp.contactPoly:null,qsub:qs};
++ M.qmax=bp.qmax;M.qref=bp.qmax-qs;
++ if(!(M.qref>1e-9)){M.why='Net basis: q_max \u2212 q_sur = '+f2(bp.qmax)+' \u2212 '+f2(M.qsur)+' = '+f2(M.qref)+' ksf \u2264 0: the base pressure does not exceed the overburden removed, so there is no net stress increase. No pressure bulb is drawn (the gross basis shows the stress from the base pressure).';M.none=true;return M;}
++ M.Q=M.P-qs*B*L;
++ M.ds=(x,y,z)=>SharedBoussinesq.stress(M.ld,x,y,z).value;
++ M.dsF=(x,y,z)=>{const ld=M.ld;if(ld.mode!=='partial')return SharedBoussinesq.stress(ld,x,y,z).value;   /* grids: tolerance 1e-6·q (tests: < 1e-6 relative) */
++  return SharedBoussinesq.polygonLinear(ld.poly,ld.q0,ld.gx,ld.gy,x,y,z,{tol:1e-6})-(ld.qsub?SharedBoussinesq.uniformRect(ld.qsub,B,L,x,y,z):0);};
++ /* point query */
++ M.qx=sfbqNum(s.qx,0);M.qy=sfbqNum(s.qy,0);M.qz=Math.max(sfbqNum(s.qz,B),0);
++ M.Q1=SharedBoussinesq.querySteps(M.ld,M.qx,M.qy,M.qz,{basis:M.basis,qRef:M.qref});
++ /* profile point */
++ const pp={c:[0,0,'centre'],k:[B/2,L/2,'corner (+B/2, +L/2)'],ex:[B/2,0,'middle of the +x edge (B/2, 0)'],ey:[0,L/2,'middle of the +y edge (0, L/2)']};
++ const pr=s.prof==='u'?[sfbqNum(s.px,0),sfbqNum(s.py,0),'custom point']:(pp[s.prof]||pp.c);
++ M.px=pr[0];M.py=pr[1];M.pname=pr[2]+' (x = '+f2(pr[0])+' ft, y = '+f2(pr[1])+' ft)';
++ M.tz=[0.25,0.5,0.75,1,1.5,2,3,5].map(k=>{const z=k*B,v=M.ds(M.px,M.py,z),t=SharedBoussinesq.twoToOne(M.Q,B,L,z);return {k,z,v,r:v/M.qref,t,tr:t/M.qref};});
++ M.planZ=Math.max(sfbqNum(s.planZ,B/2),0);
++ return M;
++}
++/* depth below which the field stays under 0.04 q_ref on the section's centre line and below the pressure peak */
++function sfbqZmax(M,dim){
++ const xs=[[0,0],[M.bp.plane.gx>=0?M.B/4:-M.B/4,M.bp.plane.gy>=0?M.L/4:-M.L/4]];
++ let z=0.25*M.B;const lim=Math.max(30*Math.max(M.B,M.L),10);
++ while(z<lim&&xs.some(p=>M.ds(p[0],p[1],z)/M.qref>0.04))z*=1.15;
++ return Math.max(Math.min(z,lim),1.5*dim);}
++/* marching squares: segments of the level lv on grid V[i][j] (i = column, j = row), node coords X[i], Z[j] */
++function sfbqIso(V,X,Z,lv){
++ const seg=[],nx=X.length,nz=Z.length,ip=(a,b,va,vb)=>a+(b-a)*(lv-va)/(vb-va);
++ for(let i=0;i<nx-1;i++)for(let j=0;j<nz-1;j++){
++  const a=V[i][j],b=V[i+1][j],c=V[i+1][j+1],d=V[i][j+1];
++  const p=[];
++  if((a<lv)!==(b<lv))p.push([ip(X[i],X[i+1],a,b),Z[j]]);
++  if((b<lv)!==(c<lv))p.push([X[i+1],ip(Z[j],Z[j+1],b,c)]);
++  if((c<lv)!==(d<lv))p.push([ip(X[i],X[i+1],d,c),Z[j+1]]);
++  if((d<lv)!==(a<lv))p.push([X[i],ip(Z[j],Z[j+1],a,d)]);
++  if(p.length===2)seg.push([p[0],p[1]]);else if(p.length===4){seg.push([p[0],p[1]]);seg.push([p[2],p[3]]);}}
++ return seg;}
++function sfbqBand(r){if(r<0)return -1;let k=-2;for(let i=0;i<SFBQ_LV.length;i++)if(r>=SFBQ_LV[i])k=i;return k;}
++/* figure width in px = the space the card gives it (so the 10-11 px labels stay 10-11 px on screen; phone and two-panel widths) */
++const sfbqW=print=>{if(print)return 680;const t=document.getElementById('tab-bearing'),w=(t&&(t.clientWidth||(t.parentElement&&t.parentElement.clientWidth)))||(window.innerWidth||720);return Math.round(Math.min(760,Math.max(280,w-40)));};
++const sfbqT=(x,y,t,o)=>'<text x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" font-size="'+((o&&o.fs)||11)+'" font-family="Arial,Helvetica,sans-serif"'+((o&&o.anchor)?' text-anchor="'+o.anchor+'"':'')+((o&&o.fill)?' fill="'+o.fill+'"':'')+((o&&o.bold)?' font-weight="bold"':'')+((o&&o.rot)?' transform="rotate('+o.rot+' '+x.toFixed(1)+' '+y.toFixed(1)+')"':'')+'>'+sfEsc(t)+'</text>';
++function sfbqHead(M){return (M.basis==='net'?'Net basis (q \u2212 \u03b3D_f)':'Gross basis (q)')+' \u00b7 '+M.a.cb.name+' \u00b7 q_ref = '+f2(M.qref)+' ksf';}
++/* the three header lines of a figure: title, basis and q_ref, load case */
++function sfbqHd(M,title){return sfbqT(8,14,title,{fs:11,bold:true})+sfbqT(8,28,(M.basis==='net'?'Net basis (q \u2212 \u03b3D_f)':'Gross basis (q)')+', q_ref = '+f2(M.qref)+' ksf',{fs:10})+sfbqT(8,41,'Load case: '+M.a.cb.name,{fs:10});}
++/* colour scale in a row under the plot (narrow figures) */
++function sfbqBarH(x0,y0,w){const n=SFBQ_LV.length,sw=w/(n+1.5);let s=sfbqT(x0,y0-4,'\u0394\u03c3_z/q_ref',{fs:10,bold:true});
++ for(let k=0;k<n;k++){const x=x0+k*sw;s+='<rect x="'+x.toFixed(1)+'" y="'+y0+'" width="'+sw.toFixed(1)+'" height="10" fill="'+SFBQ_COL[k]+'" stroke="#888" stroke-width="0.4"/>'+sfbqT(x,y0+(k%2?33:22),String(SFBQ_LV[k]),{fs:10,anchor:'middle'});}
++ const xn=x0+(n+0.5)*sw;return s+'<rect x="'+xn.toFixed(1)+'" y="'+y0+'" width="'+sw.toFixed(1)+'" height="10" fill="'+SFBQ_NEG+'" stroke="#888" stroke-width="0.4"/>'+sfbqT(xn+sw/2,y0+22,'< 0',{fs:10,anchor:'middle'});}
++/* colour bar + legend (right of a plot) */
++function sfbqBar(x0,y0,h){
++ let s='';const n=SFBQ_LV.length,bh=h/(n+1.6);
++ for(let k=0;k<n;k++){const y=y0+h-(k+1)*bh;s+='<rect x="'+x0+'" y="'+y.toFixed(1)+'" width="14" height="'+bh.toFixed(1)+'" fill="'+SFBQ_COL[k]+'" stroke="#888" stroke-width="0.4"/>';
++  s+=sfbqT(x0+18,y+bh+4,(k===n-1?'\u2265 ':'')+SFBQ_LV[k],{fs:10});}
++ s+=sfbqT(x0,y0-6,'\u0394\u03c3_z/q_ref',{fs:10,bold:true});
++ s+='<rect x="'+x0+'" y="'+(y0+h+8).toFixed(1)+'" width="14" height="'+bh.toFixed(1)+'" fill="'+SFBQ_NEG+'" stroke="#888" stroke-width="0.4"/>'+sfbqT(x0+18,y0+h+8+bh/2+4,'< 0',{fs:10});
++ return s;}
++/* field plot: section (plan=false: horizontal = x or y, vertical = z) or plan at depth zp (horizontal = x, vertical = y) */
++function sfbqFieldSVG(M,o){
++ const W=sfbqW(o.print), B=M.B, L=M.L, plan=!!o.plan, alongL=!plan&&M.s.sec==='L', dim=plan?B:(alongL?L:B);
++ let hx,v0,v1,fn;
++ if(plan){const zp=M.planZ;hx=B/2+Math.max(0.75*zp,0.3*B);const hy=L/2+Math.max(0.75*zp,0.3*B);v0=-hy;v1=hy;fn=(h,v)=>M.dsF(h,v,zp);}
++ else{const zm=sfbqZmax(M,dim);hx=Math.max(0.9*dim,0.55*zm,dim/2+0.25*B);v0=0;v1=zm;fn=alongL?((h,v)=>M.dsF(0,h,v)):((h,v)=>M.dsF(h,0,v));}
++ const narrow=W<520, ml=50,mr=narrow?58:118,mt=plan?54:70,mb=narrow?92:44, pw=W-ml-mr, sc=pw/(2*hx), ph=Math.round((v1-v0)*sc), H=mt+ph+mb;
++ const nx=M.ld.mode==='partial'?49:73, nz=Math.max(12,Math.min(90,Math.round(nx*(v1-v0)/(2*hx))));
++ const X=[],Z=[];for(let i=0;i<nx;i++)X.push(-hx+2*hx*i/(nx-1));for(let j=0;j<nz;j++)Z.push(v0+(v1-v0)*j/(nz-1));
++ const V=X.map(x=>Z.map(z=>fn(x,z)/M.qref));
++ const PX=x=>ml+(x+hx)*sc, PY=v=>plan?mt+(v1-v)*sc:mt+(v-v0)*sc;
++ let s='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+W+' '+H+'" width="'+W+'" style="max-width:100%;height:auto;background:#fff" font-family="Arial,Helvetica,sans-serif">';
++ /* fill: the grid refined 3 x 3 by bilinear interpolation of the node values (no extra stress evaluations); each sub-cell
++    coloured by its centre value, runs merged */
++ const SUB=3,FX=[],FZ=[],FV=[];
++ for(let i=0;i<(nx-1)*SUB+1;i++)FX.push(-hx+2*hx*i/((nx-1)*SUB));
++ for(let j=0;j<(nz-1)*SUB+1;j++)FZ.push(v0+(v1-v0)*j/((nz-1)*SUB));
++ const bil=(fx,fz)=>{const gi=Math.min(Math.floor(fx),nx-2),gj=Math.min(Math.floor(fz),nz-2),u=fx-gi,w=fz-gj;return V[gi][gj]*(1-u)*(1-w)+V[gi+1][gj]*u*(1-w)+V[gi][gj+1]*(1-u)*w+V[gi+1][gj+1]*u*w;};
++ for(let j=0;j<FZ.length-1;j++){let k0=null,i0=0;
++  const flush=i=>{if(k0!==null&&k0>-2){const x1=PX(FX[i0]),x2=PX(FX[i]),ya=PY(FZ[j]),yb=PY(FZ[j+1]);s+='<rect x="'+x1.toFixed(1)+'" y="'+Math.min(ya,yb).toFixed(1)+'" width="'+(x2-x1+0.8).toFixed(1)+'" height="'+(Math.abs(yb-ya)+0.8).toFixed(1)+'" shape-rendering="crispEdges" fill="'+(k0===-1?SFBQ_NEG:SFBQ_COL[k0])+'"/>';}};
++  for(let i=0;i<FX.length-1;i++){const k=sfbqBand(bil((i+0.5)/SUB,(j+0.5)/SUB));if(k!==k0){flush(i);k0=k;i0=i;}}
++  flush(FX.length-1);}
++ /* isobars */
++ const labs=[];
++ SFBQ_LV.slice().reverse().forEach(lv=>{const sg=sfbqIso(V,X,Z,lv);if(!sg.length)return;
++  s+='<path d="'+sg.map(q=>'M'+PX(q[0][0]).toFixed(1)+' '+PY(q[0][1]).toFixed(1)+'L'+PX(q[1][0]).toFixed(1)+' '+PY(q[1][1]).toFixed(1)).join('')+'" stroke="#222" stroke-width="'+(lv===0.5||lv===0.1?1.3:0.8)+'" fill="none"/>';
++  /* label: the segment nearest the centre line (section: deepest crossing; plan: on +x) */
++  let best=null;sg.forEach(q=>{const m=[(q[0][0]+q[1][0])/2,(q[0][1]+q[1][1])/2];const sc2=plan?Math.abs(m[1])+(m[0]<0?1e6:0):Math.abs(m[0])-1e-3*m[1];if(!best||sc2<best.k)best={m,k:sc2};});
++  if(best)labs.push({lv,x:PX(best.m[0]),y:PY(best.m[1])});});
++ /* place labels, skipping any within 13 px of one already placed */
++ const placed=[];labs.forEach(l=>{if(placed.some(p=>Math.abs(p.x-l.x)<26&&Math.abs(p.y-l.y)<13))return;placed.push(l);
++  const t=String(l.lv);s+='<rect x="'+(l.x-11).toFixed(1)+'" y="'+(l.y-7).toFixed(1)+'" width="22" height="13" fill="#fff" fill-opacity="0.85"/>'+sfbqT(l.x,l.y+4,t,{fs:10,anchor:'middle'});});
++ /* footing */
++ if(plan){s+='<rect x="'+PX(-B/2).toFixed(1)+'" y="'+PY(L/2).toFixed(1)+'" width="'+(B*sc).toFixed(1)+'" height="'+(L*sc).toFixed(1)+'" fill="none" stroke="#000" stroke-width="1.6" stroke-dasharray="6,3"/>';
++  if(M.ld.mode==='partial'&&M.ld.poly)s+='<path d="'+M.ld.poly.map((p,i)=>(i?'L':'M')+PX(p[0]).toFixed(1)+' '+PY(p[1]).toFixed(1)).join('')+'Z" fill="none" stroke="#1565c0" stroke-width="1.2"/>';}
++ else{const th=Math.min(Math.max(R.t*sc,6),16);s+='<rect x="'+PX(-dim/2).toFixed(1)+'" y="'+(mt-th).toFixed(1)+'" width="'+(dim*sc).toFixed(1)+'" height="'+th.toFixed(1)+'" fill="#c8c8c8" stroke="#000" stroke-width="1.2"/>';
++  s+='<line x1="'+ml+'" y1="'+mt+'" x2="'+(ml+pw)+'" y2="'+mt+'" stroke="#000" stroke-width="0.8"/>';}
++ /* axes: normalised (bottom / left) and ft (top / right of the plot) */
++ const ax=plan?'x':(alongL?'y':'x'), vax=plan?'y':'z';
++ s+='<rect x="'+ml+'" y="'+mt+'" width="'+pw+'" height="'+ph+'" fill="none" stroke="#555" stroke-width="0.8"/>';
++ const nice=r=>{const c=[0.25,0.5,1,2,5,10];for(const k of c)if(r/k<=6)return k;return 20;};
++ const st=nice(2*hx/B);for(let k=Math.ceil(-hx/B/st)*st;k<=hx/B+1e-9;k+=st){const x=PX(k*B);s+='<line x1="'+x.toFixed(1)+'" y1="'+(mt+ph)+'" x2="'+x.toFixed(1)+'" y2="'+(mt+ph+4)+'" stroke="#555"/>'+sfbqT(x,mt+ph+15,(Math.abs(k)<1e-9?0:+k.toFixed(2))+'',{fs:10,anchor:'middle'});}
++ s+=sfbqT(ml+pw/2,mt+ph+31,ax+'/B   (B = '+f2(B)+' ft; 1 B = '+f2(B)+' ft)',{fs:11,anchor:'middle'});
++ const sv=nice((v1-v0)/B);for(let k=Math.ceil(v0/B/sv)*sv;k<=v1/B+1e-9;k+=sv){const y=PY(k*B);s+='<line x1="'+(ml-4)+'" y1="'+y.toFixed(1)+'" x2="'+ml+'" y2="'+y.toFixed(1)+'" stroke="#555"/>'+sfbqT(ml-6,y+4,(Math.abs(k)<1e-9?0:+k.toFixed(2))+'',{fs:10,anchor:'end'})+
++  sfbqT(ml+pw+4,y+4,f2(k*B)+' ft',{fs:10});}
++ s+=sfbqT(14,mt+ph/2,(plan?'y/B':'z/B (depth below the base)'),{fs:11,anchor:'middle',rot:-90});
++ s+=sfbqHd(M,plan?('Isobars \u0394\u03c3_z/q_ref in plan at z = '+f2(M.planZ)+' ft ('+f2(M.planZ/B)+'B)'):('Isobars \u0394\u03c3_z/q_ref, section along '+(alongL?'L (x = 0)':'B (y = 0)')));
++ s+=narrow?sfbqBarH(ml,mt+ph+56,pw):sfbqBar(ml+pw+52,mt+14,Math.min(ph-20,240));
++ return s+'</svg>';}
++/* profile chart: Δσ_z/q_ref vs depth at the profile point, Boussinesq and 2:1 */
++function sfbqProfileSVG(M,o){
++ const W=sfbqW(o.print), B=M.B, zm=5.2*B, ml=50,mr=58,mt=60,mb=44, pw=W-ml-mr, ph=Math.round(Math.min(360,Math.max(240,pw*0.75))), H=mt+ph+mb;
++ const pts=[];for(let k=0;k<=104;k++){const z=zm*Math.pow(k/104,1.6);pts.push([z,M.ds(M.px,M.py,z)/M.qref,SharedBoussinesq.twoToOne(M.Q,B,M.L,z)/M.qref]);}
++ const rmax=Math.max(1,...pts.map(p=>Math.max(p[1],p[2]))), rmin=Math.min(0,...pts.map(p=>Math.min(p[1],p[2])));
++ const PX=r=>ml+(r-rmin)/(rmax-rmin)*pw, PY=z=>mt+z/zm*ph;
++ let s='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+W+' '+H+'" width="'+W+'" style="max-width:100%;height:auto;background:#fff" font-family="Arial,Helvetica,sans-serif">';
++ s+='<rect x="'+ml+'" y="'+mt+'" width="'+pw+'" height="'+ph+'" fill="#fff" stroke="#555" stroke-width="0.8"/>';
++ for(let r=Math.ceil(rmin*5)/5;r<=rmax+1e-9;r+=0.2){const x=PX(r);s+='<line x1="'+x.toFixed(1)+'" y1="'+mt+'" x2="'+x.toFixed(1)+'" y2="'+(mt+ph)+'" stroke="#e3e3e3"/>'+sfbqT(x,mt+ph+15,(+r.toFixed(1))+'',{fs:10,anchor:'middle'});}
++ for(let k=0;k<=5;k+=0.5){const y=PY(k*B);s+='<line x1="'+ml+'" y1="'+y.toFixed(1)+'" x2="'+(ml+pw)+'" y2="'+y.toFixed(1)+'" stroke="#e3e3e3"/>'+sfbqT(ml-6,y+4,k+'',{fs:10,anchor:'end'})+sfbqT(ml+pw+4,y+4,f2(k*B),{fs:10});}
++ const line=(i,col,dash,w)=>'<path d="'+pts.map((p,k)=>(k?'L':'M')+PX(p[i]).toFixed(1)+' '+PY(p[0]).toFixed(1)).join('')+'" stroke="'+col+'" stroke-width="'+w+'" fill="none"'+(dash?' stroke-dasharray="7,4"':'')+'/>';
++ s+=line(2,'#c0392b',true,1.6)+line(1,'#1f4e79',false,2.2);
++ M.tz.forEach(t=>{s+='<circle cx="'+PX(t.r).toFixed(1)+'" cy="'+PY(t.z).toFixed(1)+'" r="3.2" fill="#1f4e79"/>';});
++ s+=sfbqT(ml+pw/2,mt+ph+31,'\u0394\u03c3_z / q_ref   (q_ref = '+f2(M.qref)+' ksf)',{fs:11,anchor:'middle'});
++ s+=sfbqT(14,mt+ph/2,'z/B (depth below the base)',{fs:11,anchor:'middle',rot:-90})+sfbqT(W-4,mt-6,'ft',{fs:10,anchor:'end'});
++ s+=sfbqHd(M,'\u0394\u03c3_z vs depth, '+M.pname.replace(/ \(x = .*$/,'')+' (x = '+f2(M.px)+', y = '+f2(M.py)+' ft)');
++ const lx=ml+pw-150,ly=mt+ph-40;
++ s+='<rect x="'+lx+'" y="'+ly+'" width="146" height="36" fill="#fff" stroke="#999" stroke-width="0.6"/><line x1="'+(lx+6)+'" y1="'+(ly+12)+'" x2="'+(lx+30)+'" y2="'+(ly+12)+'" stroke="#1f4e79" stroke-width="2.2"/>'+sfbqT(lx+34,ly+16,'Boussinesq',{fs:10})+
++  '<line x1="'+(lx+6)+'" y1="'+(ly+27)+'" x2="'+(lx+30)+'" y2="'+(ly+27)+'" stroke="#c0392b" stroke-width="1.6" stroke-dasharray="7,4"/>'+sfbqT(lx+34,ly+31,'2:1 (average)',{fs:10});
++ return s+'</svg>';}
++/* one worked step on screen (eqBlock): label, sym = eq, = substituted, = result */
++function sfbqEq(st){st=Object.assign({},st);['sym','eq','sub'].forEach(k=>{if(typeof st[k]==='string')st[k]=st[k].replace(/\\minus\b ?/g,'-');});   /* \\minus is the steps subset's macro; the tab's KaTeX (kt) has none */
++ const u=st.unit?'\\;\\mathrm{'+st.unit+'}':'',v=typeof st.value==='number'?(isFinite(st.value)?SharedSteps.n(st.value,st.d==null?3:st.d):'\\infty'):'\\text{'+String(st.value).replace(/[{}\\]/g,'')+'}';
++ return eqBlock(st.label,st.ref||'',st.eq?st.sym+' = '+st.eq:'',st.sub?st.sym+' = '+st.sub:'',st.sym+' = '+v+u);}
++function sfbqTable(M){
++ const t=el('table','tbl');t.innerHTML='<tr><th>z</th><th>z (ft)</th><th>\u0394\u03c3<sub>z</sub> Boussinesq (ksf)</th><th>\u0394\u03c3<sub>z</sub>/q<sub>ref</sub></th><th>2:1 average (ksf)</th><th>2:1 / q<sub>ref</sub></th></tr>'+
++  M.tz.map(r=>'<tr><td>'+({0.25:'B/4',0.5:'B/2',0.75:'3B/4',1:'B'}[r.k]||r.k+'B')+'</td><td>'+f2(r.z)+'</td><td>'+f3(r.v)+'</td><td>'+f3(r.r)+'</td><td>'+f3(r.t)+'</td><td>'+f3(r.tr)+'</td></tr>').join('');
++ return t;}
++function sfbqCtl(lab,html){return '<label style="display:inline-flex;align-items:center;gap:4px;margin:2px 12px 2px 0;font-size:11px;white-space:nowrap">'+lab+' '+html+'</label>';}
++function sfbqInp(k,v,ph,w){return '<input type="number" step="any" data-sfbq="'+k+'" value="'+sfEsc(v)+'" placeholder="'+sfEsc(ph)+'" style="width:'+(w||64)+'px">';}
++function sfbqSel(k,opts,v){return '<select data-sfbq="'+k+'" style="max-width:280px">'+opts.map(o=>'<option value="'+sfEsc(o[0])+'"'+(String(o[0])===String(v)?' selected':'')+'>'+sfEsc(o[1])+'</option>').join('')+'</select>';}
++function sfbqCard(T){
++ if(!R||R.fatal||typeof SharedBoussinesq==='undefined')return;
++ const old=document.getElementById('o-br-bous');
++ const host=document.createElement('div');
++ const b=secPanel(host,'o-br-bous','3.5  Stress below footing (Boussinesq)');
++ const det=host.firstChild;det.classList.add('noprint');   /* the Report prints its own subsection (S-bous); not copied from the tab */
++ let M;try{M=sfbqModel();}catch(e){b.appendChild(el('div','errbox','Stress below the footing could not be computed: '+sfEsc(e.message)));if(old)old.replaceWith(det);else T.appendChild(det);return;}
++ const s=M.s;
++ const ctl=el('div','');ctl.style.cssText='display:flex;flex-wrap:wrap;align-items:center;margin:2px 0 6px 0';
++ ctl.innerHTML=sfbqCtl('Load case',sfbqSel('combo',[['','Governing bearing combination'+(R.govBear?' ('+R.govBear.cb.name+')':'')]].concat(M.list.map(z=>[z.cb.name,z.cb.name])),M.picked?s.combo:''))+
++  sfbqCtl('Pressure basis',sfbqSel('basis',[['net','Net (q \u2212 \u03b3\u00b7D_f)'],['gross','Gross (q)']],M.basis))+
++  sfbqCtl('Section',sfbqSel('sec',[['B','along B (x), through the centre'],['L','along L (y), through the centre']],s.sec==='L'?'L':'B'))+
++  sfbqCtl('Plan view at depth','<input type="checkbox" data-sfbq="plan"'+(s.plan==='on'?' checked':'')+'> z ='+sfbqInp('planZ',s.planZ,f2(R.B/2),56)+' ft');
++ b.appendChild(ctl);
++ b.appendChild(el('div','note sfNL',sfNL('Vertical stress increase in the soil below the base, by Boussinesq\u2019s point-load solution integrated over the loaded area (information only; no check uses it).',[
++  ['Soil:','a homogeneous, isotropic, linear-elastic half-space (the vertical stress does not depend on E or \u03bd). Layering, a rigid layer at depth and the soil\u2019s own weight are not modelled; the stress is the increase only.'],
++  ['Pressure:','the rigid-footing base pressure of the selected service combination (\u00a73.2): a plane over the footing, or over the contact area in partial contact. Uniform pressure: Newmark\u2019s closed form with superposition; a linear pressure in full contact: closed form; partial contact: numerical integration over the contact polygon.'],
++  ['Coordinates:','x along B, y along L, from the footing centre; z down from the base.'],
++  ['2:1 method:','the average stress over (B + z)(L + z) (FHWA GEC 6 Eq. 5-17), for comparison; it is not a point value.']])));
++ if(M.missing)b.appendChild(el('div','warnbox','The saved load case \u201c'+sfEsc(s.combo)+'\u201d is not in this run: the governing bearing combination is shown.'));
++ if(R.directMode)b.appendChild(el('div','warnbox','Direct factored mode: the pressure is from the factored envelope (conservative for a service-level stress).'));
++ if(M.a){
++  const cap=M.a.cap;
++  b.appendChild(eqBlock('Overburden at the base (removed by the excavation; net basis)','\u03b3 above the water table, \u03b3\u2032 = \u03b3_s \u2212 \u03b3_w below it (as the bearing check, \u00a73.3)',
++   'q_{sur} = \\gamma_{s}\\,\\min(d_{w},D_{f}) + (\\gamma_{s} - \\gamma_{w})\\,\\max(D_{f} - d_{w},0)',
++   R.dw<=R.Df?'q_{sur} = '+SharedSteps.n(R.gs,4)+'\\cdot '+f2(Math.min(R.dw,R.Df))+' + ('+SharedSteps.n(R.gs,4)+' - '+SharedSteps.n(R.gw,4)+')\\cdot '+f2(Math.max(R.Df-R.dw,0)):'q_{sur} = \\gamma_{s} D_{f} = '+SharedSteps.n(R.gs,4)+'\\cdot '+f2(R.Df)+'\\;\\;(\\text{no water table above the base})',
++   'q_{sur} = '+SharedSteps.n(M.qsur,3)+'\\;\\mathrm{ksf}'+(M.basis==='gross'?'\\;\\;(\\text{not used: gross basis})':'')));
++ }
++ if(M.none||!M.ld){b.appendChild(el('div','errbox','<b>'+sfEsc(M.why)+'</b>'));if(old)old.replaceWith(det);else T.appendChild(det);sfbqWire(det);return;}
++ const pl=M.bp.plane;
++ b.appendChild(eqBlock('Base pressure of '+M.a.cb.name+(M.gov?' (governing bearing combination)':''),M.bp.mode==='partial'?'partial contact: q = max(0, plane) over the contact area':'full contact',
++  'q(x,y) = q_{0} + g_{x} x + g_{y} y',
++  'q(x,y) = '+SharedSteps.n(pl.q0,3)+' + '+SharedSteps.n(pl.gx,4)+'\\,x + '+SharedSteps.n(pl.gy,4)+'\\,y',
++  'q_{max} = '+SharedSteps.n(M.qmax,3)+'\\;\\mathrm{ksf},\\quad q_{ref} = '+(M.basis==='net'?'q_{max} - q_{sur} = '+SharedSteps.n(M.qmax,3)+' - '+SharedSteps.n(M.qsur,3)+' = ':'q_{max} = ')+SharedSteps.n(M.qref,3)+'\\;\\mathrm{ksf}'));
++ b.appendChild(sfdWorkedIn([['o-br-press','q<sub>0</sub>, g<sub>x</sub>, g<sub>y</sub>, q<sub>max</sub>, contact']]));
++ /* (a) point query */
++ b.appendChild(el('h3','','(a) Stress at a point'));
++ const qc=el('div','');qc.style.cssText='display:flex;flex-wrap:wrap;align-items:center;margin:2px 0';
++ qc.innerHTML=sfbqCtl('x','\u00a0'+sfbqInp('qx',s.qx,'0')+' ft')+sfbqCtl('y',sfbqInp('qy',s.qy,'0')+' ft')+sfbqCtl('z below the base',sfbqInp('qz',s.qz,f2(R.B))+' ft');
++ b.appendChild(qc);
++ M.Q1.steps.forEach(st=>b.appendChild(sfbqEq(st)));
++ b.appendChild(el('p','','<b>\u0394\u03c3<sub>z</sub> = '+f3(M.Q1.result.value)+' ksf = '+f3(M.Q1.result.value/M.qref)+' q<sub>ref</sub></b> at (x, y, z) = ('+f2(M.qx)+', '+f2(M.qy)+', '+f2(M.qz)+') ft. 2:1 average at z = '+f2(M.qz)+' ft: '+f3(SharedBoussinesq.twoToOne(M.Q,M.B,M.L,M.qz))+' ksf.'));
++ /* (b) profile */
++ b.appendChild(el('h3','','(b) Profile with depth'));
++ const pc=el('div','');pc.style.cssText='display:flex;flex-wrap:wrap;align-items:center;margin:2px 0';
++ pc.innerHTML=sfbqCtl('Point',sfbqSel('prof',[['c','Centre'],['k','Corner (+B/2, +L/2)'],['ex','Middle of the +x edge (B/2, 0)'],['ey','Middle of the +y edge (0, L/2)'],['u','Custom (x, y)']],s.prof))+(s.prof==='u'?sfbqCtl('x',sfbqInp('px',s.px,'0')+' ft')+sfbqCtl('y',sfbqInp('py',s.py,'0')+' ft'):'');
++ b.appendChild(pc);
++ const f1=el('div','sfbqFig');f1.innerHTML=sfbqProfileSVG(M,{});b.appendChild(f1);
++ b.appendChild(sfbqTable(M));
++ b.appendChild(el('p','note','2:1: \u0394\u03c3 = Q/((B + z)(L + z)), Q = '+(M.basis==='net'?'\u03a3P \u2212 q_sur\u00b7B\u00b7L = '+f2(M.P)+' \u2212 '+f3(M.qsur)+'\u00b7'+f2(M.B)+'\u00b7'+f2(M.L):'\u03a3P')+' = '+f2(M.Q)+' kip (GEC 6 Eq. 5-17): an average over the spread area, the same at every point of the profile.'));
++ /* (c) section */
++ b.appendChild(el('h3','','(c) Isobars on a vertical section'));
++ const f2d=el('div','sfbqFig');f2d.innerHTML=sfbqFieldSVG(M,{});b.appendChild(f2d);
++ b.appendChild(el('p','note','Contours at 0.9, 0.8, \u2026, 0.2, 0.15, 0.1 and 0.05 q_ref; equal horizontal and vertical scales. Grey: net decrease (the base pressure is below the overburden removed). The footing is drawn above the base.'));
++ /* (d) plan */
++ if(s.plan==='on'){b.appendChild(el('h3','','(d) Isobars in plan at z = '+f2(M.planZ)+' ft'));const f3d=el('div','sfbqFig');f3d.innerHTML=sfbqFieldSVG(M,{plan:true});b.appendChild(f3d);
++  b.appendChild(el('p','note','Dashed: the footing outline'+(M.ld.mode==='partial'?'; blue: the contact area':'')+'.'));}
++ if(old)old.replaceWith(det);else T.appendChild(det);
++ sfbqWire(det);
++}
++function sfbqWire(det){
++ det.querySelectorAll('[data-sfbq]').forEach(x=>{
++  const k=x.dataset.sfbq, ev='change';
++  x.addEventListener(ev,e=>{e.stopPropagation();const s=sfbqS();
++   if(k==='plan')s.plan=x.checked?'on':'off';else if(x.type==='number')s[k]=x.value===''?(k==='qz'||k==='planZ'?'':0):num(x.value);else s[k]=x.value;
++   saveAuto();sfbqCard(document.getElementById('tab-bearing'));});});}
++/* the report's sections without S-bous: the copies of the tabs (sfxApply, sfrfMove) are chosen as before the subsection existed */
++function sfbqNoBous(secs){return (secs||[]).map(s=>Object.assign({},s,{subs:(s.subs||[]).filter(q=>q.key!=='S-bous')}));}
++/* Report: Bearing section, subsection S-bous */
++function sfrBous(){
++ if(typeof SharedBoussinesq==='undefined')return null;
++ const M=sfbqModel(), it=[];
++ it.push({type:'note',text:'Vertical stress increase in the soil below the base (information only): Boussinesq\u2019s point-load solution integrated over the loaded area in a homogeneous, isotropic, linear-elastic half-space; layering and the soil\u2019s own weight are not modelled. Uniform pressure: Newmark\u2019s corner factor with superposition (FHWA GEC 6 §5.3.2, Fig. 5-11); a linear pressure in full contact: closed form; partial contact: numerical integration over the contact polygon (shared/boussinesq.js). 2:1 method for comparison: GEC 6 Eq. 5-17. Coordinates: x along B, y along L from the footing centre, z down from the base.'});
++ if(!M.a)return {title:'Stress below the footing (Boussinesq)',key:'S-bous',items:it.concat([{type:'note',warn:true,text:M.why}])};
++ it.push({type:'kv',rows:[['Load case',M.a.cb.name+(M.gov?' (governing bearing combination)':'')],['Pressure basis',M.basis==='net'?'Net: q − q_sur, q_sur = γ·D_f (γ′ = γ_s − γ_w below the water table) = '+sfrN(M.qsur,3)+' ksf, removed over B × L':'Gross: q (the base pressure)']]});
++ if(M.none||!M.ld)return {title:'Stress below the footing (Boussinesq)',key:'S-bous',items:it.concat([{type:'note',warn:true,text:M.why}])};
++ it.push({type:'note',text:'Base pressure of this combination: q = '+sfrN(M.bp.plane.q0,3)+' + '+sfrN(M.bp.plane.gx,4)+'x + '+sfrN(M.bp.plane.gy,4)+'y ksf'+(M.bp.mode==='partial'?' over the contact area (partial contact)':'')+', q_max = '+sfrN(M.qmax,3)+' ksf'+(M.gov?' ([[S-bp]])':'')+'; q_ref = '+(M.basis==='net'?'q_max − q_sur = ':'q_max = ')+sfrN(M.qref,3)+' ksf. q_sur as in the bearing check ([[S-qa]]).'});
++ it.push({type:'steps',scope:'bous',title:'Stress at (x, y, z) = ('+sfrN(M.qx)+', '+sfrN(M.qy)+', '+sfrN(M.qz)+') ft',steps:M.Q1.steps.map(o=>SharedSteps.step(o))});
++ it.push({type:'figure',svg:sfbqProfileSVG(M,{print:true}),caption:'Δσ_z/q_ref vs depth at the '+M.pname+': Boussinesq and 2:1 — '+sfbqHead(M)});
++ it.push({type:'table',head:['z','z (ft)','Δσ_z Boussinesq (ksf)','Δσ_z/q_ref','2:1 average (ksf)','2:1 / q_ref'],rows:M.tz.map(r=>[({0.25:'B/4',0.5:'B/2',0.75:'3B/4',1:'B'}[r.k]||r.k+'B'),sfrCell(r.z),sfrCell(r.v,3),sfrCell(r.r,3),sfrCell(r.t,3),sfrCell(r.tr,3)])});
++ it.push({type:'note',text:'2:1: Δσ = Q/((B + z)(L + z)), Q = '+(M.basis==='net'?'ΣP − q_sur·B·L':'ΣP')+' = '+sfrN(M.Q)+' kip: the average over the spread area.'});
++ it.push({type:'figure',svg:sfbqFieldSVG(M,{print:true}),caption:'Isobars Δσ_z/q_ref (0.9 … 0.05) on the vertical section through the centre along '+(M.s.sec==='L'?'L':'B')+' — '+sfbqHead(M)});
++ if(M.s.plan==='on')it.push({type:'figure',svg:sfbqFieldSVG(M,{print:true,plan:true}),caption:'Isobars Δσ_z/q_ref in plan at z = '+sfrN(M.planZ)+' ft — '+sfbqHead(M)});
++ return {title:'Stress below the footing (Boussinesq)',key:'S-bous',items:it};
+ }
+ </script>
+ <script>
+@@ -4386,6 +4646,7 @@ function sfrModel(){
+    rows:R.asd.map(a=>({cells:[a.cb.name,sfrCell(a.r.P),sfrCell(a.r.ex,3),sfrCell(a.r.ey,3),sfrCell(a.bear.qmax,3),sfrCell(100*(a.bear.contactFrac!==undefined?a.bear.contactFrac:1),1),sfrDC(a.DCR)],cls:a===G?'gov':''}))},
+    {type:'note',text:'The governing row (bold) is worked in [[S-bp]] and [[S-qa]]; every row follows the same procedure.'},
+    ...R.asd.filter(a=>a.DCR===Infinity).map(a=>({type:'note',warn:true,text:'D/C = ∞, '+a.cb.name+': '+sfdBearWhy(a)+'.'}))]});   /* SFNB-2 */
++  try{const bq=sfrBous();if(bq)subs.push(bq);}catch(e){console.error(e);subs.push({title:'Stress below the footing (Boussinesq)',key:'S-bous',items:[{type:'note',warn:true,text:'Could not be computed: '+e.message}]});}   /* SFBQ */
+   secs.push({title:'Bearing',subs});
+  }
+  /* ---------- 4. Stability ---------- */
+@@ -5083,7 +5344,7 @@ function sfxResults(tab){
+ }
+ function sfxApply(model){
+  const secs=model.sections;
+- let txt='';try{txt=SharedReport.text(SharedReport.build(model),{legacy:true});}catch(e){return model;}
++ let txt='';try{txt=SharedReport.text(SharedReport.build({sections:sfbqNoBous(secs)}),{legacy:true});}catch(e){return model;}   /* SFBQ: without S-bous (its numbers must not hide a tab's table) */
+  const have=new Set();let all=sfxNrm(txt);const rep0=all;   /* the Report's own text */
+  const addNum=x=>{have.add(x);const v=parseFloat(x),d=(x.split('.')[1]||'').length;for(let i=0;i<d;i++)have.add(String(parseFloat(v.toFixed(i))));};
+  sfxNums(txt).forEach(addNum);
+@@ -5254,7 +5515,7 @@ function sfrfTarget(ti,c){
+ function sfrfMove(ap,secs){
+  if(!ap.subs.length)return [];
+  /* the report's own text (everything but the copies): numbers (with the roundings sfxApply accepts) and normalised text */
+- let txt='';try{txt=SharedReport.text(SharedReport.build({sections:secs}),{legacy:true});}catch(e){return [];}
++ let txt='';try{txt=SharedReport.text(SharedReport.build({sections:sfbqNoBous(secs)}),{legacy:true});}catch(e){return [];}   /* SFBQ: as sfxApply */
+  const have=new Set(),all=sfxNrm(txt);
+  sfxNums(txt).forEach(x=>{have.add(x);const v=parseFloat(x),d=(x.split('.')[1]||'').length;for(let i=0;i<d;i++)have.add(String(parseFloat(v.toFixed(i))));});
+  const cellT=c=>(c&&typeof c==='object')?String(c.t==null?'':c.t):String(c==null?'':c);
+@@ -10214,7 +10475,7 @@ manPart("p3","3. Output Reference",[
+ {ul:[
+  "<b>1.1\u20131.5</b> Plan and section schematics (to scale, live), sign convention, input echo, and the engineering-assumptions statement that prints with every calc.",
+  "<b>2.1\u20132.6</b> Load basis; self-weights/EV/surcharge/buoyancy with full substitution; the service-combination table with per-combo resultants, eccentricities, qmax, contact %, bearing DCR and stability FS; an expandable per-action resultant breakdown for the governing combo (every P\u00b7arm, applied M, and V\u00b7h term); bearing DCR by combination; the strength-combination table; the pedestal loads by combination.",
+- "<b>3.1\u20133.4</b> Governing-combination bearing calculation in full: eccentricities, kern check, the contact polygon with corner pressures, the statics closure table, the pressure surface and two section cuts, the interactive contact-zone map, and the bearing check (direct or Vesi\u0107 with every factor substituted); the LRFD combinations for reference only.",
++ "<b>3.1\u20133.4</b> Governing-combination bearing calculation in full: eccentricities, kern check, the contact polygon with corner pressures, the statics closure table, the pressure surface and two section cuts, the interactive contact-zone map, and the bearing check (direct or Vesi\u0107 with every factor substituted); the LRFD combinations for reference only. <b>3.5</b> Stress below the footing (Boussinesq; information only): for a chosen service combination and a net (q \u2212 \u03b3D<sub>f</sub>) or gross pressure basis, the stress increase at any point (x, y, z) worked step by step, the profile with depth (Boussinesq and 2:1) at the centre, a corner, an edge or any point with a table at B/4 \u2026 5B, the isobars on a vertical section along B or L, and optionally in plan at a chosen depth. No bulb is drawn where there is no compressive bearing pressure.",
+  "<b>4.1\u20134.6</b> Sliding parameters and both directions; overturning about all four edges with a per-action moment table each; the eccentricity limit (4.3a); flotation; the rigidity verification; the LRFD combinations for reference only.",
+  "<b>5.1\u20135.7</b> Design basis and effective depths; flexure and one-way shear per direction with critical-section diagrams, the shear/moment plot along each axis and, for a combined footing, the transverse strip under each pedestal; bar development; punching with the perimeter/frustum diagrams and the three-term v<sub>u</sub> decomposition; interface bearing, dowels and shear friction; short-direction band reinforcement (advisory).",
+  "<b>6.x</b> Pedestal classification table and, per pedestal, axial capacity, the P\u2013M views (uniaxial P\u2013M<sub>x</sub> / P\u2013M<sub>y</sub> diagrams, the load contour with every combo\u2019s demand point, P\u2013M along the governing angle, a 3D surface), tie spacing, slenderness with moment magnification where slender, shear, torsion, crossties and cover.",
+```
