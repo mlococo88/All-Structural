@@ -3496,3 +3496,34 @@ PR #1552: https://github.com/mlococo88/All-Structural/pull/1552
 - SE-D1. The type's governing line is the line of its largest group ratio. The checks of the other groups may govern on another line of the same type, and each marker names its line.
 - SE-D2. ℓ_t and ℓ_d are drawn from each girder end for the bonded strands and from each debond point for the debonded ones. The engine reports one ℓ_t (R.ss.lt) for all strands.
 - SE-D3. The groups with no station along the girder (the owner's input limits, e.g. f′ci) are listed under the figure, not marked on it.
+
+## 2026-11-14 — PR 8b: 3D view: View (whole bridge / girder line close-up, Zoom to), diagram overlays, Scale (display only)
+PR #1553: https://github.com/mlococo88/All-Structural/pull/1553
+### Request
+- PS Bridge catch-up to the Steel Bridge app, item 8, 3D view:
+  - Steel's View choices (close-up per girder);
+  - the diagram overlays (moment / shear envelopes from the results);
+  - the Scale control;
+  - readable labels.
+### What changed (`ui/view3d.js`, the Steel Bridge app's apps/steel-bridge/ui/view3d.js pattern: DG, V3B_DG, the close-up and V3B.focus)
+- New bar: View (Whole bridge / Girder line G1 … Gn close-up), Zoom to (close-up only), Diagram, Scale (0.25 to 4), + moment down. The choices are kept in `ui.v3d` (psb2.ui, the key the layers and the camera already use; nothing new in the project).
+- Close-up of line g:
+  - its girders in every span; its tributary deck strip (half the bays beside it, to the deck edge on an exterior line) with its barrier or sidewalk; its haunch and bearings; the diaphragms in the bays beside it; the continuity diaphragm cut to the strip;
+  - every strand of its girders: `geom(P, { strLine: g })`. The default `geom(P)` is unchanged: the strands of the type shown.
+  - Zoom to: the whole line; each span's left end, hold-down point (when draped), midspan and right end. The home view is closer.
+- Diagrams (`DG`, `series(R, d)`): Strength I and Service I moment envelopes, LL+IM moment envelope, DC moment, DW moment, Strength I shear envelope, LL+IM shear envelope, DC shear.
+  - The values are each girder type × line's engine result (`R.diagrams`, k-ft / kip at the engine's stations, x from the left ℄ bearing), through `ctx.res(k, g)`, which is the page's cached `cellR`.
+  - Each is drawn as a fence beside each girder drawn (+ moment down by default), with the peak values labelled (larger in the close-up, 1.2 × the label size in the whole view) and a pointer read-out.
+  - The `dg` layer toggle is added to the layer list.
+- `index.html`: `PSB3DUI.render(…, { …, res: (k, g) => cellR(PSBDesign.cellInputs(P, k, g)) })`.
+- Tests:
+  - `tests/engine/psbridge-3dviews.test.mjs` (2 tests). The close-up strands: only line g, every span, the same as the default view's for the type shown; the default is unchanged. Each Diagram choice equals the engine's `R.diagrams` columns at its stations (both branches, unit, L).
+  - `ps-bridge-figures.mjs`, at 1400 and 390 px: no diagram by default; Strength I fences beside every girder; the G1 close-up (2 girders, 4 fences, Zoom to targets, its strands); Zoom to moves the camera; the shear envelope; Scale and + moment down kept; the view kept on reload; psb2.* keys only.
+### Saved data (CLAUDE.md §5)
+- None in the project. `ui.v3d.mode / dg / dsc / eng` are new optional UI choices in the existing per-browser `psb2.ui` key (as `ui.v3d.lay` and `ui.v3d.cam`). An old `psb2.ui` without them opens on the whole bridge with no diagram.
+### Governing provisions (CLAUDE.md §4)
+- None changed. The diagrams are the engine's values; the combinations are as the engine forms them (Strength I with η and the owner's LL multiplier; Service I).
+### Decisions (pending engineer review)
+- 3D-D1. No diagram by default (Steel opens on Strength I moment). This keeps the default view as before and computes no other cell until asked.
+- 3D-D2. The diagrams are per girder line and span. For spans made continuous, the engine's diagrams of each span cell are shown (as the Analysis tab of that cell); the continuous unit is not redrawn as one curve.
+- 3D-D3. Close-up Zoom to targets: the span ends, the hold-down points and the midspans. The steel app's targets are its splices and bearings; this app has no splices.

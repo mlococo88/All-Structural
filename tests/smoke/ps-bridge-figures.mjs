@@ -227,5 +227,32 @@ for (const vw of [1400, 390]) {
   check(pg.errs.length === 0, `${tag}: console errors ${pg.errs.slice(0, 3).join(' | ')}`);
   await pg.b.close();
 }
+
+// ---------- 2026-11-14 (item 8b): the 3D view: View (whole bridge / girder line close-up), Zoom to, Diagram, Scale, + moment down ----------
+for (const vw of [1400, 390]) {
+  const tag = `3d @ ${vw}`, pg = await open('ibeam', vw, '3d'), { p } = pg;
+  await p.waitForSelector('#v3d-host canvas', { timeout: 20000 }).catch(() => {}); await p.waitForTimeout(1200);
+  const st = () => p.evaluate(() => Object.assign(window.PSB3DUI.state(), { ui: JSON.parse(localStorage.getItem('psb2.ui') || '{}').v3d || {}, dgTxt: (document.getElementById('v3d-dg') || {}).textContent || '', sideways: document.documentElement.scrollWidth > window.innerWidth + 1,
+    focus: !(document.getElementById('v3d_focus') || {}).hidden, cells: (() => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project; return window.PSBBridge.cells(P).length; })() }));
+  let r = await st();
+  check(r.counts && r.counts.girders === r.cells && r.fences === 0 && !r.focus, `${tag}: whole bridge, no diagram by default (${r.counts && r.counts.girders} girders)`);
+  await p.selectOption('#v3d_dg', 'mStr'); await p.waitForTimeout(1500); r = await st();
+  check(r.fences === 2 * r.cells && /Strength I envelope/.test(r.dgTxt) && r.ui.dg === 'mStr', `${tag}: Strength I moment fences beside every girder (${r.fences})`);
+  await p.selectOption('#v3d_mode', 'g1'); await p.waitForTimeout(1500); r = await st();
+  check(r.mode === 'g1' && r.counts.girders === 2 && r.fences === 4 && r.focus && r.tg.includes('s1h') && r.tg.includes('s2m') && r.ui.mode === 'g1', `${tag}: G1 close-up: its 2 girders, 4 fences, Zoom to ${r.tg && r.tg.join(',')}`);
+  check(r.counts.strands > 0 && /strand lines of G1/.test(r.info), `${tag}: the close-up's strands (${r.counts.strands})`);
+  const cam0 = await p.evaluate(() => window.PSB3DUI.camera()); await p.selectOption('#v3d_focus', 's1h'); await p.waitForTimeout(400); const cam1 = await p.evaluate(() => window.PSB3DUI.camera());
+  check(JSON.stringify(cam0.t) !== JSON.stringify(cam1.t), `${tag}: Zoom to the hold-down point moves the camera`);
+  await p.selectOption('#v3d_dg', 'vStr'); await p.waitForTimeout(1200); r = await st(); check(/Shear: Strength I/.test(r.dgTxt) && r.fences === 4, `${tag}: shear envelope`);
+  await p.$eval('#v3d_dsc', e => { e.value = '2'; e.dispatchEvent(new Event('change', { bubbles: true })); }); await p.waitForTimeout(800); r = await st(); check(r.ui.dsc === 2 && r.fences === 4, `${tag}: Scale kept (${r.ui.dsc})`);
+  await p.click('#v3d_eng'); await p.waitForTimeout(800); r = await st(); check(r.ui.eng === false, `${tag}: + moment down off kept`);
+  await p.reload(); await p.waitForSelector('#v3d-host canvas', { timeout: 20000 }).catch(() => {}); await p.waitForTimeout(1500); r = await st();
+  check(r.mode === 'g1' && r.fences === 4 && r.ui.dg === 'vStr', `${tag}: the view and diagram kept on reload`);
+  check(!r.sideways, `${tag}: no sideways scroll`);
+  if (args.shots) await (await p.$('#v3dHost')).screenshot({ path: path.join(args.shots, `3d-closeup-${vw}.png`) });
+  const keys = Object.keys(await lsSnap(p)); check(keys.every(k => /^psb2\./.test(k) || k === '__psb2_probe'), `${tag}: keys ${keys.join(',')}`);
+  check(pg.errs.length === 0, `${tag}: console errors ${pg.errs.slice(0, 3).join(' | ')}`);
+  await pg.b.close();
+}
 console.log(`${checks} checks, ${failures} failed`);
 process.exit(failures ? 1 : 0);
