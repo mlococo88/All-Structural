@@ -74,8 +74,8 @@
     const chain = [[m.zL, 0], ...m.ys.slice(1).map((z, i) => [m.ys[i], z]), [m.ys[m.nb - 1], m.zR]];
     // each bay where its drawn height takes its label, else the deck width only (the bays: the Cross-section tab)
     const dsz = nar ? 9 : 10, segs = chain.filter(([a, b]) => b - a > 1e-6);
-    S.raw(T => { const px = T.X(xR) + 16, roomy = segs.every(([a, b]) => Math.abs(T.Y(Y(a)) - T.Y(Y(b))) >= dsz + 2), list = roomy ? segs : [[m.zL, m.zR]], o = [];
-      list.forEach(([a, b]) => { const y0 = T.Y(Y(a)), y1 = T.Y(Y(b)), t = roomy ? f2((b - a) / 12, 2) : `${f2((b - a) / 12, 2)} ft deck`;
+    S.raw(T => { const px = T.X(xR) + 16, hpx = ([a, b]) => Math.abs(T.Y(Y(a)) - T.Y(Y(b))), bays = segs.slice(1, -1), roomy = bays.length > 0 && bays.every(q => hpx(q) >= dsz + 2), list = roomy ? segs : [[m.zL, m.zR]], o = [];
+      list.forEach(([a, b]) => { const y0 = T.Y(Y(a)), y1 = T.Y(Y(b)), t = !roomy ? `${f2((b - a) / 12, 2)} ft deck` : hpx([a, b]) >= dsz + 2 ? f2((b - a) / 12, 2) : '';   // an overhang too short for its label: the tick only
         o.push(`<line x1="${px}" y1="${y0}" x2="${px}" y2="${y1}" stroke="#64748B" stroke-width="0.7"/><line x1="${px - 3}" y1="${y0 + 3}" x2="${px + 3}" y2="${y0 - 3}" stroke="#64748B"/><line x1="${px - 3}" y1="${y1 + 3}" x2="${px + 3}" y2="${y1 - 3}" stroke="#64748B"/>`,
           `<text x="${px + 5}" y="${(y0 + y1) / 2 + dsz * 0.35}" class="dt-t halo" style="font-size:${dsz}px" fill="#0F172A">${t}</text>`); });
       return o.join(''); }, T => { const px = T.X(xR) + 16, w = 5 + V.TW('00.00 ft deck', dsz); return [[px - 4, T.Y(Y(m.zL)) - dsz], [px + w, T.Y(Y(m.zR)) + dsz]]; });
@@ -96,12 +96,12 @@
       <p class="note">Spans and skews: this tab. Girder lines, bays and overhangs: <a href="#" data-goin="xsec">Cross-section tab</a>. Girder types on the lines: <a href="#" data-goin="gird">Girders &amp; strands tab</a>. Diaphragms: <a href="#" data-goin="dd">Diaphragms / deck tab</a>. In 3D: <a href="#" data-gotab="3d">3D view</a>; the cross-section: <a href="#" data-gotab="lds">Loads &amp; LLDF</a>.</p></div></section>`;
   }
   /* mount(slot, P, o): the plan as a detail card (PSBVizKit.detCard: drawn at the slot's width, hover read-out, print width), with the
-     True scale / Width ×2 choice (STATE.vex, the page session only); o = { id, title, seg (default true) } */
+     True scale / Width ×2 choice (STATE.vex, the page session only); o = { id, title, seg (default true), maxH (px) } */
   function mount(slot, P, o) {
     const V = window.PSBVizKit; if (!slot || !V || !V.detCard) return null; o = o || {};
     let m = null; const H = V.detCard(slot, { id: o.id || 'planFig', title: o.title || 'Framing plan', sub: 'girder lines, supports and diaphragms',
       seg: o.seg === false ? null : { label: 'Width', items: [['1', 'True scale'], ['2', 'Width ×2']], cur: String(STATE.vex), on: k => { STATE.vex = +k > 1 ? 2 : 1; slot.querySelectorAll('[data-vkseg]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.vkseg === String(STATE.vex)))); H.redraw(); const c = slot.querySelector('.vk-cap[data-plancap]'); if (c && m) c.outerHTML = cap(); } },
-      draw: W => { const q = svg(P, W, { vex: o.seg === false ? 1 : STATE.vex }); m = q.m; return { html: q.svg, nar: W < 560 }; }, hint: 'Point at a girder, a support or a diaphragm to read it.' });
+      draw: W => { const q = svg(P, W, { vex: o.seg === false ? 1 : STATE.vex, maxH: o.maxH }); m = q.m; return { html: q.svg, nar: W < 560 }; }, hint: 'Point at a girder, a support or a diaphragm to read it.' });
     const cap = () => legend(m, o.seg === false ? 1 : STATE.vex).replace('<p class="vk-cap">', '<p class="vk-cap" data-plancap>');
     if (H && m) H.el.insertAdjacentHTML('beforeend', cap());
     return H;

@@ -88,6 +88,14 @@
     } finally { host.remove(); }
     return out;
   }
+  /* planFig(P, wScr): 2026-11-14: §2's framing plan (ui/plan.js, true scale): drawn at the printed width (PW) and, on a narrow screen, a copy at the
+     screen width shown there (as the tabs' figures); { svg, cap } or null */
+  function planFig(P, wScr) {
+    const PL = window.PSBPlan; if (!PL || !window.PSBVizKit) return null;
+    try { const g = PL.svg(P, PW, { vex: 1 }); if (!g.m || g.m.errors.length) return null; const sc = wScr && wScr < PW - 40 ? PL.svg(P, wScr, { vex: 1 }) : null;
+      return { svg: sc ? `<div class="vk rp-vk rp-fig-scr">${sc.svg}</div><div class="vk rp-vk rp-fig-prn">${g.svg}</div>` : `<div class="vk rp-vk">${g.svg}</div>`, cap: PL.legend(g.m, 1).replace(/<[^>]+>/g, '') }; }
+    catch (e) { console.warn(e); return null; }
+  }
   function render(host, ctx) {
     const o = ctx.opts || {};
     if (window.SharedReport) window.SharedReport.css();
@@ -100,7 +108,7 @@
     // the model is kept while the inputs, the sections chosen and the figure width are the same (the result object of the page is the same)
     // PS-25: several worked units: each unit's graphics drawn with its own result (an array, one per unit)
     if (S.key !== key || !S.M) { let figs = {}; try { figs = B.multi ? B.units.map(u => figures({ P: u.P, inp: u.inp, R: u.R, W: u.W }, inc, narrow ? wScr : 0)) : figures(B, inc, narrow ? wScr : 0); } catch (e) { console.warn(e); }
-      S.M = window.PSBReportBuild.model(B, { include: inc, figures: figs }); S.key = key; }
+      S.M = window.PSBReportBuild.model(B, { include: inc, figures: figs, planFig: inc.proj === false ? null : planFig(B.P, narrow ? wScr : 0) }); S.key = key; }
     const tb = document.getElementById('tabBar');
     const V = window.SharedReport.mount(box, S.M, { controls: controls(o, B), closed: S.closed, stick: tb ? tb.offsetHeight : 0, spy: true,
       onGoto: t => { if (/^in:/.test(t)) { if (ctx.goin) ctx.goin(t.slice(3)); } else if (ctx.goto) ctx.goto(t); } });

@@ -134,5 +134,37 @@ for (const vw of [1400, 390]) {
   check(pg.errs.length === 0, `${tag}: console errors ${pg.errs.slice(0, 3).join(' | ')}`);
   await pg.b.close();
 }
+
+// ---------- 2026-11-14 (item 4): the Summary's "Cross-section and plan" card; the Report's framing plan (§2) ----------
+for (const vw of [1400, 390]) {
+  const tag = `summary @ ${vw}`, pg = await open('ibeam', vw, 'sum'), { p } = pg;
+  await p.waitForTimeout(800);
+  const r = await p.evaluate(() => { const card = document.getElementById('sum-gfx'), ov = document.getElementById('sum-project'), xs = document.querySelector('#sumXsFig svg'), pl = document.querySelector('#sumPlanFig svg');
+    const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, d = window.PSBDesign.sel(P), cap = Math.max(360, Math.min(760, 0.8 * window.innerHeight));
+    const links = card ? [...card.querySelectorAll('a[data-goin], a[data-gotab]')].map(a => a.dataset.goin ? 'in:' + a.dataset.goin : 'out:' + a.dataset.gotab) : [];
+    return { card: !!card, before: !!(card && ov && (card.compareDocumentPosition(ov) & Node.DOCUMENT_POSITION_FOLLOWING)), xsN: xs ? xs.querySelectorAll('polygon.xs-g').length : -1, cells: window.PSBBridge.cells(P).filter(c => c.s === d.s).length,
+      plN: pl ? pl.querySelectorAll('line.xs-gl').length : -1, all: window.PSBBridge.cells(P).length, hx: xs ? xs.getBoundingClientRect().height : 0, hp: pl ? pl.getBoundingClientRect().height : 0, cap, links,
+      wx: xs ? xs.getBoundingClientRect().width : 0, wc: card ? card.getBoundingClientRect().width : 0, sideways: document.documentElement.scrollWidth > window.innerWidth + 1 }; });
+  check(r.card && r.before, `${tag}: the card above the project overview`);
+  check(r.xsN === r.cells && r.plN === r.all, `${tag}: cross-section ${r.xsN}/${r.cells} sections, plan ${r.plN}/${r.all} girder lines`);
+  check(r.hx > 40 && r.hx <= r.cap + 1 && r.hp > 40 && r.hp <= r.cap + 1, `${tag}: heights within the cap (${r.hx.toFixed(0)}, ${r.hp.toFixed(0)} ≤ ${r.cap.toFixed(0)})`);
+  check(r.wx > 0.8 * r.wc, `${tag}: full width (${r.wx.toFixed(0)} of ${r.wc.toFixed(0)})`);
+  check(['in:xsec', 'in:gird', 'out:lds', 'in:layout', 'in:dd', 'out:3d'].every(k => r.links.includes(k)), `${tag}: links ${r.links.join(',')}`);
+  check(!r.sideways, `${tag}: no sideways scroll`);
+  if (args.shots) await (await p.$('#sum-gfx')).screenshot({ path: path.join(args.shots, `summary-gfx-${vw}.png`) });
+  if (vw === 1400) {
+    await p.click('#sum-xs a[data-gotab="lds"]'); await p.waitForTimeout(500);
+    check(await p.evaluate(() => document.querySelector('#tabBar [aria-selected="true"]').dataset.otab === 'lds' && !!document.querySelector('#ldFig svg')), 'the cross-section link opens Loads & LLDF');
+    await p.click('#tabBar [data-otab="sum"]'); await p.waitForTimeout(500); await p.click('#sum-plan a[data-goin="layout"]'); await p.waitForTimeout(500);
+    check(await p.evaluate(() => !document.querySelector('#inPanes [data-pane="layout"]').hidden && !!document.querySelector('#planFig svg')), 'the plan link opens the Bridge layout tab with its plan');
+    await p.click('#tabBar [data-otab="rpt"]'); await p.waitForTimeout(2500);
+    const q = await p.evaluate(() => { const t = (document.getElementById('rptHost') || {}).textContent || ''; const svg = [...document.querySelectorAll('#rptHost svg[aria-label^="Framing plan"]')].filter(e => e.getBoundingClientRect().width > 0);
+      return { fig: /Figure 2\.1: Framing plan/.test(t), n: svg.length, lines: svg[0] ? svg[0].querySelectorAll('line.xs-gl').length : 0, see: /cross-section of each worked girder's span[^.]*: see §4/.test(t) }; });
+    check(q.fig && q.n === 1 && q.lines === 10, `Report §2: Figure 2.1 framing plan (${q.n}, ${q.lines} lines)`);
+    check(q.see, 'Report §2: the cross-section "see §4" reference');
+  }
+  check(pg.errs.length === 0, `${tag}: console errors ${pg.errs.slice(0, 3).join(' | ')}`);
+  await pg.b.close();
+}
 console.log(`${checks} checks, ${failures} failed`);
 process.exit(failures ? 1 : 0);
