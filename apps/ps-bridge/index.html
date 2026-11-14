@@ -621,6 +621,7 @@
       if (ok) h += '<div id="rptHost"></div>';   // PR 2e: the Report (ui/report.js), mounted below
     } else { const o = OUT[ui.otab]; h += ph(esc(name), o[0], o[1]); }
     $('out').innerHTML = h;
+    if (ui.otab === 'sum' && !errs.length && window.PSBSummaryUI.after) { try { window.PSBSummaryUI.after($('out'), { P }); } catch (e) { console.warn(e); } }   // 2026-11-14: the Summary's cross-section and plan
     if (ctxOut && TABUI[ui.otab]) { try { TABUI[ui.otab]().after($('out'), ctxOut); } catch (e) { console.warn(e); } }
     // PR 2e: the Report of the design girder (ui/report.js): the page's own result; the section choices kept in ui.rpt (psb2.ui), as the steel app
     if (ui.otab === 'rpt' && ok && $('rptHost')) { ui.rpt = ui.rpt || {};
