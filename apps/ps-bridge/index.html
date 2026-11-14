@@ -87,6 +87,7 @@
     'ui/rating.js',      // PR 2d-2: Rating tab
     'ui/report.js',      // PR 2e: Report tab (adapted copy of apps/steel-bridge/ui/report.js)
     'ui/dash.js',     // the check summary column (adapted copy of apps/steel-bridge/ui/dash.js)
+    'ui/view3d.js',   // PR 3c: the 3D view tab (the Steel Bridge app's 3D view pattern, apps/steel-bridge/ui/view3d.js; three.js r128 below)
     'ui/summary.js',  // PR 3b: the Summary tab (adapted copy of apps/steel-bridge/ui/summary.js): verdict, girder × span grid, type × check table
     'ui/splitter.js'  // the splitter between the input and output panels (copy of apps/steel-bridge/ui/splitter.js)
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
@@ -469,8 +470,7 @@
   /* ---------- outputs (placeholders; docs/ps-bridge-plan.md §2.3, §5) ---------- */
   const OUT = {
     dwg: ['7', ['girder sheet, strand and draping schedule (hold-down from ℄ bearing and from the girder end, PS-13), camber table; DXF']],
-    ad: ['5', ['the auto-design proposal per design group and its trial log (Run on the Auto design input tab)']],
-    '3d': ['3c', ['the bridge in 3D (three.js, as the Steel Bridge app)']]
+    ad: ['5', ['the auto-design proposal per design group and its trial log (Run on the Auto design input tab)']]
   };
   /* the design's engine results (PR 2b-2): computeAll of the design inputs (engine/design.js), kept while the inputs are the same; the worked
      steps of the three result tabs (engine/worked.js) made once per result. Only when there is no input error. */
@@ -564,6 +564,8 @@
       if (!errs.length) h += window.PSBSummaryUI.html({ P, A: ok ? allResults() : null, run: runState(), shown: (ok ? card(`Design girder: ${esc(rc.inp.proj.girderId)}, span ${window.PSBDesign.sel(P).s}`, `<div class="kv"><div><span>Section</span><span>${esc(rc.inp.girder)}, ${rc.R.ss.Ntot} strands</span></div><div><span>Composite I<sub>c</sub></span><span>${fmt(rc.R.cp.Ic, 0)} in⁴ <a href="#" data-gotab="sec">Section properties</a></span></div>
             <div><span>DF<sub>M</sub> / DF<sub>V</sub></span><span>${fmt(rc.R.dfm, 3)} / ${fmt(rc.R.dfv, 3)} <a href="#" data-gotab="lds">Loads &amp; LLDF</a></span></div><div><span>M<sub>u</sub> at midspan</span><span>${fmt(rc.R.diagrams.reduce((b, r) => Math.abs(r.x - rc.R.L / 2) < Math.abs(b.x - rc.R.L / 2) ? r : b).M_StrI_pos, 0)} kip-ft <a href="#" data-gotab="an">Analysis</a></span></div></div>
             ${rc.R.warns.length ? `<div class="alert"><b>Design warnings of the engine (${rc.R.warns.length})</b><ul>${rc.R.warns.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>` : '<p class="note">No design warnings.</p>'}`) : '') });
+    } else if (ui.otab === '3d') {
+      if (!errs.length) h += '<div id="v3dHost"></div>';   // PR 3c: the 3D view (ui/view3d.js), mounted below
     } else if (ui.otab === 'rpt') {
       if (ok) h += '<div id="rptHost"></div>';   // PR 2e: the Report (ui/report.js), mounted below
     } else { const o = OUT[ui.otab]; h += ph(esc(name), o[0], o[1]); }
@@ -573,6 +575,8 @@
     if (ui.otab === 'rpt' && ok && $('rptHost')) { ui.rpt = ui.rpt || {};
       try { window.PSBReportUI.render($('rptHost'), { P, rc, opts: ui.rpt, save: saveUi, goto: t => gotoOut(t), goin: t => { ui.itab = t; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; } }); }
       catch (e) { $('rptHost').innerHTML = `<div class="alert err" role="alert">Report error: ${esc(e && e.message)}</div>`; console.warn(e); } }
+    // PR 3c: the 3D view of the bridge (display only; its layer and camera choices kept in ui.v3d, psb2.ui)
+    if (ui.otab === '3d' && $('v3dHost')) { try { window.PSB3DUI.render($('v3dHost'), { P, ui, saveUi }); } catch (e) { $('v3dHost').innerHTML = `<div class="alert err" role="alert">3D view error: ${esc(e && e.message)}</div>`; console.warn(e); } }
     if (window.PSBDashUI) window.PSBDashUI.refresh();
   }
   const gotoOut = t => { ui.otab = t; saveUi(); drawOut(); $('outputPanel').scrollTop = 0; };
