@@ -3008,3 +3008,46 @@ Voided slabs, plates 5.1.1c (36 in, PDF p. 314) and 5.1.2c (48 in, p. 317); outl
 ### Other copies
 - `Prestressed Bridge Design.html` (the old app, frozen since PR 2a) keeps the wrong box / voided slab table (its `GIRDERS`, line ~2470); not fixed (frozen). Noted in `fixlog/Prestressed Bridge Design.md`. Harness B computes the expected values of box designs with the old app's engine and the plate's entry put in its GIRDERS.
 - `lldf.html` has its own BI–BIV box choices (separate data); not touched.
+
+## 2026-11-14 — PS-33 / PS-34: the strand fit measures 1.5 in to a void face (exterior faces 2 in); the pier compression block checked against each family's own thickness (input validation and a warning; no calculation change)
+PR #1541: https://github.com/mlococo88/All-Structural/pull/1541
+### Request
+- Engineer decisions 2026-11-14:
+  - PS-33: strand-fit (PS-28) clearance to VOID faces = 1.5 in to the strand centre (exterior faces stay 2 in), for boxes and voided slabs; the CTDOT box standard pattern rows at 2 in and 4 in in the 5½ in slab must then fit (plates 5.2.2 / 5.2.3, PDF p. 328 / 329, as far as the contiguous-row model represents them).
+  - PS-34: the pier a ≤ t_bf warning uses the family thickness: NEXT = the stem depth (h − top flange); box = the bottom slab; voided slab = the concrete below the voids; solid slab = h; I-girders / bulb tees unchanged. App-side module; warning only.
+  - Row model ("use your judgment"): keep the contiguous centred rows; state on the Girders & strands tab (box / voided slab) that the standard gapped rows and web columns are entered as the nearest contiguous rows and that the results use only row height and count; a plan item for per-row strand positions (future PR, not built).
+### Problem
+- PS-28 measured 2 in from a strand centre to a void face as to an exterior face. The CTDOT standard box pattern's second row at 4 in is 1.5 in below the void (5½ in bottom slab), and the SII slabs' 2 in row is 1.5 in below the Ø8 voids: the standard patterns were input errors.
+- The engine's pier check `tbf = g.isNext ? g.next.ft : g.d[2]` (pbd-compute.js, verbatim) uses the NEXT top flange (the block is in the stems) and 0 for every box / slab (`girderGrossBase` returns `d: [0, 0, 0, 0]`): every continuous box / slab design got "a = … exceeds the bottom-flange thickness (0.0″)".
+### What changed
+- `engine/inputcheck.js` (`misfit`, the PS-28 rule):
+  - Before: `const COVER = 2;` … `if (dv < COVER - 1e-9) return \`is ${fx(dv)} in from a void (less than ${COVER} in)\`;`
+  - After: `const COVER = 2, VOID = 1.5;` … `if (dv < VOID - 1e-9) return \`is ${fx(dv)} in from a void (less than ${VOID} in)\`;`; the message rule "…outside the voids, at least 2 in from the edges of the concrete and at least 1.5 in from the edges of the voids…"; `VOID` exported. Exterior faces (`edgeDist`) unchanged.
+- `ui/inputs.js`: the Straight strand rows card gets `#rowsFitNote` (the fit rule, every shape) and, for a box beam or a deck slab, `rowModelNote(b)`: "Box beam: the standard strand patterns (CTDOT BDM plates 5.2.2 / 5.2.3) have strands in vertical columns in the webs; enter them as the nearest contiguous rows (same height and count). The results use only each row's height y and count n (the strand centroid and area); the drawn positions are used for the fit check and the graphics only." (slab: "…plates 5.1.3–5.1.6) have rows with strands only between and outside the voids…").
+- New `engine/pierblock.js` (`window.PSBPierBlock`, loaded after `engine/holddown.js`): `family(g)` → NEXT `{ t: h − next.ft, 'the stem depth h − t_f' }`, box `{ t: box.wall, 'the bottom slab' }`, voided slab `{ t: min(void y − d/2) over sectionVoids, 'the concrete below the voids' }`, solid slab `{ t: h, 'the slab depth h' }`, else null; `apply(inp, R)` (continuity on, `R.cont.aN` a number): `R.ps34 = { t, what, aN, aOK: aN ≤ t, engT: cont.tbf, engOK: cont.aOK }` and the engine's warning (regex `^Negative-moment compression block a = `) removed when a ≤ t, else replaced by "Negative-moment compression block a = X″ exceeds <what> (t″, PS-34) — rectangular-block assumption is unconservative; refine.". `cont.tbf`, `cont.aOK` and every other value are the engine's, unchanged.
+- `engine/holddown.js`: `compute = inp => { const R = compute0(inp); return window.PSBPierBlock ? window.PSBPierBlock.apply(inp, R) : R; }` (compute0 = the former compute).
+- `ui/flexure.js`: the pier card row "a against <what> (PS-34)" with `ps34.t` (else the engine's t_bf row as before); the figure's callout names the thickness. `engine/worked-strength.js` (`fx.pier.a` note): "a ≤ <what> = t in (PS-34)".
+- `docs/ps-bridge-plan.md` §5: item 4b "Per-row strand positions (between voids / in webs)" (future PR).
+- Tests: `psbridge-strandfit.test.mjs`, `psbridge-strandgfx.test.mjs` (the reference criterion `fitsAt`: void clearance 1.5 in), new `psbridge-ps33.test.mjs`; `pierblock` in the test loaders; harness B (`ps34.*` values compared with the thickness worked from the old app's girder).
+### Saved data (CLAUDE.md §5)
+- None: no key, field or format. Nothing is written.
+### Governing provisions
+- None changed: no capacity, factor or formula. PS-33 is an input-validation rule (fabrication clearance, the engineer's decision, checked against the CTDOT standard patterns). PS-34 changes which warning is shown (the rectangular-block assumption of the pier section, AASHTO LRFD 10th Ed. 5.6.3.2 / 5.6.2.2); φM_n at the pier is the engine's, unchanged.
+### Check cases (hand)
+- PS-33, AASHTO BI-36 (27in) (void 25.5 × 16 in, y = 5.5 to 21.5 in): rows 16 @ 2 in + 14 @ 4 in (plate 5.2.2). Strand (0, 4): 5.5 − 4 = 1.5 in to the void. Before: error "Straight strand rows, row 2: 14 strands at y = 4 in do not fit …: the strand at x = -13 in is 1.5 in from a void (less than 2 in)". After: fits (1.5 ≥ 1.5). Strand (13, 4): to the void corner (12.75, 5.5): √(0.25² + 1.5²) = 1.52 in ≥ 1.5: fits. Row of 18 @ 2 in: x = ±17, 17.75 − 17 = 0.75 in from the face: error (2 in to exterior faces kept).
+- PS-33, AASHTO SII-48 (15in) (Ø8 voids at x = 0, ±14, y = 7.5; bottom 3.5 in): row 22 @ 2 in (plate 5.1.6 pattern's 2 in row): strand (1, 2): to the centre void √(1 + 5.5²) − 4 = 1.59 in; (13, 2): √(1 + 5.5²) − 4 = 1.59 in. Before: error (< 2 in). After: fits.
+- PS-34, BIII-36 (39in), two 80 ft spans continuous, deck A_s = 16 in², f_y = 60 ksi, f′c = 8.5 ksi, b_bf = 35.5 in: a = 16 × 60 / (0.85 × 8.5 × 35.5) = 960 / 256.49 = 3.743 in. Before: t_bf = 0 → warning "a = 3.7″ exceeds the bottom-flange thickness (0.0″)". After: t = 5.5 in (bottom slab), 3.743 ≤ 5.5: no warning. With A_s = 40 in²: a = 9.357 in > 5.5: "… exceeds the bottom slab (5.5″, PS-34) …".
+- PS-34, NEXT 36F, the same: b_bf = 2 × 13 = 26 in, a = 960 / (0.85 × 8.5 × 26) = 5.110 in; t = 36 − 8 = 28 in (engine: 8 in): no warning either way. SIV-48: a = 960 / (0.85 × 8.5 × 47.5) = 2.797 in, t = 10.5 − 6 = 4.5 in (below the Ø12 voids): no warning (before: 0.0″, warned).
+- Every computed value (cont.*, φM_n at the pier, all checks) is the same before and after (test: R without ps34 / warns identical).
+### How verified
+- `node tests/engine/run.mjs psbridge tex project-registry`: 23 files, 215 passed, 0 failed (new `psbridge-ps33.test.mjs`: the plate box patterns on all 8 boxes, the slab 2 in rows on all 6 slabs, the gapped-row / web-column limitation, the tab note, PS-34 per family with no other value changed, the Flexure row and step). `check-syntax`: all pass. Smokes: skeleton 265 / 0, types 106 / 0, 3d 101 / 0.
+- Harness B: normal and `--import` 17 designs, 0 differences, exit 0; `--control` and `--import --control` exit 1. `ps34.*` values compared with the thickness worked from the old app's girder (no harness design is continuous on a NEXT / box / slab: checked in the browser with a scratch run — BIII-36 A_s 16 / 40, NEXT 36F, SIV-48, BT-72 on two 80 ft continuous spans: shown 5.50 / 28.00 / 4.50 in, the BT-72 row unchanged, the warning only for a = 9.36 > 5.5 in, 0 console errors).
+### Decisions (pending engineer review)
+- PS33-D1. Row model kept (contiguous centred rows); the tab states the limitation (above). The standard box web columns and the slabs' gapped 4 in rows are not representable; a contiguous row there is an input error (it would put strands in a void), as tested.
+- PS34-D1. The voided-slab thickness is the concrete below the LOWEST void bottom (SIV-48: 4.5 in under the Ø12 voids, not 5.5 in under the Ø10), conservative.
+- PS34-D2. The engine's `cont.tbf` / `cont.aOK` are kept unchanged in R (the verbatim engine's values); the app shows and warns on `R.ps34`.
+### Open items
+- Per-row strand positions (plan item 4b).
+- The I-girder taper question of the audit (2 in measured perpendicular to the 45° taper; Type I / II rows at 6 in) is not changed.
+### Other copies
+- `Prestressed Bridge Design.html` (frozen): still the 0.0″ warning for boxes / slabs and the NEXT top flange; not fixed.

@@ -35,6 +35,13 @@
     const hint = od ? `<span class="fHint${od.over ? ' over' : ''}">${od.over ? `overrides the ${esc(od.r.owner)} default (${esc(od.r.show)})` : `${esc(od.r.owner)} default`} · ${esc(PB().ownCite(od.r))}</span>` : '';
     return `<div class="fRow"><label for="${id}" title="${tip}">${f.l}</label>${ctl}<span class="unit">${esc(f.u)}</span>${hint}</div>`;
   }
+  /* rowModelNote(b): PS-33 (2026-11-14, decision pending engineer review): for a box beam or a deck slab, the row model's limit stated where the
+     rows are entered: the CTDOT standard patterns' gapped rows (slab strands between the voids) and web columns (box webs) are entered as the
+     nearest contiguous rows; the results use only each row's height and count. Per-row strand positions are a later PR (plan). */
+  function rowModelNote(b) {
+    const G = typeof GIRDERS !== 'undefined' && b ? GIRDERS[b.girder] : null; if (!G || !(G.box || G.deck)) return '';
+    return ` ${G.box ? 'Box beam' : 'Deck slab'}: the standard strand patterns (CTDOT BDM plates ${G.box ? '5.2.2 / 5.2.3' : '5.1.3–5.1.6'}) have ${G.box ? 'strands in vertical columns in the webs' : 'rows with strands only between and outside the voids'}; enter them as the nearest contiguous rows (same height and count). The results use only each row's height y and count n (the strand centroid and area); the drawn positions are used for the fit check and the graphics only.`;
+  }
   /* table(tp, P): a table input (strand rows, diaphragms, rating vehicles) */
   function table(tp, P) {
     const T = F().TABLES[tp], rows = get(P, tp) || [];
@@ -129,7 +136,8 @@
       let body = c.fields.filter(f => !f.when || f.when(P.base, P)).map(f => field(f, P)).join('');
       h += card(c.id, c.title, c.ref, body + (c.note ? `<p class="note">${c.note(P.base, P)}</p>` : ''));
       if (c.id === 'shape') h += card('rows', 'Straight strand rows', 'y from the soffit; debonding entered only (auto-design never adds it, PS-12)', table('base.rows', P)
-        + `<p class="note">${(P.base.rows || []).reduce((a, r) => a + (+r.n || 0), 0)} straight strands + ${+P.base.harp.n || 0} draped = ${(P.base.rows || []).reduce((a, r) => a + (+r.n || 0), 0) + (+P.base.harp.n || 0)} strands. Debonding rules (5.9.4.3.3) are checked as warnings of the design.</p>`);
+        + `<p class="note">${(P.base.rows || []).reduce((a, r) => a + (+r.n || 0), 0)} straight strands + ${+P.base.harp.n || 0} draped = ${(P.base.rows || []).reduce((a, r) => a + (+r.n || 0), 0) + (+P.base.harp.n || 0)} strands. Debonding rules (5.9.4.3.3) are checked as warnings of the design.</p>`
+        + `<p class="note" id="rowsFitNote">Each row is drawn and checked as a contiguous group of strands on the 2 in grid, centred on the girder ℄. A strand centre must be inside the concrete, at least 2 in from its edges (PS-28) and at least 1.5 in from the face of a void (PS-33).${rowModelNote(P.base)}</p>`);
     });
     if (tab === 'dd') h = card('diaph', 'Diaphragms (DC1 point loads)', 'entered once (PS-14)', table('base.loads.diaph', P) + '<p class="note">Point loads on the non-composite simple span of the design girder, from the left ℄ bearing; the same diaphragms apply to every girder from PR 3a (PS-14).</p>') + h;
     if (tab === 'loads') h += card('veh', 'Legal / permit vehicles', 'MBE 6A.4.4, 6A.4.5, Strength I', table('base.rateVeh', P) + '<p class="note">Fully factored live-load moment and shear per vehicle (DF, IM, MPF and the LRFR live-load factor applied, from your own analysis); the app supplies the capacity and the dead loads.</p>')

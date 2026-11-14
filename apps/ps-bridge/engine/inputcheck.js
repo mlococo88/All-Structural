@@ -117,7 +117,8 @@
        (1) inside the concrete outline (halfPolygon mirrored about the girder ℄),
        (2) not inside a void (sectionVoids),
        (3) at least COVER = 2 in from every edge of the outline, and
-       (4) at least COVER = 2 in from the edge of every void,
+       (4) at least VOID = 1.5 in from the edge of every void (PS-33, engineer decision 2026-11-14: the void faces are interior formed faces;
+           the CTDOT standard box pattern's 4 in row in the 5½ in bottom slab is 1.5 in from the void, plates 5.2.2 / 5.2.3; 2 in until then),
      each distance measured from the strand CENTRE (not from its surface; no half strand diameter taken off): the engine's "2″ grid with
      2″ edge cover" of its row-capacity warning (pbd-compute.js: floor((b − 4)/2) + 1 strands across a width b) and the criterion of
      tests/engine/psbridge-strandgfx.test.mjs (PS-27, fitsAt). Equal to 2 in fits (1e-9 in tolerance).
@@ -127,7 +128,7 @@
      inside the depth): those have their own messages. Not checked: a Custom shape (its outline is drawn with the library's default flange
      thicknesses, not entered: PS28-D1, pending engineer review). Only inputs are read: nothing is written, so a pattern that does not fit
      (an imported old-app design too) is kept as entered and shows this error until it is fixed. */
-  const COVER = 2;
+  const COVER = 2, VOID = 1.5;   // PS-28: exterior faces 2 in; PS-33: void faces 1.5 in (strand centre)
   const fx = v => { const s = (Math.round(v * 100) / 100).toFixed(2).replace(/\.?0+$/, ''); return s === '-0' ? '0' : s; };
   function insidePoly(poly, x, y) { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j];
     if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; }
@@ -140,7 +141,7 @@
     if (vs.some(v => v.type === 'rect' ? Math.abs(q.x - v.x) < v.w / 2 && Math.abs(q.y - v.y) < v.h / 2 : Math.hypot(q.x - v.x, q.y - v.y) < v.d / 2)) return 'is inside a void';
     const de = edgeDist(poly, q.x, q.y); if (de < COVER - 1e-9) return `is ${fx(de)} in from the edge of the concrete (less than ${COVER} in)`;
     const dv = vs.reduce((m, v) => Math.min(m, v.type === 'rect' ? Math.hypot(Math.max(Math.abs(q.x - v.x) - v.w / 2, 0), Math.max(Math.abs(q.y - v.y) - v.h / 2, 0)) : Math.hypot(q.x - v.x, q.y - v.y) - v.d / 2), Infinity);
-    if (dv < COVER - 1e-9) return `is ${fx(dv)} in from a void (less than ${COVER} in)`;
+    if (dv < VOID - 1e-9) return `is ${fx(dv)} in from a void (less than ${VOID} in)`;
     return '';
   }
   /* fitOf(b, L, S, E): the PS-28 errors of the inputs b (span L ft, line spacing S ft) */
@@ -155,7 +156,7 @@
     const pos = (rows, harp, cg) => { const inp = Object.assign({}, base, { rows, harp }); return SG.xy({ g, ss: strandSys(inp, g) }, cg); };
     const bad = pts => { for (const q of pts) { const w = misfit(g, poly, q); if (w) return { q, w }; } return null; };
     const at = q => (q.h ? `(x, y) = (${fx(q.x)}, ${fx(q.y)}) in` : `x = ${fx(q.x)} in`);
-    const RULE = `each strand centre must be inside the concrete, outside the voids and at least ${COVER} in from the edges of the concrete and of the voids (the positions the strand pattern draws)`;
+    const RULE = `each strand centre must be inside the concrete, outside the voids, at least ${COVER} in from the edges of the concrete and at least ${VOID} in from the edges of the voids (the positions the strand pattern draws)`;
     const noHarp = { n: 0, yEnd: 0, yMid: 0, frac: 0.4 };
     (Array.isArray(b.rows) ? b.rows : []).forEach((r, i) => {
       if (!r || !(Number.isInteger(r.n) && r.n > 0 && isNum(r.y) && r.y > 0 && r.y < h)) return;
@@ -174,5 +175,5 @@
       } catch (e) { /* as above */ }
     });
   }
-  window.PSBInputCheck = { collect, ruleMsg, depthOf, COVER, misfit };
+  window.PSBInputCheck = { collect, ruleMsg, depthOf, COVER, VOID, misfit };
 })();

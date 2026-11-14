@@ -50,6 +50,9 @@
 //   with the old entry are logged (before / after). The old page is opened on the inputs with the old library name. --import: the old app's
 //   data hold the old name; the import summary must say the results are the same (the import, with the old app's section values) and show
 //   the section-corrected alert (#lgSec, old → new name); the imported project's inputs = the case's (the corrected name).
+//   PS-34 (2026-11-14): the pier block's family thickness of a NEXT / box / slab (ps34.t, engine/pierblock.js; the old app's t_bf is the
+//   I-girder bottom flange) is compared with the thickness worked here from the old app's girder (NEXT h − t_f, box the bottom slab, voided
+//   slab (h − D)/2, solid slab h); every other value with the old app, as before.
 // Exit code: 0 every value equal, 1 a difference, 2 an error (a page did not load, a console error).
 import fs from 'fs';
 import path from 'path';
@@ -71,6 +74,7 @@ let nImp = 0, nImpKeys = 0; const impNotes = [];
 const SEED = { 'psbeam.inputs.v1': '{"girder":"PCI BT-72","L":118}', 'psbeam.ui.v1': '{"tab":"losses"}' };
 let fails = 0, errors = 0, n29 = 0; const d29 = [];   // PS-29
 let nStd = 0; const dStd = [], bad0 = [];   // PS-30 / PS-31
+let total34 = 0;   // PS-34
 const log = s => console.log(s);
 // reloadKept(p, name, o, wait): reload the new page and check that the keys o the harness just put are in the reloaded page's storage, each
 // value as put. 2026-11-13 (PR PS-19): now and then the reloaded page saw a store with none of them (only the seed and psb2.ui: the page's
@@ -207,7 +211,11 @@ for (const name of names) {
   await old.p.evaluate(i => { localStorage.clear(); localStorage.setItem('psbeam.inputs.v1', JSON.stringify(i)); }, oldStore);
   await old.p.reload(); await old.p.waitForFunction(() => typeof computeAll === 'function', null, { timeout: 120000 }); await old.p.waitForTimeout(1500);
   const isPS10 = p => /^ps10\./.test(p) || (k10 >= 0 && new RegExp(`^checks\\.${k10}\\.`).test(p));
-  const paths = [...new Set(shown.map(q => q.path).concat(steps.map(q => q.path)))].filter(p => !isPS10(p));
+  // PS-34 (engineer decision 2026-11-14): the pier block's thickness of a NEXT / box / slab (ps34.*, engine/pierblock.js) has no counterpart
+  // in the old app (its t_bf is the I-girder bottom flange): compared with the family thickness worked here from the old app's own girder
+  // (NEXT h − t_f; box the bottom slab; voided slab (h − D)/2 below the largest void; solid slab h)
+  const isPS34 = p => /^ps34\./.test(p);
+  const paths = [...new Set(shown.map(q => q.path).concat(steps.map(q => q.path)))].filter(p => !isPS10(p) && !isPS34(p));
   const o = await old.p.evaluate(([i, paths, std]) => {
     let loaded = null; try { loaded = JSON.parse(localStorage.getItem('psbeam.inputs.v1')); } catch (e) { /* none */ }
     let before = null;
@@ -225,7 +233,8 @@ for (const name of names) {
     // PS-29: the old Losses tab's displayed "f_pe with permanent gains credited" (f_pe + Δf_p,perm + Δf_pSS, its line ~6663) and the parts
     // of the new value worked here from the old app's components
     const ps29 = { fpe: R.fpe, pc: R.gains.precast, cmp: R.gains.composite, ss: R.gains.deckShr, refd: i.opt.lossMethod === 'refined', oldShown: R.fpeGain + R.gains.deckShr };
-    return { vals, err: R.error, loaded, hand, oldChecks: R.checks.length, orpt, ps29, before };
+    const g = R.g, t34 = g.isNext ? g.h - g.next.ft : g.isBox ? g.box.wall : g.isDeck ? (g.box.voids > 0 ? (g.h - g.box.voidD) / 2 : g.h) : null;   // PS-34
+    return { vals, err: R.error, loaded, hand, oldChecks: R.checks.length, orpt, ps29, before, t34 };
   }, [inp, paths, std]);
   if (o.err) { log(`ERROR ${name}: the old app's engine: ${o.err}`); errors++; continue; }
   const same = JSON.stringify(o.loaded) === JSON.stringify(oldStore);
@@ -258,9 +267,12 @@ for (const name of names) {
     if (fx(q.oldShown, 2) !== wantTxt) d29.push(`${name}: old display ${fx(q.oldShown, 2)} (+ Δf_pSS ${fx(q.ss, 2)}) -> new ${wantTxt} ksi`);
     const ssTxt = fx(q.ss, 2) + ' ksi', re = q.refd ? /^Δf.?pSS = .* is already in the long-term loss Δf.?pLT \(refined method, 5\.9\.3\.4\.3/ : /^Δf.?pSS \(.*\) is not credited: the approximate method \(5\.9\.3\.3\)/;
     if (!ps29.note || !ps29.note.includes(ssTxt) || !re.test(ps29.note)) bad.push(`PS-29 loss: the Δf_pSS note "${ps29.note}" (expected ${q.refd ? 'refined' : 'approximate'}, Δf_pSS = ${ssTxt})`); }
-  shown.filter(q => !isPS10(q.path)).forEach(q => { const ov = o.vals[q.path], want = fx(q.div ? ov / q.div : ov, q.d);
+  let n34 = 0; shown.filter(q => isPS34(q.path)).forEach(q => { n34++; const want = q.path === 'ps34.t' ? o.t34 : undefined;
+    if (q.path !== 'ps34.t' || q.v !== want || q.text !== fx(want, q.d)) bad.push(`PS-34 ${q.tab} ${q.path}: shown "${q.text}" (${q.v}) vs the family thickness ${want}`); });
+  steps.filter(q => isPS34(q.path)).forEach(q => bad.push(`PS-34 step ${q.id}: no step expected on ${q.path}`)); total34 += n34;
+  shown.filter(q => !isPS10(q.path) && !isPS34(q.path)).forEach(q => { const ov = o.vals[q.path], want = fx(q.div ? ov / q.div : ov, q.d);
     if (typeof ov !== 'number' || q.text !== want || !Object.is(q.v, ov)) bad.push(`${q.tab} ${q.path}: shown "${q.text}" (${q.v}) vs old ${ov} -> "${want}"`); });
-  steps.filter(q => !isPS10(q.path)).forEach(q => { const ov = o.vals[q.path]; if (!q.onTab) bad.push(`${q.tab} step ${q.id} not on the tab`); if (!Object.is(q.v, ov)) bad.push(`${q.tab} step ${q.id} (${q.path}): ${q.v} vs old ${ov}`); });
+  steps.filter(q => !isPS10(q.path) && !isPS34(q.path)).forEach(q => { const ov = o.vals[q.path]; if (!q.onTab) bad.push(`${q.tab} step ${q.id} not on the tab`); if (!Object.is(q.v, ov)) bad.push(`${q.tab} step ${q.id} (${q.path}): ${q.v} vs old ${ov}`); });
   if (colOwn) {
     if (colOwn.out.length) bad.push('check summary column: not in a group: ' + colOwn.out.join('; '));
     if (colOwn.F !== colOwn.nF || colOwn.F + colOwn.Pn !== colOwn.all) bad.push(`check summary column: ${colOwn.F} FAIL + ${colOwn.Pn} PASS, the engine ${colOwn.nF} failing of ${colOwn.all}`);
@@ -310,6 +322,7 @@ const other = Object.keys(ls).filter(k => !k.startsWith('psb2.') && !(k in SEED)
 if (other.length) { fails++; log('DIFF storage: keys other than psb2.* written: ' + other.join(', ')); }
 const cerr = nw.errs.concat(old.errs.filter(e => !/Failed to load resource|deoptimised the styling/.test(e)));
 if (cerr.length) { errors++; log('ERROR console: ' + cerr.slice(0, 5).join(' | ')); }
+if (total34) log(`PS-34: ${total34} shown values of the pier block's family thickness compared with the thickness worked here from the old app's girder`);
 if (nStd) { log(`PS-30 / PS-31: ${nStd} designs with a standard box / voided slab of the CTDOT plates, compared with the old app's engine computing the plate's entry (intended difference from its own wrong table; before = the old app with the old entry):`); dStd.forEach(t => log('    ' + t)); }
 if (n29) { log(`PS-29: ${n29} designs, the shown f_pe with the permanent gains = f_pe + Δf_p,DC1 + Δf_p,SD (worked here); intended differences from the old app's display (Δf_pSS no longer added): ${d29.length}`); d29.forEach(t => log('    ' + t)); }
 await nw.b.close(); await old.b.close();

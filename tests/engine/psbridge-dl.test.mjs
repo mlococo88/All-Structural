@@ -14,8 +14,8 @@ import { TAB_CASES } from './psbridge-tab-cases.mjs';
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PIN = '58204bac99b576db79d1dc3ac8eed0b47cf70018', FROM = 116, TO = 217;
 const PBDF = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared('steps.js', ...PBDF, ...['sections', 'model', 'holddown', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck'].map(n => path.join(APP, `engine/${n}.js`)));
-const W0 = loadShared('steps.js', ...PBDF, ...['sections', 'model', 'holddown', 'design', 'bridge', 'fields', 'inputcheck'].map(n => path.join(APP, `engine/${n}.js`)));   // without the distribution (PR 3a-2)
+const W = loadShared('steps.js', ...PBDF, ...['sections', 'model', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck'].map(n => path.join(APP, `engine/${n}.js`)));
+const W0 = loadShared('steps.js', ...PBDF, ...['sections', 'model', 'holddown', 'pierblock', 'design', 'bridge', 'fields', 'inputcheck'].map(n => path.join(APP, `engine/${n}.js`)));   // without the distribution (PR 3a-2)
 const S = loadShared('steps.js', path.join(ROOT, 'apps/steel-bridge/engine/loads.js'));
 const M = W.PSBModel, D = W.PSBDesign, DL = W.PSBBridgeDL;
 const J = v => JSON.parse(JSON.stringify(v));
