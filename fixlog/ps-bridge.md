@@ -3809,7 +3809,7 @@ PR #1560: https://github.com/mlococo88/All-Structural/pull/1560
 - apps/steel-bridge/engine/sheets.js `sheet()` and apps/steel-bridge/engine/drawings.js SCALES / SCALE_NAME / TXT; apps/steel-bridge/ui/drawings.js (the tab's bar, viewer and print wiring). Keep in step.
 
 ## 2026-11-14 — Item A: Auto design (engine/autodesign.js, ui/autodesign.js): a search over each girder type's section, strands, draping and f′c / f′ci, judged by the page's own engine call; candidates per span, Apply as one Undo step (inputs only; no calculation change)
-PR #TBD: https://github.com/mlococo88/All-Structural/pull/TBD
+PR #1562: https://github.com/mlococo88/All-Structural/pull/1562
 ### Request
 - PS Bridge catch-up to the Steel Bridge app, item A: Auto design (the steel app's apps/steel-bridge/engine/autodesign.js, ui/autodesign.js are the pattern: settings with Auto / Lock variables and Run on the input tab; ranked candidates with the governing check, Apply as one change, on the output tab).
 - For each girder type: the library sections of the owner, strand counts and rows, draping, f′c / f′ci within the allowed ranges; the lightest / shallowest section and the fewest strands that pass every engine check; every candidate computed by the existing engine; no new design formula. docs/ps-bridge-plan.md §4 (PS-1, PS-5, PS-10 to PS-12).
