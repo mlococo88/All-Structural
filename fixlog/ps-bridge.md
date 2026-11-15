@@ -6852,7 +6852,7 @@ index 009f1be..1183e53 100644
 - check-syntax all pass. Node `psbridge tex project-registry`: 44 files, 449 passed (new psbridge-mct 3). Harness B: normal 24 designs 61,186 shown + 10,568 step values, 0 differences; --import 24 "the same", 0 differences; --control exits 1. Smokes: mct 4 (new), demands 8, skeleton 271, types 106, 3d 101, figures 225, library 11, undo 7, drawings 6, drawings2 7, autodesign 7, handoffs 12, adbasis 5; 0 console errors.
 
 ## 2026-11-15 — Batch F1/F2 (PSBF): Bridge Substructure Loading — the reactions of every girder line (allGirders) and the bridge geometry (superGeometry), as the Steel Bridge app sends them (click only; the one-line send unchanged)
-PR: PRLINK
+PR #1577: https://github.com/mlococo88/All-Structural/pull/1577
 ### Request
 - Batch F (engineer-approved plan A→H, 2026-11-15), F1: reactions for every girder line to Bridge Substructure Loading as the Steel Bridge app sends them (`allGirders`, the same schema and keys; the receiver learns about the PS sender where needed; the current single-line payload unchanged, CLAUDE.md §5). F2: the bridge geometry (`bridgeSuite.v1.superGeometry`, as apps/steel-bridge/ui/handoffs.js sgPayload), the same schema. Review rows: ps-vs-steel S6, S7 (review-1115). Cross-tool connection (CLAUDE.md §7 exception, HANDOFF.md): this app and Bridge Substructure Loading.html in one PR.
 ### What changed
