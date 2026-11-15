@@ -6861,6 +6861,9 @@ PR #TBD
 - **`ui/inputs.js`** `assumptions(P)`, the "Unequal bays (PS-9 …)" item, shown on the Project tab and in Report §2 Assumptions (anchor `with unequal bays it is an approximation`):
   - Before: `… with unequal bays it is an approximation (pending engineer review).'`
   - After: `… with unequal bays it is an approximation.'`
+- **`ui/handoffs.js`**, the MCT hand-off banner (batch D3, #1576; anchor `Auto-adopt (the old app's lock): not in this app yet`):
+  - Before: `… not in this app yet (engineer decision HO-D2 pending).</span>`
+  - After: `… not in this app yet: the hand-off is loaded only by "Load these demands".</span>` (the banner's own button; behaviour unchanged).
 - Every other "pending" in apps/ps-bridge (outside the frozen engine/pbd-*.js) is in a code comment, a list's "pending edit" (lists.js, not review wording) or the kept "to be confirmed" note.
 ### Saved data (CLAUDE.md §5)
 - None.
@@ -6870,7 +6873,7 @@ PR #TBD
 - Default project: Report text and every input tab's girder-design cards: no match for /pending/i (before: the Unequal bays assumption in Project tab and Report §2 Assumptions matched).
 - Auto design output tab: the assumptions list item reads "Assumption (Report, §2, Auto design basis): a higher f′c or f′ci is not worse for any check; …".
 ### How verified
-- New `tests/engine/psbridge-nopending.test.mjs` (3 tests; 2 fail on main before the change).
+- New `tests/engine/psbridge-nopending.test.mjs` (4 tests; 2 fail on main before the change): also the MCT banner strings of ui/handoffs.js.
 - PS checks: see the PR.
 ### Other copies
 - engine/autodesign.js keeps the "Decisions pending engineer review" wording in its header comment only (not shown).

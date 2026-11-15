@@ -1,6 +1,6 @@
 // apps/ps-bridge E0 (2026-11-15): the engineer's rule that "pending engineer review" wording appears only in PRs and the fix log, never
 // in the app: the Report of the default project and of a new project (two girder types), the Project tab's assumptions, every input
-// tab's girder-design cards, and the Auto design output tab's source strings carry no "pending" review wording. The box beam / voided
+// tab's girder-design cards, the Auto design output tab's and the MCT hand-off banner's source strings carry no "pending" review wording. The box beam / voided
 // slab "to be confirmed" note (PS #1542 / #1554, engineer-requested) is kept and is not matched.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -35,4 +35,10 @@ test('no "pending" review wording: the Auto design output tab (ui/autodesign.js 
   const html = src.split('\n').filter(l => /<li>|<p |<div /.test(l)).join('\n');   // the lines that build the tab's HTML
   assert.ok(!PEND.test(html), (html.match(/.{0,80}pending.{0,40}/i) || [''])[0]);
   assert.match(html, /<li>Assumption \(<a href="#rp:rs\.adb" data-gotab="rpt">Report, §2, Auto design basis<\/a>\): a higher f′c or f′ci is not worse/);
+});
+
+test('no "pending" review wording: the MCT hand-off banner (ui/handoffs.js strings)', () => {
+  const src = fs.readFileSync(path.join(APP, 'ui/handoffs.js'), 'utf8');
+  const html = src.split('\n').filter(l => !/^\s*(\/\*|\/\/|\*)/.test(l) && /<span|<p |<div |<h3/.test(l)).join('\n').replace(/\b(mct|geom)Pending\b/g, '');
+  assert.ok(!/pending/i.test(html), (html.match(/.{0,80}pending.{0,40}/i) || [''])[0]);
 });
