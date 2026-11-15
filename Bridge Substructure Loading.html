@@ -3601,7 +3601,7 @@ async function rxImport(file) {
   const ST_MSG = 'ST-Girder is no longer a source of superstructure reactions (engineer decision 2026-10-19: ST-Girder is connected to GirderDetail only).';
   /* the latest payload on the channel is new for SubLoads, and not ST-Girder's */
   const newOK = () => { const recs = Array.isArray(P.rxSrc) ? P.rxSrc : [], last = recs[recs.length - 1];   // GXF (2026-11-09): per pulled project
-    if (last && last.pid && window.SubLoadsPicker) return SubLoadsPicker.newer(CH, SCH, BY.concat(['steelbridge']), last.pid, last.producedAt, isST);
+    if (last && last.pid && window.SubLoadsPicker) return SubLoadsPicker.newer(CH, SCH, BY.concat(['steelbridge', 'psbridge']), last.pid, last.producedAt, isST);
     if (!BX() || !BX().isNew(CH, RID)) return false; const r = BX().read(CH, SCH, 1); return !(r.ok && isST(r.payload)); };
   const TOKIP = { kip: 1, kips: 1, k: 1, kn: 1 / 4.4482216152605, lb: 0.001, lbs: 0.001, lbf: 0.001 };   // force unit -> kip
   const TOFT = { ft: 1, feet: 1, m: 1 / 0.3048 };                                                          // length unit -> ft
@@ -3769,7 +3769,7 @@ async function rxImport(file) {
   function pull() {
     if (window.SubLoadsPicker && window.SharedHandoffStore) {   // GXF (2026-11-09): first ask which project (HANDOFF.md §5.1)
       const NSx = 'bridgeSuite.v1.';
-      SubLoadsPicker.open({ channel: CH, schema: SCH, title: 'Pull superstructure reactions', producers: BY.concat(['steelbridge']), skip: isST,
+      SubLoadsPicker.open({ channel: CH, schema: SCH, title: 'Pull superstructure reactions', producers: BY.concat(['steelbridge', 'psbridge']), skip: isST,
         legacy: [{ key: NSx + CH, via: 'latest hand-off' }].concat(BY.map(id => ({ key: `${NSx}${CH}.by.${id}`, via: `copy from ${id}`, producer: id }))),
         empty: 'No superstructure reactions have been sent yet. In the Steel Bridge app (Send to Substructure Loading), PS-Beam, or GirderDetail (Steel Bridge Design, Structural analysis), send the reactions, then pull here.',
         onPick: (g, errs, skipped) => { if (skipped.length) flash(stNote(skipped)); openDialog(g.entries.map(e => e.payload), g.pid ? `pull, project ${g.label}` : 'pull', errs, g.pid); } });
@@ -3851,7 +3851,7 @@ async function rxImport(file) {
     const isNew = newOK(); let latest = null;
     if (isNew) { const r = BX().read(CH, SCH, 1); if (r.ok) latest = r.payload; }
     const recs = Array.isArray(P.rxSrc) ? P.rxSrc : [], last = recs[recs.length - 1];
-    const btns = `<button type="button" class="btn btn-sm" id="rx-pull" title="Pull the unfactored girder reactions sent by PS-Beam (one girder line) or GirderDetail (every girder) (asks first)">Pull from PS-Beam / GirderDetail</button><button type="button" class="btn btn-sm" id="rx-hf-imp" title="Import a superReactions hand-off JSON file (asks first)">Import hand-off (JSON)</button><input type="file" id="rx-hf-in" accept=".json,application/json" hidden>${isNew ? `<span class="rxh-new">New data available${latest ? `: ${esc(latest.producer || '')}, ${esc(when(latest.producedAt))}` : ''}</span>` : ''}${stOld().length ? `<span class="rxh-new" title="${esc(stNote(stOld()))}">ST-Girder reactions in this browser are not offered</span>` : ''}`;
+    const btns = `<button type="button" class="btn btn-sm" id="rx-pull" title="Pull the unfactored girder reactions sent by PS-Beam (one girder line; the PS Bridge app: one line or every girder line), GirderDetail or the Steel Bridge app (every girder) (asks first)">Pull from PS-Beam / GirderDetail</button><button type="button" class="btn btn-sm" id="rx-hf-imp" title="Import a superReactions hand-off JSON file (asks first)">Import hand-off (JSON)</button><input type="file" id="rx-hf-in" accept=".json,application/json" hidden>${isNew ? `<span class="rxh-new">New data available${latest ? `: ${esc(latest.producer || '')}, ${esc(when(latest.producedAt))}` : ''}</span>` : ''}${stOld().length ? `<span class="rxh-new" title="${esc(stNote(stOld()))}">ST-Girder reactions in this browser are not offered</span>` : ''}`;
     return `<div class="slHoRow"><div class="slHoWho"><b>Superstructure reactions</b> <span class="note" style="padding:0">from the Steel Bridge app, PS-Beam or GirderDetail (bridgeSuite.v1.superReactions)</span></div>
       <div class="slRow" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${btns}</div>
       <p class="note" style="padding:2px 0 0"><b>Status:</b> ${isNew ? 'new data available' : last ? 'no newer copy of the pulled project' : 'no copy for this project yet'}. <b>Last received:</b> ${last ? srcText(last) : 'none'}. Applied to the <a href="#" data-go-itab="rx">Reactions tab</a> after the review.</p></div>`;
@@ -3899,10 +3899,15 @@ async function rxImport(file) {
    largest depth by default; per support, per span or entered), bf, tf, tw; P.units resized by syncSupports (kept where a support still
    exists). Not changed: elevations, bearing fixity, unit inputs, reactions. Option "Also update the live-load distribution girder data"
    (off): off keeps the skew-correction K_g in use (pins br.skKg when it is estimated). Source: the new optional field P.geoSrc. Nothing is
-   applied without Apply; nothing on page load. */
+   applied without Apply; nothing on page load.
+   PSBF (2026-11-15): the PS Bridge app (apps/ps-bridge) is a second sender (producer id psbridge: its per-project copies and the copy
+   superGeometry.by.psbridge are listed; its reactions' per-project copies too, above). A section with section.material other than steel
+   (the PS Bridge app sends 'prestressed concrete'): the option above is off and disabled (the K_g estimate is of a steel shape). */
 (function patchGeoHandoff() {
   const NS = 'bridgeSuite.v1.', HS = () => window.SharedHandoffStore, BX = () => window.BridgeXfer;
-  const CH = 'superGeometry', SCH = 'bridge-super-geometry', PRODS = ['steelbridge'], RID = 'subloads';
+  const CH = 'superGeometry', SCH = 'bridge-super-geometry', PRODS = ['steelbridge', 'psbridge'], RID = 'subloads';   // PSBF (2026-11-15): + the PS Bridge app (apps/ps-bridge, producer id psbridge)
+  // PSBF: a section sent as concrete (optional section.material, HANDOFF.md §4.14; the PS Bridge app): SubLoads' K_g estimate is of a steel girder shape
+  const concrete = p => !!(p && p.section && p.section.material && !/steel/i.test(String(p.section.material)));
   const when = iso => { const d = new Date(iso); return isNaN(d) ? String(iso || '?') : d.toLocaleString(); };
   const f3 = v => isFinite(v) ? (+v).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) : '—';
   const r4 = v => Math.round(v * 1e4) / 1e4;
@@ -4014,14 +4019,15 @@ async function rxImport(file) {
     h += `<h3>Skew sign</h3><select data-gxg="sign"><option value="flip"${D.sign === 'flip' ? ' selected' : ''}>Convert: ${esc(p.producer || 'the sender')} + = right end ahead; SubLoads + = left end ahead (default)</option><option value="asis"${D.sign === 'asis' ? ' selected' : ''}>As sent (no sign change)</option></select>${anySk ? '' : ' <small>(every skew is 0)</small>'}${p.basis && p.basis.skew ? `<p style="margin:2px 0 0;font-size:.8rem">Sender: ${esc(p.basis.skew)}.</p>` : ''}`;
     h += `<h3>Review</h3><div style="max-height:300px;overflow:auto"><table class="mini-t"><thead><tr><th>Input (Bridge tab)</th><th>Now</th><th>Incoming</th><th></th></tr></thead><tbody>${pl.rows.map(r => `<tr${r.chg ? ' style="font-weight:600"' : ''}><td class="lbl">${r.lbl}</td><td>${esc(r.cur)}</td><td>${esc(r.inc)}</td><td>${r.chg ? '<span style="color:var(--warn)">changes</span>' : ''}</td></tr>`).join('')}</tbody></table></div>`;
     h += `<h3>Substructure units</h3><p style="margin:0">${pl.units.join('; ')}.</p>`;
-    h += `<h3>Live-load distribution</h3><label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" data-gxg="lldf"${D.lldf ? ' checked' : ''}> Also update the live-load distribution girder data</label><p style="margin:2px 0 0;font-size:.85rem">${P.br.skCorr !== 'yes' ? 'The skew correction of the bearing live load is not applied in this project, so the girder data does not affect the live load.' : num(P.br.skKg) > 0 ? `K<sub>g</sub> is entered (${f0(num(P.br.skKg))} in⁴) and is kept either way.` : pl.kg && pl.kg.K0 ? (D.lldf ? `K<sub>g</sub> of the skew correction (Table 4.6.2.2.3c-1) will follow the new girder section: ${f0(pl.kg.K0)} → ${pl.kg.K1 ? f0(pl.kg.K1) : '—'} in⁴ (estimated).` : `Off: K<sub>g</sub> of the skew correction keeps its value now, ${f0(pl.kg.K0)} in⁴, entered as the girder K<sub>g</sub> (Live load section), so the live load does not change with the section (it would be ${pl.kg.K1 ? f0(pl.kg.K1) : '—'} in⁴).`) : 'K<sub>g</sub> cannot be estimated from the current girder shape.'}</p>`;
+    if (concrete(p)) h += `<h3>Live-load distribution</h3><label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" data-gxg="lldf" disabled> Also update the live-load distribution girder data</label><p style="margin:2px 0 0;font-size:.85rem">The girder section sent is ${esc(p.section.material)}; SubLoads estimates K<sub>g</sub> of the skew correction (Table 4.6.2.2.3c-1) from a steel girder shape, so the live-load girder data is not updated from it. ${P.br.skCorr !== 'yes' ? 'The skew correction of the bearing live load is not applied in this project.' : num(P.br.skKg) > 0 ? `K<sub>g</sub> is entered (${f0(num(P.br.skKg))} in⁴) and is kept.` : pl.kg && pl.kg.K0 ? `K<sub>g</sub> keeps its value now, ${f0(pl.kg.K0)} in⁴, entered as the girder K<sub>g</sub> (Live load section); enter the concrete girder's K<sub>g</sub> = n(I + A e<sub>g</sub>²) there.` : 'Enter the concrete girder\'s K<sub>g</sub> = n(I + A e<sub>g</sub>²) in the Live load section.'}</p>`;   // PSBF (2026-11-15)
+    else h += `<h3>Live-load distribution</h3><label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" data-gxg="lldf"${D.lldf ? ' checked' : ''}> Also update the live-load distribution girder data</label><p style="margin:2px 0 0;font-size:.85rem">${P.br.skCorr !== 'yes' ? 'The skew correction of the bearing live load is not applied in this project, so the girder data does not affect the live load.' : num(P.br.skKg) > 0 ? `K<sub>g</sub> is entered (${f0(num(P.br.skKg))} in⁴) and is kept either way.` : pl.kg && pl.kg.K0 ? (D.lldf ? `K<sub>g</sub> of the skew correction (Table 4.6.2.2.3c-1) will follow the new girder section: ${f0(pl.kg.K0)} → ${pl.kg.K1 ? f0(pl.kg.K1) : '—'} in⁴ (estimated).` : `Off: K<sub>g</sub> of the skew correction keeps its value now, ${f0(pl.kg.K0)} in⁴, entered as the girder K<sub>g</sub> (Live load section), so the live load does not change with the section (it would be ${pl.kg.K1 ? f0(pl.kg.K1) : '—'} in⁴).`) : 'K<sub>g</sub> cannot be estimated from the current girder shape.'}</p>`;
     h += `<p style="margin-top:8px;font-size:.85rem">Not changed: deck elevations (not carried; a new support takes the last support's elevation), bearing fixity${p.supports.some(s => s.bearings) ? ' (sent, shown in the notes; not applied)' : ' (not sent)'}, every substructure unit input, the reactions, w<sub>c</sub>, the wind and live-load settings.</p>`;
     if (pl.err.length) h += `<p style="color:var(--fail)">${esc(pl.err.join(' '))}</p>`;
     h += `<div class="modal-foot"><button type="button" class="btn" id="gxg-cancel">Cancel</button><button type="button" class="btn btn-primary" id="gxg-apply"${pl.err.length ? ' disabled' : ''}>Apply</button></div></div>`;
     m.innerHTML = h;
   }
   function applyGeo() {
-    const D = GD; if (!D || !D.c.ok) return false; const pl = plan(); if (pl.err.length) { flash(pl.err.join(' '), 'fail'); return false; }
+    const D = GD; if (!D || !D.c.ok) return false; if (concrete(D.p)) D.lldf = false; const pl = plan(); if (pl.err.length) { flash(pl.err.join(' '), 'fail'); return false; }   // PSBF: + the concrete rule
     const b = P.br, nu = pl.nu, p = D.p, before = {}; Object.keys(nu).forEach(k => { before[k] = clone(b[k]); });
     let pinned = null; if (!D.lldf && pl.kg && pl.kg.K0 > 0) { pinned = pl.kg.K0; b.skKg = pinned; }   // off: K_g of the skew correction kept (exact value)
     Object.keys(nu).forEach(k => { b[k] = Array.isArray(nu[k]) ? nu[k].slice() : nu[k]; });
@@ -4037,8 +4043,8 @@ async function rxImport(file) {
   }
   function pull() {
     if (!HS()) { alert('The hand-off helper (shared/handoff-store.js) is not loaded; keep the whole folder together.'); return; }
-    open({ channel: CH, schema: SCH, title: 'Pull bridge geometry', producers: PRODS, legacy: [{ key: NS + CH, via: 'latest hand-off' }, { key: NS + CH + '.by.steelbridge', via: 'copy from steelbridge', producer: 'steelbridge' }],
-      empty: 'No bridge geometry has been sent yet. In the Steel Bridge app (apps/steel-bridge), Project tab, click "Send to Substructure Loading" with Geometry ticked, then pull here.',
+    open({ channel: CH, schema: SCH, title: 'Pull bridge geometry', producers: PRODS, legacy: [{ key: NS + CH, via: 'latest hand-off' }].concat(PRODS.map(id => ({ key: NS + CH + '.by.' + id, via: 'copy from ' + id, producer: id }))),   // PSBF: + .by.psbridge
+      empty: 'No bridge geometry has been sent yet. In the Steel Bridge app (apps/steel-bridge) or the PS Bridge app (apps/ps-bridge), Project tab, click "Send to Substructure Loading" with Geometry ticked, then pull here.',
       onPick: (g, errs) => openGeo(g.newest.payload, g.pid ? `pull, project ${g.label}${g.newest.source === 'github' ? ' (GitHub)' : ''}` : 'pull', errs, g.pid) });
   }
   function importFile(file) {
@@ -4062,8 +4068,8 @@ async function rxImport(file) {
     return h.replace('<p class="note">One span per row (Enter adds a row). Changing the number of spans adds or removes piers.</p>', m => m + btns); };
   // HOC (2026-11-10): the new-data marker is on the Project tab (slHdr show(), from isNewGeo()); hoRow(): the Geometry row of the Hand-offs card
   function hoRow() { const n = isNewGeo(), s = P.geoSrc;
-    return `<div class="slHoRow"><div class="slHoWho"><b>Bridge geometry</b> <span class="note" style="padding:0">from the Steel Bridge app (bridgeSuite.v1.superGeometry)</span></div>
-      <div class="slRow" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><button type="button" class="btn btn-sm" id="geo-pull" title="Pull spans, skews, joints, girder layout, deck edges, deck and girder section sent by the Steel Bridge app (asks which project, then shows every change first)">Pull geometry from Steel Bridge Design</button><button type="button" class="btn btn-sm" id="geo-hf-imp" title="Import a superGeometry (or superReactions) hand-off JSON file (asks first)">Import hand-off (JSON)</button><input type="file" id="geo-hf-in" accept=".json,application/json" hidden>${n ? '<span class="rxh-new" id="geo-new">New data available</span>' : ''}</div>
+    return `<div class="slHoRow"><div class="slHoWho"><b>Bridge geometry</b> <span class="note" style="padding:0">from the Steel Bridge app or the PS Bridge app (bridgeSuite.v1.superGeometry)</span></div>
+      <div class="slRow" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><button type="button" class="btn btn-sm" id="geo-pull" title="Pull spans, skews, joints, girder layout, deck edges, deck and girder section sent by the Steel Bridge app or the PS Bridge app (asks which project, then shows every change first)">Pull geometry from Steel Bridge Design</button><button type="button" class="btn btn-sm" id="geo-hf-imp" title="Import a superGeometry (or superReactions) hand-off JSON file (asks first)">Import hand-off (JSON)</button><input type="file" id="geo-hf-in" accept=".json,application/json" hidden>${n ? '<span class="rxh-new" id="geo-new">New data available</span>' : ''}</div>
       <p class="note" style="padding:2px 0 0"><b>Status:</b> ${n ? 'new data available' : s ? 'no newer copy of the pulled project' : 'no copy for this project yet'}. <b>Last received:</b> ${s ? srcLine() : 'none.'} Applied to the <a href="#" data-go-itab="bridge">Bridge tab</a> after the review.</p></div>`; }
   const be = basisExtra; basisExtra = function () { const h = be(); if (!P.geoSrc) return h; return h + `<tr><td class="lbl">Bridge geometry</td><td>${srcLine()}</td></tr>`; };
   document.addEventListener('click', e => {
@@ -4079,7 +4085,7 @@ async function rxImport(file) {
   document.addEventListener('change', e => { const t = e.target;
     if (t.id === 'geo-hf-in' && t.files && t.files[0]) { importFile(t.files[0]); t.value = ''; return; }
     if (!GD || !t.dataset || !t.dataset.gxg) return; const w = t.dataset.gxg;
-    if (w === 'depth') GD.depth = t.value; else if (w === 'depthIn') GD.depthIn = t.value; else if (w === 'sign') GD.sign = t.value; else if (w === 'lldf') GD.lldf = !!t.checked;
+    if (w === 'depth') GD.depth = t.value; else if (w === 'depthIn') GD.depthIn = t.value; else if (w === 'sign') GD.sign = t.value; else if (w === 'lldf') GD.lldf = !!t.checked && !concrete(GD.p);   // PSBF: never for a concrete section
     renderGeo(); });
   document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; if (PK) { shut('gxp-modal'); PK = null; } else if (GD) { shut('gxg-modal'); GD = null; } });
   window.addEventListener('storage', e => { if (e.key && e.key.indexOf(NS + CH) === 0) buildSide(); });   // HOC: the Hand-offs card and the Project tab marker
