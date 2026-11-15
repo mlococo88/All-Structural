@@ -8395,7 +8395,7 @@ PR #1586: https://github.com/mlococo88/All-Structural/pull/1586
 ### How verified
 - New tests/engine/psbridge-strandedit.test.mjs (3), tests/smoke/ps-bridge-strandedit.mjs. PS checks: see the PR.
 ## 2026-11-15 — Batch G7 / G9: the splitting steel orientation graphic for slabs and box beams (End zone tab, drawn from the section) and the old app's "↩ MCT Analysis" header button when opened from the MCT Generator (display / navigation only)
-PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__
+PR #1587: https://github.com/mlococo88/All-Structural/pull/1587
 ### Request
 - Old-vs-new review 2026-11-15, rows #85 (splitting-steel orientation for slabs / boxes, the old app's AASHTO Fig. C5.9.4.4.1-2 image, O:7544-7547: draw our own, do not copy AASHTO art) and #131 ("↩ MCT Analysis", O:9702 with bridgeNav, O:2477).
 ### What changed
