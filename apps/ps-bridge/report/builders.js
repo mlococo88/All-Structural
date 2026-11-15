@@ -31,7 +31,7 @@
   const sub = (id, title, items) => ({ id, title, items: items.filter(Boolean) });
   const steps = (scope, list, o) => ({ type: 'steps', scope, steps: list || [], ...(o || {}) });
   /* gsteps: the worked steps in the tab's topics (its TOPICS, SharedSteps.group as on the tab), a sub-heading per topic (shared/report.js item.topics) */
-  const gsteps = (scope, list, topics) => { const G = S().group(list || [], topics || [], { strip: false });
+  const gsteps = (scope, list, topics) => { const G = window.PSBOutKit ? window.PSBOutKit.groups(list || [], topics || []) : S().group(list || [], topics || [], { strip: false });   // PSBOutKit.groups: the RF topics as on the tab (2026-11-15)
     return steps(scope, [].concat(...G.map(t => t.steps)), { topics: G.map(t => ({ title: t.title, ref: t.ref, n: t.steps.length, cls: t.cls, chip: t.chip, res: t.res })) }); };
   const at = (R, p) => String(p).split('.').reduce((o, k) => o == null ? o : o[k], R);
   const plain = s => String(s == null ? '' : s).replace(/<[^>]*>/g, '').replace(/\$/g, 'S');
@@ -61,8 +61,8 @@
       tbl(['Group', 'Check', 'x (ft)', 'Demand', 'Limit', 'Unit', 'Ratio', 'Status', 'Worked'], rows, { wide: true })];
     if (RT && R.rating) {
       const rf = RT.rf.map(([n, f, st]) => ({ n, v: f(R), st })), pth = { 'rt.RFinv': 'rating.RFinv', 'rt.RFvInv': 'shrRating.RFinv', 'rt.RFs3': 'svcRating.RF' };
-      items.push(tbl(['HL-93 inventory rating factor', 'RF', 'Worked'], rf.map(z => [z.n, { t: V(pth[z.st], 3), n: true, cls: z.v < 1 ? 'ng' : 'ok' }, `see [[${z.st}]]`])),
-        note('Rating factors are not design checks and are not counted in the PASS / FAIL above (RF ≥ 1.0 is OK; 99 = not applicable).'));
+      items.push(tbl(['HL-93 inventory rating factor', 'RF', 'Worked'], rf.map(z => [z.n, z.v >= 99 ? { t: '—', n: true } : { t: V(pth[z.st], 3), n: true, cls: z.v < 1 ? 'ng' : 'ok' }, `see [[${z.st}]]`])),   // 99: the engine's "not applicable", shown — as on the Rating tab (2026-11-15)
+        note('Rating factors are not design checks and are not counted in the PASS / FAIL above (RF ≥ 1.0 is OK; — = not applicable, e.g. no live-load tension at the Service III section).'));
     }
     const kq = kv([['Girder', `${plain(B.inp.girder)}, span L = ${V('L', 2)} ft, ${V('ss.Ntot', 0)} strands`], ['Total loss Δf$_{pT}$', `${V('totalLoss', 2)} ksi (${V('pctLoss', 1)} %) (see [[ls.total]])`],
       ['Effective prestress f$_{pe}$', `${V('fpe', 2)} ksi (see [[ls.fpe]])`], ['DF$_{M}$ / DF$_{V}$', `${V('dfm', 3)} / ${V('dfv', 3)} (see [[ld.dfm]])`],
@@ -231,8 +231,24 @@
     return { title: (SECTIONS.find(q => q[0] === k) || [k, k])[1], subs };
   }
 
-  const refsOf = B => [['AASHTO LRFD', 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): articles as cited at each step'], ['MBE', 'AASHTO Manual for Bridge Evaluation, LRFR (Section 6, Part A): article numbers as the old app'],
-    ['PCI', 'PCI Bridge Design Manual and the Mast method (handling stability screening), as the moved engine'], ...(B.inp.owner && B.inp.owner !== 'AASHTO' && window.PBD ? [[B.inp.owner, window.PBD.OWN_RULES.owners[B.inp.owner].manual]] : [])];
+  /* the References of the front matter (2026-11-15, batch A): the articles the report's worked steps cite (each step's ref, every worked unit),
+     as the old app's References table listed its articles; the PCI Design Handbook for the camber multipliers (the Camber & deflection steps);
+     handling named as what is computed: the Mast form of the lateral deflection z_o, the factors of safety a simplified screening (not the
+     PCI (2016) / Mast method, as the Handling tab says). Display only: the text of the citations, no value. */
+  const artKey = a => a.replace(/^C/, '').split('.').map(q => { const m = /^(\d+)([a-zA-Z]*)$/.exec(q); return m ? [+m[1], m[2]] : [0, q]; });
+  const artCmp = (a, b) => { const x = artKey(a), y = artKey(b); for (let i = 0; i < Math.max(x.length, y.length); i++) { if (!x[i]) return -1; if (!y[i]) return 1; if (x[i][0] !== y[i][0]) return x[i][0] - y[i][0]; if (x[i][1] !== y[i][1]) return x[i][1] < y[i][1] ? -1 : 1; } return a < b ? -1 : a > b ? 1 : 0; };
+  function citedArts(B, re) {   // the article numbers (C: commentary) in the steps' refs that match re (equation / table suffixes -n dropped)
+    const out = new Set(), Ws = [B.W].concat((B.multi && B.units ? B.units : []).map(u => u.W));
+    Ws.forEach(W => Object.values(W || {}).forEach(w => ((w && w.steps) || []).forEach(s => { const r = String(s.ref || ''); if (!re.test(r)) return;
+      r.replace(re, '').replace(/\([^)]*\)/g, '').split(/[,;]/).forEach(t => { const m = /(C?\d+[A-Z]?(?:\.\d+[a-z]?)+)/.exec(t.replace(/(Art|Eqs?|Tables?)\.?/g, '')); if (m) out.add(m[1].replace(/-\d+$/, '')); }); })));
+    return [...out].sort(artCmp);
+  }
+  const refsOf = B => { const hn = ((B.W && B.W.handling && B.W.handling.steps) || []).length > 0, aa = citedArts(B, /^AASHTO LRFD 10th Ed\.?|^AASHTO LRFD 10th Ed\. \(2024\)( Art\.)?/), mb = citedArts(B, /^MBE( Eq\.)?/), cam = Object.values(B.W || {}).some(w => ((w && w.steps) || []).some(s => /PCI Design Handbook/.test(s.ref || '')));
+    return [['AASHTO LRFD', `AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). Articles cited in the worked steps${aa.length ? ': ' + aa.join('; ') : ''} (each step names its article, equation or table).`],
+      ['MBE', `AASHTO Manual for Bridge Evaluation, LRFR (Section 6, Part A)${mb.length ? ': ' + mb.join('; ') : ''}. The article numbers are the old app's labels (the MBE 4th Ed. (2026) labels come in their own change).`],
+      ...(cam ? [['PCI', 'PCI Design Handbook: the long-term camber multipliers (Camber & deflection; the multipliers entered on the Materials tab). Edition not stated by the old app: verify.']] : []),
+      ...(hn ? [['Handling', 'Lateral stability by a simplified screening of the old app: the lateral deflection z_o uses the Mast expression; the factors of safety are not the PCI (2016) / Mast method (Handling tab).']] : []),
+      ...(B.inp.owner && B.inp.owner !== 'AASHTO' && window.PBD ? [[B.inp.owner, window.PBD.OWN_RULES.owners[B.inp.owner].manual]] : [])]; };
 
   /* ---------- PS-25: several worked units ----------
      Engineer decision PS-25 (2026-11-13): the worked sections (§3–§14, figures included) are printed once per girder type for its governing

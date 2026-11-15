@@ -3965,3 +3965,233 @@ PR #1563: https://github.com/mlococo88/All-Structural/pull/1563
 - DW2-D4. The schedule is one row per girder type (the same girder on every line listed); each line's camber after the deck is on the Camber & deflection tab.
 ### Other copies
 - None new: the sheet frame is part 1's adapted copy of the steel app's `sheet()` (unchanged here).
+
+## 2026-11-15 — Batch A: display bugs and stale text — Report References, the Rating tab's RF chips, §1's "99.000", the Flexure Components chart, stale placeholders, the footer (display only; no calculation change)
+PR #1569: https://github.com/mlococo88/All-Structural/pull/1569
+### Request
+- PS Bridge catch-up batch A (review 2026-11-15, ps-vs-steel O16, O19, L15, R7; old-vs-new #109, #134). Display bugs and stale text; no calculation change.
+### What changed
+- `report/builders.js` `refsOf(B)` (the References table on the Report's cover):
+  - before: 'PCI Bridge Design Manual and the Mast method (handling stability screening)'. That contradicted the Handling tab, which says the stability is a screening and not the PCI / Mast method.
+  - after: built from what the report works:
+    - AASHTO LRFD 10th Ed. (2024): every article the worked steps cite (each step's `ref`, every worked unit), sorted. Equation and table suffixes are dropped, e.g. "Eq. 5.9.3.3-1" is listed as 5.9.3.3. This restores the old app's article list.
+    - MBE: the articles cited, with the existing note that the labels are the old app's (MBE 4th Ed. labels: their own change).
+    - PCI Design Handbook: the long-term camber multipliers ("edition not stated by the old app: verify", as in the old app's References). Listed when the Camber steps cite it.
+    - Handling: listed when the handling steps exist. Text: the lateral deflection z_o uses the Mast expression; the factors of safety are a simplified screening, not the PCI (2016) / Mast method.
+    - The owner's manual row is unchanged.
+  - New helpers: `artKey`, `artCmp`, `citedArts(B, re)`.
+- `ui/outkit.js`: new `groups(list, topics)`. It wraps `SharedSteps.group`.
+  - A topic with `rf: RegExp` gets a rating-factor status:
+    - result step and chip: the lowest RF of the topic's RF steps ("RF 1.737"; 99, the engine's "not applicable", is left out; all 99: "RF —");
+    - `cls`: 'ng' when an RF step has ok false, else 'ok'.
+  - `steps()` uses it.
+  - `report/builders.js` `gsteps` uses `PSBOutKit.groups` too, so the Report's topic chips match the tab.
+  - Why: `shared/steps.js` group() reads any unitless step with an ok flag as demand / capacity, so the largest value governs and anything over 1 is red. The flexure topic's operating RF (2.252 on the default project, 2.407 on the reviewed design) was shown red.
+  - `shared/steps.js` is unchanged (no other tool affected).
+- `ui/rating.js` TOPICS: `rf` regex added to:
+  - flex: `/^rt\.RF(inv|opr)$/`;
+  - shear: `/^rt\.RFv(Inv|Opr)$/`;
+  - s3: `/^rt\.RFs3$/`;
+  - veh: `/^rt\.veh\d+\.RF$/`.
+- `report/builders.js` `summary()`, the §1 rating table:
+  - an RF ≥ 99 (the engine's "not applicable") is shown "—", as on the Rating tab (before: "99.000");
+  - the note now says "— = not applicable" (before: "99 = not applicable").
+- `ui/flexure.js`: `HIDE = {}`. Every series of both charts is shown at first, as in the steel app's charts (`S.hide {}`). Before, every Components series was hidden, so the chart was drawn empty. The label's "select them below" is removed.
+- `index.html`:
+  - the "Girder library … PR 4, waits for the sheets (PS-2)" placeholder card is removed: the library has been merged (PS-37);
+  - new footer `#appFoot`, as the old app's `.footer`: "Prestressed Bridge Design v3.0-dev (new, in development) · AASHTO LRFD 10th Ed. (2024) · units: kip, in, ksi" and "Design aid — independent verification by a licensed engineer required". It is hidden when the Report is printed alone.
+- `engine/fields.js` (not a pbd-* file): the Girder shape card's subtitle. Before: "PCI / AASHTO shapes (the old app's library)". After: "girder library by owner: AASHTO / PCI, PCI Northeast NEXT, MassDOT, CTDOT; or Custom".
+- New test `tests/engine/psbridge-display-a.test.mjs` (20 cases).
+### Code (before / after: the diff of this change)
+```diff
+diff --git a/apps/ps-bridge/engine/fields.js b/apps/ps-bridge/engine/fields.js
+index d4028c2..b94888f 100644
+--- a/apps/ps-bridge/engine/fields.js
++++ b/apps/ps-bridge/engine/fields.js
+@@ -44,7 +44,7 @@
+       note: (b, P) => P && P.xs && P.xs.dl && window.PSBDesign ? `d<sub>e</sub> from the cross-section for each exterior line (PS-20): G1 ${(+window.PSBDesign.deOf(P, 1)).toFixed(3)} ft (left overhang − traffic face), G${P.xs.nb} ${(+window.PSBDesign.deOf(P, P.xs.nb)).toFixed(3)} ft (right); the barriers are in the card below. Used for an exterior girder (G1 or the last girder).`
+         : 'Used when the design girder is an exterior girder (G1 or the last girder). Entered: the project has no cross-section barriers (saved before the DC2 / DW distribution, 2026-11-13).' },
+     // ---- Girders & strands ----
+-    { tab: 'gird', id: 'shape', title: 'Girder shape', ref: 'PCI / AASHTO shapes (the old app\'s library)', fields: [
++    { tab: 'gird', id: 'shape', title: 'Girder shape', ref: 'girder library by owner: AASHTO / PCI, PCI Northeast NEXT, MassDOT, CTDOT; or Custom', fields: [
+       F('base.girder', 'Girder section', '', 'Girder shape from the library, grouped by owner (PS-37): the old app\'s AASHTO / PCI shapes and NEXT F, the CTDOT box beams and voided slabs (BDM plates), and the MassDOT Bridge Manual Part II standard sections (NEBT, NEDBT, NEXT F, NEXT D, spread and adjacent box beams, deck beams).', 'sel', { o: () => Object.keys(typeof GIRDERS !== 'undefined' ? GIRDERS : {}).map(k => [k, k, window.PSBSections && window.PSBSections.group ? window.PSBSections.group(k) : undefined]) }),
+       F('base.cust.h', 'Overall depth h', 'in', 'Custom section: overall girder depth.', 'num', { when: b => b.girder === 'Custom' }),
+       F('base.cust.A', 'Gross area A', 'in²', 'Custom section: gross area.', 'num', { when: b => b.girder === 'Custom' }),
+diff --git a/apps/ps-bridge/index.html b/apps/ps-bridge/index.html
+index c788c96..bd37908 100644
+--- a/apps/ps-bridge/index.html
++++ b/apps/ps-bridge/index.html
+@@ -143,6 +143,9 @@
+   #hdr .allToolsLink{font-size:8.5pt;color:#C7D4E4;text-decoration:none;font-family:var(--font-ui);}
+   #hdr .allToolsLink:hover{color:#fff;text-decoration:underline;}
+   #main{flex:1 1 auto;display:flex;min-height:0;}
++  /* 2026-11-15 (batch A): the footer of the old app (Prestressed Bridge Design.html .footer): the version line and the design-aid disclaimer */
++  #appFoot{flex:0 0 auto;display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 16px;padding:3px 14px;border-top:1px solid var(--color-border);background:var(--slate-100);color:#475569;font-family:var(--font-ui);font-size:7.5pt;letter-spacing:.04em;text-transform:uppercase;}
++  @media print{ body:has(#tabBar [data-otab="rpt"][aria-selected="true"]) #appFoot{display:none!important;} }
+   #inputPanel{flex:0 0 calc(100% * var(--sbIn,.33));max-width:calc(100% * var(--sbIn,.33));border-right:1px solid var(--color-border);overflow-y:auto;position:relative;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:var(--color-bg);padding:10px 12px 60px;font-family:var(--font-ui);font-size:9.5pt;}
+   #outputPanel{flex:1 1 67%;min-width:0;overflow-y:auto;position:relative;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:0 16px 80px;background:var(--paper);}
+   @media screen and (max-width:899.98px){
+@@ -342,6 +345,7 @@
+       <div id="out"></div>
+     </main>
+   </div>
++  <footer id="appFoot"><span>Prestressed Bridge Design v3.0-dev (new, in development) · AASHTO LRFD 10th Ed. (2024) · units: kip, in, ksi</span><span>Design aid — independent verification by a licensed engineer required</span></footer>
+ </div>
+ <script>
+ (function () {
+@@ -418,8 +422,7 @@
+         + IN.cards('xsec', P)
+         + DLUI.card(P),   // PR 3a-3: DC2 / DW to each girder line (PS-9)
+       gird: TY.card(P, ui) + TY.shownCard(P) + TY.scopeBar(P, ui, 'gird') + IN.cards('gird', V)
+-        + `<section class="sec"><div class="secHead">Strand pattern${sk >= 0 ? ` of ${esc(P.types[sk].label)}` : ''}</div><div class="secBody" id="gfx_strands_in"><p class="note">Shown when the inputs have no error.</p></div></section>`
+-        + ph('Girder library', '4', ['girder library from the standard sheets (NEBT, NEDBT, NEXT, boxes): PR 4, waits for the sheets (PS-2)']),
++        + `<section class="sec"><div class="secHead">Strand pattern${sk >= 0 ? ` of ${esc(P.types[sk].label)}` : ''}</div><div class="secBody" id="gfx_strands_in"><p class="note">Shown when the inputs have no error.</p></div></section>`,   // 2026-11-15: the "Girder library PR 4" placeholder removed (the library is in the Girder shape card, PS-37)
+       mat: TY.scopeBar(P, ui, 'mat') + IN.cards('mat', V),
+       dd: IN.cards('dd', P),
+       loads: TY.scopeBar(P, ui, 'loads') + IN.cards('loads', V),
+diff --git a/apps/ps-bridge/report/builders.js b/apps/ps-bridge/report/builders.js
+index d5c0315..11e244c 100644
+--- a/apps/ps-bridge/report/builders.js
++++ b/apps/ps-bridge/report/builders.js
+@@ -31,7 +31,7 @@
+   const sub = (id, title, items) => ({ id, title, items: items.filter(Boolean) });
+   const steps = (scope, list, o) => ({ type: 'steps', scope, steps: list || [], ...(o || {}) });
+   /* gsteps: the worked steps in the tab's topics (its TOPICS, SharedSteps.group as on the tab), a sub-heading per topic (shared/report.js item.topics) */
+-  const gsteps = (scope, list, topics) => { const G = S().group(list || [], topics || [], { strip: false });
++  const gsteps = (scope, list, topics) => { const G = window.PSBOutKit ? window.PSBOutKit.groups(list || [], topics || []) : S().group(list || [], topics || [], { strip: false });   // PSBOutKit.groups: the RF topics as on the tab (2026-11-15)
+     return steps(scope, [].concat(...G.map(t => t.steps)), { topics: G.map(t => ({ title: t.title, ref: t.ref, n: t.steps.length, cls: t.cls, chip: t.chip, res: t.res })) }); };
+   const at = (R, p) => String(p).split('.').reduce((o, k) => o == null ? o : o[k], R);
+   const plain = s => String(s == null ? '' : s).replace(/<[^>]*>/g, '').replace(/\$/g, 'S');
+@@ -61,8 +61,8 @@
+       tbl(['Group', 'Check', 'x (ft)', 'Demand', 'Limit', 'Unit', 'Ratio', 'Status', 'Worked'], rows, { wide: true })];
+     if (RT && R.rating) {
+       const rf = RT.rf.map(([n, f, st]) => ({ n, v: f(R), st })), pth = { 'rt.RFinv': 'rating.RFinv', 'rt.RFvInv': 'shrRating.RFinv', 'rt.RFs3': 'svcRating.RF' };
+-      items.push(tbl(['HL-93 inventory rating factor', 'RF', 'Worked'], rf.map(z => [z.n, { t: V(pth[z.st], 3), n: true, cls: z.v < 1 ? 'ng' : 'ok' }, `see [[${z.st}]]`])),
+-        note('Rating factors are not design checks and are not counted in the PASS / FAIL above (RF ≥ 1.0 is OK; 99 = not applicable).'));
++      items.push(tbl(['HL-93 inventory rating factor', 'RF', 'Worked'], rf.map(z => [z.n, z.v >= 99 ? { t: '—', n: true } : { t: V(pth[z.st], 3), n: true, cls: z.v < 1 ? 'ng' : 'ok' }, `see [[${z.st}]]`])),   // 99: the engine's "not applicable", shown — as on the Rating tab (2026-11-15)
++        note('Rating factors are not design checks and are not counted in the PASS / FAIL above (RF ≥ 1.0 is OK; — = not applicable, e.g. no live-load tension at the Service III section).'));
+     }
+     const kq = kv([['Girder', `${plain(B.inp.girder)}, span L = ${V('L', 2)} ft, ${V('ss.Ntot', 0)} strands`], ['Total loss Δf$_{pT}$', `${V('totalLoss', 2)} ksi (${V('pctLoss', 1)} %) (see [[ls.total]])`],
+       ['Effective prestress f$_{pe}$', `${V('fpe', 2)} ksi (see [[ls.fpe]])`], ['DF$_{M}$ / DF$_{V}$', `${V('dfm', 3)} / ${V('dfv', 3)} (see [[ld.dfm]])`],
+@@ -231,8 +231,24 @@
+     return { title: (SECTIONS.find(q => q[0] === k) || [k, k])[1], subs };
+   }
+ 
+-  const refsOf = B => [['AASHTO LRFD', 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): articles as cited at each step'], ['MBE', 'AASHTO Manual for Bridge Evaluation, LRFR (Section 6, Part A): article numbers as the old app'],
+-    ['PCI', 'PCI Bridge Design Manual and the Mast method (handling stability screening), as the moved engine'], ...(B.inp.owner && B.inp.owner !== 'AASHTO' && window.PBD ? [[B.inp.owner, window.PBD.OWN_RULES.owners[B.inp.owner].manual]] : [])];
++  /* the References of the front matter (2026-11-15, batch A): the articles the report's worked steps cite (each step's ref, every worked unit),
++     as the old app's References table listed its articles; the PCI Design Handbook for the camber multipliers (the Camber & deflection steps);
++     handling named as what is computed: the Mast form of the lateral deflection z_o, the factors of safety a simplified screening (not the
++     PCI (2016) / Mast method, as the Handling tab says). Display only: the text of the citations, no value. */
++  const artKey = a => a.replace(/^C/, '').split('.').map(q => { const m = /^(\d+)([a-zA-Z]*)$/.exec(q); return m ? [+m[1], m[2]] : [0, q]; });
++  const artCmp = (a, b) => { const x = artKey(a), y = artKey(b); for (let i = 0; i < Math.max(x.length, y.length); i++) { if (!x[i]) return -1; if (!y[i]) return 1; if (x[i][0] !== y[i][0]) return x[i][0] - y[i][0]; if (x[i][1] !== y[i][1]) return x[i][1] < y[i][1] ? -1 : 1; } return a < b ? -1 : a > b ? 1 : 0; };
++  function citedArts(B, re) {   // the article numbers (C: commentary) in the steps' refs that match re (equation / table suffixes -n dropped)
++    const out = new Set(), Ws = [B.W].concat((B.multi && B.units ? B.units : []).map(u => u.W));
++    Ws.forEach(W => Object.values(W || {}).forEach(w => ((w && w.steps) || []).forEach(s => { const r = String(s.ref || ''); if (!re.test(r)) return;
++      r.replace(re, '').replace(/\([^)]*\)/g, '').split(/[,;]/).forEach(t => { const m = /(C?\d+[A-Z]?(?:\.\d+[a-z]?)+)/.exec(t.replace(/(Art|Eqs?|Tables?)\.?/g, '')); if (m) out.add(m[1].replace(/-\d+$/, '')); }); })));
++    return [...out].sort(artCmp);
++  }
++  const refsOf = B => { const hn = ((B.W && B.W.handling && B.W.handling.steps) || []).length > 0, aa = citedArts(B, /^AASHTO LRFD 10th Ed\.?|^AASHTO LRFD 10th Ed\. \(2024\)( Art\.)?/), mb = citedArts(B, /^MBE( Eq\.)?/), cam = Object.values(B.W || {}).some(w => ((w && w.steps) || []).some(s => /PCI Design Handbook/.test(s.ref || '')));
++    return [['AASHTO LRFD', `AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). Articles cited in the worked steps${aa.length ? ': ' + aa.join('; ') : ''} (each step names its article, equation or table).`],
++      ['MBE', `AASHTO Manual for Bridge Evaluation, LRFR (Section 6, Part A)${mb.length ? ': ' + mb.join('; ') : ''}. The article numbers are the old app's labels (the MBE 4th Ed. (2026) labels come in their own change).`],
++      ...(cam ? [['PCI', 'PCI Design Handbook: the long-term camber multipliers (Camber & deflection; the multipliers entered on the Materials tab). Edition not stated by the old app: verify.']] : []),
++      ...(hn ? [['Handling', 'Lateral stability by a simplified screening of the old app: the lateral deflection z_o uses the Mast expression; the factors of safety are not the PCI (2016) / Mast method (Handling tab).']] : []),
++      ...(B.inp.owner && B.inp.owner !== 'AASHTO' && window.PBD ? [[B.inp.owner, window.PBD.OWN_RULES.owners[B.inp.owner].manual]] : [])]; };
+ 
+   /* ---------- PS-25: several worked units ----------
+      Engineer decision PS-25 (2026-11-13): the worked sections (§3–§14, figures included) are printed once per girder type for its governing
+diff --git a/apps/ps-bridge/ui/flexure.js b/apps/ps-bridge/ui/flexure.js
+index a6305a7..5edeb34 100644
+--- a/apps/ps-bridge/ui/flexure.js
++++ b/apps/ps-bridge/ui/flexure.js
+@@ -77,7 +77,7 @@
+     bk.forEach(([x0, x1]) => S.region(x0, 0, x1, Math.max(c.aN, 1), `a = A_s f_y / (0.85 f'c b_bf) = ${V.fx(c.aN, 3)} in, c = ${V.fx(c.cN, 3)} in${G.isNext ? `; b_bf = 2 stems × B = 2 × ${V.fx(G.next.B, 2)} = ${V.fx(G.bbf, 2)} in` : ''}`));
+     return { html: S.render({ W: Math.min(W, 640), maxH: 330, label: 'Pier section, negative moment' }).svg, nar: W < 560 };
+   }
+-  const HIDE = { cmp: { sw: true, dc1: true, dc2: true, dw: true, llp: true, lln: true } };
++  const HIDE = {};   // every series shown at first, as the steel app's charts (S.hide {}); a chip hides one (2026-11-15: before, the Components chart started empty)
+   function after(el, ctx) {
+     K().after(el, OPEN);
+     const { R } = ctx, k = K(), ev = (p, d, u, div) => k.ev(R, p, d, u, div), fg = R.flexFull, L = R.L, c = R.cont, xs = fg.map(r => r.x);
+@@ -96,7 +96,7 @@
+           { label: 'φ', value: ev('fMid.phi', 3), unit: '' }, { label: 'Minimum reinf.', value: ev(`checks.${qM.i}.r`, 3), unit: qM.c.pass ? 'PASS' : 'FAIL', tone: qM.c.pass ? '' : 't' }, ...(qP ? [{ label: 'Pier −M<sub>u</sub> / −φM<sub>n</sub>', value: ev('cont.dc', 3), unit: qP.c.pass ? 'PASS' : 'FAIL', tone: qP.c.pass ? '' : 't' }] : [])]),
+         draw: W => VA().render({ L0: 0, L1: L, sup: [0, L], axisTitle: 'Station x, ft (from ℄ bearing, left)', aria: 'Moments and flexural resistance along the girder', rows: [
+           { kind: 'chart', key: 'st', label: 'Strength I: M_u against φM_n', unit: 'kip-ft', series: ST, hidden: HIDE.st, gov: [{ x: R.flexGov.x, y: R.flexGov.Mu / 12 }], h: W < 600 ? 160 : 220 },
+-          { kind: 'chart', key: 'cmp', label: 'Components (unfactored; LL with DF and IM): select them below', unit: 'kip-ft', series: CP, hidden: HIDE.cmp, h: W < 600 ? 110 : 140 }] }, W),
++          { kind: 'chart', key: 'cmp', label: 'Components (unfactored; LL with DF and IM)', unit: 'kip-ft', series: CP, hidden: HIDE.cmp, h: W < 600 ? 110 : 140 }] }, W),
+         at, snap: x => xs[nearX(x)], chips: () => [grp('st', 'Strength I', ST), grp('cmp', 'Components', CP)], onChip: key => { const [g, s] = key.split(':'), o = HIDE[g] = HIDE[g] || {}; o[s] = !o[s]; },
+         legend: VA().legend('marks'), hint: 'Point at (or tap) the chart to read the station.',
+         caption: `<p class="vk-cap">The engine's M<sub>u</sub> and φM<sub>n</sub> at its stations (φM<sub>n</sub> drops near the ends where the strands are not developed)${c ? '; −M<sub>u</sub> from the continuous unit and the deck-reinforced −φM<sub>n</sub> of the pier section, drawn along the span as the old app' : ''}. Circle: the governing station. Display only.</p>` });
+diff --git a/apps/ps-bridge/ui/outkit.js b/apps/ps-bridge/ui/outkit.js
+index d0886c4..4363606 100644
+--- a/apps/ps-bridge/ui/outkit.js
++++ b/apps/ps-bridge/ui/outkit.js
+@@ -5,6 +5,7 @@
+                            grouped); tests/smoke/ps-bridge-skeleton.mjs checks every data-ev against computeAll on the page (values = engine values)
+      val(R, path)          the value of R at a dotted path ('cp.Ic', 'diagrams.30.M_DC')
+      fx(v, d)              the number as shown;  card(title, body, id);  kv(rows [[label, html]]);  wk(id, text, tab) a link to step id (on tab)
++     groups(list, topics)  SharedSteps.group with the rating-factor topics (topic rf: RegExp) given an RF status (2026-11-15)
+      steps(list, topics, open)  the worked steps in topics (SharedSteps.group / groupsHTML), each step <li id="st-<id>">
+      after(el, open)       wires the topics (expand / collapse, § links) after the tab's HTML is set */
+ (function () {
+@@ -18,7 +19,17 @@
+   const kv = rows => `<div class="kv">${rows.map(([l, h]) => `<div><span>${l}</span><span>${h}</span></div>`).join('')}</div>`;
+   const wk = (id, text, tab) => `<a class="wk" href="#st-${esc(id)}"${tab ? ` data-gotab="${esc(tab)}"` : ''} title="Worked step">${text || '§'}</a>`;
+   const stepLi = s => `<li id="st-${esc(s.id)}"><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${S().line(s, true)}</div>${s.note ? `<div class="nt">${esc(S().noteText(s.note))}</div>` : ''}</li>`;
+-  const steps = (list, topics, open) => S().groupsHTML(S().group(list, topics, { strip: false }), { open, item: stepLi });
++  /* groups(list, topics): SharedSteps.group, then (2026-11-15, batch A) each topic with rf: RegExp (step ids of rating factors, e.g. the Rating
++     tab) gets the status of a rating factor, not of a demand / capacity ratio: its result step and chip the lowest RF of those steps (99, the
++     engine's "not applicable", left out: chip —), 'ng' when one is < 1.0 (its ok false), else 'ok'. group() itself reads a unitless step with
++     an ok flag as demand / capacity (largest governs, > 1 red), which is wrong for an RF. Display only (shared/steps.js unchanged). */
++  const groups = (list, topics) => S().group(list, topics, { strip: false }).map(t => {
++    const d = (topics || []).find(q => q.key === t.key), rs = d && d.rf ? t.steps.filter(s => d.rf.test(String(s.id)) && typeof s.value === 'number') : [];
++    if (!rs.length) return t;
++    const live = rs.filter(s => s.value < 99), lo = live.reduce((a, b) => (b.value < a.value ? b : a), live[0] || null), ng = rs.some(s => s.ok === false);
++    return Object.assign({}, t, { res: lo || rs[0], ratio: NaN, cls: ng ? 'ng' : 'ok', chip: lo ? 'RF ' + fx(lo.value, 3) + (ng ? ' NG' : '') : 'RF —' });
++  });
++  const steps = (list, topics, open) => S().groupsHTML(groups(list, topics), { open, item: stepLi });
+   const after = (el, open) => S().wire(el, { onToggle: (k, on) => { if (on) open.add(k); else open.delete(k); } });
+-  window.PSBOutKit = { esc, val, fx, ev, card, kv, wk, stepLi, steps, after };
++  window.PSBOutKit = { esc, val, fx, ev, card, kv, wk, stepLi, groups, steps, after };
+ })();
+diff --git a/apps/ps-bridge/ui/rating.js b/apps/ps-bridge/ui/rating.js
+index e9eb26f..2aec14f 100644
+--- a/apps/ps-bridge/ui/rating.js
++++ b/apps/ps-bridge/ui/rating.js
+@@ -13,10 +13,10 @@
+   const OPEN = new Set(['flex']);
+   const TOPICS = [
+     { key: 'cs', title: 'Condition and system factors', ref: 'MBE 6A.4.2.3, 6A.4.2.4', ids: /^rt\.phiCS$/ },
+-    { key: 'flex', title: 'Flexure rating at the governing station', ref: 'MBE 6A.4 · Strength I', ids: /^rt\.(Rn|MDC|MDW|MLL|RFinv|RFopr|RFmid)$/, res: /^rt\.RFinv$/ },
+-    { key: 'shear', title: 'Shear rating at the governing shear section', ref: 'MBE 6A.5.6 · Strength I', ids: /^rt\.(phiVn|VDC|VDW|VLL|RFvInv|RFvOpr)$/, res: /^rt\.RFvInv$/ },
+-    { key: 's3', title: 'Service III rating (prestressed concrete)', ref: 'MBE 6A.5.4.1', ids: /^rt\.(fPS|fDC|fDW|fLL|fr|RFs3)$/, res: /^rt\.RFs3$/ },
+-    { key: 'veh', title: 'Legal / permit vehicles (entered factored forces)', ref: 'MBE 6A.4.4 / 6A.4.5', ids: /^rt\.veh\d+\./ }];
++    { key: 'flex', title: 'Flexure rating at the governing station', ref: 'MBE 6A.4 · Strength I', ids: /^rt\.(Rn|MDC|MDW|MLL|RFinv|RFopr|RFmid)$/, res: /^rt\.RFinv$/, rf: /^rt\.RF(inv|opr)$/ },
++    { key: 'shear', title: 'Shear rating at the governing shear section', ref: 'MBE 6A.5.6 · Strength I', ids: /^rt\.(phiVn|VDC|VDW|VLL|RFvInv|RFvOpr)$/, res: /^rt\.RFvInv$/, rf: /^rt\.RFv(Inv|Opr)$/ },
++    { key: 's3', title: 'Service III rating (prestressed concrete)', ref: 'MBE 6A.5.4.1', ids: /^rt\.(fPS|fDC|fDW|fLL|fr|RFs3)$/, res: /^rt\.RFs3$/, rf: /^rt\.RFs3$/ },
++    { key: 'veh', title: 'Legal / permit vehicles (entered factored forces)', ref: 'MBE 6A.4.4 / 6A.4.5', ids: /^rt\.veh\d+\./, rf: /^rt\.veh\d+\.RF$/ }];   // rf: rating-factor steps (PSBOutKit.groups: RF status, not demand / capacity; 2026-11-15)
+   const rfs = v => v >= 99 ? '—' : null;
+   const okT = (ok, v) => v >= 99 ? '<td class="lft">n/a</td>' : `<td class="${ok ? 'ok' : 'ngt'}">${ok ? '≥ 1.0' : '< 1.0'}</td>`;
+   function output(ctx) {
+```
+### Saved data (CLAUDE.md §5)
+- None: no key or field.
+### Governing provisions (CLAUDE.md §4)
+- None changed: display only; no formula, factor or value. Harness B: 0 differences.
+### Check case
+- New project (PCI BT-72, 120 ft, Interior S1 on G2):
+  - Rating tab topic chips, before: Flexure "2.252" red (the operating RF read as a ratio), Shear "2.120" red, Service III "1.430" red.
+  - After: Flexure "RF 1.737" green (RF_inv 1.737 < RF_opr 2.252), Shear "RF 1.635" green, Service III "RF 1.430" green.
+  - Hand check: the lowest of the topic's RFs (1.737, 2.252) is 1.737 ≥ 1.0, so green.
+- Box BIII-36 with a 6 in topping (test case): Service III RF = 99 (net compression). §1's table, before "99.000", after "—"; the Rating tab already shows "—".
+- References of the new project:
+  - AASHTO LRFD: 1.3.2.1; 2.5.2.6.2; 3.4.1; … 5.9.4.4.2 (66 articles);
+  - MBE: 6A.4; 6A.4.2.1; 6A.5.4.1; 6A.5.6;
+  - PCI: Design Handbook (camber multipliers);
+  - no Handling row (handling off).
+### Decisions (pending engineer review)
+- A-D1. The footer's version text "v3.0-dev" (the old app is v2.65). It is a name for the new app until a numbering is chosen.
+- A-D2. The References list the articles the worked steps cite, not a hand-kept list, so the list always matches what is worked. An article cited only in a tab's prose (not in a step) is not listed.
+- A-D3. A rating topic's chip shows the lowest RF of the topic ("RF x.xxx"). It is red only when an RF is < 1.0. The steel app shows no chip on its RF topic (its RF steps have no ok flag).
+### Other copies
+- None.

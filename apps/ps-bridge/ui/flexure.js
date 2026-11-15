@@ -77,7 +77,7 @@
     bk.forEach(([x0, x1]) => S.region(x0, 0, x1, Math.max(c.aN, 1), `a = A_s f_y / (0.85 f'c b_bf) = ${V.fx(c.aN, 3)} in, c = ${V.fx(c.cN, 3)} in${G.isNext ? `; b_bf = 2 stems × B = 2 × ${V.fx(G.next.B, 2)} = ${V.fx(G.bbf, 2)} in` : ''}`));
     return { html: S.render({ W: Math.min(W, 640), maxH: 330, label: 'Pier section, negative moment' }).svg, nar: W < 560 };
   }
-  const HIDE = { cmp: { sw: true, dc1: true, dc2: true, dw: true, llp: true, lln: true } };
+  const HIDE = {};   // every series shown at first, as the steel app's charts (S.hide {}); a chip hides one (2026-11-15: before, the Components chart started empty)
   function after(el, ctx) {
     K().after(el, OPEN);
     const { R } = ctx, k = K(), ev = (p, d, u, div) => k.ev(R, p, d, u, div), fg = R.flexFull, L = R.L, c = R.cont, xs = fg.map(r => r.x);
@@ -96,7 +96,7 @@
           { label: 'φ', value: ev('fMid.phi', 3), unit: '' }, { label: 'Minimum reinf.', value: ev(`checks.${qM.i}.r`, 3), unit: qM.c.pass ? 'PASS' : 'FAIL', tone: qM.c.pass ? '' : 't' }, ...(qP ? [{ label: 'Pier −M<sub>u</sub> / −φM<sub>n</sub>', value: ev('cont.dc', 3), unit: qP.c.pass ? 'PASS' : 'FAIL', tone: qP.c.pass ? '' : 't' }] : [])]),
         draw: W => VA().render({ L0: 0, L1: L, sup: [0, L], axisTitle: 'Station x, ft (from ℄ bearing, left)', aria: 'Moments and flexural resistance along the girder', rows: [
           { kind: 'chart', key: 'st', label: 'Strength I: M_u against φM_n', unit: 'kip-ft', series: ST, hidden: HIDE.st, gov: [{ x: R.flexGov.x, y: R.flexGov.Mu / 12 }], h: W < 600 ? 160 : 220 },
-          { kind: 'chart', key: 'cmp', label: 'Components (unfactored; LL with DF and IM): select them below', unit: 'kip-ft', series: CP, hidden: HIDE.cmp, h: W < 600 ? 110 : 140 }] }, W),
+          { kind: 'chart', key: 'cmp', label: 'Components (unfactored; LL with DF and IM)', unit: 'kip-ft', series: CP, hidden: HIDE.cmp, h: W < 600 ? 110 : 140 }] }, W),
         at, snap: x => xs[nearX(x)], chips: () => [grp('st', 'Strength I', ST), grp('cmp', 'Components', CP)], onChip: key => { const [g, s] = key.split(':'), o = HIDE[g] = HIDE[g] || {}; o[s] = !o[s]; },
         legend: VA().legend('marks'), hint: 'Point at (or tap) the chart to read the station.',
         caption: `<p class="vk-cap">The engine's M<sub>u</sub> and φM<sub>n</sub> at its stations (φM<sub>n</sub> drops near the ends where the strands are not developed)${c ? '; −M<sub>u</sub> from the continuous unit and the deck-reinforced −φM<sub>n</sub> of the pier section, drawn along the span as the old app' : ''}. Circle: the governing station. Display only.</p>` });
