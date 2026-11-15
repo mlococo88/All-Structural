@@ -28,9 +28,9 @@ try {
   // 1.
   await dwg();
   let r = await p.evaluate(() => ({ opts: [...document.querySelectorAll('#dwg_sheet option')].map(o => o.value), miss: /Not in this set/.test(document.getElementById('out').innerText) }));
-  assert.deepEqual(r.opts, ['sec', 'plan', 'elev0', 'strd0', 'elev1', 'strd1', 'sched']); assert.equal(r.miss, false);
+  assert.deepEqual(r.opts, ['cover', 'notes', 'sec', 'plan', 'elev0', 'strd0', 'elev1', 'strd1', 'sched', 'summ']); assert.equal(r.miss, false);   // batch H1: cover, notes, summary
   let t = await sheet('elev0');
-  ['GIRDER INTERIOR S1: ELEVATION', '3 OF 7', 'CL BRG', 'MIDSPAN'].forEach(x => assert.ok(t.includes(x), x + ' | ' + t.slice(0, 30).join('|')));
+  ['GIRDER INTERIOR S1: ELEVATION', '5 OF 10', 'CL BRG', 'MIDSPAN'].forEach(x => assert.ok(t.includes(x), x + ' | ' + t.slice(0, 30).join('|')));
   assert.ok(t.some(x => /^HOLD-DOWN .* FROM CL BRG$/.test(x)) && t.some(x => / FROM GIRDER END$/.test(x)) && t.some(x => /^CL BRG TO CL BRG 120'-0"$/.test(x)), 'the hold-down and span dimensions');
   assert.ok(t.some(x => /CAMBER AT MIDSPAN/.test(x)) && t.some(x => /DRAPED, Y END/.test(x)), 'camber and draped notes');
   ok('elevation sheet of Interior S1: CL BRG, midspan, hold-down from CL BRG and from the girder end (PS-13), CL BRG to CL BRG 120\'-0", camber');
@@ -61,7 +61,7 @@ try {
   assert.ok(chk.ok, chk.errors.join('; ')); ['S-STRD', 'S-STRD-DRAPE', 'S-TBL'].forEach(l => assert.ok(chk.layers.includes(l), l));
   ['GIRDER EXTERIOR S1: STRAND PATTERN', 'STRAND AND GIRDER SCHEDULE'].forEach(x => assert.ok(txt.includes(x), x));
   const pages = await p.evaluate(() => { let got = null; const o = SharedDxf.printSheets; SharedDxf.printSheets = l => { got = l.length; }; document.getElementById('dwg_printAll').click(); SharedDxf.printSheets = o; return got; });
-  assert.equal(pages, 7);
+  assert.equal(pages, 10);
   ok(`Download DXF: valid, layers ${chk.layers.join(', ')}; Print all sheets: ${pages} pages`);
   // 4. box beams, debonded, no draped strands
   await seed(() => { const P = PSBModel.newProject(); P.base.girder = 'AASHTO BIII-36 (39in)'; P.base.ts = 6; P.base.harp.n = 0; P.base.rows = [{ n: 16, y: 2, nd: 4, dbnd: 8 }, { n: 4, y: 37, nd: 0, dbnd: 0 }];

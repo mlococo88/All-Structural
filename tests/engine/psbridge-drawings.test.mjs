@@ -12,8 +12,8 @@ import { loadShared, test, ROOT } from './harness.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared('steps.js', 'dxf.js', ...PBD, ...['sections', 'model', 'rigid', 'lldf-fg', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck'].map(n => path.join(APP, `engine/${n}.js`)),
-  ...['vizkit', 'strands', 'view3d', 'xsfig', 'plan', 'sheets'].map(n => path.join(APP, `ui/${n}.js`)));
+const W = loadShared('steps.js', 'dxf.js', ...PBD, ...['sections', 'model', 'rigid', 'lldf-fg', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'handoffs', 'rating-along'].map(n => path.join(APP, `engine/${n}.js`)),
+  ...['vizkit', 'strands', 'view3d', 'xsfig', 'plan', 'dash', 'summary', 'sheets'].map(n => path.join(APP, `ui/${n}.js`)));   // batch H: handoffs (reactions), rating-along + dash + summary (the design summary sheet)
 W.PSBSections.install();
 const X = W.SharedDxf, SH = W.PSBSheets, J = v => JSON.parse(JSON.stringify(v));
 const close = (a, b, m) => assert.ok(Math.abs(a - b) < 1e-6 * Math.max(1, Math.abs(b)), `${m}: ${a} vs ${b}`);
@@ -33,7 +33,8 @@ test('the sheets: each layout, paper D and B, a valid DXF; every sheet at a scal
     const P = fill(J(P0)), B = SH.build(P, { paper, date: '2026-11-14' }), ns = P.spans.lengths.length;
     assert.deepEqual(J(B.errors), [], name);
     const tk = W.PSBBridge.types(P).map((t, k) => k).filter(k => W.PSBBridge.typeLines(P, k).length);   // part 2: each type's elevation and strand pattern, the schedule
-    assert.deepEqual(J(B.sheets.map(s => s.id)), [...(ns > 1 ? P.spans.lengths.map((_, i) => 'sec' + (i + 1)) : ['sec']), 'plan', ...[].concat(...tk.map(k => ['elev' + k, 'strd' + k])), 'sched'], name);
+    const base = [...new Set(B.sheets.map(s => s.id.replace(/^(cover|notes|summ)\d+$/, '$1')))];   // batch H1: a block sheet continued on more sheets (cover2, summ2, …)
+    assert.deepEqual(base, ['cover', 'notes', ...(ns > 1 ? P.spans.lengths.map((_, i) => 'sec' + (i + 1)) : ['sec']), 'plan', ...[].concat(...tk.map(k => ['elev' + k, 'strd' + k])), 'sched', 'summ'], name);   // batch H1: cover, notes first; summary last
     const chk = X.validate(B.D.toDXF({ ltscale: 1 })); assert.ok(chk.ok, name + ' ' + chk.errors.join('; '));
     ['S-GRDR', 'S-DECK', 'S-DIMS', 'S-TEXT', 'S-TBLK', 'S-BRDR', 'S-SUPP'].forEach(l => assert.ok(chk.layers.includes(l), `${name}: layer ${l}`));
     B.sheets.forEach(s => { assert.ok(SH.SCALES.includes(s.k), `${name} ${s.id} k ${s.k}`); const [pw, ph] = SH.PAPER[paper], b = B.D.bbox(s.i0, s.i1);
