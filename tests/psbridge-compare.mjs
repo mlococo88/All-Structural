@@ -61,6 +61,7 @@ import fs from 'fs';
 import path from 'path';
 import { openPage, REPO } from './lib.mjs';
 import { TAB_CASES } from './engine/psbridge-tab-cases.mjs';
+import { MIDAS_CASES, midasFixtures } from './engine/psbridge-midas-cases.mjs';   // batch D1
 
 const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
@@ -96,8 +97,15 @@ async function reloadKept(p, name, o, wait) {
 }
 
 // the projects: the new page builds them (PSBModel.defaultProject of the page), from the same TAB_CASES source
-const caseSrc = fs.readFileSync(path.join(REPO, 'tests/engine/psbridge-tab-cases.mjs'), 'utf8').replace(/^export const TAB_CASES = /m, 'window.__TAB_CASES = ');
-const names = Object.keys(TAB_CASES(() => ({ base: { opt: {}, loads: {}, cont: {}, harp: {}, mat: {}, handling: {}, deck: {} }, spans: {}, xs: {} }))).filter(n => !args.case || n.includes(args.case));
+// batch D1 (2026-11-15): + the designs whose demands come from a MIDAS file or a custom table (tests/engine/psbridge-midas-cases.mjs, the
+// files read here): the new page computes them through P.demands (engine/demands.js), the old page through its own MIDAS input (the same
+// inputs.external); every value compared as above. --no-midas leaves them out.
+const MIDAS_F = midasFixtures(rel => JSON.parse(fs.readFileSync(path.join(REPO, 'tests/projects', rel), 'utf8')));
+const caseSrc = fs.readFileSync(path.join(REPO, 'tests/engine/psbridge-tab-cases.mjs'), 'utf8').replace(/^export const TAB_CASES = /m, 'window.__TAB_CASES = ')
+  + (args['no-midas'] ? '' : '\n' + fs.readFileSync(path.join(REPO, 'tests/engine/psbridge-midas-cases.mjs'), 'utf8').replace(/^export const MIDAS_CASES = /m, 'window.__MIDAS_CASES = ').replace(/^export const midasFixtures = /m, 'window.__midasFixtures = ')
+    + `\nwindow.__MIDAS_F = ${JSON.stringify(MIDAS_F)}; { const T0 = window.__TAB_CASES; if (!T0.__d1) { window.__TAB_CASES = b => Object.assign(T0(b), window.__MIDAS_CASES(b, window.__MIDAS_F)); window.__TAB_CASES.__d1 = true; } }`);
+const stub = () => ({ base: { opt: {}, loads: {}, cont: {}, harp: {}, mat: {}, handling: {}, deck: {} }, spans: {}, xs: {} });
+const names = Object.keys(Object.assign(TAB_CASES(stub), args['no-midas'] ? {} : MIDAS_CASES(stub, MIDAS_F))).filter(n => !args.case || n.includes(args.case));
 
 // --import: the harness puts each design's psbeam.inputs.v1 itself (checked per design), so the page is not seeded with one (its init script
 // would put the seed back on a reload before the import)

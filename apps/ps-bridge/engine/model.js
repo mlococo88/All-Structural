@@ -61,6 +61,11 @@
                       open-time check above runs once and writes it; written also when such a project is written (exportJSON: the section
                       chosen with today's library); a new project (newProject) has it. Any other project's stored text is not changed by
                       opening it. Nothing reads it for a calculation.
+     demands: { '<type id>': { src, midas, span, table } }  added 2026-11-15 (batch D1, the old app's MIDAS demand import), optional within
+                      version 1: the demand source of each girder type (engine/demands.js): 'app' (this app's analysis), 'table' (a custom
+                      demand table) or 'midas' (a MIDAS demands file, kept as read). Absent (every project saved before) = every type uses this
+                      app's analysis, as before: those projects are byte-identical and compute as before (no migration). An old-app design
+                      with MIDAS demands (engine/legacy.js) gets them here for its type (PS-18), so it computes as the old app.
    }
    Needs the moved engine (engine/pbd-*.js) loaded first for base; without it (a test of this file alone) base is left as it is.
    From PR 2b the engine computes the design girder from base and the bridge values (engine/design.js). */
@@ -140,6 +145,8 @@
     if (p.base !== undefined && (!p.base || typeof p.base !== 'object' || Array.isArray(p.base))) E('base', 'The base girder design is not an inputs object.');
     const BR = typeof window !== 'undefined' && window.PSBBridge;   // PR 3a-1: the girder types (engine/bridge.js), when present
     if (p.types !== undefined && BR && !BR.validTypes(p.types)) E('types', 'The girder types cannot be read (each needs an id, a span, its lines and its overrides).');
+    // batch D1: the demand source of each girder type (engine/demands.js), optional; its contents are checked there (inputcheck)
+    if (p.demands !== undefined && (!p.demands || typeof p.demands !== 'object' || Array.isArray(p.demands))) E('demands', 'The demand sources of the girder types cannot be read (an object by type id).');
     return { errors, warnings };
   }
 

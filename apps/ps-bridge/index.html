@@ -51,6 +51,7 @@
     'engine/lldf-fg.js',     // PS-35: box beams and voided slabs, live-load distribution types (f) / (g) (an app-side override of distFactors, §4)
     'engine/holddown.js',    // PR 2d-3: the optional hold-down check for AASHTO / RIDOT (PS-10), an engine addition after computeAll (§4)
     'engine/pierblock.js',   // PS-34: the pier compression block against the family's thickness (NEXT stems, box bottom slab, slabs; a warning only)
+    'engine/demands.js',     // batch D1 (2026-11-15): the demand source of each girder type (this app / custom table / MIDAS file, the old app's import)
     'engine/design.js',      // PR 2b: the one girder design and its engine inputs (base + the bridge values, PBD.applyBridge)
     'engine/bridge.js',      // PR 3a-1: the girder types on the girder lines of each span (PS-8)
     'engine/bridge-dl.js',   // PR 3a-3: DC2 and DW to each girder line by the Steel Bridge app's method (PS-9; copy of its dead())
@@ -77,6 +78,7 @@
     'ui/inputs.js',      // PR 2b: the girder design's input cards
     'ui/bridgedl.js',    // PR 3a-3: the Cross-section tab's DC2 / DW distribution card and the Loads & LLDF line table
     'ui/types.js',       // PR 3a-1: the girder types card, the "entered values for" choice, the type and line choice above the output tabs
+    'ui/demands.js',     // batch D1 (2026-11-15): the Loads tab's Demands card and the output tabs' demand source line
     'ui/legacy.js',      // PR 2f: the Project tab's "From the old app" card and the import summary
     'ui/bridgexfer.js',  // 2026-11-14 (item 12): BridgeXfer v1 (HANDOFF.md §5, verbatim)
     'ui/handoffs.js',    // 2026-11-14 (item 12): the Project tab's Hand-offs card (the old app's channels, keys and formats)
@@ -280,6 +282,8 @@
   }
   @media print{#sbSplit{display:none!important}}
   /* this app (PR 1) */
+  .dmBanner{border:1px solid var(--accent);border-radius:6px;background:#EFF6FF;padding:6px 9px;margin:6px 0;font-family:var(--font-ui);font-size:9pt;} .dmHead{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;} .dmSpans{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0;} .dmSpans .pri{font-weight:700;outline:2px solid var(--accent);}
+  .dmVals summary{cursor:pointer;font-family:var(--font-ui);font-size:9pt;margin:6px 0;} .dmGuide{max-width:760px;width:calc(100% - 32px);border:2px solid #0f172a;padding:16px 20px;font-family:var(--font-ui);font-size:9.5pt;line-height:1.5;} .dmGuide::backdrop{background:rgba(22,33,46,.55);} .dmGuide h3{margin:0 0 4px;} .dmGuide h4{margin:12px 0 4px;border-bottom:1px solid var(--color-border);}
   .ph{border:1px dashed var(--slate-400);border-radius:6px;background:var(--slate-50);padding:8px 10px;margin:10px 0;font-family:var(--font-ui);font-size:9pt;color:#475569;}
   /* this app (PR 3a-1): girder types (ui/types.js) */
   .tyScope{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0;padding:6px 8px;border:1px solid var(--color-border);border-radius:6px;background:var(--slate-100);font-family:var(--font-ui);font-size:9pt;}
@@ -430,7 +434,7 @@
         + `<section class="sec"><div class="secHead">Strand pattern${sk >= 0 ? ` of ${esc(P.types[sk].label)}` : ''}</div><div class="secBody" id="gfx_strands_in"><p class="note">Shown when the inputs have no error.</p></div></section>`,   // 2026-11-15: the "Girder library PR 4" placeholder removed (the library is in the Girder shape card, PS-37)
       mat: TY.scopeBar(P, ui, 'mat') + IN.cards('mat', V),
       dd: IN.cards('dd', P),
-      loads: TY.scopeBar(P, ui, 'loads') + IN.cards('loads', V),
+      loads: TY.scopeBar(P, ui, 'loads') + DMUI.card(P, ui) + IN.cards('loads', V),   // batch D1: the demand source of the girder type in scope
       own: IN.cards('own', P, ownRes()),
       ad: window.PSBAutoDesignUI.inputs(P)   // item A (2026-11-14): settings and Run (ui/autodesign.js)
     };
@@ -493,7 +497,9 @@
   /* resize(a, n, fill): a list kept at n values when the span or girder count changes (new values: the last one, else fill) */
   const resize = (a, n, fill) => { const b = (a || []).slice(0, Math.max(0, n)); while (b.length < n) b.push(b.length ? b[b.length - 1] : fill); return b; };
   $('inTabs').addEventListener('click', e => { const b = e.target.closest('[data-itab]'); if (!b) return; ui.itab = b.dataset.itab; saveUi(); drawInputs(); });
-  const IN = window.PSBInputsUI, LGUI = window.PSBLegacyUI;
+  const IN = window.PSBInputsUI, LGUI = window.PSBLegacyUI, DMUI = window.PSBDemandsUI;
+  /* batch D1: the Demands card's context (ui/demands.js): one change() = one Undo step */
+  const dmCtx = { changed: () => changed(), toast: (t, u) => toast(t, u), redraw: () => { saveUi(); drawInputs(); } };
   /* 2026-11-14 (item 12): the Hand-offs card (ui/handoffs.js): the girder type and line the output tabs show, its engine inputs and result */
   const hoCtx = { P: () => P, result: () => (errs.length ? null : result()), cell: () => hoCell(), changed: () => changed() };
   HOUI.init();   // the "new data" marks follow the other tools' sends (storage event)
@@ -505,6 +511,7 @@
   $('inPanes').addEventListener('change', e => {
     const el = e.target;
     if (el.dataset.ad) { if (window.PSBAutoDesignUI.onChange(el, P)) changed(); return; }   // item A: the Auto design settings (P.autodesign)
+    if (el.dataset.dm) { DMUI.onChange(el, P, ui, dmCtx); return; }   // batch D1: the Demands card (source, MIDAS file, custom table)
     if (el.dataset.ty) { typesDone(TY.onChange(el, P, ui)); return; }   // PR 3a-1
     if (el.dataset.dl && DLUI.onChange(el, P)) { changed(); return; }   // PR 3a-3
     if (el.dataset.lt) { const [s, g] = el.dataset.lt.split('|').map(Number), k = +el.value; if (el.value !== '' && P.types[k] && P.types[k].span === s) { BR.assignLine(P, k, g); changed(); } return; }   // 2026-11-14: girder type of each line
@@ -536,11 +543,13 @@
     changed();
     if (tyNote) toast(tyNote, true);   // PR 6: Undo = the header's Undo of this one step (the count change and the re-assignment together)
   });
+  $('inPanes').addEventListener('paste', e => { DMUI.onPaste(e, P, ui, dmCtx); });   // batch D1: rows pasted into the custom demand table
   $('inPanes').addEventListener('click', e => {
     const t = e.target, go = t.closest('[data-goin]');
     if (go) { e.preventDefault(); ui.itab = go.dataset.goin; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; return; }
     { const gt = t.closest('[data-gotab]'); if (gt) { e.preventDefault(); gotoOut(gt.dataset.gotab); return; } }   // PS-35: an input note's link to an output tab (the Loads input tab's J note)
     if (LGUI.onClick(e, lgCtx)) return;
+    if (DMUI.onClick(e, P, ui, dmCtx)) return;   // batch D1
     if (HOUI.onClick(e, hoCtx)) return;
     if (window.PSBAutoDesignUI.onClick(e, adCtx())) return;   // item A: Run / Stop / the output tab
     if (DLUI.onClick(e, P)) { changed(); return; }   // PR 3a-3: the added line loads
@@ -659,6 +668,7 @@
     if (!errs.length) { rc = result(); if (rc.R.error) h += `<div class="alert err" role="alert"><b>The engine could not compute this design:</b> ${esc(rc.R.error)}. Results not shown.</div>`; }
     const ok = rc && !rc.R.error;
     if (TABUI[ui.otab] || ui.otab === 'rpt') h += TY.outBar(P);   // PR 3a-1: the girder type and line shown
+    if ((TABUI[ui.otab] || ui.otab === 'rpt') && !errs.length) h += DMUI.srcBar(P);   // batch D1: the demands of the type shown (the steel app's srcBar)
     if (ui.otab === 'lds') h += deNotice();   // PS-23: the entered d_e differs from the computed one
     if (TABUI[ui.otab]) {
       if (ok) { ctxOut = { P, inp: rc.inp, R: rc.R, W: rc.W, ui, all: rc.all || null, redraw: () => { saveUi(); drawOut(); } };   // all (2026-11-15, batch C): every girder type × line, for the tables of every line

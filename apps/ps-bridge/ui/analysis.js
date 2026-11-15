@@ -48,19 +48,36 @@
       body += '<p class="note">The pier section\'s resistance (negative moment, deck bars) and the positive moment connection are worked on the <a href="#" data-gotab="flex">Flexure tab</a>.</p>';
       h += k.card('Continuity for composite loads (5.12.3.3)', body);
     } else h += k.card('Continuity', `<p class="note">${R.L && ctx.P.spans.lengths.length > 1 ? 'Simple spans for all loads' : 'One span'} (Bridge layout tab). Made continuous: girder and DC1 on the simple span; DC2, DW and live load on the continuous unit; restraint moments switchable (5.12.3.3, PS-7).</p>`);
+    if (R.useExt) h += imported(ctx);   // batch D1: the imported demands of the span, as read, linked to the steps that combine them
     h += reactions(ctx);   // 2026-11-15 (batch C): the unfactored reactions (the steel app's table, ui/analysis.js "Reactions (unfactored, kip)")
     h += k.card('Worked steps: analysis', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value; midspan = the engine's station at x = ${k.fx(D[midOf(R)].x, 2)} ft (${D.length} stations).</p>${k.steps(ctx.W.analysis.steps, TOPICS, OPEN)}`);
     return h;
+  }
+  const srcName = ctx => { const D = window.PSBDemands, T = window.PSBDemandsUI ? window.PSBDemandsUI.shownType(ctx.P) : null; return D && T ? D.describe(ctx.P, T).what : 'imported demands'; };
+  /* imported(ctx) (batch D1, 2026-11-15; §6): the stations of the file's span the engine reads (engine/demands.js slice, buildExternal's rule),
+     as read (the file's sign), and as the engine takes them (this app's sign, LL × the factors); each linked to the steps that combine them */
+  function imported(ctx) {
+    const { R, inp } = ctx, k = K(), D = window.PSBDemands, S = D ? D.slice(inp.external, R.L) : null; if (!S) return '';
+    const F = D.fac(inp), fx = (v, d) => k.fx(+v || 0, d), x = R.ext || {};
+    const rows = S.st.map(s => `<tr><td>${fx(s.xr, 2)}</td><td>${fx(s.M_DC2, 1)}</td><td>${fx(s.M_DW, 1)}</td><td>${fx(s.M_LLpos, 1)}</td><td>${fx(s.M_LLneg, 1)}</td><td>${fx(s.V_DC2, 2)}</td><td>${fx(s.V_DW, 2)}</td><td>${fx(s.V_LLpos, 2)}</td><td>${fx(s.V_LLneg, 2)}</td>`
+      + `<td>${fx(F.pos * (+s.M_LLpos || 0), 1)}</td><td>${fx(F.neg * (+s.M_LLneg || 0), 1)}</td><td>${fx(-(+s.V_DC2 || 0), 2)}</td><td>${fx(-(+s.V_DW || 0), 2)}</td><td>${fx(-(+s.V_LLneg || 0) * F.v, 2)}</td><td>${fx(-(+s.V_LLpos || 0) * F.v, 2)}</td></tr>`).join('');
+    return k.card(`Imported demands of the span (${k.esc(srcName(ctx))}${x.sel && x.sel.idx ? `, span ${x.sel.idx} of the file` : ''})`, `<div class="tscroll"><table class="tbl" id="anImported"><thead>
+      <tr><th rowspan="2">x<br>ft</th><th colspan="8">As read (the file's sign; LL per the file)</th><th colspan="6">As the engine takes them (this app's sign; LL × f)</th></tr>
+      <tr><th>M<sub>DC2</sub></th><th>M<sub>DW</sub></th><th>M<sub>LL</sub>+</th><th>M<sub>LL</sub>−</th><th>V<sub>DC2</sub></th><th>V<sub>DW</sub></th><th>V<sub>LL</sub>+</th><th>V<sub>LL</sub>−</th>
+      <th>f<sub>+M</sub>M<sub>LL</sub>+</th><th>f<sub>−M</sub>M<sub>LL</sub>−</th><th>V<sub>DC2</sub></th><th>V<sub>DW</sub></th><th>V<sub>LL</sub>+ = −f<sub>V</sub>V<sub>LL,file</sub>−</th><th>V<sub>LL</sub>− = −f<sub>V</sub>V<sub>LL,file</sub>+</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="note">x from the left bearing of the span (the file's station − ${fx(S.sel.x0, 2)} ft). The engine interpolates linearly between these stations at its own (force effects table above); f = DF × m per effect ${k.wk('ld.xfp', '§', 'lds')}. They are combined with the girder and DC1 of this app in Strength I ${k.wk('an.MuS')}, Service I ${k.wk('an.MsI')} and Service III ${k.wk('an.MsIII')}${R.cont ? `, and at the pier ${k.wk('an.pier.Mu')} (the file's moments at the span ends)` : ''}. Moments kip-ft, shears kip.</p>`);
   }
   /* usedCard(ctx): the loads and factors of the analysis, each the engine's value linked to the step that works it (Loads & LLDF, Section) */
   function usedCard(ctx) {
     const { R } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), L = (id, tab) => k.wk(id, '§', tab), own = R.own;
     return k.card('Loads and factors used', k.kv([['DC1 girder self-weight w<sub>g</sub>', `${ev('wG', 4, 'klf')} ${L('sec.g.wsw', 'sec')}`], ['DC1 on the bare girder w<sub>DC1</sub> (deck, haunch, additional)', `${ev('wDk', 4, 'klf')} ${L('ld.wDC1', 'lds')}`],
       ...(R.nDiaph ? [[`DC1 diaphragms (${R.nDiaph} point loads, simple span)`, `${ev('Pdia', 2, 'kip')} ${L('ld.Pdia', 'lds')}`]] : []),
-      ['DC2 (composite)', `${ev('wBar', 4, 'klf')} ${L('ld.wDC2', 'lds')}`], ['DW (composite)', `${ev('wDW', 4, 'klf')} ${L('ld.wDW', 'lds')}`],
-      ['DF<sub>M</sub> / DF<sub>V</sub>', `${ev('dfm', 4)} ${L('ld.dfm', 'lds')} / ${ev('dfv', 4)} ${L('ld.dfv', 'lds')}`], ['η (Strength I) / m (HL-93)', `${own ? ev('own.eta', 4) : '1.0000'} / ${own ? ev('own.mLL', 2) : '1.00'} ${L('ld.eta', 'lds')}`],
+      ...(R.useExt ? [['DC2, DW and LL+IM (composite)', `imported: ${k.esc(srcName(ctx))} (Imported demands card below)`], ['Factors on the imported LL+IM f<sub>+M</sub> / f<sub>−M</sub> / f<sub>V</sub>', `${L('ld.xfp', 'lds')} / ${L('ld.xfn', 'lds')} / ${L('ld.xfv', 'lds')}`]]   // batch D1
+        : [['DC2 (composite)', `${ev('wBar', 4, 'klf')} ${L('ld.wDC2', 'lds')}`], ['DW (composite)', `${ev('wDW', 4, 'klf')} ${L('ld.wDW', 'lds')}`],
+      ['DF<sub>M</sub> / DF<sub>V</sub>', `${ev('dfm', 4)} ${L('ld.dfm', 'lds')} / ${ev('dfv', 4)} ${L('ld.dfv', 'lds')}`]]), ['η (Strength I) / m (HL-93)', `${own ? ev('own.eta', 4) : '1.0000'} / ${own ? ev('own.mLL', 2) : '1.00'} ${L('ld.eta', 'lds')}`],
       ['Load combinations', `Strength I ${k.wk('an.MuS')}, Service I ${k.wk('an.MsI')}, Service III ${k.wk('an.MsIII')} (Table 3.4.1-1)`]])
-      + `<p class="note">Girder and DC1 on the simple span${R.fe ? '; DC2, DW and the live load on the continuous unit (Continuity card below)' : ''}; live load HL-93 with IM = 33 % and the distribution factors (<a href="#" data-gotab="lds">Loads &amp; LLDF tab</a>, where each load is worked).</p>`);
+      + (R.useExt ? `<p class="note">Girder and DC1 on the simple span (this app); DC2, DW and the live load (with impact, × DF m per effect) from the imported demands, interpolated at the engine's stations (<a href="#" data-gotab="lds">Loads &amp; LLDF tab</a>, where the factors are worked).</p>`
+        : `<p class="note">Girder and DC1 on the simple span${R.fe ? '; DC2, DW and the live load on the continuous unit (Continuity card below)' : ''}; live load HL-93 with IM = 33 % and the distribution factors (<a href="#" data-gotab="lds">Loads &amp; LLDF tab</a>, where each load is worked).</p>`));
   }
   /* reactions(ctx): the unfactored end reactions of this girder line: the engine's own bxSuperRxPayload (engine/handoffs.js srPayload, the
      numbers "Send reactions to Substructure Loading" sends), worked here as that function finds them (no other arithmetic) */
@@ -71,7 +88,8 @@
     const p = b.payload, fx = (v, d) => k.fx(v, d), Lf = +R.L, S = p.supports, ll = p.liveLoad;
     const rows = S.map((q, i) => { const g = q.girders[0]; return `<tr><td class="lft">${k.esc(q.id)} (x = ${fx(q.x, 2)} ft)</td><td>${fx(g.DC1, 2)}</td><td>${fx(g.DC2, 2)}</td><td>${fx(g.DW, 2)}</td>${ll ? `<td>${fx(ll.supports[i].Rmax, 2)}</td>` : ''}</tr>`; }).join('');
     const dia = (inp.loads.diaph || []).filter(d => +d.P > 0 && +d.a >= 0 && +d.a <= Lf);
-    const wk1 = R.fe ? `DC2 and DW: the end shears of this span on the continuous unit, as reactions (+ up), w × V<sub>w</sub> per klf: DC2 = ${fx(R.wBar, 4)} × ${fx(R.fe.Vw(0), 4)} = ${fx(S[0].girders[0].DC2, 3)} kip at ${k.esc(S[0].id)} (V<sub>w</sub>: the end shear per klf on every span of the engine's model of the continuous unit, whose midspan moment M<sub>w</sub> is worked ${k.wk('an.Mw')}).`
+    const wk1 = R.useExt ? `DC2 and DW: the imported shears at the two ends of the span (the file's, sign-corrected to reactions, + up; the engine's own bxSuperRxPayload): DC2 ${fx(S[0].girders[0].DC2, 3)} / ${fx(S[1].girders[0].DC2, 3)} kip, DW ${fx(S[0].girders[0].DW, 3)} / ${fx(S[1].girders[0].DW, 3)} kip (the imported values: Imported demands card). At an interior pier these are this span's share only.`   // batch D1
+      : R.fe ? `DC2 and DW: the end shears of this span on the continuous unit, as reactions (+ up), w × V<sub>w</sub> per klf: DC2 = ${fx(R.wBar, 4)} × ${fx(R.fe.Vw(0), 4)} = ${fx(S[0].girders[0].DC2, 3)} kip at ${k.esc(S[0].id)} (V<sub>w</sub>: the end shear per klf on every span of the engine's model of the continuous unit, whose midspan moment M<sub>w</sub> is worked ${k.wk('an.Mw')}).`
       : `DC2 = w<sub>DC2</sub> L / 2 = ${fx(R.wBar, 4)} (${fx(Lf, 2)}) / 2 = ${fx(S[0].girders[0].DC2, 3)} kip; DW = w<sub>DW</sub> L / 2 = ${fx(R.wDW, 4)} (${fx(Lf, 2)}) / 2 = ${fx(S[0].girders[0].DW, 3)} kip.`;
     const wkDC1 = `DC1 at ${k.esc(S[0].id)} = (w<sub>g</sub> + w<sub>DC1</sub>) L / 2${dia.length ? ' + Σ P (L − a) / L' : ''} = (${fx(R.wG, 4)} + ${fx(R.wDk, 4)})(${fx(Lf, 2)}) / 2${dia.length ? ` + ${dia.map(d => `${fx(+d.P, 2)}(${fx(Lf, 2)} − ${fx(+d.a, 2)}) / ${fx(Lf, 2)}`).join(' + ')}` : ''} = ${fx(S[0].girders[0].DC1, 3)} kip (w<sub>g</sub> ${k.wk('sec.g.wsw', '§', 'sec')}, w<sub>DC1</sub> ${k.wk('ld.wDC1', '§', 'lds')}${dia.length ? `, P ${k.wk('ld.Pdia', '§', 'lds')}` : ''}).`;
     return k.card('Reactions (unfactored, kip)', `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Support</th><th>DC1</th><th>DC2</th><th>DW</th>${ll ? '<th>LL per lane (no IM, no DF)</th>' : ''}</tr></thead><tbody>${rows}</tbody></table></div>
