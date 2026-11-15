@@ -4,7 +4,14 @@
 //   1. Bridge layout tab: span 1 typed into its row, then (a) a click on another input tab straight from the cell, (b) Tab out of the cell
 //      and a click on another input tab: the saved spans.lengths holds the new value (before the fix it was lost);
 //   2. Cross-section tab: a girder spacing typed into its row, then a click on another input tab: saved xs.bays holds it;
-//   3. the plain case (the focus leaves the table to another input of the same tab) still commits once; 0 console errors.
+//   3. the plain case (the focus leaves the table to another input of the same tab) still commits once;
+//   4-6 (SBLT, 2026-11-15): the lists drawn only in some states, when the next event redraws to a state without an input of the same id:
+//   4. Loads tab, Pours (#an_a_seqCustom): a row typed, then a click on another input tab: saved analysis.seqCustom holds it;
+//   5. Auto design, design variables dialog, Station windows (#ad_win, drawn only while the splice variable is "Range"): a window typed,
+//      then the splice variable's mode changed to Lock (no blur first): saved autodesign.vars.spl.win holds it (before: lost);
+//   6. a project with a stored cross-frame point load entry (#an_l_xf, drawn only for that entry): (a) a load typed, then a click on
+//      another input tab: kept; (b) a load typed for girder type 1, then the Loads tab's girder type changed to type 2 (no blur first):
+//      saved on type 1 (before: lost), type 2 unchanged; 0 console errors.
 //   node tests/smoke/steel-bridge-list-commit.mjs [--file <html>]
 import path from 'path';
 import { openPage, REPO } from '../lib.mjs';
@@ -37,6 +44,35 @@ try {
   await p.focus('#inPanes [id="i_spans.continuity"]'); await p.waitForTimeout(500);
   P = await saved(p); ok(P.spans.lengths[0] === 113, `3. span 1 typed, focus to another input: saved ${JSON.stringify(P.spans.lengths)}`);
   ok(JSON.stringify(P.spans.lengths.slice(1)) === JSON.stringify(L0.slice(1)), `other spans unchanged ${JSON.stringify(P.spans.lengths)}`);
+  // 4. Pours on the Loads tab, then a click on another input tab
+  await tab('loads');
+  const pour = (r, k) => `#inPanes #an_a_seqCustom + [data-sli="host"] tr[data-sli-r="${r}"] input[data-sli-c="${k}"]`;
+  await p.fill(pour(0, 0), '0'); await p.fill(pour(0, 1), '75'); await tab('layout'); await p.waitForTimeout(300);
+  P = await saved(p); ok((P.analysis || {}).seqCustom === '0-75', `4. pour typed, input tab clicked: saved seqCustom ${JSON.stringify((P.analysis || {}).seqCustom)}`);
+  // 5. Station windows in the design variables dialog, then the variable's mode changed so the windows box is not drawn again
+  await tab('ad'); await p.click('#ad_vars_edit'); await p.waitForTimeout(300);
+  await p.selectOption('#adVarsBody select[data-adv="spl.mode"]', 'range'); await p.waitForTimeout(600);
+  const win = (r, k) => `#adVarsBody #ad_win + [data-sli="host"] tr[data-sli-r="${r}"] input[data-sli-c="${k}"]`;
+  await p.fill(win(0, 0), '61'); await p.fill(win(0, 1), '81');
+  await p.selectOption('#adVarsBody select[data-adv="spl.mode"]', 'lock'); await p.waitForTimeout(600);
+  P = await saved(p); const V = ((P.autodesign || {}).vars || {}).spl || {};
+  ok(V.win === '61-81' && V.mode === 'lock', `5. window typed, mode set to Lock: saved vars.spl ${JSON.stringify(V)}`);
+  await p.click('#adVarsClose'); await p.waitForTimeout(300);
+  // 6. a stored cross-frame point load entry (a project saved with the entry and the cross-frame weights off)
+  P = await saved(p); P.crossframes.weight = { ...(P.crossframes.weight || {}), mode: 'off' };
+  P.girders[0].loadsManual = { ...(P.girders[0].loadsManual || {}), xf: [{ x: 20, P: 1.5 }, { x: 45, P: 2 }] };
+  const g1 = P.girders[1] && JSON.stringify((P.girders[1].loadsManual || {}).xf);
+  await p.evaluate(t => localStorage.setItem('sbd2.project.current', t), JSON.stringify(P)); await p.reload();
+  await p.waitForSelector('#inTabs [data-itab="loads"]'); await p.waitForTimeout(1500);
+  await tab('loads'); await p.selectOption('#i__gLd', '0'); await p.waitForTimeout(500);
+  const xf = (r, k) => `#inPanes #an_l_xf + [data-sli="host"] tr[data-sli-r="${r}"] input[data-sli-c="${k}"]`;
+  ok(!!(await p.$(xf(0, 0))) && P.girders.length > 1, `6. the stored entry is drawn as a table (girder types: ${P.girders.length})`);
+  await p.fill(xf(0, 0), '22'); await tab('layout'); await p.waitForTimeout(300);
+  P = await saved(p); ok(JSON.stringify(P.girders[0].loadsManual.xf) === '[{"x":22,"P":1.5},{"x":45,"P":2}]', `6a. load typed, input tab clicked: saved ${JSON.stringify(P.girders[0].loadsManual.xf)}`);
+  await tab('loads'); await p.fill(xf(1, 1), '2.5'); await p.selectOption('#i__gLd', '1'); await p.waitForTimeout(600);
+  P = await saved(p); ok(JSON.stringify(P.girders[0].loadsManual.xf) === '[{"x":22,"P":1.5},{"x":45,"P":2.5}]', `6b. load typed, girder type changed: type 1 saved ${JSON.stringify(P.girders[0].loadsManual.xf)}`);
+  ok(JSON.stringify((P.girders[1].loadsManual || {}).xf) === g1, `6b. type 2 unchanged: ${JSON.stringify((P.girders[1].loadsManual || {}).xf)}`);
+  ok(await p.inputValue('#i__gLd') === '1', '6b. the girder type changed to type 2');
   ok(A.errs.length === 0, `console errors: ${A.errs.slice(0, 3).join(' | ')}`);
 } finally { await A.b.close(); }
 console.log(fails ? `${fails} FAILED` : 'all passed');
