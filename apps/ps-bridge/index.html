@@ -725,7 +725,8 @@
     const gi = e.target.closest('[data-goin]'); if (gi) { e.preventDefault(); ui.itab = gi.dataset.goin; saveUi(); drawInputs(); $('inputPanel').scrollIntoView({ block: 'start' }); return; }
     // a link to another output tab (and to a worked step there): that tab, then the step with its topic opened
     const gt = e.target.closest('[data-gotab]'); if (gt) { e.preventDefault(); gotoOut(gt.dataset.gotab); const h = gt.getAttribute('href') || '';
-      if (/^#st-/.test(h)) { const el = window.SharedSteps.reveal($('out'), h.slice(4)); if (el) el.scrollIntoView({ block: 'center' }); } }
+      if (/^#st-/.test(h)) { const el = window.SharedSteps.reveal($('out'), h.slice(4)); if (el) el.scrollIntoView({ block: 'center' }); }
+      if (/^#rp:/.test(h) && window.PSBReportUI && window.PSBReportUI.state.V) window.PSBReportUI.state.V.jump(h.slice(4)); }   // ADB (2026-11-15): a Report subsection (the Auto design basis)
   });
   $('out').addEventListener('change', e => { if (e.target.dataset.ty) { typesDone(TY.onChange(e.target, P, ui)); return; }   // PR 3a-1: the type and line shown
     if (window.PSBSumElev && window.PSBSumElev.onChange(e.target)) { drawOut(); return; }   // 2026-11-14: the Summary elevation's girder type (the page session only)
