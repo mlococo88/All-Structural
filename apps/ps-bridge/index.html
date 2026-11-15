@@ -506,7 +506,7 @@
   /* 2026-11-14 (item 12): the Hand-offs card (ui/handoffs.js): the girder type and line the output tabs show, its engine inputs and result */
   const hoCtx = { P: () => P, result: () => (errs.length ? null : result()), cell: () => hoCell(), changed: () => changed(),
     toast: (t, u) => toast(t, u), redraw: () => drawOut(),   // batch D3: + the MCT banners' notice and redraw
-    all: () => (errs.length ? null : allResults(true)), redrawIn: () => drawInputs() };   // batch F: every girder type on every line (the page's cache, as the Report); the card's "Last sent"
+    all: () => (errs.length ? null : allResults(true)), redrawIn: () => drawInputs(), pick: (k, g) => pick(k, g) };   // batch F3: pick = the design beam chip's Show G<i>   // batch F: every girder type on every line (the page's cache, as the Report); the card's "Last sent"
   HOUI.init(() => drawOut());   // the "new data" marks follow the other tools' sends (storage event); batch D3: the MCT banners too
   /* PR 2f: "From the old app" (ui/legacy.js): an import replaces the open project, as Import JSON does (asked first there) */
   const lgCtx = { store: LS, gotoOut: t => gotoOut(t), pickFile: () => pb.importJSON(),   // PR 5: asks first on unsaved changes, then the file chooser
@@ -667,6 +667,7 @@
     if (L.note) h += `<div class="alert err">${esc(L.note)}</div>`;
     h += secNotice();   // PS-31: the old box / voided slab section corrected (or removed)
     h += HOUI.mctBanner(P);   // batch D3: the MCT demands hand-off and geometry changes (click only)
+    h += HOUI.beamChip(P);    // batch F3: the old app's Design beam chip (LL & DL's design beam; read only, Show G<i> by click)
     if (errs.length) h += window.PSBInputCheckUI.blocked(errs, icO());
     h += `<div class="alert">In development: Section properties, Loads &amp; LLDF, Analysis, Losses, Stresses, Flexure, Shear, End zone &amp; hold-down, Camber &amp; deflection, Handling, Deck and Rating show the results of the girder type and line chosen above them; the Summary, the check summary column and the Report cover every girder type on every line. Use the old <a href="../../Prestressed%20Bridge%20Design.html">Prestressed Bridge Design</a> for design work.</div>`;
     const name = (OTABS.find(t => t[0] === ui.otab) || [, ''])[1];

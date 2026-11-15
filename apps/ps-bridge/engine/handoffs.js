@@ -32,6 +32,7 @@
      srAll(P, cells), sgPayload(P, cells), secDims(g)   batch F (2026-11-15): Bridge Substructure Loading in the Steel Bridge app's
                               formats: superReactions of every girder line (allGirders, HANDOFF.md §4.4) from each cell's srPayload,
                               summed at the piers; superGeometry (§4.14) from the inputs and each girder type's section.
+     dbState(P, get)          batch F3: the shared design beam and its roster (the old app's chip), read only.
    No engineering value is computed here beyond what the old app's code computed for the same payload (batch F: the sum of the two spans'
    end reactions at a pier, and the largest of the section dimensions). */
 (function () {
@@ -397,7 +398,34 @@
     return { ok: true, payload, sum: `${HS ? HS.summary('superGeometry', payload) : ns + ' spans'}; skews ${skews.map(f2).join(', ')} deg; overhangs ${f2(+xs.ohL)} / ${f2(+xs.ohR)} ft; deck ${f2(ts.v)} in, haunch ${f2(th.v)} in; girder depth ${f3(sec.depth)} in (largest)` };
   }
 
+  /* ---- batch F3 (2026-11-15): the old app's "Design beam" chip (O:8962-8984 BeamChip, BridgeBeam O:515-565), read only ----
+     dbState(P, get): the shared design beam of LL & DL Distribution (bridgeSuite.v1.designBeam, schema bridge-design-beam) and its beam
+     roster (bridgeSuite.v1.beamRoster, bridge-beam-roster), read as BridgeBeam.rd reads them (schema, version <= 1), and what they mean
+     here: mismatch (the old app's BridgeBeam.mismatch: the roster's Nb against this bridge's xs.nb), the line of the same number (the old
+     app's beam numbers are the girder lines; only when the counts match), its girder type in the span shown, and whether LL & DL's
+     interior / exterior class of that beam agrees with the line's position here (G1 and G<nb> exterior). get(key) returns the stored
+     text. -> null (nothing published) | { sel, roster, nb, mismatch: { mine, roster } | null, g, k, s, pos, theirs, posWarn } */
+  const DB_K = { sel: 'bridgeSuite.v1.designBeam', ros: 'bridgeSuite.v1.beamRoster' };
+  function dbRead(get, k, sch) { try { const raw = get(k); if (!raw) return null; const o = JSON.parse(raw); if (!o || o._schema !== sch || (o.schemaVersion || 1) > 1) return null; return o; } catch (e) { return null; } }
+  function dbState(P, get) {
+    const sel = dbRead(get, DB_K.sel, 'bridge-design-beam'), roster = dbRead(get, DB_K.ros, 'bridge-beam-roster');
+    if (!sel && !roster) return null;
+    const nb = Math.round(+(P && P.xs && P.xs.nb)) || null, BRm = W.PSBBridge;
+    const mismatch = roster && roster.Nb && nb && +nb !== +roster.Nb ? { mine: +nb, roster: +roster.Nb } : null;
+    const o = { sel, roster, nb, mismatch, g: null, k: -1, s: null, pos: '', theirs: '', posWarn: false };
+    const i = sel ? Math.round(+sel.index) : NaN;
+    if (!mismatch && nb && i >= 1 && i <= nb) {
+      const d = BRm && BRm.sel ? BRm.sel(P) : { s: 1 }; o.g = i; o.s = d.s;
+      o.k = BRm && BRm.hasTypes(P) ? BRm.typeAt(P, d.s, i) : -1;
+      o.pos = i === 1 || i === nb ? 'exterior' : 'interior';
+      const t = sel.type || (roster && (roster.beams || []).find(b => +b.i === i) || {}).type;
+      o.theirs = t === 'ext' ? 'exterior' : t === 'int' ? 'interior' : '';
+      o.posWarn = !!o.theirs && o.theirs !== o.pos;
+    }
+    return o;
+  }
+
   W.PSBHandoffs = { PRODUCER, SR_ID, RX, applyLoads, dlBlocked, srPayload, psSection, capacity, CAP_BASIS, lldfGeom, lldfResolve, lldfTheirs, lldfFields, dlResolve, dlTheirs,
     PM, PM_LABELS, pmFields, pmPlan, MCT_VERSION, MCT_K, verOf, tokenOf, mctPending, mctDescribe, mctPlan, geomPending,
-    GEO_ID, srAll, secDims, sgPayload };   // batch F (2026-11-15)
+    GEO_ID, srAll, secDims, sgPayload, DB_K, dbState };   // batch F (2026-11-15)
 })();
