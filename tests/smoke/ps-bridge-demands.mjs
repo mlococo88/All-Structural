@@ -75,13 +75,14 @@ try {
   await otab('an'); await p.waitForSelector('#o_dmView');
   assert.equal(await p.$$eval('#o_dmView option', o => o.map(x => x.value).join()), 'design,s1,s2,s3,all');
   await p.selectOption('#o_dmView', 's2'); await p.waitForSelector('#anViewTbl');
-  const v2 = await p.evaluate(() => [...document.querySelectorAll('#anViewTbl tbody tr')].map(tr => +tr.children[0].textContent));
+  const v2 = await p.evaluate(() => [...document.querySelectorAll('#anViewTbl tbody tr')].map(tr => +tr.children[0].textContent.replace(/,/g, '')));
   assert.ok(v2.length > 5 && v2[0] >= 110 && v2[0] < 115 && v2[v2.length - 1] > 240 && v2[v2.length - 1] <= 250, 'span 2 stations ' + v2.join());
-  assert.ok(await p.$('#gfx_dmview svg'), 'view chart'); assert.match(await out(), /Worked: Mu\+ at x = /);
+  assert.ok(await p.$('#gfx_dmview svg'), 'view chart');
+  if (process.env.SHOTS) await p.screenshot({ path: path.join(process.env.SHOTS, 'D2-analysis-view-span2.png') }); assert.match(await out(), /Worked: Mu\+ at x = /);
   // Strength I of the view = the old app's: η(1.25(M_DC1 + M_DC2) + 1.50 M_DW + 1.75 m M_LL+) of the file's row (AASHTO: η = m = 1)
   const row = mct.stations.find(s => s.x === 180) || mct.stations.find(s => s.x > 110 && s.x < 250);
   const Mu = 1.25 * (row.M_DC1 + row.M_DC2) + 1.5 * row.M_DW + 1.75 * row.M_LLpos;
-  const shown = await p.evaluate(x => { const tr = [...document.querySelectorAll('#anViewTbl tbody tr')].find(t => +t.children[0].textContent === x); return tr ? +tr.children[6].textContent : NaN; }, row.x);
+  const shown = await p.evaluate(x => { const tr = [...document.querySelectorAll('#anViewTbl tbody tr')].find(t => +t.children[0].textContent.replace(/,/g, '') === x); return tr ? +tr.children[6].textContent.replace(/,/g, '').replace(/\u2212/g, '-') : NaN; }, row.x);
   assert.ok(Math.abs(shown - Mu) <= 0.5, `M_u+ at ${row.x}: ${shown} vs ${Mu}`);
   await p.selectOption('#o_dmView', 'all'); await p.waitForTimeout(300);
   assert.equal(await p.evaluate(() => document.querySelectorAll('#anViewTbl tbody tr').length), mct.stations.length);
