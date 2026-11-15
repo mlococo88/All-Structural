@@ -7435,7 +7435,7 @@ PR #1580: https://github.com/mlococo88/All-Structural/pull/1580
 - None (the Steel app's rating is its own engine; not changed).
 
 ## 2026-11-15 — Batch G1–G3: the Section tab's weak-axis I_y, S_y and torsion J (worked), P_jack and the eccentricity / effective A_ps chart; every load case of the old app on the Analysis chart (display only)
-PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__
+PR #1582: https://github.com/mlococo88/All-Structural/pull/1582
 ### Request
 - Old-vs-new review 2026-11-15, rows #69/#71 (I_y, S_y, J and their derivation, O:6510-6621), #72 (eccentricity and effective A_ps along the span, O:6623-6630), #21 (P_jack hint, O:6074), #61 (the Analysis chart's 11 moment and 10 shear series with toggles kept, O:8035-8131).
 ### What changed
