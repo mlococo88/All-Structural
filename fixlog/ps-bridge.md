@@ -5141,7 +5141,7 @@ PR #1571: https://github.com/mlococo88/All-Structural/pull/1571
 - `apps/steel-bridge/ui/lists.js` (PR #1568): the same code. The two copies differ only in comments, the selector list and the namespace.
 
 ## 2026-11-15 — Batch C: the tables the Steel Bridge app has — dead loads and LLDF of every girder line, Analysis reactions / loads and factors used / girder elevation, Report "every station" detail and §1 girder elevations (display only)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1572: https://github.com/mlococo88/All-Structural/pull/1572
 ### Request
 - PS Bridge catch-up batch C (review 2026-11-15, ps-vs-steel O10, O12, O13, O14, R4, R6).
 - Add the steel app's tables from existing engine results; no new formula. Display only.
