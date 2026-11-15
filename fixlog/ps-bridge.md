@@ -7789,7 +7789,7 @@ index 12ea514..f1339ef 100644
      return true;
 diff --git a/apps/ps-bridge/ui/strandedit.js b/apps/ps-bridge/ui/strandedit.js
 new file mode 100644
-index 0000000..911b09f
+index 0000000..4de1d1b
 --- /dev/null
 +++ b/apps/ps-bridge/ui/strandedit.js
 @@ -0,0 +1,147 @@
@@ -7900,7 +7900,7 @@ index 0000000..911b09f
 +    const { rows, R } = ctx, g = R.g, key = ctx.scopeKey, log = S.log[key] || [], dirty = !!S.start[key] && JSON.stringify(S.start[key]) !== JSON.stringify(rows), r = S.sel != null ? rows[S.sel] : null, pr = g.isNext ? 'pair' : 'strand';
 +    let h = `<div class="fRow" style="gap:6px;flex-wrap:wrap"><button type="button" data-se="mode" aria-pressed="${S.add}"${g.isNext ? ' disabled title="NEXT beams: add strands in the table (the stems are filled in pairs)"' : ''}>${S.add ? '● Adding: click a grid slot' : '+ Add strands'}</button>
 +      <button type="button" data-se="revert"${dirty ? '' : ' disabled'} title="Put the straight rows back as they were before the first edit on this graphic in this page view (one Undo step)">↺ Revert strand edits</button>
-+      <span class="vk-seg" role="group" aria-label="Section"><button type="button" data-se="view" data-v="end" aria-pressed="${S.view === 'end'}">At ℄ bearing</button><button type="button" data-se="view" data-v="mid" aria-pressed="${S.view === 'mid'}">At midspan</button></span></div>
++      <span role="group" aria-label="Section">${[['end', 'At ℄ bearing'], ['mid', 'At midspan']].map(([v, t]) => `<button type="button" data-se="view" data-v="${v}" aria-pressed="${S.view === v}"${S.view === v ? ' style="font-weight:700;border-color:#1E3A5F"' : ''}>${t}</button>`).join('')}</span></div>
 +      <div id="seFig"></div>`;
 +    if (r) h += `<div class="alert" id="seRow" style="background:#F7FAFF;border-color:#2563EB"><b>Row ${S.sel + 1}: ${r.n} strands at y = ${fx(+r.y, 2)} in</b>${+r.nd > 0 && +r.dbnd > 0 ? ` · ${r.nd} debonded ${fx(+r.dbnd, 2)} ft` : ''}
 +      <div class="fRow" style="gap:6px;flex-wrap:wrap;margin-top:6px"><button type="button" data-se="debond">${+r.nd > 0 ? '↻ Debond the next ' + pr + ' (cycles to none)' : '⌁ Debond a ' + pr}</button><button type="button" data-se="up">↑ Row +1 in</button><button type="button" data-se="down">↓ Row −1 in</button>

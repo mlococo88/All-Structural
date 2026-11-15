@@ -13,7 +13,6 @@ const shots = (i => i > 0 ? process.argv[i + 1] : null)(process.argv.indexOf('--
 let n = 0; const ok = m => { n++; console.log('  ok  ', m); }; const t0 = Date.now();
 const { b, p, errs } = await openPage(path.join(REPO, 'apps/ps-bridge/index.html'), { vw: 1400, vh: 1000 });
 const rows = () => p.evaluate(() => PSBModel.load(localStorage).project.base.rows.map(r => ({ n: r.n, y: r.y, nd: r.nd, dbnd: r.dbnd })));
-p.on('dialog', d => d.accept());
 try {
   await p.waitForFunction(() => window.PSBStrandEdit && document.getElementById('out').innerText.length > 50, null, { timeout: 120000 });
   await p.click('#inTabs [data-itab="gird"]'); await p.waitForSelector('#strandEditHost svg');
@@ -38,7 +37,7 @@ try {
   const before = JSON.stringify(await rows()); await p.click('#seRow [data-se="down"]'); await p.waitForSelector('#seErr');
   assert.match(await p.textContent('#seErr'), /Not changed: moved the row to y = 1 in would put a strand outside the input check's strand fit/); assert.equal(JSON.stringify(await rows()), before);
   ok('a move that would not fit: refused with the reason, nothing changed');
-  assert.match(await p.textContent('#seLog'), /Strand edits from the graphic \(1\)[\s\S]*Added 1 strand at y = /); ok('the edit log lists the edit');
+  assert.match(await p.textContent('#seLog'), /Strand edits from the graphic \(2\)[\s\S]*Added 1 strand at y = [\s\S]*Debonded 1 of /); ok('the edit log lists both edits, newest first (the undone debond kept, as the old app)');
   await p.click('#strandEditHost [data-se="revert"]'); await p.waitForTimeout(400);
   assert.deepEqual(await rows(), r0); ok('↺ Revert strand edits: the rows as before the first edit');
   if (shots) await p.locator('#card-strandEdit').screenshot({ path: path.join(shots, 'G5-reverted.png') });
