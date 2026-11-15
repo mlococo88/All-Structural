@@ -20,7 +20,12 @@
   function output(ctx) {
     const { R, inp, ui } = ctx, k = K(), ev = (p, d, u, div) => k.ev(R, p, d, u, div), wk = k.wk, D = R.diagrams, sel = selOf(ui, R), c = R.cont;
     const simple = !R.fe && !R.useExt;
-    let h = K().gcard('Analysis graphic: girder elevation', 'gfxr_anel') + K().gcard('Analysis graphic: envelopes along the girder', 'gfx_an');   // gfxr_anel (2026-11-15, batch C): screen only
+    // batch D2 (2026-11-15; the old app's Diagrams tab O:8036-8118): an imported member of more than one span: view another span or the
+    // whole member from the file; the design and its checks stay on the span used
+    const V = ctx.ui && ctx.ui.otab ? viewOf(ctx) : null;   // the page only (its ui); the Report shows the design span
+    if (V && V.vr) return viewBar(ctx, V) + viewOut(ctx, V);
+    let h = (V ? viewBar(ctx, V) : '') + (R.useExt ? `<div class="srcBar ex" id="anExtNote">The force effects below are the imported demands over span ${k.esc(String((R.ext && R.ext.sel && R.ext.sel.idx) || '—'))} of the file (${k.fx(R.ext && R.ext.spanLen, 0)} ft): DC2, DW unfactored; LL± the envelope branches with impact, × DF m per effect (Loads &amp; LLDF tab). The girder self-weight and DC1 are computed by this app on the simple span.</div>` : '');
+    h += K().gcard('Analysis graphic: girder elevation', 'gfxr_anel') + K().gcard('Analysis graphic: envelopes along the girder', 'gfx_an');   // gfxr_anel (2026-11-15, batch C): screen only
     h += usedCard(ctx);   // 2026-11-15 (batch C): the loads and factors the analysis uses (the steel app's card), each linked to its work
     // the station table: every sixth station of the engine's and the selected one
     const idx = D.map((r, i) => i).filter(i => (ui && ui.every) || i % 6 === 0 || i === sel);   // ui.every: the Report's "every station" detail (2026-11-15)
@@ -66,6 +71,51 @@
       <tr><th>M<sub>DC2</sub></th><th>M<sub>DW</sub></th><th>M<sub>LL</sub>+</th><th>M<sub>LL</sub>−</th><th>V<sub>DC2</sub></th><th>V<sub>DW</sub></th><th>V<sub>LL</sub>+</th><th>V<sub>LL</sub>−</th>
       <th>f<sub>+M</sub>M<sub>LL</sub>+</th><th>f<sub>−M</sub>M<sub>LL</sub>−</th><th>V<sub>DC2</sub></th><th>V<sub>DW</sub></th><th>V<sub>LL</sub>+ = −f<sub>V</sub>V<sub>LL,file</sub>−</th><th>V<sub>LL</sub>− = −f<sub>V</sub>V<sub>LL,file</sub>+</th></tr></thead><tbody>${rows}</tbody></table></div>
       <p class="note">x from the left bearing of the span (the file's station − ${fx(S.sel.x0, 2)} ft). The engine interpolates linearly between these stations at its own (force effects table above); f = DF × m per effect ${k.wk('ld.xfp', '§', 'lds')}. They are combined with the girder and DC1 of this app in Strength I ${k.wk('an.MuS')}, Service I ${k.wk('an.MsI')} and Service III ${k.wk('an.MsIII')}${R.cont ? `, and at the pier ${k.wk('an.pier.Mu')} (the file's moments at the span ends)` : ''}. Moments kip-ft, shears kip.</p>`);
+  }
+  /* ---- batch D2 (2026-11-15): the views of an imported member (the old app's "View span", O:8039-8058, 8100-8118) ----
+     viewOf(ctx): null without imported demands of a member of 2 or more spans (a file only; a custom table is one span of this bridge);
+     else { spans, sel (the span used), len (the member), vr (the view chosen: { x0, x1, label, sp }) or null (the design span) }.
+     ui.dmView: 'design' | 's<n>' | 'all' (the page's psb2.ui, per browser; absent = the design span, as the old app's default). */
+  function viewOf(ctx) {
+    const { R, inp, ui } = ctx, x = inp.external, D = window.PSBDemands;
+    if (!R.useExt || !D || !D.isFile(x) || x.source === 'custom table') return null;
+    const sp = D.spans(x); if (sp.length < 2) return null;
+    const len = (x.member && x.member.totalLength) || Math.max(...x.stations.map(s => +s.x || 0)), v = (ui && ui.dmView) || 'design';
+    const q = v === 'all' ? { x0: 0, x1: len, label: 'Entire beam' } : v !== 'design' ? (() => { const s = sp.find(t => 's' + t.idx === v); return s ? { x0: s.x0, x1: s.x1, label: 'Span ' + s.idx, sp: s } : null; })() : null;
+    return { spans: sp, sel: (R.ext && R.ext.sel) || {}, len, vr: q, v: q ? v : 'design' };
+  }
+  function viewBar(ctx, V) {
+    const k = K(), i = V.sel.idx, f0 = v => k.fx(+v, 0);
+    return `<div class="dmBanner" id="anViewBar"><div class="fRow"><label for="o_dmView">View span (imported member)</label><select id="o_dmView">
+      <option value="design"${V.v === 'design' ? ' selected' : ''}>Design span — span ${i} of the file (${f0(V.sel.len)} ft)</option>
+      ${V.spans.map(s => `<option value="s${s.idx}"${V.v === 's' + s.idx ? ' selected' : ''}>Span ${s.idx} (${f0(s.x0)}–${f0(s.x1)} ft)${s.idx === i ? ' • current' : ''}</option>`).join('')}
+      <option value="all"${V.v === 'all' ? ' selected' : ''}>Entire beam (0–${f0(V.len)} ft)</option></select></div>
+      ${V.vr && V.vr.sp && V.vr.sp.idx !== i ? `<button type="button" class="btn sm" data-dmdesign="${V.vr.sp.idx}">Design span ${V.vr.sp.idx} →</button> ` : ''}<span class="note">Design and checks stay on span ${i} of the file${V.vr && V.vr.sp && V.vr.sp.idx !== i ? `; "Design span ${V.vr.sp.idx}" makes the girder type shown use span ${V.vr.sp.idx} of the file (Loads tab, Demands card; one Undo step)` : ''}.</span></div>`;
+  }
+  /* viewRows(ctx, V): the file's stations in the view (member coordinates) and Strength I from them, the old app's own view (O:8053-8058):
+     M_u± = η(1.25(M_DC1 + M_DC2) + 1.50 M_DW + 1.75 m M_LL±), the same for V; the file's values as read (its DC1, its LL without this app's
+     DF × m per effect, its shear sign), η and m of the owner */
+  function viewRows(ctx, V) {
+    const { R, inp } = ctx, e = R.own ? R.own.eta : 1, m = R.own ? R.own.mLL : 1, q = V.vr;
+    return inp.external.stations.filter(s => +s.x >= q.x0 - 1e-6 && +s.x <= q.x1 + 1e-6).sort((a, b) => a.x - b.x).map(s => {
+      const a = key => +s[key] || 0, r = { x: +s.x };
+      ['M_DC1', 'M_DC2', 'M_DW', 'M_LLpos', 'M_LLneg', 'V_DC1', 'V_DC2', 'V_DW', 'V_LLpos', 'V_LLneg'].forEach(key => { r[key] = a(key); });
+      r.M_StrI_pos = e * (1.25 * (r.M_DC1 + r.M_DC2) + 1.5 * r.M_DW + 1.75 * (m * r.M_LLpos)); r.M_StrI_neg = e * (1.25 * (r.M_DC1 + r.M_DC2) + 1.5 * r.M_DW + 1.75 * (m * r.M_LLneg));
+      r.V_StrI_pos = e * (1.25 * (r.V_DC1 + r.V_DC2) + 1.5 * r.V_DW + 1.75 * (m * r.V_LLpos)); r.V_StrI_neg = e * (1.25 * (r.V_DC1 + r.V_DC2) + 1.5 * r.V_DW + 1.75 * (m * r.V_LLneg));
+      return r; });
+  }
+  function viewOut(ctx, V) {
+    const { R } = ctx, k = K(), rows = viewRows(ctx, V), e = R.own ? R.own.eta : 1, m = R.own ? R.own.mLL : 1, f = (v, d) => k.fx(v, d);
+    const C = [['M_DC1', 'M<sub>DC1</sub>'], ['M_DC2', 'M<sub>DC2</sub>'], ['M_DW', 'M<sub>DW</sub>'], ['M_LLpos', 'M<sub>LL</sub>+'], ['M_LLneg', 'M<sub>LL</sub>−'], ['M_StrI_pos', 'M<sub>u</sub>+'], ['M_StrI_neg', 'M<sub>u</sub>−'],
+      ['V_DC1', 'V<sub>DC1</sub>'], ['V_DC2', 'V<sub>DC2</sub>'], ['V_DW', 'V<sub>DW</sub>'], ['V_LLpos', 'V<sub>LL</sub>+'], ['V_LLneg', 'V<sub>LL</sub>−'], ['V_StrI_pos', 'V<sub>u</sub>+'], ['V_StrI_neg', 'V<sub>u</sub>−']];
+    const gp = rows.reduce((b, r) => (r.M_StrI_pos > b.M_StrI_pos ? r : b), rows[0]), gn = rows.reduce((b, r) => (r.M_StrI_neg < b.M_StrI_neg ? r : b), rows[0]);
+    const work = (r, s) => `M<sub>u</sub>${s} at x = ${f(r.x, 2)} ft = η(1.25(M<sub>DC1</sub> + M<sub>DC2</sub>) + 1.50 M<sub>DW</sub> + 1.75 m M<sub>LL</sub>${s}) = ${f(e, 4)}(1.25(${f(r.M_DC1, 1)} + ${f(r.M_DC2, 1)}) + 1.50(${f(r.M_DW, 1)}) + 1.75(${f(m, 2)})(${f(s === '+' ? r.M_LLpos : r.M_LLneg, 1)})) = <b>${f(s === '+' ? r.M_StrI_pos : r.M_StrI_neg, 1)} kip-ft</b>`;
+    return K().gcard(`Imported demands — ${k.esc(V.vr.label)}`, 'gfx_dmview')
+      + k.card(`Imported demands — ${k.esc(V.vr.label)} (member x ${f(V.vr.x0, 0)}–${f(V.vr.x1, 0)} ft; moments kip-ft, shears kip)`, `<div class="tscroll"><table class="tbl" id="anViewTbl"><thead><tr><th>x<br>ft</th>${C.map(c => `<th>${c[1]}</th>`).join('')}</tr></thead><tbody>
+        ${rows.map(r => `<tr><td>${f(r.x, 2)}</td>${C.map(c => `<td>${f(r[c[0]], c[0][0] === 'M' ? 0 : 1)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+        <p class="note">Strength I = η(1.25(DC1 + DC2) + 1.50 DW + 1.75 m LL) from the imported per-station envelope over ${k.esc(V.vr.label.toLowerCase())} (member coordinates; AASHTO LRFD 10th Ed. Table 3.4.1-1), the old app's view: the file's values as read (its DC1, its shear sign, its LL without this app's DF × m per effect). The girder self-weight this app computes is added only on the design span, so it is not in this view. η = ${f(e, 4)}, m = ${f(m, 2)} (owner, Loads &amp; LLDF tab ${k.wk('ld.eta', '§', 'lds')}).</p>
+        <p class="note">Worked: ${work(gp, '+')}; ${work(gn, '−')}.</p>
+        <p class="note">Choose "Design span" above for the design diagrams and checks, or "Design span n →" to move the design to that span of the file.</p>`);
   }
   /* usedCard(ctx): the loads and factors of the analysis, each the engine's value linked to the step that works it (Loads & LLDF, Section) */
   function usedCard(ctx) {
@@ -115,6 +165,19 @@
       if (se && VK && VK.detCard) VK.detCard(se, { id: 'anElev', title: 'Girder elevation', sub: 'the span analysed: bearings, diaphragm point loads (DC1), continuity for composite loads', draw: W => elevSvg(ctx, W), hint: 'Point at a bearing or a diaphragm load to read it.', file: 'analysis-elevation',
         cap: '<p class="vk-cap">Entered on the Bridge layout tab (span, continuity) and the Diaphragms / deck tab (point loads). Display only.</p>' }); }
     K().after(el, OPEN);
+    { const V = ctx.ui && ctx.ui.otab ? viewOf(ctx) : null, vs = el.querySelector('#gfx_dmview');   // batch D2: the view of another span / the whole member
+      if (V && V.vr && vs && VA() && VA().mount) { const rows = viewRows(ctx, V), k = K(), pts = f => rows.map(r => [r.x, r[f]]), sup = V.spans.map(s => s.x0).concat([V.spans[V.spans.length - 1].x1]).filter(x => x >= V.vr.x0 - 1e-6 && x <= V.vr.x1 + 1e-6);
+        const MS = [['M_DC1', 'M<sub>DC1</sub>', 0], ['M_DC2', 'M<sub>DC2</sub>', 0, '2 2'], ['M_DW', 'M<sub>DW</sub>', 3, '2 2'], ['M_LLpos', 'M<sub>LL</sub> +', 1], ['M_LLneg', 'M<sub>LL</sub> −', 1, '5 3'], ['M_StrI_pos', 'M<sub>u</sub> +', 2], ['M_StrI_neg', 'M<sub>u</sub> −', 2, '5 3']];
+        const VSr = MS.map(q => ['V' + q[0].slice(1), q[1].replace(/^M/, 'V'), q[2], q[3]]);
+        const ser = L => L.map(q => ({ key: q[0], ci: q[2], dash: q[3], pts: pts(q[0]) }));
+        const near = x => rows.reduce((b, r) => Math.abs(r.x - x) < Math.abs(b.x - x) ? r : b, rows[0]);
+        VA().mount(vs, { key: 'dmview', title: `Imported demands along the member — ${k.esc(V.vr.label)}`, sub: `member x ${k.fx(V.vr.x0, 0)}–${k.fx(V.vr.x1, 0)} ft, ${rows.length} stations of the file`,
+          draw: W => VA().render({ L0: V.vr.x0, L1: V.vr.x1, sup, axisTitle: 'Member station x, ft (the file\'s)', aria: 'Imported moments and shears along the member', rows: [
+            { kind: 'chart', key: 'M', label: 'Moments, kip-ft (sagging up)', unit: 'kip-ft', series: ser(MS) }, { kind: 'chart', key: 'V', label: 'Shears, kip (the file\'s sign)', unit: 'kip', series: ser(VSr), h: W < 600 ? 110 : 140 }] }, W),
+          at: x => { const r = near(x); return [`x = ${k.fx(r.x, 2)} ft`, `M_u ${k.fx(r.M_StrI_neg, 0)} / ${k.fx(r.M_StrI_pos, 0)} kip-ft; V_u ${k.fx(r.V_StrI_neg, 1)} / ${k.fx(r.V_StrI_pos, 1)} kip`]; },
+          legend: [...MS, ...VSr].filter((q, j, a) => a.findIndex(t => t[1].replace(/^[MV]/, '') === q[1].replace(/^[MV]/, '')) === j).map(q => `${VA().swatch(q[2], q[3])} ${q[1].replace(/^M/, '')}`).join(' &nbsp; '),
+          caption: '<p class="vk-cap">The file\'s stations (the table below), Strength I as the old app\'s view. Display only.</p>' }); }
+      if (V && V.vr) return; }
     const slot = el.querySelector('#gfx_an'); if (!slot || !VA() || !VA().mount) return;
     const { R, ui } = ctx, D = R.diagrams, xs = D.map(r => r.x), near = x => xs.reduce((b, v, i) => Math.abs(v - x) < Math.abs(xs[b] - x) ? i : b, 0), k = K();
     const MS = [{ key: 'dc', html: 'M<sub>DC</sub>', ci: 0, f: 'M_DC' }, { key: 'dw', html: 'M<sub>DW</sub>', ci: 3, f: 'M_DW' }, { key: 'llp', html: 'M<sub>LL+IM</sub> +', ci: 1, f: 'M_LLpos' }, { key: 'lln', html: 'M<sub>LL+IM</sub> −', ci: 1, dash: '5 3', f: 'M_LLneg' },
@@ -135,6 +198,8 @@
       caption: '<p class="vk-cap">The engine\'s force effects at its stations (the table above); click a station to select it. Display only.</p>' });
     return H;
   }
-  function onOutChange(e, ui) { if (e.target.id === 'o_anSel') { ui.anSel = +e.target.value; return true; } return false; }
+  function onOutChange(e, ui) { if (e.target.id === 'o_anSel') { ui.anSel = +e.target.value; return true; }
+    if (e.target.id === 'o_dmView') { ui.dmView = e.target.value; return true; }   // batch D2: the span viewed (psb2.ui, per browser)
+    return false; }
   window.PSBUiAnalysis = { output, after, onOutChange, TOPICS };
 })();

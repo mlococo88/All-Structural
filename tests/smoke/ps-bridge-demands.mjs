@@ -7,6 +7,8 @@
 //      (blue), "Imported demands" card and the worked steps of the imported DC2 / DW / LL; the Loads & LLDF tab's "Live load from the
 //      imported demands"; the DF / m per effect card on the Loads tab; the Summary's checks computed;
 //   3. span 2 chosen: the engine reads the file's span 2 (an input warning: its length against the bridge span 1); Undo puts span 1 back;
+//      (batch D2) the Analysis tab's views of the member: span 2 and the entire beam (the file's stations, Strength I as the old app's view),
+//      "Design span 2 →" (one Undo step); the Report keeps the design span;
 //   4. "✕ use this app's analysis": the results equal those before the import (the file kept with the type); the import guide opens;
 //   5. a custom table (paste of 3 rows from Excel), the engine's M_LL at midspan = 0.7 × the entered M+ (DF 0.7);
 //   6. a factored file refused (alert, project unchanged); a MIDAS file through Import JSON refused with the Loads-tab pointer;
@@ -69,6 +71,29 @@ try {
   await itab('loads');
   await p.click('#bUndo'); await p.waitForTimeout(300); assert.equal((await R()).sel.idx, 1);
   ok('span 2 chosen: the engine reads it, with the length warning; Undo returns span 1');
+  // 3b (batch D2): the Analysis tab's views of the imported member (the old app's "View span"): span 2, the entire beam, "Design span 2 →"
+  await otab('an'); await p.waitForSelector('#o_dmView');
+  assert.equal(await p.$$eval('#o_dmView option', o => o.map(x => x.value).join()), 'design,s1,s2,s3,all');
+  await p.selectOption('#o_dmView', 's2'); await p.waitForSelector('#anViewTbl');
+  const v2 = await p.evaluate(() => [...document.querySelectorAll('#anViewTbl tbody tr')].map(tr => +tr.children[0].textContent.replace(/,/g, '')));
+  assert.ok(v2.length > 5 && v2[0] >= 110 && v2[0] < 115 && v2[v2.length - 1] > 240 && v2[v2.length - 1] <= 250, 'span 2 stations ' + v2.join());
+  assert.ok(await p.$('#gfx_dmview svg'), 'view chart');
+  if (process.env.SHOTS) await p.screenshot({ path: path.join(process.env.SHOTS, 'D2-analysis-view-span2.png') }); assert.match(await out(), /Worked: Mu\+ at x = /);
+  // Strength I of the view = the old app's: η(1.25(M_DC1 + M_DC2) + 1.50 M_DW + 1.75 m M_LL+) of the file's row (AASHTO: η = m = 1)
+  const row = mct.stations.find(s => s.x === 180) || mct.stations.find(s => s.x > 110 && s.x < 250);
+  const Mu = 1.25 * (row.M_DC1 + row.M_DC2) + 1.5 * row.M_DW + 1.75 * row.M_LLpos;
+  const shown = await p.evaluate(x => { const tr = [...document.querySelectorAll('#anViewTbl tbody tr')].find(t => +t.children[0].textContent.replace(/,/g, '') === x); return tr ? +tr.children[6].textContent.replace(/,/g, '').replace(/\u2212/g, '-') : NaN; }, row.x);
+  assert.ok(Math.abs(shown - Mu) <= 0.5, `M_u+ at ${row.x}: ${shown} vs ${Mu}`);
+  await p.selectOption('#o_dmView', 'all'); await p.waitForTimeout(300);
+  assert.equal(await p.evaluate(() => document.querySelectorAll('#anViewTbl tbody tr').length), mct.stations.length);
+  await p.selectOption('#o_dmView', 's2'); await p.waitForSelector('[data-dmdesign="2"]'); await p.click('[data-dmdesign="2"]'); await p.waitForTimeout(400);
+  assert.equal((await R()).sel.idx, 2); assert.equal(await p.$eval('#o_dmView', e => e.value), 'design');
+  await p.click('#bUndo'); await p.waitForTimeout(300); assert.equal((await R()).sel.idx, 1);
+  const rpt = await p.evaluate(() => { const P = window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project, B = window.PSBReportData.compute(P, null);
+    return window.PSBUiAnalysis.output({ P, inp: B.inp, R: B.R, W: B.W, ui: {} }); });
+  assert.ok(!/anViewBar/.test(rpt) && /Imported demands of the span/.test(rpt), 'the Report keeps the design span');
+  await p.selectOption('#o_dmView', 'design');
+  ok('Analysis: view span 2 (the file\'s stations, Strength I as the old app) and the entire beam; "Design span 2 →" = one Undo step; the Report on the design span');
   // 4. back to this app's analysis
   await p.click('#card-dem [data-dm="app"]'); await p.waitForTimeout(300);
   const P4 = await proj(); assert.equal(P4.demands[T1.id].src, 'app'); assert.ok(P4.demands[T1.id].midas.file, 'file kept');
