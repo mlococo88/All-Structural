@@ -140,7 +140,7 @@
       sub('b', 'Bridge and the design girder', [kv([['Spans', `${P.spans.lengths.map(L => OK().fx(+L, 2)).join(' + ')} ft (${P.spans.continuity === 'composite' && nS > 1 ? 'made continuous for composite loads, 5.12.3.3' : 'simple spans'})`],
         ['Girders', `${P.xs.nb}; bays ${(P.xs.bays || []).map(x => OK().fx(+x, 2)).join(', ')} ft; overhangs ${OK().fx(+P.xs.ohL, 2)} / ${OK().fx(+P.xs.ohR, 2)} ft`], ['Support skews', `${(P.xs.skews || []).map(x => OK().fx(+x, 1)).join(', ')}°`],
         ['Design girder', `${plain(inp.proj && inp.proj.girderId)} in span ${sel.s}: ${plain(inp.girder)}, L = ${V0(X, 'L', 2)} ft, S = ${OK().fx(+inp.S, 3)} ft, ${inp.loads.pos === 'exterior' ? 'exterior' : 'interior'} girder`],
-        ['Owner', ownR ? `${own} (${ownR.manual})` : own]]), note('Entered values (Project, Bridge layout, Cross-section and Girders & strands tabs); the engine inputs of the design girder are those of the [[tab:in:gird|Girders & strands tab]].'), ...planFig(P, X)]),
+        ['Owner', ownR ? `${own} (${ownR.manual})` : own]]), note('Entered values (Project, Bridge layout, Cross-section and Girders & strands tabs); the engine inputs of the design girder are those of the [[tab:in:gird|Girders & strands tab]].'), ...planFig(P, X), ...snapFig(P, X)]),
       sub('c', 'Basis', [kv([['Design specification', ED], ['Load rating', 'AASHTO Manual for Bridge Evaluation (MBE), LRFR; article numbers as the old app'], ['Owner manual', ownR && !ownR.none ? `${ownR.manual} (AASHTO LRFD ${ownR.aashto} basis); its rules as listed below` : 'none (AASHTO only)'],
         ['Units', 'in, kip, ksi, ft, klf, kip-ft'], ['Sign convention', 'stresses + compression, − tension; moments + sagging']])]),
       sub('a', 'Assumptions', [...(asm ? asm.items : []), ...ASSUME.map(t => note('• ' + t)), ...deNote(P), ...voidNotes(B), ...tbcNotes(B), ...rowNotes(B), ...fgNotes(B), ...secNotes(B)])];
@@ -254,6 +254,15 @@
     const f = X.planFig; if (!f || !f.svg) return [];
     return [{ type: 'figure', caption: 'Framing plan: girder lines, skewed supports and diaphragms (true scale; the Bridge layout tab and the Summary)', svg: f.svg },
       note(`${f.cap || ''} The cross-section of each worked girder's span, with the girder sections, barriers and d$_{e}$: see [[${X.inReport('lds') ? 'rs.lds' : 'tab:lds|Loads & LLDF tab'}]].`)];
+  }
+  /* snapFig(P, X): batch G8 (2026-11-15): the 3D view captured on the 3D view tab ("Capture for the Report", the old app's 3D snapshot in its
+     report, O:5090), opt.snap3d = { png (a data URL), at, key (the project when captured), meta } from ui/report.js (this page view only), a
+     figure of §2 after the framing plan; a note when the inputs changed after the capture. Display only; none in Node unless given. */
+  function snapFig(P, X) {
+    const f = X.snap3d; if (!f || !/^data:image\/png;base64,/.test(String(f.png || ''))) return [];
+    const stale = f.key && f.key !== JSON.stringify(P);
+    return [{ type: 'figure', caption: `3D view (captured on the 3D view tab, ${f.at || ''}): ${f.meta || ''}`, svg: `<img src="${f.png}" alt="3D view of the bridge" style="width:100%;max-width:7.3in;height:auto;display:block">` },
+      note(stale ? 'Captured before the last input change: capture again on the [[tab:3d|3D view tab]] for the inputs this report works.' : 'Display only: the girders, deck, supports and the reinforcement layers chosen on the [[tab:3d|3D view tab]] when it was captured.', !!stale)];
   }
   const V0 = (X, p, d, div) => X.V(p, d, div);
   /* ownCols(ownSubs, X, o, nv0): PS-26 (engineer decision 2026-11-13): several girder types (the report of PS-25): the Owner rules table of §2
@@ -456,7 +465,7 @@
     const inc = opt.include || null, on = k => !inc || inc[k] !== false, P = B.P, p = P.project || {}, R = B.R;
     const vals = [];
     const own = B.inp.owner && B.inp.owner !== 'AASHTO';
-    const X = { vals, inReport: t => !!TABS[t] && on(t), ownKey: own && on('proj') ? 'rs.own' : null, figs: opt.figures || null, planFig: opt.planFig || null, sumFig: opt.sumFig || null, every: !!opt.every };   // planFig (2026-11-14): §2's framing plan (ui/report.js); rs.own: the owner rules subsection of §2
+    const X = { vals, inReport: t => !!TABS[t] && on(t), ownKey: own && on('proj') ? 'rs.own' : null, figs: opt.figures || null, planFig: opt.planFig || null, sumFig: opt.sumFig || null, every: !!opt.every, snap3d: opt.snap3d || null };   // snap3d: batch G8   // planFig (2026-11-14): §2's framing plan (ui/report.js); rs.own: the owner rules subsection of §2
     X.V = (path, d, div) => { const v = at(X.R || R, path), text = OK().fx(div ? v / div : v, d); vals.push({ sec: X.cur, path, d, div: div || 0, text, ...(X.u != null ? { u: X.u } : {}) }); return text; };   // PS-25: X.R / X.u = the worked unit's result
     const secs = [], dropped = [];
     if (B.multi) multiSecs(B, X, opt, on, secs, dropped);   // PS-25: the worked sections once per girder type (or per line)
