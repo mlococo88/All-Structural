@@ -28,7 +28,7 @@ try {
   // 1.
   await dwg();
   let r = await p.evaluate(() => ({ opts: [...document.querySelectorAll('#dwg_sheet option')].map(o => o.value), miss: /Not in this set/.test(document.getElementById('out').innerText) }));
-  assert.deepEqual(r.opts, ['cover', 'notes', 'sec', 'plan', 'elev0', 'strd0', 'elev1', 'strd1', 'sched', 'summ']);   // batch H1: cover, notes, summary assert.equal(r.miss, false);
+  assert.deepEqual(r.opts, ['cover', 'notes', 'sec', 'plan', 'elev0', 'strd0', 'elev1', 'strd1', 'sched', 'summ']); assert.equal(r.miss, false);   // batch H1: cover, notes, summary
   let t = await sheet('elev0');
   ['GIRDER INTERIOR S1: ELEVATION', '5 OF 10', 'CL BRG', 'MIDSPAN'].forEach(x => assert.ok(t.includes(x), x + ' | ' + t.slice(0, 30).join('|')));
   assert.ok(t.some(x => /^HOLD-DOWN .* FROM CL BRG$/.test(x)) && t.some(x => / FROM GIRDER END$/.test(x)) && t.some(x => /^CL BRG TO CL BRG 120'-0"$/.test(x)), 'the hold-down and span dimensions');
