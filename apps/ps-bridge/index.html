@@ -143,6 +143,9 @@
   #hdr .allToolsLink{font-size:8.5pt;color:#C7D4E4;text-decoration:none;font-family:var(--font-ui);}
   #hdr .allToolsLink:hover{color:#fff;text-decoration:underline;}
   #main{flex:1 1 auto;display:flex;min-height:0;}
+  /* 2026-11-15 (batch A): the footer of the old app (Prestressed Bridge Design.html .footer): the version line and the design-aid disclaimer */
+  #appFoot{flex:0 0 auto;display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 16px;padding:3px 14px;border-top:1px solid var(--color-border);background:var(--slate-100);color:#475569;font-family:var(--font-ui);font-size:7.5pt;letter-spacing:.04em;text-transform:uppercase;}
+  @media print{ body:has(#tabBar [data-otab="rpt"][aria-selected="true"]) #appFoot{display:none!important;} }
   #inputPanel{flex:0 0 calc(100% * var(--sbIn,.33));max-width:calc(100% * var(--sbIn,.33));border-right:1px solid var(--color-border);overflow-y:auto;position:relative;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:var(--color-bg);padding:10px 12px 60px;font-family:var(--font-ui);font-size:9.5pt;}
   #outputPanel{flex:1 1 67%;min-width:0;overflow-y:auto;position:relative;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:0 16px 80px;background:var(--paper);}
   @media screen and (max-width:899.98px){
@@ -342,6 +345,7 @@
       <div id="out"></div>
     </main>
   </div>
+  <footer id="appFoot"><span>Prestressed Bridge Design v3.0-dev (new, in development) · AASHTO LRFD 10th Ed. (2024) · units: kip, in, ksi</span><span>Design aid — independent verification by a licensed engineer required</span></footer>
 </div>
 <script>
 (function () {
@@ -418,8 +422,7 @@
         + IN.cards('xsec', P)
         + DLUI.card(P),   // PR 3a-3: DC2 / DW to each girder line (PS-9)
       gird: TY.card(P, ui) + TY.shownCard(P) + TY.scopeBar(P, ui, 'gird') + IN.cards('gird', V)
-        + `<section class="sec"><div class="secHead">Strand pattern${sk >= 0 ? ` of ${esc(P.types[sk].label)}` : ''}</div><div class="secBody" id="gfx_strands_in"><p class="note">Shown when the inputs have no error.</p></div></section>`
-        + ph('Girder library', '4', ['girder library from the standard sheets (NEBT, NEDBT, NEXT, boxes): PR 4, waits for the sheets (PS-2)']),
+        + `<section class="sec"><div class="secHead">Strand pattern${sk >= 0 ? ` of ${esc(P.types[sk].label)}` : ''}</div><div class="secBody" id="gfx_strands_in"><p class="note">Shown when the inputs have no error.</p></div></section>`,   // 2026-11-15: the "Girder library PR 4" placeholder removed (the library is in the Girder shape card, PS-37)
       mat: TY.scopeBar(P, ui, 'mat') + IN.cards('mat', V),
       dd: IN.cards('dd', P),
       loads: TY.scopeBar(P, ui, 'loads') + IN.cards('loads', V),

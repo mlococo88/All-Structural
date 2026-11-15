@@ -5,6 +5,7 @@
                            grouped); tests/smoke/ps-bridge-skeleton.mjs checks every data-ev against computeAll on the page (values = engine values)
      val(R, path)          the value of R at a dotted path ('cp.Ic', 'diagrams.30.M_DC')
      fx(v, d)              the number as shown;  card(title, body, id);  kv(rows [[label, html]]);  wk(id, text, tab) a link to step id (on tab)
+     groups(list, topics)  SharedSteps.group with the rating-factor topics (topic rf: RegExp) given an RF status (2026-11-15)
      steps(list, topics, open)  the worked steps in topics (SharedSteps.group / groupsHTML), each step <li id="st-<id>">
      after(el, open)       wires the topics (expand / collapse, § links) after the tab's HTML is set */
 (function () {
@@ -18,7 +19,17 @@
   const kv = rows => `<div class="kv">${rows.map(([l, h]) => `<div><span>${l}</span><span>${h}</span></div>`).join('')}</div>`;
   const wk = (id, text, tab) => `<a class="wk" href="#st-${esc(id)}"${tab ? ` data-gotab="${esc(tab)}"` : ''} title="Worked step">${text || '§'}</a>`;
   const stepLi = s => `<li id="st-${esc(s.id)}"><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${S().line(s, true)}</div>${s.note ? `<div class="nt">${esc(S().noteText(s.note))}</div>` : ''}</li>`;
-  const steps = (list, topics, open) => S().groupsHTML(S().group(list, topics, { strip: false }), { open, item: stepLi });
+  /* groups(list, topics): SharedSteps.group, then (2026-11-15, batch A) each topic with rf: RegExp (step ids of rating factors, e.g. the Rating
+     tab) gets the status of a rating factor, not of a demand / capacity ratio: its result step and chip the lowest RF of those steps (99, the
+     engine's "not applicable", left out: chip —), 'ng' when one is < 1.0 (its ok false), else 'ok'. group() itself reads a unitless step with
+     an ok flag as demand / capacity (largest governs, > 1 red), which is wrong for an RF. Display only (shared/steps.js unchanged). */
+  const groups = (list, topics) => S().group(list, topics, { strip: false }).map(t => {
+    const d = (topics || []).find(q => q.key === t.key), rs = d && d.rf ? t.steps.filter(s => d.rf.test(String(s.id)) && typeof s.value === 'number') : [];
+    if (!rs.length) return t;
+    const live = rs.filter(s => s.value < 99), lo = live.reduce((a, b) => (b.value < a.value ? b : a), live[0] || null), ng = rs.some(s => s.ok === false);
+    return Object.assign({}, t, { res: lo || rs[0], ratio: NaN, cls: ng ? 'ng' : 'ok', chip: lo ? 'RF ' + fx(lo.value, 3) + (ng ? ' NG' : '') : 'RF —' });
+  });
+  const steps = (list, topics, open) => S().groupsHTML(groups(list, topics), { open, item: stepLi });
   const after = (el, open) => S().wire(el, { onToggle: (k, on) => { if (on) open.add(k); else open.delete(k); } });
-  window.PSBOutKit = { esc, val, fx, ev, card, kv, wk, stepLi, steps, after };
+  window.PSBOutKit = { esc, val, fx, ev, card, kv, wk, stepLi, groups, steps, after };
 })();

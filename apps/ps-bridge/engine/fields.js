@@ -44,7 +44,7 @@
       note: (b, P) => P && P.xs && P.xs.dl && window.PSBDesign ? `d<sub>e</sub> from the cross-section for each exterior line (PS-20): G1 ${(+window.PSBDesign.deOf(P, 1)).toFixed(3)} ft (left overhang − traffic face), G${P.xs.nb} ${(+window.PSBDesign.deOf(P, P.xs.nb)).toFixed(3)} ft (right); the barriers are in the card below. Used for an exterior girder (G1 or the last girder).`
         : 'Used when the design girder is an exterior girder (G1 or the last girder). Entered: the project has no cross-section barriers (saved before the DC2 / DW distribution, 2026-11-13).' },
     // ---- Girders & strands ----
-    { tab: 'gird', id: 'shape', title: 'Girder shape', ref: 'PCI / AASHTO shapes (the old app\'s library)', fields: [
+    { tab: 'gird', id: 'shape', title: 'Girder shape', ref: 'girder library by owner: AASHTO / PCI, PCI Northeast NEXT, MassDOT, CTDOT; or Custom', fields: [
       F('base.girder', 'Girder section', '', 'Girder shape from the library, grouped by owner (PS-37): the old app\'s AASHTO / PCI shapes and NEXT F, the CTDOT box beams and voided slabs (BDM plates), and the MassDOT Bridge Manual Part II standard sections (NEBT, NEDBT, NEXT F, NEXT D, spread and adjacent box beams, deck beams).', 'sel', { o: () => Object.keys(typeof GIRDERS !== 'undefined' ? GIRDERS : {}).map(k => [k, k, window.PSBSections && window.PSBSections.group ? window.PSBSections.group(k) : undefined]) }),
       F('base.cust.h', 'Overall depth h', 'in', 'Custom section: overall girder depth.', 'num', { when: b => b.girder === 'Custom' }),
       F('base.cust.A', 'Gross area A', 'in²', 'Custom section: gross area.', 'num', { when: b => b.girder === 'Custom' }),
