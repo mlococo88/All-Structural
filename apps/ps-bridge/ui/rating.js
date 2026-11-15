@@ -74,8 +74,8 @@
     const regs = xs.map((x, j) => { const r = lowAt(x); return r ? { x0: j ? (xs[j - 1] + x) / 2 : 0, x1: j < xs.length - 1 ? (x + xs[j + 1]) / 2 : L, v: r.i, pri: 3,
       lab: [`x = ${k.fx(x, 2)} ft: lowest ${KN[r.kind][0]}`, A.rows.filter(q => Math.abs(q.x - x) < 1e-3).map(q => `${KN[q.kind][0]} ${fin(q.inv) ? k.fx(q.inv, 2) : '—'}${q.kind !== 's3' && fin(q.opr) ? ' / ' + k.fx(q.opr, 2) : ''}`).join('; ')] } : null; }).filter(Boolean);
     if (slot && VA() && VA().mount) VA().mount(slot, { key: 'rtal', title: 'Rating factor along the girder', sub: `HL-93 design load (LRFR, MBE 4th Ed. (2026)); inventory solid, operating dashed; ${A.rows.length} ratings`,
-      controls: VK().tiles([{ label: 'Inventory (governing)', value: A.inv ? k.fx(A.inv.inv, 3) : '—', unit: A.inv ? `${KN[A.inv.kind][0]}, x = ${k.fx(A.inv.x, 1)} ft` : '', tone: A.inv && A.inv.inv < 1 ? 't' : 'c' },
-        { label: 'Operating (governing)', value: A.opr ? k.fx(A.opr.opr, 3) : '—', unit: A.opr ? `${KN[A.opr.kind][0]}, x = ${k.fx(A.opr.x, 1)} ft` : '', tone: A.opr && A.opr.opr < 1 ? 't' : '' },
+      controls: VK().tiles([{ label: `Inventory, governing${A.inv ? ': ' + KN[A.inv.kind][0] : ''}`, value: A.inv ? k.fx(A.inv.inv, 3) : '—', unit: A.inv ? `x = ${k.fx(A.inv.x, 1)} ft` : '', tone: A.inv && A.inv.inv < 1 ? 't' : 'c' },
+        { label: `Operating, governing${A.opr ? ': ' + KN[A.opr.kind][0] : ''}`, value: A.opr ? k.fx(A.opr.opr, 3) : '—', unit: A.opr ? `x = ${k.fx(A.opr.x, 1)} ft` : '', tone: A.opr && A.opr.opr < 1 ? 't' : '' },
         ...AL().GROUPS.filter(([kd]) => A.gov[kd]).map(([kd]) => ({ label: KN[kd][0], value: k.fx(A.gov[kd].inv, 3), unit: `x = ${k.fx(A.gov[kd].x, 1)} ft`, tone: A.gov[kd].inv < 1 ? 't' : '' }))]),
       draw: W => VA().render({ L0: 0, L1: L, sup: [0, L], axisTitle: 'Station x, ft (from ℄ bearing, left)', aria: 'Load rating factors along the girder', rows: [
         { kind: 'chart', key: 'rf', label: 'Rating factor RF', h: W < 600 ? 160 : 220, yr: [y0, ymax], ystep: ymax - y0 > 6 ? 1 : 0.5, cap: ymax, hidden: HIDE,
