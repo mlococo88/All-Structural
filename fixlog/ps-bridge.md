@@ -7433,6 +7433,282 @@ PR #1580: https://github.com/mlococo88/All-Structural/pull/1580
 - E1-D8. Demands from a MIDAS file or a custom table: each station is rated with its own (concurrent) demands, an interior-support end with that end's DC2, DW and LL; the engine's pier design check takes the most negative of the two ends for each effect separately (pbd-external.js pierNegM): the pier RF of the governing end may differ from one formed with those mixed demands.
 ### Other copies
 - None (the Steel app's rating is its own engine; not changed).
+## 2026-11-15 — H1: Drawings tab: cover and sheet index, general notes, design summary sheets (display and export only)
+PR #1581: https://github.com/mlococo88/All-Structural/pull/1581
+### Request
+- Review finding D2 / D3 (scratchpad review ps-vs-steel.md "Drawings"): the Steel Bridge app's drawing set has 30 sheets, this app's 7; the sheets with a prestressed equivalent were missing. Batch H1: the cover and sheet index, the general notes, the design summary.
+### What changed
+- `ui/sheets.js` (part 3, anchor `/* ---------- part 3 (2026-11-15, batch H)`): block sheets, an adapted COPY of the Steel Bridge app's `blockDraw` / `blockBox` / `blockPages` / `pageFn` (apps/steel-bridge/engine/sheets.js, SBTXT) and its `table()` / `notes()` (apps/steel-bridge/engine/drawings.js), to move to shared/ later (CLAUDE.md §3):
+  - `table(D, lL, lT, x, y, cols, rows, title)`: lines on S-TBL, text on S-TEXT, upper case; `notesBlk`, `headBlk` (a heading of lines of given sizes); `asc()` turns ² ³ ⁴ ≤ ≥ √ φ Δ into plain text (MAX. / MIN. for ≤ / ≥: SharedDxf.str drops `<…>` as an HTML tag).
+  - `blockPages(blocks, aw, ah)`: the blocks flow top-down in columns over the drawing area (paper D 31.75 × 17.45 in, B 14.75 × 6.45 in); a table taller than the area is continued "(CONTINUED)"; past the width a new sheet "(i OF n)", ids `summ`, `summ2`, … (the index links strip the digits).
+  - `coverBlocks(P, TM, list, miss, date)`: project name, "PRESTRESSED CONCRETE GIRDER SUPERSTRUCTURE", the spans, girder lines and skews, project number and owner / client (Project tab), the design rules (each type's owner: `PBD.OWN_RULES.owners[o].manual`, or "AASHTO LRFD 10TH ED. (NO OWNER RULES)"); the SHEET INDEX (every sheet of the set, its own cover sheets included), DRAWINGS NOT IN THIS SET (miss), REVISIONS (as the steel cover).
+  - `notesModel(P, TM)`: GENERAL NOTES named, not quoted: AASHTO LRFD Bridge Design Specifications 10th Ed. (2024); MBE 4th Ed. (2026) LRFR; the owner manual and the AASHTO edition it is written to (`OWN_RULES.owners`); live load HL-93 (entered LL / the owner's LL multiplier when present; DF by the AASHTO equations or entered); dead loads (the barrier weights, `xs.dl.fws`, the DC2 / DW distribution method `PSBBridgeDL.METHODS`); simple or made continuous; loss method and H; the corrosion exposure; and the table MATERIALS BY GIRDER TYPE (each type's effective inputs on its first line, `PSBDesign.cellInputs`: section, f′c, f′ci, deck f′c, w girder / deck (dead load), strand size, f_pu, f_pj/f_pu, E_p, f_y of stirrups / bottom bars / splitting steel (/ deck bars when the deck is designed)).
+  - `summaryRows(P, A)` / `summaryBlocks(P, A)`: the DESIGN SUMMARY, per girder type and check group the Summary tab's governing check (`PSBSummaryUI.model(P, A).types[].groups`, the largest engine ratio over the type's lines): check, line, x, demand, limit, unit, ratio, status (FAIL when `!pass`, REVIEW when the ratio is not a number, else PASS), and the lowest HL-93 inventory RF (`types[].rf`).
+  - `build(P, opt)`: the cover (first), the general notes (second), then parts 1–2 as before, the design summary (last). `opt.all()` (new): `PSBBridge.results` of every type on every line (the page's `allResults(true)`); absent: computed here with a memo of `PSBHoldDown.compute` (also used for `opt.res` when absent). The cover's own sheet count is iterated until stable.
+- `ui/drawings.js`: `SRC` entries `cover` (Project, Bridge layout input tabs), `notes` (Project, Materials, Loads, Owner rules input tabs), `summ` (Summary output tab); `all: ctx.all` passed to both `build` calls; the note on the file names the new sheets.
+- `index.html` (the Drawings tab's ctx, anchor `res: (k, g) => cellR(window.PSBDesign.cellInputs(P, k, g))`): `+ all: () => allResults(true)`.
+### Saved data (CLAUDE.md §5)
+- None (no key or format; `ui.dwg.sheet` may now hold `cover`, `notes`, `summ`; an unknown id falls back to the first sheet as before).
+### Governing provisions (CLAUDE.md §4)
+- None changed. Every number on the new sheets is an input or an engine value, formatted (no new formula). Harness B: 0 differences.
+### Check case
+- Default new project, paper D: 10 sheets: 1 COVER AND SHEET INDEX, 2 GENERAL NOTES, 3 TYPICAL SECTION, 4 FRAMING PLAN, 5–8 the girder sheets of Interior S1 / Exterior S1, 9 STRAND AND GIRDER SCHEDULE, 10 DESIGN SUMMARY.
+- Design summary, Interior S1 (G2 G3 G4): Release stresses, "Release comp", G2, x 48.00, 4.174 / 4.420 ksi, 0.944 PASS; Flexure, G2, x 60.00, 9697.492 / 13638.909 k-ft, 0.711 PASS; End zone & hold-down, "Hold-down force (PS-10)", G2, 94.823 / 74.303 kip, 1.276 FAIL; Rating, Service III, G2, RF 1.614 — the Summary tab's values.
+- General notes, both types: PCI BT-72, f′c 8.50, f′ci 6.80, deck 4.00 ksi, w 0.155 / 0.150 kcf, 0.6" strand, f_pu 270.0, 0.75, E_p 28500, f_y 60.0 / 60.0 / 60.0.
+### How verified
+- New `tests/engine/psbridge-drawings-h.test.mjs`: the cover's index = every sheet (number and title) on three layouts, paper D and B; "n OF N" on every sheet; the notes' editions, owner manual (MassDOT layout) and each type's materials = `cellInputs` (a type's own f′c override); the design summary's rows = the largest engine ratio of each group's checks over the type's lines, found in the test directly from `PSBHoldDown.compute` of every line (demand, limit, ratio, line, status), the lowest RF.
+- `tests/engine/psbridge-drawings.test.mjs`: the load list (+ handoffs, rating-along, dash, summary) and the sheet list (cover, notes first; summ last; continued block sheets folded).
+- Smokes: `ps-bridge-drawings.mjs` and `ps-bridge-drawings2.mjs` for the new sheet list (10 sheets, "n OF 10", Print all 10 pages); new `tests/smoke/ps-bridge-drawings3.mjs` (every sheet renders with its title and n OF N; the cover lists all; notes and summary texts; the summary's ratios = the Summary tab's; the index links; DXF valid; Print all = N pages; paper B).
+### Open items
+- Pre-existing, not changed: on paper B the STRAND AND GIRDER SCHEDULE of a project with six girder types does not fit at any scale (`over`, 1" = 100'-0") — the same on main.
+### Other copies
+- The block-sheet functions and table / notes are adapted copies of the Steel Bridge app's (apps/steel-bridge/engine/sheets.js, engine/drawings.js); keep a fix in step.
+
+## 2026-11-15 — Batch G1–G3: the Section tab's weak-axis I_y, S_y and torsion J (worked), P_jack and the eccentricity / effective A_ps chart; every load case of the old app on the Analysis chart (display only)
+PR #1582: https://github.com/mlococo88/All-Structural/pull/1582
+### Request
+- Old-vs-new review 2026-11-15, rows #69/#71 (I_y, S_y, J and their derivation, O:6510-6621), #72 (eccentricity and effective A_ps along the span, O:6623-6630), #21 (P_jack hint, O:6074), #61 (the Analysis chart's 11 moment and 10 shear series with toggles kept, O:8035-8131).
+### What changed
+- **`engine/worked.js`** `section(inp, R)`: after the `lt` step (anchor `weakSteps(add, G);`) two additions:
+  - `sec.Pj` P_jack = A_ps f_pbt (f_pbt = R.fpbt = k_j f_pu, linked to §ls.fpbt). The old app showed `R.ss.Aps*inp.str.jack*inp.str.fpu` in a hint (O:6074); no check uses it.
+  - `weakSteps(add, G)` (new function, anchor `function weakSteps(add, G)`): steps `sec.wk.*` that work the engine's own `weakAxisAndJ(G)` (engine/pbd-section.js, frozen; the psSection hand-off's Iweak / J since the old app): I-girder h_w, I_y = t_tf b_tf³/12 + t_bf b_bf³/12 + h_w b_w³/12, J_tf, J_bf, J_w (rectTorsionJ: a b³[1/3 − 0.21 (b/a)(1 − b⁴/(12 a⁴))]) and J = their sum; NEXT h_s, I_y (two stems + flange), J_s, J_f, J = 2 J_s + J_f; box / slab I_y = h w³/12 and J of the w × h rectangle (as the engine: no void deducted); S_y = I_y / (b_max/2). Each step's value is weakAxisAndJ's; its expression reproduces it (pairs). `weakAxis(G)` exported for the tab.
+- **`ui/section.js`**: topic `wk` "Weak axis and torsion (bare girder)" (before `str`); `weakRows(G, k)` adds three rows to the Gross girder section card (ids `sec-Iy`, `sec-Sy`, `sec-J`, each with its § link) and a note (bare girder; the MCT hand-off's I_zz / I_xx; no check uses J; the Handling tab's I_y); the Prestressing strands card gets the row "Jacking force P_jack = A_ps f_pbt" (`sec-Pj`, § sec.Pj); a new graphic card `gfx_secE` with `eccChart(el, ctx)`: e(x) and the effective A_ps(x) at the engine's stress stations R.grid (PSBVizAlong, two rows). The Report §3 shows the same rows, steps and figure (report/fromtab.js and ui/report.js read the tab).
+- **`ui/analysis.js`** the envelope chart: the moment series + M_g, M_DC1, M_DC2, Service I +, Service III + (the old app's 11), the shear series + V_g, V_DC1, V_DC2, V_DW, Service I + (10); the added ones are off at first (the old app's defaults; the six shown before stay on); `HIDE` (page-session memory) replaced by `hiddenOf(ui, g)` = the defaults overlaid by `ui.anHide` (the page's psb2.ui object, saved with `ctx.save`), so the choice is kept as the old app kept its toggles.
+- **`index.html`** `ctxOut` gets `save: saveUi` (anchor `redraw: () => { saveUi(); drawOut(); }, save: saveUi`).
+### Saved data (CLAUDE.md §5)
+- No key changed. psb2.ui (this app's UI state, not project data) gets an optional field `anHide` (absent = the defaults).
+### Governing provisions (CLAUDE.md §4)
+- No engineering value of the app changes: every number added is the engine's (weakAxisAndJ, R.grid, R.fpbt, R.diagrams). P_jack is the product A_ps × f_pbt the old app showed; no check uses it. Harness B: see the PR.
+- Open items (not changed, CLAUDE.md §4 / §9; raised in the PR): (1) weakAxisAndJ reads `g.voidW / g.voidH / g.voids` but the gross section keeps the void sizes under `g.box`, so box beams and voided slabs get the solid rectangle's I_y and J (the old app the same); (2) the I-girder J is a sum of rectangle J's (with the 0.21 term), not AASHTO's Eq. C4.6.2.2.1-2 A⁴/(40 I_p) for stocky open sections. Both values are used only by the MCT hand-off (I_zz, I_xx).
+### Check case (default project, PCI BT-72, 120 ft)
+- t_tf = 3.5 + 2 = 5.5 in, t_bf = 6 + 4.5 = 10.5 in, h_w = 72 − 5.5 − 10.5 = 56 in.
+- I_y = 5.5(42)³/12 + 10.5(26)³/12 + 56(6)³/12 = 33,957 + 15,379 + 1,008 = 50,344 in⁴; S_y = 50,344 / (42/2) = 2,397 in³.
+- J_tf = 42(5.5)³[1/3 − 0.21(5.5/42)(1 − 5.5⁴/(12·42⁴))] = 2,137; J_bf = 7,486; J_w = 56(6)³[…] = 3,760; J = 13,383 in⁴.
+- P_jack = 40 × 0.217 = 8.68 in² × 0.75 × 270 = 8.68 × 202.5 = 1,757.7 kip (shown 1,758).
+### How verified
+- New tests/engine/psbridge-gsection.test.mjs (5 tests), new tests/smoke/ps-bridge-gfeatures.mjs (parts g1-g3). PS checks: see the PR.
+### Other copies
+- None.
+### Code (the PR's diff of the app files; anchors in the text above)
+```diff
+diff --git a/apps/ps-bridge/engine/worked.js b/apps/ps-bridge/engine/worked.js
+index ab8d9b0..26f1301 100644
+--- a/apps/ps-bridge/engine/worked.js
++++ b/apps/ps-bridge/engine/worked.js
+@@ -104,9 +104,59 @@
+       value: ss.cgsMid, unit: 'in', d: 3, note: full ? '' : 'Effective strands at midspan only (debonding or transfer length reaches midspan).' }, ym);
+     add({ id: 'eMid', label: 'Strand eccentricity at midspan', sym: 'e_{m}', eq: 'y_{b} - y_{ps}', sub: `${n(G.yb, 3)} - ${n(ss.cgsMid, 3)}`, value: ss.eMid, unit: 'in', d: 3 }, G.yb - ss.cgsMid);
+     add({ id: 'lt', label: 'Transfer length', sym: '\\ell_{t}', eq: '60\\,d_{b}', sub: `60(${n(ss.st.db, 2)})`, value: ss.lt, unit: 'in', d: 1, ref: A10 + '5.9.4.3.1' }, 60 * ss.st.db);
++    // batch G2 (2026-11-15): the old app's P_jack hint under the strands (O:6074, A_ps × k_j × f_pu), worked here as A_ps f_pbt (f_pbt = k_j f_pu, the engine's R.fpbt)
++    add({ id: 'Pj', label: 'Jacking force of all strands', sym: 'P_{jack}', eq: 'A_{ps}\\,f_{pbt}', sub: `${n(ss.Aps, 3)}(${n(R.fpbt, 2)})`, value: ss.Aps * R.fpbt, unit: 'kip', d: 0,
++      note: 'f_pbt = k_j f_pu, the stress immediately before transfer (worked on the Losses tab). Information: no check uses P_jack.' }, ss.Aps * R.fpbt);
++    weakSteps(add, G);
+     return K.done();
+   }
+ 
++  /* weakSteps(add, G) (batch G1, 2026-11-15): the bare girder's weak-axis (lateral) I_y, S_y and St-Venant torsion J as the old app's
++     Section tab worked them (O:6593-6621), here with the engine's own expressions: the values are weakAxisAndJ(G) of engine/pbd-section.js
++     (the psSection hand-off's Iweak / J, sent to the MCT generator as I_zz / I_xx since the old app); rectTorsionJ the rectangle's J with
++     the 0.21 thickness term. Display only: nothing new is calculated (CLAUDE.md §4: no value of the app changes). */
++  function weakAxis(G) { return typeof weakAxisAndJ === 'function' ? weakAxisAndJ(G) : null; }
++  function weakSteps(add, G) {
++    const wj = weakAxis(G); if (!wj) return;
++    const rJ = (a, b) => (typeof rectTorsionJ === 'function' ? rectTorsionJ(a, b) : NaN);
++    const rjEq = (A, B) => `${A}\\,${B}^{3}\\left[\\frac{1}{3} - 0.21\\,\\frac{${B}}{${A}}\\left(1 - \\frac{${B}^{4}}{12\\,${A}^{4}}\\right)\\right]`;
++    const rjSub = (a, b) => { const A = Math.max(a, b), B = Math.min(a, b); return `${n(A, 2)}(${n(B, 2)})^{3}\\left[\\frac{1}{3} - 0.21\\,\\frac{${n(B, 2)}}{${n(A, 2)}}\\left(1 - \\frac{(${n(B, 2)})^{4}}{12(${n(A, 2)})^{4}}\\right)\\right]`; };
++    const bare = 'The bare girder about its vertical centroidal axis: the deck spans between the girders and is not a full-width flange for one girder\'s lateral bending.';
++    const rjNote = 'J of a rectangle a × b (a the longer side, b the shorter): a b³ [1/3 − 0.21 (b/a)(1 − b⁴/(12 a⁴))].';
++    const JN = 'Not used by any check of this app: it is the J the section hand-off sends to the MCT generator (I_xx). For comparison, AASHTO LRFD 10th Ed. C4.6.2.2.1 gives Σ b t³ / 3 for thin-walled open beams (Eq. C4.6.2.2.1-1) and A⁴ / (40 I_p) for stocky open sections (Eq. C4.6.2.2.1-2).';
++    if (G.isBox || G.isDeck) {
++      const w = +G.w || +G.btf || +G.bw, h = +G.h;
++      add({ id: 'wk.Iy', label: 'Weak-axis moment of inertia (the solid w × h rectangle)', sym: 'I_{y}', eq: '\\frac{h\\,w^{3}}{12}', sub: `\\frac{${n(h, 2)}(${n(w, 2)})^{3}}{12}`, value: wj.Iweak, unit: 'in^{4}', d: 0,
++        note: bare + ' The engine takes the outer rectangle (no void deducted), as the old app.' }, h * Math.pow(w, 3) / 12);
++      add({ id: 'wk.J', label: 'St-Venant torsion constant (the solid w × h rectangle)', sym: 'J', eq: rjEq('a', 'b'), sub: rjSub(w, h), value: wj.J, unit: 'in^{4}', d: 0,
++        note: rjNote + ' The engine takes the outer rectangle (no void deducted), as the old app. Not used by any check of this app: it is the J the section hand-off sends to the MCT generator (I_xx); the distribution factors of types (f) / (g) use their own J of the outline (Loads & LLDF tab, §ld.J).' }, rJ(w, h));
++    } else if (G.isNext) {
++      const B = (G.next && +G.next.B) || 10, cc = (G.next && +G.next.stemCC) || 60, w = +G.btf || +G.w, h = +G.h, hs = Math.max(1, h - 8);
++      add({ id: 'wk.hs', label: 'Weak axis: stem depth (the flange taken 8 in)', sym: 'h_{s}', eq: 'h - 8', sub: `${n(h, 2)} - 8`, value: hs, unit: 'in', d: 2 }, Math.max(1, h - 8));
++      add({ id: 'wk.Iy', label: 'Weak-axis moment of inertia (two stems at ± c/c ÷ 2, plus the flange)', sym: 'I_{y}', eq: '2\\left[\\frac{B\\,h_{s}^{3}}{12} + B\\,h_{s}\\left(\\frac{c}{2}\\right)^{2}\\right] + \\frac{8\\,b_{f}^{3}}{12}',
++        sub: `2\\left[\\frac{${n(B, 2)}(${n(hs, 2)})^{3}}{12} + ${n(B, 2)}(${n(hs, 2)})\\left(\\frac{${n(cc, 1)}}{2}\\right)^{2}\\right] + \\frac{8(${n(w, 2)})^{3}}{12}`, value: wj.Iweak, unit: 'in^{4}', d: 0,
++        note: bare + ' B: the stem width, c: the stem spacing (c/c), b_f: the flange width; the engine\'s approximation, as the old app.' }, 2 * (B * Math.pow(hs, 3) / 12 + B * hs * Math.pow(cc / 2, 2)) + 8 * Math.pow(w, 3) / 12);
++      const Js = rJ(B, hs), Jf = rJ(w, 8);
++      add({ id: 'wk.Js', label: 'Torsion: one stem (B × h_s)', sym: 'J_{s}', eq: rjEq('a', 'b'), sub: rjSub(B, hs), value: Js, unit: 'in^{4}', d: 0, note: rjNote }, Js);
++      add({ id: 'wk.Jf', label: 'Torsion: the flange (b_f × 8 in)', sym: 'J_{f}', eq: rjEq('a', 'b'), sub: rjSub(w, 8), value: Jf, unit: 'in^{4}', d: 0 }, Jf);
++      add({ id: 'wk.J', label: 'St-Venant torsion constant (open section: the sum of its parts)', sym: 'J', eq: '2\\,J_{s} + J_{f}', sub: `2(${g(Js, 0)}) + ${g(Jf, 0)}`, value: wj.J, unit: 'in^{4}', d: 0, note: JN }, 2 * Js + Jf);
++    } else {
++      const d = G.d || [6, 3, 6, 6], ttf = (+d[0] || 0) + (+d[1] || 0), tbf = (+d[2] || 0) + (+d[3] || 0), hw = Math.max(1, G.h - ttf - tbf);
++      const It = ttf * Math.pow(G.btf, 3) / 12, Ib = tbf * Math.pow(G.bbf, 3) / 12, Iw = hw * Math.pow(G.bw, 3) / 12;
++      add({ id: 'wk.hw', label: 'Weak axis: web height between the flanges (flange thicknesses with their tapers)', sym: 'h_{w}', eq: 'h - t_{tf} - t_{bf}', sub: `${n(G.h, 2)} - ${n(ttf, 2)} - ${n(tbf, 2)}`, value: hw, unit: 'in', d: 2 }, Math.max(1, G.h - ttf - tbf));
++      add({ id: 'wk.Iy', label: 'Weak-axis moment of inertia (flange and web rectangles, each centred on the vertical axis)', sym: 'I_{y}', eq: '\\frac{t_{tf}\\,b_{tf}^{3}}{12} + \\frac{t_{bf}\\,b_{bf}^{3}}{12} + \\frac{h_{w}\\,b_{w}^{3}}{12}',
++        sub: `\\frac{${n(ttf, 2)}(${n(G.btf, 2)})^{3}}{12} + \\frac{${n(tbf, 2)}(${n(G.bbf, 2)})^{3}}{12} + \\frac{${n(hw, 2)}(${n(G.bw, 2)})^{3}}{12} = ${g(It, 0)} + ${g(Ib, 0)} + ${g(Iw, 0)}`, value: wj.Iweak, unit: 'in^{4}', d: 0,
++        note: bare + ' The Handling tab\'s lateral stability (when on) uses the same I_y.' }, It + Ib + Iw);
++      const Jt = rJ(G.btf, ttf), Jb = rJ(G.bbf, tbf), Jw = rJ(hw, G.bw);
++      add({ id: 'wk.Jtf', label: 'Torsion: top flange (b_tf × t_tf)', sym: 'J_{tf}', eq: rjEq('a', 'b'), sub: rjSub(G.btf, ttf), value: Jt, unit: 'in^{4}', d: 0, note: rjNote }, Jt);
++      add({ id: 'wk.Jbf', label: 'Torsion: bottom flange (b_bf × t_bf)', sym: 'J_{bf}', eq: rjEq('a', 'b'), sub: rjSub(G.bbf, tbf), value: Jb, unit: 'in^{4}', d: 0 }, Jb);
++      add({ id: 'wk.Jw', label: 'Torsion: web (h_w × b_w)', sym: 'J_{w}', eq: rjEq('a', 'b'), sub: rjSub(hw, G.bw), value: Jw, unit: 'in^{4}', d: 0 }, Jw);
++      add({ id: 'wk.J', label: 'St-Venant torsion constant (open section: the sum of its plates)', sym: 'J', eq: 'J_{tf} + J_{bf} + J_{w}', sub: `${g(Jt, 0)} + ${g(Jb, 0)} + ${g(Jw, 0)}`, value: wj.J, unit: 'in^{4}', d: 0, note: JN }, Jt + Jb + Jw);
++    }
++    add({ id: 'wk.Sy', label: 'Weak-axis section modulus (to the widest fibre)', sym: 'S_{y}', eq: '\\frac{I_{y}}{b_{max}/2}', sub: `\\frac{${g(wj.Iweak, 0)}}{${n(wj.bMax, 2)}/2}`, value: wj.Sy, unit: 'in^{3}', d: 0,
++      note: 'b_max: the widest of the top flange, bottom flange and section widths.' }, wj.bMax > 0 ? wj.Iweak / (wj.bMax / 2) : 0);
++  }
++
+   /* PS-35 (engine/lldf-fg.js): the type (f) / (g) distribution factors of a box beam or a voided slab, worked (the values are R.df's) */
+   function fgSteps(add, inp, R) {
+     const df = R.df, f = df.fg, jw = f.jw, L = f.L, b = f.b, T = A10 + 'Table 4.6.2.2.';
+@@ -361,5 +411,5 @@
+     }
+     return K.done();
+   }
+-  window.PSBWorked = { section, loads, analysis, kit, n, g, par };   // kit, n, g, par: for the worked steps of the PR 2c tabs (engine/worked-stress.js, worked-strength.js)
++  window.PSBWorked = { weakAxis, section, loads, analysis, kit, n, g, par };   // kit, n, g, par: for the worked steps of the PR 2c tabs (engine/worked-stress.js, worked-strength.js)
+ })();
+diff --git a/apps/ps-bridge/index.html b/apps/ps-bridge/index.html
+index bd4f749..117d41e 100644
+--- a/apps/ps-bridge/index.html
++++ b/apps/ps-bridge/index.html
+@@ -678,7 +678,7 @@
+     if ((TABUI[ui.otab] || ui.otab === 'rpt') && !errs.length) h += DMUI.srcBar(P);   // batch D1: the demands of the type shown (the steel app's srcBar)
+     if (ui.otab === 'lds') h += deNotice();   // PS-23: the entered d_e differs from the computed one
+     if (TABUI[ui.otab]) {
+-      if (ok) { ctxOut = { P, inp: rc.inp, R: rc.R, W: rc.W, ui, all: rc.all || null, redraw: () => { saveUi(); drawOut(); } };   // all (2026-11-15, batch C): every girder type × line, for the tables of every line
++      if (ok) { ctxOut = { P, inp: rc.inp, R: rc.R, W: rc.W, ui, all: rc.all || null, redraw: () => { saveUi(); drawOut(); }, save: saveUi };   /* save (batch G3): keep a ui choice without a redraw (the Analysis chart's series) */   // all (2026-11-15, batch C): every girder type × line, for the tables of every line
+         const d = window.PSBDesign.sel(P);
+         const sh = BR.hasTypes(P) ? BR.shown(P) : null;
+         h += `<p class="note">${sh ? `Girder type ${esc(P.types[sh.k].label)} on ` : 'Design girder '}${esc(rc.inp.proj.girderId)}, span ${d.s} (L = ${fmt(rc.R.L, 2)} ft): <a href="#" data-goin="gird">Girders &amp; strands tab</a>.</p>` + TABUI[ui.otab]().output(ctxOut); }
+diff --git a/apps/ps-bridge/ui/analysis.js b/apps/ps-bridge/ui/analysis.js
+index b139a0c..83d29a8 100644
+--- a/apps/ps-bridge/ui/analysis.js
++++ b/apps/ps-bridge/ui/analysis.js
+@@ -159,7 +159,10 @@
+     h += `<text x="${(X(0) + X(L)) / 2}" y="${yG + hG + 26}" text-anchor="middle" font-size="11" fill="#475569">Span ${s}${n > 1 ? ` of ${n}` : ''}: L = ${f2(L)} ft</text></svg>`;
+     return { html: h, nar: W < 560 };
+   }
+-  const HIDE = {};
++  /* batch G3: the series switched off on the Analysis chart: the old app's defaults (the girder, DC1, DC2, DW shear, Service I and III off)
++     overlaid by the viewer's choices, ui.anHide = { M: { key: bool }, V: { … } } (the page's psb2.ui, per browser, as the old app kept its toggles) */
++  const HIDE0 = { M: { g: true, dc1: true, dc2: true, s1: true, s3: true }, V: { g: true, dc1: true, dc2: true, dw: true, s1: true } };
++  const hiddenOf = (ui, g) => Object.assign({}, HIDE0[g], ui && ui.anHide && ui.anHide[g]);
+   function after(el, ctx) {
+     { const se = el.querySelector('#gfxr_anel'), VK = window.PSBVizKit;   // 2026-11-15 (batch C): the girder elevation
+       if (se && VK && VK.detCard) VK.detCard(se, { id: 'anElev', title: 'Girder elevation', sub: 'the span analysed: bearings, diaphragm point loads (DC1), continuity for composite loads', draw: W => elevSvg(ctx, W), hint: 'Point at a bearing or a diaphragm load to read it.', file: 'analysis-elevation',
+@@ -180,20 +183,26 @@
+       if (V && V.vr) return; }
+     const slot = el.querySelector('#gfx_an'); if (!slot || !VA() || !VA().mount) return;
+     const { R, ui } = ctx, D = R.diagrams, xs = D.map(r => r.x), near = x => xs.reduce((b, v, i) => Math.abs(v - x) < Math.abs(xs[b] - x) ? i : b, 0), k = K();
+-    const MS = [{ key: 'dc', html: 'M<sub>DC</sub>', ci: 0, f: 'M_DC' }, { key: 'dw', html: 'M<sub>DW</sub>', ci: 3, f: 'M_DW' }, { key: 'llp', html: 'M<sub>LL+IM</sub> +', ci: 1, f: 'M_LLpos' }, { key: 'lln', html: 'M<sub>LL+IM</sub> −', ci: 1, dash: '5 3', f: 'M_LLneg' },
+-      { key: 'up', html: 'M<sub>u</sub> +', ci: 2, f: 'M_StrI_pos' }, { key: 'un', html: 'M<sub>u</sub> −', ci: 2, dash: '5 3', f: 'M_StrI_neg' }];
+-    const VS = [{ key: 'dc', html: 'V<sub>DC</sub>', ci: 0, f: 'V_DC' }, { key: 'llp', html: 'V<sub>LL+IM</sub> +', ci: 1, f: 'V_LLpos' }, { key: 'lln', html: 'V<sub>LL+IM</sub> −', ci: 1, dash: '5 3', f: 'V_LLneg' },
+-      { key: 'up', html: 'V<sub>u</sub> +', ci: 2, f: 'V_StrI_pos' }, { key: 'un', html: 'V<sub>u</sub> −', ci: 2, dash: '5 3', f: 'V_StrI_neg' }];
++    // batch G3 (2026-11-15): every load case the old app drew (O:8063-8090): + the girder self-weight, DC1, DC2, Service I + and Service III +
++    // (and V_DW), switched off at first as in the old app (the series shown before stay on); the series switched on / off are kept (psb2.ui anHide)
++    const MS = [{ key: 'g', html: 'M<sub>g</sub> (girder)', ci: 5, dash: '2 2', f: 'M_g' }, { key: 'dc1', html: 'M<sub>DC1</sub>', ci: 4, f: 'M_DC1' }, { key: 'dc2', html: 'M<sub>DC2</sub>', ci: 4, dash: '2 2', f: 'M_DC2' },
++      { key: 'dc', html: 'M<sub>DC</sub>', ci: 0, f: 'M_DC' }, { key: 'dw', html: 'M<sub>DW</sub>', ci: 3, f: 'M_DW' }, { key: 'llp', html: 'M<sub>LL+IM</sub> +', ci: 1, f: 'M_LLpos' }, { key: 'lln', html: 'M<sub>LL+IM</sub> −', ci: 1, dash: '5 3', f: 'M_LLneg' },
++      { key: 'up', html: 'M<sub>u</sub> +', ci: 2, f: 'M_StrI_pos' }, { key: 'un', html: 'M<sub>u</sub> −', ci: 2, dash: '5 3', f: 'M_StrI_neg' },
++      { key: 's1', html: 'Service I +', ci: 5, f: 'M_SrvI_pos' }, { key: 's3', html: 'Service III +', ci: 5, dash: '5 3', f: 'M_SrvIII_pos' }];
++    const VS = [{ key: 'g', html: 'V<sub>g</sub> (girder)', ci: 5, dash: '2 2', f: 'V_g' }, { key: 'dc1', html: 'V<sub>DC1</sub>', ci: 4, f: 'V_DC1' }, { key: 'dc2', html: 'V<sub>DC2</sub>', ci: 4, dash: '2 2', f: 'V_DC2' },
++      { key: 'dc', html: 'V<sub>DC</sub>', ci: 0, f: 'V_DC' }, { key: 'dw', html: 'V<sub>DW</sub>', ci: 3, f: 'V_DW' }, { key: 'llp', html: 'V<sub>LL+IM</sub> +', ci: 1, f: 'V_LLpos' }, { key: 'lln', html: 'V<sub>LL+IM</sub> −', ci: 1, dash: '5 3', f: 'V_LLneg' },
++      { key: 'up', html: 'V<sub>u</sub> +', ci: 2, f: 'V_StrI_pos' }, { key: 'un', html: 'V<sub>u</sub> −', ci: 2, dash: '5 3', f: 'V_StrI_neg' }, { key: 's1', html: 'Service I +', ci: 5, f: 'V_SrvI_pos' }];
++    const hid = g => hiddenOf(ui, g);
+     const ser = L => L.map(q => ({ key: q.key, ci: q.ci, dash: q.dash, pts: D.map(r => [r.x, r[q.f]]) }));
+-    const grp = (g, label, L) => ({ label, items: L.map(q => ({ key: g + ':' + q.key, html: `${VA().swatch(q.ci, q.dash)} ${q.html}`, on: !(HIDE[g] || {})[q.key] })) });
++    const grp = (g, label, L) => ({ label, items: L.map(q => ({ key: g + ':' + q.key, html: `${VA().swatch(q.ci, q.dash)} ${q.html}`, on: !hid(g)[q.key] })) });
+     const at = x => { const r = D[near(x)]; return [`x = ${k.fx(r.x, 2)} ft`, `M_DC ${k.fx(r.M_DC, 0)}, M_DW ${k.fx(r.M_DW, 0)}, M_LL+IM ${k.fx(r.M_LLneg, 0)} / ${k.fx(r.M_LLpos, 0)}, M_u ${k.fx(r.M_StrI_neg, 0)} / ${k.fx(r.M_StrI_pos, 0)} kip-ft; V_u ${k.fx(r.V_StrI_neg, 1)} / ${k.fx(r.V_StrI_pos, 1)} kip`]; };
+     let H = null;
+     H = VA().mount(slot, { key: 'an', title: 'Moment and shear envelopes along the design girder', sub: `span L = ${k.fx(R.L, 2)} ft, ${D.length} stations${R.fe ? ', continuous unit for DC2, DW and LL' : ''}`,
+       draw: W => VA().render({ L0: 0, L1: R.L, sup: [0, R.L], sel: xs[selOf(ui, R)], selLabel: `x = ${k.fx(xs[selOf(ui, R)], 2)} ft`, axisTitle: 'Station x, ft (from ℄ bearing, left)', aria: 'Moment and shear envelopes along the girder', rows: [
+-        { kind: 'chart', key: 'M', label: 'Moments, kip-ft (per girder; sagging up)', unit: 'kip-ft', series: ser(MS), hidden: HIDE.M },
+-        { kind: 'chart', key: 'V', label: 'Shears, kip (per girder)', unit: 'kip', series: ser(VS), hidden: HIDE.V, h: W < 600 ? 110 : 140 }] }, W),
++        { kind: 'chart', key: 'M', label: 'Moments, kip-ft (per girder; sagging up)', unit: 'kip-ft', series: ser(MS), hidden: hid('M') },
++        { kind: 'chart', key: 'V', label: 'Shears, kip (per girder)', unit: 'kip', series: ser(VS), hidden: hid('V'), h: W < 600 ? 110 : 140 }] }, W),
+       at, pickX: x => near(x), snap: x => xs[near(x)], onSelect: i => { ui.anSel = i; if (ctx.redraw) ctx.redraw(); },
+-      chips: () => [grp('M', 'Moments', MS), grp('V', 'Shears', VS)], onChip: key => { const [g, s] = key.split(':'), o = HIDE[g] = HIDE[g] || {}; o[s] = !o[s]; },
++      chips: () => [grp('M', 'Moments', MS), grp('V', 'Shears', VS)], onChip: key => { const [g, q] = key.split(':'), h = ui.anHide = ui.anHide || {}, o = h[g] = Object.assign({}, hid(g)); o[q] = !o[q]; if (ctx.save) ctx.save(); },
+       hint: 'Point at (or tap) the chart to read the station; click or tap to select it.',
+       caption: '<p class="vk-cap">The engine\'s force effects at its stations (the table above); click a station to select it. Display only.</p>' });
+     return H;
+@@ -201,5 +210,5 @@
+   function onOutChange(e, ui) { if (e.target.id === 'o_anSel') { ui.anSel = +e.target.value; return true; }
+     if (e.target.id === 'o_dmView') { ui.dmView = e.target.value; return true; }   // batch D2: the span viewed (psb2.ui, per browser)
+     return false; }
+-  window.PSBUiAnalysis = { output, after, onOutChange, TOPICS };
++  window.PSBUiAnalysis = { output, after, onOutChange, TOPICS, hiddenOf };
+ })();
+diff --git a/apps/ps-bridge/ui/section.js b/apps/ps-bridge/ui/section.js
+index e4101ff..49912dd 100644
+--- a/apps/ps-bridge/ui/section.js
++++ b/apps/ps-bridge/ui/section.js
+@@ -11,6 +11,7 @@
+     { key: 'gross', title: 'Gross girder section', ref: 'shape library; 3.5.1', ids: /^sec\.g\./ },
+     { key: 'ec', title: 'Moduli of elasticity and modular ratio', ref: 'AASHTO LRFD 10th Ed. 5.4.2.4', ids: /^sec\.(Ecg|Ecd|n)$/, res: /^sec\.n$/ },
+     { key: 'comp', title: 'Composite section (transformed deck)', ref: 'AASHTO LRFD 10th Ed. 4.6.2.6', ids: /^sec\.(beff|Ad|yd|Ah|Ac|ybc|Ic|hc|Sbc|Stg|Std)$/, res: /^sec\.Ic$/ },
++    { key: 'wk', title: 'Weak axis and torsion (bare girder)', ref: 'the MCT section hand-off: I_zz, I_xx', ids: /^sec\.wk\./, res: /^sec\.wk\.J$/ },   // batch G1
+     { key: 'str', title: 'Prestressing strands', ref: 'AASHTO LRFD 10th Ed. 5.9.4.3.1', ids: /^sec\./, res: /^sec\.eMid$/ }];
+   /* voidNote(G): 2026-11-14 (decision pending engineer review, PS28/void note): where the void of a box beam or a voided deck slab is, as the
+      engine places it (sectionVoids, pbd-section.js) and every graphic draws it; '' for a shape without voids. The old app's section graphic
+@@ -40,6 +41,14 @@
+     if (st[1].src.owner === 'MassDOT') { const m = st[1].src; return `MassDOT ${m.beam}: A, I, y<sub>b</sub> from MassDOT Bridge Manual Part II dwg ${m.dwg} (p. ${m.page}) (PS-37)${st[1].next ? ', interpolated on the beam width' : ''}; S<sub>b</sub>, S<sub>t</sub> and the self-weight computed from them below`; }   // PS-37
+     const s = st[1].src; return `AASHTO ${s.beam}: A, I, y<sub>b</sub> from CTDOT Bridge Design Manual plate ${s.plate} (PDF p. ${s.page}), an app-side correction of the old library (PS-30 / PS-32); S<sub>b</sub>, S<sub>t</sub> and the self-weight computed from them below`;
+   }
++  /* weakRows(G, k) (batch G1, 2026-11-15): the old app's I_y, S_y and J rows of its Non-composite card (O:6510-6519): the bare girder's weak-axis
++     (lateral) inertia, modulus and St-Venant torsion constant, engine/pbd-section.js weakAxisAndJ (the psSection hand-off's Iweak / J), worked
++     in topic "Weak axis and torsion" (engine/worked.js weakSteps). Display only. */
++  function weakRows(G, k) {
++    const wj = window.PSBWorked && window.PSBWorked.weakAxis ? window.PSBWorked.weakAxis(G) : null; if (!wj) return [];
++    return [['Weak-axis I<sub>y</sub> (lateral, bare girder)', `<span id="sec-Iy">${k.fx(wj.Iweak, 0)}</span> in⁴ ${k.wk('sec.wk.Iy')}`], ['Weak-axis modulus S<sub>y</sub>', `<span id="sec-Sy">${k.fx(wj.Sy, 0)}</span> in³ ${k.wk('sec.wk.Sy')}`],
++      ['St-Venant torsion J (bare girder)', `<span id="sec-J">${k.fx(wj.J, 0)}</span> in⁴ ${k.wk('sec.wk.J')}`]];
++  }
+   function output(ctx) {
+     const { R, inp } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, G = R.g, ss = R.ss;
+     const SCm = window.PSBSections, md = SCm && SCm.mdOf ? SCm.mdOf(G) : null;   // PS-37: a MassDOT section's own kind and note
+@@ -52,8 +61,10 @@
+       ...(mx ? [['Beam width b<sub>f</sub>', `${ev('g.btf', 2, 'in')} ${wk('sec.g.bf')}`]] : []),   // PS-37: a MassDOT NEXT's width and interpolated properties, worked
+       ['Area A', `${ev('g.A', 1, 'in²')}${mx && !(G.ovr && G.ovr.A) ? ' ' + wk('sec.g.A') : ''}`], ['Moment of inertia I', `${ev('g.I', 0, 'in⁴')}${mx && !(G.ovr && G.ovr.I) ? ' ' + wk('sec.g.I') : ''}`],
+       ['y<sub>b</sub> (centroid above the soffit)', `${ev('g.yb', 3, 'in')}${mx && !(G.ovr && G.ovr.yb) ? ' ' + wk('sec.g.yb') : ''}`], ['y<sub>t</sub>', `${ev('g.yt', 3, 'in')} ${wk('sec.g.yt')}`], ['S<sub>b</sub>', `${ev('g.Sb', 0, 'in³')} ${wk('sec.g.Sb')}`], ['S<sub>t</sub>', `${ev('g.St', 0, 'in³')} ${wk('sec.g.St')}`],
+-      ['Web width b<sub>w</sub>', ev('g.bw', 2, 'in')], ['Top / bottom flange width', `${ev('g.btf', 2)} / ${ev('g.bbf', 2, 'in')}`], ['Self-weight w<sub>g</sub>', `${ev('g.wsw', 4, 'klf')} ${wk('sec.g.wsw')}`]])
++      ['Web width b<sub>w</sub>', ev('g.bw', 2, 'in')], ['Top / bottom flange width', `${ev('g.btf', 2)} / ${ev('g.bbf', 2, 'in')}`], ['Self-weight w<sub>g</sub>', `${ev('g.wsw', 4, 'klf')} ${wk('sec.g.wsw')}`],
++      ...weakRows(G, k)])
+       + `<p class="note">Gross properties of the shape library (${stdSrc(G) || `the old app's GIRDERS${G.isNext ? '; NEXT: interpolated on the flange width' : ''}`})${G.ovr && G.ovr.any ? '; overridden values as entered (Girders &amp; strands tab)' : ''}.</p>`
++      + '<p class="note">I<sub>y</sub>, S<sub>y</sub> and J are the bare girder\'s (the deck spans between the girders and is not a full-width flange for one girder\'s lateral bending), the engine\'s approximations as in the old app. They are the values the section hand-off sends to the MCT generator as the MIDAS section\'s I<sub>zz</sub> (weak axis) and I<sub>xx</sub> (torsion); I<sub>c</sub> below goes to I<sub>yy</sub>. No check of this app uses J; I<sub>y</sub> of an I-girder is also the lateral stability I<sub>y</sub> of the <a href="#" data-gotab="hand">Handling tab</a>.</p>'
+       + (vn ? `<p class="note" id="sec-void-note">${vn}</p>` : ''), 'card-gross');
+     h += k.card('Composite section', k.kv([
+       ['E<sub>c</sub> girder', `${ev('cp.Ecg', 0, 'ksi')} ${wk('sec.Ecg')}`], ['E<sub>c</sub> deck', `${ev('cp.Ecd', 0, 'ksi')} ${wk('sec.Ecd')}`], ['Modular ratio n', `${ev('cp.n', 4)} ${wk('sec.n')}`],
+@@ -68,8 +79,10 @@
+       ...(dr ? [['Draped strands: y<sub>end</sub> / y<sub>mid</sub>', `${k.fx(+ss.hp.yEnd, 2)} / ${k.fx(+ss.hp.yMid, 2)} in`], ['Hold-down points from ℄ bearing', `${k.fx(ss.hp.frac * R.L, 2)} ft (${k.fx(+ss.hp.frac, 3)} L) ${wk('sec.aHd')}`],
+         ['Slope of the draped strands', `${ev('ss.slope', 4)} ${wk('sec.slope')}`]] : []),
+       ['Strand centroid at midspan y<sub>ps</sub>', `${ev('ss.cgsMid', 3, 'in')} ${wk('sec.cgsMid')}`], ['Eccentricity at midspan e<sub>m</sub>', `${ev('ss.eMid', 3, 'in')} ${wk('sec.eMid')}`],
+-      ['Eccentricity at the end e<sub>end</sub>', ev('ss.eEnd', 3, 'in')], ['Transfer length ℓ<sub>t</sub>', `${ev('ss.lt', 1, 'in')} ${wk('sec.lt')}`]])
++      ['Eccentricity at the end e<sub>end</sub>', ev('ss.eEnd', 3, 'in')], ['Transfer length ℓ<sub>t</sub>', `${ev('ss.lt', 1, 'in')} ${wk('sec.lt')}`],
++      ['Jacking force P<sub>jack</sub> = A<sub>ps</sub> f<sub>pbt</sub>', `<span id="sec-Pj">${k.fx(ss.Aps * R.fpbt, 0)}</span> kip ${wk('sec.Pj')} (f<sub>pbt</sub>: <a href="#" data-gotab="loss">Losses tab</a>)`]])   // batch G2: the old app's P_jack hint (O:6074)
+       + '<p class="note">Strand rows and draped strands: <a href="#" data-goin="gird">Girders &amp; strands tab</a>. The strands are drawn in the section figure above and in the strand-pattern graphic of the Losses tab.</p>', 'card-str');
++    h += K().gcard('Eccentricity and effective strands along the span', 'gfx_secE');   // batch G2: the old app's chart (O:6623-6630)
+     h += k.card('Worked steps: section properties', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value (the moved Prestressed Bridge Design engine).</p>${k.steps(ctx.W.section.steps, TOPICS, OPEN)}`);
+     return h;
+   }
+@@ -99,8 +112,24 @@
+     const r = S.render({ W, maxH: nar ? Math.max(300, W * 1.1) : Math.min(520, Math.max(300, W * 0.6)), label: 'Composite section with the strands' });
+     return { html: r.svg, nar };
+   }
++  /* batch G2 (2026-11-15): the old app's "Eccentricity & Effective Strands Along Span" chart (O:6623-6630): e(x) and the effective A_ps(x)
++     at the engine's stress stations (R.grid: x, e, Aps; the strand system's at(x), with draping, debonding and the transfer-length ramps),
++     the steel along-girder chart (PSBVizAlong). Display only. */
++  function eccChart(el, ctx) {
++    const slot = el.querySelector('#gfx_secE'), VA = window.PSBVizAlong; if (!slot || !VA || !VA.mount) return;
++    const { R } = ctx, k = K(), Gd = R.grid || [], xs = Gd.map(r => r.x); if (!Gd.length) return;
++    const near = x => Gd.reduce((b, r) => (Math.abs(r.x - x) < Math.abs(b.x - x) ? r : b), Gd[0]), lt = R.ss.lt / 12;
++    return VA.mount(slot, { key: 'secE', title: 'Eccentricity and effective strands along the span', sub: `span L = ${k.fx(R.L, 2)} ft, ${Gd.length} stations; ℓ<sub>t</sub> = ${k.fx(R.ss.lt, 1)} in`,
++      draw: W => VA.render({ L0: 0, L1: R.L, sup: [0, R.L], axisTitle: 'Station x, ft (from ℄ bearing, left)', aria: 'Strand eccentricity and effective strand area along the girder', rows: [
++        { kind: 'chart', key: 'e', label: 'Eccentricity e, in (strand centroid below the girder centroid +)', unit: 'in', series: [{ key: 'e', ci: 0, pts: Gd.map(r => [r.x, r.e]) }], h: W < 600 ? 110 : 140 },
++        { kind: 'chart', key: 'A', label: 'Effective A_ps, in²', unit: 'in²', series: [{ key: 'A', ci: 1, dash: '5 3', pts: Gd.map(r => [r.x, r.Aps]) }], h: W < 600 ? 100 : 120 }] }, W),
++      at: x => { const r = near(x); return [`x = ${k.fx(r.x, 2)} ft`, `e = ${k.fx(r.e, 2)} in; effective A_ps = ${k.fx(r.Aps, 3)} in²`]; }, snap: x => near(x).x,
++      legend: `${VA.swatch(0)} e(x), in &nbsp; ${VA.swatch(1, '5 3')} A<sub>ps</sub> effective, in²`,
++      caption: `<p class="vk-cap">The engine's values at its stress stations (Stresses tab), x = ${xs.length ? k.fx(xs[0], 0) : '0'} to ${k.fx(R.L, 0)} ft. The eccentricity follows the draped strands and the debonding; the effective area ramps up over the transfer length ℓ<sub>t</sub> = 60 d<sub>b</sub> = ${k.fx(lt, 2)} ft from each point where a strand is bonded (AASHTO LRFD 10th Ed. 5.9.4.3.1). Where no strand is yet effective (A<sub>ps</sub> = 0, at the girder end) the eccentricity drawn is the engine's value with no prestress acting. Display only.</p>` });
++  }
+   function after(el, ctx) {
+     K().after(el, OPEN);
++    try { eccChart(el, ctx); } catch (e) { console.warn(e); }
+     const slot = el.querySelector('#gfx_sec'); if (!slot || !VK() || !VK().detCard) return;
+     const { R } = ctx, k = K(), ev = (p, d) => k.ev(R, p, d);
+     VK().detCard(slot, { id: 'secFig', title: 'Composite section and strands', sub: `${k.esc(ctx.inp.girder)}, design girder ${k.esc(R.rv ? ctx.inp.proj.girderId : '')}`,
 
 ## 2026-11-15 — Batch G4 / G6: the Compare tab (the old app's design sweep over span, girder section or spacing) and the Nomenclature tab (the symbols with their live values, search, § links) (display only)
 PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__
