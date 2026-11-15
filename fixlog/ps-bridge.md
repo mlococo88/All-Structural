@@ -6585,6 +6585,271 @@ index a847637..b139a0c 100644
 - check-syntax all pass. Node `psbridge tex project-registry`: 43 files, 446 passed. Harness B normal: 24 designs, 61,186 shown + 10,568
   step values, 0 differences; --import 0 differences; --control exits 1. Smokes: demands 8 (+ the D2 check), skeleton 271, types 106,
   3d 101, figures 225, library 11, undo 7, drawings 6, drawings2 7, autodesign 7, handoffs 12, adbasis 5; 0 console errors.
+
+## 2026-11-15 — Batch D3: the MCT demands hand-off ("New analysis data available", Load, version check) and the MCT geometry changes (banner, review window); click only (the auto-adopt lock: HO-D2 pending)
+PR #1576: https://github.com/mlococo88/All-Structural/pull/1576
+### Request
+- Engineer-approved plan A→H (2026-11-15), batch D3 (review old-vs-new.md #127 High, #128 Med): the old app's receiver of the MCT
+  Generator's demands ("Prestressed Bridge Design.html" O:9211-9290 checkHandoff / adoptHandoff, O:9603-9625 banner) and its geometry
+  changes (O:9291-9318, 9626-9660), with the existing bridgeSuite.v1 keys unchanged (HANDOFF.md), receiver id psbridge (as PR #1566).
+  Auto-adopt locks on hold (engineer decision HO-D2 pending): Load by click only.
+### What changed
+- `apps/ps-bridge/engine/handoffs.js` (anchor `/* ---- MCT demands (batch D3`): `MCT_VERSION` 1 (the old app's HANDOFF_SUPPORTED_VERSION),
+  `MCT_K` (the keys), `verOf`, `tokenOf` (BridgeHandoff's), `mctPending(get)` (the old checkHandoff: latestId → the map's payload → its token
+  against this app's marker `bridgeSuite.v1.adopted.psbridge`; `supported` = version ≤ 1), `mctDescribe(p)`, `mctPlan(P, T, payload)` (the
+  file reader of engine/demands.js on the payload; the old app's "continuous member" rule; the bridge questions: spans, continuity),
+  `geomPending(get)` (the old checkGeometryChanges against `bridgeSuite.v1.geometryChanges.adopted.psbridge`).
+- `apps/ps-bridge/ui/handoffs.js`: `mctBanner(P)`, `geoDialog`, `mctLoad(ctx)`, `onMct(e, ctx)`; `init(onMctChange)` also follows the MCT
+  keys (storage event). Load: the payload becomes the MIDAS demands of the girder type chosen in the banner (default: the type on the
+  member's line `member.key` in the span shown, else the type shown), the two questions (bridge spans = the member's when the counts agree;
+  continuity for a continuous member), this app's marker written; one Undo step (the marker is not undone, as the old app's). "Not now" /
+  Dismiss write the marker only. A schema newer than v1: "Analysis output is newer than this app" (dismiss only). The geometry review window
+  lists the changes (field, detail, current, new); Dismiss; "Load the demands now" when a payload is waiting (both markers).
+- `apps/ps-bridge/index.html`: the banners at the top of the output panel (`HOUI.mctBanner`), their clicks (`HOUI.onMct`), `hoCtx` + toast /
+  redraw, `HOUI.init(() => drawOut())`, CSS.
+- `HANDOFF.md` §4.16: the MCT demands and geometry changes in the new app.
+### Saved data (CLAUDE.md §5)
+- The old app's keys and formats are read unchanged (`bridgeSuite.v1.handoffs`, `.latestId`, `.updatedAt`, `.geometryChanges`,
+  `.geometryChanges.updatedAt`); nothing of them is written. This app writes only its own adoption markers `bridgeSuite.v1.adopted.psbridge`
+  (the payload's token `handoffId@producedAt`) and `bridgeSuite.v1.geometryChanges.adopted.psbridge` (its producedAt), the receiver id of
+  PR #1566; the old app's `.adopted.psbeam` / `.geometryChanges.adopted.psbeam` are not read or written (smoke). A Load writes the type's
+  `P.demands` entry (batch D1 field) and, on the two questions, `P.spans.lengths` / `P.spans.continuity`; one Undo step.
+### Governing provisions (CLAUDE.md §4)
+- No engine value changed. Load gives the engine the same inputs as the old app's adoptHandoff for its design (the payload with the
+  member's span, L, continuity on for a continuous member): Node test, every computeAll value equal.
+### Check case (tests/engine/psbridge-mct.test.mjs)
+- New project, bridge 100 / 100 / 100 simple; the MCT fixture (110 / 140 / 110, member G2) published; Load into Interior S1 (on G2), both
+  questions yes: bridge 110 / 140 / 110 made continuous; the cell's engine inputs = the old app's adopted inputs (external with span 1
+  x = 0–110, L = 110, cont.on true); computeAll identical (R.ext.sel.idx 1); a type of span 2 takes span 2 of the member.
+### Decisions (pending engineer review)
+- D3-a. HO-D2 pending: no auto-adopt lock; Load by click only (the banner says so).
+- D3-b. Load goes to one girder type, chosen in the banner (default: the type on the member's line `member.key` in the span shown); the old
+  app had one design. The type keeps its own span of the member (the old app took span 1 of a new member).
+- D3-c. The old app turned continuity on and set L silently; here both are questions (Undo returns them), as continuity is the bridge's
+  (every type) in this app.
+- D3-d. The geometry review window is the old app's record (no values travel from it); its "Load the demands now" loads the pending
+  demands when there are any. The marker of a Load is not undone by Undo (as the old app's).
+### Other copies
+- None. HANDOFF.md §4.16 updated.
+### Code (before / after: the diff of this change)
+```diff
+diff --git a/HANDOFF.md b/HANDOFF.md
+index a729fca..d5c53e6 100644
+--- a/HANDOFF.md
++++ b/HANDOFF.md
+@@ -639,7 +639,8 @@ Engineer request 2026-11-11 ("The abutment app and substructure loading app shou
+ The new app sends and receives the old app's (`Prestressed Bridge Design.html`) channels with the **same keys, schemas and payloads**, so no receiving tool changed: `engine/handoffs.js` (`PSBHandoffs`) builds each payload with the old app's own code on the engine inputs and result of the girder type and line shown on the output tabs (Node test `tests/engine/psbridge-handoffs.test.mjs`: the same JSON text as the old page's code on the same inputs); `ui/handoffs.js` is the Project tab's **Hand-offs** card; `ui/bridgexfer.js` is BridgeXfer v1 (§5, verbatim).
+ - **Sent (click only; nothing is published on its own):** `superReactions` + `superReactions.by.psbeam` (the old app's `bxSuperRxPayload`, stamped by `BridgeXfer.publish` with `producer:"PS-Beam"`, `producerFile:"apps/ps-bridge/index.html"`), `lldfGeom`, `psSection` (+ `.updatedAt`), `capacity` (+ `.updatedAt`), `projectMeta`. Each also as "Export (JSON)". The old app re-published `psSection` on every recompute and `capacity` / `lldfGeom` while their channel lock was on; the new app does not (no locks).
+ - **Received (pull, confirm first):** `lldf` (the old app's `lldfResolveFor`: the design beam is the line shown when lldf's `Nb` equals the bridge's; DF auto off, DFm, DFv, fatigue DF to the girder type shown), `dlLoads` (DC2 / DW to the girder type shown; refused while the project distributes DC2 / DW to the lines itself), `projectMeta` (name, number, client, designer, checker, date). Adoption marker `bridgeSuite.v1.<channel>.adopted.psbridge`.
+-- **Not in the new app yet:** the MCT demands (`handoffs`, `latestId`, `updatedAt`, `adopted.psbeam`), `designBeam` / `beamRoster`, `geometryChanges`, the channel locks (`locks`, `syncLog.*`, `lockSnap.*`), `appPaths` and the shared project list (`projects`, `currentProjectId`: read only, "From the old app"). Until the switch-over both apps can send on the same keys; the last send wins (as two open copies of the old app).
++- **MCT demands and geometry changes (added 2026-11-15, batch D3; click only):** the MCT Generator's demands map `handoffs` / `latestId` / `updatedAt` (schema `psbeam-external-demands`, read as the old app's `checkHandoff`: the latest payload, its token `handoffId@producedAt`, schema version ≤ 1 else "newer than this app") raise a banner above the output tabs; **Load** puts the payload as the MIDAS demands of the girder type chosen (default: the type on the member's line `member.key` in the span shown; `P.demands`, the new app's own field) and asks before setting the bridge spans / continuity to the member's; one Undo step. `geometryChanges` (+ `.updatedAt`) raise a banner and a review window (Dismiss; "Load the demands now" when a payload is waiting). The new app's adoption markers are its own: `bridgeSuite.v1.adopted.psbridge` and `bridgeSuite.v1.geometryChanges.adopted.psbridge`; the old app's (`.psbeam`) are not read or written, so its banners are unchanged. No auto-adopt (the old app's `demands` lock): engineer decision HO-D2 pending.
++- **Not in the new app yet:** `designBeam` / `beamRoster`, the channel locks (`locks`, `syncLog.*`, `lockSnap.*`), `appPaths` and the shared project list (`projects`, `currentProjectId`: read only, "From the old app"). Until the switch-over both apps can send on the same keys; the last send wins (as two open copies of the old app).
+ 
+ ## 5. Shared helper (copy into each tool that sends or receives)
+ 
+diff --git a/apps/ps-bridge/engine/handoffs.js b/apps/ps-bridge/engine/handoffs.js
+index 5773f6f..e1b0b61 100644
+--- a/apps/ps-bridge/engine/handoffs.js
++++ b/apps/ps-bridge/engine/handoffs.js
+@@ -216,6 +216,57 @@
+     return { upd, lines };
+   }
+ 
++  /* ---- MCT demands (batch D3, 2026-11-15): the old app's receiver of the MCT Generator's hand-off (its checkHandoff / adoptHandoff,
++     "Prestressed Bridge Design.html" O:9211-9290, and BridgeHandoff, O:592-660), read here from the stored texts the page passes in.
++     Keys (the old app's, unchanged; HANDOFF.md, AUDIT.md §1.3): bridgeSuite.v1.handoffs (map id → payload, schema psbeam-external-demands),
++     bridgeSuite.v1.latestId, bridgeSuite.v1.updatedAt; this app's adoption marker bridgeSuite.v1.adopted.psbridge (the old app's own,
++     .adopted.psbeam, is not read or written: the old app keeps its own banner). Load is by click only: the old app's lock (auto-adopt,
++     BridgeLocks 'demands') is not here (engineer decision HO-D2 pending). ---- */
++  const MCT_VERSION = 1;   // the old app's HANDOFF_SUPPORTED_VERSION
++  const MCT_K = { map: 'bridgeSuite.v1.handoffs', latest: 'bridgeSuite.v1.latestId', updated: 'bridgeSuite.v1.updatedAt', adopted: 'bridgeSuite.v1.adopted.' + RX,
++    geom: 'bridgeSuite.v1.geometryChanges', geomAt: 'bridgeSuite.v1.geometryChanges.updatedAt', geomAdopted: 'bridgeSuite.v1.geometryChanges.adopted.' + RX };
++  const verOf = p => (p && p.schemaVersion != null) ? p.schemaVersion : ((p && p._version != null) ? p._version : 1);   // BridgeHandoff verOf
++  const tokenOf = p => p ? ((p.handoffId || '') + '@' + (p.producedAt || '')) : '';                                    // BridgeHandoff tokenOf
++  /* mctPending(get): the hand-off waiting for this app, or null (none, unreadable, or already adopted / dismissed here): the old app's
++     checkHandoff with BridgeHandoff.readOne(latestId()). get(key) returns the stored text. → { id, version, token, payload, supported } */
++  function mctPending(get) {
++    const id = get(MCT_K.latest); if (!id) return null;
++    let map; try { map = JSON.parse(get(MCT_K.map) || '{}') || {}; } catch (e) { return null; }
++    const p = map[id]; if (!p || typeof p !== 'object') return null;
++    const r = { id, version: verOf(p), token: tokenOf(p), payload: p };
++    if (get(MCT_K.adopted) === r.token) return null;
++    r.supported = r.version <= MCT_VERSION;
++    return r;
++  }
++  /* mctDescribe(p): the banner's text parts (the old app's: producer, project, member key, stations, LL type) */
++  function mctDescribe(p) {
++    return { producer: (p && p.producer) || 'MCT Generator', project: (p && p.project) || '', member: (p && p.member && p.member.key) || '',
++      n: (p && Array.isArray(p.stations)) ? p.stations.length : 0, ll: (p && p.liveLoadType) || 'HL-93' };
++  }
++  /* mctPlan(P, T, payload): what Load changes for girder type T (the old app's adoptHandoff for one design): the demands of T = the payload
++     (engine/demands.js setFile; a payload the file reader refuses is refused here too), the span of the member used = T's span when the
++     member has it (the old app took span 1 of a new member; here each type keeps its own span), and the bridge questions the page asks:
++     spans (the member's lengths when the count is the bridge's and they differ: the old app set L to the span) and continuity (a continuous
++     member on a bridge of simple spans: the old app turned its continuity on). → { ok, error | file, spans, setSpans, makeCont, lines } */
++  function mctPlan(P, T, payload) {
++    const DM = W.PSBDemands; if (!DM) return { ok: false, error: 'the demand module is not loaded' };
++    const r = DM.parse(JSON.stringify(payload), 'the MCT hand-off'); if (!r.ok) return { ok: false, error: r.error };
++    const own = ((P.spans && P.spans.lengths) || []).map(Number), fl = r.spans.map(q => +q.len), m = payload.member || {};
++    const continuous = (Array.isArray(m.spans) && m.spans.length > 1) || (Array.isArray(m.supports) && m.supports.length > 2) || r.spans.length > 1;   // the old app's rule
++    const setSpans = fl.length === own.length && fl.some((v, j) => Math.abs(v - own[j]) > 0.005) ? fl : null;
++    const makeCont = continuous && own.length >= 2 && P.spans.continuity !== 'composite';
++    const lines = [`${T.label}: demands from the MCT hand-off (${r.file.stations.length} stations, ${fl.length} span${fl.length > 1 ? 's' : ''} ${fl.map(v => v.toFixed(2)).join(', ')} ft)${T.span <= fl.length ? `, span ${T.span} of the member` : ''}.`].concat(r.notes);
++    return { ok: true, file: r.file, spans: r.spans, setSpans, makeCont, continuous, lines };
++  }
++  /* geomPending(get): the MCT geometry-change record waiting for this app, or null (the old app's checkGeometryChanges, O:9291-9318:
++     BridgeGeometryChanges.readGeometryChanges against .adopted.<app>) → { producedAt, producer, changes: [{ field, detail, oldVal, newVal }] } */
++  function geomPending(get) {
++    let g; try { g = JSON.parse(get(MCT_K.geom) || 'null'); } catch (e) { return null; }
++    if (!g || typeof g !== 'object' || !Array.isArray(g.changes)) return null;
++    if (get(MCT_K.geomAdopted) === g.producedAt) return null;
++    return g;
++  }
++
+   W.PSBHandoffs = { PRODUCER, SR_ID, RX, applyLoads, dlBlocked, srPayload, psSection, capacity, CAP_BASIS, lldfGeom, lldfResolve, lldfTheirs, lldfFields, dlResolve, dlTheirs,
+-    PM, PM_LABELS, pmFields, pmPlan };
++    PM, PM_LABELS, pmFields, pmPlan, MCT_VERSION, MCT_K, verOf, tokenOf, mctPending, mctDescribe, mctPlan, geomPending };
+ })();
+diff --git a/apps/ps-bridge/index.html b/apps/ps-bridge/index.html
+index e60ca79..2565df1 100644
+--- a/apps/ps-bridge/index.html
++++ b/apps/ps-bridge/index.html
+@@ -282,6 +282,7 @@
+   }
+   @media print{#sbSplit{display:none!important}}
+   /* this app (PR 1) */
++  #mctBanner.mctNew{border-left:4px solid #ea580c;background:#fff7ed;} #mctBanner select{width:auto;margin:0 4px;} .mctGeo a{color:#9a3412;font-weight:600;}
+   .dmBanner{border:1px solid var(--accent);border-radius:6px;background:#EFF6FF;padding:6px 9px;margin:6px 0;font-family:var(--font-ui);font-size:9pt;} .dmHead{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;} .dmSpans{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0;} .dmSpans .pri{font-weight:700;outline:2px solid var(--accent);}
+   .dmVals summary{cursor:pointer;font-family:var(--font-ui);font-size:9pt;margin:6px 0;} .dmGuide{max-width:760px;width:calc(100% - 32px);border:2px solid #0f172a;padding:16px 20px;font-family:var(--font-ui);font-size:9.5pt;line-height:1.5;} .dmGuide::backdrop{background:rgba(22,33,46,.55);} .dmGuide h3{margin:0 0 4px;} .dmGuide h4{margin:12px 0 4px;border-bottom:1px solid var(--color-border);}
+   .ph{border:1px dashed var(--slate-400);border-radius:6px;background:var(--slate-50);padding:8px 10px;margin:10px 0;font-family:var(--font-ui);font-size:9pt;color:#475569;}
+@@ -501,8 +502,9 @@
+   /* batch D1: the Demands card's context (ui/demands.js): one change() = one Undo step */
+   const dmCtx = { changed: () => changed(), toast: (t, u) => toast(t, u), redraw: () => { saveUi(); drawInputs(); } };
+   /* 2026-11-14 (item 12): the Hand-offs card (ui/handoffs.js): the girder type and line the output tabs show, its engine inputs and result */
+-  const hoCtx = { P: () => P, result: () => (errs.length ? null : result()), cell: () => hoCell(), changed: () => changed() };
+-  HOUI.init();   // the "new data" marks follow the other tools' sends (storage event)
++  const hoCtx = { P: () => P, result: () => (errs.length ? null : result()), cell: () => hoCell(), changed: () => changed(),
++    toast: (t, u) => toast(t, u), redraw: () => drawOut() };   // batch D3: + the MCT banners' notice and redraw
++  HOUI.init(() => drawOut());   // the "new data" marks follow the other tools' sends (storage event); batch D3: the MCT banners too
+   /* PR 2f: "From the old app" (ui/legacy.js): an import replaces the open project, as Import JSON does (asked first there) */
+   const lgCtx = { store: LS, gotoOut: t => gotoOut(t), pickFile: () => pb.importJSON(),   // PR 5: asks first on unsaved changes, then the file chooser
+     replace: Q => { BR.migrate(Q); const rn = window.PSBLegacy.restore(Q); if (window.PSBSections) window.PSBSections.migrate(Q); ui.itab = 'proj'; loadAs(Q, null); if (rn) toast(rn); } };   // PR 3a-4 (PS-17): the old model's other designs restored; PR 5: not a saved project (chip "not saved")
+@@ -661,6 +663,7 @@
+     let h = '';
+     if (L.note) h += `<div class="alert err">${esc(L.note)}</div>`;
+     h += secNotice();   // PS-31: the old box / voided slab section corrected (or removed)
++    h += HOUI.mctBanner(P);   // batch D3: the MCT demands hand-off and geometry changes (click only)
+     if (errs.length) h += window.PSBInputCheckUI.blocked(errs, icO());
+     h += `<div class="alert">In development: Section properties, Loads &amp; LLDF, Analysis, Losses, Stresses, Flexure, Shear, End zone &amp; hold-down, Camber &amp; deflection, Handling, Deck and Rating show the results of the girder type and line chosen above them; the Summary, the check summary column and the Report cover every girder type on every line. Use the old <a href="../../Prestressed%20Bridge%20Design.html">Prestressed Bridge Design</a> for design work.</div>`;
+     const name = (OTABS.find(t => t[0] === ui.otab) || [, ''])[1];
+@@ -712,6 +715,7 @@
+   const gotoStep = (t, id) => { gotoOut(t); if (id) { const el = window.SharedSteps.reveal($('out'), id); if (el) el.scrollIntoView({ block: 'center' }); } };
+   $('tabBar').addEventListener('click', e => { const b = e.target.closest('[data-otab]'); if (b) gotoOut(b.dataset.otab); });
+   $('out').addEventListener('click', e => {
++    if (HOUI.onMct(e, hoCtx)) return;   // batch D3: the MCT banners
+     if (e.target.closest('[data-secdismiss]')) { P.notices = Object.assign({}, P.notices, { sec: window.PSBSections.sig(P) }); changed(); return; }   // PS-31: closed for this project (shown again if another section is corrected)
+     if (e.target.closest('[data-dedismiss]')) { const D = window.PSBDesign.deDiff(P); P.notices = Object.assign({}, P.notices, { de: D.sig }); changed(); return; }   // PS-23: dismissed for this project
+     const a = e.target.closest('[data-icgo]'); if (a) { e.preventDefault(); gotoErr(+a.dataset.icgo); return; }
+diff --git a/apps/ps-bridge/ui/handoffs.js b/apps/ps-bridge/ui/handoffs.js
+index 009f1be..1183e53 100644
+--- a/apps/ps-bridge/ui/handoffs.js
++++ b/apps/ps-bridge/ui/handoffs.js
+@@ -10,8 +10,10 @@
+               lldfGeom ("Send geometry to LL & DL"), psSection ("Send section properties"), capacity ("Send capacity to the MCT rating"),
+               each with "Export hand-off (JSON)": click only (the old app re-published psSection, and capacity / lldfGeom when locked, by
+               itself; here nothing is sent without a click; Decision pending engineer review, fixlog/ps-bridge.md HO-D2).
+-   Not here (fixlog/ps-bridge.md, Open items): the MCT demands (handoffs / latestId), designBeam / beamRoster, geometryChanges, the channel
+-   locks (BridgeLocks), appPaths and the shared Bridge Suite project list (switch-over). */
++   Batch D3 (2026-11-15): the MCT demands (handoffs / latestId) and geometryChanges: banners above the output tabs (mctBanner), Load by click
++   into a girder type (its demands, engine/demands.js), the review window of the geometry changes.
++   Not here (fixlog/ps-bridge.md, Open items): designBeam / beamRoster, the channel locks (BridgeLocks; HO-D2 pending), appPaths and the
++   shared Bridge Suite project list (switch-over). */
+ (function () {
+   'use strict';
+   const H = () => window.PSBHandoffs, BX = () => window.BridgeXfer;
+@@ -157,6 +159,77 @@
+     return true;
+   }
+   function refresh() { document.querySelectorAll('[data-ho-new]').forEach(s => { s.hidden = !isNew(s.dataset.hoNew); }); }
+-  function init() { window.addEventListener('storage', e => { if (!e.key || /^bridgeSuite\.v1\.(lldf|dlLoads)/.test(e.key)) refresh(); }); }
+-  window.PSBHandoffUI = { card, onClick, refresh, init };
++  /* ---- batch D3 (2026-11-15): the MCT demands hand-off and the MCT geometry changes (the old app's banners, O:9603-9662) ----
++     mctBanner(P): the banners at the top of the output panel: "New analysis data available" (Load into a girder type / Not now) or, for a
++     payload newer than this app reads, "Analysis output is newer than this app" (dismiss); "Geometry has been updated in MCT – click to
++     review what changed" (the review window: the changes as the MCT Generator recorded them; Dismiss; Load the demands now). Load, the review
++     window's Load and the bridge questions are one change of the project = one Undo step; nothing is applied without a click (the old app's
++     lock / auto-adopt: engineer decision HO-D2 pending). The adoption markers are this app's own (bridgeSuite.v1.adopted.psbridge,
++     bridgeSuite.v1.geometryChanges.adopted.psbridge); the old app's (.psbeam) are not touched. */
++  const setRaw = (k, v) => { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } };
++  function mctBanner(P) {
++    const h = H(), D = window.PSBDemands, B = window.PSBBridge; if (!h || !h.mctPending || !D || !B) return '';
++    let out = '';
++    const r = h.mctPending(getRaw);
++    if (r) {
++      const d = h.mctDescribe(r.payload);
++      if (!r.supported) out += `<div class="notice" id="mctBanner" role="status"><div><b>⚠ Analysis output is newer than this app</b>: the MCT Generator published schema <b>v${esc(r.version)}</b>; this app reads <b>v${h.MCT_VERSION}</b>. Update this app to load it, or load a matching file on the Loads tab (Demands card).</div><div class="nBtns"><button type="button" data-mct="dismiss">Dismiss</button></div></div>`;
++      else {
++        const T = B.types(P), sh = window.PSBDemandsUI && window.PSBDemandsUI.shownType(P), key = /^G(\d+)$/i.exec(d.member || '');
++        // the default type: the one on the member's girder line in the span shown (the MCT member is a girder line), else the type shown
++        let def = sh ? sh.id : (T[0] && T[0].id);
++        if (key && B.hasTypes(P) && sh) { const k = B.typeAt ? B.typeAt(P, sh.span, +key[1]) : -1; if (k >= 0) def = P.types[k].id; }
++        out += `<div class="notice mctNew" id="mctBanner" role="status"><div><b>New analysis data available</b> from <b>${esc(d.producer)}</b>${d.project ? ' · ' + esc(d.project) : ''}${d.member ? ' · ' + esc(d.member) : ''} · ${d.n} stations · LL: <b>${esc(d.ll)}</b>.
++          Loading replaces the <b>demands of the girder type chosen</b> only (its source becomes this MIDAS member; section, strands and materials stay).
++          <label for="mctType">Load into</label> <select id="mctType">${T.map(t => `<option value="${esc(t.id)}"${t.id === def ? ' selected' : ''}>${esc(t.label)} (span ${t.span})</option>`).join('')}</select>
++          <span class="note">Auto-adopt (the old app's lock): not in this app yet (engineer decision HO-D2 pending).</span></div>
++          <div class="nBtns"><button type="button" class="pri" data-mct="load">Load these demands</button><button type="button" data-mct="dismiss">Not now</button></div></div>`;
++      }
++    }
++    const g = h.geomPending(getRaw);
++    if (g) out += `<div class="notice mctGeo" id="mctGeoBanner" role="status"><div><a href="#" data-mct="geo">Geometry has been updated in MCT – click to review what changed</a> (${(g.changes || []).length} change${(g.changes || []).length === 1 ? '' : 's'}).</div><div class="nBtns"><button type="button" data-mct="geo">Review</button></div></div>`;
++    return out;
++  }
++  /* geoDialog(P): the review window of the geometry changes */
++  function geoDialog(P) {
++    const h = H(), g = h.geomPending(getRaw); if (!g) return;
++    let d = document.getElementById('mctGeoDlg'); if (d) d.remove();
++    const r = h.mctPending(getRaw), can = !!(r && r.supported);
++    d = document.createElement('dialog'); d.id = 'mctGeoDlg'; d.className = 'dmGuide'; d.setAttribute('aria-label', 'Geometry changes from MCT');
++    d.innerHTML = `<h3>Geometry changes from MCT</h3><p class="note">A record of what moved in the analysis model (${esc(g.producer || 'MCT Generator')}, ${esc(String(g.producedAt || '').replace('T', ' ').slice(0, 16))}). The numbers themselves travel with the demands hand-off, not from here: ${can ? 'load the demands now (below), into the girder type chosen in the banner' : 're-send the demands from the MCT Generator'}. Auto-update (the old app's lock) is not in this app yet (engineer decision HO-D2 pending).</p>
++      <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Field</th><th class="lft">Current</th><th class="lft">New</th></tr></thead><tbody>${(g.changes || []).map(c => `<tr><td class="lft"><b>${esc(c.field)}</b>${c.detail ? `<br><span class="note">${esc(c.detail)}</span>` : ''}</td><td class="lft">${esc(String(c.oldVal == null || c.oldVal === '' ? '—' : c.oldVal))}</td><td class="lft">${esc(String(c.newVal == null || c.newVal === '' ? '—' : c.newVal))}</td></tr>`).join('')}</tbody></table></div>
++      <div class="nBtns" style="margin-top:8px"><button type="button" data-mctg="dismiss">Dismiss</button>${can ? ' <button type="button" class="pri" data-mctg="load">Load the demands now (one Undo step)</button>' : ''} <button type="button" data-mctg="close">Close</button></div>`;
++    document.body.appendChild(d);
++    d.addEventListener('click', e => { const b = e.target.closest('[data-mctg]'); if (!b) { if (e.target === d) d.close(); return; }
++      const a = b.dataset.mctg; if (a === 'close') { d.close(); return; }
++      if (a === 'load') { if (mctLoad(d.__ctx)) { setRaw(h.MCT_K.geomAdopted, g.producedAt); d.close(); d.__ctx.redraw(); } return; }
++      if (a === 'dismiss') { setRaw(h.MCT_K.geomAdopted, g.producedAt); d.close(); d.__ctx.redraw(); } });
++    return d;
++  }
++  /* mctLoad(ctx): Load the pending hand-off into the girder type chosen in the banner (one change = one Undo step) */
++  function mctLoad(ctx) {
++    const h = H(), D = window.PSBDemands, B = window.PSBBridge, P = ctx.P(), r = h.mctPending(getRaw); if (!r || !r.supported) return false;
++    const sel = document.getElementById('mctType'), id = sel ? sel.value : (window.PSBDemandsUI.shownType(P) || {}).id, T = B.types(P).find(t => t.id === id);
++    if (!T) { say('Choose the girder type to load the demands into.'); return false; }
++    const q = h.mctPlan(P, T, r.payload); if (!q.ok) { say(`The MCT hand-off cannot be loaded: ${q.error}`); return false; }
++    const lines = q.lines.slice();
++    D.setFile(P, T.id, q.file, `MCT hand-off ${r.id}`);
++    if (q.setSpans && window.confirm(`The member's spans (${q.setSpans.map(v => v.toFixed(2)).join(', ')} ft) differ from the bridge's (${P.spans.lengths.map(v => (+v).toFixed(2)).join(', ')} ft). Set the bridge spans to the member's (as the old app set L to the span)? (Undo returns both.)`)) { P.spans.lengths = q.setSpans.slice(); lines.push('The bridge spans were set to the member\'s.'); }
++    if (q.makeCont && window.confirm('The member is continuous: make the bridge continuous for composite loads (5.12.3.3; the old app turned its continuity on)? Every girder type of the bridge is affected. (Undo returns it.)')) { P.spans.continuity = 'composite'; lines.push('The bridge was made continuous for composite loads.'); }
++    setRaw(h.MCT_K.adopted, r.token);
++    ctx.changed(); if (ctx.toast) ctx.toast(lines.join(' '), true);
++    return true;
++  }
++  /* onMct(e, ctx): the banners' buttons (ctx: hoCtx + toast, redraw) */
++  function onMct(e, ctx) {
++    const b = e.target.closest('[data-mct]'); if (!b || !H() || !H().mctPending) return false;
++    e.preventDefault(); const h = H(), a = b.dataset.mct;
++    if (a === 'load') { mctLoad(ctx); return true; }
++    if (a === 'dismiss') { const r = h.mctPending(getRaw); if (r) setRaw(h.MCT_K.adopted, r.token); ctx.redraw(); return true; }
++    if (a === 'geo') { const d = geoDialog(ctx.P()); if (d) { d.__ctx = ctx; if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', ''); } return true; }
++    return true;
++  }
++  function init(onMctChange) { window.addEventListener('storage', e => { if (!e.key || /^bridgeSuite\.v1\.(lldf|dlLoads)/.test(e.key)) refresh();
++    if (onMctChange && (!e.key || /^bridgeSuite\.v1\.(latestId|updatedAt|handoffs|geometryChanges)/.test(e.key))) onMctChange(); }); }   // batch D3: the banners follow the MCT Generator's sends
++  window.PSBHandoffUI = { card, onClick, refresh, init, mctBanner, onMct, mctLoad };
+ })();
+```
+### Tests
+- check-syntax all pass. Node `psbridge tex project-registry`: 44 files, 449 passed (new psbridge-mct 3). Harness B: normal 24 designs 61,186 shown + 10,568 step values, 0 differences; --import 24 "the same", 0 differences; --control exits 1. Smokes: mct 4 (new), demands 8, skeleton 271, types 106, 3d 101, figures 225, library 11, undo 7, drawings 6, drawings2 7, autodesign 7, handoffs 12, adbasis 5; 0 console errors.
 ## 2026-11-15 — E0: no "pending engineer review" wording in the app (Auto design output tab, Project tab / Report assumption; display only)
 PR #TBD
 ### Request

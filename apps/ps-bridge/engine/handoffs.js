@@ -216,6 +216,57 @@
     return { upd, lines };
   }
 
+  /* ---- MCT demands (batch D3, 2026-11-15): the old app's receiver of the MCT Generator's hand-off (its checkHandoff / adoptHandoff,
+     "Prestressed Bridge Design.html" O:9211-9290, and BridgeHandoff, O:592-660), read here from the stored texts the page passes in.
+     Keys (the old app's, unchanged; HANDOFF.md, AUDIT.md §1.3): bridgeSuite.v1.handoffs (map id → payload, schema psbeam-external-demands),
+     bridgeSuite.v1.latestId, bridgeSuite.v1.updatedAt; this app's adoption marker bridgeSuite.v1.adopted.psbridge (the old app's own,
+     .adopted.psbeam, is not read or written: the old app keeps its own banner). Load is by click only: the old app's lock (auto-adopt,
+     BridgeLocks 'demands') is not here (engineer decision HO-D2 pending). ---- */
+  const MCT_VERSION = 1;   // the old app's HANDOFF_SUPPORTED_VERSION
+  const MCT_K = { map: 'bridgeSuite.v1.handoffs', latest: 'bridgeSuite.v1.latestId', updated: 'bridgeSuite.v1.updatedAt', adopted: 'bridgeSuite.v1.adopted.' + RX,
+    geom: 'bridgeSuite.v1.geometryChanges', geomAt: 'bridgeSuite.v1.geometryChanges.updatedAt', geomAdopted: 'bridgeSuite.v1.geometryChanges.adopted.' + RX };
+  const verOf = p => (p && p.schemaVersion != null) ? p.schemaVersion : ((p && p._version != null) ? p._version : 1);   // BridgeHandoff verOf
+  const tokenOf = p => p ? ((p.handoffId || '') + '@' + (p.producedAt || '')) : '';                                    // BridgeHandoff tokenOf
+  /* mctPending(get): the hand-off waiting for this app, or null (none, unreadable, or already adopted / dismissed here): the old app's
+     checkHandoff with BridgeHandoff.readOne(latestId()). get(key) returns the stored text. → { id, version, token, payload, supported } */
+  function mctPending(get) {
+    const id = get(MCT_K.latest); if (!id) return null;
+    let map; try { map = JSON.parse(get(MCT_K.map) || '{}') || {}; } catch (e) { return null; }
+    const p = map[id]; if (!p || typeof p !== 'object') return null;
+    const r = { id, version: verOf(p), token: tokenOf(p), payload: p };
+    if (get(MCT_K.adopted) === r.token) return null;
+    r.supported = r.version <= MCT_VERSION;
+    return r;
+  }
+  /* mctDescribe(p): the banner's text parts (the old app's: producer, project, member key, stations, LL type) */
+  function mctDescribe(p) {
+    return { producer: (p && p.producer) || 'MCT Generator', project: (p && p.project) || '', member: (p && p.member && p.member.key) || '',
+      n: (p && Array.isArray(p.stations)) ? p.stations.length : 0, ll: (p && p.liveLoadType) || 'HL-93' };
+  }
+  /* mctPlan(P, T, payload): what Load changes for girder type T (the old app's adoptHandoff for one design): the demands of T = the payload
+     (engine/demands.js setFile; a payload the file reader refuses is refused here too), the span of the member used = T's span when the
+     member has it (the old app took span 1 of a new member; here each type keeps its own span), and the bridge questions the page asks:
+     spans (the member's lengths when the count is the bridge's and they differ: the old app set L to the span) and continuity (a continuous
+     member on a bridge of simple spans: the old app turned its continuity on). → { ok, error | file, spans, setSpans, makeCont, lines } */
+  function mctPlan(P, T, payload) {
+    const DM = W.PSBDemands; if (!DM) return { ok: false, error: 'the demand module is not loaded' };
+    const r = DM.parse(JSON.stringify(payload), 'the MCT hand-off'); if (!r.ok) return { ok: false, error: r.error };
+    const own = ((P.spans && P.spans.lengths) || []).map(Number), fl = r.spans.map(q => +q.len), m = payload.member || {};
+    const continuous = (Array.isArray(m.spans) && m.spans.length > 1) || (Array.isArray(m.supports) && m.supports.length > 2) || r.spans.length > 1;   // the old app's rule
+    const setSpans = fl.length === own.length && fl.some((v, j) => Math.abs(v - own[j]) > 0.005) ? fl : null;
+    const makeCont = continuous && own.length >= 2 && P.spans.continuity !== 'composite';
+    const lines = [`${T.label}: demands from the MCT hand-off (${r.file.stations.length} stations, ${fl.length} span${fl.length > 1 ? 's' : ''} ${fl.map(v => v.toFixed(2)).join(', ')} ft)${T.span <= fl.length ? `, span ${T.span} of the member` : ''}.`].concat(r.notes);
+    return { ok: true, file: r.file, spans: r.spans, setSpans, makeCont, continuous, lines };
+  }
+  /* geomPending(get): the MCT geometry-change record waiting for this app, or null (the old app's checkGeometryChanges, O:9291-9318:
+     BridgeGeometryChanges.readGeometryChanges against .adopted.<app>) → { producedAt, producer, changes: [{ field, detail, oldVal, newVal }] } */
+  function geomPending(get) {
+    let g; try { g = JSON.parse(get(MCT_K.geom) || 'null'); } catch (e) { return null; }
+    if (!g || typeof g !== 'object' || !Array.isArray(g.changes)) return null;
+    if (get(MCT_K.geomAdopted) === g.producedAt) return null;
+    return g;
+  }
+
   W.PSBHandoffs = { PRODUCER, SR_ID, RX, applyLoads, dlBlocked, srPayload, psSection, capacity, CAP_BASIS, lldfGeom, lldfResolve, lldfTheirs, lldfFields, dlResolve, dlTheirs,
-    PM, PM_LABELS, pmFields, pmPlan };
+    PM, PM_LABELS, pmFields, pmPlan, MCT_VERSION, MCT_K, verOf, tokenOf, mctPending, mctDescribe, mctPlan, geomPending };
 })();
