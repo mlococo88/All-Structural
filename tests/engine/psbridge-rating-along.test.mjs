@@ -49,11 +49,11 @@ for (const [name, P] of [...Object.entries(CASES), ...Object.entries(MCASES).map
       if (q.vc) { close(r.LL, Math.abs(q.vc.ll), 1e-12, 'V_LL'); close(r.DC, Math.abs(q.vc.g + q.vc.dc1 + q.vc.dc2), 1e-12, 'V_DC'); } });
     // Service III: the engine's row, the lowest not above it
     const sv = R.svcRating, s3e = byK('s3').filter(r => r.src === 'engine');
-    if (sv.fLL > 0) { assert.equal(s3e.length, 1); assert.ok(Object.is(s3e[0].inv, sv.RF)); assert.ok(A.gov.s3.inv <= sv.RF); }
+    if (sv.fLL > 1e-6) { assert.equal(s3e.length, 1); assert.ok(Object.is(s3e[0].inv, sv.RF)); assert.ok(A.gov.s3.inv <= sv.RF); }
     else assert.equal(s3e.length, 0, 'no live-load tension at the engine\'s Service III section: not a row');
     // an independent recomputation at the engine's Service III station and flexure station (the expressions of every other row)
     { const j = R.grid.findIndex(g => g.x === sv.x), q = R.grid[j], d = R.diagrams[j], fLL = q.Mll / R.cp.Sbc;
-      if (fLL > 0) { const Pe = q.Aps * R.fpe, fPS = Pe / R.g.A + Pe * q.e / R.g.Sb, fDC = (q.Mg + q.Mdk) / R.g.Sb + d.M_DC2 * 12 / R.cp.Sbc, fDW = d.M_DW * 12 / R.cp.Sbc;
+      if (fLL > 1e-6) { const Pe = q.Aps * R.fpe, fPS = Pe / R.g.A + Pe * q.e / R.g.Sb, fDC = (q.Mg + q.Mdk) / R.g.Sb + d.M_DC2 * 12 / R.cp.Sbc, fDW = d.M_DW * 12 / R.cp.Sbc;
         close((sv.fr + fPS - fDC - fDW) / (0.8 * fLL), sv.RF, 1e-9, 'Service III expression'); } }
     // negative flexure: continuity on only; at an interior support the engine's pier demands
     if (R.cont) {

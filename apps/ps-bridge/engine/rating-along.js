@@ -37,7 +37,7 @@
             C = φ_c φ_s φV_n (R.shearDiag φV_n, the engine's shear capacity along the span), DC = |V_DC|, DW = |V_DW|, LL = the engine's
             HL-93 shear envelope magnitude at x; plus the engine's own governing shear section (R.shrRating) where it is not a grid
             station. The engine's shear rating is one of these rows, so the lowest can only be the same or lower.
-     s3     Service III bottom-fibre tension, every grid station with live-load tension: C = f_r, RF = (f_r + f_ps − f_DC − f_DW)/(0.8 f_LL),
+     s3     Service III bottom-fibre tension, every grid station with live-load tension (f_LL > 1e-6 ksi; below, a round-off live load at a support): C = f_r, RF = (f_r + f_ps − f_DC − f_DW)/(0.8 f_LL),
             f_ps = P_e/A + P_e e/S_b, P_e = A_ps f_pe at the station, f_DC = (M_g + M_DC1)/S_b + M_DC2/S_bc, f_DW = M_DW/S_bc,
             f_LL = M_LL+/S_bc (the engine's svcRating expressions at each station). The engine's Service III rating is one of these rows.
    The legal / permit vehicles (entered factored M and V, with no station) stay where the engine rates them (Rating tab).
@@ -104,19 +104,19 @@
         VLL = isEng ? sh.VLL : (sym ? Math.max(vll(j), vll(mirror(x))) : vll(j));
       const cap = cs * phiVn - 1.25 * VDC - 1.50 * VDW;
       rows.push({ kind: 'shear', x, name: nm(x) + (isEng ? ': the engine\'s governing shear section' : ''), C: cs * phiVn, DC: VDC, DW: VDW, LL: VLL, unit: 'kip',
-        inv: VLL > 0 ? cap / (1.75 * VLL) : null, opr: VLL > 0 ? cap / (1.35 * VLL) : null, src: isEng ? 'engine' : 'grid', parts: { phiVn, cap, eng: isEng } });
+        inv: VLL > 1e-6 ? cap / (1.75 * VLL) : null, opr: VLL > 1e-6 ? cap / (1.35 * VLL) : null, src: isEng ? 'engine' : 'grid', parts: { phiVn, cap, eng: isEng } });
     });
     if (sh && !shOnGrid) {
       const cap = cs * sh.phiVn - 1.25 * sh.VDC - 1.50 * sh.VDW;
       rows.push({ kind: 'shear', x: sh.x, name: nm(sh.x) + ': the engine\'s governing shear section', C: cs * sh.phiVn, DC: sh.VDC, DW: sh.VDW, LL: sh.VLL, unit: 'kip',
-        inv: sh.VLL > 0 ? cap / (1.75 * sh.VLL) : null, opr: sh.VLL > 0 ? cap / (1.35 * sh.VLL) : null, src: 'engine', parts: { phiVn: sh.phiVn, cap, eng: true } });
+        inv: sh.VLL > 1e-6 ? cap / (1.75 * sh.VLL) : null, opr: sh.VLL > 1e-6 ? cap / (1.35 * sh.VLL) : null, src: 'engine', parts: { phiVn: sh.phiVn, cap, eng: true } });
     }
     // ---- Service III: every grid station with live-load tension at the bottom fibre (the engine's svcRating expressions)
     const sv = R.svcRating, G = R.g, cp = R.cp, fr = sv ? sv.fr : NaN;
     (R.grid || []).forEach((q, j) => {
       const dg = D[j]; if (!dg || !sv) return;
       const isEng = q.x === sv.x;
-      const fLL = isEng ? sv.fLL : q.Mll / cp.Sbc; if (!(fLL > 0)) return;
+      const fLL = isEng ? sv.fLL : q.Mll / cp.Sbc; if (!(fLL > 1e-6)) return;   // no live-load tension (1e-6 ksi: a round-off LL at a support, e.g. 1.6E-14, gives a meaningless RF)
       const Pe = q.Aps * R.fpe, fPS = isEng ? sv.fPS : Pe / G.A + Pe * q.e / G.Sb, fDC = isEng ? sv.fDC : (q.Mg + q.Mdk) / G.Sb + dg.M_DC2 * 12 / cp.Sbc, fDW = isEng ? sv.fDW : dg.M_DW * 12 / cp.Sbc;
       const inv = isEng ? sv.RF : (fr + fPS - 1.0 * fDC - 1.0 * fDW) / (0.8 * fLL);
       rows.push({ kind: 's3', x: q.x, name: nm(q.x) + (isEng ? ': the engine\'s governing Service III section' : ''), C: fr, DC: fDC, DW: fDW, LL: fLL, unit: 'ksi', inv, opr: null, src: isEng ? 'engine' : 'grid',
