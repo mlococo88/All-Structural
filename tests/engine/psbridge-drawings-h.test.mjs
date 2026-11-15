@@ -99,7 +99,7 @@ test('H2 bearing reactions: every girder line at every support = the hand-off sr
     const P = fill(J(P0)), B = SH.build(P, { date: '2026-11-15' }), A = BR.results(P, compute), r = W.PSBHandoffs.srAll(P, A.cells), R = rows(B, /^reac\d*$/).filter(q => q.length === 6);
     assert.ok(r.ok, name); const S = r.payload.supports, ns = S.length - 1, sup = k => k === 0 ? 'ABUT. 1' : k === ns ? 'ABUT. 2' : `PIER ${k}`;
     let n = 0;
-    S.forEach((s, k) => s.girders.forEach(g => { assert.ok(R.some(q => q[0] === g.label && q[1] === sup(k) && q[2] === f2(s.x) && q[3] === f2(g.DC1) && q[4] === f2(g.DC2) && q[5] === f2(g.DW)), `${name} ${g.label} ${sup(k)}`); n++; }));
+    S.forEach((s, k) => s.girders.forEach(g => { assert.ok(R.some(q => q[0] === g.label && q[1] === sup(k) && q[2] === f2(s.x) && q[3] === f3(g.DC1) && q[4] === f3(g.DC2) && q[5] === f3(g.DW)), `${name} ${g.label} ${sup(k)}`); n++; }));
     assert.equal(n, (ns + 1) * P.xs.nb);
     if (ns > 1) for (let k = 1; k < ns; k++) r.shares[k].forEach((a, i) => a.forEach(q => assert.ok(R.some(z => z[0] === `G${i + 1}` && z[1] === sup(k) && z[2] === `SPAN ${q.s} ${q.end === 'right' ? 'RIGHT' : 'LEFT'} END` && z[3] === f3(q.DC1) && z[4] === f3(q.DC2) && z[5] === f3(q.DW)), `${name} share G${i + 1} ${sup(k)} S${q.s}`)));
   }

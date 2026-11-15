@@ -318,8 +318,8 @@
      the two spans' ends) — the values sent, unfactored, kip, + up; at a pier also each span's end share (srAll's shares) */
   function reacBlocks(P, A) {
     const r = window.PSBHandoffs.srAll(P, A.cells); if (!r || r.error) throw new Error(r ? r.error : 'no reactions');
-    const S = r.payload.supports, ns = S.length - 1, rows = [], sh = [];
-    S[0].girders.forEach((_, i) => S.forEach((s, k) => { const g = s.girders[i]; rows.push([g.label, supN(k, ns), f2(s.x), f2(g.DC1), f2(g.DC2), f2(g.DW)]); }));
+    const S = r.payload.supports, ns = S.length - 1, rows = [], sh = [];   // the hand-off's values: srAll rounds to 0.001 kip, shown so
+    S[0].girders.forEach((_, i) => S.forEach((s, k) => { const g = s.girders[i]; rows.push([g.label, supN(k, ns), f2(s.x), f3(g.DC1), f3(g.DC2), f3(g.DW)]); }));
     if (ns > 1) S[0].girders.forEach((_, i) => { for (let k = 1; k < ns; k++) r.shares[k][i].slice().sort((a, b) => a.s - b.s).forEach(q => sh.push([`G${i + 1}`, supN(k, ns), `SPAN ${q.s} ${q.end === 'right' ? 'RIGHT' : 'LEFT'} END`, f3(q.DC1), f3(q.DC2), f3(q.DW)])); });
     const cont = P.spans.lengths.length > 1 && P.spans.continuity === 'composite', ext = A.cells.some(c => c.R && c.R.useExt);
     return [{ t: 'head', lines: [[1.6, 'BEARING REACTIONS'], [1, 'EVERY GIRDER LINE AT EVERY SUPPORT; UNFACTORED, KIP, + UP']] },
