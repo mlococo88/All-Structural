@@ -19,7 +19,8 @@
      5. per girder type, the governing check of each group: check, line, x, demand, limit, ratio, status;
      6. the girder type and line shown on the output tabs (its key values, as before);
      7. the lines not checked, the groups switched off, the engine's design warnings and errors.
-   Every number is a value of an engine result (R.checks[i].r / v / lim / loc, R.rating…) or a weight of engine/bridge.js results (W per
+   Every number is a value of an engine result (R.checks[i].r / v / lim / loc, R.rating…; E1: or the along-girder rating factor of
+   engine/rating-along.js, formed from the engine's values at each station) or a weight of engine/bridge.js results (W per
    line, its sums per type and bridge); nothing is calculated here but the choice of the largest (or, for RF, the smallest). Each number
    carries data-sv="<k>|<g>|<R path>" (data-sw for a weight) so tests/engine/psbridge-summary.test.mjs checks it against the engine.
    Each value links (data-sumgo="<k>|<g>|<tab>|<step>|<1: input tab>") to its tab with that type and line, at the worked step (§6); the
@@ -38,10 +39,11 @@
   const worse = (a, b) => (bad(a) && !bad(b)) || (!bad(a) && !bad(b) && a > b);
   /* the check group of a check name (ui/dash.js GROUPS) and its step */
   function where(n) { for (const gp of DU().GROUPS) for (const [cn, st] of gp.checks) if (cn === n) return { gp, st }; return null; }
-  /* the lowest HL-93 inventory rating factor of a cell (ui/dash.js RATING; 99 = not applicable, left out) */
+  /* the lowest HL-93 inventory rating factor of a cell (ui/dash.js RATING; 99 = not applicable, left out); E1 (2026-11-15): over every station
+     (engine/rating-along.js), path null for a rating factor formed app-side (shown without data-sv) */
   function rfOf(R) {
     const RT = DU().RATING; if (!R || R.error || !R.rating) return null;
-    return RT.rf.map(([n, f, st], j) => ({ n, v: f(R), st, path: ['rating.RFinv', 'shrRating.RFinv', 'svcRating.RF'][j] })).filter(z => typeof z.v === 'number' && z.v < 99).reduce((b, z) => !b || z.v < b.v ? z : b, null);
+    return RT.rf.map(([n, f, st, p]) => ({ n, v: f(R), st, path: p ? p(R) : null })).filter(z => typeof z.v === 'number' && z.v < 99).reduce((b, z) => !b || z.v < b.v ? z : b, null);
   }
 
   /* model(P, A): the Summary's values (no arithmetic: choices among engine values). A = PSBBridge.results(P, …). */
@@ -115,7 +117,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
   const box = (id, title, body, ref) => `<section class="sec" id="${id}"><div class="secHead">${title}${ref ? ` <span class="secRef">${esc(ref)}</span>` : ''}</div><div class="secBody">${body}</div></section>`;
   /* the link of a value: its tab with that type and line, at the step (a group on an input tab: the input tab and its row) */
   const go = z => `data-sumgo="${z.k}|${z.g}|${z.gp.tab}|${esc(z.st)}|${z.gp.input ? 1 : ''}"`;
-  const sv = (k, g, path, v, d) => `<span data-sv="${k}|${g}|${esc(path)}">${fx(v, d)}</span>`;
+  const sv = (k, g, path, v, d) => path ? `<span data-sv="${k}|${g}|${esc(path)}">${fx(v, d)}</span>` : `<span>${fx(v, d)}</span>`;   // E1: no engine path (an along-girder RF): no data-sv
   const rv = z => sv(z.k, z.g, `checks.${z.i}.r`, z.q.r, 3);
   const tip = z => esc(`${z.q.n} on G${z.g}: ${fx(z.q.v, 3)} vs ${fx(z.q.lim, 3)} ${z.q.u || ''}${z.gp.input ? ' (Owner rules tab)' : ` at x = ${fx(z.q.loc, 2)} ft`}`);
   const LBL = q => q ? 'PASS' : 'FAIL';
