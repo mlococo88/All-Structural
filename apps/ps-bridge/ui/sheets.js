@@ -365,6 +365,114 @@
     wrap(notes.map(t => X_().str(asc(t)).toUpperCase()), C.wrap).forEach((t, i) => D.text(Ly.t, 0, y - (amp + 0.4) * k - 1.8 * i * h, h * 0.8, t, 0));
   }
 
+  /* ---------- batch H3 (2026-11-15): camber and haunch, end zone reinforcement, diaphragms, deck ---------- */
+  const fx3 = v => fN(v, 3), udn = v => typeof v === 'number' && isFinite(v) ? (v >= 0 ? 'UP' : 'DOWN') : '';
+  /* tables drawn under a figure: the steel table() at (x, y) one below the other; returns the y under the last */
+  const tablesAt = (D, x, y, list) => { const lL = D.layer('TBL', 8), lT = D.layer('TEXT', 7); list.forEach(q => { y = table(D, lL, lT, x, y, q.cols, q.rows, q.title).y - 0.6 * D.h; }); return y; };
+  /* columns of tables side by side from (x, y): each column's tables one below the other; returns the y under the lowest */
+  const tableCols = (D, x, y, cols) => { let yb = y, xx = x; cols.forEach(list => { const i0 = D.mark(); yb = Math.min(yb, tablesAt(D, xx, y, list)); const b = D.bbox(i0); xx = b[2] + 4 * D.h; }); return yb; };
+  /* camber and haunch of a girder type on its first line (the Camber & deflection tab): the camber at erection, deck placement (haunch /
+     screed) and the beam seats and the haunch build-up at the tenth points (R.haunch, plotted and tabulated), the net camber at midspan by
+     stage and its components (R.cam). Nothing computed here. */
+  function camber(D, C) {
+    const m = C.t, R = m.R, Hn = R.haunch || [], c = R.cam || {}, xs = Hn.map(r => +r.x), L = +R.L, h = D.h, k = D.k, amp = C.amp || 1.1, lT = D.layer('TEXT', 7);
+    const Ly = { er: D.layer('CAMB-ERECT', 4), dk: D.layer('CAMB-DECK', 3), st: D.layer('CAMB-SEAT', 6), hb: D.layer('HAUNCH', 1) };
+    const pc = plot(D, Ly.er, 0, xs, [{ ys: Hn.map(r => +r.camErect), l: Ly.er }, { ys: Hn.map(r => +r.camDeck), l: Ly.dk }, { ys: Hn.map(r => +r.camSeat), l: Ly.st, lt: 'DASHED' }, { ys: Hn.map(r => +r.buildup), l: Ly.hb }],
+      'CAMBER AND HAUNCH BUILD-UP ALONG THE GIRDER', 'IN', [0, L], amp);
+    D.text(lT, xs[xs.length - 1] * 12, (amp + 0.15) * k + 2 * h, h * 0.7, 'CYAN ERECTION / GREEN DECK PLACEMENT (HAUNCH) / MAGENTA BEAM SEAT (DASHED) / RED HAUNCH BUILD-UP (+ UP)', 2);
+    const mid = Hn.findIndex(r => Math.abs(r.x - L / 2) < 1e-6) >= 0 ? Hn.findIndex(r => Math.abs(r.x - L / 2) < 1e-6) : Math.floor(Hn.length / 2);
+    lab(D, lT, xs, Hn.map(r => +r.buildup), 0, pc.vs, [0, mid, Hn.length - 1], v => (+v).toFixed(2));
+    lab(D, lT, xs, Hn.map(r => +r.camErect), 0, pc.vs, [mid], v => (+v).toFixed(2));
+    const stg = [['RELEASE', c.rel], ['ERECTION', c.erect], ['DECK PLACEMENT', c.afterDeck], ['BEAM SEAT', c.seat], ['FINAL', c.final]];
+    const cmp = [['PRESTRESS', c.dPS, 'UP'], ['SELF-WEIGHT', c.dSW, 'DOWN'], ['DECK + HAUNCH', c.dDK, 'DOWN'], ...(c.dDia > 1e-4 ? [['DIAPHRAGMS', c.dDia, 'DOWN']] : []), ['DC2 + DW', c.dSD, 'DOWN'], ['LL + IM', c.dLL, 'DOWN'], ['LL LIMIT', c.llLim, '']];
+    const y1 = tableCols(D, 0, -(amp + 1.0) * k, [[
+      { title: 'CAMBER AND HAUNCH AT THE TENTH POINTS (IN)', cols: ['X (FT)', 'SHAPE', 'ERECTION', 'DECK (HAUNCH)', 'SEAT', 'BUILD-UP'], rows: Hn.map(r => [fN(r.x, 1), fx3(r.par), fx3(r.camErect), fx3(r.camDeck), fx3(r.camSeat), fN(r.buildup, 2)]) }],
+      [{ title: 'CAMBER AT MIDSPAN (IN)', cols: ['STAGE', 'CAMBER', ''], rows: stg.map(([a, v]) => [a, fx3(v), udn(v)]) }],
+      [{ title: 'COMPONENTS AT MIDSPAN (IN)', cols: ['DEFLECTION', 'MAGNITUDE', ''], rows: cmp.map(([a, v, d]) => [a, fx3(v), d]) }]]);
+    const notes = [`CAMBER AND HAUNCH OF GIRDER TYPE ${m.label.toUpperCase()} (SPAN ${m.span}) ON LINE G${m.g}, L = ${f2(L)} FT. HAUNCH BUILD-UP AT THE CL BEARINGS ${fN(Hn[0] && Hn[0].buildup, 2)} AND ${fN(Hn[Hn.length - 1] && Hn[Hn.length - 1].buildup, 2)} IN, AT MIDSPAN ${fN(Hn[mid] && Hn[mid].buildup, 2)} IN (THE ENTERED HAUNCH ${f2(m.inp.th)} IN PLUS THE RESIDUAL DECK-PLACEMENT CAMBER, AS THE CAMBER & DEFLECTION TAB).`,
+      'X FROM THE LEFT CL BEARING; SHAPE: THE SHAPE FACTOR OF THE CAMBER ALONG THE GIRDER; ERECTION, DECK (HAUNCH AND SCREED), SEAT (BEAM SEATS): THE CAMBER AT EACH STAGE (+ UP); FINAL: LONG-TERM. CAMBER MULTIPLIERS: PCI DESIGN HANDBOOK, AS ENTERED ON THE MATERIALS TAB. THE BEAM SEATS USE THE BEAM-SEAT CAMBER. CHECK THE MINIMUM HAUNCH AT MIDSPAN AND THE MAXIMUM AT THE BEARINGS AGAINST THE FABRICATOR\'S TOLERANCE. WORKED: CAMBER & DEFLECTION TAB; OTHER LINES OF THIS TYPE: THAT TAB WITH THAT LINE.'];
+    wrap(notes.map(t => X_().str(asc(t)).toUpperCase()), C.wrap).forEach((t, i) => D.text(lT, 0, y1 - 1.0 * h - 1.8 * i * h, h * 0.8, t, 0));
+  }
+  /* end zone reinforcement of a girder type (the End zone & hold-down tab, R of its first line): the girder end in elevation (true scale,
+     schematic depth lines), the splitting steel zone h/4 from the end (R.splitZone) with the legs provided (opt.splitN × splitAv =
+     R.AsSplitProv against R.AsSplit), the confinement bars at R.conf.s from the end (R.conf.n bars, provided extent (n − 1)s = R.conf.provExt
+     against 1.5d = R.conf.reqExt), ℄ bearing at e_end, the release tension steel (R.relSteel); the checks R.checks. Bar positions schematic. */
+  function endzone(D, C) {
+    const m = C.t, R = m.R, o = m.inp.opt, cf = R.conf || {}, h = D.h, H = +R.g.h, oh = m.oh, lT = D.layer('TEXT', 7), lG = D.layer('GRDR', 7), lZ = D.layer('ZONE', 30, 'DASHED'), lB = D.layer('REBAR', 1), lD = D.layer('DIMS', 2), lC = D.layer('CNTR', 1, 'CENTER');
+    const ext = Math.max(+R.splitZone || 0, cf.exempt ? 0 : (+cf.provExt || 0), cf.exempt ? 0 : (+cf.reqExt || 0), oh) + Math.max(H, 24), cen = D.ltype('CENTER'), dsh = D.ltype('DASHED');
+    D.pline(lG, [[ext, 0], [0, 0], [0, H], [ext, H]], false);
+    D.pline(lG, [[ext, H], [ext - 2, 0.6 * H], [ext + 2, 0.4 * H], [ext, 0]], false);   // break line
+    if (oh > 0) { D.line(lC, oh, -3 * h, oh, H + 3 * h, cen); D.text(lT, oh, H + 3.6 * h, h, 'CL BRG', 1); D.dimH(lD, 0, oh, H + 6 * h, H, 'E_END = <>'); }
+    const zs = +R.splitZone || 0;
+    if (zs > 0) { D.rect(lZ, 0, 0, zs, H, dsh); D.dimH(lD, 0, zs, -4 * h, 0, `SPLITTING ZONE ${R.splitDir === 'width' ? 'W' : 'H'}/4 = <>`);
+      D.text(lT, zs / 2, H / 2, 0.8 * h, `${fN(+o.splitN, 0)} X ${fN(+o.splitAv, 2)} IN2`, 1, 90); }
+    if (!cf.exempt && +cf.n > 0 && +cf.s > 0) { const xs = Array.from({ length: Math.round(+cf.n) }, (_, i) => i * +cf.s), yb = Math.min(0.25 * H, 12);
+      xs.forEach(x => D.line(lB, x, 0.15 * yb, x, yb));
+      D.chainH(lD, xs, -8 * h, 0); D.dimH(lD, 0, +cf.reqExt, -12 * h, 0, 'REQUIRED 1.5D = <>'); }
+    const ck = n => { const q = R.checks.find(c => typeof n === 'string' ? c.n === n : n.test(c.n)); return q ? [q.n, fx3(q.v), fx3(q.lim), q.u || '', fx3(q.r), ST(q)] : null; };
+    const rows = [ck('Splitting steel (5.9.4.4)'), ck('Confinement steel (5.9.4.4.2)'), ck('Release tens. steel (5.9.2.3.1b)')].filter(Boolean);
+    const y1 = tableCols(D, 0, -16 * h, [[
+      { title: 'SPLITTING / BURSTING STEEL (5.9.4.4.1)', cols: ['ITEM', 'VALUE', 'UNIT'], rows: [['REQUIRED RESISTANCE (4 % OF THE PRESTRESS AT TRANSFER)', fN(R.splitDem, 1), 'KIP'], ['AS REQUIRED', fN(R.AsSplit, 2), 'IN2'],
+        ['LEGS X AREA PROVIDED', `${fN(+o.splitN, 0)} X ${fN(+o.splitAv, 2)} = ${fN(R.AsSplitProv, 2)}`, 'IN2'], ['ZONE FROM THE MEMBER END', fN(R.splitZone, 1), 'IN'], ['ORIENTATION', R.splitDir === 'width' ? 'HORIZONTAL' : 'VERTICAL', ''], ['STEEL F_Y', fN(+o.splitFy, 1), 'KSI']] },
+      { title: 'CONFINEMENT STEEL (5.9.4.4.2)', cols: ['ITEM', 'VALUE', 'UNIT'], rows: cf.exempt ? [['NOT REQUIRED', String(cf.why || ''), '']] : [['BAR', `NO. ${fN(cf.barNo, 0)} AT ${fN(cf.s, 2)}`, 'IN'], ['BARS FROM EACH END', fN(cf.n, 0), ''], ['EXTENT PROVIDED (N - 1) S', fN(cf.provExt, 1), 'IN'], ['EXTENT REQUIRED 1.5D', fN(cf.reqExt, 1), 'IN']] }], [
+      ...(o.relBondedReinf && R.relSteel ? [{ title: 'BONDED RELEASE TENSION STEEL (5.9.2.3.1B)', cols: ['ITEM', 'VALUE', 'UNIT'], rows: [['GOVERNING', `${R.relSteel.where}, X = ${fN(R.relSteel.x, 2)} FT`, ''], ['AS REQUIRED', fN(R.relSteel.AsReq, 2), 'IN2'], ['AS PROVIDED', fN(R.relSteel.AsProv, 2), 'IN2']] }] : []),
+      { title: 'CHECKS (THE ENGINE\'S)', cols: ['CHECK', 'DEMAND', 'LIMIT', 'UNIT', 'RATIO', 'STATUS'], rows }]]);
+    const notes = [`END ZONE REINFORCEMENT OF GIRDER TYPE ${m.label.toUpperCase()} (SPAN ${m.span}, LINES ${m.lines.map(g => 'G' + g).join(', ')}): ${m.girder.toUpperCase()}, H = ${f2(H)} IN; BOTH ENDS ALIKE. AASHTO LRFD 10TH ED. 5.9.4.4.`,
+      'THE GIRDER END IN ELEVATION AT TRUE SCALE; THE SPLITTING ZONE DASHED, THE CONFINEMENT BARS AT THEIR SPACING FROM THE END IN THE BOTTOM FLANGE (BAR POSITIONS AND HEIGHTS SCHEMATIC; THE BARS SHAPED TO ENCLOSE THE STRANDS ON THE REINFORCEMENT DETAIL).',
+      'ENTERED: GIRDERS & STRANDS TAB (SPLITTING AND CONFINEMENT STEEL). WORKED: END ZONE & HOLD-DOWN TAB.'];
+    wrap(notes.map(t => X_().str(asc(t)).toUpperCase()), C.wrap).forEach((t, i) => D.text(lT, 0, y1 - h - 1.8 * i * h, h * 0.8, t, 0));
+  }
+  /* diaphragms: each girder type's diaphragms at their entered distance a from the left ℄ bearing (inp.loads.diaph) and weight P on the
+     girder (DC1), as the framing plan draws them in the bays (PSBPlan.model dia); the continuity diaphragms on the pier lines. Geometry as
+     the app has it (no diaphragm section is an input). */
+  function diaphragms(D, C) {
+    const h = D.h, TT = C.types, lT = D.layer('TEXT', 7), lG = D.layer('GRDR', 7), lX = D.layer('DIAP', 5), lD = D.layer('DIMS', 2), lC = D.layer('CNTR', 1, 'CENTER'), cen = D.ltype('CENTER');
+    let y = 0;
+    TT.forEach(m => { const dd = (m.inp.loads.diaph || []).filter(d => +d.a >= 0 && +d.a <= m.L), Li = m.L * 12;
+      D.line(lG, 0, y, Li, y); [0, Li].forEach(x => D.line(lC, x, y - 2 * h, x, y + 2 * h, cen));
+      dd.forEach(d => D.line(lX, +d.a * 12, y - 1.2 * h, +d.a * 12, y + 1.2 * h));
+      if (dd.length) D.chainH(lD, [0, ...dd.map(d => +d.a * 12).sort((a, b) => a - b), Li], y - 3.5 * h, y); else D.dimH(lD, 0, Li, y - 3.5 * h, y, 'CL BRG TO CL BRG <>');
+      D.text(lT, 0, y + 2.6 * h, h, X_().str(`GIRDER TYPE ${m.label.toUpperCase()} (SPAN ${m.span}, LINES ${m.lines.map(g => 'G' + g).join(', ')}): ${dd.length ? `${dd.length} DIAPHRAGM${dd.length > 1 ? 'S' : ''}` : 'NO DIAPHRAGMS'}`), 0);
+      y -= 9 * h; });
+    const y1 = y + 4 * h;
+    const notes = ['DIAPHRAGMS AT THEIR ENTERED DISTANCE FROM EACH LINE\'S LEFT CL BEARING, IN THE BAYS NEXT TO A LINE WHOSE TYPE HAS THEM, PARALLEL TO THE SUPPORTS (FRAMING PLAN; NONE BETWEEN ADJACENT UNITS). THE WEIGHT P IS THE DC1 POINT LOAD ON THE GIRDER (LOADS & LLDF TAB).',
+      'THE DIAPHRAGM SECTION, MATERIAL AND CONNECTION ARE NOT INPUTS OF THIS APP: DETAIL THEM ON THE CONTRACT DRAWINGS. ENTERED: DIAPHRAGMS / DECK TAB. SCHEDULE: THE NEXT SHEET.'];
+    wrap(notes, C.wrap).forEach((t, i) => D.text(lT, 0, y1 - h - 1.8 * i * h, h * 0.8, t, 0));
+  }
+  function diaphBlocks(TT, pl) {
+    const rows = [], cont = pl && pl.cont ? pl.cont : [];
+    TT.forEach(m => (m.inp.loads.diaph || []).filter(d => +d.a >= 0 && +d.a <= m.L).forEach((d, i) => rows.push([m.label, String(m.span), m.lines.map(g => 'G' + g).join(' '), String(i + 1), f2(+d.a), f2(m.L - +d.a), f2(+d.P)])));
+    return [{ t: 'head', lines: [[1.6, 'DIAPHRAGM SCHEDULE']] },
+      { t: 'table', title: 'INTERMEDIATE DIAPHRAGMS PER GIRDER TYPE', cols: ['TYPE', 'SPAN', 'LINES', 'NO.', 'A FROM LEFT CL BRG (FT)', 'FROM RIGHT CL BRG (FT)', 'WEIGHT ON THE GIRDER P (KIP, DC1)'], rows: rows.length ? rows : [['NONE', '', '', '', '', '', '']] },
+      ...(cont.length ? [{ t: 'table', title: 'CONTINUITY DIAPHRAGMS', cols: ['SUPPORT', 'NOTE'], rows: [...new Set(cont.map(c => c.k))].map(kk => [`PIER ${kk}`, 'ON THE PIER LINE, THE SPANS MADE CONTINUOUS FOR COMPOSITE LOADS (FRAMING PLAN)']) }] : []),
+      { t: 'notes', title: '', wc: 100, lines: ['A: THE ENTERED DISTANCE FROM THE LEFT CL BEARING OF EACH LINE OF THE TYPE; FROM THE RIGHT CL BEARING: L - A. P: THE DC1 POINT LOAD ON THE GIRDER (DIAPHRAGMS / DECK TAB; LOADS & LLDF TAB).'] }];
+  }
+  /* deck reinforcement and overhang (the Deck tab, the strip method: R.deck of the exterior line's girder type, and a table of every type's
+     results): the deck from the left edge over G1 into the first bay (true scale): thickness R.deck.ts, overhang R.deck.oh, girder spacing
+     R.deck.Ls, the bars at their effective depths R.deck.pos.dEff / neg.dEff, the negative-moment design section R.deck.xneg from ℄ G1, the
+     barrier base width R.deck.bBar (its height schematic) */
+  function deck(D, C) {
+    const m = C.t, Dk = m.R.deck, h = D.h, ts = +Dk.ts, oh = +Dk.oh * 12, S = +Dk.Ls * 12, x1 = S + Math.min(S / 2, 36), bb = +Dk.bBar;
+    const lK = D.layer('DECK', 8), lA = D.layer('APPR', 30), lB = D.layer('REBAR', 1), lD = D.layer('DIMS', 2), lT = D.layer('TEXT', 7), lC = D.layer('CNTR', 1, 'CENTER'), cen = D.ltype('CENTER'), dsh = D.ltype('DASHED');
+    D.pline(lK, [[x1, 0], [-oh, 0], [-oh, ts], [x1, ts]], false); D.pline(lK, [[x1, ts], [x1 - 1, 0.6 * ts], [x1 + 1, 0.4 * ts], [x1, 0]], false);
+    if (bb > 0) D.rect(lA, -oh, ts, -oh + bb, ts + 3 * ts);
+    [0, S].forEach((x, i) => { D.line(lC, x, -4 * h, x, ts + 4 * ts, cen); D.text(lT, x, -5.5 * h, h, `CL G${i + 1}`, 1); });
+    const yT = ts - +Dk.neg.dEff, yB = ts - +Dk.pos.dEff;
+    D.line(lB, -oh + 1.5, yT, x1, yT); D.line(lB, -oh + 1.5, yB, x1, yB);
+    D.text(lT, x1 + 2 * h, yT - 0.4 * h, 0.8 * h, `TOP BARS ${fN(+m.inp.deck.barTop, 2)} IN2 AT ${fN(+m.inp.deck.sTop, 2)} IN`, 0);
+    D.text(lT, x1 + 2 * h, yB - 0.4 * h, 0.8 * h, `BOTTOM BARS ${fN(+m.inp.deck.barBot, 2)} IN2 AT ${fN(+m.inp.deck.sBot, 2)} IN`, 0);
+    D.dimH(lD, -oh, 0, ts + 6 * ts, ts, 'OVERHANG <>'); D.dimH(lD, 0, S, ts + 6 * ts, ts, 'S = <>');
+    if (bb > 0) D.dimH(lD, -oh, -oh + bb, ts + 4.5 * ts, ts + 3 * ts, 'BARRIER <>');
+    D.dimV(lD, 0, ts, x1 + 22 * h, x1, 'T = <>'); D.dimV(lD, yT, ts, -oh - 3 * h, -oh, 'D TOP = <>'); D.dimV(lD, yB, ts, -oh - 7 * h, -oh, 'D BOT = <>');
+    if (+Dk.xneg > 0) { D.line(lD, +Dk.xneg, -1.5 * h, +Dk.xneg, ts + 1.5 * h, dsh); D.dimH(lD, 0, +Dk.xneg, -2.5 * h, 0, 'NEG. DESIGN SECTION <>'); }
+    const rows = C.types.filter(t => t.R.deck).map(t => { const q = t.R.deck, ck = n => t.R.checks.find(c => c.n === n);
+      return [t.label, String(t.span), f2(+q.Ls), fN(q.Mu_pos, 2), fN(q.pos.phiMn, 2), fx3((ck('Deck +M') || {}).r), fN(q.Mu_neg, 2), fN(q.neg.phiMn, 2), fx3((ck('Deck −M') || {}).r), fN(q.Mu_oh, 2), fN(q.ohCap.phiMn, 2), fx3((ck('Deck overhang') || {}).r), `${fN(q.distPct, 0)} %`]; });
+    const y1 = tablesAt(D, -oh, -9 * h, [{ title: 'DECK DESIGN BY GIRDER TYPE (STRIP METHOD; K-FT/FT)', cols: ['TYPE', 'SPAN', 'S (FT)', 'MU +', 'PHI MN +', 'RATIO', 'MU -', 'PHI MN -', 'RATIO', 'MU OVERHANG', 'PHI MN', 'RATIO', 'DIST. STEEL'], rows }]);
+    const notes = [`DECK OVER GIRDER TYPE ${m.label.toUpperCase()} (G${m.g}, THE EXTERIOR LINE): TRANSVERSE DESIGN BY THE EQUIVALENT-STRIP METHOD (AASHTO LRFD 10TH ED. 4.6.2.1, TABLE A4-1; DISTRIBUTION STEEL 9.7.3.2) AS THE DECK TAB. DECK F'C ${fN(+Dk.fcd, 2)} KSI, F_Y ${fN(+Dk.fy, 1)} KSI.`,
+      'TRUE SCALE; THE BARS AT THEIR EFFECTIVE DEPTHS (THE ENGINE\'S), THE BARRIER HEIGHT SCHEMATIC. ENTERED: DIAPHRAGMS / DECK TAB. WORKED: DECK TAB.'];
+    wrap(notes, C.wrap).forEach((t, i) => D.text(lT, -oh, y1 - h - 1.8 * i * h, h * 0.8, X_().str(t), 0));
+  }
+
   /* one sheet (adapted copy of the steel app's sheet()): the smallest plot scale (not below S.kmin) at which the drawing fits the drawing
      area; the drawing placed top left at x offset ox; border, inner border and title block at the plot scale */
   function sheet(D, S, ox, C) {
@@ -412,8 +520,17 @@
       list.push({ id: `strd${t.k}`, title: `GIRDER ${t.label.toUpperCase()}: STRAND PATTERN`, fn: strands, c: { ...C, t }, kmin: 2 });
     });
     if (TM.types.length) list.push({ id: 'sched', title: 'STRAND AND GIRDER SCHEDULE', fn: schedule, c: { ...C, types: TM.types, aw }, kmin: 1 });
+    // batch H3: each girder type's camber / haunch and end zone; the diaphragms; the deck (the exterior line's type, when the deck is designed)
+    const amp = opt.paper === 'B' ? 0.7 : 1.1;
+    TM.types.forEach(t => { if (t.R.haunch && t.R.haunch.length) list.push({ id: `camb${t.k}`, title: `GIRDER ${t.label.toUpperCase()}: CAMBER AND HAUNCH`, fn: camber, c: { ...C, t, amp }, kmin: 24 }); else miss.push([`GIRDER ${t.label.toUpperCase()}: CAMBER AND HAUNCH`, 'NO HAUNCH TABLE IN THE ENGINE RESULT']); });
+    TM.types.forEach(t => list.push({ id: `endz${t.k}`, title: `GIRDER ${t.label.toUpperCase()}: END ZONE REINFORCEMENT`, fn: endzone, c: { ...C, t }, kmin: 4 }));
+    if (TM.types.some(t => (t.inp.loads.diaph || []).some(d => +d.P > 0 || +d.a > 0)) || (pl && pl.cont && pl.cont.length)) { list.push({ id: 'diaph', title: 'DIAPHRAGM DETAILS', fn: diaphragms, c: { ...C, types: TM.types }, kmin: 24 }); addBlocks('diapht', 'DIAPHRAGM SCHEDULE', diaphBlocks(TM.types, pl && !pl.errors.length ? pl : null)); }
+    else if (TM.types.length) miss.push(['DIAPHRAGM DETAILS', 'NO DIAPHRAGMS ENTERED (DIAPHRAGMS / DECK TAB) AND NO CONTINUITY DIAPHRAGMS']);
+    { const ex = TM.types.find(t => t.R.deck && t.lines.includes(1)) || TM.types.find(t => t.R.deck);
+      if (ex) list.push({ id: 'deck', title: 'DECK REINFORCEMENT AND OVERHANG', fn: deck, c: { ...C, t: ex, types: TM.types }, kmin: 4 });
+      else if (TM.types.length) miss.push(['DECK REINFORCEMENT AND OVERHANG', 'DECK DESIGN OFF (DIAPHRAGMS / DECK TAB)']); }
     // batch H2: each girder type's analysis diagrams; batch H1/H2: the bearing reactions and the design summary (every type on every line)
-    TM.types.forEach(t => list.push({ id: `diag${t.k}`, title: `GIRDER ${t.label.toUpperCase()}: ANALYSIS DIAGRAMS`, fn: diag, c: { ...C, t, amp: opt.paper === 'B' ? 0.7 : 1.1 }, kmin: 48 }));
+    TM.types.forEach(t => list.push({ id: `diag${t.k}`, title: `GIRDER ${t.label.toUpperCase()}: ANALYSIS DIAGRAMS`, fn: diag, c: { ...C, t, amp }, kmin: 48 }));
     if (TM.types.length) { let A = null, why = '';
       try { A = (opt.all && opt.all()) || window.PSBBridge.results(P, resI); } catch (e) { why = e.message; }
       const ok = A && A.cells && A.cells.length;
@@ -439,5 +556,5 @@
   }
 
   window.PSBSheets = { PAPER, SCALES, SCALE_NAME, TXT, build, sheet, section, plan, typeModels, elevation, strands, schedule,
-    blockPages, blockBox, coverBlocks, notesModel, summaryRows, summaryBlocks, reacBlocks, diag, plot };
+    blockPages, blockBox, coverBlocks, notesModel, summaryRows, summaryBlocks, reacBlocks, diag, plot, camber, endzone, diaphragms, diaphBlocks, deck };
 })();

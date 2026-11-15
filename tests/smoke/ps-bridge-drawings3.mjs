@@ -6,6 +6,8 @@
 //      values); the index links of the notes (Materials input tab) and of the summary (Summary output tab);
 //   2b. H2: the analysis diagrams (titles, demand source), the bearing reactions (the Analysis tab's reactions of the line shown on it);
 //   3. Download DXF passes SharedDxf.validate and holds the new sheets' titles; Print all sheets builds one page per sheet;
+//   3b. H3: camber and haunch, end zone, diaphragms (elevations, schedule), deck sheets (deck design on, two diaphragms); the tabs' values
+//       on them; the index links; Print all;
 //   4. paper B: the set still renders (block sheets continued as "(i OF n)" when they need more room);
 //   5. 0 console errors.
 //   SHOTS=<dir> node tests/smoke/ps-bridge-drawings3.mjs   (screenshots h-*.png when SHOTS is set)
@@ -78,11 +80,32 @@ try {
   const pages = await p.evaluate(() => { let got = null; const o = SharedDxf.printSheets; SharedDxf.printSheets = l => { got = l.length; }; document.getElementById('dwg_printAll').click(); SharedDxf.printSheets = o; return got; });
   assert.equal(pages, N);
   ok(`Download DXF valid with the new sheets; Print all sheets: ${pages} pages`);
+  // 3b. H3: camber / haunch, end zone, diaphragms, deck (a project with the deck design on and two diaphragms)
+  await seed(() => { const P = PSBModel.newProject(); P.project.name = 'Batch H3 sheets'; P.base.deck.on = true; P.base.loads.diaph = [{ P: 5, a: 40 }, { P: 5, a: 80 }]; localStorage.setItem('psb2.project.current', PSBModel.exportJSON(P)); });
+  await dwg();
+  const L3 = (await ids()).map(q => q[0]); ['camb0', 'camb1', 'endz0', 'endz1', 'diaph', 'diapht', 'deck'].forEach(id => assert.ok(L3.includes(id), id + ' in ' + L3.join(',')));
+  t = await sheet('camb0'); assert.ok(t.includes('CAMBER AND HAUNCH AT THE TENTH POINTS (IN)') && t.includes('CAMBER AT MIDSPAN (IN)') && t.some(x => /HAUNCH BUILD-UP AT THE CL BEARINGS/.test(x)), 'camber sheet');
+  await shot('h3-camber');
+  t = await sheet('endz0'); assert.ok(t.includes('SPLITTING / BURSTING STEEL (5.9.4.4.1)') && t.includes('CONFINEMENT STEEL (5.9.4.4.2)') && t.some(x => /^SPLITTING ZONE H\/4 = /.test(x)) && t.some(x => /^REQUIRED 1\.5D = /.test(x)), 'end zone sheet');
+  await shot('h3-endzone');
+  t = await sheet('diaph'); assert.ok(t.some(x => /2 DIAPHRAGMS$/.test(x)), 'diaphragm elevations'); t = await sheet('diapht'); assert.ok(t.includes('INTERMEDIATE DIAPHRAGMS PER GIRDER TYPE') && t.includes('40.00') && t.includes('80.00'), 'diaphragm schedule');
+  await shot('h3-diaphragms');
+  t = await sheet('deck'); assert.ok(t.includes('DECK DESIGN BY GIRDER TYPE (STRIP METHOD; K-FT/FT)') && t.some(x => /^OVERHANG /.test(x)) && t.some(x => /^D TOP = /.test(x)), 'deck sheet');
+  await shot('h3-deck');
+  // the Camber & deflection tab's haunch at midspan and the End zone tab's splitting ratio of the type shown are on the sheets
+  await p.click('#tabBar [data-otab="camb"]'); await p.waitForTimeout(800);
+  const hb = await p.evaluate(() => { const c = document.getElementById('card-cbhaunch'); const tr = c && c.querySelector('tr.sel'); return tr ? tr.lastElementChild.textContent.trim() : null; });
+  await dwg(); t = await sheet('camb0'); const t1 = await sheet('camb1'); assert.ok(hb && (t.includes(hb) || t1.includes(hb)), 'haunch at midspan ' + hb);
+  r = await p.evaluate(() => [...document.querySelectorAll('.dwg-idx tr[data-dsheet="deck"] a, .dwg-idx tr[data-dsheet="endz0"] a, .dwg-idx tr[data-dsheet="camb0"] a, .dwg-idx tr[data-dsheet="diaph"] a')].map(a => a.dataset.dgo || a.dataset.dgi));
+  assert.deepEqual(r, ['camb', 'mat', 'end', 'gird', 'dd', 'layout', 'deck', 'dd']);
+  const pages3 = await p.evaluate(() => { let got = null; const o = SharedDxf.printSheets; SharedDxf.printSheets = l => { got = l.length; }; document.getElementById('dwg_printAll').click(); SharedDxf.printSheets = o; return got; });
+  assert.equal(pages3, L3.length);
+  ok(`H3 sheets: camber and haunch (the tab's midspan haunch ${hb} in), end zone, diaphragms and schedule, deck; index links; Print all ${pages3} pages`);
   // 4. paper B
   await p.selectOption('#dwg_paper', 'B'); await p.waitForTimeout(500);
   const LB = await ids();
-  for (const [id, lab] of LB.filter(([id]) => /^(cover|notes|summ)/.test(id))) { const tt = await sheet(id); assert.ok(tt.includes(lab.replace(/^\d+\.\s*/, '')), id); }
-  ok(`paper B: ${LB.length} sheets (${LB.filter(([id]) => /^(cover|notes|summ)/.test(id)).map(q => q[0]).join(', ')} rendered)`);
+  for (const [id, lab] of LB.filter(([id]) => /^(cover|notes|summ|reac|camb|endz|diaph|deck|diag)/.test(id))) { const tt = await sheet(id); assert.ok(tt.includes(lab.replace(/^\d+\.\s*/, '')), id); }
+  ok(`paper B: ${LB.length} sheets (${LB.filter(([id]) => /^(cover|notes|summ|reac|camb|endz|diaph|deck|diag)/.test(id)).map(q => q[0]).join(', ')} rendered)`);
   await shot('h1-summary-B');
   await p.selectOption('#dwg_paper', 'D'); await p.waitForTimeout(300);
   assert.deepEqual(errs, []);
