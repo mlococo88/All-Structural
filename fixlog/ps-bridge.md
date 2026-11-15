@@ -5073,3 +5073,69 @@ index 0cafcb6..a81b3b7 100644
 - B-D5. A tile whose value is not worked by a step (e.g. the library's A, I, y_b on Section properties) has no § link.
 ### Other copies
 - `ui/vizkit.js` and `ui/vizalong.js` are adapted copies of the steel app's files. The tile layout (3 across, `.vk-tv`) and the Download DXF of the graphic as drawn differ from the steel copies; the steel files are unchanged.
+## 2026-11-15 — PSLT: a list edit is committed before another click or change acts (the Steel Bridge app's fix, PR #1568; input only, no calculation change)
+PR #1571: https://github.com/mlococo88/All-Structural/pull/1571
+### Request
+- The PS Bridge app's copy of `ui/lists.js` should get the same fix as Steel's (PR #1568, its open item of PR #1561): a pending list-table edit should always be committed, including for the lists drawn only in some states.
+- Reproduce in a smoke first.
+### Problem
+- The table edit is committed in a `focusout` handler deferred by `setTimeout(…, 0)`.
+- A click or change elsewhere that is handled before that commit runs acts on the project without the edit. Two cases reproduce on origin/main (new smoke, below):
+  - **Lost edit.** Cross-section tab, a girder spacing typed, then Girder spacing changed to Equal. The bay list is not drawn in Equal mode, so after the redraw no input of the same id exists for the commit. W_cc was taken as Σ of the old bays, and the edit was lost.
+  - **Undo in the wrong order.** Bridge layout tab, a skew typed, then the Undo button clicked. Undo took back the step before, and the deferred commit then wrote the skew after it, as a step that Redo could not reach.
+- The PS app has no list drawn only while its own tab is open: spans, skews and bays are on panes that are always drawn. The cases above are the lists drawn only in some states.
+### Where
+- `apps/ps-bridge/ui/lists.js`, `bind()` (anchor `ctl.el.addEventListener('focusout', () => setTimeout(() => {`) and `start()` (anchor `upgrade(document);`).
+- Before (`bind`):
+  ```js
+      ctl.el.addEventListener('focusout', () => setTimeout(() => {   // after the event: a redraw (Enter, ×) moves the focus within the table
+        if (ctl.el.isConnected && ctl.el.contains(document.activeElement)) return;
+        if (el.value === was) return; was = el.value;
+        // one change from the steel copy: …
+        let t = el; if (!el.isConnected) { t = document.getElementById(el.id); if (!t) return; t.value = el.value; }
+        t.dispatchEvent(new Event('change', { bubbles: true }));
+      }, 0));
+      el._sli = ctl;
+  ```
+- After:
+  - the commit body moved unchanged into `const commit = () => { … }`;
+  - the focusout handler calls `commit()`;
+  - `BOUND.add({ el, ctl, commit })` follows `el._sli = ctl;`;
+  - new, above `bind`: `const BOUND = new Set(); let flushing = false;`;
+  - new, after `bind`:
+  ```js
+    function flush(target) {
+      if (flushing) return;
+      flushing = true;
+      try {
+        BOUND.forEach(b => {
+          if (!b.el.isConnected) { BOUND.delete(b); return; }   // redrawn: its deferred focusout (above) still commits a pending edit
+          if (target && target.nodeType === 1 && (target === b.el || b.ctl.el.contains(target))) return;
+          b.commit();
+        });
+      } finally { flushing = false; }
+    }
+  ```
+  - in `start()`, after `upgrade(document);`:
+  ```js
+      ['click', 'change'].forEach(t => document.addEventListener(t, e => flush(e.target), true));   // PSLT: before the page's handlers
+  ```
+  - `W.PSBListsUI = { LISTS, upgrade, flush };`
+- How it works: a click or change anywhere outside a table commits that table's pending edit first. The listener is in the capture phase on the document, so it runs before the page's own handlers. The page's own handler then reads the edit before that click or change acts.
+### Saved data (CLAUDE.md §5)
+- None. The page's own change handler writes the same fields in the same formats.
+### Governing provisions (CLAUDE.md §4)
+- None changed. Input handling only; no formula, factor or value changed. Harness B: 0 differences.
+### Check case (new project, `tests/smoke/ps-bridge-list-commit.mjs`)
+- **Bays then Equal.** Bays 9, 9, 9, 9; bay 1 typed 9.5, then Girder spacing → Equal.
+  - Saved `xs.Wcc` before: **36** (the edit lost).
+  - After: **36.5** = 9.5 + 9 + 9 + 9.
+- **Skew then Undo.** Skews 0, 0; skew 1 typed 12, then Undo.
+  - Before: the skews stayed "12, 0" and Redo was disabled. Undo took back the step before, and the skew was written after it.
+  - After: "0, 0", and Redo gives [12, 0].
+- **Span then input tab.** Span 120 → 121, then an input-tab click: saved [121] before and after (PR #1548's case).
+### How verified
+- `tests/smoke/ps-bridge-list-commit.mjs`: 5 checks. On origin/main 3 fail; with the fix 5 of 5 pass, 0 console errors.
+- PS checks: see the PR.
+### Other copies
+- `apps/steel-bridge/ui/lists.js` (PR #1568): the same code. The two copies differ only in comments, the selector list and the namespace.
