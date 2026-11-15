@@ -226,6 +226,7 @@
           .map(([n, z]) => ({ cells: [plain(n), { t: fx(z.r, 3), n: true, cls: z.pass ? (z.r >= 0.9 ? 'hi' : 'ok') : 'ng' }, `G${z.g}`, { t: z.pass ? 'PASS' : 'FAIL', cls: z.pass ? 'ok' : 'ng' }, see(n, k, z.g)], cls: gv && n === gv.n ? 'gov' : '' })), { wide: true }));
       });
     });
+    let tn = 0; items.forEach(it => { if (it.topic) it.topic.no = ++tn; });   // the topics numbered 1, 2, … (the viewer's topic sub-headings)
     items.push(note(`Worked: each check is worked at the step named, for the inputs the report works (${A.kind === 'applied' && !A.stale ? 'the applied candidate' : 'the current inputs, not the candidate'}); a girder type the report does not work: its result tab with that type chosen. Ratio = demand / limit, OK ≤ 1.0.`));
     return out(items);
   }

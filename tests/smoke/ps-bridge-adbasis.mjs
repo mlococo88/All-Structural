@@ -21,7 +21,7 @@ const itab = t => p.evaluate(t => document.querySelector(`#inTabs [data-itab="${
 const otab = t => p.evaluate(t => document.querySelector(`#tabBar [data-otab="${t}"]`).click(), t);
 const until = async (f, ms, w) => { const t0 = Date.now(); for (;;) { if (await f()) return; if (Date.now() - t0 > ms) throw new Error('timeout: ' + w); await new Promise(r => setTimeout(r, 200)); } };
 const adb = () => p.evaluate(() => { const h = [...document.querySelectorAll('.rp-doc h3.rp-h2')].find(x => /Auto design basis/.test(x.textContent)); if (!h) return null;
-  const s = h.closest('.rp-sub'), r = h.getBoundingClientRect(); return { n: h.textContent.trim().split(' ')[0], text: s.innerText, inView: r.top >= -2 && r.top < window.innerHeight, id: h.id }; });
+  const s = h.closest('.rp-sub'), r = h.getBoundingClientRect(); return { n: h.textContent.trim().split(/\s/)[0], text: s.textContent, inView: r.top >= -2 && r.top < window.innerHeight, id: h.id }; });
 try {
   await p.waitForSelector('#tabBar [data-otab]');
   await p.evaluate(() => { localStorage.clear(); const P = PSBModel.newProject(); P.project.name = 'Auto design basis smoke'; localStorage.setItem('psb2.project.current', PSBModel.exportJSON(P)); });
@@ -30,7 +30,7 @@ try {
   // 1. no run
   await otab('rpt'); await until(() => adb(), 60000, 'the Report');
   let a = await adb();
-  assert.ok(/^2\.\d+$/.test(a.n), a.n); assert.ok(/No auto design was run in this page view: nothing in this report comes from an auto design/.test(a.text), a.text);
+  assert.ok(/^2\.\d+$/.test(a.n), JSON.stringify(a)); assert.ok(/No auto design was run in this page view: nothing in this report comes from an auto design/.test(a.text), a.text);
   assert.ok(a.text.split('\n').filter(Boolean).length <= 3, 'short: ' + a.text);
   ok(`before a run: §${a.n} Auto design basis: no auto design was run (one note)`);
   // 2. Run, then the output tab's link
@@ -59,8 +59,13 @@ try {
   assert.notEqual(await p.evaluate(() => document.getElementById('outputPanel').scrollTop), before, 'the link moved to its step');
   ok(`Apply: §${a.n} says applied; ${all.length} candidate checks, ${all.filter(t => /^see §/.test(t)).length} with a "see §" link; a link jumps to its step`);
   if (SHOT) { await p.click('#adHost a[href="#rp:rs.adb"]').catch(() => {}); await otab('ad'); await p.click('#adHost a[href="#rp:rs.adb"]'); await p.waitForTimeout(800);
-    fs.mkdirSync(path.dirname(SHOT), { recursive: true }); const el = await p.$(`#${a.id}`); const s = await el.evaluateHandle(h => h.closest('.rp-sub'));
-    await s.asElement().screenshot({ path: SHOT }); console.log('       (screenshot ' + SHOT + ')'); }
+    fs.mkdirSync(path.dirname(SHOT), { recursive: true });
+    const hh = await p.evaluate(id => document.getElementById(id).closest('.rp-sub').getBoundingClientRect().height, a.id);
+    await p.setViewportSize({ width: 1400, height: Math.ceil(hh) + 400 }); await p.waitForTimeout(500);   // tall enough to show the whole subsection
+    await p.evaluate(id => document.getElementById(id).scrollIntoView({ block: 'start' }), a.id); await p.waitForTimeout(300);
+    const s = await p.evaluateHandle(id => document.getElementById(id).closest('.rp-sub'), a.id);
+    await s.asElement().screenshot({ path: SHOT }); console.log('       (screenshot ' + SHOT + ')');
+    await p.setViewportSize({ width: 1400, height: 1000 }); await p.waitForTimeout(300); }
   // an input change: changed since
   await itab('proj'); await p.fill('#i_project\\.checker', 'XY'); await p.dispatchEvent('#i_project\\.checker', 'change'); await p.waitForTimeout(300);
   await otab('rpt'); await until(() => adb(), 60000, 'the Report again'); a = await adb();
