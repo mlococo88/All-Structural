@@ -4197,7 +4197,7 @@ index e9eb26f..2aec14f 100644
 - None.
 
 ## 2026-11-15 — Batch B: the Steel Bridge app's formats — amber / REVIEW statuses, stat tiles 3 across with § links, graphics in titled cards, plain type / line picker, Download DXF on each result graphic, girder elevation coloured by governing ratio (Flexure, Shear), the 390 px section figure (display and export only)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1570: https://github.com/mlococo88/All-Structural/pull/1570
 ### Request
 - PS Bridge catch-up batch B (review 2026-11-15, ps-vs-steel L4, L5, L9, L13, L14, L17, O8, O15). Format the result tabs as the Steel Bridge app does. Display and export only.
 ### What changed
