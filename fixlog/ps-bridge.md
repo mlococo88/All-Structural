@@ -5167,6 +5167,7 @@ PR #TBD
     - f′c and f′ci grids and limits: AASHTO LRFD 10th Ed. Art. 5.4.2.1, paraphrased, and the owner rules with their section numbers. A table gives each girder type's searched f′c and f′ci range;
     - Assumptions of the search;
     - Selected candidate and its governing check: each girder type's inputs, then a table of every check (ratio, line, status, and "see §" to the step that works it).
+  - The topics are numbered 1 to 8 as the viewer's topic sub-headings (`it.topic.no`).
   - How each check's link is chosen (`see()`):
     - the step of the girder type the report works: single report `B.cell.k`; per-type report the unit `u<j>/<step>`;
     - "(worked for G…)" when the line differs;
