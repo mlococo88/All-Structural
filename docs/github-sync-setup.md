@@ -120,6 +120,22 @@ Tools that have the standard save controls (a **Save and open** card first in th
 - With sync off, the panel only reads this browser's lists: no request to GitHub and nothing written.
 - Apps on the home page list: those in `shared/project-registry.js`. An app whose sync is added later appears there once it has an entry. An entry marked list-only shows the projects and their status but leaves uploading to the app ("open the app to sync").
 
+## When the token expires (2026-11-15)
+
+Nothing is lost when the token expires. Every Save still goes to the browser's list; GitHub refuses the uploads, so they are marked **waiting to upload** and go up by themselves once a new token is pasted. Files already on GitHub stay there.
+
+- **Tell the tools the date.** In **Cloud sync (GitHub)…**, fill in **Token expires on** with the date GitHub showed when you made the token (also listed on github.com under Settings → Developer settings → Fine-grained tokens). If the browser is allowed to read the date from GitHub's replies it fills itself in, but a date you enter always wins.
+- **Warning.** From 14 days before that date, a yellow banner at the top of every tool says how many days are left. **Remind me tomorrow** hides it for the rest of the day.
+- **Expired or refused.** Once the date has passed, or as soon as GitHub refuses the token (expired, revoked or changed), the banner turns red and says sync is paused.
+- **Reset it** (the banner lists the same steps, with a button that opens the settings):
+  1. On github.com: your picture → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens**. Open the sync token and click **Regenerate token** (it keeps the repository and permissions), or **Generate new token** with **Only select repositories** = `structural-projects` and **Contents: Read and write**.
+  2. Pick the new **Expiration** (for example 1 year) and copy the token (starts with `github_pat_`; shown once).
+  3. In any tool: **Open Cloud sync settings** (or **Saved projects…** → **Cloud sync (GitHub)…**), paste it into **Fine-grained access token**, enter the new **Token expires on** date, click **Test connection**, then **Close**.
+  4. Repeat step 3 once on each other computer or browser. One paste covers every tool in that browser (the setting is shared).
+- GitHub also emails the account about a week before a token expires.
+
+The date and the "refused" mark are kept in a new browser key, `bridgeSuite.v1.githubSync.tokenExpiry` (no tool key or format changes).
+
 ## Removing the token
 
 - **From one device:** Saved projects… → Cloud sync (GitHub)… → **Forget token on this device**. Sync stops on that device; the projects stay in the browser and on GitHub.

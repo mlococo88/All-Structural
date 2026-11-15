@@ -23,6 +23,8 @@
        c = git blob sha of the file on GitHub, l = git blob sha of this browser's file text, at the last sync.
        hold (STDS, 2026-11-05): projects saved with "This browser only" (Save as): not uploaded until the user presses Upload.
        Written only while sync is set up (no key appears while sync is off).
+     TOKX (2026-11-15; token expiry warning): bridgeSuite.v1.githubSync.tokenExpiry { v:1, date:'YYYY-MM-DD', src:'entered'|'github',
+       refusedAt:ms, snooze:'YYYY-MM-DD' } (see "token expiry" below). Written only while sync is set up or when the date is entered.
      LIVE (2026-11-08; auto-save, the open project's GitHub check and presence): bridgeSuite.v1.githubSync.live,
        bridgeSuite.v1.githubSync.deviceId, bridgeSuite.v1.githubSync.presence.<tool> (see "live" below); and on GitHub, beside the
        project files, projects/<tool>/.presence/<safe name>.<device id>.json heartbeats (a sub-folder: never listed as a project).
@@ -148,6 +150,51 @@
     return !!p.changed || (p.at != null && now - p.at < stale);
   }
 
+  /* ---------------- token expiry (TOKX, 2026-11-15) ----------------
+     A fine-grained token has an expiry date; once it passes GitHub refuses every request (401) and saves only wait in this browser.
+     The date comes from the Cloud sync dialog ("Token expires on", entered when the token is pasted) or, when the browser is allowed
+     to read it, from GitHub's GitHub-Authentication-Token-Expiration response header (src 'github'; an entered date is kept).
+     A 401 from GitHub records refusedAt; any later successful request clears it. tokenNotice(x) is the pure decision (Node-tested);
+     tokenBanner(storage) draws one banner at the top of the page with the steps to make and paste a new token. New key only:
+       bridgeSuite.v1.githubSync.tokenExpiry  { v:1, date, src, refusedAt, snooze }   snooze: 'Remind me tomorrow' (date, ET). */
+  const EXP_KEY = KEY + '.tokenExpiry', DATE_RX = /^\d{4}-\d{2}-\d{2}$/, WARN_DAYS = 14;
+  function tokenExpiry(storage) {
+    const v = readJSON(storage, EXP_KEY) || {};
+    return { date: DATE_RX.test(v.date || '') ? v.date : '', src: v.src === 'github' ? 'github' : (v.date ? 'entered' : ''), refusedAt: +v.refusedAt || 0, snooze: DATE_RX.test(v.snooze || '') ? v.snooze : '' };
+  }
+  /* saveTokenExpiry(storage, { date?, src?, refusedAt?, snooze? }): merges into the key; '' / 0 clear a field. Returns true when written. */
+  function saveTokenExpiry(storage, x) {
+    const c = tokenExpiry(storage), n = { v: 1 };
+    const date = x.date !== undefined ? String(x.date || '') : c.date; if (date && !DATE_RX.test(date)) return false;
+    if (date) { n.date = date; n.src = x.src || (x.date !== undefined ? 'entered' : c.src) || 'entered'; }
+    const ra = x.refusedAt !== undefined ? +x.refusedAt || 0 : c.refusedAt; if (ra) n.refusedAt = ra;
+    const sn = x.snooze !== undefined ? String(x.snooze || '') : c.snooze; if (sn) n.snooze = sn;
+    if (JSON.stringify(n) === JSON.stringify(Object.assign({ v: 1 }, c.date ? { date: c.date, src: c.src } : {}, c.refusedAt ? { refusedAt: c.refusedAt } : {}, c.snooze ? { snooze: c.snooze } : {}))) return true;
+    return writeJSON(storage, EXP_KEY, n);
+  }
+  /* parseExpiryHeader('2027-02-01 00:00:00 UTC' | '2027-02-01 12:00:00 -0500') -> '2027-02-01' (the date part), '' when not a date */
+  function parseExpiryHeader(h) { const m = String(h || '').match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : ''; }
+  /* noteExpiry(storage, header): keep GitHub's date unless the engineer entered one (an entered date wins) */
+  function noteExpiry(storage, h) { const d = parseExpiryHeader(h); if (!d) return; const c = tokenExpiry(storage); if (c.src === 'entered' && c.date) return; if (c.date !== d) saveTokenExpiry(storage, { date: d, src: 'github' }); }
+  function ymd(t) {   // the US Eastern date of time t, 'YYYY-MM-DD'
+    try { const p = {}; new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(t)).forEach(q => { p[q.type] = q.value; }); return `${p.year}-${p.month}-${p.day}`; }
+    catch (e) { return new Date(t).toISOString().slice(0, 10); }
+  }
+  /* tokenNotice(x) -> { level, days, date }. Pure. x = { configured, date, refusedAt, snooze, now, warn (default 14 days) }
+     level: none (sync off) | refused (GitHub answered 401 since the last success) | expired (the date has passed) | soon (within warn
+     days, and not snoozed today) | snoozed | unknown (no date known) | ok. days: whole days left (0 = expires today), null when no date. */
+  function tokenNotice(x) {
+    const warn = x.warn == null ? WARN_DAYS : x.warn, today = ymd(x.now);
+    const days = DATE_RX.test(x.date || '') ? Math.round((Date.parse(x.date + 'T12:00:00Z') - Date.parse(today + 'T12:00:00Z')) / 86400000) : null;
+    const r = level => ({ level, days, date: x.date || '' });
+    if (!x.configured) return r('none');
+    if (x.refusedAt) return r('refused');
+    if (days == null) return r('unknown');
+    if (days < 0) return r('expired');
+    if (days <= warn) return x.snooze === today ? r('snoozed') : r('soon');
+    return r('ok');
+  }
+
   /* ---------------- names and files ---------------- */
   const SAFE = /[A-Za-z0-9 _\-.(),+&'!~=@]/;
   function utf8(s) {   // string -> array of byte values
@@ -231,7 +278,7 @@
   /* ---------------- REST client (api.github.com only) ---------------- */
   /* Every failure is { ok:false, status, kind, message, retryAt? }; kind: offline | auth | notfound | conflict | rate | invalid | http.
      Messages never contain the token. */
-  function client(s, fetchFn) {
+  function client(s, fetchFn, hooks) {
     const enc = p => p.split('/').map(encodeURIComponent).join('/');
     const base = `${API}/repos/${encodeURIComponent(s.owner)}/${encodeURIComponent(s.repo)}`;
     const ref = `ref=${encodeURIComponent(s.branch || 'main')}`;
@@ -248,6 +295,8 @@
           cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer', redirect: 'error', mode: 'cors', keepalive: !!o.keepalive });   // keepalive (LIVE): the presence delete sent while the page closes
       } catch (e) { return { ok: false, kind: 'offline', status: 0, message: 'GitHub could not be reached (offline, or blocked by the network). Changes wait here and are sent later.' }; }
       const hd = k => { try { return r.headers && r.headers.get ? r.headers.get(k) : null; } catch (e) { return null; } };
+      if (hooks && hooks.expiry) { const xh = hd('github-authentication-token-expiration'); if (xh) try { hooks.expiry(xh); } catch (e) { /* storage refused */ } }   // TOKX
+      if (hooks && hooks.status) try { hooks.status(r.status); } catch (e) { /* storage refused */ }   // TOKX: 401 = token refused; 2xx = it works again
       if (r.ok) {
         if (o.raw) return { ok: true, status: r.status, text: await r.text() };
         let j = null; try { j = await r.json(); } catch (e) { j = null; }
@@ -337,6 +386,10 @@
     const notices = [];
     const S = () => settings(storage);
     const pathOf = n => `${folder}/${safeName(n)}.json`;
+    // TOKX: every request notes the token's expiry date (when GitHub lets the browser read it) and whether GitHub refused the token
+    const tokHooks = { expiry: h => noteExpiry(storage, h),
+      status: st => { if (st === 401) { if (!tokenExpiry(storage).refusedAt) { saveTokenExpiry(storage, { refusedAt: now() }); if (typeof tokenBanner === 'function') tokenBanner(storage); } }
+                      else if (st >= 200 && st < 300 && tokenExpiry(storage).refusedAt) { saveTokenExpiry(storage, { refusedAt: 0 }); if (typeof tokenBanner === 'function') tokenBanner(storage); } } };
     const devName = () => String(o.device || S().device || '').replace(/[()\r\n]/g, '').trim();
     const saveMsg = n => `${label}: save "${n}"${devName() ? ` (from ${devName()})` : ''}`;   // LIVE: the device, for "Updated on <device>"
     async function treeOf(c, maxAge) {
@@ -427,7 +480,7 @@
       if (!lock()) return { ok: true, locked: true };
       busy = true; let done = 0;
       try {
-        const c = client(S(), o.fetch);
+        const c = client(S(), o.fetch, tokHooks);
         const t = await treeOf(c, 0); if (!t.ok) { failed(t); return t; }
         const shas = t.files;
         for (const name of st().queue.slice()) {
@@ -463,7 +516,7 @@
     /* refreshCloud(): the files on GitHub for this tool -> cloud (Map name -> { sha, path }) */
     async function refreshCloud() {
       if (!configured_()) { cloud = null; return { ok: false, kind: 'off' }; }
-      const r = await treeOf(client(S(), o.fetch), 0);   // LIVE: the same one request as client.list(), kept for poll()
+      const r = await treeOf(client(S(), o.fetch, tokHooks), 0);   // LIVE: the same one request as client.list(), kept for poll()
       if (!r.ok) { cloudErr = r; return r; }
       cloudErr = null; cloud = new Map();
       r.files.forEach((sha, p) => { const f = p.slice(folder.length + 1); if (f.indexOf('/') >= 0) return; const n = nameOf(f); if (n != null) cloud.set(n, { sha, path: p }); });   // files directly in the folder only (not .presence/)
@@ -502,7 +555,7 @@
     /* download(name, replace): the GitHub file into this browser's list (store.save of fromFile(file)). replace false refuses an existing name. */
     async function download(name, replace) {
       if (store.has(name) && !replace) return { ok: false, error: 'exists', message: `A project named "${name}" is already in this browser.` };
-      const c = client(S(), o.fetch), path = pathOf(name);
+      const c = client(S(), o.fetch, tokHooks), path = pathOf(name);
       const r = await c.raw(path); if (!r.ok) { err = r; return r; }
       let obj; try { obj = JSON.parse(r.text); } catch (e) { return { ok: false, error: 'format', message: `"${name}" on GitHub is not a JSON project file.` }; }
       if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return { ok: false, error: 'format', message: `"${name}" on GitHub is not a project file of this tool.` };
@@ -532,7 +585,7 @@
     }
     /* keepMine(name): replace GitHub's file with this browser's version (explicit, after a conflict or when GitHub is newer). */
     async function keepMine(name) {
-      const c = client(S(), o.fetch), path = pathOf(name), text = fileText(name); if (text == null) return { ok: false, message: 'Not in this browser.' };
+      const c = client(S(), o.fetch, tokHooks), path = pathOf(name), text = fileText(name); if (text == null) return { ok: false, message: 'Not in this browser.' };
       const m = await c.meta(path); if (!m.ok) { err = m; return m; }
       const r = await c.put(path, text, m.sha, `${label}: save "${name}" (replacing the GitHub version)`);
       if (!r.ok) { err = r; return r; }
@@ -544,7 +597,7 @@
     }
     /* deleteCloud(name): explicit only (the dialog asks first). The local copy is not touched. */
     async function deleteCloud(name) {
-      const c = client(S(), o.fetch), path = pathOf(name);
+      const c = client(S(), o.fetch, tokHooks), path = pathOf(name);
       const m = await c.meta(path); if (!m.ok) { err = m; return m; }
       if (!m.sha) { if (cloud) cloud.delete(name); mut(v => { delete v.base[name]; }); return { ok: true }; }
       const r = await c.del(path, m.sha, `${label}: delete "${name}"`); if (!r.ok) { err = r; return r; }
@@ -567,7 +620,7 @@
       if (!po.force && now() < nextTry) return { ok: true, waiting: true };
       if (!store.has(name)) return { ok: false, kind: 'missing' };
       init();
-      const t = await treeOf(client(S(), o.fetch), po.maxAge == null ? LIVE.poll * 0.8 : po.maxAge);   // 24 s
+      const t = await treeOf(client(S(), o.fetch, tokHooks), po.maxAge == null ? LIVE.poll * 0.8 : po.maxAge);   // 24 s
       if (!t.ok) { failed(t); return t; }
       if (err && (err.kind === 'offline' || err.kind === 'rate')) { err = null; backoff = 0; nextTry = 0; }   // reachable again
       const path = pathOf(name), cs = t.files.get(path) || null, v = st() || { base: {}, conflicts: {} }, b = v.base[name] || null, l = localSha(name);
@@ -586,7 +639,7 @@
     const who = {};
     async function changeInfo(name, sha) {
       if (sha && who[sha]) return who[sha];
-      const r = await client(S(), o.fetch).commits(pathOf(name));
+      const r = await client(S(), o.fetch, tokHooks).commits(pathOf(name));
       if (!r.ok) return { device: null, at: null, error: r.kind };
       const k = (Array.isArray(r.json) && r.json[0] && r.json[0].commit) || {}, msg = String(k.message || '').split('\n')[0];
       const m = /\(from ([^()]{1,60})\)\s*$/.exec(msg), at = Date.parse((k.committer && k.committer.date) || (k.author && k.author.date) || '') || null;
@@ -642,7 +695,7 @@
         if (f.id === mine) continue;
         let p = seenP[f.path];
         if (!p || p.sha !== f.sha) {
-          const r = await client(S(), o.fetch).raw(f.path);
+          const r = await client(S(), o.fetch, tokHooks).raw(f.path);
           if (!r.ok) { if (r.kind === 'offline' || r.kind === 'rate') { failed(r); break; } continue; }
           let info = null; try { const j = JSON.parse(r.text); if (j && typeof j === 'object') info = { device: String(j.device || '').slice(0, 60), since: Date.parse(j.since) || null, at: Date.parse(j.at) || null }; } catch (e) { info = null; }
           p = seenP[f.path] = { sha: f.sha, info, seenAt: now(), checkedAt: now(), changed: !!(p && now() - p.checkedAt < LIVE.stale) };   // changed: seen to change while this page watched
@@ -658,7 +711,7 @@
       po = po || {};
       if (!configured_() || !live(storage).watch) return { ok: true, list: [] };
       if (now() < nextTry) return { ok: true, list: [], waiting: true };
-      const t = await treeOf(client(S(), o.fetch), po.maxAge == null ? LIVE.poll : po.maxAge); if (!t.ok) return t;
+      const t = await treeOf(client(S(), o.fetch, tokHooks), po.maxAge == null ? LIVE.poll : po.maxAge); if (!t.ok) return t;
       return { ok: true, list: (await presenceOf(name, t.files)).filter(x => x.fresh) };
     }
     function pst() { const v = readJSON(storage, PKEY); return v && v.v === 1 && v.files && typeof v.files === 'object' ? v : { v: 1, files: {} }; }
@@ -694,7 +747,7 @@
       const msg = `${label}: "${name}" open on ${dev || 'a device'} (presence)`;
       pbusy = true;
       try {
-        const c = client(S(), o.fetch);
+        const c = client(S(), o.fetch, tokHooks);
         let r = await c.put(path, text, (rec && rec.sha) || (lastTree && lastTree.files.get(path)) || null, msg);
         if (!r.ok && r.kind === 'conflict') { const m = await c.meta(path); if (m.ok) r = await c.put(path, text, m.sha, msg); }
         if (!r.ok) { if (r.kind === 'offline' || r.kind === 'rate') failed(r); return r; }
@@ -715,7 +768,7 @@
       pmut(v => { const f = v.files[path]; if (!f) return; if (f.tabs) delete f.tabs[me]; kept = !!(f.tabs && Object.keys(f.tabs).some(k => now() - f.tabs[k] < LIVE.stale)); if (!kept) delete v.files[path]; });
       if (kept) return { ok: true, kept: true };
       const sha = rec.sha || (lastTree && lastTree.files.get(path)) || null; if (!sha) return { ok: true, none: true };
-      const r = await client(S(), o.fetch).del(path, sha, `${label}: "${name}" closed on ${devName() || 'a device'} (presence)`, { keepalive: !!po.keepalive });
+      const r = await client(S(), o.fetch, tokHooks).del(path, sha, `${label}: "${name}" closed on ${devName() || 'a device'} (presence)`, { keepalive: !!po.keepalive });
       if (r.ok || r.kind === 'notfound') noteSha(path, null);
       return r;
     }
@@ -743,7 +796,11 @@
       'dialog.spGh .spGhRes{margin:8px 0;font-size:9pt;white-space:pre-wrap;} dialog.spGh .spGhBtns{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;} dialog.spGh .spGhBtns button{margin-left:0;}',
       '.spGhToast{position:fixed;right:12px;bottom:12px;z-index:2147483000;max-width:min(420px,92vw);background:#fffbeb;color:#78350f;border:1px solid #f59e0b;border-radius:6px;padding:8px 28px 8px 10px;font:13px/1.35 system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.15);}',
       '.spGhToast button{position:absolute;top:4px;right:4px;border:0;background:none;font-size:14px;cursor:pointer;color:#78350f;}',
-      '@media print{.spGhToast,dialog.spGh{display:none!important;}}'
+      '.spGhTok{position:sticky;top:0;z-index:2147482000;margin:0;padding:10px 14px;font:13px/1.45 system-ui,sans-serif;border-bottom:2px solid;}',   // TOKX
+      '.spGhTok.soon{background:#fffbeb;color:#78350f;border-color:#f59e0b;} .spGhTok.bad{background:#fef2f2;color:#7f1d1d;border-color:#dc2626;}',
+      '.spGhTok b{font-weight:700;} .spGhTok ol{margin:6px 0 4px 20px;padding:0;} .spGhTok li{margin:2px 0;} .spGhTok .spGhTokB{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;}',
+      '.spGhTok button{font:inherit;font-size:12px;padding:3px 10px;border:1px solid currentColor;border-radius:4px;background:#fff;color:inherit;cursor:pointer;} .spGhTok a{color:inherit;}',
+      '@media print{.spGhToast,dialog.spGh,.spGhTok{display:none!important;}}'
     ].join('\n');
     document.head.appendChild(s);
   }
@@ -757,6 +814,42 @@
   const LABEL = { synced: 'synced', pending: 'waiting to upload', local: 'this browser only', removed: 'not on GitHub (deleted there)', unknown: 'not checked yet',
     cloud: 'on GitHub only', 'cloud-newer': 'GitHub newer', conflict: 'conflict' };
 
+  /* TOKX (2026-11-15): the token banner at the top of the page. Shown when sync is set up and the token was refused by GitHub, its date
+     has passed, or it expires within 14 days (not after "Remind me tomorrow" today). The steps say how to make a new token and where
+     to paste it; one paste covers every tool in this browser. Called at page load, every hour, after a 401 and after the dialog saves. */
+  function tokenBanner(storage) {
+    if (typeof document === 'undefined' || !document.body) return null;
+    let n; try { n = tokenNotice(Object.assign({ configured: configured(settings(storage)), now: Date.now() }, tokenExpiry(storage))); } catch (e) { return null; }
+    let el = document.getElementById('spGhTok');
+    const show = n.level === 'refused' || n.level === 'expired' || n.level === 'soon';
+    if (!show) { if (el) el.remove(); return null; }
+    css();
+    if (!el) { el = document.createElement('div'); el.id = 'spGhTok'; el.setAttribute('data-sp', 'gh-token'); el.setAttribute('role', 'alert'); document.body.insertBefore(el, document.body.firstChild); }
+    const s = settings(storage), repo = esc(`${s.owner}/${s.repo}`), when = n.date ? new Date(n.date + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : '';
+    const head = n.level === 'refused' ? `<b>GitHub sync is paused: GitHub refused the access token</b> (it has expired, or was revoked or changed).`
+      : n.level === 'expired' ? `<b>GitHub sync is paused: the access token expired on ${when}.</b>`
+      : `<b>The GitHub access token expires ${n.days === 0 ? 'today' : n.days === 1 ? 'tomorrow' : 'in ' + n.days + ' days'} (${when}).</b> Make a new one before then so sync does not stop.`;
+    const safe = n.level === 'soon' ? '' : ` Your work is safe: saves are kept in this browser and marked "waiting to upload"; they upload by themselves once a new token is pasted.`;
+    el.className = 'spGhTok ' + (n.level === 'soon' ? 'soon' : 'bad');
+    el.innerHTML = `${head}${safe}
+      <ol>
+        <li>On <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener">github.com/settings/personal-access-tokens</a> (your picture → <b>Settings</b> → <b>Developer settings</b> → <b>Personal access tokens</b> → <b>Fine-grained tokens</b>), open the sync token (for example "Structural tools sync") and click <b>Regenerate token</b>; or click <b>Generate new token</b> with <b>Only select repositories</b> = <b>${esc(s.repo)}</b> and <b>Contents: Read and write</b>.</li>
+        <li>Pick the new <b>Expiration</b> (for example 1 year), then copy the token (it starts with <code>github_pat_</code>; GitHub shows it only once).</li>
+        <li>Here, click <b>Open Cloud sync settings</b>, paste it into <b>Fine-grained access token</b>, enter the new <b>Token expires on</b> date, click <b>Test connection</b>, then <b>Close</b>.</li>
+        <li>On each other computer or browser you use, do step 3 once (one paste covers every tool in that browser). Repository: ${repo}.</li>
+      </ol>
+      <div class="spGhTokB"><button type="button" data-tok="open">Open Cloud sync settings</button>${n.level === 'soon' ? '<button type="button" data-tok="later">Remind me tomorrow</button>' : ''}</div>`;
+    el.onclick = e => { const b = e.target.closest('[data-tok]'); if (!b) return;
+      if (b.dataset.tok === 'open') settingsDialog(storage, () => tokenBanner(storage));
+      if (b.dataset.tok === 'later') { saveTokenExpiry(storage, { snooze: ymd(Date.now()) }); tokenBanner(storage); } };
+    return el;
+  }
+  /* TOKX: check at page load and every hour, on every page that loads this file (only while sync is set up; reads storage only) */
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    const go = () => { let st = null; try { st = window.localStorage; } catch (e) { return; } tokenBanner(st); setInterval(() => tokenBanner(st), 3600000); };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else setTimeout(go, 0);
+  }
+
   /* the Cloud sync (GitHub) settings dialog: one per page */
   let setDlg = null;
   function settingsDialog(storage, after) {
@@ -765,13 +858,15 @@
       setDlg = document.createElement('dialog'); setDlg.className = 'spLib spGh'; setDlg.setAttribute('data-sp', 'gh-dialog'); setDlg.id = 'spGhDlg';
       document.body.appendChild(setDlg);
     }
-    const d = setDlg, s = settings(storage), L = live(storage);
+    const d = setDlg, s = settings(storage), L = live(storage), X = tokenExpiry(storage);
     d.innerHTML = `<div class="spHead"><strong>Cloud sync (GitHub)</strong><span><button type="button" data-gh="close">Close</button></span></div>
       <p class="spNote">Copies the saved projects of every tool in this browser to your <b>private</b> GitHub repository, so they are on all your devices. The browser's list stays the working copy: the tools work offline as before, and changes are sent when GitHub can be reached. Autosave is not synced, only named projects. Setup steps: docs/github-sync-setup.md.</p>
       <label for="spGhOwner">GitHub account (owner)</label><input id="spGhOwner" autocomplete="off" spellcheck="false" value="${esc(s.owner || 'mlococo88')}">
       <label for="spGhRepo">Repository</label><input id="spGhRepo" autocomplete="off" spellcheck="false" value="${esc(s.repo || 'structural-projects')}">
       <label for="spGhBranch">Branch</label><input id="spGhBranch" autocomplete="off" spellcheck="false" value="${esc(s.branch || 'main')}">
       <label for="spGhToken">Fine-grained access token</label><input id="spGhToken" type="password" autocomplete="off" spellcheck="false" placeholder="${s.token ? 'saved: ' + esc(mask(s.token)) + ' (leave blank to keep it)' : 'github_pat_…'}">
+      <label for="spGhExp">Token expires on</label><input id="spGhExp" type="date" value="${esc(X.date)}">
+      <p class="spNote">${X.date ? `Expires ${esc(X.date)}${X.src === 'github' ? ' (read from GitHub)' : ''}. ` : ''}The date GitHub showed when the token was made (also on github.com → Settings → Developer settings → Fine-grained tokens). A banner at the top of every tool warns 14 days before, and says how to paste a new token.</p>
       <label for="spGhDevice">This device's name (used in conflict copies)</label><input id="spGhDevice" autocomplete="off" value="${esc(s.device)}" placeholder="e.g. Work laptop">
       <label class="spGhChk"><input type="checkbox" id="spGhAuto"${L.autoSave ? ' checked' : ''}> Auto-save open project every 30 s</label>
       <p class="spNote">While a <b>named</b> saved project is open and you change its inputs, they are saved into it about every 30 s (after a few seconds without a change) and uploaded. A new project with no name yet is never auto-saved. Untick to save only with Save.</p>
@@ -794,8 +889,12 @@
       if (a === 'close') { d.close(); return; }
       if (a === 'forget') { if (!confirm('Forget the GitHub token in this browser? Sync stops on this device until a token is pasted again. Nothing is deleted.')) return; forgetToken(storage); settingsDialog(storage, after); d.querySelector('.spGhRes').textContent = 'The token was removed from this browser.'; if (after) after(); return; }
       if (a === 'save' || a === 'test') {
+        const newTok = !!val('spGhToken').trim(), exp = val('spGhExp');
         const r = saveSettings(storage, form()); d.querySelector('#spGhToken').value = '';
         if (!r.ok) { res.textContent = r.message; return; }
+        // TOKX: the date as entered; a new token clears "refused" and any snooze (a still-bad token is refused again on the next request)
+        saveTokenExpiry(storage, Object.assign({ date: exp, src: 'entered' }, newTok ? { refusedAt: 0, snooze: '' } : {}));
+        tokenBanner(storage);
         if (a === 'save') { settingsDialog(storage, after); d.querySelector('.spGhRes').textContent = 'Saved.' + (configured(settings(storage)) ? ' Sync is on for every tool in this browser.' : ' Paste a token to turn sync on.'); if (after) after(); return; }
         res.textContent = 'Testing…';
         const t = await testConnection(storage); settingsDialog(storage, after); d.querySelector('.spGhRes').textContent = t.message; if (after) after();
@@ -807,7 +906,8 @@
   /* testConnection(storage): reads the repository and the branch; never writes. */
   async function testConnection(storage, fetchFn) {
     const s = settings(storage); if (!configured(s)) return { ok: false, message: 'Enter the account, the repository and a token first.' };
-    const c = client(s, fetchFn || ((u, i) => window.fetch(u, i)));
+    const c = client(s, fetchFn || ((u, i) => window.fetch(u, i)), { expiry: h => noteExpiry(storage, h),
+      status: st => { if (st === 401) saveTokenExpiry(storage, { refusedAt: Date.now() }); else if (st >= 200 && st < 300) saveTokenExpiry(storage, { refusedAt: 0 }); } });   // TOKX
     const r = await c.repo(); if (!r.ok) return { ok: false, message: 'Not connected. ' + r.message };
     const j = r.json || {}, lines = [`Connected to ${s.owner}/${s.repo}.`];
     lines.push(j.private === false ? 'WARNING: this repository is PUBLIC. Anyone can read the projects. Make it private (Settings, Danger Zone, Change visibility) before syncing.' : 'The repository is private.');
@@ -815,6 +915,7 @@
     const br = await c.branch();
     if (!br.ok) lines.push(br.kind === 'notfound' ? `The branch "${s.branch}" does not exist. A new repository needs a first file (tick "Add a README file" when you create it), or use its default branch${j.default_branch ? ' "' + j.default_branch + '"' : ''}.` : br.message);
     else lines.push(`Branch "${s.branch}" found. Writing is checked on the first save.`);
+    { const X = tokenExpiry(storage); lines.push(X.date ? `Token expires ${X.date}${X.src === 'github' ? ' (read from GitHub)' : ''}.` : 'Token expiry date not known: enter it in "Token expires on" to be warned before it expires.'); }   // TOKX
     return { ok: br.ok && j.private !== false, message: lines.join('\n') };
   }
 
@@ -953,6 +1054,7 @@
   }
 
   window.SharedGitHubSync = { API, KEY, settings, saveSettings, forgetToken, configured, mask, safeName, nameOf, gitSha, b64, unb64, client, engine,
+    tokenExpiry, saveTokenExpiry, parseExpiryHeader, tokenNotice, tokenBanner,   // TOKX (2026-11-15)
     attach, testConnection, settingsDialog, stamp,
     LIVE, LIVE_KEY, DEV_KEY, live, saveLive, deviceId, autoSaveDue, pollDue, beatDue, presenceFresh };
 })();
