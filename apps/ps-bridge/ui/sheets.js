@@ -115,7 +115,7 @@
       const g = lines[0]; let inp, R; try { inp = DS.cellInputs(P, k, g); R = resOf(k, g); } catch (e) { R = { error: e.message }; }
       if (!R || R.error) { miss.push([`GIRDER ${T.label.toUpperCase()}`, `NO RESULT ON G${g}: ${String((R && R.error) || '').toUpperCase()}`]); return; }
       const ss = R.ss, oh = +((inp.opt && inp.opt.endOh) || 0), L = +R.L;
-      out.push({ k, label: T.label, span: T.span, lines, g, inp, R, L, oh, h: +R.g.h, girder: inp.girder, dia: num(inp.str.size) || 0.5, size: inp.str.size,
+      out.push({ k, T, label: T.label, span: T.span, lines, g, inp, R, L, oh, h: +R.g.h, girder: inp.girder, dia: num(inp.str.size) || 0.5, size: inp.str.size,
         rows: ss.rows.map(r => ({ y: +r.y, n: +r.n, nd: +r.nd || 0, dbnd: +r.dbnd || 0 })), nh: +ss.nh || 0, N: ss.Ntot,
         hp: ss.nh > 0 ? { frac: +ss.hp.frac, a: +ss.hp.frac * L, yEnd: +ss.hp.yEnd, yMid: +ss.hp.yMid } : null,
         cam: R.cam, fc: +inp.mat.fc, fci: +inp.mat.fci, W: R.g.wsw * (L + 2 * oh / 12) });
@@ -311,6 +311,60 @@
         cols: ['TYPE', 'SPAN', 'LINES', 'GROUP', 'GOVERNING CHECK', 'LINE', 'X (FT)', 'DEMAND', 'LIMIT', 'UNIT', 'RATIO / RF', 'STATUS'], rows }];
   }
 
+  /* ---------- batch H2 (2026-11-15): bearing reactions, analysis diagrams ---------- */
+  const f3 = v => (+v).toFixed(3), supN = (k, ns) => k === 0 ? 'ABUT. 1' : k === ns ? 'ABUT. 2' : `PIER ${k}`;
+  /* the bearing reactions of every girder line at every support: PSBHandoffs.srAll(P, A.cells) (the hand-off to Bridge Substructure
+     Loading, bridgeSuite.v1.superReactions allGirders; each span the girder type on the line, its engine's own end reactions, a pier the sum of
+     the two spans' ends) — the values sent, unfactored, kip, + up; at a pier also each span's end share (srAll's shares) */
+  function reacBlocks(P, A) {
+    const r = window.PSBHandoffs.srAll(P, A.cells); if (!r || r.error) throw new Error(r ? r.error : 'no reactions');
+    const S = r.payload.supports, ns = S.length - 1, rows = [], sh = [];   // the hand-off's values: srAll rounds to 0.001 kip, shown so
+    S[0].girders.forEach((_, i) => S.forEach((s, k) => { const g = s.girders[i]; rows.push([g.label, supN(k, ns), f2(s.x), f3(g.DC1), f3(g.DC2), f3(g.DW)]); }));
+    if (ns > 1) S[0].girders.forEach((_, i) => { for (let k = 1; k < ns; k++) r.shares[k][i].slice().sort((a, b) => a.s - b.s).forEach(q => sh.push([`G${i + 1}`, supN(k, ns), `SPAN ${q.s} ${q.end === 'right' ? 'RIGHT' : 'LEFT'} END`, f3(q.DC1), f3(q.DC2), f3(q.DW)])); });
+    const cont = P.spans.lengths.length > 1 && P.spans.continuity === 'composite', ext = A.cells.some(c => c.R && c.R.useExt);
+    return [{ t: 'head', lines: [[1.6, 'BEARING REACTIONS'], [1, 'EVERY GIRDER LINE AT EVERY SUPPORT; UNFACTORED, KIP, + UP']] },
+      { t: 'notes', title: '', wc: 100, lines: ['DC1: GIRDER SELF-WEIGHT, DECK AND HAUNCH, OTHER NON-COMPOSITE DC AND THE DIAPHRAGM POINT LOADS, ON THE SIMPLE SPAN. DC2: BARRIERS AND OTHER SUPERIMPOSED DC. DW: WEARING SURFACE.',
+        cont ? 'MADE CONTINUOUS: DC2 AND DW ARE EACH SPAN\'S END SHEARS ON THE CONTINUOUS UNIT, AS REACTIONS; DC1 ON THE SIMPLE SPAN.' : 'SIMPLE SPANS: EACH SPAN\'S TWO END REACTIONS.',
+        ...(ext ? ['A GIRDER TYPE WITH IMPORTED (MIDAS) DEMANDS: ITS DC2 AND DW ARE THE IMPORTED SHEARS AT THE TWO ENDS OF THE SPAN USED, AS REACTIONS.'] : []),
+        ...(ns > 1 ? ['AT A PIER: THE SUM OF THE END REACTIONS OF THE TWO SPANS ON IT (EACH SPAN\'S SHARE IN THE SECOND TABLE).'] : []),
+        'LIVE LOAD NOT LISTED (BRIDGE SUBSTRUCTURE LOADING COMPUTES ITS OWN). THESE ARE THE VALUES THE PROJECT TAB SENDS TO BRIDGE SUBSTRUCTURE LOADING; EACH LINE\'S ARE WORKED ON THE ANALYSIS TAB (REACTIONS) WITH THAT TYPE AND LINE.'] },
+      { t: 'table', title: 'BEARING REACTIONS PER GIRDER LINE (KIP)', cols: ['GIRDER', 'SUPPORT', 'X (FT)', 'DC1', 'DC2', 'DW'], rows },
+      ...(sh.length ? [{ t: 'table', title: 'PIER REACTIONS: EACH SPAN\'S END (KIP)', cols: ['GIRDER', 'SUPPORT', 'FROM', 'DC1', 'DC2', 'DW'], rows: sh }] : [])];
+  }
+  /* the analysis diagrams of a girder type on its first line (the Analysis tab's envelopes, R.diagrams at the engine's stations): moments
+     girder + DC1, DC2, DW, LL+IM (+/−), Strength I (max / min); shears DC, DW, LL+IM (+/−), Strength I (max / min). Adapted from the steel
+     app's dxfPlot / dxfLab / dxfDiag (apps/steel-bridge/engine/sheets.js plot, lab, diag); COPY. The demand source of the type named
+     (PSBDemands.describe: this app's analysis, a custom table, a MIDAS file). Vertical: the largest value of each plot 1.1 in at plot scale. */
+  function plot(D, l, y0, xs, series, title, unit, marks, amp) {
+    amp = amp || 1.1; const h = D.h, X = x => x * 12, mx = Math.max(1e-6, ...series.flatMap(s => s.ys.map(Math.abs))), vs = amp * D.k / mx, x0 = X(xs[0]), x1 = X(xs[xs.length - 1]), ax = D.layer('DIAG-AXIS', 7), lT = D.layer('TEXT', 7);
+    D.line(ax, x0, y0, x1, y0); (marks || []).forEach(x => D.line(ax, X(x), y0 - (amp + 0.1) * D.k, X(x), y0 + (amp + 0.1) * D.k, D.ltype('CENTER')));
+    series.forEach(s => D.pline(s.l || l, xs.map((x, i) => [X(x), y0 + s.ys[i] * vs]), false, s.lt ? D.ltype(s.lt) : undefined));
+    D.text(lT, x0, y0 + (amp + 0.15) * D.k + 0.5 * h, h, `${title} (${unit}; VERTICAL 1 IN. = ${(mx / amp).toFixed(0)} ${unit} AT PLOT SCALE)`);
+    return { vs, mx };
+  }
+  const lab = (D, l, xs, ys, y0, vs, idx, fmt) => { const h = D.h; idx.forEach(i => { const v = ys[i]; if (!(Math.abs(v) > 1e-6)) return; D.text(l, xs[i] * 12, y0 + v * vs + (v >= 0 ? 0.3 : -1.1) * h, h * 0.6, fmt(v), 1); }); };
+  function diag(D, C) {
+    const m = C.t, R = m.R, Dg = R.diagrams, xs = Dg.map(r => +r.x), L = +R.L, h = D.h, k = D.k, amp = C.amp || 1.1, gap = (2 * amp + 1.0) * k, near = x => xs.reduce((b, q, i) => Math.abs(q - x) < Math.abs(xs[b] - x) ? i : b, 0);
+    const t10 = [...new Set(Array.from({ length: 11 }, (_, i) => near(i * L / 10)))], col = f => Dg.map(r => +r[f] || 0);
+    const Ly = { dc: D.layer('DIAG-DC', 7), dw: D.layer('DIAG-DW', 3), ll: D.layer('DIAG-LL', 4), st: D.layer('DIAG-STR', 1), t: D.layer('TEXT', 7) };
+    const key = (yy, s) => D.text(Ly.t, xs[xs.length - 1] * 12, yy + (amp + 0.15) * k + 2 * h, h * 0.7, s, 2);
+    const MgD = Dg.map(r => (+r.M_g || 0) + (+r.M_DC1 || 0));   // girder + DC1 drawn as one curve (the Analysis tab's M_g and M_DC1 columns; the plot only)
+    const f0 = v => (+v).toFixed(0), f1v = v => (+v).toFixed(1), neg = col('M_StrI_neg').some(v => v < -1e-6); let y = 0;
+    const pm = plot(D, Ly.dc, y, xs, [{ ys: MgD, l: Ly.dc }, { ys: col('M_DC2'), l: Ly.dw, lt: 'DASHED' }, { ys: col('M_DW'), l: Ly.dw }, { ys: col('M_LLpos'), l: Ly.ll }, { ys: col('M_LLneg'), l: Ly.ll, lt: 'HIDDEN' }, { ys: col('M_StrI_pos'), l: Ly.st }, { ys: col('M_StrI_neg'), l: Ly.st, lt: 'HIDDEN' }],
+      'MOMENT ENVELOPES', 'KIP-FT', [0, L], amp);
+    key(y, 'WHITE GIRDER + DC1 / GREEN DC2 (DASHED), DW / CYAN LL+IM (+/-) / RED STRENGTH I (DASHED = MIN.)'); lab(D, Ly.t, xs, col('M_StrI_pos'), y, pm.vs, t10, f0);
+    if (neg) lab(D, Ly.t, xs, col('M_StrI_neg'), y, pm.vs, [0, xs.length - 1], f0);
+    y -= gap;
+    const pv = plot(D, Ly.dc, y, xs, [{ ys: col('V_DC'), l: Ly.dc }, { ys: col('V_DW'), l: Ly.dw }, { ys: col('V_LLpos'), l: Ly.ll }, { ys: col('V_LLneg'), l: Ly.ll, lt: 'HIDDEN' }, { ys: col('V_StrI_pos'), l: Ly.st }, { ys: col('V_StrI_neg'), l: Ly.st, lt: 'HIDDEN' }],
+      'SHEAR ENVELOPES', 'KIP', [0, L], amp);
+    key(y, 'WHITE DC / GREEN DW / CYAN LL+IM (+/-) / RED STRENGTH I (DASHED = MIN.)'); lab(D, Ly.t, xs, col('V_StrI_pos'), y, pv.vs, [0], f1v); lab(D, Ly.t, xs, col('V_StrI_neg'), y, pv.vs, [xs.length - 1], f1v);
+    const ds = window.PSBDemands && window.PSBDemands.describe ? window.PSBDemands.describe(C.P, m.T) : null;
+    const notes = [`ANALYSIS DIAGRAMS OF GIRDER TYPE ${m.label.toUpperCase()} (SPAN ${m.span}) ON LINE G${m.g}, L = ${f2(L)} FT CL BEARING TO CL BEARING, AT THE ENGINE'S ${xs.length} STATIONS (THE ANALYSIS TAB'S FORCE EFFECTS PER GIRDER, SAGGING +). LABELS: STRENGTH I MAX. AT THE TENTH POINTS${neg ? ', MIN. AT THE ENDS' : ''}; THE SHEARS AT THE ENDS.`,
+      `DEMANDS: ${ds ? `${ds.what} (${ds.detail})` : 'THIS APP\'S ANALYSIS'}${R.useExt ? '; DC2, DW AND LL+IM FROM THE IMPORTED FILE, THE GIRDER AND DC1 COMPUTED BY THIS APP ON THE SIMPLE SPAN' : R.fe ? '; GIRDER AND DC1 ON THE SIMPLE SPAN, DC2, DW AND LL+IM ON THE CONTINUOUS UNIT' : ''}.`,
+      'STRENGTH I AS THE ANALYSIS TAB (AASHTO LRFD 10TH ED. TABLE 3.4.1-1; DC = GIRDER + DC1 + DC2). WORKED: ANALYSIS TAB (MOMENTS AT MIDSPAN, SHEARS AT THE SUPPORT); THE OTHER LINES OF THIS TYPE: THE ANALYSIS TAB WITH THAT LINE.'];
+    wrap(notes.map(t => X_().str(asc(t)).toUpperCase()), C.wrap).forEach((t, i) => D.text(Ly.t, 0, y - (amp + 0.4) * k - 1.8 * i * h, h * 0.8, t, 0));
+  }
+
   /* one sheet (adapted copy of the steel app's sheet()): the smallest plot scale (not below S.kmin) at which the drawing fits the drawing
      area; the drawing placed top left at x offset ox; border, inner border and title block at the plot scale */
   function sheet(D, S, ox, C) {
@@ -358,10 +412,14 @@
       list.push({ id: `strd${t.k}`, title: `GIRDER ${t.label.toUpperCase()}: STRAND PATTERN`, fn: strands, c: { ...C, t }, kmin: 2 });
     });
     if (TM.types.length) list.push({ id: 'sched', title: 'STRAND AND GIRDER SCHEDULE', fn: schedule, c: { ...C, types: TM.types, aw }, kmin: 1 });
-    // part 3 (batch H1): the design summary (every girder type on every line)
+    // batch H2: each girder type's analysis diagrams; batch H1/H2: the bearing reactions and the design summary (every type on every line)
+    TM.types.forEach(t => list.push({ id: `diag${t.k}`, title: `GIRDER ${t.label.toUpperCase()}: ANALYSIS DIAGRAMS`, fn: diag, c: { ...C, t, amp: opt.paper === 'B' ? 0.7 : 1.1 }, kmin: 48 }));
     if (TM.types.length) { let A = null, why = '';
       try { A = (opt.all && opt.all()) || window.PSBBridge.results(P, resI); } catch (e) { why = e.message; }
-      if (A && A.cells && A.cells.length && window.PSBSummaryUI) { try { addBlocks('summ', 'DESIGN SUMMARY', summaryBlocks(P, A)); } catch (e) { miss.push(['DESIGN SUMMARY', String(e.message).toUpperCase()]); } }
+      const ok = A && A.cells && A.cells.length;
+      if (ok && window.PSBHandoffs && window.PSBHandoffs.srAll) { try { addBlocks('reac', 'BEARING REACTIONS', reacBlocks(P, A)); } catch (e) { miss.push(['BEARING REACTIONS', String(e.message).toUpperCase()]); } }
+      else miss.push(['BEARING REACTIONS', (why || 'NO RESULTS OF EVERY GIRDER TYPE ON EVERY LINE').toUpperCase()]);
+      if (ok && window.PSBSummaryUI) { try { addBlocks('summ', 'DESIGN SUMMARY', summaryBlocks(P, A)); } catch (e) { miss.push(['DESIGN SUMMARY', String(e.message).toUpperCase()]); } }
       else miss.push(['DESIGN SUMMARY', (why || 'NO RESULTS OF EVERY GIRDER TYPE ON EVERY LINE').toUpperCase()]); }
     if (!list.length) errors.push('Nothing to draw: ' + miss.map(q => q.join(': ')).join('; '));
     // the general notes (second) and the cover with the sheet index (first): the cover's own sheets counted in the index
@@ -381,5 +439,5 @@
   }
 
   window.PSBSheets = { PAPER, SCALES, SCALE_NAME, TXT, build, sheet, section, plan, typeModels, elevation, strands, schedule,
-    blockPages, blockBox, coverBlocks, notesModel, summaryRows, summaryBlocks };
+    blockPages, blockBox, coverBlocks, notesModel, summaryRows, summaryBlocks, reacBlocks, diag, plot };
 })();
