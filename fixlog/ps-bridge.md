@@ -3967,7 +3967,7 @@ PR #1563: https://github.com/mlococo88/All-Structural/pull/1563
 - None new: the sheet frame is part 1's adapted copy of the steel app's `sheet()` (unchanged here).
 
 ## 2026-11-15 — Batch A: display bugs and stale text — Report References, the Rating tab's RF chips, §1's "99.000", the Flexure Components chart, stale placeholders, the footer (display only; no calculation change)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1569: https://github.com/mlococo88/All-Structural/pull/1569
 ### Request
 - PS Bridge catch-up batch A (review 2026-11-15, ps-vs-steel O16, O19, L15, R7; old-vs-new #109, #134). Display bugs and stale text; no calculation change.
 ### What changed

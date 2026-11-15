@@ -29,20 +29,43 @@
   ];
   const SEL = LISTS.map(l => l[0]).join(',');
 
+  /* SBLT (2026-11-15): the tables bound now ({ el, ctl, commit }). A table edit not yet committed is committed at once, before the page
+     handles a click or a change made anywhere outside the table (flush(), a capture listener on the document): the page's own handler
+     then reads the edit while the page still shows the edit's own girder type, tab and dialog state. Before, the commit waited for
+     the deferred focusout below; when the click or change redrew the page first (another girder type on the Loads tab, a design
+     variable's mode in the Auto design dialog) and no input of the same id was drawn again, the edit was lost. */
+  const BOUND = new Set();
+  let flushing = false;
   function bind(el, cfg) {
     if (el._sli || !W.SharedListInput) return;
     let was = el.value;
     const parse = cfg.colSplit ? (t => W.SharedListInput.fromText(t, { rowSplit: cfg.rowSplit, colSplit: cfg.colSplit, ncol: cfg.columns.length })) : undefined;
     const ctl = W.SharedListInput.bindInput(el, Object.assign({ events: ['input'], parse }, cfg));
-    ctl.el.addEventListener('focusout', () => setTimeout(() => {   // after the event: a redraw (Enter, ×) moves the focus within the table
-      if (ctl.el.isConnected && ctl.el.contains(document.activeElement)) return;
+    const commit = () => {   // the input's 'change', once per edit (the module's own handler reads the input)
       if (el.value === was) return; was = el.value;
       // SBLC (2026-11-14): when the page was redrawn before this ran (a click on an input tab redraws every pane), the edit is committed
       // through the input of the same id drawn in its place (before, it was lost); the PS Bridge app's copy has the same fix (PR #1548)
       let t = el; if (!el.isConnected) { t = document.getElementById(el.id); if (!t) return; t.value = el.value; }
       t.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    ctl.el.addEventListener('focusout', () => setTimeout(() => {   // after the event: a redraw (Enter, ×) moves the focus within the table
+      if (ctl.el.isConnected && ctl.el.contains(document.activeElement)) return;
+      commit();
     }, 0));
     el._sli = ctl;
+    BOUND.add({ el, ctl, commit });
+  }
+  /* flush(target): commits every bound table's pending edit, except the table the event is in (its own rows, × and add buttons) */
+  function flush(target) {
+    if (flushing) return;
+    flushing = true;
+    try {
+      BOUND.forEach(b => {
+        if (!b.el.isConnected) { BOUND.delete(b); return; }   // redrawn: its deferred focusout (above) still commits a pending edit
+        if (target && target.nodeType === 1 && (target === b.el || b.ctl.el.contains(target))) return;
+        b.commit();
+      });
+    } finally { flushing = false; }
   }
   function upgrade(root) {
     (root || document).querySelectorAll(SEL).forEach(el => { const l = LISTS.find(q => el.matches(q[0])); if (l) bind(el, l[1]); });
@@ -53,9 +76,10 @@
     s.textContent = '.bad + [data-sli="host"] .sli{outline:1px solid #dc2626;outline-offset:2px;}';   // the module's error mark, on the table
     document.head.appendChild(s);
     upgrade(document);
+    ['click', 'change'].forEach(t => document.addEventListener(t, e => flush(e.target), true));   // SBLT: before the page's handlers
     new MutationObserver(ms => { if (ms.some(m => m.addedNodes.length && !(m.target.closest && m.target.closest('.rp')))) upgrade(document); }).observe(document.body, { childList: true, subtree: true });   // RSX (2026-11-09): not for nodes added inside the report viewer (search marks and status, lazy items): it holds no list input
   }
   if (typeof document === 'undefined') { /* no page (Node test harness): nothing to bind */ }
   else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
-  W.SBDListsUI = { LISTS, upgrade };
+  W.SBDListsUI = { LISTS, upgrade, flush };
 })();
