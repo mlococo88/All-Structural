@@ -8320,7 +8320,7 @@ index 0bef68d..011f1a0 100644
  })();
 ```
 ## 2026-11-15 — H2: Drawings tab: bearing reactions and analysis diagrams sheets (display and export only)
-PR #TBD
+PR #1584: https://github.com/mlococo88/All-Structural/pull/1584
 ### Request
 - Review finding D3 (scratchpad review ps-vs-steel.md "Drawings"), batch H2: the Steel Bridge app's bearing reactions and analysis diagrams sheets (apps/steel-bridge/engine/sheets.js `reac`, `diag`) for this app.
 ### What changed
