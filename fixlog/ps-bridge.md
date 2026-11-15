@@ -4196,6 +4196,949 @@ index e9eb26f..2aec14f 100644
 ### Other copies
 - None.
 
+## 2026-11-15 — Batch B: the Steel Bridge app's formats — amber / REVIEW statuses, stat tiles 3 across with § links, graphics in titled cards, plain type / line picker, Download DXF on each result graphic, girder elevation coloured by governing ratio (Flexure, Shear), the 390 px section figure (display and export only)
+PR #1570: https://github.com/mlococo88/All-Structural/pull/1570
+### Request
+- PS Bridge catch-up batch B (review 2026-11-15, ps-vs-steel L4, L5, L9, L13, L14, L17, O8, O15). Format the result tabs as the Steel Bridge app does. Display and export only.
+### What changed
+- `ui/summary.js`: each check cell's class comes from the engine's own pass and ratio, through `stOf(q)`:
+  - s-fail: the engine's FAIL;
+  - s-review: the engine passes the check but its ratio is not finite (REVIEW, the steel Summary's rule for a ratio that is not finite);
+  - s-hi: PASS with a ratio from 0.90 to 1.00 (amber; the 0.90 threshold of the steel app's ratio colours, of this app's Report 'hi' and of the step chips);
+  - s-pass.
+  - The grid, the type × group table and the governing-check tables use it. CSS s-review / s-hi as the steel s-review.
+  - The verdict: FAIL / REVIEW / PASS badge and counts. `model()` returns `nR`; `nP` counts PASS with a finite ratio.
+- `ui/dash.js`:
+  - `stG(all)`: a group is FAIL / REVIEW / PASS as above;
+  - `stC(c)`: the class of each listed check;
+  - a PASS chip with a governing ratio ≥ 0.90 gets `sd-hi` (amber border and value);
+  - REVIEW is counted (`sdW`); the verdict is FAIL / REVIEW / PASS.
+  - The CSS of `sd-hi` is in `index.html`.
+  - No engine check changes status: a check the engine fails stays FAIL whatever its ratio.
+- `ui/vizkit.js` `tiles()`:
+  - 3 across (`.vk-tiles` repeat(3); before 6);
+  - the value and its unit on one line in `.vk-tv` (white-space: nowrap);
+  - the label rule is now `.vk-tile>span:first-child`. Before, `.vk-tile span{display:block}` also hit the value's own data-ev span, which put the unit on the next line;
+  - value font 12.5 pt;
+  - a § link: `t.link`, else `PSBVizKit.tileLink(path)`. The page sets it around each tab's `after()` to `PSBOutKit.tileLinker($('out'), ctx)`, which finds, in order:
+    - the § the tab writes next to the same value (a data-ev span outside the graphics followed by a.wk);
+    - else the step whose engine path it is (`ctx.W[*].paths`);
+    - else, for a check ratio `checks.<i>.r`, that check's step (ui/dash.js GROUPS).
+- `ui/outkit.js`:
+  - `tileLinker`, as above;
+  - `gcard(title, id)`: a result graphic's slot in a titled card (`section.sec.gfxCard`).
+  - Every result tab's top-level graphic slot is now in one, e.g. "Section graphic", "Load rating: rating factors" (ui/section, loads, analysis, losses, stresses, flexure, shear, endzone, camber, handling, deck, rating).
+  - `report/fromtab.js` reads a `gfxCard` as its slot alone, so the Report is unchanged. The page hides a gfxCard left empty.
+- `ui/types.js` `outBar`:
+  - the girder type / line picker is a plain line, as the steel `#gBar`: "Girder type … on line … checked on G2, G3, G4; every line in the Summary · Girder types";
+  - `.tyOut` CSS without the box (`index.html`);
+  - ids `tyOutT` / `tyOutL` unchanged.
+- New `ui/svgdxf.js` (`window.PSBGraphics`): Download DXF of a graphic as drawn.
+  - Every line, polyline, polygon, rect, circle, path and text of its SVG becomes a DXF R12 entity through `shared/dxf.js` (unchanged).
+  - Units: the graphic's own units, y up. Layers PSB-<kind>-<class>.
+  - `download()` validates first (`SharedDxf.validate`), as the steel `SBDGraphics.download`.
+  - No `textW`: the charts' text widths are unchanged.
+- `ui/vizkit.js` `detCard` and `ui/vizalong.js` `mount`: Download DXF on every graphic. It uses `o.dxf` when given, else the graphic as drawn (`PSBGraphics.fromFig`), with the note `PSBGraphics.NOTE`. The "DXF comes with PR 7" comments are removed.
+- New `ui/ratioelev.js` (`window.PSBRatioElev`): the girder elevation coloured by governing ratio, as the steel Flexure / Shear elevation:
+  - one band per station: the stretch to the mid-points of its neighbours;
+  - neighbours of one class merged and labelled with their largest ratio;
+  - green below 0.90, amber 0.90 to 1.00, red above 1.00;
+  - the engine's governing check flagged.
+  - Flexure (`#gfxr_fx`): M_u / φM_n at the chart's stations (the ratio its read-out shows), flag = the Flexure check, § fx.gov.
+  - Shear (`#gfxr_sh`): the engine's d/c of each design station, flag = the Shear check, § sh.gov.
+  - Slots `gfxr_*` are screen only (not Report figures).
+- `ui/section.js` `figure()`: on a narrow card (W < 560) the y_b / y_bc / y_ps labels go above each line at its right end (short text, halo), and maxH = max(300, 1.1 W). At 390 px the section is drawn at the card's width (before about 120 px).
+- `index.html`: the scripts ui/ratioelev.js and ui/svgdxf.js; `VK.tileLink` set around `after()`; empty gfxCards hidden; CSS.
+- Tests:
+  - new `tests/engine/psbridge-display-b.test.mjs` (22): the Summary classes and counts vs the engine and the column, the gfxCard in the Report, the tiles;
+  - new smoke `tests/smoke/ps-bridge-display.mjs`.
+### Saved data (CLAUDE.md §5)
+- None: no key or field.
+### Governing provisions (CLAUDE.md §4)
+- None changed. Display and export only.
+- Every ratio shown is the engine's. The flexure elevation's band ratio is M_u / φM_n of the engine's stations, the quotient the chart's read-out already shows.
+- Harness B: 0 differences.
+### Check case
+- New project:
+  - Summary: Release stresses 0.944 (Release comp at x = 48 ft) PASS, now amber (s-hi; before green); its column chip is amber (sd-hi). Counts 2 FAIL / 38 PASS, unchanged.
+  - Flexure elevation: governs 0.752 at x = 60 ft (= the Flexure check).
+  - Shear elevation: governs 0.721 at x = 30.01 ft (= the Shear check).
+  - Hand check of one band: x = 60 ft, M_u / φM_n = the read-out's ratio at that station.
+### Code (before / after: the diff of this change)
+```diff
+diff --git a/apps/ps-bridge/index.html b/apps/ps-bridge/index.html
+index bd37908..9055c05 100644
+--- a/apps/ps-bridge/index.html
++++ b/apps/ps-bridge/index.html
+@@ -104,6 +104,8 @@
+     'ui/xsfig.js',    // 2026-11-14: the whole-bridge cross-section figure (Loads & LLDF tab, Report): the girder sections at their offsets
+     'ui/view3d.js',   // PR 3c: the 3D view tab (the Steel Bridge app's 3D view pattern, apps/steel-bridge/ui/view3d.js; three.js r128 below)
+     '../../shared/dxf.js',  // item 10: the DXF R12 writer, previews and sheet printing (shared, unchanged; also used by the steel app's Drawings tab)
++    'ui/ratioelev.js', // 2026-11-15 (batch B): the girder elevation coloured by governing ratio (Flexure, Shear tabs)
++    'ui/svgdxf.js',   // 2026-11-15 (batch B): Download DXF of each result graphic as drawn (window.PSBGraphics, on shared/dxf.js)
+     'ui/sheets.js',   // item 10: the drawing set (part 1: typical section of each span, framing plan; part 2: girder elevation, strand pattern, schedule) with border and title block (adapted from the steel app's sheets)
+     'ui/drawings.js', // item 10, part 1: the Drawings tab (previews, Download DXF, Print; the steel app's Drawings tab pattern)
+     'ui/sumelev.js',  // 2026-11-14 (item 8a): the Summary's girder elevation of each girder type (picker; the governing checks where they govern)
+@@ -258,6 +260,7 @@
+   #sbDashCol .sdMain{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 6px;padding:3px 5px 3px 0;color:var(--ink);text-decoration:none;min-width:0}
+   #sbDashCol .sdMain:hover .sdName{text-decoration:underline} #sbDashCol .sdName{font-weight:600;flex:1 1 auto} #sbDashCol .sdVal{font-variant-numeric:tabular-nums;white-space:nowrap} #sbDashCol .sdSt{font-size:7.5pt;font-weight:700;color:#475569}
+   #sbDashCol .sd-fail .sdSt{color:#991B1B} #sbDashCol .sd-pass .sdSt{color:#065F46} #sbDashCol .sd-review .sdSt{color:#92400E}
++  #sbDashCol .sdChip.sd-hi{border-left-color:var(--warn)} #sbDashCol .sd-hi .sdVal{color:#92400E} #sbDashCol .sdList a.sd-hi{color:#92400E}   /* 2026-11-15 (batch B): PASS with a ratio 0.90 to 1.00 (amber) */
+   #sbDashCol .sdList{grid-column:2;margin:0 0 4px;padding:0 4px 0 0;list-style:none;font-size:8.5pt} #sbDashCol .sdList a{text-decoration:none} #sbDashCol .sdList a:hover{text-decoration:underline}
+   #sbDashCol .sdList a.sd-fail{color:#991B1B;font-weight:700} #sbDashCol .sdList a.sd-review{color:#92400E} #sbDashCol .sdList a.sd-pass{color:#065F46} #sbDashCol .sdList a.sd-na,#sbDashCol .sdList a.sd-notrun{color:#64748b} #sbDashCol .sdOldV{font-style:italic}
+   #sbDashCol .sdNote{font-size:8pt;color:#64748b;margin:6px 0}
+@@ -279,7 +282,9 @@
+   /* this app (PR 1) */
+   .ph{border:1px dashed var(--slate-400);border-radius:6px;background:var(--slate-50);padding:8px 10px;margin:10px 0;font-family:var(--font-ui);font-size:9pt;color:#475569;}
+   /* this app (PR 3a-1): girder types (ui/types.js) */
+-  .tyScope,.tyOut{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0;padding:6px 8px;border:1px solid var(--color-border);border-radius:6px;background:var(--slate-100);font-family:var(--font-ui);font-size:9pt;}
++  .tyScope{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0;padding:6px 8px;border:1px solid var(--color-border);border-radius:6px;background:var(--slate-100);font-family:var(--font-ui);font-size:9pt;}
++  /* 2026-11-15 (batch B): the girder type / line picker of the output tabs as the steel app's #gBar (a plain line, no box) */
++  .tyOut{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:6px 0 8px;font-family:var(--font-ui);font-size:9pt;color:#475569;} .tyOut select{font-size:9pt;max-width:100%;}
+   .tyScope.on{background:#FEF9C3;border-color:#EAB308;} .tyScope .note{flex-basis:100%;margin:0;}
+   .tyMark{font-family:var(--font-ui);font-size:8pt;font-weight:600;color:#A16207;margin-left:6px;text-transform:none;letter-spacing:0;} .tyMark.base{color:#64748b;font-weight:400;}
+   .tySpan{margin:8px 0 4px;font-family:var(--font-ui);font-size:9.5pt;} .tyRow{border:1px solid var(--color-border);border-radius:5px;padding:5px 7px;margin:4px 0;} .tyRow.tyShown{background:#EFF6FF;border-color:#93C5FD;}
+@@ -677,7 +682,9 @@
+     } else { const o = OUT[ui.otab]; h += ph(esc(name), o[0], o[1]); }
+     $('out').innerHTML = h;
+     if (ui.otab === 'sum' && !errs.length && window.PSBSummaryUI.after) { try { window.PSBSummaryUI.after($('out'), { P }); } catch (e) { console.warn(e); } }   // 2026-11-14: the Summary's cross-section and plan
+-    if (ctxOut && TABUI[ui.otab]) { try { TABUI[ui.otab]().after($('out'), ctxOut); } catch (e) { console.warn(e); } }
++    if (ctxOut && TABUI[ui.otab]) { const VKt = window.PSBVizKit; if (VKt) VKt.tileLink = window.PSBOutKit.tileLinker($('out'), ctxOut);   // 2026-11-15 (batch B): the tiles' § links
++      try { TABUI[ui.otab]().after($('out'), ctxOut); } catch (e) { console.warn(e); } if (VKt) VKt.tileLink = null;
++      $('out').querySelectorAll('.gfxCard').forEach(c => { if (!c.querySelector('.vk, svg')) c.hidden = true; }); }   // a graphic's card with no graphic for this design
+     // PR 2e: the Report of the design girder (ui/report.js): the page's own result; the section choices kept in ui.rpt (psb2.ui), as the steel app
+     if (ui.otab === 'rpt' && ok && $('rptHost')) { ui.rpt = ui.rpt || {};
+       try { window.PSBReportUI.render($('rptHost'), { P, rc, opts: ui.rpt, save: saveUi, goto: t => gotoOut(t), goin: t => { ui.itab = t; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; } }); }
+diff --git a/apps/ps-bridge/report/fromtab.js b/apps/ps-bridge/report/fromtab.js
+index 4ee032a..6eb32ef 100644
+--- a/apps/ps-bridge/report/fromtab.js
++++ b/apps/ps-bridge/report/fromtab.js
+@@ -114,6 +114,7 @@
+   function cards(html, o) {
+     const T = parse(html), subs = [], top = [];
+     const walk = n => (n.kids || []).forEach(k => {
++      if (k.tag === 'section' && has(k, 'gfxCard')) { const b = (k.kids || []).find(q => has(q, 'secBody')); if (b) walk(b); return; }   // 2026-11-15: a graphic's card (PSBOutKit.gcard) = its slot alone
+       if (k.tag === 'section' && has(k, 'sec')) {
+         const hd = (k.kids || []).find(q => has(q, 'secHead')), body = (k.kids || []).find(q => has(q, 'secBody')) || { kids: [] };
+         const title = hd ? line(hd, o).replace(/\s*\(see \[\[[^\]]*\]\]\)/g, '') : '';
+diff --git a/apps/ps-bridge/ui/analysis.js b/apps/ps-bridge/ui/analysis.js
+index cb79f6e..55dc3a1 100644
+--- a/apps/ps-bridge/ui/analysis.js
++++ b/apps/ps-bridge/ui/analysis.js
+@@ -20,7 +20,7 @@
+   function output(ctx) {
+     const { R, inp, ui } = ctx, k = K(), ev = (p, d, u, div) => k.ev(R, p, d, u, div), wk = k.wk, D = R.diagrams, sel = selOf(ui, R), c = R.cont;
+     const simple = !R.fe && !R.useExt;
+-    let h = '<div id="gfx_an"></div>';
++    let h = K().gcard('Analysis graphic: envelopes along the girder', 'gfx_an');
+     // the station table: every sixth station of the engine's and the selected one
+     const idx = D.map((r, i) => i).filter(i => i % 6 === 0 || i === sel);
+     h += k.card('Force effects along the girder (per girder; moments kip-ft, shears kip)', `<div class="fRow"><label for="o_anSel">Station</label><select id="o_anSel">${D.map((r, i) => `<option value="${i}"${i === sel ? ' selected' : ''}>x = ${k.fx(r.x, 2)} ft (${k.fx(r.x / R.L, 3)} L)</option>`).join('')}</select></div>
+diff --git a/apps/ps-bridge/ui/camber.js b/apps/ps-bridge/ui/camber.js
+index 4161234..b097349 100644
+--- a/apps/ps-bridge/ui/camber.js
++++ b/apps/ps-bridge/ui/camber.js
+@@ -19,7 +19,7 @@
+   const arrow = v => v >= 0 ? '↑' : '↓';
+   function output(ctx) {
+     const { R, inp } = ctx, k = K(), ev = (p, d, u, div) => k.ev(R, p, d, u, div), wk = k.wk, c = R.cam, m = inp.opt.mult, qL = ckOf(R, 'LL deflection');
+-    let h = '<div id="gfx_cb"></div>';
++    let h = K().gcard('Camber graphic: at midspan', 'gfx_cb');
+     const stg = [['Release (1.0 / 1.0)', 'Δ<sub>ps</sub> − Δ<sub>sw</sub>', 'cam.rel', 'cb.rel', 'the girder on the bed after transfer'],
+       [`Erection (${k.fx(+m.psE, 2)} / ${k.fx(+m.swE, 2)})`, `${k.fx(+m.psE, 2)} Δ<sub>ps</sub> − ${k.fx(+m.swE, 2)} Δ<sub>sw</sub>`, 'cam.erect', 'cb.erect', 'the girder set on the bearings'],
+       ['Deck placement', `Δ<sub>erect</sub> − (Δ<sub>dk</sub>${c.dDia > 1e-4 ? ' + Δ<sub>dia</sub>' : ''})`, 'cam.afterDeck', 'cb.deck', '<b>haunch and screed</b>'],
+@@ -39,7 +39,7 @@
+     h += k.card(`Live-load deflection (${c.llDen ? 'MassDOT 3.5.6.1' : '2.5.2.6.2'})`, k.kv([['Δ<sub>LL</sub> ≈ 5 M<sub>LL</sub> L² / 48 E<sub>c</sub> I<sub>c</sub>', `${ev('cam.dLL', 3, 'in')} ${wk('cb.dLL')}`], [`Limit L/${c.llDen || 800}`, `${ev('cam.llLim', 3, 'in')} ${wk('cb.llLim')}`],
+       ['Ratio', `<b>${ev(`checks.${qL.i}.r`, 3)}</b> ${qL.c.pass ? 'PASS' : '<b style="color:var(--fail)">FAIL</b>'} ${wk('cb.ll.r')}`]])
+       + `<p class="note">The optional deflection criterion: live load with impact and distribution on the composite section, by an equivalent uniform load${c.llDen ? '; MassDOT 3.5.6.1 for an interior girder: L/1000 with sidewalks, else L/800' : ''}.</p>`, 'card-cbll');
+-    h += '<div id="gfx_cb_along"></div>';
++    h += K().gcard('Camber graphic: along the girder', 'gfx_cb_along');
+     h += k.card('Haunch / screed and beam-seat camber at the tenth points', `<div class="tscroll"><table class="tbl"><thead><tr><th>x<br>ft</th><th>Shape factor<br>4x(L − x)/L²</th><th>Erection camber<br>in</th><th>Δ<sub>deck</sub>: haunch<br>in</th><th>Δ<sub>seat</sub>: beam seat<br>in</th><th>Haunch build-up<br>in</th></tr></thead><tbody>
+       ${R.haunch.map((r, i) => { const p = `haunch.${i}.`; return `<tr${i === 5 ? ' class="sel"' : ''}><td>${ev(p + 'x', 1)}</td><td>${ev(p + 'par', 3)}</td><td>${ev(p + 'camErect', 3)}</td><td>${ev(p + 'camDeck', 3)}</td><td>${ev(p + 'camSeat', 3)}</td><td>${ev(p + 'buildup', 2)}</td></tr>`; }).join('')}</tbody></table></div>
+       <p class="note">Haunch build-up = the entered haunch t<sub>h</sub> = ${k.fx(+inp.th, 2)} in + the residual Δ<sub>deck</sub> camber (at least 0.5 in): the deck is screeded to grade before the superimposed dead load. The beam seats use Δ<sub>seat</sub>. Both shaped by 4x(L − x)/L² (zero at the bearings, one at midspan). Check the minimum haunch at midspan and the maximum at the bearings against the fabricator's tolerance.</p>`, 'card-cbhaunch');
+diff --git a/apps/ps-bridge/ui/dash.js b/apps/ps-bridge/ui/dash.js
+index 9bee4e3..d9a033e 100644
+--- a/apps/ps-bridge/ui/dash.js
++++ b/apps/ps-bridge/ui/dash.js
+@@ -62,11 +62,17 @@
+     if (A) { const all = [];
+       A.types.forEach(t => gp.checks.forEach(([n, st]) => { const q = t.gov[n]; if (q) all.push({ c: q.c, st, cell: q.cell }); }));
+       const gov = all.reduce((b, z) => !b || z.c.r > b.c.r ? z : b, null);
+-      return { all, gov, st: !all.length ? 'na' : all.some(z => !z.c.pass) ? 'fail' : 'pass' }; }
++      return { all, gov, st: stG(all) }; }
+     const all = gp.checks.map(([n, st]) => { const c = R.checks.find(q => q.n === n); return c ? { c, st } : null; }).filter(Boolean);
+     const gov = all.reduce((b, z) => !b || z.c.r > b.c.r ? z : b, null);
+-    return { all, gov, st: !all.length ? 'na' : all.some(z => !z.c.pass) ? 'fail' : 'pass' };
++    return { all, gov, st: stG(all) };
+   }
++  /* 2026-11-15 (batch B, the steel app's statuses): a group FAIL (an engine FAIL), REVIEW (every check passes but a ratio is not a finite
++     number: the steel column's REVIEW for a ratio that is not finite), PASS; a PASS chip with a governing ratio 0.90 to 1.00 is amber (sd-hi,
++     the 0.90 threshold of the steel ratio colours) */
++  const fin = v => typeof v === 'number' && isFinite(v);
++  const stG = all => !all.length ? 'na' : all.some(z => !z.c.pass) ? 'fail' : all.some(z => !fin(z.c.r)) ? 'review' : 'pass';
++  const stC = c => !c.pass ? 'fail' : !fin(c.r) ? 'review' : c.r >= 0.9 ? 'hi' : 'pass';
+   const D = { o: null, coll: false, open: new Set() };
+   const rd = k => { try { return D.o.store ? D.o.store.getItem(k) : null; } catch (e) { return null; } };
+   const wr = (k, v) => { try { if (D.o.store) D.o.store.setItem(k, v); } catch (e) { /* not kept */ } };
+@@ -83,26 +89,26 @@
+     const R = o.result ? o.result() : null, A = R && o.all ? o.all() : null;   // PR 3a-2: every girder type × line
+     D.many = !!(A && A.n > 1);
+     if (!R) { o.el.innerHTML = head('<span class="sdC"><span class="sdN">not run</span></span>') + (D.coll ? '' : '<p class="sdNote">The engine could not compute this design: no checks (see the output panel).</p>'); return; }
+-    const G = GROUPS.map(gp => gp.pr ? { gp, st: 'notrun' } : { gp, ...grp(R, gp, A) }), run = G.filter(q => q.st === 'pass' || q.st === 'fail'), nOff = G.filter(q => q.st === 'na' && q.gp.off).length;
+-    const nF = run.reduce((a, q) => a + q.all.filter(z => !z.c.pass).length, 0), nP = run.reduce((a, q) => a + q.all.filter(z => z.c.pass).length, 0);
++    const G = GROUPS.map(gp => gp.pr ? { gp, st: 'notrun' } : { gp, ...grp(R, gp, A) }), run = G.filter(q => q.st === 'pass' || q.st === 'fail' || q.st === 'review'), nOff = G.filter(q => q.st === 'na' && q.gp.off).length;
++    const nF = run.reduce((a, q) => a + q.all.filter(z => !z.c.pass).length, 0), nR = run.reduce((a, q) => a + q.all.filter(z => z.c.pass && !fin(z.c.r)).length, 0), nP = run.reduce((a, q) => a + q.all.filter(z => z.c.pass && fin(z.c.r)).length, 0);
+     const top = run.map(q => q.gov && { ...q.gov, gp: q.gp }).filter(Boolean).reduce((b, z) => !b || z.c.r > b.c.r ? z : b, null);
+-    const cnt = `<span class="sdC">${nF ? `<span class="sdF">${nF} FAIL</span>` : ''}${nP ? `<span class="sdP">${nP} PASS</span>` : ''}${nOff ? `<span class="sdN">${nOff} off</span>` : ''}</span>`;
++    const cnt = `<span class="sdC">${nF ? `<span class="sdF">${nF} FAIL</span>` : ''}${nR ? `<span class="sdW">${nR} REVIEW</span>` : ''}${nP ? `<span class="sdP">${nP} PASS</span>` : ''}${nOff ? `<span class="sdN">${nOff} off</span>` : ''}</span>`;
+     if (D.coll) { o.el.innerHTML = head(cnt); return; }
+-    const LBL = { pass: 'PASS', fail: 'FAIL' };
++    const LBL = { pass: 'PASS', fail: 'FAIL', review: 'REVIEW' };
+     const chips = G.map(q => {
+       const gp = q.gp;
+       if (gp.pr) return `<div class="sdChip sd-notrun"><span></span><a href="#" class="sdMain" data-sdtab="${gp.tab}" title="Not built yet: comes in PR ${gp.pr} (docs/ps-bridge-plan.md §5)"><span class="sdName">${esc(gp.name)}</span><span class="sdVal">not run</span><span class="sdSt">PR ${gp.pr}</span></a></div>`;
+       if (q.st === 'na') return gp.off ? `<div class="sdChip sd-notrun" data-sdgrp="${gp.id}"><span></span><a href="#" class="sdMain" data-sdin="${gp.off}" title="Off for this design: turn it on on its input tab"><span class="sdName">${esc(gp.name)}</span><span class="sdVal">off</span><span class="sdSt">input</span></a></div>` : '';
+       const op = D.open.has(gp.id), g = q.gov;
+-      const rows = q.all.map(z => `<li><a href="#" ${go(gp, z.st, z.cell)} class="sd-${z.c.pass ? 'pass' : 'fail'}">${esc(z.c.n + on(z))}: ${fx(z.c.r, 3)}</a></li>`).join('');
+-      return `<div class="sdChip sd-${q.st}" data-sdgrp="${gp.id}"><button type="button" class="sdX" data-sdx="${gp.id}" aria-expanded="${op}" title="${op ? 'Hide' : 'Show'} each check">${op ? '▾' : '▸'}</button><a href="#" class="sdMain" ${go(gp, g.st, g.cell)} title="${esc(`${g.c.n}${on(g)}: ${fx(g.c.v, 3)} vs ${fx(g.c.lim, 3)} ${g.c.u}${gp.input ? ' (Owner rules tab)' : ` at x = ${fx(g.c.loc, 2)} ft`}`)}">
++      const rows = q.all.map(z => `<li><a href="#" ${go(gp, z.st, z.cell)} class="sd-${stC(z.c)}">${esc(z.c.n + on(z))}: ${fx(z.c.r, 3)}</a></li>`).join('');
++      return `<div class="sdChip sd-${q.st}${q.st === 'pass' && fin(g.c.r) && g.c.r >= 0.9 ? ' sd-hi' : ''}" data-sdgrp="${gp.id}"><button type="button" class="sdX" data-sdx="${gp.id}" aria-expanded="${op}" title="${op ? 'Hide' : 'Show'} each check">${op ? '▾' : '▸'}</button><a href="#" class="sdMain" ${go(gp, g.st, g.cell)} title="${esc(`${g.c.n}${on(g)}: ${fx(g.c.v, 3)} vs ${fx(g.c.lim, 3)} ${g.c.u}${gp.input ? ' (Owner rules tab)' : ` at x = ${fx(g.c.loc, 2)} ft`}`)}">
+         <span class="sdName">${esc(gp.name)}</span><span class="sdVal">${fx(g.c.r, 3)}</span><span class="sdSt">${LBL[q.st]}</span></a>${op ? `<ul class="sdList">${rows}</ul>` : ''}</div>`;
+     }).join('') + rtChip(R, A);
+-    const verd = nF ? 'fail' : 'pass';
++    const verd = nF ? 'fail' : nR ? 'review' : 'pass';
+     o.el.innerHTML = head(cnt)
+-      + `<div class="sdVerd"><b class="sd-${verd}">${nF ? 'FAIL' : 'PASS'}</b>${top ? ` · max ratio ${fx(top.c.r, 3)}` : ''}</div>${top ? `<div class="sdGov">Governing: <a href="#" ${go(top.gp, top.st, top.cell)}>${esc(top.c.n + on(top))}: ${fx(top.c.r, 3)}</a></div>` : ''}
++      + `<div class="sdVerd"><b class="sd-${verd}">${LBL[verd]}</b>${top ? ` · max ratio ${fx(top.c.r, 3)}` : ''}</div>${top ? `<div class="sdGov">Governing: <a href="#" ${go(top.gp, top.st, top.cell)}>${esc(top.c.n + on(top))}: ${fx(top.c.r, 3)}</a></div>` : ''}
+         <div class="sdRun">${A ? `${A.types.length} girder type${A.types.length === 1 ? '' : 's'} on ${A.n} line${A.n === 1 ? '' : 's'} (every span); each counted once per check, its worst line.` : runTxt(o)}</div>`
+-      + `<div id="sbDash">${chips}</div><p class="sdNote">Each chip: the governing ratio of its checks${A && A.n > 1 ? ' over every girder type and line (the type and line named)' : ''} (demand / capacity, OK ≤ 1.0), the engine's value. Click: its tab with that type and line, and the worked step of the value. Summary tab: every type and line.</p>`;
++      + `<div id="sbDash">${chips}</div><p class="sdNote">Each chip: the governing ratio of its checks${A && A.n > 1 ? ' over every girder type and line (the type and line named)' : ''} (demand / capacity, OK ≤ 1.0; amber 0.90 to 1.00), the engine's value. Click: its tab with that type and line, and the worked step of the value. Summary tab: every type and line.</p>`;
+   }
+   /* PR 3b: while every girder type × line is being computed (index.html, chunked) or after Stop, the chips are those of the girder type
+      and line shown (R); the line says so, with Stop / Run all (the Summary tab's buttons, o.runCtl) */
+diff --git a/apps/ps-bridge/ui/deck.js b/apps/ps-bridge/ui/deck.js
+index 9884231..9ec570d 100644
+--- a/apps/ps-bridge/ui/deck.js
++++ b/apps/ps-bridge/ui/deck.js
+@@ -24,7 +24,7 @@
+     if (!R.deck) return k.card('Deck design (strip method)', '<p class="note">Deck design is off for this design. Turn it on (<a href="#" data-goin="dd">Diaphragms / deck tab</a>, Deck design) for the transverse design of the interior bays and the overhang.</p>', 'card-dkoff');
+     const ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, D = R.deck, own = D.own;
+     const qP = ckOf(R, 'Deck +M'), qN = ckOf(R, 'Deck −M'), qO = ckOf(R, 'Deck overhang');
+-    let h = '<div id="gfx_dk"></div>';
++    let h = K().gcard('Deck graphic: checks', 'gfx_dk');
+     h += k.card('Interior bay: transverse moments per foot of deck', `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Moment, kip-ft/ft</th><th>Positive<br>(midbay)</th><th></th><th>Negative<br>(design section)</th><th></th></tr></thead><tbody>
+       <tr><td class="lft">Slab DC: w<sub>DC</sub>S²/11, /10 (w<sub>DC</sub> = ${ev('deck.wDLslab', 4, 'ksf')} ${wk('dk.wDC')})</td><td>${ev('deck.MDC_pos', 3)}</td><td>${wk('dk.MDCp')}</td><td>${ev('deck.MDC_neg', 3)}</td><td>${wk('dk.MDCn')}</td></tr>
+       <tr><td class="lft">Wearing surface DW (w<sub>DW</sub> = ${ev('deck.wDLws', 4, 'ksf')})</td><td>${ev('deck.MDW_pos', 3)}</td><td>${wk('dk.MDWp')}</td><td>${ev('deck.MDW_neg', 3)}</td><td>${wk('dk.MDWn')}</td></tr>
+@@ -43,7 +43,7 @@
+       ['M<sub>u</sub> / φM<sub>n</sub>', `${ev('deck.Mu_oh', 3)} / ${ev('deck.ohCap.phiMn', 3, 'kip-ft/ft')}: <b>${ev(`checks.${qO.i}.r`, 3)}</b> ${qO.c.pass ? 'PASS' : '<b style="color:var(--fail)">FAIL</b>'} ${wk('dk.oh.r')}`]])
+       + '<p class="note">The gravity and barrier-weight case on the 45 + 10X strip only. The Extreme Event II vehicular-collision cases (A13.4) still need a barrier-specific analysis.</p>', 'card-dkoh');
+     h += k.card('Distribution reinforcement (9.7.3.2)', k.kv([['Bottom distribution steel, % of the positive-moment steel', `${ev('deck.distPct', 1)} % ${wk('dk.dist')}`]]) + '<p class="note">min(220/√S, 67 %), S in ft, bottom bars parallel to the girders (as the old app).</p>', 'card-dkdist');
+-    h += '<div id="gfx_dksec"></div>';
++    h += K().gcard('Deck graphic: section', 'gfx_dksec');
+     h += k.card('Worked steps: deck', `<p class="note">${A}(2024) 4.6.2.1, Table A4-1, 5.6.3, 9.7. Every result is the engine's value (the moved Prestressed Bridge Design engine). Inputs: <a href="#" data-goin="dd">Diaphragms / deck tab</a>.</p>${k.steps(ctx.W.deck.steps, TOPICS, OPEN)}`);
+     return h;
+   }
+diff --git a/apps/ps-bridge/ui/endzone.js b/apps/ps-bridge/ui/endzone.js
+index 7d1ed65..741d8ca 100644
+--- a/apps/ps-bridge/ui/endzone.js
++++ b/apps/ps-bridge/ui/endzone.js
+@@ -29,7 +29,7 @@
+   function output(ctx) {
+     const { R, inp } = ctx, k = K(), ev = (p, d, u, div) => k.ev(R, p, d, u, div), wk = k.wk, o = inp.opt, G = R.g, ss = R.ss, cf = R.conf, rs = R.relSteel;
+     const qS = ckOf(R, 'Splitting steel (5.9.4.4)'), qC = ckOf(R, 'Confinement steel (5.9.4.4.2)'), qR = ckOf(R, 'Release tens. steel (5.9.2.3.1b)'), qH = ckOf(R, /^Hold-down force/), qD = ckOf(R, /^Debonded strands/);
+-    let h = '<div id="gfx_ez"></div>';
++    let h = K().gcard('End zone graphic: check ratios', 'gfx_ez');
+     h += k.card('Splitting / bursting resistance (5.9.4.4.1)', k.kv([['P<sub>i</sub> at transfer (all strands)', `${ev('rv.terms.Pi', 1, 'kip')} ${wk('ez.Pi')}`], ['Required P<sub>r</sub> = 0.04 P<sub>i</sub>', `${ev('splitDem', 1, 'kip')} ${wk('ez.Pr')}`],
+       ['A<sub>s,req</sub> = 0.04 P<sub>i</sub> / 20 ksi', `${ev('AsSplit', 2, 'in²')} ${wk('ez.AsReq')}`], [`Within h/4 (h = overall ${k.esc(R.splitDir)} ${ev('splitH', 1, 'in')})`, `${ev('splitZone', 1, 'in')} of the member end ${wk('ez.h4')}`],
+       ['A<sub>s,prov</sub> (legs × area)', `${k.fx(+o.splitN || 0, 0)} × ${k.fx(+o.splitAv || 0, 2)} = ${ev('AsSplitProv', 2, 'in²')} ${wk('ez.AsProv')}`], ['P<sub>r</sub> provided = 20 A<sub>s,prov</sub>', `${ev('splitPr', 1, 'kip')} ${wk('ez.PrProv')}`],
+@@ -76,7 +76,7 @@
+     } else dbh += '<p class="note">No debonded strands.</p>';
+     if (wD.length) dbh += `<div class="alert"><b>Engine warnings (debonding)</b><ul>${wD.map(w => `<li>${k.esc(w)}</li>`).join('')}</ul></div>`;
+     h += k.card('Debonded strands (5.9.4.3.3)', dbh, 'card-ezdb');
+-    h += '<div id="gfx_ezend"></div>';
++    h += K().gcard('End zone graphic: girder end', 'gfx_ezend');
+     h += k.card('Worked steps: end zone and hold-down', `<p class="note">AASHTO LRFD 10th Ed. (2024); the owner rules as cited. Every result is the engine's value (the moved Prestressed Bridge Design engine).</p>${k.steps(ctx.W.endzone.steps, TOPICS, OPEN)}`);
+     return h;
+   }
+diff --git a/apps/ps-bridge/ui/flexure.js b/apps/ps-bridge/ui/flexure.js
+index 5edeb34..a1f32e1 100644
+--- a/apps/ps-bridge/ui/flexure.js
++++ b/apps/ps-bridge/ui/flexure.js
+@@ -20,7 +20,7 @@
+   function output(ctx) {
+     const { R, inp } = ctx, k = K(), ev = (p, d, u, div) => k.ev(R, p, d, u, div), wk = k.wk, f = R.fMid, L = R.L, c = R.cont;
+     const qF = ckOf(R, 'Flexure'), qM = ckOf(R, 'Min reinf'), qP = ckOf(R, 'Neg flexure (pier)'), qC = ckOf(R, 'Pos. moment connection (5.12.3.3.8)');
+-    let h = '<div id="gfx_fx"></div>';
++    let h = K().gcard('Flexure graphic: girder elevation coloured by governing ratio', 'gfxr_fx') + K().gcard('Flexure graphic: moments and resistance along the girder', 'gfx_fx');   // gfxr_: on screen only (not a Report figure)
+     h += k.card('Strength I flexure (positive moment)', k.kv([
+       ['Governing M<sub>u</sub> / φM<sub>n</sub>', `<b>${ev(`checks.${qF.i}.r`, 3)}</b> at x = ${ev('flexGov.x', 2, 'ft')} ${pf(qF)} ${wk('fx.gov')}`], ['M<sub>u</sub> / φM<sub>n</sub> there', `${ev('flexGov.Mu', 0, '', 12)} / ${ev('flexGov.phiMn', 0, 'kip-ft', 12)}`],
+       ['M<sub>u</sub> at midspan', `${ev('MuMid', 0, 'kip-ft', 12)} ${wk('fx.Mu')}`], ['k', `${inp.str.lowlax ? '0.28' : '0.38'} (${inp.str.lowlax ? 'low-relaxation' : 'stress-relieved'})`], ['β<sub>1</sub>', `${ev('fMid.b1', 3)} ${wk('fx.b1')}`],
+@@ -101,6 +101,11 @@
+         legend: VA().legend('marks'), hint: 'Point at (or tap) the chart to read the station.',
+         caption: `<p class="vk-cap">The engine's M<sub>u</sub> and φM<sub>n</sub> at its stations (φM<sub>n</sub> drops near the ends where the strands are not developed)${c ? '; −M<sub>u</sub> from the continuous unit and the deck-reinforced −φM<sub>n</sub> of the pier section, drawn along the span as the old app' : ''}. Circle: the governing station. Display only.</p>` });
+     }
++    // 2026-11-15 (batch B): the girder elevation coloured by M_u / φM_n at the engine's stations (the read-out's ratio), the flexure check flagged
++    const se = el.querySelector('#gfxr_fx'), qG = ckOf(R, 'Flexure');
++    if (se && window.PSBRatioElev) window.PSBRatioElev.mount(se, { id: 'fxElev', title: 'Girder elevation coloured by governing ratio', sub: `M<sub>u</sub> / φM<sub>n</sub> at each of the ${fg.length} stations of the chart below`, L,
++      pts: fg.filter(r => r.phiMn > 0).map(r => ({ x: r.x, r: r.Mu / r.phiMn })), gov: qG ? { x: qG.c.loc, r: qG.c.r, name: 'Flexure' } : null, label: 'Strength I flexure: M_u / φM_n (neighbours of one colour class merged; the band shows its largest)', file: 'flexure-elevation',
++      cap: `<p class="vk-cap">The flag: the engine's flexure check (ratio ${k.fx(qG ? qG.c.r : NaN, 3)} at x = ${k.fx(qG ? qG.c.loc : NaN, 2)} ft) ${k.wk('fx.gov')}. Bands: M<sub>u</sub> / φM<sub>n</sub> of the chart's stations (the ratio its read-out shows). Display only.</p>` });
+     const sp = el.querySelector('#gfx_fxpier');
+     if (sp && c && VK() && VK().detCard) VK().detCard(sp, { id: 'fxPierFig', title: 'Pier section (negative moment)', sub: `${k.esc(ctx.inp.girder)} with the deck; girder f′c ${k.fx(+ctx.inp.mat.fc, 2)} ksi`, draw: W => pierFig(R, ctx.inp, W), hint: 'Point at the compression block for its values.',
+       cap: `<p class="vk-cap">Deck bars (A<sub>s</sub> within b<sub>eff</sub>) in tension, the rectangular compression block in the girder bottom flange${R.g.isNext ? ' (NEXT: at the bottom of each of the two stems, b<sub>bf</sub> = 2B, the width the engine uses)' : ''}; bar positions drawn for display. Display only.</p>` });
+diff --git a/apps/ps-bridge/ui/handling.js b/apps/ps-bridge/ui/handling.js
+index 4b1a68e..87c346f 100644
+--- a/apps/ps-bridge/ui/handling.js
++++ b/apps/ps-bridge/ui/handling.js
+@@ -23,7 +23,7 @@
+     if (!R.handling) return k.card('Handling (lifting and hauling)', '<p class="note">The Handling checks are off for this design. Turn them on (<a href="#" data-goin="loads">Loads tab</a>, Handling) for the stresses at the lifting and hauling points and the lateral-stability screening.</p>', 'card-hnoff');
+     const ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, H = R.handling;
+     const qL = ckOf(R, 'Lifting stress'), qFL = ckOf(R, 'Lifting FS (crack, screening)'), qFH = ckOf(R, 'Hauling FS (crack, screening)');
+-    let h = '<div id="gfx_hn"></div>';
++    let h = K().gcard('Handling graphic: checks', 'gfx_hn');
+     const tbl = (key, nm, use) => { const P = `handling.${key}.`;
+       return `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Location</th><th>M<br>kip-ft</th><th>Top fibre<br>ksi</th><th>Bottom fibre<br>ksi</th><th></th></tr></thead><tbody>
+         <tr><td class="lft">Support (${ev(P + 'a', 1)} ft from the end, cantilever)</td><td>${ev(P + 'Msup', 1)} ${wk(`hn.${key}.Msup`)}</td><td>${ev(P + 'fSupTop', 3)} ${wk(`hn.${key}.fSupTop`)}</td><td>${ev(P + 'fSupBot', 3)} ${wk(`hn.${key}.fSupBot`)}</td><td></td></tr>
+@@ -35,7 +35,7 @@
+       ['Lateral CG deflection, lifting z<sub>o</sub>', `${ev('handling.zo', 3, 'in')} ${wk('hn.zo')}`], ['FS against cracking, lifting y<sub>t</sub> / (z<sub>o</sub> + e<sub>i</sub>)', `<b>${ev('handling.FScrLift', 2)}</b> (1.0 required): ratio ${ev(`checks.${qFL.i}.r`, 3)} ${pf(qFL.c.pass)} ${wk('hn.FSl')}`],
+       ['Lateral CG deflection, hauling z<sub>o,h</sub>', `${ev('handling.zoH', 3, 'in')} ${wk('hn.zoH')}`], ['FS against cracking, hauling', `<b>${ev('handling.FScrHaul', 2)}</b> (1.0 required): ratio ${ev(`checks.${qFH.i}.r`, 3)} ${pf(qFH.c.pass)} ${wk('hn.FSh')}`]])
+       + `<div class="alert"><b>Screening only: not the PCI (2016) / Mast method.</b> Simplified factors of safety against cracking: lifting y<sub>r</sub>/(z<sub>o</sub> + e<sub>i</sub>) with the roll axis at the top of the girder; hauling with no truck roll stiffness K<sub>θ</sub>, no tilt equilibrium, and no factor of safety against failure or rollover. I<sub>y</sub> is approximated from the section outline. For long or slender girders, confirm with the full PCI stability procedure and the hauler's roll stiffness and bunk geometry (as the old app).</div>`, 'card-hnstab');
+-    h += '<div id="gfx_hnel"></div>';
++    h += K().gcard('Handling graphic: girder on its supports', 'gfx_hnel');
+     h += k.card('Worked steps: handling', `<p class="note">Release-stage stresses (${A}5.9.2.3.1) and the simplified lateral-stability screening. Every result is the engine's value (the moved Prestressed Bridge Design engine). Inputs: <a href="#" data-goin="loads">Loads tab</a> (Handling).</p>${k.steps(ctx.W.handling.steps, TOPICS, OPEN)}`);
+     return h;
+   }
+diff --git a/apps/ps-bridge/ui/loads.js b/apps/ps-bridge/ui/loads.js
+index 2cbb34d..7e24a57 100644
+--- a/apps/ps-bridge/ui/loads.js
++++ b/apps/ps-bridge/ui/loads.js
+@@ -26,7 +26,7 @@
+   function output(ctx) {
+     const { R, inp, P } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, df = R.df, cp = R.cp, own = R.own;
+     const simple = !R.fe && !R.useExt, DL = window.PSBBridgeDL, dist = !!(DL && DL.on(P)), dg = window.PSBDesign.sel(P).g;   // PR 3a-3
+-    let h = '<div id="gfx_ld"></div>';
++    let h = K().gcard('Loads graphic: cross-section', 'gfx_ld');
+     h += k.card('Owner load rules', k.kv([['Owner', k.esc(own ? own.owner : 'AASHTO')], ['Load modifier η (Strength I)', `${own ? ev('own.eta', 4) : '1.0000'} ${wk('ld.eta')}`],
+       ['HL-93 design load multiplier m', `${own ? ev('own.mLL', 2) : '1.00'} ${wk('ld.mLL')}`]]) + '<p class="note">Owner and its questions: <a href="#" data-goin="own">Owner rules tab</a>.</p>');
+     const row = (lab, how, v, link) => `<tr><td class="lft">${lab}</td><td class="lft">${how}</td><td>${v}</td><td>${link || ''}</td></tr>`;
+diff --git a/apps/ps-bridge/ui/losses.js b/apps/ps-bridge/ui/losses.js
+index 68c3ef3..094d42e 100644
+--- a/apps/ps-bridge/ui/losses.js
++++ b/apps/ps-bridge/ui/losses.js
+@@ -18,7 +18,7 @@
+     { key: 'row', title: 'Strand stress by row and stage (row 1; the table covers every row)', ref: A + '5.9.3', ids: /^ls\.row\./ }];
+   function output(ctx) {
+     const { R, inp } = ctx, k = K(), ev = (p, d, u, div) => k.ev(R, p, d, u, div), wk = k.wk, lo = R.lo, rf = lo.ref, fin = R.refFin, gn = R.gains, ss = R.ss, refd = inp.opt.lossMethod === 'refined';
+-    let h = '<div id="gfx_loss"></div>';
++    let h = K().gcard('Losses graphic', 'gfx_loss');
+     h += k.card('Prestress losses', k.kv([
+       ['Stress before transfer f<sub>pbt</sub>', `${ev('fpbt', 2, 'ksi')} ${wk('ls.fpbt')}`], ['Elastic shortening Δf<sub>pES</sub>', `${ev('lo.dfES', 2, 'ksi')} ${wk('ls.dfES')}`],
+       ['After transfer f<sub>pi</sub> = f<sub>pt</sub>', `${ev('fpi', 2, 'ksi')} ${wk('ls.fpt')}`], ['P<sub>i</sub> (all strands, midspan)', `${ev('lo.Pi', 0, 'kip')} ${wk('ls.Pi')}`],
+@@ -50,7 +50,7 @@
+       + k.card(`Approximate estimate (5.9.3.3)${refd ? ': not used' : ': used'}`, `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Component</th><th>Δf<sub>p</sub> ksi</th><th></th></tr></thead><tbody>
+       <tr><td class="lft">Creep + shrinkage 10 f<sub>pi</sub>A<sub>ps</sub>/A<sub>g</sub> γ<sub>h</sub>γ<sub>st</sub> + 12 γ<sub>h</sub>γ<sub>st</sub></td><td>${ev('lo.apx.SH_CR', 3)}</td><td>${wk('ls.apx.shcr')}</td></tr><tr><td class="lft">Relaxation Δf<sub>pR</sub></td><td>${ev('lo.apx.R', 3)}</td><td>${wk('ls.apx.R')}</td></tr>
+       <tr><td class="lft"><b>Σ long-term</b></td><td><b>${ev('lo.apx.total', 3)}</b></td><td>${wk('ls.apx.total')}</td></tr></tbody></table></div><p class="note">γ<sub>h</sub> = ${ev('rv.gh', 3)}, γ<sub>st</sub> = ${ev('rv.gst', 3)}.</p>`, 'card-apx');
+-    h += '<div id="gfx_loss_str"></div>';
++    h += K().gcard('Strand pattern graphic', 'gfx_loss_str');
+     h += k.card('Worked steps: losses', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value (the moved Prestressed Bridge Design engine); both long-term methods are worked, the ${refd ? 'refined' : 'approximate'} one is used.</p>${k.steps(ctx.W.losses.steps, TOPICS, OPEN)}`);
+     return h;
+   }
+diff --git a/apps/ps-bridge/ui/outkit.js b/apps/ps-bridge/ui/outkit.js
+index 4363606..767a14a 100644
+--- a/apps/ps-bridge/ui/outkit.js
++++ b/apps/ps-bridge/ui/outkit.js
+@@ -31,5 +31,21 @@
+   });
+   const steps = (list, topics, open) => S().groupsHTML(groups(list, topics), { open, item: stepLi });
+   const after = (el, open) => S().wire(el, { onToggle: (k, on) => { if (on) open.add(k); else open.delete(k); } });
+-  window.PSBOutKit = { esc, val, fx, ev, card, kv, wk, stepLi, groups, steps, after };
++  /* tileLinker(el, ctx) -> path => the § link of the value at R path (2026-11-15, batch B: the stat tiles of the graphics, as the steel app's):
++     the § the tab writes next to the same value (a data-ev span outside the graphics followed by a.wk); else the step whose engine path it
++     is (ctx.W[*].paths, on its tab); else, a check ratio checks.<i>.r, the step of that check (ui/dash.js GROUPS). '' when none. */
++  const WTAB = { section: 'sec', loads: 'lds', analysis: 'an', losses: 'loss', stresses: 'str', flexure: 'flex', shear: 'shear', endzone: 'end', camber: 'camb', handling: 'hand', deck: 'deck', rating: 'rt' };
++  const tileLinker = (el, ctx) => path => {
++    const here = ctx && ctx.ui ? ctx.ui.otab : null, lk = (id, tab) => wk(id, '§', tab && tab !== here ? tab : null);
++    if (el && el.querySelectorAll) for (const sp of el.querySelectorAll('[data-ev]')) { if (sp.getAttribute('data-ev') !== path || (sp.closest && sp.closest('.vk'))) continue;
++      const a = sp.nextElementSibling; if (a && a.matches && a.matches('a.wk')) return a.outerHTML; }
++    for (const [k, w] of Object.entries((ctx && ctx.W) || {})) for (const [id, p] of Object.entries((w && w.paths) || {})) if (p === path) return lk(id, WTAB[k]);
++    const m = /^checks\.(\d+)\.r$/.exec(path), c = m && ctx && ctx.R && ctx.R.checks ? ctx.R.checks[+m[1]] : null, GR = window.PSBDashUI && window.PSBDashUI.GROUPS;
++    if (c && GR) for (const gp of GR) { if (gp.input) continue; const q = gp.checks.find(z => z[0] === c.n); if (q) return lk(q[1], gp.tab); }
++    return '';
++  };
++  /* gcard(title, id): a result graphic's slot #id in a titled card (2026-11-15, batch B: the steel app's "SECTION GRAPHIC" cards); class gfxCard:
++     report/fromtab.js reads it as the slot alone (the Report unchanged); the page hides a gfxCard left empty (no graphic for the design) */
++  const gcard = (title, id) => `<section class="sec gfxCard"><div class="secHead">${title}</div><div class="secBody"><div id="${esc(id)}"></div></div></section>`;
++  window.PSBOutKit = { esc, val, fx, ev, card, kv, wk, stepLi, groups, steps, after, tileLinker, gcard };
+ })();
+diff --git a/apps/ps-bridge/ui/rating.js b/apps/ps-bridge/ui/rating.js
+index 2aec14f..92aec8f 100644
+--- a/apps/ps-bridge/ui/rating.js
++++ b/apps/ps-bridge/ui/rating.js
+@@ -22,7 +22,7 @@
+   function output(ctx) {
+     const { R, inp } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, rt = R.rating, sh = R.shrRating, sv = R.svcRating, md = rt.mid;
+     const evRF = (p, v) => rfs(v) || ev(p, 3);
+-    let h = '<div id="gfx_rt"></div>';
++    let h = K().gcard('Load rating: rating factors', 'gfx_rt');
+     h += `<p class="note">LRFR load rating (MBE; article labels as the old app: the MBE 4th Ed. (2026) labels come in their own PR). Screening of the design girder: a complete rating also covers the negative-moment region over the piers and the restraint moments.</p>`;
+     h += k.card('Condition and system factors (MBE 6A.4.2.3 / 6A.4.2.4)', k.kv([['φ<sub>c</sub> × φ<sub>s</sub> entered', `${ev('rating.phiC', 2)} × ${ev('rating.phiS', 2)} <a href="#" data-goin="loads">Loads tab</a>`],
+       ['φ<sub>c</sub>φ<sub>s</sub> used (not less than 0.85, MBE Eq. 6A.4.2.1-3; not more than 1.00)', `<b>${ev('rating.phiCS', 3)}</b>${rt.phiCSfloor ? ' (floored at 0.85)' : rt.phiCScap ? ' (capped at 1.00)' : ''} ${wk('rt.phiCS')}`]])
+@@ -46,7 +46,7 @@
+       ${V.map((v, i) => { const P = `vehRatings.${i}.`; return `<tr><td class="lft">${k.esc(v.name)}</td><td>${ev(P + 'M', 1)}</td><td>${ev(P + 'V', 1)}</td><td>${ev(P + 'W', 1)}</td><td>${evRF(P + 'RFm', v.RFm)}</td><td>${evRF(P + 'RFv', v.RFv)}</td><td><b>${evRF(P + 'RF', v.RF)}</b></td><td>${v.RT != null && v.RF < 99 ? ev(P + 'RT', 1) : '—'}</td>${okT(v.ok, v.RF)}<td>${wk(`rt.veh${i}.RF`)}</td></tr>`; }).join('')}</tbody></table></div>`
+       : '<p class="note">No vehicles entered. Add a legal truck (Type 3, 3S2, 3-3) or a permit vehicle on the <a href="#" data-goin="loads">Loads tab</a>.</p>')
+       + `<p class="note">Your factored live-load moment and shear (DF, IM, multiple presence and the LRFR live-load factor applied); the app supplies φ<sub>c</sub>φ<sub>s</sub>φM<sub>n</sub> at midspan (${ev('rating.mid.Rn', 1, 'kip-ft')}) and φ<sub>c</sub>φ<sub>s</sub>φV<sub>n</sub> at the governing shear section (${ev('shrRating.phiVn', 1, 'kip')}), with 1.25 DC and 1.50 DW (M<sub>DC</sub> ${ev('rating.mid.MDC', 1)}, M<sub>DW</sub> ${ev('rating.mid.MDW', 1, 'kip-ft')}; V<sub>DC</sub> ${ev('shrRating.VDC', 1)}, V<sub>DW</sub> ${ev('shrRating.VDW', 1, 'kip')}). The governing RF is the lower of flexure and shear; the rated tons = RF × weight where a weight is entered.</p>`, 'card-rtveh');
+-    h += '<div id="gfx_rtx"></div>';
++    h += K().gcard('Load rating: rated sections along the span', 'gfx_rtx');
+     h += k.card('Worked steps: load rating', `<p class="note">LRFR, MBE (article labels as the old app); resistances from AASHTO LRFD 10th Ed. (2024). Every result is the engine's value (the moved Prestressed Bridge Design engine).</p>${k.steps(ctx.W.rating.steps, TOPICS, OPEN)}`);
+     void md;
+     return h;
+diff --git a/apps/ps-bridge/ui/ratioelev.js b/apps/ps-bridge/ui/ratioelev.js
+new file mode 100644
+index 0000000..cb1ab36
+--- /dev/null
++++ b/apps/ps-bridge/ui/ratioelev.js
+@@ -0,0 +1,56 @@
++/* apps/ps-bridge/ui/ratioelev.js — window.PSBRatioElev: "Girder elevation coloured by governing ratio" on a check tab (2026-11-15, batch B;
++   the steel app's elevation of the Flexure / Shear tabs, apps/steel-bridge/ui/alonggfx.js: one band per station of the check's table, the
++   stretch to the mid-points of its neighbours, neighbouring bands of one colour class merged and labelled with their largest ratio; green
++   below 0.90, amber 0.90 to 1.00, red above 1.00; a flag at the governing check). Classic script, display only: the ratios are the tab's
++   own (each tab hands in its stations and the ratio its read-out or table shows, e.g. the engine's shear d/c, M_u / φM_n of the flexure
++   read-out); the governing check is the engine's (R.checks: its x and ratio).
++     svg(W, o) -> { svg, nar }   o = { L (ft), pts: [{ x, r }], gov: { x, r, name }, label (the band's title) }
++     mount(slot, o)              a PSBVizKit.detCard (title, read-out of each band, Download DXF as every graphic) */
++(function () {
++  'use strict';
++  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
++  const fin = v => typeof v === 'number' && isFinite(v);
++  const cls = r => !fin(r) || r > 1 + 1e-9 ? 'ng' : r >= 0.9 ? 'hi' : 'ok';
++  const COL = { ok: ['#E3F4EA', '#2F6E4E'], hi: ['#FEF3C7', '#8A5A0B'], ng: ['#FDE2E1', '#A3322A'] };
++  const f2 = v => (fin(v) ? v.toFixed(2) : v === Infinity ? '∞' : 'NaN'), f3 = v => (fin(v) ? v.toFixed(3) : v === Infinity ? '∞' : 'NaN');
++  const nice = (span, n) => { const r = span / n, p = Math.pow(10, Math.floor(Math.log10(r))), m = r / p; return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p; };
++  /* the merged bands: [{ x0, x1, c, r (largest), i0, i1 }] */
++  function bands(L, pts) {
++    const P = pts.filter(q => fin(q.x)).slice().sort((a, b) => a.x - b.x), out = [];
++    P.forEach((q, i) => { const x0 = i ? (P[i - 1].x + q.x) / 2 : 0, x1 = i < P.length - 1 ? (q.x + P[i + 1].x) / 2 : L, c = cls(q.r), b = out[out.length - 1];
++      if (b && b.c === c) { b.x1 = x1; if (!fin(b.r) || !fin(q.r) ? !fin(q.r) : q.r > b.r) { b.r = q.r; b.xr = q.x; } b.n++; } else out.push({ x0, x1, c, r: q.r, xr: q.x, n: 1 }); });
++    return out;
++  }
++  function svg(W, o) {
++    const L = o.L, l = 14, r = 14, X = x => l + Math.max(0, Math.min(L, x)) / L * (W - l - r), nar = W < 560;
++    const yG = 34, hG = 22, yB = yG + hG + 34, hB = 22, yA = yB + hB + 30, H = yA + 30;
++    let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(o.label || 'Girder elevation coloured by governing ratio')}" font-family="Arial,sans-serif">`;
++    // the girder and its bearings
++    s += `<rect class="re-g" x="${X(0)}" y="${yG}" width="${X(L) - X(0)}" height="${hG}" fill="#E2E8F0" stroke="#475569" stroke-width="1" data-dtr="Girder, ℄ bearing to ℄ bearing L = ${f2(L)} ft"/>`;
++    [0, L].forEach(x => { s += `<path class="re-s" d="M${X(x)} ${yG + hG} l-6 10 h12 z" fill="#64748B"/>`; });
++    s += `<text x="${(X(0) + X(L)) / 2}" y="${yG - 8}" text-anchor="middle" font-size="11" fill="#475569">Span L = ${f2(L)} ft (℄ bearing to ℄ bearing)</text>`;
++    // the band
++    s += `<text x="${X(0)}" y="${yB - 8}" font-size="11" fill="#0F172A">${esc(o.label || 'Governing ratio')}</text>`;
++    bands(L, o.pts).forEach(b => { const [fl, st] = COL[b.c], x0 = X(b.x0), w = Math.max(1, X(b.x1) - x0);
++      s += `<rect class="re-${b.c}" x="${x0.toFixed(1)}" y="${yB}" width="${w.toFixed(1)}" height="${hB}" fill="${fl}" stroke="${st}" stroke-width="0.8" data-dtr="x = ${f2(b.x0)} to ${f2(b.x1)} ft: largest ratio ${f3(b.r)} at x = ${f2(b.xr)} ft (${b.n} station${b.n === 1 ? '' : 's'}; ${b.c === 'ok' ? 'below 0.90' : b.c === 'hi' ? '0.90 to 1.00' : 'above 1.00'})"/>`;
++      if (w > (nar ? 28 : 34)) s += `<text x="${(x0 + w / 2).toFixed(1)}" y="${yB + 15}" text-anchor="middle" font-size="11" font-weight="600" fill="${st}" pointer-events="none">${f2(b.r)}</text>`;
++      // the same colour on the girder
++      s += `<rect x="${x0.toFixed(1)}" y="${yG + 2}" width="${w.toFixed(1)}" height="${hG - 4}" fill="${fl}" opacity="0.85" pointer-events="none"/>`; });
++    // the governing check
++    if (o.gov && fin(o.gov.x)) { const gx = X(o.gov.x), gc = COL[cls(o.gov.r)][1], lab = `Governs: ${o.gov.name ? o.gov.name + ' ' : ''}${f3(o.gov.r)} at x = ${f2(o.gov.x)} ft`;
++      s += `<line x1="${gx}" x2="${gx}" y1="${yG - 4}" y2="${yB + hB + 4}" stroke="${gc}" stroke-width="1.6"/>`;
++      s += `<text x="${Math.min(Math.max(gx, l + 4), W - r - 4)}" y="${yB + hB + 18}" text-anchor="${gx > W * 0.6 ? 'end' : gx < W * 0.3 ? 'start' : 'middle'}" font-size="11" font-weight="600" fill="${gc}">${esc(lab)}</text>`; }
++    // the axis
++    const st = nice(L, nar ? 4 : 8); s += `<line x1="${X(0)}" x2="${X(L)}" y1="${yA}" y2="${yA}" stroke="#94A3B8"/>`;
++    for (let x = 0; x <= L + 1e-9; x += st) s += `<line x1="${X(x)}" x2="${X(x)}" y1="${yA}" y2="${yA + 4}" stroke="#94A3B8"/><text x="${X(x)}" y="${yA + 15}" text-anchor="middle" font-size="10" fill="#475569">${+x.toFixed(2)}</text>`;
++    s += `<text x="${X(L)}" y="${yA + 27}" text-anchor="end" font-size="10" fill="#475569">Station x, ft (from ℄ bearing, left)</text></svg>`;
++    return { svg: s, nar };
++  }
++  const LEG = '<p class="vk-cap"><span style="display:inline-block;width:12px;height:9px;background:#E3F4EA;border:1px solid #2F6E4E"></span> below 0.90 &nbsp; <span style="display:inline-block;width:12px;height:9px;background:#FEF3C7;border:1px solid #8A5A0B"></span> 0.90 to 1.00 &nbsp; <span style="display:inline-block;width:12px;height:9px;background:#FDE2E1;border:1px solid #A3322A"></span> above 1.00</p>';
++  function mount(slot, o) {
++    const VK = window.PSBVizKit; if (!slot || !VK || !VK.detCard) return null;
++    return VK.detCard(slot, { id: o.id, title: o.title || 'Girder elevation coloured by governing ratio', sub: o.sub || '', draw: W => { const q = svg(W, o); return { html: q.svg, nar: q.nar }; },
++      hint: 'Point at (or tap) a band to read its stations and ratio.', cap: LEG + (o.cap || ''), file: o.file });
++  }
++  window.PSBRatioElev = { svg, mount, bands, cls };
++})();
+diff --git a/apps/ps-bridge/ui/section.js b/apps/ps-bridge/ui/section.js
+index 862324a..e4101ff 100644
+--- a/apps/ps-bridge/ui/section.js
++++ b/apps/ps-bridge/ui/section.js
+@@ -46,7 +46,7 @@
+     const kind = md ? { nebt: 'NEBT bulb tee', nedbt: 'NEDBT decked bulb tee', nextf: 'NEXT F double tee', nextd: 'NEXT D double tee (integral deck)', spread: 'spread box beam, computed as an I-girder', adj: 'adjacent box beam', slab: 'adjacent deck beam', solid: 'adjacent deck beam' }[md[1].src.fam]
+       : G.isNext ? 'NEXT F double tee' : G.isBox ? 'adjacent box beam' : G.isDeck ? 'adjacent deck beam' : 'I-girder / bulb tee';
+     const vn = voidNote(G) || (md ? SCm.mdNote(G) : ''), mx = !!(md && md[1].next && G.nxw);
+-    let h = '<div id="gfx_sec"></div>';
++    let h = K().gcard('Section graphic', 'gfx_sec');
+     h += k.card(`Gross girder section: ${k.esc(inp.girder)}`, k.kv([
+       ['Shape', `${k.esc(inp.girder)} (${kind})${G.ovr && G.ovr.any ? ', with overrides' : ''}`], ['Depth h', ev('g.h', 2, 'in')],
+       ...(mx ? [['Beam width b<sub>f</sub>', `${ev('g.btf', 2, 'in')} ${wk('sec.g.bf')}`]] : []),   // PS-37: a MassDOT NEXT's width and interpolated properties, worked
+@@ -89,12 +89,15 @@
+     if (ss.nh > 0) { const [x0, x1, y0, y1] = SG.drapedBox(pts);
+       S.region(x0, y0, x1, y1, `${ss.nh} draped strands, centroid y_mid = ${ss.hp.yMid} in at midspan (y_end = ${ss.hp.yEnd} in)`); }
+     const xr = Math.max(G.bbf || 0, G.btf || 0, cp.beff || 0) / 2 + 4;
+-    const cl = (y, txt, cls) => { S.line(-xr, y, xr, y, cls || 'dt-cl'); S.text(xr, y, txt, { dx: 4, vc: true, sz: 11 }); };
+-    cl(G.yb, `y_b = ${V.fx(G.yb, 2)} in (girder)`); cl(cp.ybc, `y_bc = ${V.fx(cp.ybc, 2)} in (composite)`, 'dt-hid'); cl(ss.cgsMid, `y_ps = ${V.fx(ss.cgsMid, 2)} in (strands, midspan)`, 'dt-tf');
++    // 2026-11-15 (batch B): on a narrow card (W < 560, a phone) the line labels go above each line at its right end, inside the drawing width,
++    // so the section is drawn at the card's width (before: the labels to the right left the section about 120 px wide at 390 px)
++    const nar = W < 560;
++    const cl = (y, txt, cls) => { S.line(-xr, y, xr, y, cls || 'dt-cl'); if (nar) S.text(xr, y, txt, { a: 'end', dy: -3, sz: 10, halo: true }); else S.text(xr, y, txt, { dx: 4, vc: true, sz: 11 }); };
++    cl(G.yb, `y_b = ${V.fx(G.yb, 2)} in${nar ? '' : ' (girder)'}`); cl(cp.ybc, `y_bc = ${V.fx(cp.ybc, 2)} in${nar ? '' : ' (composite)'}`, 'dt-hid'); cl(ss.cgsMid, `y_ps = ${V.fx(ss.cgsMid, 2)} in${nar ? '' : ' (strands, midspan)'}`, 'dt-tf');
+     S.dimV(0, G.h, -Math.max(G.bbf || 0, G.btf || 0) / 2, -16, `h = ${V.fx(G.h, 1)} in`);
+     if (ts > 0) S.dimH(-cp.beff / 2, cp.beff / 2, G.h + th + ts, 14, `b_eff = ${V.fx(cp.beff, 1)} in`);
+-    const r = S.render({ W, maxH: Math.min(520, Math.max(300, W * 0.6)), label: 'Composite section with the strands' });
+-    return { html: r.svg, nar: W < 560 };
++    const r = S.render({ W, maxH: nar ? Math.max(300, W * 1.1) : Math.min(520, Math.max(300, W * 0.6)), label: 'Composite section with the strands' });
++    return { html: r.svg, nar };
+   }
+   function after(el, ctx) {
+     K().after(el, OPEN);
+diff --git a/apps/ps-bridge/ui/shear.js b/apps/ps-bridge/ui/shear.js
+index c8c976e..ec3a838 100644
+--- a/apps/ps-bridge/ui/shear.js
++++ b/apps/ps-bridge/ui/shear.js
+@@ -20,7 +20,7 @@
+   function output(ctx) {
+     const { R, inp } = ctx, k = K(), ev = (p, d, u, div) => k.ev(R, p, d, u, div), wk = k.wk, S = R.shear;
+     const qS = ckOf(R, 'Shear'), qL = ckOf(R, 'Long. reinf (5.7.3.5)'), qI = ckOf(R, 'Interface shear (5.7.4)');
+-    let h = '<div id="gfx_sh"></div>';
++    let h = K().gcard('Shear graphic: girder elevation coloured by governing ratio', 'gfxr_sh') + K().gcard('Shear graphic: demand and resistance along the girder', 'gfx_sh');   // gfxr_: on screen only (not a Report figure)
+     h += k.card('Shear (governing values)', k.kv([['Worst V<sub>u</sub> / φV<sub>n</sub>', `<b>${ev(`checks.${qS.i}.r`, 3)}</b> at x = ${ev('wShear.x', 2, 'ft')} ${qS.c.pass ? 'PASS' : 'FAIL'} ${wk('sh.gov')}`],
+       ['Longitudinal tie T / T<sub>r</sub>', `<b>${ev(`checks.${qL.i}.r`, 3)}</b> at x = ${ev('wLong.x', 2, 'ft')} ${qL.c.pass ? 'PASS' : 'FAIL'} ${wk('sh.Tr')}`], ['Interface shear', `<b>${ev(`checks.${qI.i}.r`, 3)}</b> at x = ${ev('wIface.x', 2, 'ft')} ${qI.c.pass ? 'PASS' : 'FAIL'} ${wk('sh.ifr')}`],
+       ['Stirrups (trial)', `${k.fx(+inp.opt.stirAv, 2)} in² at ${k.fx(+inp.opt.sEnd, 1)} in (end zone, ${k.fx(+inp.opt.endZoneLen, 2)} L each end) / ${k.fx(+inp.opt.sInt, 1)} in, f<sub>y</sub> ${k.fx(+inp.opt.fy, 0)} ksi <a href="#" data-goin="gird">Girders &amp; strands</a>`]])
+@@ -45,6 +45,11 @@
+     K().after(el, OPEN);
+     const { R, inp } = ctx, k = K(), ev = (p, d) => k.ev(R, p, d), D = R.shearDiag, xs = D.map(r => r.x), L = R.L;
+     const nearX = x => xs.reduce((b, v, i) => Math.abs(v - x) < Math.abs(xs[b] - x) ? i : b, 0);
++    // 2026-11-15 (batch B): the girder elevation coloured by the engine's shear d/c at each design station (the table's ratio), the shear check flagged
++    const se = el.querySelector('#gfxr_sh'), qG = ckOf(R, 'Shear'), SS = R.shear.filter(r => !r.isBearing);
++    if (se && window.PSBRatioElev) window.PSBRatioElev.mount(se, { id: 'shElev', title: 'Girder elevation coloured by governing ratio', sub: `V<sub>u</sub> / φV<sub>n</sub> (the engine's d/c) at each of the ${SS.length} design stations`, L,
++      pts: SS.map(r => ({ x: r.x, r: r.dc })), gov: qG ? { x: qG.c.loc, r: qG.c.r, name: 'Shear' } : null, label: 'Shear: V_u / φV_n (neighbours of one colour class merged; the band shows its largest)', file: 'shear-elevation',
++      cap: `<p class="vk-cap">The flag: the engine's shear check (ratio ${k.fx(qG ? qG.c.r : NaN, 3)} at x = ${k.fx(qG ? qG.c.loc : NaN, 2)} ft) ${k.wk('sh.gov')}. Bands: the d/c of each design station of the section-by-section table. Display only.</p>` });
+     const slot = el.querySelector('#gfx_sh'); if (!slot || !VA() || !VA().mount) return;
+     const qS = ckOf(R, 'Shear'), qL = ckOf(R, 'Long. reinf (5.7.3.5)'), qI = ckOf(R, 'Interface shear (5.7.4)');
+     const SER = [{ key: 'vu', html: 'V<sub>u</sub>', ci: 2, pts: D.map(r => [r.x, r.Vu]) }, { key: 'pvn', html: 'φV<sub>n</sub> (trial stirrups)', ci: 0, pts: D.map(r => [r.x, r.phiVn]) }, { key: 'pvc', html: 'φ(V<sub>c</sub> + V<sub>p</sub>)', ci: 1, dash: '3 3', pts: D.map(r => [r.x, r.phiVcp]) },
+diff --git a/apps/ps-bridge/ui/stresses.js b/apps/ps-bridge/ui/stresses.js
+index 211cb2b..dc34d57 100644
+--- a/apps/ps-bridge/ui/stresses.js
++++ b/apps/ps-bridge/ui/stresses.js
+@@ -34,7 +34,7 @@
+   const FIB = { rel: ['relTop', 'relBot'], s1: ['s1Top', 's3Bot'], s2: ['s2Top', 's3Bot'] };
+   function output(ctx) {
+     const { R, inp, ui } = ctx, k = K(), ev = (p, d, u, div) => k.ev(R, p, d, u, div), wk = k.wk, G = R.grid, sel = selOf(ui, R), lim = R.lim;
+-    let h = '<div id="gfx_st"></div>';
++    let h = K().gcard('Stresses graphic: along the girder', 'gfx_st');
+     // the governing stress summary
+     const rows = CHECKS.map(([nm, st, lab]) => { const q = ckOf(R, nm); if (!q) return ''; const p = `checks.${q.i}.`, u = q.c.u === 'in²' ? 'in²' : q.c.u;
+       return `<tr class="${q.c.pass ? '' : 'ng'}"><td class="lft">${k.esc(lab)}</td><td>${ev(p + 'loc', 2)}</td><td>${ev(p + 'v', 3)}</td><td>${ev(p + 'lim', 3)}</td><td>${k.esc(u)}</td><td><b>${ev(p + 'r', 3)}</b></td><td class="${q.c.pass ? 'ok' : 'ngt'}">${q.c.pass ? 'PASS' : 'FAIL'}</td><td>${wk(st)}</td></tr>`; }).join('');
+diff --git a/apps/ps-bridge/ui/summary.js b/apps/ps-bridge/ui/summary.js
+index 1a4017c..5b75ec0 100644
+--- a/apps/ps-bridge/ui/summary.js
++++ b/apps/ps-bridge/ui/summary.js
+@@ -75,12 +75,12 @@
+     const grid = Array.from({ length: nb }, (_, i) => Array.from({ length: ns }, (_, j) => cells.find(z => z.c.g === i + 1 && z.c.s === j + 1) || null));
+     // the verdict: the check summary column's counts (ui/dash.js grp: one entry per type per check, its worst line)
+     const G = DU().GROUPS.map(gp => Object.assign({ gp }, DU().grp(null, gp, A)));
+-    const run = G.filter(q => q.st === 'pass' || q.st === 'fail');
+-    const nF = run.reduce((a, q) => a + q.all.filter(z => !z.c.pass).length, 0), nP = run.reduce((a, q) => a + q.all.filter(z => z.c.pass).length, 0);
++    const run = G.filter(q => q.st === 'pass' || q.st === 'fail' || q.st === 'review');
++    const nF = run.reduce((a, q) => a + q.all.filter(z => !z.c.pass).length, 0), nR = run.reduce((a, q) => a + q.all.filter(z => z.c.pass && !fin(z.c.r)).length, 0), nP = run.reduce((a, q) => a + q.all.filter(z => z.c.pass && fin(z.c.r)).length, 0);
+     const off = G.filter(q => q.st === 'na' && q.gp.off).map(q => q.gp);
+     let top = null; run.forEach(q => q.all.forEach(z => { if (!top || worse(z.c.r, top.c.r)) top = Object.assign({ gp: q.gp }, z); }));
+     const low = types.map(T => T.rf && Object.assign({ k: T.k }, T.rf)).filter(Boolean).reduce((b, z) => !b || z.v < b.v ? z : b, null);
+-    return { used, cells, types, grid, nF, nP, off, top, low, W: A.W, n: A.n, nb, ns };
++    return { used, cells, types, grid, nF, nR, nP, off, top, low, W: A.W, n: A.n, nb, ns };
+   }
+ 
+   /* ---------- HTML ---------- */
+@@ -91,9 +91,9 @@
+     st.textContent = `
+ .sum-verd{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;font-family:var(--font-ui)}
+ .sum-badge{font-weight:700;font-size:13pt;padding:3px 12px;border-radius:5px;border:2px solid;letter-spacing:.04em}
+-.sum-badge.fail{color:#991B1B;background:#FEF2F2;border-color:var(--fail)} .sum-badge.pass{color:#065F46;background:#ECFDF5;border-color:var(--pass)} .sum-badge.none{color:#475569;background:var(--slate-100);border-color:var(--slate-400)}
++.sum-badge.fail{color:#991B1B;background:#FEF2F2;border-color:var(--fail)} .sum-badge.pass{color:#065F46;background:#ECFDF5;border-color:var(--pass)} .sum-badge.review{color:#92400E;background:#FFFBEB;border-color:var(--warn)} .sum-badge.none{color:#475569;background:var(--slate-100);border-color:var(--slate-400)}
+ .sum-cnt{display:inline-flex;gap:5px;flex-wrap:wrap} .sum-cnt span{font-size:8.5pt;font-weight:700;padding:1px 6px;border:1px solid;border-radius:3px;white-space:nowrap}
+-.sum-cnt .c-fail{color:#991B1B;background:#FEF2F2;border-color:var(--fail)} .sum-cnt .c-pass{color:#065F46;background:#ECFDF5;border-color:var(--pass)} .sum-cnt .c-na{color:#475569;background:var(--slate-100);border-color:var(--slate-400)}
++.sum-cnt .c-fail{color:#991B1B;background:#FEF2F2;border-color:var(--fail)} .sum-cnt .c-review{color:#92400E;background:#FFFBEB;border-color:var(--warn)} .sum-cnt .c-pass{color:#065F46;background:#ECFDF5;border-color:var(--pass)} .sum-cnt .c-na{color:#475569;background:var(--slate-100);border-color:var(--slate-400)}
+ #sum-elev .se-list{margin:6px 0;padding-left:18px} .se-ok{color:#2F6E4E} .se-hi{color:#8A5A0B} .se-ng{color:#A3322A}   /* 2026-11-14 (item 8a): the elevation's check list */
+ #sum-gfx figure.sum-g1{margin:0 0 14px} #sum-gfx figcaption{font-family:var(--font-ui);font-size:9pt;color:#475569;margin:0 0 4px} #sum-gfx .vk-det{margin:0}   /* 2026-11-14: the cross-section and plan card */
+ #sum-project .kv div{gap:10px} #sum-project .kv div>span:last-child{text-align:right}   /* the label and its value never run together (display only) */
+@@ -101,9 +101,9 @@
+ .sum-run .spin{display:inline-block;width:12px;height:12px;border:2px solid #CBD5E1;border-top-color:var(--color-primary);border-radius:50%;animation:sbspin .8s linear infinite;vertical-align:-2px;margin-right:6px}
+ @media (prefers-reduced-motion:reduce){.sum-run .spin{animation:none}}
+ table.sum-tbl{width:auto;min-width:100%} table.sum-tbl th{font-family:var(--font-ui);font-size:8pt;font-weight:600;line-height:1.15;vertical-align:bottom} table.sum-tbl td{font-family:var(--font-ui);font-size:9pt;white-space:nowrap}
+-table.sum-tbl td.s-pass{background:#ECFDF5} table.sum-tbl td.s-fail{background:#FEE2E2;font-weight:700} table.sum-tbl td.s-na{color:#64748b;background:#F8FAFC}
++table.sum-tbl td.s-pass{background:#ECFDF5} table.sum-tbl td.s-fail{background:#FEE2E2;font-weight:700} table.sum-tbl td.s-review{background:#FEF3C7} table.sum-tbl td.s-hi{background:#FFFBEB} table.sum-tbl td.s-na{color:#64748b;background:#F8FAFC}
+ table.sum-tbl td a{color:inherit;text-decoration:underline dotted;text-underline-offset:2px} table.sum-tbl td a:hover{text-decoration:underline}
+-table.sum-tbl td.s-pass a{color:#065F46} table.sum-tbl td.s-fail a{color:#991B1B}
++table.sum-tbl td.s-pass a{color:#065F46} table.sum-tbl td.s-fail a{color:#991B1B} table.sum-tbl td.s-review a,table.sum-tbl td.s-hi a{color:#92400E}
+ table.sum-tbl tr.sum-line td{font-size:8pt} table.sum-tbl tr.sum-line td.lft{color:#475569} table.sum-tbl tr.sum-span td{background:#f1efe9;font-weight:600;text-align:left}
+ .sum-sub{font-size:7.5pt;color:#475569;font-weight:400;display:block}
+ table.sum-grid td{min-width:92px} table.sum-grid td .sum-ty{display:block;font-size:7.5pt;color:#475569;font-weight:400}
+@@ -119,9 +119,15 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
+   const rv = z => sv(z.k, z.g, `checks.${z.i}.r`, z.q.r, 3);
+   const tip = z => esc(`${z.q.n} on G${z.g}: ${fx(z.q.v, 3)} vs ${fx(z.q.lim, 3)} ${z.q.u || ''}${z.gp.input ? ' (Owner rules tab)' : ` at x = ${fx(z.q.loc, 2)} ft`}`);
+   const LBL = q => q ? 'PASS' : 'FAIL';
++  /* 2026-11-15 (batch B, the steel app's classes and thresholds): a check's cell class: s-fail (the engine's FAIL), s-review (the engine passes
++     it but its ratio is not a finite number: REVIEW, as the steel Summary counts a ratio that is not finite), s-hi (PASS with a ratio 0.90 to
++     1.00: amber, the 0.90 threshold of the steel app's ratio colours, report/builders.js 'hi' and the worked-step chips), s-pass */
++  const fin = v => typeof v === 'number' && isFinite(v);
++  const stOf = q => !q.pass ? 'fail' : !fin(q.r) ? 'review' : q.r >= 0.9 ? 'hi' : 'pass';
++  const STL = { fail: 'FAIL', review: 'REVIEW', hi: 'PASS', pass: 'PASS' };
+ 
+   function verdict(M, o) {
+-    const run = o.run || {}, A = o.A, cls = !A ? 'none' : M.nF ? 'fail' : 'pass', badge = !A ? (run.busy ? 'RUNNING' : '—') : M.nF ? 'FAIL' : 'PASS';
++    const run = o.run || {}, A = o.A, cls = !A ? 'none' : M.nF ? 'fail' : M.nR ? 'review' : 'pass', badge = !A ? (run.busy ? 'RUNNING' : '—') : M.nF ? 'FAIL' : M.nR ? 'REVIEW' : 'PASS';
+     const top = A && M.top, lowC = A && M.low;
+     const gov = top ? `<b>Governing:</b> ${esc(top.gp.name)}, girder type ${esc(top.cell.label)} on G${top.cell.g} (span ${top.cell.s}): ${esc(top.c.n)} — <a href="#" ${go({ k: top.cell.k, g: top.cell.g, gp: top.gp, st: top.st })}>ratio ${sv(top.cell.k, top.cell.g, `checks.${top.cell.R.checks.indexOf(top.c)}.r`, top.c.r, 3)}</a>` : A ? 'No check.' : '';
+     const low = lowC ? `<span class="sum-low"><b>Lowest HL-93 inventory rating factor:</b> ${esc(lowC.n)} RF <a href="#" data-sumgo="${lowC.k}|${lowC.g}|rt|${lowC.st}|">${sv(lowC.k, lowC.g, lowC.path, lowC.v, 3)}</a> (${esc(M.types.find(T => T.k === lowC.k).label)} on G${lowC.g}; not a check, not counted).</span>` : '';
+@@ -129,10 +135,10 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
+       : run.stopped ? `<span role="status" aria-live="polite" id="sumRunMsg">Stopped: ${run.i} of ${run.n} girder type × line results computed. The verdict and tables below need all of them.</span><button type="button" data-sumrun="run" title="Run the girder types × lines not yet computed">Run all</button>`
+       : A ? `<span role="status" aria-live="polite" id="sumRunMsg">Up to date: ${A.n} girder type × line result${A.n === 1 ? '' : 's'} of this project state${run.ms != null ? ` (computed in ${(run.ms / 1000).toFixed(2)} s)` : ''}.</span>` : '<span role="status" aria-live="polite" id="sumRunMsg">Not run.</span>';
+     const un = BRG().unassigned(o.P);
+-    return box('sum-verdict', 'Summary: overall verdict', `<div class="sum-verd"><span class="sum-badge ${cls}">${badge}</span>${A ? `<span class="sum-cnt"><span class="c-fail">${M.nF} FAIL</span><span class="c-pass">${M.nP} PASS</span>${M.off.length ? `<span class="c-na">${M.off.length} off</span>` : ''}</span>` : ''}</div>
++    return box('sum-verdict', 'Summary: overall verdict', `<div class="sum-verd"><span class="sum-badge ${cls}">${badge}</span>${A ? `<span class="sum-cnt"><span class="c-fail">${M.nF} FAIL</span>${M.nR ? `<span class="c-review">${M.nR} REVIEW</span>` : ''}<span class="c-pass">${M.nP} PASS</span>${M.off.length ? `<span class="c-na">${M.off.length} off</span>` : ''}</span>` : ''}</div>
+       ${A ? `<p class="sum-gov">${gov}${low}</p>` : ''}
+       ${un.length ? `<div class="alert err" id="sum-unassigned"><b>Line${un.length > 1 ? 's' : ''} ${un.map(q => `G${q.g}/S${q.s}`).join(', ')} ${un.length > 1 ? 'have' : 'has'} no girder type</b> and ${un.length > 1 ? 'are' : 'is'} not checked: the verdict covers the lines of the girder types only. Assign a type on the <a href="#" data-goin="gird">Girders &amp; strands</a> input tab.</div>` : ''}
+-      <p class="note">Counts: one per girder type and check, its worst line (SB-5), the same as the check summary column. FAIL: a check whose ratio (demand / limit, the engine's) is over 1.0 (PASS when ≤ 1.0001, the engine's rule). Rating factors are not checks (RF ≥ 1.0 OK) and are not counted. ${M && M.off.length ? `Off for this project (no check): ${M.off.map(g => esc(g.name)).join(', ')}.` : ''}</p>
++      <p class="note">Counts: one per girder type and check, its worst line (SB-5), the same as the check summary column. FAIL: a check whose ratio (demand / limit, the engine's) is over 1.0 (PASS when ≤ 1.0001, the engine's rule). REVIEW: a check the engine passes whose ratio is not a finite number. Amber: a ratio 0.90 to 1.00 (PASS). Rating factors are not checks (RF ≥ 1.0 OK) and are not counted. ${M && M.off.length ? `Off for this project (no check): ${M.off.map(g => esc(g.name)).join(', ')}.` : ''}</p>
+       <div class="sum-run">${state}<button type="button" data-sumrun="rerun" title="Compute every girder type on every line again">Re-run all</button><a href="#" data-gotab="rpt" title="The Report tab: §1 lists every girder type and line with these values">Report</a></div>`);
+   }
+   function overview(M, o) {
+@@ -153,13 +159,13 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
+       const lab = esc(z.c.label);
+       if (z.err) return `<td class="s-fail" title="${esc(z.err)}"><span class="sum-ty">${lab}</span>engine error</td>`;
+       if (!z.gov) return `<td class="s-na"><span class="sum-ty">${lab}</span>no check</td>`;
+-      const f = z.nF > 0;
+-      return `<td class="s-${f ? 'fail' : 'pass'}" title="${tip(z.gov)}"><span class="sum-ty">${lab}</span><a href="#" ${go(z.gov)}>${rv(z.gov)}</a><span class="sum-sub">${esc(z.gov.gp.name)} · ${f ? `FAIL (${z.nF})` : 'PASS'}</span></td>`; }).join('')}</tr>`).join('');
++      const f = z.nF > 0, st = f ? 'fail' : stOf(z.gov.q);
++      return `<td class="s-${st}" title="${tip(z.gov)}"><span class="sum-ty">${lab}</span><a href="#" ${go(z.gov)}>${rv(z.gov)}</a><span class="sum-sub">${esc(z.gov.gp.name)} · ${f ? `FAIL (${z.nF})` : STL[st]}</span></td>`; }).join('')}</tr>`).join('');
+     return box('sum-grid', 'Girder × span grid', `<div class="tscroll"><table class="tbl sum-tbl sum-grid"><thead><tr><th class="lft">Line</th>${P.spans.lengths.map((L, j) => `<th>Span ${j + 1}<span class="sum-sub">L = ${fx(+L, 2)} ft</span></th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+       <p class="note">Each cell: the girder type on that line of that span, its governing ratio (the largest of all its checks, demand / limit, the engine's), the check group, and PASS or FAIL (with the number of its checks over 1.0). Click: the tab of that check with that girder type and line, at the worked step.</p>`, 'every line of every span');
+   }
+   function table(M) {
+-    const cellT = (z, sub) => z ? `<td class="s-${z.q.pass ? 'pass' : 'fail'}" title="${tip(z)}"><a href="#" ${go(z)}>${rv(z)}</a><span class="sum-sub">${LBL(z.q.pass)}${sub ? ` · G${z.g}` : ''}</span></td>` : '<td class="s-na">—</td>';
++    const cellT = (z, sub) => z ? `<td class="s-${stOf(z.q)}" title="${tip(z)}"><a href="#" ${go(z)}>${rv(z)}</a><span class="sum-sub">${STL[stOf(z.q)]}${sub ? ` · G${z.g}` : ''}</span></td>` : '<td class="s-na">—</td>';
+     const rfT = (z, k, sub) => z ? `<td class="s-${z.v >= 1 ? 'pass' : 'fail'}" title="${esc(z.n)} on G${z.g}"><a href="#" data-sumgo="${k}|${z.g}|rt|${z.st}|">${sv(k, z.g, z.path, z.v, 3)}</a><span class="sum-sub">${z.v >= 1 ? 'RF ≥ 1' : 'RF < 1'}${sub ? ` · G${z.g}` : ''}</span></td>` : '<td class="s-na">—</td>';
+     let body = '';
+     for (let s = 1; s <= M.ns; s++) {
+@@ -178,7 +184,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
+   function checks(M) {
+     const one = T => { const rows = M.used.map(gp => { const z = T.groups[gp.id]; if (!z) return '';
+       return `<tr><td class="lft">${esc(gp.name)}</td><td class="lft">${esc(z.q.n)}</td><td>G${z.g}</td><td>${z.gp.input ? '—' : sv(z.k, z.g, `checks.${z.i}.loc`, z.q.loc, 2)}</td><td>${sv(z.k, z.g, `checks.${z.i}.v`, z.q.v, 3)}</td><td>${sv(z.k, z.g, `checks.${z.i}.lim`, z.q.lim, 3)}</td><td>${esc(z.q.u || '')}</td>
+-        <td class="s-${z.q.pass ? 'pass' : 'fail'}"><a href="#" ${go(z)}>${rv(z)}</a></td><td>${LBL(z.q.pass)}</td></tr>`; }).join('');
++        <td class="s-${stOf(z.q)}"><a href="#" ${go(z)}>${rv(z)}</a></td><td>${STL[stOf(z.q)]}</td></tr>`; }).join('');
+       return `<details class="sum-g" data-sumg="${T.k}"${M.types.length === 1 ? ' open' : ''}><summary><b>${esc(T.label)}</b> (span ${T.span}${T.lines.length > 1 ? `, worst of ${T.lines.map(z => 'G' + z.c.g).join(', ')}` : `, G${T.lines[0].c.g}`}) — ${T.nF ? `FAIL (${T.nF})` : 'PASS'}</summary>
+         <div class="tscroll"><table class="tbl sum-tbl"><thead><tr><th class="lft">Group</th><th class="lft">Governing check</th><th>Line</th><th>x (ft)</th><th>Demand</th><th>Limit</th><th>Unit</th><th>Ratio</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div></details>`; };
+     return box('sum-checks', 'Governing check of each group, per girder type', M.types.map(one).join('') + '<p class="note">The check with the largest ratio in each group over the type\'s lines, at its governing station x (the owner\'s limits: on the Owner rules tab). Click a ratio: its tab and worked step with that type and line.</p>');
+diff --git a/apps/ps-bridge/ui/svgdxf.js b/apps/ps-bridge/ui/svgdxf.js
+new file mode 100644
+index 0000000..57b25b6
+--- /dev/null
++++ b/apps/ps-bridge/ui/svgdxf.js
+@@ -0,0 +1,101 @@
++/* apps/ps-bridge/ui/svgdxf.js — window.PSBGraphics: "Download DXF" of the result tabs' graphics (2026-11-15, batch B; the steel app's
++   Download DXF on each result-tab graphic). Classic script, display and export only: nothing here computes an engineering value.
++   The steel app builds a CAD drawing for each graphic by hand (apps/steel-bridge/ui/graphics.js); this app writes the graphic as drawn: every
++   line, polyline, polygon, rectangle, circle, path and text of the graphic's SVG (the figure on screen, the same numbers and labels) becomes a
++   DXF R12 entity through shared/dxf.js (SharedDxf.drawing, loaded unchanged). Units: the graphic's own units (screen px, y up), not a
++   drawing scale; the Drawings tab has the scaled CAD sheets. Layers by the kind of entity and the SVG class of the element (PSB-<CLASS>).
++   Skipped: <defs>, clip paths, masks, patterns, markers, title / desc, the hover read-out groups (vk-hov, va-hov) and hidden elements.
++
++   API
++     PSBGraphics.fromSvg(svg, o) -> { D, file, title }   svg: an <svg> element on the page (or a container: its first svg); o = { title, file }
++     PSBGraphics.fromFig(fig, o) -> the graphic of every <svg> in fig (side by side, as drawn)
++     PSBGraphics.download(g, name)  validates (SharedDxf.validate) and saves <name>.dxf (as the steel app's SBDGraphics.download)
++     PSBGraphics.NOTE              the note shown under a graphic with Download DXF
++   Does not define textW: the charts' text widths stay the estimate they use today (no layout change). */
++(function () {
++  'use strict';
++  const X = () => window.SharedDxf;
++  const NOTE = 'Download DXF gives this graphic as drawn (its lines, outlines and text, in the graphic\'s own units, not to a drawing scale; layers by element); the scaled CAD sheets are on the Drawings tab.';
++  const SKIP = new Set(['defs', 'clippath', 'mask', 'pattern', 'marker', 'title', 'desc', 'style', 'script', 'lineargradient', 'radialgradient', 'filter', 'symbol']);
++  const num = v => { const n = parseFloat(v); return isFinite(n) ? n : 0; };
++  const lay = (D, el, kind) => { const c = String((el.getAttribute && el.getAttribute('class')) || '').trim().split(/\s+/)[0].replace(/[^A-Za-z0-9_-]/g, '').toUpperCase().slice(0, 24);
++    return D.layer('PSB-' + kind + (c ? '-' + c : ''), kind === 'TEXT' ? 7 : kind === 'FILL' ? 8 : 7); };
++  /* the element's matrix: its parent's times its own transform attribute (SVG transform list, consolidated by the browser) */
++  function own(el) { const t = el.transform && el.transform.baseVal; if (!t || !t.numberOfItems) return null; const m = t.consolidate().matrix; return new DOMMatrix([m.a, m.b, m.c, m.d, m.e, m.f]); }
++  /* path d -> polylines (absolute points); curves sampled (8 segments), arcs to their end point */
++  function pathPolys(d) {
++    const tk = String(d || '').match(/[a-zA-Z]|-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/g) || [], out = []; let i = 0, cmd = '', x = 0, y = 0, sx = 0, sy = 0, cur = null, px = 0, py = 0;
++    const n = () => num(tk[i++]), push = (a, b) => { cur.push([a, b]); x = a; y = b; };
++    const start = (a, b) => { if (cur && cur.length > 1) out.push({ pts: cur, closed: false }); cur = [[a, b]]; x = sx = a; y = sy = b; };
++    while (i < tk.length) {
++      if (/[a-zA-Z]/.test(tk[i])) cmd = tk[i++];
++      const rel = cmd === cmd.toLowerCase(), C = cmd.toUpperCase(), ox = rel ? x : 0, oy = rel ? y : 0;
++      if (C === 'M') { start(n() + ox, n() + oy); cmd = rel ? 'l' : 'L'; }
++      else if (C === 'L') push(n() + ox, n() + oy);
++      else if (C === 'H') push(n() + ox, y);
++      else if (C === 'V') push(x, n() + oy);
++      else if (C === 'Z') { if (cur) { cur.push([sx, sy]); out.push({ pts: cur, closed: true }); cur = null; } x = sx; y = sy; }
++      else if (C === 'C' || C === 'S' || C === 'Q' || C === 'T') {
++        const k = C === 'C' ? 6 : C === 'S' || C === 'Q' ? 4 : 2, v = []; for (let j = 0; j < k; j++) v.push(n() + (j % 2 ? oy : ox));
++        const p0 = [x, y], pe = [v[k - 2], v[k - 1]], c1 = C === 'C' ? [v[0], v[1]] : C === 'S' ? [2 * x - px, 2 * y - py] : C === 'Q' ? [v[0], v[1]] : [2 * x - px, 2 * y - py], c2 = C === 'C' ? [v[2], v[3]] : C === 'S' ? [v[0], v[1]] : null;
++        if (!cur) cur = [[x, y]];
++        for (let s = 1; s <= 8; s++) { const t = s / 8, u = 1 - t;
++          const q = c2 ? [u * u * u * p0[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * pe[0], u * u * u * p0[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * pe[1]]
++            : [u * u * p0[0] + 2 * u * t * c1[0] + t * t * pe[0], u * u * p0[1] + 2 * u * t * c1[1] + t * t * pe[1]];
++          cur.push(q); }
++        px = c2 ? c2[0] : c1[0]; py = c2 ? c2[1] : c1[1]; x = pe[0]; y = pe[1]; continue;
++      }
++      else if (C === 'A') { n(); n(); n(); n(); n(); push(n() + ox, n() + oy); }
++      else { i++; continue; }
++      px = x; py = y;
++    }
++    if (cur && cur.length > 1) out.push({ pts: cur, closed: false });
++    return out;
++  }
++  function walk(D, el, m, root) {
++    const tag = String(el.tagName || '').toLowerCase(); if (!tag || SKIP.has(tag)) return;
++    const cls = String((el.getAttribute && el.getAttribute('class')) || '');
++    if (/(^|\s)(vk-hov|va-hov)(\s|$)/.test(cls) || el.getAttribute('display') === 'none' || (el.style && el.style.display === 'none') || el.getAttribute('visibility') === 'hidden') return;
++    const o = own(el), M = o ? m.multiply(o) : m, P = (x, y) => { const q = M.transformPoint(new DOMPoint(x, y)); return [q.x, -q.y]; };
++    const A = k => num(el.getAttribute(k)), fillOnly = () => { const s = el.getAttribute('stroke'); return s === 'none' && (el.getAttribute('fill') || '') !== 'none'; };
++    if (tag === 'line') D.line(lay(D, el, 'LINE'), ...P(A('x1'), A('y1')), ...P(A('x2'), A('y2')));
++    else if (tag === 'polyline' || tag === 'polygon') { const v = String(el.getAttribute('points') || '').trim().split(/[\s,]+/).map(num), pts = [];
++      for (let j = 0; j + 1 < v.length; j += 2) pts.push(P(v[j], v[j + 1])); if (pts.length > 1) D.pline(lay(D, el, tag === 'polygon' && fillOnly() ? 'FILL' : 'LINE'), pts, tag === 'polygon'); }
++    else if (tag === 'rect') { const x = A('x'), y = A('y'), w = A('width'), h = A('height'); if (w > 0 && h > 0) D.pline(lay(D, el, fillOnly() ? 'FILL' : 'LINE'), [P(x, y), P(x + w, y), P(x + w, y + h), P(x, y + h)], true); }
++    else if (tag === 'circle' || tag === 'ellipse') { const c = P(A('cx'), A('cy')), r = (tag === 'circle' ? A('r') : (A('rx') + A('ry')) / 2) * Math.hypot(M.a, M.b); if (r > 0) D.circle(lay(D, el, 'LINE'), c[0], c[1], r); }
++    else if (tag === 'path') pathPolys(el.getAttribute('d')).forEach(q => D.pline(lay(D, el, 'LINE'), q.pts.map(p => P(p[0], p[1])), q.closed));
++    else if (tag === 'text') {
++      const s = String(el.textContent || '').replace(/\s+/g, ' ').trim(); if (!s) return;
++      const fs = parseFloat((el.style && el.style.fontSize) || el.getAttribute('font-size') || (typeof getComputedStyle === 'function' ? getComputedStyle(el).fontSize : '') || '11') || 11;
++      const an = el.getAttribute('text-anchor') || (typeof getComputedStyle === 'function' ? getComputedStyle(el).textAnchor : '') || 'start', j = an === 'middle' ? 1 : an === 'end' ? 2 : 0;
++      const p = P(A('x'), A('y')), rot = -Math.atan2(M.b, M.a) * 180 / Math.PI;
++      D.text(lay(D, el, 'TEXT'), p[0], p[1], fs * 0.8 * Math.hypot(M.a, M.b), s, j, Math.abs(rot) < 1e-6 ? 0 : rot);
++      return;
++    }
++    if (tag === 'svg' && el !== root) { const vb = el.viewBox && el.viewBox.baseVal; const t = new DOMMatrix([1, 0, 0, 1, A('x'), A('y')]); walk2(D, el, M.multiply(t), root); return; }   // a nested svg: at its x, y (no viewBox scaling)
++    walk2(D, el, M, root);
++  }
++  const walk2 = (D, el, M, root) => [...el.children].forEach(c => walk(D, c, M, root));
++  const slug = s => String(s || 'graphic').replace(/<[^>]*>/g, '').replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60) || 'graphic';
++  function fromSvg(svg, o) {
++    o = o || {}; const el = svg && svg.tagName && svg.tagName.toLowerCase() === 'svg' ? svg : svg && svg.querySelector ? svg.querySelector('svg') : null;
++    if (!el) throw new Error('no graphic drawn');
++    const D = X().drawing({ prefix: '' }); D.h = 10; D.k = 1;
++    walk2(D, el, new DOMMatrix(), el);
++    return { D, file: o.file || slug(o.title), title: o.title || '' };
++  }
++  function fromFig(fig, o) {
++    const svgs = [...(fig && fig.querySelectorAll ? fig.querySelectorAll('svg') : [])].filter(s => !s.parentElement || !s.parentElement.closest('svg'));
++    if (!svgs.length) throw new Error('no graphic drawn');
++    o = o || {}; const D = X().drawing({ prefix: '' }); D.h = 10; D.k = 1; let ox = 0;
++    svgs.forEach(s => { const w = (s.viewBox && s.viewBox.baseVal && s.viewBox.baseVal.width) || s.clientWidth || 0, vx = (s.viewBox && s.viewBox.baseVal && s.viewBox.baseVal.x) || 0;
++      walk2(D, s, new DOMMatrix([1, 0, 0, 1, ox - vx, 0]), s); ox += w + 20; });
++    return { D, file: o.file || slug(o.title), title: o.title || '' };
++  }
++  function download(g, name) {
++    const txt = g.D.toDXF({ ltscale: 1 }), chk = X().validate(txt);
++    if (!chk.ok) { alert(`The DXF file failed its structure check:\n${chk.errors.slice(0, 8).join('\n')}`); return false; }
++    X().download(txt, `${String(name || g.file || 'graphic').replace(/[^\w.-]+/g, '_')}.dxf`); return true;
++  }
++  window.PSBGraphics = { fromSvg, fromFig, download, pathPolys, NOTE };
++})();
+diff --git a/apps/ps-bridge/ui/types.js b/apps/ps-bridge/ui/types.js
+index ba552b5..2d2bd5d 100644
+--- a/apps/ps-bridge/ui/types.js
++++ b/apps/ps-bridge/ui/types.js
+@@ -72,9 +72,10 @@
+     const BR = B(); if (!BR.hasTypes(P)) return '';
+     const c = BR.shown(P), C = BR.cells(P); if (!c || !C.length) return '';
+     const ks = [...new Set(C.map(q => q.k))], lines = BR.typeLines(P, c.k);
+-    return `<div class="tyOut"><label for="tyOutT">Results of girder type</label> <select id="tyOutT" data-ty="otype">${ks.map(k => `<option value="${k}"${k === c.k ? ' selected' : ''}>${esc(P.types[k].label)} (span ${P.types[k].span})</option>`).join('')}</select>
+-      <label for="tyOutL">on line</label> <select id="tyOutL" data-ty="oline">${lines.map(g => `<option value="${g}"${g === c.g ? ' selected' : ''}>G${g} (${g === 1 || g === P.xs.nb ? 'exterior' : 'interior'})</option>`).join('')}</select>
+-      <a href="#" data-goin="gird" title="The girder types and their lines (Girders & strands tab)">Girder types</a></div>`;
++    // 2026-11-15 (batch B): a plain line as the steel app's #gBar ("Girder type … on line … checked on …; every line in the Summary"), not a boxed band
++    return `<div class="tyOut"><label for="tyOutT">Girder type</label><select id="tyOutT" data-ty="otype">${ks.map(k => `<option value="${k}"${k === c.k ? ' selected' : ''}>${esc(P.types[k].label)} (span ${P.types[k].span})</option>`).join('')}</select>
++      <label for="tyOutL">on line</label><select id="tyOutL" data-ty="oline">${lines.map(g => `<option value="${g}"${g === c.g ? ' selected' : ''}>G${g} (${g === 1 || g === P.xs.nb ? 'exterior' : 'interior'})</option>`).join('')}</select>
++      <span>${lines.length > 1 ? `checked on ${lines.map(g => 'G' + g).join(', ')}; ` : ''}every line in the <a href="#" data-gotab="sum">Summary</a> · <a href="#" data-goin="gird" title="The girder types and their lines (Girders & strands tab)">Girder types</a></span></div>`;
+   }
+   /* mark(root, P, ui): the fields a type has of its own */
+   function mark(root, P, ui) {
+diff --git a/apps/ps-bridge/ui/vizalong.js b/apps/ps-bridge/ui/vizalong.js
+index d303a6c..79fe705 100644
+--- a/apps/ps-bridge/ui/vizalong.js
++++ b/apps/ps-bridge/ui/vizalong.js
+@@ -1,5 +1,5 @@
+ /* COPY, to move to shared/ later (CLAUDE.md §3): apps/steel-bridge/ui/vizalong.js at 28e1605 (SBVZB), changed only in: namespace
+-   PSBVizAlong (was SBDVizAlong), PSBVizKit, PSBGraphics (none yet: text widths estimated, no DXF until PR 7), PSBSub (none: read-out as plain
++   PSBVizAlong (was SBDVizAlong), PSBVizKit, PSBGraphics (ui/svgdxf.js, 2026-11-15: Download DXF of the graphic as drawn; no textW, so text widths stay estimated), PSBSub (none: read-out as plain
+    text), resize event psb2:panelresize. PR 2b. */
+ /* apps/ps-bridge/ui/vizalong.js — window.PSBVizAlong: the along-girder pieces of the "modern data-viz" graphic style (option C of the Section
+    properties graphic, ui/vizkit.js), for the graphics drawn along the girder (engineer's decision 2026-11-10: restyle every on-screen CAD-style
+@@ -298,15 +298,17 @@ svg.va-mini{display:inline-block;width:24px;height:8px;vertical-align:middle;} .
+   function mount(slot, o) {
+     css(); const vk = VK();
+     const groups = o.chips ? o.chips() : [];   // [{ label, items: [{ key, html, on }] }]
+-    slot.innerHTML = `<div class="vk va-card" data-va="${esc(o.key || '')}"><div class="vk-hd"><h3>${o.title}${o.sub ? `<small>${o.sub}</small>` : ''}</h3>${o.dxf ? '<button type="button" data-vadxf title="The CAD line drawing of this graphic">Download DXF</button>' : ''}</div>`
++    const auto = o.dxf == null && o.dxf !== false && window.PSBGraphics && window.SharedDxf, hasDxf = !!(o.dxf || auto);   // 2026-11-15 (batch B): Download DXF of the graphic as drawn (ui/svgdxf.js) unless o.dxf is given or false
++    slot.innerHTML = `<div class="vk va-card" data-va="${esc(o.key || '')}"><div class="vk-hd"><h3>${o.title}${o.sub ? `<small>${o.sub}</small>` : ''}</h3>${hasDxf ? '<button type="button" data-vadxf title="The CAD line drawing of this graphic">Download DXF</button>' : ''}</div>`
+       + (o.controls ? `<div class="va-ctl">${o.controls}</div>` : '') + `<div class="vk-fig"></div><p class="vk-read" aria-live="polite" data-hint="${esc(o.hint || 'Point at (or tap) the graphic to read the values.')}"></p>`
+       + (vk ? groups.filter(q => q.items.length).map(q => vk.chips({ label: q.label || 'Show', items: q.items })).join('') : '') + (o.legend ? `<div class="va-leg">${o.legend}</div>` : '') + (o.caption || '') + (o.notes || '')
+-      + (o.dxf ? `<p class="vk-note">${esc(DXF_NOTE)}</p>` : '') + '</div>';
++      + (o.dxf ? `<p class="vk-note">${esc(DXF_NOTE)}</p>` : auto ? `<p class="vk-note">${esc(window.PSBGraphics.NOTE)}</p>` : '') + '</div>';
+     const root = slot.querySelector('.va-card'), fig = root.querySelector('.vk-fig'), out = root.querySelector('.vk-read'); let cur = null, lastW = 0;
+     const draw = w => { const W = w > 0 ? w : 900; lastW = W; cur = o.draw(W); fig.innerHTML = cur.svg; root.classList.toggle('vk-narrow', W < 600); wireSvg(fig.querySelector('svg'), cur, o, out); };
+     if (vk) { vk.fit(fig, draw); vk.print(fig, () => { if (fig.clientWidth < 760) draw(760); }, () => draw(fig.clientWidth)); vk.wire(root, { chip: k => { if (o.onChip) { o.onChip(k); mount(slot, o); } } }); }
+     else draw(fig.clientWidth || 900);
+-    const b = root.querySelector('[data-vadxf]'); if (b) b.addEventListener('click', () => { try { const g = o.dxf(); GR().download(g, o.file || g.file || 'graphic'); } catch (e) { alert('The DXF could not be made: ' + e.message); } });
++    const dxf = o.dxf || (auto ? () => GR().fromFig(fig, { title: plain(o.title), file: o.file || ('chart-' + (o.key || 'graphic')) }) : null);
++    const b = root.querySelector('[data-vadxf]'); if (b) b.addEventListener('click', () => { try { const g = dxf(); GR().download(g, o.file || g.file || 'graphic'); } catch (e) { alert('The DXF could not be made: ' + e.message); } });
+     return { el: root, fig, redraw: () => draw(fig.clientWidth || lastW), get R() { return cur; } };
+   }
+   function wireSvg(svg, Rr, o, out) {
+diff --git a/apps/ps-bridge/ui/vizkit.js b/apps/ps-bridge/ui/vizkit.js
+index 0cafcb6..a81b3b7 100644
+--- a/apps/ps-bridge/ui/vizkit.js
++++ b/apps/ps-bridge/ui/vizkit.js
+@@ -1,6 +1,6 @@
+ /* COPY, to move to shared/ later (CLAUDE.md §3): apps/steel-bridge/ui/vizkit.js at 28e1605 (the steel app's "modern data-viz" graphic style,
+    SECC / DETC), changed only in: namespace PSBVizKit (was SBDVizKit), resize event psb2:panelresize (ui/splitter.js of this app), the CAD
+-   helpers PSBGraphics (none yet: DXF comes with PR 7), and detCard's Download DXF button and note shown only when o.dxf is given. PR 2b. */
++   helpers PSBGraphics (ui/svgdxf.js, 2026-11-15: the graphic as drawn, not hand-built CAD), and detCard's Download DXF button (o.dxf, else the graphic as drawn). PR 2b. */
+ /* apps/ps-bridge/ui/vizkit.js — window.PSBVizKit: the pieces of the "modern data-viz" graphic style (engineer's decision 2026-11-10, mockup option C
+    of the Section properties graphic), kept here so that other tab graphics can be moved to the same style later. Classic script, display only:
+    nothing here computes an engineering value; a graphic hands in the numbers its tab already has. No storage. First user: ui/gfxa.js section().
+@@ -12,7 +12,7 @@
+      VK.esc(s)                        HTML escape;  VK.sub(base, s): SVG text with a subscript (tspans)
+      VK.seg({ label, items: [[key, html]], cur })          segmented control: real buttons (data-vkseg, aria-pressed), in a role=group
+      VK.chips({ label, items: [{ key, html, on, fixed, title }] })   toggle chips: buttons (data-vkchip, aria-pressed; fixed = pressed and disabled)
+-     VK.tiles([{ label (html), value, unit, tone: 'c' | 't' | '', link (html) }])   the stat tiles (6 across, 3 at narrow widths)
++     VK.tiles([{ label (html), value, unit, tone: 'c' | 't' | '', link (html) }])   the stat tiles (3 across, 2026-11-15; § link: link or VK.tileLink)
+      VK.wire(root, { seg(key), chip(key) })                 clicks of the segmented control and chips inside root (bound once per root)
+      VK.T(x, y, html, { a, cls, sz, w }), VK.L(x1, y1, x2, y2, cls, extra), VK.PG(points, cls, extra), VK.PL(points, cls, extra)   SVG primitives
+      VK.defs(id)                      the hatch patterns (#<id>-ht print hatch, #<id>-htc screen hatch) as a <defs> string
+@@ -54,9 +54,9 @@
+ .vk-seg{display:inline-flex;flex-wrap:wrap;border:1px solid #CBD5E1;border-radius:6px;overflow:hidden;margin:0 0 10px;max-width:100%;}
+ .vk-seg button{font:inherit;font-size:9pt;padding:5px 10px;border:0;border-right:1px solid #CBD5E1;background:#fff;color:var(--vk-mut);cursor:pointer;} .vk-seg button:last-child{border-right:0;}
+ .vk-seg button[aria-pressed=true]{background:var(--vk-navy);color:#fff;} .vk-seg button:focus-visible,.vk-chips button:focus-visible{outline:2px solid var(--vk-acc);outline-offset:-2px;}
+-.vk-tiles{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:0 0 10px;}
+-.vk-tile{border:1px solid var(--vk-line);border-radius:6px;padding:6px 8px;background:#FAFBFC;min-width:0;} .vk-tile span{display:block;font-size:8.5pt;color:var(--vk-mut);}
+-.vk-tile b{font-size:11.5pt;font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap;} .vk-tile i{font-style:normal;font-size:8.5pt;color:var(--vk-mut);margin-left:3px;} .vk-tile a.wk{margin-left:4px;}
++.vk-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 0 10px;} .vk-tile .vk-tv{display:block;white-space:nowrap;}
++.vk-tile{border:1px solid var(--vk-line);border-radius:6px;padding:6px 8px;background:#FAFBFC;min-width:0;} .vk-tile>span:first-child{display:block;font-size:8.5pt;color:var(--vk-mut);}
++.vk-tile b{font-size:12.5pt;font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap;} .vk-tile i{font-style:normal;font-size:8.5pt;color:var(--vk-mut);margin-left:3px;} .vk-tile a.wk{margin-left:4px;}
+ .vk-tile.c b{color:var(--vk-ct);} .vk-tile.t b{color:var(--vk-tt);}
+ .vk-fig{width:100%;position:relative;} .vk-fig svg{display:block;width:100%;height:auto;touch-action:pan-x pan-y;font-family:var(--font-ui,Arial,sans-serif);}
+ .vk-read{min-height:1.3em;font-size:9pt;color:var(--vk-ink);margin:2px 0 0;font-variant-numeric:tabular-nums;} .vk-read:empty::before{content:attr(data-hint);color:var(--vk-mut);}
+@@ -74,7 +74,7 @@
+ .vk svg .bc{fill:#EFF4FF;stroke:#BFD3FB;} .vk svg .bt{fill:#FDF1EA;stroke:#F2C7AE;} .vk svg text.vc,.vk svg text.cc{fill:var(--vk-ct);} .vk svg text.vt,.vk svg text.tt{fill:var(--vk-tt);} .vk svg text.vc,.vk svg text.vt{font-size:11px;font-weight:600;}
+ .vk svg .hl{stroke:var(--vk-ink);stroke-width:.6;stroke-dasharray:3 3;} .vk svg .tip{fill:var(--vk-ink);opacity:.88;} .vk svg .vk-hov text{fill:#fff;font-size:11px;} .vk svg .vk-hov{pointer-events:none;}
+ @media (max-width:760px){.vk-tiles{grid-template-columns:repeat(3,minmax(0,1fr));} .vk-seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;} .vk-seg button{padding:5px 4px;line-height:1.25;}}
+-.vk.vk-narrow .vk-tiles,.vk.vk-t3 .vk-tiles{grid-template-columns:repeat(3,minmax(0,1fr));} .vk.vk-narrow .vk-tile b{font-size:10.5pt;white-space:normal;} .vk.vk-narrow .vk-seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;} .vk.vk-narrow .vk-seg button{padding:5px 4px;line-height:1.25;}
++.vk.vk-narrow .vk-tiles,.vk.vk-t3 .vk-tiles{grid-template-columns:repeat(3,minmax(0,1fr));} .vk.vk-narrow .vk-tile b{font-size:10.5pt;white-space:normal;} .vk.vk-narrow .vk-tile .vk-tv{white-space:normal;} .vk.vk-narrow .vk-seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;} .vk.vk-narrow .vk-seg button{padding:5px 4px;line-height:1.25;}
+ @media print{.vk{--vk-steel:#9A9A9A;--vk-deck:#fff;--vk-deck-l:#000;--vk-rebar:#000;--vk-c:#000;--vk-t:#000;--vk-ct:#000;--vk-tt:#000;--vk-acc:#000;--vk-ink:#000;--vk-mut:#333;--vk-faint:#666;}
+   .vk .vk-seg,.vk .vk-chips,.vk .vk-read,.vk .vk-hd button,.vk .vk-noprint{display:none!important;} .vk .vk-cap.vk-pr{display:block;} .vk-tile{background:#fff;border-color:#999;} .vk-tile a.wk{display:none;}
+   .vk svg .pc{fill:#D4D4D4;} .vk svg .pt{fill:url(#vk-ht);} .vk svg .vk-gf{fill:none!important;} .vk svg .nat{fill:#777;} .vk svg .bc,.vk svg .bt{fill:#fff;stroke:#000;} .vk svg .stl{stroke:#000;stroke-width:.6;} .vk svg .vk-hov{display:none;}
+@@ -87,7 +87,10 @@
+   /* ---------- HTML controls ---------- */
+   const seg = o => `<div class="vk-seg" role="group" aria-label="${esc(o.label || 'Show')}">${o.items.map(([k, h]) => `<button type="button" data-vkseg="${esc(k)}" aria-pressed="${k === o.cur}">${h}</button>`).join('')}</div>`;
+   const chips = o => `<div class="vk-chips" role="group" aria-label="${esc(o.label || 'Also show')}"><span class="vk-cl">${esc(o.label || 'Also show')}</span>${o.items.map(q => `<button type="button" data-vkchip="${esc(q.key)}" aria-pressed="${!!(q.on || q.fixed)}"${q.fixed ? ' disabled' : ''}${q.title ? ` title="${esc(q.title)}"` : ''}>${q.html}</button>`).join('')}</div>`;
+-  const tiles = list => `<div class="vk-tiles">${list.map(t => `<div class="vk-tile${t.tone ? ' ' + t.tone : ''}"><span>${t.label}</span><b>${t.value}</b><i>${t.unit || ''}</i>${t.link || ''}</div>`).join('')}</div>`;
++  /* 2026-11-15 (batch B, the steel app's section tiles): 3 across, the value and its unit on one line (.vk-tv), a § link to the step that works
++     the value: t.link, else PSBVizKit.tileLink(path of the value's data-ev) when the page sets it (index.html: PSBOutKit.tileLinker) */
++  const tlk = t => t.link || (window.PSBVizKit && window.PSBVizKit.tileLink && (/data-ev="([^"]+)"/.exec(String(t.value || '')) || [])[1] ? window.PSBVizKit.tileLink(/data-ev="([^"]+)"/.exec(String(t.value))[1]) || '' : '');
++  const tiles = list => `<div class="vk-tiles">${list.map(t => `<div class="vk-tile${t.tone ? ' ' + t.tone : ''}"><span>${t.label}</span><span class="vk-tv"><b>${t.value}</b><i>${t.unit || ''}</i>${tlk(t)}</span></div>`).join('')}</div>`;
+   function wire(root, h) {
+     root.__vkH = h; if (root.__vkW) return; root.__vkW = true;
+     root.addEventListener('click', e => { const t = e.target && e.target.closest ? e.target.closest('[data-vkseg],[data-vkchip]') : null; if (!t || !root.contains(t) || t.disabled) return; const H = root.__vkH || {};
+@@ -306,15 +309,19 @@
+      dxf() -> the PSBGraphics graphic of the CAD line drawing (Download DXF), file, hint (read-out hint; none: no read-out line), cap (html), notes [html], tbl (html) } -> { el, fig, redraw } */
+   function detCard(slot, o) {
+     detCss();
+-    slot.innerHTML = `<div class="vk vk-det"${o.id ? ` id="${esc(o.id)}"` : ''}><div class="vk-hd"><h3>${o.title}${o.sub ? `<small>${o.sub}</small>` : ''}</h3>${o.dxf ? '<button type="button" data-vkdxf title="The CAD line drawing of this graphic">Download DXF</button>' : ''}</div>`
++    // 2026-11-15 (batch B): Download DXF on every graphic, as the steel app's: o.dxf, else (unless o.dxf === false) the graphic as drawn
++    // (PSBGraphics.fromFig, ui/svgdxf.js, with shared/dxf.js); its note PSBGraphics.NOTE
++    const auto = o.dxf == null && o.dxf !== false && window.PSBGraphics && window.SharedDxf, hasDxf = !!(o.dxf || auto);
++    slot.innerHTML = `<div class="vk vk-det"${o.id ? ` id="${esc(o.id)}"` : ''}><div class="vk-hd"><h3>${o.title}${o.sub ? `<small>${o.sub}</small>` : ''}</h3>${hasDxf ? '<button type="button" data-vkdxf title="The CAD line drawing of this graphic">Download DXF</button>' : ''}</div>`
+       + (o.seg && o.seg.items.length > 1 ? VK.seg({ label: o.seg.label, items: o.seg.items, cur: o.seg.cur }) : '') + (o.top || '')
+-      + `<div class="vk-fig"></div>${o.hint ? `<p class="vk-read" aria-live="polite" data-hint="${esc(o.hint)}"></p>` : ''}${o.tbl || ''}${o.cap || ''}${(o.notes || []).map(n => `<p class="vk-note">${n}</p>`).join('')}${o.dxf ? `<p class="vk-note">${esc(DXF_NOTE_D)}</p>` : ''}</div>`;
++      + `<div class="vk-fig"></div>${o.hint ? `<p class="vk-read" aria-live="polite" data-hint="${esc(o.hint)}"></p>` : ''}${o.tbl || ''}${o.cap || ''}${(o.notes || []).map(n => `<p class="vk-note">${n}</p>`).join('')}${o.dxf ? `<p class="vk-note">${esc(DXF_NOTE_D)}</p>` : auto ? `<p class="vk-note">${esc(window.PSBGraphics.NOTE)}</p>` : ''}</div>`;
+     const root = slot.querySelector('.vk'), fig = root.querySelector('.vk-fig'), out = root.querySelector('.vk-read');
+     const draw = w => { const W = w > 0 ? w : 900, q = o.draw(W); fig.innerHTML = q.html; root.classList.toggle('vk-narrow', !!q.nar); };
+     VK.fit(fig, draw); VK.print(fig, () => { if (fig.clientWidth < 760) draw(760); }, () => draw(fig.clientWidth));
+     detRead(fig, out);
+     if (o.seg) VK.wire(root, { seg: k => o.seg.on(k) });
+-    if (o.dxf) root.querySelector('[data-vkdxf]').addEventListener('click', () => { try { const g = o.dxf(); window.PSBGraphics.download(g, o.file || g.file || g.title); } catch (e) { alert('The DXF could not be made: ' + e.message); } });
++    const dxf = o.dxf || (auto ? () => window.PSBGraphics.fromFig(fig, { title: plain(o.title), file: o.file || o.id }) : null);
++    if (dxf) root.querySelector('[data-vkdxf]').addEventListener('click', () => { try { const g = dxf(); window.PSBGraphics.download(g, o.file || g.file || g.title); } catch (e) { alert('The DXF could not be made: ' + e.message); } });
+     return { el: root, fig, redraw: () => draw(fig.clientWidth) };
+   }
+ 
+```
+### Tests
+- check-syntax: all pass.
+- `node tests/engine/run.mjs psbridge tex project-registry`: 40 files, 415 passed (the new psbridge-display-b 22; psbridge-model's script list gets ui/ratioelev.js and ui/svgdxf.js).
+- Harness B: 48,347 shown and 8,392 step values, 0 differences (normal and --import); --control exits 1.
+- Smokes: skeleton 271, types 106, 3d 101, figures 225, library 11, undo 7, drawings 6, drawings2 7, autodesign 7, handoffs 12, display 8; 0 console errors.
+### Decisions (pending engineer review)
+- B-D1. Amber on PASS ratios 0.90 to 1.00 in the Summary table and the check summary column, as the review asked. The steel app colours 0.90–1.00 amber in its elevations and step chips. Its Summary cells are amber only for REVIEW: there a 0.997 is green.
+- B-D2. REVIEW is given only to a check the engine passes whose ratio is not finite. A check the engine fails stays FAIL even when its ratio is NaN; the steel app would count that REVIEW. This is the conservative choice.
+- B-D3. Download DXF writes the graphic as drawn (screen units, not a drawing scale), not a hand-built CAD drawing as in the steel app. The scaled sheets are on the Drawings tab.
+- B-D4. The ratio elevation is on Flexure (M_u / φM_n at the chart's stations) and Shear (the engine's d/c at the design stations) only. The Stresses tab has no per-station ratio from the engine; its checks are worked at their governing stations.
+- B-D5. A tile whose value is not worked by a step (e.g. the library's A, I, y_b on Section properties) has no § link.
+### Other copies
+- `ui/vizkit.js` and `ui/vizalong.js` are adapted copies of the steel app's files. The tile layout (3 across, `.vk-tv`) and the Download DXF of the graphic as drawn differ from the steel copies; the steel files are unchanged.
+## 2026-11-15 — PSLT: a list edit is committed before another click or change acts (the Steel Bridge app's fix, PR #1568; input only, no calculation change)
+PR #1571: https://github.com/mlococo88/All-Structural/pull/1571
+### Request
+- The PS Bridge app's copy of `ui/lists.js` should get the same fix as Steel's (PR #1568, its open item of PR #1561): a pending list-table edit should always be committed, including for the lists drawn only in some states.
+- Reproduce in a smoke first.
+### Problem
+- The table edit is committed in a `focusout` handler deferred by `setTimeout(…, 0)`.
+- A click or change elsewhere that is handled before that commit runs acts on the project without the edit. Two cases reproduce on origin/main (new smoke, below):
+  - **Lost edit.** Cross-section tab, a girder spacing typed, then Girder spacing changed to Equal. The bay list is not drawn in Equal mode, so after the redraw no input of the same id exists for the commit. W_cc was taken as Σ of the old bays, and the edit was lost.
+  - **Undo in the wrong order.** Bridge layout tab, a skew typed, then the Undo button clicked. Undo took back the step before, and the deferred commit then wrote the skew after it, as a step that Redo could not reach.
+- The PS app has no list drawn only while its own tab is open: spans, skews and bays are on panes that are always drawn. The cases above are the lists drawn only in some states.
+### Where
+- `apps/ps-bridge/ui/lists.js`, `bind()` (anchor `ctl.el.addEventListener('focusout', () => setTimeout(() => {`) and `start()` (anchor `upgrade(document);`).
+- Before (`bind`):
+  ```js
+      ctl.el.addEventListener('focusout', () => setTimeout(() => {   // after the event: a redraw (Enter, ×) moves the focus within the table
+        if (ctl.el.isConnected && ctl.el.contains(document.activeElement)) return;
+        if (el.value === was) return; was = el.value;
+        // one change from the steel copy: …
+        let t = el; if (!el.isConnected) { t = document.getElementById(el.id); if (!t) return; t.value = el.value; }
+        t.dispatchEvent(new Event('change', { bubbles: true }));
+      }, 0));
+      el._sli = ctl;
+  ```
+- After:
+  - the commit body moved unchanged into `const commit = () => { … }`;
+  - the focusout handler calls `commit()`;
+  - `BOUND.add({ el, ctl, commit })` follows `el._sli = ctl;`;
+  - new, above `bind`: `const BOUND = new Set(); let flushing = false;`;
+  - new, after `bind`:
+  ```js
+    function flush(target) {
+      if (flushing) return;
+      flushing = true;
+      try {
+        BOUND.forEach(b => {
+          if (!b.el.isConnected) { BOUND.delete(b); return; }   // redrawn: its deferred focusout (above) still commits a pending edit
+          if (target && target.nodeType === 1 && (target === b.el || b.ctl.el.contains(target))) return;
+          b.commit();
+        });
+      } finally { flushing = false; }
+    }
+  ```
+  - in `start()`, after `upgrade(document);`:
+  ```js
+      ['click', 'change'].forEach(t => document.addEventListener(t, e => flush(e.target), true));   // PSLT: before the page's handlers
+  ```
+  - `W.PSBListsUI = { LISTS, upgrade, flush };`
+- How it works: a click or change anywhere outside a table commits that table's pending edit first. The listener is in the capture phase on the document, so it runs before the page's own handlers. The page's own handler then reads the edit before that click or change acts.
+### Saved data (CLAUDE.md §5)
+- None. The page's own change handler writes the same fields in the same formats.
+### Governing provisions (CLAUDE.md §4)
+- None changed. Input handling only; no formula, factor or value changed. Harness B: 0 differences.
+### Check case (new project, `tests/smoke/ps-bridge-list-commit.mjs`)
+- **Bays then Equal.** Bays 9, 9, 9, 9; bay 1 typed 9.5, then Girder spacing → Equal.
+  - Saved `xs.Wcc` before: **36** (the edit lost).
+  - After: **36.5** = 9.5 + 9 + 9 + 9.
+- **Skew then Undo.** Skews 0, 0; skew 1 typed 12, then Undo.
+  - Before: the skews stayed "12, 0" and Redo was disabled. Undo took back the step before, and the skew was written after it.
+  - After: "0, 0", and Redo gives [12, 0].
+- **Span then input tab.** Span 120 → 121, then an input-tab click: saved [121] before and after (PR #1548's case).
+### How verified
+- `tests/smoke/ps-bridge-list-commit.mjs`: 5 checks. On origin/main 3 fail; with the fix 5 of 5 pass, 0 console errors.
+- PS checks: see the PR.
+### Other copies
+- `apps/steel-bridge/ui/lists.js` (PR #1568): the same code. The two copies differ only in comments, the selector list and the namespace.
 ## 2026-11-15 — ADB: the Report's "Auto design basis" (§2, last subsection) and a link to it from the Auto design output tab (display only)
 PR #TBD
 ### Request

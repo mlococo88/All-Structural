@@ -1,6 +1,6 @@
 /* COPY, to move to shared/ later (CLAUDE.md §3): apps/steel-bridge/ui/vizkit.js at 28e1605 (the steel app's "modern data-viz" graphic style,
    SECC / DETC), changed only in: namespace PSBVizKit (was SBDVizKit), resize event psb2:panelresize (ui/splitter.js of this app), the CAD
-   helpers PSBGraphics (none yet: DXF comes with PR 7), and detCard's Download DXF button and note shown only when o.dxf is given. PR 2b. */
+   helpers PSBGraphics (ui/svgdxf.js, 2026-11-15: the graphic as drawn, not hand-built CAD), and detCard's Download DXF button (o.dxf, else the graphic as drawn). PR 2b. */
 /* apps/ps-bridge/ui/vizkit.js — window.PSBVizKit: the pieces of the "modern data-viz" graphic style (engineer's decision 2026-11-10, mockup option C
    of the Section properties graphic), kept here so that other tab graphics can be moved to the same style later. Classic script, display only:
    nothing here computes an engineering value; a graphic hands in the numbers its tab already has. No storage. First user: ui/gfxa.js section().
@@ -12,7 +12,7 @@
      VK.esc(s)                        HTML escape;  VK.sub(base, s): SVG text with a subscript (tspans)
      VK.seg({ label, items: [[key, html]], cur })          segmented control: real buttons (data-vkseg, aria-pressed), in a role=group
      VK.chips({ label, items: [{ key, html, on, fixed, title }] })   toggle chips: buttons (data-vkchip, aria-pressed; fixed = pressed and disabled)
-     VK.tiles([{ label (html), value, unit, tone: 'c' | 't' | '', link (html) }])   the stat tiles (6 across, 3 at narrow widths)
+     VK.tiles([{ label (html), value, unit, tone: 'c' | 't' | '', link (html) }])   the stat tiles (3 across, 2026-11-15; § link: link or VK.tileLink)
      VK.wire(root, { seg(key), chip(key) })                 clicks of the segmented control and chips inside root (bound once per root)
      VK.T(x, y, html, { a, cls, sz, w }), VK.L(x1, y1, x2, y2, cls, extra), VK.PG(points, cls, extra), VK.PL(points, cls, extra)   SVG primitives
      VK.defs(id)                      the hatch patterns (#<id>-ht print hatch, #<id>-htc screen hatch) as a <defs> string
@@ -54,9 +54,9 @@
 .vk-seg{display:inline-flex;flex-wrap:wrap;border:1px solid #CBD5E1;border-radius:6px;overflow:hidden;margin:0 0 10px;max-width:100%;}
 .vk-seg button{font:inherit;font-size:9pt;padding:5px 10px;border:0;border-right:1px solid #CBD5E1;background:#fff;color:var(--vk-mut);cursor:pointer;} .vk-seg button:last-child{border-right:0;}
 .vk-seg button[aria-pressed=true]{background:var(--vk-navy);color:#fff;} .vk-seg button:focus-visible,.vk-chips button:focus-visible{outline:2px solid var(--vk-acc);outline-offset:-2px;}
-.vk-tiles{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:0 0 10px;}
-.vk-tile{border:1px solid var(--vk-line);border-radius:6px;padding:6px 8px;background:#FAFBFC;min-width:0;} .vk-tile span{display:block;font-size:8.5pt;color:var(--vk-mut);}
-.vk-tile b{font-size:11.5pt;font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap;} .vk-tile i{font-style:normal;font-size:8.5pt;color:var(--vk-mut);margin-left:3px;} .vk-tile a.wk{margin-left:4px;}
+.vk-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 0 10px;} .vk-tile .vk-tv{display:block;white-space:nowrap;}
+.vk-tile{border:1px solid var(--vk-line);border-radius:6px;padding:6px 8px;background:#FAFBFC;min-width:0;} .vk-tile>span:first-child{display:block;font-size:8.5pt;color:var(--vk-mut);}
+.vk-tile b{font-size:12.5pt;font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap;} .vk-tile i{font-style:normal;font-size:8.5pt;color:var(--vk-mut);margin-left:3px;} .vk-tile a.wk{margin-left:4px;}
 .vk-tile.c b{color:var(--vk-ct);} .vk-tile.t b{color:var(--vk-tt);}
 .vk-fig{width:100%;position:relative;} .vk-fig svg{display:block;width:100%;height:auto;touch-action:pan-x pan-y;font-family:var(--font-ui,Arial,sans-serif);}
 .vk-read{min-height:1.3em;font-size:9pt;color:var(--vk-ink);margin:2px 0 0;font-variant-numeric:tabular-nums;} .vk-read:empty::before{content:attr(data-hint);color:var(--vk-mut);}
@@ -74,7 +74,7 @@
 .vk svg .bc{fill:#EFF4FF;stroke:#BFD3FB;} .vk svg .bt{fill:#FDF1EA;stroke:#F2C7AE;} .vk svg text.vc,.vk svg text.cc{fill:var(--vk-ct);} .vk svg text.vt,.vk svg text.tt{fill:var(--vk-tt);} .vk svg text.vc,.vk svg text.vt{font-size:11px;font-weight:600;}
 .vk svg .hl{stroke:var(--vk-ink);stroke-width:.6;stroke-dasharray:3 3;} .vk svg .tip{fill:var(--vk-ink);opacity:.88;} .vk svg .vk-hov text{fill:#fff;font-size:11px;} .vk svg .vk-hov{pointer-events:none;}
 @media (max-width:760px){.vk-tiles{grid-template-columns:repeat(3,minmax(0,1fr));} .vk-seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;} .vk-seg button{padding:5px 4px;line-height:1.25;}}
-.vk.vk-narrow .vk-tiles,.vk.vk-t3 .vk-tiles{grid-template-columns:repeat(3,minmax(0,1fr));} .vk.vk-narrow .vk-tile b{font-size:10.5pt;white-space:normal;} .vk.vk-narrow .vk-seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;} .vk.vk-narrow .vk-seg button{padding:5px 4px;line-height:1.25;}
+.vk.vk-narrow .vk-tiles,.vk.vk-t3 .vk-tiles{grid-template-columns:repeat(3,minmax(0,1fr));} .vk.vk-narrow .vk-tile b{font-size:10.5pt;white-space:normal;} .vk.vk-narrow .vk-tile .vk-tv{white-space:normal;} .vk.vk-narrow .vk-seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;} .vk.vk-narrow .vk-seg button{padding:5px 4px;line-height:1.25;}
 @media print{.vk{--vk-steel:#9A9A9A;--vk-deck:#fff;--vk-deck-l:#000;--vk-rebar:#000;--vk-c:#000;--vk-t:#000;--vk-ct:#000;--vk-tt:#000;--vk-acc:#000;--vk-ink:#000;--vk-mut:#333;--vk-faint:#666;}
   .vk .vk-seg,.vk .vk-chips,.vk .vk-read,.vk .vk-hd button,.vk .vk-noprint{display:none!important;} .vk .vk-cap.vk-pr{display:block;} .vk-tile{background:#fff;border-color:#999;} .vk-tile a.wk{display:none;}
   .vk svg .pc{fill:#D4D4D4;} .vk svg .pt{fill:url(#vk-ht);} .vk svg .vk-gf{fill:none!important;} .vk svg .nat{fill:#777;} .vk svg .bc,.vk svg .bt{fill:#fff;stroke:#000;} .vk svg .stl{stroke:#000;stroke-width:.6;} .vk svg .vk-hov{display:none;}
@@ -87,7 +87,10 @@
   /* ---------- HTML controls ---------- */
   const seg = o => `<div class="vk-seg" role="group" aria-label="${esc(o.label || 'Show')}">${o.items.map(([k, h]) => `<button type="button" data-vkseg="${esc(k)}" aria-pressed="${k === o.cur}">${h}</button>`).join('')}</div>`;
   const chips = o => `<div class="vk-chips" role="group" aria-label="${esc(o.label || 'Also show')}"><span class="vk-cl">${esc(o.label || 'Also show')}</span>${o.items.map(q => `<button type="button" data-vkchip="${esc(q.key)}" aria-pressed="${!!(q.on || q.fixed)}"${q.fixed ? ' disabled' : ''}${q.title ? ` title="${esc(q.title)}"` : ''}>${q.html}</button>`).join('')}</div>`;
-  const tiles = list => `<div class="vk-tiles">${list.map(t => `<div class="vk-tile${t.tone ? ' ' + t.tone : ''}"><span>${t.label}</span><b>${t.value}</b><i>${t.unit || ''}</i>${t.link || ''}</div>`).join('')}</div>`;
+  /* 2026-11-15 (batch B, the steel app's section tiles): 3 across, the value and its unit on one line (.vk-tv), a § link to the step that works
+     the value: t.link, else PSBVizKit.tileLink(path of the value's data-ev) when the page sets it (index.html: PSBOutKit.tileLinker) */
+  const tlk = t => t.link || (window.PSBVizKit && window.PSBVizKit.tileLink && (/data-ev="([^"]+)"/.exec(String(t.value || '')) || [])[1] ? window.PSBVizKit.tileLink(/data-ev="([^"]+)"/.exec(String(t.value))[1]) || '' : '');
+  const tiles = list => `<div class="vk-tiles">${list.map(t => `<div class="vk-tile${t.tone ? ' ' + t.tone : ''}"><span>${t.label}</span><span class="vk-tv"><b>${t.value}</b><i>${t.unit || ''}</i>${tlk(t)}</span></div>`).join('')}</div>`;
   function wire(root, h) {
     root.__vkH = h; if (root.__vkW) return; root.__vkW = true;
     root.addEventListener('click', e => { const t = e.target && e.target.closest ? e.target.closest('[data-vkseg],[data-vkchip]') : null; if (!t || !root.contains(t) || t.disabled) return; const H = root.__vkH || {};
@@ -306,15 +309,19 @@
      dxf() -> the PSBGraphics graphic of the CAD line drawing (Download DXF), file, hint (read-out hint; none: no read-out line), cap (html), notes [html], tbl (html) } -> { el, fig, redraw } */
   function detCard(slot, o) {
     detCss();
-    slot.innerHTML = `<div class="vk vk-det"${o.id ? ` id="${esc(o.id)}"` : ''}><div class="vk-hd"><h3>${o.title}${o.sub ? `<small>${o.sub}</small>` : ''}</h3>${o.dxf ? '<button type="button" data-vkdxf title="The CAD line drawing of this graphic">Download DXF</button>' : ''}</div>`
+    // 2026-11-15 (batch B): Download DXF on every graphic, as the steel app's: o.dxf, else (unless o.dxf === false) the graphic as drawn
+    // (PSBGraphics.fromFig, ui/svgdxf.js, with shared/dxf.js); its note PSBGraphics.NOTE
+    const auto = o.dxf == null && o.dxf !== false && window.PSBGraphics && window.SharedDxf, hasDxf = !!(o.dxf || auto);
+    slot.innerHTML = `<div class="vk vk-det"${o.id ? ` id="${esc(o.id)}"` : ''}><div class="vk-hd"><h3>${o.title}${o.sub ? `<small>${o.sub}</small>` : ''}</h3>${hasDxf ? '<button type="button" data-vkdxf title="The CAD line drawing of this graphic">Download DXF</button>' : ''}</div>`
       + (o.seg && o.seg.items.length > 1 ? VK.seg({ label: o.seg.label, items: o.seg.items, cur: o.seg.cur }) : '') + (o.top || '')
-      + `<div class="vk-fig"></div>${o.hint ? `<p class="vk-read" aria-live="polite" data-hint="${esc(o.hint)}"></p>` : ''}${o.tbl || ''}${o.cap || ''}${(o.notes || []).map(n => `<p class="vk-note">${n}</p>`).join('')}${o.dxf ? `<p class="vk-note">${esc(DXF_NOTE_D)}</p>` : ''}</div>`;
+      + `<div class="vk-fig"></div>${o.hint ? `<p class="vk-read" aria-live="polite" data-hint="${esc(o.hint)}"></p>` : ''}${o.tbl || ''}${o.cap || ''}${(o.notes || []).map(n => `<p class="vk-note">${n}</p>`).join('')}${o.dxf ? `<p class="vk-note">${esc(DXF_NOTE_D)}</p>` : auto ? `<p class="vk-note">${esc(window.PSBGraphics.NOTE)}</p>` : ''}</div>`;
     const root = slot.querySelector('.vk'), fig = root.querySelector('.vk-fig'), out = root.querySelector('.vk-read');
     const draw = w => { const W = w > 0 ? w : 900, q = o.draw(W); fig.innerHTML = q.html; root.classList.toggle('vk-narrow', !!q.nar); };
     VK.fit(fig, draw); VK.print(fig, () => { if (fig.clientWidth < 760) draw(760); }, () => draw(fig.clientWidth));
     detRead(fig, out);
     if (o.seg) VK.wire(root, { seg: k => o.seg.on(k) });
-    if (o.dxf) root.querySelector('[data-vkdxf]').addEventListener('click', () => { try { const g = o.dxf(); window.PSBGraphics.download(g, o.file || g.file || g.title); } catch (e) { alert('The DXF could not be made: ' + e.message); } });
+    const dxf = o.dxf || (auto ? () => window.PSBGraphics.fromFig(fig, { title: plain(o.title), file: o.file || o.id }) : null);
+    if (dxf) root.querySelector('[data-vkdxf]').addEventListener('click', () => { try { const g = dxf(); window.PSBGraphics.download(g, o.file || g.file || g.title); } catch (e) { alert('The DXF could not be made: ' + e.message); } });
     return { el: root, fig, redraw: () => draw(fig.clientWidth) };
   }
 

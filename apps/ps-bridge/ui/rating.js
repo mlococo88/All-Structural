@@ -22,7 +22,7 @@
   function output(ctx) {
     const { R, inp } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, rt = R.rating, sh = R.shrRating, sv = R.svcRating, md = rt.mid;
     const evRF = (p, v) => rfs(v) || ev(p, 3);
-    let h = '<div id="gfx_rt"></div>';
+    let h = K().gcard('Load rating: rating factors', 'gfx_rt');
     h += `<p class="note">LRFR load rating (MBE; article labels as the old app: the MBE 4th Ed. (2026) labels come in their own PR). Screening of the design girder: a complete rating also covers the negative-moment region over the piers and the restraint moments.</p>`;
     h += k.card('Condition and system factors (MBE 6A.4.2.3 / 6A.4.2.4)', k.kv([['φ<sub>c</sub> × φ<sub>s</sub> entered', `${ev('rating.phiC', 2)} × ${ev('rating.phiS', 2)} <a href="#" data-goin="loads">Loads tab</a>`],
       ['φ<sub>c</sub>φ<sub>s</sub> used (not less than 0.85, MBE Eq. 6A.4.2.1-3; not more than 1.00)', `<b>${ev('rating.phiCS', 3)}</b>${rt.phiCSfloor ? ' (floored at 0.85)' : rt.phiCScap ? ' (capped at 1.00)' : ''} ${wk('rt.phiCS')}`]])
@@ -46,7 +46,7 @@
       ${V.map((v, i) => { const P = `vehRatings.${i}.`; return `<tr><td class="lft">${k.esc(v.name)}</td><td>${ev(P + 'M', 1)}</td><td>${ev(P + 'V', 1)}</td><td>${ev(P + 'W', 1)}</td><td>${evRF(P + 'RFm', v.RFm)}</td><td>${evRF(P + 'RFv', v.RFv)}</td><td><b>${evRF(P + 'RF', v.RF)}</b></td><td>${v.RT != null && v.RF < 99 ? ev(P + 'RT', 1) : '—'}</td>${okT(v.ok, v.RF)}<td>${wk(`rt.veh${i}.RF`)}</td></tr>`; }).join('')}</tbody></table></div>`
       : '<p class="note">No vehicles entered. Add a legal truck (Type 3, 3S2, 3-3) or a permit vehicle on the <a href="#" data-goin="loads">Loads tab</a>.</p>')
       + `<p class="note">Your factored live-load moment and shear (DF, IM, multiple presence and the LRFR live-load factor applied); the app supplies φ<sub>c</sub>φ<sub>s</sub>φM<sub>n</sub> at midspan (${ev('rating.mid.Rn', 1, 'kip-ft')}) and φ<sub>c</sub>φ<sub>s</sub>φV<sub>n</sub> at the governing shear section (${ev('shrRating.phiVn', 1, 'kip')}), with 1.25 DC and 1.50 DW (M<sub>DC</sub> ${ev('rating.mid.MDC', 1)}, M<sub>DW</sub> ${ev('rating.mid.MDW', 1, 'kip-ft')}; V<sub>DC</sub> ${ev('shrRating.VDC', 1)}, V<sub>DW</sub> ${ev('shrRating.VDW', 1, 'kip')}). The governing RF is the lower of flexure and shear; the rated tons = RF × weight where a weight is entered.</p>`, 'card-rtveh');
-    h += '<div id="gfx_rtx"></div>';
+    h += K().gcard('Load rating: rated sections along the span', 'gfx_rtx');
     h += k.card('Worked steps: load rating', `<p class="note">LRFR, MBE (article labels as the old app); resistances from AASHTO LRFD 10th Ed. (2024). Every result is the engine's value (the moved Prestressed Bridge Design engine).</p>${k.steps(ctx.W.rating.steps, TOPICS, OPEN)}`);
     void md;
     return h;
