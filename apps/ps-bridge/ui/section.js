@@ -11,6 +11,7 @@
     { key: 'gross', title: 'Gross girder section', ref: 'shape library; 3.5.1', ids: /^sec\.g\./ },
     { key: 'ec', title: 'Moduli of elasticity and modular ratio', ref: 'AASHTO LRFD 10th Ed. 5.4.2.4', ids: /^sec\.(Ecg|Ecd|n)$/, res: /^sec\.n$/ },
     { key: 'comp', title: 'Composite section (transformed deck)', ref: 'AASHTO LRFD 10th Ed. 4.6.2.6', ids: /^sec\.(beff|Ad|yd|Ah|Ac|ybc|Ic|hc|Sbc|Stg|Std)$/, res: /^sec\.Ic$/ },
+    { key: 'wk', title: 'Weak axis and torsion (bare girder)', ref: 'the MCT section hand-off: I_zz, I_xx', ids: /^sec\.wk\./, res: /^sec\.wk\.J$/ },   // batch G1
     { key: 'str', title: 'Prestressing strands', ref: 'AASHTO LRFD 10th Ed. 5.9.4.3.1', ids: /^sec\./, res: /^sec\.eMid$/ }];
   /* voidNote(G): 2026-11-14 (decision pending engineer review, PS28/void note): where the void of a box beam or a voided deck slab is, as the
      engine places it (sectionVoids, pbd-section.js) and every graphic draws it; '' for a shape without voids. The old app's section graphic
@@ -40,6 +41,14 @@
     if (st[1].src.owner === 'MassDOT') { const m = st[1].src; return `MassDOT ${m.beam}: A, I, y<sub>b</sub> from MassDOT Bridge Manual Part II dwg ${m.dwg} (p. ${m.page}) (PS-37)${st[1].next ? ', interpolated on the beam width' : ''}; S<sub>b</sub>, S<sub>t</sub> and the self-weight computed from them below`; }   // PS-37
     const s = st[1].src; return `AASHTO ${s.beam}: A, I, y<sub>b</sub> from CTDOT Bridge Design Manual plate ${s.plate} (PDF p. ${s.page}), an app-side correction of the old library (PS-30 / PS-32); S<sub>b</sub>, S<sub>t</sub> and the self-weight computed from them below`;
   }
+  /* weakRows(G, k) (batch G1, 2026-11-15): the old app's I_y, S_y and J rows of its Non-composite card (O:6510-6519): the bare girder's weak-axis
+     (lateral) inertia, modulus and St-Venant torsion constant, engine/pbd-section.js weakAxisAndJ (the psSection hand-off's Iweak / J), worked
+     in topic "Weak axis and torsion" (engine/worked.js weakSteps). Display only. */
+  function weakRows(G, k) {
+    const wj = window.PSBWorked && window.PSBWorked.weakAxis ? window.PSBWorked.weakAxis(G) : null; if (!wj) return [];
+    return [['Weak-axis I<sub>y</sub> (lateral, bare girder)', `<span id="sec-Iy">${k.fx(wj.Iweak, 0)}</span> in⁴ ${k.wk('sec.wk.Iy')}`], ['Weak-axis modulus S<sub>y</sub>', `<span id="sec-Sy">${k.fx(wj.Sy, 0)}</span> in³ ${k.wk('sec.wk.Sy')}`],
+      ['St-Venant torsion J (bare girder)', `<span id="sec-J">${k.fx(wj.J, 0)}</span> in⁴ ${k.wk('sec.wk.J')}`]];
+  }
   function output(ctx) {
     const { R, inp } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, G = R.g, ss = R.ss;
     const SCm = window.PSBSections, md = SCm && SCm.mdOf ? SCm.mdOf(G) : null;   // PS-37: a MassDOT section's own kind and note
@@ -52,8 +61,10 @@
       ...(mx ? [['Beam width b<sub>f</sub>', `${ev('g.btf', 2, 'in')} ${wk('sec.g.bf')}`]] : []),   // PS-37: a MassDOT NEXT's width and interpolated properties, worked
       ['Area A', `${ev('g.A', 1, 'in²')}${mx && !(G.ovr && G.ovr.A) ? ' ' + wk('sec.g.A') : ''}`], ['Moment of inertia I', `${ev('g.I', 0, 'in⁴')}${mx && !(G.ovr && G.ovr.I) ? ' ' + wk('sec.g.I') : ''}`],
       ['y<sub>b</sub> (centroid above the soffit)', `${ev('g.yb', 3, 'in')}${mx && !(G.ovr && G.ovr.yb) ? ' ' + wk('sec.g.yb') : ''}`], ['y<sub>t</sub>', `${ev('g.yt', 3, 'in')} ${wk('sec.g.yt')}`], ['S<sub>b</sub>', `${ev('g.Sb', 0, 'in³')} ${wk('sec.g.Sb')}`], ['S<sub>t</sub>', `${ev('g.St', 0, 'in³')} ${wk('sec.g.St')}`],
-      ['Web width b<sub>w</sub>', ev('g.bw', 2, 'in')], ['Top / bottom flange width', `${ev('g.btf', 2)} / ${ev('g.bbf', 2, 'in')}`], ['Self-weight w<sub>g</sub>', `${ev('g.wsw', 4, 'klf')} ${wk('sec.g.wsw')}`]])
+      ['Web width b<sub>w</sub>', ev('g.bw', 2, 'in')], ['Top / bottom flange width', `${ev('g.btf', 2)} / ${ev('g.bbf', 2, 'in')}`], ['Self-weight w<sub>g</sub>', `${ev('g.wsw', 4, 'klf')} ${wk('sec.g.wsw')}`],
+      ...weakRows(G, k)])
       + `<p class="note">Gross properties of the shape library (${stdSrc(G) || `the old app's GIRDERS${G.isNext ? '; NEXT: interpolated on the flange width' : ''}`})${G.ovr && G.ovr.any ? '; overridden values as entered (Girders &amp; strands tab)' : ''}.</p>`
+      + '<p class="note">I<sub>y</sub>, S<sub>y</sub> and J are the bare girder\'s (the deck spans between the girders and is not a full-width flange for one girder\'s lateral bending), the engine\'s approximations as in the old app. They are the values the section hand-off sends to the MCT generator as the MIDAS section\'s I<sub>zz</sub> (weak axis) and I<sub>xx</sub> (torsion); I<sub>c</sub> below goes to I<sub>yy</sub>. No check of this app uses J; I<sub>y</sub> of an I-girder is also the lateral stability I<sub>y</sub> of the <a href="#" data-gotab="hand">Handling tab</a>.</p>'
       + (vn ? `<p class="note" id="sec-void-note">${vn}</p>` : ''), 'card-gross');
     h += k.card('Composite section', k.kv([
       ['E<sub>c</sub> girder', `${ev('cp.Ecg', 0, 'ksi')} ${wk('sec.Ecg')}`], ['E<sub>c</sub> deck', `${ev('cp.Ecd', 0, 'ksi')} ${wk('sec.Ecd')}`], ['Modular ratio n', `${ev('cp.n', 4)} ${wk('sec.n')}`],
@@ -68,8 +79,10 @@
       ...(dr ? [['Draped strands: y<sub>end</sub> / y<sub>mid</sub>', `${k.fx(+ss.hp.yEnd, 2)} / ${k.fx(+ss.hp.yMid, 2)} in`], ['Hold-down points from ℄ bearing', `${k.fx(ss.hp.frac * R.L, 2)} ft (${k.fx(+ss.hp.frac, 3)} L) ${wk('sec.aHd')}`],
         ['Slope of the draped strands', `${ev('ss.slope', 4)} ${wk('sec.slope')}`]] : []),
       ['Strand centroid at midspan y<sub>ps</sub>', `${ev('ss.cgsMid', 3, 'in')} ${wk('sec.cgsMid')}`], ['Eccentricity at midspan e<sub>m</sub>', `${ev('ss.eMid', 3, 'in')} ${wk('sec.eMid')}`],
-      ['Eccentricity at the end e<sub>end</sub>', ev('ss.eEnd', 3, 'in')], ['Transfer length ℓ<sub>t</sub>', `${ev('ss.lt', 1, 'in')} ${wk('sec.lt')}`]])
+      ['Eccentricity at the end e<sub>end</sub>', ev('ss.eEnd', 3, 'in')], ['Transfer length ℓ<sub>t</sub>', `${ev('ss.lt', 1, 'in')} ${wk('sec.lt')}`],
+      ['Jacking force P<sub>jack</sub> = A<sub>ps</sub> f<sub>pbt</sub>', `<span id="sec-Pj">${k.fx(ss.Aps * R.fpbt, 0)}</span> kip ${wk('sec.Pj')} (f<sub>pbt</sub>: <a href="#" data-gotab="loss">Losses tab</a>)`]])   // batch G2: the old app's P_jack hint (O:6074)
       + '<p class="note">Strand rows and draped strands: <a href="#" data-goin="gird">Girders &amp; strands tab</a>. The strands are drawn in the section figure above and in the strand-pattern graphic of the Losses tab.</p>', 'card-str');
+    h += K().gcard('Eccentricity and effective strands along the span', 'gfx_secE');   // batch G2: the old app's chart (O:6623-6630)
     h += k.card('Worked steps: section properties', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value (the moved Prestressed Bridge Design engine).</p>${k.steps(ctx.W.section.steps, TOPICS, OPEN)}`);
     return h;
   }
@@ -99,8 +112,24 @@
     const r = S.render({ W, maxH: nar ? Math.max(300, W * 1.1) : Math.min(520, Math.max(300, W * 0.6)), label: 'Composite section with the strands' });
     return { html: r.svg, nar };
   }
+  /* batch G2 (2026-11-15): the old app's "Eccentricity & Effective Strands Along Span" chart (O:6623-6630): e(x) and the effective A_ps(x)
+     at the engine's stress stations (R.grid: x, e, Aps; the strand system's at(x), with draping, debonding and the transfer-length ramps),
+     the steel along-girder chart (PSBVizAlong). Display only. */
+  function eccChart(el, ctx) {
+    const slot = el.querySelector('#gfx_secE'), VA = window.PSBVizAlong; if (!slot || !VA || !VA.mount) return;
+    const { R } = ctx, k = K(), Gd = R.grid || [], xs = Gd.map(r => r.x); if (!Gd.length) return;
+    const near = x => Gd.reduce((b, r) => (Math.abs(r.x - x) < Math.abs(b.x - x) ? r : b), Gd[0]), lt = R.ss.lt / 12;
+    return VA.mount(slot, { key: 'secE', title: 'Eccentricity and effective strands along the span', sub: `span L = ${k.fx(R.L, 2)} ft, ${Gd.length} stations; ℓ<sub>t</sub> = ${k.fx(R.ss.lt, 1)} in`,
+      draw: W => VA.render({ L0: 0, L1: R.L, sup: [0, R.L], axisTitle: 'Station x, ft (from ℄ bearing, left)', aria: 'Strand eccentricity and effective strand area along the girder', rows: [
+        { kind: 'chart', key: 'e', label: 'Eccentricity e, in (strand centroid below the girder centroid +)', unit: 'in', series: [{ key: 'e', ci: 0, pts: Gd.map(r => [r.x, r.e]) }], h: W < 600 ? 110 : 140 },
+        { kind: 'chart', key: 'A', label: 'Effective A_ps, in²', unit: 'in²', series: [{ key: 'A', ci: 1, dash: '5 3', pts: Gd.map(r => [r.x, r.Aps]) }], h: W < 600 ? 100 : 120 }] }, W),
+      at: x => { const r = near(x); return [`x = ${k.fx(r.x, 2)} ft`, `e = ${k.fx(r.e, 2)} in; effective A_ps = ${k.fx(r.Aps, 3)} in²`]; }, snap: x => near(x).x,
+      legend: `${VA.swatch(0)} e(x), in &nbsp; ${VA.swatch(1, '5 3')} A<sub>ps</sub> effective, in²`,
+      caption: `<p class="vk-cap">The engine's values at its stress stations (Stresses tab), x = ${xs.length ? k.fx(xs[0], 0) : '0'} to ${k.fx(R.L, 0)} ft. The eccentricity follows the draped strands and the debonding; the effective area ramps up over the transfer length ℓ<sub>t</sub> = 60 d<sub>b</sub> = ${k.fx(lt, 2)} ft from each point where a strand is bonded (AASHTO LRFD 10th Ed. 5.9.4.3.1). Where no strand is yet effective (A<sub>ps</sub> = 0, at the girder end) the eccentricity drawn is the engine's value with no prestress acting. Display only.</p>` });
+  }
   function after(el, ctx) {
     K().after(el, OPEN);
+    try { eccChart(el, ctx); } catch (e) { console.warn(e); }
     const slot = el.querySelector('#gfx_sec'); if (!slot || !VK() || !VK().detCard) return;
     const { R } = ctx, k = K(), ev = (p, d) => k.ev(R, p, d);
     VK().detCard(slot, { id: 'secFig', title: 'Composite section and strands', sub: `${k.esc(ctx.inp.girder)}, design girder ${k.esc(R.rv ? ctx.inp.proj.girderId : '')}`,

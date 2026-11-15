@@ -202,6 +202,115 @@
     wrap(notes, Math.floor(W / k / (0.12 * f))).forEach((t, i) => D.text(lT, 0, -(nR + 1.5 + 1.8 * i) * rh, th, t, 0));
   }
 
+  /* ---------- part 3 (2026-11-15, batch H): the sheets of tables and notes (cover and sheet index, general notes, design summary, …) ----------
+     The steel app's block sheets (apps/steel-bridge/engine/sheets.js blockDraw / blockBox / blockPages / pageFn, SBTXT, and its table() and
+     notes() of apps/steel-bridge/engine/drawings.js): COPY, to move to shared/ later (CLAUDE.md §3); keep a fix to one in step with the other.
+     A block is { t: 'table', title, cols, rows } | { t: 'notes', title, lines, wc } | { t: 'head', lines: [[size × h, text]] }. The blocks of a
+     sheet flow top-down in columns over the drawing area; a table taller than the area is continued ("(CONTINUED)"); blocks past the area's
+     width go on the next sheet of the set (" (2 OF n)"). Nothing is calculated: each cell is a value of the model or the engine, formatted. */
+  const asc = s => String(s == null ? '' : s).replace(/²/g, '2').replace(/³/g, '3').replace(/⁴/g, '4').replace(/≤/g, 'MAX.').replace(/≥/g, 'MIN.').replace(/<=/g, 'MAX.').replace(/>=/g, 'MIN.').replace(/√/g, 'SQRT ').replace(/φ/g, 'PHI ')
+    .replace(/Δ/g, 'DELTA ').replace(/[·•]/g, '-').replace(/…/g, '...').replace(/[ₐ-ₜ]/g, '');
+  function table(D, lL, lT, x, y, cols, rows, title) {
+    const h = D.h, ch = h * 0.8, rh = 1.5 * h; let yy = y; const S = v => X_().str(asc(v == null ? '' : v)).toUpperCase();
+    if (title) { D.text(lT, x, yy, h, S(title)); yy -= 1.7 * h; }
+    const w = cols.map((c, i) => Math.max(S(c).length, ...rows.map(r => S(r[i]).length)) * ch * 0.95 + 2 * ch), W = w.reduce((a, b) => a + b, 0), xs = [x];
+    w.forEach(v => xs.push(xs[xs.length - 1] + v));
+    const top = yy + 0.2 * h; D.line(lL, x, top, x + W, top); const hy = yy - rh; cols.forEach((c, i) => D.text(lT, xs[i] + ch * 0.6, yy - 1.05 * h, ch, S(c))); D.line(lL, x, hy, x + W, hy);
+    rows.forEach((r, j) => { const ry = hy - (j + 1) * rh; r.forEach((c, i) => D.text(lT, xs[i] + ch * 0.6, ry + 0.45 * h, ch, S(c))); D.line(lL, x, ry, x + W, ry); });
+    const bot = hy - rows.length * rh; xs.forEach(xv => D.line(lL, xv, top, xv, bot));
+    return { w: W, y: bot - 1.2 * h };
+  }
+  function notesBlk(D, lT, x, y, title, lines, wc) {
+    const h = D.h; wc = wc || 90; if (title) D.text(lT, x, y, h, X_().str(asc(title)).toUpperCase()); let yy = y - (title ? 1.8 * h : 0);
+    lines.forEach((s, i) => { const out = wrap([X_().str(asc(s)).toUpperCase()], wc);
+      out.forEach((ln, j) => { D.text(lT, x + (j ? 2.2 * h : 0), yy, h * 0.8, j ? ln : `${i + 1}. ${ln}`); yy -= 1.35 * h; }); yy -= 0.3 * h; });
+    return yy;
+  }
+  function headBlk(D, lT, x, y, lines) { let yy = y; lines.forEach(([sz, t]) => { D.text(lT, x, yy, sz * D.h, X_().str(asc(t)).toUpperCase()); yy -= (sz + 0.7) * D.h; }); return yy; }
+  const blockDraw = (D, b, x, y) => { const lT = D.layer('TEXT', 7), lL = D.layer('TBL', 8);
+    return b.t === 'notes' ? notesBlk(D, lT, x, y, b.title, b.lines, b.wc) : b.t === 'head' ? headBlk(D, lT, x, y, b.lines) : table(D, lL, lT, x, y, b.cols, b.rows, b.title); };
+  function blockBox(b) { const D = X_().drawing({ prefix: 'S-' }); D.k = 1; D.h = TXT; blockDraw(D, b, 0, 0); return D.bbox(0); }   // plotted inches, origin (0, 0)
+  /* blockPages(blocks, aw, ah): the pages [[{ b, x, y }]] of the blocks in the drawing area aw × ah (plotted inches; x, y the block's origin
+     from the area's top left). A block { …, page: true } starts a new page. */
+  function blockPages(blocks, aw, ah) {
+    const gapY = 0.25, gapX = 0.5, list = [];
+    blocks.forEach(b => { if (b.t !== 'table') { list.push(b); return; } let rows = b.rows, first = true;
+      if (!rows.length) { list.push(b); return; }
+      while (rows.length) { let n = rows.length; const part = m => ({ ...b, page: first && b.page, title: first ? b.title : `${b.title} (CONTINUED)`, rows: rows.slice(0, m) }); const H = m => { const q = blockBox(part(m)); return q[3] - q[1]; };
+        while (n > 1 && H(n) > ah) n--; list.push(part(n)); rows = rows.slice(n); first = false; } });
+    const pages = [[]]; let cx = 0, cy = 0, cw = 0;
+    list.forEach(b => { const q = blockBox(b), w = q[2] - q[0], hh = q[3] - q[1];
+      if (b.page && pages[pages.length - 1].length) { pages.push([]); cx = 0; cy = 0; cw = 0; }
+      if (cy > 0 && cy + hh > ah) { cx += cw + gapX; cy = 0; cw = 0; }
+      if (cx > 0 && cx + w > aw) { pages.push([]); cx = 0; cy = 0; cw = 0; }
+      pages[pages.length - 1].push({ b, x: cx - q[0], y: -cy - q[3] }); cy += hh + gapY; cw = Math.max(cw, w); });
+    return pages;
+  }
+  const pageFn = items => (D, C) => items.forEach(p => blockDraw(D, p.b, p.x * D.k, p.y * D.k));
+  const f1 = v => typeof v === 'number' && isFinite(v) ? v.toFixed(1) : '-', fN = (v, d) => typeof v === 'number' && isFinite(v) ? v.toFixed(d) : '-';
+  const ED = 'AASHTO LRFD BRIDGE DESIGN SPECIFICATIONS, 10TH ED. (2024)', MBE = 'AASHTO MANUAL FOR BRIDGE EVALUATION (MBE), 4TH ED. (2026), LRFR';
+
+  /* the cover: the project, the bridge, the owner; the sheet index (C.list: [n, title]), the sheets not in this set (C.miss), revisions */
+  const ownersOf = TM => [...new Set(TM.types.map(t => window.PBD && window.PBD.ownerOf ? window.PBD.ownerOf(t.inp) : (t.inp.owner || 'AASHTO')))];
+  function coverBlocks(P, TM, list, miss, date) {
+    const pj = P.project || {}, L = (P.spans && P.spans.lengths) || [], sk = (P.xs && P.xs.skews) || [], nb = P.xs && P.xs.nb;
+    const ow = window.PBD && window.PBD.OWN_RULES ? window.PBD.OWN_RULES.owners : {}, owners = ownersOf(TM);
+    const head = { t: 'head', lines: [[3, pj.name || 'BRIDGE'], [1.6, 'PRESTRESSED CONCRETE GIRDER SUPERSTRUCTURE'],
+      [1, `${L.length} SPAN${L.length > 1 ? 'S' : ''} (${L.map(v => f2(+v)).join(' + ')} FT)${L.length > 1 ? (P.spans.continuity === 'composite' ? ', MADE CONTINUOUS' : ', SIMPLE SPANS') : ''}`],
+      [1, `${nb} GIRDER LINES, SKEW ${sk.map(v => f2(+v)).join(' / ')} DEG.`],
+      ...(pj.number ? [[1, `PROJECT NO. ${pj.number}`]] : []), ...(pj.owner ? [[1, `OWNER / CLIENT: ${pj.owner}`]] : []),
+      [1, `DESIGN RULES: ${owners.map(o => o === 'AASHTO' || !ow[o] ? 'AASHTO LRFD 10TH ED. (NO OWNER RULES)' : ow[o].manual).join('; ')}`]] };
+    return [head, { t: 'table', title: 'SHEET INDEX', cols: ['SHEET', 'TITLE'], rows: list.map(([n, t]) => [String(n), t]) },
+      ...(miss.length ? [{ t: 'table', title: 'DRAWINGS NOT IN THIS SET', cols: ['NOT GENERATED', 'REASON'], rows: miss.map(q => [q[0], String(q[1]).slice(0, 90)]) }] : []),
+      { t: 'table', title: 'REVISIONS', cols: ['REV.', 'DATE', 'DESCRIPTION', 'BY'], rows: [['0', date, 'ISSUED FROM PRESTRESSED BRIDGE DESIGN (NEW APP)', pj.designer || ''], ['', '', '', ''], ['', '', '', ''], ['', '', '', '']] }];
+  }
+  /* general notes: the specifications and editions the app applies (named, not quoted), the owner rules, the materials and loads entered
+     (each girder type's own values: its effective inputs, PSBDesign.cellInputs on its first line, as the girder sheets) */
+  function notesModel(P, TM) {
+    const pj = P.project || {}, dl = (P.xs && P.xs.dl) || {}, OWN = window.PBD && window.PBD.OWN_RULES, BRD = window.PSBBridgeDL;
+    const T = TM.types, owners = ownersOf(TM);
+    const lines = [`DESIGN SPECIFICATION: ${ED}, WITH THE LOAD AND RESISTANCE FACTORS OF THOSE SPECIFICATIONS AS THE ENGINE APPLIES THEM (WORKED ON THE OUTPUT TABS).`,
+      `LOAD RATING: ${MBE} (RATING TAB).`,
+      ...owners.filter(o => o !== 'AASHTO' && OWN && OWN.owners[o]).map(o => `OWNER RULES: ${OWN.owners[o].manual} (WRITTEN TO AASHTO LRFD ${OWN.owners[o].aashto}); THIS DESIGN APPLIES THE AASHTO LRFD 10TH ED. WITH THE OWNER'S RULES ON TOP (OWNER RULES TAB).`),
+      ...(owners.every(o => o === 'AASHTO') ? ['OWNER RULES: NONE (AASHTO).'] : []),
+      ...(pj.owner ? [`OWNER / CLIENT: ${pj.owner}.`] : []),
+      `LIVE LOAD: HL-93${T.some(t => t.inp.loads && t.inp.loads.llAuto === false) ? ' (ENTERED MOMENT AND SHEAR ON SOME GIRDER TYPES: LOADS TAB)' : ''}${T.some(t => +(t.inp.opt && t.inp.opt.llMult) > 0 && +t.inp.opt.llMult !== 1) ? `, DESIGN LOAD MULTIPLIER ${[...new Set(T.map(t => f2(+(t.inp.opt.llMult || 1))))].join(' / ')} ON LL+IM` : ''}; DISTRIBUTION FACTORS ${T.every(t => t.inp.loads.dfAuto !== false) ? 'BY THE AASHTO EQUATIONS' : 'AS ENTERED OR BY THE AASHTO EQUATIONS (LOADS TAB)'} (LOADS & LLDF TAB).`,
+      `DEAD LOADS: GIRDER SELF-WEIGHT, DECK AND HAUNCH (DC1); BARRIERS ${f2(+((dl.barL || {}).w) || 0)} / ${f2(+((dl.barR || {}).w) || 0)} KLF (LEFT / RIGHT, DC2); FUTURE WEARING SURFACE ${f1(+dl.fws)} PSF (DW)${dl.mode === 'distributed' && BRD && BRD.METHODS && BRD.METHODS[dl.method] ? `; DC2 AND DW DISTRIBUTED: ${BRD.METHODS[dl.method]}` : dl.mode === 'distributed' ? '' : '; DC2 AND DW ENTERED PER GIRDER (LOADS TAB)'}.`,
+      `SPANS: ${P.spans.lengths.length > 1 && P.spans.continuity === 'composite' ? 'PRECAST GIRDERS ON SIMPLE SPANS FOR THE GIRDER AND DECK WEIGHT, MADE CONTINUOUS FOR THE COMPOSITE LOADS (CONTINUITY DIAPHRAGMS AT THE PIERS)' : 'SIMPLE SPANS FOR ALL LOADS'}.`,
+      `PRESTRESS LOSSES: ${[...new Set(T.map(t => t.inp.opt.lossMethod === 'approx' ? 'APPROXIMATE LUMP-SUM ESTIMATE' : 'REFINED ESTIMATE'))].join(' / ')}; RELATIVE HUMIDITY ${[...new Set(T.map(t => f1(+t.inp.mat.H)))].join(' / ')} % (LOSSES TAB).`,
+      `SERVICE III TENSION LIMIT: ${[...new Set(T.map(t => t.inp.opt.corrosion === 'severe' ? 'SEVERE CORROSION EXPOSURE' : 'MODERATE CORROSION EXPOSURE'))].join(' / ')} (STRESSES TAB).`,
+      'PRESTRESSING STRAND: SEVEN-WIRE, LOW RELAXATION; SIZE, F_PU, JACKING STRESS AND E_P OF EACH GIRDER TYPE IN THE TABLE.',
+      "CONCRETE AND REINFORCING STEEL OF EACH GIRDER TYPE IN THE TABLE (MATERIALS AND GIRDERS & STRANDS TABS): STRENGTHS IN KSI; W: THE UNIT WEIGHTS FOR DEAD LOAD, KCF; FY: STIRRUPS / BOTTOM BARS / SPLITTING STEEL (/ DECK BARS WHEN THE DECK IS DESIGNED).",
+      'CAMBER MULTIPLIERS: PCI DESIGN HANDBOOK (CAMBER & DEFLECTION TAB).',
+      'ALL DIMENSIONS TO BE VERIFIED AGAINST THE CONTRACT DRAWINGS. GENERATED BY PRESTRESSED BRIDGE DESIGN (NEW APP).'];
+    const rows = T.map(t => { const m = t.inp.mat, s = t.inp.str, o = t.inp.opt, dk = t.inp.deck || {};
+      return [t.label, String(t.span), t.girder, f2(+m.fc), f2(+m.fci), f2(+m.fcd), `${fN(+m.wcLoad, 3)} / ${fN(+m.wcdLoad, 3)}`, String(s.size).replace(/\s*in$/i, '"'), f1(+s.fpu), f2(+s.jack), String(Math.round(+s.Ep)),
+        `${f1(+o.fy)} / ${f1(+o.longFy)} / ${f1(+o.splitFy)}${dk.on ? ` / ${f1(+dk.fyd)}` : ''}`]; });
+    return [{ t: 'notes', title: 'GENERAL NOTES', lines, wc: 100 },
+      { t: 'table', title: 'MATERIALS BY GIRDER TYPE (UNITS: SEE THE NOTES)',
+        cols: ['TYPE', 'SPAN', 'SECTION', "F'C", "F'CI", "F'C DECK", 'W GIRDER / DECK', 'STRAND', 'F_PU', 'F_PJ / F_PU', 'E_P', 'FY'], rows }];
+  }
+  /* the design summary: per girder type the governing check of each check group over its lines and the lowest HL-93 inventory RF (the
+     Summary tab's "Governing check of each group, per girder type", PSBSummaryUI.model over PSBBridge.results: the engine's values) */
+  const ST = q => !q.pass ? 'FAIL' : !(typeof q.r === 'number' && isFinite(q.r)) ? 'REVIEW' : 'PASS';
+  function summaryRows(P, A) {
+    const M = window.PSBSummaryUI.model(P, A), rows = [];
+    M.types.forEach(T => { const ln = T.lines.map(z => 'G' + z.c.g).join(' ');
+      M.used.forEach(gp => { const z = T.groups[gp.id]; if (!z) return; const q = z.q;
+        rows.push([T.label, String(T.span), ln, gp.name, q.n, 'G' + z.g, z.gp.input ? '-' : fN(q.loc, 2), fN(q.v, 3), fN(q.lim, 3), q.u || '', fN(q.r, 3), ST(q)]); });
+      if (T.rf) rows.push([T.label, String(T.span), ln, 'Rating (HL-93 inventory)', T.rf.n, 'G' + T.rf.g, '-', '-', '-', 'RF', fN(T.rf.v, 3), T.rf.v >= 1 ? 'RF 1.0 OR MORE' : 'RF UNDER 1.0']); });
+    return { M, rows };
+  }
+  function summaryBlocks(P, A) {
+    const { M, rows } = summaryRows(P, A);
+    return [{ t: 'head', lines: [[1.6, 'DESIGN SUMMARY'], [1, `${M.nF ? `FAIL: ${M.nF} CHECK${M.nF > 1 ? 'S' : ''} OVER 1.0` : 'PASS'}; ${M.n} GIRDER LINE${M.n === 1 ? '' : 'S'} CHECKED`]] },
+      { t: 'notes', title: '', wc: 100, lines: [`${ED}. ONE ROW PER GIRDER TYPE AND CHECK GROUP: THE CHECK WITH THE LARGEST RATIO (DEMAND / LIMIT, THE ENGINE'S) OVER THE TYPE'S LINES, ITS LINE AND STATION X FROM THE LEFT CL BEARING. A RATIO UP TO 1.0 PASSES.`,
+        'RATING: THE LOWEST HL-93 INVENTORY RATING FACTOR OF THE TYPE (FLEXURE, SHEAR, SERVICE III; NOT A CHECK); AN RF OF 1.0 OR MORE PASSES. THE FAIL COUNT ABOVE: ONE PER GIRDER TYPE PER CHECK, ITS WORST LINE.',
+        'WORKED: THE OUTPUT TAB OF EACH GROUP (STRESSES, FLEXURE, SHEAR, END ZONE & HOLD-DOWN, CAMBER & DEFLECTION, HANDLING, DECK, RATING); THE SUMMARY TAB LINKS EACH VALUE TO ITS STEP.'] },
+      { t: 'table', title: 'GOVERNING CHECK OF EACH CHECK GROUP PER GIRDER TYPE',
+        cols: ['TYPE', 'SPAN', 'LINES', 'GROUP', 'GOVERNING CHECK', 'LINE', 'X (FT)', 'DEMAND', 'LIMIT', 'UNIT', 'RATIO / RF', 'STATUS'], rows }];
+  }
+
   /* one sheet (adapted copy of the steel app's sheet()): the smallest plot scale (not below S.kmin) at which the drawing fits the drawing
      area; the drawing placed top left at x offset ox; border, inner border and title block at the plot scale */
   function sheet(D, S, ox, C) {
@@ -219,11 +328,19 @@
     return { n: S.n, title: S.title, id: S.id, s: S.c.s, k, W, H, ox, i0, iC, i1: D.mark(), over, paper: S.paper };
   }
 
-  /* build(P, opt): the sheets of part 1: the typical section of each span (one sheet; one per span when there are several spans) and
-     the framing plan. A figure that cannot be drawn (its model's errors) is listed in miss. */
+  /* build(P, opt): the drawing set. Part 1: the typical section of each span (one sheet; one per span when there are several spans) and
+     the framing plan; part 2: each girder type's elevation and strand pattern, the schedule; part 3 (batch H1): the cover and sheet index
+     first, the general notes second, the design summary last (opt.all(): PSBBridge.results of every girder type on every line, the page's
+     cache; absent: computed here by the same call). A figure that cannot be drawn (its model's errors) is listed in miss. */
   function build(P, opt) {
     opt = opt || {}; const D = X_().drawing({ prefix: 'S-' }), errors = [], miss = [];
     const C = { P, date: opt.date || new Date().toISOString().slice(0, 10) }, list = [];
+    const [pw, ph] = PAPER[opt.paper] || PAPER.D, aw = pw - 2.25, ah = ph - 4.55;
+    const memo = new Map(), resI = inp => { const key = JSON.stringify(inp); if (!memo.has(key)) { let R; try { R = window.PSBHoldDown.compute(JSON.parse(key)); } catch (e) { R = { error: e.message }; } memo.set(key, R); } return memo.get(key); };
+    const o2 = { ...opt, res: opt.res || ((k, g) => resI(window.PSBDesign.cellInputs(P, k, g))) };
+    /* the sheets of a list of blocks: one sheet, or "(i OF n)" when they need more */
+    const addBlocks = (id, title, blocks) => { const pg = blockPages(blocks, aw, ah);
+      pg.forEach((items, i) => list.push({ id: i ? `${id}${i + 1}` : id, title: pg.length > 1 ? `${title} (${i + 1} OF ${pg.length})` : title, fn: pageFn(items), c: { ...C }, kmin: 1 })); };
     const ns = (P.spans && P.spans.lengths || []).length;
     for (let s = 1; s <= Math.max(ns, 1); s++) {
       let xs; try { xs = window.PSBXsFig.model(P, s); } catch (e) { xs = { errors: [e.message] }; }
@@ -234,20 +351,35 @@
     if (pl.errors && pl.errors.length) miss.push(['FRAMING PLAN', pl.errors.join(' ').toUpperCase()]);
     else list.push({ id: 'plan', title: 'FRAMING PLAN', fn: plan, c: { ...C, pl }, kmin: 48 });
     // part 2 (item B): each girder type's elevation and strand pattern, then the schedule of every type
-    let TM; try { TM = typeModels(P, opt); } catch (e) { TM = { types: [], miss: [['GIRDER SHEETS', String(e.message).toUpperCase()]] }; }
+    let TM; try { TM = typeModels(P, o2); } catch (e) { TM = { types: [], miss: [['GIRDER SHEETS', String(e.message).toUpperCase()]] }; }
     TM.miss.forEach(q => miss.push(q));
     TM.types.forEach(t => {
       list.push({ id: `elev${t.k}`, title: `GIRDER ${t.label.toUpperCase()}: ELEVATION`, fn: elevation, c: { ...C, t }, kmin: 12 });
       list.push({ id: `strd${t.k}`, title: `GIRDER ${t.label.toUpperCase()}: STRAND PATTERN`, fn: strands, c: { ...C, t }, kmin: 2 });
     });
-    const aw = (PAPER[opt.paper] || PAPER.D)[0] - 2.25;
     if (TM.types.length) list.push({ id: 'sched', title: 'STRAND AND GIRDER SCHEDULE', fn: schedule, c: { ...C, types: TM.types, aw }, kmin: 1 });
+    // part 3 (batch H1): the design summary (every girder type on every line)
+    if (TM.types.length) { let A = null, why = '';
+      try { A = (opt.all && opt.all()) || window.PSBBridge.results(P, resI); } catch (e) { why = e.message; }
+      if (A && A.cells && A.cells.length && window.PSBSummaryUI) { try { addBlocks('summ', 'DESIGN SUMMARY', summaryBlocks(P, A)); } catch (e) { miss.push(['DESIGN SUMMARY', String(e.message).toUpperCase()]); } }
+      else miss.push(['DESIGN SUMMARY', (why || 'NO RESULTS OF EVERY GIRDER TYPE ON EVERY LINE').toUpperCase()]); }
     if (!list.length) errors.push('Nothing to draw: ' + miss.map(q => q.join(': ')).join('; '));
+    // the general notes (second) and the cover with the sheet index (first): the cover's own sheets counted in the index
+    const head = [];
+    const notesL = []; if (TM.types.length) { const pg = blockPages(notesModel(P, TM), aw, ah); pg.forEach((items, i) => notesL.push({ id: i ? `notes${i + 1}` : 'notes', title: pg.length > 1 ? `GENERAL NOTES (${i + 1} OF ${pg.length})` : 'GENERAL NOTES', fn: pageFn(items), c: { ...C }, kmin: 1 })); }
+    let nC = 1, cpg = null;
+    for (let it = 0; it < 5; it++) {
+      const titles = [...Array.from({ length: nC }, (_, i) => nC > 1 ? `COVER AND SHEET INDEX (${i + 1} OF ${nC})` : 'COVER AND SHEET INDEX'), ...notesL.map(q => q.title), ...list.map(q => q.title)];
+      cpg = blockPages(coverBlocks(P, TM, titles.map((t, i) => [i + 1, t]), miss, C.date), aw, ah); if (cpg.length === nC) break; nC = cpg.length;
+    }
+    cpg.forEach((items, i) => head.push({ id: i ? `cover${i + 1}` : 'cover', title: cpg.length > 1 ? `COVER AND SHEET INDEX (${i + 1} OF ${cpg.length})` : 'COVER AND SHEET INDEX', fn: pageFn(items), c: { ...C }, kmin: 1 }));
+    const all = errors.length ? list : [...head, ...notesL, ...list];
     let ox = 0; const sheets = [];
-    const wr = Math.floor(((PAPER[opt.paper] || PAPER.D)[0] - 2.25) * 0.8 / TXT);   // note characters per line: 80 % of the drawing width
-    list.forEach((S, i) => { S.c.wrap = wr; const r = sheet(D, { ...S, paper: opt.paper || 'D', n: i + 1, of: list.length, half: !!opt.half }, ox, C); sheets.push(r); ox += r.W + 2 * r.k * 12; });
+    const wr = Math.floor(aw * 0.8 / TXT);   // note characters per line: 80 % of the drawing width
+    all.forEach((S, i) => { S.c.wrap = wr; const r = sheet(D, { ...S, paper: opt.paper || 'D', n: i + 1, of: all.length, half: !!opt.half }, ox, C); sheets.push(r); ox += r.W + 2 * r.k * 12; });
     return { D, sheets, miss, errors };
   }
 
-  window.PSBSheets = { PAPER, SCALES, SCALE_NAME, TXT, build, sheet, section, plan, typeModels, elevation, strands, schedule };
+  window.PSBSheets = { PAPER, SCALES, SCALE_NAME, TXT, build, sheet, section, plan, typeModels, elevation, strands, schedule,
+    blockPages, blockBox, coverBlocks, notesModel, summaryRows, summaryBlocks };
 })();
