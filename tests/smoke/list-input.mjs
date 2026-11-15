@@ -355,18 +355,22 @@ TOOLS.pbd = {   // Prestressed Bridge Design: the bridge bar's span lengths (bri
   },
   tableSel: '.pbd-spans',
 };
-TOOLS.sbridge = {   // apps/steel-bridge: spans, girder spacings, skews (arrays), cross-frame x:P loads (array of {x, P}), pours a-b (text)
+TOOLS.sbridge = {   // apps/steel-bridge: spans, girder spacings, skews (arrays), pours a-b (text). The cross-frame x:P loads table (#an_l_xf) is
+  // drawn only for a project that stored them and has no framing (ui/analysis.js xfShow), not for the built-in project: not typed here.
   file: 'apps/steel-bridge/index.html', archive: ['apps/steel-bridge'], a: '0cea448',
-  values: { spans: '110, 140, 110', bays: '9, 9.5, 9, 9.5', skews: '10, 10, 10, 10', xf: '20:1.5, 45:2', seq: '0-80, 140-220' },
-  expect: '{"spans":[110,140,110],"bays":[9,9.5,9,9.5],"skews":[10,10,10,10],"xf":[{"x":20,"P":1.5},{"x":45,"P":2}],"seq":"0-80, 140-220"}',
+  // base: re-baselined 2026-11-15 (SBLI) to origin/main 89a12db: the input tabs were reorganised (#1255: 'spans' -> 'layout', 'xs' ->
+  // 'xsec' / 'loads') and the analysis inputs (pours, cross-frame loads) moved from the Analysis output tab to the Loads input tab (AIN),
+  // so the steps below no longer drive the app at BASE (the part timed out waiting for the old tab).
+  base: '89a12db',
+  values: { spans: '110, 140, 110', bays: '9, 9.5, 9, 9.5', skews: '10, 10, 10, 10', seq: '0-80, 140-220' },
+  expect: '{"spans":[110,140,110],"bays":[9,9.5,9,9.5],"skews":[10,10,10,10],"seq":"0-80, 140-220"}',
   serial: true, timeout: 120000,
   setup: async p => { await p.waitForSelector('#tabBar [data-otab="an"]', { timeout: 120000 }); await p.waitForTimeout(2500); },
   typeOld: async (p, v) => {
     const put = async (itab, sel, val) => { if (itab) { await p.click(`#inTabs [data-itab="${itab}"]`); await p.waitForTimeout(400); }
       await p.evaluate(([sel, val]) => { const i = document.querySelector(sel); i.value = val; i.dispatchEvent(new Event('change', { bubbles: true })); }, [sel, val]); await p.waitForTimeout(800); };
-    await put('spans', '#i_spans', v.spans); await put('xs', '[id="i_xs.bays"]', v.bays); await put('xs', '[id="i_xs.skews"]', v.skews);
-    await p.click('#tabBar [data-otab="an"]'); await p.waitForTimeout(1500);
-    await put(null, '#an_l_xf', v.xf); await put(null, '#an_a_seqCustom', v.seq);
+    await put('layout', '#i_spans', v.spans); await put('xsec', '[id="i_xs.bays"]', v.bays); await put('layout', '[id="i_xs.skews"]', v.skews);
+    await put('loads', '#an_a_seqCustom', v.seq);
   },
   typeNew: async (p, v) => {
     const host = sel => `${sel} + [data-sli="host"]`;
@@ -375,24 +379,24 @@ TOOLS.sbridge = {   // apps/steel-bridge: spans, girder spacings, skews (arrays)
     const two = async (sel, val) => { await p.evaluate(([sel, val]) => { const i = document.querySelector(sel + ' tr[data-sli-r="0"] input[data-sli-c="0"]'), dt = new DataTransfer(); dt.setData('text', val);
       i.focus(); i.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); }, [sel, val]); await p.waitForTimeout(200);
       await p.evaluate(() => document.activeElement.blur()); await p.waitForTimeout(800); };
-    await one('spans', '#i_spans', v.spans); await one('xs', '[id="i_xs.bays"]', v.bays); await one('xs', '[id="i_xs.skews"]', v.skews);
-    await p.click('#tabBar [data-otab="an"]'); await p.waitForTimeout(1500);
-    await two(host('#an_l_xf'), v.xf.replace(/, /g, '\n').replace(/:/g, '\t')); await two(host('#an_a_seqCustom'), v.seq.replace(/, /g, '\n').replace(/-/g, '\t'));
+    await one('layout', '#i_spans', v.spans); await one('xsec', '[id="i_xs.bays"]', v.bays); await one('layout', '[id="i_xs.skews"]', v.skews);
+    await p.click('#inTabs [data-itab="loads"]'); await p.waitForTimeout(800);   // AIN: the pours are on the Loads input tab
+    await two(host('#an_a_seqCustom'), v.seq.replace(/, /g, '\n').replace(/-/g, '\t'));
   },
   saved: p => p.evaluate(() => { const j = JSON.parse(localStorage.getItem('sbd2.project.current') || 'null'); if (!j || !j.spans) return 'not saved';
-    return JSON.stringify({ spans: j.spans.lengths, bays: j.xs.bays, skews: j.xs.skews, xf: ((j.girders[0] || {}).loadsManual || {}).xf || [], seq: (j.analysis || {}).seqCustom }); }),
+    return JSON.stringify({ spans: j.spans.lengths, bays: j.xs.bays, skews: j.xs.skews, seq: (j.analysis || {}).seqCustom }); }),
   read: async p => {
     await p.waitForTimeout(1500); const out = {};
     out.stored = await p.evaluate(() => JSON.parse((localStorage.getItem('sbd2.project.current') || 'null').replace(/"(savedAt|ts|at|updatedAt|modified|created|producedAt)":"[^"]*"/g, '"$1":"T"')));
     for (const t of ['sec', 'loads', 'an']) { await p.click(`#tabBar [data-otab="${t}"]`); await p.waitForTimeout(1500);
       out[t] = await p.evaluate(() => { const k = document.getElementById('out').cloneNode(true); k.querySelectorAll('[data-sli],script,style,input,select,textarea,.unit').forEach(x => x.remove()); return k.innerText; }); }
     out.inputs = {};
-    for (const t of ['spans', 'xs', 'fs', 'spl']) { await p.click(`#inTabs [data-itab="${t}"]`); await p.waitForTimeout(500);
+    for (const t of ['layout', 'xsec', 'loads', 'fs', 'spl']) { await p.click(`#inTabs [data-itab="${t}"]`); await p.waitForTimeout(500);
       out.inputs[t] = await p.evaluate(() => { const k = document.getElementById('inPanes').cloneNode(true); k.querySelectorAll('[data-sli],script,style,input,select,textarea,.unit,.note').forEach(x => x.remove()); return k.innerText; }); }
     return out;
   },
   tableSel: '#i_spans + [data-sli="host"]',
-  shotPrep: async p => { await p.click('#inTabs [data-itab="spans"]'); await p.waitForTimeout(500); },
+  shotPrep: async p => { await p.click('#inTabs [data-itab="layout"]'); await p.waitForTimeout(500); },
 };
 TOOLS.secpropren = {   // Section Property Calculator: Rename = one dialog (name, description, tags table) in place of three prompts.
   // A: the prompts, each accepted with its default (the test kit accepts every dialog); B: the dialog saved unchanged -> the same library.
