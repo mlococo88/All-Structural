@@ -258,6 +258,7 @@
   #sbDashCol .sdMain{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 6px;padding:3px 5px 3px 0;color:var(--ink);text-decoration:none;min-width:0}
   #sbDashCol .sdMain:hover .sdName{text-decoration:underline} #sbDashCol .sdName{font-weight:600;flex:1 1 auto} #sbDashCol .sdVal{font-variant-numeric:tabular-nums;white-space:nowrap} #sbDashCol .sdSt{font-size:7.5pt;font-weight:700;color:#475569}
   #sbDashCol .sd-fail .sdSt{color:#991B1B} #sbDashCol .sd-pass .sdSt{color:#065F46} #sbDashCol .sd-review .sdSt{color:#92400E}
+  #sbDashCol .sdChip.sd-hi{border-left-color:var(--warn)} #sbDashCol .sd-hi .sdVal{color:#92400E} #sbDashCol .sdList a.sd-hi{color:#92400E}   /* 2026-11-15 (batch B): PASS with a ratio 0.90 to 1.00 (amber) */
   #sbDashCol .sdList{grid-column:2;margin:0 0 4px;padding:0 4px 0 0;list-style:none;font-size:8.5pt} #sbDashCol .sdList a{text-decoration:none} #sbDashCol .sdList a:hover{text-decoration:underline}
   #sbDashCol .sdList a.sd-fail{color:#991B1B;font-weight:700} #sbDashCol .sdList a.sd-review{color:#92400E} #sbDashCol .sdList a.sd-pass{color:#065F46} #sbDashCol .sdList a.sd-na,#sbDashCol .sdList a.sd-notrun{color:#64748b} #sbDashCol .sdOldV{font-style:italic}
   #sbDashCol .sdNote{font-size:8pt;color:#64748b;margin:6px 0}
@@ -279,7 +280,9 @@
   /* this app (PR 1) */
   .ph{border:1px dashed var(--slate-400);border-radius:6px;background:var(--slate-50);padding:8px 10px;margin:10px 0;font-family:var(--font-ui);font-size:9pt;color:#475569;}
   /* this app (PR 3a-1): girder types (ui/types.js) */
-  .tyScope,.tyOut{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0;padding:6px 8px;border:1px solid var(--color-border);border-radius:6px;background:var(--slate-100);font-family:var(--font-ui);font-size:9pt;}
+  .tyScope{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0;padding:6px 8px;border:1px solid var(--color-border);border-radius:6px;background:var(--slate-100);font-family:var(--font-ui);font-size:9pt;}
+  /* 2026-11-15 (batch B): the girder type / line picker of the output tabs as the steel app's #gBar (a plain line, no box) */
+  .tyOut{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:6px 0 8px;font-family:var(--font-ui);font-size:9pt;color:#475569;} .tyOut select{font-size:9pt;max-width:100%;}
   .tyScope.on{background:#FEF9C3;border-color:#EAB308;} .tyScope .note{flex-basis:100%;margin:0;}
   .tyMark{font-family:var(--font-ui);font-size:8pt;font-weight:600;color:#A16207;margin-left:6px;text-transform:none;letter-spacing:0;} .tyMark.base{color:#64748b;font-weight:400;}
   .tySpan{margin:8px 0 4px;font-family:var(--font-ui);font-size:9.5pt;} .tyRow{border:1px solid var(--color-border);border-radius:5px;padding:5px 7px;margin:4px 0;} .tyRow.tyShown{background:#EFF6FF;border-color:#93C5FD;}
@@ -677,7 +680,9 @@
     } else { const o = OUT[ui.otab]; h += ph(esc(name), o[0], o[1]); }
     $('out').innerHTML = h;
     if (ui.otab === 'sum' && !errs.length && window.PSBSummaryUI.after) { try { window.PSBSummaryUI.after($('out'), { P }); } catch (e) { console.warn(e); } }   // 2026-11-14: the Summary's cross-section and plan
-    if (ctxOut && TABUI[ui.otab]) { try { TABUI[ui.otab]().after($('out'), ctxOut); } catch (e) { console.warn(e); } }
+    if (ctxOut && TABUI[ui.otab]) { const VKt = window.PSBVizKit; if (VKt) VKt.tileLink = window.PSBOutKit.tileLinker($('out'), ctxOut);   // 2026-11-15 (batch B): the tiles' § links
+      try { TABUI[ui.otab]().after($('out'), ctxOut); } catch (e) { console.warn(e); } if (VKt) VKt.tileLink = null;
+      $('out').querySelectorAll('.gfxCard').forEach(c => { if (!c.querySelector('.vk, svg')) c.hidden = true; }); }   // a graphic's card with no graphic for this design
     // PR 2e: the Report of the design girder (ui/report.js): the page's own result; the section choices kept in ui.rpt (psb2.ui), as the steel app
     if (ui.otab === 'rpt' && ok && $('rptHost')) { ui.rpt = ui.rpt || {};
       try { window.PSBReportUI.render($('rptHost'), { P, rc, opts: ui.rpt, save: saveUi, goto: t => gotoOut(t), goin: t => { ui.itab = t; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; } }); }

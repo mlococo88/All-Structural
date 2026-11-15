@@ -72,9 +72,10 @@
     const BR = B(); if (!BR.hasTypes(P)) return '';
     const c = BR.shown(P), C = BR.cells(P); if (!c || !C.length) return '';
     const ks = [...new Set(C.map(q => q.k))], lines = BR.typeLines(P, c.k);
-    return `<div class="tyOut"><label for="tyOutT">Results of girder type</label> <select id="tyOutT" data-ty="otype">${ks.map(k => `<option value="${k}"${k === c.k ? ' selected' : ''}>${esc(P.types[k].label)} (span ${P.types[k].span})</option>`).join('')}</select>
-      <label for="tyOutL">on line</label> <select id="tyOutL" data-ty="oline">${lines.map(g => `<option value="${g}"${g === c.g ? ' selected' : ''}>G${g} (${g === 1 || g === P.xs.nb ? 'exterior' : 'interior'})</option>`).join('')}</select>
-      <a href="#" data-goin="gird" title="The girder types and their lines (Girders & strands tab)">Girder types</a></div>`;
+    // 2026-11-15 (batch B): a plain line as the steel app's #gBar ("Girder type … on line … checked on …; every line in the Summary"), not a boxed band
+    return `<div class="tyOut"><label for="tyOutT">Girder type</label><select id="tyOutT" data-ty="otype">${ks.map(k => `<option value="${k}"${k === c.k ? ' selected' : ''}>${esc(P.types[k].label)} (span ${P.types[k].span})</option>`).join('')}</select>
+      <label for="tyOutL">on line</label><select id="tyOutL" data-ty="oline">${lines.map(g => `<option value="${g}"${g === c.g ? ' selected' : ''}>G${g} (${g === 1 || g === P.xs.nb ? 'exterior' : 'interior'})</option>`).join('')}</select>
+      <span>${lines.length > 1 ? `checked on ${lines.map(g => 'G' + g).join(', ')}; ` : ''}every line in the <a href="#" data-gotab="sum">Summary</a> · <a href="#" data-goin="gird" title="The girder types and their lines (Girders & strands tab)">Girder types</a></span></div>`;
   }
   /* mark(root, P, ui): the fields a type has of its own */
   function mark(root, P, ui) {

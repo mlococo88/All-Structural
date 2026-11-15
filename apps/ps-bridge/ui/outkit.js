@@ -31,5 +31,21 @@
   });
   const steps = (list, topics, open) => S().groupsHTML(groups(list, topics), { open, item: stepLi });
   const after = (el, open) => S().wire(el, { onToggle: (k, on) => { if (on) open.add(k); else open.delete(k); } });
-  window.PSBOutKit = { esc, val, fx, ev, card, kv, wk, stepLi, groups, steps, after };
+  /* tileLinker(el, ctx) -> path => the § link of the value at R path (2026-11-15, batch B: the stat tiles of the graphics, as the steel app's):
+     the § the tab writes next to the same value (a data-ev span outside the graphics followed by a.wk); else the step whose engine path it
+     is (ctx.W[*].paths, on its tab); else, a check ratio checks.<i>.r, the step of that check (ui/dash.js GROUPS). '' when none. */
+  const WTAB = { section: 'sec', loads: 'lds', analysis: 'an', losses: 'loss', stresses: 'str', flexure: 'flex', shear: 'shear', endzone: 'end', camber: 'camb', handling: 'hand', deck: 'deck', rating: 'rt' };
+  const tileLinker = (el, ctx) => path => {
+    const here = ctx && ctx.ui ? ctx.ui.otab : null, lk = (id, tab) => wk(id, '§', tab && tab !== here ? tab : null);
+    if (el && el.querySelectorAll) for (const sp of el.querySelectorAll('[data-ev]')) { if (sp.getAttribute('data-ev') !== path || (sp.closest && sp.closest('.vk'))) continue;
+      const a = sp.nextElementSibling; if (a && a.matches && a.matches('a.wk')) return a.outerHTML; }
+    for (const [k, w] of Object.entries((ctx && ctx.W) || {})) for (const [id, p] of Object.entries((w && w.paths) || {})) if (p === path) return lk(id, WTAB[k]);
+    const m = /^checks\.(\d+)\.r$/.exec(path), c = m && ctx && ctx.R && ctx.R.checks ? ctx.R.checks[+m[1]] : null, GR = window.PSBDashUI && window.PSBDashUI.GROUPS;
+    if (c && GR) for (const gp of GR) { if (gp.input) continue; const q = gp.checks.find(z => z[0] === c.n); if (q) return lk(q[1], gp.tab); }
+    return '';
+  };
+  /* gcard(title, id): a result graphic's slot #id in a titled card (2026-11-15, batch B: the steel app's "SECTION GRAPHIC" cards); class gfxCard:
+     report/fromtab.js reads it as the slot alone (the Report unchanged); the page hides a gfxCard left empty (no graphic for the design) */
+  const gcard = (title, id) => `<section class="sec gfxCard"><div class="secHead">${title}</div><div class="secBody"><div id="${esc(id)}"></div></div></section>`;
+  window.PSBOutKit = { esc, val, fx, ev, card, kv, wk, stepLi, groups, steps, after, tileLinker, gcard };
 })();

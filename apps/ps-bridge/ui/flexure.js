@@ -20,7 +20,7 @@
   function output(ctx) {
     const { R, inp } = ctx, k = K(), ev = (p, d, u, div) => k.ev(R, p, d, u, div), wk = k.wk, f = R.fMid, L = R.L, c = R.cont;
     const qF = ckOf(R, 'Flexure'), qM = ckOf(R, 'Min reinf'), qP = ckOf(R, 'Neg flexure (pier)'), qC = ckOf(R, 'Pos. moment connection (5.12.3.3.8)');
-    let h = '<div id="gfx_fx"></div>';
+    let h = K().gcard('Flexure graphic: moments and resistance along the girder', 'gfx_fx');
     h += k.card('Strength I flexure (positive moment)', k.kv([
       ['Governing M<sub>u</sub> / φM<sub>n</sub>', `<b>${ev(`checks.${qF.i}.r`, 3)}</b> at x = ${ev('flexGov.x', 2, 'ft')} ${pf(qF)} ${wk('fx.gov')}`], ['M<sub>u</sub> / φM<sub>n</sub> there', `${ev('flexGov.Mu', 0, '', 12)} / ${ev('flexGov.phiMn', 0, 'kip-ft', 12)}`],
       ['M<sub>u</sub> at midspan', `${ev('MuMid', 0, 'kip-ft', 12)} ${wk('fx.Mu')}`], ['k', `${inp.str.lowlax ? '0.28' : '0.38'} (${inp.str.lowlax ? 'low-relaxation' : 'stress-relieved'})`], ['β<sub>1</sub>', `${ev('fMid.b1', 3)} ${wk('fx.b1')}`],

@@ -20,7 +20,7 @@
   function output(ctx) {
     const { R, inp } = ctx, k = K(), ev = (p, d, u, div) => k.ev(R, p, d, u, div), wk = k.wk, S = R.shear;
     const qS = ckOf(R, 'Shear'), qL = ckOf(R, 'Long. reinf (5.7.3.5)'), qI = ckOf(R, 'Interface shear (5.7.4)');
-    let h = '<div id="gfx_sh"></div>';
+    let h = K().gcard('Shear graphic: demand and resistance along the girder', 'gfx_sh');
     h += k.card('Shear (governing values)', k.kv([['Worst V<sub>u</sub> / φV<sub>n</sub>', `<b>${ev(`checks.${qS.i}.r`, 3)}</b> at x = ${ev('wShear.x', 2, 'ft')} ${qS.c.pass ? 'PASS' : 'FAIL'} ${wk('sh.gov')}`],
       ['Longitudinal tie T / T<sub>r</sub>', `<b>${ev(`checks.${qL.i}.r`, 3)}</b> at x = ${ev('wLong.x', 2, 'ft')} ${qL.c.pass ? 'PASS' : 'FAIL'} ${wk('sh.Tr')}`], ['Interface shear', `<b>${ev(`checks.${qI.i}.r`, 3)}</b> at x = ${ev('wIface.x', 2, 'ft')} ${qI.c.pass ? 'PASS' : 'FAIL'} ${wk('sh.ifr')}`],
       ['Stirrups (trial)', `${k.fx(+inp.opt.stirAv, 2)} in² at ${k.fx(+inp.opt.sEnd, 1)} in (end zone, ${k.fx(+inp.opt.endZoneLen, 2)} L each end) / ${k.fx(+inp.opt.sInt, 1)} in, f<sub>y</sub> ${k.fx(+inp.opt.fy, 0)} ksi <a href="#" data-goin="gird">Girders &amp; strands</a>`]])

@@ -18,7 +18,7 @@
     { key: 'row', title: 'Strand stress by row and stage (row 1; the table covers every row)', ref: A + '5.9.3', ids: /^ls\.row\./ }];
   function output(ctx) {
     const { R, inp } = ctx, k = K(), ev = (p, d, u, div) => k.ev(R, p, d, u, div), wk = k.wk, lo = R.lo, rf = lo.ref, fin = R.refFin, gn = R.gains, ss = R.ss, refd = inp.opt.lossMethod === 'refined';
-    let h = '<div id="gfx_loss"></div>';
+    let h = K().gcard('Losses graphic', 'gfx_loss');
     h += k.card('Prestress losses', k.kv([
       ['Stress before transfer f<sub>pbt</sub>', `${ev('fpbt', 2, 'ksi')} ${wk('ls.fpbt')}`], ['Elastic shortening Δf<sub>pES</sub>', `${ev('lo.dfES', 2, 'ksi')} ${wk('ls.dfES')}`],
       ['After transfer f<sub>pi</sub> = f<sub>pt</sub>', `${ev('fpi', 2, 'ksi')} ${wk('ls.fpt')}`], ['P<sub>i</sub> (all strands, midspan)', `${ev('lo.Pi', 0, 'kip')} ${wk('ls.Pi')}`],
@@ -50,7 +50,7 @@
       + k.card(`Approximate estimate (5.9.3.3)${refd ? ': not used' : ': used'}`, `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Component</th><th>Δf<sub>p</sub> ksi</th><th></th></tr></thead><tbody>
       <tr><td class="lft">Creep + shrinkage 10 f<sub>pi</sub>A<sub>ps</sub>/A<sub>g</sub> γ<sub>h</sub>γ<sub>st</sub> + 12 γ<sub>h</sub>γ<sub>st</sub></td><td>${ev('lo.apx.SH_CR', 3)}</td><td>${wk('ls.apx.shcr')}</td></tr><tr><td class="lft">Relaxation Δf<sub>pR</sub></td><td>${ev('lo.apx.R', 3)}</td><td>${wk('ls.apx.R')}</td></tr>
       <tr><td class="lft"><b>Σ long-term</b></td><td><b>${ev('lo.apx.total', 3)}</b></td><td>${wk('ls.apx.total')}</td></tr></tbody></table></div><p class="note">γ<sub>h</sub> = ${ev('rv.gh', 3)}, γ<sub>st</sub> = ${ev('rv.gst', 3)}.</p>`, 'card-apx');
-    h += '<div id="gfx_loss_str"></div>';
+    h += K().gcard('Strand pattern graphic', 'gfx_loss_str');
     h += k.card('Worked steps: losses', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value (the moved Prestressed Bridge Design engine); both long-term methods are worked, the ${refd ? 'refined' : 'approximate'} one is used.</p>${k.steps(ctx.W.losses.steps, TOPICS, OPEN)}`);
     return h;
   }

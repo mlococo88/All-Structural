@@ -34,7 +34,7 @@
   const FIB = { rel: ['relTop', 'relBot'], s1: ['s1Top', 's3Bot'], s2: ['s2Top', 's3Bot'] };
   function output(ctx) {
     const { R, inp, ui } = ctx, k = K(), ev = (p, d, u, div) => k.ev(R, p, d, u, div), wk = k.wk, G = R.grid, sel = selOf(ui, R), lim = R.lim;
-    let h = '<div id="gfx_st"></div>';
+    let h = K().gcard('Stresses graphic: along the girder', 'gfx_st');
     // the governing stress summary
     const rows = CHECKS.map(([nm, st, lab]) => { const q = ckOf(R, nm); if (!q) return ''; const p = `checks.${q.i}.`, u = q.c.u === 'in²' ? 'in²' : q.c.u;
       return `<tr class="${q.c.pass ? '' : 'ng'}"><td class="lft">${k.esc(lab)}</td><td>${ev(p + 'loc', 2)}</td><td>${ev(p + 'v', 3)}</td><td>${ev(p + 'lim', 3)}</td><td>${k.esc(u)}</td><td><b>${ev(p + 'r', 3)}</b></td><td class="${q.c.pass ? 'ok' : 'ngt'}">${q.c.pass ? 'PASS' : 'FAIL'}</td><td>${wk(st)}</td></tr>`; }).join('');
