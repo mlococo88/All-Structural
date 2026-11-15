@@ -7434,7 +7434,7 @@ PR #1580: https://github.com/mlococo88/All-Structural/pull/1580
 ### Other copies
 - None (the Steel app's rating is its own engine; not changed).
 ## 2026-11-15 — H1: Drawings tab: cover and sheet index, general notes, design summary sheets (display and export only)
-PR #TBD
+PR #1581: https://github.com/mlococo88/All-Structural/pull/1581
 ### Request
 - Review finding D2 / D3 (scratchpad review ps-vs-steel.md "Drawings"): the Steel Bridge app's drawing set has 30 sheets, this app's 7; the sheets with a prestressed equivalent were missing. Batch H1: the cover and sheet index, the general notes, the design summary.
 ### What changed
