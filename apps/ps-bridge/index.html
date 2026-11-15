@@ -119,6 +119,7 @@
     'ui/compare.js',  // batch G4 (2026-11-15): the Compare output tab (the old app's design sweep; table and bar graphic)
     'ui/autodesign.js', // item A (2026-11-14): the Auto design input tab (settings, Run) and output tab (candidates, Apply as one Undo step)
     'ui/summary.js',  // PR 3b: the Summary tab (adapted copy of apps/steel-bridge/ui/summary.js): verdict, girder × span grid, type × check table
+    'ui/mctnav.js',   // batch G9 (2026-11-15): the old app's "↩ MCT Analysis" header button (shown when opened from the MCT Generator)
     'ui/splitter.js'  // the splitter between the input and output panels (copy of apps/steel-bridge/ui/splitter.js)
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
 })();
@@ -152,6 +153,7 @@
   #hdrUR{display:inline-flex;gap:6px;align-items:center;white-space:nowrap;}
   #hdr .allToolsLink{font-size:8.5pt;color:#C7D4E4;text-decoration:none;font-family:var(--font-ui);}
   #hdr .allToolsLink:hover{color:#fff;text-decoration:underline;}
+  #hdr .mctBack{font-size:8.5pt;margin-left:10px;padding:1px 8px;}   /* batch G9: the old app's "↩ MCT Analysis" */
   #main{flex:1 1 auto;display:flex;min-height:0;}
   /* 2026-11-15 (batch A): the footer of the old app (Prestressed Bridge Design.html .footer): the version line and the design-aid disclaimer */
   #appFoot{flex:0 0 auto;display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 16px;padding:3px 14px;border-top:1px solid var(--color-border);background:var(--slate-100);color:#475569;font-family:var(--font-ui);font-size:7.5pt;letter-spacing:.04em;text-transform:uppercase;}
@@ -337,7 +339,7 @@
       <div>
         <h1>Prestressed Bridge Design <span style="font-weight:400;font-size:11pt">(new, in development)</span></h1>
         <div class="byline">AASHTO LRFD 10th Ed. (2024) <span id="saveState" aria-live="polite"></span></div>
-        <a class="allToolsLink" href="../../tools.html" title="Open the list of all tools">&larr; All tools</a>
+        <a class="allToolsLink" href="../../tools.html" title="Open the list of all tools">&larr; All tools</a> <button type="button" id="bMct" class="mctBack" hidden title="Back to the MIDAS / MCT analysis app (shown when this page was opened from it)">↩ MCT Analysis</button>
       </div>
       <div id="hdrBtns">
         <span id="hdrUR"><!-- PR 6: Undo and Redo (the steel app's header, apps/steel-bridge/index.html), kept together when the header wraps -->
@@ -899,6 +901,7 @@
   /* PR 6: Undo / Redo buttons and keys, as the steel app: Ctrl+Z undo, Ctrl+Y or Ctrl+Shift+Z redo (⌘ on a Mac). Text being typed in a field
      (an input event since its last change / blur) keeps the browser's own undo of that field; nothing while a dialog is open. */
   $('bUndo').addEventListener('click', undo); $('bRedo').addEventListener('click', redo);
+  if (window.PSBMctNav) window.PSBMctNav.mount($('bMct'), window);   // batch G9: "↩ MCT Analysis" when opened from the MCT Generator
   document.addEventListener('input', e => { if (e.target && e.target.dataset) e.target.dataset.typing = '1'; }, true);
   document.addEventListener('change', e => { if (e.target && e.target.dataset) delete e.target.dataset.typing; }, true);
   document.addEventListener('blur', e => { if (e.target && e.target.dataset) delete e.target.dataset.typing; }, true);
