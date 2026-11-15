@@ -5521,3 +5521,28 @@ PR #1574: https://github.com/mlococo88/All-Structural/pull/1574
 - ADB-D4. **What "see §" points to.** It points to the step the report works for that girder type, which is the current inputs. After an Apply with no later change, those are the candidate's inputs. Otherwise the text says the report works the current inputs, not the candidate.
 ### Other copies
 - None.
+
+## 2026-11-15 — E0: no "pending engineer review" wording in the app (Auto design output tab, Project tab / Report assumption; display only)
+PR #TBD
+### Request
+- Engineer rule: "pending engineer review" wording appears only in PRs and the fix log, never in the app UI or the Report. Reword the Auto design output tab's "Assumed (pending engineer review)" neutrally, and fix any other such wording in apps/ps-bridge the same way. The box beam / voided slab "to be confirmed" note (PS #1542 / #1554) is an engineer-requested exception and is kept.
+### What changed
+- **`ui/autodesign.js`**, the output tab's "How the search works (assumptions)" list (anchor `a higher f′c or f′ci is not worse for any check; a higher y<sub>end</sub>`):
+  - Before: `<li>Assumed (pending engineer review): a higher f′c or f′ci …`
+  - After: `<li>Assumption (<a href="#rp:rs.adb" data-gotab="rpt">Report, §2, Auto design basis</a>): a higher f′c or f′ci …` (the link is the one the tab's first note already uses; the Report's Auto design basis states the same assumptions under "Assumptions of the search").
+- **`ui/inputs.js`** `assumptions(P)`, the "Unequal bays (PS-9 …)" item, shown on the Project tab and in Report §2 Assumptions (anchor `with unequal bays it is an approximation`):
+  - Before: `… with unequal bays it is an approximation (pending engineer review).'`
+  - After: `… with unequal bays it is an approximation.'`
+- Every other "pending" in apps/ps-bridge (outside the frozen engine/pbd-*.js) is in a code comment, a list's "pending edit" (lists.js, not review wording) or the kept "to be confirmed" note.
+### Saved data (CLAUDE.md §5)
+- None.
+### Governing provisions (CLAUDE.md §4)
+- None changed (wording only). Harness B: 0 differences.
+### Check case
+- Default project: Report text and every input tab's girder-design cards: no match for /pending/i (before: the Unequal bays assumption in Project tab and Report §2 Assumptions matched).
+- Auto design output tab: the assumptions list item reads "Assumption (Report, §2, Auto design basis): a higher f′c or f′ci is not worse for any check; …".
+### How verified
+- New `tests/engine/psbridge-nopending.test.mjs` (3 tests; 2 fail on main before the change).
+- PS checks: see the PR.
+### Other copies
+- engine/autodesign.js keeps the "Decisions pending engineer review" wording in its header comment only (not shown).
