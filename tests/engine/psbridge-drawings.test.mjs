@@ -33,14 +33,14 @@ test('the sheets: each layout, paper D and B, a valid DXF; every sheet at a scal
     const P = fill(J(P0)), B = SH.build(P, { paper, date: '2026-11-14' }), ns = P.spans.lengths.length;
     assert.deepEqual(J(B.errors), [], name);
     const tk = W.PSBBridge.types(P).map((t, k) => k).filter(k => W.PSBBridge.typeLines(P, k).length);   // part 2: each type's elevation and strand pattern, the schedule
-    const base = [...new Set(B.sheets.map(s => s.id.replace(/^(cover|notes|summ)\d+$/, '$1')))];   // batch H1: a block sheet continued on more sheets (cover2, summ2, …)
-    assert.deepEqual(base, ['cover', 'notes', ...(ns > 1 ? P.spans.lengths.map((_, i) => 'sec' + (i + 1)) : ['sec']), 'plan', ...[].concat(...tk.map(k => ['elev' + k, 'strd' + k])), 'sched', 'summ'], name);   // batch H1: cover, notes first; summary last
+    const base = [...new Set(B.sheets.map(s => s.id.replace(/^(cover|notes|summ|reac|diapht)\d+$/, '$1')))];   // batch H1: a block sheet continued on more sheets (cover2, summ2, …)
+    assert.deepEqual(base, ['cover', 'notes', ...(ns > 1 ? P.spans.lengths.map((_, i) => 'sec' + (i + 1)) : ['sec']), 'plan', ...[].concat(...tk.map(k => ['elev' + k, 'strd' + k])), 'sched', ...tk.map(k => 'camb' + k), ...tk.map(k => 'endz' + k), ...(ns > 1 && P.spans.continuity === 'composite' ? ['diaph', 'diapht'] : []), ...tk.map(k => 'diag' + k), 'reac', 'summ'], name);   // H3: camber, end zone, diaphragms (the continuity diaphragms)   // batch H1: cover, notes first; summary last; H2: the analysis diagrams, the reactions
     const chk = X.validate(B.D.toDXF({ ltscale: 1 })); assert.ok(chk.ok, name + ' ' + chk.errors.join('; '));
     ['S-GRDR', 'S-DECK', 'S-DIMS', 'S-TEXT', 'S-TBLK', 'S-BRDR', 'S-SUPP'].forEach(l => assert.ok(chk.layers.includes(l), `${name}: layer ${l}`));
     B.sheets.forEach(s => { assert.ok(SH.SCALES.includes(s.k), `${name} ${s.id} k ${s.k}`); const [pw, ph] = SH.PAPER[paper], b = B.D.bbox(s.i0, s.i1);
       assert.ok(b[0] >= s.ox - 1e-6 && b[2] <= s.ox + pw * s.k + 1e-6 && b[1] >= -1e-6 && b[3] <= ph * s.k + 1e-6, `${name} ${s.id}: inside its sheet`);
       if (!s.over) { const d = B.D.bbox(s.i0, s.iC); assert.ok((d[2] - d[0]) / s.k <= pw - 2.25 + 1e-9 && (d[3] - d[1]) / s.k <= ph - 4.55 + 1e-9, `${name} ${s.id}: fits`); } });
-    assert.deepEqual(J(B.miss), [], `${name}: nothing left out (part 2 drawn)`);
+    assert.deepEqual(J(B.miss.filter(q => !/^(DIAPHRAGM DETAILS|DECK REINFORCEMENT)/.test(q[0]))), [], `${name}: nothing left out (part 2 drawn; H3: no diaphragms or deck design in these layouts)`);
   }
 });
 

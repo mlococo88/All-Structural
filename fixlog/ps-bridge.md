@@ -8319,6 +8319,63 @@ index 0bef68d..011f1a0 100644
 +  window.PSBSheets = { PAPER, SCALES, SCALE_NAME, TXT, build, sheet, section, plan, typeModels, elevation, strands, schedule };
  })();
 ```
+## 2026-11-15 — H2: Drawings tab: bearing reactions and analysis diagrams sheets (display and export only)
+PR #1584: https://github.com/mlococo88/All-Structural/pull/1584
+### Request
+- Review finding D3 (scratchpad review ps-vs-steel.md "Drawings"), batch H2: the Steel Bridge app's bearing reactions and analysis diagrams sheets (apps/steel-bridge/engine/sheets.js `reac`, `diag`) for this app.
+### What changed
+- `ui/sheets.js` (anchor `/* ---------- batch H2 (2026-11-15): bearing reactions, analysis diagrams`):
+  - `reacBlocks(P, A)`: BEARING REACTIONS of every girder line at every support from `PSBHandoffs.srAll(P, A.cells)` (the values the Project tab sends to Bridge Substructure Loading, allGirders: each span the girder type on the line, its engine's own end reactions `bxSuperRxPayload`; a pier the sum of the two spans' ends, srAll's own sum): GIRDER, SUPPORT, X, DC1, DC2, DW (kip, the payload's values to 0.001 kip as sent; the Analysis tab shows the same to 2 decimals); with more than one span a second table PIER REACTIONS: EACH SPAN'S END (srAll's `shares`, 3 decimals). Live load not listed (not sent).
+  - `plot()` / `lab()` / `diag(D, C)`: adapted COPY of the steel app's dxfPlot / dxfLab / dxfDiag: per girder type on its first line (as the girder sheets), R.diagrams at the engine's stations: moments (girder + DC1 as one curve: `M_g + M_DC1`, plotted only; DC2 dashed, DW, LL+IM ±, Strength I max / min), shears (V_DC, V_DW, V_LL±, V_StrI±); labels: M_StrI_pos at the station nearest each tenth point, M_StrI_neg at the ends when negative, V_StrI_pos at the left end and V_StrI_neg at the right end; the demand source named (`PSBDemands.describe`: this app's analysis, custom table, MIDAS file with its stations and span). Plot amplitude 1.1 in (paper D), 0.7 in (paper B, so the sheet fits); `plot(…, amp)`.
+  - `build`: after the schedule `diag<k>` per type (kmin 48), then `reac` (block sheets), then `summ`; `typeModels` entries carry `T` (the type object, for describe).
+- `ui/drawings.js`: `SRC` `diag` (Analysis tab, Loads input tab), `reac` (Analysis tab, Project input tab); the layer list names S-DIAG-AXIS / -DC / -DW / -LL / -STR.
+### Saved data (CLAUDE.md §5)
+- None.
+### Governing provisions (CLAUDE.md §4)
+- None changed; every value is an engine or hand-off value (no new formula; girder + DC1 summed for one plotted curve only). Harness B: 0 differences.
+### Check case
+- Three spans 80 / 110 / 80 ft made continuous, 6 lines: G1 Abut. 1 DC1 68.524 kip; Pier 1 DC1 162.744 = 68.524 (span 1 right end) + 94.220 (span 2 left end); DC2 10.675 = 5.175 + 5.500; DW 20.683 = 10.027 + 10.656.
+- Default simple span: G2 Abut. 1 DC1 114.785, DC2 7.200, DW 11.700 kip (the Analysis tab: 114.79 / 7.20 / 11.70).
+- Interior S1 on G2 (span 1, 80 ft): M_u labels at the tenth points 0 … 4257 kip-ft; V_u 267.3 kip at the left end, −302.3 kip at the right end (continuous end).
+### How verified
+- `tests/engine/psbridge-drawings-h.test.mjs` (+2 tests): every reaction row = srAll (every line × support), the shares; every point of the 13 curves = R.diagrams at its station (x and value, through the plot scale), the axis = L, the tenth-point and end labels, the demand source, the sheet fits (paper D and B).
+- `tests/engine/psbridge-drawings.test.mjs`, smokes `ps-bridge-drawings*.mjs`: the new sheet list.
+### Decisions (pending engineer review)
+- H2-D1. The analysis diagrams are drawn per girder type on its first line (as the girder sheets of item B); a type's other lines are on the Analysis tab with that line.
+- H2-D2. The bearing reactions sheet lists DC1, DC2 and DW only (the hand-off's values; the steel sheet's LL+IM and service sums are not formed here: no new arithmetic, and the PS hand-off sends no live load).
+### Other copies
+- plot / lab / diag adapted from apps/steel-bridge/engine/sheets.js; keep a fix in step.
+## 2026-11-15 — H3: Drawings tab: camber and haunch, end zone reinforcement, diaphragm details and schedule, deck reinforcement and overhang sheets (display and export only)
+PR #1585: https://github.com/mlococo88/All-Structural/pull/1585
+### Request
+- Review finding D3 (scratchpad review ps-vs-steel.md "Drawings"), batch H3: a camber / haunch sheet, an end-zone (splitting / confinement) reinforcement sheet, diaphragm details (geometry only, as the app has it) and the deck overhang / reinforcement (the Steel Bridge app's camber tables, deck overhang and diaphragm sheets have these PS equivalents).
+### What changed
+- `ui/sheets.js` (anchor `/* ---------- batch H3 (2026-11-15): camber and haunch, end zone reinforcement, diaphragms, deck`):
+  - `tablesAt` / `tableCols`: the H1 `table()` drawn under a figure, one below the other / in columns side by side.
+  - `camber(D, C)` (sheet `camb<k>`, each girder type on its first line, kmin 24): R.haunch at the tenth points plotted (erection camber, deck placement (haunch), beam seat, haunch build-up; `plot()` of H2) and tabulated (x, shape factor, erection, deck, seat, build-up: the Camber & deflection tab's table, same decimals); the camber at midspan by stage (R.cam rel, erect, afterDeck, seat, final) and its components (dPS, dSW, dDK, dDia when > 1e-4, dSD, dLL, llLim); a note with the haunch build-up at both ℄ bearings and at midspan (R.haunch[0], [last], the midspan row). The engine computes the haunch (R.haunch.buildup), so it is shown, not derived.
+  - `endzone(D, C)` (sheet `endz<k>`, kmin 4): the girder end in elevation (true scale; depth R.g.h; break line), ℄ bearing at e_end (`opt.endOh`, dimension E_END), the splitting zone dashed with its dimension R.splitZone ("SPLITTING ZONE H/4" or W/4 by R.splitDir) and the legs × area (opt.splitN × opt.splitAv); the confinement bars as lines at i × R.conf.s from the end, i = 0 … R.conf.n − 1 (chain dimension = R.conf.provExt), the required extent R.conf.reqExt; tables: splitting (R.splitDem, R.AsSplit, provided = R.AsSplitProv, R.splitZone, orientation, f_y), confinement (bar, spacing, n, extents; or "not required" with R.conf.why), bonded release tension steel (R.relSteel), and the engine's three checks (demand, limit, ratio, status). Bar positions and heights are schematic (noted).
+  - `diaphragms(D, C)` (sheet `diaph`, kmin 24) and `diaphBlocks()` (block sheet `diapht`, DIAPHRAGM SCHEDULE): per girder type a line ℄ bearing to ℄ bearing with a mark at each entered diaphragm a (inp.loads.diaph, 0 ≤ a ≤ L) and the chain from ℄ bearing; the schedule: type, span, lines, no., a, L − a (the display difference), P (kip, DC1); the continuity diaphragms of the framing plan's pier lines (PSBPlan.model cont). Drawn when any type has diaphragms or the spans are made continuous; else listed as not in the set. No diaphragm section is an input (noted).
+  - `deck(D, C)` (sheet `deck`, kmin 4; the type on G1 with R.deck, else the first with R.deck): the deck from the left edge over G1 into the first bay, true scale: thickness R.deck.ts, OVERHANG R.deck.oh, S = R.deck.Ls, the top and bottom bars at the engine's effective depths (y = ts − neg.dEff, ts − pos.dEff; dimensions D TOP / D BOT), the negative-moment design section R.deck.xneg from ℄ G1, the barrier base R.deck.bBar (height schematic); the bars entered (deck.barTop / sTop, barBot / sBot); a table of every type's R.deck (Mu+, φMn+, ratio; Mu−, φMn−, ratio; Mu overhang, φMn, ratio; distribution steel %). Deck design off: listed as not in the set.
+  - `build`: after the schedule `camb<k>` per type, `endz<k>` per type, `diaph` + `diapht`, `deck`, then the H2 `diag<k>`, `reac`, and `summ`; the plot amplitude `amp` (1.1 in on D, 0.7 in on B) shared with the diagrams.
+- `ui/drawings.js`: `SRC` `camb` (Camber & deflection tab, Materials), `endz` (End zone & hold-down tab, Girders & strands), `diaph` (Diaphragms / deck, Bridge layout), `diapht` (Diaphragms / deck, Loads & LLDF), `deck` (Deck tab, Diaphragms / deck); the layer list (+ S-CAMB-ERECT, -DECK, -SEAT, S-HAUNCH, S-ZONE, S-REBAR) and the note.
+### Saved data (CLAUDE.md §5)
+- None.
+### Governing provisions (CLAUDE.md §4)
+- None changed; every value is an input or an engine value (R.haunch, R.cam, R.splitZone, R.AsSplit, R.AsSplitProv, R.conf, R.relSteel, R.deck, R.checks); the only arithmetic is drawing positions (i × s, ts − d_eff) and the display L − a. Harness B: 0 differences.
+### Check case
+- Default BT-72, interior S1 on G2, L = 120 ft: haunch build-up 2.00 in at both ℄ bearings, 5.33 in at midspan; erection camber at midspan 5.150 in; release 2.902 in up.
+- End zone: splitting zone h/4 = 18.0 in; A_s,req 3.12 in², provided 12 × 0.31 = 3.72 in², ratio 0.838 PASS; confinement No. 4 at 6.00 in, 19 bars, chain 18 @ 6" = 108 in = 1.5d = 108.0 in, ratio 1.000.
+- Deck on (S = 9 ft, overhang 3 ft, t = 8 in): d top 5.186 in, d bot 6.686 in, negative design section 14 in; Mu+ 12.20 / φMn+ 17.38 k-ft/ft (0.702), Mu− 7.58 / 13.20 (0.574), overhang 6.81 / 13.20 (0.516).
+### How verified
+- `tests/engine/psbridge-drawings-h.test.mjs` (+3 tests; table rows now read per table from its S-TBL lines): every camber / haunch curve point and table row = R.haunch, the stages and components = R.cam, the haunch at the bearings and midspan; the end zone dimensions (h/4, e_end, the confinement chain, 1.5d), a line per confinement bar, the tables and checks; a diaphragm line per entered diaphragm, the schedule rows, the chains = L; the deck dimensions and every type's ratios — on five layouts (default, three continuous spans, MassDOT, deck on with diaphragms and e_end, box beams), paper D and B, every sheet fitting.
+- `tests/engine/psbridge-drawings.test.mjs` and the smokes `ps-bridge-drawings.mjs`, `-drawings2.mjs` (17 sheets on a new project; the diaphragm and deck sheets listed as not in the set), `-drawings3.mjs` (the H3 sheets on a project with the deck on and two diaphragms; the Camber tab's midspan haunch on the sheet; links; Print all).
+- `ps-bridge-drawings2.mjs`: H1 had put a comment in front of `assert.equal(r.miss, false)` on the same line (the assert was commented out); restored in H1/H2 and replaced here by the H3 expectation.
+### Decisions (pending engineer review)
+- H3-D1. Camber, end zone and diagrams sheets: per girder type on its first line (as the girder sheets of item B); the other lines of a type are on the tabs with that line.
+- H3-D2. The deck sheet draws the deck over the exterior line G1's type (the overhang); every type's results in its table.
+- H3-D3. Confinement bars drawn from the girder end at the spacing s (the first bar's cover is not an input); splitting legs not drawn one by one (their spacing is not an input): the zone and the count.
+### Other copies
+- None (the steel app's camber, overhang and diaphragm sheets are its own; the plot is the H2 copy).
 
 ## 2026-11-15 — Batch G7 / G9: the splitting steel orientation graphic for slabs and box beams (End zone tab, drawn from the section) and the old app's "↩ MCT Analysis" header button when opened from the MCT Generator (display / navigation only)
 PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__

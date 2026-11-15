@@ -29,19 +29,19 @@ try {
   let r = await p.evaluate(() => ({ opts: [...document.querySelectorAll('#dwg_sheet option')].map(o => o.textContent), idx: document.querySelectorAll('.dwg-idx tbody tr').length,
     txt: [...document.querySelectorAll('.dwg-box svg text')].map(t => t.textContent), miss: (document.querySelector('#out').innerText.match(/Not in this set:[^\n]*/) || [''])[0],
     links: [...document.querySelectorAll('.dwg-idx a')].map(a => a.dataset.dgo || a.dataset.dgi) }));
-  assert.deepEqual(r.opts, ['1. COVER AND SHEET INDEX', '2. GENERAL NOTES', '3. TYPICAL SECTION', '4. FRAMING PLAN', '5. GIRDER INTERIOR S1: ELEVATION', '6. GIRDER INTERIOR S1: STRAND PATTERN', '7. GIRDER EXTERIOR S1: ELEVATION', '8. GIRDER EXTERIOR S1: STRAND PATTERN', '9. STRAND AND GIRDER SCHEDULE', '10. DESIGN SUMMARY']); assert.equal(r.idx, 10);   // part 2 (item B): the girder sheets; batch H1: cover, notes, design summary
-  ['COVER AND SHEET INDEX', '1 OF 10', 'ROUTE 9 OVER THE MILL RIVER', 'B-123', 'SHEET INDEX', 'TYPICAL SECTION', 'DESIGN SUMMARY', 'REVISIONS'].forEach(t => assert.ok(r.txt.includes(t), t + ' in ' + r.txt.slice(0, 40).join('|')));
-  assert.equal(r.miss, '', 'nothing "Not in this set" (part 2 drawn)');
-  ok('a new project: the cover with the sheet index of all 10 sheets (batch H1), the preview with its title block, nothing left out');
+  assert.deepEqual(r.opts, ['1. COVER AND SHEET INDEX', '2. GENERAL NOTES', '3. TYPICAL SECTION', '4. FRAMING PLAN', '5. GIRDER INTERIOR S1: ELEVATION', '6. GIRDER INTERIOR S1: STRAND PATTERN', '7. GIRDER EXTERIOR S1: ELEVATION', '8. GIRDER EXTERIOR S1: STRAND PATTERN', '9. STRAND AND GIRDER SCHEDULE', '10. GIRDER INTERIOR S1: CAMBER AND HAUNCH', '11. GIRDER EXTERIOR S1: CAMBER AND HAUNCH', '12. GIRDER INTERIOR S1: END ZONE REINFORCEMENT', '13. GIRDER EXTERIOR S1: END ZONE REINFORCEMENT', '14. GIRDER INTERIOR S1: ANALYSIS DIAGRAMS', '15. GIRDER EXTERIOR S1: ANALYSIS DIAGRAMS', '16. BEARING REACTIONS', '17. DESIGN SUMMARY']); assert.equal(r.idx, 17);   // part 2 (item B): the girder sheets; batch H1: cover, notes, design summary
+  ['COVER AND SHEET INDEX', '1 OF 17', 'ROUTE 9 OVER THE MILL RIVER', 'B-123', 'SHEET INDEX', 'TYPICAL SECTION', 'DESIGN SUMMARY', 'REVISIONS'].forEach(t => assert.ok(r.txt.includes(t), t + ' in ' + r.txt.slice(0, 40).join('|')));
+  assert.match(r.miss, /^Not in this set: diaphragm details \(no diaphragms entered.*deck reinforcement and overhang \(deck design off/, 'only the diaphragm and deck sheets left out (none entered, deck design off; batch H3)');
+  ok('a new project: the cover with the sheet index of all 17 sheets (batch H1), the preview with its title block, only the diaphragm and deck sheets left out (H3)');
   await shot('h1-dwg-cover');
   await p.click('.dwg-idx tr[data-dsheet="sec"] td.lft'); await p.waitForTimeout(300);
   r = await p.evaluate(() => ({ txt: [...document.querySelectorAll('.dwg-box svg text')].map(t => t.textContent), links: [...document.querySelectorAll('.dwg-idx tr[data-dsheet="sec"] a')].map(a => a.dataset.dgo || a.dataset.dgi) }));
-  ['TYPICAL SECTION', '3 OF 10', 'G1', 'G5'].forEach(t => assert.ok(r.txt.includes(t), t + ' in ' + r.txt.slice(0, 40).join('|'))); assert.deepEqual(r.links, ['lds', 'xsec']);
+  ['TYPICAL SECTION', '3 OF 17', 'G1', 'G5'].forEach(t => assert.ok(r.txt.includes(t), t + ' in ' + r.txt.slice(0, 40).join('|'))); assert.deepEqual(r.links, ['lds', 'xsec']);
   ok('typical section and framing plan (and the part 2 girder sheets), the index with its links');
   await shot('pr10-dwg-section');
   await p.click('.dwg-idx tr[data-dsheet="plan"] td.lft'); await p.waitForTimeout(300);
   r = await p.evaluate(() => ({ sel: document.querySelector('#dwg_sheet').value, txt: [...document.querySelectorAll('.dwg-box svg text')].map(t => t.textContent) }));
-  assert.equal(r.sel, 'plan'); ['FRAMING PLAN', '4 OF 10', 'ABUT. 1', 'ABUT. 2'].forEach(t => assert.ok(r.txt.includes(t), t));
+  assert.equal(r.sel, 'plan'); ['FRAMING PLAN', '4 OF 17', 'ABUT. 1', 'ABUT. 2'].forEach(t => assert.ok(r.txt.includes(t), t));
   ok('the index row draws its sheet (the framing plan: Abut. 1, Abut. 2)');
   await shot('pr10-dwg-plan');
 
