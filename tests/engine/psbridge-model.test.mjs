@@ -92,8 +92,8 @@ test('the page: classic scripts by relative path (file://), no modules or fetch,
     // 2026-11-14 (item 12): the hand-offs (ui/handoffs.js; BridgeXfer v1, ui/bridgexfer.js, HANDOFF.md §5 verbatim) write the old app's
     // channels only, under their own keys (HANDOFF.md §4; AUDIT.md §1.3): every Bridge Suite key literal there is one of these
     const HO = ['bridgeSuite.v1.', 'bridgeSuite.v1.lldf', 'bridgeSuite.v1.dlLoads', 'bridgeSuite.v1.lldfGeom', 'bridgeSuite.v1.psSection', 'bridgeSuite.v1.psSection.updatedAt', 'bridgeSuite.v1.capacity', 'bridgeSuite.v1.capacity.updatedAt'];
-    // batch D3 (2026-11-15): engine/handoffs.js names the MCT demands / geometry keys (MCT_K; read, plus this app's .psbridge markers)
-    const MCT = ['bridgeSuite.v1.handoffs', 'bridgeSuite.v1.latestId', 'bridgeSuite.v1.updatedAt', 'bridgeSuite.v1.adopted.', 'bridgeSuite.v1.geometryChanges', 'bridgeSuite.v1.geometryChanges.updatedAt', 'bridgeSuite.v1.geometryChanges.adopted.'];
+    // batch D3 (2026-11-15): engine/handoffs.js names the MCT demands / geometry keys (MCT_K; read, plus this app's .psbridge markers); batch F3: + the design beam keys (DB_K, read only)
+    const MCT = ['bridgeSuite.v1.designBeam', 'bridgeSuite.v1.beamRoster', 'bridgeSuite.v1.handoffs', 'bridgeSuite.v1.latestId', 'bridgeSuite.v1.updatedAt', 'bridgeSuite.v1.adopted.', 'bridgeSuite.v1.geometryChanges', 'bridgeSuite.v1.geometryChanges.updatedAt', 'bridgeSuite.v1.geometryChanges.adopted.'];
     if (f === 'engine/handoffs.js') [...c.matchAll(/'(bridgeSuite\.[^']*)'/g)].forEach(m => assert.ok(MCT.includes(m[1]), `${f}: ${m[1]}`));
     else if (f === 'ui/handoffs.js' || f === 'ui/bridgexfer.js') [...c.matchAll(/'(bridgeSuite\.[^']*)'/g)].forEach(m => assert.ok(HO.includes(m[1]), `${f}: ${m[1]}`));
     else if (f !== 'engine/legacy.js') assert.ok(!/'bridgeSuite\./.test(c), `${f}: a Bridge Suite key`);
