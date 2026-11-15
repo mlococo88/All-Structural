@@ -9,7 +9,8 @@
    per-browser UI key psb2.dashCollapsed_v1 ('1' shrunk; not in the project, the autosave or the export).
    PR 2d-2: a group whose module is off for the design (Handling, Deck: no engine check) shows an "off" chip that opens its input tab.
    The Rating chip (PR 2d-2) is not an engine check: it shows the lowest HL-93 inventory rating factor of the engine (R.rating, R.shrRating,
-   R.svcRating; RF ≥ 1.0 or < 1.0) and is not counted in the PASS / FAIL totals.
+   R.svcRating; RF ≥ 1.0 or < 1.0) and is not counted in the PASS / FAIL totals. E1 (2026-11-15): the lowest over every station of the
+   girder, by group (engine/rating-along.js; flexure positive, flexure negative over the pier, shear, Service III).
    Owner material limits (engineer, 2026-11-13; display only): the engine's checks of the girder f′c and the release f′ci against the owner's
    limits (RIDOT 5.2.1, MassDOT 3.7.2.1, CTDOT V2 5.9.1.2) are the chip "Materials (owner limits)" (now "Owner limits"), counted in the PASS / FAIL totals like
    every other group; its group has input: the chip and its checks open the Owner rules input tab at the rule's row of the rules table
@@ -48,8 +49,18 @@
     // the material limits and (2026-11-13) the RIDOT girder age at continuity
     { id: 'mat', name: 'Owner limits', tab: 'own', input: true, checks: [['Girder f′c (RIDOT 5.2.1)', 'own-rule-fc.min'], ['Girder f′c (CTDOT 5.9.1.2)', 'own-rule-fc.range'],
       ['Release strength f′ci (MassDOT 3.7.2.1)', 'own-rule-fci.max'], ['Release strength f′ci (CTDOT 5.9.1.2)', 'own-rule-fci.range'], ['Girder age at continuity (RIDOT 5.6.3.3)', 'own-rule-cont.age']] }];
-  /* the Rating chip: the HL-93 inventory rating factors of the engine (not checks), the lowest governs */
-  const RATING = { id: 'rt', name: 'Rating', tab: 'rt', rf: [['Flexure, inventory', R => R.rating.RFinv, 'rt.RFinv'], ['Shear, inventory', R => R.shrRating.RFinv, 'rt.RFvInv'], ['Service III', R => R.svcRating.RF, 'rt.RFs3']] };
+  /* the Rating chip: the HL-93 inventory rating factors (not checks), the lowest governs. E1 (2026-11-15): the lowest of each group over every
+     station of the girder (engine/rating-along.js; before, the engine's governing stations only: R.rating, R.shrRating, R.svcRating, kept as
+     ENG for the Report's §1 column and as the fallback without that file). Each entry [name, R -> RF (undefined: none), step id, R -> the
+     engine path holding that same value, or null when the value is formed app-side (the Summary's data-sv and the Report's recorded values
+     name only engine paths)] */
+  const ENG = [['Flexure, inventory', R => R.rating.RFinv, 'rt.RFinv', () => 'rating.RFinv'], ['Shear, inventory', R => R.shrRating.RFinv, 'rt.RFvInv', () => 'shrRating.RFinv'], ['Service III', R => R.svcRating.RF, 'rt.RFs3', () => 'svcRating.RF']];
+  const AL = R => window.PSBRatingAlong.of(R);
+  const gv = kind => R => { const A = AL(R), q = A && A.gov[kind]; return q ? q.inv : undefined; };
+  const rp = (kind, e) => R => { const A = AL(R), q = A && A.gov[kind]; return e && q && Object.is(q.inv, e[1](R)) ? e[3]() : null; };
+  const RATING = { id: 'rt', name: 'Rating', tab: 'rt', ENG, rf: window.PSBRatingAlong ? [['Flexure (positive), inventory', gv('flexP'), 'rt.al.fp.RFinv', rp('flexP', ENG[0])],
+    ['Flexure (negative, pier region), inventory', gv('flexN'), 'rt.al.fn.RFinv', rp('flexN', null)], ['Shear, inventory', gv('shear'), 'rt.al.v.RFinv', rp('shear', ENG[1])],
+    ['Service III', gv('s3'), 'rt.al.s3.RF', rp('s3', ENG[2])]] : ENG };
   /* the link of a check: its output tab and step, or (a group on an input tab) the input tab and the element id */
   const go = (gp, st, cell) => (cell ? `data-sdcell="${cell.k}|${cell.g}" ` : '') + (gp.input ? `data-sdown="${gp.tab}|${st}"` : `data-sdgo="${gp.tab}|${st}"`);
   /* PR 3a-2: the girder type and line of an entry (several cells only) */

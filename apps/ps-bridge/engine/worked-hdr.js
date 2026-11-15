@@ -14,7 +14,8 @@
      rating: the LRFR load rating of the moved engine (computeAll): φ_c φ_s (floor 0.85), the flexure rating at the governing station,
        the shear rating at the governing shear section, the Service III rating at the governing bottom-tension section, the entered
        legal / permit vehicles. The MBE citations are the old app's labels (article numbers, no edition): the MBE 4th Ed. (2026) labels
-       come in their own PR (plan §5 PR 6, PS-14 e).
+       come in their own PR (plan §5 PR 6, PS-14 e). E1 (2026-11-15): then the governing location of each group of the rating at every
+       station (engine/rating-along.js, MBE 4th Ed. (2026) citations), when that file is loaded.
    Display intermediates the engine does not keep are named in their notes (the prestress force and eccentricity at the handling points,
    β_1 of the deck, the overhang wheel position terms, the vehicles' net capacities). The expressions are those of the moved engine
    (pbd-handling-deck.js handlingCalc, deckCalc; pbd-compute.js computeAll), written out for display. Code basis AASHTO LRFD 10th Ed. (2024). */
@@ -203,6 +204,10 @@
       add({ id: `veh${i}.RF`, label: `${nm}: rating factor (governing: ${v.gov})`, sym: 'RF', eq: '\\min(RF_{M},\\ RF_{V})', sub: `\\min(${n(v.RFm, 3)},\\ ${n(v.RFv, 3)})`, value: v.RF, unit: '', d: 3, ok: v.ok }, Math.min(v.RFm, v.RFv), P + 'RF');
       if (v.W > 0) add({ id: `veh${i}.RT`, label: `${nm}: rated load`, sym: 'RT', eq: 'RF\\,W', sub: `${n(v.RF, 3)}(${n(v.W, 1)})`, value: v.RT, unit: 'ton', d: 1 }, v.RF * v.W, P + 'RT');
     });
+    // E1 (2026-11-15): the rating at every station (engine/rating-along.js): the governing location of each group worked (ids rt.al.*; no
+    // engine path: the rating factor is formed app-side from the engine's demands and capacities at that station)
+    const AL = window.PSBRatingAlong, A = AL ? AL.of(R) : null;
+    if (A) K.w.take(AL.govSteps(A));
     return K.done();
   }
 

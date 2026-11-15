@@ -56,7 +56,8 @@ for (const [name, P] of Object.entries(CASES)) {
       const r = rows.find(q => q.cells[1] === c.n.replace(/<[^>]*>/g, '')); assert.ok(r && /^see \[\[[\w.]+\]\]$/.test(r.cells[8]), `check ${c.n} has a link`);
       if (r.cells[8] === 'see [[rs.own]]') assert.match(c.n, /\((MassDOT|CTDOT|RIDOT) [\d.]+\)/, 'owner material limit'); });
     // assumptions stated in the tabs
-    ['hauling stresses are shown for comparison and not checked', 'strip method', 'governing positive-moment section only', 'MBE 4th Ed. (2026) labels', 'Hold-down force (PS-10)'].forEach(t => assert.ok(T.includes(t), t));
+    ['hauling stresses are shown for comparison and not checked', 'strip method', 'design-load rating (HL-93) at every analysis station of the girder', 'MBE 4th Ed. labels of those cards',   // E1 (2026-11-15): the rating at every station
+      'Hold-down force (PS-10)'].forEach(t => assert.ok(T.includes(t), t));
     // the converted notation parses
     const tex = new Set(); JSON.stringify(M.sections).replace(/\$([^$]+)\$/g, (m, t) => { tex.add(JSON.parse(`"${t}"`)); return m; });
     [...tex].forEach(t => assert.ok(katexOk(t), 'KaTeX: ' + t));
