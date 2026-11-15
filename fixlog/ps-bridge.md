@@ -7483,6 +7483,9 @@ PR #TBD
 ### How verified
 - `tests/engine/psbridge-drawings-h.test.mjs` (+2 tests): every reaction row = srAll (every line × support), the shares; every point of the 13 curves = R.diagrams at its station (x and value, through the plot scale), the axis = L, the tenth-point and end labels, the demand source, the sheet fits (paper D and B).
 - `tests/engine/psbridge-drawings.test.mjs`, smokes `ps-bridge-drawings*.mjs`: the new sheet list.
+### Decisions (pending engineer review)
+- H2-D1. The analysis diagrams are drawn per girder type on its first line (as the girder sheets of item B); a type's other lines are on the Analysis tab with that line.
+- H2-D2. The bearing reactions sheet lists DC1, DC2 and DW only (the hand-off's values; the steel sheet's LL+IM and service sums are not formed here: no new arithmetic, and the PS hand-off sends no live load).
 ### Other copies
 - plot / lab / diag adapted from apps/steel-bridge/engine/sheets.js; keep a fix in step.
 ## 2026-11-15 — H3: Drawings tab: camber and haunch, end zone reinforcement, diaphragm details and schedule, deck reinforcement and overhang sheets (display and export only)
