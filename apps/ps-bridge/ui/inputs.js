@@ -54,7 +54,7 @@
     const T = F().TABLES[tp], rows = get(P, tp) || [];
     const head = T.cols.map(([, lab, u, , tip]) => `<th title="${esc(tip)}">${esc(lab)}${u ? `<br><span class="unit">${esc(u)}</span>` : ''}</th>`).join('');
     const body = rows.map((r, i) => `<tr><td>${i + 1}</td>${T.cols.map(([k, lab, , rule, tip]) => `<td><input type="${rule === 'text' ? 'text' : 'number'}" step="any" data-path="${tp}.${i}.${k}" data-kind="${rule === 'text' ? 'text' : 'num'}" value="${esc(r[k] == null ? '' : r[k])}" aria-label="${esc(`${T.title}, row ${i + 1}, ${lab}`)}" title="${esc(tip)}"${rule === 'text' ? ' style="width:110px;text-align:left"' : ''}></td>`).join('')}
-      <td><button type="button" data-act="del" data-tbl="${tp}" data-i="${i}" title="Delete row ${i + 1}" aria-label="Delete row ${i + 1}"${tp === 'base.rows' && rows.length === 1 ? ' disabled' : ''}>✕</button></td></tr>`).join('');
+      <td style="white-space:nowrap">${tp === 'base.rows' && (+r.nd > 0 || +r.dbnd > 0) ? `<button type="button" data-act="clrdb" data-tbl="${tp}" data-i="${i}" title="Clear debonding on this row (n_d and the debonded length to 0)" aria-label="Clear debonding on row ${i + 1}">⌁✕</button> ` : ''}<button type="button" data-act="del" data-tbl="${tp}" data-i="${i}" title="Delete row ${i + 1}" aria-label="Delete row ${i + 1}"${tp === 'base.rows' && rows.length === 1 ? ' disabled' : ''}>✕</button></td></tr>`).join('');   // batch G5: the old app's "Clear debonding on this row" (O:6031)
     return `<div class="tscroll"><table class="tbl" data-tbl="${tp}"><thead><tr><th>#</th>${head}<th></th></tr></thead><tbody>${body || `<tr><td colspan="${T.cols.length + 2}" class="lft note">None.</td></tr>`}</tbody></table></div>
       <button type="button" data-act="add" data-tbl="${tp}">Add row</button>`;
   }
@@ -187,6 +187,7 @@
     const b = e.target.closest('[data-act][data-tbl]'); if (!b) return false;
     const tp = b.dataset.tbl; let rows = get(P, tp); if (!Array.isArray(rows)) { rows = []; setp(P, tp, rows); }
     if (b.dataset.act === 'add') rows.push(NEW[tp](rows));
+    else if (b.dataset.act === 'clrdb') { const r = rows[+b.dataset.i]; if (!r) return true; r.nd = 0; r.dbnd = 0; }   // batch G5: one click, one Undo step
     else if (b.dataset.act === 'del') { if (tp === 'base.rows' && rows.length <= 1) return true; rows.splice(+b.dataset.i, 1); }   // one strand row stays: the engine's mergeInputs reads an empty list as its default rows
     else return false;
     return true;
