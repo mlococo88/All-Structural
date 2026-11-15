@@ -1,5 +1,5 @@
 /* COPY, to move to shared/ later (CLAUDE.md §3): apps/steel-bridge/ui/vizalong.js at 28e1605 (SBVZB), changed only in: namespace
-   PSBVizAlong (was SBDVizAlong), PSBVizKit, PSBGraphics (none yet: text widths estimated, no DXF until PR 7), PSBSub (none: read-out as plain
+   PSBVizAlong (was SBDVizAlong), PSBVizKit, PSBGraphics (ui/svgdxf.js, 2026-11-15: Download DXF of the graphic as drawn; no textW, so text widths stay estimated), PSBSub (none: read-out as plain
    text), resize event psb2:panelresize. PR 2b. */
 /* apps/ps-bridge/ui/vizalong.js — window.PSBVizAlong: the along-girder pieces of the "modern data-viz" graphic style (option C of the Section
    properties graphic, ui/vizkit.js), for the graphics drawn along the girder (engineer's decision 2026-11-10: restyle every on-screen CAD-style
@@ -298,15 +298,17 @@ svg.va-mini{display:inline-block;width:24px;height:8px;vertical-align:middle;} .
   function mount(slot, o) {
     css(); const vk = VK();
     const groups = o.chips ? o.chips() : [];   // [{ label, items: [{ key, html, on }] }]
-    slot.innerHTML = `<div class="vk va-card" data-va="${esc(o.key || '')}"><div class="vk-hd"><h3>${o.title}${o.sub ? `<small>${o.sub}</small>` : ''}</h3>${o.dxf ? '<button type="button" data-vadxf title="The CAD line drawing of this graphic">Download DXF</button>' : ''}</div>`
+    const auto = o.dxf == null && o.dxf !== false && window.PSBGraphics && window.SharedDxf, hasDxf = !!(o.dxf || auto);   // 2026-11-15 (batch B): Download DXF of the graphic as drawn (ui/svgdxf.js) unless o.dxf is given or false
+    slot.innerHTML = `<div class="vk va-card" data-va="${esc(o.key || '')}"><div class="vk-hd"><h3>${o.title}${o.sub ? `<small>${o.sub}</small>` : ''}</h3>${hasDxf ? '<button type="button" data-vadxf title="The CAD line drawing of this graphic">Download DXF</button>' : ''}</div>`
       + (o.controls ? `<div class="va-ctl">${o.controls}</div>` : '') + `<div class="vk-fig"></div><p class="vk-read" aria-live="polite" data-hint="${esc(o.hint || 'Point at (or tap) the graphic to read the values.')}"></p>`
       + (vk ? groups.filter(q => q.items.length).map(q => vk.chips({ label: q.label || 'Show', items: q.items })).join('') : '') + (o.legend ? `<div class="va-leg">${o.legend}</div>` : '') + (o.caption || '') + (o.notes || '')
-      + (o.dxf ? `<p class="vk-note">${esc(DXF_NOTE)}</p>` : '') + '</div>';
+      + (o.dxf ? `<p class="vk-note">${esc(DXF_NOTE)}</p>` : auto ? `<p class="vk-note">${esc(window.PSBGraphics.NOTE)}</p>` : '') + '</div>';
     const root = slot.querySelector('.va-card'), fig = root.querySelector('.vk-fig'), out = root.querySelector('.vk-read'); let cur = null, lastW = 0;
     const draw = w => { const W = w > 0 ? w : 900; lastW = W; cur = o.draw(W); fig.innerHTML = cur.svg; root.classList.toggle('vk-narrow', W < 600); wireSvg(fig.querySelector('svg'), cur, o, out); };
     if (vk) { vk.fit(fig, draw); vk.print(fig, () => { if (fig.clientWidth < 760) draw(760); }, () => draw(fig.clientWidth)); vk.wire(root, { chip: k => { if (o.onChip) { o.onChip(k); mount(slot, o); } } }); }
     else draw(fig.clientWidth || 900);
-    const b = root.querySelector('[data-vadxf]'); if (b) b.addEventListener('click', () => { try { const g = o.dxf(); GR().download(g, o.file || g.file || 'graphic'); } catch (e) { alert('The DXF could not be made: ' + e.message); } });
+    const dxf = o.dxf || (auto ? () => GR().fromFig(fig, { title: plain(o.title), file: o.file || ('chart-' + (o.key || 'graphic')) }) : null);
+    const b = root.querySelector('[data-vadxf]'); if (b) b.addEventListener('click', () => { try { const g = dxf(); GR().download(g, o.file || g.file || 'graphic'); } catch (e) { alert('The DXF could not be made: ' + e.message); } });
     return { el: root, fig, redraw: () => draw(fig.clientWidth || lastW), get R() { return cur; } };
   }
   function wireSvg(svg, Rr, o, out) {

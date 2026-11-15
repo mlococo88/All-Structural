@@ -19,7 +19,7 @@
   const arrow = v => v >= 0 ? '↑' : '↓';
   function output(ctx) {
     const { R, inp } = ctx, k = K(), ev = (p, d, u, div) => k.ev(R, p, d, u, div), wk = k.wk, c = R.cam, m = inp.opt.mult, qL = ckOf(R, 'LL deflection');
-    let h = '<div id="gfx_cb"></div>';
+    let h = K().gcard('Camber graphic: at midspan', 'gfx_cb');
     const stg = [['Release (1.0 / 1.0)', 'Δ<sub>ps</sub> − Δ<sub>sw</sub>', 'cam.rel', 'cb.rel', 'the girder on the bed after transfer'],
       [`Erection (${k.fx(+m.psE, 2)} / ${k.fx(+m.swE, 2)})`, `${k.fx(+m.psE, 2)} Δ<sub>ps</sub> − ${k.fx(+m.swE, 2)} Δ<sub>sw</sub>`, 'cam.erect', 'cb.erect', 'the girder set on the bearings'],
       ['Deck placement', `Δ<sub>erect</sub> − (Δ<sub>dk</sub>${c.dDia > 1e-4 ? ' + Δ<sub>dia</sub>' : ''})`, 'cam.afterDeck', 'cb.deck', '<b>haunch and screed</b>'],
@@ -39,7 +39,7 @@
     h += k.card(`Live-load deflection (${c.llDen ? 'MassDOT 3.5.6.1' : '2.5.2.6.2'})`, k.kv([['Δ<sub>LL</sub> ≈ 5 M<sub>LL</sub> L² / 48 E<sub>c</sub> I<sub>c</sub>', `${ev('cam.dLL', 3, 'in')} ${wk('cb.dLL')}`], [`Limit L/${c.llDen || 800}`, `${ev('cam.llLim', 3, 'in')} ${wk('cb.llLim')}`],
       ['Ratio', `<b>${ev(`checks.${qL.i}.r`, 3)}</b> ${qL.c.pass ? 'PASS' : '<b style="color:var(--fail)">FAIL</b>'} ${wk('cb.ll.r')}`]])
       + `<p class="note">The optional deflection criterion: live load with impact and distribution on the composite section, by an equivalent uniform load${c.llDen ? '; MassDOT 3.5.6.1 for an interior girder: L/1000 with sidewalks, else L/800' : ''}.</p>`, 'card-cbll');
-    h += '<div id="gfx_cb_along"></div>';
+    h += K().gcard('Camber graphic: along the girder', 'gfx_cb_along');
     h += k.card('Haunch / screed and beam-seat camber at the tenth points', `<div class="tscroll"><table class="tbl"><thead><tr><th>x<br>ft</th><th>Shape factor<br>4x(L − x)/L²</th><th>Erection camber<br>in</th><th>Δ<sub>deck</sub>: haunch<br>in</th><th>Δ<sub>seat</sub>: beam seat<br>in</th><th>Haunch build-up<br>in</th></tr></thead><tbody>
       ${R.haunch.map((r, i) => { const p = `haunch.${i}.`; return `<tr${i === 5 ? ' class="sel"' : ''}><td>${ev(p + 'x', 1)}</td><td>${ev(p + 'par', 3)}</td><td>${ev(p + 'camErect', 3)}</td><td>${ev(p + 'camDeck', 3)}</td><td>${ev(p + 'camSeat', 3)}</td><td>${ev(p + 'buildup', 2)}</td></tr>`; }).join('')}</tbody></table></div>
       <p class="note">Haunch build-up = the entered haunch t<sub>h</sub> = ${k.fx(+inp.th, 2)} in + the residual Δ<sub>deck</sub> camber (at least 0.5 in): the deck is screeded to grade before the superimposed dead load. The beam seats use Δ<sub>seat</sub>. Both shaped by 4x(L − x)/L² (zero at the bearings, one at midspan). Check the minimum haunch at midspan and the maximum at the bearings against the fabricator's tolerance.</p>`, 'card-cbhaunch');

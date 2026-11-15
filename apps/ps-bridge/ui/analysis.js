@@ -20,7 +20,7 @@
   function output(ctx) {
     const { R, inp, ui } = ctx, k = K(), ev = (p, d, u, div) => k.ev(R, p, d, u, div), wk = k.wk, D = R.diagrams, sel = selOf(ui, R), c = R.cont;
     const simple = !R.fe && !R.useExt;
-    let h = '<div id="gfx_an"></div>';
+    let h = K().gcard('Analysis graphic: envelopes along the girder', 'gfx_an');
     // the station table: every sixth station of the engine's and the selected one
     const idx = D.map((r, i) => i).filter(i => i % 6 === 0 || i === sel);
     h += k.card('Force effects along the girder (per girder; moments kip-ft, shears kip)', `<div class="fRow"><label for="o_anSel">Station</label><select id="o_anSel">${D.map((r, i) => `<option value="${i}"${i === sel ? ' selected' : ''}>x = ${k.fx(r.x, 2)} ft (${k.fx(r.x / R.L, 3)} L)</option>`).join('')}</select></div>

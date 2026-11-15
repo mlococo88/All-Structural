@@ -29,7 +29,7 @@
   function output(ctx) {
     const { R, inp } = ctx, k = K(), ev = (p, d, u, div) => k.ev(R, p, d, u, div), wk = k.wk, o = inp.opt, G = R.g, ss = R.ss, cf = R.conf, rs = R.relSteel;
     const qS = ckOf(R, 'Splitting steel (5.9.4.4)'), qC = ckOf(R, 'Confinement steel (5.9.4.4.2)'), qR = ckOf(R, 'Release tens. steel (5.9.2.3.1b)'), qH = ckOf(R, /^Hold-down force/), qD = ckOf(R, /^Debonded strands/);
-    let h = '<div id="gfx_ez"></div>';
+    let h = K().gcard('End zone graphic: check ratios', 'gfx_ez');
     h += k.card('Splitting / bursting resistance (5.9.4.4.1)', k.kv([['P<sub>i</sub> at transfer (all strands)', `${ev('rv.terms.Pi', 1, 'kip')} ${wk('ez.Pi')}`], ['Required P<sub>r</sub> = 0.04 P<sub>i</sub>', `${ev('splitDem', 1, 'kip')} ${wk('ez.Pr')}`],
       ['A<sub>s,req</sub> = 0.04 P<sub>i</sub> / 20 ksi', `${ev('AsSplit', 2, 'in²')} ${wk('ez.AsReq')}`], [`Within h/4 (h = overall ${k.esc(R.splitDir)} ${ev('splitH', 1, 'in')})`, `${ev('splitZone', 1, 'in')} of the member end ${wk('ez.h4')}`],
       ['A<sub>s,prov</sub> (legs × area)', `${k.fx(+o.splitN || 0, 0)} × ${k.fx(+o.splitAv || 0, 2)} = ${ev('AsSplitProv', 2, 'in²')} ${wk('ez.AsProv')}`], ['P<sub>r</sub> provided = 20 A<sub>s,prov</sub>', `${ev('splitPr', 1, 'kip')} ${wk('ez.PrProv')}`],
@@ -76,7 +76,7 @@
     } else dbh += '<p class="note">No debonded strands.</p>';
     if (wD.length) dbh += `<div class="alert"><b>Engine warnings (debonding)</b><ul>${wD.map(w => `<li>${k.esc(w)}</li>`).join('')}</ul></div>`;
     h += k.card('Debonded strands (5.9.4.3.3)', dbh, 'card-ezdb');
-    h += '<div id="gfx_ezend"></div>';
+    h += K().gcard('End zone graphic: girder end', 'gfx_ezend');
     h += k.card('Worked steps: end zone and hold-down', `<p class="note">AASHTO LRFD 10th Ed. (2024); the owner rules as cited. Every result is the engine's value (the moved Prestressed Bridge Design engine).</p>${k.steps(ctx.W.endzone.steps, TOPICS, OPEN)}`);
     return h;
   }

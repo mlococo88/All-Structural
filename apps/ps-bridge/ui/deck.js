@@ -24,7 +24,7 @@
     if (!R.deck) return k.card('Deck design (strip method)', '<p class="note">Deck design is off for this design. Turn it on (<a href="#" data-goin="dd">Diaphragms / deck tab</a>, Deck design) for the transverse design of the interior bays and the overhang.</p>', 'card-dkoff');
     const ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, D = R.deck, own = D.own;
     const qP = ckOf(R, 'Deck +M'), qN = ckOf(R, 'Deck −M'), qO = ckOf(R, 'Deck overhang');
-    let h = '<div id="gfx_dk"></div>';
+    let h = K().gcard('Deck graphic: checks', 'gfx_dk');
     h += k.card('Interior bay: transverse moments per foot of deck', `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Moment, kip-ft/ft</th><th>Positive<br>(midbay)</th><th></th><th>Negative<br>(design section)</th><th></th></tr></thead><tbody>
       <tr><td class="lft">Slab DC: w<sub>DC</sub>S²/11, /10 (w<sub>DC</sub> = ${ev('deck.wDLslab', 4, 'ksf')} ${wk('dk.wDC')})</td><td>${ev('deck.MDC_pos', 3)}</td><td>${wk('dk.MDCp')}</td><td>${ev('deck.MDC_neg', 3)}</td><td>${wk('dk.MDCn')}</td></tr>
       <tr><td class="lft">Wearing surface DW (w<sub>DW</sub> = ${ev('deck.wDLws', 4, 'ksf')})</td><td>${ev('deck.MDW_pos', 3)}</td><td>${wk('dk.MDWp')}</td><td>${ev('deck.MDW_neg', 3)}</td><td>${wk('dk.MDWn')}</td></tr>
@@ -43,7 +43,7 @@
       ['M<sub>u</sub> / φM<sub>n</sub>', `${ev('deck.Mu_oh', 3)} / ${ev('deck.ohCap.phiMn', 3, 'kip-ft/ft')}: <b>${ev(`checks.${qO.i}.r`, 3)}</b> ${qO.c.pass ? 'PASS' : '<b style="color:var(--fail)">FAIL</b>'} ${wk('dk.oh.r')}`]])
       + '<p class="note">The gravity and barrier-weight case on the 45 + 10X strip only. The Extreme Event II vehicular-collision cases (A13.4) still need a barrier-specific analysis.</p>', 'card-dkoh');
     h += k.card('Distribution reinforcement (9.7.3.2)', k.kv([['Bottom distribution steel, % of the positive-moment steel', `${ev('deck.distPct', 1)} % ${wk('dk.dist')}`]]) + '<p class="note">min(220/√S, 67 %), S in ft, bottom bars parallel to the girders (as the old app).</p>', 'card-dkdist');
-    h += '<div id="gfx_dksec"></div>';
+    h += K().gcard('Deck graphic: section', 'gfx_dksec');
     h += k.card('Worked steps: deck', `<p class="note">${A}(2024) 4.6.2.1, Table A4-1, 5.6.3, 9.7. Every result is the engine's value (the moved Prestressed Bridge Design engine). Inputs: <a href="#" data-goin="dd">Diaphragms / deck tab</a>.</p>${k.steps(ctx.W.deck.steps, TOPICS, OPEN)}`);
     return h;
   }

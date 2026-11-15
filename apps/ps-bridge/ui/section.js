@@ -46,7 +46,7 @@
     const kind = md ? { nebt: 'NEBT bulb tee', nedbt: 'NEDBT decked bulb tee', nextf: 'NEXT F double tee', nextd: 'NEXT D double tee (integral deck)', spread: 'spread box beam, computed as an I-girder', adj: 'adjacent box beam', slab: 'adjacent deck beam', solid: 'adjacent deck beam' }[md[1].src.fam]
       : G.isNext ? 'NEXT F double tee' : G.isBox ? 'adjacent box beam' : G.isDeck ? 'adjacent deck beam' : 'I-girder / bulb tee';
     const vn = voidNote(G) || (md ? SCm.mdNote(G) : ''), mx = !!(md && md[1].next && G.nxw);
-    let h = '<div id="gfx_sec"></div>';
+    let h = K().gcard('Section graphic', 'gfx_sec');
     h += k.card(`Gross girder section: ${k.esc(inp.girder)}`, k.kv([
       ['Shape', `${k.esc(inp.girder)} (${kind})${G.ovr && G.ovr.any ? ', with overrides' : ''}`], ['Depth h', ev('g.h', 2, 'in')],
       ...(mx ? [['Beam width b<sub>f</sub>', `${ev('g.btf', 2, 'in')} ${wk('sec.g.bf')}`]] : []),   // PS-37: a MassDOT NEXT's width and interpolated properties, worked
@@ -89,12 +89,15 @@
     if (ss.nh > 0) { const [x0, x1, y0, y1] = SG.drapedBox(pts);
       S.region(x0, y0, x1, y1, `${ss.nh} draped strands, centroid y_mid = ${ss.hp.yMid} in at midspan (y_end = ${ss.hp.yEnd} in)`); }
     const xr = Math.max(G.bbf || 0, G.btf || 0, cp.beff || 0) / 2 + 4;
-    const cl = (y, txt, cls) => { S.line(-xr, y, xr, y, cls || 'dt-cl'); S.text(xr, y, txt, { dx: 4, vc: true, sz: 11 }); };
-    cl(G.yb, `y_b = ${V.fx(G.yb, 2)} in (girder)`); cl(cp.ybc, `y_bc = ${V.fx(cp.ybc, 2)} in (composite)`, 'dt-hid'); cl(ss.cgsMid, `y_ps = ${V.fx(ss.cgsMid, 2)} in (strands, midspan)`, 'dt-tf');
+    // 2026-11-15 (batch B): on a narrow card (W < 560, a phone) the line labels go above each line at its right end, inside the drawing width,
+    // so the section is drawn at the card's width (before: the labels to the right left the section about 120 px wide at 390 px)
+    const nar = W < 560;
+    const cl = (y, txt, cls) => { S.line(-xr, y, xr, y, cls || 'dt-cl'); if (nar) S.text(xr, y, txt, { a: 'end', dy: -3, sz: 10, halo: true }); else S.text(xr, y, txt, { dx: 4, vc: true, sz: 11 }); };
+    cl(G.yb, `y_b = ${V.fx(G.yb, 2)} in${nar ? '' : ' (girder)'}`); cl(cp.ybc, `y_bc = ${V.fx(cp.ybc, 2)} in${nar ? '' : ' (composite)'}`, 'dt-hid'); cl(ss.cgsMid, `y_ps = ${V.fx(ss.cgsMid, 2)} in${nar ? '' : ' (strands, midspan)'}`, 'dt-tf');
     S.dimV(0, G.h, -Math.max(G.bbf || 0, G.btf || 0) / 2, -16, `h = ${V.fx(G.h, 1)} in`);
     if (ts > 0) S.dimH(-cp.beff / 2, cp.beff / 2, G.h + th + ts, 14, `b_eff = ${V.fx(cp.beff, 1)} in`);
-    const r = S.render({ W, maxH: Math.min(520, Math.max(300, W * 0.6)), label: 'Composite section with the strands' });
-    return { html: r.svg, nar: W < 560 };
+    const r = S.render({ W, maxH: nar ? Math.max(300, W * 1.1) : Math.min(520, Math.max(300, W * 0.6)), label: 'Composite section with the strands' });
+    return { html: r.svg, nar };
   }
   function after(el, ctx) {
     K().after(el, OPEN);

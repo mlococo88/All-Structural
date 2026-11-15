@@ -23,7 +23,7 @@
     if (!R.handling) return k.card('Handling (lifting and hauling)', '<p class="note">The Handling checks are off for this design. Turn them on (<a href="#" data-goin="loads">Loads tab</a>, Handling) for the stresses at the lifting and hauling points and the lateral-stability screening.</p>', 'card-hnoff');
     const ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, H = R.handling;
     const qL = ckOf(R, 'Lifting stress'), qFL = ckOf(R, 'Lifting FS (crack, screening)'), qFH = ckOf(R, 'Hauling FS (crack, screening)');
-    let h = '<div id="gfx_hn"></div>';
+    let h = K().gcard('Handling graphic: checks', 'gfx_hn');
     const tbl = (key, nm, use) => { const P = `handling.${key}.`;
       return `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Location</th><th>M<br>kip-ft</th><th>Top fibre<br>ksi</th><th>Bottom fibre<br>ksi</th><th></th></tr></thead><tbody>
         <tr><td class="lft">Support (${ev(P + 'a', 1)} ft from the end, cantilever)</td><td>${ev(P + 'Msup', 1)} ${wk(`hn.${key}.Msup`)}</td><td>${ev(P + 'fSupTop', 3)} ${wk(`hn.${key}.fSupTop`)}</td><td>${ev(P + 'fSupBot', 3)} ${wk(`hn.${key}.fSupBot`)}</td><td></td></tr>
@@ -35,7 +35,7 @@
       ['Lateral CG deflection, lifting z<sub>o</sub>', `${ev('handling.zo', 3, 'in')} ${wk('hn.zo')}`], ['FS against cracking, lifting y<sub>t</sub> / (z<sub>o</sub> + e<sub>i</sub>)', `<b>${ev('handling.FScrLift', 2)}</b> (1.0 required): ratio ${ev(`checks.${qFL.i}.r`, 3)} ${pf(qFL.c.pass)} ${wk('hn.FSl')}`],
       ['Lateral CG deflection, hauling z<sub>o,h</sub>', `${ev('handling.zoH', 3, 'in')} ${wk('hn.zoH')}`], ['FS against cracking, hauling', `<b>${ev('handling.FScrHaul', 2)}</b> (1.0 required): ratio ${ev(`checks.${qFH.i}.r`, 3)} ${pf(qFH.c.pass)} ${wk('hn.FSh')}`]])
       + `<div class="alert"><b>Screening only: not the PCI (2016) / Mast method.</b> Simplified factors of safety against cracking: lifting y<sub>r</sub>/(z<sub>o</sub> + e<sub>i</sub>) with the roll axis at the top of the girder; hauling with no truck roll stiffness K<sub>θ</sub>, no tilt equilibrium, and no factor of safety against failure or rollover. I<sub>y</sub> is approximated from the section outline. For long or slender girders, confirm with the full PCI stability procedure and the hauler's roll stiffness and bunk geometry (as the old app).</div>`, 'card-hnstab');
-    h += '<div id="gfx_hnel"></div>';
+    h += K().gcard('Handling graphic: girder on its supports', 'gfx_hnel');
     h += k.card('Worked steps: handling', `<p class="note">Release-stage stresses (${A}5.9.2.3.1) and the simplified lateral-stability screening. Every result is the engine's value (the moved Prestressed Bridge Design engine). Inputs: <a href="#" data-goin="loads">Loads tab</a> (Handling).</p>${k.steps(ctx.W.handling.steps, TOPICS, OPEN)}`);
     return h;
   }

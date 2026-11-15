@@ -114,6 +114,7 @@
   function cards(html, o) {
     const T = parse(html), subs = [], top = [];
     const walk = n => (n.kids || []).forEach(k => {
+      if (k.tag === 'section' && has(k, 'gfxCard')) { const b = (k.kids || []).find(q => has(q, 'secBody')); if (b) walk(b); return; }   // 2026-11-15: a graphic's card (PSBOutKit.gcard) = its slot alone
       if (k.tag === 'section' && has(k, 'sec')) {
         const hd = (k.kids || []).find(q => has(q, 'secHead')), body = (k.kids || []).find(q => has(q, 'secBody')) || { kids: [] };
         const title = hd ? line(hd, o).replace(/\s*\(see \[\[[^\]]*\]\]\)/g, '') : '';
