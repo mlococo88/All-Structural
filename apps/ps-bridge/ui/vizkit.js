@@ -1,6 +1,6 @@
 /* COPY, to move to shared/ later (CLAUDE.md §3): apps/steel-bridge/ui/vizkit.js at 28e1605 (the steel app's "modern data-viz" graphic style,
    SECC / DETC), changed only in: namespace PSBVizKit (was SBDVizKit), resize event psb2:panelresize (ui/splitter.js of this app), the CAD
-   helpers PSBGraphics (none yet: DXF comes with PR 7), and detCard's Download DXF button and note shown only when o.dxf is given. PR 2b. */
+   helpers PSBGraphics (ui/svgdxf.js, 2026-11-15: the graphic as drawn, not hand-built CAD), and detCard's Download DXF button (o.dxf, else the graphic as drawn). PR 2b. */
 /* apps/ps-bridge/ui/vizkit.js — window.PSBVizKit: the pieces of the "modern data-viz" graphic style (engineer's decision 2026-11-10, mockup option C
    of the Section properties graphic), kept here so that other tab graphics can be moved to the same style later. Classic script, display only:
    nothing here computes an engineering value; a graphic hands in the numbers its tab already has. No storage. First user: ui/gfxa.js section().
@@ -309,15 +309,19 @@
      dxf() -> the PSBGraphics graphic of the CAD line drawing (Download DXF), file, hint (read-out hint; none: no read-out line), cap (html), notes [html], tbl (html) } -> { el, fig, redraw } */
   function detCard(slot, o) {
     detCss();
-    slot.innerHTML = `<div class="vk vk-det"${o.id ? ` id="${esc(o.id)}"` : ''}><div class="vk-hd"><h3>${o.title}${o.sub ? `<small>${o.sub}</small>` : ''}</h3>${o.dxf ? '<button type="button" data-vkdxf title="The CAD line drawing of this graphic">Download DXF</button>' : ''}</div>`
+    // 2026-11-15 (batch B): Download DXF on every graphic, as the steel app's: o.dxf, else (unless o.dxf === false) the graphic as drawn
+    // (PSBGraphics.fromFig, ui/svgdxf.js, with shared/dxf.js); its note PSBGraphics.NOTE
+    const auto = o.dxf == null && o.dxf !== false && window.PSBGraphics && window.SharedDxf, hasDxf = !!(o.dxf || auto);
+    slot.innerHTML = `<div class="vk vk-det"${o.id ? ` id="${esc(o.id)}"` : ''}><div class="vk-hd"><h3>${o.title}${o.sub ? `<small>${o.sub}</small>` : ''}</h3>${hasDxf ? '<button type="button" data-vkdxf title="The CAD line drawing of this graphic">Download DXF</button>' : ''}</div>`
       + (o.seg && o.seg.items.length > 1 ? VK.seg({ label: o.seg.label, items: o.seg.items, cur: o.seg.cur }) : '') + (o.top || '')
-      + `<div class="vk-fig"></div>${o.hint ? `<p class="vk-read" aria-live="polite" data-hint="${esc(o.hint)}"></p>` : ''}${o.tbl || ''}${o.cap || ''}${(o.notes || []).map(n => `<p class="vk-note">${n}</p>`).join('')}${o.dxf ? `<p class="vk-note">${esc(DXF_NOTE_D)}</p>` : ''}</div>`;
+      + `<div class="vk-fig"></div>${o.hint ? `<p class="vk-read" aria-live="polite" data-hint="${esc(o.hint)}"></p>` : ''}${o.tbl || ''}${o.cap || ''}${(o.notes || []).map(n => `<p class="vk-note">${n}</p>`).join('')}${o.dxf ? `<p class="vk-note">${esc(DXF_NOTE_D)}</p>` : auto ? `<p class="vk-note">${esc(window.PSBGraphics.NOTE)}</p>` : ''}</div>`;
     const root = slot.querySelector('.vk'), fig = root.querySelector('.vk-fig'), out = root.querySelector('.vk-read');
     const draw = w => { const W = w > 0 ? w : 900, q = o.draw(W); fig.innerHTML = q.html; root.classList.toggle('vk-narrow', !!q.nar); };
     VK.fit(fig, draw); VK.print(fig, () => { if (fig.clientWidth < 760) draw(760); }, () => draw(fig.clientWidth));
     detRead(fig, out);
     if (o.seg) VK.wire(root, { seg: k => o.seg.on(k) });
-    if (o.dxf) root.querySelector('[data-vkdxf]').addEventListener('click', () => { try { const g = o.dxf(); window.PSBGraphics.download(g, o.file || g.file || g.title); } catch (e) { alert('The DXF could not be made: ' + e.message); } });
+    const dxf = o.dxf || (auto ? () => window.PSBGraphics.fromFig(fig, { title: plain(o.title), file: o.file || o.id }) : null);
+    if (dxf) root.querySelector('[data-vkdxf]').addEventListener('click', () => { try { const g = dxf(); window.PSBGraphics.download(g, o.file || g.file || g.title); } catch (e) { alert('The DXF could not be made: ' + e.message); } });
     return { el: root, fig, redraw: () => draw(fig.clientWidth) };
   }
 

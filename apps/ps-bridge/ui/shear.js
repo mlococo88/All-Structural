@@ -20,7 +20,7 @@
   function output(ctx) {
     const { R, inp } = ctx, k = K(), ev = (p, d, u, div) => k.ev(R, p, d, u, div), wk = k.wk, S = R.shear;
     const qS = ckOf(R, 'Shear'), qL = ckOf(R, 'Long. reinf (5.7.3.5)'), qI = ckOf(R, 'Interface shear (5.7.4)');
-    let h = K().gcard('Shear graphic: demand and resistance along the girder', 'gfx_sh');
+    let h = K().gcard('Shear graphic: girder elevation coloured by governing ratio', 'gfxr_sh') + K().gcard('Shear graphic: demand and resistance along the girder', 'gfx_sh');   // gfxr_: on screen only (not a Report figure)
     h += k.card('Shear (governing values)', k.kv([['Worst V<sub>u</sub> / φV<sub>n</sub>', `<b>${ev(`checks.${qS.i}.r`, 3)}</b> at x = ${ev('wShear.x', 2, 'ft')} ${qS.c.pass ? 'PASS' : 'FAIL'} ${wk('sh.gov')}`],
       ['Longitudinal tie T / T<sub>r</sub>', `<b>${ev(`checks.${qL.i}.r`, 3)}</b> at x = ${ev('wLong.x', 2, 'ft')} ${qL.c.pass ? 'PASS' : 'FAIL'} ${wk('sh.Tr')}`], ['Interface shear', `<b>${ev(`checks.${qI.i}.r`, 3)}</b> at x = ${ev('wIface.x', 2, 'ft')} ${qI.c.pass ? 'PASS' : 'FAIL'} ${wk('sh.ifr')}`],
       ['Stirrups (trial)', `${k.fx(+inp.opt.stirAv, 2)} in² at ${k.fx(+inp.opt.sEnd, 1)} in (end zone, ${k.fx(+inp.opt.endZoneLen, 2)} L each end) / ${k.fx(+inp.opt.sInt, 1)} in, f<sub>y</sub> ${k.fx(+inp.opt.fy, 0)} ksi <a href="#" data-goin="gird">Girders &amp; strands</a>`]])
@@ -45,6 +45,11 @@
     K().after(el, OPEN);
     const { R, inp } = ctx, k = K(), ev = (p, d) => k.ev(R, p, d), D = R.shearDiag, xs = D.map(r => r.x), L = R.L;
     const nearX = x => xs.reduce((b, v, i) => Math.abs(v - x) < Math.abs(xs[b] - x) ? i : b, 0);
+    // 2026-11-15 (batch B): the girder elevation coloured by the engine's shear d/c at each design station (the table's ratio), the shear check flagged
+    const se = el.querySelector('#gfxr_sh'), qG = ckOf(R, 'Shear'), SS = R.shear.filter(r => !r.isBearing);
+    if (se && window.PSBRatioElev) window.PSBRatioElev.mount(se, { id: 'shElev', title: 'Girder elevation coloured by governing ratio', sub: `V<sub>u</sub> / φV<sub>n</sub> (the engine's d/c) at each of the ${SS.length} design stations`, L,
+      pts: SS.map(r => ({ x: r.x, r: r.dc })), gov: qG ? { x: qG.c.loc, r: qG.c.r, name: 'Shear' } : null, label: 'Shear: V_u / φV_n (neighbours of one colour class merged; the band shows its largest)', file: 'shear-elevation',
+      cap: `<p class="vk-cap">The flag: the engine's shear check (ratio ${k.fx(qG ? qG.c.r : NaN, 3)} at x = ${k.fx(qG ? qG.c.loc : NaN, 2)} ft) ${k.wk('sh.gov')}. Bands: the d/c of each design station of the section-by-section table. Display only.</p>` });
     const slot = el.querySelector('#gfx_sh'); if (!slot || !VA() || !VA().mount) return;
     const qS = ckOf(R, 'Shear'), qL = ckOf(R, 'Long. reinf (5.7.3.5)'), qI = ckOf(R, 'Interface shear (5.7.4)');
     const SER = [{ key: 'vu', html: 'V<sub>u</sub>', ci: 2, pts: D.map(r => [r.x, r.Vu]) }, { key: 'pvn', html: 'φV<sub>n</sub> (trial stirrups)', ci: 0, pts: D.map(r => [r.x, r.phiVn]) }, { key: 'pvc', html: 'φ(V<sub>c</sub> + V<sub>p</sub>)', ci: 1, dash: '3 3', pts: D.map(r => [r.x, r.phiVcp]) },
