@@ -3809,7 +3809,7 @@ PR #1560: https://github.com/mlococo88/All-Structural/pull/1560
 - apps/steel-bridge/engine/sheets.js `sheet()` and apps/steel-bridge/engine/drawings.js SCALES / SCALE_NAME / TXT; apps/steel-bridge/ui/drawings.js (the tab's bar, viewer and print wiring). Keep in step.
 
 ## 2026-11-14 — Item 12: the old app's cross-tool hand-offs (bridgeSuite.v1.*) in the new app — same keys, schemas and payloads; Project tab "Hand-offs" card (no calculation change)
-PR: claude/ps-bridge-handoffs
+PR #1566: https://github.com/mlococo88/All-Structural/pull/1566
 ### Request
 - Planned item 12: the new app sends and receives the same `bridgeSuite.v1.*` hand-offs as the old app (`Prestressed Bridge Design.html`), with identical key names and payload formats (CLAUDE.md §5; HANDOFF.md). Prefer changing only apps/ps-bridge. Node tests of every payload round trip. Not the switch-over itself.
 ### Inventory: the old app's channels (sender → receiver, key) and what the new app does
