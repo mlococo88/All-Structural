@@ -93,6 +93,7 @@
     'ui/loads.js',       // PR 2b-2: Loads & LLDF tab
     'ui/analysis.js',    // PR 2b-2: Analysis tab
     'ui/strands.js',     // PR 2c-1: the strand-pattern graphic (Girders & strands input tab, Losses tab)
+    'ui/strandedit.js',  // batch G5 (2026-11-15): strand editing by clicking the section (the old app's Live Geometry editing; an input editor)
     'ui/losses.js',      // PR 2c-1: Losses tab
     'ui/stresses.js',    // PR 2c-1: Stresses tab
     'ui/flexure.js',     // PR 2c-2: Flexure tab (with the pier section and the positive moment connection)
@@ -437,7 +438,8 @@
         + IN.cards('xsec', P)
         + DLUI.card(P),   // PR 3a-3: DC2 / DW to each girder line (PS-9)
       gird: TY.card(P, ui) + TY.shownCard(P) + TY.scopeBar(P, ui, 'gird') + IN.cards('gird', V)
-        + `<section class="sec"><div class="secHead">Strand pattern${sk >= 0 ? ` of ${esc(P.types[sk].label)}` : ''}</div><div class="secBody" id="gfx_strands_in"><p class="note">Shown when the inputs have no error.</p></div></section>`,   // 2026-11-15: the "Girder library PR 4" placeholder removed (the library is in the Girder shape card, PS-37)
+        + `<section class="sec"><div class="secHead">Strand pattern${sk >= 0 ? ` of ${esc(P.types[sk].label)}` : ''}</div><div class="secBody" id="gfx_strands_in"><p class="note">Shown when the inputs have no error.</p></div></section>`
+        + (window.PSBStrandEdit ? window.PSBStrandEdit.card(sk >= 0 ? P.types[sk].label : '') : ''),   // batch G5: strand editing by clicking the section (ui/strandedit.js)   // 2026-11-15: the "Girder library PR 4" placeholder removed (the library is in the Girder shape card, PS-37)
       mat: TY.scopeBar(P, ui, 'mat') + IN.cards('mat', V),
       dd: IN.cards('dd', P),
       loads: TY.scopeBar(P, ui, 'loads') + DMUI.card(P, ui) + IN.cards('loads', V),   // batch D1: the demand source of the girder type in scope
@@ -484,6 +486,11 @@
     if (pb && $('pbHost')) pb.mount($('pbHost'));   // PR 5: the standard save card
     // PR 2c-1: the strand-pattern graphic of the design (the engine's strand system), on the Girders & strands tab, when the inputs have no error
     if (ui.itab === 'gird' && !errs.length && window.PSBStrandGfx) { const rc = scopeK() >= 0 ? scopeResult() : result(); if (rc && !rc.R.error) { try { window.PSBStrandGfx.mount($('gfx_strands_in'), { R: rc.R, inp: rc.inp }, { id: 'inStrandFig', title: 'Strand pattern of the design girder', compact: true }); } catch (e) { console.warn(e); } } }
+    // batch G5: strand editing by clicking the section (ui/strandedit.js): the straight rows of the scope shown, one change = one Undo step
+    if (ui.itab === 'gird' && !errs.length && window.PSBStrandEdit && $('strandEditHost')) { const sk = scopeK(), rc = sk >= 0 ? scopeResult() : result(); if (rc && !rc.R.error) { try {
+      const V = viewOf(sk), rows = V.base.rows || [], fc = window.PSBStrandEdit.fitCtx(P, sk, rows);
+      window.PSBStrandEdit.mount($('strandEditHost'), { R: rc.R, rows, scopeKey: sk >= 0 ? P.types[sk].id : 'base', fits: fc.fits, fitWhy: fc.fitWhy,
+        commit: (r2, msg) => { const W2 = viewOf(scopeK()); W2.base.rows = r2; if (scopeK() >= 0) BR.setOvr(P, scopeK(), W2.base); changed(); toast(msg + '.', true); return {}; } }); } catch (e) { console.warn(e); } } }
   }
   /* the blocking input errors (engine/inputcheck.js collect: the model, the design girder, every field of the input cards): their fields
      marked with their message (ui/inputcheck.js, the steel app's pattern), counted on their input tab; no results while one exists */
