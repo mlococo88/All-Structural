@@ -18,7 +18,7 @@ try {
   await p.click('#tabBar [data-otab="3d"]'); await p.waitForFunction(() => window.PSB3DUI.state().counts, null, { timeout: 60000 });
   const off = await p.evaluate(K => K.map(k => document.querySelector(`[data-v3d="${k}"]`).checked), KEYS); assert.deepEqual(off, [false, false, false, false, false]); ok('the five cage layers are off at first');
   for (const k of KEYS) { await p.check(`[data-v3d="${k}"]`); await p.waitForTimeout(100); }
-  const st = await p.evaluate(() => { const s = window.PSB3DUI.state(), G = window.PSB3DUI.geom(PSBModel.load(localStorage).project); return { c: s.counts, cam: s.camNote, sfc: s.sfcNote, g: { stir: G.cage.filter(q => q.kind === 'stir').length, lon: G.cage.filter(q => q.kind === 'lon').length, spl: G.cage.filter(q => q.kind === 'spl').length } }; });
+  const st = await p.evaluate(() => { const s = window.PSB3DUI.state(), G = window.PSB3DUI.geom(PSBModel.load(localStorage).project); return { c: s.cage, cam: s.camNote, sfc: s.sfcNote, g: { stir: G.cage.filter(q => q.kind === 'stir').length, lon: G.cage.filter(q => q.kind === 'lon').length, spl: G.cage.filter(q => q.kind === 'spl').length } }; });
   assert.deepEqual([st.c.stir, st.c.lon, st.c.spl], [st.g.stir, st.g.lon, st.g.spl]); assert.ok(st.c.stir > 50 && st.c.cam >= 1 && st.c.sfc >= 1, JSON.stringify(st.c));
   assert.match(await p.textContent('#v3d-cage'), /Cambered shape: the final camber Δ_final = -?[\d.]+ in .* × 12/); assert.match(await p.textContent('#v3d-cage'), /Strand stress colour: f_ps\(x\) \/ f_ps/);
   ok(`switched on: ${st.c.stir} stirrups, ${st.c.lon} top bars, ${st.c.spl} splitting legs (= geom), the cambered shape and the stress colour; notes shown`);

@@ -283,8 +283,8 @@
     V.focus = (x, z, span) => { const tgt = new T.Vector3(x, Hm / 2, z), r = span || 240; V.cam.position.copy(tgt.clone().add(new T.Vector3(-0.55, 0.35, 1).normalize().multiplyScalar(r * 1.5))); V.cam.near = r / 400; V.cam.far = Math.max(r * 60, R * 40); V.cam.updateProjectionMatrix(); if (V.ctl) { V.ctl.target.copy(tgt); V.ctl.update(); } };
     V.tg = line ? [['all', `Whole girder line G${line}`, null]].concat(...G.girders.filter(on).sort((a, b) => a.s - b.s).map(q => { const ss = q.inp && q.gg ? strandSys(q.inp, q.gg) : null, a = ss && ss.nh > 0 ? (+ss.hp.frac || 0) * q.L * 12 : 0;
       return [[`s${q.s}a`, `Span ${q.s}: left end`, [q.xa, q.z, 3 * Hm]], ...(a > 0 ? [[`s${q.s}h`, `Span ${q.s}: hold-down point`, [q.xa + a, q.z, 4 * Hm]]] : []), [`s${q.s}m`, `Span ${q.s}: midspan`, [(q.xa + q.xb) / 2, q.z, 6 * Hm]], [`s${q.s}b`, `Span ${q.s}: right end`, [q.xb, q.z, 3 * Hm]]]; })) : null;
-    V.counts = { girders: G.girders.filter(on).length, dia: G.dia.length, cont: G.cont.length, pads: G.pads.length, strands: G.strands.length, app: G.app.length,
-      stir: (G.cage || []).filter(q => q.kind === 'stir').length, lon: (G.cage || []).filter(q => q.kind === 'lon').length, spl: (G.cage || []).filter(q => q.kind === 'spl').length, cam: V.groups.cam ? V.groups.cam.children.length : 0, sfc: V.groups.sfc ? V.groups.sfc.children.length : 0 };   // batch G8
+    V.counts = { girders: G.girders.filter(on).length, dia: G.dia.length, cont: G.cont.length, pads: G.pads.length, strands: G.strands.length, app: G.app.length };
+    V.cage = { stir: (G.cage || []).filter(q => q.kind === 'stir').length, lon: (G.cage || []).filter(q => q.kind === 'lon').length, spl: (G.cage || []).filter(q => q.kind === 'spl').length, cam: V.groups.cam ? V.groups.cam.children.length : 0, sfc: V.groups.sfc ? V.groups.sfc.children.length : 0 };   // batch G8
     if (line) Object.assign(V.counts, { dia: G.dia.filter(q => q.bay === line || q.bay === line - 1).length, pads: G.pads.filter(p => Math.abs(p.z - G.ys[line - 1] * 12) <= 60).length });
   }
 
@@ -362,5 +362,5 @@
   /* for tests: the camera, the counts of the last build */
   const camera = () => (V.cam ? { p: V.cam.position.toArray(), t: V.ctl ? V.ctl.target.toArray() : null } : null);
   const snapshot = () => V.snap || null;   // batch G8: the capture for the Report (ui/report.js)
-  window.PSB3DUI = { render, geom, camera, LAY, DG, series, snapshot, state: () => ({ snap: !!V.snap, camNote: V.camNote, sfcNote: V.sfcNote, counts: V.counts, info: V.info, fences: V.fences.length, dg: V.dgLbl, tg: V.tg ? V.tg.map(t => t[0]) : null, mode: V.mode }) };
+  window.PSB3DUI = { render, geom, camera, LAY, DG, series, snapshot, state: () => ({ cage: V.cage || null, snap: !!V.snap, camNote: V.camNote, sfcNote: V.sfcNote, counts: V.counts, info: V.info, fences: V.fences.length, dg: V.dgLbl, tg: V.tg ? V.tg.map(t => t[0]) : null, mode: V.mode }) };
 })();
