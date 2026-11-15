@@ -8378,7 +8378,7 @@ PR #1585: https://github.com/mlococo88/All-Structural/pull/1585
 - None (the steel app's camber, overhang and diaphragm sheets are its own; the plot is the H2 copy).
 
 ## 2026-11-15 — Batch G5: strand editing by clicking the section (add on the grid, remove, debond, move; edit log; "↺ Revert strand edits"; each edit one Undo step; the strand fit respected) and the table's "Clear debonding on this row" (input editor; no calculation change)
-PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__
+PR #1586: https://github.com/mlococo88/All-Structural/pull/1586
 ### Request
 - Old-vs-new review 2026-11-15, rows #16 ("Clear debonding on this row", O:6031) and #18 (interactive strand editing in Live Geometry: add mode on the 2 in grid, click a strand to remove / debond / nudge, the edit log, Revert strand edits; O:4936-5024, 6051-6066).
 ### What changed
