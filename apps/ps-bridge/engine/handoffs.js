@@ -29,7 +29,11 @@
                               jobNo → Number, client → Client name, preparedBy → Designer, checkedBy → Checker, date → Date; bridgeId and
                               location: no such field here, sent blank as the old app's BXProject.share) and what "Use shared project
                               info" would change (the old app's BXProject.use rule: never blank a field, only the fields that differ).
-   No engineering value is computed here beyond what the old app's code computed for the same payload. */
+     srAll(P, cells), sgPayload(P, cells), secDims(g)   batch F (2026-11-15): Bridge Substructure Loading in the Steel Bridge app's
+                              formats: superReactions of every girder line (allGirders, HANDOFF.md §4.4) from each cell's srPayload,
+                              summed at the piers; superGeometry (§4.14) from the inputs and each girder type's section.
+   No engineering value is computed here beyond what the old app's code computed for the same payload (batch F: the sum of the two spans'
+   end reactions at a pier, and the largest of the section dimensions). */
 (function () {
   'use strict';
   const W = typeof window !== 'undefined' ? window : globalThis;
@@ -216,6 +220,184 @@
     return { upd, lines };
   }
 
+  /* ---- MCT demands (batch D3, 2026-11-15): the old app's receiver of the MCT Generator's hand-off (its checkHandoff / adoptHandoff,
+     "Prestressed Bridge Design.html" O:9211-9290, and BridgeHandoff, O:592-660), read here from the stored texts the page passes in.
+     Keys (the old app's, unchanged; HANDOFF.md, AUDIT.md §1.3): bridgeSuite.v1.handoffs (map id → payload, schema psbeam-external-demands),
+     bridgeSuite.v1.latestId, bridgeSuite.v1.updatedAt; this app's adoption marker bridgeSuite.v1.adopted.psbridge (the old app's own,
+     .adopted.psbeam, is not read or written: the old app keeps its own banner). Load is by click only: the old app's lock (auto-adopt,
+     BridgeLocks 'demands') is not here (engineer decision HO-D2 pending). ---- */
+  const MCT_VERSION = 1;   // the old app's HANDOFF_SUPPORTED_VERSION
+  const MCT_K = { map: 'bridgeSuite.v1.handoffs', latest: 'bridgeSuite.v1.latestId', updated: 'bridgeSuite.v1.updatedAt', adopted: 'bridgeSuite.v1.adopted.' + RX,
+    geom: 'bridgeSuite.v1.geometryChanges', geomAt: 'bridgeSuite.v1.geometryChanges.updatedAt', geomAdopted: 'bridgeSuite.v1.geometryChanges.adopted.' + RX };
+  const verOf = p => (p && p.schemaVersion != null) ? p.schemaVersion : ((p && p._version != null) ? p._version : 1);   // BridgeHandoff verOf
+  const tokenOf = p => p ? ((p.handoffId || '') + '@' + (p.producedAt || '')) : '';                                    // BridgeHandoff tokenOf
+  /* mctPending(get): the hand-off waiting for this app, or null (none, unreadable, or already adopted / dismissed here): the old app's
+     checkHandoff with BridgeHandoff.readOne(latestId()). get(key) returns the stored text. → { id, version, token, payload, supported } */
+  function mctPending(get) {
+    const id = get(MCT_K.latest); if (!id) return null;
+    let map; try { map = JSON.parse(get(MCT_K.map) || '{}') || {}; } catch (e) { return null; }
+    const p = map[id]; if (!p || typeof p !== 'object') return null;
+    const r = { id, version: verOf(p), token: tokenOf(p), payload: p };
+    if (get(MCT_K.adopted) === r.token) return null;
+    r.supported = r.version <= MCT_VERSION;
+    return r;
+  }
+  /* mctDescribe(p): the banner's text parts (the old app's: producer, project, member key, stations, LL type) */
+  function mctDescribe(p) {
+    return { producer: (p && p.producer) || 'MCT Generator', project: (p && p.project) || '', member: (p && p.member && p.member.key) || '',
+      n: (p && Array.isArray(p.stations)) ? p.stations.length : 0, ll: (p && p.liveLoadType) || 'HL-93' };
+  }
+  /* mctPlan(P, T, payload): what Load changes for girder type T (the old app's adoptHandoff for one design): the demands of T = the payload
+     (engine/demands.js setFile; a payload the file reader refuses is refused here too), the span of the member used = T's span when the
+     member has it (the old app took span 1 of a new member; here each type keeps its own span), and the bridge questions the page asks:
+     spans (the member's lengths when the count is the bridge's and they differ: the old app set L to the span) and continuity (a continuous
+     member on a bridge of simple spans: the old app turned its continuity on). → { ok, error | file, spans, setSpans, makeCont, lines } */
+  function mctPlan(P, T, payload) {
+    const DM = W.PSBDemands; if (!DM) return { ok: false, error: 'the demand module is not loaded' };
+    const r = DM.parse(JSON.stringify(payload), 'the MCT hand-off'); if (!r.ok) return { ok: false, error: r.error };
+    const own = ((P.spans && P.spans.lengths) || []).map(Number), fl = r.spans.map(q => +q.len), m = payload.member || {};
+    const continuous = (Array.isArray(m.spans) && m.spans.length > 1) || (Array.isArray(m.supports) && m.supports.length > 2) || r.spans.length > 1;   // the old app's rule
+    const setSpans = fl.length === own.length && fl.some((v, j) => Math.abs(v - own[j]) > 0.005) ? fl : null;
+    const makeCont = continuous && own.length >= 2 && P.spans.continuity !== 'composite';
+    const lines = [`${T.label}: demands from the MCT hand-off (${r.file.stations.length} stations, ${fl.length} span${fl.length > 1 ? 's' : ''} ${fl.map(v => v.toFixed(2)).join(', ')} ft)${T.span <= fl.length ? `, span ${T.span} of the member` : ''}.`].concat(r.notes);
+    return { ok: true, file: r.file, spans: r.spans, setSpans, makeCont, continuous, lines };
+  }
+  /* geomPending(get): the MCT geometry-change record waiting for this app, or null (the old app's checkGeometryChanges, O:9291-9318:
+     BridgeGeometryChanges.readGeometryChanges against .adopted.<app>) → { producedAt, producer, changes: [{ field, detail, oldVal, newVal }] } */
+  function geomPending(get) {
+    let g; try { g = JSON.parse(get(MCT_K.geom) || 'null'); } catch (e) { return null; }
+    if (!g || typeof g !== 'object' || !Array.isArray(g.changes)) return null;
+    if (get(MCT_K.geomAdopted) === g.producedAt) return null;
+    return g;
+  }
+
+  /* ---- batch F (2026-11-15): Bridge Substructure Loading, every girder line and the bridge geometry, in the Steel Bridge app's
+     formats (apps/steel-bridge/ui/handoffs.js srPayload / sgPayload; HANDOFF.md §4.4 "Optional fields", §4.14). The old app's one-line
+     superReactions payload (srPayload above) is unchanged and still sent by its own button.
+     cells: PSBBridge.results(P, resOf).cells ([{ k, s, g, inp, R }], every girder type on every line; the page's cache of the engine). ---- */
+  const r3 = v => Math.round(v * 1000) / 1000, r4 = v => Math.round(v * 1e4) / 1e4;
+  const isN = v => typeof v === 'number' && isFinite(v);
+  const f2 = v => (+v).toFixed(2), f3 = v => (+v).toFixed(3);
+  const FILE = 'apps/ps-bridge/index.html', GEO_ID = 'psbridge';
+  const supId = (k, ns) => k === 0 ? 'Abut. 1' : k === ns ? 'Abut. 2' : 'Pier ' + k;
+  /* srAll(P, cells): superReactions for every girder line G1 … G<nb> (allGirders: true), the Steel Bridge app's shape: each line's
+     unfactored DC1, DC2 and DW at every support (kip, + up). Each span of a line is its girder type's engine run on that line (the cell),
+     its two end reactions the engine's own bxSuperRxPayload (srPayload above: the Analysis tab's "Reactions (unfactored, kip)" of that type
+     and line, the old app's numbers); at a pier the reaction is the sum of the end reactions of the two spans on it (one support point per
+     support, as the Steel Bridge app sends; each span's share is listed in the notes). No other arithmetic. → { ok, payload, sum, shares }
+     or { error } (a line with no type in a span, or a girder with an input error: nothing is sent). */
+  function srAll(P, cells) {
+    const spans = ((P && P.spans && P.spans.lengths) || []).map(Number), ns = spans.length, nb = Math.round(+(P && P.xs && P.xs.nb));
+    if (!ns || !spans.every(v => isN(v) && v > 0)) return { error: 'Enter the span lengths (Bridge layout tab).' };
+    if (!(nb >= 1)) return { error: 'Define the cross-section (number of girders, Cross-section tab).' };
+    const at = {}; (cells || []).forEach(c => { if (!at[c.s + '.' + c.g]) at[c.s + '.' + c.g] = c; });
+    const miss = [], bad = [];
+    for (let s = 1; s <= ns; s++) for (let g = 1; g <= nb; g++) if (!at[s + '.' + g]) miss.push(`G${g}/S${s}`);
+    if (miss.length) return { error: `Every girder line of every span needs a girder type (Girders & strands tab, Girder types): none on ${miss.join(', ')}.` };
+    // sh[k][g-1]: the end reactions on support k of line g: [{ s, end: 'left' | 'right', DC1, DC2, DW, basis }]
+    const sh = Array.from({ length: ns + 1 }, () => Array.from({ length: nb }, () => [])), pos = [], basis = {};
+    for (let s = 1; s <= ns; s++) for (let g = 1; g <= nb; g++) {
+      const c = at[s + '.' + g], b = srPayload(c.inp, c.R);
+      if (!b || b.error || !b.payload) { bad.push(`G${g}, span ${s} (${c.label || 'type ' + (c.k + 1)}): ${(b && b.error) || 'no result'}`); continue; }
+      const p = b.payload, q = p.supports; if (!Array.isArray(q) || q.length !== 2) { bad.push(`G${g}, span ${s}: not two end reactions`); continue; }
+      if (s === 1 || pos[g - 1] == null) pos[g - 1] = p.girderLine.position;
+      basis[p.girderLine.source] = (basis[p.girderLine.source] || []).concat([`G${g}/S${s}`]);
+      [[s - 1, 'left', q[0]], [s, 'right', q[1]]].forEach(([k, end, r]) => { const x = r.girders[0]; sh[k][g - 1].push({ s, end, DC1: x.DC1, DC2: x.DC2, DW: x.DW }); });
+    }
+    if (bad.length) return { error: `The reactions cannot be built: ${bad.join('; ')}. Fix the inputs first.` };
+    const X = [0]; spans.forEach(v => X.push(r3(X[X.length - 1] + v)));
+    const sum = (a, f) => r3(a.reduce((t, x) => t + x[f], 0));
+    const supports = X.map((x, k) => ({ id: supId(k, ns), x, girders: sh[k].map((a, i) => ({ label: 'G' + (i + 1), position: pos[i] || (i === 0 || i === nb - 1 ? 'exterior' : 'interior'),
+      DC1: sum(a, 'DC1'), DC2: sum(a, 'DC2'), DW: sum(a, 'DW') })) }));
+    const cont = !!(P.spans && P.spans.continuity === 'composite') && ns > 1;
+    const piers = []; for (let k = 1; k < ns; k++) piers.push(k);
+    const shareTxt = k => `${supId(k, ns)} (span ${k} right end + span ${k + 1} left end), DC1 / DC2 / DW kip: ` + sh[k].map((a, i) => {
+      const L = a.find(x => x.end === 'right'), R = a.find(x => x.end === 'left');
+      return `G${i + 1} ${f3(L.DC1)} + ${f3(R.DC1)}, ${f3(L.DC2)} + ${f3(R.DC2)}, ${f3(L.DW)} + ${f3(R.DW)}`; }).join('; ');
+    const notes = [
+      `Whole bridge: every girder line (G1 to G${nb}) of every span from this app (PS Bridge, apps/ps-bridge): each span of a line is the girder type on that line, its own engine run; its two end reactions are the ones the Analysis tab shows for that type and line ("Reactions (unfactored, kip)"; the old app's bxSuperRxPayload). Each girder is labelled by its line number, left to right.`,
+      'Unfactored, kip, + up. DC1 = girder self-weight + deck / haunch and other non-composite DC + diaphragm point loads, on the simple non-composite span (R = wL/2 for each uniform load, the diaphragms by statics). DC2 = barrier / SIDL. DW = wearing surface.',
+      cont ? `Continuity for composite loads on (spans ${spans.map(f2).join(', ')} ft): DC2 and DW are each span's end shears on the continuous unit, as reactions (+ up); DC1 is on the simple span.` : `Simple spans (${spans.map(f2).join(', ')} ft): R = wL/2 for each uniform load at each end of each span.`,
+      ...Object.keys(basis).filter(k => /MIDAS/.test(k)).map(k => `${basis[k].join(', ')}: DC2 and DW are the imported MIDAS shears at the two ends of the span used (the girder type's demands file), sign-corrected to reactions (+ up).`),
+      ...(piers.length ? [`At a pier the reaction is the sum of the end reactions of the two spans on it (one support point per pier, as the Steel Bridge app sends).${cont ? '' : ' Simple spans: split it between the back and ahead bearing rows by hand where needed, with the shares below.'}`].concat(piers.map(shareTxt)) : []),
+      'Live load is not sent (liveLoad null): Substructure Loading computes its own.'];
+    const pr = (P && P.project) || {};
+    const payload = { _schema: 'bridge-super-reactions', schemaVersion: 1, producer: PRODUCER, producerFile: FILE, project: { name: String(pr.name || ''), bridgeId: '' },
+      units: { force: 'kip', length: 'ft' }, factored: false, imIncluded: false, dfIncluded: false, perGirder: true,
+      allGirders: true, span: { index: null, length: r3(X[ns]) }, supports, liveLoad: null, notes };
+    return { ok: true, payload, shares: sh, sum: supports.map(s => `  ${s.id} (x = ${f2(s.x)} ft): ${s.girders.map(g => `${g.label} ${f2(g.DC1)} / ${f2(g.DC2)} / ${f2(g.DW)}`).join(', ')}`).join('\n') };
+  }
+  /* secDims(g): the girder section in the §4.14 terms from the engine's own section (girderGross / R.g, in): depth = h (the girder's total
+     depth); bf = the larger flange width (btf, bbf); tw = bw (the engine's web width: both webs of a box, both stems of a NEXT beam); tf =
+     the thickest horizontal part of the outline: I-girders and bulb tees the larger of the top and bottom flange thicknesses (d1, d3 of the
+     library), NEXT the flange thickness, a box the larger of the bottom slab (wall) and the top slab (h − wall − void height), a voided slab
+     (h − void diameter) / 2, a solid box or slab h. */
+  function secDims(g) {
+    let tf;
+    if (g.isNext && g.next) tf = +g.next.ft;
+    else if (g.isBox && g.box) tf = g.box.voidH > 0 ? Math.max(+g.box.wall, g.h - g.box.wall - g.box.voidH) : +g.h;
+    else if (g.isDeck && g.box) tf = g.box.voids > 0 && g.box.voidD > 0 ? (g.h - g.box.voidD) / 2 : +g.h;
+    else { const d = Array.isArray(g.d) ? g.d.map(Number) : []; tf = Math.max(d[0] || 0, d[2] || 0); }
+    return { d: +g.h, bf: Math.max(+g.btf || 0, +g.bbf || 0), tf, tw: +g.bw };
+  }
+  /* sgPayload(P, cells): superGeometry (HANDOFF.md §4.14) from the inputs and each girder type's section (no analysis): spans and
+     continuity, each support's station, skew (as entered) and joint, the girder layout, the deck edges (the traffic-face width,
+     PSBBridgeDL.edgeFace, the Steel Bridge app's edgeIn), the deck, and the girder section (the largest of each dimension over every
+     girder type on its lines; the deepest at each support and in each span), section.material 'prestressed concrete' (optional, §4.14).
+     → { ok, payload, sum } or { error } */
+  function sgPayload(P, cells) {
+    const errs = [], spans = ((P && P.spans && P.spans.lengths) || []).map(Number), ns = spans.length, xs = (P && P.xs) || {}, nb = Math.round(+xs.nb);
+    if (!ns || !spans.every(v => isN(v) && v > 0)) errs.push('Enter the span lengths (Bridge layout tab).');
+    if (!(nb >= 1)) errs.push('Define the cross-section (number of girders, Cross-section tab).');
+    const skews = (xs.skews || []).map(Number);
+    if (ns && (skews.length !== ns + 1 || !skews.every(isN))) errs.push(`Enter one skew for each of the ${ns + 1} supports (Bridge layout tab).`);
+    const DL = W.PSBBridgeDL, q = xs.dl;
+    const Ed = DL && q ? { L: DL.edgeFace(P, 'L'), R: DL.edgeFace(P, 'R') } : null;
+    if (!Ed || !isN(Ed.L.f) || !isN(Ed.R.f)) errs.push('Define the deck edges (barrier or curb, Cross-section tab, DC2 and DW).');
+    const cs = (cells || []).filter(c => c.inp && c.s >= 1 && c.s <= ns);
+    if (ns && !cs.length) errs.push('No girder line has a girder type (Girders & strands tab, Girder types).');
+    if (errs.length) return { error: errs.join(' ') };
+    const D = cs.map(c => { let g = c.R && !c.R.error && c.R.g ? c.R.g : null; if (!g) { try { g = W.girderGross(c.inp); } catch (e) { g = null; } }
+      return g ? Object.assign({ s: c.s, g: c.g, name: c.inp.girder }, secDims(g)) : null; });
+    if (D.some(x => !x)) return { error: 'A girder section cannot be computed: fix the inputs first.' };
+    const mx = (a, k) => a.length ? Math.max(...a.map(x => x[k])) : null;
+    const spanMax = spans.map((_, i) => mx(D.filter(x => x.s === i + 1), 'd'));
+    if (spanMax.some(v => v == null)) return { error: `Every span needs a girder type on its lines (none in span ${spanMax.findIndex(v => v == null) + 1}).` };
+    const atSupports = skews.map((_, k) => Math.max(k > 0 ? spanMax[k - 1] : 0, k < ns ? spanMax[k] : 0));
+    const cont = !!(P.spans && P.spans.continuity === 'composite') && ns > 1, X = [0]; spans.forEach(v => X.push(r3(X[X.length - 1] + v)));
+    // the deck: t_s, the dead-load thickness and the haunch of the girder types (one value each in a project; the largest when types differ)
+    const one = f => { const v = [...new Set(cs.map(c => +f(c.inp)))]; return { v: Math.max(...v), many: v.length > 1 }; };
+    const ts = one(i => +i.ts), tot = one(i => i.tsSeparate ? +i.tsDL : +i.ts), th = one(i => +i.th);
+    const edge = sd => { const e = Ed[sd], b = q['bar' + sd] || {}, curb = e.type === 'curb', o = v => (v == null || v === '' || !isN(+v)) ? null : r4(+v);
+      return { type: curb ? 'curb' : 'barrier', width: r4(e.f), faceBasis: e.by, barrierWidth: curb ? null : o(b.bw), curbWidth: curb ? o(b.cw) : null, curbHeight: curb ? o(b.ch) : null, height: null,
+        railing: curb ? { loadPoint: o(b.rp), trafficFace: o(b.rf) } : null }; };
+    const supports = X.map((x, k) => ({ id: supId(k, ns), x, skew: skews[k], joint: k === 0 || k === ns ? 'end' : cont ? 'continuous' : 'joint', depth: r4(atSupports[k]) }));
+    const pr = (P && P.project) || {}, sec = { depth: mx(D, 'd'), bf: mx(D, 'bf'), tf: mx(D, 'tf'), tw: mx(D, 'tw') };
+    const names = [...new Set(D.map(x => x.name))];
+    const payload = { _schema: 'bridge-super-geometry', schemaVersion: 1, producer: PRODUCER, producerFile: FILE, project: { name: String(pr.name || ''), bridgeId: '' },
+      units: { length: 'ft', skew: 'deg', deck: 'in', section: 'in', curb: 'in', height: 'in' },
+      spans: spans.slice(), continuity: cont ? 'continuous' : 'simple', supports,
+      girders: { count: nb, spacings: (xs.bays || []).map(Number), ohL: +xs.ohL, ohR: +xs.ohR },
+      edges: { L: edge('L'), R: edge('R') },
+      deck: { ts: ts.v, total: tot.v, haunch: th.v },
+      section: { depth: r4(sec.depth), bf: r4(sec.bf), tf: r4(sec.tf), tw: r4(sec.tw), atSupports: atSupports.map(r4), spanMax: spanMax.map(r4), material: 'prestressed concrete',
+        definition: 'precast prestressed concrete girders: total depth = the girder depth h (deck and haunch not included); bf = the larger flange width (top, bottom); tw = the web width bw (both webs of a box, both stems of a NEXT beam); tf = the thickest flange or slab of the section; each the largest over every girder type (each on its own)' },
+      basis: { skew: 'as entered in this app (Bridge layout tab): the bearing of girder line i is at x = x_support + (z_i - z_mid) tan(skew), z from G1 toward Gn (left to right looking ahead station), so + = the right end of the support line is ahead station',
+        spans: 'span lengths of the girder design, bearing to bearing; stations x from the first support' },
+      notes: [
+        `From the PS Bridge app (apps/ps-bridge) inputs: spans and continuity (Bridge layout), support skews (Bridge layout), girders, spacings and overhangs (Cross-section), deck edges (Cross-section, DC2 and DW; width = deck edge to the traffic face: ${['L', 'R'].map(sd => `${sd === 'L' ? 'left' : 'right'} ${f2(Ed[sd].f)} ft, ${Ed[sd].by}`).join('; ')}), deck thickness and haunch (Cross-section, Deck and haunch${ts.many || tot.many || th.many ? '; the girder types differ: the largest sent' : ''}), girder sections of the girder types (${names.join(', ')}).`,
+        `Girder section (in), precast prestressed concrete: largest over every girder type: depth ${f3(sec.depth)}, flange width ${f3(sec.bf)}, flange thickness ${f3(sec.tf)}, web width ${f3(sec.tw)}. Deepest at each support: ${supports.map(s => `${s.id} ${f3(s.depth)}`).join(', ')}. Deepest in each span: ${spanMax.map((v, i) => `span ${i + 1} ${f3(v)}`).join(', ')}.`,
+        'Skew: as entered here, + when the right end of the support line (looking ahead station) is ahead station.',
+        `Supports: ${cont ? 'continuous for composite loads over the piers (5.12.3.3)' : 'simple spans (an expansion joint at each pier)'}; the abutments are deck ends. Bearing fixity is not defined in this app and is not sent. Elevations and the substructure are not carried.`,
+        'Barrier height: not an input of this app (not sent). Curb height and the railing load point are sent for a curb edge.'] };
+    const HS = W.SharedHandoffStore;
+    if (HS) payload.contentHash = HS.geometryHash(payload);
+    const chk = HS ? HS.checkGeometry(payload) : { ok: true, errors: [] };
+    if (!chk.ok) return { error: chk.errors.join('; ') };
+    return { ok: true, payload, sum: `${HS ? HS.summary('superGeometry', payload) : ns + ' spans'}; skews ${skews.map(f2).join(', ')} deg; overhangs ${f2(+xs.ohL)} / ${f2(+xs.ohR)} ft; deck ${f2(ts.v)} in, haunch ${f2(th.v)} in; girder depth ${f3(sec.depth)} in (largest)` };
+  }
+
   W.PSBHandoffs = { PRODUCER, SR_ID, RX, applyLoads, dlBlocked, srPayload, psSection, capacity, CAP_BASIS, lldfGeom, lldfResolve, lldfTheirs, lldfFields, dlResolve, dlTheirs,
-    PM, PM_LABELS, pmFields, pmPlan };
+    PM, PM_LABELS, pmFields, pmPlan, MCT_VERSION, MCT_K, verOf, tokenOf, mctPending, mctDescribe, mctPlan, geomPending,
+    GEO_ID, srAll, secDims, sgPayload };   // batch F (2026-11-15)
 })();

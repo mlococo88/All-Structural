@@ -6585,6 +6585,603 @@ index a847637..b139a0c 100644
 - check-syntax all pass. Node `psbridge tex project-registry`: 43 files, 446 passed. Harness B normal: 24 designs, 61,186 shown + 10,568
   step values, 0 differences; --import 0 differences; --control exits 1. Smokes: demands 8 (+ the D2 check), skeleton 271, types 106,
   3d 101, figures 225, library 11, undo 7, drawings 6, drawings2 7, autodesign 7, handoffs 12, adbasis 5; 0 console errors.
+
+## 2026-11-15 — Batch D3: the MCT demands hand-off ("New analysis data available", Load, version check) and the MCT geometry changes (banner, review window); click only (the auto-adopt lock: HO-D2 pending)
+PR #1576: https://github.com/mlococo88/All-Structural/pull/1576
+### Request
+- Engineer-approved plan A→H (2026-11-15), batch D3 (review old-vs-new.md #127 High, #128 Med): the old app's receiver of the MCT
+  Generator's demands ("Prestressed Bridge Design.html" O:9211-9290 checkHandoff / adoptHandoff, O:9603-9625 banner) and its geometry
+  changes (O:9291-9318, 9626-9660), with the existing bridgeSuite.v1 keys unchanged (HANDOFF.md), receiver id psbridge (as PR #1566).
+  Auto-adopt locks on hold (engineer decision HO-D2 pending): Load by click only.
+### What changed
+- `apps/ps-bridge/engine/handoffs.js` (anchor `/* ---- MCT demands (batch D3`): `MCT_VERSION` 1 (the old app's HANDOFF_SUPPORTED_VERSION),
+  `MCT_K` (the keys), `verOf`, `tokenOf` (BridgeHandoff's), `mctPending(get)` (the old checkHandoff: latestId → the map's payload → its token
+  against this app's marker `bridgeSuite.v1.adopted.psbridge`; `supported` = version ≤ 1), `mctDescribe(p)`, `mctPlan(P, T, payload)` (the
+  file reader of engine/demands.js on the payload; the old app's "continuous member" rule; the bridge questions: spans, continuity),
+  `geomPending(get)` (the old checkGeometryChanges against `bridgeSuite.v1.geometryChanges.adopted.psbridge`).
+- `apps/ps-bridge/ui/handoffs.js`: `mctBanner(P)`, `geoDialog`, `mctLoad(ctx)`, `onMct(e, ctx)`; `init(onMctChange)` also follows the MCT
+  keys (storage event). Load: the payload becomes the MIDAS demands of the girder type chosen in the banner (default: the type on the
+  member's line `member.key` in the span shown, else the type shown), the two questions (bridge spans = the member's when the counts agree;
+  continuity for a continuous member), this app's marker written; one Undo step (the marker is not undone, as the old app's). "Not now" /
+  Dismiss write the marker only. A schema newer than v1: "Analysis output is newer than this app" (dismiss only). The geometry review window
+  lists the changes (field, detail, current, new); Dismiss; "Load the demands now" when a payload is waiting (both markers).
+- `apps/ps-bridge/index.html`: the banners at the top of the output panel (`HOUI.mctBanner`), their clicks (`HOUI.onMct`), `hoCtx` + toast /
+  redraw, `HOUI.init(() => drawOut())`, CSS.
+- `HANDOFF.md` §4.16: the MCT demands and geometry changes in the new app.
+### Saved data (CLAUDE.md §5)
+- The old app's keys and formats are read unchanged (`bridgeSuite.v1.handoffs`, `.latestId`, `.updatedAt`, `.geometryChanges`,
+  `.geometryChanges.updatedAt`); nothing of them is written. This app writes only its own adoption markers `bridgeSuite.v1.adopted.psbridge`
+  (the payload's token `handoffId@producedAt`) and `bridgeSuite.v1.geometryChanges.adopted.psbridge` (its producedAt), the receiver id of
+  PR #1566; the old app's `.adopted.psbeam` / `.geometryChanges.adopted.psbeam` are not read or written (smoke). A Load writes the type's
+  `P.demands` entry (batch D1 field) and, on the two questions, `P.spans.lengths` / `P.spans.continuity`; one Undo step.
+### Governing provisions (CLAUDE.md §4)
+- No engine value changed. Load gives the engine the same inputs as the old app's adoptHandoff for its design (the payload with the
+  member's span, L, continuity on for a continuous member): Node test, every computeAll value equal.
+### Check case (tests/engine/psbridge-mct.test.mjs)
+- New project, bridge 100 / 100 / 100 simple; the MCT fixture (110 / 140 / 110, member G2) published; Load into Interior S1 (on G2), both
+  questions yes: bridge 110 / 140 / 110 made continuous; the cell's engine inputs = the old app's adopted inputs (external with span 1
+  x = 0–110, L = 110, cont.on true); computeAll identical (R.ext.sel.idx 1); a type of span 2 takes span 2 of the member.
+### Decisions (pending engineer review)
+- D3-a. HO-D2 pending: no auto-adopt lock; Load by click only (the banner says so).
+- D3-b. Load goes to one girder type, chosen in the banner (default: the type on the member's line `member.key` in the span shown); the old
+  app had one design. The type keeps its own span of the member (the old app took span 1 of a new member).
+- D3-c. The old app turned continuity on and set L silently; here both are questions (Undo returns them), as continuity is the bridge's
+  (every type) in this app.
+- D3-d. The geometry review window is the old app's record (no values travel from it); its "Load the demands now" loads the pending
+  demands when there are any. The marker of a Load is not undone by Undo (as the old app's).
+### Other copies
+- None. HANDOFF.md §4.16 updated.
+### Code (before / after: the diff of this change)
+```diff
+diff --git a/HANDOFF.md b/HANDOFF.md
+index a729fca..d5c53e6 100644
+--- a/HANDOFF.md
++++ b/HANDOFF.md
+@@ -639,7 +639,8 @@ Engineer request 2026-11-11 ("The abutment app and substructure loading app shou
+ The new app sends and receives the old app's (`Prestressed Bridge Design.html`) channels with the **same keys, schemas and payloads**, so no receiving tool changed: `engine/handoffs.js` (`PSBHandoffs`) builds each payload with the old app's own code on the engine inputs and result of the girder type and line shown on the output tabs (Node test `tests/engine/psbridge-handoffs.test.mjs`: the same JSON text as the old page's code on the same inputs); `ui/handoffs.js` is the Project tab's **Hand-offs** card; `ui/bridgexfer.js` is BridgeXfer v1 (§5, verbatim).
+ - **Sent (click only; nothing is published on its own):** `superReactions` + `superReactions.by.psbeam` (the old app's `bxSuperRxPayload`, stamped by `BridgeXfer.publish` with `producer:"PS-Beam"`, `producerFile:"apps/ps-bridge/index.html"`), `lldfGeom`, `psSection` (+ `.updatedAt`), `capacity` (+ `.updatedAt`), `projectMeta`. Each also as "Export (JSON)". The old app re-published `psSection` on every recompute and `capacity` / `lldfGeom` while their channel lock was on; the new app does not (no locks).
+ - **Received (pull, confirm first):** `lldf` (the old app's `lldfResolveFor`: the design beam is the line shown when lldf's `Nb` equals the bridge's; DF auto off, DFm, DFv, fatigue DF to the girder type shown), `dlLoads` (DC2 / DW to the girder type shown; refused while the project distributes DC2 / DW to the lines itself), `projectMeta` (name, number, client, designer, checker, date). Adoption marker `bridgeSuite.v1.<channel>.adopted.psbridge`.
+-- **Not in the new app yet:** the MCT demands (`handoffs`, `latestId`, `updatedAt`, `adopted.psbeam`), `designBeam` / `beamRoster`, `geometryChanges`, the channel locks (`locks`, `syncLog.*`, `lockSnap.*`), `appPaths` and the shared project list (`projects`, `currentProjectId`: read only, "From the old app"). Until the switch-over both apps can send on the same keys; the last send wins (as two open copies of the old app).
++- **MCT demands and geometry changes (added 2026-11-15, batch D3; click only):** the MCT Generator's demands map `handoffs` / `latestId` / `updatedAt` (schema `psbeam-external-demands`, read as the old app's `checkHandoff`: the latest payload, its token `handoffId@producedAt`, schema version ≤ 1 else "newer than this app") raise a banner above the output tabs; **Load** puts the payload as the MIDAS demands of the girder type chosen (default: the type on the member's line `member.key` in the span shown; `P.demands`, the new app's own field) and asks before setting the bridge spans / continuity to the member's; one Undo step. `geometryChanges` (+ `.updatedAt`) raise a banner and a review window (Dismiss; "Load the demands now" when a payload is waiting). The new app's adoption markers are its own: `bridgeSuite.v1.adopted.psbridge` and `bridgeSuite.v1.geometryChanges.adopted.psbridge`; the old app's (`.psbeam`) are not read or written, so its banners are unchanged. No auto-adopt (the old app's `demands` lock): engineer decision HO-D2 pending.
++- **Not in the new app yet:** `designBeam` / `beamRoster`, the channel locks (`locks`, `syncLog.*`, `lockSnap.*`), `appPaths` and the shared project list (`projects`, `currentProjectId`: read only, "From the old app"). Until the switch-over both apps can send on the same keys; the last send wins (as two open copies of the old app).
+ 
+ ## 5. Shared helper (copy into each tool that sends or receives)
+ 
+diff --git a/apps/ps-bridge/engine/handoffs.js b/apps/ps-bridge/engine/handoffs.js
+index 5773f6f..e1b0b61 100644
+--- a/apps/ps-bridge/engine/handoffs.js
++++ b/apps/ps-bridge/engine/handoffs.js
+@@ -216,6 +216,57 @@
+     return { upd, lines };
+   }
+ 
++  /* ---- MCT demands (batch D3, 2026-11-15): the old app's receiver of the MCT Generator's hand-off (its checkHandoff / adoptHandoff,
++     "Prestressed Bridge Design.html" O:9211-9290, and BridgeHandoff, O:592-660), read here from the stored texts the page passes in.
++     Keys (the old app's, unchanged; HANDOFF.md, AUDIT.md §1.3): bridgeSuite.v1.handoffs (map id → payload, schema psbeam-external-demands),
++     bridgeSuite.v1.latestId, bridgeSuite.v1.updatedAt; this app's adoption marker bridgeSuite.v1.adopted.psbridge (the old app's own,
++     .adopted.psbeam, is not read or written: the old app keeps its own banner). Load is by click only: the old app's lock (auto-adopt,
++     BridgeLocks 'demands') is not here (engineer decision HO-D2 pending). ---- */
++  const MCT_VERSION = 1;   // the old app's HANDOFF_SUPPORTED_VERSION
++  const MCT_K = { map: 'bridgeSuite.v1.handoffs', latest: 'bridgeSuite.v1.latestId', updated: 'bridgeSuite.v1.updatedAt', adopted: 'bridgeSuite.v1.adopted.' + RX,
++    geom: 'bridgeSuite.v1.geometryChanges', geomAt: 'bridgeSuite.v1.geometryChanges.updatedAt', geomAdopted: 'bridgeSuite.v1.geometryChanges.adopted.' + RX };
++  const verOf = p => (p && p.schemaVersion != null) ? p.schemaVersion : ((p && p._version != null) ? p._version : 1);   // BridgeHandoff verOf
++  const tokenOf = p => p ? ((p.handoffId || '') + '@' + (p.producedAt || '')) : '';                                    // BridgeHandoff tokenOf
++  /* mctPending(get): the hand-off waiting for this app, or null (none, unreadable, or already adopted / dismissed here): the old app's
++     checkHandoff with BridgeHandoff.readOne(latestId()). get(key) returns the stored text. → { id, version, token, payload, supported } */
++  function mctPending(get) {
++    const id = get(MCT_K.latest); if (!id) return null;
++    let map; try { map = JSON.parse(get(MCT_K.map) || '{}') || {}; } catch (e) { return null; }
++    const p = map[id]; if (!p || typeof p !== 'object') return null;
++    const r = { id, version: verOf(p), token: tokenOf(p), payload: p };
++    if (get(MCT_K.adopted) === r.token) return null;
++    r.supported = r.version <= MCT_VERSION;
++    return r;
++  }
++  /* mctDescribe(p): the banner's text parts (the old app's: producer, project, member key, stations, LL type) */
++  function mctDescribe(p) {
++    return { producer: (p && p.producer) || 'MCT Generator', project: (p && p.project) || '', member: (p && p.member && p.member.key) || '',
++      n: (p && Array.isArray(p.stations)) ? p.stations.length : 0, ll: (p && p.liveLoadType) || 'HL-93' };
++  }
++  /* mctPlan(P, T, payload): what Load changes for girder type T (the old app's adoptHandoff for one design): the demands of T = the payload
++     (engine/demands.js setFile; a payload the file reader refuses is refused here too), the span of the member used = T's span when the
++     member has it (the old app took span 1 of a new member; here each type keeps its own span), and the bridge questions the page asks:
++     spans (the member's lengths when the count is the bridge's and they differ: the old app set L to the span) and continuity (a continuous
++     member on a bridge of simple spans: the old app turned its continuity on). → { ok, error | file, spans, setSpans, makeCont, lines } */
++  function mctPlan(P, T, payload) {
++    const DM = W.PSBDemands; if (!DM) return { ok: false, error: 'the demand module is not loaded' };
++    const r = DM.parse(JSON.stringify(payload), 'the MCT hand-off'); if (!r.ok) return { ok: false, error: r.error };
++    const own = ((P.spans && P.spans.lengths) || []).map(Number), fl = r.spans.map(q => +q.len), m = payload.member || {};
++    const continuous = (Array.isArray(m.spans) && m.spans.length > 1) || (Array.isArray(m.supports) && m.supports.length > 2) || r.spans.length > 1;   // the old app's rule
++    const setSpans = fl.length === own.length && fl.some((v, j) => Math.abs(v - own[j]) > 0.005) ? fl : null;
++    const makeCont = continuous && own.length >= 2 && P.spans.continuity !== 'composite';
++    const lines = [`${T.label}: demands from the MCT hand-off (${r.file.stations.length} stations, ${fl.length} span${fl.length > 1 ? 's' : ''} ${fl.map(v => v.toFixed(2)).join(', ')} ft)${T.span <= fl.length ? `, span ${T.span} of the member` : ''}.`].concat(r.notes);
++    return { ok: true, file: r.file, spans: r.spans, setSpans, makeCont, continuous, lines };
++  }
++  /* geomPending(get): the MCT geometry-change record waiting for this app, or null (the old app's checkGeometryChanges, O:9291-9318:
++     BridgeGeometryChanges.readGeometryChanges against .adopted.<app>) → { producedAt, producer, changes: [{ field, detail, oldVal, newVal }] } */
++  function geomPending(get) {
++    let g; try { g = JSON.parse(get(MCT_K.geom) || 'null'); } catch (e) { return null; }
++    if (!g || typeof g !== 'object' || !Array.isArray(g.changes)) return null;
++    if (get(MCT_K.geomAdopted) === g.producedAt) return null;
++    return g;
++  }
++
+   W.PSBHandoffs = { PRODUCER, SR_ID, RX, applyLoads, dlBlocked, srPayload, psSection, capacity, CAP_BASIS, lldfGeom, lldfResolve, lldfTheirs, lldfFields, dlResolve, dlTheirs,
+-    PM, PM_LABELS, pmFields, pmPlan };
++    PM, PM_LABELS, pmFields, pmPlan, MCT_VERSION, MCT_K, verOf, tokenOf, mctPending, mctDescribe, mctPlan, geomPending };
+ })();
+diff --git a/apps/ps-bridge/index.html b/apps/ps-bridge/index.html
+index e60ca79..2565df1 100644
+--- a/apps/ps-bridge/index.html
++++ b/apps/ps-bridge/index.html
+@@ -282,6 +282,7 @@
+   }
+   @media print{#sbSplit{display:none!important}}
+   /* this app (PR 1) */
++  #mctBanner.mctNew{border-left:4px solid #ea580c;background:#fff7ed;} #mctBanner select{width:auto;margin:0 4px;} .mctGeo a{color:#9a3412;font-weight:600;}
+   .dmBanner{border:1px solid var(--accent);border-radius:6px;background:#EFF6FF;padding:6px 9px;margin:6px 0;font-family:var(--font-ui);font-size:9pt;} .dmHead{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;} .dmSpans{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0;} .dmSpans .pri{font-weight:700;outline:2px solid var(--accent);}
+   .dmVals summary{cursor:pointer;font-family:var(--font-ui);font-size:9pt;margin:6px 0;} .dmGuide{max-width:760px;width:calc(100% - 32px);border:2px solid #0f172a;padding:16px 20px;font-family:var(--font-ui);font-size:9.5pt;line-height:1.5;} .dmGuide::backdrop{background:rgba(22,33,46,.55);} .dmGuide h3{margin:0 0 4px;} .dmGuide h4{margin:12px 0 4px;border-bottom:1px solid var(--color-border);}
+   .ph{border:1px dashed var(--slate-400);border-radius:6px;background:var(--slate-50);padding:8px 10px;margin:10px 0;font-family:var(--font-ui);font-size:9pt;color:#475569;}
+@@ -501,8 +502,9 @@
+   /* batch D1: the Demands card's context (ui/demands.js): one change() = one Undo step */
+   const dmCtx = { changed: () => changed(), toast: (t, u) => toast(t, u), redraw: () => { saveUi(); drawInputs(); } };
+   /* 2026-11-14 (item 12): the Hand-offs card (ui/handoffs.js): the girder type and line the output tabs show, its engine inputs and result */
+-  const hoCtx = { P: () => P, result: () => (errs.length ? null : result()), cell: () => hoCell(), changed: () => changed() };
+-  HOUI.init();   // the "new data" marks follow the other tools' sends (storage event)
++  const hoCtx = { P: () => P, result: () => (errs.length ? null : result()), cell: () => hoCell(), changed: () => changed(),
++    toast: (t, u) => toast(t, u), redraw: () => drawOut() };   // batch D3: + the MCT banners' notice and redraw
++  HOUI.init(() => drawOut());   // the "new data" marks follow the other tools' sends (storage event); batch D3: the MCT banners too
+   /* PR 2f: "From the old app" (ui/legacy.js): an import replaces the open project, as Import JSON does (asked first there) */
+   const lgCtx = { store: LS, gotoOut: t => gotoOut(t), pickFile: () => pb.importJSON(),   // PR 5: asks first on unsaved changes, then the file chooser
+     replace: Q => { BR.migrate(Q); const rn = window.PSBLegacy.restore(Q); if (window.PSBSections) window.PSBSections.migrate(Q); ui.itab = 'proj'; loadAs(Q, null); if (rn) toast(rn); } };   // PR 3a-4 (PS-17): the old model's other designs restored; PR 5: not a saved project (chip "not saved")
+@@ -661,6 +663,7 @@
+     let h = '';
+     if (L.note) h += `<div class="alert err">${esc(L.note)}</div>`;
+     h += secNotice();   // PS-31: the old box / voided slab section corrected (or removed)
++    h += HOUI.mctBanner(P);   // batch D3: the MCT demands hand-off and geometry changes (click only)
+     if (errs.length) h += window.PSBInputCheckUI.blocked(errs, icO());
+     h += `<div class="alert">In development: Section properties, Loads &amp; LLDF, Analysis, Losses, Stresses, Flexure, Shear, End zone &amp; hold-down, Camber &amp; deflection, Handling, Deck and Rating show the results of the girder type and line chosen above them; the Summary, the check summary column and the Report cover every girder type on every line. Use the old <a href="../../Prestressed%20Bridge%20Design.html">Prestressed Bridge Design</a> for design work.</div>`;
+     const name = (OTABS.find(t => t[0] === ui.otab) || [, ''])[1];
+@@ -712,6 +715,7 @@
+   const gotoStep = (t, id) => { gotoOut(t); if (id) { const el = window.SharedSteps.reveal($('out'), id); if (el) el.scrollIntoView({ block: 'center' }); } };
+   $('tabBar').addEventListener('click', e => { const b = e.target.closest('[data-otab]'); if (b) gotoOut(b.dataset.otab); });
+   $('out').addEventListener('click', e => {
++    if (HOUI.onMct(e, hoCtx)) return;   // batch D3: the MCT banners
+     if (e.target.closest('[data-secdismiss]')) { P.notices = Object.assign({}, P.notices, { sec: window.PSBSections.sig(P) }); changed(); return; }   // PS-31: closed for this project (shown again if another section is corrected)
+     if (e.target.closest('[data-dedismiss]')) { const D = window.PSBDesign.deDiff(P); P.notices = Object.assign({}, P.notices, { de: D.sig }); changed(); return; }   // PS-23: dismissed for this project
+     const a = e.target.closest('[data-icgo]'); if (a) { e.preventDefault(); gotoErr(+a.dataset.icgo); return; }
+diff --git a/apps/ps-bridge/ui/handoffs.js b/apps/ps-bridge/ui/handoffs.js
+index 009f1be..1183e53 100644
+--- a/apps/ps-bridge/ui/handoffs.js
++++ b/apps/ps-bridge/ui/handoffs.js
+@@ -10,8 +10,10 @@
+               lldfGeom ("Send geometry to LL & DL"), psSection ("Send section properties"), capacity ("Send capacity to the MCT rating"),
+               each with "Export hand-off (JSON)": click only (the old app re-published psSection, and capacity / lldfGeom when locked, by
+               itself; here nothing is sent without a click; Decision pending engineer review, fixlog/ps-bridge.md HO-D2).
+-   Not here (fixlog/ps-bridge.md, Open items): the MCT demands (handoffs / latestId), designBeam / beamRoster, geometryChanges, the channel
+-   locks (BridgeLocks), appPaths and the shared Bridge Suite project list (switch-over). */
++   Batch D3 (2026-11-15): the MCT demands (handoffs / latestId) and geometryChanges: banners above the output tabs (mctBanner), Load by click
++   into a girder type (its demands, engine/demands.js), the review window of the geometry changes.
++   Not here (fixlog/ps-bridge.md, Open items): designBeam / beamRoster, the channel locks (BridgeLocks; HO-D2 pending), appPaths and the
++   shared Bridge Suite project list (switch-over). */
+ (function () {
+   'use strict';
+   const H = () => window.PSBHandoffs, BX = () => window.BridgeXfer;
+@@ -157,6 +159,77 @@
+     return true;
+   }
+   function refresh() { document.querySelectorAll('[data-ho-new]').forEach(s => { s.hidden = !isNew(s.dataset.hoNew); }); }
+-  function init() { window.addEventListener('storage', e => { if (!e.key || /^bridgeSuite\.v1\.(lldf|dlLoads)/.test(e.key)) refresh(); }); }
+-  window.PSBHandoffUI = { card, onClick, refresh, init };
++  /* ---- batch D3 (2026-11-15): the MCT demands hand-off and the MCT geometry changes (the old app's banners, O:9603-9662) ----
++     mctBanner(P): the banners at the top of the output panel: "New analysis data available" (Load into a girder type / Not now) or, for a
++     payload newer than this app reads, "Analysis output is newer than this app" (dismiss); "Geometry has been updated in MCT – click to
++     review what changed" (the review window: the changes as the MCT Generator recorded them; Dismiss; Load the demands now). Load, the review
++     window's Load and the bridge questions are one change of the project = one Undo step; nothing is applied without a click (the old app's
++     lock / auto-adopt: engineer decision HO-D2 pending). The adoption markers are this app's own (bridgeSuite.v1.adopted.psbridge,
++     bridgeSuite.v1.geometryChanges.adopted.psbridge); the old app's (.psbeam) are not touched. */
++  const setRaw = (k, v) => { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } };
++  function mctBanner(P) {
++    const h = H(), D = window.PSBDemands, B = window.PSBBridge; if (!h || !h.mctPending || !D || !B) return '';
++    let out = '';
++    const r = h.mctPending(getRaw);
++    if (r) {
++      const d = h.mctDescribe(r.payload);
++      if (!r.supported) out += `<div class="notice" id="mctBanner" role="status"><div><b>⚠ Analysis output is newer than this app</b>: the MCT Generator published schema <b>v${esc(r.version)}</b>; this app reads <b>v${h.MCT_VERSION}</b>. Update this app to load it, or load a matching file on the Loads tab (Demands card).</div><div class="nBtns"><button type="button" data-mct="dismiss">Dismiss</button></div></div>`;
++      else {
++        const T = B.types(P), sh = window.PSBDemandsUI && window.PSBDemandsUI.shownType(P), key = /^G(\d+)$/i.exec(d.member || '');
++        // the default type: the one on the member's girder line in the span shown (the MCT member is a girder line), else the type shown
++        let def = sh ? sh.id : (T[0] && T[0].id);
++        if (key && B.hasTypes(P) && sh) { const k = B.typeAt ? B.typeAt(P, sh.span, +key[1]) : -1; if (k >= 0) def = P.types[k].id; }
++        out += `<div class="notice mctNew" id="mctBanner" role="status"><div><b>New analysis data available</b> from <b>${esc(d.producer)}</b>${d.project ? ' · ' + esc(d.project) : ''}${d.member ? ' · ' + esc(d.member) : ''} · ${d.n} stations · LL: <b>${esc(d.ll)}</b>.
++          Loading replaces the <b>demands of the girder type chosen</b> only (its source becomes this MIDAS member; section, strands and materials stay).
++          <label for="mctType">Load into</label> <select id="mctType">${T.map(t => `<option value="${esc(t.id)}"${t.id === def ? ' selected' : ''}>${esc(t.label)} (span ${t.span})</option>`).join('')}</select>
++          <span class="note">Auto-adopt (the old app's lock): not in this app yet (engineer decision HO-D2 pending).</span></div>
++          <div class="nBtns"><button type="button" class="pri" data-mct="load">Load these demands</button><button type="button" data-mct="dismiss">Not now</button></div></div>`;
++      }
++    }
++    const g = h.geomPending(getRaw);
++    if (g) out += `<div class="notice mctGeo" id="mctGeoBanner" role="status"><div><a href="#" data-mct="geo">Geometry has been updated in MCT – click to review what changed</a> (${(g.changes || []).length} change${(g.changes || []).length === 1 ? '' : 's'}).</div><div class="nBtns"><button type="button" data-mct="geo">Review</button></div></div>`;
++    return out;
++  }
++  /* geoDialog(P): the review window of the geometry changes */
++  function geoDialog(P) {
++    const h = H(), g = h.geomPending(getRaw); if (!g) return;
++    let d = document.getElementById('mctGeoDlg'); if (d) d.remove();
++    const r = h.mctPending(getRaw), can = !!(r && r.supported);
++    d = document.createElement('dialog'); d.id = 'mctGeoDlg'; d.className = 'dmGuide'; d.setAttribute('aria-label', 'Geometry changes from MCT');
++    d.innerHTML = `<h3>Geometry changes from MCT</h3><p class="note">A record of what moved in the analysis model (${esc(g.producer || 'MCT Generator')}, ${esc(String(g.producedAt || '').replace('T', ' ').slice(0, 16))}). The numbers themselves travel with the demands hand-off, not from here: ${can ? 'load the demands now (below), into the girder type chosen in the banner' : 're-send the demands from the MCT Generator'}. Auto-update (the old app's lock) is not in this app yet (engineer decision HO-D2 pending).</p>
++      <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Field</th><th class="lft">Current</th><th class="lft">New</th></tr></thead><tbody>${(g.changes || []).map(c => `<tr><td class="lft"><b>${esc(c.field)}</b>${c.detail ? `<br><span class="note">${esc(c.detail)}</span>` : ''}</td><td class="lft">${esc(String(c.oldVal == null || c.oldVal === '' ? '—' : c.oldVal))}</td><td class="lft">${esc(String(c.newVal == null || c.newVal === '' ? '—' : c.newVal))}</td></tr>`).join('')}</tbody></table></div>
++      <div class="nBtns" style="margin-top:8px"><button type="button" data-mctg="dismiss">Dismiss</button>${can ? ' <button type="button" class="pri" data-mctg="load">Load the demands now (one Undo step)</button>' : ''} <button type="button" data-mctg="close">Close</button></div>`;
++    document.body.appendChild(d);
++    d.addEventListener('click', e => { const b = e.target.closest('[data-mctg]'); if (!b) { if (e.target === d) d.close(); return; }
++      const a = b.dataset.mctg; if (a === 'close') { d.close(); return; }
++      if (a === 'load') { if (mctLoad(d.__ctx)) { setRaw(h.MCT_K.geomAdopted, g.producedAt); d.close(); d.__ctx.redraw(); } return; }
++      if (a === 'dismiss') { setRaw(h.MCT_K.geomAdopted, g.producedAt); d.close(); d.__ctx.redraw(); } });
++    return d;
++  }
++  /* mctLoad(ctx): Load the pending hand-off into the girder type chosen in the banner (one change = one Undo step) */
++  function mctLoad(ctx) {
++    const h = H(), D = window.PSBDemands, B = window.PSBBridge, P = ctx.P(), r = h.mctPending(getRaw); if (!r || !r.supported) return false;
++    const sel = document.getElementById('mctType'), id = sel ? sel.value : (window.PSBDemandsUI.shownType(P) || {}).id, T = B.types(P).find(t => t.id === id);
++    if (!T) { say('Choose the girder type to load the demands into.'); return false; }
++    const q = h.mctPlan(P, T, r.payload); if (!q.ok) { say(`The MCT hand-off cannot be loaded: ${q.error}`); return false; }
++    const lines = q.lines.slice();
++    D.setFile(P, T.id, q.file, `MCT hand-off ${r.id}`);
++    if (q.setSpans && window.confirm(`The member's spans (${q.setSpans.map(v => v.toFixed(2)).join(', ')} ft) differ from the bridge's (${P.spans.lengths.map(v => (+v).toFixed(2)).join(', ')} ft). Set the bridge spans to the member's (as the old app set L to the span)? (Undo returns both.)`)) { P.spans.lengths = q.setSpans.slice(); lines.push('The bridge spans were set to the member\'s.'); }
++    if (q.makeCont && window.confirm('The member is continuous: make the bridge continuous for composite loads (5.12.3.3; the old app turned its continuity on)? Every girder type of the bridge is affected. (Undo returns it.)')) { P.spans.continuity = 'composite'; lines.push('The bridge was made continuous for composite loads.'); }
++    setRaw(h.MCT_K.adopted, r.token);
++    ctx.changed(); if (ctx.toast) ctx.toast(lines.join(' '), true);
++    return true;
++  }
++  /* onMct(e, ctx): the banners' buttons (ctx: hoCtx + toast, redraw) */
++  function onMct(e, ctx) {
++    const b = e.target.closest('[data-mct]'); if (!b || !H() || !H().mctPending) return false;
++    e.preventDefault(); const h = H(), a = b.dataset.mct;
++    if (a === 'load') { mctLoad(ctx); return true; }
++    if (a === 'dismiss') { const r = h.mctPending(getRaw); if (r) setRaw(h.MCT_K.adopted, r.token); ctx.redraw(); return true; }
++    if (a === 'geo') { const d = geoDialog(ctx.P()); if (d) { d.__ctx = ctx; if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', ''); } return true; }
++    return true;
++  }
++  function init(onMctChange) { window.addEventListener('storage', e => { if (!e.key || /^bridgeSuite\.v1\.(lldf|dlLoads)/.test(e.key)) refresh();
++    if (onMctChange && (!e.key || /^bridgeSuite\.v1\.(latestId|updatedAt|handoffs|geometryChanges)/.test(e.key))) onMctChange(); }); }   // batch D3: the banners follow the MCT Generator's sends
++  window.PSBHandoffUI = { card, onClick, refresh, init, mctBanner, onMct, mctLoad };
+ })();
+```
+### Tests
+- check-syntax all pass. Node `psbridge tex project-registry`: 44 files, 449 passed (new psbridge-mct 3). Harness B: normal 24 designs 61,186 shown + 10,568 step values, 0 differences; --import 24 "the same", 0 differences; --control exits 1. Smokes: mct 4 (new), demands 8, skeleton 271, types 106, 3d 101, figures 225, library 11, undo 7, drawings 6, drawings2 7, autodesign 7, handoffs 12, adbasis 5; 0 console errors.
+
+## 2026-11-15 — Batch F1/F2 (PSBF): Bridge Substructure Loading — the reactions of every girder line (allGirders) and the bridge geometry (superGeometry), as the Steel Bridge app sends them (click only; the one-line send unchanged)
+PR #1577: https://github.com/mlococo88/All-Structural/pull/1577
+### Request
+- Batch F (engineer-approved plan A→H, 2026-11-15), F1: reactions for every girder line to Bridge Substructure Loading as the Steel Bridge app sends them (`allGirders`, the same schema and keys; the receiver learns about the PS sender where needed; the current single-line payload unchanged, CLAUDE.md §5). F2: the bridge geometry (`bridgeSuite.v1.superGeometry`, as apps/steel-bridge/ui/handoffs.js sgPayload), the same schema. Review rows: ps-vs-steel S6, S7 (review-1115). Cross-tool connection (CLAUDE.md §7 exception, HANDOFF.md): this app and Bridge Substructure Loading.html in one PR.
+### What changed
+- `engine/handoffs.js` (`PSBHandoffs`), new (anchor `/* ---- batch F (2026-11-15): Bridge Substructure Loading`): `srAll(P, cells)`, `secDims(g)`, `sgPayload(P, cells)`, `GEO_ID = 'psbridge'`; exported. `cells` = `PSBBridge.results(P, cellR).cells` (every girder type × line, the page's engine cache).
+  - `srAll`: for each span s and line g, the cell's `srPayload(inp, R)` (the old app's `bxSuperRxPayload`, unchanged) gives the two end reactions; support k gets the right end of span k and the left end of span k+1, summed (`r3` of the sum of the 3-decimal values). Supports "Abut. 1" / "Pier k" / "Abut. 2", x cumulative; girders G1…Gn with the cell's position; `allGirders:true`, `span:{index:null,length:Σ}`, `liveLoad:null`, `project` from the Project tab name, producer `PS-Beam`, producerFile `apps/ps-bridge/index.html`; notes: basis, DC1 content, continuity or simple, MIDAS cells, each pier's shares per girder ("Pier 1 (span 1 right end + span 2 left end), DC1 / DC2 / DW kip: G1 a + b, …"), live load not sent. Refused when a line of a span has no type or a cell has an input error.
+  - `sgPayload`: §4.14 from the inputs (spans, continuity, skews, bays, overhangs, `xs.dl` edges via `PSBBridgeDL.edgeFace`, deck t_s / dead-load thickness / haunch) and each cell's engine section (`R.g`, else `girderGross`) through `secDims`; `section.material:'prestressed concrete'` (new optional field, HANDOFF.md §4.14); contentHash and the shared check (`SharedHandoffStore.geometryHash`, `checkGeometry`).
+- `ui/handoffs.js`: a new row in the Hand-offs card under "Send reactions…": **Send to Substructure Loading** + boxes Geometry / Reactions of every girder line (ticked; page-only state `SEND`) + **Export hand-off (JSON)**; `subSend(ctx, file)` (the Steel Bridge app's subSend): build all ticked first, publish (channel key + `.updatedAt`), the `.by` copy (`superGeometry.by.psbridge`; `superReactions.by.psbeam`), the per-project copy and Cloud-sync upload (`SharedHandoffStore.send`, producer id `psbridge`), one alert with the summary; "Last sent" per project in the card (`lastSent`, read only).
+- `index.html`: `'../../shared/handoff-store.js'` after github-sync.js; `hoCtx.all` (= `allResults(true)`, as the Report) and `hoCtx.redrawIn`.
+- Bridge Substructure Loading.html (receiver; fixlog/Bridge Substructure Loading.md PSBF): producer id `psbridge` listed for both channels; a concrete section disables the "Also update the live-load distribution girder data" option.
+- HANDOFF.md §2 table, §4.4, §4.14, §4.16, §5.1.
+- Tests: new `tests/engine/psbridge-subloads.test.mjs` (3 tests), new smoke `tests/smoke/ps-bridge-subloads.mjs` (7 checks); `psbridge-model.test.mjs`: the script list and the shared-file exemption of the key check (handoff-store.js).
+### Saved data (CLAUDE.md §5)
+- No project field, psb2.* key or existing hand-off key/format changed. New keys written only on the new button: `bridgeSuite.v1.superGeometry`, `.updatedAt`, `.by.psbridge`, `bridgeSuite.v1.superGeometry.by.psbridge.<project id>`, `bridgeSuite.v1.superReactions.by.psbridge.<project id>` (HANDOFF.md §5.1 pattern; Cloud sync queue `bridgeSuite.v1.handoffStore.pending` only while sync is set up); it also writes `superReactions`, `.updatedAt`, `.by.psbeam` with the every-line payload (the same schema; the receiver already reads it). The one-line button's payload is byte-identical (Node test, smoke).
+### Governing provisions (CLAUDE.md §4)
+- No formula, factor, unit or code reference of the design changed (harness B 0 differences). New sent values (callout): a pier reaction = the sum of the two adjacent spans' end reactions of the same line (statics of the line-girder model; the Steel Bridge app sends one support point too); each span end reaction is the existing `bxSuperRxPayload` value (simple span R = wL/2, AASHTO LRFD 10th Ed. 5.12.3.3 for the continuous-unit DC2 / DW, unchanged). Geometry: values copied from the inputs; the section dimensions are the engine's library values (largest of each).
+### Check case (new project: PCI BT-72, 120 ft, 5 girders at the default bays; tests/engine/psbridge-subloads.test.mjs)
+- G2 (interior), Abut. 1: w_g = 0.82559 klf, w_deck+haunch = 1.08750 klf, no diaphragms → DC1 = (0.82559 + 1.08750) × 120 / 2 = 114.785 kip; DC2 = 0.120 × 60 = 7.200; DW = 0.195 × 60 = 11.700 kip (= the Analysis tab's Reactions card of G2). G1 / G5 DC1 105.785 kip. Σ DW over both abutments = Σ_g w_DW,g × L (statics).
+- Two spans 100 + 120 ft made continuous: Pier 1, G2: DC1 95.655 + 114.785 = 210.440 kip; DC2 7.860 + 8.750 = 16.610; DW 12.773 + 14.219 = 26.992 → 26.99 shown (the shares are the cells' continuous-unit end shears).
+- Geometry: depth 72 in (h), bf 42 (max of 42 / 26), tf 6 (max of d1 3.5, d3 6), tw 6 (bw); deck t_s 8 in, haunch 2 in; edges barrier 1.5 ft (barrier face); skews 0.
+- Before: nothing sent for every line / geometry ("Missing" / "Partial"). After: as above; SubLoads applies P.br d 72, bf 42, tf 6, tw 6 and P.rx.data = the payload by girder number (smoke).
+### Decisions (pending engineer review)
+- F-D1. A pier reaction is the sum of both spans' end reactions (one support point per pier, as the Steel Bridge app); for simple spans the notes give each span's share to split between the back and ahead bearing rows by hand (the receiver maps one source support to one row). The schema has no per-span field; none invented.
+- F-D2. The every-line send writes the same `.by.psbeam` slot as the one-line button (the receiver's PS slot): the last send wins there; per-project copies use producer id `psbridge`, so the receiver had to list it (the HANDOFF.md cross-tool exception).
+- F-D3. producer `PS-Beam` (the identity of this app's other sends, HO-D1), producer id `psbridge` (this app's receiver id).
+- F-D4. Section dimensions for a concrete girder: `tf` / `tw` as stated in secDims (thickest flange or slab; bw incl. both webs / stems); `section.material:'prestressed concrete'` added (optional) so the receiver does not estimate K_g from a steel shape.
+- F-D5. Deck values: the largest over the girder types when they differ (said in the notes); `total` = the dead-load deck thickness when entered separately.
+- F-D6. Live load not sent (liveLoad null), as the Steel Bridge app.
+### Other copies
+- `subSend` follows apps/steel-bridge/ui/handoffs.js subSend (not shared code; adapted). shared/handoff-store.js loaded unchanged.
+### How verified
+- See the PR: Node (psbridge-subloads: the Steel Bridge app's payload keys from its own srPayload / sgPayload code; each cell's reactions; statics; the receiver's own check code cut from the HTML), smokes ps-bridge-subloads (PS as the sender into SubLoads), geometry-handoff (Steel → SubLoads unchanged), the PS full checks, bsl-compare.
+### Code (before / after: the diff of this change in apps/ps-bridge)
+```diff
+diff --git a/apps/ps-bridge/engine/handoffs.js b/apps/ps-bridge/engine/handoffs.js
+index e1b0b61..0115c8e 100644
+--- a/apps/ps-bridge/engine/handoffs.js
++++ b/apps/ps-bridge/engine/handoffs.js
+@@ -29,7 +29,11 @@
+                               jobNo → Number, client → Client name, preparedBy → Designer, checkedBy → Checker, date → Date; bridgeId and
+                               location: no such field here, sent blank as the old app's BXProject.share) and what "Use shared project
+                               info" would change (the old app's BXProject.use rule: never blank a field, only the fields that differ).
+-   No engineering value is computed here beyond what the old app's code computed for the same payload. */
++     srAll(P, cells), sgPayload(P, cells), secDims(g)   batch F (2026-11-15): Bridge Substructure Loading in the Steel Bridge app's
++                              formats: superReactions of every girder line (allGirders, HANDOFF.md §4.4) from each cell's srPayload,
++                              summed at the piers; superGeometry (§4.14) from the inputs and each girder type's section.
++   No engineering value is computed here beyond what the old app's code computed for the same payload (batch F: the sum of the two spans'
++   end reactions at a pier, and the largest of the section dimensions). */
+ (function () {
+   'use strict';
+   const W = typeof window !== 'undefined' ? window : globalThis;
+@@ -267,6 +271,133 @@
+     return g;
+   }
+ 
++  /* ---- batch F (2026-11-15): Bridge Substructure Loading, every girder line and the bridge geometry, in the Steel Bridge app's
++     formats (apps/steel-bridge/ui/handoffs.js srPayload / sgPayload; HANDOFF.md §4.4 "Optional fields", §4.14). The old app's one-line
++     superReactions payload (srPayload above) is unchanged and still sent by its own button.
++     cells: PSBBridge.results(P, resOf).cells ([{ k, s, g, inp, R }], every girder type on every line; the page's cache of the engine). ---- */
++  const r3 = v => Math.round(v * 1000) / 1000, r4 = v => Math.round(v * 1e4) / 1e4;
++  const isN = v => typeof v === 'number' && isFinite(v);
++  const f2 = v => (+v).toFixed(2), f3 = v => (+v).toFixed(3);
++  const FILE = 'apps/ps-bridge/index.html', GEO_ID = 'psbridge';
++  const supId = (k, ns) => k === 0 ? 'Abut. 1' : k === ns ? 'Abut. 2' : 'Pier ' + k;
++  /* srAll(P, cells): superReactions for every girder line G1 … G<nb> (allGirders: true), the Steel Bridge app's shape: each line's
++     unfactored DC1, DC2 and DW at every support (kip, + up). Each span of a line is its girder type's engine run on that line (the cell),
++     its two end reactions the engine's own bxSuperRxPayload (srPayload above: the Analysis tab's "Reactions (unfactored, kip)" of that type
++     and line, the old app's numbers); at a pier the reaction is the sum of the end reactions of the two spans on it (one support point per
++     support, as the Steel Bridge app sends; each span's share is listed in the notes). No other arithmetic. → { ok, payload, sum, shares }
++     or { error } (a line with no type in a span, or a girder with an input error: nothing is sent). */
++  function srAll(P, cells) {
++    const spans = ((P && P.spans && P.spans.lengths) || []).map(Number), ns = spans.length, nb = Math.round(+(P && P.xs && P.xs.nb));
++    if (!ns || !spans.every(v => isN(v) && v > 0)) return { error: 'Enter the span lengths (Bridge layout tab).' };
++    if (!(nb >= 1)) return { error: 'Define the cross-section (number of girders, Cross-section tab).' };
++    const at = {}; (cells || []).forEach(c => { if (!at[c.s + '.' + c.g]) at[c.s + '.' + c.g] = c; });
++    const miss = [], bad = [];
++    for (let s = 1; s <= ns; s++) for (let g = 1; g <= nb; g++) if (!at[s + '.' + g]) miss.push(`G${g}/S${s}`);
++    if (miss.length) return { error: `Every girder line of every span needs a girder type (Girders & strands tab, Girder types): none on ${miss.join(', ')}.` };
++    // sh[k][g-1]: the end reactions on support k of line g: [{ s, end: 'left' | 'right', DC1, DC2, DW, basis }]
++    const sh = Array.from({ length: ns + 1 }, () => Array.from({ length: nb }, () => [])), pos = [], basis = {};
++    for (let s = 1; s <= ns; s++) for (let g = 1; g <= nb; g++) {
++      const c = at[s + '.' + g], b = srPayload(c.inp, c.R);
++      if (!b || b.error || !b.payload) { bad.push(`G${g}, span ${s} (${c.label || 'type ' + (c.k + 1)}): ${(b && b.error) || 'no result'}`); continue; }
++      const p = b.payload, q = p.supports; if (!Array.isArray(q) || q.length !== 2) { bad.push(`G${g}, span ${s}: not two end reactions`); continue; }
++      if (s === 1 || pos[g - 1] == null) pos[g - 1] = p.girderLine.position;
++      basis[p.girderLine.source] = (basis[p.girderLine.source] || []).concat([`G${g}/S${s}`]);
++      [[s - 1, 'left', q[0]], [s, 'right', q[1]]].forEach(([k, end, r]) => { const x = r.girders[0]; sh[k][g - 1].push({ s, end, DC1: x.DC1, DC2: x.DC2, DW: x.DW }); });
++    }
++    if (bad.length) return { error: `The reactions cannot be built: ${bad.join('; ')}. Fix the inputs first.` };
++    const X = [0]; spans.forEach(v => X.push(r3(X[X.length - 1] + v)));
++    const sum = (a, f) => r3(a.reduce((t, x) => t + x[f], 0));
++    const supports = X.map((x, k) => ({ id: supId(k, ns), x, girders: sh[k].map((a, i) => ({ label: 'G' + (i + 1), position: pos[i] || (i === 0 || i === nb - 1 ? 'exterior' : 'interior'),
++      DC1: sum(a, 'DC1'), DC2: sum(a, 'DC2'), DW: sum(a, 'DW') })) }));
++    const cont = !!(P.spans && P.spans.continuity === 'composite') && ns > 1;
++    const piers = []; for (let k = 1; k < ns; k++) piers.push(k);
++    const shareTxt = k => `${supId(k, ns)} (span ${k} right end + span ${k + 1} left end), DC1 / DC2 / DW kip: ` + sh[k].map((a, i) => {
++      const L = a.find(x => x.end === 'right'), R = a.find(x => x.end === 'left');
++      return `G${i + 1} ${f3(L.DC1)} + ${f3(R.DC1)}, ${f3(L.DC2)} + ${f3(R.DC2)}, ${f3(L.DW)} + ${f3(R.DW)}`; }).join('; ');
++    const notes = [
++      `Whole bridge: every girder line (G1 to G${nb}) of every span from this app (PS Bridge, apps/ps-bridge): each span of a line is the girder type on that line, its own engine run; its two end reactions are the ones the Analysis tab shows for that type and line ("Reactions (unfactored, kip)"; the old app's bxSuperRxPayload). Each girder is labelled by its line number, left to right.`,
++      'Unfactored, kip, + up. DC1 = girder self-weight + deck / haunch and other non-composite DC + diaphragm point loads, on the simple non-composite span (R = wL/2 for each uniform load, the diaphragms by statics). DC2 = barrier / SIDL. DW = wearing surface.',
++      cont ? `Continuity for composite loads on (spans ${spans.map(f2).join(', ')} ft): DC2 and DW are each span's end shears on the continuous unit, as reactions (+ up); DC1 is on the simple span.` : `Simple spans (${spans.map(f2).join(', ')} ft): R = wL/2 for each uniform load at each end of each span.`,
++      ...Object.keys(basis).filter(k => /MIDAS/.test(k)).map(k => `${basis[k].join(', ')}: DC2 and DW are the imported MIDAS shears at the two ends of the span used (the girder type's demands file), sign-corrected to reactions (+ up).`),
++      ...(piers.length ? [`At a pier the reaction is the sum of the end reactions of the two spans on it (one support point per pier, as the Steel Bridge app sends).${cont ? '' : ' Simple spans: split it between the back and ahead bearing rows by hand where needed, with the shares below.'}`].concat(piers.map(shareTxt)) : []),
++      'Live load is not sent (liveLoad null): Substructure Loading computes its own.'];
++    const pr = (P && P.project) || {};
++    const payload = { _schema: 'bridge-super-reactions', schemaVersion: 1, producer: PRODUCER, producerFile: FILE, project: { name: String(pr.name || ''), bridgeId: '' },
++      units: { force: 'kip', length: 'ft' }, factored: false, imIncluded: false, dfIncluded: false, perGirder: true,
++      allGirders: true, span: { index: null, length: r3(X[ns]) }, supports, liveLoad: null, notes };
++    return { ok: true, payload, shares: sh, sum: supports.map(s => `  ${s.id} (x = ${f2(s.x)} ft): ${s.girders.map(g => `${g.label} ${f2(g.DC1)} / ${f2(g.DC2)} / ${f2(g.DW)}`).join(', ')}`).join('\n') };
++  }
++  /* secDims(g): the girder section in the §4.14 terms from the engine's own section (girderGross / R.g, in): depth = h (the girder's total
++     depth); bf = the larger flange width (btf, bbf); tw = bw (the engine's web width: both webs of a box, both stems of a NEXT beam); tf =
++     the thickest horizontal part of the outline: I-girders and bulb tees the larger of the top and bottom flange thicknesses (d1, d3 of the
++     library), NEXT the flange thickness, a box the larger of the bottom slab (wall) and the top slab (h − wall − void height), a voided slab
++     (h − void diameter) / 2, a solid box or slab h. */
++  function secDims(g) {
++    let tf;
++    if (g.isNext && g.next) tf = +g.next.ft;
++    else if (g.isBox && g.box) tf = g.box.voidH > 0 ? Math.max(+g.box.wall, g.h - g.box.wall - g.box.voidH) : +g.h;
++    else if (g.isDeck && g.box) tf = g.box.voids > 0 && g.box.voidD > 0 ? (g.h - g.box.voidD) / 2 : +g.h;
++    else { const d = Array.isArray(g.d) ? g.d.map(Number) : []; tf = Math.max(d[0] || 0, d[2] || 0); }
++    return { d: +g.h, bf: Math.max(+g.btf || 0, +g.bbf || 0), tf, tw: +g.bw };
++  }
++  /* sgPayload(P, cells): superGeometry (HANDOFF.md §4.14) from the inputs and each girder type's section (no analysis): spans and
++     continuity, each support's station, skew (as entered) and joint, the girder layout, the deck edges (the traffic-face width,
++     PSBBridgeDL.edgeFace, the Steel Bridge app's edgeIn), the deck, and the girder section (the largest of each dimension over every
++     girder type on its lines; the deepest at each support and in each span), section.material 'prestressed concrete' (optional, §4.14).
++     → { ok, payload, sum } or { error } */
++  function sgPayload(P, cells) {
++    const errs = [], spans = ((P && P.spans && P.spans.lengths) || []).map(Number), ns = spans.length, xs = (P && P.xs) || {}, nb = Math.round(+xs.nb);
++    if (!ns || !spans.every(v => isN(v) && v > 0)) errs.push('Enter the span lengths (Bridge layout tab).');
++    if (!(nb >= 1)) errs.push('Define the cross-section (number of girders, Cross-section tab).');
++    const skews = (xs.skews || []).map(Number);
++    if (ns && (skews.length !== ns + 1 || !skews.every(isN))) errs.push(`Enter one skew for each of the ${ns + 1} supports (Bridge layout tab).`);
++    const DL = W.PSBBridgeDL, q = xs.dl;
++    const Ed = DL && q ? { L: DL.edgeFace(P, 'L'), R: DL.edgeFace(P, 'R') } : null;
++    if (!Ed || !isN(Ed.L.f) || !isN(Ed.R.f)) errs.push('Define the deck edges (barrier or curb, Cross-section tab, DC2 and DW).');
++    const cs = (cells || []).filter(c => c.inp && c.s >= 1 && c.s <= ns);
++    if (ns && !cs.length) errs.push('No girder line has a girder type (Girders & strands tab, Girder types).');
++    if (errs.length) return { error: errs.join(' ') };
++    const D = cs.map(c => { let g = c.R && !c.R.error && c.R.g ? c.R.g : null; if (!g) { try { g = W.girderGross(c.inp); } catch (e) { g = null; } }
++      return g ? Object.assign({ s: c.s, g: c.g, name: c.inp.girder }, secDims(g)) : null; });
++    if (D.some(x => !x)) return { error: 'A girder section cannot be computed: fix the inputs first.' };
++    const mx = (a, k) => a.length ? Math.max(...a.map(x => x[k])) : null;
++    const spanMax = spans.map((_, i) => mx(D.filter(x => x.s === i + 1), 'd'));
++    if (spanMax.some(v => v == null)) return { error: `Every span needs a girder type on its lines (none in span ${spanMax.findIndex(v => v == null) + 1}).` };
++    const atSupports = skews.map((_, k) => Math.max(k > 0 ? spanMax[k - 1] : 0, k < ns ? spanMax[k] : 0));
++    const cont = !!(P.spans && P.spans.continuity === 'composite') && ns > 1, X = [0]; spans.forEach(v => X.push(r3(X[X.length - 1] + v)));
++    // the deck: t_s, the dead-load thickness and the haunch of the girder types (one value each in a project; the largest when types differ)
++    const one = f => { const v = [...new Set(cs.map(c => +f(c.inp)))]; return { v: Math.max(...v), many: v.length > 1 }; };
++    const ts = one(i => +i.ts), tot = one(i => i.tsSeparate ? +i.tsDL : +i.ts), th = one(i => +i.th);
++    const edge = sd => { const e = Ed[sd], b = q['bar' + sd] || {}, curb = e.type === 'curb', o = v => (v == null || v === '' || !isN(+v)) ? null : r4(+v);
++      return { type: curb ? 'curb' : 'barrier', width: r4(e.f), faceBasis: e.by, barrierWidth: curb ? null : o(b.bw), curbWidth: curb ? o(b.cw) : null, curbHeight: curb ? o(b.ch) : null, height: null,
++        railing: curb ? { loadPoint: o(b.rp), trafficFace: o(b.rf) } : null }; };
++    const supports = X.map((x, k) => ({ id: supId(k, ns), x, skew: skews[k], joint: k === 0 || k === ns ? 'end' : cont ? 'continuous' : 'joint', depth: r4(atSupports[k]) }));
++    const pr = (P && P.project) || {}, sec = { depth: mx(D, 'd'), bf: mx(D, 'bf'), tf: mx(D, 'tf'), tw: mx(D, 'tw') };
++    const names = [...new Set(D.map(x => x.name))];
++    const payload = { _schema: 'bridge-super-geometry', schemaVersion: 1, producer: PRODUCER, producerFile: FILE, project: { name: String(pr.name || ''), bridgeId: '' },
++      units: { length: 'ft', skew: 'deg', deck: 'in', section: 'in', curb: 'in', height: 'in' },
++      spans: spans.slice(), continuity: cont ? 'continuous' : 'simple', supports,
++      girders: { count: nb, spacings: (xs.bays || []).map(Number), ohL: +xs.ohL, ohR: +xs.ohR },
++      edges: { L: edge('L'), R: edge('R') },
++      deck: { ts: ts.v, total: tot.v, haunch: th.v },
++      section: { depth: r4(sec.depth), bf: r4(sec.bf), tf: r4(sec.tf), tw: r4(sec.tw), atSupports: atSupports.map(r4), spanMax: spanMax.map(r4), material: 'prestressed concrete',
++        definition: 'precast prestressed concrete girders: total depth = the girder depth h (deck and haunch not included); bf = the larger flange width (top, bottom); tw = the web width bw (both webs of a box, both stems of a NEXT beam); tf = the thickest flange or slab of the section; each the largest over every girder type (each on its own)' },
++      basis: { skew: 'as entered in this app (Bridge layout tab): the bearing of girder line i is at x = x_support + (z_i - z_mid) tan(skew), z from G1 toward Gn (left to right looking ahead station), so + = the right end of the support line is ahead station',
++        spans: 'span lengths of the girder design, bearing to bearing; stations x from the first support' },
++      notes: [
++        `From the PS Bridge app (apps/ps-bridge) inputs: spans and continuity (Bridge layout), support skews (Bridge layout), girders, spacings and overhangs (Cross-section), deck edges (Cross-section, DC2 and DW; width = deck edge to the traffic face: ${['L', 'R'].map(sd => `${sd === 'L' ? 'left' : 'right'} ${f2(Ed[sd].f)} ft, ${Ed[sd].by}`).join('; ')}), deck thickness and haunch (Cross-section, Deck and haunch${ts.many || tot.many || th.many ? '; the girder types differ: the largest sent' : ''}), girder sections of the girder types (${names.join(', ')}).`,
++        `Girder section (in), precast prestressed concrete: largest over every girder type: depth ${f3(sec.depth)}, flange width ${f3(sec.bf)}, flange thickness ${f3(sec.tf)}, web width ${f3(sec.tw)}. Deepest at each support: ${supports.map(s => `${s.id} ${f3(s.depth)}`).join(', ')}. Deepest in each span: ${spanMax.map((v, i) => `span ${i + 1} ${f3(v)}`).join(', ')}.`,
++        'Skew: as entered here, + when the right end of the support line (looking ahead station) is ahead station.',
++        `Supports: ${cont ? 'continuous for composite loads over the piers (5.12.3.3)' : 'simple spans (an expansion joint at each pier)'}; the abutments are deck ends. Bearing fixity is not defined in this app and is not sent. Elevations and the substructure are not carried.`,
++        'Barrier height: not an input of this app (not sent). Curb height and the railing load point are sent for a curb edge.'] };
++    const HS = W.SharedHandoffStore;
++    if (HS) payload.contentHash = HS.geometryHash(payload);
++    const chk = HS ? HS.checkGeometry(payload) : { ok: true, errors: [] };
++    if (!chk.ok) return { error: chk.errors.join('; ') };
++    return { ok: true, payload, sum: `${HS ? HS.summary('superGeometry', payload) : ns + ' spans'}; skews ${skews.map(f2).join(', ')} deg; overhangs ${f2(+xs.ohL)} / ${f2(+xs.ohR)} ft; deck ${f2(ts.v)} in, haunch ${f2(th.v)} in; girder depth ${f3(sec.depth)} in (largest)` };
++  }
++
+   W.PSBHandoffs = { PRODUCER, SR_ID, RX, applyLoads, dlBlocked, srPayload, psSection, capacity, CAP_BASIS, lldfGeom, lldfResolve, lldfTheirs, lldfFields, dlResolve, dlTheirs,
+-    PM, PM_LABELS, pmFields, pmPlan, MCT_VERSION, MCT_K, verOf, tokenOf, mctPending, mctDescribe, mctPlan, geomPending };
++    PM, PM_LABELS, pmFields, pmPlan, MCT_VERSION, MCT_K, verOf, tokenOf, mctPending, mctDescribe, mctPlan, geomPending,
++    GEO_ID, srAll, secDims, sgPayload };   // batch F (2026-11-15)
+ })();
+diff --git a/apps/ps-bridge/index.html b/apps/ps-bridge/index.html
+index 2565df1..e09c9e5 100644
+--- a/apps/ps-bridge/index.html
++++ b/apps/ps-bridge/index.html
+@@ -72,6 +72,7 @@
+     '../../shared/projects.js',    // PR 5: the standard save (shared, unchanged; as the steel app)
+     '../../shared/projects-ui.js', // PR 5: projectBar: header chip, Save / Save as… / Saved projects…, the "Save and open" card, the Saved projects dialog
+     '../../shared/github-sync.js', // PR 5: Cloud sync of the saved projects to a private GitHub repository (off until set up; tool 'ps-bridge-app')
++    '../../shared/handoff-store.js', // batch F (2026-11-15): per-project hand-off copies (HANDOFF.md §5.1; shared, unchanged; as the steel app), used by ui/handoffs.js
+     'report/fromtab.js',     // PR 2e: an output tab's cards as report items (the tab's own HTML and values)
+     'report/data.js',        // PR 2e: the report's results (the page's own result, as the tabs)
+     'report/builders.js',    // PR 2e: the report model (adapted copy of apps/steel-bridge/report/builders.js)
+@@ -503,7 +504,8 @@
+   const dmCtx = { changed: () => changed(), toast: (t, u) => toast(t, u), redraw: () => { saveUi(); drawInputs(); } };
+   /* 2026-11-14 (item 12): the Hand-offs card (ui/handoffs.js): the girder type and line the output tabs show, its engine inputs and result */
+   const hoCtx = { P: () => P, result: () => (errs.length ? null : result()), cell: () => hoCell(), changed: () => changed(),
+-    toast: (t, u) => toast(t, u), redraw: () => drawOut() };   // batch D3: + the MCT banners' notice and redraw
++    toast: (t, u) => toast(t, u), redraw: () => drawOut(),   // batch D3: + the MCT banners' notice and redraw
++    all: () => (errs.length ? null : allResults(true)), redrawIn: () => drawInputs() };   // batch F: every girder type on every line (the page's cache, as the Report); the card's "Last sent"
+   HOUI.init(() => drawOut());   // the "new data" marks follow the other tools' sends (storage event); batch D3: the MCT banners too
+   /* PR 2f: "From the old app" (ui/legacy.js): an import replaces the open project, as Import JSON does (asked first there) */
+   const lgCtx = { store: LS, gotoOut: t => gotoOut(t), pickFile: () => pb.importJSON(),   // PR 5: asks first on unsaved changes, then the file chooser
+diff --git a/apps/ps-bridge/ui/handoffs.js b/apps/ps-bridge/ui/handoffs.js
+index 1183e53..4aaa763 100644
+--- a/apps/ps-bridge/ui/handoffs.js
++++ b/apps/ps-bridge/ui/handoffs.js
+@@ -12,6 +12,11 @@
+               itself; here nothing is sent without a click; Decision pending engineer review, fixlog/ps-bridge.md HO-D2).
+    Batch D3 (2026-11-15): the MCT demands (handoffs / latestId) and geometryChanges: banners above the output tabs (mctBanner), Load by click
+    into a girder type (its demands, engine/demands.js), the review window of the geometry changes.
++   Batch F (2026-11-15): "Send to Substructure Loading" with the boxes Geometry and Reactions of every girder line, and "Export hand-off
++   (JSON)", the Steel Bridge app's row (apps/steel-bridge/ui/handoffs.js subSend): superGeometry (engine sgPayload, HANDOFF.md §4.14) and
++   superReactions with allGirders (engine srAll, §4.4), each published (channel key, .updatedAt), its .by copy (superGeometry.by.psbridge;
++   superReactions.by.psbeam, the slot the reactions button above writes) and its per-project copy (shared/handoff-store.js, producer id
++   psbridge, HANDOFF.md §5.1; uploaded with Cloud sync as the Steel Bridge app's). The one-line "Send reactions" row above is unchanged.
+    Not here (fixlog/ps-bridge.md, Open items): designBeam / beamRoster, the channel locks (BridgeLocks; HO-D2 pending), appPaths and the
+    shared Bridge Suite project list (switch-over). */
+ (function () {
+@@ -24,10 +29,17 @@
+   const isNew = ch => { const b = BX(); return !!(b && b.isNew(ch, H().RX)); };
+   const has = ch => !!getRaw('bridgeSuite.v1.' + ch);
+ 
++  /* batch F: the per-project copies of this app's sends (shared/handoff-store.js, producer id psbridge; read only) */
++  const HS = () => window.SharedHandoffStore, SEND = { geo: true, rx: true };   // the boxes: this page only, not saved (as the Steel Bridge app)
++  const whenL = t => { const d = new Date(t); return t && isFinite(d) ? d.toLocaleString() : 'time unknown'; };
++  const lastSent = (P, ch) => { try { const S = HS(); if (!S || !H()) return null; const pid = S.pidOf({ name: String((P.project || {}).name || ''), bridgeId: '' }); if (!pid) return null;
++    const t = localStorage.getItem(S.copyKey(ch, H().GEO_ID, pid)); const p = t ? JSON.parse(t) : null; return p && p.producedAt ? p : null; } catch (e) { return null; } };
+   /* the girder type and line the output tabs show (ctx.cell()), its label */
+   function shownText(c) { return c ? `${esc(c.label)} on G${c.g}, span ${c.s}` : 'no girder type on a line'; }
+ 
+   function card(P, c) {
++    const pname = P && P.project && String(P.project.name || '').trim(), sg = lastSent(P, 'superGeometry'), sr = lastSent(P, 'superReactions');
++    const sent = !pname ? 'not kept per project until the project has a name' : sg || sr ? [sg && `Geometry ${esc(whenL(sg.producedAt))}`, sr && `Reactions ${esc(whenL(sr.producedAt))}`].filter(Boolean).join('; ') + ` (project "${esc(pname)}", from this browser)` : `nothing sent yet for project "${esc(pname)}" from this browser`;
+     const n = ch => `<span class="note" data-ho-new="${ch}"${isNew(ch) ? '' : ' hidden'}> · <b>new data</b></span>`;
+     const st = ch => has(ch) ? '' : ' <span class="note">(nothing sent yet)</span>';
+     const btn = (a, t, tip) => `<button type="button" data-ho="${a}" title="${esc(tip)}">${t}</button>`;
+@@ -41,6 +53,8 @@
+       <p class="note"><b>Send</b></p>
+       <div class="fRow">${btn('pmShare', 'Share project info', 'Share this title block with the other tools (bridgeSuite.v1.projectMeta)')}</div>
+       <div class="fRow">${btn('srSend', 'Send reactions to Substructure Loading', 'The unfactored DC1, DC2 and DW end reactions of this girder line (kip): bridgeSuite.v1.superReactions and its copy superReactions.by.psbeam')}${btn('srExport', 'Export hand-off (JSON)', 'The same reactions hand-off as a JSON file')}</div>
++      <div class="fRow">${btn('subSend', 'Send to Substructure Loading', 'Every girder line: the bridge geometry (bridgeSuite.v1.superGeometry) and the reactions of every girder line G1 to Gn (bridgeSuite.v1.superReactions, allGirders), as the Steel Bridge app sends them')} <label><input type="checkbox" data-ho-opt="geo"${SEND.geo ? ' checked' : ''}> Geometry</label> <label><input type="checkbox" data-ho-opt="rx"${SEND.rx ? ' checked' : ''}> Reactions of every girder line</label> ${btn('subFile', 'Export hand-off (JSON)', 'The same hand-offs as JSON files (one per ticked box)')}</div>
++      <p class="note">The row above sends the girder line shown only (the old app's hand-off). This row, as the Steel Bridge app: <b>Geometry</b>: spans, support skews and joints, girder count, spacings and overhangs, the deck edges (traffic faces), the deck and haunch, and the girder sections (largest depth, flange and web; the depth at each support and the deepest in each span), for Bridge Substructure Loading's "Pull geometry". <b>Reactions</b>: each girder line's unfactored DC1, DC2 and DW at every support (kip) from every girder type on its lines — each span's end reactions are the Analysis tab's (choose the type and line above the output tabs), a pier's the sum of its two spans' (each span's share in the hand-off notes) — for its "Pull from PS-Beam / GirderDetail". Each send is also kept for this project (${pname ? `"${esc(pname)}"` : 'enter a project name on this tab first'}). <b>Last sent:</b> ${sent}.</p>
+       <div class="fRow">${btn('geoSend', 'Send geometry to LL &amp; DL', 'Spans, girder count and spacing, deck, skew and girder section properties for LL & DL Distribution (bridgeSuite.v1.lldfGeom)')}${btn('geoExport', 'Export (JSON)', 'The same geometry hand-off as a JSON file')}</div>
+       <div class="fRow">${btn('secSend', 'Send section properties', 'The composite section properties and outline for the MCT generator and LL & DL (bridgeSuite.v1.psSection)')}${btn('secExport', 'Export (JSON)', 'The same section hand-off as a JSON file')}</div>
+       <div class="fRow">${btn('capSend', 'Send capacity to the MCT rating', 'φMn± and φVn at every station of the girder for the MCT generator\'s AASHTO rating (bridgeSuite.v1.capacity)')}${btn('capExport', 'Export (JSON)', 'The same capacity hand-off as a JSON file')}</div>
+@@ -149,10 +163,37 @@
+       say('Capacity published — ' + b.payload.stationCount + ' stations over ' + b.spans + ' span(s).\n\nOpen the MCT app → AASHTO Rating and apply the "Design capacity received" banner.' + (b.warns.length ? '\n\nWarnings:\n• ' + b.warns.join('\n• ') : ''));
+   }
+ 
++  /* batch F: subSend(ctx, file): the Steel Bridge app's subSend. Every ticked channel is built first (nothing is sent when one fails), then
++     published (channel key, .updatedAt), its .by copy and its per-project copy (and upload with Cloud sync); file: one JSON file per box. */
++  async function subSend(ctx, file) {
++    const todo = [SEND.geo && 'geo', SEND.rx && 'rx'].filter(Boolean);
++    if (!todo.length) { say('Tick Geometry, Reactions or both.'); return; }
++    const A = ctx.all ? ctx.all() : null;
++    if (!A) { say(`Nothing was ${file ? 'exported' : 'sent'}: fix the inputs first (the input errors are listed above the results).`); return; }
++    const P = ctx.P(), built = {}, errs = [];
++    todo.forEach(k => { const r = k === 'geo' ? H().sgPayload(P, A.cells) : H().srAll(P, A.cells); if (r.error) errs.push(`${k === 'geo' ? 'Geometry' : 'Reactions'}: ${r.error}`); else built[k] = r; });
++    if (errs.length) { say(`Nothing was ${file ? 'exported' : 'sent'}.\n\n${errs.join('\n')}`); return; }
++    const dev = HS() ? HS().deviceName(localStorage) : ''; todo.forEach(k => { if (dev) built[k].payload.device = dev; });   // §5.1 optional envelope field
++    const CH = { geo: { ch: 'superGeometry', by: H().GEO_ID }, rx: { ch: 'superReactions', by: H().SR_ID } };
++    if (file) { todo.forEach(k => exportP(CH[k].ch, Object.assign({}, built[k].payload, { producedAt: new Date().toISOString() }))); return; }
++    const out = [], pname = String((P.project || {}).name || '').trim();
++    for (const k of todo) {
++      const c = CH[k], w = BX().publish(c.ch, built[k].payload, H().PRODUCER, FILE);
++      if (w.error) { out.push(`${k === 'geo' ? 'Geometry' : 'Reactions'}: NOT sent: ${w.error} Use "Export hand-off (JSON)" instead.`); continue; }
++      write(BX().NS + c.ch + '.by.' + c.by, JSON.stringify(w.payload));   // the .by copy (§4.4, §4.14)
++      let cl = '';
++      if (HS()) { const r = await HS().send({ storage: localStorage, channel: c.ch, producer: H().GEO_ID, payload: w.payload, fetch: (u, i) => window.fetch(u, i) });
++        cl = !r.ok ? ` (the per-project copy was not saved: ${r.error})` : !r.pid ? '' : r.cloud && r.cloud.ok ? '; also uploaded to GitHub' : r.cloud && r.cloud.queued ? `; GitHub upload waiting (${r.cloud.error})` : ''; }
++      out.push(k === 'geo' ? `Geometry sent: ${built.geo.sum}${cl}.` : `Reactions sent (unfactored, kip, DC1 / DC2 / DW of every girder line)${cl}:\n${built.rx.sum}`);
++    }
++    say(`${pname ? `Kept for project "${pname}".` : 'This project has no name, so the send is kept only as the latest hand-off (no project). Enter a project name on this tab to keep one copy per project.'}\n\n${out.join('\n\n')}\n\nIn Bridge Substructure Loading: Project tab, Hand-offs card, "Pull geometry from Steel Bridge Design" and "Pull from PS-Beam / GirderDetail". Each asks which project first.`);
++    if (ctx.redrawIn) ctx.redrawIn();   // the card's "Last sent"
++  }
+   function onClick(e, ctx) {
+     const b = e.target.closest('[data-ho]'); if (!b) return false;
+     if (!BX() || !H()) { say('The hand-off helper is not available in this browser.'); return true; }
+     const a = b.dataset.ho;
++    if (a === 'subSend' || a === 'subFile') { subSend(ctx, a === 'subFile'); return true; }   // batch F (async: the per-project copy)
+     ({ pmUse, pmShare, lldfPull, dlPull, srSend, srExport, secSend: c => secSend(c, false), secExport: c => secSend(c, true),
+       geoSend: c => geoSend(c, false), geoExport: c => geoSend(c, true), capSend: c => capSend(c, false), capExport: c => capSend(c, true) })[a](ctx);
+     refresh();
+@@ -229,7 +270,8 @@
+     if (a === 'geo') { const d = geoDialog(ctx.P()); if (d) { d.__ctx = ctx; if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', ''); } return true; }
+     return true;
+   }
+-  function init(onMctChange) { window.addEventListener('storage', e => { if (!e.key || /^bridgeSuite\.v1\.(lldf|dlLoads)/.test(e.key)) refresh();
++  function init(onMctChange) { document.addEventListener('change', e => { const t = e.target; if (t && t.dataset && t.dataset.hoOpt) SEND[t.dataset.hoOpt] = !!t.checked; });   // batch F
++    window.addEventListener('storage', e => { if (!e.key || /^bridgeSuite\.v1\.(lldf|dlLoads)/.test(e.key)) refresh();
+     if (onMctChange && (!e.key || /^bridgeSuite\.v1\.(latestId|updatedAt|handoffs|geometryChanges)/.test(e.key))) onMctChange(); }); }   // batch D3: the banners follow the MCT Generator's sends
+   window.PSBHandoffUI = { card, onClick, refresh, init, mctBanner, onMct, mctLoad };
+ })();
+```
+### Tests
+- New: tests/engine/psbridge-subloads.test.mjs (3), tests/smoke/ps-bridge-subloads.mjs (7). Changed: tests/engine/psbridge-model.test.mjs (script list, shared exemption).
+## 2026-11-15 — E0: no "pending engineer review" wording in the app (Auto design output tab, Project tab / Report assumption; display only)
+PR #1578: https://github.com/mlococo88/All-Structural/pull/1578
+### Request
+- Engineer rule: "pending engineer review" wording appears only in PRs and the fix log, never in the app UI or the Report. Reword the Auto design output tab's "Assumed (pending engineer review)" neutrally, and fix any other such wording in apps/ps-bridge the same way. The box beam / voided slab "to be confirmed" note (PS #1542 / #1554) is an engineer-requested exception and is kept.
+### What changed
+- **`ui/autodesign.js`**, the output tab's "How the search works (assumptions)" list (anchor `a higher f′c or f′ci is not worse for any check; a higher y<sub>end</sub>`):
+  - Before: `<li>Assumed (pending engineer review): a higher f′c or f′ci …`
+  - After: `<li>Assumption (<a href="#rp:rs.adb" data-gotab="rpt">Report, §2, Auto design basis</a>): a higher f′c or f′ci …` (the link is the one the tab's first note already uses; the Report's Auto design basis states the same assumptions under "Assumptions of the search").
+- **`ui/inputs.js`** `assumptions(P)`, the "Unequal bays (PS-9 …)" item, shown on the Project tab and in Report §2 Assumptions (anchor `with unequal bays it is an approximation`):
+  - Before: `… with unequal bays it is an approximation (pending engineer review).'`
+  - After: `… with unequal bays it is an approximation.'`
+- **`ui/handoffs.js`**, the MCT hand-off banner (batch D3, #1576; anchor `Auto-adopt (the old app's lock): not in this app yet`):
+  - Before: `… not in this app yet (engineer decision HO-D2 pending).</span>`
+  - After: `… not in this app yet: the hand-off is loaded only by "Load these demands".</span>` (the banner's own button; behaviour unchanged).
+  - and its "Geometry changes from MCT" dialog (anchor `Auto-update (the old app's lock) is not in this app yet`): Before `… not in this app yet (engineer decision HO-D2 pending).</p>`; After `… not in this app yet.</p>`.
+- Every other "pending" in apps/ps-bridge (outside the frozen engine/pbd-*.js) is in a code comment, a list's "pending edit" (lists.js, not review wording) or the kept "to be confirmed" note.
+### Saved data (CLAUDE.md §5)
+- None.
+### Governing provisions (CLAUDE.md §4)
+- None changed (wording only). Harness B: 0 differences.
+### Check case
+- Default project: Report text and every input tab's girder-design cards: no match for /pending/i (before: the Unequal bays assumption in Project tab and Report §2 Assumptions matched).
+- Auto design output tab: the assumptions list item reads "Assumption (Report, §2, Auto design basis): a higher f′c or f′ci is not worse for any check; …".
+### How verified
+- New `tests/engine/psbridge-nopending.test.mjs` (4 tests; 2 fail on main before the change): also the MCT banner strings of ui/handoffs.js.
+- PS checks: see the PR.
+### Other copies
+- engine/autodesign.js keeps the "Decisions pending engineer review" wording in its header comment only (not shown).
 ## 2026-11-15 — E1: the HL-93 load rating at every station of the girder, negative moment over the pier included (engine/rating-along.js, Rating tab, Summary, Report; CLAUDE.md §4 change of the governing rating factors shown)
 PR #TBD
 ### Request
