@@ -796,7 +796,7 @@
       'dialog.spGh .spGhRes{margin:8px 0;font-size:9pt;white-space:pre-wrap;} dialog.spGh .spGhBtns{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;} dialog.spGh .spGhBtns button{margin-left:0;}',
       '.spGhToast{position:fixed;right:12px;bottom:12px;z-index:2147483000;max-width:min(420px,92vw);background:#fffbeb;color:#78350f;border:1px solid #f59e0b;border-radius:6px;padding:8px 28px 8px 10px;font:13px/1.35 system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.15);}',
       '.spGhToast button{position:absolute;top:4px;right:4px;border:0;background:none;font-size:14px;cursor:pointer;color:#78350f;}',
-      '.spGhTok{position:sticky;top:0;z-index:2147482000;margin:0;padding:10px 14px;font:13px/1.45 system-ui,sans-serif;border-bottom:2px solid;}',   // TOKX
+      '.spGhTok{position:relative;z-index:2147482000;margin:0;padding:10px 14px;font:13px/1.45 system-ui,sans-serif;border-bottom:2px solid;}',   // TOKX
       '.spGhTok.soon{background:#fffbeb;color:#78350f;border-color:#f59e0b;} .spGhTok.bad{background:#fef2f2;color:#7f1d1d;border-color:#dc2626;}',
       '.spGhTok b{font-weight:700;} .spGhTok ol{margin:6px 0 4px 20px;padding:0;} .spGhTok li{margin:2px 0;} .spGhTok .spGhTokB{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;}',
       '.spGhTok button{font:inherit;font-size:12px;padding:3px 10px;border:1px solid currentColor;border-radius:4px;background:#fff;color:inherit;cursor:pointer;} .spGhTok a{color:inherit;}',
