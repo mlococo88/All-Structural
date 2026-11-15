@@ -58,7 +58,7 @@ try {
   assert.equal(await p.evaluate(() => document.querySelector('#tabBar [aria-selected=true]').dataset.otab), 'sum');
   ok('index links: the notes to the Project / Materials / Loads / Owner rules input tabs, the summary to the Summary tab');
   // 2b. H2: the analysis diagrams and the bearing reactions; the reactions of the line the Analysis tab shows = the sheet's
-  t = await sheet('diag0');
+  await dwg(); t = await sheet('diag0');
   ['GIRDER INTERIOR S1: ANALYSIS DIAGRAMS'].forEach(x => assert.ok(t.includes(x), x)); assert.ok(t.some(x => /^MOMENT ENVELOPES/.test(x)) && t.some(x => /^SHEAR ENVELOPES/.test(x)) && t.some(x => /^DEMANDS: THIS APP'S ANALYSIS/.test(x)), 'diagram titles');
   await shot('h2-diagrams');
   await p.click('#tabBar [data-otab="an"]'); await p.waitForTimeout(800);
@@ -66,7 +66,8 @@ try {
     return { g: (document.querySelector('#out').innerText.match(/girder line \((G\d+)/) || [])[1], rows: [...c.querySelectorAll('tbody tr')].map(tr => [...tr.children].map(td => td.textContent.trim())) }; });
   await dwg(); t = await sheet('reac');
   assert.ok(t.includes('BEARING REACTIONS PER GIRDER LINE (KIP)'), 'reactions table');
-  an.rows.forEach(r => [1, 2, 3].forEach(j => assert.ok(t.includes(r[j]), `reaction ${r[0]} ${r[j]} on the sheet`)));
+  const nums = t.map(Number).filter(v => isFinite(v));
+  an.rows.forEach(r => [1, 2, 3].forEach(j => assert.ok(nums.some(v => Math.abs(v - +r[j]) <= 0.005 + 1e-9), `reaction ${r[0]} ${r[j]} on the sheet (3 decimals there)`)));
   ok(`analysis diagrams sheet; bearing reactions: the Analysis tab's ${an.rows.length} support rows (${an.g || 'the line shown'}) on the sheet`);
   await shot('h2-reactions');
   r = await p.evaluate(() => ({ d: [...document.querySelectorAll('.dwg-idx tr[data-dsheet="diag0"] a')].map(a => a.dataset.dgo || a.dataset.dgi), r: [...document.querySelectorAll('.dwg-idx tr[data-dsheet="reac"] a')].map(a => a.dataset.dgo || a.dataset.dgi) }));
