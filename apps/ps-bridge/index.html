@@ -661,7 +661,7 @@
     if (TABUI[ui.otab] || ui.otab === 'rpt') h += TY.outBar(P);   // PR 3a-1: the girder type and line shown
     if (ui.otab === 'lds') h += deNotice();   // PS-23: the entered d_e differs from the computed one
     if (TABUI[ui.otab]) {
-      if (ok) { ctxOut = { P, inp: rc.inp, R: rc.R, W: rc.W, ui, redraw: () => { saveUi(); drawOut(); } };
+      if (ok) { ctxOut = { P, inp: rc.inp, R: rc.R, W: rc.W, ui, all: rc.all || null, redraw: () => { saveUi(); drawOut(); } };   // all (2026-11-15, batch C): every girder type × line, for the tables of every line
         const d = window.PSBDesign.sel(P);
         const sh = BR.hasTypes(P) ? BR.shown(P) : null;
         h += `<p class="note">${sh ? `Girder type ${esc(P.types[sh.k].label)} on ` : 'Design girder '}${esc(rc.inp.proj.girderId)}, span ${d.s} (L = ${fmt(rc.R.L, 2)} ft): <a href="#" data-goin="gird">Girders &amp; strands tab</a>.</p>` + TABUI[ui.otab]().output(ctxOut); }

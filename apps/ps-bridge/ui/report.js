@@ -31,7 +31,8 @@
   function controls(o, B) {
     const inc = incOf(o), m = modeOf(o);
     const ch = B && B.all && B.all.n > 1 ? `<div class="rp-chips" role="radiogroup" aria-label="Worked sections" id="rpWorked"><span class="rp-chip" style="border:0;padding-left:0"><b>Worked sections:</b></span>${[['gov', "each type's governing line"], ['all', 'every girder line']].map(([v, t]) => `<label class="rp-chip"><input type="radio" name="rpWorked" data-rpworked="${v}"${m === v ? ' checked' : ''}>${t}</label>`).join('')}</div>` : '';
-    return ch + `<div class="rp-chips" role="group" aria-label="Report sections">${window.PSBReportBuild.SECTIONS.map(([k, t]) => `<label class="rp-chip"><input type="checkbox" data-rpinc="${k}"${inc[k] ? ' checked' : ''}>${esc(t)}</label>`).join('')}</div>`;
+    const dt = `<div class="rp-chips" role="radiogroup" aria-label="Detail" id="rpDetail"><span class="rp-chip" style="border:0;padding-left:0"><b>Detail:</b></span>${[['tab', 'the stations the tabs tabulate'], ['all', 'every station']].map(([v, t]) => `<label class="rp-chip"><input type="radio" name="rpDetail" data-rpdetail="${v}"${(o.detail === 'all' ? 'all' : 'tab') === v ? ' checked' : ''}>${t}</label>`).join('')}</div>`;   // 2026-11-15 (batch C): the steel report's Detail choice
+    return ch + dt + `<div class="rp-chips" role="group" aria-label="Report sections">${window.PSBReportBuild.SECTIONS.map(([k, t]) => `<label class="rp-chip"><input type="checkbox" data-rpinc="${k}"${inc[k] ? ' checked' : ''}>${esc(t)}</label>`).join('')}</div>`;
   }
   const PW = 700;
   const plainA = el => { el.querySelectorAll('a').forEach(a => { const sp = document.createElement('span'); sp.innerHTML = a.innerHTML; a.replaceWith(sp); }); return el; };
@@ -96,6 +97,21 @@
       return { svg: sc ? `<div class="vk rp-vk rp-fig-scr">${sc.svg}</div><div class="vk rp-vk rp-fig-prn">${g.svg}</div>` : `<div class="vk rp-vk">${g.svg}</div>`, cap: PL.legend(g.m, 1).replace(/<[^>]+>/g, '') }; }
     catch (e) { console.warn(e); return null; }
   }
+  /* sumFig(B, wScr): 2026-11-15 (batch C; the steel report's §1 summary figure): the Summary tab's girder elevation of each girder type on its
+     governing line (ui/sumelev.js model + svg: the governing check of each group where it governs), at the printed width and, on a narrow
+     screen, a copy at the screen width; [{ svg, cap }] or null (no girder types computed). Links of the screen figure removed. Display only. */
+  function sumFig(B, wScr) {
+    const SU = window.PSBSummaryUI, SE = window.PSBSumElev; if (!SU || !SE || !B.all || !window.PSBVizKit) return null;
+    const strip = t => String(t).replace(/<a\b[^>]*>/g, '').replace(/<\/a>/g, '');
+    try { const M = SU.model(B.P, B.all);
+      return M.types.map(T => { const m = SE.model(M, B.P, T.k); if (!m || (m.errors && m.errors.length)) return null;
+        const g = SE.svg(m, PW), sc = wScr && wScr < PW - 40 ? SE.svg(m, wScr) : null;
+        const list = m.marks.concat(m.other).map(q => `${q.name}: ${q.check}${fin(q.x) && m.marks.includes(q) ? ` at x = ${q.x.toFixed(2)} ft` : ''} on G${q.g}, ratio ${fin(q.r) ? q.r.toFixed(3) : 'NaN'} (${q.pass ? 'PASS' : 'FAIL'})`).join('; ');
+        return { svg: sc ? `<div class="vk rp-vk rp-fig-scr">${strip(sc.svg)}</div><div class="vk rp-vk rp-fig-prn">${strip(g.svg)}</div>` : `<div class="vk rp-vk">${strip(g.svg)}</div>`,
+          cap: `Girder elevation: ${m.label} on G${m.g} (its governing line), span ${m.span}; the governing check of each group where it governs (vertical scale exaggerated)`, list }; }).filter(Boolean); }
+    catch (e) { console.warn(e); return null; }
+  }
+  const fin = v => typeof v === 'number' && isFinite(v);
   function render(host, ctx) {
     const o = ctx.opts || {};
     if (window.SharedReport) window.SharedReport.css();
@@ -104,17 +120,18 @@
     if (!window.SharedReport) { box.innerHTML = '<div class="alert err">shared/report.js is not loaded.</div>'; return null; }
     const B = window.PSBReportData.compute(ctx.P, ctx.rc, modeOf(o));
     if (B.err) { box.innerHTML = `<div class="alert err" role="alert">The report cannot be built: ${esc(B.err)}</div>`; return null; }
-    const inc = incOf(o), wScr = Math.round(box.clientWidth || 0), narrow = wScr > 0 && wScr < PW - 40, key = JSON.stringify([ctx.rc && ctx.rc.key, ctx.rc && ctx.rc.allKey, inc, narrow ? wScr : 0, modeOf(o)]);
+    const inc = incOf(o), wScr = Math.round(box.clientWidth || 0), narrow = wScr > 0 && wScr < PW - 40, key = JSON.stringify([ctx.rc && ctx.rc.key, ctx.rc && ctx.rc.allKey, inc, narrow ? wScr : 0, modeOf(o), o.detail === 'all']);
     // the model is kept while the inputs, the sections chosen and the figure width are the same (the result object of the page is the same)
     // PS-25: several worked units: each unit's graphics drawn with its own result (an array, one per unit)
     if (S.key !== key || !S.M) { let figs = {}; try { figs = B.multi ? B.units.map(u => figures({ P: u.P, inp: u.inp, R: u.R, W: u.W }, inc, narrow ? wScr : 0)) : figures(B, inc, narrow ? wScr : 0); } catch (e) { console.warn(e); }
-      S.M = window.PSBReportBuild.model(B, { include: inc, figures: figs, planFig: inc.proj === false ? null : planFig(B.P, narrow ? wScr : 0) }); S.key = key; }
+      S.M = window.PSBReportBuild.model(B, { include: inc, figures: figs, planFig: inc.proj === false ? null : planFig(B.P, narrow ? wScr : 0), sumFig: inc.sum === false ? null : sumFig(B, narrow ? wScr : 0), every: o.detail === 'all' }); S.key = key; }
     const tb = document.getElementById('tabBar');
     const V = window.SharedReport.mount(box, S.M, { controls: controls(o, B), closed: S.closed, stick: tb ? tb.offsetHeight : 0, spy: true,
       onGoto: t => { if (/^in:/.test(t)) { if (ctx.goin) ctx.goin(t.slice(3)); } else if (ctx.goto) ctx.goto(t); } });
+    box.querySelectorAll('[data-rpdetail]').forEach(el => el.addEventListener('change', () => { if (!el.checked) return; o.detail = el.dataset.rpdetail; if (ctx.save) ctx.save(); render(host, ctx); }));
     box.querySelectorAll('[data-rpworked]').forEach(el => el.addEventListener('change', () => { if (!el.checked) return; o.worked = el.dataset.rpworked; if (ctx.save) ctx.save(); render(host, ctx); }));
     box.querySelectorAll('[data-rpinc]').forEach(el => el.addEventListener('change', () => { o.inc = o.inc || {}; o.inc[el.dataset.rpinc] = el.checked; if (ctx.save) ctx.save(); render(host, ctx); }));
     return V;
   }
-  window.PSBReportUI = { render, figures, state: S, PW };
+  window.PSBReportUI = { render, figures, sumFig, state: S, PW };
 })();

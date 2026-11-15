@@ -20,9 +20,10 @@
   function output(ctx) {
     const { R, inp, ui } = ctx, k = K(), ev = (p, d, u, div) => k.ev(R, p, d, u, div), wk = k.wk, D = R.diagrams, sel = selOf(ui, R), c = R.cont;
     const simple = !R.fe && !R.useExt;
-    let h = K().gcard('Analysis graphic: envelopes along the girder', 'gfx_an');
+    let h = K().gcard('Analysis graphic: girder elevation', 'gfxr_anel') + K().gcard('Analysis graphic: envelopes along the girder', 'gfx_an');   // gfxr_anel (2026-11-15, batch C): screen only
+    h += usedCard(ctx);   // 2026-11-15 (batch C): the loads and factors the analysis uses (the steel app's card), each linked to its work
     // the station table: every sixth station of the engine's and the selected one
-    const idx = D.map((r, i) => i).filter(i => i % 6 === 0 || i === sel);
+    const idx = D.map((r, i) => i).filter(i => (ui && ui.every) || i % 6 === 0 || i === sel);   // ui.every: the Report's "every station" detail (2026-11-15)
     h += k.card('Force effects along the girder (per girder; moments kip-ft, shears kip)', `<div class="fRow"><label for="o_anSel">Station</label><select id="o_anSel">${D.map((r, i) => `<option value="${i}"${i === sel ? ' selected' : ''}>x = ${k.fx(r.x, 2)} ft (${k.fx(r.x / R.L, 3)} L)</option>`).join('')}</select></div>
       <div class="tscroll"><table class="tbl"><thead><tr><th>x<br>ft</th>${COLS.map(q => `<th>${q[1]}</th>`).join('')}</tr></thead><tbody>
       ${idx.map(i => `<tr${i === sel ? ' class="sel"' : ''}><td>${ev(`diagrams.${i}.x`, 2)}</td>${COLS.map(q => `<td>${ev(`diagrams.${i}.${q[0]}`, q[0][0] === 'M' ? 0 : 1)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
@@ -47,11 +48,54 @@
       body += '<p class="note">The pier section\'s resistance (negative moment, deck bars) and the positive moment connection are worked on the <a href="#" data-gotab="flex">Flexure tab</a>.</p>';
       h += k.card('Continuity for composite loads (5.12.3.3)', body);
     } else h += k.card('Continuity', `<p class="note">${R.L && ctx.P.spans.lengths.length > 1 ? 'Simple spans for all loads' : 'One span'} (Bridge layout tab). Made continuous: girder and DC1 on the simple span; DC2, DW and live load on the continuous unit; restraint moments switchable (5.12.3.3, PS-7).</p>`);
+    h += reactions(ctx);   // 2026-11-15 (batch C): the unfactored reactions (the steel app's table, ui/analysis.js "Reactions (unfactored, kip)")
     h += k.card('Worked steps: analysis', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value; midspan = the engine's station at x = ${k.fx(D[midOf(R)].x, 2)} ft (${D.length} stations).</p>${k.steps(ctx.W.analysis.steps, TOPICS, OPEN)}`);
     return h;
   }
+  /* usedCard(ctx): the loads and factors of the analysis, each the engine's value linked to the step that works it (Loads & LLDF, Section) */
+  function usedCard(ctx) {
+    const { R } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), L = (id, tab) => k.wk(id, '§', tab), own = R.own;
+    return k.card('Loads and factors used', k.kv([['DC1 girder self-weight w<sub>g</sub>', `${ev('wG', 4, 'klf')} ${L('sec.g.wsw', 'sec')}`], ['DC1 on the bare girder w<sub>DC1</sub> (deck, haunch, additional)', `${ev('wDk', 4, 'klf')} ${L('ld.wDC1', 'lds')}`],
+      ...(R.nDiaph ? [[`DC1 diaphragms (${R.nDiaph} point loads, simple span)`, `${ev('Pdia', 2, 'kip')} ${L('ld.Pdia', 'lds')}`]] : []),
+      ['DC2 (composite)', `${ev('wBar', 4, 'klf')} ${L('ld.wDC2', 'lds')}`], ['DW (composite)', `${ev('wDW', 4, 'klf')} ${L('ld.wDW', 'lds')}`],
+      ['DF<sub>M</sub> / DF<sub>V</sub>', `${ev('dfm', 4)} ${L('ld.dfm', 'lds')} / ${ev('dfv', 4)} ${L('ld.dfv', 'lds')}`], ['η (Strength I) / m (HL-93)', `${own ? ev('own.eta', 4) : '1.0000'} / ${own ? ev('own.mLL', 2) : '1.00'} ${L('ld.eta', 'lds')}`],
+      ['Load combinations', `Strength I ${k.wk('an.MuS')}, Service I ${k.wk('an.MsI')}, Service III ${k.wk('an.MsIII')} (Table 3.4.1-1)`]])
+      + `<p class="note">Girder and DC1 on the simple span${R.fe ? '; DC2, DW and the live load on the continuous unit (Continuity card below)' : ''}; live load HL-93 with IM = 33 % and the distribution factors (<a href="#" data-gotab="lds">Loads &amp; LLDF tab</a>, where each load is worked).</p>`);
+  }
+  /* reactions(ctx): the unfactored end reactions of this girder line: the engine's own bxSuperRxPayload (engine/handoffs.js srPayload, the
+     numbers "Send reactions to Substructure Loading" sends), worked here as that function finds them (no other arithmetic) */
+  function reactions(ctx) {
+    const { R, inp } = ctx, k = K(), H = window.PSBHandoffs; if (!H || !H.srPayload) return '';
+    let b = null; try { b = H.srPayload(inp, R); } catch (e) { b = { error: e.message }; }
+    if (!b || b.error || !b.payload) return k.card('Reactions (unfactored, kip)', `<p class="note">Not available: ${k.esc((b && b.error) || 'no result')}.</p>`);
+    const p = b.payload, fx = (v, d) => k.fx(v, d), Lf = +R.L, S = p.supports, ll = p.liveLoad;
+    const rows = S.map((q, i) => { const g = q.girders[0]; return `<tr><td class="lft">${k.esc(q.id)} (x = ${fx(q.x, 2)} ft)</td><td>${fx(g.DC1, 2)}</td><td>${fx(g.DC2, 2)}</td><td>${fx(g.DW, 2)}</td>${ll ? `<td>${fx(ll.supports[i].Rmax, 2)}</td>` : ''}</tr>`; }).join('');
+    const dia = (inp.loads.diaph || []).filter(d => +d.P > 0 && +d.a >= 0 && +d.a <= Lf);
+    const wk1 = R.fe ? `DC2 and DW: the end shears of this span on the continuous unit, as reactions (+ up), w × V<sub>w</sub> per klf: DC2 = ${fx(R.wBar, 4)} × ${fx(R.fe.Vw(0), 4)} = ${fx(S[0].girders[0].DC2, 3)} kip at ${k.esc(S[0].id)} (V<sub>w</sub>: the end shear per klf on every span of the engine's model of the continuous unit, whose midspan moment M<sub>w</sub> is worked ${k.wk('an.Mw')}).`
+      : `DC2 = w<sub>DC2</sub> L / 2 = ${fx(R.wBar, 4)} (${fx(Lf, 2)}) / 2 = ${fx(S[0].girders[0].DC2, 3)} kip; DW = w<sub>DW</sub> L / 2 = ${fx(R.wDW, 4)} (${fx(Lf, 2)}) / 2 = ${fx(S[0].girders[0].DW, 3)} kip.`;
+    const wkDC1 = `DC1 at ${k.esc(S[0].id)} = (w<sub>g</sub> + w<sub>DC1</sub>) L / 2${dia.length ? ' + Σ P (L − a) / L' : ''} = (${fx(R.wG, 4)} + ${fx(R.wDk, 4)})(${fx(Lf, 2)}) / 2${dia.length ? ` + ${dia.map(d => `${fx(+d.P, 2)}(${fx(Lf, 2)} − ${fx(+d.a, 2)}) / ${fx(Lf, 2)}`).join(' + ')}` : ''} = ${fx(S[0].girders[0].DC1, 3)} kip (w<sub>g</sub> ${k.wk('sec.g.wsw', '§', 'sec')}, w<sub>DC1</sub> ${k.wk('ld.wDC1', '§', 'lds')}${dia.length ? `, P ${k.wk('ld.Pdia', '§', 'lds')}` : ''}).`;
+    return k.card('Reactions (unfactored, kip)', `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Support</th><th>DC1</th><th>DC2</th><th>DW</th>${ll ? '<th>LL per lane (no IM, no DF)</th>' : ''}</tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="note">Worked: ${wkDC1} ${wk1}${ll ? ` LL: max(truck, tandem) + lane, simple span, one lane, no IM, no DF (information only): max(${fx(R.hl.Vtr, 2)}, ${fx(R.hl.Vtd, 2)}) + ${fx(R.hl.Vln, 2)} = ${fx(ll.supports[0].Rmax, 3)} kip (V<sub>tr</sub> ${k.wk('ld.Vtr', '§', 'lds')}, V<sub>td</sub> ${k.wk('ld.Vtd', '§', 'lds')}, V<sub>ln</sub> ${k.wk('ld.Vln', '§', 'lds')}).` : ''}</p>
+      <p class="note">This girder line (${k.esc(p.girderLine.label)}, ${k.esc(p.girderLine.position)}), the values the Project tab's "Send reactions to Substructure Loading" sends (bridgeSuite.v1.superReactions).</p>`);
+  }
+  /* the girder elevation (2026-11-15, batch C; the steel app's elevation strip above its diagrams): the span with its bearings, the
+     diaphragm point loads and, made continuous, the continuous ends; drawn from the entered geometry; display only */
+  function elevSvg(ctx, W) {
+    const { R, inp } = ctx, L = +R.L, l = 16, r = 16, X = x => l + x / L * (W - l - r), yG = 40, hG = 20, H = 110, f2 = v => K().fx(v, 2);
+    const dia = (inp.loads.diaph || []).filter(d => +d.P > 0 && +d.a >= 0 && +d.a <= L), c = R.cont && R.cont.unit, s = c ? c.s : 1, n = c ? c.spans.length : 1;
+    let h = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Girder elevation" font-family="Arial,sans-serif">`;
+    h += `<rect x="${X(0)}" y="${yG}" width="${X(L) - X(0)}" height="${hG}" fill="#E2E8F0" stroke="#475569" data-dtr="Girder, span L = ${f2(L)} ft (℄ bearing to ℄ bearing)"/>`;
+    [[0, s > 1], [L, s < n]].forEach(([x, cont]) => { h += cont ? `<line x1="${X(x)}" x2="${X(x)}" y1="${yG - 6}" y2="${yG + hG + 12}" stroke="#1E3A5F" stroke-width="2" stroke-dasharray="4 2"/><text x="${X(x)}" y="${yG - 10}" text-anchor="${x ? 'end' : 'start'}" font-size="10" fill="#1E3A5F">continuous (composite loads)</text>` : '';
+      h += `<path d="M${X(x)} ${yG + hG} l-6 10 h12 z" fill="#64748B" data-dtr="℄ bearing at x = ${f2(x)} ft"/>`; });
+    dia.forEach(d => { const x = X(+d.a); h += `<line x1="${x}" x2="${x}" y1="${yG - 16}" y2="${yG - 2}" stroke="#A3322A" stroke-width="1.5"/><path d="M${x} ${yG - 1} l-3 -6 h6 z" fill="#A3322A"/><text x="${x}" y="${yG - 19}" text-anchor="middle" font-size="10" fill="#A3322A" data-dtr="Diaphragm P = ${f2(+d.P)} kip at x = ${f2(+d.a)} ft">P ${f2(+d.P)}</text>`; });
+    h += `<text x="${(X(0) + X(L)) / 2}" y="${yG + hG + 26}" text-anchor="middle" font-size="11" fill="#475569">Span ${s}${n > 1 ? ` of ${n}` : ''}: L = ${f2(L)} ft</text></svg>`;
+    return { html: h, nar: W < 560 };
+  }
   const HIDE = {};
   function after(el, ctx) {
+    { const se = el.querySelector('#gfxr_anel'), VK = window.PSBVizKit;   // 2026-11-15 (batch C): the girder elevation
+      if (se && VK && VK.detCard) VK.detCard(se, { id: 'anElev', title: 'Girder elevation', sub: 'the span analysed: bearings, diaphragm point loads (DC1), continuity for composite loads', draw: W => elevSvg(ctx, W), hint: 'Point at a bearing or a diaphragm load to read it.', file: 'analysis-elevation',
+        cap: '<p class="vk-cap">Entered on the Bridge layout tab (span, continuity) and the Diaphragms / deck tab (point loads). Display only.</p>' }); }
     K().after(el, OPEN);
     const slot = el.querySelector('#gfx_an'); if (!slot || !VA() || !VA().mount) return;
     const { R, ui } = ctx, D = R.diagrams, xs = D.map(r => r.x), near = x => xs.reduce((b, v, i) => Math.abs(v - x) < Math.abs(xs[b] - x) ? i : b, 0), k = K();
