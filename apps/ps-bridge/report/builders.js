@@ -130,6 +130,105 @@
     ownSubs.forEach((s, j) => subs.push({ ...sub('o' + j, `Owner rules: ${s.title}`, s.items), ...(j === 0 ? { key: X.ownKey } : {}) }));
     return { title: 'Project, basis and assumptions', subs };
   }
+  /* ---------- §2, last subsection: the Auto design basis (ADB, 2026-11-15; display only) ----------
+     The basis of the auto design run applied or shown in this page view (ui/autodesign.js basis(P): { kind: 'shown' | 'applied' |
+     'running', R (PSBAutoDesign.run result), Q (the project copy the run used), sel (the candidate chosen per span), stale (the project
+     changed since) }, opt.autodesign from ui/report.js; none in Node): the objective, the sections searched, the strand, drape and f′c /
+     f′ci rules with the owner limits, the order of preference, and each span's selected candidate with its checks and a "see §" link to
+     the step that works each check (the step of the girder type the report works; another type: its result tab). Read from
+     PSBAutoDesign (its settings, rules and run result) and P.autodesign; nothing is computed here and no number is recorded in model.vals
+     (the run's numbers are its own engine runs of the candidate, not R of the design girder). Last in §2 so that no section or
+     subsection number of the report changes. */
+  const AD_KEY = 'rs.adb';
+  function keysOf(secs) {
+    const ks = new Set();
+    secs.forEach(s => { if (s.key) ks.add(s.key); s.subs.forEach(q => { if (q.key) ks.add(q.key);
+      q.items.forEach(it => { if (it.type === 'steps') it.steps.forEach(t => ks.add(K(it.scope, t.id))); }); }); });
+    return ks;
+  }
+  function adSub(B, X, A, secs) {
+    const AD = window.PSBAutoDesign, BR = window.PSBBridge, fx = OK().fx, out = items => ({ ...sub('adb', 'Auto design basis', items), key: AD_KEY });
+    const goTab = '[[tab:ad|Auto design output tab]]', goIn = '[[tab:in:ad|Auto design input tab]]';
+    if (!A || !A.R || !AD || !BR) return out([note(A && A.kind === 'running'
+      ? `An auto design run is under way (${goTab}): its basis is listed here when it ends. Nothing in this report comes from an auto design until a candidate is applied.`
+      : `No auto design was run in this page view: nothing in this report comes from an auto design (the inputs are as entered). Run it on the ${goIn}; the basis of the run applied or shown is then listed here.`)]);
+    const R = A.R, Q = A.Q, o = R.o || AD.settings(Q), T = BR.types(Q), lab = k => plain((T[k] || {}).label || `type ${k + 1}`);
+    const keys = keysOf(secs), GR = (window.PSBDashUI && window.PSBDashUI.GROUPS) || [];
+    const where = n => { for (const gp of GR) for (const [cn, st] of gp.checks || []) if (cn === n) return { gp, st }; return null; };
+    /* see(n, k, g): where check n of girder type k (worst on line g) is worked: the step of this report that works that type (its unit in
+       the report of every type), else its result tab */
+    const see = (n, k, g) => {
+      const w = where(n); if (!w) return '—';
+      if (w.gp.input) return X.ownKey && keys.has(X.ownKey) ? `see [[${X.ownKey}]]` : `[[tab:in:${w.gp.tab}|${plain(w.gp.name)}]]`;
+      let key = null, ln = '';
+      if (B.multi) { const j = B.units.findIndex(u => u.k === k && (B.mode !== 'all' || u.g === g)); if (j >= 0) { key = `u${j}/${w.st}`; if (B.units[j].g !== g) ln = ` (worked for G${B.units[j].g})`; } }
+      else if (!B.cell || B.cell.k === k) { key = w.st; if (B.cell && B.cell.g !== g) ln = ` (worked for G${B.cell.g})`; }
+      return key && keys.has(key) ? `see [[${key}]]${ln}` : `[[tab:${w.gp.tab}|${plain(w.gp.name)}]] tab, type ${lab(k)} chosen`;
+    };
+    const items = [];
+    // the run
+    const st = A.kind === 'applied'
+      ? `Applied in this page view (${goTab}, Apply): every girder type of a span with a candidate took the selected candidate's section, straight rows, draped strands, f′c and f′ci as its own inputs; nothing else was changed. The other sections of this report work the inputs as they are now${A.stale ? '.' : ', which are those of the candidates below.'}`
+      : `Shown on the ${goTab}, not applied: the other sections of this report work the inputs as entered, not the candidates below. The ratios below are the auto design's own engine runs of each candidate.`;
+    items.push(note(st));
+    if (A.stale) items.push(note(A.kind === 'applied' ? 'The project has changed since the run was applied (an edit, Undo or Redo): the inputs the other sections work may differ from the candidates below.' : 'The project has changed since this run: run it again before applying.', true));
+    items.push(note(`${R.runs} engine runs in ${fx(R.ms / 1000, 1)} s${R.stopped ? ' (stopped at the run limit: the results are partial)' : ''}. Auto design proposes inputs only: each trial is computed by the same engine as the result tabs (every check on every line of the girder type, the worst line governing) and checked for strand fit as the inputs are; a candidate passes every check. The run is kept in this page view only (not saved with the project).`));
+    // objective and variables
+    const VN = { section: 'Girder section', strands: 'Strand count and rows', drape: 'Draped strands', conc: 'f′c and f′ci' };
+    items.push({ ...kv([['Objective', o.objective === 'depth' ? 'the shallowest section (depth h, then gross area A)' : 'the lightest section (gross area A, then depth h)'],
+      ['Sections listed per span', String(o.topN)], ['Variables', Object.keys(VN).map(v => `${VN[v]}: ${o.vars[v] === 'lock' ? 'Lock (as entered)' : 'Auto'}`).join('; ')]]), topic: { title: 'Objective and variables' } });
+    items.push({ ...note(`Order of preference (the first is the most important): the ${o.objective === 'depth' ? 'shallower section (h, then A)' : 'lighter section (A, then h)'}; then fewer strands N; then fewer draped strands n$_{h}$; then the lower hold-down force (the flatter drape, (y$_{end}$ − y$_{mid}$) / frac); then the hold-down point nearest 0.40 L; then the lower f′c; then the lower f′ci. Ties keep the first in the search order (no random step). Per girder type and section: (1) the fewest straight strands that pass Strength I flexure and Service III tension with no draped strand (a lower bound); (2) from there, in pairs, n$_{h}$ = 0, 2, … with the flattest drape that passes every check; (3) the lowest f′c (with the highest f′ci it allows), then the lowest f′ci, with that pattern.`), topic: { title: 'Order of preference' } });
+    // sections searched
+    const rowsS = [];
+    R.spans.forEach(sp => sp.sections.forEach(e => { const ci = sp.cands.indexOf(e), ks = sp.types;
+      const why = ci >= 0 ? `candidate #${ci + 1}` : (() => { const q = e.types.find(z => !z.res.best); return q ? `none (${lab(q.k)}: ${plain(q.res.why)})` : 'not run'; })();
+      rowsS.push([String(sp.s), plain(e.name), { t: fx(e.h, 2), n: true }, { t: fx(e.A, 1), n: true }, ks.map(lab).join(', '), why]); }));
+    items.push({ ...note(`The library sections of the span's current shape family (I-girders and bulb tees; deck bulb tees; NEXT F; NEXT D; spread box beams; adjacent box beams; deck slabs); for a MassDOT project the MassDOT sections, for any other owner the other library sections; adjacent members (box beams, deck slabs) of the same nominal width (their width sets the girder lines); one section for every girder type of a span (PS-8). A Custom shape, a section property override or Lock: the current section only. Searched in the order of the objective; the first ${o.topN} that pass for every girder type of the span are listed.`), topic: { title: 'Sections searched' } });
+    R.spans.forEach(sp => items.push(note(`Span ${sp.s}: ${plain(sp.why)}.`)));
+    if (rowsS.length) items.push(tbl(['Span', 'Section', 'h (in)', 'A (in²)', 'Girder types', 'Result'], rowsS, { wide: true }));
+    // strands and drape
+    const gridTxt = name => { const g = window.PSBSections && window.PSBSections.rowGrid ? window.PSBSections.rowGrid(name) : null; return g ? `${plain(name)}: first row at ${fx(g.first, 2)} in, then every ${fx(g.step, 2)} in (PS-41)` : `${plain(name)}: first row at 2.00 in, then every 2.00 in`; };
+    const selNames = [...new Set(R.spans.map(sp => { const c = sp.cands[(A.sel && A.sel[sp.s]) || 0]; return c ? c.name : null; }).filter(Boolean))];
+    items.push({ ...note(o.vars.strands === 'lock' ? 'Strands locked: the entered straight rows and draped strands are kept; only the other variables were searched.'
+      : `Straight rows bottom-up on the section's row grid (PS-41 for a MassDOT section; else 2 in, then every 2 in)${selNames.length ? ` — ${selNames.map(gridTxt).join('; ')}` : ''}. Each row is filled to its capacity before the next, in symmetric pairs (even counts, PS-12); the capacity of a row is the largest even count that fits (the input check's strand fit, PS-28); a row that holds fewer than 4 strands is not used (nor any row above it). Entered straight rows in the upper half of the girder (top strands) are kept as entered, at the same distance below the top of the section searched; entered debonding is kept row by row and never added (PS-12).`), topic: { title: 'Strand pattern rules' } });
+    const fr = o.fracs && o.fracs.length ? o.fracs : AD.FRACS;
+    items.push({ ...note(o.vars.drape === 'lock' ? 'Draped strands locked: the entered draped strands are kept.'
+      : `Draped strands n$_{h}$ = 0, 2, 4, … in rows of two at x = ±1 in; at midspan directly above the top straight row (y$_{mid}$); at the girder end y$_{end}$ = y$_{mid}$ + 2 j in (on the 2 in grid), up to 2 in below the top; the bundle must fit at every height between them (1 in steps). Hold-down points at frac × L from ℄ bearing, frac ${fx(Math.min(...fr), 2)} to ${fx(Math.max(...fr), 2)} in steps of 0.01 (PS-5). For each n$_{h}$ the flattest drape that passes is taken; a drape that fails the hold-down force check ends the steeper ones of that n$_{h}$.`), topic: { title: 'Drape rules' } });
+    // concrete strengths, per girder type of the run
+    const own = new Set(), cRows = [];
+    Object.keys(R.cur || {}).map(Number).sort((a, b) => a - b).forEach(k => { let C = null; try { C = AD.conc(Q, k, o); } catch (e) { C = null; } if (!C) return; own.add(C.owner);
+      if (C.lock) { cRows.push([lab(k), C.owner, 'locked (as entered)', `${fx(C.fc[0], 1)} / ${fx(C.fciOf(C.fc[0])[0], 1)}`]); return; }
+      const fi = C.fc.map(f => C.fciOf(f)).filter(q => q.length), fiLo = fi.length ? Math.min(...fi.map(q => q[0])) : NaN, fiHi = fi.length ? Math.max(...fi.map(q => q[q.length - 1])) : NaN;
+      cRows.push([lab(k), C.owner, C.fc.length ? `${fx(C.fc[0], 1)} to ${fx(C.fc[C.fc.length - 1], 1)} (${C.fc.length} values)` : 'none', fi.length ? `${fx(fiLo, 1)} to ${fx(fiHi, 1)}` : 'none']); });
+    const OR = window.PBD && window.PBD.OWN_RULES, ownTxt = [...own].filter(w => w !== 'AASHTO').map(w => { const rs = OR ? OR.rules.filter(r => r.owner === w && /^fci?\./.test(r.id)) : [];
+      const v = r => r.id === 'fc.min' ? `f′c ≥ ${fx(r.value.min, 1)} ksi` : r.id === 'fc.max' ? `f′c ≤ ${fx(r.value.max, 1)} ksi` : r.id === 'fc.range' ? `f′c ${fx(r.value.min, 1)} to ${fx(r.value.max, 1)} ksi`
+        : r.id === 'fc.std' ? `f′c ${r.value.std.map(x => fx(x, 1)).join(' or ')} ksi (searched between them)` : r.id === 'fci.max' ? `f′ci ≤ ${fx(r.value.max, 2)} f′c` : r.id === 'fci.range' ? `f′ci ${fx(r.value.min, 2)} to ${fx(r.value.max, 2)} f′c and ≤ ${fx(r.value.cap, 1)} ksi` : '';
+      return `${w} (${(OR.owners[w] || {}).manual || w}): ${rs.map(r => `${v(r)} (${r.sec})`).filter(Boolean).join('; ')}`; });
+    const set = ['fcLo', 'fcHi', 'fciLo', 'fciHi'].filter(q => isFinite(o[q]) && !(q === 'fciLo' && o[q] === AD.DEF.fciLo)).map(q => `${({ fcLo: 'f′c lowest', fcHi: 'f′c highest', fciLo: 'f′ci lowest', fciHi: 'f′ci highest (plant)' })[q]} ${fx(o[q], 1)} ksi`);
+    items.push({ ...note(o.vars.conc === 'lock' ? 'f′c and f′ci locked: the entered values are kept.'
+      : `f′c and f′ci on 0.5 ksi grids through the entered values (PS-11), f′ci ≤ f′c and from ${fx(o.fciLo, 1)} ksi. f′c from the owner's minimum to its maximum: AASHTO LRFD 10th Ed. Art. 5.4.2.1 sets a minimum of 4.0 ksi for prestressed concrete members and bases its provisions on strengths up to 10.0 ksi (4.0 to 10.0 ksi for an AASHTO project)${ownTxt.length ? `; the owner's limits (Owner rules tab): ${ownTxt.join(' — ')}` : ''}.${own.has('RIDOT') ? ' RIDOT 5.6.1 (f′ci about 0.70 f′c, a warning in the engine) is applied as a limit.' : ''}${set.length ? ` Limits entered on the Auto design input tab: ${set.join('; ')}.` : ''} The strand search is run at the entered f′c / f′ci first, then the entered f′c with the highest f′ci it allows, then the highest f′c and f′ci.`), topic: { title: 'f′c and f′ci grids and limits' } });
+    if (cRows.length) items.push(tbl(['Girder type', 'Owner', 'f′c searched (ksi)', 'f′ci searched (ksi)'], cRows));
+    items.push({ ...note(`The search assumes: a higher f′c or f′ci is not worse for any check; a higher y$_{end}$ relieves the girder end; the checks that more strands improve are ${AD.GROW.join(', ')}.`), topic: { title: 'Assumptions of the search' } });
+    // the selected candidate of each span
+    let first = true;
+    R.spans.forEach(sp => {
+      const c = sp.cands[(A.sel && A.sel[sp.s]) || 0], tp = first ? { topic: { title: 'Selected candidate and its governing check' } } : {}; first = false;
+      if (!c) { items.push({ ...note(`Span ${sp.s}: no section passes every check for every girder type.${sp.blocked && sp.blocked.length ? ` Failing on the current design and on the closest trial of every section: ${sp.blocked.map(plain).join(', ')} (not changed by the variables searched).` : ''}`, true), ...tp }); return; }
+      items.push({ ...note(`Span ${sp.s}: ${plain(c.name)} (candidate #${sp.cands.indexOf(c) + 1} of ${sp.cands.length}${A.kind === 'applied' ? ', applied' : ', shown'}).`), ...tp });
+      c.types.forEach(({ k, res }) => { const b = res.best; if (!b) return; const gv = b.ev.gov;
+        const rowsT = b.rows.map(r => `${r.n} at ${fx(+r.y, 2)} in${+r.nd > 0 ? ` (${r.nd} debonded ${fx(+r.dbnd, 1)} ft)` : ''}`).join(', ');
+        items.push(kv([['Girder type', `${lab(k)} (span ${sp.s})`], ['Section', plain(b.girder)], ['Strands', `${b.N} (${b.nh} draped${b.nTop ? `, ${b.nTop} top strands kept` : ''}); straight rows ${rowsT}`],
+          ['Draped strands', b.nh ? `y$_{end}$ ${fx(+b.harp.yEnd, 2)} in, y$_{mid}$ ${fx(+b.harp.yMid, 2)} in, hold-down at ${fx(+b.harp.frac, 2)} L${b.hd ? `; F$_{hd}$ / limit ${fx(b.hd.r, 3)} (G${b.hd.g})` : ''}` : 'none'],
+          ['f′c / f′ci', `${fx(b.fc, 1)} / ${fx(b.fci, 1)} ksi (${plain(res.level || '')} searched first; ${res.trials} trials)`], ['Girder weight, the type\'s lines', `${fx(b.W, 1)} kip`],
+          ['Governing check', gv ? `${plain(gv.n)}, ratio ${fx(gv.r, 3)} on G${gv.g} (${see(gv.n, k, gv.g)})` : '—']]));
+        const by = {}; (b.ev.lines || []).forEach(l => l.R.checks.forEach(q => { const z = by[q.n]; if (!z || q.r > z.r) by[q.n] = { r: q.r, g: l.g, pass: q.pass }; }));
+        items.push(tbl(['Check', 'Ratio (worst line)', 'Line', 'Status', 'Worked'], Object.entries(by).sort((x, y) => y[1].r - x[1].r)
+          .map(([n, z]) => ({ cells: [plain(n), { t: fx(z.r, 3), n: true, cls: z.pass ? (z.r >= 0.9 ? 'hi' : 'ok') : 'ng' }, `G${z.g}`, { t: z.pass ? 'PASS' : 'FAIL', cls: z.pass ? 'ok' : 'ng' }, see(n, k, z.g)], cls: gv && n === gv.n ? 'gov' : '' })), { wide: true }));
+      });
+    });
+    items.push(note(`Worked: each check is worked at the step named, for the inputs the report works (${A.kind === 'applied' && !A.stale ? 'the applied candidate' : 'the current inputs, not the candidate'}); a girder type the report does not work: its result tab with that type chosen. Ratio = demand / limit, OK ≤ 1.0.`));
+    return out(items);
+  }
   /* planFig(P, X): 2026-11-14 (PS Bridge catch-up, item 4): the framing plan of the Bridge layout tab and the Summary (ui/plan.js, its own
      drawing, true scale; opt.planFig = { svg (the screen and the printed copies, as the tabs' figures), cap } from ui/report.js) as a figure
      of §2, and where the cross-section of the span is drawn (the Loads & LLDF section's figure, "see §"). Display only; none in Node. */
@@ -351,6 +450,8 @@
       if (on(k)) secs.push({ id: k, key: 'rs.' + k, ...s });
       else { dropped.push({ key: 'rs.' + k, ...s }); vals.splice(n0); }
     });
+    // ADB (2026-11-15): §2's last subsection, the Auto design basis (built last: its "see §" links go to the steps of the sections shown)
+    { const ps = secs.find(q => q.id === 'proj'); if (ps) { try { ps.subs.push(adSub(B, X, opt.autodesign || null, secs)); } catch (e) { ps.subs.push({ ...sub('adb', 'Auto design basis', [note('Report error: ' + (e && e.message), true)]), key: AD_KEY }); } } }
     // references from the sections shown into a section left out: no link, the text says so (as apps/steel-bridge/report/builders.js)
     if (dropped.length) {
       const gone = new Set(), keep = new Set();

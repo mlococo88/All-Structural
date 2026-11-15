@@ -15,7 +15,7 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fx = (v, d) => (typeof v === 'number' && isFinite(v)) ? v.toFixed(d) : '—';
   const AD = () => window.PSBAutoDesign, BR = () => window.PSBBridge;
-  const S = { running: false, stop: false, prog: null, R: null, key: '', sel: {}, err: '', t0: 0 };
+  const S = { running: false, stop: false, prog: null, R: null, key: '', sel: {}, err: '', t0: 0, ap: null, rev: 0 };   // ap, rev: ADB (basis())
   const keyOf = P => JSON.stringify(Object.assign({}, P, { design: undefined, notices: undefined }));
   function css() {
     if (typeof document === 'undefined' || document.getElementById('psbad-css')) return;
@@ -89,7 +89,7 @@ table.ad-tbl tr.ad-sel td{background:#FEF9C3;} table.ad-tbl tr.ad-cur td{font-st
       const t1 = Date.now(); let r;
       try { do { r = it.next(); } while (!r.done && Date.now() - t1 < 40); }
       catch (e) { S.running = false; S.prog = null; S.err = 'Auto design failed: ' + (e && e.message); ctx.redraw(); return; }
-      if (r.done) { S.running = false; S.prog = null; S.R = r.value; ctx.redraw(); return; }
+      if (r.done) { S.running = false; S.prog = null; S.R = r.value; S.rev++; ctx.redraw(); return; }
       const i = r.value.i || 0; S.prog = { f: Math.min(0.98, i / Math.max(400, i * 1.25)), msg: `${i} engine runs, ${((Date.now() - S.t0) / 1000).toFixed(0)} s: ${r.value.msg || ''}` }; put();
       setTimeout(tick, 0);
     };
@@ -109,7 +109,7 @@ table.ad-tbl tr.ad-sel td{background:#FEF9C3;} table.ad-tbl tr.ad-cur td{font-st
     return `${esc(e.girder)}, ${AD().countOf(e)} strands (${+e.harp.n || 0} draped), f′c ${fx(+e.mat.fc, 2)} / f′ci ${fx(+e.mat.fci, 2)} ksi: ${c.ev.pass ? '<span class="ad-pass">PASS</span>' : `<span class="ad-fail">FAIL</span> ${c.ev.fails.map(n => link(n)).join(', ')}`}`; };
   function render(host, ctx) {
     css(); const P = ctx.P, R = S.R;
-    let h = `<p class="note"><a href="#" data-goin="ad">Settings and Run: Auto design input tab</a>.</p>`;
+    let h = `<p class="note"><a href="#" data-goin="ad">Settings and Run: Auto design input tab</a>. <a href="#rp:rs.adb" data-gotab="rpt">The basis of the run shown or applied: Report, §2 Project, basis and assumptions, Auto design basis</a>.</p>`;
     if (S.running || S.prog) h += `<section class="sec"><div class="secBody"><div class="fRow"><button type="button" id="ad_stop2"${S.running ? '' : ' disabled'}>Stop</button></div>${progHtml()}</div></section>`;
     if (S.err) h += `<div class="alert err" role="alert">${esc(S.err)}</div>`;
     if (!R && !S.running) { h += `<p class="note">No results yet: set the variables and Run on the <a href="#" data-goin="ad">Auto design input tab</a>. The results are kept for this page view.</p>`; host.innerHTML = h; return; }
@@ -146,7 +146,9 @@ table.ad-tbl tr.ad-sel td{background:#FEF9C3;} table.ad-tbl tr.ad-cur td{font-st
     on('#ad_stop2', 'click', () => { S.stop = true; });
     on('[data-adsel]', 'change', e => { const [s, i] = e.target.dataset.adsel.split('|').map(Number); S.sel[s] = i; render(host, ctx); });
     on('#ad_apply', 'click', () => { if (S.key !== keyOf(P)) return;
-      const A = AD().apply(P, R, S.sel); if (!A.changed.length) return; S.R = null; S.prog = null; ctx.changed(); ctx.toast(A.note, true); });   // one step of the header's Undo (the notice's Undo is that step)
+      const A = AD().apply(P, R, S.sel); if (!A.changed.length) return;
+      S.ap = { R, Q: S.Q, sel: Object.assign({}, S.sel), key: keyOf(P) }; S.rev++;   // ADB: the applied run, kept in this page view for the Report's Auto design basis
+      S.R = null; S.prog = null; ctx.changed(); ctx.toast(A.note, true); });   // one step of the header's Undo (the notice's Undo is that step)
   }
   /* detail(Q, sp, c, lab): the selected candidate of a span: each type's inputs and its every check (ratio, line), linked to its tab */
   function detail(Q, sp, c, lab) {
@@ -158,5 +160,15 @@ table.ad-tbl tr.ad-sel td{background:#FEF9C3;} table.ad-tbl tr.ad-cur td{font-st
         <div class="tscroll"><table class="tbl ad-tbl"><thead><tr><th class="lft">Check (worked on its tab after Apply)</th><th class="lft">Tab</th><th>Ratio (worst line)</th><th>Line</th></tr></thead><tbody>
         ${Object.entries(by).sort((x, y) => y[1].r - x[1].r).map(([n, z]) => `<tr><td class="lft">${link(n)}</td><td class="lft">${esc(tabName(n))}</td><td>${fx(z.r, 3)}</td><td>G${z.g}</td></tr>`).join('')}</tbody></table></div></details>`; }).join('');
   }
-  window.PSBAutoDesignUI = { inputs, onChange, onClick, render, state: () => S };
+  /* basis(P) (ADB, 2026-11-15): the run the Report's Auto design basis describes: the run shown on the output tab (not applied), else the
+     run last applied in this page view, else null ({ kind: 'running' } while a run is under way). stale: the project changed since that run
+     (shown) or since it was applied. Memory only: nothing stored. basisKey(): changes when the run shown or applied changes. */
+  function basis(P) {
+    if (S.running) return { kind: 'running' };
+    if (S.R) return { kind: 'shown', R: S.R, Q: S.Q, sel: Object.assign({}, S.sel), stale: S.key !== keyOf(P) };
+    if (S.ap) return { kind: 'applied', R: S.ap.R, Q: S.ap.Q, sel: S.ap.sel, stale: S.ap.key !== keyOf(P) };
+    return null;
+  }
+  const basisKey = () => `${S.rev}|${S.running ? 1 : 0}|${JSON.stringify(S.sel)}`;
+  window.PSBAutoDesignUI = { inputs, onChange, onClick, render, state: () => S, basis, basisKey };
 })();
