@@ -7389,7 +7389,7 @@ PR #1578: https://github.com/mlococo88/All-Structural/pull/1578
 ### Other copies
 - engine/autodesign.js keeps the "Decisions pending engineer review" wording in its header comment only (not shown).
 ## 2026-11-15 — E1: the HL-93 load rating at every station of the girder, negative moment over the pier included (engine/rating-along.js, Rating tab, Summary, Report; CLAUDE.md §4 change of the governing rating factors shown)
-PR #TBD
+PR #1580: https://github.com/mlococo88/All-Structural/pull/1580
 ### Request
 - Review finding O17 (scratchpad review ps-vs-steel.md "Rating"): the Steel Bridge app rates every location (apps/steel-bridge/ui/rating.js, engine/rating.js); this app rated only the engine's governing stations and called it a screening, and did not rate the negative-moment region over the piers of continuous units.
 - Rate, per MBE 4th Ed. (2026), at every analysis station for each rating the app already makes (HL-93 inventory / operating): flexure positive and negative (the engine's continuity capacity with the deck bars), shear, Service III; an RF-along-the-girder chart and a table of every location; the governing RF of each group; the governing location worked (§6); Report sections. Reuse the engine's demands and capacities; no saved-format change.
