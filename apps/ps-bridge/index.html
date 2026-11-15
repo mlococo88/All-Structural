@@ -59,6 +59,7 @@
     'engine/inputcheck.js',  // PR 2b: the blocking input errors (the steel app's pattern)
     'engine/legacy.js',      // PR 2f: "From the old app": read-only import of the old app's saved designs and Export JSON files
     'engine/handoffs.js',    // 2026-11-14 (item 12): the old app's bridgeSuite.v1.* hand-off payloads (its code; formats unchanged)
+    'engine/compare.js',     // batch G4 (2026-11-15): the Compare tab's design sweep (the old app's sweepDesign on this app's engine call)
     'engine/autodesign.js',  // item A (2026-11-14): Auto design, a search over each girder type's inputs judged by the page's own engine call (no new formula)
     'engine/worked.js',      // PR 2b-2: the worked steps of the Section properties, Loads & LLDF and Analysis tabs (values = the engine's)
     'engine/worked-stress.js', // PR 2c-1: the worked steps of the Losses and Stresses tabs (values = the engine's)
@@ -113,6 +114,8 @@
     'ui/sheets.js',   // item 10: the drawing set (part 1: typical section of each span, framing plan; part 2: girder elevation, strand pattern, schedule) with border and title block (adapted from the steel app's sheets)
     'ui/drawings.js', // item 10, part 1: the Drawings tab (previews, Download DXF, Print; the steel app's Drawings tab pattern)
     'ui/sumelev.js',  // 2026-11-14 (item 8a): the Summary's girder elevation of each girder type (picker; the governing checks where they govern)
+    'ui/nomen.js',    // batch G6 (2026-11-15): the Nomenclature output tab (the old app's live variable reference, with § links)
+    'ui/compare.js',  // batch G4 (2026-11-15): the Compare output tab (the old app's design sweep; table and bar graphic)
     'ui/autodesign.js', // item A (2026-11-14): the Auto design input tab (settings, Run) and output tab (candidates, Apply as one Undo step)
     'ui/summary.js',  // PR 3b: the Summary tab (adapted copy of apps/steel-bridge/ui/summary.js): verdict, girder × span grid, type × check table
     'ui/mctnav.js',   // batch G9 (2026-11-15): the old app's "↩ MCT Analysis" header button (shown when opened from the MCT Generator)
@@ -394,7 +397,7 @@
     ['dd', 'Diaphragms / deck'], ['loads', 'Loads'], ['own', 'Owner rules'], ['ad', 'Auto design']];
   const OTABS = [['sum', 'Summary'], ['sec', 'Section properties'], ['lds', 'Loads & LLDF'], ['an', 'Analysis'], ['loss', 'Losses'], ['str', 'Stresses'],
     ['flex', 'Flexure'], ['shear', 'Shear'], ['end', 'End zone & hold-down'], ['camb', 'Camber & deflection'], ['hand', 'Handling'], ['deck', 'Deck'],
-    ['rt', 'Rating'], ['rpt', 'Report'], ['dwg', 'Drawings'], ['ad', 'Auto design'], ['3d', '3D view']];
+    ['rt', 'Rating'], ['rpt', 'Report'], ['dwg', 'Drawings'], ['ad', 'Auto design'], ['cmp', 'Compare'], ['nom', 'Nomenclature'], ['3d', '3D view']];   // cmp, nom: batch G4, G6
   if (!TABS.some(t => t[0] === ui.itab)) ui.itab = 'proj';
   if (!OTABS.some(t => t[0] === ui.otab)) ui.otab = 'sum';
 
@@ -661,7 +664,7 @@
   /* the result of the girder type whose inputs are shown (ui.scope), on its first line: the strand pattern of the Girders & strands tab */
   function scopeResult() { const k = scopeK(), L = k >= 0 ? BR.typeLines(P, k) : []; if (!L.length) return null; const inp = window.PSBDesign.cellInputs(P, k, L[0]); return { inp, R: cellR(inp) }; }
   const TABUI = { sec: () => window.PSBUiSection, lds: () => window.PSBUiLoads, an: () => window.PSBUiAnalysis, loss: () => window.PSBUiLosses, str: () => window.PSBUiStresses, flex: () => window.PSBUiFlexure, shear: () => window.PSBUiShear,
-    end: () => window.PSBUiEndZone, camb: () => window.PSBUiCamber, hand: () => window.PSBUiHandling, deck: () => window.PSBUiDeck, rt: () => window.PSBUiRating };
+    end: () => window.PSBUiEndZone, camb: () => window.PSBUiCamber, hand: () => window.PSBUiHandling, deck: () => window.PSBUiDeck, rt: () => window.PSBUiRating, cmp: () => window.PSBUiCompare, nom: () => window.PSBUiNomen };   // cmp, nom: batch G4, G6
   let ctxOut = null;
   function drawOut() {
     $('tabBar').innerHTML = OTABS.map(([k, t]) => `<button type="button" role="tab" data-otab="${k}" aria-selected="${ui.otab === k}">${t}</button>`).join('');

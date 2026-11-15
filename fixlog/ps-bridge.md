@@ -7709,6 +7709,615 @@ index e4101ff..49912dd 100644
      const slot = el.querySelector('#gfx_sec'); if (!slot || !VK() || !VK().detCard) return;
      const { R } = ctx, k = K(), ev = (p, d) => k.ev(R, p, d);
      VK().detCard(slot, { id: 'secFig', title: 'Composite section and strands', sub: `${k.esc(ctx.inp.girder)}, design girder ${k.esc(R.rv ? ctx.inp.proj.girderId : '')}`,
+
+## 2026-11-15 — Batch G4 / G6: the Compare tab (the old app's design sweep over span, girder section or spacing) and the Nomenclature tab (the symbols with their live values, search, § links) (display only)
+PR #1583: https://github.com/mlococo88/All-Structural/pull/1583
+### Request
+- Old-vs-new review 2026-11-15, rows #65 (Compare tab: design sweep, O:8009-8034, engine sweepDesign already moved) and #91 (Nomenclature tab, ≈ 80 symbols with live values and a search box, O:8815-8960), in the Steel Bridge app's formats.
+### What changed
+- **New `engine/compare.js`** (window.PSBCompare): `presets(inp, mode)` the old tab's presets (span L − 20 … L + 20 by 10, > 20 ft; every library girder but Custom; spacing S − 1 … S + 1 by 0.5, > 3 ft); `inputsOf(inp, mode, v)` (a copy with L / girder / S set; spacing: `rigidX` of unequal bays dropped, equal bays at S); `one()` / `run()`: sweepDesign's body (the same core checks: every check but /Deck|Lifting|Hauling|FS/; flex, s3, rel, shear, maxDC, camber, nPass / nTot; + the governing check's name and the failing checks) on the page's engine call `PSBHoldDown.compute`.
+- **New `ui/compare.js`** (window.PSBUiCompare): the output tab "Compare": Vary (Span / Girder section / Girder spacing; `ui.cmpMode` in psb2.ui), Run sweep, a bar graphic of each candidate's governing D/C against 1.0 (PSBVizAlong.hbars, ratio colours) and the results table (Flexure, Service III tension, Release compression, Shear, Max D/C, governing check, camber, checks n/m, the girder sweep's Strand fit column = the input check's rows / draped strand errors of each section for the type shown, Status); "this design" marked; out of date after an input change; the result in page memory only.
+- **New `ui/nomen.js`** (window.PSBUiNomen): the output tab "Nomenclature": 11 groups, 91 symbols: symbol, description, unit, value (an engine value at its R path as the result tabs show it, `data-ev`; where the worked step has an R path that path; an input; η without an owner rule: its step's value), the AASHTO LRFD 10th Ed. article (MBE for the rating factors), a § link to the worked step on its tab (or "input" to the input tab); a search box (symbol, description, article); the old tab's decimals (≥ 100: 0, ≥ 10: 1, else 3).
+- **`index.html`**: the two scripts; OTABS + `['cmp', 'Compare'], ['nom', 'Nomenclature']` before '3D view'; TABUI + `cmp`, `nom` (so each gets the girder type / line bar, ctx and onOutChange).
+- **`tests/smoke/ps-bridge-skeleton.mjs`**: the output tab count 17 → 19 (+ Compare, Nomenclature).
+### Saved data (CLAUDE.md §5)
+- No key changed. psb2.ui (UI state) gets an optional `cmpMode`; the project is not changed by either tab.
+### Governing provisions (CLAUDE.md §4)
+- No engineering value of the app changes: the sweep runs the app's own engine call on changed copies of the inputs; the nomenclature shows the engine's values.
+- Decision (pending engineer review): the sweep uses this app's engine call (computeAll + PS-19 rigid section, PS-35 types (f)/(g), PS-10 hold-down, PS-34 pier block), not the frozen sweepDesign's raw computeAll, so a candidate's ratios are the ones its result tabs would show. Where those additions do not apply the rows equal sweepDesign's field by field (test). The default design's row therefore shows the PS-10 hold-down check (1.276, FAIL) in Max D/C, which the old tab did not have.
+- Decision (pending engineer review): spacing sweep at equal bays S (the old app had one S).
+### Check case
+- Default project (BT-72, 120 ft, S = 9 ft), Vary = Span: 100, 110, 120, 130, 140 ft; Max D/C 2.208 (Release tens. steel), 1.518, 1.276, 1.150, 2.342 (Srv III tens); the 120 ft row = this design: Max D/C = 1.276 (Hold-down force (PS-10)), 18/19 core checks, FAIL (the PS-10 check only); with the PS-10 box off the five rows = sweepDesign(inp, 'span', [100 … 140]).
+- Nomenclature: I_c = 1,126,663 in⁴ shown "1,126,663" (as the Section properties tab), ℓ_t = 36.0 → "36.0" in, M_u = R.MuMid / 12 = 10,251 kip-ft.
+### How verified
+- New tests/engine/psbridge-compare-tab.test.mjs (5), tests/engine/psbridge-nomen.test.mjs (3), tests/smoke/ps-bridge-gtabs.mjs. PS checks: see the PR.
+### Other copies
+- None (engine/pbd-optimize.js sweepDesign unchanged, frozen).
+### Code (the PR's diff of the app files)
+```diff
+diff --git a/apps/ps-bridge/engine/compare.js b/apps/ps-bridge/engine/compare.js
+new file mode 100644
+index 0000000..420f579
+--- /dev/null
++++ b/apps/ps-bridge/engine/compare.js
+@@ -0,0 +1,46 @@
++/* apps/ps-bridge/engine/compare.js — the Compare tab's design sweep (window.PSBCompare). Classic script, no DOM. Created 2026-11-15
++   (batch G4: the old app's Compare tab, O:8009-8034, "Design Comparison Sweep": the full design re-run over a range of spans, girder
++   sections or girder spacings, everything else held as entered, and the governing demand / capacity of each).
++
++   The old tab called the moved engine's sweepDesign (engine/pbd-optimize.js, frozen) with its presets. sweepDesign calls the global
++   computeAll, not this app's engine call PSBHoldDown.compute (computeAll + the rigid section on the real girder lines PS-19, the type (f) /
++   (g) distribution factors of box beams and voided slabs PS-35, the hold-down check PS-10, the pier block PS-34): with it a candidate would
++   be judged by other numbers than the app's own result tabs show. So run() repeats sweepDesign's body (the same input changes, the same
++   "core" checks: every check but Deck / Lifting / Hauling / FS, the same fields) on the page's engine call; nothing is calculated here.
++   Decision (pending engineer review; recorded in the PR and the fix log only): the sweep uses the app's engine call, not the raw computeAll.
++   tests/engine/psbridge-compare-tab.test.mjs: for a design the app's additions do not touch, run() = sweepDesign() field by field.
++
++   presets(inp, mode) -> values   the old tab's presets (O:8012-8016): span L − 20 … L + 20 by 10 (> 20 ft), every library girder but Custom,
++                                  spacing S − 1 … S + 1 by 0.5 (> 3 ft)
++   inputsOf(inp, mode, v) -> inp  a copy with L, girder or S set (spacing: equal bays at S, so inputs.rigidX of unequal bays is dropped)
++   one(inp, mode, v, compute) -> row  { v, pass, maxDC, flex, s3, rel, shear, camber, nPass, nTot, gov, fails } or { v, error }
++   run(inp, mode, values, compute) -> rows;  MODES: [[key, label, unit]] */
++(function () {
++  'use strict';
++  const NOT_CORE = /Deck|Lifting|Hauling|FS/;   // sweepDesign's filter (pbd-optimize.js)
++  const MODES = [['span', 'Span', 'ft'], ['girder', 'Girder section', ''], ['spacing', 'Girder spacing', 'ft']];
++  function presets(inp, mode) {
++    if (mode === 'span') return [inp.L - 20, inp.L - 10, inp.L, inp.L + 10, inp.L + 20].filter(v => v > 20);
++    if (mode === 'girder') return Object.keys(GIRDERS).filter(k => k !== 'Custom');
++    if (mode === 'spacing') return [inp.S - 1, inp.S - 0.5, inp.S, inp.S + 0.5, inp.S + 1].filter(v => v > 3);
++    return [];
++  }
++  function inputsOf(inp, mode, v) {
++    const i = JSON.parse(JSON.stringify(inp));
++    if (mode === 'span') i.L = v;
++    else if (mode === 'girder') i.girder = v;
++    else if (mode === 'spacing') { i.S = v; delete i.rigidX; }
++    return i;
++  }
++  const engine = () => (window.PSBHoldDown ? window.PSBHoldDown.compute : computeAll);
++  function one(inp, mode, v, compute) {
++    let R; try { R = (compute || engine())(inputsOf(inp, mode, v)); } catch (e) { R = { error: e.message }; }
++    if (R.error) return { v, error: R.error };
++    const core = R.checks.filter(c => !NOT_CORE.test(c.n)), r = n => { const c = R.checks.find(q => q.n === n); return c ? c.r : NaN; };
++    const gov = core.reduce((b, c) => (c.r > b.r ? c : b), core[0] || { n: '', r: -Infinity });
++    return { v, pass: core.every(c => c.pass), maxDC: Math.max(...core.map(c => c.r)), flex: r('Flexure'), s3: r('Srv III tens'), rel: r('Release comp'), shear: r('Shear'),
++      camber: R.cam.final, nPass: core.filter(c => c.pass).length, nTot: core.length, gov: gov.n, fails: core.filter(c => !c.pass).map(c => c.n) };
++  }
++  const run = (inp, mode, values, compute) => values.map(v => one(inp, mode, v, compute));
++  window.PSBCompare = { MODES, NOT_CORE, presets, inputsOf, one, run };
++})();
+diff --git a/apps/ps-bridge/index.html b/apps/ps-bridge/index.html
+index 7d7fc77..0f77eae 100644
+--- a/apps/ps-bridge/index.html
++++ b/apps/ps-bridge/index.html
+@@ -59,6 +59,7 @@
+     'engine/inputcheck.js',  // PR 2b: the blocking input errors (the steel app's pattern)
+     'engine/legacy.js',      // PR 2f: "From the old app": read-only import of the old app's saved designs and Export JSON files
+     'engine/handoffs.js',    // 2026-11-14 (item 12): the old app's bridgeSuite.v1.* hand-off payloads (its code; formats unchanged)
++    'engine/compare.js',     // batch G4 (2026-11-15): the Compare tab's design sweep (the old app's sweepDesign on this app's engine call)
+     'engine/autodesign.js',  // item A (2026-11-14): Auto design, a search over each girder type's inputs judged by the page's own engine call (no new formula)
+     'engine/worked.js',      // PR 2b-2: the worked steps of the Section properties, Loads & LLDF and Analysis tabs (values = the engine's)
+     'engine/worked-stress.js', // PR 2c-1: the worked steps of the Losses and Stresses tabs (values = the engine's)
+@@ -113,6 +114,8 @@
+     'ui/sheets.js',   // item 10: the drawing set (part 1: typical section of each span, framing plan; part 2: girder elevation, strand pattern, schedule) with border and title block (adapted from the steel app's sheets)
+     'ui/drawings.js', // item 10, part 1: the Drawings tab (previews, Download DXF, Print; the steel app's Drawings tab pattern)
+     'ui/sumelev.js',  // 2026-11-14 (item 8a): the Summary's girder elevation of each girder type (picker; the governing checks where they govern)
++    'ui/nomen.js',    // batch G6 (2026-11-15): the Nomenclature output tab (the old app's live variable reference, with § links)
++    'ui/compare.js',  // batch G4 (2026-11-15): the Compare output tab (the old app's design sweep; table and bar graphic)
+     'ui/autodesign.js', // item A (2026-11-14): the Auto design input tab (settings, Run) and output tab (candidates, Apply as one Undo step)
+     'ui/summary.js',  // PR 3b: the Summary tab (adapted copy of apps/steel-bridge/ui/summary.js): verdict, girder × span grid, type × check table
+     'ui/splitter.js'  // the splitter between the input and output panels (copy of apps/steel-bridge/ui/splitter.js)
+@@ -392,7 +395,7 @@
+     ['dd', 'Diaphragms / deck'], ['loads', 'Loads'], ['own', 'Owner rules'], ['ad', 'Auto design']];
+   const OTABS = [['sum', 'Summary'], ['sec', 'Section properties'], ['lds', 'Loads & LLDF'], ['an', 'Analysis'], ['loss', 'Losses'], ['str', 'Stresses'],
+     ['flex', 'Flexure'], ['shear', 'Shear'], ['end', 'End zone & hold-down'], ['camb', 'Camber & deflection'], ['hand', 'Handling'], ['deck', 'Deck'],
+-    ['rt', 'Rating'], ['rpt', 'Report'], ['dwg', 'Drawings'], ['ad', 'Auto design'], ['3d', '3D view']];
++    ['rt', 'Rating'], ['rpt', 'Report'], ['dwg', 'Drawings'], ['ad', 'Auto design'], ['cmp', 'Compare'], ['nom', 'Nomenclature'], ['3d', '3D view']];   // cmp, nom: batch G4, G6
+   if (!TABS.some(t => t[0] === ui.itab)) ui.itab = 'proj';
+   if (!OTABS.some(t => t[0] === ui.otab)) ui.otab = 'sum';
+ 
+@@ -659,7 +662,7 @@
+   /* the result of the girder type whose inputs are shown (ui.scope), on its first line: the strand pattern of the Girders & strands tab */
+   function scopeResult() { const k = scopeK(), L = k >= 0 ? BR.typeLines(P, k) : []; if (!L.length) return null; const inp = window.PSBDesign.cellInputs(P, k, L[0]); return { inp, R: cellR(inp) }; }
+   const TABUI = { sec: () => window.PSBUiSection, lds: () => window.PSBUiLoads, an: () => window.PSBUiAnalysis, loss: () => window.PSBUiLosses, str: () => window.PSBUiStresses, flex: () => window.PSBUiFlexure, shear: () => window.PSBUiShear,
+-    end: () => window.PSBUiEndZone, camb: () => window.PSBUiCamber, hand: () => window.PSBUiHandling, deck: () => window.PSBUiDeck, rt: () => window.PSBUiRating };
++    end: () => window.PSBUiEndZone, camb: () => window.PSBUiCamber, hand: () => window.PSBUiHandling, deck: () => window.PSBUiDeck, rt: () => window.PSBUiRating, cmp: () => window.PSBUiCompare, nom: () => window.PSBUiNomen };   // cmp, nom: batch G4, G6
+   let ctxOut = null;
+   function drawOut() {
+     $('tabBar').innerHTML = OTABS.map(([k, t]) => `<button type="button" role="tab" data-otab="${k}" aria-selected="${ui.otab === k}">${t}</button>`).join('');
+@@ -708,7 +711,7 @@
+       catch (e) { $('rptHost').innerHTML = `<div class="alert err" role="alert">Report error: ${esc(e && e.message)}</div>`; console.warn(e); } }
+     if (ui.otab === 'ad' && $('adHost')) { try { window.PSBAutoDesignUI.render($('adHost'), adCtx()); } catch (e) { $('adHost').innerHTML = `<div class="alert err" role="alert">Auto design error: ${esc(e && e.message)}</div>`; console.warn(e); } }
+     // item 10, part 1: the Drawings tab (display and export only; its choices kept in ui.dwg, psb2.ui)
+-    if (ui.otab === 'dwg' && $('dwgHost')) { try { window.PSBDrawingsUI.render($('dwgHost'), { P, ui, saveUi, goto: t => gotoOut(t), goin: t => { ui.itab = t; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; }, res: (k, g) => cellR(window.PSBDesign.cellInputs(P, k, g)), all: () => allResults(true) });   /* res (part 2): the girder types' engine results (the page's cache); all (batch H1): every type on every line, for the design summary sheet */ }
++    if (ui.otab === 'dwg' && $('dwgHost')) { try { window.PSBDrawingsUI.render($('dwgHost'), { P, ui, saveUi, goto: t => gotoOut(t), goin: t => { ui.itab = t; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; }, res: (k, g) => cellR(window.PSBDesign.cellInputs(P, k, g)) });   /* res (part 2): the girder types' engine results (the page's cache) */ }
+       catch (e) { $('dwgHost').innerHTML = `<div class="alert err" role="alert">Drawings error: ${esc(e && e.message)}</div>`; console.warn(e); } }
+     // PR 3c: the 3D view of the bridge (display only; its layer and camera choices kept in ui.v3d, psb2.ui)
+     if (ui.otab === '3d' && $('v3dHost')) { try { window.PSB3DUI.render($('v3dHost'), { P, ui, saveUi, res: (k, g) => cellR(window.PSBDesign.cellInputs(P, k, g)) });   /* res (PR 8b): each girder type × line's engine result, for the diagrams (cached, cellR) */ } catch (e) { $('v3dHost').innerHTML = `<div class="alert err" role="alert">3D view error: ${esc(e && e.message)}</div>`; console.warn(e); } }
+diff --git a/apps/ps-bridge/ui/compare.js b/apps/ps-bridge/ui/compare.js
+new file mode 100644
+index 0000000..cffe096
+--- /dev/null
++++ b/apps/ps-bridge/ui/compare.js
+@@ -0,0 +1,68 @@
++/* apps/ps-bridge/ui/compare.js — the Compare output tab (window.PSBUiCompare): the old app's "Design Comparison Sweep" (O:8009-8034), the full
++   design of the girder type and line shown re-run over a range of spans, girder sections or girder spacings, everything else held as
++   entered; per candidate the governing ratios of the core checks (engine/compare.js, the old app's sweepDesign on the page's engine call)
++   in the Steel Bridge app's formats: a bar graphic of the governing D/C against 1.0 (PSBVizAlong.hbars, ratio colours) and a table.
++   Created 2026-11-15 (batch G4). Classic script; display only: nothing is saved but the "Vary" choice (ui.cmpMode, the page's psb2.ui);
++   the result lives in this page view's memory and is marked out of date when the inputs change.
++     output(ctx) -> HTML; after(el, ctx) mounts the graphic and wires Run; onOutChange(e, ui). ctx = { P, inp, R, W, ui, redraw } */
++(function () {
++  'use strict';
++  const K = () => window.PSBOutKit, VA = () => window.PSBVizAlong, C = () => window.PSBCompare;
++  const S = { key: '', mode: '', rows: null, fit: null, ms: 0, err: '' };
++  const modeOf = ui => (C().MODES.some(m => m[0] === (ui && ui.cmpMode)) ? ui.cmpMode : 'span');
++  const keyOf = (ctx, mode) => JSON.stringify([ctx.inp, mode]);
++  const cls = r => (!(r <= 1.0001) ? 'ng' : r >= 0.9 ? 'hi' : 'ok');
++  const label = (mode, v) => (mode === 'girder' ? String(v) : K().fx(+v, mode === 'span' ? 1 : 2) + ' ft');
++  const isCur = (ctx, mode, v) => (mode === 'span' ? Math.abs(v - ctx.inp.L) < 1e-9 : mode === 'girder' ? v === ctx.inp.girder : Math.abs(v - ctx.inp.S) < 1e-9);
++  /* fitErrs(ctx, v): girder sweep only: the input check's strand-fit errors (PS-28 / PS-33 / PS-39: rows and draped strands) of the type
++     shown with section v (the page's PSBInputCheck.collect, as engine/autodesign.js fitErrors); [] when the strands fit */
++  function fitErrs(ctx, v) {
++    const P = ctx.P, BR = window.PSBBridge, IC = window.PSBInputCheck; if (!IC) return [];
++    const sh = BR && BR.hasTypes(P) ? BR.shown(P) : null, b = JSON.parse(JSON.stringify(sh ? BR.effBase(P, sh.k) : P.base)); b.girder = v;
++    const Pv = Object.assign({}, P, { base: b, types: undefined, design: sh ? { g: sh.g, s: sh.s } : P.design });
++    try { return IC.collect(Pv).errors.filter(x => /^base\.(rows|harp)(\.|$)/.test(x.path)).map(x => x.msg); } catch (e) { return []; }
++  }
++  function runNow(ctx) {
++    const mode = modeOf(ctx.ui), t0 = Date.now(); S.err = '';
++    try { const vals = C().presets(ctx.inp, mode); S.rows = C().run(ctx.inp, mode, vals); S.fit = mode === 'girder' ? vals.map(v => fitErrs(ctx, v)) : null; }
++    catch (e) { S.rows = null; S.err = e.message; }
++    S.key = keyOf(ctx, mode); S.mode = mode; S.ms = Date.now() - t0;
++  }
++  function output(ctx) {
++    const k = K(), mode = modeOf(ctx.ui), M = C().MODES, vals = C().presets(ctx.inp, mode);
++    const what = mode === 'span' ? 'spans' : mode === 'girder' ? 'girder sections' : 'girder spacings';
++    let h = k.card('Design comparison sweep', `<div class="fRow"><label for="o_cmpMode">Vary</label><select id="o_cmpMode">${M.map(([v, t]) => `<option value="${v}"${v === mode ? ' selected' : ''}>${t}</option>`).join('')}</select>
++      <button type="button" class="btn pri" id="cmpRun">Run sweep</button><span class="note" id="cmpBusy" hidden>Running…</span></div>
++      <p class="note">Re-runs the whole design of the girder type shown over ${vals.length} ${what} (${mode === 'girder' ? 'every section of the library but Custom' : vals.map(v => label(mode, v)).join(', ')}), holding every other input as entered, and lists the governing demand / capacity of each: a preliminary sizing and type study, as the old app's Compare tab. The deck and handling checks are not in the governing ratio (the old app's rule).${mode === 'spacing' ? ' Spacing: the girders at equal bays of that spacing (the rigid-section factor of unequal bays is not used).' : ''}${mode === 'girder' ? ' The strand rows and draped strands are kept as entered: the Strand fit column gives the input check of each section (a section they do not fit is computed but not a usable design).' : ''}</p>
++      <p class="note">Each candidate is computed by this app's engine call, the one behind every result tab (with the PS-10 hold-down check, the type (f) / (g) distribution factors and the rigid section where they apply), so its ratios match what the result tabs would show for it.</p>`, 'card-cmp');
++    if (!S.rows && !S.err) return h + '<p class="note" id="cmpNone">Choose what to vary and click Run sweep.</p>';
++    if (S.err) return h + `<div class="alert err" role="alert">The sweep stopped: ${k.esc(S.err)}</div>`;
++    const stale = S.key !== keyOf(ctx, mode);
++    if (stale) h += `<div class="alert" id="cmpStale">${S.mode !== mode ? `The results below vary the ${k.esc((M.find(m => m[0] === S.mode) || [, ''])[1].toLowerCase())}, not the ${k.esc((M.find(m => m[0] === mode) || [, ''])[1].toLowerCase())}.` : 'The inputs have changed since this sweep.'} Run the sweep again for the inputs as they are now.</div>`;
++    const md = S.mode, fx = (v, d) => k.fx(v, d), nOk = S.rows.filter((r, i) => !r.error && r.pass && !(S.fit && S.fit[i].length)).length;
++    h += K().gcard('Compare graphic: governing D/C of each candidate', 'gfx_cmp');
++    const head = `<th class="lft">${md === 'span' ? 'Span<br>ft' : md === 'girder' ? 'Girder section' : 'Spacing<br>ft'}</th><th>Flexure</th><th>Service III<br>tension</th><th>Release<br>compression</th><th>Shear</th><th>Max D/C</th><th class="lft">Governing check</th><th>Camber<br>in</th><th>Checks</th>${S.fit ? '<th class="lft">Strand fit</th>' : ''}<th>Status</th>`;
++    const rows = S.rows.map((r, i) => { const cur = isCur(ctx, md, r.v), f = S.fit ? S.fit[i] : null, nm = `${k.esc(label(md, r.v))}${cur ? ' <b>(this design)</b>' : ''}`;
++      const fitC = f ? `<td class="lft${f.length ? ' ngt' : ''}"${f.length ? ` title="${k.esc(f.join(' '))}"` : ''}>${f.length ? `${f.length} error${f.length > 1 ? 's' : ''}` : 'fits'}</td>` : '';
++      if (r.error) return `<tr class="ng"><td class="lft">${nm}</td><td colspan="8" class="lft">The engine could not compute it: ${k.esc(r.error)}</td>${fitC}<td class="ngt">—</td></tr>`;
++      const c = (v, d) => `<td${cls(v) === 'ng' ? ' class="ngt"' : cls(v) === 'hi' ? ' style="color:var(--warn);font-weight:600"' : ''}>${fx(v, d)}</td>`, okAll = r.pass && !(f && f.length);
++      return `<tr${cur ? ' class="sel"' : !okAll ? ' class="ng"' : ''}><td class="lft">${nm}</td>${c(r.flex, 2)}${c(r.s3, 2)}${c(r.rel, 2)}${c(r.shear, 2)}<td><b>${fx(r.maxDC, 2)}</b></td><td class="lft">${k.esc(r.gov)}</td><td>${fx(r.camber, 2)}</td><td>${r.nPass}/${r.nTot}</td>${fitC}<td class="${okAll ? 'ok' : 'ngt'}">${okAll ? 'PASS' : 'FAIL'}</td></tr>`; }).join('');
++    h += k.card(`Results: varying the ${k.esc((M.find(m => m[0] === md) || [, ''])[1].toLowerCase())} (${S.rows.length} candidates, ${nOk} pass)`, `<div class="tscroll"><table class="tbl" id="cmpTbl"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>
++      <p class="note">Ratios are demand / capacity (≤ 1.00 passes; amber 0.90 to 1.00, red above 1.00), the engine's checks of the same names (Flexure, Srv III tens, Release comp, Shear; <a href="#" data-gotab="flex">Flexure</a>, <a href="#" data-gotab="str">Stresses</a>, <a href="#" data-gotab="shear">Shear</a> tabs, where each is worked for the design shown). Max D/C: the largest ratio of the core checks (every check but deck, lifting, hauling and the handling factors of safety), named in "Governing check". Camber: the engine's final camber (Camber &amp; deflection tab). Checks: core checks passing / core checks. A candidate is worked only when it is the design: to see one in full, enter it and the result tabs show it (Undo puts the design back). Computed in ${S.ms} ms.</p>`, 'card-cmpres');
++    return h;
++  }
++  function after(el, ctx) {
++    const b = el.querySelector('#cmpRun'); if (b) b.addEventListener('click', () => { const busy = el.querySelector('#cmpBusy'); if (busy) busy.hidden = false; b.disabled = true;
++      setTimeout(() => { runNow(ctx); if (ctx.redraw) ctx.redraw(); }, 30); });
++    const slot = el.querySelector('#gfx_cmp'); if (!slot || !S.rows || !VA() || !VA().mount) return;
++    const k = K(), md = S.mode;
++    const items = S.rows.map((r, i) => ({ id: label(md, r.v), key: 'c' + i, bars: r.error ? [{ v: 0, cls: 'na', text: 'error' }] : [{ v: Math.min(r.maxDC, 3), cls: cls(r.maxDC), text: k.fx(r.maxDC, 2) }],
++      lab: [`${label(md, r.v)}${isCur(ctx, md, r.v) ? ' (this design)' : ''}${r.error ? '' : ': ' + r.gov}`, r.error ? 'error' : k.fx(r.maxDC, 3)] }));
++    VA().mount(slot, { key: 'cmp', title: 'Governing D/C of each candidate', sub: `varying the ${k.esc((C().MODES.find(m => m[0] === md) || [, ''])[1].toLowerCase())}; bars capped at 3.0`,
++      draw: W => VA().hbars({ aria: 'Governing demand / capacity of each candidate of the sweep', panels: [{ label: 'Max D/C of the core checks', unit: 'D/C', limit: { v: 1, label: '1.0' }, items }] }, W),
++      hint: 'Point at (or tap) a bar for its value.', legend: VA().legend('ratio'),
++      caption: '<p class="vk-cap">The largest demand / capacity ratio of the core checks of each candidate (the table below). Display only.</p>' });
++  }
++  function onOutChange(e, ui) { if (e.target.id === 'o_cmpMode') { ui.cmpMode = e.target.value; return true; } return false; }
++  window.PSBUiCompare = { output, after, onOutChange, runNow, state: S };
++})();
+diff --git a/apps/ps-bridge/ui/drawings.js b/apps/ps-bridge/ui/drawings.js
+index 2e0eec8..e4075b9 100644
+--- a/apps/ps-bridge/ui/drawings.js
++++ b/apps/ps-bridge/ui/drawings.js
+@@ -8,9 +8,7 @@
+ 
+    Part 2 (2026-11-14, item B): each girder type's elevation and strand pattern sheets and the strand and girder schedule (ui/sheets.js),
+    from the engine results of the page's cache (ctx.res).
+-   Part 3 (2026-11-15, batch H1): the cover and sheet index, the general notes and the design summary (ctx.all(): every girder type on
+-   every line, the page's allResults).
+-   render(host, ctx), ctx = { P, ui, saveUi, goto(output tab), goin(input tab), res(k, g), all() }; the choices are kept in ui.dwg { paper, sheet, z }
++   render(host, ctx), ctx = { P, ui, saveUi, goto(output tab), goin(input tab), res(k, g) }; the choices are kept in ui.dwg { paper, sheet, z }
+    (psb2.ui, per browser; nothing in the project). */
+ (function () {
+   'use strict';
+@@ -22,11 +20,7 @@
+     // part 2 (item B): the girder sheets and the schedule
+     elev: [['in', 'gird', 'Girders & strands input tab'], ['out', 'camb', 'Camber & deflection tab'], ['out', 'end', 'End zone & hold-down tab']],
+     strd: [['in', 'gird', 'Girders & strands input tab (strand pattern)'], ['out', 'loss', 'Losses tab'], ['out', 'str', 'Stresses tab']],
+-    sched: [['in', 'gird', 'Girders & strands input tab'], ['in', 'mat', 'Materials input tab'], ['out', 'camb', 'Camber & deflection tab']],
+-    // part 3 (batch H1): the cover and sheet index, the general notes, the design summary
+-    cover: [['in', 'proj', 'Project input tab'], ['in', 'layout', 'Bridge layout input tab']],
+-    notes: [['in', 'proj', 'Project input tab'], ['in', 'mat', 'Materials input tab'], ['in', 'loads', 'Loads input tab'], ['in', 'own', 'Owner rules input tab']],
+-    summ: [['out', 'sum', 'Summary tab (governing check of each group, per girder type)']] };
++    sched: [['in', 'gird', 'Girders & strands input tab'], ['in', 'mat', 'Materials input tab'], ['out', 'camb', 'Camber & deflection tab']] };
+   const srcOf = id => SRC[id.replace(/\d+$/, '')] || [];
+ 
+   function css() {
+@@ -39,7 +33,7 @@
+   function render(host, ctx) {
+     css(); const P = ctx.P, ui = ctx.ui; ui.dwg = ui.dwg || {};
+     const paper = ui.dwg.paper === 'B' ? 'B' : 'D', z = ZOOM.some(q => q[0] === ui.dwg.z) ? ui.dwg.z : 1, SH = window.PSBSheets;
+-    let B; try { B = SH.build(P, { paper, res: ctx.res, all: ctx.all }); } catch (e) { host.innerHTML = `<div class="alert err" role="alert">The drawings could not be drawn: ${esc(e.message)}</div>`; return; }
++    let B; try { B = SH.build(P, { paper, res: ctx.res }); } catch (e) { host.innerHTML = `<div class="alert err" role="alert">The drawings could not be drawn: ${esc(e.message)}</div>`; return; }
+     if (B.errors.length) { host.innerHTML = `<section class="sec"><div class="secHead">Drawings</div><div class="secBody"><div class="alert err">${B.errors.map(esc).join('<br>')}</div><p class="note">The drawings need the girder types on the girder lines (Girders &amp; strands tab), the cross-section and the bridge layout.</p></div></section>`; return; }
+     const sh = B.sheets, cur = sh.find(s => s.id === ui.dwg.sheet) || sh[0];
+     const link = (w) => `<a class="wk" href="#" data-dg${w[0] === 'out' ? 'o' : 'i'}="${esc(w[1])}">${esc(w[2])}</a>`;
+@@ -51,7 +45,7 @@
+         <button type="button" id="dwg_print1" title="Print the sheet shown on one 11 x 17 in landscape page${paper === 'B' ? ' at its plot scale' : ', half size'}">Print sheet</button>
+         <button type="button" id="dwg_printAll" title="Print every sheet, one 11 x 17 in landscape page each${paper === 'B' ? ', at its plot scale' : ', half size'}">Print all sheets (${sh.length})</button></div>
+       <p class="note">${esc(window.SharedDxf.PRINT_NOTE)}${paper === 'B' ? '' : ' Paper D (34 × 22 in): the sheets print <b>half size</b> on 11 × 17, each at half its stated scale; the printed scale cell says "(HALF SIZE)" and the note under the title block gives the printed scale. Choose paper B above for 11 × 17 sheets at full scale.'}</p>
+-      <p class="note">One DXF file (AutoCAD R12, model space, full size in inches): each sheet drawn at its plot scale inside its border and title block (paper ${paper === 'D' ? 'D, 34 × 22' : 'B, 17 × 11'} in), side by side, as the Steel Bridge app's drawing set; plot each sheet at its scale. Layers S-GRDR, S-GRDR-VOID, S-DECK, S-APPR, S-SUPP, S-DIAP, S-CNTR, S-FACE, S-STRD, S-STRD-DEBOND, S-STRD-DRAPE, S-TBL, S-DIMS, S-TEXT, S-TBLK, S-BRDR; dimensions are DIMENSION entities. The previews are drawn from the same entities as the file. Every position is the app's own figure geometry: the cross-section of the Loads &amp; LLDF tab, the framing plan of the Bridge layout tab, and for each girder type its engine result (the strand pattern of the Girders &amp; strands tab, the draped profile and hold-down points, the camber of the Camber &amp; deflection tab) on its first line. The cover lists every sheet; the general notes name the specifications and the materials and loads entered; the design summary is the Summary tab's governing check of each group per girder type.</p></div></section>`;
++      <p class="note">One DXF file (AutoCAD R12, model space, full size in inches): each sheet drawn at its plot scale inside its border and title block (paper ${paper === 'D' ? 'D, 34 × 22' : 'B, 17 × 11'} in), side by side, as the Steel Bridge app's drawing set; plot each sheet at its scale. Layers S-GRDR, S-GRDR-VOID, S-DECK, S-APPR, S-SUPP, S-DIAP, S-CNTR, S-FACE, S-STRD, S-STRD-DEBOND, S-STRD-DRAPE, S-TBL, S-DIMS, S-TEXT, S-TBLK, S-BRDR; dimensions are DIMENSION entities. The previews are drawn from the same entities as the file. Every position is the app's own figure geometry: the cross-section of the Loads &amp; LLDF tab, the framing plan of the Bridge layout tab, and for each girder type its engine result (the strand pattern of the Girders &amp; strands tab, the draped profile and hold-down points, the camber of the Camber &amp; deflection tab) on its first line.</p></div></section>`;
+     h += `<section class="sec"><div class="secHead">${esc(cur.n + '. ' + cur.title)} <span style="font-weight:400;text-transform:none">· scale ${esc(SH.SCALE_NAME[cur.k] || '1:' + cur.k)}${cur.over ? ' · does not fit the sheet even at the largest scale' : ''}</span></div><div class="secBody">
+       <div class="dwg-box" data-dwg="${esc(cur.id)}"></div><p class="note">Wheel: zoom about the cursor · drag: pan · pinch and two-finger drag on a touch screen · double-click or double-tap: fit.</p></div></section>`;
+     h += `<section class="sec"><div class="secHead">Sheet index</div><div class="secBody"><div class="tscroll"><table class="tbl dwg-idx"><thead><tr><th>No.</th><th class="lft">Title</th><th>Scale</th><th class="lft">Entered and worked on</th></tr></thead><tbody>
+@@ -77,7 +71,7 @@
+     /* Print sheet / Print all sheets on 11 x 17 landscape pages (SharedDxf.printSheets; the steel app's SBPS-3): paper B at the plot scale;
+        paper D half size, built for the print with opt.half */
+     const prt = all => {
+-      let PB = B; if (paper === 'D') { try { PB = SH.build(P, { paper: 'D', half: true, res: ctx.res, all: ctx.all }); } catch (e) { alert(`The sheets could not be drawn: ${e.message}`); return; } }
++      let PB = B; if (paper === 'D') { try { PB = SH.build(P, { paper: 'D', half: true, res: ctx.res }); } catch (e) { alert(`The sheets could not be drawn: ${e.message}`); return; } }
+       const list = all ? PB.sheets : PB.sheets.filter(s => s.id === cur.id);
+       window.SharedDxf.printSheets((list.length ? list : PB.sheets.slice(0, 1)).map(s => ({ svg: window.SharedDxf.sheetSVG(PB.D, s), title: s.title })), { paper: SH.PAPER.B });
+     };
+diff --git a/apps/ps-bridge/ui/nomen.js b/apps/ps-bridge/ui/nomen.js
+new file mode 100644
+index 0000000..f1b9418
+--- /dev/null
++++ b/apps/ps-bridge/ui/nomen.js
+@@ -0,0 +1,165 @@
++/* apps/ps-bridge/ui/nomen.js — the Nomenclature output tab (window.PSBUiNomen): the old app's "Nomenclature — Live Variable Reference"
++   (O:8815-8960), about 90 symbols of the design with the engine's value for the girder type and line shown, the unit, the AASHTO LRFD 10th
++   Ed. article and a § link to the worked step where the value is worked (CLAUDE.md §6); a search box filters the rows (symbol, description,
++   article). Created 2026-11-15 (batch G6) in the Steel Bridge app's table style. Classic script; display only: every value is the engine's
++   (R at its path, as the result tabs' data-ev) or an input; nothing is calculated or saved (the search text lives in this page view).
++     output(ctx) -> HTML; after(el, ctx) wires the search box. ctx = { P, inp, R, W, ui } */
++(function () {
++  'use strict';
++  const K = () => window.PSBOutKit;
++  const S = { q: '' };
++  const TAB = { sec: 'sec', ld: 'lds', an: 'an', ls: 'loss', st: 'str', fx: 'flex', sh: 'shear', ez: 'end', cb: 'camb', rt: 'rt' };
++  /* rows: [symbol (HTML), description, unit, value (R path | { inp: path } | null), step id (§ link) | { goin: tab }, AASHTO LRFD 10th Ed. article, div] */
++  const GROUPS = [
++    ['Geometry: girder and composite section', [
++      ['L', 'Design span length (℄ bearing to ℄ bearing)', 'ft', 'L', { goin: 'layout' }, ''],
++      ['h', 'Girder depth', 'in', 'g.h', { goin: 'gird' }, ''],
++      ['A<sub>g</sub>', 'Gross girder area', 'in²', 'g.A', { goin: 'gird' }, ''],
++      ['I<sub>g</sub>', 'Gross girder moment of inertia', 'in⁴', 'g.I', { goin: 'gird' }, ''],
++      ['y<sub>b</sub>', 'Girder centroid above the soffit', 'in', 'g.yb', { goin: 'gird' }, ''],
++      ['y<sub>t</sub>', 'Girder centroid to the top', 'in', 'g.yt', 'sec.g.yt', ''],
++      ['S<sub>b</sub>', 'Girder section modulus, bottom', 'in³', 'g.Sb', 'sec.g.Sb', ''],
++      ['S<sub>t</sub>', 'Girder section modulus, top', 'in³', 'g.St', 'sec.g.St', ''],
++      ['b<sub>w</sub>', 'Web width (shear)', 'in', 'g.bw', { goin: 'gird' }, ''],
++      ['w<sub>g</sub>', 'Girder self-weight', 'klf', 'g.wsw', 'sec.g.wsw', '3.5.1'],
++      ['b<sub>eff</sub>', 'Effective flange width of the deck', 'in', 'cp.beff', 'sec.beff', '4.6.2.6.1'],
++      ['A<sub>c</sub>', 'Composite area (transformed)', 'in²', 'cp.Ac', 'sec.Ac', '4.6.2.6'],
++      ['I<sub>c</sub>', 'Composite moment of inertia', 'in⁴', 'cp.Ic', 'sec.Ic', '4.6.2.6'],
++      ['y<sub>bc</sub>', 'Composite centroid above the soffit', 'in', 'cp.ybc', 'sec.ybc', ''],
++      ['h<sub>c</sub>', 'Composite depth', 'in', 'cp.hc', 'sec.hc', ''],
++      ['S<sub>bc</sub>', 'Composite modulus, girder bottom', 'in³', 'cp.Sbc', 'sec.Sbc', ''],
++      ['S<sub>tg</sub>', 'Composite modulus, girder top', 'in³', 'cp.Stg', 'sec.Stg', ''],
++      ['S<sub>td</sub>', 'Composite modulus, deck top (÷ n)', 'in³', 'cp.Std', 'sec.Std', ''],
++      ['n', 'Modular ratio E<sub>c,d</sub> / E<sub>c</sub>', '—', 'cp.n', 'sec.n', '4.6.2.6']]],
++    ['Materials and moduli', [
++      ['f′<sub>c</sub>', 'Girder concrete strength, 28 days', 'ksi', { inp: 'mat.fc' }, { goin: 'mat' }, '5.4.2.1'],
++      ['f′<sub>ci</sub>', 'Girder concrete strength at release', 'ksi', { inp: 'mat.fci' }, { goin: 'mat' }, '5.4.2.1'],
++      ['f′<sub>c,d</sub>', 'Deck concrete strength', 'ksi', { inp: 'mat.fcd' }, { goin: 'mat' }, '5.4.2.1'],
++      ['E<sub>ci</sub>', 'Girder modulus at release', 'ksi', 'lo.Eci', 'ls.Eci', '5.4.2.4'],
++      ['E<sub>c</sub>', 'Girder modulus, final', 'ksi', 'cp.Ecg', 'sec.Ecg', '5.4.2.4'],
++      ['E<sub>c,d</sub>', 'Deck modulus', 'ksi', 'cp.Ecd', 'sec.Ecd', '5.4.2.4'],
++      ['E<sub>p</sub>', 'Strand modulus', 'ksi', { inp: 'str.Ep' }, { goin: 'mat' }, '5.4.4.2'],
++      ['f<sub>pu</sub>', 'Strand tensile strength', 'ksi', { inp: 'str.fpu' }, { goin: 'mat' }, 'Table 5.4.4.1-1']]],
++    ['Loads and distribution', [
++      ['η', 'Load modifier (Strength I)', '—', 'own.eta', 'ld.eta', '1.3.2.1'],
++      ['w<sub>DC1</sub>', 'DC1 on the bare girder (deck, haunch, additional)', 'klf', 'wDk', 'ld.wDC1', '3.5.1'],
++      ['w<sub>DC2</sub>', 'DC2 on the composite girder (barriers, …)', 'klf', 'wBar', 'ld.wDC2', '3.5.1'],
++      ['w<sub>DW</sub>', 'DW on the composite girder (wearing surface)', 'klf', 'wDW', 'ld.wDW', '3.5.1'],
++      ['DF<sub>M</sub>', 'Live-load distribution factor, moment', '—', 'dfm', 'ld.dfm', '4.6.2.2.2'],
++      ['DF<sub>V</sub>', 'Live-load distribution factor, shear', '—', 'dfv', 'ld.dfv', '4.6.2.2.3'],
++      ['M<sub>LL+IM</sub>', 'Live-load moment at midspan (× IM × DF)', 'kip-ft', 'MLL', 'ld.MLL', '3.6.1.3'],
++      ['V<sub>LL+IM</sub>', 'Live-load shear at the support (× IM × DF)', 'kip', 'VLL', 'ld.VLL', '3.6.1.3'],
++      ['M<sub>u</sub>', 'Factored moment at midspan, Strength I', 'kip-ft', 'MuMid', 'fx.Mu', 'Table 3.4.1-1', 12]]],
++    ['Prestressing strands', [
++      ['N', 'Number of strands', '—', 'ss.Ntot', 'sec.N', ''],
++      ['n<sub>h</sub>', 'Number of draped strands', '—', 'ss.nh', { goin: 'gird' }, ''],
++      ['A<sub>ps</sub>', 'Area of prestressing steel', 'in²', 'ss.Aps', 'sec.Aps', ''],
++      ['y<sub>ps</sub>', 'Strand centroid above the soffit, midspan', 'in', 'ss.cgsMid', 'sec.cgsMid', ''],
++      ['e<sub>m</sub>', 'Strand eccentricity at midspan', 'in', 'ss.eMid', 'sec.eMid', ''],
++      ['e<sub>end</sub>', 'Strand eccentricity at the end', 'in', 'ss.eEnd', { goin: 'gird' }, ''],
++      ['ℓ<sub>t</sub>', 'Transfer length', 'in', 'ss.lt', 'sec.lt', '5.9.4.3.1'],
++      ['ℓ<sub>d</sub>', 'Development length, bonded strand', 'in', 'ldBonded', 'sh.ldB', '5.9.4.3.2'],
++      ['ℓ<sub>d,db</sub>', 'Development length, debonded strand', 'in', 'ldDebond', 'sh.ldD', '5.9.4.3.3'],
++      ['f<sub>pbt</sub>', 'Strand stress immediately before transfer', 'ksi', 'fpbt', 'ls.fpbt', 'Table 5.9.2.2-1']]],
++    ['Prestress losses and gains', [
++      ['Δf<sub>pES</sub>', 'Elastic shortening loss', 'ksi', 'lo.dfES', 'ls.dfES', '5.9.3.2.3a'],
++      ['f<sub>cgp</sub>', 'Concrete stress at the strand centroid at transfer', 'ksi', 'lo.fcgp', 'ls.fcgp', '5.9.3.2.3a'],
++      ['Δf<sub>pSR</sub>', 'Shrinkage loss, transfer to deck', 'ksi', 'lo.ref.dfSR', 'ls.ref.dfSR', '5.9.3.4.2a'],
++      ['Δf<sub>pCR</sub>', 'Creep loss, transfer to deck', 'ksi', 'lo.ref.dfCR', 'ls.ref.dfCR', '5.9.3.4.2b'],
++      ['Δf<sub>pR1</sub>', 'Relaxation loss, transfer to deck', 'ksi', 'lo.ref.dfR1', 'ls.ref.dfR1', '5.9.3.4.2c'],
++      ['Δf<sub>pSD</sub>', 'Shrinkage loss, deck to final', 'ksi', 'lo.ref.dfSD', 'ls.ref.dfSD', '5.9.3.4.3a'],
++      ['K<sub>id</sub>', 'Transformed-section factor, transfer to deck', '—', 'lo.ref.Kid', 'ls.ref.Kid', '5.9.3.4.2a'],
++      ['K<sub>df</sub>', 'Transformed-section factor, deck to final', '—', 'lo.ref.Kdf', 'ls.ref.Kdf', '5.9.3.4.3a'],
++      ['ψ<sub>b</sub>(t<sub>f</sub>, t<sub>i</sub>)', 'Girder creep coefficient, final', '—', 'lo.ref.psiBIF', 'ls.ref.psiBIF', '5.4.2.3.2'],
++      ['Δf<sub>pLT</sub>', 'Long-term loss', 'ksi', 'LT', 'ls.LT', '5.9.3.4'],
++      ['Δf<sub>pT</sub>', 'Total loss (ES + LT)', 'ksi', 'totalLoss', 'ls.total', '5.9.3.1'],
++      ['f<sub>pe</sub>', 'Effective prestress after all losses', 'ksi', 'fpe', 'ls.fpe', '5.9.3'],
++      ['Δf<sub>p,gain</sub>', 'Elastic gains under the permanent loads', 'ksi', 'gains.permanent', 'ls.gain.perm', ''],
++      ['f<sub>pe,gain</sub>', 'Effective prestress with the elastic gains', 'ksi', 'fpeGain', 'ls.gain.fpe', '']]],
++    ['Stress limits', [
++      ['f<sub>ci,lim</sub>', 'Compression limit at release', 'ksi', 'lim.relC', 'st.lim.relC', '5.9.2.3.1a'],
++      ['f<sub>ti,lim</sub>', 'Tension limit at release', 'ksi', 'lim.relT', 'st.lim.relT', 'Table 5.9.2.3.1b-1'],
++      ['f<sub>c,lim</sub> (perm.)', 'Service compression limit, permanent loads', 'ksi', 'lim.srvC1', 'st.lim.srvC1', 'Table 5.9.2.3.2a-1'],
++      ['f<sub>c,lim</sub> (total)', 'Service compression limit, permanent + transient', 'ksi', 'lim.srvC2', 'st.lim.srvC2', 'Table 5.9.2.3.2a-1'],
++      ['f<sub>t,lim</sub>', 'Service III tension limit', 'ksi', 'lim.srvT', 'st.lim.srvT', 'Table 5.9.2.3.2b-1']]],
++    ['Flexure (midspan)', [
++      ['β<sub>1</sub>', 'Stress block factor', '—', 'fMid.b1', 'fx.b1', '5.6.2.2'],
++      ['d<sub>p</sub>', 'Depth to the strand centroid', 'in', 'fMid.dp', 'fx.dp', '5.6.3.1.1'],
++      ['c', 'Neutral axis depth', 'in', 'fMid.c', 'fx.c', '5.6.3.1.1'],
++      ['a', 'Stress block depth', 'in', 'fMid.a', 'fx.a', '5.6.3.2.2'],
++      ['f<sub>ps</sub>', 'Strand stress at nominal flexural resistance', 'ksi', 'fMid.fps', 'fx.fps', '5.6.3.1.1'],
++      ['ε<sub>t</sub>', 'Net tensile strain', '—', 'fMid.et', 'fx.et', '5.5.4.2'],
++      ['φ', 'Resistance factor, flexure', '—', 'fMid.phi', 'fx.phi', '5.5.4.2'],
++      ['φM<sub>n</sub>', 'Factored flexural resistance', 'kip-ft', 'fMid.phiMn', 'fx.phiMn', '5.6.3.2', 12],
++      ['f<sub>r</sub>', 'Modulus of rupture', 'ksi', 'fr', 'fx.fr', '5.4.2.6'],
++      ['M<sub>cr</sub>', 'Cracking moment', 'kip-ft', 'Mcr', 'fx.Mcr', '5.6.3.3', 12]]],
++    ['Shear (critical section)', [
++      ['d<sub>v</sub>', 'Effective shear depth', 'in', 'shear.1.dv', 'sh.dv', '5.7.2.8'],
++      ['V<sub>u</sub>', 'Factored shear', 'kip', 'shear.1.Vu', 'sh.Vu', 'Table 3.4.1-1'],
++      ['ε<sub>s</sub>', 'Longitudinal strain', '—', 'shear.1.es', 'sh.es', '5.7.3.4.2'],
++      ['β', 'Concrete tensile stress factor', '—', 'shear.1.beta', 'sh.beta', '5.7.3.4.2'],
++      ['θ', 'Angle of the diagonal compressive stresses', '°', 'shear.1.theta', 'sh.theta', '5.7.3.4.2'],
++      ['V<sub>c</sub>', 'Concrete shear resistance', 'kip', 'shear.1.Vc', 'sh.Vc', '5.7.3.3'],
++      ['V<sub>s</sub>', 'Stirrup shear resistance', 'kip', 'shear.1.Vs', 'sh.Vs', '5.7.3.3'],
++      ['V<sub>p</sub>', 'Vertical component of the prestress', 'kip', 'shear.1.Vp', 'sh.Vp', '5.7.3.3']]],
++    ['End zone', [
++      ['P<sub>r</sub>', 'Splitting demand (4 % of the prestress at transfer)', 'kip', 'splitDem', 'ez.Pr', '5.9.4.4.1'],
++      ['A<sub>s,split</sub>', 'Splitting steel required within h/4', 'in²', 'AsSplit', 'ez.AsReq', '5.9.4.4.1'],
++      ['h/4', 'Splitting zone length', 'in', 'splitZone', 'ez.h4', '5.9.4.4.1']]],
++    ['Camber and deflection', [
++      ['Δ<sub>ps</sub>', 'Camber from the prestress (release)', 'in', 'cam.dPS', 'cb.dPS', ''],
++      ['Δ<sub>g</sub>', 'Deflection under the girder self-weight', 'in', 'cam.dSW', 'cb.dSW', ''],
++      ['Δ<sub>deck</sub>', 'Deflection under the deck and haunch', 'in', 'cam.dDK', 'cb.dDK', ''],
++      ['Δ<sub>SD</sub>', 'Deflection under DC2 + DW (composite)', 'in', 'cam.dSD', 'cb.dSD', ''],
++      ['Δ<sub>erect</sub>', 'Camber at erection', 'in', 'cam.erect', 'cb.erect', ''],
++      ['Δ<sub>after deck</sub>', 'Camber after the deck is placed', 'in', 'cam.afterDeck', 'cb.deck', ''],
++      ['Δ<sub>seat</sub>', 'Camber for the bearing seats (all dead load)', 'in', 'cam.seat', 'cb.seat', ''],
++      ['Δ<sub>final</sub>', 'Final long-term camber', 'in', 'cam.final', 'cb.final', ''],
++      ['Δ<sub>LL</sub>', 'Live-load deflection', 'in', 'cam.dLL', 'cb.dLL', '2.5.2.6.2']]],
++    ['Load rating (HL-93)', [
++      ['RF<sub>inv</sub>', 'Inventory rating factor, flexure', '—', 'rating.RFinv', 'rt.RFinv', 'MBE 6A.4.2.1'],
++      ['RF<sub>opr</sub>', 'Operating rating factor, flexure', '—', 'rating.RFopr', 'rt.RFopr', 'MBE 6A.4.2.1'],
++      ['RF<sub>V,inv</sub>', 'Inventory rating factor, shear', '—', 'shrRating.RFinv', 'rt.RFvInv', 'MBE 6A.4.2.1'],
++      ['RF<sub>Srv III</sub>', 'Rating factor, Service III', '—', 'svcRating.RF', 'rt.RFs3', 'MBE 6A.4.2.1']]]];
++  const at = (o, p) => String(p).split('.').reduce((a, k) => (a == null ? a : a[k]), o);
++  const dOf = v => (typeof v !== 'number' || !isFinite(v) ? 0 : Math.abs(v) >= 100 ? 0 : Math.abs(v) >= 10 ? 1 : 3);   // the old tab's rule
++  const plainTx = h => String(h).replace(/<[^>]+>/g, '');
++  const rowText = e => `${plainTx(e[0])} ${plainTx(e[1])} ${e[5]}`.toLowerCase();
++  /* the R path of a row: the path of its worked step when the tab's steps give one (the step's value = R there), else the row's own */
++  const pathOf = (ctx, e) => { for (const w of Object.values(ctx.W || {})) if (w && w.paths && typeof e[4] === 'string' && w.paths[e[4]]) return w.paths[e[4]]; return e[3]; };
++  const stepOf = (ctx, id) => { if (typeof id !== 'string') return null; for (const w of Object.values(ctx.W || {})) { const s = w && w.steps && w.steps.find(q => q.id === id); if (s) return s; } return null; };
++  function cell(ctx, e) {
++    const k = K(), { R, inp } = ctx, src = e[3] && e[3].inp ? e[3] : pathOf(ctx, e), div = e[6] || 0;
++    if (src && src.inp) { const v = +at(inp, src.inp); return `${k.fx(v, dOf(v))}`; }
++    const v0 = at(R, src), v = typeof v0 === 'number' && div ? v0 / div : v0;
++    if (typeof v0 === 'number' && isFinite(v0)) return k.ev(R, src, dOf(v), '', div || undefined);
++    const st = stepOf(ctx, e[4]);   // a value R does not hold (e.g. η = 1 without an owner rule): its worked step's value
++    return st && typeof st.value === 'number' && isFinite(st.value) ? k.fx(st.value, dOf(st.value)) : '—';
++  }
++  function link(ctx, e) {
++    const k = K(), w = e[4]; if (!w) return '';
++    if (w.goin) return `<a href="#" data-goin="${w.goin}" title="Entered on that input tab">input</a>`;
++    const tab = TAB[String(w).split('.')[0]]; if (!tab) return '';
++    return stepOf(ctx, w) ? k.wk(w, '§', tab) : '';
++  }
++  function output(ctx) {
++    const k = K();
++    let n = 0;
++    const body = GROUPS.map(([g, rows]) => `<tbody class="nm-g"><tr class="nm-h"><th colspan="6" class="lft">${k.esc(g)}</th></tr>${rows.map(e => { n++;
++      return `<tr data-nm="${k.esc(rowText(e))}"><td class="lft nm-s">${e[0]}</td><td class="lft">${e[1]}</td><td class="lft">${e[2]}</td><td>${cell(ctx, e)}</td><td class="lft">${e[5] ? k.esc(e[5]) : '—'}</td><td>${link(ctx, e)}</td></tr>`; }).join('')}</tbody>`).join('');
++    return k.card('Nomenclature: the symbols of the design with their values', `<div class="fRow"><label for="o_nmQ">Search</label><input type="search" id="o_nmQ" placeholder="symbol, description or article" value="${k.esc(S.q)}" autocomplete="off"><span class="note" id="nmCount"></span></div>
++      <div class="tscroll"><table class="tbl" id="nmTbl"><thead><tr><th class="lft">Symbol</th><th class="lft">Description</th><th class="lft">Unit</th><th>Value</th><th class="lft">Article</th><th>Worked</th></tr></thead>${body}</table></div>
++      <p class="note">${n} symbols. Every value is the engine's for the girder type and line chosen above (or the entered input) and follows the inputs. Articles: AASHTO LRFD 10th Ed. (2024) unless marked MBE (the Manual for Bridge Evaluation, as the Rating tab). "§" opens the worked step on its result tab; "input" the input tab where the value is entered. Moments kip-ft, shears kip. Flexure at the engine's midspan station; shear at the station the Shear tab works (the critical section).</p>`, 'card-nom');
++  }
++  function filter(el) {
++    const q = S.q.trim().toLowerCase(), rows = el.querySelectorAll('#nmTbl tr[data-nm]'); let shown = 0;
++    rows.forEach(r => { const on = !q || r.getAttribute('data-nm').includes(q); r.hidden = !on; if (on) shown++; });
++    el.querySelectorAll('#nmTbl tbody.nm-g').forEach(b => { b.hidden = ![...b.querySelectorAll('tr[data-nm]')].some(r => !r.hidden); });
++    const c = el.querySelector('#nmCount'); if (c) c.textContent = q ? `${shown} of ${rows.length} shown` : '';
++  }
++  function after(el) {
++    const i = el.querySelector('#o_nmQ'); if (!i) return;
++    i.addEventListener('input', () => { S.q = i.value; filter(el); }); filter(el);
++  }
++  window.PSBUiNomen = { output, after, GROUPS, state: S };
++})();
+diff --git a/apps/ps-bridge/ui/sheets.js b/apps/ps-bridge/ui/sheets.js
+index 0bef68d..011f1a0 100644
+--- a/apps/ps-bridge/ui/sheets.js
++++ b/apps/ps-bridge/ui/sheets.js
+@@ -202,115 +202,6 @@
+     wrap(notes, Math.floor(W / k / (0.12 * f))).forEach((t, i) => D.text(lT, 0, -(nR + 1.5 + 1.8 * i) * rh, th, t, 0));
+   }
+ 
+-  /* ---------- part 3 (2026-11-15, batch H): the sheets of tables and notes (cover and sheet index, general notes, design summary, …) ----------
+-     The steel app's block sheets (apps/steel-bridge/engine/sheets.js blockDraw / blockBox / blockPages / pageFn, SBTXT, and its table() and
+-     notes() of apps/steel-bridge/engine/drawings.js): COPY, to move to shared/ later (CLAUDE.md §3); keep a fix to one in step with the other.
+-     A block is { t: 'table', title, cols, rows } | { t: 'notes', title, lines, wc } | { t: 'head', lines: [[size × h, text]] }. The blocks of a
+-     sheet flow top-down in columns over the drawing area; a table taller than the area is continued ("(CONTINUED)"); blocks past the area's
+-     width go on the next sheet of the set (" (2 OF n)"). Nothing is calculated: each cell is a value of the model or the engine, formatted. */
+-  const asc = s => String(s == null ? '' : s).replace(/²/g, '2').replace(/³/g, '3').replace(/⁴/g, '4').replace(/≤/g, 'MAX.').replace(/≥/g, 'MIN.').replace(/<=/g, 'MAX.').replace(/>=/g, 'MIN.').replace(/√/g, 'SQRT ').replace(/φ/g, 'PHI ')
+-    .replace(/Δ/g, 'DELTA ').replace(/[·•]/g, '-').replace(/…/g, '...').replace(/[ₐ-ₜ]/g, '');
+-  function table(D, lL, lT, x, y, cols, rows, title) {
+-    const h = D.h, ch = h * 0.8, rh = 1.5 * h; let yy = y; const S = v => X_().str(asc(v == null ? '' : v)).toUpperCase();
+-    if (title) { D.text(lT, x, yy, h, S(title)); yy -= 1.7 * h; }
+-    const w = cols.map((c, i) => Math.max(S(c).length, ...rows.map(r => S(r[i]).length)) * ch * 0.95 + 2 * ch), W = w.reduce((a, b) => a + b, 0), xs = [x];
+-    w.forEach(v => xs.push(xs[xs.length - 1] + v));
+-    const top = yy + 0.2 * h; D.line(lL, x, top, x + W, top); const hy = yy - rh; cols.forEach((c, i) => D.text(lT, xs[i] + ch * 0.6, yy - 1.05 * h, ch, S(c))); D.line(lL, x, hy, x + W, hy);
+-    rows.forEach((r, j) => { const ry = hy - (j + 1) * rh; r.forEach((c, i) => D.text(lT, xs[i] + ch * 0.6, ry + 0.45 * h, ch, S(c))); D.line(lL, x, ry, x + W, ry); });
+-    const bot = hy - rows.length * rh; xs.forEach(xv => D.line(lL, xv, top, xv, bot));
+-    return { w: W, y: bot - 1.2 * h };
+-  }
+-  function notesBlk(D, lT, x, y, title, lines, wc) {
+-    const h = D.h; wc = wc || 90; if (title) D.text(lT, x, y, h, X_().str(asc(title)).toUpperCase()); let yy = y - (title ? 1.8 * h : 0);
+-    lines.forEach((s, i) => { const out = wrap([X_().str(asc(s)).toUpperCase()], wc);
+-      out.forEach((ln, j) => { D.text(lT, x + (j ? 2.2 * h : 0), yy, h * 0.8, j ? ln : `${i + 1}. ${ln}`); yy -= 1.35 * h; }); yy -= 0.3 * h; });
+-    return yy;
+-  }
+-  function headBlk(D, lT, x, y, lines) { let yy = y; lines.forEach(([sz, t]) => { D.text(lT, x, yy, sz * D.h, X_().str(asc(t)).toUpperCase()); yy -= (sz + 0.7) * D.h; }); return yy; }
+-  const blockDraw = (D, b, x, y) => { const lT = D.layer('TEXT', 7), lL = D.layer('TBL', 8);
+-    return b.t === 'notes' ? notesBlk(D, lT, x, y, b.title, b.lines, b.wc) : b.t === 'head' ? headBlk(D, lT, x, y, b.lines) : table(D, lL, lT, x, y, b.cols, b.rows, b.title); };
+-  function blockBox(b) { const D = X_().drawing({ prefix: 'S-' }); D.k = 1; D.h = TXT; blockDraw(D, b, 0, 0); return D.bbox(0); }   // plotted inches, origin (0, 0)
+-  /* blockPages(blocks, aw, ah): the pages [[{ b, x, y }]] of the blocks in the drawing area aw × ah (plotted inches; x, y the block's origin
+-     from the area's top left). A block { …, page: true } starts a new page. */
+-  function blockPages(blocks, aw, ah) {
+-    const gapY = 0.25, gapX = 0.5, list = [];
+-    blocks.forEach(b => { if (b.t !== 'table') { list.push(b); return; } let rows = b.rows, first = true;
+-      if (!rows.length) { list.push(b); return; }
+-      while (rows.length) { let n = rows.length; const part = m => ({ ...b, page: first && b.page, title: first ? b.title : `${b.title} (CONTINUED)`, rows: rows.slice(0, m) }); const H = m => { const q = blockBox(part(m)); return q[3] - q[1]; };
+-        while (n > 1 && H(n) > ah) n--; list.push(part(n)); rows = rows.slice(n); first = false; } });
+-    const pages = [[]]; let cx = 0, cy = 0, cw = 0;
+-    list.forEach(b => { const q = blockBox(b), w = q[2] - q[0], hh = q[3] - q[1];
+-      if (b.page && pages[pages.length - 1].length) { pages.push([]); cx = 0; cy = 0; cw = 0; }
+-      if (cy > 0 && cy + hh > ah) { cx += cw + gapX; cy = 0; cw = 0; }
+-      if (cx > 0 && cx + w > aw) { pages.push([]); cx = 0; cy = 0; cw = 0; }
+-      pages[pages.length - 1].push({ b, x: cx - q[0], y: -cy - q[3] }); cy += hh + gapY; cw = Math.max(cw, w); });
+-    return pages;
+-  }
+-  const pageFn = items => (D, C) => items.forEach(p => blockDraw(D, p.b, p.x * D.k, p.y * D.k));
+-  const f1 = v => typeof v === 'number' && isFinite(v) ? v.toFixed(1) : '-', fN = (v, d) => typeof v === 'number' && isFinite(v) ? v.toFixed(d) : '-';
+-  const ED = 'AASHTO LRFD BRIDGE DESIGN SPECIFICATIONS, 10TH ED. (2024)', MBE = 'AASHTO MANUAL FOR BRIDGE EVALUATION (MBE), 4TH ED. (2026), LRFR';
+-
+-  /* the cover: the project, the bridge, the owner; the sheet index (C.list: [n, title]), the sheets not in this set (C.miss), revisions */
+-  const ownersOf = TM => [...new Set(TM.types.map(t => window.PBD && window.PBD.ownerOf ? window.PBD.ownerOf(t.inp) : (t.inp.owner || 'AASHTO')))];
+-  function coverBlocks(P, TM, list, miss, date) {
+-    const pj = P.project || {}, L = (P.spans && P.spans.lengths) || [], sk = (P.xs && P.xs.skews) || [], nb = P.xs && P.xs.nb;
+-    const ow = window.PBD && window.PBD.OWN_RULES ? window.PBD.OWN_RULES.owners : {}, owners = ownersOf(TM);
+-    const head = { t: 'head', lines: [[3, pj.name || 'BRIDGE'], [1.6, 'PRESTRESSED CONCRETE GIRDER SUPERSTRUCTURE'],
+-      [1, `${L.length} SPAN${L.length > 1 ? 'S' : ''} (${L.map(v => f2(+v)).join(' + ')} FT)${L.length > 1 ? (P.spans.continuity === 'composite' ? ', MADE CONTINUOUS' : ', SIMPLE SPANS') : ''}`],
+-      [1, `${nb} GIRDER LINES, SKEW ${sk.map(v => f2(+v)).join(' / ')} DEG.`],
+-      ...(pj.number ? [[1, `PROJECT NO. ${pj.number}`]] : []), ...(pj.owner ? [[1, `OWNER / CLIENT: ${pj.owner}`]] : []),
+-      [1, `DESIGN RULES: ${owners.map(o => o === 'AASHTO' || !ow[o] ? 'AASHTO LRFD 10TH ED. (NO OWNER RULES)' : ow[o].manual).join('; ')}`]] };
+-    return [head, { t: 'table', title: 'SHEET INDEX', cols: ['SHEET', 'TITLE'], rows: list.map(([n, t]) => [String(n), t]) },
+-      ...(miss.length ? [{ t: 'table', title: 'DRAWINGS NOT IN THIS SET', cols: ['NOT GENERATED', 'REASON'], rows: miss.map(q => [q[0], String(q[1]).slice(0, 90)]) }] : []),
+-      { t: 'table', title: 'REVISIONS', cols: ['REV.', 'DATE', 'DESCRIPTION', 'BY'], rows: [['0', date, 'ISSUED FROM PRESTRESSED BRIDGE DESIGN (NEW APP)', pj.designer || ''], ['', '', '', ''], ['', '', '', ''], ['', '', '', '']] }];
+-  }
+-  /* general notes: the specifications and editions the app applies (named, not quoted), the owner rules, the materials and loads entered
+-     (each girder type's own values: its effective inputs, PSBDesign.cellInputs on its first line, as the girder sheets) */
+-  function notesModel(P, TM) {
+-    const pj = P.project || {}, dl = (P.xs && P.xs.dl) || {}, OWN = window.PBD && window.PBD.OWN_RULES, BRD = window.PSBBridgeDL;
+-    const T = TM.types, owners = ownersOf(TM);
+-    const lines = [`DESIGN SPECIFICATION: ${ED}, WITH THE LOAD AND RESISTANCE FACTORS OF THOSE SPECIFICATIONS AS THE ENGINE APPLIES THEM (WORKED ON THE OUTPUT TABS).`,
+-      `LOAD RATING: ${MBE} (RATING TAB).`,
+-      ...owners.filter(o => o !== 'AASHTO' && OWN && OWN.owners[o]).map(o => `OWNER RULES: ${OWN.owners[o].manual} (WRITTEN TO AASHTO LRFD ${OWN.owners[o].aashto}); THIS DESIGN APPLIES THE AASHTO LRFD 10TH ED. WITH THE OWNER'S RULES ON TOP (OWNER RULES TAB).`),
+-      ...(owners.every(o => o === 'AASHTO') ? ['OWNER RULES: NONE (AASHTO).'] : []),
+-      ...(pj.owner ? [`OWNER / CLIENT: ${pj.owner}.`] : []),
+-      `LIVE LOAD: HL-93${T.some(t => t.inp.loads && t.inp.loads.llAuto === false) ? ' (ENTERED MOMENT AND SHEAR ON SOME GIRDER TYPES: LOADS TAB)' : ''}${T.some(t => +(t.inp.opt && t.inp.opt.llMult) > 0 && +t.inp.opt.llMult !== 1) ? `, DESIGN LOAD MULTIPLIER ${[...new Set(T.map(t => f2(+(t.inp.opt.llMult || 1))))].join(' / ')} ON LL+IM` : ''}; DISTRIBUTION FACTORS ${T.every(t => t.inp.loads.dfAuto !== false) ? 'BY THE AASHTO EQUATIONS' : 'AS ENTERED OR BY THE AASHTO EQUATIONS (LOADS TAB)'} (LOADS & LLDF TAB).`,
+-      `DEAD LOADS: GIRDER SELF-WEIGHT, DECK AND HAUNCH (DC1); BARRIERS ${f2(+((dl.barL || {}).w) || 0)} / ${f2(+((dl.barR || {}).w) || 0)} KLF (LEFT / RIGHT, DC2); FUTURE WEARING SURFACE ${f1(+dl.fws)} PSF (DW)${dl.mode === 'distributed' && BRD && BRD.METHODS && BRD.METHODS[dl.method] ? `; DC2 AND DW DISTRIBUTED: ${BRD.METHODS[dl.method]}` : dl.mode === 'distributed' ? '' : '; DC2 AND DW ENTERED PER GIRDER (LOADS TAB)'}.`,
+-      `SPANS: ${P.spans.lengths.length > 1 && P.spans.continuity === 'composite' ? 'PRECAST GIRDERS ON SIMPLE SPANS FOR THE GIRDER AND DECK WEIGHT, MADE CONTINUOUS FOR THE COMPOSITE LOADS (CONTINUITY DIAPHRAGMS AT THE PIERS)' : 'SIMPLE SPANS FOR ALL LOADS'}.`,
+-      `PRESTRESS LOSSES: ${[...new Set(T.map(t => t.inp.opt.lossMethod === 'approx' ? 'APPROXIMATE LUMP-SUM ESTIMATE' : 'REFINED ESTIMATE'))].join(' / ')}; RELATIVE HUMIDITY ${[...new Set(T.map(t => f1(+t.inp.mat.H)))].join(' / ')} % (LOSSES TAB).`,
+-      `SERVICE III TENSION LIMIT: ${[...new Set(T.map(t => t.inp.opt.corrosion === 'severe' ? 'SEVERE CORROSION EXPOSURE' : 'MODERATE CORROSION EXPOSURE'))].join(' / ')} (STRESSES TAB).`,
+-      'PRESTRESSING STRAND: SEVEN-WIRE, LOW RELAXATION; SIZE, F_PU, JACKING STRESS AND E_P OF EACH GIRDER TYPE IN THE TABLE.',
+-      "CONCRETE AND REINFORCING STEEL OF EACH GIRDER TYPE IN THE TABLE (MATERIALS AND GIRDERS & STRANDS TABS): STRENGTHS IN KSI; W: THE UNIT WEIGHTS FOR DEAD LOAD, KCF; FY: STIRRUPS / BOTTOM BARS / SPLITTING STEEL (/ DECK BARS WHEN THE DECK IS DESIGNED).",
+-      'CAMBER MULTIPLIERS: PCI DESIGN HANDBOOK (CAMBER & DEFLECTION TAB).',
+-      'ALL DIMENSIONS TO BE VERIFIED AGAINST THE CONTRACT DRAWINGS. GENERATED BY PRESTRESSED BRIDGE DESIGN (NEW APP).'];
+-    const rows = T.map(t => { const m = t.inp.mat, s = t.inp.str, o = t.inp.opt, dk = t.inp.deck || {};
+-      return [t.label, String(t.span), t.girder, f2(+m.fc), f2(+m.fci), f2(+m.fcd), `${fN(+m.wcLoad, 3)} / ${fN(+m.wcdLoad, 3)}`, String(s.size).replace(/\s*in$/i, '"'), f1(+s.fpu), f2(+s.jack), String(Math.round(+s.Ep)),
+-        `${f1(+o.fy)} / ${f1(+o.longFy)} / ${f1(+o.splitFy)}${dk.on ? ` / ${f1(+dk.fyd)}` : ''}`]; });
+-    return [{ t: 'notes', title: 'GENERAL NOTES', lines, wc: 100 },
+-      { t: 'table', title: 'MATERIALS BY GIRDER TYPE (UNITS: SEE THE NOTES)',
+-        cols: ['TYPE', 'SPAN', 'SECTION', "F'C", "F'CI", "F'C DECK", 'W GIRDER / DECK', 'STRAND', 'F_PU', 'F_PJ / F_PU', 'E_P', 'FY'], rows }];
+-  }
+-  /* the design summary: per girder type the governing check of each check group over its lines and the lowest HL-93 inventory RF (the
+-     Summary tab's "Governing check of each group, per girder type", PSBSummaryUI.model over PSBBridge.results: the engine's values) */
+-  const ST = q => !q.pass ? 'FAIL' : !(typeof q.r === 'number' && isFinite(q.r)) ? 'REVIEW' : 'PASS';
+-  function summaryRows(P, A) {
+-    const M = window.PSBSummaryUI.model(P, A), rows = [];
+-    M.types.forEach(T => { const ln = T.lines.map(z => 'G' + z.c.g).join(' ');
+-      M.used.forEach(gp => { const z = T.groups[gp.id]; if (!z) return; const q = z.q;
+-        rows.push([T.label, String(T.span), ln, gp.name, q.n, 'G' + z.g, z.gp.input ? '-' : fN(q.loc, 2), fN(q.v, 3), fN(q.lim, 3), q.u || '', fN(q.r, 3), ST(q)]); });
+-      if (T.rf) rows.push([T.label, String(T.span), ln, 'Rating (HL-93 inventory)', T.rf.n, 'G' + T.rf.g, '-', '-', '-', 'RF', fN(T.rf.v, 3), T.rf.v >= 1 ? 'RF 1.0 OR MORE' : 'RF UNDER 1.0']); });
+-    return { M, rows };
+-  }
+-  function summaryBlocks(P, A) {
+-    const { M, rows } = summaryRows(P, A);
+-    return [{ t: 'head', lines: [[1.6, 'DESIGN SUMMARY'], [1, `${M.nF ? `FAIL: ${M.nF} CHECK${M.nF > 1 ? 'S' : ''} OVER 1.0` : 'PASS'}; ${M.n} GIRDER LINE${M.n === 1 ? '' : 'S'} CHECKED`]] },
+-      { t: 'notes', title: '', wc: 100, lines: [`${ED}. ONE ROW PER GIRDER TYPE AND CHECK GROUP: THE CHECK WITH THE LARGEST RATIO (DEMAND / LIMIT, THE ENGINE'S) OVER THE TYPE'S LINES, ITS LINE AND STATION X FROM THE LEFT CL BEARING. A RATIO UP TO 1.0 PASSES.`,
+-        'RATING: THE LOWEST HL-93 INVENTORY RATING FACTOR OF THE TYPE (FLEXURE, SHEAR, SERVICE III; NOT A CHECK); AN RF OF 1.0 OR MORE PASSES. THE FAIL COUNT ABOVE: ONE PER GIRDER TYPE PER CHECK, ITS WORST LINE.',
+-        'WORKED: THE OUTPUT TAB OF EACH GROUP (STRESSES, FLEXURE, SHEAR, END ZONE & HOLD-DOWN, CAMBER & DEFLECTION, HANDLING, DECK, RATING); THE SUMMARY TAB LINKS EACH VALUE TO ITS STEP.'] },
+-      { t: 'table', title: 'GOVERNING CHECK OF EACH CHECK GROUP PER GIRDER TYPE',
+-        cols: ['TYPE', 'SPAN', 'LINES', 'GROUP', 'GOVERNING CHECK', 'LINE', 'X (FT)', 'DEMAND', 'LIMIT', 'UNIT', 'RATIO / RF', 'STATUS'], rows }];
+-  }
+-
+   /* one sheet (adapted copy of the steel app's sheet()): the smallest plot scale (not below S.kmin) at which the drawing fits the drawing
+      area; the drawing placed top left at x offset ox; border, inner border and title block at the plot scale */
+   function sheet(D, S, ox, C) {
+@@ -328,19 +219,11 @@
+     return { n: S.n, title: S.title, id: S.id, s: S.c.s, k, W, H, ox, i0, iC, i1: D.mark(), over, paper: S.paper };
+   }
+ 
+-  /* build(P, opt): the drawing set. Part 1: the typical section of each span (one sheet; one per span when there are several spans) and
+-     the framing plan; part 2: each girder type's elevation and strand pattern, the schedule; part 3 (batch H1): the cover and sheet index
+-     first, the general notes second, the design summary last (opt.all(): PSBBridge.results of every girder type on every line, the page's
+-     cache; absent: computed here by the same call). A figure that cannot be drawn (its model's errors) is listed in miss. */
++  /* build(P, opt): the sheets of part 1: the typical section of each span (one sheet; one per span when there are several spans) and
++     the framing plan. A figure that cannot be drawn (its model's errors) is listed in miss. */
+   function build(P, opt) {
+     opt = opt || {}; const D = X_().drawing({ prefix: 'S-' }), errors = [], miss = [];
+     const C = { P, date: opt.date || new Date().toISOString().slice(0, 10) }, list = [];
+-    const [pw, ph] = PAPER[opt.paper] || PAPER.D, aw = pw - 2.25, ah = ph - 4.55;
+-    const memo = new Map(), resI = inp => { const key = JSON.stringify(inp); if (!memo.has(key)) { let R; try { R = window.PSBHoldDown.compute(JSON.parse(key)); } catch (e) { R = { error: e.message }; } memo.set(key, R); } return memo.get(key); };
+-    const o2 = { ...opt, res: opt.res || ((k, g) => resI(window.PSBDesign.cellInputs(P, k, g))) };
+-    /* the sheets of a list of blocks: one sheet, or "(i OF n)" when they need more */
+-    const addBlocks = (id, title, blocks) => { const pg = blockPages(blocks, aw, ah);
+-      pg.forEach((items, i) => list.push({ id: i ? `${id}${i + 1}` : id, title: pg.length > 1 ? `${title} (${i + 1} OF ${pg.length})` : title, fn: pageFn(items), c: { ...C }, kmin: 1 })); };
+     const ns = (P.spans && P.spans.lengths || []).length;
+     for (let s = 1; s <= Math.max(ns, 1); s++) {
+       let xs; try { xs = window.PSBXsFig.model(P, s); } catch (e) { xs = { errors: [e.message] }; }
+@@ -351,35 +234,20 @@
+     if (pl.errors && pl.errors.length) miss.push(['FRAMING PLAN', pl.errors.join(' ').toUpperCase()]);
+     else list.push({ id: 'plan', title: 'FRAMING PLAN', fn: plan, c: { ...C, pl }, kmin: 48 });
+     // part 2 (item B): each girder type's elevation and strand pattern, then the schedule of every type
+-    let TM; try { TM = typeModels(P, o2); } catch (e) { TM = { types: [], miss: [['GIRDER SHEETS', String(e.message).toUpperCase()]] }; }
++    let TM; try { TM = typeModels(P, opt); } catch (e) { TM = { types: [], miss: [['GIRDER SHEETS', String(e.message).toUpperCase()]] }; }
+     TM.miss.forEach(q => miss.push(q));
+     TM.types.forEach(t => {
+       list.push({ id: `elev${t.k}`, title: `GIRDER ${t.label.toUpperCase()}: ELEVATION`, fn: elevation, c: { ...C, t }, kmin: 12 });
+       list.push({ id: `strd${t.k}`, title: `GIRDER ${t.label.toUpperCase()}: STRAND PATTERN`, fn: strands, c: { ...C, t }, kmin: 2 });
+     });
++    const aw = (PAPER[opt.paper] || PAPER.D)[0] - 2.25;
+     if (TM.types.length) list.push({ id: 'sched', title: 'STRAND AND GIRDER SCHEDULE', fn: schedule, c: { ...C, types: TM.types, aw }, kmin: 1 });
+-    // part 3 (batch H1): the design summary (every girder type on every line)
+-    if (TM.types.length) { let A = null, why = '';
+-      try { A = (opt.all && opt.all()) || window.PSBBridge.results(P, resI); } catch (e) { why = e.message; }
+-      if (A && A.cells && A.cells.length && window.PSBSummaryUI) { try { addBlocks('summ', 'DESIGN SUMMARY', summaryBlocks(P, A)); } catch (e) { miss.push(['DESIGN SUMMARY', String(e.message).toUpperCase()]); } }
+-      else miss.push(['DESIGN SUMMARY', (why || 'NO RESULTS OF EVERY GIRDER TYPE ON EVERY LINE').toUpperCase()]); }
+     if (!list.length) errors.push('Nothing to draw: ' + miss.map(q => q.join(': ')).join('; '));
+-    // the general notes (second) and the cover with the sheet index (first): the cover's own sheets counted in the index
+-    const head = [];
+-    const notesL = []; if (TM.types.length) { const pg = blockPages(notesModel(P, TM), aw, ah); pg.forEach((items, i) => notesL.push({ id: i ? `notes${i + 1}` : 'notes', title: pg.length > 1 ? `GENERAL NOTES (${i + 1} OF ${pg.length})` : 'GENERAL NOTES', fn: pageFn(items), c: { ...C }, kmin: 1 })); }
+-    let nC = 1, cpg = null;
+-    for (let it = 0; it < 5; it++) {
+-      const titles = [...Array.from({ length: nC }, (_, i) => nC > 1 ? `COVER AND SHEET INDEX (${i + 1} OF ${nC})` : 'COVER AND SHEET INDEX'), ...notesL.map(q => q.title), ...list.map(q => q.title)];
+-      cpg = blockPages(coverBlocks(P, TM, titles.map((t, i) => [i + 1, t]), miss, C.date), aw, ah); if (cpg.length === nC) break; nC = cpg.length;
+-    }
+-    cpg.forEach((items, i) => head.push({ id: i ? `cover${i + 1}` : 'cover', title: cpg.length > 1 ? `COVER AND SHEET INDEX (${i + 1} OF ${cpg.length})` : 'COVER AND SHEET INDEX', fn: pageFn(items), c: { ...C }, kmin: 1 }));
+-    const all = errors.length ? list : [...head, ...notesL, ...list];
+     let ox = 0; const sheets = [];
+-    const wr = Math.floor(aw * 0.8 / TXT);   // note characters per line: 80 % of the drawing width
+-    all.forEach((S, i) => { S.c.wrap = wr; const r = sheet(D, { ...S, paper: opt.paper || 'D', n: i + 1, of: all.length, half: !!opt.half }, ox, C); sheets.push(r); ox += r.W + 2 * r.k * 12; });
++    const wr = Math.floor(((PAPER[opt.paper] || PAPER.D)[0] - 2.25) * 0.8 / TXT);   // note characters per line: 80 % of the drawing width
++    list.forEach((S, i) => { S.c.wrap = wr; const r = sheet(D, { ...S, paper: opt.paper || 'D', n: i + 1, of: list.length, half: !!opt.half }, ox, C); sheets.push(r); ox += r.W + 2 * r.k * 12; });
+     return { D, sheets, miss, errors };
+   }
+ 
+-  window.PSBSheets = { PAPER, SCALES, SCALE_NAME, TXT, build, sheet, section, plan, typeModels, elevation, strands, schedule,
+-    blockPages, blockBox, coverBlocks, notesModel, summaryRows, summaryBlocks };
++  window.PSBSheets = { PAPER, SCALES, SCALE_NAME, TXT, build, sheet, section, plan, typeModels, elevation, strands, schedule };
+ })();
 ```
 
 ## 2026-11-15 — Batch G7 / G9: the splitting steel orientation graphic for slabs and box beams (End zone tab, drawn from the section) and the old app's "↩ MCT Analysis" header button when opened from the MCT Generator (display / navigation only)
