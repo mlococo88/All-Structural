@@ -7711,7 +7711,7 @@ index e4101ff..49912dd 100644
      VK().detCard(slot, { id: 'secFig', title: 'Composite section and strands', sub: `${k.esc(ctx.inp.girder)}, design girder ${k.esc(R.rv ? ctx.inp.proj.girderId : '')}`,
 
 ## 2026-11-15 — Batch G4 / G6: the Compare tab (the old app's design sweep over span, girder section or spacing) and the Nomenclature tab (the symbols with their live values, search, § links) (display only)
-PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__
+PR #1583: https://github.com/mlococo88/All-Structural/pull/1583
 ### Request
 - Old-vs-new review 2026-11-15, rows #65 (Compare tab: design sweep, O:8009-8034, engine sweepDesign already moved) and #91 (Nomenclature tab, ≈ 80 symbols with live values and a search box, O:8815-8960), in the Steel Bridge app's formats.
 ### What changed
