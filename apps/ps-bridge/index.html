@@ -57,6 +57,7 @@
     'engine/fields.js',      // PR 2b: every engine input on its input tab (label, unit, tooltip, rule)
     'engine/inputcheck.js',  // PR 2b: the blocking input errors (the steel app's pattern)
     'engine/legacy.js',      // PR 2f: "From the old app": read-only import of the old app's saved designs and Export JSON files
+    'engine/handoffs.js',    // 2026-11-14 (item 12): the old app's bridgeSuite.v1.* hand-off payloads (its code; formats unchanged)
     'engine/autodesign.js',  // item A (2026-11-14): Auto design, a search over each girder type's inputs judged by the page's own engine call (no new formula)
     'engine/worked.js',      // PR 2b-2: the worked steps of the Section properties, Loads & LLDF and Analysis tabs (values = the engine's)
     'engine/worked-stress.js', // PR 2c-1: the worked steps of the Losses and Stresses tabs (values = the engine's)
@@ -77,6 +78,8 @@
     'ui/bridgedl.js',    // PR 3a-3: the Cross-section tab's DC2 / DW distribution card and the Loads & LLDF line table
     'ui/types.js',       // PR 3a-1: the girder types card, the "entered values for" choice, the type and line choice above the output tabs
     'ui/legacy.js',      // PR 2f: the Project tab's "From the old app" card and the import summary
+    'ui/bridgexfer.js',  // 2026-11-14 (item 12): BridgeXfer v1 (HANDOFF.md §5, verbatim)
+    'ui/handoffs.js',    // 2026-11-14 (item 12): the Project tab's Hand-offs card (the old app's channels, keys and formats)
     'ui/inputcheck.js',  // PR 2b: the input errors on the page (copy of apps/steel-bridge/ui/inputcheck.js)
     'ui/vizkit.js',      // PR 2b-2: the steel graphic style (copy of apps/steel-bridge/ui/vizkit.js)
     'ui/vizalong.js',    // PR 2b-2: the steel along-girder charts (copy of apps/steel-bridge/ui/vizalong.js)
@@ -348,6 +351,8 @@
      psb2.ui. Only the Project, Bridge layout and Cross-section inputs of schema v1 are editable; every other tab is a placeholder naming
      what it will hold and the PR that brings it (docs/ps-bridge-plan.md §2.2, §2.3, §5). Nothing is calculated. */
   const M = window.PSBModel, BR = window.PSBBridge, TY = window.PSBTypesUI, DLUI = window.PSBBridgeDLUI;
+  const HOUI = window.PSBHandoffUI;   // 2026-11-14 (item 12): the Hand-offs card
+  const hoCell = () => { const c = BR.hasTypes(P) ? BR.shown(P) : null; return c ? Object.assign({ label: P.types[c.k].label }, c) : null; };
   const $ = id => document.getElementById(id), esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const store = (() => { try { const k = '__psb2_probe'; localStorage.setItem(k, '1'); localStorage.removeItem(k); return localStorage; } catch (e) { return null; } })();
   const memStore = { getItem: () => null, setItem: () => {}, removeItem: () => {} }, LS = store || memStore;
@@ -400,7 +405,7 @@
         + card('Project', ['name', 'number', 'owner', 'designer', 'checker', 'date'].map(k => num('project.' + k, k === 'owner' ? 'Client name (title block, optional)' : k[0].toUpperCase() + k.slice(1), '', { text: true })).join('')
           + num('project.notes', 'Notes', '', { text: true }))
         + IN.cards('proj', P)
-        + ph('Hand-offs', '9', ['to and from the other tools, from the switch-over (PS-14): bearings to Elastomeric Bearing Design, every girder\'s reactions to Substructure Loading; before that, by file only']),
+        + HOUI.card(P, hoCell()),   // 2026-11-14 (item 12): the old app's hand-offs (ui/handoffs.js)
       layout: card('Spans', `${sel('spans.continuity', 'Continuity', [['simple', 'Simple spans'], ['composite', 'Made continuous for composite loads (5.12.3.3)']])}
           ${list('spans.lengths', 'Span lengths', '')}
           <p class="note">One row per span, left to right (Enter adds a row; a pasted list is split into rows). Total ${fmt(M.totalLength(P), 2)} ft. Made continuous: girder and DC1 simple; DC2, DW and live load continuous; restraint moments switchable (as the old app, PS-7).</p>`)
@@ -481,6 +486,9 @@
   const resize = (a, n, fill) => { const b = (a || []).slice(0, Math.max(0, n)); while (b.length < n) b.push(b.length ? b[b.length - 1] : fill); return b; };
   $('inTabs').addEventListener('click', e => { const b = e.target.closest('[data-itab]'); if (!b) return; ui.itab = b.dataset.itab; saveUi(); drawInputs(); });
   const IN = window.PSBInputsUI, LGUI = window.PSBLegacyUI;
+  /* 2026-11-14 (item 12): the Hand-offs card (ui/handoffs.js): the girder type and line the output tabs show, its engine inputs and result */
+  const hoCtx = { P: () => P, result: () => (errs.length ? null : result()), cell: () => hoCell(), changed: () => changed() };
+  HOUI.init();   // the "new data" marks follow the other tools' sends (storage event)
   /* PR 2f: "From the old app" (ui/legacy.js): an import replaces the open project, as Import JSON does (asked first there) */
   const lgCtx = { store: LS, gotoOut: t => gotoOut(t), pickFile: () => pb.importJSON(),   // PR 5: asks first on unsaved changes, then the file chooser
     replace: Q => { BR.migrate(Q); const rn = window.PSBLegacy.restore(Q); if (window.PSBSections) window.PSBSections.migrate(Q); ui.itab = 'proj'; loadAs(Q, null); if (rn) toast(rn); } };   // PR 3a-4 (PS-17): the old model's other designs restored; PR 5: not a saved project (chip "not saved")
@@ -525,6 +533,7 @@
     if (go) { e.preventDefault(); ui.itab = go.dataset.goin; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; return; }
     { const gt = t.closest('[data-gotab]'); if (gt) { e.preventDefault(); gotoOut(gt.dataset.gotab); return; } }   // PS-35: an input note's link to an output tab (the Loads input tab's J note)
     if (LGUI.onClick(e, lgCtx)) return;
+    if (HOUI.onClick(e, hoCtx)) return;
     if (window.PSBAutoDesignUI.onClick(e, adCtx())) return;   // item A: Run / Stop / the output tab
     if (DLUI.onClick(e, P)) { changed(); return; }   // PR 3a-3: the added line loads
     if (t.closest('[data-ty]') && !t.closest('select, input')) { typesDone(TY.onClick(e, P, ui)); return; }   // PR 3a-1

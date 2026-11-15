@@ -3808,6 +3808,58 @@ PR #1560: https://github.com/mlococo88/All-Structural/pull/1560
 ### Other copies
 - apps/steel-bridge/engine/sheets.js `sheet()` and apps/steel-bridge/engine/drawings.js SCALES / SCALE_NAME / TXT; apps/steel-bridge/ui/drawings.js (the tab's bar, viewer and print wiring). Keep in step.
 
+## 2026-11-14 — Item 12: the old app's cross-tool hand-offs (bridgeSuite.v1.*) in the new app — same keys, schemas and payloads; Project tab "Hand-offs" card (no calculation change)
+PR #1566: https://github.com/mlococo88/All-Structural/pull/1566
+### Request
+- Planned item 12: the new app sends and receives the same `bridgeSuite.v1.*` hand-offs as the old app (`Prestressed Bridge Design.html`), with identical key names and payload formats (CLAUDE.md §5; HANDOFF.md). Prefer changing only apps/ps-bridge. Node tests of every payload round trip. Not the switch-over itself.
+### Inventory: the old app's channels (sender → receiver, key) and what the new app does
+| Channel / key | Old app | New app (this PR) |
+|---|---|---|
+| `superReactions`, `.updatedAt`, copy `.by.psbeam` (bridge-super-reactions) | sends (button) → Bridge Substructure Loading | **sends** (button), the old app's `bxSuperRxPayload` (moved engine, verbatim), producer `PS-Beam`, same copy key |
+| `lldfGeom` (bridge-lldf-geometry) | sends (button; auto while the geometry lock is on) → LL & DL | **sends** (button), port of `sendLLDF` |
+| `psSection`, `.updatedAt` (bridge-ps-section) | sends on every recompute → MCT generator, LL & DL | **sends** (button), port of its publisher |
+| `capacity`, `.updatedAt` (bridge-design-capacity) | sends (button; auto while locked) → MCT rating | **sends** (button), port of `publishCapacity` |
+| `projectMeta`, `.updatedAt` (bridge-project-meta) | Share / Use (buttons) ↔ every tool | **Share / Use** (buttons) |
+| `lldf` (bridge-lldf-factors) | receives (Pull; lock auto-follow) ← LL & DL | **receives** (Pull, confirm), port of `lldfResolveFor` / `lldfTheirsFor` / `applyLLDFTo` |
+| `dlLoads` (bridge-dl-loads) | receives (Pull; lock) ← LL & DL | **receives** (Pull, confirm), port of `dlResolveFor` / `dlTheirsFor` / `applyDLTo` |
+| `handoffs`, `latestId`, `updatedAt`, `adopted.psbeam` (MCT demands, psbeam-external-demands) | receives ← MCT generator | not yet (open item: the new app has no imported MIDAS demands in its design; `P.legacy` keeps them unused) |
+| `designBeam`, `beamRoster` | reads / writes ↔ LL & DL, MCT | not yet (open item); the lldf pull takes the line shown as the design beam (HO-D5) |
+| `geometryChanges`, `.adopted.psbeam` | receives (notice) ← MCT | not yet (open item; a notice for the MCT demands) |
+| `locks`, `syncLog.*`, `lockSnap.*` (BridgeLocks) | auto-follow / auto-publish | not in the new app (HANDOFF.md §3.1, §3.7: pull and send on click) |
+| `appPaths` | records its file | not written (switch-over) |
+| `projects`, `currentProjectId`, `migrated.psbeam` | its slice of the shared project list | read only ("From the old app", PR 2f); switch-over |
+| bearings → Elastomeric Bearing Design | none (postMessage is abutment ↔ EDM only) | none (plan item 9, at the switch-over, PS-14 c) |
+### What changed
+- New `engine/handoffs.js` (`window.PSBHandoffs`, no DOM, no storage): `srPayload` (calls the moved engine's `bxSuperRxPayload`), `psSection`, `capacity`, `lldfGeom` (the old app's code for each payload: the same fields, order, rounding and texts; anchors `const cp=R.cp, g=R.g;`, `const publishCapacity=(silent)=>{`, `const sendLLDF=(silent)=>{` of the old page), `lldfResolve` / `lldfTheirs` / `lldfFields`, `dlResolve` / `dlTheirs` (the old app's `lldfResolveFor`, `lldfTheirsFor`, `applyLLDFTo`, `dlResolveFor`, `dlTheirsFor`, with the stored text and the design beam passed in), `applyLoads(P, cell, fields)` (the fields to the girder type shown: `PSBBridge.effBase` + `setOvr`, as an edit of that type), `dlBlocked(P, g)`, `pmFields` / `pmPlan` (projectMeta: projectName ↔ Name, jobNo ↔ Number, client ↔ Client name, preparedBy ↔ Designer, checkedBy ↔ Checker, date ↔ Date; bridgeId and location sent blank; Use never blanks a field and lists only what differs, the old `BXProject.use` rule).
+- New `ui/bridgexfer.js`: BridgeXfer v1, the HANDOFF.md §5 block verbatim (the same text as apps/steel-bridge/ui/bridgexfer.js).
+- New `ui/handoffs.js` (`window.PSBHandoffUI`): the Project tab's "Hand-offs" card (replaces the placeholder `ph('Hand-offs', '9', …)`): Use / Share project info; Pull distribution factors, Pull DC2 / DW (with "new data" from `BridgeXfer.isNew`, receiver id `psbridge`); Send reactions to Substructure Loading + Export hand-off (JSON); Send geometry to LL & DL, Send section properties, Send capacity to the MCT rating, each + Export (JSON). The confirm and alert texts are the old app's. A pull writes `bridgeSuite.v1.<channel>.adopted.psbridge`.
+- `index.html`: the three scripts; `HOUI.card(P, hoCell())` in the Project pane; `hoCtx` and `HOUI.onClick` in the input panel's click handler; `HOUI.init()` (storage event: the new-data marks).
+- HANDOFF.md: the table rows of `lldfGeom`, `lldf`, `dlLoads`, `superReactions` name the new app; new §4.16.
+- Tests: `tests/engine/psbridge-handoffs.test.mjs` (new, below); `tests/engine/psbridge-model.test.mjs`: the page's script list; the "no Bridge Suite key" check now allows, in ui/handoffs.js and ui/bridgexfer.js only, exactly the old app's channel keys listed there. New smoke `tests/smoke/ps-bridge-handoffs.mjs`.
+### Saved data (CLAUDE.md §5)
+- No psb2.* key or project field is added; a pull writes the girder type's existing override fields (`loads.dfAuto`, `loads.llAuto`, `loads.dfm`, `loads.dfv`, `loads.fatM`, `loads.wBar`, `loads.wDW`), as an edit on the tabs does. The sent keys and payloads are the old app's (byte-identical text from the same engine inputs and result, producedAt aside; `superReactions` `producerFile` is `apps/ps-bridge/index.html`, HO-D7). New keys only: the adoption markers `bridgeSuite.v1.lldf.adopted.psbridge`, `bridgeSuite.v1.dlLoads.adopted.psbridge` (HANDOFF.md §2 pattern). Nothing is written until a click.
+### Governing provisions (CLAUDE.md §4)
+- None changed. No formula, factor, unit or code reference: each payload carries the engine's values as the old app sent them (the capacity basis text unchanged: AASHTO LRFD 10th Ed. as the old app states it).
+### Check case
+- Harness B default design (BT-72, interior G2, simple 120 ft span): superReactions, psSection, capacity and lldfGeom from the new app = the old page's code on the same inputs, the same JSON text; lldf pull of `governing.interior` gM 0.612345 / gV 0.701234 / fatM 0.41234 with no design beam (LL & DL Nb ≠ 5 or none): DFm = 0.6123, DFv = 0.7012, fatigue DF = 0.4123, DF auto off; with LL & DL Nb = 5 and line G2 shown: its `byBeam['2']` (0.6333, 0.7111, 0.42). dlLoads DC2 0.123456 / DW 0.2345678 → 0.1235 / 0.2346 klf.
+### How verified
+- `tests/engine/psbridge-handoffs.test.mjs` (7 tests): 22 designs (the 19 of harness B and three typed new projects: one span, two spans made continuous, exterior G1 shown): each payload = the old page's code (cut at its anchors from the pinned text) run on the same engine inputs and result, in the old page's compiled context (19 designs; the other 3 use a section of this app's corrected library, PS-30 / PS-32, which the old library cannot compute) and in this app's engine context (22): identical JSON text. What the page sends (this app's own result) = what the old app sent for 18 of 19; the one that differs is the solid deck slab, whose shear capacity φVn differs because this app's own results differ there (PS-36, §4, merged). lldf: 7 payloads (full, no negative region, slab strip, v2, no exterior, unreadable, none) × 4 design beams × 11 designs: the resolve = the old app's (and the refusal texts), and after a pull the new app's engine inputs = the old app's inputs after its own apply (every result the same); dlLoads: 6 payloads × 8 designs, the same; a typed project's other types unchanged; projectMeta mapping; ui/bridgexfer.js = HANDOFF.md §5; the stamped superReactions = the old stamp except producerFile.
+- Smoke `tests/smoke/ps-bridge-handoffs.mjs`; harness B and the PS smokes (see the PR).
+### Decisions (pending engineer review)
+- HO-D1. The new app sends on the old app's keys as `PS-Beam` (and `superReactions.by.psbeam`) before the switch-over, as asked for item 12. The plan's old Q18 ("no hand-offs from the new app before switch-over, so two apps never publish as psbeam", docs/ps-bridge-plan.md §7 item 4) is read as superseded by that request: both apps may now send on the same key, and the last send wins, as with two open copies of the old app. The card says so.
+- HO-D2. Every send is a click (no auto-publish of psSection on each recompute, no locks): HANDOFF.md §3.7 / §3.1; the receiving tools read the keys as before.
+- HO-D3. The girder hand-offs are for the girder type and line shown on the output tabs (one girder line, as the old app's one design). Every girder's reactions (`allGirders`) is the switch-over item (plan item 9).
+- HO-D4. lldfGeom carries what the old app built from its one design: one span (the design span L) and equal spacings (the line's S), not the bridge's spans and bays; superReactions likewise for the line shown (continuous units: the old app's continuous-unit end shears).
+- HO-D5. The lldf pull takes the line shown as the old app's design beam (its `byBeam` entry) when LL & DL's girder count equals the bridge's; otherwise the interior / exterior envelope (`governing`, all spans), as the old app without a design beam. It writes the girder type shown, so every line of that type gets the factors.
+- HO-D6. dlLoads: refused (nothing changed, the message says why) while the project distributes DC2 / DW to the girder lines (Cross-section tab), since entered values would not be used.
+- HO-D7. `producerFile` of the stamped superReactions / projectMeta is `apps/ps-bridge/index.html` (the old app wrote its own file name; no receiver reads it, HANDOFF.md §4.4).
+- HO-D8. Adoption markers under the new receiver id `psbridge`, so the old app's own markers are untouched.
+### Open items
+- Not ported yet (each needs a decision or a feature of its own): the MCT demands hand-off (imported MIDAS demands into the design), designBeam / beamRoster, geometryChanges, the channel locks; "Import hand-off (JSON)" for lldf / dlLoads (the old app had none).
+- Switch-over (not done here): see the PR's checklist.
+### Other copies
+- `ui/bridgexfer.js` = HANDOFF.md §5 = apps/steel-bridge/ui/bridgexfer.js and the copies in the other tools (CLAUDE.md §3). The payload code in `engine/handoffs.js` is the old app's (frozen); the bootstrap/handoff block at the top of index.html, lldf.html and Prestressed Bridge Design.html is not copied or changed.
+
 ## 2026-11-14 — Item A: Auto design (engine/autodesign.js, ui/autodesign.js): a search over each girder type's section, strands, draping and f′c / f′ci, judged by the page's own engine call; candidates per span, Apply as one Undo step (inputs only; no calculation change)
 PR #1562: https://github.com/mlococo88/All-Structural/pull/1562
 ### Request
