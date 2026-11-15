@@ -74,10 +74,18 @@
     // governing ratio of each check group per girder type with its line and a "see §" reference to the section that works the group, and
     // the weights per line, per type and the bridge total (SB-6)
     if (B.all && B.all.n > 1 && window.PSBSummaryUI) subs.splice(1, 0, allSub(B, X, null));
+    if (X.u == null) { const el = elevSub(X); if (el) subs.splice(1, 0, el); }   // 2026-11-15 (batch C): the Summary's girder elevations (one worked girder; several: after the tables)
     if ((R.warns || []).length) subs.push(sub('warn', `Design warnings of the engine (${R.warns.length})`, R.warns.map(w => note(plain(w), true))));
     return { title: 'Summary of checks', subs };
   }
 
+  /* elevSub(X): 2026-11-15 (batch C; the steel report's §1 summary figure): the Summary tab's girder elevation of each girder type on its
+     governing line (opt.sumFig from ui/report.js; none in Node), each check where it governs, as figures with the list of the checks drawn */
+  function elevSub(X) {
+    const F = X.sumFig; if (!F || !F.length) return null;
+    return sub('el', 'Girder elevations: where each check governs', [].concat(...F.map(f => [{ type: 'figure', caption: f.cap, svg: f.svg }, note(`Drawn: ${plain(f.list)}.`)])),
+      note('The Summary tab\'s elevation of each girder type (the [[tab:sum|Summary tab]]): the strands, the transfer and development lengths and the governing check of each check group at its station, coloured by its ratio (green below 0.90, amber 0.90 to 1.00, red above 1.00). Each check is worked in the section of its group.'));
+  }
   /* the Report's tables of every girder type and line (PR 3b): the girder × span grid, the governing ratio of each check group per type,
      the weights. M (PS-25, several worked units) = { sec(tab, k, g) -> the section key that works that type × line's group, shown, works,
      worked: texts }; null: one worked girder (the sections rs.<tab>) */
@@ -318,7 +326,7 @@
   /* ---------- 3–14. the result tabs ---------- */
   function tabSec(B, k, X) {
     const [ui, wk] = TABS[k], U = window[ui], FT = window.PSBReportTab;
-    const html = U.output({ P: B.P, inp: B.inp, R: B.R, W: B.W, ui: {} });   // ui {}: each chooser at its default (the governing / midspan station)
+    const html = U.output({ P: B.P, inp: B.inp, R: B.R, W: B.W, ui: X.every ? { every: true } : {} });   // ui.every (2026-11-15, batch C): the Report's "every station" detail   // ui {}: each chooser at its default (the governing / midspan station)
     const C = FT.cards(html, { tab: k, X, sec: k, inReport: X.inReport, figs: X.figs && X.figs[k] });   // figs: the tab's own graphics at their slots (ui/report.js)
     const subs = [], gTop = C.top.filter(i => i.type === 'figure'), nTop = C.top.filter(i => i.type !== 'figure');
     if (gTop.length) subs.push(sub('g', 'Graphics', gTop));
@@ -415,7 +423,7 @@
       const M = { sec: (tab, k, g) => (k == null ? `rs.${tab}@u0` : secKey(tab, k, g)), shown: B.mode === 'all' ? 'each girder type on each of its lines' : 'each girder type on its governing line',
         works: `This report works ${B.mode === 'all' ? 'every girder type on every line' : 'each girder type on its governing line (the line with its largest check ratio; on a tie, the next largest)'}: ${list}. ${B.mode === 'all' ? '' : 'The other lines are the rows of the tables below, each pointing to its type\'s sections; their steps are on the result tabs with that type and line chosen (the [[tab:sum|Summary tab]] lists them).'}`,
         worked: `Worked: the section of this report that works the group for that girder type (${B.mode === 'all' ? 'on the line named' : 'on its governing line'}).` };
-      subs.unshift(allSub(B, X, M));
+      subs.unshift(allSub(B, X, M)); { const el = elevSub(X); if (el) subs.splice(1, 0, el); }   // 2026-11-15 (batch C): the Summary's girder elevations
       s1 = { title: 'Summary of checks', subs };
     } catch (e) { X.u = null; X.R = null; s1 = fail('sum', e); }
     if (on('sum')) secs.push({ id: 'sum', key: 'rs.sum', ...s1 }); else { dropped.push({ key: 'rs.sum', ...s1 }); for (let j = vals.length - 1; j >= 0; j--) if (vals[j].sec === 'sum') vals.splice(j, 1); }
@@ -439,7 +447,7 @@
     const inc = opt.include || null, on = k => !inc || inc[k] !== false, P = B.P, p = P.project || {}, R = B.R;
     const vals = [];
     const own = B.inp.owner && B.inp.owner !== 'AASHTO';
-    const X = { vals, inReport: t => !!TABS[t] && on(t), ownKey: own && on('proj') ? 'rs.own' : null, figs: opt.figures || null, planFig: opt.planFig || null };   // planFig (2026-11-14): §2's framing plan (ui/report.js); rs.own: the owner rules subsection of §2
+    const X = { vals, inReport: t => !!TABS[t] && on(t), ownKey: own && on('proj') ? 'rs.own' : null, figs: opt.figures || null, planFig: opt.planFig || null, sumFig: opt.sumFig || null, every: !!opt.every };   // planFig (2026-11-14): §2's framing plan (ui/report.js); rs.own: the owner rules subsection of §2
     X.V = (path, d, div) => { const v = at(X.R || R, path), text = OK().fx(div ? v / div : v, d); vals.push({ sec: X.cur, path, d, div: div || 0, text, ...(X.u != null ? { u: X.u } : {}) }); return text; };   // PS-25: X.R / X.u = the worked unit's result
     const secs = [], dropped = [];
     if (B.multi) multiSecs(B, X, opt, on, secs, dropped);   // PS-25: the worked sections once per girder type (or per line)

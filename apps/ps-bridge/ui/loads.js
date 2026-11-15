@@ -78,8 +78,33 @@
       + (nt ? `<div class="alert" id="nedbtNoTop"><b>NEDBT without a topping: the distribution factor is likely very conservative</b> ${nt} The moment factors g<sub>M1</sub> ${wk('ld.m1')} and g<sub>M2</sub> ${wk('ld.m2')} are worked in the Loads &amp; LLDF steps.</div>` : '')
       + `<p class="note">${inp.loads.dfAuto ? `AASHTO equations, cross-section type ${df.isNext ? '(i)/(j)' : '(k)'}; S = ${k.fx(df.isNext ? df.Sf : inp.S, 3)} ft, L = ${k.fx(R.L, 2)} ft, N<sub>b</sub> = ${inp.nGirders}.` : 'Distribution factors entered on the Loads tab.'} Position and skew from the bridge (<a href="#" data-goin="gird">Design girder card</a>).</p>`);
     }
+    h += everyLine(ctx);   // 2026-11-15 (batch C): the dead loads and distribution factors of every girder line (the steel app's tables)
     h += k.card('Worked steps: loads and distribution factors', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value.</p>${k.steps(ctx.W.loads.steps, TOPICS, OPEN)}`);
     return h;
+  }
+  /* everyLine(ctx): 2026-11-15 (batch C; the steel app's Loads & LLDF "dead loads of every girder line" and "LLDF of every girder × region"):
+     each girder type on each of its lines (ctx.all = engine/bridge.js results, the page's cached results of every type × line: each line's
+     own computeAll, the same objects as the Summary's), a row per line of every span: w_g, w_DC1, DC2, DW, DF_M, DF_V and the fatigue DF of
+     that line's engine result, the factors' method. No arithmetic: each value is the engine's; each § opens this tab (or the tab that works
+     it) with that type and line, at the step that works the value (data-sumgo, as the Summary's links). Not in the Report (its tab sections
+     are the girder worked; §1 lists every type and line). */
+  function everyLine(ctx) {
+    const A = ctx.all, k = K(), fx = (v, d) => k.fx(v, d);
+    if (A === undefined) return '';   // the Report's tab sections (no ctx.all): not shown
+    if (!A || !A.cells || !A.cells.length) return window.PSBBridge && window.PSBBridge.hasTypes(ctx.P) ? k.card('Dead loads and distribution factors of every girder line', '<p class="note">Shown once every girder type × line is computed (the Summary tab runs them).</p>') : '';
+    const P = ctx.P, d = window.PSBDesign.sel(P), DL = window.PSBBridgeDL, dist = !!(DL && DL.on(P));
+    const go = (c, tab, st) => `<a class="wk" href="#" data-sumgo="${c.k}|${c.g}|${tab}|${k.esc(st)}|" title="Worked: ${tab === 'lds' ? 'Loads &amp; LLDF' : tab === 'sec' ? 'Section properties' : 'Stresses'} tab with this girder type and line">§</a>`;
+    const meth = R => { const df = R.df || {}; if (R.useExt) return 'imported'; if (df.fg) return `type (${df.fg.type}), ${df.ext ? 'exterior' : 'interior'}`; return df.ext ? 'exterior: lever rule, e, rigid section' : `interior: equations${df.isNext ? ' (NEXT)' : ''}`; };
+    const cs = A.cells.slice().sort((a, b) => a.s - b.s || a.g - b.g);
+    const rows = cs.map(c => { const R = c.R, on = c.g === d.g && c.s === d.s, lab = k.esc((P.types[c.k] || {}).label || '');
+      if (!R || R.error) return `<tr><td>${c.s}</td><td class="lft">G${c.g}</td><td class="lft">${lab}</td><td class="lft" colspan="9">engine error${R && R.error ? ': ' + k.esc(R.error) : ''}</td></tr>`;
+      const man = c.inp && c.inp.loads && c.inp.loads.dfAuto === false;
+      return `<tr${on ? ' class="sel"' : ''}><td>${c.s}</td><td class="lft">G${c.g}${on ? ' (shown)' : ''}</td><td class="lft">${lab}</td>
+        <td style="white-space:nowrap">${fx(R.wG, 4)} ${go(c, 'sec', 'sec.g.wsw')}</td><td style="white-space:nowrap">${fx(R.wDk, 4)} ${go(c, 'lds', 'ld.wDC1')}</td><td style="white-space:nowrap">${fx(R.wBar, 4)} ${go(c, 'lds', dist ? `dl.G${c.g}.DC2` : 'ld.wDC2')}</td><td style="white-space:nowrap">${fx(R.wDW, 4)} ${go(c, 'lds', dist ? `dl.G${c.g}.DW` : 'ld.wDW')}</td>
+        <td style="white-space:nowrap">${fx(R.dfm, 4)} ${go(c, 'lds', 'ld.dfm')}</td><td style="white-space:nowrap">${fx(R.dfv, 4)} ${go(c, 'lds', 'ld.dfv')}</td><td style="white-space:nowrap">${R.fat ? `${fx(R.fat.dfFat, 4)} ${go(c, 'str', 'st.fat.df')}` : '—'}</td><td class="lft">${man ? 'entered (Loads tab)' : meth(R)}</td></tr>`; }).join('');
+    return k.card('Dead loads and distribution factors of every girder line', `<div class="tscroll"><table class="tbl"><thead><tr><th>Span</th><th class="lft">Line</th><th class="lft">Girder type</th>
+      <th>DC1 girder w<sub>g</sub><br>klf</th><th>DC1 on the girder w<sub>DC1</sub><br>klf</th><th>DC2<br>klf</th><th>DW<br>klf</th><th>DF<sub>M</sub><br>lanes</th><th>DF<sub>V</sub><br>lanes</th><th>DF fatigue</th><th class="lft">LLDF method</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="note">Each girder type on each of its lines, as the Summary computes them (each line's own engine result: its spacing S, position, skew and DC2 / DW). One distribution factor per line and load effect over its span (the engine's: moment, shear, fatigue; a continuous unit uses the same factors). § opens the step that works the value, with that type and line shown. Lines with no girder type are not listed (Summary tab).</p>`);
   }
   /* the cross-section of the design span (ui/xsfig.js, PSBXsFig): each line's girder section at its offset, deck, haunch, barriers,
      sidewalks, traffic faces and d_e, to scale; the line shown on the output tabs outlined. Display only. Also the Report's figure.

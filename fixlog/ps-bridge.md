@@ -5139,6 +5139,320 @@ PR #1571: https://github.com/mlococo88/All-Structural/pull/1571
 - PS checks: see the PR.
 ### Other copies
 - `apps/steel-bridge/ui/lists.js` (PR #1568): the same code. The two copies differ only in comments, the selector list and the namespace.
+
+## 2026-11-15 — Batch C: the tables the Steel Bridge app has — dead loads and LLDF of every girder line, Analysis reactions / loads and factors used / girder elevation, Report "every station" detail and §1 girder elevations (display only)
+PR #1572: https://github.com/mlococo88/All-Structural/pull/1572
+### Request
+- PS Bridge catch-up batch C (review 2026-11-15, ps-vs-steel O10, O12, O13, O14, R4, R6).
+- Add the steel app's tables from existing engine results; no new formula. Display only.
+### What changed
+- `ui/loads.js`: new `everyLine(ctx)`, a card "Dead loads and distribution factors of every girder line".
+  - One row per girder type × line of every span, from `ctx.all`. That is engine/bridge.js results, the page's cached results of every type × line; each line has its own computeAll, the same objects the Summary uses.
+  - Columns: w_g, w_DC1 (`R.wDk`), DC2 (`R.wBar`), DW (`R.wDW`), DF_M, DF_V, fatigue DF (`R.fat.dfFat`), and the LLDF method (interior equations / exterior lever rule, e, rigid / type (f)/(g) / entered).
+  - Each value has a § (`data-sumgo` k|g|tab|step) that opens its tab with that type and line at the step that works it: `sec.g.wsw`, `ld.wDC1`, `ld.wDC2` or `dl.G<g>.DC2`, `ld.wDW` or `dl.G<g>.DW`, `ld.dfm`, `ld.dfv`, `st.fat.df`.
+  - Not in the Report: the report's tab sections have no `ctx.all`; §1 lists every type and line.
+- `index.html`: `ctxOut.all = rc.all`.
+- `ui/analysis.js`:
+  - `usedCard(ctx)`, "Loads and factors used": w_g, w_DC1, P_dia, DC2, DW, DF_M / DF_V, η / m, as engine values (data-ev), each with its §; and the load combinations' steps (an.MuS, an.MsI, an.MsIII).
+  - `reactions(ctx)`, "Reactions (unfactored, kip)":
+    - the engine's own `bxSuperRxPayload` (engine/handoffs.js `srPayload`), the numbers "Send reactions to Substructure Loading" sends: DC1, DC2, DW per support and, simple span, the LL per lane for information;
+    - worked in the note with the same numbers: DC1 = (w_g + w_DC1) L / 2 + Σ P (L − a) / L; DC2 = w L / 2, or on a continuous unit w × V_w(0); LL = max(V_tr, V_td) + V_ln; each term linked.
+  - `elevSvg` / the "Girder elevation" card (slot `gfxr_anel`, screen only): the span, bearings, diaphragm point loads, continuous ends.
+- `report/builders.js`:
+  - `tabSec` passes `ui: { every: true }` when `opt.every`;
+  - `elevSub(X)` puts the figures of `opt.sumFig` in §1 ("Girder elevations: where each check governs"), with the list of the checks drawn;
+  - X gets `sumFig` and `every`.
+- `ui/report.js`:
+  - the Detail choice ("the stations the tabs tabulate" / "every station"), kept in `ui.rpt.detail` (psb2.ui; a new field of the existing UI object, default the tabulated stations);
+  - `sumFig(B, wScr)`: the Summary's girder elevation of each type on its governing line (ui/sumelev.js model + svg, links removed) at the printed width.
+- `ui/analysis.js`, `ui/stresses.js`, `ui/flexure.js`: with `ui.every` the station tables list every engine station. Before / default: analysis every 6th station; stresses the tenth points; flexure the twentieth points to midspan.
+- Tests:
+  - new `tests/engine/psbridge-display-c.test.mjs` (20): every value of the line table vs each cell's engine result and its link; the reactions vs bxSuperRxPayload with the DC2 = w L / 2 hand check; "every station" lists every station with each recorded value equal to the engine's; the default is unchanged; §1's figure;
+  - new smoke `tests/smoke/ps-bridge-tables.mjs`.
+- `tests/smoke/ps-bridge-skeleton.mjs`: the Report-figures check now expects the §1 girder elevations (before it required none in §1; test only).
+### Code (before / after: the diff of this change)
+```diff
+diff --git a/apps/ps-bridge/index.html b/apps/ps-bridge/index.html
+index 9055c05..ee43efd 100644
+--- a/apps/ps-bridge/index.html
++++ b/apps/ps-bridge/index.html
+@@ -661,7 +661,7 @@
+     if (TABUI[ui.otab] || ui.otab === 'rpt') h += TY.outBar(P);   // PR 3a-1: the girder type and line shown
+     if (ui.otab === 'lds') h += deNotice();   // PS-23: the entered d_e differs from the computed one
+     if (TABUI[ui.otab]) {
+-      if (ok) { ctxOut = { P, inp: rc.inp, R: rc.R, W: rc.W, ui, redraw: () => { saveUi(); drawOut(); } };
++      if (ok) { ctxOut = { P, inp: rc.inp, R: rc.R, W: rc.W, ui, all: rc.all || null, redraw: () => { saveUi(); drawOut(); } };   // all (2026-11-15, batch C): every girder type × line, for the tables of every line
+         const d = window.PSBDesign.sel(P);
+         const sh = BR.hasTypes(P) ? BR.shown(P) : null;
+         h += `<p class="note">${sh ? `Girder type ${esc(P.types[sh.k].label)} on ` : 'Design girder '}${esc(rc.inp.proj.girderId)}, span ${d.s} (L = ${fmt(rc.R.L, 2)} ft): <a href="#" data-goin="gird">Girders &amp; strands tab</a>.</p>` + TABUI[ui.otab]().output(ctxOut); }
+diff --git a/apps/ps-bridge/report/builders.js b/apps/ps-bridge/report/builders.js
+index 11e244c..4ad2897 100644
+--- a/apps/ps-bridge/report/builders.js
++++ b/apps/ps-bridge/report/builders.js
+@@ -74,10 +74,18 @@
+     // governing ratio of each check group per girder type with its line and a "see §" reference to the section that works the group, and
+     // the weights per line, per type and the bridge total (SB-6)
+     if (B.all && B.all.n > 1 && window.PSBSummaryUI) subs.splice(1, 0, allSub(B, X, null));
++    if (X.u == null) { const el = elevSub(X); if (el) subs.splice(1, 0, el); }   // 2026-11-15 (batch C): the Summary's girder elevations (one worked girder; several: after the tables)
+     if ((R.warns || []).length) subs.push(sub('warn', `Design warnings of the engine (${R.warns.length})`, R.warns.map(w => note(plain(w), true))));
+     return { title: 'Summary of checks', subs };
+   }
+ 
++  /* elevSub(X): 2026-11-15 (batch C; the steel report's §1 summary figure): the Summary tab's girder elevation of each girder type on its
++     governing line (opt.sumFig from ui/report.js; none in Node), each check where it governs, as figures with the list of the checks drawn */
++  function elevSub(X) {
++    const F = X.sumFig; if (!F || !F.length) return null;
++    return sub('el', 'Girder elevations: where each check governs', [].concat(...F.map(f => [{ type: 'figure', caption: f.cap, svg: f.svg }, note(`Drawn: ${plain(f.list)}.`)])),
++      note('The Summary tab\'s elevation of each girder type (the [[tab:sum|Summary tab]]): the strands, the transfer and development lengths and the governing check of each check group at its station, coloured by its ratio (green below 0.90, amber 0.90 to 1.00, red above 1.00). Each check is worked in the section of its group.'));
++  }
+   /* the Report's tables of every girder type and line (PR 3b): the girder × span grid, the governing ratio of each check group per type,
+      the weights. M (PS-25, several worked units) = { sec(tab, k, g) -> the section key that works that type × line's group, shown, works,
+      worked: texts }; null: one worked girder (the sections rs.<tab>) */
+@@ -218,7 +226,7 @@
+   /* ---------- 3–14. the result tabs ---------- */
+   function tabSec(B, k, X) {
+     const [ui, wk] = TABS[k], U = window[ui], FT = window.PSBReportTab;
+-    const html = U.output({ P: B.P, inp: B.inp, R: B.R, W: B.W, ui: {} });   // ui {}: each chooser at its default (the governing / midspan station)
++    const html = U.output({ P: B.P, inp: B.inp, R: B.R, W: B.W, ui: X.every ? { every: true } : {} });   // ui.every (2026-11-15, batch C): the Report's "every station" detail   // ui {}: each chooser at its default (the governing / midspan station)
+     const C = FT.cards(html, { tab: k, X, sec: k, inReport: X.inReport, figs: X.figs && X.figs[k] });   // figs: the tab's own graphics at their slots (ui/report.js)
+     const subs = [], gTop = C.top.filter(i => i.type === 'figure'), nTop = C.top.filter(i => i.type !== 'figure');
+     if (gTop.length) subs.push(sub('g', 'Graphics', gTop));
+@@ -315,7 +323,7 @@
+       const M = { sec: (tab, k, g) => (k == null ? `rs.${tab}@u0` : secKey(tab, k, g)), shown: B.mode === 'all' ? 'each girder type on each of its lines' : 'each girder type on its governing line',
+         works: `This report works ${B.mode === 'all' ? 'every girder type on every line' : 'each girder type on its governing line (the line with its largest check ratio; on a tie, the next largest)'}: ${list}. ${B.mode === 'all' ? '' : 'The other lines are the rows of the tables below, each pointing to its type\'s sections; their steps are on the result tabs with that type and line chosen (the [[tab:sum|Summary tab]] lists them).'}`,
+         worked: `Worked: the section of this report that works the group for that girder type (${B.mode === 'all' ? 'on the line named' : 'on its governing line'}).` };
+-      subs.unshift(allSub(B, X, M));
++      subs.unshift(allSub(B, X, M)); { const el = elevSub(X); if (el) subs.splice(1, 0, el); }   // 2026-11-15 (batch C): the Summary's girder elevations
+       s1 = { title: 'Summary of checks', subs };
+     } catch (e) { X.u = null; X.R = null; s1 = fail('sum', e); }
+     if (on('sum')) secs.push({ id: 'sum', key: 'rs.sum', ...s1 }); else { dropped.push({ key: 'rs.sum', ...s1 }); for (let j = vals.length - 1; j >= 0; j--) if (vals[j].sec === 'sum') vals.splice(j, 1); }
+@@ -339,7 +347,7 @@
+     const inc = opt.include || null, on = k => !inc || inc[k] !== false, P = B.P, p = P.project || {}, R = B.R;
+     const vals = [];
+     const own = B.inp.owner && B.inp.owner !== 'AASHTO';
+-    const X = { vals, inReport: t => !!TABS[t] && on(t), ownKey: own && on('proj') ? 'rs.own' : null, figs: opt.figures || null, planFig: opt.planFig || null };   // planFig (2026-11-14): §2's framing plan (ui/report.js); rs.own: the owner rules subsection of §2
++    const X = { vals, inReport: t => !!TABS[t] && on(t), ownKey: own && on('proj') ? 'rs.own' : null, figs: opt.figures || null, planFig: opt.planFig || null, sumFig: opt.sumFig || null, every: !!opt.every };   // planFig (2026-11-14): §2's framing plan (ui/report.js); rs.own: the owner rules subsection of §2
+     X.V = (path, d, div) => { const v = at(X.R || R, path), text = OK().fx(div ? v / div : v, d); vals.push({ sec: X.cur, path, d, div: div || 0, text, ...(X.u != null ? { u: X.u } : {}) }); return text; };   // PS-25: X.R / X.u = the worked unit's result
+     const secs = [], dropped = [];
+     if (B.multi) multiSecs(B, X, opt, on, secs, dropped);   // PS-25: the worked sections once per girder type (or per line)
+diff --git a/apps/ps-bridge/ui/analysis.js b/apps/ps-bridge/ui/analysis.js
+index 55dc3a1..2b8fe2f 100644
+--- a/apps/ps-bridge/ui/analysis.js
++++ b/apps/ps-bridge/ui/analysis.js
+@@ -20,9 +20,10 @@
+   function output(ctx) {
+     const { R, inp, ui } = ctx, k = K(), ev = (p, d, u, div) => k.ev(R, p, d, u, div), wk = k.wk, D = R.diagrams, sel = selOf(ui, R), c = R.cont;
+     const simple = !R.fe && !R.useExt;
+-    let h = K().gcard('Analysis graphic: envelopes along the girder', 'gfx_an');
++    let h = K().gcard('Analysis graphic: girder elevation', 'gfxr_anel') + K().gcard('Analysis graphic: envelopes along the girder', 'gfx_an');   // gfxr_anel (2026-11-15, batch C): screen only
++    h += usedCard(ctx);   // 2026-11-15 (batch C): the loads and factors the analysis uses (the steel app's card), each linked to its work
+     // the station table: every sixth station of the engine's and the selected one
+-    const idx = D.map((r, i) => i).filter(i => i % 6 === 0 || i === sel);
++    const idx = D.map((r, i) => i).filter(i => (ui && ui.every) || i % 6 === 0 || i === sel);   // ui.every: the Report's "every station" detail (2026-11-15)
+     h += k.card('Force effects along the girder (per girder; moments kip-ft, shears kip)', `<div class="fRow"><label for="o_anSel">Station</label><select id="o_anSel">${D.map((r, i) => `<option value="${i}"${i === sel ? ' selected' : ''}>x = ${k.fx(r.x, 2)} ft (${k.fx(r.x / R.L, 3)} L)</option>`).join('')}</select></div>
+       <div class="tscroll"><table class="tbl"><thead><tr><th>x<br>ft</th>${COLS.map(q => `<th>${q[1]}</th>`).join('')}</tr></thead><tbody>
+       ${idx.map(i => `<tr${i === sel ? ' class="sel"' : ''}><td>${ev(`diagrams.${i}.x`, 2)}</td>${COLS.map(q => `<td>${ev(`diagrams.${i}.${q[0]}`, q[0][0] === 'M' ? 0 : 1)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+@@ -47,11 +48,54 @@
+       body += '<p class="note">The pier section\'s resistance (negative moment, deck bars) and the positive moment connection are worked on the <a href="#" data-gotab="flex">Flexure tab</a>.</p>';
+       h += k.card('Continuity for composite loads (5.12.3.3)', body);
+     } else h += k.card('Continuity', `<p class="note">${R.L && ctx.P.spans.lengths.length > 1 ? 'Simple spans for all loads' : 'One span'} (Bridge layout tab). Made continuous: girder and DC1 on the simple span; DC2, DW and live load on the continuous unit; restraint moments switchable (5.12.3.3, PS-7).</p>`);
++    h += reactions(ctx);   // 2026-11-15 (batch C): the unfactored reactions (the steel app's table, ui/analysis.js "Reactions (unfactored, kip)")
+     h += k.card('Worked steps: analysis', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value; midspan = the engine's station at x = ${k.fx(D[midOf(R)].x, 2)} ft (${D.length} stations).</p>${k.steps(ctx.W.analysis.steps, TOPICS, OPEN)}`);
+     return h;
+   }
++  /* usedCard(ctx): the loads and factors of the analysis, each the engine's value linked to the step that works it (Loads & LLDF, Section) */
++  function usedCard(ctx) {
++    const { R } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), L = (id, tab) => k.wk(id, '§', tab), own = R.own;
++    return k.card('Loads and factors used', k.kv([['DC1 girder self-weight w<sub>g</sub>', `${ev('wG', 4, 'klf')} ${L('sec.g.wsw', 'sec')}`], ['DC1 on the bare girder w<sub>DC1</sub> (deck, haunch, additional)', `${ev('wDk', 4, 'klf')} ${L('ld.wDC1', 'lds')}`],
++      ...(R.nDiaph ? [[`DC1 diaphragms (${R.nDiaph} point loads, simple span)`, `${ev('Pdia', 2, 'kip')} ${L('ld.Pdia', 'lds')}`]] : []),
++      ['DC2 (composite)', `${ev('wBar', 4, 'klf')} ${L('ld.wDC2', 'lds')}`], ['DW (composite)', `${ev('wDW', 4, 'klf')} ${L('ld.wDW', 'lds')}`],
++      ['DF<sub>M</sub> / DF<sub>V</sub>', `${ev('dfm', 4)} ${L('ld.dfm', 'lds')} / ${ev('dfv', 4)} ${L('ld.dfv', 'lds')}`], ['η (Strength I) / m (HL-93)', `${own ? ev('own.eta', 4) : '1.0000'} / ${own ? ev('own.mLL', 2) : '1.00'} ${L('ld.eta', 'lds')}`],
++      ['Load combinations', `Strength I ${k.wk('an.MuS')}, Service I ${k.wk('an.MsI')}, Service III ${k.wk('an.MsIII')} (Table 3.4.1-1)`]])
++      + `<p class="note">Girder and DC1 on the simple span${R.fe ? '; DC2, DW and the live load on the continuous unit (Continuity card below)' : ''}; live load HL-93 with IM = 33 % and the distribution factors (<a href="#" data-gotab="lds">Loads &amp; LLDF tab</a>, where each load is worked).</p>`);
++  }
++  /* reactions(ctx): the unfactored end reactions of this girder line: the engine's own bxSuperRxPayload (engine/handoffs.js srPayload, the
++     numbers "Send reactions to Substructure Loading" sends), worked here as that function finds them (no other arithmetic) */
++  function reactions(ctx) {
++    const { R, inp } = ctx, k = K(), H = window.PSBHandoffs; if (!H || !H.srPayload) return '';
++    let b = null; try { b = H.srPayload(inp, R); } catch (e) { b = { error: e.message }; }
++    if (!b || b.error || !b.payload) return k.card('Reactions (unfactored, kip)', `<p class="note">Not available: ${k.esc((b && b.error) || 'no result')}.</p>`);
++    const p = b.payload, fx = (v, d) => k.fx(v, d), Lf = +R.L, S = p.supports, ll = p.liveLoad;
++    const rows = S.map((q, i) => { const g = q.girders[0]; return `<tr><td class="lft">${k.esc(q.id)} (x = ${fx(q.x, 2)} ft)</td><td>${fx(g.DC1, 2)}</td><td>${fx(g.DC2, 2)}</td><td>${fx(g.DW, 2)}</td>${ll ? `<td>${fx(ll.supports[i].Rmax, 2)}</td>` : ''}</tr>`; }).join('');
++    const dia = (inp.loads.diaph || []).filter(d => +d.P > 0 && +d.a >= 0 && +d.a <= Lf);
++    const wk1 = R.fe ? `DC2 and DW: the end shears of this span on the continuous unit, as reactions (+ up), w × V<sub>w</sub> per klf: DC2 = ${fx(R.wBar, 4)} × ${fx(R.fe.Vw(0), 4)} = ${fx(S[0].girders[0].DC2, 3)} kip at ${k.esc(S[0].id)} (V<sub>w</sub>: the end shear per klf on every span of the engine's model of the continuous unit, whose midspan moment M<sub>w</sub> is worked ${k.wk('an.Mw')}).`
++      : `DC2 = w<sub>DC2</sub> L / 2 = ${fx(R.wBar, 4)} (${fx(Lf, 2)}) / 2 = ${fx(S[0].girders[0].DC2, 3)} kip; DW = w<sub>DW</sub> L / 2 = ${fx(R.wDW, 4)} (${fx(Lf, 2)}) / 2 = ${fx(S[0].girders[0].DW, 3)} kip.`;
++    const wkDC1 = `DC1 at ${k.esc(S[0].id)} = (w<sub>g</sub> + w<sub>DC1</sub>) L / 2${dia.length ? ' + Σ P (L − a) / L' : ''} = (${fx(R.wG, 4)} + ${fx(R.wDk, 4)})(${fx(Lf, 2)}) / 2${dia.length ? ` + ${dia.map(d => `${fx(+d.P, 2)}(${fx(Lf, 2)} − ${fx(+d.a, 2)}) / ${fx(Lf, 2)}`).join(' + ')}` : ''} = ${fx(S[0].girders[0].DC1, 3)} kip (w<sub>g</sub> ${k.wk('sec.g.wsw', '§', 'sec')}, w<sub>DC1</sub> ${k.wk('ld.wDC1', '§', 'lds')}${dia.length ? `, P ${k.wk('ld.Pdia', '§', 'lds')}` : ''}).`;
++    return k.card('Reactions (unfactored, kip)', `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Support</th><th>DC1</th><th>DC2</th><th>DW</th>${ll ? '<th>LL per lane (no IM, no DF)</th>' : ''}</tr></thead><tbody>${rows}</tbody></table></div>
++      <p class="note">Worked: ${wkDC1} ${wk1}${ll ? ` LL: max(truck, tandem) + lane, simple span, one lane, no IM, no DF (information only): max(${fx(R.hl.Vtr, 2)}, ${fx(R.hl.Vtd, 2)}) + ${fx(R.hl.Vln, 2)} = ${fx(ll.supports[0].Rmax, 3)} kip (V<sub>tr</sub> ${k.wk('ld.Vtr', '§', 'lds')}, V<sub>td</sub> ${k.wk('ld.Vtd', '§', 'lds')}, V<sub>ln</sub> ${k.wk('ld.Vln', '§', 'lds')}).` : ''}</p>
++      <p class="note">This girder line (${k.esc(p.girderLine.label)}, ${k.esc(p.girderLine.position)}), the values the Project tab's "Send reactions to Substructure Loading" sends (bridgeSuite.v1.superReactions).</p>`);
++  }
++  /* the girder elevation (2026-11-15, batch C; the steel app's elevation strip above its diagrams): the span with its bearings, the
++     diaphragm point loads and, made continuous, the continuous ends; drawn from the entered geometry; display only */
++  function elevSvg(ctx, W) {
++    const { R, inp } = ctx, L = +R.L, l = 16, r = 16, X = x => l + x / L * (W - l - r), yG = 40, hG = 20, H = 110, f2 = v => K().fx(v, 2);
++    const dia = (inp.loads.diaph || []).filter(d => +d.P > 0 && +d.a >= 0 && +d.a <= L), c = R.cont && R.cont.unit, s = c ? c.s : 1, n = c ? c.spans.length : 1;
++    let h = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Girder elevation" font-family="Arial,sans-serif">`;
++    h += `<rect x="${X(0)}" y="${yG}" width="${X(L) - X(0)}" height="${hG}" fill="#E2E8F0" stroke="#475569" data-dtr="Girder, span L = ${f2(L)} ft (℄ bearing to ℄ bearing)"/>`;
++    [[0, s > 1], [L, s < n]].forEach(([x, cont]) => { h += cont ? `<line x1="${X(x)}" x2="${X(x)}" y1="${yG - 6}" y2="${yG + hG + 12}" stroke="#1E3A5F" stroke-width="2" stroke-dasharray="4 2"/><text x="${X(x)}" y="${yG - 10}" text-anchor="${x ? 'end' : 'start'}" font-size="10" fill="#1E3A5F">continuous (composite loads)</text>` : '';
++      h += `<path d="M${X(x)} ${yG + hG} l-6 10 h12 z" fill="#64748B" data-dtr="℄ bearing at x = ${f2(x)} ft"/>`; });
++    dia.forEach(d => { const x = X(+d.a); h += `<line x1="${x}" x2="${x}" y1="${yG - 16}" y2="${yG - 2}" stroke="#A3322A" stroke-width="1.5"/><path d="M${x} ${yG - 1} l-3 -6 h6 z" fill="#A3322A"/><text x="${x}" y="${yG - 19}" text-anchor="middle" font-size="10" fill="#A3322A" data-dtr="Diaphragm P = ${f2(+d.P)} kip at x = ${f2(+d.a)} ft">P ${f2(+d.P)}</text>`; });
++    h += `<text x="${(X(0) + X(L)) / 2}" y="${yG + hG + 26}" text-anchor="middle" font-size="11" fill="#475569">Span ${s}${n > 1 ? ` of ${n}` : ''}: L = ${f2(L)} ft</text></svg>`;
++    return { html: h, nar: W < 560 };
++  }
+   const HIDE = {};
+   function after(el, ctx) {
++    { const se = el.querySelector('#gfxr_anel'), VK = window.PSBVizKit;   // 2026-11-15 (batch C): the girder elevation
++      if (se && VK && VK.detCard) VK.detCard(se, { id: 'anElev', title: 'Girder elevation', sub: 'the span analysed: bearings, diaphragm point loads (DC1), continuity for composite loads', draw: W => elevSvg(ctx, W), hint: 'Point at a bearing or a diaphragm load to read it.', file: 'analysis-elevation',
++        cap: '<p class="vk-cap">Entered on the Bridge layout tab (span, continuity) and the Diaphragms / deck tab (point loads). Display only.</p>' }); }
+     K().after(el, OPEN);
+     const slot = el.querySelector('#gfx_an'); if (!slot || !VA() || !VA().mount) return;
+     const { R, ui } = ctx, D = R.diagrams, xs = D.map(r => r.x), near = x => xs.reduce((b, v, i) => Math.abs(v - x) < Math.abs(xs[b] - x) ? i : b, 0), k = K();
+diff --git a/apps/ps-bridge/ui/flexure.js b/apps/ps-bridge/ui/flexure.js
+index a1f32e1..457e6df 100644
+--- a/apps/ps-bridge/ui/flexure.js
++++ b/apps/ps-bridge/ui/flexure.js
+@@ -31,7 +31,7 @@
+       ['M<sub>cr</sub> (γ<sub>1</sub> = 1.6, γ<sub>2</sub> = 1.1, γ<sub>3</sub> = 1.0)', `${ev('Mcr', 0, 'kip-ft', 12)} ${wk('fx.Mcr')}`], ['min(M<sub>cr</sub>, 1.33 M<sub>u</sub>) at midspan', `${ev('minMr', 0, 'kip-ft', 12)} ${wk('fx.minMr')}`],
+       ['Governing ratio', `<b>${ev(`checks.${qM.i}.r`, 3)}</b> at x = ${ev('minGov.x', 2, 'ft')} ${pf(qM)} ${wk('fx.min.r')}`]]), 'card-fxmin');
+     // stations
+-    const fg = R.flexFull, idx = fg.map((r, i) => i).filter(i => fg[i].x <= L / 2 + 0.01 && Math.abs(fg[i].x * 20 / L - Math.round(fg[i].x * 20 / L)) < 1e-6);
++    const fg = R.flexFull, every = !!(ctx.ui && ctx.ui.every), idx = fg.map((r, i) => i).filter(i => every || (fg[i].x <= L / 2 + 0.01 && Math.abs(fg[i].x * 20 / L - Math.round(fg[i].x * 20 / L)) < 1e-6));   // every: the Report's "every station" detail (2026-11-15)
+     h += k.card('Flexure stations (to midspan)', `<div class="tscroll"><table class="tbl"><thead><tr><th>x<br>ft</th><th>M<sub>u</sub><br>kip-ft</th><th>c<br>in</th><th>a<br>in</th><th>f<sub>ps</sub><br>ksi</th><th>ε<sub>t</sub></th><th>φ</th><th>φM<sub>n</sub><br>kip-ft</th><th>M<sub>u</sub>/φM<sub>n</sub></th></tr></thead><tbody>
+       ${idx.map(i => { const p = `flexFull.${i}.`, r = fg[i]; return `<tr><td>${ev(p + 'x', 1)}</td><td>${ev(p + 'Mu', 0, '', 12)}</td><td>${ev(p + 'c', 2)}</td><td>${ev(p + 'a', 2)}</td><td>${ev(p + 'fps', 1)}${r.devGov ? ' †' : ''}</td><td>${ev(p + 'et', 5)}</td><td>${ev(p + 'phi', 3)}</td><td>${ev(p + 'phiMn', 0, '', 12)}</td><td>${r.phiMn > 0 ? k.fx(r.Mu / r.phiMn, 3) : '—'}</td></tr>`; }).join('')}</tbody></table></div>
+       <p class="note">† The strand is not fully developed at the station (5.9.4.3.2): f<sub>ps</sub> is the section-average developed stress and φM<sub>n</sub> is solved from that tension. Every station of the engine is searched for the governing ratio; the table shows the twentieth points.</p>`, 'card-fxtab');
+diff --git a/apps/ps-bridge/ui/loads.js b/apps/ps-bridge/ui/loads.js
+index 7e24a57..f18cf85 100644
+--- a/apps/ps-bridge/ui/loads.js
++++ b/apps/ps-bridge/ui/loads.js
+@@ -78,9 +78,34 @@
+       + (nt ? `<div class="alert" id="nedbtNoTop"><b>NEDBT without a topping: the distribution factor is likely very conservative</b> ${nt} The moment factors g<sub>M1</sub> ${wk('ld.m1')} and g<sub>M2</sub> ${wk('ld.m2')} are worked in the Loads &amp; LLDF steps.</div>` : '')
+       + `<p class="note">${inp.loads.dfAuto ? `AASHTO equations, cross-section type ${df.isNext ? '(i)/(j)' : '(k)'}; S = ${k.fx(df.isNext ? df.Sf : inp.S, 3)} ft, L = ${k.fx(R.L, 2)} ft, N<sub>b</sub> = ${inp.nGirders}.` : 'Distribution factors entered on the Loads tab.'} Position and skew from the bridge (<a href="#" data-goin="gird">Design girder card</a>).</p>`);
+     }
++    h += everyLine(ctx);   // 2026-11-15 (batch C): the dead loads and distribution factors of every girder line (the steel app's tables)
+     h += k.card('Worked steps: loads and distribution factors', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value.</p>${k.steps(ctx.W.loads.steps, TOPICS, OPEN)}`);
+     return h;
+   }
++  /* everyLine(ctx): 2026-11-15 (batch C; the steel app's Loads & LLDF "dead loads of every girder line" and "LLDF of every girder × region"):
++     each girder type on each of its lines (ctx.all = engine/bridge.js results, the page's cached results of every type × line: each line's
++     own computeAll, the same objects as the Summary's), a row per line of every span: w_g, w_DC1, DC2, DW, DF_M, DF_V and the fatigue DF of
++     that line's engine result, the factors' method. No arithmetic: each value is the engine's; each § opens this tab (or the tab that works
++     it) with that type and line, at the step that works the value (data-sumgo, as the Summary's links). Not in the Report (its tab sections
++     are the girder worked; §1 lists every type and line). */
++  function everyLine(ctx) {
++    const A = ctx.all, k = K(), fx = (v, d) => k.fx(v, d);
++    if (A === undefined) return '';   // the Report's tab sections (no ctx.all): not shown
++    if (!A || !A.cells || !A.cells.length) return window.PSBBridge && window.PSBBridge.hasTypes(ctx.P) ? k.card('Dead loads and distribution factors of every girder line', '<p class="note">Shown once every girder type × line is computed (the Summary tab runs them).</p>') : '';
++    const P = ctx.P, d = window.PSBDesign.sel(P), DL = window.PSBBridgeDL, dist = !!(DL && DL.on(P));
++    const go = (c, tab, st) => `<a class="wk" href="#" data-sumgo="${c.k}|${c.g}|${tab}|${k.esc(st)}|" title="Worked: ${tab === 'lds' ? 'Loads &amp; LLDF' : tab === 'sec' ? 'Section properties' : 'Stresses'} tab with this girder type and line">§</a>`;
++    const meth = R => { const df = R.df || {}; if (R.useExt) return 'imported'; if (df.fg) return `type (${df.fg.type}), ${df.ext ? 'exterior' : 'interior'}`; return df.ext ? 'exterior: lever rule, e, rigid section' : `interior: equations${df.isNext ? ' (NEXT)' : ''}`; };
++    const cs = A.cells.slice().sort((a, b) => a.s - b.s || a.g - b.g);
++    const rows = cs.map(c => { const R = c.R, on = c.g === d.g && c.s === d.s, lab = k.esc((P.types[c.k] || {}).label || '');
++      if (!R || R.error) return `<tr><td>${c.s}</td><td class="lft">G${c.g}</td><td class="lft">${lab}</td><td class="lft" colspan="9">engine error${R && R.error ? ': ' + k.esc(R.error) : ''}</td></tr>`;
++      const man = c.inp && c.inp.loads && c.inp.loads.dfAuto === false;
++      return `<tr${on ? ' class="sel"' : ''}><td>${c.s}</td><td class="lft">G${c.g}${on ? ' (shown)' : ''}</td><td class="lft">${lab}</td>
++        <td style="white-space:nowrap">${fx(R.wG, 4)} ${go(c, 'sec', 'sec.g.wsw')}</td><td style="white-space:nowrap">${fx(R.wDk, 4)} ${go(c, 'lds', 'ld.wDC1')}</td><td style="white-space:nowrap">${fx(R.wBar, 4)} ${go(c, 'lds', dist ? `dl.G${c.g}.DC2` : 'ld.wDC2')}</td><td style="white-space:nowrap">${fx(R.wDW, 4)} ${go(c, 'lds', dist ? `dl.G${c.g}.DW` : 'ld.wDW')}</td>
++        <td style="white-space:nowrap">${fx(R.dfm, 4)} ${go(c, 'lds', 'ld.dfm')}</td><td style="white-space:nowrap">${fx(R.dfv, 4)} ${go(c, 'lds', 'ld.dfv')}</td><td style="white-space:nowrap">${R.fat ? `${fx(R.fat.dfFat, 4)} ${go(c, 'str', 'st.fat.df')}` : '—'}</td><td class="lft">${man ? 'entered (Loads tab)' : meth(R)}</td></tr>`; }).join('');
++    return k.card('Dead loads and distribution factors of every girder line', `<div class="tscroll"><table class="tbl"><thead><tr><th>Span</th><th class="lft">Line</th><th class="lft">Girder type</th>
++      <th>DC1 girder w<sub>g</sub><br>klf</th><th>DC1 on the girder w<sub>DC1</sub><br>klf</th><th>DC2<br>klf</th><th>DW<br>klf</th><th>DF<sub>M</sub><br>lanes</th><th>DF<sub>V</sub><br>lanes</th><th>DF fatigue</th><th class="lft">LLDF method</th></tr></thead><tbody>${rows}</tbody></table></div>
++      <p class="note">Each girder type on each of its lines, as the Summary computes them (each line's own engine result: its spacing S, position, skew and DC2 / DW). One distribution factor per line and load effect over its span (the engine's: moment, shear, fatigue; a continuous unit uses the same factors). § opens the step that works the value, with that type and line shown. Lines with no girder type are not listed (Summary tab).</p>`);
++  }
+   /* the cross-section of the design span (ui/xsfig.js, PSBXsFig): each line's girder section at its offset, deck, haunch, barriers,
+      sidewalks, traffic faces and d_e, to scale; the line shown on the output tabs outlined. Display only. Also the Report's figure.
+      2026-11-14 (item 7): with the live-load case of the line shown (PSBXsFig.lldf: the engine's lever-rule wheel placement and its influence
+diff --git a/apps/ps-bridge/ui/report.js b/apps/ps-bridge/ui/report.js
+index 22d30d7..fd111c2 100644
+--- a/apps/ps-bridge/ui/report.js
++++ b/apps/ps-bridge/ui/report.js
+@@ -31,7 +31,8 @@
+   function controls(o, B) {
+     const inc = incOf(o), m = modeOf(o);
+     const ch = B && B.all && B.all.n > 1 ? `<div class="rp-chips" role="radiogroup" aria-label="Worked sections" id="rpWorked"><span class="rp-chip" style="border:0;padding-left:0"><b>Worked sections:</b></span>${[['gov', "each type's governing line"], ['all', 'every girder line']].map(([v, t]) => `<label class="rp-chip"><input type="radio" name="rpWorked" data-rpworked="${v}"${m === v ? ' checked' : ''}>${t}</label>`).join('')}</div>` : '';
+-    return ch + `<div class="rp-chips" role="group" aria-label="Report sections">${window.PSBReportBuild.SECTIONS.map(([k, t]) => `<label class="rp-chip"><input type="checkbox" data-rpinc="${k}"${inc[k] ? ' checked' : ''}>${esc(t)}</label>`).join('')}</div>`;
++    const dt = `<div class="rp-chips" role="radiogroup" aria-label="Detail" id="rpDetail"><span class="rp-chip" style="border:0;padding-left:0"><b>Detail:</b></span>${[['tab', 'the stations the tabs tabulate'], ['all', 'every station']].map(([v, t]) => `<label class="rp-chip"><input type="radio" name="rpDetail" data-rpdetail="${v}"${(o.detail === 'all' ? 'all' : 'tab') === v ? ' checked' : ''}>${t}</label>`).join('')}</div>`;   // 2026-11-15 (batch C): the steel report's Detail choice
++    return ch + dt + `<div class="rp-chips" role="group" aria-label="Report sections">${window.PSBReportBuild.SECTIONS.map(([k, t]) => `<label class="rp-chip"><input type="checkbox" data-rpinc="${k}"${inc[k] ? ' checked' : ''}>${esc(t)}</label>`).join('')}</div>`;
+   }
+   const PW = 700;
+   const plainA = el => { el.querySelectorAll('a').forEach(a => { const sp = document.createElement('span'); sp.innerHTML = a.innerHTML; a.replaceWith(sp); }); return el; };
+@@ -96,6 +97,21 @@
+       return { svg: sc ? `<div class="vk rp-vk rp-fig-scr">${sc.svg}</div><div class="vk rp-vk rp-fig-prn">${g.svg}</div>` : `<div class="vk rp-vk">${g.svg}</div>`, cap: PL.legend(g.m, 1).replace(/<[^>]+>/g, '') }; }
+     catch (e) { console.warn(e); return null; }
+   }
++  /* sumFig(B, wScr): 2026-11-15 (batch C; the steel report's §1 summary figure): the Summary tab's girder elevation of each girder type on its
++     governing line (ui/sumelev.js model + svg: the governing check of each group where it governs), at the printed width and, on a narrow
++     screen, a copy at the screen width; [{ svg, cap }] or null (no girder types computed). Links of the screen figure removed. Display only. */
++  function sumFig(B, wScr) {
++    const SU = window.PSBSummaryUI, SE = window.PSBSumElev; if (!SU || !SE || !B.all || !window.PSBVizKit) return null;
++    const strip = t => String(t).replace(/<a\b[^>]*>/g, '').replace(/<\/a>/g, '');
++    try { const M = SU.model(B.P, B.all);
++      return M.types.map(T => { const m = SE.model(M, B.P, T.k); if (!m || (m.errors && m.errors.length)) return null;
++        const g = SE.svg(m, PW), sc = wScr && wScr < PW - 40 ? SE.svg(m, wScr) : null;
++        const list = m.marks.concat(m.other).map(q => `${q.name}: ${q.check}${fin(q.x) && m.marks.includes(q) ? ` at x = ${q.x.toFixed(2)} ft` : ''} on G${q.g}, ratio ${fin(q.r) ? q.r.toFixed(3) : 'NaN'} (${q.pass ? 'PASS' : 'FAIL'})`).join('; ');
++        return { svg: sc ? `<div class="vk rp-vk rp-fig-scr">${strip(sc.svg)}</div><div class="vk rp-vk rp-fig-prn">${strip(g.svg)}</div>` : `<div class="vk rp-vk">${strip(g.svg)}</div>`,
++          cap: `Girder elevation: ${m.label} on G${m.g} (its governing line), span ${m.span}; the governing check of each group where it governs (vertical scale exaggerated)`, list }; }).filter(Boolean); }
++    catch (e) { console.warn(e); return null; }
++  }
++  const fin = v => typeof v === 'number' && isFinite(v);
+   function render(host, ctx) {
+     const o = ctx.opts || {};
+     if (window.SharedReport) window.SharedReport.css();
+@@ -104,17 +120,18 @@
+     if (!window.SharedReport) { box.innerHTML = '<div class="alert err">shared/report.js is not loaded.</div>'; return null; }
+     const B = window.PSBReportData.compute(ctx.P, ctx.rc, modeOf(o));
+     if (B.err) { box.innerHTML = `<div class="alert err" role="alert">The report cannot be built: ${esc(B.err)}</div>`; return null; }
+-    const inc = incOf(o), wScr = Math.round(box.clientWidth || 0), narrow = wScr > 0 && wScr < PW - 40, key = JSON.stringify([ctx.rc && ctx.rc.key, ctx.rc && ctx.rc.allKey, inc, narrow ? wScr : 0, modeOf(o)]);
++    const inc = incOf(o), wScr = Math.round(box.clientWidth || 0), narrow = wScr > 0 && wScr < PW - 40, key = JSON.stringify([ctx.rc && ctx.rc.key, ctx.rc && ctx.rc.allKey, inc, narrow ? wScr : 0, modeOf(o), o.detail === 'all']);
+     // the model is kept while the inputs, the sections chosen and the figure width are the same (the result object of the page is the same)
+     // PS-25: several worked units: each unit's graphics drawn with its own result (an array, one per unit)
+     if (S.key !== key || !S.M) { let figs = {}; try { figs = B.multi ? B.units.map(u => figures({ P: u.P, inp: u.inp, R: u.R, W: u.W }, inc, narrow ? wScr : 0)) : figures(B, inc, narrow ? wScr : 0); } catch (e) { console.warn(e); }
+-      S.M = window.PSBReportBuild.model(B, { include: inc, figures: figs, planFig: inc.proj === false ? null : planFig(B.P, narrow ? wScr : 0) }); S.key = key; }
++      S.M = window.PSBReportBuild.model(B, { include: inc, figures: figs, planFig: inc.proj === false ? null : planFig(B.P, narrow ? wScr : 0), sumFig: inc.sum === false ? null : sumFig(B, narrow ? wScr : 0), every: o.detail === 'all' }); S.key = key; }
+     const tb = document.getElementById('tabBar');
+     const V = window.SharedReport.mount(box, S.M, { controls: controls(o, B), closed: S.closed, stick: tb ? tb.offsetHeight : 0, spy: true,
+       onGoto: t => { if (/^in:/.test(t)) { if (ctx.goin) ctx.goin(t.slice(3)); } else if (ctx.goto) ctx.goto(t); } });
++    box.querySelectorAll('[data-rpdetail]').forEach(el => el.addEventListener('change', () => { if (!el.checked) return; o.detail = el.dataset.rpdetail; if (ctx.save) ctx.save(); render(host, ctx); }));
+     box.querySelectorAll('[data-rpworked]').forEach(el => el.addEventListener('change', () => { if (!el.checked) return; o.worked = el.dataset.rpworked; if (ctx.save) ctx.save(); render(host, ctx); }));
+     box.querySelectorAll('[data-rpinc]').forEach(el => el.addEventListener('change', () => { o.inc = o.inc || {}; o.inc[el.dataset.rpinc] = el.checked; if (ctx.save) ctx.save(); render(host, ctx); }));
+     return V;
+   }
+-  window.PSBReportUI = { render, figures, state: S, PW };
++  window.PSBReportUI = { render, figures, sumFig, state: S, PW };
+ })();
+diff --git a/apps/ps-bridge/ui/stresses.js b/apps/ps-bridge/ui/stresses.js
+index dc34d57..d04e81a 100644
+--- a/apps/ps-bridge/ui/stresses.js
++++ b/apps/ps-bridge/ui/stresses.js
+@@ -48,7 +48,7 @@
+         ...(r.s3TopN != null ? [['Service III top, negative LL', ev(p + 's3TopN', 3, 'ksi')], ['Service I bottom, negative LL (perm / full)', `${ev(p + 's1BotN', 3)} / ${ev(p + 's2BotN', 3, 'ksi')}`]] : [])])
+       + '<div id="gfx_stsec"></div>', 'card-stsel');
+     // the tenth points
+-    const tenth = G.map((q, i) => i).filter(i => Math.abs(G[i].x * 10 / R.L - Math.round(G[i].x * 10 / R.L)) < 1e-6 || i === sel);
++    const tenth = G.map((q, i) => i).filter(i => (ctx.ui && ctx.ui.every) || Math.abs(G[i].x * 10 / R.L - Math.round(G[i].x * 10 / R.L)) < 1e-6 || i === sel);   // ui.every: the Report's "every station" detail (2026-11-15)
+     h += k.card('Stresses at the tenth points (ksi, + compression; moments kip-ft)', `<div class="tscroll"><table class="tbl"><thead><tr><th>x<br>ft</th><th>e<br>in</th><th>A<sub>ps</sub><br>in²</th><th>M<sub>g</sub></th><th>M<sub>DC1</sub></th><th>M<sub>DC2+DW</sub></th><th>M<sub>LL+IM</sub></th><th>Release top</th><th>Release bottom</th><th>Service top perm</th><th>Service I top</th><th>Service III bottom</th></tr></thead><tbody>
+       ${tenth.map(i => { const q = `grid.${i}.`; return `<tr${i === sel ? ' class="sel"' : ''}><td>${ev(q + 'x', 1)}</td><td>${ev(q + 'e', 2)}</td><td>${ev(q + 'Aps', 2)}</td><td>${ev(q + 'Mg', 0, '', 12)}</td><td>${ev(q + 'Mdk', 0, '', 12)}</td><td>${ev(q + 'Msd', 0, '', 12)}</td><td>${ev(q + 'Mll', 0, '', 12)}</td><td>${ev(q + 'relTop', 3)}</td><td>${ev(q + 'relBot', 3)}</td><td>${ev(q + 's1Top', 3)}</td><td>${ev(q + 's2Top', 3)}</td><td>${ev(q + 's3Bot', 3)}</td></tr>`; }).join('')}</tbody></table></div>
+       <p class="note">The governing search runs over every station of the engine (the table shows the tenth points and the selected station). M<sub>LL+IM</sub>: the positive envelope (it maximises the bottom tension and the top compression); the negative envelope enters the interior-support checks.</p>`, 'card-sttab');
+```
+### Saved data (CLAUDE.md §5)
+- No key added or renamed. `psb2.ui` (the page's UI object, per browser) gets the optional `rpt.detail` ('all' or absent). An older psb2.ui without it opens with the default detail.
+### Governing provisions (CLAUDE.md §4)
+- None changed. Every value is an engine value. The reactions are the engine's hand-off function (AASHTO statics as the old app's BXSuperRx), shown with their working.
+- Harness B: 0 differences. The Report now records more values in its Analysis section (Loads and factors used), each compared equal.
+### Check case
+- New project, Interior S1 on G2, simple span L = 120.00 ft:
+  - Support 1 DC1 = (w_g + w_DC1) L / 2 = (0.8256 + w_DC1)(120.00) / 2, as the table shows;
+  - DC2 = w_DC2 (120.00) / 2;
+  - the test checks |DC2 − w_DC2 L / 2| < 0.001 kip on every design.
+- Loads & LLDF line table: 5 rows (G1–G5), G2 marked shown. A § on G5's DF_M opens Exterior S1 on G5 at step ld.dfm.
+- Report Detail "every station": the Analysis table 12 → 63 rows (every 6th station + midspan → every station); Stresses → every grid station; Flexure → every flexFull station.
+### Decisions (pending engineer review)
+- C-D1. The line table is on the tab only, not in the Report (the Report's §1 already lists every type and line).
+- C-D2. Reactions: those of the girder line shown (as the hand-off sends), not of every line. V_w of a continuous unit is the engine's FE end shear per klf (not a worked step; its M_w is).
+- C-D3. "Every station" widens the Analysis, Stresses and Flexure station tables. The worked steps stay at the governing stations (the steel app opens each station's steps on demand).
+### Other copies
+- None.
+### Tests
+- check-syntax: all pass. Engine `psbridge tex project-registry`: 41 files, 435 passed (new psbridge-display-c 20).
+- Harness B: 48,475 shown and 8,392 step values, 0 differences (normal and --import; +128 Report values: the Analysis section's "Loads and factors used", each equal to the old app's); --control exits 1.
+- Smokes: skeleton 271, types 106, 3d 101, figures 225, library 11, undo 7, drawings 6, drawings2 7, autodesign 7, handoffs 12, display 8, tables 5 (new); 0 console errors.
 ## 2026-11-15 — ADB: the Report's "Auto design basis" (§2, last subsection) and a link to it from the Auto design output tab (display only)
 PR #TBD
 ### Request
