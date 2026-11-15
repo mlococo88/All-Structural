@@ -4196,7 +4196,7 @@ index e9eb26f..2aec14f 100644
 ### Other copies
 - None.
 ## 2026-11-15 — PSLT: a list edit is committed before another click or change acts (the Steel Bridge app's fix, PR #1568; input only, no calculation change)
-PR #TBD
+PR #1571: https://github.com/mlococo88/All-Structural/pull/1571
 ### Request
 - The PS Bridge app's copy of `ui/lists.js` should get the same fix as Steel's (PR #1568, its open item of PR #1561): a pending list-table edit should always be committed, including for the lists drawn only in some states.
 - Reproduce in a smoke first.
