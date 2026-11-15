@@ -7710,3 +7710,179 @@ index e4101ff..49912dd 100644
      const { R } = ctx, k = K(), ev = (p, d) => k.ev(R, p, d);
      VK().detCard(slot, { id: 'secFig', title: 'Composite section and strands', sub: `${k.esc(ctx.inp.girder)}, design girder ${k.esc(R.rv ? ctx.inp.proj.girderId : '')}`,
 ```
+
+## 2026-11-15 — Batch G7 / G9: the splitting steel orientation graphic for slabs and box beams (End zone tab, drawn from the section) and the old app's "↩ MCT Analysis" header button when opened from the MCT Generator (display / navigation only)
+PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__
+### Request
+- Old-vs-new review 2026-11-15, rows #85 (splitting-steel orientation for slabs / boxes, the old app's AASHTO Fig. C5.9.4.4.1-2 image, O:7544-7547: draw our own, do not copy AASHTO art) and #131 ("↩ MCT Analysis", O:9702 with bridgeNav, O:2477).
+### What changed
+- **`ui/endzone.js`**: a graphic card `gfx_ezsplit` (only for a deck slab or a box beam, after "Girder end") and `splitFig(R, inp, W)`: (1) the end face, true scale, from halfPolygon / sectionVoids: a slab with horizontal bars across the width above and below the voids, a box with vertical legs in the webs (solid) and horizontal flange bars (dashed, the commentary's second direction, not in the check); (2) the plan (slab) or side view (box) of the end region with the provided splitN bars spread evenly within h/4 = R.splitZone; mounted in `after()` with a caption citing 5.9.4.4.1 / C5.9.4.4.1. Exported `splitFig`.
+- **New `ui/mctnav.js`** (window.PSBMctNav): `fromMct(w)` 'frame' (framed by another page) / 'tab' (opened from the repo-root index.html: referrer or opener, or `#from=mct` / `?from=mct`) / ''; `back(w, how)`: framed, the old message `{ source: 'bridge-suite', embed: null }` to the parent (the MCT shows itself), else `location.href = '../../index.html'`; `mount(btn, w)`.
+- **`index.html`**: the script; a header button `#bMct` "↩ MCT Analysis" (hidden unless opened from the MCT) after "← All tools"; its CSS; `PSBMctNav.mount($('bMct'), window)` after the Undo / Redo wiring.
+### Saved data (CLAUDE.md §5)
+- None. No key read or written (the old app's bridgeSuite.v1.appPaths record is not used: switch-over item).
+### Governing provisions (CLAUDE.md §4)
+- None changed (display / navigation). Open item (not changed; raised in the PR): for box beams the engine takes h = the overall height (pbd-compute.js `splitH = g.isDeck ? w : h`), where AASHTO LRFD 10th Ed. 5.9.4.4.1 says the lesser of the overall width or height for box / tub girders (e.g. AASHTO BIV-36 (42in): 42 in deep, 35.5 in wide → h/4 = 10.5 in used, 8.9 in by the article).
+- Decision (pending engineer review): the old app showed "↩ MCT Analysis" always; here only when the page was opened from the MCT (framed, from the MCT's file, or #from=mct), because the MCT opens the old app until the switch-over.
+### Check case
+- AASHTO SIV-48 voided slab: R.splitDir = 'width', h/4 = 48 / 4 = 12.0 in, the plan view "bars across the width"; AASHTO BIII-36 box: 'height', h/4 = 39 / 4 = 9.8 in, "legs in each web".
+### How verified
+- New tests/engine/psbridge-gsplitmct.test.mjs (2), tests/smoke/ps-bridge-gsplitmct.mjs. PS checks: see the PR.
+### Other copies
+- None.
+### Code (the PR's diff of the app files)
+```diff
+diff --git a/apps/ps-bridge/index.html b/apps/ps-bridge/index.html
+index a8d107d..ab8582d 100644
+--- a/apps/ps-bridge/index.html
++++ b/apps/ps-bridge/index.html
+@@ -115,6 +115,7 @@
+     'ui/sumelev.js',  // 2026-11-14 (item 8a): the Summary's girder elevation of each girder type (picker; the governing checks where they govern)
+     'ui/autodesign.js', // item A (2026-11-14): the Auto design input tab (settings, Run) and output tab (candidates, Apply as one Undo step)
+     'ui/summary.js',  // PR 3b: the Summary tab (adapted copy of apps/steel-bridge/ui/summary.js): verdict, girder × span grid, type × check table
++    'ui/mctnav.js',   // batch G9 (2026-11-15): the old app's "↩ MCT Analysis" header button (shown when opened from the MCT Generator)
+     'ui/splitter.js'  // the splitter between the input and output panels (copy of apps/steel-bridge/ui/splitter.js)
+   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
+ })();
+@@ -148,6 +149,7 @@
+   #hdrUR{display:inline-flex;gap:6px;align-items:center;white-space:nowrap;}
+   #hdr .allToolsLink{font-size:8.5pt;color:#C7D4E4;text-decoration:none;font-family:var(--font-ui);}
+   #hdr .allToolsLink:hover{color:#fff;text-decoration:underline;}
++  #hdr .mctBack{font-size:8.5pt;margin-left:10px;padding:1px 8px;}   /* batch G9: the old app's "↩ MCT Analysis" */
+   #main{flex:1 1 auto;display:flex;min-height:0;}
+   /* 2026-11-15 (batch A): the footer of the old app (Prestressed Bridge Design.html .footer): the version line and the design-aid disclaimer */
+   #appFoot{flex:0 0 auto;display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 16px;padding:3px 14px;border-top:1px solid var(--color-border);background:var(--slate-100);color:#475569;font-family:var(--font-ui);font-size:7.5pt;letter-spacing:.04em;text-transform:uppercase;}
+@@ -333,7 +335,7 @@
+       <div>
+         <h1>Prestressed Bridge Design <span style="font-weight:400;font-size:11pt">(new, in development)</span></h1>
+         <div class="byline">AASHTO LRFD 10th Ed. (2024) <span id="saveState" aria-live="polite"></span></div>
+-        <a class="allToolsLink" href="../../tools.html" title="Open the list of all tools">&larr; All tools</a>
++        <a class="allToolsLink" href="../../tools.html" title="Open the list of all tools">&larr; All tools</a> <button type="button" id="bMct" class="mctBack" hidden title="Back to the MIDAS / MCT analysis app (shown when this page was opened from it)">↩ MCT Analysis</button>
+       </div>
+       <div id="hdrBtns">
+         <span id="hdrUR"><!-- PR 6: Undo and Redo (the steel app's header, apps/steel-bridge/index.html), kept together when the header wraps -->
+@@ -889,6 +891,7 @@
+   /* PR 6: Undo / Redo buttons and keys, as the steel app: Ctrl+Z undo, Ctrl+Y or Ctrl+Shift+Z redo (⌘ on a Mac). Text being typed in a field
+      (an input event since its last change / blur) keeps the browser's own undo of that field; nothing while a dialog is open. */
+   $('bUndo').addEventListener('click', undo); $('bRedo').addEventListener('click', redo);
++  if (window.PSBMctNav) window.PSBMctNav.mount($('bMct'), window);   // batch G9: "↩ MCT Analysis" when opened from the MCT Generator
+   document.addEventListener('input', e => { if (e.target && e.target.dataset) e.target.dataset.typing = '1'; }, true);
+   document.addEventListener('change', e => { if (e.target && e.target.dataset) delete e.target.dataset.typing; }, true);
+   document.addEventListener('blur', e => { if (e.target && e.target.dataset) delete e.target.dataset.typing; }, true);
+diff --git a/apps/ps-bridge/ui/endzone.js b/apps/ps-bridge/ui/endzone.js
+index 741d8ca..7286e97 100644
+--- a/apps/ps-bridge/ui/endzone.js
++++ b/apps/ps-bridge/ui/endzone.js
+@@ -77,6 +77,7 @@
+     if (wD.length) dbh += `<div class="alert"><b>Engine warnings (debonding)</b><ul>${wD.map(w => `<li>${k.esc(w)}</li>`).join('')}</ul></div>`;
+     h += k.card('Debonded strands (5.9.4.3.3)', dbh, 'card-ezdb');
+     h += K().gcard('End zone graphic: girder end', 'gfx_ezend');
++    if (G.isDeck || G.isBox) h += K().gcard('End zone graphic: splitting steel orientation (slabs and box beams)', 'gfx_ezsplit');   // batch G7: the old app's orientation figure (O:7544-7547)
+     h += k.card('Worked steps: end zone and hold-down', `<p class="note">AASHTO LRFD 10th Ed. (2024); the owner rules as cited. Every result is the engine's value (the moved Prestressed Bridge Design engine).</p>${k.steps(ctx.W.endzone.steps, TOPICS, OPEN)}`);
+     return h;
+   }
+@@ -111,6 +112,45 @@
+     S.dimV(0, h, 0, -12, `h = ${V.fx(h, 1)} in`, { sz: 10.5 });
+     return S.render({ W, maxH: Math.min(360, Math.max(220, W * 0.42)), label: 'Girder end: splitting and confinement steel' }).svg;
+   }
++  /* batch G7 (2026-11-15): the orientation of the splitting steel in a slab or box beam (the old app showed AASHTO Fig. C5.9.4.4.1-2; drawn
++     here from the section, not copied): (1) the end face (the section at the member end, true scale) with the bars in the direction the
++     engine evaluates (R.splitDir: a slab, horizontal bars across the width; a box, vertical legs in the webs) and, for a box, the horizontal
++     bars of the flanges the commentary describes (C5.9.4.4.1: tensile zones in both directions); (2) the plan (slab) or side view (box) of
++     the end region: the bars within h/4 of the end (h = the engine's splitH), the provided count spread evenly (positions are not inputs).
++     Display only. */
++  function splitFig(R, inp, W) {
++    const V = VK(), G = R.g, o = inp.opt, zone = R.splitZone, n = Math.max(0, Math.round(+o.splitN || 0)), nar = W < 560, slab = R.splitDir === 'width';
++    const w = +G.w || +G.btf, h = G.h, BL = '#1D4ED8';
++    // (1) the end face
++    const A = V.scene(), half = halfPolygon(G), poly = half.concat(half.slice().reverse().map(p => [-p[0], p[1]]));
++    A.poly(poly, 'dt-cc');
++    sectionVoids(G).forEach(v => { if (v.type === 'rect') A.rect(v.x - v.w / 2, v.y - v.h / 2, v.x + v.w / 2, v.y + v.h / 2, 'dt-cc', { fill: '#fff' }); else A.circ(v.x, v.y, v.d / 2, 'dt-cc', { fill: '#fff' }); });
++    const cov = 2;
++    if (slab) {
++      const vs = sectionVoids(G), yB = vs.length ? Math.max(cov, Math.min(...vs.map(v => v.y - (v.d || v.h) / 2)) / 2) : cov, yT = vs.length ? h - Math.max(cov, (h - Math.max(...vs.map(v => v.y + (v.d || v.h) / 2))) / 2) : h - cov;
++      [yB, yT].forEach(y => A.line(-w / 2 + cov, y, w / 2 - cov, y, 'dt-ol', { stroke: BL, sw: 2.2 }));
++      A.region(-w / 2, 0, w / 2, h, `Splitting bars horizontal, across the overall width w = ${V.fx(w, 1)} in (the h of 5.9.4.4.1 for a slab)`);
++      A.callout(w / 2 - cov, yT, 18, -16, ['splitting bars', 'horizontal'], { sz: 10.5 });
++    } else {
++      const v = sectionVoids(G)[0], tw = v ? (w - v.w) / 2 : w / 4, xs = [-w / 2 + tw / 2, w / 2 - tw / 2];
++      xs.forEach(x => A.line(x, cov, x, h - cov, 'dt-ol', { stroke: BL, sw: 2.2 }));
++      if (v) [[cov, v.y - v.h / 2], [v.y + v.h / 2, h - cov]].forEach(([y0, y1]) => A.line(-w / 2 + cov, (y0 + y1) / 2, w / 2 - cov, (y0 + y1) / 2, 'dt-ol', { stroke: BL, sw: 1.4, dash: '6 3' }));
++      A.region(-w / 2, 0, w / 2, h, `Splitting legs vertical in the webs (solid); dashed: horizontal bars in the top and bottom flanges (the commentary's second direction)`);
++      A.callout(xs[1], h * 0.7, 18, -10, ['legs in the webs', 'vertical'], { sz: 10.5 });
++    }
++    A.dimH(-w / 2, w / 2, h, 14, `w = ${V.fx(w, 1)} in`, { sz: 10.5 }); A.dimV(0, h, -w / 2, -12, `h = ${V.fx(h, 1)} in`, { sz: 10.5 });
++    A.text(0, 0, 'End face (at the member end)', { a: 'middle', dy: 18, sz: 11, cls: 'dt-m' });
++    // (2) plan (slab) or side view (box) of the end region
++    const B = V.scene(), dep = slab ? w : h, len = Math.max(zone * 2.2, dep * 0.9), x0 = Math.min(1.5, zone / 4);
++    B.rect(0, 0, len, dep, 'dt-cc'); B.line(len, -2, len, dep + 2, 'dt-cl');
++    B.rect(0, 0, zone, dep, 'dt-sel', { op: 0.55 });
++    for (let i = 0; i < Math.min(n, 40); i++) { const x = n > 1 ? x0 + i * (zone - 2 * x0) / (n - 1) : zone / 2; B.line(x, 1.5, x, dep - 1.5, 'dt-ol', { stroke: BL, sw: 1.6 }); }
++    B.region(0, 0, zone, dep, `${n} ${slab ? 'bars' : 'legs'} within h/4 = ${V.fx(zone, 1)} in of the member end (h = the overall ${R.splitDir}, ${V.fx(R.splitH, 1)} in)`);
++    B.dimH(0, zone, dep, 14, `h/4 = ${V.fx(zone, 1)} in`, { sz: 10.5 }); B.dimV(0, dep, 0, -12, slab ? `w = ${V.fx(w, 1)} in` : `h = ${V.fx(h, 1)} in`, { sz: 10.5 });
++    B.text(len / 2, 0, slab ? 'Plan of the end region (bars across the width)' : 'Side view of the end region (legs in each web)', { a: 'middle', dy: 18, sz: 11, cls: 'dt-m' });
++    const sw = nar ? W : Math.floor((W - 14) / 2), mh = Math.min(300, Math.max(200, sw * 0.7));
++    return { html: `<div class="vk-figs"${nar ? ' style="flex-direction:column"' : ''}><div style="width:${sw}px">${A.render({ W: sw, maxH: mh, label: 'End face: splitting steel orientation' }).svg}</div><div style="width:${sw}px">${B.render({ W: sw, maxH: mh, label: 'End region: splitting steel within h/4' }).svg}</div></div>`, nar };
++  }
+   /* the draped strands from ℄ bearing to midspan (vertical scale exaggerated) with the hold-down points and, where the owner check applies,
+      the force n_h F_str at each */
+   function hdFig(R, W) {
+@@ -148,6 +188,11 @@
+         hint: 'Point at (or tap) a bar for its value.', legend: VA().legend('ratio'),
+         caption: '<p class="vk-cap">The engine\'s ratios (cards below). Confinement: the three detailing limits of 5.9.4.4.2; hold-down and debonded share: the owner rules where they apply. Display only.</p>' });
+     }
++    const s4 = el.querySelector('#gfx_ezsplit');   // batch G7
++    if (s4 && VK() && VK().detCard) { const slab = R.splitDir === 'width';
++      VK().detCard(s4, { id: 'ezSplitFig', title: 'Splitting steel orientation: ' + (slab ? 'solid or voided slab' : 'box beam'), sub: `${k.esc(inp.girder)}; true scale`,
++        draw: W => splitFig(R, inp, W), hint: 'Point at (or tap) the bars or the end region for their values.',
++        cap: `<p class="vk-cap">AASHTO LRFD 10th Ed. 5.9.4.4.1 and C5.9.4.4.1 (Figs. C5.9.4.4.1-1 and -2 show examples; this drawing is the app's own, from the section). ${slab ? 'Slab: the splitting reinforcement is horizontal, within h/4 of the end, h = the overall width; the bars run across the width, above and below the voids.' : 'Box beam: the engine evaluates vertical reinforcement in the webs within h/4 of the end, h = the overall height (the Splitting card above); the commentary notes tensile zones in both directions in the webs and flanges of box and tub girders, so horizontal bars in the flanges are drawn dashed (not in the check).'} The provided ${slab ? 'bars' : 'legs'} (${k.fx(+o.splitN || 0, 0)}) are spread evenly over the zone: their positions are not inputs. Display only.</p>` }); }
+     const s2 = el.querySelector('#gfx_ezend');
+     if (s2 && VK() && VK().detCard) VK().detCard(s2, { id: 'ezEndFig', title: 'Girder end: splitting and confinement steel', sub: `${k.esc(inp.girder)}, h = ${k.fx(R.g.h, 1)} in; true scale`,
+       draw: W => ({ html: endFig(R, inp, W), nar: W < 560 }), hint: 'Point at (or tap) the splitting zone or the confinement bars for their values.',
+@@ -157,5 +202,5 @@
+       draw: W => ({ html: hdFig(R, W), nar: W < 560 }), hint: 'Point at (or tap) the draped strands for their values.',
+       cap: `<p class="vk-cap">${(R.own && R.own.hd) || (R.ps10 && !R.ps10.off) ? 'The arrow: the hold-down force of the draped strands at one hold-down point, n<sub>h</sub> F<sub>str</sub> (two points per beam: F<sub>hd</sub> = 2 n<sub>h</sub> F<sub>str</sub>).' : 'No hold-down force is computed: the PS-10 box is off (Owner rules tab).'} The other half of the span is symmetric. Display only.</p>` });
+   }
+-  window.PSBUiEndZone = { output, after, TOPICS };
++  window.PSBUiEndZone = { output, after, TOPICS, splitFig };   // splitFig: batch G7, also for tests/engine/psbridge-gsplitmct.test.mjs
+ })();
+diff --git a/apps/ps-bridge/ui/mctnav.js b/apps/ps-bridge/ui/mctnav.js
+new file mode 100644
+index 0000000..311a746
+--- /dev/null
++++ b/apps/ps-bridge/ui/mctnav.js
+@@ -0,0 +1,33 @@
++/* apps/ps-bridge/ui/mctnav.js — the old app's "↩ MCT Analysis" header button (window.PSBMctNav). Classic script. Created 2026-11-15 (batch G9;
++   the old app O:9702 and its bridgeNav(null), O:2477-2486).
++   The old app showed the button always; here it is shown when the page was opened from the MCT Generator (index.html at the repo root):
++   framed by it (window.top is another page), opened by it in a new tab (window.opener set, document.referrer the MCT's file) or with
++   "#from=mct" / "?from=mct" in the address. Click: framed, the old message to the parent window { source: 'bridge-suite', embed: null }
++   (the MCT shows itself again, as for the old app); otherwise this tab goes to the MCT Generator, ../../index.html (the old app's built-in
++   path for the MCT; the old app's appPaths record of where each app was last opened, bridgeSuite.v1.appPaths, is not read: it is part of
++   the switch-over). Nothing is saved; no shared key is read or written.
++     fromMct(w) -> 'frame' | 'tab' | ''   back(w, how)   mount(btn, w) */
++(function () {
++  'use strict';
++  const MCT = '../../index.html';
++  const isMctFile = u => { try { const p = decodeURIComponent(String(u || '').split(/[?#]/)[0]).replace(/\\/g, '/'); return /\/index\.html$/i.test(p) && !/\/apps\/[^/]+\/index\.html$/i.test(p); } catch (e) { return false; } };
++  function fromMct(w) {
++    if (!w) return '';
++    let framed = false; try { framed = w.self !== w.top; } catch (e) { framed = true; }
++    if (framed) return 'frame';
++    const loc = w.location || {}, flag = /(^|[?#&])from=mct(&|$)/i.test(String(loc.search || '') + String(loc.hash || ''));
++    const ref = w.document && w.document.referrer ? isMctFile(w.document.referrer) : false;
++    let op = false; try { op = !!w.opener && isMctFile(w.opener.location.href); } catch (e) { op = false; }   // another file:// page: not readable
++    return flag || ref || op ? 'tab' : '';
++  }
++  function back(w, how) {
++    if (how === 'frame') { try { w.parent.postMessage({ source: 'bridge-suite', embed: null }, '*'); return 'message'; } catch (e) { /* fall through */ } }
++    w.location.href = MCT; return 'navigate';
++  }
++  function mount(btn, w) {
++    if (!btn) return ''; const how = fromMct(w); btn.hidden = !how;
++    if (how) btn.onclick = () => back(w, how);
++    return how;
++  }
++  window.PSBMctNav = { MCT, fromMct, back, mount, isMctFile };
++})();
+```
