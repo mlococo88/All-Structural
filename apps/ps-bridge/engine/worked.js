@@ -274,6 +274,22 @@
     } else if (simple) {
       add({ id: 'MLL', label: 'Live load moment per girder at midspan (entered)', sym: 'M_{LL+IM}', value: R.MLL, unit: 'kip-ft', d: 1, note: 'Entered on the Loads tab.' });
       add({ id: 'VLL', label: 'Live load shear per girder at the support (entered)', sym: 'V_{LL+IM}', value: R.VLL, unit: 'kip', d: 2, note: 'Entered on the Loads tab.' });
+    } else if (R.useExt && window.PSBDemands && window.PSBDemands.slice(inp.external, L)) {
+      // batch D1 (2026-11-15): imported demands (a MIDAS file or a custom table, engine/demands.js): the engine's factors on the imported
+      // LL+IM (pbd-compute.js extLL) and its midspan / support values (MLLmid, VLLsup), worked from the file's stations (display only)
+      const DM = window.PSBDemands, F = DM.fac(inp), X = DM.slice(inp.external, L), ref = A10 + '4.6.2.2, 3.6.1.1.2';
+      add({ id: 'xfp', label: 'Factor on the imported LL+IM, positive moment', sym: 'f_{+M}', eq: 'DF_{+M}\\,m', sub: `${n(F.dfp, 3)}(${n(F.m, 2)})`, value: F.pos, unit: '', d: 3, ref, note: 'DF and m: Loads tab (blank = 1.0). Impact is already in the imported live load and is not applied again.' }, F.dfp * F.m);
+      add({ id: 'xfn', label: 'Factor on the imported LL+IM, negative moment', sym: 'f_{-M}', eq: 'DF_{-M}\\,m', sub: `${n(F.dfn, 3)}(${n(F.m, 2)})`, value: F.neg, unit: '', d: 3, ref }, F.dfn * F.m);
+      add({ id: 'xfv', label: 'Factor on the imported LL+IM, shear', sym: 'f_{V}', eq: 'DF_{V}\\,m', sub: `${n(F.dfv, 3)}(${n(F.m, 2)})`, value: F.v, unit: '', d: 3, ref }, F.dfv * F.m);
+      const mp = X.at('M_LLpos', L / 2), mn = X.at('M_LLneg', L / 2), p = F.pos * mp.v, q = F.neg * mn.v;
+      const between = (o, key) => o.a === o.b ? `the file's value at x = ${n(o.a.xr, 2)} ft` : `linear between the file's stations x = ${n(o.a.xr, 2)} ft (${n(+o.a[key] || 0, 2)}) and ${n(o.b.xr, 2)} ft (${n(+o.b[key] || 0, 2)})`;
+      add({ id: 'MLL', label: 'Live load moment per girder at midspan (imported)', sym: 'M_{LL+IM}', eq: '\\left|\\text{larger of } f_{+M}\\,M^{+}_{file},\\ f_{-M}\\,M^{-}_{file}\\right|',
+        sub: `\\left|\\text{larger of } ${n(F.pos, 3)}(${par(mp.v, 2)}),\\ ${n(F.neg, 3)}(${par(mn.v, 2)})\\right|`, value: R.MLL, unit: 'kip-ft', d: 1,
+        note: `M_file at x = L/2 = ${n(L / 2, 2)} ft of the file's span: M+ ${between(mp, 'M_LLpos')}; M− ${between(mn, 'M_LLneg')} (the imported values: Analysis tab).` }, Math.abs(Math.abs(p) >= Math.abs(q) ? p : q));
+      const vp = X.at('V_LLpos', 0), vn = X.at('V_LLneg', 0);
+      add({ id: 'VLL', label: 'Live load shear per girder at the support (imported)', sym: 'V_{LL+IM}', eq: 'f_{V}\\,\\max\\left(\\left|V^{+}_{file}\\right|,\\ \\left|V^{-}_{file}\\right|\\right)',
+        sub: `${n(F.v, 3)}\\max\\left(\\left|${n(vp.v, 2)}\\right|,\\ \\left|${n(vn.v, 2)}\\right|\\right)`, value: R.VLL, unit: 'kip', d: 2, note: 'At the left bearing (x = 0) of the file\'s span.' },
+        Math.max(Math.abs(-vn.v * F.v), Math.abs(-vp.v * F.v)));
     } else {
       add({ id: 'MLL', label: 'Live load moment per girder at midspan (continuous unit)', sym: 'M_{LL+IM}', value: R.MLL, unit: 'kip-ft', d: 1, note: 'HL-93 on the continuous unit (influence lines of the FE model, Analysis tab) × DF_M.' });
       add({ id: 'VLL', label: 'Live load shear per girder at the support (continuous unit)', sym: 'V_{LL+IM}', value: R.VLL, unit: 'kip', d: 2, note: 'HL-93 on the continuous unit × DF_V (Analysis tab).' });
@@ -285,6 +301,7 @@
   function analysis(inp, R) {
     const K = kit('an'), add = K.add, L = R.L, D = R.diagrams, mid = D.reduce((b, r) => Math.abs(r.x - L / 2) < Math.abs(b.x - L / 2) ? r : b, D[0]), s0 = D[0], x = mid.x, own = R.own || { eta: 1, mLL: 1 }, eta = own.eta === undefined ? 1 : own.eta, mLL = own.mLL === undefined ? 1 : own.mLL;
     const fe = R.fe, simple = !fe && !R.useExt;
+    const X = R.useExt && window.PSBDemands ? window.PSBDemands.slice(inp.external, L) : null, XF = X ? window.PSBDemands.fac(inp) : null;   // batch D1
     const Mw = (w) => w * x * (L - x) / 2;
     add({ id: 'Mg', label: `Girder self-weight moment at midspan (x = ${n(x, 2)} ft, simple span)`, sym: 'M_{g}', eq: '\\frac{w_{g}\\,x(L - x)}{2}', sub: `\\frac{${n(R.wG, 4)}(${n(x, 2)})(${n(L - x, 2)})}{2}`, value: mid.M_g, unit: 'kip-ft', d: 1 }, Mw(R.wG));
     const dia = (inp.loads.diaph || []).filter(d => +d.P > 0 && +d.a >= 0 && +d.a <= L);
@@ -298,8 +315,17 @@
       add({ id: 'Mw', label: 'Moment at midspan of the design span, unit uniform load on every span of the continuous unit', sym: 'M_{w}', value: mw, unit: 'kip-ft/klf', d: 3, ref: A10 + '5.12.3.3', note: 'Three-moment equation / FE model of the continuous unit (the old app\'s PBD.contFE).' });
       add({ id: 'Mdc2', label: 'DC2 moment at midspan (continuous)', sym: 'M_{DC2}', eq: 'w_{DC2}\\,M_{w}', sub: `${n(R.wBar, 4)}(${n(mw, 3)})`, value: mid.M_DC2, unit: 'kip-ft', d: 1 }, R.wBar * mw);
       add({ id: 'Mdw', label: 'DW moment at midspan (continuous)', sym: 'M_{DW}', eq: 'w_{DW}\\,M_{w}', sub: `${n(R.wDW, 4)}(${n(mw, 3)})`, value: mid.M_DW, unit: 'kip-ft', d: 1 }, R.wDW * mw);
+    } else if (R.useExt && X) {
+      // batch D1 (2026-11-15): imported DC2 / DW (a MIDAS file or a custom table): the engine's linear interpolation of the file's stations
+      [['Mdc2', 'DC2', 'M_DC2', 'M_{DC2}', mid.M_DC2], ['Mdw', 'DW', 'M_DW', 'M_{DW}', mid.M_DW]].forEach(([id, lab, key, sym, v]) => { const o = X.at(key, x), one = o.a === o.b;
+        add({ id, label: `${lab} moment at midspan (imported, x = ${n(x, 2)} ft of the file's span)`, sym, eq: one ? '' : 'M_{a} + (M_{b} - M_{a})\\frac{x - x_{a}}{x_{b} - x_{a}}',
+          sub: one ? '' : `${par(+o.a[key] || 0, 2)} + (${par(+o.b[key] || 0, 2)} - ${par(+o.a[key] || 0, 2)})\\frac{${n(x, 2)} - ${n(o.a.xr, 2)}}{${n(o.b.xr, 2)} - ${n(o.a.xr, 2)}}`, value: v, unit: 'kip-ft', d: 1,
+          note: one ? `The file's value at its station x = ${n(o.a.xr, 2)} ft.` : `Between the file's stations x_a = ${n(o.a.xr, 2)} ft and x_b = ${n(o.b.xr, 2)} ft (the imported values: Imported demands card).` }, one ? undefined : o.v); });
     }
-    add({ id: 'Mll', label: 'Live load moment (LL+IM) at midspan, positive envelope', sym: 'M_{LL+IM}', value: mid.M_LLpos, unit: 'kip-ft', d: 1,
+    if (X) { const o = X.at('M_LLpos', x);   // batch D1: the imported positive envelope × f_+M
+      add({ id: 'Mll', label: 'Live load moment (LL+IM) at midspan, positive envelope (imported)', sym: 'M_{LL+IM}', eq: 'f_{+M}\\,M^{+}_{file}(x)', sub: `${n(XF.pos, 3)}(${par(o.v, 2)})`, value: mid.M_LLpos, unit: 'kip-ft', d: 1,
+        note: `f_+M = DF_+M m (Loads & LLDF tab); M+_file(x) ${o.a === o.b ? `at the file's station x = ${n(o.a.xr, 2)} ft` : `linear between the file's stations x = ${n(o.a.xr, 2)} and ${n(o.b.xr, 2)} ft`}.` }, XF.pos * o.v); }
+    else add({ id: 'Mll', label: 'Live load moment (LL+IM) at midspan, positive envelope', sym: 'M_{LL+IM}', value: mid.M_LLpos, unit: 'kip-ft', d: 1,
       note: simple && inp.loads.llAuto ? 'HL-93 envelope at x: each axle placed at x, both truck orientations and the tandem, with IM = 33 % on the vehicles, plus the lane load, × DF_M (Loads & LLDF tab).' : simple ? 'Entered M_LL (parabola along the span).' : 'HL-93 on the continuous unit × DF_M.' });
     add({ id: 'Mdc', label: 'Total DC moment at midspan', sym: 'M_{DC}', eq: 'M_{g} + M_{DC1} + M_{DC2}', sub: `${n(mid.M_g, 1)} + ${n(mid.M_DC1, 1)} + ${n(mid.M_DC2, 1)}`, value: mid.M_DC, unit: 'kip-ft', d: 1 }, mid.M_g + mid.M_DC1 + mid.M_DC2);
     add({ id: 'MuS', label: 'Strength I moment at midspan', sym: 'M_{u}', eq: '\\eta(1.25\\,M_{DC} + 1.50\\,M_{DW} + 1.75\\,m\\,M_{LL+IM})', sub: `${n(eta, 4)}(1.25(${n(mid.M_DC, 1)}) + 1.50(${n(mid.M_DW, 1)}) + 1.75(${n(mLL, 2)})(${n(mid.M_LLpos, 1)}))`, value: mid.M_StrI_pos, unit: 'kip-ft', d: 1, ref: A10 + 'Table 3.4.1-1, 3.4.1-2' },

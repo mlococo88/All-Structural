@@ -45,6 +45,8 @@
     const BR = window.PSBBridge;   // PR 3a-1: the girder types (engine/bridge.js): two types on one line, different shapes in a span (blocking)
     if (BR && P.xs && P.spans) { const c = BR.checks(P); c.errors.forEach(e => E(e.path, e.msg, 'types')); c.warnings.forEach(w => warnings.push({ path: w.path, msg: w.msg, src: 'types' })); }
     if (window.PSBBridgeDL && P.xs) window.PSBBridgeDL.checks(P).forEach(e => E(e.path, e.msg, 'dl'));   // PR 3a-3: the DC2 / DW distribution inputs
+    if (window.PSBDemands && P.xs && P.spans) { const c = window.PSBDemands.checks(P);   // batch D1: the demand source of each girder type (MIDAS file, custom table)
+      c.errors.forEach(e => errors.push(e)); c.warnings.forEach(w => warnings.push(w)); }
     const Ls = s => P.spans && Array.isArray(P.spans.lengths) ? P.spans.lengths[s - 1] : NaN;
     const lS = g => (window.PSBDesign && P.xs ? window.PSBDesign.lineS(P, g) : NaN);   // PS-28: the girder spacing of a line (a NEXT flange width)
     inputsOf(P, P.base, Ls(window.PSBDesign ? window.PSBDesign.sel(P).s : 1), E, lS(window.PSBDesign ? window.PSBDesign.sel(P).g : 1));

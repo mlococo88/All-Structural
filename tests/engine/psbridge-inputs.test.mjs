@@ -75,9 +75,9 @@ test('every engine input of the old app\'s DEFAULTS is on an input tab, driven b
   walk(D, '');
   const fields = new Set(W.PSBFields.ALL().map(f => f.p.slice(5))), tables = Object.keys(W.PSBFields.TABLES).map(t => t.slice(5));
   const driven = W.PSBDesign.DRIVEN;
-  // not exposed by the old app's input cards either (fixed values or its stability-screening constants); MIDAS: a later PR
-  const NOT = ['str.fpu', 'str.lowlax', 'handling.sweep', 'handling.fr', 'handling.zo', 'handling.ag', 'handling.gFactor', 'deck.method', 'opt.splitFy',
-    'loads.extDFpos', 'loads.extDFneg', 'loads.extDFv', 'loads.extLLmpf', 'external'];
+  // not exposed by the old app's input cards either (fixed values or its stability-screening constants); external: the Demands card of each
+  // girder type (P.demands, engine/demands.js, batch D1; the DF / m per effect loads.extDF* are fields of the Loads tab since D1)
+  const NOT = ['str.fpu', 'str.lowlax', 'handling.sweep', 'handling.fr', 'handling.zo', 'handling.ag', 'handling.gFactor', 'deck.method', 'opt.splitFy', 'external'];
   const miss = leaves.filter(l => !fields.has(l) && !tables.includes(l) && !NOT.includes(l) && !driven.some(d => l === d || l.startsWith(d + '.')));
   assert.deepEqual(miss, []);
   W.PSBFields.ALL().forEach(f => { assert.ok(f.t.length > 10, 'tooltip ' + f.p); assert.ok(W.PSBFields.tabOf(f.p) === f.card.tab, f.p); });

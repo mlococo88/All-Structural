@@ -5522,6 +5522,1069 @@ PR #1574: https://github.com/mlococo88/All-Structural/pull/1574
 ### Other copies
 - None.
 
+## 2026-11-15 — Batch D1: demand source per girder type — this app's analysis, a custom demand table or a MIDAS demands file (the old app's MIDAS import; a new calculation input path, CLAUDE.md §4)
+PR #1573: https://github.com/mlococo88/All-Structural/pull/1573
+### Request
+- Engineer-approved plan A→H (2026-11-15), batch D1: the highest-priority parity gap with the old app (review old-vs-new.md rows #34 / #63,
+  ps-vs-steel.md I15). An old design that ran on MIDAS envelopes imported into this app but silently used the built-in HL-93
+  (ui/inputs.js placeholder; engine/legacy.js refused the file; PS-18 "MIDAS demands stay kept, restored when the MIDAS import arrives").
+### What changed
+- `apps/ps-bridge/engine/demands.js` (new, `window.PSBDemands`): the demand source of each girder type, saved as the new optional field
+  `P.demands = { '<type id>': { src: 'app' | 'table' | 'midas', midas: { file, name, at }, span, table: { rows } } }`. `external(P, T)` gives
+  the engine the old app's own input `inputs.external` (the file as read with the span chosen, `_selSpan`; a custom table put in the file's
+  form). `parse()` reads a MIDAS file (the old app's import, O:9539-9548, plus: readable stations, `factored: true` refused); `checks()` the
+  input errors / warnings; `slice()` / `fac()` the display helpers of the worked steps (buildExternal's rule, pbd-compute.js fac1).
+- `engine/design.js` `inputs()` / `cellInputs()`: `withDemands(P, T, o)` adds `o.external` for a type with a file or a table; nothing else.
+- `engine/legacy.js`: `convert()` puts an old design's MIDAS demands in `P.demands.T1` (its stored `_selSpan` kept: the engine inputs are the
+  old app's); `restore()` gives a restored cell's MIDAS demands to its type (grouped with them); `fromText()` names the Loads tab for a MIDAS
+  file. The summary item is now 'ok' ("the demands of this girder design ... as the old app gave them").
+- `engine/inputcheck.js`: the demand errors / warnings (scope = the type). `engine/fields.js`: `tabOf('demands.*')` = 'loads'; new card
+  `extll` (the old app's DF +M / −M / V and m on imported live load, `loads.extDFpos / extDFneg / extDFv / extLLmpf`, blank = 1.0), shown
+  while a type uses a file or a table; the 'll' card note. `engine/model.js`: the field documented; `validate` (an object).
+- `ui/demands.js` (new): the Loads tab's Demands card (source select; MIDAS: choose file, "Running on MIDAS demands" banner, span picker,
+  "✕ use this app's analysis", the imported values of the span (details); the import guide dialog (the old app's MidasHelp text); the custom
+  table with paste from Excel) and the output tabs' source line `srcBar` (the Steel Bridge app's).
+- `engine/worked.js`, `engine/worked-strength.js` (display only): with imported demands the steps `ld.xfp / xfn / xfv` (f = DF m),
+  `ld.MLL / VLL` (from the file's stations), `an.Mdc2 / an.Mdw` (the linear interpolation), `an.Mll` (f+M M+file); `sh.Vu`'s components on a
+  simple span with imported demands (the engine's own, before the w (L/2 − x) formulas, wrong for a file: a display bug of the import path).
+- `ui/analysis.js`: "Imported demands of the span" card (as read and as the engine takes them, linked to the Strength I / Service / pier
+  steps), "Loads and factors used" and the reactions' working for imported demands. `ui/loads.js`: "Live load from the imported demands"
+  card, DC2 / DW rows say the moments and shears are imported. `ui/inputs.js`: the placeholder card removed, the assumption added.
+- `index.html`: the two scripts, the card on the Loads tab, its events (change, click, paste), the source line on the output tabs, CSS.
+- Display of the demand warnings (not blocking): the Demands card (`#dmWarn`) and the source line (`.srcBar.warn`, "Check: …").
+### Saved data (CLAUDE.md §5)
+- New optional field `P.demands` (engine/model.js doc). Absent in every project saved before = every type on this app's analysis: the
+  project text is byte-identical through import / export and computes as before (test). No key added or renamed; the old app's keys and
+  its MIDAS file format are read only. `psb2.ui` unchanged.
+### Governing provisions (CLAUDE.md §4)
+- No formula, factor, unit or reference of the engine changed (engine/pbd-*.js not edited). New calculation input path: the frozen engine's
+  own MIDAS path (the old app's, pbd-compute.js `extLL` / `buildExternal`, AASHTO LRFD 10th Ed. Table 3.4.1-1 combinations, Art. 5.12.3.3
+  continuity at the pier, 4.6.2.2 / 3.6.1.1.2 for the DF and m entered on imported live load) is reachable from the new app.
+### Check case (tests/engine/psbridge-midas.test.mjs, "§4 check case")
+- Default BT-72 G2, bridge 100 / 120 / 100 ft made continuous, span 2, the old app's test file `tests/projects/ps/midas_3span.json` (its
+  span 2: x = 100 to 220 ft), DF +M 0.62, −M 0.68, V 0.74, m 1.0, AASHTO (η = 1, m_LL = 1).
+- Midspan x = 60 ft = file station 160: M_DC2 174.64, M_DW 145.54, M+_LL,file 1631.59 kip-ft; M_g 1486.0625, M_DC1 1957.50 (this app).
+  M_DC = 3618.2025; M_LL+IM = 0.62 × 1631.59 = 1011.5858; Strength I M_u = 1.25(3618.2025) + 1.50(145.54) + 1.75(1011.5858) = 6511.34 kip-ft.
+  Before (this app's continuous unit, w_DC2 0.30, w_DW 0.25 klf, DF_M 0.7191): M_LL 1627.60, M_u 7589.36 kip-ft.
+- Pier: file x = 100 / 220: M_DC2 −365.36, M_DW −304.46, M−_LL −1034.51 / −1336.65 → M_LL,n = 0.68 × 1336.65 = 908.92; M_r,n 604.38;
+  M_u,n = 1.25(365.36) + 1.50(304.46) + 1.75(908.92) + 604.38 = 3108.38 kip-ft. Before: M_LL,n 1758.40, M_u,n 4594.98 kip-ft.
+- Flexure ratio 0.556 → 0.477; Shear 0.639 → 0.389.
+### Decisions (pending engineer review)
+- D1-a. One demand source per girder type (the Steel app chooses per check tab; this engine computes one design per type).
+- D1-b. L is the bridge span; the file's span is the type's span unless another is chosen; a length difference over 0.005 ft is a warning
+  (not blocking), so imported old designs compute as the old app did.
+- D1-c. A new file import refuses `factored: true` and stations without x; when the file has as many spans as the bridge and they differ,
+  the page asks to set the bridge spans (the old app set L to the span).
+- D1-d. The custom table's shears are in this app's sign; converted to the file's sign for the engine.
+- D1-e. The fatigue check keeps this app's fatigue truck and DF (as the old app did with MIDAS demands).
+### Other copies
+- None (the frozen old app is unchanged).
+### How verified
+- Node: tests/engine/psbridge-midas.test.mjs (new: 5 designs, worked-step pairs, the §4 case by hand, §5 round trip, the file reader, the
+  input checks, the table's signs, restore of MIDAS cells); psbridge-legacy (the 658 harness-A old designs: the 57 with MIDAS demands now
+  identical to the old app, engine input `external` = the old app's); psbridge-inputs, psbridge-model (script list) updated.
+- Harness B with the 5 new designs (tests/engine/psbridge-midas-cases.mjs): every value shown = the old page's own computeAll.
+- Smoke tests/smoke/ps-bridge-demands.mjs (new).
+### Code (before / after: the diff of this change; the two new files in full)
+```diff
+diff --git a/apps/ps-bridge/engine/demands.js b/apps/ps-bridge/engine/demands.js
+new file mode 100644
+index 0000000..0ceb94c
+--- /dev/null
++++ b/apps/ps-bridge/engine/demands.js
+@@ -0,0 +1,185 @@
++/* apps/ps-bridge/engine/demands.js — the demand source of each girder type (window.PSBDemands): this app's analysis, a custom demand table,
++   or a MIDAS demands file (schema psbeam-external-demands, the old app's import). Classic script, no DOM.
++   Created 2026-11-15 (batch D1, the old app's MIDAS import "Prestressed Bridge Design.html" O:5862-5895, 6252-6264, 9539-9548; the Steel
++   Bridge app's demand-source choice, apps/steel-bridge/ui/demands.js). No formula here: the imported or entered demands are given to the
++   moved engine the way the old app gave them, as inputs.external (an object of schema psbeam-external-demands with the span chosen,
++   _selSpan), which computeAll reads through its own buildExternal / externalSpans / contUnit (engine/pbd-external.js, unchanged). The DF per
++   effect and the multiple presence m on the imported live load are the old app's own inputs loads.extDFpos / extDFneg / extDFv / extLLmpf
++   (Loads tab; per girder type like every Loads field).
++
++   Saved with the project (CLAUDE.md §5; a new optional field, absent in every project saved before: every type then uses this app's
++   analysis, as before, so those projects are byte-identical and compute as before):
++     P.demands = { '<type id>': { src: 'app' | 'table' | 'midas',
++                                  midas: { file: <the psbeam-external-demands object as read>, name: <file name>, at: <ISO time read> },
++                                  span: <the MIDAS span (1-based) of the file used for this type; absent: the type's own span; 0: none
++                                         chosen (only an old-app design saved so: the whole member, as the old app's engine read it)>,
++                                  table: { rows: [ { x, M_DC2, M_DW, M_LLpos, M_LLneg, V_DC2, V_DW, V_LLpos, V_LLneg } ] } } }
++   A source other than 'app' keeps the other source's data (switching back and forth loses nothing). The MIDAS file is kept as read; an
++   old-app design's demands (engine/legacy.js) are kept with their own _selSpan, so the engine inputs are the old app's exactly.
++   The custom table: per girder, unfactored, the span's stations x (ft from its left bearing); moments kip-ft (sagging +), shears kip in this
++   app's sign (+ at the left support under gravity load, V = dM/dx); LL+IM with the impact, and the distribution factor unless it is entered
++   below (DF / m per effect, Loads tab). It is put in the file's form: shears negated (MIDAS's sign, which buildExternal negates back) and the
++   LL shear branches exchanged (buildExternal takes the app's + branch from the file's −), on the bridge's own spans (supports at the span
++   ends), so the engine reads the entered values exactly.
++   API: SCHEMA, SRC, COLS; isFile(o); parse(text, fileName); spans(file); entry(P, id); srcOf(P, id); pickOf(P, T); external(P, T);
++   setSrc(P, id, src); setFile(P, id, file, name, at); setSpan(P, id, i); tableRows(P, id); setTable(P, id, rows); anyExt(P); checks(P);
++   describe(P, T) (the source line of the output tabs). */
++(function () {
++  'use strict';
++  const SCHEMA = 'psbeam-external-demands';
++  const SRC = ['app', 'table', 'midas'];
++  const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
++  const isNum = v => typeof v === 'number' && isFinite(v);
++  const clone = v => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
++  /* the custom table's columns: [key, label (HTML), unit] */
++  const COLS = [['x', 'x', 'ft'], ['M_DC2', 'M<sub>DC2</sub>', 'kip-ft'], ['M_DW', 'M<sub>DW</sub>', 'kip-ft'], ['M_LLpos', 'M<sub>LL+IM</sub> +', 'kip-ft'], ['M_LLneg', 'M<sub>LL+IM</sub> −', 'kip-ft'],
++    ['V_DC2', 'V<sub>DC2</sub>', 'kip'], ['V_DW', 'V<sub>DW</sub>', 'kip'], ['V_LLpos', 'V<sub>LL+IM</sub> +', 'kip'], ['V_LLneg', 'V<sub>LL+IM</sub> −', 'kip']];
++  /* isFile(o): an object of the MIDAS demands schema with stations (the old app's extActive) */
++  const isFile = o => !!(isObj(o) && o._schema === SCHEMA && Array.isArray(o.stations) && o.stations.length);
++  /* spans(file): the spans of the imported member (the old app's own rule, PBD.extSpans = externalSpans) */
++  const spans = f => (isFile(f) && window.PBD && window.PBD.extSpans ? window.PBD.extSpans(f) : []);
++  /* parse(text, fileName): { ok, file, spans, notes } or { ok: false, error }. The old app's import (O:9539-9548) took any object of the
++     schema; added here (2026-11-15, decision pending engineer review): the stations must be readable (each x a number) and the file must
++     say it is unfactored (factored: true is refused; the engine applies the load factors), each read as the old app reads it. */
++  function parse(text, fileName) {
++    let o; try { o = JSON.parse(text); } catch (e) { return { ok: false, error: `Not a JSON file: ${e.message}` }; }
++    const f = fileName ? `"${fileName}"` : 'The file';
++    if (!isObj(o) || o._schema !== SCHEMA) {
++      if (isObj(o) && o.schema === 'psb2.project') return { ok: false, error: `${f} is a project of this app, not a MIDAS demands file: open it with Import JSON (Project tab).` };
++      if (isObj(o) && isFile(o.external)) return { ok: false, error: `${f} is an old-app design with MIDAS demands: import it with "From the old app" (Project tab); its demands come with it.` };
++      return { ok: false, error: `${f} is not a MIDAS demands file (schema ${SCHEMA}, made by the MCT Generator's "Organize for PS-Beam tool").` };
++    }
++    if (!Array.isArray(o.stations) || o.stations.length < 2) return { ok: false, error: `${f} has ${Array.isArray(o.stations) ? o.stations.length : 'no'} station${Array.isArray(o.stations) && o.stations.length === 1 ? '' : 's'}: at least 2 are needed.` };
++    const bad = o.stations.findIndex(s => !isObj(s) || !isNum(+s.x) || s.x === '' || s.x == null);
++    if (bad >= 0) return { ok: false, error: `${f}: station ${bad + 1} has no station x (a number, ft).` };
++    if (o.factored === true) return { ok: false, error: `${f} holds factored demands (factored: true). Export the components unfactored (factored: false): this app applies the LRFD load factors.` };
++    const sp = spans(o), notes = [];
++    if (!sp.length) return { ok: false, error: `${f}: no span could be read (member.supports, member.spans or the station range).` };
++    const u = isObj(o.units) ? o.units : null;
++    if (u && ((u.force && !/^kips?$/i.test(String(u.force))) || (u.length && !/^(ft|feet)$/i.test(String(u.length))))) notes.push(`The file declares units ${JSON.stringify(u)}: this app reads kip, ft and kip-ft (check the export).`);
++    if (o.selfWeightExcluded === false) notes.push('The file says the girder self-weight is not excluded: this app computes the self-weight and DC1 itself and does not read them from the file (M_DC1 / V_DC1 are not used).');
++    return { ok: true, file: o, spans: sp, notes };
++  }
++  const store = P => (P && isObj(P.demands) ? P.demands : null);
++  function entry(P, id) { const s = store(P); return s && isObj(s[id]) ? s[id] : null; }
++  function srcOf(P, id) { const e = entry(P, id); return e && SRC.includes(e.src) ? e.src : 'app'; }
++  /* pickOf(P, T): the MIDAS span used for type T: the one chosen, else the type's own span */
++  function pickOf(P, T) { const e = T ? entry(P, T.id) : null; return e && Number.isInteger(e.span) && e.span >= 1 ? e.span : (T ? T.span : 1); }
++  const spanLens = P => ((P && P.spans && P.spans.lengths) || []).map(Number);
++  /* tableFile(P, s, rows): the entered rows of span s in the file's form (see the header), on the bridge's spans */
++  function tableFile(P, s, rows) {
++    const Ls = spanLens(P), sup = [0]; Ls.forEach(v => sup.push(+(sup[sup.length - 1] + v).toFixed(6)));
++    const x0 = sup[s - 1], v = (r, k) => (isNum(+r[k]) && r[k] !== '' && r[k] != null ? +r[k] : 0);
++    const st = (rows || []).filter(r => isObj(r) && r.x !== '' && r.x != null && isNum(+r.x)).map(r => ({ x: +(x0 + +r.x).toFixed(6), M_DC2: v(r, 'M_DC2'), V_DC2: -v(r, 'V_DC2'), M_DW: v(r, 'M_DW'), V_DW: -v(r, 'V_DW'),
++      M_LLpos: v(r, 'M_LLpos'), M_LLneg: v(r, 'M_LLneg'), V_LLpos: -v(r, 'V_LLneg'), V_LLneg: -v(r, 'V_LLpos') })).sort((a, b) => a.x - b.x);
++    return { _schema: SCHEMA, _version: 1, source: 'custom table', generatedBy: 'PS Bridge app (entered on the Loads tab)', units: { force: 'kip', length: 'ft', moment: 'ft-kip' }, factored: false,
++      liveLoadType: 'entered', member: { mode: 'beam', type: 'beam', supports: sup, spans: Ls, totalLength: sup[sup.length - 1] }, stationCount: st.length, stations: st };
++  }
++  /* external(P, T): the engine's inputs.external of girder type T (null: this app's analysis, or the source is not usable: its input error
++     says why). MIDAS: the file as read with the span chosen (_selSpan: the stored one of an old-app design when it is that span, else the
++     file's span from its own spans); table: the rows in the file's form, span T.span. */
++  function external(P, T) {
++    if (!T) return null;
++    const e = entry(P, T.id), src = srcOf(P, T.id);
++    if (src === 'midas') {
++      const f = e.midas && e.midas.file; if (!isFile(f)) return null;
++      if (e.span === 0) return clone(f);   // an old-app design saved with no span chosen: the whole member, as the old app's engine read it
++      const i = pickOf(P, T), q = spans(f)[i - 1]; if (!q) return null;
++      const sel = isObj(f._selSpan) && +f._selSpan.idx === i ? f._selSpan : q;
++      return Object.assign(clone(f), { _selSpan: clone(sel) });
++    }
++    if (src === 'table') {
++      const rows = tableRows(P, T.id); if (rows.length < 2) return null;
++      const f = tableFile(P, T.span, rows), q = spans(f)[T.span - 1]; if (!q) return null;
++      return Object.assign(f, { _selSpan: q });
++    }
++    return null;
++  }
++  function ensure(P, id) { if (!isObj(P.demands)) P.demands = {}; if (!isObj(P.demands[id])) P.demands[id] = { src: 'app' }; return P.demands[id]; }
++  function setSrc(P, id, src) { if (!SRC.includes(src)) return; if (src === 'app' && !entry(P, id)) return; ensure(P, id).src = src; }
++  function setFile(P, id, file, name, at) { const e = ensure(P, id); e.midas = { file: clone(file), name: String(name || ''), at: at || new Date().toISOString() }; e.src = 'midas'; delete e.span; }
++  function setSpan(P, id, i) { const e = ensure(P, id); if (Number.isInteger(i) && i >= 1) e.span = i; else delete e.span; }
++  function tableRows(P, id) { const e = entry(P, id); return e && isObj(e.table) && Array.isArray(e.table.rows) ? e.table.rows : []; }
++  function setTable(P, id, rows) { const e = ensure(P, id); e.table = { rows: clone(rows) }; }
++  /* anyExt(P): a girder type uses a MIDAS file or a custom table (the Loads tab then shows the DF / m per effect) */
++  function anyExt(P) {
++    const B = window.PSBBridge; if (!B || !store(P)) return false;
++    return B.types(P).some(T => srcOf(P, T.id) !== 'app');
++  }
++  const near = (a, b) => Math.abs(a - b) <= 0.005;   // ft, the engine's own tolerance for a span of the bridge against L (contUnit warning)
++  /* checks(P): { errors, warnings } E = { path, msg, scope } (scope: the type's id; the page marks the field in that type's scope) */
++  function checks(P) {
++    const errors = [], warnings = [], B = window.PSBBridge;
++    if (!B || !store(P) || !P.spans) return { errors, warnings };
++    const Ls = spanLens(P), cont = P.spans.continuity === 'composite' && Ls.length >= 2;
++    B.types(P).forEach((T, k) => {
++      const src = srcOf(P, T.id); if (src === 'app') return;
++      if (!(B.hasTypes(P) ? B.typeLines(P, k).length : true)) return;   // a type on no line is not checked (as its other inputs)
++      const E = (f, msg) => errors.push({ path: `demands.${T.id}.${f}`, msg: `Girder type ${T.label}: ${msg}`, src: 'demands', scope: T.id });
++      const Wn = (f, msg) => warnings.push({ path: `demands.${T.id}.${f}`, msg: `Girder type ${T.label}: ${msg}`, src: 'demands', scope: T.id });
++      const L = Ls[T.span - 1], e = entry(P, T.id);
++      if (src === 'midas') {
++        const f = e.midas && e.midas.file;
++        if (!isFile(f)) { E('src', 'the demands come from a MIDAS file, but no readable file is loaded: choose the file (Loads tab, Demands card) or choose This app\'s analysis.'); return; }
++        const sp = spans(f), i = pickOf(P, T), q = sp[i - 1];
++        if (e.span === 0) { Wn('span', 'no span of the MIDAS member is chosen (an old-app design saved so): the engine reads the whole member from x = 0 with L of the bridge span, as the old app did. Choose the span (Loads tab, Demands card).'); return; }
++        if (!q) { E('span', `the MIDAS member has ${sp.length} span${sp.length > 1 ? 's' : ''}: choose the span of the file used for span ${T.span} of the bridge.`); return; }
++        const sel = isObj(f._selSpan) && +f._selSpan.idx === i ? f._selSpan : q;
++        const n = f.stations.filter(s => +s.x >= +sel.x0 - 1e-6 && +s.x <= +sel.x1 + 1e-6).length;
++        if (n < 2) { E('span', `MIDAS span ${i} has ${n} station${n === 1 ? '' : 's'} in the file: at least 2 are needed.`); return; }
++        if (isNum(L) && !near(+sel.len, L)) Wn('span', `MIDAS span ${i} is ${(+sel.len).toFixed(2)} ft long but span ${T.span} of the bridge is ${L.toFixed(2)} ft: the design uses L = ${L.toFixed(2)} ft with the file's demands of span ${i} re-zeroed to its left bearing (held at the end values past its length). Check the span lengths (Bridge layout tab).`);
++        if (sp.length >= 2 && !cont) Wn('span', `the MIDAS member is continuous (${sp.length} spans) but the bridge has simple spans: the pier negative-moment check is made only for a bridge made continuous (Bridge layout tab).`);
++        if (sp.length === 1 && cont) Wn('span', 'the MIDAS member has one span but the bridge is made continuous: the pier negative moments are the file\'s moments at the ends of that span.');
++      } else if (src === 'table') {
++        const rows = tableRows(P, T.id);
++        if (rows.length < 2) { E('table', 'the custom demand table needs at least 2 rows (stations), e.g. both bearings.'); return; }
++        rows.forEach((r, j) => {
++          if (!isObj(r) || r.x === '' || r.x == null || !isNum(+r.x)) { E(`table.${j}.x`, `custom demands row ${j + 1}: enter the station x (ft from the left bearing).`); return; }
++          if (isNum(L) && (+r.x < -1e-9 || +r.x > L + 1e-9)) E(`table.${j}.x`, `custom demands row ${j + 1}: x = ${r.x} ft is outside span ${T.span} (0 to ${L.toFixed(2)} ft).`);
++          COLS.slice(1).forEach(([c]) => { if (r[c] !== '' && r[c] != null && !isNum(+r[c])) E(`table.${j}.${c}`, `custom demands row ${j + 1}: ${c} must be a number.`); });
++        });
++        const xs = rows.map(r => +r.x).filter(isNum);
++        if (new Set(xs).size !== xs.length) Wn('table', 'two custom demand rows have the same station x: the engine interpolates between neighbouring rows (enter a support twice only when the value jumps).');
++      }
++    });
++    return { errors, warnings };
++  }
++  const fx = (v, d) => (isNum(+v) ? (+v).toFixed(d) : '—');
++  /* describe(P, T): { src, what, detail } for the output tabs' source line */
++  function describe(P, T) {
++    const src = T ? srcOf(P, T.id) : 'app';
++    if (src === 'app') return { src, what: 'This app\'s analysis', detail: 'DC2, DW and LL+IM computed by this app (built-in HL-93; continuous unit when made continuous)' };
++    const e = entry(P, T.id);
++    if (src === 'table') return { src, what: 'Custom table (entered)', detail: `${tableRows(P, T.id).length} rows of span ${T.span} for ${T.label}, Loads tab` };
++    const f = e.midas && e.midas.file, x = external(P, T), q = x && x._selSpan;
++    return { src, what: `MIDAS file${e.midas && e.midas.name ? ' ' + e.midas.name : ''}`, detail: f ? `${f.source || 'midas'} · ${f.generatedBy || 'export'} · project ${f.project || '—'} · ${(f.stations || []).length} stations${q ? ` · span ${q.idx}: ${fx(q.x0, 0)}–${fx(q.x1, 0)} ft (${fx(q.len, 1)} ft)` : ''} · LL type ${f.liveLoadType || '—'}` : 'no file loaded' };
++  }
++  /* slice(ext, L) (display only, for the worked steps and the imported-values table): the stations of the span the engine reads, re-zeroed
++     to its left bearing, by buildExternal's own rule (engine/pbd-external.js: the stations within [x0, x1] of _selSpan, else of the whole
++     member, x_r = x − x0, sorted; span length sel.len, else x1 − x0); at(key, x): its linear interpolation at x (clamped to the span) with
++     the two stations used { v, a, b } (a = b at a station or past an end). The engine's own values are what the tabs show; these reproduce
++     them for the derivation. */
++  function slice(ext, L) {
++    if (!isFile(ext)) return null;
++    const sel = ext._selSpan || { x0: 0, x1: (ext.member && ext.member.totalLength) || L, idx: 0, len: L };
++    const st = ext.stations.filter(s => s.x >= sel.x0 - 1e-6 && s.x <= sel.x1 + 1e-6).map(s => Object.assign({}, s, { xr: s.x - sel.x0 })).sort((a, b) => a.xr - b.xr);
++    if (st.length < 2) return null;
++    const len = sel.len || (sel.x1 - sel.x0);
++    const at = (key, xf) => {
++      const x = Math.min(Math.max(xf, 0), len), n = st.length;
++      if (x <= st[0].xr) return { v: +st[0][key] || 0, a: st[0], b: st[0], x };
++      if (x >= st[n - 1].xr) return { v: +st[n - 1][key] || 0, a: st[n - 1], b: st[n - 1], x };
++      for (let i = 0; i < n - 1; i++) { const a = st[i], b = st[i + 1];
++        if (x >= a.xr && x <= b.xr) { const t = (x - a.xr) / Math.max(b.xr - a.xr, 1e-9); return { v: (+a[key] || 0) + ((+b[key] || 0) - (+a[key] || 0)) * t, a, b, x }; } }
++      return { v: +st[n - 1][key] || 0, a: st[n - 1], b: st[n - 1], x };
++    };
++    return { sel, len, st, at };
++  }
++  /* fac(inp): the engine's factors on the imported live load (pbd-compute.js fac1: blank = 1.0, an entered 0 kept): { dfp, dfn, dfv, m, pos, neg, v } */
++  function fac(inp) {
++    const f1 = v => { if (v === '' || v === null || v === undefined) return 1; const n = +v; return isFinite(n) ? n : 1; }, l = (inp && inp.loads) || {};
++    const m = f1(l.extLLmpf), dfp = f1(l.extDFpos), dfn = f1(l.extDFneg), dfv = f1(l.extDFv);
++    return { dfp, dfn, dfv, m, pos: dfp * m, neg: dfn * m, v: dfv * m };
++  }
++  window.PSBDemands = { slice, fac, SCHEMA, SRC, COLS, isFile, parse, spans, entry, srcOf, pickOf, external, tableFile, setSrc, setFile, setSpan, tableRows, setTable, anyExt, checks, describe };
++})();
+diff --git a/apps/ps-bridge/engine/design.js b/apps/ps-bridge/engine/design.js
+index f65608e..4782f40 100644
+--- a/apps/ps-bridge/engine/design.js
++++ b/apps/ps-bridge/engine/design.js
+@@ -19,6 +19,8 @@
+    DRIVEN: the base paths the bridge sets (not edited in base; shown read-only on the Girders & strands tab).
+    PR 3a-1 (2026-11-13): girder types on the girder lines of each span (engine/bridge.js, PS-8): inputs(P) is the cell the output tabs show
+    (P.design = the line and span shown), cellInputs(P, k, g) any type on any of its lines; the code of one design (one()) is unchanged.
++   Batch D1 (2026-11-15): a girder type whose demands come from a MIDAS file or a custom table (engine/demands.js, P.demands) gets them as
++   inputs.external (withDemands), the old app's own MIDAS input; every other type (and every project saved before) is unchanged.
+    Needs the moved engine (window.PBD, DEFAULTS) loaded first. */
+ (function () {
+   'use strict';
+@@ -113,14 +115,22 @@
+   function inputs(P) {
+     const B = window.PSBBridge;
+     if (B && B.hasTypes(P)) { const c = B.shown(P); if (c) return cellInputs(P, c.k, c.g); }
+-    return one(P);
++    return withDemands(P, B ? B.types(P)[0] : null, one(P));   // batch D1: the one design is type T1 (the type PSBBridge.migrate makes of it)
++  }
++  /* withDemands(P, T, o) (batch D1, 2026-11-15): the demand source of girder type T (engine/demands.js): a MIDAS file or a custom table is
++     given to the engine as inputs.external, the old app's own input (its MIDAS import; computeAll reads it through buildExternal); this
++     app's analysis (every project saved before: no P.demands): o unchanged. */
++  function withDemands(P, T, o) {
++    const DM = window.PSBDemands, x = DM && T ? DM.external(P, T) : null;
++    if (x) o.external = x;
++    return o;
+   }
+   /* cellInputs(P, k, g): the engine inputs of girder type k (engine/bridge.js) on girder line g of its span: the type's inputs (the base
+      design with the type's overrides, PSBBridge.effBase) with the bridge values of that line and span, by the same code as the one design
+      girder (one()). A type with no override on the design girder's line gives exactly one(P). */
+   function cellInputs(P, k, g) {
+     const B = window.PSBBridge, T = B.types(P)[k];
+-    return one(Object.assign({}, P, { base: B.effBase(P, k), design: { g, s: T.span }, types: undefined }));
++    return withDemands(P, T, one(Object.assign({}, P, { base: B.effBase(P, k), design: { g, s: T.span }, types: undefined })));
+   }
+   /* one(P): the engine inputs of the design girder P.design (PR 2b; unchanged) */
+   function one(P) {
+diff --git a/apps/ps-bridge/engine/fields.js b/apps/ps-bridge/engine/fields.js
+index b94888f..919ed25 100644
+--- a/apps/ps-bridge/engine/fields.js
++++ b/apps/ps-bridge/engine/fields.js
+@@ -149,7 +149,16 @@
+       F('base.loads.dfm', 'DF moment, entered', 'lanes', 'Live load distribution factor for moment (lanes per girder, multiple presence included).', 'num', { when: b => !!b.loads.llAuto && !b.loads.dfAuto }),
+       F('base.loads.dfv', 'DF shear, entered', 'lanes', 'Live load distribution factor for shear.', 'num', { when: b => !!b.loads.llAuto && !b.loads.dfAuto }),
+       F('base.loads.fatM', 'Fatigue DF (single lane), entered', 'lanes', 'Single-lane fatigue distribution factor without multiple presence; 0 = from the design DF (÷ 1.2).', 'num', { v: 'nn' })],
+-      note: () => 'Skew and the exterior / interior position come from the bridge (Bridge layout and Cross-section tabs); d<sub>e</sub> and N<sub>L</sub>: <a href="#" data-goin="xsec">Cross-section tab</a>. Imported MIDAS demands (by file) come in a later PR.' },
++      note: () => 'Skew and the exterior / interior position come from the bridge (Bridge layout and Cross-section tabs); d<sub>e</sub> and N<sub>L</sub>: <a href="#" data-goin="xsec">Cross-section tab</a>. The demands of a girder type can come from a MIDAS file or a custom table instead (Demands card above).' },
++    // batch D1 (2026-11-15): the old app's factors on imported (MIDAS) live load (O:6232-6243, its loads.extDFpos / extDFneg / extDFv / extLLmpf):
++    // shown while a girder type takes its demands from a MIDAS file or a custom table (engine/demands.js); blank = 1.0, as the old app
++    { tab: 'loads', id: 'extll', title: 'Imported live load: distribution factor and multiple presence per effect', ref: 'AASHTO LRFD 10th Ed. 4.6.2.2, 3.6.1.1.2', when: (b, P) => !!(window.PSBDemands && window.PSBDemands.anyExt(P)), fields: [
++      F('base.loads.extDFpos', 'DF — positive moment', 'lanes', 'Applied to the imported (or entered) positive LL+IM moment envelope; 1.0 (or blank) = no adjustment (the envelope is per girder already).', 'opt', { v: 'nn' }),
++      F('base.loads.extDFneg', 'DF — negative moment', 'lanes', 'Applied to the imported negative LL+IM moment envelope (and the pier moment); 1.0 (or blank) = no adjustment.', 'opt', { v: 'nn' }),
++      F('base.loads.extDFv', 'DF — shear', 'lanes', 'Applied to the imported LL+IM shear envelope; 1.0 (or blank) = no adjustment.', 'opt', { v: 'nn' }),
++      F('base.loads.extLLmpf', 'Multiple presence m', '', 'Multiplies all three; 1.0 (or blank) = none (already in the envelope or in the DF).', 'opt', { v: 'nn' })],
++      note: b => { const f = v => (v === '' || v == null ? 1 : isFinite(+v) ? +v : 1), m = f(b.loads.extLLmpf), r = v => (f(v) * m).toFixed(3);
++        return `Impact is already in the imported live load and is not applied again. Combined factors DF × m: +M = <b>${r(b.loads.extDFpos)}</b>, −M = <b>${r(b.loads.extDFneg)}</b>, V = <b>${r(b.loads.extDFv)}</b> (worked on the <a href="#" data-gotab="lds">Loads &amp; LLDF tab</a>). These factors apply only to the girder types whose demands come from a file or a table.`; } },
+     // PS-35 (2026-11-14): adjacent box beams and voided slabs, types (f) / (g): the J override (saved per girder type) and the range notice
+     { tab: 'loads', id: 'fglldf', title: 'Box beam / deck slab live load distribution (types f / g)', ref: 'AASHTO LRFD 10th Ed. Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1; Eqs. C4.6.2.2.1-2, C4.6.2.2.1-3', when: fgShape, fields: [
+       F('base.loads.Jfg', 'St. Venant torsional constant J (override)', 'in⁴', 'Blank: J from the library (a DOT value, where one is listed) or computed from the drawn outline (box / voided slab: a closed thin-walled cell, Eq. C4.6.2.2.1-3; solid slab: A⁴ / 40 I_p, Eq. C4.6.2.2.1-2). Enter a value (e.g. from the DOT sheets) to use it for this girder type: labelled "user/DOT value".', 'opt', { v: 'pos' })],
+@@ -197,6 +206,7 @@
+     if (/^(spans|xs\.skews)\b/.test(p)) return 'layout';
+     if (/^xs\b/.test(p)) return 'xsec';
+     if (/^(design|types)\b/.test(p)) return 'gird';   // types: PR 3a-1 (the girder types card)
++    if (/^demands\b/.test(p)) return 'loads';   // batch D1: the demand source of each girder type (Loads tab, Demands card)
+     if (/^base\.(owner|opt\.eta[DRI]|opt\.llMult|opt\.sidewalk)\b/.test(p)) return 'own';
+     for (const t in TABLES) if (p === t || p.indexOf(t + '.') === 0) return TABLES[t].tab;
+     let q = p; while (q) { if (byPath[q]) return byPath[q].card.tab; q = q.replace(/\.?[^.]*$/, ''); }
+diff --git a/apps/ps-bridge/engine/inputcheck.js b/apps/ps-bridge/engine/inputcheck.js
+index 704e7b4..16c2084 100644
+--- a/apps/ps-bridge/engine/inputcheck.js
++++ b/apps/ps-bridge/engine/inputcheck.js
+@@ -45,6 +45,8 @@
+     const BR = window.PSBBridge;   // PR 3a-1: the girder types (engine/bridge.js): two types on one line, different shapes in a span (blocking)
+     if (BR && P.xs && P.spans) { const c = BR.checks(P); c.errors.forEach(e => E(e.path, e.msg, 'types')); c.warnings.forEach(w => warnings.push({ path: w.path, msg: w.msg, src: 'types' })); }
+     if (window.PSBBridgeDL && P.xs) window.PSBBridgeDL.checks(P).forEach(e => E(e.path, e.msg, 'dl'));   // PR 3a-3: the DC2 / DW distribution inputs
++    if (window.PSBDemands && P.xs && P.spans) { const c = window.PSBDemands.checks(P);   // batch D1: the demand source of each girder type (MIDAS file, custom table)
++      c.errors.forEach(e => errors.push(e)); c.warnings.forEach(w => warnings.push(w)); }
+     const Ls = s => P.spans && Array.isArray(P.spans.lengths) ? P.spans.lengths[s - 1] : NaN;
+     const lS = g => (window.PSBDesign && P.xs ? window.PSBDesign.lineS(P, g) : NaN);   // PS-28: the girder spacing of a line (a NEXT flange width)
+     inputsOf(P, P.base, Ls(window.PSBDesign ? window.PSBDesign.sel(P).s : 1), E, lS(window.PSBDesign ? window.PSBDesign.sel(P).g : 1));
+diff --git a/apps/ps-bridge/engine/legacy.js b/apps/ps-bridge/engine/legacy.js
+index 724ac0e..d8a19a6 100644
+--- a/apps/ps-bridge/engine/legacy.js
++++ b/apps/ps-bridge/engine/legacy.js
+@@ -92,7 +92,7 @@
+     let o; try { o = JSON.parse(text); } catch (e) { return { ok: false, error: `Not a JSON file: ${e.message}` }; }
+     const f = fileName ? `the file "${fileName}"` : 'the file';
+     if (isObj(o) && o.schema === 'psb2.project') return { ok: false, error: 'This is a file of this app: open it with Import JSON.' };
+-    if (isObj(o) && o._schema === 'psbeam-external-demands') return { ok: false, error: 'This is a MIDAS demands file of the old app, not a design. The MIDAS demand import comes in a later version of this app.' };
++    if (isObj(o) && o._schema === 'psbeam-external-demands') return { ok: false, error: 'This is a MIDAS demands file of the old app, not a design: load it for a girder type on the Loads tab (Demands card, source "MIDAS file").' };
+     const kind = window.PSBModel.legacyKind(o);
+     if (!kind) return { ok: false, error: 'Not a Prestressed Bridge Design (old app) file: an Export JSON of the old app holds a girder design (girder, mat, str, rows, …).' };
+     if (isObj(o.designs) && (o.mode === 'pl' || o.mode === 'mod') && !(o.girder != null && Array.isArray(o.rows)))
+@@ -141,7 +141,7 @@
+     const ext = old.external != null ? clone(old.external) : null;
+     const extOn = !!(ext && ext._schema === 'psbeam-external-demands' && Array.isArray(ext.stations) && ext.stations.length);
+     const base = M.baseInputs(Object.assign(clone(raw), { external: null }));
+-    const eff = clone(old); eff.external = null;   // the old inputs as this app can hold them
++    const eff = clone(old); if (!extOn) eff.external = null;   // the old inputs as this app can hold them (batch D1: with readable MIDAS demands)
+     // the bridge the old design was computed on
+     const L = +old.L, c = isObj(old.cont) ? old.cont : {};
+     const cs = Array.isArray(c.spans) ? c.spans.map(Number).filter(v => v > 0) : [];
+@@ -163,6 +163,9 @@
+     P.spans = { lengths, continuity: contOn ? 'composite' : 'simple' };
+     P.xs = { nb, bays: Array.from({ length: nb - 1 }, () => S), ohL: oh, ohR: oh, skews: Array.from({ length: lengths.length + 1 }, () => skew) };
+     P.base = base; P.design = { g, s };
++    // batch D1 (PS-18): the old design's MIDAS demands, as read, are the demands of its girder type T1 (engine/demands.js); the span the old
++    // app chose (its _selSpan) is kept with the file, so the engine inputs are the old app's; no span chosen: span 0 = the whole member
++    if (extOn) P.demands = { T1: { src: 'midas', midas: { file: clone(ext), name: 'old app design', at: now || new Date().toISOString() }, span: ext._selSpan && ext._selSpan.idx ? s : 0 } };
+     // the input differences left (engine inputs of the imported project vs the old inputs)
+     // left out: proj (the title block, below), the PS-10 box (new in this app, below) and, when the old design is not made continuous over two
+     // or more entered spans, cont.spans / cont.span (the engine reads them only for a continuous unit, contUnit; the one-span case is noted below)
+@@ -183,7 +186,7 @@
+     if (filled.length) add('mig', `${filled.length} input${filled.length > 1 ? 's were' : ' was'} not in the saved design and take${filled.length > 1 ? '' : 's'} the old app's default, as the old app does (its mergeInputs): ${filled.slice(0, 12).join(', ')}${filled.length > 12 ? ', …' : ''}.`);
+     if (has(raw, 'opt.longAs') && !has(raw, 'opt.longAsBot')) add('mig', `Older field opt.longAs = ${show(raw.opt.longAs)} read as the bottom tie steel opt.longAsBot, as the old app does.`);
+     if (unknown.length) add('kept', `Field${unknown.length > 1 ? 's' : ''} the old app's engine does not use, kept as they are in the base design: ${unknown.slice(0, 12).join(', ')}${unknown.length > 12 ? ', …' : ''}.`);
+-    if (ext) add(extOn ? 'diff' : 'kept', extOn ? `MIDAS demands (imported in the old app${ext.member && ext.member.name ? `, member "${ext.member.name}"` : ''}, ${ext.stations.length} stations${ext._selSpan && ext._selSpan.idx ? `, span ${ext._selSpan.idx}` : ''}): kept in the project, NOT used: this app has no MIDAS demand import yet (a later PR). The design is computed with the built-in analysis instead, so its results differ from the old app's.`
++    if (ext) add(extOn ? 'ok' : 'kept', extOn ? `MIDAS demands (imported in the old app${ext.member && ext.member.name ? `, member "${ext.member.name}"` : ''}, ${ext.stations.length} stations${ext._selSpan && ext._selSpan.idx ? `, span ${ext._selSpan.idx}` : ', no span chosen: the whole member, as the old app read it'}): the demands of this girder design (Loads tab, Demands card: source "MIDAS file"), given to the engine as the old app gave them (batch D1, PS-18).`
+       : 'An empty or unreadable MIDAS demands object (not used by the old app either): kept in the project.');
+     const br = isObj(src && src.bridge) ? src.bridge : null;
+     if (br) {
+@@ -256,6 +259,17 @@
+      cell is computed both ways (the old app's inputs of that cell: PBD.applyBridge on the old model in "Preliminary designer", the stored
+      design in "Design modules"; this project's cell inputs) and the result recorded (the same, or how it differs). P is changed (types,
+      legacy.restored, legacy.summary.items); the old data as read (legacy.inputs, legacy.bridge) is not. Returns the notice text or ''. */
++  /* demOf(ext, s) (batch D1): the MIDAS demands of an old cell as a demand entry key { file, span } (span: s in the old 'pl' model, else the
++     stored _selSpan's, 0 = none chosen), null without a readable file; demOfType(P, T): the same of a type of this project */
++  function demOf(ext, s) {
++    if (!(isObj(ext) && ext._schema === 'psbeam-external-demands' && Array.isArray(ext.stations) && ext.stations.length)) return null;
++    return { file: ext, span: s != null ? s : (ext._selSpan && ext._selSpan.idx ? +ext._selSpan.idx : 0) };
++  }
++  function demOfType(P, T) {
++    const DM = window.PSBDemands, e = DM ? DM.entry(P, T.id) : null;
++    if (!e || DM.srcOf(P, T.id) !== 'midas' || !(e.midas && DM.isFile(e.midas.file))) return null;
++    return { file: e.midas.file, span: Number.isInteger(e.span) ? e.span : T.span };
++  }
+   function restore(P, now) {
+     const BR = window.PSBBridge, D = window.PSBDesign, L = P && P.legacy;
+     if (!BR || !D || !isObj(L) || !isObj(L.bridge) || L.restored || !isObj(L.bridge.designs) || !P.base) return '';
+@@ -270,8 +284,10 @@
+       if (!(g >= 1 && g <= nb && s >= 1 && s <= ns)) { out.skipped.push({ key: k, why: `beyond this bridge (${nb} girders, ${ns} span${ns > 1 ? 's' : ''})` }); return; }
+       const oi = window.PSBModel.baseInputs(Object.assign(clone(br.designs[k]), { external: null }));
+       const ov = BR.diffOvr(P.base, oi); Object.keys(ov).forEach(q => { if (drv(q)) delete ov[q]; });
+-      const pos = BR.posLabel(P, g), gk = s + '|' + pos + '|' + JSON.stringify(ov);
+-      if (!groups.has(gk)) groups.set(gk, { s, pos, ov, cells: [] });
++      // batch D1 (PS-18): a cell's MIDAS demands go with its type (the old 'pl' model computed the file's span s of the cell; 'mod' its own)
++      const cx = demOf(br.designs[k].external, br.mode !== 'mod' ? s : null);
++      const pos = BR.posLabel(P, g), gk = s + '|' + pos + '|' + JSON.stringify(ov) + '|' + JSON.stringify(cx);
++      if (!groups.has(gk)) groups.set(gk, { s, pos, ov, cx, cells: [] });
+       groups.get(gk).cells.push({ key: k, g, s, raw: br.designs[k] });
+     });
+     groups.forEach(G => {
+@@ -280,10 +296,12 @@
+       if (!free.length) return;
+       let k = -1;
+       // the same overrides (none) and position as a type of the span: that type (the design on screen's, as the old app's 'pl' cells shared its inputs)
+-      k = BR.spanTypes(P, G.s).find(j => JSON.stringify(P.types[j].ovr) === JSON.stringify(G.ov) && BR.typeLines(P, j).length && BR.typeLines(P, j).every(h => BR.posLabel(P, h) === G.pos));
++      k = BR.spanTypes(P, G.s).find(j => JSON.stringify(P.types[j].ovr) === JSON.stringify(G.ov) && BR.typeLines(P, j).length && BR.typeLines(P, j).every(h => BR.posLabel(P, h) === G.pos)
++        && JSON.stringify(demOfType(P, P.types[j])) === JSON.stringify(G.cx));
+       if (k == null || k < 0) {
+         P.types.push({ id: BR.nextId(P), label: `${G.pos} S${G.s} (old ${free.map(c => 'G' + c.g).join(', ')})`, span: G.s, lines: [], ovr: clone(G.ov) }); k = P.types.length - 1;
+         out.types.push(P.types[k].id);
++        if (G.cx) { if (!isObj(P.demands)) P.demands = {}; P.demands[P.types[k].id] = { src: 'midas', midas: { file: clone(G.cx.file), name: 'old app design', at: out.at }, span: G.cx.span }; }
+       }
+       free.forEach(c => { BR.assignLine(P, k, c.g); out.cells.push({ key: c.key, g: c.g, s: c.s, type: P.types[k].id }); });
+     });
+@@ -292,7 +310,7 @@
+       const k = BR.typeAt(P, c.s, c.g), inp = D.cellInputs(P, k, c.g);
+       let oldInp = clone(mergeInputs(clone(br.designs[c.key])));
+       if (br.mode !== 'mod') oldInp = PBD().applyBridge(br, oldInp, c.g, c.s);
+-      oldInp.external = null;
++      if (!PBD().extActive(oldInp)) oldInp.external = null;   // batch D1: the cell's MIDAS demands are its type's (above); none: as before
+       const val = R => { const o = Object.assign({}, R); delete o.warns; if (o.cont && o.cont.unit) { o.cont = Object.assign({}, o.cont, { unit: Object.assign({}, o.cont.unit) }); ['src', 'assumed', 'Lbridge'].forEach(q => delete o.cont.unit[q]); } return o; };
+       let Ro, Rn; try { const WL = fn => (window.PSBSections ? window.PSBSections.withLegacy(fn) : fn());   // PS-31: old names with the old entries (as verify)
+         Ro = WL(() => computeAll(clone(oldInp))); Rn = WL(() => computeAll(clone(inp))); } catch (e) { c.same = false; c.why = e.message; return; }
+@@ -305,7 +323,7 @@
+     const text = out.cells.length
+       ? `Restored from the old app's bridge model (PS-17): ${out.cells.length} more girder × span design${out.cells.length > 1 ? 's' : ''} (${out.cells.map(c => c.key).join(', ')}) as girder types on their lines${out.types.length ? ` (${out.types.length} new type${out.types.length > 1 ? 's' : ''})` : ''}; ${nSame} of ${out.cells.length} compute the same as the old app${nSame < out.cells.length ? `; different: ${out.cells.filter(c => !c.same).map(c => `${c.key} (${c.why})`).join('; ')}` : ''}.`
+         + (out.skipped.length ? ` Not restored: ${out.skipped.map(q => `${q.key} (${q.why})`).join('; ')}.` : '') + (un.length ? ` Lines with no girder type (not checked): ${un.map(q => `G${q.g}/S${q.s}`).join(', ')} — Girders & strands tab, "Assign every line".` : '')
+-        + (L.external ? ' The MIDAS demands stay kept, not used (PS-18).' : '')
++        + (out.cells.some(c => demOf((br.designs[c.key] || {}).external, null)) ? ' The restored cells\' MIDAS demands are their types\' demands (Loads tab, Demands card; PS-18).' : '')
+       : (out.skipped.length ? `The old bridge model's other designs were not restored: ${out.skipped.map(q => `${q.key} (${q.why})`).join('; ')}.` : '');
+     if (text && L.summary && Array.isArray(L.summary.items)) L.summary.items.push({ kind: out.cells.length && nSame === out.cells.length ? 'ok' : 'note', text });
+     return text;
+diff --git a/apps/ps-bridge/engine/model.js b/apps/ps-bridge/engine/model.js
+index 8d1abf5..5f881ba 100644
+--- a/apps/ps-bridge/engine/model.js
++++ b/apps/ps-bridge/engine/model.js
+@@ -61,6 +61,11 @@
+                       open-time check above runs once and writes it; written also when such a project is written (exportJSON: the section
+                       chosen with today's library); a new project (newProject) has it. Any other project's stored text is not changed by
+                       opening it. Nothing reads it for a calculation.
++     demands: { '<type id>': { src, midas, span, table } }  added 2026-11-15 (batch D1, the old app's MIDAS demand import), optional within
++                      version 1: the demand source of each girder type (engine/demands.js): 'app' (this app's analysis), 'table' (a custom
++                      demand table) or 'midas' (a MIDAS demands file, kept as read). Absent (every project saved before) = every type uses this
++                      app's analysis, as before: those projects are byte-identical and compute as before (no migration). An old-app design
++                      with MIDAS demands (engine/legacy.js) gets them here for its type (PS-18), so it computes as the old app.
+    }
+    Needs the moved engine (engine/pbd-*.js) loaded first for base; without it (a test of this file alone) base is left as it is.
+    From PR 2b the engine computes the design girder from base and the bridge values (engine/design.js). */
+@@ -140,6 +145,8 @@
+     if (p.base !== undefined && (!p.base || typeof p.base !== 'object' || Array.isArray(p.base))) E('base', 'The base girder design is not an inputs object.');
+     const BR = typeof window !== 'undefined' && window.PSBBridge;   // PR 3a-1: the girder types (engine/bridge.js), when present
+     if (p.types !== undefined && BR && !BR.validTypes(p.types)) E('types', 'The girder types cannot be read (each needs an id, a span, its lines and its overrides).');
++    // batch D1: the demand source of each girder type (engine/demands.js), optional; its contents are checked there (inputcheck)
++    if (p.demands !== undefined && (!p.demands || typeof p.demands !== 'object' || Array.isArray(p.demands))) E('demands', 'The demand sources of the girder types cannot be read (an object by type id).');
+     return { errors, warnings };
+   }
+ 
+diff --git a/apps/ps-bridge/engine/worked-strength.js b/apps/ps-bridge/engine/worked-strength.js
+index 3e34399..b495b35 100644
+--- a/apps/ps-bridge/engine/worked-strength.js
++++ b/apps/ps-bridge/engine/worked-strength.js
+@@ -122,6 +122,10 @@
+       const V = w => w * (L / 2 - x), dia = (inp.loads.diaph || []).filter(d => +d.P > 0 && +d.a >= 0 && +d.a <= L);
+       const Vdia = dia.reduce((t, d) => { const Pp = +d.P, a = +d.a, Rl = Pp * (L - a) / L; return t + (x < a ? Rl : x > a ? Rl - Pp : Rl - Pp / 2); }, 0);
+       vg = V(R.wG); vdc1 = V(R.wDk) + Vdia; vdc2 = V(R.wBar); vdw = V(R.wDW); vll = R.VLL * (L - xm) / L;
++      // batch D1 (display only): imported demands on a simple span (the engine keeps the components only when made continuous): DC2, DW and
++      // LL+IM at x as the engine reads them (buildExternal: the file's shear negated; the LL the larger branch × f_V)
++      const X = R.useExt && window.PSBDemands ? window.PSBDemands.slice(inp.external, L) : null;
++      if (X) { const fv = window.PSBDemands.fac(inp).v; vdc2 = -X.at('V_DC2', x).v; vdw = -X.at('V_DW', x).v; vll = Math.max(Math.abs(X.at('V_LLpos', x).v * fv), Math.abs(X.at('V_LLneg', x).v * fv)); }
+     }
+     const vdl = 1.25 * (vg + vdc1 + vdc2) + 1.5 * vdw;
+     add({ id: 'Vu', label: 'Strength I shear at the section', sym: 'V_{u}', eq: `\\eta\\left(\\left|1.25(V_{g} + V_{DC1} + V_{DC2}) + 1.50\\,V_{DW}${rIn ? ' + V_{r}' : ''}\\right| + 1.75\\,m\\,V_{LL+IM}\\right)`,
+diff --git a/apps/ps-bridge/engine/worked.js b/apps/ps-bridge/engine/worked.js
+index 97ea294..ab8d9b0 100644
+--- a/apps/ps-bridge/engine/worked.js
++++ b/apps/ps-bridge/engine/worked.js
+@@ -274,6 +274,22 @@
+     } else if (simple) {
+       add({ id: 'MLL', label: 'Live load moment per girder at midspan (entered)', sym: 'M_{LL+IM}', value: R.MLL, unit: 'kip-ft', d: 1, note: 'Entered on the Loads tab.' });
+       add({ id: 'VLL', label: 'Live load shear per girder at the support (entered)', sym: 'V_{LL+IM}', value: R.VLL, unit: 'kip', d: 2, note: 'Entered on the Loads tab.' });
++    } else if (R.useExt && window.PSBDemands && window.PSBDemands.slice(inp.external, L)) {
++      // batch D1 (2026-11-15): imported demands (a MIDAS file or a custom table, engine/demands.js): the engine's factors on the imported
++      // LL+IM (pbd-compute.js extLL) and its midspan / support values (MLLmid, VLLsup), worked from the file's stations (display only)
++      const DM = window.PSBDemands, F = DM.fac(inp), X = DM.slice(inp.external, L), ref = A10 + '4.6.2.2, 3.6.1.1.2';
++      add({ id: 'xfp', label: 'Factor on the imported LL+IM, positive moment', sym: 'f_{+M}', eq: 'DF_{+M}\\,m', sub: `${n(F.dfp, 3)}(${n(F.m, 2)})`, value: F.pos, unit: '', d: 3, ref, note: 'DF and m: Loads tab (blank = 1.0). Impact is already in the imported live load and is not applied again.' }, F.dfp * F.m);
++      add({ id: 'xfn', label: 'Factor on the imported LL+IM, negative moment', sym: 'f_{-M}', eq: 'DF_{-M}\\,m', sub: `${n(F.dfn, 3)}(${n(F.m, 2)})`, value: F.neg, unit: '', d: 3, ref }, F.dfn * F.m);
++      add({ id: 'xfv', label: 'Factor on the imported LL+IM, shear', sym: 'f_{V}', eq: 'DF_{V}\\,m', sub: `${n(F.dfv, 3)}(${n(F.m, 2)})`, value: F.v, unit: '', d: 3, ref }, F.dfv * F.m);
++      const mp = X.at('M_LLpos', L / 2), mn = X.at('M_LLneg', L / 2), p = F.pos * mp.v, q = F.neg * mn.v;
++      const between = (o, key) => o.a === o.b ? `the file's value at x = ${n(o.a.xr, 2)} ft` : `linear between the file's stations x = ${n(o.a.xr, 2)} ft (${n(+o.a[key] || 0, 2)}) and ${n(o.b.xr, 2)} ft (${n(+o.b[key] || 0, 2)})`;
++      add({ id: 'MLL', label: 'Live load moment per girder at midspan (imported)', sym: 'M_{LL+IM}', eq: '\\left|\\text{larger of } f_{+M}\\,M^{+}_{file},\\ f_{-M}\\,M^{-}_{file}\\right|',
++        sub: `\\left|\\text{larger of } ${n(F.pos, 3)}(${par(mp.v, 2)}),\\ ${n(F.neg, 3)}(${par(mn.v, 2)})\\right|`, value: R.MLL, unit: 'kip-ft', d: 1,
++        note: `M_file at x = L/2 = ${n(L / 2, 2)} ft of the file's span: M+ ${between(mp, 'M_LLpos')}; M− ${between(mn, 'M_LLneg')} (the imported values: Analysis tab).` }, Math.abs(Math.abs(p) >= Math.abs(q) ? p : q));
++      const vp = X.at('V_LLpos', 0), vn = X.at('V_LLneg', 0);
++      add({ id: 'VLL', label: 'Live load shear per girder at the support (imported)', sym: 'V_{LL+IM}', eq: 'f_{V}\\,\\max\\left(\\left|V^{+}_{file}\\right|,\\ \\left|V^{-}_{file}\\right|\\right)',
++        sub: `${n(F.v, 3)}\\max\\left(\\left|${n(vp.v, 2)}\\right|,\\ \\left|${n(vn.v, 2)}\\right|\\right)`, value: R.VLL, unit: 'kip', d: 2, note: 'At the left bearing (x = 0) of the file\'s span.' },
++        Math.max(Math.abs(-vn.v * F.v), Math.abs(-vp.v * F.v)));
+     } else {
+       add({ id: 'MLL', label: 'Live load moment per girder at midspan (continuous unit)', sym: 'M_{LL+IM}', value: R.MLL, unit: 'kip-ft', d: 1, note: 'HL-93 on the continuous unit (influence lines of the FE model, Analysis tab) × DF_M.' });
+       add({ id: 'VLL', label: 'Live load shear per girder at the support (continuous unit)', sym: 'V_{LL+IM}', value: R.VLL, unit: 'kip', d: 2, note: 'HL-93 on the continuous unit × DF_V (Analysis tab).' });
+@@ -285,6 +301,7 @@
+   function analysis(inp, R) {
+     const K = kit('an'), add = K.add, L = R.L, D = R.diagrams, mid = D.reduce((b, r) => Math.abs(r.x - L / 2) < Math.abs(b.x - L / 2) ? r : b, D[0]), s0 = D[0], x = mid.x, own = R.own || { eta: 1, mLL: 1 }, eta = own.eta === undefined ? 1 : own.eta, mLL = own.mLL === undefined ? 1 : own.mLL;
+     const fe = R.fe, simple = !fe && !R.useExt;
++    const X = R.useExt && window.PSBDemands ? window.PSBDemands.slice(inp.external, L) : null, XF = X ? window.PSBDemands.fac(inp) : null;   // batch D1
+     const Mw = (w) => w * x * (L - x) / 2;
+     add({ id: 'Mg', label: `Girder self-weight moment at midspan (x = ${n(x, 2)} ft, simple span)`, sym: 'M_{g}', eq: '\\frac{w_{g}\\,x(L - x)}{2}', sub: `\\frac{${n(R.wG, 4)}(${n(x, 2)})(${n(L - x, 2)})}{2}`, value: mid.M_g, unit: 'kip-ft', d: 1 }, Mw(R.wG));
+     const dia = (inp.loads.diaph || []).filter(d => +d.P > 0 && +d.a >= 0 && +d.a <= L);
+@@ -298,8 +315,17 @@
+       add({ id: 'Mw', label: 'Moment at midspan of the design span, unit uniform load on every span of the continuous unit', sym: 'M_{w}', value: mw, unit: 'kip-ft/klf', d: 3, ref: A10 + '5.12.3.3', note: 'Three-moment equation / FE model of the continuous unit (the old app\'s PBD.contFE).' });
+       add({ id: 'Mdc2', label: 'DC2 moment at midspan (continuous)', sym: 'M_{DC2}', eq: 'w_{DC2}\\,M_{w}', sub: `${n(R.wBar, 4)}(${n(mw, 3)})`, value: mid.M_DC2, unit: 'kip-ft', d: 1 }, R.wBar * mw);
+       add({ id: 'Mdw', label: 'DW moment at midspan (continuous)', sym: 'M_{DW}', eq: 'w_{DW}\\,M_{w}', sub: `${n(R.wDW, 4)}(${n(mw, 3)})`, value: mid.M_DW, unit: 'kip-ft', d: 1 }, R.wDW * mw);
++    } else if (R.useExt && X) {
++      // batch D1 (2026-11-15): imported DC2 / DW (a MIDAS file or a custom table): the engine's linear interpolation of the file's stations
++      [['Mdc2', 'DC2', 'M_DC2', 'M_{DC2}', mid.M_DC2], ['Mdw', 'DW', 'M_DW', 'M_{DW}', mid.M_DW]].forEach(([id, lab, key, sym, v]) => { const o = X.at(key, x), one = o.a === o.b;
++        add({ id, label: `${lab} moment at midspan (imported, x = ${n(x, 2)} ft of the file's span)`, sym, eq: one ? '' : 'M_{a} + (M_{b} - M_{a})\\frac{x - x_{a}}{x_{b} - x_{a}}',
++          sub: one ? '' : `${par(+o.a[key] || 0, 2)} + (${par(+o.b[key] || 0, 2)} - ${par(+o.a[key] || 0, 2)})\\frac{${n(x, 2)} - ${n(o.a.xr, 2)}}{${n(o.b.xr, 2)} - ${n(o.a.xr, 2)}}`, value: v, unit: 'kip-ft', d: 1,
++          note: one ? `The file's value at its station x = ${n(o.a.xr, 2)} ft.` : `Between the file's stations x_a = ${n(o.a.xr, 2)} ft and x_b = ${n(o.b.xr, 2)} ft (the imported values: Imported demands card).` }, one ? undefined : o.v); });
+     }
+-    add({ id: 'Mll', label: 'Live load moment (LL+IM) at midspan, positive envelope', sym: 'M_{LL+IM}', value: mid.M_LLpos, unit: 'kip-ft', d: 1,
++    if (X) { const o = X.at('M_LLpos', x);   // batch D1: the imported positive envelope × f_+M
++      add({ id: 'Mll', label: 'Live load moment (LL+IM) at midspan, positive envelope (imported)', sym: 'M_{LL+IM}', eq: 'f_{+M}\\,M^{+}_{file}(x)', sub: `${n(XF.pos, 3)}(${par(o.v, 2)})`, value: mid.M_LLpos, unit: 'kip-ft', d: 1,
++        note: `f_+M = DF_+M m (Loads & LLDF tab); M+_file(x) ${o.a === o.b ? `at the file's station x = ${n(o.a.xr, 2)} ft` : `linear between the file's stations x = ${n(o.a.xr, 2)} and ${n(o.b.xr, 2)} ft`}.` }, XF.pos * o.v); }
++    else add({ id: 'Mll', label: 'Live load moment (LL+IM) at midspan, positive envelope', sym: 'M_{LL+IM}', value: mid.M_LLpos, unit: 'kip-ft', d: 1,
+       note: simple && inp.loads.llAuto ? 'HL-93 envelope at x: each axle placed at x, both truck orientations and the tandem, with IM = 33 % on the vehicles, plus the lane load, × DF_M (Loads & LLDF tab).' : simple ? 'Entered M_LL (parabola along the span).' : 'HL-93 on the continuous unit × DF_M.' });
+     add({ id: 'Mdc', label: 'Total DC moment at midspan', sym: 'M_{DC}', eq: 'M_{g} + M_{DC1} + M_{DC2}', sub: `${n(mid.M_g, 1)} + ${n(mid.M_DC1, 1)} + ${n(mid.M_DC2, 1)}`, value: mid.M_DC, unit: 'kip-ft', d: 1 }, mid.M_g + mid.M_DC1 + mid.M_DC2);
+     add({ id: 'MuS', label: 'Strength I moment at midspan', sym: 'M_{u}', eq: '\\eta(1.25\\,M_{DC} + 1.50\\,M_{DW} + 1.75\\,m\\,M_{LL+IM})', sub: `${n(eta, 4)}(1.25(${n(mid.M_DC, 1)}) + 1.50(${n(mid.M_DW, 1)}) + 1.75(${n(mLL, 2)})(${n(mid.M_LLpos, 1)}))`, value: mid.M_StrI_pos, unit: 'kip-ft', d: 1, ref: A10 + 'Table 3.4.1-1, 3.4.1-2' },
+diff --git a/apps/ps-bridge/index.html b/apps/ps-bridge/index.html
+index ee43efd..5452c0b 100644
+--- a/apps/ps-bridge/index.html
++++ b/apps/ps-bridge/index.html
+@@ -51,6 +51,7 @@
+     'engine/lldf-fg.js',     // PS-35: box beams and voided slabs, live-load distribution types (f) / (g) (an app-side override of distFactors, §4)
+     'engine/holddown.js',    // PR 2d-3: the optional hold-down check for AASHTO / RIDOT (PS-10), an engine addition after computeAll (§4)
+     'engine/pierblock.js',   // PS-34: the pier compression block against the family's thickness (NEXT stems, box bottom slab, slabs; a warning only)
++    'engine/demands.js',     // batch D1 (2026-11-15): the demand source of each girder type (this app / custom table / MIDAS file, the old app's import)
+     'engine/design.js',      // PR 2b: the one girder design and its engine inputs (base + the bridge values, PBD.applyBridge)
+     'engine/bridge.js',      // PR 3a-1: the girder types on the girder lines of each span (PS-8)
+     'engine/bridge-dl.js',   // PR 3a-3: DC2 and DW to each girder line by the Steel Bridge app's method (PS-9; copy of its dead())
+@@ -77,6 +78,7 @@
+     'ui/inputs.js',      // PR 2b: the girder design's input cards
+     'ui/bridgedl.js',    // PR 3a-3: the Cross-section tab's DC2 / DW distribution card and the Loads & LLDF line table
+     'ui/types.js',       // PR 3a-1: the girder types card, the "entered values for" choice, the type and line choice above the output tabs
++    'ui/demands.js',     // batch D1 (2026-11-15): the Loads tab's Demands card and the output tabs' demand source line
+     'ui/legacy.js',      // PR 2f: the Project tab's "From the old app" card and the import summary
+     'ui/bridgexfer.js',  // 2026-11-14 (item 12): BridgeXfer v1 (HANDOFF.md §5, verbatim)
+     'ui/handoffs.js',    // 2026-11-14 (item 12): the Project tab's Hand-offs card (the old app's channels, keys and formats)
+@@ -280,6 +282,8 @@
+   }
+   @media print{#sbSplit{display:none!important}}
+   /* this app (PR 1) */
++  .dmBanner{border:1px solid var(--accent);border-radius:6px;background:#EFF6FF;padding:6px 9px;margin:6px 0;font-family:var(--font-ui);font-size:9pt;} .dmHead{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;} .dmSpans{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0;} .dmSpans .pri{font-weight:700;outline:2px solid var(--accent);}
++  .dmVals summary{cursor:pointer;font-family:var(--font-ui);font-size:9pt;margin:6px 0;} .dmGuide{max-width:760px;width:calc(100% - 32px);border:2px solid #0f172a;padding:16px 20px;font-family:var(--font-ui);font-size:9.5pt;line-height:1.5;} .dmGuide::backdrop{background:rgba(22,33,46,.55);} .dmGuide h3{margin:0 0 4px;} .dmGuide h4{margin:12px 0 4px;border-bottom:1px solid var(--color-border);}
+   .ph{border:1px dashed var(--slate-400);border-radius:6px;background:var(--slate-50);padding:8px 10px;margin:10px 0;font-family:var(--font-ui);font-size:9pt;color:#475569;}
+   /* this app (PR 3a-1): girder types (ui/types.js) */
+   .tyScope{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0;padding:6px 8px;border:1px solid var(--color-border);border-radius:6px;background:var(--slate-100);font-family:var(--font-ui);font-size:9pt;}
+@@ -430,7 +434,7 @@
+         + `<section class="sec"><div class="secHead">Strand pattern${sk >= 0 ? ` of ${esc(P.types[sk].label)}` : ''}</div><div class="secBody" id="gfx_strands_in"><p class="note">Shown when the inputs have no error.</p></div></section>`,   // 2026-11-15: the "Girder library PR 4" placeholder removed (the library is in the Girder shape card, PS-37)
+       mat: TY.scopeBar(P, ui, 'mat') + IN.cards('mat', V),
+       dd: IN.cards('dd', P),
+-      loads: TY.scopeBar(P, ui, 'loads') + IN.cards('loads', V),
++      loads: TY.scopeBar(P, ui, 'loads') + DMUI.card(P, ui) + IN.cards('loads', V),   // batch D1: the demand source of the girder type in scope
+       own: IN.cards('own', P, ownRes()),
+       ad: window.PSBAutoDesignUI.inputs(P)   // item A (2026-11-14): settings and Run (ui/autodesign.js)
+     };
+@@ -493,7 +497,9 @@
+   /* resize(a, n, fill): a list kept at n values when the span or girder count changes (new values: the last one, else fill) */
+   const resize = (a, n, fill) => { const b = (a || []).slice(0, Math.max(0, n)); while (b.length < n) b.push(b.length ? b[b.length - 1] : fill); return b; };
+   $('inTabs').addEventListener('click', e => { const b = e.target.closest('[data-itab]'); if (!b) return; ui.itab = b.dataset.itab; saveUi(); drawInputs(); });
+-  const IN = window.PSBInputsUI, LGUI = window.PSBLegacyUI;
++  const IN = window.PSBInputsUI, LGUI = window.PSBLegacyUI, DMUI = window.PSBDemandsUI;
++  /* batch D1: the Demands card's context (ui/demands.js): one change() = one Undo step */
++  const dmCtx = { changed: () => changed(), toast: (t, u) => toast(t, u), redraw: () => { saveUi(); drawInputs(); } };
+   /* 2026-11-14 (item 12): the Hand-offs card (ui/handoffs.js): the girder type and line the output tabs show, its engine inputs and result */
+   const hoCtx = { P: () => P, result: () => (errs.length ? null : result()), cell: () => hoCell(), changed: () => changed() };
+   HOUI.init();   // the "new data" marks follow the other tools' sends (storage event)
+@@ -505,6 +511,7 @@
+   $('inPanes').addEventListener('change', e => {
+     const el = e.target;
+     if (el.dataset.ad) { if (window.PSBAutoDesignUI.onChange(el, P)) changed(); return; }   // item A: the Auto design settings (P.autodesign)
++    if (el.dataset.dm) { DMUI.onChange(el, P, ui, dmCtx); return; }   // batch D1: the Demands card (source, MIDAS file, custom table)
+     if (el.dataset.ty) { typesDone(TY.onChange(el, P, ui)); return; }   // PR 3a-1
+     if (el.dataset.dl && DLUI.onChange(el, P)) { changed(); return; }   // PR 3a-3
+     if (el.dataset.lt) { const [s, g] = el.dataset.lt.split('|').map(Number), k = +el.value; if (el.value !== '' && P.types[k] && P.types[k].span === s) { BR.assignLine(P, k, g); changed(); } return; }   // 2026-11-14: girder type of each line
+@@ -536,11 +543,13 @@
+     changed();
+     if (tyNote) toast(tyNote, true);   // PR 6: Undo = the header's Undo of this one step (the count change and the re-assignment together)
+   });
++  $('inPanes').addEventListener('paste', e => { DMUI.onPaste(e, P, ui, dmCtx); });   // batch D1: rows pasted into the custom demand table
+   $('inPanes').addEventListener('click', e => {
+     const t = e.target, go = t.closest('[data-goin]');
+     if (go) { e.preventDefault(); ui.itab = go.dataset.goin; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; return; }
+     { const gt = t.closest('[data-gotab]'); if (gt) { e.preventDefault(); gotoOut(gt.dataset.gotab); return; } }   // PS-35: an input note's link to an output tab (the Loads input tab's J note)
+     if (LGUI.onClick(e, lgCtx)) return;
++    if (DMUI.onClick(e, P, ui, dmCtx)) return;   // batch D1
+     if (HOUI.onClick(e, hoCtx)) return;
+     if (window.PSBAutoDesignUI.onClick(e, adCtx())) return;   // item A: Run / Stop / the output tab
+     if (DLUI.onClick(e, P)) { changed(); return; }   // PR 3a-3: the added line loads
+@@ -659,6 +668,7 @@
+     if (!errs.length) { rc = result(); if (rc.R.error) h += `<div class="alert err" role="alert"><b>The engine could not compute this design:</b> ${esc(rc.R.error)}. Results not shown.</div>`; }
+     const ok = rc && !rc.R.error;
+     if (TABUI[ui.otab] || ui.otab === 'rpt') h += TY.outBar(P);   // PR 3a-1: the girder type and line shown
++    if ((TABUI[ui.otab] || ui.otab === 'rpt') && !errs.length) h += DMUI.srcBar(P);   // batch D1: the demands of the type shown (the steel app's srcBar)
+     if (ui.otab === 'lds') h += deNotice();   // PS-23: the entered d_e differs from the computed one
+     if (TABUI[ui.otab]) {
+       if (ok) { ctxOut = { P, inp: rc.inp, R: rc.R, W: rc.W, ui, all: rc.all || null, redraw: () => { saveUi(); drawOut(); } };   // all (2026-11-15, batch C): every girder type × line, for the tables of every line
+diff --git a/apps/ps-bridge/ui/analysis.js b/apps/ps-bridge/ui/analysis.js
+index 2b8fe2f..a847637 100644
+--- a/apps/ps-bridge/ui/analysis.js
++++ b/apps/ps-bridge/ui/analysis.js
+@@ -48,19 +48,36 @@
+       body += '<p class="note">The pier section\'s resistance (negative moment, deck bars) and the positive moment connection are worked on the <a href="#" data-gotab="flex">Flexure tab</a>.</p>';
+       h += k.card('Continuity for composite loads (5.12.3.3)', body);
+     } else h += k.card('Continuity', `<p class="note">${R.L && ctx.P.spans.lengths.length > 1 ? 'Simple spans for all loads' : 'One span'} (Bridge layout tab). Made continuous: girder and DC1 on the simple span; DC2, DW and live load on the continuous unit; restraint moments switchable (5.12.3.3, PS-7).</p>`);
++    if (R.useExt) h += imported(ctx);   // batch D1: the imported demands of the span, as read, linked to the steps that combine them
+     h += reactions(ctx);   // 2026-11-15 (batch C): the unfactored reactions (the steel app's table, ui/analysis.js "Reactions (unfactored, kip)")
+     h += k.card('Worked steps: analysis', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value; midspan = the engine's station at x = ${k.fx(D[midOf(R)].x, 2)} ft (${D.length} stations).</p>${k.steps(ctx.W.analysis.steps, TOPICS, OPEN)}`);
+     return h;
+   }
++  const srcName = ctx => { const D = window.PSBDemands, T = window.PSBDemandsUI ? window.PSBDemandsUI.shownType(ctx.P) : null; return D && T ? D.describe(ctx.P, T).what : 'imported demands'; };
++  /* imported(ctx) (batch D1, 2026-11-15; §6): the stations of the file's span the engine reads (engine/demands.js slice, buildExternal's rule),
++     as read (the file's sign), and as the engine takes them (this app's sign, LL × the factors); each linked to the steps that combine them */
++  function imported(ctx) {
++    const { R, inp } = ctx, k = K(), D = window.PSBDemands, S = D ? D.slice(inp.external, R.L) : null; if (!S) return '';
++    const F = D.fac(inp), fx = (v, d) => k.fx(+v || 0, d), x = R.ext || {};
++    const rows = S.st.map(s => `<tr><td>${fx(s.xr, 2)}</td><td>${fx(s.M_DC2, 1)}</td><td>${fx(s.M_DW, 1)}</td><td>${fx(s.M_LLpos, 1)}</td><td>${fx(s.M_LLneg, 1)}</td><td>${fx(s.V_DC2, 2)}</td><td>${fx(s.V_DW, 2)}</td><td>${fx(s.V_LLpos, 2)}</td><td>${fx(s.V_LLneg, 2)}</td>`
++      + `<td>${fx(F.pos * (+s.M_LLpos || 0), 1)}</td><td>${fx(F.neg * (+s.M_LLneg || 0), 1)}</td><td>${fx(-(+s.V_DC2 || 0), 2)}</td><td>${fx(-(+s.V_DW || 0), 2)}</td><td>${fx(-(+s.V_LLneg || 0) * F.v, 2)}</td><td>${fx(-(+s.V_LLpos || 0) * F.v, 2)}</td></tr>`).join('');
++    return k.card(`Imported demands of the span (${k.esc(srcName(ctx))}${x.sel && x.sel.idx ? `, span ${x.sel.idx} of the file` : ''})`, `<div class="tscroll"><table class="tbl" id="anImported"><thead>
++      <tr><th rowspan="2">x<br>ft</th><th colspan="8">As read (the file's sign; LL per the file)</th><th colspan="6">As the engine takes them (this app's sign; LL × f)</th></tr>
++      <tr><th>M<sub>DC2</sub></th><th>M<sub>DW</sub></th><th>M<sub>LL</sub>+</th><th>M<sub>LL</sub>−</th><th>V<sub>DC2</sub></th><th>V<sub>DW</sub></th><th>V<sub>LL</sub>+</th><th>V<sub>LL</sub>−</th>
++      <th>f<sub>+M</sub>M<sub>LL</sub>+</th><th>f<sub>−M</sub>M<sub>LL</sub>−</th><th>V<sub>DC2</sub></th><th>V<sub>DW</sub></th><th>V<sub>LL</sub>+ = −f<sub>V</sub>V<sub>LL,file</sub>−</th><th>V<sub>LL</sub>− = −f<sub>V</sub>V<sub>LL,file</sub>+</th></tr></thead><tbody>${rows}</tbody></table></div>
++      <p class="note">x from the left bearing of the span (the file's station − ${fx(S.sel.x0, 2)} ft). The engine interpolates linearly between these stations at its own (force effects table above); f = DF × m per effect ${k.wk('ld.xfp', '§', 'lds')}. They are combined with the girder and DC1 of this app in Strength I ${k.wk('an.MuS')}, Service I ${k.wk('an.MsI')} and Service III ${k.wk('an.MsIII')}${R.cont ? `, and at the pier ${k.wk('an.pier.Mu')} (the file's moments at the span ends)` : ''}. Moments kip-ft, shears kip.</p>`);
++  }
+   /* usedCard(ctx): the loads and factors of the analysis, each the engine's value linked to the step that works it (Loads & LLDF, Section) */
+   function usedCard(ctx) {
+     const { R } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), L = (id, tab) => k.wk(id, '§', tab), own = R.own;
+     return k.card('Loads and factors used', k.kv([['DC1 girder self-weight w<sub>g</sub>', `${ev('wG', 4, 'klf')} ${L('sec.g.wsw', 'sec')}`], ['DC1 on the bare girder w<sub>DC1</sub> (deck, haunch, additional)', `${ev('wDk', 4, 'klf')} ${L('ld.wDC1', 'lds')}`],
+       ...(R.nDiaph ? [[`DC1 diaphragms (${R.nDiaph} point loads, simple span)`, `${ev('Pdia', 2, 'kip')} ${L('ld.Pdia', 'lds')}`]] : []),
+-      ['DC2 (composite)', `${ev('wBar', 4, 'klf')} ${L('ld.wDC2', 'lds')}`], ['DW (composite)', `${ev('wDW', 4, 'klf')} ${L('ld.wDW', 'lds')}`],
+-      ['DF<sub>M</sub> / DF<sub>V</sub>', `${ev('dfm', 4)} ${L('ld.dfm', 'lds')} / ${ev('dfv', 4)} ${L('ld.dfv', 'lds')}`], ['η (Strength I) / m (HL-93)', `${own ? ev('own.eta', 4) : '1.0000'} / ${own ? ev('own.mLL', 2) : '1.00'} ${L('ld.eta', 'lds')}`],
++      ...(R.useExt ? [['DC2, DW and LL+IM (composite)', `imported: ${k.esc(srcName(ctx))} (Imported demands card below)`], ['Factors on the imported LL+IM f<sub>+M</sub> / f<sub>−M</sub> / f<sub>V</sub>', `${L('ld.xfp', 'lds')} / ${L('ld.xfn', 'lds')} / ${L('ld.xfv', 'lds')}`]]   // batch D1
++        : [['DC2 (composite)', `${ev('wBar', 4, 'klf')} ${L('ld.wDC2', 'lds')}`], ['DW (composite)', `${ev('wDW', 4, 'klf')} ${L('ld.wDW', 'lds')}`],
++      ['DF<sub>M</sub> / DF<sub>V</sub>', `${ev('dfm', 4)} ${L('ld.dfm', 'lds')} / ${ev('dfv', 4)} ${L('ld.dfv', 'lds')}`]]), ['η (Strength I) / m (HL-93)', `${own ? ev('own.eta', 4) : '1.0000'} / ${own ? ev('own.mLL', 2) : '1.00'} ${L('ld.eta', 'lds')}`],
+       ['Load combinations', `Strength I ${k.wk('an.MuS')}, Service I ${k.wk('an.MsI')}, Service III ${k.wk('an.MsIII')} (Table 3.4.1-1)`]])
+-      + `<p class="note">Girder and DC1 on the simple span${R.fe ? '; DC2, DW and the live load on the continuous unit (Continuity card below)' : ''}; live load HL-93 with IM = 33 % and the distribution factors (<a href="#" data-gotab="lds">Loads &amp; LLDF tab</a>, where each load is worked).</p>`);
++      + (R.useExt ? `<p class="note">Girder and DC1 on the simple span (this app); DC2, DW and the live load (with impact, × DF m per effect) from the imported demands, interpolated at the engine's stations (<a href="#" data-gotab="lds">Loads &amp; LLDF tab</a>, where the factors are worked).</p>`
++        : `<p class="note">Girder and DC1 on the simple span${R.fe ? '; DC2, DW and the live load on the continuous unit (Continuity card below)' : ''}; live load HL-93 with IM = 33 % and the distribution factors (<a href="#" data-gotab="lds">Loads &amp; LLDF tab</a>, where each load is worked).</p>`));
+   }
+   /* reactions(ctx): the unfactored end reactions of this girder line: the engine's own bxSuperRxPayload (engine/handoffs.js srPayload, the
+      numbers "Send reactions to Substructure Loading" sends), worked here as that function finds them (no other arithmetic) */
+@@ -71,7 +88,8 @@
+     const p = b.payload, fx = (v, d) => k.fx(v, d), Lf = +R.L, S = p.supports, ll = p.liveLoad;
+     const rows = S.map((q, i) => { const g = q.girders[0]; return `<tr><td class="lft">${k.esc(q.id)} (x = ${fx(q.x, 2)} ft)</td><td>${fx(g.DC1, 2)}</td><td>${fx(g.DC2, 2)}</td><td>${fx(g.DW, 2)}</td>${ll ? `<td>${fx(ll.supports[i].Rmax, 2)}</td>` : ''}</tr>`; }).join('');
+     const dia = (inp.loads.diaph || []).filter(d => +d.P > 0 && +d.a >= 0 && +d.a <= Lf);
+-    const wk1 = R.fe ? `DC2 and DW: the end shears of this span on the continuous unit, as reactions (+ up), w × V<sub>w</sub> per klf: DC2 = ${fx(R.wBar, 4)} × ${fx(R.fe.Vw(0), 4)} = ${fx(S[0].girders[0].DC2, 3)} kip at ${k.esc(S[0].id)} (V<sub>w</sub>: the end shear per klf on every span of the engine's model of the continuous unit, whose midspan moment M<sub>w</sub> is worked ${k.wk('an.Mw')}).`
++    const wk1 = R.useExt ? `DC2 and DW: the imported shears at the two ends of the span (the file's, sign-corrected to reactions, + up; the engine's own bxSuperRxPayload): DC2 ${fx(S[0].girders[0].DC2, 3)} / ${fx(S[1].girders[0].DC2, 3)} kip, DW ${fx(S[0].girders[0].DW, 3)} / ${fx(S[1].girders[0].DW, 3)} kip (the imported values: Imported demands card). At an interior pier these are this span's share only.`   // batch D1
++      : R.fe ? `DC2 and DW: the end shears of this span on the continuous unit, as reactions (+ up), w × V<sub>w</sub> per klf: DC2 = ${fx(R.wBar, 4)} × ${fx(R.fe.Vw(0), 4)} = ${fx(S[0].girders[0].DC2, 3)} kip at ${k.esc(S[0].id)} (V<sub>w</sub>: the end shear per klf on every span of the engine's model of the continuous unit, whose midspan moment M<sub>w</sub> is worked ${k.wk('an.Mw')}).`
+       : `DC2 = w<sub>DC2</sub> L / 2 = ${fx(R.wBar, 4)} (${fx(Lf, 2)}) / 2 = ${fx(S[0].girders[0].DC2, 3)} kip; DW = w<sub>DW</sub> L / 2 = ${fx(R.wDW, 4)} (${fx(Lf, 2)}) / 2 = ${fx(S[0].girders[0].DW, 3)} kip.`;
+     const wkDC1 = `DC1 at ${k.esc(S[0].id)} = (w<sub>g</sub> + w<sub>DC1</sub>) L / 2${dia.length ? ' + Σ P (L − a) / L' : ''} = (${fx(R.wG, 4)} + ${fx(R.wDk, 4)})(${fx(Lf, 2)}) / 2${dia.length ? ` + ${dia.map(d => `${fx(+d.P, 2)}(${fx(Lf, 2)} − ${fx(+d.a, 2)}) / ${fx(Lf, 2)}`).join(' + ')}` : ''} = ${fx(S[0].girders[0].DC1, 3)} kip (w<sub>g</sub> ${k.wk('sec.g.wsw', '§', 'sec')}, w<sub>DC1</sub> ${k.wk('ld.wDC1', '§', 'lds')}${dia.length ? `, P ${k.wk('ld.Pdia', '§', 'lds')}` : ''}).`;
+     return k.card('Reactions (unfactored, kip)', `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Support</th><th>DC1</th><th>DC2</th><th>DW</th>${ll ? '<th>LL per lane (no IM, no DF)</th>' : ''}</tr></thead><tbody>${rows}</tbody></table></div>
+diff --git a/apps/ps-bridge/ui/demands.js b/apps/ps-bridge/ui/demands.js
+new file mode 100644
+index 0000000..307c590
+--- /dev/null
++++ b/apps/ps-bridge/ui/demands.js
+@@ -0,0 +1,157 @@
++/* apps/ps-bridge/ui/demands.js — the demand source of each girder type on the page (window.PSBDemandsUI). Classic script; display and input
++   only (the data and its rules: engine/demands.js). Created 2026-11-15 (batch D1): the old app's MIDAS import ("Prestressed Bridge Design.html"
++   O:5862-5895 banner, span picker, "use built-in analysis", O:5362-5440 import guide, O:6225-6243 DF / m per effect) with the Steel Bridge
++   app's source choice (apps/steel-bridge/ui/flexure.js "Demands" select, ui/analysis.js srcBar, ui/demands.js the custom table):
++     card(P, ui)        the Loads tab's "Demands" card: the source of the girder type in scope (This app's analysis / Custom table / MIDAS
++                        file), the MIDAS file (choose, import guide, span picker, the imported values of the span used) or the table; in the
++                        base scope a list of every type's source
++     srcBar(P)          the line at the top of the output tabs naming the demands of the type shown (the Steel Bridge app's srcBar)
++     onChange(el, P, ui, ctx) / onClick(e, P, ui, ctx)  true when handled; ctx = { changed(), toast(text, undo), redraw() }
++   Nothing is calculated here. */
++(function () {
++  'use strict';
++  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
++  const DM = () => window.PSBDemands, B = () => window.PSBBridge;
++  const fx = (v, d) => (typeof v === 'number' && isFinite(v) ? v.toFixed(d) : (v === '' || v == null ? '' : isFinite(+v) ? (+v).toFixed(d) : esc(v)));
++  const LBL = { app: 'This app\'s analysis (built-in)', table: 'Custom table (entered)', midas: 'MIDAS file (psbeam-external-demands)' };
++  const box = (body, ref) => `<section class="sec" id="card-dem"><div class="secHead">Demands: DC2, DW and LL+IM <span class="secRef">${esc(ref || 'composite stage, per girder type')}</span></div><div class="secBody">${body}</div></section>`;
++  /* the type in scope (the Loads tab's "Entered values for"), else null (base scope) */
++  function typeOf(P, ui) { const k = window.PSBTypesUI ? window.PSBTypesUI.scopeOf(P, ui) : -1; return k >= 0 ? P.types[k] : null; }
++  /* the type the output tabs show */
++  function shownType(P) { const b = B(); if (!b) return null; if (b.hasTypes(P)) { const c = b.shown(P); return c ? P.types[c.k] : null; } return b.types(P)[0]; }
++  function card(P, ui) {
++    const D = DM(), b = B(); if (!D || !b) return '';
++    const T = b.hasTypes(P) ? typeOf(P, ui) : b.types(P)[0];
++    if (!T) {   // base scope: every type's source, a link to set it
++      const rows = b.types(P).map(t => { const d = D.describe(P, t); return `<tr><td class="lft">${esc(t.label)}</td><td>${t.span}</td><td class="lft">${esc(d.what)}</td><td><button type="button" class="btn sm" data-dm="scope" data-id="${esc(t.id)}">Set for ${esc(t.label)}</button></td></tr>`; }).join('');
++      return box(`<p class="note">Each girder type takes its composite-stage demands (DC2, DW and LL+IM) from this app's analysis, a custom table or a MIDAS file (the old app's import). Choose a type under "Entered values for" above to set its source.</p>
++        <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Girder type</th><th>Span</th><th class="lft">Demands</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
++        <p class="note">The girder self-weight and DC1 are always computed by this app on the non-composite girder. <a href="#" data-dm="guide">MIDAS import guide</a>.</p>`);
++    }
++    const src = D.srcOf(P, T.id), id = T.id;
++    let h = `<div class="fRow"><label for="dm_src">Demands of ${esc(T.label)} (span ${T.span})</label><select id="dm_src" data-dm="src" data-path="demands.${esc(id)}.src">${D.SRC.map(v => `<option value="${v}"${v === src ? ' selected' : ''}>${LBL[v]}</option>`).join('')}</select></div>`;
++    h += `<input type="file" id="fDemands" accept=".json,application/json" data-dm="filein" hidden>`;
++    if (src === 'app') h += `<p class="note">DC2, DW and the live load (HL-93 × the distribution factors; on the continuous unit when the bridge is made continuous) are computed by this app (Loads &amp; LLDF and Analysis tabs). Importing analysis results from MIDAS? <a href="#" data-dm="guide">Read the import guide</a> before exporting from the MCT Generator.</p>`;
++    if (src === 'midas') h += midasBody(P, T);
++    if (src === 'table') h += tableBody(P, T);
++    const w = warnsOf(P, T);   // the demand warnings of this type (engine/demands.js checks; not blocking)
++    if (w.length) h += `<div class="alert" id="dmWarn" role="status"><b>Check</b><ul>${w.map(m => `<li>${esc(m)}</li>`).join('')}</ul></div>`;
++    return box(h);
++  }
++  function midasBody(P, T) {
++    const D = DM(), e = D.entry(P, T.id) || {}, f = e.midas && e.midas.file;
++    if (!D.isFile(f)) return `<div class="alert"><b>No MIDAS file loaded</b> for ${esc(T.label)}. <button type="button" class="btn sm" data-dm="file">Choose MIDAS file…</button> <a href="#" data-dm="guide">Import guide</a></div>`;
++    const sp = D.spans(f), x = D.external(P, T), q = x && x._selSpan, i = D.pickOf(P, T), L = (P.spans.lengths || [])[T.span - 1];
++    let h = `<div class="dmBanner" id="dmBanner"><div class="dmHead"><b>Running on MIDAS demands</b><span class="dmBtns"><button type="button" class="btn sm" data-dm="file">Choose another file…</button> <button type="button" class="btn sm" data-dm="guide">? import guide</button> <button type="button" class="btn sm" data-dm="app">✕ use this app's analysis</button></span></div>
++      <div class="note">File <b>${esc(e.midas.name || '—')}</b> (read ${esc(String(e.midas.at || '').replace('T', ' ').slice(0, 16))}): source ${esc(f.source || '—')} · ${esc(f.generatedBy || 'export')} · project ${esc(f.project || '—')} · ${f.stations.length} stations · LL type <b>${esc(f.liveLoadType || '—')}</b>.<br>
++      ${f.distributionFactor !== undefined || f.impactFactor !== undefined ? `Distribution factor (${fx(+f.distributionFactor || 0, 3)}) and impact (${fx(+f.impactFactor || 1, 3)}) are <b>already applied</b> in the LL envelope` : 'The dynamic load allowance (impact) is <b>already included</b> in the LL envelope'}${f.dfIncluded === false ? '; the file says the distribution factor is <b>not</b> applied: enter it below (DF per effect)' : f.dfIncluded === true ? '; the file says the distribution factor is applied' : ''}. This app computes the non-composite loads itself (girder self-weight + DC1 deck / haunch on the non-composite section); the file supplies DC2, DW and LL+IM.</div>`;
++    if (e.span === 0) h += `<p class="note">No span of the file chosen (an old-app design saved so): the whole member from x = 0, as the old app read it. Choose a span:</p>`;
++    if (sp.length > 1 || e.span === 0) h += `<div class="note">Span of the file used for span ${T.span} of the bridge (${sp.length}-span member):</div><div class="dmSpans">${sp.map(s => `<button type="button" class="btn sm${s.idx === i && e.span !== 0 ? ' pri' : ''}" data-dm="span" data-i="${s.idx}" aria-pressed="${s.idx === i && e.span !== 0}">Span ${s.idx}: ${fx(s.x0, 0)}–${fx(s.x1, 0)} ft (${fx(s.len, 0)}′)</button>`).join(' ')}</div>`;
++    if (q) h += `<p class="note">Active: <b>span ${q.idx}</b> of the file, length <b>${fx(q.len, 2)} ft</b>, re-zeroed to its left bearing; span ${T.span} of the bridge: L = ${fx(L, 2)} ft (Bridge layout tab). ${sp.length > 1 ? 'The file\'s moments at the span ends are the pier negative moments of the continuity check (Analysis and Flexure tabs).' : ''}</p>`;
++    h += '</div>' + valuesTable(x, P, T);
++    return h;
++  }
++  /* valuesTable(x): the imported values of the span the engine reads (as read, the file's sign), each linked to where it is combined */
++  function valuesTable(x, P, T) {
++    const D = DM(), L = (P.spans.lengths || [])[T.span - 1], S = x ? D.slice(x, L) : null; if (!S) return '';
++    const C = D.COLS.slice(1);
++    return `<details class="dmVals" id="dmVals"><summary>Imported values of the span used (${S.st.length} stations, as read; moments kip-ft, shears kip in the file's sign)</summary>
++      <div class="tscroll"><table class="tbl"><thead><tr><th>x file<br>ft</th><th>x span<br>ft</th>${C.map(c => `<th>${c[1]}</th>`).join('')}</tr></thead><tbody>
++      ${S.st.map(s => `<tr><td>${fx(+s.x, 2)}</td><td>${fx(s.xr, 2)}</td>${C.map(c => `<td>${fx(+s[c[0]] || 0, c[0][0] === 'M' ? 1 : 2)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
++      <p class="note">The engine interpolates these linearly at its stations (Analysis tab, force effects table), takes the shears with the opposite sign (this app: + at the left support under gravity; the + LL branch from the file's −) and multiplies the LL+IM by DF × m per effect (worked on the <a href="#" data-gotab="lds">Loads &amp; LLDF tab</a>). Combined in Strength I, Service I and III at each station (<a href="#" data-gotab="an">Analysis tab</a>, worked steps "Moments at midspan" and "Interior support").</p></details>`;
++  }
++  function tableBody(P, T) {
++    const D = DM(), rows = D.tableRows(P, T.id), C = D.COLS, L = (P.spans.lengths || [])[T.span - 1];
++    const cell = (r, j, c) => `<td><input type="number" step="any" data-dm="cell" data-j="${j}" data-c="${c[0]}" data-path="demands.${esc(T.id)}.table.${j}.${c[0]}" value="${r[c[0]] === '' || r[c[0]] == null ? '' : esc(r[c[0]])}" aria-label="${esc(c[0])}, row ${j + 1}" style="width:5.5em"></td>`;
++    return `<p class="note">Per girder, unfactored, at stations x of span ${T.span} (0 to ${fx(L, 2)} ft from its left bearing): moments kip-ft (sagging +), shears kip in this app's sign (+ at the left support under gravity load); LL+IM with impact (the DF and m per effect below are applied to it; 1.0 when it is per girder already). A blank cell is 0. Include both bearings; the engine interpolates linearly between rows. Paste from Excel into any cell (columns in this order).</p>
++      <div class="tscroll" data-path="demands.${esc(T.id)}.table"><table class="tbl" id="dmTable"><thead><tr>${C.map(c => `<th>${c[1]}<br>${c[2]}</th>`).join('')}<th></th></tr></thead><tbody>
++      ${rows.map((r, j) => `<tr>${C.map(c => cell(r, j, c)).join('')}<td><button type="button" class="btn sm" data-dm="del" data-j="${j}" aria-label="delete row ${j + 1}">✕</button></td></tr>`).join('')}</tbody></table></div>
++      <div><button type="button" class="btn sm" data-dm="add">Add row</button>${rows.length ? '' : ' <button type="button" class="btn sm" data-dm="seed">Start with the two bearings</button>'}</div>`;
++  }
++  const warnsOf = (P, T) => DM().checks(P).warnings.filter(x => x.scope === T.id).map(x => x.msg);
++  /* srcBar(P): the output tabs' source line (the Steel Bridge app's srcBar): green for this app's analysis, blue for entered / imported */
++  function srcBar(P) {
++    const D = DM(), T = shownType(P); if (!D || !T) return '';
++    const d = D.describe(P, T), ex = d.src !== 'app', w = ex ? warnsOf(P, T) : [];
++    return `<div class="srcBar${w.length ? ' warn' : ex ? ' ex' : ''}" role="status" id="dmSrcBar"><span>Demands:</span> <b>${esc(d.what)}</b> <span class="srcWhy">(${esc(d.detail)}; ${d.src === 'app' ? 'the default' : 'as chosen'}: <a href="#" data-goin="loads">Loads tab, Demands card</a>${ex ? '; combined on the <a href="#" data-gotab="an">Analysis tab</a>' : ''})</span>${w.length ? `<div class="srcWhy">Check: ${w.map(esc).join(' ')}</div>` : ''}</div>`;
++  }
++  /* the guide (the old app's MidasHelp, O:5362-5440, its own text adapted to this app) */
++  const GUIDE = `<h3>Importing MIDAS demands</h3><p class="note">How to prepare the external force-effect file so this app reads it correctly.</p>
++    <h4>The idea</h4><p>MIDAS runs the continuous-structure analysis on the <b>composite</b> section (influence surfaces, skew, staging). The MCT Generator organizes that output into a JSON file by component and station. This app imports the <b>composite-stage</b> demands and applies the LRFD load factors and limit-state combinations itself. The <b>non-composite</b> loads (girder self-weight and DC1) act on the bare girder before the deck cures, so this app computes them on the non-composite section rather than taking them from MIDAS.</p>
++    <h4>Who computes what</h4><ul><li><b>Girder self-weight</b>: this app, on the non-composite section.</li><li><b>DC1 (deck + haunch)</b>: this app too, on the non-composite section. Do not put DC1 in the file: it would land on the composite section.</li>
++    <li><b>DC2 / SIDL</b>: the file (M_DC2, V_DC2): barriers, parapets, sidewalks, railing, on the composite section.</li><li><b>Wearing surface</b>: the file (M_DW, V_DW).</li>
++    <li><b>Live load</b>: the file's LL envelope (positive and negative branches, moment and shear) with the dynamic load allowance (impact) already included. Whether the distribution factor or multiple presence is applied depends on the MIDAS model: apply what is missing with the DF per effect and m on the Loads tab (each 1.0 by default). A refined grillage usually has them; a single line-girder model usually needs the DF.</li></ul>
++    <h4>The components (per girder, per station)</h4><p><code>M_DC2, V_DC2</code> composite superimposed dead load; <code>M_DW, V_DW</code> wearing surface and utilities; <code>M_LLpos / M_LLneg</code> and <code>V_LLpos / V_LLneg</code> the live-load envelope, both branches. DC1 may be in the file but is not used. The girder self-weight should be excluded (<code>selfWeightExcluded: true</code>).</p>
++    <h4>Conventions</h4><ul><li>Units kip, ft, ft-kip (the file's <code>units</code> block).</li><li>Moment sagging-positive; shear signed (not a magnitude), in MIDAS's element sign (the opposite of this app's; the app negates it).</li><li><code>factored: false</code>: unfactored components (a factored file is refused). This app builds Strength I (1.25 DC + 1.50 DW + 1.75 LL), Service I / III and Fatigue.</li>
++    <li>Stations at any spacing, the supports included; the app interpolates linearly.</li><li><code>member.supports</code> (or <code>spans</code>) so the span picker can slice one span, re-zeroed to its left bearing; the moments at the span ends are the pier negative moments of the continuity check.</li></ul>
++    <h4>What this app does on import</h4><p>Checks the schema, reads the spans, takes the span of the girder type (or the one you pick), re-zeros the stationing and gives the engine the file's DC2, DW and LL envelope for the composite stage (the old app's own path, unchanged). Each girder type has its own source and file.</p>
++    <p class="note"><b>Checklist:</b> self-weight excluded · DC1 not included · barrier in DC2 · wearing surface in DW · LL envelope both branches with IM (and DF if your model has it) · signed shear · supports / spans listed · units kip / ft / ft-kip. Schema id <code>psbeam-external-demands</code>, produced by the MCT Generator's "Organize for PS-Beam tool" action. Design aid: independent verification of the imported demands and the resulting design by a licensed engineer is required.</p>`;
++  function guide() {
++    let d = document.getElementById('dmGuide');
++    if (!d) { d = document.createElement('dialog'); d.id = 'dmGuide'; d.className = 'dmGuide'; d.setAttribute('aria-label', 'MIDAS import guide');
++      d.innerHTML = `<div class="dmGuideBody">${GUIDE}</div><div><button type="button" class="btn" id="dmGuideClose">Close</button></div>`;
++      document.body.appendChild(d); d.querySelector('#dmGuideClose').onclick = () => d.close(); d.addEventListener('click', e => { if (e.target === d) d.close(); }); }
++    if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
++  }
++  const idOf = (P, ui) => { const b = B(), T = b.hasTypes(P) ? typeOf(P, ui) : b.types(P)[0]; return T; };
++  /* readFile(file, P, T, ctx): parse, keep with type T (one change = one Undo step) */
++  function readFile(file, P, T, ctx) {
++    const rd = new FileReader();
++    rd.onload = () => {
++      const r = DM().parse(String(rd.result), file.name);
++      if (!r.ok) { alert(r.error); return; }
++      DM().setFile(P, T.id, r.file, file.name);
++      const own = (P.spans.lengths || []).map(Number), fl = r.spans.map(q => +q.len), n = T.span <= fl.length ? T.span : 0;
++      let note = `MIDAS file ${file.name} read for ${T.label}: ${r.file.stations.length} stations, ${fl.length} span${fl.length > 1 ? 's' : ''} (${fl.map(v => v.toFixed(2)).join(', ')} ft)${n ? `; span ${n} of the file used for span ${T.span}` : `; choose the span of the file used for span ${T.span}`}.`;
++      if (fl.length === own.length && fl.some((v, j) => Math.abs(v - own[j]) > 0.005)
++        && confirm(`The MIDAS member's spans (${fl.map(v => v.toFixed(2)).join(', ')} ft) differ from the bridge's (${own.map(v => v.toFixed(2)).join(', ')} ft). Set the bridge spans to the MIDAS spans (as the old app set L to the span)? (Undo returns both.)`)) {
++        P.spans.lengths = fl.slice(); note += ' The bridge spans were set to the MIDAS spans.';
++      }
++      if (r.notes.length) note += ' ' + r.notes.join(' ');
++      ctx.changed(); ctx.toast(note, true);
++    };
++    rd.readAsText(file);
++  }
++  function onChange(el, P, ui, ctx) {
++    const a = el.dataset.dm; if (!a) return false;
++    const T = idOf(P, ui); if (!T) return true;
++    if (a === 'src') { const v = el.value; if (v === 'app' && !DM().entry(P, T.id)) return true; DM().setSrc(P, T.id, v);
++      if (v === 'table' && !DM().tableRows(P, T.id).length) seed(P, T);
++      ctx.changed(); return true; }
++    if (a === 'filein') { const f = el.files && el.files[0]; el.value = ''; if (f) readFile(f, P, T, ctx); return true; }
++    if (a === 'cell') { const rows = JSON.parse(JSON.stringify(DM().tableRows(P, T.id))), j = +el.dataset.j, c = el.dataset.c; if (!rows[j]) return true;
++      rows[j][c] = el.value.trim() === '' ? '' : Number(el.value); DM().setTable(P, T.id, rows); ctx.changed(); return true; }
++    return true;
++  }
++  function seed(P, T) { const L = (P.spans.lengths || [])[T.span - 1]; const z = x => Object.assign({ x }, ...DM().COLS.slice(1).map(c => ({ [c[0]]: '' })));
++    DM().setTable(P, T.id, [z(0), z(isFinite(+L) ? +L : '')]); }
++  function onClick(e, P, ui, ctx) {
++    const t = e.target.closest('[data-dm]'); if (!t || t.tagName === 'SELECT' || t.tagName === 'INPUT') return false;
++    const a = t.dataset.dm; e.preventDefault();
++    if (a === 'guide') { guide(); return true; }
++    if (a === 'scope') { ui.scope = t.dataset.id; ctx.redraw(); return true; }
++    const T = idOf(P, ui); if (!T) return true;
++    if (a === 'file') { const f = document.getElementById('fDemands'); if (f) f.click(); return true; }
++    if (a === 'app') { DM().setSrc(P, T.id, 'app'); ctx.changed(); ctx.toast(`${T.label}: demands from this app's analysis (the MIDAS file is kept with the type; choose "MIDAS file" to use it again).`, true); return true; }
++    if (a === 'span') { DM().setSpan(P, T.id, +t.dataset.i); ctx.changed(); return true; }
++    const rows = JSON.parse(JSON.stringify(DM().tableRows(P, T.id)));
++    if (a === 'add') { rows.push(Object.assign({}, ...DM().COLS.map(c => ({ [c[0]]: '' })))); DM().setTable(P, T.id, rows); ctx.changed(); return true; }
++    if (a === 'del') { rows.splice(+t.dataset.j, 1); DM().setTable(P, T.id, rows); ctx.changed(); return true; }
++    if (a === 'seed') { seed(P, T); ctx.changed(); return true; }
++    return true;
++  }
++  /* onPaste(e, P, ui, ctx): rows pasted from Excel (tab-separated) into the table from the cell pasted into */
++  function onPaste(e, P, ui, ctx) {
++    const el = e.target; if (!el || el.dataset.dm !== 'cell') return false;
++    const txt = (e.clipboardData && e.clipboardData.getData('text')) || ''; if (!/[\t\n]/.test(txt)) return false;
++    e.preventDefault();
++    const T = idOf(P, ui); if (!T) return true;
++    const C = DM().COLS.map(c => c[0]), j0 = +el.dataset.j, c0 = C.indexOf(el.dataset.c), rows = JSON.parse(JSON.stringify(DM().tableRows(P, T.id)));
++    txt.replace(/\r/g, '').split('\n').filter(l => l.trim() !== '').forEach((line, i) => {
++      const j = j0 + i; if (!rows[j]) rows[j] = Object.assign({}, ...C.map(c => ({ [c]: '' })));
++      line.split('\t').forEach((v, m) => { const c = C[c0 + m]; if (!c) return; const s = v.trim().replace(/,/g, ''); rows[j][c] = s === '' ? '' : Number(s); });
++    });
++    DM().setTable(P, T.id, rows); ctx.changed(); return true;
++  }
++  window.PSBDemandsUI = { card, srcBar, onChange, onClick, onPaste, guide, shownType };
++})();
+diff --git a/apps/ps-bridge/ui/inputs.js b/apps/ps-bridge/ui/inputs.js
+index 7c4197e..5625504 100644
+--- a/apps/ps-bridge/ui/inputs.js
++++ b/apps/ps-bridge/ui/inputs.js
+@@ -127,7 +127,8 @@
+     items.push(
+       (window.PSBBridgeDL && window.PSBBridgeDL.on(P) ? 'DC2 (barriers, sidewalks, superimposed) and DW (wearing surface) are distributed to each girder line from the Cross-section tab by the Steel Bridge app\'s method (PS-9), shown per line on the Loads &amp; LLDF tab.' : 'DC2 (barrier / superimposed) and DW are entered per girder type (Loads tab; Cross-section tab: dead load distribution "Entered per girder type"); the Steel Bridge distribution to each girder line is the other choice there (PS-9).'),
+       'Calculations: the old Prestressed Bridge Design engine, moved unchanged (PR 2a, 0 differences on 658 cases); AASHTO LRFD 10th Ed. (2024). Normal-weight concrete; strand f<sub>pu</sub> = 270 ksi, low relaxation.',
+-      'Hold-down force: F<sub>hd</sub> = 2 n<sub>h</sub> f<sub>pbt</sub> A<sub>b</sub> sin α ≤ 0.75 W, checked always for MassDOT and CTDOT (their rule) and, for AASHTO and RIDOT, when the PS-10 box is on (default on, the fraction editable; Owner rules tab). AASHTO LRFD itself sets no limit. MIDAS demand import by file: a later PR.'
++      'Hold-down force: F<sub>hd</sub> = 2 n<sub>h</sub> f<sub>pbt</sub> A<sub>b</sub> sin α ≤ 0.75 W, checked always for MassDOT and CTDOT (their rule) and, for AASHTO and RIDOT, when the PS-10 box is on (default on, the fraction editable; Owner rules tab). AASHTO LRFD itself sets no limit.',
++      'Demands (batch D1): each girder type takes its composite-stage DC2, DW and LL+IM from this app\'s analysis (the default), a custom table or a MIDAS demands file (the old app\'s import, schema psbeam-external-demands; Loads tab, Demands card). The girder self-weight and DC1 are always computed here on the non-composite girder. Imported live load: impact included in the file; the DF and m per effect entered on the Loads tab are applied to it; shears are taken with the opposite sign (MIDAS element sign). The output tabs name the source at their top.'
+     );
+     return card('assume', 'Assumptions', '', `<ul class="note asm">${items.map(t => `<li>${t}</li>`).join('')}</ul>`);
+   }
+@@ -153,7 +154,7 @@
+     });
+     if (tab === 'dd') h = card('diaph', 'Diaphragms (DC1 point loads)', 'entered once (PS-14)', table('base.loads.diaph', P) + '<p class="note">Point loads on the non-composite simple span of the design girder, from the left ℄ bearing; the same diaphragms apply to every girder line (PS-14).</p>') + h;
+     if (tab === 'loads') h += card('veh', 'Legal / permit vehicles', 'MBE 6A.4.4, 6A.4.5, Strength I', table('base.rateVeh', P) + '<p class="note">Fully factored live-load moment and shear per vehicle (DF, IM, MPF and the LRFR live-load factor applied, from your own analysis); the app supplies the capacity and the dead loads.</p>')
+-      + '<div class="ph"><b>External demands (MIDAS) by file</b> <span class="devBadge">later PR</span><ul><li>the composite-stage DC2, DW and LL+IM envelopes of a MIDAS model (schema psbeam-external-demands), with the DF and multiple presence per effect</li></ul></div>';
++      ;   // batch D1 (2026-11-15): the MIDAS / custom demands are the Demands card of ui/demands.js (above the Loads cards)
+     return h;
+   }
+   /* onChange(el, P): true = handled */
+diff --git a/apps/ps-bridge/ui/loads.js b/apps/ps-bridge/ui/loads.js
+index f18cf85..1950ce6 100644
+--- a/apps/ps-bridge/ui/loads.js
++++ b/apps/ps-bridge/ui/loads.js
+@@ -22,11 +22,13 @@
+     { key: 'int', title: 'Interior girder equations', ref: A + 'Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1', ids: /^ld\.(k|m1|m2|v1|v2)$/ },
+     { key: 'ext', title: 'Exterior girder: lever rule, e, rigid section', ref: A + '4.6.2.2.2d, 4.6.2.2.3b', ids: /^ld\.(lever|eM|eV|rigid|rigXbar|rigXext|rigSx2|eM1|eM2|eV1|eV2|f48)$/ },
+     { key: 'df', title: 'Distribution factors used', ref: A + '4.6.2.2.2e, 4.6.2.2.3c', ids: /^ld\.(dfmRaw|dfvRaw|c1|skM|skV|dfm|dfv)$/, res: /^ld\.dfm$/ },
+-    { key: 'll', title: 'Live load per girder', ref: A + '3.6.1.3, 4.6.2.2', ids: /^ld\.(MLL|VLL)$/, res: /^ld\.MLL$/ }];
++    { key: 'll', title: 'Live load per girder', ref: A + '3.6.1.3, 4.6.2.2', ids: /^ld\.(xfp|xfn|xfv|MLL|VLL)$/, res: /^ld\.MLL$/ }];   // xf*: batch D1, the factors on imported live load
+   function output(ctx) {
+     const { R, inp, P } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, df = R.df, cp = R.cp, own = R.own;
+     const simple = !R.fe && !R.useExt, DL = window.PSBBridgeDL, dist = !!(DL && DL.on(P)), dg = window.PSBDesign.sel(P).g;   // PR 3a-3
+     let h = K().gcard('Loads graphic: cross-section', 'gfx_ld');
++    // batch D1: with imported demands the DC2 / DW moments and shears are the file's (or the table's); the klf here gives the deflection only
++    const xm = R.useExt ? '; <b>moments and shears imported</b> (Analysis tab), this w is used for the superimposed dead-load deflection only' : '';
+     h += k.card('Owner load rules', k.kv([['Owner', k.esc(own ? own.owner : 'AASHTO')], ['Load modifier η (Strength I)', `${own ? ev('own.eta', 4) : '1.0000'} ${wk('ld.eta')}`],
+       ['HL-93 design load multiplier m', `${own ? ev('own.mLL', 2) : '1.00'} ${wk('ld.mLL')}`]]) + '<p class="note">Owner and its questions: <a href="#" data-goin="own">Owner rules tab</a>.</p>');
+     const row = (lab, how, v, link) => `<tr><td class="lft">${lab}</td><td class="lft">${how}</td><td>${v}</td><td>${link || ''}</td></tr>`;
+@@ -39,8 +41,8 @@
+         : row('DC1 additional (forms, …)', 'non-composite; entered (Loads tab)', `${k.fx(+inp.loads.wNC, 4)} klf`, ''); })()}
+       ${row('DC1 distributed (deck + haunch + additional)', 'on the bare girder', ev('wDk', 4, 'klf'), wk('ld.wDC1'))}
+       ${R.nDiaph ? row(`DC1 diaphragms (${R.nDiaph} point loads)`, 'non-composite simple span; entered (Diaphragms / deck tab)', ev('Pdia', 2, 'kip'), wk('ld.Pdia')) : ''}
+-      ${row('DC2 barrier / superimposed', `composite${R.fe ? ', continuous unit' : ''}; ${dist ? `distributed to G${dg} (Cross-section tab)` : 'entered per girder'}`, ev('wBar', 4, 'klf'), dist ? wk(`dl.G${dg}.DC2`) : wk('ld.wDC2'))}
+-      ${row('DW wearing surface', `composite${R.fe ? ', continuous unit' : ''}; ${dist ? `distributed to G${dg} (Cross-section tab)` : 'entered per girder'}`, ev('wDW', 4, 'klf'), dist ? wk(`dl.G${dg}.DW`) : wk('ld.wDW'))}
++      ${row('DC2 barrier / superimposed', `composite${R.fe ? ', continuous unit' : ''}; ${dist ? `distributed to G${dg} (Cross-section tab)` : 'entered per girder'}${xm}`, ev('wBar', 4, 'klf'), dist ? wk(`dl.G${dg}.DC2`) : wk('ld.wDC2'))}
++      ${row('DW wearing surface', `composite${R.fe ? ', continuous unit' : ''}; ${dist ? `distributed to G${dg} (Cross-section tab)` : 'entered per girder'}${xm}`, ev('wDW', 4, 'klf'), dist ? wk(`dl.G${dg}.DW`) : wk('ld.wDW'))}
+       </tbody></table></div><p class="note">${dist ? 'DC2 and DW: the Steel Bridge app\'s distribution of the barriers, sidewalks and wearing surface to each girder line (PS-9; table below).' : 'DC2 and DW are entered per girder type (Loads tab); the Cross-section tab can distribute them to each girder line (PS-9).'}</p>`);
+     if (dist) h += window.PSBBridgeDLUI.lineTable(P, dg, k);
+     h += k.card('HL-93 per lane (simple span L = ' + k.fx(R.L, 2) + ' ft)', k.kv([['Truck M<sub>tr</sub> (midspan)', `${ev('hl.Mtr', 1, 'kip-ft')} ${wk('ld.Mtr')}`], ['Tandem M<sub>td</sub>', `${ev('hl.Mtd', 1, 'kip-ft')} ${wk('ld.Mtd')}`], ['Lane M<sub>ln</sub>', `${ev('hl.Mln', 1, 'kip-ft')} ${wk('ld.Mln')}`],
+@@ -78,10 +80,22 @@
+       + (nt ? `<div class="alert" id="nedbtNoTop"><b>NEDBT without a topping: the distribution factor is likely very conservative</b> ${nt} The moment factors g<sub>M1</sub> ${wk('ld.m1')} and g<sub>M2</sub> ${wk('ld.m2')} are worked in the Loads &amp; LLDF steps.</div>` : '')
+       + `<p class="note">${inp.loads.dfAuto ? `AASHTO equations, cross-section type ${df.isNext ? '(i)/(j)' : '(k)'}; S = ${k.fx(df.isNext ? df.Sf : inp.S, 3)} ft, L = ${k.fx(R.L, 2)} ft, N<sub>b</sub> = ${inp.nGirders}.` : 'Distribution factors entered on the Loads tab.'} Position and skew from the bridge (<a href="#" data-goin="gird">Design girder card</a>).</p>`);
+     }
++    if (R.useExt) h += importedLL(ctx);   // batch D1: the imported live load and its factors
+     h += everyLine(ctx);   // 2026-11-15 (batch C): the dead loads and distribution factors of every girder line (the steel app's tables)
+     h += k.card('Worked steps: loads and distribution factors', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value.</p>${k.steps(ctx.W.loads.steps, TOPICS, OPEN)}`);
+     return h;
+   }
++  /* importedLL(ctx) (batch D1, 2026-11-15; the old app's Loads card O:6225-6243): the live load of a type whose demands come from a MIDAS file
++     or a custom table: the factors DF × m per effect and the midspan / support values the engine takes, each linked to its worked step */
++  function importedLL(ctx) {
++    const { R, P } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, D = window.PSBDemands, T = window.PSBDemandsUI ? window.PSBDemandsUI.shownType(P) : null;
++    const d = D && T ? D.describe(P, T) : { what: 'imported', detail: '' }, F = D ? D.fac(ctx.inp) : null, x = R.ext || {};
++    return k.card('Live load from the imported demands', k.kv([['Source', `${k.esc(d.what)} (<a href="#" data-goin="loads">Loads tab, Demands card</a>)`],
++      ['Span of the file', x.sel ? `span ${x.sel.idx || '—'}: ${k.fx(+x.sel.x0, 2)}–${k.fx(+x.sel.x1, 2)} ft, ${x.nStations} stations` : '—'], ['LL type', k.esc(x.liveLoadType || '—')],
++      ['f<sub>+M</sub> = DF<sub>+M</sub> m', `${F ? k.fx(F.pos, 3) : '—'} ${wk('ld.xfp')}`], ['f<sub>−M</sub> = DF<sub>−M</sub> m', `${F ? k.fx(F.neg, 3) : '—'} ${wk('ld.xfn')}`], ['f<sub>V</sub> = DF<sub>V</sub> m', `${F ? k.fx(F.v, 3) : '—'} ${wk('ld.xfv')}`],
++      ['M<sub>LL+IM</sub> per girder, midspan', `<b>${ev('MLL', 1, 'kip-ft')}</b> ${wk('ld.MLL')}`], ['V<sub>LL+IM</sub> per girder, support', `<b>${ev('VLL', 2, 'kip')}</b> ${wk('ld.VLL')}`]])
++      + '<p class="note">Impact is in the imported live load (not applied again); DF and m per effect from the Loads tab (blank = 1.0). The distribution factors above are this app\'s own: used for the fatigue check (this app\'s fatigue truck) (and shown for comparison), not for the imported live load. The imported values at every station and their combinations: <a href="#" data-gotab="an">Analysis tab</a>.</p>');
++  }
+   /* everyLine(ctx): 2026-11-15 (batch C; the steel app's Loads & LLDF "dead loads of every girder line" and "LLDF of every girder × region"):
+      each girder type on each of its lines (ctx.all = engine/bridge.js results, the page's cached results of every type × line: each line's
+      own computeAll, the same objects as the Summary's), a row per line of every span: w_g, w_DC1, DC2, DW, DF_M, DF_V and the fatigue DF of
+```
+### Tests
+- check-syntax all pass. Node `psbridge tex project-registry`: 42 files, 442 passed (new psbridge-midas 7; psbridge-model fixed for the script list). Harness B: 24 designs (19 + 5 new MIDAS / table), normal 61,186 shown + 10,568 step values, 0 differences; --import 24 imported "the same", 0 differences; --control exits 1. Smokes: demands 7 (new), skeleton 271, types 106, 3d 101, figures 225, library 11, undo 7, drawings 6, drawings2 7, autodesign 7, handoffs 12; 0 console errors.
+
+## 2026-11-15 — Batch D2: the Analysis tab's views of an imported MIDAS member — span n, the entire beam, "Design span n →" (display; the button sets the span of the file used, an input)
+PR #1575: https://github.com/mlococo88/All-Structural/pull/1575
+### Request
+- Engineer-approved plan A→H (2026-11-15), batch D2 (review old-vs-new.md #63, High): the old app's Diagrams tab with an imported member of
+  two or more spans ("Prestressed Bridge Design.html" O:8036-8058, 8100-8118): "View span" (design span / span n / entire beam), the
+  member's diagrams from the file with Strength I, "Design Span n →".
+### What changed
+- `apps/ps-bridge/ui/analysis.js`: `viewOf(ctx)`, `viewBar(ctx, V)`, `viewRows(ctx, V)`, `viewOut(ctx, V)` (new, anchor
+  `/* ---- batch D2 (2026-11-15): the views of an imported member`): on the page only (the Report keeps the design span), for a type whose
+  demands are a MIDAS file of 2 or more spans: the select `#o_dmView` (`ui.dmView`: 'design' | 's<n>' | 'all', in `psb2.ui`, per browser);
+  another span or the entire beam shows the file's stations (member coordinates) in a chart (`#gfx_dmview`, the along-girder chart) and a
+  table, Strength I as the old app's view: M_u± = η(1.25(M_DC1 + M_DC2) + 1.50 M_DW + 1.75 m M_LL±) (the same for V) of the file's values
+  as read, with the worked line of the largest M_u+ and the smallest M_u−; the design span shows a note that the force effects are the
+  imported ones (`#anExtNote`). `onOutChange`: `o_dmView`.
+- `apps/ps-bridge/index.html`: the `#out` click `[data-dmdesign]` ("Design span n →"): the girder type shown takes span n of its file
+  (`PSBDemands.setSpan`), the view back to the design span; one Undo step, with a notice.
+### Code (before / after: the diff of this change)
+```diff
+diff --git a/apps/ps-bridge/index.html b/apps/ps-bridge/index.html
+index 2b8c4b0..e60ca79 100644
+--- a/apps/ps-bridge/index.html
++++ b/apps/ps-bridge/index.html
+@@ -722,6 +722,8 @@
+       else gotoStep(tab, st); return; }
+     const sr = e.target.closest('[data-sumrun]'); if (sr) { e.preventDefault(); runCtl(sr.dataset.sumrun); return; }
+     const tc = e.target.closest('[data-tycell]'); if (tc) { e.preventDefault(); const [k, g, tab] = tc.dataset.tycell.split('|'); P.design = { g: +g, s: P.types[+k].span }; if (autosave) autoFailed = !M.save(LS, P); record(); gotoOut(tab); drawInputs(); return; }   // PR 3a-2
++    // batch D2: "Design span n →" of the Analysis tab's imported-member view: the girder type shown uses span n of its MIDAS file (one Undo step)
++    const dd = e.target.closest('[data-dmdesign]'); if (dd) { e.preventDefault(); const T = DMUI.shownType(P); if (T) { window.PSBDemands.setSpan(P, T.id, +dd.dataset.dmdesign); ui.dmView = 'design'; saveUi(); changed(); toast(`${T.label}: span ${dd.dataset.dmdesign} of the MIDAS file is used now (Loads tab, Demands card).`, true); } return; }
+     const gi = e.target.closest('[data-goin]'); if (gi) { e.preventDefault(); ui.itab = gi.dataset.goin; saveUi(); drawInputs(); $('inputPanel').scrollIntoView({ block: 'start' }); return; }
+     // a link to another output tab (and to a worked step there): that tab, then the step with its topic opened
+     const gt = e.target.closest('[data-gotab]'); if (gt) { e.preventDefault(); gotoOut(gt.dataset.gotab); const h = gt.getAttribute('href') || '';
+diff --git a/apps/ps-bridge/ui/analysis.js b/apps/ps-bridge/ui/analysis.js
+index a847637..b139a0c 100644
+--- a/apps/ps-bridge/ui/analysis.js
++++ b/apps/ps-bridge/ui/analysis.js
+@@ -20,7 +20,12 @@
+   function output(ctx) {
+     const { R, inp, ui } = ctx, k = K(), ev = (p, d, u, div) => k.ev(R, p, d, u, div), wk = k.wk, D = R.diagrams, sel = selOf(ui, R), c = R.cont;
+     const simple = !R.fe && !R.useExt;
+-    let h = K().gcard('Analysis graphic: girder elevation', 'gfxr_anel') + K().gcard('Analysis graphic: envelopes along the girder', 'gfx_an');   // gfxr_anel (2026-11-15, batch C): screen only
++    // batch D2 (2026-11-15; the old app's Diagrams tab O:8036-8118): an imported member of more than one span: view another span or the
++    // whole member from the file; the design and its checks stay on the span used
++    const V = ctx.ui && ctx.ui.otab ? viewOf(ctx) : null;   // the page only (its ui); the Report shows the design span
++    if (V && V.vr) return viewBar(ctx, V) + viewOut(ctx, V);
++    let h = (V ? viewBar(ctx, V) : '') + (R.useExt ? `<div class="srcBar ex" id="anExtNote">The force effects below are the imported demands over span ${k.esc(String((R.ext && R.ext.sel && R.ext.sel.idx) || '—'))} of the file (${k.fx(R.ext && R.ext.spanLen, 0)} ft): DC2, DW unfactored; LL± the envelope branches with impact, × DF m per effect (Loads &amp; LLDF tab). The girder self-weight and DC1 are computed by this app on the simple span.</div>` : '');
++    h += K().gcard('Analysis graphic: girder elevation', 'gfxr_anel') + K().gcard('Analysis graphic: envelopes along the girder', 'gfx_an');   // gfxr_anel (2026-11-15, batch C): screen only
+     h += usedCard(ctx);   // 2026-11-15 (batch C): the loads and factors the analysis uses (the steel app's card), each linked to its work
+     // the station table: every sixth station of the engine's and the selected one
+     const idx = D.map((r, i) => i).filter(i => (ui && ui.every) || i % 6 === 0 || i === sel);   // ui.every: the Report's "every station" detail (2026-11-15)
+@@ -67,6 +72,51 @@
+       <th>f<sub>+M</sub>M<sub>LL</sub>+</th><th>f<sub>−M</sub>M<sub>LL</sub>−</th><th>V<sub>DC2</sub></th><th>V<sub>DW</sub></th><th>V<sub>LL</sub>+ = −f<sub>V</sub>V<sub>LL,file</sub>−</th><th>V<sub>LL</sub>− = −f<sub>V</sub>V<sub>LL,file</sub>+</th></tr></thead><tbody>${rows}</tbody></table></div>
+       <p class="note">x from the left bearing of the span (the file's station − ${fx(S.sel.x0, 2)} ft). The engine interpolates linearly between these stations at its own (force effects table above); f = DF × m per effect ${k.wk('ld.xfp', '§', 'lds')}. They are combined with the girder and DC1 of this app in Strength I ${k.wk('an.MuS')}, Service I ${k.wk('an.MsI')} and Service III ${k.wk('an.MsIII')}${R.cont ? `, and at the pier ${k.wk('an.pier.Mu')} (the file's moments at the span ends)` : ''}. Moments kip-ft, shears kip.</p>`);
+   }
++  /* ---- batch D2 (2026-11-15): the views of an imported member (the old app's "View span", O:8039-8058, 8100-8118) ----
++     viewOf(ctx): null without imported demands of a member of 2 or more spans (a file only; a custom table is one span of this bridge);
++     else { spans, sel (the span used), len (the member), vr (the view chosen: { x0, x1, label, sp }) or null (the design span) }.
++     ui.dmView: 'design' | 's<n>' | 'all' (the page's psb2.ui, per browser; absent = the design span, as the old app's default). */
++  function viewOf(ctx) {
++    const { R, inp, ui } = ctx, x = inp.external, D = window.PSBDemands;
++    if (!R.useExt || !D || !D.isFile(x) || x.source === 'custom table') return null;
++    const sp = D.spans(x); if (sp.length < 2) return null;
++    const len = (x.member && x.member.totalLength) || Math.max(...x.stations.map(s => +s.x || 0)), v = (ui && ui.dmView) || 'design';
++    const q = v === 'all' ? { x0: 0, x1: len, label: 'Entire beam' } : v !== 'design' ? (() => { const s = sp.find(t => 's' + t.idx === v); return s ? { x0: s.x0, x1: s.x1, label: 'Span ' + s.idx, sp: s } : null; })() : null;
++    return { spans: sp, sel: (R.ext && R.ext.sel) || {}, len, vr: q, v: q ? v : 'design' };
++  }
++  function viewBar(ctx, V) {
++    const k = K(), i = V.sel.idx, f0 = v => k.fx(+v, 0);
++    return `<div class="dmBanner" id="anViewBar"><div class="fRow"><label for="o_dmView">View span (imported member)</label><select id="o_dmView">
++      <option value="design"${V.v === 'design' ? ' selected' : ''}>Design span — span ${i} of the file (${f0(V.sel.len)} ft)</option>
++      ${V.spans.map(s => `<option value="s${s.idx}"${V.v === 's' + s.idx ? ' selected' : ''}>Span ${s.idx} (${f0(s.x0)}–${f0(s.x1)} ft)${s.idx === i ? ' • current' : ''}</option>`).join('')}
++      <option value="all"${V.v === 'all' ? ' selected' : ''}>Entire beam (0–${f0(V.len)} ft)</option></select></div>
++      ${V.vr && V.vr.sp && V.vr.sp.idx !== i ? `<button type="button" class="btn sm" data-dmdesign="${V.vr.sp.idx}">Design span ${V.vr.sp.idx} →</button> ` : ''}<span class="note">Design and checks stay on span ${i} of the file${V.vr && V.vr.sp && V.vr.sp.idx !== i ? `; "Design span ${V.vr.sp.idx}" makes the girder type shown use span ${V.vr.sp.idx} of the file (Loads tab, Demands card; one Undo step)` : ''}.</span></div>`;
++  }
++  /* viewRows(ctx, V): the file's stations in the view (member coordinates) and Strength I from them, the old app's own view (O:8053-8058):
++     M_u± = η(1.25(M_DC1 + M_DC2) + 1.50 M_DW + 1.75 m M_LL±), the same for V; the file's values as read (its DC1, its LL without this app's
++     DF × m per effect, its shear sign), η and m of the owner */
++  function viewRows(ctx, V) {
++    const { R, inp } = ctx, e = R.own ? R.own.eta : 1, m = R.own ? R.own.mLL : 1, q = V.vr;
++    return inp.external.stations.filter(s => +s.x >= q.x0 - 1e-6 && +s.x <= q.x1 + 1e-6).sort((a, b) => a.x - b.x).map(s => {
++      const a = key => +s[key] || 0, r = { x: +s.x };
++      ['M_DC1', 'M_DC2', 'M_DW', 'M_LLpos', 'M_LLneg', 'V_DC1', 'V_DC2', 'V_DW', 'V_LLpos', 'V_LLneg'].forEach(key => { r[key] = a(key); });
++      r.M_StrI_pos = e * (1.25 * (r.M_DC1 + r.M_DC2) + 1.5 * r.M_DW + 1.75 * (m * r.M_LLpos)); r.M_StrI_neg = e * (1.25 * (r.M_DC1 + r.M_DC2) + 1.5 * r.M_DW + 1.75 * (m * r.M_LLneg));
++      r.V_StrI_pos = e * (1.25 * (r.V_DC1 + r.V_DC2) + 1.5 * r.V_DW + 1.75 * (m * r.V_LLpos)); r.V_StrI_neg = e * (1.25 * (r.V_DC1 + r.V_DC2) + 1.5 * r.V_DW + 1.75 * (m * r.V_LLneg));
++      return r; });
++  }
++  function viewOut(ctx, V) {
++    const { R } = ctx, k = K(), rows = viewRows(ctx, V), e = R.own ? R.own.eta : 1, m = R.own ? R.own.mLL : 1, f = (v, d) => k.fx(v, d);
++    const C = [['M_DC1', 'M<sub>DC1</sub>'], ['M_DC2', 'M<sub>DC2</sub>'], ['M_DW', 'M<sub>DW</sub>'], ['M_LLpos', 'M<sub>LL</sub>+'], ['M_LLneg', 'M<sub>LL</sub>−'], ['M_StrI_pos', 'M<sub>u</sub>+'], ['M_StrI_neg', 'M<sub>u</sub>−'],
++      ['V_DC1', 'V<sub>DC1</sub>'], ['V_DC2', 'V<sub>DC2</sub>'], ['V_DW', 'V<sub>DW</sub>'], ['V_LLpos', 'V<sub>LL</sub>+'], ['V_LLneg', 'V<sub>LL</sub>−'], ['V_StrI_pos', 'V<sub>u</sub>+'], ['V_StrI_neg', 'V<sub>u</sub>−']];
++    const gp = rows.reduce((b, r) => (r.M_StrI_pos > b.M_StrI_pos ? r : b), rows[0]), gn = rows.reduce((b, r) => (r.M_StrI_neg < b.M_StrI_neg ? r : b), rows[0]);
++    const work = (r, s) => `M<sub>u</sub>${s} at x = ${f(r.x, 2)} ft = η(1.25(M<sub>DC1</sub> + M<sub>DC2</sub>) + 1.50 M<sub>DW</sub> + 1.75 m M<sub>LL</sub>${s}) = ${f(e, 4)}(1.25(${f(r.M_DC1, 1)} + ${f(r.M_DC2, 1)}) + 1.50(${f(r.M_DW, 1)}) + 1.75(${f(m, 2)})(${f(s === '+' ? r.M_LLpos : r.M_LLneg, 1)})) = <b>${f(s === '+' ? r.M_StrI_pos : r.M_StrI_neg, 1)} kip-ft</b>`;
++    return K().gcard(`Imported demands — ${k.esc(V.vr.label)}`, 'gfx_dmview')
++      + k.card(`Imported demands — ${k.esc(V.vr.label)} (member x ${f(V.vr.x0, 0)}–${f(V.vr.x1, 0)} ft; moments kip-ft, shears kip)`, `<div class="tscroll"><table class="tbl" id="anViewTbl"><thead><tr><th>x<br>ft</th>${C.map(c => `<th>${c[1]}</th>`).join('')}</tr></thead><tbody>
++        ${rows.map(r => `<tr><td>${f(r.x, 2)}</td>${C.map(c => `<td>${f(r[c[0]], c[0][0] === 'M' ? 0 : 1)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
++        <p class="note">Strength I = η(1.25(DC1 + DC2) + 1.50 DW + 1.75 m LL) from the imported per-station envelope over ${k.esc(V.vr.label.toLowerCase())} (member coordinates; AASHTO LRFD 10th Ed. Table 3.4.1-1), the old app's view: the file's values as read (its DC1, its shear sign, its LL without this app's DF × m per effect). The girder self-weight this app computes is added only on the design span, so it is not in this view. η = ${f(e, 4)}, m = ${f(m, 2)} (owner, Loads &amp; LLDF tab ${k.wk('ld.eta', '§', 'lds')}).</p>
++        <p class="note">Worked: ${work(gp, '+')}; ${work(gn, '−')}.</p>
++        <p class="note">Choose "Design span" above for the design diagrams and checks, or "Design span n →" to move the design to that span of the file.</p>`);
++  }
+   /* usedCard(ctx): the loads and factors of the analysis, each the engine's value linked to the step that works it (Loads & LLDF, Section) */
+   function usedCard(ctx) {
+     const { R } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), L = (id, tab) => k.wk(id, '§', tab), own = R.own;
+@@ -115,6 +165,19 @@
+       if (se && VK && VK.detCard) VK.detCard(se, { id: 'anElev', title: 'Girder elevation', sub: 'the span analysed: bearings, diaphragm point loads (DC1), continuity for composite loads', draw: W => elevSvg(ctx, W), hint: 'Point at a bearing or a diaphragm load to read it.', file: 'analysis-elevation',
+         cap: '<p class="vk-cap">Entered on the Bridge layout tab (span, continuity) and the Diaphragms / deck tab (point loads). Display only.</p>' }); }
+     K().after(el, OPEN);
++    { const V = ctx.ui && ctx.ui.otab ? viewOf(ctx) : null, vs = el.querySelector('#gfx_dmview');   // batch D2: the view of another span / the whole member
++      if (V && V.vr && vs && VA() && VA().mount) { const rows = viewRows(ctx, V), k = K(), pts = f => rows.map(r => [r.x, r[f]]), sup = V.spans.map(s => s.x0).concat([V.spans[V.spans.length - 1].x1]).filter(x => x >= V.vr.x0 - 1e-6 && x <= V.vr.x1 + 1e-6);
++        const MS = [['M_DC1', 'M<sub>DC1</sub>', 0], ['M_DC2', 'M<sub>DC2</sub>', 0, '2 2'], ['M_DW', 'M<sub>DW</sub>', 3, '2 2'], ['M_LLpos', 'M<sub>LL</sub> +', 1], ['M_LLneg', 'M<sub>LL</sub> −', 1, '5 3'], ['M_StrI_pos', 'M<sub>u</sub> +', 2], ['M_StrI_neg', 'M<sub>u</sub> −', 2, '5 3']];
++        const VSr = MS.map(q => ['V' + q[0].slice(1), q[1].replace(/^M/, 'V'), q[2], q[3]]);
++        const ser = L => L.map(q => ({ key: q[0], ci: q[2], dash: q[3], pts: pts(q[0]) }));
++        const near = x => rows.reduce((b, r) => Math.abs(r.x - x) < Math.abs(b.x - x) ? r : b, rows[0]);
++        VA().mount(vs, { key: 'dmview', title: `Imported demands along the member — ${k.esc(V.vr.label)}`, sub: `member x ${k.fx(V.vr.x0, 0)}–${k.fx(V.vr.x1, 0)} ft, ${rows.length} stations of the file`,
++          draw: W => VA().render({ L0: V.vr.x0, L1: V.vr.x1, sup, axisTitle: 'Member station x, ft (the file\'s)', aria: 'Imported moments and shears along the member', rows: [
++            { kind: 'chart', key: 'M', label: 'Moments, kip-ft (sagging up)', unit: 'kip-ft', series: ser(MS) }, { kind: 'chart', key: 'V', label: 'Shears, kip (the file\'s sign)', unit: 'kip', series: ser(VSr), h: W < 600 ? 110 : 140 }] }, W),
++          at: x => { const r = near(x); return [`x = ${k.fx(r.x, 2)} ft`, `M_u ${k.fx(r.M_StrI_neg, 0)} / ${k.fx(r.M_StrI_pos, 0)} kip-ft; V_u ${k.fx(r.V_StrI_neg, 1)} / ${k.fx(r.V_StrI_pos, 1)} kip`]; },
++          legend: [...MS, ...VSr].filter((q, j, a) => a.findIndex(t => t[1].replace(/^[MV]/, '') === q[1].replace(/^[MV]/, '')) === j).map(q => `${VA().swatch(q[2], q[3])} ${q[1].replace(/^M/, '')}`).join(' &nbsp; '),
++          caption: '<p class="vk-cap">The file\'s stations (the table below), Strength I as the old app\'s view. Display only.</p>' }); }
++      if (V && V.vr) return; }
+     const slot = el.querySelector('#gfx_an'); if (!slot || !VA() || !VA().mount) return;
+     const { R, ui } = ctx, D = R.diagrams, xs = D.map(r => r.x), near = x => xs.reduce((b, v, i) => Math.abs(v - x) < Math.abs(xs[b] - x) ? i : b, 0), k = K();
+     const MS = [{ key: 'dc', html: 'M<sub>DC</sub>', ci: 0, f: 'M_DC' }, { key: 'dw', html: 'M<sub>DW</sub>', ci: 3, f: 'M_DW' }, { key: 'llp', html: 'M<sub>LL+IM</sub> +', ci: 1, f: 'M_LLpos' }, { key: 'lln', html: 'M<sub>LL+IM</sub> −', ci: 1, dash: '5 3', f: 'M_LLneg' },
+@@ -135,6 +198,8 @@
+       caption: '<p class="vk-cap">The engine\'s force effects at its stations (the table above); click a station to select it. Display only.</p>' });
+     return H;
+   }
+-  function onOutChange(e, ui) { if (e.target.id === 'o_anSel') { ui.anSel = +e.target.value; return true; } return false; }
++  function onOutChange(e, ui) { if (e.target.id === 'o_anSel') { ui.anSel = +e.target.value; return true; }
++    if (e.target.id === 'o_dmView') { ui.dmView = e.target.value; return true; }   // batch D2: the span viewed (psb2.ui, per browser)
++    return false; }
+   window.PSBUiAnalysis = { output, after, onOutChange, TOPICS };
+ })();
+```
+### Saved data (CLAUDE.md §5)
+- No project field or key added. `psb2.ui` (the page's UI object, per browser) gets the optional `dmView` ('design' | 's<n>' | 'all'; absent =
+  the design span). "Design span n →" writes `P.demands[<type id>].span` (the field of batch D1), one Undo step.
+### Governing provisions (CLAUDE.md §4)
+- No engine value changed (harness B: 0 differences; the Report keeps the design span). The view's Strength I is the old app's own view
+  (O:8053-8058): η(1.25(DC1 + DC2) + 1.50 DW + 1.75 m LL±), AASHTO LRFD 10th Ed. Table 3.4.1-1, from the file's values as read.
+### Check case (tests/smoke/ps-bridge-demands.mjs 3b)
+- The MCT file (110 / 140 / 110 ft), view span 2: 23 stations from x = 113 to 245 ft (the file's stations in 110–250); at x = 113 ft
+  M_u+ = 1.25(M_DC1 + M_DC2) + 1.50 M_DW + 1.75 M_LL+ of the file's row = −2542.2 kip-ft, the table's value (AASHTO, η = m = 1).
+  Entire beam: all 62 stations. "Design span 2 →": the engine reads span 2 of the file (R.ext.sel.idx 2); Undo returns span 1.
+### Decisions (pending engineer review)
+- D2-a. The view shows the file's values as the old app's view did: its DC1, its shear sign and its LL **without** this app's DF × m per
+  effect (the design span applies them); the note says so.
+- D2-b. The view is on the page only; the Report shows the design span.
+### Other copies
+- None.
+### Tests
+- check-syntax all pass. Node `psbridge tex project-registry`: 43 files, 446 passed. Harness B normal: 24 designs, 61,186 shown + 10,568
+  step values, 0 differences; --import 0 differences; --control exits 1. Smokes: demands 8 (+ the D2 check), skeleton 271, types 106,
+  3d 101, figures 225, library 11, undo 7, drawings 6, drawings2 7, autodesign 7, handoffs 12, adbasis 5; 0 console errors.
 ## 2026-11-15 — E0: no "pending engineer review" wording in the app (Auto design output tab, Project tab / Report assumption; display only)
 PR #TBD
 ### Request

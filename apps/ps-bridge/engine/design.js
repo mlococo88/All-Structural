@@ -19,6 +19,8 @@
    DRIVEN: the base paths the bridge sets (not edited in base; shown read-only on the Girders & strands tab).
    PR 3a-1 (2026-11-13): girder types on the girder lines of each span (engine/bridge.js, PS-8): inputs(P) is the cell the output tabs show
    (P.design = the line and span shown), cellInputs(P, k, g) any type on any of its lines; the code of one design (one()) is unchanged.
+   Batch D1 (2026-11-15): a girder type whose demands come from a MIDAS file or a custom table (engine/demands.js, P.demands) gets them as
+   inputs.external (withDemands), the old app's own MIDAS input; every other type (and every project saved before) is unchanged.
    Needs the moved engine (window.PBD, DEFAULTS) loaded first. */
 (function () {
   'use strict';
@@ -113,14 +115,22 @@
   function inputs(P) {
     const B = window.PSBBridge;
     if (B && B.hasTypes(P)) { const c = B.shown(P); if (c) return cellInputs(P, c.k, c.g); }
-    return one(P);
+    return withDemands(P, B ? B.types(P)[0] : null, one(P));   // batch D1: the one design is type T1 (the type PSBBridge.migrate makes of it)
+  }
+  /* withDemands(P, T, o) (batch D1, 2026-11-15): the demand source of girder type T (engine/demands.js): a MIDAS file or a custom table is
+     given to the engine as inputs.external, the old app's own input (its MIDAS import; computeAll reads it through buildExternal); this
+     app's analysis (every project saved before: no P.demands): o unchanged. */
+  function withDemands(P, T, o) {
+    const DM = window.PSBDemands, x = DM && T ? DM.external(P, T) : null;
+    if (x) o.external = x;
+    return o;
   }
   /* cellInputs(P, k, g): the engine inputs of girder type k (engine/bridge.js) on girder line g of its span: the type's inputs (the base
      design with the type's overrides, PSBBridge.effBase) with the bridge values of that line and span, by the same code as the one design
      girder (one()). A type with no override on the design girder's line gives exactly one(P). */
   function cellInputs(P, k, g) {
     const B = window.PSBBridge, T = B.types(P)[k];
-    return one(Object.assign({}, P, { base: B.effBase(P, k), design: { g, s: T.span }, types: undefined }));
+    return withDemands(P, T, one(Object.assign({}, P, { base: B.effBase(P, k), design: { g, s: T.span }, types: undefined })));
   }
   /* one(P): the engine inputs of the design girder P.design (PR 2b; unchanged) */
   function one(P) {
