@@ -159,7 +159,10 @@
     h += `<text x="${(X(0) + X(L)) / 2}" y="${yG + hG + 26}" text-anchor="middle" font-size="11" fill="#475569">Span ${s}${n > 1 ? ` of ${n}` : ''}: L = ${f2(L)} ft</text></svg>`;
     return { html: h, nar: W < 560 };
   }
-  const HIDE = {};
+  /* batch G3: the series switched off on the Analysis chart: the old app's defaults (the girder, DC1, DC2, DW shear, Service I and III off)
+     overlaid by the viewer's choices, ui.anHide = { M: { key: bool }, V: { … } } (the page's psb2.ui, per browser, as the old app kept its toggles) */
+  const HIDE0 = { M: { g: true, dc1: true, dc2: true, s1: true, s3: true }, V: { g: true, dc1: true, dc2: true, dw: true, s1: true } };
+  const hiddenOf = (ui, g) => Object.assign({}, HIDE0[g], ui && ui.anHide && ui.anHide[g]);
   function after(el, ctx) {
     { const se = el.querySelector('#gfxr_anel'), VK = window.PSBVizKit;   // 2026-11-15 (batch C): the girder elevation
       if (se && VK && VK.detCard) VK.detCard(se, { id: 'anElev', title: 'Girder elevation', sub: 'the span analysed: bearings, diaphragm point loads (DC1), continuity for composite loads', draw: W => elevSvg(ctx, W), hint: 'Point at a bearing or a diaphragm load to read it.', file: 'analysis-elevation',
@@ -180,20 +183,26 @@
       if (V && V.vr) return; }
     const slot = el.querySelector('#gfx_an'); if (!slot || !VA() || !VA().mount) return;
     const { R, ui } = ctx, D = R.diagrams, xs = D.map(r => r.x), near = x => xs.reduce((b, v, i) => Math.abs(v - x) < Math.abs(xs[b] - x) ? i : b, 0), k = K();
-    const MS = [{ key: 'dc', html: 'M<sub>DC</sub>', ci: 0, f: 'M_DC' }, { key: 'dw', html: 'M<sub>DW</sub>', ci: 3, f: 'M_DW' }, { key: 'llp', html: 'M<sub>LL+IM</sub> +', ci: 1, f: 'M_LLpos' }, { key: 'lln', html: 'M<sub>LL+IM</sub> −', ci: 1, dash: '5 3', f: 'M_LLneg' },
-      { key: 'up', html: 'M<sub>u</sub> +', ci: 2, f: 'M_StrI_pos' }, { key: 'un', html: 'M<sub>u</sub> −', ci: 2, dash: '5 3', f: 'M_StrI_neg' }];
-    const VS = [{ key: 'dc', html: 'V<sub>DC</sub>', ci: 0, f: 'V_DC' }, { key: 'llp', html: 'V<sub>LL+IM</sub> +', ci: 1, f: 'V_LLpos' }, { key: 'lln', html: 'V<sub>LL+IM</sub> −', ci: 1, dash: '5 3', f: 'V_LLneg' },
-      { key: 'up', html: 'V<sub>u</sub> +', ci: 2, f: 'V_StrI_pos' }, { key: 'un', html: 'V<sub>u</sub> −', ci: 2, dash: '5 3', f: 'V_StrI_neg' }];
+    // batch G3 (2026-11-15): every load case the old app drew (O:8063-8090): + the girder self-weight, DC1, DC2, Service I + and Service III +
+    // (and V_DW), switched off at first as in the old app (the series shown before stay on); the series switched on / off are kept (psb2.ui anHide)
+    const MS = [{ key: 'g', html: 'M<sub>g</sub> (girder)', ci: 5, dash: '2 2', f: 'M_g' }, { key: 'dc1', html: 'M<sub>DC1</sub>', ci: 4, f: 'M_DC1' }, { key: 'dc2', html: 'M<sub>DC2</sub>', ci: 4, dash: '2 2', f: 'M_DC2' },
+      { key: 'dc', html: 'M<sub>DC</sub>', ci: 0, f: 'M_DC' }, { key: 'dw', html: 'M<sub>DW</sub>', ci: 3, f: 'M_DW' }, { key: 'llp', html: 'M<sub>LL+IM</sub> +', ci: 1, f: 'M_LLpos' }, { key: 'lln', html: 'M<sub>LL+IM</sub> −', ci: 1, dash: '5 3', f: 'M_LLneg' },
+      { key: 'up', html: 'M<sub>u</sub> +', ci: 2, f: 'M_StrI_pos' }, { key: 'un', html: 'M<sub>u</sub> −', ci: 2, dash: '5 3', f: 'M_StrI_neg' },
+      { key: 's1', html: 'Service I +', ci: 5, f: 'M_SrvI_pos' }, { key: 's3', html: 'Service III +', ci: 5, dash: '5 3', f: 'M_SrvIII_pos' }];
+    const VS = [{ key: 'g', html: 'V<sub>g</sub> (girder)', ci: 5, dash: '2 2', f: 'V_g' }, { key: 'dc1', html: 'V<sub>DC1</sub>', ci: 4, f: 'V_DC1' }, { key: 'dc2', html: 'V<sub>DC2</sub>', ci: 4, dash: '2 2', f: 'V_DC2' },
+      { key: 'dc', html: 'V<sub>DC</sub>', ci: 0, f: 'V_DC' }, { key: 'dw', html: 'V<sub>DW</sub>', ci: 3, f: 'V_DW' }, { key: 'llp', html: 'V<sub>LL+IM</sub> +', ci: 1, f: 'V_LLpos' }, { key: 'lln', html: 'V<sub>LL+IM</sub> −', ci: 1, dash: '5 3', f: 'V_LLneg' },
+      { key: 'up', html: 'V<sub>u</sub> +', ci: 2, f: 'V_StrI_pos' }, { key: 'un', html: 'V<sub>u</sub> −', ci: 2, dash: '5 3', f: 'V_StrI_neg' }, { key: 's1', html: 'Service I +', ci: 5, f: 'V_SrvI_pos' }];
+    const hid = g => hiddenOf(ui, g);
     const ser = L => L.map(q => ({ key: q.key, ci: q.ci, dash: q.dash, pts: D.map(r => [r.x, r[q.f]]) }));
-    const grp = (g, label, L) => ({ label, items: L.map(q => ({ key: g + ':' + q.key, html: `${VA().swatch(q.ci, q.dash)} ${q.html}`, on: !(HIDE[g] || {})[q.key] })) });
+    const grp = (g, label, L) => ({ label, items: L.map(q => ({ key: g + ':' + q.key, html: `${VA().swatch(q.ci, q.dash)} ${q.html}`, on: !hid(g)[q.key] })) });
     const at = x => { const r = D[near(x)]; return [`x = ${k.fx(r.x, 2)} ft`, `M_DC ${k.fx(r.M_DC, 0)}, M_DW ${k.fx(r.M_DW, 0)}, M_LL+IM ${k.fx(r.M_LLneg, 0)} / ${k.fx(r.M_LLpos, 0)}, M_u ${k.fx(r.M_StrI_neg, 0)} / ${k.fx(r.M_StrI_pos, 0)} kip-ft; V_u ${k.fx(r.V_StrI_neg, 1)} / ${k.fx(r.V_StrI_pos, 1)} kip`]; };
     let H = null;
     H = VA().mount(slot, { key: 'an', title: 'Moment and shear envelopes along the design girder', sub: `span L = ${k.fx(R.L, 2)} ft, ${D.length} stations${R.fe ? ', continuous unit for DC2, DW and LL' : ''}`,
       draw: W => VA().render({ L0: 0, L1: R.L, sup: [0, R.L], sel: xs[selOf(ui, R)], selLabel: `x = ${k.fx(xs[selOf(ui, R)], 2)} ft`, axisTitle: 'Station x, ft (from ℄ bearing, left)', aria: 'Moment and shear envelopes along the girder', rows: [
-        { kind: 'chart', key: 'M', label: 'Moments, kip-ft (per girder; sagging up)', unit: 'kip-ft', series: ser(MS), hidden: HIDE.M },
-        { kind: 'chart', key: 'V', label: 'Shears, kip (per girder)', unit: 'kip', series: ser(VS), hidden: HIDE.V, h: W < 600 ? 110 : 140 }] }, W),
+        { kind: 'chart', key: 'M', label: 'Moments, kip-ft (per girder; sagging up)', unit: 'kip-ft', series: ser(MS), hidden: hid('M') },
+        { kind: 'chart', key: 'V', label: 'Shears, kip (per girder)', unit: 'kip', series: ser(VS), hidden: hid('V'), h: W < 600 ? 110 : 140 }] }, W),
       at, pickX: x => near(x), snap: x => xs[near(x)], onSelect: i => { ui.anSel = i; if (ctx.redraw) ctx.redraw(); },
-      chips: () => [grp('M', 'Moments', MS), grp('V', 'Shears', VS)], onChip: key => { const [g, s] = key.split(':'), o = HIDE[g] = HIDE[g] || {}; o[s] = !o[s]; },
+      chips: () => [grp('M', 'Moments', MS), grp('V', 'Shears', VS)], onChip: key => { const [g, q] = key.split(':'), h = ui.anHide = ui.anHide || {}, o = h[g] = Object.assign({}, hid(g)); o[q] = !o[q]; if (ctx.save) ctx.save(); },
       hint: 'Point at (or tap) the chart to read the station; click or tap to select it.',
       caption: '<p class="vk-cap">The engine\'s force effects at its stations (the table above); click a station to select it. Display only.</p>' });
     return H;
@@ -201,5 +210,5 @@
   function onOutChange(e, ui) { if (e.target.id === 'o_anSel') { ui.anSel = +e.target.value; return true; }
     if (e.target.id === 'o_dmView') { ui.dmView = e.target.value; return true; }   // batch D2: the span viewed (psb2.ui, per browser)
     return false; }
-  window.PSBUiAnalysis = { output, after, onOutChange, TOPICS };
+  window.PSBUiAnalysis = { output, after, onOutChange, TOPICS, hiddenOf };
 })();
