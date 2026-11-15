@@ -6864,6 +6864,7 @@ PR #TBD
 - **`ui/handoffs.js`**, the MCT hand-off banner (batch D3, #1576; anchor `Auto-adopt (the old app's lock): not in this app yet`):
   - Before: `… not in this app yet (engineer decision HO-D2 pending).</span>`
   - After: `… not in this app yet: the hand-off is loaded only by "Load these demands".</span>` (the banner's own button; behaviour unchanged).
+  - and its "Geometry changes from MCT" dialog (anchor `Auto-update (the old app's lock) is not in this app yet`): Before `… not in this app yet (engineer decision HO-D2 pending).</p>`; After `… not in this app yet.</p>`.
 - Every other "pending" in apps/ps-bridge (outside the frozen engine/pbd-*.js) is in a code comment, a list's "pending edit" (lists.js, not review wording) or the kept "to be confirmed" note.
 ### Saved data (CLAUDE.md §5)
 - None.
