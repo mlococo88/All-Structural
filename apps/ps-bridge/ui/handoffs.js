@@ -10,8 +10,10 @@
               lldfGeom ("Send geometry to LL & DL"), psSection ("Send section properties"), capacity ("Send capacity to the MCT rating"),
               each with "Export hand-off (JSON)": click only (the old app re-published psSection, and capacity / lldfGeom when locked, by
               itself; here nothing is sent without a click; Decision pending engineer review, fixlog/ps-bridge.md HO-D2).
-   Not here (fixlog/ps-bridge.md, Open items): the MCT demands (handoffs / latestId), designBeam / beamRoster, geometryChanges, the channel
-   locks (BridgeLocks), appPaths and the shared Bridge Suite project list (switch-over). */
+   Batch D3 (2026-11-15): the MCT demands (handoffs / latestId) and geometryChanges: banners above the output tabs (mctBanner), Load by click
+   into a girder type (its demands, engine/demands.js), the review window of the geometry changes.
+   Not here (fixlog/ps-bridge.md, Open items): designBeam / beamRoster, the channel locks (BridgeLocks; HO-D2 pending), appPaths and the
+   shared Bridge Suite project list (switch-over). */
 (function () {
   'use strict';
   const H = () => window.PSBHandoffs, BX = () => window.BridgeXfer;
@@ -157,6 +159,77 @@
     return true;
   }
   function refresh() { document.querySelectorAll('[data-ho-new]').forEach(s => { s.hidden = !isNew(s.dataset.hoNew); }); }
-  function init() { window.addEventListener('storage', e => { if (!e.key || /^bridgeSuite\.v1\.(lldf|dlLoads)/.test(e.key)) refresh(); }); }
-  window.PSBHandoffUI = { card, onClick, refresh, init };
+  /* ---- batch D3 (2026-11-15): the MCT demands hand-off and the MCT geometry changes (the old app's banners, O:9603-9662) ----
+     mctBanner(P): the banners at the top of the output panel: "New analysis data available" (Load into a girder type / Not now) or, for a
+     payload newer than this app reads, "Analysis output is newer than this app" (dismiss); "Geometry has been updated in MCT – click to
+     review what changed" (the review window: the changes as the MCT Generator recorded them; Dismiss; Load the demands now). Load, the review
+     window's Load and the bridge questions are one change of the project = one Undo step; nothing is applied without a click (the old app's
+     lock / auto-adopt: engineer decision HO-D2 pending). The adoption markers are this app's own (bridgeSuite.v1.adopted.psbridge,
+     bridgeSuite.v1.geometryChanges.adopted.psbridge); the old app's (.psbeam) are not touched. */
+  const setRaw = (k, v) => { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } };
+  function mctBanner(P) {
+    const h = H(), D = window.PSBDemands, B = window.PSBBridge; if (!h || !h.mctPending || !D || !B) return '';
+    let out = '';
+    const r = h.mctPending(getRaw);
+    if (r) {
+      const d = h.mctDescribe(r.payload);
+      if (!r.supported) out += `<div class="notice" id="mctBanner" role="status"><div><b>⚠ Analysis output is newer than this app</b>: the MCT Generator published schema <b>v${esc(r.version)}</b>; this app reads <b>v${h.MCT_VERSION}</b>. Update this app to load it, or load a matching file on the Loads tab (Demands card).</div><div class="nBtns"><button type="button" data-mct="dismiss">Dismiss</button></div></div>`;
+      else {
+        const T = B.types(P), sh = window.PSBDemandsUI && window.PSBDemandsUI.shownType(P), key = /^G(\d+)$/i.exec(d.member || '');
+        // the default type: the one on the member's girder line in the span shown (the MCT member is a girder line), else the type shown
+        let def = sh ? sh.id : (T[0] && T[0].id);
+        if (key && B.hasTypes(P) && sh) { const k = B.typeAt ? B.typeAt(P, sh.span, +key[1]) : -1; if (k >= 0) def = P.types[k].id; }
+        out += `<div class="notice mctNew" id="mctBanner" role="status"><div><b>New analysis data available</b> from <b>${esc(d.producer)}</b>${d.project ? ' · ' + esc(d.project) : ''}${d.member ? ' · ' + esc(d.member) : ''} · ${d.n} stations · LL: <b>${esc(d.ll)}</b>.
+          Loading replaces the <b>demands of the girder type chosen</b> only (its source becomes this MIDAS member; section, strands and materials stay).
+          <label for="mctType">Load into</label> <select id="mctType">${T.map(t => `<option value="${esc(t.id)}"${t.id === def ? ' selected' : ''}>${esc(t.label)} (span ${t.span})</option>`).join('')}</select>
+          <span class="note">Auto-adopt (the old app's lock): not in this app yet (engineer decision HO-D2 pending).</span></div>
+          <div class="nBtns"><button type="button" class="pri" data-mct="load">Load these demands</button><button type="button" data-mct="dismiss">Not now</button></div></div>`;
+      }
+    }
+    const g = h.geomPending(getRaw);
+    if (g) out += `<div class="notice mctGeo" id="mctGeoBanner" role="status"><div><a href="#" data-mct="geo">Geometry has been updated in MCT – click to review what changed</a> (${(g.changes || []).length} change${(g.changes || []).length === 1 ? '' : 's'}).</div><div class="nBtns"><button type="button" data-mct="geo">Review</button></div></div>`;
+    return out;
+  }
+  /* geoDialog(P): the review window of the geometry changes */
+  function geoDialog(P) {
+    const h = H(), g = h.geomPending(getRaw); if (!g) return;
+    let d = document.getElementById('mctGeoDlg'); if (d) d.remove();
+    const r = h.mctPending(getRaw), can = !!(r && r.supported);
+    d = document.createElement('dialog'); d.id = 'mctGeoDlg'; d.className = 'dmGuide'; d.setAttribute('aria-label', 'Geometry changes from MCT');
+    d.innerHTML = `<h3>Geometry changes from MCT</h3><p class="note">A record of what moved in the analysis model (${esc(g.producer || 'MCT Generator')}, ${esc(String(g.producedAt || '').replace('T', ' ').slice(0, 16))}). The numbers themselves travel with the demands hand-off, not from here: ${can ? 'load the demands now (below), into the girder type chosen in the banner' : 're-send the demands from the MCT Generator'}. Auto-update (the old app's lock) is not in this app yet (engineer decision HO-D2 pending).</p>
+      <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Field</th><th class="lft">Current</th><th class="lft">New</th></tr></thead><tbody>${(g.changes || []).map(c => `<tr><td class="lft"><b>${esc(c.field)}</b>${c.detail ? `<br><span class="note">${esc(c.detail)}</span>` : ''}</td><td class="lft">${esc(String(c.oldVal == null || c.oldVal === '' ? '—' : c.oldVal))}</td><td class="lft">${esc(String(c.newVal == null || c.newVal === '' ? '—' : c.newVal))}</td></tr>`).join('')}</tbody></table></div>
+      <div class="nBtns" style="margin-top:8px"><button type="button" data-mctg="dismiss">Dismiss</button>${can ? ' <button type="button" class="pri" data-mctg="load">Load the demands now (one Undo step)</button>' : ''} <button type="button" data-mctg="close">Close</button></div>`;
+    document.body.appendChild(d);
+    d.addEventListener('click', e => { const b = e.target.closest('[data-mctg]'); if (!b) { if (e.target === d) d.close(); return; }
+      const a = b.dataset.mctg; if (a === 'close') { d.close(); return; }
+      if (a === 'load') { if (mctLoad(d.__ctx)) { setRaw(h.MCT_K.geomAdopted, g.producedAt); d.close(); d.__ctx.redraw(); } return; }
+      if (a === 'dismiss') { setRaw(h.MCT_K.geomAdopted, g.producedAt); d.close(); d.__ctx.redraw(); } });
+    return d;
+  }
+  /* mctLoad(ctx): Load the pending hand-off into the girder type chosen in the banner (one change = one Undo step) */
+  function mctLoad(ctx) {
+    const h = H(), D = window.PSBDemands, B = window.PSBBridge, P = ctx.P(), r = h.mctPending(getRaw); if (!r || !r.supported) return false;
+    const sel = document.getElementById('mctType'), id = sel ? sel.value : (window.PSBDemandsUI.shownType(P) || {}).id, T = B.types(P).find(t => t.id === id);
+    if (!T) { say('Choose the girder type to load the demands into.'); return false; }
+    const q = h.mctPlan(P, T, r.payload); if (!q.ok) { say(`The MCT hand-off cannot be loaded: ${q.error}`); return false; }
+    const lines = q.lines.slice();
+    D.setFile(P, T.id, q.file, `MCT hand-off ${r.id}`);
+    if (q.setSpans && window.confirm(`The member's spans (${q.setSpans.map(v => v.toFixed(2)).join(', ')} ft) differ from the bridge's (${P.spans.lengths.map(v => (+v).toFixed(2)).join(', ')} ft). Set the bridge spans to the member's (as the old app set L to the span)? (Undo returns both.)`)) { P.spans.lengths = q.setSpans.slice(); lines.push('The bridge spans were set to the member\'s.'); }
+    if (q.makeCont && window.confirm('The member is continuous: make the bridge continuous for composite loads (5.12.3.3; the old app turned its continuity on)? Every girder type of the bridge is affected. (Undo returns it.)')) { P.spans.continuity = 'composite'; lines.push('The bridge was made continuous for composite loads.'); }
+    setRaw(h.MCT_K.adopted, r.token);
+    ctx.changed(); if (ctx.toast) ctx.toast(lines.join(' '), true);
+    return true;
+  }
+  /* onMct(e, ctx): the banners' buttons (ctx: hoCtx + toast, redraw) */
+  function onMct(e, ctx) {
+    const b = e.target.closest('[data-mct]'); if (!b || !H() || !H().mctPending) return false;
+    e.preventDefault(); const h = H(), a = b.dataset.mct;
+    if (a === 'load') { mctLoad(ctx); return true; }
+    if (a === 'dismiss') { const r = h.mctPending(getRaw); if (r) setRaw(h.MCT_K.adopted, r.token); ctx.redraw(); return true; }
+    if (a === 'geo') { const d = geoDialog(ctx.P()); if (d) { d.__ctx = ctx; if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', ''); } return true; }
+    return true;
+  }
+  function init(onMctChange) { window.addEventListener('storage', e => { if (!e.key || /^bridgeSuite\.v1\.(lldf|dlLoads)/.test(e.key)) refresh();
+    if (onMctChange && (!e.key || /^bridgeSuite\.v1\.(latestId|updatedAt|handoffs|geometryChanges)/.test(e.key))) onMctChange(); }); }   // batch D3: the banners follow the MCT Generator's sends
+  window.PSBHandoffUI = { card, onClick, refresh, init, mctBanner, onMct, mctLoad };
 })();
