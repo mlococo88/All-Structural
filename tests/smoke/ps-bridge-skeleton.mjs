@@ -64,7 +64,7 @@ await ready(p);
 const itabs = await p.$$eval('#inTabs [data-itab]', b => b.map(x => x.textContent));
 check(itabs.join('|') === 'Project|Bridge layout|Cross-section|Girders & strands|Materials|Diaphragms / deck|Loads|Owner rules|Auto design', 'input tabs: ' + itabs.join('|'));
 const otabs = await p.$$eval('#tabBar [data-otab]', b => b.map(x => x.textContent));
-check(otabs.length === 17 && otabs[0] === 'Summary' && otabs.includes('End zone & hold-down') && otabs.at(-1) === '3D view', 'output tabs: ' + otabs.join('|'));
+check(otabs.length === 19 && otabs[0] === 'Summary' && otabs.includes('Compare') && otabs.includes('Nomenclature') && otabs.includes('End zone & hold-down') && otabs.at(-1) === '3D view', 'output tabs: ' + otabs.join('|'));
 const lay = await p.evaluate(() => { const r = id => document.getElementById(id).getBoundingClientRect(); return { d: r('sbDashCol'), i: r('inputPanel'), s: r('sbSplit'), o: r('outputPanel'), x: document.scrollingElement.scrollWidth - innerWidth }; });
 check(lay.d.width >= 230 && lay.d.right <= lay.i.left + 1 && lay.i.right <= lay.s.left + 1 && lay.s.right <= lay.o.left + 1 && lay.o.width > 600 && lay.x <= 0, 'side-by-side layout ' + JSON.stringify(lay));
 check(/Handling\s*off/.test(await p.textContent('#sbDashCol')) && /Deck\s*off/.test(await p.textContent('#sbDashCol')), 'check summary: Handling and Deck off');
