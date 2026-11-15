@@ -10099,3 +10099,53 @@ index 58d25a5..b6463e8 100644
 - **How verified:** new smoke `tests/smoke/steel-bridge-list-commit.mjs`: on origin/main 3 of 6 checks fail (the three tab-click cases), with the fix 6 of 6 pass, 0 console errors. Engine: `node tests/engine/run.mjs list-input steps-groups-tabs model paths tex handoff equal-spacing library report-wiring` 13 files, 110 passed, 0 failed; `node tests/check-syntax.mjs` all scripts pass; smokes steel-bridge-equal-spacing, -taberrors, -invalid, -wiring, sbd-undo, steel-bridge-splices, -splice-addrow pass (see the PR).
 - **Other copies:** `apps/ps-bridge/ui/lists.js` (already has the fix, PR #1548). The two copies now differ only in their header comments, selector lists and namespace (to move to `shared/` later, CLAUDE.md §3).
 - **Open items:** a list drawn only while its tab is open (the Auto design tab's Station windows, `#ad_win`) or on an output tab (Analysis `#an_a_seqCustom`, `#an_l_xf`), when the click that redraws goes to a tab that does not draw that input again: no input of the same id exists after the redraw, so the edit is still not committed (as before; same in the PS copy). Not changed here.
+
+## 2026-11-15 — PR: claude/sbd-list-commit-tabonly (PR #1568: https://github.com/mlococo88/All-Structural/pull/1568) — a list edit is committed before another click or change redraws the page (SBLT; the open item of PR #1561; input only, no calculation change)
+- **Request:** the lists drawn only in some states (#ad_win, #an_a_seqCustom, #an_l_xf) still lost an edit when the redraw left no input of the same id (open item of PR #1561). Commit the pending edit always.
+- **Problem:** `ui/lists.js` commits a table edit in a `focusout` handler deferred by `setTimeout(…, 0)`. When a click or a change elsewhere is handled before that commit runs, and that handler redraws the page into a state with no input of the same id, the edit is lost. Two cases reproduce on origin/main (the smoke below):
+  - Auto design, design variables dialog: a station window typed, then the splice variable's mode changed to Lock. `#ad_win` is drawn only in Range mode.
+  - A project with a stored cross-frame point load entry: a load typed for girder type 1, then the Loads tab's girder type changed to type 2. `#an_l_xf` is drawn only for a type with that entry.
+  - The same-id fallback of #1561 also had a wrong-target risk. When type 2 also had a stored entry, the edit typed for type 1 would have been written into type 2's input.
+  - In today's app the pours (`#an_a_seqCustom`) are on the Loads input pane, which is always drawn (AIN). They already committed on an input-tab click. That case is now in the smoke as well.
+- **Where:** `apps/steel-bridge/ui/lists.js`, `bind()` (anchor `ctl.el.addEventListener('focusout', () => setTimeout(() => {`) and `start()` (anchor `upgrade(document);`).
+  - Before (`bind`):
+    ```js
+        ctl.el.addEventListener('focusout', () => setTimeout(() => {   // after the event: a redraw (Enter, ×) moves the focus within the table
+          if (ctl.el.isConnected && ctl.el.contains(document.activeElement)) return;
+          if (el.value === was) return; was = el.value;
+          // SBLC (2026-11-14): …
+          let t = el; if (!el.isConnected) { t = document.getElementById(el.id); if (!t) return; t.value = el.value; }
+          t.dispatchEvent(new Event('change', { bubbles: true }));
+        }, 0));
+        el._sli = ctl;
+    ```
+  - After: the commit body moved unchanged into `const commit = () => { … }`. The focusout handler calls `commit()`, and `BOUND.add({ el, ctl, commit })` follows `el._sli = ctl;`. New, above `bind`: `const BOUND = new Set(); let flushing = false;`. New, after `bind`:
+    ```js
+      function flush(target) {
+        if (flushing) return;
+        flushing = true;
+        try {
+          BOUND.forEach(b => {
+            if (!b.el.isConnected) { BOUND.delete(b); return; }   // redrawn: its deferred focusout (above) still commits a pending edit
+            if (target && target.nodeType === 1 && (target === b.el || b.ctl.el.contains(target))) return;
+            b.commit();
+          });
+        } finally { flushing = false; }
+      }
+    ```
+  - In `start()`, after `upgrade(document);`:
+    ```js
+        ['click', 'change'].forEach(t => document.addEventListener(t, e => flush(e.target), true));   // SBLT: before the page's handlers
+    ```
+  - `W.SBDListsUI = { LISTS, upgrade, flush };`
+  - How it works: a click or change anywhere outside a table commits that table's pending edit first. The listener is in the capture phase on the document, so it runs before the page's own handlers. The page's own handler then reads the edit while the page still shows the edit's own girder type, tab and dialog state. The deferred focusout commit stays for every other path. After a flush it finds nothing pending.
+- **Saved data (§5):** none changed. The same module handlers write the same fields in the same formats.
+- **Governing provision:** none (input handling only). No formula, factor or value changed.
+- **Check case (built-in project, browser, `tests/smoke/steel-bridge-list-commit.mjs`):**
+  - Station windows: Range, 61 to 81, then mode Lock. Saved `autodesign.vars.spl` before: `{"mode":"lock"}` (window lost). After: `{"mode":"lock","win":"61-81"}`.
+  - Stored cross-frame entry `20:1.5, 45:2` on type 1, P of row 2 typed 2.5, then girder type 2 chosen. Saved type 1 before: `[{"x":22,"P":1.5},{"x":45,"P":2}]` (2.5 lost). After: `[{"x":22,"P":1.5},{"x":45,"P":2.5}]`. Type 2 unchanged both times.
+  - Pours `0-75`, then an input-tab click: saved `0-75` before and after.
+- **How verified:**
+  - `tests/smoke/steel-bridge-list-commit.mjs`: 14 checks. On origin/main 2 fail (the two cases above); with the fix 14 of 14 pass, 0 console errors.
+  - Engine and smokes: see the PR.
+- **Other copies:** `apps/ps-bridge/ui/lists.js` (to be put in step in its own PR, CLAUDE.md §3 and §7).
