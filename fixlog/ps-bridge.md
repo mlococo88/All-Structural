@@ -7156,7 +7156,7 @@ index 1183e53..4aaa763 100644
 - New: tests/engine/psbridge-subloads.test.mjs (3), tests/smoke/ps-bridge-subloads.mjs (7). Changed: tests/engine/psbridge-model.test.mjs (script list, shared exemption).
 
 ## 2026-11-15 — Batch F3 / F4: the old app's "Design beam" chip (read only; girder-count warning; "Show G<i>", interior / exterior follows the line) and "Import hand-off (JSON)" of the distribution factors (click / display only; no calculation change)
-PR: PRLINK
+PR #1579: https://github.com/mlococo88/All-Structural/pull/1579
 ### Request
 - Batch F (engineer-approved plan, 2026-11-15). F3: the "Design beam" chip of LL & DL (old app O:8962-8984 `BeamChip`, `BridgeBeam` O:515-565): warn on a girder-count mismatch; interior / exterior follows it, by click / display only. F4: "Import hand-off (JSON)" for the LLDF pull, as the Steel Bridge app offers (apps/steel-bridge/ui/handoffs.js `lldfFile`); dlLoads only if the old app or the Steel app offers it (neither does: not added). Not in scope: the auto-follow locks (HO-D2), designBeam / beamRoster channels beyond the chip. Review rows old-vs-new #28, #129; ps-vs-steel S8.
 ### What changed
