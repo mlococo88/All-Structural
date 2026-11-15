@@ -13,10 +13,10 @@
   const OPEN = new Set(['flex']);
   const TOPICS = [
     { key: 'cs', title: 'Condition and system factors', ref: 'MBE 6A.4.2.3, 6A.4.2.4', ids: /^rt\.phiCS$/ },
-    { key: 'flex', title: 'Flexure rating at the governing station', ref: 'MBE 6A.4 · Strength I', ids: /^rt\.(Rn|MDC|MDW|MLL|RFinv|RFopr|RFmid)$/, res: /^rt\.RFinv$/ },
-    { key: 'shear', title: 'Shear rating at the governing shear section', ref: 'MBE 6A.5.6 · Strength I', ids: /^rt\.(phiVn|VDC|VDW|VLL|RFvInv|RFvOpr)$/, res: /^rt\.RFvInv$/ },
-    { key: 's3', title: 'Service III rating (prestressed concrete)', ref: 'MBE 6A.5.4.1', ids: /^rt\.(fPS|fDC|fDW|fLL|fr|RFs3)$/, res: /^rt\.RFs3$/ },
-    { key: 'veh', title: 'Legal / permit vehicles (entered factored forces)', ref: 'MBE 6A.4.4 / 6A.4.5', ids: /^rt\.veh\d+\./ }];
+    { key: 'flex', title: 'Flexure rating at the governing station', ref: 'MBE 6A.4 · Strength I', ids: /^rt\.(Rn|MDC|MDW|MLL|RFinv|RFopr|RFmid)$/, res: /^rt\.RFinv$/, rf: /^rt\.RF(inv|opr)$/ },
+    { key: 'shear', title: 'Shear rating at the governing shear section', ref: 'MBE 6A.5.6 · Strength I', ids: /^rt\.(phiVn|VDC|VDW|VLL|RFvInv|RFvOpr)$/, res: /^rt\.RFvInv$/, rf: /^rt\.RFv(Inv|Opr)$/ },
+    { key: 's3', title: 'Service III rating (prestressed concrete)', ref: 'MBE 6A.5.4.1', ids: /^rt\.(fPS|fDC|fDW|fLL|fr|RFs3)$/, res: /^rt\.RFs3$/, rf: /^rt\.RFs3$/ },
+    { key: 'veh', title: 'Legal / permit vehicles (entered factored forces)', ref: 'MBE 6A.4.4 / 6A.4.5', ids: /^rt\.veh\d+\./, rf: /^rt\.veh\d+\.RF$/ }];   // rf: rating-factor steps (PSBOutKit.groups: RF status, not demand / capacity; 2026-11-15)
   const rfs = v => v >= 99 ? '—' : null;
   const okT = (ok, v) => v >= 99 ? '<td class="lft">n/a</td>' : `<td class="${ok ? 'ok' : 'ngt'}">${ok ? '≥ 1.0' : '< 1.0'}</td>`;
   function output(ctx) {
