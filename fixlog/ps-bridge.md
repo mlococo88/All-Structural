@@ -7463,3 +7463,25 @@ PR #TBD
 - Pre-existing, not changed: on paper B the STRAND AND GIRDER SCHEDULE of a project with six girder types does not fit at any scale (`over`, 1" = 100'-0") — the same on main.
 ### Other copies
 - The block-sheet functions and table / notes are adapted copies of the Steel Bridge app's (apps/steel-bridge/engine/sheets.js, engine/drawings.js); keep a fix in step.
+## 2026-11-15 — H2: Drawings tab: bearing reactions and analysis diagrams sheets (display and export only)
+PR #TBD
+### Request
+- Review finding D3 (scratchpad review ps-vs-steel.md "Drawings"), batch H2: the Steel Bridge app's bearing reactions and analysis diagrams sheets (apps/steel-bridge/engine/sheets.js `reac`, `diag`) for this app.
+### What changed
+- `ui/sheets.js` (anchor `/* ---------- batch H2 (2026-11-15): bearing reactions, analysis diagrams`):
+  - `reacBlocks(P, A)`: BEARING REACTIONS of every girder line at every support from `PSBHandoffs.srAll(P, A.cells)` (the values the Project tab sends to Bridge Substructure Loading, allGirders: each span the girder type on the line, its engine's own end reactions `bxSuperRxPayload`; a pier the sum of the two spans' ends, srAll's own sum): GIRDER, SUPPORT, X, DC1, DC2, DW (kip, 2 decimals of the payload); with more than one span a second table PIER REACTIONS: EACH SPAN'S END (srAll's `shares`, 3 decimals). Live load not listed (not sent).
+  - `plot()` / `lab()` / `diag(D, C)`: adapted COPY of the steel app's dxfPlot / dxfLab / dxfDiag: per girder type on its first line (as the girder sheets), R.diagrams at the engine's stations: moments (girder + DC1 as one curve: `M_g + M_DC1`, plotted only; DC2 dashed, DW, LL+IM ±, Strength I max / min), shears (V_DC, V_DW, V_LL±, V_StrI±); labels: M_StrI_pos at the station nearest each tenth point, M_StrI_neg at the ends when negative, V_StrI_pos at the left end and V_StrI_neg at the right end; the demand source named (`PSBDemands.describe`: this app's analysis, custom table, MIDAS file with its stations and span). Plot amplitude 1.1 in (paper D), 0.7 in (paper B, so the sheet fits); `plot(…, amp)`.
+  - `build`: after the schedule `diag<k>` per type (kmin 48), then `reac` (block sheets), then `summ`; `typeModels` entries carry `T` (the type object, for describe).
+- `ui/drawings.js`: `SRC` `diag` (Analysis tab, Loads input tab), `reac` (Analysis tab, Project input tab); the layer list names S-DIAG-AXIS / -DC / -DW / -LL / -STR.
+### Saved data (CLAUDE.md §5)
+- None.
+### Governing provisions (CLAUDE.md §4)
+- None changed; every value is an engine or hand-off value (no new formula; girder + DC1 summed for one plotted curve only). Harness B: 0 differences.
+### Check case
+- Three spans 80 / 110 / 80 ft made continuous, 6 lines: G1 Abut. 1 DC1 68.52, DC2 2.83, DW 5.47 kip; Pier 1 DC1 162.74 = 68.524 (span 1 right end) + 94.220 (span 2 left end); DC2 10.68 = 5.175 + 5.500; DW 20.68 = 10.027 + 10.656.
+- Interior S1 on G2 (span 1, 80 ft): M_u labels at the tenth points 0 … 4257 kip-ft; V_u 267.3 kip at the left end, −302.3 kip at the right end (continuous end).
+### How verified
+- `tests/engine/psbridge-drawings-h.test.mjs` (+2 tests): every reaction row = srAll (every line × support), the shares; every point of the 13 curves = R.diagrams at its station (x and value, through the plot scale), the axis = L, the tenth-point and end labels, the demand source, the sheet fits (paper D and B).
+- `tests/engine/psbridge-drawings.test.mjs`, smokes `ps-bridge-drawings*.mjs`: the new sheet list.
+### Other copies
+- plot / lab / diag adapted from apps/steel-bridge/engine/sheets.js; keep a fix in step.
