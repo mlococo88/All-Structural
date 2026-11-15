@@ -32,7 +32,7 @@ for (const [name, P0] of Object.entries(CASES)) {
     A.cells.forEach(c => { const R = c.R; if (!R || R.error) return;
       const row = new RegExp(`<td>${c.s}</td><td class="lft">G${c.g}[^<]*</td>.*?</tr>`, 's').exec(card); assert.ok(row, `row G${c.g} S${c.s}`);
       [[R.wG, 'sec|sec.g.wsw'], [R.wDk, 'lds|ld.wDC1'], [R.wBar, 'lds|'], [R.wDW, 'lds|'], [R.dfm, 'lds|ld.dfm'], [R.dfv, 'lds|ld.dfv'], [R.fat.dfFat, 'str|st.fat.df']].forEach(([v, lk]) =>
-        assert.ok(row[0].includes(`<td>${fx(v, 4)} <a class="wk" href="#" data-sumgo="${c.k}|${c.g}|${lk}`), `G${c.g}: ${v} ${lk}`)); });
+        assert.ok(row[0].includes(`<td style="white-space:nowrap">${fx(v, 4)} <a class="wk" href="#" data-sumgo="${c.k}|${c.g}|${lk}`), `G${c.g}: ${v} ${lk}`)); });
     assert.ok(!W.PSBUiLoads.output({ ...ctx, all: undefined }).includes('of every girder line'), 'not in the Report (no ctx.all)');
     // 2. Analysis: the reactions = bxSuperRxPayload; the loads used with their links
     const ha = W.PSBUiAnalysis.output(ctx), pl = W.PSBHandoffs.srPayload(Bd.inp, Bd.R).payload;
