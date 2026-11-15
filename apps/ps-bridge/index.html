@@ -723,6 +723,8 @@
       else gotoStep(tab, st); return; }
     const sr = e.target.closest('[data-sumrun]'); if (sr) { e.preventDefault(); runCtl(sr.dataset.sumrun); return; }
     const tc = e.target.closest('[data-tycell]'); if (tc) { e.preventDefault(); const [k, g, tab] = tc.dataset.tycell.split('|'); P.design = { g: +g, s: P.types[+k].span }; if (autosave) autoFailed = !M.save(LS, P); record(); gotoOut(tab); drawInputs(); return; }   // PR 3a-2
+    // batch D2: "Design span n →" of the Analysis tab's imported-member view: the girder type shown uses span n of its MIDAS file (one Undo step)
+    const dd = e.target.closest('[data-dmdesign]'); if (dd) { e.preventDefault(); const T = DMUI.shownType(P); if (T) { window.PSBDemands.setSpan(P, T.id, +dd.dataset.dmdesign); ui.dmView = 'design'; saveUi(); changed(); toast(`${T.label}: span ${dd.dataset.dmdesign} of the MIDAS file is used now (Loads tab, Demands card).`, true); } return; }
     const gi = e.target.closest('[data-goin]'); if (gi) { e.preventDefault(); ui.itab = gi.dataset.goin; saveUi(); drawInputs(); $('inputPanel').scrollIntoView({ block: 'start' }); return; }
     // a link to another output tab (and to a worked step there): that tab, then the step with its topic opened
     const gt = e.target.closest('[data-gotab]'); if (gt) { e.preventDefault(); gotoOut(gt.dataset.gotab); const h = gt.getAttribute('href') || '';
