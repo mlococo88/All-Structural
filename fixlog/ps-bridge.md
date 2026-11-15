@@ -7155,7 +7155,7 @@ index 1183e53..4aaa763 100644
 ### Tests
 - New: tests/engine/psbridge-subloads.test.mjs (3), tests/smoke/ps-bridge-subloads.mjs (7). Changed: tests/engine/psbridge-model.test.mjs (script list, shared exemption).
 ## 2026-11-15 — E0: no "pending engineer review" wording in the app (Auto design output tab, Project tab / Report assumption; display only)
-PR #TBD
+PR #1578: https://github.com/mlococo88/All-Structural/pull/1578
 ### Request
 - Engineer rule: "pending engineer review" wording appears only in PRs and the fix log, never in the app UI or the Report. Reword the Auto design output tab's "Assumed (pending engineer review)" neutrally, and fix any other such wording in apps/ps-bridge the same way. The box beam / voided slab "to be confirmed" note (PS #1542 / #1554) is an engineer-requested exception and is kept.
 ### What changed
