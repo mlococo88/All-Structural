@@ -1,5 +1,5 @@
 // apps/ps-bridge E1 (2026-11-15): the HL-93 rating at every station of the girder (engine/rating-along.js, MBE 4th Ed. (2026)), in Node:
-//   1. on every design of psbridge-tab-cases.mjs: the positive-flexure governing RF is the engine's own (R.rating.RFinv, same station, Object.is);
+//   1. on every design of psbridge-tab-cases.mjs and of psbridge-midas-cases.mjs (MIDAS files, a custom table): the positive-flexure governing RF is the engine's own (R.rating.RFinv, same station, Object.is);
 //      the engine's shear and Service III ratings are rows of the table (the same values) and each governing RF is not above the engine's
 //      (more stations can only keep or lower it); the negative-moment rows at an interior support carry the engine's pier demands (R.cont);
 //      the shear capacity of the grid rows equals the engine's design-station φV_n at the common stations, and their LL the engine's (contOn);
@@ -12,12 +12,14 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { loadShared, test, ROOT } from './harness.mjs';
+import fs from 'node:fs';
 import { TAB_CASES } from './psbridge-tab-cases.mjs';
+import { MIDAS_CASES, midasFixtures } from './psbridge-midas-cases.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBDF = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
 const W = loadShared('steps.js', 'report.js', ...PBDF,
-  ...['sections', 'model', 'rigid', 'lldf-fg', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'legacy', 'worked', 'worked-stress', 'worked-strength', 'worked-end', 'rating-along', 'worked-hdr', 'autodesign'].map(n => path.join(APP, `engine/${n}.js`)),
+  ...['sections', 'model', 'rigid', 'lldf-fg', 'holddown', 'pierblock', 'demands', 'design', 'bridge', 'bridge-dl', 'fields', 'inputcheck', 'legacy', 'worked', 'worked-stress', 'worked-strength', 'worked-end', 'rating-along', 'worked-hdr', 'autodesign'].map(n => path.join(APP, `engine/${n}.js`)),
   ...['inputs', 'vizkit', 'vizalong', 'outkit', 'section', 'loads', 'analysis', 'strands', 'losses', 'stresses', 'flexure', 'shear', 'endzone', 'camber', 'handling', 'deck', 'rating', 'dash', 'summary', 'bridgedl'].map(n => path.join(APP, `ui/${n}.js`)),
   ...['fromtab', 'data', 'builders'].map(n => path.join(APP, `report/${n}.js`)));
 const AL = W.PSBRatingAlong, M = W.PSBModel;
@@ -25,7 +27,8 @@ const CASES = TAB_CASES(() => M.defaultProject());
 const run = P => { const inp = W.PSBDesign.inputs(P), R = W.PSBHoldDown.compute(inp); assert.equal(R.error, null); return { inp, R, A: AL.of(R) }; };
 const close = (a, b, t, m) => assert.ok(Math.abs(a - b) <= t * Math.max(1, Math.abs(b)), `${m}: ${a} vs ${b}`);
 
-for (const [name, P] of Object.entries(CASES)) {
+const MCASES = MIDAS_CASES(() => M.defaultProject(), midasFixtures(rel => JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/projects', rel), 'utf8'))));
+for (const [name, P] of [...Object.entries(CASES), ...Object.entries(MCASES).map(([n, q]) => ['(demands) ' + n, q])]) {
   test(`rating along the girder: ${name}`, () => {
     const { R, A } = run(P), L = R.L;
     assert.ok(A && A.rows.length > 100, 'every station rated');
@@ -55,9 +58,13 @@ for (const [name, P] of Object.entries(CASES)) {
     // negative flexure: continuity on only; at an interior support the engine's pier demands
     if (R.cont) {
       const U = R.cont.unit, ends = [U.s > 1 ? 0 : null, U.s < U.spans.length ? L : null].filter(v => v != null);
+      // the continuous unit (R.fe): the engine's pier demands at each interior support; a MIDAS file (R.useExt): each end its own (the file's)
+      // values; the engine's pier check takes the most negative of the two ends for each effect (pbd-external.js pierNegM), the LL of one of them
       ends.forEach(x => { const r = byK('flexN').find(z => z.x === x); assert.ok(r, 'a pier row at x = ' + x);
-        close(r.parts.h2, R.cont.MDC2n, 1e-12, 'M_DC2 at the pier'); close(r.parts.hW, R.cont.MDWn, 1e-12, 'M_DW at the pier'); close(r.LL, R.cont.MLLn, 1e-9, 'M_LL at the pier');
+        const d = R.diagrams.find(q => q.x === x); close(r.parts.h2, -d.M_DC2, 1e-12, 'M_DC2 at the pier'); close(r.parts.hW, -d.M_DW, 1e-12, 'M_DW at the pier'); close(r.LL, -d.M_LLneg, 1e-12, 'M_LL at the pier');
+        if (!R.useExt) { close(r.parts.h2, R.cont.MDC2n, 1e-12, 'engine M_DC2 at the pier'); close(r.parts.hW, R.cont.MDWn, 1e-12, 'engine M_DW'); close(r.LL, R.cont.MLLn, 1e-9, 'engine M_LL'); }
         close(r.C, R.rating.phiCS * R.cont.phiMnN / 12, 1e-12, 'C at the pier'); });
+      if (R.useExt) close(Math.max(...ends.map(x => byK('flexN').find(z => z.x === x).LL)), R.cont.MLLn, 1e-9, 'the engine\'s pier LL: the more negative end');
       byK('flexN').forEach(r => assert.ok((U.s > 1 && r.x <= L / 2 + 1e-9) || (U.s < U.spans.length && r.x >= L / 2 - 1e-9), 'the half span next to an interior support'));
     } else assert.equal(byK('flexN').length, 0);
     // the governing rows
