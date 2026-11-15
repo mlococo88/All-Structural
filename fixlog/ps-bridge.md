@@ -5453,3 +5453,71 @@ index dc34d57..d04e81a 100644
 - check-syntax: all pass. Engine `psbridge tex project-registry`: 41 files, 435 passed (new psbridge-display-c 20).
 - Harness B: 48,475 shown and 8,392 step values, 0 differences (normal and --import; +128 Report values: the Analysis section's "Loads and factors used", each equal to the old app's); --control exits 1.
 - Smokes: skeleton 271, types 106, 3d 101, figures 225, library 11, undo 7, drawings 6, drawings2 7, autodesign 7, handoffs 12, display 8, tables 5 (new); 0 console errors.
+## 2026-11-15 — ADB: the Report's "Auto design basis" (§2, last subsection) and a link to it from the Auto design output tab (display only)
+PR #1574: https://github.com/mlococo88/All-Structural/pull/1574
+### Request
+- Add an "Auto design basis" section to the printed Report, with an on-screen link to it from the Auto design output. It describes, for the run applied or shown:
+  - the objective;
+  - the sections searched;
+  - the strand pattern, drape and f′c / f′ci rules, with the owner limits;
+  - the order of preference;
+  - the selected candidate and its governing check, with "see §x.y" links to where each check is worked (CLAUDE.md §6).
+- Display only: read from PSBAutoDesign / P.autodesign; no calculation change, no new keys. With no run, the section says so.
+### What changed
+- **`report/builders.js`**
+  - New `keysOf(secs)` and `adSub(B, X, A, secs)`, inserted before `planFig`.
+  - `model()`: before the dropped-section fix (anchor `// references from the sections shown into a section left out`):
+    ```js
+    { const ps = secs.find(q => q.id === 'proj'); if (ps) { try { ps.subs.push(adSub(B, X, opt.autodesign || null, secs)); } catch (e) { … } } }
+    ```
+  - It is built last, so its links point only to the steps of the sections shown (`keysOf`). No number is recorded in `model.vals`.
+  - Content, from the run (`PSBAutoDesign` result `R`, its settings `R.o`, `PSBAutoDesign.conc` / `FRACS` / `GROW` / `DEF`, `PSBSections.rowGrid`, `PBD.OWN_RULES`):
+    - the run's status (applied or shown; changed since);
+    - Objective and variables;
+    - Order of preference;
+    - Sections searched (the family, owner and width rules, and a table of every section tried with its result);
+    - Strand pattern rules (the row grid of the selected section, even counts, rows of fewer than 4 not used, top strands and debonding kept);
+    - Drape rules (the frac range);
+    - f′c and f′ci grids and limits: AASHTO LRFD 10th Ed. Art. 5.4.2.1, paraphrased, and the owner rules with their section numbers. A table gives each girder type's searched f′c and f′ci range;
+    - Assumptions of the search;
+    - Selected candidate and its governing check: each girder type's inputs, then a table of every check (ratio, line, status, and "see §" to the step that works it).
+  - The topics are numbered 1 to 8 as the viewer's topic sub-headings (`it.topic.no`).
+  - How each check's link is chosen (`see()`):
+    - the step of the girder type the report works: single report `B.cell.k`; per-type report the unit `u<j>/<step>`;
+    - "(worked for G…)" when the line differs;
+    - an owner-limit check goes to `rs.own`;
+    - a type the report does not work goes to its result tab with that type chosen.
+  - With no run: one note ("No auto design was run in this page view: nothing in this report comes from an auto design …"); while a run is under way: one note.
+- **`ui/autodesign.js`**
+  - `S.ap` (the run applied in this page view, kept on Apply) and `S.rev` (incremented on a finished run and on Apply).
+  - New `basis(P)`: the run shown, else the one applied, with `stale`. New `basisKey()`.
+  - The output tab's first note links to the Report subsection (`href="#rp:rs.adb" data-gotab="rpt"`).
+  - Memory only: nothing stored.
+- **`ui/report.js`**
+  - Passes `autodesign: PSBAutoDesignUI.basis(P)` to the model.
+  - `basisKey()` and `stale` are in the cache key.
+  - Keeps the viewer as `state.V`.
+- **`index.html`**: the output-panel `[data-gotab]` handler: an href `#rp:<key>` jumps the Report viewer to that key (`state.V.jump`).
+### Saved data (CLAUDE.md §5)
+- None: no key or field. P.autodesign is read only. The applied run is kept in the page view's memory, as the run itself.
+### Governing provisions (CLAUDE.md §4)
+- None changed. The basis cites AASHTO LRFD 10th Ed. Art. 5.4.2.1 (minimum f′c 4.0 ksi for prestressed concrete; provisions based on up to 10.0 ksi) and the owner rules' sections (RIDOT 5.2.1 and 5.6.1; MassDOT 3.7.2.1; CTDOT V2 5.9.1.2), as the Auto design input tab states them. The values are those PSBAutoDesign searches.
+- Harness B: 0 differences (no value recorded).
+### Check case (new project, Interior S1 + Exterior S1, AASHTO; `tests/engine/psbridge-adbasis.test.mjs`)
+- Before a run: §2.7 "Auto design basis" holds one note. The report still has 14 sections, and no other subsection number changes.
+- After Run and Apply of candidate #1:
+  - Sections searched: AASHTO Type I to Type V and PCI BT-54 / 63 / 72. Type I to III, BT-54 and Type IV give "none (… live-load deflection fails at the highest f′c …)"; BT-63, BT-72 and Type V are candidates #1, #2 and #3.
+  - Interior S1 on PCI BT-63: 36 strands (6 draped), straight rows 12 at 2.00, 12 at 4.00 and 6 at 6.00 in; y_end 50.00, y_mid 10.00 in, hold-down at 0.40 L; f′c / f′ci 8.5 / 7.8 ksi.
+  - Its governing check: Confinement steel (5.9.4.4.2), ratio 1.000 on G3, "see §10.7 (worked for G2)" (on main c63d974) (the Interior S1 unit's End zone section).
+  - The f′c grid is 4.0 to 10.0 ksi (13 values) for both types.
+### How verified
+- New `tests/engine/psbridge-adbasis.test.mjs` (4 tests): no run; a run applied on the default and on the new project; shown and stale.
+- New smoke `tests/smoke/ps-bridge-adbasis.mjs`.
+- PS checks: see the PR.
+### Decisions (pending engineer review)
+- ADB-D1. **Placement.** The basis is the last subsection of §2 "Project, basis and assumptions", not a new numbered section. Every existing section and subsection number, and every "see §" reference, stays as it was. Leaving §2 out of the Report leaves the basis out too.
+- ADB-D2. **No run.** The subsection is kept, with one note saying no auto design was run and that nothing in the report comes from one. It is not omitted, so that the printed report always states it.
+- ADB-D3. **Which run.** The run described is the one shown on the Auto design output tab; if none is shown, the one last applied in this page view. The run is memory only (as before), so a reopened project has no run to describe, and the subsection says so. The subsection says when the project has changed since the run or since its Apply.
+- ADB-D4. **What "see §" points to.** It points to the step the report works for that girder type, which is the current inputs. After an Apply with no later change, those are the candidate's inputs. Otherwise the text says the report works the current inputs, not the candidate.
+### Other copies
+- None.

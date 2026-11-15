@@ -120,14 +120,16 @@
     if (!window.SharedReport) { box.innerHTML = '<div class="alert err">shared/report.js is not loaded.</div>'; return null; }
     const B = window.PSBReportData.compute(ctx.P, ctx.rc, modeOf(o));
     if (B.err) { box.innerHTML = `<div class="alert err" role="alert">The report cannot be built: ${esc(B.err)}</div>`; return null; }
-    const inc = incOf(o), wScr = Math.round(box.clientWidth || 0), narrow = wScr > 0 && wScr < PW - 40, key = JSON.stringify([ctx.rc && ctx.rc.key, ctx.rc && ctx.rc.allKey, inc, narrow ? wScr : 0, modeOf(o), o.detail === 'all']);
+    const ADU = window.PSBAutoDesignUI, adb = ADU && ADU.basis ? ADU.basis(ctx.P) : null;   // ADB (2026-11-15): §2's Auto design basis (the run shown or applied in this page view)
+    const inc = incOf(o), wScr = Math.round(box.clientWidth || 0), narrow = wScr > 0 && wScr < PW - 40, key = JSON.stringify([ctx.rc && ctx.rc.key, ctx.rc && ctx.rc.allKey, inc, narrow ? wScr : 0, modeOf(o), o.detail === 'all', ADU && ADU.basisKey ? ADU.basisKey() : '', adb && adb.stale]);
     // the model is kept while the inputs, the sections chosen and the figure width are the same (the result object of the page is the same)
     // PS-25: several worked units: each unit's graphics drawn with its own result (an array, one per unit)
     if (S.key !== key || !S.M) { let figs = {}; try { figs = B.multi ? B.units.map(u => figures({ P: u.P, inp: u.inp, R: u.R, W: u.W }, inc, narrow ? wScr : 0)) : figures(B, inc, narrow ? wScr : 0); } catch (e) { console.warn(e); }
-      S.M = window.PSBReportBuild.model(B, { include: inc, figures: figs, planFig: inc.proj === false ? null : planFig(B.P, narrow ? wScr : 0), sumFig: inc.sum === false ? null : sumFig(B, narrow ? wScr : 0), every: o.detail === 'all' }); S.key = key; }
+      S.M = window.PSBReportBuild.model(B, { include: inc, figures: figs, planFig: inc.proj === false ? null : planFig(B.P, narrow ? wScr : 0), sumFig: inc.sum === false ? null : sumFig(B, narrow ? wScr : 0), every: o.detail === 'all', autodesign: adb }); S.key = key; }
     const tb = document.getElementById('tabBar');
     const V = window.SharedReport.mount(box, S.M, { controls: controls(o, B), closed: S.closed, stick: tb ? tb.offsetHeight : 0, spy: true,
       onGoto: t => { if (/^in:/.test(t)) { if (ctx.goin) ctx.goin(t.slice(3)); } else if (ctx.goto) ctx.goto(t); } });
+    S.V = V;   // ADB: the viewer, for a link that jumps to a key (index.html, href "#rp:<key>")
     box.querySelectorAll('[data-rpdetail]').forEach(el => el.addEventListener('change', () => { if (!el.checked) return; o.detail = el.dataset.rpdetail; if (ctx.save) ctx.save(); render(host, ctx); }));
     box.querySelectorAll('[data-rpworked]').forEach(el => el.addEventListener('change', () => { if (!el.checked) return; o.worked = el.dataset.rpworked; if (ctx.save) ctx.save(); render(host, ctx); }));
     box.querySelectorAll('[data-rpinc]').forEach(el => el.addEventListener('change', () => { o.inc = o.inc || {}; o.inc[el.dataset.rpinc] = el.checked; if (ctx.save) ctx.save(); render(host, ctx); }));
