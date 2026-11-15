@@ -121,11 +121,12 @@
     const B = window.PSBReportData.compute(ctx.P, ctx.rc, modeOf(o));
     if (B.err) { box.innerHTML = `<div class="alert err" role="alert">The report cannot be built: ${esc(B.err)}</div>`; return null; }
     const ADU = window.PSBAutoDesignUI, adb = ADU && ADU.basis ? ADU.basis(ctx.P) : null;   // ADB (2026-11-15): §2's Auto design basis (the run shown or applied in this page view)
-    const inc = incOf(o), wScr = Math.round(box.clientWidth || 0), narrow = wScr > 0 && wScr < PW - 40, key = JSON.stringify([ctx.rc && ctx.rc.key, ctx.rc && ctx.rc.allKey, inc, narrow ? wScr : 0, modeOf(o), o.detail === 'all', ADU && ADU.basisKey ? ADU.basisKey() : '', adb && adb.stale]);
+    const snap = window.PSB3DUI && window.PSB3DUI.snapshot ? window.PSB3DUI.snapshot() : null;   // batch G8: the 3D view captured for the Report (§2)
+    const inc = incOf(o), wScr = Math.round(box.clientWidth || 0), narrow = wScr > 0 && wScr < PW - 40, key = JSON.stringify([ctx.rc && ctx.rc.key, ctx.rc && ctx.rc.allKey, inc, narrow ? wScr : 0, modeOf(o), o.detail === 'all', ADU && ADU.basisKey ? ADU.basisKey() : '', adb && adb.stale, snap ? snap.at + snap.png.length : '']);
     // the model is kept while the inputs, the sections chosen and the figure width are the same (the result object of the page is the same)
     // PS-25: several worked units: each unit's graphics drawn with its own result (an array, one per unit)
     if (S.key !== key || !S.M) { let figs = {}; try { figs = B.multi ? B.units.map(u => figures({ P: u.P, inp: u.inp, R: u.R, W: u.W }, inc, narrow ? wScr : 0)) : figures(B, inc, narrow ? wScr : 0); } catch (e) { console.warn(e); }
-      S.M = window.PSBReportBuild.model(B, { include: inc, figures: figs, planFig: inc.proj === false ? null : planFig(B.P, narrow ? wScr : 0), sumFig: inc.sum === false ? null : sumFig(B, narrow ? wScr : 0), every: o.detail === 'all', autodesign: adb }); S.key = key; }
+      S.M = window.PSBReportBuild.model(B, { include: inc, figures: figs, planFig: inc.proj === false ? null : planFig(B.P, narrow ? wScr : 0), sumFig: inc.sum === false ? null : sumFig(B, narrow ? wScr : 0), every: o.detail === 'all', autodesign: adb, snap3d: inc.proj === false ? null : snap }); S.key = key; }
     const tb = document.getElementById('tabBar');
     const V = window.SharedReport.mount(box, S.M, { controls: controls(o, B), closed: S.closed, stick: tb ? tb.offsetHeight : 0, spy: true,
       onGoto: t => { if (/^in:/.test(t)) { if (ctx.goin) ctx.goin(t.slice(3)); } else if (ctx.goto) ctx.goto(t); } });
