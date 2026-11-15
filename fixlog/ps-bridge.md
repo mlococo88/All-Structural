@@ -8776,7 +8776,7 @@ index 0000000..311a746
 +})();
 
 ## 2026-11-15 — Batch G8: the 3D view's reinforcement cage layers (stirrups, longitudinal bars, splitting steel, cambered shape, strand stress colour) and "Capture for the Report" (Report §2 figure) (display only)
-PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__
+PR #1588: https://github.com/mlococo88/All-Structural/pull/1588
 ### Request
 - Old-vs-new review 2026-11-15, rows #73 (the old 3D reinforcement cage: stirrups, longitudinal bars, splitting / confinement, deformed camber, strand-stress colour; O:5127-5361) and #110 (3D snapshot captured into the report, O:5090, 5348).
 ### What changed
