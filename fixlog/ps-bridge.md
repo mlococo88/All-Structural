@@ -8408,7 +8408,7 @@ PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__
 - None changed (display / navigation). Open item (not changed; raised in the PR): for box beams the engine takes h = the overall height (pbd-compute.js `splitH = g.isDeck ? w : h`), where AASHTO LRFD 10th Ed. 5.9.4.4.1 says the lesser of the overall width or height for box / tub girders (e.g. AASHTO BIV-36 (42in): 42 in deep, 35.5 in wide → h/4 = 10.5 in used, 8.9 in by the article).
 - Decision (pending engineer review): the old app showed "↩ MCT Analysis" always; here only when the page was opened from the MCT (framed, from the MCT's file, or #from=mct), because the MCT opens the old app until the switch-over.
 ### Check case
-- AASHTO SIV-48 voided slab: R.splitDir = 'width', h/4 = 48 / 4 = 12.0 in, the plan view "bars across the width"; AASHTO BIII-36 box: 'height', h/4 = 39 / 4 = 9.8 in, "legs in each web".
+- AASHTO SIV-48 (21in) voided slab: R.splitDir = 'width', h/4 = 47.5 / 4 = 11.9 in (actual width 47.5 in), the plan view "bars across the width"; AASHTO BIII-36 box: 'height', h/4 = 39 / 4 = 9.8 in, "legs in each web".
 ### How verified
 - New tests/engine/psbridge-gsplitmct.test.mjs (2), tests/smoke/ps-bridge-gsplitmct.mjs. PS checks: see the PR.
 ### Other copies
