@@ -8346,7 +8346,7 @@ PR #1584: https://github.com/mlococo88/All-Structural/pull/1584
 ### Other copies
 - plot / lab / diag adapted from apps/steel-bridge/engine/sheets.js; keep a fix in step.
 ## 2026-11-15 — H3: Drawings tab: camber and haunch, end zone reinforcement, diaphragm details and schedule, deck reinforcement and overhang sheets (display and export only)
-PR #TBD
+PR #1585: https://github.com/mlococo88/All-Structural/pull/1585
 ### Request
 - Review finding D3 (scratchpad review ps-vs-steel.md "Drawings"), batch H3: a camber / haunch sheet, an end-zone (splitting / confinement) reinforcement sheet, diaphragm details (geometry only, as the app has it) and the deck overhang / reinforcement (the Steel Bridge app's camber tables, deck overhang and diaphragm sheets have these PS equivalents).
 ### What changed
