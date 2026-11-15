@@ -20,7 +20,7 @@
   function output(ctx) {
     const { R, inp } = ctx, k = K(), ev = (p, d, u, div) => k.ev(R, p, d, u, div), wk = k.wk, f = R.fMid, L = R.L, c = R.cont;
     const qF = ckOf(R, 'Flexure'), qM = ckOf(R, 'Min reinf'), qP = ckOf(R, 'Neg flexure (pier)'), qC = ckOf(R, 'Pos. moment connection (5.12.3.3.8)');
-    let h = '<div id="gfx_fx"></div>';
+    let h = K().gcard('Flexure graphic: girder elevation coloured by governing ratio', 'gfxr_fx') + K().gcard('Flexure graphic: moments and resistance along the girder', 'gfx_fx');   // gfxr_: on screen only (not a Report figure)
     h += k.card('Strength I flexure (positive moment)', k.kv([
       ['Governing M<sub>u</sub> / φM<sub>n</sub>', `<b>${ev(`checks.${qF.i}.r`, 3)}</b> at x = ${ev('flexGov.x', 2, 'ft')} ${pf(qF)} ${wk('fx.gov')}`], ['M<sub>u</sub> / φM<sub>n</sub> there', `${ev('flexGov.Mu', 0, '', 12)} / ${ev('flexGov.phiMn', 0, 'kip-ft', 12)}`],
       ['M<sub>u</sub> at midspan', `${ev('MuMid', 0, 'kip-ft', 12)} ${wk('fx.Mu')}`], ['k', `${inp.str.lowlax ? '0.28' : '0.38'} (${inp.str.lowlax ? 'low-relaxation' : 'stress-relieved'})`], ['β<sub>1</sub>', `${ev('fMid.b1', 3)} ${wk('fx.b1')}`],
@@ -101,6 +101,11 @@
         legend: VA().legend('marks'), hint: 'Point at (or tap) the chart to read the station.',
         caption: `<p class="vk-cap">The engine's M<sub>u</sub> and φM<sub>n</sub> at its stations (φM<sub>n</sub> drops near the ends where the strands are not developed)${c ? '; −M<sub>u</sub> from the continuous unit and the deck-reinforced −φM<sub>n</sub> of the pier section, drawn along the span as the old app' : ''}. Circle: the governing station. Display only.</p>` });
     }
+    // 2026-11-15 (batch B): the girder elevation coloured by M_u / φM_n at the engine's stations (the read-out's ratio), the flexure check flagged
+    const se = el.querySelector('#gfxr_fx'), qG = ckOf(R, 'Flexure');
+    if (se && window.PSBRatioElev) window.PSBRatioElev.mount(se, { id: 'fxElev', title: 'Girder elevation coloured by governing ratio', sub: `M<sub>u</sub> / φM<sub>n</sub> at each of the ${fg.length} stations of the chart below`, L,
+      pts: fg.filter(r => r.phiMn > 0).map(r => ({ x: r.x, r: r.Mu / r.phiMn })), gov: qG ? { x: qG.c.loc, r: qG.c.r, name: 'Flexure' } : null, label: 'Strength I flexure: M_u / φM_n (neighbours of one colour class merged; the band shows its largest)', file: 'flexure-elevation',
+      cap: `<p class="vk-cap">The flag: the engine's flexure check (ratio ${k.fx(qG ? qG.c.r : NaN, 3)} at x = ${k.fx(qG ? qG.c.loc : NaN, 2)} ft) ${k.wk('fx.gov')}. Bands: M<sub>u</sub> / φM<sub>n</sub> of the chart's stations (the ratio its read-out shows). Display only.</p>` });
     const sp = el.querySelector('#gfx_fxpier');
     if (sp && c && VK() && VK().detCard) VK().detCard(sp, { id: 'fxPierFig', title: 'Pier section (negative moment)', sub: `${k.esc(ctx.inp.girder)} with the deck; girder f′c ${k.fx(+ctx.inp.mat.fc, 2)} ksi`, draw: W => pierFig(R, ctx.inp, W), hint: 'Point at the compression block for its values.',
       cap: `<p class="vk-cap">Deck bars (A<sub>s</sub> within b<sub>eff</sub>) in tension, the rectangular compression block in the girder bottom flange${R.g.isNext ? ' (NEXT: at the bottom of each of the two stems, b<sub>bf</sub> = 2B, the width the engine uses)' : ''}; bar positions drawn for display. Display only.</p>` });

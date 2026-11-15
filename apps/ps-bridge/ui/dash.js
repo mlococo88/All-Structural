@@ -62,11 +62,17 @@
     if (A) { const all = [];
       A.types.forEach(t => gp.checks.forEach(([n, st]) => { const q = t.gov[n]; if (q) all.push({ c: q.c, st, cell: q.cell }); }));
       const gov = all.reduce((b, z) => !b || z.c.r > b.c.r ? z : b, null);
-      return { all, gov, st: !all.length ? 'na' : all.some(z => !z.c.pass) ? 'fail' : 'pass' }; }
+      return { all, gov, st: stG(all) }; }
     const all = gp.checks.map(([n, st]) => { const c = R.checks.find(q => q.n === n); return c ? { c, st } : null; }).filter(Boolean);
     const gov = all.reduce((b, z) => !b || z.c.r > b.c.r ? z : b, null);
-    return { all, gov, st: !all.length ? 'na' : all.some(z => !z.c.pass) ? 'fail' : 'pass' };
+    return { all, gov, st: stG(all) };
   }
+  /* 2026-11-15 (batch B, the steel app's statuses): a group FAIL (an engine FAIL), REVIEW (every check passes but a ratio is not a finite
+     number: the steel column's REVIEW for a ratio that is not finite), PASS; a PASS chip with a governing ratio 0.90 to 1.00 is amber (sd-hi,
+     the 0.90 threshold of the steel ratio colours) */
+  const fin = v => typeof v === 'number' && isFinite(v);
+  const stG = all => !all.length ? 'na' : all.some(z => !z.c.pass) ? 'fail' : all.some(z => !fin(z.c.r)) ? 'review' : 'pass';
+  const stC = c => !c.pass ? 'fail' : !fin(c.r) ? 'review' : c.r >= 0.9 ? 'hi' : 'pass';
   const D = { o: null, coll: false, open: new Set() };
   const rd = k => { try { return D.o.store ? D.o.store.getItem(k) : null; } catch (e) { return null; } };
   const wr = (k, v) => { try { if (D.o.store) D.o.store.setItem(k, v); } catch (e) { /* not kept */ } };
@@ -83,26 +89,26 @@
     const R = o.result ? o.result() : null, A = R && o.all ? o.all() : null;   // PR 3a-2: every girder type × line
     D.many = !!(A && A.n > 1);
     if (!R) { o.el.innerHTML = head('<span class="sdC"><span class="sdN">not run</span></span>') + (D.coll ? '' : '<p class="sdNote">The engine could not compute this design: no checks (see the output panel).</p>'); return; }
-    const G = GROUPS.map(gp => gp.pr ? { gp, st: 'notrun' } : { gp, ...grp(R, gp, A) }), run = G.filter(q => q.st === 'pass' || q.st === 'fail'), nOff = G.filter(q => q.st === 'na' && q.gp.off).length;
-    const nF = run.reduce((a, q) => a + q.all.filter(z => !z.c.pass).length, 0), nP = run.reduce((a, q) => a + q.all.filter(z => z.c.pass).length, 0);
+    const G = GROUPS.map(gp => gp.pr ? { gp, st: 'notrun' } : { gp, ...grp(R, gp, A) }), run = G.filter(q => q.st === 'pass' || q.st === 'fail' || q.st === 'review'), nOff = G.filter(q => q.st === 'na' && q.gp.off).length;
+    const nF = run.reduce((a, q) => a + q.all.filter(z => !z.c.pass).length, 0), nR = run.reduce((a, q) => a + q.all.filter(z => z.c.pass && !fin(z.c.r)).length, 0), nP = run.reduce((a, q) => a + q.all.filter(z => z.c.pass && fin(z.c.r)).length, 0);
     const top = run.map(q => q.gov && { ...q.gov, gp: q.gp }).filter(Boolean).reduce((b, z) => !b || z.c.r > b.c.r ? z : b, null);
-    const cnt = `<span class="sdC">${nF ? `<span class="sdF">${nF} FAIL</span>` : ''}${nP ? `<span class="sdP">${nP} PASS</span>` : ''}${nOff ? `<span class="sdN">${nOff} off</span>` : ''}</span>`;
+    const cnt = `<span class="sdC">${nF ? `<span class="sdF">${nF} FAIL</span>` : ''}${nR ? `<span class="sdW">${nR} REVIEW</span>` : ''}${nP ? `<span class="sdP">${nP} PASS</span>` : ''}${nOff ? `<span class="sdN">${nOff} off</span>` : ''}</span>`;
     if (D.coll) { o.el.innerHTML = head(cnt); return; }
-    const LBL = { pass: 'PASS', fail: 'FAIL' };
+    const LBL = { pass: 'PASS', fail: 'FAIL', review: 'REVIEW' };
     const chips = G.map(q => {
       const gp = q.gp;
       if (gp.pr) return `<div class="sdChip sd-notrun"><span></span><a href="#" class="sdMain" data-sdtab="${gp.tab}" title="Not built yet: comes in PR ${gp.pr} (docs/ps-bridge-plan.md §5)"><span class="sdName">${esc(gp.name)}</span><span class="sdVal">not run</span><span class="sdSt">PR ${gp.pr}</span></a></div>`;
       if (q.st === 'na') return gp.off ? `<div class="sdChip sd-notrun" data-sdgrp="${gp.id}"><span></span><a href="#" class="sdMain" data-sdin="${gp.off}" title="Off for this design: turn it on on its input tab"><span class="sdName">${esc(gp.name)}</span><span class="sdVal">off</span><span class="sdSt">input</span></a></div>` : '';
       const op = D.open.has(gp.id), g = q.gov;
-      const rows = q.all.map(z => `<li><a href="#" ${go(gp, z.st, z.cell)} class="sd-${z.c.pass ? 'pass' : 'fail'}">${esc(z.c.n + on(z))}: ${fx(z.c.r, 3)}</a></li>`).join('');
-      return `<div class="sdChip sd-${q.st}" data-sdgrp="${gp.id}"><button type="button" class="sdX" data-sdx="${gp.id}" aria-expanded="${op}" title="${op ? 'Hide' : 'Show'} each check">${op ? '▾' : '▸'}</button><a href="#" class="sdMain" ${go(gp, g.st, g.cell)} title="${esc(`${g.c.n}${on(g)}: ${fx(g.c.v, 3)} vs ${fx(g.c.lim, 3)} ${g.c.u}${gp.input ? ' (Owner rules tab)' : ` at x = ${fx(g.c.loc, 2)} ft`}`)}">
+      const rows = q.all.map(z => `<li><a href="#" ${go(gp, z.st, z.cell)} class="sd-${stC(z.c)}">${esc(z.c.n + on(z))}: ${fx(z.c.r, 3)}</a></li>`).join('');
+      return `<div class="sdChip sd-${q.st}${q.st === 'pass' && fin(g.c.r) && g.c.r >= 0.9 ? ' sd-hi' : ''}" data-sdgrp="${gp.id}"><button type="button" class="sdX" data-sdx="${gp.id}" aria-expanded="${op}" title="${op ? 'Hide' : 'Show'} each check">${op ? '▾' : '▸'}</button><a href="#" class="sdMain" ${go(gp, g.st, g.cell)} title="${esc(`${g.c.n}${on(g)}: ${fx(g.c.v, 3)} vs ${fx(g.c.lim, 3)} ${g.c.u}${gp.input ? ' (Owner rules tab)' : ` at x = ${fx(g.c.loc, 2)} ft`}`)}">
         <span class="sdName">${esc(gp.name)}</span><span class="sdVal">${fx(g.c.r, 3)}</span><span class="sdSt">${LBL[q.st]}</span></a>${op ? `<ul class="sdList">${rows}</ul>` : ''}</div>`;
     }).join('') + rtChip(R, A);
-    const verd = nF ? 'fail' : 'pass';
+    const verd = nF ? 'fail' : nR ? 'review' : 'pass';
     o.el.innerHTML = head(cnt)
-      + `<div class="sdVerd"><b class="sd-${verd}">${nF ? 'FAIL' : 'PASS'}</b>${top ? ` · max ratio ${fx(top.c.r, 3)}` : ''}</div>${top ? `<div class="sdGov">Governing: <a href="#" ${go(top.gp, top.st, top.cell)}>${esc(top.c.n + on(top))}: ${fx(top.c.r, 3)}</a></div>` : ''}
+      + `<div class="sdVerd"><b class="sd-${verd}">${LBL[verd]}</b>${top ? ` · max ratio ${fx(top.c.r, 3)}` : ''}</div>${top ? `<div class="sdGov">Governing: <a href="#" ${go(top.gp, top.st, top.cell)}>${esc(top.c.n + on(top))}: ${fx(top.c.r, 3)}</a></div>` : ''}
         <div class="sdRun">${A ? `${A.types.length} girder type${A.types.length === 1 ? '' : 's'} on ${A.n} line${A.n === 1 ? '' : 's'} (every span); each counted once per check, its worst line.` : runTxt(o)}</div>`
-      + `<div id="sbDash">${chips}</div><p class="sdNote">Each chip: the governing ratio of its checks${A && A.n > 1 ? ' over every girder type and line (the type and line named)' : ''} (demand / capacity, OK ≤ 1.0), the engine's value. Click: its tab with that type and line, and the worked step of the value. Summary tab: every type and line.</p>`;
+      + `<div id="sbDash">${chips}</div><p class="sdNote">Each chip: the governing ratio of its checks${A && A.n > 1 ? ' over every girder type and line (the type and line named)' : ''} (demand / capacity, OK ≤ 1.0; amber 0.90 to 1.00), the engine's value. Click: its tab with that type and line, and the worked step of the value. Summary tab: every type and line.</p>`;
   }
   /* PR 3b: while every girder type × line is being computed (index.html, chunked) or after Stop, the chips are those of the girder type
      and line shown (R); the line says so, with Stop / Run all (the Summary tab's buttons, o.runCtl) */

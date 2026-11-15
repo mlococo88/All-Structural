@@ -75,12 +75,12 @@
     const grid = Array.from({ length: nb }, (_, i) => Array.from({ length: ns }, (_, j) => cells.find(z => z.c.g === i + 1 && z.c.s === j + 1) || null));
     // the verdict: the check summary column's counts (ui/dash.js grp: one entry per type per check, its worst line)
     const G = DU().GROUPS.map(gp => Object.assign({ gp }, DU().grp(null, gp, A)));
-    const run = G.filter(q => q.st === 'pass' || q.st === 'fail');
-    const nF = run.reduce((a, q) => a + q.all.filter(z => !z.c.pass).length, 0), nP = run.reduce((a, q) => a + q.all.filter(z => z.c.pass).length, 0);
+    const run = G.filter(q => q.st === 'pass' || q.st === 'fail' || q.st === 'review');
+    const nF = run.reduce((a, q) => a + q.all.filter(z => !z.c.pass).length, 0), nR = run.reduce((a, q) => a + q.all.filter(z => z.c.pass && !fin(z.c.r)).length, 0), nP = run.reduce((a, q) => a + q.all.filter(z => z.c.pass && fin(z.c.r)).length, 0);
     const off = G.filter(q => q.st === 'na' && q.gp.off).map(q => q.gp);
     let top = null; run.forEach(q => q.all.forEach(z => { if (!top || worse(z.c.r, top.c.r)) top = Object.assign({ gp: q.gp }, z); }));
     const low = types.map(T => T.rf && Object.assign({ k: T.k }, T.rf)).filter(Boolean).reduce((b, z) => !b || z.v < b.v ? z : b, null);
-    return { used, cells, types, grid, nF, nP, off, top, low, W: A.W, n: A.n, nb, ns };
+    return { used, cells, types, grid, nF, nR, nP, off, top, low, W: A.W, n: A.n, nb, ns };
   }
 
   /* ---------- HTML ---------- */
@@ -91,9 +91,9 @@
     st.textContent = `
 .sum-verd{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;font-family:var(--font-ui)}
 .sum-badge{font-weight:700;font-size:13pt;padding:3px 12px;border-radius:5px;border:2px solid;letter-spacing:.04em}
-.sum-badge.fail{color:#991B1B;background:#FEF2F2;border-color:var(--fail)} .sum-badge.pass{color:#065F46;background:#ECFDF5;border-color:var(--pass)} .sum-badge.none{color:#475569;background:var(--slate-100);border-color:var(--slate-400)}
+.sum-badge.fail{color:#991B1B;background:#FEF2F2;border-color:var(--fail)} .sum-badge.pass{color:#065F46;background:#ECFDF5;border-color:var(--pass)} .sum-badge.review{color:#92400E;background:#FFFBEB;border-color:var(--warn)} .sum-badge.none{color:#475569;background:var(--slate-100);border-color:var(--slate-400)}
 .sum-cnt{display:inline-flex;gap:5px;flex-wrap:wrap} .sum-cnt span{font-size:8.5pt;font-weight:700;padding:1px 6px;border:1px solid;border-radius:3px;white-space:nowrap}
-.sum-cnt .c-fail{color:#991B1B;background:#FEF2F2;border-color:var(--fail)} .sum-cnt .c-pass{color:#065F46;background:#ECFDF5;border-color:var(--pass)} .sum-cnt .c-na{color:#475569;background:var(--slate-100);border-color:var(--slate-400)}
+.sum-cnt .c-fail{color:#991B1B;background:#FEF2F2;border-color:var(--fail)} .sum-cnt .c-review{color:#92400E;background:#FFFBEB;border-color:var(--warn)} .sum-cnt .c-pass{color:#065F46;background:#ECFDF5;border-color:var(--pass)} .sum-cnt .c-na{color:#475569;background:var(--slate-100);border-color:var(--slate-400)}
 #sum-elev .se-list{margin:6px 0;padding-left:18px} .se-ok{color:#2F6E4E} .se-hi{color:#8A5A0B} .se-ng{color:#A3322A}   /* 2026-11-14 (item 8a): the elevation's check list */
 #sum-gfx figure.sum-g1{margin:0 0 14px} #sum-gfx figcaption{font-family:var(--font-ui);font-size:9pt;color:#475569;margin:0 0 4px} #sum-gfx .vk-det{margin:0}   /* 2026-11-14: the cross-section and plan card */
 #sum-project .kv div{gap:10px} #sum-project .kv div>span:last-child{text-align:right}   /* the label and its value never run together (display only) */
@@ -101,9 +101,9 @@
 .sum-run .spin{display:inline-block;width:12px;height:12px;border:2px solid #CBD5E1;border-top-color:var(--color-primary);border-radius:50%;animation:sbspin .8s linear infinite;vertical-align:-2px;margin-right:6px}
 @media (prefers-reduced-motion:reduce){.sum-run .spin{animation:none}}
 table.sum-tbl{width:auto;min-width:100%} table.sum-tbl th{font-family:var(--font-ui);font-size:8pt;font-weight:600;line-height:1.15;vertical-align:bottom} table.sum-tbl td{font-family:var(--font-ui);font-size:9pt;white-space:nowrap}
-table.sum-tbl td.s-pass{background:#ECFDF5} table.sum-tbl td.s-fail{background:#FEE2E2;font-weight:700} table.sum-tbl td.s-na{color:#64748b;background:#F8FAFC}
+table.sum-tbl td.s-pass{background:#ECFDF5} table.sum-tbl td.s-fail{background:#FEE2E2;font-weight:700} table.sum-tbl td.s-review{background:#FEF3C7} table.sum-tbl td.s-hi{background:#FFFBEB} table.sum-tbl td.s-na{color:#64748b;background:#F8FAFC}
 table.sum-tbl td a{color:inherit;text-decoration:underline dotted;text-underline-offset:2px} table.sum-tbl td a:hover{text-decoration:underline}
-table.sum-tbl td.s-pass a{color:#065F46} table.sum-tbl td.s-fail a{color:#991B1B}
+table.sum-tbl td.s-pass a{color:#065F46} table.sum-tbl td.s-fail a{color:#991B1B} table.sum-tbl td.s-review a,table.sum-tbl td.s-hi a{color:#92400E}
 table.sum-tbl tr.sum-line td{font-size:8pt} table.sum-tbl tr.sum-line td.lft{color:#475569} table.sum-tbl tr.sum-span td{background:#f1efe9;font-weight:600;text-align:left}
 .sum-sub{font-size:7.5pt;color:#475569;font-weight:400;display:block}
 table.sum-grid td{min-width:92px} table.sum-grid td .sum-ty{display:block;font-size:7.5pt;color:#475569;font-weight:400}
@@ -119,9 +119,15 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
   const rv = z => sv(z.k, z.g, `checks.${z.i}.r`, z.q.r, 3);
   const tip = z => esc(`${z.q.n} on G${z.g}: ${fx(z.q.v, 3)} vs ${fx(z.q.lim, 3)} ${z.q.u || ''}${z.gp.input ? ' (Owner rules tab)' : ` at x = ${fx(z.q.loc, 2)} ft`}`);
   const LBL = q => q ? 'PASS' : 'FAIL';
+  /* 2026-11-15 (batch B, the steel app's classes and thresholds): a check's cell class: s-fail (the engine's FAIL), s-review (the engine passes
+     it but its ratio is not a finite number: REVIEW, as the steel Summary counts a ratio that is not finite), s-hi (PASS with a ratio 0.90 to
+     1.00: amber, the 0.90 threshold of the steel app's ratio colours, report/builders.js 'hi' and the worked-step chips), s-pass */
+  const fin = v => typeof v === 'number' && isFinite(v);
+  const stOf = q => !q.pass ? 'fail' : !fin(q.r) ? 'review' : q.r >= 0.9 ? 'hi' : 'pass';
+  const STL = { fail: 'FAIL', review: 'REVIEW', hi: 'PASS', pass: 'PASS' };
 
   function verdict(M, o) {
-    const run = o.run || {}, A = o.A, cls = !A ? 'none' : M.nF ? 'fail' : 'pass', badge = !A ? (run.busy ? 'RUNNING' : '—') : M.nF ? 'FAIL' : 'PASS';
+    const run = o.run || {}, A = o.A, cls = !A ? 'none' : M.nF ? 'fail' : M.nR ? 'review' : 'pass', badge = !A ? (run.busy ? 'RUNNING' : '—') : M.nF ? 'FAIL' : M.nR ? 'REVIEW' : 'PASS';
     const top = A && M.top, lowC = A && M.low;
     const gov = top ? `<b>Governing:</b> ${esc(top.gp.name)}, girder type ${esc(top.cell.label)} on G${top.cell.g} (span ${top.cell.s}): ${esc(top.c.n)} — <a href="#" ${go({ k: top.cell.k, g: top.cell.g, gp: top.gp, st: top.st })}>ratio ${sv(top.cell.k, top.cell.g, `checks.${top.cell.R.checks.indexOf(top.c)}.r`, top.c.r, 3)}</a>` : A ? 'No check.' : '';
     const low = lowC ? `<span class="sum-low"><b>Lowest HL-93 inventory rating factor:</b> ${esc(lowC.n)} RF <a href="#" data-sumgo="${lowC.k}|${lowC.g}|rt|${lowC.st}|">${sv(lowC.k, lowC.g, lowC.path, lowC.v, 3)}</a> (${esc(M.types.find(T => T.k === lowC.k).label)} on G${lowC.g}; not a check, not counted).</span>` : '';
@@ -129,10 +135,10 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
       : run.stopped ? `<span role="status" aria-live="polite" id="sumRunMsg">Stopped: ${run.i} of ${run.n} girder type × line results computed. The verdict and tables below need all of them.</span><button type="button" data-sumrun="run" title="Run the girder types × lines not yet computed">Run all</button>`
       : A ? `<span role="status" aria-live="polite" id="sumRunMsg">Up to date: ${A.n} girder type × line result${A.n === 1 ? '' : 's'} of this project state${run.ms != null ? ` (computed in ${(run.ms / 1000).toFixed(2)} s)` : ''}.</span>` : '<span role="status" aria-live="polite" id="sumRunMsg">Not run.</span>';
     const un = BRG().unassigned(o.P);
-    return box('sum-verdict', 'Summary: overall verdict', `<div class="sum-verd"><span class="sum-badge ${cls}">${badge}</span>${A ? `<span class="sum-cnt"><span class="c-fail">${M.nF} FAIL</span><span class="c-pass">${M.nP} PASS</span>${M.off.length ? `<span class="c-na">${M.off.length} off</span>` : ''}</span>` : ''}</div>
+    return box('sum-verdict', 'Summary: overall verdict', `<div class="sum-verd"><span class="sum-badge ${cls}">${badge}</span>${A ? `<span class="sum-cnt"><span class="c-fail">${M.nF} FAIL</span>${M.nR ? `<span class="c-review">${M.nR} REVIEW</span>` : ''}<span class="c-pass">${M.nP} PASS</span>${M.off.length ? `<span class="c-na">${M.off.length} off</span>` : ''}</span>` : ''}</div>
       ${A ? `<p class="sum-gov">${gov}${low}</p>` : ''}
       ${un.length ? `<div class="alert err" id="sum-unassigned"><b>Line${un.length > 1 ? 's' : ''} ${un.map(q => `G${q.g}/S${q.s}`).join(', ')} ${un.length > 1 ? 'have' : 'has'} no girder type</b> and ${un.length > 1 ? 'are' : 'is'} not checked: the verdict covers the lines of the girder types only. Assign a type on the <a href="#" data-goin="gird">Girders &amp; strands</a> input tab.</div>` : ''}
-      <p class="note">Counts: one per girder type and check, its worst line (SB-5), the same as the check summary column. FAIL: a check whose ratio (demand / limit, the engine's) is over 1.0 (PASS when ≤ 1.0001, the engine's rule). Rating factors are not checks (RF ≥ 1.0 OK) and are not counted. ${M && M.off.length ? `Off for this project (no check): ${M.off.map(g => esc(g.name)).join(', ')}.` : ''}</p>
+      <p class="note">Counts: one per girder type and check, its worst line (SB-5), the same as the check summary column. FAIL: a check whose ratio (demand / limit, the engine's) is over 1.0 (PASS when ≤ 1.0001, the engine's rule). REVIEW: a check the engine passes whose ratio is not a finite number. Amber: a ratio 0.90 to 1.00 (PASS). Rating factors are not checks (RF ≥ 1.0 OK) and are not counted. ${M && M.off.length ? `Off for this project (no check): ${M.off.map(g => esc(g.name)).join(', ')}.` : ''}</p>
       <div class="sum-run">${state}<button type="button" data-sumrun="rerun" title="Compute every girder type on every line again">Re-run all</button><a href="#" data-gotab="rpt" title="The Report tab: §1 lists every girder type and line with these values">Report</a></div>`);
   }
   function overview(M, o) {
@@ -153,13 +159,13 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
       const lab = esc(z.c.label);
       if (z.err) return `<td class="s-fail" title="${esc(z.err)}"><span class="sum-ty">${lab}</span>engine error</td>`;
       if (!z.gov) return `<td class="s-na"><span class="sum-ty">${lab}</span>no check</td>`;
-      const f = z.nF > 0;
-      return `<td class="s-${f ? 'fail' : 'pass'}" title="${tip(z.gov)}"><span class="sum-ty">${lab}</span><a href="#" ${go(z.gov)}>${rv(z.gov)}</a><span class="sum-sub">${esc(z.gov.gp.name)} · ${f ? `FAIL (${z.nF})` : 'PASS'}</span></td>`; }).join('')}</tr>`).join('');
+      const f = z.nF > 0, st = f ? 'fail' : stOf(z.gov.q);
+      return `<td class="s-${st}" title="${tip(z.gov)}"><span class="sum-ty">${lab}</span><a href="#" ${go(z.gov)}>${rv(z.gov)}</a><span class="sum-sub">${esc(z.gov.gp.name)} · ${f ? `FAIL (${z.nF})` : STL[st]}</span></td>`; }).join('')}</tr>`).join('');
     return box('sum-grid', 'Girder × span grid', `<div class="tscroll"><table class="tbl sum-tbl sum-grid"><thead><tr><th class="lft">Line</th>${P.spans.lengths.map((L, j) => `<th>Span ${j + 1}<span class="sum-sub">L = ${fx(+L, 2)} ft</span></th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
       <p class="note">Each cell: the girder type on that line of that span, its governing ratio (the largest of all its checks, demand / limit, the engine's), the check group, and PASS or FAIL (with the number of its checks over 1.0). Click: the tab of that check with that girder type and line, at the worked step.</p>`, 'every line of every span');
   }
   function table(M) {
-    const cellT = (z, sub) => z ? `<td class="s-${z.q.pass ? 'pass' : 'fail'}" title="${tip(z)}"><a href="#" ${go(z)}>${rv(z)}</a><span class="sum-sub">${LBL(z.q.pass)}${sub ? ` · G${z.g}` : ''}</span></td>` : '<td class="s-na">—</td>';
+    const cellT = (z, sub) => z ? `<td class="s-${stOf(z.q)}" title="${tip(z)}"><a href="#" ${go(z)}>${rv(z)}</a><span class="sum-sub">${STL[stOf(z.q)]}${sub ? ` · G${z.g}` : ''}</span></td>` : '<td class="s-na">—</td>';
     const rfT = (z, k, sub) => z ? `<td class="s-${z.v >= 1 ? 'pass' : 'fail'}" title="${esc(z.n)} on G${z.g}"><a href="#" data-sumgo="${k}|${z.g}|rt|${z.st}|">${sv(k, z.g, z.path, z.v, 3)}</a><span class="sum-sub">${z.v >= 1 ? 'RF ≥ 1' : 'RF < 1'}${sub ? ` · G${z.g}` : ''}</span></td>` : '<td class="s-na">—</td>';
     let body = '';
     for (let s = 1; s <= M.ns; s++) {
@@ -178,7 +184,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
   function checks(M) {
     const one = T => { const rows = M.used.map(gp => { const z = T.groups[gp.id]; if (!z) return '';
       return `<tr><td class="lft">${esc(gp.name)}</td><td class="lft">${esc(z.q.n)}</td><td>G${z.g}</td><td>${z.gp.input ? '—' : sv(z.k, z.g, `checks.${z.i}.loc`, z.q.loc, 2)}</td><td>${sv(z.k, z.g, `checks.${z.i}.v`, z.q.v, 3)}</td><td>${sv(z.k, z.g, `checks.${z.i}.lim`, z.q.lim, 3)}</td><td>${esc(z.q.u || '')}</td>
-        <td class="s-${z.q.pass ? 'pass' : 'fail'}"><a href="#" ${go(z)}>${rv(z)}</a></td><td>${LBL(z.q.pass)}</td></tr>`; }).join('');
+        <td class="s-${stOf(z.q)}"><a href="#" ${go(z)}>${rv(z)}</a></td><td>${STL[stOf(z.q)]}</td></tr>`; }).join('');
       return `<details class="sum-g" data-sumg="${T.k}"${M.types.length === 1 ? ' open' : ''}><summary><b>${esc(T.label)}</b> (span ${T.span}${T.lines.length > 1 ? `, worst of ${T.lines.map(z => 'G' + z.c.g).join(', ')}` : `, G${T.lines[0].c.g}`}) — ${T.nF ? `FAIL (${T.nF})` : 'PASS'}</summary>
         <div class="tscroll"><table class="tbl sum-tbl"><thead><tr><th class="lft">Group</th><th class="lft">Governing check</th><th>Line</th><th>x (ft)</th><th>Demand</th><th>Limit</th><th>Unit</th><th>Ratio</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div></details>`; };
     return box('sum-checks', 'Governing check of each group, per girder type', M.types.map(one).join('') + '<p class="note">The check with the largest ratio in each group over the type\'s lines, at its governing station x (the owner\'s limits: on the Owner rules tab). Click a ratio: its tab and worked step with that type and line.</p>');
