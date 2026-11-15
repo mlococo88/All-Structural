@@ -5454,7 +5454,7 @@ index dc34d57..d04e81a 100644
 - Harness B: 48,475 shown and 8,392 step values, 0 differences (normal and --import; +128 Report values: the Analysis section's "Loads and factors used", each equal to the old app's); --control exits 1.
 - Smokes: skeleton 271, types 106, 3d 101, figures 225, library 11, undo 7, drawings 6, drawings2 7, autodesign 7, handoffs 12, display 8, tables 5 (new); 0 console errors.
 ## 2026-11-15 — ADB: the Report's "Auto design basis" (§2, last subsection) and a link to it from the Auto design output tab (display only)
-PR #TBD
+PR #1574: https://github.com/mlococo88/All-Structural/pull/1574
 ### Request
 - Add an "Auto design basis" section to the printed Report, with an on-screen link to it from the Auto design output. It describes, for the run applied or shown:
   - the objective;
@@ -5508,7 +5508,7 @@ PR #TBD
 - After Run and Apply of candidate #1:
   - Sections searched: AASHTO Type I to Type V and PCI BT-54 / 63 / 72. Type I to III, BT-54 and Type IV give "none (… live-load deflection fails at the highest f′c …)"; BT-63, BT-72 and Type V are candidates #1, #2 and #3.
   - Interior S1 on PCI BT-63: 36 strands (6 draped), straight rows 12 at 2.00, 12 at 4.00 and 6 at 6.00 in; y_end 50.00, y_mid 10.00 in, hold-down at 0.40 L; f′c / f′ci 8.5 / 7.8 ksi.
-  - Its governing check: Confinement steel (5.9.4.4.2), ratio 1.000 on G3, "see §10.6 (worked for G2)" (the Interior S1 unit's End zone section).
+  - Its governing check: Confinement steel (5.9.4.4.2), ratio 1.000 on G3, "see §10.7 (worked for G2)" (on main c63d974) (the Interior S1 unit's End zone section).
   - The f′c grid is 4.0 to 10.0 ksi (13 values) for both types.
 ### How verified
 - New `tests/engine/psbridge-adbasis.test.mjs` (4 tests): no run; a run applied on the default and on the new project; shown and stale.
