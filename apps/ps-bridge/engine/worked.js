@@ -104,7 +104,57 @@
       value: ss.cgsMid, unit: 'in', d: 3, note: full ? '' : 'Effective strands at midspan only (debonding or transfer length reaches midspan).' }, ym);
     add({ id: 'eMid', label: 'Strand eccentricity at midspan', sym: 'e_{m}', eq: 'y_{b} - y_{ps}', sub: `${n(G.yb, 3)} - ${n(ss.cgsMid, 3)}`, value: ss.eMid, unit: 'in', d: 3 }, G.yb - ss.cgsMid);
     add({ id: 'lt', label: 'Transfer length', sym: '\\ell_{t}', eq: '60\\,d_{b}', sub: `60(${n(ss.st.db, 2)})`, value: ss.lt, unit: 'in', d: 1, ref: A10 + '5.9.4.3.1' }, 60 * ss.st.db);
+    // batch G2 (2026-11-15): the old app's P_jack hint under the strands (O:6074, A_ps × k_j × f_pu), worked here as A_ps f_pbt (f_pbt = k_j f_pu, the engine's R.fpbt)
+    add({ id: 'Pj', label: 'Jacking force of all strands', sym: 'P_{jack}', eq: 'A_{ps}\\,f_{pbt}', sub: `${n(ss.Aps, 3)}(${n(R.fpbt, 2)})`, value: ss.Aps * R.fpbt, unit: 'kip', d: 0,
+      note: 'f_pbt = k_j f_pu, the stress immediately before transfer (worked on the Losses tab). Information: no check uses P_jack.' }, ss.Aps * R.fpbt);
+    weakSteps(add, G);
     return K.done();
+  }
+
+  /* weakSteps(add, G) (batch G1, 2026-11-15): the bare girder's weak-axis (lateral) I_y, S_y and St-Venant torsion J as the old app's
+     Section tab worked them (O:6593-6621), here with the engine's own expressions: the values are weakAxisAndJ(G) of engine/pbd-section.js
+     (the psSection hand-off's Iweak / J, sent to the MCT generator as I_zz / I_xx since the old app); rectTorsionJ the rectangle's J with
+     the 0.21 thickness term. Display only: nothing new is calculated (CLAUDE.md §4: no value of the app changes). */
+  function weakAxis(G) { return typeof weakAxisAndJ === 'function' ? weakAxisAndJ(G) : null; }
+  function weakSteps(add, G) {
+    const wj = weakAxis(G); if (!wj) return;
+    const rJ = (a, b) => (typeof rectTorsionJ === 'function' ? rectTorsionJ(a, b) : NaN);
+    const rjEq = (A, B) => `${A}\\,${B}^{3}\\left[\\frac{1}{3} - 0.21\\,\\frac{${B}}{${A}}\\left(1 - \\frac{${B}^{4}}{12\\,${A}^{4}}\\right)\\right]`;
+    const rjSub = (a, b) => { const A = Math.max(a, b), B = Math.min(a, b); return `${n(A, 2)}(${n(B, 2)})^{3}\\left[\\frac{1}{3} - 0.21\\,\\frac{${n(B, 2)}}{${n(A, 2)}}\\left(1 - \\frac{(${n(B, 2)})^{4}}{12(${n(A, 2)})^{4}}\\right)\\right]`; };
+    const bare = 'The bare girder about its vertical centroidal axis: the deck spans between the girders and is not a full-width flange for one girder\'s lateral bending.';
+    const rjNote = 'J of a rectangle a × b (a the longer side, b the shorter): a b³ [1/3 − 0.21 (b/a)(1 − b⁴/(12 a⁴))].';
+    const JN = 'Not used by any check of this app: it is the J the section hand-off sends to the MCT generator (I_xx). For comparison, AASHTO LRFD 10th Ed. C4.6.2.2.1 gives Σ b t³ / 3 for thin-walled open beams (Eq. C4.6.2.2.1-1) and A⁴ / (40 I_p) for stocky open sections (Eq. C4.6.2.2.1-2).';
+    if (G.isBox || G.isDeck) {
+      const w = +G.w || +G.btf || +G.bw, h = +G.h;
+      add({ id: 'wk.Iy', label: 'Weak-axis moment of inertia (the solid w × h rectangle)', sym: 'I_{y}', eq: '\\frac{h\\,w^{3}}{12}', sub: `\\frac{${n(h, 2)}(${n(w, 2)})^{3}}{12}`, value: wj.Iweak, unit: 'in^{4}', d: 0,
+        note: bare + ' The engine takes the outer rectangle (no void deducted), as the old app.' }, h * Math.pow(w, 3) / 12);
+      add({ id: 'wk.J', label: 'St-Venant torsion constant (the solid w × h rectangle)', sym: 'J', eq: rjEq('a', 'b'), sub: rjSub(w, h), value: wj.J, unit: 'in^{4}', d: 0,
+        note: rjNote + ' The engine takes the outer rectangle (no void deducted), as the old app. Not used by any check of this app: it is the J the section hand-off sends to the MCT generator (I_xx); the distribution factors of types (f) / (g) use their own J of the outline (Loads & LLDF tab, §ld.J).' }, rJ(w, h));
+    } else if (G.isNext) {
+      const B = (G.next && +G.next.B) || 10, cc = (G.next && +G.next.stemCC) || 60, w = +G.btf || +G.w, h = +G.h, hs = Math.max(1, h - 8);
+      add({ id: 'wk.hs', label: 'Weak axis: stem depth (the flange taken 8 in)', sym: 'h_{s}', eq: 'h - 8', sub: `${n(h, 2)} - 8`, value: hs, unit: 'in', d: 2 }, Math.max(1, h - 8));
+      add({ id: 'wk.Iy', label: 'Weak-axis moment of inertia (two stems at ± c/c ÷ 2, plus the flange)', sym: 'I_{y}', eq: '2\\left[\\frac{B\\,h_{s}^{3}}{12} + B\\,h_{s}\\left(\\frac{c}{2}\\right)^{2}\\right] + \\frac{8\\,b_{f}^{3}}{12}',
+        sub: `2\\left[\\frac{${n(B, 2)}(${n(hs, 2)})^{3}}{12} + ${n(B, 2)}(${n(hs, 2)})\\left(\\frac{${n(cc, 1)}}{2}\\right)^{2}\\right] + \\frac{8(${n(w, 2)})^{3}}{12}`, value: wj.Iweak, unit: 'in^{4}', d: 0,
+        note: bare + ' B: the stem width, c: the stem spacing (c/c), b_f: the flange width; the engine\'s approximation, as the old app.' }, 2 * (B * Math.pow(hs, 3) / 12 + B * hs * Math.pow(cc / 2, 2)) + 8 * Math.pow(w, 3) / 12);
+      const Js = rJ(B, hs), Jf = rJ(w, 8);
+      add({ id: 'wk.Js', label: 'Torsion: one stem (B × h_s)', sym: 'J_{s}', eq: rjEq('a', 'b'), sub: rjSub(B, hs), value: Js, unit: 'in^{4}', d: 0, note: rjNote }, Js);
+      add({ id: 'wk.Jf', label: 'Torsion: the flange (b_f × 8 in)', sym: 'J_{f}', eq: rjEq('a', 'b'), sub: rjSub(w, 8), value: Jf, unit: 'in^{4}', d: 0 }, Jf);
+      add({ id: 'wk.J', label: 'St-Venant torsion constant (open section: the sum of its parts)', sym: 'J', eq: '2\\,J_{s} + J_{f}', sub: `2(${g(Js, 0)}) + ${g(Jf, 0)}`, value: wj.J, unit: 'in^{4}', d: 0, note: JN }, 2 * Js + Jf);
+    } else {
+      const d = G.d || [6, 3, 6, 6], ttf = (+d[0] || 0) + (+d[1] || 0), tbf = (+d[2] || 0) + (+d[3] || 0), hw = Math.max(1, G.h - ttf - tbf);
+      const It = ttf * Math.pow(G.btf, 3) / 12, Ib = tbf * Math.pow(G.bbf, 3) / 12, Iw = hw * Math.pow(G.bw, 3) / 12;
+      add({ id: 'wk.hw', label: 'Weak axis: web height between the flanges (flange thicknesses with their tapers)', sym: 'h_{w}', eq: 'h - t_{tf} - t_{bf}', sub: `${n(G.h, 2)} - ${n(ttf, 2)} - ${n(tbf, 2)}`, value: hw, unit: 'in', d: 2 }, Math.max(1, G.h - ttf - tbf));
+      add({ id: 'wk.Iy', label: 'Weak-axis moment of inertia (flange and web rectangles, each centred on the vertical axis)', sym: 'I_{y}', eq: '\\frac{t_{tf}\\,b_{tf}^{3}}{12} + \\frac{t_{bf}\\,b_{bf}^{3}}{12} + \\frac{h_{w}\\,b_{w}^{3}}{12}',
+        sub: `\\frac{${n(ttf, 2)}(${n(G.btf, 2)})^{3}}{12} + \\frac{${n(tbf, 2)}(${n(G.bbf, 2)})^{3}}{12} + \\frac{${n(hw, 2)}(${n(G.bw, 2)})^{3}}{12} = ${g(It, 0)} + ${g(Ib, 0)} + ${g(Iw, 0)}`, value: wj.Iweak, unit: 'in^{4}', d: 0,
+        note: bare + ' The Handling tab\'s lateral stability (when on) uses the same I_y.' }, It + Ib + Iw);
+      const Jt = rJ(G.btf, ttf), Jb = rJ(G.bbf, tbf), Jw = rJ(hw, G.bw);
+      add({ id: 'wk.Jtf', label: 'Torsion: top flange (b_tf × t_tf)', sym: 'J_{tf}', eq: rjEq('a', 'b'), sub: rjSub(G.btf, ttf), value: Jt, unit: 'in^{4}', d: 0, note: rjNote }, Jt);
+      add({ id: 'wk.Jbf', label: 'Torsion: bottom flange (b_bf × t_bf)', sym: 'J_{bf}', eq: rjEq('a', 'b'), sub: rjSub(G.bbf, tbf), value: Jb, unit: 'in^{4}', d: 0 }, Jb);
+      add({ id: 'wk.Jw', label: 'Torsion: web (h_w × b_w)', sym: 'J_{w}', eq: rjEq('a', 'b'), sub: rjSub(hw, G.bw), value: Jw, unit: 'in^{4}', d: 0 }, Jw);
+      add({ id: 'wk.J', label: 'St-Venant torsion constant (open section: the sum of its plates)', sym: 'J', eq: 'J_{tf} + J_{bf} + J_{w}', sub: `${g(Jt, 0)} + ${g(Jb, 0)} + ${g(Jw, 0)}`, value: wj.J, unit: 'in^{4}', d: 0, note: JN }, Jt + Jb + Jw);
+    }
+    add({ id: 'wk.Sy', label: 'Weak-axis section modulus (to the widest fibre)', sym: 'S_{y}', eq: '\\frac{I_{y}}{b_{max}/2}', sub: `\\frac{${g(wj.Iweak, 0)}}{${n(wj.bMax, 2)}/2}`, value: wj.Sy, unit: 'in^{3}', d: 0,
+      note: 'b_max: the widest of the top flange, bottom flange and section widths.' }, wj.bMax > 0 ? wj.Iweak / (wj.bMax / 2) : 0);
   }
 
   /* PS-35 (engine/lldf-fg.js): the type (f) / (g) distribution factors of a box beam or a voided slab, worked (the values are R.df's) */
@@ -361,5 +411,5 @@
     }
     return K.done();
   }
-  window.PSBWorked = { section, loads, analysis, kit, n, g, par };   // kit, n, g, par: for the worked steps of the PR 2c tabs (engine/worked-stress.js, worked-strength.js)
+  window.PSBWorked = { weakAxis, section, loads, analysis, kit, n, g, par };   // kit, n, g, par: for the worked steps of the PR 2c tabs (engine/worked-stress.js, worked-strength.js)
 })();
