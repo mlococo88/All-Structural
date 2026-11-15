@@ -7154,6 +7154,212 @@ index 1183e53..4aaa763 100644
 ```
 ### Tests
 - New: tests/engine/psbridge-subloads.test.mjs (3), tests/smoke/ps-bridge-subloads.mjs (7). Changed: tests/engine/psbridge-model.test.mjs (script list, shared exemption).
+
+## 2026-11-15 — Batch F3 / F4: the old app's "Design beam" chip (read only; girder-count warning; "Show G<i>", interior / exterior follows the line) and "Import hand-off (JSON)" of the distribution factors (click / display only; no calculation change)
+PR #1579: https://github.com/mlococo88/All-Structural/pull/1579
+### Request
+- Batch F (engineer-approved plan, 2026-11-15). F3: the "Design beam" chip of LL & DL (old app O:8962-8984 `BeamChip`, `BridgeBeam` O:515-565): warn on a girder-count mismatch; interior / exterior follows it, by click / display only. F4: "Import hand-off (JSON)" for the LLDF pull, as the Steel Bridge app offers (apps/steel-bridge/ui/handoffs.js `lldfFile`); dlLoads only if the old app or the Steel app offers it (neither does: not added). Not in scope: the auto-follow locks (HO-D2), designBeam / beamRoster channels beyond the chip. Review rows old-vs-new #28, #129; ps-vs-steel S8.
+### What changed
+- `engine/handoffs.js`: `DB_K`, `dbRead`, `dbState(P, get)` (anchor `/* ---- batch F3 (2026-11-15): the old app's "Design beam" chip`): reads `bridgeSuite.v1.designBeam` (bridge-design-beam) and `bridgeSuite.v1.beamRoster` (bridge-beam-roster) as the old `BridgeBeam.rd` (schema, version ≤ 1); `mismatch` = the old `BridgeBeam.mismatch(nb)` (roster Nb ≠ xs.nb); with equal counts the line g = the beam index, its type in the span shown (`PSBBridge.typeAt`), its position here (G1 / G<nb> exterior) and LL & DL's class (`type` 'ext' / 'int' of the selection, else of the roster beam) → `posWarn` when they differ.
+- `ui/handoffs.js`: `beamChip(P)` (exported): `<div id="dbChip">` "Design beam (LL & DL Distribution, bridgeSuite.v1.designBeam): B4 · INT" + "Show G4 (interior)" (`data-mct="dbShow"`), or "The output tabs show G4", or "⚠ 5≠6" with a note (no Show), or "no roster"; nothing when neither key is published. `onMct`: `dbShow` → `ctx.pick(k, g)`. `init`: the storage event also redraws for designBeam / beamRoster. The lldf row: button `lldfFile` "Import hand-off (JSON)" + hidden `<input type="file" data-ho-file="lldf">`; `lldfPull(ctx, raw0, via)` (was `lldfPull(ctx)`): a file's payload text goes through the same `lldfResolve` / confirm (+ "Via: file <name>") / apply / `markAdopted` as the stored one; `BridgeXfer.importFile(file, 'bridge-lldf-factors', 1, …)` refuses another schema or a newer version. The card's closing note and header comment updated.
+- `index.html`: `h += HOUI.beamChip(P);` after the MCT banners; `hoCtx.pick`.
+- HANDOFF.md §4.16. Tests: new `tests/engine/psbridge-designbeam.test.mjs` (the old page's BridgeBeam code, cut from the pinned file, on 9 stored states = dbState's sel / roster / mismatch), new smoke `tests/smoke/ps-bridge-designbeam.mjs` (6 checks); `psbridge-model.test.mjs`: the two read keys allowed in engine/handoffs.js.
+### Saved data (CLAUDE.md §5)
+- None changed; no key written by the chip (designBeam / beamRoster read only). "Show G<i>" writes `P.design` (the line shown, as the type and line choice above the output tabs). The file import writes what the pull writes (the girder type's `loads.dfAuto`, `dfm`, `dfv`, `fatM`) and `bridgeSuite.v1.lldf.adopted.psbridge`.
+### Governing provisions (CLAUDE.md §4)
+- None changed (harness B 0 differences). Interior / exterior is the line's position as before (engine/design.js); the chip only chooses which line is shown.
+### Check case
+- New project, 5 girders; LL & DL roster Nb 5, design beam B4 (INT): chip "B4 · INT", "Show G4 (interior)" → P.design.g = 4, the inputs' loads.pos 'interior'. Roster Nb 6: "⚠ 5≠6", no Show. LL & DL class 'ext' for B3 → "⚠ LL & DL classes B3 as exterior; here G3 is interior".
+- File `bridge-lldf-factors` with governing.interior gM 0.612345, gV 0.701234, fatM 0.41234, Nb 7 (≠ 5: no design beam, the envelope): DFm 0.6123, DFv 0.7012, fatigue DF 0.4123, DF auto off (= the stored pull of the same payload, item 12 check case). A `bridge-dl-loads` file: "Cannot import the hand-off file: wrong data type (bridge-dl-loads), expected bridge-lldf-factors", nothing changed.
+### Decisions (pending engineer review)
+- F-D7. The chip is read only (the old app's chip could change the shared design beam; here it is chosen in LL & DL) and shown only when LL & DL has published a design beam or roster.
+- F-D8. "Interior / exterior follows it" = "Show G<i>" puts the output tabs on that line (whose position this app derives from the line, G1 / G<nb> exterior); no automatic following and no position override (the old app's posAuto). When LL & DL's class disagrees with the line's position the chip warns; nothing is changed.
+- F-D9. With different girder counts the beam number is not mapped to a line (the old app's mismatch warning; the pull uses the envelope, HO-D5).
+- F-D10. dlLoads: no file import (neither the old app nor the Steel Bridge app offers one).
+### Other copies
+- The chip's rules are the old page's BridgeBeam (rd, mismatch), re-written as dbState (Node test against the old code). `lldfFile` follows the Steel Bridge app's handler.
+### Code (before / after: the diff of this change in apps/ps-bridge)
+```diff
+diff --git a/apps/ps-bridge/engine/handoffs.js b/apps/ps-bridge/engine/handoffs.js
+index 0115c8e..ffb1312 100644
+--- a/apps/ps-bridge/engine/handoffs.js
++++ b/apps/ps-bridge/engine/handoffs.js
+@@ -32,6 +32,7 @@
+      srAll(P, cells), sgPayload(P, cells), secDims(g)   batch F (2026-11-15): Bridge Substructure Loading in the Steel Bridge app's
+                               formats: superReactions of every girder line (allGirders, HANDOFF.md §4.4) from each cell's srPayload,
+                               summed at the piers; superGeometry (§4.14) from the inputs and each girder type's section.
++     dbState(P, get)          batch F3: the shared design beam and its roster (the old app's chip), read only.
+    No engineering value is computed here beyond what the old app's code computed for the same payload (batch F: the sum of the two spans'
+    end reactions at a pier, and the largest of the section dimensions). */
+ (function () {
+@@ -397,7 +398,34 @@
+     return { ok: true, payload, sum: `${HS ? HS.summary('superGeometry', payload) : ns + ' spans'}; skews ${skews.map(f2).join(', ')} deg; overhangs ${f2(+xs.ohL)} / ${f2(+xs.ohR)} ft; deck ${f2(ts.v)} in, haunch ${f2(th.v)} in; girder depth ${f3(sec.depth)} in (largest)` };
+   }
+ 
++  /* ---- batch F3 (2026-11-15): the old app's "Design beam" chip (O:8962-8984 BeamChip, BridgeBeam O:515-565), read only ----
++     dbState(P, get): the shared design beam of LL & DL Distribution (bridgeSuite.v1.designBeam, schema bridge-design-beam) and its beam
++     roster (bridgeSuite.v1.beamRoster, bridge-beam-roster), read as BridgeBeam.rd reads them (schema, version <= 1), and what they mean
++     here: mismatch (the old app's BridgeBeam.mismatch: the roster's Nb against this bridge's xs.nb), the line of the same number (the old
++     app's beam numbers are the girder lines; only when the counts match), its girder type in the span shown, and whether LL & DL's
++     interior / exterior class of that beam agrees with the line's position here (G1 and G<nb> exterior). get(key) returns the stored
++     text. -> null (nothing published) | { sel, roster, nb, mismatch: { mine, roster } | null, g, k, s, pos, theirs, posWarn } */
++  const DB_K = { sel: 'bridgeSuite.v1.designBeam', ros: 'bridgeSuite.v1.beamRoster' };
++  function dbRead(get, k, sch) { try { const raw = get(k); if (!raw) return null; const o = JSON.parse(raw); if (!o || o._schema !== sch || (o.schemaVersion || 1) > 1) return null; return o; } catch (e) { return null; } }
++  function dbState(P, get) {
++    const sel = dbRead(get, DB_K.sel, 'bridge-design-beam'), roster = dbRead(get, DB_K.ros, 'bridge-beam-roster');
++    if (!sel && !roster) return null;
++    const nb = Math.round(+(P && P.xs && P.xs.nb)) || null, BRm = W.PSBBridge;
++    const mismatch = roster && roster.Nb && nb && +nb !== +roster.Nb ? { mine: +nb, roster: +roster.Nb } : null;
++    const o = { sel, roster, nb, mismatch, g: null, k: -1, s: null, pos: '', theirs: '', posWarn: false };
++    const i = sel ? Math.round(+sel.index) : NaN;
++    if (!mismatch && nb && i >= 1 && i <= nb) {
++      const d = BRm && BRm.sel ? BRm.sel(P) : { s: 1 }; o.g = i; o.s = d.s;
++      o.k = BRm && BRm.hasTypes(P) ? BRm.typeAt(P, d.s, i) : -1;
++      o.pos = i === 1 || i === nb ? 'exterior' : 'interior';
++      const t = sel.type || (roster && (roster.beams || []).find(b => +b.i === i) || {}).type;
++      o.theirs = t === 'ext' ? 'exterior' : t === 'int' ? 'interior' : '';
++      o.posWarn = !!o.theirs && o.theirs !== o.pos;
++    }
++    return o;
++  }
++
+   W.PSBHandoffs = { PRODUCER, SR_ID, RX, applyLoads, dlBlocked, srPayload, psSection, capacity, CAP_BASIS, lldfGeom, lldfResolve, lldfTheirs, lldfFields, dlResolve, dlTheirs,
+     PM, PM_LABELS, pmFields, pmPlan, MCT_VERSION, MCT_K, verOf, tokenOf, mctPending, mctDescribe, mctPlan, geomPending,
+-    GEO_ID, srAll, secDims, sgPayload };   // batch F (2026-11-15)
++    GEO_ID, srAll, secDims, sgPayload, DB_K, dbState };   // batch F (2026-11-15)
+ })();
+diff --git a/apps/ps-bridge/index.html b/apps/ps-bridge/index.html
+index e09c9e5..76e9116 100644
+--- a/apps/ps-bridge/index.html
++++ b/apps/ps-bridge/index.html
+@@ -505,7 +505,7 @@
+   /* 2026-11-14 (item 12): the Hand-offs card (ui/handoffs.js): the girder type and line the output tabs show, its engine inputs and result */
+   const hoCtx = { P: () => P, result: () => (errs.length ? null : result()), cell: () => hoCell(), changed: () => changed(),
+     toast: (t, u) => toast(t, u), redraw: () => drawOut(),   // batch D3: + the MCT banners' notice and redraw
+-    all: () => (errs.length ? null : allResults(true)), redrawIn: () => drawInputs() };   // batch F: every girder type on every line (the page's cache, as the Report); the card's "Last sent"
++    all: () => (errs.length ? null : allResults(true)), redrawIn: () => drawInputs(), pick: (k, g) => pick(k, g) };   // batch F3: pick = the design beam chip's Show G<i>   // batch F: every girder type on every line (the page's cache, as the Report); the card's "Last sent"
+   HOUI.init(() => drawOut());   // the "new data" marks follow the other tools' sends (storage event); batch D3: the MCT banners too
+   /* PR 2f: "From the old app" (ui/legacy.js): an import replaces the open project, as Import JSON does (asked first there) */
+   const lgCtx = { store: LS, gotoOut: t => gotoOut(t), pickFile: () => pb.importJSON(),   // PR 5: asks first on unsaved changes, then the file chooser
+@@ -666,6 +666,7 @@
+     if (L.note) h += `<div class="alert err">${esc(L.note)}</div>`;
+     h += secNotice();   // PS-31: the old box / voided slab section corrected (or removed)
+     h += HOUI.mctBanner(P);   // batch D3: the MCT demands hand-off and geometry changes (click only)
++    h += HOUI.beamChip(P);    // batch F3: the old app's Design beam chip (LL & DL's design beam; read only, Show G<i> by click)
+     if (errs.length) h += window.PSBInputCheckUI.blocked(errs, icO());
+     h += `<div class="alert">In development: Section properties, Loads &amp; LLDF, Analysis, Losses, Stresses, Flexure, Shear, End zone &amp; hold-down, Camber &amp; deflection, Handling, Deck and Rating show the results of the girder type and line chosen above them; the Summary, the check summary column and the Report cover every girder type on every line. Use the old <a href="../../Prestressed%20Bridge%20Design.html">Prestressed Bridge Design</a> for design work.</div>`;
+     const name = (OTABS.find(t => t[0] === ui.otab) || [, ''])[1];
+diff --git a/apps/ps-bridge/ui/handoffs.js b/apps/ps-bridge/ui/handoffs.js
+index 4aaa763..77b8ef1 100644
+--- a/apps/ps-bridge/ui/handoffs.js
++++ b/apps/ps-bridge/ui/handoffs.js
+@@ -17,7 +17,9 @@
+    superReactions with allGirders (engine srAll, §4.4), each published (channel key, .updatedAt), its .by copy (superGeometry.by.psbridge;
+    superReactions.by.psbeam, the slot the reactions button above writes) and its per-project copy (shared/handoff-store.js, producer id
+    psbridge, HANDOFF.md §5.1; uploaded with Cloud sync as the Steel Bridge app's). The one-line "Send reactions" row above is unchanged.
+-   Not here (fixlog/ps-bridge.md, Open items): designBeam / beamRoster, the channel locks (BridgeLocks; HO-D2 pending), appPaths and the
++   Batch F3 / F4 (2026-11-15): the old app's Design beam chip above the output tabs (beamChip; designBeam / beamRoster read only, "Show
++   G<i>" by click) and "Import hand-off (JSON)" of the distribution factors (lldfPull from a file, the Steel Bridge app's lldfFile).
++   Not here (fixlog/ps-bridge.md, Open items): writing designBeam / beamRoster, the channel locks (BridgeLocks; HO-D2 pending), appPaths and the
+    shared Bridge Suite project list (switch-over). */
+ (function () {
+   'use strict';
+@@ -47,7 +49,7 @@
+       <p class="note">The same hand-offs as the old Prestressed Bridge Design (same keys and formats; the other tools read them as before). Nothing is applied or sent until you click: each pull shows what changes and asks first. The girder hand-offs are for the girder type and line shown on the output tabs: <b id="hoCell">${shownText(c)}</b>. Opened as files, the tools share data in Chrome or Edge only (one folder); otherwise use the JSON files.</p>
+       <p class="note"><b>Receive</b></p>
+       <div class="fRow">${btn('pmUse', 'Use shared project info', 'Fill Name, Number, Client name, Designer, Checker and Date from the project info shared by another tool (asks first; never blanks a field)')}</div>
+-      <div class="fRow">${btn('lldfPull', 'Pull distribution factors', 'The LL & DL Distribution factors for this girder type (DF auto off, DFm, DFv, fatigue DF); asks first')}${n('lldf')}${st('lldf')}</div>
++      <div class="fRow">${btn('lldfPull', 'Pull distribution factors', 'The LL & DL Distribution factors for this girder type (DF auto off, DFm, DFv, fatigue DF); asks first')}${btn('lldfFile', 'Import hand-off (JSON)', 'The same pull from a bridge-lldf-factors file LL & DL Distribution exported (asks first)')}<input type="file" data-ho-file="lldf" accept=".json,application/json" hidden>${n('lldf')}${st('lldf')}</div>
+       <div class="fRow">${btn('dlPull', 'Pull DC2 / DW', 'The LL & DL Distribution dead loads DC2 and DW for this girder type; asks first')}${n('dlLoads')}${st('dlLoads')}</div>
+       <p class="note">From LL &amp; DL Distribution (lldf.html). DC2 / DW are pulled only while they are entered per girder type (Cross-section tab, DC2 and DW: entered); when this app distributes them to the girder lines the pull says so and changes nothing.</p>
+       <p class="note"><b>Send</b></p>
+@@ -58,7 +60,7 @@
+       <div class="fRow">${btn('geoSend', 'Send geometry to LL &amp; DL', 'Spans, girder count and spacing, deck, skew and girder section properties for LL & DL Distribution (bridgeSuite.v1.lldfGeom)')}${btn('geoExport', 'Export (JSON)', 'The same geometry hand-off as a JSON file')}</div>
+       <div class="fRow">${btn('secSend', 'Send section properties', 'The composite section properties and outline for the MCT generator and LL & DL (bridgeSuite.v1.psSection)')}${btn('secExport', 'Export (JSON)', 'The same section hand-off as a JSON file')}</div>
+       <div class="fRow">${btn('capSend', 'Send capacity to the MCT rating', 'φMn± and φVn at every station of the girder for the MCT generator\'s AASHTO rating (bridgeSuite.v1.capacity)')}${btn('capExport', 'Export (JSON)', 'The same capacity hand-off as a JSON file')}</div>
+-      <p class="note">Each send replaces what the old app (or another copy of this app) last sent on the same channel, as two copies of the old app would. The MCT demands, the shared design beam and the channel locks (auto-follow) of the old app are not part of this app yet.</p>
++      <p class="note">Each send replaces what the old app (or another copy of this app) last sent on the same channel, as two copies of the old app would. The shared design beam is shown above the output tabs (read only; it is chosen in LL &amp; DL). The channel locks (auto-follow) of the old app are not part of this app yet.</p>
+     </div></section>`;
+   }
+ 
+@@ -83,16 +85,17 @@
+   }
+   /* the pulls write the girder type shown (its overrides); without girder types (a project not yet migrated) the base design */
+   function applyLoads(ctx, fields) { H().applyLoads(ctx.P(), ctx.cell(), fields); ctx.changed(); }
+-  function lldfPull(ctx) {
++  /* batch F4 (2026-11-15): raw / via given = an imported hand-off file (the Steel Bridge app's "Import hand-off (JSON)"), read as the pull */
++  function lldfPull(ctx, raw0, via) {
+     const rr = ctx.result(); if (!rr || !rr.inp) { say('There is no girder design to pull for.'); return; }
+-    const P = ctx.P(), c = ctx.cell(), inp = rr.inp, raw = getRaw('bridgeSuite.v1.lldf');
++    const P = ctx.P(), c = ctx.cell(), inp = rr.inp, raw = raw0 != null ? raw0 : getRaw('bridgeSuite.v1.lldf');
+     let nb = null; try { nb = raw ? JSON.parse(raw).Nb : null; } catch (e) { nb = null; }
+     // the design beam of the old app = the line shown, when LL & DL has the same girder count (its beam numbers are these lines)
+     const db = c && nb != null && +nb === +P.xs.nb ? { index: c.g, label: 'G' + c.g, clsLabel: inp.loads.pos === 'exterior' ? 'exterior' : 'interior' } : null;
+     const r = H().lldfResolve(inp, raw, db);
+     if (r.why) { say(r.why); return; }
+     const when = (r.at || '').slice(0, 16).replace('T', ' ');
+-    const msg = 'Pull from LL & DL Distribution (' + when + ')\nProject: ' + (r.project || '—') + ' · ' + r.src + '\nFor: ' + (c ? c.label + ' (G' + c.g + ', span ' + c.s + ')' : 'the design') + '\n\n'
++    const msg = 'Pull from LL & DL Distribution (' + when + ')' + (via ? '\nVia: ' + via : '') + '\nProject: ' + (r.project || '—') + ' · ' + r.src + '\nFor: ' + (c ? c.label + ' (G' + c.g + ', span ' + c.s + ')' : 'the design') + '\n\n'
+       + '  g_M +M (moment DF)   = ' + r.gMpos.toFixed(3) + '\n'
+       + '  g_M −M (pier region) = ' + r.gMneg.toFixed(3) + (r.hasNeg ? '' : '  (no continuity region → = +M)') + '\n'
+       + '  g_V (shear DF)       = ' + r.gV.toFixed(3) + '\n'
+@@ -193,7 +196,9 @@
+     const b = e.target.closest('[data-ho]'); if (!b) return false;
+     if (!BX() || !H()) { say('The hand-off helper is not available in this browser.'); return true; }
+     const a = b.dataset.ho;
+-    if (a === 'subSend' || a === 'subFile') { subSend(ctx, a === 'subFile'); return true; }   // batch F (async: the per-project copy)
++    if (a === 'subSend' || a === 'subFile') { subSend(ctx, a === 'subFile'); return true; }
++    if (a === 'lldfFile') { const f = b.parentNode.querySelector('[data-ho-file="lldf"]'); if (f) { f.value = ''; f.onchange = () => { const file = f.files && f.files[0]; if (!file) return;   // batch F4
++      BX().importFile(file, 'bridge-lldf-factors', 1, r => { if (r.error) { say('Cannot import the hand-off file: ' + r.error); return; } lldfPull(ctx, JSON.stringify(r.payload), 'file ' + file.name); refresh(); }); }; f.click(); } return true; }   // batch F (async: the per-project copy)
+     ({ pmUse, pmShare, lldfPull, dlPull, srSend, srExport, secSend: c => secSend(c, false), secExport: c => secSend(c, true),
+       geoSend: c => geoSend(c, false), geoExport: c => geoSend(c, true), capSend: c => capSend(c, false), capExport: c => capSend(c, true) })[a](ctx);
+     refresh();
+@@ -247,6 +252,25 @@
+       if (a === 'dismiss') { setRaw(h.MCT_K.geomAdopted, g.producedAt); d.close(); d.__ctx.redraw(); } });
+     return d;
+   }
++  /* ---- batch F3 (2026-11-15): the old app's "Design beam" chip (O:8962-8984), above the output tabs, read only (click / visual):
++     the beam LL & DL Distribution designs for, its class, the girder-count warning (⚠ mine ≠ roster) and "Show G<i>" (the output tabs show
++     that line in the span shown, so interior / exterior follows the line, as the old app's position followed the beam). Nothing is
++     written to the shared keys (the old app's chip could change the shared beam; here it is set in LL & DL); no auto-follow (HO-D2). ---- */
++  function beamChip(P) {
++    const h = H(); if (!h || !h.dbState) return ''; const d = h.dbState(P, getRaw); if (!d) return '';
++    const s = d.sel, lbl = s ? `${esc(s.label || ('B' + s.index))}${s.ab || s.clsLabel ? ' · ' + esc(s.ab || s.clsLabel) : ''}` : '—';
++    const shown = window.PSBBridge && window.PSBBridge.shown ? window.PSBBridge.shown(P) : null;
++    let act = '';
++    if (d.mismatch) act = ` <span style="color:var(--warn);font-weight:600" title="This app is set up for ${d.mismatch.mine} girders but the published roster has ${d.mismatch.roster}. Re-run the LL &amp; DL Distribution app on the current layout.">⚠ ${d.mismatch.mine}≠${d.mismatch.roster}</span> <span class="note">The girder counts differ: the beam numbers are not this bridge's lines (the distribution factor pull uses the interior / exterior envelope).</span>`;
++    else if (d.g) {
++      act = d.k < 0 ? ` <span class="note">Line G${d.g} has no girder type in span ${d.s}.</span>`
++        : shown && shown.g === d.g && shown.s === d.s ? ` <span class="note">The output tabs show G${d.g} (${d.pos}).</span>`
++        : ` <button type="button" data-mct="dbShow" data-k="${d.k}" data-g="${d.g}" title="Show girder line G${d.g} of span ${d.s} on the output tabs (its girder type; interior / exterior follows the line)">Show G${d.g} (${d.pos})</button>`;
++      if (d.posWarn) act += ` <span style="color:var(--warn);font-weight:600">⚠ LL &amp; DL classes ${lbl} as ${d.theirs}; here G${d.g} is ${d.pos} (G1 and G${d.nb} are the exterior lines).</span>`;
++    } else if (!s) act = ' <span class="note">no beam chosen in LL &amp; DL yet</span>';
++    if (s && !d.roster) act += ' <span style="color:var(--warn);font-weight:600" title="No beam roster published yet — open the LL &amp; DL Distribution app and recalculate.">no roster</span>';
++    return `<div class="note" id="dbChip" role="status"><b>Design beam</b> (LL &amp; DL Distribution, bridgeSuite.v1.designBeam): <b>${lbl}</b>${act}</div>`;
++  }
+   /* mctLoad(ctx): Load the pending hand-off into the girder type chosen in the banner (one change = one Undo step) */
+   function mctLoad(ctx) {
+     const h = H(), D = window.PSBDemands, B = window.PSBBridge, P = ctx.P(), r = h.mctPending(getRaw); if (!r || !r.supported) return false;
+@@ -265,6 +289,7 @@
+   function onMct(e, ctx) {
+     const b = e.target.closest('[data-mct]'); if (!b || !H() || !H().mctPending) return false;
+     e.preventDefault(); const h = H(), a = b.dataset.mct;
++    if (a === 'dbShow') { if (ctx.pick) ctx.pick(+b.dataset.k, +b.dataset.g); return true; }   // batch F3: the design beam's line
+     if (a === 'load') { mctLoad(ctx); return true; }
+     if (a === 'dismiss') { const r = h.mctPending(getRaw); if (r) setRaw(h.MCT_K.adopted, r.token); ctx.redraw(); return true; }
+     if (a === 'geo') { const d = geoDialog(ctx.P()); if (d) { d.__ctx = ctx; if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', ''); } return true; }
+@@ -272,6 +297,6 @@
+   }
+   function init(onMctChange) { document.addEventListener('change', e => { const t = e.target; if (t && t.dataset && t.dataset.hoOpt) SEND[t.dataset.hoOpt] = !!t.checked; });   // batch F
+     window.addEventListener('storage', e => { if (!e.key || /^bridgeSuite\.v1\.(lldf|dlLoads)/.test(e.key)) refresh();
+-    if (onMctChange && (!e.key || /^bridgeSuite\.v1\.(latestId|updatedAt|handoffs|geometryChanges)/.test(e.key))) onMctChange(); }); }   // batch D3: the banners follow the MCT Generator's sends
+-  window.PSBHandoffUI = { card, onClick, refresh, init, mctBanner, onMct, mctLoad };
++    if (onMctChange && (!e.key || /^bridgeSuite\.v1\.(latestId|updatedAt|handoffs|geometryChanges|designBeam|beamRoster)/.test(e.key))) onMctChange(); }); }   // batch F3: + the design beam chip   // batch D3: the banners follow the MCT Generator's sends
++  window.PSBHandoffUI = { card, onClick, refresh, init, mctBanner, onMct, mctLoad, beamChip };
+ })();
+```
+### Tests
+- New: tests/engine/psbridge-designbeam.test.mjs (1), tests/smoke/ps-bridge-designbeam.mjs (6). Changed: tests/engine/psbridge-model.test.mjs (the read keys).
 ## 2026-11-15 — E0: no "pending engineer review" wording in the app (Auto design output tab, Project tab / Report assumption; display only)
 PR #1578: https://github.com/mlococo88/All-Structural/pull/1578
 ### Request
