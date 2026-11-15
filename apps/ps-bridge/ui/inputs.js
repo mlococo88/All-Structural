@@ -127,7 +127,8 @@
     items.push(
       (window.PSBBridgeDL && window.PSBBridgeDL.on(P) ? 'DC2 (barriers, sidewalks, superimposed) and DW (wearing surface) are distributed to each girder line from the Cross-section tab by the Steel Bridge app\'s method (PS-9), shown per line on the Loads &amp; LLDF tab.' : 'DC2 (barrier / superimposed) and DW are entered per girder type (Loads tab; Cross-section tab: dead load distribution "Entered per girder type"); the Steel Bridge distribution to each girder line is the other choice there (PS-9).'),
       'Calculations: the old Prestressed Bridge Design engine, moved unchanged (PR 2a, 0 differences on 658 cases); AASHTO LRFD 10th Ed. (2024). Normal-weight concrete; strand f<sub>pu</sub> = 270 ksi, low relaxation.',
-      'Hold-down force: F<sub>hd</sub> = 2 n<sub>h</sub> f<sub>pbt</sub> A<sub>b</sub> sin α ≤ 0.75 W, checked always for MassDOT and CTDOT (their rule) and, for AASHTO and RIDOT, when the PS-10 box is on (default on, the fraction editable; Owner rules tab). AASHTO LRFD itself sets no limit. MIDAS demand import by file: a later PR.'
+      'Hold-down force: F<sub>hd</sub> = 2 n<sub>h</sub> f<sub>pbt</sub> A<sub>b</sub> sin α ≤ 0.75 W, checked always for MassDOT and CTDOT (their rule) and, for AASHTO and RIDOT, when the PS-10 box is on (default on, the fraction editable; Owner rules tab). AASHTO LRFD itself sets no limit.',
+      'Demands (batch D1): each girder type takes its composite-stage DC2, DW and LL+IM from this app\'s analysis (the default), a custom table or a MIDAS demands file (the old app\'s import, schema psbeam-external-demands; Loads tab, Demands card). The girder self-weight and DC1 are always computed here on the non-composite girder. Imported live load: impact included in the file; the DF and m per effect entered on the Loads tab are applied to it; shears are taken with the opposite sign (MIDAS element sign). The output tabs name the source at their top.'
     );
     return card('assume', 'Assumptions', '', `<ul class="note asm">${items.map(t => `<li>${t}</li>`).join('')}</ul>`);
   }
@@ -153,7 +154,7 @@
     });
     if (tab === 'dd') h = card('diaph', 'Diaphragms (DC1 point loads)', 'entered once (PS-14)', table('base.loads.diaph', P) + '<p class="note">Point loads on the non-composite simple span of the design girder, from the left ℄ bearing; the same diaphragms apply to every girder line (PS-14).</p>') + h;
     if (tab === 'loads') h += card('veh', 'Legal / permit vehicles', 'MBE 6A.4.4, 6A.4.5, Strength I', table('base.rateVeh', P) + '<p class="note">Fully factored live-load moment and shear per vehicle (DF, IM, MPF and the LRFR live-load factor applied, from your own analysis); the app supplies the capacity and the dead loads.</p>')
-      + '<div class="ph"><b>External demands (MIDAS) by file</b> <span class="devBadge">later PR</span><ul><li>the composite-stage DC2, DW and LL+IM envelopes of a MIDAS model (schema psbeam-external-demands), with the DF and multiple presence per effect</li></ul></div>';
+      ;   // batch D1 (2026-11-15): the MIDAS / custom demands are the Demands card of ui/demands.js (above the Loads cards)
     return h;
   }
   /* onChange(el, P): true = handled */

@@ -122,6 +122,10 @@
       const V = w => w * (L / 2 - x), dia = (inp.loads.diaph || []).filter(d => +d.P > 0 && +d.a >= 0 && +d.a <= L);
       const Vdia = dia.reduce((t, d) => { const Pp = +d.P, a = +d.a, Rl = Pp * (L - a) / L; return t + (x < a ? Rl : x > a ? Rl - Pp : Rl - Pp / 2); }, 0);
       vg = V(R.wG); vdc1 = V(R.wDk) + Vdia; vdc2 = V(R.wBar); vdw = V(R.wDW); vll = R.VLL * (L - xm) / L;
+      // batch D1 (display only): imported demands on a simple span (the engine keeps the components only when made continuous): DC2, DW and
+      // LL+IM at x as the engine reads them (buildExternal: the file's shear negated; the LL the larger branch × f_V)
+      const X = R.useExt && window.PSBDemands ? window.PSBDemands.slice(inp.external, L) : null;
+      if (X) { const fv = window.PSBDemands.fac(inp).v; vdc2 = -X.at('V_DC2', x).v; vdw = -X.at('V_DW', x).v; vll = Math.max(Math.abs(X.at('V_LLpos', x).v * fv), Math.abs(X.at('V_LLneg', x).v * fv)); }
     }
     const vdl = 1.25 * (vg + vdc1 + vdc2) + 1.5 * vdw;
     add({ id: 'Vu', label: 'Strength I shear at the section', sym: 'V_{u}', eq: `\\eta\\left(\\left|1.25(V_{g} + V_{DC1} + V_{DC2}) + 1.50\\,V_{DW}${rIn ? ' + V_{r}' : ''}\\right| + 1.75\\,m\\,V_{LL+IM}\\right)`,

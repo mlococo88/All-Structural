@@ -149,7 +149,16 @@
       F('base.loads.dfm', 'DF moment, entered', 'lanes', 'Live load distribution factor for moment (lanes per girder, multiple presence included).', 'num', { when: b => !!b.loads.llAuto && !b.loads.dfAuto }),
       F('base.loads.dfv', 'DF shear, entered', 'lanes', 'Live load distribution factor for shear.', 'num', { when: b => !!b.loads.llAuto && !b.loads.dfAuto }),
       F('base.loads.fatM', 'Fatigue DF (single lane), entered', 'lanes', 'Single-lane fatigue distribution factor without multiple presence; 0 = from the design DF (÷ 1.2).', 'num', { v: 'nn' })],
-      note: () => 'Skew and the exterior / interior position come from the bridge (Bridge layout and Cross-section tabs); d<sub>e</sub> and N<sub>L</sub>: <a href="#" data-goin="xsec">Cross-section tab</a>. Imported MIDAS demands (by file) come in a later PR.' },
+      note: () => 'Skew and the exterior / interior position come from the bridge (Bridge layout and Cross-section tabs); d<sub>e</sub> and N<sub>L</sub>: <a href="#" data-goin="xsec">Cross-section tab</a>. The demands of a girder type can come from a MIDAS file or a custom table instead (Demands card above).' },
+    // batch D1 (2026-11-15): the old app's factors on imported (MIDAS) live load (O:6232-6243, its loads.extDFpos / extDFneg / extDFv / extLLmpf):
+    // shown while a girder type takes its demands from a MIDAS file or a custom table (engine/demands.js); blank = 1.0, as the old app
+    { tab: 'loads', id: 'extll', title: 'Imported live load: distribution factor and multiple presence per effect', ref: 'AASHTO LRFD 10th Ed. 4.6.2.2, 3.6.1.1.2', when: (b, P) => !!(window.PSBDemands && window.PSBDemands.anyExt(P)), fields: [
+      F('base.loads.extDFpos', 'DF — positive moment', 'lanes', 'Applied to the imported (or entered) positive LL+IM moment envelope; 1.0 (or blank) = no adjustment (the envelope is per girder already).', 'opt', { v: 'nn' }),
+      F('base.loads.extDFneg', 'DF — negative moment', 'lanes', 'Applied to the imported negative LL+IM moment envelope (and the pier moment); 1.0 (or blank) = no adjustment.', 'opt', { v: 'nn' }),
+      F('base.loads.extDFv', 'DF — shear', 'lanes', 'Applied to the imported LL+IM shear envelope; 1.0 (or blank) = no adjustment.', 'opt', { v: 'nn' }),
+      F('base.loads.extLLmpf', 'Multiple presence m', '', 'Multiplies all three; 1.0 (or blank) = none (already in the envelope or in the DF).', 'opt', { v: 'nn' })],
+      note: b => { const f = v => (v === '' || v == null ? 1 : isFinite(+v) ? +v : 1), m = f(b.loads.extLLmpf), r = v => (f(v) * m).toFixed(3);
+        return `Impact is already in the imported live load and is not applied again. Combined factors DF × m: +M = <b>${r(b.loads.extDFpos)}</b>, −M = <b>${r(b.loads.extDFneg)}</b>, V = <b>${r(b.loads.extDFv)}</b> (worked on the <a href="#" data-gotab="lds">Loads &amp; LLDF tab</a>). These factors apply only to the girder types whose demands come from a file or a table.`; } },
     // PS-35 (2026-11-14): adjacent box beams and voided slabs, types (f) / (g): the J override (saved per girder type) and the range notice
     { tab: 'loads', id: 'fglldf', title: 'Box beam / deck slab live load distribution (types f / g)', ref: 'AASHTO LRFD 10th Ed. Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1; Eqs. C4.6.2.2.1-2, C4.6.2.2.1-3', when: fgShape, fields: [
       F('base.loads.Jfg', 'St. Venant torsional constant J (override)', 'in⁴', 'Blank: J from the library (a DOT value, where one is listed) or computed from the drawn outline (box / voided slab: a closed thin-walled cell, Eq. C4.6.2.2.1-3; solid slab: A⁴ / 40 I_p, Eq. C4.6.2.2.1-2). Enter a value (e.g. from the DOT sheets) to use it for this girder type: labelled "user/DOT value".', 'opt', { v: 'pos' })],
@@ -197,6 +206,7 @@
     if (/^(spans|xs\.skews)\b/.test(p)) return 'layout';
     if (/^xs\b/.test(p)) return 'xsec';
     if (/^(design|types)\b/.test(p)) return 'gird';   // types: PR 3a-1 (the girder types card)
+    if (/^demands\b/.test(p)) return 'loads';   // batch D1: the demand source of each girder type (Loads tab, Demands card)
     if (/^base\.(owner|opt\.eta[DRI]|opt\.llMult|opt\.sidewalk)\b/.test(p)) return 'own';
     for (const t in TABLES) if (p === t || p.indexOf(t + '.') === 0) return TABLES[t].tab;
     let q = p; while (q) { if (byPath[q]) return byPath[q].card.tab; q = q.replace(/\.?[^.]*$/, ''); }

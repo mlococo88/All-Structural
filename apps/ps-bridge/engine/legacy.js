@@ -92,7 +92,7 @@
     let o; try { o = JSON.parse(text); } catch (e) { return { ok: false, error: `Not a JSON file: ${e.message}` }; }
     const f = fileName ? `the file "${fileName}"` : 'the file';
     if (isObj(o) && o.schema === 'psb2.project') return { ok: false, error: 'This is a file of this app: open it with Import JSON.' };
-    if (isObj(o) && o._schema === 'psbeam-external-demands') return { ok: false, error: 'This is a MIDAS demands file of the old app, not a design. The MIDAS demand import comes in a later version of this app.' };
+    if (isObj(o) && o._schema === 'psbeam-external-demands') return { ok: false, error: 'This is a MIDAS demands file of the old app, not a design: load it for a girder type on the Loads tab (Demands card, source "MIDAS file").' };
     const kind = window.PSBModel.legacyKind(o);
     if (!kind) return { ok: false, error: 'Not a Prestressed Bridge Design (old app) file: an Export JSON of the old app holds a girder design (girder, mat, str, rows, …).' };
     if (isObj(o.designs) && (o.mode === 'pl' || o.mode === 'mod') && !(o.girder != null && Array.isArray(o.rows)))
@@ -141,7 +141,7 @@
     const ext = old.external != null ? clone(old.external) : null;
     const extOn = !!(ext && ext._schema === 'psbeam-external-demands' && Array.isArray(ext.stations) && ext.stations.length);
     const base = M.baseInputs(Object.assign(clone(raw), { external: null }));
-    const eff = clone(old); eff.external = null;   // the old inputs as this app can hold them
+    const eff = clone(old); if (!extOn) eff.external = null;   // the old inputs as this app can hold them (batch D1: with readable MIDAS demands)
     // the bridge the old design was computed on
     const L = +old.L, c = isObj(old.cont) ? old.cont : {};
     const cs = Array.isArray(c.spans) ? c.spans.map(Number).filter(v => v > 0) : [];
@@ -163,6 +163,9 @@
     P.spans = { lengths, continuity: contOn ? 'composite' : 'simple' };
     P.xs = { nb, bays: Array.from({ length: nb - 1 }, () => S), ohL: oh, ohR: oh, skews: Array.from({ length: lengths.length + 1 }, () => skew) };
     P.base = base; P.design = { g, s };
+    // batch D1 (PS-18): the old design's MIDAS demands, as read, are the demands of its girder type T1 (engine/demands.js); the span the old
+    // app chose (its _selSpan) is kept with the file, so the engine inputs are the old app's; no span chosen: span 0 = the whole member
+    if (extOn) P.demands = { T1: { src: 'midas', midas: { file: clone(ext), name: 'old app design', at: now || new Date().toISOString() }, span: ext._selSpan && ext._selSpan.idx ? s : 0 } };
     // the input differences left (engine inputs of the imported project vs the old inputs)
     // left out: proj (the title block, below), the PS-10 box (new in this app, below) and, when the old design is not made continuous over two
     // or more entered spans, cont.spans / cont.span (the engine reads them only for a continuous unit, contUnit; the one-span case is noted below)
@@ -183,7 +186,7 @@
     if (filled.length) add('mig', `${filled.length} input${filled.length > 1 ? 's were' : ' was'} not in the saved design and take${filled.length > 1 ? '' : 's'} the old app's default, as the old app does (its mergeInputs): ${filled.slice(0, 12).join(', ')}${filled.length > 12 ? ', …' : ''}.`);
     if (has(raw, 'opt.longAs') && !has(raw, 'opt.longAsBot')) add('mig', `Older field opt.longAs = ${show(raw.opt.longAs)} read as the bottom tie steel opt.longAsBot, as the old app does.`);
     if (unknown.length) add('kept', `Field${unknown.length > 1 ? 's' : ''} the old app's engine does not use, kept as they are in the base design: ${unknown.slice(0, 12).join(', ')}${unknown.length > 12 ? ', …' : ''}.`);
-    if (ext) add(extOn ? 'diff' : 'kept', extOn ? `MIDAS demands (imported in the old app${ext.member && ext.member.name ? `, member "${ext.member.name}"` : ''}, ${ext.stations.length} stations${ext._selSpan && ext._selSpan.idx ? `, span ${ext._selSpan.idx}` : ''}): kept in the project, NOT used: this app has no MIDAS demand import yet (a later PR). The design is computed with the built-in analysis instead, so its results differ from the old app's.`
+    if (ext) add(extOn ? 'ok' : 'kept', extOn ? `MIDAS demands (imported in the old app${ext.member && ext.member.name ? `, member "${ext.member.name}"` : ''}, ${ext.stations.length} stations${ext._selSpan && ext._selSpan.idx ? `, span ${ext._selSpan.idx}` : ', no span chosen: the whole member, as the old app read it'}): the demands of this girder design (Loads tab, Demands card: source "MIDAS file"), given to the engine as the old app gave them (batch D1, PS-18).`
       : 'An empty or unreadable MIDAS demands object (not used by the old app either): kept in the project.');
     const br = isObj(src && src.bridge) ? src.bridge : null;
     if (br) {
@@ -256,6 +259,17 @@
      cell is computed both ways (the old app's inputs of that cell: PBD.applyBridge on the old model in "Preliminary designer", the stored
      design in "Design modules"; this project's cell inputs) and the result recorded (the same, or how it differs). P is changed (types,
      legacy.restored, legacy.summary.items); the old data as read (legacy.inputs, legacy.bridge) is not. Returns the notice text or ''. */
+  /* demOf(ext, s) (batch D1): the MIDAS demands of an old cell as a demand entry key { file, span } (span: s in the old 'pl' model, else the
+     stored _selSpan's, 0 = none chosen), null without a readable file; demOfType(P, T): the same of a type of this project */
+  function demOf(ext, s) {
+    if (!(isObj(ext) && ext._schema === 'psbeam-external-demands' && Array.isArray(ext.stations) && ext.stations.length)) return null;
+    return { file: ext, span: s != null ? s : (ext._selSpan && ext._selSpan.idx ? +ext._selSpan.idx : 0) };
+  }
+  function demOfType(P, T) {
+    const DM = window.PSBDemands, e = DM ? DM.entry(P, T.id) : null;
+    if (!e || DM.srcOf(P, T.id) !== 'midas' || !(e.midas && DM.isFile(e.midas.file))) return null;
+    return { file: e.midas.file, span: Number.isInteger(e.span) ? e.span : T.span };
+  }
   function restore(P, now) {
     const BR = window.PSBBridge, D = window.PSBDesign, L = P && P.legacy;
     if (!BR || !D || !isObj(L) || !isObj(L.bridge) || L.restored || !isObj(L.bridge.designs) || !P.base) return '';
@@ -270,8 +284,10 @@
       if (!(g >= 1 && g <= nb && s >= 1 && s <= ns)) { out.skipped.push({ key: k, why: `beyond this bridge (${nb} girders, ${ns} span${ns > 1 ? 's' : ''})` }); return; }
       const oi = window.PSBModel.baseInputs(Object.assign(clone(br.designs[k]), { external: null }));
       const ov = BR.diffOvr(P.base, oi); Object.keys(ov).forEach(q => { if (drv(q)) delete ov[q]; });
-      const pos = BR.posLabel(P, g), gk = s + '|' + pos + '|' + JSON.stringify(ov);
-      if (!groups.has(gk)) groups.set(gk, { s, pos, ov, cells: [] });
+      // batch D1 (PS-18): a cell's MIDAS demands go with its type (the old 'pl' model computed the file's span s of the cell; 'mod' its own)
+      const cx = demOf(br.designs[k].external, br.mode !== 'mod' ? s : null);
+      const pos = BR.posLabel(P, g), gk = s + '|' + pos + '|' + JSON.stringify(ov) + '|' + JSON.stringify(cx);
+      if (!groups.has(gk)) groups.set(gk, { s, pos, ov, cx, cells: [] });
       groups.get(gk).cells.push({ key: k, g, s, raw: br.designs[k] });
     });
     groups.forEach(G => {
@@ -280,10 +296,12 @@
       if (!free.length) return;
       let k = -1;
       // the same overrides (none) and position as a type of the span: that type (the design on screen's, as the old app's 'pl' cells shared its inputs)
-      k = BR.spanTypes(P, G.s).find(j => JSON.stringify(P.types[j].ovr) === JSON.stringify(G.ov) && BR.typeLines(P, j).length && BR.typeLines(P, j).every(h => BR.posLabel(P, h) === G.pos));
+      k = BR.spanTypes(P, G.s).find(j => JSON.stringify(P.types[j].ovr) === JSON.stringify(G.ov) && BR.typeLines(P, j).length && BR.typeLines(P, j).every(h => BR.posLabel(P, h) === G.pos)
+        && JSON.stringify(demOfType(P, P.types[j])) === JSON.stringify(G.cx));
       if (k == null || k < 0) {
         P.types.push({ id: BR.nextId(P), label: `${G.pos} S${G.s} (old ${free.map(c => 'G' + c.g).join(', ')})`, span: G.s, lines: [], ovr: clone(G.ov) }); k = P.types.length - 1;
         out.types.push(P.types[k].id);
+        if (G.cx) { if (!isObj(P.demands)) P.demands = {}; P.demands[P.types[k].id] = { src: 'midas', midas: { file: clone(G.cx.file), name: 'old app design', at: out.at }, span: G.cx.span }; }
       }
       free.forEach(c => { BR.assignLine(P, k, c.g); out.cells.push({ key: c.key, g: c.g, s: c.s, type: P.types[k].id }); });
     });
@@ -292,7 +310,7 @@
       const k = BR.typeAt(P, c.s, c.g), inp = D.cellInputs(P, k, c.g);
       let oldInp = clone(mergeInputs(clone(br.designs[c.key])));
       if (br.mode !== 'mod') oldInp = PBD().applyBridge(br, oldInp, c.g, c.s);
-      oldInp.external = null;
+      if (!PBD().extActive(oldInp)) oldInp.external = null;   // batch D1: the cell's MIDAS demands are its type's (above); none: as before
       const val = R => { const o = Object.assign({}, R); delete o.warns; if (o.cont && o.cont.unit) { o.cont = Object.assign({}, o.cont, { unit: Object.assign({}, o.cont.unit) }); ['src', 'assumed', 'Lbridge'].forEach(q => delete o.cont.unit[q]); } return o; };
       let Ro, Rn; try { const WL = fn => (window.PSBSections ? window.PSBSections.withLegacy(fn) : fn());   // PS-31: old names with the old entries (as verify)
         Ro = WL(() => computeAll(clone(oldInp))); Rn = WL(() => computeAll(clone(inp))); } catch (e) { c.same = false; c.why = e.message; return; }
@@ -305,7 +323,7 @@
     const text = out.cells.length
       ? `Restored from the old app's bridge model (PS-17): ${out.cells.length} more girder × span design${out.cells.length > 1 ? 's' : ''} (${out.cells.map(c => c.key).join(', ')}) as girder types on their lines${out.types.length ? ` (${out.types.length} new type${out.types.length > 1 ? 's' : ''})` : ''}; ${nSame} of ${out.cells.length} compute the same as the old app${nSame < out.cells.length ? `; different: ${out.cells.filter(c => !c.same).map(c => `${c.key} (${c.why})`).join('; ')}` : ''}.`
         + (out.skipped.length ? ` Not restored: ${out.skipped.map(q => `${q.key} (${q.why})`).join('; ')}.` : '') + (un.length ? ` Lines with no girder type (not checked): ${un.map(q => `G${q.g}/S${q.s}`).join(', ')} — Girders & strands tab, "Assign every line".` : '')
-        + (L.external ? ' The MIDAS demands stay kept, not used (PS-18).' : '')
+        + (out.cells.some(c => demOf((br.designs[c.key] || {}).external, null)) ? ' The restored cells\' MIDAS demands are their types\' demands (Loads tab, Demands card; PS-18).' : '')
       : (out.skipped.length ? `The old bridge model's other designs were not restored: ${out.skipped.map(q => `${q.key} (${q.why})`).join('; ')}.` : '');
     if (text && L.summary && Array.isArray(L.summary.items)) L.summary.items.push({ kind: out.cells.length && nSame === out.cells.length ? 'ok' : 'note', text });
     return text;

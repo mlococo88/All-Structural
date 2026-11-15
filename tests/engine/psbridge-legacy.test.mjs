@@ -13,7 +13,7 @@ import { TAB_CASES } from './psbridge-tab-cases.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBDF = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared(...PBDF, ...['sections', 'model', 'lldf-fg', 'holddown', 'pierblock', 'design', 'bridge', 'fields', 'inputcheck', 'legacy'].map(n => path.join(APP, `engine/${n}.js`)));
+const W = loadShared(...PBDF, ...['sections', 'model', 'lldf-fg', 'holddown', 'pierblock', 'demands', 'design', 'bridge', 'fields', 'inputcheck', 'legacy'].map(n => path.join(APP, `engine/${n}.js`)));
 const LG = W.PSBLegacy, M = W.PSBModel, D = W.PSBDesign;
 const J = v => JSON.parse(JSON.stringify(v));
 // an independent exact comparison (Object.is per number: NaN, ±∞, −0 kept; functions left out)
@@ -49,7 +49,7 @@ test('harness B designs (19) as the old app\'s inputs: imported, the engine inpu
   }
 });
 
-test('harness A cases (658 old saved designs): every value identical, or the difference named in the summary (MIDAS demands not used; one-span continuity recorded)', () => {
+test('harness A cases (658 old saved designs): every value identical, or the difference named in the summary (one-span continuity recorded); batch D1: every design with MIDAS demands identical', () => {
   const cases = [...recordedCases(), ...seededCases(), ...edgeCases()];
   assert.equal(cases.length, 658);
   const tally = { same: 0, midas: 0, oneSpan: 0, inputDiff: 0, inputErr: 0 };
@@ -60,8 +60,10 @@ test('harness A cases (658 old saved designs): every value identical, or the dif
     const vs = C(vals(Ro)) === C(vals(Rn)), all = C(Ro) === C(Rn), v = LG.verify(r);
     assert.equal(v.same, all, c.name + ': verify'); assert.equal(v.values, vs, c.name + ': verify values');
     if (kinds(r, 'err').length) tally.inputErr++;
+    // batch D1 (PS-18): an old design with MIDAS demands imports with them (P.demands.T1) and computes exactly as the old app
+    if (r.extOn) { tally.midas++; assert.equal(all, true, c.name + ': MIDAS demands computed as the old app'); assert.equal(r.project.base.external, null); assert.deepEqual(J(r.project.legacy.external), J(old.external));
+      assert.deepEqual(J(inp.external), J(old.external), c.name + ': the engine\'s MIDAS input = the old app\'s'); assert.equal(r.project.demands.T1.src, 'midas'); }
     if (all) { tally.same++; assert.deepEqual(kinds(r, 'diff'), [], c.name); continue; }
-    if (r.extOn) { tally.midas++; assert.ok(kinds(r, 'diff').some(t => /MIDAS demands .* NOT used/.test(t)), c.name); assert.equal(r.project.base.external, null); assert.deepEqual(J(r.project.legacy.external), J(old.external)); continue; }
     // an input the imported project cannot hold as the old app saved it (blank text where the bridge needs a number): named, with its input error
     if (kinds(r, 'diff').length) { tally.inputDiff++; assert.ok(kinds(r, 'diff').every(t => /^Input /.test(t)), c.name); assert.ok(kinds(r, 'err').length, c.name); continue; }
     // the only other difference: one span entered with continuity on (the old app assumed [L, L]): every value the same
@@ -69,7 +71,7 @@ test('harness A cases (658 old saved designs): every value identical, or the dif
     assert.ok(kinds(r, 'note').some(t => /assumed two equal spans|the old app used L and warned/.test(t)), c.name);
     assert.deepEqual(J(r.project.spans.lengths.length >= 2), true);
   }
-  assert.equal(tally.same + tally.midas + tally.oneSpan + tally.inputDiff, 658); console.log('       ' + JSON.stringify(tally));
+  assert.equal(tally.same + tally.oneSpan + tally.inputDiff, 658); console.log('       ' + JSON.stringify(tally));
   assert.ok(tally.midas >= 50 && tally.oneSpan >= 40 && tally.same >= 500, JSON.stringify(tally));
 });
 
@@ -157,12 +159,14 @@ test('edge cases: missing fields filled as the old app does; opt.longAs; unknown
   const back = M.importJSON(M.exportJSON(r.project)); assert.equal(back.ok, true); assert.deepEqual(J(back.project.legacy), J(r.project.legacy)); assert.deepEqual(J(back.project.base), J(r.project.base));
 });
 
-test('MIDAS demands: kept in the import record, not in the base design; spans from the imported member', () => {
+test('MIDAS demands: kept in the import record and (batch D1) the demands of type T1, not in the base design; spans from the imported member; computed as the old app', () => {
   const rec = recordedCases().find(c => c.name === 'midas_3span');
   const r = LG.convert({ inputs: J(rec.saved) }), ext = rec.saved.external;
   assert.equal(r.project.base.external, null); assert.deepEqual(J(r.project.legacy.external), J(ext));
   assert.deepEqual(J(r.project.spans.lengths), J(W.PBD.extSpans(ext).map(q => q.len)).map((x, i) => i === r.project.design.s - 1 ? rec.saved.L : x));
-  assert.equal(LG.verify(r).values, false);
+  assert.equal(LG.verify(r).same, true);   // batch D1: before, false (the built-in analysis)
+  assert.deepEqual(J(r.project.demands), { T1: { src: 'midas', midas: { file: J(ext), name: 'old app design', at: r.project.demands.T1.midas.at }, span: ext._selSpan.idx } });
+  assert.ok(kinds(r, 'ok').some(t => /MIDAS demands .*Demands card/.test(t)));
 });
 
 // PR 3a-4 (PS-17): an old bridge model's other girder × span designs restored as girder types

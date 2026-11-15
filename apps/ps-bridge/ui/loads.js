@@ -22,11 +22,13 @@
     { key: 'int', title: 'Interior girder equations', ref: A + 'Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1', ids: /^ld\.(k|m1|m2|v1|v2)$/ },
     { key: 'ext', title: 'Exterior girder: lever rule, e, rigid section', ref: A + '4.6.2.2.2d, 4.6.2.2.3b', ids: /^ld\.(lever|eM|eV|rigid|rigXbar|rigXext|rigSx2|eM1|eM2|eV1|eV2|f48)$/ },
     { key: 'df', title: 'Distribution factors used', ref: A + '4.6.2.2.2e, 4.6.2.2.3c', ids: /^ld\.(dfmRaw|dfvRaw|c1|skM|skV|dfm|dfv)$/, res: /^ld\.dfm$/ },
-    { key: 'll', title: 'Live load per girder', ref: A + '3.6.1.3, 4.6.2.2', ids: /^ld\.(MLL|VLL)$/, res: /^ld\.MLL$/ }];
+    { key: 'll', title: 'Live load per girder', ref: A + '3.6.1.3, 4.6.2.2', ids: /^ld\.(xfp|xfn|xfv|MLL|VLL)$/, res: /^ld\.MLL$/ }];   // xf*: batch D1, the factors on imported live load
   function output(ctx) {
     const { R, inp, P } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, df = R.df, cp = R.cp, own = R.own;
     const simple = !R.fe && !R.useExt, DL = window.PSBBridgeDL, dist = !!(DL && DL.on(P)), dg = window.PSBDesign.sel(P).g;   // PR 3a-3
     let h = K().gcard('Loads graphic: cross-section', 'gfx_ld');
+    // batch D1: with imported demands the DC2 / DW moments and shears are the file's (or the table's); the klf here gives the deflection only
+    const xm = R.useExt ? '; <b>moments and shears imported</b> (Analysis tab), this w is used for the superimposed dead-load deflection only' : '';
     h += k.card('Owner load rules', k.kv([['Owner', k.esc(own ? own.owner : 'AASHTO')], ['Load modifier η (Strength I)', `${own ? ev('own.eta', 4) : '1.0000'} ${wk('ld.eta')}`],
       ['HL-93 design load multiplier m', `${own ? ev('own.mLL', 2) : '1.00'} ${wk('ld.mLL')}`]]) + '<p class="note">Owner and its questions: <a href="#" data-goin="own">Owner rules tab</a>.</p>');
     const row = (lab, how, v, link) => `<tr><td class="lft">${lab}</td><td class="lft">${how}</td><td>${v}</td><td>${link || ''}</td></tr>`;
@@ -39,8 +41,8 @@
         : row('DC1 additional (forms, …)', 'non-composite; entered (Loads tab)', `${k.fx(+inp.loads.wNC, 4)} klf`, ''); })()}
       ${row('DC1 distributed (deck + haunch + additional)', 'on the bare girder', ev('wDk', 4, 'klf'), wk('ld.wDC1'))}
       ${R.nDiaph ? row(`DC1 diaphragms (${R.nDiaph} point loads)`, 'non-composite simple span; entered (Diaphragms / deck tab)', ev('Pdia', 2, 'kip'), wk('ld.Pdia')) : ''}
-      ${row('DC2 barrier / superimposed', `composite${R.fe ? ', continuous unit' : ''}; ${dist ? `distributed to G${dg} (Cross-section tab)` : 'entered per girder'}`, ev('wBar', 4, 'klf'), dist ? wk(`dl.G${dg}.DC2`) : wk('ld.wDC2'))}
-      ${row('DW wearing surface', `composite${R.fe ? ', continuous unit' : ''}; ${dist ? `distributed to G${dg} (Cross-section tab)` : 'entered per girder'}`, ev('wDW', 4, 'klf'), dist ? wk(`dl.G${dg}.DW`) : wk('ld.wDW'))}
+      ${row('DC2 barrier / superimposed', `composite${R.fe ? ', continuous unit' : ''}; ${dist ? `distributed to G${dg} (Cross-section tab)` : 'entered per girder'}${xm}`, ev('wBar', 4, 'klf'), dist ? wk(`dl.G${dg}.DC2`) : wk('ld.wDC2'))}
+      ${row('DW wearing surface', `composite${R.fe ? ', continuous unit' : ''}; ${dist ? `distributed to G${dg} (Cross-section tab)` : 'entered per girder'}${xm}`, ev('wDW', 4, 'klf'), dist ? wk(`dl.G${dg}.DW`) : wk('ld.wDW'))}
       </tbody></table></div><p class="note">${dist ? 'DC2 and DW: the Steel Bridge app\'s distribution of the barriers, sidewalks and wearing surface to each girder line (PS-9; table below).' : 'DC2 and DW are entered per girder type (Loads tab); the Cross-section tab can distribute them to each girder line (PS-9).'}</p>`);
     if (dist) h += window.PSBBridgeDLUI.lineTable(P, dg, k);
     h += k.card('HL-93 per lane (simple span L = ' + k.fx(R.L, 2) + ' ft)', k.kv([['Truck M<sub>tr</sub> (midspan)', `${ev('hl.Mtr', 1, 'kip-ft')} ${wk('ld.Mtr')}`], ['Tandem M<sub>td</sub>', `${ev('hl.Mtd', 1, 'kip-ft')} ${wk('ld.Mtd')}`], ['Lane M<sub>ln</sub>', `${ev('hl.Mln', 1, 'kip-ft')} ${wk('ld.Mln')}`],
@@ -78,9 +80,21 @@
       + (nt ? `<div class="alert" id="nedbtNoTop"><b>NEDBT without a topping: the distribution factor is likely very conservative</b> ${nt} The moment factors g<sub>M1</sub> ${wk('ld.m1')} and g<sub>M2</sub> ${wk('ld.m2')} are worked in the Loads &amp; LLDF steps.</div>` : '')
       + `<p class="note">${inp.loads.dfAuto ? `AASHTO equations, cross-section type ${df.isNext ? '(i)/(j)' : '(k)'}; S = ${k.fx(df.isNext ? df.Sf : inp.S, 3)} ft, L = ${k.fx(R.L, 2)} ft, N<sub>b</sub> = ${inp.nGirders}.` : 'Distribution factors entered on the Loads tab.'} Position and skew from the bridge (<a href="#" data-goin="gird">Design girder card</a>).</p>`);
     }
+    if (R.useExt) h += importedLL(ctx);   // batch D1: the imported live load and its factors
     h += everyLine(ctx);   // 2026-11-15 (batch C): the dead loads and distribution factors of every girder line (the steel app's tables)
     h += k.card('Worked steps: loads and distribution factors', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value.</p>${k.steps(ctx.W.loads.steps, TOPICS, OPEN)}`);
     return h;
+  }
+  /* importedLL(ctx) (batch D1, 2026-11-15; the old app's Loads card O:6225-6243): the live load of a type whose demands come from a MIDAS file
+     or a custom table: the factors DF × m per effect and the midspan / support values the engine takes, each linked to its worked step */
+  function importedLL(ctx) {
+    const { R, P } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, D = window.PSBDemands, T = window.PSBDemandsUI ? window.PSBDemandsUI.shownType(P) : null;
+    const d = D && T ? D.describe(P, T) : { what: 'imported', detail: '' }, F = D ? D.fac(ctx.inp) : null, x = R.ext || {};
+    return k.card('Live load from the imported demands', k.kv([['Source', `${k.esc(d.what)} (<a href="#" data-goin="loads">Loads tab, Demands card</a>)`],
+      ['Span of the file', x.sel ? `span ${x.sel.idx || '—'}: ${k.fx(+x.sel.x0, 2)}–${k.fx(+x.sel.x1, 2)} ft, ${x.nStations} stations` : '—'], ['LL type', k.esc(x.liveLoadType || '—')],
+      ['f<sub>+M</sub> = DF<sub>+M</sub> m', `${F ? k.fx(F.pos, 3) : '—'} ${wk('ld.xfp')}`], ['f<sub>−M</sub> = DF<sub>−M</sub> m', `${F ? k.fx(F.neg, 3) : '—'} ${wk('ld.xfn')}`], ['f<sub>V</sub> = DF<sub>V</sub> m', `${F ? k.fx(F.v, 3) : '—'} ${wk('ld.xfv')}`],
+      ['M<sub>LL+IM</sub> per girder, midspan', `<b>${ev('MLL', 1, 'kip-ft')}</b> ${wk('ld.MLL')}`], ['V<sub>LL+IM</sub> per girder, support', `<b>${ev('VLL', 2, 'kip')}</b> ${wk('ld.VLL')}`]])
+      + '<p class="note">Impact is in the imported live load (not applied again); DF and m per effect from the Loads tab (blank = 1.0). The distribution factors above are this app\'s own: used for the fatigue check (this app\'s fatigue truck) (and shown for comparison), not for the imported live load. The imported values at every station and their combinations: <a href="#" data-gotab="an">Analysis tab</a>.</p>');
   }
   /* everyLine(ctx): 2026-11-15 (batch C; the steel app's Loads & LLDF "dead loads of every girder line" and "LLDF of every girder × region"):
      each girder type on each of its lines (ctx.all = engine/bridge.js results, the page's cached results of every type × line: each line's
