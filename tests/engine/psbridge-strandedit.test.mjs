@@ -35,7 +35,7 @@ test('G5: add / remove / debond / clear / move, the old app\'s rules', () => {
   assert.deepEqual(plain(R0), [{ n: 12, y: 2, nd: 0, dbnd: 0 }, { n: 8, y: 4, nd: 0, dbnd: 0 }], 'the rows given are not changed');
 });
 
-test('G5: the fit check: the BT-72's 26 in bottom flange holds 12 strands a row on the 2 in grid, a 13th is refused; the add slots only where one more fits', () => {
+test('G5: the fit check: the BT-72 26 in bottom flange holds 12 strands a row on the 2 in grid, a 13th is refused; the add slots only where one more fits', () => {
   const P = W.PSBModel.defaultProject(), rows = P.base.rows, fc = E().fitCtx(P, -1, rows);
   assert.deepEqual(plain(E().fitErrs(P, -1, rows)), [], 'the default rows fit');
   const full = rows.map(r => Object.assign({}, r)); const i2 = full.findIndex(r => r.y === 2);
