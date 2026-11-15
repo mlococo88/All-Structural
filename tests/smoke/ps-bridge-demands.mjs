@@ -64,6 +64,9 @@ try {
   await itab('loads'); await p.click('.dmSpans button[data-i="2"]'); await p.waitForTimeout(300);
   const r2 = await R(); assert.equal(r2.sel.idx, 2);
   assert.ok(await p.evaluate(() => window.PSBInputCheck.collect(window.PSBModel.importJSON(localStorage.getItem('psb2.project.current')).project).warnings.some(w => /MIDAS span 2 is 140\.00 ft long but span 1/.test(w.msg))));
+  assert.match(await p.$eval('#dmWarn', e => e.textContent), /MIDAS span 2 is 140\.00 ft long/, 'the warning on the card');
+  await otab('an'); await p.waitForTimeout(300); assert.equal(await p.$eval('#dmSrcBar', e => e.classList.contains('warn')), true); assert.match(await p.$eval('#dmSrcBar', e => e.textContent), /Check: .*140\.00 ft long/);
+  await itab('loads');
   await p.click('#bUndo'); await p.waitForTimeout(300); assert.equal((await R()).sel.idx, 1);
   ok('span 2 chosen: the engine reads it, with the length warning; Undo returns span 1');
   // 4. back to this app's analysis

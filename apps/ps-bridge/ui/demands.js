@@ -34,6 +34,8 @@
     if (src === 'app') h += `<p class="note">DC2, DW and the live load (HL-93 × the distribution factors; on the continuous unit when the bridge is made continuous) are computed by this app (Loads &amp; LLDF and Analysis tabs). Importing analysis results from MIDAS? <a href="#" data-dm="guide">Read the import guide</a> before exporting from the MCT Generator.</p>`;
     if (src === 'midas') h += midasBody(P, T);
     if (src === 'table') h += tableBody(P, T);
+    const w = warnsOf(P, T);   // the demand warnings of this type (engine/demands.js checks; not blocking)
+    if (w.length) h += `<div class="alert" id="dmWarn" role="status"><b>Check</b><ul>${w.map(m => `<li>${esc(m)}</li>`).join('')}</ul></div>`;
     return box(h);
   }
   function midasBody(P, T) {
@@ -66,11 +68,12 @@
       ${rows.map((r, j) => `<tr>${C.map(c => cell(r, j, c)).join('')}<td><button type="button" class="btn sm" data-dm="del" data-j="${j}" aria-label="delete row ${j + 1}">✕</button></td></tr>`).join('')}</tbody></table></div>
       <div><button type="button" class="btn sm" data-dm="add">Add row</button>${rows.length ? '' : ' <button type="button" class="btn sm" data-dm="seed">Start with the two bearings</button>'}</div>`;
   }
+  const warnsOf = (P, T) => DM().checks(P).warnings.filter(x => x.scope === T.id).map(x => x.msg);
   /* srcBar(P): the output tabs' source line (the Steel Bridge app's srcBar): green for this app's analysis, blue for entered / imported */
   function srcBar(P) {
     const D = DM(), T = shownType(P); if (!D || !T) return '';
-    const d = D.describe(P, T), ex = d.src !== 'app';
-    return `<div class="srcBar${ex ? ' ex' : ''}" role="status" id="dmSrcBar"><span>Demands:</span> <b>${esc(d.what)}</b> <span class="srcWhy">(${esc(d.detail)}; ${d.src === 'app' ? 'the default' : 'as chosen'}: <a href="#" data-goin="loads">Loads tab, Demands card</a>${ex ? '; combined on the <a href="#" data-gotab="an">Analysis tab</a>' : ''})</span></div>`;
+    const d = D.describe(P, T), ex = d.src !== 'app', w = ex ? warnsOf(P, T) : [];
+    return `<div class="srcBar${w.length ? ' warn' : ex ? ' ex' : ''}" role="status" id="dmSrcBar"><span>Demands:</span> <b>${esc(d.what)}</b> <span class="srcWhy">(${esc(d.detail)}; ${d.src === 'app' ? 'the default' : 'as chosen'}: <a href="#" data-goin="loads">Loads tab, Demands card</a>${ex ? '; combined on the <a href="#" data-gotab="an">Analysis tab</a>' : ''})</span>${w.length ? `<div class="srcWhy">Check: ${w.map(esc).join(' ')}</div>` : ''}</div>`;
   }
   /* the guide (the old app's MidasHelp, O:5362-5440, its own text adapted to this app) */
   const GUIDE = `<h3>Importing MIDAS demands</h3><p class="note">How to prepare the external force-effect file so this app reads it correctly.</p>
