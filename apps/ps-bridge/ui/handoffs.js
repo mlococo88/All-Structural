@@ -12,6 +12,11 @@
               itself; here nothing is sent without a click; Decision pending engineer review, fixlog/ps-bridge.md HO-D2).
    Batch D3 (2026-11-15): the MCT demands (handoffs / latestId) and geometryChanges: banners above the output tabs (mctBanner), Load by click
    into a girder type (its demands, engine/demands.js), the review window of the geometry changes.
+   Batch F (2026-11-15): "Send to Substructure Loading" with the boxes Geometry and Reactions of every girder line, and "Export hand-off
+   (JSON)", the Steel Bridge app's row (apps/steel-bridge/ui/handoffs.js subSend): superGeometry (engine sgPayload, HANDOFF.md §4.14) and
+   superReactions with allGirders (engine srAll, §4.4), each published (channel key, .updatedAt), its .by copy (superGeometry.by.psbridge;
+   superReactions.by.psbeam, the slot the reactions button above writes) and its per-project copy (shared/handoff-store.js, producer id
+   psbridge, HANDOFF.md §5.1; uploaded with Cloud sync as the Steel Bridge app's). The one-line "Send reactions" row above is unchanged.
    Not here (fixlog/ps-bridge.md, Open items): designBeam / beamRoster, the channel locks (BridgeLocks; HO-D2 pending), appPaths and the
    shared Bridge Suite project list (switch-over). */
 (function () {
@@ -24,10 +29,17 @@
   const isNew = ch => { const b = BX(); return !!(b && b.isNew(ch, H().RX)); };
   const has = ch => !!getRaw('bridgeSuite.v1.' + ch);
 
+  /* batch F: the per-project copies of this app's sends (shared/handoff-store.js, producer id psbridge; read only) */
+  const HS = () => window.SharedHandoffStore, SEND = { geo: true, rx: true };   // the boxes: this page only, not saved (as the Steel Bridge app)
+  const whenL = t => { const d = new Date(t); return t && isFinite(d) ? d.toLocaleString() : 'time unknown'; };
+  const lastSent = (P, ch) => { try { const S = HS(); if (!S || !H()) return null; const pid = S.pidOf({ name: String((P.project || {}).name || ''), bridgeId: '' }); if (!pid) return null;
+    const t = localStorage.getItem(S.copyKey(ch, H().GEO_ID, pid)); const p = t ? JSON.parse(t) : null; return p && p.producedAt ? p : null; } catch (e) { return null; } };
   /* the girder type and line the output tabs show (ctx.cell()), its label */
   function shownText(c) { return c ? `${esc(c.label)} on G${c.g}, span ${c.s}` : 'no girder type on a line'; }
 
   function card(P, c) {
+    const pname = P && P.project && String(P.project.name || '').trim(), sg = lastSent(P, 'superGeometry'), sr = lastSent(P, 'superReactions');
+    const sent = !pname ? 'not kept per project until the project has a name' : sg || sr ? [sg && `Geometry ${esc(whenL(sg.producedAt))}`, sr && `Reactions ${esc(whenL(sr.producedAt))}`].filter(Boolean).join('; ') + ` (project "${esc(pname)}", from this browser)` : `nothing sent yet for project "${esc(pname)}" from this browser`;
     const n = ch => `<span class="note" data-ho-new="${ch}"${isNew(ch) ? '' : ' hidden'}> · <b>new data</b></span>`;
     const st = ch => has(ch) ? '' : ' <span class="note">(nothing sent yet)</span>';
     const btn = (a, t, tip) => `<button type="button" data-ho="${a}" title="${esc(tip)}">${t}</button>`;
@@ -41,6 +53,8 @@
       <p class="note"><b>Send</b></p>
       <div class="fRow">${btn('pmShare', 'Share project info', 'Share this title block with the other tools (bridgeSuite.v1.projectMeta)')}</div>
       <div class="fRow">${btn('srSend', 'Send reactions to Substructure Loading', 'The unfactored DC1, DC2 and DW end reactions of this girder line (kip): bridgeSuite.v1.superReactions and its copy superReactions.by.psbeam')}${btn('srExport', 'Export hand-off (JSON)', 'The same reactions hand-off as a JSON file')}</div>
+      <div class="fRow">${btn('subSend', 'Send to Substructure Loading', 'Every girder line: the bridge geometry (bridgeSuite.v1.superGeometry) and the reactions of every girder line G1 to Gn (bridgeSuite.v1.superReactions, allGirders), as the Steel Bridge app sends them')} <label><input type="checkbox" data-ho-opt="geo"${SEND.geo ? ' checked' : ''}> Geometry</label> <label><input type="checkbox" data-ho-opt="rx"${SEND.rx ? ' checked' : ''}> Reactions of every girder line</label> ${btn('subFile', 'Export hand-off (JSON)', 'The same hand-offs as JSON files (one per ticked box)')}</div>
+      <p class="note">The row above sends the girder line shown only (the old app's hand-off). This row, as the Steel Bridge app: <b>Geometry</b>: spans, support skews and joints, girder count, spacings and overhangs, the deck edges (traffic faces), the deck and haunch, and the girder sections (largest depth, flange and web; the depth at each support and the deepest in each span), for Bridge Substructure Loading's "Pull geometry". <b>Reactions</b>: each girder line's unfactored DC1, DC2 and DW at every support (kip) from every girder type on its lines — each span's end reactions are the Analysis tab's (choose the type and line above the output tabs), a pier's the sum of its two spans' (each span's share in the hand-off notes) — for its "Pull from PS-Beam / GirderDetail". Each send is also kept for this project (${pname ? `"${esc(pname)}"` : 'enter a project name on this tab first'}). <b>Last sent:</b> ${sent}.</p>
       <div class="fRow">${btn('geoSend', 'Send geometry to LL &amp; DL', 'Spans, girder count and spacing, deck, skew and girder section properties for LL & DL Distribution (bridgeSuite.v1.lldfGeom)')}${btn('geoExport', 'Export (JSON)', 'The same geometry hand-off as a JSON file')}</div>
       <div class="fRow">${btn('secSend', 'Send section properties', 'The composite section properties and outline for the MCT generator and LL & DL (bridgeSuite.v1.psSection)')}${btn('secExport', 'Export (JSON)', 'The same section hand-off as a JSON file')}</div>
       <div class="fRow">${btn('capSend', 'Send capacity to the MCT rating', 'φMn± and φVn at every station of the girder for the MCT generator\'s AASHTO rating (bridgeSuite.v1.capacity)')}${btn('capExport', 'Export (JSON)', 'The same capacity hand-off as a JSON file')}</div>
@@ -149,10 +163,37 @@
       say('Capacity published — ' + b.payload.stationCount + ' stations over ' + b.spans + ' span(s).\n\nOpen the MCT app → AASHTO Rating and apply the "Design capacity received" banner.' + (b.warns.length ? '\n\nWarnings:\n• ' + b.warns.join('\n• ') : ''));
   }
 
+  /* batch F: subSend(ctx, file): the Steel Bridge app's subSend. Every ticked channel is built first (nothing is sent when one fails), then
+     published (channel key, .updatedAt), its .by copy and its per-project copy (and upload with Cloud sync); file: one JSON file per box. */
+  async function subSend(ctx, file) {
+    const todo = [SEND.geo && 'geo', SEND.rx && 'rx'].filter(Boolean);
+    if (!todo.length) { say('Tick Geometry, Reactions or both.'); return; }
+    const A = ctx.all ? ctx.all() : null;
+    if (!A) { say(`Nothing was ${file ? 'exported' : 'sent'}: fix the inputs first (the input errors are listed above the results).`); return; }
+    const P = ctx.P(), built = {}, errs = [];
+    todo.forEach(k => { const r = k === 'geo' ? H().sgPayload(P, A.cells) : H().srAll(P, A.cells); if (r.error) errs.push(`${k === 'geo' ? 'Geometry' : 'Reactions'}: ${r.error}`); else built[k] = r; });
+    if (errs.length) { say(`Nothing was ${file ? 'exported' : 'sent'}.\n\n${errs.join('\n')}`); return; }
+    const dev = HS() ? HS().deviceName(localStorage) : ''; todo.forEach(k => { if (dev) built[k].payload.device = dev; });   // §5.1 optional envelope field
+    const CH = { geo: { ch: 'superGeometry', by: H().GEO_ID }, rx: { ch: 'superReactions', by: H().SR_ID } };
+    if (file) { todo.forEach(k => exportP(CH[k].ch, Object.assign({}, built[k].payload, { producedAt: new Date().toISOString() }))); return; }
+    const out = [], pname = String((P.project || {}).name || '').trim();
+    for (const k of todo) {
+      const c = CH[k], w = BX().publish(c.ch, built[k].payload, H().PRODUCER, FILE);
+      if (w.error) { out.push(`${k === 'geo' ? 'Geometry' : 'Reactions'}: NOT sent: ${w.error} Use "Export hand-off (JSON)" instead.`); continue; }
+      write(BX().NS + c.ch + '.by.' + c.by, JSON.stringify(w.payload));   // the .by copy (§4.4, §4.14)
+      let cl = '';
+      if (HS()) { const r = await HS().send({ storage: localStorage, channel: c.ch, producer: H().GEO_ID, payload: w.payload, fetch: (u, i) => window.fetch(u, i) });
+        cl = !r.ok ? ` (the per-project copy was not saved: ${r.error})` : !r.pid ? '' : r.cloud && r.cloud.ok ? '; also uploaded to GitHub' : r.cloud && r.cloud.queued ? `; GitHub upload waiting (${r.cloud.error})` : ''; }
+      out.push(k === 'geo' ? `Geometry sent: ${built.geo.sum}${cl}.` : `Reactions sent (unfactored, kip, DC1 / DC2 / DW of every girder line)${cl}:\n${built.rx.sum}`);
+    }
+    say(`${pname ? `Kept for project "${pname}".` : 'This project has no name, so the send is kept only as the latest hand-off (no project). Enter a project name on this tab to keep one copy per project.'}\n\n${out.join('\n\n')}\n\nIn Bridge Substructure Loading: Project tab, Hand-offs card, "Pull geometry from Steel Bridge Design" and "Pull from PS-Beam / GirderDetail". Each asks which project first.`);
+    if (ctx.redrawIn) ctx.redrawIn();   // the card's "Last sent"
+  }
   function onClick(e, ctx) {
     const b = e.target.closest('[data-ho]'); if (!b) return false;
     if (!BX() || !H()) { say('The hand-off helper is not available in this browser.'); return true; }
     const a = b.dataset.ho;
+    if (a === 'subSend' || a === 'subFile') { subSend(ctx, a === 'subFile'); return true; }   // batch F (async: the per-project copy)
     ({ pmUse, pmShare, lldfPull, dlPull, srSend, srExport, secSend: c => secSend(c, false), secExport: c => secSend(c, true),
       geoSend: c => geoSend(c, false), geoExport: c => geoSend(c, true), capSend: c => capSend(c, false), capExport: c => capSend(c, true) })[a](ctx);
     refresh();
@@ -229,7 +270,8 @@
     if (a === 'geo') { const d = geoDialog(ctx.P()); if (d) { d.__ctx = ctx; if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', ''); } return true; }
     return true;
   }
-  function init(onMctChange) { window.addEventListener('storage', e => { if (!e.key || /^bridgeSuite\.v1\.(lldf|dlLoads)/.test(e.key)) refresh();
+  function init(onMctChange) { document.addEventListener('change', e => { const t = e.target; if (t && t.dataset && t.dataset.hoOpt) SEND[t.dataset.hoOpt] = !!t.checked; });   // batch F
+    window.addEventListener('storage', e => { if (!e.key || /^bridgeSuite\.v1\.(lldf|dlLoads)/.test(e.key)) refresh();
     if (onMctChange && (!e.key || /^bridgeSuite\.v1\.(latestId|updatedAt|handoffs|geometryChanges)/.test(e.key))) onMctChange(); }); }   // batch D3: the banners follow the MCT Generator's sends
   window.PSBHandoffUI = { card, onClick, refresh, init, mctBanner, onMct, mctLoad };
 })();
