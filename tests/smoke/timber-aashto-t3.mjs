@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Timber Beam Check, AASHTO LRFD 10th Ed. phase T3 (fix log TBA4, 2026-11-16): the checks, in the working tree (headless Chromium, file://).
+// Timber Beam Check, AASHTO LRFD 10th Ed. phase T3 (fix log TBA4, TBA5, 2026-11-16): the checks (flexure, shear; TBA5: bearing, deflection, glulam camber, the deflection-limit input), in the working tree (headless Chromium, file://).
 // For each case: the AASHTO Checks tab (summary, flexure, shear, notes), every ratio the engine gives (TBC.ac) shown, the OK / NG of each
 // check block equal to the engine's, the governing strip and the left column (PASS / FAIL with the governing check), no NaN / undefined,
 // no KaTeX errors; the lateral-support inputs on the Factors tab in AASHTO mode; the Report section (steps, summary table with § links);
@@ -37,17 +37,19 @@ for (const [name, fn] of Object.entries(cases)) {
   ok(s.AC && s.AC.ok, `${name}: checks: ${s.AC && (s.AC.errors || []).join('; ')}`);
   if (!s.AC || !s.AC.ok) continue;
   ok(s.kerr === 0 && !/NaN|undefined|Infinity/.test(s.text), `${name}: KaTeX errors ${s.kerr}, NaN/undefined ${/NaN|undefined|Infinity/.test(s.text)}`);
-  for (const c of ['aasCSum', 'aasFlex', 'aasShr', 'aasCNotes']) ok(await p.$(`#tabPages .sec[data-secid="${c}"]`), `${name}: card ${c}`);
-  const all = s.AC.flex.concat(s.AC.shear);
+  for (const c of ['aasCSum', 'aasFlex', 'aasShr', 'aasBrg', 'aasDefl', 'aasCNotes']) /* aasBrg, aasDefl: TBA5 */ ok(await p.$(`#tabPages .sec[data-secid="${c}"]`), `${name}: card ${c}`);
+  const all = s.AC.flex.concat(s.AC.shear, s.AC.bear, s.AC.defl);   // TBA5: bearing, deflection
   ok(all.length >= 2, `${name}: ${all.length} check items`);
   all.forEach(it => ok(s.text.includes(it.ratio.toFixed(3)), `${name}: ratio ${it.ratio.toFixed(3)} shown (${it.kind})`));
-  all.forEach(it => ok(s.text.includes((it.kind === 'flex' ? it.Mr : it.Vr).toFixed(3)), `${name}: resistance ${(it.kind === 'flex' ? it.Mr : it.Vr).toFixed(3)} shown`));
+  const rv = it => ({ flex: it.Mr, shear: it.Vr, bear: it.Pr, defl: it.allow })[it.kind];
+  all.forEach(it => ok(s.text.includes(rv(it).toFixed(3)), `${name}: resistance ${rv(it).toFixed(3)} shown (${it.kind})`));
   const st2 = s.blocks.filter(Boolean);
   ok(st2.length === all.length && st2.every((x, i) => x === ((all[i].rbNG || all[i].ratio > 1) ? 'NG' : 'OK')), `${name}: block statuses ${st2.join(',')} vs engine`);
   const ng = all.some(it => !it.ok);
-  ok(/Governing: (Flexure|Shear)/.test(s.gov) && s.gov.includes((s.AC.gov.ratio * 100).toFixed(1) + ' %') && s.govCls.includes(ng ? 'fail' : 'pass') && s.gov.includes(ng ? 'NG' : 'OK'), `${name}: governing strip ${s.gov} (${s.govCls})`);
-  ok(/Flexure \[Art\. 8\.6\.2\]/.test(s.dash) && /Shear \[Art\. 8\.7\]/.test(s.dash) && s.dash.includes(s.AC.govFlex.ratio.toFixed(3)), `${name}: left column: ${s.dash.slice(0, 160)}`);
+  ok(/Governing: (Flexure|Shear|Bearing|Deflection)/.test(s.gov) && s.gov.includes((s.AC.gov.ratio * 100).toFixed(1) + ' %') && s.govCls.includes(ng ? 'fail' : 'pass') && s.gov.includes(ng ? 'NG' : 'OK'), `${name}: governing strip ${s.gov} (${s.govCls})`);
+  ok(/Flexure \[Art\. 8\.6\.2\]/.test(s.dash) && /Shear \[Art\. 8\.7\]/.test(s.dash) && /Bearing \[Art\. 8\.8\.3\]/.test(s.dash) && /Deflection L\/425 \[Art\. 2\.5\.2\.6\.2\]/.test(s.dash) && s.dash.includes(s.AC.govFlex.ratio.toFixed(3)), `${name}: left column: ${s.dash.slice(0, 160)}`);
   if (name === 'glulamCont') ok(s.AC.flex.some(it => it.sg < 0 && it.CL < 1) && s.AC.flex.every(it => it.Lz > 0 && it.Lz < 60), 'glulamCont: −M with C_L < 1; C_V lengths from zero-moment points');
+  if (name.startsWith('glulam')) ok(await p.$('#tabPages .sec[data-secid="aasCamb"]') && s.AC.camber.length && s.text.includes(s.AC.camber[0].req.toFixed(3)), `${name}: camber card (TBA5)`);
   if (name === 'glulamPermit') ok(s.AC.flex.some(it => it.lim === 'StrII') && /Strength II/.test(s.text), 'glulamPermit: Strength II checks');
   if (name === 'sawnBraced') ok(s.AC.flex[0].CL < 1 && /R_?B|RB/.test(s.text.replace(/\s/g, '')), 'sawnBraced: C_L < 1 worked');
   // a click on a left-column line opens its card
@@ -57,15 +59,20 @@ for (const [name, fn] of Object.entries(cases)) {
     fs.mkdirSync(args.shots, { recursive: true });
     await p.click('#tab_aasC'); await p.waitForTimeout(300);
     await p.setViewportSize({ width: 1400, height: 7000 }); await p.waitForTimeout(400);
-    for (const sec of ['aasCSum', 'aasFlex', 'aasShr']) { const h = await p.$(`#tabPages .sec[data-secid="${sec}"]`); if (h && (name !== 'exterior')) await h.screenshot({ path: path.join(args.shots, `t3-${name}-${sec}.png`) }); }
+    for (const sec of ['aasCSum', 'aasFlex', 'aasShr', 'aasBrg', 'aasDefl', 'aasCamb']) { const h = await p.$(`#tabPages .sec[data-secid="${sec}"]`); if (h && (name !== 'exterior')) await h.screenshot({ path: path.join(args.shots, `t3-${name}-${sec}.png`) }); }
     await p.setViewportSize({ width: 1400, height: 1000 }); await p.waitForTimeout(300);
     if (name === 'glulamCont') { await p.screenshot({ path: path.join(args.shots, 't3-glulamCont-page.png') }); await p.click('#tbcInTab_factors'); await p.waitForTimeout(200); const pn = await p.$('#tbcInPane_factors'); if (pn) await pn.screenshot({ path: path.join(args.shots, 't3-factors-pane.png') }); }
   }
 }
+// TBA5: the deflection-limit input (Factors tab): an entry is saved (version 6) and used; blank = 425
+await p.click('#tbcInTab_factors'); await p.fill('[data-fkey="aasDLim"]', '800'); await p.waitForTimeout(600);
+ok(await p.evaluate(() => { const d = JSON.parse(localStorage.getItem('tbc_autosave_v1')); return d.version === 6 && d.design.aashto.dLim === 800 && TBC.ac.dLim === 800; }), 'deflection limit 800: saved (version 6) and used');
+await p.fill('[data-fkey="aasDLim"]', ''); await p.waitForTimeout(600);
+ok(await p.evaluate(() => { const d = JSON.parse(localStorage.getItem('tbc_autosave_v1')); return d.version === 5 && !('dLim' in d.design.aashto) && TBC.ac.dLim === 425; }), 'deflection limit blank: 425, no field saved (version 5)');
 // Report
 await p.click('#tab_rpt'); await p.waitForTimeout(1500);
 const rt = await p.evaluate(() => typeof TBRP !== 'undefined' && TBRP.doc ? SharedReport.text(TBRP.doc) : '');
-ok(/AASHTO checks \(Art\. 8\.6, 8\.7\)/.test(rt) && /Summary of the checks/.test(rt) && /Flexure check/.test(rt) && /Shear check/.test(rt) && !/NaN|undefined/.test(rt), 'Report: checks section: ' + rt.slice(0, 200));
+ok(/AASHTO checks \(Art\. 8\.6, 8\.7, 8\.8\.3, 2\.5\.2\.6\.2\)/.test(rt) && /Bearing check/.test(rt) && /Deflection check/.test(rt) && /Summary of the checks/.test(rt) && /Flexure check/.test(rt) && /Shear check/.test(rt) && !/NaN|undefined/.test(rt), 'Report: checks section: ' + rt.slice(0, 200));
 ok(/§\s*\d+\.\d+/.test(rt), 'Report: § references');
 ok(await p.evaluate(() => document.querySelectorAll('.katex-error').length) === 0, 'KaTeX errors in the report');
 if (args.shots) { const h = await p.$('#tabPages'); if (h) await p.screenshot({ path: path.join(args.shots, 't3-report.png') }); }

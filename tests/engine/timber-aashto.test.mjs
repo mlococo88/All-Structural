@@ -137,5 +137,5 @@ test('saved data: the code switch is optional (absent = NDS); version 4 only wit
   assert.ok(!('code' in u.design)); assert.deepEqual(JSON.parse(JSON.stringify(u.design.aashto)), JSON.parse(JSON.stringify(E.tbcAashtoDefaults())));
   const v4 = { ...JSON.parse(JSON.stringify(t)), _schema: 'timber-beam-check', version: 4 };
   assert.equal(E.tbcMigrate(v4).model.design.code, 'AASHTO');
-  assert.throws(() => E.tbcMigrate({ ...v4, version: 6 }), /newer format/);   // TBA2: the tool reads version 5 (bridge loads)
+  assert.throws(() => E.tbcMigrate({ ...v4, version: 7 }), /newer format/);   // TBA2: the tool reads version 5 (bridge loads); TBA5: 6 (deflection limit)
 });
