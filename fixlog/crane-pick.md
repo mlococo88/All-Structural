@@ -415,3 +415,36 @@ entered: the 40 × 4 load (r 20.10) reaches the plane: 0. Obstruction 1,015…1,
 ### How verified
 `node tests/engine/run.mjs crane` (48 tests, 0 failed); `node tests/smoke/crane-clear3d.mjs` (8 checks, incl. the elevation dock live
 mid-drag and Report §Elevations), `crane-elev.mjs` (7), `crane-place.mjs` (9), `crane-picks.mjs` (5); `node tests/check-syntax.mjs`.
+
+## 2026-11-16 — C3-3: the 3D view (three.js)
+PR #1611: https://github.com/mlococo88/All-Structural/pull/1611
+### Where
+- `apps/crane-pick/ui/view3d.js` (new, `window.CranePickView3D`): three.js r128 + OrbitControls (engineer-approved for C3; the pinned
+  files `apps/steel-bridge/index.html` uses: `https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js`,
+  `https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js`), loaded when the 3D view is first opened (as
+  `ui/sheets.js` loads pdf.js). The scene: plan sheets as the ground texture (else a grid), obstructions (prisms to their top; height
+  not entered: a 30 ft wireframe), exclusion zones (translucent), power lines at the lowest-wire elevation with their D_min (+ sway)
+  tubes (height not entered: a vertical plane), every setup (carrier / carbody, tracks, floats, outrigger beams, tail-swing circle), and
+  for the selected pick: the boom at the chosen point (pick / set / capacity governing / closest 3D), the counterweight at that slew, the
+  load line, hook block, rigging, load box (L along the boom), the swing envelope (the boom's swept surface; the tip path; the hook path
+  at the travel height) and the red / amber 3D clearance flags (closest points). Orbit / pan / zoom; renders on demand; the camera is
+  kept while the same pick is shown. WebGL not available or three.js not loaded: a message (the elevation view and every check work).
+  Report: §"3D view", a snapshot of the view as last shown (a picture only; not saved with the project).
+- `ui/elev.js`: the dock switches between "Elevation" and "3D" (`crane.ui.elev.mode`, per browser). `index.html`: the script, CSS,
+  notes, footer. `tests/libs/MANIFEST.json`: three@0.128.0 `used_by` adds apps/crane-pick (the files were already there).
+- Tests: `tests/smoke/crane-3d.mjs` (new).
+### Calculations
+None (CLAUDE.md §4): display of the values of engine/lift.js, elev.js, clear3d.js (checked: the boom's middle at x 16.00, el. +34.24
+= ((2 + 30) / 2, (8 + 60.4772) / 2) from the rotation centre and the pad in the C3-1 hand check).
+### Saved data (§5)
+None in the project; the view mode in `crane.ui` (per browser).
+### Decisions (pending engineer review)
+- three.js is loaded on demand (no download for users who never open the 3D view; offline: a message), not as a static tag.
+- Display-only simplifications: the carrier body is drawn to the counterweight bottom height (5 ft when not known), the counterweight as
+  a block behind the rotation centre at the shown slew (the checks use the full tail-swing cylinder), the load box with L along the boom
+  (the checks use any orientation).
+- Engineer instruction 2026-11-16 (speed up): lighter checks (syntax, crane engine tests, the touched smokes, one new smoke).
+### How verified
+`node tests/smoke/crane-3d.mjs` (7 checks: three.js from tests/libs, scene contents, the canvas drawn, orbit, the boom following a plan
+drag mid-drag, Undo / Redo, Report snapshot, 390 px, 0 console errors, WebGL-unavailable message), `crane-clear3d.mjs` (8);
+`node tests/engine/run.mjs crane` (48); `node tests/check-syntax.mjs`.
