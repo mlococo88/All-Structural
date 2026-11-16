@@ -450,7 +450,7 @@ drag mid-drag, Undo / Redo, Report snapshot, 390 px, 0 console errors, WebGL-una
 `node tests/engine/run.mjs crane` (48); `node tests/check-syntax.mjs`.
 
 ## 2026-11-16 — C4: ground and supports (outrigger / track loads along the swing, mats, ground bearing, stress at depth)
-PR: (link added below on merge)
+PR #1612: https://github.com/mlococo88/All-Structural/pull/1612
 ### Where
 - `apps/crane-pick/engine/ground.js` (new, `window.CranePickGround`, no DOM): `inputsOf` (weights / CGs and where each comes from; mode
   rigid / estimate / none), `supports` (floats FL FR RL RR at (x_F, ±b), (−x_R, ±b); crawler tracks), `parts` / `resultant`,
