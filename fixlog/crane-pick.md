@@ -362,3 +362,89 @@ migration, no new storage key.
 `node tests/engine/run.mjs crane` (42 tests, 0 failed: the C2 tests unchanged, so no C2 result changed with the fixture additions);
 `node tests/smoke/crane-elev.mjs` (7 checks), `crane-picks.mjs` (5), `crane-place.mjs` (9), `crane-library.mjs` (9), `crane-shell.mjs`
 (11), `crane-sheets.mjs` (8), `crane-draw.mjs` (7); `node tests/check-syntax.mjs`.
+
+## 2026-11-16 — C3-2: 3D clearances along the path, the path model setting, the elevation view
+PR #1610: https://github.com/mlococo88/All-Structural/pull/1610
+### Where
+- `apps/crane-pick/engine/clear3d.js` (new, `window.CranePickClear`, no DOM): `segSeg3`, `cpPoly`, `ptPrism`, `discPrism`, `segPrism`,
+  `spanRect`, `envelope` (the site item as prisms), `check` (every power line, obstruction and exclusion zone against the boom, load line,
+  load and counterweight along the path; results with worked steps and flags).
+- `engine/lift.js`: `pathPoints(setup, a, b, dir, model)` (new `model`: 'uniform' as C2, or 'luff'; returns `at(t)`, `tL`, `model`);
+  `evaluate` passes `s.path`, zone-boundary points from `at`, the governing text "on the luff at the pick, R = …", a path-model step,
+  `path.at / tL / model`, `govT`; `settingsOf` adds `path`, `obstClr` (2 ft); `cfgAt` (the config at a hook position without the lookup);
+  `clearances(…, { skip3d })` leaves out the plan flags the 3D check replaces (power line vs the boom / load swing, exclusion zone vs the
+  load path and the boom, obstruction vs the tail swing and the boom passing over); the footprint flags stay.
+- `engine/elev.js`: the swing-reach loop uses `cfgAt`; no strings formatted in the quiet (path) calls (speed only; same values).
+- `engine/model.js`: items `obst.gradeEl`, `power.gradeEl / sag / sway`; `lift.path`, `lift.obstClr`.
+- `ui/draw.js`: the item inputs (grade elevation; power line: sag and sway allowances; "lowest wire" hint). `ui/place.js`: `evalPick`
+  adds `ev.c3` (flags first), memoized per state (pick, setup, settings, a revision bumped by every other change); the map shows each
+  red / amber 3D result as a marker at the closest point with a dashed line to the item; settings "Path model" and "Clearance to
+  obstructions"; steps "3D clearance: <item>". `ui/picks.js`: column "Closest 3D"; Report: the 3D basis note, a table per pick and the
+  steps. `ui/elev.js` (new): the elevation view (a dock under the map, live while dragging: at the pick / the set / the capacity governing
+  point / the closest 3D clearance) and Report §Elevations (pick and set per pick). `index.html`: scripts, CSS, notes.
+- Tests: `tests/engine/crane-clear3d.test.mjs` (new), `tests/smoke/crane-clear3d.mjs` (new); `crane-lift.test.mjs` (settings defaults),
+  `crane-place.mjs` (the power-line flag is now the 3D one), `crane-picks.mjs` (the exclusion-zone text).
+### Calculations (CLAUDE.md §4: new; the C2 plan flags they replace are listed above)
+- Components: boom = segment foot pin (rotation centre + e along the slew, z_pad + h_f) → tip (plumb above the hook, z_tip), less
+  b_w / 2; load line = vertical from the load top to the tip; load = vertical cylinder, radius √(L² + W²)/2, load bottom to top (the whole
+  vertical travel while hoisting at the pick / lowering at the set); counterweight = tail-swing cylinder, z_pad + z_cb … z_pad + z_ct.
+- Positions: hoisting at the pick, every path point (every degree; luff every 1 ft; zone boundaries), lowering at the set; the closest
+  point refined by golden-section search between its neighbours (to 1e-6 of the path).
+- Power line: per span a prism, plan = span ± s_h, height z_w − s_v … z_w, z_w = z_gr + h_w (grade: entered, else the pad); height not
+  entered = a vertical plane (plan distance). D ≥ D_min (29 CFR 1926.1408 Table A, as C1-3) for every component; the true minimum and its
+  component are reported (red below D_min, info otherwise).
+- Obstruction: prism up to z_top (top elevation, else grade + height); contact red, below the project clearance (2 ft) amber; height not
+  entered: amber only when within the clearance in plan. Exclusion zone: no height limit (plan): any component over it amber.
+- Distances: segment–segment (Ericson, Real-Time Collision Detection, §5.1.9); point / segment to a prism (end points and the prism's
+  edges, 0 when the segment meets it); cylinder to prism √(max(0, d_plan − r)² + Δz²).
+**Check cases** (hand-computed, `tests/engine/crane-clear3d.test.mjs`): segments (0,0,0)-(10,0,0) to (5,5,−5)-(5,5,5) = 5,
+(0,3,4)-(0,13,4) = 5, parallel 5, crossing 0; square prism 0…10 × 0…10 × 0…20: side 5, above 5, vertical edge 7/√2 = 4.9497, through 0;
+cylinder (20,5) r 3 z 0…5 to the prism z 8…20: √58 = 7.6158. Lift (C3-1 hand check, pick R 30, tip 160.4772, foot pin (1,002, 2,000,
+108)): 115 kV line at x = 1,040, wire el. 150: load line 10.00 ft < 15 → red; boom 13.76 ft (t = 0.92372); sway 3: 7.00; wire height not
+entered: the 40 × 4 load (r 20.10) reaches the plane: 0. Obstruction 1,015…1,025 × 2,010…2,020, top 110: point load over it at travel
+120: 10.00 ft; governing the counterweight √325 − 15 = 3.03 ft; top 125: contact. Wall 15 ft west, top 103 vs counterweight bottom 104:
+1.00 ft amber. Paths: uniform 91 points; luff 10 + 91, tL = 10 / (10 + 10π) = 0.241453; an exclusion square crossed by the uniform path
+(load 0) is 2.63 ft (√512 − 20) from the luff path.
+### Decisions (pending engineer review)
+- Path model default "uniform" (C2); "luff then swing" is a project setting. A "worst of both" option is not offered.
+- Load: any orientation in plan (radius √(L² + W²)/2); counterweight: the full tail-swing circle at every slew angle (C2).
+- Obstruction clearance 2 ft (setting); obstructions extend down without limit; the footprint vs power-line check stays in plan.
+- Sag lowers the envelope from the lowest-wire height; sway widens it sideways (a box, conservative for a swinging wire).
+- Engineer instruction 2026-11-16 (speed up): the elevation view joined this PR; lighter checks (syntax, crane engine tests, the crane
+  smokes touched and one new smoke) instead of every crane smoke after each change.
+### How verified
+`node tests/engine/run.mjs crane` (48 tests, 0 failed); `node tests/smoke/crane-clear3d.mjs` (8 checks, incl. the elevation dock live
+mid-drag and Report §Elevations), `crane-elev.mjs` (7), `crane-place.mjs` (9), `crane-picks.mjs` (5); `node tests/check-syntax.mjs`.
+
+## 2026-11-16 — C3-3: the 3D view (three.js)
+PR #1611: https://github.com/mlococo88/All-Structural/pull/1611
+### Where
+- `apps/crane-pick/ui/view3d.js` (new, `window.CranePickView3D`): three.js r128 + OrbitControls (engineer-approved for C3; the pinned
+  files `apps/steel-bridge/index.html` uses: `https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js`,
+  `https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js`), loaded when the 3D view is first opened (as
+  `ui/sheets.js` loads pdf.js). The scene: plan sheets as the ground texture (else a grid), obstructions (prisms to their top; height
+  not entered: a 30 ft wireframe), exclusion zones (translucent), power lines at the lowest-wire elevation with their D_min (+ sway)
+  tubes (height not entered: a vertical plane), every setup (carrier / carbody, tracks, floats, outrigger beams, tail-swing circle), and
+  for the selected pick: the boom at the chosen point (pick / set / capacity governing / closest 3D), the counterweight at that slew, the
+  load line, hook block, rigging, load box (L along the boom), the swing envelope (the boom's swept surface; the tip path; the hook path
+  at the travel height) and the red / amber 3D clearance flags (closest points). Orbit / pan / zoom; renders on demand; the camera is
+  kept while the same pick is shown. WebGL not available or three.js not loaded: a message (the elevation view and every check work).
+  Report: §"3D view", a snapshot of the view as last shown (a picture only; not saved with the project).
+- `ui/elev.js`: the dock switches between "Elevation" and "3D" (`crane.ui.elev.mode`, per browser). `index.html`: the script, CSS,
+  notes, footer. `tests/libs/MANIFEST.json`: three@0.128.0 `used_by` adds apps/crane-pick (the files were already there).
+- Tests: `tests/smoke/crane-3d.mjs` (new).
+### Calculations
+None (CLAUDE.md §4): display of the values of engine/lift.js, elev.js, clear3d.js (checked: the boom's middle at x 16.00, el. +34.24
+= ((2 + 30) / 2, (8 + 60.4772) / 2) from the rotation centre and the pad in the C3-1 hand check).
+### Saved data (§5)
+None in the project; the view mode in `crane.ui` (per browser).
+### Decisions (pending engineer review)
+- three.js is loaded on demand (no download for users who never open the 3D view; offline: a message), not as a static tag.
+- Display-only simplifications: the carrier body is drawn to the counterweight bottom height (5 ft when not known), the counterweight as
+  a block behind the rotation centre at the shown slew (the checks use the full tail-swing cylinder), the load box with L along the boom
+  (the checks use any orientation).
+- Engineer instruction 2026-11-16 (speed up): lighter checks (syntax, crane engine tests, the touched smokes, one new smoke).
+### How verified
+`node tests/smoke/crane-3d.mjs` (7 checks: three.js from tests/libs, scene contents, the canvas drawn, orbit, the boom following a plan
+drag mid-drag, Undo / Redo, Report snapshot, 390 px, 0 console errors, WebGL-unavailable message), `crane-clear3d.mjs` (8);
+`node tests/engine/run.mjs crane` (48); `node tests/check-syntax.mjs`.
