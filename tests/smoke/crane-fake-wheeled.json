@@ -17,8 +17,10 @@
    "spread_longitudinal": { "front_outrigger_to_rotation": { "value": 12, "unit": "ft", "as_printed": "12 ft (fake)", "page": 1 }, "rotation_to_rear_outrigger": { "value": 12, "unit": "ft", "as_printed": "12 ft (fake)", "page": 1 } },
    "float_size": { "value": 2, "unit": "ft", "as_printed": "24 in (fake)", "page": 1 }
   },
-  "carrier_or_carbody": { "overall_carrier_length": { "value": 40, "unit": "ft", "as_printed": "40 ft (fake)", "page": 1 }, "carrier_width": { "value": 10, "unit": "ft", "as_printed": "10 ft (fake)", "page": 1 } },
-  "boom_foot": { "ahead_of_rotation": { "value": 2, "unit": "ft", "as_printed": "2 ft (fake)", "page": 1 }, "height_above_ground": null }
+  "carrier_or_carbody": { "overall_carrier_length": { "value": 40, "unit": "ft", "as_printed": "40 ft (fake)", "page": 1 }, "carrier_width": { "value": 10, "unit": "ft", "as_printed": "10 ft (fake)", "page": 1 },
+    "counterweight_ground_clearance": { "value": 4, "unit": "ft", "as_printed": "4 ft (fake)", "page": 1 }, "counterweight_top_height": { "value": 10, "unit": "ft", "as_printed": "10 ft (fake)", "page": 1 } },
+  "boom_foot": { "ahead_of_rotation": { "value": 2, "unit": "ft", "as_printed": "2 ft (fake)", "page": 1 }, "height_above_ground": { "value": 8, "unit": "ft", "as_printed": "8 ft (fake)", "page": 1 } },
+  "max_boom_angle_deg": { "value": 80, "page": 1, "note": "fake" }
  },
  "weights": {
   "hook_blocks": [ { "item": "FAKE 50 t block", "lb": 1000, "page": 2 }, { "item": "FAKE hook ball", "lb": 300, "page": 2 } ],
@@ -30,6 +32,8 @@
     "chart": { "boom_lengths_ft": [40, 60, 80, 100], "radii_ft": [10, 15, 20, 30, 40, 50, 60, 70],
       "capacity_lb": [[100000, 90000, null, null], [80000, 76000, 70000, null], [60000, 58000, 55000, 50000], [40000, 39000, 37000, 35000],
         [null, 28000, 27000, 26000], [null, 20000, 19000, 18000], [null, null, 14000, 13500], [null, null, 10000, 10500]] },
+    "boom_angle_deg": { "boom_lengths_ft": [40, 60, 80, 100], "radii_ft": [10, 15, 20, 30, 40, 50, 60, 70],
+      "deg": [[77, 81, null, null], [70, 76, 80, null], [62, 72, 76, 79], [45, 61, 69, 73], [null, 50, 61, 67], [null, 36, 52, 60], [null, null, 43, 54], [null, null, 31, 46]] },
     "capacity_units_as_printed": "lb",
     "deductions": { "rule": "FAKE: deduct the hook block, slings and rigging from the chart capacity.", "page": 2 },
     "notes": "FAKE TEST DATA. Capacities in lb, not exceeding 85% of tipping. Linear interpolation between radii is permitted (fake note).", "page": 1 },

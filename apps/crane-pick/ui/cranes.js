@@ -163,12 +163,22 @@
       ${zoned ? `<div class="shBlk"><div class="note"><b>Working-area zones</b> (from the chart's working-area diagram; slew angle from the carrier front). A zone chart is used only inside its sector; not set = not used (the 360° or over-side chart applies).</div>
         ${num('secF', ai.sectors && ai.sectors.front, 'Over-front half-angle', '°', 'not set')}${num('secR', ai.sectors && ai.sectors.rear, 'Over-rear half-angle', '°', 'not set')}</div>` : ''}
       <div class="shBlk"><div class="note"><b>Plan dimensions</b> (the map symbol and plan clearances): ${planText(p)}${p.assumed.length ? `<br><span class="warnT">Assumed: ${esc(p.assumed.join('; '))}.</span>` : ''} (Edit… to change)</div></div>
+      ${geomHtml(c, num)}
       <div class="shBlk"><div class="note"><b>For outrigger loads (phase 4)</b>: optional; from the manufacturer when known.</div>
         ${num('upLb', ph.upperLb, 'Upperworks weight', 'lb')}${num('upCg', ph.upperCg, 'Upperworks CG from rotation', 'ft', '+ toward the boom')}
         ${num('caLb', ph.carrierLb, d.type === 'crawler' ? 'Carbody + crawlers weight' : 'Carrier weight', 'lb')}${num('caCg', ph.carrierCg, (d.type === 'crawler' ? 'Carbody' : 'Carrier') + ' CG from rotation', 'ft', '+ toward the front')}
         ${num('flt', ph.floatFt, d.type === 'crawler' ? 'Track shoe width' : 'Float size', 'ft', d.type === 'crawler' ? (p.crawler && p.crawler.shoe != null ? String(p.crawler.shoe) + ' (file)' : '') : (p.outr && p.outr.float != null ? String(p.outr.float) + ' (file)' : ''))}</div>
       ${(d.gaps || []).length ? `<details class="crSteps"><summary>Gaps noted in the file (${d.gaps.length})</summary><ul class="note">${d.gaps.map(g => `<li>${esc(g)}</li>`).join('')}</ul></details>` : ''}
       <div class="goRow"><button type="button" data-ca="edit" data-id="${c.id}">Edit…</button>${le && le.fp !== fp ? `<button type="button" data-ca="upd" data-id="${c.id}">Use the library copy</button>` : ''}${window.CranePickPlace ? `<button type="button" data-ca="place" data-id="${c.id}">Place on the map</button>` : ''}<button type="button" class="danger" data-ca="rm" data-id="${c.id}">Remove from project</button></div></div>`;
+  }
+  /* C3-1: the elevation geometry (engine/elev.js geomOf): entered here (app_inputs.geom), else the file's, else the stated assumption */
+  function geomHtml(c, num) {
+    const EL = window.CranePickElev; if (!EL) return '';
+    const g = EL.geomOf(c.def), gi = (c.def.app_inputs || {}).geom || {}, f = k => g.from[k] === 'file' ? fmt(g[k], 2) + ' (file)' : g.from[k] === 'assumed' ? 'assumed' : '';
+    return `<div class="shBlk"><div class="note"><b>Elevation geometry</b> (heights, hook reach, 3D clearances; above the crane pad): boom-foot pin ${fmt(g.footE, 2)} ft ahead of rotation (${esc(EL.FROM[g.from.footE])}; Edit… to change), tail swing ${g.tail == null ? '?' : fmt(g.tail, 2)} ft${isFinite(g.maxAng) && g.maxAng != null ? `, maximum boom angle ${fmt(g.maxAng, 1)}° (file)` : ''}.</div>
+      ${num('gfH', gi.footH, 'Boom-foot pin height', 'ft', f('footH'))}${num('ghd', gi.head, 'Head allowance (tip pin to the highest block position)', 'ft', f('head'))}${num('gbw', gi.boomW, 'Boom section width', 'ft', f('boomW'))}
+      ${num('gcb', gi.cwBot, 'Counterweight bottom above the pad', 'ft', f('cwBot'))}${num('gct', gi.cwTop, 'Counterweight top above the pad', 'ft', g.from.cwTop === 'file' ? f('cwTop') : 'not limited')}
+      ${g.assumed.length ? `<p class="note warnT" id="crGeoAss-${c.id}">Assumed (not in the file, not entered): ${esc(g.assumed.join('; '))}. Decision (pending engineer review): the lowest boom (conservative for the hook reach and for anything under the boom; not for a power line above it).</p>` : ''}</div>`;
   }
   function planText(p) {
     const f = v => v == null ? '?' : fmt(v, 2);
@@ -227,6 +237,8 @@
     if (t.dataset.rb) { if (v !== null && !(v > 0 && v <= 100)) { t.classList.add('bad'); return; } A.update(() => { const ai = c.def.app_inputs; ai.rating = Object.assign({}, ai.rating); if (v === null) delete ai.rating[t.dataset.rb]; else ai.rating[t.dataset.rb] = v; }, 'cranes', { id: c.id }); return; }
     const k = t.dataset.k;
     if (k === 'secF' || k === 'secR') { if (v !== null && !(v >= 0 && v <= 180)) { t.classList.add('bad'); return; } A.update(() => { const ai = c.def.app_inputs; ai.sectors = Object.assign({}, ai.sectors, { [k === 'secF' ? 'front' : 'rear']: v }); }, 'cranes', { id: c.id }); return; }
+    const gk = { gfH: 'footH', ghd: 'head', gbw: 'boomW', gcb: 'cwBot', gct: 'cwTop' }[k];   // C3-1: app_inputs.geom
+    if (gk) { if (v !== null && v < 0) { t.classList.add('bad'); return; } A.update(() => { const ai = c.def.app_inputs; ai.geom = Object.assign({}, ai.geom); if (v === null) delete ai.geom[gk]; else ai.geom[gk] = v; }, 'cranes', { id: c.id }); return; }
     const map = { upLb: 'upperLb', upCg: 'upperCg', caLb: 'carrierLb', caCg: 'carrierCg', flt: 'floatFt' };
     if (map[k]) { if (v !== null && v < 0 && !/Cg$/.test(k)) { t.classList.add('bad'); return; } A.update(() => { const ai = c.def.app_inputs; ai.ph4 = Object.assign({}, ai.ph4, { [map[k]]: v }); }, 'cranes', { id: c.id }); }
   }
@@ -242,6 +254,9 @@
       const sec = (d.app_inputs || {}).sectors;
       if ((d.configs || []).some(g => g.zone !== '360')) items.push({ type: 'note', text: `Working-area sectors (entered): over front ±${sec && sec.front != null ? sec.front + '°' : ' not set'}; over rear ±${sec && sec.rear != null ? sec.rear + '°' : ' not set'} about the carrier axis. A zone chart is used only inside its sector.` });
       items.push({ type: 'note', text: 'Plan dimensions: ' + planText(p).replace(/<[^>]+>/g, '') + (p.assumed.length ? '. Assumed: ' + p.assumed.join('; ') : '') + '.' });
+      if (window.CranePickElev) { const g = window.CranePickElev.geomOf(d), F = window.CranePickElev.FROM, r = (k, nm) => [nm, (g[k] == null ? 'not limited' : fmt(g[k], 2)) + ' (' + F[g.from[k]] + ')'];
+        items.push({ type: 'kv', rows: [r('footH', 'Boom-foot pin height above the pad (ft)'), r('footE', 'Boom-foot pin ahead of rotation (ft)'), r('head', 'Head allowance (ft)'), r('boomW', 'Boom section width (ft)'), r('cwBot', 'Counterweight bottom (ft)'), r('cwTop', 'Counterweight top (ft)'), ['Maximum boom angle', g.maxAng == null ? 'not given' : fmt(g.maxAng, 1) + '° (file)']] });
+        if (g.assumed.length) items.push({ type: 'note', warn: true, text: 'Elevation geometry assumed (not in the file, not entered): ' + g.assumed.join('; ') + '. Decision (pending engineer review): the lowest boom.' }); }
       if (['upperLb', 'upperCg', 'carrierLb', 'carrierCg', 'floatFt'].some(k => ph[k] != null)) items.push({ type: 'kv', rows: [['Upperworks weight (lb)', fmt(ph.upperLb, 0)], ['Upperworks CG from rotation (ft)', fmt(ph.upperCg, 2)], ['Carrier / carbody weight (lb)', fmt(ph.carrierLb, 0)], ['Carrier / carbody CG (ft)', fmt(ph.carrierCg, 2)], ['Float / shoe size (ft)', fmt(ph.floatFt, 2)]] });
       return { id: 'c' + (n + 1), key: 'crane-' + c.id, title: K.name(d), items };
     }) }];

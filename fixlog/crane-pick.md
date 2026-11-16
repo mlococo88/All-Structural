@@ -316,3 +316,49 @@ and the Report; Report §Lifts with no unresolved or duplicate keys and no NaN, 
 390 px; 0 console errors); `crane-place.mjs` (9), `crane-library.mjs` (9), `crane-shell.mjs` (11), `crane-sheets.mjs` (8),
 `crane-draw.mjs` (7); `node tests/engine/run.mjs crane` (35); `node tests/check-syntax.mjs`. Locally (not committed): all ten real library
 files load in the app and two real cranes place and compute with 0 console errors.
+
+## 2026-11-16 — C3-1: heights (boom angle, boom tip, hook, load bottom, hook reach), crane elevation geometry, pick heights
+PR #1609: https://github.com/mlococo88/All-Structural/pull/1609
+### Where
+- `apps/crane-pick/engine/elev.js` (new, `window.CranePickElev`, no DOM): `geomOf` (the crane's elevation geometry: entered / file /
+  assumed), `chartAngle` (the config's printed boom-angle table), `angleAt`, `tipAt`, `point` (heights at the pick or the set with their
+  steps), `evaluate` (pick, set, travel height, the hook reach along the swing, flags, geometry steps), `el0`, `padEl`, `FROM`.
+- `engine/model.js`: `setup.pad` (crane pad elevation, ft), `pick.elev = { pg, ph, sg, sh, rig, blk, trav, L, W, H }` (`normElev`);
+  the crane's `app_inputs.geom = { footH, head, boomW, cwBot, cwTop }` (kept as entered by `normCrane`).
+- `ui/cranes.js` (card: "Elevation geometry" inputs with the file's values as placeholders and the assumptions listed; Report §Cranes:
+  the geometry with where each value comes from), `ui/craneedit.js` (editor section "Elevation geometry"), `ui/place.js` (`evalPick` adds
+  `ev.elev` and its flags; setup: "Crane pad elevation"; pick: "Heights" inputs; live card line `#lfHeights`; worked steps "Heights …"),
+  `ui/picks.js` (Picks tab: columns θ pick / set, tip el. pick / set, hook reach min (after Flags); the worked steps; Report §Lifts: the
+  basis note, a "Hook reach min" summary column, each pick's heights and steps; `gotoReport` jumps again at 160 / 420 ms because the
+  shared viewer's lazy parts can move the target after the first jump), `index.html` (script, notes, footer v0.3).
+- Tests: `tests/engine/crane-elev.test.mjs` (new), `tests/smoke/crane-elev.mjs` (new); the synthetic fake wheeled crane
+  (`tests/smoke/crane-fake-wheeled.json`) gains made-up heights (boom-foot pin 8 ft, counterweight 4 / 10 ft, maximum boom angle 80°)
+  and a made-up boom-angle table on `or-full-360` (geometric angle with e = 2 ft, rounded, minus 1°).
+### Formulas (CLAUDE.md §4: new calculation; no existing formula changed)
+- d_h = R − e (e: boom-foot pin ahead of the rotation centre); θ_g = acos(d_h / L); θ_c = the chart's printed (loaded) boom angle at
+  (L, R) where the config prints a table and L is one of its columns (read at R, else linear between the two printed radii; telescoping
+  modes without a mode: the lowest); θ = θ_c where available (both shown, an info flag when they differ by more than 0.5°), else θ_g.
+  d_h > L: not reachable (red); θ above the file's maximum boom angle: red.
+- z_tip = z_pad + h_f + L sin θ (tip plumb above the hook); z_lb = z_g + h_b; z_hk = z_lb + H + h_r; z_bk = z_hk + h_bk;
+  m = z_tip − H_hd − z_bk ≥ 0 (hook reach / two-block; red when negative); ℓ = z_tip − z_bk.
+- Travel: z_tr = entered, else max(z_lb,pick, z_lb,set); m_tr = min over the swing path (every degree) of z_tip(R) − H_hd − z_bk,tr.
+**Check case** (fake crane, `tests/engine/crane-elev.test.mjs` and `tests/smoke/crane-elev.mjs`): L 60, e 2 (file), h_f 8 (file),
+H_hd 3 (entered), z_pad 100. Pick R 30: d_h 28 → θ_g = acos(28/60) = 62.1819°, chart 61° → z_tip = 100 + 8 + 60 sin 61° = 160.4772;
+ground 98 + 4 → z_lb 102.00; H 6, h_r 12, h_bk 5 → z_hk 120.00, z_bk 125.00; m = 160.4772 − 3 − 125 = 32.4772 ft. Set R 20: θ_g 72.5424°,
+chart 72° → z_tip 165.0634; z_lb 120.00, z_hk 138.00, z_bk 143.00, m = 19.0634 ft. Travel 120.00 → z_bk,tr 143.00; lowest tip on the
+swing at R 30 → m_tr = 14.4772 ft. R 25: θ_c = 72 + (61 − 72)(5/10) = 66.5° (θ_g 67.4597°). Set load bottom 60 ft → z_bk 183,
+m = −20.9366 ft → red flag.
+### Saved data (§5)
+New fields only (`setup.pad`, `pick.elev`, `app_inputs.geom`); absent in older projects = not entered (the defaults below); no
+migration, no new storage key.
+### Decisions (pending engineer review)
+- Missing crane geometry is assumed and listed on the card, in the Report and as an info flag on every pick: boom-foot pin 0 ft high
+  and on the rotation centre, head allowance 0, boom width 0 (centre line), counterweight bottom 0, top not limited. These give the
+  lowest boom: conservative for the hook reach and for anything under the boom, not for a power line above it (said where used).
+- The chart's printed boom angle governs where present (as asked); the tip is placed plumb above the hook at that angle.
+- No elevation entered = the crane pad is the datum 0.00; a pick / set ground not entered = the pad.
+- Elevations are in ft whatever the zone's plan unit.
+### How verified
+`node tests/engine/run.mjs crane` (42 tests, 0 failed: the C2 tests unchanged, so no C2 result changed with the fixture additions);
+`node tests/smoke/crane-elev.mjs` (7 checks), `crane-picks.mjs` (5), `crane-place.mjs` (9), `crane-library.mjs` (9), `crane-shell.mjs`
+(11), `crane-sheets.mjs` (8), `crane-draw.mjs` (7); `node tests/check-syntax.mjs`.

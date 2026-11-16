@@ -1,7 +1,7 @@
 /* apps/crane-pick/ui/craneedit.js — the crane editor (window.CranePickCraneEdit). C2-1 (2026-11-16).
    A dialog over one crane: the project's copy (Edit… on its card) or a new one (New crane: a chart pasted from Excel, radius rows ×
    boom-length columns). Crane data (make, model, type, preliminary, source document, revision, date, pages, terms), plan dimensions
-   (overrides of the file's dims: app_inputs.plan), and the configs: id, label, support, zone, counterweight, page, notes, deductions,
+   (overrides of the file's dims: app_inputs.plan), the elevation geometry (C3-1: app_inputs.geom, engine/elev.js), and the configs: id, label, support, zone, counterweight, page, notes, deductions,
    and the chart as tab-separated text (Excel copy / paste) with a checked preview (blank cells, capacity increasing with radius).
    Saving checks the whole crane (engine/cranes.js parse): errors block it, warnings are listed. A changed chart is marked
    app_inputs.edited (shown on the card and in the Report). */
@@ -37,6 +37,8 @@
     const g = W.configs[ci], s = W.source || (W.source = {}), p0 = K.planDims(Object.assign({}, W, { app_inputs: {} })), ov = W.app_inputs.plan || {};
     const pv = (sec, k) => sec ? (ov[sec] && ov[sec][k]) : ov[k], ph = (v) => v == null ? 'not in the file' : String(+(+v).toFixed(4)) + ' (file)';
     const pnum = (id, sec, k, lbl, dv) => tin(id, pv(sec, k), lbl + ' (ft)', { ph: ph(dv), num: true });
+    const gv = W.app_inputs.geom || {}, g0 = window.CranePickElev ? window.CranePickElev.geomOf(Object.assign({}, W, { app_inputs: {} })) : { from: {} };   // C3-1
+    const gnum = (id, k, lbl, dv, none) => tin(id, gv[k], lbl + ' (ft)', { ph: dv == null ? none : String(+(+dv).toFixed(4)) + ' (file)', num: true });
     const spreads = ov.outr && ov.outr.spreads ? Object.keys(ov.outr.spreads).map(k => `${k}=${ov.outr.spreads[k]}`).join(', ') : '';
     dlg.innerHTML = `<div class="crDlgHead"><strong>${cid ? 'Edit crane' : 'New crane'}: ${esc(K.name(W))}</strong><button type="button" data-ce="close">Close</button></div>
       <div class="crDlgBody">
@@ -52,6 +54,9 @@
           : pnum('ceOF', 'outr', 'xFront', 'Front outrigger beam ahead of rotation', p0.outr && p0.outr.xFront) + pnum('ceOR', 'outr', 'xRear', 'Rear outrigger beam behind rotation', p0.outr && p0.outr.xRear) + pnum('ceFl', 'outr', 'float', 'Float size', p0.outr && p0.outr.float)
             + tin('ceSp', spreads, 'Spreads (c-c floats)', { ph: p0.outr ? Object.keys(p0.outr.spreads).map(k => `${k}=${p0.outr.spreads[k]}`).join(', ') + ' (file)' : 'full=24, mid=16' })}
         ${pnum('ceBF', 'body', 'front', 'Body ahead of rotation', p0.body && p0.body.front)}${pnum('ceBR', 'body', 'rear', 'Body behind rotation', p0.body && p0.body.rear)}${pnum('ceBW', 'body', 'width', 'Body width', p0.body && p0.body.width)}</div></div>
+      <div class="sec"><div class="secHead">Elevation geometry (heights, 3D clearances)</div><div class="secBody"><p class="note">Blank = the file's value (grey), else the stated assumption (engine/elev.js). Above the crane pad; ft. The boom-foot offset ahead of rotation and the tail-swing radius are above.</p>
+        ${gnum('ceGfH', 'footH', 'Boom-foot pin height', g0.from.footH === 'file' ? g0.footH : null, 'assumed 0')}${gnum('ceGhd', 'head', 'Head allowance (tip pin to the highest block position)', null, 'assumed 0')}
+        ${gnum('ceGbw', 'boomW', 'Boom section width', null, 'assumed 0 (centre line)')}${gnum('ceGcb', 'cwBot', 'Counterweight bottom above the pad', g0.from.cwBot === 'file' ? g0.cwBot : null, 'assumed 0')}${gnum('ceGct', 'cwTop', 'Counterweight top above the pad', g0.from.cwTop === 'file' ? g0.cwTop : null, 'not limited')}</div></div>
       <div class="sec"><div class="secHead">Load charts (${W.configs.length})</div><div class="secBody">
         <div class="goRow"><select id="ceCfg" aria-label="Config">${W.configs.map((x, i) => `<option value="${i}"${i === ci ? ' selected' : ''}>${esc(x.id)}: ${esc(x.label || '')}</option>`).join('')}</select><button type="button" data-ce="cfgNew">New config</button>${g ? '<button type="button" class="danger" data-ce="cfgDel">Delete config</button>' : ''}</div>
         ${g ? `${tin('ceId', g.id, 'Config id')}${tin('ceLabel', g.label, 'Label')}
@@ -77,6 +82,9 @@
       case 'ceMake': W.make = v.trim(); break; case 'ceModel': W.model = v.trim(); break; case 'ceType': W.type = v; draw(); break;
       case 'cePrelim': W.preliminary = t.checked; break;
       case 'ceDoc': s.doc = v; break; case 'ceRev': s.revision = v; break; case 'ceDate': s.date = v; break; case 'cePages': s.pages = v; break; case 'ceFile': s.file = v; break; case 'ceTerms': s.terms = v; break;
+      case 'ceGfH': case 'ceGhd': case 'ceGbw': case 'ceGcb': case 'ceGct': {   // C3-1: app_inputs.geom
+        const n = numOrNull(v); if (Number.isNaN(n) || (n != null && n < 0)) { t.classList.add('bad'); break; } t.classList.remove('bad');
+        const k = { ceGfH: 'footH', ceGhd: 'head', ceGbw: 'boomW', ceGcb: 'cwBot', ceGct: 'cwTop' }[t.id], G0 = W.app_inputs.geom = Object.assign({}, W.app_inputs.geom); if (n == null) delete G0[k]; else G0[k] = n; break; }
       case 'ceTail': plan(null, 'tail'); break; case 'ceBf': plan(null, 'boomFoot'); break;
       case 'ceCrL': plan('crawler', 'length'); break; case 'ceCrG': plan('crawler', 'gauge'); break; case 'ceCrS': plan('crawler', 'shoe'); break;
       case 'ceOF': plan('outr', 'xFront'); break; case 'ceOR': plan('outr', 'xRear'); break; case 'ceFl': plan('outr', 'float'); break;

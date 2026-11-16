@@ -30,9 +30,12 @@
                'file' | 'paste' | 'library', name, repo, path, at }, fp (fingerprint of the chart data when it was added) }   C2-1:
              a copy of each crane the project uses, so a saved or exported project is self-contained (it carries the chart data)
      setup = { id, name, craneId, x, y (centre of rotation), heading (deg, carrier front, clockwise from grid north), group (the chart
-               group key: engine/cranes.js groups), boom (ft), mode (telescoping mode | null) }                          C2-2
+               group key: engine/cranes.js groups), boom (ft), mode (telescoping mode | null), pad (crane pad elevation, ft | null:
+               C3-1) }                                                                                                   C2-2
      pick  = { id, name, setupId, pick: { x, y }, set: { x, y }, load, rigging, hook, ded (lb), hookLabel, dedNote, swing: 'short' |
-               'cw' | 'ccw' }                                                                                           C2-2
+               'cw' | 'ccw', elev: { pg, ph, sg, sh, rig, blk, trav, L, W, H } (C3-1: heights, ft; normElev) }         C2-2
+     crane.def.app_inputs.geom = { footH, head, boomW, cwBot, cwTop } (ft, C3-1: the crane's elevation geometry entered in this tool;
+               engine/elev.js geomOf; the boom-foot offset and the tail radius stay in app_inputs.plan)
      lift  = { caution: 75, critical: 75, limit: 100 (% of chart), interp: false } (project settings; engine/lift.js)    C2-2 */
 (function () {
   'use strict';
@@ -102,13 +105,22 @@
   function normSetup(u) {
     if (!u || typeof u !== 'object' || !isFinite(u.x) || !isFinite(u.y)) return null;
     return { id: str(u.id) || uid('u'), name: str(u.name, 'Crane setup'), craneId: str(u.craneId), x: +u.x, y: +u.y, heading: ((num(u.heading, 0) % 360) + 360) % 360,
-      group: str(u.group), boom: numOrNull(u.boom), mode: u.mode == null || u.mode === '' ? null : str(u.mode) };
+      group: str(u.group), boom: numOrNull(u.boom), mode: u.mode == null || u.mode === '' ? null : str(u.mode), pad: numOrNull(u.pad) };
   }
   function normPick(k) {
     if (!k || typeof k !== 'object' || !pt(k.pick) || !pt(k.set)) return null;
     const w = v => { const x = numOrNull(v); return x != null && x >= 0 ? x : null; };
     return { id: str(k.id) || uid('k'), name: str(k.name, 'Pick'), setupId: str(k.setupId), pick: pt(k.pick), set: pt(k.set), load: w(k.load), rigging: w(k.rigging), hook: w(k.hook), ded: w(k.ded),
-      hookLabel: str(k.hookLabel), dedNote: str(k.dedNote), swing: ['short', 'cw', 'ccw'].indexOf(k.swing) >= 0 ? k.swing : 'short' };
+      hookLabel: str(k.hookLabel), dedNote: str(k.dedNote), swing: ['short', 'cw', 'ccw'].indexOf(k.swing) >= 0 ? k.swing : 'short', elev: normElev(k.elev) };
+  }
+  /* C3-1: the pick's heights (ft): pg / sg ground elevation at the pick / set point, ph / sh load bottom above that ground, rig rigging
+     height (hook to load top), blk hook block height (hook to block top), trav load-bottom elevation during the swing, L / W / H the
+     load's length, width, height. null = not entered (engine/elev.js defaults). Elevations may be negative; the rest must be ≥ 0. */
+  function normElev(e) {
+    e = e && typeof e === 'object' ? e : {}; const o = {};
+    ['pg', 'sg', 'trav'].forEach(k => { o[k] = numOrNull(e[k]); });
+    ['ph', 'sh', 'rig', 'blk', 'L', 'W', 'H'].forEach(k => { const v = numOrNull(e[k]); o[k] = v != null && v >= 0 ? v : null; });
+    return o;
   }
   function normLift(l) { l = l || {}; return { caution: numPos(l.caution, 75), critical: numPos(l.critical, 75), limit: numPos(l.limit, 100), interp: !!l.interp }; }
   /* normalize(p): a project as this version keeps it (unknown fields dropped, defaults filled; never throws) */
@@ -144,5 +156,5 @@
   }
   /* text of the inputs (undo / "unsaved changes"): the project without the view and the saved time */
   function inputsText(P) { const o = Object.assign({}, P); delete o.view; delete o.savedAt; return JSON.stringify(o); }
-  window.CranePickModel = { KEYS, FORMAT, TYPES, UTIL_KINDS, BASIS, newProject, normalize, normItem, normSheet, normCrane, normSetup, normPick, normLift, load, save, toFile, fromFile, inputsText, uid };
+  window.CranePickModel = { KEYS, FORMAT, TYPES, UTIL_KINDS, BASIS, newProject, normalize, normItem, normSheet, normCrane, normSetup, normPick, normElev, normLift, load, save, toFile, fromFile, inputsText, uid };
 })();
