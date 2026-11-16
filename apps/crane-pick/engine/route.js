@@ -5,7 +5,9 @@
 
    route = { id, name, pts: [{ x, y }] (drawn by the user: the path of the TRACTOR'S FRONT (STEER) AXLE CENTRE, from the site entrance
              or last public road to the truck stop for the pick), rad: [ft | null per vertex] (the curve radius at each interior vertex;
-             null = rDef), rDef (ft), veh, load, tyre, axIn, pickId (the pick this delivery is for: staging), stageTol (ft), margin (ft) }
+             null = rDef), rDef (ft), veh, load, tyre, axIn, pickId (the C2 pick this delivery is for: staging), tandemId (the C5 girder lift whose
+             girder is the load: staging at its pick pose), endA ('front' | 'rear': where the girder's end A is on the truck), stageTol (ft),
+             margin (ft), at (ft along the route where the vehicle is drawn; null = the stop) }
    veh = { type: 'semi' | 'stretch' | 'dolly' | 'jeep', L1 (tractor wheelbase: steer axle to drive-group centre), e (kingpin / fifth
            wheel ahead (+) of the drive-group centre), fo (tractor front overhang ahead of the steer axle), ro (tractor rear overhang
            behind the drive-group centre), Wt (tractor width), L2 (body wheelbase: kingpin (or jeep bolster) to the trailer's rear
@@ -16,7 +18,7 @@
            xt (its CG behind the steer axle), Wtl (trailer tare) xtl (its CG behind the kingpin), Wj (jeep tare, at its axle), Wd (rear
            dolly tare, at its pivot); axles: nS, nD, nJ, nR (axles per group), tS, tD, tJ, tR (tyres per axle) }
    load = { L (length), W (weight, lb), B (width), r (rear overhang behind the rear group / dolly pivot), cg (CG from the load's front
-           end; null = L / 2), h (load height above the deck) }      (C5's girder object will be linked here later)
+           end; null = L / 2), h (load height above the deck) }      linked to a C5 girder lift: L, W, B, h, cg from its girder object
    tyre = { A (contact area per tyre, in²) }    axIn = { on, S, D, J, R } (entered axle-group loads, lb)
    mark (route marks, P.routeMarks) = { id, type: 'overhead' | 'haul' | 'bridge', name, pts, h (overhead: clearance height above the
            road, ft), w (overhead point: radius; haul road / bridge: width, ft), qa (haul: allowable bearing, psf), mat (haul: as C4's mat
@@ -61,8 +63,11 @@
       overlapping spread under closely spaced tyres is not combined).
    8. Posted bridges (marks 'bridge'): on the route when the steer-axle path comes within w/2 of the bridge line; gross weight vs the
       gross posting and the vehicle-type posting; the heaviest single axle vs the axle posting (tons × 2,000 lb).
-   9. Staging: the vehicle's pose at the end of the route; the load CG there (x_L behind the hitch) against the linked pick's pick
-      point (offset ≤ stageTol, warn) and the pick crane's chart at that radius (engine/lift.js evalAt with the pick's W). */
+   9. Staging: the vehicle's pose at the end of the route. A C5 girder lift: the girder's mid-length point c = H + (f − L/2) û and its
+      end-A→B heading at the stop against the lift's pick pose (offset ≤ stageTol, heading within 2°, warn; Decision pending engineer
+      review), and both cranes at the pick pose (the C5 evaluation's first step: % of chart). A C2 pick: the load CG (x_L behind the
+      hitch) against the pick point (offset ≤ stageTol) and the pick crane's chart at that radius (engine/lift.js evalAt with the pick's W).
+      Turnaround: information only. */
 (function () {
   'use strict';
   const G = () => window.CranePickGeo, O = () => window.CranePickOSHA, LF = () => window.CranePickLift, GR = () => window.CranePickGround;
@@ -85,7 +90,16 @@
   /* vehOf / loadOf: the inputs with the defaults filled (null / missing = default; the "from" lists what was assumed) */
   function vehOf(r) { const v = Object.assign({}, VDEF), src = (r && r.veh) || {}, from = {}; Object.keys(VDEF).forEach(k => { if (k === 'type') { v.type = TYPES[src.type] ? src.type : VDEF.type; return; } if (isNum(src[k])) v[k] = src[k]; else from[k] = 'default'; });
     if (!steered(v)) { v.k = 0; } v.k = Math.max(0, Math.min(1, v.k)); v.from = from; return v; }
-  function loadOf(r) { const l = Object.assign({}, LDEF), src = (r && r.load) || {}; Object.keys(LDEF).forEach(k => { if (isNum(src[k])) l[k] = src[k]; }); if (!isNum(l.cg)) l.cg = l.L / 2; return l; }
+  /* loadOf(r, P): the load; linked to a C5 girder lift (r.tandemId) its length, weight, width, depth and CG come from that girder object
+     (engine/tandem.js object(): a pair of girders with cross-frames as one load); r.endA: 'front' (end A toward the tractor, default) or
+     'rear'. The rear overhang stays a route input (how the load sits on the trailer). */
+  function tandemOf(r, P) { return r && r.tandemId && P && (P.tandems || []).find(t => t.id === r.tandemId) || null; }
+  function loadOf(r, P) {
+    const l = Object.assign({}, LDEF), src = (r && r.load) || {}; Object.keys(LDEF).forEach(k => { if (isNum(src[k])) l[k] = src[k]; });
+    const t = tandemOf(r, P), T = window.CranePickTandem;
+    if (t && T) { const ob = T.object(t); l.L = ob.L; l.W = ob.Wg; l.B = Math.max(ob.tmax - ob.tmin, 0.5); l.h = ob.H > 0 ? ob.H : l.h; l.endA = r.endA === 'rear' ? 'rear' : 'front';
+      l.cg = l.endA === 'front' ? ob.xcg : ob.L - ob.xcg; l.tcg = ob.tcg; l.from = `girder lift "${t.name}"`; l.tandem = t; l.ob = ob; return l; }
+    if (!isNum(l.cg)) l.cg = l.L / 2; l.from = 'entered'; return l; }
   /* ---------- 1. the path ---------- */
   const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y }), add = (a, b) => ({ x: a.x + b.x, y: a.y + b.y }), mul = (a, k) => ({ x: a.x * k, y: a.y * k });
   const len = a => Math.hypot(a.x, a.y), unit = a => { const l = len(a) || 1; return { x: a.x / l, y: a.y / l }; }, left = a => ({ x: -a.y, y: a.x });
@@ -158,7 +172,7 @@
   }
   /* simulate(route) -> { pa, v, l, samples: [{ s, p (pose), ot (off-tracking), parts }], end (pose), ok } */
   function simulate(r, o) {
-    const STP = o && o.step > 0 ? o.step : STEP, v = vehOf(r), l = loadOf(r), pa = path(r);
+    const STP = o && o.step > 0 ? o.step : STEP, v = vehOf(r), l = loadOf(r, o && o.P), pa = path(r);
     if (!pa.ok || !(v.L1 > 0) || !(v.L2 > 0) || (hasJeep(v) && !(v.Lj > 0))) return { pa, v, l, samples: [], ok: false, why: !pa.ok ? 'draw at least two points' : 'enter the wheelbases' };
     const a0 = at(pa, 0).th; let th1 = a0, thj = a0, th2 = a0, s = 0;
     const samples = [], push = () => { const q = at(pa, s), p = pose(v, { x: q.x, y: q.y }, th1, thj, th2); samples.push({ s, p, parts: outlines(v, l, p) }); };
@@ -309,8 +323,8 @@
     return { Htop, margin: mg, top, list: out };
   }
   /* ---------- 6. axle loads ---------- */
-  function axles(r, idp) {
-    const v = vehOf(r), l = loadOf(r), steps = [], pre = idp || 'ax', ai = (r && r.axIn) || {};
+  function axles(r, idp, P) {
+    const v = vehOf(r), l = loadOf(r, P), steps = [], pre = idp || 'ax', ai = (r && r.axIn) || {};
     const f = l.L - v.L2 - l.r, xL = l.cg - f;
     steps.push(st(pre, { id: 'f', label: 'Load front ahead of the hitch (kingpin / jeep bolster; − = behind it)', sym: 'f', eq: 'L_{load} \\minus L_{2} \\minus r', sub: `${tx(l.L, 2)} \\minus ${tx(v.L2, 2)} \\minus ${tx(l.r, 2)}`, value: f, unit: 'ft', d: 2 }),
       st(pre, { id: 'xL', label: 'Load CG behind the hitch', sym: 'x_{L}', eq: 'c_{L} \\minus f', sub: `${tx(l.cg, 2)} \\minus ${tp(f, 2)}`, value: xL, unit: 'ft', d: 2 }));
@@ -385,7 +399,11 @@
   }
   /* ---------- 9. staging ---------- */
   function loadCg(sim) { const p = sim.end, u2 = U(p.th2); return sub(p.H, mul(u2, sim.l.cg - (sim.l.L - sim.v.L2 - sim.l.r))); }
-  function staging(sim, r, P, s, idp) {
+  /* the load's mid-length point and its end-A→B azimuth at the stop (the C5 pose) */
+  function loadPose(sim) { const p = sim.end, u2 = U(p.th2), f = sim.l.L - sim.v.L2 - sim.l.r, mid = add(p.H, mul(u2, f - sim.l.L / 2)), azF = (90 - p.th2 / DEG + 360) % 360;
+    return { x: mid.x, y: mid.y, h: sim.l.endA === 'rear' ? azF : (azF + 180) % 360 }; }
+  const n180 = a => { a = ((a % 360) + 360) % 360; return a > 180 ? a - 360 : a; };
+  function staging(sim, r, P, s, idp, tev) {
     const cg = loadCg(sim), out = { cg, steps: [], flags: [] }, pre = idp;
     out.az = (90 - sim.end.th2 / DEG + 360) % 360;   // the load axis at the stop, azimuth of front
     const k = r && r.pickId && P && (P.picks || []).find(q => q.id === r.pickId);
@@ -395,7 +413,20 @@
     if (RT2 > 0) { const Ro = Math.hypot(v.L1 + v.fo, Math.sqrt(RT2) + v.Wt / 2); out.turnR = Ro;
       out.steps.push(st(pre, { id: 'Ro', label: 'Turnaround (information): the tractor\'s outer front corner on its minimum turn', sym: 'R_{o}', eq: '\\sqrt{(L_{1} + f_{o})^{2} + (\\sqrt{R_{min}^{2} \\minus L_{1}^{2}} + \\frac{W_{t}}{2})^{2}}', sub: `\\sqrt{(${tx(v.L1, 2)} + ${tx(v.fo, 2)})^{2} + (\\sqrt{${tx(v.Rmin, 2)}^{2} \\minus ${tx(v.L1, 2)}^{2}} + \\frac{${tx(v.Wt, 2)}}{2})^{2}}`, value: Ro, unit: 'ft', d: 2,
         note: 'An empty tractor turning around needs a circle of about 2 R_o, or it backs out: plan the exit.' })); }
-    if (!k) { out.flags.push({ level: 'info', kind: 'stage', text: 'No pick is linked to this route: choose the pick the delivery is for (staging check).' }); return out; }
+    const t = sim.l.tandem;
+    if (t) {   // C5 girder lift: its pick pose is where the girder sits on the truck
+      const lp = loadPose(sim), pp = t.pick, off = G().dist(lp, pp), dh = n180(lp.h - pp.h); out.tandem = t; out.lp = lp; out.off = off; out.dh = dh;
+      out.steps.push(st(pre, { id: 'mid', label: `Girder mid-length point on the truck at the stop (front ${fmt(sim.l.L - sim.v.L2 - sim.l.r, 2)} ft ahead of the hitch, less L/2)`, sym: 'c', eq: 'H + (f \minus L/2)\,\hat{u}', sub: '', value: `E ${fmt(lp.x, 2)}, N ${fmt(lp.y, 2)}`, d: 0 }),
+        st(pre, { id: 'off', label: `Girder on the truck vs the pick pose of "${t.name}" (C5)`, sym: '\Delta', eq: '\sqrt{\Delta x^{2} + \Delta y^{2}}', sub: `\sqrt{${tx(lp.x - pp.x, 2)}^{2} + ${tx(lp.y - pp.y, 2)}^{2}}`, value: off, unit: 'ft', d: 2, note: off <= tol ? `within ${fmt(tol, 1)} ft` : `more than ${fmt(tol, 1)} ft` }),
+        st(pre, { id: 'dh', label: `Heading of the girder (end A → B; end A ${sim.l.endA === 'rear' ? 'to the rear' : 'toward the tractor'}) vs the pick pose`, sym: '\Delta h', eq: 'h_{truck} \minus h_{pick}', sub: `${tx(lp.h, 2)} \minus ${tx(pp.h, 2)}`, value: dh, unit: 'deg', d: 2, note: Math.abs(dh) <= 2 ? 'within 2°' : 'more than 2°' }));
+      if (off > tol || Math.abs(dh) > 2) out.flags.push({ level: 'warn', kind: 'stage', text: `Staging: the girder on the truck is ${fmt(off, 1)} ft and ${fmt(Math.abs(dh), 1)}° from the pick pose of "${t.name}" (tolerance ${fmt(tol, 1)} ft, 2°): move the route's end or the pick pose.` });
+      if (tev && tev.steps && tev.steps[0]) { out.tsteps = tev.steps[0].cr.map((c, i) => c ? { i, R: c.R, pct: c.pct, cls: c.cls } : null).filter(Boolean);
+        out.tsteps.forEach(c => { if (c.cls === 'np' || c.cls === 'over') out.flags.push({ level: 'stop', kind: 'stage', text: `Staging: crane ${c.i + 1} of "${t.name}" at the pick pose: ${c.cls === 'np' ? 'not permitted' : fmt(c.pct, 1) + ' % of chart, over the limit'} (R = ${fmt(c.R, 1)} ft; Girder lifts tab).` }); }); }
+      else if (tev) out.flags.push({ level: 'warn', kind: 'stage', text: `Staging: "${t.name}" is not computed yet (cranes / girder inputs): its pick-pose reach is not checked.` });
+      if (isNum(pp.z)) out.flags.push({ level: 'info', kind: 'stage', text: `Staging: the pick pose has the girder bottom at el. ${fmt(pp.z, 2)} ft; the deck is ${fmt(sim.v.hDeck, 2)} ft above the road at the stop: check the road elevation there.` });
+      return out;
+    }
+    if (!k) { out.flags.push({ level: 'info', kind: 'stage', text: 'No pick or girder lift is linked to this route: choose the delivery (staging check).' }); return out; }
     out.pick = k; const off = G().dist(cg, k.pick); out.off = off;
     out.steps.push(st(pre, { id: 'off', label: `Load CG at the truck stop vs the pick point of "${k.name}"`, sym: '\\Delta', eq: '\\sqrt{\\Delta x^{2} + \\Delta y^{2}}', sub: `\\sqrt{${tx(cg.x - k.pick.x, 2)}^{2} + ${tx(cg.y - k.pick.y, 2)}^{2}}`, value: off, unit: 'ft', d: 2, note: off <= tol ? `within ${fmt(tol, 1)} ft` : `more than ${fmt(tol, 1)} ft: move the pick point to the load, or the route's end` }));
     if (off > tol) out.flags.push({ level: 'warn', kind: 'stage', text: `Staging: the load CG stops ${fmt(off, 1)} ft from the pick point of "${k.name}" (tolerance ${fmt(tol, 1)} ft).` });
@@ -411,17 +442,17 @@
   }
   /* ---------- the whole route ---------- */
   function evaluate(r, P, idp, o) {
-    idp = idp || 'rt'; const sim = simulate(r, o);
+    idp = idp || 'rt'; const sim = simulate(r, Object.assign({ P }, o || {}));
     const res = { sim, ok: sim.ok, flags: [] };
     if (!sim.ok) { res.flags.push({ level: 'warn', kind: 'route', text: `Route "${r.name || 'route'}": ${sim.why}.` }); return res; }
     const marks = (P && P.routeMarks) || [];
     res.turns = turnsOf(sim, idp);
     res.conf = conflicts(sim, P);
-    res.ax = axles(r, idp + '.ax');
+    res.ax = axles(r, idp + '.ax', P);
     res.oh = overhead(sim, P, marks, r, idp + '.oh');
     res.haul = haul(sim, res.ax, marks, r, idp + '.hl');
     res.br = bridges(sim, res.ax, marks, idp + '.br');
-    res.stage = staging(sim, r, P, LF() ? LF().settingsOf(P) : null, idp + '.sg');
+    res.stage = staging(sim, r, P, LF() ? LF().settingsOf(P) : null, idp + '.sg', o && o.tev);
     res.otMax = sim.samples.reduce((m, q) => Math.max(m, q.ot), 0);
     res.flags = [].concat(...res.turns.map(t => t.flags), res.conf, res.ax.flags, res.oh.list.map(o => o.flag).filter(Boolean), res.haul.map(h => h.flag).filter(Boolean), res.br.map(b => b.flag).filter(Boolean), res.stage.flags);
     const rank = { stop: 0, warn: 1, info: 2 }; res.flags.sort((a, b) => rank[a.level] - rank[b.level]);
@@ -434,5 +465,5 @@
     let last = -Infinity; sim.samples.forEach((q, i) => { if (q.s - last >= every - 1e-9 || i === sim.samples.length - 1) { last = q.s; q.parts.forEach(pp => rings.push(pp.poly)); } q.parts.forEach(pp => pp.poly.forEach((c, j) => { const key = pp.part + j; (tr[key] || (tr[key] = [])).push(c); })); });
     return { rings, traces: tr };
   }
-  window.CranePickRoute = { TYPES, VDEF, LDEF, RDEF, STEP, REF, LB_PER_TON, vehOf, loadOf, path, at, simulate, steady, turnsOf, conflicts, overhead, axles, haul, bridges, staging, loadCg, evaluate, swept, outlines, pose, steered, hasJeep };
+  window.CranePickRoute = { loadPose, tandemOf, TYPES, VDEF, LDEF, RDEF, STEP, REF, LB_PER_TON, vehOf, loadOf, path, at, simulate, steady, turnsOf, conflicts, overhead, axles, haul, bridges, staging, loadCg, evaluate, swept, outlines, pose, steered, hasJeep };
 })();

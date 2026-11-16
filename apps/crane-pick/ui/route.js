@@ -22,9 +22,10 @@
   /* ---------- evaluation (memoized for an unchanged state) ---------- */
   const memo = new Map();
   function evalRoute(r, live) {
-    const P = A.P, key = JSON.stringify([r, P.items, P.routeMarks, P.picks, P.setups, (P.cranes || []).map(c => c.id + c.fp), P.lift, !!live]);
+    const P = A.P, t = RT.tandemOf(r, P), key = JSON.stringify([r, P.items, P.routeMarks, P.picks, P.setups, t, (P.cranes || []).map(c => c.id + c.fp), P.lift, !!live]);
     if (memo.has(key)) return memo.get(key);
-    const ev = RT.evaluate(r, P, 'rt' + ((P.routes || []).indexOf(r) + 1), live ? { step: 1 } : null);
+    const tev = t && window.CranePickTandemUI ? window.CranePickTandemUI.evalT(t) : null;   // C5: the girder lift (its pick pose: both cranes)
+    const ev = RT.evaluate(r, P, 'rt' + ((P.routes || []).indexOf(r) + 1), Object.assign(live ? { step: 1 } : {}, { tev }));
     if (memo.size > 24) memo.clear(); memo.set(key, ev); return ev;
   }
   /* ---------- map layers ---------- */
@@ -161,11 +162,10 @@
   function liveTab(r, live) { if (!inEl || r.id !== selR) return; const b = inEl.querySelector('#rtLive'); if (b) b.outerHTML = liveBox(r, evalRoute(r, live)); const z = A.P.site.zone;
     inEl.querySelectorAll('[data-rvx]').forEach(i => { const p = r.pts[+i.dataset.rvx]; if (p && document.activeElement !== i) i.value = G.ftToNative(z, i.dataset.c === 'E' ? p.x : p.y).toFixed(2); }); }
   function routeHtml(r) {
-    const ev = evalRoute(r), v = RT.vehOf(r), l = RT.loadOf(r), z = G.zone(A.P.site.zone), V = r.veh, Ld = r.load;
+    const ev = evalRoute(r), v = RT.vehOf(r), l = RT.loadOf(r, A.P), z = G.zone(A.P.site.zone), V = r.veh, Ld = r.load;
     const fld = (pre, src, defs, eff, list) => list.filter(f => showF(v, f)).map(f => numIn(pre + f[0], src[f[0]], f[1], f[2], f[4] != null ? f[4] : fmt(defs[f[0]], f[2] === 'lb' || f[2] === 'no.' ? 0 : 2))).join('');
     return `${liveBox(r, ev)}
       <div class="fRow"><label for="rtName">Name</label><input type="text" id="rtName" value="${esc(r.name)}"></div>
-      <div class="fRow"><label for="rtPick">Delivers to pick</label><select id="rtPick"><option value="">— none —</option>${A.P.picks.map(k => `<option value="${k.id}" ${k.id === r.pickId ? 'selected' : ''}>${esc(k.name)}</option>`).join('')}</select></div>
       ${numIn('rtRdef', r.rDef, 'Curve radius at the vertices (default)', 'ft')}${numIn('rtMargin', r.margin, 'Overhead margin required', 'ft', '1.00')}${numIn('rtTol', r.stageTol, 'Staging tolerance (load CG to pick point)', 'ft', '2.00')}
       <div class="fRow"><label for="rtAt">Show the vehicle at</label><input type="range" id="rtAt" min="0" max="${ev.sim.ok ? Math.ceil(ev.sim.pa.L) : 0}" step="1" value="${isNum(r.at) ? r.at : ev.sim.ok ? Math.ceil(ev.sim.pa.L) : 0}"><span class="unit" id="rtAtV">${isNum(r.at) ? fmt(r.at, 0) + ' ft' : 'the stop'}</span></div>
       <details class="crVxList"><summary>Points and curve radii (${esc(z.short)})</summary><div class="tscroll"><table class="tbl"><thead><tr><th>#</th><th>Easting</th><th>Northing</th><th>Radius (ft)</th></tr></thead><tbody>
@@ -179,9 +179,13 @@
         ${r.axIn.on ? numIn('ra_S', r.axIn.S, 'Steer axle', 'lb') + numIn('ra_D', r.axIn.D, 'Drive group', 'lb') + (RT.hasJeep(v) ? numIn('ra_J', r.axIn.J, 'Jeep group', 'lb') : '') + numIn('ra_R', r.axIn.R, 'Rear group / dolly', 'lb') : ''}
         ${numIn('rtTyre', r.tyre.A, 'Tyre contact area (each)', 'in²', '100')}</details>
       <h4 class="stH">Load on the trailer</h4>
-      ${fld('rl_', Ld, RT.LDEF, l, LFIELDS)}
-      <p class="note">The load's front is then ${fmt(l.L - v.L2 - l.r, 2)} ft ${l.L - v.L2 - l.r >= 0 ? 'ahead of' : 'behind'} the ${RT.hasJeep(v) ? 'jeep bolster' : 'kingpin'}. A C5 girder object will be linkable here when C5 is on main; until then enter the girder's length, weight and overhangs.</p>
-      <div class="goRow"><button type="button" data-ra="zoom">Show on the map</button>${ev.stage && ev.stage.pick ? '<button type="button" data-ra="topick">Move the pick point to the load</button>' : ''}<button type="button" class="danger" data-ra="del">Delete route</button></div>`;
+      <div class="fRow"><label for="rtTandem">Girder lift (C5)</label><select id="rtTandem"><option value="">— none: enter the load —</option>${(A.P.tandems || []).map(t => `<option value="${t.id}" ${t.id === r.tandemId ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div>
+      ${l.tandem ? `<div class="fRow"><label for="rtEndA">Girder end A on the truck</label><select id="rtEndA"><option value="front" ${l.endA !== 'rear' ? 'selected' : ''}>toward the tractor</option><option value="rear" ${l.endA === 'rear' ? 'selected' : ''}>to the rear</option></select></div>
+        <div class="crOut">From the girder object of "${esc(l.tandem.name)}"${l.ob.pair ? ' (paired girders with cross-frames)' : ''}: L = ${fmt(l.L, 2)} ft, W = ${fmt(l.W, 0)} lb, width ${fmt(l.B, 2)} ft, depth ${fmt(l.h, 2)} ft, CG ${fmt(l.cg, 2)} ft from the front end. <a href="#" class="wk" data-ra="tandem">Girder lifts tab</a></div>
+        ${fld('rl_', Ld, RT.LDEF, l, LFIELDS.filter(f => f[0] === 'r'))}` : fld('rl_', Ld, RT.LDEF, l, LFIELDS)}
+      <p class="note">The load's front is then ${fmt(l.L - v.L2 - l.r, 2)} ft ${l.L - v.L2 - l.r >= 0 ? 'ahead of' : 'behind'} the ${RT.hasJeep(v) ? 'jeep bolster' : 'kingpin'}.</p>
+      ${l.tandem ? '' : `<div class="fRow"><label for="rtPick">Delivers to pick (C2)</label><select id="rtPick"><option value="">— none —</option>${A.P.picks.map(k => `<option value="${k.id}" ${k.id === r.pickId ? 'selected' : ''}>${esc(k.name)}</option>`).join('')}</select></div>`}
+      <div class="goRow"><button type="button" data-ra="zoom">Show on the map</button>${ev.stage && ev.stage.tandem ? '<button type="button" data-ra="totandem">Move the girder lift\'s pick pose to the girder on the truck</button>' : ev.stage && ev.stage.pick ? '<button type="button" data-ra="topick">Move the pick point to the load</button>' : ''}<button type="button" class="danger" data-ra="del">Delete route</button></div>`;
   }
   function markHtml(mk) {
     const m = mk.mat || {};
@@ -219,6 +223,8 @@
     if (a.dataset.ra === 'zoom') zoom();
     if (a.dataset.ra === 'del' && r) delRoute(r.id);
     if (a.dataset.ra === 'mdel' && selM) delMark(selM);
+    if (a.dataset.ra === 'tandem') { A.showITab('tandem'); return; }
+    if (a.dataset.ra === 'totandem' && r) { const ev = evalRoute(r), t = ev.stage && ev.stage.tandem; if (t) A.update(() => { t.pick.x = ev.stage.lp.x; t.pick.y = ev.stage.lp.y; t.pick.h = ev.stage.lp.h; }, 'tandem', { id: t.id }); if (window.CranePickTandemUI) window.CranePickTandemUI.renderAll(); renderAll(); drawTab(); return; }
     if (a.dataset.ra === 'topick' && r) { const ev = evalRoute(r), k = ev.stage && ev.stage.pick; if (k) A.update(() => { k.pick = { x: ev.stage.cg.x, y: ev.stage.cg.y }; }, 'lifts', { id: k.id }); renderAll(); drawTab(); }
   }
   function zoom() { const r = routeOf(selR); if (r) { A.showOTab('plan'); MP().fit(r.pts); } }
@@ -230,6 +236,8 @@
       if (t.id === 'rtName') return commit(() => { r.name = t.value; });
       if (t.id === 'rtPick') return commit(() => { r.pickId = t.value; });
       if (t.id === 'rtType') return commit(() => { r.veh.type = t.value; });
+      if (t.id === 'rtTandem') return commit(() => { r.tandemId = t.value; });
+      if (t.id === 'rtEndA') return commit(() => { r.endA = t.value; });
       if (t.id === 'rtAxOn') return commit(() => { r.axIn.on = t.checked; });
       if (t.id === 'rtAt') { const v = +t.value; return commit(() => { r.at = v; }); }
       const v = num(); if (v === undefined) return;
@@ -262,7 +270,7 @@
   const flagLi = f => `<li class="lf-${f.level}">${esc(f.text)}</li>`;
   const det = (id, title, steps, open) => steps && steps.length ? `<details class="crSteps" id="${id}"${open ? ' open' : ''}><summary>${esc(title)}: worked</summary>${S().steps(steps)}</details>` : '';
   function routeOut(r, i) {
-    const ev = evalRoute(r), v = RT.vehOf(r), l = RT.loadOf(r), id = r.id;
+    const ev = evalRoute(r), v = RT.vehOf(r), l = RT.loadOf(r, A.P), id = r.id;
     if (!ev.sim.ok) return `<div class="sec" id="rt-${id}"><div class="secHead">${esc(r.name)}</div><div class="secBody"><p class="note">${esc(ev.flags[0].text)}</p></div></div>`;
     const tRows = ev.turns.map(t => `<tr><td><a href="#rt-${id}-t${t.n}">T${t.n}</a></td><td class="n">${t.i + 1}</td><td class="n">${fmt(t.D * 180 / Math.PI, 1)}</td><td class="n">${fmt(t.r, 1)}${t.reduced ? ' *' : ''}</td><td class="n">${fmt(t.ot, 2)}</td><td class="n">${t.ss ? fmt(t.ss.OT, 2) : '—'}</td><td class="n">${fmt(t.Rin, 2)}</td><td class="n">${fmt(t.Rout, 2)}</td><td class="n">${fmt(t.Rout - t.Rin, 2)}</td><td>${t.flags.map(f => `<span class="lfDot lf-${f.level}">●</span>`).join('') || 'OK'}</td></tr>`).join('');
     const oh = ev.oh.list.map(o => `<tr><td><a href="#rt-${id}-oh-${o.id}">${esc(o.name)}</a></td><td>${o.kind === 'power' ? 'power line' : 'overhead'}</td><td class="n">${o.kind === 'power' ? fmt(o.hw, 2) : fmt(o.h, 2)}</td><td class="n">${fmt(o.Htop, 2)}</td><td class="n">${o.kind === 'power' ? fmt(o.d, 2) + ' (D_T ' + fmt(o.DT, 0) + ')' : fmt(o.c, 2)}</td><td>${o.flag ? `<span class="lfDot lf-${o.flag.level}">●</span>${esc(o.flag.level)}` : 'OK'}</td></tr>`).join('');
@@ -280,7 +288,7 @@
       <h4 class="stH">Axle loads (${ev.ax.mode === 'entered' ? 'entered' : 'statics'})</h4><div class="tscroll"><table class="tbl lfTbl"><thead><tr><th>Group</th><th>Load (lb)</th><th>Axles</th><th>Per axle (lb)</th><th>Per tyre (lb)</th></tr></thead><tbody>${ax}<tr><td><b>Gross</b></td><td class="n"><b>${fmt(ev.ax.gross, 0)}</b></td><td></td><td></td><td></td></tr></tbody></table></div>${det(`rt-${id}-ax`, 'Axle loads', ev.ax.steps)}
       <h4 class="stH">Haul road bearing</h4>${ev.haul.filter(h => !h.flagOnly).length ? ev.haul.filter(h => !h.flagOnly).map(h => `<p class="note"><b>${esc(h.name)}</b>: heaviest tyre ${fmt(h.P, 0)} lb, q<sub>g</sub> = ${fmt(h.qg, 0)} psf${h.qa ? ` vs q<sub>a</sub> = ${fmt(h.qa, 0)} psf (${fmt(h.ratio * 100, 0)} %)` : ' (allowable not entered)'}</p>${det(`rt-${id}-h-${h.id}`, h.name, h.steps)}`).join('') : '<p class="note">The route does not use a drawn haul road / mat run.</p>'}
       <h4 class="stH">Posted bridges</h4>${ev.br.length ? ev.br.map(b => `<p class="note"><b>${esc(b.name)}</b>: ${b.checks.length ? b.checks.map(c => `${esc(c.what)} ${fmt(c.val, 2)} / ${fmt(c.limit, 2)} t`).join('; ') : 'no posting entered'} — ${b.ok ? 'OK' : '<b class="warnT">see flags</b>'}</p>${det(`rt-${id}-b-${b.id}`, b.name, b.steps)}`).join('') : '<p class="note">No posted bridge on the route.</p>'}
-      <h4 class="stH">Staging (the truck stop)</h4><p class="note">Load CG at the stop: E ${fmt(G.ftToNative(A.P.site.zone, st.cg.x), 2)}, N ${fmt(G.ftToNative(A.P.site.zone, st.cg.y), 2)}; load axis azimuth ${fmt(st.az, 1)}°.${st.pick ? ` Pick "${esc(st.pick.name)}": offset ${fmt(st.off, 2)} ft${st.ev ? `, R = ${fmt(st.ev.R, 2)} ft, ${fmt(st.ev.pct, 1)} % of chart (${esc(LF.CLS[st.ev.cls])})` : ''}.` : ' No pick linked.'} Turnaround: information only${isNum(st.turnR) ? ` (outer front corner radius ${fmt(st.turnR, 1)} ft at R_min)` : ''}.</p>${det(`rt-${id}-sg`, 'Staging', st.steps)}
+      <h4 class="stH">Staging (the truck stop)</h4><p class="note">Load CG at the stop: E ${fmt(G.ftToNative(A.P.site.zone, st.cg.x), 2)}, N ${fmt(G.ftToNative(A.P.site.zone, st.cg.y), 2)}; load axis azimuth ${fmt(st.az, 1)}°.${st.tandem ? ` Girder lift "${esc(st.tandem.name)}": girder ${fmt(st.off, 2)} ft and ${fmt(Math.abs(st.dh), 1)}° from its pick pose${st.tsteps ? '; at the pick pose ' + st.tsteps.map(c => `crane ${c.i + 1} R = ${fmt(c.R, 1)} ft, ${fmt(c.pct, 1)} % of chart`).join(', ') + ' (worked: Girder lifts tab)' : ''}.` : st.pick ? ` Pick "${esc(st.pick.name)}": offset ${fmt(st.off, 2)} ft${st.ev ? `, R = ${fmt(st.ev.R, 2)} ft, ${fmt(st.ev.pct, 1)} % of chart (${esc(LF.CLS[st.ev.cls])})` : ''}.` : ' No pick or girder lift linked.'} Turnaround: information only${isNum(st.turnR) ? ` (outer front corner radius ${fmt(st.turnR, 1)} ft at R_min)` : ''}.</p>${det(`rt-${id}-sg`, 'Staging', st.steps)}
     </div></div>`;
   }
   function drawOut() {
@@ -312,7 +320,7 @@
     if (!(P.routes || []).length) return [];
     const subs = [];
     P.routes.forEach((r, i) => {
-      const ev = evalRoute(r), v = RT.vehOf(r), l = RT.loadOf(r), items = [];
+      const ev = evalRoute(r), v = RT.vehOf(r), l = RT.loadOf(r, A.P), items = [];
       if (!ev.sim.ok) { subs.push({ id: 'r' + i, key: 'route-' + i, title: r.name, items: [{ type: 'note', text: ev.flags[0].text }] }); return; }
       items.push({ type: 'figure', svg: routeSvg(P, r, ev), caption: `${r.name}: the steer-axle path, the swept path (outlines every 2 ft) and the vehicle at the truck stop (north up).` });
       items.push({ type: 'kv', rows: [['Vehicle', RT.TYPES[v.type]], ['Tractor', `L1 ${fmt(v.L1, 2)} ft, kingpin ${fmt(v.e, 2)} ft ahead of the drive group, width ${fmt(v.Wt, 2)} ft`], ['Body', `L2 ${fmt(v.L2, 2)} ft${RT.hasJeep(v) ? `, jeep ${fmt(v.Lj, 2)} ft (bolster ${fmt(v.ej, 2)} ft)` : ''}${RT.steered(v) ? `, rear dolly k = ${fmt(v.k, 2)}, δmax ${fmt(v.dmax, 0)}°` : ''}`],
