@@ -291,6 +291,8 @@
   }
 
   /* ---------- elevations (to the same scale as the plan; the values of ev.elev / the tandem step) ---------- */
+  /* labels at one x, top down, at least 1.2 text heights apart (values close in height would overlap) */
+  function stack(D, l, x, list) { let last = Infinity; list.slice().sort((a, b) => b[0] - a[0]).forEach(([y, t]) => { const yy = Math.min(y, last - 1.2 * D.h); D.text(l, x, yy, 0.7 * D.h, U(t)); last = yy; }); }
   function pickElev(D, C, which) {
     const { P, k, u, ev } = C.pick, h0 = ev.elev; if (!h0) return false;
     const h = D.h, e = h0[which], g = h0.g, zp = EL().padEl(u), E = EL().el0(k), H = isNum(E.H) ? E.H : 0, rL = Math.hypot(E.L || 0, E.W || 0) / 2, q = which === 'set' ? k.set : k.pick, R = (which === 'set' ? ev.set : ev.pick).R;
@@ -312,8 +314,7 @@
     else D.text(lT, S(R), Z(zp + 10), h, 'THE BOOM CANNOT REACH THIS RADIUS', 1);
     D.rect(lLd, S(R - 1), Z(e.zHk), S(R + 1), Z(e.zBk)); D.rect(lLd, S(R - Math.max(rL, 0.5)), Z(e.zLb), S(R + Math.max(rL, 0.5)), Z(e.zLb + H));
     if (e.zLt < e.zHk) { D.line(lL, S(R), Z(e.zHk), S(R - Math.max(rL, 1) * 0.8), Z(e.zLt)); D.line(lL, S(R), Z(e.zHk), S(R + Math.max(rL, 1) * 0.8), Z(e.zLt)); }
-    const tx = S(R + Math.max(rL, 0.5)) + 1 * h; D.text(lT, tx, Z(e.zHk), 0.7 * h, U(`HOOK EL. ${fmt(e.zHk, 2)}`)); D.text(lT, tx, Z(e.zLb), 0.7 * h, U(`LOAD BOTTOM EL. ${fmt(e.zLb, 2)}`));
-    D.text(lT, tx, Z(e.zBk) + 0.2 * h, 0.7 * h, U(`HOOK REACH MARGIN ${fmt(e.margin, 2)} FT`));
+    stack(D, lT, S(R + Math.max(rL, 0.5)) + 1 * h, [[Z(e.zBk), `HOOK REACH MARGIN ${fmt(e.margin, 2)} FT (BLOCK TOP EL. ${fmt(e.zBk, 2)})`], [Z(e.zHk), `HOOK EL. ${fmt(e.zHk, 2)}`], [Z(e.zLb), `LOAD BOTTOM EL. ${fmt(e.zLb, 2)}`]]);
     const lD = D.layer('DIMS', 2); D.fmt = v => fmt(v / 12, 2) + "'"; D.dimH(lD, 0, S(R), Z(zp) - 3 * h, Z(zp), 'R = <>'); D.fmt = X_().fmtFtIn;
     D.text(lT, S(s0), Z(Math.max(isNum(e.zTip) ? e.zTip : zp, e.zBk)) + 2 * h, 1.1 * h, U(`ELEVATION AT THE ${which === 'set' ? 'SET' : 'PICK'}: ${k.name} (SECTION ALONG THE BOOM; TO SCALE)`));
     return true;
@@ -372,27 +373,26 @@
   }
   /* a view sheet: the plan, the elevations under it, the data table and the flags to the right */
   function viewSheet(D, C) {
-    const h = D.h, i0 = D.mark(); C.planFn(D, C); const bp = D.bbox(i0); let y = bp[1] - 5 * h;
-    (C.elevs || []).forEach(fn => { const j0 = D.mark(); if (!fn(D, C)) { D.E.length = j0; return; } const b = D.bbox(j0); D.move(j0, bp[0] - b[0], y - b[3]); y = D.bbox(j0)[1] - 4 * h; });
+    const h = D.h, i0 = D.mark(); C.planFn(D, C); let x = D.bbox(i0)[2] + 5 * h; const top = D.bbox(i0)[3];
+    (C.elevs || []).forEach(fn => { const j0 = D.mark(); if (!fn(D, C)) { D.E.length = j0; return; } const b = D.bbox(j0); D.move(j0, x - b[0], top - b[3]); x = D.bbox(j0)[2] + 5 * h; });
     const ba = D.bbox(i0), t0 = D.mark(), rows = C.rowsFn(C);
     let yy = table(D, D.layer('TBL', 8), D.layer('TEXT', 7), 0, 0, ['ITEM', 'VALUE'], rows, C.tableTitle || 'LIFT DATA').y;
     const fl = (C.flagText || []).concat((C.flags || []).filter(f => f.level !== 'info' && !f.p).map(f => f.text));
-    yy = notesBlk(D, D.layer('TEXT', 7), 0, yy - h, fl.length ? 'FLAGS' : 'FLAGS: NONE', fl, 80);
-    notesBlk(D, D.layer('TEXT', 7), 0, yy - h, 'NOTES', C.notes || [], 80);
-    const bt = D.bbox(t0); D.move(t0, ba[2] + 4 * h - bt[0], ba[3] - bt[3]);
+    yy = notesBlk(D, D.layer('TEXT', 7), 0, yy - h, fl.length ? 'FLAGS' : 'FLAGS: NONE', fl, 90);
+    notesBlk(D, D.layer('TEXT', 7), 0, yy - h, 'NOTES', C.notes || [], 90);
+    const bt = D.bbox(t0); D.move(t0, ba[0] - bt[0], ba[1] - 4 * h - bt[3]);
   }
-
   /* ---------- the rigging / load-share sheet of a girder lift ---------- */
   const stepText = s => { const tt = x => (window.SharedSteps && window.SharedSteps.toText ? window.SharedSteps.toText(x) : String(x || '')); const v = typeof s.value === 'number' ? fmt(s.value, s.d == null ? 2 : s.d) : String(s.value);
     return `${s.label}: ${tt(s.sym)}${s.eq ? ' = ' + tt(s.eq) : ''}${s.sub ? ' = ' + tt(s.sub) : ''} = ${v}${s.unit ? ' ' + s.unit : ''}`; };
   function rigging(D, C) {
     const { t, r } = C.tl, sh = r.sh, ob = sh.ob, h = D.h, L = ob.L, H = Math.max(ob.H || 0, 1);
     const lG = D.layer('GIRDER', 4), lA = D.layer('LOADS', 1), lD = D.layer('DIMS', 2), lT = D.layer('TEXT', 7), lC = D.layer('CNTR', 1, 'CENTER');
-    const S = x => x * 12, yb = 0, yt = H * 12, ar = Math.max(6 * h, yt * 1.2);
+    const S = x => x * 12, yb = 0, yt = H * 12, ar = 8 * h;
     D.rect(lG, 0, yb, S(L), yt); if (ob.pair) D.text(lT, S(L / 2), yt + 0.6 * h, 0.75 * h, U(`PAIRED GIRDERS, SPACING ${fmt(ob.s, 2)} FT, CROSS-FRAMES ${fmt(ob.Wx, 0)} LB (ONE OBJECT)`), 1);
     D.text(lT, -0.8 * h, yb + yt / 2, 0.9 * h, 'END A', 2); D.text(lT, S(L) + 0.8 * h, yb + yt / 2, 0.9 * h, 'END B', 0);
     // CG and the weight
-    const xc = S(ob.xcg); D.line(lC, xc, yb - ar, xc, yt + 0.5 * h, D.ltype('CENTER')); D.circle(lA, xc, yt / 2, 0.8 * h); D.line(lA, xc, yb, xc, yb - ar); D.pline(lA, [[xc, yb], [xc - 0.5 * h, yb - h], [xc + 0.5 * h, yb - h]], true);
+    const xc = S(ob.xcg); D.line(lC, xc, yb - ar, xc, yt + 0.5 * h, D.ltype('CENTER')); D.circle(lA, xc, yt / 2, 0.8 * h); D.line(lA, xc, yb, xc, yb - ar); D.pline(lA, [[xc, yb - ar], [xc - 0.5 * h, yb - ar + h], [xc + 0.5 * h, yb - ar + h]], true);
     D.text(lT, xc + 0.8 * h, yb - ar + 0.3 * h, 0.85 * h, U(`W_G = ${fmt(ob.Wg, 0)} LB AT THE CG`));
     // lifting points: the girder reactions up, the hook loads above
     sh.xs.forEach((x, i) => { if (r.single && i) return; const xx = S(x); D.line(lA, xx, yt, xx, yt + ar); D.pline(lA, [[xx, yt + ar], [xx - 0.5 * h, yt + ar - h], [xx + 0.5 * h, yt + ar - h]], true);
@@ -422,14 +422,18 @@
       out.push({ u, S, sup, list, est: ok.some(x => x.g.mode === 'estimate'), qa: ok[0].g.qa, mat: ok[0].g.mat }); });
     return out;
   }
-  function groundPlan(D, C) {
-    const { P, gm, w } = C.gr, V = pv(w), h = D.h, lT = D.layer('TEXT', 7), lF = D.layer('CRANE-FLOAT', 30);
-    siteLayer(D, V, P);
-    gm.forEach(s => { setupLayer(D, V, P, s.u); if (!s.sup) return;
-      s.sup.forEach(x => { const p = LF().toGrid(s.u, x.it.lx, x.it.ly); if (!inWin(p, w)) return;
-        if (s.S.kind === 'crawler') { const rect = [[s.S.Lt / 2, x.it.ly + s.S.s / 2], [s.S.Lt / 2, x.it.ly - s.S.s / 2], [-s.S.Lt / 2, x.it.ly - s.S.s / 2], [-s.S.Lt / 2, x.it.ly + s.S.s / 2]].map(([a, b]) => LF().toGrid(s.u, a, b)); drawPoly(D, V, lF, rect, true); }
-        D.text(lT, V.X(p.x) + 1.0 * h, V.Y(p.y) + 0.8 * h, 0.7 * h, U(`${x.it.id}: ${kip(x.m.load)} KIP, Q_G ${fmt(x.br && x.br.qg, 0)} PSF${x.br && x.br.ratio != null ? ' (' + fmt(x.br.ratio, 2) + ')' : ''}${s.est ? ' EST.' : ''}`)); }); });
-    frameLayer(D, V, P, 'GROUND: FLOATS / TRACKS AND MATS IN PLAN');
+  /* one plan panel per setup (its floats / tracks, mats and the largest load on each, labelled outward) */
+  function groundPanel(D, C, gs) {
+    const { P } = C.gr, h = D.h, lT = D.layer('TEXT', 7), lF = D.layer('CRANE-FLOAT', 30), c = craneOf(P, gs.u), pts = [gs.u];
+    if (c) { const f = LF().footprint(c.def, gs.u); f.floatC.forEach(q => pts.push({ x: q.x - 4, y: q.y - 4 }, { x: q.x + 4, y: q.y + 4 })); [].concat(f.body ? [f.body] : [], f.tracks).forEach(q => pts.push(...q)); }
+    const w = windowOf(pts, 0.35), V = pv(w);
+    siteLayer(D, V, P); setupLayer(D, V, P, gs.u);
+    (gs.sup || []).forEach(x => { const p = LF().toGrid(gs.u, x.it.lx, x.it.ly); if (!inWin(p, w)) return;
+      if (gs.S.kind === 'crawler') { const rect = [[gs.S.Lt / 2, x.it.ly + gs.S.s / 2], [gs.S.Lt / 2, x.it.ly - gs.S.s / 2], [-gs.S.Lt / 2, x.it.ly - gs.S.s / 2], [-gs.S.Lt / 2, x.it.ly + gs.S.s / 2]].map(([a, b]) => LF().toGrid(gs.u, a, b)); drawPoly(D, V, lF, rect, true); }
+      const dx = p.x - gs.u.x, dy = p.y - gs.u.y, L = Math.hypot(dx, dy) || 1, right = dx >= 0, yo = dy >= 0 ? 1.6 * h : -2.4 * h;
+      D.text(lT, V.X(p.x) + (right ? 1 : -1) * 1.2 * h, V.Y(p.y) + yo, 0.7 * h, U(`${x.it.id}: ${kip(x.m.load)} KIP`), right ? 0 : 2);
+      D.text(lT, V.X(p.x) + (right ? 1 : -1) * 1.2 * h, V.Y(p.y) + yo - 1.1 * h, 0.7 * h, U(`Q_G ${fmt(x.br && x.br.qg, 0)} PSF${x.br && x.br.ratio != null ? ' (' + fmt(x.br.ratio, 2) + ')' : ''}${gs.est ? ' EST.' : ''}`), right ? 0 : 2); void L; });
+    frameLayer(D, V, P, `GROUND: ${gs.u.name}`);
   }
   function groundTables(D, C) {
     const { P, gm } = C.gr, h = D.h, lL = D.layer('TBL', 8), lT = D.layer('TEXT', 7), MT = (GR() && GR().MAT_TYPES) || {};
@@ -449,7 +453,11 @@
     notesBlk(D, lT, 0, y - h, 'NOTES', ['METHOD: "ENTERED DATA" = RIGID-BODY STATICS WITH THE WEIGHTS AND CGS ON THE CRANE CARD; "ESTIMATE" = THE BOUNDING ESTIMATE: VERIFY WITH THE MANUFACTURER\'S OUTRIGGER CALCULATOR.',
       `WORKED: ${seeRef(C, 'ground')} (SINGLE PICKS) AND ${seeRef(C, 'tandem')} (GIRDER LIFTS); BASIS ${seeRef(C, 'ground-basis')}.`, 'ALLOWABLE BEARING PRESSURES FROM THE GEOTECHNICAL ENGINEER (GROUND INPUT TAB).'], 110);
   }
-  function groundSheet(D, C) { const h = D.h, i0 = D.mark(); groundPlan(D, C); const bp = D.bbox(i0), t0 = D.mark(); groundTables(D, C); const bt = D.bbox(t0); D.move(t0, bp[2] + 4 * h - bt[0], bp[3] - bt[3]); }
+  function groundSheet(D, C) {
+    const h = D.h, i0 = D.mark(); let x = 0, top = null;
+    C.gr.gm.forEach(gs => { const j0 = D.mark(); groundPanel(D, C, gs); const b = D.bbox(j0); if (top == null) top = b[3]; D.move(j0, x - b[0], top - b[3]); x = D.bbox(j0)[2] + 5 * h; });
+    const bp = D.bbox(i0), t0 = D.mark(); groundTables(D, C); const bt = D.bbox(t0); D.move(t0, bp[0] - bt[0], bp[1] - 4 * h - bt[3]);
+  }
 
   /* ---------- the cover and the general notes ---------- */
   function coverBlocks(P, sum, list, miss, date) {
@@ -504,8 +512,8 @@
     });
     // the ground sheet
     const gm = groundModel(P, ctx);
-    if (gm.length) { const pts = []; gm.forEach(s => { const c = craneOf(P, s.u); pts.push(s.u); if (c) { const f = LF().footprint(c.def, s.u); f.floatC.forEach(q => pts.push(q)); [].concat(f.body ? [f.body] : [], f.tracks).forEach(q => pts.push(...q)); } });
-      list.push({ id: 'ground', title: 'GROUND: OUTRIGGER / TRACK LOADS, MATS, BEARING', fn: groundSheet, kmin: 48, c: { ...C, gr: { P, gm, w: windowOf(pts, 0.25) } }, src: [['out', 'ground', 'Ground tab'], ['in', 'ground', 'Ground input tab'], ['rpt', 'ground', 'Report §Ground']] }); }
+    if (gm.length) {
+      list.push({ id: 'ground', title: 'GROUND: OUTRIGGER / TRACK LOADS, MATS, BEARING', fn: groundSheet, kmin: 24, c: { ...C, gr: { P, gm } }, src: [['out', 'ground', 'Ground tab'], ['in', 'ground', 'Ground input tab'], ['rpt', 'ground', 'Report §Ground']] }); }
     else if (sum.length) miss.push(['GROUND', 'NO GROUND RESULT (NO CRANE SETUP WITH A LIFT)']);
     EXTRA.forEach(fn => { try { (fn(P, ctx, C) || []).forEach(s => list.push(Object.assign({ kmin: 1, c: { ...C } }, s))); } catch (e) { miss.push(['ADDED SHEET', String(e.message)]); } });
     if (!sum.length) miss.push(['LIFT PLAN SHEETS', 'NO LIFT YET (LIFTS OR GIRDER LIFTS TAB)']);
