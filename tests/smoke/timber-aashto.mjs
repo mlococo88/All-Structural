@@ -46,7 +46,7 @@ async function collect(file) {
     rec.tabs = await p.evaluate(() => [...document.querySelectorAll('#tabBar button')].map(x => x.id.slice(4)));
     for (const t of rec.tabs) {
       await p.click('#tab_' + t); await p.waitForTimeout(t === 'rpt' ? 1500 : 250);
-      rec[t] = await p.evaluate(t => ({ tab: (e => { const c = e.cloneNode(true); c.querySelectorAll('.tbFig').forEach(f => f.remove()); c.querySelectorAll('figure.rp-fig').forEach(f => { if (/^Figure \d+\./.test((f.querySelector('figcaption') || {}).textContent || '')) f.remove(); }); document.body.appendChild(c); const x = c.innerText; c.remove(); return x; })(document.getElementById('tabPages')).replace(/\s+/g, ' '),   // TBGX: the figures (.tbFig) are additions, compared apart gov: document.getElementById('govStrip').innerText, dash: (document.getElementById('tbcDash') || {}).innerText || '',
+      rec[t] = await p.evaluate(t => ({ tab: (e => { const c = e.cloneNode(true); c.querySelectorAll('.tbFig, .js-plotly-plot').forEach(f => f.remove()); c.querySelectorAll('figure.rp-fig').forEach(f => { if (/^Figure \d+\./.test((f.querySelector('figcaption') || {}).textContent || '')) f.remove(); }); document.body.appendChild(c); const x = c.innerText; c.remove(); return x; })(document.getElementById('tabPages')).replace(/\s+/g, ' '),   // TBGX: the figures (.tbFig) are additions, compared apart gov: document.getElementById('govStrip').innerText, dash: (document.getElementById('tbcDash') || {}).innerText || '',
         rpt: t === 'rpt' && typeof TBRP !== 'undefined' && TBRP.doc ? SharedReport.text(TBRP.doc).replace(/\n?\[Figure\] Figure \d+\.[^\n]*/g, '') : '' }), t);
     }
     out[name] = rec;
