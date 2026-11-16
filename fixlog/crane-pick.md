@@ -293,7 +293,7 @@ permitted, interpolation, clockwise swing, chart group, power-line flag, steps, 
 `crane-shell.mjs` (11), `crane-sheets.mjs` (8), `crane-draw.mjs` (7); `node tests/check-syntax.mjs`.
 
 ## 2026-11-16 — C2-3: Picks tab, Report §Lifts
-PR: (this PR, link added after merge)
+PR #1608: https://github.com/mlococo88/All-Structural/pull/1608
 ### Where
 - `apps/crane-pick/ui/picks.js` (new): the Picks output tab (between Plan and Site): one row per pick (pick, crane setup, chart, boom,
   R pick / set / max, C pick / set, W, governing point and its capacity, % of chart, status, flags) with links (the pick: selected on the
