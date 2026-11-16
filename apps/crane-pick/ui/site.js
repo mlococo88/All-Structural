@@ -6,6 +6,8 @@
   const A = window.CranePickApp, G = window.CranePickGeo, esc = A.esc;
   let el = null, shown = false, dirty = true;
   const parts = [];
+  /* steps(list): worked steps as the bridge apps show them (shared/steps.js line(); each <li id="st-<id>"> is a link target) */
+  const steps = list => `<ol class="steps">${(list || []).map(s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps ? window.SharedSteps.line(s, true) : esc(String(s.value))}</div>${s.note ? `<div class="nt">${esc(window.SharedSteps ? window.SharedSteps.noteText(s.note) : s.note)}</div>` : ''}</li>`).join('')}</ol>`;
   const kv = rows => `<div class="kv">${rows.map(([k, v]) => `<div><span>${esc(k)}</span><span>${v}</span></div>`).join('')}</div>`;
   function draw() {
     if (!el) return; dirty = false;
@@ -21,5 +23,5 @@
   const mark = () => { dirty = true; if (A.ui.otab === 'site') draw(); };
   A.on('project', mark); A.on('change', mark);
   A.on('tab', id => { shown = id === 'site'; });
-  window.CranePickSite = { section: fn => parts.push(fn), kv, redraw: mark, get dirty() { return dirty; }, get shown() { return shown; } };
+  window.CranePickSite = { section: fn => parts.push(fn), kv, steps, redraw: mark, get dirty() { return dirty; }, get shown() { return shown; } };
 })();

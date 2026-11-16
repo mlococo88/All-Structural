@@ -11,7 +11,10 @@
      Engine: engine/*.js (no DOM). UI: ui/*.js. Report: report/*.js. Saved data: localStorage keys crane.* and IndexedDB crane.sheets.v1
      only (engine/model.js). Units: US customary (ft, kip, psf / ksf).
      C1-1: the shell (header, input / output tabs, Project tab with Save and open, title block, notes), Undo / Redo, the map (base layers,
-     scale bar, cursor coordinates in latitude / longitude and State Plane, go to a coordinate), the Site and Report output tabs. -->
+     scale bar, cursor coordinates in latitude / longitude and State Plane, go to a coordinate), the Site and Report output tabs.
+     C1-2: plan-sheet underlays (PNG / JPG / PDF page), scale calibration, georeference, opacity, lock; images in IndexedDB. -->
+<!-- pdf.js 3.11.174 (engineer-approved 2026-11-16; BasePlateAnchorDesigner.html's pinned jsDelivr URL) is loaded by ui/sheets.js when the
+     first PDF is opened: https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js (worker: build/pdf.worker.min.js) -->
 <!-- Leaflet 1.9.4 and proj4js 2.11.0 (engineer-approved 2026-11-16; the versions and URLs Bridge Geometry.html already pins, CLAUDE.md §2) -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -35,7 +38,9 @@
     'ui/sitetab.js',        // Site & map input tab: zone, base map, go to
     'ui/site.js',           // Site output tab: the plan summary
     'report/builders.js',   // the report model
-    'ui/report.js'          // Report output tab (shared/report.js viewer)
+    'ui/report.js',         // Report output tab (shared/report.js viewer)
+    'ui/sheetstore.js',     // C1-2: the plan-sheet images in IndexedDB (crane.sheets.v1)
+    'ui/sheets.js'          // C1-2: Plan sheets input tab: underlay, calibration, georeference (pdf.js loaded on first PDF)
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
 })();
 </script>
@@ -111,17 +116,31 @@
   #out>[data-opane="plan"]{height:100%;}
   #planPane{height:100%;display:flex;flex-direction:column;}
   #mapBar{flex:0 0 auto;display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;padding:5px 10px;border-bottom:1px solid var(--color-border);background:var(--slate-50);}
-  #mapBar .mbStatus{flex:1 1 200px;min-width:0;font-size:9pt;color:#334155;}
+  #mapBar:empty{display:none;}
+  #mbStatus{position:absolute;left:56px;right:56px;top:10px;z-index:950;margin:0 auto;max-width:640px;width:fit-content;background:rgba(255,255,255,.96);border:1px solid var(--blue-600);border-radius:6px;padding:5px 9px;font-size:9pt;color:#0f172a;box-shadow:0 2px 8px rgba(0,0,0,.18);}
+  #mbStatus:empty{display:none;} #mbStatus button{padding:1px 8px;font-size:8.5pt;margin-left:4px;}
   #mapWrap{position:relative;flex:1 1 auto;min-height:0;}
   #map{position:absolute;inset:0;background:#e5e7eb;}
   #map.blank{background:#f8fafc;background-image:linear-gradient(#e2e8f0 1px,transparent 1px),linear-gradient(90deg,#e2e8f0 1px,transparent 1px);background-size:40px 40px;}
-  #mapMsg{position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:900;max-width:calc(100% - 120px);background:#FFFBEB;border:1px solid var(--warn);border-radius:6px;padding:5px 9px;font-size:9pt;box-shadow:0 2px 8px rgba(0,0,0,.15);}
+  #mapMsg{position:absolute;left:50%;top:56px;transform:translateX(-50%);z-index:900;max-width:calc(100% - 120px);background:#FFFBEB;border:1px solid var(--warn);border-radius:6px;padding:5px 9px;font-size:9pt;box-shadow:0 2px 8px rgba(0,0,0,.15);}
   #mapMsg[hidden]{display:none;}
   .crCoord{background:rgba(255,255,255,.92);padding:3px 7px;border-radius:4px;font:8.5pt/1.35 var(--font-ui);color:#0f172a;box-shadow:0 1px 4px rgba(0,0,0,.25);white-space:nowrap;max-width:calc(100vw - 30px);overflow:hidden;text-overflow:ellipsis;}
   .crCoord b{font-weight:600;}
   @media (max-width:560px){ .crCoord{font-size:7.5pt;padding:2px 5px;} }
   .leaflet-container{font-family:var(--font-ui);}
   .goRow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0;} .goRow input{flex:1 1 110px;min-width:0;}
+  /* C1-2: plan sheets */
+  .crHandle span{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#fff;border:2px solid var(--blue-600);color:var(--blue-600);font-size:14px;box-shadow:0 1px 4px rgba(0,0,0,.35);cursor:move;}
+  .crHandle.crRot span{cursor:grab;border-color:#7C3AED;color:#7C3AED;}
+  .crPickTip{font-weight:700;color:#B91C1C;}
+  .chip{display:inline-block;font-size:8pt;padding:0 6px;border-radius:9px;border:1px solid var(--slate-400);background:var(--slate-100);color:#334155;white-space:nowrap;}
+  .chip.chipOk{background:#DCFCE7;border-color:#86EFAC;color:#166534;} .chip.chipW{background:#FEF3C7;border-color:#FCD34D;color:#92400E;}
+  .shCard{border:1px solid var(--color-border);border-radius:6px;margin:8px 0;padding:6px 8px;background:#fff;} .shCard.on{border-color:#93C5FD;background:#F8FBFF;}
+  .shHead{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;} .shName{font-weight:600;border:none;background:none;padding:2px 0;text-align:left;color:var(--color-primary);overflow-wrap:anywhere;flex:1 1 100px;min-width:0;}
+  .shTg{font-size:9pt;white-space:nowrap;} .shBlk{border-top:1px dotted var(--line);margin-top:6px;padding-top:5px;}
+  .fRow>span{min-width:0;overflow-wrap:anywhere;flex:1 1 150px;} .fRow>span.unit{flex:0 0 auto;} .fRow input[type=range]{flex:1 1 90px;min-width:0;width:90px;}
+  .warnT{color:var(--warn);} button.danger{color:#B91C1C;border-color:#FCA5A5;} a.wk{font-size:8.5pt;margin-left:auto;}
+  h4.stH{margin:10px 0 2px;font-size:10pt;color:var(--color-primary);}
   .rp-host{container-type:inline-size;}
   @container (max-width:999.98px){ #out .rp-body{grid-template-columns:minmax(0,1fr);} #out .rp-toc{position:static;max-height:220px;} #out .rp-doc{padding:0.3in 0.35in 0.5in;} }
   /* phone / narrow: the map first, full width; the input panels below it (engineer decision 2026-11-16) */

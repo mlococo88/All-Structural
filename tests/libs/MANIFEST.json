@@ -66,7 +66,7 @@
     "leaflet@1.9.4": { "npm": "leaflet@1.9.4", "license": "BSD-2-Clause", "used_by": ["Bridge Geometry.html", "apps/crane-pick/index.html (unpkg, the same URLs)"], "note": "dist/leaflet.js, leaflet.css, images/" },
     "proj4@2.11.0": { "npm": "proj4@2.11.0", "license": "MIT", "used_by": ["Bridge Geometry.html", "apps/crane-pick/index.html (cdnjs, the same URL)"], "note": "dist/proj4.js (cdnjs proj4js/2.11.0/proj4.js)" },
     "exceljs@4.4.0": { "npm": "exceljs@4.4.0", "license": "MIT", "used_by": ["ASCE7-16 Load Generator.html", "Steel Beam Design - AISC 15th.html"] },
-    "pdfjs-dist@3.11.174": { "npm": "pdfjs-dist@3.11.174", "license": "Apache-2.0", "used_by": ["BasePlateAnchorDesigner.html (jsDelivr)", "Pile Designer.html (cdnjs pdf.js)"], "note": "build/pdf.min.js and pdf.worker.min.js" },
+    "pdfjs-dist@3.11.174": { "npm": "pdfjs-dist@3.11.174", "license": "Apache-2.0", "used_by": ["BasePlateAnchorDesigner.html (jsDelivr)", "Pile Designer.html (cdnjs pdf.js)", "apps/crane-pick/index.html (jsDelivr, loaded on the first PDF)"], "note": "build/pdf.min.js and pdf.worker.min.js" },
     "xlsx@0.18.5": { "npm": "xlsx@0.18.5", "license": "Apache-2.0", "used_by": ["Bridge Substructure Loading.html / Gusset Plate Rating.html (cdnjs xlsx.full.min.js)"] }
   }
 }

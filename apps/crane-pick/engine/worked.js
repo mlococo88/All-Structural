@@ -63,7 +63,19 @@
     if (sheet.cal) { const c = cal(sheet, pre + '.cal'); if (c && isFinite(c.s)) { chk = (c.s - r.s) / r.s; steps.push(st(pre, { id: 'chk', label: 'Check against the scale calibration', sym: '\\frac{s_{cal} - s}{s}', eq: '', sub: `\\frac{${f(c.s, 5)} - ${f(r.s, 5)}}{${f(r.s, 5)}}`, value: chk * 100, unit: '\\%', d: 2 })); } }
     return { r, chk, steps };
   }
+  /* sheet scale from the plan's stated scale (1 in = S ft) and the PDF page width: s = S · W_in / W_px */
+  function planScale(sheet, pre) {
+    if (!sheet || !(sheet.planScale > 0) || !sheet.pageIn) return null;
+    const s = sheet.planScale * sheet.pageIn.w / sheet.w;
+    return { s, steps: [
+      st(pre, { id: 'S', label: 'Stated plan scale (entered): 1 in on the sheet', sym: 'S', eq: '', sub: '', value: sheet.planScale, unit: 'ft/in', d: 3 }),
+      st(pre, { id: 'Win', label: 'Page width (PDF page size)', sym: 'W_{in}', eq: '', sub: '', value: sheet.pageIn.w, unit: 'in', d: 3 }),
+      st(pre, { id: 'Wpx', label: 'Image width (rendered)', sym: 'W_{px}', eq: '', sub: '', value: sheet.w, unit: 'px', d: 0 }),
+      st(pre, { id: 's', label: 'Sheet scale', sym: 's', eq: '\\frac{S \\cdot W_{in}}{W_{px}}', sub: `\\frac{${f(sheet.planScale, 3)} \\cdot ${f(sheet.pageIn.w, 3)}}{${f(sheet.w, 0)}}`, value: s, unit: 'ft/px', d: 5,
+        note: 'Valid only when the PDF is at the plan\'s full size (not a reduced print); check it against a known dimension (scale calibration).' })
+    ] };
+  }
   /* power-line clearance (Table A) */
   function clearance(item, pre) { return O().clearance({ kv: item.kv, le350: item.le350, setFt: item.setFt }, pre); }
-  window.CranePickWorked = { dim, shape, cal, geo, clearance, fmt: f };
+  window.CranePickWorked = { dim, shape, cal, geo, planScale, clearance, fmt: f };
 })();

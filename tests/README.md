@@ -211,6 +211,9 @@ node tests/smoke/home-sync.mjs [--tool asce7,spreadfooting,...] [--shots <dir>]
 # crane.* only, offline tiles notice, Site / Report tabs, 390 px. Engine (coordinates against Snyder's published examples, OSHA Table A):
 # node tests/engine/run.mjs crane. ~1 min
 node tests/smoke/crane-shell.mjs   # SHOTS=<dir> for screenshots
+# Crane Pick Analyzer plan sheets (C1-2): PNG and PDF (pdf.js) underlays, calibration and georeference by clicks on the map, move / rotate
+# handles with undo, opacity / lock, images in IndexedDB (reload, missing image, Export / Import JSON with images, clean up), Report, 390 px. ~1 min
+node tests/smoke/crane-sheets.mjs  # SHOTS=<dir> for screenshots
 
 # Bridge Suite standard save (BSS, shared/bridge-suite-projects.js) in index.html / lldf.html / Prestressed Bridge Design.html (a page that
 # does not load the adapter yet is skipped): seeded suite list with a duplicate name; chip, header order, the dialog's rows, Save as (new /

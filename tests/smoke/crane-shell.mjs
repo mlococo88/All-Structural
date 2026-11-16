@@ -59,7 +59,7 @@ try {
   await p.waitForSelector('[data-sp=chip]'); await p.waitForSelector('#map .leaflet-tile-pane', { state: 'attached' }); await p.waitForTimeout(600);
   // 1. shell
   assert.match(await p.textContent('#hdr h1'), /Crane Pick Analyzer\s*LIFT-PLANNING AID/);
-  assert.deepEqual(await p.$$eval('#inTabs [data-itab]', a => a.map(x => x.textContent)), ['Project', 'Site & map']);
+  assert.deepEqual((await p.$$eval('#inTabs [data-itab]', a => a.map(x => x.textContent))).slice(0, 2), ['Project', 'Site & map']);
   assert.deepEqual(await p.$$eval('#tabBar [data-otab]', a => a.map(x => x.textContent)), ['Plan', 'Site', 'Report']);
   assert.equal(await p.evaluate(() => [...document.querySelectorAll('#hdrBtns [data-sp]')].map(b => b.dataset.sp).join()), 'chip');
   assert.ok(await p.$('#bUndo[disabled]') && await p.$('#bRedo[disabled]'));
