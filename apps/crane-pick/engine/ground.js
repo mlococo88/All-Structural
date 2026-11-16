@@ -261,13 +261,17 @@
     return o;
   }
   /* ---------- the pick along its swing ---------- */
-  function evaluate(crane, setup, pick, P, idp) {
-    idp = idp || 'gr';
-    const inp = inputsOf(crane, setup), S = supports(crane, setup), W = LF().total(pick);
-    const out = { mode: inp.mode, inp, S, W, label: inp.mode === 'rigid' ? 'entered data' : 'estimate — verify with the manufacturer\'s outrigger calculator', flags: [] };
+  /* o (C5, optional): { W (the hook load, lb, in place of LF.total(pick)), pts: [{ x, y }] (the hook positions to check, in place of the
+     pick's swing path: a girder lift's steps for this crane) }; pick may then be null. */
+  function evaluate(crane, setup, pick, P, idp, o) {
+    idp = idp || 'gr'; o = o || null;
+    const inp = inputsOf(crane, setup), S = supports(crane, setup), W = o && isNum(o.W) ? o.W : LF().total(pick);
+    const out = { mode: inp.mode, inp, S, W, src: o && o.pts ? 'steps' : 'swing', label: inp.mode === 'rigid' ? 'entered data' : 'estimate — verify with the manufacturer\'s outrigger calculator', flags: [] };
     if (!S.ok) { out.mode = 'none'; out.why = S.why; return out; }
     if (inp.mode === 'none') { out.why = `enter the crane's gross operating weight${isNum(inp.Wcw) ? '' : ' and the counterweight'} (estimate), or the weights and CGs (${inp.missing.join(', ')}) on the crane card`; return out; }
-    const pp = LF().pathPoints(setup, pick.pick, pick.set, pick.swing || 'short', LF().settingsOf(P).path), h0 = setup.heading || 0;
+    const pp = o && o.pts ? { pts: o.pts.map((q, j, a) => { const dx = q.x - setup.x, dy = q.y - setup.y; let az = Math.atan2(dx, dy) * 180 / Math.PI; if (az < 0) az += 360;
+      return { x: q.x, y: q.y, az, r: Math.hypot(dx, dy), t: a.length > 1 ? j / (a.length - 1) : 0 }; }) } : LF().pathPoints(setup, pick.pick, pick.set, pick.swing || 'short', LF().settingsOf(P).path), h0 = setup.heading || 0;
+    if (!pp.pts.length) { out.mode = 'none'; out.why = 'no hook positions to check'; return out; }
     const fn = inp.mode === 'rigid' ? rigidAt : boundAt;
     const samples = pp.pts.map(q => { const theta = K().norm180(q.az - h0); return Object.assign(fn(inp, S, theta, q.r, W), { t: q.t, gp: { x: q.x, y: q.y } }); });
     out.samples = samples;
@@ -294,8 +298,9 @@
   /* the governing support's worked steps at its governing slew angle */
   function govSteps(out, idp) {
     const S = out.S, inp = out.inp, m = out.gov, s = m.s, pre = idp + '.L', L = [];
-    L.push(st(pre, { id: 'th', label: `Governing slew angle for the ${m.name} (largest ${S.kind === 'crawler' ? 'track pressure' : 'float load'} on the swing, 1° steps)`, sym: '\\theta', eq: '', sub: '', value: s.theta, unit: 'deg', d: 1, note: '0° = over the front, + clockwise (plan).' }),
-      st(pre, { id: 'R', label: 'Hook radius there (the radius changing uniformly along the swing)', sym: 'R', eq: '', sub: '', value: s.R, unit: 'ft', d: 2 }));
+    const alongSteps = out.src === 'steps';   // C5: a girder lift's steps (1 ft of hook travel / 1° of slew)
+    L.push(st(pre, { id: 'th', label: `Governing slew angle for the ${m.name} (largest ${S.kind === 'crawler' ? 'track pressure' : 'float load'} ${alongSteps ? 'over the girder lift\'s steps' : 'on the swing, 1° steps'})`, sym: '\\theta', eq: '', sub: '', value: s.theta, unit: 'deg', d: 1, note: '0° = over the front, + clockwise (plan).' }),
+      st(pre, { id: 'R', label: alongSteps ? 'Hook radius there (the hook plumb above its lifting point at that step)' : 'Hook radius there (the radius changing uniformly along the swing)', sym: 'R', eq: '', sub: '', value: s.R, unit: 'ft', d: 2 }));
     if (!s.bound) {
       s.ps.forEach(q => L.push(st(pre, { id: 'x' + q.id, label: `${q.name}: W = ${fmt(q.W, 0)} lb at (x, y)`, sym: `(x,\\,y)_{${q.id}}`, eq: q.id === 'c' ? '(x_{c},\\; 0)' : q.id === 'cw' ? '\\minus r_{cw}(\\cos\\theta,\\; \\minus \\sin\\theta)' : q.id === 'b' ? '(e + f_{b}(R \\minus e))(\\cos\\theta,\\; \\minus \\sin\\theta)' : `${q.id === 'h' ? 'R' : 'x_{u}'}(\\cos\\theta,\\; \\minus \\sin\\theta)`,
         sub: q.id === 'c' ? `(${tx(q.x, 2)},\\; 0)` : `${tp(q.r, 2)}(\\cos ${tp(s.theta, 1)}°,\\; \\minus \\sin ${tp(s.theta, 1)}°)`, value: `(${fmt(q.x, 2)}, ${fmt(q.y, 2)})`, unit: 'ft', d: 2,
@@ -409,6 +414,34 @@
     L.push(st(pre, { id: 'sum', label: 'Vertical stress increase at the item (sum of the supports)', sym: '\\Delta\\sigma_{z}', eq: '\\sum \\Delta\\sigma_{z,i}', sub: parts.map(x => tx(x.v, 3)).join(' + '), value: tot, unit: 'ksf', d: 3, ref: REF.bq, note: `${fmt(tot * 1000, 0)} psf` }));
     return L;
   }
+  /* ---------- C5: stress at depth from two setups together (a tandem lift) ----------
+     depthPair(outs, setups, P, idp): outs = [GR.evaluate(crane 1, …, { pts: crane 1's hooks at the lift's steps }), the same for crane 2],
+     the two evaluated over the same steps (step j of one with step j of the other: the cranes carry the girder together). For every
+     buried utility / culvert / wall: Δσ_z(p) = Σ over both setups' supports at step j (superposition of the Boussinesq solutions; each
+     crane's loads at its own depth z_i below its pad, depthOf), at the union of both setups' sample points (samplePts), at the steps
+     where any support of either crane governs, the first and the last step; the largest sum governs. */
+  const toGrid = (setup, q) => { const h = rad(setup.heading || 0); return { x: setup.x + q.x * Math.sin(h) - q.y * Math.cos(h), y: setup.y + q.x * Math.cos(h) + q.y * Math.sin(h) }; };
+  function depthPair(outs, setups, P, idp) {
+    idp = idp || 'gr2';
+    if (!BQ() || outs.length !== 2 || outs.some(o => !o || o.mode === 'none' || !o.samples)) return [];
+    const items = ((P && P.items) || []).filter(i => i.type === 'util'), caps = (P && P.ground && P.ground.caps) || {}, n = Math.min(outs[0].samples.length, outs[1].samples.length);
+    const js = [...new Set([0, n - 1].concat(...outs.map(o => o.max.map(m => m.j))))].filter(j => j < n);
+    return items.map(it => {
+      const dz = setups.map(u => depthOf(it, u)), cap = isNum(caps[it.id]) && caps[it.id] > 0 ? caps[it.id] : null, name = it.name || 'utility';
+      if (!dz[0] || !dz[1]) return { id: it.id, name, kind: it.kind, none: 'enter the depth to top (or the top elevation) of the item (Site items tab)', cap };
+      const pts = [].concat(...outs.map((o, i) => samplePts(it, setups[i], o, dz[i].z).map(q => toGrid(setups[i], q))));
+      let best = null;
+      js.forEach(j => { const ar = outs.map((o, i) => areasOf(o, o.samples[j], j));
+        pts.forEach(p => { const v = outs.map((o, i) => stressAt(ar[i], toLocal(setups[i], p), dz[i].z)), sum = v[0] + v[1]; if (!best || sum > best.ds) best = { ds: sum, v, j, p }; }); });
+      if (!best) return { id: it.id, name, kind: it.kind, z: dz.map(d => d.z), ds: 0, far: true, cap, ratio: cap ? 0 : null };
+      const steps = [];
+      outs.forEach((o, i) => { const s = o.samples[best.j], ar = areasOf(o, s, best.j);
+        steps.push(...depthSteps(o, ar, toLocal(setups[i], best.p), dz[i], `${idp}.z.${it.id}.c${i + 1}`, s, name).map(x => Object.assign({}, x, { label: `Crane ${i + 1}: ${x.label}` }))); });
+      steps.push(st(`${idp}.z.${it.id}`, { id: 'sum2', label: `Vertical stress increase at "${name}" from both cranes' supports together (superposition), at grid (${fmt(best.p.x, 2)}, ${fmt(best.p.y, 2)})`, sym: '\\Delta\\sigma_{z}', eq: '\\Delta\\sigma_{z,1} + \\Delta\\sigma_{z,2}', sub: `${tx(best.v[0] / 1000, 3)} + ${tx(best.v[1] / 1000, 3)}`, value: best.ds / 1000, unit: 'ksf', d: 3, ref: REF.bq, note: `${fmt(best.ds, 0)} psf` }));
+      if (cap) steps.push(st(`${idp}.z.${it.id}`, { id: 'r2', label: 'Ratio to the entered allowable stress increase', sym: '\\frac{\\Delta\\sigma_{z}}{\\Delta\\sigma_{a}}', eq: '', sub: `\\frac{${tx(best.ds, 0)}}{${tx(cap, 0)}}`, value: best.ds / cap, d: 3, note: best.ds <= cap ? 'OK' : 'OVER the allowable' }));
+      return { id: it.id, name, kind: it.kind, z: dz.map(d => d.z), ds: best.ds, parts: best.v, j: best.j, p: best.p, cap, ratio: cap ? best.ds / cap : null, steps, n: pts.length };
+    });
+  }
   /* a setup's map labels: for each support, the largest over the setup's picks */
   function setupSummary(crane, setup, picks, P) {
     const evs = picks.map(k => ({ k, g: evaluate(crane, setup, k, P, 'gr') })).filter(x => x.g.mode !== 'none');
@@ -417,5 +450,5 @@
     const sup = S.items.map((it, i) => { let best = null; evs.forEach(x => { const m = x.g.max[i], v = isTr ? m.q : m.load; if (!best || v > best.v) best = { v, m, b: x.g.bear[i], k: x.k, g: x.g }; }); return Object.assign({ it }, best); });
     return { S, sup, mode: evs.some(x => x.g.mode === 'estimate') ? 'estimate' : 'rigid', qa: evs[0].g.qa, evs };
   }
-  window.CranePickGround = { U, DEF, MAT_TYPES, FLOATS, TRACKS, REF, inputsOf, supports, parts, resultant, floatDist, trackP, trackDist, rigidAt, boundAt, boundCandidates, restBox, matOf, bearing, bearingArea, evaluate, stressAt, depthOf, toLocal, setupSummary, fileGross };
+  window.CranePickGround = { U, DEF, MAT_TYPES, FLOATS, TRACKS, REF, inputsOf, supports, parts, resultant, floatDist, trackP, trackDist, rigidAt, boundAt, boundCandidates, restBox, matOf, bearing, bearingArea, evaluate, stressAt, depthOf, toLocal, toGrid, depthPair, setupSummary, fileGross };
 })();
