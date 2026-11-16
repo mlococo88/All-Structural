@@ -622,7 +622,7 @@ dock's elevation and 3D; ground per crane and the both-cranes sum; Picks rows, R
 `node tests/check-syntax.mjs`.
 
 ## 2026-11-16 — C6: the trucking route (path, vehicle, kinematic swept path, overhead clearances, axle loads, haul road, posted bridges, staging)
-PR: (link added after the PR is opened)
+PR #1614: https://github.com/mlococo88/All-Structural/pull/1614
 ### Where
 - `apps/crane-pick/engine/route.js` (new, `window.CranePickRoute`, no DOM): the route's path (tangents + curves), the vehicle and load
   inputs with defaults, the kinematic simulation, the closed-form steady state, turns, site conflicts, overhead / power-line travel
