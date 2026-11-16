@@ -3,19 +3,20 @@
    and in the summary is a value the engines already computed (engine/lift.js, elev.js, clear3d.js, ground.js, tandem.js through the
    page's evalPick / evalT), formatted; nothing is calculated here except the drawing geometry (positions, the view window, clipping).
 
-   summary(P, ctx) -> [{ kind: 'pick' | 'tandem', id, name, key, cranes: [{ setup, crane, W, C, pct, cls, clsText, where }], reach, clr,
+   summary(P, ctx) -> [{ kind: 'pick' | 'tandem' | 'route', id, name, key, cranes: [{ setup, crane, W, C, pct, cls, clsText, where }], reach, clr,
      ground, flags: { stop, warn, list }, missing }]: one row per lift (single pick or girder lift): the governing % of chart per crane, the
      closest 3D clearance (the smallest margin over its requirement, as the Picks tab's "Closest 3D"), the largest float / track load and
      bearing ratio, the flags. The Summary tab, the cover sheet and Report §1 show it.
    notesModel(P, ctx) -> [{ topic, text, key }]: the general notes (sheet 2) and Report §2 Basis (one source).
    build(P, ctx, opt) -> { D, sheets: [{ n, id, title, k, W, H, ox, i0, iC, i1, over, src }], miss, errors } (shared/dxf.js display list)
-     ctx = { evalPick(k) (CranePickPlace.evalPick), evalT(t) (CranePickTandemUI.evalT), sections (CranePickElevView.sections, optional: the
+     ctx = { evalPick(k) (CranePickPlace.evalPick), evalT(t) (CranePickTandemUI.evalT), evalRoute(r) (CranePickRouteUI.evalRoute, C6), sections (CranePickElevView.sections, optional: the
      site items an elevation crosses), ref(key) -> '§x.y' | null (Report numbering, optional), date }
      opt = { paper: 'D' | 'B', half (the half-size print of paper D) }.
    Sheets: cover (sheet index, lift summary, revisions), general notes, a lift plan per single pick (plan to scale, elevation at the pick
    and at the set, data table, flags), a lift plan per girder lift (plan, elevation at each crane's governing step, data table) followed by
    its rigging / load-share sheet, the ground sheet (float / track loads, mats, bearing, stress at depth, float and mat outlines in plan),
-   and the sheets other modules add (addSheets(fn): C6 trucking route hook, see below).
+   a sheet per trucking route (C6: route, swept path, overhead clearances, axle loads, posted bridges, staging), and the sheets other
+   modules add (addSheets(fn)).
    Units: full size in inches (plan: x = 12 (E − E0), y = 12 (N − N0), grid north up; elevations: x = 12 s along the section, y = 12 z).
    The sheet frame (SCALES / SCALE_NAME / TXT, sheet(), the block sheets table() / notesBlk() / headBlk() / blockPages() / pageFn()) is an
    adapted COPY of apps/ps-bridge/ui/sheets.js (itself a copy of apps/steel-bridge/engine/sheets.js and drawings.js), to move to shared/
@@ -84,6 +85,15 @@
           clsText: r.single ? LF().CLS[g.c.cls] : T().CLS[g.c.cls], where: `step ${g.i}: ${g.where}`, step: g.i }; }),
         reach: ms.length ? Math.min(...ms) : null, clr: govClr(r.clr), ground: groundSum(r.ground ? r.ground.cr : []), flags: flagSum(r.flags) });
     });
+    // C6 routes (ctx.evalRoute: CranePickRouteUI.evalRoute): the worst flag, gross weight, largest off-tracking, the least overhead margin, the lift it delivers to
+    (P.routes || []).forEach((rt, i) => {
+      const ev = ctx.evalRoute ? ctx.evalRoute(rt) : null, key = 'route-' + i, k = rt.pickId && (P.picks || []).find(q => q.id === rt.pickId), t = rt.tandemId && (P.tandems || []).find(q => q.id === rt.tandemId);
+      const to = t ? { name: t.name, key: 'tandem-' + t.id } : k ? { name: k.name, key: 'pick-' + k.id } : null;
+      if (!ev || !ev.sim || !ev.sim.ok) { rows.push({ kind: 'route', id: rt.id, i, name: rt.name, key, to, missing: ev && ev.flags[0] ? ev.flags[0].text : 'not evaluated', cranes: [], flags: flagSum(ev ? ev.flags : []), rt, ev }); return; }
+      let oh = null; (ev.oh.list || []).forEach(o => { const m = o.kind === 'power' ? (isNum(o.d) && isNum(o.DT) ? o.d - o.DT : null) : o.c; if (m == null) return;
+        if (!oh || m < oh.margin) oh = { name: o.name, margin: m, text: o.kind === 'power' ? `${o.name}: ${fmt(o.d, 2)} ft vs D_T ${fmt(o.DT, 0)} ft (power line)` : `${o.name}: ${fmt(o.c, 2)} ft under it` }; });
+      rows.push({ kind: 'route', id: rt.id, i, name: rt.name, key, to, rt, ev, cranes: [], worst: ev.worst, gross: ev.ax && ev.ax.gross, otMax: ev.otMax, oh, flags: flagSum(ev.flags) });
+    });
     return rows;
   }
   const pctText = c => c.pct == null ? 'not permitted' : fmt(c.pct, 1) + ' %';
@@ -114,6 +124,7 @@
       if (g) meth.push(`${u.name}: ${g.mode === 'none' ? 'not computed (' + g.why + ')' : g.mode === 'rigid' ? 'entered data' : 'estimate — verify with the manufacturer\'s outrigger calculator'}`); });
     out.push({ topic: 'Outrigger / track loads', key: 'ground-basis', text: (meth.length ? meth.join('; ') : 'no crane setup') + '. Rigid-body statics with the entered weights and CGs, else the bounding estimate (Report §Ground basis).' });
     out.push({ topic: 'Power lines', key: 'items-power', text: '29 CFR 1926.1408 Table A minimum clearance D_min by the entered voltage (up to 50 kV 10 ft; over 50 to 200 kV 15 ft; over 200 to 350 kV 20 ft; over 350 to 500 kV 25 ft; over 500 to 750 kV 35 ft; over 750 to 1,000 kV 45 ft; over 1,000 kV as set by the utility or a registered professional engineer); voltage not known: 50 ft, or 20 ft where the utility says 350 kV or less; checked in 3D for the boom, load line, load and counterweight along the path.' });
+    if ((P.routes || []).length) out.push({ topic: 'Trucking routes', key: 'route', text: 'swept path by the low-speed kinematic off-tracking model of the drawn steer-axle path; power lines over the route: 29 CFR 1926.1411 Table T travel clearance (applied to the haul vehicle and its load; voltage not known: 20 ft); overhead items: clearance above the load top; posted bridges against the entered postings (tons of 2,000 lb).' });
     out.push({ topic: '3D clearances', key: 'lift-rule', text: `path model ${s.path === 'luff' ? 'luff at the pick, then swing at the set radius' : 'uniform (the radius changes evenly with the swing)'}; obstruction clearance ${fmt(s.obstClr, 2)} ft (contact red, closer amber); crane to crane: the same clearance.` });
     out.push({ topic: 'Coordinate system', key: 'crs', text: `${z.name}; grid coordinates and distances (no combined scale or elevation factor); NAD 83; plan views grid north up; elevations in ft (crane pad elevation as entered, else the datum 0.00).` });
     out.push({ topic: 'Units', text: 'US customary: ft, lb (kip = 1,000 lb), psf (ksf = 1,000 psf).' });
@@ -459,27 +470,57 @@
     const bp = D.bbox(i0), t0 = D.mark(); groundTables(D, C); const bt = D.bbox(t0); D.move(t0, bp[0] - bt[0], bp[1] - 4 * h - bt[3]);
   }
 
+  /* ---------- the trucking route sheet (C6: engine/route.js evaluate through CranePickRouteUI.evalRoute) ---------- */
+  function routePlan(D, C) {
+    const { P, rt, ev, w } = C.ro, V = pv(w), h = D.h, RT = window.CranePickRoute, lS = D.layer('ROUTE-SWEPT', 9), lP = D.layer('ROUTE-PATH', 4, 'CENTER'), lV = D.layer('ROUTE-VEHICLE', 5), lL = D.layer('ROUTE-LOAD', 1), lM = D.layer('ROUTE-MARK', 6), lT = D.layer('TEXT', 7);
+    siteLayer(D, V, P);
+    (P.routeMarks || []).forEach(m => { if (m.pts.length === 1) { drawCircle(D, V, lM, m.pts[0], Math.max(m.w || 2, 1)); if (inWin(m.pts[0], w)) D.text(lT, V.X(m.pts[0].x) + h, V.Y(m.pts[0].y), 0.7 * h, U(`${m.name || m.type}${isNum(m.h) ? ' H ' + fmt(m.h, 2) + ' FT' : ''}`)); }
+      else { drawPoly(D, V, lM, m.pts, false); const q = m.pts.find(p => inWin(p, w)); if (q) D.text(lT, V.X(q.x) + h, V.Y(q.y) + 0.5 * h, 0.7 * h, U(`${m.type === 'bridge' ? 'POSTED BRIDGE' : m.type === 'haul' ? 'HAUL ROAD' : 'OVERHEAD'}: ${m.name || ''}`)); } });
+    const sw = RT.swept(ev.sim, Math.max(2, ev.sim.pa.L / 120)); sw.rings.forEach(q => drawPoly(D, V, lS, q, true));
+    drawPoly(D, V, lP, ev.sim.dense.filter(q => q.s >= 0), false, D.ltype('CENTER'));
+    ev.sim.samples[ev.sim.samples.length - 1].parts.forEach(pp => drawPoly(D, V, pp.part === 'load' ? lL : lV, pp.poly, true));
+    // turn labels on the outside of each curve (away from its centre: right of the path for a left turn)
+    (ev.turns || []).forEach(t => { const m = RT.at(ev.sim.pa, (t.s0 + t.s1) / 2); if (!m || !inWin(m, w)) return; const sg = t.D > 0 ? -1 : 1, nx = -Math.sin(m.th) * sg, ny = Math.cos(m.th) * sg, off = 3 * h;
+      D.text(lT, V.X(m.x) + nx * off, V.Y(m.y) + ny * off - 0.35 * h, 0.8 * h, `T${t.n}`, 1); });
+    const st = ev.stage; if (st && st.cg && inWin(st.cg, w)) { const x = V.X(st.cg.x), y = V.Y(st.cg.y); D.circle(lL, x, y, 0.7 * h); D.text(lT, x + 1.2 * h, y - 0.3 * h, 0.7 * h, 'LOAD CG AT THE STOP'); }
+    frameLayer(D, V, P, `PLAN: ${rt.name}`);
+  }
+  function routeTables(D, C) {
+    const { P, rt, ev, row } = C.ro, h = D.h, lL = D.layer('TBL', 8), lT = D.layer('TEXT', 7), RT = window.CranePickRoute, v = RT.vehOf(rt), l = RT.loadOf(rt, P);
+    let y = table(D, lL, lT, 0, 0, ['ITEM', 'VALUE'], [['VEHICLE', RT.TYPES[v.type]], ['LOAD', `${fmt(l.L, 2)} X ${fmt(l.B, 2)} FT, ${fmt(l.W, 0)} LB, HEIGHT ${fmt(l.h, 2)} FT ON A ${fmt(v.hDeck, 2)} FT DECK`],
+      ['DELIVERS TO', row.to ? row.to.name : '-'], ['ROUTE LENGTH', fmt(ev.sim.pa.L, 1) + ' FT'], ['MAX OFF-TRACKING', fmt(ev.otMax, 2) + ' FT'], ['GROSS WEIGHT', `${fmt(ev.ax.gross, 0)} LB (${fmt(ev.ax.gross / RT.LB_PER_TON, 2)} T)`],
+      ['LEAST OVERHEAD CLEARANCE', row.oh ? row.oh.text : '-'], ['WORKED', seeRef(C, row.key)]], 'ROUTE DATA').y;
+    if ((ev.turns || []).length) y = table(D, lL, lT, 0, y - h, ['TURN', 'DELTA (DEG)', 'R (FT)', 'OT MAX (FT)', 'R INSIDE (FT)', 'R OUTSIDE (FT)', 'SWEPT WIDTH (FT)'], ev.turns.map(t => [`T${t.n}`, fmt(t.D * 180 / Math.PI, 1), fmt(t.r, 1) + (t.reduced ? ' *' : ''), fmt(t.ot, 2), fmt(t.Rin, 2), fmt(t.Rout, 2), fmt(t.Rout - t.Rin, 2)]), 'TURNS (SWEPT PATH)').y;
+    y = table(D, lL, lT, 0, y - h, ['AXLE GROUP', 'LOAD (LB)', 'AXLES', 'PER AXLE (LB)', 'PER TYRE (LB)'], ev.ax.groups.map(g => [g.label, fmt(g.load, 0), String(g.n), fmt(g.perAxle, 0), fmt(g.perTyre, 0)]), `AXLE LOADS (${ev.ax.mode})`).y;
+    if (ev.oh.list.length) y = table(D, lL, lT, 0, y - h, ['OVERHEAD ITEM', 'KIND', 'HEIGHT (FT)', 'CLEARANCE (FT)', 'RESULT'], ev.oh.list.map(o => [o.name, o.kind === 'power' ? 'POWER LINE (TABLE T)' : 'OVERHEAD', fmt(o.kind === 'power' ? o.hw : o.h, 2), o.kind === 'power' ? `${fmt(o.d, 2)} VS D_T ${fmt(o.DT, 0)}` : fmt(o.c, 2), o.flag ? o.flag.level : 'OK']), 'OVERHEAD CLEARANCES').y;
+    if (ev.br.length) y = table(D, lL, lT, 0, y - h, ['POSTED BRIDGE', 'CHECKS (VALUE / POSTING, T)', 'RESULT'], ev.br.map(b => [b.name, b.checks.length ? b.checks.map(c => `${c.what} ${fmt(c.val, 2)} / ${fmt(c.limit, 2)}`).join('; ') : 'NO POSTING ENTERED', b.ok ? 'OK' : 'SEE FLAGS']), 'POSTED BRIDGES ON THE ROUTE').y;
+    const fl = ev.flags.filter(f => f.level !== 'info').map(f => f.text);
+    y = notesBlk(D, lT, 0, y - h, fl.length ? 'FLAGS' : 'FLAGS: NONE', fl, 100);
+    notesBlk(D, lT, 0, y - h, 'NOTES', ['SWEPT PATH: LOW-SPEED KINEMATIC OFF-TRACKING OF THE DRAWN STEER-AXLE PATH (OUTLINES OF THE TRACTOR, BODY / DOLLY AND LOAD); VEHICLE DRAWN AT THE TRUCK STOP.',
+      `STAGING AND THE LIFT IT DELIVERS TO: ${seeRef(C, row.to && row.to.key)}. VALUES: THE APP'S ENGINE (ROUTE TAB, REPORT).`], 100);
+  }
+  function routeSheet(D, C) { const h = D.h, i0 = D.mark(); routePlan(D, C); const bp = D.bbox(i0), t0 = D.mark(); routeTables(D, C); const bt = D.bbox(t0); D.move(t0, bp[2] + 4 * h - bt[0], bp[3] - bt[3]); }
+
   /* ---------- the cover and the general notes ---------- */
   function coverBlocks(P, sum, list, miss, date) {
     const t = P.title || {};
     const head = { t: 'head', lines: [[3, t.name || 'CRANE LIFT PLAN'], [1.6, 'CRANE LIFT PLAN DRAWINGS: LIFT-PLANNING AID'], ...(t.location ? [[1, t.location]] : []), ...(t.number ? [[1, `PROJECT NO. ${t.number}`]] : []), ...(t.client ? [[1, `CLIENT / OWNER: ${t.client}`]] : []),
-      [1, `${sum.filter(r => r.kind === 'pick').length} SINGLE PICK(S), ${sum.filter(r => r.kind === 'tandem').length} GIRDER LIFT(S)`]] };
+      [1, `${sum.filter(r => r.kind === 'pick').length} SINGLE PICK(S), ${sum.filter(r => r.kind === 'tandem').length} GIRDER LIFT(S), ${sum.filter(r => r.kind === 'route').length} TRUCKING ROUTE(S)`]] };
     const sheetOf = id => { const s = list.find(q => q[2] === id); return s ? String(s[0]) : '-'; };
-    const rows = []; sum.forEach(r => { if (r.missing) { rows.push([r.name, '-', r.missing.slice(0, 60), '', '', '', '', '', sheetOf(r.kind === 'pick' ? 'lift-' + r.id : 'tlift-' + r.id)]); return; }
+    const rts = sum.filter(r => r.kind === 'route').map(r => [r.name, r.to ? r.to.name : '-', r.missing ? String(r.missing).slice(0, 60) : r.worst === 'ok' ? 'NONE' : String(r.worst).toUpperCase(), r.missing ? '-' : fmt(r.gross, 0), r.missing ? '-' : fmt(r.otMax, 2), r.oh ? r.oh.text.slice(0, 60) : '-', `${r.flags.stop} STOP / ${r.flags.warn} CHECK`, sheetOf('route-' + r.i)]);
+    const rows = []; sum.filter(r => r.kind !== 'route').forEach(r => { if (r.missing) { rows.push([r.name, '-', r.missing.slice(0, 60), '', '', '', '', '', sheetOf(r.kind === 'pick' ? 'lift-' + r.id : 'tlift-' + r.id)]); return; }
       r.cranes.forEach((c, i) => rows.push([i ? '' : r.name, `${r.kind === 'pick' ? 'SINGLE' : r.single ? 'GIRDER, 1 CRANE' : 'TANDEM C' + (i + 1)}: ${c.setup}`, pctText(c), c.clsText, i ? '' : clrText(r.clr, r.single).slice(0, 70), i ? '' : grText(r.ground), i ? '' : r.ground && r.ground.ratio != null ? fmt(r.ground.ratio, 2) : '-', i ? '' : `${r.flags.stop} STOP / ${r.flags.warn} CHECK`, sheetOf(r.kind === 'pick' ? 'lift-' + r.id : 'tlift-' + r.id)])); });
     return [head, { t: 'table', title: 'SHEET INDEX', cols: ['SHEET', 'TITLE'], rows: list.map(([n, tt]) => [String(n), tt]) },
       { t: 'table', title: 'LIFT SUMMARY (GOVERNING % OF CHART PER CRANE)', cols: ['LIFT', 'TYPE: CRANE SETUP', '% CHART', 'STATUS', 'CLOSEST CLEARANCE', 'MAX FLOAT / TRACK LOAD', 'BEARING RATIO', 'FLAGS', 'SHEET'], rows: rows.length ? rows : [['NO LIFT YET', '', '', '', '', '', '', '', '']] },
+      ...(rts.length ? [{ t: 'table', title: 'TRUCKING ROUTES', cols: ['ROUTE', 'DELIVERS TO', 'WORST FLAG', 'GROSS (LB)', 'MAX OFF-TRACKING (FT)', 'LEAST OVERHEAD CLEARANCE', 'FLAGS', 'SHEET'], rows: rts }] : []),
       ...(miss.length ? [{ t: 'table', title: 'DRAWINGS NOT IN THIS SET', cols: ['NOT GENERATED', 'REASON'], rows: miss.map(q => [q[0], String(q[1]).slice(0, 90)]) }] : []),
       { t: 'table', title: 'REVISIONS', cols: ['REV.', 'DATE', 'DESCRIPTION', 'BY'], rows: [[t.rev || '0', t.date || date, 'ISSUED FROM CRANE PICK ANALYZER (LIFT-PLANNING AID)', t.by || ''], ['', '', '', ''], ['', '', '', '']] }];
   }
   function notesBlocks(P, ctx) { return [{ t: 'notes', title: 'GENERAL NOTES', lines: notesModel(P, ctx).map(n => `${n.topic}: ${n.text}`), wc: 110 }]; }
 
   /* ---------- the set ---------- */
-  const EXTRA = [];   // addSheets(fn): fn(P, ctx, C) -> [{ id, title, fn(D, C), c, kmin, src }] | null (sheets of other modules, after the ground sheet)
-  /* C6 HOOK (trucking route): ui/route.js adds its route sheet here, e.g.
-       window.CranePickDrawSet.addSheets((P, ctx, C) => P.route ? [{ id: 'route', title: 'TRUCKING ROUTE', fn: routeSheetFn, c: { ...C }, kmin: 120,
-         src: [['out', 'route', 'Route tab'], ['rpt', 'route', 'Report §Route']] }] : null);
-     with the route, swept path, clearances, axle loads and posted bridges drawn by the route module from its engine values. */
+  const EXTRA = [];   // addSheets(fn): fn(P, ctx, C) -> [{ id, title, fn(D, C), c, kmin, src }] | null (sheets of other modules, after the route sheets)
+  /* (C6 merged before C7: the route sheets are drawn here, routeSheet; addSheets stays for later modules.) */
   function addSheets(fn) { if (typeof fn === 'function') EXTRA.push(fn); }
   function build(P, ctx, opt) {
     opt = opt || {}; ctx = ctx || {}; const D = X_().drawing({ prefix: 'C-' }), errors = [], miss = [];
@@ -515,6 +556,12 @@
     if (gm.length) {
       list.push({ id: 'ground', title: 'GROUND: OUTRIGGER / TRACK LOADS, MATS, BEARING', fn: groundSheet, kmin: 24, c: { ...C, gr: { P, gm } }, src: [['out', 'ground', 'Ground tab'], ['in', 'ground', 'Ground input tab'], ['rpt', 'ground', 'Report §Ground']] }); }
     else if (sum.length) miss.push(['GROUND', 'NO GROUND RESULT (NO CRANE SETUP WITH A LIFT)']);
+    // C6: a sheet per trucking route
+    if (window.CranePickRoute) sum.filter(r => r.kind === 'route').forEach(r => {
+      if (r.missing) { miss.push([`TRUCKING ROUTE: ${r.name}`, r.missing]); return; }
+      const ev = r.ev, pts = [].concat(...ev.sim.samples.map(q => q.parts.map(p => p.poly).flat())); (P.routeMarks || []).forEach(m => m.pts.forEach(p => pts.push(p)));
+      list.push({ id: 'route-' + r.i, title: `TRUCKING ROUTE: ${r.name}`, fn: routeSheet, kmin: 48, c: { ...C, ro: { P, rt: r.rt, ev, row: r, w: windowOf(pts, 0.06) } }, src: [['in', 'route', 'Route input tab'], ['out', 'route', 'Route tab'], ['rpt', r.key, 'Report §Route']] });
+    });
     EXTRA.forEach(fn => { try { (fn(P, ctx, C) || []).forEach(s => list.push(Object.assign({ kmin: 1, c: { ...C } }, s))); } catch (e) { miss.push(['ADDED SHEET', String(e.message)]); } });
     if (!sum.length) miss.push(['LIFT PLAN SHEETS', 'NO LIFT YET (LIFTS OR GIRDER LIFTS TAB)']);
     // the general notes (second) and the cover with the sheet index (first): the cover's own sheets counted in the index

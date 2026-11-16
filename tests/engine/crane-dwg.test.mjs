@@ -21,7 +21,7 @@ import path from 'node:path';
 import { test, loadShared, ROOT } from './harness.mjs';
 
 const APP = path.join(ROOT, 'apps', 'crane-pick');
-const W = loadShared('steps.js', 'boussinesq.js', 'dxf.js', ...['geo', 'model', 'osha', 'cranes', 'lift', 'elev', 'clear3d', 'ground', 'tandem'].map(f => path.join(APP, 'engine', f + '.js')),
+const W = loadShared('steps.js', 'boussinesq.js', 'dxf.js', ...['geo', 'model', 'osha', 'cranes', 'lift', 'elev', 'clear3d', 'ground', 'tandem', 'route'].map(f => path.join(APP, 'engine', f + '.js')),
   path.join(APP, 'report', 'builders.js'), path.join(APP, 'ui', 'drawset.js'));
 const K = W.CranePickCranes, LF = W.CranePickLift, M = W.CranePickModel, T = W.CranePickTandem, GR = W.CranePickGround, DS = W.CranePickDrawSet, X = W.SharedDxf;
 const J = v => JSON.parse(JSON.stringify(v)), same = (a, b, m) => assert.deepEqual(J(a), J(b), m);
@@ -31,7 +31,7 @@ raw.app_inputs = Object.assign({}, raw.app_inputs, { ph4: { carrierLb: 40000, ca
 const WH = K.parse(raw).crane;
 const grp = id => K.groups(WH).find(g => Object.values(g.configs).some(x => x.id === id)).key;
 
-function project() {
+function project(o) {
   const P = M.newProject(); P.title = Object.assign({}, P.title, { name: 'TEST LIFT PLAN', number: 'T-7', by: 'ABC', checker: 'DEF' });
   P.cranes = [M.normCrane({ id: 'c1', def: WH, src: { from: 'file', name: 'fake' } })];
   const mat = { type: 'timber', B: 4, L: 4, t: 12, Fb: 1200, Fv: 150, E: 1.2e6 };
@@ -42,6 +42,8 @@ function project() {
   P.tandems = [M.normTandem({ id: 't1', name: 'Tandem 1', type: 'tandem', slots: ['u1', 'u2'], girder: { L: 60, W: 40000, cg: 28, H: 6 },
     hooks: [{ s: 10, rig: 1000, hook: 1000, rigH: 10, blk: 4 }, { s: 50, rig: 1000, hook: 1000, rigH: 10, blk: 4 }], pick: { x: 1050, y: 1980, h: 90, z: 105 }, set: { x: 1050, y: 2000, h: 90, z: 120 } })];
   P.lift = Object.assign({}, P.lift, { tandem: 75 });
+  if (o && o.route) P.routes = [M.normRoute({ id: 'r1', name: 'Route 1', pts: [{ x: 900, y: 1700 }, { x: 1050, y: 1700 }, { x: 1050, y: 1990 }], rad: [null, 80, null], tandemId: 't1',
+    veh: { type: 'semi', L1: 20, e: 1, L2: 40, Wtr: 20000, xt: 8, Wtl: 15000, xtl: 25, nS: 1, nD: 2, nR: 3, tS: 2, tD: 4, tR: 4 }, load: { r: 2, h: 6, B: 8 } })];
   return M.normalize(JSON.parse(JSON.stringify(P)));
 }
 /* the page's evaluation (ui/place.js evalPick0, ui/tandem.js evalT): the same engine calls */
@@ -51,7 +53,8 @@ function ctxOf(P) {
     ev.elev = W.CranePickElev.evaluate(c, u, k, ev, 'k.el'); ev.flags = ev.flags.concat(ev.elev.flags); ev.c3 = W.CranePickClear.check(c, u, k, ev, P.items, S, 'k.c3'); ev.flags = ev.c3.flags.concat(ev.flags);
     ev.ground = GR.evaluate(c, u, k, P, 'k.gr'); ev.flags = ev.flags.concat(ev.ground.flags || []); return ev; };
   const evalT = t => { const us = t.slots.slice(0, t.type === 'single' ? 1 : 2).map(su); return T.evaluate(t, { setups: us, cranes: us.map(cr), items: P.items, P, s: Object.assign(LF.settingsOf(P), { tandem: P.lift.tandem || 75 }), zPad: W.CranePickElev.padEl(us[0]) }, 'tg'); };
-  return { evalPick, evalT, date: '2026-11-16', ref: key => ({ 'pick-k1': '§5.2', 'tandem-t1': '§6.3', ground: '§7', 'gr-k1': '§7.3' })[key] || null };
+  const evalRoute = r => W.CranePickRoute.evaluate(r, P, 'rt' + (P.routes.indexOf(r) + 1), { tev: evalT(W.CranePickRoute.tandemOf(r, P)) });
+  return { evalPick, evalT, evalRoute, date: '2026-11-16', ref: key => ({ 'route-0': '§8.1', 'pick-k1': '§5.2', 'tandem-t1': '§6.3', ground: '§7', 'gr-k1': '§7.3' })[key] || null };
 }
 const textsOf = (B, id) => { const s = B.sheets.find(q => q.id === id); assert.ok(s, 'sheet ' + id); return B.D.E.slice(s.i0, s.i1).filter(e => e.t === 'TEXT' || e.t === 'DIM').map(e => e.s).join(' | '); };
 
@@ -108,4 +111,14 @@ test('clip (Liang–Barsky) and the hook for other modules\' sheets', () => {
   same(DS.clip({ x: -5, y: 5 }, { x: 15, y: 5 }, w), [{ x: 0, y: 5 }, { x: 10, y: 5 }]); assert.equal(DS.clip({ x: -5, y: -1 }, { x: 15, y: -1 }, w), null);
   const P = project(); DS.addSheets(() => [{ id: 'route', title: 'TRUCKING ROUTE', fn: D => D.text(D.layer('TEXT', 7), 0, 0, D.h, 'ROUTE HOOK'), kmin: 120 }]);
   const B = DS.build(P, ctxOf(P)); assert.equal(B.sheets[B.sheets.length - 1].id, 'route'); assert.match(textsOf(B, 'route'), /ROUTE HOOK/);
+});
+
+// Route (C6, trucking route sheet): a semi (tractor 20,000 lb, trailer 15,000 lb) carrying the tandem lift's girder (40,000 lb, linked):
+//   gross weight = 20,000 + 15,000 + 40,000 = 75,000 lb (statics: the sum of the weights); one 90° turn (T1).
+test('route (C6): summary row and the route sheet (gross weight hand check, turn table, delivers to the girder lift)', () => {
+  const P = project({ route: true }), ctx = ctxOf(P), S = DS.summary(P, ctx), r = S.find(x => x.kind === 'route');
+  assert.ok(r && !r.missing, r && r.missing); near(r.gross, 75000, 1e-6, 'gross = tractor + trailer + girder'); assert.equal(r.to.name, 'Tandem 1'); assert.equal(r.to.key, 'tandem-t1'); assert.ok(r.otMax > 0);
+  const B = DS.build(P, ctx, { paper: 'D' }); same(B.errors, []); assert.ok(B.sheets.some(s => s.id === 'route-0'));
+  const rt = textsOf(B, 'route-0'); assert.match(rt, /GROSS WEIGHT \| 75,000 LB \(37\.50 T\)/); assert.match(rt, /\| T1 \|/); assert.match(rt, /DELIVERS TO \| TANDEM 1/); assert.match(rt, /REPORT SEC\. 8\.1/); assert.match(rt, /REPORT SEC\. 6\.3/);
+  assert.match(textsOf(B, 'cover'), /TRUCKING ROUTES/); assert.ok(X.validate(B.D.toDXF()).ok);
 });

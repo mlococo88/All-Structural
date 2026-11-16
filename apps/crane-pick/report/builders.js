@@ -46,13 +46,14 @@
   }
   /* C7: the summary of every lift (ui/drawset.js summary: the engine values through the page's evaluations), with § links */
   const ORDER = ['site', 'sheets', 'items', 'cranes', 'lifts', 'tandem', 'ground', 'route', 'elev', 'v3'];
-  const ctxOf = () => ({ evalPick: k => (window.CranePickPlace ? window.CranePickPlace.evalPick(k) : null), evalT: t => (window.CranePickTandemUI ? window.CranePickTandemUI.evalT(t) : null) });
+  const ctxOf = () => ({ evalPick: k => (window.CranePickPlace ? window.CranePickPlace.evalPick(k) : null), evalT: t => (window.CranePickTandemUI ? window.CranePickTandemUI.evalT(t) : null), evalRoute: r => (window.CranePickRouteUI ? window.CranePickRouteUI.evalRoute(r) : null) });
   const f = (v, d) => (typeof v === 'number' && isFinite(v)) ? v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—';
   function liftSummary(P) {
-    const DS = window.CranePickDrawSet; if (!DS || !((P.picks || []).length + (P.tandems || []).length)) return [];
+    const DS = window.CranePickDrawSet; if (!DS || !((P.picks || []).length + (P.tandems || []).length + (P.routes || []).length)) return [];
     let rows; try { rows = DS.summary(P, ctxOf()); } catch (e) { console.error(e); return []; }
-    const cell = [];
-    rows.forEach(r => {
+    const cell = [], rts = rows.filter(r => r.kind === 'route').map(r => [{ t: r.name, key: r.key }, r.to ? { t: r.to.name, key: r.to.key } : '—', r.missing ? r.missing : r.worst === 'ok' ? 'none' : r.worst,
+      r.missing ? '—' : { t: f(r.gross, 0), n: true, key: r.key }, r.missing ? '—' : { t: f(r.otMax, 2), n: true, key: r.key }, r.oh ? { t: r.oh.text, key: r.key } : '—', `${r.flags.stop} stop, ${r.flags.warn} check`]);
+    rows.filter(r => r.kind !== 'route').forEach(r => {
       if (r.missing) { cell.push([{ t: r.name, key: r.key }, r.kind === 'pick' ? 'single pick' : 'girder lift', r.missing, '', '', '', '', '', '']); return; }
       r.cranes.forEach((c, i) => cell.push({ cells: [i ? '' : { t: r.name, key: r.key }, `${r.kind === 'pick' ? 'single pick' : r.single ? 'girder lift, one crane' : 'tandem, crane ' + (i + 1)}: ${c.setup}`,
         { t: c.pct == null ? 'not permitted' : f(c.pct, 1) + ' %', n: true, key: r.key, cls: c.cls === 'ok' ? 'ok' : c.cls === 'caution' ? 'hi' : 'ng' }, c.clsText, c.where,
@@ -61,7 +62,8 @@
         i ? '' : (r.flags.stop || r.flags.warn ? `${r.flags.stop} stop, ${r.flags.warn} check` : 'none')] })); });
     return [{ id: 'lsum', key: 'lift-sum', title: 'Summary of every lift', items: [
       { type: 'note', text: 'One row per crane of each lift: the governing % of chart (single picks: the lift thresholds; tandem lifts: the tandem limit per crane), the closest 3D clearance (the smallest margin over its requirement), the largest float / track load and the largest bearing ratio, the flags. Each value is worked in the § linked from it. Drawings: [[tab:dwg|Drawings tab]].' },
-      { type: 'table', wide: true, head: ['Lift', 'Type: crane setup', '% chart (governing)', 'Status', 'Governing', 'Closest clearance', 'Max float / track load', 'Bearing ratio', 'Flags'], rows: cell }] }];
+      ...(cell.length ? [{ type: 'table', wide: true, head: ['Lift', 'Type: crane setup', '% chart (governing)', 'Status', 'Governing', 'Closest clearance', 'Max float / track load', 'Bearing ratio', 'Flags'], rows: cell }] : []),
+      ...(rts.length ? [{ type: 'table', wide: true, caption: 'Trucking routes', head: ['Route', 'Delivers to', 'Worst flag', 'Gross (lb)', 'Max off-tracking (ft)', 'Least overhead clearance', 'Flags'], rows: rts }] : [])] }];
   }
   /* C7: §2 Basis: the drawing set's general notes (one model) with § links */
   function basis(P) {
