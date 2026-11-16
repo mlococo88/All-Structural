@@ -34,7 +34,8 @@
       <div class="sec"><div class="secHead">About this tool</div><div class="secBody"><p class="note"><b>Lift-planning aid.</b> Draw the site on the map or on a plan sheet: obstructions,
         power lines (OSHA minimum clearance), buried utilities, culverts and walls, exclusion zones, labels and dimensions. Every item can be dragged and edited, and every change can be undone.</p>
         <p class="note">Cranes (C2): load the crane library (Cranes tab: from GitHub or from files, or paste a chart), add cranes to the project, place them on the map (Lifts tab) and drag the crane, the pick and the set points: radius, chart capacity and % of chart follow live; every pick is listed on the Picks tab and in the Report.</p>
-        <p class="note">Coming next: elevations and clearances in 3D (C3), ground bearing and stress at depth (C4), rigging and tandem lifts (C5), lift plan sheets (C6).</p>
+        <p class="note">Girder lifts (C5, Girder lifts tab): a girder (or paired girders with cross-frames) lifted by one crane or by two in tandem, from the truck to the bearings: load share, every step of the path checked for each crane (capacity against the tandem limit, heights, 3D clearances, crane to crane, ground).</p>
+        <p class="note">Coming next: the trucking route (C6), lift plan sheets, DXF and the multi-lift Report (C7).</p>
         <p class="note">Units: US customary (ft, kip, psf / ksf). Positions: State Plane grid, US survey feet (Site &amp; map tab).</p></div></div>`;
     p.addEventListener('change', e => {
       const t = e.target;

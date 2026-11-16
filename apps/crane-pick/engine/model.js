@@ -38,8 +38,11 @@
      crane.def.app_inputs.geom = { footH, head, boomW, cwBot, cwTop } (ft, C3-1: the crane's elevation geometry entered in this tool;
                engine/elev.js geomOf; the boom-foot offset and the tail radius stay in app_inputs.plan)
      setup.ground (C4) = { mat: { type, B, L, t, Fb, Fv, E, Fy, gamma, k }, qa (psf), qaUnit } (normSetupGround); ground (C4, project) = { caps: { <util id>: psf } }
-     lift  = { caution: 75, critical: 75, limit: 100 (% of chart), interp: false, path: 'uniform' | 'luff', obstClr: 2 (ft) }
+     lift  = { caution: 75, critical: 75, limit: 100 (% of chart), interp: false, path: 'uniform' | 'luff', obstClr: 2 (ft),
+               tandem: 75 (% of chart per crane in a tandem lift, C5) }
              (project settings; engine/lift.js; path and obstClr C3-2)                                                  C2-2
+     tandems: [ tandem ]  C5: girder lifts (one crane or two in tandem), engine/tandem.js (the fields there; normTandem). A project
+             saved before C5 has none: normalize gives [].
      routes = [ route ], routeMarks = [ mark ]   C6: trucking routes and their marks (engine/route.js has the fields; normRoute,
              normRouteMark). A project saved before C6 has none: normalize gives []. */
 (function () {
@@ -64,8 +67,8 @@
     o = o || {};
     return { schema: FORMAT, v: 1,
       title: { name: 'New crane pick', number: '', location: '', client: '', by: '', checker: '', date: today(), rev: '' },
-      notes: '', site: { zone: o.zone || 'EPSG:2249' }, view: o.view || null, sheets: [], items: [], cranes: [], setups: [], picks: [], ground: { caps: {} }, routes: [], routeMarks: [],
-      lift: { caution: 75, critical: 75, limit: 100, interp: false, path: 'uniform', obstClr: 2 } };
+      notes: '', site: { zone: o.zone || 'EPSG:2249' }, view: o.view || null, sheets: [], items: [], cranes: [], setups: [], picks: [], ground: { caps: {} }, tandems: [], routes: [], routeMarks: [],
+      lift: { caution: 75, critical: 75, limit: 100, interp: false, path: 'uniform', obstClr: 2, tandem: 75 } };
   }
   const num = (v, d) => typeof v === 'number' && isFinite(v) ? v : d;
   const numOrNull = v => typeof v === 'number' && isFinite(v) ? v : null;
@@ -140,7 +143,7 @@
   /* C3-2: path ('uniform': the radius changes uniformly with the swing angle (C2) | 'luff': luff at the pick, then swing at the set
      radius), obstClr (ft: an obstruction closer than this is flagged amber; contact is red) */
   function normLift(l) { l = l || {}; return { caution: numPos(l.caution, 75), critical: numPos(l.critical, 75), limit: numPos(l.limit, 100), interp: !!l.interp,
-    path: l.path === 'luff' ? 'luff' : 'uniform', obstClr: typeof l.obstClr === 'number' && isFinite(l.obstClr) && l.obstClr >= 0 ? l.obstClr : 2 }; }
+    path: l.path === 'luff' ? 'luff' : 'uniform', obstClr: typeof l.obstClr === 'number' && isFinite(l.obstClr) && l.obstClr >= 0 ? l.obstClr : 2, tandem: numPos(l.tandem, 75) }; }   // tandem: C5
   /* C6: a trucking route (engine/route.js). Lengths ft, weights lb, tyre area in²; null = not entered (engine defaults). */
   const VEH_KEYS = ['L1', 'e', 'fo', 'ro', 'Wt', 'L2', 'Wb', 'dF', 'dR', 'Lj', 'ej', 'Ld', 'k', 'dmax', 'Rmin', 'hDeck', 'Wtr', 'xt', 'Wtl', 'xtl', 'Wj', 'Wd', 'nS', 'nD', 'nJ', 'nR', 'tS', 'tD', 'tJ', 'tR'];
   const VEH_SIGNED = ['e', 'ej', 'xt', 'xtl'];
@@ -165,6 +168,22 @@
     if (m.type === 'bridge') { const p = m.post && typeof m.post === 'object' ? m.post : {}; o.post = { gross: nn(p.gross), axle: nn(p.axle), tLabel: str(p.tLabel), tTons: nn(p.tTons) }; }
     return o;
   }
+  /* C5: a girder lift (engine/tandem.js). Weights ≥ 0 (lb), lengths ft; null = not entered (engine defaults). */
+  function normTandem(t) {
+    if (!t || typeof t !== 'object') return null;
+    const nn = v => { const x = numOrNull(v); return x != null && x >= 0 ? x : null; }, g = t.girder && typeof t.girder === 'object' ? t.girder : {}, pr = g.pair && typeof g.pair === 'object' ? g.pair : {};
+    const pose = (p, d) => { p = p && typeof p === 'object' ? p : {}; return { x: num(p.x, d.x), y: num(p.y, d.y), h: ((num(p.h, d.h) % 360) + 360) % 360, z: numOrNull(p.z) }; };
+    const L = numPos(g.L, 100), hk = Array.isArray(t.hooks) ? t.hooks : [];
+    const hook = (h, s) => { h = h && typeof h === 'object' ? h : {}; return { s: num(h.s, s), sp: nn(h.sp), rig: nn(h.rig), hook: nn(h.hook), ded: nn(h.ded), hookLabel: str(h.hookLabel), rigH: nn(h.rigH), blk: nn(h.blk) }; };
+    const pick = pose(t.pick, { x: 0, y: 0, h: 90 });
+    return { id: str(t.id) || uid('t'), name: str(t.name, 'Girder lift'), type: t.type === 'single' ? 'single' : 'tandem',
+      slots: [0, 1].map(i => str(Array.isArray(t.slots) ? t.slots[i] : '')),
+      girder: { L, W: nn(g.W), cg: numOrNull(g.cg), cgT: numOrNull(g.cgT), cgV: nn(g.cgV), H: nn(g.H), B: nn(g.B),
+        pair: { on: !!pr.on, s: nn(pr.s), W2: nn(pr.W2), cg2: numOrNull(pr.cg2), xf: nn(pr.xf), xfCg: numOrNull(pr.xfCg) } },
+      hooks: [hook(hk[0], L * 0.1), hook(hk[1], L * 0.9)], pick, set: pose(t.set, pick),
+      way: (Array.isArray(t.way) ? t.way : []).filter(p => p && isFinite(p.x) && isFinite(p.y)).map(p => ({ x: +p.x, y: +p.y, h: ((num(p.h, 0) % 360) + 360) % 360 })),
+      trav: numOrNull(t.trav) };
+  }
   /* normalize(p): a project as this version keeps it (unknown fields dropped, defaults filled; never throws) */
   function normalize(p) {
     const d = newProject(); if (!p || typeof p !== 'object') return d;
@@ -176,7 +195,8 @@
       cranes: (Array.isArray(p.cranes) ? p.cranes : []).map(normCrane).filter(Boolean),
       setups: (Array.isArray(p.setups) ? p.setups : []).map(normSetup).filter(Boolean),
       picks: (Array.isArray(p.picks) ? p.picks : []).map(normPick).filter(Boolean), lift: normLift(p.lift), ground: normGround(p.ground),
-      routes: (Array.isArray(p.routes) ? p.routes : []).map(normRoute).filter(Boolean), routeMarks: (Array.isArray(p.routeMarks) ? p.routeMarks : []).map(normRouteMark).filter(Boolean) };
+      tandems: (Array.isArray(p.tandems) ? p.tandems : []).map(normTandem).filter(Boolean),   // C5
+      routes: (Array.isArray(p.routes) ? p.routes : []).map(normRoute).filter(Boolean), routeMarks: (Array.isArray(p.routeMarks) ? p.routeMarks : []).map(normRouteMark).filter(Boolean) };   // C6
     Object.keys(d.title).forEach(k => { o.title[k] = str(t[k], k === 'date' ? '' : ''); });
     if (p.savedAt) o.savedAt = str(p.savedAt);
     return o;
@@ -199,5 +219,5 @@
   }
   /* text of the inputs (undo / "unsaved changes"): the project without the view and the saved time */
   function inputsText(P) { const o = Object.assign({}, P); delete o.view; delete o.savedAt; return JSON.stringify(o); }
-  window.CranePickModel = { KEYS, FORMAT, TYPES, UTIL_KINDS, BASIS, newProject, normalize, normItem, normSheet, normCrane, normSetup, normPick, normElev, normLift, normSetupGround, normGround, normRoute, normRouteMark, MARK_TYPES, ROUTE_VEH, load, save, toFile, fromFile, inputsText, uid };
+  window.CranePickModel = { KEYS, FORMAT, TYPES, UTIL_KINDS, BASIS, newProject, normalize, normItem, normSheet, normCrane, normSetup, normPick, normElev, normLift, normSetupGround, normGround, normTandem, normRoute, normRouteMark, MARK_TYPES, ROUTE_VEH, load, save, toFile, fromFile, inputsText, uid };
 })();

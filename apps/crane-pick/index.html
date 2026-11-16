@@ -80,6 +80,8 @@
     '../../shared/boussinesq.js',  // C4: Boussinesq stress below a loaded rectangle (shared, unchanged; also Spread Footing)
     'engine/ground.js',     // C4: float / track loads along the swing, bounding estimate, mats, bearing, stress at depth
     'ui/ground.js',         // C4: Ground input and output tabs, the pressure map and float-load labels, Report §Ground
+    'engine/tandem.js',     // C5: girder lifts (one crane or two in tandem): load share, the girder path, per-step checks
+    'ui/tandem.js',         // C5: Girder lifts input tab, the girder poses on the map, scrubber, Picks rows, Report §Tandem lifts
     'engine/route.js',      // C6: trucking route: path, kinematic swept path, overhead clearances, axle loads, haul road, posted bridges, staging
     'ui/route.js'           // C6: Route input and output tabs, the route on the map (live while dragging), Report §Route
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
@@ -240,6 +242,11 @@
   #elevDock .elBar{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;padding:3px 10px;} #elevDock .elBar button{padding:1px 8px;font-size:8.5pt;}
   #el3d{height:300px;position:relative;} #el3d canvas{display:block;touch-action:none;} #elevDock.v3{max-height:none;}
   .elMode button{padding:1px 8px;font-size:8.5pt;} .elMode button[aria-pressed="true"]{background:#DBEAFE;border-color:var(--blue-600);color:#1E3A8A;font-weight:600;}
+  /* C5: girder lifts */
+  .tgCg span,.tgHk span,.tgGov span{display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font:700 9pt/1 var(--font-ui);color:#fff;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45);cursor:move;}
+  .tgCg span{background:#7C3AED;} .tgHk span{background:#B45309;} .tgGov span{background:transparent;border:3px solid #DC2626;color:#DC2626;box-shadow:none;cursor:default;}
+  .tgWay span{background:#7C3AED;font-size:8.5pt;} .tgPt span{border-radius:4px;}
+  #tlElev svg{display:block;max-width:100%;height:auto;}
   #elSvg{padding:0 6px 4px;} #elSvg svg{display:block;max-width:100%;height:auto;}
   /* C6: route labels on the map */
   .crRtLbl{pointer-events:none!important;} .crRtLbl span{display:inline-block;white-space:nowrap;font-size:8pt;line-height:1.2;background:rgba(255,255,255,.92);border:1px solid #94A3B8;border-left:4px solid #059669;border-radius:3px;padding:0 4px;color:#0f172a;transform:translate(-50%,-140%);}
@@ -298,7 +305,7 @@
       <div id="out"></div>
     </main>
   </div>
-  <footer id="appFoot"><span>Crane Pick Analyzer v0.6 (phase C6: site, plan sheets, drawing, cranes, lifts, heights, 3D, ground, route) · units: ft, kip, psf / ksf</span><span>Lift-planning aid</span></footer>
+  <footer id="appFoot"><span>Crane Pick Analyzer v0.6 (phase C6: site, plan sheets, drawing, cranes, lifts, heights, 3D, ground, girder lifts, route) · units: ft, kip, psf / ksf</span><span>Lift-planning aid</span></footer>
 </div>
 <script>
   window.CranePickApp && window.CranePickApp.start();
