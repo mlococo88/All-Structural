@@ -86,6 +86,9 @@ node tests/smoke/timber-aashto.mjs [--a <folder> | --ref <git ref>] [--shots <di
 # Timber Beam Check, AASHTO phase T2 (TBA2): bridge loads (dead loads, distribution factors incl. the lever rule, IM for wood, load factors,
 # saved data version 5) in Node (the timber-aashto filter above runs timber-aashto-loads too); browser: the wet-service default of a project
 # switched to AASHTO and the kept NDS setting, the Loads tab inputs, the Bridge Loads tab (values = engine, no PASS / FAIL), Report, 390 px
+# TBA3 (T2 part 2): HL-93 envelopes by influence lines (hand checks on 20 / 30 ft spans, the wood shear rule, Strength I demands, a
+# continuous beam against shared/moving-load.js) in tests/engine/timber-aashto-env.test.mjs (also run by the timber-aashto filter); the
+# smoke above also checks the envelope cards, the diagrams, the demands in the left column and Strength II with a permit vehicle
 node tests/smoke/timber-aashto-t2.mjs [--shots <dir>]
 
 # Spread Footing: no service combination with a bearing solution (SFNB): no console error, Bearing FAIL with a reason, card 2.6, Report;

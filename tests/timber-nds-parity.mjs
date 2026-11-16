@@ -73,7 +73,8 @@ legacy.forEach((d, i) => { const a = EA.tbcMigrate(cl(d)), b = EB.tbcMigrate(cl(
 const runs = cases.filter(([, m]) => EB.tbcRun(EB.tbcSanitize(cl(m))).ok).length;
 // an AASHTO project in the reference version: refused (newer format), never read as NDS
 const aas = cl(EB.tbcDefaultModel()); aas.design.code = 'AASHTO'; aas.design.aashto = EB.tbcAashtoDefaults(); if (EB.tbcAasLoadDefaults) aas.design.aashto.bl = EB.tbcAasLoadDefaults(); aas.version = EB.tbcVersionFor(aas);
-let refused = false; try { EA.tbcMigrate(cl(aas)); } catch (e) { refused = /newer format/.test(e.message); }
+let refused = false, readOK = false; try { const r = EA.tbcMigrate(cl(aas)); readOK = r.model.design.code === 'AASHTO'; } catch (e) { refused = /newer format/.test(e.message); }
+const newer = aas.version > EA.TBC_VERSION;   // TBA3: when the reference reads this version (same format), it must open it as AASHTO, not refuse it
 console.log(`${ref} vs working tree: ${cases.length} NDS projects (${runs} with results) + ${legacy.length} legacy files, ${n} comparisons, ${nd} differences${bad.length ? ': ' + bad.join(', ') : ''}`);
-console.log(`AASHTO project (version ${aas.version}) in ${ref}: ${refused ? 'refused (newer format)' : 'NOT refused'}`);
-process.exit(nd || !refused ? 1 : 0);
+console.log(`AASHTO project (version ${aas.version}) in ${ref} (reads up to ${EA.TBC_VERSION}): ${refused ? 'refused (newer format)' : readOK ? 'opened as AASHTO' : 'NOT refused, NOT AASHTO'}`);
+process.exit(nd || (newer ? !refused : !readOK) ? 1 : 0);

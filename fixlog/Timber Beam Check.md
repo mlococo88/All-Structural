@@ -2704,3 +2704,60 @@ Engineer decisions (2026-11-16): T2 = bridge loads; new AASHTO projects default 
 ### TBA2-g. Open items
 - Part 2: envelopes along the member (HL-93 truck / tandem / lane, 90 % two-truck case), the wood shear rule Eq. 4.6.2.2.2a-1 at the lesser of 3d and L/4 (Art. 8.7), Strength I / II / Service I factored envelopes, M<sub>u</sub>, V<sub>u</sub>, R<sub>u</sub>, Service I deflection loads, glulam C<sub>V</sub> length (TBA1 decision 9).
 - Not built in: pedestrian / sidewalk load (Art. 3.6.1.6), the design tandem pair of C3.6.1.3.1, skew correction (Art. 4.6.2.2.2e), deck design (Art. 9.9).
+
+## 2026-11-16 — PR: claude/timber-aashto-t2b (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (TBA3: AASHTO phase T2, part 2 — HL-93 envelopes along the stringer, axle placement, wood shear rule at the critical sections, Strength I / II and Service I factored envelopes, M<sub>u</sub>, V<sub>u</sub>, R<sub>u</sub>, Service I deflections; no checks yet)   [new capability] [NDS results unchanged] [saved data: one new optional field]
+
+Continues TBA2 (PR #1591). Every code site is tagged `TBA3`.
+
+### TBA3-a. What changes for the user
+- **Loads tab (AASHTO):** new input "Permit vehicle (Strength II)": axles as `P0, P1@s1, P2@s2, …` (kip; spacing in ft from the axle before). Blank = no Strength II.
+- **Bridge Loads tab:** four new cards after the load combinations:
+  5. **Live-load envelopes and axle placement (HL-93, per lane)**: how the analysis is done; for each span the largest +M and −M and for each support the largest R with the governing case and every axle (kip @ x ft), the axle and lane parts; a table of M<sub>LL</sub>±, V<sub>LL</sub>±, M<sub>DC</sub>, M<sub>DW</sub>, V<sub>DC</sub> at the 1/10 points.
+  6. **Shear at the critical sections (Art. 8.7, Eq. 4.6.2.2.2a-1)**: for each support side, a = min(3d, L/4), x<sub>LL</sub>, x<sub>d</sub>, V<sub>lane</sub> with its axle placement, V<sub>LU</sub>, V<sub>LD</sub>, V<sub>LL</sub>, V<sub>u</sub> (Strength I, II), Service I, worked.
+  7. **Factored envelopes**: the combination equations, Plotly diagrams of the M and V envelopes (Strength I max / min, Service I max / min) and a table at the 1/10 points (Strength II columns with a permit).
+  8. **Factored demands and resistances (no checks yet)**: M<sub>u</sub>+, M<sub>u</sub>− (Strength I, II), V<sub>u</sub>, R<sub>u</sub> per support next to the T1 φF<sub>b</sub>, φF<sub>v</sub>, φF<sub>c⊥</sub> (links to where each is worked); Service I deflections per span (LL per lane, g<sub>Δ</sub>, Δ<sub>LL</sub>, span/Δ, Δ<sub>DC+DW</sub>).
+- **Left column:** M<sub>u</sub>+, M<sub>u</sub>−, V<sub>u</sub>, R<sub>u</sub>, Δ<sub>LL</sub> (no OK / NG), each opening its card. Governing strip: M<sub>u</sub>. Still no PASS / FAIL.
+- **Report:** the Bridge loads section gets "Envelopes and factored demands" (governing M<sub>u</sub>, V<sub>u</sub>, R<sub>u</sub> steps with values substituted, the factored envelope table, the deflection table, a link to the Bridge Loads tab).
+
+### TBA3-b. §4 callouts (CLAUDE.md)
+1. **No NDS calculation changed**; no TBA1 / TBA2 AASHTO value changed. **C<sub>V</sub> length (T1 decision 9) not changed**: the zero-moment points of the Strength I envelope are not those of the governing load case (with patterned live load the negative-moment region of a continuous envelope covers the whole member, which would make L longer than before), so the change waits for the flexure check (T3), which will use the governing case's moment diagram.
+2. **New calculations (no previous result), AASHTO LRFD 10th Ed. (2024):**
+   - Analysis: the tool's own beam engine `tbcSolve` (direct stiffness; pin / fixed / free nodes; cantilevers) gives the reactions for a unit load at each point of a grid (each span in 40 × ⌈L/4⌉ equal parts, ≤ 0.1 ft); M, V and R influence lines by statics (exact where determinate). HL-93 per lane, **Art. 3.6.1.2.2–3.6.1.2.4, 3.6.1.3.1**: truck (rear spacing 14 ft to 30 ft; one simple span: 14 ft), tandem, both directions, lane load on the parts of the influence line of the sign sought; 90 % × (two trucks, 14 ft, ≥ 50 ft apart) + 90 % lane for M where a uniform load on all spans gives negative M, and for interior reactions; axles that do not add left out. IM per Art. 3.6.2.3 / 3.6.2.1 (TBA2).
+   - Shear, **Art. 8.7**: dead-load shear at d from the support face; live load placed for the largest shear at min(3d, L/4) from the face. Interior stringer with a wood deck, **Eq. 4.6.2.2.2a-1**: V<sub>LL</sub> = 0.50[(0.60 V<sub>LU</sub>) + V<sub>LD</sub>], V<sub>LU</sub> = 0.5 V<sub>lane</sub> (one wheel line), V<sub>LD</sub> = g<sub>V</sub>V<sub>lane</sub>; otherwise V<sub>LL</sub> = g<sub>V</sub>V<sub>lane</sub>. V<sub>u</sub> = 1.25|V<sub>DC</sub>| + 1.50|V<sub>DW</sub>| + 1.75 V<sub>LL</sub>.
+   - Combinations, **Tables 3.4.1-1, 3.4.1-2**: Strength I (γ<sub>LL</sub> 1.75), Strength II (1.35, permit), Service I; γ<sub>p</sub> max where the permanent load adds to the effect sought, min where it reduces it; g<sub>M</sub> on M, g<sub>V</sub> on V and R; η = 1.0.
+   - Deflection, **Art. 3.6.1.3.2**: max(truck × (1 + IM), 0.25 truck × (1 + IM) + lane) at the 1/20 points (influence lines by reciprocity, the closed form of `tbcRun`'s deflG), × g<sub>Δ</sub> (**Art. 2.5.2.6.2**); DC + DW deflection, E of T1, I = bd³/12.
+3. **Hand checks** (independent closed-form; pinned in `tests/engine/timber-aashto-env.test.mjs`); 6x16 DF-L No. 1, S = 2 ft, plank deck, interior, IM 0, l<sub>b</sub> = 3.5 in.:
+   - **D, 20 ft simple span, per lane:** midspan: tandem at 10 and 14 ft, R<sub>A</sub> = 25(10/20) + 25(6/20) = 20.0, M = 200.0; lane 0.64 × 20²/8 = 32.0 → **232.0 kip-ft** (truck: 32 × 20/4 = 160). Absolute: tandem axle at x, other at x + 4: M = 51.4x − 2.82x² → x = 9.11 ft, **234.22 kip-ft** (tool 234.216, 0.1-ft scan). Support shear: tandem 25 + 25(16/20) = 45.0 + lane 6.4 = **51.4 kip** (truck 41.6 + 6.4 = 48.0); R<sub>A</sub> = 51.4 kip. M<sub>DC</sub> = 0.062934 × 20²/8 = 3.1467 kip-ft.
+   - **E, 30 ft simple span, per lane:** midspan tandem at 15, 19 ft: 21.667 × 15 = 325.0 + lane 72.0 = **397.0 kip-ft**; absolute 56.267x − 1.98667x² → x = 14.16 ft, **398.40 kip-ft** (truck + lane 350.7). Support shear: truck 32 + 32(16/30) + 8(2/30) = 49.6 + lane 9.6 = **59.2 kip**.
+   - **F, wood shear rule and Strength I, 20 ft:** d = 15.5 in.; face 0.1458 ft; a = min(3.875, 5.0) = 3.875 ft → x<sub>LL</sub> = 4.0208 ft, x<sub>d</sub> = 1.4375 ft. V<sub>lane</sub> = tandem 25(15.979/20) + 25(11.979/20) = 34.948 + lane 0.64 × 15.979²/40 = 4.085 → **39.033 kip**; V<sub>LU</sub> = 19.517, V<sub>LD</sub> = (2/6.7) × 39.033 = 11.652, **V<sub>LL</sub> = 0.50(0.60 × 19.517 + 11.652) = 11.681 kip**; V<sub>DC</sub> = 0.062934 × (10 − 1.4375) = 0.5389; **V<sub>u</sub> = 1.25 × 0.5389 + 1.75 × 11.681 = 21.115 kip**. **M<sub>u</sub> (midspan) = 1.25 × 3.1467 + 1.75 × 0.29851 × 232.0 = 3.933 + 121.194 = 125.127 kip-ft**; R<sub>u</sub> = 1.25 × 0.6293 + 1.75 × 0.29851 × 51.4 = 27.637 kip. Before: no result.
+   - **Cantilever:** 12 ft + 4 ft overhang, M at B: a 32-kip axle at the tip, 32 × 4 = 128 + lane 0.64 × 4²/2 = 5.12 → −133.12 kip-ft. **Permit** 20, 30@14, 30@4 on 20 ft: 30-kip axles at 10 and 14 ft → 24 × 10 = 240 kip-ft.
+   - **Cross-check** of a continuous 2 × 30 ft beam against the repo's tested `shared/moving-load.js` (`SharedMovingLoad.analyze`, HL-93 preset, run in the test only; the tool does not load it): M<sub>LL</sub>± at 6, 12, 15, 30, 45 ft within 0.2 % (e.g. −265.08 vs −265.13 kip-ft at the pier), reactions 54.839 / 87.055 / 54.839 kip and the end shear identical.
+
+### TBA3-c. Saved data (CLAUDE.md §5)
+- New optional `design.aashto.bl.permit` (string, ≤ 400 characters; '' = none). Inside `bl` (version 5, TBA2): no version change, no key change. A TBA2 project opens unchanged (no permit).
+
+### TBA3-d. Code (anchors)
+- **Engine** before `/* TBC-ENGINE-END */`: anchor `Envelopes along the stringer (phase T2 part 2; fix log TBA3)`: `aasParsePermit`, `tbcAasEnv(m, A, AL)` (→ `{ ok, Ls, types, xN, Lt, EI, Ib, nGrid, secs[{ x, k, t, M, VL, VR: { dc, dw, ll{ max, min, gMax, gMin }, pm } }], reac[], shear[], defl[], permit, permitAx, IMf }`), `aasFactor(r, g, IMf)`, `aasDemands(AL)` (→ `{ sec, Mpos, Mneg, Mpos2, Mneg2, shear[{ …, VLU, VLD, VLL, Vu, Vs, Vu2 }], reac[{ …, Ru, Rs, Ru2 }], defl[], Vu, Ru }`).
+- **UI** before `/* ---- Report (AASHTO mode) ---- */`: anchor `TBA3 (phase T2, part 2)`: `AD`, `aasPosTxt`, `aasGovTxt`, `aasEnvFig`, `aasSpanTxt`, `buildAasEnvCards`, `tbrAasEnvSubs`.
+- Small edits: `tbcAasLoads(m, A)` → `(m, A, opt)` and at its end the permit parse and `out.env = tbcAasEnv(m, A, out)` (anchor `TBA3: the permit vehicle`); `tbcAasLoadDefaults` + `permit: ''`; `tbcSanitize` + `permit`; `compute()` + `AD = aasDemands(AL)`; `buildAasLoads` + `if (AD) buildAasEnvCards(pg)` and the notes; `buildAasLoadsPane` + the permit input; `tbrAasLoadsSec` + `...tbrAasEnvSubs()`; `TBC_CARDS` + `aasEnv`, `aasWV`, `aasFE`, `aasDem`; `buildAasGovStrip` text; `tbcAasDashRender` + the demand items; `aasNotice` and the AASHTO Report notice / status texts; `window.TBC` + `get ad()`.
+
+### TBA3-e. Decisions (pending engineer review)
+1. **V<sub>LU</sub> includes the lane load** (half the lane shear, one wheel line): Eq. 4.6.2.2.2a-1 speaks of wheel loads; including the lane is conservative.
+2. **d and min(3d, L/4) measured from the face of the support** (support line + l<sub>b</sub>/2); L = the span (the cantilever length for a cantilever).
+3. **V<sub>u</sub>** adds γ<sub>max</sub>|V<sub>DC</sub>| + γ<sub>max</sub>|V<sub>DW</sub>| at d to the LL shear at min(3d, L/4) (conservative).
+4. **Reactions** use g<sub>V</sub>.
+5. **Two-truck case**: the 90 % lane load on the parts that add (patterned), not on all spans ("on all spans", Art. 3.6.1.3.1, read as the loaded length; patterned is conservative).
+6. **Permit vehicle**: alone in its lane, no lane load, the same g and IM; Strength II only when entered.
+7. **Search resolution**: truck rear spacing 2-ft steps then the 1-ft neighbours of each section's governing spacing (reactions and deflections: 2-ft steps); one simple span: 14 ft; positions 0.5 ft plus every axle exactly on the section; absolute maximum +M to 0.1 ft.
+8. **Deflection**: the truck alone with the axles that do not add left out; g<sub>Δ</sub> from TBA2.
+9. **C<sub>V</sub> length** unchanged until T3 (see TBA3-b 1).
+
+### TBA3-f. How verified
+- `node tests/check-syntax.mjs`: all pass. `node tests/engine/run.mjs timber report steps`: 11 files, 109 passed, 0 failed (new `timber-aashto-env.test.mjs`: 6 tests).
+- `node tests/timber-nds-parity.mjs`: 0 differences (see PR). `node tests/smoke/timber-aashto.mjs`: NDS part 0 differences; AASHTO part PASS. `node tests/smoke/timber-aashto-t2.mjs` (extended): 7 cases incl. 2-span with permit and glulam span + overhang: the cards, M<sub>u</sub> / V<sub>u</sub> shown = engine, two diagrams, demands in the left column, Strength II; Report; 390 px; 0 console errors: PASS. Screenshots reviewed.
+- Run time of the analysis in Node: 20 ft span ≈ 60 ms; 2 × 24 ft ≈ 0.5 s; 3 × 30 ft ≈ 1 s.
+- **Other copies:** none. `shared/moving-load.js` is used only by the test (no shared file changed).
+
+### TBA3-g. Open items (for T3)
+- The checks: flexure (Art. 8.6 with C<sub>L</sub>, the lesser of C<sub>L</sub> and C<sub>V</sub>, C<sub>V</sub> with the governing case's zero-moment points), shear (Art. 8.7, V<sub>r</sub> = φF<sub>v</sub>bd/1.5 against V<sub>u</sub> here), bearing (Art. 8.8.3 with R<sub>u</sub>), deflection criteria (Art. 2.5.2.6.2 with the Service I deflections here); Strength II with C<sub>λ</sub> = 1.0.
+- Speed for long multi-span members (≈ 1 s for 3 × 30 ft on each input change).
