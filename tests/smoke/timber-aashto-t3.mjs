@@ -74,6 +74,7 @@ await p.click('#tab_rpt'); await p.waitForTimeout(1500);
 const rt = await p.evaluate(() => typeof TBRP !== 'undefined' && TBRP.doc ? SharedReport.text(TBRP.doc) : '');
 ok(/AASHTO checks \(Art\. 8\.6, 8\.7, 8\.8\.3, 2\.5\.2\.6\.2\)/.test(rt) && /Bearing check/.test(rt) && /Deflection check/.test(rt) && /Summary of the checks/.test(rt) && /Flexure check/.test(rt) && /Shear check/.test(rt) && !/NaN|undefined/.test(rt), 'Report: checks section: ' + rt.slice(0, 200));
 ok(/§\s*\d+\.\d+/.test(rt), 'Report: § references');
+ok(!/§aas/.test(rt) && /see §\s*\d+\.\d+/i.test(rt) && /Governing check: /.test(rt), 'Report (TBA6): every "see §" link of the checks resolved; the governing check in the Status: ' + (rt.match(/§aas\S*/) || [''])[0]);
 ok(await p.evaluate(() => document.querySelectorAll('.katex-error').length) === 0, 'KaTeX errors in the report');
 if (args.shots) { const h = await p.$('#tabPages'); if (h) await p.screenshot({ path: path.join(args.shots, 't3-report.png') }); }
 // back to NDS: no AASHTO checks, NDS tabs

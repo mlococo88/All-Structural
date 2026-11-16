@@ -2862,3 +2862,32 @@ Continues TBA4 (PR #1593). Every code site is tagged `TBA5`.
 
 ### TBA5-g. Open items
 - Not built in: deck design (Art. 9.9) and the 0.10 in. plank / panel relative deflection; rating (MBE); MSR / MEL lumber; tension-reinforced glulam (Art. 8.4.1.3); skew (Art. 4.6.2.2.2e); pedestrian load (Art. 3.6.1.6); flat use in AASHTO mode (TBA4-g).
+
+## 2026-11-16 — PR: claude/timber-aashto-t4 (PR #1595: https://github.com/mlococo88/All-Structural/pull/1595) (TBA6: AASHTO phase T4 — Report "see §" links from the check steps to where their inputs are worked; the governing check in the Report Status)   [display / report only; no result change]
+
+Phase T4 (report, hand-checked examples, Node tests). The two worked examples are in TBA4-b / TBA5-b and pinned in `tests/engine/timber-aashto-checks.test.mjs` (with the hand arithmetic as comments); the Report sections and the summary table with § links came with TBA4 / TBA5. This entry adds the cross-references (CLAUDE.md §6). Every code site is tagged `TBA6`.
+
+### TBA6-a. What changes for the user
+- Report, "AASHTO checks": each step that uses a value worked elsewhere now says where, as a "see §x.y" link (a link in the app, "§x.y" in print): M<sub>u</sub> → the governing factored moment step (§ of the bridge-load section; for a non-governing span the note names the envelope table and links the governing step); V<sub>u</sub> → its critical-section step (`aasL.V<i>`); R<sub>u</sub> → its reaction step (`aasL.R<j>`); F<sub>b</sub>, F<sub>v</sub>, F<sub>cp</sub> → the product without C<sub>λ</sub> on the materials section (`aas.bFb`, `aas.bFv`, `aas.bFcp`); F<sub>bE</sub> → E (`aas.E`).
+- Report Status: a "Governing check" row (name, ratio) with a § link to its ratio step.
+
+### TBA6-b. §4 callouts
+None: no formula, factor, value, unit or code reference changed (only step notes and one Status row). Engine (`TBC-ENGINE`) unchanged.
+
+### TBA6-c. Saved data
+None.
+
+### TBA6-d. Code (anchors)
+- `tbrAasChecksSec()`: `const muSee = it => …` (anchor `TBA6 (T4): "see §" links`); the `note:` of the steps `.Mu`, `.Fb`, `.FbE`, `.Vu`, `.Fv`, `.Ru`, `.Fcp` (each tagged `TBA6`).
+- `tbrAasModel()`: the Status `kv` rows `.concat(AC && AC.ok && AC.gov ? [['Governing check', …, 'tb/' + aasItId(AC.gov) + '.r']] : [])` before the Result row.
+
+### TBA6-e. Decisions (pending engineer review)
+None new.
+
+### TBA6-f. How verified
+- `node tests/check-syntax.mjs`: all pass; `node tests/engine/run.mjs timber report steps`: 12 files, 116 passed (engine unchanged).
+- `node tests/smoke/timber-aashto-t3.mjs` (+ an assertion: no unresolved "§aas…" link, a "see §n.m" present, "Governing check:" in the Status): PASS; `timber-aashto` (part 1 NDS 0 differences) and `timber-aashto-t2`: PASS (NDS part 1: 294 comparisons, 0 differences). The report text of example 1 read: "M_u = 79.432 kip-ft (The governing moment of the member: see §4.3.)", "F_b … (The product without Cλ: see §3.3.)", "R_u = 25.957 kip (Worked: see §4.3.)", "Governing check: Flexure, span, +M at x = 7.90 ft, Strength I, ratio 0.955 §5.2".
+- **Other copies:** none.
+
+### TBA6-g. Open items (AASHTO stringer design, after T4)
+- Decks (Art. 9.9; plank / panel relative deflection 0.10 in.), load rating (MBE), MSR / MEL lumber (Tables 8.4.1.1.4-2, -3; K<sub>bE</sub> 1.06 / 0.98), tension-reinforced glulam (Art. 8.4.1.3), skew correction (Art. 4.6.2.2.2e), pedestrian / sidewalk load (Art. 3.6.1.6), flat use in AASHTO mode (TBA4-g), owner (MassDOT / CTDOT / RIDOT) timber rules.
