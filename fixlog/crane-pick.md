@@ -74,7 +74,7 @@ github-sync projects`; `node tests/smoke/home-projects.mjs`, `node tests/smoke/h
 `node tests/check-syntax.mjs`.
 
 ## 2026-11-16 — C1-2: plan-sheet underlays (calibration, georeference, images in IndexedDB)
-PR: link below once opened.
+PR #1602: https://github.com/mlococo88/All-Structural/pull/1602
 ### Where
 - `apps/crane-pick/ui/sheets.js` (new, `window.CranePickSheets`): the Plan sheets input tab; a PNG / JPG, or a PDF page rendered by pdf.js
   (page and resolution 3,000 / 5,000 / 7,000 px long side), placed at the map centre; move and rotate handles (drag, one undo step each,
