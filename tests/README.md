@@ -83,6 +83,10 @@ node tests/timber-nds-parity.mjs [--a <git ref>] [--random <n>]
 # browser: NDS parity of every output tab, the governing strip, the left column and the Report text (origin/main with its shared/ folder,
 # extracted with git archive) and the AASHTO mode (no PASS / FAIL, values, Report, autosave / reload, 390 px); --shots: the AASHTO Materials card
 node tests/smoke/timber-aashto.mjs [--a <folder> | --ref <git ref>] [--shots <dir>]
+# Timber Beam Check, AASHTO phase T2 (TBA2): bridge loads (dead loads, distribution factors incl. the lever rule, IM for wood, load factors,
+# saved data version 5) in Node (the timber-aashto filter above runs timber-aashto-loads too); browser: the wet-service default of a project
+# switched to AASHTO and the kept NDS setting, the Loads tab inputs, the Bridge Loads tab (values = engine, no PASS / FAIL), Report, 390 px
+node tests/smoke/timber-aashto-t2.mjs [--shots <dir>]
 
 # Spread Footing: no service combination with a bearing solution (SFNB): no console error, Bearing FAIL with a reason, card 2.6, Report;
 # a renderer that throws marks its tab "Out of date"
