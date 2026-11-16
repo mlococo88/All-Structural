@@ -1782,8 +1782,8 @@ function tbcAashto(m) {
         return o;
     });
     if (!isGL && cat !== 'dim' && Ls.length > 1) notes.push('Continuous or cantilevered sawn beams and stringers: the grading provisions for the middle third of the length apply to at least the middle two thirds (two-span pieces) or to the whole length (three or more spans, cantilevers), Art. 8.4.1.1.1. State it in the contract documents.');
-    if (isGL) notes.push('C_V and the beam stability factor C_L are not applied together: the lesser applies (Art. 8.4.4.5). The adjusted F_b here includes C_V; the flexure check (next phase) uses the lesser of C_L and C_V.');
-    else notes.push('AASHTO has no repetitive-member factor for stringers (the deck factor C_d replaces it for decks, Art. C8.4.4.8). The beam stability factor C_L belongs to the flexural resistance (Art. 8.6.2) and comes with the checks in the next phase.');
+    if (isGL) notes.push('C_V and the beam stability factor C_L are not applied together: the lesser applies (Art. 8.4.4.5). The adjusted F_b here includes C_V (L = the longest span); the flexure check uses the lesser of C_L and C_V, with C_V from the points of zero moment of its load case.');
+    else notes.push('AASHTO has no repetitive-member factor for stringers (the deck factor C_d replaces it for decks, Art. C8.4.4.8). The beam stability factor C_L belongs to the flexural resistance (Art. 8.6.2) and is worked with the flexure check.');
     Object.assign(out, { ok: true, R0, CKF, PHI, CM, CMb, CF, CFb, CV, CVd, Cfu, Cfub, Ci, Cib, Cd, Cdb, base, E, lims, sizeF });
     return out;
 }
@@ -2163,6 +2163,49 @@ function tbcAasEnv(m, A, AL) {
         defl.push({ k, t, x, dc: AL.wDC * deflAt(solD, stD, 1, [], x) * 12, dw: AL.wDW * deflAt(solD, stD, 1, [], x) * 12, truck: c1 * 12, mix: c2 * 12, ll: Math.max(c1, c2) * 12, gov: c1 >= c2 ? 'truck' : '25 % truck + lane', g: tr.g });
     }
     Object.assign(out, { ok: true, Ls, types, xN, Lt, EI, Ib: A.b * Math.pow(A.d, 3) / 12, nGrid: G, secs, reac, shear, defl, permit, permitAx, IMf });
+    // TBA4 (phase T3): the factored moment diagram of the load case that governs M at one section, and its points of zero moment
+    // on either side of the section (the glulam volume factor, Art. 8.4.4.5: L between points of contraflexure). The case, as the
+    // envelope placed it: DC and DW on the whole member with the gamma_p used at this section (aasFactor), the axles of the governing
+    // placement that add to the effect at the section (x 0.90 for the two-truck case, x (1 + IM)) and, for HL-93, the lane load on the
+    // parts of the section's influence line of the sign sought; x gamma_LL x g. The lane load goes in as point loads at the centres of
+    // the loaded parts of the grid cells (each <= 0.1 ft). sec = a record of secs; key 'max' | 'min'; lim 'StrI' | 'StrII'; g = g_M.
+    // Returns { Mx (the case at the section), xl, xr (ft; the member end when the sign does not change), Lz = xr - xl, M(y) }.
+    out.caseM = (sec, key, lim, g) => {
+        const up = key === 'max', sg = up ? 1 : -1, r = sec.M, II = lim === 'StrII';
+        const gv = II ? (r.pm ? (up ? r.pm.gMax : r.pm.gMin) : null) : (up ? r.ll.gMax : r.ll.gMin);
+        const gp = (v, k) => (up ? v >= 0 : v <= 0) ? AAS_GP[k][0] : AAS_GP[k][1];
+        const gLL = II ? 1.35 : 1.75, wT = gp(r.dc, 'DC') * AL.wDC + gp(r.dw, 'DW') * AL.wDW;
+        const ef = mkEff('M', sec.x, sec.x < Lt), P = [];
+        if (gv) {
+            const f2 = gv.two ? H.f2 : 1, Ps = II ? permit.P : gv.P;
+            if (gv.pos) gv.pos.forEach((xi, a) => { const c = cOf(ef, xi); if (c && sg * Ps[a] * c[0] > 0) P.push({ mag: gLL * g * f2 * IMf * Ps[a], loc: xi }); });
+            if (!II) {   // the lane load on the parts of the influence line of the sign sought (as areas())
+                const pts = Array.from(xg); if (!pts.some(v => Math.abs(v - ef.x) < 1e-9)) { pts.push(ef.x); pts.sort((u, v) => u - v); }
+                const wl = gLL * g * f2 * H.lane;
+                for (let q = 0; q < pts.length - 1; q++) {
+                    const a = pts[q], b = pts[q + 1], hh = b - a; if (hh <= 1e-12) continue;
+                    const mid = (a + b) / 2, c = loc(mid), i = c[0], x0 = xg[i], x1 = xg[i + 1];
+                    const sAt = xi => ef.S[i] + (ef.S[i + 1] - ef.S[i]) * (xi - x0) / (x1 - x0), B = xi => (mid < ef.x ? ef.x - xi : 0);
+                    const fa = sg * (sAt(a) - B(a)), fb = sg * (sAt(b) - B(b));
+                    let lo = null, hi = null;
+                    if (fa >= 0 && fb >= 0) { if (fa + fb > 0) { lo = a; hi = b; } }
+                    else if (fa > 0 || fb > 0) { const cx = a + fa / (fa - fb) * hh; if (fa > 0) { lo = a; hi = cx; } else { lo = cx; hi = b; } }
+                    if (lo !== null && hi - lo > 1e-12) P.push({ mag: wl * (hi - lo), loc: (lo + hi) / 2 });
+                }
+            }
+        }
+        const so = tbcSolve(Ls, types, xN, EI, wT, P), sto = tbcStatics(xN, ns, so.R, wT, P), Mf = y => sto.M(y, y < Lt);
+        const Mx = Mf(sec.x), tol = 1e-9 * Math.max(1, Math.abs(Mx));
+        const zero = (dir) => {   // walk the grid away from the section until the moment loses the sign sought; linear between grid points
+            let prev = sec.x, pv = Mx;
+            const ys = Array.from(xg).filter(y => dir < 0 ? y < sec.x - 1e-9 : y > sec.x + 1e-9); if (dir < 0) ys.reverse();
+            for (const y of ys) { const v = Mf(y); if (sg * v <= tol) { if (Math.abs(v) <= tol) return y; const t = v / (v - pv); return y + t * (prev - y); } prev = y; pv = v; }
+            return dir < 0 ? 0 : Lt;
+        };
+        if (!(sg * Mx > tol)) return { Mx, xl: sec.x, xr: sec.x, Lz: 0, M: Mf };
+        const xl = zero(-1), xr = zero(1);
+        return { Mx, xl, xr, Lz: xr - xl, M: Mf, nP: P.length };
+    };
     return out;
 }
 // Factored values for one effect record {dc, dw, ll{max, min}, pm}: g = the distribution factor of the effect. Load factors per
@@ -2200,6 +2243,83 @@ function aasDemands(AL) {
     });
     return { sec, Mpos, Mneg, Mpos2, Mneg2, shear, reac, defl,
         Vu: shear.reduce((b, s) => !b || s.Vu > b.Vu ? s : b, null), Ru: reac.reduce((b, r) => !b || r.Ru > b.Ru ? r : b, null) };
+}
+/* ---------------------------------------------------------------------
+   AASHTO LRFD 10th Ed. (2024) stringer checks (phase T3; fix log TBA4). tbcAasChecks(m, A, AL, AD): pure function of the project,
+   A = tbcAashto(m), AL = tbcAasLoads(m, A) and AD = aasDemands(AL). kip, in., ksi; moments kip-ft.
+   Flexure, Art. 8.6.1 / 8.6.2 (rectangular section): M_r = phi M_n, M_n = F_b S C_L (Eq. 8.6.1-1, 8.6.2-1). C_L (Eq. 8.6.2-2 to -5):
+   A = F_bE / F_b, F_bE = K_bE E / R_B^2, R_B = sqrt(L_e d / b^2) <= 50; K_bE = 0.76 visually graded lumber, 1.10 glulam; E the
+   adjusted modulus (Eq. 8.4.4.1-6); L_e from L_u/d (< 7: 2.06 L_u; 7 to 14.3: 1.63 L_u + 3d; > 14.3: 1.84 L_u). C_L = 1.0 where
+   d <= b or the compression edge is braced continuously (the project's lateral-support inputs of the NDS mode, reused: top edge for
+   +M, bottom edge for -M; L_u = the entered unbraced length, else the span). Glulam: C_V and C_L are not applied together, the
+   lesser applies (Art. 8.4.4.5, 8.6.2); C_V with L between the points of zero moment of the governing load case (AL.env.caseM).
+   F_b in A: the adjusted value of the limit state without C_V (glulam; decision pending engineer review, fix log TBA4); sawn: with
+   C_F. Each span: the largest +M and -M of Strength I (C_lambda 0.8) and, with a permit vehicle, Strength II (C_lambda 1.0).
+   Shear, Art. 8.7: V_r = phi F_v b d / 1.5 (Eq. 8.7-1, 8.7-2) against V_u at the critical sections of aasDemands.
+   --------------------------------------------------------------------- */
+const AAS_KBE = { sawn: 0.76, glulam: 1.10 };   // Art. 8.6.2: visually graded lumber 0.76, glulam 1.10 (MEL 0.98, MSR 1.06: not built in)
+function aasLe(Lu, d) {   // effective unbraced length, Art. 8.6.2 (in.)
+    const r = Lu / d;
+    return r < 7 ? { Le: 2.06 * Lu, leRule: '2.06', luD: r } : r <= 14.3 ? { Le: 1.63 * Lu + 3 * d, leRule: '1.63', luD: r } : { Le: 1.84 * Lu, leRule: '1.84', luD: r };
+}
+function aasStab(Fb, E, KbE, Le, d, b) {   // Eq. 8.6.2-2 to -5
+    const RB = Math.sqrt(Le * d / (b * b)), FbE = KbE * E / (RB * RB), Ar = FbE / Fb, t = (1 + Ar) / 1.9;
+    return { RB, FbE, A: Ar, CL: t - Math.sqrt(t * t - Ar / 0.95) };
+}
+function tbcAasChecks(m, A, AL, AD) {
+    const out = { ok: false, errors: [], errTab: [], notes: [], flex: [], shear: [] };
+    if (!A || !A.ok || !AL || !AL.ok || !AD || !AL.env || !AL.env.ok) { out.errors.push('The checks need the material, the bridge loads and the factored demands first.'); out.errTab.push(null); return out; }
+    if (A.flat) { out.errors.push('Flat use (load on the wide face): the AASHTO checks of this tool are for stringers bent edgewise (the bridge-load analysis uses the edgewise depth). Untick Flat use, or check a flat member by hand.'); out.errTab.push('factors'); return out; }
+    const e = AL.env, dz = m.design || {}, num = (v) => (typeof v === 'number' && isFinite(v)) ? v : NaN;
+    const b = A.b, d = A.d, S = b * d * d / 6, KbE = A.isGL ? AAS_KBE.glulam : AAS_KBE.sawn, E = A.E, PHI = A.PHI;
+    const latTop = dz.latTop === 'Supports' ? 'Supports' : 'Continuous';
+    const latBot0 = ['same', 'Supports', 'Continuous'].includes(dz.latBot) ? dz.latBot : 'Supports', latBot = latBot0 === 'same' ? latTop : latBot0;
+    const luTop = num(dz.luTop), luBot = num(dz.luBot);
+    const lims = [['StrI', 0]].concat(e.permit ? [['StrII', 1]] : []);
+    const ax = A.isGL ? A.CVd.a : null;
+    // ---- flexure ----
+    e.Ls.forEach((L, k) => {
+        const inK = AD.sec.filter(q => q.x >= e.xN[k] - 1e-9 && q.x <= e.xN[k + 1] + 1e-9);
+        lims.forEach(([lim, li]) => [1, -1].forEach(sg => {
+            const key = sg > 0 ? 'max' : 'min';
+            const q = inK.reduce((bq, q) => { const v = q.M[lim] ? q.M[lim][key] : NaN; return isFinite(v) && sg * v > (bq ? sg * bq.M[lim][key] : 1e-9) ? q : bq; }, null);
+            if (!q) return;
+            const l = A.lims[li], Cl = l.Cl, Mu = Math.abs(q.M[lim][key]);
+            const lat = sg > 0 ? latTop : latBot, luIn = sg > 0 ? luTop : luBot;
+            // F_b of the limit state; glulam: without C_V (F_bx+ for +M, F_bx- for -M), sawn: with C_F (as Eq. 8.4.4.1-1)
+            const Fb = A.isGL ? (sg > 0 ? A.R0.Fb : A.R0.Fbn) * A.CKF.Fb * A.CM.Fb * A.Cfu * A.Ci.Fb * A.Cd * Cl : A.base.Fb * Cl;
+            const it = { kind: 'flex', lim, li, Cl, sg, key, k, L, x: q.x, Mu, edge: sg > 0 ? 'top' : 'bottom', lat, latSet: sg > 0 ? latTop : latBot0, Fb, sec: q.s };
+            if (d <= b) { it.CL = 1; it.clWhy = 'db'; }
+            else if (lat === 'Continuous') { it.CL = 1; it.clWhy = 'braced'; }
+            else {
+                const Lu = (luIn > 0 ? luIn : L) * 12;
+                Object.assign(it, { Lu, luSrc: luIn > 0 ? 'entered' : 'span' }, aasLe(Lu, d));
+                Object.assign(it, aasStab(Fb, E, KbE, it.Le, d, b)); it.rbNG = it.RB > 50;
+            }
+            if (A.isGL) {
+                const c = e.caseM(q.s, key, lim, AL.df.gM);
+                const Lz = c.Lz > 1e-9 ? c.Lz : A.CVd.L;
+                const prod = (12 / d) * (5.125 / b) * (21 / Lz), raw = Math.pow(prod, ax);
+                Object.assign(it, { zl: c.xl, zr: c.xr, Lz, Mcase: c.Mx, prod, CVraw: raw, CV: Math.min(1, raw) });
+                it.fac = Math.min(it.CL, it.CV); it.facBy = it.CL <= it.CV ? 'CL' : 'CV';
+            } else { it.fac = it.CL; it.facBy = 'CL'; }
+            it.Mn = Fb * S * it.fac / 12; it.Mr = PHI.Fb * it.Mn; it.ratio = Mu / it.Mr; it.ok = !it.rbNG && it.ratio <= 1;
+            out.flex.push(it);
+        }));
+    });
+    // ---- shear ----
+    AD.shear.forEach(s => lims.forEach(([lim, li]) => {
+        const Vu = lim === 'StrI' ? s.Vu : s.Vu2; if (Vu == null) return;
+        const l = A.lims[li], Vn = l.Fv * b * d / 1.5, Vr = PHI.Fv * Vn;
+        out.shear.push({ kind: 'shear', lim, li, Cl: l.Cl, j: s.j, k: s.k, dir: s.dir, Vu, Fv: l.Fv, Vn, Vr, ratio: Vu / Vr, ok: Vu / Vr <= 1, s });
+    }));
+    const all = out.flex.concat(out.shear);
+    const worst = (list) => list.reduce((bq, it) => !bq || (it.rbNG && !bq.rbNG) || ((!!it.rbNG === !!bq.rbNG) && it.ratio > bq.ratio) ? it : bq, null);
+    if (A.isGL) out.notes.push('Glulam flexure: C_V and C_L are not applied together, the lesser applies (Art. 8.4.4.5); C_V is computed for each check with L between the points of zero moment of its governing load case. F_b in the beam stability parameter A excludes C_V.');
+    if (latTop === 'Continuous') out.notes.push('Positive moment: the top (compression) edge is taken as braced continuously by the deck (C_L = 1.0, Art. 8.6.2); the deck must be fastened to the stringers, and the points of bearing must be braced against rotation (transverse bracing at the supports, Art. 8.11.2).');
+    out.notes.push('Transverse bracing (Art. 8.11.2): at the supports for all spans, and at intermediate points for spans over 20 ft, spaced at not more than 25 ft; depth at least 3/4 of the stringer depth. An intermediate brace counts as a brace point of the bottom edge only where it prevents lateral displacement and rotation (Art. 8.11.1): enter its spacing as the bottom-edge unbraced length.');
+    Object.assign(out, { ok: true, S, KbE, E, b, d, latTop, latBot, latBot0, luTop, luBot, all, gov: worst(all), govFlex: worst(out.flex), govShear: worst(out.shear), fails: all.filter(it => !it.ok) });
+    return out;
 }
 /* TBC-ENGINE-END */
 </script>
@@ -2395,6 +2515,7 @@ const LS_AUTO = 'tbc_autosave_v1', LS_PROJ = 'tbc_projects_v1';
 let M = tbcDefaultModel(), R = null;
 let A = null;   // TBA1: AASHTO materials and resistance (tbcAashto) when the design code is AASHTO, else null
 let AL = null;  // TBA2: AASHTO bridge loads (tbcAasLoads) when the design code is AASHTO, else null
+let AC = null;  // TBA4: AASHTO checks (tbcAasChecks) when the demands exist, else null
 const aasOn = () => !!(M && M.design && M.design.code === 'AASHTO');
 function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
@@ -2456,6 +2577,8 @@ function compute() {
   if (aasOn()) { try { AL = tbcAasLoads(M, A); } catch (e) { AL = { ok: false, errors: ['Internal error in the AASHTO bridge loads: ' + e.message], errTab: [null], notes: [] }; } }
   AD = null;   // TBA3: factored demands
   if (AL && AL.ok && AL.env && AL.env.ok) { try { AD = aasDemands(AL); } catch (e) { AL = Object.assign({}, AL, { ok: false, errors: ['Internal error in the AASHTO demands: ' + e.message], errTab: [null] }); } }
+  AC = null;   // TBA4: the AASHTO checks
+  if (AD) { try { AC = tbcAasChecks(M, A, AL, AD); } catch (e) { AC = { ok: false, errors: ['Internal error in the AASHTO checks: ' + e.message], errTab: [null], notes: [], flex: [], shear: [] }; } }
 }
 let schedT = null, pendStruct = false;
 function schedule(structural) { if (structural) pendStruct = true; clearTimeout(schedT); schedT = setTimeout(flush, 120); }
@@ -2568,7 +2691,7 @@ function inTabKey(e) {
 function inputTabMarks() {
   if (!$('tbcInTabs')) return;
   const bad = {};
-  if (aasOn()) ((A && A.errTab) || []).concat((AL && AL.errTab) || []).forEach(t => { if (t) bad[t] = 1; });   // TBA1: AASHTO errors carry their input tab (TBA2: bridge loads too)
+  if (aasOn()) ((A && A.errTab) || []).concat((AL && AL.errTab) || [], (AC && AC.errTab) || []).forEach(t => { if (t) bad[t] = 1; });   // TBA1: AASHTO errors carry their input tab (TBA2: bridge loads too)
   else ((R && R.errors) || []).forEach(m => { const r = TBC_IN_ERR.find(x => x[0].test(m)); if (r) bad[r[1]] = 1; });
   TBC_IN_TABS.forEach(([k]) => {
     const pn = $('tbcInPane_' + k); if (!pn) return;
@@ -2949,7 +3072,7 @@ function buildTabBar() {
     bar.appendChild(b);
   });
 }
-const BUILDERS = () => ({ sum: buildSummary, sch: buildSchem, ana: buildAnalysis, dv: buildDV, bend: buildBend, shear: buildShear, bear: buildBear, defl: buildDefl, refv: buildRefv, val: buildValid, man: buildManual, rpt: buildReport, aas: buildAashto, aasL: buildAasLoads });   /* rpt: TBRP; aas: TBA1 */
+const BUILDERS = () => ({ sum: buildSummary, sch: buildSchem, ana: buildAnalysis, dv: buildDV, bend: buildBend, shear: buildShear, bear: buildBear, defl: buildDefl, refv: buildRefv, val: buildValid, man: buildManual, rpt: buildReport, aas: buildAashto, aasL: buildAasLoads, aasC: buildAasChecks });   /* rpt: TBRP; aas: TBA1 */
 function renderTab() {
   const pages = $('tabPages'); pages.innerHTML = ''; PLOTQ = [];
   const id = curTab(); const pg = el('div', 'tabPage'); pg.id = 'page_' + id; pages.appendChild(pg);
@@ -3070,7 +3193,8 @@ const TBC_CARDS = { dvSect: ['dv', 'Section properties'], dvAdj: ['dv', 'Adjuste
   sCap: ['shear', 'Adjusted shear design value and check'], sNotch: ['shear', 'Notched ends'], brCalc: ['bear', 'Bearing perpendicular to grain'], brX: ['bear', 'Supporting members and point loads'], dfCheck: ['defl', 'Deflection checks'],
   aasRef: ['aas', 'Reference design values'], aasFac: ['aas', 'Adjustment factors (Art. 8.4.4)'], aasAdj: ['aas', 'Adjusted design values'],
   aasDL: ['aasL', 'Dead loads (DC, DW)'], aasLL: ['aasL', 'Live load (HL-93) and dynamic load allowance'], aasDF: ['aasL', 'Live-load distribution factors'], aasCmb: ['aasL', 'Load combinations and load factors'],
-  aasEnv: ['aasL', 'Live-load envelopes and axle placement'], aasWV: ['aasL', 'Shear at the critical sections'], aasFE: ['aasL', 'Factored envelopes'], aasDem: ['aasL', 'Factored demands and resistances'] };   // TBA2, TBA3   // aas*: TBA1
+  aasEnv: ['aasL', 'Live-load envelopes and axle placement'], aasWV: ['aasL', 'Shear at the critical sections'], aasFE: ['aasL', 'Factored envelopes'], aasDem: ['aasL', 'Factored demands and resistances'],
+  aasCSum: ['aasC', 'Summary of the checks'], aasFlex: ['aasC', 'Flexure (Art. 8.6.2)'], aasShr: ['aasC', 'Shear (Art. 8.7)'], aasCNotes: ['aasC', 'Notes (checks)'] };   // TBA4   // TBA2, TBA3   // aas*: TBA1
 const tbcTabName = id => (OUT_TABS.find(t => t[0] === id) || AAS_TABS.find(t => t[0] === id) || [id, id])[1];
 const tbcCardTxt = card => tbcTabName(TBC_CARDS[card][0]) + ' · ' + TBC_CARDS[card][1];
 // txt = the visible text; pre = the label the report puts before "see §n.k"
@@ -4540,7 +4664,7 @@ window.addEventListener('beforeprint', () => {
    (the engine); only the substitution strings are formatted here. None of this runs in NDS mode (aasOn() false).
    ===================================================================== */
 const TBC_CODES = [['NDS', 'NDS 2018 (buildings; ASD / LRFD)'], ['AASHTO', 'AASHTO LRFD 10th Ed. (bridge stringer)']];
-const AAS_TABS = [['aas', 'AASHTO Materials'], ['aasL', 'Bridge Loads'], ['rpt', 'Report']];   // aasL: TBA2
+const AAS_TABS = [['aas', 'AASHTO Materials'], ['aasL', 'Bridge Loads'], ['aasC', 'AASHTO Checks'], ['rpt', 'Report']];   // aasL: TBA2; aasC: TBA4
 const AAS_ART = 'AASHTO LRFD 10th Ed. ';
 const k3 = v => f(v, 3), k4 = v => f(v, 4);
 const kf = v => (typeof v === 'number' && isFinite(v) && Math.abs(v - +v.toFixed(3)) < 1e-12) ? String(+v.toFixed(3)) : k4(v);   // a factor: as tabulated, or 4 decimals when computed
@@ -4568,8 +4692,8 @@ function aasSwitch(v) {
 }
 const aasGlName = k => aasGlKind(k) === 2 ? `No. ${k.slice(3)} ${AAS_GL2[k.slice(3)].sp} ${AAS_GL2[k.slice(3)].gr} (Table 8.4.1.2.3-2)` : `${k} (Table 8.4.1.2.3-1)`;
 function aasNotice() {
-  return el('div', 'warnBox', tbNL('AASHTO LRFD 10th Ed. (2024), bridge stringer: reference values, adjustment factors, resistance factors and bridge loads (DC, DW, HL-93 with distribution factors and dynamic load allowance; envelopes and factored demands).', [   // TBNL
-    ['No checks yet:', 'the AASHTO checks (flexure Art. 8.6, shear Art. 8.7, bearing Art. 8.8.3, deflection Art. 2.5.2.6.2) come in the next versions of this tool. No PASS / FAIL is given in AASHTO mode.'],
+  return el('div', 'warnBox', tbNL('AASHTO LRFD 10th Ed. (2024), bridge stringer: reference values, adjustment factors, resistance factors, bridge loads (DC, DW, HL-93 with distribution factors and dynamic load allowance; envelopes and factored demands) and the flexure and shear checks.', [   // TBNL
+    ['Checks:', 'flexure (Art. 8.6.2) and shear (Art. 8.7) on the AASHTO Checks tab, with PASS / FAIL. Bearing (Art. 8.8.3) and the deflection criteria (Art. 2.5.2.6.2) come in the next version of this tool.'],   // TBA4
     ['NDS checks:', 'the NDS 2018 building-load checks are not run in AASHTO mode; set Design code to NDS 2018 (Factors input tab) for them.']]));
 }
 function aasMemberTxt() {
@@ -4647,8 +4771,16 @@ function buildAasFactorsPane(P) {
       ['C<sub>KF</sub>', '= 2.5/φ (2.1/φ for compression perpendicular to grain), Art. 8.4.4.2; φ per Art. 8.5.2.2.'], ['C<sub>F</sub> / C<sub>V</sub>', 'from the size (Art. 8.4.4.4 / 8.4.4.5).'],
       ['C<sub>λ</sub>', 'per strength limit state, Table 8.4.4.9-1.']])));
   }, { noNum: true });
+  mkSec(P, 'inStab', 'Lateral support (beam stability C<sub>L</sub>, Art. 8.6.2)', body => {   // TBA4: the project's lateral-support inputs (shared with the NDS mode)
+    fRow(body, 'Top edge (compression where M > 0)', selIn([['Continuous', 'Continuous (deck fastened to the stringer)'], ['Supports', 'At brace points only']], () => dz.latTop, v => { dz.latTop = v; }, 'latTop'), '');
+    if (dz.latTop === 'Supports') fRow(body, 'Unbraced length L<sub>u</sub>, top', numIn(() => dz.luTop, v => { dz.luTop = v; }, 'luTop', { ph: 'span' }), 'ft', '0 or blank = the length of each span.');
+    fRow(body, 'Bottom edge (compression where M < 0)', selIn([['Supports', 'At brace points only (supports, diaphragms)'], ['Continuous', 'Continuous'], ['same', 'Same as top edge']], () => dz.latBot, v => { dz.latBot = v; }, 'latBot'), '');
+    if (dz.latBot === 'Supports') fRow(body, 'Unbraced length L<sub>u</sub>, bottom', numIn(() => dz.luBot, v => { dz.luBot = v; }, 'luBot', { ph: 'span' }), 'ft', '0 or blank = the length of each span (support to support, or the cantilever length). With intermediate transverse bracing (Art. 8.11.2), enter its spacing.');
+    body.appendChild(el('div', 'hint', tbNL('C<sub>L</sub> = 1.0 where d ≤ b, or where the compression edge is braced continuously and the points of bearing are braced against rotation (Art. 8.6.2). Otherwise C<sub>L</sub> with L<sub>u</sub>, the distance between points of lateral and rotational support.', [
+      ['Negative moment', '(over interior supports, on cantilevers) puts the bottom edge in compression.'], ['Shared:', 'the same inputs as the NDS mode\'s lateral support (one setting per project).']])));
+  }, { noNum: true });
   mkSec(P, 'inAasNot', 'Settings not used in AASHTO mode', body => {
-    body.appendChild(el('div', 'hint', 'The NDS settings of this project (method, temperature, repetitive member, lateral support, deflection limits) are kept but not used in AASHTO mode. Lateral support and deflection under AASHTO come with the checks in the next versions of this tool.'));
+    body.appendChild(el('div', 'hint', 'The NDS settings of this project (method, temperature, repetitive member, deflection limits) are kept but not used in AASHTO mode. Deflection under AASHTO comes with the checks in the next version of this tool.'));
   }, { noNum: true });
 }
 function aasRefLineHTML() {
@@ -4661,15 +4793,37 @@ function aasRefLineHTML() {
 function buildAasGovStrip() {
   const g = $('govStrip'); g.innerHTML = '';
   if (!A || !A.ok) { g.className = 'govStrip fail'; const n = A ? A.errors.length : 0; g.appendChild(el('span', 'govTxt', `AASHTO LRFD: input or design data required (${n} item${n === 1 ? '' : 's'})`)); g.appendChild(el('span', 'govSec', 'see the red tab dots in the input panel')); return; }
-  g.className = 'govStrip aas';
+  if (AC && AC.ok && AC.gov) {   // TBA4: the checks
+    g.className = 'govStrip ' + (aasNG() ? 'fail' : 'pass');
+    g.appendChild(el('span', 'govTxt', esc(`Governing: ${aasItName(AC.gov)} · ${pct(AC.gov.ratio)}`)));
+    g.appendChild(el('span', 'hint', 'AASHTO LRFD 10th Ed. · flexure and shear checked; bearing and deflection not yet checked'));
+    g.appendChild(el('span', 'govSec', esc(aasMemberTxt())));
+    g.appendChild(el('span', 'govBadge', aasNG() ? 'NG' : 'OK'));
+    return;
+  }
+  g.className = (AC && !AC.ok) ? 'govStrip fail' : 'govStrip aas';
   g.appendChild(el('span', 'govTxt', 'AASHTO LRFD 10th Ed. · materials, resistance and bridge loads' + (AD && AD.Mpos ? ` · M<sub>u</sub> = ${f1(AD.Mpos.v)} kip-ft` : '')));   // TBA3
-  g.appendChild(el('span', 'hint', 'no checks yet: no PASS / FAIL'));
+  g.appendChild(el('span', 'hint', AC && !AC.ok ? 'no checks: ' + esc(AC.errors[0] || '') : 'no checks: the bridge loads are needed first'));
   g.appendChild(el('span', 'govSec', esc(aasMemberTxt())));
 }
 function tbcAasDashRender(box, cnt, sub) {
   if (!A || !A.ok) { box.appendChild(el('div', 'tbcDMsg', `AASHTO LRFD: input or design data required (${A ? A.errors.length : 0} item${A && A.errors.length === 1 ? '' : 's'}); see the red tab dots in the input panel.`)); return; }
-  sub.innerHTML = '<b>AASHTO LRFD 10th Ed.</b><br>' + esc(aasMemberTxt());
-  box.appendChild(el('div', 'tbcDMsg aas', 'Materials, resistance and bridge-load demands. No checks yet (the AASHTO checks come in the next version): no PASS / FAIL.'));
+  sub.innerHTML = '<b>AASHTO LRFD 10th Ed.</b><br>' + (AC && AC.ok && AC.gov ? 'Governing: <b>' + esc(aasItName(AC.gov)) + ' · ' + esc(pct(AC.gov.ratio)) + '</b><br>' : '') + esc(aasMemberTxt());
+  if (AC && AC.ok) {   // TBA4: one line per check (its governing item), each opening the card where it is worked
+    let nf = 0;
+    [['Flexure [Art. 8.6.2]', AC.govFlex], ['Shear [Art. 8.7]', AC.govShear]].forEach(([n, it]) => {
+      if (!it) return;
+      const s = aasItSt(it) === 'ok' ? 'pass' : 'fail'; if (s === 'fail') nf++;
+      const c = el('div', 'tbcDc ' + s); c.tabIndex = 0; c.setAttribute('role', 'button');
+      c.innerHTML = `<span class="tbcDcN">${esc(n)}</span><span class="tbcDcR">${f3(it.ratio)}</span><span class="tbcDcS">${s === 'pass' ? 'OK' : 'NG'}</span><div class="tbcDcV">${esc(aasItLoc(it) + ', ' + aasLimName(it.lim))}</div><div class="tbcDcRef">→ ${tbcCardTxt(aasItCard(it))}</div>`;
+      c.title = n + ': ' + f3(it.ratio) + '\nClick: ' + tbcCardTxt(aasItCard(it)).replace(/<[^>]+>/g, '');
+      const go = () => tbcGoto(aasItCard(it));
+      c.addEventListener('click', go); c.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); go(); } });
+      box.appendChild(c);
+    });
+    cnt.innerHTML = nf ? `<span class="tbcCf">${nf} NG</span>` : '<span class="tbcCp">no NG</span>';
+    box.appendChild(el('div', 'tbcDMsg aas', 'Bearing (Art. 8.8.3) and deflection (Art. 2.5.2.6.2): not yet checked (next version). Resistances and demands:'));
+  } else box.appendChild(el('div', 'tbcDMsg aas', 'Materials, resistance and bridge-load demands. No checks: ' + esc(AC && !AC.ok ? AC.errors[0] : 'the bridge loads are needed first') + '.'));
   const s1 = A.lims[0];
   [['φF<sub>b</sub>, Strength I', k3(s1.phiFb) + ' ksi'], ['φF<sub>v</sub>, Strength I', k3(s1.phiFv) + ' ksi'], ['φF<sub>c⊥</sub>, Strength I', k3(s1.phiFcp) + ' ksi'], ['E', f0(A.E) + ' ksi']].forEach(([n, v]) => {
     const c = el('div', 'tbcDc na'); c.tabIndex = 0; c.setAttribute('role', 'button');
@@ -4760,7 +4914,7 @@ function buildAashto(pg) {
       const c = x.CVd;
       calc(body, { title: 'Volume factor C<sub>V</sub> (glulam)', ref: AAS_ART + 'Art. 8.4.4.5, Eq. 8.4.4.5-1',
         lines: [T`C_V = \left[\left(\frac{12}{d}\right)\left(\frac{5.125}{b}\right)\left(\frac{21}{L}\right)\right]^{a} = \left[\left(\frac{12}{${g4(x.d)}}\right)\left(\frac{5.125}{${g4(x.b)}}\right)\left(\frac{21}{${g4(c.L)}}\right)\right]^{${g4(c.a)}} = ${k4(c.prod)}^{${g4(c.a)}} = ${k4(c.raw)}`, T`C_V = \min(${k4(c.raw)},\ 1.0) = ${k4(x.CV)}`],
-        where: [['d, b', 'depth and width of the glulam', `${g4(x.d)}, ${g4(x.b)}`, 'in.', 'Material input tab'], ['L', 'length between points of contraflexure: the longest span (a cantilever with its adjacent span) until the bridge-load analysis of the next phase', g4(c.L), 'ft', 'Geometry input tab'], ['a', c.a === 0.05 ? 'Southern Pine' : 'other species', g4(c.a), '', 'Art. 8.4.4.5']],
+        where: [['d, b', 'depth and width of the glulam', `${g4(x.d)}, ${g4(x.b)}`, 'in.', 'Material input tab'], ['L', 'the longest span (a cantilever with its adjacent span): an upper bound for this table; the flexure check uses L between the points of zero moment of its governing load case (' + tbcLink('aasFlex', 'AASHTO Checks → Flexure') + ')', g4(c.L), 'ft', 'Geometry input tab'], ['a', c.a === 0.05 ? 'Southern Pine' : 'other species', g4(c.a), '', 'Art. 8.4.4.5']],
         result: `C<sub>V</sub> = ${k4(x.CV)} (not combined with C<sub>L</sub>: the lesser applies in flexure, Art. 8.4.4.5)` });
     } else {
       const lines = x.CF.dL !== undefined && x.CF.dL > 12 ? [T`C_F = \left(\frac{12}{d}\right)^{1/9} = \left(\frac{12}{${g4(x.CF.dL)}}\right)^{1/9} = ${k4(x.CF.Fb)}`] : [T`C_F = ${kf(x.CF.Fb)}` + (x.CF.E !== 1 ? T`,\quad C_{F,E} = ${g4(x.CF.E)}` : '')];
@@ -4790,7 +4944,7 @@ function buildAashto(pg) {
     const heads = ['Limit state', 'C<sub>λ</sub>'].concat(...ps.map(p => [nm[p] + ' = (·/C<sub>λ</sub>) × C<sub>λ</sub>', 'φ' + nm[p]]));
     body.appendChild(tblEl(heads, x.lims.map(l => [l.name, g4(l.Cl)].concat(...ps.map(p => [`${k4(x.base[p])} × ${g4(l.Cl)} = ${k3(l[p])}`, `${g4(ph[p])} × ${k3(l[p])} = ${k3(PHIv(l, p))}`]))), { left: [0] }));
     body.appendChild(el('div', 'hint', 'ksi. φ: flexure ' + g4(x.PHI.Fb) + ', shear ' + g4(x.PHI.Fv) + ', compression perpendicular to grain ' + g4(x.PHI.Fcp) + ' (Art. 8.5.2.2; extreme event: φ = 1.0, Art. 8.5.3, applied with the checks). '
-      + 'The factored resistances (M<sub>r</sub> = φF<sub>b</sub>SC<sub>L</sub>, Art. 8.6; V<sub>r</sub>, Art. 8.7; P<sub>r</sub>, Art. 8.8.3) come with the checks in the next phase.'));
+      + 'The factored resistances M<sub>r</sub> = φF<sub>b</sub>SC<sub>L</sub> (Art. 8.6) and V<sub>r</sub> (Art. 8.7) are worked on the ' + tbcLink('aasFlex', 'AASHTO Checks tab') + '; P<sub>r</sub> (Art. 8.8.3) comes in the next version.'));   // TBA4
   });
   mkSec(pg, 'aasNotes', 'Notes and assumptions', body => {
     body.appendChild(el('div', 'hint', tbNL('Notes:', x.notes.map(n => esc(n).replace(/C_([A-Za-zλ]+)/g, 'C<sub>$1</sub>').replace(/F_([a-z]+)/g, 'F<sub>$1</sub>')))));
@@ -4895,7 +5049,7 @@ function buildAasLoads(pg) {
   });
   if (AD) buildAasEnvCards(pg);   // TBA3
   mkSec(pg, 'aasLNotes', 'Notes and assumptions (bridge loads)', body => {
-    body.appendChild(el('div', 'hint', tbNL('Notes:', x.notes.map(esc).concat(['The glulam volume factor C<sub>V</sub> still uses the longest span (T1 decision 9); the zero-moment points of the governing load case come with the flexure check (next phase).', 'Not included: pedestrian load (Art. 3.6.1.6), the tandem pair of C3.6.1.3.1, skew (Art. 4.6.2.2.2e).']))));
+    body.appendChild(el('div', 'hint', tbNL('Notes:', x.notes.map(esc).concat(['The glulam volume factor C<sub>V</sub> of the flexure check uses the points of zero moment of the governing load case (' + tbcLink('aasFlex', 'AASHTO Checks → Flexure') + ').', 'Not included: pedestrian load (Art. 3.6.1.6), the tandem pair of C3.6.1.3.1, skew (Art. 4.6.2.2.2e).']))));
   });
 }
 function tbrAasLoadsSec() {   // Report section: bridge loads (TBA2)
@@ -4997,7 +5151,7 @@ function buildAasEnvCards(pg) {
     body.appendChild(tblEl(['x (ft)', 'M<sub>u</sub> max', 'M<sub>u</sub> min', 'V<sub>u</sub> max', 'V<sub>u</sub> min', 'M Service I max', 'M Service I min'].concat(e.permit ? ['M<sub>u,II</sub> max', 'M<sub>u,II</sub> min'] : []), rows));
     body.appendChild(el('div', 'hint', 'kip-ft and kip per stringer, at the 1/10 points (every 1/40 point is computed; the diagrams use all of them).'));
   });
-  mkSec(pg, 'aasDem', 'Factored demands and resistances (no checks yet)', body => {
+  mkSec(pg, 'aasDem', 'Factored demands and resistances', body => {
     const l1 = A.lims[0], l2 = A.lims[1], S = A.b * A.d * A.d / 6, rows = [];
     const mrow = (lab, o, lim, phiF, ref) => o ? rows.push([{ h: lab }, `${kf2(o.v)} kip-ft at x = ${kf2(o.x)} ft`, { h: `φF<sub>b</sub> = ${k3(phiF)} ksi (${lim})` }, { h: ref }]) : null;
     mrow('M<sub>u</sub>, positive (Strength I)', D.Mpos, 'Strength I, C<sub>λ</sub> ' + g4(l1.Cl), l1.phiFb, tbcLink('aasFE', 'envelopes'));
@@ -5008,9 +5162,9 @@ function buildAasEnvCards(pg) {
     body.appendChild(tblEl(['Demand', 'Value', 'Resistance (AASHTO Materials)', 'Worked in'], rows, { left: [0, 1, 3] }));
     body.appendChild(tbcWorkedIn([['aasAdj', 'φF values'], ['aasFE', 'M_u'], ['aasWV', 'V_u']]));
     const dr = D.defl.filter(Boolean).map(d => [aasSpanTxt(d.k) + (d.cant ? ' (cantilever)' : ''), `${kf2(d.x)} ft`, `${k4(d.perLane)} (${esc(d.gov)})`, kL(d.gD), k4(d.dLL), d.dLL > 0 ? 'L/' + f0((d.cant ? 2 : 1) * d.L * 12 / d.dLL) : '—', `${k4(d.dDL)} at ${kf2(d.xD)} ft`]);
-    body.appendChild(el('div', 'note', '<b>Service I deflections</b> (Art. 3.6.1.3.2: the larger of the design truck alone and 25 % of the truck + the lane load; Art. 2.5.2.6.2: g<sub>Δ</sub>; E = ' + f0(A.E) + ' ksi, I = bd³/12 = ' + f1(e.Ib) + ' in.⁴). Downward +, in. The criteria of Art. 2.5.2.6.2 are checked in the next phase.'));
+    body.appendChild(el('div', 'note', '<b>Service I deflections</b> (Art. 3.6.1.3.2: the larger of the design truck alone and 25 % of the truck + the lane load; Art. 2.5.2.6.2: g<sub>Δ</sub>; E = ' + f0(A.E) + ' ksi, I = bd³/12 = ' + f1(e.Ib) + ' in.⁴). Downward +, in. The criteria of Art. 2.5.2.6.2 are checked in the next version.'));
     body.appendChild(tblEl(['Span', 'x (LL)', 'Δ<sub>LL</sub> per lane', 'g<sub>Δ</sub>', 'Δ<sub>LL</sub>', 'span / Δ<sub>LL</sub>', 'Δ<sub>DC+DW</sub>'], dr, { left: [0] }));
-    body.appendChild(el('div', 'hint', 'Resistances are the factored adjusted stresses of phase T1 (without the beam stability factor C<sub>L</sub>); the flexure, shear, bearing and deflection checks (Art. 8.6, 8.7, 8.8.3, 2.5.2.6.2) and PASS / FAIL come in the next phase. Reactions use g<sub>V</sub> (Decision pending engineer review). Cantilever: span / Δ with twice the cantilever length.'));
+    body.appendChild(el('div', 'hint', 'Resistances here are the factored adjusted stresses (without C<sub>L</sub>, C<sub>V</sub>); the flexure and shear checks are on the ' + tbcLink('aasCSum', 'AASHTO Checks tab') + '; bearing (Art. 8.8.3) and the deflection criteria (Art. 2.5.2.6.2) come in the next version. Reactions use g<sub>V</sub>. Cantilever: span / Δ with twice the cantilever length.'));   // TBA4
   });
 }
 function tbrAasEnvSubs() {   // Report: envelopes and demands (TBA3)
@@ -5030,16 +5184,147 @@ function tbrAasEnvSubs() {   // Report: envelopes and demands (TBA3)
     { type: 'table', wide: true, head: ['x (ft)', 'M_u max', 'M_u min', 'V_u max', 'V_u min', 'M Ser I max', 'M Ser I min'], rows: fe },
     { type: 'note', text: 'Service I deflections (Art. 3.6.1.3.2, 2.5.2.6.2), in.: span, x (ft), Δ_LL per lane, g_Δ, Δ_LL, Δ_DC+DW.' }, { type: 'table', head: ['Span', 'x', 'Δ_LL per lane', 'g_Δ', 'Δ_LL', 'Δ_DC+DW'], rows: dl }] }];
 }
+/* ---- TBA4 (phase T3): the AASHTO checks. The AASHTO Checks tab (summary, flexure, shear, notes), the governing strip, the left
+   column and the Report section. Every value is a value of AC = tbcAasChecks(M, A, AL, AD); only the substitution strings are
+   formatted here. ---- */
+const aasLimName = lim => lim === 'StrII' ? 'Strength II' : 'Strength I';
+const aasItLoc = it => it.kind === 'flex' ? `${aasSpanTxt(it.k)}, ${it.sg > 0 ? '+M' : '−M'} at x = ${kf2(it.x)} ft` : `support ${TBC_NODE[it.j]}, ${aasSpanTxt(it.k)} side`;
+const aasItName = it => (it.kind === 'flex' ? 'Flexure' : 'Shear') + ', ' + aasItLoc(it) + ', ' + aasLimName(it.lim);
+const aasItCard = it => it.kind === 'flex' ? 'aasFlex' : 'aasShr';
+const aasItSt = it => it.rbNG ? 'ng' : stCls(it.ratio);
+const aasItId = it => (it.kind === 'flex' ? 'aasC.f' : 'aasC.v') + (it.kind === 'flex' ? AC.flex : AC.shear).indexOf(it);
+const aasNG = () => !!(AC && AC.ok && AC.fails.length);
+const aasCaseTxt = it => { if (it.lim === 'StrII') { const gv = it.sg > 0 ? it.sec.M.pm.gMax : it.sec.M.pm.gMin; return 'permit vehicle, axles ' + (gv ? aasPosTxt(Object.assign({ P: AL.env.permit.P }, gv)) + ' ft' : '—'); } return aasGovTxt(it.sg > 0 ? it.sec.M.ll.gMax : it.sec.M.ll.gMin); };
+function aasStabLines(it) {   // the C_L lines of one flexure item (TeX), or a one-line reason
+  if (it.clWhy === 'db') return { lines: [T`d = ${g4(A.d)} \le b = ${g4(A.b)}\ \text{in.} \Rightarrow C_L = 1.0`], why: 'd ≤ b: C<sub>L</sub> = 1.0 (Art. 8.6.2)' };
+  if (it.clWhy === 'braced') return { lines: [T`C_L = 1.0`], why: `the ${it.edge} (compression) edge is braced continuously and the points of bearing against rotation: C<sub>L</sub> = 1.0 (Art. 8.6.2)` };
+  const le = it.leRule === '2.06' ? T`L_e = 2.06\,L_u = 2.06 \times ${f1(it.Lu)} = ${f1(it.Le)}\ \text{in.}\quad (L_u/d < 7)` : it.leRule === '1.84' ? T`L_e = 1.84\,L_u = 1.84 \times ${f1(it.Lu)} = ${f1(it.Le)}\ \text{in.}\quad (L_u/d > 14.3)`
+    : T`L_e = 1.63\,L_u + 3d = 1.63 \times ${f1(it.Lu)} + 3 \times ${g4(A.d)} = ${f1(it.Le)}\ \text{in.}\quad (7 \le L_u/d \le 14.3)`;
+  return { lines: [T`\frac{L_u}{d} = \frac{${f1(it.Lu)}}{${g4(A.d)}} = ${f2(it.luD)}`, le,
+    T`R_B = \sqrt{\frac{L_e\,d}{b^2}} = \sqrt{\frac{${f1(it.Le)} \times ${g4(A.d)}}{${g4(A.b)}^2}} = ${f3(it.RB)}\ ${it.rbNG ? '> 50\\ \\text{(NG)}' : '\\le 50'}`,
+    T`F_{bE} = \frac{K_{bE}\,E}{R_B^2} = \frac{${g4(AC.KbE)} \times ${f0(AC.E)}}{${f3(it.RB)}^2} = ${k4(it.FbE)}\ \text{ksi}`,
+    T`A = \frac{F_{bE}}{F_b} = \frac{${k4(it.FbE)}}{${k4(it.Fb)}} = ${k4(it.A)}`,
+    T`C_L = \frac{1 + A}{1.9} - \sqrt{\left(\frac{1 + A}{1.9}\right)^2 - \frac{A}{0.95}} = \frac{1 + ${k4(it.A)}}{1.9} - \sqrt{\left(\frac{1 + ${k4(it.A)}}{1.9}\right)^2 - \frac{${k4(it.A)}}{0.95}} = ${k4(it.CL)}`], why: null };
+}
+function aasFbLine(it) {   // F_b of the limit state used in the check
+  const l = A.lims[it.li];
+  if (!A.isGL) return T`F_b = (F_b/C_\lambda)\,C_\lambda = ${k4(A.base.Fb)} \times ${g4(it.Cl)} = ${k4(it.Fb)}\ \text{ksi}\quad (\text{with } C_F = ${kf(A.CF.Fb)})`;
+  const ref = it.sg > 0 ? A.R0.Fb : A.R0.Fbn, sy = it.sg > 0 ? 'F_{bxo}^{+}' : 'F_{bxo}^{-}';
+  return T`F_b = ${sy}\,C_{KF}\,C_M\,C_{fu}\,C_i\,C_d\,C_\lambda = ${k4(ref)} \times ${k4(A.CKF.Fb)} \times ${g4(A.CM.Fb)} \times ${g4(A.Cfu)} \times ${g4(A.Ci.Fb)} \times ${g4(A.Cd)} \times ${g4(l.Cl)} = ${k4(it.Fb)}\ \text{ksi}`;
+}
+function aasFlexBlock(body, it) {
+  const st = aasStabLines(it), lines = [T`M_u = ${kf3(it.Mu)}\ \text{kip-ft}\quad (\text{${aasLimName(it.lim)}},\ x = ${kf2(it.x)}\ \text{ft})`, aasFbLine(it)].concat(st.lines);
+  const where = [['M_u', `largest ${it.sg > 0 ? 'positive' : 'negative'} factored moment in ${aasSpanTxt(it.k)}`, kf3(it.Mu), 'kip-ft', tbcLink('aasFE', 'Factored envelopes')],
+    ['F_b', `adjusted design value in flexure, ${aasLimName(it.lim)} (C<sub>λ</sub> = ${g4(it.Cl)})${A.isGL ? ', without C<sub>V</sub>' : ''}`, k4(it.Fb), 'ksi', tbcLink('aasAdj', 'AASHTO Materials')]];
+  if (!it.clWhy) where.push(['L_u', `unbraced length of the ${it.edge} edge (${it.luSrc === 'entered' ? 'entered' : 'span length'})`, f1(it.Lu), 'in.', 'Factors input tab'], ['K_{bE}', A.isGL ? 'glulam' : 'visually graded lumber', g4(AC.KbE), '', 'Art. 8.6.2'], ['E', 'adjusted modulus of elasticity (Eq. 8.4.4.1-6)', f0(AC.E), 'ksi', tbcLink('aasAdj', 'AASHTO Materials')]);
+  if (A.isGL) {
+    lines.push(T`L = x_r - x_l = ${kf3(it.zr)} - ${kf3(it.zl)} = ${kf3(it.Lz)}\ \text{ft}`,
+      T`C_V = \left[\left(\frac{12}{d}\right)\left(\frac{5.125}{b}\right)\left(\frac{21}{L}\right)\right]^{a} = \left[\left(\frac{12}{${g4(A.d)}}\right)\left(\frac{5.125}{${g4(A.b)}}\right)\left(\frac{21}{${kf3(it.Lz)}}\right)\right]^{${g4(A.CVd.a)}} = ${k4(it.prod)}^{${g4(A.CVd.a)}} = ${k4(it.CVraw)}` + (it.CVraw > 1 ? T` > 1.0 \Rightarrow C_V = 1.0` : ''),
+      T`\min(C_L,\ C_V) = \min(${k4(it.CL)},\ ${k4(it.CV)}) = ${k4(it.fac)}`);
+    where.push(['x_l, x_r', 'points of zero moment of the governing load case on either side of the section (or the member end); the case: ' + aasCaseTxt(it) + ', with the factored DC and DW (its moment at the section ' + kf2(it.Mcase) + ' kip-ft)', `${kf3(it.zl)}, ${kf3(it.zr)}`, 'ft', 'Art. 8.4.4.5'],
+      ['a', A.CVd.a === 0.05 ? 'Southern Pine' : 'species other than Southern Pine', g4(A.CVd.a), '', 'Art. 8.4.4.5']);
+  }
+  const C = A.isGL ? 'C' : 'C_L', Cv = A.isGL ? it.fac : it.CL;
+  lines.push(T`S = \frac{b\,d^2}{6} = \frac{${g4(A.b)} \times ${g4(A.d)}^2}{6} = ${f2(AC.S)}\ \text{in.}^3`,
+    T`M_n = F_b\,S\,${C} / 12 = ${k4(it.Fb)} \times ${f2(AC.S)} \times ${k4(Cv)} / 12 = ${kf3(it.Mn)}\ \text{kip-ft}`,
+    T`M_r = \phi\,M_n = ${g4(A.PHI.Fb)} \times ${kf3(it.Mn)} = ${kf3(it.Mr)}\ \text{kip-ft}`,
+    T`\frac{M_u}{M_r} = \frac{${kf3(it.Mu)}}{${kf3(it.Mr)}} = ${f3(it.ratio)}\ ${it.ratio <= 1 ? '\\le' : '>'}\ 1.0`);
+  calc(body, { title: `${aasLimName(it.lim)}, ${aasSpanTxt(it.k)}: ${it.sg > 0 ? 'positive moment (top edge in compression)' : 'negative moment (bottom edge in compression)'}`, ref: AAS_ART + 'Art. 8.6.1, 8.6.2 (Eq. 8.6.1-1, 8.6.2-1 to -5)' + (A.isGL ? ', 8.4.4.5' : ''), status: aasItSt(it), lines, where,
+    result: `M<sub>r</sub> = ${kf3(it.Mr)} kip-ft; M<sub>u</sub>/M<sub>r</sub> = ${f3(it.ratio)}` + (A.isGL ? `; ${it.facBy === 'CL' ? 'C<sub>L</sub>' : 'C<sub>V</sub>'} governs (the lesser applies, Art. 8.4.4.5)` : '') + (st.why ? '; ' + st.why : '') + (it.rbNG ? ` — R<sub>B</sub> = ${f3(it.RB)} > 50: not permitted (Art. 8.6.2)` : '') }).id = 'aasIt_' + aasItId(it).replace('.', '_');
+}
+function aasShrBlock(body, it) {
+  const s = it.s;
+  calc(body, { title: `${aasLimName(it.lim)}, support ${TBC_NODE[it.j]} (${aasSpanTxt(it.k)} side)`, ref: AAS_ART + 'Art. 8.7 (Eq. 8.7-1, 8.7-2)', status: aasItSt(it),
+    lines: [T`F_v = (F_v/C_\lambda)\,C_\lambda = ${k4(A.base.Fv)} \times ${g4(it.Cl)} = ${k4(it.Fv)}\ \text{ksi}`,
+      T`V_n = \frac{F_v\,b\,d}{1.5} = \frac{${k4(it.Fv)} \times ${g4(A.b)} \times ${g4(A.d)}}{1.5} = ${kf3(it.Vn)}\ \text{kip}`,
+      T`V_r = \phi\,V_n = ${g4(A.PHI.Fv)} \times ${kf3(it.Vn)} = ${kf3(it.Vr)}\ \text{kip}`,
+      T`\frac{V_u}{V_r} = \frac{${kf3(it.Vu)}}{${kf3(it.Vr)}} = ${f3(it.ratio)}\ ${it.ratio <= 1 ? '\\le' : '>'}\ 1.0`],
+    where: [['V_u', `factored shear at the critical section: dead load at d from the face, live load placed for the largest shear at min(3d, L/4) = ${kf3(s.aLL)} ft from the face`, kf3(it.Vu), 'kip', tbcLink('aasWV', 'Shear at the critical sections')],
+      ['F_v', `adjusted design value in shear, ${aasLimName(it.lim)} (C<sub>λ</sub> = ${g4(it.Cl)})`, k4(it.Fv), 'ksi', tbcLink('aasAdj', 'AASHTO Materials')]],
+    result: `V<sub>r</sub> = ${kf3(it.Vr)} kip; V<sub>u</sub>/V<sub>r</sub> = ${f3(it.ratio)}` });
+}
+function aasChkRows() {   // the summary rows: [check, limit state, location, demand, resistance, ratio, status, card]
+  return AC.all.map(it => ({ it, cells: [it.kind === 'flex' ? 'Flexure (Art. 8.6.2)' : 'Shear (Art. 8.7)', aasLimName(it.lim), aasItLoc(it),
+    it.kind === 'flex' ? `M<sub>u</sub> = ${kf2(it.Mu)} kip-ft` : `V<sub>u</sub> = ${kf2(it.Vu)} kip`, it.kind === 'flex' ? `M<sub>r</sub> = ${kf2(it.Mr)} kip-ft` : `V<sub>r</sub> = ${kf2(it.Vr)} kip`] }));
+}
+function buildAasChecks(pg) {
+  pg.appendChild(aasNotice());
+  if (!AC || !AC.ok) { const errs = (AC && AC.errors) || (A && !A.ok ? A.errors : AL && !AL.ok ? AL.errors : ['The checks need the material, the bridge loads and the factored demands first.']);
+    pg.appendChild(el('div', 'errBox', '<b>No AASHTO checks: input or design data required</b><ul>' + errs.map(m => '<li>' + esc(m) + '</li>').join('') + '</ul>')); return; }
+  mkSec(pg, 'aasCSum', 'Summary of the checks', body => {
+    const g = AC.gov;
+    body.appendChild(el('div', 'note', g ? `<b>Governing:</b> ${esc(aasItName(g))} · ratio ${f3(g.ratio)} · <b>${aasNG() ? 'NG' : 'OK'}</b>` : 'No check.'));
+    body.appendChild(tblEl(['Check', 'Limit state', 'Location', 'Demand', 'Factored resistance', 'Ratio', 'Status', 'Worked in'], aasChkRows().map(r => ({ cls: r.it === g ? 'gov' : '',
+      cells: r.cells.map(c => ({ h: c })).concat([f3(r.it.ratio), { cls: aasItSt(r.it), h: aasItSt(r.it) === 'ok' ? 'OK' : 'NG' }, { h: tbcLink(aasItCard(r.it), '→ ' + (r.it.kind === 'flex' ? 'Flexure' : 'Shear')) }]) })), { left: [0, 1, 2] }));
+    body.appendChild(el('div', 'hint', 'Strength I with the HL-93 loading (C<sub>λ</sub> = 0.8)' + (AL.env.permit ? '; Strength II with the permit vehicle (C<sub>λ</sub> = 1.0)' : '') + ' (Table 8.4.4.9-1). Bearing (Art. 8.8.3) and the deflection criteria (Art. 2.5.2.6.2) come in the next version of this tool.'));
+  });
+  mkSec(pg, 'aasFlex', 'Flexure (Art. 8.6.2)', body => {
+    body.appendChild(el('div', 'note', tbNL(`M<sub>r</sub> = φM<sub>n</sub>, M<sub>n</sub> = F<sub>b</sub>SC<sub>L</sub> (Eq. 8.6.1-1, 8.6.2-1); φ = ${g4(A.PHI.Fb)} (Art. 8.5.2.2). For each span: the largest positive and negative factored moment of each limit state.`, [
+      ['Lateral support (Factors input tab):', `top edge ${AC.latTop === 'Continuous' ? 'braced continuously (deck)' : 'at supports only' + (AC.luTop > 0 ? ', L<sub>u</sub> = ' + g4(AC.luTop) + ' ft' : ', L<sub>u</sub> = span')}; bottom edge ${AC.latBot === 'Continuous' ? 'braced continuously' : 'at brace points, L<sub>u</sub> = ' + (AC.luBot > 0 ? g4(AC.luBot) + ' ft' : 'span')}${AC.latBot0 === 'same' ? ' (same as top edge)' : ''}.`],
+      ['C<sub>L</sub>:', 'K<sub>bE</sub> = ' + g4(AC.KbE) + (A.isGL ? ' (glulam)' : ' (visually graded lumber)') + '; L<sub>e</sub> from L<sub>u</sub>/d (Art. 8.6.2); C<sub>L</sub> = 1.0 where d ≤ b or the compression edge is braced continuously.'],
+      ...(A.isGL ? [['Glulam:', 'the lesser of C<sub>L</sub> and C<sub>V</sub> (Art. 8.4.4.5); C<sub>V</sub> with L between the points of zero moment of the load case that governs each check (not the longest span used on the AASHTO Materials tab).']] : [])])));
+    AC.flex.forEach(it => aasFlexBlock(body, it));
+    if (!AC.flex.length) body.appendChild(el('div', 'hint', 'No factored moment.'));
+  });
+  mkSec(pg, 'aasShr', 'Shear (Art. 8.7)', body => {
+    body.appendChild(el('div', 'note', `V<sub>r</sub> = φV<sub>n</sub>, V<sub>n</sub> = F<sub>v</sub>bd/1.5 (Eq. 8.7-1, 8.7-2); φ = ${g4(A.PHI.Fv)} (Art. 8.5.2.2). Horizontal shear parallel to grain at the critical sections of each support (shear perpendicular to grain need not be checked, C8.7).`));
+    AC.shear.forEach(it => aasShrBlock(body, it));
+    if (!AC.shear.length) body.appendChild(el('div', 'hint', 'No critical section: every span is shorter than the shear offset.'));
+  });
+  mkSec(pg, 'aasCNotes', 'Notes (checks)', body => {
+    body.appendChild(el('div', 'hint', tbNL('Notes:', AC.notes.map(n => esc(n).replace(/C_([A-Za-zλ]+)/g, 'C<sub>$1</sub>').replace(/F_([a-z]+)/g, 'F<sub>$1</sub>')))));
+  });
+}
+function tbrAasChecksSec() {   // Report section: the AASHTO checks (TBA4)
+  const T0 = 'AASHTO checks (Art. 8.6, 8.7)';
+  if (!AC || !AC.ok) return { title: T0, subs: [{ title: 'Input required', items: ((AC && AC.errors) || ['The checks need the material, the bridge loads and the factored demands first.']).map(m => ({ type: 'note', warn: true, text: m })) }] };
+  const fl = [], sh = [];
+  AC.flex.forEach(it => {
+    const id = aasItId(it), lab = aasLimName(it.lim) + ', ' + aasSpanTxt(it.k) + ', ' + (it.sg > 0 ? '+M' : '−M') + ' at x = ' + kf2(it.x) + ' ft';
+    fl.push(tbrS({ id: id + '.Mu', label: 'Factored moment, ' + lab, sym: 'M_{u}', eq: '', sub: '', value: it.Mu, unit: 'kip-ft', d: 3, ref: AAS_ART + 'Table 3.4.1-1', note: 'Worked on the Bridge Loads tab (factored envelopes).' }),
+      tbrS({ id: id + '.Fb', label: 'Adjusted design value in flexure, ' + aasLimName(it.lim) + (A.isGL ? ' (without C_V)' : ''), sym: 'F_{b}', eq: A.isGL ? (it.sg > 0 ? 'F_{bxo}^{+}' : 'F_{bxo}^{-}') + '\\,C_{KF}\\,C_{M}\\,C_{fu}\\,C_{i}\\,C_{d}\\,C_{\\lambda}' : '(F_{b}/C_{\\lambda})\\,C_{\\lambda}',
+        sub: A.isGL ? [k4(it.sg > 0 ? A.R0.Fb : A.R0.Fbn), k4(A.CKF.Fb), g4(A.CM.Fb), g4(A.Cfu), g4(A.Ci.Fb), g4(A.Cd), g4(it.Cl)].join(' \\times ') : k4(A.base.Fb) + ' \\times ' + g4(it.Cl), value: it.Fb, unit: 'ksi', d: 4, ref: AAS_ART + 'Eq. 8.4.4.1-1' }));
+    if (it.clWhy) fl.push(tbrS({ id: id + '.CL', label: 'Beam stability factor (' + it.edge + ' edge in compression): ' + (it.clWhy === 'db' ? 'd ≤ b' : 'braced continuously, points of bearing braced'), sym: 'C_{L}', eq: '', sub: '', value: 1, unit: '', d: 3, ref: AAS_ART + 'Art. 8.6.2' }));
+    else fl.push(tbrS({ id: id + '.Lu', label: 'Unbraced length of the ' + it.edge + ' edge (' + (it.luSrc === 'entered' ? 'entered' : 'span length') + ')', sym: 'L_{u}', eq: '', sub: '', value: it.Lu, unit: 'in', d: 1, ref: AAS_ART + 'Art. 8.6.2' }),
+      tbrS({ id: id + '.Le', label: 'Effective unbraced length (L_u/d = ' + f2(it.luD) + ')', sym: 'L_{e}', eq: it.leRule === '2.06' ? '2.06\\,L_{u}' : it.leRule === '1.84' ? '1.84\\,L_{u}' : '1.63\\,L_{u} + 3d', sub: it.leRule === '1.63' ? '1.63 \\times ' + f1(it.Lu) + ' + 3 \\times ' + g4(A.d) : it.leRule + ' \\times ' + f1(it.Lu), value: it.Le, unit: 'in', d: 1, ref: AAS_ART + 'Art. 8.6.2' }),
+      tbrS({ id: id + '.RB', label: 'Slenderness ratio', sym: 'R_{B}', eq: '\\sqrt{\\frac{L_{e}\\,d}{b^{2}}}', sub: '\\sqrt{\\frac{' + f1(it.Le) + ' \\times ' + g4(A.d) + '}{' + g4(A.b) + '^{2}}}', value: it.RB, unit: '', d: 3, ref: AAS_ART + 'Eq. 8.6.2-5', note: it.rbNG ? 'R_B > 50: not permitted — NG.' : 'R_B ≤ 50.', ok: !it.rbNG }),
+      tbrS({ id: id + '.FbE', label: 'Critical buckling design value', sym: 'F_{bE}', eq: '\\frac{K_{bE}\\,E}{R_{B}^{2}}', sub: '\\frac{' + g4(AC.KbE) + ' \\times ' + f0(AC.E) + '}{' + f3(it.RB) + '^{2}}', value: it.FbE, unit: 'ksi', d: 4, ref: AAS_ART + 'Eq. 8.6.2-4' }),
+      tbrS({ id: id + '.A', label: 'Beam stability parameter', sym: 'A', eq: '\\frac{F_{bE}}{F_{b}}', sub: '\\frac{' + k4(it.FbE) + '}{' + k4(it.Fb) + '}', value: it.A, unit: '', d: 4, ref: AAS_ART + 'Eq. 8.6.2-3' }),
+      tbrS({ id: id + '.CL', label: 'Beam stability factor (' + it.edge + ' edge in compression)', sym: 'C_{L}', eq: '\\frac{1 + A}{1.9} - \\sqrt{\\left(\\frac{1 + A}{1.9}\\right)^{2} - \\frac{A}{0.95}}', sub: '\\frac{1 + ' + k4(it.A) + '}{1.9} - \\sqrt{\\left(\\frac{1 + ' + k4(it.A) + '}{1.9}\\right)^{2} - \\frac{' + k4(it.A) + '}{0.95}}', value: it.CL, unit: '', d: 4, ref: AAS_ART + 'Eq. 8.6.2-2' }));
+    if (A.isGL) fl.push(tbrS({ id: id + '.Lz', label: 'Length between the points of zero moment of the governing load case (x_l = ' + kf3(it.zl) + ', x_r = ' + kf3(it.zr) + ' ft)', sym: 'L', eq: 'x_{r} - x_{l}', sub: kf3(it.zr) + ' - ' + kf3(it.zl), value: it.Lz, unit: 'ft', d: 3, ref: AAS_ART + 'Art. 8.4.4.5' }),
+      tbrS({ id: id + '.CV', label: 'Volume factor (a = ' + g4(A.CVd.a) + ')', sym: 'C_{V}', eq: '\\left[\\left(\\frac{12}{d}\\right)\\left(\\frac{5.125}{b}\\right)\\left(\\frac{21}{L}\\right)\\right]^{a} \\le 1.0', sub: '\\left[\\left(\\frac{12}{' + g4(A.d) + '}\\right)\\left(\\frac{5.125}{' + g4(A.b) + '}\\right)\\left(\\frac{21}{' + kf3(it.Lz) + '}\\right)\\right]^{' + g4(A.CVd.a) + '}', value: it.CV, unit: '', d: 4, ref: AAS_ART + 'Eq. 8.4.4.5-1' }),
+      tbrS({ id: id + '.fac', label: 'The lesser of C_L and C_V (' + (it.facBy === 'CL' ? 'C_L' : 'C_V') + ' governs)', sym: '\\min(C_{L}, C_{V})', eq: '', sub: '\\min(' + k4(it.CL) + ', ' + k4(it.CV) + ')', value: it.fac, unit: '', d: 4, ref: AAS_ART + 'Art. 8.4.4.5' }));
+    fl.push(tbrS({ id: id + '.Mn', label: 'Nominal flexural resistance (S = b d²/6 = ' + f2(AC.S) + ' in.³)', sym: 'M_{n}', eq: 'F_{b}\\,S\\,' + (A.isGL ? '\\min(C_{L}, C_{V})' : 'C_{L}') + ' / 12', sub: k4(it.Fb) + ' \\times ' + f2(AC.S) + ' \\times ' + k4(it.fac) + ' / 12', value: it.Mn, unit: 'kip-ft', d: 3, ref: AAS_ART + 'Eq. 8.6.2-1' }),
+      tbrS({ id: id + '.Mr', label: 'Factored flexural resistance', sym: 'M_{r}', eq: '\\phi\\,M_{n}', sub: g4(A.PHI.Fb) + ' \\times ' + kf3(it.Mn), value: it.Mr, unit: 'kip-ft', d: 3, ref: AAS_ART + 'Eq. 8.6.1-1' }),
+      tbrS({ id: id + '.r', label: 'Flexure check, ' + lab, sym: '\\frac{M_{u}}{M_{r}}', eq: '', sub: '\\frac{' + kf3(it.Mu) + '}{' + kf3(it.Mr) + '}', value: it.ratio, unit: '', d: 3, ref: AAS_ART + 'Art. 8.6', ok: it.ok, note: it.ok ? 'OK (≤ 1.0).' : 'NG.' }));
+  });
+  AC.shear.forEach(it => {
+    const id = aasItId(it), lab = aasLimName(it.lim) + ', support ' + TBC_NODE[it.j] + ' (' + aasSpanTxt(it.k) + ' side)';
+    sh.push(tbrS({ id: id + '.Vu', label: 'Factored shear at the critical section, ' + lab, sym: 'V_{u}', eq: '', sub: '', value: it.Vu, unit: 'kip', d: 3, ref: AAS_ART + 'Art. 8.7', note: 'Worked in the bridge-load section (shear at the critical sections).' }),
+      tbrS({ id: id + '.Fv', label: 'Adjusted design value in shear, ' + aasLimName(it.lim), sym: 'F_{v}', eq: '(F_{v}/C_{\\lambda})\\,C_{\\lambda}', sub: k4(A.base.Fv) + ' \\times ' + g4(it.Cl), value: it.Fv, unit: 'ksi', d: 4, ref: AAS_ART + 'Eq. 8.4.4.1-2' }),
+      tbrS({ id: id + '.Vn', label: 'Nominal shear resistance', sym: 'V_{n}', eq: '\\frac{F_{v}\\,b\\,d}{1.5}', sub: '\\frac{' + k4(it.Fv) + ' \\times ' + g4(A.b) + ' \\times ' + g4(A.d) + '}{1.5}', value: it.Vn, unit: 'kip', d: 3, ref: AAS_ART + 'Eq. 8.7-2' }),
+      tbrS({ id: id + '.Vr', label: 'Factored shear resistance', sym: 'V_{r}', eq: '\\phi\\,V_{n}', sub: g4(A.PHI.Fv) + ' \\times ' + kf3(it.Vn), value: it.Vr, unit: 'kip', d: 3, ref: AAS_ART + 'Eq. 8.7-1' }),
+      tbrS({ id: id + '.r', label: 'Shear check, ' + lab, sym: '\\frac{V_{u}}{V_{r}}', eq: '', sub: '\\frac{' + kf3(it.Vu) + '}{' + kf3(it.Vr) + '}', value: it.ratio, unit: '', d: 3, ref: AAS_ART + 'Art. 8.7', ok: it.ok, note: it.ok ? 'OK (≤ 1.0).' : 'NG.' }));
+  });
+  const rows = AC.all.map(it => [it.kind === 'flex' ? 'Flexure' : 'Shear', aasLimName(it.lim), aasItLoc(it).replace('−M', '-M'), it.kind === 'flex' ? 'M_u = ' + kf2(it.Mu) + ' kip-ft' : 'V_u = ' + kf2(it.Vu) + ' kip',
+    { t: it.kind === 'flex' ? 'M_r = ' + kf2(it.Mr) + ' kip-ft' : 'V_r = ' + kf2(it.Vr) + ' kip', key: 'tb/' + aasItId(it) + '.' + (it.kind === 'flex' ? 'Mr' : 'Vr') }, { t: f3(it.ratio), cls: aasItSt(it), n: true }, { t: aasItSt(it) === 'ok' ? 'OK' : 'NG', cls: aasItSt(it) }]);
+  return { title: T0, subs: [
+    { title: 'Summary of the checks', items: [{ type: 'table', head: ['Check', 'Limit state', 'Location', 'Demand', 'Factored resistance', 'Ratio', 'Status'], rows },
+      { type: 'note', text: 'Governing: ' + aasItName(AC.gov).replace(/<[^>]+>/g, '') + ', ratio ' + f3(AC.gov.ratio) + ' — ' + (aasNG() ? 'NG' : 'OK') + '. The same checks are on the AASHTO Checks tab[[tab:aasC| ↗]]. Bearing (Art. 8.8.3) and the deflection criteria (Art. 2.5.2.6.2) come in the next version.' }] },
+    { title: 'Flexure (Art. 8.6.2)', items: [{ type: 'note', text: 'Lateral support: top edge ' + (AC.latTop === 'Continuous' ? 'braced continuously' : 'at supports only') + ', bottom edge ' + (AC.latBot === 'Continuous' ? 'braced continuously' : 'at brace points') + '; K_bE = ' + g4(AC.KbE) + '; φ = ' + g4(A.PHI.Fb) + '.' }, tbrTopics([{ title: 'Flexure', ref: AAS_ART + 'Art. 8.6.1, 8.6.2' + (A.isGL ? ', 8.4.4.5' : ''), res: /\.r$/, steps: fl }])] },
+    { title: 'Shear (Art. 8.7)', items: [tbrTopics([{ title: 'Shear', ref: AAS_ART + 'Art. 8.7', res: /\.r$/, steps: sh }])] },
+    { title: 'Notes (checks)', items: AC.notes.map(n => ({ type: 'note', text: n })) }] };
+}
 /* ---- Report (AASHTO mode) ---- */
 function tbrAasModel() {
   const p = M.project || {}, secs = [], today = new Date().toISOString().slice(0, 10), x = A;
   const head = { title: 'Timber Beam Check — Calculation Report (AASHTO LRFD)', subtitle: (p.name || 'Untitled') + (p.member ? ' — ' + p.member : ''), code: 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 8',
     info: [['Project', p.name], ['Project No.', p.job], ['Calculated by', p.designer], ['Date', p.date || today], ['Checked by', p.checker], ['Checked date', '']],
     head: { left: 'Project No. ' + (p.job || '—') + ' — ' + String(p.member || p.name || 'Timber stringer').slice(0, 40), right: 'Computed: ' + (p.designer || '—') + ' ' + (p.date || today) + ' · Checked: ' + (p.checker || '—'), foot: (p.name || 'Untitled') + ' (Timber Beam Check)' } };
-  const notice = [{ type: 'note', warn: true, text: 'AASHTO LRFD 10th Ed. mode: reference values, adjustment factors, resistance factors and bridge loads (DC, DW, HL-93; envelopes and factored demands). The AASHTO checks (flexure Art. 8.6, shear Art. 8.7, bearing Art. 8.8.3, deflection Art. 2.5.2.6.2) come in the next versions of the tool: no PASS / FAIL is given. The NDS 2018 building-load checks are not run in this mode.' }];
+  const notice = [{ type: 'note', warn: true, text: 'AASHTO LRFD 10th Ed. mode: reference values, adjustment factors, resistance factors, bridge loads (DC, DW, HL-93; envelopes and factored demands) and the flexure (Art. 8.6.2) and shear (Art. 8.7) checks. Bearing (Art. 8.8.3) and the deflection criteria (Art. 2.5.2.6.2) come in the next version of the tool. The NDS 2018 building-load checks are not run in this mode.' }];   // TBA4
   if (!x || !x.ok) { secs.push({ title: 'Status', subs: [{ title: 'Input required', items: notice.concat(((x && x.errors) || []).map(m => ({ type: 'note', warn: true, text: m }))) }] }); return Object.assign(head, { sections: secs }); }
   const gl = x.isGL, r = x.ref, a = x.a;
-  secs.push({ title: 'Status', subs: [{ title: 'Member and code', items: [{ type: 'kv', rows: [['Member', aasMemberTxt()], ['Design code', 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 8'], ['Result', 'No checks yet (materials, resistance and bridge-load demands)']] }].concat(notice) }] });
+  secs.push({ title: 'Status', subs: [{ title: 'Member and code', items: [{ type: 'kv', rows: [['Member', aasMemberTxt()], ['Design code', 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 8'], ['Result', AC && AC.ok && AC.gov ? (aasNG() ? 'NG' : 'OK') + ' — governing: ' + aasItName(AC.gov) + ', ratio ' + f3(AC.gov.ratio) + ' (flexure and shear; bearing and deflection not yet checked)' : 'No checks: ' + (AC && !AC.ok ? AC.errors[0] : 'the bridge loads are needed first')]] }].concat(notice) }] });
   {
     const rows = gl ? [['Material', 'Glulam, ' + aasGlName(a.gl)], ['Species group (laminations)', (GLULAM_GRP[M.material.glulam.grp] || {}).name || '?'], ['Section', 'b = ' + g4(x.b) + ' in., d = ' + g4(x.d) + ' in.'], ['Special tension laminations', aasGlKind(a.gl) === 1 ? (a.noTL ? 'omitted' : 'present (as Table 8.4.1.2.3-1 requires)') : 'not used (Table 8.4.1.2.3-2)']]
       : [['Material', 'Sawn lumber, ' + ((AAS_SAWN[a.sp] || {}).name || a.sp) + ' ' + (AAS_GRADES[a.gr] || a.gr)], ['Section', (M.material.size === 'Custom' ? 'custom' : M.material.size) + ', b = ' + g4(x.b) + ' in., d = ' + g4(x.d) + ' in.'], ['Deck type', (AAS_DECKS.find(q => q[0] === a.deck) || [0, a.deck])[1]]];
@@ -5080,10 +5365,11 @@ function tbrAasModel() {
         { type: 'note', text: 'Each value is the product without C_λ ([[tb/aas.bFb]]) times the C_λ of the limit state; φ per Art. 8.5.2.2: flexure ' + g4(x.PHI.Fb) + ', shear ' + g4(x.PHI.Fv) + ', compression perpendicular to grain ' + g4(x.PHI.Fcp) + '.' }] }] });
   }
   secs.push(tbrAasLoadsSec());   // TBA2
+  secs.push(tbrAasChecksSec());   // TBA4
   {
-    const items = x.notes.map(n => ({ type: 'note', text: 'Note: ' + n })).concat(AL && AL.ok ? AL.notes.map(n => ({ type: 'note', text: 'Note (bridge loads): ' + n })) : []);   // TBA2: bridge-load notes
+    const items = x.notes.map(n => ({ type: 'note', text: 'Note: ' + n })).concat(AL && AL.ok ? AL.notes.map(n => ({ type: 'note', text: 'Note (bridge loads): ' + n })) : []);   // TBA2: bridge-load notes (the check notes: TBA4, in their section)
     if ((p.notes || '').trim()) items.unshift({ type: 'note', text: 'Project notes and assumptions (input): ' + String(p.notes).trim().replace(/\s*\n\s*/g, ' / ') });
-    const refs = [['AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)', 'Art. 8.4.1.1.2 (dressed sizes), 8.4.1.1.4 / Table 8.4.1.1.4-1, 8.4.1.2.2, 8.4.1.2.3 / Tables 8.4.1.2.3-1 and -2, 8.4.4.1 to 8.4.4.9 (Tables 8.4.4.3-1, -2, 8.4.4.4-1, -2, 8.4.4.6-1, 8.4.4.7-1, 8.4.4.8-1, -2, 8.4.4.9-1), 8.5.2.2; bridge loads (TBA2): Art. 1.3.2.1, 2.5.2.6.2, 3.4.1 (Tables 3.4.1-1, -2), 3.5.1 (Table 3.5.1-1), 3.6.1.1.1, 3.6.1.1.2 (Table 3.6.1.1.2-1), 3.6.1.2.2 to 3.6.1.2.4, 3.6.1.3.1, 3.6.2.1, 3.6.2.3, 4.6.2.2.1, 4.6.2.2.2a (Table 4.6.2.2.2a-1, Eq. 4.6.2.2.2a-1), Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1, 4.6.2.2.3a-1, 4.6.2.2.3b-1, Art. 8.7']];
+    const refs = [['AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)', 'Art. 8.4.1.1.2 (dressed sizes), 8.4.1.1.4 / Table 8.4.1.1.4-1, 8.4.1.2.2, 8.4.1.2.3 / Tables 8.4.1.2.3-1 and -2, 8.4.4.1 to 8.4.4.9 (Tables 8.4.4.3-1, -2, 8.4.4.4-1, -2, 8.4.4.6-1, 8.4.4.7-1, 8.4.4.8-1, -2, 8.4.4.9-1), 8.5.2.2; bridge loads (TBA2): Art. 1.3.2.1, 2.5.2.6.2, 3.4.1 (Tables 3.4.1-1, -2), 3.5.1 (Table 3.5.1-1), 3.6.1.1.1, 3.6.1.1.2 (Table 3.6.1.1.2-1), 3.6.1.2.2 to 3.6.1.2.4, 3.6.1.3.1, 3.6.2.1, 3.6.2.3, 4.6.2.2.1, 4.6.2.2.2a (Table 4.6.2.2.2a-1, Eq. 4.6.2.2.2a-1), Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1, 4.6.2.2.3a-1, 4.6.2.2.3b-1, Art. 8.7; checks (TBA4): Art. 8.4.4.5, 8.5.2.2, 8.6.1, 8.6.2 (Eq. 8.6.1-1, 8.6.2-1 to -5), 8.7 (Eq. 8.7-1, 8.7-2), 8.11.1, 8.11.2']];
     secs.push({ title: 'Notes and references', subs: [{ title: 'Notes', items: items.length ? items : [{ type: 'note', text: 'No notes.' }] }, { title: 'Codes and references cited', items: [{ type: 'table', head: ['Reference', 'Provisions used'], rows: refs }] }] });
   }
   return Object.assign(head, { sections: secs });
@@ -5101,7 +5387,7 @@ function tbcInit() {
   window.addEventListener('resize', () => { if (typeof Plotly !== 'undefined') document.querySelectorAll('.plotHold.js-plotly-plot').forEach(d => { try { Plotly.Plots.resize(d); } catch (e) { } }); });
 }
 // test / automation hook (read-only use; not part of the saved data)
-window.TBC = { get model() { return M; }, get res() { return R; }, get aas() { return A; }, get al() { return AL; }, get ad() { return AD; }, aasLoads: tbcAasLoads, flush, fullRebuild, load: (d) => loadModel(d), run: tbcRun, migrate: tbcMigrate, aashto: tbcAashto };   // aas, aashto: TBA1
+window.TBC = { get model() { return M; }, get res() { return R; }, get aas() { return A; }, get al() { return AL; }, get ad() { return AD; }, get ac() { return AC; }, aasLoads: tbcAasLoads, flush, fullRebuild, load: (d) => loadModel(d), run: tbcRun, migrate: tbcMigrate, aashto: tbcAashto };   // aas, aashto: TBA1
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tbcInit); else tbcInit();
 </script>
 </body>
