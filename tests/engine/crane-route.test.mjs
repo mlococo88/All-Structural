@@ -148,3 +148,22 @@ test('G. curves: the radius reduced to fit the tangents; the minimum turning rad
   assert.equal(M.normalize({ schema: 'crane-pick.project' }).routes.length, 0);
   assert.equal(M.normRouteMark({ type: 'overhead', pts: [{ x: 1, y: 2 }], h: 14 }).h, 14); assert.equal(M.normRouteMark({ type: 'nope', pts: [] }), null);
 });
+
+test('steps: KaTeX (strict) for every sym / eq / sub / unit; no NaN / undefined (turns, axles, overhead, haul, bridges, staging)', async () => {
+  const { createRequire } = await import('node:module');
+  const katex = createRequire(import.meta.url)(path.join(ROOT, 'tests/libs/katex@0.16.9/dist/katex.min.js'));
+  const parse = x => katex.renderToString(x, { ...W.SharedSteps.katexOpt, throwOnError: true, strict: 'error' });
+  const items = [{ id: 'p1', type: 'power', name: 'OH', kv: 13.8, pts: [{ x: 150, y: -60 }, { x: 150, y: 260 }], height: 25, sag: 1, sway: 1 }];
+  const marks = [{ id: 'm1', type: 'overhead', name: 'Sign', pts: [{ x: 60, y: -20 }, { x: 60, y: 20 }], h: 15 }, { id: 'h1', type: 'haul', name: 'Haul', pts: [{ x: 0, y: 0 }, { x: 200, y: 0 }], w: 20, qa: 5000, mat: { type: 'steel', B: 4, L: 4, t: 1, Fy: 36 } },
+    { id: 'b1', type: 'bridge', name: 'Br', pts: [{ x: 20, y: 0 }, { x: 60, y: 0 }], post: { gross: 40, axle: 10, tLabel: '3S2', tTons: 36 } }];
+  const t = M.normTandem({ id: 't1', name: 'G', girder: { L: 100, W: 80000, H: 6, pair: { on: true, s: 8 } }, pick: { x: 200, y: 180, h: 0 } });
+  const P = { items, routeMarks: marks, setups: [], cranes: [], tandems: [t], picks: [{ id: 'k1', name: 'K', pick: { x: 0, y: 0 }, set: { x: 0, y: 0 }, load: 1 }] };
+  const base = { pts: [{ x: 0, y: 0 }, { x: 200, y: 0 }, { x: 200, y: 200 }, { x: 100, y: 300 }], rad: [null, 80, 60, null] };
+  const rs = [RT.evaluate(Object.assign({}, base, { veh: SEMI, load: LOAD, pickId: 'k1' }), P, 'rt'), RT.evaluate(Object.assign({}, base, { veh: { type: 'jeep', k: 0.6, L2: 85 }, tandemId: 't1', load: { r: 6 } }), P, 'rt', { tev: { steps: [] } }),
+    RT.evaluate(Object.assign({}, base, { veh: { type: 'dolly', k: 0.4, L2: 80 }, load: { L: 100, r: 10 } }), P, 'rt')];
+  let n = 0;
+  for (const r of rs) { const all = [].concat(...r.turns.map(q => q.steps), r.ax.steps, r.oh.top, ...r.oh.list.map(o => o.steps), ...r.haul.filter(h => !h.flagOnly).map(h => h.steps), ...r.br.map(b => b.steps), r.stage.steps);
+    for (const s of all) { for (const f of ['sym', 'eq', 'sub']) if (s[f]) { parse(s[f]); n++; } if (s.unit) { parse(W.SharedSteps.unitTeX(s.unit)); n++; }
+      assert.ok(!/NaN|undefined/.test(W.SharedSteps.toText([s])), s.id + ' ' + W.SharedSteps.toText([s])); } }
+  assert.ok(rs.every(r => r.oh.list.length === 2 && r.haul.length && r.br.length === 1) && n > 200, String(n));
+});

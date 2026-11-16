@@ -249,6 +249,7 @@
   #tlElev svg{display:block;max-width:100%;height:auto;}
   #elSvg{padding:0 6px 4px;} #elSvg svg{display:block;max-width:100%;height:auto;}
   /* C6: route labels on the map */
+  .crTool .leaflet-overlay-pane path.crRtPath,.crTool .leaflet-overlay-pane path.crRtMk{pointer-events:none!important;}   /* a drawing tool's clicks pass through the routes */
   .crRtLbl{pointer-events:none!important;} .crRtLbl span{display:inline-block;white-space:nowrap;font-size:8pt;line-height:1.2;background:rgba(255,255,255,.92);border:1px solid #94A3B8;border-left:4px solid #059669;border-radius:3px;padding:0 4px;color:#0f172a;transform:translate(-50%,-140%);}
   .crRtLbl span.rt-warn{border-left-color:#D97706;} .crRtLbl span.rt-stop{border-left-color:#DC2626;background:#FEF2F2;}
   #mbStatus button[data-rtb]{margin-left:6px;}

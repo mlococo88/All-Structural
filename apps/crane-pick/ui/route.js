@@ -63,9 +63,9 @@
     const m = MP() && MP().map; if (!m) return; removeLayer('m:' + mk.id);
     const Lf = L_(), all = [], c = COL[mk.type], on = mk.id === selM, add = x => { x.addTo(m); all.push(x); return x; };
     let main;
-    if (mk.pts.length === 1) { const rr = isNum(mk.w) && mk.w > 0 ? mk.w : 2; main = add(Lf.circle(MP().toLL(mk.pts[0]), { radius: rr * 1200 / 3937, color: c, weight: on ? 3 : 2, fillOpacity: 0.3, bubblingMouseEvents: false })); }
+    if (mk.pts.length === 1) { const rr = isNum(mk.w) && mk.w > 0 ? mk.w : 2; main = add(Lf.circle(MP().toLL(mk.pts[0]), { radius: rr * 1200 / 3937, color: c, weight: on ? 3 : 2, fillOpacity: 0.3, bubblingMouseEvents: false, className: 'crRtMk' })); }
     else { if (mk.type !== 'overhead') { const w = isNum(mk.w) && mk.w > 0 ? mk.w : mk.type === 'haul' ? 20 : 30; add(Lf.polygon(G.bufferRings(mk.pts, w / 2, 24).map(lls), { stroke: false, fillColor: c, fillOpacity: mk.type === 'haul' ? 0.22 : 0.14, fillRule: 'nonzero', interactive: false })); }
-      main = add(Lf.polyline(lls(mk.pts), { color: c, weight: on ? 4 : 3, dashArray: mk.type === 'overhead' ? '2 5' : null, bubblingMouseEvents: false })); }
+      main = add(Lf.polyline(lls(mk.pts), { color: c, weight: on ? 4 : 3, dashArray: mk.type === 'overhead' ? '2 5' : null, bubblingMouseEvents: false, className: 'crRtMk' })); }
     const tip = mk.type === 'overhead' ? `${esc(mk.name)} · ${isNum(mk.h) ? fmt(mk.h, 2) + ' ft clear' : 'height not entered'}` : mk.type === 'bridge' ? `${esc(mk.name)} · ${postText(mk)}` : `${esc(mk.name)} · ${isNum(mk.qa) ? fmt(mk.qa, 0) + ' psf allowable' : 'allowable not entered'}`;
     main.bindTooltip(tip, { permanent: true, direction: 'center', className: 'crName', interactive: false });
     main.on('click', e => { if (MP().tool) return; L_().DomEvent.stop(e); selectMark(mk.id); });
