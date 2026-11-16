@@ -417,7 +417,7 @@ entered: the 40 × 4 load (r 20.10) reaches the plane: 0. Obstruction 1,015…1,
 mid-drag and Report §Elevations), `crane-elev.mjs` (7), `crane-place.mjs` (9), `crane-picks.mjs` (5); `node tests/check-syntax.mjs`.
 
 ## 2026-11-16 — C3-3: the 3D view (three.js)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1611: https://github.com/mlococo88/All-Structural/pull/1611
 ### Where
 - `apps/crane-pick/ui/view3d.js` (new, `window.CranePickView3D`): three.js r128 + OrbitControls (engineer-approved for C3; the pinned
   files `apps/steel-bridge/index.html` uses: `https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js`,
