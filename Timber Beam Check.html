@@ -75,6 +75,9 @@ body{font-family:var(--font-doc);font-size:10pt;color:var(--ink);background:#efe
 #tbcInTabs .tbcInTab:focus-visible{outline:2px solid #BFD3F2;outline-offset:1px}
 .tbcInDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--fail);margin-left:6px;box-shadow:0 0 0 1.5px #fff}
 .tbcInTab.has-err .tbcInDot{display:inline-block}
+/* TBGX: figures (inline SVG) and their captions; the live section sketch on the Member input tab */
+.tbFig{margin:8px 0 12px}.tbFig svg{max-width:100%;height:auto}.tbFigCap{font-family:var(--font-ui);font-size:8.5pt;color:#475569;text-align:center;margin-top:4px;line-height:1.35}
+#tbgxMem{max-width:240px;margin:6px auto 0}
 .tbcInPane[hidden]{display:none!important}
 #outputPanel{flex:1 1 auto;min-width:0;overflow-y:auto;overflow-x:hidden;padding:0 14px 60px;background:var(--paper)}
 #tabBar{position:sticky;top:0;z-index:15;background:var(--paper);border-bottom:2px solid var(--accent);padding:7px 0 0;display:flex;flex-wrap:wrap;gap:2px}
@@ -2369,6 +2372,164 @@ function tbcAasChecks(m, A, AL, AD) {
 </script>
 <script>
 "use strict";
+/* TBGX-BEGIN — graphics (engineer decision 2026-11-16; display only). Pure functions: each takes the numbers it draws (passed in by the
+   page from the engine results R, A, AL, AD, AC, never recomputed here) and returns { data, svg }: data = the numbers drawn (pinned by
+   tests/engine/timber-graphics.test.mjs against the engine), svg = an inline SVG string (the same string on the tab and in the Report).
+   No DOM, no page globals: the block runs in Node (tests) as it is. */
+const TBGX = (() => {
+  const C = { navy: '#1E3A5F', blue: '#2563EB', green: '#059669', red: '#DC2626', amber: '#B45309', ink: '#0F172A', grey: '#64748B', line: '#CBD5E1', wood: '#EBCB9B', woodS: '#7A5126', comp: '#DBEAFE', tens: '#FEE2E2', paper: '#FFFFFF' };
+  const FONT = '-apple-system,Segoe UI,Roboto,Helvetica Neue,Arial,sans-serif';
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const num = v => typeof v === 'number' && isFinite(v);
+  const g4 = v => num(v) ? String(+v.toPrecision(4)) : '—';
+  const fx = (v, d) => num(v) ? v.toFixed(d) : '—';
+  const r2 = v => Math.round(v * 100) / 100;
+  // "F'_b" style label → text with a subscript tspan (one subscript, after "_"); "^" superscript after it
+  const lab = s => { s = String(s); const m = /^([^_^]*)(?:_(?:\{([^}]*)\}|([A-Za-z0-9,]+)))?(?:\^(?:\{([^}]*)\}|(\S)))?(.*)$/.exec(s); if (!m) return esc(s);
+    const sb = m[2] != null ? m[2] : m[3], sp = m[4] != null ? m[4] : m[5];
+    return esc(m[1]) + (sb ? `<tspan baseline-shift="sub" font-size="75%">${esc(sb)}</tspan>` : '') + (sp ? `<tspan baseline-shift="super" font-size="75%">${esc(sp)}</tspan>` : '') + (m[6] ? `<tspan>${esc(m[6])}</tspan>` : ''); };
+  const T = (x, y, s, o) => { o = o || {}; return `<text x="${r2(x)}" y="${r2(y)}" font-size="${o.fs || 12}"${o.a ? ` text-anchor="${o.a}"` : ''}${o.w ? ` font-weight="${o.w}"` : ''} fill="${o.c || C.ink}"${o.it ? ' font-style="italic"' : ''}>${o.raw ? s : lab(s)}</text>`; };
+  const L = (x1, y1, x2, y2, c, w, dash) => `<line x1="${r2(x1)}" y1="${r2(y1)}" x2="${r2(x2)}" y2="${r2(y2)}" stroke="${c || C.ink}" stroke-width="${w || 1}"${dash ? ` stroke-dasharray="${dash}"` : ''}/>`;
+  const svg = (W, H, aria, body, attrs) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;display:block;margin:0 auto;background:${C.paper}" font-family="${FONT}" role="img" aria-label="${esc(aria)}"${attrs || ''}>${body}</svg>`;
+  const dimH = (x1, x2, y, txt) => L(x1, y, x2, y, C.grey) + L(x1, y - 5, x1, y + 5, C.grey) + L(x2, y - 5, x2, y + 5, C.grey) + `<path d="M${r2(x1)} ${r2(y)} l7 -3 v6 Z M${r2(x2)} ${r2(y)} l-7 -3 v6 Z" fill="${C.grey}"/>` + T((x1 + x2) / 2, y - 6, txt, { a: 'middle' });
+  const dimV = (x, y1, y2, txt) => L(x, y1, x, y2, C.grey) + L(x - 5, y1, x + 5, y1, C.grey) + L(x - 5, y2, x + 5, y2, C.grey) + `<path d="M${r2(x)} ${r2(y1)} l-3 7 h6 Z M${r2(x)} ${r2(y2)} l-3 -7 h6 Z" fill="${C.grey}"/>`
+    + `<text x="${r2(x - 7)}" y="${r2((y1 + y2) / 2)}" font-size="12" text-anchor="middle" fill="${C.ink}" transform="rotate(-90 ${r2(x - 7)} ${r2((y1 + y2) / 2)})">${lab(txt)}</text>`;
+  const ratioCls = r => !num(r) ? 'na' : r > 1 ? 'ng' : r >= 0.9 ? 'near' : 'ok';
+  const ratioCol = r => ({ ok: C.green, near: C.amber, ng: C.red, na: C.grey }[ratioCls(r)]);
+
+  /* 1. Cross-section to scale (b × d as loaded: bw across, dep down), neutral axis, orientation, glulam laminations, end notch; beside it
+     (o.stress) the bending stress at the governing section: linear, f at the extreme fibres, against the capacity stress F. */
+  function section(o) {
+    const bw = o.bw, dep = o.dep;
+    const data = { bw, dep, yNA: dep / 2, flat: !!o.flat, nLam: o.nLam > 0 ? o.nLam : null, tLam: o.tLam > 0 ? o.tLam : null, notch: o.notch > 0 ? { n: o.notch, dn: o.dn, face: o.notchFace || 'tension' } : null,
+      stress: o.stress && num(o.stress.f) && num(o.stress.F) ? { f: o.stress.f, F: o.stress.F, sign: o.stress.sign >= 0 ? 1 : -1, ratio: o.stress.ratio, unit: o.stress.unit } : null };
+    if (!(bw > 0 && dep > 0)) return { data, svg: '' };
+    const small = !!o.small, st = !small && data.stress;
+    const W = small ? 240 : 300, H = small ? 200 : 330, W2 = 250;
+    const boxW = small ? 140 : 170, boxH = small ? 130 : 210, x0 = small ? 60 : 70, y0 = small ? 24 : 42;
+    const sc = Math.min(boxW / bw, boxH / dep), w = bw * sc, h = dep * sc, xL = x0 + (boxW - w) / 2, yT = y0 + (boxH - h) / 2, xR = xL + w, yB = yT + h, yN = yT + h / 2;
+    const p = [];
+    const sg = data.stress ? data.stress.sign : 1, topC = sg > 0;   // positive moment: top in compression
+    p.push(`<rect x="${r2(xL)}" y="${r2(yT)}" width="${r2(w)}" height="${r2(h)}" fill="${C.wood}" stroke="${C.woodS}" stroke-width="1.5"/>`);
+    if (!small) p.push(`<rect x="${r2(xL)}" y="${r2(yT)}" width="${r2(w)}" height="${r2(h / 2)}" fill="${topC ? C.comp : C.tens}" opacity=".55"/>`, `<rect x="${r2(xL)}" y="${r2(yN)}" width="${r2(w)}" height="${r2(h / 2)}" fill="${topC ? C.tens : C.comp}" opacity=".55"/>`);
+    if (data.nLam && data.tLam && !data.flat) { const n = Math.round(data.nLam); for (let k = 1; k < n; k++) { const y = yT + h * k / n; p.push(L(xL, y, xR, y, C.woodS, 0.6)); } }
+    if (data.notch && data.notch.n < dep) { const nh = data.notch.n * sc, yn = data.notch.face === 'comp' ? yT : yB - nh;   // end notch (at the end supports), on the face it is cut from
+      p.push(`<rect x="${r2(xL)}" y="${r2(yn)}" width="${r2(w)}" height="${r2(nh)}" fill="${C.paper}" fill-opacity=".75" stroke="${C.red}" stroke-dasharray="4 3"/>`);
+      if (!small) p.push(T(xR + 6, data.notch.face === 'comp' ? yT + 12 : yB - 3, 'end notch n = ' + g4(data.notch.n) + ' in.', { fs: 11, c: C.red })); }
+    p.push(`<rect x="${r2(xL)}" y="${r2(yT)}" width="${r2(w)}" height="${r2(h)}" fill="none" stroke="${C.woodS}" stroke-width="1.5"/>`);
+    p.push(L(xL - 10, yN, xR + 10, yN, C.navy, 1.2, '7 4'), T(xL - 8, yN - 4, 'N.A.', { fs: 10.5, a: 'end', c: C.navy }));
+    p.push(dimH(xL, xR, yB + (small ? 20 : 24), (data.flat ? 'd' : 'b') + ' = ' + g4(bw) + ' in.'));
+    p.push(dimV(xL - (small ? 34 : 44), yT, yB, (data.flat ? 'b' : 'd') + ' = ' + g4(dep) + ' in.'));
+    if (!small) {
+      p.push(T(xL + w / 2, yT - 22, data.flat ? 'Flat (load on the wide face)' : 'Edgewise (strong axis)', { a: 'middle', w: 600, c: C.navy }));
+      p.push(`<path d="M${r2(xL + w / 2)} ${r2(yT - 16)} v10 m-4 -5 l4 5 l4 -5" fill="none" stroke="${C.navy}" stroke-width="1.4"/>`);
+      if (data.nLam) p.push(T(xR + 6, yT + 12, Math.round(data.nLam) + ' lams × ' + g4(data.tLam) + ' in.', { fs: 11, c: C.woodS }));
+      p.push(T(xR + 6, yN - 8, topC ? 'compression' : 'tension', { fs: 10.5, c: topC ? C.blue : C.red }), T(xR + 6, yN + 16, topC ? 'tension' : 'compression', { fs: 10.5, c: topC ? C.red : C.blue }));
+    } else p.push(T(W / 2, 14, (data.flat ? 'flat' : 'edgewise') + (data.nLam ? ', ' + Math.round(data.nLam) + ' lams' : ''), { fs: 11, a: 'middle', c: C.navy }));
+    const q = [];   // the bending stress, a second drawing at the same vertical scale: linear, f at the extreme fibres (top drawn to the left), capacity F dashed
+    if (st) {
+      const s = data.stress, xc = 125, gw = 78, m = Math.max(Math.abs(s.f), Math.abs(s.F)), k = gw / m, fw = Math.abs(s.f) * k, Fw = Math.abs(s.F) * k, col = ratioCol(s.ratio);
+      q.push(T(xc, 16, 'Bending stress', { a: 'middle', w: 600, c: C.navy }));
+      q.push(L(xc - gw - 12, yN, xc + gw + 12, yN, C.navy, 0.8, '7 4'), L(xc, yT - 6, xc, yB + 6, C.ink, 1));
+      q.push(`<path d="M${r2(xc)} ${r2(yT)} L${r2(xc - fw)} ${r2(yT)} L${r2(xc + fw)} ${r2(yB)} L${r2(xc)} ${r2(yB)} Z" fill="${col}" fill-opacity=".22" stroke="${col}" stroke-width="1.4"/>`);
+      q.push(L(xc - Fw, yT - 4, xc - Fw, yN, C.ink, 1.2, '5 3'), L(xc + Fw, yN, xc + Fw, yB + 4, C.ink, 1.2, '5 3'));
+      q.push(T(xc, yT - 10, o.stress.fSym + ' = ' + g4(s.f) + ' ' + s.unit, { fs: 12, a: 'middle', w: 600, c: col }), T(xc, yB + 20, o.stress.fSym + ' = ' + g4(s.f) + ' ' + s.unit, { fs: 12, a: 'middle', w: 600, c: col }));
+      q.push(T(xc + 6, yT + 13, topC ? 'comp.' : 'tens.', { fs: 11, c: C.grey }), T(xc - 6, yB - 5, topC ? 'tens.' : 'comp.', { fs: 11, a: 'end', c: C.grey }));
+      const yl = yB + 44; q.push(L(10, yl - 4, 30, yl - 4, C.ink, 1.2, '5 3'), T(36, yl, 'capacity ' + o.stress.FSym + ' = ' + g4(s.F) + ' ' + s.unit, { fs: 12 }));
+      q.push(T(10, yl + 19, 'ratio ' + fx(s.ratio, 3) + (num(s.ratio) ? (s.ratio > 1 ? ' > 1.0: NG' : ' ≤ 1.0: OK') : ''), { fs: 12, w: 600, c: col }));
+    }
+    const aria = `Cross-section ${g4(bw)} by ${g4(dep)} in.`, attrs = ` data-tbgx="section" data-bw="${bw}" data-dep="${dep}"`;
+    if (!st) return { data, svg: svg(W, H, aria, p.join(''), attrs) };
+    const one = (w, a, b, at) => svg(w, H, a, b, at).replace('style="max-width:' + w + 'px;', 'style="flex:1 1 ' + Math.round(w * 0.8) + 'px;max-width:' + w + 'px;');
+    return { data, svg: '<div style="display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:4px 10px">' + one(W, aria, p.join(''), attrs)
+      + one(W2, `Bending stress ${g4(data.stress.f)} against ${g4(data.stress.F)} ${data.stress.unit}`, q.join(''), ` data-tbgx="stress" data-f="${data.stress.f}" data-cap="${data.stress.F}"`) + '</div>' };
+  }
+
+  /* 7. Factor chain ("waterfall"): the reference value, then the value after each factor in the order of the governing equation, then the
+     checkpoints given by the engine (o.steps[i].v overrides the running product: the engine's adjusted value is drawn, not a product
+     recomputed here). One horizontal bar per step. */
+  function waterfall(o) {
+    const rows = [{ sym: o.base.sym, f: null, v: o.base.v, kind: 'base', note: o.base.note || 'reference' }];
+    let v = o.base.v;
+    o.steps.forEach(s => { v = num(s.v) ? s.v : v * s.f; rows.push({ sym: s.sym, f: s.f, v, kind: s.kind || 'fac', note: s.note || '' }); });
+    const data = { unit: o.unit, rows: rows.map(r => ({ sym: r.sym, f: r.f, v: r.v, kind: r.kind })) };
+    const W = 460, rowH = 24, top = 30, H = top + rows.length * rowH + 30, xl = 150, xr = W - 70;
+    const m = Math.max(...rows.map(r => Math.abs(r.v)).filter(num), 1e-9), k = (xr - xl) / m;
+    const p = [T(8, 18, o.title || '', { w: 600, c: C.navy, fs: 12.5 })];
+    rows.forEach((r, i) => {
+      const y = top + i * rowH, bw = Math.max(1, Math.abs(r.v) * k);
+      const col = r.kind === 'base' ? C.grey : r.kind === 'final' ? C.navy : r.kind === 'check' ? C.blue : '#93C5FD';
+      p.push(`<rect x="${xl}" y="${r2(y + 4)}" width="${r2(bw)}" height="${rowH - 9}" fill="${col}" rx="2"/>`);
+      p.push(`<text x="${xl - 8}" y="${r2(y + 16)}" font-size="12" text-anchor="end" fill="${C.ink}">${r.f == null ? lab(r.sym) : '× ' + lab(r.sym) + ' = ' + esc(o.fmtF ? o.fmtF(r.f) : g4(r.f))}</text>`);
+      p.push(T(xl + bw + 6, y + 16, (o.fmtV ? o.fmtV(r.v) : g4(r.v)), { fs: 12, w: r.kind === 'final' || r.kind === 'check' ? 600 : 400 }));
+    });
+    p.push(T(xl, H - 8, (o.foot || ('values in ' + o.unit)), { fs: 10.5, c: C.grey }));
+    return { data, svg: svg(W, H, (o.title || 'Factor chain') + ': ' + rows.map(r => r.sym + ' ' + g4(r.v)).join(', '), p.join(''), ' data-tbgx="waterfall"') };
+  }
+
+  /* 8. Check ratios: one bar per check; green < 0.90, amber 0.90 to 1.00, red > 1.00; lines at 0.90 and 1.00. */
+  function ratios(o) {
+    const items = o.items.filter(it => it);
+    const data = { items: items.map(it => ({ name: it.name, r: it.r, cls: ratioCls(it.r) })) };
+    const W = 460, rowH = 30, top = 14, H = top + items.length * rowH + 34, xl = 150, xr = W - 52;
+    const mx = Math.max(1.2, ...items.map(it => num(it.r) ? it.r : 0)) * 1.0, k = (xr - xl) / mx;
+    const p = [];
+    items.forEach((it, i) => {
+      const y = top + i * rowH, r = num(it.r) ? it.r : 0, c = ratioCol(it.r);
+      p.push(`<rect x="${xl}" y="${r2(y + 5)}" width="${r2(Math.max(1, r * k))}" height="${rowH - 12}" fill="${c}" rx="2"/>`);
+      p.push(`<text x="${xl - 8}" y="${r2(y + 15)}" font-size="12" text-anchor="end" fill="${C.ink}">${esc(it.name)}</text>`);
+      if (it.sub) p.push(`<text x="${xl - 8}" y="${r2(y + 27)}" font-size="9.5" text-anchor="end" fill="${C.grey}">${esc(String(it.sub).length > 30 ? String(it.sub).slice(0, 29) + '…' : it.sub)}</text>`);
+      p.push(T(xl + Math.max(1, r * k) + 5, y + 18, fx(it.r, 3), { fs: 12, w: 600, c }));
+    });
+    const yA = top + items.length * rowH + 2;
+    [[0, '0', 'middle'], [0.9, '0.90', 'end'], [1, '1.00', 'start']].forEach(([v, s, a]) => { const x = xl + v * k; p.push(L(x, top, x, yA, v === 1 ? C.red : v === 0.9 ? C.amber : C.grey, v ? 1.2 : 1, v ? '5 3' : ''), T(x + (a === 'end' ? -2 : a === 'start' ? 2 : 0), yA + 14, s, { fs: 10.5, a, c: C.grey })); });
+    p.push(T(8, H - 4, 'demand / capacity · green < 0.90 · amber 0.90 to 1.00 · red > 1.00', { fs: 10, c: C.grey }));
+    return { data, svg: svg(W, H, 'Check ratios: ' + items.map(it => it.name + ' ' + fx(it.r, 3)).join(', '), p.join(''), ' data-tbgx="ratios"') };
+  }
+  /* ---- pickers: the numbers each figure draws, taken from the engine results (R: tbcRun; A: tbcAashto; AC: tbcAasChecks; m: the model) ---- */
+  const glLams = (m, grpKey) => { const gl = m.material.glulam, grp = GLULAM_GRP[grpKey]; return !gl.customSize && grp ? { nLam: gl.nLam, tLam: grp.lam } : {}; };
+  const glGrp = m => { const gl = m.material.glulam, sp = GLULAM_5A[gl.combo]; return (sp && sp.grp) || gl.grp; };   // = glGrpOf() of the page
+  function ndsSection(R, m, small) {   // the bending section b_w × d_b as loaded; f_b and F′_b of the governing bending combination
+    if (!R || !(R.bw > 0 && R.dep > 0)) return null;
+    let stress = null;
+    if (!small && R.ok) { const c = R.gov.b, sign = R.legacyBend ? (c.bend[0].Mp >= c.bend[0].Mn ? 1 : -1) : c.gbSign; stress = { f: c.fb, F: c.Fb_p, sign, ratio: c.r_b, unit: 'psi', fSym: 'f_b', FSym: 'F′_b' }; }
+    return section(Object.assign({ bw: R.bw, dep: R.dep, flat: R.flat, notch: R.hasNotch ? R.notch : 0, dn: R.dn, notchFace: R.notchFace, stress, small }, R.isGL ? glLams(m, glGrp(m)) : {}));
+  }
+  function aasSection(A, AC, m, small) {   // the stringer; f = M_u/S and M_r/S (= φF_b × C_L, or the lesser of C_L and C_V) of the governing flexure check
+    if (!A || !A.ok || !(A.b > 0 && A.d > 0)) return null;
+    const it = !small && AC && AC.ok ? AC.govFlex : null, S = AC && AC.ok ? AC.S : NaN;
+    const stress = it && S > 0 ? { f: it.Mu * 12 / S, F: it.Mr * 12 / S, sign: it.sg, ratio: it.ratio, unit: 'ksi', fSym: 'M_{u}/S', FSym: 'M_{r}/S' } : null;
+    return section(Object.assign({ bw: A.flat ? A.d : A.b, dep: A.flat ? A.b : A.d, flat: A.flat, stress, small }, A.isGL ? glLams(m, m.material.glulam.grp) : {}));
+  }
+  function ndsFbChain(R, m) {   // F_b → the factors of the governing bending combination in the order of the Design Values tab (fbFacs) → F′_b
+    if (!R || !R.ok) return null;
+    const c = R.gov.b, sg = R.legacyBend ? 1 : c.gbSign, lrfd = m.design.method === 'LRFD', sawn = !R.isGL && !R.isSCL, st = [];
+    st.push({ sym: lrfd ? 'λ' : 'C_D', f: lrfd ? c.TF : c.CD }, { sym: 'C_M', f: R.CM.Fb }, { sym: 'C_t', f: R.Ct.Fb });
+    if (sawn) st.push({ sym: 'C_L', f: c.CL }, { sym: 'C_F', f: R.CF }, { sym: 'C_i', f: R.Ci.Fb }, { sym: 'C_{fu}', f: R.Cfu }, { sym: 'C_r', f: R.Cr });
+    else { if (c.CV > 1) st.push({ sym: 'C_L', f: c.CL }, { sym: 'C_V', f: c.CV }); else st.push({ sym: 'lesser of CL, CV', f: Math.min(c.CL, c.CV) }); if (R.isSCL) st.push({ sym: 'C_r', f: R.Cr }); }
+    if (lrfd) st.push({ sym: 'K_F', f: R.KF.Fb }, { sym: 'φ_b', f: R.PHI.Fb });
+    st.push({ sym: 'F′_b', f: null, v: c.Fb_p, kind: 'final' });
+    const base = R.isGL ? (sg > 0 ? { sym: 'F_{bx}^{+}', v: R.ref.Fb } : { sym: 'F_{bx}^{−}', v: R.ref.Fbn }) : { sym: 'F_b', v: R.ref.Fb };
+    return { title: 'Bending design value, ' + c.name, unit: 'psi', base, steps: st };
+  }
+  function aasFbChain(A) {   // F_bo (after the Art. 8.4.1.2.3 reductions) → C_KF, C_M, C_F or C_V, C_fu, C_i, C_d (Eq. 8.4.4.1-1) → × C_λ = F_b, Strength I → × φ = φF_b
+    if (!A || !A.ok) return null;
+    const gl = A.isGL, red = A.pre.some(q => q.p === 'Fb'), l = A.lims[0];
+    const st = [{ sym: 'C_{KF}', f: A.CKF.Fb }, { sym: 'C_M', f: A.CM.Fb }, gl ? { sym: 'C_V', f: A.CV } : { sym: 'C_F', f: A.CF.Fb }, { sym: 'C_{fu}', f: A.Cfu }, { sym: 'C_i', f: A.Ci.Fb }, { sym: 'C_d', f: A.Cd },
+      { sym: 'C_{λ}', f: l.Cl, v: l.Fb, kind: 'check' }, { sym: 'φ', f: A.PHI.Fb, v: l.phiFb, kind: 'final' }];
+    return { title: 'Bending, Strength I (Cλ = ' + g4(l.Cl) + ')', unit: 'ksi', base: { sym: gl ? (red ? 'F_{bxo,r}^{+}' : 'F_{bxo}^{+}') : 'F_{bo}', v: A.R0.Fb }, steps: st };
+  }
+  function ndsRatios(R, subs) {   // the five Summary checks (tbcChips order): ratios R.dcr.b, .v, .c and the two deflection ratios
+    if (!R || !R.ok) return null; const d = R.defl, s = subs || [];
+    return ratios({ items: [['Bending', R.dcr.b], ['Shear', R.dcr.v], ['Bearing', R.dcr.c], ['Deflection, live', d.r_dLL], ['Deflection, total', d.r_dTL]].map(([name, r], i) => ({ name, r, sub: (i === 3 ? 'L/' + g4(d.LLdiv) + '; ' : i === 4 ? 'L/' + g4(d.TLdiv) + '; ' : '') + (s[i] || '') })) });
+  }
+  function aasRatios(AC, subs) {   // the governing item of each AASHTO check (AC.govFlex, govShear, govBear, govDefl)
+    if (!AC || !AC.ok) return null; const s = subs || {};
+    return ratios({ items: [['Flexure', AC.govFlex, 'flex'], ['Shear', AC.govShear, 'shear'], ['Bearing', AC.govBear, 'bear'], ['Deflection', AC.govDefl, 'defl']].filter(q => q[1]).map(([name, it, k]) => ({ name, r: it.ratio, sub: (k === 'defl' ? 'L/' + g4(AC.dLim) + '; ' : '') + (s[k] || '') })) });
+  }
+  return { C, section, waterfall, ratios, ratioCls, g4, ndsSection, aasSection, ndsFbChain, aasFbChain, ndsRatios, aasRatios };
+})();
+/* TBGX-END */
 /* =====================================================================
    Timber Beam Check — user interface (vanilla JS; layout after
    Steel Beam Design - AISC 15th.html). The engine is in the script above.
@@ -2812,6 +2973,7 @@ function refreshInputs() {
   const gd = $('glDepth'); if (gd) { const gl = M.material.glulam, sp = GLULAM_5A[gl.combo], grp = GLULAM_GRP[(sp && sp.grp) || gl.grp]; gd.textContent = grp ? `d = n × t = ${g4(gl.nLam)} × ${grp.lam} = ${typeof gl.nLam === 'number' ? g4(gl.nLam * grp.lam) : '—'} in.` : ''; }
   const cost = $('costVal'); if (cost) { const b = R && R.b, d = R && R.d; const BF = (b > 0 && d > 0) ? (b * d / 144) * (L || 0) : 0; cost.textContent = `Est. cost: $${(BF * (M.material.costPerBF || 0)).toFixed(2)} (${f2(BF)} BF)`; }
   document.querySelectorAll('#inputPanel [data-xnode]').forEach(s => { const x = nodeXs()[+s.getAttribute('data-xnode')]; s.textContent = f2(x); });
+  tbgxMemRefresh();   // TBGX
   inputTabMarks();
 }
 function refLineHTML() {
@@ -2880,6 +3042,7 @@ function buildFlatSec(P) {   // TBIT (engineer decision 2026-11-16): Flat use, m
   mkSec(P, 'inOrient', 'Orientation', body => {
     if (aasOn()) chkRow(body, 'Flat use (load on the wide face)', chkIn(() => dz.flatUse, v => { dz.flatUse = v; }, 'flat'), 'Dimension lumber: C<sub>fu</sub>, Table 8.4.4.6-1. Beams and Stringers: Table 8.4.4.4-2. Not for glulam in this tool.');
     else chkRow(body, 'Flat use (C<sub>fu</sub>, load on the wide face)', chkIn(() => dz.flatUse, v => { dz.flatUse = v; }, 'flat'));
+    const h = el('div'); h.id = 'tbgxMem'; h.title = 'The section as loaded, to scale (last computed size)'; body.appendChild(h);   // TBGX: live sketch (tbgxMemRefresh)
   }, { noNum: true });
 }
 function buildGeomPane(P) {
@@ -3417,6 +3580,7 @@ function buildSummary(pg) {
   const nlH = m => { const q = R.adv.nl && R.adv.nl[m]; return q ? tbNL(esc(q.lead), q.items.map(esc)) : esc(m); };   // TBNL: a long note as a lead and a list (display only)
   if (R.notes.length || R.adv.length) pg.appendChild(el('div', 'warnBox', '<b>Notes:</b><ul>' + R.notes.concat(R.adv).map(m => '<li>' + nlH(m) + '</li>').join('') + '</ul>'));
   mkSec(pg, 'sumGov', 'Governing results', body => {
+    body.appendChild(tbgxFig(tbgxRatios(), 'Check ratios (demand / capacity) of the governing combinations, as in the table below; each is worked on its tab: ' + tbcLink('bCap', 'Bending') + ', ' + tbcLink(shearIsNotch(gv) ? 'sNotch' : 'sCap', 'Shear') + ', ' + tbcLink('brCalc', 'Bearing') + ', ' + tbcLink('dfCheck', 'Deflection') + '.'));   // TBGX
     const rows = [];
     const bc = gb;
     rows.push({ cls: R.dcr.b === R.dcrMax ? 'gov' : '', cells: ['Bending [NDS 3.3, Table ' + (R.isGL ? '5.3.1' : R.isSCL ? '8.3.1' : '4.3.1') + ']', bc.name + ` (${tfH(bc)})`, bendLoc(bc), `f<sub>b</sub> = ${f0(bc.fb)} psi (M = ${f0(bendM(bc))} ft-lb)`, `F′<sub>b</sub> = ${f0(bc.Fb_p)} psi`, f3(bc.r_b), { cls: stCls(bc.r_b), h: stTxt(bc.r_b) }].map((v, i) => i === 1 || i === 3 || i === 4 ? { h: v } : v) });
@@ -3642,8 +3806,24 @@ function factorRows() {
 }
 /* TBAT (engineer request 2026-11-16): the Section Properties tab. The section-properties card moved here unchanged from the Design
    Values tab; the self-weight and the size / volume factor stay worked on the Design Values tab (linked). */
+/* TBGX (engineer decision 2026-11-16): the page side of the graphics. The TBGX pickers read the engine results (R, A, AC) and the TBGX
+   drawings return SVG; here the figures are placed on the tabs (class tbFig, inside the card that works their values, with a caption that
+   links to it) and on the Member input tab (live sketch). Display only: no computed value changes. */
+function tbgxFig(r, cap) { const w = el('div', 'tbFig'); if (!r || !r.svg) return w; w.innerHTML = r.svg + (cap ? `<div class="tbFigCap">${cap}</div>` : ''); return w; }
+const tbgxSect = small => aasOn() ? TBGX.aasSection(A, AC, M, small) : TBGX.ndsSection(R, M, small);
+const tbgxWf = () => { const o = aasOn() ? TBGX.aasFbChain(A) : TBGX.ndsFbChain(R, M); if (!o) return null;
+  return TBGX.waterfall(Object.assign(o, aasOn() ? { fmtF: v => k4(v), fmtV: v => k3(v) + ' ksi', foot: 'ksi; after × Cλ: Fb, Strength I; after × φ: φFb' }
+    : { fmtF: v => f3(v), fmtV: v => f0(v) + ' psi', foot: 'Each bar: the value after the factor on its left (psi).' })); };
+const tbgxRatios = () => aasOn() ? TBGX.aasRatios(AC, AC && AC.ok ? { flex: AC.govFlex && aasItLoc(AC.govFlex), shear: AC.govShear && aasItLoc(AC.govShear), bear: AC.govBear && aasItLoc(AC.govBear), defl: AC.govDefl && aasItLoc(AC.govDefl) } : {})
+  : TBGX.ndsRatios(R, R && R.ok ? tbcChips().map(c => String(c[2]).slice(0, 34)) : []);
+function tbgxMemRefresh() {   // the live sketch on the Member input tab (Orientation card): the last computed section, as loaded
+  const h = $('tbgxMem'); if (!h) return;
+  const r = tbgxSect(true);
+  h.innerHTML = r && r.svg ? r.svg : '<div class="hint">Section sketch: shown when the size is valid.</div>';
+}
 function buildSect(pg) {
   mkSec(pg, 'dvSect', 'Section properties', body => {
+    { const c = R.gov.b; body.appendChild(tbgxFig(tbgxSect(false), `Cross-section to scale (b<sub>w</sub> × d<sub>b</sub> as loaded${R.isGL && !M.material.glulam.customSize ? ', laminations' : ''}${R.hasNotch ? ', end notch at the end supports' : ''}) and the bending stress at the governing section (${esc(c.name)}, ${esc(bendLoc(c))}): f<sub>b</sub> = ${f0(c.fb)} psi against F′<sub>b</sub> = ${f0(c.Fb_p)} psi (both worked on the ${tbcLink('bCap', 'Bending tab')}); b, d, S below.`)); }   // TBGX
     const fl = R.flat;
     calc(body, { title: 'Gross area', ref: 'NDS 3.1.2', lines: [T`A = b\,d = ${g4(R.b)} \times ${g4(R.d)} = ${f3(R.A)}\ \text{in}^2`], where: [['b, d', 'dressed thickness and width', `${g4(R.b)}, ${g4(R.d)}`, 'in.', M.material.size === 'Custom' ? 'user-entered' : 'standard dressed size (NDS Supplement Table 1B) ' + VFY]] });
     calc(body, { title: 'Section modulus and moment of inertia (bending axis)', ref: fl ? 'flat use: bending about the weak axis' : 'edgewise',
@@ -3684,6 +3864,7 @@ function buildDV(pg) {   // TBAT: the section-properties card is on the Section 
     calc(body, { title: 'Stiffness: E′ and E′min', ref: tbl,
       lines: [facEq1("E'", ['E', g4(r.E)], eFacs(false), `${f0(R.E_p)}\\ \\text{psi}`), facEq1("E'_{min}", R.isGL ? ['E_{y,min}', g4(R.EminStab)] : ['E_{min}', g4(r.Emin)], eFacs(true), `${f0(R.Emin_p)}\\ \\text{psi}`)],
       result: `E′ = ${f0(R.E_p)} psi, E′min = ${f0(R.Emin_p)} psi` + (R.isGL ? ' (glulam: E′min from E<sub>y,min</sub> for beam stability, NDS 3.3.3.8 ' + VFY + '; E′ from E<sub>x</sub> for deflection)' : '') + (isLRFD() ? ' (E′min includes K<sub>F</sub> φ<sub>s</sub>; E′ for deflection at service loads)' : '') });
+    body.appendChild(tbgxFig(tbgxWf(), `Factor chain of F′<sub>b</sub> for ${esc(gb.name)}: the reference value, then the value after each factor of the bending equation above, in its order; the last bar is F′<sub>b</sub> = ${f0(gb.Fb_p)} psi (also on the ${tbcLink('bCap', 'Bending tab')}). Factors: ${tbcLink('dvFac', 'Adjustment factors')}${sawnOnly() ? '; C<sub>L</sub>: ' + tbcLink('bCL', 'Bending tab') : '; C<sub>L</sub>, C<sub>V</sub>: ' + tbcLink('bCL', 'Bending tab')}.`));   // TBGX
   });
 }
 
@@ -4390,7 +4571,10 @@ const tbrFac = (base, facs) => ({ eq: base[0] + '\\,' + facs.map(x => x[0]).join
 const tbrNL = (lead, items) => [{ type: 'note', text: lead }, ...items.filter(Boolean).map(x => ({ type: 'note', text: '• ' + x }))];   // TBNL: a lead note and one "• " note per item
 const tbrTbl = () => 'NDS 2018 Table ' + (R.isGL ? '5.3.1' : R.isSCL ? '8.3.1' : '4.3.1') + (isLRFD() ? ', App. N' : '');
 
+let TBGX_FN = 0;   // TBGX: figure numbers of the Report (reset by tbrModel / tbrAasModel)
+const tbgxRptFig = (r, cap) => r && r.svg ? { type: 'figure', svg: r.svg, caption: 'Figure ' + (++TBGX_FN) + '. ' + cap } : null;
 function tbrModel() {
+  TBGX_FN = 0;
   const p = M.project || {}, mt = M.material, dz = M.design, secs = [], today = new Date().toISOString().slice(0, 10);
   const gb = R.gov.b, gv = R.gov.v, gc = R.gov.c, d = R.defl, nt = shearIsNotch(gv), r = R.ref;
   const bSign = R.legacyBend ? (gb.bend[0].Mp >= gb.bend[0].Mn ? 1 : -1) : gb.gbSign, bSpan = gb.gbSpan;
@@ -4407,6 +4591,7 @@ function tbrModel() {
       { type: 'table', head: ['Check', 'Governing combination', 'Location', 'Demand', 'Capacity / limit', 'Ratio', 'Reference'], rows: rows.map(x => ({ cells: x, cls: x[5].t === f3(R.dcrMax) ? 'gov' : '' })) },
       ...tbrNL('Ratio = demand / capacity; ≤ 1.000 passes.', ['Each ratio links to the step where it is worked.', isLRFD() ? 'LRFD: stresses from factored loads; adjusted values include K_F, φ and λ (NDS 2018 Appendix N). Deflection at service loads.' : 'Stresses are ASD (unfactored loads).', 'The same values are on the Summary tab[[tab:sum| ↗]].'])];   // TBNL
     if (R.fails.length) items.push({ type: 'note', warn: true, text: 'Code limit violated (NG): ' + R.fails.join(' ') });
+    { const f = tbgxRptFig(tbgxRatios(), 'Check ratios of the table above (demand / capacity; green < 0.90, amber 0.90 to 1.00, red > 1.00): bending [[tb/bd.r]], shear [[tb/sh.r]], bearing [[tb/br.r]], deflection [[tb/df.rLL]], [[tb/df.rTL]].'); if (f) items.push(f); }   // TBGX
     secs.push({ title: 'Summary of results', subs: [{ title: 'Governing results', items }] });
   }
   /* ---------- 2. Project and inputs ---------- */
@@ -4448,7 +4633,8 @@ function tbrModel() {
       tbrS({ id: 'ld.wsw', label: 'Self-weight' + (M.loads.selfWeight ? '' : ' (not included: input)'), sym: 'w_{sw}', eq: '\\frac{\\rho A}{144}', sub: M.loads.selfWeight ? '\\frac{' + g4(R.dens) + ' \\times ' + f3(R.A) + '}{144}' : '', value: R.w_self, unit: 'plf', d: 2, note: M.loads.selfWeight ? 'ρ = ' + g4(R.dens) + ' pcf (' + (R.userVals ? 'user-entered' : 'tool value for ' + (R.isGL ? 'the species group' : M.material.species)) + ').' : '' })];
     ['D', 'L', 'Lr', 'S', 'W'].forEach(t => ls.push(tbrS({ id: 'ld.w' + t, label: 'Line load, ' + t, sym: 'w_{' + t + '}', eq: t === 'D' && M.loads.selfWeight ? 'p_{D}\\,t + w_{sw}' : 'p_{' + t + '}\\,t', sub: g4(M.loads[t] || 0) + ' \\times ' + f3(R.trib) + (t === 'D' && M.loads.selfWeight ? ' + ' + f2(R.w_self) : ''), value: R.wu[t], unit: 'plf', d: 2 })));
     T.push({ title: 'Loads on the member', ref: 'statics', res: /\.wL$/, steps: ls });
-    secs.push({ title: 'Section properties and loads', subs: [{ title: 'Section properties and line loads', items: [tbrTopics(T)] }] });
+    const sf = tbgxRptFig(tbgxSect(false), 'Cross-section to scale (b_w × d_b as loaded' + (R.isGL && !M.material.glulam.customSize ? ', laminations' : '') + (R.hasNotch ? ', end notch at the end supports' : '') + ') and the bending stress at the governing section (' + gb.name + '): f_b = ' + f0(gb.fb) + ' psi [[tb/bd.fb]] against F′_b = ' + f0(gb.Fb_p) + ' psi [[tb/bd.Fbp]]; b, d: [[tb/sec.A]], S: [[tb/sec.S]].');   // TBGX
+    secs.push({ title: 'Section properties and loads', subs: [{ title: 'Section properties and line loads', items: [tbrTopics(T)].concat(sf ? [sf] : []) }] });
   }
   /* ---------- 4. Design values ---------- */
   {
@@ -4467,7 +4653,8 @@ function tbrModel() {
     T.push({ title: 'Bearing: F′_c⊥ at support ' + nodeN(R.gov.cb.gcJ), ref: tbrTbl() + (isLRFD() ? ' (no λ)' : ' (no C_D)'), steps: [tbrS({ id: 'dv.Fcp', label: 'Adjusted compression perpendicular to grain, support ' + nodeN(R.gov.cb.gcJ), sym: 'F^{\\prime}_{c⊥}', eq: fc.eq, sub: fc.sub, value: R.gov.cb.Fcp_p, unit: 'psi', d: 1, ref: tbrTbl() })] });
     T.push({ title: 'Stiffness: E′ and E′_min', ref: tbrTbl(), res: /\.Emin$/, steps: [tbrS({ id: 'dv.E', label: 'Adjusted modulus of elasticity (deflection' + (isLRFD() ? ', service loads' : '') + ')', sym: 'E^{\\prime}', eq: fe.eq, sub: fe.sub, value: R.E_p, unit: 'psi', d: 0, ref: tbrTbl() }),
       tbrS({ id: 'dv.Emin', label: 'Adjusted E_min (beam stability' + (R.isGL ? '; glulam: from E_y,min, NDS 3.3.3.8' : '') + ')' + (isLRFD() ? ', incl. K_F φ_s' : ''), sym: 'E^{\\prime}_{min}', eq: fm.eq, sub: fm.sub, value: R.Emin_p, unit: 'psi', d: 0, ref: tbrTbl() })] });
-    subs.push({ title: 'Adjusted design values (governing combinations)', items: [tbrTopics(T), { type: 'note', text: 'Each combination has its own ' + (isLRFD() ? 'λ' : 'C_D') + ': the values of every combination are in §6–§8 (tables) and on the Design Values tab[[tab:dv| ↗]].' }] });
+    const wf = tbgxRptFig(tbgxWf(), 'Factor chain of F′_b for ' + gb.name + ': the reference value, then the value after each factor of [[tb/dv.Fb]] in its order; the last bar is F′_b = ' + f0(gb.Fb_p) + ' psi.');   // TBGX
+    subs.push({ title: 'Adjusted design values (governing combinations)', items: [tbrTopics(T), ...(wf ? [wf] : []), { type: 'note', text: 'Each combination has its own ' + (isLRFD() ? 'λ' : 'C_D') + ': the values of every combination are in §6–§8 (tables) and on the Design Values tab[[tab:dv| ↗]].' }] });
     secs.push({ title: 'Design values', subs });
   }
   /* ---------- 5. Analysis ---------- */
@@ -4729,7 +4916,7 @@ function tbrImages() {
 }
 function tbrAddPorted(Mo) {
   const hv = tbrHarvest(), S = re => Mo.sections.find(x => re.test(x.title));
-  const all = tbrNrm(JSON.stringify(Mo));
+  const all = tbrNrm(JSON.stringify(Mo, (k, v) => k === 'svg' && /data-tbgx=/.test(v) ? '' : v));   // TBGX: the text inside the TBGX drawings does not count as printed text
   const fresh = n => { const ss = String(n.text).split(/(?<=[.;:])\s+/).map(tbrNrm).filter(x => x.length > 15); return !ss.length ? !all.includes(tbrNrm(n.text)) : ss.some(x => !all.includes(x)); };
   const im = TBRP.img && TBRP.img.R === R && TBRP.img.k === M.ui.diagCombo ? TBRP.img.im : null;
   const fig = (src, cap) => src ? { type: 'figure', svg: '<img src="' + src + '" alt="" style="max-width:100%;height:auto">', caption: cap } : null;
@@ -5065,6 +5252,7 @@ function buildAashto(pg) {   // TBAT: the Design Values tab (was AASHTO Material
     body.appendChild(tblEl(heads, x.lims.map(l => [l.name, g4(l.Cl)].concat(...ps.map(p => [`${k4(x.base[p])} × ${g4(l.Cl)} = ${k3(l[p])}`, `${g4(ph[p])} × ${k3(l[p])} = ${k3(PHIv(l, p))}`]))), { left: [0] }));
     body.appendChild(el('div', 'hint', 'ksi. φ: flexure ' + g4(x.PHI.Fb) + ', shear ' + g4(x.PHI.Fv) + ', compression perpendicular to grain ' + g4(x.PHI.Fcp) + ' (Art. 8.5.2.2; extreme event: φ = 1.0, Art. 8.5.3, applied with the checks). '
       + 'The factored resistances M<sub>r</sub> = φF<sub>b</sub>SC<sub>L</sub> (Art. 8.6) and V<sub>r</sub> (Art. 8.7) are worked on the ' + tbcLink('aasFlex', 'Flexure') + ' and ' + tbcLink('aasShr', 'Shear') + ' tabs; P<sub>r</sub> (Art. 8.8.3) on the ' + tbcLink('aasBrg', 'Bearing tab') + '.'));   // TBA4, TBA5; TBAT: the tabs
+    body.appendChild(tbgxFig(tbgxWf(), `Factor chain of the bending design value: F${gl ? '<sub>bxo</sub><sup>+</sup>' : '<sub>bo</sub>'} = ${k4(x.R0.Fb)} ksi${x.pre.some(q => q.p === 'Fb') ? ' (after the Art. 8.4.1.2.3 reduction, ' + tbcLink('aasRef', 'Reference design values') + ')' : ''}, then the value after each factor of Eq. 8.4.4.1-1 (${tbcLink('aasFac', 'Adjustment factors')}); × C<sub>λ</sub> = F<sub>b</sub> = ${k3(x.lims[0].Fb)} ksi (Strength I) and × φ = φF<sub>b</sub> = ${k3(x.lims[0].phiFb)} ksi, as in the table above.`));   // TBGX
   });
 }
 function aasNotesCard(pg) {   // TBAT: moved unchanged from the AASHTO Materials tab to the Notes tab
@@ -5402,6 +5590,7 @@ function buildAasSum(pg) {   // TBAT: Summary: the checks summary (moved from AA
   if (AC && AC.ok) mkSec(pg, 'aasCSum', 'Summary of the checks', body => {
     const g = AC.gov;
     body.appendChild(el('div', 'note', g ? `<b>Governing:</b> ${esc(aasItName(g))} · ratio ${f3(g.ratio)} · <b>${aasNG() ? 'NG' : 'OK'}</b>` : 'No check.'));
+    body.appendChild(tbgxFig(tbgxRatios(), 'Ratio of the governing item of each check (demand / factored resistance), as in the table below; worked on the ' + [['aasFlex', 'Flexure'], ['aasShr', 'Shear'], ['aasBrg', 'Bearing'], ['aasDefl', 'Deflection']].map(q => tbcLink(q[0], q[1])).join(', ') + ' tabs.'));   // TBGX
     body.appendChild(tblEl(['Check', 'Limit state', 'Location', 'Demand', 'Factored resistance', 'Ratio', 'Status', 'Worked in'], aasChkRows().map(r => ({ cls: r.it === g ? 'gov' : '',
       cells: r.cells.map(c => ({ h: c })).concat([f3(r.it.ratio), { cls: aasItSt(r.it), h: aasItSt(r.it) === 'ok' ? 'OK' : 'NG' }, { h: tbcLink(aasItCard(r.it), '→ ' + AAS_KIND[r.it.kind][0]) }]) })), { left: [0, 1, 2] }));
     body.appendChild(el('div', 'hint', 'Strength I with the HL-93 loading (C<sub>λ</sub> = 0.8)' + (AL.env.permit ? '; Strength II with the permit vehicle (C<sub>λ</sub> = 1.0)' : '') + ' (Table 8.4.4.9-1); deflection: Service I live load' + (AC.dLim > 0 ? '' : ' (not checked: limit 0)') + '.' + (A.isGL ? ' Glulam camber (Art. 8.12.1): ' + tbcLink('aasCamb', 'required camber') + ' (information).' : '')));   // TBA5
@@ -5511,6 +5700,7 @@ function buildAasSect(pg) {   // TBAT: Section Properties: b, d, A, S, I, self-w
   mkSec(pg, 'aasSect', 'Section properties', body => {
     const src = gl ? (mt.glulam.customSize ? 'custom section (entered)' : `${g4(mt.glulam.nLam)} laminations × ${g4((GLULAM_GRP[mt.glulam.grp] || {}).lam)} in. (Art. 8.4.1.2.2)`)
       : (mt.size === 'Custom' ? 'custom size (entered)' : `nominal ${esc(mt.size)}, dressed size (Art. 8.4.1.1.2)`) + ` · ${esc(AAS_CLASS[x.cat === 'dim' ? 'dim' : x.cat] || '')}`;
+    { const it = AC && AC.ok ? AC.govFlex : null; body.appendChild(tbgxFig(tbgxSect(false), 'Cross-section to scale' + (gl && !mt.glulam.customSize ? ' (laminations)' : '') + (it ? `; stress at the governing flexure section (${esc(aasItLoc(it))}, ${esc(aasLimName(it.lim))}): M<sub>u</sub>/S = ${k3(it.Mu * 12 / S)} ksi against M<sub>r</sub>/S = ${k3(it.Mr * 12 / S)} ksi (= φF<sub>b</sub> × ${it.facBy === 'CV' ? 'C<sub>V</sub>' : 'C<sub>L</sub>'}; ${tbcLink('aasFlex', 'Flexure tab')}), ratio ${f3(it.ratio)}` : '; the stress is drawn once the checks have run') + '. b, d, S below.')); }   // TBGX
     body.appendChild(el('div', 'note', `<b>Section:</b> b × d = ${g4(b)} × ${g4(d)} in., ${src}. <b>Orientation:</b> ${x.flat ? 'flat (load on the wide face; the AASHTO checks of this tool are for stringers bent edgewise)' : 'edgewise, bending about the strong axis'}.`));
     calc(body, { title: 'Gross area', ref: 'section geometry', lines: [T`A = b\,d = ${g4(b)} \times ${g4(d)} = ${f3(b * d)}\ \text{in}^2`], where: [['b, d', gl ? 'width and depth of the glulam' : 'dressed thickness and width', `${g4(b)}, ${g4(d)}`, 'in.', 'Member input tab']] });
     calc(body, { title: 'Section modulus and moment of inertia (strong axis)', ref: AAS_ART + 'S: Eq. 8.6.2-1 (M<sub>n</sub> = F<sub>b</sub>SC<sub>L</sub>); I: deflection, Art. 2.5.2.6.2',
@@ -5576,9 +5766,9 @@ function tbrAasChecksSec() {   // Report section: the AASHTO checks (TBA4)
   const rows = AC.all.map(it => { const q = rk[it.kind], dd = it.kind === 'defl' ? 3 : 2; return [AAS_KIND[it.kind][0], aasLimName(it.lim), aasItLoc(it).replace('−M', '-M'), q[0] + ' = ' + f(it[q[2]], dd) + ' ' + q[1],
     { t: q[3] + ' = ' + f(it[q[4]], dd) + ' ' + q[1], key: 'tb/' + aasItId(it) + '.' + (it.kind === 'flex' ? 'Mr' : it.kind === 'shear' ? 'Vr' : it.kind === 'bear' ? 'Pr' : 'al') }, { t: f3(it.ratio), cls: aasItSt(it), n: true }, { t: aasItSt(it) === 'ok' ? 'OK' : 'NG', cls: aasItSt(it) }]; });
   return { title: T0, subs: [
-    { title: 'Summary of the checks', items: [{ type: 'table', head: ['Check', 'Limit state', 'Location', 'Demand', 'Factored resistance', 'Ratio', 'Status'], rows },
+    { title: 'Summary of the checks', items: [{ type: 'table', head: ['Check', 'Limit state', 'Location', 'Demand', 'Factored resistance', 'Ratio', 'Status'], rows }, ...[tbgxRptFig(tbgxRatios(), 'Ratio of the governing item of each check (green < 0.90, amber 0.90 to 1.00, red > 1.00): ' + [AC.govFlex, AC.govShear, AC.govBear, AC.govDefl].filter(Boolean).map(it => AAS_KIND[it.kind][0].toLowerCase() + ' [[tb/' + aasItId(it) + '.r]]').join(', ') + '.')].filter(Boolean),   // TBGX
       { type: 'note', text: 'Governing: ' + aasItName(AC.gov).replace(/<[^>]+>/g, '') + ', ratio ' + f3(AC.gov.ratio) + ' — ' + (aasNG() ? 'NG' : 'OK') + '. The same checks are on the Summary tab[[tab:aasSum| ↗]] and the Flexure, Shear, Bearing and Deflection & Camber tabs. Deflection: Service I live load, span/' + g4(AC.dLim) + (AC.dLim > 0 ? '' : ' (not checked)') + '.' }] },
-    { title: 'Flexure (Art. 8.6.2)', items: [{ type: 'note', text: 'Lateral support: top edge ' + (AC.latTop === 'Continuous' ? 'braced continuously' : 'at supports only') + ', bottom edge ' + (AC.latBot === 'Continuous' ? 'braced continuously' : 'at brace points') + '; K_bE = ' + g4(AC.KbE) + '; φ = ' + g4(A.PHI.Fb) + '.' }, tbrTopics([{ title: 'Flexure', ref: AAS_ART + 'Art. 8.6.1, 8.6.2' + (A.isGL ? ', 8.4.4.5' : ''), res: /\.r$/, steps: fl }])] },
+    { title: 'Flexure (Art. 8.6.2)', items: [...[AC.govFlex && tbgxRptFig(tbgxSect(false), 'Cross-section to scale and the stress at the governing flexure section (' + aasItLoc(AC.govFlex).replace('−M', '-M') + ', ' + aasLimName(AC.govFlex.lim) + '): M_u/S = ' + k3(AC.govFlex.Mu * 12 / AC.S) + ' ksi against M_r/S = ' + k3(AC.govFlex.Mr * 12 / AC.S) + ' ksi (M_u [[tb/' + aasItId(AC.govFlex) + '.Mu]], M_r [[tb/' + aasItId(AC.govFlex) + '.Mr]], S = ' + f2(AC.S) + ' in.³).')].filter(Boolean), { type: 'note', text: 'Lateral support: top edge ' + (AC.latTop === 'Continuous' ? 'braced continuously' : 'at supports only') + ', bottom edge ' + (AC.latBot === 'Continuous' ? 'braced continuously' : 'at brace points') + '; K_bE = ' + g4(AC.KbE) + '; φ = ' + g4(A.PHI.Fb) + '.' }, tbrTopics([{ title: 'Flexure', ref: AAS_ART + 'Art. 8.6.1, 8.6.2' + (A.isGL ? ', 8.4.4.5' : ''), res: /\.r$/, steps: fl }])] },
     { title: 'Shear (Art. 8.7)', items: [tbrTopics([{ title: 'Shear', ref: AAS_ART + 'Art. 8.7', res: /\.r$/, steps: sh }])] },
     { title: 'Bearing (Art. 8.8.3)', items: [tbrTopics([{ title: 'Bearing', ref: AAS_ART + 'Art. 8.8.3, Table 8.8.3-1', res: /\.r$/, steps: br }])] },
     { title: 'Deflection (Art. 2.5.2.6.2)', items: df.length ? [tbrTopics([{ title: 'Deflection', ref: AAS_ART + 'Art. 2.5.2.6.2', res: /\.r$/, steps: df }])] : [{ type: 'note', text: AC.dLim > 0 ? 'No live-load deflection.' : 'Not checked (limit 0).' }] },
@@ -5587,6 +5777,7 @@ function tbrAasChecksSec() {   // Report section: the AASHTO checks (TBA4)
 }
 /* ---- Report (AASHTO mode) ---- */
 function tbrAasModel() {
+  TBGX_FN = 0;   // TBGX
   const p = M.project || {}, secs = [], today = new Date().toISOString().slice(0, 10), x = A;
   const head = { title: 'Timber Beam Check — Calculation Report (AASHTO LRFD)', subtitle: (p.name || 'Untitled') + (p.member ? ' — ' + p.member : ''), code: 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 8',
     info: [['Project', p.name], ['Project No.', p.job], ['Calculated by', p.designer], ['Date', p.date || today], ['Checked by', p.checker], ['Checked date', '']],
@@ -5629,7 +5820,7 @@ function tbrAasModel() {
       { title: 'Reference design values (ksi)', items: refItems },
       { title: 'Adjustment factors (Art. 8.4.4)', items: [tbrTopics([{ title: 'Adjustment factors', ref: AAS_ART + 'Art. 8.4.4', steps: fs }]), { type: 'table', head: ['Factor', 'F_b', 'F_v', 'F_c⊥', 'E', 'Basis', 'Reference'], rows: aasFacRows().map(rw => rw.map(tbrPlain)) },
         { type: 'note', text: 'Time effect factor C_λ (Table 8.4.4.9-1): ' + AAS_CLAMBDA.map(c => c[1] + ' ' + g4(c[2])).join('; ') + '.' }] },
-      { title: 'Adjusted design values (Eq. 8.4.4.1)', items: [tbrTopics([{ title: 'Adjusted design values', ref: AAS_ART + 'Art. 8.4.4.1', steps: adj }])] },
+      { title: 'Adjusted design values (Eq. 8.4.4.1)', items: [tbrTopics([{ title: 'Adjusted design values', ref: AAS_ART + 'Art. 8.4.4.1', steps: adj }])].concat([tbgxRptFig(tbgxWf(), 'Factor chain of the bending design value: the reference value, then the value after each factor of Eq. 8.4.4.1-1 ([[tb/aas.bFb]]); × C_λ = F_b, Strength I = ' + k3(x.lims[0].Fb) + ' ksi ([[tb/aas.Fb]]) and × φ = φF_b = ' + k3(x.lims[0].phiFb) + ' ksi.')].filter(Boolean)) },   // TBGX
       { title: 'Adjusted values and factored stresses by limit state (ksi)', items: [{ type: 'table', wide: true, head: ['Limit state', 'C_λ'].concat(...pq.map(q => [sn[q], 'φ' + sn[q]])),
         rows: x.lims.map(l => [l.name, g4(l.Cl)].concat(...pq.map(q => [k4(x.base[q]) + ' × ' + g4(l.Cl) + ' = ' + k3(l[q]), g4(phs[q]) + ' × ' + k3(l[q]) + ' = ' + k3(PHIv(l, q))]))) },
         { type: 'note', text: 'Each value is the product without C_λ ([[tb/aas.bFb]]) times the C_λ of the limit state; φ per Art. 8.5.2.2: flexure ' + g4(x.PHI.Fb) + ', shear ' + g4(x.PHI.Fv) + ', compression perpendicular to grain ' + g4(x.PHI.Fcp) + '.' }] }] });
