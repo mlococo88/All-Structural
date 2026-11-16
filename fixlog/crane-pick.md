@@ -234,3 +234,60 @@ migration). The Cloud sync settings key is read only (the token and, for the "Th
 token only in the Authorization header, the public-repository warning and Save question, the editor (paste, kip, edit, restore),
 reload, Report, 390 px, 0 console errors); `crane-shell.mjs` (11), `crane-sheets.mjs` (8), `crane-draw.mjs` (7);
 `node tests/check-syntax.mjs`.
+
+## 2026-11-16 — C2-2: crane placement on the map, live capacity, plan clearances, Lifts tab
+PR #1607: https://github.com/mlococo88/All-Structural/pull/1607
+### Where
+- `apps/crane-pick/engine/lift.js` (new, `window.CranePickLift`, no DOM): `evalAt` (radius, slew angle, zone, chart lookup through
+  `engine/cranes.js`, % of chart, class), `evaluate` (total load, pick, set, swing path, governing point), `sweep` / `pathPoints`,
+  `footprint` (carrier / carbody, crawler tracks, outrigger beams and floats at the chart's spread, tail swing), `clearances`
+  (plan), `settingsOf`, `toGrid`, `minDist`.
+- `apps/crane-pick/ui/place.js` (new): the map symbols and handles (✥ move, ↻ rotate the carrier, P / S points), boom lines, swing
+  path coloured by the governing class, live labels at the hook (R, C, % of chart), updates once per animation frame
+  (`CranePickMap.raf`) and one undo step per drag; the Lifts input tab: settings (caution / critical / limit %, interpolation where the
+  notes permit), setups (chart group, boom length with the tabulated lengths listed, telescoping mode, support and spread drawn, heading,
+  rotation E / N, picks), picks (load, rigging, hook block from the crane's list or entered, other deductions and what they are, the
+  chart's deduction notes, swing shortest / clockwise / counter-clockwise, pick / set E / N) and the live card (pick / set / governing
+  table, W, swing, R_max, thresholds, rating basis, not-permitted reasons, clearance flags, worked steps).
+- `engine/model.js`: `P.setups`, `P.picks`, `P.lift` (+ `normSetup`, `normPick`, `normLift`). `engine/geo.js` `reproject`: setups
+  (position and heading: a point 100 ft ahead is moved too) and pick / set points follow a zone change. `ui/cranes.js` (C2-1) shows
+  "Place on the map" on each crane card. `index.html`: two scripts, CSS. Tests: `tests/engine/crane-lift.test.mjs`,
+  `tests/smoke/crane-place.mjs`; `crane-library.mjs` (the input tabs now end with Lifts).
+### Calculations (CLAUDE.md §4: new; Decisions pending engineer review)
+- Radius: R = √(Δx² + Δy²) from the centre of rotation (the setup's point) to the hook (pick or set point), grid ft.
+- Slew angle θ = α − α_front (azimuth of the hook from the rotation centre minus the carrier heading), −180° … 180°; zone: over front if
+  |θ| ≤ the entered front half-angle, over rear if |θ| ≥ 180° − the rear half-angle, otherwise over side; a zone's own chart is used in
+  its zone, else the 360° chart; no chart → not permitted. Only when the chosen chart group has zone charts; else the 360° chart.
+- C = chart capacity at (L, R): C2-1 lookup (next longer boom, next larger radius; outside = not permitted).
+- Total load W = W_load + W_rigging + W_hook + W_other (the charts are gross; the deduction notes of the chart are shown beside the inputs).
+- %chart = W / C × 100. Classes: ≥ limit (default 100 %) over the chart; ≥ critical (default 75 %) critical lift; ≥ caution (default
+  75 %) caution. Thresholds are project inputs (`P.lift`); the chart's rating basis (% of tipping) is shown with them.
+- Swing path: from the pick to the set about the rotation centre, shortest way by default (a half turn: clockwise), the radius changing
+  uniformly with the angle; checked every degree and on both sides of each zone boundary; R_max = max(R_pick, R_set); governing = the
+  highest % of chart (any not-permitted point governs; a tie with an end is reported at that end).
+- **Check case** (fake crane, outriggers full 360°, boom 60 ft, rotation E 1,000 N 2,000, heading 0): pick (1,030, 2,000): R = 30.00 ft →
+  L_tab 60, R_tab 30 → C = 39,000 lb; W = 20,000 + 1,000 + 1,000 + 0 = 22,000 lb → 56.41 %; set (1,000, 2,020): R = 20.00 ft → 58,000 lb
+  → 37.93 %; swing −90° (counter-clockwise), R_max = 30.00 ft, governing at the pick 56.4 % (within the chart). With W = 30,000 lb:
+  76.9 % = critical lift. Set at 75 ft: beyond the largest radius → not permitted.
+- Plan clearances (flags only; heights are C3): power line: distance in plan from the swept boom sector (rotation centre + swing path)
+  and from the footprint to the line < D_min (C1-3 OSHA Table A value) → red flag (check: a 115 kV line 10 ft east of the pick → D_min
+  15 ft, closest 10.0 ft → flagged; 13.8 kV (10 ft) → not flagged); exclusion zone: load path crosses it / boom swings over it /
+  footprint or tail-swing circle in it → amber; obstruction: footprint overlaps it → red; tail-swing circle reaches it → amber; boom
+  passes over it → note (height check in C3).
+### Saved data (§5)
+Project fields only, new: `setups`, `picks`, `lift` (absent in older projects = none / the defaults; no migration). No new storage key.
+### Decisions (pending engineer review)
+- The radius is measured from the rotation centre (the chart radius); the boom-foot offset is drawn only (the boom line starts at the
+  rotation centre).
+- The swing path assumes the radius changes uniformly with the swing angle (boom luffed steadily between the two radii). Other paths
+  (luff first, then swing) can reach the larger radius earlier in the swing; the zone check uses R_max where the zones differ only through
+  the check points, so a planner wanting the worst case should put the pick and the set at the larger radius.
+- The tail-swing circle is checked as a full circle (the counterweight can be anywhere during the setup's work).
+- Footprint uses the outrigger spread named by the chart's support (outriggers-full → "full"); "on rubber" draws no outriggers.
+- The rotate handle sits 6 ft ahead of the carrier front and is drawn above the pick / set points.
+### How verified
+`node tests/engine/run.mjs crane` (35 tests: the check case, thresholds, swing directions, zones with sectors, footprint, clearances,
+zone change, KaTeX of every step); `node tests/smoke/crane-place.mjs` (9 checks: place, hand check on the map labels and the live card,
+pick dragged with the values following mid-drag and live updates ≤ frames, one undo step, crane moved and rotated, thresholds, not
+permitted, interpolation, clockwise swing, chart group, power-line flag, steps, reload, 390 px, 0 console errors); `crane-library.mjs` (9),
+`crane-shell.mjs` (11), `crane-sheets.mjs` (8), `crane-draw.mjs` (7); `node tests/check-syntax.mjs`.

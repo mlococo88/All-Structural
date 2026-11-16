@@ -16,7 +16,9 @@
      C1-3: site items (obstructions, power lines with the OSHA clearance, buried utilities / culverts / walls, exclusion zones, labels,
      dimensions), drawn, dragged and edited on the map; Site and Report sections.
      C2-1: the crane library (from the engineer's private GitHub repository with the Cloud sync token, or from files; a chart pasted
-     from Excel in the crane editor), the project's cranes (each copied into the project), crane cards and the Report's §Cranes. -->
+     from Excel in the crane editor), the project's cranes (each copied into the project), crane cards and the Report's §Cranes.
+     C2-2: crane setups drawn to scale and dragged / rotated on the map; pick and set points with the swing path; live radius, chart
+     capacity and % of chart on every drag; plan clearances to power lines, exclusion zones and obstructions; the Lifts tab. -->
 <!-- pdf.js 3.11.174 (engineer-approved 2026-11-16; BasePlateAnchorDesigner.html's pinned jsDelivr URL) is loaded by ui/sheets.js when the
      first PDF is opened: https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js (worker: build/pdf.worker.min.js) -->
 <!-- Leaflet 1.9.4 and proj4js 2.11.0 (engineer-approved 2026-11-16; the versions and URLs Bridge Geometry.html already pins, CLAUDE.md §2) -->
@@ -49,7 +51,9 @@
     'ui/draw.js',           // C1-3: Site items input tab and the map's Draw bar: drawing, dragging, editing the site items
     'engine/cranes.js',     // C2-1: crane files (schema crane-pick.crane.v1), chart lookup, zones, plan dimensions, pasted charts
     'ui/cranes.js',         // C2-1: Cranes input tab: the library (GitHub / files), the project's cranes, the sync-repository check
-    'ui/craneedit.js'       // C2-1: the crane editor (crane data, plan dimensions, configs, a chart pasted from Excel)
+    'ui/craneedit.js',      // C2-1: the crane editor (crane data, plan dimensions, configs, a chart pasted from Excel)
+    'engine/lift.js',       // C2-2: setups, picks, capacity at the hook, swing path, plan footprint and clearances
+    'ui/place.js'           // C2-2: Lifts input tab; cranes, pick and set points dragged on the map with live capacity
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
 })();
 </script>
@@ -184,6 +188,18 @@
   textarea.crChartTxt{font-family:ui-monospace,Consolas,monospace;font-size:8.5pt;white-space:pre;overflow-wrap:normal;overflow-x:auto;min-height:140px;}
   .crPrev{max-height:320px;overflow:auto;} .crPrev table.tbl{width:auto;} .crPrev td,.crPrev th{padding:1px 5px;font-size:8.5pt;}
   td.crBlank{background:#F1F5F9;} td.crInc,span.crInc{background:#FEF3C7;}
+  /* C2-2: placement */
+  .crHandle.crCor span{border-color:#0F172A;color:#0F172A;}
+  .crPt span{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;font:700 11pt/1 var(--font-ui);color:#fff;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45);cursor:move;}
+  .crPtP span{background:#2563EB;} .crPtS span{background:#059669;}
+  .crLiftLbl{pointer-events:none!important;} .crLiftLbl .lv{display:inline-block;white-space:nowrap;font-size:8.5pt;line-height:1.25;background:rgba(255,255,255,.94);border:1px solid #94A3B8;border-left:4px solid;border-radius:3px;padding:1px 5px;color:#0f172a;}
+  .crLiftLbl .lv i{font-style:normal;font-weight:700;margin-right:2px;}
+  .lv{border-color:#059669;} .lv-ok{border-left-color:#059669;} .lv-caution{border-left-color:#D97706;} .lv-critical{border-left-color:#EA580C;} .lv-over,.lv-np{border-left-color:#DC2626;}
+  span.lv{border:1px solid;border-radius:9px;padding:0 6px;font-size:8pt;white-space:nowrap;} span.lv.lv-ok{background:#DCFCE7;color:#166534;border-color:#86EFAC;} span.lv.lv-caution{background:#FEF3C7;color:#92400E;border-color:#FCD34D;}
+  span.lv.lv-critical{background:#FFEDD5;color:#9A3412;border-color:#FDBA74;} span.lv.lv-over,span.lv.lv-np{background:#FEE2E2;color:#991B1B;border-color:#FCA5A5;}
+  .crLiftLbl .lv{border-radius:3px;font-size:8.5pt;padding:1px 5px;background:rgba(255,255,255,.94);color:#0f172a;border-color:#94A3B8;}
+  table.lfTbl td,table.lfTbl th{font-size:8.5pt;padding:2px 4px;}
+  ul.lfFlags{margin:4px 0;padding-left:18px;font-size:9pt;} .lfFlags li.lf-stop{color:#B91C1C;font-weight:600;} .lfFlags li.lf-warn{color:var(--warn);} .lfFlags li.lf-info{color:#475569;}
   .rp-host{container-type:inline-size;}
   @container (max-width:999.98px){ #out .rp-body{grid-template-columns:minmax(0,1fr);} #out .rp-toc{position:static;max-height:220px;} #out .rp-doc{padding:0.3in 0.35in 0.5in;} }
   /* phone / narrow: the map first, full width; the input panels below it (engineer decision 2026-11-16) */
@@ -234,7 +250,7 @@
       <div id="out"></div>
     </main>
   </div>
-  <footer id="appFoot"><span>Crane Pick Analyzer v0.2 (phase C2: site, plan sheets, drawing, cranes) · units: ft, kip, psf / ksf</span><span>Lift-planning aid</span></footer>
+  <footer id="appFoot"><span>Crane Pick Analyzer v0.2 (phase C2: site, plan sheets, drawing, cranes, lifts) · units: ft, kip, psf / ksf</span><span>Lift-planning aid</span></footer>
 </div>
 <script>
   window.CranePickApp && window.CranePickApp.start();
