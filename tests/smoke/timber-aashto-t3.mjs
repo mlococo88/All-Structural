@@ -2,7 +2,7 @@
 // Timber Beam Check, AASHTO LRFD 10th Ed. phase T3 (fix log TBA4, TBA5, 2026-11-16): the checks (flexure, shear; TBA5: bearing, deflection, glulam camber, the deflection-limit input), in the working tree (headless Chromium, file://).
 // For each case: the check tabs (TBAT: Summary, Flexure, Shear, Bearing, Deflection & Camber, Notes; were the AASHTO Checks tab), every ratio the engine gives (TBC.ac) shown, the OK / NG of each
 // check block equal to the engine's, the governing strip and the left column (PASS / FAIL with the governing check), no NaN / undefined,
-// no KaTeX errors; the lateral-support inputs on the Factors tab in AASHTO mode; the Report section (steps, summary table with § links);
+// no KaTeX errors; the lateral-support inputs on the Geometry tab in AASHTO mode (TBIT; were on Factors); the Report section (steps, summary table with § links);
 // 390 px without horizontal page scroll; 0 console errors. Screenshots (deviceScaleFactor 1) with --shots <dir>.
 //   node tests/smoke/timber-aashto-t3.mjs [--shots <dir>]
 import fs from 'node:fs';
@@ -16,7 +16,7 @@ const fails = []; const ok = (c, msg) => { if (!c) fails.push(msg); };
 const { b, p, errs } = await openPage(FILE, { vw: 1400, vh: 1000 });
 await p.waitForFunction(() => window.TBC && window.TBC.res, null, { timeout: 30000 }); await p.waitForTimeout(800);
 await p.click('#tbcInTab_project'); await p.selectOption('[data-fkey="dcode"]', 'AASHTO'); await p.waitForTimeout(600);
-ok(await p.evaluate(() => !!document.querySelector('[data-fkey="latTop"]') && !!document.querySelector('[data-fkey="latBot"]')), 'Factors tab (AASHTO): lateral-support inputs');
+ok(await p.evaluate(() => !!document.querySelector('#tbcInPane_geom [data-fkey="latTop"]') && !!document.querySelector('#tbcInPane_geom [data-fkey="latBot"]')), 'Geometry tab (AASHTO): lateral-support inputs');
 const st = async () => p.evaluate(() => ({ gov: document.getElementById('govStrip').innerText, govCls: document.getElementById('govStrip').className, text: document.getElementById('tabPages').innerText,
   dash: (document.getElementById('tbcDash') || {}).innerText || '', blocks: [...document.querySelectorAll('#tabPages .eqb')].map(e => (e.querySelector('.st') || {}).textContent || ''),
   kerr: document.querySelectorAll('.katex-error').length, AC: TBC.ac, secs: [...document.querySelectorAll('#tabPages .sec[data-secid]')].map(e => e.dataset.secid) }));
@@ -64,11 +64,11 @@ for (const [name, fn] of Object.entries(cases)) {
     await p.setViewportSize({ width: 1400, height: 7000 }); await p.waitForTimeout(400);
     for (const sec of ['aasCSum', 'aasFlex', 'aasShr', 'aasBrg', 'aasDefl', 'aasCamb']) { await p.click('#tab_' + CARD_TAB[sec]); await p.waitForTimeout(300); const h = await p.$(`#tabPages .sec[data-secid="${sec}"]`); if (h && (name !== 'exterior')) await h.screenshot({ path: path.join(args.shots, `t3-${name}-${sec}.png`) }); }
     await p.setViewportSize({ width: 1400, height: 1000 }); await p.waitForTimeout(300);
-    if (name === 'glulamCont') { await p.screenshot({ path: path.join(args.shots, 't3-glulamCont-page.png') }); await p.click('#tbcInTab_factors'); await p.waitForTimeout(200); const pn = await p.$('#tbcInPane_factors'); if (pn) await pn.screenshot({ path: path.join(args.shots, 't3-factors-pane.png') }); }
+    if (name === 'glulamCont') { await p.screenshot({ path: path.join(args.shots, 't3-glulamCont-page.png') }); await p.click('#tbcInTab_criteria'); await p.waitForTimeout(200); const pn = await p.$('#tbcInPane_criteria'); if (pn) await pn.screenshot({ path: path.join(args.shots, 't3-factors-pane.png') }); }
   }
 }
-// TBA5: the deflection-limit input (Factors tab): an entry is saved (version 6) and used; blank = 425
-await p.click('#tbcInTab_factors'); await p.fill('[data-fkey="aasDLim"]', '800'); await p.waitForTimeout(600);
+// TBA5: the deflection-limit input (Design criteria tab, was Factors; TBIT): an entry is saved (version 6) and used; blank = 425
+await p.click('#tbcInTab_criteria'); await p.fill('[data-fkey="aasDLim"]', '800'); await p.waitForTimeout(600);
 ok(await p.evaluate(() => { const d = JSON.parse(localStorage.getItem('tbc_autosave_v1')); return d.version === 6 && d.design.aashto.dLim === 800 && TBC.ac.dLim === 800; }), 'deflection limit 800: saved (version 6) and used');
 await p.fill('[data-fkey="aasDLim"]', ''); await p.waitForTimeout(600);
 ok(await p.evaluate(() => { const d = JSON.parse(localStorage.getItem('tbc_autosave_v1')); return d.version === 5 && !('dLim' in d.design.aashto) && TBC.ac.dLim === 425; }), 'deflection limit blank: 425, no field saved (version 5)');

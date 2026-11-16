@@ -30,12 +30,12 @@ ok(await p.evaluate(() => document.querySelector('[data-fkey="wet"]').checked), 
 ok(s.saved.version === 5, 'version 5 with the kept NDS setting: ' + s.saved.version);
 ok(s.tabs.join('|') === 'Summary|Schematic & Inputs|Section Properties|Bridge Loads|Analysis|Design Values|Flexure|Shear|Bearing|Deflection & Camber|Notes|Report', 'tabs: ' + s.tabs.join('|'));   // TBA4; TBAT: the 12 AASHTO tabs
 // untick wet in AASHTO, back to NDS, to AASHTO again: the AASHTO setting (dry) comes back; NDS stays dry
-await p.click('#tbcInTab_factors'); await p.click('[data-fkey="wet"]'); await p.waitForTimeout(400);
+await p.click('#tbcInTab_criteria'); await p.click('[data-fkey="wet"]'); await p.waitForTimeout(400);
 await p.click('#tbcInTab_project'); await p.selectOption('[data-fkey="dcode"]', 'NDS'); await p.waitForTimeout(500);
 ok(await p.evaluate(() => JSON.stringify(TBC.res)) === ndsRes, 'NDS results after AASHTO wet / dry and back');
 await p.selectOption('[data-fkey="dcode"]', 'AASHTO'); await p.waitForTimeout(500);
 ok(await p.evaluate(() => TBC.model.design.moisture) === 'Dry', 'second switch: the AASHTO setting kept (dry)');
-await p.click('#tbcInTab_factors'); await p.click('[data-fkey="wet"]'); await p.waitForTimeout(300);
+await p.click('#tbcInTab_criteria'); await p.click('[data-fkey="wet"]'); await p.waitForTimeout(300);
 await p.click('#tbcInTab_project'); await p.selectOption('[data-fkey="dcode"]', 'NDS'); await p.waitForTimeout(400);
 ok(await p.evaluate(() => TBC.model.design.moisture === 'Dry' && TBC.model.design.aashto.moist === 'Wet'), 'NDS: dry; the AASHTO wet setting kept in design.aashto.moist');
 ok(await p.evaluate(() => JSON.stringify(TBC.res)) === ndsRes, 'NDS results unchanged');
@@ -47,7 +47,8 @@ await p.waitForTimeout(500); s = await st();
 ok(s.saved.design.moisture === 'Dry' && s.saved.version === 4 && !s.saved.design.aashto.bl, `TBA1 project: dry, version 4, no bridge-load field (${s.saved.design.moisture}, ${s.saved.version})`);
 // 2. Loads tab: an edit creates the inputs
 await p.click('#tbcInTab_loads'); await p.waitForTimeout(200);
-ok(await p.evaluate(() => !!document.querySelector('[data-fkey="aasBDeck"]') && !document.querySelector('[data-fkey="load_D"]')), 'Loads tab: bridge-load inputs, no building loads');
+ok(await p.evaluate(() => !!document.querySelector('#tbcInPane_loads [data-fkey="aasTWs"]') && !document.querySelector('[data-fkey="load_D"]')), 'Loads tab: bridge-load inputs, no building loads');
+ok(await p.evaluate(() => ['aasBDeck', 'aasPos', 'aasWRd', 'aasNB'].every(k => document.querySelector('#tbcInPane_geom [data-fkey="' + k + '"]')) && ['aasBDeck', 'aasPos', 'aasWRd', 'aasNB'].every(k => !document.querySelector('#tbcInPane_loads [data-fkey="' + k + '"]'))), 'TBIT: deck type, stringer, roadway width, N_b on the Geometry tab (Bridge cross-section), not on Loads');
 await p.fill('[data-fkey="aasTWs"]', '2'); await p.waitForTimeout(500);
 s = await st(); ok(s.saved.version === 5 && s.saved.design.aashto.bl && s.saved.design.aashto.bl.tWs === 2, 'edit: design.aashto.bl saved, version 5');
 // 3. Bridge Loads tab for several cases
