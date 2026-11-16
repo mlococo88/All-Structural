@@ -12,7 +12,9 @@
      only (engine/model.js). Units: US customary (ft, kip, psf / ksf).
      C1-1: the shell (header, input / output tabs, Project tab with Save and open, title block, notes), Undo / Redo, the map (base layers,
      scale bar, cursor coordinates in latitude / longitude and State Plane, go to a coordinate), the Site and Report output tabs.
-     C1-2: plan-sheet underlays (PNG / JPG / PDF page), scale calibration, georeference, opacity, lock; images in IndexedDB. -->
+     C1-2: plan-sheet underlays (PNG / JPG / PDF page), scale calibration, georeference, opacity, lock; images in IndexedDB.
+     C1-3: site items (obstructions, power lines with the OSHA clearance, buried utilities / culverts / walls, exclusion zones, labels,
+     dimensions), drawn, dragged and edited on the map; Site and Report sections. -->
 <!-- pdf.js 3.11.174 (engineer-approved 2026-11-16; BasePlateAnchorDesigner.html's pinned jsDelivr URL) is loaded by ui/sheets.js when the
      first PDF is opened: https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js (worker: build/pdf.worker.min.js) -->
 <!-- Leaflet 1.9.4 and proj4js 2.11.0 (engineer-approved 2026-11-16; the versions and URLs Bridge Geometry.html already pins, CLAUDE.md §2) -->
@@ -40,7 +42,9 @@
     'report/builders.js',   // the report model
     'ui/report.js',         // Report output tab (shared/report.js viewer)
     'ui/sheetstore.js',     // C1-2: the plan-sheet images in IndexedDB (crane.sheets.v1)
-    'ui/sheets.js'          // C1-2: Plan sheets input tab: underlay, calibration, georeference (pdf.js loaded on first PDF)
+    'ui/sheets.js',         // C1-2: Plan sheets input tab: underlay, calibration, georeference (pdf.js loaded on first PDF)
+    'engine/osha.js',       // C1-3: 29 CFR 1926.1408 Table A power-line clearance
+    'ui/draw.js'            // C1-3: Site items input tab and the map's Draw bar: drawing, dragging, editing the site items
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
 })();
 </script>
@@ -141,6 +145,29 @@
   .fRow>span{min-width:0;overflow-wrap:anywhere;flex:1 1 150px;} .fRow>span.unit{flex:0 0 auto;} .fRow input[type=range]{flex:1 1 90px;min-width:0;width:90px;}
   .warnT{color:var(--warn);} button.danger{color:#B91C1C;border-color:#FCA5A5;} a.wk{font-size:8.5pt;margin-left:auto;}
   h4.stH{margin:10px 0 2px;font-size:10pt;color:var(--color-primary);}
+  /* C1-3: drawing */
+  #mapBar .tbLbl{font-size:8.5pt;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:.04em;}
+  .tbBtn{padding:3px 8px;font-size:9pt;white-space:nowrap;} .tbSep{flex:0 0 8px;}
+  .crTools{display:flex;flex-wrap:wrap;gap:4px;}
+  .crTool .leaflet-overlay-pane path.crItem,.crTool .crLabel,.crTool .crVx,.crTool .crItemMove{pointer-events:none!important;}
+  .crName{background:rgba(255,255,255,.85);border:none;box-shadow:none;padding:0 4px;font-size:8pt;color:#0f172a;white-space:nowrap;}
+  .crName::before{display:none;}
+  .crLabel span{display:inline-block;white-space:nowrap;font-weight:600;color:#0f172a;background:rgba(255,255,255,.8);padding:0 3px;border-radius:2px;transform:translate(-50%,-50%);cursor:pointer;}
+  .crLabel.leaflet-marker-draggable span{outline:2px solid var(--blue-600);cursor:move;}
+  .crDimTxt span{display:inline-block;white-space:nowrap;text-align:center;font-size:8.5pt;font-weight:600;color:#0f172a;background:rgba(255,255,255,.9);padding:1px 4px;border:1px solid #0f172a;border-radius:3px;transform:translate(-50%,-50%);line-height:1.2;}
+  .crDimTxt small{font-weight:400;font-size:7.5pt;}
+  .crVx span{display:block;width:14px;height:14px;background:#fff;border:2px solid var(--blue-600);border-radius:2px;box-shadow:0 1px 3px rgba(0,0,0,.35);cursor:move;}
+  .crVxM span{width:10px;height:10px;margin:2px;border-radius:50%;border-color:#64748B;opacity:.8;cursor:copy;}
+  .crLive{font-variant-numeric:tabular-nums;color:#1E3A8A;font-weight:600;}
+  .crOut{border:1px solid var(--color-border);border-left:4px solid var(--blue-600);border-radius:5px;background:#F8FBFF;padding:5px 8px;margin:6px 0;font-size:9.5pt;}
+  .crOut.bad{border-left-color:var(--fail);background:#FEF2F2;}
+  .crVxList summary{cursor:pointer;font-size:9pt;margin:6px 0 2px;} .crVxList table.tbl td input{width:100%;min-width:90px;}
+  .itGrp{margin:6px 0;} .itGrpH{font-size:8.5pt;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:.04em;margin:4px 0 2px;}
+  .itRow{display:flex;align-items:center;gap:6px;border-bottom:1px dotted var(--line);padding:2px 0;} .itRow.on{background:#EFF6FF;}
+  .itSel{flex:1 1 auto;min-width:0;text-align:left;border:none;background:none;padding:2px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .itSum{flex:0 1 auto;font-size:8.5pt;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%;} .itDel{padding:0 7px;border:none;background:none;color:#B91C1C;font-size:12pt;}
+  .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px;}
+  details.crSteps{margin:4px 0;} details.crSteps>summary{cursor:pointer;font-size:9pt;color:var(--color-primary);}
   .rp-host{container-type:inline-size;}
   @container (max-width:999.98px){ #out .rp-body{grid-template-columns:minmax(0,1fr);} #out .rp-toc{position:static;max-height:220px;} #out .rp-doc{padding:0.3in 0.35in 0.5in;} }
   /* phone / narrow: the map first, full width; the input panels below it (engineer decision 2026-11-16) */
