@@ -36,7 +36,11 @@
      posted bridges, staging at the pick; Route input / output tabs and Report §Route. 
      C7: the lift-plan drawings (ui/drawset.js, ui/drawings.js: cover and sheet index, general notes, a lift plan per pick and per girder lift
      with plan and elevations to scale, rigging / load share, ground, route; one DXF R12 file via shared/dxf.js; Print sheet / all), the
-     Summary tab (every lift and route; ui/summary.js) and the Report's §1 Summary, §2 Basis, the section order and figure numbers. -->
+     Summary tab (every lift and route; ui/summary.js) and the Report's §1 Summary, §2 Basis, the section order and figure numbers.
+     C8: preliminary terrain from USGS 3DEP (engine/terrain.js, ui/terrain.js), fetched in the browser (ImageServer getSamples; EPQS for a
+     few points) and cached per browser (IndexedDB crane.terrain.v1): crane levelness and blocking, ground elevations from the terrain,
+     pad cut / fill, route grades / crests / sags / long-load clearance, contours and slope colours, the cursor elevation; Terrain tabs,
+     Report §Terrain. Not adequate to certify crane levelness: survey data governs. -->
 <!-- pdf.js 3.11.174 (engineer-approved 2026-11-16; BasePlateAnchorDesigner.html's pinned jsDelivr URL) is loaded by ui/sheets.js when the
      first PDF is opened: https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js (worker: build/pdf.worker.min.js) -->
 <!-- three.js r128 + OrbitControls (engineer-approved 2026-11-16 for C3; the pinned files apps/steel-bridge/index.html uses) are loaded by
@@ -90,7 +94,9 @@
     '../../shared/dxf.js',  // C7: the DXF R12 writer, previews and sheet printing (shared, unchanged; also the bridge apps)
     'ui/drawset.js',        // C7: the lift-plan drawing set (cover, notes, lift plans, rigging, ground, route sheets) and the multi-lift summary
     'ui/drawings.js',       // C7: Drawings output tab (paper, preview, Download DXF, Print sheet / all, sheet index with links)
-    'ui/summary.js'         // C7: Summary output tab (every lift and route in one table, with links)
+    'ui/summary.js',        // C7: Summary output tab (every lift and route in one table, with links)
+    'engine/terrain.js',    // C8: preliminary terrain (USGS 3DEP): the grid, bilinear surface, levelness, pad grading, route profile, contours
+    'ui/terrain.js'         // C8: Terrain input and output tabs, the fetch (USGS 3DEP, cached per browser), contours / slope map, level badges, Report §Terrain
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
 })();
 </script>
@@ -260,6 +266,12 @@
   .crRtLbl{pointer-events:none!important;} .crRtLbl span{display:inline-block;white-space:nowrap;font-size:8pt;line-height:1.2;background:rgba(255,255,255,.92);border:1px solid #94A3B8;border-left:4px solid #059669;border-radius:3px;padding:0 4px;color:#0f172a;transform:translate(-50%,-140%);}
   .crRtLbl span.rt-warn{border-left-color:#D97706;} .crRtLbl span.rt-stop{border-left-color:#DC2626;background:#FEF2F2;}
   #mbStatus button[data-rtb]{margin-left:6px;}
+  /* C8: terrain */
+  .crLvl{pointer-events:none!important;} .lvb{display:inline-block;white-space:nowrap;font-size:8pt;line-height:1.25;border:1px solid;border-radius:9px;padding:0 6px;}
+  .lvb-ok{background:#DCFCE7;color:#166534;border-color:#86EFAC;} .lvb-warn{background:#FEF3C7;color:#92400E;border-color:#FCD34D;} .lvb-stop,.lvb-none{background:#FEE2E2;color:#991B1B;border-color:#FCA5A5;}
+  .crLvl .lvb{font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.3);}
+  .crTrCl{pointer-events:none!important;} .crTrCl span{display:inline-block;transform:translate(-50%,-50%);font-size:7.5pt;color:#7C2D12;background:rgba(255,255,255,.75);padding:0 2px;border-radius:2px;}
+  .crTrTag{font-size:7.5pt;color:#92400E;} .trProf svg{display:block;max-width:100%;height:auto;}
   /* C2-3: Picks tab */
   #pkTbl td,#pkTbl th{font-size:8.5pt;padding:2px 4px;white-space:nowrap;} .lfDot{margin-right:3px;} .lfDot.lf-stop{color:#B91C1C;} .lfDot.lf-warn{color:var(--warn);} .lfDot.lf-info{color:#64748B;}
   details.pkDet{border:1px solid var(--color-border);border-radius:6px;padding:4px 8px;margin:6px 0;background:#fff;} details.pkDet:target,details.pkDet[open]{background:#FCFDFF;}
@@ -313,7 +325,7 @@
       <div id="out"></div>
     </main>
   </div>
-  <footer id="appFoot"><span>Crane Pick Analyzer v0.7 (phase C7: site, plan sheets, drawing, cranes, lifts, heights, 3D, ground, girder lifts, route, drawings, summary) · units: ft, kip, psf / ksf</span><span>Lift-planning aid</span></footer>
+  <footer id="appFoot"><span>Crane Pick Analyzer v0.8 (phase C8: site, plan sheets, drawing, cranes, lifts, heights, 3D, ground, girder lifts, route, drawings, summary, terrain) · units: ft, kip, psf / ksf</span><span>Lift-planning aid</span></footer>
 </div>
 <script>
   window.CranePickApp && window.CranePickApp.start();

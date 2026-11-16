@@ -107,8 +107,20 @@
   }
   /* tipAt(crane, setup, cfg, R, g): z_tip (or null) without steps (the swing path, C3-2's 3D checks) */
   function tipAt(c, u, cfg, R, g) { g = g || geomOf(c); const a = angleAt(c, u, cfg, R, g, 'q', true); if (!isNum(a.theta)) return null; return padEl(u) + g.footH + u.boom * Math.sin(rad(a.theta)); }
-  const padEl = u => isNum(u && u.pad) ? u.pad : 0;
-  const el0 = k => Object.assign({ pg: null, ph: null, sg: null, sh: null, rig: null, blk: null, trav: null, L: null, W: null, H: null }, k && k.elev || {});
+  /* C8: the terrain provider (ui/terrain.js sets it while "use terrain" is on and a terrain grid is loaded): { pad(setup) -> ft | null (the
+     levelling datum under the crane), ground(x, y) -> ft | null, depthPad(setup) -> ft | null (the lowest ground under the supports) }.
+     An entered value always overrides the terrain (per item). */
+  let TP = null;
+  const setTerrain = p => { TP = p || null; };
+  const tpv = (f, ...a) => { if (!TP || !TP[f]) return null; try { const v = TP[f](...a); return isNum(v) ? v : null; } catch (e) { return null; } };
+  const padFrom = u => isNum(u && u.pad) ? 'entered' : isNum(tpv('pad', u)) ? 'terrain' : 'datum';
+  const padEl = u => isNum(u && u.pad) ? u.pad : (u ? (tpv('pad', u) ?? 0) : 0);
+  const el0 = k => {
+    const E = Object.assign({ pg: null, ph: null, sg: null, sh: null, rig: null, blk: null, trav: null, L: null, W: null, H: null }, k && k.elev || {}), from = {};
+    [['pg', 'pick'], ['sg', 'set']].forEach(([f, w]) => { if (isNum(E[f])) from[f] = 'entered'; else if (k && k[w]) { const z = tpv('ground', k[w].x, k[w].y); if (isNum(z)) { E[f] = z; from[f] = 'terrain'; } } });
+    E.from = from; return E;
+  };
+  const TERR = 'USGS 3DEP preliminary terrain';
   /* point(crane, setup, pick, 'pick' | 'set', e (engine/lift.js evalAt result), g, idp) -> heights at that point with their steps */
   function point(c, u, k, which, e, g, idp) {
     const E = el0(k), isP = which === 'pick', zp = padEl(u), steps = [];
@@ -120,11 +132,11 @@
     if (isNum(a.theta)) {
       out.zTip = zp + g.footH + u.boom * Math.sin(rad(a.theta));
       steps.push(st(idp, { id: 'tip', label: 'Boom-tip (head sheave) pin elevation', sym: 'z_{tip}', eq: 'z_{pad} + h_{f} + L\\,\\text{sin}\\,\\theta', sub: `${tx(zp, 2)} + ${tx(g.footH, 2)} + ${tx(u.boom, 2)}\\,\\text{sin}\\,${tx(a.theta, 2)}^{\\circ}`, value: out.zTip, unit: 'ft',
-        note: `z_pad: crane pad elevation (${isNum(u.pad) ? 'entered' : 'not entered: the datum, 0.00'}); h_f: boom-foot pin height (${FROM[g.from.footH]}).` }));
+        note: `z_pad: crane pad elevation (${{ entered: 'entered', terrain: TERR + ': the levelling datum under the crane, Terrain tab', datum: 'not entered: the datum, 0.00' }[padFrom(u)]}); h_f: boom-foot pin height (${FROM[g.from.footH]}).` }));
     }
     out.zLt = out.zLb + H; out.zHk = out.zLt + hr; out.zBk = out.zHk + hbk;
     steps.push(st(idp, { id: 'lb', label: `Load bottom elevation at the ${which}`, sym: 'z_{lb}', eq: 'z_{g} + h_{b}', sub: `${tx(zg, 2)} + ${tx(hb, 2)}`, value: out.zLb, unit: 'ft',
-        note: `z_g: ground at the ${which} point (${isNum(isP ? E.pg : E.sg) ? 'entered' : 'not entered: the crane pad'}); h_b: load bottom above that ground (${isNum(isP ? E.ph : E.sh) ? 'entered' : 'not entered: 0'}).` }),
+        note: `z_g: ground at the ${which} point (${(E.from || {})[isP ? 'pg' : 'sg'] === 'terrain' ? TERR : isNum(isP ? E.pg : E.sg) ? 'entered' : 'not entered: the crane pad'}); h_b: load bottom above that ground (${isNum(isP ? E.ph : E.sh) ? 'entered' : 'not entered: 0'}).` }),
       st(idp, { id: 'hk', label: 'Hook elevation (load top + rigging height)', sym: 'z_{hk}', eq: 'z_{lb} + H + h_{r}', sub: `${tx(out.zLb, 2)} + ${tx(H, 2)} + ${tx(hr, 2)}`, value: out.zHk, unit: 'ft' }),
       st(idp, { id: 'bk', label: 'Top of the hook block', sym: 'z_{bk}', eq: 'z_{hk} + h_{bk}', sub: `${tx(out.zHk, 2)} + ${tx(hbk, 2)}`, value: out.zBk, unit: 'ft' }));
     if (isNum(out.zTip)) {
@@ -164,5 +176,5 @@
       st(idp, { id: 'hd', label: 'Head allowance (tip pin to the highest block position)', sym: 'H_{hd}', value: g.head, unit: 'ft', note: FROM[g.from.head] })];
     return { g, pick: pp, set: ps, trav, swing, flags, geoSteps };
   }
-  window.CranePickElev = { geomOf, chartAngle, angleAt, tipAt, point, evaluate, padEl, el0, FROM };
+  window.CranePickElev = { geomOf, chartAngle, angleAt, tipAt, point, evaluate, padEl, padFrom, el0, FROM, setTerrain, get terrain() { return TP; } };
 })();
