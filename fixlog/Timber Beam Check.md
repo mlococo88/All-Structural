@@ -2966,7 +2966,7 @@ None new.
 - The AASHTO notice box is shown on the Summary tab only (was on each of the three tabs).
 - The NDS Report's list of result tabs ("Design Values, Analysis Results, …") is unchanged (NDS Report kept identical); it does not name Section Properties.
 
-## 2026-11-16 — PR: claude/timber-input-tabs (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (TBIT: input tabs reorganized — Project · Geometry · Member · Loads · Design criteria; engineer decision 2026-11-16)   [display only; no computed value, saved key or saved-data format change]
+## 2026-11-16 — PR: claude/timber-input-tabs (PR #1599: https://github.com/mlococo88/All-Structural/pull/1599) (TBIT: input tabs reorganized — Project · Geometry · Member · Loads · Design criteria; engineer decision 2026-11-16)   [display only; no computed value, saved key or saved-data format change]
 
 ### TBIT-a. What changes for the user
 - Input tabs were Project · Geometry · Loads · Material · Factors; now **Project · Geometry · Member · Loads · Design criteria**. Every card and field keeps its data path (`data-fkey`), default, hint and validation; only its tab changes.
