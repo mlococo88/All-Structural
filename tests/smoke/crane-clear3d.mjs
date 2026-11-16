@@ -101,7 +101,7 @@ try {
   await p.evaluate(() => CranePickApp.update(P => { P.items.push(CranePickModel.normItem({ id: 'pl1', type: 'power', name: 'OH 115 kV', kv: 115, height: 50, gradeEl: 100, pts: [{ x: 1040, y: 1900 }, { x: 1040, y: 2100 }] })); }, 'items')); await p.waitForTimeout(200);
   await p.click('#tabBar [data-otab=picks]'); await p.waitForSelector('#pkTbl');
   const row = await p.$$eval('#pkTbl tbody tr', r => [...r[0].querySelectorAll('td')].map(td => td.innerText.trim()));
-  assert.equal(row[17], 'OH 115 kV: 10.0 ft (load line) < D_min 15');
+  assert.equal(row[18], 'OH 115 kV: 10.0 ft (load line) < D_min 15');   // C8: the Level (terrain) column before it
   await p.click('#tabBar [data-otab=rpt]'); await p.waitForSelector('#rptHost .rp-doc'); await p.waitForTimeout(300);
   const doc = await p.evaluate(() => { const d = CranePickReportUI.view.doc; return { unresolved: d.unresolved, dup: d.dup, text: SharedReport.text(d) }; });
   assert.deepEqual(doc.unresolved, []); assert.deepEqual(doc.dup, []); assert.ok(!/NaN|undefined/.test(doc.text));

@@ -54,7 +54,7 @@ const settle = () => p.waitForTimeout(450);
 try {
   await p.waitForSelector('[data-sp=chip]'); await p.waitForTimeout(300);
   // 1.
-  assert.deepEqual(await p.$$eval('#inTabs [data-itab]', a => a.map(x => x.textContent)), ['Project', 'Site & map', 'Plan sheets', 'Site items', 'Cranes', 'Lifts', 'Ground']);   // C4 adds Ground
+  assert.deepEqual(await p.$$eval('#inTabs [data-itab]', a => a.map(x => x.textContent)), ['Project', 'Site & map', 'Plan sheets', 'Site items', 'Cranes', 'Lifts', 'Ground', 'Girder lifts', 'Route', 'Terrain']);   // C4 adds Ground, C5 Girder lifts, C6 Route, C8 Terrain
   assert.match(await txt('[data-pane=cranes]'), /The library is empty/);
   await p.setInputFiles('#crFiles', [FW, FC, BAD]); await p.waitForFunction(() => /Files: 2 cranes loaded/.test(document.querySelector('#crStatus').textContent));
   let L = await lib(); assert.deepEqual(Object.keys(L.cranes).sort(), ['fakeco-test-at-100-fake-test-data', 'fakeco-test-cr-200-fake-test-data']);
