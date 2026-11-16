@@ -2818,7 +2818,7 @@ Continues TBA3 (PR #1592). Every code site is tagged `TBA4`. Part 2 (bearing Art
 - **Flat use in AASHTO mode (raised, not changed):** `tbcAasEnv` (TBA3) uses I = bd³/12 and the critical-section depth d of the edgewise section even with Flat use ticked; the checks refuse flat use until the engineer decides how flat members are handled (a flat member is a deck plank, out of the stringer scope).
 - Not built in: MSR / MEL lumber (K<sub>bE</sub> 1.06 / 0.98), tension-reinforced glulam, decks (Art. 9.9), rating, skew, pedestrian load.
 
-## 2026-11-16 — PR: claude/timber-aashto-t3b (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (TBA5: AASHTO phase T3, part 2 — bearing Art. 8.8.3 with Table 8.8.3-1; deflection criteria Art. 2.5.2.6.2 (wood span/425, input); glulam camber Art. 8.12.1 as information; notes Art. 8.4.1.1.3 and 8.4.3)   [new capability: checks] [NDS results unchanged] [saved data: one new optional field, version 6]
+## 2026-11-16 — PR: claude/timber-aashto-t3b (PR #1594: https://github.com/mlococo88/All-Structural/pull/1594) (TBA5: AASHTO phase T3, part 2 — bearing Art. 8.8.3 with Table 8.8.3-1; deflection criteria Art. 2.5.2.6.2 (wood span/425, input); glulam camber Art. 8.12.1 as information; notes Art. 8.4.1.1.3 and 8.4.3)   [new capability: checks] [NDS results unchanged] [saved data: one new optional field, version 6]
 
 Continues TBA4 (PR #1593). Every code site is tagged `TBA5`.
 
