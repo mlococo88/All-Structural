@@ -3076,3 +3076,37 @@ None new.
 - Stringers other than the one checked, and the lanes, are placed for illustration (the distribution needs only S, d<sub>e</sub> and the wheels): an interior stringer is drawn in the middle with the roadway centred; without N<sub>b</sub>, five stringers (interior) or enough to span the roadway (exterior, at most 8).
 - The lane load of the vehicle placements is not drawn (it is on the parts of the influence line that add; stated in the caption).
 - Shear row: the axles of the placement for the largest shear at the lesser of 3d and L/4 (the wood rule, x = `xl`), as the check uses them.
+
+## 2026-11-16 — PR: claude/timber-gfx-3 (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (TBGX-3: graphics — demand and capacity along the member, bracing elevation, bearing detail, deflected shape with limits; engineer decision 2026-11-16)   [display only; no computed value, saved key or saved-data format change]
+
+### TBGX3-a. What changes for the user
+- **Demand and capacity along the member** (inline SVG line charts; the ratio chart under the demand chart):
+  - NDS **Bending** tab, first in *Bending stress (demand)*: the moment of the governing bending combination (`c.bm.M` at the analysis stations, both sides of each support and point load — the Analysis Results diagram) against the allowable moment F′<sub>b</sub>S/12 of each span and sign (`c.bend[i].Fbp_t`, `.Fbp_b`, `R.S`), and |M|/(F′<sub>b</sub>S/12) along the member. Its largest value is the bending ratio r<sub>b</sub> (pinned in the tests).
+  - NDS **Shear** tab, first in *Adjusted shear design value and check*: the shear of the governing shear combination against (2/3)F′<sub>v</sub>A (`Fv_p`, `R.A`; f<sub>v</sub> = 3V/2A ≤ F′<sub>v</sub>), the design shear V at x<sub>V</sub> as a dot (V/(2/3 F′<sub>v</sub>A) = f<sub>v</sub>/F′<sub>v</sub>).
+  - AASHTO **Flexure** tab, first in *Flexure (Art. 8.6.2)*: the Strength I factored moment envelope (`AD.sec[].M.StrI`) against M<sub>r</sub> of each span and sign (Strength I flexure items), and M<sub>u</sub>/M<sub>r</sub> along the member (largest = the governing Strength I flexure ratio).
+  - AASHTO **Shear** tab: the Strength I factored shear envelope (`VL`, `VR`) against V<sub>r</sub>, and V<sub>u</sub> at the critical sections (`AC.shear[].s.xd`, `.Vu`) as dots.
+- **Bracing elevation** — NDS Bending tab (first in *Beam stability factor C<sub>L</sub>*) and AASHTO Flexure tab: the member, the supports, each compression edge (top for +M, bottom for −M) braced continuously (C<sub>L</sub> = 1.0) or with brace marks at the supports and every l<sub>u</sub> (illustrative), labelled l<sub>u</sub>, l<sub>e</sub> (in.), C<sub>L</sub> per span: NDS `R.stab[i].top/.bot` (l<sub>u</sub>, l<sub>e</sub>) and C<sub>L</sub> of the governing bending combination (`c.bend[i].CLt/.CLb`); AASHTO the Strength I flexure items (`Lu`, `Le`, `CL`, braced when `clWhy`).
+- **Bearing detail** — NDS Bearing tab (first in *Bearing perpendicular to grain*) and AASHTO Bearing tab: the member end on its support, l<sub>b</sub> dimensioned, C<sub>b</sub>, the reaction against the capacity and the ratio. NDS: the beam at its governing support (`R.gov.cb`, TBB1): R = `Rbear`, capacity F′<sub>c⊥</sub> b l<sub>b</sub> (display; R / capacity = `r_cB`); AASHTO: `AC.govBear` R<sub>u</sub>, P<sub>r</sub>, l<sub>b</sub>, C<sub>b</sub>.
+- **Deflected shape** — NDS Deflection tab: the existing Plotly deflection plot gains dashed limit lines L/n<sub>LL</sub> and L/n<sub>TL</sub> over each span (`R.defl.perSpan[].LLlim`, `.TLlim`); AASHTO Deflection & Camber tab, first in *Deflection (Art. 2.5.2.6.2)*: Service I Δ<sub>DL</sub> (DC + DW), the live-load envelope g<sub>Δ</sub>Δ<sub>LL</sub> (`AL.env.defl[].ll` × `AL.df.gD`, zero at the supports) and their sum (display), with the live-load limit L/n of each span (`AC.defl[].allow`).
+- Report: the figures in Bending, Shear, Bearing (NDS) and in the AASHTO checks' Flexure, Shear, Bearing and Deflection subsections, numbered, with "see §" links. The NDS Report's deflection image (from the same Plotly plot) now shows the limit lines.
+- SVG text labels: the label helper now sets every subscript / superscript of a label (was the first only).
+
+### TBGX3-b. Code (anchors)
+- TBGX block: `nice`, `chart`, `steps`, `split`, `stepSeries`, `demCap`, `ratioAlong`, `bracing`, `bearing`, `deflShape`; pickers `ndsMoment`, `ndsShear`, `aasMoment`, `aasShear`, `ndsBracing`, `aasBracing`, `ndsBearing`, `aasBearing`, `aasDefl`, `ndsDeflLimits`; `lab` rewritten (all sub/superscripts).
+- Placements: `buildBend` (bDemand, bCL), `buildShear` (sCap), `buildBear` (brCalc), `figD` (limit traces), `buildAasFlex`, `buildAasShr`, `buildAasBrg`, `buildAasDefl`; Report: `tbrModel` Bending, Shear, Bearing subs; `tbrAasChecksSec` Flexure, Shear, Bearing, Deflection subs.
+- Tests: `tests/engine/timber-graphics.test.mjs` +5 tests (11 in all).
+
+### TBGX3-c. §4 / §5
+- §4: none — engine unchanged. Shown as display only (captions say so): F′<sub>b</sub>S/12, (2/3)F′<sub>v</sub>A, F′<sub>c⊥</sub>bl<sub>b</sub> (the checks' stress limits restated as moment / shear / force), the ratios along the member (|M|/capacity, M<sub>u</sub>/M<sub>r</sub>) and the AASHTO Δ<sub>DL</sub> + Δ<sub>LL</sub> curve. The checks and their ratios are unchanged; the tests pin that the largest ratio along the member equals the check's ratio.
+- §5: none.
+- **Check case:** NDS two spans of 12 ft (2x10 DF-L No. 2, D + L, top edge braced at 4 ft): F′<sub>b</sub>S/12 = 1883 ft-lb (+M) and −1076 ft-lb (−M, bottom edge at supports only, C<sub>L</sub> = 0.531); the largest |M|/capacity 1.293 at the middle support = r<sub>b</sub>; bracing labels: top l<sub>u</sub> 48.0, l<sub>e</sub> 98.9 in., C<sub>L</sub> 0.926; bottom l<sub>u</sub> 144.0, l<sub>e</sub> 265.0 in., C<sub>L</sub> 0.531.
+
+### TBGX3-d. How verified
+- RESULTS4
+- **Other copies:** none.
+
+### TBGX3-e. Decisions (pending engineer review)
+- Line charts drawn as inline SVG (printable, the same in the Report) rather than new Plotly plots; the NDS deflection plot (already Plotly) gains the limit lines.
+- NDS shear chart: the notched-end check is not drawn (its own card); NDS bearing detail: the beam at its governing support (supporting members and point loads on their own card).
+- Brace points at the spacing l<sub>u</sub> from each support are illustrative (the tool takes l<sub>u</sub>, not brace locations).
+- AASHTO Δ<sub>DL</sub> + Δ<sub>LL</sub>: the sum of the dead-load deflection and the live-load envelope (display; Art. 2.5.2.6.2 limits the live load only).
