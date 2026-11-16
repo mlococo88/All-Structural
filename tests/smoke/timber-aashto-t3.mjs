@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Timber Beam Check, AASHTO LRFD 10th Ed. phase T3 (fix log TBA4, TBA5, 2026-11-16): the checks (flexure, shear; TBA5: bearing, deflection, glulam camber, the deflection-limit input), in the working tree (headless Chromium, file://).
-// For each case: the AASHTO Checks tab (summary, flexure, shear, notes), every ratio the engine gives (TBC.ac) shown, the OK / NG of each
+// For each case: the check tabs (TBAT: Summary, Flexure, Shear, Bearing, Deflection & Camber, Notes; were the AASHTO Checks tab), every ratio the engine gives (TBC.ac) shown, the OK / NG of each
 // check block equal to the engine's, the governing strip and the left column (PASS / FAIL with the governing check), no NaN / undefined,
 // no KaTeX errors; the lateral-support inputs on the Factors tab in AASHTO mode; the Report section (steps, summary table with § links);
 // 390 px without horizontal page scroll; 0 console errors. Screenshots (deviceScaleFactor 1) with --shots <dir>.
@@ -19,7 +19,12 @@ await p.click('#tbcInTab_project'); await p.selectOption('[data-fkey="dcode"]', 
 ok(await p.evaluate(() => !!document.querySelector('[data-fkey="latTop"]') && !!document.querySelector('[data-fkey="latBot"]')), 'Factors tab (AASHTO): lateral-support inputs');
 const st = async () => p.evaluate(() => ({ gov: document.getElementById('govStrip').innerText, govCls: document.getElementById('govStrip').className, text: document.getElementById('tabPages').innerText,
   dash: (document.getElementById('tbcDash') || {}).innerText || '', blocks: [...document.querySelectorAll('#tabPages .eqb')].map(e => (e.querySelector('.st') || {}).textContent || ''),
-  kerr: document.querySelectorAll('.katex-error').length, AC: TBC.ac }));
+  kerr: document.querySelectorAll('.katex-error').length, AC: TBC.ac, secs: [...document.querySelectorAll('#tabPages .sec[data-secid]')].map(e => e.dataset.secid) }));
+// TBAT: the checks are on the Summary, Flexure, Shear, Bearing, Deflection & Camber and Notes tabs; their text, blocks and cards together
+const CHK_TABS = ['aasSum', 'aasF', 'aasV', 'aasB', 'aasD', 'aasN'];
+const stChecks = async () => { let all = null; for (const t of CHK_TABS) { await p.click('#tab_' + t); await p.waitForTimeout(300); const x = await st();
+  if (!all) all = x; else { all.text += '\n' + x.text; all.blocks = all.blocks.concat(x.blocks); all.kerr += x.kerr; all.secs = all.secs.concat(x.secs); } } return all; };
+const CARD_TAB = { aasCSum: 'aasSum', aasFlex: 'aasF', aasShr: 'aasV', aasBrg: 'aasB', aasDefl: 'aasD', aasCamb: 'aasD', aasCNotes: 'aasN' };
 const cases = {
   sawnSimple: m => { m.material.size = '10x16'; m.design.aashto.gr = 'No.1'; m.geom.spacing = 24; m.geom.spans = [{ L: 16 }]; m.geom.supports = [0, 1].map(() => ({ t: 'pin', lb: 5.5, cb: false })); Object.assign(m.design.aashto.bl, { tWs: 2 }); },
   sawnBraced: m => { m.material.size = '6x16'; m.design.aashto.gr = 'No.1'; m.geom.spacing = 24; m.geom.spans = [{ L: 20 }]; m.geom.supports = [0, 1].map(() => ({ t: 'pin', lb: 5.5, cb: false })); m.design.latTop = 'Supports'; m.design.luTop = 10; },
@@ -32,12 +37,11 @@ const cases = {
 for (const [name, fn] of Object.entries(cases)) {
   await p.evaluate(src => { const m = TBC.model; m.material.type = 'sawn'; m.design.latTop = 'Continuous'; m.design.latBot = 'Supports'; m.design.luTop = 0; m.design.luBot = 0; m.design.aashto.bl = tbcAasLoadDefaults(); (0, eval)('(' + src + ')')(m); TBC.fullRebuild(); }, fn.toString());
   await p.waitForTimeout(500);
-  await p.click('#tab_aasC'); await p.waitForTimeout(700);
-  const s = await st();
+  const s = await stChecks();
   ok(s.AC && s.AC.ok, `${name}: checks: ${s.AC && (s.AC.errors || []).join('; ')}`);
   if (!s.AC || !s.AC.ok) continue;
   ok(s.kerr === 0 && !/NaN|undefined|Infinity/.test(s.text), `${name}: KaTeX errors ${s.kerr}, NaN/undefined ${/NaN|undefined|Infinity/.test(s.text)}`);
-  for (const c of ['aasCSum', 'aasFlex', 'aasShr', 'aasBrg', 'aasDefl', 'aasCNotes']) /* aasBrg, aasDefl: TBA5 */ ok(await p.$(`#tabPages .sec[data-secid="${c}"]`), `${name}: card ${c}`);
+  for (const c of ['aasCSum', 'aasFlex', 'aasShr', 'aasBrg', 'aasDefl', 'aasCNotes']) /* aasBrg, aasDefl: TBA5 */ ok(s.secs.includes(c), `${name}: card ${c}`);
   const all = s.AC.flex.concat(s.AC.shear, s.AC.bear, s.AC.defl);   // TBA5: bearing, deflection
   ok(all.length >= 2, `${name}: ${all.length} check items`);
   all.forEach(it => ok(s.text.includes(it.ratio.toFixed(3)), `${name}: ratio ${it.ratio.toFixed(3)} shown (${it.kind})`));
@@ -49,7 +53,7 @@ for (const [name, fn] of Object.entries(cases)) {
   ok(/Governing: (Flexure|Shear|Bearing|Deflection)/.test(s.gov) && s.gov.includes((s.AC.gov.ratio * 100).toFixed(1) + ' %') && s.govCls.includes(ng ? 'fail' : 'pass') && s.gov.includes(ng ? 'NG' : 'OK'), `${name}: governing strip ${s.gov} (${s.govCls})`);
   ok(/Flexure \[Art\. 8\.6\.2\]/.test(s.dash) && /Shear \[Art\. 8\.7\]/.test(s.dash) && /Bearing \[Art\. 8\.8\.3\]/.test(s.dash) && /Deflection L\/425 \[Art\. 2\.5\.2\.6\.2\]/.test(s.dash) && s.dash.includes(s.AC.govFlex.ratio.toFixed(3)), `${name}: left column: ${s.dash.slice(0, 160)}`);
   if (name === 'glulamCont') ok(s.AC.flex.some(it => it.sg < 0 && it.CL < 1) && s.AC.flex.every(it => it.Lz > 0 && it.Lz < 60), 'glulamCont: −M with C_L < 1; C_V lengths from zero-moment points');
-  if (name.startsWith('glulam')) ok(await p.$('#tabPages .sec[data-secid="aasCamb"]') && s.AC.camber.length && s.text.includes(s.AC.camber[0].req.toFixed(3)), `${name}: camber card (TBA5)`);
+  if (name.startsWith('glulam')) ok(s.secs.includes('aasCamb') && s.AC.camber.length && s.text.includes(s.AC.camber[0].req.toFixed(3)), `${name}: camber card (TBA5)`);
   if (name === 'glulamPermit') ok(s.AC.flex.some(it => it.lim === 'StrII') && /Strength II/.test(s.text), 'glulamPermit: Strength II checks');
   if (name === 'sawnBraced') ok(s.AC.flex[0].CL < 1 && /R_?B|RB/.test(s.text.replace(/\s/g, '')), 'sawnBraced: C_L < 1 worked');
   // a click on a left-column line opens its card
@@ -57,9 +61,8 @@ for (const [name, fn] of Object.entries(cases)) {
   ok(await p.evaluate(() => document.querySelector('#tabBar button.on, #tabBar button.active, #tabBar button[aria-selected="true"]')?.textContent.trim() || ''), `${name}: tab after the left-column click`);
   if (args.shots) {
     fs.mkdirSync(args.shots, { recursive: true });
-    await p.click('#tab_aasC'); await p.waitForTimeout(300);
     await p.setViewportSize({ width: 1400, height: 7000 }); await p.waitForTimeout(400);
-    for (const sec of ['aasCSum', 'aasFlex', 'aasShr', 'aasBrg', 'aasDefl', 'aasCamb']) { const h = await p.$(`#tabPages .sec[data-secid="${sec}"]`); if (h && (name !== 'exterior')) await h.screenshot({ path: path.join(args.shots, `t3-${name}-${sec}.png`) }); }
+    for (const sec of ['aasCSum', 'aasFlex', 'aasShr', 'aasBrg', 'aasDefl', 'aasCamb']) { await p.click('#tab_' + CARD_TAB[sec]); await p.waitForTimeout(300); const h = await p.$(`#tabPages .sec[data-secid="${sec}"]`); if (h && (name !== 'exterior')) await h.screenshot({ path: path.join(args.shots, `t3-${name}-${sec}.png`) }); }
     await p.setViewportSize({ width: 1400, height: 1000 }); await p.waitForTimeout(300);
     if (name === 'glulamCont') { await p.screenshot({ path: path.join(args.shots, 't3-glulamCont-page.png') }); await p.click('#tbcInTab_factors'); await p.waitForTimeout(200); const pn = await p.$('#tbcInPane_factors'); if (pn) await pn.screenshot({ path: path.join(args.shots, 't3-factors-pane.png') }); }
   }
@@ -77,12 +80,20 @@ ok(/§\s*\d+\.\d+/.test(rt), 'Report: § references');
 ok(!/§aas/.test(rt) && /see §\s*\d+\.\d+/i.test(rt) && /Governing check: /.test(rt), 'Report (TBA6): every "see §" link of the checks resolved; the governing check in the Status: ' + (rt.match(/§aas\S*/) || [''])[0]);
 ok(await p.evaluate(() => document.querySelectorAll('.katex-error').length) === 0, 'KaTeX errors in the report');
 if (args.shots) { const h = await p.$('#tabPages'); if (h) await p.screenshot({ path: path.join(args.shots, 't3-report.png') }); }
+// TBAT: a status dot on each check tab; a saved tab id of the 3-tab layout opens its new tab (M.ui.outTab is not rewritten)
+ok(await p.evaluate(() => ['aasF', 'aasV', 'aasB', 'aasD'].every(t => document.querySelector('#tab_' + t + ' .tabDot.pass, #tab_' + t + ' .tabDot.fail'))), 'check tabs: status dots');
+for (const [old, want] of [['aasC', 'Summary'], ['aas', 'Design Values'], ['aasL', 'Bridge Loads']]) {
+  await p.evaluate(o => { const d = JSON.parse(localStorage.getItem('tbc_autosave_v1')); d.ui = Object.assign(d.ui || {}, { outTab: o }); localStorage.setItem('tbc_autosave_v1', JSON.stringify(d)); }, old);
+  await p.reload(); await p.waitForFunction(() => window.TBC && window.TBC.res, null, { timeout: 30000 }); await p.waitForTimeout(700);
+  const r = await p.evaluate(() => [document.querySelector('#tabBar button.active').textContent.trim(), TBC.model.ui.outTab]);
+  ok(r[0] === want && r[1] === old, `saved tab "${old}": opens ${r[0]} (want ${want}), saved value ${r[1]}`);
+}
 // back to NDS: no AASHTO checks, NDS tabs
 await p.click('#tbcInTab_project'); await p.selectOption('[data-fkey="dcode"]', 'NDS'); await p.waitForTimeout(500);
 ok(await p.evaluate(() => TBC.ac === null && [...document.querySelectorAll('#tabBar button')][0].textContent.trim() === 'Summary'), 'NDS mode: no AASHTO checks');
 await p.selectOption('[data-fkey="dcode"]', 'AASHTO'); await p.waitForTimeout(400);
 // 390 px
-await p.setViewportSize({ width: 390, height: 900 }); await p.click('#tab_aasC').catch(() => {}); await p.waitForTimeout(600);
+await p.setViewportSize({ width: 390, height: 900 }); await p.click('#tab_aasF').catch(() => {}); await p.waitForTimeout(600);
 ok(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), '390 px: horizontal page scroll');
 ok(!errs.length, 'console errors: ' + errs.join(' | '));
 await b.close();
