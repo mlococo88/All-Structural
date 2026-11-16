@@ -96,7 +96,9 @@ try {
   const rp = await txt('#out [data-opane=rpt]'); assert.match(rp, /Terrain.*not adequate to certify crane levelness.*survey data governs/); assert.ok(!/NaN|undefined/.test(rp));
   await shot('c8-report');
   await p.click('#tabBar [data-otab=picks]'); await p.waitForTimeout(300); assert.match(await txt('#pkTbl'), new RegExp(`Level \\(terrain\\).*${Math.abs(e.sMax).toFixed(2)} % · max block ${(e.bMax * 12).toFixed(1)} in`));
-  ok('Report §Terrain: the statement, no NaN / undefined; Picks table: the levelness column');
+  await p.click('#tabBar [data-otab=summary]'); await p.waitForSelector('#smTbl'); assert.match(await txt('#smTbl'), new RegExp(`Level \\(terrain\\).*${Math.abs(e.sMax).toFixed(2)} % · block ${(e.bMax * 12).toFixed(1)} in`));
+  assert.match(await txt('#smRoutes'), /Max grade · ground clearance \(terrain\).*5\.00 % · \d+\.\d\d ft/);
+  ok('Report §Terrain: the statement, no NaN / undefined; Picks and Summary tables: the levelness column; Summary routes: max grade and ground clearance');
   await p.reload(); await p.waitForSelector('[data-sp=chip]'); await p.waitForFunction(() => !!CranePickTerrainUI.grid, null, { timeout: 15000 });
   assert.equal(await p.evaluate(() => CranePickApp.P.terrain.src.id), src.id); assert.match((await p.$eval('.lvb[data-lvb]', e => e.className)), /lvb-warn/);
   ok('reload: the grid comes back from this browser\'s cache (IndexedDB); the badge is drawn again');

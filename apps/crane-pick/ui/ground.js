@@ -155,7 +155,7 @@
       const items = [];
       if (g.mode === 'none') items.push({ type: 'note', warn: true, text: 'Not computed: ' + g.why + '.' });
       else {
-        items.push({ type: 'note', warn: g.mode !== 'rigid', text: (g.mode === 'rigid' ? 'Method: rigid body, entered data. ' : 'Method: ESTIMATE — verify with the manufacturer\'s outrigger calculator. ') + inputsNote(g).replace(/<[^>]+>/g, '') + ' Lift results: §Lifts (see the pick).' });
+        items.push({ type: 'note', warn: g.mode !== 'rigid', text: (g.mode === 'rigid' ? 'Method: rigid body, entered data. ' : 'Method: ESTIMATE — verify with the manufacturer\'s outrigger calculator. ') + inputsNote(g).replace(/<[^>]+>/g, '') + ` Lift results: [[pick-${k.id}]].` });
         items.push({ type: 'table', head: [g.S.kind === 'crawler' ? 'Track' : 'Float', 'Load (kip)', g.S.kind === 'crawler' ? 'q_max track (psf)' : 'q_max', 'Slew θ', 'R (ft)', 'q_g (psf)', 'q_g / q_a', 'M/M_a', 'V/V_a'],
           rows: g.max.map((m, i) => { const b = g.bear[i]; return [m.id + ' (' + m.name + ')', { t: fmt(m.load / 1000, 2), n: true }, { t: m.q == null ? '—' : fmt(m.q, 0), n: true }, { t: fmt(m.theta, 0) + '°', n: true }, { t: fmt(m.R, 2), n: true }, { t: fmt(b.qg, 0), n: true }, { t: b.ratio == null ? '—' : fmt(b.ratio, 2), n: true, cls: b.ratio > 1 ? 'ng' : '' }, { t: isNum(b.rM) ? fmt(b.rM, 2) : '—', n: true }, { t: isNum(b.rV) ? fmt(b.rV, 2) : '—', n: true }]; }) });
         items.push({ type: 'kv', rows: [['Allowable bearing pressure', g.qa ? `${fmt(g.qa, 0)} psf (${ksf(g.qa)} ksf)` : 'not entered'], ['Mat', GR.MAT_TYPES[g.mat.type] + (g.mat.type !== 'none' ? `: ${fmt(g.mat.B, 2)}${g.S.kind === 'crawler' ? '' : ' × ' + fmt(g.mat.L, 2)} ft, ${fmt(g.mat.t, 2)} in, spread ${fmt(g.mat.k, 2)} : 1` : '')]] });

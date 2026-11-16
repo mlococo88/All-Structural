@@ -33,7 +33,10 @@
      C6: the trucking route (engine/route.js, ui/route.js): drawn routes with curve radii, the vehicle (tractor + semi / stretch trailer /
      steerable rear dolly / jeep + dolly) and its load, the kinematic swept path live while dragging, turns (off-tracking, inside /
      outside radii), site conflicts, overhead clearances (marks, power lines: 29 CFR 1926.1411 Table T), axle loads, haul-road bearing,
-     posted bridges, staging at the pick; Route input / output tabs and Report §Route.
+     posted bridges, staging at the pick; Route input / output tabs and Report §Route. 
+     C7: the lift-plan drawings (ui/drawset.js, ui/drawings.js: cover and sheet index, general notes, a lift plan per pick and per girder lift
+     with plan and elevations to scale, rigging / load share, ground, route; one DXF R12 file via shared/dxf.js; Print sheet / all), the
+     Summary tab (every lift and route; ui/summary.js) and the Report's §1 Summary, §2 Basis, the section order and figure numbers.
      C8: preliminary terrain from USGS 3DEP (engine/terrain.js, ui/terrain.js), fetched in the browser (ImageServer getSamples; EPQS for a
      few points) and cached per browser (IndexedDB crane.terrain.v1): crane levelness and blocking, ground elevations from the terrain,
      pad cut / fill, route grades / crests / sags / long-load clearance, contours and slope colours, the cursor elevation; Terrain tabs,
@@ -88,6 +91,10 @@
     'ui/tandem.js',         // C5: Girder lifts input tab, the girder poses on the map, scrubber, Picks rows, Report §Tandem lifts
     'engine/route.js',      // C6: trucking route: path, kinematic swept path, overhead clearances, axle loads, haul road, posted bridges, staging
     'ui/route.js',          // C6: Route input and output tabs, the route on the map (live while dragging), Report §Route
+    '../../shared/dxf.js',  // C7: the DXF R12 writer, previews and sheet printing (shared, unchanged; also the bridge apps)
+    'ui/drawset.js',        // C7: the lift-plan drawing set (cover, notes, lift plans, rigging, ground, route sheets) and the multi-lift summary
+    'ui/drawings.js',       // C7: Drawings output tab (paper, preview, Download DXF, Print sheet / all, sheet index with links)
+    'ui/summary.js',        // C7: Summary output tab (every lift and route in one table, with links)
     'engine/terrain.js',    // C8: preliminary terrain (USGS 3DEP): the grid, bilinear surface, levelness, pad grading, route profile, contours
     'ui/terrain.js'         // C8: Terrain input and output tabs, the fetch (USGS 3DEP, cached per browser), contours / slope map, level badges, Report §Terrain
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
@@ -318,7 +325,7 @@
       <div id="out"></div>
     </main>
   </div>
-  <footer id="appFoot"><span>Crane Pick Analyzer v0.8 (phase C8: site, plan sheets, drawing, cranes, lifts, heights, 3D, ground, girder lifts, route, terrain) · units: ft, kip, psf / ksf</span><span>Lift-planning aid</span></footer>
+  <footer id="appFoot"><span>Crane Pick Analyzer v0.8 (phase C8: site, plan sheets, drawing, cranes, lifts, heights, 3D, ground, girder lifts, route, drawings, summary, terrain) · units: ft, kip, psf / ksf</span><span>Lift-planning aid</span></footer>
 </div>
 <script>
   window.CranePickApp && window.CranePickApp.start();

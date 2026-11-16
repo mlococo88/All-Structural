@@ -722,3 +722,188 @@ storage key.
 changes the swept path and the card mid-drag and clears it, one undo step; overhead line, posted bridge, power line (Table T, spotter);
 Route tab tables and the turn link; C5 link and "move the pick pose"; Report §Route; reload; 390 px; 0 console errors);
 `crane-draw` (7, fixed), `crane-shell` (11) and `crane-picks` (5) (their output-tab lists now include Route), `crane-tandem` (6), `crane-ground` (5), `crane-place` (9); `node tests/check-syntax.mjs`.
+
+## 2026-11-16 — C7: lift-plan drawings (DXF), Summary tab, multi-lift summary, Report polish
+PR #1615: https://github.com/mlococo88/All-Structural/pull/1615
+### Where
+- `apps/crane-pick/ui/drawset.js` (new, `window.CranePickDrawSet`, no DOM, Node-tested): `summary(P, ctx)` (one row per lift: single picks,
+  girder lifts per crane, trucking routes), `notesModel(P, ctx)` (the general notes = Report §2 Basis), `build(P, ctx, opt)` (the drawing set
+  as one `shared/dxf.js` display list): cover and sheet index (lift summary table, trucking routes, revisions), general notes, a lift plan
+  per single pick (plan to scale: site items clipped to the view, plan-sheet outlines, power-line D_min buffers, the crane footprint,
+  outrigger beams, floats, mats, tail swing, boom at the pick / set / governing point, swing path, P / S / G, 3D clearance flags F1…,
+  north arrow, scale bar, State Plane grid ticks; elevations at the pick and the set to the same scale with the site items the section
+  crosses; the lift data table, flags, notes, "REPORT SEC. x.y"), a lift plan per girder lift (both cranes, the girder at the pick and set
+  poses, the path, waypoints, each crane's boom and hook at its governing step; the elevation at each crane's governing step) and its
+  rigging / load-share sheet (girder, CG, lifting points, R1 / R2 and the hook loads, dimensions from end A, the engine's load-share
+  steps as text, the rigging table), the ground sheet (one plan panel per setup with floats / tracks, mats and the largest loads; tables
+  of float / track loads and bearing, the mat specification and allowable, stress at depth incl. both cranes summed), a route sheet per
+  trucking route (C6: path, swept outlines, marks, the vehicle at the stop, turn labels outside the curves, the load CG; tables of turns,
+  axle loads, overhead clearances, posted bridges; flags). The sheet frame and block-sheet code is an adapted COPY of
+  `apps/ps-bridge/ui/sheets.js` (itself from the steel app; to move to `shared/` later, CLAUDE.md §3). `addSheets(fn)` for later modules.
+- `apps/crane-pick/ui/drawings.js` (new): Drawings output tab (Paper D / B, sheet, preview zoom, Download DXF (validated first), Print sheet /
+  Print all sheets (11 × 17; D half size), the sheet index with links to the input / output tabs and the Report §).
+- `apps/crane-pick/ui/summary.js` (new): Summary output tab (every lift per crane and every route; links: map, worked, Report, drawing).
+- `apps/crane-pick/report/builders.js`: §1 "Summary" (was "Project": title block, statement, the lift table with § links (and routes),
+  notes); §2 "Basis" (the general notes, § links); the added sections ordered Site, Plan sheets, Site items, Cranes, Lifts, Tandem lifts,
+  Ground, Route, Elevations, 3D view (`ORDER`); figures numbered "Figure n."; § links of §1 / §2 only to sections present; running
+  header "Crane Pick Analyzer — LIFT-PLANNING AID" + "The crane manufacturer's charts, the lift plan and the site checks govern" on every
+  printed page. Section ids / keys unchanged.
+- `apps/crane-pick/ui/ground.js`: the Report note "Lift results: §Lifts (see the pick)" is now a § link to the pick.
+- `apps/crane-pick/ui/route.js` (C6, coordinator's list): Report figure: swept outlines every max(2 ft, L / 150) (a long route's figure
+  stays small; caption says the spacing); turn labels on the outside of each curve; a note after the staging steps with the § link to
+  the girder lift (§Tandem lifts) or the pick it serves.
+- `apps/crane-pick/index.html`: loads `shared/dxf.js` (unchanged) and the three scripts; notes; footer v0.7.
+- Tests: `tests/engine/crane-dwg.test.mjs` (new), `tests/smoke/crane-drawings.mjs` (new); `crane-shell.mjs`, `crane-picks.mjs` (output tabs
+  now Plan · Summary · Picks · Ground · Route · Site · Drawings · Report); `crane-library.mjs` (input tabs: + Girder lifts, Route — it
+  failed on main since C5).
+### Calculations
+None (CLAUDE.md §4): every number on the sheets, in the Summary tab and in Report §1 / §2 is an engine value (engine/lift.js, elev.js,
+clear3d.js, ground.js, tandem.js, route.js through the page's evalPick / evalT / evalRoute), formatted. New display rules (not
+calculations): "closest clearance" = the power line / obstruction (known height) with the smallest margin over its requirement (as the
+Picks tab's "Closest 3D"); "max float / track load" = the largest load on any float or track of the lift (tandem: either crane);
+"bearing ratio" = the largest q_g / q_a; route "least overhead clearance" = the smallest of c (overhead) and d − D_T (power line).
+**Check cases** (`tests/engine/crane-dwg.test.mjs`, fake crane): lift plan: P R 30.00 ft, C 39,000 lb, 56.4 %; S R 20.00 ft, 58,000 lb,
+37.9 %; W 22,000 lb. Ground: front float 41.08 kip (C4 case A, hook 30 ft over the front at the pick; less on the swing to the set),
+4 × 4 × 12 in timber mat: q_g = 41,083.33 / 14.231407 + 50 = 2,936.80 → "2,937" psf, ratio 0.73 (q_a 4,000). Tandem: R1 22,000,
+R2 18,000, W1 24,000, W2 20,000 lb, governing step 0: R 36.06, C 27,000, 88.9 % / 74.1 %. Route: gross 20,000 + 15,000 + 40,000 =
+75,000 lb (37.50 t). Each value found as text on its sheet; every sheet inside its border at a listed scale; DXF `SharedDxf.validate` OK.
+### Saved data (§5)
+No new key; `crane.ui` gains `dwg: { paper, sheet, z }` (per browser view state). Project format unchanged.
+### Shared files
+`shared/dxf.js`, `shared/report.js` loaded unchanged (no shared file changed).
+### Decisions (pending engineer review)
+- The drawing set is display only and is regenerated from the project every time (no stored drawing data); paper D default, B option;
+  each sheet at the smallest standard scale at which it fits (lift / tandem plans from 1/4" = 1'-0", rigging from 1/2" = 1'-0").
+- Lift plan layout: plan and elevations in one row at one scale, the data table, flags and notes below; elevations at the pick and the
+  set (single pick) and at each crane's governing step (girder lift).
+- Ground sheet: one panel per setup (not one site plan) so floats stay legible; the largest load per float / track over all the lifts of
+  that setup (single picks and girder lifts).
+- Report § references on the sheets as "REPORT SEC. x.y" (the § sign is not plain ASCII for DXF R12 text).
+- The sheet-frame / block-sheet code is a third copy (ps-bridge, steel); moving it to `shared/` is planned work, not done here.
+- Route tools on the Plan's Draw bar (coordinator's list): not added (the bar is rebuilt by ui/draw.js; a cross-module change better
+  done on its own); the route tools stay on the Route tab.
+- Engineer instruction 2026-11-16 (speed): one PR, lighter checks.
+### How verified
+`node tests/engine/run.mjs crane` (all crane engine tests incl. 6 new); `node tests/smoke/crane-drawings.mjs` (5 checks: Summary tab =
+engine (56.4 %, 41.08 kip, 0.73; 88.9 % / 74.1 %; route 75,000 lb), its links; Drawings: 7 sheets render, index links, Download DXF valid,
+Print all = 7 pages, Print sheet = 1, paper B; Report order, §1 / §2, figure numbers, staging link, no unresolved keys / NaN; 390 px;
+0 console errors); `crane-shell` (11), `crane-picks` (5), `crane-ground` (5), `crane-tandem` (6), `crane-route` (5), `crane-place` (9),
+`crane-clear3d` (8), `crane-elev` (7), `crane-3d` (7), `crane-sheets` (8), `crane-library` (9); `node tests/check-syntax.mjs`.
+
+## 2026-11-16 — C8: preliminary terrain from USGS 3DEP (levelness, blocking, ground elevations, pad grading, route grades, contours)
+PR: (link added after the PR is opened, same PR)
+Engineer decision 2026-11-16: USGS 3DEP online ONLY for now (no survey import, no clicked spot elevations). Every terrain value is labelled
+"preliminary terrain (USGS 3DEP, ~1–3 m)"; the Terrain tab and Report §Terrain state that it is not adequate to certify crane levelness
+or grades — survey data governs.
+### Where
+- `apps/crane-pick/engine/terrain.js` (new, `window.CranePickTerrain`, no DOM): the request body and the answer parsers (getSamples, EPQS),
+  the grid (`gridSpec`, `nodes`, `makeGrid`), `at` (bilinear), `grad`, `cellSlope`, `bilStep` (worked), `level` (levelness, blocking,
+  badge), `padGrade` (cut / fill), `profile` (route grades, crests / sags, long-load ground clearance), `contours` (marching squares).
+- `apps/crane-pick/ui/terrain.js` (new, `window.CranePickTerrainUI`): Terrain input tab (area: map view / site extent; grid spacing
+  3.28 (≈ 1 m native) / 5 (default) / 10 / 20 ft; "Fetch terrain for this site"; source, fetch date, grid, native resolution, datum,
+  cache state; "Use terrain for ground elevations"; contours (interval) and slope colours; per setup: level tolerance, blocking limit,
+  levelling datum, grading pad; per route: maximum grade, grade base, load / deck underside height, clearance margin), Terrain output tab
+  (before Site: levelness table, slopes, badge, blocking, pad cut / fill, route profile chart, segment grades, crests / sags, clearance,
+  worked steps), the map (contours and slope cells on a canvas pane under the overlays; a level badge per crane that follows every drag;
+  the ground elevation in the cursor coordinates box), Report §Terrain (after §Route by the C7 order rule).
+- Changed existing code (each before → after):
+  - `engine/elev.js` `padEl` / `el0`: before `const padEl = u => isNum(u && u.pad) ? u.pad : 0;` and
+    `const el0 = k => Object.assign({ pg: null, … H: null }, k && k.elev || {});`; after: a terrain provider (`setTerrain(p)`, set by
+    ui/terrain.js only while "use terrain" is on and a grid is loaded): `padEl(u)` = the entered pad, else the provider's pad (the
+    levelling datum under the crane), else 0; `el0(k)` fills `pg` / `sg` from the provider's ground at the pick / set point when not
+    entered and records `E.from` ('entered' | 'terrain'). The step notes say "USGS 3DEP preliminary terrain" where used. With the
+    provider off (the default; every project saved before C8) the values are unchanged (tested: `EL.padEl({ pad: null })` = 0).
+  - `engine/ground.js` `depthOf`: before `const pad = isNum(setup.pad) ? setup.pad : 0, z = pad - it.topEl;`; after: with the pad not
+    entered and the provider on, `pad` = the lowest ground under the supports (the smallest depth: conservative), the note says so.
+  - `ui/map.js` `showCoord`: appends `CranePickMap.coordExtra(ll)` (the terrain elevation) when set.
+  - `ui/place.js` `evalPick0`: `ev.level = CranePickTerrainUI.levelOf(u)` and its flags appended (as C3 / C4).
+  - `ui/picks.js`: Picks table column "Level (terrain)" (after Hook reach min; a link to the Terrain tab) and Report §Lifts summary column
+    "Level / blocking (terrain)". `ui/summary.js` (C7): Summary column "Level (terrain)" per crane row and routes column "Max grade · ground
+    clearance (terrain)".
+  - `engine/model.js`: `terrain` (`normTerrain`), `setup.lvl` (`normLvl`), `route.grade` (`normGrade`), KEYS.terrainDb.
+  - `index.html`: two scripts, CSS (badges, contour labels), comment, footer v0.8.
+- Tests: `tests/engine/crane-terrain.test.mjs` (new), `tests/smoke/crane-terrain.mjs` (new); `crane-shell` / `crane-picks` (output tabs
+  include Terrain), `crane-library` (input tabs include Terrain), `crane-clear3d` (the Picks column index of "Closest 3D" 17 → 18).
+### Data (USGS) — endpoint and verification
+- Used: USGS The National Map 3DEP Elevation ImageServer, `getSamples` (ArcGIS REST "Get Samples"), POST
+  `https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/getSamples`, form body `geometry={"points":[[lon,lat],…],
+  "spatialReference":{"wkid":4326}}&geometryType=esriGeometryMultipoint&returnFirstValueOnly=true&interpolation=RSP_BilinearInterpolation&f=json`
+  (a CORS "simple" request: no preflight); answer `samples[{ location, locationId, value (string, metres), rasterId, resolution }]`, read
+  by `locationId` (by order if absent); "NoData" → no data; `{ error }` → the message shown. 400 points per request (the service's
+  documented default limit is about 1,000), 3 requests at a time, 45 s timeout, at most 10,000 points per fetch (the spacing grows by
+  ×1.25 until it fits, and the app says so). Fallback for ≤ 60 points when getSamples fails: EPQS `https://epqs.nationalmap.gov/v1/json?
+  x=<lon>&y=<lat>&wkid=4326&units=Feet&includeDate=false` (`value`, feet).
+- NOT verified live: elevation.nationalmap.gov, epqs.nationalmap.gov and developers.arcgis.com were blocked from the build container
+  (proxy 403 / not resolvable). The parameters and the answer format were taken from Esri's ArcGIS REST API "Get Samples" reference as
+  found by web search (its mirrors on several agency servers) and the USGS service path; the EPQS v1 parameters from general knowledge
+  (not confirmed). The parsers are tested against mocked answers in that format. **Engineer to try "Fetch terrain" once from the work
+  laptop and the GitHub Pages copy** (CORS from `file://` sends `Origin: null`; ArcGIS servers normally answer `Access-Control-Allow-
+  Origin: *`, not confirmed for this one). Offline / blocked → the message "Could not reach the USGS 3DEP elevation service …
+  everything else in the app still works".
+- Units and datum: 3DEP values are metres above NAVD 88 (CONUS); converted to US survey feet, 1 m = 3937/1200 ftUS = 3.280833 ftUS (the
+  plan coordinates' unit; 2 ppm from the international foot, 0.0004 ft at 200 ft). With "use terrain" on, the pad / pick / set
+  elevations not entered are NAVD 88 ftUS (said on the Terrain tab and in the Report).
+- Cache: IndexedDB `crane.terrain.v1`, store `grid` (new; the 12 latest fetches kept); the project keeps only `terrain.src` (id, fetch
+  date, service, grid geometry, counts, range, zone).
+### Calculations (CLAUDE.md §4: new calculation; no existing formula changed — the elev / ground changes above only supply ground
+elevations when the user turns terrain on; Decisions pending engineer review)
+1. Grid: nodes on the multiples of the spacing s in the site frame (State Plane grid ftUS) covering the area; elevation anywhere by
+   bilinear interpolation: t = (x − x_i)/s, u = (y − y_j)/s, z = (1 − t)(1 − u)z00 + t(1 − u)z10 + (1 − t)u z01 + t u z11 (null outside the
+   grid or with a no-data corner).
+2. Levelness (crane frame from C4 `supports()`): floats FL, FR, RL, RR at (x_F, ±b), (−x_R, ±b); crawler track ends (±L_t/2, ±g/2).
+   s_L = 100[(z_front pair mean) − (z_rear pair mean)]/(x_F + x_R) (crawler L_t); s_T = 100[(z_left mean) − (z_right mean)]/(2b);
+   s_max = √(s_L² + s_T²) — the steepest slope of the least-squares plane through the four points (for a rectangle the LS gradient is
+   exactly these pair means); twist w = (z_FL + z_RR − z_FR − z_RL)/4 (information). Blocking b_i = z_datum − z_i, z_datum = the highest
+   support (or an entered datum). Badge: green s_max ≤ tolerance; amber above it (or a datum below a support: cut); red when a blocking
+   exceeds the blocking limit or terrain is missing under a support.
+3. Use terrain: crane pad z_pad = z_datum (cribbing at the highest support not added); pick / set ground = z at the point; stress at depth
+   z = lowest support ground − top el.
+4. Pad grading (grid method): pad B × W on the carrier axis centred on the rotation centre (default: float rectangle + float + 4 ft;
+   crawler L_t + 4 by g + s + 4); cells ≤ s and ≤ min(B, W)/10; z_i = bilinear at each cell centre; V_fill = Σ a max(z_pad − z_i, 0),
+   V_cut = Σ a max(z_i − z_pad, 0); z_pad default = the mean ground (cut ≈ fill); cy = ft³/27; bank volumes, no shrink / swell, no slopes.
+5. Route profile: the C6 steer-axle path every min(2, s/2) ft (≥ 0.5 ft); z(s) bilinear; grade g(s) = 100[z(s + ℓ_g/2) − z(s − ℓ_g/2)]/ℓ_g
+   (ℓ_g default 20 ft, clipped at the ends); per path segment (tangent / curve) the steepest |g| vs the maximum grade (default 8 %);
+   crests / sags at grade breaks A = g(s + ℓ_g/2) − g(s − ℓ_g/2), |A| ≥ 2 % (crest A < 0, sag A > 0), each run reported at its largest |A|.
+6. Long-load ground clearance (rigid load / deck): stations behind the steer axle along the path: hitch H = L1 − e (+ Lj − ej with a
+   jeep), rear support R = H + L2; underside line through z(s_R) + h_u and z(s_H) + h_u, extended over the front overhang f = L − L2 − r
+   and the rear overhang r; c = line − z at every station from the rear tip to the front tip, for every vehicle position (the whole
+   vehicle on the route), min reported with where (between the supports = crest; overhang = sag); c < 0 stop, c < margin (0.5 ft) warn.
+   h_u default: deck height (dolly / jeep: the load spans the bolsters) or deck height − 1 ft (semi / stretch: deck structure, assumed).
+   Off-tracking and suspension travel not included; the tractor and jeep not checked.
+7. Map: contours by marching squares (saddles by the cell mean), every 5th interval heavier and labelled; slope cells coloured
+   < 1 / 1–2 / 2–5 / 5–10 / ≥ 10 %.
+### Check cases (`tests/engine/crane-terrain.test.mjs`, hand-computed)
+- A: plane z = 100 + 0.02x − 0.01y reproduced exactly; a 2 ft bump on a node: 102.00 at the node, 101.00 half way, 100.50 at a cell centre.
+- B: floats x_F 10, x_R 8, b 9, heading 0, z = 100 + 0.02x + 0.03y: FL 100.12, FR 100.48, RL 99.58, RR 99.94; s_L = 100(100.30 − 99.76)/18
+  = 3.000 %; s_T = 100(99.85 − 100.21)/18 = −2.000 %; s_max = √13 = 3.6056 %; blocking FL 0.36, FR 0, RL 0.90, RR 0.54 ft; tolerance 1 %
+  → amber; limit 0.5 ft → red (10.8 in); datum 100.00 → FR −0.48 (cut). Rotated crane: s_max √13 again. Crawler L_t 20, g 16, heading 90:
+  s_L 2 %, s_T 3 %.
+- C: z = 100 + 0.02x, pad 40 × 20 along x at el. 100: fill = cut = W s B²/8 = 20 × 0.02 × 1,600/8 = 80 ft³ (2.963 cy); el. 101: fill 800,
+  cut 0; not entered: mean 100.00.
+- D: route (0,0)→(300,0), semi L1 20, e 1, L2 40, load 50 ft, r 2 (f 8), deck 5 → h_u 4. Crest z = 107.5 − 0.05|x − 150|: max grade 5 %,
+  crest at 150, c(a) = 4 − 0.1a + 0.0025a² → 3.00 ft at a = 20 (between the supports). Sag z = 100 + 0.05|x − 150|: sag at 150, front
+  overhang c = 3.2 + 0.1a → 3.20 ft (rear overhang 3.8 + 0.1a). Max grade 4 % → flagged; margin 3.5 → warn; h_u 0.5 → stop.
+- Mocked answers: by locationId, "NoData", order fallback, `{ error }` text, EPQS value; 30.48 m = 99.9998 ftUS; the request body.
+### Saved data (§5)
+New: project `terrain` (`normTerrain`: use, spacing, ext, contour, src), `setup.lvl`, `route.grade` (absent before C8 = defaults / null:
+no migration); IndexedDB `crane.terrain.v1` (new database, prefixed); `crane.ui.trC` / `trS` (map layers, existing per-browser key).
+No existing key or format changed.
+### Decisions (pending engineer review)
+- getSamples batches (no raster decoder library); 400 points per request, 10,000 per fetch; EPQS only for ≤ 60 points.
+- Elevations in US survey feet (3937/1200 per metre), as the plan coordinates.
+- Levelness from the four support points' plane (not the terrain inside the footprint); the level tolerance default 1 % ("enter the crane
+  manual's requirement"); blocking limit default 24 in (assumed); datum default the highest support.
+- With terrain on, z_pad = the levelling datum (the highest support ground; cribbing there not added); stress-at-depth z from the lowest
+  support ground (conservative).
+- Grading pad default size and elevation as above; route maximum grade default 8 %, grade base 20 ft, crest / sag break 2 %, clearance
+  margin 0.5 ft, h_u defaults as above; the profile follows the steer-axle path (off-tracking ignored).
+- Fetching turns "use terrain" on (the tab says so; it can be turned off); an entered pad / pick / set elevation always overrides.
+### How verified
+`node tests/engine/run.mjs crane` (all crane engine tests incl. 9 new: A–D, grid spec, contours, mocked answers, the elevation provider,
+KaTeX of every step); `node tests/smoke/crane-terrain.mjs` (7 checks: offline message with the app still working; mocked getSamples →
+grid = the made-up surface, contours and slope overlay drawn, cursor elevation; the level badge green on the flat and amber mid-drag onto a
+5 % slope, Terrain tab = engine, pad = datum with "use terrain"; route profile chart, 5 % grade, sag at the grade break; Report §Terrain
+statement, Picks and Summary columns; reload restores the grid from IndexedDB; 390 px; 0 console errors (the browser's own "Failed to load
+resource" lines of the deliberate offline fetch excluded)); `crane-shell` (11), `crane-picks` (5), `crane-library` (9; its input-tab list
+had failed on main since C5 — fixed by C7, Terrain added), `crane-drawings` (5), `crane-clear3d` (8), `crane-place` (9), `crane-ground` (5),
+`crane-elev` (7), `crane-route` (5), `crane-tandem` (6); `node tests/check-syntax.mjs`.
