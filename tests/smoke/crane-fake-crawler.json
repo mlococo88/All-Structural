@@ -1,0 +1,27 @@
+{
+ "schema": "crane-pick.crane.v1",
+ "make": "FAKECO",
+ "model": "TEST-CR 200 (FAKE TEST DATA)",
+ "type": "crawler",
+ "rated_capacity_nominal": "fake test crane: every number is made up for the tests",
+ "preliminary": false,
+ "source": { "file": "none (synthetic test file)", "doc": "FAKECO test chart TC-2 (not a real document)", "revision": "T2", "date": "2026-11-16", "pages": "p1",
+   "terms": "FAKE TEST DATA for the Crane Pick Analyzer tests. Not a real crane; never use for a lift." },
+ "units": { "length": "ft", "weight": "lb" },
+ "dims": {
+  "tail_swing_radius": { "value": 18, "unit": "ft", "as_printed": "18 ft (fake)", "page": 1 },
+  "crawler": { "track_length_overall": { "value": 26, "unit": "ft", "as_printed": "26 ft (fake)", "page": 1 }, "track_gauge_extended": { "value": 18, "unit": "ft", "as_printed": "18 ft (fake)", "page": 1 },
+    "shoe_width": { "value": 3, "unit": "ft", "as_printed": "36 in (fake)", "page": 1 } },
+  "carrier_or_carbody": { "carbody_length": { "value": 14, "unit": "ft", "as_printed": "14 ft (fake)", "page": 1 }, "carbody_width": { "value": 12, "unit": "ft", "as_printed": "12 ft (fake)", "page": 1 } }
+ },
+ "weights": { "hook_blocks": [ { "item": "FAKE 100 t block", "lb": 2000, "page": 1 } ] },
+ "configs": [
+  { "id": "rear-150k", "label": "Main boom, over rear, 150,000 lb counterweight (FAKE)", "boom": "main", "counterweight_lb": 150000, "support": "crawler", "zone": "over-rear",
+    "chart": { "boom_lengths_ft": [100, 150], "radii_ft": [20, 40, 60, 80], "capacity_lb": [[200000, 180000], [100000, 95000], [60000, 58000], [null, 40000]] },
+    "notes": "FAKE TEST DATA. Ratings do not exceed 75% of tipping.", "page": 1 },
+  { "id": "side-150k", "label": "Main boom, over side, 150,000 lb counterweight (FAKE)", "boom": "main", "counterweight_lb": 150000, "support": "crawler", "zone": "over-side",
+    "chart": { "boom_lengths_ft": [100, 150], "radii_ft": [20, 40, 60, 80], "capacity_lb": [[150000, 140000], [80000, 76000], [45000, 44000], [null, 30000]] },
+    "notes": "FAKE TEST DATA. Ratings do not exceed 75% of tipping.", "page": 1 }
+ ],
+ "gaps": ["FAKE TEST FILE"]
+}

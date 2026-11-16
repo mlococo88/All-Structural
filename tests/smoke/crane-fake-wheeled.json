@@ -1,0 +1,61 @@
+{
+ "schema": "crane-pick.crane.v1",
+ "make": "FAKECO",
+ "model": "TEST-AT 100 (FAKE TEST DATA)",
+ "type": "all-terrain",
+ "rated_capacity_nominal": "fake test crane: every number is made up for the tests",
+ "preliminary": true,
+ "source": { "file": "none (synthetic test file)", "doc": "FAKECO test chart TC-1 (not a real document)", "revision": "T1", "date": "2026-11-16", "pages": "p1-2",
+   "terms": "FAKE TEST DATA for the Crane Pick Analyzer tests. Not a real crane; never use for a lift." },
+ "page_numbering": "test",
+ "units": { "length": "ft", "weight": "lb" },
+ "dims": {
+  "tail_swing_radius": { "value": 15, "unit": "ft", "as_printed": "15 ft (fake)", "page": 1 },
+  "center_of_rotation": { "rotation_to_rear_of_carrier": { "value": 14, "unit": "ft", "as_printed": "14 ft (fake)", "page": 1 } },
+  "outriggers": {
+   "spread_transverse": { "full": { "value": 24, "unit": "ft", "as_printed": "24 ft (fake)", "page": 1 }, "mid": { "value": 16, "unit": "ft", "as_printed": "16 ft (fake)", "page": 1 } },
+   "spread_longitudinal": { "front_outrigger_to_rotation": { "value": 12, "unit": "ft", "as_printed": "12 ft (fake)", "page": 1 }, "rotation_to_rear_outrigger": { "value": 12, "unit": "ft", "as_printed": "12 ft (fake)", "page": 1 } },
+   "float_size": { "value": 2, "unit": "ft", "as_printed": "24 in (fake)", "page": 1 }
+  },
+  "carrier_or_carbody": { "overall_carrier_length": { "value": 40, "unit": "ft", "as_printed": "40 ft (fake)", "page": 1 }, "carrier_width": { "value": 10, "unit": "ft", "as_printed": "10 ft (fake)", "page": 1 } },
+  "boom_foot": { "ahead_of_rotation": { "value": 2, "unit": "ft", "as_printed": "2 ft (fake)", "page": 1 }, "height_above_ground": null }
+ },
+ "weights": {
+  "hook_blocks": [ { "item": "FAKE 50 t block", "lb": 1000, "page": 2 }, { "item": "FAKE hook ball", "lb": 300, "page": 2 } ],
+  "upperworks": null, "upperworks_cg": null
+ },
+ "configs": [
+  { "id": "or-full-360", "label": "Main boom, outriggers full 24 ft, 360 deg, 20,000 lb counterweight (FAKE)", "boom": "main", "counterweight_lb": 20000,
+    "support": "outriggers-full", "zone": "360",
+    "chart": { "boom_lengths_ft": [40, 60, 80, 100], "radii_ft": [10, 15, 20, 30, 40, 50, 60, 70],
+      "capacity_lb": [[100000, 90000, null, null], [80000, 76000, 70000, null], [60000, 58000, 55000, 50000], [40000, 39000, 37000, 35000],
+        [null, 28000, 27000, 26000], [null, 20000, 19000, 18000], [null, null, 14000, 13500], [null, null, 10000, 10500]] },
+    "capacity_units_as_printed": "lb",
+    "deductions": { "rule": "FAKE: deduct the hook block, slings and rigging from the chart capacity.", "page": 2 },
+    "notes": "FAKE TEST DATA. Capacities in lb, not exceeding 85% of tipping. Linear interpolation between radii is permitted (fake note).", "page": 1 },
+  { "id": "or-mid-360", "label": "Main boom, outriggers mid 16 ft, 360 deg, 20,000 lb counterweight (FAKE)", "boom": "main", "counterweight_lb": 20000,
+    "support": "outriggers-mid", "zone": "360",
+    "chart": { "boom_lengths_ft": [40, 60], "radii_ft": [10, 20, 30], "capacity_lb": [[70000, 60000], [40000, 38000], [20000, 19000]] },
+    "chart_flags": [ { "radius_ft": 10, "boom_ft": 40, "printed": "70.0*", "flag": "* Over rear with special equipment (fake)." } ],
+    "deductions": { "rule": "FAKE: deduct the hook block.", "page": 2 },
+    "notes": "FAKE TEST DATA. Capacities in lb, not exceeding 85% of tipping. No interpolation (fake note).", "page": 1 },
+  { "id": "rubber-360", "label": "Main boom, on rubber, stationary, 360 deg, 20,000 lb counterweight (FAKE)", "boom": "main", "counterweight_lb": 20000,
+    "support": "on-rubber", "zone": "360",
+    "chart": { "boom_lengths_ft": [40, 60], "radii_ft": [10, 15, 20, 25], "capacity_lb": [[30000, 28000], [20000, 19000], [12000, 11000], [8000, null]] },
+    "deductions": { "rule": "FAKE: deduct the hook block.", "page": 2 },
+    "notes": "FAKE TEST DATA. Capacities in lb, not exceeding 75% of tipping.", "page": 2 },
+  { "id": "rubber-front", "label": "Main boom, on rubber, stationary, over front, 20,000 lb counterweight (FAKE)", "boom": "main", "counterweight_lb": 20000,
+    "support": "on-rubber", "zone": "over-front",
+    "chart": { "boom_lengths_ft": [40, 60], "radii_ft": [10, 15, 20, 25], "capacity_lb": [[45000, 42000], [30000, 28000], [18000, 17000], [12000, 11000]] },
+    "deductions": { "rule": "FAKE: deduct the hook block.", "page": 2 },
+    "notes": "FAKE TEST DATA. Capacities in lb, not exceeding 75% of tipping.", "page": 2 },
+  { "id": "or-full-360-modes", "label": "Main boom, outriggers full 24 ft, 360 deg, 10,000 lb counterweight, two telescoping modes (FAKE)", "boom": "main", "counterweight_lb": 10000,
+    "support": "outriggers-full", "zone": "360",
+    "chart": { "boom_lengths_ft": [40, 60, 60, 80], "radii_ft": [10, 20, 30], "column_modes": ["A,B", "A", "B", "A,B"],
+      "capacity_lb": [[50000, 45000, 42000, null], [30000, 29000, 31000, 27000], [15000, 14000, null, 13000]] },
+    "deductions": { "rule": "FAKE: deduct the hook block.", "page": 2 },
+    "notes": "FAKE TEST DATA. Capacities in lb, not exceeding 85% of tipping. Use the next longer radius; no interpolation (fake note).", "page": 2 }
+ ],
+ "other_charts_available": [],
+ "gaps": ["FAKE TEST FILE"]
+}
