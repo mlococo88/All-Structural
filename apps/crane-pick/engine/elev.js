@@ -85,12 +85,12 @@
   /* angleAt(crane, setup, cfg, R, g, idp) -> { ok, theta, geom, chart, used, why, dh, steps } */
   function angleAt(c, u, cfg, R, g, idp, quiet) {
     g = g || geomOf(c); const L = u.boom, e = g.footE, dh = R - e, steps = [];
-    const ref = cfg ? `${K().name(c)}, chart "${cfg.label || cfg.id}"${cfg.page ? ', PDF p. ' + [].concat(cfg.page).join(', ') : ''}` : '';
+    const ref = cfg && !quiet ? `${K().name(c)}, chart "${cfg.label || cfg.id}"${cfg.page ? ', PDF p. ' + [].concat(cfg.page).join(', ') : ''}` : '';
     if (!quiet) steps.push(st(idp, { id: 'dh', label: 'Horizontal distance from the boom-foot pin to the hook', sym: 'd_{h}', eq: 'R - e', sub: `${tx(R, 2)} - ${tx(e, 2)}`, value: dh, unit: 'ft',
       note: `e = boom-foot pin ahead of the rotation centre (${FROM[g.from.footE]}).` }));
     if (!isNum(L) || L <= 0) return { ok: false, why: 'boom length not set', dh, steps };
     if (dh > L + 1e-9) { if (!quiet) steps.push(st(idp, { id: 'th', label: 'Boom angle: the hook is beyond the boom\'s reach (d_h > L)', sym: '\\theta', eq: '\\text{acos}(\\frac{d_{h}}{L})', sub: `\\text{acos}(\\frac{${tx(dh, 2)}}{${tx(L, 2)}})`, value: 'not reachable', d: 0 }));
-      return { ok: false, why: `the radius is beyond the boom's reach (d_h = ${fmt(dh, 2)} ft > L = ${fmt(L, 2)} ft)`, dh, steps }; }
+      return { ok: false, why: quiet ? 'not reachable' : `the radius is beyond the boom's reach (d_h = ${fmt(dh, 2)} ft > L = ${fmt(L, 2)} ft)`, dh, steps }; }
     const thG = deg(Math.acos(Math.max(-1, Math.min(1, dh / L))));
     if (!quiet) steps.push(st(idp, { id: 'thg', label: 'Boom angle from the geometry (straight boom, foot pin to tip pin)', sym: '\\theta_{g}', eq: '\\text{acos}(\\frac{d_{h}}{L})', sub: `\\text{acos}(\\frac{${tx(dh, 2)}}{${tx(L, 2)}})`, value: thG, unit: 'deg', d: 2 }));
     const ca = chartAngle(cfg, L, R, u.mode);
@@ -102,7 +102,7 @@
     if (!quiet) steps.push(st(idp, { id: 'th', label: ca ? 'Boom angle used: the chart\'s' : 'Boom angle used: from the geometry (the chart prints no boom angle here)', sym: '\\theta', eq: ca ? '\\theta_{c}' : '\\theta_{g}', sub: '', value: theta, unit: 'deg', d: 2,
       note: ca && Math.abs(ca.deg - thG) > 0.5 ? `The chart's loaded angle differs from the geometric angle by ${fmt(ca.deg - thG, 2)}° (boom deflection, foot-pin position): the chart's is used.` : '' }));
     const out = { ok: true, theta, geom: thG, chart: ca ? ca.deg : null, used, dh, steps, why: '' };
-    if (isNum(g.maxAng) && theta > g.maxAng + 1e-9) { out.ok = false; out.why = `the boom angle ${fmt(theta, 1)}° is above the crane's maximum ${fmt(g.maxAng, 1)}°`; }
+    if (isNum(g.maxAng) && theta > g.maxAng + 1e-9) { out.ok = false; out.why = quiet ? 'above the maximum boom angle' : `the boom angle ${fmt(theta, 1)}° is above the crane's maximum ${fmt(g.maxAng, 1)}°`; }
     return out;
   }
   /* tipAt(crane, setup, cfg, R, g): z_tip (or null) without steps (the swing path, C3-2's 3D checks) */
@@ -147,7 +147,7 @@
     trav.steps.push(st(idp, { id: 'trbk', label: 'Top of the hook block during the swing', sym: 'z_{bk,tr}', eq: 'z_{tr} + H + h_{r} + h_{bk}', sub: `${tx(zTr, 2)} + ${tx(H, 2)} + ${tx(hr, 2)} + ${tx(hbk, 2)}`, value: zBkTr, unit: 'ft' }));
     // the hook reach along the swing at the travel height: the lowest margin over the path's check points (every degree)
     let min = null;
-    (ev.path.pts || []).forEach(q => { const e = LF().evalAt(c, u, q, ev.W, LF().settingsOf(null), 'q', ev.chs), zt = tipAt(c, u, e.cfg, e.R, g); if (!isNum(zt)) { if (!min || min.m !== -Infinity) min = { m: -Infinity, R: e.R, t: q.t, zt: null }; return; } const m = zt - g.head - zBkTr; if (!min || m < min.m) min = { m, R: e.R, t: q.t, zt }; });
+    (ev.path.pts || []).forEach(q => { const e = { cfg: LF().cfgAt(c, u, q, ev.chs), R: Math.hypot(q.x - u.x, q.y - u.y) }, zt = tipAt(c, u, e.cfg, e.R, g); if (!isNum(zt)) { if (!min || min.m !== -Infinity) min = { m: -Infinity, R: e.R, t: q.t, zt: null }; return; } const m = zt - g.head - zBkTr; if (!min || m < min.m) min = { m, R: e.R, t: q.t, zt }; });
     const swing = { min: min ? min.m : null, R: min ? min.R : null, t: min ? min.t : null, zTip: min ? min.zt : null, zBk: zBkTr, steps: [] };
     if (min && isNum(min.zt)) swing.steps.push(st(idp, { id: 'swm', label: `Hook reach margin during the swing (lowest along the path: at R = ${fmt(min.R, 2)} ft, where the tip is lowest)`, sym: 'm_{tr}', eq: 'z_{tip}(R) - H_{hd} - z_{bk,tr}', sub: `${tx(min.zt, 2)} - ${tx(g.head, 2)} - ${tx(zBkTr, 2)}`, value: min.m, unit: 'ft', ok: min.m >= 0,
       note: min.m < 0 ? 'm < 0: the load cannot be swung at this travel height (raise the boom angle, use a longer boom or lower the travel height).' : '' }));

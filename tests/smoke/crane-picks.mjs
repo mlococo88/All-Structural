@@ -50,7 +50,7 @@ try {
   assert.equal(rows[2][11], ev[2][0].toFixed(1) + ' %'); assert.equal(rows[2][4], '40.00'); assert.equal(rows[2][7], '76,000', 'crawler over side (no sector set): boom 120 → L_tab 150, R 40 → 76,000 lb');
   await p.click('#pkTbl [data-pkw]'); await p.waitForTimeout(150);
   assert.ok(await p.$eval('details.pkDet', d => d.open)); assert.match(await p.$eval('details.pkDet', d => d.innerText), /Radius from the centre of rotation to the hook[\s\S]*Percent of chart[\s\S]*Largest radius along the swing path/);
-  assert.match(await p.$eval('details.pkDet', d => d.innerText), /load path crosses the exclusion zone "Lane 1"/);
+  assert.match(await p.$eval('details.pkDet', d => d.innerText), /Over the exclusion zone "Lane 1": [^.]*load/);
   await shot('c2-3-picks');
   const k2 = P.picks[1].id; await p.click(`[data-pkmap="${k2}"]`); await p.waitForTimeout(250);
   assert.equal(await p.$eval('#tabBar [aria-selected=true]', e => e.textContent), 'Plan'); assert.deepEqual(await p.evaluate(() => CranePickPlace.selected), { setup: P.setups[0].id, pick: k2 });

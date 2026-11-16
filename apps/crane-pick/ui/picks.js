@@ -27,12 +27,12 @@
     if (!R.length) { el.innerHTML = '<div class="sec"><div class="secHead">Picks</div><div class="secBody"><p class="note">No pick yet: add a crane to the project (Cranes tab), then "Place on the map" (or the Lifts tab).</p></div></div>'; return; }
     el.innerHTML = `<div class="sec"><div class="secHead">Picks (${R.length})</div><div class="secBody">
       <p class="note">Capacity: the chart value at the next longer tabulated boom length and the next larger tabulated radius (no interpolation${s.interp ? '; linear interpolation between radii where the chart notes permit it is ON' : ''}); outside the chart = not permitted. Thresholds: caution ≥ ${s.caution} %, critical lift ≥ ${s.critical} %, limit ${s.limit} % of chart. Swing: the radius changes uniformly with the swing angle. Clearances: plan only (heights in C3).</p>
-      <div class="tscroll"><table class="tbl" id="pkTbl"><thead><tr><th>Pick</th><th>Crane setup</th><th>Chart</th><th>Boom (ft)</th><th>R pick (ft)</th><th>R set (ft)</th><th>R max (ft)</th><th>C pick (lb)</th><th>C set (lb)</th><th>W (lb)</th><th>Governing</th><th>% chart</th><th>Status</th><th>Flags</th><th>θ pick / set (°)</th><th>Tip el. pick / set (ft)</th><th>Hook reach min (ft)</th><th></th></tr></thead><tbody>
+      <div class="tscroll"><table class="tbl" id="pkTbl"><thead><tr><th>Pick</th><th>Crane setup</th><th>Chart</th><th>Boom (ft)</th><th>R pick (ft)</th><th>R set (ft)</th><th>R max (ft)</th><th>C pick (lb)</th><th>C set (lb)</th><th>W (lb)</th><th>Governing</th><th>% chart</th><th>Status</th><th>Flags</th><th>θ pick / set (°)</th><th>Tip el. pick / set (ft)</th><th>Hook reach min (ft)</th><th>Closest 3D</th><th></th></tr></thead><tbody>
       ${R.map(({ k, u, c, ev }) => ev ? `<tr data-pk="${k.id}"><td><a href="#" data-pkmap="${k.id}">${esc(k.name)}</a></td><td>${esc(u.name)}</td><td>${esc(chartOf(ev, c))}</td><td class="n">${fmt(u.boom, 1)}</td><td class="n">${fmt(ev.pick.R, 2)}</td><td class="n">${fmt(ev.set.R, 2)}</td><td class="n">${fmt(ev.path.Rmax, 2)}</td>
         <td class="n">${capOf(ev.pick)}</td><td class="n">${capOf(ev.set)}</td><td class="n">${fmt(ev.W, 0)}</td><td>${esc(ev.govWhere)}${ev.gov.look.ok ? ` (C ${fmt(ev.gov.C, 0)} lb)` : ''}</td><td class="n">${res(ev)}</td><td><span class="lv lv-${ev.cls}">${esc(LF.CLS[ev.cls])}</span></td>
         <td>${ev.flags.length ? ev.flags.map(f => `<span class="lfDot lf-${f.level}" title="${esc(f.text)}">${f.level === 'stop' ? '■' : f.level === 'warn' ? '▲' : '•'}</span>`).join('') : '—'}</td>
-        <td class="n">${elv(ev).th}</td><td class="n">${elv(ev).tip}</td><td class="n">${elv(ev).m}</td>
-        <td><a href="#" data-pkw="${k.id}">worked</a> · <a href="#" data-pkr="${k.id}">Report</a></td></tr>` : `<tr><td>${esc(k.name)}</td><td colspan="17" class="warnT">The setup or its crane is missing.</td></tr>`).join('')}</tbody></table></div></div></div>
+        <td class="n">${elv(ev).th}</td><td class="n">${elv(ev).tip}</td><td class="n">${elv(ev).m}</td><td>${esc(c3Text(ev))}</td>
+        <td><a href="#" data-pkw="${k.id}">worked</a> · <a href="#" data-pkr="${k.id}">Report</a></td></tr>` : `<tr><td>${esc(k.name)}</td><td colspan="18" class="warnT">The setup or its crane is missing.</td></tr>`).join('')}</tbody></table></div></div></div>
       ${R.filter(r => r.ev).map(({ k, u, c, ev }) => `<details class="crSteps pkDet" id="pk-${k.id}"><summary>${esc(k.name)} (${esc(u.name)}): ${res(ev)}, ${esc(LF.CLS[ev.cls])}: worked steps</summary>
         <div class="note">Crane: ${esc(K.name(c.def))}${c.def.preliminary ? ' (PRELIMINARY document)' : ''}; chart: ${esc(chartOf(ev, c))}; rating basis ${esc(ev.pick.cfg ? K.ratingBasis(ev.pick.cfg, c.def).text : '—')}.</div>
         ${ev.flags.length ? `<ul class="lfFlags">${ev.flags.map(f => `<li class="lf-${f.level}">${esc(f.text)}</li>`).join('')}</ul>` : ''}
@@ -42,7 +42,8 @@
     const sx = window.CranePickSite.steps;
     return `<div class="note"><b>Total load</b></div>${sx(ev.Wsteps)}<div class="note"><b>Pick point</b></div>${sx(ev.pick.steps)}<div class="note"><b>Set point</b></div>${sx(ev.set.steps)}
       <div class="note"><b>Swing path</b></div>${sx(ev.path.steps)}${ev.govWhere.indexOf('swing') >= 0 ? `<div class="note"><b>Governing point (${esc(ev.govWhere)})</b></div>${sx(ev.gov.steps)}` : ''}
-      ${ev.elev ? elevGroups(ev).map(([t, l]) => `<div class="note"><b>${esc(t)}</b></div>${sx(l)}`).join('') : ''}`;
+      ${ev.elev ? elevGroups(ev).map(([t, l]) => `<div class="note"><b>${esc(t)}</b></div>${sx(l)}`).join('') : ''}
+      ${ev.c3 ? ev.c3.results.map(r => `<div class="note"><b>3D clearance: ${esc(r.name)}</b></div>${sx(r.steps)}`).join('') : ''}`;
   }
   /* C3-1: heights (engine/elev.js) — the table cells and the worked-step groups (tab and Report) */
   function elv(ev) {
@@ -51,6 +52,11 @@
     const m = ms.length ? Math.min(...ms) : null;
     return { th: `${t(h.pick)} / ${t(h.set)}`, tip: `${fmt(h.pick.zTip, 2)} / ${fmt(h.set.zTip, 2)}`, m: m == null ? '—' : m === -Infinity ? 'not reachable' : fmt(m, 2), mv: m };
   }
+  /* C3-2: the governing 3D clearance of a pick (the smallest margin over the requirement: power D − D_min, obstruction D − clearance) */
+  function c3Gov(ev) { const rs = (ev.c3 && ev.c3.results || []).filter(r => r.type !== 'excl' && r.known !== false || r.type === 'power'); if (!rs.length) return null;
+    const req = r => r.type === 'power' ? (isFinite(r.D) ? r.D : 0) : (r.req || 0); return rs.reduce((a, b) => (b.gov.d - req(b)) < (a.gov.d - req(a)) ? b : a); }
+  function c3Text(ev) { const r = c3Gov(ev); if (!r) return '—'; const C = window.CranePickClear.COMP;
+    return `${r.name}: ${fmt(r.gov.d, 1)} ft (${C[r.gov.comp]})${r.type === 'power' && isFinite(r.D) ? (r.gov.d < r.D ? ' < ' : ' ≥ ') + 'D_min ' + fmt(r.D, 0) : ''}`; }
   const elevGroups = ev => [['Heights: crane geometry', ev.elev.geoSteps], ['Heights at the pick', ev.elev.pick.steps], ['Heights at the set', ev.elev.set.steps], ['Heights during the swing', ev.elev.trav.steps.concat(ev.elev.swing.steps)]];
   function onClick(e) {
     const m = e.target.closest('[data-pkmap],[data-pkw],[data-pkr]'); if (!m) return; e.preventDefault();
@@ -105,7 +111,8 @@
           ['Outside the chart', 'not permitted (radius below the smallest or beyond the largest tabulated radius, boom longer than the longest, blank cell)'],
           ['Total load W', 'load + rigging + hook block + other deductions (chart capacities are gross)'], ['Percent of chart', 'W / C × 100'],
           ['Caution', `≥ ${s.caution} % of chart`], ['Critical lift', `≥ ${s.critical} % of chart`], ['Limit', `${s.limit} % of chart`]] },
-        { type: 'note', text: 'Swing path: about the centre of rotation from the pick to the set in the chosen direction, the radius changing uniformly with the swing angle; checked every degree and at each zone boundary; the governing point has the highest % of chart. Zones: from the slew angle relative to the carrier heading and the sectors entered for the crane ([[cranes]]). Clearances are checked in plan only (power-line D_min, exclusion zones, obstructions, tail swing); 3D clearances follow in phase C3-2.' },
+        { type: 'note', text: 'Swing path: about the centre of rotation from the pick to the set in the chosen direction, the radius changing uniformly with the swing angle; checked every degree and at each zone boundary; the governing point has the highest % of chart. Zones: from the slew angle relative to the carrier heading and the sectors entered for the crane ([[cranes]]). Footprint clearances are checked in plan (the carrier / tracks / floats on the ground).' },
+        { type: 'note', text: `3D clearances (C3-2): along the path (${s.path === 'luff' ? 'luff at the pick, then swing at the set radius' : 'the radius changing uniformly with the swing angle'}; hoisting at the pick and lowering at the set included), the boom (foot pin to tip, a cylinder of half the boom section width), the load line (load top to tip), the load (a vertical cylinder of radius √(L² + W²)/2 from its bottom to its top) and the counterweight (the tail-swing cylinder between its bottom and top) against: power lines (each span a prism: the span ± sway in plan, from the lowest wire less the sag to the lowest wire; not entered: a vertical plane), D ≥ D_min of 29 CFR 1926.1408 Table A; obstructions (prism up to the top), contact red, closer than ${fmt(s.obstClr, 2)} ft amber; exclusion zones in plan. Every degree, refined to the closest point.` },
         { type: 'note', text: 'Heights (C3-1): boom angle θ = acos((R − e)/L) from the geometry, or the chart\'s printed (loaded) boom angle where the config prints one (it governs; both shown when they differ); tip pin z_tip = z_pad + h_f + L sin θ, plumb above the hook; load bottom z_lb = z_g + h_b; hook z_hk = z_lb + H + h_r; block top z_bk = z_hk + h_bk; hook reach margin m = z_tip − H_hd − z_bk ≥ 0 at the pick, the set and along the swing at the travel height. Crane geometry not in the file and not entered is assumed (listed in [[cranes]]): the lowest boom.' }] },
       { id: 'sum', key: 'lift-summary', title: 'Summary of picks', items: [
         { type: 'table', head: ['Pick', 'Crane setup', 'Boom (ft)', 'R pick (ft)', 'R set (ft)', 'R max (ft)', 'W (lb)', 'C governing (lb)', '% chart', 'Status', 'Governing', 'Flags', 'Hook reach min (ft)'], wide: true,
@@ -131,6 +138,13 @@
           ['Load L × W × H (ft)', `${fmt(E.L || 0, 2)} × ${fmt(E.W || 0, 2)} × ${fmt(E.H || 0, 2)}`], ['Rigging height / hook block height (ft)', `${fmt(h.pick.hr, 2)} / ${fmt(h.pick.hbk, 2)}`], ['Travel (load bottom during the swing, ft)', fmt(h.trav.z, 2) + (h.trav.entered ? '' : ' (higher of the pick and the set)')],
           ['Boom angle pick / set (°)', elv(ev).th], ['Tip el. pick / set (ft)', elv(ev).tip], ['Hook reach margin, lowest (ft)', elv(ev).m]] });
         elevGroups(ev).forEach(([t, l]) => items.push({ type: 'steps', scope: sc, title: t, steps: l }));
+      }
+      if (ev.c3 && ev.c3.results.length) {   // C3-2: 3D clearances
+        const C = window.CranePickClear.COMP;
+        items.push({ type: 'table', head: ['Item', 'Required (ft)', 'Closest (ft)', 'Component', 'Where', 'Boom / line / load / cwt (ft)', 'Result'], wide: true,
+          rows: ev.c3.results.map(r => [r.name, r.type === 'power' ? (isFinite(r.D) ? fmt(r.D, 0) + ' (D_min)' : 'not set') : r.type === 'obst' ? fmt(r.req, 2) : 'outside (plan)', { t: fmt(r.gov.d, 2), n: true, cls: r.level === 'stop' ? 'ng' : r.level === 'warn' ? 'hi' : 'ok' }, C[r.gov.comp], r.where,
+            ['boom', 'line', 'load', 'cw'].map(x => { const q = r.comps.find(y => y.comp === x); return q ? fmt(q.d, 1) : '—'; }).join(' / '), r.level === 'stop' ? 'NOT OK' : r.level === 'warn' ? 'check' : 'OK'] ) });
+        ev.c3.results.forEach(r => items.push({ type: 'steps', scope: sc, title: '3D clearance: ' + r.name, steps: r.steps }));
       }
       subs.push({ id: 'p-' + k.id, key: 'pick-' + k.id, title: k.name, ref: res(ev), items });
     });

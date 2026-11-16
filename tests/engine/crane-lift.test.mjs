@@ -43,7 +43,7 @@ test('thresholds: caution / critical lift / over the chart are project inputs', 
   assert.equal(at(39000).cls, 'over'); assert.equal(at(39000 * 0.999).cls, 'critical');
   const s = { caution: 60, critical: 90, limit: 100 };
   assert.equal(at(39000 * 0.8, s).cls, 'caution'); assert.equal(at(39000 * 0.95, s).cls, 'critical'); assert.equal(at(39000 * 0.5, s).cls, 'ok');
-  assert.deepEqual(JSON.parse(JSON.stringify(LF.settingsOf({ lift: { caution: -1, critical: 80 } }))), { caution: 75, critical: 80, limit: 100, interp: false });
+  assert.deepEqual(JSON.parse(JSON.stringify(LF.settingsOf({ lift: { caution: -1, critical: 80 } }))), { caution: 75, critical: 80, limit: 100, interp: false, path: 'uniform', obstClr: 2 });   // path, obstClr: C3-2
 });
 
 test('swing direction and the path: sweep, R_max = larger end radius, governing point at the larger radius', () => {

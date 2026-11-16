@@ -23,7 +23,11 @@
      Report's §Lifts (basis, summary, plan figure, each pick's inputs, flags and worked steps).
      C3-1: heights (engine/elev.js): the crane's elevation geometry (boom-foot pin, head allowance, boom width, counterweight heights;
      file / entered / stated assumption), the crane pad and the pick / set heights; boom angle (geometry, or the chart's printed angle),
-     boom tip, load bottom, hook, block top, hook reach at the pick, the set and along the swing, with worked steps. -->
+     boom tip, load bottom, hook, block top, hook reach at the pick, the set and along the swing, with worked steps.
+     C3-2: 3D clearances (engine/clear3d.js) of the boom, load line, load and counterweight along the path against power lines (OSHA
+     D_min in 3D, sag / sway), obstructions (prisms) and exclusion zones; the path model setting (uniform / luff then swing); flags on
+     the map, the live card, the Picks tab and the Report with worked steps; the elevation view along the boom (a dock under the map,
+     live while dragging; Report §Elevations). -->
 <!-- pdf.js 3.11.174 (engineer-approved 2026-11-16; BasePlateAnchorDesigner.html's pinned jsDelivr URL) is loaded by ui/sheets.js when the
      first PDF is opened: https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js (worker: build/pdf.worker.min.js) -->
 <!-- Leaflet 1.9.4 and proj4js 2.11.0 (engineer-approved 2026-11-16; the versions and URLs Bridge Geometry.html already pins, CLAUDE.md §2) -->
@@ -59,8 +63,10 @@
     'ui/craneedit.js',      // C2-1: the crane editor (crane data, plan dimensions, configs, a chart pasted from Excel)
     'engine/lift.js',       // C2-2: setups, picks, capacity at the hook, swing path, plan footprint and clearances
     'engine/elev.js',       // C3-1: the lift in elevation: boom angle, tip, hook and load heights, hook reach
+    'engine/clear3d.js',    // C3-2: 3D clearances along the path (boom, load line, load, counterweight vs power lines, obstructions, exclusion zones)
     'ui/place.js',          // C2-2: Lifts input tab; cranes, pick and set points dragged on the map with live capacity
-    'ui/picks.js'           // C2-3: Picks output tab (every pick, links) and the Report's §Lifts
+    'ui/picks.js',          // C2-3: Picks output tab (every pick, links) and the Report's §Lifts
+    'ui/elev.js'            // C3-2: the elevation view along the boom (dock under the map, Report §Elevations)
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
 })();
 </script>
@@ -207,6 +213,13 @@
   .crLiftLbl .lv{border-radius:3px;font-size:8.5pt;padding:1px 5px;background:rgba(255,255,255,.94);color:#0f172a;border-color:#94A3B8;}
   table.lfTbl td,table.lfTbl th{font-size:8.5pt;padding:2px 4px;}
   ul.lfFlags{margin:4px 0;padding-left:18px;font-size:9pt;} .lfFlags li.lf-stop{color:#B91C1C;font-weight:600;} .lfFlags li.lf-warn{color:var(--warn);} .lfFlags li.lf-info{color:#475569;}
+  /* C3-2: 3D clearance flags on the map */
+  .crC3 span{display:flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;font:700 10pt/1 var(--font-ui);color:#fff;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);}
+  .crC3-stop span{background:#DC2626;} .crC3-warn span{background:#D97706;}
+  /* C3-2: the elevation dock under the map */
+  #elevDock{flex:0 0 auto;border-top:1px solid var(--color-border);background:var(--slate-50);max-height:320px;overflow:auto;}
+  #elevDock .elBar{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;padding:3px 10px;} #elevDock .elBar button{padding:1px 8px;font-size:8.5pt;}
+  #elSvg{padding:0 6px 4px;} #elSvg svg{display:block;max-width:100%;height:auto;}
   /* C2-3: Picks tab */
   #pkTbl td,#pkTbl th{font-size:8.5pt;padding:2px 4px;white-space:nowrap;} .lfDot{margin-right:3px;} .lfDot.lf-stop{color:#B91C1C;} .lfDot.lf-warn{color:var(--warn);} .lfDot.lf-info{color:#64748B;}
   details.pkDet{border:1px solid var(--color-border);border-radius:6px;padding:4px 8px;margin:6px 0;background:#fff;} details.pkDet:target,details.pkDet[open]{background:#FCFDFF;}

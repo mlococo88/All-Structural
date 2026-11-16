@@ -23,7 +23,8 @@
      sheet = { id, name, kind: 'image' | 'pdf', page, w, h (px), place: { x, y, s, rot }, opacity (0–1), locked, visible,
                cal: { p1: { px, py }, p2, dist (ft) } | null, geo: { p1, p2, g1: { E, N }, g2 (zone units) } | null,
                pageIn: { w, h } (PDF page size, in) | null, planScale (the plan's stated scale, ft per in) | null, basis (BASIS key) }
-     item  = { id, type, name, pts: [{ x, y }], ... }   type: 'obst' (polygon: height ft), 'power' (polyline: kv, le350, setFt, height),
+     item  = { id, type, name, pts: [{ x, y }], ... }   type: 'obst' (polygon: height ft, topEl, gradeEl (C3-2)), 'power' (polyline: kv,
+             le350, setFt, height (lowest wire above grade), gradeEl, sag, sway (C3-2: ft)),
              'util' (polyline or polygon (closed): kind, depth ft, topEl ft, size ft), 'excl' (polygon: reason), 'label' (one point:
              text, size), 'dim' (two points: a dimension)
      crane = { id, def (the crane file, schema crane-pick.crane.v1, with its app_inputs: engine/cranes.js), src: { from: 'github' |
@@ -36,7 +37,8 @@
                'cw' | 'ccw', elev: { pg, ph, sg, sh, rig, blk, trav, L, W, H } (C3-1: heights, ft; normElev) }         C2-2
      crane.def.app_inputs.geom = { footH, head, boomW, cwBot, cwTop } (ft, C3-1: the crane's elevation geometry entered in this tool;
                engine/elev.js geomOf; the boom-foot offset and the tail radius stay in app_inputs.plan)
-     lift  = { caution: 75, critical: 75, limit: 100 (% of chart), interp: false } (project settings; engine/lift.js)    C2-2 */
+     lift  = { caution: 75, critical: 75, limit: 100 (% of chart), interp: false, path: 'uniform' | 'luff', obstClr: 2 (ft) }
+             (project settings; engine/lift.js; path and obstClr C3-2)                                                  C2-2 */
 (function () {
   'use strict';
   const KEYS = { current: 'crane.project.current', list: 'crane.projects.v1', open: 'crane.open', ui: 'crane.ui', idb: 'crane.sheets.v1',
@@ -60,7 +62,7 @@
     return { schema: FORMAT, v: 1,
       title: { name: 'New crane pick', number: '', location: '', client: '', by: '', checker: '', date: today(), rev: '' },
       notes: '', site: { zone: o.zone || 'EPSG:2249' }, view: o.view || null, sheets: [], items: [], cranes: [], setups: [], picks: [],
-      lift: { caution: 75, critical: 75, limit: 100, interp: false } };
+      lift: { caution: 75, critical: 75, limit: 100, interp: false, path: 'uniform', obstClr: 2 } };
   }
   const num = (v, d) => typeof v === 'number' && isFinite(v) ? v : d;
   const numOrNull = v => typeof v === 'number' && isFinite(v) ? v : null;
@@ -74,8 +76,9 @@
     const T = TYPES[it.type], pts = (Array.isArray(it.pts) ? it.pts : []).map(pt).filter(Boolean);
     if (pts.length < T.min) return null;
     const o = { id: str(it.id) || uid('i'), type: it.type, name: str(it.name), pts: T.max ? pts.slice(0, T.max) : pts };
-    if (it.type === 'obst') { o.height = numOrNull(it.height); o.topEl = numOrNull(it.topEl); }
-    if (it.type === 'power') { o.kv = numOrNull(it.kv); o.le350 = !!it.le350; o.setFt = numOrNull(it.setFt); o.height = numOrNull(it.height); }
+    if (it.type === 'obst') { o.height = numOrNull(it.height); o.topEl = numOrNull(it.topEl); o.gradeEl = numOrNull(it.gradeEl); }
+    if (it.type === 'power') { o.kv = numOrNull(it.kv); o.le350 = !!it.le350; o.setFt = numOrNull(it.setFt); o.height = numOrNull(it.height); o.gradeEl = numOrNull(it.gradeEl);
+      const nn = v => { const x = numOrNull(v); return x != null && x >= 0 ? x : null; }; o.sag = nn(it.sag); o.sway = nn(it.sway); }   // C3-2: ground elevation, sag / sway allowances (ft)
     if (it.type === 'util') { o.kind = UTIL_KINDS[it.kind] ? it.kind : 'utility'; o.closed = !!it.closed && pts.length >= 3; o.depth = numOrNull(it.depth); o.topEl = numOrNull(it.topEl); o.size = numOrNull(it.size); }
     if (it.type === 'excl') o.reason = str(it.reason);
     if (it.type === 'label') { o.text = str(it.text, 'Label'); o.size = Math.max(8, Math.min(48, num(it.size, 14))); }
@@ -122,7 +125,10 @@
     ['ph', 'sh', 'rig', 'blk', 'L', 'W', 'H'].forEach(k => { const v = numOrNull(e[k]); o[k] = v != null && v >= 0 ? v : null; });
     return o;
   }
-  function normLift(l) { l = l || {}; return { caution: numPos(l.caution, 75), critical: numPos(l.critical, 75), limit: numPos(l.limit, 100), interp: !!l.interp }; }
+  /* C3-2: path ('uniform': the radius changes uniformly with the swing angle (C2) | 'luff': luff at the pick, then swing at the set
+     radius), obstClr (ft: an obstruction closer than this is flagged amber; contact is red) */
+  function normLift(l) { l = l || {}; return { caution: numPos(l.caution, 75), critical: numPos(l.critical, 75), limit: numPos(l.limit, 100), interp: !!l.interp,
+    path: l.path === 'luff' ? 'luff' : 'uniform', obstClr: typeof l.obstClr === 'number' && isFinite(l.obstClr) && l.obstClr >= 0 ? l.obstClr : 2 }; }
   /* normalize(p): a project as this version keeps it (unknown fields dropped, defaults filled; never throws) */
   function normalize(p) {
     const d = newProject(); if (!p || typeof p !== 'object') return d;

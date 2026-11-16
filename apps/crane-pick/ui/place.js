@@ -21,11 +21,20 @@
   const picksOf = u => A.P.picks.filter(k => k.setupId === u.id);
   const S = () => LF.settingsOf(A.P);
   /* evaluate one pick (engine) */
+  /* the evaluation of a pick is memoized for an unchanged state (a drag frame calls it for the map, the card and the lists; C3-2's 3D
+     checks made it worth it): the key is the pick, its setup, the settings and a revision bumped by every change of the project */
+  let rev = 0; const memo = new Map();
   function evalPick(k) {
+    const u0 = setupOf(k.setupId), key = JSON.stringify([k, u0, A.P.lift, rev]); if (memo.has(key)) return memo.get(key);
+    const ev = evalPick0(k); if (memo.size > 64) memo.clear(); memo.set(key, ev); return ev;
+  }
+  function evalPick0(k) {
     const u = setupOf(k.setupId), c = craneOf(u); if (!u || !c) return null;
     const ev = LF.evaluate(c, u, k, S(), 'k');
-    ev.flags = LF.clearances(c, u, ev, A.P.items);
+    const c3 = !!(window.CranePickElev && window.CranePickClear);
+    ev.flags = LF.clearances(c, u, ev, A.P.items, { skip3d: c3 });
     if (window.CranePickElev) { ev.elev = window.CranePickElev.evaluate(c, u, k, ev, 'k.el'); ev.flags = ev.flags.concat(ev.elev.flags); }   // C3-1: heights
+    if (c3) { ev.c3 = window.CranePickClear.check(c, u, k, ev, A.P.items, S(), 'k.c3'); ev.flags = ev.c3.flags.concat(ev.flags); }   // C3-2: 3D clearances (the plan-only power / exclusion / tail / boom-over flags replaced)
     return ev;
   }
   /* ---------- placing ---------- */
@@ -95,6 +104,7 @@
     pk.bp = add(Lf.polyline([], { color: '#0F172A', weight: on ? 3 : 2, interactive: false }));
     pk.bs = add(Lf.polyline([], { color: '#0F172A', weight: 1.5, dashArray: '6 4', interactive: false }));
     pk.gov = add(Lf.circleMarker([0, 0], { radius: 6, color: '#DC2626', weight: 2, fill: false, interactive: false }));
+    pk.c3 = add(Lf.layerGroup());   // C3-2: the 3D clearance flags (closest points, red / amber)
     const mk = (pos, t, tip) => add(Lf.marker(MP().toLL(pos), { icon: L_().divIcon({ className: 'crPt crPt' + t, html: `<span title="${esc(tip)}">${t}</span>`, iconSize: [24, 24], iconAnchor: [12, 12] }), draggable: true, keyboard: false, zIndexOffset: 1100 }));
     pk.pm = mk(k.pick, 'P', `${k.name}: pick point (drag)`); pk.sm = mk(k.set, 'S', `${k.name}: set point (drag)`);
     pk.lp = add(Lf.marker([0, 0], { icon: Lf.divIcon({ className: 'crLiftLbl', html: '' }), interactive: false, keyboard: false, zIndexOffset: 1200 }));
@@ -114,8 +124,18 @@
     pk.gov.setStyle({ opacity: ev.gov && ev.gov !== ev.pick && ev.govWhere.indexOf('swing') >= 0 ? 1 : 0 });
     if (!(pk.pm.dragging && pk.pm.dragging._draggable && pk.pm.dragging._draggable._moving)) pk.pm.setLatLng(MP().toLL(k.pick));
     if (!(pk.sm.dragging && pk.sm.dragging._draggable && pk.sm.dragging._draggable._moving)) pk.sm.setLatLng(MP().toLL(k.set));
+    drawC3(pk, ev);
     pk.lp.setLatLng(MP().toLL(k.pick)); pk.lp.setIcon(labelIcon(ev.pick, 'P')); pk.ls.setLatLng(MP().toLL(k.set)); pk.ls.setIcon(labelIcon(ev.set, 'S'));
     return ev;
+  }
+  /* C3-2: each red / amber 3D clearance: a marker at the closest point of the crane / load and a dashed line to the item's closest point */
+  function drawC3(pk, ev) {
+    pk.c3.clearLayers(); const Lf = L_();
+    ((ev.c3 && ev.c3.flags) || []).filter(f => f.p && f.level !== 'info').forEach(f => {
+      const col = f.level === 'stop' ? '#DC2626' : '#D97706', a = MP().toLL(f.p), b = MP().toLL(f.q);
+      Lf.polyline([a, b], { color: col, weight: 2, dashArray: '3 3', interactive: false }).addTo(pk.c3);
+      Lf.marker(a, { icon: Lf.divIcon({ className: 'crC3 crC3-' + f.level, html: `<span title="${esc(f.text)}">${f.level === 'stop' ? '!' : '▲'}</span>`, iconSize: [18, 18], iconAnchor: [9, 9] }), keyboard: false, zIndexOffset: 1050 }).addTo(pk.c3);
+    });
   }
   function placeSetup(u) {
     const g = layers.get(u.id); if (!g) return; const c = craneOf(u), fp = LF.footprint(c, u);
@@ -151,7 +171,7 @@
       <div class="note">W = ${fmt(ev.W, 0)} lb · swing ${fmt(Math.abs(ev.path.d), 1)}° ${ev.path.d >= 0 ? 'clockwise' : 'counter-clockwise'} · R<sub>max</sub> = ${fmt(ev.path.Rmax, 2)} ft · boom ${fmt(setupOf(k.setupId).boom, 1)} ft · thresholds: caution ≥ ${s.caution} %, critical lift ≥ ${s.critical} %, limit ${s.limit} % · chart rated at ${esc(ev.pick.cfg ? K.ratingBasis(ev.pick.cfg, craneOf(setupOf(k.setupId))).text : '—')}</div>
       ${why.length ? `<div class="note warnT">Not permitted: ${why.map(esc).join('; ')}.</div>` : ''}${notes.length ? `<div class="note">${notes.map(esc).join(' ')}</div>` : ''}
       ${!ev.W ? '<div class="note warnT">Enter the load, rigging and hook block weights.</div>' : ''}${heightsHtml(ev)}
-      ${flags.length ? `<ul class="lfFlags">${flags.map(f => `<li class="lf-${f.level}">${esc(f.text)}</li>`).join('')}</ul>` : '<div class="note">Plan clearances: no flags (power lines, exclusion zones, obstructions drawn on the Site items tab).</div>'}
+      ${flags.length ? `<ul class="lfFlags">${flags.map(f => `<li class="lf-${f.level}">${esc(f.text)}</li>`).join('')}</ul>` : '<div class="note">Clearances: no flags (power lines, exclusion zones, obstructions drawn on the Site items tab).</div>'}
       <details class="crSteps" id="lfSteps"${stepsOpen ? ' open' : ''}><summary>Worked steps</summary>${stepsHtml(ev)}</details></div>`;
   }
   function stepsHtml(ev) {
@@ -162,7 +182,8 @@
   /* C3-1: heights (engine/elev.js): the live card line and the worked steps (crane geometry, pick, set, travel) */
   function elevSteps(ev, sx) {
     const h = ev.elev; if (!h) return '';
-    return `<div class="note" id="lfElSteps"><b>Heights: crane geometry</b></div>${sx(h.geoSteps)}<div class="note"><b>Heights at the pick</b></div>${sx(h.pick.steps)}<div class="note"><b>Heights at the set</b></div>${sx(h.set.steps)}<div class="note"><b>Heights during the swing</b></div>${sx(h.trav.steps.concat(h.swing.steps))}`;
+    return `<div class="note" id="lfElSteps"><b>Heights: crane geometry</b></div>${sx(h.geoSteps)}<div class="note"><b>Heights at the pick</b></div>${sx(h.pick.steps)}<div class="note"><b>Heights at the set</b></div>${sx(h.set.steps)}<div class="note"><b>Heights during the swing</b></div>${sx(h.trav.steps.concat(h.swing.steps))}`
+      + ((ev.c3 && ev.c3.results) || []).map(r => `<div class="note"><b>3D clearance: ${esc(r.name)}</b></div>${sx(r.steps)}`).join('');
   }
   function heightsHtml(ev) {
     const h = ev.elev; if (!h) return '';
@@ -233,7 +254,10 @@
     el.innerHTML = `<div class="sec"><div class="secHead">Lift settings (project)</div><div class="secBody">
         ${numIn('lsCaution', s.caution, 'Caution at (% of chart)', '%')}${numIn('lsCritical', s.critical, 'Critical lift at (% of chart)', '%')}${numIn('lsLimit', s.limit, 'Limit (% of chart)', '%')}
         <label class="note" style="display:block"><input type="checkbox" id="lsInterp"${s.interp ? ' checked' : ''}${anyInterp || s.interp ? '' : ' disabled'}> Linear interpolation between tabulated radii where the chart notes permit it${anyInterp ? '' : ' (no chart in use permits it)'}</label>
-        <p class="note">Default (conservative): no interpolation: the next longer tabulated boom length and the next larger tabulated radius; outside the chart = not permitted. Each chart's rating basis (% of tipping) is on the Cranes tab.</p></div></div>
+        <p class="note">Default (conservative): no interpolation: the next longer tabulated boom length and the next larger tabulated radius; outside the chart = not permitted. Each chart's rating basis (% of tipping) is on the Cranes tab.</p>
+        <div class="fRow"><label for="lsPath">Path model</label><select id="lsPath"><option value="uniform"${s.path === 'uniform' ? ' selected' : ''}>uniform: radius changes with the swing angle (default)</option><option value="luff"${s.path === 'luff' ? ' selected' : ''}>luff at the pick, then swing at the set radius</option></select></div>
+        ${numIn('lsObst', s.obstClr, 'Clearance to obstructions', 'ft')}
+        <p class="note">3D clearances: power lines to 29 CFR 1926.1408 D_min (boom, load line, load, counterweight); obstructions: contact red, closer than the clearance above amber; exclusion zones in plan.</p></div></div>
       <div class="sec"><div class="secHead">Crane setups (${A.P.setups.length})</div><div class="secBody">
         ${A.P.cranes.length ? `<div class="goRow"><select id="luNew" aria-label="Crane to place">${A.P.cranes.map(c => `<option value="${c.id}">${esc(K.name(c.def))}</option>`).join('')}</select><button type="button" class="primary" data-la="place">Place at the map centre</button></div>` : '<p class="note">Add a crane to the project first (Cranes tab).</p>'}
         ${A.P.setups.map(x => `<div class="itRow${x.id === selU ? ' on' : ''}"><button type="button" class="itSel" data-selu="${x.id}">${esc(x.name)}</button><span class="itSum">${picksOf(x).length} pick${picksOf(x).length === 1 ? '' : 's'}</span><button type="button" class="itDel" data-delu="${x.id}" aria-label="Remove ${esc(x.name)}">×</button></div>`).join('')}</div></div>
@@ -260,6 +284,8 @@
     const up = (fn, kind, id) => { A.update(fn, kind, { id }); renderAll(); drawTab(); };
     if (t.id === 'lsCaution' || t.id === 'lsCritical' || t.id === 'lsLimit') { const v = num(); if (v === undefined || v === null || !(v > 0 && v <= 200)) { t.classList.add('bad'); return; } up(P => { P.lift[{ lsCaution: 'caution', lsCritical: 'critical', lsLimit: 'limit' }[t.id]] = v; }, 'lifts'); return; }
     if (t.id === 'lsInterp') { up(P => { P.lift.interp = t.checked; }, 'lifts'); return; }
+    if (t.id === 'lsPath') { up(P => { P.lift.path = t.value === 'luff' ? 'luff' : 'uniform'; }, 'lifts'); return; }   // C3-2
+    if (t.id === 'lsObst') { const v = num(); if (v === undefined || v === null || v < 0) { t.classList.add('bad'); return; } up(P => { P.lift.obstClr = v; }, 'lifts'); return; }
     if (u) {
       if (t.id === 'luName') return up(() => { u.name = t.value || 'Crane setup'; }, 'setups', u.id);
       if (t.id === 'luGroup') return up(() => { u.group = t.value; u.mode = null; }, 'setups', u.id);
@@ -285,7 +311,8 @@
   /* ---------- wiring ---------- */
   function build(p) { el = p; p.addEventListener('click', onClick); p.addEventListener('change', onChange); p.addEventListener('toggle', e => { if (e.target.id === 'lfSteps') stepsOpen = e.target.open; if (e.target.id === 'lkElev') elevOpen = e.target.open; }, true); drawTab(); }
   A.inTab({ id: 'lifts', label: 'Lifts', build, show: drawTab });
-  A.on('project', () => { renderAll(); drawTab(); });
+  A.on('project', () => { rev++; renderAll(); drawTab(); });
+  ['change', 'live'].forEach(e => A.on(e, o => { if (!(o && o.kind === 'lifts')) rev++; }));   // pick / setup drags change the memo key themselves
   A.on('change', o => {
     if (['lifts', 'setups', 'picks', 'cranes', 'items', 'site'].indexOf(o.kind) < 0) return;
     if (o.kind === 'lifts' && Date.now() - dragEnd < 400) { (A.P.setups || []).forEach(placeSetup); drawTab(); return; }   // a drag ended: geometry is in place

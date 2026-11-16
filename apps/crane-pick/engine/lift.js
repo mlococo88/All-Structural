@@ -23,12 +23,19 @@
   const G = () => window.CranePickGeo, K = () => window.CranePickCranes, O = () => window.CranePickOSHA;
   const isNum = v => typeof v === 'number' && isFinite(v);
   const n0 = v => isNum(v) ? v : 0;
-  const DEF = { caution: 75, critical: 75, limit: 100, interp: false };
+  const DEF = { caution: 75, critical: 75, limit: 100, interp: false, path: 'uniform', obstClr: 2 };
   const tx = (x, d) => { if (!isNum(x)) return String(x); const s = Math.abs(x).toFixed(d), [i, p] = s.split('.'); return (x < 0 && Number(s) !== 0 ? '\\minus ' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, '{,}') + (p ? '.' + p : ''); };
   const fmt = (v, d) => isNum(v) ? v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—';
   const st = (pre, o) => Object.assign({ unit: '', d: 2, ref: '', note: '', eq: '', sub: '' }, o, { id: pre + '.' + o.id });
   const rad = d => d * Math.PI / 180;
-  function settingsOf(P) { const s = Object.assign({}, DEF, P && P.lift || {}); ['caution', 'critical', 'limit'].forEach(k => { if (!isNum(s[k]) || s[k] <= 0) s[k] = DEF[k]; }); s.interp = !!s.interp; return s; }
+  function settingsOf(P) { const s = Object.assign({}, DEF, P && P.lift || {}); ['caution', 'critical', 'limit'].forEach(k => { if (!isNum(s[k]) || s[k] <= 0) s[k] = DEF[k]; }); s.interp = !!s.interp;
+    s.path = s.path === 'luff' ? 'luff' : 'uniform'; if (!isNum(s.obstClr) || s.obstClr < 0) s.obstClr = DEF.obstClr; return s; }   // C3-2: path model, obstruction clearance
+  /* cfgAt(crane, setup, p, chs): the chart config used at a hook position (evalAt's choice, without the lookup and the steps; C3-2) */
+  function cfgAt(crane, setup, p, chs) {
+    chs = chs || chartsOf(crane, setup); if (!chs.gr) return null;
+    if (!chs.zoned) return chs.gr.configs['360'] || chs.gr.configs[Object.keys(chs.gr.configs)[0]];
+    const theta = K().norm180(G().azimuth(setup, p) - (setup.heading || 0)); return K().chartFor(chs.gr, K().zoneOf(theta, crane.app_inputs && crane.app_inputs.sectors));
+  }
   /* the setup's charts: { gr (group), zoned, crane } */
   function chartsOf(crane, setup) {
     const gs = K().groups(crane); const gr = gs.find(g => g.key === setup.group) || gs[0] || null;
@@ -65,11 +72,22 @@
     if (dir === 'cw') return cw; if (dir === 'ccw') return cw - 360;
     return cw <= 180 ? cw : cw - 360;
   }
-  function pathPoints(setup, a, b, dir) {
+  /* pathPoints(setup, a, b, dir, model) — the hook's path from a to b about the rotation centre, as a function of t in [0, 1] (at(t)):
+     'uniform' (C2, the default): the radius changes uniformly with the swing angle; points every degree (t = k / n).
+     'luff' (C3-2, Decision pending engineer review): luff at the pick (azimuth a0) from r0 to r1, then swing at r1; t runs over the
+     path length (luff |r1 − r0|, then the arc r1 |Δα|), tL = the luff's share; points every 1 ft of the luff and every degree of the swing. */
+  function pathPoints(setup, a, b, dir, model) {
     const g = G(), r0 = g.dist(setup, a), r1 = g.dist(setup, b), a0 = g.azimuth(setup, a), a1 = g.azimuth(setup, b), d = sweep(a0, a1, dir);
-    const n = Math.max(1, Math.ceil(Math.abs(d))), out = [];
-    for (let k = 0; k <= n; k++) { const t = k / n, az = rad(a0 + d * t), r = r0 + (r1 - r0) * t; out.push({ x: setup.x + r * Math.sin(az), y: setup.y + r * Math.cos(az), t, az: a0 + d * t, r }); }
-    return { pts: out, d, a0, a1, r0, r1 };
+    const luff = model === 'luff', Lr = Math.abs(r1 - r0), Ls = r1 * Math.abs(d) * Math.PI / 180, tL = luff && Lr > 1e-9 ? (Lr + Ls > 0 ? Lr / (Lr + Ls) : 1) : 0;
+    const at = t => { let az, r, seg;
+      if (luff && t <= tL && tL > 0) { az = a0; r = r0 + (r1 - r0) * (t / tL); seg = 'luff'; }
+      else { const u = tL < 1 ? (t - tL) / (1 - tL) : 1; az = a0 + d * u; r = luff ? r1 : r0 + (r1 - r0) * u; seg = 'swing'; }
+      return { x: setup.x + r * Math.sin(rad(az)), y: setup.y + r * Math.cos(rad(az)), t, az, r, seg }; };
+    const out = [];
+    if (tL > 0) { const n1 = Math.max(1, Math.ceil(Lr)); for (let k = 0; k < n1; k++) out.push(at(tL * k / n1)); }
+    const n = Math.max(1, Math.ceil(Math.abs(d)));
+    for (let k = 0; k <= n; k++) out.push(at(tL + (1 - tL) * k / n));
+    return { pts: out, d, a0, a1, r0, r1, tL, model: luff ? 'luff' : 'uniform', at };
   }
   /* evaluate(crane, setup, pick, settings) -> { W, Wsteps, pick, set, path: { d, pts, Rmax, gov }, gov, cls } */
   function evaluate(crane, setup, pick, s, idp) {
@@ -78,23 +96,25 @@
     const Wsteps = [st(idp, { id: 'W', label: 'Total load on the hook (the chart capacities are gross)', sym: 'W', eq: 'W_{load} + W_{rig} + W_{hook} + W_{other}', sub: `${tx(n0(pick.load), 0)} + ${tx(n0(pick.rigging), 0)} + ${tx(n0(pick.hook), 0)} + ${tx(n0(pick.ded), 0)}`, value: W, unit: 'lb', d: 0,
       note: `Hook block: ${pick.hookLabel || (n0(pick.hook) ? 'entered' : 'none entered')}${pick.dedNote ? '; other: ' + pick.dedNote : ''}. Deduct everything the chart notes require (hook block, jib or extension stowed or erected, slings, spreader…).` })];
     const ep = evalAt(crane, setup, pick.pick, W, s, idp + '.pick', chs), es = evalAt(crane, setup, pick.set, W, s, idp + '.set', chs);
-    const pp = pathPoints(setup, pick.pick, pick.set, pick.swing || 'short');
+    const pp = pathPoints(setup, pick.pick, pick.set, pick.swing || 'short', s.path);
     // the path's check points: every degree, plus the zone boundaries (both sides)
     const checks = pp.pts.slice();
     if (chs.zoned) {
       const sec = crane.app_inputs && crane.app_inputs.sectors || {}, bs = [];
       if (isNum(sec.front) && sec.front > 0) bs.push(sec.front, -sec.front); if (isNum(sec.rear) && sec.rear > 0) bs.push(180 - sec.rear, -(180 - sec.rear));
-      bs.forEach(b => { const azB = (setup.heading || 0) + b, rel = sweep(pp.a0, azB, pp.d >= 0 ? 'cw' : 'ccw'); if (Math.abs(rel) <= Math.abs(pp.d) && pp.d !== 0) [-1e-4, 1e-4].forEach(e => { const t = Math.min(1, Math.max(0, rel / pp.d + e)), az = rad(pp.a0 + pp.d * t), r = pp.r0 + (pp.r1 - pp.r0) * t; checks.push({ x: setup.x + r * Math.sin(az), y: setup.y + r * Math.cos(az), t, r }); }); });
+      bs.forEach(b => { const azB = (setup.heading || 0) + b, rel = sweep(pp.a0, azB, pp.d >= 0 ? 'cw' : 'ccw'); if (Math.abs(rel) <= Math.abs(pp.d) && pp.d !== 0) [-1e-4, 1e-4].forEach(e => { const u = Math.min(1, Math.max(0, rel / pp.d + e)); checks.push(pp.at(pp.tL + (1 - pp.tL) * u)); }); });
     }
     let gov = null, govT = 0;
     checks.forEach(q => { const e = evalAt(crane, setup, q, W, s, idp + '.gov', chs); const worse = !gov || (gov.cls !== 'np' && (e.cls === 'np' || e.pct > gov.pct + 1e-9)); if (worse) { gov = e; govT = q.t; } });
     // a tie with an end point is reported at that end (the pick or the set), the same capacity and % of chart
     [es, ep].forEach((e, i) => { if (gov && e.cls === gov.cls && (e.cls === 'np' || Math.abs(e.pct - gov.pct) < 1e-9)) { gov = e; govT = i ? 0 : 1; } });
     const Rmax = Math.max(ep.R, es.R);
-    const where = govT < 1e-6 ? 'at the pick' : govT > 1 - 1e-6 ? 'at the set' : `on the swing, ${fmt(Math.abs(pp.d) * govT, 0)}° from the pick`;
+    const where = govT < 1e-6 ? 'at the pick' : govT > 1 - 1e-6 ? 'at the set' : govT <= pp.tL ? `on the luff at the pick, R = ${fmt(gov.R, 1)} ft` : `on the swing, ${fmt(Math.abs(pp.d) * (govT - pp.tL) / (1 - pp.tL), 0)}° from the pick`;
     const pathSteps = [st(idp, { id: 'sw', label: `Swing from the pick to the set (${pick.swing === 'cw' ? 'clockwise' : pick.swing === 'ccw' ? 'counter-clockwise' : 'shortest way'})`, sym: '\\Delta\\alpha', eq: '\\alpha_{set} - \\alpha_{pick}', sub: `${tx(pp.a1, 2)} - ${tx(pp.a0, 2)}`, value: pp.d, unit: 'deg', d: 1, note: '+ clockwise (plan).' }),
-      st(idp, { id: 'Rmax', label: 'Largest radius along the swing path (radius changing uniformly with the swing angle)', sym: 'R_{max}', eq: '\\max(R_{pick}, R_{set})', sub: `\\max(${tx(ep.R, 2)}, ${tx(es.R, 2)})`, value: Rmax, unit: 'ft' })];
-    return { W, Wsteps, pick: ep, set: es, path: { d: pp.d, pts: pp.pts, Rmax, steps: pathSteps }, gov, govWhere: where, cls: gov ? gov.cls : 'np', chs };
+      st(idp, { id: 'Rmax', label: pp.model === 'luff' ? 'Largest radius along the path (luff at the pick, then swing at the set radius)' : 'Largest radius along the swing path (radius changing uniformly with the swing angle)', sym: 'R_{max}', eq: '\\max(R_{pick}, R_{set})', sub: `\\max(${tx(ep.R, 2)}, ${tx(es.R, 2)})`, value: Rmax, unit: 'ft' })];
+    if (pp.model === 'luff') pathSteps.splice(1, 0, st(idp, { id: 'luff', label: 'Path model (project setting): luff at the pick, then swing at the set radius', sym: 'R_{swing}', eq: 'R_{set}', sub: '', value: pp.r1, unit: 'ft',
+      note: `Luff ${fmt(pp.r0, 2)} → ${fmt(pp.r1, 2)} ft at the pick's azimuth, then ${fmt(Math.abs(pp.d), 1)}° at ${fmt(pp.r1, 2)} ft.` }));
+    return { W, Wsteps, pick: ep, set: es, path: { d: pp.d, pts: pp.pts, Rmax, steps: pathSteps, at: pp.at, tL: pp.tL, model: pp.model }, gov, govWhere: where, govT, cls: gov ? gov.cls : 'np', chs };
   }
   /* ---------- plan footprint and clearances ---------- */
   function rect(setup, x0, x1, y0, y1) { return [toGrid(setup, x1, y1), toGrid(setup, x1, y0), toGrid(setup, x0, y0), toGrid(setup, x0, y1)]; }
@@ -133,7 +153,10 @@
     return m;
   }
   /* clearances(crane, setup, ev, pick, items) -> [{ kind, level: 'stop' | 'warn' | 'info', item, text, d }] (plan only; C3 adds heights) */
-  function clearances(crane, setup, ev, items) {
+  /* o.skip3d (C3-2): leave out the flags engine/clear3d.js checks in 3D (power line vs the boom / load swing, exclusion zone vs the load path
+     and the boom, obstruction vs the tail swing and the boom / load); the footprint (plan) flags stay */
+  function clearances(crane, setup, ev, items, o) {
+    const x3 = !!(o && o.skip3d);
     const out = [], fp = footprint(crane, setup), path = ev.path.pts, sector = [{ x: setup.x, y: setup.y }].concat(path);
     const parts = [].concat(fp.body ? [fp.body] : [], fp.tracks, fp.floats), tail = isNum(fp.tail) ? circle(setup, fp.tail, 48) : null;
     (items || []).forEach(it => {
@@ -141,23 +164,23 @@
       if (it.type === 'power') {
         const c = O().clearance({ kv: it.kv, le350: it.le350, setFt: it.setFt }, 'x');
         const d = minDist(sector, true, it.pts, false), D = c.ft;
-        if (isNum(D) && d < D - 1e-9) out.push({ kind: 'power', level: 'stop', item: it.id, d, D, text: `Boom / load swing within D_min = ${fmt(D, 0)} ft of "${nm}" in plan (closest ${fmt(d, 1)} ft): keep the boom, load line and load outside it in 3D (heights in C3) or de-energize per 29 CFR 1926.1408.` });
+        if (x3) { /* 3D: engine/clear3d.js */ } else if (isNum(D) && d < D - 1e-9) out.push({ kind: 'power', level: 'stop', item: it.id, d, D, text: `Boom / load swing within D_min = ${fmt(D, 0)} ft of "${nm}" in plan (closest ${fmt(d, 1)} ft): keep the boom, load line and load outside it in 3D (heights in C3) or de-energize per 29 CFR 1926.1408.` });
         else if (!isNum(D)) out.push({ kind: 'power', level: 'stop', item: it.id, d, text: `"${nm}": clearance not set (over 1,000 kV): enter the utility / RPE distance.` });
         const df = parts.length ? Math.min(...parts.map(q => minDist(q, true, it.pts, false))) : Infinity;
         if (isNum(D) && df < D - 1e-9) out.push({ kind: 'power', level: 'stop', item: it.id, d: df, D, text: `Crane footprint within D_min = ${fmt(D, 0)} ft of "${nm}" in plan (closest ${fmt(df, 1)} ft).` });
       } else if (it.type === 'excl') {
-        if (minDist(path, false, it.pts, true) === 0) out.push({ kind: 'excl', level: 'warn', item: it.id, text: `The load path crosses the exclusion zone "${nm}".` });
+        if (x3) { /* 3D: engine/clear3d.js */ } else if (minDist(path, false, it.pts, true) === 0) out.push({ kind: 'excl', level: 'warn', item: it.id, text: `The load path crosses the exclusion zone "${nm}".` });
         else if (minDist(sector, true, it.pts, true) === 0) out.push({ kind: 'excl', level: 'warn', item: it.id, text: `The boom swings over the exclusion zone "${nm}" (plan).` });
         if (parts.some(q => minDist(q, true, it.pts, true) === 0)) out.push({ kind: 'excl', level: 'warn', item: it.id, text: `The crane footprint (body, tracks or floats) is in the exclusion zone "${nm}".` });
         else if (tail && minDist(tail, true, it.pts, true) === 0) out.push({ kind: 'excl', level: 'warn', item: it.id, text: `The tail-swing circle (${fmt(fp.tail, 1)} ft) reaches the exclusion zone "${nm}".` });
       } else if (it.type === 'obst') {
         if (parts.some(q => minDist(q, true, it.pts, true) === 0)) out.push({ kind: 'obst', level: 'stop', item: it.id, text: `The crane footprint overlaps the obstruction "${nm}".` });
-        else if (tail && minDist(tail, true, it.pts, true) === 0) out.push({ kind: 'obst', level: 'warn', item: it.id, text: `The tail-swing circle (${fmt(fp.tail, 1)} ft) reaches the obstruction "${nm}": check the counterweight height against it (C3).` });
-        if (minDist(sector, true, it.pts, true) === 0) out.push({ kind: 'obst', level: 'info', item: it.id, text: `The boom / load passes over the obstruction "${nm}"${isNum(it.height) ? ` (${fmt(it.height, 1)} ft high)` : ''} in plan: check the boom and load heights (C3).` });
+        else if (!x3 && tail && minDist(tail, true, it.pts, true) === 0) out.push({ kind: 'obst', level: 'warn', item: it.id, text: `The tail-swing circle (${fmt(fp.tail, 1)} ft) reaches the obstruction "${nm}": check the counterweight height against it (C3).` });
+        if (!x3 && minDist(sector, true, it.pts, true) === 0) out.push({ kind: 'obst', level: 'info', item: it.id, text: `The boom / load passes over the obstruction "${nm}"${isNum(it.height) ? ` (${fmt(it.height, 1)} ft high)` : ''} in plan: check the boom and load heights (C3).` });
       }
     });
     if (!isNum(fp.tail)) out.push({ kind: 'tail', level: 'info', text: 'Tail-swing radius not given: enter it (crane editor) for the tail-swing checks.' });
     return out;
   }
-  window.CranePickLift = { DEF, CLS, settingsOf, chartsOf, evalAt, evaluate, sweep, pathPoints, total, cls, footprint, clearances, minDist, toGrid, circle };
+  window.CranePickLift = { DEF, CLS, settingsOf, chartsOf, cfgAt, evalAt, evaluate, sweep, pathPoints, total, cls, footprint, clearances, minDist, toGrid, circle };
 })();
