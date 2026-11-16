@@ -155,12 +155,17 @@
 
   /* reproject(proj4, P, to): a copy of the project with every position moved from its zone to zone `to` through latitude / longitude
      (the same places on the ground). A sheet's placement is found again from two of its pixels (so the change of grid convergence and
-     scale factor between the zones is kept); its georeference control coordinates are converted too. */
+     scale factor between the zones is kept); its georeference control coordinates are converted too. C2-2: crane setups (position and
+     heading) and the pick / set points move the same way. */
   function reproject(proj4, P, to) {
     const from = P.site && P.site.zone, Q = JSON.parse(JSON.stringify(P));
     Q.site = Object.assign({}, Q.site, { zone: to }); if (!from || from === to) return Q;
     const mv = p => { const ll = ftToLl(proj4, from, p.x, p.y), q = llToFt(proj4, to, ll.lat, ll.lng); return { x: q.x, y: q.y }; };
     (Q.items || []).forEach(it => { it.pts = (it.pts || []).map(mv); });
+    (Q.setups || []).forEach(u => {   // C2-2: a crane setup keeps its place and its heading on the ground (a point 100 ft ahead moves too)
+      const h = (u.heading || 0) * Math.PI / 180, a = mv({ x: u.x, y: u.y }), f = mv({ x: u.x + 100 * Math.sin(h), y: u.y + 100 * Math.cos(h) });
+      u.x = a.x; u.y = a.y; u.heading = azimuth(a, f); });
+    (Q.picks || []).forEach(k => { if (k.pick) k.pick = mv(k.pick); if (k.set) k.set = mv(k.set); });
     (Q.sheets || []).forEach(s => {
       const a = mv(pxToFt(s.place, 0, 0)), b = mv(pxToFt(s.place, s.w, 0));
       const r = georef({ px: 0, py: 0 }, { px: s.w, py: 0 }, a, b); if (r) s.place = { x: r.x, y: r.y, s: r.s, rot: r.rot };

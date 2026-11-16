@@ -18,7 +18,8 @@
        title: { name, number, location, client, by, checker, date, rev }, notes,
        site: { zone },                                     the State Plane zone (geo.js ZONES id)
        view: { lat, lng, z }                               the map view (kept with the project; not an "unsaved change", not an undo step)
-       sheets: [ sheet ], items: [ item ], cranes: [ crane ], savedAt? }
+       sheets: [ sheet ], items: [ item ], cranes: [ crane ], setups: [ setup ], picks: [ pick ], lift: { caution, critical, limit, interp },
+       savedAt? }
      sheet = { id, name, kind: 'image' | 'pdf', page, w, h (px), place: { x, y, s, rot }, opacity (0–1), locked, visible,
                cal: { p1: { px, py }, p2, dist (ft) } | null, geo: { p1, p2, g1: { E, N }, g2 (zone units) } | null,
                pageIn: { w, h } (PDF page size, in) | null, planScale (the plan's stated scale, ft per in) | null, basis (BASIS key) }
@@ -27,7 +28,12 @@
              text, size), 'dim' (two points: a dimension)
      crane = { id, def (the crane file, schema crane-pick.crane.v1, with its app_inputs: engine/cranes.js), src: { from: 'github' |
                'file' | 'paste' | 'library', name, repo, path, at }, fp (fingerprint of the chart data when it was added) }   C2-1:
-             a copy of each crane the project uses, so a saved or exported project is self-contained (it carries the chart data) */
+             a copy of each crane the project uses, so a saved or exported project is self-contained (it carries the chart data)
+     setup = { id, name, craneId, x, y (centre of rotation), heading (deg, carrier front, clockwise from grid north), group (the chart
+               group key: engine/cranes.js groups), boom (ft), mode (telescoping mode | null) }                          C2-2
+     pick  = { id, name, setupId, pick: { x, y }, set: { x, y }, load, rigging, hook, ded (lb), hookLabel, dedNote, swing: 'short' |
+               'cw' | 'ccw' }                                                                                           C2-2
+     lift  = { caution: 75, critical: 75, limit: 100 (% of chart), interp: false } (project settings; engine/lift.js)    C2-2 */
 (function () {
   'use strict';
   const KEYS = { current: 'crane.project.current', list: 'crane.projects.v1', open: 'crane.open', ui: 'crane.ui', idb: 'crane.sheets.v1',
@@ -50,7 +56,8 @@
     o = o || {};
     return { schema: FORMAT, v: 1,
       title: { name: 'New crane pick', number: '', location: '', client: '', by: '', checker: '', date: today(), rev: '' },
-      notes: '', site: { zone: o.zone || 'EPSG:2249' }, view: o.view || null, sheets: [], items: [], cranes: [] };
+      notes: '', site: { zone: o.zone || 'EPSG:2249' }, view: o.view || null, sheets: [], items: [], cranes: [], setups: [], picks: [],
+      lift: { caution: 75, critical: 75, limit: 100, interp: false } };
   }
   const num = (v, d) => typeof v === 'number' && isFinite(v) ? v : d;
   const numOrNull = v => typeof v === 'number' && isFinite(v) ? v : null;
@@ -91,6 +98,19 @@
     const def = JSON.parse(JSON.stringify(c.def)); if (!def.app_inputs || typeof def.app_inputs !== 'object') def.app_inputs = {};
     return { id: str(c.id) || uid('c'), def, src: { from: str(s.from, 'file'), name: str(s.name), repo: str(s.repo), path: str(s.path), at: str(s.at) }, fp: str(c.fp) };
   }
+  const numPos = (v, d) => typeof v === 'number' && isFinite(v) && v > 0 ? v : d;
+  function normSetup(u) {
+    if (!u || typeof u !== 'object' || !isFinite(u.x) || !isFinite(u.y)) return null;
+    return { id: str(u.id) || uid('u'), name: str(u.name, 'Crane setup'), craneId: str(u.craneId), x: +u.x, y: +u.y, heading: ((num(u.heading, 0) % 360) + 360) % 360,
+      group: str(u.group), boom: numOrNull(u.boom), mode: u.mode == null || u.mode === '' ? null : str(u.mode) };
+  }
+  function normPick(k) {
+    if (!k || typeof k !== 'object' || !pt(k.pick) || !pt(k.set)) return null;
+    const w = v => { const x = numOrNull(v); return x != null && x >= 0 ? x : null; };
+    return { id: str(k.id) || uid('k'), name: str(k.name, 'Pick'), setupId: str(k.setupId), pick: pt(k.pick), set: pt(k.set), load: w(k.load), rigging: w(k.rigging), hook: w(k.hook), ded: w(k.ded),
+      hookLabel: str(k.hookLabel), dedNote: str(k.dedNote), swing: ['short', 'cw', 'ccw'].indexOf(k.swing) >= 0 ? k.swing : 'short' };
+  }
+  function normLift(l) { l = l || {}; return { caution: numPos(l.caution, 75), critical: numPos(l.critical, 75), limit: numPos(l.limit, 100), interp: !!l.interp }; }
   /* normalize(p): a project as this version keeps it (unknown fields dropped, defaults filled; never throws) */
   function normalize(p) {
     const d = newProject(); if (!p || typeof p !== 'object') return d;
@@ -99,7 +119,9 @@
       view: p.view && isFinite(p.view.lat) && isFinite(p.view.lng) ? { lat: +p.view.lat, lng: +p.view.lng, z: num(p.view.z, 17) } : null,
       sheets: (Array.isArray(p.sheets) ? p.sheets : []).map(normSheet).filter(Boolean),
       items: (Array.isArray(p.items) ? p.items : []).map(normItem).filter(Boolean),
-      cranes: (Array.isArray(p.cranes) ? p.cranes : []).map(normCrane).filter(Boolean) };
+      cranes: (Array.isArray(p.cranes) ? p.cranes : []).map(normCrane).filter(Boolean),
+      setups: (Array.isArray(p.setups) ? p.setups : []).map(normSetup).filter(Boolean),
+      picks: (Array.isArray(p.picks) ? p.picks : []).map(normPick).filter(Boolean), lift: normLift(p.lift) };
     Object.keys(d.title).forEach(k => { o.title[k] = str(t[k], k === 'date' ? '' : ''); });
     if (p.savedAt) o.savedAt = str(p.savedAt);
     return o;
@@ -122,5 +144,5 @@
   }
   /* text of the inputs (undo / "unsaved changes"): the project without the view and the saved time */
   function inputsText(P) { const o = Object.assign({}, P); delete o.view; delete o.savedAt; return JSON.stringify(o); }
-  window.CranePickModel = { KEYS, FORMAT, TYPES, UTIL_KINDS, BASIS, newProject, normalize, normItem, normSheet, normCrane, load, save, toFile, fromFile, inputsText, uid };
+  window.CranePickModel = { KEYS, FORMAT, TYPES, UTIL_KINDS, BASIS, newProject, normalize, normItem, normSheet, normCrane, normSetup, normPick, normLift, load, save, toFile, fromFile, inputsText, uid };
 })();
