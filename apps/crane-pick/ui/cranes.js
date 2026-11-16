@@ -164,9 +164,12 @@
         ${num('secF', ai.sectors && ai.sectors.front, 'Over-front half-angle', '°', 'not set')}${num('secR', ai.sectors && ai.sectors.rear, 'Over-rear half-angle', '°', 'not set')}</div>` : ''}
       <div class="shBlk"><div class="note"><b>Plan dimensions</b> (the map symbol and plan clearances): ${planText(p)}${p.assumed.length ? `<br><span class="warnT">Assumed: ${esc(p.assumed.join('; '))}.</span>` : ''} (Edit… to change)</div></div>
       ${geomHtml(c, num)}
-      <div class="shBlk"><div class="note"><b>For outrigger loads (phase 4)</b>: optional; from the manufacturer when known.</div>
+      <div class="shBlk"><div class="note"><b>For outrigger / track loads (Ground)</b>: from the manufacturer when known. All the weights and CGs entered → rigid-body loads ("entered data"); otherwise, with the gross operating weight, the bounding estimate.</div>
         ${num('upLb', ph.upperLb, 'Upperworks weight', 'lb')}${num('upCg', ph.upperCg, 'Upperworks CG from rotation', 'ft', '+ toward the boom')}
         ${num('caLb', ph.carrierLb, d.type === 'crawler' ? 'Carbody + crawlers weight' : 'Carrier weight', 'lb')}${num('caCg', ph.carrierCg, (d.type === 'crawler' ? 'Carbody' : 'Carrier') + ' CG from rotation', 'ft', '+ toward the front')}
+        ${num('boLb', ph.boomLb, 'Boom weight', 'lb', '0 = included in the upperworks')}${num('boCf', ph.boomCgF, 'Boom CG (fraction of the foot-to-tip distance)', '', '0.5 (assumed)')}
+        ${num('cwLb', ph.cwLb, 'Counterweight', 'lb', (() => { const g = (d.configs || []).find(x => x.counterweight_lb != null); return g ? 'from the chart configuration' : 'not in the file'; })())}${num('cwR', ph.cwRad, 'Counterweight CG radius', 'ft', p.tail != null ? fmt(p.tail, 2) + ' (tail swing, assumed)' : '')}
+        ${num('grLb', ph.grossLb, 'Gross operating weight (no counterweight)', 'lb', window.CranePickGround && window.CranePickGround.fileGross(d) ? fmt(window.CranePickGround.fileGross(d), 0) + ' (file)' : 'for the estimate')}
         ${num('flt', ph.floatFt, d.type === 'crawler' ? 'Track shoe width' : 'Float size', 'ft', d.type === 'crawler' ? (p.crawler && p.crawler.shoe != null ? String(p.crawler.shoe) + ' (file)' : '') : (p.outr && p.outr.float != null ? String(p.outr.float) + ' (file)' : ''))}</div>
       ${(d.gaps || []).length ? `<details class="crSteps"><summary>Gaps noted in the file (${d.gaps.length})</summary><ul class="note">${d.gaps.map(g => `<li>${esc(g)}</li>`).join('')}</ul></details>` : ''}
       <div class="goRow"><button type="button" data-ca="edit" data-id="${c.id}">Edit…</button>${le && le.fp !== fp ? `<button type="button" data-ca="upd" data-id="${c.id}">Use the library copy</button>` : ''}${window.CranePickPlace ? `<button type="button" data-ca="place" data-id="${c.id}">Place on the map</button>` : ''}<button type="button" class="danger" data-ca="rm" data-id="${c.id}">Remove from project</button></div></div>`;
@@ -239,7 +242,7 @@
     if (k === 'secF' || k === 'secR') { if (v !== null && !(v >= 0 && v <= 180)) { t.classList.add('bad'); return; } A.update(() => { const ai = c.def.app_inputs; ai.sectors = Object.assign({}, ai.sectors, { [k === 'secF' ? 'front' : 'rear']: v }); }, 'cranes', { id: c.id }); return; }
     const gk = { gfH: 'footH', ghd: 'head', gbw: 'boomW', gcb: 'cwBot', gct: 'cwTop' }[k];   // C3-1: app_inputs.geom
     if (gk) { if (v !== null && v < 0) { t.classList.add('bad'); return; } A.update(() => { const ai = c.def.app_inputs; ai.geom = Object.assign({}, ai.geom); if (v === null) delete ai.geom[gk]; else ai.geom[gk] = v; }, 'cranes', { id: c.id }); return; }
-    const map = { upLb: 'upperLb', upCg: 'upperCg', caLb: 'carrierLb', caCg: 'carrierCg', flt: 'floatFt' };
+    const map = { upLb: 'upperLb', upCg: 'upperCg', caLb: 'carrierLb', caCg: 'carrierCg', flt: 'floatFt', boLb: 'boomLb', boCf: 'boomCgF', cwLb: 'cwLb', cwR: 'cwRad', grLb: 'grossLb' };   // C4: boom, counterweight, gross weight
     if (map[k]) { if (v !== null && v < 0 && !/Cg$/.test(k)) { t.classList.add('bad'); return; } A.update(() => { const ai = c.def.app_inputs; ai.ph4 = Object.assign({}, ai.ph4, { [map[k]]: v }); }, 'cranes', { id: c.id }); }
   }
   /* ---------- Report: §Cranes ---------- */
@@ -257,7 +260,8 @@
       if (window.CranePickElev) { const g = window.CranePickElev.geomOf(d), F = window.CranePickElev.FROM, r = (k, nm) => [nm, (g[k] == null ? 'not limited' : fmt(g[k], 2)) + ' (' + F[g.from[k]] + ')'];
         items.push({ type: 'kv', rows: [r('footH', 'Boom-foot pin height above the pad (ft)'), r('footE', 'Boom-foot pin ahead of rotation (ft)'), r('head', 'Head allowance (ft)'), r('boomW', 'Boom section width (ft)'), r('cwBot', 'Counterweight bottom (ft)'), r('cwTop', 'Counterweight top (ft)'), ['Maximum boom angle', g.maxAng == null ? 'not given' : fmt(g.maxAng, 1) + '° (file)']] });
         if (g.assumed.length) items.push({ type: 'note', warn: true, text: 'Elevation geometry assumed (not in the file, not entered): ' + g.assumed.join('; ') + '. Decision (pending engineer review): the lowest boom.' }); }
-      if (['upperLb', 'upperCg', 'carrierLb', 'carrierCg', 'floatFt'].some(k => ph[k] != null)) items.push({ type: 'kv', rows: [['Upperworks weight (lb)', fmt(ph.upperLb, 0)], ['Upperworks CG from rotation (ft)', fmt(ph.upperCg, 2)], ['Carrier / carbody weight (lb)', fmt(ph.carrierLb, 0)], ['Carrier / carbody CG (ft)', fmt(ph.carrierCg, 2)], ['Float / shoe size (ft)', fmt(ph.floatFt, 2)]] });
+      if (['upperLb', 'upperCg', 'carrierLb', 'carrierCg', 'floatFt', 'boomLb', 'boomCgF', 'cwLb', 'cwRad', 'grossLb'].some(k => ph[k] != null)) items.push({ type: 'kv', rows: [['Upperworks weight (lb)', fmt(ph.upperLb, 0)], ['Upperworks CG from rotation (ft)', fmt(ph.upperCg, 2)], ['Carrier / carbody weight (lb)', fmt(ph.carrierLb, 0)], ['Carrier / carbody CG (ft)', fmt(ph.carrierCg, 2)], ['Float / shoe size (ft)', fmt(ph.floatFt, 2)],
+        ['Boom weight (lb)', fmt(ph.boomLb, 0)], ['Boom CG (fraction foot to tip)', ph.boomCgF == null ? '0.50 (assumed)' : fmt(ph.boomCgF, 2)], ['Counterweight (lb)', ph.cwLb == null ? 'chart configuration' : fmt(ph.cwLb, 0)], ['Counterweight CG radius (ft)', ph.cwRad == null ? 'tail-swing radius (assumed)' : fmt(ph.cwRad, 2)], ['Gross operating weight (lb)', fmt(ph.grossLb, 0)]] });
       return { id: 'c' + (n + 1), key: 'crane-' + c.id, title: K.name(d), items };
     }) }];
   });

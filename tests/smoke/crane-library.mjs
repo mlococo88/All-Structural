@@ -54,7 +54,7 @@ const settle = () => p.waitForTimeout(450);
 try {
   await p.waitForSelector('[data-sp=chip]'); await p.waitForTimeout(300);
   // 1.
-  assert.deepEqual(await p.$$eval('#inTabs [data-itab]', a => a.map(x => x.textContent)), ['Project', 'Site & map', 'Plan sheets', 'Site items', 'Cranes', 'Lifts']);
+  assert.deepEqual(await p.$$eval('#inTabs [data-itab]', a => a.map(x => x.textContent)), ['Project', 'Site & map', 'Plan sheets', 'Site items', 'Cranes', 'Lifts', 'Ground']);   // C4 adds Ground
   assert.match(await txt('[data-pane=cranes]'), /The library is empty/);
   await p.setInputFiles('#crFiles', [FW, FC, BAD]); await p.waitForFunction(() => /Files: 2 cranes loaded/.test(document.querySelector('#crStatus').textContent));
   let L = await lib(); assert.deepEqual(Object.keys(L.cranes).sort(), ['fakeco-test-at-100-fake-test-data', 'fakeco-test-cr-200-fake-test-data']);
@@ -68,7 +68,7 @@ try {
   let P = await proj(); assert.equal(P.cranes.length, 1); assert.equal(P.cranes[0].def.model, 'TEST-AT 100 (FAKE TEST DATA)'); assert.equal(P.cranes[0].def.configs.length, 5, 'the whole crane is copied');
   const card = await txt('.crCard');
   for (const rx of [/FAKECO TEST-AT 100/, /PRELIMINARY/, /Source document FAKECO test chart TC-1/, /Revision T1/, /Date 2026-11-16/, /Terms: FAKE TEST DATA/, /85 % of tipping \(chart notes\)/, /75 % of tipping \(chart notes\)/,
-    /notes: interpolation between radii permitted/, /Over-front half-angle/, /tail swing 15\.00 ft/, /spreads full 24\.00, mid 16\.00 ft/, /For outrigger loads \(phase 4\)/, /Upperworks weight/, /Carrier weight/, /Float size/, /Chart data fingerprint [0-9a-f]{8}/, /Preliminary document/])
+    /notes: interpolation between radii permitted/, /Over-front half-angle/, /tail swing 15\.00 ft/, /spreads full 24\.00, mid 16\.00 ft/, /For outrigger \/ track loads \(Ground\)/, /Upperworks weight/, /Carrier weight/, /Float size/, /Chart data fingerprint [0-9a-f]{8}/, /Preliminary document/])
     assert.match(card, rx);
   assert.equal(await p.$eval('[data-cr][data-k=flt]', e => e.placeholder), '2 (file)');
   const cid = P.cranes[0].id;
