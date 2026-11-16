@@ -87,7 +87,7 @@ try {
   await p.click('#tlPlay'); await p.waitForTimeout(100); await p.click('#tlPlay');
   await p.fill('#tlScrub', '32'); await p.dispatchEvent('#tlScrub', 'input'); await p.waitForTimeout(150); e = await eng(); near(e.cur[0].R, Math.sqrt(1000), 1e-9); near(e.cur[0].pct, 88.888889, 1e-5);
   // the dock under the map: the elevation of both cranes at this step, then the 3D view (both booms and the girder)
-  assert.match(await txt('#elSvg'), /C1 tip 182\.0 C1 hook 136\.0 · R 31\.6 · 88\.9 % C2 tip 182\.0 C2 hook 136\.0 · R 31\.6 · 74\.1 % Tandem lift 1, step 32/); assert.match(await txt('#elInfo'), /Tandem lift 1, step 32/);
+  assert.match(await txt('#elSvg'), /C1 tip 182\.0 C1 C2 tip 182\.0 C2 C1: hook el\. 136\.00 · R 31\.62 ft · 27,000 lb · 88\.9 % C2: hook el\. 136\.00 · R 31\.62 ft · 27,000 lb · 74\.1 % Tandem lift 1, step 32/); assert.match(await txt('#elInfo'), /Tandem lift 1, step 32/);
   await shot('c5-tandem-scrub');
   await p.click('[data-elmode="3d"]'); await p.waitForSelector('#v3Canvas', { timeout: 15000 }); await p.waitForTimeout(400);
   const c3 = await p.evaluate(() => { const c = {}; CranePickView3D.scene.traverse(o => Object.keys(o.userData || {}).forEach(k => { const key = k + ':' + o.userData[k]; c[key] = (c[key] || 0) + 1; })); return c; });

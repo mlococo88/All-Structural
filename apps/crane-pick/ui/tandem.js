@@ -279,18 +279,20 @@
     const ob = r.sh.ob, H = ob.H, zb = q.x.pose.z, ge = ends(t, q.x.pose, ob.L), sg = ge.map(sOf), zp = EL().padEl(a);
     const zs = [zp, zb, zb + H].concat(q.cr.filter(Boolean).map(c => c.zTip || zp)), ss = [0, L0].concat(sg, q.cr.filter(Boolean).map(c => sOf(c.p)));
     const s0 = Math.min(...ss) - 15, s1 = Math.max(...ss) + 15, z0 = Math.min(...zs) - 5, z1 = Math.max(...zs) + 8, Wd = o.w || 680, Ht0 = o.h || 280;
-    const k = Math.min((Wd - 20) / (s1 - s0), (Ht0 - 30) / (z1 - z0)), Ht = Math.max(140, Math.min(Ht0, (z1 - z0) * k + 30));
+    const k = Math.min((Wd - 20) / (s1 - s0), (Ht0 - 60) / (z1 - z0)), Ht = Math.max(160, Math.min(Ht0, (z1 - z0) * k + 60));   // 46 px on top for the title and the legend
     const X = s => (10 + (s - s0) * k).toFixed(1), Y = z => (Ht - 14 - (z - z0) * k).toFixed(1), ln = (s, z, s2, z2, sty) => `<line x1="${X(s)}" y1="${Y(z)}" x2="${X(s2)}" y2="${Y(z2)}" ${sty}/>`;
     let out = `<svg xmlns="http://www.w3.org/2000/svg" class="tgElevSvg" viewBox="0 0 ${Wd} ${Ht.toFixed(0)}" width="${Wd}" height="${Ht.toFixed(0)}" font-family="Arial, sans-serif" font-size="10"><rect width="100%" height="100%" fill="#fff" stroke="#94a3b8"/>`;
-    out += `<rect x="0" y="${Y(zp)}" width="${Wd}" height="${Math.max(0, Ht - +Y(zp)).toFixed(1)}" fill="#E7E5E4"/>` + ln(s0 - 50, zp, s1 + 50, zp, 'stroke="#57534E" stroke-width="1.2"');
+    out += `<rect x="0" y="${Y(zp)}" width="${Wd}" height="${Math.max(0, Ht - +Y(zp)).toFixed(1)}" fill="#E7E5E4"/>` + `<line x1="0" y1="${Y(zp)}" x2="${Wd}" y2="${Y(zp)}" stroke="#57534E" stroke-width="1.2"/>`;
     out += `<rect class="tgElGirder" x="${X(Math.min(...sg))}" y="${Y(zb + H)}" width="${Math.max(2, Math.abs(sg[1] - sg[0]) * k).toFixed(1)}" height="${Math.max(2, H * k).toFixed(1)}" fill="#2563EB" fill-opacity="0.35" stroke="#1E3A8A"/>`;
+    const legend = [];
     q.cr.forEach((c, i) => { if (!c) return; const u = us[i], sc = sOf(u), sh = sOf(c.p), sf = sOf(c.foot);
       out += `<rect x="${X(sc - 6)}" y="${Y(zp + 6)}" width="${(12 * k).toFixed(1)}" height="${(6 * k).toFixed(1)}" fill="#94A3B8" stroke="#334155"/>`;
       if (c.tip) { out += ln(sf, c.foot.z, sh, c.tip.z, `class="tgElBoom" stroke="${COLS[c.cls] || '#0F172A'}" stroke-width="3" stroke-linecap="round"`) + ln(sh, c.tip.z, sh, c.zBk, 'stroke="#334155"');
         out += `<text x="${X(sh)}" y="${Y(c.tip.z)}" dy="-5" text-anchor="middle">C${i + 1} tip ${fmt(c.tip.z, 1)}</text>`; }
       out += `<rect x="${X(sh) - 3}" y="${Y(c.zBk)}" width="6" height="${Math.max(2, (c.zBk - c.zHk) * k).toFixed(1)}" fill="#F59E0B" stroke="#78350F"/>` + ln(sh, c.zHk, sh, zb + H, 'stroke="#78350F" stroke-dasharray="3 2"');
-      const left = q.cr.length > 1 && sh < sOf(q.cr[1 - i].p);   // the label on the outer side of each hook (no overlap)
-      out += `<text x="${X(sh)}" y="${Y(c.zHk)}" dx="${left ? -6 : 6}" dy="${-4 - 12 * i}" text-anchor="${left ? 'end' : 'start'}" fill="#78350F">C${i + 1} hook ${fmt(c.zHk, 1)} · R ${fmt(c.R, 1)} · ${c.e.look.ok ? fmt(c.pct, 1) + ' %' : 'n.p.'}</text>`; });
+      out += `<text x="${X(sh)}" y="${Y(c.zHk)}" dx="6" dy="4" fill="#78350F" font-weight="bold">C${i + 1}</text>`;
+      legend.push(`C${i + 1}: hook el. ${fmt(c.zHk, 2)} · R ${fmt(c.R, 2)} ft · ${c.e.look.ok ? fmt(c.C, 0) + ' lb · ' + fmt(c.pct, 1) + ' %' : 'not permitted'}`); });
+    out += legend.map((l, i) => `<text x="8" y="${26 + 12 * i}" fill="#78350F">${esc(l)}</text>`).join('');
     out += `<text x="8" y="12" font-weight="bold">${esc(t.name)}, step ${j}: ${esc(T().where(q.x))} (girder bottom el. ${fmt(zb, 2)}; plane through ${us[1] && q.cr[1] ? 'both cranes' : 'the crane and its hook'}; to scale)</text></svg>`;
     return out;
   }
