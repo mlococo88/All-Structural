@@ -232,12 +232,13 @@
     const T = M.TYPES[it.type], z = G.zone(A.P.site.zone), u = z.unit === 'm' ? 'm' : 'ft';
     let h = `<div class="fRow"><label>Type</label><span>${esc(T.label)}${it.type === 'util' ? (it.closed ? ' (area)' : ' (line)') : ''}</span></div>
       <div class="fRow"><label for="itName">Name</label><input type="text" id="itName" value="${esc(it.name)}"></div>`;
-    if (it.type === 'obst') h += numIn('itHeight', it.height, 'Height above grade', 'ft') + numIn('itTopEl', it.topEl, 'Top elevation', 'ft', 'optional');
+    if (it.type === 'obst') h += numIn('itHeight', it.height, 'Height above grade', 'ft') + numIn('itTopEl', it.topEl, 'Top elevation', 'ft', 'optional') + numIn('itGrade', it.gradeEl, 'Grade elevation', 'ft', 'the crane pad');
     if (it.type === 'power') {
       const c = clearance(it);
       h += numIn('itKv', it.kv, 'Voltage', 'kV', 'from the utility') + `<label class="note" style="display:block"><input type="checkbox" id="itLe350" ${it.le350 ? 'checked' : ''} ${it.kv != null ? 'disabled' : ''}> Voltage not known; the utility says 350 kV or less</label>`
         + (it.kv > 1000 ? numIn('itSetFt', it.setFt, 'Clearance set by the utility / RPE', 'ft') : '')
-        + numIn('itHeight', it.height, 'Lowest wire above grade', 'ft', 'optional (3D, phase C3)')
+        + numIn('itHeight', it.height, 'Lowest wire above grade', 'ft', 'not known: checked as a vertical plane') + numIn('itGrade', it.gradeEl, 'Grade elevation', 'ft', 'the crane pad')
+        + numIn('itSag', it.sag, 'Sag allowance (wire lower by)', 'ft', '0') + numIn('itSway', it.sway, 'Sway allowance (sideways)', 'ft', '0')
         + `<div class="crOut${c.ok ? '' : ' bad'}" id="itClr"><b>Minimum clearance D<sub>min</sub> = ${isFinite(c.ft) ? fmt(c.ft, c.ft % 1 ? 1 : 0) + ' ft' : 'not set'}</b> <span class="note">${esc(c.basis)}</span><br><span class="note">${esc(c.note)} The buffer drawn is the plan (horizontal) distance; any part of the crane, load line or load must stay outside it in 3D. ${esc(c.ref)}.</span> <a href="#" class="wk" data-a="worked">worked: Site tab</a></div>`;
     }
     if (it.type === 'util') h += `<div class="fRow"><label for="itKind">Kind</label><select id="itKind">${Object.entries(M.UTIL_KINDS).map(([k, v]) => `<option value="${k}" ${it.kind === k ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></div>`
@@ -289,7 +290,7 @@
     else if (t.id === 'itKind') set('kind', t.value);
     else if (t.id === 'itLe350') set('le350', t.checked);
     else if (t.id === 'itKv') { const v = num(); if (v !== undefined && v !== null && v <= 0) { t.classList.add('bad'); return; } set('kv', v); }
-    else if (['itHeight', 'itTopEl', 'itDepth', 'itSetFt'].includes(t.id)) { const v = num(); if (v !== undefined && v !== null && v < 0 && t.id !== 'itTopEl') { t.classList.add('bad'); return; } set({ itHeight: 'height', itTopEl: 'topEl', itDepth: 'depth', itSetFt: 'setFt' }[t.id], v); }
+    else if (['itHeight', 'itTopEl', 'itDepth', 'itSetFt', 'itGrade', 'itSag', 'itSway'].includes(t.id)) { const v = num(); if (v !== undefined && v !== null && v < 0 && t.id !== 'itTopEl' && t.id !== 'itGrade') { t.classList.add('bad'); return; } set({ itHeight: 'height', itTopEl: 'topEl', itDepth: 'depth', itSetFt: 'setFt', itGrade: 'gradeEl', itSag: 'sag', itSway: 'sway' }[t.id], v); }
     else if (t.id === 'itSize') { const v = num(); if (v === undefined) return; if (it.type === 'label') set('size', Math.max(8, Math.min(48, v || 14))); else set('size', v); }
     else if (t.dataset.vx != null) {
       const v = G.parseNum(t.value); if (!isFinite(v)) { t.classList.add('bad'); return; }

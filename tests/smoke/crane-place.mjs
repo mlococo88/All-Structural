@@ -102,7 +102,7 @@ try {
   await setF('#lkLoad', 28000); assert.ok(await p.$('.crLiftLbl .lv-critical'), '30,000 / 39,000 = 76.9 % ≥ 75 %'); assert.match(await txt('#lfRes'), /76\.9 % of chart critical lift/);
   await setF('#lsCaution', 60); await setF('#lsCritical', 90); assert.match(await txt('#lfRes'), /76\.9 % of chart caution/); assert.ok(await p.$('.crLiftLbl .lv-caution'));
   await setF('#lsCaution', 75); await setF('#lsCritical', 75); await setF('#lkLoad', 20000);
-  P = await proj(); assert.deepEqual(P.lift, { caution: 75, critical: 75, limit: 100, interp: false });
+  P = await proj(); assert.deepEqual(P.lift, { caution: 75, critical: 75, limit: 100, interp: false, path: 'uniform', obstClr: 2 });   // path, obstClr: C3-2
   await setF('#lkSN', 2075); assert.equal((await labels())[1], 'S R 75.0 ft not permitted'); assert.match(await txt('#lfRes'), /not permitted.*beyond the largest tabulated radius/);
   await setF('#lkSN', 2020);
   ok('thresholds are project inputs: 76.9 % = critical lift (≥ 75 %), caution with 60 / 90 %; R 75 ft beyond the chart = not permitted');
@@ -123,11 +123,12 @@ try {
 
   // 7. plan clearance to a power line
   await p.evaluate(() => CranePickApp.update(P => { P.items.push(CranePickModel.normItem({ type: 'power', name: 'OH 115 kV', kv: 115, pts: [{ x: 1040, y: 1900 }, { x: 1040, y: 2100 }] })); }, 'items')); await p.waitForTimeout(200);
-  let e3 = await engine(); assert.ok(e3.flags.some(f => /^stop:.*within D_min = 15 ft of "OH 115 kV" in plan \(closest 10\.0 ft\)/.test(f)), e3.flags.join('|'));
-  assert.match(await txt('#lfRes'), /within D_min = 15 ft of "OH 115 kV"/); assert.ok(await p.$('.lfFlags li.lf-stop'));
-  await setF('#lkPE', 1020); e3 = await engine(); assert.ok(!e3.flags.some(f => /OH 115/.test(f)), 'clear at 20 ft'); assert.equal(await p.$('.lfFlags li.lf-stop'), null);
+  // C3-2: the 3D check replaces the plan buffer flag; the wire height is not entered, so the line is a vertical plane (the plan distance)
+  let e3 = await engine(); assert.ok(e3.flags.some(f => /^stop:The boom comes within 10\.0 ft of "OH 115 kV" in 3D \(at the pick \(hoisting\)\) < D_min = 15 ft/.test(f)), e3.flags.join('|'));
+  assert.match(await txt('#lfRes'), /within 10\.0 ft of "OH 115 kV" in 3D/); assert.ok(await p.$('.lfFlags li.lf-stop'));
+  await setF('#lkPE', 1020); e3 = await engine(); assert.ok(!e3.flags.some(f => /^stop:.*OH 115/.test(f)), 'clear at 20 ft: ' + e3.flags.join(' | ')); assert.ok(e3.flags.some(f => /^info:"OH 115 kV": closest 20\.0 ft in 3D/.test(f)), 'the true minimum is reported'); assert.equal(await p.$('.lfFlags li.lf-stop'), null);
   await setF('#lkPE', 1030);
-  ok('plan clearance: a 115 kV line 10 ft from the pick → red flag (D_min 15 ft, closest 10.0 ft); moving the pick 10 ft clears it');
+  ok('power-line clearance: a 115 kV line 10 ft from the pick (height not entered: a vertical plane) → red flag (D_min 15 ft, closest 10.0 ft, 3D check of C3-2); moving the pick 10 ft clears it');
 
   // 8. steps, save / reload, 390 px
   await p.click('#lfSteps summary'); await p.waitForTimeout(100);
