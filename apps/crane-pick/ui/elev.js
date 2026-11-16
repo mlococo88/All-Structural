@@ -1,4 +1,5 @@
-/* apps/crane-pick/ui/elev.js — the elevation view along the boom (window.CranePickElevView). C3-2 (2026-11-16).
+/* apps/crane-pick/ui/elev.js — the elevation view along the boom (window.CranePickElevView). C3-2 (2026-11-16). C3-3: the dock also
+   switches to the 3D view (ui/view3d.js).
    A section in the vertical plane through the rotation centre at the boom's azimuth, for the selected pick at the pick, the set, the
    capacity-governing point or the closest 3D clearance: ground (pad), counterweight, boom (foot pin to tip), load line, hook block,
    rigging, load, and every obstruction / power line the plane crosses (or that passes near it), with heights and clearances dimensioned.
@@ -106,21 +107,27 @@
   }
   /* ---------- the dock under the map ---------- */
   let dock = null, pending = false;
-  const st = () => Object.assign({ open: true, which: 'pick' }, A.ui.elev || {});
+  const st = () => Object.assign({ open: true, which: 'pick', mode: '2d' }, A.ui.elev || {});
   function build() {
     const pane = document.getElementById('planPane'); if (!pane || dock) return;
     dock = document.createElement('div'); dock.id = 'elevDock'; pane.appendChild(dock);
-    dock.innerHTML = `<div class="elBar"><button type="button" id="elToggle"></button><label class="note">View <select id="elWhich">${Object.keys(WHICH).map(w => `<option value="${w}">${WHICH[w]}</option>`).join('')}</select></label><span class="note" id="elInfo"></span></div><div id="elSvg"></div>`;
-    dock.addEventListener('click', e => { if (e.target.id === 'elToggle') { A.ui.elev = Object.assign(st(), { open: !st().open }); A.saveUi(); draw(); } });
+    dock.innerHTML = `<div class="elBar"><button type="button" id="elToggle"></button><span class="elMode" role="group" aria-label="View"><button type="button" data-elmode="2d">Elevation</button><button type="button" data-elmode="3d">3D</button></span><label class="note">Boom <select id="elWhich">${Object.keys(WHICH).map(w => `<option value="${w}">${WHICH[w]}</option>`).join('')}</select></label><span class="note" id="elInfo"></span></div><div id="elSvg"></div><div id="el3d" hidden></div>`;
+    dock.addEventListener('click', e => { if (e.target.id === 'elToggle') { A.ui.elev = Object.assign(st(), { open: !st().open }); A.saveUi(); draw(); }
+      const m = e.target.closest('[data-elmode]'); if (m) { A.ui.elev = Object.assign(st(), { mode: m.dataset.elmode, open: true }); A.saveUi(); draw(); } });   // C3-3: Elevation / 3D
     dock.addEventListener('change', e => { if (e.target.id === 'elWhich') { A.ui.elev = Object.assign(st(), { which: e.target.value }); A.saveUi(); draw(); } });
     draw();
   }
   function current() { const sel = PL() && PL().selected, k = (sel && sel.pick && A.P.picks.find(x => x.id === sel.pick)) || A.P.picks[0]; if (!k) return null; const u = A.P.setups.find(x => x.id === k.setupId); if (!u) return null; const ev = PL().evalPick(k); return ev ? { k, u, ev } : null; }
   function draw() {
     if (!dock) return; pending = false; const s = st();
-    dock.querySelector('#elToggle').textContent = s.open ? '▾ Elevation' : '▸ Elevation'; dock.querySelector('#elWhich').value = s.which; dock.classList.toggle('open', s.open);
-    const box = dock.querySelector('#elSvg'), c = s.open ? current() : null;
-    if (!s.open) { box.innerHTML = ''; return; }
+    const v3 = s.mode === '3d' && !!window.CranePickView3D;
+    dock.querySelector('#elToggle').textContent = (s.open ? '▾ ' : '▸ ') + (v3 ? '3D view' : 'Elevation'); dock.querySelector('#elWhich').value = s.which; dock.classList.toggle('open', s.open); dock.classList.toggle('v3', v3 && s.open);
+    dock.querySelectorAll('[data-elmode]').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.elmode === '3d') === v3)));
+    const box = dock.querySelector('#elSvg'), b3 = dock.querySelector('#el3d'), c = s.open ? current() : null;
+    b3.hidden = !(s.open && v3); box.hidden = !(s.open && !v3);
+    if (!s.open) { box.innerHTML = ''; if (window.CranePickView3D) window.CranePickView3D.hide(); return; }
+    if (v3) { box.innerHTML = ''; dock.querySelector('#elInfo').textContent = c ? c.k.name : ''; window.CranePickView3D.show(b3, c, s.which); return; }
+    if (window.CranePickView3D) window.CranePickView3D.hide();
     if (!c) { box.innerHTML = '<p class="note">No pick yet: place a crane (Cranes or Lifts tab).</p>'; dock.querySelector('#elInfo').textContent = ''; return; }
     box.innerHTML = svg(c.ev, c.k, c.u, A.P.items, s.which, { w: Math.max(360, Math.min(1100, box.clientWidth || 760)), h: 260 });
     dock.querySelector('#elInfo').textContent = c.k.name;
@@ -135,5 +142,5 @@
         { type: 'figure', svg: svg(ev, k, u, P.items, 'set', { w: 680, h: 280, cranes: P.cranes }), caption: 'Elevation at the set (to scale).' }] }); });
     return subs.length ? [{ id: 'elev', key: 'elev', title: 'Elevations', subs }] : [];
   });
-  window.CranePickElevView = { svg, sections, stateOf, redraw: later, WHICH };
+  window.CranePickElevView = { svg, sections, stateOf, redraw: later, WHICH, current };
 })();
