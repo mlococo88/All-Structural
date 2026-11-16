@@ -35,6 +35,7 @@
     ev.flags = LF.clearances(c, u, ev, A.P.items, { skip3d: c3 });
     if (window.CranePickElev) { ev.elev = window.CranePickElev.evaluate(c, u, k, ev, 'k.el'); ev.flags = ev.flags.concat(ev.elev.flags); }   // C3-1: heights
     if (c3) { ev.c3 = window.CranePickClear.check(c, u, k, ev, A.P.items, S(), 'k.c3'); ev.flags = ev.c3.flags.concat(ev.flags); }   // C3-2: 3D clearances (the plan-only power / exclusion / tail / boom-over flags replaced)
+    if (window.CranePickGround) { ev.ground = window.CranePickGround.evaluate(c, u, k, A.P, 'k.gr'); ev.flags = ev.flags.concat(ev.ground.flags || []); }   // C4: float / track loads, mats, bearing, stress at depth
     return ev;
   }
   /* ---------- placing ---------- */

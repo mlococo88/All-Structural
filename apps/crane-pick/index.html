@@ -73,6 +73,9 @@
     'ui/picks.js',          // C2-3: Picks output tab (every pick, links) and the Report's §Lifts
     'ui/elev.js',           // C3-2: the elevation view along the boom (dock under the map, Report §Elevations)
     'ui/view3d.js',         // C3-3: the 3D view in the same dock (three.js r128 + OrbitControls, loaded from the CDN when first opened)
+    '../../shared/boussinesq.js',  // C4: Boussinesq stress below a loaded rectangle (shared, unchanged; also Spread Footing)
+    'engine/ground.js',     // C4: float / track loads along the swing, bounding estimate, mats, bearing, stress at depth
+    'ui/ground.js',         // C4: Ground input and output tabs, the pressure map and float-load labels, Report §Ground
     'engine/tandem.js',     // C5: girder lifts (one crane or two in tandem): load share, the girder path, per-step checks
     'ui/tandem.js'          // C5: Girder lifts input tab, the girder poses on the map, scrubber, Picks rows, Report §Tandem lifts
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
@@ -213,6 +216,10 @@
   .crHandle.crCor span{border-color:#0F172A;color:#0F172A;}
   .crPt span{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;font:700 11pt/1 var(--font-ui);color:#fff;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45);cursor:move;}
   .crPtP span{background:#2563EB;} .crPtS span{background:#059669;}
+  /* C4: ground pressures on the map, the Ground tab */
+  .crGrLbl{pointer-events:none!important;} .crGrLbl .gl{display:inline-block;white-space:nowrap;font-size:8pt;line-height:1.2;background:rgba(255,255,255,.92);border:1px solid #94A3B8;border-left:4px solid;border-radius:3px;padding:0 4px;color:#0f172a;}
+  .crGrLbl .gl.over{background:#FEE2E2;font-weight:600;} .crGrLbl .gl.est{font-style:italic;}
+  table.grTbl tr.gov td{font-weight:600;} table.tbl td.ng{color:var(--fail);font-weight:600;}
   .crLiftLbl{pointer-events:none!important;} .crLiftLbl .lv{display:inline-block;white-space:nowrap;font-size:8.5pt;line-height:1.25;background:rgba(255,255,255,.94);border:1px solid #94A3B8;border-left:4px solid;border-radius:3px;padding:1px 5px;color:#0f172a;}
   .crLiftLbl .lv i{font-style:normal;font-weight:700;margin-right:2px;}
   .lv{border-color:#059669;} .lv-ok{border-left-color:#059669;} .lv-caution{border-left-color:#D97706;} .lv-critical{border-left-color:#EA580C;} .lv-over,.lv-np{border-left-color:#DC2626;}
@@ -288,7 +295,7 @@
       <div id="out"></div>
     </main>
   </div>
-  <footer id="appFoot"><span>Crane Pick Analyzer v0.3 (phase C3: site, plan sheets, drawing, cranes, lifts, heights, 3D) · units: ft, kip, psf / ksf</span><span>Lift-planning aid</span></footer>
+  <footer id="appFoot"><span>Crane Pick Analyzer v0.4 (phase C4: site, plan sheets, drawing, cranes, lifts, heights, 3D, ground) · units: ft, kip, psf / ksf</span><span>Lift-planning aid</span></footer>
 </div>
 <script>
   window.CranePickApp && window.CranePickApp.start();

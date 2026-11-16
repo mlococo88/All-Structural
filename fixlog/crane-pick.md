@@ -448,3 +448,82 @@ None in the project; the view mode in `crane.ui` (per browser).
 `node tests/smoke/crane-3d.mjs` (7 checks: three.js from tests/libs, scene contents, the canvas drawn, orbit, the boom following a plan
 drag mid-drag, Undo / Redo, Report snapshot, 390 px, 0 console errors, WebGL-unavailable message), `crane-clear3d.mjs` (8);
 `node tests/engine/run.mjs crane` (48); `node tests/check-syntax.mjs`.
+
+## 2026-11-16 — C4: ground and supports (outrigger / track loads along the swing, mats, ground bearing, stress at depth)
+PR #1612: https://github.com/mlococo88/All-Structural/pull/1612
+### Where
+- `apps/crane-pick/engine/ground.js` (new, `window.CranePickGround`, no DOM): `inputsOf` (weights / CGs and where each comes from; mode
+  rigid / estimate / none), `supports` (floats FL FR RL RR at (x_F, ±b), (−x_R, ±b); crawler tracks), `parts` / `resultant`,
+  `floatDist`, `trackP` / `trackDist`, `rigidAt`, `boundAt` / `boundCandidates` / `restBox` (estimate), `matOf` / `bearing` (mats and
+  bearing), `evaluate` (every 1° of the swing path, the max per support with its slew angle, bearing, mats, stress at depth, flags,
+  worked steps), `stressAt` / `depthOf`, `U` (unit conversions).
+- `shared/boussinesq.js` is loaded by the app (unchanged; reused, not copied — §3: no shared file changed, so no Spread Footing re-test
+  is needed; its tools: `Spread Footing.html`, now also `apps/crane-pick/index.html`).
+- `apps/crane-pick/ui/ground.js` (new): Ground input tab (per setup: mat / plate type, B, L, t, F_b', F_v', E or F_y, unit weight,
+  spread k, allowable bearing pressure in psf or ksf; per buried utility / culvert / wall: an optional allowable stress increase),
+  Ground output tab (per pick: method label, per float / track load, governing slew angle, R, q_g, q_g/q_a, mat M/M_a and V/V_a,
+  stress at depth, flags, worked steps), the map (pressure-coloured float / mat / track areas in their own pane; float-load labels that
+  follow every drag), Report §Ground (basis with sources, summary, per pick tables and steps).
+- `ui/place.js` `evalPick0`: `ev.ground` and its flags appended (as C3's results). `ui/cranes.js`: crane-card inputs boom weight,
+  boom CG fraction, counterweight (override), counterweight CG radius, gross operating weight (`app_inputs.ph4.boomLb, boomCgF, cwLb,
+  cwRad, grossLb`); Report §Cranes lists them. `engine/model.js`: `setup.ground` (`normSetupGround`), project `ground.caps`
+  (`normGround`). `index.html`: three scripts, CSS, footer v0.4.
+- Tests: `tests/engine/crane-ground.test.mjs` (new), `tests/smoke/crane-ground.mjs` (new); `crane-shell.mjs`, `crane-picks.mjs` (output
+  tabs now Plan · Picks · Ground · Site · Report), `crane-library.mjs` (input tabs end with Ground; the card heading text).
+### Calculations (CLAUDE.md §4: new calculation; no existing formula changed)
+Crane frame: x forward, y left, θ from the carrier front + clockwise, boom direction û = (cos θ, −sin θ).
+- Weights: carrier W_c at (x_c, 0); upperworks W_u at x_u·û; counterweight W_cw (chart configuration, or entered) at −r_cw·û (r_cw
+  entered, else the tail-swing radius, assumed); boom W_b at (e + f_b(R − e))·û (e = boom-foot offset, C3-1; f_b entered, else 0.5);
+  hook W at R·û. V = ΣW, X = ΣWx/V, Y = ΣWy/V (M = V·(X, Y) about the rotation centre).
+- Floats (rigid body, plane of loads; standard statics, cf. CIRIA C703 (2003) "Crane stability on site", paraphrase): u = (X − x̄)/a,
+  v = Y/b, x̄ = (x_F − x_R)/2, a = (x_F + x_R)/2; |u| + |v| ≤ 1: P = V/4 (1 ± u ± v); > 1: heaviest V(|u| + |v|)/2, same end
+  V(1 − |v|)/2, same side V(1 − |u|)/2, opposite 0; |u| or |v| > 1: not stable (red flag).
+- Tracks: V_L,R = V(1/2 ± Y/g); e = X on both tracks; |e| ≤ L_t/6: q = V_t/(sL_t)(1 ± 6|e|/L_t); else L_b = 3(L_t/2 − |e|),
+  q_max = 2V_t/(sL_b) (eccentric bearing statics).
+- Estimate: V = G + W_cw + W, crane-without-load CG anywhere in the rest box, resultant in (W·h + Q·box)/V ∩ supports, each support's
+  worst value over it (floats: box corners, crossings with |u| ± |v| = 1, (±1, 0), (0, ±1); tracks: largest |Y| toward the track and
+  largest |X|).
+- Mats: a = f√π/2; B_e = min(B, a + 2kt), L_e = min(L, a + 2kt); q = P/A_e; q_g = q + γt; c = max(B_e − a, L_e − a)/2; M = qc²/2,
+  V = qc per ft; timber M_a = F_b't²/6, V_a = 2F_v't/3; steel M_a = F_y t²/(4 × 1.67) (AISC 360-16 F11.1, ASD), V_a = 0.60F_y t/1.50
+  (J4.2(a)); δ = qc⁴/(8EI) (information). Crawler mats: B_e = min(B, s + 2kt), q = q_max s/B_e, c = (B_e − s)/2. No mat:
+  q_g = P/(πf²/4). Bearing ratio q_g/q_a.
+- Stress at depth: `SharedBoussinesq` uniformRect (Newmark corner superposition, FHWA GEC 6 (2002) §5.3.2, Fig. 5-11) per float over its
+  bearing area (mat effective area, else the equal-area square), `stress` (linear / triangular) per track; summed; at the governing slew
+  of each support, the pick and the set; points along the item every max(z/3, 0.5) ft within 5z + 20 ft and the closest point to each
+  support. z = depth to top, else pad el. − top el.
+- Units: psf = lb/ft², ksf × 1000 = psf, kip × 1000 = lb, in / 12 = ft, psi × 144 = psf, ksi × 144,000 = psf.
+**Check cases** (fake cranes; `tests/engine/crane-ground.test.mjs`): A symmetric (W_c 40,000 @ 0, W_u 30,000 @ 0, W_cw 20,000 @ r 10,
+W_b 6,000, e 2, f_b 0.5, W 22,000 @ R 30, θ 0): V 118,000, X 4.711864, u 0.392655 → front 41,083.33, rear 17,916.67 lb each.
+B eccentric (x_c 1.5, x_u −2, θ 60°): X 2.610169, Y −3.640242, u 0.217514, v −0.303354 → FL 26,967.74, FR 44,865.60, RL 14,134.40,
+RR 32,032.26. C three floats (B with W 60,000): V 156,000, u 0.469017, v −0.756847 → FR 95,617.40, FL 18,965.93, RR 41,416.67, RL 0.
+D crawler (L_t 26, g 18, s 3): W 60,000 → V 490,000, X 1.632653 (kern), q_max 4,324.46 / q_min 1,957.59 psf; W 150,000 → X 7.586207,
+L_b 16.241379, q_max 11,903.75 psf. E mats (P 44,865.60, float 2 ft): timber 4 × 4 × 12 in → A_e 14.231407, q_g 3,202.58 psf,
+M 1,576.29 vs 28,800, V 3,152.58 vs 14,400; steel 1 in, F_y 36 → q_g 11,972.58, M 41.43 vs 5,389.22, V_a 172,800; no mat 14,281.16 psf.
+F stress at depth under FL (A, z 3 ft, no mat): q 13,077.23 psf, m = n = 0.295409, I 0.036362 → 1,902.14 psf. Newmark I(1, 1) =
+0.1752. Estimate at θ 0 (G 76,000): FL bound 107,000 lb (u = 1, v = 0.813559).
+### Saved data (§5)
+New fields only: `setup.ground`, project `ground` (`caps`), `app_inputs.ph4.boomLb / boomCgF / cwLb / cwRad / grossLb`; `crane.ui.grMap`
+(map layer on / off, per browser, existing key). Absent in older projects = not entered; no migration, no new storage key.
+### Decisions (pending engineer review)
+- Engineer instruction 2026-11-16 (speed): one PR, lighter checks.
+- Estimate rest box: outriggers — the float rectangle (necessary for the unloaded crane to stand); crawlers — 70 % of the half track
+  length and half gauge (stated assumption; without a limit the bound is infinite). For heavy crawler lifts the estimate can still reach
+  the track end: it is then reported as unbounded (red flag: enter the weights and CGs); in the random test ~25 % of crawler cases.
+- The estimate puts the counterweight with the rest of the crane (anywhere in the rest box); a gross weight that already includes the
+  counterweight is double-counted (conservative).
+- Tracks: the same eccentricity e = X on both tracks (≥ the plane-of-pressure value on the heavier track); crawler centred on rotation.
+- Float = round, size = diameter (as drawn); bearing on πf²/4; mats and Boussinesq use the equal-area square.
+- Mat spread k : 1 (default 1 : 1) from the float / shoe edge, limited by the mat; crawler mats: across the track only; shear checked at
+  the face; the mat is treated as a solid section (timber) / plate (steel).
+- Counterweight CG radius not entered: the tail-swing radius; boom CG fraction not entered: 0.5.
+- Stress at depth: at the governing slew angle of every support and at the pick and the set (not every degree); in the estimate the
+  per-support bounds are summed (each support at its own worst; conservative) and each track takes the worst of e = −, 0, + max|X|.
+- On-rubber charts: no tyre loads (not computed, said so).
+### How verified
+`node tests/engine/run.mjs crane` (61 tests incl. 13 new: hand checks A–F, statics, 8,000 random bound ≥ rigid cases, dense-grid check
+of the bound candidates, brute-force swing sweep, track pressure plane integration, KaTeX of every step); `node tests/engine/run.mjs
+boussinesq` (13, the shared file unchanged); `node tests/smoke/crane-ground.mjs` (5 checks: card inputs, estimate label, hand check A
+in the Ground tab with a timber mat and q_a 4 ksf, Δσ_z at a water main, steps; map areas and labels changing mid-drag, one undo step;
+Report §Ground; reload; 390 px; 0 console errors), `crane-shell` (11), `crane-library` (9), `crane-place` (9), `crane-picks` (5),
+`crane-elev` (7), `crane-clear3d` (8), `crane-3d` (7), `crane-sheets` (8); `node tests/check-syntax.mjs`. `crane-draw.mjs` times out at
+`#itKind` on origin/main as well (not changed here; reported).
