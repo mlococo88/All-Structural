@@ -2863,7 +2863,7 @@ Continues TBA4 (PR #1593). Every code site is tagged `TBA5`.
 ### TBA5-g. Open items
 - Not built in: deck design (Art. 9.9) and the 0.10 in. plank / panel relative deflection; rating (MBE); MSR / MEL lumber; tension-reinforced glulam (Art. 8.4.1.3); skew (Art. 4.6.2.2.2e); pedestrian load (Art. 3.6.1.6); flat use in AASHTO mode (TBA4-g).
 
-## 2026-11-16 — PR: claude/timber-aashto-t4 (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (TBA6: AASHTO phase T4 — Report "see §" links from the check steps to where their inputs are worked; the governing check in the Report Status)   [display / report only; no result change]
+## 2026-11-16 — PR: claude/timber-aashto-t4 (PR #1595: https://github.com/mlococo88/All-Structural/pull/1595) (TBA6: AASHTO phase T4 — Report "see §" links from the check steps to where their inputs are worked; the governing check in the Report Status)   [display / report only; no result change]
 
 Phase T4 (report, hand-checked examples, Node tests). The two worked examples are in TBA4-b / TBA5-b and pinned in `tests/engine/timber-aashto-checks.test.mjs` (with the hand arithmetic as comments); the Report sections and the summary table with § links came with TBA4 / TBA5. This entry adds the cross-references (CLAUDE.md §6). Every code site is tagged `TBA6`.
 
