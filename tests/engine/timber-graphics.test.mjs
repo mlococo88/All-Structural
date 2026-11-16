@@ -124,3 +124,59 @@ test('governing vehicle positions (AASHTO): the axles of the envelope placements
     assert.equal(d.Lt, e.Lt);
   }
 });
+
+// TBGX-3: demand vs capacity along the member, bracing, bearing, deflected shape
+test('demand and capacity along the member (NDS): F′_b S/12 per span and sign, (2/3) F′_v A, the design shear point', () => {
+  for (const [name, fn] of Object.entries(NDS_CASES)) {
+    const { R } = nds(fn), c = R.gov.b, d = J(G.ndsMoment(R).data), n = R.xN.length - 1;
+    assert.equal(d.cap.length, n, name); d.cap.forEach((s, i) => { const e = c.bend[i] || c.bend[0]; close(s.v, e.Fbp_t * R.S / 12, 1e-12, name + ' +M allowable'); assert.equal(s.x0, R.xN[i]); assert.equal(s.x1, R.xN[i + 1]); close(d.capN[i].v, -e.Fbp_b * R.S / 12, 1e-12, name + ' −M allowable'); });
+    // the ratio at the governing section equals the bending ratio of the check (f_b / F′_b = M / (F′_b S/12))
+    close(d.ratioMax, c.r_b, 1e-6, name + ' largest ratio along the member = r_b');
+    const v = J(G.ndsShear(R).data), cv = R.gov.v;
+    close(v.cap[0].v, cv.Fv_p * 2 * R.A / 3, 1e-12, name + ' (2/3) F′_v A'); assert.equal(v.marks[0].x, cv.xV); assert.equal(Math.abs(v.marks[0].y), cv.Vd, name + ' design V');
+    close(Math.abs(v.marks[0].y) / v.cap[0].v, cv.r_v1, 1e-9, name + ' V/Va = f_v/F′_v');
+  }
+});
+test('demand and capacity along the member (AASHTO): M_r per span and sign, V_r, V_u at the critical sections', () => {
+  for (const [name, fn] of Object.entries(AAS_CASES)) {
+    const { AL, AD, AC } = aas(fn), d = J(G.aasMoment(AL, AD, AC).data), e = AL.env;
+    AC.flex.filter(it => it.lim === 'StrI').forEach(it => { const s = (it.sg > 0 ? d.cap : d.capN).find(q => q.k === it.k); assert.ok(s, name); close(s.v, it.sg * it.Mr, 1e-12, name + ' M_r'); assert.equal(s.x0, e.xN[it.k]); });
+    const strI = AC.flex.filter(it => it.lim === 'StrI'); close(d.ratioMax, Math.max(...strI.map(it => it.ratio)), 1e-9, name + ' largest M_u/M_r along = the governing Strength I flexure ratio');
+    const v = J(G.aasShear(AL, AD, AC).data), sh = AC.shear.filter(it => it.lim === 'StrI');
+    close(v.cap[0].v, sh[0].Vr, 1e-12, name + ' V_r'); assert.deepEqual(v.marks.map(m => [m.x, Math.abs(m.y)]), J(sh.map(it => [it.s.xd, it.Vu])), name + ' V_u points');
+  }
+});
+test('bracing: l_u, l_e, C_L per span and edge (NDS R.stab, gov.b; AASHTO the Strength I flexure items)', () => {
+  for (const [name, fn] of Object.entries(Object.assign({ braced2: m => { m.design.latTop = 'Supports'; m.design.luTop = 4; m.geom.spans = [{ L: 12 }, { L: 12 }]; m.geom.supports = [0, 1, 2].map(() => ({ t: 'pin', lb: 3.5, cb: true })); } }, NDS_CASES))) {
+    const { R } = nds(fn), c = R.gov.b, d = J(G.ndsBracing(R).data);
+    d.spans.forEach((s, i) => { const e = c.bend[i] || c.bend[0];
+      if (R.stabilityApplies) { assert.equal(s.top.lu, R.stab[i].top.lu, name + ' l_u'); assert.equal(s.top.le, R.stab[i].top.le); assert.equal(s.top.CL, e.CLt, name + ' C_L top'); } else assert.equal(s.top.cont, true);
+      if (!s.bot.cont) { assert.equal(s.bot.lu, R.stab[i].bot.lu); assert.equal(s.bot.CL, e.CLb, name + ' C_L bottom'); } });
+  }
+  for (const [name, fn] of Object.entries(AAS_CASES)) {
+    const { AL, AC } = aas(fn), d = J(G.aasBracing(AL, AC).data);
+    AC.flex.filter(it => it.lim === 'StrI').forEach(it => { const q = d.spans[it.k][it.sg > 0 ? 'top' : 'bot'];
+      if (it.clWhy) assert.equal(q.cont, true, name); else { assert.equal(q.lu, it.Lu, name + ' L_u'); assert.equal(q.le, it.Le); assert.equal(q.CL, it.CL, name + ' C_L'); } });
+  }
+});
+test('bearing: l_b, C_b, R and capacity (NDS gov.cb: R/(F′_c⊥ b l_b) = r_cB; AASHTO govBear: R_u, P_r)', () => {
+  for (const [name, fn] of Object.entries(NDS_CASES)) {
+    const { R } = nds(fn), c = R.gov.cb, d = J(G.ndsBearing(R).data), j = c.gcJ;
+    assert.equal(d.lb, R.lbs[j]); assert.equal(d.Cb, R.Cbs[j]); assert.equal(d.R, c.Rbear, name + ' R'); close(d.R / d.cap, c.r_cB, 1e-9, name + ' ratio'); assert.equal(d.ratio, c.r_cB);
+  }
+  for (const [name, fn] of Object.entries(AAS_CASES)) {
+    const { AL, AC } = aas(fn), d = J(G.aasBearing(AL, AC).data), it = AC.govBear;
+    assert.deepEqual([d.lb, d.Cb, d.R, d.cap, d.ratio], [it.lb, it.Cb, it.Ru, it.Pr, it.ratio], name);
+  }
+});
+test('deflected shape: NDS limits per span (R.defl.perSpan); AASHTO Δ_LL = g_Δ × the per-lane envelope, limit L/n (AC.defl)', () => {
+  for (const [name, fn] of Object.entries(NDS_CASES)) {
+    const { R } = nds(fn), L = J(G.ndsDeflLimits(R));
+    assert.deepEqual(L.map(s => [s.LL, s.TL]), J(R.defl.perSpan.map(s => [s.LLlim, s.TLlim])), name);
+  }
+  for (const [name, fn] of Object.entries(AAS_CASES)) {
+    const { AL, AD, AC } = aas(fn), d = J(G.aasDefl(AL, AD, AC).data);
+    close(d.llMax, Math.max(...AD.defl.filter(Boolean).map(q => q.dLL)), 1e-12, name + ' largest Δ_LL drawn = AD.defl');
+    AC.defl.forEach(it => close(d.lim[it.k].v, it.allow, 1e-12, name + ' limit'));
+  }
+});

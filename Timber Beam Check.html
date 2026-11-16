@@ -2385,9 +2385,11 @@ const TBGX = (() => {
   const fx = (v, d) => num(v) ? v.toFixed(d) : '—';
   const r2 = v => Math.round(v * 100) / 100;
   // "F'_b" style label → text with a subscript tspan (one subscript, after "_"); "^" superscript after it
-  const lab = s => { s = String(s); const m = /^([^_^]*)(?:_(?:\{([^}]*)\}|([A-Za-z0-9,]+)))?(?:\^(?:\{([^}]*)\}|(\S)))?(.*)$/.exec(s); if (!m) return esc(s);
-    const sb = m[2] != null ? m[2] : m[3], sp = m[4] != null ? m[4] : m[5];
-    return esc(m[1]) + (sb ? `<tspan baseline-shift="sub" font-size="75%">${esc(sb)}</tspan>` : '') + (sp ? `<tspan baseline-shift="super" font-size="75%">${esc(sp)}</tspan>` : '') + (m[6] ? `<tspan>${esc(m[6])}</tspan>` : ''); };
+  // "f_b = 1375, F′_{c⊥} b l_b" style label → text with subscript ("_x" or "_{…}") and superscript ("^x" or "^{…}") tspans, any number
+  const lab = s => { s = String(s); let out = '', k = 0; const re = /_(?:\{([^}]*)\}|([A-Za-z0-9,⊥λΔ]+))|\^(?:\{([^}]*)\}|(\S))/g; let m;
+    while ((m = re.exec(s))) { out += esc(s.slice(k, m.index)); const sb = m[1] != null ? m[1] : m[2], sp = m[3] != null ? m[3] : m[4];
+      out += sb != null ? `<tspan baseline-shift="sub" font-size="75%">${esc(sb)}</tspan>` : `<tspan baseline-shift="super" font-size="75%">${esc(sp)}</tspan>`; k = re.lastIndex; }
+    return out + esc(s.slice(k)); };
   const T = (x, y, s, o) => { o = o || {}; return `<text x="${r2(x)}" y="${r2(y)}" font-size="${o.fs || 12}"${o.a ? ` text-anchor="${o.a}"` : ''}${o.w ? ` font-weight="${o.w}"` : ''} fill="${o.c || C.ink}"${o.it ? ' font-style="italic"' : ''}>${o.raw ? s : lab(s)}</text>`; };
   const L = (x1, y1, x2, y2, c, w, dash) => `<line x1="${r2(x1)}" y1="${r2(y1)}" x2="${r2(x2)}" y2="${r2(y2)}" stroke="${c || C.ink}" stroke-width="${w || 1}"${dash ? ` stroke-dasharray="${dash}"` : ''}/>`;
   const svg = (W, H, aria, body, attrs) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;display:block;margin:0 auto;background:${C.paper}" font-family="${FONT}" role="img" aria-label="${esc(aria)}"${attrs || ''}>${body}</svg>`;
@@ -2543,6 +2545,92 @@ const TBGX = (() => {
     return { data, svg: svg(W, H, 'Governing vehicle positions: ' + rows.map(r => r.title).join('; '), p.join(''), ' data-tbgx="trucks"') };
   }
 
+  /* A plain x-y line chart (SVG): series of polylines, optional fills to zero, step lines (capacity), marked points; x ticks at the
+     nodes of the member; y + up unless o.down (deflection: + down, drawn downward). */
+  const nice = (a, b, n) => { const span = b - a || 1, raw = span / n, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p, st = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p; const t = []; for (let v = Math.ceil(a / st) * st; v <= b + 1e-9 * st; v += st) t.push(Math.abs(v) < 1e-12 ? 0 : v); return t; };
+  function chart(o) {
+    const W = o.W || 440, ser = o.series.filter(s => s && s.pts && s.pts.length), legRows = Math.ceil(ser.filter(s => s.name).length / 2);
+    const H = (o.H || 210) + legRows * 15 + 12, l = 54, r = 12, t = o.title ? 24 : 10, b = 46 + legRows * 15, pw = W - l - r, ph = H - t - b;
+    const ys = [0]; ser.forEach(s => s.pts.forEach(q => num(q[1]) && ys.push(q[1]))); (o.marks || []).forEach(m => num(m.y) && ys.push(m.y));
+    let y0 = Math.min(...ys), y1 = Math.max(...ys); const pad = (y1 - y0 || 1) * 0.08; y0 -= y0 < 0 ? pad : 0; y1 += pad;
+    const X = x => l + x / o.xMax * pw, Y = y => o.down ? t + (y - y0) / (y1 - y0) * ph : t + (y1 - y) / (y1 - y0) * ph, p = [];
+    if (o.title) p.push(T(8, 16, o.title, { w: 600, c: C.navy, fs: 12.5 }));
+    nice(y0, y1, 5).forEach(v => { p.push(L(l, Y(v), l + pw, Y(v), v === 0 ? C.grey : '#E2E8F0', v === 0 ? 1 : 0.8), T(l - 5, Y(v) + 4, o.fmtY ? o.fmtY(v) : g4(v), { fs: 10.5, a: 'end', c: C.grey })); });
+    (o.xN || []).forEach(x => { p.push(L(X(x), t, X(x), t + ph, '#E2E8F0', 0.8), T(X(x), t + ph + 13, g4(x), { fs: 10.5, a: 'middle', c: C.grey })); });
+    p.push(T(l + pw, t + ph + 27, 'x (ft)', { fs: 10.5, a: 'end', c: C.grey }), `<text x="12" y="${r2(t + ph / 2)}" font-size="10.5" text-anchor="middle" fill="${C.grey}" transform="rotate(-90 12 ${r2(t + ph / 2)})">${lab(o.yLab || '')}</text>`);
+    ser.forEach(s => {
+      const d = s.pts.filter(q => num(q[0]) && num(q[1])).map((q, i) => (i ? 'L' : 'M') + r2(X(q[0])) + ' ' + r2(Y(q[1]))).join(' ');
+      if (s.fill) p.push(`<path d="${d} L${r2(X(s.pts[s.pts.length - 1][0]))} ${r2(Y(0))} L${r2(X(s.pts[0][0]))} ${r2(Y(0))} Z" fill="${s.col}" fill-opacity=".12" stroke="none"/>`);
+      p.push(`<path d="${d}" fill="none" stroke="${s.col}" stroke-width="${s.w || 1.6}"${s.dash ? ` stroke-dasharray="${s.dash}"` : ''}/>`);
+    });
+    (o.marks || []).forEach(m => { p.push(`<circle cx="${r2(X(m.x))}" cy="${r2(Y(m.y))}" r="3.5" fill="${m.col || C.red}"/>`); if (m.lab) p.push(T(X(m.x) + (X(m.x) > W - 110 ? -6 : 6), Y(m.y) + (m.below ? 14 : -6), m.lab, { fs: 10.5, a: X(m.x) > W - 110 ? 'end' : 'start', c: m.col || C.red, w: 600 })); });
+    ser.filter(s => s.name).forEach((s, i) => { const x = 10 + (i % 2) * (W / 2), y = H - b + 44 + Math.floor(i / 2) * 15;
+      p.push(`<line x1="${x}" y1="${y - 4}" x2="${x + 22}" y2="${y - 4}" stroke="${s.col}" stroke-width="${s.w || 1.6}"${s.dash ? ` stroke-dasharray="${s.dash}"` : ''}/>`, T(x + 27, y, s.name, { fs: 10.5 })); });
+    return svg(W, H, o.aria || o.title || 'chart', p.join(''), o.attrs || '');
+  }
+  // a step line: a constant value over each [x0, x1]
+  const steps = segs => { const pts = []; segs.forEach(s => { if (num(s.v)) { if (pts.length) pts.push([s.x0, NaN]); pts.push([s.x0, s.v], [s.x1, s.v]); } }); return pts; };
+  const split = pts => { const out = [[]]; pts.forEach(q => { if (!num(q[1])) out.push([]); else out[out.length - 1].push(q); }); return out.filter(a => a.length); };
+  const stepSeries = (segs, base) => split(steps(segs)).map((pts, i) => Object.assign({}, base, { pts, name: i ? '' : base.name }));
+
+  /* 4. Demand and capacity along the member, and their ratio. o = { xMax, xN, unit, dem: [[x, y]] (or demP / demN), cap: [{x0, x1, v}] (+), capN (−), marks } */
+  function demCap(o) {
+    const ser = [];
+    if (o.dem) ser.push({ name: o.demName, pts: o.dem, col: C.blue, w: 1.8, fill: true });
+    if (o.demP) ser.push({ name: o.demName + ' (max)', pts: o.demP, col: C.blue, w: 1.8, fill: true }, { name: o.demName + ' (min)', pts: o.demN, col: '#7C3AED', w: 1.8, fill: true });
+    ser.push(...stepSeries(o.cap || [], { name: o.capName, col: C.red, w: 1.6, dash: '6 4' }), ...stepSeries(o.capN || [], { name: '', col: C.red, w: 1.6, dash: '6 4' }));
+    const svg1 = chart({ title: o.title, yLab: o.yLab, xMax: o.xMax, xN: o.xN, series: ser, marks: o.marks, attrs: ` data-tbgx="demcap"` });
+    let svg2 = '';
+    if (o.ratio && o.ratio.length) svg2 = chart({ title: 'Ratio ' + (o.ratioName || 'demand / capacity'), yLab: 'ratio', xMax: o.xMax, xN: o.xN, H: 150, fmtY: v => v.toFixed(2),
+      series: [{ pts: o.ratio, col: C.navy, w: 1.6, name: o.ratioName || 'demand / capacity' }, { pts: [[0, 1], [o.xMax, 1]], col: C.red, w: 1, dash: '4 3', name: '1.0' }], attrs: ' data-tbgx="ratio"' });
+    return { data: { cap: o.cap, capN: o.capN || [], marks: o.marks || [], ratioMax: o.ratio && o.ratio.length ? Math.max(...o.ratio.map(q => q[1]).filter(num)) : null }, svg: svg1 + svg2 };
+  }
+  // ratio along the member: |demand| / capacity of the segment and sign that holds x
+  const ratioAlong = (pts, cap, capN) => pts.map(([x, y]) => { const set = y >= 0 ? cap : capN, s = (set || []).find(q => x >= q.x0 - 1e-9 && x <= q.x1 + 1e-9); return [x, s && num(s.v) && s.v !== 0 ? Math.abs(y) / Math.abs(s.v) : NaN]; });
+
+  /* 5. Bracing: the member in elevation; each edge: braced continuously, or brace points at the supports and every l_u (illustrative
+     spacing), with l_u, l_e and C_L per span. o.spans[i] = { x0, x1, top: { cont, lu (in.), le (in.), CL }, bot: {…} } */
+  function bracing(o) {
+    const W = 440, rowH = 0, H = 190, l = 20, pw = W - 40, X = x => l + x / o.xMax * pw, yT = 70, yB = 104, p = [];
+    p.push(T(8, 16, 'Lateral bracing of the compression edges', { w: 600, c: C.navy, fs: 12.5 }));
+    p.push(`<rect x="${l}" y="${yT}" width="${pw}" height="${yB - yT}" fill="${C.wood}" stroke="${C.woodS}"/>`);
+    (o.xN || []).forEach((x, j) => { if (o.types && o.types[j] === 'free') return; p.push(`<path d="M${r2(X(x))} ${yB} l-6 10 h12 Z" fill="#E2E8F0" stroke="#334155"/>`); });
+    const edge = (sp, e, y, up) => {
+      const q = sp[e]; if (!q) return;
+      if (q.cont) p.push(`<line x1="${r2(X(sp.x0) + 1)}" y1="${y}" x2="${r2(X(sp.x1) - 1)}" y2="${y}" stroke="${C.green}" stroke-width="4" stroke-dasharray="2 3"/>`);
+      else { const lu = q.lu / 12, xs = [sp.x0]; if (lu > 0) for (let x = sp.x0 + lu; x < sp.x1 - 1e-6; x += lu) xs.push(x); xs.push(sp.x1);
+        xs.forEach(x => p.push(`<path d="M${r2(X(x) - 4)} ${y + (up ? -10 : 2)} l8 8 m-8 0 l8 -8" stroke="${C.green}" stroke-width="1.8" fill="none"/>`)); }
+      const txt = q.cont ? 'braced (C_L = 1.0)' : `l_u ${fx(q.lu, 1)}, l_e ${fx(q.le, 1)} in., C_L ${fx(q.CL, 3)}`;
+      p.push(T((X(sp.x0) + X(sp.x1)) / 2, up ? y - 16 - (sp.i % 2) * 12 : y + 24 + (sp.i % 2) * 12, txt, { fs: 10.5, a: 'middle', c: q.cont ? C.green : C.ink }));
+    };
+    o.spans.forEach((sp, i) => { sp.i = i; edge(sp, 'top', yT, true); edge(sp, 'bot', yB, false); });
+    p.push(T(8, H - 8, 'top edge: compression for +M · bottom edge: for −M · × brace point (l_u apart, illustrative)', { fs: 9.5, c: C.grey }));
+    return { data: { spans: o.spans.map(s => ({ x0: s.x0, x1: s.x1, top: s.top, bot: s.bot })) }, svg: svg(W, H, 'Lateral bracing', p.join(''), ' data-tbgx="bracing"') };
+  }
+
+  /* 6. Bearing: the member end on its support, bearing length l_b, C_b, the reaction against the bearing capacity */
+  function bearing(o) {
+    const W = 440, H = 206, p = [], k = Math.min(18, 160 / Math.max(o.lb, 1)), x0 = 150, wb = o.lb * k;
+    p.push(T(8, 16, 'Bearing at ' + o.where, { w: 600, c: C.navy, fs: 12.5 }));
+    p.push(`<rect x="${o.end ? x0 - 12 : 20}" y="60" width="${o.end ? 380 - x0 + 12 : 400}" height="42" fill="${C.wood}" stroke="${C.woodS}"/>`);
+    p.push(`<rect x="${r2(x0)}" y="102" width="${r2(wb)}" height="34" fill="#CBD5E1" stroke="${C.grey}"/>`, `<path d="M${r2(x0 - 10)} 136 h${r2(wb + 20)}" stroke="${C.grey}" stroke-width="2"/>`);
+    for (let x = x0 - 10; x < x0 + wb + 10; x += 8) p.push(L(x, 136, x - 6, 144, C.grey, 1));
+    p.push(dimH(x0, x0 + wb, 172, 'l_b = ' + g4(o.lb) + ' in.'));
+    p.push(`<path d="M${r2(x0 + wb / 2)} 156 V108 m-5 9 l5 -9 l5 9" fill="none" stroke="${ratioCol(o.ratio)}" stroke-width="2.2"/>`);
+    const tx = x0 + wb + 28;
+    p.push(T(tx, 116, o.Rsym + ' = ' + g4(o.R) + ' ' + o.unit, { fs: 12, w: 600, c: ratioCol(o.ratio) }), T(tx, 132, o.capSym + ' = ' + g4(o.cap) + ' ' + o.unit, { fs: 12 }),
+      T(tx, 148, 'C_b = ' + fx(o.Cb, 3) + (o.cbNote ? ' (' + o.cbNote + ')' : ''), { fs: 11.5 }), T(tx, 164, 'ratio ' + fx(o.ratio, 3) + (o.ratio > 1 ? ' > 1.0: NG' : ' ≤ 1.0: OK'), { fs: 12, w: 600, c: ratioCol(o.ratio) }));
+    p.push(T(8, H - 8, o.foot || '', { fs: 10, c: C.grey }));
+    return { data: { lb: o.lb, Cb: o.Cb, R: o.R, cap: o.cap, ratio: o.ratio }, svg: svg(W, H, 'Bearing: ' + o.where, p.join(''), ' data-tbgx="bearing"') };
+  }
+
+  /* 9. Deflected shape (AASHTO): Service I dead load, the live-load envelope g_Δ Δ_LL and their sum, with the limit L/n of each span */
+  function deflShape(o) {
+    const ser = [{ name: 'Δ_DL (DC + DW)', pts: o.dl, col: C.grey, w: 1.4 }, { name: 'Δ_LL (envelope, g_Δ)', pts: o.ll, col: C.blue, w: 1.8 }, { name: 'Δ_DL + Δ_LL', pts: o.tot, col: C.amber, w: 1.6 }];
+    if (o.lim) ser.push(...stepSeries(o.lim, { name: 'limit L/' + g4(o.n) + ' (Δ_LL)', col: C.red, w: 1.4, dash: '6 4' }));
+    return { data: { lim: o.lim || [], llMax: Math.max(...o.ll.map(q => q[1])) }, svg: chart({ title: 'Service I deflection (+ down)', yLab: 'Δ (in.)', xMax: o.xMax, xN: o.xN, series: ser, down: true, fmtY: v => v.toFixed(2), attrs: ' data-tbgx="defl"' }) };
+  }
+
   /* ---- pickers: the numbers each figure draws, taken from the engine results (R: tbcRun; A: tbcAashto; AC: tbcAasChecks; m: the model) ---- */
   const glLams = (m, grpKey) => { const gl = m.material.glulam, grp = GLULAM_GRP[grpKey]; return !gl.customSize && grp ? { nLam: gl.nLam, tLam: grp.lam } : {}; };
   const glGrp = m => { const gl = m.material.glulam, sp = GLULAM_5A[gl.combo]; return (sp && sp.grp) || gl.grp; };   // = glGrpOf() of the page
@@ -2590,6 +2678,73 @@ const TBGX = (() => {
     return bridgeXs({ S: AL.S, pos: AL.pos, de: AL.de, wRd: AL.wRd, NL: AL.NL, nB: df.nB, deckName: AL.deck ? AL.deck[1] : '', lev: df.lev || null, small,
       note: df.mode === 'entered' ? 'Distribution factors entered: no wheel placement' : 'g from ' + (df.tab || 'the AASHTO table') + ': no wheel placement' });
   }
+  /* ---- pickers, TBGX-3 ---- */
+  const both = (xs, f) => { const pts = []; xs.forEach(x => { const a = f(x, false), b = f(x, true); pts.push([x, a]); if (num(b) && Math.abs(b - a) > 1e-9) pts.push([x, b]); }); return pts; };
+  function ndsMoment(R) {   // the moment diagram of the governing bending combination; capacity F′_b S / 12 of each span and sign (ft-lb)
+    if (!R || !R.ok) return null;
+    const c = R.gov.b, xN = R.xN, nS = xN.length - 1, dem = both(R.xs, (x, s) => c.bm.M(x, s));
+    const cap = [], capN = [];
+    for (let i = 0; i < nS; i++) { const e = c.bend[i] || c.bend[0]; cap.push({ x0: xN[i], x1: xN[i + 1], v: e.Fbp_t * R.S / 12 }); capN.push({ x0: xN[i], x1: xN[i + 1], v: -e.Fbp_b * R.S / 12 }); }
+    return demCap({ title: 'Moment and allowable moment, ' + c.name, yLab: 'M (ft-lb)', xMax: R.xN[nS], xN, dem, demName: 'M (' + c.name + ')', cap, capN, capName: 'F′_b S / 12 (each span and sign)', ratio: ratioAlong(dem, cap, capN), ratioName: '|M| / (F′_b S / 12)' });
+  }
+  function ndsShear(R) {   // the shear diagram of the governing shear combination; capacity (2/3) F′_v A (lb); the design shear V at x
+    if (!R || !R.ok) return null;
+    const c = R.gov.v, xN = R.xN, nS = xN.length - 1, dem = both(R.xs, (x, s) => c.bm.V(x, s)), Va = c.Fv_p * 2 * R.A / 3;
+    const cap = [{ x0: 0, x1: xN[nS], v: Va }], capN = [{ x0: 0, x1: xN[nS], v: -Va }];
+    const vs = c.bm.V(c.xV, false), vs2 = c.bm.V(c.xV, true), sg = Math.abs(vs2) > Math.abs(vs) ? Math.sign(vs2) : Math.sign(vs) || 1;
+    return demCap({ title: 'Shear and allowable shear, ' + c.name, yLab: 'V (lb)', xMax: xN[nS], xN, dem, demName: 'V (' + c.name + ')', cap, capN, capName: '(2/3) F′_v A', marks: [{ x: c.xV, y: sg * c.Vd, lab: 'design V = ' + g4(c.Vd) + ' lb' }] });
+  }
+  function aasMoment(AL, AD, AC) {   // the Strength I factored moment envelope; M_r of each span and sign (AC.flex, Strength I)
+    if (!AC || !AC.ok || !AD) return null;
+    const e = AL.env, xN = e.xN, nS = xN.length - 1, xs = AD.sec.map(q => q.x);
+    const demP = AD.sec.map(q => [q.x, q.M.StrI.max]), demN = AD.sec.map(q => [q.x, q.M.StrI.min]);
+    const cap = [], capN = [];
+    AC.flex.filter(it => it.lim === 'StrI').forEach(it => (it.sg > 0 ? cap : capN).push({ x0: xN[it.k], x1: xN[it.k + 1], v: it.sg * it.Mr, k: it.k }));
+    const ratio = AD.sec.map(q => { const rp = cap.find(s => q.x >= s.x0 - 1e-9 && q.x <= s.x1 + 1e-9), rn = capN.find(s => q.x >= s.x0 - 1e-9 && q.x <= s.x1 + 1e-9);
+      const a = rp && q.M.StrI.max > 0 ? q.M.StrI.max / rp.v : 0, b = rn && q.M.StrI.min < 0 ? q.M.StrI.min / rn.v : 0; return [q.x, Math.max(a, b)]; });
+    return demCap({ title: 'Factored moment envelope and M_r (Strength I)', yLab: 'M (kip-ft)', xMax: e.Lt, xN, demP, demN, demName: 'M_u', cap, capN, capName: 'φM_r = M_r (each span and sign)', ratio, ratioName: 'M_u / M_r' });
+  }
+  function aasShear(AL, AD, AC) {   // the Strength I factored shear envelope; V_r; V_u at the critical sections (AC.shear, Strength I)
+    if (!AC || !AC.ok || !AD) return null;
+    const e = AL.env, xN = e.xN, nS = xN.length - 1, demP = [], demN = [];
+    AD.sec.forEach(q => { [q.VL, q.VR].forEach(v => { if (v && v.StrI) { demP.push([q.x, v.StrI.max]); demN.push([q.x, v.StrI.min]); } }); });
+    const sh = AC.shear.filter(it => it.lim === 'StrI'), Vr = sh.length ? sh[0].Vr : NaN;
+    return demCap({ title: 'Factored shear envelope and V_r (Strength I)', yLab: 'V (kip)', xMax: e.Lt, xN, demP, demN, demName: 'V_u', cap: [{ x0: 0, x1: e.Lt, v: Vr }], capN: [{ x0: 0, x1: e.Lt, v: -Vr }], capName: 'V_r',
+      marks: sh.map(it => ({ x: it.s.xd, y: it.s.dir * it.Vu, lab: 'V_u = ' + fx(it.Vu, 2), below: it.s.dir < 0 })) });
+  }
+  function ndsBracing(R) {   // l_u, l_e (in.) of each span and edge (R.stab) and C_L of the governing bending combination
+    if (!R || !R.ok) return null;
+    const c = R.gov.b, xN = R.xN, same = R.latBot === 'same';
+    return bracing({ xMax: xN[xN.length - 1], xN, types: R.types, spans: R.stab.map((s, i) => { const e = c.bend[i] || c.bend[0];
+      return { x0: xN[i], x1: xN[i + 1], top: R.stabilityApplies ? { cont: false, lu: s.top.lu, le: s.top.le, CL: e.CLt } : { cont: true, CL: 1 },
+        bot: (same ? R.stabilityApplies : R.stabBot) ? { cont: false, lu: s.bot.lu, le: s.bot.le, CL: e.CLb } : { cont: true, CL: 1 } }; }) });
+  }
+  function aasBracing(AL, AC) {   // the Strength I flexure items of each span and sign: braced (C_L = 1.0) or L_u, L_e, C_L
+    if (!AC || !AC.ok) return null;
+    const e = AL.env, xN = e.xN, it = (k, sg) => AC.flex.find(q => q.lim === 'StrI' && q.k === k && q.sg === sg);
+    const one = q => !q ? null : q.clWhy ? { cont: true, CL: 1, why: q.clWhy } : { cont: false, lu: q.Lu, le: q.Le, CL: q.CL };
+    return bracing({ xMax: e.Lt, xN, types: e.types, spans: e.Ls.map((L, k) => ({ x0: xN[k], x1: xN[k + 1], top: one(it(k, 1)), bot: one(it(k, -1)) })) });
+  }
+  function ndsBearing(R, nodeName) {   // the beam at its governing support (R.gov.cb, TBB1): l_b, C_b, R, F′_c⊥ b l_b; ratio r_cB
+    if (!R || !R.ok || !R.gov.cb) return null; const c = R.gov.cb, j = c.gcJ, lb = R.lbs[j], n = R.xN.length - 1;
+    return bearing({ where: 'support ' + (nodeName ? nodeName(j) : j) + ' (' + c.name + ')', end: j === 0 || j === n, lb, Cb: R.Cbs[j], R: c.Rbear, cap: c.Fcp_p * R.bw * lb, ratio: c.r_cB, unit: 'lb', Rsym: 'R', capSym: 'F′_c⊥ b l_b', cbNote: R.cbOn[j] ? (lb < 6 ? 'Eq. 3.10-2' : 'l_b ≥ 6 in.') : 'end bearing', foot: 'R: reaction of the combination; F′_c⊥ b l_b: the bearing capacity (f_c⊥ ≤ F′_c⊥)' });
+  }
+  function aasBearing(AL, AC) {   // the governing bearing item (AC.govBear): l_b, C_b, R_u, P_r
+    if (!AC || !AC.ok || !AC.govBear) return null; const it = AC.govBear, n = AL.env.xN.length - 1;
+    return bearing({ where: 'support ' + 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[it.j] + ' (' + (it.lim === 'StrII' ? 'Strength II' : 'Strength I') + ')', end: it.j === 0 || it.j === n, lb: it.lb, Cb: it.Cb, R: it.Ru, cap: it.Pr, ratio: it.ratio, unit: 'kip', Rsym: 'R_u', capSym: 'P_r', cbNote: it.cbWhy === 'table' ? 'Table 8.8.3-1' : it.cbWhy === 'long' ? 'l_b ≥ 6 in.' : it.cbWhy === 'end' ? 'end bearing' : 'interior support', foot: 'P_r = φ F_cp A_b C_b (Art. 8.8.3); R_u: factored reaction' });
+  }
+  function aasDefl(AL, AD, AC) {   // Service I: Δ_DL = DC + DW, Δ_LL = g_Δ × the per-lane live-load envelope, their sum; limit L/n per span
+    if (!AL || !AL.ok || !AL.env || !AL.env.ok || !AD) return null;
+    const e = AL.env, gD = AL.df.gD, st = e.defl.slice().sort((a, b) => a.x - b.x), pts = f => [[0, 0]].concat(st.map(d => [d.x, f(d)]));
+    const withSup = f => { const a = st.map(d => [d.x, f(d)]); e.xN.forEach((x, j) => { if (e.types[j] !== 'free') a.push([x, 0]); }); return a.sort((p, q) => p[0] - q[0]); };
+    const dl = withSup(d => d.dc + d.dw), ll = withSup(d => gD * d.ll), tot = withSup(d => d.dc + d.dw + gD * d.ll);
+    const n = AC && AC.ok ? AC.dLim : 0, lim = n > 0 ? e.Ls.map((L, k) => ({ x0: e.xN[k], x1: e.xN[k + 1], v: (AC.defl.find(q => q.k === k) || {}).allow })) : null;
+    return deflShape({ xMax: e.Lt, xN: e.xN, dl, ll, tot, lim, n });
+  }
+  function ndsDeflLimits(R) {   // the limits of each span (in.): Δ_LL ≤ L/n_LL, Δ_T ≤ L/n_TL (R.defl.perSpan)
+    if (!R || !R.ok) return null;
+    return R.defl.perSpan.map(s => ({ x0: R.xN[s.span], x1: R.xN[s.span + 1], LL: s.LLlim, TL: s.TLlim }));
+  }
   function aasTrucks(AL, AD) {   // the axle placements of the envelopes that give M_u+, M_u−, V_u, R_u (and the permit's M_u, Strength II)
     if (!AL || !AL.ok || !AL.env || !AL.env.ok || !AD) return null;
     const e = AL.env, on = x => x >= -1e-9 && x <= e.Lt + 1e-9;
@@ -2604,7 +2759,8 @@ const TBGX = (() => {
       AD.Mpos2 && AD.Mpos2.s.M.pm && row('Mpos2', 'Permit vehicle, largest +M (Strength II)', AD.Mpos2.x, AD.Mpos2.s.M.pm.gMax, pm, 'M_u = ' + fx(AD.Mpos2.v, 1) + ' kip-ft'),
       AD.Mneg2 && AD.Mneg2.s.M.pm && row('Mneg2', 'Permit vehicle, largest −M (Strength II)', AD.Mneg2.x, AD.Mneg2.s.M.pm.gMin, pm, 'M_u = ' + fx(AD.Mneg2.v, 1) + ' kip-ft')] });
   }
-  return { C, section, waterfall, ratios, ratioCls, g4, ndsSection, aasSection, ndsFbChain, aasFbChain, ndsRatios, aasRatios, bridgeXs, trucks, aasXsec, aasTrucks };   // TBGX-2: bridgeXs, trucks
+  return { C, section, waterfall, ratios, ratioCls, g4, ndsSection, aasSection, ndsFbChain, aasFbChain, ndsRatios, aasRatios, bridgeXs, trucks, aasXsec, aasTrucks,   // TBGX-2: bridgeXs, trucks
+    chart, demCap, bracing, bearing, deflShape, ndsMoment, ndsShear, aasMoment, aasShear, ndsBracing, aasBracing, ndsBearing, aasBearing, aasDefl, ndsDeflLimits };   // TBGX-3
 })();
 /* TBGX-END */
 /* =====================================================================
@@ -3820,6 +3976,8 @@ function figD() {
   const data = [{ x: xs, y: cv.D, name: 'Δ dead (D)', line: { color: '#64748B', width: 1.5 } },
     { x: xs, y: tr(tcLL.f), name: 'Δ live/snow (' + d.trName + ')', line: { color: '#2563EB', width: 2 } },
     { x: xs, y: tr(tcTL.f).map((v, k) => d.Kcr * cv.D[k] + v), name: 'Δ total (Kcr·D + ' + d.totName + ')', line: { color: '#B45309', width: 2 } }];
+  (TBGX.ndsDeflLimits(R) || []).forEach((s, i) => data.push({ x: [s.x0, s.x1], y: [s.LL, s.LL], name: 'limit L/' + g4(d.LLdiv) + ' (live/snow)', showlegend: !i, legendgroup: 'lLL', mode: 'lines', line: { color: '#2563EB', width: 1, dash: 'dash' }, hoverinfo: 'skip' },
+    { x: [s.x0, s.x1], y: [s.TL, s.TL], name: 'limit L/' + g4(d.TLdiv) + ' (total)', showlegend: !i, legendgroup: 'lTL', mode: 'lines', line: { color: '#B45309', width: 1, dash: 'dash' }, hoverinfo: 'skip' }));   // TBGX-3: the limits of each span (R.defl.perSpan)
   return { data, layout: plotLayout('Deflection (service loads, + down)', 'Δ (in.)', { rev: true }) };
 }
 function buildAnalysis(pg) {
@@ -4015,12 +4173,13 @@ function buildBend(pg) {
   const be = c.bend[i]; const Mv = bendM(c);
   pg.appendChild(el('div', 'note', `Governing combination for bending: <b>${esc(c.name)}</b> (${tfH(c)}), ${esc(bendLoc(c))}. Ratio ${f3(c.r_b)}.` + (isLRFD() ? ' LRFD: M from factored loads.' : '')));
   mkSec(pg, 'bDemand', 'Bending stress (demand)', body => {
+    body.appendChild(tbgxFig(TBGX.ndsMoment(R), `Moment of ${esc(c.name)} along the member (as on the ${tbcLink('anaDiag', 'Analysis Results tab')}) against the allowable moment F′<sub>b</sub> S / 12 of each span and sign (F′<sub>b</sub>: ${tbcLink('bCap', 'Adjusted bending design value')}; S: ${tbcLink('dvSect', 'Section properties')}), and their ratio |M| / (F′<sub>b</sub>S/12) along the member (display: the check is f<sub>b</sub>/F′<sub>b</sub> at the governing section).`));   // TBGX-3
     calc(body, { title: 'Moment and bending stress', ref: 'NDS 3.3.2, Eq. 3.3-2',
       lines: [T`f_b = \frac{M}{S} = \frac{${f0(Mv)} \times 12}{${f3(R.S)}} = ${f0(c.fb)}\ \text{psi}`],
       where: [['M', `${R.legacyBend ? 'largest |M|' : (sign > 0 ? 'largest positive moment' : 'largest negative moment')} in ${spanLab(i)}, ${esc(c.name)}`, f0(Mv), 'ft-lb', tbcLink('anaPeaks', 'Analysis Results tab')], ['S', 'section modulus', f3(R.S), 'in³', tbcLink('dvSect', 'Section Properties tab')]],
       result: `f<sub>b</sub> = ${f0(c.fb)} psi` });
   });
-  mkSec(pg, 'bCL', 'Beam stability factor C<sub>L</sub>', body => { clBlock(body, c, i, sign);
+  mkSec(pg, 'bCL', 'Beam stability factor C<sub>L</sub>', body => { body.appendChild(tbgxFig(TBGX.ndsBracing(R), `Lateral bracing (inputs: Geometry input tab): each compression edge braced continuously, or l<sub>u</sub>, l<sub>e</sub> (in.) and C<sub>L</sub> of ${esc(c.name)} for each span (as in the C<sub>L</sub> steps below and the table “Bending by span and sign”); brace points drawn at the spacing l<sub>u</sub> for illustration.`)); clBlock(body, c, i, sign);   // TBGX-3
     body.appendChild(el('div', 'hint', tbNL('Beam stability basis (NDS 2018 3.3.3):', [   // TBASM (2026-11-10): assumptions stated where they apply
       ['R<sub>B</sub> ≤ 50', '(3.3.3.7) is enforced for an edge only in a span where that edge is in compression in some combination: the top edge where positive moment occurs, the bottom edge where negative moment occurs (with "same as top edge", either). A moment that is only numerical round-off counts as zero.'],
       ['l<sub>e</sub>:', 'a single span with uniform load only takes the Table 3.3.3 uniform-load row; a span with point loads, a continuous beam or a cantilever takes the general rule of footnote 1 (not less than the cantilever rows).'],
@@ -4079,6 +4238,7 @@ function buildShear(pg) {
       'Reactions, bearing, the notched-end check, moments and deflections use the full loads.'])));
   });
   mkSec(pg, 'sCap', 'Adjusted shear design value and check', body => {
+    { const c = R.gov.v; body.appendChild(tbgxFig(TBGX.ndsShear(R), `Shear of ${esc(c.name)} along the member (${tbcLink('anaDiag', 'Analysis Results tab')}) against the allowable shear (2/3) F′<sub>v</sub> A = ${f0(c.Fv_p * 2 * R.A / 3)} lb (display: the check is f<sub>v</sub> = 3V/2A ≤ F′<sub>v</sub>); the dot: the design shear V at x = ${f2(c.xV)} ft (Design shear and shear stress, above).${R.hasNotch ? ' Notched ends: ' + tbcLink('sNotch', 'Notched ends') + '.' : ''}`)); }   // TBGX-3
     calc(body, { title: 'Adjusted shear design value', ref: 'NDS Table ' + (R.isGL ? '5.3.1' : R.isSCL ? '8.3.1' : '4.3.1') + (isLRFD() ? ', App. N' : ''),
       lines: [sawnOnly() && !isLRFD() ? T`F'_v = F_v\,C_D\,C_M\,C_t\,C_i = ${g4(r.Fv)} \times ${c.CD} \times ${g4(R.CM.Fv)} \times ${g4(R.Ct.Fv)} \times ${g4(R.Ci.Fv)} = ${f1(c.Fv_p)}\ \text{psi}` : facEq1("F'_v", [R.isGL ? 'F_{vx}' : 'F_v', g4(r.Fv)], fvFacs(c), `${f1(c.Fv_p)}\\ \\text{psi}`)],
       where: [['F_v', 'reference shear design value', g4(r.Fv), 'psi', R.userVals ? 'user-entered' : esc(R.src) + ' ' + VFY], tfWhere(c, 'load duration'), ['C_M', 'wet service', g4(R.CM.Fv), '', 'Supplement footnotes ' + VFY], ['C_t', 'temperature', g4(R.Ct.Fv), '', 'NDS Table 2.3.3 ' + VFY], ...(sawnOnly() ? [['C_i', 'incising', g4(R.Ci.Fv), '', 'NDS Table 4.3.8 ' + VFY]] : []), ...lrfdWhere('Fv')] });
@@ -4133,6 +4293,7 @@ function buildBear(pg) {
   const cg = R.gov.c, c = R.gov.cb, r = R.ref; const j = c.gcJ; const lb = R.lbs[j], Cb = R.Cbs[j];   // TBB1: c = the beam at its supports
   pg.appendChild(el('div', 'note', `Governing: <b>${esc(cg.name)}</b>${cg.gcKind === 'beam' ? ` at support <b>${nodeN(cg.gcJ)}</b>` : `, <b>${bearLab(cg)}</b>`}. Ratio ${f3(cg.r_c)}. F<sub>c⊥</sub> is not adjusted by ${isLRFD() ? 'λ (NDS Table 4.3.1, App. N)' : 'C<sub>D</sub> (NDS Table 4.3.1)'}.`));
   mkSec(pg, 'brCalc', 'Bearing perpendicular to grain at support ' + nodeN(j), body => {
+    body.appendChild(tbgxFig(TBGX.ndsBearing(R, nodeN), 'The beam on its governing support: bearing length l<sub>b</sub> (Geometry input tab), C<sub>b</sub> and the reaction R against the bearing capacity F′<sub>c⊥</sub> b l<sub>b</sub> (display: the check is f<sub>c⊥</sub> = R/(b l<sub>b</sub>) ≤ F′<sub>c⊥</sub>, below).'));   // TBGX-3
     calc(body, { title: 'Bearing area factor', ref: 'NDS 3.10.4, Eq. 3.10-2',
       lines: R.cbOn[j] && lb < 6 ? [T`C_b = \frac{l_b + 0.375}{l_b} = \frac{${g4(lb)} + 0.375}{${g4(lb)}} = ${f3(Cb)}`] : [T`C_b = 1.0`],
       result: R.cbOn[j] ? (lb < 6 ? 'Bearing ≥ 3 in. from the member end and l<sub>b</sub> < 6 in.' : 'l<sub>b</sub> ≥ 6 in.: C<sub>b</sub> = 1.0') : 'End bearing (less than 3 in. from the member end): C<sub>b</sub> = 1.0 (fix log F8)' });
@@ -4792,7 +4953,8 @@ function tbrModel() {
     const cvOn = !sawnOnly(), brows = [];
     c.bend.forEach(e => { brows.push([spanLab(e.span), '+M (top)' + (R.isGL ? ', F_bx^+' : ''), tbrCell(e.Mp, 0), e.xp == null ? '—' : tbrCell(e.xp, 2), tbrCell(e.CLt, 3), ...(cvOn ? [tbrCell(e.CVt, 3)] : []), tbrCell(e.Fbp_t, 0), tbrCell(e.fbp, 0), tbrDC(e.rp)]);
       brows.push([spanLab(e.span), '−M (bottom)' + (R.isGL ? ', F_bx^−' : ''), tbrCell(e.Mn, 0), e.xn == null ? '—' : tbrCell(e.xn, 2), tbrCell(e.CLb, 3), ...(cvOn ? [tbrCell(e.CVb, 3)] : []), tbrCell(e.Fbp_b, 0), tbrCell(e.fbn, 0), tbrDC(e.rn)]); });
-    const subs = [{ title: 'Bending check (governing combination ' + c.name + ')', items: [tbrTopics(T), { type: 'note', text: 'The same steps are on the Bending tab[[tab:bend| ↗]].' }] }];
+    const subs = [{ title: 'Bending check (governing combination ' + c.name + ')', items: [tbrTopics(T), { type: 'note', text: 'The same steps are on the Bending tab[[tab:bend| ↗]].' },
+      ...[tbgxRptFig(TBGX.ndsMoment(R), 'Moment of ' + c.name + ' against F′_b S / 12 of each span and sign, and the ratio along the member (display; the check: [[tb/bd.r]]).'), tbgxRptFig(TBGX.ndsBracing(R), 'Lateral bracing: l_u, l_e and C_L of each span and edge ([[tb/bd.CL]]); brace points at the spacing l_u for illustration.')].filter(Boolean)] }];   // TBGX-3
     if (R.nS > 1 || !R.legacyBend) subs.push({ title: 'Bending by span and sign (' + c.name + ')', items: [{ type: 'table', head: ['Span', 'Region', '|M| (ft-lb)', 'x (ft)', 'C_L', ...(cvOn ? ['C_V'] : []), 'F′_b (psi)', 'f_b (psi)', 'Ratio'], rows: brows },
       { type: 'table', head: ['Span', 'top l_u (in.)', 'l_e', 'R_B', 'F_bE', 'bottom l_u (in.)', 'l_e', 'R_B', 'F_bE'], rows: R.stab.map((q, k) => [spanLab(k), tbrCell(q.top.lu, 1), tbrCell(q.top.le, 1), tbrCell(q.top.RB, 2), tbrCell(q.top.FbE, 0), tbrCell(q.bot.lu, 1), tbrCell(q.bot.le, 1), tbrCell(q.bot.RB, 2), tbrCell(q.bot.FbE, 0)]) },
       { type: 'note', text: 'Top edge: ' + (R.stabilityApplies ? 'at supports only' : 'braced (C_L = 1.0)') + '; bottom edge: ' + (R.latBot === 'same' ? 'same as top edge' : (R.stabBot ? 'at supports only' : 'braced (C_L = 1.0)')) + '.' + (R.simple ? '' : ' Continuous beams and cantilevers use the general rule of NDS 2018 Table 3.3.3 footnote 1.') }] });
@@ -4820,7 +4982,7 @@ function tbrModel() {
       : [tbrS({ id: 'sh.Cn', label: 'Notch factor', sym: 'C_{n}', eq: '\\left(\\frac{d_{n}}{d}\\right)^{2}', sub: '\\left(\\frac{' + f3(R.dn) + '}{' + g4(R.dep) + '}\\right)^{2}', value: R.Cn, unit: '', d: 3, ref: TB_NDS + 'Eq. 3.4-3' })]),
       tbrS({ id: 'sh.fvn', label: 'Shear stress at the notched end (R = largest |reaction| at a notched end support, ' + c.name + ')', sym: 'f_{v,n}', eq: '\\frac{3R}{2\\,b\\,d_{n}}', sub: '\\frac{1.5 \\times ' + f0(c.Rmax) + '}{' + g4(R.bw) + ' \\times ' + f3(R.dn) + '}', value: c.fvn, unit: 'psi', d: 1, ref: TB_NDS + 'Eq. 3.4-3' }),
       tbrS({ id: 'sh.rn', label: 'Notched-end check', sym: R.isGL ? '\\frac{f_{v,n}}{F^{\\prime}_{v}\\,C_{n}\\,C_{vr}}' : '\\frac{f_{v,n}}{F^{\\prime}_{v}\\,C_{n}}', eq: '', sub: R.isGL ? '\\frac{' + f1(c.fvn) + '}{' + f1(c.Fv_p) + ' \\times ' + f3(R.Cn) + ' \\times ' + R.Cvr + '}' : '\\frac{' + f1(c.fvn) + '}{' + f1(c.Fv_p) + ' \\times ' + f3(R.Cn) + '}', value: c.r_vn, unit: '', d: 3, ref: TB_NDS + (nc ? '3.4.3.2' : '3.4.3.2(a)'), ok: c.r_vn <= 1 })] });
-    secs.push({ title: 'Shear', subs: [{ title: 'Shear check (governing combination ' + c.name + ')', items: [tbrTopics(T), { type: 'note', text: 'Shear ratio of the combination = the larger of the unnotched and notched-end ratios = ' + f3(c.r_v) + '. The same steps are on the Shear tab[[tab:shear| ↗]].' }] },
+    secs.push({ title: 'Shear', subs: [{ title: 'Shear check (governing combination ' + c.name + ')', items: [tbrTopics(T), ...[tbgxRptFig(TBGX.ndsShear(R), 'Shear of ' + c.name + ' against (2/3) F′_v A; the dot: the design shear [[tb/sh.V]] (display; the check: [[tb/sh.r]]).')].filter(Boolean), { type: 'note', text: 'Shear ratio of the combination = the larger of the unnotched and notched-end ratios = ' + f3(c.r_v) + '. The same steps are on the Shear tab[[tab:shear| ↗]].' }] },
       { title: 'Shear ratio by combination', items: [{ type: 'table', wide: true, head: ['Combination', tfHead().replace(/<sub>(.*?)<\/sub>/, '_$1'), 'V (lb)', 'x (ft)', 'f_v (psi)', 'F′_v (psi)', 'f_v/F′_v', ...(R.hasNotch ? ['R notch (lb)', 'f_v,n/(F′_v C_n)'] : []), 'Ratio'],
         rows: R.combos.map(k => ({ cls: k === c ? 'gov' : '', cells: [k.name, String(k.TF), tbrCell(k.Vd, 0), tbrCell(k.xV, 2), tbrCell(k.fv, 1), tbrCell(k.Fv_p, 1), tbrCell(k.r_v1, 3), ...(R.hasNotch ? [tbrCell(k.Rmax, 0), tbrCell(k.r_vn, 3)] : []), tbrDC(k.r_v)] })) }] }] });
   }
@@ -4838,7 +5000,7 @@ function tbrModel() {
       const Rmin = Math.min(...R.combos.map(k => k.R[jj]));
       return { cls: jj === j ? 'gov' : '', cells: [nodeN(jj), g4(R.lbs[jj]), R.cbOn[jj] ? 'yes' : 'no', tbrCell(R.Cbs[jj], 3), tbrCell(best.e.Fcp_p, 1), best.k.name, tbrCell(best.e.R, 0), tbrCell(best.e.fcp, 1), tbrDC(best.e.r), tbrCell(Rmin, 0, Rmin < 0 ? 'ng' : '')] };
     });
-    secs.push({ title: 'Bearing', subs: [{ title: 'Bearing perpendicular to grain at support ' + nodeN(j) + ' (' + c.name + ')', items: [tbrTopics(T), { type: 'note', text: 'F_c⊥ is not adjusted by ' + (isLRFD() ? 'λ' : 'C_D') + ' (NDS 2018 Table 4.3.1). The same steps are on the Bearing tab[[tab:bear| ↗]].' }] },
+    secs.push({ title: 'Bearing', subs: [{ title: 'Bearing perpendicular to grain at support ' + nodeN(j) + ' (' + c.name + ')', items: [tbrTopics(T), ...[tbgxRptFig(TBGX.ndsBearing(R, nodeN), 'The beam on its governing support: l_b, C_b ([[tb/br.Cb]]), R against F′_c⊥ b l_b (display; the check: [[tb/br.r]]).')].filter(Boolean), { type: 'note', text: 'F_c⊥ is not adjusted by ' + (isLRFD() ? 'λ' : 'C_D') + ' (NDS 2018 Table 4.3.1). The same steps are on the Bearing tab[[tab:bear| ↗]].' }] },
       { title: 'All supports (largest ratio over the combinations)', items: [{ type: 'table', wide: true, head: ['Support', 'l_b (in.)', '≥ 3 in. from end', 'C_b', 'F′_c⊥ (psi)', 'Governing combination', 'R (lb)', 'f_c⊥ (psi)', 'Ratio', 'R min (lb)'], rows },
         { type: 'note', text: 'R min < 0 = net uplift in at least one combination: the bearing check uses only downward reactions; provide an uplift connection.' }] }].concat(tbrBearX()) });
   }
@@ -5704,6 +5866,8 @@ function buildAasSum(pg) {   // TBAT: Summary: the checks summary (moved from AA
 }
 function buildAasFlex(pg) { if (!aasGate(pg, 'AC')) return;   // TBAT: moved unchanged from AASHTO Checks
   mkSec(pg, 'aasFlex', 'Flexure (Art. 8.6.2)', body => {
+    body.appendChild(tbgxFig(TBGX.aasMoment(AL, AD, AC), 'Strength I factored moment envelope M<sub>u</sub> (' + tbcLink('aasFE', 'Factored envelopes') + ') against M<sub>r</sub> of each span and sign (the checks below), and M<sub>u</sub>/M<sub>r</sub> along the member (display; the checks are at the governing sections).'));   // TBGX-3
+    body.appendChild(tbgxFig(TBGX.aasBracing(AL, AC), 'Lateral bracing (Geometry input tab): each compression edge braced continuously (C<sub>L</sub> = 1.0), or L<sub>u</sub>, L<sub>e</sub> (in.) and C<sub>L</sub> of the Strength I check of each span (the steps below); brace points drawn at the spacing L<sub>u</sub> for illustration.'));
     body.appendChild(el('div', 'note', tbNL(`M<sub>r</sub> = φM<sub>n</sub>, M<sub>n</sub> = F<sub>b</sub>SC<sub>L</sub> (Eq. 8.6.1-1, 8.6.2-1); φ = ${g4(A.PHI.Fb)} (Art. 8.5.2.2). For each span: the largest positive and negative factored moment of each limit state.`, [
       ['Lateral support (Geometry input tab):', `top edge ${AC.latTop === 'Continuous' ? 'braced continuously (deck)' : 'at supports only' + (AC.luTop > 0 ? ', L<sub>u</sub> = ' + g4(AC.luTop) + ' ft' : ', L<sub>u</sub> = span')}; bottom edge ${AC.latBot === 'Continuous' ? 'braced continuously' : 'at brace points, L<sub>u</sub> = ' + (AC.luBot > 0 ? g4(AC.luBot) + ' ft' : 'span')}${AC.latBot0 === 'same' ? ' (same as top edge)' : ''}.`],
       ['C<sub>L</sub>:', 'K<sub>bE</sub> = ' + g4(AC.KbE) + (A.isGL ? ' (glulam)' : ' (visually graded lumber)') + '; L<sub>e</sub> from L<sub>u</sub>/d (Art. 8.6.2); C<sub>L</sub> = 1.0 where d ≤ b or the compression edge is braced continuously.'],
@@ -5714,6 +5878,7 @@ function buildAasFlex(pg) { if (!aasGate(pg, 'AC')) return;   // TBAT: moved unc
 }
 function buildAasShr(pg) { if (!aasGate(pg, 'AC')) return;   // TBAT
   mkSec(pg, 'aasShr', 'Shear (Art. 8.7)', body => {
+    body.appendChild(tbgxFig(TBGX.aasShear(AL, AD, AC), 'Strength I factored shear envelope (' + tbcLink('aasFE', 'Factored envelopes') + ') against V<sub>r</sub>; the dots: V<sub>u</sub> at the critical sections of the wood rule (' + tbcLink('aasWV', 'Shear at the critical sections') + '), as checked below.'));   // TBGX-3
     body.appendChild(el('div', 'note', `V<sub>r</sub> = φV<sub>n</sub>, V<sub>n</sub> = F<sub>v</sub>bd/1.5 (Eq. 8.7-1, 8.7-2); φ = ${g4(A.PHI.Fv)} (Art. 8.5.2.2). Horizontal shear parallel to grain at the critical sections of each support (shear perpendicular to grain need not be checked, C8.7).`));
     AC.shear.forEach(it => aasShrBlock(body, it));
     if (!AC.shear.length) body.appendChild(el('div', 'hint', 'No critical section: every span is shorter than the shear offset.'));
@@ -5721,6 +5886,7 @@ function buildAasShr(pg) { if (!aasGate(pg, 'AC')) return;   // TBAT
 }
 function buildAasBrg(pg) { if (!aasGate(pg, 'AC')) return;   // TBAT
   mkSec(pg, 'aasBrg', 'Bearing (Art. 8.8.3)', body => {   // TBA5
+    body.appendChild(tbgxFig(TBGX.aasBearing(AL, AC), 'The stringer on its governing support: bearing length l<sub>b</sub> (Geometry input tab), C<sub>b</sub> (Table 8.8.3-1), R<sub>u</sub> against P<sub>r</sub> (the check below).'));   // TBGX-3
     body.appendChild(el('div', 'note', tbNL(`P<sub>r</sub> = φP<sub>n</sub>, P<sub>n</sub> = F<sub>cp</sub>A<sub>b</sub>C<sub>b</sub> (Eq. 8.8.1-1, 8.8.3-1); φ = ${g4(A.PHI.Fcp)} (Art. 8.5.2.2). A<sub>b</sub> = b l<sub>b</sub> (bearing length l<sub>b</sub> of each support, Geometry tab).`, [
       ['C<sub>b</sub> (Table 8.8.3-1):', 'only at a member end support marked "C<sub>b</sub> permitted" (bearing 3 in. or more from the end); the value of the shortest tabulated length not less than l<sub>b</sub>. Interior supports and supports next to a cantilever (high flexural stress) and bearings within 3 in. of the end: C<sub>b</sub> = 1.0.'],
       ...(A.isGL ? [['Glulam:', 'F<sub>cp</sub> of the tension face (the bottom face bears on the support).']] : [])])));
@@ -5729,6 +5895,7 @@ function buildAasBrg(pg) { if (!aasGate(pg, 'AC')) return;   // TBAT
 }
 function buildAasDefl(pg) { if (!aasGate(pg, 'AC')) return;   // TBAT: deflection and glulam camber
   mkSec(pg, 'aasDefl', 'Deflection (Art. 2.5.2.6.2)', body => {   // TBA5
+    body.appendChild(tbgxFig(TBGX.aasDefl(AL, AD, AC), 'Service I deflections along the member (+ down): dead load DC + DW, the live-load envelope g<sub>Δ</sub> Δ<sub>LL</sub> (the largest at each point, from the placements of ' + tbcLink('aasDem', 'Factored demands') + ') and their sum (display), with the live-load limit L/' + g4(AC.dLim) + ' of each span' + (AC.dLim > 0 ? '' : ' (not checked: limit 0)') + '.'));   // TBGX-3
     body.appendChild(el('div', 'note', tbNL(`Service I live-load deflection (with IM) against span/${g4(AC.dLim)}${AC.dLimSrc === 'default' ? ' (wood construction, vehicular and pedestrian loads; the default)' : ' (entered)'}.`, [
       ['Optional:', 'the criteria of Art. 2.5.2.6.2 apply when the owner invokes them; set the limit on the Design criteria input tab (0 = not checked).'],
       ['Cantilever:', 'L = the cantilever length.']])));
@@ -5857,10 +6024,10 @@ function tbrAasChecksSec() {   // Report section: the AASHTO checks (TBA4)
   return { title: T0, subs: [
     { title: 'Summary of the checks', items: [{ type: 'table', head: ['Check', 'Limit state', 'Location', 'Demand', 'Factored resistance', 'Ratio', 'Status'], rows }, ...[tbgxRptFig(tbgxRatios(), 'Ratio of the governing item of each check (green < 0.90, amber 0.90 to 1.00, red > 1.00): ' + [AC.govFlex, AC.govShear, AC.govBear, AC.govDefl].filter(Boolean).map(it => AAS_KIND[it.kind][0].toLowerCase() + ' [[tb/' + aasItId(it) + '.r]]').join(', ') + '.')].filter(Boolean),   // TBGX
       { type: 'note', text: 'Governing: ' + aasItName(AC.gov).replace(/<[^>]+>/g, '') + ', ratio ' + f3(AC.gov.ratio) + ' — ' + (aasNG() ? 'NG' : 'OK') + '. The same checks are on the Summary tab[[tab:aasSum| ↗]] and the Flexure, Shear, Bearing and Deflection & Camber tabs. Deflection: Service I live load, span/' + g4(AC.dLim) + (AC.dLim > 0 ? '' : ' (not checked)') + '.' }] },
-    { title: 'Flexure (Art. 8.6.2)', items: [...[AC.govFlex && tbgxRptFig(tbgxSect(false), 'Cross-section to scale and the stress at the governing flexure section (' + aasItLoc(AC.govFlex).replace('−M', '-M') + ', ' + aasLimName(AC.govFlex.lim) + '): M_u/S = ' + k3(AC.govFlex.Mu * 12 / AC.S) + ' ksi against M_r/S = ' + k3(AC.govFlex.Mr * 12 / AC.S) + ' ksi (M_u [[tb/' + aasItId(AC.govFlex) + '.Mu]], M_r [[tb/' + aasItId(AC.govFlex) + '.Mr]], S = ' + f2(AC.S) + ' in.³).')].filter(Boolean), { type: 'note', text: 'Lateral support: top edge ' + (AC.latTop === 'Continuous' ? 'braced continuously' : 'at supports only') + ', bottom edge ' + (AC.latBot === 'Continuous' ? 'braced continuously' : 'at brace points') + '; K_bE = ' + g4(AC.KbE) + '; φ = ' + g4(A.PHI.Fb) + '.' }, tbrTopics([{ title: 'Flexure', ref: AAS_ART + 'Art. 8.6.1, 8.6.2' + (A.isGL ? ', 8.4.4.5' : ''), res: /\.r$/, steps: fl }])] },
-    { title: 'Shear (Art. 8.7)', items: [tbrTopics([{ title: 'Shear', ref: AAS_ART + 'Art. 8.7', res: /\.r$/, steps: sh }])] },
-    { title: 'Bearing (Art. 8.8.3)', items: [tbrTopics([{ title: 'Bearing', ref: AAS_ART + 'Art. 8.8.3, Table 8.8.3-1', res: /\.r$/, steps: br }])] },
-    { title: 'Deflection (Art. 2.5.2.6.2)', items: df.length ? [tbrTopics([{ title: 'Deflection', ref: AAS_ART + 'Art. 2.5.2.6.2', res: /\.r$/, steps: df }])] : [{ type: 'note', text: AC.dLim > 0 ? 'No live-load deflection.' : 'Not checked (limit 0).' }] },
+    { title: 'Flexure (Art. 8.6.2)', items: [...[AC.govFlex && tbgxRptFig(tbgxSect(false), 'Cross-section to scale and the stress at the governing flexure section (' + aasItLoc(AC.govFlex).replace('−M', '-M') + ', ' + aasLimName(AC.govFlex.lim) + '): M_u/S = ' + k3(AC.govFlex.Mu * 12 / AC.S) + ' ksi against M_r/S = ' + k3(AC.govFlex.Mr * 12 / AC.S) + ' ksi (M_u [[tb/' + aasItId(AC.govFlex) + '.Mu]], M_r [[tb/' + aasItId(AC.govFlex) + '.Mr]], S = ' + f2(AC.S) + ' in.³).')].filter(Boolean), ...[tbgxRptFig(TBGX.aasMoment(AL, AD, AC), 'Strength I factored moment envelope against M_r of each span and sign, and M_u/M_r along the member (display; the checks below).'), tbgxRptFig(TBGX.aasBracing(AL, AC), 'Lateral bracing: braced continuously, or L_u, L_e and C_L of each span (the steps below); brace points at the spacing L_u for illustration.')].filter(Boolean), { type: 'note', text: 'Lateral support: top edge ' + (AC.latTop === 'Continuous' ? 'braced continuously' : 'at supports only') + ', bottom edge ' + (AC.latBot === 'Continuous' ? 'braced continuously' : 'at brace points') + '; K_bE = ' + g4(AC.KbE) + '; φ = ' + g4(A.PHI.Fb) + '.' }, tbrTopics([{ title: 'Flexure', ref: AAS_ART + 'Art. 8.6.1, 8.6.2' + (A.isGL ? ', 8.4.4.5' : ''), res: /\.r$/, steps: fl }])] },
+    { title: 'Shear (Art. 8.7)', items: [...[tbgxRptFig(TBGX.aasShear(AL, AD, AC), 'Strength I factored shear envelope against V_r; the dots: V_u at the critical sections (the steps below).')].filter(Boolean), tbrTopics([{ title: 'Shear', ref: AAS_ART + 'Art. 8.7', res: /\.r$/, steps: sh }])] },
+    { title: 'Bearing (Art. 8.8.3)', items: [...[tbgxRptFig(TBGX.aasBearing(AL, AC), 'The stringer on its governing support: l_b, C_b, R_u against P_r ([[tb/' + aasItId(AC.govBear) + '.r]]).')].filter(Boolean), tbrTopics([{ title: 'Bearing', ref: AAS_ART + 'Art. 8.8.3, Table 8.8.3-1', res: /\.r$/, steps: br }])] },
+    { title: 'Deflection (Art. 2.5.2.6.2)', items: [tbgxRptFig(TBGX.aasDefl(AL, AD, AC), 'Service I deflections (+ down): DC + DW, the live-load envelope g_Δ Δ_LL and their sum (display), with the live-load limit of each span.')].filter(Boolean).concat(df.length ? [tbrTopics([{ title: 'Deflection', ref: AAS_ART + 'Art. 2.5.2.6.2', res: /\.r$/, steps: df }])] : [{ type: 'note', text: AC.dLim > 0 ? 'No live-load deflection.' : 'Not checked (limit 0).' }]) },
     ...(cm.length ? [{ title: 'Glulam camber (Art. 8.12.1)', items: [tbrTopics([{ title: 'Camber (information)', ref: AAS_ART + 'Art. 8.12.1', res: /\.c\d+$/, steps: cm }])] }] : []),
     { title: 'Notes (checks)', items: AC.notes.map(n => ({ type: 'note', text: n })) }] };
 }
