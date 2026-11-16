@@ -2705,7 +2705,7 @@ Engineer decisions (2026-11-16): T2 = bridge loads; new AASHTO projects default 
 - Part 2: envelopes along the member (HL-93 truck / tandem / lane, 90 % two-truck case), the wood shear rule Eq. 4.6.2.2.2a-1 at the lesser of 3d and L/4 (Art. 8.7), Strength I / II / Service I factored envelopes, M<sub>u</sub>, V<sub>u</sub>, R<sub>u</sub>, Service I deflection loads, glulam C<sub>V</sub> length (TBA1 decision 9).
 - Not built in: pedestrian / sidewalk load (Art. 3.6.1.6), the design tandem pair of C3.6.1.3.1, skew correction (Art. 4.6.2.2.2e), deck design (Art. 9.9).
 
-## 2026-11-16 — PR: claude/timber-aashto-t2b (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (TBA3: AASHTO phase T2, part 2 — HL-93 envelopes along the stringer, axle placement, wood shear rule at the critical sections, Strength I / II and Service I factored envelopes, M<sub>u</sub>, V<sub>u</sub>, R<sub>u</sub>, Service I deflections; no checks yet)   [new capability] [NDS results unchanged] [saved data: one new optional field]
+## 2026-11-16 — PR: claude/timber-aashto-t2b (PR #1592: https://github.com/mlococo88/All-Structural/pull/1592) (TBA3: AASHTO phase T2, part 2 — HL-93 envelopes along the stringer, axle placement, wood shear rule at the critical sections, Strength I / II and Service I factored envelopes, M<sub>u</sub>, V<sub>u</sub>, R<sub>u</sub>, Service I deflections; no checks yet)   [new capability] [NDS results unchanged] [saved data: one new optional field]
 
 Continues TBA2 (PR #1591). Every code site is tagged `TBA3`.
 
