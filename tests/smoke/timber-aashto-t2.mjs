@@ -3,7 +3,7 @@
 // - the code switch: a project switched to AASHTO for the first time is set to wet service (engineer decision 2026-11-16); back to NDS
 //   restores the NDS setting (dry) and the NDS results; a TBA1 project (AASHTO, dry, saved before) opens dry, unchanged;
 // - the Loads tab shows the bridge-load inputs; an edit creates design.aashto.bl (autosave version 5);
-// - the Bridge Loads tab: every card, the values equal to the engine's (AL), no NaN / undefined, no KaTeX errors, no PASS / FAIL on the tab (TBA4: the checks are on the AASHTO Checks tab);
+// - the Bridge Loads tab: every card, the values equal to the engine's (AL), no NaN / undefined, no KaTeX errors, no PASS / FAIL on the tab (TBA4: the checks are on their own tabs; TBAT: the envelopes and demands on the Analysis tab);
 //   interior / exterior / concrete deck / entered DF; the Report section; 390 px without horizontal scroll; 0 console errors.
 // Screenshots of the Bridge Loads cards (deviceScaleFactor 1) with --shots <dir>.
 //   node tests/smoke/timber-aashto-t2.mjs [--shots <dir>]
@@ -28,7 +28,7 @@ let s = await st();
 ok(s.saved.design.moisture === 'Wet' && s.saved.design.aashto.ndsMoist === 'Dry', `first switch to AASHTO: wet (saved ${s.saved.design.moisture}, ndsMoist ${s.saved.design.aashto.ndsMoist})`);
 ok(await p.evaluate(() => document.querySelector('[data-fkey="wet"]').checked), 'Wet service box ticked');
 ok(s.saved.version === 5, 'version 5 with the kept NDS setting: ' + s.saved.version);
-ok(s.tabs.join('|') === 'AASHTO Materials|Bridge Loads|AASHTO Checks|Report', 'tabs: ' + s.tabs.join('|'));   // TBA4
+ok(s.tabs.join('|') === 'Summary|Schematic & Inputs|Section Properties|Bridge Loads|Analysis|Design Values|Flexure|Shear|Bearing|Deflection & Camber|Notes|Report', 'tabs: ' + s.tabs.join('|'));   // TBA4; TBAT: the 12 AASHTO tabs
 // untick wet in AASHTO, back to NDS, to AASHTO again: the AASHTO setting (dry) comes back; NDS stays dry
 await p.click('#tbcInTab_factors'); await p.click('[data-fkey="wet"]'); await p.waitForTimeout(400);
 await p.click('#tbcInTab_project'); await p.selectOption('[data-fkey="dcode"]', 'NDS'); await p.waitForTimeout(500);
@@ -65,11 +65,15 @@ for (const [name, fn] of Object.entries(cases)) {
   await p.waitForTimeout(400);
   await p.click('#tab_aasL'); await p.waitForTimeout(500);
   s = await st();
+  const loadCards = []; for (const c of ['aasDL', 'aasLL', 'aasDF', 'aasCmb']) loadCards.push(!!(await p.$(`#tabPages .sec[data-secid="${c}"]`)));
+  await p.click('#tab_aasAna'); await p.waitForTimeout(500);   // TBAT: the envelopes and demands are on the Analysis tab
+  { const s2 = await st(); s.text += '\n' + s2.text; s.chips += s2.chips; s.kerr += s2.kerr; }
   ok(s.AL && s.AL.ok, `${name}: bridge loads: ${s.AL && (s.AL.errors || []).join('; ')}`);
   ok(s.chips === 0 && s.kerr === 0 && !/NaN|undefined/.test(s.text), `${name}: chips ${s.chips}, KaTeX errors ${s.kerr}, NaN/undefined ${/NaN|undefined/.test(s.text)}`);
   if (s.AL && s.AL.ok) {
     ok(s.text.includes(s.AL.wDC.toFixed(4)) && s.text.includes(s.AL.df.gM.toFixed(4)), `${name}: w_DC ${s.AL.wDC.toFixed(4)} and g_M ${s.AL.df.gM.toFixed(4)} shown`);
-    for (const c of ['aasDL', 'aasLL', 'aasDF', 'aasCmb', 'aasEnv', 'aasWV', 'aasFE', 'aasDem']) ok(await p.$(`#tabPages .sec[data-secid="${c}"]`), `${name}: card ${c}`);
+    ok(loadCards.every(Boolean), `${name}: Bridge Loads tab cards aasDL, aasLL, aasDF, aasCmb: ${loadCards}`);
+    for (const c of ['aasEnv', 'aasWV', 'aasFE', 'aasDem']) ok(await p.$(`#tabPages .sec[data-secid="${c}"]`), `${name}: Analysis tab card ${c}`);
     // TBA3: the demands shown are the engine's; the diagrams drawn; the left column lists them
     const ad = await p.evaluate(() => TBC.ad);
     ok(ad && ad.Mpos && s.text.includes(ad.Mpos.v.toFixed(2)) && (!ad.Vu || s.text.includes(ad.Vu.Vu.toFixed(3))), `${name}: M_u / V_u shown (${ad && ad.Mpos && ad.Mpos.v})`);
@@ -80,7 +84,9 @@ for (const [name, fn] of Object.entries(cases)) {
   if (args.shots) {
     fs.mkdirSync(args.shots, { recursive: true });
     await p.setViewportSize({ width: 1400, height: 6000 }); await p.waitForTimeout(400);
+    await p.click('#tab_aasAna'); await p.waitForTimeout(300);
     for (const sec of ['aasEnv', 'aasWV', 'aasFE', 'aasDem']) { const h = await p.$(`#tabPages .sec[data-secid="${sec}"]`); if (h && ['interiorPlank', 'twoSpanPermit', 'overhang'].includes(name)) await h.screenshot({ path: path.join(args.shots, `t2-${name}-${sec}.png`) }); }
+    await p.click('#tab_aasL'); await p.waitForTimeout(300);
     for (const sec of ['aasDL', 'aasDF']) { const h = await p.$(`#tabPages .sec[data-secid="${sec}"]`); if (h && (name === 'interiorPlank' || name === 'exterior' || sec === 'aasDF')) await h.screenshot({ path: path.join(args.shots, `t2-${name}-${sec}.png`) }); }
     if (name === 'interiorPlank') { const h = await p.$('#tabPages .sec[data-secid="aasCmb"]'); if (h) await h.screenshot({ path: path.join(args.shots, 't2-combos.png') }); const pn = await p.$('#tbcInPane_loads'); if (pn) await pn.screenshot({ path: path.join(args.shots, 't2-loads-inputs.png') }); }
     await p.setViewportSize({ width: 1400, height: 1000 });

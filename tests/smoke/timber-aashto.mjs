@@ -4,8 +4,8 @@
 //    the same NDS projects (ASD and LRFD; sawn, timber, glulam, SCL; simple, continuous, overhang, cantilever; an input error); for each,
 //    every output tab is opened by its tab button and compared: the tab's text, the governing strip, the left column, the Report text
 //    (SharedReport.text) and every computed value (TBC.res). Expected: identical.
-// 2. AASHTO mode in the working tree: Design code switched with the Project input tab's select; only the AASHTO Materials and Report tabs;
-//    no status chips on the AASHTO Materials tab (TBA4: the governing strip and the left column carry the checks); the shown F_b (Strength I) equals the engine's; no NaN / undefined, no KaTeX errors;
+// 2. AASHTO mode in the working tree: Design code switched with the Project input tab's select; the 12 AASHTO tabs (TBAT; were AASHTO
+//    Materials and Report in T1); no status chips on the Design Values tab (was AASHTO Materials) (TBA4: the governing strip and the left column carry the checks); the shown F_b (Strength I) equals the engine's; no NaN / undefined, no KaTeX errors;
 //    the Report; autosave (version 4, design.code) and reload; back to NDS gives the same NDS results; an input error (SCL); 390 px
 //    without horizontal scroll; 0 console errors. Screenshots of the AASHTO Materials card (deviceScaleFactor 1) with --shots <dir>.
 //   node tests/smoke/timber-aashto.mjs [--a <folder with the reference Timber Beam Check.html and shared/> | --ref <git ref>] [--shots <dir>]
@@ -34,7 +34,7 @@ const NDS = {
   timberWetFlat: m => { m.material.size = '6x12'; m.material.grade = 'No.1'; m.design.moisture = 'Wet'; m.design.flatUse = true; m.geom.spacing = 48; },
   error: m => { m.geom.spacing = 0; },
 };
-const TABS = ['sum', 'sch', 'ana', 'dv', 'bend', 'shear', 'bear', 'defl', 'refv', 'val', 'man', 'rpt'];
+// TBAT (2026-11-16): the tabs are read from each page's tab bar (the Section Properties tab 'sect' is new)
 async function collect(file) {
   const { b, p, errs } = await openPage(file, { vw: 1400, vh: 1000 });
   await p.waitForFunction(() => window.TBC && window.TBC.res, null, { timeout: 30000 }); await p.waitForTimeout(800);
@@ -43,7 +43,8 @@ async function collect(file) {
     await p.evaluate(s => { const d = JSON.parse(JSON.stringify(TBC.migrate({ _schema: 'timber-beam-check', version: 2 }).model)); (0, eval)('(' + s + ')')(d); d.version = 3; TBC.load(d); }, fn.toString()).catch(e => fails.push(name + ': ' + e.message));
     await p.waitForTimeout(400);
     const rec = { res: await p.evaluate(() => JSON.stringify(TBC.res, (k, x) => typeof x === 'number' && !isFinite(x) ? String(x) : x)) };
-    for (const t of TABS) {
+    rec.tabs = await p.evaluate(() => [...document.querySelectorAll('#tabBar button')].map(x => x.id.slice(4)));
+    for (const t of rec.tabs) {
       await p.click('#tab_' + t); await p.waitForTimeout(t === 'rpt' ? 1500 : 250);
       rec[t] = await p.evaluate(t => ({ tab: document.getElementById('tabPages').innerText.replace(/\s+/g, ' '), gov: document.getElementById('govStrip').innerText, dash: (document.getElementById('tbcDash') || {}).innerText || '',
         rpt: t === 'rpt' && typeof TBRP !== 'undefined' && TBRP.doc ? SharedReport.text(TBRP.doc) : '' }), t);
@@ -58,14 +59,25 @@ async function collect(file) {
 const A = await collect(path.join(dirA, FILE));
 const B = await collect(path.join(REPO, FILE));
 let nCmp = 0, nDiff = 0;
+// TBAT: a reference without the Section Properties tab: its Design Values tab = the branch's Section Properties card + Design Values tab; the
+// expected differences are the card numbers, the link texts that name the tab ("Section Properties tab") and the new A row (link) of the self-weight
+const TBAT = !A.out.default.tabs.includes('sect') && B.out.default.tabs.includes('sect');
+const nrm = x => !TBAT ? x : x.replace(/(^| )\d+\. (?=[A-Z])/g, '$1').replace(/Section Properties tab/g, 'Design Values tab').replace(/→ Section Properties · Section properties/g, '→ Design Values · Section properties')
+  .replace(/ \S+ A gross area [\d.,]+ ?in² Design Values tab/gu, '').replace(/ ?Worked in: → Design Values · Loads on the member; → Design Values · Adjustment factors ?/g, ' ').replace(/\s+/g, ' ').trim();
 for (const name of Object.keys(NDS)) {
   const a = A.out[name], b = B.out[name];
   nCmp++; if (a.res !== b.res) { nDiff++; fails.push(`NDS ${name}: TBC.res differs`); }
   ok(a.rpt.rpt.length > 1000 && b.rpt.rpt.length > 1000 || name === 'error', `NDS ${name}: Report text read (${a.rpt.rpt.length}, ${b.rpt.rpt.length} chars)`);
-  for (const t of TABS) for (const k of ['tab', 'gov', 'dash', 'rpt']) { nCmp++; if (a[t][k] !== b[t][k]) { nDiff++; fails.push(`NDS ${name} / ${t} / ${k} differs`); } }
+  ok(b.tabs.join(',') === (TBAT ? a.tabs.join(',').replace('sch,', 'sch,sect,') : a.tabs.join(',')), `NDS ${name}: tabs ${b.tabs.join(',')}`);
+  for (const t of a.tabs) for (const k of ['tab', 'gov', 'dash', 'rpt']) {
+    nCmp++;
+    const bt = TBAT && k === 'tab' && t === 'dv' && R_OK(b) ? b.sect.tab + ' ' + b.dv.tab : b[t][k];
+    if ((k === 'tab' ? nrm(a[t][k]) : a[t][k]) !== (k === 'tab' ? nrm(bt) : bt)) { nDiff++; fails.push(`NDS ${name} / ${t} / ${k} differs`); if (process.env.TBC_DIFF) console.log('A:', nrm(a[t][k]).slice(0, 3000), '\nB:', nrm(bt).slice(0, 3000)); }
+  }
 }
+function R_OK(b) { return !/No results: input or design data required/.test(b.sect.tab); }
 ok(!A.errs.length && !B.errs.length, 'console errors (NDS part): ' + [...A.errs, ...B.errs].join(' | '));
-console.log(`part 1 (NDS parity, ${dirA} vs working tree): ${Object.keys(NDS).length} projects × ${TABS.length} tabs, ${nCmp} comparisons, ${nDiff} differences`);
+console.log(`part 1 (NDS parity, ${dirA} vs working tree): ${Object.keys(NDS).length} projects × ${A.out.default.tabs.length} tabs, ${nCmp} comparisons, ${nDiff} differences`);
 
 // ---------- part 2 ----------
 {
@@ -80,10 +92,11 @@ console.log(`part 1 (NDS parity, ${dirA} vs working tree): ${Object.keys(NDS).le
   ok(await p.evaluate(() => JSON.stringify(TBC.res)) === ndsRes, 'NDS results unchanged after visiting AASHTO mode');
   ok(await p.evaluate(() => !('code' in JSON.parse(localStorage.getItem('tbc_autosave_v1')).design)), 'NDS: no design.code saved');
   await p.selectOption('[data-fkey="dcode"]', 'AASHTO'); await p.waitForTimeout(500);
+  await p.click('#tab_aas'); await p.waitForTimeout(300);   // TBAT: Design Values (was AASHTO Materials)
   let s = await st();
-  ok(s.tabs.join('|') === 'AASHTO Materials|Bridge Loads|AASHTO Checks|Report', 'AASHTO tabs: ' + s.tabs.join('|'));   // TBA2: Bridge Loads tab; TBA4: AASHTO Checks tab
+  ok(s.tabs.join('|') === 'Summary|Schematic & Inputs|Section Properties|Bridge Loads|Analysis|Design Values|Flexure|Shear|Bearing|Deflection & Camber|Notes|Report', 'AASHTO tabs: ' + s.tabs.join('|'));   // TBA2: Bridge Loads tab; TBA4: AASHTO Checks tab; TBAT: 12 tabs
   ok(s.AC && s.AC.ok && /Governing: (Flexure|Shear)/.test(s.gov) && /\b(OK|NG)\b/.test(s.gov) && s.dashChk >= 2, 'governing strip and left column with the checks (TBA4): ' + s.gov); ok(/AASHTO LRFD 10th Ed/.test(s.h1), 'header: ' + s.h1);
-  ok(s.chips === 0, 'status chips on the AASHTO Materials tab: ' + s.chips); ok(s.kerr === 0, 'KaTeX errors: ' + s.kerr); ok(!/NaN|undefined/.test(s.text), 'NaN / undefined in the AASHTO tab');
+  ok(s.chips === 0, 'status chips on the Design Values tab: ' + s.chips); ok(s.kerr === 0, 'KaTeX errors: ' + s.kerr); ok(!/NaN|undefined/.test(s.text), 'NaN / undefined in the AASHTO tab');
   ok(s.A.ok && s.text.includes('= ' + s.A.lims[0].Fb.toFixed(4) + ' ksi'), 'F_b Strength I shown as the engine value ' + (s.A.lims && s.A.lims[0].Fb));
   const cases = {
     sawnWet: m => { m.material.size = '6x16'; m.design.aashto.gr = 'No.1'; m.design.moisture = 'Wet'; m.design.incising = true; },
@@ -130,7 +143,7 @@ console.log(`part 1 (NDS parity, ${dirA} vs working tree): ${Object.keys(NDS).le
   await p.evaluate(() => { const m = TBC.model; m.material.type = 'sawn'; m.material.size = '2x10'; m.design.moisture = 'Dry'; m.design.incising = false; m.design.flatUse = false; TBC.fullRebuild(); });
   await p.click('#tbcInTab_project'); await p.selectOption('[data-fkey="dcode"]', 'NDS'); await p.waitForTimeout(600);
   s = await st();
-  ok(s.tabs[0] === 'Summary' && s.tabs.length === 12, 'NDS tabs back: ' + s.tabs.join('|')); ok(!/AASHTO/.test(s.h1), 'NDS header back');
+  ok(s.tabs[0] === 'Summary' && s.tabs.length === 13 && s.tabs[2] === 'Section Properties', 'NDS tabs back: ' + s.tabs.join('|'));   // TBAT: 13 tabs ok(!/AASHTO/.test(s.h1), 'NDS header back');
   ok(await p.evaluate(() => TBC.res.ok && !('code' in JSON.parse(localStorage.getItem('tbc_autosave_v1')).design)), 'back to NDS: results, no design.code saved');
   ok(!errs.length, 'console errors (AASHTO part): ' + errs.join(' | '));
   await b.close();
