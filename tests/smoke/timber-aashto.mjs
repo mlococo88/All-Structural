@@ -5,7 +5,7 @@
 //    every output tab is opened by its tab button and compared: the tab's text, the governing strip, the left column, the Report text
 //    (SharedReport.text) and every computed value (TBC.res). Expected: identical.
 // 2. AASHTO mode in the working tree: Design code switched with the Factors input tab's select; only the AASHTO Materials and Report tabs;
-//    no PASS / FAIL anywhere (no status chips); the shown F_b (Strength I) equals the engine's; no NaN / undefined, no KaTeX errors;
+//    no status chips on the AASHTO Materials tab (TBA4: the governing strip and the left column carry the checks); the shown F_b (Strength I) equals the engine's; no NaN / undefined, no KaTeX errors;
 //    the Report; autosave (version 4, design.code) and reload; back to NDS gives the same NDS results; an input error (SCL); 390 px
 //    without horizontal scroll; 0 console errors. Screenshots of the AASHTO Materials card (deviceScaleFactor 1) with --shots <dir>.
 //   node tests/smoke/timber-aashto.mjs [--a <folder with the reference Timber Beam Check.html and shared/> | --ref <git ref>] [--shots <dir>]
@@ -74,16 +74,16 @@ console.log(`part 1 (NDS parity, ${dirA} vs working tree): ${Object.keys(NDS).le
   const ndsRes = await p.evaluate(() => JSON.stringify(TBC.res));
   await p.click('#tbcInTab_factors'); await p.selectOption('[data-fkey="dcode"]', 'AASHTO'); await p.waitForTimeout(600);
   const st = async () => p.evaluate(() => ({ tabs: [...document.querySelectorAll('#tabBar button')].map(x => x.textContent.trim()), gov: document.getElementById('govStrip').innerText, text: document.getElementById('tabPages').innerText,
-    chips: document.querySelectorAll('#tabPages .st.ok, #tabPages .st.ng, #tbcDash .tbcDc.pass, #tbcDash .tbcDc.fail').length, kerr: document.querySelectorAll('.katex-error').length, A: TBC.aas, h1: document.querySelector('h1').textContent }));
+    chips: document.querySelectorAll('#tabPages .st.ok, #tabPages .st.ng').length, dashChk: document.querySelectorAll('#tbcDash .tbcDc.pass, #tbcDash .tbcDc.fail').length, kerr: document.querySelectorAll('.katex-error').length, A: TBC.aas, AC: TBC.ac, h1: document.querySelector('h1').textContent }));
   // straight back to NDS and to AASHTO again: the NDS results as before the switch
   await p.selectOption('[data-fkey="dcode"]', 'NDS'); await p.waitForTimeout(500);
   ok(await p.evaluate(() => JSON.stringify(TBC.res)) === ndsRes, 'NDS results unchanged after visiting AASHTO mode');
   ok(await p.evaluate(() => !('code' in JSON.parse(localStorage.getItem('tbc_autosave_v1')).design)), 'NDS: no design.code saved');
   await p.selectOption('[data-fkey="dcode"]', 'AASHTO'); await p.waitForTimeout(500);
   let s = await st();
-  ok(s.tabs.join('|') === 'AASHTO Materials|Bridge Loads|Report', 'AASHTO tabs: ' + s.tabs.join('|'));   // TBA2: Bridge Loads tab
-  ok(/no PASS \/ FAIL/.test(s.gov), 'governing strip: ' + s.gov); ok(/AASHTO LRFD 10th Ed/.test(s.h1), 'header: ' + s.h1);
-  ok(s.chips === 0, 'status chips in AASHTO mode: ' + s.chips); ok(s.kerr === 0, 'KaTeX errors: ' + s.kerr); ok(!/NaN|undefined/.test(s.text), 'NaN / undefined in the AASHTO tab');
+  ok(s.tabs.join('|') === 'AASHTO Materials|Bridge Loads|AASHTO Checks|Report', 'AASHTO tabs: ' + s.tabs.join('|'));   // TBA2: Bridge Loads tab; TBA4: AASHTO Checks tab
+  ok(s.AC && s.AC.ok && /Governing: (Flexure|Shear)/.test(s.gov) && /\b(OK|NG)\b/.test(s.gov) && s.dashChk >= 2, 'governing strip and left column with the checks (TBA4): ' + s.gov); ok(/AASHTO LRFD 10th Ed/.test(s.h1), 'header: ' + s.h1);
+  ok(s.chips === 0, 'status chips on the AASHTO Materials tab: ' + s.chips); ok(s.kerr === 0, 'KaTeX errors: ' + s.kerr); ok(!/NaN|undefined/.test(s.text), 'NaN / undefined in the AASHTO tab');
   ok(s.A.ok && s.text.includes('= ' + s.A.lims[0].Fb.toFixed(4) + ' ksi'), 'F_b Strength I shown as the engine value ' + (s.A.lims && s.A.lims[0].Fb));
   const cases = {
     sawnWet: m => { m.material.size = '6x16'; m.design.aashto.gr = 'No.1'; m.design.moisture = 'Wet'; m.design.incising = true; },

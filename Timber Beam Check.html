@@ -5210,12 +5210,12 @@ function aasFbLine(it) {   // F_b of the limit state used in the check
   const l = A.lims[it.li];
   if (!A.isGL) return T`F_b = (F_b/C_\lambda)\,C_\lambda = ${k4(A.base.Fb)} \times ${g4(it.Cl)} = ${k4(it.Fb)}\ \text{ksi}\quad (\text{with } C_F = ${kf(A.CF.Fb)})`;
   const ref = it.sg > 0 ? A.R0.Fb : A.R0.Fbn, sy = it.sg > 0 ? 'F_{bxo}^{+}' : 'F_{bxo}^{-}';
-  return T`F_b = ${sy}\,C_{KF}\,C_M\,C_{fu}\,C_i\,C_d\,C_\lambda = ${k4(ref)} \times ${k4(A.CKF.Fb)} \times ${g4(A.CM.Fb)} \times ${g4(A.Cfu)} \times ${g4(A.Ci.Fb)} \times ${g4(A.Cd)} \times ${g4(l.Cl)} = ${k4(it.Fb)}\ \text{ksi}\quad (\text{without } C_V)`;
+  return T`F_b = ${sy}\,C_{KF}\,C_M\,C_{fu}\,C_i\,C_d\,C_\lambda = ${k4(ref)} \times ${k4(A.CKF.Fb)} \times ${g4(A.CM.Fb)} \times ${g4(A.Cfu)} \times ${g4(A.Ci.Fb)} \times ${g4(A.Cd)} \times ${g4(l.Cl)} = ${k4(it.Fb)}\ \text{ksi}`;
 }
 function aasFlexBlock(body, it) {
-  const st = aasStabLines(it), lines = [T`M_u = ${kf3(it.Mu)}\ \text{kip-ft}\quad (${aasLimName(it.lim).replace(' ', '\\ ')},\ x = ${kf2(it.x)}\ \text{ft})`, aasFbLine(it)].concat(st.lines);
+  const st = aasStabLines(it), lines = [T`M_u = ${kf3(it.Mu)}\ \text{kip-ft}\quad (\text{${aasLimName(it.lim)}},\ x = ${kf2(it.x)}\ \text{ft})`, aasFbLine(it)].concat(st.lines);
   const where = [['M_u', `largest ${it.sg > 0 ? 'positive' : 'negative'} factored moment in ${aasSpanTxt(it.k)}`, kf3(it.Mu), 'kip-ft', tbcLink('aasFE', 'Factored envelopes')],
-    ['F_b', `adjusted design value in flexure, ${aasLimName(it.lim)} (C<sub>λ</sub> = ${g4(it.Cl)})`, k4(it.Fb), 'ksi', tbcLink('aasAdj', 'AASHTO Materials')]];
+    ['F_b', `adjusted design value in flexure, ${aasLimName(it.lim)} (C<sub>λ</sub> = ${g4(it.Cl)})${A.isGL ? ', without C<sub>V</sub>' : ''}`, k4(it.Fb), 'ksi', tbcLink('aasAdj', 'AASHTO Materials')]];
   if (!it.clWhy) where.push(['L_u', `unbraced length of the ${it.edge} edge (${it.luSrc === 'entered' ? 'entered' : 'span length'})`, f1(it.Lu), 'in.', 'Factors input tab'], ['K_{bE}', A.isGL ? 'glulam' : 'visually graded lumber', g4(AC.KbE), '', 'Art. 8.6.2'], ['E', 'adjusted modulus of elasticity (Eq. 8.4.4.1-6)', f0(AC.E), 'ksi', tbcLink('aasAdj', 'AASHTO Materials')]);
   if (A.isGL) {
     lines.push(T`L = x_r - x_l = ${kf3(it.zr)} - ${kf3(it.zl)} = ${kf3(it.Lz)}\ \text{ft}`,
@@ -5230,7 +5230,7 @@ function aasFlexBlock(body, it) {
     T`M_r = \phi\,M_n = ${g4(A.PHI.Fb)} \times ${kf3(it.Mn)} = ${kf3(it.Mr)}\ \text{kip-ft}`,
     T`\frac{M_u}{M_r} = \frac{${kf3(it.Mu)}}{${kf3(it.Mr)}} = ${f3(it.ratio)}\ ${it.ratio <= 1 ? '\\le' : '>'}\ 1.0`);
   calc(body, { title: `${aasLimName(it.lim)}, ${aasSpanTxt(it.k)}: ${it.sg > 0 ? 'positive moment (top edge in compression)' : 'negative moment (bottom edge in compression)'}`, ref: AAS_ART + 'Art. 8.6.1, 8.6.2 (Eq. 8.6.1-1, 8.6.2-1 to -5)' + (A.isGL ? ', 8.4.4.5' : ''), status: aasItSt(it), lines, where,
-    result: `M<sub>r</sub> = ${kf3(it.Mr)} kip-ft ≥ M<sub>u</sub>? ratio ${f3(it.ratio)}` + (A.isGL ? `; ${it.facBy === 'CL' ? 'C<sub>L</sub>' : 'C<sub>V</sub>'} governs (the lesser applies, Art. 8.4.4.5)` : '') + (st.why ? '; ' + st.why : '') + (it.rbNG ? ` — R<sub>B</sub> = ${f3(it.RB)} > 50: not permitted (Art. 8.6.2)` : '') }).id = 'aasIt_' + aasItId(it).replace('.', '_');
+    result: `M<sub>r</sub> = ${kf3(it.Mr)} kip-ft; M<sub>u</sub>/M<sub>r</sub> = ${f3(it.ratio)}` + (A.isGL ? `; ${it.facBy === 'CL' ? 'C<sub>L</sub>' : 'C<sub>V</sub>'} governs (the lesser applies, Art. 8.4.4.5)` : '') + (st.why ? '; ' + st.why : '') + (it.rbNG ? ` — R<sub>B</sub> = ${f3(it.RB)} > 50: not permitted (Art. 8.6.2)` : '') }).id = 'aasIt_' + aasItId(it).replace('.', '_');
 }
 function aasShrBlock(body, it) {
   const s = it.s;
@@ -5241,7 +5241,7 @@ function aasShrBlock(body, it) {
       T`\frac{V_u}{V_r} = \frac{${kf3(it.Vu)}}{${kf3(it.Vr)}} = ${f3(it.ratio)}\ ${it.ratio <= 1 ? '\\le' : '>'}\ 1.0`],
     where: [['V_u', `factored shear at the critical section: dead load at d from the face, live load placed for the largest shear at min(3d, L/4) = ${kf3(s.aLL)} ft from the face`, kf3(it.Vu), 'kip', tbcLink('aasWV', 'Shear at the critical sections')],
       ['F_v', `adjusted design value in shear, ${aasLimName(it.lim)} (C<sub>λ</sub> = ${g4(it.Cl)})`, k4(it.Fv), 'ksi', tbcLink('aasAdj', 'AASHTO Materials')]],
-    result: `V<sub>r</sub> = ${kf3(it.Vr)} kip; ratio ${f3(it.ratio)}` });
+    result: `V<sub>r</sub> = ${kf3(it.Vr)} kip; V<sub>u</sub>/V<sub>r</sub> = ${f3(it.ratio)}` });
 }
 function aasChkRows() {   // the summary rows: [check, limit state, location, demand, resistance, ratio, status, card]
   return AC.all.map(it => ({ it, cells: [it.kind === 'flex' ? 'Flexure (Art. 8.6.2)' : 'Shear (Art. 8.7)', aasLimName(it.lim), aasItLoc(it),

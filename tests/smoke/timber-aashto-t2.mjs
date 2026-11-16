@@ -3,7 +3,7 @@
 // - the code switch: a project switched to AASHTO for the first time is set to wet service (engineer decision 2026-11-16); back to NDS
 //   restores the NDS setting (dry) and the NDS results; a TBA1 project (AASHTO, dry, saved before) opens dry, unchanged;
 // - the Loads tab shows the bridge-load inputs; an edit creates design.aashto.bl (autosave version 5);
-// - the Bridge Loads tab: every card, the values equal to the engine's (AL), no NaN / undefined, no KaTeX errors, no PASS / FAIL;
+// - the Bridge Loads tab: every card, the values equal to the engine's (AL), no NaN / undefined, no KaTeX errors, no PASS / FAIL on the tab (TBA4: the checks are on the AASHTO Checks tab);
 //   interior / exterior / concrete deck / entered DF; the Report section; 390 px without horizontal scroll; 0 console errors.
 // Screenshots of the Bridge Loads cards (deviceScaleFactor 1) with --shots <dir>.
 //   node tests/smoke/timber-aashto-t2.mjs [--shots <dir>]
@@ -19,7 +19,8 @@ const { b, p, errs } = await openPage(FILE, { vw: 1400, vh: 1000 });
 await p.waitForFunction(() => window.TBC && window.TBC.res, null, { timeout: 30000 }); await p.waitForTimeout(800);
 const ndsRes = await p.evaluate(() => JSON.stringify(TBC.res));
 const st = async () => p.evaluate(() => ({ tabs: [...document.querySelectorAll('#tabBar button')].map(x => x.textContent.trim()), gov: document.getElementById('govStrip').innerText, text: document.getElementById('tabPages').innerText,
-  chips: document.querySelectorAll('#tabPages .st.ok, #tabPages .st.ng, #tbcDash .tbcDc.pass, #tbcDash .tbcDc.fail').length, kerr: document.querySelectorAll('.katex-error').length, AL: TBC.al, A: TBC.aas,
+  chips: document.querySelectorAll('#tabPages .st.ok, #tabPages .st.ng').length,   // TBA4: the left column has the checks; the Bridge Loads tab has none
+  kerr: document.querySelectorAll('.katex-error').length, AL: TBC.al, A: TBC.aas,
   saved: JSON.parse(localStorage.getItem('tbc_autosave_v1')) }));
 // 1. wet default on the first switch; back to NDS: dry and the NDS results
 await p.click('#tbcInTab_factors'); await p.selectOption('[data-fkey="dcode"]', 'AASHTO'); await p.waitForTimeout(600);
@@ -27,7 +28,7 @@ let s = await st();
 ok(s.saved.design.moisture === 'Wet' && s.saved.design.aashto.ndsMoist === 'Dry', `first switch to AASHTO: wet (saved ${s.saved.design.moisture}, ndsMoist ${s.saved.design.aashto.ndsMoist})`);
 ok(await p.evaluate(() => document.querySelector('[data-fkey="wet"]').checked), 'Wet service box ticked');
 ok(s.saved.version === 5, 'version 5 with the kept NDS setting: ' + s.saved.version);
-ok(s.tabs.join('|') === 'AASHTO Materials|Bridge Loads|Report', 'tabs: ' + s.tabs.join('|'));
+ok(s.tabs.join('|') === 'AASHTO Materials|Bridge Loads|AASHTO Checks|Report', 'tabs: ' + s.tabs.join('|'));   // TBA4
 // untick wet in AASHTO, back to NDS, to AASHTO again: the AASHTO setting (dry) comes back; NDS stays dry
 await p.click('[data-fkey="wet"]'); await p.waitForTimeout(400);
 await p.selectOption('[data-fkey="dcode"]', 'NDS'); await p.waitForTimeout(500);
