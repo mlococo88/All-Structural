@@ -89,3 +89,38 @@ test('section, factor chain and ratios (AASHTO): engine values', () => {
     assert.deepEqual(rt.map(x => x.r), J([AC.govFlex, AC.govShear, AC.govBear, AC.govDefl].filter(Boolean).map(x => x.ratio)), name + ' ratios');
   }
 });
+
+// TBGX-2: the bridge cross-section and the governing vehicle positions
+const AAS_XS = {
+  interiorPlank: m => { m.material.size = '6x16'; m.design.aashto.gr = 'No.1'; m.geom.spacing = 24; },
+  exterior: m => { m.material.size = '6x16'; m.design.aashto.gr = 'No.1'; m.geom.spacing = 24; Object.assign(m.design.aashto.bl, { pos: 'ext', de: 1.5, nB: 12 }); },
+  concrete: m => { m.material.type = 'glulam'; m.geom.spacing = 72; Object.assign(m.design.aashto.bl, { deck: 'concrete', tD: 8, wRd: 30 }); },
+  plankBeyond: m => { m.material.size = '8x16'; m.geom.spacing = 72; },
+  entered: m => { m.material.size = '6x16'; Object.assign(m.design.aashto.bl, { dfMode: 'entered', gM: 0.35, gV: 0.4, im: 33 }); },
+};
+test('bridge cross-section (AASHTO): S, d_e, roadway, lanes, the lever-rule wheels and reactions of the engine', () => {
+  for (const [name, fn] of Object.entries(AAS_XS)) {
+    const { m, AL } = aas(fn), d = J(G.aasXsec(AL, m).data), df = AL.df;
+    assert.equal(d.S, AL.S, name + ' S'); assert.equal(d.wRd, AL.wRd, name + ' w'); assert.equal(d.NL, AL.NL, name + ' N_L'); assert.equal(d.lanes.length, AL.NL, name + ' lanes drawn');
+    close(d.roadway[1] - d.roadway[0], AL.wRd, 1e-12, name + ' roadway width drawn');
+    assert.ok(d.stringers.includes(0), name + ' the checked stringer at 0'); d.stringers.forEach((x, i) => i && close(x - d.stringers[i - 1], AL.S, 1e-12, name + ' spacing'));
+    if (AL.pos === 'ext') { assert.equal(d.de, AL.de, name + ' d_e'); close(-d.roadway[0], AL.de, 1e-12, name + ' curb face at d_e'); assert.equal(d.stringers[0], 0, name + ' exterior = the outer stringer'); }
+    if (df.nB) assert.equal(d.stringers.length, Math.min(df.nB, 12), name + ' N_b stringers');
+    if (df.lev) {
+      const g = df.lev.gov; assert.deepEqual(d.wheels.map(w => w.xs), J(g.xs), name + ' wheel x'); assert.deepEqual(d.wheels.map(w => w.r), J(g.rs), name + ' wheel r');
+      d.wheels.forEach(w => close(w.x, AL.pos === 'ext' ? -w.xs : w.xs, 1e-12, name + ' drawn position')); assert.equal(d.lever.g, g.g, name + ' g'); assert.equal(d.lever.m, g.m);
+    } else { assert.equal(d.wheels.length, 0, name + ' no wheels without the lever rule'); assert.equal(d.lever, null); }
+  }
+});
+test('governing vehicle positions (AASHTO): the axles of the envelope placements (x, P) and the sections', () => {
+  for (const [name, fn] of Object.entries(Object.assign({}, AAS_CASES, AAS_XS))) {
+    const { AL, AD } = aas(fn), d = J(G.aasTrucks(AL, AD).data), e = AL.env, on = x => x >= -1e-9 && x <= e.Lt + 1e-9;
+    const want = [['Mpos', AD.Mpos, AD.Mpos && AD.Mpos.s.M.ll.gMax, AD.Mpos && AD.Mpos.x], ['Mneg', AD.Mneg, AD.Mneg && AD.Mneg.s.M.ll.gMin, AD.Mneg && AD.Mneg.x], ['Vu', AD.Vu, AD.Vu && AD.Vu.gov, AD.Vu && AD.Vu.xl], ['Ru', AD.Ru, AD.Ru && AD.Ru.ll.gMax, AD.Ru && AD.Ru.x],
+      ['Mpos2', AD.Mpos2, AD.Mpos2 && AD.Mpos2.s.M.pm && AD.Mpos2.s.M.pm.gMax, AD.Mpos2 && AD.Mpos2.x], ['Mneg2', AD.Mneg2, AD.Mneg2 && AD.Mneg2.s.M.pm && AD.Mneg2.s.M.pm.gMin, AD.Mneg2 && AD.Mneg2.x]].filter(w => w[1] && w[2]);
+    assert.deepEqual(d.rows.map(r => r.key), want.map(w => w[0]), name + ' rows');
+    want.forEach(([k, , gv, x], i) => { const r = d.rows[i], P = k.endsWith('2') ? e.permit.P : gv.P;
+      assert.equal(r.x, x, name + ' ' + k + ' section'); const ax = gv.pos.map((xx, a) => ({ x: xx, P: P[a] })).filter(a => on(a.x));
+      assert.deepEqual(r.axles, J(ax), name + ' ' + k + ' axles'); assert.ok(r.axles.length > 0, name + ' ' + k + ' at least one axle'); });
+    assert.equal(d.Lt, e.Lt);
+  }
+});
