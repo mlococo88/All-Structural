@@ -25,7 +25,8 @@ const FILE = path.join(REPO, 'apps/crane-pick/index.html');
 const TMP = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'crane-draw-'));
 let n = 0; const ok = m => { n++; console.log('  ok  ', m); };
 const near = (a, b, tol, m) => assert.ok(Math.abs(a - b) <= tol, `${m || ''}: ${a} vs ${b} (tol ${tol})`);
-const { b, p, errs } = await openPage(FILE, { vw: 1280, vh: 860, ls: { 'crane.ui': '{"base":"none","itab":"draw"}' } });
+// The viewport is 960 px tall: the map must reach y = 680 px for the clicks below (C3-2 added the elevation dock under the map, 67 px).
+const { b, p, errs } = await openPage(FILE, { vw: 1280, vh: 960, ls: { 'crane.ui': '{"base":"none","itab":"draw"}' } });
 let reply = [];
 p.removeAllListeners('dialog'); p.on('dialog', async d => { const r = reply.shift(); if (r === false) await d.dismiss(); else await d.accept(typeof r === 'string' ? r : undefined); });
 const proj = () => p.evaluate(() => JSON.parse(localStorage.getItem('crane.project.current')));
