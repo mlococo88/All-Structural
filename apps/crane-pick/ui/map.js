@@ -35,8 +35,8 @@
     if (!quiet) A.emit('base', k);
   }
   function build(el) {
-    el.innerHTML = `<div id="planPane"><div id="mapBar"><span class="mbStatus" id="mbStatus"></span></div>
-      <div id="mapWrap"><div id="map" role="application" aria-label="Site plan map"></div><div id="mapMsg" hidden></div></div></div>`;
+    el.innerHTML = `<div id="planPane"><div id="mapBar"></div>
+      <div id="mapWrap"><div id="map" role="application" aria-label="Site plan map"></div><div id="mapMsg" hidden></div><div id="mbStatus" role="status" aria-live="polite"></div></div></div>`;
     if (!window.L || !window.proj4) {
       document.getElementById('map').classList.add('blank');
       msg('The map libraries (Leaflet, proj4js) did not load: they come from unpkg.com / cdnjs.cloudflare.com and need the internet the first time. The Project, Site and Report tabs still work.');
@@ -62,6 +62,8 @@
     map.on('click', e => { if (tool && tool.click) tool.click(toFt(e.latlng), e); });
     map.on('dblclick', e => { if (tool && tool.dbl) tool.dbl(toFt(e.latlng), e); });
     document.getElementById('mapMsg').addEventListener('click', e => { if (e.target.id === 'mmNone') setBase('none'); });
+    // the map's box changes with the notices above it and the panels beside it: keep Leaflet's size in step (clicks land where they are drawn)
+    if (window.ResizeObserver) new ResizeObserver(() => map.invalidateSize({ pan: false })).observe(document.getElementById('map'));
     ok = true; setBase(A.ui.base || 'sat', true); void ctl;
   }
   function home() { const z = G.zone(zoneId()); return { lat: z.home.lat, lng: z.home.lng, z: 16 }; }

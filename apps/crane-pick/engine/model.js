@@ -17,7 +17,8 @@
        view: { lat, lng, z }                               the map view (kept with the project; not an "unsaved change", not an undo step)
        sheets: [ sheet ], items: [ item ], savedAt? }
      sheet = { id, name, kind: 'image' | 'pdf', page, w, h (px), place: { x, y, s, rot }, opacity (0–1), locked, visible,
-               cal: { p1: { px, py }, p2, dist (ft) } | null, geo: { p1, p2, g1: { E, N }, g2 (zone units) } | null, planScale (1" = ft, text) }
+               cal: { p1: { px, py }, p2, dist (ft) } | null, geo: { p1, p2, g1: { E, N }, g2 (zone units) } | null,
+               pageIn: { w, h } (PDF page size, in) | null, planScale (the plan's stated scale, ft per in) | null, basis (BASIS key) }
      item  = { id, type, name, pts: [{ x, y }], ... }   type: 'obst' (polygon: height ft), 'power' (polyline: kv, le350, setFt, height),
              'util' (polyline or polygon (closed): kind, depth ft, topEl ft, size ft), 'excl' (polygon: reason), 'label' (one point:
              text, size), 'dim' (two points: a dimension) */
@@ -33,6 +34,9 @@
     label: { label: 'Text label', geom: 'point', min: 1 },
     dim: { label: 'Dimension', geom: 'polyline', min: 2, max: 2 }
   };
+  /* how a sheet's scale was set: none (placed only), plan (the plan's stated scale on the PDF page size), cal (two points and a known
+     distance), geo (two points with State Plane coordinates: scale, rotation and position) */
+  const BASIS = { none: 'not set', plan: 'stated plan scale (PDF page size)', cal: 'calibrated (two points, known distance)', geo: 'georeferenced (two State Plane points)' };
   const UTIL_KINDS = { utility: 'Buried utility', culvert: 'Culvert', wall: 'Wall', other: 'Other' };
   const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
   function newProject(o) {
@@ -69,7 +73,9 @@
     const geo = g && pxp(g.p1) && pxp(g.p2) && gp(g.g1) && gp(g.g2) ? { p1: pxp(g.p1), p2: pxp(g.p2), g1: gp(g.g1), g2: gp(g.g2) } : null;
     return { id: str(s.id) || uid('s'), name: str(s.name, 'Plan sheet'), kind: s.kind === 'pdf' ? 'pdf' : 'image', page: Math.max(1, Math.round(num(s.page, 1))),
       w: +s.w, h: +s.h, place: { x: num(pl.x, 0), y: num(pl.y, 0), s: +pl.s, rot: num(pl.rot, 0) },
-      opacity: Math.max(0.05, Math.min(1, num(s.opacity, 0.8))), locked: !!s.locked, visible: s.visible !== false, cal, geo, planScale: str(s.planScale) };
+      opacity: Math.max(0.05, Math.min(1, num(s.opacity, 0.8))), locked: !!s.locked, visible: s.visible !== false, cal, geo,
+      pageIn: s.pageIn && num(s.pageIn.w, 0) > 0 && num(s.pageIn.h, 0) > 0 ? { w: +s.pageIn.w, h: +s.pageIn.h } : null,
+      planScale: num(s.planScale, 0) > 0 ? +s.planScale : null, basis: BASIS[s.basis] ? s.basis : 'none' };
   }
   /* normalize(p): a project as this version keeps it (unknown fields dropped, defaults filled; never throws) */
   function normalize(p) {
@@ -101,5 +107,5 @@
   }
   /* text of the inputs (undo / "unsaved changes"): the project without the view and the saved time */
   function inputsText(P) { const o = Object.assign({}, P); delete o.view; delete o.savedAt; return JSON.stringify(o); }
-  window.CranePickModel = { KEYS, FORMAT, TYPES, UTIL_KINDS, newProject, normalize, normItem, normSheet, load, save, toFile, fromFile, inputsText, uid };
+  window.CranePickModel = { KEYS, FORMAT, TYPES, UTIL_KINDS, BASIS, newProject, normalize, normItem, normSheet, load, save, toFile, fromFile, inputsText, uid };
 })();
