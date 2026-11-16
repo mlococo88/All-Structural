@@ -37,6 +37,7 @@
                'cw' | 'ccw', elev: { pg, ph, sg, sh, rig, blk, trav, L, W, H } (C3-1: heights, ft; normElev) }         C2-2
      crane.def.app_inputs.geom = { footH, head, boomW, cwBot, cwTop } (ft, C3-1: the crane's elevation geometry entered in this tool;
                engine/elev.js geomOf; the boom-foot offset and the tail radius stay in app_inputs.plan)
+     setup.ground (C4) = { mat: { type, B, L, t, Fb, Fv, E, Fy, gamma, k }, qa (psf), qaUnit } (normSetupGround); ground (C4, project) = { caps: { <util id>: psf } }
      lift  = { caution: 75, critical: 75, limit: 100 (% of chart), interp: false, path: 'uniform' | 'luff', obstClr: 2 (ft) }
              (project settings; engine/lift.js; path and obstClr C3-2)                                                  C2-2 */
 (function () {
@@ -61,7 +62,7 @@
     o = o || {};
     return { schema: FORMAT, v: 1,
       title: { name: 'New crane pick', number: '', location: '', client: '', by: '', checker: '', date: today(), rev: '' },
-      notes: '', site: { zone: o.zone || 'EPSG:2249' }, view: o.view || null, sheets: [], items: [], cranes: [], setups: [], picks: [],
+      notes: '', site: { zone: o.zone || 'EPSG:2249' }, view: o.view || null, sheets: [], items: [], cranes: [], setups: [], picks: [], ground: { caps: {} },
       lift: { caution: 75, critical: 75, limit: 100, interp: false, path: 'uniform', obstClr: 2 } };
   }
   const num = (v, d) => typeof v === 'number' && isFinite(v) ? v : d;
@@ -108,8 +109,17 @@
   function normSetup(u) {
     if (!u || typeof u !== 'object' || !isFinite(u.x) || !isFinite(u.y)) return null;
     return { id: str(u.id) || uid('u'), name: str(u.name, 'Crane setup'), craneId: str(u.craneId), x: +u.x, y: +u.y, heading: ((num(u.heading, 0) % 360) + 360) % 360,
-      group: str(u.group), boom: numOrNull(u.boom), mode: u.mode == null || u.mode === '' ? null : str(u.mode), pad: numOrNull(u.pad) };
+      group: str(u.group), boom: numOrNull(u.boom), mode: u.mode == null || u.mode === '' ? null : str(u.mode), pad: numOrNull(u.pad), ground: normSetupGround(u.ground) };
   }
+  /* C4: the setup's ground inputs: mat { type: 'none' | 'timber' | 'steel', B, L (ft), t (in), Fb, Fv, E (psi), Fy (ksi), gamma (pcf),
+     k (spread, horizontal : 1 vertical) }, qa (allowable bearing pressure, psf), qaUnit ('psf' | 'ksf': how it is shown) */
+  function normSetupGround(g) {
+    g = g && typeof g === 'object' ? g : {}; const m = g.mat && typeof g.mat === 'object' ? g.mat : {}, mat = { type: ['timber', 'steel'].indexOf(m.type) >= 0 ? m.type : 'none' };
+    ['B', 'L', 't', 'Fb', 'Fv', 'E', 'Fy', 'gamma', 'k'].forEach(k => { const v = numOrNull(m[k]); mat[k] = v != null && v >= 0 ? v : null; });
+    const qa = numOrNull(g.qa); return { mat, qa: qa != null && qa > 0 ? qa : null, qaUnit: g.qaUnit === 'ksf' ? 'ksf' : 'psf' };
+  }
+  /* C4: project ground inputs: caps { <util item id>: allowable vertical stress increase at the item, psf } */
+  function normGround(g) { g = g && typeof g === 'object' ? g : {}; const caps = {}; Object.keys(g.caps || {}).forEach(k => { const v = numOrNull(g.caps[k]); if (v != null && v > 0) caps[k] = v; }); return { caps }; }
   function normPick(k) {
     if (!k || typeof k !== 'object' || !pt(k.pick) || !pt(k.set)) return null;
     const w = v => { const x = numOrNull(v); return x != null && x >= 0 ? x : null; };
@@ -139,7 +149,7 @@
       items: (Array.isArray(p.items) ? p.items : []).map(normItem).filter(Boolean),
       cranes: (Array.isArray(p.cranes) ? p.cranes : []).map(normCrane).filter(Boolean),
       setups: (Array.isArray(p.setups) ? p.setups : []).map(normSetup).filter(Boolean),
-      picks: (Array.isArray(p.picks) ? p.picks : []).map(normPick).filter(Boolean), lift: normLift(p.lift) };
+      picks: (Array.isArray(p.picks) ? p.picks : []).map(normPick).filter(Boolean), lift: normLift(p.lift), ground: normGround(p.ground) };
     Object.keys(d.title).forEach(k => { o.title[k] = str(t[k], k === 'date' ? '' : ''); });
     if (p.savedAt) o.savedAt = str(p.savedAt);
     return o;
@@ -162,5 +172,5 @@
   }
   /* text of the inputs (undo / "unsaved changes"): the project without the view and the saved time */
   function inputsText(P) { const o = Object.assign({}, P); delete o.view; delete o.savedAt; return JSON.stringify(o); }
-  window.CranePickModel = { KEYS, FORMAT, TYPES, UTIL_KINDS, BASIS, newProject, normalize, normItem, normSheet, normCrane, normSetup, normPick, normElev, normLift, load, save, toFile, fromFile, inputsText, uid };
+  window.CranePickModel = { KEYS, FORMAT, TYPES, UTIL_KINDS, BASIS, newProject, normalize, normItem, normSheet, normCrane, normSetup, normPick, normElev, normLift, normSetupGround, normGround, load, save, toFile, fromFile, inputsText, uid };
 })();

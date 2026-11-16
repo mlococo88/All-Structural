@@ -267,7 +267,7 @@
     const out = { mode: inp.mode, inp, S, W, label: inp.mode === 'rigid' ? 'entered data' : 'estimate — verify with the manufacturer\'s outrigger calculator', flags: [] };
     if (!S.ok) { out.mode = 'none'; out.why = S.why; return out; }
     if (inp.mode === 'none') { out.why = `enter the crane's gross operating weight${isNum(inp.Wcw) ? '' : ' and the counterweight'} (estimate), or the weights and CGs (${inp.missing.join(', ')}) on the crane card`; return out; }
-    const pp = LF().pathPoints(setup, pick.pick, pick.set, pick.swing || 'short'), h0 = setup.heading || 0;
+    const pp = LF().pathPoints(setup, pick.pick, pick.set, pick.swing || 'short', LF().settingsOf(P).path), h0 = setup.heading || 0;
     const fn = inp.mode === 'rigid' ? rigidAt : boundAt;
     const samples = pp.pts.map(q => { const theta = K().norm180(q.az - h0); return Object.assign(fn(inp, S, theta, q.r, W), { t: q.t, gp: { x: q.x, y: q.y } }); });
     out.samples = samples;
