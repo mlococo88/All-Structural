@@ -96,7 +96,7 @@ Loaded by: see `shared/README.md` (row `project-registry.js`). Tests: `node test
 - **Formulas, factors, units, code references:** none.
 - **How verified:** `node tests/engine/run.mjs project-registry github-sync projects`: 4 files, 47 passed, 0 failed; `node tests/smoke/home-projects.mjs` (every tool, psbapp included): 60 checks, ALL PASS; `node tests/smoke/home-sync.mjs` (every synced tool): 41 checks, ALL PASS (psbapp: after the home page's Sync all, the app's own dialog shows "synced", no upload: its file = the home page's file); `node tests/check-syntax.mjs`: all scripts pass.
 
-## 2026-11-16 — PR: claude/crane-c1-shell (C1-1) — the Crane Pick Analyzer's saved projects on the home page (`crane-pick`)
+## 2026-11-16 — PR: claude/crane-c1-shell (PR #1600: https://github.com/mlococo88/All-Structural/pull/1600) (C1-1) — the Crane Pick Analyzer's saved projects on the home page (`crane-pick`)
 - **What (additive):** one entry at the end of the `TOOLS` array literal (after `bridge-geometry`):
   `{ tool: 'crane-pick', label: 'Crane Pick Analyzer', name: 'Crane Pick Analyzer', href: 'apps/crane-pick/index.html', def: 'apps/crane-pick/ui/project.js', key: 'crane.projects.v1', time: i => i && i.savedAt || null, sort: 'saved', space: 1, toFile: i => ({ format: 'crane-pick.project', version: 1, project: i }) }`.
   `tool`, `label`, `space`, `toFile` = the app's own `ctx.cloud` (`apps/crane-pick/ui/project.js`, `def`); `key`, `time`, `sort` = its mapStore.

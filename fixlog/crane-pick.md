@@ -14,7 +14,7 @@ Libraries (engineer-approved 2026-11-16, CDN only, exact versions): Leaflet 1.9.
 Labelling (engineer, 2026-11-16): "lift-planning aid" in the header and in the Report; no other disclaimers for now.
 
 ## 2026-11-16 — C1-1: the app shell, saved projects, the map (new files)
-PR: link below once opened.
+PR #1600: https://github.com/mlococo88/All-Structural/pull/1600
 ### Where (all new)
 - `apps/crane-pick/index.html`: header (title, "LIFT-PLANNING AID" badge, units line, project chip, Undo / Redo), input panel (tabs
   Project, Site & map) and output panel (tabs Plan, Site, Report); below 900 px the output panel (the map, 62 vh, full width) comes first

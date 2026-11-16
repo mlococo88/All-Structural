@@ -122,7 +122,7 @@
 - **Formulas, factors, units, code references:** none. **Saved data:** none.
 - **How verified:** headless Chromium: the card is shown, its href is the relative `#hss` link, and the link opens the tool with HSS preselected (fresh profile); home-projects passes; 0 console errors. **Other copies:** none. **Open items:** none.
 
-## 2026-11-16 — PR: claude/crane-c1-shell (C1-1) — card "Crane Pick Analyzer (new, in development)" in a new section "Construction & erection"   [navigation only]
+## 2026-11-16 — PR: claude/crane-c1-shell (PR #1600: https://github.com/mlococo88/All-Structural/pull/1600) (C1-1) — card "Crane Pick Analyzer (new, in development)" in a new section "Construction & erection"   [navigation only]
 - **Where:** a new `<section><h2>Construction &amp; erection</h2>` before "Survey & geometry".
 - **After:** `<a class="card" href="apps/crane-pick/index.html" target="_blank">` "Crane Pick Analyzer (new, in development)", "Lift-planning aid on a map or a plan sheet." with Now / Next lines; tags "OSHA 1926 Subpart CC", "Lift planning".
 - **Why:** the new tool (engineer decisions 2026-11-16); the card comes with the tool (§7 practice). The home page's Saved projects panel lists its projects through `shared/project-registry.js` (`fixlog/shared-project-registry.md`).
