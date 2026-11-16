@@ -43,7 +43,7 @@ try {
   await p.evaluate(() => CranePickMap.map.setZoom(19)); await p.waitForTimeout(200); await mapBox();
   // 1.
   assert.deepEqual(await p.$$eval('#mapBar [data-tool]', a => a.map(x => x.textContent.trim().replace(/^\S+\s/, ''))), ['Obstruction', 'Power line', 'Utility (line)', 'Utility (area)', 'Exclusion zone', 'Label', 'Dimension']);
-  assert.deepEqual(await p.$$eval('#inTabs [data-itab]', a => a.map(x => x.textContent)), ['Project', 'Site & map', 'Plan sheets', 'Site items']);
+  assert.deepEqual((await p.$$eval('#inTabs [data-itab]', a => a.map(x => x.textContent))).slice(0, 4), ['Project', 'Site & map', 'Plan sheets', 'Site items']);   // C2 adds Cranes after them
   ok('Draw bar with 7 tools above the map; input tabs Project · Site & map · Plan sheets · Site items');
 
   // 2. power line and Table A

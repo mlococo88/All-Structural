@@ -5,6 +5,9 @@
      crane.projects.v1       the saved-project list (shared/projects.js mapStore: { "<name>": project with savedAt })
      crane.open              the name of the saved project the open project belongs to ('' when none)
      crane.ui                the page's view choices (tabs, base map), per browser; never part of a project
+     crane.library.v1        C2-1: the crane library of this browser (ui/cranes.js): { v: 1, cranes: { <key>: { def, src, at, fp } } }
+     crane.libsrc            C2-1: where "Load crane library from GitHub" reads: { owner, repo, branch, folder }
+     crane.syncCheck         C2-1: the last check of the Cloud sync repository's visibility: { owner, repo, private, at }
      IndexedDB crane.sheets.v1, store "img"   the plan-sheet images (one record per sheet id: { id, blob, type, name, w, h, at });
                              a project keeps the sheet's placement and calibration only, so the list stays small (ui/sheetstore.js)
    File (Export JSON, GitHub sync): { format: 'crane-pick.project', version: 1, project } (+ images: { <sheet id>: data URL } when the
@@ -15,16 +18,20 @@
        title: { name, number, location, client, by, checker, date, rev }, notes,
        site: { zone },                                     the State Plane zone (geo.js ZONES id)
        view: { lat, lng, z }                               the map view (kept with the project; not an "unsaved change", not an undo step)
-       sheets: [ sheet ], items: [ item ], savedAt? }
+       sheets: [ sheet ], items: [ item ], cranes: [ crane ], savedAt? }
      sheet = { id, name, kind: 'image' | 'pdf', page, w, h (px), place: { x, y, s, rot }, opacity (0–1), locked, visible,
                cal: { p1: { px, py }, p2, dist (ft) } | null, geo: { p1, p2, g1: { E, N }, g2 (zone units) } | null,
                pageIn: { w, h } (PDF page size, in) | null, planScale (the plan's stated scale, ft per in) | null, basis (BASIS key) }
      item  = { id, type, name, pts: [{ x, y }], ... }   type: 'obst' (polygon: height ft), 'power' (polyline: kv, le350, setFt, height),
              'util' (polyline or polygon (closed): kind, depth ft, topEl ft, size ft), 'excl' (polygon: reason), 'label' (one point:
-             text, size), 'dim' (two points: a dimension) */
+             text, size), 'dim' (two points: a dimension)
+     crane = { id, def (the crane file, schema crane-pick.crane.v1, with its app_inputs: engine/cranes.js), src: { from: 'github' |
+               'file' | 'paste' | 'library', name, repo, path, at }, fp (fingerprint of the chart data when it was added) }   C2-1:
+             a copy of each crane the project uses, so a saved or exported project is self-contained (it carries the chart data) */
 (function () {
   'use strict';
-  const KEYS = { current: 'crane.project.current', list: 'crane.projects.v1', open: 'crane.open', ui: 'crane.ui', idb: 'crane.sheets.v1' };
+  const KEYS = { current: 'crane.project.current', list: 'crane.projects.v1', open: 'crane.open', ui: 'crane.ui', idb: 'crane.sheets.v1',
+    library: 'crane.library.v1', libsrc: 'crane.libsrc', syncCheck: 'crane.syncCheck' };
   const FORMAT = 'crane-pick.project';
   const TYPES = {
     obst: { label: 'Obstruction', geom: 'polygon', min: 3 },
@@ -43,7 +50,7 @@
     o = o || {};
     return { schema: FORMAT, v: 1,
       title: { name: 'New crane pick', number: '', location: '', client: '', by: '', checker: '', date: today(), rev: '' },
-      notes: '', site: { zone: o.zone || 'EPSG:2249' }, view: o.view || null, sheets: [], items: [] };
+      notes: '', site: { zone: o.zone || 'EPSG:2249' }, view: o.view || null, sheets: [], items: [], cranes: [] };
   }
   const num = (v, d) => typeof v === 'number' && isFinite(v) ? v : d;
   const numOrNull = v => typeof v === 'number' && isFinite(v) ? v : null;
@@ -77,6 +84,13 @@
       pageIn: s.pageIn && num(s.pageIn.w, 0) > 0 && num(s.pageIn.h, 0) > 0 ? { w: +s.pageIn.w, h: +s.pageIn.h } : null,
       planScale: num(s.planScale, 0) > 0 ? +s.planScale : null, basis: BASIS[s.basis] ? s.basis : 'none' };
   }
+  /* a project crane: kept as loaded (a crane file that no longer passes the check is kept too, so nothing is lost; the UI says so) */
+  function normCrane(c) {
+    if (!c || typeof c !== 'object' || !c.def || typeof c.def !== 'object') return null;
+    const s = c.src && typeof c.src === 'object' ? c.src : {};
+    const def = JSON.parse(JSON.stringify(c.def)); if (!def.app_inputs || typeof def.app_inputs !== 'object') def.app_inputs = {};
+    return { id: str(c.id) || uid('c'), def, src: { from: str(s.from, 'file'), name: str(s.name), repo: str(s.repo), path: str(s.path), at: str(s.at) }, fp: str(c.fp) };
+  }
   /* normalize(p): a project as this version keeps it (unknown fields dropped, defaults filled; never throws) */
   function normalize(p) {
     const d = newProject(); if (!p || typeof p !== 'object') return d;
@@ -84,7 +98,8 @@
     const o = { schema: FORMAT, v: 1, title: {}, notes: str(p.notes), site: { zone: (p.site && typeof p.site.zone === 'string') ? p.site.zone : d.site.zone },
       view: p.view && isFinite(p.view.lat) && isFinite(p.view.lng) ? { lat: +p.view.lat, lng: +p.view.lng, z: num(p.view.z, 17) } : null,
       sheets: (Array.isArray(p.sheets) ? p.sheets : []).map(normSheet).filter(Boolean),
-      items: (Array.isArray(p.items) ? p.items : []).map(normItem).filter(Boolean) };
+      items: (Array.isArray(p.items) ? p.items : []).map(normItem).filter(Boolean),
+      cranes: (Array.isArray(p.cranes) ? p.cranes : []).map(normCrane).filter(Boolean) };
     Object.keys(d.title).forEach(k => { o.title[k] = str(t[k], k === 'date' ? '' : ''); });
     if (p.savedAt) o.savedAt = str(p.savedAt);
     return o;
@@ -107,5 +122,5 @@
   }
   /* text of the inputs (undo / "unsaved changes"): the project without the view and the saved time */
   function inputsText(P) { const o = Object.assign({}, P); delete o.view; delete o.savedAt; return JSON.stringify(o); }
-  window.CranePickModel = { KEYS, FORMAT, TYPES, UTIL_KINDS, BASIS, newProject, normalize, normItem, normSheet, load, save, toFile, fromFile, inputsText, uid };
+  window.CranePickModel = { KEYS, FORMAT, TYPES, UTIL_KINDS, BASIS, newProject, normalize, normItem, normSheet, normCrane, load, save, toFile, fromFile, inputsText, uid };
 })();

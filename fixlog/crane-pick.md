@@ -162,3 +162,75 @@ The plan buffer drawn around the line has radius D_min (tested: every point of a
 ### Tests
 `node tests/smoke/crane-draw.mjs` (7 checks), `crane-sheets.mjs` (8), `crane-shell.mjs` (11); `node tests/engine/run.mjs crane` (10);
 `node tests/check-syntax.mjs`.
+
+## 2026-11-16 — C2-1: crane library (GitHub / files), project cranes, crane cards, crane editor (paste from Excel)
+PR: (this PR, link added after merge)
+### Where
+- `apps/crane-pick/engine/cranes.js` (new, `window.CranePickCranes`, no DOM): crane files of schema `crane-pick.crane.v1` (the private
+  library's SCHEMA.md): `parse` (structure check: schema, make / model, grid shape (one row per radius, one value per boom length),
+  numbers or null, radii increasing, boom lengths non-decreasing, zones, duplicate ids → errors; capacity increasing with radius, blanks
+  between rated cells, preliminary, rating basis not found → warnings), `lookup` (below), `ratingBasis` (the % of tipping read from the
+  config notes, or entered), `interpPermitted` (the notes mention interpolation and do not forbid it), `groups` / `zoneOf` / `chartFor`
+  (zone charts, used by C2-2), `planDims` (the map symbol's dimensions from the file's dims, with the user's overrides), `hookBlocks`,
+  `pasteChart` / `chartText` (Excel paste: radius rows × boom-length columns), `fingerprint` (FNV-1a of the crane without `app_inputs`).
+- `apps/crane-pick/ui/cranes.js` (new): the Cranes input tab: "Load crane library from GitHub" (repository / branch / folder settings,
+  defaults mlococo88/Structural_References, crane-charts, "Crane Load Charts/library/"; read with the Cloud sync token through
+  `shared/github-sync.js` `client` (unchanged): token only in the Authorization header to api.github.com), "Load crane file(s)",
+  the library list (Add to project, ×), the project's crane cards (source document, revision, date, pages, file, where it was loaded
+  from, fingerprint, PRELIMINARY, terms, configs with the rating basis (entered where the notes do not state it), zone sectors, plan
+  dimensions with what was assumed, the phase-4 inputs "for outrigger loads (phase 4)": upperworks weight and CG, carrier / carbody weight
+  and CG, float / shoe size), "Use the library copy" when the chart data differ, Remove; the Cloud sync repository check; Report §Cranes.
+- `apps/crane-pick/ui/craneedit.js` (new): the crane editor dialog (crane data, plan-dimension overrides, configs, the chart as
+  tab-separated text with a checked preview; an edited chart is marked `app_inputs.edited`).
+- `engine/model.js`: `P.cranes` (+ `normCrane`), keys below. `ui/project.js`: Save asks `CranePickCraneUI.beforeSave(name)` first
+  (below). `index.html`: three scripts, CSS, footer v0.2. Tests: `tests/engine/crane-lib.test.mjs`, `crane-library-real.test.mjs`,
+  `tests/smoke/crane-library.mjs`, fake cranes `tests/smoke/crane-fake-wheeled.json`, `crane-fake-crawler.json` (synthetic values);
+  `tests/smoke/crane-draw.mjs` (the input-tab list now ends with Cranes).
+### Chart data stays out of this repository
+All-Structural is public; the manufacturer chart data (the engineer's extraction) is only in the private references repository
+(branch crane-charts). Nothing numeric from it is committed: the tests use two synthetic cranes ("FAKECO … (FAKE TEST DATA)");
+`crane-library-real.test.mjs` checks the real files' structure only, and only where `CRANE_LIB_DIR` points to a local copy (run
+locally: every file loads; a file without charts loads with a warning).
+Where chart data can end up once loaded: this browser's `crane.library.v1`; every project that uses a crane (`crane.project.current`,
+`crane.projects.v1`, Export JSON files); the Cloud sync copy of a saved project (`projects/crane-pick/<name>.json` in the repository set
+in Cloud sync); the Report (C2-2 on: the cells used).
+**Sync-repository finding:** `shared/github-sync.js` copies saved projects to the repository the user typed in Cloud sync (owner / repo /
+branch, default repository name `structural-projects`); nothing stops it from being `mlococo88/All-Structural` or another public
+repository (the shared dialog's "Test connection" only warns when it is public). So this tool checks it: when the project holds cranes and
+sync is set up, GET /repos/{owner}/{repo} (the same token, header only) records `private` in `crane.syncCheck`; the Cranes tab shows
+where chart data go and warns when the repository is PUBLIC, unchecked, or named All-Structural; Save asks first (Cancel = not saved)
+unless the repository was checked private or the name is held as "This browser only".
+### Chart lookup (CLAUDE.md §4: new calculation; Decision pending engineer review)
+Rule (conservative, as the engineer set it): **no interpolation**: C = chart cell at L_tab = the smallest tabulated boom length ≥ L and
+R_tab = the smallest tabulated radius ≥ R. Not permitted: R below the smallest or above the largest tabulated radius, L above the longest
+length, a blank cell (null), a cell the file marks "special equipment" (e.g. an over-rear-only value printed in a 360° chart).
+Added for review (conservative): when L lies between two tabulated lengths and the next shorter length's cell at R_tab is rated and lower,
+the lower value is used (one library chart's notes ask for "the lesser of adjacent boom lengths"); repeated columns at one length
+(telescoping modes) give the lowest unless a mode is chosen. Optional (project setting, C2-2; only where the notes are read to permit it):
+linear interpolation between the two tabulated radii in the L_tab column.
+**Check cases** (fake crane `or-full-360`, `tests/engine/crane-lib.test.mjs`): L 50 ft, R 17 ft → L_tab 60, R_tab 20 → C = 58,000 lb
+(the 40 ft cell, 60,000, is higher: not used); L 90, R 65 → L_tab 100, R_tab 70 → 10,500, the 80 ft cell 10,000 is lower → C = 10,000 lb;
+L 60, R 5 / 70.5 / L 100.5 → not permitted; L 40, R 40 → blank → not permitted; with interpolation (notes permit): L 60, R 25 →
+58,000 + (39,000 − 58,000)(25 − 20)/(30 − 20) = 48,500 lb (without: 39,000).
+Rating basis: read from the notes by the pattern "NN % of (static) tipping" (where the extracted notes do not state it, the card asks
+for it). Shown on each card and in the Report; not used in a calculation.
+### Saved data (§5)
+New keys only: `crane.library.v1` (the library: `{ v: 1, cranes: { <make-model>: { def, src, at, fp } } }`), `crane.libsrc` (the GitHub
+library settings), `crane.syncCheck` (`{ owner, repo, private, at }`). Project: new field `cranes` (absent in older projects = none; no
+migration). The Cloud sync settings key is read only (the token and, for the "This browser only" hold, the tool's sync state).
+### Decisions (pending engineer review)
+- The library is kept in localStorage (`crane.library.v1`, about 15–20 kB per crane), not IndexedDB: simple and synchronous; a full
+  storage says so and the crane can still be added to the project.
+- A project carries a full copy of each crane it uses (self-contained, as decided); "Use the library copy" replaces it when the library's
+  chart data differ (the fingerprint shows it); the entered inputs (`app_inputs`) are kept.
+- Zone sectors (over-front / over-rear half-angles) are inputs on the crane card (the files do not give the working-area diagram);
+  not set = the zone chart is not used (the 360° or over-side chart applies), the conservative reading.
+- Plan dimensions missing from a file are assumed and listed (carrier centred between the outrigger beams, crawler centred on rotation,
+  gauge = width over tracks − shoe); display and plan clearances only.
+- An edited chart is marked "edited here" on the card and in the Report; the library copy is changed only when the user ticks it.
+### How verified
+`node tests/engine/run.mjs crane` (27 tests, 0 failed); `CRANE_LIB_DIR=<local copy> node tests/engine/run.mjs crane-library-real`
+(structure, local only); `node tests/smoke/crane-library.mjs` (9 checks: files, cards, inputs, Undo / Redo, mocked GitHub with the
+token only in the Authorization header, the public-repository warning and Save question, the editor (paste, kip, edit, restore),
+reload, Report, 390 px, 0 console errors); `crane-shell.mjs` (11), `crane-sheets.mjs` (8), `crane-draw.mjs` (7);
+`node tests/check-syntax.mjs`.
