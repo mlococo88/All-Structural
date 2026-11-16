@@ -200,7 +200,7 @@
       <div class="fRow"><label>Swing</label><span id="lkSwing">${[['short', 'shortest'], ['cw', 'clockwise'], ['ccw', 'counter-clockwise']].map(([v, t]) => `<label style="margin-right:8px"><input type="radio" name="lkSwing" value="${v}"${k.swing === v ? ' checked' : ''}> ${t}</label>`).join('')}</span></div>
       ${numIn('lkPE', G.ftToNative(z.id, k.pick.x).toFixed(2), 'Pick E', un)}${numIn('lkPN', G.ftToNative(z.id, k.pick.y).toFixed(2), 'Pick N', un)}${numIn('lkSE', G.ftToNative(z.id, k.set.x).toFixed(2), 'Set E', un)}${numIn('lkSN', G.ftToNative(z.id, k.set.y).toFixed(2), 'Set N', un)}
       <div id="lfLive">${resHtml(k)}</div>
-      <div class="goRow"><a href="#" class="wk" data-la="picksTab">all picks: Picks tab</a></div></div></div>`;
+      <div class="goRow"><a href="#" class="wk" data-la="picksTab">all picks: Picks tab</a> <a href="#" class="wk" data-la="rptPick">worked: Report</a></div></div></div>`;
   }
   function drawTab() {
     if (!el) return;
@@ -208,7 +208,7 @@
     const s = S(), u = setupOf(selU), k = pickOf(selK);
     const anyInterp = (A.P.setups || []).some(x => { const c = craneOf(x); return c && LF.chartsOf(c, x).gr && Object.values(LF.chartsOf(c, x).gr.configs).some(K.interpPermitted); });
     el.innerHTML = `<div class="sec"><div class="secHead">Lift settings (project)</div><div class="secBody">
-        ${numIn('lsCaution', s.caution, 'Caution at', '% of chart')}${numIn('lsCritical', s.critical, 'Critical lift at', '% of chart')}${numIn('lsLimit', s.limit, 'Limit', '% of chart')}
+        ${numIn('lsCaution', s.caution, 'Caution at (% of chart)', '%')}${numIn('lsCritical', s.critical, 'Critical lift at (% of chart)', '%')}${numIn('lsLimit', s.limit, 'Limit (% of chart)', '%')}
         <label class="note" style="display:block"><input type="checkbox" id="lsInterp"${s.interp ? ' checked' : ''}${anyInterp || s.interp ? '' : ' disabled'}> Linear interpolation between tabulated radii where the chart notes permit it${anyInterp ? '' : ' (no chart in use permits it)'}</label>
         <p class="note">Default (conservative): no interpolation: the next longer tabulated boom length and the next larger tabulated radius; outside the chart = not permitted. Each chart's rating basis (% of tipping) is on the Cranes tab.</p></div></div>
       <div class="sec"><div class="secHead">Crane setups (${A.P.setups.length})</div><div class="secBody">
@@ -228,6 +228,7 @@
     else if (a === 'delU') delSetup(selU);
     else if (a === 'zoomU') zoomTo(selU);
     else if (a === 'picksTab') { e.preventDefault(); A.showOTab(window.CranePickPicks ? 'picks' : 'plan'); }
+    else if (a === 'rptPick') { e.preventDefault(); if (window.CranePickPicks && selK) window.CranePickPicks.gotoReport(selK); }
   }
   function zoomTo(uid) { const u = setupOf(uid); if (!u) return; A.showOTab('plan'); const pts = [u].concat(...picksOf(u).map(k => [k.pick, k.set])); const r = Math.max(30, ...pts.map(p => G.dist(u, p))); MP().fit([{ x: u.x - r, y: u.y - r }, { x: u.x + r, y: u.y + r }]); }
   function onChange(e) {

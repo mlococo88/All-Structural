@@ -49,7 +49,7 @@
   }
   /* ---------- tabs ---------- */
   function inTab(t) { inTabs.push(t); }
-  function outTab(t) { outTabs.push(t); }
+  function outTab(t) { const i = t.before ? outTabs.findIndex(x => x.id === t.before) : -1; if (i >= 0) outTabs.splice(i, 0, t); else outTabs.push(t); }   // before (C2-3): the id of the tab it goes in front of
   function showITab(id) {
     if (!inTabs.some(t => t.id === id)) id = inTabs[0].id;
     ui.itab = id; saveUi();
