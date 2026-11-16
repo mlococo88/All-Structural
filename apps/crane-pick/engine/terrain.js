@@ -202,12 +202,15 @@
     if (gov) { const s0 = Math.max(0, gov.at - b2), s1 = Math.min(Ltot, gov.at + b2), za = zAt(pr, s0), zc = zAt(pr, s1);
       steps.push(st(idp, { id: 'g', label: `Steepest grade (over the base length ℓ_g, at sta. ${fmt(gov.at, 1)} ft)`, sym: 'g_{max}', eq: '100\\,\\frac{z(s + \\ell_g/2) - z(s - \\ell_g/2)}{\\ell_g}', sub: `100\\,\\frac{${tx(zc, 2)} - ${tx(za, 2)}}{${tx(s1 - s0, 2)}}`, value: gov.g, unit: '\\%',
         note: `ℓ_g = ${fmt(base, 1)} ft (input; clipped at the route ends); the maximum grade allowed ${fmt(maxG, 2)} % (input). Profile: the steer-axle path every ${fmt(pr.ds, 2)} ft, ground bilinear on the terrain grid (${LABEL}).`, ok: Math.abs(gov.g) <= maxG + 1e-9 })); }
-    // crests / sags: sign changes of the grade (over ℓ_g), merged within ℓ_g
-    const crest = [], sag = [];
-    for (let k = 1; k < pr.s.length; k++) { const a = pr.s[k - 1], c = pr.s[k]; if (!isNum(a.g) || !isNum(c.g)) continue;
-      if (a.g > 0 && c.g <= 0) { const q = (Math.abs(c.g) < Math.abs(a.g) ? c : a); if (!crest.length || q.s - crest[crest.length - 1].s > 2 * b2) crest.push({ s: q.s, z: q.z, x: q.x, y: q.y }); }
-      if (a.g < 0 && c.g >= 0) { const q = (Math.abs(c.g) < Math.abs(a.g) ? c : a); if (!sag.length || q.s - sag[sag.length - 1].s > 2 * b2) sag.push({ s: q.s, z: q.z, x: q.x, y: q.y }); } }
-    crest.forEach(c => { c.gIn = gAt(c.s - b2); c.gOut = gAt(c.s + b2); }); sag.forEach(c => { c.gIn = gAt(c.s - b2); c.gOut = gAt(c.s + b2); });
+    // crests / sags: grade breaks — the algebraic change of grade A = g(s + ℓ_g/2) − g(s − ℓ_g/2) (each over ℓ_g); a run of stations with
+    // |A| ≥ A_min (2 %, Decision pending engineer review) is one crest (A < 0) or sag (A > 0), placed at its largest |A|
+    const AMIN = 2, crest = [], sag = []; let run = null;
+    const flush = () => { if (run) (run.A < 0 ? crest : sag).push(run); run = null; };
+    pr.s.forEach(q => { const gi = gAt(q.s - b2), go = gAt(q.s + b2), Ag = isNum(gi) && isNum(go) && q.s - b2 >= 0 && q.s + b2 <= Ltot ? go - gi : null;
+      if (!isNum(Ag) || Math.abs(Ag) < AMIN) { flush(); return; }
+      if (run && Math.sign(Ag) !== Math.sign(run.A)) flush();
+      if (!run || Math.abs(Ag) > Math.abs(run.A)) run = { s: q.s, z: q.z, x: q.x, y: q.y, A: Ag, gIn: gi, gOut: go }; });
+    flush();
     // long-load ground clearance
     const V = vehStations(RT, r, P), hu = isNum(o.hu) && o.hu >= 0 ? o.hu : V.huDef, huFrom = isNum(o.hu) && o.hu >= 0 ? 'entered' : V.huFrom;
     const back = V.dH + V.L2 + Math.max(V.r, 0), clr = { min: null };
@@ -224,7 +227,7 @@
       if (clr.min < 0) flags.push({ level: 'stop', text: `Route "${r.name}": the load / deck grounds (${clr.where}, clearance ${fmt(clr.min, 2)} ft at sta. ${fmt(clr.sg, 1)} ft; ${LABEL}).` });
       else if (clr.min < clrM) flags.push({ level: 'warn', text: `Route "${r.name}": ground clearance under the load / deck ${fmt(clr.min, 2)} ft (${clr.where}, sta. ${fmt(clr.sg, 1)} ft) is less than the margin ${fmt(clrM, 2)} ft (${LABEL}).` });
     }
-    return { ok: true, st: pr.s, ds: pr.ds, L: Ltot, segs, gov, crest, sag, clr, hu, huFrom, V, maxG, base, clrM, miss, steps, flags };
+    return { ok: true, st: pr.s, ds: pr.ds, L: Ltot, segs, gov, crest, sag, aMin: AMIN, clr, hu, huFrom, V, maxG, base, clrM, miss, steps, flags };
   }
   /* ---------- 4. the map ---------- */
   /* contours(G, dz, maxLevels) -> { levels: [{ z, major, segs: [[{x,y},{x,y}], …] }], tooMany } (marching squares, the saddle by the cell mean) */

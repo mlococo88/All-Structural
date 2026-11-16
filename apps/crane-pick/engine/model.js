@@ -8,6 +8,8 @@
      crane.library.v1        C2-1: the crane library of this browser (ui/cranes.js): { v: 1, cranes: { <key>: { def, src, at, fp } } }
      crane.libsrc            C2-1: where "Load crane library from GitHub" reads: { owner, repo, branch, folder }
      crane.syncCheck         C2-1: the last check of the Cloud sync repository's visibility: { owner, repo, private, at }
+     IndexedDB crane.terrain.v1, store "grid"   C8: the fetched USGS 3DEP terrain grids of this browser (one record per fetch id:
+                             { id, at, svc, x0, y0, dx, nx, ny, z (ft, NaN no data), res, zone }); a project keeps the settings and what was used
      IndexedDB crane.sheets.v1, store "img"   the plan-sheet images (one record per sheet id: { id, blob, type, name, w, h, at });
                              a project keeps the sheet's placement and calibration only, so the list stays small (ui/sheetstore.js)
    File (Export JSON, GitHub sync): { format: 'crane-pick.project', version: 1, project } (+ images: { <sheet id>: data URL } when the
@@ -44,11 +46,16 @@
      tandems: [ tandem ]  C5: girder lifts (one crane or two in tandem), engine/tandem.js (the fields there; normTandem). A project
              saved before C5 has none: normalize gives [].
      routes = [ route ], routeMarks = [ mark ]   C6: trucking routes and their marks (engine/route.js has the fields; normRoute,
-             normRouteMark). A project saved before C6 has none: normalize gives []. */
+             normRouteMark). A project saved before C6 has none: normalize gives [].
+     terrain (C8) = { use (ground elevations from the terrain), spacing (ft), ext ('view' | 'site'), contour (ft), src: null | { id (the
+             grid's key in this browser's IndexedDB crane.terrain.v1), at (fetch date, ISO), svc, x0, y0, dx, nx, ny, n, nodata, res (m),
+             zmin, zmax, zone } }: the settings and what was used — the elevations themselves stay in the browser's cache (normTerrain);
+             setup.lvl (C8) = { tol (%), maxBlk (ft), datum (ft), padB, padW, padEl (ft) }; route.grade (C8) = { max (%), base, hu, clr (ft) }
+             (null = not entered: the engine/terrain.js defaults). A project saved before C8 has none: normalize gives the defaults. */
 (function () {
   'use strict';
   const KEYS = { current: 'crane.project.current', list: 'crane.projects.v1', open: 'crane.open', ui: 'crane.ui', idb: 'crane.sheets.v1',
-    library: 'crane.library.v1', libsrc: 'crane.libsrc', syncCheck: 'crane.syncCheck' };
+    library: 'crane.library.v1', libsrc: 'crane.libsrc', syncCheck: 'crane.syncCheck', terrainDb: 'crane.terrain.v1' };
   const FORMAT = 'crane-pick.project';
   const TYPES = {
     obst: { label: 'Obstruction', geom: 'polygon', min: 3 },
@@ -67,7 +74,7 @@
     o = o || {};
     return { schema: FORMAT, v: 1,
       title: { name: 'New crane pick', number: '', location: '', client: '', by: '', checker: '', date: today(), rev: '' },
-      notes: '', site: { zone: o.zone || 'EPSG:2249' }, view: o.view || null, sheets: [], items: [], cranes: [], setups: [], picks: [], ground: { caps: {} }, tandems: [], routes: [], routeMarks: [],
+      notes: '', site: { zone: o.zone || 'EPSG:2249' }, view: o.view || null, sheets: [], items: [], cranes: [], setups: [], picks: [], ground: { caps: {} }, tandems: [], routes: [], routeMarks: [], terrain: normTerrain(null),
       lift: { caution: 75, critical: 75, limit: 100, interp: false, path: 'uniform', obstClr: 2, tandem: 75 } };
   }
   const num = (v, d) => typeof v === 'number' && isFinite(v) ? v : d;
@@ -114,7 +121,7 @@
   function normSetup(u) {
     if (!u || typeof u !== 'object' || !isFinite(u.x) || !isFinite(u.y)) return null;
     return { id: str(u.id) || uid('u'), name: str(u.name, 'Crane setup'), craneId: str(u.craneId), x: +u.x, y: +u.y, heading: ((num(u.heading, 0) % 360) + 360) % 360,
-      group: str(u.group), boom: numOrNull(u.boom), mode: u.mode == null || u.mode === '' ? null : str(u.mode), pad: numOrNull(u.pad), ground: normSetupGround(u.ground) };
+      group: str(u.group), boom: numOrNull(u.boom), mode: u.mode == null || u.mode === '' ? null : str(u.mode), pad: numOrNull(u.pad), ground: normSetupGround(u.ground), lvl: normLvl(u.lvl) };
   }
   /* C4: the setup's ground inputs: mat { type: 'none' | 'timber' | 'steel', B, L (ft), t (in), Fb, Fv, E (psi), Fy (ksi), gamma (pcf),
      k (spread, horizontal : 1 vertical) }, qa (allowable bearing pressure, psf), qaUnit ('psf' | 'ksf': how it is shown) */
@@ -122,6 +129,18 @@
     g = g && typeof g === 'object' ? g : {}; const m = g.mat && typeof g.mat === 'object' ? g.mat : {}, mat = { type: ['timber', 'steel'].indexOf(m.type) >= 0 ? m.type : 'none' };
     ['B', 'L', 't', 'Fb', 'Fv', 'E', 'Fy', 'gamma', 'k'].forEach(k => { const v = numOrNull(m[k]); mat[k] = v != null && v >= 0 ? v : null; });
     const qa = numOrNull(g.qa); return { mat, qa: qa != null && qa > 0 ? qa : null, qaUnit: g.qaUnit === 'ksf' ? 'ksf' : 'psf' };
+  }
+  /* C8: terrain inputs (null = not entered). setup.lvl: level tolerance tol (%), blocking limit maxBlk (ft), levelling datum (ft; null: the
+     highest support), the grading pad padB (along the carrier) × padW (ft) at padEl (ft; null: the mean ground). route.grade: max (%),
+     base (grade base length, ft), hu (load / deck underside above the ground at its supports, ft), clr (ground clearance margin, ft). */
+  const nnK = (o, keys, signed) => { o = o && typeof o === 'object' ? o : {}; const r = {}; keys.forEach(k => { const v = numOrNull(o[k]); r[k] = v != null && (signed.indexOf(k) >= 0 || v >= 0) ? v : null; }); return r; };
+  const normLvl = l => nnK(l, ['tol', 'maxBlk', 'datum', 'padB', 'padW', 'padEl'], ['datum', 'padEl']);
+  const normGrade = g => nnK(g, ['max', 'base', 'hu', 'clr'], []);
+  function normTerrain(t) {
+    t = t && typeof t === 'object' ? t : {}; const s = t.src && typeof t.src === 'object' ? t.src : null;
+    const src = s && str(s.id) && isFinite(s.x0) && isFinite(s.y0) && num(s.dx, 0) > 0 ? { id: str(s.id), at: str(s.at), svc: str(s.svc), x0: +s.x0, y0: +s.y0, dx: +s.dx, nx: Math.round(num(s.nx, 0)), ny: Math.round(num(s.ny, 0)),
+      n: Math.round(num(s.n, 0)), nodata: Math.round(num(s.nodata, 0)), res: numOrNull(s.res), zmin: numOrNull(s.zmin), zmax: numOrNull(s.zmax), zone: str(s.zone), asked: numOrNull(s.asked) } : null;
+    return { use: !!t.use, spacing: numPos(t.spacing, 5), ext: t.ext === 'site' ? 'site' : 'view', contour: numPos(t.contour, 1), src };
   }
   /* C4: project ground inputs: caps { <util item id>: allowable vertical stress increase at the item, psf } */
   function normGround(g) { g = g && typeof g === 'object' ? g : {}; const caps = {}; Object.keys(g.caps || {}).forEach(k => { const v = numOrNull(g.caps[k]); if (v != null && v > 0) caps[k] = v; }); return { caps }; }
@@ -156,7 +175,7 @@
     const load = {}; ['L', 'W', 'B', 'r', 'cg', 'h'].forEach(k => { load[k] = k === 'r' ? numOrNull(l0[k]) : nn(l0[k]); });
     const rad = pts.map((_, i) => { const x = Array.isArray(r.rad) ? nn(r.rad[i]) : null; return x != null && x > 0 ? x : null; });
     return { id: str(r.id) || uid('r'), name: str(r.name, 'Route'), pts, rad, rDef: numPos(r.rDef, 50), veh, load, tyre: { A: nn(r.tyre && r.tyre.A) },
-      axIn: { on: !!a0.on, S: nn(a0.S), D: nn(a0.D), J: nn(a0.J), R: nn(a0.R) }, pickId: str(r.pickId), tandemId: str(r.tandemId), endA: r.endA === 'rear' ? 'rear' : 'front', stageTol: nn(r.stageTol), margin: nn(r.margin), at: nn(r.at) };
+      axIn: { on: !!a0.on, S: nn(a0.S), D: nn(a0.D), J: nn(a0.J), R: nn(a0.R) }, pickId: str(r.pickId), tandemId: str(r.tandemId), endA: r.endA === 'rear' ? 'rear' : 'front', stageTol: nn(r.stageTol), margin: nn(r.margin), at: nn(r.at), grade: normGrade(r.grade) };
   }
   const MARK_TYPES = { overhead: 'Overhead clearance', haul: 'Haul road / mats', bridge: 'Posted bridge' };
   function normRouteMark(m) {
@@ -196,7 +215,7 @@
       setups: (Array.isArray(p.setups) ? p.setups : []).map(normSetup).filter(Boolean),
       picks: (Array.isArray(p.picks) ? p.picks : []).map(normPick).filter(Boolean), lift: normLift(p.lift), ground: normGround(p.ground),
       tandems: (Array.isArray(p.tandems) ? p.tandems : []).map(normTandem).filter(Boolean),   // C5
-      routes: (Array.isArray(p.routes) ? p.routes : []).map(normRoute).filter(Boolean), routeMarks: (Array.isArray(p.routeMarks) ? p.routeMarks : []).map(normRouteMark).filter(Boolean) };   // C6
+      routes: (Array.isArray(p.routes) ? p.routes : []).map(normRoute).filter(Boolean), routeMarks: (Array.isArray(p.routeMarks) ? p.routeMarks : []).map(normRouteMark).filter(Boolean), terrain: normTerrain(p.terrain) };   // C6; C8 terrain
     Object.keys(d.title).forEach(k => { o.title[k] = str(t[k], k === 'date' ? '' : ''); });
     if (p.savedAt) o.savedAt = str(p.savedAt);
     return o;
@@ -219,5 +238,5 @@
   }
   /* text of the inputs (undo / "unsaved changes"): the project without the view and the saved time */
   function inputsText(P) { const o = Object.assign({}, P); delete o.view; delete o.savedAt; return JSON.stringify(o); }
-  window.CranePickModel = { KEYS, FORMAT, TYPES, UTIL_KINDS, BASIS, newProject, normalize, normItem, normSheet, normCrane, normSetup, normPick, normElev, normLift, normSetupGround, normGround, normTandem, normRoute, normRouteMark, MARK_TYPES, ROUTE_VEH, load, save, toFile, fromFile, inputsText, uid };
+  window.CranePickModel = { KEYS, FORMAT, TYPES, UTIL_KINDS, BASIS, newProject, normalize, normItem, normSheet, normCrane, normSetup, normPick, normElev, normLift, normSetupGround, normGround, normTandem, normRoute, normRouteMark, normTerrain, normLvl, normGrade, MARK_TYPES, ROUTE_VEH, load, save, toFile, fromFile, inputsText, uid };
 })();

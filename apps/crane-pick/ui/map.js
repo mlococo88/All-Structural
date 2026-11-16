@@ -22,7 +22,7 @@
   const fmt = (v, d) => Number(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
   function llText(ll) { return `${fmt(Math.abs(ll.lat), 6)}° ${ll.lat >= 0 ? 'N' : 'S'}, ${fmt(Math.abs(ll.lng), 6)}° ${ll.lng >= 0 ? 'E' : 'W'}`; }
   function gridText(ll) { const z = G.zone(zoneId()), n = G.llToNative(window.proj4, z.id, ll.lat, ll.lng); return `E ${fmt(n.E, 2)} · N ${fmt(n.N, 2)} ${z.unit}, ${z.short.replace(/\s*\(.*\)$/, '')}`; }
-  function showCoord(ll, what) { if (!coordEl || !ll) return; coordEl.innerHTML = `<b>${what}</b> ${esc(llText(ll))}<br>${esc(gridText(ll))}`; }
+  function showCoord(ll, what) { if (!coordEl || !ll) return; const X = window.CranePickMap && window.CranePickMap.coordExtra; coordEl.innerHTML = `<b>${what}</b> ${esc(llText(ll))}<br>${esc(gridText(ll))}` + (X ? X(ll) : ''); }   // C8: + the terrain elevation (ui/terrain.js)
   function msg(html) { const m = document.getElementById('mapMsg'); if (!m) return; m.hidden = !html; m.innerHTML = html || ''; }
   function setBase(k, quiet) {
     if (!BASES[k]) k = 'sat';

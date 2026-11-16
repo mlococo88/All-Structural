@@ -16,7 +16,7 @@
 //    deck 5 ft -> h_u = 5 − 1 = 4 ft (default):
 //    crest z = 107.5 − 0.05|x − 150|: grade ±5 %; crest at sta. 150; chord clearance c(a) = 4 − 0.1a + 0.0025a² (a = 150 − s_R), the least
 //    at a = 20: c = 4 − 2 + 1 = 3.00 ft, between the supports; sag z = 100 + 0.05|x − 150|: front overhang with H at the sag bottom:
-//    c = 3.2 + 0.1a -> 3.20 ft at a = 0 (the rear overhang gives 3.8 + 0.1a); sag at sta. 150. Maximum grade 8 % (default): no flag;
+//    c = 3.2 + 0.1a -> 3.20 ft at a = 0 (the rear overhang gives 3.8 + 0.1a); sag at sta. 150 (grade break A = +10 % >= 2 %; crest A = −10 %). Maximum grade 8 % (default): no flag;
 //    4 %: the tangent's 5 % flagged (warn). Grid nodes on multiples of the spacing, so x = 150 is a node (the crest is not cut off).
 import assert from 'node:assert/strict';
 import path from 'node:path';
