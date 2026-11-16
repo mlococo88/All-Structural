@@ -213,7 +213,9 @@
     pa.turns.forEach((t, k) => {
       const end = t.s1 + sim.Ltot, inT = samples.filter(q => q.s >= t.s0 - 1e-9 && q.s <= end + 1e-9);
       let ot = 0, otS = t.s0, Rin = Infinity, Rout = 0, inPart = '', outPart = '';
-      inT.forEach(q => { if (q.ot > ot) { ot = q.ot; otS = q.s; } q.parts.forEach(pp => { const d = polyDist(t.c, pp.poly); if (d < Rin) { Rin = d; inPart = pp.part; } pp.poly.forEach(c => { const e = G().dist(t.c, c); if (e > Rout) { Rout = e; outPart = pp.part; } }); }); });
+      // the radii are measured in the curve's sector (between the radii to its tangent points): outside it the vehicle is on a tangent
+      const a0 = Math.atan2(t.A.y - t.c.y, t.A.x - t.c.x), sg = Math.sign(t.D), inSec = p => { const a = ang(Math.atan2(p.y - t.c.y, p.x - t.c.x) - a0) * sg; return a >= -1e-9 && a <= Math.abs(t.D) + 1e-9; };
+      inT.forEach(q => { if (q.ot > ot) { ot = q.ot; otS = q.s; } q.parts.forEach(pp => { if (!pp.poly.some(inSec)) return; const d = polyDist(t.c, pp.poly); if (d < Rin) { Rin = d; inPart = pp.part; } pp.poly.forEach(c => { if (!inSec(c)) return; const e = G().dist(t.c, c); if (e > Rout) { Rout = e; outPart = pp.part; } }); }); });
       const ss = steady(v, t.r), pre = `${idp}.t${k + 1}`, steps = [];
       steps.push(st(pre, { id: 'D', label: `Turn ${k + 1}: deflection at vertex ${t.i + 1} (+ left)`, sym: '\\Delta', eq: '\\text{atan2}(\\hat{u}_{in} \\times \\hat{u}_{out},\\; \\hat{u}_{in} \\cdot \\hat{u}_{out})', sub: '', value: t.D / DEG, unit: 'deg', d: 1 }),
         st(pre, { id: 'T', label: `Tangent length (radius ${fmt(t.rq, 1)} ft ${t.from})`, sym: 'T', eq: 'r \\tan\\frac{|\\Delta|}{2}', sub: `${tx(t.rq, 2)} \\tan\\frac{${tx(Math.abs(t.D) / DEG, 2)}°}{2}`, value: t.rq * Math.tan(Math.abs(t.D) / 2), unit: 'ft', d: 2,
@@ -231,8 +233,8 @@
       } else steps.push(st(pre, { id: 'OTss', label: 'Steady state: the radius is shorter than the wheelbases allow (no steady state)', sym: 'OT_{ss}', eq: '', sub: '', value: 'none', d: 0 }));
       const frac = t.r * Math.abs(t.D) / Math.max(1e-9, v.L1 + v.L2);
       steps.push(st(pre, { id: 'OT', label: `Max off-tracking in the turn (simulation; arc length ${fmt(t.r * Math.abs(t.D), 1)} ft = ${fmt(frac, 2)} × the wheelbases: ${frac < 2 ? 'transient, below the steady state' : 'near the steady state'})`, sym: 'OT_{max}', eq: '\\max_{s} d(D(s),\\, \\text{path})', sub: `\\text{at } s = ${tx(otS, 1)}\\text{ ft}`, value: ot, unit: 'ft', d: 2, ref: REF.ot }),
-        st(pre, { id: 'Rin', label: `Inside radius of the swept path (least distance from the curve centre; ${inPart})`, sym: 'R_{in}', eq: '\\min d(O, \\text{outlines})', sub: '', value: Rin, unit: 'ft', d: 2 }),
-        st(pre, { id: 'Rout', label: `Outside radius of the swept path (largest; ${outPart}${outPart === 'load' ? ': the load\'s swing-out' : ''})`, sym: 'R_{out}', eq: '\\max d(O, \\text{outlines})', sub: '', value: Rout, unit: 'ft', d: 2 }),
+        st(pre, { id: 'Rin', label: `Inside radius of the swept path (least distance from the curve centre; ${inPart})`, sym: 'R_{in}', eq: '\\min d(O, \\text{outlines in the curve\'s sector})', sub: '', value: Rin, unit: 'ft', d: 2 }),
+        st(pre, { id: 'Rout', label: `Outside radius of the swept path (largest; ${outPart}${outPart === 'load' ? ': the load\'s swing-out' : ''})`, sym: 'R_{out}', eq: '\\max d(O, \\text{corners in the curve\'s sector})', sub: '', value: Rout, unit: 'ft', d: 2 }),
         st(pre, { id: 'Wsw', label: 'Swept width in the turn', sym: 'W_{sw}', eq: 'R_{out} \\minus R_{in}', sub: `${tx(Rout, 2)} \\minus ${tx(Rin, 2)}`, value: Rout - Rin, unit: 'ft', d: 2 }));
       const flags = [];
       if (t.r < v.Rmin - 1e-9) flags.push({ level: 'stop', kind: 'radius', turn: k + 1, text: `Turn ${k + 1}: radius ${fmt(t.r, 1)} ft is tighter than the vehicle's minimum turning radius ${fmt(v.Rmin, 1)} ft.` });
