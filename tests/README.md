@@ -99,6 +99,11 @@ node tests/smoke/spread-footing-nobear.mjs [--file <file or git ref>] [--shots <
 # a b_y change keeps per-foot values; wall along x; length 0 error; foundationLoads import switches a per-foot wall to totals; 390 px
 node tests/smoke/spread-footing-wall-perft.mjs [--file <file or git ref>] [--shots <dir>]
 
+# Spread Footing: Reinforcement-tab element cards in numbered sections (SFRU, display only): 9 projects opened and edited through the
+# card in origin/main and the working tree: saved JSON, R, P2, dashboard, result tabs and Report identical; each input visible, enabled
+# and stored at its data-path; only the inputs that apply shown; no wall-only rows on a Pedestal after a rebuild; 390 px
+node tests/smoke/spread-footing-rebar-ui.mjs --a <folder with the origin/main checkout> [--b <folder>]
+
 # Retaining Wall Designer: required inputs (RWIE) and the self-consistency panel (RWSC): a blank / invalid input gives the "Input error: no results" banner on the check
 # summary, every output tab, the Drawings and the Report, the field marked with its reason, a working link; REVIEW does not block
 node tests/smoke/retaining-wall-checks.mjs [--file <file or git ref>]
