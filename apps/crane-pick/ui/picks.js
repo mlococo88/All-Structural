@@ -24,7 +24,8 @@
   function draw() {
     if (!el) return; dirty = false;
     const P = A.P, s = LF.settingsOf(P), R = rows(P);
-    if (!R.length) { el.innerHTML = '<div class="sec"><div class="secHead">Picks</div><div class="secBody"><p class="note">No pick yet: add a crane to the project (Cranes tab), then "Place on the map" (or the Lifts tab).</p></div></div>'; return; }
+    const tg = window.CranePickTandemUI ? window.CranePickTandemUI.picksHtml() : '';   // C5: girder lifts, one row per crane
+    if (!R.length) { el.innerHTML = '<div class="sec"><div class="secHead">Picks</div><div class="secBody"><p class="note">No pick yet: add a crane to the project (Cranes tab), then "Place on the map" (or the Lifts tab).</p></div></div>' + tg; return; }
     el.innerHTML = `<div class="sec"><div class="secHead">Picks (${R.length})</div><div class="secBody">
       <p class="note">Capacity: the chart value at the next longer tabulated boom length and the next larger tabulated radius (no interpolation${s.interp ? '; linear interpolation between radii where the chart notes permit it is ON' : ''}); outside the chart = not permitted. Thresholds: caution ≥ ${s.caution} %, critical lift ≥ ${s.critical} %, limit ${s.limit} % of chart. Swing: the radius changes uniformly with the swing angle. Clearances: plan only (heights in C3).</p>
       <div class="tscroll"><table class="tbl" id="pkTbl"><thead><tr><th>Pick</th><th>Crane setup</th><th>Chart</th><th>Boom (ft)</th><th>R pick (ft)</th><th>R set (ft)</th><th>R max (ft)</th><th>C pick (lb)</th><th>C set (lb)</th><th>W (lb)</th><th>Governing</th><th>% chart</th><th>Status</th><th>Flags</th><th>θ pick / set (°)</th><th>Tip el. pick / set (ft)</th><th>Hook reach min (ft)</th><th>Closest 3D</th><th></th></tr></thead><tbody>
@@ -36,7 +37,7 @@
       ${R.filter(r => r.ev).map(({ k, u, c, ev }) => `<details class="crSteps pkDet" id="pk-${k.id}"><summary>${esc(k.name)} (${esc(u.name)}): ${res(ev)}, ${esc(LF.CLS[ev.cls])}: worked steps</summary>
         <div class="note">Crane: ${esc(K.name(c.def))}${c.def.preliminary ? ' (PRELIMINARY document)' : ''}; chart: ${esc(chartOf(ev, c))}; rating basis ${esc(ev.pick.cfg ? K.ratingBasis(ev.pick.cfg, c.def).text : '—')}.</div>
         ${ev.flags.length ? `<ul class="lfFlags">${ev.flags.map(f => `<li class="lf-${f.level}">${esc(f.text)}</li>`).join('')}</ul>` : ''}
-        ${stepsHtml(ev)}</details>`).join('')}`;
+        ${stepsHtml(ev)}</details>`).join('')}${tg}`;
   }
   function stepsHtml(ev) {
     const sx = window.CranePickSite.steps;

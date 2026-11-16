@@ -94,6 +94,9 @@
       fp.beams.forEach(([a, b]) => g.add(rod(T, W3(a.x, a.y, zp + 1.2), W3(b.x, b.y, zp + 1.2), 0.5, mat(T, 0x1e3a5f))));
       if (isNum(fp.tail)) g.add(poly(T, LF().circle(u, fp.tail, 64).concat([LF().circle(u, fp.tail, 64)[0]]).map(p => W3(p.x, p.y, zp + 0.1)), 0x7c3aed));
     });
+    // C5: the girder lift at its shown step (ui/tandem.js): the girder, both cranes' booms, load lines and blocks, the centre's path
+    const tg = window.CranePickTandemUI && window.CranePickTandemUI.draw3d({ T, g, W3, prism, rod, line, poly, mat });
+    if (tg && !c && tg.key !== camKey) { camKey = tg.key; const ctr = W3(tg.x, tg.y, tg.z), r = 160; v.controls.target.copy(ctr); v.camera.position.set(ctr.x + r * 0.9, ctr.y + r * 0.7, ctr.z + r * 1.1); v.controls.update(); }
     if (!c) return;
     const { k, u, ev } = c, h = ev.elev; if (!h) return;
     const cr = A.P.cranes.find(x => x.id === u.craneId).def, gm = h.g, zp = EL().padEl(u), E = EL().el0(k), H = E.H || 0;

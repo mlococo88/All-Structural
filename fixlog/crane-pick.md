@@ -527,3 +527,96 @@ in the Ground tab with a timber mat and q_a 4 ksf, Δσ_z at a water main, steps
 Report §Ground; reload; 390 px; 0 console errors), `crane-shell` (11), `crane-library` (9), `crane-place` (9), `crane-picks` (5),
 `crane-elev` (7), `crane-clear3d` (8), `crane-3d` (7), `crane-sheets` (8); `node tests/check-syntax.mjs`. `crane-draw.mjs` times out at
 `#itKind` on origin/main as well (not changed here; reported).
+
+## 2026-11-16 — C5: girder lifts (one crane or two in tandem): load share, the girder path, per-step checks, ground per crane
+PR #1613: https://github.com/mlococo88/All-Structural/pull/1613
+### Where
+- `apps/crane-pick/engine/tandem.js` (new, `window.CranePickTandem`, no DOM): `object` (the girder; paired girders with cross-frames as one
+  object), `share` (load share and hook loads), `at` / `outline` / `hooks` (plan geometry of a pose), `path` (the steps), `evaluate` (each
+  crane at every step: radius, zone, chart capacity by the C2 lookup rule (`engine/lift.js` `evalAt`), % of chart, the tandem limit,
+  heights / hook reach (`engine/elev.js`), the governing step per crane, 3D clearances (`engine/clear3d.js` shapes, the girder as a box),
+  crane to crane, girder level, ground per crane), `where`.
+- `apps/crane-pick/ui/tandem.js` (new, `window.CranePickTandemUI`): input tab "Girder lifts" (project tandem limit; lifts list; the card:
+  crane slots with "Place for crane i", girder, paired girders, hooks / rigging, pick and set poses, travel elevation, waypoints; the live
+  result: load share, governing steps, scrubber with Play, the step's table, an elevation of both cranes, crane–crane, Ground, flags with
+  links to their steps, worked steps); the map (girder at the pick (blue) and the set (green) to scale, the centre's path, the girder at
+  the scrubbed step with each crane's boom line and a live label R / C / % chart, G1 / G2 governing-step rings, red / amber 3D clearance
+  markers; handles when selected: P / S move, ↻ turn, ◆ CG, H1 / H2 lifting points, W1… waypoints; one undo step per drag); the Picks tab
+  section "Girder lifts" (one row per crane per lift); Report §"Tandem lifts" (basis, summary, per lift: inputs, flags, load share,
+  path, the steps table (≤ 40 rows + the ends and the governing steps), an elevation at crane 1's governing step, the governing steps'
+  worked values per crane, girder level, crane–crane, clearances, ground per crane, stress at depth from both cranes).
+- `engine/ground.js` `evaluate(crane, setup, pick, P, idp, o)`: new optional `o = { W, pts }` (the hook load and the hook positions in
+  place of `LF.total(pick)` and the pick's swing path; without `o` nothing changes: the C4 tests pass unchanged); the governing-step label
+  says "over the girder lift's steps" then. New `depthPair` (stress at depth from two setups summed) and `toGrid`.
+- `ui/ground.js`: `CranePickGroundUI` also exports `supTable`, `depthTable`, `stepsHtml`, `modeChip`, `inputsNote`, `BASIS` (reused).
+- `ui/elev.js`: the dock under the map shows the selected girder lift (both cranes at its step) while the Girder lifts tab is open (or
+  when there is no pick); 3D then centres on the lift. `ui/view3d.js`: the lift (girder box, both booms, load lines, blocks, the
+  centre's path) via `CranePickTandemUI.draw3d`. `ui/picks.js`: appends the Girder lifts rows. `ui/project.js`: About text.
+  `engine/model.js`: `tandems`, `normTandem`, `lift.tandem`. `index.html`: scripts, CSS, footer v0.5.
+- Tests: `tests/engine/crane-tandem.test.mjs` (new), `tests/smoke/crane-tandem.mjs` (new), `tests/smoke/crane-place.mjs` (the saved
+  `lift` settings now include `tandem: 75`).
+### Calculations (CLAUDE.md §4: new; no existing formula changed)
+- Combined object: W_g = W_1 + W_2 + W_xf; x_cg = (W_1 x_1 + W_2 x_2 + W_xf x_xf)/W_g; t_cg = (W_1 (t_c − s/2) + W_2 (t_c + s/2))/W_g
+  (girder 1 at −s/2, girder 2 at +s/2, cross-frames on the axis). One girder: W_g = W, x_cg entered (else L/2), t_cg = t_c.
+- Load share, hooks plumb (statics; moments about lifting point 2): R_1 = W_g (x_2 − x_cg)/(x_2 − x_1), R_2 = W_g − R_1; each hook
+  W_i = R_i + W_rig,i + W_hook,i + W_other,i (the chart capacities are gross). CG outside the lifting points (R < 0) or x_1 = x_2: red.
+  One crane: the hook plumb above the CG, W = W_g + W_rig + W_hook + W_other.
+- Hook i in plan: p = c + (x_i − L/2) â + t_cg n̂, â = (sin h, cos h), n̂ = (cos h, −sin h) (h = heading of end A → B, azimuth).
+- Path: hoist at the pick pose (girder bottom z_pick → z_tr, every 1 ft), travel through the waypoints (each leg: the centre linear in
+  plan, the heading linear the shorter way, at z_tr), lower at the set (z_tr → z_set, every 1 ft); z_tr entered, else max(z_pick, z_set);
+  z not entered = crane 1's pad. Each leg in n = ceil(max over the cranes of (hook travel / 1 ft, slew / 1°)) equal steps (measured on
+  48 sub-steps of the leg), at most 2,000 (a warning says when coarser).
+- At every step, each crane: R, θ, zone, C (C2 rule), %chart = W_i/C × 100; tandem: over at %chart ≥ the tandem limit (project input,
+  default 75 %, separate from the single-crane thresholds); one crane: the lift thresholds (C2). z_hk = z_b + H + h_r, z_bk = z_hk + h_bk,
+  z_tip (C3-1), m = z_tip − H_hd − z_bk (red < 0). Governing step per crane: the highest %chart (any not-permitted step governs).
+- Clearances (C3-2 shapes): each crane's boom (foot pin → tip, less b_w/2), load line (girder top → tip), counterweight (tail-swing
+  cylinder), and the girder as a box (plan rectangle L × B, a pair L × (s + B), z_b … z_b + H): d = √(d_plan² + Δz²); power lines
+  (D_min, 29 CFR 1926.1408 Table A as C1-3), obstructions (contact red, < the obstruction clearance amber), exclusion zones (amber).
+- Crane–crane: the least 3D distance between crane 1's boom / load line and crane 2's (segment–segment, Ericson §5.1.9), less the boom
+  half-widths; contact red, < the obstruction clearance (2 ft) amber. Girder level: Δz_hk = h_r,1 − h_r,2 (information).
+- Ground (C4 method): each crane with its own W_i at its own hook at every step (rigid body or estimate as C4). Stress at depth from both
+  cranes: Δσ_z(p) = Δσ_z,1(p) + Δσ_z,2(p) (superposition), the two cranes at the same step, at the union of both setups' sample points,
+  at the steps where any support of either crane governs and the first and last step; each crane's loads at its own depth below its pad.
+**Check cases** (`tests/engine/crane-tandem.test.mjs`, fake crane only):
+- Load share: L 100, W 100,000, hooks 10 / 90: CG 50 → 50,000 / 50,000; CG 45 → R_1 = 100,000 (90 − 45)/80 = 56,250, R_2 = 43,750;
+  + rigging 2,000, block 1,500, other 500 / rigging 1,200, block 1,000 → W_1 60,250, W_2 45,950; CG 95 → R_1 = −6,250 (red).
+  Paired: W_1 80,000, W_2 60,000 (CG 50), cross-frames 10,000 at 30, s 8 → W_g 150,000, x_cg = 7,300,000/150,000 = 48.6667,
+  t_cg = (80,000(−4) + 60,000(4))/150,000 = −0.5333; R_1 = 150,000 (90 − 48.6667)/80 = 77,500, R_2 = 72,500.
+- Tandem path (80 ft boom, pad 100, cranes at (1,000, 2,000) / (1,100, 2,000)): L 60, W 40,000, CG 28, hooks 10 / 50 → R_1 = 40,000 ×
+  22/40 = 22,000, R_2 = 18,000; + 2,000 each → W 24,000 / 20,000. Pick (1,050, 1,980) el. 105, set (1,050, 2,000) el. 120, heading 90°:
+  15 hoist steps; travel: hook travel 20 ft, slew atan(20/30) = 33.69° → n = 34 → 50 steps. Set: R 30.00, C(80, 30) = 37,000 → 64.86 % /
+  54.05 %. Pick: R = √(30² + 20²) = 36.06 → C(80, 40) = 27,000 → 88.89 % (≥ 75 %: over) / 74.07 %. Step 32 (travel step 17): hook 1
+  (1,030, 1,990), R = √1,000 = 31.62 → 27,000 → 88.89 %. Governing: both at step 0. Heights at the set (H 6, h_r 10, h_bk 4): z_hk 136,
+  z_bk 140, θ 69° (chart) → z_tip = 108 + 80 sin 69° = 182.686, m = 42.69. Tandem limit 90 %: no capacity flag.
+- Crane–crane: symmetric cranes, tips at one height, 40.00 ft apart at every step (segment–segment hand case 40.00); hooks 1 ft apart →
+  1.00 ft < 2 ft amber; rigging heights 10 / 12 → girder level 2.00 ft (information).
+- Girder box: pier 10 × 10 ft, top 112, under the pick: the girder at 105 … 111 → contact (red); picked at 120 → 8.00 ft.
+- Ground per crane (C4 weights of hand check A): crane 1 at the set, θ 90°, R 30, W 24,000: V 120,000, Y = −616,000/120,000 = −5.1333,
+  v = −0.4278 → FL = RL = 17,166.67, FR = RR = 42,833.33 lb.
+- Stress at depth, two setups: cranes at (1,000, 2,000) and (1,030, 2,000), heading 0, hooks 30 ft ahead (W 22,000: front floats
+  41,083.33 lb), a pipe along x = 1,015 at depth 3 ft: at (1,015, 2,012), own front float q = 13,077.23 psf × 2 [I(1.295409, 0.295409) −
+  I(0.704591, 0.295409)] = 13,077.23 × 2 (0.083359 − 0.067889) = 404.63 psf, + the crane's other floats → 404.69 psf per crane;
+  both: 809.38 psf (one setup alone, as C4: 404.69). With an allowable of 700 psf: OK for one crane, over for both.
+### Saved data (§5)
+New fields only: project `tandems: [ … ]` (`normTandem`; absent in older projects = []) and `lift.tandem` (default 75). No new storage key.
+### Decisions (pending engineer review)
+- Hooks plumb (no sling angle, no hook drift); the girder rigid and carried level; the girder's vertical CG is information only (it does
+  not change the load share with plumb hooks; lifting stability is not checked here).
+- Rigging per hook is one weight (slings, spreader / lifting beam, hardware together) plus the hook block and "other deductions"; the
+  spreader length is drawn only.
+- At the tandem limit counts as over (%chart ≥ limit). A one-crane girder lift uses the C2 thresholds.
+- Path: centre linear in plan and heading linear (shorter way) between poses / waypoints; vertical hoist at the pick and lowering at the
+  set; travel elevation = the higher of pick and set unless entered; girder elevations not entered = crane 1's pad; at most 2,000 steps
+  per leg (warned).
+- Governing step = the highest %chart (the first of equal steps). Crane–crane clearance = the project's obstruction clearance (2 ft).
+- Ground: each crane at its hook positions at the lift's steps (in place of the C2 swing path); the both-cranes stress at depth at the
+  steps where a support governs and the first / last step (not every step); each crane's depth from its own pad. The map's float labels
+  and the Ground tab still show the C2 picks only; girder lifts show their ground in the card and in Report §Tandem lifts.
+- The elevation is the vertical plane through the two cranes' centres (one crane: through it and its hook).
+### How verified
+`node tests/engine/run.mjs crane` (70 tests, 0 failed; 9 new in crane-tandem incl. KaTeX of every step); `node tests/engine/run.mjs
+boussinesq` (13, shared file unchanged); `node tests/smoke/crane-tandem.mjs` (6 checks: the hand case typed in, card = engine, map
+labels; CG and lifting-point drags change both cranes' labels mid-drag, one undo step each, redo; scrubber steps 49 and 32, Play, the
+dock's elevation and 3D; ground per crane and the both-cranes sum; Picks rows, Report §Tandem lifts, reload, 390 px, 0 console errors),
+`crane-place` (9), `crane-picks` (5), `crane-ground` (5), `crane-3d` (7), `crane-clear3d` (8), `crane-elev` (7), `crane-shell` (11);
+`node tests/check-syntax.mjs`.

@@ -123,11 +123,13 @@
     const v3 = s.mode === '3d' && !!window.CranePickView3D;
     dock.querySelector('#elToggle').textContent = (s.open ? '▾ ' : '▸ ') + (v3 ? '3D view' : 'Elevation'); dock.querySelector('#elWhich').value = s.which; dock.classList.toggle('open', s.open); dock.classList.toggle('v3', v3 && s.open);
     dock.querySelectorAll('[data-elmode]').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.elmode === '3d') === v3)));
-    const box = dock.querySelector('#elSvg'), b3 = dock.querySelector('#el3d'), c = s.open ? current() : null;
+    const TU = window.CranePickTandemUI, tg = s.open && TU && TU.active();   // C5: a girder lift selected on its tab: both cranes at its step
+    const box = dock.querySelector('#elSvg'), b3 = dock.querySelector('#el3d'), c = s.open && !tg ? current() : null;
     b3.hidden = !(s.open && v3); box.hidden = !(s.open && !v3);
     if (!s.open) { box.innerHTML = ''; if (window.CranePickView3D) window.CranePickView3D.hide(); return; }
-    if (v3) { box.innerHTML = ''; dock.querySelector('#elInfo').textContent = c ? c.k.name : ''; window.CranePickView3D.show(b3, c, s.which); return; }
+    if (v3) { box.innerHTML = ''; dock.querySelector('#elInfo').textContent = tg ? tg.name : c ? c.k.name : ''; window.CranePickView3D.show(b3, c, s.which); return; }
     if (window.CranePickView3D) window.CranePickView3D.hide();
+    if (tg) { box.innerHTML = TU.dockSvg(Math.max(360, Math.min(1100, box.clientWidth || 760))); dock.querySelector('#elInfo').textContent = `${tg.name}, step ${TU.step}`; return; }
     if (!c) { box.innerHTML = '<p class="note">No pick yet: place a crane (Cranes or Lifts tab).</p>'; dock.querySelector('#elInfo').textContent = ''; return; }
     box.innerHTML = svg(c.ev, c.k, c.u, A.P.items, s.which, { w: Math.max(360, Math.min(1100, box.clientWidth || 760)), h: 260 });
     dock.querySelector('#elInfo').textContent = c.k.name;
@@ -135,6 +137,7 @@
   const later = () => { if (pending || !window.CranePickMap) return; pending = true; window.CranePickMap.raf('elev', draw); };
   A.on('ready', build); A.on('project', later); A.on('change', later); A.on('live', later);
   A.on('tab', id => { if (id === 'plan') later(); });
+  A.on('itab', later);   // C5: the girder lift shows in the dock while its tab is open
   /* Report: the elevation at the pick and at the set of each pick */
   window.CranePickReport && window.CranePickReport.add(P => {
     const subs = []; P.picks.forEach(k => { const u = P.setups.find(x => x.id === k.setupId); if (!u || !PL()) return; const ev = PL().evalPick(k); if (!ev || !ev.elev) return;

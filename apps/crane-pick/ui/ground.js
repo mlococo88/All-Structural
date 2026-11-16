@@ -180,5 +180,5 @@
   A.on('change', o => { if (o.kind === 'select' || o.kind === 'select-lift') return; mark(); setTimeout(renderAll, 0); if (A.ui.itab === 'ground' && o.kind !== 'ground') drawIn(); });
   A.on('live', o => { if (!o || (o.kind !== 'lifts' && o.kind !== 'items')) return; dirty = true; A.P.setups.forEach(u => { if (o.kind === 'items' || !o.id || u.id === o.id || A.P.picks.some(k => k.id === o.id && k.setupId === u.id)) renderSetup(u); }); });
   A.on('tab', id => { if (id === 'plan') setTimeout(renderAll, 0); });
-  window.CranePickGroundUI = { renderAll, redraw: mark, gotoReport, groundOf, setupSum, get layers() { return layers; } };
+  window.CranePickGroundUI = { renderAll, redraw: mark, gotoReport, groundOf, setupSum, supTable, depthTable, stepsHtml, modeChip, inputsNote, BASIS, get layers() { return layers; } };   // C5: the tables / steps reused by ui/tandem.js
 })();
