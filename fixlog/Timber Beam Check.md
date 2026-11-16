@@ -3046,3 +3046,30 @@ None new.
 - An NDS end notch is drawn on the cross-section as a dashed band on the face it is cut from (it exists at the end supports only; the caption says so).
 - AASHTO stress diagram in terms of M/S (ksi) as above, rather than adding a new "stress" quantity to the checks.
 - The ratio bars use 0.90 as the amber threshold (engineer's instruction) — the Summary's OK / NG status is unchanged (≤ 1.00 passes).
+
+## 2026-11-16 — PR: claude/timber-gfx-2 (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (TBGX-2: graphics — AASHTO bridge cross-section with the lever-rule wheels; governing vehicle positions; engineer decision 2026-11-16)   [display only; no computed value, saved key or saved-data format change]
+
+### TBGX2-a. What changes for the user
+- **Bridge Loads tab**, first in *Live-load distribution factors* (aasDF): the **bridge cross-section** — deck, the stringers at S (N<sub>b</sub> of them when entered, else a few; the one checked outlined red), curb faces, roadway width w with its N<sub>L</sub> design lanes (12 ft each from the left curb), d<sub>e</sub> for an exterior stringer (the left one, d<sub>e</sub> from the left curb face), and — where the lever rule gives g — the wheels of the governing lever-rule case with their reactions r and the line m, Σr, g = mΣr/2 (`AL.df.lev.gov`). With a table factor or entered g the drawing says that no wheel placement is used.
+- **Geometry input tab**, card *Bridge cross-section*: a small live sketch (stringers, S, d<sub>e</sub>, curbs), redrawn with the inputs from the last computed bridge loads.
+- **Analysis tab** (AASHTO), first in *Live-load envelopes and axle placement* (aasEnv): the **governing vehicle positions** — the member in elevation, one row per governing demand: largest +M, largest −M (Strength I), largest V at the critical section, largest reaction, and with a permit vehicle the Strength II +M and −M; each with the axles (kip) of the placement the envelope found, at their x, the section dashed, the vehicle (design truck with its rear spacing, tandem, two trucks, permit) and the demand value. The lane load is not drawn (caption).
+- Report (AASHTO): the cross-section in *Live load and distribution* and the vehicle positions in *Envelopes and factored demands*, numbered, with "see §" links ([[tb/aasL.NL]], [[tb/aasL.gM]], [[tb/aasL.Mpos]], [[tb/aasL.Mneg]]).
+- 390 px: both drawings 440 px wide in their viewBox (scaled about 0.8); no horizontal scroll.
+
+### TBGX2-b. Code (anchors)
+- TBGX block: new drawings `bridgeXs(o)`, `trucks(o)` and pickers `aasXsec(AL, m, small)` (S, pos, d<sub>e</sub>, w, N<sub>L</sub>, N<sub>b</sub>, deck, `df.lev`), `aasTrucks(AL, AD)` (rows from `AD.Mpos.s.M.ll.gMax`, `AD.Mneg.s.M.ll.gMin`, `AD.Vu.gov` at `AD.Vu.xl`, `AD.Ru.ll.gMax`, permit: `…M.pm.gMax/gMin` with `AL.env.permit.P`; the axles on the member only). Export list extended.
+- Page: `tbgxXsRefresh()` (holder `#tbgxXs` in `buildAasXsecSec`, called from `refreshInputs`), CSS `#tbgxXs`; `buildAasLoads` aasDF card; `buildAasAna` aasEnv card; `tbrAasLoadsSec` (live load and distribution sub), `tbrAasEnvSubs` (after the governing demands).
+- Tests: `tests/engine/timber-graphics.test.mjs` +2 tests.
+
+### TBGX2-c. §4 / §5
+- §4: none (engine unchanged; the drawings show the engine's S, d<sub>e</sub>, w, N<sub>L</sub>, the lever-rule wheel positions and reactions, and the envelope's axle positions and loads). §5: none.
+- **Check case:** t2 case *exterior* (6x16, s = 24 in., d<sub>e</sub> = 1.5 ft, w = 24 ft, N<sub>b</sub> = 12): 12 stringers at S = 2 ft, the left one checked, curb face 1.5 ft outside it; lever rule, 1 lane: outer wheel at x = d<sub>e</sub> − 2 = −0.5 ft (0.5 ft inside the stringer) r = 1 + x/S = 0.75, the second wheel 6 ft further in r = 0; m = 1.2, Σr = 0.75, g = 0.45 = the lever-rule table.
+
+### TBGX2-d. How verified
+- RESULTS3
+- **Other copies:** none.
+
+### TBGX2-e. Decisions (pending engineer review)
+- Stringers other than the one checked, and the lanes, are placed for illustration (the distribution needs only S, d<sub>e</sub> and the wheels): an interior stringer is drawn in the middle with the roadway centred; without N<sub>b</sub>, five stringers (interior) or enough to span the roadway (exterior, at most 8).
+- The lane load of the vehicle placements is not drawn (it is on the parts of the influence line that add; stated in the caption).
+- Shear row: the axles of the placement for the largest shear at the lesser of 3d and L/4 (the wood rule, x = `xl`), as the check uses them.
