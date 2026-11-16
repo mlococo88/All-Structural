@@ -2892,7 +2892,7 @@ None new.
 ### TBA6-g. Open items (AASHTO stringer design, after T4)
 - Decks (Art. 9.9; plank / panel relative deflection 0.10 in.), load rating (MBE), MSR / MEL lumber (Tables 8.4.1.1.4-2, -3; K<sub>bE</sub> 1.06 / 0.98), tension-reinforced glulam (Art. 8.4.1.3), skew correction (Art. 4.6.2.2.2e), pedestrian / sidewalk load (Art. 3.6.1.6), flat use in AASHTO mode (TBA4-g), owner (MassDOT / CTDOT / RIDOT) timber rules.
 
-## 2026-11-16 — PR: claude/timber-codeswitch-project (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (TBCS: the "Design code" card moves from the Factors input tab to the Project input tab; engineer decision 2026-11-16)   [display only; no computed value, saved key or saved-data format change]
+## 2026-11-16 — PR: timber-codeswitch-project (PR #1596: https://github.com/mlococo88/All-Structural/pull/1596) (TBCS: the "Design code" card moves from the Factors input tab to the Project input tab; engineer decision 2026-11-16)   [display only; no computed value, saved key or saved-data format change]
 
 ### TBCS-a. What changes for the user
 - Project input tab: Save and open · Title block · **Design code** · Hand-offs · Notes and assumptions. The Factors tab no longer has the card (NDS: Design method is now its first card; AASHTO: AASHTO adjustment factors).
