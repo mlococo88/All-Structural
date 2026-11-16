@@ -81,7 +81,7 @@ console.log(`part 1 (NDS parity, ${dirA} vs working tree): ${Object.keys(NDS).le
   ok(await p.evaluate(() => !('code' in JSON.parse(localStorage.getItem('tbc_autosave_v1')).design)), 'NDS: no design.code saved');
   await p.selectOption('[data-fkey="dcode"]', 'AASHTO'); await p.waitForTimeout(500);
   let s = await st();
-  ok(s.tabs.join('|') === 'AASHTO Materials|Report', 'AASHTO tabs: ' + s.tabs.join('|'));
+  ok(s.tabs.join('|') === 'AASHTO Materials|Bridge Loads|Report', 'AASHTO tabs: ' + s.tabs.join('|'));   // TBA2: Bridge Loads tab
   ok(/no PASS \/ FAIL/.test(s.gov), 'governing strip: ' + s.gov); ok(/AASHTO LRFD 10th Ed/.test(s.h1), 'header: ' + s.h1);
   ok(s.chips === 0, 'status chips in AASHTO mode: ' + s.chips); ok(s.kerr === 0, 'KaTeX errors: ' + s.kerr); ok(!/NaN|undefined/.test(s.text), 'NaN / undefined in the AASHTO tab');
   ok(s.A.ok && s.text.includes('= ' + s.A.lims[0].Fb.toFixed(4) + ' ksi'), 'F_b Strength I shown as the engine value ' + (s.A.lims && s.A.lims[0].Fb));

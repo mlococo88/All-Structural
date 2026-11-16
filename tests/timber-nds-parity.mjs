@@ -4,7 +4,8 @@
 // flat), timbers, glulam (every combination, custom), SCL; single span, continuous, span + overhang, fixed-free cantilever; point loads,
 // notches, wet / hot / incised, lateral-support options; legacy (pre-R1) files; plus random projects. Compared exactly (NaN, -0 and
 // Infinity kept): every field of tbcRun(model) (the results the tabs and the Report are built from), the model tbcMigrate opens
-// (saved data) and tbcVersionFor. Also: the reference version refuses an AASHTO (version 4) project instead of opening it as NDS.
+// (saved data) and tbcVersionFor. Also: the reference version refuses an AASHTO project of a newer version (version 4: TBA1; 5: with the TBA2 bridge loads) instead of
+// opening it as NDS or dropping its inputs.
 //   node tests/timber-nds-parity.mjs [--a <git ref>] [--random <n>]
 import { execFileSync } from 'node:child_process';
 import { tbcEngine, TBC_FILE } from './engine/tbc-source.mjs';
@@ -71,7 +72,7 @@ for (const [name, m] of cases) {
 legacy.forEach((d, i) => { const a = EA.tbcMigrate(cl(d)), b = EB.tbcMigrate(cl(d)); cmp('legacy ' + i, ser(a), ser(b)); cmp('legacy run ' + i, ser(EA.tbcRun(a.model)), ser(EB.tbcRun(b.model))); });
 const runs = cases.filter(([, m]) => EB.tbcRun(EB.tbcSanitize(cl(m))).ok).length;
 // an AASHTO project in the reference version: refused (newer format), never read as NDS
-const aas = cl(EB.tbcDefaultModel()); aas.design.code = 'AASHTO'; aas.design.aashto = EB.tbcAashtoDefaults(); aas.version = EB.tbcVersionFor(aas);
+const aas = cl(EB.tbcDefaultModel()); aas.design.code = 'AASHTO'; aas.design.aashto = EB.tbcAashtoDefaults(); if (EB.tbcAasLoadDefaults) aas.design.aashto.bl = EB.tbcAasLoadDefaults(); aas.version = EB.tbcVersionFor(aas);
 let refused = false; try { EA.tbcMigrate(cl(aas)); } catch (e) { refused = /newer format/.test(e.message); }
 console.log(`${ref} vs working tree: ${cases.length} NDS projects (${runs} with results) + ${legacy.length} legacy files, ${n} comparisons, ${nd} differences${bad.length ? ': ' + bad.join(', ') : ''}`);
 console.log(`AASHTO project (version ${aas.version}) in ${ref}: ${refused ? 'refused (newer format)' : 'NOT refused'}`);

@@ -640,11 +640,13 @@ const ctFactors = (temp, wet) => {
 // earlier (R1) version of the tool refuses the file instead of reading it as sawn lumber / ASD. Otherwise version 2.
 // Version 4 (TBA1, 2026-11-16) only with the AASHTO code switch (design.code === 'AASHTO'), so that an earlier version of the tool
 // refuses an AASHTO project instead of opening it as an NDS building member. NDS projects keep version 2 / 3.
-const TBC_SCHEMA = 'timber-beam-check', TBC_VERSION = 4;
+// Version 5 (TBA2, 2026-11-16): an AASHTO project with the bridge-load inputs (design.aashto.bl) or a kept NDS wet / dry setting
+// (design.aashto.ndsMoist), so that a TBA1 copy refuses it instead of dropping those inputs when it saves. NDS projects keep 2 / 3.
+const TBC_SCHEMA = 'timber-beam-check', TBC_VERSION = 5;
 const TBC_NODE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 const TBC_MAT_TYPES = [['sawn', 'Sawn lumber (NDS Ch. 4)'], ['glulam', 'Glulam (NDS Ch. 5)'], ['scl', 'SCL: LVL / PSL / LSL (NDS Ch. 8)']];
 const TBC_METHODS = [['ASD', 'ASD'], ['LRFD', 'LRFD (NDS Appendix N)']];
-function tbcVersionFor(m) { if (m && m.design && m.design.code === 'AASHTO') return 4; return (m && m.material && m.material.type && m.material.type !== 'sawn') || (m && m.design && m.design.method && m.design.method !== 'ASD') ? 3 : 2; }
+function tbcVersionFor(m) { if (m && m.design && m.design.code === 'AASHTO') { const q = m.design.aashto; return q && typeof q === 'object' && (q.bl || q.ndsMoist) ? 5 : 4; } return (m && m.material && m.material.type && m.material.type !== 'sawn') || (m && m.design && m.design.method && m.design.method !== 'ASD') ? 3 : 2; }
 function tbcDefaultModel() {
     return {
         _schema: TBC_SCHEMA, version: 2,   // set by tbcVersionFor() when saved: 3 only with glulam, SCL or LRFD
@@ -1456,6 +1458,14 @@ function tbcSanitize(d) {
         const A0 = tbcAashtoDefaults(), q = dz.aashto;
         m.design.aashto = { sp: st(q.sp, A0.sp, Object.keys(AAS_SAWN)), gr: st(q.gr, A0.gr, Object.keys(AAS_GRADES)), gl: (typeof q.gl === 'string' && aasGlKind(q.gl)) ? q.gl : A0.gl,
             deck: st(q.deck, A0.deck, AAS_DECKS.map(x => x[0])), noTL: bo(q.noTL, false) };
+        // TBA2: the wet-service settings kept across the code switch and the bridge loads; each kept only when present
+        ['moist', 'ndsMoist'].forEach(k => { if (q[k] === 'Wet' || q[k] === 'Dry') m.design.aashto[k] = q[k]; });
+        if (q.bl && typeof q.bl === 'object' && !Array.isArray(q.bl)) {
+            const B0 = tbcAasLoadDefaults(), b = q.bl, nn = (v, def) => (typeof v === 'number' && isFinite(v)) ? v : (v === null ? null : def);
+            m.design.aashto.bl = { gW: nn(b.gW, B0.gW), deck: st(b.deck, B0.deck, AAS_BDECKS.map(x => x[0])), tD: nn(b.tD, B0.tD), gD: nn(b.gD, B0.gD), tWs: nn(b.tWs, B0.tWs),
+                gWs: nn(b.gWs, B0.gWs), wRail: nn(b.wRail, B0.wRail), trib: nn(b.trib, B0.trib), pos: st(b.pos, B0.pos, ['int', 'ext']), de: nn(b.de, B0.de), wRd: nn(b.wRd, B0.wRd),
+                dfMode: st(b.dfMode, B0.dfMode, ['table', 'entered']), gM: nn(b.gM, B0.gM), gV: nn(b.gV, B0.gV), nB: nn(b.nB, B0.nB), im: nn(b.im, B0.im) };
+        }
     }
     m.ui = { diagCombo: st(ui.diagCombo, 'GOV', ['GOV', 'ENV', ...COMBOS.map(c => c.key), ...COMBOS_LRFD.map(c => c.key)]) };
     if (ui.outTab && typeof ui.outTab === 'string') m.ui.outTab = ui.outTab;
@@ -1777,6 +1787,143 @@ function tbcAashto(m) {
     Object.assign(out, { ok: true, R0, CKF, PHI, CM, CMb, CF, CFb, CV, CVd, Cfu, Cfub, Ci, Cib, Cd, Cdb, base, E, lims, sizeF });
     return out;
 }
+/* =====================================================================
+   AASHTO LRFD 10th Ed. (2024) bridge loads on one stringer (phase T2, engineer decisions 2026-11-16; fix log TBA2).
+   tbcAasLoads(m, A): pure function of the project m and of A = tbcAashto(m) (section b x d). Units: kip, ft, klf, kip-ft,
+   in. for thicknesses. Dead loads (Art. 3.5.1, Table 3.5.1-1), HL-93 (Art. 3.6.1.2), dynamic load allowance for wood
+   (Art. 3.6.2.3), number of design lanes (Art. 3.6.1.1.1), multiple presence (Art. 3.6.1.1.2), live-load distribution
+   (Art. 4.6.2.2: Table 4.6.2.2.2a-1, wood decks; Tables 4.6.2.2.2b-1 / 4.6.2.2.3a-1, concrete deck on wood beams; the lever
+   rule for exterior stringers, Tables 4.6.2.2.2d-1 / 4.6.2.2.3b-1, and beyond the range of applicability, Art. 4.6.2.2.1),
+   load factors (Tables 3.4.1-1, 3.4.1-2) with the time effect factor of each limit state (Table 8.4.4.9-1).
+   --------------------------------------------------------------------- */
+// Table 3.5.1-1 unit weights (kcf). Wood values include mandatory preservatives (C3.5.1). Reinforced concrete: the plain-concrete
+// value + 0.005 kcf (C3.5.1).
+const AAS_UW = { soft: 0.050, hard: 0.060, bit: 0.140, conc: 0.145, rcAdd: 0.005 };
+// Hardwood species of Table 8.4.1.1.4-1 (the others, and every glulam combination of Section 8, are softwoods).
+const AAS_HARDWOOD = ['NRO', 'RM', 'RO', 'YP'];
+// Deck types on the stringers: [key, name, S/k one lane, S/k two or more lanes, S limit (ft), wood deck?]
+// Table 4.6.2.2.2a-1 (wood decks on wood beams, moment and shear); concrete deck on wood beams: Table 4.6.2.2.2b-1 (moment;
+// shear by the lever rule, Table 4.6.2.2.3a-1). "Glued laminated panels on glued laminated stringers" applies to glulam stringers.
+const AAS_BDECKS = [
+    ['plank', 'Plank deck', 6.7, 7.5, 5.0, true],
+    ['stressed', 'Stressed laminated deck', 9.2, 9.0, 6.0, true],
+    ['spike', 'Spike-laminated deck', 8.3, 8.5, 6.0, true],
+    ['glpanel', 'Glued laminated panels on glued laminated stringers', 10.0, 10.0, 6.0, true],
+    ['concrete', 'Concrete deck on wood beams', 12.0, 10.0, 6.0, false]];
+// Multiple presence factors m, Table 3.6.1.1.2-1: 1, 2, 3, more than 3 loaded lanes.
+const AAS_MPF = [1.20, 1.00, 0.85, 0.65];
+// HL-93 (Art. 3.6.1.2): design truck 8, 32, 32 kip, 14 ft and 14 ft to 30 ft; design tandem 2 x 25 kip at 4 ft; design lane 0.64 klf.
+// Art. 3.6.1.3.1: 90 % of two trucks (32-kip axles at 14 ft, at least 50 ft between them) + 90 % lane for negative moment and
+// interior reactions. Wheels 6 ft apart across the lane (Fig. 3.6.1.2.2-1).
+const AAS_HL93 = { truck: [[8, 0], [32, 14], [32, 14]], sMin: 14, sMax: 30, tandem: [[25, 0], [25, 4]], lane: 0.64, gap2: 50, f2: 0.90, wheel: 6 };
+// Load factors, Tables 3.4.1-1 and 3.4.1-2 (DC: components and attachments; DW: wearing surfaces and utilities), and the time
+// effect factor C_lambda of Table 8.4.4.9-1 for each strength limit state (Service I: not a strength limit state).
+const AAS_GP = { DC: [1.25, 0.90], DW: [1.50, 0.65] };
+const AAS_COMBOS = [['StrI', 'Strength I', 1.75, 0.8], ['StrII', 'Strength II (permit vehicle)', 1.35, 1.0], ['SerI', 'Service I', 1.00, null]];
+function tbcAasLoadDefaults() {
+    return { gW: null, deck: 'plank', tD: 4, gD: null, tWs: 0, gWs: AAS_UW.bit, wRail: 0, trib: null, pos: 'int', de: 2, wRd: 24,
+        dfMode: 'table', gM: null, gV: null, nB: null, im: 0 };
+}
+// Number of design lanes, Art. 3.6.1.1.1: integer part of w/12; roadways from 20 ft to 24 ft: two lanes. At least one.
+function aasLanes(w) { return (w >= 20 && w <= 24) ? 2 : Math.max(1, Math.floor(w / 12 + 1e-9)); }
+// Lever rule (Art. 4.6.2.2.1, C4.6.2.2.1): the deck is hinged over the stringers next to this one. Wheels 6 ft apart in a lane;
+// wheels of adjacent lanes 4 ft apart (each 2 ft from its lane edge, Art. 3.6.1.3.1). Interior: reaction line r(x) = 1 - |x|/S
+// (x from this stringer); exterior: r(x) = 1 + x/S for x >= -S (x outward from this stringer, toward the curb), the outer wheel
+// 2 ft from the curb face (x = de - 2). g(n) = m(n) x (sum of the wheel reactions) / 2 lanes per stringer; the largest n <= NL governs.
+function aasLever(pos, S, de, NL) {
+    const pat = n => { const p = []; for (let k = 0; k < n; k++) p.push(10 * k, 10 * k + AAS_HL93.wheel); return p; };
+    const r = pos === 'ext' ? (x => x >= -S ? 1 + x / S : 0) : (x => Math.max(0, 1 - Math.abs(x) / S));
+    const cases = [];
+    for (let n = 1; n <= Math.max(1, NL); n++) {
+        const P = pat(n); let best = null;
+        const tryAt = (xs) => { const rs = xs.map(r), s = rs.reduce((a, v) => a + v, 0); if (!best || s > best.sum + 1e-12) best = { xs, rs, sum: s }; };
+        if (pos === 'ext') tryAt(P.map(p => (de - 2) - p));
+        else P.forEach(p0 => [0, S, -S].forEach(at => tryAt(P.map(p => p - p0 + at))));
+        const m = AAS_MPF[Math.min(n, 4) - 1];
+        cases.push({ n, m, xs: best.xs, rs: best.rs, sum: best.sum, g: m * best.sum / 2 });
+    }
+    const gov = cases.reduce((a, c) => c.g > a.g + 1e-12 ? c : a, cases[0]);
+    return { pos, S, de, cases, gov, g: gov.g };
+}
+function tbcAasLoads(m, A) {
+    const errors = [], errTab = [], notes = [];
+    const err = (t, tab) => { errors.push(t); errTab.push(tab); };
+    const num = (v) => (typeof v === 'number' && isFinite(v)) ? v : NaN;
+    const g = m.geom || {}, dz = m.design || {}, a0 = (dz.aashto && typeof dz.aashto === 'object') ? dz.aashto : {};
+    const q = Object.assign(tbcAasLoadDefaults(), (a0.bl && typeof a0.bl === 'object') ? a0.bl : {});
+    const out = { ok: false, errors, errTab, notes, q };
+    const S = num(g.spacing) / 12;   // stringer spacing (ft) from the Geometry tab (in.)
+    if (!(S > 0)) err('Stringer spacing must be greater than zero (Geometry tab, Member spacing s).', 'geom');
+    const deck = AAS_BDECKS.find(x => x[0] === q.deck);
+    if (!deck) err(`Unknown deck type "${q.deck}".`, 'loads');
+    const isGL = !!(A && A.isGL), sp = A && A.a ? A.a.sp : null;
+    // ---- dead loads (klf on this stringer) ----
+    const hard = !isGL && AAS_HARDWOOD.includes(sp);
+    const gW = q.gW === null || q.gW === undefined ? (hard ? AAS_UW.hard : AAS_UW.soft) : num(q.gW);
+    const gWsrc = q.gW === null || q.gW === undefined ? `Table 3.5.1-1, wood, ${hard ? 'hard' : 'soft'}` : 'entered';
+    const conc = deck && !deck[5];
+    const gD = q.gD === null || q.gD === undefined ? (conc ? AAS_UW.conc + AAS_UW.rcAdd : AAS_UW.soft) : num(q.gD);
+    const gDsrc = q.gD === null || q.gD === undefined ? (conc ? 'Table 3.5.1-1, normal-weight concrete (f′c ≤ 5.0 ksi) 0.145 + 0.005 for reinforcement (C3.5.1)' : 'Table 3.5.1-1, wood, soft') : 'entered';
+    const tD = num(q.tD), tWs = num(q.tWs), gWs = num(q.gWs), wRail = num(q.wRail), de = num(q.de), wRd = num(q.wRd);
+    const pos = q.pos === 'ext' ? 'ext' : 'int';
+    if (!(gW > 0)) err('Stringer unit weight must be greater than zero (blank = Table 3.5.1-1).', 'loads');
+    if (!(tD >= 0)) err('Deck thickness must be 0 or more.', 'loads');
+    if (!(gD > 0)) err('Deck unit weight must be greater than zero (blank = Table 3.5.1-1).', 'loads');
+    if (!(tWs >= 0)) err('Wearing surface thickness must be 0 or more.', 'loads');
+    if (tWs > 0 && !(gWs > 0)) err('Wearing surface unit weight must be greater than zero.', 'loads');
+    if (!(wRail >= 0)) err('Rail, curb and other attachments: the line load must be 0 or more (kip/ft on this stringer).', 'loads');
+    if (!(wRd > 0)) err('Clear roadway width must be greater than zero.', 'loads');
+    if (pos === 'ext' && !isFinite(de)) err('Exterior stringer: enter d_e, the distance from the stringer to the face of the curb or rail (ft; negative when the curb is inside).', 'loads');
+    let trib = NaN, tribSrc = 'entered';
+    if (q.trib === null || q.trib === undefined) { trib = pos === 'ext' ? S / 2 + Math.max(0, de) : S; tribSrc = pos === 'ext' ? 'S/2 + d_e' : 'S'; }
+    else trib = num(q.trib);
+    if (!(trib > 0)) err('Tributary width must be greater than zero (blank = S, or S/2 + d_e for an exterior stringer).', 'loads');
+    if (errors.length || !A || !A.ok) { if (!A || !A.ok) err('The material and section are needed first (see the AASHTO Materials tab).', null); return out; }
+    const Aft = A.b * A.d / 144;
+    const rows = [
+        { key: 'self', kind: 'DC', lab: 'Stringer self-weight', eq: 'γ_w b d / 144', g: gW, src: gWsrc, w: gW * Aft, b: A.b, d: A.d },
+        { key: 'deck', kind: 'DC', lab: deck[1] + ' (deck weight)', eq: 'γ_D (t_D/12) W_t', g: gD, src: gDsrc, t: tD, w: gD * tD / 12 * trib },
+        { key: 'rail', kind: 'DC', lab: 'Rail, curb and other attachments (entered line load)', eq: 'entered', w: wRail },
+        { key: 'ws', kind: 'DW', lab: 'Wearing surface', eq: 'γ_ws (t_ws/12) W_t', g: gWs, src: q.gWs === AAS_UW.bit ? 'Table 3.5.1-1, bituminous wearing surfaces' : 'entered', t: tWs, w: tWs > 0 ? gWs * tWs / 12 * trib : 0 }];
+    const wDC = rows.filter(r => r.kind === 'DC').reduce((s, r) => s + r.w, 0), wDW = rows.filter(r => r.kind === 'DW').reduce((s, r) => s + r.w, 0);
+    // ---- lanes, live-load distribution ----
+    const NL = aasLanes(wRd);
+    const df = { mode: q.dfMode === 'entered' ? 'entered' : 'table', pos, deck: deck[0], deckName: deck[1], woodDeck: deck[5], S, NL };
+    const lever = () => aasLever(pos, S, de, NL);
+    if (df.mode === 'entered') {
+        const gM = num(q.gM), gV = num(q.gV);
+        if (!(gM > 0) || !(gV > 0)) { err('Entered distribution factors: enter g for moment and for shear (lanes per stringer, multiple presence included).', 'loads'); return out; }
+        Object.assign(df, { gM, gV, srcM: 'entered', srcV: 'entered' });
+    } else if (pos === 'ext') {
+        const L = lever(); Object.assign(df, { lev: L, gM: L.g, gV: L.g, srcM: 'lever', srcV: 'lever', why: deck[5] ? 'Table 4.6.2.2.2d-1 / 4.6.2.2.3b-1: wood deck on wood beams, exterior beam: lever rule' : 'Table 4.6.2.2.2d-1 / 4.6.2.2.3b-1: concrete deck on wood beams, exterior beam: lever rule' });
+    } else {
+        const inRange = S <= deck[4] + 1e-9, glOK = deck[0] !== 'glpanel' || isGL;
+        if (inRange && glOK) {
+            const g1 = S / deck[2], g2 = S / deck[3];
+            Object.assign(df, { g1, g2, gM: NL >= 2 ? Math.max(g1, g2) : g1, srcM: 'table', tab: deck[5] ? 'Table 4.6.2.2.2a-1' : 'Table 4.6.2.2.2b-1' });
+            if (deck[5]) Object.assign(df, { gV: df.gM, srcV: 'table' });
+            else { const L = lever(); Object.assign(df, { lev: L, gV: L.g, srcV: 'lever', whyV: 'Table 4.6.2.2.3a-1: concrete deck on wood beams, shear: lever rule' }); }
+        } else {
+            const L = lever(); Object.assign(df, { lev: L, gM: L.g, gV: L.g, srcM: 'lever', srcV: 'lever',
+                why: !glOK ? 'Table 4.6.2.2.2a-1 lists glued laminated panels on glued laminated (or steel) stringers only; for this sawn stringer the lever rule is used (Art. 4.6.2.2.1)'
+                    : `S = ${+S.toFixed(4)} ft is beyond the range of applicability S ≤ ${deck[4]} ft of ${deck[5] ? 'Table 4.6.2.2.2a-1' : 'Table 4.6.2.2.2b-1'}: lever rule (Art. 4.6.2.2.1)` });
+        }
+    }
+    // shear parallel to grain, interior stringer with a wood deck: Eq. 4.6.2.2.2a-1 (applied with the envelopes); otherwise g_V x V
+    df.woodV = pos === 'int' && deck[5];
+    // deflection: all design lanes loaded, all stringers deflect equally (Art. 2.5.2.6.2): g = m NL / N_b; without N_b, g_M
+    const nB = num(q.nB);
+    if (q.nB !== null && q.nB !== undefined && !(nB >= 1 && Math.round(nB) === nB)) err('Number of stringers N_b: a whole number of 1 or more (blank = use g for moment).', 'loads');
+    df.gD = nB >= 1 ? AAS_MPF[Math.min(NL, 4) - 1] * NL / nB : df.gM; df.gDsrc = nB >= 1 ? 'mNL/Nb' : 'gM'; df.nB = nB >= 1 ? nB : null; df.mNL = AAS_MPF[Math.min(NL, 4) - 1];
+    // ---- dynamic load allowance: need not be applied to wood components (Art. 3.6.2.3); an entered IM is applied as entered ----
+    const im = q.im === null || q.im === undefined ? 0 : num(q.im);
+    if (!(im >= 0)) err('Dynamic load allowance IM: a percentage of 0 or more (0 = not applied, Art. 3.6.2.3).', 'loads');
+    if (errors.length) return out;
+    if (pos === 'int' && S > 0 && !(df.mode === 'entered')) notes.push('Approximate distribution (Art. 4.6.2.2.1): constant deck width and normally at least four stringers; otherwise use a refined analysis or enter the distribution factors.');
+    if (df.mode === 'table' && pos === 'int' && df.srcM === 'table') notes.push('The factors of ' + df.tab + ' include the multiple presence factors (Art. 3.6.1.1.2); the lever rule applies them explicitly.');
+    Object.assign(out, { ok: true, S, trib, tribSrc, NL, wRd, de, pos, deck, rows, wDC, wDW, df, im, IMf: 1 + im / 100 });
+    return out;
+}
 /* TBC-ENGINE-END */
 </script>
 <script>
@@ -1970,6 +2117,7 @@ function chkRow(parent, label, input, hint) {
 const LS_AUTO = 'tbc_autosave_v1', LS_PROJ = 'tbc_projects_v1';
 let M = tbcDefaultModel(), R = null;
 let A = null;   // TBA1: AASHTO materials and resistance (tbcAashto) when the design code is AASHTO, else null
+let AL = null;  // TBA2: AASHTO bridge loads (tbcAasLoads) when the design code is AASHTO, else null
 const aasOn = () => !!(M && M.design && M.design.code === 'AASHTO');
 function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
@@ -2027,6 +2175,8 @@ function compute() {
   catch (e) { R = { ok: false, errors: ['Internal error in the calculation: ' + e.message], fails: [], notes: [], adv: [] }; }
   A = null;   // TBA1
   if (aasOn()) { try { A = tbcAashto(M); } catch (e) { A = { ok: false, errors: ['Internal error in the AASHTO calculation: ' + e.message], errTab: [null], notes: [] }; } }
+  AL = null;   // TBA2
+  if (aasOn()) { try { AL = tbcAasLoads(M, A); } catch (e) { AL = { ok: false, errors: ['Internal error in the AASHTO bridge loads: ' + e.message], errTab: [null], notes: [] }; } }
 }
 let schedT = null, pendStruct = false;
 function schedule(structural) { if (structural) pendStruct = true; clearTimeout(schedT); schedT = setTimeout(flush, 120); }
@@ -2139,7 +2289,7 @@ function inTabKey(e) {
 function inputTabMarks() {
   if (!$('tbcInTabs')) return;
   const bad = {};
-  if (aasOn()) ((A && A.errTab) || []).forEach(t => { if (t) bad[t] = 1; });   // TBA1: AASHTO errors carry their input tab
+  if (aasOn()) ((A && A.errTab) || []).concat((AL && AL.errTab) || []).forEach(t => { if (t) bad[t] = 1; });   // TBA1: AASHTO errors carry their input tab (TBA2: bridge loads too)
   else ((R && R.errors) || []).forEach(m => { const r = TBC_IN_ERR.find(x => x[0].test(m)); if (r) bad[r[1]] = 1; });
   TBC_IN_TABS.forEach(([k]) => {
     const pn = $('tbcInPane_' + k); if (!pn) return;
@@ -2177,8 +2327,7 @@ function rebuildInputs() {
     panes[k] = pn; P.appendChild(pn);
   });
   __secNum = 0;
-  if (PJ) panes.project.appendChild(PJ); buildProjectPane(panes.project); buildGeomPane(panes.geom); buildLoadsPane(panes.loads); buildMaterialPane(panes.material); buildFactorsPane(panes.factors);
-  if (aasOn()) panes.loads.insertBefore(el('div', 'warnBox', '<b>AASHTO mode:</b> these building loads are not used. Bridge loads (DC, DW, HL-93) come in the next version of this tool.'), panes.loads.firstChild);   // TBA1
+  if (PJ) panes.project.appendChild(PJ); buildProjectPane(panes.project); buildGeomPane(panes.geom); if (aasOn()) buildAasLoadsPane(panes.loads); else buildLoadsPane(panes.loads); buildMaterialPane(panes.material); buildFactorsPane(panes.factors);   // TBA2: AASHTO bridge loads on the Loads tab
   let t = tbcInTabGet(); if (!TBC_IN_TABS.some(([k]) => k === t)) t = 'project';
   inTabSelect(t, false);
   P.scrollTop = keep;
@@ -2462,8 +2611,8 @@ function buildMaterialPane(P) {
 function buildFactorsPane(P) {
   const dz = M.design;
   mkSec(P, 'inCode', 'Design code', body => {   // TBA1 (engineer decision 2026-11-16): NDS 2018 or AASHTO LRFD 10th Ed. (bridge stringer); absent = NDS
-    fRow(body, 'Design code', selIn(TBC_CODES, () => dz.code === 'AASHTO' ? 'AASHTO' : 'NDS', v => { if (v === 'AASHTO') { dz.code = 'AASHTO'; aasA(); } else delete dz.code; }, 'dcode'), '',
-      dz.code === 'AASHTO' ? 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 8: stringers of sawn lumber or glulam. This version gives the reference values, adjustment factors and resistance factors; bridge loads and the checks come next.'
+    fRow(body, 'Design code', selIn(TBC_CODES, () => dz.code === 'AASHTO' ? 'AASHTO' : 'NDS', v => aasSwitch(v), 'dcode'), '',
+      dz.code === 'AASHTO' ? 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 8: stringers of sawn lumber or glulam. This version gives the reference values, adjustment factors and resistance factors and the bridge loads (DC, DW, HL-93); the checks come next.'
         : 'NDS 2018 for building members. AASHTO LRFD 10th Ed. is for bridge stringers.');
   }, { noNum: true });
   if (aasOn()) { buildAasFactorsPane(P); return; }   // TBA1
@@ -2521,7 +2670,7 @@ function buildTabBar() {
     bar.appendChild(b);
   });
 }
-const BUILDERS = () => ({ sum: buildSummary, sch: buildSchem, ana: buildAnalysis, dv: buildDV, bend: buildBend, shear: buildShear, bear: buildBear, defl: buildDefl, refv: buildRefv, val: buildValid, man: buildManual, rpt: buildReport, aas: buildAashto });   /* rpt: TBRP; aas: TBA1 */
+const BUILDERS = () => ({ sum: buildSummary, sch: buildSchem, ana: buildAnalysis, dv: buildDV, bend: buildBend, shear: buildShear, bear: buildBear, defl: buildDefl, refv: buildRefv, val: buildValid, man: buildManual, rpt: buildReport, aas: buildAashto, aasL: buildAasLoads });   /* rpt: TBRP; aas: TBA1 */
 function renderTab() {
   const pages = $('tabPages'); pages.innerHTML = ''; PLOTQ = [];
   const id = curTab(); const pg = el('div', 'tabPage'); pg.id = 'page_' + id; pages.appendChild(pg);
@@ -2640,7 +2789,8 @@ function srcTag(builtIn) { return builtIn ? 'NDS Supplement 2018 ' + VFY : 'user
 const TBC_CARDS = { dvSect: ['dv', 'Section properties'], dvAdj: ['dv', 'Adjusted design values'], anaDiag: ['ana', 'Shear and moment diagrams'], anaReac: ['ana', 'Support reactions'], anaPeaks: ['ana', 'Peak values by combination'],
   bCL: ['bend', 'Beam stability factor C<sub>L</sub>'], bCV: ['bend', 'Volume / size factor C<sub>V</sub>'], bCap: ['bend', 'Adjusted bending design value and check'],
   sCap: ['shear', 'Adjusted shear design value and check'], sNotch: ['shear', 'Notched ends'], brCalc: ['bear', 'Bearing perpendicular to grain'], brX: ['bear', 'Supporting members and point loads'], dfCheck: ['defl', 'Deflection checks'],
-  aasRef: ['aas', 'Reference design values'], aasFac: ['aas', 'Adjustment factors (Art. 8.4.4)'], aasAdj: ['aas', 'Adjusted design values'] };   // aas*: TBA1
+  aasRef: ['aas', 'Reference design values'], aasFac: ['aas', 'Adjustment factors (Art. 8.4.4)'], aasAdj: ['aas', 'Adjusted design values'],
+  aasDL: ['aasL', 'Dead loads (DC, DW)'], aasLL: ['aasL', 'Live load (HL-93) and dynamic load allowance'], aasDF: ['aasL', 'Live-load distribution factors'], aasCmb: ['aasL', 'Load combinations and load factors'] };   // TBA2   // aas*: TBA1
 const tbcTabName = id => (OUT_TABS.find(t => t[0] === id) || AAS_TABS.find(t => t[0] === id) || [id, id])[1];
 const tbcCardTxt = card => tbcTabName(TBC_CARDS[card][0]) + ' · ' + TBC_CARDS[card][1];
 // txt = the visible text; pre = the label the report puts before "see §n.k"
@@ -4110,16 +4260,36 @@ window.addEventListener('beforeprint', () => {
    (the engine); only the substitution strings are formatted here. None of this runs in NDS mode (aasOn() false).
    ===================================================================== */
 const TBC_CODES = [['NDS', 'NDS 2018 (buildings; ASD / LRFD)'], ['AASHTO', 'AASHTO LRFD 10th Ed. (bridge stringer)']];
-const AAS_TABS = [['aas', 'AASHTO Materials'], ['rpt', 'Report']];
+const AAS_TABS = [['aas', 'AASHTO Materials'], ['aasL', 'Bridge Loads'], ['rpt', 'Report']];   // aasL: TBA2
 const AAS_ART = 'AASHTO LRFD 10th Ed. ';
 const k3 = v => f(v, 3), k4 = v => f(v, 4);
 const kf = v => (typeof v === 'number' && isFinite(v) && Math.abs(v - +v.toFixed(3)) < 1e-12) ? String(+v.toFixed(3)) : k4(v);   // a factor: as tabulated, or 4 decimals when computed
 const aasH = s => esc(s).replace(/([CFE])_([A-Za-zλ⊥]+)/g, '$1<sub>$2</sub>');   // engine text 'C_M', 'F_bo' -> HTML subscripts
 const aasA = () => { const dz = M.design; if (!dz.aashto || typeof dz.aashto !== 'object') dz.aashto = tbcAashtoDefaults(); return dz.aashto; };
+/* TBA2 (engineer decision 2026-11-16): a project switched to AASHTO for the first time (no design.aashto yet) starts in wet service
+   (Art. C8.4.4.3: wet use unless an analysis of the in-service moisture shows otherwise); a project that was AASHTO before keeps its
+   setting. design.moisture is the one wet / dry field of the project (shared with NDS, TBA1); the switch keeps the other code's setting
+   in design.aashto: ndsMoist (the NDS setting, while AASHTO is on) and moist (the AASHTO setting, while NDS is on), so switching back
+   and forth never changes either code's setting. NDS-only projects never get these fields. */
+function aasSwitch(v) {
+  const dz = M.design;
+  if (v === 'AASHTO') {
+    if (dz.code === 'AASHTO') return;
+    const isNew = !dz.aashto || typeof dz.aashto !== 'object', a = aasA(), nds = dz.moisture === 'Wet' ? 'Wet' : 'Dry';
+    const to = (a.moist === 'Wet' || a.moist === 'Dry') ? a.moist : isNew ? 'Wet' : nds;
+    delete a.moist; dz.code = 'AASHTO'; a.ndsMoist = nds; dz.moisture = to;
+    if (isNew && to !== nds) toast('AASHTO: wet service set (Art. C8.4.4.3); untick it on the Factors tab for dry service');
+  } else {
+    if (dz.code !== 'AASHTO') return;
+    delete dz.code;
+    const a = dz.aashto;
+    if (a && typeof a === 'object') { const cur = dz.moisture === 'Wet' ? 'Wet' : 'Dry'; if (a.ndsMoist === 'Wet' || a.ndsMoist === 'Dry') { if (a.ndsMoist !== cur) a.moist = cur; dz.moisture = a.ndsMoist; } delete a.ndsMoist; }
+  }
+}
 const aasGlName = k => aasGlKind(k) === 2 ? `No. ${k.slice(3)} ${AAS_GL2[k.slice(3)].sp} ${AAS_GL2[k.slice(3)].gr} (Table 8.4.1.2.3-2)` : `${k} (Table 8.4.1.2.3-1)`;
 function aasNotice() {
-  return el('div', 'warnBox', tbNL('AASHTO LRFD 10th Ed. (2024), bridge stringer: reference values, adjustment factors and resistance factors only.', [   // TBNL
-    ['No checks yet:', 'bridge loads (DC, DW, HL-93 with dynamic load allowance and live-load distribution) and the AASHTO checks (flexure Art. 8.6, shear Art. 8.7, bearing Art. 8.8.3, deflection Art. 2.5.2.6.2) come in the next versions of this tool. No PASS / FAIL is given in AASHTO mode.'],
+  return el('div', 'warnBox', tbNL('AASHTO LRFD 10th Ed. (2024), bridge stringer: reference values, adjustment factors, resistance factors and bridge loads (TBA2: DC, DW, HL-93 distribution factors and dynamic load allowance).', [   // TBNL
+    ['No checks yet:', 'the envelopes and factored demands, and the AASHTO checks (flexure Art. 8.6, shear Art. 8.7, bearing Art. 8.8.3, deflection Art. 2.5.2.6.2) come in the next versions of this tool. No PASS / FAIL is given in AASHTO mode.'],
     ['NDS checks:', 'the NDS 2018 building-load checks are not run in AASHTO mode; set Design code to NDS 2018 (Factors input tab) for them.']]));
 }
 function aasMemberTxt() {
@@ -4188,7 +4358,7 @@ function buildAasFactorsPane(P) {
   const dz = M.design, a = aasA(), gl = M.material.type === 'glulam';
   mkSec(P, 'inAasFac', 'AASHTO adjustment factors (Art. 8.4.4)', body => {
     chkRow(body, 'Wet service (C<sub>M</sub>, Art. 8.4.4.3)', chkIn(() => dz.moisture === 'Wet', v => { dz.moisture = v ? 'Wet' : 'Dry'; }, 'wet'),
-      'Wet: in-service moisture content over 19 % (sawn lumber) or over 16 % (glulam). Without an analysis of the in-service moisture, AASHTO recommends assuming wet use (Art. C8.4.4.3).');
+      'Wet: in-service moisture content over 19 % (sawn lumber) or over 16 % (glulam). Without an analysis of the in-service moisture, AASHTO recommends assuming wet use (Art. C8.4.4.3): a project switched to AASHTO for the first time starts wet (engineer decision 2026-11-16); untick for dry service. The NDS setting of the project is kept for the NDS mode.');
     chkRow(body, 'Incised (C<sub>i</sub>, Art. 8.4.4.7)', chkIn(() => dz.incising, v => { dz.incising = v; }, 'incised'), 'Incisions within the depth, length and density limits of Art. 8.4.4.7.');
     chkRow(body, 'Flat use (load on the wide face)', chkIn(() => dz.flatUse, v => { dz.flatUse = v; }, 'flat'), 'Dimension lumber: C<sub>fu</sub>, Table 8.4.4.6-1. Beams and Stringers: Table 8.4.4.4-2. Not for glulam in this tool.');
     if (!gl) fRow(body, 'Deck factor C<sub>d</sub>', selIn(AAS_DECKS.map(x => [x[0], x[1].replace('C_d', 'Cd')]), () => a.deck, v => { a.deck = v; }, 'aasDeck'), '', 'A stringer takes C<sub>d</sub> = 1.0. Deck members of 2 in. to 4 in. lumber in stressed-wood or laminated decks, or 4 in. planks on the wide face, may use Tables 8.4.4.8-1 / -2.');
@@ -4328,6 +4498,132 @@ function buildAashto(pg) {
   });
 }
 const PHIv = (l, p) => ({ Fb: l.phiFb, Fbn: l.phiFbn, Fv: l.phiFv, Fcp: l.phiFcp, Fcpc: l.phiFcpc }[p]);
+/* ---- TBA2 (phase T2): bridge loads. Input pane (Loads tab in AASHTO mode), the Bridge Loads tab and its Report section.
+   Every value shown is a value of AL = tbcAasLoads(M, A); only the substitution strings are formatted here. ---- */
+const aasB = () => { const a = aasA(); if (!a.bl || typeof a.bl !== 'object') a.bl = tbcAasLoadDefaults(); return a.bl; };
+const kL = v => f(v, 4);   // kip/ft, factors: 4 decimals
+function buildAasLoadsPane(P) {
+  const q = (M.design.aashto && M.design.aashto.bl) || tbcAasLoadDefaults(), S =   // read only: the inputs are created on the first edit (aasB), so an untouched project keeps its saved form
+    (M.geom.spacing > 0) ? M.geom.spacing / 12 : NaN;
+  P.appendChild(el('div', 'hint', 'AASHTO mode: the bridge loads on one stringer (kip, ft). The building loads of the NDS mode are kept in the project but not used.'));
+  mkSec(P, 'inAasDL', 'Dead loads DC, DW (Art. 3.5.1)', body => {
+    fRow(body, 'Deck type', selIn(AAS_BDECKS.map(x => [x[0], x[1]]), () => q.deck, v => { aasB().deck = v; }, 'aasBDeck'), '', 'The deck on the stringers: its weight here and the live-load distribution factor (Table 4.6.2.2.2a-1; concrete deck: Tables 4.6.2.2.2b-1 and 4.6.2.2.3a-1).');
+    fRow(body, 'Stringer unit weight γ<sub>w</sub>', numIn(() => q.gW, v => { aasB().gW = v; }, 'aasGW', { ph: 'Table 3.5.1-1' }), 'kcf', 'Blank = Table 3.5.1-1: wood, soft 0.050 kcf; hard 0.060 kcf (Northern Red Oak, Red Maple, Red Oak, Yellow Poplar). The values include preservatives (C3.5.1).');
+    fRow(body, 'Deck thickness t<sub>D</sub>', numIn(() => q.tD, v => { aasB().tD = v; }, 'aasTD'), 'in.');
+    fRow(body, 'Deck unit weight γ<sub>D</sub>', numIn(() => q.gD, v => { aasB().gD = v; }, 'aasGD', { ph: 'Table 3.5.1-1' }), 'kcf', 'Blank = Table 3.5.1-1: wood (soft) 0.050 kcf; concrete deck 0.145 + 0.005 = 0.150 kcf (reinforced, C3.5.1).');
+    fRow(body, 'Wearing surface thickness t<sub>ws</sub>', numIn(() => q.tWs, v => { aasB().tWs = v; }, 'aasTWs'), 'in.', 'DW. 0 = none.');
+    fRow(body, 'Wearing surface unit weight γ<sub>ws</sub>', numIn(() => q.gWs, v => { aasB().gWs = v; }, 'aasGWs'), 'kcf', 'Table 3.5.1-1: bituminous wearing surfaces 0.140 kcf.');
+    fRow(body, 'Rail, curb and other attachments (DC)', numIn(() => q.wRail, v => { aasB().wRail = v; }, 'aasRail'), 'kip/ft', 'Line load carried by this stringer (enter its share). 0 = none.');
+    fRow(body, 'Tributary width W<sub>t</sub>', numIn(() => q.trib, v => { aasB().trib = v; }, 'aasTrib', { ph: q.pos === 'ext' ? 'S/2 + de' : 'S' }), 'ft',
+      `Deck and wearing surface on this stringer. Blank = S${q.pos === 'ext' ? '/2 + d<sub>e</sub> (exterior; enter the actual width to the deck edge)' : ''}; S = s/12 = ${isFinite(S) ? g4(+S.toFixed(4)) : '—'} ft from the Geometry tab.`);
+  }, { noNum: true });
+  mkSec(P, 'inAasLL', 'Live load HL-93 (Art. 3.6.1) and distribution (Art. 4.6.2.2)', body => {
+    fRow(body, 'Stringer', selIn([['int', 'Interior stringer'], ['ext', 'Exterior stringer']], () => q.pos, v => { aasB().pos = v; }, 'aasPos'), '');
+    fRow(body, 'Clear roadway width w', numIn(() => q.wRd, v => { aasB().wRd = v; }, 'aasWRd'), 'ft', 'Number of design lanes N<sub>L</sub> = integer part of w/12; 20 ft to 24 ft: 2 lanes (Art. 3.6.1.1.1).');
+    if (q.pos === 'ext') fRow(body, 'd<sub>e</sub>, stringer to curb face', numIn(() => q.de, v => { aasB().de = v; }, 'aasDe'), 'ft', 'Horizontal distance from the exterior stringer to the face of the curb or rail, positive outward. Lever rule: the outer wheel 2 ft from the curb face (Art. 3.6.1.3.1).');
+    fRow(body, 'Distribution factors', selIn([['table', 'By the AASHTO tables / lever rule'], ['entered', 'Entered (override)']], () => q.dfMode, v => { aasB().dfMode = v; }, 'aasDfMode'), '');
+    if (q.dfMode === 'entered') {
+      fRow(body, 'g, moment', numIn(() => q.gM, v => { aasB().gM = v; }, 'aasGM'), 'lanes', 'Lanes per stringer, multiple presence included.');
+      fRow(body, 'g, shear', numIn(() => q.gV, v => { aasB().gV = v; }, 'aasGV'), 'lanes');
+    }
+    fRow(body, 'Number of stringers N<sub>b</sub>', numIn(() => q.nB, v => { aasB().nB = v; }, 'aasNB', { ph: 'use g moment', step: 1 }), '', 'Deflection (Art. 2.5.2.6.2): all lanes loaded, all stringers deflect equally, g = m N<sub>L</sub>/N<sub>b</sub>. Blank = g for moment (conservative for usual layouts).');
+    fRow(body, 'Dynamic load allowance IM', numIn(() => q.im, v => { aasB().im = v; }, 'aasIM'), '%', 'Art. 3.6.2.3: need not be applied to wood components (0). An entered IM is applied to the truck and tandem (not the lane load, Art. 3.6.2.1).');
+  }, { noNum: true });
+}
+function aasDFwork(body, x) {   // the distribution factors, worked (card aasDF)
+  const d = x.df, S = d.S;
+  if (d.mode === 'entered') { calc(body, { title: 'Entered distribution factors (override)', ref: 'user input', lines: [T`g_M = ${kL(d.gM)},\quad g_V = ${kL(d.gV)}`], result: `g<sub>M</sub> = ${kL(d.gM)}, g<sub>V</sub> = ${kL(d.gV)} lanes per stringer (multiple presence included, as entered)` }); }
+  else {
+    if (d.srcM === 'table') {
+      const dk = x.deck;
+      calc(body, { title: `Interior stringer, ${esc(dk[1].toLowerCase())}: moment${d.srcV === 'table' ? ' and shear' : ''}`, ref: AAS_ART + d.tab + (d.srcV === 'table' ? ' (shear: Table 4.6.2.2.3a-1 refers to it)' : ''),
+        lines: [T`g_1 = \frac{S}{${g4(dk[2])}} = \frac{${k4(S)}}{${g4(dk[2])}} = ${kL(d.g1)}\quad\text{(one design lane)}`, T`g_2 = \frac{S}{${g4(dk[3])}} = \frac{${k4(S)}}{${g4(dk[3])}} = ${kL(d.g2)}\quad\text{(two or more lanes)}`,
+          x.NL >= 2 ? T`g_M = \max(g_1, g_2) = ${kL(d.gM)}` : T`g_M = g_1 = ${kL(d.gM)}\quad (N_L = 1)`],
+        where: [['S', 'stringer spacing s/12 (Geometry tab)', k4(S), 'ft', `range of applicability S ≤ ${g4(dk[4])} ft`], ['N_L', 'number of design lanes', String(x.NL), '', 'Art. 3.6.1.1.1']],
+        result: `g<sub>M</sub> = ${kL(d.gM)}${d.srcV === 'table' ? `, g<sub>V</sub> = ${kL(d.gV)}` : ''} lanes per stringer (multiple presence included, Art. 3.6.1.1.2)` });
+    }
+    if (d.lev) {
+      const L = d.lev, ext = L.pos === 'ext';
+      const why = d.srcM === 'lever' ? (d.why || '') : (d.whyV || '');
+      body.appendChild(el('div', 'note', '<b>Lever rule</b> (' + esc(why) + '). ' + (ext
+        ? `Exterior stringer: the deck is hinged over the first interior stringer; reaction of a wheel at x (outward from this stringer) r = 1 + x/S. Outer wheel 2 ft from the curb face: x = d<sub>e</sub> − 2 = ${g4(L.de)} − 2 = ${g4(L.de - 2)} ft; wheels 6 ft apart, wheels of adjacent lanes 4 ft apart.`
+        : 'Interior stringer: the deck is hinged over the adjacent stringers; reaction of a wheel at x from this stringer r = 1 − |x|/S ≥ 0. Wheels 6 ft apart, wheels of adjacent lanes 4 ft apart, placed for the largest sum.')));
+      body.appendChild(tblEl(['Lanes loaded n', 'Wheel positions x (ft)', 'Wheel reactions r', 'Σr', 'm (Table 3.6.1.1.2-1)', 'g = m Σr / 2'],
+        L.cases.map(c => ({ cls: c === L.gov ? 'gov' : '', cells: [String(c.n), c.xs.map(v => f2(v)).join(', '), c.rs.map(v => k3(v)).join(', '), kL(c.sum), g4(c.m), `${g4(c.m)} × ${kL(c.sum)} / 2 = ${kL(c.g)}`] })), { left: [1, 2] }));
+      calc(body, { title: 'Lever rule result', ref: AAS_ART + 'Art. 4.6.2.2.1, 3.6.1.1.2', lines: [T`g = \max_n \frac{m_n \sum r}{2} = ${kL(L.g)}\quad (n = ${L.gov.n})`], result: `g = ${kL(L.g)} lanes per stringer, for ${d.srcM === 'lever' ? 'moment and shear' : 'shear'}` });
+    }
+  }
+  const gd = d.gDsrc === 'mNL/Nb' ? T`g_\Delta = \frac{m\,N_L}{N_b} = \frac{${g4(d.mNL)} \times ${x.NL}}{${d.nB}} = ${kL(d.gD)}` : T`g_\Delta = g_M = ${kL(d.gD)}`;
+  calc(body, { title: 'Live-load deflection distribution', ref: AAS_ART + 'Art. 2.5.2.6.2, C2.5.2.6.2', lines: [gd], result: d.gDsrc === 'mNL/Nb' ? 'all design lanes loaded; all stringers deflect equally' : 'N<sub>b</sub> not entered: the moment factor is used (Decision pending engineer review)' });
+  body.appendChild(el('div', 'hint', d.woodV
+    ? 'Shear parallel to grain of an interior stringer with a wood deck: the distributed live-load shear V<sub>LL</sub> = 0.50 [(0.60 V<sub>LU</sub>) + V<sub>LD</sub>] (Eq. 4.6.2.2.2a-1), with the axles placed for the largest shear at the lesser of 3d and L/4 from the support (Art. 8.7); worked with the envelopes.'
+    : 'Shear: g<sub>V</sub> × the lane shear (Eq. 4.6.2.2.2a-1 is for interior stringers with wood decks only).'));
+}
+function buildAasLoads(pg) {
+  pg.appendChild(aasNotice());
+  if (!A || !A.ok) { pg.appendChild(el('div', 'errBox', '<b>The AASHTO material and section are needed first</b><ul>' + ((A && A.errors) || ['Internal error']).map(m => '<li>' + esc(m) + '</li>').join('') + '</ul>')); return; }
+  if (!AL || !AL.ok) { pg.appendChild(el('div', 'errBox', '<b>No bridge loads: input required (Loads tab)</b><ul>' + ((AL && AL.errors) || ['Internal error']).map(m => '<li>' + esc(m) + '</li>').join('') + '</ul>')); return; }
+  const x = AL;
+  mkSec(pg, 'aasDL', 'Dead loads (DC, DW)', body => {
+    body.appendChild(el('div', 'note', `Per stringer, kip/ft. Tributary width W<sub>t</sub> = ${k4(x.trib)} ft (${x.tribSrc === 'entered' ? 'entered' : esc(x.tribSrc) + ', S = ' + k4(x.S) + ' ft'}); section b × d = ${g4(A.b)} × ${g4(A.d)} in. (AASHTO Materials tab).`));
+    x.rows.forEach(r => {
+      let lines;
+      if (r.key === 'self') lines = [T`w_{s} = \gamma_w \frac{b\,d}{144} = ${g4(r.g)} \times \frac{${g4(r.b)} \times ${g4(r.d)}}{144} = ${kL(r.w)}\ \text{kip/ft}`];
+      else if (r.key === 'deck') lines = [T`w_{D} = \gamma_D \frac{t_D}{12} W_t = ${g4(r.g)} \times \frac{${g4(r.t)}}{12} \times ${k4(x.trib)} = ${kL(r.w)}\ \text{kip/ft}`];
+      else if (r.key === 'ws') lines = [r.t > 0 ? T`w_{ws} = \gamma_{ws} \frac{t_{ws}}{12} W_t = ${g4(r.g)} \times \frac{${g4(r.t)}}{12} \times ${k4(x.trib)} = ${kL(r.w)}\ \text{kip/ft}` : T`w_{ws} = 0\quad (t_{ws} = 0)`];
+      else lines = [T`w_{r} = ${kL(r.w)}\ \text{kip/ft}\quad\text{(entered)}`];
+      calc(body, { title: `${esc(r.lab)} (${r.kind})`, ref: AAS_ART + 'Art. 3.5.1' + (r.src ? ', ' + esc(r.src) : ''), lines, result: `${r.kind}: ${kL(r.w)} kip/ft` });
+    });
+    calc(body, { title: 'Totals per stringer', ref: AAS_ART + 'Art. 3.5.1', lines: [T`w_{DC} = ${x.rows.filter(r => r.kind === 'DC').map(r => kL(r.w)).join(' + ')} = ${kL(x.wDC)}\ \text{kip/ft}`, T`w_{DW} = ${kL(x.wDW)}\ \text{kip/ft}`],
+      result: `w<sub>DC</sub> = ${kL(x.wDC)} kip/ft, w<sub>DW</sub> = ${kL(x.wDW)} kip/ft (uniform over the whole member)` });
+  });
+  mkSec(pg, 'aasLL', 'Live load (HL-93) and dynamic load allowance', body => {
+    const H = AAS_HL93;
+    body.appendChild(tblEl(['Load', 'Axles (kip) and spacings (ft)', 'Reference'], [
+      ['Design truck', `${H.truck.map(t => t[0]).join(' + ')} kip; 14 ft; 14 ft to 30 ft (varied for the extreme effect)`, 'Art. 3.6.1.2.2, Fig. 3.6.1.2.2-1'],
+      ['Design tandem', '25 + 25 kip at 4 ft', 'Art. 3.6.1.2.3'], ['Design lane load', `${g4(H.lane)} kip/ft, on the lengths that add to the extreme effect`, 'Art. 3.6.1.2.4, 3.6.1.3.1'],
+      ['Extreme effect', 'larger of (tandem + lane) and (truck + lane); negative moment between points of contraflexure and interior reactions also 90 % × (two trucks, 32-kip axles at 14 ft, ≥ 50 ft apart, + lane); axles that do not add are left out', 'Art. 3.6.1.3.1']], { left: [0, 1] }));
+    calc(body, { title: 'Number of design lanes', ref: AAS_ART + 'Art. 3.6.1.1.1', lines: [x.wRd >= 20 && x.wRd <= 24 ? T`20 \le w = ${g4(x.wRd)} \le 24\ \text{ft} \Rightarrow N_L = 2` : T`N_L = \mathrm{int}\left(\frac{w}{12}\right) = \mathrm{int}\left(\frac{${g4(x.wRd)}}{12}\right) = ${x.NL}`], result: `N<sub>L</sub> = ${x.NL}` });
+    calc(body, { title: 'Dynamic load allowance', ref: AAS_ART + 'Art. 3.6.2.3 (wood components), 3.6.2.1', lines: [T`IM = ${g4(x.im)}\,\%\quad\Rightarrow\quad 1 + \frac{IM}{100} = ${k4(x.IMf)}`],
+      result: x.im === 0 ? 'IM = 0: dynamic load allowance need not be applied to wood components (Art. 3.6.2.3)' : `IM = ${g4(x.im)} % as entered, on the truck and tandem only (not the lane load, Art. 3.6.2.1)` });
+  });
+  mkSec(pg, 'aasDF', 'Live-load distribution factors', body => aasDFwork(body, x));
+  mkSec(pg, 'aasCmb', 'Load combinations and load factors', body => {
+    body.appendChild(tblEl(['Limit state', 'γ<sub>DC</sub> max / min', 'γ<sub>DW</sub> max / min', 'γ<sub>LL</sub>', 'C<sub>λ</sub> (Table 8.4.4.9-1)', 'Use'], AAS_COMBOS.map(c => [c[1], c[0] === 'SerI' ? '1.00' : `${g4(AAS_GP.DC[0])} / ${g4(AAS_GP.DC[1])}`, c[0] === 'SerI' ? '1.00' : `${g4(AAS_GP.DW[0])} / ${g4(AAS_GP.DW[1])}`, g4(c[2]), c[3] === null ? '—' : g4(c[3]),
+      c[0] === 'StrI' ? 'flexure, shear, bearing (HL-93)' : c[0] === 'StrII' ? 'owner-specified permit vehicle (only when one is entered)' : 'deflection (service loads)']), { left: [0, 5] }));
+    body.appendChild(el('div', 'hint', 'Tables 3.4.1-1 and 3.4.1-2: the maximum γ<sub>p</sub> where the permanent load adds to the effect, the minimum where it reduces it. η<sub>i</sub> = 1.0 (Art. 1.3.2.1; Decision pending engineer review). C<sub>λ</sub> multiplies the adjusted design values of each strength limit state (' + tbcLink('aasAdj', 'AASHTO Materials → Adjusted design values') + '). Fatigue: Section 8 has no fatigue check for wood stringers (only tension-reinforced glulam, Art. 8.4.1.3.3, not built in).'));
+  });
+  mkSec(pg, 'aasLNotes', 'Notes and assumptions (bridge loads)', body => {
+    body.appendChild(el('div', 'hint', tbNL('Notes:', x.notes.map(esc).concat(['Envelopes along the member (HL-93 positions), the factored demands M<sub>u</sub>, V<sub>u</sub>, R<sub>u</sub> and the Service I deflection loads come in the next part of this phase.']))));
+  });
+}
+function tbrAasLoadsSec() {   // Report section: bridge loads (TBA2)
+  if (!AL || !AL.ok) return { title: 'Bridge loads (AASHTO LRFD 10th Ed. Sections 3 and 4)', subs: [{ title: 'Input required', items: ((AL && AL.errors) || ['No bridge loads.']).map(m => ({ type: 'note', warn: true, text: m })) }] };
+  const x = AL, d = x.df, dk = x.deck;
+  const dl = x.rows.map(r => tbrS({ id: 'aasL.' + r.key, label: r.lab + ' (' + r.kind + ')' + (r.src ? '; ' + r.src : ''), sym: r.key === 'self' ? 'w_s' : r.key === 'deck' ? 'w_D' : r.key === 'ws' ? 'w_{ws}' : 'w_r',
+    eq: r.key === 'self' ? '\\gamma_w \\frac{b\\,d}{144}' : r.key === 'deck' ? '\\gamma_D \\frac{t_D}{12} W_t' : r.key === 'ws' ? '\\gamma_{ws} \\frac{t_{ws}}{12} W_t' : '',
+    sub: r.key === 'self' ? g4(r.g) + ' \\times \\frac{' + g4(r.b) + ' \\times ' + g4(r.d) + '}{144}' : r.key === 'deck' ? g4(r.g) + ' \\times \\frac{' + g4(r.t) + '}{12} \\times ' + k4(x.trib) : r.key === 'ws' ? g4(r.g) + ' \\times \\frac{' + g4(r.t) + '}{12} \\times ' + k4(x.trib) : '',
+    value: r.w, unit: 'kip/ft', d: 4, ref: AAS_ART + 'Art. 3.5.1' }));
+  dl.push(tbrS({ id: 'aasL.wDC', label: 'DC per stringer', sym: 'w_{DC}', eq: '\\sum w', sub: x.rows.filter(r => r.kind === 'DC').map(r => kL(r.w)).join(' + '), value: x.wDC, unit: 'kip/ft', d: 4, ref: AAS_ART + 'Art. 3.5.1' }),
+    tbrS({ id: 'aasL.wDW', label: 'DW per stringer', sym: 'w_{DW}', eq: '', sub: '', value: x.wDW, unit: 'kip/ft', d: 4, ref: AAS_ART + 'Art. 3.5.1' }));
+  const dfs = [tbrS({ id: 'aasL.NL', label: 'Number of design lanes (clear roadway w = ' + g4(x.wRd) + ' ft)', sym: 'N_L', eq: x.wRd >= 20 && x.wRd <= 24 ? '2\\ (20 \\le w \\le 24)' : '\\mathrm{int}(w/12)', sub: '', value: x.NL, unit: '', d: 0, ref: AAS_ART + 'Art. 3.6.1.1.1' })];
+  if (d.mode === 'entered') dfs.push(tbrS({ id: 'aasL.gM', label: 'Distribution factor, moment (entered)', sym: 'g_M', eq: '', sub: '', value: d.gM, unit: '', d: 4, ref: 'entered' }), tbrS({ id: 'aasL.gV', label: 'Distribution factor, shear (entered)', sym: 'g_V', eq: '', sub: '', value: d.gV, unit: '', d: 4, ref: 'entered' }));
+  else {
+    if (d.srcM === 'table') dfs.push(tbrS({ id: 'aasL.g1', label: 'One design lane, ' + dk[1], sym: 'g_1', eq: '\\frac{S}{' + g4(dk[2]) + '}', sub: '\\frac{' + k4(x.S) + '}{' + g4(dk[2]) + '}', value: d.g1, unit: '', d: 4, ref: AAS_ART + d.tab }),
+      tbrS({ id: 'aasL.g2', label: 'Two or more design lanes', sym: 'g_2', eq: '\\frac{S}{' + g4(dk[3]) + '}', sub: '\\frac{' + k4(x.S) + '}{' + g4(dk[3]) + '}', value: d.g2, unit: '', d: 4, ref: AAS_ART + d.tab }),
+      tbrS({ id: 'aasL.gM', label: 'Distribution factor, moment', sym: 'g_M', eq: x.NL >= 2 ? '\\max(g_1, g_2)' : 'g_1', sub: '', value: d.gM, unit: '', d: 4, ref: AAS_ART + d.tab }));
+    if (d.lev) { const L = d.lev; dfs.push(tbrS({ id: 'aasL.lev', label: 'Lever rule (' + (d.srcM === 'lever' ? d.why : d.whyV) + '): ' + L.cases.map(c => c.n + ' lane' + (c.n > 1 ? 's' : '') + ': m = ' + g4(c.m) + ', wheels at x = ' + c.xs.map(f2).join(', ') + ' ft, Σr = ' + kL(c.sum)).join('; '), sym: 'g', eq: '\\max_n \\frac{m_n \\sum r}{2}', sub: '', value: L.g, unit: '', d: 4, ref: AAS_ART + 'Art. 4.6.2.2.1, 3.6.1.1.2' })); }
+    if (d.srcV === 'table') dfs.push(tbrS({ id: 'aasL.gV', label: 'Distribution factor, shear (the same table)', sym: 'g_V', eq: 'g_M', sub: '', value: d.gV, unit: '', d: 4, ref: AAS_ART + 'Table 4.6.2.2.3a-1' }));
+  }
+  dfs.push(tbrS({ id: 'aasL.gD', label: 'Live-load deflection distribution' + (d.gDsrc === 'mNL/Nb' ? '' : ' (N_b not entered: g_M; Decision pending engineer review)'), sym: 'g_\\Delta', eq: d.gDsrc === 'mNL/Nb' ? '\\frac{m N_L}{N_b}' : 'g_M', sub: d.gDsrc === 'mNL/Nb' ? '\\frac{' + g4(d.mNL) + ' \\times ' + x.NL + '}{' + d.nB + '}' : '', value: d.gD, unit: '', d: 4, ref: AAS_ART + 'Art. 2.5.2.6.2' }),
+    tbrS({ id: 'aasL.IM', label: 'Dynamic load allowance (' + (x.im === 0 ? 'need not be applied to wood components' : 'as entered; truck and tandem only') + ')', sym: 'IM', eq: '', sub: '', value: x.im, unit: '%', d: 1, ref: AAS_ART + 'Art. 3.6.2.3, 3.6.2.1' }));
+  return { title: 'Bridge loads (AASHTO LRFD 10th Ed. Sections 3 and 4)', subs: [
+    { title: 'Dead loads per stringer', items: [{ type: 'note', text: 'Tributary width W_t = ' + k4(x.trib) + ' ft (' + (x.tribSrc === 'entered' ? 'entered' : x.tribSrc + ', S = ' + k4(x.S) + ' ft') + '). The same values are on the Bridge Loads tab[[tab:aasL| ↗]].' }, tbrTopics([{ title: 'Dead loads', ref: AAS_ART + 'Art. 3.5.1, Table 3.5.1-1', steps: dl }])] },
+    { title: 'Live load and distribution', items: [{ type: 'table', head: ['Load', 'Definition', 'Reference'], rows: [['Design truck', '8 + 32 + 32 kip; 14 ft; 14 ft to 30 ft', 'Art. 3.6.1.2.2'], ['Design tandem', '25 + 25 kip at 4 ft', 'Art. 3.6.1.2.3'], ['Design lane', '0.64 kip/ft, no IM', 'Art. 3.6.1.2.4, 3.6.2.1']] },
+      tbrTopics([{ title: 'Lanes, distribution factors and IM', ref: AAS_ART + 'Art. 3.6.1.1, 4.6.2.2, 3.6.2.3', steps: dfs }])] },
+    { title: 'Load combinations', items: [{ type: 'table', head: ['Limit state', 'γ_DC max / min', 'γ_DW max / min', 'γ_LL', 'C_λ'], rows: AAS_COMBOS.map(c => [c[1], c[0] === 'SerI' ? '1.00' : g4(AAS_GP.DC[0]) + ' / ' + g4(AAS_GP.DC[1]), c[0] === 'SerI' ? '1.00' : g4(AAS_GP.DW[0]) + ' / ' + g4(AAS_GP.DW[1]), g4(c[2]), c[3] === null ? '—' : g4(c[3])]) },
+      { type: 'note', text: 'Tables 3.4.1-1, 3.4.1-2 and 8.4.4.9-1; η_i = 1.0 (Art. 1.3.2.1; Decision pending engineer review). Strength II only with an owner-specified permit vehicle.' }] }] };
+}
 /* ---- Report (AASHTO mode) ---- */
 function tbrAasModel() {
   const p = M.project || {}, secs = [], today = new Date().toISOString().slice(0, 10), x = A;
@@ -4377,10 +4673,11 @@ function tbrAasModel() {
         rows: x.lims.map(l => [l.name, g4(l.Cl)].concat(...pq.map(q => [k4(x.base[q]) + ' × ' + g4(l.Cl) + ' = ' + k3(l[q]), g4(phs[q]) + ' × ' + k3(l[q]) + ' = ' + k3(PHIv(l, q))]))) },
         { type: 'note', text: 'Each value is the product without C_λ ([[tb/aas.bFb]]) times the C_λ of the limit state; φ per Art. 8.5.2.2: flexure ' + g4(x.PHI.Fb) + ', shear ' + g4(x.PHI.Fv) + ', compression perpendicular to grain ' + g4(x.PHI.Fcp) + '.' }] }] });
   }
+  secs.push(tbrAasLoadsSec());   // TBA2
   {
-    const items = x.notes.map(n => ({ type: 'note', text: 'Note: ' + n }));
+    const items = x.notes.map(n => ({ type: 'note', text: 'Note: ' + n })).concat(AL && AL.ok ? AL.notes.map(n => ({ type: 'note', text: 'Note (bridge loads): ' + n })) : []);   // TBA2: bridge-load notes
     if ((p.notes || '').trim()) items.unshift({ type: 'note', text: 'Project notes and assumptions (input): ' + String(p.notes).trim().replace(/\s*\n\s*/g, ' / ') });
-    const refs = [['AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)', 'Art. 8.4.1.1.2 (dressed sizes), 8.4.1.1.4 / Table 8.4.1.1.4-1, 8.4.1.2.2, 8.4.1.2.3 / Tables 8.4.1.2.3-1 and -2, 8.4.4.1 to 8.4.4.9 (Tables 8.4.4.3-1, -2, 8.4.4.4-1, -2, 8.4.4.6-1, 8.4.4.7-1, 8.4.4.8-1, -2, 8.4.4.9-1), 8.5.2.2']];
+    const refs = [['AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)', 'Art. 8.4.1.1.2 (dressed sizes), 8.4.1.1.4 / Table 8.4.1.1.4-1, 8.4.1.2.2, 8.4.1.2.3 / Tables 8.4.1.2.3-1 and -2, 8.4.4.1 to 8.4.4.9 (Tables 8.4.4.3-1, -2, 8.4.4.4-1, -2, 8.4.4.6-1, 8.4.4.7-1, 8.4.4.8-1, -2, 8.4.4.9-1), 8.5.2.2; bridge loads (TBA2): Art. 1.3.2.1, 2.5.2.6.2, 3.4.1 (Tables 3.4.1-1, -2), 3.5.1 (Table 3.5.1-1), 3.6.1.1.1, 3.6.1.1.2 (Table 3.6.1.1.2-1), 3.6.1.2.2 to 3.6.1.2.4, 3.6.1.3.1, 3.6.2.1, 3.6.2.3, 4.6.2.2.1, 4.6.2.2.2a (Table 4.6.2.2.2a-1, Eq. 4.6.2.2.2a-1), Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1, 4.6.2.2.3a-1, 4.6.2.2.3b-1, Art. 8.7']];
     secs.push({ title: 'Notes and references', subs: [{ title: 'Notes', items: items.length ? items : [{ type: 'note', text: 'No notes.' }] }, { title: 'Codes and references cited', items: [{ type: 'table', head: ['Reference', 'Provisions used'], rows: refs }] }] });
   }
   return Object.assign(head, { sections: secs });
@@ -4398,7 +4695,7 @@ function tbcInit() {
   window.addEventListener('resize', () => { if (typeof Plotly !== 'undefined') document.querySelectorAll('.plotHold.js-plotly-plot').forEach(d => { try { Plotly.Plots.resize(d); } catch (e) { } }); });
 }
 // test / automation hook (read-only use; not part of the saved data)
-window.TBC = { get model() { return M; }, get res() { return R; }, get aas() { return A; }, flush, fullRebuild, load: (d) => loadModel(d), run: tbcRun, migrate: tbcMigrate, aashto: tbcAashto };   // aas, aashto: TBA1
+window.TBC = { get model() { return M; }, get res() { return R; }, get aas() { return A; }, get al() { return AL; }, aasLoads: tbcAasLoads, flush, fullRebuild, load: (d) => loadModel(d), run: tbcRun, migrate: tbcMigrate, aashto: tbcAashto };   // aas, aashto: TBA1
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tbcInit); else tbcInit();
 </script>
 </body>
