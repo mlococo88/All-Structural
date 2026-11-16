@@ -55,6 +55,8 @@ const cases = {
   exterior: m => { m.material.size = '6x16'; m.design.aashto.gr = 'No.1'; m.geom.spacing = 24; Object.assign(m.design.aashto.bl, { pos: 'ext', de: 1.5, nB: 12 }); },
   concrete: m => { m.material.type = 'glulam'; m.geom.spacing = 72; Object.assign(m.design.aashto.bl, { deck: 'concrete', tD: 8, wRd: 30 }); },
   plankBeyond: m => { m.material.size = '8x16'; m.geom.spacing = 72; },
+  twoSpanPermit: m => { m.material.size = '6x16'; m.design.aashto.gr = 'No.1'; m.geom.spans = [{ L: 24 }, { L: 24 }]; m.geom.supports = [{ t: 'pin', lb: 3.5, cb: false }, { t: 'pin', lb: 5.5, cb: true }, { t: 'pin', lb: 3.5, cb: false }]; m.design.aashto.bl.permit = '20, 30@14, 30@4'; },
+  overhang: m => { m.material.type = 'glulam'; m.geom.spacing = 48; m.geom.spans = [{ L: 20 }, { L: 4 }]; m.geom.supports = [{ t: 'pin', lb: 3.5, cb: false }, { t: 'pin', lb: 5.5, cb: true }, { t: 'free', lb: 3.5, cb: false }]; Object.assign(m.design.aashto.bl, { deck: 'glpanel', nB: 8 }); },
   entered: m => { m.material.size = '6x16'; Object.assign(m.design.aashto.bl, { dfMode: 'entered', gM: 0.35, gV: 0.4, im: 33 }); },
 };
 for (const [name, fn] of Object.entries(cases)) {
@@ -66,11 +68,18 @@ for (const [name, fn] of Object.entries(cases)) {
   ok(s.chips === 0 && s.kerr === 0 && !/NaN|undefined/.test(s.text), `${name}: chips ${s.chips}, KaTeX errors ${s.kerr}, NaN/undefined ${/NaN|undefined/.test(s.text)}`);
   if (s.AL && s.AL.ok) {
     ok(s.text.includes(s.AL.wDC.toFixed(4)) && s.text.includes(s.AL.df.gM.toFixed(4)), `${name}: w_DC ${s.AL.wDC.toFixed(4)} and g_M ${s.AL.df.gM.toFixed(4)} shown`);
-    for (const c of ['aasDL', 'aasLL', 'aasDF', 'aasCmb']) ok(await p.$(`#tabPages .sec[data-secid="${c}"]`), `${name}: card ${c}`);
+    for (const c of ['aasDL', 'aasLL', 'aasDF', 'aasCmb', 'aasEnv', 'aasWV', 'aasFE', 'aasDem']) ok(await p.$(`#tabPages .sec[data-secid="${c}"]`), `${name}: card ${c}`);
+    // TBA3: the demands shown are the engine's; the diagrams drawn; the left column lists them
+    const ad = await p.evaluate(() => TBC.ad);
+    ok(ad && ad.Mpos && s.text.includes(ad.Mpos.v.toFixed(2)) && (!ad.Vu || s.text.includes(ad.Vu.Vu.toFixed(3))), `${name}: M_u / V_u shown (${ad && ad.Mpos && ad.Mpos.v})`);
+    ok(await p.evaluate(() => document.querySelectorAll('#tabPages .plotHold.js-plotly-plot').length) === 2, `${name}: two envelope diagrams`);
+    ok(await p.evaluate(() => /M\s*u\+?/.test((document.getElementById('tbcDash') || {}).innerText || '')), `${name}: demands in the left column`);
+    if (name === 'twoSpanPermit') ok(ad.Mpos2 && /Strength II/.test(s.text), 'permit: Strength II shown');
   }
   if (args.shots) {
     fs.mkdirSync(args.shots, { recursive: true });
     await p.setViewportSize({ width: 1400, height: 6000 }); await p.waitForTimeout(400);
+    for (const sec of ['aasEnv', 'aasWV', 'aasFE', 'aasDem']) { const h = await p.$(`#tabPages .sec[data-secid="${sec}"]`); if (h && ['interiorPlank', 'twoSpanPermit', 'overhang'].includes(name)) await h.screenshot({ path: path.join(args.shots, `t2-${name}-${sec}.png`) }); }
     for (const sec of ['aasDL', 'aasDF']) { const h = await p.$(`#tabPages .sec[data-secid="${sec}"]`); if (h && (name === 'interiorPlank' || name === 'exterior' || sec === 'aasDF')) await h.screenshot({ path: path.join(args.shots, `t2-${name}-${sec}.png`) }); }
     if (name === 'interiorPlank') { const h = await p.$('#tabPages .sec[data-secid="aasCmb"]'); if (h) await h.screenshot({ path: path.join(args.shots, 't2-combos.png') }); const pn = await p.$('#tbcInPane_loads'); if (pn) await pn.screenshot({ path: path.join(args.shots, 't2-loads-inputs.png') }); }
     await p.setViewportSize({ width: 1400, height: 1000 });

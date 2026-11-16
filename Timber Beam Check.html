@@ -1464,7 +1464,7 @@ function tbcSanitize(d) {
             const B0 = tbcAasLoadDefaults(), b = q.bl, nn = (v, def) => (typeof v === 'number' && isFinite(v)) ? v : (v === null ? null : def);
             m.design.aashto.bl = { gW: nn(b.gW, B0.gW), deck: st(b.deck, B0.deck, AAS_BDECKS.map(x => x[0])), tD: nn(b.tD, B0.tD), gD: nn(b.gD, B0.gD), tWs: nn(b.tWs, B0.tWs),
                 gWs: nn(b.gWs, B0.gWs), wRail: nn(b.wRail, B0.wRail), trib: nn(b.trib, B0.trib), pos: st(b.pos, B0.pos, ['int', 'ext']), de: nn(b.de, B0.de), wRd: nn(b.wRd, B0.wRd),
-                dfMode: st(b.dfMode, B0.dfMode, ['table', 'entered']), gM: nn(b.gM, B0.gM), gV: nn(b.gV, B0.gV), nB: nn(b.nB, B0.nB), im: nn(b.im, B0.im) };
+                dfMode: st(b.dfMode, B0.dfMode, ['table', 'entered']), gM: nn(b.gM, B0.gM), gV: nn(b.gV, B0.gV), nB: nn(b.nB, B0.nB), im: nn(b.im, B0.im), permit: typeof b.permit === 'string' ? b.permit.slice(0, 400) : B0.permit };   // permit: TBA3
         }
     }
     m.ui = { diagCombo: st(ui.diagCombo, 'GOV', ['GOV', 'ENV', ...COMBOS.map(c => c.key), ...COMBOS_LRFD.map(c => c.key)]) };
@@ -1822,7 +1822,7 @@ const AAS_GP = { DC: [1.25, 0.90], DW: [1.50, 0.65] };
 const AAS_COMBOS = [['StrI', 'Strength I', 1.75, 0.8], ['StrII', 'Strength II (permit vehicle)', 1.35, 1.0], ['SerI', 'Service I', 1.00, null]];
 function tbcAasLoadDefaults() {
     return { gW: null, deck: 'plank', tD: 4, gD: null, tWs: 0, gWs: AAS_UW.bit, wRail: 0, trib: null, pos: 'int', de: 2, wRd: 24,
-        dfMode: 'table', gM: null, gV: null, nB: null, im: 0 };
+        dfMode: 'table', gM: null, gV: null, nB: null, im: 0, permit: '' };
 }
 // Number of design lanes, Art. 3.6.1.1.1: integer part of w/12; roadways from 20 ft to 24 ft: two lanes. At least one.
 function aasLanes(w) { return (w >= 20 && w <= 24) ? 2 : Math.max(1, Math.floor(w / 12 + 1e-9)); }
@@ -1845,7 +1845,7 @@ function aasLever(pos, S, de, NL) {
     const gov = cases.reduce((a, c) => c.g > a.g + 1e-12 ? c : a, cases[0]);
     return { pos, S, de, cases, gov, g: gov.g };
 }
-function tbcAasLoads(m, A) {
+function tbcAasLoads(m, A, opt) {   // opt.env === false: without the envelopes (TBA3)
     const errors = [], errTab = [], notes = [];
     const err = (t, tab) => { errors.push(t); errTab.push(tab); };
     const num = (v) => (typeof v === 'number' && isFinite(v)) ? v : NaN;
@@ -1922,7 +1922,284 @@ function tbcAasLoads(m, A) {
     if (pos === 'int' && S > 0 && !(df.mode === 'entered')) notes.push('Approximate distribution (Art. 4.6.2.2.1): constant deck width and normally at least four stringers; otherwise use a refined analysis or enter the distribution factors.');
     if (df.mode === 'table' && pos === 'int' && df.srcM === 'table') notes.push('The factors of ' + df.tab + ' include the multiple presence factors (Art. 3.6.1.1.2); the lever rule applies them explicitly.');
     Object.assign(out, { ok: true, S, trib, tribSrc, NL, wRd, de, pos, deck, rows, wDC, wDW, df, im, IMf: 1 + im / 100 });
+    // TBA3: the permit vehicle (Strength II) and the envelopes along the member
+    const pa = aasParsePermit(q.permit);
+    if (pa === false) { out.ok = false; err('Permit vehicle: enter the axles as "P0, P1@s1, P2@s2, …" (kip, spacings in ft, each from the axle before), or leave it blank.', 'loads'); return out; }
+    if (!opt || opt.env !== false) { out.env = tbcAasEnv(m, A, out); if (!out.env.ok) { out.ok = false; out.env.errors.forEach(t => err(t, 'geom')); } }
     return out;
+}
+/* ---------------------------------------------------------------------
+   Envelopes along the stringer (phase T2 part 2; fix log TBA3). The tool's own beam engine does the analysis: tbcSolve (direct
+   stiffness, any spans, pin / fixed / free nodes, cantilevers) gives the support reactions for a unit load at every point of a
+   fine grid (each span cut into 40 x ceil(L/4) equal parts, <= 0.1 ft), and tbcStatics-form statics turn them into influence
+   lines of M, V (just left / just right) and R at any section: effect(x; load at xi) = sum over the supports left of x of
+   [R_j(xi)(x - x_j) - Rm_j(xi)] - (x - xi)[xi < x] for M, sum of R_j(xi) - [xi < x] for V. R_j(xi) is linear between grid
+   points (exact where the beam is statically determinate; within O(h^2) otherwise), the (x - xi) and [xi < x] terms are exact.
+   HL-93 per lane (Art. 3.6.1.2, 3.6.1.3.1): design truck (rear spacing 14 ft to 30 ft, 1-ft steps) and design tandem, both
+   directions, + the design lane load on the parts of the influence line of the sign sought; 90 % x (two trucks at 14 ft, 50 ft
+   or more apart, 1-ft steps) + 90 % lane for M where the moment of a uniform load on all spans is negative and for the interior
+   reactions; axles that do not add to the extreme are left out. Positions: the lead axle in 0.25-ft steps plus every axle
+   exactly on the section (the influence-line kink / jump), so the extremes of a determinate span are exact. IM on axles only.
+   Dead loads: tbcSolve with a uniform load. Deflections: the closed form of tbcRun's deflG (chord + simple-beam span + end
+   moments) for a unit load at each 1/20 point; by reciprocity (Maxwell) that is the influence line of the deflection there.
+   --------------------------------------------------------------------- */
+// Strength II permit vehicle, entered as "P0, P1@s1, P2@s2, ..." (kip, ft): the first axle, then each axle with its spacing from the one before.
+function aasParsePermit(t) {
+    const s = String(t == null ? '' : t).trim(); if (!s) return null;
+    const ax = []; let ok = true;
+    s.split(/[,;]/).map(x => x.trim()).filter(Boolean).forEach((tok, i) => {
+        const m = tok.match(/^(\d+(?:\.\d+)?)\s*(?:@\s*(\d+(?:\.\d+)?))?$/);
+        if (!m) { ok = false; return; }
+        const P = parseFloat(m[1]), sp = m[2] === undefined ? (i === 0 ? 0 : NaN) : parseFloat(m[2]);
+        if (!(P >= 0) || !(sp >= 0) || (i > 0 && !(sp > 0)) || (i === 0 && sp !== 0)) ok = false; else ax.push([P, sp]);
+    });
+    return ok && ax.length ? ax : false;
+}
+function tbcAasEnv(m, A, AL) {
+    const g = m.geom || {}, num = (v) => (typeof v === 'number' && isFinite(v)) ? v : NaN;
+    const Ls = g.spans.map(s => num(s.L)), ns = Ls.length, sup = g.supports.slice(0, ns + 1);
+    const types = Ls.concat([0]).map((_, j) => (sup[j] && ['pin', 'fixed', 'free'].includes(sup[j].t)) ? sup[j].t : 'pin');
+    const out = { ok: false, errors: [] };
+    if (!ns || !Ls.every(x => x > 0)) { out.errors.push('Every span length must be greater than zero (Geometry tab).'); return out; }
+    if (types.some((t, j) => t === 'free' && j > 0 && j < ns) || !(types.some(t => t === 'fixed') || types.filter(t => t !== 'free').length >= 2)) { out.errors.push('Supports: the beam is unstable or a free node is not at an end (Geometry tab).'); return out; }
+    const xN = [0]; Ls.forEach(L => xN.push(xN[xN.length - 1] + L)); const Lt = xN[ns];
+    const EI = A.E * (A.b * Math.pow(A.d, 3) / 12) / 144;   // kip-ft^2 (E ksi, I in^4)
+    // ---- grid ----
+    const nk = Ls.map(L => 40 * Math.ceil(L / 4 - 1e-9)), hk = Ls.map((L, k) => L / nk[k]), base = [0];
+    nk.forEach(n => base.push(base[base.length - 1] + n));
+    const G = base[ns] + 1, xg = new Float64Array(G);
+    for (let k = 0; k < ns; k++) for (let i = 0; i <= nk[k]; i++) xg[base[k] + i] = k === ns - 1 || i < nk[k] ? xN[k] + hk[k] * i : xN[k + 1];
+    for (let k = 0; k <= ns; k++) xg[k < ns ? base[k] : G - 1] = xN[k];
+    const loc = (xi) => {   // [index of the left grid point, fraction]; null off the beam
+        if (xi < -1e-9 || xi > Lt + 1e-9) return null;
+        let k = 0; while (k < ns - 1 && xi >= xN[k + 1]) k++;
+        let t = (xi - xN[k]) / hk[k], i = Math.floor(t); if (i >= nk[k]) i = nk[k] - 1; if (i < 0) i = 0;
+        return [base[k] + i, Math.min(1, Math.max(0, t - i))];
+    };
+    // ---- reactions for a unit load at each grid point (tbcSolve; EI does not change reactions) ----
+    const nj = ns + 1, RV = [], RM = [];
+    for (let j = 0; j < nj; j++) { RV.push(new Float64Array(G)); RM.push(new Float64Array(G)); }
+    for (let q = 0; q < G; q++) { const sol = tbcSolve(Ls, types, xN, 1, 0, [{ mag: 1, loc: xg[q] }]); for (let j = 0; j < nj; j++) { RV[j][q] = sol.R[j].v; RM[j][q] = sol.R[j].m; } }
+    const inc = (j, x, right) => xN[j] < x || (xN[j] === x && (j === 0 || (right && j !== ns)));
+    // effect: { t: 'M' | 'V' | 'R', x, right, j, S (smooth part on the grid) }
+    const mkEff = (t, x, right, j) => {
+        const S = new Float64Array(G);
+        if (t === 'R') S.set(RV[j]);
+        else for (let jj = 0; jj < nj; jj++) { if (types[jj] === 'free' || !inc(jj, x, right)) continue; const a = RV[jj], c = RM[jj], dx = x - xN[jj];
+            for (let q = 0; q < G; q++) S[q] += t === 'M' ? a[q] * dx - c[q] : a[q]; }
+        return { t, x, right, j, S };
+    };
+    // contribution of a unit load at xi: [high, low] (they differ only for V with the load exactly at the section)
+    const cOf = (e, xi) => {
+        const L0 = loc(xi); if (!L0) return null;
+        const s = e.S[L0[0]] + (e.S[L0[0] + 1] - e.S[L0[0]]) * L0[1];
+        if (e.t === 'R') return [s, s];
+        if (e.t === 'M') { const v = s - (xi < e.x ? e.x - xi : 0); return [v, v]; }
+        if (Math.abs(xi - e.x) < 1e-9) return [Math.max(s, s - 1), Math.min(s, s - 1)];
+        const v = s - (xi < e.x ? 1 : 0); return [v, v];
+    };
+    // lane load: positive and negative areas of the influence line (exact for the piecewise-linear line; the section splits its cell)
+    const areas = (e) => {
+        let ap = 0, an = 0;
+        const pts = Array.from(xg); if (e.t !== 'R' && !pts.some(v => Math.abs(v - e.x) < 1e-9)) { pts.push(e.x); pts.sort((u, v) => u - v); }
+        for (let q = 0; q < pts.length - 1; q++) {
+            const a = pts[q], b = pts[q + 1], hh = b - a; if (hh <= 1e-12) continue;
+            const mid = (a + b) / 2, c = loc(mid), i = c[0], x0 = xg[i], x1 = xg[i + 1];
+            const sAt = xi => e.S[i] + (e.S[i + 1] - e.S[i]) * (xi - x0) / (x1 - x0);
+            const B = xi => e.t === 'R' ? 0 : e.t === 'M' ? (mid < e.x ? e.x - xi : 0) : (mid < e.x ? 1 : 0);
+            const fa = sAt(a) - B(a), fb = sAt(b) - B(b);
+            if (fa >= 0 && fb >= 0) ap += (fa + fb) / 2 * hh; else if (fa <= 0 && fb <= 0) an += (fa + fb) / 2 * hh;
+            else { const tt = fa / (fa - fb), A1 = fa * tt * hh / 2, A2 = fb * (1 - tt) * hh / 2; if (fa > 0) { ap += A1; an += A2; } else { an += A1; ap += A2; } }
+        }
+        return [ap, an];
+    };
+    // ---- vehicle configurations ----
+    const H = AAS_HL93, IMf = AL.IMf;
+    const truck = s => ({ lab: `design truck, rear spacing ${s} ft`, offs: [0, 14, 14 + s], P: [8, 32, 32], kind: 'truck', s });
+    const cfgs = [];
+    // rear-axle spacing 14 ft to 30 ft in 1-ft steps (Art. 3.6.1.2.2); one simply supported span: 14 ft (every influence line part
+    // there is of one sign and monotone away from the section, so the shortest spacing gives the extremes)
+    const oneSimple = ns === 1 && types[0] === 'pin' && types[1] === 'pin';
+    // (2-ft steps, then the 1-ft neighbours of each effect's governing spacing)
+    for (let s = H.sMin; s <= (oneSimple ? H.sMin : H.sMax); s += 2) cfgs.push(truck(s));
+    cfgs.push({ lab: 'design tandem', offs: [0, 4], P: [25, 25], kind: 'tandem' });
+    const permitAx = aasParsePermit(AL.q.permit);
+    let permit = null;
+    if (permitAx) { const offs = [0]; permitAx.slice(1).forEach(a => offs.push(offs[offs.length - 1] + a[1])); permit = { lab: 'permit vehicle', offs, P: permitAx.map(a => a[0]), kind: 'permit' }; }
+    // sweep one configuration over a list of effects; returns per effect {max, min, gMax, gMin} of the axle part (per lane, without IM)
+    const sweep = (cfg, effs, extraAt) => {
+        const nA = cfg.offs.length, Lv = cfg.offs[nA - 1], res = effs.map(() => ({ max: 0, min: 0, gMax: null, gMin: null }));
+        const LI = new Int32Array(nA), LF = new Float64Array(nA), XI = new Float64Array(nA), ON = new Uint8Array(nA);
+        const evalAt = (p, dir, list) => {
+            let any = false;
+            for (let a = 0; a < nA; a++) { const xi = p - dir * cfg.offs[a], L0 = loc(xi); XI[a] = xi; if (L0) { ON[a] = 1; LI[a] = L0[0]; LF[a] = L0[1]; any = true; } else ON[a] = 0; }
+            if (!any) return;
+            const n = list ? list.length : effs.length;
+            for (let ii = 0; ii < n; ii++) {
+                const ei = list ? list[ii] : ii, e = effs[ei], S = e.S, ex = e.x, tt = e.t; let hi = 0, lo = 0;
+                for (let a = 0; a < nA; a++) {
+                    if (!ON[a]) continue;
+                    const i = LI[a], s = S[i] + (S[i + 1] - S[i]) * LF[a], xi = XI[a], P = cfg.P[a];
+                    let ch, cl;
+                    if (tt === 'R') ch = cl = s;
+                    else if (tt === 'M') ch = cl = s - (xi < ex ? ex - xi : 0);
+                    else if (Math.abs(xi - ex) < 1e-9) { ch = s > s - 1 ? s : s - 1; cl = s - 1; }   // the jump: either side
+                    else ch = cl = s - (xi < ex ? 1 : 0);
+                    const vh = P * ch, vl = P * cl; if (vh > 0) hi += vh; if (vl < 0) lo += vl;   // axles that do not add are left out
+                }
+                const r = res[ei];
+                if (hi > r.max + 1e-12) { r.max = hi; r.gMax = { p, dir, pos: cfg.offs.map(o => p - dir * o) }; }
+                if (lo < r.min - 1e-12) { r.min = lo; r.gMin = { p, dir, pos: cfg.offs.map(o => p - dir * o) }; }
+            }
+        };
+        for (const dir of [1, -1]) {
+            const p0 = dir > 0 ? 0 : -Lv, p1 = dir > 0 ? Lt + Lv : Lt;   // lead-axle positions with at least one axle on the beam
+            for (let p = p0; p <= p1 + 1e-9; p += 0.5) evalAt(p, dir, null);
+            effs.forEach((e, ei) => { const xs = e.t === 'R' ? [e.x] : [e.x].concat(extraAt ? extraAt(e) : []); xs.forEach(xx => cfg.offs.forEach(o => evalAt(xx + dir * o, dir, [ei]))); });
+        }
+        return res;
+    };
+    // ---- sections: 1/40 points of each span (grid points), every node; M, V just left (VL), V just right (VR) ----
+    const st = [];
+    for (let k = 0; k < ns; k++) for (let t = 0; t <= 40; t++) { if (t === 0 && k > 0) continue; const x = t === 40 ? xN[k + 1] : xN[k] + Ls[k] * t / 40; st.push({ x, k: t === 40 && k < ns - 1 ? k : k, t, node: t === 0 ? k : t === 40 ? k + 1 : -1 }); }
+    // uniform load on all spans (unit): the negative-moment region for the two-truck case; the dead-load effects are w times it
+    const sol1 = tbcSolve(Ls, types, xN, EI, 1, []), st1 = tbcStatics(xN, ns, sol1.R, 1, []);
+    const mOf = x => st1.M(x, x < Lt), vOf = (x, right) => st1.V(x, right);
+    const negM = x => mOf(x) < -1e-9 * Lt * Lt;
+    const intSup = xN.map((_, j) => j > 0 && j < ns && types[j] !== 'free');
+    const doSecs = (secs, wantTwo) => {
+        const effs = [];
+        // V just left and just right differ only at a node (a support reaction); elsewhere one effect serves both
+        secs.forEach(s => { s.eM = effs.length; effs.push(mkEff('M', s.x, s.x < Lt)); s.eVL = effs.length; effs.push(mkEff('V', s.x, false));
+            if (xN.some(v => Math.abs(v - s.x) < 1e-9)) { s.eVR = effs.length; effs.push(mkEff('V', s.x, true)); } else s.eVR = s.eVL; });
+        const lane = effs.map(areas);
+        const best = effs.map(() => ({ max: 0, min: 0, gMax: null, gMin: null }));
+        const permitRes = permit ? sweep(permit, effs) : null;
+        const take = (cfg, r, idx) => {
+            r.forEach((q, ii) => { const ei = idx ? idx[ii] : ii;
+                const vMax = IMf * q.max + H.lane * lane[ei][0], vMin = IMf * q.min + H.lane * lane[ei][1], b = best[ei];
+                if (vMax > b.max + 1e-12) Object.assign(b, { max: vMax, gMax: Object.assign({ cfg: cfg.lab, ax: IMf * q.max, ln: H.lane * lane[ei][0], P: cfg.P, s: cfg.s }, q.gMax) });
+                if (vMin < b.min - 1e-12) Object.assign(b, { min: vMin, gMin: Object.assign({ cfg: cfg.lab, ax: IMf * q.min, ln: H.lane * lane[ei][1], P: cfg.P, s: cfg.s }, q.gMin) });
+            });
+        };
+        cfgs.forEach(cfg => take(cfg, sweep(cfg, effs), null));
+        // the 1-ft spacings next to each effect's governing spacing (Art. 3.6.1.2.2: 14 ft to 30 ft)
+        if (!oneSimple) { const need = {};
+            best.forEach((b, ei) => [b.gMax, b.gMin].forEach(gv => { if (gv && gv.s) [gv.s - 1, gv.s + 1].forEach(s2 => { if (s2 > H.sMin && s2 < H.sMax) (need[s2] = need[s2] || new Set()).add(ei); }); }));
+            Object.keys(need).forEach(s2 => { const idx = [...need[s2]], cfg = truck(+s2); take(cfg, sweep(cfg, idx.map(i => effs[i])), idx); }); }
+        // 90 % of two trucks + 90 % lane: M in the negative region of a uniform load on all spans (multi-span)
+        if (wantTwo && ns > 1) {
+            const sel = effs.map((e, ei) => e.t === 'M' && negM(e.x) ? ei : -1).filter(i => i >= 0);
+            if (sel.length) for (let Hd = H.gap2; Hd <= Math.max(H.gap2, Lt); Hd++) {
+                const cfg = { lab: `90 % of two design trucks (14 ft) ${Hd} ft apart + 90 % lane`, offs: [0, 14, 28, 28 + Hd, 42 + Hd, 56 + Hd], P: [8, 32, 32, 8, 32, 32] };
+                const sub = sel.map(i => effs[i]), r = sweep(cfg, sub);
+                r.forEach((q, ii) => { const ei = sel[ii], vMin = H.f2 * (IMf * q.min + H.lane * lane[ei][1]), b = best[ei];
+                    if (vMin < b.min - 1e-12) Object.assign(b, { min: vMin, gMin: Object.assign({ cfg: cfg.lab, ax: H.f2 * IMf * q.min, ln: H.f2 * H.lane * lane[ei][1], P: cfg.P, two: true }, q.gMin) }); });
+            }
+        }
+        secs.forEach(s => {
+            s.M = { dc: AL.wDC * mOf(s.x), dw: AL.wDW * mOf(s.x), ll: best[s.eM], pm: permitRes ? permitRes[s.eM] : null };
+            s.VL = { dc: AL.wDC * vOf(s.x, false), dw: AL.wDW * vOf(s.x, false), ll: best[s.eVL], pm: permitRes ? permitRes[s.eVL] : null };
+            s.VR = { dc: AL.wDC * vOf(s.x, true), dw: AL.wDW * vOf(s.x, true), ll: best[s.eVR], pm: permitRes ? permitRes[s.eVR] : null };
+            s.neg = ns > 1 && negM(s.x); delete s.eM; delete s.eVL; delete s.eVR;
+        });
+        return secs;
+    };
+    doSecs(st, true);
+    // absolute maximum positive moment in each span: a 0.05-ft scan between the neighbours of the largest 1/40 point
+    const extra = [];
+    for (let k = 0; k < ns; k++) {
+        const inK = st.filter(s => s.x >= xN[k] - 1e-9 && s.x <= xN[k + 1] + 1e-9); let bi = -1, bv = 0;
+        inK.forEach((s, i) => { if (s.M.ll.max > bv) { bv = s.M.ll.max; bi = i; } });
+        if (bi < 0) continue;
+        const a = inK[Math.max(0, bi - 1)].x, b = inK[Math.min(inK.length - 1, bi + 1)].x, cand = [];
+        for (let x = a + 0.1; x < b - 1e-6; x += 0.1) if (!inK.some(s => Math.abs(s.x - x) < 1e-6)) cand.push({ x, k, t: 40 * (x - xN[k]) / Ls[k], node: -1, extra: true });
+        doSecs(cand, false); extra.push(...cand);
+    }
+    const secs = st.concat(extra).sort((a, b) => a.x - b.x);
+    // ---- reactions ----
+    const reac = [];
+    { const effs = xN.map((x, j) => types[j] === 'free' ? null : mkEff('R', x, true, j)).filter(Boolean), lane = effs.map(areas), best = effs.map(() => ({ max: 0, min: 0, gMax: null, gMin: null }));
+        cfgs.forEach(cfg => sweep(cfg, effs).forEach((q, i) => { const v = IMf * q.max + H.lane * lane[i][0], vn = IMf * q.min + H.lane * lane[i][1]; if (v > best[i].max) Object.assign(best[i], { max: v, gMax: Object.assign({ cfg: cfg.lab, ax: IMf * q.max, ln: H.lane * lane[i][0], P: cfg.P }, q.gMax) }); if (vn < best[i].min) Object.assign(best[i], { min: vn, gMin: Object.assign({ cfg: cfg.lab, ax: IMf * q.min, ln: H.lane * lane[i][1], P: cfg.P }, q.gMin) }); }));
+        effs.forEach((e, i) => { if (!intSup[e.j]) return;
+            for (let Hd = H.gap2; Hd <= Math.max(H.gap2, Lt); Hd++) { const cfg = { lab: `90 % of two design trucks (14 ft) ${Hd} ft apart + 90 % lane`, offs: [0, 14, 28, 28 + Hd, 42 + Hd, 56 + Hd], P: [8, 32, 32, 8, 32, 32] };
+                const q = sweep(cfg, [e])[0], v = H.f2 * (IMf * q.max + H.lane * lane[i][0]); if (v > best[i].max) Object.assign(best[i], { max: v, gMax: Object.assign({ cfg: cfg.lab, ax: H.f2 * IMf * q.max, ln: H.f2 * H.lane * lane[i][0], P: cfg.P, two: true }, q.gMax) }); } });
+        const pr = permit ? sweep(permit, effs) : null;
+        effs.forEach((e, i) => reac.push({ j: e.j, x: e.x, dc: AL.wDC * sol1.R[e.j].v, dw: AL.wDW * sol1.R[e.j].v, ll: best[i], pm: pr ? pr[i] : null }));
+    }
+    // ---- shear for the wood checks (Art. 8.7): V at d from the face of each support; LL placed for the largest shear at the lesser of 3d and L/4 ----
+    const dft = A.d / 12, shear = [];
+    for (let k = 0; k < ns; k++) [[k, 1], [k + 1, -1]].forEach(([j, dir]) => {
+        if (types[j] === 'free') return;
+        const lbf = num((sup[j] || {}).lb) > 0 ? sup[j].lb / 24 : 0, L = Ls[k], aLL = Math.min(3 * dft, L / 4), xd = xN[j] + dir * (lbf + dft), xl = xN[j] + dir * (lbf + aLL);
+        if (dir > 0 ? xl >= xN[k + 1] : xl <= xN[k]) return;
+        const s = doSecs([{ x: xl, k, t: 40 * (xl - xN[k]) / L, node: -1 }], false)[0], side = dir > 0 ? s.VR : s.VL;
+        const lane = dir > 0 ? side.ll.max : -side.ll.min, gv = dir > 0 ? side.ll.gMax : side.ll.gMin, pm = side.pm ? (dir > 0 ? side.pm.max : -side.pm.min) * IMf : 0;
+        shear.push({ k, j, dir, lbf, L, aLL, xd, xl, VLane: lane, gov: gv, VPermit: pm, VDC: AL.wDC * vOf(xd, dir > 0), VDW: AL.wDW * vOf(xd, dir > 0) });
+    });
+    // ---- deflections (Service I): dead load and LL (truck alone, or 25 % truck + lane; Art. 3.6.1.3.2) at the 1/20 points ----
+    const solD = tbcSolve(Ls, types, xN, EI, 1, []), stD = tbcStatics(xN, ns, solD.R, 1, []);
+    const deflAt = (sol, stt, w, P, x) => {   // ft, + down; the closed form of tbcRun's deflG in kip and ft
+        let i = 0; for (let k = 0; k < ns; k++) if (x >= xN[k] - 1e-12) i = k;
+        const L = Ls[i], s = Math.min(L, Math.max(0, x - xN[i]));
+        let y = w * s * (L * L * L - 2 * L * s * s + s * s * s) / (24 * EI);
+        P.forEach(p => { if (!(p.loc >= xN[i] && p.loc <= xN[i + 1])) return; const a = p.loc - xN[i], bb = L - a;
+            y += s <= a ? p.mag * bb * s * (L * L - bb * bb - s * s) / (6 * L * EI) : p.mag * a * (L - s) * (2 * L * s - s * s - a * a) / (6 * L * EI); });
+        const M1 = stt.M(xN[i], true), M2 = stt.M(xN[i + 1], false);
+        y += (M1 * s * (L - s) * (2 * L - s) + M2 * s * (L - s) * (L + s)) / (6 * L * EI);
+        const v1 = sol.d[2 * i], v2 = sol.d[2 * i + 2];
+        return y + v1 + (v2 - v1) * s / L;
+    };
+    const defl = [];
+    for (let k = 0; k < ns; k++) for (let t = 0; t <= 20; t++) {
+        if (t === 0 && k > 0) continue;
+        const j = t === 0 ? k : t === 20 ? k + 1 : -1; if (j >= 0 && types[j] !== 'free') continue;   // supports do not deflect
+        const x = t === 20 ? xN[k + 1] : xN[k] + Ls[k] * t / 20;
+        const so = tbcSolve(Ls, types, xN, EI, 0, [{ mag: 1, loc: x }]), sto = tbcStatics(xN, ns, so.R, 0, [{ mag: 1, loc: x }]);
+        const S = new Float64Array(G); for (let q = 0; q < G; q++) S[q] = deflAt(so, sto, 0, [{ mag: 1, loc: x }], xg[q]);
+        const e = { t: 'R', x, S };
+        const tr = cfgs.filter(c => c.kind === 'truck').reduce((bst, cfg) => { const q = sweep(cfg, [e])[0]; return q.max > bst.v ? { v: q.max, g: Object.assign({ cfg: cfg.lab }, q.gMax) } : bst; }, { v: 0, g: null });
+        const ar = areas(e), lane = H.lane * ar[0], c1 = IMf * tr.v, c2 = 0.25 * IMf * tr.v + lane;
+        defl.push({ k, t, x, dc: AL.wDC * deflAt(solD, stD, 1, [], x) * 12, dw: AL.wDW * deflAt(solD, stD, 1, [], x) * 12, truck: c1 * 12, mix: c2 * 12, ll: Math.max(c1, c2) * 12, gov: c1 >= c2 ? 'truck' : '25 % truck + lane', g: tr.g });
+    }
+    Object.assign(out, { ok: true, Ls, types, xN, Lt, EI, Ib: A.b * Math.pow(A.d, 3) / 12, nGrid: G, secs, reac, shear, defl, permit, permitAx, IMf });
+    return out;
+}
+// Factored values for one effect record {dc, dw, ll{max, min}, pm}: g = the distribution factor of the effect. Load factors per
+// Tables 3.4.1-1 / 3.4.1-2: the maximum gamma_p where the permanent load adds to the effect sought, the minimum where it reduces it.
+function aasFactor(r, g, IMf) {
+    const gp = (v, key, up) => v * ((up ? v >= 0 : v <= 0) ? AAS_GP[key][0] : AAS_GP[key][1]);
+    const o = {
+        StrI: { max: gp(r.dc, 'DC', true) + gp(r.dw, 'DW', true) + 1.75 * g * r.ll.max, min: gp(r.dc, 'DC', false) + gp(r.dw, 'DW', false) + 1.75 * g * r.ll.min },
+        SerI: { max: r.dc + r.dw + g * r.ll.max, min: r.dc + r.dw + g * r.ll.min },
+    };
+    if (r.pm) o.StrII = { max: gp(r.dc, 'DC', true) + gp(r.dw, 'DW', true) + 1.35 * g * IMf * r.pm.max, min: gp(r.dc, 'DC', false) + gp(r.dw, 'DW', false) + 1.35 * g * IMf * r.pm.min };
+    return o;
+}
+// Factored demands (TBA3): M_u, V_u (Art. 8.7 critical sections; Eq. 4.6.2.2.2a-1 for an interior stringer with a wood deck),
+// R_u and the Service I deflections, from tbcAasLoads(...).env. g_M on moments, g_V on shears and reactions, g_Delta on the LL deflection.
+function aasDemands(AL) {
+    const e = AL.env, df = AL.df, IMf = AL.IMf, gM = df.gM, gV = df.gV;
+    const sec = e.secs.map(s => ({ x: s.x, k: s.k, M: aasFactor(s.M, gM, IMf), VL: aasFactor(s.VL, gV, IMf), VR: aasFactor(s.VR, gV, IMf), s }));
+    const pick = (lim, key, sg) => sec.reduce((b, q) => { const v = q.M[lim] ? q.M[lim][key] : NaN; return isFinite(v) && sg * v > sg * (b ? b.v : 0) + 1e-12 ? { v, x: q.x, k: q.k, s: q.s } : b; }, null);
+    const Mpos = pick('StrI', 'max', 1), Mneg = pick('StrI', 'min', -1), Mpos2 = e.permit ? pick('StrII', 'max', 1) : null, Mneg2 = e.permit ? pick('StrII', 'min', -1) : null;
+    const vLL = (Vl) => df.woodV ? { VLU: 0.5 * Vl, VLD: gV * Vl, VLL: 0.5 * (0.60 * 0.5 * Vl + gV * Vl) } : { VLU: null, VLD: null, VLL: gV * Vl };
+    const shear = e.shear.map(r => {
+        const a = vLL(r.VLane), o = Object.assign({}, r, a);
+        o.Vu = AAS_GP.DC[0] * Math.abs(r.VDC) + AAS_GP.DW[0] * Math.abs(r.VDW) + 1.75 * a.VLL;
+        o.Vs = Math.abs(r.VDC) + Math.abs(r.VDW) + a.VLL;
+        if (e.permit) { const p = vLL(r.VPermit); o.VLLp = p.VLL; o.Vu2 = AAS_GP.DC[0] * Math.abs(r.VDC) + AAS_GP.DW[0] * Math.abs(r.VDW) + 1.35 * p.VLL; }
+        return o;
+    });
+    const reac = e.reac.map(r => { const f = aasFactor(r, gV, IMf); return Object.assign({}, r, { Ru: f.StrI.max, Rs: f.SerI.max, Ru2: f.StrII ? f.StrII.max : null, Rmin: f.StrI.min }); });
+    const defl = e.Ls.map((L, k) => {
+        const pts = e.defl.filter(d => d.k === k); if (!pts.length) return null;
+        const ll = pts.reduce((b, d) => d.ll > b.ll ? d : b), dl = pts.reduce((b, d) => Math.abs(d.dc + d.dw) > Math.abs(b.dc + b.dw) ? d : b);
+        const cant = e.types[k] === 'free' || e.types[k + 1] === 'free';
+        return { k, L, cant, x: ll.x, perLane: ll.ll, gov: ll.gov, g: ll.g, gD: df.gD, dLL: df.gD * ll.ll, xD: dl.x, dDL: dl.dc + dl.dw, dDC: dl.dc, dDW: dl.dw };
+    });
+    return { sec, Mpos, Mneg, Mpos2, Mneg2, shear, reac, defl,
+        Vu: shear.reduce((b, s) => !b || s.Vu > b.Vu ? s : b, null), Ru: reac.reduce((b, r) => !b || r.Ru > b.Ru ? r : b, null) };
 }
 /* TBC-ENGINE-END */
 </script>
@@ -2177,6 +2454,8 @@ function compute() {
   if (aasOn()) { try { A = tbcAashto(M); } catch (e) { A = { ok: false, errors: ['Internal error in the AASHTO calculation: ' + e.message], errTab: [null], notes: [] }; } }
   AL = null;   // TBA2
   if (aasOn()) { try { AL = tbcAasLoads(M, A); } catch (e) { AL = { ok: false, errors: ['Internal error in the AASHTO bridge loads: ' + e.message], errTab: [null], notes: [] }; } }
+  AD = null;   // TBA3: factored demands
+  if (AL && AL.ok && AL.env && AL.env.ok) { try { AD = aasDemands(AL); } catch (e) { AL = Object.assign({}, AL, { ok: false, errors: ['Internal error in the AASHTO demands: ' + e.message], errTab: [null] }); } }
 }
 let schedT = null, pendStruct = false;
 function schedule(structural) { if (structural) pendStruct = true; clearTimeout(schedT); schedT = setTimeout(flush, 120); }
@@ -2790,7 +3069,8 @@ const TBC_CARDS = { dvSect: ['dv', 'Section properties'], dvAdj: ['dv', 'Adjuste
   bCL: ['bend', 'Beam stability factor C<sub>L</sub>'], bCV: ['bend', 'Volume / size factor C<sub>V</sub>'], bCap: ['bend', 'Adjusted bending design value and check'],
   sCap: ['shear', 'Adjusted shear design value and check'], sNotch: ['shear', 'Notched ends'], brCalc: ['bear', 'Bearing perpendicular to grain'], brX: ['bear', 'Supporting members and point loads'], dfCheck: ['defl', 'Deflection checks'],
   aasRef: ['aas', 'Reference design values'], aasFac: ['aas', 'Adjustment factors (Art. 8.4.4)'], aasAdj: ['aas', 'Adjusted design values'],
-  aasDL: ['aasL', 'Dead loads (DC, DW)'], aasLL: ['aasL', 'Live load (HL-93) and dynamic load allowance'], aasDF: ['aasL', 'Live-load distribution factors'], aasCmb: ['aasL', 'Load combinations and load factors'] };   // TBA2   // aas*: TBA1
+  aasDL: ['aasL', 'Dead loads (DC, DW)'], aasLL: ['aasL', 'Live load (HL-93) and dynamic load allowance'], aasDF: ['aasL', 'Live-load distribution factors'], aasCmb: ['aasL', 'Load combinations and load factors'],
+  aasEnv: ['aasL', 'Live-load envelopes and axle placement'], aasWV: ['aasL', 'Shear at the critical sections'], aasFE: ['aasL', 'Factored envelopes'], aasDem: ['aasL', 'Factored demands and resistances'] };   // TBA2, TBA3   // aas*: TBA1
 const tbcTabName = id => (OUT_TABS.find(t => t[0] === id) || AAS_TABS.find(t => t[0] === id) || [id, id])[1];
 const tbcCardTxt = card => tbcTabName(TBC_CARDS[card][0]) + ' · ' + TBC_CARDS[card][1];
 // txt = the visible text; pre = the label the report puts before "see §n.k"
@@ -4288,8 +4568,8 @@ function aasSwitch(v) {
 }
 const aasGlName = k => aasGlKind(k) === 2 ? `No. ${k.slice(3)} ${AAS_GL2[k.slice(3)].sp} ${AAS_GL2[k.slice(3)].gr} (Table 8.4.1.2.3-2)` : `${k} (Table 8.4.1.2.3-1)`;
 function aasNotice() {
-  return el('div', 'warnBox', tbNL('AASHTO LRFD 10th Ed. (2024), bridge stringer: reference values, adjustment factors, resistance factors and bridge loads (TBA2: DC, DW, HL-93 distribution factors and dynamic load allowance).', [   // TBNL
-    ['No checks yet:', 'the envelopes and factored demands, and the AASHTO checks (flexure Art. 8.6, shear Art. 8.7, bearing Art. 8.8.3, deflection Art. 2.5.2.6.2) come in the next versions of this tool. No PASS / FAIL is given in AASHTO mode.'],
+  return el('div', 'warnBox', tbNL('AASHTO LRFD 10th Ed. (2024), bridge stringer: reference values, adjustment factors, resistance factors and bridge loads (DC, DW, HL-93 with distribution factors and dynamic load allowance; envelopes and factored demands).', [   // TBNL
+    ['No checks yet:', 'the AASHTO checks (flexure Art. 8.6, shear Art. 8.7, bearing Art. 8.8.3, deflection Art. 2.5.2.6.2) come in the next versions of this tool. No PASS / FAIL is given in AASHTO mode.'],
     ['NDS checks:', 'the NDS 2018 building-load checks are not run in AASHTO mode; set Design code to NDS 2018 (Factors input tab) for them.']]));
 }
 function aasMemberTxt() {
@@ -4382,20 +4662,39 @@ function buildAasGovStrip() {
   const g = $('govStrip'); g.innerHTML = '';
   if (!A || !A.ok) { g.className = 'govStrip fail'; const n = A ? A.errors.length : 0; g.appendChild(el('span', 'govTxt', `AASHTO LRFD: input or design data required (${n} item${n === 1 ? '' : 's'})`)); g.appendChild(el('span', 'govSec', 'see the red tab dots in the input panel')); return; }
   g.className = 'govStrip aas';
-  g.appendChild(el('span', 'govTxt', 'AASHTO LRFD 10th Ed. · materials and resistance only'));
+  g.appendChild(el('span', 'govTxt', 'AASHTO LRFD 10th Ed. · materials, resistance and bridge loads' + (AD && AD.Mpos ? ` · M<sub>u</sub> = ${f1(AD.Mpos.v)} kip-ft` : '')));   // TBA3
   g.appendChild(el('span', 'hint', 'no checks yet: no PASS / FAIL'));
   g.appendChild(el('span', 'govSec', esc(aasMemberTxt())));
 }
 function tbcAasDashRender(box, cnt, sub) {
   if (!A || !A.ok) { box.appendChild(el('div', 'tbcDMsg', `AASHTO LRFD: input or design data required (${A ? A.errors.length : 0} item${A && A.errors.length === 1 ? '' : 's'}); see the red tab dots in the input panel.`)); return; }
   sub.innerHTML = '<b>AASHTO LRFD 10th Ed.</b><br>' + esc(aasMemberTxt());
-  box.appendChild(el('div', 'tbcDMsg aas', 'Materials and resistance only. No checks yet (bridge loads and the AASHTO checks come in the next versions): no PASS / FAIL.'));
+  box.appendChild(el('div', 'tbcDMsg aas', 'Materials, resistance and bridge-load demands. No checks yet (the AASHTO checks come in the next version): no PASS / FAIL.'));
   const s1 = A.lims[0];
   [['φF<sub>b</sub>, Strength I', k3(s1.phiFb) + ' ksi'], ['φF<sub>v</sub>, Strength I', k3(s1.phiFv) + ' ksi'], ['φF<sub>c⊥</sub>, Strength I', k3(s1.phiFcp) + ' ksi'], ['E', f0(A.E) + ' ksi']].forEach(([n, v]) => {
     const c = el('div', 'tbcDc na'); c.tabIndex = 0; c.setAttribute('role', 'button');
     c.innerHTML = `<span class="tbcDcN">${n}</span><span class="tbcDcR">${esc(v)}</span><span class="tbcDcS"></span><div class="tbcDcRef">→ ${tbcCardTxt('aasAdj')}</div>`;
     c.title = 'Click: AASHTO Materials · Adjusted design values';
     const go = () => tbcGoto('aasAdj');
+    c.addEventListener('click', go); c.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); go(); } });
+    box.appendChild(c);
+  });
+  // TBA3: the factored demands, each linked to the card where it is worked
+  const dem = [];
+  if (AL && !AL.ok) dem.push(['Bridge loads', 'input required', 'aasDL']);
+  if (AD) {
+    if (AD.Mpos) dem.push(['M<sub>u</sub>+, Strength I', f1(AD.Mpos.v) + ' kip-ft', 'aasFE']);
+    if (AD.Mneg) dem.push(['M<sub>u</sub>−, Strength I', f1(AD.Mneg.v) + ' kip-ft', 'aasFE']);
+    if (AD.Vu) dem.push(['V<sub>u</sub>, Strength I', f2(AD.Vu.Vu) + ' kip', 'aasWV']);
+    if (AD.Ru) dem.push(['R<sub>u</sub>, Strength I', f2(AD.Ru.Ru) + ' kip', 'aasDem']);
+    const dd = AD.defl.filter(Boolean).reduce((b, d) => !b || d.dLL > b.dLL ? d : b, null);
+    if (dd) dem.push(['Δ<sub>LL</sub>, Service I', f3(dd.dLL) + ' in.', 'aasDem']);
+  }
+  dem.forEach(([n, v, card]) => {
+    const c = el('div', 'tbcDc na'); c.tabIndex = 0; c.setAttribute('role', 'button');
+    c.innerHTML = `<span class="tbcDcN">${n}</span><span class="tbcDcR">${esc(v)}</span><span class="tbcDcS"></span><div class="tbcDcRef">→ ${tbcCardTxt(card)}</div>`;
+    c.title = 'Click: Bridge Loads · ' + tbcCardTxt(card).replace(/<[^>]+>/g, '');
+    const go = () => tbcGoto(card);
     c.addEventListener('click', go); c.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); go(); } });
     box.appendChild(c);
   });
@@ -4528,6 +4827,7 @@ function buildAasLoadsPane(P) {
     }
     fRow(body, 'Number of stringers N<sub>b</sub>', numIn(() => q.nB, v => { aasB().nB = v; }, 'aasNB', { ph: 'use g moment', step: 1 }), '', 'Deflection (Art. 2.5.2.6.2): all lanes loaded, all stringers deflect equally, g = m N<sub>L</sub>/N<sub>b</sub>. Blank = g for moment (conservative for usual layouts).');
     fRow(body, 'Dynamic load allowance IM', numIn(() => q.im, v => { aasB().im = v; }, 'aasIM'), '%', 'Art. 3.6.2.3: need not be applied to wood components (0). An entered IM is applied to the truck and tandem (not the lane load, Art. 3.6.2.1).');
+    fRow(body, 'Permit vehicle (Strength II)', txtIn(() => q.permit || '', v => { aasB().permit = v; }, 'aasPermit', 'none, e.g. 20, 30@14, 30@4'), 'kip, ft', 'Owner-specified permit vehicle: the first axle, then each axle @ its spacing from the one before. Alone in its lane (no lane load), with g and IM; Strength II, γ<sub>LL</sub> = 1.35 (Table 3.4.1-1). Blank = no Strength II.');   // TBA3
   }, { noNum: true });
 }
 function aasDFwork(body, x) {   // the distribution factors, worked (card aasDF)
@@ -4593,8 +4893,9 @@ function buildAasLoads(pg) {
       c[0] === 'StrI' ? 'flexure, shear, bearing (HL-93)' : c[0] === 'StrII' ? 'owner-specified permit vehicle (only when one is entered)' : 'deflection (service loads)']), { left: [0, 5] }));
     body.appendChild(el('div', 'hint', 'Tables 3.4.1-1 and 3.4.1-2: the maximum γ<sub>p</sub> where the permanent load adds to the effect, the minimum where it reduces it. η<sub>i</sub> = 1.0 (Art. 1.3.2.1; Decision pending engineer review). C<sub>λ</sub> multiplies the adjusted design values of each strength limit state (' + tbcLink('aasAdj', 'AASHTO Materials → Adjusted design values') + '). Fatigue: Section 8 has no fatigue check for wood stringers (only tension-reinforced glulam, Art. 8.4.1.3.3, not built in).'));
   });
+  if (AD) buildAasEnvCards(pg);   // TBA3
   mkSec(pg, 'aasLNotes', 'Notes and assumptions (bridge loads)', body => {
-    body.appendChild(el('div', 'hint', tbNL('Notes:', x.notes.map(esc).concat(['Envelopes along the member (HL-93 positions), the factored demands M<sub>u</sub>, V<sub>u</sub>, R<sub>u</sub> and the Service I deflection loads come in the next part of this phase.']))));
+    body.appendChild(el('div', 'hint', tbNL('Notes:', x.notes.map(esc).concat(['The glulam volume factor C<sub>V</sub> still uses the longest span (T1 decision 9); the zero-moment points of the governing load case come with the flexure check (next phase).', 'Not included: pedestrian load (Art. 3.6.1.6), the tandem pair of C3.6.1.3.1, skew (Art. 4.6.2.2.2e).']))));
   });
 }
 function tbrAasLoadsSec() {   // Report section: bridge loads (TBA2)
@@ -4621,8 +4922,113 @@ function tbrAasLoadsSec() {   // Report section: bridge loads (TBA2)
     { title: 'Dead loads per stringer', items: [{ type: 'note', text: 'Tributary width W_t = ' + k4(x.trib) + ' ft (' + (x.tribSrc === 'entered' ? 'entered' : x.tribSrc + ', S = ' + k4(x.S) + ' ft') + '). The same values are on the Bridge Loads tab[[tab:aasL| ↗]].' }, tbrTopics([{ title: 'Dead loads', ref: AAS_ART + 'Art. 3.5.1, Table 3.5.1-1', steps: dl }])] },
     { title: 'Live load and distribution', items: [{ type: 'table', head: ['Load', 'Definition', 'Reference'], rows: [['Design truck', '8 + 32 + 32 kip; 14 ft; 14 ft to 30 ft', 'Art. 3.6.1.2.2'], ['Design tandem', '25 + 25 kip at 4 ft', 'Art. 3.6.1.2.3'], ['Design lane', '0.64 kip/ft, no IM', 'Art. 3.6.1.2.4, 3.6.2.1']] },
       tbrTopics([{ title: 'Lanes, distribution factors and IM', ref: AAS_ART + 'Art. 3.6.1.1, 4.6.2.2, 3.6.2.3', steps: dfs }])] },
+    ...tbrAasEnvSubs(),   // TBA3
     { title: 'Load combinations', items: [{ type: 'table', head: ['Limit state', 'γ_DC max / min', 'γ_DW max / min', 'γ_LL', 'C_λ'], rows: AAS_COMBOS.map(c => [c[1], c[0] === 'SerI' ? '1.00' : g4(AAS_GP.DC[0]) + ' / ' + g4(AAS_GP.DC[1]), c[0] === 'SerI' ? '1.00' : g4(AAS_GP.DW[0]) + ' / ' + g4(AAS_GP.DW[1]), g4(c[2]), c[3] === null ? '—' : g4(c[3])]) },
       { type: 'note', text: 'Tables 3.4.1-1, 3.4.1-2 and 8.4.4.9-1; η_i = 1.0 (Art. 1.3.2.1; Decision pending engineer review). Strength II only with an owner-specified permit vehicle.' }] }] };
+}
+/* ---- TBA3 (phase T2, part 2): envelopes, factored demands, Service I deflections on the Bridge Loads tab, the left column and
+   the Report. Values of AL.env / aasDemands(AL); formatting only. ---- */
+let AD = null;   // aasDemands(AL), set by compute()
+const kf1 = v => f(v, 1), kf2 = v => f(v, 2), kf3 = v => f(v, 3);
+const aasPosTxt = (gv) => gv && gv.pos ? gv.pos.map((x, i) => `${g4(gv.P ? gv.P[i] : '')}${gv.P ? ' k @ ' : ''}${kf2(x)}`).filter((_, i) => gv.pos[i] >= -1e-9 && gv.pos[i] <= AL.env.Lt + 1e-9).join(', ') : '—';
+function aasGovTxt(gv) {   // governing HL-93 case: the vehicle, its axles on the beam (kip @ x ft), the axle part and the lane part
+  if (!gv) return 'no live load of this sign';
+  return `${esc(gv.cfg)}: axles ${aasPosTxt(gv)} ft${AL.IMf !== 1 ? ' (× (1 + IM) = ' + k4(AL.IMf) + ')' : ''}; axles ${kf2(gv.ax)}, lane ${kf2(gv.ln)}`;
+}
+function aasEnvFig(kind) {   // Strength I / Service I factored envelope of M or V along the member (Plotly)
+  const sec = AD.sec, xs = [], mx = [], mn = [], sx = [], smx = [], smn = [];
+  sec.forEach(q => {
+    if (kind === 'M') { xs.push(q.x); mx.push(q.M.StrI.max); mn.push(q.M.StrI.min); smx.push(q.M.SerI.max); smn.push(q.M.SerI.min); }
+    else { const node = AL.env.xN.some(v => Math.abs(v - q.x) < 1e-9);
+      if (node) { xs.push(q.x, q.x); mx.push(q.VL.StrI.max, q.VR.StrI.max); mn.push(q.VL.StrI.min, q.VR.StrI.min); smx.push(q.VL.SerI.max, q.VR.SerI.max); smn.push(q.VL.SerI.min, q.VR.SerI.min); }
+      else { xs.push(q.x); mx.push(q.VR.StrI.max); mn.push(q.VR.StrI.min); smx.push(q.VR.SerI.max); smn.push(q.VR.SerI.min); } }
+  });
+  const u = kind === 'M' ? 'kip-ft' : 'kip', narrow = window.innerWidth < 700;
+  return { data: [{ x: xs, y: mx, name: 'Strength I max', line: { color: '#B42318', width: 2 } }, { x: xs, y: mn, name: 'Strength I min', line: { color: '#1D4ED8', width: 2 } },
+    { x: xs, y: smx, name: 'Service I max', line: { color: '#B42318', width: 1, dash: 'dot' } }, { x: xs, y: smn, name: 'Service I min', line: { color: '#1D4ED8', width: 1, dash: 'dot' } }],
+    layout: { title: { text: (kind === 'M' ? 'Moment' : 'Shear') + ' envelope per stringer (factored)', font: { size: 12 }, x: 0 }, margin: { l: 62, r: 12, t: 30, b: narrow ? 74 : 38 }, height: narrow ? 300 : 260,
+      xaxis: { title: { text: 'x (ft)', font: { size: 10 } }, gridcolor: '#E5E9F0', zeroline: false }, yaxis: { title: { text: (kind === 'M' ? 'M' : 'V') + ' (' + u + ')', font: { size: 10 } }, zerolinecolor: '#9AA7B8', gridcolor: '#E5E9F0', autorange: kind === 'M' ? 'reversed' : true },
+      shapes: AL.env.xN.map(x => ({ type: 'line', x0: x, x1: x, y0: 0, y1: 1, yref: 'paper', line: { color: '#94A3B8', width: 1, dash: 'dot' } })),
+      showlegend: true, legend: narrow ? { font: { size: 9 }, orientation: 'h', y: -0.32, x: 0, xanchor: 'left' } : { font: { size: 9 }, orientation: 'h', y: 1.2, x: 1, xanchor: 'right' }, paper_bgcolor: '#fff', plot_bgcolor: '#fff' } };
+}
+function aasSpanTxt(k) { return AL.env.Ls.length > 1 ? `span ${k + 1} (${TBC_NODE[k]}–${TBC_NODE[k + 1]})` : 'span'; }
+function buildAasEnvCards(pg) {
+  const e = AL.env, D = AD, df = AL.df;
+  if (!e || !e.ok) return;
+  mkSec(pg, 'aasEnv', 'Live-load envelopes and axle placement (HL-93, per lane)', body => {
+    body.appendChild(el('div', 'note', tbNL('Analysis: the tool\'s beam engine (direct stiffness, the spans and supports of the Geometry tab).', [
+      ['Influence lines:', `reactions for a unit load at ${e.nGrid} grid points (each span in 40 × ⌈L/4⌉ equal parts, ≤ 0.1 ft); M and V at a section by statics.`],
+      ['HL-93 (Art. 3.6.1.3.1):', 'design truck (rear axle spacing 14 ft to 30 ft' + (e.Ls.length === 1 && e.types[0] === 'pin' && e.types[1] === 'pin' ? '; one simple span: 14 ft governs' : ', 2-ft steps then the 1-ft neighbours') + ') and design tandem, both directions, + design lane load on the parts of the influence line of the sign sought; ' + (e.Ls.length > 1 ? '90 % of two trucks (14 ft, ≥ 50 ft apart) + 90 % lane for negative moment where a uniform load on all spans gives negative moment, and for interior reactions; ' : '') + 'axles that do not add are left out.'],
+      ['Positions:', 'the lead axle in 0.5-ft steps and every axle exactly on the section; the largest positive moment of each span is searched to 0.1 ft.'],
+      ['IM:', AL.im === 0 ? 'not applied (Art. 3.6.2.3).' : `1 + IM = ${k4(AL.IMf)} on the axles, not on the lane (Art. 3.6.2.1).`]])));
+    const gov = [];
+    e.Ls.forEach((L, k) => {
+      const inK = e.secs.filter(s => s.x >= e.xN[k] - 1e-9 && s.x <= e.xN[k + 1] + 1e-9);
+      const mp = inK.reduce((b, s) => s.M.ll.max > (b ? b.M.ll.max : 0) ? s : b, null), mn = inK.reduce((b, s) => s.M.ll.min < (b ? b.M.ll.min : 0) ? s : b, null);
+      if (mp) gov.push([aasSpanTxt(k) + ': largest +M', `x = ${kf2(mp.x)} ft`, kf2(mp.M.ll.max) + ' kip-ft', { h: aasGovTxt(mp.M.ll.gMax) }]);
+      if (mn) gov.push([aasSpanTxt(k) + ': largest −M', `x = ${kf2(mn.x)} ft`, kf2(mn.M.ll.min) + ' kip-ft', { h: aasGovTxt(mn.M.ll.gMin) }]);
+    });
+    e.reac.forEach(r => gov.push([`Support ${TBC_NODE[r.j]}: largest R`, `x = ${kf2(r.x)} ft`, kf2(r.ll.max) + ' kip', { h: aasGovTxt(r.ll.gMax) }]));
+    body.appendChild(tblEl(['Effect', 'Section', 'Per lane', 'Governing case and axle placement (kip @ x ft)'], gov, { left: [0, 3] }));
+    const rows = e.secs.filter(s => !s.extra && Math.round(s.t) % 4 === 0).map(s => [kf2(s.x), kf2(s.M.ll.max), kf2(s.M.ll.min), kf2(s.VR.ll.max), kf2(s.VL.ll.min), kf3(s.M.dc), kf3(s.M.dw), kf3(s.VR.dc)]);
+    body.appendChild(tblEl(['x (ft)', 'M<sub>LL</sub> + (kip-ft)', 'M<sub>LL</sub> − (kip-ft)', 'V<sub>LL</sub> + (kip)', 'V<sub>LL</sub> − (kip)', 'M<sub>DC</sub>', 'M<sub>DW</sub>', 'V<sub>DC</sub>'], rows));
+    body.appendChild(el('div', 'hint', 'Per lane (LL) and per stringer (DC, DW), at the 1/10 points; the factored values use g<sub>M</sub> = ' + kL(df.gM) + ' for moment and g<sub>V</sub> = ' + kL(df.gV) + ' for shear and reactions (' + tbcLink('aasDF', 'Live-load distribution factors') + '). V at a support: just right (+) / just left (−).'));
+  });
+  mkSec(pg, 'aasWV', 'Shear at the critical sections (Art. 8.7' + (df.woodV ? ', Eq. 4.6.2.2.2a-1' : '') + ')', body => {
+    body.appendChild(el('div', 'note', `Dead-load shear at d = ${g4(A.d)} in. from the face of each support (half the bearing length l<sub>b</sub> from the support line); the live load placed for the largest shear at the lesser of 3d and L/4 from the face (Art. 8.7). ` + (df.woodV ? 'Interior stringer with a wood deck: V<sub>LU</sub> = one line of wheels (half the lane shear) on one stringer; V<sub>LD</sub> = g<sub>V</sub> × the lane shear (Art. 4.6.2.2.2a).' : 'V<sub>LL</sub> = g<sub>V</sub> × the lane shear.')));
+    D.shear.forEach(s => {
+      const lines = [T`a = \min(3d,\ L/4) = \min(3 \times ${kf3(A.d / 12)},\ ${g4(s.L)}/4) = ${kf3(s.aLL)}\ \text{ft};\quad x_{LL} = ${kf3(s.xl)}\ \text{ft},\ x_d = ${kf3(s.xd)}\ \text{ft}`,
+        T`V_{lane}(x_{LL}) = ${kf3(s.VLane)}\ \text{kip per lane}`];
+      if (df.woodV) lines.push(T`V_{LU} = 0.5 \times ${kf3(s.VLane)} = ${kf3(s.VLU)},\quad V_{LD} = g_V V_{lane} = ${kL(df.gV)} \times ${kf3(s.VLane)} = ${kf3(s.VLD)}`, T`V_{LL} = 0.50\left[(0.60 V_{LU}) + V_{LD}\right] = 0.50\left[0.60 \times ${kf3(s.VLU)} + ${kf3(s.VLD)}\right] = ${kf3(s.VLL)}\ \text{kip}`);
+      else lines.push(T`V_{LL} = g_V V_{lane} = ${kL(df.gV)} \times ${kf3(s.VLane)} = ${kf3(s.VLL)}\ \text{kip}`);
+      lines.push(T`V_u = ${g4(AAS_GP.DC[0])} |V_{DC}| + ${g4(AAS_GP.DW[0])} |V_{DW}| + 1.75 V_{LL} = ${g4(AAS_GP.DC[0])} \times ${kf3(Math.abs(s.VDC))} + ${g4(AAS_GP.DW[0])} \times ${kf3(Math.abs(s.VDW))} + 1.75 \times ${kf3(s.VLL)} = ${kf3(s.Vu)}\ \text{kip}`);
+      if (s.Vu2 != null) lines.push(T`V_{u,II} = ${g4(AAS_GP.DC[0])} |V_{DC}| + ${g4(AAS_GP.DW[0])} |V_{DW}| + 1.35 V_{LL,permit} = ${kf3(s.Vu2)}\ \text{kip}\quad (V_{LL,permit} = ${kf3(s.VLLp)})`);
+      calc(body, { title: `Support ${TBC_NODE[s.j]}, ${aasSpanTxt(s.k)} side`, ref: AAS_ART + 'Art. 8.7' + (df.woodV ? ', Eq. 4.6.2.2.2a-1' : '') + ', Table 3.4.1-1',
+        lines, where: [['V_{lane}', 'HL-93 shear per lane at x<sub>LL</sub>: ' + aasGovTxt(s.gov), kf3(s.VLane), 'kip', ''], ['V_{DC}, V_{DW}', 'dead-load shear at x<sub>d</sub>', kf3(s.VDC) + ', ' + kf3(s.VDW), 'kip', tbcLink('aasDL', 'Dead loads')]],
+        result: `V<sub>u</sub> = ${kf3(s.Vu)} kip (Strength I)${s.Vu2 != null ? `; ${kf3(s.Vu2)} kip (Strength II)` : ''}; Service I ${kf3(s.Vs)} kip` });
+    });
+    if (!D.shear.length) body.appendChild(el('div', 'hint', 'No critical section: every span is shorter than the shear offset.'));
+  });
+  mkSec(pg, 'aasFE', 'Factored envelopes (Strength I' + (e.permit ? ', Strength II' : '') + ', Service I)', body => {
+    calc(body, { title: 'Combinations per stringer', ref: AAS_ART + 'Tables 3.4.1-1, 3.4.1-2', lines: [T`U_{I} = \eta\left[\gamma_{DC} DC + \gamma_{DW} DW + 1.75\, g\,(LL + IM)\right],\quad \eta = 1.0`, T`U_{II} = \eta\left[\gamma_{DC} DC + \gamma_{DW} DW + 1.35\, g\,(LL_{permit} + IM)\right]`, T`U_{Ser\,I} = DC + DW + g\,(LL + IM)`],
+      result: `γ<sub>DC</sub> = ${g4(AAS_GP.DC[0])} / ${g4(AAS_GP.DC[1])}, γ<sub>DW</sub> = ${g4(AAS_GP.DW[0])} / ${g4(AAS_GP.DW[1])} (maximum where the load adds, minimum where it reduces); g = g<sub>M</sub> for M, g<sub>V</sub> for V and R` });
+    plotHolder(body, 'aasPlotM', () => aasEnvFig('M')); plotHolder(body, 'aasPlotV', () => aasEnvFig('V'));
+    const rows = D.sec.filter(q => !q.s.extra && Math.round(q.s.t) % 4 === 0).map(q => [kf2(q.x), kf2(q.M.StrI.max), kf2(q.M.StrI.min), kf2(q.VR.StrI.max), kf2(q.VL.StrI.min), kf2(q.M.SerI.max), kf2(q.M.SerI.min)].concat(e.permit ? [kf2(q.M.StrII.max), kf2(q.M.StrII.min)] : []));
+    body.appendChild(tblEl(['x (ft)', 'M<sub>u</sub> max', 'M<sub>u</sub> min', 'V<sub>u</sub> max', 'V<sub>u</sub> min', 'M Service I max', 'M Service I min'].concat(e.permit ? ['M<sub>u,II</sub> max', 'M<sub>u,II</sub> min'] : []), rows));
+    body.appendChild(el('div', 'hint', 'kip-ft and kip per stringer, at the 1/10 points (every 1/40 point is computed; the diagrams use all of them).'));
+  });
+  mkSec(pg, 'aasDem', 'Factored demands and resistances (no checks yet)', body => {
+    const l1 = A.lims[0], l2 = A.lims[1], S = A.b * A.d * A.d / 6, rows = [];
+    const mrow = (lab, o, lim, phiF, ref) => o ? rows.push([{ h: lab }, `${kf2(o.v)} kip-ft at x = ${kf2(o.x)} ft`, { h: `φF<sub>b</sub> = ${k3(phiF)} ksi (${lim})` }, { h: ref }]) : null;
+    mrow('M<sub>u</sub>, positive (Strength I)', D.Mpos, 'Strength I, C<sub>λ</sub> ' + g4(l1.Cl), l1.phiFb, tbcLink('aasFE', 'envelopes'));
+    mrow('M<sub>u</sub>, negative (Strength I)', D.Mneg, 'Strength I', A.isGL ? l1.phiFbn : l1.phiFb, tbcLink('aasFE', 'envelopes'));
+    if (e.permit) { mrow('M<sub>u</sub>, positive (Strength II)', D.Mpos2, 'Strength II, C<sub>λ</sub> ' + g4(l2.Cl), l2.phiFb, tbcLink('aasFE', 'envelopes')); mrow('M<sub>u</sub>, negative (Strength II)', D.Mneg2, 'Strength II', A.isGL ? l2.phiFbn : l2.phiFb, tbcLink('aasFE', 'envelopes')); }
+    if (D.Vu) rows.push([{ h: 'V<sub>u</sub>, critical section (Strength I)' }, `${kf3(D.Vu.Vu)} kip, support ${TBC_NODE[D.Vu.j]}`, { h: `φF<sub>v</sub> = ${k3(l1.phiFv)} ksi` }, { h: tbcLink('aasWV', 'shear at the critical sections') }]);
+    D.reac.forEach(r => rows.push([{ h: `R<sub>u</sub>, support ${TBC_NODE[r.j]} (Strength I)` }, `${kf3(r.Ru)} kip${r.Ru2 != null ? '; Strength II ' + kf3(r.Ru2) : ''}; Service I ${kf3(r.Rs)}`, { h: `φF<sub>c⊥</sub> = ${k3(l1.phiFcp)} ksi` }, { h: `${g4(AAS_GP.DC[0])} × ${kf3(r.dc)} + ${g4(AAS_GP.DW[0])} × ${kf3(r.dw)} + 1.75 × ${kL(df.gV)} × ${kf3(r.ll.max)}` }]));
+    body.appendChild(tblEl(['Demand', 'Value', 'Resistance (AASHTO Materials)', 'Worked in'], rows, { left: [0, 1, 3] }));
+    body.appendChild(tbcWorkedIn([['aasAdj', 'φF values'], ['aasFE', 'M_u'], ['aasWV', 'V_u']]));
+    const dr = D.defl.filter(Boolean).map(d => [aasSpanTxt(d.k) + (d.cant ? ' (cantilever)' : ''), `${kf2(d.x)} ft`, `${k4(d.perLane)} (${esc(d.gov)})`, kL(d.gD), k4(d.dLL), d.dLL > 0 ? 'L/' + f0((d.cant ? 2 : 1) * d.L * 12 / d.dLL) : '—', `${k4(d.dDL)} at ${kf2(d.xD)} ft`]);
+    body.appendChild(el('div', 'note', '<b>Service I deflections</b> (Art. 3.6.1.3.2: the larger of the design truck alone and 25 % of the truck + the lane load; Art. 2.5.2.6.2: g<sub>Δ</sub>; E = ' + f0(A.E) + ' ksi, I = bd³/12 = ' + f1(e.Ib) + ' in.⁴). Downward +, in. The criteria of Art. 2.5.2.6.2 are checked in the next phase.'));
+    body.appendChild(tblEl(['Span', 'x (LL)', 'Δ<sub>LL</sub> per lane', 'g<sub>Δ</sub>', 'Δ<sub>LL</sub>', 'span / Δ<sub>LL</sub>', 'Δ<sub>DC+DW</sub>'], dr, { left: [0] }));
+    body.appendChild(el('div', 'hint', 'Resistances are the factored adjusted stresses of phase T1 (without the beam stability factor C<sub>L</sub>); the flexure, shear, bearing and deflection checks (Art. 8.6, 8.7, 8.8.3, 2.5.2.6.2) and PASS / FAIL come in the next phase. Reactions use g<sub>V</sub> (Decision pending engineer review). Cantilever: span / Δ with twice the cantilever length.'));
+  });
+}
+function tbrAasEnvSubs() {   // Report: envelopes and demands (TBA3)
+  const e = AL && AL.env; if (!e || !e.ok || !AD) return [];
+  const D = AD, df = AL.df, steps = [];
+  const mStep = (id, lab, o, key) => { if (!o) return; const s = o.s, r = s.M, gl = key === 'max' ? r.ll.gMax : r.ll.gMin, gp = (v, k) => (key === 'max' ? v >= 0 : v <= 0) ? AAS_GP[k][0] : AAS_GP[k][1];
+    steps.push(tbrS({ id, label: lab + ' at x = ' + kf2(o.x) + ' ft; LL: ' + (gl ? gl.cfg + ', axles at ' + aasPosTxt(gl) + ' ft' : '—'), sym: 'M_u', eq: '\\gamma_{DC} M_{DC} + \\gamma_{DW} M_{DW} + 1.75\\, g_M M_{LL}',
+      sub: g4(gp(r.dc, 'DC')) + ' \\times ' + kf3(r.dc) + ' + ' + g4(gp(r.dw, 'DW')) + ' \\times ' + kf3(r.dw) + ' + 1.75 \\times ' + kL(df.gM) + ' \\times ' + kf3(r.ll[key]), value: o.v, unit: 'kip-ft', d: 2, ref: AAS_ART + 'Table 3.4.1-1' })); };
+  mStep('aasL.Mpos', 'Largest positive moment, Strength I', D.Mpos, 'max'); mStep('aasL.Mneg', 'Largest negative moment, Strength I', D.Mneg, 'min');
+  D.shear.forEach((s, i) => steps.push(tbrS({ id: 'aasL.V' + i, label: 'Shear, support ' + TBC_NODE[s.j] + ' (' + aasSpanTxt(s.k) + '): V_lane = ' + kf3(s.VLane) + ' kip per lane at x_LL = ' + kf3(s.xl) + ' ft (min(3d, L/4) = ' + kf3(s.aLL) + ' ft from the face), V_DC = ' + kf3(s.VDC) + ', V_DW = ' + kf3(s.VDW) + ' kip at d; V_LL = ' + kf3(s.VLL) + (df.woodV ? ' (Eq. 4.6.2.2.2a-1: V_LU = ' + kf3(s.VLU) + ', V_LD = ' + kf3(s.VLD) + ')' : ' (g_V × V_lane)'),
+    sym: 'V_u', eq: '1.25|V_{DC}| + 1.50|V_{DW}| + 1.75 V_{LL}', sub: '1.25 \\times ' + kf3(Math.abs(s.VDC)) + ' + 1.50 \\times ' + kf3(Math.abs(s.VDW)) + ' + 1.75 \\times ' + kf3(s.VLL), value: s.Vu, unit: 'kip', d: 3, ref: AAS_ART + 'Art. 8.7, Eq. 4.6.2.2.2a-1' })));
+  D.reac.forEach(r => steps.push(tbrS({ id: 'aasL.R' + r.j, label: 'Reaction, support ' + TBC_NODE[r.j] + ', Strength I (LL: ' + (r.ll.gMax ? r.ll.gMax.cfg : '—') + ')', sym: 'R_u', eq: '\\gamma_{DC} R_{DC} + \\gamma_{DW} R_{DW} + 1.75\\, g_V R_{LL}', sub: g4(r.dc >= 0 ? 1.25 : 0.9) + ' \\times ' + kf3(r.dc) + ' + ' + g4(r.dw >= 0 ? 1.5 : 0.65) + ' \\times ' + kf3(r.dw) + ' + 1.75 \\times ' + kL(df.gV) + ' \\times ' + kf3(r.ll.max), value: r.Ru, unit: 'kip', d: 3, ref: AAS_ART + 'Table 3.4.1-1' })));
+  const fe = D.sec.filter(q => !q.s.extra && Math.round(q.s.t) % 4 === 0).map(q => [kf2(q.x), kf2(q.M.StrI.max), kf2(q.M.StrI.min), kf2(q.VR.StrI.max), kf2(q.VL.StrI.min), kf2(q.M.SerI.max), kf2(q.M.SerI.min)]);
+  const dl = D.defl.filter(Boolean).map(d => [aasSpanTxt(d.k), kf2(d.x), k4(d.perLane) + ' (' + d.gov + ')', kL(d.gD), k4(d.dLL), k4(d.dDL)]);
+  return [{ title: 'Envelopes and factored demands', items: [{ type: 'note', text: 'HL-93 per lane by influence lines of the tool\'s beam engine (Art. 3.6.1.3.1; IM ' + g4(AL.im) + ' %); factored per stringer with g_M = ' + kL(df.gM) + ', g_V = ' + kL(df.gV) + '. Diagrams and the axle placements are on the Bridge Loads tab[[tab:aasL| ↗]].' },
+    tbrTopics([{ title: 'Governing factored demands', ref: AAS_ART + 'Tables 3.4.1-1, 3.4.1-2; Art. 8.7', steps }]),
+    { type: 'table', wide: true, head: ['x (ft)', 'M_u max', 'M_u min', 'V_u max', 'V_u min', 'M Ser I max', 'M Ser I min'], rows: fe },
+    { type: 'note', text: 'Service I deflections (Art. 3.6.1.3.2, 2.5.2.6.2), in.: span, x (ft), Δ_LL per lane, g_Δ, Δ_LL, Δ_DC+DW.' }, { type: 'table', head: ['Span', 'x', 'Δ_LL per lane', 'g_Δ', 'Δ_LL', 'Δ_DC+DW'], rows: dl }] }];
 }
 /* ---- Report (AASHTO mode) ---- */
 function tbrAasModel() {
@@ -4630,10 +5036,10 @@ function tbrAasModel() {
   const head = { title: 'Timber Beam Check — Calculation Report (AASHTO LRFD)', subtitle: (p.name || 'Untitled') + (p.member ? ' — ' + p.member : ''), code: 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 8',
     info: [['Project', p.name], ['Project No.', p.job], ['Calculated by', p.designer], ['Date', p.date || today], ['Checked by', p.checker], ['Checked date', '']],
     head: { left: 'Project No. ' + (p.job || '—') + ' — ' + String(p.member || p.name || 'Timber stringer').slice(0, 40), right: 'Computed: ' + (p.designer || '—') + ' ' + (p.date || today) + ' · Checked: ' + (p.checker || '—'), foot: (p.name || 'Untitled') + ' (Timber Beam Check)' } };
-  const notice = [{ type: 'note', warn: true, text: 'AASHTO LRFD 10th Ed. mode: reference values, adjustment factors and resistance factors only. Bridge loads and the AASHTO checks (flexure Art. 8.6, shear Art. 8.7, bearing Art. 8.8.3, deflection Art. 2.5.2.6.2) come in the next versions of the tool: no PASS / FAIL is given. The NDS 2018 building-load checks are not run in this mode.' }];
+  const notice = [{ type: 'note', warn: true, text: 'AASHTO LRFD 10th Ed. mode: reference values, adjustment factors, resistance factors and bridge loads (DC, DW, HL-93; envelopes and factored demands). The AASHTO checks (flexure Art. 8.6, shear Art. 8.7, bearing Art. 8.8.3, deflection Art. 2.5.2.6.2) come in the next versions of the tool: no PASS / FAIL is given. The NDS 2018 building-load checks are not run in this mode.' }];
   if (!x || !x.ok) { secs.push({ title: 'Status', subs: [{ title: 'Input required', items: notice.concat(((x && x.errors) || []).map(m => ({ type: 'note', warn: true, text: m }))) }] }); return Object.assign(head, { sections: secs }); }
   const gl = x.isGL, r = x.ref, a = x.a;
-  secs.push({ title: 'Status', subs: [{ title: 'Member and code', items: [{ type: 'kv', rows: [['Member', aasMemberTxt()], ['Design code', 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 8'], ['Result', 'No checks yet (materials and resistance only)']] }].concat(notice) }] });
+  secs.push({ title: 'Status', subs: [{ title: 'Member and code', items: [{ type: 'kv', rows: [['Member', aasMemberTxt()], ['Design code', 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 8'], ['Result', 'No checks yet (materials, resistance and bridge-load demands)']] }].concat(notice) }] });
   {
     const rows = gl ? [['Material', 'Glulam, ' + aasGlName(a.gl)], ['Species group (laminations)', (GLULAM_GRP[M.material.glulam.grp] || {}).name || '?'], ['Section', 'b = ' + g4(x.b) + ' in., d = ' + g4(x.d) + ' in.'], ['Special tension laminations', aasGlKind(a.gl) === 1 ? (a.noTL ? 'omitted' : 'present (as Table 8.4.1.2.3-1 requires)') : 'not used (Table 8.4.1.2.3-2)']]
       : [['Material', 'Sawn lumber, ' + ((AAS_SAWN[a.sp] || {}).name || a.sp) + ' ' + (AAS_GRADES[a.gr] || a.gr)], ['Section', (M.material.size === 'Custom' ? 'custom' : M.material.size) + ', b = ' + g4(x.b) + ' in., d = ' + g4(x.d) + ' in.'], ['Deck type', (AAS_DECKS.find(q => q[0] === a.deck) || [0, a.deck])[1]]];
@@ -4695,7 +5101,7 @@ function tbcInit() {
   window.addEventListener('resize', () => { if (typeof Plotly !== 'undefined') document.querySelectorAll('.plotHold.js-plotly-plot').forEach(d => { try { Plotly.Plots.resize(d); } catch (e) { } }); });
 }
 // test / automation hook (read-only use; not part of the saved data)
-window.TBC = { get model() { return M; }, get res() { return R; }, get aas() { return A; }, get al() { return AL; }, aasLoads: tbcAasLoads, flush, fullRebuild, load: (d) => loadModel(d), run: tbcRun, migrate: tbcMigrate, aashto: tbcAashto };   // aas, aashto: TBA1
+window.TBC = { get model() { return M; }, get res() { return R; }, get aas() { return A; }, get al() { return AL; }, get ad() { return AD; }, aasLoads: tbcAasLoads, flush, fullRebuild, load: (d) => loadModel(d), run: tbcRun, migrate: tbcMigrate, aashto: tbcAashto };   // aas, aashto: TBA1
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tbcInit); else tbcInit();
 </script>
 </body>
