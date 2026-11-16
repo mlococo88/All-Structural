@@ -102,7 +102,7 @@ try {
   await setF('#lkLoad', 28000); assert.ok(await p.$('.crLiftLbl .lv-critical'), '30,000 / 39,000 = 76.9 % ≥ 75 %'); assert.match(await txt('#lfRes'), /76\.9 % of chart critical lift/);
   await setF('#lsCaution', 60); await setF('#lsCritical', 90); assert.match(await txt('#lfRes'), /76\.9 % of chart caution/); assert.ok(await p.$('.crLiftLbl .lv-caution'));
   await setF('#lsCaution', 75); await setF('#lsCritical', 75); await setF('#lkLoad', 20000);
-  P = await proj(); assert.deepEqual(P.lift, { caution: 75, critical: 75, limit: 100, interp: false, path: 'uniform', obstClr: 2 });   // path, obstClr: C3-2
+  P = await proj(); assert.deepEqual(P.lift, { caution: 75, critical: 75, limit: 100, interp: false, path: 'uniform', obstClr: 2, tandem: 75 });   // path, obstClr: C3-2; tandem: C5
   await setF('#lkSN', 2075); assert.equal((await labels())[1], 'S R 75.0 ft not permitted'); assert.match(await txt('#lfRes'), /not permitted.*beyond the largest tabulated radius/);
   await setF('#lkSN', 2020);
   ok('thresholds are project inputs: 76.9 % = critical lift (≥ 75 %), caution with 60 / 90 %; R 75 ft beyond the chart = not permitted');

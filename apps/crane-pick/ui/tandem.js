@@ -193,7 +193,7 @@
       <div class="fRow"><label for="tlType">Lift</label><select id="tlType"><option value="tandem"${t.type === 'tandem' ? ' selected' : ''}>tandem: two cranes</option><option value="single"${t.type === 'single' ? ' selected' : ''}>one crane</option></select></div>
       ${slot(0)}${t.type === 'tandem' ? slot(1) : ''}
       <div class="itGrpH">Girder</div>
-      ${numIn('tlL', g.L, 'Length L', 'ft')}${numIn('tlW', g.W, 'Weight', 'lb')}${numIn('tlCg', g.cg, 'CG from end A', 'ft', { ph: 'mid-length' })}${numIn('tlCgT', g.cgT, 'CG offset across (+ right of A→B)', 'ft', { ph: '0' })}
+      ${numIn('tlL', g.L, 'Length L', 'ft')}${numIn('tlW', g.W, 'Weight', 'lb')}${numIn('tlCg', g.cg, 'CG from end A', 'ft', { ph: 'mid-length' })}${numIn('tlCgT', g.cgT, 'CG offset across (+ right of A→B)', 'ft', { ph: '0' })}${numIn('tlCgV', g.cgV, 'CG height above the girder bottom', 'ft', { ph: 'information only' })}
       ${numIn('tlH', g.H, 'Depth H', 'ft', { ph: '0' })}${numIn('tlB', g.B, 'Width in plan (flange)', 'ft', { ph: '0: the axis line' })}
       <label class="note" style="display:block"><input type="checkbox" id="tlPair"${pr.on ? ' checked' : ''}> Paired girders with cross-frames (lifted as one object)</label>
       ${pr.on ? `${numIn('tlPs', pr.s, 'Girder spacing', 'ft')}${numIn('tlPW2', pr.W2, 'Girder 2 weight', 'lb', { ph: 'as girder 1' })}${numIn('tlPcg2', pr.cg2, 'Girder 2 CG from end A', 'ft', { ph: 'as girder 1' })}${numIn('tlPxf', pr.xf, 'Cross-frames weight', 'lb')}${numIn('tlPxfCg', pr.xfCg, 'Cross-frames CG from end A', 'ft', { ph: 'mid-length' })}` : ''}
@@ -259,7 +259,7 @@
     if (tg.id === 'tlType') return up(() => { t.type = tg.value === 'single' ? 'single' : 'tandem'; });
     if (tg.id === 'tlSlot0' || tg.id === 'tlSlot1') return up(() => { t.slots[+tg.id.slice(-1)] = tg.value; });
     if (tg.id === 'tlPair') return up(() => { t.girder.pair.on = tg.checked; });
-    const gk = { tlL: 'L', tlW: 'W', tlCg: 'cg', tlCgT: 'cgT', tlH: 'H', tlB: 'B' }[tg.id], pk = { tlPs: 's', tlPW2: 'W2', tlPcg2: 'cg2', tlPxf: 'xf', tlPxfCg: 'xfCg' }[tg.id];
+    const gk = { tlL: 'L', tlW: 'W', tlCg: 'cg', tlCgT: 'cgT', tlCgV: 'cgV', tlH: 'H', tlB: 'B' }[tg.id], pk = { tlPs: 's', tlPW2: 'W2', tlPcg2: 'cg2', tlPxf: 'xf', tlPxfCg: 'xfCg' }[tg.id];
     if (gk || pk) { const v = num(); if (v === undefined || (v !== null && v < 0 && gk !== 'cgT') || (gk === 'L' && !(v > 0))) { tg.classList.add('bad'); return; } return up(() => { if (gk) t.girder[gk] = v; else t.girder.pair[pk] = v; }); }
     const hm = /^tlH([01])(s|sp|rig|hook|ded|rigH|blk|hb)$/.exec(tg.id);
     if (hm) { const h = t.hooks[+hm[1]], f = hm[2];
@@ -343,7 +343,7 @@
       const z = G.zone(P.site.zone), un = z.unit === 'm' ? 'm' : 'ft', E = v => fmt(G.ftToNative(z.id, v), 2), ob = r.sh.ob, sc = 'tg-' + t.id;
       const items = [{ type: 'kv', rows: [['Lift', t.type === 'single' ? 'one crane' : 'tandem (two cranes)']].concat(t.slots.slice(0, nC(t)).map((id, i) => [`Crane ${i + 1}`, (setupOf(id) || {}).name || 'not chosen']), [
         ['Girder L / weight', `${fmt(ob.L, 2)} ft / ${fmt(ob.W1, 0)} lb${ob.pair ? `; paired: spacing ${fmt(ob.s, 2)} ft, girder 2 ${fmt(ob.W2, 0)} lb, cross-frames ${fmt(ob.Wx, 0)} lb` : ''}`], ['Combined W_g / x_cg / t_cg', `${fmt(ob.Wg, 0)} lb / ${fmt(ob.xcg, 2)} ft / ${fmt(ob.tcg, 2)} ft`],
-        ['Depth / width (ft)', `${fmt(ob.H, 2)} / ${fmt(ob.B, 2)}`], [`Pick centre E / N (${un}), heading, bottom el.`, `${E(t.pick.x)} / ${E(t.pick.y)}, ${fmt(t.pick.h, 1)}°, ${fmt(r.path.zP, 2)} ft`],
+        ['Depth / width (ft)', `${fmt(ob.H, 2)} / ${fmt(ob.B, 2)}`], ['CG height above the girder bottom', t.girder.cgV == null ? 'not entered' : `${fmt(t.girder.cgV, 2)} ft (information: with the hooks plumb it does not change the load share; for the lifting-stability check, not made here)`], [`Pick centre E / N (${un}), heading, bottom el.`, `${E(t.pick.x)} / ${E(t.pick.y)}, ${fmt(t.pick.h, 1)}°, ${fmt(r.path.zP, 2)} ft`],
         [`Set centre E / N (${un}), heading, bottom el.`, `${E(t.set.x)} / ${E(t.set.y)}, ${fmt(t.set.h, 1)}°, ${fmt(r.path.zS, 2)} ft`], ['Travel el. / waypoints / steps', `${fmt(r.path.zT, 2)} ft${r.path.trEntered ? '' : ' (higher of pick and set)'} / ${t.way.length} / ${r.steps.length}`]].concat(
         t.hooks.slice(0, nC(t)).map((h, i) => [`Hook ${i + 1}`, `${t.type === 'single' ? 'over the CG' : 'x = ' + fmt(h.s, 2) + ' ft'}; rigging ${fmt(h.rig || 0, 0)} lb, block ${fmt(h.hook || 0, 0)} lb${h.hookLabel ? ' (' + h.hookLabel + ')' : ''}, other ${fmt(h.ded || 0, 0)} lb; rigging height ${fmt(h.rigH || 0, 2)} ft, block ${fmt(h.blk || 0, 2)} ft`]))) }];
       if (r.flags.length) items.push({ type: 'note', warn: r.flags.some(f => f.level !== 'info'), text: 'Flags: ' + r.flags.map(f => (isNum(f.step) ? `step ${f.step}: ` : '') + f.text).join(' ') });

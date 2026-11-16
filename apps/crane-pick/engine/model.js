@@ -152,7 +152,7 @@
     const pick = pose(t.pick, { x: 0, y: 0, h: 90 });
     return { id: str(t.id) || uid('t'), name: str(t.name, 'Girder lift'), type: t.type === 'single' ? 'single' : 'tandem',
       slots: [0, 1].map(i => str(Array.isArray(t.slots) ? t.slots[i] : '')),
-      girder: { L, W: nn(g.W), cg: numOrNull(g.cg), cgT: numOrNull(g.cgT), H: nn(g.H), B: nn(g.B),
+      girder: { L, W: nn(g.W), cg: numOrNull(g.cg), cgT: numOrNull(g.cgT), cgV: nn(g.cgV), H: nn(g.H), B: nn(g.B),
         pair: { on: !!pr.on, s: nn(pr.s), W2: nn(pr.W2), cg2: numOrNull(pr.cg2), xf: nn(pr.xf), xfCg: numOrNull(pr.xfCg) } },
       hooks: [hook(hk[0], L * 0.1), hook(hk[1], L * 0.9)], pick, set: pose(t.set, pick),
       way: (Array.isArray(t.way) ? t.way : []).filter(p => p && isFinite(p.x) && isFinite(p.y)).map(p => ({ x: +p.x, y: +p.y, h: ((num(p.h, 0) % 360) + 360) % 360 })),

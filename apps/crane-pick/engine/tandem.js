@@ -3,7 +3,8 @@
    the site frame (grid ft, x east, y north); headings: degrees clockwise from grid north; z: elevation, ft (engine/elev.js).
 
    tandem = { id, name, type: 'tandem' | 'single', slots: [setupId, setupId] (crane 1, crane 2; 'single': slot 1 only),
-              girder: { L (ft), W (lb, girder 1), cg (ft from end A; null = L / 2), cgT (transverse, ft, + to the right of A→B; null = 0),
+              girder: { L (ft), W (lb, girder 1), cg (ft from end A; null = L / 2), cgT (transverse, ft, + to the right of A→B; null = 0), cgV (vertical, ft above
+                        the girder bottom; information only: with the hooks plumb it does not change the load share),
                         H (depth, ft), B (width in plan, ft), pair: { on, s (line spacing, ft), W2 (lb; null = W), cg2 (ft; null = cg),
                         xf (cross-frame weight, lb), xfCg (ft from end A; null = L / 2) } },
               hooks: [ { s (lifting point / spreader centre, ft from end A), sp (spreader length, ft; drawing only), rig (rigging weight,
