@@ -76,6 +76,14 @@ node tests/smoke/spread-footing-boussinesq.mjs [--file <file or git ref>] [--sho
 # result tab without card 3.5, the Report model without S-bous (anchor numbers and Plotly's random ids masked): identical
 node tests/smoke/spread-footing-boussinesq-probe.mjs --a <folder with the origin/main checkout> [--b <folder>]
 
+# Timber Beam Check, AASHTO LRFD 10th Ed. code switch (TBA1, phase T1): engine tests (AASHTO table values pinned with their table and row,
+# Art. 8.4.4 factors, hand checks, saved data) and the NDS parity of the engine (origin/main vs the working tree, ~4,000 NDS projects, exact)
+node tests/engine/run.mjs timber-aashto
+node tests/timber-nds-parity.mjs [--a <git ref>] [--random <n>]
+# browser: NDS parity of every output tab, the governing strip, the left column and the Report text (origin/main with its shared/ folder,
+# extracted with git archive) and the AASHTO mode (no PASS / FAIL, values, Report, autosave / reload, 390 px); --shots: the AASHTO Materials card
+node tests/smoke/timber-aashto.mjs [--a <folder> | --ref <git ref>] [--shots <dir>]
+
 # Spread Footing: no service combination with a bearing solution (SFNB): no console error, Bearing FAIL with a reason, card 2.6, Report;
 # a renderer that throws marks its tab "Out of date"
 node tests/smoke/spread-footing-nobear.mjs [--file <file or git ref>] [--shots <dir>]

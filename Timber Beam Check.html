@@ -1736,10 +1736,10 @@ function tbcAashto(m) {
         else { Cd = a.gr === 'SS' ? 1.30 : (a.gr === 'No.1' || a.gr === 'No.2' || a.gr === 'No.1/No.2') ? 1.50 : 1.30;
             Cdb = 'Table 8.4.4.8-1, stressed wood deck, ' + (a.gr === 'SS' ? 'Select Structural' : (Cd === 1.50 ? 'No. 1 or No. 2' : (AAS_GRADES[a.gr] || a.gr) + ' (not listed; the Select Structural value is used)')); }
     } else if (!isGL && a.deck === 'plank') {
-        const pk = sizeLab && AAS_CD_PLANK[sizeLab];
+        const pkKey = b === 3.5 ? ({ 5.5: '4x6', 7.25: '4x8', 9.25: '4x10', 11.25: '4x12' })[d] : null, pk = pkKey && AAS_CD_PLANK[pkKey];   // 4 in. planks by dressed size (custom b x d too)
         if (!pk) err('Plank deck factor: only for 4 × 6, 4 × 8, 4 × 10 and 4 × 12 planks (Table 8.4.4.8-2). Choose one of these sizes.', 'factors');
         else if (!flat) err('Plank deck factor: the load is on the wide face of the planks; tick Flat use (Table 8.4.4.8-2).', 'factors');
-        else { Cd = pk; Cdb = `Table 8.4.4.8-2, plank ${sizeLab}`; }
+        else { Cd = pk; Cdb = `Table 8.4.4.8-2, plank ${pkKey.replace('x', ' × ')}`; }
     }
     if (flat && cat === 'dim') {
         if (a.deck === 'plank' && Cd !== 1) { Cfu = 1; Cfub = 'plank deck factor applied: C_fu not applied with it (Art. 8.4.4.8)'; }
@@ -1771,6 +1771,7 @@ function tbcAashto(m) {
         if (isGL) { o.phiFbn = PHI.Fb * o.Fbn; o.phiFcpc = PHI.Fcp * o.Fcpc; }
         return o;
     });
+    if (!isGL && cat !== 'dim' && Ls.length > 1) notes.push('Continuous or cantilevered sawn beams and stringers: the grading provisions for the middle third of the length apply to at least the middle two thirds (two-span pieces) or to the whole length (three or more spans, cantilevers), Art. 8.4.1.1.1. State it in the contract documents.');
     if (isGL) notes.push('C_V and the beam stability factor C_L are not applied together: the lesser applies (Art. 8.4.4.5). The adjusted F_b here includes C_V; the flexure check (next phase) uses the lesser of C_L and C_V.');
     else notes.push('AASHTO has no repetitive-member factor for stringers (the deck factor C_d replaces it for decks, Art. C8.4.4.8). The beam stability factor C_L belongs to the flexural resistance (Art. 8.6.2) and comes with the checks in the next phase.');
     Object.assign(out, { ok: true, R0, CKF, PHI, CM, CMb, CF, CFb, CV, CVd, Cfu, Cfub, Ci, Cib, Cd, Cdb, base, E, lims, sizeF });
