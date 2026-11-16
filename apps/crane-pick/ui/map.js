@@ -43,7 +43,7 @@
       return;
     }
     const L = window.L;
-    map = L.map('map', { maxZoom: 23, minZoom: 3, zoomControl: true, boxZoom: true, doubleClickZoom: false, worldCopyJump: false });
+    map = L.map('map', { maxZoom: 23, minZoom: 3, zoomControl: true, boxZoom: true, doubleClickZoom: false, worldCopyJump: false, zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 90 });
     layers.sat = L.tileLayer(ESRI, { maxZoom: 23, maxNativeZoom: 19, attribution: ATTR_ESRI });
     layers.street = L.tileLayer(OSM, { maxZoom: 23, maxNativeZoom: 19, attribution: ATTR_OSM });
     layers.none = L.layerGroup();
@@ -59,7 +59,7 @@
     map.on('mousemove', e => { last = e.latlng; raf('coord', () => { showCoord(last, 'Cursor'); if (tool && tool.move) tool.move(toFt(last), e); }); });
     map.on('mouseout', () => showCoord(map.getCenter(), 'Center'));
     map.on('moveend', () => { const c = map.getCenter(); if (!last) showCoord(c, 'Center'); A.viewChanged({ lat: c.lat, lng: c.lng, z: map.getZoom() }); });
-    map.on('click', e => { if (tool && tool.click) tool.click(toFt(e.latlng), e); });
+    map.on('click', e => { if (tool && tool.click) { e._crTool = true; tool.click(toFt(e.latlng), e); } });   // _crTool: the click was a tool's (no deselect)
     map.on('dblclick', e => { if (tool && tool.dbl) tool.dbl(toFt(e.latlng), e); });
     document.getElementById('mapMsg').addEventListener('click', e => { if (e.target.id === 'mmNone') setBase('none'); });
     // the map's box changes with the notices above it and the panels beside it: keep Leaflet's size in step (clicks land where they are drawn)
@@ -81,7 +81,7 @@
   function setTool(t) {
     if (tool && tool.end) tool.end();
     tool = t || null;
-    if (map) { map.getContainer().style.cursor = tool && tool.cursor || ''; }
+    if (map) { map.getContainer().style.cursor = tool && tool.cursor || ''; map.getContainer().classList.toggle('crTool', !!tool); }   // crTool: the items let clicks through to the tool
   }
   function status(html) { const s = document.getElementById('mbStatus'); if (s) s.innerHTML = html || ''; }
   A.outTab({ id: 'plan', label: 'Plan', build, show: () => { if (map) setTimeout(() => map.invalidateSize(), 0); } });

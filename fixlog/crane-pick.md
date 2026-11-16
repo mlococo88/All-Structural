@@ -115,3 +115,50 @@ localStorage); Export JSON may add `images: { <sheet id>: data URL }` (option, o
 ### How verified
 `node tests/smoke/crane-sheets.mjs` (8 checks, below); `node tests/smoke/crane-shell.mjs` (11); `node tests/engine/run.mjs crane` (10);
 `node tests/check-syntax.mjs`.
+
+## 2026-11-16 — C1-3: site items (drawing, dragging, editing), OSHA power-line clearance, Site and Report sections
+PR #1604: https://github.com/mlococo88/All-Structural/pull/1604
+### Where
+- `apps/crane-pick/ui/draw.js` (new, `window.CranePickDraw`): the Draw bar above the map and the "Site items" input tab. Tools:
+  obstruction (area; height above grade, top elevation), power line (line; voltage, "not known, ≤ 350 kV", the utility / RPE clearance
+  over 1,000 kV, lowest wire height for C3), utility line and utility area (kind utility / culvert / wall / other; depth to top, top
+  elevation, size; for the C4 stress-at-depth checks), exclusion zone (area; reason), label (text, size), dimension (two points; distance
+  and bearing, live while drawing). Drawing: clicks; double-click / Enter / Finish / a click on the first point ends; Backspace, Esc.
+  Editing: click to select; vertex handles (drag; double-click removes), "+" handles (drag adds a point), ✥ handle, body drag (mouse),
+  a selected label drags by its text; properties and vertex coordinates (zone units) in the tab; Delete key / ×. Every finished drag or
+  edit is one undo step; drag redraws are throttled to one per animation frame (`CranePickMap.raf`) and the tab's computed values follow
+  live. Site tab: one table per type with the computed values and the worked steps (links from the tab); Report: §"Site items" with a
+  site-plan SVG figure (north up, scale bar, buffers), tables, the OSHA Table A note and the worked steps.
+- `engine/osha.js` (added in C1-1, now loaded), `index.html` (the two scripts, CSS), `ui/app.js` (`itab` event), `ui/map.js` (a tool
+  click is flagged so it does not clear the selection; while a tool is active the items let clicks through, class `crTool`; fractional
+  zoom 0.25 so a fitted sheet fills the view), `ui/sheets.js` (the sheet's handles and blue outline only while the Plan sheets tab is open).
+### OSHA values used (CLAUDE.md §4: new code reference; engineer to confirm)
+29 CFR 1926.1408 Table A "Minimum Clearance Distances" (Cranes and Derricks in Construction, 75 FR 47906, Aug. 9, 2010; current eCFR):
+
+| Voltage (nominal, kV, AC) | Minimum clearance (ft) |
+|---|---|
+| up to 50 | 10 |
+| over 50 to 200 | 15 |
+| over 200 to 350 | 20 |
+| over 350 to 500 | 25 |
+| over 500 to 750 | 35 |
+| over 750 to 1,000 | 45 |
+| over 1,000 | as established by the utility owner/operator or a registered professional engineer who is a qualified person with respect to electrical power transmission and distribution |
+
+Table note: the value after "to" is included in its row ("over 50 to 200" includes 200 kV). Source check: the official eCFR / OSHA pages
+could not be opened from this session (network); the values were confirmed against search results limited to osha.gov, ecfr.gov,
+govinfo.gov (CFR 2012 / 2014 annual editions of § 1926.1408) and federalregister.gov (75 FR 47906), which agree with each other.
+**Engineer to confirm against the current eCFR text before relying on it.**
+Check cases (`tests/engine/crane-geo.test.mjs`, `tests/smoke/crane-draw.mjs`): 0.12 / 13.8 / 50 kV → 10 ft; 50.01 / 115 / 200 kV → 15 ft;
+230 / 345 / 350 kV → 20 ft; 350.1 / 500 kV → 25 ft; 735 / 750 kV → 35 ft; 765 / 1,000 kV → 45 ft; 1,100 kV → not set until entered.
+The plan buffer drawn around the line has radius D_min (tested: every point of a vertex circle at D_min from the vertex).
+### Decisions (pending engineer review)
+- Voltage not known: 50 ft (1926.1409's Option 2 distance for lines over 350 kV, conservative); 20 ft when the user ticks "the utility
+  says 350 kV or less" (1926.1408(a)(2)(ii) Option 2). Table A only with an entered voltage (Option 3 needs the utility's voltage).
+- The buffer is the horizontal (plan) distance only; the step note and the tab say the clearance applies in 3D to any part of the
+  equipment, load line or load (checked in C3).
+- "Items drawn on a sheet" (moved by a georeference) = items whose every point lies inside the sheet's footprint before the move.
+- A click on the empty map clears the selection; a click that ends a drag, or that lands on a handle or label, does not.
+### Tests
+`node tests/smoke/crane-draw.mjs` (7 checks), `crane-sheets.mjs` (8), `crane-shell.mjs` (11); `node tests/engine/run.mjs crane` (10);
+`node tests/check-syntax.mjs`.

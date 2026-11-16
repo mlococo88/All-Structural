@@ -3,7 +3,8 @@
    (shared/projects.js history, session only; the map view and the page's tabs are not steps). The other ui/*.js files register their
    input tabs (inTab) and output tabs (outTab) and listen to the events below; they change the project only through update() / live().
    Events: 'project' (a different project or an undo / redo: redraw everything), 'change' (kind: 'title' | 'notes' | 'site' | 'sheets' |
-   'items' | 'select' …), 'live' (during a drag: only what moves is redrawn; no autosave, no undo step), 'tab' (an output tab shown). */
+   'items' | 'select' …), 'live' (during a drag: only what moves is redrawn; no autosave, no undo step), 'tab' (an output tab shown),
+   'itab' (an input tab shown). */
 (function () {
   'use strict';
   const M = window.CranePickModel;
@@ -55,6 +56,7 @@
     document.querySelectorAll('#inTabs [data-itab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.itab === id)));
     document.querySelectorAll('#inPanes [data-pane]').forEach(p => { p.hidden = p.dataset.pane !== id; });
     const t = inTabs.find(x => x.id === id); if (t && t.show) t.show();
+    emit('itab', id);
   }
   function showOTab(id) {
     if (!outTabs.some(t => t.id === id)) id = outTabs[0].id;

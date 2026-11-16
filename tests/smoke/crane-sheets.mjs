@@ -44,7 +44,7 @@ try {
   await p.waitForSelector('[data-sp=chip]'); await p.waitForTimeout(500);
   await makePlan(p, PNG); await makePdf(PDF);
   // 1. add a PNG
-  assert.deepEqual(await p.$$eval('#inTabs [data-itab]', a => a.map(x => x.textContent)), ['Project', 'Site & map', 'Plan sheets']);
+  assert.deepEqual((await p.$$eval('#inTabs [data-itab]', a => a.map(x => x.textContent))).slice(0, 3), ['Project', 'Site & map', 'Plan sheets']);
   await p.setInputFiles('#shFile', PNG); await until(async () => (await proj()).sheets.length === 1, 5000, 'sheet added');
   let s = await sheet(); assert.equal(s.w, 2400); assert.equal(s.h, 1600); assert.equal(s.basis, 'none'); assert.equal(s.kind, 'image');
   await until(() => p.evaluate(() => !!document.querySelector('img.crSheet')), 5000, 'img');

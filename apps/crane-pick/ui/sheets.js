@@ -76,7 +76,7 @@
       const u = urls.get(s.id);
       if (u && !L.img) { const im = document.createElement('img'); im.className = 'crSheet leaflet-image-layer leaflet-zoom-animated'; im.alt = ''; im.draggable = false; im.src = u; im.dataset.sheet = s.id; pane.appendChild(im); L.img = im; }
       if (L.img) { L.img.style.width = s.w + 'px'; L.img.style.height = s.h + 'px'; L.img.style.opacity = String(s.opacity); L.img.style.display = s.visible ? '' : 'none'; L.img.style.zIndex = String(i + 1); }
-      const on = s.id === sel, miss = u === null;
+      const on = s.id === sel && A.ui.itab === 'sheets', miss = u === null;
       L.foot.setStyle({ color: on ? '#2563EB' : miss ? '#B45309' : '#64748B', dashArray: on ? null : '6 4', opacity: s.visible || on ? 0.9 : 0.35, weight: on ? 2 : 1.5,
         fill: miss, fillColor: '#FDE68A', fillOpacity: miss ? 0.25 : 0 });
       position(s);
@@ -88,7 +88,7 @@
   function clearHandles() { handles.forEach(h => h.remove()); handles = []; }
   function drawHandles() {
     clearHandles();
-    const s = sheetOf(sel), m = MP() && MP().map; if (!s || !m || s.locked || !s.visible || pick) return;
+    const s = sheetOf(sel), m = MP() && MP().map; if (!s || !m || s.locked || !s.visible || pick || A.ui.itab !== 'sheets') return;   // handles while the Plan sheets tab is open
     const Lf = window.L, cpx = { px: s.w / 2, py: s.h / 2 };
     const cen = Lf.marker(MP().toLL(G.pxToFt(s.place, cpx.px, cpx.py)), { icon: hIcon('crMove', '✥', 'Drag to move the sheet'), draggable: true, keyboard: false, zIndexOffset: 1000 }).addTo(m);
     const rpx = () => ({ px: s.w / 2, py: -Math.max(s.h * 0.08, 40) });
@@ -368,5 +368,6 @@
   A.on('live', o => { if (o.kind === 'sheets') { /* drawn by the handle itself */ } });
   A.on('ready', () => { if (window.CranePickProject) window.CranePickProject.setImages(imagesFor, afterImport); });
   A.on('tab', id => { if (id === 'plan') setTimeout(sync, 0); });
+  A.on('itab', () => sync());
   window.CranePickSheets = { sync, select: id => { sel = id; sync(); drawTab(); }, get selected() { return sel; }, startPick, endPick, get pick() { return pick; }, urls, applyCal, applyGeo, applyPlanScale, fitSheet, cleanUp, onFile };
 })();
