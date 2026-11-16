@@ -3006,7 +3006,7 @@ None new.
 - Lateral support placed after Spans and supports and before Member spacing; Bridge cross-section last on Geometry.
 - The deck-factor errors mark both Design criteria and Member.
 
-## 2026-11-16 — PR: claude/timber-gfx-1 (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (TBGX-1: graphics — cross-section and bending stress, factor chain of F<sub>b</sub>, check-ratio bars; engineer decision 2026-11-16)   [display only; no computed value, saved key or saved-data format change]
+## 2026-11-16 — PR: claude/timber-gfx-1 (PR #1601: https://github.com/mlococo88/All-Structural/pull/1601) (TBGX-1: graphics — cross-section and bending stress, factor chain of F<sub>b</sub>, check-ratio bars; engineer decision 2026-11-16)   [display only; no computed value, saved key or saved-data format change]
 
 ### TBGX1-a. What changes for the user
 - **Section Properties tab** (both modes), first in the card *Section properties*: the cross-section **to scale** (b<sub>w</sub> × d<sub>b</sub> as loaded; dimension lines; neutral axis; edgewise / flat; glulam laminations when the number is known (not for a custom section); the compression / tension halves for the sign of the governing moment; an NDS end notch dashed on the face it is cut from) and beside it **the bending stress**: linear, f at the extreme fibres against the capacity stress (dashed), ratio.
