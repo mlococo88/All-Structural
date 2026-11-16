@@ -791,7 +791,7 @@ Print all = 7 pages, Print sheet = 1, paper B; Report order, §1 / §2, figure n
 `crane-clear3d` (8), `crane-elev` (7), `crane-3d` (7), `crane-sheets` (8), `crane-library` (9); `node tests/check-syntax.mjs`.
 
 ## 2026-11-16 — C8: preliminary terrain from USGS 3DEP (levelness, blocking, ground elevations, pad grading, route grades, contours)
-PR: (link added after the PR is opened, same PR)
+PR #1616: https://github.com/mlococo88/All-Structural/pull/1616
 Engineer decision 2026-11-16: USGS 3DEP online ONLY for now (no survey import, no clicked spot elevations). Every terrain value is labelled
 "preliminary terrain (USGS 3DEP, ~1–3 m)"; the Terrain tab and Report §Terrain state that it is not adequate to certify crane levelness
 or grades — survey data governs.
