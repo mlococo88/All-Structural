@@ -117,7 +117,7 @@ localStorage); Export JSON may add `images: { <sheet id>: data URL }` (option, o
 `node tests/check-syntax.mjs`.
 
 ## 2026-11-16 — C1-3: site items (drawing, dragging, editing), OSHA power-line clearance, Site and Report sections
-PR: link below once opened.
+PR #1604: https://github.com/mlococo88/All-Structural/pull/1604
 ### Where
 - `apps/crane-pick/ui/draw.js` (new, `window.CranePickDraw`): the Draw bar above the map and the "Site items" input tab. Tools:
   obstruction (area; height above grade, top elevation), power line (line; voltage, "not known, ≤ 350 kV", the utility / RPE clearance
