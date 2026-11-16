@@ -1,12 +1,14 @@
 // Shared helpers for the headless test kit (dev tooling only; the tools themselves never load anything from tests/).
 // - loadPlaywright(): the playwright package from a local node_modules or the global npm root (no browser download).
-// - openPage(): Chromium with every CDN library served from tests/libs (routing), Google Fonts answered empty, all other
+// - openPage(): Chromium with every CDN library served from tests/libs (routing), Google Fonts answered empty, map tiles answered with a
+//   blank tile (2026-11-16), all other
 //   network requests blocked and listed; console errors, page errors and dialogs recorded; optional localStorage seed.
 // - resolveFile(): a tool file from the working tree, or "<git ref>:<file>" / a bare git ref extracted with git show.
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
+import zlib from 'zlib';
 import { execFileSync } from 'child_process';
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
@@ -34,6 +36,16 @@ export function libFor(url) {
   for (const [pre, dir] of Object.entries(MANIFEST.prefixes || {})) if (k.startsWith(pre)) return path.join(HERE, 'libs', dir, k.slice(pre.length));
   return null;
 }
+// a 256 x 256 light grey PNG (made once with zlib; the tile answer above)
+const TILE = /^https:\/\/(server\.arcgisonline\.com\/ArcGIS\/rest\/services\/World_Imagery\/MapServer\/tile\/|tile\.openstreetmap\.org\/|[abc]\.tile\.openstreetmap\.org\/)/;
+export const BLANK_TILE = (() => {
+  const crcT = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc = b => { let c = 0xffffffff; for (const x of b) c = crcT[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const chunk = (t, d) => { const l = Buffer.alloc(4); l.writeUInt32BE(d.length); const td = Buffer.concat([Buffer.from(t), d]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([l, td, c]); };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(256, 0); ihdr.writeUInt32BE(256, 4); ihdr[8] = 8; ihdr[9] = 0;   // 8-bit greyscale
+  const raw = Buffer.alloc(257 * 256); for (let y = 0; y < 256; y++) { raw[y * 257] = 0; raw.fill(0xdd, y * 257 + 1, y * 257 + 257); }
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+})();
 const TYPES = { '.js': 'application/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf' };
 
 export async function openPage(file, { ls, vw = 1400, vh = 1000, hash = '', timeout } = {}) {   // timeout: page load, ms (default 30 s)
@@ -47,6 +59,9 @@ export async function openPage(file, { ls, vw = 1400, vh = 1000, hash = '', time
     const f = libFor(u);
     if (f && fs.existsSync(f)) return r.fulfill({ path: f, contentType: TYPES[path.extname(f)] || 'application/octet-stream', headers: { 'Access-Control-Allow-Origin': '*' } });
     if (/^https?:\/\/fonts\.(googleapis|gstatic)\.com/.test(u)) return r.fulfill({ body: '', contentType: 'text/css' });
+    // map tiles (Esri World Imagery, OpenStreetMap; the Crane Pick Analyzer's and Bridge Geometry's base maps): a blank 256 px tile, so a map opens
+    // without console errors and without the network (2026-11-16). A smoke that tests the offline case routes them on its page (p.route wins).
+    if (TILE.test(u)) return r.fulfill({ body: BLANK_TILE, contentType: 'image/png' });
     blocked.add(u.slice(0, 160)); return r.abort();
   });
   const errs = [], dialogs = [];

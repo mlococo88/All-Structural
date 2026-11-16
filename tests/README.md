@@ -206,6 +206,12 @@ node tests/smoke/home-projects.mjs [--tool asce7,spreadfooting,...] [--shots <di
 # nothing; then each tool's own dialog shows "synced" and the tool uploads nothing (its file = the home page's file); GitHub newer; token. ~4 min
 node tests/smoke/home-sync.mjs [--tool asce7,spreadfooting,...] [--shots <dir>]
 
+# Crane Pick Analyzer (apps/crane-pick): the shell, the map (base layers with mocked tiles, scale bar, cursor coordinates = proj4, go to
+# lat/long and State Plane), title block, Undo / Redo, saved projects, Export / Import JSON, Cloud sync (mock GitHub, token checks), keys
+# crane.* only, offline tiles notice, Site / Report tabs, 390 px. Engine (coordinates against Snyder's published examples, OSHA Table A):
+# node tests/engine/run.mjs crane. ~1 min
+node tests/smoke/crane-shell.mjs   # SHOTS=<dir> for screenshots
+
 # Bridge Suite standard save (BSS, shared/bridge-suite-projects.js) in index.html / lldf.html / Prestressed Bridge Design.html (a page that
 # does not load the adapter yet is skipped): seeded suite list with a duplicate name; chip, header order, the dialog's rows, Save as (new /
 # "Replace it" into the newest entry, other parts and demands kept), Ctrl+S, Rename / Duplicate / Delete, sync off = no request and no key,

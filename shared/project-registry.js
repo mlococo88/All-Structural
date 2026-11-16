@@ -85,7 +85,11 @@
       key: 'rebar_aci_projects_v1', space: 2 },
     { tool: 'bridge-geometry', label: 'Bridge Geometry', name: 'Bridge Geometry', href: 'Bridge%20Geometry.html',
       key: 'bridgeGeomEngine.library.v1', time: i => i && i.savedAt || null, space: 2,   // its own library panel: by name, "Saved" = savedAt
-      toFile: (i, n) => { const o = Object.assign({}, i, { name: n }); delete o.savedAt; return o; } }
+      toFile: (i, n) => { const o = Object.assign({}, i, { name: n }); delete o.savedAt; return o; } },
+    // Crane Pick Analyzer (apps/crane-pick, C1 2026-11-16): its mapStore over crane.projects.v1 (newest first by savedAt); toFile = its own
+    // ui/project.js toFile (engine/model.js toFile without images: { format, version, project }); def: the file with its ctx.cloud
+    { tool: 'crane-pick', label: 'Crane Pick Analyzer', name: 'Crane Pick Analyzer', href: 'apps/crane-pick/index.html', def: 'apps/crane-pick/ui/project.js',
+      key: 'crane.projects.v1', time: i => i && i.savedAt || null, sort: 'saved', space: 1, toFile: i => ({ format: 'crane-pick.project', version: 1, project: i }) }
   ];
   /* sbd2View(storage): apps/steel-bridge's list (engine/library.js: sbd2.lib.index { schema: 'sbd2.library', items: [{ id, name, saved,
      size }] } + one key sbd2.lib.p.<id> per item, holding the Export JSON text) by name, as the app's own sync (index.html ghStore) sees

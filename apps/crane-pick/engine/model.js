@@ -1,0 +1,105 @@
+/* apps/crane-pick/engine/model.js — the Crane Pick Analyzer project (window.CranePickModel). Classic script, no DOM. C1 (2026-11-16).
+
+   Saved data (CLAUDE.md §5; every key starts with "crane."):
+     crane.project.current   the open project (autosave, JSON of the project below; written on every change)
+     crane.projects.v1       the saved-project list (shared/projects.js mapStore: { "<name>": project with savedAt })
+     crane.open              the name of the saved project the open project belongs to ('' when none)
+     crane.ui                the page's view choices (tabs, base map), per browser; never part of a project
+     IndexedDB crane.sheets.v1, store "img"   the plan-sheet images (one record per sheet id: { id, blob, type, name, w, h, at });
+                             a project keeps the sheet's placement and calibration only, so the list stays small (ui/sheetstore.js)
+   File (Export JSON, GitHub sync): { format: 'crane-pick.project', version: 1, project } (+ images: { <sheet id>: data URL } when the
+   user chose to include them in an exported file; never in the GitHub copy).
+
+   Project v1 (positions: the site frame of engine/geo.js, grid US survey ft of the project's zone):
+     { schema: 'crane-pick.project', v: 1,
+       title: { name, number, location, client, by, checker, date, rev }, notes,
+       site: { zone },                                     the State Plane zone (geo.js ZONES id)
+       view: { lat, lng, z }                               the map view (kept with the project; not an "unsaved change", not an undo step)
+       sheets: [ sheet ], items: [ item ], savedAt? }
+     sheet = { id, name, kind: 'image' | 'pdf', page, w, h (px), place: { x, y, s, rot }, opacity (0–1), locked, visible,
+               cal: { p1: { px, py }, p2, dist (ft) } | null, geo: { p1, p2, g1: { E, N }, g2 (zone units) } | null, planScale (1" = ft, text) }
+     item  = { id, type, name, pts: [{ x, y }], ... }   type: 'obst' (polygon: height ft), 'power' (polyline: kv, le350, setFt, height),
+             'util' (polyline or polygon (closed): kind, depth ft, topEl ft, size ft), 'excl' (polygon: reason), 'label' (one point:
+             text, size), 'dim' (two points: a dimension) */
+(function () {
+  'use strict';
+  const KEYS = { current: 'crane.project.current', list: 'crane.projects.v1', open: 'crane.open', ui: 'crane.ui', idb: 'crane.sheets.v1' };
+  const FORMAT = 'crane-pick.project';
+  const TYPES = {
+    obst: { label: 'Obstruction', geom: 'polygon', min: 3 },
+    power: { label: 'Power line', geom: 'polyline', min: 2 },
+    util: { label: 'Buried utility / culvert / wall', geom: 'either', min: 2 },
+    excl: { label: 'Exclusion zone', geom: 'polygon', min: 3 },
+    label: { label: 'Text label', geom: 'point', min: 1 },
+    dim: { label: 'Dimension', geom: 'polyline', min: 2, max: 2 }
+  };
+  const UTIL_KINDS = { utility: 'Buried utility', culvert: 'Culvert', wall: 'Wall', other: 'Other' };
+  const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  function newProject(o) {
+    o = o || {};
+    return { schema: FORMAT, v: 1,
+      title: { name: 'New crane pick', number: '', location: '', client: '', by: '', checker: '', date: today(), rev: '' },
+      notes: '', site: { zone: o.zone || 'EPSG:2249' }, view: o.view || null, sheets: [], items: [] };
+  }
+  const num = (v, d) => typeof v === 'number' && isFinite(v) ? v : d;
+  const numOrNull = v => typeof v === 'number' && isFinite(v) ? v : null;
+  const str = (v, d) => v == null ? (d == null ? '' : d) : String(v);
+  const pt = p => p && isFinite(p.x) && isFinite(p.y) ? { x: +p.x, y: +p.y } : null;
+  const pxp = p => p && isFinite(p.px) && isFinite(p.py) ? { px: +p.px, py: +p.py } : null;
+  let seq = 0;
+  const uid = pre => pre + Date.now().toString(36) + (seq++).toString(36) + Math.random().toString(36).slice(2, 6);
+  function normItem(it) {
+    if (!it || !TYPES[it.type]) return null;
+    const T = TYPES[it.type], pts = (Array.isArray(it.pts) ? it.pts : []).map(pt).filter(Boolean);
+    if (pts.length < T.min) return null;
+    const o = { id: str(it.id) || uid('i'), type: it.type, name: str(it.name), pts: T.max ? pts.slice(0, T.max) : pts };
+    if (it.type === 'obst') { o.height = numOrNull(it.height); o.topEl = numOrNull(it.topEl); }
+    if (it.type === 'power') { o.kv = numOrNull(it.kv); o.le350 = !!it.le350; o.setFt = numOrNull(it.setFt); o.height = numOrNull(it.height); }
+    if (it.type === 'util') { o.kind = UTIL_KINDS[it.kind] ? it.kind : 'utility'; o.closed = !!it.closed && pts.length >= 3; o.depth = numOrNull(it.depth); o.topEl = numOrNull(it.topEl); o.size = numOrNull(it.size); }
+    if (it.type === 'excl') o.reason = str(it.reason);
+    if (it.type === 'label') { o.text = str(it.text, 'Label'); o.size = Math.max(8, Math.min(48, num(it.size, 14))); }
+    return o;
+  }
+  function normSheet(s) {
+    if (!s || typeof s !== 'object') return null;
+    const pl = s.place || {};
+    if (!(num(pl.s, 0) > 0) || !(num(s.w, 0) > 0) || !(num(s.h, 0) > 0)) return null;
+    const cal = s.cal && pxp(s.cal.p1) && pxp(s.cal.p2) && num(s.cal.dist, 0) > 0 ? { p1: pxp(s.cal.p1), p2: pxp(s.cal.p2), dist: +s.cal.dist } : null;
+    const g = s.geo, gp = q => q && isFinite(q.E) && isFinite(q.N) ? { E: +q.E, N: +q.N } : null;
+    const geo = g && pxp(g.p1) && pxp(g.p2) && gp(g.g1) && gp(g.g2) ? { p1: pxp(g.p1), p2: pxp(g.p2), g1: gp(g.g1), g2: gp(g.g2) } : null;
+    return { id: str(s.id) || uid('s'), name: str(s.name, 'Plan sheet'), kind: s.kind === 'pdf' ? 'pdf' : 'image', page: Math.max(1, Math.round(num(s.page, 1))),
+      w: +s.w, h: +s.h, place: { x: num(pl.x, 0), y: num(pl.y, 0), s: +pl.s, rot: num(pl.rot, 0) },
+      opacity: Math.max(0.05, Math.min(1, num(s.opacity, 0.8))), locked: !!s.locked, visible: s.visible !== false, cal, geo, planScale: str(s.planScale) };
+  }
+  /* normalize(p): a project as this version keeps it (unknown fields dropped, defaults filled; never throws) */
+  function normalize(p) {
+    const d = newProject(); if (!p || typeof p !== 'object') return d;
+    const t = p.title || {};
+    const o = { schema: FORMAT, v: 1, title: {}, notes: str(p.notes), site: { zone: (p.site && typeof p.site.zone === 'string') ? p.site.zone : d.site.zone },
+      view: p.view && isFinite(p.view.lat) && isFinite(p.view.lng) ? { lat: +p.view.lat, lng: +p.view.lng, z: num(p.view.z, 17) } : null,
+      sheets: (Array.isArray(p.sheets) ? p.sheets : []).map(normSheet).filter(Boolean),
+      items: (Array.isArray(p.items) ? p.items : []).map(normItem).filter(Boolean) };
+    Object.keys(d.title).forEach(k => { o.title[k] = str(t[k], k === 'date' ? '' : ''); });
+    if (p.savedAt) o.savedAt = str(p.savedAt);
+    return o;
+  }
+  /* load(storage) -> { project, source: 'autosave' | 'new' } (an unreadable autosave is left in storage and a new project is opened) */
+  function load(storage) {
+    let raw = null; try { raw = storage.getItem(KEYS.current); } catch (e) { raw = null; }
+    if (raw) { try { const j = JSON.parse(raw); if (j && j.schema === FORMAT) return { project: normalize(j), source: 'autosave' }; } catch (e) { /* below */ }
+      return { project: newProject(), source: 'new', unreadable: true, noAutosave: true }; }
+    return { project: newProject(), source: 'new' };
+  }
+  function save(storage, P) { try { storage.setItem(KEYS.current, JSON.stringify(P)); return true; } catch (e) { return false; } }
+  /* the file */
+  function toFile(P, images) { const f = { format: FORMAT, version: 1, project: P }; if (images && Object.keys(images).length) f.images = images; return f; }
+  function fromFile(obj) {
+    if (!obj || typeof obj !== 'object') throw new Error('not a Crane Pick Analyzer file');
+    if (obj.format === FORMAT && obj.project) return { project: normalize(obj.project), images: obj.images && typeof obj.images === 'object' ? obj.images : {} };
+    if (obj.schema === FORMAT) return { project: normalize(obj), images: {} };
+    throw new Error('not a Crane Pick Analyzer file (format "' + (obj.format || obj.schema || '?') + '")');
+  }
+  /* text of the inputs (undo / "unsaved changes"): the project without the view and the saved time */
+  function inputsText(P) { const o = Object.assign({}, P); delete o.view; delete o.savedAt; return JSON.stringify(o); }
+  window.CranePickModel = { KEYS, FORMAT, TYPES, UTIL_KINDS, newProject, normalize, normItem, normSheet, load, save, toFile, fromFile, inputsText, uid };
+})();
