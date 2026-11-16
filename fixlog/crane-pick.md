@@ -164,7 +164,7 @@ The plan buffer drawn around the line has radius D_min (tested: every point of a
 `node tests/check-syntax.mjs`.
 
 ## 2026-11-16 — C2-1: crane library (GitHub / files), project cranes, crane cards, crane editor (paste from Excel)
-PR: (this PR, link added after merge)
+PR #1606: https://github.com/mlococo88/All-Structural/pull/1606
 ### Where
 - `apps/crane-pick/engine/cranes.js` (new, `window.CranePickCranes`, no DOM): crane files of schema `crane-pick.crane.v1` (the private
   library's SCHEMA.md): `parse` (structure check: schema, make / model, grid shape (one row per radius, one value per boom length),
