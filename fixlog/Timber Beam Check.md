@@ -2762,7 +2762,7 @@ Continues TBA2 (PR #1591). Every code site is tagged `TBA3`.
 - The checks: flexure (Art. 8.6 with C<sub>L</sub>, the lesser of C<sub>L</sub> and C<sub>V</sub>, C<sub>V</sub> with the governing case's zero-moment points), shear (Art. 8.7, V<sub>r</sub> = φF<sub>v</sub>bd/1.5 against V<sub>u</sub> here), bearing (Art. 8.8.3 with R<sub>u</sub>), deflection criteria (Art. 2.5.2.6.2 with the Service I deflections here); Strength II with C<sub>λ</sub> = 1.0.
 - Speed for long multi-span members (≈ 1 s for 3 × 30 ft on each input change).
 
-## 2026-11-16 — PR: claude/timber-aashto-t3a (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (TBA4: AASHTO phase T3, part 1 — flexure Art. 8.6.2 with the beam stability factor C<sub>L</sub> and, for glulam, the lesser of C<sub>L</sub> and C<sub>V</sub> with C<sub>V</sub> from the zero-moment points of the governing load case; shear Art. 8.7; PASS / FAIL)   [new capability: checks] [NDS results unchanged] [saved data: none new]
+## 2026-11-16 — PR: claude/timber-aashto-t3a (PR #1593: https://github.com/mlococo88/All-Structural/pull/1593) (TBA4: AASHTO phase T3, part 1 — flexure Art. 8.6.2 with the beam stability factor C<sub>L</sub> and, for glulam, the lesser of C<sub>L</sub> and C<sub>V</sub> with C<sub>V</sub> from the zero-moment points of the governing load case; shear Art. 8.7; PASS / FAIL)   [new capability: checks] [NDS results unchanged] [saved data: none new]
 
 Continues TBA3 (PR #1592). Every code site is tagged `TBA4`. Part 2 (bearing Art. 8.8.3, deflection Art. 2.5.2.6.2, glulam camber Art. 8.12.1, note-only items) follows as TBA5.
 
