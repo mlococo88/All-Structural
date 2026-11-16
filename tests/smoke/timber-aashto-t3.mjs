@@ -15,7 +15,7 @@ const FILE = path.join(REPO, 'Timber Beam Check.html');
 const fails = []; const ok = (c, msg) => { if (!c) fails.push(msg); };
 const { b, p, errs } = await openPage(FILE, { vw: 1400, vh: 1000 });
 await p.waitForFunction(() => window.TBC && window.TBC.res, null, { timeout: 30000 }); await p.waitForTimeout(800);
-await p.click('#tbcInTab_factors'); await p.selectOption('[data-fkey="dcode"]', 'AASHTO'); await p.waitForTimeout(600);
+await p.click('#tbcInTab_project'); await p.selectOption('[data-fkey="dcode"]', 'AASHTO'); await p.waitForTimeout(600);
 ok(await p.evaluate(() => !!document.querySelector('[data-fkey="latTop"]') && !!document.querySelector('[data-fkey="latBot"]')), 'Factors tab (AASHTO): lateral-support inputs');
 const st = async () => p.evaluate(() => ({ gov: document.getElementById('govStrip').innerText, govCls: document.getElementById('govStrip').className, text: document.getElementById('tabPages').innerText,
   dash: (document.getElementById('tbcDash') || {}).innerText || '', blocks: [...document.querySelectorAll('#tabPages .eqb')].map(e => (e.querySelector('.st') || {}).textContent || ''),
@@ -78,7 +78,7 @@ ok(!/§aas/.test(rt) && /see §\s*\d+\.\d+/i.test(rt) && /Governing check: /.tes
 ok(await p.evaluate(() => document.querySelectorAll('.katex-error').length) === 0, 'KaTeX errors in the report');
 if (args.shots) { const h = await p.$('#tabPages'); if (h) await p.screenshot({ path: path.join(args.shots, 't3-report.png') }); }
 // back to NDS: no AASHTO checks, NDS tabs
-await p.click('#tbcInTab_factors'); await p.selectOption('[data-fkey="dcode"]', 'NDS'); await p.waitForTimeout(500);
+await p.click('#tbcInTab_project'); await p.selectOption('[data-fkey="dcode"]', 'NDS'); await p.waitForTimeout(500);
 ok(await p.evaluate(() => TBC.ac === null && [...document.querySelectorAll('#tabBar button')][0].textContent.trim() === 'Summary'), 'NDS mode: no AASHTO checks');
 await p.selectOption('[data-fkey="dcode"]', 'AASHTO'); await p.waitForTimeout(400);
 // 390 px

@@ -2891,3 +2891,39 @@ None new.
 
 ### TBA6-g. Open items (AASHTO stringer design, after T4)
 - Decks (Art. 9.9; plank / panel relative deflection 0.10 in.), load rating (MBE), MSR / MEL lumber (Tables 8.4.1.1.4-2, -3; K<sub>bE</sub> 1.06 / 0.98), tension-reinforced glulam (Art. 8.4.1.3), skew correction (Art. 4.6.2.2.2e), pedestrian / sidewalk load (Art. 3.6.1.6), flat use in AASHTO mode (TBA4-g), owner (MassDOT / CTDOT / RIDOT) timber rules.
+
+## 2026-11-16 — PR: timber-codeswitch-project (PR #1596: https://github.com/mlococo88/All-Structural/pull/1596) (TBCS: the "Design code" card moves from the Factors input tab to the Project input tab; engineer decision 2026-11-16)   [display only; no computed value, saved key or saved-data format change]
+
+### TBCS-a. What changes for the user
+- Project input tab: Save and open · Title block · **Design code** · Hand-offs · Notes and assumptions. The Factors tab no longer has the card (NDS: Design method is now its first card; AASHTO: AASHTO adjustment factors).
+- Placement: directly after the title block, not first. "Save and open" stays the Project tab's first card (the standard save, approved 2026-11-05 / 11-06, the same in every tool), and the design code is a project setting read with the project's identity; the card is visible without scrolling far (at 390 px it starts about 630 px down, after Save and open and the title block).
+- Same field (`design.code`, select `data-fkey="dcode"`), the same options (`TBC_CODES`), the same `aasSwitch(v)` (with the T2 wet-service default, TBA2) and the same hint texts (NDS / AASHTO). The card stays collapsible (`mkSec`, id `inCode`, unnumbered).
+- Texts that point to it now say the Project tab: the AASHTO notice (AASHTO Materials, Bridge Loads and AASHTO Checks tabs) "set Design code to NDS 2018 (Project input tab) for them"; the SCL error box on the AASHTO Material pane "…or set Design code to NDS 2018 (Project input tab)."; the Manual tab, Inputs list: new first item "Project: the design code, NDS 2018 (buildings) or AASHTO LRFD 10th Ed. (bridge stringer), in the Design code card after the title block." The toast "untick it on the Factors tab for dry service" is unchanged (Wet service is still on the Factors tab). The Report has no tab reference to the code (its Status row "Design code" is unchanged).
+
+### TBCS-b. Code (anchors)
+- HTML, `#prjPane`, after the Title block card (anchor `<div class="hint">Printed on the Report.</div>`): new `<div id="tbcCodeHold"></div>` (comment `TBCS`). `#prjPane` survives `rebuildInputs()`, so the holder is emptied and refilled on every rebuild.
+- CSS after `#prjPane .secHead{cursor:default}`: `#prjPane #tbcCodeHold .secHead{cursor:pointer}` (the card's head still collapses it).
+- New `function buildCodeSec(P)` before `function buildProjectPane(P)`; its body is the block moved unchanged from `buildFactorsPane()`:
+  ```
+  mkSec(P, 'inCode', 'Design code', body => {   // TBA1 (engineer decision 2026-11-16): NDS 2018 or AASHTO LRFD 10th Ed. (bridge stringer); absent = NDS
+    fRow(body, 'Design code', selIn(TBC_CODES, () => dz.code === 'AASHTO' ? 'AASHTO' : 'NDS', v => aasSwitch(v), 'dcode'), '',
+      dz.code === 'AASHTO' ? 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 8: …' : 'NDS 2018 for building members. AASHTO LRFD 10th Ed. is for bridge stringers.');
+  }, { noNum: true });
+  ```
+- `buildProjectPane(P)`, first line: `{ const ch = $('tbcCodeHold'); if (ch) { ch.innerHTML = ''; buildCodeSec(ch); } else buildCodeSec(P); }`.
+- `buildFactorsPane(P)`: the block above removed (before: it followed `const dz = M.design;`; after: `const dz = M.design;   /* TBCS … */` then `if (aasOn()) { buildAasFactorsPane(P); return; }`).
+- `aasNotice()`: `(Factors input tab)` → `(Project input tab)`. `buildAasMaterialPane()` SCL `errBox`: `or set Design code to NDS 2018.` → `or set Design code to NDS 2018 (Project input tab).` Manual (`'<b>Factors:</b> design method …'`): the `'<b>Project:</b> …'` item inserted before it.
+- Smokes: `tests/smoke/timber-aashto.mjs`, `-t2.mjs`, `-t3.mjs` select the code on `#tbcInTab_project` (were `#tbcInTab_factors`); `-t2` opens the Factors tab before clicking Wet service and the Project tab before the next code change.
+
+### TBCS-c. §4 / §5
+- §4: none (no formula, factor, unit or code reference changed; engine `TBC-ENGINE` unchanged). §5: none (same field, same keys; the input-tab key `tbcInTab` unchanged).
+- **Check case:** default project, Project tab, Design code → AASHTO: wet service ticked (Art. C8.4.4.3 default), tabs AASHTO Materials | Bridge Loads | AASHTO Checks | Report, one Design code card; → NDS: TBC.res identical to before the switch (timber-aashto-t2).
+
+### TBCS-d. How verified
+- `node tests/check-syntax.mjs`: all pass. `node tests/timber-nds-parity.mjs`: 3,952 NDS projects + 4 legacy files, 15,816 comparisons, **0 differences**. `node tests/engine/run.mjs timber report steps`: 12 files, 116 passed.
+- Smokes (one browser at a time): `timber-aashto` part 1 (origin/main vs branch, NDS): TBC.res, governing strip, left column and Report identical for every project; the only differences are the Manual tab of each project, by exactly the one new "Project:" line (checked by diffing the Manual text main vs branch: 72 → 73 lines, no other line changed); part 2 PASS. `timber-aashto-t2`, `timber-aashto-t3`: PASS. `project-library --tool timber`, `home-projects --tool timber`: ALL PASS; `decimal-entry --tool timber`: 15 numeric fields, 0 lose a keystroke or the focus.
+- 390 px (deviceScaleFactor 1): the select is visible on the Project tab (x 198–328 px of 390), no horizontal page scroll (scrollWidth 390), not on the Factors tab; 0 console errors.
+- **Other copies:** none.
+
+### TBCS-e. Decisions (pending engineer review)
+- The card after the title block rather than first (TBCS-a). At 390 px the select shows "NDS 2018 (buildi…" truncated, as it did on the Factors tab (the standard field row); the hint below names the code.
