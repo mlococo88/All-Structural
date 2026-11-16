@@ -337,7 +337,10 @@
   }
   /* ---------- stress at depth ---------- */
   const toLocal = (setup, p) => { const h = rad(setup.heading || 0), dx = p.x - setup.x, dy = p.y - setup.y; return { x: dx * Math.sin(h) + dy * Math.cos(h), y: -dx * Math.cos(h) + dy * Math.sin(h) }; };
-  function depthOf(it, setup) { if (isNum(it.depth) && it.depth > 0) return { z: it.depth, from: 'depth to top entered' }; if (isNum(it.topEl)) { const pad = isNum(setup.pad) ? setup.pad : 0, z = pad - it.topEl; if (z > 0) return { z, from: `pad el. ${fmt(pad, 2)} − top el. ${fmt(it.topEl, 2)}` }; } return null; }
+  function depthOf(it, setup) { if (isNum(it.depth) && it.depth > 0) return { z: it.depth, from: 'depth to top entered' }; if (isNum(it.topEl)) {
+      // C8: with "use terrain" on and the pad not entered, the lowest ground under the supports (USGS 3DEP preliminary terrain; the smallest depth: conservative)
+      const EL = window.CranePickElev, tz = !isNum(setup.pad) && EL && EL.terrain && EL.terrain.depthPad ? EL.terrain.depthPad(setup) : null;
+      const pad = isNum(setup.pad) ? setup.pad : isNum(tz) ? tz : 0, z = pad - it.topEl; if (z > 0) return { z, from: isNum(tz) && !isNum(setup.pad) ? `ground el. ${fmt(pad, 2)} (lowest under the supports, USGS 3DEP preliminary terrain) − top el. ${fmt(it.topEl, 2)}` : `pad el. ${fmt(pad, 2)} − top el. ${fmt(it.topEl, 2)}` }; } return null; }
   /* the loaded areas of a sample (crane frame): [{ kind, x, y, B (along x), L (along y), q (psf) } | track { y, B (width), L (length), q0, gy, tri }] */
   function areasOf(out, s, j) {
     const S = out.S, mat = out.mat;
