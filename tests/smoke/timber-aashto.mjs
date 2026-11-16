@@ -58,6 +58,13 @@ async function collect(file) {
 // the same starting model in both pages: the working tree's default model
 const A = await collect(path.join(dirA, FILE));
 const B = await collect(path.join(REPO, FILE));
+// TBIT (2026-11-16): a reference with the input tabs of the earlier layout (Factors / Material): the Method & Manual tab's Inputs list
+// names the new tabs; the branch's list is checked here, then that list is left out of the comparison (the rest of the tab must be identical)
+const TBIT = /Factors: design method/.test(A.out.default.man ? A.out.default.man.tab : '');
+if (TBIT) {
+  ok(/ Inputs Project: .* Geometry: .* Member: .* Loads: .* Design criteria: design method .* Analysis /.test(B.out.default.man.tab), 'TBIT: Manual Inputs list in the new tab order');
+  for (const X of [A, B]) for (const name of Object.keys(NDS)) if (X.out[name].man) X.out[name].man.tab = X.out[name].man.tab.replace(/ Inputs .*? Analysis /, ' Inputs Analysis ');
+}
 let nCmp = 0, nDiff = 0;
 // TBAT: a reference without the Section Properties tab: its Design Values tab = the branch's Section Properties card + Design Values tab; the
 // expected differences are the card numbers, the link texts that name the tab ("Section Properties tab") and the new A row (link) of the self-weight
@@ -127,7 +134,7 @@ console.log(`part 1 (NDS parity, ${dirA} vs working tree): ${Object.keys(NDS).le
   // input error: SCL
   await p.evaluate(() => { TBC.model.material.type = 'scl'; TBC.fullRebuild(); }); await p.waitForTimeout(400);
   s = await st(); ok(!s.A.ok && /SCL/.test(s.gov + s.text) || /input/.test(s.gov), 'SCL error shown: ' + s.gov);
-  ok(await p.evaluate(() => document.getElementById('tbcInTab_material').classList.contains('has-err')), 'SCL error marks the Material input tab');
+  ok(await p.evaluate(() => document.getElementById('tbcInTab_member').classList.contains('has-err')), 'SCL error marks the Member input tab')   // TBIT: Member (was Material);
   await p.evaluate(() => { TBC.model.material.type = 'glulam'; TBC.fullRebuild(); }); await p.waitForTimeout(300);
   // autosave and reload
   const saved = await p.evaluate(() => JSON.parse(localStorage.getItem('tbc_autosave_v1')));
