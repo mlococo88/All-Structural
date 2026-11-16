@@ -109,7 +109,7 @@ console.log(`part 1 (NDS parity, ${dirA} vs working tree): ${Object.keys(NDS).le
   // Report
   await p.click('#tab_rpt'); await p.waitForTimeout(1200);
   const rt = await p.evaluate(() => typeof TBRP !== 'undefined' && TBRP.doc ? SharedReport.text(TBRP.doc) : '');
-  ok(/AASHTO LRFD/.test(rt) && /No checks yet/.test(rt) && !/NaN|undefined/.test(rt), 'AASHTO report text: ' + rt.slice(0, 300));
+  ok(/AASHTO LRFD/.test(rt) && /Result: (OK — governing|NG — governing|No checks: )/.test(rt)   /* TBA4: the result line of the checks */ && !/NaN|undefined/.test(rt), 'AASHTO report text: ' + rt.slice(0, 300));
   ok(await p.evaluate(() => document.querySelectorAll('.katex-error').length) === 0, 'KaTeX errors in the report');
   // input error: SCL
   await p.evaluate(() => { TBC.model.material.type = 'scl'; TBC.fullRebuild(); }); await p.waitForTimeout(400);
