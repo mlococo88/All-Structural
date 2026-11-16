@@ -364,7 +364,7 @@ migration, no new storage key.
 (11), `crane-sheets.mjs` (8), `crane-draw.mjs` (7); `node tests/check-syntax.mjs`.
 
 ## 2026-11-16 — C3-2: 3D clearances along the path, the path model setting, the elevation view
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1610: https://github.com/mlococo88/All-Structural/pull/1610
 ### Where
 - `apps/crane-pick/engine/clear3d.js` (new, `window.CranePickClear`, no DOM): `segSeg3`, `cpPoly`, `ptPrism`, `discPrism`, `segPrism`,
   `spanRect`, `envelope` (the site item as prisms), `check` (every power line, obstruction and exclusion zone against the boom, load line,
