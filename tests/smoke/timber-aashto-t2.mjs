@@ -23,20 +23,20 @@ const st = async () => p.evaluate(() => ({ tabs: [...document.querySelectorAll('
   kerr: document.querySelectorAll('.katex-error').length, AL: TBC.al, A: TBC.aas,
   saved: JSON.parse(localStorage.getItem('tbc_autosave_v1')) }));
 // 1. wet default on the first switch; back to NDS: dry and the NDS results
-await p.click('#tbcInTab_factors'); await p.selectOption('[data-fkey="dcode"]', 'AASHTO'); await p.waitForTimeout(600);
+await p.click('#tbcInTab_project'); await p.selectOption('[data-fkey="dcode"]', 'AASHTO'); await p.waitForTimeout(600);
 let s = await st();
 ok(s.saved.design.moisture === 'Wet' && s.saved.design.aashto.ndsMoist === 'Dry', `first switch to AASHTO: wet (saved ${s.saved.design.moisture}, ndsMoist ${s.saved.design.aashto.ndsMoist})`);
 ok(await p.evaluate(() => document.querySelector('[data-fkey="wet"]').checked), 'Wet service box ticked');
 ok(s.saved.version === 5, 'version 5 with the kept NDS setting: ' + s.saved.version);
 ok(s.tabs.join('|') === 'AASHTO Materials|Bridge Loads|AASHTO Checks|Report', 'tabs: ' + s.tabs.join('|'));   // TBA4
 // untick wet in AASHTO, back to NDS, to AASHTO again: the AASHTO setting (dry) comes back; NDS stays dry
-await p.click('[data-fkey="wet"]'); await p.waitForTimeout(400);
-await p.selectOption('[data-fkey="dcode"]', 'NDS'); await p.waitForTimeout(500);
+await p.click('#tbcInTab_factors'); await p.click('[data-fkey="wet"]'); await p.waitForTimeout(400);
+await p.click('#tbcInTab_project'); await p.selectOption('[data-fkey="dcode"]', 'NDS'); await p.waitForTimeout(500);
 ok(await p.evaluate(() => JSON.stringify(TBC.res)) === ndsRes, 'NDS results after AASHTO wet / dry and back');
 await p.selectOption('[data-fkey="dcode"]', 'AASHTO'); await p.waitForTimeout(500);
 ok(await p.evaluate(() => TBC.model.design.moisture) === 'Dry', 'second switch: the AASHTO setting kept (dry)');
-await p.click('[data-fkey="wet"]'); await p.waitForTimeout(300);
-await p.selectOption('[data-fkey="dcode"]', 'NDS'); await p.waitForTimeout(400);
+await p.click('#tbcInTab_factors'); await p.click('[data-fkey="wet"]'); await p.waitForTimeout(300);
+await p.click('#tbcInTab_project'); await p.selectOption('[data-fkey="dcode"]', 'NDS'); await p.waitForTimeout(400);
 ok(await p.evaluate(() => TBC.model.design.moisture === 'Dry' && TBC.model.design.aashto.moist === 'Wet'), 'NDS: dry; the AASHTO wet setting kept in design.aashto.moist');
 ok(await p.evaluate(() => JSON.stringify(TBC.res)) === ndsRes, 'NDS results unchanged');
 await p.selectOption('[data-fkey="dcode"]', 'AASHTO'); await p.waitForTimeout(400);
