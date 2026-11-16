@@ -722,3 +722,70 @@ storage key.
 changes the swept path and the card mid-drag and clears it, one undo step; overhead line, posted bridge, power line (Table T, spotter);
 Route tab tables and the turn link; C5 link and "move the pick pose"; Report §Route; reload; 390 px; 0 console errors);
 `crane-draw` (7, fixed), `crane-shell` (11) and `crane-picks` (5) (their output-tab lists now include Route), `crane-tandem` (6), `crane-ground` (5), `crane-place` (9); `node tests/check-syntax.mjs`.
+
+## 2026-11-16 — C7: lift-plan drawings (DXF), Summary tab, multi-lift summary, Report polish
+PR #1615: https://github.com/mlococo88/All-Structural/pull/1615
+### Where
+- `apps/crane-pick/ui/drawset.js` (new, `window.CranePickDrawSet`, no DOM, Node-tested): `summary(P, ctx)` (one row per lift: single picks,
+  girder lifts per crane, trucking routes), `notesModel(P, ctx)` (the general notes = Report §2 Basis), `build(P, ctx, opt)` (the drawing set
+  as one `shared/dxf.js` display list): cover and sheet index (lift summary table, trucking routes, revisions), general notes, a lift plan
+  per single pick (plan to scale: site items clipped to the view, plan-sheet outlines, power-line D_min buffers, the crane footprint,
+  outrigger beams, floats, mats, tail swing, boom at the pick / set / governing point, swing path, P / S / G, 3D clearance flags F1…,
+  north arrow, scale bar, State Plane grid ticks; elevations at the pick and the set to the same scale with the site items the section
+  crosses; the lift data table, flags, notes, "REPORT SEC. x.y"), a lift plan per girder lift (both cranes, the girder at the pick and set
+  poses, the path, waypoints, each crane's boom and hook at its governing step; the elevation at each crane's governing step) and its
+  rigging / load-share sheet (girder, CG, lifting points, R1 / R2 and the hook loads, dimensions from end A, the engine's load-share
+  steps as text, the rigging table), the ground sheet (one plan panel per setup with floats / tracks, mats and the largest loads; tables
+  of float / track loads and bearing, the mat specification and allowable, stress at depth incl. both cranes summed), a route sheet per
+  trucking route (C6: path, swept outlines, marks, the vehicle at the stop, turn labels outside the curves, the load CG; tables of turns,
+  axle loads, overhead clearances, posted bridges; flags). The sheet frame and block-sheet code is an adapted COPY of
+  `apps/ps-bridge/ui/sheets.js` (itself from the steel app; to move to `shared/` later, CLAUDE.md §3). `addSheets(fn)` for later modules.
+- `apps/crane-pick/ui/drawings.js` (new): Drawings output tab (Paper D / B, sheet, preview zoom, Download DXF (validated first), Print sheet /
+  Print all sheets (11 × 17; D half size), the sheet index with links to the input / output tabs and the Report §).
+- `apps/crane-pick/ui/summary.js` (new): Summary output tab (every lift per crane and every route; links: map, worked, Report, drawing).
+- `apps/crane-pick/report/builders.js`: §1 "Summary" (was "Project": title block, statement, the lift table with § links (and routes),
+  notes); §2 "Basis" (the general notes, § links); the added sections ordered Site, Plan sheets, Site items, Cranes, Lifts, Tandem lifts,
+  Ground, Route, Elevations, 3D view (`ORDER`); figures numbered "Figure n."; § links of §1 / §2 only to sections present; running
+  header "Crane Pick Analyzer — LIFT-PLANNING AID" + "The crane manufacturer's charts, the lift plan and the site checks govern" on every
+  printed page. Section ids / keys unchanged.
+- `apps/crane-pick/ui/ground.js`: the Report note "Lift results: §Lifts (see the pick)" is now a § link to the pick.
+- `apps/crane-pick/ui/route.js` (C6, coordinator's list): Report figure: swept outlines every max(2 ft, L / 150) (a long route's figure
+  stays small; caption says the spacing); turn labels on the outside of each curve; a note after the staging steps with the § link to
+  the girder lift (§Tandem lifts) or the pick it serves.
+- `apps/crane-pick/index.html`: loads `shared/dxf.js` (unchanged) and the three scripts; notes; footer v0.7.
+- Tests: `tests/engine/crane-dwg.test.mjs` (new), `tests/smoke/crane-drawings.mjs` (new); `crane-shell.mjs`, `crane-picks.mjs` (output tabs
+  now Plan · Summary · Picks · Ground · Route · Site · Drawings · Report); `crane-library.mjs` (input tabs: + Girder lifts, Route — it
+  failed on main since C5).
+### Calculations
+None (CLAUDE.md §4): every number on the sheets, in the Summary tab and in Report §1 / §2 is an engine value (engine/lift.js, elev.js,
+clear3d.js, ground.js, tandem.js, route.js through the page's evalPick / evalT / evalRoute), formatted. New display rules (not
+calculations): "closest clearance" = the power line / obstruction (known height) with the smallest margin over its requirement (as the
+Picks tab's "Closest 3D"); "max float / track load" = the largest load on any float or track of the lift (tandem: either crane);
+"bearing ratio" = the largest q_g / q_a; route "least overhead clearance" = the smallest of c (overhead) and d − D_T (power line).
+**Check cases** (`tests/engine/crane-dwg.test.mjs`, fake crane): lift plan: P R 30.00 ft, C 39,000 lb, 56.4 %; S R 20.00 ft, 58,000 lb,
+37.9 %; W 22,000 lb. Ground: front float 41.08 kip (C4 case A, hook 30 ft over the front at the pick; less on the swing to the set),
+4 × 4 × 12 in timber mat: q_g = 41,083.33 / 14.231407 + 50 = 2,936.80 → "2,937" psf, ratio 0.73 (q_a 4,000). Tandem: R1 22,000,
+R2 18,000, W1 24,000, W2 20,000 lb, governing step 0: R 36.06, C 27,000, 88.9 % / 74.1 %. Route: gross 20,000 + 15,000 + 40,000 =
+75,000 lb (37.50 t). Each value found as text on its sheet; every sheet inside its border at a listed scale; DXF `SharedDxf.validate` OK.
+### Saved data (§5)
+No new key; `crane.ui` gains `dwg: { paper, sheet, z }` (per browser view state). Project format unchanged.
+### Shared files
+`shared/dxf.js`, `shared/report.js` loaded unchanged (no shared file changed).
+### Decisions (pending engineer review)
+- The drawing set is display only and is regenerated from the project every time (no stored drawing data); paper D default, B option;
+  each sheet at the smallest standard scale at which it fits (lift / tandem plans from 1/4" = 1'-0", rigging from 1/2" = 1'-0").
+- Lift plan layout: plan and elevations in one row at one scale, the data table, flags and notes below; elevations at the pick and the
+  set (single pick) and at each crane's governing step (girder lift).
+- Ground sheet: one panel per setup (not one site plan) so floats stay legible; the largest load per float / track over all the lifts of
+  that setup (single picks and girder lifts).
+- Report § references on the sheets as "REPORT SEC. x.y" (the § sign is not plain ASCII for DXF R12 text).
+- The sheet-frame / block-sheet code is a third copy (ps-bridge, steel); moving it to `shared/` is planned work, not done here.
+- Route tools on the Plan's Draw bar (coordinator's list): not added (the bar is rebuilt by ui/draw.js; a cross-module change better
+  done on its own); the route tools stay on the Route tab.
+- Engineer instruction 2026-11-16 (speed): one PR, lighter checks.
+### How verified
+`node tests/engine/run.mjs crane` (all crane engine tests incl. 6 new); `node tests/smoke/crane-drawings.mjs` (5 checks: Summary tab =
+engine (56.4 %, 41.08 kip, 0.73; 88.9 % / 74.1 %; route 75,000 lb), its links; Drawings: 7 sheets render, index links, Download DXF valid,
+Print all = 7 pages, Print sheet = 1, paper B; Report order, §1 / §2, figure numbers, staging link, no unresolved keys / NaN; 390 px;
+0 console errors); `crane-shell` (11), `crane-picks` (5), `crane-ground` (5), `crane-tandem` (6), `crane-route` (5), `crane-place` (9),
+`crane-clear3d` (8), `crane-elev` (7), `crane-3d` (7), `crane-sheets` (8), `crane-library` (9); `node tests/check-syntax.mjs`.

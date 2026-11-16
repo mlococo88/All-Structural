@@ -307,10 +307,10 @@
     let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${Wd} ${Ht.toFixed(0)}" width="${Wd}" height="${Ht.toFixed(0)}" font-family="Arial, sans-serif" font-size="11"><rect width="100%" height="100%" fill="#fff" stroke="#94a3b8"/>`;
     P.items.filter(i => i.type !== 'label' && i.type !== 'dim').forEach(i => { const cl = i.type === 'obst' || i.type === 'excl' || (i.type === 'util' && i.closed); s += `<path d="${path(i.pts, cl)}" fill="${cl ? col[i.type] : 'none'}" fill-opacity="0.15" stroke="${col[i.type]}" stroke-width="1.5"/>`; });
     (P.routeMarks || []).forEach(m => { s += m.pts.length === 1 ? `<circle cx="${X(m.pts[0].x)}" cy="${Y(m.pts[0].y)}" r="4" fill="${COL[m.type]}"/>` : `<path d="${path(m.pts)}" fill="none" stroke="${COL[m.type]}" stroke-width="3" stroke-opacity="0.6"/>`; });
-    const sw = RT.swept(ev.sim, 2); s += `<path d="${sw.rings.map(q => path(q, true)).join(' ')}" fill="${COL.swept}" fill-opacity="0.18" fill-rule="nonzero" stroke="none"/>`;
+    const sw = RT.swept(ev.sim, Math.max(2, ev.sim.pa.L / 150)); s += `<path d="${sw.rings.map(q => path(q, true)).join(' ')}" fill="${COL.swept}" fill-opacity="0.18" fill-rule="nonzero" stroke="none"/>`;
     s += `<path d="${path(ev.sim.dense.filter(q => q.s >= 0))}" fill="none" stroke="${COL.path}" stroke-width="2"/>`;
     ev.sim.samples[ev.sim.samples.length - 1].parts.forEach(pp => { s += `<path d="${path(pp.poly, true)}" fill="${pp.part === 'load' ? COL.load : '#fff'}" fill-opacity="${pp.part === 'load' ? 0.35 : 0.7}" stroke="#0f172a" stroke-width="1"/>`; });
-    ev.turns.forEach(t => { const m = RT.at(ev.sim.pa, (t.s0 + t.s1) / 2); s += `<text x="${X(m.x)}" y="${Y(m.y)}" dy="-6" text-anchor="middle" fill="#0f172a">T${t.n}</text>`; });
+    ev.turns.forEach(t => { const m = RT.at(ev.sim.pa, (t.s0 + t.s1) / 2), sg = t.D > 0 ? -1 : 1, o = 16 / k; s += `<text x="${X(m.x - Math.sin(m.th) * sg * o)}" y="${Y(m.y + Math.cos(m.th) * sg * o)}" dy="4" text-anchor="middle" font-weight="bold" fill="#0f172a">T${t.n}</text>`; });   // C7: on the outside of the curve, clear of the path
     const nice = v => { const e = Math.pow(10, Math.floor(Math.log10(v))); return [1, 2, 5, 10].map(q => q * e).filter(q => q <= v).pop() || e; }, sb = nice((x1 - x0) / 4);
     s += `<g transform="translate(${Wd - 30},34)"><path d="M0 -22 L7 4 L0 -2 L-7 4 Z" fill="#0f172a"/><text y="18" text-anchor="middle" font-weight="bold">N</text></g>`;
     s += `<g transform="translate(14,${(Ht - 14).toFixed(0)})"><rect width="${(sb * k).toFixed(1)}" height="5" fill="#0f172a"/><text y="-4">${fmt(sb, 0)} ft</text></g></svg>`;
@@ -322,7 +322,7 @@
     P.routes.forEach((r, i) => {
       const ev = evalRoute(r), v = RT.vehOf(r), l = RT.loadOf(r, A.P), items = [];
       if (!ev.sim.ok) { subs.push({ id: 'r' + i, key: 'route-' + i, title: r.name, items: [{ type: 'note', text: ev.flags[0].text }] }); return; }
-      items.push({ type: 'figure', svg: routeSvg(P, r, ev), caption: `${r.name}: the steer-axle path, the swept path (outlines every 2 ft) and the vehicle at the truck stop (north up).` });
+      items.push({ type: 'figure', svg: routeSvg(P, r, ev), caption: `${r.name}: the steer-axle path, the swept path (outlines every ${fmt(Math.max(2, ev.sim.pa.L / 150), 1)} ft) and the vehicle at the truck stop (north up).` });
       items.push({ type: 'kv', rows: [['Vehicle', RT.TYPES[v.type]], ['Tractor', `L1 ${fmt(v.L1, 2)} ft, kingpin ${fmt(v.e, 2)} ft ahead of the drive group, width ${fmt(v.Wt, 2)} ft`], ['Body', `L2 ${fmt(v.L2, 2)} ft${RT.hasJeep(v) ? `, jeep ${fmt(v.Lj, 2)} ft (bolster ${fmt(v.ej, 2)} ft)` : ''}${RT.steered(v) ? `, rear dolly k = ${fmt(v.k, 2)}, δmax ${fmt(v.dmax, 0)}°` : ''}`],
         ['Load', `${fmt(l.L, 2)} ft × ${fmt(l.B, 2)} ft, ${fmt(l.W, 0)} lb, rear overhang ${fmt(l.r, 2)} ft, height ${fmt(l.h, 2)} ft on a ${fmt(v.hDeck, 2)} ft deck`], ['Min. turning radius', fmt(v.Rmin, 1) + ' ft'], ['Route length', fmt(ev.sim.pa.L, 1) + ' ft'], ['Max off-tracking', fmt(ev.otMax, 2) + ' ft'],
         ['Gross weight', `${fmt(ev.ax.gross, 0)} lb (${fmt(ev.ax.gross / RT.LB_PER_TON, 2)} t), axle loads by ${ev.ax.mode}`]] });
@@ -339,6 +339,9 @@
       ev.haul.filter(h => !h.flagOnly).forEach(h => items.push({ type: 'steps', scope: 'route', title: `${r.name}: haul road ${h.name}`, steps: h.steps }));
       ev.br.forEach(b => items.push({ type: 'steps', scope: 'route', title: `${r.name}: posted bridge ${b.name}`, steps: b.steps }));
       items.push({ type: 'steps', scope: 'route', title: `${r.name}: staging`, steps: ev.stage.steps });
+      { const tg = RT.tandemOf(r, P), pk = !tg && r.pickId && P.picks.find(q => q.id === r.pickId);   // C7: the lift the staging serves (§6 link)
+        if (tg) items.push({ type: 'note', text: `Staging serves the girder lift "${tg.name}": its pick pose and both cranes' values are worked in [[tandem-${tg.id}]].` });
+        else if (pk && window.CranePickPlace && window.CranePickPlace.evalPick(pk)) items.push({ type: 'note', text: `Staging serves the pick "${pk.name}": worked in [[pick-${pk.id}]].` }); }
       subs.push({ id: 'r' + i, key: 'route-' + i, title: r.name, items });
     });
     return [{ id: 'route', key: 'route', title: 'Route', subs }];
