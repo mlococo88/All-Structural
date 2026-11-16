@@ -3047,7 +3047,7 @@ None new.
 - AASHTO stress diagram in terms of M/S (ksi) as above, rather than adding a new "stress" quantity to the checks.
 - The ratio bars use 0.90 as the amber threshold (engineer's instruction) — the Summary's OK / NG status is unchanged (≤ 1.00 passes).
 
-## 2026-11-16 — PR: claude/timber-gfx-2 (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (TBGX-2: graphics — AASHTO bridge cross-section with the lever-rule wheels; governing vehicle positions; engineer decision 2026-11-16)   [display only; no computed value, saved key or saved-data format change]
+## 2026-11-16 — PR: claude/timber-gfx-2 (PR #1603: https://github.com/mlococo88/All-Structural/pull/1603) (TBGX-2: graphics — AASHTO bridge cross-section with the lever-rule wheels; governing vehicle positions; engineer decision 2026-11-16)   [display only; no computed value, saved key or saved-data format change]
 
 ### TBGX2-a. What changes for the user
 - **Bridge Loads tab**, first in *Live-load distribution factors* (aasDF): the **bridge cross-section** — deck, the stringers at S (N<sub>b</sub> of them when entered, else a few; the one checked outlined red), curb faces, roadway width w with its N<sub>L</sub> design lanes (12 ft each from the left curb), d<sub>e</sub> for an exterior stringer (the left one, d<sub>e</sub> from the left curb face), and — where the lever rule gives g — the wheels of the governing lever-rule case with their reactions r and the line m, Σr, g = mΣr/2 (`AL.df.lev.gov`). With a table factor or entered g the drawing says that no wheel placement is used.
