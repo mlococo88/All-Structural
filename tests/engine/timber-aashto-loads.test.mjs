@@ -94,5 +94,5 @@ test('saved data: design.aashto.bl / moist / ndsMoist optional; version 5 only w
   assert.equal(r.design.aashto.bl.deck, 'spike'); assert.equal(r.design.aashto.bl.tD, 5); assert.equal(r.design.aashto.bl.gW, null); assert.equal(r.design.aashto.bl.pos, 'int'); assert.equal(r.design.aashto.bl.im, 0); assert.ok(!('extra' in r.design.aashto.bl));
   const t1 = E.tbcMigrate(JSON.parse(JSON.stringify(Object.assign(E.tbcDefaultModel(), { version: 4, design: Object.assign(E.tbcDefaultModel().design, { code: 'AASHTO', aashto: E.tbcAashtoDefaults() }) })))).model;
   assert.ok(!('bl' in t1.design.aashto) && !('ndsMoist' in t1.design.aashto) && t1.design.moisture === 'Dry' && t1.version === 4, 'a TBA1 project opens unchanged (dry as saved, no new fields)');
-  assert.throws(() => E.tbcMigrate({ _schema: 'timber-beam-check', version: 6 }), /newer format/);
+  assert.throws(() => E.tbcMigrate({ _schema: 'timber-beam-check', version: 7 }), /newer format/);   // TBA5: the tool reads version 6
 });

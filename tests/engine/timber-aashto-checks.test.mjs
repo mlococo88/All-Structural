@@ -13,10 +13,10 @@ const run = (fn) => { const m = E.tbcDefaultModel(); m.design.code = 'AASHTO'; m
 // Example 1: 10x16 DF-L No. 1 Beams and Stringers (9.5 x 15.5 in.), wet, 14 ft simple span, bearing 5.5 in.; s = 24 in. (S = 2 ft),
 // 4 in. plank deck, 2 in. bituminous wearing surface, interior stringer, 24 ft roadway (N_L = 2), IM 0, top edge braced by the deck.
 const EX1 = m => { m.design.aashto.gr = 'No.1'; m.material.size = '10x16'; m.geom.spacing = 24; m.geom.spans = [{ L: 14 }]; m.geom.supports = [0, 1].map(() => ({ t: 'pin', lb: 5.5, cb: false })); m.design.aashto.bl.tWs = 2; };
-// Example 2: glulam 24F-V4 DF/DF, 8-3/4 x 33 in. (22 laminations of 1.5 in.), wet, two spans of 30 ft, bearing 6 in.; s = 48 in. (S = 4 ft),
+// Example 2: glulam 24F-V4 DF/DF, 8-3/4 x 33 in. (22 laminations of 1.5 in.), wet, two spans of 30 ft, bearing 9 in. (ends, >= 3 in. from the end) / 16 in. (pier); s = 48 in. (S = 4 ft),
 // glued laminated deck panels 5.125 in., 3 in. bituminous, interior, 24 ft roadway; top edge braced by the deck, bottom edge braced at 10 ft.
 const EX2 = m => { m.material.type = 'glulam'; m.material.glulam.grp = 'DF'; m.material.glulam.b = 8.75; m.material.glulam.nLam = 22; m.design.aashto.gl = '24F-V4 DF/DF'; m.geom.spacing = 48;
-  m.geom.spans = [{ L: 30 }, { L: 30 }]; m.geom.supports = [0, 1, 2].map(() => ({ t: 'pin', lb: 6, cb: false })); Object.assign(m.design.aashto.bl, { deck: 'glpanel', tD: 5.125, tWs: 3 }); m.design.latBot = 'Supports'; m.design.luBot = 10; };
+  m.geom.spans = [{ L: 30 }, { L: 30 }]; m.geom.supports = [{ t: 'pin', lb: 9, cb: true }, { t: 'pin', lb: 16, cb: false }, { t: 'pin', lb: 9, cb: true }]; /* TBA5: bearing lengths for the bearing check (6 in. in TBA4) */ Object.assign(m.design.aashto.bl, { deck: 'glpanel', tD: 5.125, tWs: 3 }); m.design.latBot = 'Supports'; m.design.luBot = 10; };
 
 test('example 1 (sawn, simple span): flexure Art. 8.6.2 and shear Art. 8.7, by hand', () => {
   const { A, L, C } = run(EX1);
@@ -77,7 +77,7 @@ test('example 2 (glulam, two continuous spans): C_L, C_V from the zero-moment po
   close(pos.CV, 0.842245, 2e-5, 'C_V+'); close(pos.Mr, 428.029, 0.01, 'M_r+'); close(pos.ratio, pos.Mu / pos.Mr, 1e-12, 'ratio +M'); close(pos.Mu, 252.526, 0.01, 'M_u+');
   // shear: F_v = 0.265 x 0.72 x (2.5/0.75) x 0.875 x 0.8 = 0.4452 ksi; V_n = 0.4452 x 8.75 x 33/1.5 = 85.701 kip; V_r = 0.75 x 85.701 = 64.27575 kip
   C.shear.forEach(s => { close(s.Fv, 0.4452, 1e-9, 'F_v'); close(s.Vr, 64.27575, 1e-6, 'V_r'); close(s.ratio, s.Vu / 64.27575, 1e-12, 'ratio'); });
-  close(C.gov.ratio, neg.ratio, 1e-12, 'governing -M'); assert.equal(C.fails.length, 0);
+  assert.equal(C.fails.length, 0);
   assert.ok(A.isGL);
 });
 
@@ -105,4 +105,60 @@ test('Strength II (permit vehicle) with C_lambda = 1.0; flat use refused; NDS un
   const m = E.tbcDefaultModel(); m.design.code = 'AASHTO'; m.design.aashto = E.tbcAashtoDefaults(); m.design.aashto.bl = E.tbcAasLoadDefaults(); m.material.size = '4x6'; m.design.flatUse = true;
   const A = E.tbcAashto(m), L = E.tbcAasLoads(m, A), C = E.tbcAasChecks(m, A, L, E.aasDemands(L));
   assert.equal(C.ok, false); assert.equal(JSON.stringify(C.errTab), '["factors"]');
+});
+
+test('TBA5 example 1: bearing Art. 8.8.3, deflection Art. 2.5.2.6.2, by hand', () => {
+  const { C } = run(EX1);
+  // R_LL per lane: tandem 25 + 25 x 10/14 = 42.857143 + lane 0.64 x 14/2 = 4.48 -> 47.337143; R_DC = 0.0844618 x 7 = 0.591233, R_DW = 0.326667
+  // R_u = 1.25 x 0.591233 + 1.50 x 0.326667 + 1.75 x 0.298507 x 47.337143 = 0.739041 + 0.490000 + 24.728358 = 25.957399 kip
+  const b = C.bear[0]; assert.equal(C.bear.length, 2); close(b.Ru, 25.957399, 1e-5, 'R_u');
+  // F_cp = 0.625 x (2.1/0.9) x 0.67 (C_M) x 0.8 = 0.781667 ksi; A_b = 9.5 x 5.5 = 52.25 in^2; C_b = 1.0 (end bearing, "C_b permitted" not ticked)
+  // P_n = 0.781667 x 52.25 x 1.0 = 40.842083; P_r = 0.90 x 40.842083 = 36.757875 kip; ratio 0.706172
+  close(b.Fcp, 0.781667, 1e-6, 'F_cp'); assert.equal(b.Cb, 1); assert.equal(b.cbWhy, 'end'); close(b.Pn, 40.842083, 1e-5, 'P_n'); close(b.Pr, 36.757875, 1e-5, 'P_r'); close(b.ratio, 0.706172, 1e-6, 'R_u/P_r');
+  // deflection: the design truck's middle 32-kip axle at midspan (the others off the 14 ft span): P L^3/(48 E I) = 32 x 14^3 x 1728/(48 x 1600 x 2948.068)
+  // = 151,732,224/226,411,620 = 0.670161 in. per lane (> 0.25 truck + lane); g_Delta = g_M = 0.298507 -> 0.200048 in.; limit 14 x 12/425 = 0.395294 in.; ratio 0.506074
+  const d = C.defl[0]; assert.equal(C.defl.length, 1); close(d.d.perLane, 32 * 14 ** 3 * 1728 / (48 * 1600 * 9.5 * 15.5 ** 3 / 12), 1e-6, 'per lane'); close(d.dLL, 0.200048, 1e-6, 'Delta_LL');
+  close(d.allow, 14 * 12 / 425, 1e-12, 'L/425'); close(d.ratio, 0.506074, 1e-6, 'ratio'); assert.equal(C.dLim, 425); assert.equal(C.dLimSrc, 'default');
+  assert.equal(C.camber.length, 0); close(C.gov.ratio, 0.95483, 1e-5, 'governing: flexure');
+});
+
+test('TBA5 example 2: bearing at the pier and the ends, deflection, glulam camber Art. 8.12.1', () => {
+  const { C } = run(EX2);
+  // reactions per stringer: R_DC = 3wL/8 = 0.375 x 30 x 0.185677 = 2.088867 (ends), 10wL/8 = 6.962891 (pier); R_DW = 1.575 / 5.25;
+  // R_LL per lane 54.839 (ends) / 87.055 (pier) (TBA3, cross-checked with shared/moving-load.js); pier R_u = 1.25 x 6.962891 + 1.50 x 5.25 + 1.75 x 0.4 x 87.0554 = 77.5174
+  const p = C.bear.find(x => x.j === 1), e = C.bear.find(x => x.j === 0);
+  close(p.Ru, 1.25 * 6.962891 + 1.5 * 5.25 + 0.7 * p.r.ll.max, 1e-5, 'R_u pier'); close(p.Ru, 77.5174, 1e-3, 'R_u pier value');
+  // F_cp (tension face) = 0.650 x 2.333333 x 0.53 x 0.8 = 0.643067 ksi; pier: C_b = 1.0 (interior support); P_n = 0.643067 x 8.75 x 16 = 90.029333; P_r = 81.0264; ratio 0.95669
+  close(p.Fcp, 0.643067, 1e-6, 'F_cp'); assert.equal(p.cbWhy, 'interior'); close(p.Pr, 81.0264, 1e-4, 'P_r pier'); close(p.ratio, 0.95669, 1e-4, 'ratio pier');
+  // ends: l_b = 9 in. >= 6 in.: C_b = 1.0; P_r = 0.90 x 0.643067 x 8.75 x 9 = 45.57735 kip; R_u 43.3610 -> 0.95137
+  assert.equal(e.Cb, 1); assert.equal(e.cbWhy, 'long'); close(e.Pr, 45.57735, 1e-4, 'P_r end'); close(e.ratio, 0.95137, 1e-4, 'ratio end');
+  // camber: DC + DW = 0.325677 kip/ft on both spans; two equal spans: y(x) = w x (L^3 - 3 L x^2 + 2 x^3)/(48 E I); E I = 1499.4 x 26204.06/144 = 272856.0 kip-ft^2
+  // at x = 12 ft (the 1/20 point nearest the maximum): 0.325677 x 12 x 17496/(48 x 272856.0) = 0.00522076 ft = 0.062649 in.; camber >= 2 x 0.062649 = 0.125299 in.
+  const cb = C.camber[0]; close(cb.x, 12, 1e-9, 'x'); close(cb.dDL, 0.325677 * 12 * 17496 / (48 * 1499.4 * 8.75 * 33 ** 3 / 12 / 144) * 12, 1e-5, 'Delta_DL'); close(cb.req, 2 * cb.dDL, 1e-12, 'camber');
+  // deflection limit 30 x 12/425 = 0.847059 in.; Delta_LL = 0.4 x 0.800866 = 0.320346 in. (truck alone, from TBA3's analysis); ratio 0.378187
+  C.defl.forEach(d => { close(d.allow, 0.847059, 1e-6, 'L/425'); close(d.dLL, 0.4 * d.d.perLane, 1e-12, 'g x per lane'); close(d.ratio, d.dLL / d.allow, 1e-12, 'ratio'); });
+  close(C.gov.ratio, p.ratio, 1e-12, 'governing: bearing at the pier'); assert.equal(C.gov.kind, 'bear'); assert.equal(C.fails.length, 0);
+});
+
+test('TBA5: C_b by Table 8.8.3-1, the deflection-limit input, saved data version 6', () => {
+  // C_b: the value of the shortest tabulated length not less than l_b
+  [[0.4, 1.75], [0.5, 1.75], [0.75, 1.38], [1.5, 1.25], [2.5, 1.13], [3.5, 1.10], [4, 1.10], [5.5, 1.00], [6, 1.00], [8, 1.00]].forEach(([lb, cb]) => close(E.aasCb(lb).Cb, cb, 0, 'C_b at ' + lb));
+  // example 1 with a 3.5 in. end bearing marked "C_b permitted": C_b = 1.10; P_r = 0.9 x 0.7816667 x 9.5 x 3.5 x 1.10 = 25.73051 kip
+  const r = run(m => { EX1(m); m.geom.supports = [0, 1].map(() => ({ t: 'pin', lb: 3.5, cb: true })); });
+  assert.equal(r.C.bear[0].cbWhy, 'table'); close(r.C.bear[0].Cb, 1.10, 0, 'C_b'); close(r.C.bear[0].Pr, 0.9 * (0.625 * 2.1 / 0.9 * 0.67 * 0.8) * 9.5 * 3.5 * 1.10, 1e-9, 'P_r');
+  // a support next to a cantilever: C_b = 1.0 even when ticked
+  const o = run(m => { EX1(m); m.geom.spans = [{ L: 14 }, { L: 3 }]; m.geom.supports = [{ t: 'pin', lb: 5.5, cb: true }, { t: 'pin', lb: 5.5, cb: true }, { t: 'free', lb: 3.5, cb: false }]; });
+  assert.equal(o.C.bear.find(x => x.j === 1).cbWhy, 'interior'); assert.equal(o.C.bear.length, 2);
+  assert.ok(o.C.defl.some(d => d.cant && Math.abs(d.allow - 3 * 12 / 425) < 1e-12), 'cantilever: L = the cantilever length');
+  // deflection limit: entered 800; 0 = not checked; negative refused (Factors tab)
+  close(run(m => { EX1(m); m.design.aashto.dLim = 800; }).C.defl[0].allow, 14 * 12 / 800, 1e-12, 'L/800');
+  const z = run(m => { EX1(m); m.design.aashto.dLim = 0; }).C; assert.equal(z.defl.length, 0); assert.equal(z.govDefl, null);
+  const mm = E.tbcDefaultModel(); mm.design.code = 'AASHTO'; mm.design.aashto = E.tbcAashtoDefaults(); mm.design.aashto.bl = E.tbcAasLoadDefaults(); mm.design.aashto.dLim = -1;
+  const A = E.tbcAashto(mm), L = E.tbcAasLoads(mm, A), bad = E.tbcAasChecks(mm, A, L, E.aasDemands(L)); assert.equal(bad.ok, false); assert.equal(JSON.stringify(bad.errTab), '["factors"]');
+  // saved data: dLim kept by tbcSanitize, version 6 only with it; absent -> 5 / 4 as before; NDS unchanged
+  mm.design.aashto.dLim = 600; assert.equal(E.tbcVersionFor(mm), 6); assert.equal(E.tbcSanitize(JSON.parse(JSON.stringify(mm))).design.aashto.dLim, 600);
+  delete mm.design.aashto.dLim; assert.equal(E.tbcVersionFor(mm), 5); assert.equal(E.tbcSanitize(JSON.parse(JSON.stringify(mm))).design.aashto.dLim, undefined);
+  assert.equal(E.tbcVersionFor(E.tbcDefaultModel()), 2); assert.equal(E.TBC_VERSION, 6);
+  // notes: moisture at installation (dimension lumber) and preservative treatment
+  const dn = run(m => { m.material.size = '2x12'; m.geom.spans = [{ L: 10 }]; }).C.notes.join(' '); assert.match(dn, /19 %.*Art\. 8\.4\.1\.1\.3/); assert.match(dn, /Art\. 8\.4\.3/);
 });
