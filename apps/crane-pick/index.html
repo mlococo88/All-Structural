@@ -72,7 +72,9 @@
     'ui/place.js',          // C2-2: Lifts input tab; cranes, pick and set points dragged on the map with live capacity
     'ui/picks.js',          // C2-3: Picks output tab (every pick, links) and the Report's §Lifts
     'ui/elev.js',           // C3-2: the elevation view along the boom (dock under the map, Report §Elevations)
-    'ui/view3d.js'          // C3-3: the 3D view in the same dock (three.js r128 + OrbitControls, loaded from the CDN when first opened)
+    'ui/view3d.js',         // C3-3: the 3D view in the same dock (three.js r128 + OrbitControls, loaded from the CDN when first opened)
+    'engine/tandem.js',     // C5: girder lifts (one crane or two in tandem): load share, the girder path, per-step checks
+    'ui/tandem.js'          // C5: Girder lifts input tab, the girder poses on the map, scrubber, Picks rows, Report §Tandem lifts
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
 })();
 </script>
@@ -227,6 +229,11 @@
   #elevDock .elBar{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;padding:3px 10px;} #elevDock .elBar button{padding:1px 8px;font-size:8.5pt;}
   #el3d{height:300px;position:relative;} #el3d canvas{display:block;touch-action:none;} #elevDock.v3{max-height:none;}
   .elMode button{padding:1px 8px;font-size:8.5pt;} .elMode button[aria-pressed="true"]{background:#DBEAFE;border-color:var(--blue-600);color:#1E3A8A;font-weight:600;}
+  /* C5: girder lifts */
+  .tgCg span,.tgHk span,.tgGov span{display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font:700 9pt/1 var(--font-ui);color:#fff;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45);cursor:move;}
+  .tgCg span{background:#7C3AED;} .tgHk span{background:#B45309;} .tgGov span{background:transparent;border:3px solid #DC2626;color:#DC2626;box-shadow:none;cursor:default;}
+  .tgWay span{background:#7C3AED;font-size:8.5pt;} .tgPt span{border-radius:4px;}
+  #tlElev svg{display:block;max-width:100%;height:auto;}
   #elSvg{padding:0 6px 4px;} #elSvg svg{display:block;max-width:100%;height:auto;}
   /* C2-3: Picks tab */
   #pkTbl td,#pkTbl th{font-size:8.5pt;padding:2px 4px;white-space:nowrap;} .lfDot{margin-right:3px;} .lfDot.lf-stop{color:#B91C1C;} .lfDot.lf-warn{color:var(--warn);} .lfDot.lf-info{color:#64748B;}
