@@ -318,7 +318,7 @@ and the Report; Report §Lifts with no unresolved or duplicate keys and no NaN, 
 files load in the app and two real cranes place and compute with 0 console errors.
 
 ## 2026-11-16 — C3-1: heights (boom angle, boom tip, hook, load bottom, hook reach), crane elevation geometry, pick heights
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1609: https://github.com/mlococo88/All-Structural/pull/1609
 ### Where
 - `apps/crane-pick/engine/elev.js` (new, `window.CranePickElev`, no DOM): `geomOf` (the crane's elevation geometry: entered / file /
   assumed), `chartAngle` (the config's printed boom-angle table), `angleAt`, `tipAt`, `point` (heights at the pick or the set with their
