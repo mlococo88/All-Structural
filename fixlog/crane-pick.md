@@ -620,3 +620,105 @@ labels; CG and lifting-point drags change both cranes' labels mid-drag, one undo
 dock's elevation and 3D; ground per crane and the both-cranes sum; Picks rows, Report §Tandem lifts, reload, 390 px, 0 console errors),
 `crane-place` (9), `crane-picks` (5), `crane-ground` (5), `crane-3d` (7), `crane-clear3d` (8), `crane-elev` (7), `crane-shell` (11);
 `node tests/check-syntax.mjs`.
+
+## 2026-11-16 — C6: the trucking route (path, vehicle, kinematic swept path, overhead clearances, axle loads, haul road, posted bridges, staging)
+PR: (link added after the PR is opened)
+### Where
+- `apps/crane-pick/engine/route.js` (new, `window.CranePickRoute`, no DOM): the route's path (tangents + curves), the vehicle and load
+  inputs with defaults, the kinematic simulation, the closed-form steady state, turns, site conflicts, overhead / power-line travel
+  clearances, axle loads, haul-road tyre bearing, posted bridges, staging (C2 pick or C5 girder lift), the swept outlines for drawing.
+- `apps/crane-pick/ui/route.js` (new, `window.CranePickRouteUI`): the Route input tab (draw tools: Route, Overhead clearance point / line,
+  Haul road / mats, Posted bridge; the selected route's inputs and live card; the selected mark's inputs; the list), the map layers (the
+  drawn line, the path with its curves, the swept path (union of the outlines every 2 ft, non-zero fill), the load's corner traces, the
+  vehicle at the chosen position (default the stop), turn labels "T1 r 50 · OT 16.5 ft", flag markers), vertex handles (drag: the
+  route is re-simulated once per animation frame at 1 ft steps and redrawn with the live card; one undo step at the end; "+" adds a
+  vertex, a double-click removes one), the Route output tab (before Site) and Report §Route (figure, vehicle, flags, turns table and
+  worked steps, conflicts, overhead table and steps, axle-load table and steps, haul road, posted bridges, staging).
+- `engine/osha.js`: `travel()` — 29 CFR 1926.1411 Table T (new; Table A unchanged). `engine/model.js`: `normRoute`, `normRouteMark`,
+  `routes: []`, `routeMarks: []` in the project. `index.html`: the two scripts, CSS (route labels; drawing-tool clicks pass through the
+  route lines), the comment and the footer (v0.6).
+- `tests/smoke/crane-draw.mjs` (first, separate fix): the smoke timed out waiting for `#itKind` on main (broken since C3-2, not C4).
+  **Cause:** the test clicks fixed pixel offsets in the map up to y = 680 px (the utility line's second point at y = 650, the utility
+  area at y = 680); C3-2 added the elevation dock under the map (67 px), so at the 860 px viewport the map is only 631 px tall: the
+  clicks landed on the dock, the utility line got one point, was never finished, and `#itKind` never appeared. The app was right; the
+  test now uses a 960 px viewport (map 731 px). Before / after: `vh: 860` → `vh: 960`. All 7 checks pass.
+### Calculations (CLAUDE.md §4: new calculation; no existing formula changed; Decisions pending engineer review)
+1. Path: the drawn points are the steer-axle centre's path. At each interior vertex a circular curve of radius r (per vertex, else the
+   route default, 50 ft): Δ = atan2(û_in × û_out, û_in · û_out) (+ left), T = r tan(|Δ|/2); T limited to the available tangent (half of a
+   segment between two curves, the whole of an end segment): r = T_avail / tan(|Δ|/2) (flagged warn).
+2. Kinematic off-tracking (low speed, no tyre slip; standard tractor-semitrailer kinematics: SAE J695 "Turning Ability and Off Tracking
+   — Motor Vehicles"; NCHRP Report 505 (2003) "Review of Truck Characteristics as Factors in Roadway Design", ch. 3; AASHTO Green Book,
+   7th Ed. 2018, §2.1.4 design-vehicle turning paths; paraphrased): every unit's rear axle-group centre moves along the unit's axis
+   (a steered axle along the axis turned by δ): dθ/ds = (v_H · n̂_δ) / (L cos δ); tractor: H = the steer axle on the path, δ = 0;
+   kingpin e ahead of the drive-group centre; optional jeep (kingpin → jeep axle Lj, bolster ej ahead); body (trailer or the load itself)
+   from the kingpin / bolster to the rear axle group or dolly pivot (L2). Rear dolly (types "steerable rear dolly", "jeep + dolly"):
+   δ = −k γ, γ = articulation between the unit ahead and the body, |δ| ≤ δ_max (Decision: a proportional steering law with an effective
+   ratio k standing for hydraulic / steerman steering; enter the dolly maker's ratio). RK4 every 0.25 ft (1 ft while dragging); the
+   vehicle starts straight on the first tangent. Steady state (closed form): R_T² = R² − L1², R_K² = R_T² + e², (jeep R_J² = R_K² − Lj²,
+   R_H² = R_J² + ej²), R_D² = R_H² − L2², OT = R − R_D; steered: o_x = −L2 − o_y tan δ, o_x² + o_y² = R_H², R_D = o_y / cos δ, δ = −k γ
+   by iteration.
+3. Swept path: outlines of the tractor (front overhang to rear overhang, width), jeep, trailer deck (or the rear dolly) and the load
+   (front f = L − L2 − r ahead of the hitch, rear overhang r behind the rear group, width) every 1 ft. Per turn (curve start to one
+   vehicle length past its end): OT_max (rear group / dolly pivot from the path), R_in (least distance from the curve centre to an outline
+   in the curve's sector), R_out (largest, corners in the sector: the load's swing-out shows here), swept width R_out − R_in; r < R_min
+   (the vehicle's minimum turning radius, input) → stop.
+4. Conflicts: an outline meeting an obstruction, an exclusion zone or a crane footprint (C2 plan footprint) → stop; within a power line's
+   Table A plan buffer → warn (the vertical check governs); over a buried utility → info (wheel loads on it not computed).
+5. Overhead: H_top = h_deck + h_load. Marks reached by an outline: c = h − H_top < margin (default 1 ft) warn, < 0 stop, height not
+   entered stop. Power lines: d_h = least plan distance outline → wire less the sway allowance; d_v = max(0, h_wire − sag − H_top);
+   d = √(d_h² + d_v²); 29 CFR 1926.1411 Table T: up to 0.75 kV 4 ft; over 0.75 to 50 kV 6 ft; over 50 to 345 kV 10 ft; over 345 to 750
+   kV 16 ft; over 750 to 1,000 kV 20 ft; over 1,000 kV as set by the utility owner/operator or an RPE (paraphrased; the value after "to"
+   in its row); d < D_T stop; d < 20 ft warn: a dedicated spotter (1926.1411(b)(4)). Voltage not known: 20 ft. Source check: the
+   official pages (ecfr.gov, osha.gov, govinfo.gov) could not be opened from this session (proxy); the values were confirmed in search
+   results limited to ecfr.gov, osha.gov, govinfo.gov (CFR 2023 ed., title 29 vol. 8, § 1926.1411) and federalregister.gov (75 FR 47906,
+   Aug. 9, 2010), as C1 did for Table A. **Engineer to confirm against the current eCFR text.**
+6. Axle loads (statics, or entered): R_b = (W_tl x_tl + W_L x_L)/L2 (dolly types: W_L x_L / L2, the dolly tare W_d added at the pivot);
+   R_H = W_tl + W_L − R_b; jeep: R_J = (R_H (Lj − ej) + W_j Lj)/Lj, R_K = R_H + W_j − R_J; tractor: R_drive = (W_tr x_t + R_K (L1 − e))/L1,
+   R_steer = W_tr + R_K − R_drive; x_L = c_L − f. Per axle = group / n; per tyre = group / (n × tyres). An uplift is flagged.
+7. Haul road (marks; a corridor of width w): the heaviest tyre through C4's `bearing()` (tyre area A as the equal-area round float
+   f = √(4A/π), so a = √A; mat spread k : 1, mat weight, mat bending / shear); q_g vs q_a.
+8. Posted bridges (marks; on the route when the steer-axle path is within w/2): gross (tons of 2,000 lb) vs the gross posting and the
+   vehicle-type posting; the heaviest single axle vs the axle posting.
+9. Staging: C5 girder lift linked: the girder's mid-length point c = H + (f − L/2) û and end-A→B heading at the stop vs the lift's pick
+   pose (offset ≤ tolerance, 2 ft default; heading within 2°), and the C5 evaluation's first step (both cranes at the pick pose: % of
+   chart; worked in the Girder lifts tab) — "Move the girder lift's pick pose to the girder on the truck" sets it. C2 pick linked: the
+   load CG vs the pick point and the crane's chart at that radius (`evalAt`); "Move the pick point to the load". Turnaround: information
+   (the tractor's outer front corner radius at R_min).
+### Check cases (`tests/engine/crane-route.test.mjs`, hand-computed)
+- Steady state: semi L1 20, e +1, L2 40, R 60: R_T = √3,200 = 56.5685, R_K = 56.5774, R_D = √1,601 = 40.0125, OT = 19.9875 ft; semi L1 15,
+  e −1, L2 50: R_D = √876 = 29.5973, OT = 30.4027; jeep (18, 1, 12, 0.5, 90) at R 150: R_D = √13,933.25 = 118.0392, OT = 31.9608. The
+  simulation on a circular path (72-gon whose curves form the circle, 3 laps) reaches these within 0.002 ft. Steered dolly (L2 100,
+  k 0.5, R 150): simulation = fixed-point closed form (R_D 135.7758, δ −13.4887°); steering reduces OT by more than 5 ft.
+- Axle loads, semi: tractor 20,000 lb at 8 ft, L1 20, e 1; trailer 15,000 lb at 25 ft, L2 40; load 50 ft, 40,000 lb, r 2: f = 8,
+  x_L = 17; R_rear = 1,055,000/40 = 26,375; R_K = 28,625; R_drive = 703,875/20 = 35,193.75; R_steer = 13,431.25; gross 75,000.
+  Jeep + dolly (jeep 8,000 lb, Lj 10, ej 0.5; dolly 12,000 lb; L2 90; load 100 ft, 80,000 lb, r 5): R_rear 52,000, R_J 46,000,
+  R_drive 9,900, R_steer 12,100, gross 120,000.
+- Overhead: load top 11.00; h 14.5 → c 3.50 OK; 11.5 → 0.50 warn; 10 → stop. Power line crossed, wire 20 ft, sag 1: d = 8.00: 13.8 kV
+  (6 ft) spotter warn; 115 kV (10 ft) stop. A line 15 ft beside the route, wire 12 ft: d = √(10.75² + 1) = 10.7964 (warn, spotter).
+- Posting: 37.50 t vs 40 OK, 36 stop; heaviest axle 8.7984 t vs 10 OK, 8 stop. Haul road: heaviest tyre 6,715.625 lb on 100 in² →
+  9,670.50 psf vs 10,000 (0.967). Staging: straight route ending at x 300: load CG at x 264; C5 lift pose at 275, 270° → 11.00 ft, 0°.
+- Curve fit: 90° between two 100 ft end segments, r 150 asked → r 100 (flagged).
+### Saved data (§5)
+New project fields only: `routes: [ … ]`, `routeMarks: [ … ]` (`normRoute`, `normRouteMark`; absent in older projects = []). No new
+storage key.
+### Decisions (pending engineer review)
+- The drawn route is the steer-axle centre path; curves are circular arcs of the entered radius (no spirals; no automatic road routing);
+  the vehicle approaches straight along the first tangent.
+- Load inputs: length, weight, width, CG from the front, height above the deck and the rear overhang (behind the rear group / dolly
+  pivot); the front position follows (f = L − L2 − r). With a C5 girder lift linked, L, W, width (pair: s + B), depth and CG come from
+  its girder object; "end A toward the tractor / to the rear" chooses which way it rides.
+- Rear dolly: proportional steering δ = −k γ with a limit δ_max (default 45°); the dolly's axles are lumped at its pivot.
+- The tractor, jeep and dolly are assumed lower than the load top (the load top governs overhead).
+- Overhead margin default 1 ft; staging tolerance default 2 ft and 2°.
+- 29 CFR 1926.1411 Table T is applied to the haul vehicle and its load as instructed (2026-11-16); the section is written for cranes /
+  derricks travelling without a load. Unknown voltage: 20 ft.
+- Haul road: tyres one at a time (overlapping spread under adjacent tyres not combined); tyre area default 100 in².
+- Defaults when not entered (shown as placeholders): tractor L1 20, e 1, front overhang 4, rear 3, width 8.5 ft; L2 40, width 8.5; deck
+  3 / 4 ft ahead / behind; jeep 10 / 0; dolly 12 ft long; R_min 45 ft; deck height 5 ft; tractor 20,000 lb at 8 ft; trailer 15,000 lb at
+  25 ft; jeep 8,000 lb; dolly 12,000 lb; axles 1 / 2 / 2 / 3, tyres 2 / 4 / 4 / 4; load 50 ft, 40,000 lb, 8 ft wide, r 2, 6 ft high.
+### How verified
+`node tests/engine/run.mjs crane-route` (9 tests incl. KaTeX of every step); `node tests/engine/run.mjs crane` (all crane tests);
+`node tests/smoke/crane-route.mjs` (5 checks: route drawn by clicks, live card = engine; an obstruction in turn 1 → stop, the vertex drag
+changes the swept path and the card mid-drag and clears it, one undo step; overhead line, posted bridge, power line (Table T, spotter);
+Route tab tables and the turn link; C5 link and "move the pick pose"; Report §Route; reload; 390 px; 0 console errors);
+`crane-draw` (7, fixed), `crane-shell` (11) and `crane-picks` (5) (their output-tab lists now include Route), `crane-tandem` (6), `crane-ground` (5), `crane-place` (9); `node tests/check-syntax.mjs`.
