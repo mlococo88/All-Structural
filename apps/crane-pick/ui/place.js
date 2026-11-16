@@ -13,7 +13,7 @@
   const MP = () => window.CranePickMap, L_ = () => window.L;
   const fmt = (v, d) => (typeof v === 'number' && isFinite(v)) ? v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—';
   const COLS = { ok: '#059669', caution: '#D97706', critical: '#EA580C', over: '#DC2626', np: '#DC2626' };
-  let el = null, selU = null, selK = null, dragEnd = 0, stepsOpen = false;
+  let el = null, selU = null, selK = null, dragEnd = 0, stepsOpen = false, elevOpen = false;
   const layers = new Map();   // setup id -> { parts..., picks: Map(pick id -> layers) }
   const setupOf = id => (A.P.setups || []).find(u => u.id === id) || null;
   const pickOf = id => (A.P.picks || []).find(k => k.id === id) || null;
@@ -25,6 +25,7 @@
     const u = setupOf(k.setupId), c = craneOf(u); if (!u || !c) return null;
     const ev = LF.evaluate(c, u, k, S(), 'k');
     ev.flags = LF.clearances(c, u, ev, A.P.items);
+    if (window.CranePickElev) { ev.elev = window.CranePickElev.evaluate(c, u, k, ev, 'k.el'); ev.flags = ev.flags.concat(ev.elev.flags); }   // C3-1: heights
     return ev;
   }
   /* ---------- placing ---------- */
@@ -149,14 +150,24 @@
       <div class="tscroll"><table class="tbl lfTbl"><thead><tr><th></th><th>R (ft)</th><th>Zone</th><th>L / R tab (ft)</th><th>C (lb)</th><th>% chart</th><th></th></tr></thead><tbody>${pt(ev.pick, 'Pick')}${pt(ev.set, 'Set')}${pt(ev.gov, 'Governing')}</tbody></table></div>
       <div class="note">W = ${fmt(ev.W, 0)} lb · swing ${fmt(Math.abs(ev.path.d), 1)}° ${ev.path.d >= 0 ? 'clockwise' : 'counter-clockwise'} · R<sub>max</sub> = ${fmt(ev.path.Rmax, 2)} ft · boom ${fmt(setupOf(k.setupId).boom, 1)} ft · thresholds: caution ≥ ${s.caution} %, critical lift ≥ ${s.critical} %, limit ${s.limit} % · chart rated at ${esc(ev.pick.cfg ? K.ratingBasis(ev.pick.cfg, craneOf(setupOf(k.setupId))).text : '—')}</div>
       ${why.length ? `<div class="note warnT">Not permitted: ${why.map(esc).join('; ')}.</div>` : ''}${notes.length ? `<div class="note">${notes.map(esc).join(' ')}</div>` : ''}
-      ${!ev.W ? '<div class="note warnT">Enter the load, rigging and hook block weights.</div>' : ''}
+      ${!ev.W ? '<div class="note warnT">Enter the load, rigging and hook block weights.</div>' : ''}${heightsHtml(ev)}
       ${flags.length ? `<ul class="lfFlags">${flags.map(f => `<li class="lf-${f.level}">${esc(f.text)}</li>`).join('')}</ul>` : '<div class="note">Plan clearances: no flags (power lines, exclusion zones, obstructions drawn on the Site items tab).</div>'}
       <details class="crSteps" id="lfSteps"${stepsOpen ? ' open' : ''}><summary>Worked steps</summary>${stepsHtml(ev)}</details></div>`;
   }
   function stepsHtml(ev) {
     const sx = window.CranePickSite ? window.CranePickSite.steps : (l => l.map(x => esc(x.label)).join('<br>'));
     return `<div class="note"><b>Total load</b></div>${sx(ev.Wsteps)}<div class="note"><b>Pick point</b></div>${sx(ev.pick.steps)}<div class="note"><b>Set point</b></div>${sx(ev.set.steps)}
-      <div class="note"><b>Swing path</b></div>${sx(ev.path.steps)}${ev.govWhere.indexOf('swing') >= 0 ? `<div class="note"><b>Governing point (${esc(ev.govWhere)})</b></div>${sx(ev.gov.steps)}` : ''}`;
+      <div class="note"><b>Swing path</b></div>${sx(ev.path.steps)}${ev.govWhere.indexOf('swing') >= 0 ? `<div class="note"><b>Governing point (${esc(ev.govWhere)})</b></div>${sx(ev.gov.steps)}` : ''}${elevSteps(ev, sx)}`;
+  }
+  /* C3-1: heights (engine/elev.js): the live card line and the worked steps (crane geometry, pick, set, travel) */
+  function elevSteps(ev, sx) {
+    const h = ev.elev; if (!h) return '';
+    return `<div class="note" id="lfElSteps"><b>Heights: crane geometry</b></div>${sx(h.geoSteps)}<div class="note"><b>Heights at the pick</b></div>${sx(h.pick.steps)}<div class="note"><b>Heights at the set</b></div>${sx(h.set.steps)}<div class="note"><b>Heights during the swing</b></div>${sx(h.trav.steps.concat(h.swing.steps))}`;
+  }
+  function heightsHtml(ev) {
+    const h = ev.elev; if (!h) return '';
+    const th = p => isFinite(p.ang.theta) && p.ang.theta != null ? fmt(p.ang.theta, 1) + '°' + (p.ang.used === 'chart' ? ' (chart)' : '') : '—', m = v => v == null ? '—' : v === -Infinity ? 'not reachable' : fmt(v, 2) + ' ft';
+    return `<div class="note" id="lfHeights">Heights: boom angle ${th(h.pick)} at the pick / ${th(h.set)} at the set · tip el. ${fmt(h.pick.zTip, 2)} / ${fmt(h.set.zTip, 2)} ft · hook el. ${fmt(h.pick.zHk, 2)} / ${fmt(h.set.zHk, 2)} ft · load bottom el. ${fmt(h.pick.zLb, 2)} / ${fmt(h.set.zLb, 2)} ft (travel ${fmt(h.trav.z, 2)}) · hook reach margin ${m(h.pick.margin)} / ${m(h.set.margin)} / swing ${m(h.swing.min)}</div>`;
   }
   function liveCard() { if (!el) return; const k = pickOf(selK), x = el.querySelector('#lfLive'); if (k && x) x.innerHTML = resHtml(k); }
   function liveSetupFields(u) {
@@ -181,6 +192,7 @@
       ${numIn('luBoom', u.boom, 'Boom length', 'ft', { ph: 'ft' })}<p class="note">Tabulated: ${booms.map(b => fmt(b, b % 1 ? 1 : 0)).join(', ') || '—'} ft (a length between them reads the next longer column).</p>
       ${modes.length ? `<div class="fRow"><label for="luMode">Telescoping mode</label><select id="luMode"><option value="">lowest of the columns</option>${modes.map(x => `<option${u.mode === x ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></div>` : ''}
       <div class="fRow"><label>Support</label><span>${esc(any ? any.support || '—' : '—')}${sk ? ` (spread ${esc(sk)} ${fmt(p.outr.spreads[sk], 2)} ft drawn)` : ''}</span></div>
+      ${numIn('luPad', u.pad, 'Crane pad elevation', 'ft', { ph: 'not entered: 0.00 (datum)' })}
       ${numIn('luHead', (+u.heading).toFixed(1), 'Carrier heading', '° (az.)')}${numIn('luE', G.ftToNative(z.id, u.x).toFixed(2), 'Rotation E', un)}${numIn('luN', G.ftToNative(z.id, u.y).toFixed(2), 'Rotation N', un)}
       <p class="note">On the map: drag ✥ to move the crane, ↻ to turn it.</p>
       <div class="goRow"><button type="button" data-la="addPick">Add a pick</button><button type="button" data-la="zoomU">Show on the map</button><button type="button" class="danger" data-la="delU">Remove setup</button></div>
@@ -198,9 +210,20 @@
       <div class="fRow"><label for="lkDedNote">What they are</label><input type="text" id="lkDedNote" value="${esc(k.dedNote)}" placeholder="e.g. stowed jib, headache ball"></div>
       ${c && (c.configs || []).length ? `<p class="note">Chart deductions: ${esc([...new Set((c.configs || []).map(g => g.deductions && g.deductions.rule).filter(Boolean))].join(' / ') || 'not stated')}</p>` : ''}
       <div class="fRow"><label>Swing</label><span id="lkSwing">${[['short', 'shortest'], ['cw', 'clockwise'], ['ccw', 'counter-clockwise']].map(([v, t]) => `<label style="margin-right:8px"><input type="radio" name="lkSwing" value="${v}"${k.swing === v ? ' checked' : ''}> ${t}</label>`).join('')}</span></div>
+      ${heightsIn(k, u)}
       ${numIn('lkPE', G.ftToNative(z.id, k.pick.x).toFixed(2), 'Pick E', un)}${numIn('lkPN', G.ftToNative(z.id, k.pick.y).toFixed(2), 'Pick N', un)}${numIn('lkSE', G.ftToNative(z.id, k.set.x).toFixed(2), 'Set E', un)}${numIn('lkSN', G.ftToNative(z.id, k.set.y).toFixed(2), 'Set N', un)}
       <div id="lfLive">${resHtml(k)}</div>
       <div class="goRow"><a href="#" class="wk" data-la="picksTab">all picks: Picks tab</a> <a href="#" class="wk" data-la="rptPick">worked: Report</a></div></div></div>`;
+  }
+  /* C3-1: the pick's heights (pick.elev; engine/elev.js). Elevations in ft whatever the zone's plan unit. */
+  function heightsIn(k, u) {
+    const E = window.CranePickElev ? window.CranePickElev.el0(k) : (k.elev || {}), pad = u && u.pad != null ? fmt(u.pad, 2) : '0.00';
+    return `<details class="crSteps" id="lkElev"${elevOpen ? ' open' : ''}><summary>Heights (elevation, hook reach; ft)</summary>
+      ${numIn('lkPg', E.pg, 'Ground el. at the pick', 'ft', { ph: 'pad ' + pad })}${numIn('lkPh', E.ph, 'Load bottom above that ground', 'ft', { ph: '0' })}
+      ${numIn('lkSg', E.sg, 'Ground el. at the set', 'ft', { ph: 'pad ' + pad })}${numIn('lkSh', E.sh, 'Load bottom above that ground', 'ft', { ph: '0 (e.g. bearing seat height)' })}
+      ${numIn('lkLH', E.H, 'Load height H', 'ft', { ph: '0' })}${numIn('lkLL', E.L, 'Load length L', 'ft', { ph: '0 (3D, C3-2)' })}${numIn('lkLW', E.W, 'Load width W', 'ft', { ph: '0 (3D, C3-2)' })}
+      ${numIn('lkRigH', E.rig, 'Rigging height (hook to load top)', 'ft', { ph: '0' })}${numIn('lkBlk', E.blk, 'Hook block height (hook to block top)', 'ft', { ph: '0' })}
+      ${numIn('lkTrav', E.trav, 'Load bottom el. during the swing', 'ft', { ph: 'higher of pick / set' })}</details>`;
   }
   function drawTab() {
     if (!el) return;
@@ -242,6 +265,7 @@
       if (t.id === 'luGroup') return up(() => { u.group = t.value; u.mode = null; }, 'setups', u.id);
       if (t.id === 'luMode') return up(() => { u.mode = t.value || null; }, 'setups', u.id);
       if (t.id === 'luBoom') { const v = num(); if (v === undefined || (v !== null && v <= 0)) { t.classList.add('bad'); return; } return up(() => { u.boom = v; }, 'setups', u.id); }
+      if (t.id === 'luPad') { const v = num(); if (v === undefined) return; return up(() => { u.pad = v; }, 'setups', u.id); }
       if (t.id === 'luHead') { const v = num(); if (v == null) { t.classList.add('bad'); return; } return up(() => { u.heading = ((v % 360) + 360) % 360; }, 'setups', u.id); }
       if (t.id === 'luE' || t.id === 'luN') { const v = num(); if (v == null) { t.classList.add('bad'); return; } return up(() => { u[t.id === 'luE' ? 'x' : 'y'] = G.nativeToFt(z, v); }, 'setups', u.id); }
     }
@@ -251,13 +275,15 @@
       if (w) { const v = num(); if (v === undefined || (v !== null && v < 0)) { t.classList.add('bad'); return; } return up(() => { k[w] = v; if (w === 'hook') k.hookLabel = v == null ? '' : 'entered'; }, 'picks', k.id); }
       if (t.id === 'lkHookSel') { const c = craneOf(setupOf(k.setupId)), h = c && K.hookBlocks(c)[+t.value]; if (t.value === '' || !h) return; return up(() => { k.hook = h.lb; k.hookLabel = h.label; }, 'picks', k.id); }
       if (t.id === 'lkDedNote') return up(() => { k.dedNote = t.value; }, 'picks', k.id);
+      const h = { lkPg: 'pg', lkPh: 'ph', lkSg: 'sg', lkSh: 'sh', lkLH: 'H', lkLL: 'L', lkLW: 'W', lkRigH: 'rig', lkBlk: 'blk', lkTrav: 'trav' }[t.id];   // C3-1
+      if (h) { const v = num(); if (v === undefined || (v !== null && v < 0 && ['pg', 'sg', 'trav'].indexOf(h) < 0)) { t.classList.add('bad'); return; } return up(() => { k.elev = Object.assign({}, k.elev, { [h]: v }); }, 'picks', k.id); }
       if (t.name === 'lkSwing') return up(() => { k.swing = t.value; }, 'picks', k.id);
       const c = { lkPE: ['pick', 'x'], lkPN: ['pick', 'y'], lkSE: ['set', 'x'], lkSN: ['set', 'y'] }[t.id];
       if (c) { const v = num(); if (v == null) { t.classList.add('bad'); return; } return up(() => { k[c[0]] = Object.assign({}, k[c[0]], { [c[1]]: G.nativeToFt(z, v) }); }, 'picks', k.id); }
     }
   }
   /* ---------- wiring ---------- */
-  function build(p) { el = p; p.addEventListener('click', onClick); p.addEventListener('change', onChange); p.addEventListener('toggle', e => { if (e.target.id === 'lfSteps') stepsOpen = e.target.open; }, true); drawTab(); }
+  function build(p) { el = p; p.addEventListener('click', onClick); p.addEventListener('change', onChange); p.addEventListener('toggle', e => { if (e.target.id === 'lfSteps') stepsOpen = e.target.open; if (e.target.id === 'lkElev') elevOpen = e.target.open; }, true); drawTab(); }
   A.inTab({ id: 'lifts', label: 'Lifts', build, show: drawTab });
   A.on('project', () => { renderAll(); drawTab(); });
   A.on('change', o => {
