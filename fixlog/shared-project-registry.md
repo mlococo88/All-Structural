@@ -95,3 +95,14 @@ Loaded by: see `shared/README.md` (row `project-registry.js`). Tests: `node test
 - **Tests:** `tests/engine/project-registry.test.mjs`: new test "PS Bridge app view" (list newest per name, file text as stored, home Upload all then the tool's engine finds it synced with no upload, save refused, the app's and the Steel Bridge app's keys unchanged, an unreadable index reported and kept); the first test checks the entry against the app (key in its .js files, ctx.cloud tool / label in its page). `tests/smoke/project-library.mjs`: new `psbapp` entry (not run by that file); `tests/smoke/home-projects.mjs` `FOLDER`: `psbapp: 'ps-bridge-app'` (so home-projects and home-sync cover it).
 - **Formulas, factors, units, code references:** none.
 - **How verified:** `node tests/engine/run.mjs project-registry github-sync projects`: 4 files, 47 passed, 0 failed; `node tests/smoke/home-projects.mjs` (every tool, psbapp included): 60 checks, ALL PASS; `node tests/smoke/home-sync.mjs` (every synced tool): 41 checks, ALL PASS (psbapp: after the home page's Sync all, the app's own dialog shows "synced", no upload: its file = the home page's file); `node tests/check-syntax.mjs`: all scripts pass.
+
+## 2026-11-16 — PR: claude/crane-c1-shell (C1-1) — the Crane Pick Analyzer's saved projects on the home page (`crane-pick`)
+- **What (additive):** one entry at the end of the `TOOLS` array literal (after `bridge-geometry`):
+  `{ tool: 'crane-pick', label: 'Crane Pick Analyzer', name: 'Crane Pick Analyzer', href: 'apps/crane-pick/index.html', def: 'apps/crane-pick/ui/project.js', key: 'crane.projects.v1', time: i => i && i.savedAt || null, sort: 'saved', space: 1, toFile: i => ({ format: 'crane-pick.project', version: 1, project: i }) }`.
+  `tool`, `label`, `space`, `toFile` = the app's own `ctx.cloud` (`apps/crane-pick/ui/project.js`, `def`); `key`, `time`, `sort` = its mapStore.
+- **Saved data (§5):** no key or format changed; the new key is the new app's own list.
+- **Tools that load this file:** `tools.html` only (card added in the same PR, `fixlog/tools.md`).
+- **Formulas, factors, units, code references:** none.
+- **How verified:** `node tests/engine/run.mjs project-registry github-sync projects` (all pass; the "one entry per tool" test reads the
+  key and ctx.cloud from `def`); `node tests/smoke/home-projects.mjs` and `node tests/smoke/home-sync.mjs` with the crane entry
+  (`tests/smoke/project-library.mjs` TOOLS `crane`, `home-projects.mjs` FOLDER `crane`).

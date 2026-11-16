@@ -214,6 +214,13 @@ export const TOOLS = {
     save: async (p, name) => { await stdSave(p, name); await p.waitForTimeout(400); },
     names: p => p.evaluate(() => (JSON.parse(localStorage.getItem('psb2.lib.index') || '{"items":[]}').items || []).map(i => i.name)),
   },
+  crane: {
+    // Crane Pick Analyzer (apps/crane-pick, C1 2026-11-16): used by tests/smoke/home-projects.mjs and home-sync.mjs; its own smoke is
+    // tests/smoke/crane-shell.mjs (save / open / undo / GitHub sync). Not run by this file.
+    file: 'apps/crane-pick/index.html', list: 'crane.projects.v1', auto: 'crane.project.current', noRun: true,
+    ready: p => p.waitForFunction(() => document.querySelector('[data-sp=chip]') && window.CranePickApp && window.CranePickApp.pb, null, { timeout: 60000 }),
+    save: async (p, name) => { await stdSave(p, name); await p.waitForTimeout(300); },
+  },
   pile: {
     // Pile Designer (STDS-P, 2026-11-06): its list is IndexedDB (tests/smoke/pile-library.mjs tests it); used by github-sync-tools.mjs and
     // home-projects.mjs. Results: the autosaved inputs and LPILE import (the GitHub copy carries no title-block change); save = the
