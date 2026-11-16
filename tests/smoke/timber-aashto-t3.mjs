@@ -64,11 +64,11 @@ for (const [name, fn] of Object.entries(cases)) {
     await p.setViewportSize({ width: 1400, height: 7000 }); await p.waitForTimeout(400);
     for (const sec of ['aasCSum', 'aasFlex', 'aasShr', 'aasBrg', 'aasDefl', 'aasCamb']) { await p.click('#tab_' + CARD_TAB[sec]); await p.waitForTimeout(300); const h = await p.$(`#tabPages .sec[data-secid="${sec}"]`); if (h && (name !== 'exterior')) await h.screenshot({ path: path.join(args.shots, `t3-${name}-${sec}.png`) }); }
     await p.setViewportSize({ width: 1400, height: 1000 }); await p.waitForTimeout(300);
-    if (name === 'glulamCont') { await p.screenshot({ path: path.join(args.shots, 't3-glulamCont-page.png') }); await p.click('#tbcInTab_factors'); await p.waitForTimeout(200); const pn = await p.$('#tbcInPane_factors'); if (pn) await pn.screenshot({ path: path.join(args.shots, 't3-factors-pane.png') }); }
+    if (name === 'glulamCont') { await p.screenshot({ path: path.join(args.shots, 't3-glulamCont-page.png') }); await p.click('#tbcInTab_criteria'); await p.waitForTimeout(200); const pn = await p.$('#tbcInPane_criteria'); if (pn) await pn.screenshot({ path: path.join(args.shots, 't3-factors-pane.png') }); }
   }
 }
-// TBA5: the deflection-limit input (Factors tab): an entry is saved (version 6) and used; blank = 425
-await p.click('#tbcInTab_factors'); await p.fill('[data-fkey="aasDLim"]', '800'); await p.waitForTimeout(600);
+// TBA5: the deflection-limit input (Design criteria tab, was Factors; TBIT): an entry is saved (version 6) and used; blank = 425
+await p.click('#tbcInTab_criteria'); await p.fill('[data-fkey="aasDLim"]', '800'); await p.waitForTimeout(600);
 ok(await p.evaluate(() => { const d = JSON.parse(localStorage.getItem('tbc_autosave_v1')); return d.version === 6 && d.design.aashto.dLim === 800 && TBC.ac.dLim === 800; }), 'deflection limit 800: saved (version 6) and used');
 await p.fill('[data-fkey="aasDLim"]', ''); await p.waitForTimeout(600);
 ok(await p.evaluate(() => { const d = JSON.parse(localStorage.getItem('tbc_autosave_v1')); return d.version === 5 && !('dLim' in d.design.aashto) && TBC.ac.dLim === 425; }), 'deflection limit blank: 425, no field saved (version 5)');
