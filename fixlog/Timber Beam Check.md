@@ -3077,7 +3077,7 @@ None new.
 - The lane load of the vehicle placements is not drawn (it is on the parts of the influence line that add; stated in the caption).
 - Shear row: the axles of the placement for the largest shear at the lesser of 3d and L/4 (the wood rule, x = `xl`), as the check uses them.
 
-## 2026-11-16 — PR: claude/timber-gfx-3 (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (TBGX-3: graphics — demand and capacity along the member, bracing elevation, bearing detail, deflected shape with limits; engineer decision 2026-11-16)   [display only; no computed value, saved key or saved-data format change]
+## 2026-11-16 — PR: claude/timber-gfx-3 (PR #1605: https://github.com/mlococo88/All-Structural/pull/1605) (TBGX-3: graphics — demand and capacity along the member, bracing elevation, bearing detail, deflected shape with limits; engineer decision 2026-11-16)   [display only; no computed value, saved key or saved-data format change]
 
 ### TBGX3-a. What changes for the user
 - **Demand and capacity along the member** (inline SVG line charts; the ratio chart under the demand chart):
