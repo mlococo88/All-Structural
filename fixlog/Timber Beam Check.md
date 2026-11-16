@@ -3005,3 +3005,40 @@ None new.
 - Flat use in its own small card "Orientation" on the Member tab (it was a row of the service-conditions card).
 - Lateral support placed after Spans and supports and before Member spacing; Bridge cross-section last on Geometry.
 - The deck-factor errors mark both Design criteria and Member.
+
+## 2026-11-16 — PR: claude/timber-gfx-1 (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (TBGX-1: graphics — cross-section and bending stress, factor chain of F<sub>b</sub>, check-ratio bars; engineer decision 2026-11-16)   [display only; no computed value, saved key or saved-data format change]
+
+### TBGX1-a. What changes for the user
+- **Section Properties tab** (both modes), first in the card *Section properties*: the cross-section **to scale** (b<sub>w</sub> × d<sub>b</sub> as loaded; dimension lines; neutral axis; edgewise / flat; glulam laminations when the number is known (not for a custom section); the compression / tension halves for the sign of the governing moment; an NDS end notch dashed on the face it is cut from) and beside it **the bending stress**: linear, f at the extreme fibres against the capacity stress (dashed), ratio.
+  - NDS: f<sub>b</sub> and F′<sub>b</sub> of the governing bending combination (`R.gov.b.fb`, `.Fb_p`, `.r_b`; sign `gbSign`, as the Bending tab).
+  - AASHTO: M<sub>u</sub>/S and M<sub>r</sub>/S of the governing flexure item (`AC.govFlex.Mu`, `.Mr`, `AC.S`): the moments of the check divided by its S (display; M<sub>r</sub>/S = φF<sub>b</sub> × C<sub>L</sub> or the lesser of C<sub>L</sub>, C<sub>V</sub>); ratio = `AC.govFlex.ratio`.
+- **Member input tab**, Orientation card: a small live sketch of the same section (no stress), redrawn with the inputs (`refreshInputs`).
+- **Design Values tab** (both modes), at the end of *Adjusted design values*: the **factor chain** of the bending design value — one bar for the reference value, one for the value after each factor in the order of the governing equation, the last bar(s) the engine's adjusted values.
+  - NDS: F<sub>b</sub> (glulam F<sub>bx</sub><sup>+</sup> / F<sub>bx</sub><sup>−</sup> by the sign) × C<sub>D</sub> (λ) × C<sub>M</sub> × C<sub>t</sub> × [sawn: C<sub>L</sub> C<sub>F</sub> C<sub>i</sub> C<sub>fu</sub> C<sub>r</sub> | glulam / SCL: the lesser of C<sub>L</sub> and C<sub>V</sub> (both when C<sub>V</sub> > 1), SCL C<sub>r</sub>] × [LRFD: K<sub>F</sub> φ<sub>b</sub>] → F′<sub>b</sub> (`gov.b.Fb_p`) — the factors of `fbFacs()` for the governing bending combination.
+  - AASHTO: F<sub>bo</sub> (glulam F<sub>bxo</sub><sup>+</sup> after the Art. 8.4.1.2.3 reduction) × C<sub>KF</sub> C<sub>M</sub> (C<sub>F</sub> or C<sub>V</sub>) C<sub>fu</sub> C<sub>i</sub> C<sub>d</sub> (Eq. 8.4.4.1-1) → × C<sub>λ</sub> = F<sub>b</sub>, Strength I (`A.lims[0].Fb`) → × φ = φF<sub>b</sub> (`A.lims[0].phiFb`).
+- **Summary tab** (both modes): **check-ratio bars**, one per check (NDS: bending, shear, bearing, deflection live, deflection total — `R.dcr.b/.v/.c`, `R.defl.r_dLL/.r_dTL`; AASHTO: the governing flexure, shear, bearing, deflection items), green < 0.90, amber 0.90 to 1.00, red > 1.00, lines at 0.90 and 1.00. NDS: first in *Governing results*; AASHTO: in *Summary of the checks* after the governing line.
+- Each figure has a caption with links to the cards where its values are worked (CLAUDE.md §6).
+- **Report**: numbered figures (Figure 1, 2, … in each report): NDS — check ratios in §1 Summary, the section and stress in §3 Section properties, the factor chain in §4 Design values; AASHTO — the factor chain in Materials and resistance (adjusted design values), the check ratios in the checks' summary, the section and stress in Flexure. Captions carry "see §" links ([[tb/…]]) to the steps that work the values.
+- Readable at 390 px: the section and the stress are two drawings that wrap one under the other; bars and labels sized for a 340 px column.
+
+### TBGX1-b. Code (anchors)
+- New block `/* TBGX-BEGIN — graphics` … `/* TBGX-END */` at the start of the page script (after `/* TBC-ENGINE-END */`): `const TBGX` with the pure drawings `section`, `waterfall`, `ratios` and the pickers `ndsSection(R, m, small)`, `aasSection(A, AC, m, small)`, `ndsFbChain(R, m)`, `aasFbChain(A)`, `ndsRatios(R, subs)`, `aasRatios(AC, subs)`. No DOM and no page globals except the engine tables `GLULAM_GRP`, `GLULAM_5A`: the block runs in Node as it is.
+- Before `function buildSect(pg)`: `tbgxFig`, `tbgxSect`, `tbgxWf`, `tbgxRatios`, `tbgxMemRefresh`.
+- Placements: `buildSect` (dvSect), `buildAasSect` (aasSect), `buildDV` (dvAdj, end), `buildAashto` (aasAdj, end), `buildSummary` (sumGov, first), `buildAasSum` (aasCSum), `buildFlatSec` (holder `#tbgxMem`), `refreshInputs` (`tbgxMemRefresh()`); Report: `TBGX_FN` / `tbgxRptFig` before `tbrModel`; `tbrModel` (§1, §3, §4), `tbrAasModel` (adjusted values), `tbrAasChecksSec` (summary, flexure).
+- CSS after `.tbcInTab.has-err .tbcInDot`: `.tbFig`, `.tbFigCap`, `#tbgxMem`.
+- New Node test `tests/engine/timber-graphics.test.mjs`.
+
+### TBGX1-c. §4 / §5
+- §4: none — no formula, factor, unit or code reference changed; the engine (`TBC-ENGINE`) is unchanged. The figures draw engine values; the AASHTO stress diagram shows M<sub>u</sub>/S and M<sub>r</sub>/S (the check's moments divided by its S; display only, the check is M<sub>u</sub>/M<sub>r</sub> as before).
+- §5: none.
+- **Check case:** default NDS project (2x10 DF-L No. 2, 16 ft, D + L): the section drawn 1.5 × 9.25 in.; f<sub>b</sub> = 1375 psi against F′<sub>b</sub> = 1139 psi, ratio 1.208 (= the Bending tab); ratio bars 1.208 (red), 0.333, 0.187 (green), 0.932 (amber), 1.028 (red) = the Summary table. LRFD default: F<sub>b</sub> 900 → × λ 0.8 = 720 → × C<sub>F</sub> 1.1 = 792 → × C<sub>r</sub> 1.15 = 911 → × K<sub>F</sub> 2.54 = 2313 → × φ 0.85 = 1966 psi = F′<sub>b</sub>.
+
+### TBGX1-d. How verified
+- RESULTS
+- **Other copies:** none.
+
+### TBGX1-e. Decisions (pending engineer review)
+- The glulam tension / compression halves are drawn at mid-depth (rectangular section; the laminations' grade zones of the layup are not known to the tool).
+- An NDS end notch is drawn on the cross-section as a dashed band on the face it is cut from (it exists at the end supports only; the caption says so).
+- AASHTO stress diagram in terms of M/S (ksi) as above, rather than adding a new "stress" quantity to the checks.
+- The ratio bars use 0.90 as the amber threshold (engineer's instruction) — the Summary's OK / NG status is unchanged (≤ 1.00 passes).
