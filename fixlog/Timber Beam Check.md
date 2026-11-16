@@ -3066,7 +3066,10 @@ None new.
 - **Check case:** t2 case *exterior* (6x16, s = 24 in., d<sub>e</sub> = 1.5 ft, w = 24 ft, N<sub>b</sub> = 12): 12 stringers at S = 2 ft, the left one checked, curb face 1.5 ft outside it; lever rule, 1 lane: outer wheel at x = d<sub>e</sub> − 2 = −0.5 ft (0.5 ft inside the stringer) r = 1 + x/S = 0.75, the second wheel 6 ft further in r = 0; m = 1.2, Σr = 0.75, g = 0.45 = the lever-rule table.
 
 ### TBGX2-d. How verified
-- RESULTS3
+- `node tests/check-syntax.mjs`: all pass. `node tests/timber-nds-parity.mjs`: 15,816 comparisons, **0 differences**. `node tests/engine/run.mjs timber report steps`: 13 files, 122 passed (`timber-graphics.test.mjs` +2: the cross-section's S, w, N<sub>L</sub>, lanes, roadway width drawn, stringer spacing, d<sub>e</sub> and curb face, N<sub>b</sub> stringers, the lever-rule wheel x and r and g equal `AL` / `AL.df.lev.gov` (5 cases); the vehicle rows, sections and axles (x, P; on the member) equal the envelope's placements `gMax` / `gMin` / `gov` / permit (9 cases)).
+- Output and Report text, origin/main vs branch (cards without `.tbFig`, numbered Report figures left out on both sides): 6 NDS + 13 AASHTO cases, 1,066 comparisons, **0 differences**, 0 console errors.
+- Smokes (one browser at a time): `timber-input-tabs`, `timber-aashto` (318 comparisons, 0 differences), `timber-aashto-t2`, `timber-aashto-t3` PASS; `project-library`, `home-projects` (`--tool timber`) ALL PASS; `decimal-entry --tool timber`: 15 fields, 0 lose a keystroke.
+- 390 px: scrollWidth 390; screenshots: gfx-bridge-ext-desktop, gfx-bridge-int-lever-390, gfx-bridge-table-desktop, gfx-trucks-permit-desktop, gfx-trucks-2span-390, gfx-geom-xs-sketch-390, gfx-report-aas-trucks.
 - **Other copies:** none.
 
 ### TBGX2-e. Decisions (pending engineer review)
