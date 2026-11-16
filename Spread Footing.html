@@ -76,6 +76,18 @@ textarea{width:100%;font-family:inherit;font-size:11px;border:1px solid #aab;pad
 .pedcard{border:1px solid #b9c4d0;margin:6px 0;background:#fdfdfd}
 .pedcard>summary{background:#f0f4f8;padding:4px 8px;cursor:pointer;font-weight:bold}
 .pedbody{padding:6px 8px}
+/* SFRU (2026-11-16): the element cards of Reinforcement > Pedestal Reinforcement & Dowels */
+.sfdPedRbH{background:#f0f4f8;padding:4px 8px;font-weight:bold;border-bottom:1px solid #d5dde6}
+.sfdPedRbT{font-weight:normal;font-size:11px;color:#444;margin-left:8px}
+.sfdRbSec{font-weight:bold;font-size:11px;margin:8px 0 2px 0;padding-top:5px;border-top:1px solid #e1e7ee}
+.sfdRbBody>.sfdRbSec:first-child{margin-top:0;padding-top:0;border-top:0}
+.sfdRbPair{display:flex;flex-wrap:wrap;gap:4px 14px;margin:3px 0;align-items:flex-end}
+.sfdRbPair>div{display:flex;flex-direction:column;gap:2px;min-width:0;max-width:100%}
+.sfdRbPair input,.sfdRbPair select{font-family:inherit;font-size:11px;padding:2px 4px;border:1px solid #aab;background:#fff}
+.sfdRbPair input{width:70px}
+.sfdRbPair select{width:auto;max-width:100%}
+.sfdRbPair .unit{margin-left:5px;color:#333;font-style:italic}
+.sfdRbExp{flex:1 1 220px}
 table.tbl{border-collapse:collapse;background:#fff;margin:4px 0;font-size:11px}
 table.tbl th,table.tbl td{border:1px solid #98a4b0;padding:3px 7px;text-align:right;line-height:1.35}
 table.tbl th{background:#e9eef4;text-align:center}
@@ -989,7 +1001,7 @@ function refreshVis(){
  $$('.sm-direct').forEach(e=>e.style.display=sm==='direct'?'flex':'none');
  $$('.qa-over').forEach(e=>e.style.display=(sm==='vesic'&&state.soil.qaOverride==='on')?'flex':'none');
  $$('.mu-user').forEach(e=>e.style.display=state.stab.muMode==='user'?'flex':'none');
- $$('.sfdWallOnly').forEach(e=>{const q=state.peds[+e.dataset.ped];e.style.display=(q&&q.elemType==='wall')?'':'none';});   /* SFWC: wall-only inputs */
+ sfdWallOnlyVis();   /* SFWC: wall-only inputs */
  sfdRbVis();   /* SFWS / SFHB */
  $$('.sfdLdU').forEach(e=>{const q=state.peds[+e.dataset.ped];if(q)e.textContent=sfdLdUnit(q,e.dataset.cm);});   /* SFWP: units follow the entry and the wall axis */
  $$('.sfdWpNote').forEach(e=>{const q=state.peds[+e.dataset.ped],h=q?sfdWallPfNote(q):'';e.innerHTML=h;e.style.display=h?'':'none';});
@@ -1013,6 +1025,10 @@ function refreshVis(){
    h > 0: sfdWallChk) has no ties: the Tie bar / Tie spc inputs are hidden unless ties apply to it: the horizontal bars are entered
    as "same as ties", or A_st > 0.01 A_g (11.7.4.1, pd.wTieReq). The stored tie fields are kept. SFWS: a Wall with a spacing hides the
    n-per-face and the entry-mode inputs and shows s_v. Display only. */
+/* SFRU (2026-11-16): the wall-only rows of the Pedestals & Loads card, also set when the cards are built (buildPedCards): before, only
+   refreshVis set them, so after a rebuild without it (page load, open / import / new project, add or remove a pedestal) a Pedestal
+   showed the wall inputs until the next input change. Display only. */
+function sfdWallOnlyVis(){$$('.sfdWallOnly').forEach(e=>{const q=state.peds[+e.dataset.ped];e.style.display=(q&&q.elemType==='wall')?'':'none';});}
 function sfdWallChk(q){if(!q||q.elemType!=='wall'||!(num(q.h)>0))return false;const a=num(q.bx),b=num(q.by),t=Math.min(a,b);return t>0&&Math.max(a,b)/t>3+1e-9;}
 function sfdWallTies(i){const q=state.peds[i];if(!sfdWallChk(q))return true;if(((q.wallIn||{}).hSize)==='sameTie')return true;
  const pd=P2&&P2.pedDes&&P2.pedDes[i];return !!(pd&&pd.wTieReq);}
@@ -1020,7 +1036,11 @@ function sfdRbVis(){
  document.querySelectorAll('.sfdPedRb').forEach(rb=>{const i=+rb.dataset.ped,q=state.peds[i];if(!q)return;
   const wl=q.elemType==='wall', ws=sfdWallSpc(q)>0, tie=sfdWallTies(i), wc=sfdWallChk(q);
   const sh=(sel,on)=>rb.querySelectorAll(sel).forEach(e=>{e.style.display=on?'':'none';});
-  sh('.sfdNCol',!(wl&&ws));sh('.sfdModeTbl',!(wl&&ws));sh('.sfdWsCol',wl);sh('.sfdTieCol',tie);sh('.sfdLbP',!wc);sh('.sfdLbW',wc);
+  const B=sfdPedBars(i), DB=sfdDowelBars(i), rf=q.reinf||{};   /* SFRU: only the inputs that apply are shown (hidden, not greyed) */
+  sh('.sfdNCol',B.mode==='faces');sh('.sfdNTot',B.mode==='total');sh('.sfdNSpc',B.mode==='spacing'&&!(wl&&ws));sh('.sfdModeTbl',!(wl&&ws));sh('.sfdWsCol',wl);sh('.sfdTieCol',tie);sh('.sfdLbP',!wc);sh('.sfdLbW',wc);
+  sh('.sfdHzRow',wl);sh('.sfdHPosRow',wl&&(q.wallIn||{}).hSize!=='sameTie');sh('.sfdS2P',!wl);sh('.sfdS2W',wl);sh('.sfdS2T',wl&&tie);sh('.sfdDwSep',!DB.fromLong);sh('.sfdDwSum',DB.fromLong);
+  rb.querySelectorAll('.sfdDwSumT').forEach(x=>{x.textContent=DB.n+' #'+DB.size+' ('+(wl?'vertical':'longitudinal')+' bars, continuous into the footing), '+(rf.dowelHook==='hook90'?'hooked 90\u00b0 in the footing':'straight in the footing');});
+  rb.querySelectorAll('.sfdPedRbT').forEach(x=>{const d=v=>String(+num(v).toFixed(2));x.textContent=(wl?'Wall':'Pedestal')+' \u00b7 '+d(q.bx)+' \u00d7 '+d(q.by)+' ft'+(num(q.h)>0?', h = '+d(q.h)+' ft':', bearing patch (h = 0)');});
   rb.querySelectorAll('.sfdHPos').forEach(x=>{const st=(q.wallIn||{}).hSize==='sameTie';x.disabled=st;x.value=st?'out':((q.wallIn||{}).hPos==='in'?'in':'out');x.title=st?'\u201cSame as ties\u201d: the ties enclose the vertical bars, so these bars are outside (the stored choice is kept)':'';});
   const hin=sfdHzIn(q);sh('.sfdLbWo',!hin);sh('.sfdLbWi',hin);});   /* SFHP */
 }
@@ -1094,76 +1114,63 @@ function buildPedCards(){
   /* SFTQ (2026-11-07): factored torsion T_u, a direct factored value used in every LRFD combination (both load modes); 0 / blank = not checked */
   {const r=el('div','row','<label>Factored torsion T<sub>u</sub></label><input type="number" step="any" data-path="peds.'+i+'.Tu" data-num placeholder="0"><span class="unit">k-ft</span><span class="hint">Pedestal only: factored (LRFD) torsion about the vertical axis, used as entered in every strength combination; checked against the ACI 318-19 22.7 threshold \u03c6T<sub>th</sub>. Blank / 0 = not checked</span>');b.appendChild(r);
    r.querySelector('input').value=num(p.Tu)?p.Tu:'';}
-  const rb=el('div','pedbody sfdPedRb');rb.dataset.ped=i;   /* SFDB: moved from the pedestal card to the Reinforcement tab */
-  const rh=el('div','sfdPedRbH',' <b style="font-size:11px">'+sfEsc(p.label)+'</b>');rh.style.marginTop='6px';rb.appendChild(rh);
-  const rt=document.createElement('table');rt.className='tbl';rt.style.fontSize='11px';
-  /* SFWS / SFHB (2026-11-11): for a Wall the n-per-face columns give way to the spacing s_v (each face), and the tie columns are hidden
-     unless ties apply (sfdRbVis); the stored fields are kept */
-  rt.innerHTML='<tr><th><span class="sfdLbP">Long. bar</span><span class="sfdLbW" style="display:none">Vertical bar</span></th><th class="sfdNCol">n along x-face</th><th class="sfdNCol">n along y-face</th><th class="sfdWsCol" style="display:none" title="Wall: centre-to-centre spacing of the vertical bars on each face; bars per face = ceil(L_c/s) + 1, L_c = b \u2212 2\u00b7cover \u2212 d_b">Vertical spc s<sub>v</sub> (in), each face</th><th class="sfdTieCol">Tie bar</th><th class="sfdTieCol">Tie spc (in)</th><th title="Clear cover to the longitudinal (vertical) bars">Cover (in)</th></tr>';
-  const rr=document.createElement('tr');
-  function cell(html,cls){const td=document.createElement('td');td.innerHTML=html;if(cls)td.className=cls;return td;}
-  const selL=cell('<select data-path="peds.'+i+'.reinf.longSize" class="barsel">'+barOptions()+'</select>');selL.querySelector('select').dataset.filled='1';
-  const selT=cell('<select data-path="peds.'+i+'.reinf.tieSize" class="barsel">'+barOptions()+'</select>','sfdTieCol');selT.querySelector('select').dataset.filled='1';
-  rr.appendChild(selL);
-  rr.appendChild(cell('<input type="number" step="1" data-path="peds.'+i+'.reinf.nx" data-num style="width:44px">','sfdNCol'));
-  rr.appendChild(cell('<input type="number" step="1" data-path="peds.'+i+'.reinf.ny" data-num style="width:44px">','sfdNCol'));
-  {const c=cell('<input type="number" step="0.5" min="0" data-path="peds.'+i+'.reinf.wallSpc" placeholder="enter" style="width:56px">','sfdWsCol');c.style.display='none';rr.appendChild(c);}
-  rr.appendChild(selT);
-  rr.appendChild(cell('<input type="number" step="0.5" data-path="peds.'+i+'.reinf.tieSpc" data-num style="width:52px">','sfdTieCol'));
-  rr.appendChild(cell('<input type="number" step="0.25" data-path="peds.'+i+'.reinf.cover" data-num style="width:52px">'));
-  rt.appendChild(rr);rb.appendChild(rt);
-  {const x=rr.querySelector('[data-path$=".wallSpc"]'),v=state.peds[i].reinf.wallSpc;x.value=(v==null?'':v);}
-  /* SFTC: exposure of the pedestal, for the clear cover to the ties (ACI 318-19 Table 20.5.1.3.1) */
-  const et=document.createElement('table');et.className='tbl';et.style.fontSize='11px';
-  et.innerHTML='<tr><th title="ACI 318-19 Table 20.5.1.3.1: sets the minimum clear cover to the ties (wall: to the horizontal bars, or to the vertical bars where the horizontal bars are inside them)">Exposure (<span class="sfdLbP">tie cover</span><span class="sfdLbW" style="display:none"><span class="sfdLbWo">cover to the horizontal bars</span><span class="sfdLbWi" style="display:none">cover to the vertical bars, horizontal bars inside</span></span>, ACI Table 20.5.1.3.1)</th></tr>';
-  const er=document.createElement('tr');
-  er.appendChild(cell('<select data-path="peds.'+i+'.reinf.exposure" style="width:auto;max-width:100%">'+Object.keys(SFTC_EXP).map(k=>'<option value="'+k+'">'+SFTC_EXP[k][0]+'</option>').join('')+'</select>'));
-  et.appendChild(er);rb.appendChild(et);
-  {const s=er.querySelector('select');s.value=state.peds[i].reinf.exposure||'weather';}
-  /* SFRQ: how the longitudinal bars are entered: n per face (as before), a total quantity, or a spacing */
-  const mt=document.createElement('table');mt.className='tbl sfdModeTbl';mt.style.fontSize='11px';
-  mt.innerHTML='<tr><th>Long. bars entered as</th><th>Total qty</th><th>Spacing c-c (in)</th></tr>';
-  const mr=document.createElement('tr');
-  mr.appendChild(cell('<select data-path="peds.'+i+'.reinf.longMode" style="width:auto"><option value="faces">n per face</option><option value="total">Total quantity</option><option value="spacing">Spacing</option></select>'));
-  mr.appendChild(cell('<input type="number" step="1" min="0" data-path="peds.'+i+'.reinf.nTot" data-num style="width:52px">'));
-  mr.appendChild(cell('<input type="number" step="0.5" data-path="peds.'+i+'.reinf.longSpc" data-num style="width:52px">'));
-  mt.appendChild(mr);rb.appendChild(mt);
-  const pbi=el('div','note sfdPbInfo');pbi.dataset.ped=i;pbi.style.fontSize='10.5px';rb.appendChild(pbi);
-  /* SFWC (2026-11-06): wall horizontal (transverse) bars, one bar in each of the two curtains (one near each face) at s;
-     'sameTie' = the tie size and spacing above (the long legs of the perimeter ties are the horizontal bars); SFWH: blank = input needed */
-  {const wt=document.createElement('table');wt.className='tbl sfdWallOnly';wt.dataset.ped=i;wt.style.fontSize='11px';
-   wt.innerHTML='<tr><th title="Wall only (ACI 318-19 11.6, 11.5.4.3): horizontal bar in each of the two curtains (one near each face); blank = input needed">Wall horizontal bar (each face)</th><th title="Wall only: spacing of the horizontal bars; blank = the tie spacing with &quot;same as ties&quot;, otherwise input needed">Horizontal spc (in)</th><th title="Wall only (SFHP): where the horizontal bars sit on each face. The cover c is the clear cover to the vertical bars either way (d of the wall checks unchanged). Outside: cover checked to the horizontal bars, c \u2212 d_b,h. Inside: the vertical bars are the outermost bars, cover c checked against the vertical bar size (ACI 318-19 Table 20.5.1.3.1). &quot;Same as ties&quot; is always outside.">Horizontal bars</th></tr>';
-   const wr=document.createElement('tr');
-   wr.appendChild(cell('<select data-path="peds.'+i+'.wallIn.hSize" style="width:auto" title="Blank = input needed: the wall checks that need \u03c1_t show REVIEW until the horizontal bars are entered (SFWH)"><option value="">\u2014 enter \u2014</option><option value="sameTie">same as ties</option>'+BAR_SIZES.filter(z=>z>0).map(z=>'<option value="'+z+'">#'+z+'</option>').join('')+'</select>'));
-   wr.appendChild(cell('<input type="number" step="0.5" min="0" data-path="peds.'+i+'.wallIn.hSpc" placeholder="ties" style="width:56px">'));
-   wr.appendChild(cell('<select class="sfdHPos" data-path="peds.'+i+'.wallIn.hPos" style="width:auto"><option value="out">Outside the vertical bars</option><option value="in">Inside the vertical bars</option></select>'));   /* SFHP: absent = outside */
-   wt.appendChild(wr);rb.appendChild(wt);
-   const wi=state.peds[i].wallIn||{};wr.querySelector('select').value=String(wi.hSize||'');wr.querySelector('input').value=(wi.hSpc==null?'':wi.hSpc);wr.querySelector('.sfdHPos').value=wi.hPos==='in'?'in':'out';}
-  mr.querySelectorAll('select,input').forEach(x=>{const v=getPath(state,x.dataset.path);x.value=(v===undefined||v===null)?'':v;});
-  const dt=document.createElement('table');dt.className='tbl';dt.style.fontSize='11px';
-  const dlw=el('div','',' <label title="SFDB: the dowel size, count and layout are those of the pedestal longitudinal bars, which run continuously into the footing (no lap at the joint)"><input type="checkbox" data-path="peds.'+i+'.reinf.dowelLong"> Pedestal longitudinal bars act as the dowels</label>');dlw.style.fontSize='11px';rb.appendChild(dlw);
-  dlw.querySelector('input').checked=state.peds[i].reinf.dowelLong===true;
-  dt.innerHTML='<tr><th>Dowel bar</th><th>Dowel count</th><th title="Standard 90\u00b0 hook at the footing end of the dowels (SFDO): develops tension (ACI 318-19 25.4.3) but not compression (25.4.1.2)">Hooked end in footing</th><th title="Dowel projection above the footing top (in); blank = the required projection computed by the tool">Projection (in)</th><th title="Footing top under the pedestal (construction joint), for shear friction mu, ACI 318-19 Table 22.9.4.2 (SFSF)">Joint surface</th></tr>';
-  const dr=document.createElement('tr');
-  const selD=cell('<select data-path="peds.'+i+'.reinf.dowelSize" class="barsel">'+barOptions()+'</select>');selD.querySelector('select').dataset.filled='1';
-  dr.appendChild(selD);
-  dr.appendChild(cell('<input type="number" step="1" data-path="peds.'+i+'.reinf.dowelN" data-num style="width:52px">'));
-  dr.appendChild(cell('<label><input type="checkbox" data-path="peds.'+i+'.reinf.dowelHook" data-on="hook90" data-off="straight"> hooked</label>'));   /* SFDO; SFDB: checkbox (same field and values) */
-  dr.appendChild(cell('<input type="number" step="1" min="0" data-path="peds.'+i+'.reinf.dowelProj" placeholder="auto" style="width:56px">'));
-  dr.appendChild(cell('<select data-path="peds.'+i+'.reinf.sfJoint" style="width:auto"><option value="rough">Roughened \u00bc in (\u03bc = 1.0\u03bb)</option><option value="smooth">Not roughened (\u03bc = 0.6\u03bb)</option></select>'));   /* SFSF */
-  dt.appendChild(dr);rb.appendChild(dt);
+  /* SFRU (2026-11-16, engineer: display only): the element's reinforcement inputs as one card, numbered sections in the order
+     1 longitudinal (vertical) bars, 2 ties / horizontal bars, 3 cover, 4 dowels into the footing, 5 bars provided (sfdPbInfo);
+     only the inputs that apply are shown (sfdRbVis); a hidden input keeps its stored value. The data-paths, attributes, initial
+     values, hints and titles are those of the SFDB / SFRQ / SFWS / SFHB / SFHP / SFTC / SFDO / SFSF tables this replaces. */
+  const rb=el('div','pedcard sfdPedRb');rb.dataset.ped=i;   /* SFDB: moved from the pedestal card to the Reinforcement tab */
+  rb.appendChild(el('div','sfdPedRbH','<b>'+sfEsc(p.label)+'</b><span class="sfdPedRbT"></span>'));
+  const rbb=el('div','pedbody sfdRbBody');rb.appendChild(rbb);
+  const sec=html=>rbb.appendChild(el('div','sfdRbSec',html));
+  const rw=(cls,lbl,ctl,unit,hint,title)=>rbb.appendChild(el('div','row'+(cls?' '+cls:''),'<label'+(title?' title="'+title+'"':'')+'>'+lbl+'</label>'+ctl+(unit?'<span class="unit">'+unit+'</span>':'')+(hint?'<span class="hint">'+hint+'</span>':'')));
+  const RP='peds.'+i+'.reinf.', WP='peds.'+i+'.wallIn.';
+  /* 1. longitudinal (vertical) bars: SFRQ entry mode first, then only its boxes; SFWS: a Wall with a spacing shows s_v only */
+  sec('1. <span class="sfdLbP">Longitudinal bars</span><span class="sfdLbW" style="display:none">Vertical bars</span>');
+  rw('','Bar size','<select data-path="'+RP+'longSize" class="barsel" data-filled="1">'+barOptions()+'</select>');
+  rw('sfdModeTbl','Entered as','<select data-path="'+RP+'longMode" style="width:auto"><option value="faces">n per face</option><option value="total">Total quantity</option><option value="spacing">Spacing</option></select>');
+  rw('sfdNCol','n along x-face','<input type="number" step="1" data-path="'+RP+'nx" data-num>');
+  rw('sfdNCol','n along y-face','<input type="number" step="1" data-path="'+RP+'ny" data-num>');
+  rw('sfdNTot','Total qty','<input type="number" step="1" min="0" data-path="'+RP+'nTot" data-num>');
+  rw('sfdNSpc','Spacing c-c','<input type="number" step="0.5" data-path="'+RP+'longSpc" data-num>','in');
+  rw('sfdWsCol','Vertical spc s<sub>v</sub>, each face','<input type="number" step="0.5" min="0" data-path="'+RP+'wallSpc" placeholder="enter">','in','','Wall: centre-to-centre spacing of the vertical bars on each face; bars per face = ceil(L_c/s) + 1, L_c = b − 2·cover − d_b');
+  /* 2. ties (pedestal) or the wall's horizontal bars (SFWC; SFWH blank = input needed; SFHP position), wall ties only where they apply (SFHB) */
+  sec('2. <span class="sfdS2P">Ties</span><span class="sfdS2W" style="display:none">Horizontal bars</span><span class="sfdS2T" style="display:none"> and ties</span>');
+  rw('sfdHzRow','Horizontal bar (each face)','<select data-path="'+WP+'hSize" style="width:auto" title="Blank = input needed: the wall checks that need ρ_t show REVIEW until the horizontal bars are entered (SFWH)"><option value="">— enter —</option><option value="sameTie">same as ties</option>'+BAR_SIZES.filter(z=>z>0).map(z=>'<option value="'+z+'">#'+z+'</option>').join('')+'</select>','','','Wall only (ACI 318-19 11.6, 11.5.4.3): horizontal bar in each of the two curtains (one near each face); blank = input needed');
+  rw('sfdHzRow','Horizontal spacing','<input type="number" step="0.5" min="0" data-path="'+WP+'hSpc" placeholder="ties">','in','','Wall only: spacing of the horizontal bars; blank = the tie spacing with &quot;same as ties&quot;, otherwise input needed');
+  rw('sfdHzRow sfdHPosRow','Horizontal bars','<select class="sfdHPos" data-path="'+WP+'hPos" style="width:auto"><option value="out">Outside the vertical bars</option><option value="in">Inside the vertical bars</option></select>','','','Wall only (SFHP): where the horizontal bars sit on each face. The cover c is the clear cover to the vertical bars either way (d of the wall checks unchanged). Outside: cover checked to the horizontal bars, c − d_b,h. Inside: the vertical bars are the outermost bars, cover c checked against the vertical bar size (ACI 318-19 Table 20.5.1.3.1). &quot;Same as ties&quot; is always outside.');   /* SFHP: absent = outside */
+  rw('sfdTieCol','Tie bar','<select data-path="'+RP+'tieSize" class="barsel" data-filled="1">'+barOptions()+'</select>');
+  rw('sfdTieCol','Tie spacing','<input type="number" step="0.5" data-path="'+RP+'tieSpc" data-num>','in');
+  /* 3. cover and exposure side by side (SFTC), with the minimum clear cover of that exposure from the design (sfdPedBarInfo) */
+  sec('3. Cover');
+  rbb.appendChild(el('div','sfdRbPair','<div><label title="Clear cover to the longitudinal (vertical) bars">Clear cover</label><span><input type="number" step="0.25" data-path="'+RP+'cover" data-num><span class="unit">in</span></span></div>'
+   +'<div class="sfdRbExp"><label title="ACI 318-19 Table 20.5.1.3.1: sets the minimum clear cover to the ties (wall: to the horizontal bars, or to the vertical bars where the horizontal bars are inside them)">Exposure (<span class="sfdLbP">tie cover</span><span class="sfdLbW" style="display:none"><span class="sfdLbWo">cover to the horizontal bars</span><span class="sfdLbWi" style="display:none">cover to the vertical bars, horizontal bars inside</span></span>, ACI Table 20.5.1.3.1)</label><select data-path="'+RP+'exposure">'+Object.keys(SFTC_EXP).map(k=>'<option value="'+k+'">'+SFTC_EXP[k][0]+'</option>').join('')+'</select></div>'));
+  {const n=el('div','note sfdCovMin');n.style.fontSize='10.5px';n.style.display='none';rbb.appendChild(n);}
+  /* 4. dowels into the footing (SFDB, SFDO); joint surface for shear friction (SFSF) on its own row, always shown */
+  sec('4. Dowels into footing');
+  rbb.appendChild(el('div','row','<label style="width:auto" title="SFDB: the dowel size, count and layout are those of the pedestal longitudinal bars, which run continuously into the footing (no lap at the joint)"><input type="checkbox" data-path="'+RP+'dowelLong"> <span class="sfdLbP">Pedestal longitudinal bars act as the dowels</span><span class="sfdLbW" style="display:none">Wall vertical bars act as the dowels</span></label>'));
+  rw('sfdDwSum','Dowels','<span class="sfdDwSumT"></span>');
+  rw('sfdDwSep','Dowel bar','<select data-path="'+RP+'dowelSize" class="barsel" data-filled="1">'+barOptions()+'</select>');
+  rw('sfdDwSep','Dowel count','<input type="number" step="1" data-path="'+RP+'dowelN" data-num>');
+  rw('','Hooked end in footing','<label style="width:auto"><input type="checkbox" data-path="'+RP+'dowelHook" data-on="hook90" data-off="straight"> hooked</label>','','','Standard 90° hook at the footing end of the dowels (SFDO): develops tension (ACI 318-19 25.4.3) but not compression (25.4.1.2)');   /* SFDO; SFDB: checkbox (same field and values) */
+  rw('sfdDwSep','Projection','<input type="number" step="1" min="0" data-path="'+RP+'dowelProj" placeholder="auto">','in','','Dowel projection above the footing top (in); blank = the required projection computed by the tool');
+  rw('','Joint surface (shear friction μ)','<select data-path="'+RP+'sfJoint" style="width:auto;max-width:100%"><option value="rough">Roughened ¼ in (μ = 1.0λ)</option><option value="smooth">Not roughened (μ = 0.6λ)</option></select>','','','Footing top under the pedestal (construction joint), for shear friction mu, ACI 318-19 Table 22.9.4.2 (SFSF)');   /* SFSF */
+  /* 5. the bars provided, worked (sfdPedBarInfo) */
+  sec('5. Bars provided');
+  const pbi=el('div','note sfdPbInfo');pbi.dataset.ped=i;pbi.style.fontSize='10.5px';rbb.appendChild(pbi);
   if(rc)rc.appendChild(rb);else b.appendChild(rb);
-  // set current values on the just-created selects/inputs
-  [selL,selT,selD].forEach(td=>{const s=td.querySelector('select');s.value=getPath(state,s.dataset.path);});
-  [...rr.querySelectorAll('input'),...dr.querySelectorAll('input:not([type=checkbox])')].forEach(inp=>{const v=getPath(state,inp.dataset.path);inp.value=(v===undefined||v===null)?'':v;});
-  {const s=dr.querySelector('input[data-path$="dowelHook"]');s.checked=state.peds[i].reinf.dowelHook==='hook90';}
-  {const s=dr.querySelector('select[data-path$="sfJoint"]');s.value=state.peds[i].reinf.sfJoint==='smooth'?'smooth':'rough';}
+  // set the current values (as the tables did: null / absent = blank; the defaults below as before)
+  rbb.querySelectorAll('[data-path]').forEach(x=>{const v=getPath(state,x.dataset.path);
+   if(x.type==='checkbox')x.checked=x.dataset.on!==undefined?v===x.dataset.on:v===true;else x.value=(v===undefined||v===null)?'':v;});
+  {const rf=state.peds[i].reinf,wi=state.peds[i].wallIn||{},q=s=>rbb.querySelector('[data-path="'+s+'"]');
+   q(RP+'exposure').value=rf.exposure||'weather';q(RP+'sfJoint').value=rf.sfJoint==='smooth'?'smooth':'rough';
+   q(RP+'dowelLong').checked=rf.dowelLong===true;q(RP+'dowelHook').checked=rf.dowelHook==='hook90';
+   q(WP+'hSize').value=String(wi.hSize||'');q(WP+'hSpc').value=(wi.hSpc==null?'':wi.hSpc);q(WP+'hPos').value=wi.hPos==='in'?'in':'out';}
   const del=el('button','danger','Remove pedestal');del.type='button';
   del.addEventListener('click',()=>{state.peds.splice(i,1);buildPedCards();sfdAnalyzeReq();saveAuto();});
   b.appendChild(del);
   d.appendChild(b);c.appendChild(d);
  });
- sfdRbVis();   /* SFWS / SFHB */
+ sfdWallOnlyVis();sfdRbVis();   /* SFWS / SFHB; SFRU: wall-only rows */
 }
 function rowInput(lbl,path,kind,unit,val){
  const r=el('div','row');const l=document.createElement('label');l.textContent=lbl;r.appendChild(l);
@@ -1447,12 +1454,17 @@ function sfdPedBarInfo(){
    b.wall?['Bars per face (wall, '+longF+'-face along \u2113<sub>w</sub>):','n = ceil(L<sub>c</sub>/s<sub>v</sub>) + 1 = ceil('+f2(Lc)+'/'+f2(b.s)+') + 1 = '+nF+'; spacing provided L<sub>c</sub>/(n \u2212 1) = '+f2(Lc)+'/'+(nF-1)+' = '+f2(nF>1?Lc/(nF-1):0)+' in \u2264 s<sub>v</sub>; the end faces by the same rule ('+(longF==='y'?b.nx:b.ny)+' bars). The first and last bars are the corner bars at cover + d<sub>b</sub>/2 from the wall ends.']
     :b.mode==='spacing'?['Bars per face:','ceil(L<sub>c</sub>/s) + 1.']:b.mode==='total'?['Split:','so the two faces have spacings as equal as possible.']:null,
    wl&&!b.wall?['Saved wall entry kept:','no single spacing gives the same bars as this saved entry, so it is used as saved; enter s<sub>v</sub> to define the vertical bars by spacing.']:null,   /* SFWS */
-   wc?['Horizontal bars:',hzI&&!hzI.need?'#'+hzI.size+' @ '+f2(hzI.s)+' in, each face'+(hzI.fromTie?' (same as ties; ties enclose the vertical bars, so always outside)':'')+(hzI.inside?', inside the vertical bars (the vertical bars are the outermost bars: cover c checked against the vertical bar size; d of the wall checks unchanged).':', outside the vertical bars (cover check c \u2212 d<sub>b,h</sub>).'):'not entered (Wall horizontal bar below).']:null,
+   wc?['Horizontal bars:',hzI&&!hzI.need?'#'+hzI.size+' @ '+f2(hzI.s)+' in, each face'+(hzI.fromTie?' (same as ties; ties enclose the vertical bars, so always outside)':'')+(hzI.inside?', inside the vertical bars (the vertical bars are the outermost bars: cover c checked against the vertical bar size; d of the wall checks unchanged).':', outside the vertical bars (cover check c \u2212 d<sub>b,h</sub>).'):'not entered (2. Horizontal bars, above).']:null,
    wc?['Ties:',sfdWallTies(i)?((q.wallIn||{}).hSize==='sameTie'?'the horizontal bars are entered as \u201csame as ties\u201d: the tie inputs give them.':'required: A<sub>st</sub> &gt; 0.01A<sub>g</sub> (ACI 318-19 11.7.4.1).'):'none: a wall needs ties only where A<sub>st</sub> &gt; 0.01A<sub>g</sub> (ACI 318-19 11.7.4.1); the tie inputs are hidden and kept as stored.']:null,   /* SFHB */
    DB.fromLong?['Dowels:','the '+DB.n+' #'+DB.size+' '+(wl?'vertical':'longitudinal')+' bars, continuous into the footing.']:null,
    P2&&P2.dowels&&P2.dowels[i]&&!P2.dowels[i].isPatch?['Dowels and shear friction worked in:',sfdLink('o-fd-bear','',['tab-footdes','5.6 Concrete Bearing & Dowels'])+'.']:null,   /* SFLK */
    P2&&P2.pedDes&&P2.pedDes[i]&&!P2.pedDes[i].isPatch?['Cover:',sftcTxt(P2.pedDes[i])]:null,
    P2&&P2.pedDes&&P2.pedDes[i]&&!P2.pedDes[i].isPatch?['Worked in:',sfdElLink(i)]:null]);});   /* SFWD */
+ /* SFRU: under the cover input, the minimum clear covers of the chosen exposure as the design found them (pd, SFCV / SFTC); none for a bearing patch */
+ $$('.sfdCovMin').forEach(n=>{const i=+n.closest('.sfdPedRb').dataset.ped,pd=P2&&P2.pedDes&&P2.pedDes[i],q=state.peds[i];
+  if(!q||!pd||pd.isPatch||!SFTC_EXP[pd.exposure]){n.style.display='none';n.innerHTML='';return;}
+  const k=pd.trKind,tr=k==='horizIn'?'the vertical bars (horizontal bars inside, #'+(pd.trSize||0)+' row)':k==='horiz'?'the horizontal bars, c \u2212 d<sub>b,h</sub>':k==='tieNoH'?'the transverse bars (tie input), c \u2212 d<sub>b,tie</sub>':'the ties, c \u2212 d<sub>b,tie</sub>';
+  n.innerHTML='Minimum clear cover, '+SFTC_EXP[pd.exposure][1]+' (ACI 318-19 Table 20.5.1.3.1): '+f2(pd.vertCovMin)+' in to the '+(q.elemType==='wall'?'vertical':'longitudinal')+' bars; '+f2(pd.tieCovMin)+' in to '+tr+'. Checked in 5 below.';n.style.display='';});
  sfdRbVis();   /* SFHB */
 }
 /* SFTC: one line for the clear cover to the ties */
