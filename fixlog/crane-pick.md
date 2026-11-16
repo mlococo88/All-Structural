@@ -236,7 +236,7 @@ reload, Report, 390 px, 0 console errors); `crane-shell.mjs` (11), `crane-sheets
 `node tests/check-syntax.mjs`.
 
 ## 2026-11-16 — C2-2: crane placement on the map, live capacity, plan clearances, Lifts tab
-PR: (this PR, link added after merge)
+PR #1607: https://github.com/mlococo88/All-Structural/pull/1607
 ### Where
 - `apps/crane-pick/engine/lift.js` (new, `window.CranePickLift`, no DOM): `evalAt` (radius, slew angle, zone, chart lookup through
   `engine/cranes.js`, % of chart, class), `evaluate` (total load, pick, set, swing path, governing point), `sweep` / `pathPoints`,
