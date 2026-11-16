@@ -14,7 +14,7 @@
   const isNum = v => typeof v === 'number' && isFinite(v);
   const fmt = (v, d) => isNum(v) ? v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—';
   const COLS = { ok: '#059669', caution: '#D97706', critical: '#EA580C', over: '#DC2626', np: '#DC2626' };
-  let el = null, sel = null, scrub = 0, stepsOpen = false, play = null, dragEnd = 0;
+  let el = null, sel = null, scrub = 0, stepsOpen = false, grOpen = false, play = null, dragEnd = 0;
   const layers = new Map();
   const tOf = id => (A.P.tandems || []).find(t => t.id === id) || null;
   const setupOf = id => (A.P.setups || []).find(u => u.id === id) || null;
@@ -145,6 +145,7 @@
         <div class="tscroll"><table class="tbl lfTbl" id="tlStep"><thead><tr><th>This step</th><th>R (ft)</th><th>Zone</th><th>C (lb)</th><th>% chart</th><th></th><th>Hook el. (ft)</th><th>Tip el. (ft)</th><th>Reach margin (ft)</th></tr></thead><tbody>${stepRows}</tbody></table></div>
         <div id="tlElev">${elevSvg(t, r, j, { w: 340, h: 220 })}</div>` : ''}
       ${r.cc ? `<div class="note" id="tlCC">Crane–crane: least ${fmt(r.cc.d, 2)} ft (crane 1 ${esc(T().COMP[r.cc.c1])} to crane 2 ${esc(T().COMP[r.cc.c2])}, ${esc(r.cc.where)})${r.level ? ` · girder level: hook heights differ by ${fmt(r.level.d, 2)} ft` : ''}</div>` : ''}
+      ${groundHtml(r)}
       ${r.flags.length ? `<ul class="lfFlags" id="tlFlags">${r.flags.map(f => `<li class="lf-${f.level}">${isNum(f.step) ? `<a href="#" data-tgstep="${f.step}">step ${f.step}</a>: ` : ''}${esc(f.text)}</li>`).join('')}</ul>` : '<div class="note">No flags.</div>'}
       <details class="crSteps" id="tlSteps"${stepsOpen ? ' open' : ''}><summary>Worked steps</summary>${stepsOpen ? workedHtml(r, sx) : ''}</details>
       <div class="goRow"><a href="#" class="wk" data-ta="picksTab">Picks tab</a> <a href="#" class="wk" data-ta="rpt">worked: Report §Tandem lifts</a></div></div>`;
@@ -153,7 +154,19 @@
     return `<div class="note"><b>Load share</b></div>${sx(r.sh.steps)}<div class="note"><b>Path</b></div>${sx(r.path.steps)}`
       + r.gov.map((g, i) => `<div class="note"><b>Crane ${i + 1}: governing step ${g.i} (${esc(g.where)})</b></div>${sx(g.steps)}`).join('')
       + (r.level ? `<div class="note"><b>Girder level</b></div>${sx(r.level.steps)}` : '') + (r.cc ? `<div class="note"><b>Crane–crane distance</b></div>${sx(r.cc.steps)}` : '')
-      + r.clr.map(c => `<div class="note"><b>Clearance: ${esc(c.name)}</b></div>${sx(c.steps)}`).join('');
+      + r.clr.map(c => `<div class="note"><b>Clearance: ${esc(c.name)}</b></div>${sx(c.steps)}`).join('')
+      + (r.ground && window.CranePickGroundUI ? r.ground.cr.map((g, i) => g.mode === 'none' ? '' : `<div class="note"><b>Crane ${i + 1}: ground</b></div>${window.CranePickGroundUI.stepsHtml(g)}`).join('')
+        + r.ground.pair.filter(d => d.steps).map(d => `<div class="note"><b>Stress at depth, both cranes: ${esc(d.name)}</b></div>${sx(d.steps)}`).join('') : '');
+  }
+  /* C5: ground (engine/ground.js via engine/tandem.js): each crane with its own hook load along the lift's steps; the stress at depth
+     from both cranes together */
+  function groundHtml(r) {
+    const GU = window.CranePickGroundUI; if (!r.ground || !GU) return '';
+    const per = r.ground.cr.map((g, i) => `<div class="note tgGr" data-tggr="${i}"><b>Crane ${i + 1}: ground</b> (hook load W<sub>${i + 1}</sub> = ${fmt(g.W, 0)} lb at its hook at every step)${g.mode === 'none' ? ` · <span class="warnT">not computed: ${esc(g.why)}</span>` : ` ${GU.modeChip(g)}`}</div>
+      ${g.mode === 'none' ? '' : GU.supTable(g) + (g.depth.length ? GU.depthTable(g) : '')}`).join('');
+    const pr = r.ground.pair, pair = pr.length ? `<div class="tscroll"><table class="tbl" id="tlGrPair"><thead><tr><th>Both cranes</th><th>Δσ<sub>z</sub> crane 1 (psf)</th><th>Δσ<sub>z</sub> crane 2 (psf)</th><th>Δσ<sub>z</sub> sum (psf)</th><th>Step</th><th>Allowable (psf)</th><th>Ratio</th></tr></thead><tbody>
+      ${pr.map(d => `<tr><td>${esc(d.name)}</td>${d.none ? `<td colspan="6" class="warnT">${esc(d.none)}</td>` : d.far ? '<td colspan="6">—</td>' : `<td class="n">${fmt(d.parts[0], 0)}</td><td class="n">${fmt(d.parts[1], 0)}</td><td class="n"><b>${fmt(d.ds, 0)}</b></td><td class="n"><a href="#" data-tgstep="${d.j}">${d.j}</a></td><td class="n">${d.cap ? fmt(d.cap, 0) : 'not entered'}</td><td class="n${d.ratio > 1 ? ' ng' : ''}">${d.ratio == null ? '—' : fmt(d.ratio, 2)}</td>`}</tr>`).join('')}</tbody></table></div>` : '';
+    return `<details class="crSteps" id="tlGround"${grOpen ? ' open' : ''}><summary>Ground (outrigger / track loads, bearing, stress at depth)</summary>${per}${pair}<p class="note">Values of the Ground tab's method (§Ground basis), with each crane's own hook load along its own hook path; the stress at depth from both cranes' supports summed at the same step.</p></details>`;
   }
   function liveCard() {
     if (!el) return; const t = tOf(sel), x = el.querySelector('#tlLive'); if (t && x) x.innerHTML = resHtml(t);
@@ -205,7 +218,7 @@
         ${A.P.cranes.length ? '' : '<p class="note">Add a crane to the project first (Cranes tab).</p>'}</div></div>${t ? cardHtml(t) : ''}`;
   }
   function sumText(t) { const r = evalT(t); return r.gov.length ? r.gov.map(g => g.c.e.look.ok ? fmt(g.c.pct, 1) + ' %' : 'n.p.').join(' / ') : 'incomplete'; }
-  function select(id) { sel = id; scrub = 0; renderAll(); drawTab(); A.emit('change', { kind: 'select-lift', id }); }
+  function select(id) { sel = id; scrub = 0; renderAll(); drawTab(); A.emit('change', { kind: 'select-lift', id }); if (window.CranePickElevView) window.CranePickElevView.redraw(); }
   function setStep(j) { const t = tOf(sel); if (!t) return; const r = evalT(t); scrub = stepIdx(r, j); place(t); liveCard(); if (window.CranePickElevView) window.CranePickElevView.redraw(); }
   function onClick(e) {
     const s = e.target.closest('[data-tgstep]'); if (s) { e.preventDefault(); setStep(+s.dataset.tgstep); return; }
@@ -276,10 +289,14 @@
       if (c.tip) { out += ln(sf, c.foot.z, sh, c.tip.z, `class="tgElBoom" stroke="${COLS[c.cls] || '#0F172A'}" stroke-width="3" stroke-linecap="round"`) + ln(sh, c.tip.z, sh, c.zBk, 'stroke="#334155"');
         out += `<text x="${X(sh)}" y="${Y(c.tip.z)}" dy="-5" text-anchor="middle">C${i + 1} tip ${fmt(c.tip.z, 1)}</text>`; }
       out += `<rect x="${X(sh) - 3}" y="${Y(c.zBk)}" width="6" height="${Math.max(2, (c.zBk - c.zHk) * k).toFixed(1)}" fill="#F59E0B" stroke="#78350F"/>` + ln(sh, c.zHk, sh, zb + H, 'stroke="#78350F" stroke-dasharray="3 2"');
-      out += `<text x="${X(sh)}" y="${Y(c.zHk)}" dx="5" dy="3" fill="#78350F">hook ${fmt(c.zHk, 1)} · R ${fmt(c.R, 1)} · ${c.e.look.ok ? fmt(c.pct, 1) + ' %' : 'n.p.'}</text>`; });
+      const left = q.cr.length > 1 && sh < sOf(q.cr[1 - i].p);   // the label on the outer side of each hook (no overlap)
+      out += `<text x="${X(sh)}" y="${Y(c.zHk)}" dx="${left ? -6 : 6}" dy="${-4 - 12 * i}" text-anchor="${left ? 'end' : 'start'}" fill="#78350F">C${i + 1} hook ${fmt(c.zHk, 1)} · R ${fmt(c.R, 1)} · ${c.e.look.ok ? fmt(c.pct, 1) + ' %' : 'n.p.'}</text>`; });
     out += `<text x="8" y="12" font-weight="bold">${esc(t.name)}, step ${j}: ${esc(T().where(q.x))} (girder bottom el. ${fmt(zb, 2)}; plane through ${us[1] && q.cr[1] ? 'both cranes' : 'the crane and its hook'}; to scale)</text></svg>`;
     return out;
   }
+  /* the elevation dock under the map (ui/elev.js): the selected girder lift while the Girder lifts tab is open (or when there is no pick) */
+  function active() { const t = tOf(sel); return t && (A.ui.itab === 'tandem' || !A.P.picks.length) ? t : null; }
+  function dockSvg(w) { const t = active(); if (!t) return ''; const r = evalT(t); return elevSvg(t, r, stepIdx(r, scrub), { w, h: 260 }) || '<p class="note">Choose the crane setups and enter the girder (Girder lifts tab).</p>'; }
   /* ---------- 3D (ui/view3d.js calls draw3d while it builds the lift group) ---------- */
   function draw3d(h) {
     const t = tOf(sel) || (A.P.tandems || [])[0]; if (!t) return false; const r = evalT(t), j = t.id === sel ? stepIdx(r, scrub) : 0, q = r.steps[j]; if (!q) return false;
@@ -314,7 +331,8 @@
         ['Tandem limit', `${fmt(s.tandem, 0)} % of chart per crane (project setting); a one-crane girder lift uses the lift thresholds (caution ${s.caution} %, critical ${s.critical} %, limit ${s.limit} %)`],
         ['Path', 'hoist at the pick pose to the travel elevation (every 1 ft), travel through the waypoints (the centre in straight lines, the heading turning evenly the shorter way), lower at the set pose; each leg in steps of the finer of 1 ft of hook travel and 1° of slew of either crane'],
         ['Clearances', 'every step: each crane\'s boom, load line and counterweight, and the girder as a box (plan outline × depth), against power lines (D_min, 29 CFR 1926.1408), obstructions and exclusion zones; crane–crane: the least distance between the two booms / load lines (contact red, closer than the obstruction clearance amber)'],
-        ['Girder level', 'the hook-height difference z_hk,1 − z_hk,2 (informational)']] },
+        ['Girder level', 'the hook-height difference z_hk,1 − z_hk,2 (informational)'],
+        ['Ground', 'each crane by the §Ground method with its own hook load W_i (girder share + its rigging, block, deductions) at its own hook at every step (in place of the swing path); the stress at depth at buried items from both cranes\' supports summed at the same step (superposition), each crane\'s loads at its own depth below its pad']] },
       { type: 'note', warn: true, text: 'Decisions (pending engineer review): hooks plumb (no sling angle or hook drift); the girder carried level and rigid; the path model above; the governing step = the highest % of chart (the first of equal steps); the crane–crane clearance uses the obstruction clearance setting.' }] },
       { id: 'tsum', key: 'tandem-summary', title: 'Summary', items: [{ type: 'table', wide: true, head: ['Lift', 'Crane', 'Setup', 'W hook (lb)', 'Governing step', 'Where', 'R (ft)', 'C (lb)', '% chart', 'Status'],
         rows: [].concat(...rs.map(({ t, r }) => r.gov.map((g, i) => ({ cells: [{ t: t.name, key: 'tandem-' + t.id }, String(i + 1), (setupOf(t.slots[i]) || {}).name || '—', { t: fmt(r.sh.Wh[i], 0), n: true }, { t: String(g.i), n: true }, g.where, { t: fmt(g.c.R, 2), n: true }, { t: g.c.e.look.ok ? fmt(g.c.C, 0) : 'n.p.', n: true },
@@ -340,13 +358,28 @@
       if (r.cc) items.push({ type: 'steps', scope: sc, title: 'Crane–crane distance', steps: r.cc.steps });
       if (r.clr.length) { items.push({ type: 'table', wide: true, head: ['Item', 'Required (ft)', 'Closest (ft)', 'Component', 'Where', 'Result'], rows: r.clr.map(c => [c.name, c.type === 'power' ? (isNum(c.D) ? fmt(c.D, 0) + ' (D_min)' : 'not set') : c.type === 'obst' ? fmt(c.req, 2) : 'outside', { t: fmt(c.gov.d, 2), n: true, cls: c.level === 'stop' ? 'ng' : c.level === 'warn' ? 'hi' : 'ok' }, (c.gov.crane == null ? '' : 'crane ' + (c.gov.crane + 1) + ' ') + C[c.gov.comp], c.where, c.level === 'stop' ? 'NOT OK' : c.level === 'warn' ? 'check' : 'OK']) });
         r.clr.forEach(c => items.push({ type: 'steps', scope: sc, title: 'Clearance: ' + c.name, steps: c.steps })); }
+      if (r.ground) {   // C5: ground per crane, and the stress at depth from both cranes
+        r.ground.cr.forEach((g, i) => {
+          if (g.mode === 'none') { items.push({ type: 'note', warn: true, text: `Crane ${i + 1}, ground: not computed: ${g.why}.` }); return; }
+          items.push({ type: 'note', warn: g.mode !== 'rigid', text: `Crane ${i + 1}, ground (${g.mode === 'rigid' ? 'rigid body, entered data' : 'ESTIMATE — verify with the manufacturer\'s outrigger calculator'}; method: §Ground basis): hook load W${i + 1} = ${fmt(g.W, 0)} lb at its hook at every step. ` + (window.CranePickGroundUI ? window.CranePickGroundUI.inputsNote(g).replace(/<[^>]+>/g, '') : '') });
+          items.push({ type: 'table', head: [g.S.kind === 'crawler' ? 'Track' : 'Float', 'Load (kip)', 'Slew θ', 'R (ft)', 'q_g (psf)', 'q_g / q_a', 'M/M_a', 'V/V_a'],
+            rows: g.max.map((m, k) => { const b = g.bear[k]; return [m.id + ' (' + m.name + ')', { t: fmt(m.load / 1000, 2), n: true }, { t: fmt(m.theta, 0) + '°', n: true }, { t: fmt(m.R, 2), n: true }, { t: fmt(b.qg, 0), n: true }, { t: b.ratio == null ? '—' : fmt(b.ratio, 2), n: true, cls: b.ratio > 1 ? 'ng' : '' }, { t: isNum(b.rM) ? fmt(b.rM, 2) : '—', n: true }, { t: isNum(b.rV) ? fmt(b.rV, 2) : '—', n: true }]; }) });
+          items.push({ type: 'steps', scope: sc, title: `Crane ${i + 1}, ground: governing support ${g.gov.name}`, steps: g.steps });
+          g.max.forEach((m, k) => { if (g.bear[k].steps.length) items.push({ type: 'steps', scope: sc, title: `Crane ${i + 1}, ${m.name}: bearing${g.mat.type !== 'none' ? ' and mat' : ''}`, steps: g.bear[k].steps }); });
+          g.depth.filter(d => d.steps).forEach(d => items.push({ type: 'steps', scope: sc, title: `Crane ${i + 1} alone, stress at depth: ${d.name}`, steps: d.steps }));
+        });
+        const pr = r.ground.pair.filter(d => !d.none && !d.far);
+        if (pr.length) { items.push({ type: 'table', head: ['Item (both cranes)', 'Δσ_z crane 1 (psf)', 'Δσ_z crane 2 (psf)', 'Δσ_z sum (psf)', 'Step', 'Allowable (psf)', 'Ratio'],
+          rows: pr.map(d => [d.name, { t: fmt(d.parts[0], 0), n: true }, { t: fmt(d.parts[1], 0), n: true }, { t: fmt(d.ds, 0), n: true }, { t: String(d.j), n: true }, d.cap ? fmt(d.cap, 0) : 'not entered', { t: d.ratio == null ? '—' : fmt(d.ratio, 2), n: true, cls: d.ratio > 1 ? 'ng' : '' }]) });
+          pr.forEach(d => items.push({ type: 'steps', scope: sc, title: 'Stress at depth, both cranes: ' + d.name, steps: d.steps })); }
+      }
       subs.push({ id: 't-' + t.id, key: 'tandem-' + t.id, title: t.name, ref: r.gov.map(g => g.c.e.look.ok ? fmt(g.c.pct, 1) + ' %' : 'n.p.').join(' / '), items });
     });
     return [{ id: 'tandem', key: 'tandem', title: 'Tandem lifts', subs }];
   });
   /* ---------- wiring ---------- */
   function build(p) { el = p; p.addEventListener('click', onClick); p.addEventListener('change', onChange); p.addEventListener('input', onInput);
-    p.addEventListener('toggle', e => { if (e.target.id === 'tlSteps') { stepsOpen = e.target.open; if (stepsOpen) liveCard(); } }, true); drawTab(); }
+    p.addEventListener('toggle', e => { if (e.target.id === 'tlSteps') { stepsOpen = e.target.open; if (stepsOpen) liveCard(); } if (e.target.id === 'tlGround') grOpen = e.target.open; }, true); drawTab(); }
   A.inTab({ id: 'tandem', label: 'Girder lifts', build, show: drawTab });
   A.on('project', () => { rev++; memo.clear(); renderAll(); drawTab(); });
   A.on('change', o => { if (o.kind !== 'tandem' && o.kind !== 'select' && o.kind !== 'select-lift') rev++;
@@ -355,5 +388,5 @@
     renderAll(); drawTab(); });
   A.on('live', o => { if (o.kind === 'items') rev++; if (o.kind === 'lifts' || o.kind === 'items') { (A.P.tandems || []).forEach(t => place(t)); liveCard(); } });
   A.on('tab', id => { if (id === 'plan') setTimeout(() => (A.P.tandems || []).forEach(t => place(t)), 0); });
-  window.CranePickTandemUI = { newLift, placeFor, select, setStep, evalT, renderAll, picksHtml, elevSvg, draw3d, layers, get selected() { return sel; }, get step() { return scrub; } };
+  window.CranePickTandemUI = { active, dockSvg, newLift, placeFor, select, setStep, evalT, renderAll, picksHtml, elevSvg, draw3d, layers, get selected() { return sel; }, get step() { return scrub; } };
 })();

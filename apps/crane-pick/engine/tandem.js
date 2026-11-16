@@ -48,6 +48,7 @@
   const st = (pre, o) => Object.assign({ unit: '', d: 2, ref: '', note: '', eq: '', sub: '' }, o, { id: pre + '.' + o.id });
   const rad = d => d * Math.PI / 180;
   const LIMIT = 75;
+  const MAXLEG = 2000;   // steps per leg at most (a pose typed far away would otherwise freeze the page); coarser steps are flagged
   const CLS = { ok: 'within the tandem limit', over: 'over the tandem limit', np: 'not permitted' };
   const limitOf = s => s && isNum(s.tandem) && s.tandem > 0 ? s.tandem : LIMIT;
   const norm180 = a => { a = ((a % 360) + 360) % 360; return a > 180 ? a - 360 : a; };
@@ -112,7 +113,7 @@
     idp = idp || 'tg'; const zP = zOf(t.pick, env.zPad), zS = zOf(t.set, env.zPad), zT = isNum(t.trav) ? t.trav : Math.max(zP, zS);
     const nodes = [t.pick].concat(t.way || [], [t.set]).map(p => ({ x: p.x, y: p.y, h: isNum(p.h) ? p.h : 0 })), list = [], legs = [];
     const push = (phase, pose, leg, k, n) => list.push({ i: list.length, phase, pose, leg, k, n });
-    const nH = Math.ceil(Math.abs(zT - zP) - 1e-9);
+    const nH = Math.min(MAXLEG, Math.ceil(Math.abs(zT - zP) - 1e-9));
     for (let k = 0; k < nH; k++) push('hoist', { x: nodes[0].x, y: nodes[0].y, h: nodes[0].h, z: zP + (zT - zP) * k / nH }, -1, k, nH);
     for (let j = 0; j + 1 < nodes.length; j++) {
       const a = nodes[j], b = nodes[j + 1], dh = norm180(b.h - a.h), pose = u => ({ x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u, h: ((a.h + dh * u) % 360 + 360) % 360, z: zT });
@@ -121,11 +122,11 @@
       (env.setups || []).forEach((u, i) => { if (!u) return; let d = 0, s = 0, prev = null;
         for (let q = 0; q <= m; q++) { const p = hooks(t, pose(q / m), sh)[i]; if (!p) return; const az = G().azimuth(u, p); if (prev) { d += Math.hypot(p.x - prev.p.x, p.y - prev.p.y); s += Math.abs(norm180(az - prev.az)); } prev = { p, az }; }
         hookD = Math.max(hookD, d); slew = Math.max(slew, s); });
-      const n = Math.max(1, Math.ceil(Math.max(hookD, slew) - 1e-9)); legs.push({ n, hookD, slew, dh, len: Math.hypot(b.x - a.x, b.y - a.y) });
+      const n0_ = Math.max(1, Math.ceil(Math.max(hookD, slew) - 1e-9)), n = Math.min(n0_, MAXLEG); legs.push({ n, hookD, slew, dh, len: Math.hypot(b.x - a.x, b.y - a.y), capped: n0_ > MAXLEG });
       for (let k = 0; k < n; k++) push('travel', pose(k / n), j, k, n);
       if (j + 2 === nodes.length) push('travel', pose(1), j, n, n);
     }
-    const nL = Math.ceil(Math.abs(zT - zS) - 1e-9), last = nodes[nodes.length - 1];
+    const nL = Math.min(MAXLEG, Math.ceil(Math.abs(zT - zS) - 1e-9)), last = nodes[nodes.length - 1];
     for (let k = 1; k <= nL; k++) push('lower', { x: last.x, y: last.y, h: last.h, z: zT + (zS - zT) * k / nL }, nodes.length - 1, k, nL);
     const steps = [st(idp, { id: 'ztr', label: isNum(t.trav) ? 'Girder bottom elevation during the travel (entered)' : 'Girder bottom elevation during the travel (not entered: the higher of the pick and the set)', sym: 'z_{tr}', eq: isNum(t.trav) ? '' : '\\max(z_{pick}, z_{set})', sub: isNum(t.trav) ? '' : `\\max(${tx(zP, 2)}, ${tx(zS, 2)})`, value: zT, unit: 'ft',
       note: `z_pick, z_set: the girder bottom at the pick (on the truck) and at the set (on the bearings)${isNum(t.pick.z) && isNum(t.set.z) ? '' : '; not entered: crane 1\'s pad'}.` })];
@@ -163,6 +164,7 @@
     if (!(sh.ob.Wg > 0)) flags.push({ kind: 'girder', level: 'warn', text: 'Enter the girder weight.' });
     const X = { t, env, sh, s, lim, idp, chs: env.setups.map((u, i) => u && env.cranes[i] ? LF().chartsOf(env.cranes[i], u) : null), geo: env.cranes.map(c => c ? EL().geomOf(c) : null) };
     const pa = path(t, env, sh, idp + '.path'); pa.list.forEach((x, i) => { x.last = i === pa.list.length - 1 - pa.nL; });
+    if (pa.legs.some(g => g.capped) || Math.abs(pa.zT - pa.zP) > MAXLEG || Math.abs(pa.zT - pa.zS) > MAXLEG) flags.push({ kind: 'path', level: 'warn', text: `The path is very long (${pa.legs.map(g => fmt(Math.max(g.hookD, g.slew), 0)).join(' + ')} ft / ° on its legs): checked in ${MAXLEG} steps per leg, coarser than 1 ft / 1°. Check the pick and set positions.` });
     const ready = env.setups.every(Boolean) && env.cranes.every(Boolean) && sh.ob.L > 0 && sh.Wh.every(isNum);
     const res = { sh, path: pa, steps: [], gov: [], flags, clr: [], cc: null, lim, single, nC, ok: false };
     if (!ready) { res.level = 'stop'; return res; }
@@ -276,5 +278,5 @@
       res.ground.pair.forEach(d => { if (d.ratio > 1) res.flags.push({ kind: 'ground', level: 'stop', text: `Ground: stress at depth at "${d.name}" from both cranes together ${fmt(d.ds, 0)} psf > the entered allowable ${fmt(d.cap, 0)} psf.` }); });
     }
   }
-  window.CranePickTandem = { LIMIT, CLS, COMP, limitOf, object, share, at, outline, hooks, path, evaluate, where, norm180 };
+  window.CranePickTandem = { LIMIT, MAXLEG, CLS, COMP, limitOf, object, share, at, outline, hooks, path, evaluate, where, norm180 };
 })();
