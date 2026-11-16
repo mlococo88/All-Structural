@@ -724,7 +724,7 @@ Route tab tables and the turn link; C5 link and "move the pick pose"; Report §R
 `crane-draw` (7, fixed), `crane-shell` (11) and `crane-picks` (5) (their output-tab lists now include Route), `crane-tandem` (6), `crane-ground` (5), `crane-place` (9); `node tests/check-syntax.mjs`.
 
 ## 2026-11-16 — C7: lift-plan drawings (DXF), Summary tab, multi-lift summary, Report polish
-PR: see the PR link added below this entry.
+PR #1615: https://github.com/mlococo88/All-Structural/pull/1615
 ### Where
 - `apps/crane-pick/ui/drawset.js` (new, `window.CranePickDrawSet`, no DOM, Node-tested): `summary(P, ctx)` (one row per lift: single picks,
   girder lifts per crane, trucking routes), `notesModel(P, ctx)` (the general notes = Report §2 Basis), `build(P, ctx, opt)` (the drawing set
