@@ -529,7 +529,7 @@ Report §Ground; reload; 390 px; 0 console errors), `crane-shell` (11), `crane-l
 `#itKind` on origin/main as well (not changed here; reported).
 
 ## 2026-11-16 — C5: girder lifts (one crane or two in tandem): load share, the girder path, per-step checks, ground per crane
-PR: (link added on merge, see below)
+PR #1613: https://github.com/mlococo88/All-Structural/pull/1613
 ### Where
 - `apps/crane-pick/engine/tandem.js` (new, `window.CranePickTandem`, no DOM): `object` (the girder; paired girders with cross-frames as one
   object), `share` (load share and hook loads), `at` / `outline` / `hooks` (plan geometry of a pose), `path` (the steps), `evaluate` (each
