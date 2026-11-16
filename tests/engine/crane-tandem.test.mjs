@@ -24,14 +24,26 @@
 //     Crane–crane: at the set the booms are in one vertical plane y = 2,000: foot pins (1,002, 108) and (1,098, 108), tips (1,030,
 //     182.686) and (1,070, 182.686): least distance tip to tip = 40.00 ft. The cranes are symmetric about x = 1,050 at every step, so
 //     the tips are always at one height and 40 ft apart (the hooks' spacing): 40.00 ft at every step; reported at the first (step 0).
+//   Ground per crane (C4 weights of the ground hand check A: W_c 40,000 @ 0, W_u 30,000 @ 0, W_cw 20,000 @ r 10, W_b 6,000, e 2,
+//     f_b 0.5; floats at x ±12, spread 24): each crane's own hook load (W1 24,000, W2 20,000) at its own hook. At the set, crane 1
+//     (heading 0) has its hook at (1,030, 2,000): θ = 90°, R 30: û = (0, −1); y: cw +10, boom −(2 + 0.5·28) = −16, hook −30 →
+//     V = 120,000, ΣWy = 200,000 − 96,000 − 720,000 = −616,000 → Y = −5.133333, v = −0.427778, u = 0:
+//     FL = RL = 30,000 (1 − 0.427778) = 17,166.67 lb; FR = RR = 30,000 (1.427778) = 42,833.33 lb.
+//   Stress at depth from two setups (summed): two fake cranes (case A weights), crane 1 at (1,000, 2,000), crane 2 at (1,030, 2,000), both
+//     heading 0 (front north), each hook 30 ft ahead (θ 0, R 30, W 22,000 → front floats 41,083.33, rear 17,916.67 lb, case A); a pipe
+//     along x = 1,015 at depth 3 ft, between crane 1's right floats (x 1,012) and crane 2's left floats (x 1,018). Float = the 1.772454 ft
+//     equal-area square, q_front = 41,083.33 / 1.772454² = 13,077.23 psf. At (1,015, 2,012) (3 ft from each front float centre, level
+//     with it): own front float = q · 2 [I(1.295409, 0.295409) − I(0.704591, 0.295409)] = 13,077.23 · 2 (0.083359 − 0.067889) =
+//     404.63 psf; the crane's other floats (15 + ft away) 0.036 + 0.027 + 0.004 → 404.69 psf per crane; both cranes (symmetric):
+//     Δσ_z = 404.69 + 404.69 = 809.38 psf (one setup alone, as C4 computes it: 404.69).
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test, loadShared, ROOT } from './harness.mjs';
 
 const APP = path.join(ROOT, 'apps', 'crane-pick', 'engine');
-const W = loadShared('steps.js', path.join(APP, 'geo.js'), path.join(APP, 'model.js'), path.join(APP, 'osha.js'), path.join(APP, 'cranes.js'), path.join(APP, 'lift.js'), path.join(APP, 'elev.js'), path.join(APP, 'clear3d.js'), path.join(APP, 'tandem.js'));
-const K = W.CranePickCranes, LF = W.CranePickLift, M = W.CranePickModel, T = W.CranePickTandem, C3 = W.CranePickClear;
+const W = loadShared('steps.js', 'boussinesq.js', path.join(APP, 'geo.js'), path.join(APP, 'model.js'), path.join(APP, 'osha.js'), path.join(APP, 'cranes.js'), path.join(APP, 'lift.js'), path.join(APP, 'elev.js'), path.join(APP, 'clear3d.js'), path.join(APP, 'ground.js'), path.join(APP, 'tandem.js'));
+const GR = W.CranePickGround, K = W.CranePickCranes, LF = W.CranePickLift, M = W.CranePickModel, T = W.CranePickTandem, C3 = W.CranePickClear;
 const WH = K.parse(JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'smoke', 'crane-fake-wheeled.json'), 'utf8'))).crane;
 const near = (a, b, tol, m) => assert.ok(Math.abs(a - b) <= tol, `${m || ''}: ${a} vs ${b} (tol ${tol})`);
 const grp = (c, id) => K.groups(c).find(g => Object.values(g.configs).some(x => x.id === id)).key;
@@ -112,4 +124,54 @@ test('saved tandem: normalize keeps it; a project without tandems gets []', () =
   const P = M.normalize({ schema: 'crane-pick.project', tandems: [TAN()], lift: { tandem: 70 } });
   assert.equal(P.tandems.length, 1); assert.equal(P.lift.tandem, 70); assert.equal(JSON.stringify(M.normalize(JSON.parse(JSON.stringify(P))).tandems), JSON.stringify(P.tandems));
   assert.equal(JSON.stringify(M.normalize({ schema: 'crane-pick.project' }).tandems), '[]'); assert.equal(M.normalize({}).lift.tandem, 75);
+});
+
+const withPh = (c, ph) => { const d = JSON.parse(JSON.stringify(c)); d.app_inputs = Object.assign({}, d.app_inputs, { ph4: ph }); return d; };
+const PH_A = { carrierLb: 40000, carrierCg: 0, upperLb: 30000, upperCg: 0, boomLb: 6000, cwRad: 10 };
+test('ground: each crane its own hook load and hook positions (hand check at the set)', () => {
+  const c = withPh(WH, PH_A), P = M.normalize({ schema: 'crane-pick.project' }), e = Object.assign(ENV(), { cranes: [c, c], P });
+  const r = T.evaluate(TAN(), e);
+  assert.ok(r.ground && r.ground.cr.length === 2); assert.equal(r.ground.cr[0].W, 24000); assert.equal(r.ground.cr[1].W, 20000);
+  assert.equal(r.ground.cr[0].samples.length, r.steps.length);
+  const last = r.ground.cr[0].samples[r.steps.length - 1]; near(last.theta, 90, 1e-9); near(last.R, 30, 1e-9);
+  [17166.67, 42833.33, 17166.67, 42833.33].forEach((v, i) => near(last.load[i], v, 0.01, GR.FLOATS[i].id));
+  assert.ok(r.ground.cr[0].steps.some(x => /girder lift's steps/.test(x.label)));
+  assert.ok(r.flags.some(f => f.kind === 'ground' && /^Crane 1: Ground: no allowable bearing/.test(f.text)));
+  // the C2 pick path is unchanged when no override is given (the same as before: W from the pick)
+  const pk = { load: 22000, pick: { x: 1030, y: 2000 }, set: { x: 1030, y: 2000 } }, g0 = GR.evaluate(c, U({ boom: 60 }), pk, P, 'x');
+  assert.equal(g0.W, 22000); assert.equal(g0.src, 'swing');
+});
+test('stress at depth: two setups summed (hand check 809.38 psf), one setup alone 404.69', () => {
+  const c = withPh(WH, PH_A), pipe = M.normItem({ type: 'util', id: 'u1', name: 'Pipe', kind: 'utility', depth: 3, pts: [{ x: 1015, y: 1950 }, { x: 1015, y: 2050 }] });
+  const P = M.normalize({ schema: 'crane-pick.project', items: [pipe] }), u1 = U({ boom: 60 }), u2 = U({ boom: 60, x: 1030 });
+  const o1 = GR.evaluate(c, u1, null, P, 'a', { W: 22000, pts: [{ x: 1000, y: 2030 }] }), o2 = GR.evaluate(c, u2, null, P, 'b', { W: 22000, pts: [{ x: 1030, y: 2030 }] });
+  [41083.33, 41083.33, 17916.67, 17916.67].forEach((v, i) => near(o1.samples[0].load[i], v, 0.01));
+  near(o1.depth[0].ds, 404.69, 0.01, 'one setup alone');
+  const d = GR.depthPair([o1, o2], [u1, u2], P, 'p')[0];
+  near(d.ds, 809.38, 0.01, 'both setups'); near(d.parts[0], 404.69, 0.01); near(d.parts[1], 404.69, 0.01); near(d.p.x, 1015, 1e-9); near(d.p.y, 2012, 1e-9);
+  const sum = d.steps.find(x => x.id.endsWith('.sum2')); near(sum.value, 0.80938, 1e-5); assert.match(sum.sub, /0\.405 \+ 0\.405/);
+  // an entered allowable 700 psf: over with both cranes (809), OK with one (405)
+  P.ground.caps.u1 = 700; const d2 = GR.depthPair([o1, o2], [u1, u2], P, 'p')[0]; near(d2.ratio, 809.38 / 700, 1e-4);
+  // inside a tandem evaluate, the pair is computed and flagged
+  const tg = M.normTandem({ type: 'tandem', girder: { L: 30, W: 40000, cg: 15 }, hooks: [{ s: 0 }, { s: 30 }], pick: { x: 1015, y: 2030, h: 90, z: 100 }, set: { x: 1015, y: 2030, h: 90, z: 100 } });
+  const r = T.evaluate(tg, { setups: [u1, u2], cranes: [c, c], items: P.items, P, s: Object.assign({}, LF.DEF, { tandem: 75 }), zPad: 100 });
+  near(r.sh.Wh[0], 20000, 1e-9); assert.equal(r.ground.pair.length, 1); assert.ok(r.ground.pair[0].ds > r.ground.cr[0].depth[0].ds);
+  assert.ok(r.flags.some(f => /both cranes together/.test(f.text)));
+});
+test('steps: KaTeX (strict) for every sym / eq / sub / unit; no NaN / undefined (load share, path, governing, clearances, ground, pair)', async () => {
+  const { createRequire } = await import('node:module');
+  const katex = createRequire(import.meta.url)(path.join(ROOT, 'tests/libs/katex@0.16.9/dist/katex.min.js'));
+  const parse = x => katex.renderToString(x, { ...W.SharedSteps.katexOpt, throwOnError: true, strict: 'error' });
+  const c = withPh(WH, PH_A), items = [{ type: 'util', id: 'u1', name: 'Pipe', kind: 'utility', depth: 3, pts: [{ x: 1050, y: 1950 }, { x: 1050, y: 2050 }] },
+    { type: 'power', id: 'pw', name: 'Line', kv: 115, wireH: 60, pts: [{ x: 900, y: 2100 }, { x: 1200, y: 2100 }] },
+    { type: 'obst', id: 'o1', name: 'Pier', topEl: 112, pts: [{ x: 1045, y: 1975 }, { x: 1055, y: 1975 }, { x: 1055, y: 1985 }, { x: 1045, y: 1985 }] }];
+  const P = M.normalize({ schema: 'crane-pick.project', items, ground: { caps: { u1: 2000 } } });
+  const rs = [T.evaluate(TAN({ girder: { L: 60, W: 40000, cg: 28, H: 6, pair: { on: true, s: 8, xf: 4000 } }, way: [{ x: 1060, y: 1990, h: 80 }] }), Object.assign(ENV(), { cranes: [c, c], items: P.items, P })),
+    T.evaluate(TAN({ type: 'single', girder: { L: 60, W: 20000 } }), Object.assign(ENV(), { cranes: [c, c], items: P.items, P }))];
+  let n = 0;
+  for (const r of rs) { const all = [].concat(r.sh.steps, r.path.steps, ...r.gov.map(g => g.steps), r.level ? r.level.steps : [], r.cc ? r.cc.steps : [], ...r.clr.map(x => x.steps),
+    ...r.ground.cr.map(g => [].concat(g.steps, ...g.bear.map(b => b.steps), ...g.depth.map(d => d.steps || []))), ...r.ground.pair.map(d => d.steps || []));
+    for (const s of all) { for (const f of ['sym', 'eq', 'sub']) if (s[f]) { parse(s[f]); n++; } if (s.unit) { parse(W.SharedSteps.unitTeX(s.unit)); n++; }
+      assert.ok(!/NaN|undefined/.test(W.SharedSteps.toText([s])), s.id + ' ' + W.SharedSteps.toText([s])); } }
+  assert.ok(rs[0].ground.pair.length === 1 && n > 150, String(n));
 });

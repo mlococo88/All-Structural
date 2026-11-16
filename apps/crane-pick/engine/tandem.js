@@ -26,6 +26,8 @@
      at each step, for each crane: R, θ, zone, C (engine/lift.js evalAt: the C2 lookup rule), %chart = W_i / C × 100; tandem: over the
        tandem limit when %chart ≥ the limit; heights: z_hk = z_b + H + h_r, z_bk = z_hk + h_bk, z_tip (engine/elev.js tipAt), hook reach
        margin m = z_tip − H_hd − z_bk
+   Ground (engine/ground.js): each crane's float / track loads with its own hook load W_i at its own hook positions (every step), bearing,
+     mats; the stress at depth from both setups' supports summed (GR.depthPair).
    Path: hoist at the pick pose (z_b from z_pick to z_tr), travel through the waypoints (each leg: the centre moves linearly in plan and
      the heading turns linearly by the shorter way), lower at the set pose (z_tr to z_set); z_tr = the entered travel elevation, else
      max(z_pick, z_set). Steps: every 1 ft of vertical travel; each leg in n = ⌈max over the cranes of (hook travel / 1 ft, slew / 1°)⌉
@@ -194,6 +196,7 @@
       if (Math.abs(d) > 1e-9) flags.push({ kind: 'level', level: 'info', text: `Girder level: the hooks are ${fmt(Math.abs(d), 2)} ft apart in height (rigging heights differ) for the girder to hang level.` }); }
     clearances(X, res);
     if (!single) crane2(X, res);
+    ground(X, res);
     res.ok = !flags.some(f => f.level === 'stop');
     return res;
   }
@@ -259,6 +262,19 @@
     res.cc = Object.assign(best, { where: wh, steps });
     if (best.d <= 1e-9) res.flags.push({ kind: 'cc', level: 'stop', step: best.j, p: P, q: Q, text: `The two cranes meet: crane 1 ${COMP[best.c1]} and crane 2 ${COMP[best.c2]} (${wh}).` });
     else if (best.d < oc - 1e-9) res.flags.push({ kind: 'cc', level: 'warn', step: best.j, p: P, q: Q, text: `Crane 1 ${COMP[best.c1]} comes within ${fmt(best.d, 2)} ft of crane 2 ${COMP[best.c2]} (${wh}) < ${fmt(oc, 2)} ft.` });
+  }
+  /* ---------- ground (engine/ground.js, C4): each crane's own hook load W_i and its own hook positions at every step ----------
+     res.ground = { cr: [GR.evaluate(crane i, setup i, null, P, …, { W: W_i, pts: crane i's hooks at the steps })], pair: GR.depthPair
+     (both setups' supports summed for the stress at depth, tandem only) }; their flags are appended to res.flags with "Crane i: ". */
+  function ground(X, res) {
+    const GR = window.CranePickGround, P = X.env.P; if (!GR || !P) return;
+    const outs = X.env.setups.map((u, i) => GR.evaluate(X.env.cranes[i], u, null, P, `${X.idp}.c${i + 1}.gr`, { W: X.sh.Wh[i], pts: res.steps.map(z => z.cr[i].p) }));
+    res.ground = { cr: outs, pair: [] };
+    outs.forEach((g, i) => (g.flags || []).forEach(f => res.flags.push(Object.assign({}, f, { kind: 'ground', crane: i, text: `Crane ${i + 1}: ${f.text}` }))));
+    if (outs.length === 2 && outs.every(g => g.mode !== 'none')) {
+      res.ground.pair = GR.depthPair(outs, X.env.setups, P, `${X.idp}.gr2`);
+      res.ground.pair.forEach(d => { if (d.ratio > 1) res.flags.push({ kind: 'ground', level: 'stop', text: `Ground: stress at depth at "${d.name}" from both cranes together ${fmt(d.ds, 0)} psf > the entered allowable ${fmt(d.cap, 0)} psf.` }); });
+    }
   }
   window.CranePickTandem = { LIMIT, CLS, COMP, limitOf, object, share, at, outline, hooks, path, evaluate, where, norm180 };
 })();

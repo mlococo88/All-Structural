@@ -21,7 +21,7 @@
   const craneDef = u => { const c = u && A.P.cranes.find(x => x.id === u.craneId); return c ? c.def : null; };
   const nC = t => t.type === 'single' ? 1 : 2;
   const settings = () => Object.assign(LF.settingsOf(A.P), { tandem: (A.P.lift && A.P.lift.tandem) || 75 });
-  function env(t) { const us = t.slots.slice(0, nC(t)).map(setupOf); return { setups: us, cranes: us.map(craneDef), items: A.P.items, s: settings(), zPad: us[0] ? EL().padEl(us[0]) : 0 }; }
+  function env(t) { const us = t.slots.slice(0, nC(t)).map(setupOf); return { setups: us, cranes: us.map(craneDef), items: A.P.items, P: A.P, s: settings(), zPad: us[0] ? EL().padEl(us[0]) : 0 }; }
   /* memo: the lift, its setups, the settings and a revision bumped by every other change */
   let rev = 0; const memo = new Map();
   function evalT(t) {
