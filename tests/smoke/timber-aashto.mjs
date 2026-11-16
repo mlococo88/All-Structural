@@ -4,7 +4,7 @@
 //    the same NDS projects (ASD and LRFD; sawn, timber, glulam, SCL; simple, continuous, overhang, cantilever; an input error); for each,
 //    every output tab is opened by its tab button and compared: the tab's text, the governing strip, the left column, the Report text
 //    (SharedReport.text) and every computed value (TBC.res). Expected: identical.
-// 2. AASHTO mode in the working tree: Design code switched with the Factors input tab's select; only the AASHTO Materials and Report tabs;
+// 2. AASHTO mode in the working tree: Design code switched with the Project input tab's select; only the AASHTO Materials and Report tabs;
 //    no status chips on the AASHTO Materials tab (TBA4: the governing strip and the left column carry the checks); the shown F_b (Strength I) equals the engine's; no NaN / undefined, no KaTeX errors;
 //    the Report; autosave (version 4, design.code) and reload; back to NDS gives the same NDS results; an input error (SCL); 390 px
 //    without horizontal scroll; 0 console errors. Screenshots of the AASHTO Materials card (deviceScaleFactor 1) with --shots <dir>.
@@ -72,7 +72,7 @@ console.log(`part 1 (NDS parity, ${dirA} vs working tree): ${Object.keys(NDS).le
   const { b, p, errs } = await openPage(path.join(REPO, FILE), { vw: 1400, vh: 1000 });
   await p.waitForFunction(() => window.TBC && window.TBC.res, null, { timeout: 30000 }); await p.waitForTimeout(800);
   const ndsRes = await p.evaluate(() => JSON.stringify(TBC.res));
-  await p.click('#tbcInTab_factors'); await p.selectOption('[data-fkey="dcode"]', 'AASHTO'); await p.waitForTimeout(600);
+  await p.click('#tbcInTab_project'); await p.selectOption('[data-fkey="dcode"]', 'AASHTO'); await p.waitForTimeout(600);
   const st = async () => p.evaluate(() => ({ tabs: [...document.querySelectorAll('#tabBar button')].map(x => x.textContent.trim()), gov: document.getElementById('govStrip').innerText, text: document.getElementById('tabPages').innerText,
     chips: document.querySelectorAll('#tabPages .st.ok, #tabPages .st.ng').length, dashChk: document.querySelectorAll('#tbcDash .tbcDc.pass, #tbcDash .tbcDc.fail').length, kerr: document.querySelectorAll('.katex-error').length, A: TBC.aas, AC: TBC.ac, h1: document.querySelector('h1').textContent }));
   // straight back to NDS and to AASHTO again: the NDS results as before the switch
@@ -128,7 +128,7 @@ console.log(`part 1 (NDS parity, ${dirA} vs working tree): ${Object.keys(NDS).le
   await p.setViewportSize({ width: 1400, height: 1000 });
   // back to NDS: the NDS results of the default project as before the switch
   await p.evaluate(() => { const m = TBC.model; m.material.type = 'sawn'; m.material.size = '2x10'; m.design.moisture = 'Dry'; m.design.incising = false; m.design.flatUse = false; TBC.fullRebuild(); });
-  await p.click('#tbcInTab_factors'); await p.selectOption('[data-fkey="dcode"]', 'NDS'); await p.waitForTimeout(600);
+  await p.click('#tbcInTab_project'); await p.selectOption('[data-fkey="dcode"]', 'NDS'); await p.waitForTimeout(600);
   s = await st();
   ok(s.tabs[0] === 'Summary' && s.tabs.length === 12, 'NDS tabs back: ' + s.tabs.join('|')); ok(!/AASHTO/.test(s.h1), 'NDS header back');
   ok(await p.evaluate(() => TBC.res.ok && !('code' in JSON.parse(localStorage.getItem('tbc_autosave_v1')).design)), 'back to NDS: results, no design.code saved');

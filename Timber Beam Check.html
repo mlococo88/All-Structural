@@ -56,6 +56,7 @@ body{font-family:var(--font-doc);font-size:10pt;color:var(--ink);background:#efe
 #hdrProj:hover{color:#fff;text-decoration:underline}
 #hdrProj .hdrNone{font-style:italic;opacity:.8}
 #prjPane .secHead{cursor:default}
+#prjPane #tbcCodeHold .secHead{cursor:pointer}   /* TBCS (2026-11-16): the Design code card (mkSec) stays collapsible on the Project tab */
 /* HOC (2026-11-10): the Project tab's Hand-offs section */
 #prjPane #tbcHo .hoRow{border-top:1px solid #d5dce5;padding:5px 0 3px;font-family:var(--font-ui);font-size:9pt}
 #prjPane #tbcHo .hoFrom{font-size:8.5pt;color:#555}
@@ -305,6 +306,7 @@ a.wkA:hover{text-decoration:underline}
         <div id="projGrid"></div>
         <div class="hint">Printed on the Report.</div>
       </div></div>
+      <div id="tbcCodeHold"></div><!-- TBCS (2026-11-16, engineer decision): the Design code card, after the title block; rebuilt by buildProjectPane() on every rebuild (moved from the Factors tab) -->
       <!-- HOC (2026-11-10, engineer decision: the hand-off card on the Project tab in every tool): "Shared project info" laid out as Receive / Send (same ids and handlers) -->
       <div class="sec" id="tbcHo"><div class="secHead"><span class="secTitle">Hand-offs</span></div><div class="secBody" id="projShare">
         <div class="hint">Nothing changes until you confirm: "Use shared project info" lists the title-block fields it will overwrite and asks first. "Share project info" sends the title block only when you click it.</div>
@@ -2806,7 +2808,16 @@ function refLineHTML() {
   return `<b>${esc(R.src)}</b>${R.userVals ? '' : ' ' + VFY}<br>Fb ${g4(r.Fb)}, Ft ${r.Ft ?? '—'}, Fv ${g4(r.Fv)}, Fc⊥ ${g4(r.Fcp)}, Fc ${r.Fc ?? '—'}, E ${g4(r.E)}, Emin ${g4(r.Emin)} psi`;
 }
 
+function buildCodeSec(P) {   // TBCS (2026-11-16, engineer decision): moved unchanged from the top of buildFactorsPane() to the Project tab
+  const dz = M.design;
+  mkSec(P, 'inCode', 'Design code', body => {   // TBA1 (engineer decision 2026-11-16): NDS 2018 or AASHTO LRFD 10th Ed. (bridge stringer); absent = NDS
+    fRow(body, 'Design code', selIn(TBC_CODES, () => dz.code === 'AASHTO' ? 'AASHTO' : 'NDS', v => aasSwitch(v), 'dcode'), '',
+      dz.code === 'AASHTO' ? 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 8: stringers of sawn lumber or glulam. This version gives the reference values, adjustment factors and resistance factors and the bridge loads (DC, DW, HL-93); the checks come next.'
+        : 'NDS 2018 for building members. AASHTO LRFD 10th Ed. is for bridge stringers.');
+  }, { noNum: true });
+}
 function buildProjectPane(P) {
+  { const ch = $('tbcCodeHold'); if (ch) { ch.innerHTML = ''; buildCodeSec(ch); } else buildCodeSec(P); }   // TBCS: after the title block (in #prjPane, which survives rebuilds)
   /* STDS (2026-11-06): the sections 'Saved projects (this browser)' (Name, Save, drop-down, Open, Delete, Saved projects…) and 'Project file'
      (Open file… / Save file / New project) are replaced by the standard "Save and open" card (#tbSaveCard, tbPlibInit) */
   mkSec(P, 'inNotes', 'Notes and assumptions', body => {
@@ -3053,12 +3064,7 @@ function buildMaterialPane(P) {
 }
 
 function buildFactorsPane(P) {
-  const dz = M.design;
-  mkSec(P, 'inCode', 'Design code', body => {   // TBA1 (engineer decision 2026-11-16): NDS 2018 or AASHTO LRFD 10th Ed. (bridge stringer); absent = NDS
-    fRow(body, 'Design code', selIn(TBC_CODES, () => dz.code === 'AASHTO' ? 'AASHTO' : 'NDS', v => aasSwitch(v), 'dcode'), '',
-      dz.code === 'AASHTO' ? 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 8: stringers of sawn lumber or glulam. This version gives the reference values, adjustment factors and resistance factors and the bridge loads (DC, DW, HL-93); the checks come next.'
-        : 'NDS 2018 for building members. AASHTO LRFD 10th Ed. is for bridge stringers.');
-  }, { noNum: true });
+  const dz = M.design;   /* TBCS (2026-11-16): the Design code card is on the Project tab (buildCodeSec) */
   if (aasOn()) { buildAasFactorsPane(P); return; }   // TBA1
   mkSec(P, 'inMethod', 'Design method', body => {
     fRow(body, 'Method', selIn(TBC_METHODS, () => dz.method, v => { dz.method = v; }, 'method'), '', dz.method === 'LRFD'
@@ -4186,6 +4192,7 @@ function buildManual(pg) {
       ['Point loads', '(lb, + down) at x from the left end, each with a load type; optional x/d reduction of point loads within d of a support for shear (NDS 3.4.3.1(b)).']]),
     S('<b>Material:</b>', [['Sawn lumber:', 'species, grade and size select the NDS Supplement values (Table 4A; Table 4B for Southern Pine SS, No.1, No.2; Table 4D for timbers 5 in. and thicker, Beams and Stringers or Posts and Timbers from the section). Manual values or a custom species can be entered instead.'],   // TBNL
       ['Glulam:', 'a Table 5A stress class or combination (or custom values), the species group, the width and the number of laminations (or any b × d).'], ['SCL:', 'the product’s values and size factor from the manufacturer.']]),
+    '<b>Project:</b> the design code, NDS 2018 (buildings) or AASHTO LRFD 10th Ed. (bridge stringer), in the Design code card after the title block.',   // TBCS
     '<b>Factors:</b> design method (ASD or LRFD, with the source of the floor live load for λ); wet service, temperature, incising, repetitive member, flat use; lateral support of the top and bottom edges; creep factor and deflection limits.']);
   H('Analysis');
   UL([S('A single span on two pins uses statics (the earlier tool’s exact code path).', [   // TBNL
@@ -4737,7 +4744,7 @@ const aasGlName = k => aasGlKind(k) === 2 ? `No. ${k.slice(3)} ${AAS_GL2[k.slice
 function aasNotice() {
   return el('div', 'warnBox', tbNL('AASHTO LRFD 10th Ed. (2024), bridge stringer: reference values, adjustment factors, resistance factors, bridge loads (DC, DW, HL-93 with distribution factors and dynamic load allowance; envelopes and factored demands) and the checks.', [   // TBNL
     ['Checks:', 'flexure (Art. 8.6.2), shear (Art. 8.7), bearing (Art. 8.8.3) and deflection (Art. 2.5.2.6.2) on the AASHTO Checks tab, with PASS / FAIL; glulam camber (Art. 8.12.1) as information.'],   // TBA4, TBA5
-    ['NDS checks:', 'the NDS 2018 building-load checks are not run in AASHTO mode; set Design code to NDS 2018 (Factors input tab) for them.']]));
+    ['NDS checks:', 'the NDS 2018 building-load checks are not run in AASHTO mode; set Design code to NDS 2018 (Project input tab) for them.']]));
 }
 function aasMemberTxt() {
   if (!A) return '';
@@ -4751,7 +4758,7 @@ function buildAasMaterialPane(P) {
   const mt = M.material, a = aasA();
   mkSec(P, 'inMat', 'Material and section (AASHTO LRFD 10th Ed.)', body => {
     fRow(body, 'Material type', selIn([['sawn', 'Sawn lumber (Art. 8.4.1.1)'], ['glulam', 'Glulam (Art. 8.4.1.2)'], ['scl', 'SCL (not in AASHTO Section 8)', true]], () => mt.type, v => { mt.type = v; }, 'mtype'), '');
-    if (mt.type === 'scl') { body.appendChild(el('div', 'errBox', 'AASHTO LRFD Section 8 has no reference values for SCL (LVL / PSL / LSL). Choose sawn lumber or glulam, or set Design code to NDS 2018.')); return; }
+    if (mt.type === 'scl') { body.appendChild(el('div', 'errBox', 'AASHTO LRFD Section 8 has no reference values for SCL (LVL / PSL / LSL). Choose sawn lumber or glulam, or set Design code to NDS 2018 (Project input tab).')); return; }
     if (mt.type === 'glulam') { buildAasGlulamInputs(body, mt, a); return; }
     const clsOf = () => { const sz = SIZES_DB.find(s => s.label === mt.size), b = sz && mt.size !== 'Custom' ? sz.b : mt.customB, d = sz && mt.size !== 'Custom' ? sz.d : mt.customD;
       const sp = AAS_SAWN[a.sp] || {}; return !(b > 0 && d > 0) ? null : b <= 3.5 ? (sp.sp ? 'dimW' : 'dim') : b >= 4.5 ? (sp.sp ? 'T' : (d - b > 2 ? 'BS' : 'PT')) : null; };
