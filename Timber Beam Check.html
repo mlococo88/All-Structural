@@ -4916,7 +4916,7 @@ function tbrImages() {
 }
 function tbrAddPorted(Mo) {
   const hv = tbrHarvest(), S = re => Mo.sections.find(x => re.test(x.title));
-  const all = tbrNrm(JSON.stringify(Mo));
+  const all = tbrNrm(JSON.stringify(Mo, (k, v) => k === 'svg' && /data-tbgx=/.test(v) ? '' : v));   // TBGX: the text inside the TBGX drawings does not count as printed text
   const fresh = n => { const ss = String(n.text).split(/(?<=[.;:])\s+/).map(tbrNrm).filter(x => x.length > 15); return !ss.length ? !all.includes(tbrNrm(n.text)) : ss.some(x => !all.includes(x)); };
   const im = TBRP.img && TBRP.img.R === R && TBRP.img.k === M.ui.diagCombo ? TBRP.img.im : null;
   const fig = (src, cap) => src ? { type: 'figure', svg: '<img src="' + src + '" alt="" style="max-width:100%;height:auto">', caption: cap } : null;
