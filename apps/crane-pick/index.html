@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache">
+<title>Crane Pick Analyzer</title>
+<!-- Crane Pick Analyzer (engineer decisions 2026-11-16): an interactive lift-planning aid. The site is drawn on a map (Leaflet) or on a
+     plan sheet; cranes, picks and sets (phase C2) are dragged on it and every result updates live. Built like the bridge apps
+     (apps/steel-bridge, apps/ps-bridge): plain HTML/JS/CSS, classic scripts, opens from file://, relative paths only.
+     Engine: engine/*.js (no DOM). UI: ui/*.js. Report: report/*.js. Saved data: localStorage keys crane.* and IndexedDB crane.sheets.v1
+     only (engine/model.js). Units: US customary (ft, kip, psf / ksf).
+     C1-1: the shell (header, input / output tabs, Project tab with Save and open, title block, notes), Undo / Redo, the map (base layers,
+     scale bar, cursor coordinates in latitude / longitude and State Plane, go to a coordinate), the Site and Report output tabs. -->
+<!-- Leaflet 1.9.4 and proj4js 2.11.0 (engineer-approved 2026-11-16; the versions and URLs Bridge Geometry.html already pins, CLAUDE.md §2) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.11.0/proj4.js"></script>
+<!-- the app's scripts with ?v=<index.html Last-Modified> (as apps/steel-bridge/index.html: parser-blocking classic scripts, in order) -->
+<script>
+(function () {
+  var v = Date.parse(document.lastModified) || Date.now();
+  [
+    'engine/geo.js',        // coordinates (State Plane zones, proj4), plane geometry, sheet placement
+    'engine/model.js',      // the project, its storage keys and file format
+    'engine/worked.js',     // worked steps of the computed values
+    '../../shared/steps.js',       // the worked-step format and renderer (shared, unchanged)
+    '../../shared/report.js',      // the calculation report viewer (shared, unchanged)
+    '../../shared/projects.js',    // the standard save (shared, unchanged)
+    '../../shared/projects-ui.js', // projectBar: header chip, Save / Save as… / Saved projects…, the "Save and open" card
+    '../../shared/github-sync.js', // Cloud sync of the saved projects to a private GitHub repository (off until set up; tool 'crane-pick')
+    'ui/app.js',            // the page controller: project, autosave, undo / redo, tabs, notices
+    'ui/project.js',        // Project tab: Save and open, title block, notes
+    'ui/map.js',            // the map: base layers, scale bar, cursor coordinates, go to
+    'ui/sitetab.js',        // Site & map input tab: zone, base map, go to
+    'ui/site.js',           // Site output tab: the plan summary
+    'report/builders.js',   // the report model
+    'ui/report.js'          // Report output tab (shared/report.js viewer)
+  ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
+})();
+</script>
+<style>
+  /* shell: the bridge apps' tokens and panels (apps/ps-bridge/index.html), adapted: the map fills the output panel */
+  :root{
+    --navy-900:#16304F; --navy-800:#1E3A5F; --blue-600:#2563EB; --green-600:#059669; --red-600:#DC2626; --amber-700:#B45309;
+    --slate-50:#F8FAFC; --slate-100:#F1F3F5; --slate-200:#E4E7EB; --slate-400:#94A3B8; --slate-900:#0F172A;
+    --color-primary:var(--navy-800); --color-secondary:var(--blue-600); --color-ring:var(--blue-600);
+    --color-bg:var(--slate-50); --color-surface:#ffffff; --color-border:var(--slate-200); --color-fg:var(--slate-900);
+    --ink:var(--slate-900); --paper:#ffffff; --line:var(--slate-200); --accent:var(--navy-800); --pass:var(--green-600); --fail:var(--red-600); --warn:var(--amber-700);
+    --font-ui:-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; --font-doc:"Times New Roman",Times,serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;overflow:hidden;}
+  body{font-family:var(--font-ui);font-size:9.5pt;color:var(--ink);background:#efede8;}
+  #app{height:100vh;height:100dvh;display:flex;flex-direction:column;background:var(--paper);}
+  #hdr{flex:0 0 auto;border-bottom:3px solid var(--navy-900);padding:8px 14px 7px;background:var(--color-primary);color:#fff;z-index:1100;}
+  #hdr .titleRow{display:flex;justify-content:space-between;align-items:flex-start;gap:8px 12px;flex-wrap:wrap;}
+  #hdr .titleRow>div{min-width:0;max-width:100%;}
+  #hdr h1{font-size:15pt;margin:0;letter-spacing:.4px;font-weight:600;color:#fff;}
+  #hdr .aid{display:inline-block;font-size:8pt;font-weight:700;letter-spacing:.04em;padding:1px 7px;border-radius:3px;background:#FDE68A;color:#78350F;margin-left:8px;vertical-align:3px;}
+  #hdr .byline{font-size:9pt;color:#C7D4E4;margin-top:1px;}
+  #hdr .allToolsLink{font-size:8.5pt;color:#C7D4E4;text-decoration:none;}
+  #hdr .allToolsLink:hover{color:#fff;text-decoration:underline;}
+  #hdrBtns{display:flex;gap:6px;align-items:center;flex-wrap:wrap;min-width:0;max-width:100%;}
+  #hdrUR{display:inline-flex;gap:6px;align-items:center;white-space:nowrap;}
+  #hdrBtns button{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.35);color:#fff;}
+  #hdrBtns button:hover{background:rgba(255,255,255,.18);} #hdrBtns button:disabled{opacity:.4;cursor:default;}
+  #hdrBtns button.spChip[data-sp]{background:#f8fafc;color:#0f172a;border-color:#cbd5e1;}
+  #main{flex:1 1 auto;display:flex;min-height:0;}
+  #inputPanel{flex:0 0 360px;width:360px;max-width:40%;border-right:1px solid var(--color-border);overflow-y:auto;overscroll-behavior:contain;background:var(--color-bg);padding:10px 12px 60px;}
+  #outputPanel{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;background:var(--paper);}
+  #out{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 14px 40px;}
+  #out.plan{overflow:hidden;padding:0;}
+  #appFoot{flex:0 0 auto;display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 16px;padding:3px 14px;border-top:1px solid var(--color-border);background:var(--slate-100);color:#475569;font-size:7.5pt;letter-spacing:.04em;text-transform:uppercase;}
+  .inTabs{position:sticky;top:-10px;z-index:12;display:flex;flex-wrap:wrap;gap:2px;margin:-10px -12px 0;padding:8px 12px 0;background:var(--color-bg);border-bottom:2px solid var(--ink);}
+  .inTabs button,#tabBar button{border:1px solid var(--color-border);border-bottom:none;border-radius:6px 6px 0 0;font-size:9pt;padding:5px 10px;background:var(--slate-100);color:#475569;}
+  .inTabs button[aria-selected="true"],#tabBar button[aria-selected="true"]{background:var(--paper);font-weight:600;color:var(--color-primary);box-shadow:inset 0 3px 0 var(--color-secondary);}
+  #tabBar{flex:0 0 auto;display:flex;gap:2px;border-bottom:2px solid var(--ink);padding:8px 14px 0;flex-wrap:wrap;background:var(--paper);}
+  .pane[hidden]{display:none!important;}
+  .sec{border:1px solid var(--color-border);border-radius:6px;background:var(--color-surface);margin:10px 0;overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,.04);}
+  .sec>.secHead{padding:6px 9px;background:var(--slate-100);border-bottom:1px solid var(--color-border);font-size:8.5pt;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#334155;}
+  .sec>.secBody{padding:8px 10px;}
+  .fRow{display:flex;align-items:center;gap:6px;margin:4px 0;flex-wrap:wrap;}
+  .fRow>label:first-child{flex:0 0 120px;min-width:0;}
+  .fRow>input[type=text],.fRow>select{flex:1 1 140px;min-width:0;width:auto;}
+  input[type=number],input[type=text],input[type=search],select,textarea{font-family:var(--font-ui);font-size:9.5pt;padding:3px 6px;border:1px solid var(--color-border);border-radius:4px;width:110px;background:#fff;color:var(--color-fg);}
+  textarea{width:100%;min-height:120px;resize:vertical;}
+  input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none;border-color:var(--color-ring);box-shadow:0 0 0 2px rgba(37,99,235,.25);}
+  input.bad{border-color:var(--fail);background:#FEF2F2;}
+  .unit{color:#555;}
+  button{font-family:var(--font-ui);font-size:9.5pt;padding:4px 11px;border:1px solid var(--color-border);border-radius:4px;background:var(--color-surface);color:var(--color-fg);cursor:pointer;}
+  button:hover{background:var(--slate-100);border-color:var(--slate-400);} button:disabled{opacity:.45;cursor:default;}
+  button.primary{background:var(--color-secondary);color:#fff;border-color:var(--color-secondary);}
+  button.on{background:#DBEAFE;border-color:var(--blue-600);color:#1E3A8A;font-weight:600;}
+  .note{font-size:9pt;color:#475569;margin:4px 0;}
+  .ph{border:1px dashed var(--slate-400);border-radius:6px;background:var(--slate-50);padding:8px 10px;margin:10px 0;font-size:9pt;color:#475569;}
+  table.tbl{border-collapse:collapse;width:100%;font-size:9.5pt;margin:6px 0;}
+  table.tbl th,table.tbl td{border:1px solid var(--line);padding:3px 5px;text-align:left;vertical-align:top;}
+  table.tbl th{background:#f1efe9;font-weight:600;} table.tbl td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .tscroll{overflow-x:auto;max-width:100%;}
+  .kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 14px;margin:6px 0;}
+  .kv div{display:flex;justify-content:space-between;gap:8px;border-bottom:1px dotted var(--line);padding:2px 0;min-width:0;} .kv div>span:last-child{text-align:right;overflow-wrap:anywhere;}
+  #notices:empty{display:none;} #notices{margin:6px 14px 0;display:flex;flex-direction:column;gap:6px;}
+  #notices .notice{display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px 10px;background:#fff;border:1px solid var(--slate-400);border-left:4px solid var(--navy-800);border-radius:6px;padding:6px 10px;font-size:9.5pt;}
+  #notices .notice.warn{border-left-color:var(--warn);background:#FFFBEB;} #notices .notice.err{border-left-color:var(--fail);background:#FEF2F2;}
+  #notices .notice>div:first-child{flex:1 1 240px;min-width:0;overflow-wrap:anywhere;}
+  .steps{list-style:none;padding:0;margin:4px 0;} .steps li{padding:3px 0;border-bottom:1px dotted var(--line);} .steps li:target{background:#FFF7D6;}
+  .steps .lbl{font-size:8.5pt;color:#475569;margin-bottom:3px;} .steps .ref{font-size:8pt;color:#64748b;margin-left:6px;} .steps .nt{font-size:8.5pt;color:var(--warn);}
+  .st-frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;font-size:92%;margin:0 2px;} .st-frac>.st-num{border-bottom:1px solid currentColor;padding:0 2px;} .st-frac>.st-den{padding:0 2px;}
+  /* the Plan tab: toolbar and map */
+  #out>[data-opane="plan"]{height:100%;}
+  #planPane{height:100%;display:flex;flex-direction:column;}
+  #mapBar{flex:0 0 auto;display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;padding:5px 10px;border-bottom:1px solid var(--color-border);background:var(--slate-50);}
+  #mapBar .mbStatus{flex:1 1 200px;min-width:0;font-size:9pt;color:#334155;}
+  #mapWrap{position:relative;flex:1 1 auto;min-height:0;}
+  #map{position:absolute;inset:0;background:#e5e7eb;}
+  #map.blank{background:#f8fafc;background-image:linear-gradient(#e2e8f0 1px,transparent 1px),linear-gradient(90deg,#e2e8f0 1px,transparent 1px);background-size:40px 40px;}
+  #mapMsg{position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:900;max-width:calc(100% - 120px);background:#FFFBEB;border:1px solid var(--warn);border-radius:6px;padding:5px 9px;font-size:9pt;box-shadow:0 2px 8px rgba(0,0,0,.15);}
+  #mapMsg[hidden]{display:none;}
+  .crCoord{background:rgba(255,255,255,.92);padding:3px 7px;border-radius:4px;font:8.5pt/1.35 var(--font-ui);color:#0f172a;box-shadow:0 1px 4px rgba(0,0,0,.25);white-space:nowrap;max-width:calc(100vw - 30px);overflow:hidden;text-overflow:ellipsis;}
+  .crCoord b{font-weight:600;}
+  @media (max-width:560px){ .crCoord{font-size:7.5pt;padding:2px 5px;} }
+  .leaflet-container{font-family:var(--font-ui);}
+  .goRow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0;} .goRow input{flex:1 1 110px;min-width:0;}
+  .rp-host{container-type:inline-size;}
+  @container (max-width:999.98px){ #out .rp-body{grid-template-columns:minmax(0,1fr);} #out .rp-toc{position:static;max-height:220px;} #out .rp-doc{padding:0.3in 0.35in 0.5in;} }
+  /* phone / narrow: the map first, full width; the input panels below it (engineer decision 2026-11-16) */
+  @media screen and (max-width:899.98px){
+    html,body{overflow:visible;height:auto;}
+    #app{height:auto;min-height:100vh;}
+    #main{flex-direction:column;}
+    #outputPanel{order:-1;}
+    #out{overflow:visible;} #out.plan{overflow:hidden;}
+    #out>[data-opane="plan"],#planPane{height:auto;} #mapWrap{flex:none;height:62vh;min-height:300px;}
+    #inputPanel{flex:none;width:auto;max-width:none;border-right:none;border-top:2px solid var(--ink);overflow:visible;padding-bottom:16px;}
+    .inTabs{top:0;}
+    #out .rp-bar select{max-width:calc(100vw - 48px);}
+  }
+  @media print{
+    html,body{overflow:visible;height:auto;} #app{height:auto;}
+    #hdrBtns,#notices,.inTabs,#tabBar,#inputPanel,#mapBar,#appFoot{display:none!important;}
+    body:has(#tabBar [data-otab="rpt"][aria-selected="true"]) #hdr{display:none!important;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="hdr">
+    <div class="titleRow">
+      <div>
+        <h1>Crane Pick Analyzer<span class="aid" title="A lift-planning aid: the lift plan, the crane's own charts and the site checks govern">LIFT-PLANNING AID</span></h1>
+        <div class="byline">Units: US customary (ft, kip, psf / ksf) <span id="saveState" aria-live="polite"></span></div>
+        <a class="allToolsLink" href="../../tools.html" title="Open the list of all tools">&larr; All tools</a>
+      </div>
+      <div id="hdrBtns">
+        <span id="hdrUR">
+        <button type="button" id="bUndo" title="Undo the last change (Ctrl+Z)" disabled>Undo</button>
+        <button type="button" id="bRedo" title="Redo (Ctrl+Y or Ctrl+Shift+Z)" disabled>Redo</button>
+        </span>
+        <input type="file" id="fImport" accept=".json,application/json" hidden>
+      </div>
+    </div>
+  </header>
+  <div id="main">
+    <aside id="inputPanel" aria-label="Inputs">
+      <div class="inTabs" role="tablist" id="inTabs"></div>
+      <div id="inPanes"></div>
+    </aside>
+    <main id="outputPanel">
+      <div id="tabBar" role="tablist"></div>
+      <div id="notices" role="status" aria-live="polite"></div>
+      <div id="out"></div>
+    </main>
+  </div>
+  <footer id="appFoot"><span>Crane Pick Analyzer v0.1 (phase C1: site, plan sheets, drawing) · units: ft, kip, psf / ksf</span><span>Lift-planning aid</span></footer>
+</div>
+<script>
+  window.CranePickApp && window.CranePickApp.start();
+</script>
+</body>
+</html>
