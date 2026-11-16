@@ -39,7 +39,9 @@
                engine/elev.js geomOf; the boom-foot offset and the tail radius stay in app_inputs.plan)
      setup.ground (C4) = { mat: { type, B, L, t, Fb, Fv, E, Fy, gamma, k }, qa (psf), qaUnit } (normSetupGround); ground (C4, project) = { caps: { <util id>: psf } }
      lift  = { caution: 75, critical: 75, limit: 100 (% of chart), interp: false, path: 'uniform' | 'luff', obstClr: 2 (ft) }
-             (project settings; engine/lift.js; path and obstClr C3-2)                                                  C2-2 */
+             (project settings; engine/lift.js; path and obstClr C3-2)                                                  C2-2
+     routes = [ route ], routeMarks = [ mark ]   C6: trucking routes and their marks (engine/route.js has the fields; normRoute,
+             normRouteMark). A project saved before C6 has none: normalize gives []. */
 (function () {
   'use strict';
   const KEYS = { current: 'crane.project.current', list: 'crane.projects.v1', open: 'crane.open', ui: 'crane.ui', idb: 'crane.sheets.v1',
@@ -62,7 +64,7 @@
     o = o || {};
     return { schema: FORMAT, v: 1,
       title: { name: 'New crane pick', number: '', location: '', client: '', by: '', checker: '', date: today(), rev: '' },
-      notes: '', site: { zone: o.zone || 'EPSG:2249' }, view: o.view || null, sheets: [], items: [], cranes: [], setups: [], picks: [], ground: { caps: {} },
+      notes: '', site: { zone: o.zone || 'EPSG:2249' }, view: o.view || null, sheets: [], items: [], cranes: [], setups: [], picks: [], ground: { caps: {} }, routes: [], routeMarks: [],
       lift: { caution: 75, critical: 75, limit: 100, interp: false, path: 'uniform', obstClr: 2 } };
   }
   const num = (v, d) => typeof v === 'number' && isFinite(v) ? v : d;
@@ -139,6 +141,30 @@
      radius), obstClr (ft: an obstruction closer than this is flagged amber; contact is red) */
   function normLift(l) { l = l || {}; return { caution: numPos(l.caution, 75), critical: numPos(l.critical, 75), limit: numPos(l.limit, 100), interp: !!l.interp,
     path: l.path === 'luff' ? 'luff' : 'uniform', obstClr: typeof l.obstClr === 'number' && isFinite(l.obstClr) && l.obstClr >= 0 ? l.obstClr : 2 }; }
+  /* C6: a trucking route (engine/route.js). Lengths ft, weights lb, tyre area in²; null = not entered (engine defaults). */
+  const VEH_KEYS = ['L1', 'e', 'fo', 'ro', 'Wt', 'L2', 'Wb', 'dF', 'dR', 'Lj', 'ej', 'Ld', 'k', 'dmax', 'Rmin', 'hDeck', 'Wtr', 'xt', 'Wtl', 'xtl', 'Wj', 'Wd', 'nS', 'nD', 'nJ', 'nR', 'tS', 'tD', 'tJ', 'tR'];
+  const VEH_SIGNED = ['e', 'ej', 'xt', 'xtl'];
+  const ROUTE_VEH = ['semi', 'stretch', 'dolly', 'jeep'];
+  function normRoute(r) {
+    if (!r || typeof r !== 'object') return null;
+    const pts = (Array.isArray(r.pts) ? r.pts : []).map(pt).filter(Boolean); if (pts.length < 2) return null;
+    const nn = v => { const x = numOrNull(v); return x != null && x >= 0 ? x : null; }, v0 = r.veh && typeof r.veh === 'object' ? r.veh : {}, l0 = r.load && typeof r.load === 'object' ? r.load : {}, a0 = r.axIn && typeof r.axIn === 'object' ? r.axIn : {};
+    const veh = { type: ROUTE_VEH.indexOf(v0.type) >= 0 ? v0.type : 'semi' }; VEH_KEYS.forEach(k => { veh[k] = VEH_SIGNED.indexOf(k) >= 0 ? numOrNull(v0[k]) : nn(v0[k]); });
+    const load = {}; ['L', 'W', 'B', 'r', 'cg', 'h'].forEach(k => { load[k] = k === 'r' ? numOrNull(l0[k]) : nn(l0[k]); });
+    const rad = pts.map((_, i) => { const x = Array.isArray(r.rad) ? nn(r.rad[i]) : null; return x != null && x > 0 ? x : null; });
+    return { id: str(r.id) || uid('r'), name: str(r.name, 'Route'), pts, rad, rDef: numPos(r.rDef, 50), veh, load, tyre: { A: nn(r.tyre && r.tyre.A) },
+      axIn: { on: !!a0.on, S: nn(a0.S), D: nn(a0.D), J: nn(a0.J), R: nn(a0.R) }, pickId: str(r.pickId), stageTol: nn(r.stageTol), margin: nn(r.margin), at: nn(r.at) };
+  }
+  const MARK_TYPES = { overhead: 'Overhead clearance', haul: 'Haul road / mats', bridge: 'Posted bridge' };
+  function normRouteMark(m) {
+    if (!m || typeof m !== 'object' || !MARK_TYPES[m.type]) return null;
+    const pts = (Array.isArray(m.pts) ? m.pts : []).map(pt).filter(Boolean); if (pts.length < (m.type === 'overhead' ? 1 : 2)) return null;
+    const nn = v => { const x = numOrNull(v); return x != null && x >= 0 ? x : null; }, o = { id: str(m.id) || uid('m'), type: m.type, name: str(m.name, MARK_TYPES[m.type]), pts, w: nn(m.w) };
+    if (m.type === 'overhead') o.h = nn(m.h);
+    if (m.type === 'haul') { o.qa = nn(m.qa); const g = normSetupGround({ mat: m.mat }); o.mat = g.mat; }
+    if (m.type === 'bridge') { const p = m.post && typeof m.post === 'object' ? m.post : {}; o.post = { gross: nn(p.gross), axle: nn(p.axle), tLabel: str(p.tLabel), tTons: nn(p.tTons) }; }
+    return o;
+  }
   /* normalize(p): a project as this version keeps it (unknown fields dropped, defaults filled; never throws) */
   function normalize(p) {
     const d = newProject(); if (!p || typeof p !== 'object') return d;
@@ -149,7 +175,8 @@
       items: (Array.isArray(p.items) ? p.items : []).map(normItem).filter(Boolean),
       cranes: (Array.isArray(p.cranes) ? p.cranes : []).map(normCrane).filter(Boolean),
       setups: (Array.isArray(p.setups) ? p.setups : []).map(normSetup).filter(Boolean),
-      picks: (Array.isArray(p.picks) ? p.picks : []).map(normPick).filter(Boolean), lift: normLift(p.lift), ground: normGround(p.ground) };
+      picks: (Array.isArray(p.picks) ? p.picks : []).map(normPick).filter(Boolean), lift: normLift(p.lift), ground: normGround(p.ground),
+      routes: (Array.isArray(p.routes) ? p.routes : []).map(normRoute).filter(Boolean), routeMarks: (Array.isArray(p.routeMarks) ? p.routeMarks : []).map(normRouteMark).filter(Boolean) };
     Object.keys(d.title).forEach(k => { o.title[k] = str(t[k], k === 'date' ? '' : ''); });
     if (p.savedAt) o.savedAt = str(p.savedAt);
     return o;
@@ -172,5 +199,5 @@
   }
   /* text of the inputs (undo / "unsaved changes"): the project without the view and the saved time */
   function inputsText(P) { const o = Object.assign({}, P); delete o.view; delete o.savedAt; return JSON.stringify(o); }
-  window.CranePickModel = { KEYS, FORMAT, TYPES, UTIL_KINDS, BASIS, newProject, normalize, normItem, normSheet, normCrane, normSetup, normPick, normElev, normLift, normSetupGround, normGround, load, save, toFile, fromFile, inputsText, uid };
+  window.CranePickModel = { KEYS, FORMAT, TYPES, UTIL_KINDS, BASIS, newProject, normalize, normItem, normSheet, normCrane, normSetup, normPick, normElev, normLift, normSetupGround, normGround, normRoute, normRouteMark, MARK_TYPES, ROUTE_VEH, load, save, toFile, fromFile, inputsText, uid };
 })();

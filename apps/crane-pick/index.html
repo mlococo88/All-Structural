@@ -29,7 +29,11 @@
      the map, the live card, the Picks tab and the Report with worked steps; the elevation view along the boom (a dock under the map,
      live while dragging; Report §Elevations).
      C3-3: the 3D view (ui/view3d.js) in the same dock: site, plan sheet as the ground, cranes, the boom at the chosen point, the swing
-     envelope, power lines with their D_min tubes, the 3D clearance flags; orbit; live with drags; a snapshot in the Report. -->
+     envelope, power lines with their D_min tubes, the 3D clearance flags; orbit; live with drags; a snapshot in the Report.
+     C6: the trucking route (engine/route.js, ui/route.js): drawn routes with curve radii, the vehicle (tractor + semi / stretch trailer /
+     steerable rear dolly / jeep + dolly) and its load, the kinematic swept path live while dragging, turns (off-tracking, inside /
+     outside radii), site conflicts, overhead clearances (marks, power lines: 29 CFR 1926.1411 Table T), axle loads, haul-road bearing,
+     posted bridges, staging at the pick; Route input / output tabs and Report §Route. -->
 <!-- pdf.js 3.11.174 (engineer-approved 2026-11-16; BasePlateAnchorDesigner.html's pinned jsDelivr URL) is loaded by ui/sheets.js when the
      first PDF is opened: https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js (worker: build/pdf.worker.min.js) -->
 <!-- three.js r128 + OrbitControls (engineer-approved 2026-11-16 for C3; the pinned files apps/steel-bridge/index.html uses) are loaded by
@@ -75,7 +79,9 @@
     'ui/view3d.js',         // C3-3: the 3D view in the same dock (three.js r128 + OrbitControls, loaded from the CDN when first opened)
     '../../shared/boussinesq.js',  // C4: Boussinesq stress below a loaded rectangle (shared, unchanged; also Spread Footing)
     'engine/ground.js',     // C4: float / track loads along the swing, bounding estimate, mats, bearing, stress at depth
-    'ui/ground.js'          // C4: Ground input and output tabs, the pressure map and float-load labels, Report §Ground
+    'ui/ground.js',         // C4: Ground input and output tabs, the pressure map and float-load labels, Report §Ground
+    'engine/route.js',      // C6: trucking route: path, kinematic swept path, overhead clearances, axle loads, haul road, posted bridges, staging
+    'ui/route.js'           // C6: Route input and output tabs, the route on the map (live while dragging), Report §Route
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
 })();
 </script>
@@ -235,6 +241,10 @@
   #el3d{height:300px;position:relative;} #el3d canvas{display:block;touch-action:none;} #elevDock.v3{max-height:none;}
   .elMode button{padding:1px 8px;font-size:8.5pt;} .elMode button[aria-pressed="true"]{background:#DBEAFE;border-color:var(--blue-600);color:#1E3A8A;font-weight:600;}
   #elSvg{padding:0 6px 4px;} #elSvg svg{display:block;max-width:100%;height:auto;}
+  /* C6: route labels on the map */
+  .crRtLbl{pointer-events:none!important;} .crRtLbl span{display:inline-block;white-space:nowrap;font-size:8pt;line-height:1.2;background:rgba(255,255,255,.92);border:1px solid #94A3B8;border-left:4px solid #059669;border-radius:3px;padding:0 4px;color:#0f172a;transform:translate(-50%,-140%);}
+  .crRtLbl span.rt-warn{border-left-color:#D97706;} .crRtLbl span.rt-stop{border-left-color:#DC2626;background:#FEF2F2;}
+  #mbStatus button[data-rtb]{margin-left:6px;}
   /* C2-3: Picks tab */
   #pkTbl td,#pkTbl th{font-size:8.5pt;padding:2px 4px;white-space:nowrap;} .lfDot{margin-right:3px;} .lfDot.lf-stop{color:#B91C1C;} .lfDot.lf-warn{color:var(--warn);} .lfDot.lf-info{color:#64748B;}
   details.pkDet{border:1px solid var(--color-border);border-radius:6px;padding:4px 8px;margin:6px 0;background:#fff;} details.pkDet:target,details.pkDet[open]{background:#FCFDFF;}
@@ -288,7 +298,7 @@
       <div id="out"></div>
     </main>
   </div>
-  <footer id="appFoot"><span>Crane Pick Analyzer v0.4 (phase C4: site, plan sheets, drawing, cranes, lifts, heights, 3D, ground) · units: ft, kip, psf / ksf</span><span>Lift-planning aid</span></footer>
+  <footer id="appFoot"><span>Crane Pick Analyzer v0.6 (phase C6: site, plan sheets, drawing, cranes, lifts, heights, 3D, ground, route) · units: ft, kip, psf / ksf</span><span>Lift-planning aid</span></footer>
 </div>
 <script>
   window.CranePickApp && window.CranePickApp.start();
