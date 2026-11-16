@@ -291,3 +291,28 @@ zone change, KaTeX of every step); `node tests/smoke/crane-place.mjs` (9 checks:
 pick dragged with the values following mid-drag and live updates ≤ frames, one undo step, crane moved and rotated, thresholds, not
 permitted, interpolation, clockwise swing, chart group, power-line flag, steps, reload, 390 px, 0 console errors); `crane-library.mjs` (9),
 `crane-shell.mjs` (11), `crane-sheets.mjs` (8), `crane-draw.mjs` (7); `node tests/check-syntax.mjs`.
+
+## 2026-11-16 — C2-3: Picks tab, Report §Lifts
+PR #1608: https://github.com/mlococo88/All-Structural/pull/1608
+### Where
+- `apps/crane-pick/ui/picks.js` (new): the Picks output tab (between Plan and Site): one row per pick (pick, crane setup, chart, boom,
+  R pick / set / max, C pick / set, W, governing point and its capacity, % of chart, status, flags) with links (the pick: selected on the
+  map; "worked": its flags and worked steps below the table; "Report": its § in the Report); the Report's §Lifts: Basis (the lookup rule,
+  W, % of chart, thresholds, the swing-path and zone method, plan-only clearances, a § link to §Cranes), Summary of picks (§ link to each
+  pick), a plan figure (setups to scale, tail-swing circles, boom lines, swing paths coloured by status, P / S with R and %, power-line
+  D_min buffers, obstructions, exclusion zones), and one subsection per pick (inputs with a § link to its crane, result, flags,
+  not-permitted reasons, worked steps of the total load, the pick, the set, the swing path and the governing point).
+- `ui/app.js` `outTab`: optional `before` (the tab id it goes in front of; Picks before Site). `ui/place.js`: "worked: Report" link
+  on the live card; settings labels. `ui/project.js`: the About text. `index.html`: the script, CSS. Tests:
+  `tests/smoke/crane-picks.mjs` (new), `crane-shell.mjs` (the output tabs now Plan · Picks · Site · Report).
+### Calculations
+None new (CLAUDE.md §4): the values are engine/lift.js's (C2-2), shown again. Checked: the Picks tab's first row equals the C2-2 hand
+check (R 30.00 / 20.00 ft, C 39,000 / 58,000 lb, W 22,000 lb, 56.4 %); every value in the tab is the engine's for the stored project.
+### Saved data (§5)
+None changed.
+### How verified
+`node tests/smoke/crane-picks.mjs` (5 checks: two fake cranes, three picks; the table against the engine; links to the map, the steps
+and the Report; Report §Lifts with no unresolved or duplicate keys and no NaN, § links to the picks and the cranes; Undo updates the tab;
+390 px; 0 console errors); `crane-place.mjs` (9), `crane-library.mjs` (9), `crane-shell.mjs` (11), `crane-sheets.mjs` (8),
+`crane-draw.mjs` (7); `node tests/engine/run.mjs crane` (35); `node tests/check-syntax.mjs`. Locally (not committed): all ten real library
+files load in the app and two real cranes place and compute with 0 console errors.

@@ -18,7 +18,9 @@
      C2-1: the crane library (from the engineer's private GitHub repository with the Cloud sync token, or from files; a chart pasted
      from Excel in the crane editor), the project's cranes (each copied into the project), crane cards and the Report's §Cranes.
      C2-2: crane setups drawn to scale and dragged / rotated on the map; pick and set points with the swing path; live radius, chart
-     capacity and % of chart on every drag; plan clearances to power lines, exclusion zones and obstructions; the Lifts tab. -->
+     capacity and % of chart on every drag; plan clearances to power lines, exclusion zones and obstructions; the Lifts tab.
+     C2-3: the Picks output tab (every pick with its crane, chart, radii, capacities, % of chart, governing point, flags, links) and the
+     Report's §Lifts (basis, summary, plan figure, each pick's inputs, flags and worked steps). -->
 <!-- pdf.js 3.11.174 (engineer-approved 2026-11-16; BasePlateAnchorDesigner.html's pinned jsDelivr URL) is loaded by ui/sheets.js when the
      first PDF is opened: https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js (worker: build/pdf.worker.min.js) -->
 <!-- Leaflet 1.9.4 and proj4js 2.11.0 (engineer-approved 2026-11-16; the versions and URLs Bridge Geometry.html already pins, CLAUDE.md §2) -->
@@ -53,7 +55,8 @@
     'ui/cranes.js',         // C2-1: Cranes input tab: the library (GitHub / files), the project's cranes, the sync-repository check
     'ui/craneedit.js',      // C2-1: the crane editor (crane data, plan dimensions, configs, a chart pasted from Excel)
     'engine/lift.js',       // C2-2: setups, picks, capacity at the hook, swing path, plan footprint and clearances
-    'ui/place.js'           // C2-2: Lifts input tab; cranes, pick and set points dragged on the map with live capacity
+    'ui/place.js',          // C2-2: Lifts input tab; cranes, pick and set points dragged on the map with live capacity
+    'ui/picks.js'           // C2-3: Picks output tab (every pick, links) and the Report's §Lifts
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
 })();
 </script>
@@ -200,6 +203,9 @@
   .crLiftLbl .lv{border-radius:3px;font-size:8.5pt;padding:1px 5px;background:rgba(255,255,255,.94);color:#0f172a;border-color:#94A3B8;}
   table.lfTbl td,table.lfTbl th{font-size:8.5pt;padding:2px 4px;}
   ul.lfFlags{margin:4px 0;padding-left:18px;font-size:9pt;} .lfFlags li.lf-stop{color:#B91C1C;font-weight:600;} .lfFlags li.lf-warn{color:var(--warn);} .lfFlags li.lf-info{color:#475569;}
+  /* C2-3: Picks tab */
+  #pkTbl td,#pkTbl th{font-size:8.5pt;padding:2px 4px;white-space:nowrap;} .lfDot{margin-right:3px;} .lfDot.lf-stop{color:#B91C1C;} .lfDot.lf-warn{color:var(--warn);} .lfDot.lf-info{color:#64748B;}
+  details.pkDet{border:1px solid var(--color-border);border-radius:6px;padding:4px 8px;margin:6px 0;background:#fff;} details.pkDet:target,details.pkDet[open]{background:#FCFDFF;}
   .rp-host{container-type:inline-size;}
   @container (max-width:999.98px){ #out .rp-body{grid-template-columns:minmax(0,1fr);} #out .rp-toc{position:static;max-height:220px;} #out .rp-doc{padding:0.3in 0.35in 0.5in;} }
   /* phone / narrow: the map first, full width; the input panels below it (engineer decision 2026-11-16) */
