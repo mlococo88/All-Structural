@@ -61,5 +61,39 @@
       note: `Table A: ${r.band} → ${r.ft} ft.`,
       steps: [step({ id: 'D', label: `Minimum clearance, ${n(kv, kv % 1 ? 1 : 0)} kV (${r.band})`, sym: 'D_{min}', eq: '\\text{Table A}(V)', sub: `\\text{Table A}(${n(kv, kv % 1 ? 1 : 0)}\\,\\text{kV})`, value: r.ft })] };
   }
-  window.CranePickOSHA = { REF, ROWS, row, clearance };
+  /* C6 (2026-11-16): 29 CFR 1926.1411 "Power line safety — while traveling under or near power lines with no load", Table T "Minimum
+     Clearance Distances While Traveling With No Load" (paraphrased, not quoted; nominal kV, alternating current):
+       up to 0.75 kV 4 ft; over 0.75 to 50 kV 6 ft; over 50 to 345 kV 10 ft; over 345 to 750 kV 16 ft; over 750 to 1,000 kV 20 ft;
+       over 1,000 kV as established by the utility owner/operator or a registered professional engineer who is a qualified person with
+       respect to electrical power transmission and distribution. 1926.1411(b)(4): a dedicated spotter in continuous contact with the
+       driver when any part will get closer than 20 ft to the line. Scope note: 1926.1411 is written for cranes / derricks travelling
+       without a load; this tool applies Table T to the haul vehicle and its load on the engineer's instruction (2026-11-16, Decision
+       pending engineer review). Source check as for Table A (C1-3): the official pages could not be opened from this session; the values
+       agree in search results limited to ecfr.gov, osha.gov and govinfo.gov (CFR 2023 ed., vol. 8, § 1926.1411). Engineer to confirm.
+     Voltage not known: 20 ft (the largest Table T distance up to 1,000 kV; Decision pending engineer review). */
+  const REF_T = '29 CFR 1926.1411 Table T';
+  const ROWS_T = [
+    { over: 0, to: 0.75, ft: 4, band: 'up to 0.75 kV' },
+    { over: 0.75, to: 50, ft: 6, band: 'over 0.75 to 50 kV' },
+    { over: 50, to: 345, ft: 10, band: 'over 50 to 345 kV' },
+    { over: 345, to: 750, ft: 16, band: 'over 345 to 750 kV' },
+    { over: 750, to: 1000, ft: 20, band: 'over 750 to 1,000 kV' }
+  ];
+  const SPOTTER_FT = 20;
+  /* travel(line) -> { ft (NaN when none), basis, band, ok, note, steps } */
+  function travel(line, idp) {
+    const id = (idp || 'osha') + '.', kv = line && typeof line.kv === 'number' && isFinite(line.kv) && line.kv > 0 ? line.kv : null;
+    const step = (o) => Object.assign({ unit: 'ft', d: 0, ref: REF_T }, o, { id: id + o.id });
+    if (kv == null) return { ft: 20, basis: 'voltage not known: 20 ft (largest Table T value up to 1,000 kV), conservative', ok: true, known: false,
+      note: 'Voltage not known: 20 ft is used (the largest Table T distance up to 1,000 kV). Get the voltage from the utility owner/operator.',
+      steps: [step({ id: 'DT', label: 'Travel clearance, voltage not known (largest Table T value up to 1,000 kV)', sym: 'D_{T}', eq: '\\text{Table T, over 750 to 1,000 kV}', sub: '20', value: 20 })] };
+    const r = ROWS_T.find(q => kv > q.over && kv <= q.to);
+    if (!r) { const s = line && typeof line.setFt === 'number' && line.setFt > 0 ? line.setFt : NaN;
+      return { ft: s, basis: 'over 1,000 kV: set by the utility owner/operator or an RPE', ok: isFinite(s), known: true,
+        note: isFinite(s) ? `Over 1,000 kV: ${n(s, 1)} ft as entered (utility owner/operator or RPE).` : 'Over 1,000 kV: Table T gives no distance; enter the utility / RPE value.',
+        steps: [step({ id: 'DT', label: `Travel clearance, ${n(kv, 1)} kV (over 1,000 kV: as set by the utility owner/operator or an RPE)`, sym: 'D_{T}', eq: '\\text{as set}', sub: isFinite(s) ? n(s, 1) : '\\text{not entered}', value: isFinite(s) ? s : 'not entered', d: 1 })] }; }
+    return { ft: r.ft, basis: `Table T, ${r.band}`, band: r.band, ok: true, known: true, note: `Table T: ${r.band} → ${r.ft} ft.`,
+      steps: [step({ id: 'DT', label: `Travel clearance, ${n(kv, kv % 1 ? 1 : 0)} kV (${r.band})`, sym: 'D_{T}', eq: '\\text{Table T}(V)', sub: `\\text{Table T}(${n(kv, kv % 1 ? 1 : 0)}\\,\\text{kV})`, value: r.ft })] };
+  }
+  window.CranePickOSHA = { REF, ROWS, row, clearance, REF_T, ROWS_T, SPOTTER_FT, travel };
 })();
