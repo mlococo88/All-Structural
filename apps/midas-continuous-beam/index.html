@@ -90,15 +90,26 @@
       <div class="row3">
         <div><label>γ material (kcf)</label><input id="gamma" type="number" step="0.005" value="0.490"></div>
         <div><label>DW (klf)</label><input id="wDW" type="number" step="0.05" value="0.50"></div>
-        <div><label>LL (klf)</label><input id="wLL" type="number" step="0.05" value="0.64"></div>
+        <div></div>
       </div>
-      <div class="note">DC = γ·A of the I-section (girder only, no deck, haunch or details allowance) is applied as an element uniform load (not as MIDAS self-weight), so MIDAS and the check solver use the same weight. DW and LL are uniform on all spans; there's no pattern loading.</div>
+      <div class="note">DC = γ·A of the I-section (girder only, no deck, haunch or details allowance) is applied as an element uniform load (not as MIDAS self-weight), so MIDAS and the check solver use the same weight. DW is uniform on all spans.</div>
+      <h2 style="margin-top:12px">Live load: HL-93 moving load (AASHTO LRFD)</h2>
+      <div class="row">
+        <div><label>Distribution factor, moment (lanes/girder)</label><input id="dfM" type="number" step="0.01" value="1.00"></div>
+        <div><label>Distribution factor, shear &amp; reactions</label><input id="dfV" type="number" step="0.01" value="1.00"></div>
+      </div>
+      <div class="row">
+        <div><label>IM, dynamic load allowance (%)</label><input id="imPct" type="number" step="1" value="33"></div>
+        <div><label>Multiple presence factor m, 1 lane</label><input id="mpf" type="number" step="0.05" value="1.00"></div>
+      </div>
+      <div class="check"><input id="dualTruck" type="checkbox"><label for="dualTruck" style="margin:0;color:inherit">Check solver: add 90% of two trucks + 90% lane (negative moment, interior reactions)</label></div>
+      <div class="note">One traffic lane along the girder line (eccentricity 0). Vehicles: HL-93 design truck (8, 32, 32 kips; 14 ft; rear spacing 14–30 ft) and design tandem (25 + 25 kips at 4 ft), each with the 0.64 klf design lane load (AASHTO LRFD 3.6.1.2.2–3.6.1.2.4), truck and tandem taken separately (envelope). IM applies to the truck/tandem only, not the lane load (3.6.2.1). The live load is multiplied by the distribution factor (moment DF for moments, shear DF for shears and reactions) and by m; m defaults to 1.0 because the approximate distribution factors of 4.6.2.2 already include multiple presence (3.6.1.1.2). The 90% two-truck case (3.6.1.3.1) is <b>not</b> sent to Civil NX yet (it needs Lane Supports); tick the box to see its effect in the check solver only. In Civil NX: moving load code AASHTO LRFD, line lane LANE1, vehicles HL-93TRK / HL-93TDM, cases LLM (moment DF) and LLV (shear DF).</div>
       <div class="row3">
         <div><label>STR-I: DC</label><input id="fDC" type="number" step="0.05" value="1.25"></div>
         <div><label>DW</label><input id="fDW" type="number" step="0.05" value="1.50"></div>
-        <div><label>LL</label><input id="fLL" type="number" step="0.05" value="1.75"></div>
+        <div><label>LL+IM</label><input id="fLL" type="number" step="0.05" value="1.75"></div>
       </div>
-      <div class="note">SER-I uses 1.0 on all three.</div>
+      <div class="note">SER-I uses 1.0 on all three. Combinations add the static cases to the live-load envelope: max = DC + DW + LL<sub>max</sub>, min = DC + DW + LL<sub>min</sub> (no minimum DC/DW factors).</div>
     </div>
 
     <div class="card">
@@ -155,7 +166,7 @@
     <div class="card">
       <h2>Summary</h2>
       <div id="summary"></div>
-      <div class="btns"><button id="btnCsv" disabled>Download MIDAS beam forces (CSV)</button></div>
+      <div class="btns"><button id="btnCsv" disabled>Download MIDAS result tables (CSV)</button></div>
     </div>
 
     <div class="card">
@@ -323,14 +334,14 @@
 const $ = id => document.getElementById(id);
 const LS_INPUTS = 'cbeam.inputs.v2';
 const LS_INPUTS_V1 = 'cbeam.inputs.v1';   // rectangular version (read once for migration, never written)
-const CASES = ['DC', 'DW', 'LL', 'STR-I', 'SER-I'];
+const CASES = ['DC', 'DW', 'LL+IM', 'STR-I', 'SER-I'];
 
 /* ---------------- state ---------------- */
 let spans = [];          // [{L,DL,DM,DR,tw,bt,tt,bb,tb,n}] (L ft, the rest in)
 let model = null;        // built geometry
-let local = null;        // {case: [{x,V,M}]}, reactions
-let midasRes = null;     // {case: [{x,V,M,elem,part}]}
-let midasRaw = null;     // raw rows for CSV
+let local = null;        // {case: {pts: [{x,elem,t,Mmax,Mmin,Vmax,Vmin}], react: Map(node -> {max,min})}}
+let midasRes = null;     // same shape as local, plus _react
+let midasTables = [];    // [{name, table}] raw tables for CSV
 
 /* ---------------- logging ---------------- */
 function log(msg, cls) {
@@ -351,13 +362,15 @@ const DEFAULT_SPANS = [
   { L: 100, DL: 84, DM: 54, DR: 54, tw: 0.5625, bt: 16, tt: 1, bb: 18, tb: 1.25, n: 16 },
 ];
 const SPAN_KEYS = ['L', 'DL', 'DM', 'DR', 'tw', 'bt', 'tt', 'bb', 'tb', 'n'];
-const FIELDS = ['gamma', 'wDW', 'wLL', 'fDC', 'fDW', 'fLL', 'matType', 'matSrc', 'matE', 'matNu', 'matStd', 'matDb'];
+const FIELDS = ['gamma', 'wDW', 'dfM', 'dfV', 'imPct', 'mpf', 'dualTruck', 'fDC', 'fDW', 'fLL', 'matType', 'matSrc', 'matE', 'matNu', 'matStd', 'matDb'];
+const fieldVal = f => $(f).type === 'checkbox' ? $(f).checked : $(f).value;
+const setFieldVal = (f, v) => { if ($(f).type === 'checkbox') $(f).checked = !!v; else $(f).value = v; };
 const MAT_DEFAULTS = { STEEL: { std: 'ASTM(S)', db: 'A709-50', gamma: '0.490', E: '29000', nu: '0.30', damp: 0.02, alpha: 6.5e-6 },
                        CONC: { std: 'ASTM(RC)', db: 'Grade C4000', gamma: '0.150', E: '3605', nu: '0.20', damp: 0.05, alpha: 6.0e-6 } };
 
 function saveInputs() {
   const o = { spans };
-  FIELDS.forEach(f => o[f] = $(f).value);
+  FIELDS.forEach(f => o[f] = fieldVal(f));
   try { localStorage.setItem(LS_INPUTS, JSON.stringify(o)); } catch (e) {}
 }
 // v1 (rectangular b x h) -> v2 (I-section). Keeps L, element count, loads, factors and the concrete material;
@@ -381,7 +394,7 @@ function loadInputs() {
   }
   const ok = o && Array.isArray(o.spans) && o.spans.length && o.spans.every(s => SPAN_KEYS.every(k => s[k] > 0));
   spans = ok ? o.spans : JSON.parse(JSON.stringify(DEFAULT_SPANS));
-  if (o) FIELDS.forEach(f => { if (o[f] !== undefined) $(f).value = o[f]; });
+  if (o) FIELDS.forEach(f => { if (o[f] !== undefined) setFieldVal(f, o[f]); });
 }
 
 function renderSpans() {
@@ -462,80 +475,186 @@ function buildModel() {
 }
 
 function loadVals() {
-  const g = parseFloat($('gamma').value) || 0;
+  const num = (id, d = 0) => { const v = parseFloat($(id).value); return isFinite(v) ? v : d; };
   return {
-    gamma: g,
-    wDW: parseFloat($('wDW').value) || 0,
-    wLL: parseFloat($('wLL').value) || 0,
-    f: { DC: parseFloat($('fDC').value) || 0, DW: parseFloat($('fDW').value) || 0, LL: parseFloat($('fLL').value) || 0 },
+    gamma: num('gamma'),
+    wDW: num('wDW'),
+    dfM: num('dfM', 1), dfV: num('dfV', 1), im: num('imPct', 33) / 100, mpf: num('mpf', 1),
+    dual: $('dualTruck').checked,
+    f: { DC: num('fDC'), DW: num('fDW'), LL: num('fLL') },
   };
 }
 
 /* ---------------- independent check solver (2D Euler-Bernoulli, direct stiffness) ---------------- */
-// Loads per element: w (klf, +up). Returns sample points (5 per element) and support reactions.
-function solveBeam(m, wOfElem) {
-  const nDof = m.nodes.length * 2;            // [v, theta] per node
+const T_PTS = [0, 0.25, 0.5, 0.75, 1];      // output points per element (same parts as the MIDAS beam-force table)
+const ke = (EI, L) => {
+  const a = EI / (L * L * L);
+  return [
+    [12 * a, 6 * L * a, -12 * a, 6 * L * a],
+    [6 * L * a, 4 * L * L * a, -6 * L * a, 2 * L * L * a],
+    [-12 * a, -6 * L * a, 12 * a, -6 * L * a],
+    [6 * L * a, 2 * L * L * a, -6 * L * a, 4 * L * L * a]];
+};
+// Equivalent nodal loads [V1, M1, V2, M2] (+up, +ccw): uniform w over the element, point load F at distance a from end i
+const feqUniform = (w, L) => [w * L / 2, w * L * L / 12, w * L / 2, -w * L * L / 12];
+const feqPoint = (F, a, L) => { const b = L - a; return [F * b * b * (3 * a + b) / L ** 3, F * a * b * b / L ** 2, F * a * a * (a + 3 * b) / L ** 3, -F * a * a * b / L ** 2]; };
+const dofsOf = e => [2 * (e.i - 1), 2 * (e.i - 1) + 1, 2 * (e.j - 1), 2 * (e.j - 1) + 1];
+
+// Assemble and LU-factor the stiffness once; returns solve(F) -> nodal displacements
+function makeSolver(m) {
+  const nDof = m.nodes.length * 2;
   const K = Array.from({ length: nDof }, () => new Float64Array(nDof));
-  const F = new Float64Array(nDof);
-  const E = 1;                                 // single material: E cancels for forces
-  const ke = (EI, L) => {
-    const a = EI / (L * L * L);
-    return [
-      [12 * a, 6 * L * a, -12 * a, 6 * L * a],
-      [6 * L * a, 4 * L * L * a, -6 * L * a, 2 * L * L * a],
-      [-12 * a, -6 * L * a, 12 * a, -6 * L * a],
-      [6 * L * a, 2 * L * L * a, -6 * L * a, 4 * L * L * a]];
-  };
-  const feq = (w, L) => [w * L / 2, w * L * L / 12, w * L / 2, -w * L * L / 12];
-  const dofs = e => [2 * (e.i - 1), 2 * (e.i - 1) + 1, 2 * (e.j - 1), 2 * (e.j - 1) + 1];
-
   m.elems.forEach(e => {
-    const k = ke(E * e.I, e.L), f = feq(wOfElem(e), e.L), d = dofs(e);
-    for (let r = 0; r < 4; r++) { F[d[r]] += f[r]; for (let c = 0; c < 4; c++) K[d[r]][d[c]] += k[r][c]; }
+    const k = ke(e.I, e.L), d = dofsOf(e);                     // E = 1: one material, so E cancels in the forces
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) K[d[r]][d[c]] += k[r][c];
   });
-
-  const fixed = new Set(m.supports.map(n => 2 * (n - 1)));     // vertical restraint at supports
+  const fixed = new Set(m.supports.map(n => 2 * (n - 1)));     // vertical restraint at every support
   const free = [...Array(nDof).keys()].filter(i => !fixed.has(i));
   const n = free.length;
-  const A = free.map(r => free.map(c => K[r][c]));
-  const b = free.map(r => F[r]);
-  // Gaussian elimination with partial pivoting
-  for (let c = 0; c < n; c++) {
+  const A = free.map(r => Float64Array.from(free.map(c => K[r][c])));
+  const piv = [...Array(n).keys()];
+  for (let c = 0; c < n; c++) {                                 // LU with partial pivoting
     let p = c;
     for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
-    [A[c], A[p]] = [A[p], A[c]]; [b[c], b[p]] = [b[p], b[c]];
-    if (Math.abs(A[c][c]) < 1e-300) throw new Error('Singular stiffness matrix (unstable supports?)');
+    if (Math.abs(A[p][c]) < 1e-300) throw new Error('Singular stiffness matrix (unstable supports?)');
+    if (p !== c) { [A[c], A[p]] = [A[p], A[c]]; [piv[c], piv[p]] = [piv[p], piv[c]]; }
     for (let r = c + 1; r < n; r++) {
-      const fct = A[r][c] / A[c][c];
-      if (!fct) continue;
-      for (let cc = c; cc < n; cc++) A[r][cc] -= fct * A[c][cc];
-      b[r] -= fct * b[c];
+      const f = A[r][c] / A[c][c];
+      A[r][c] = f;
+      if (f) for (let cc = c + 1; cc < n; cc++) A[r][cc] -= f * A[c][cc];
     }
   }
-  const xs = new Float64Array(n);
-  for (let r = n - 1; r >= 0; r--) {
-    let s = b[r];
-    for (let c = r + 1; c < n; c++) s -= A[r][c] * xs[c];
-    xs[r] = s / A[r][r];
-  }
-  const D = new Float64Array(nDof);
-  free.forEach((g, i) => D[g] = xs[i]);
+  return function solve(F) {
+    const y = new Float64Array(n);
+    for (let r = 0; r < n; r++) { let s = F[free[piv[r]]]; for (let c = 0; c < r; c++) s -= A[r][c] * y[c]; y[r] = s; }
+    for (let r = n - 1; r >= 0; r--) { let s = y[r]; for (let c = r + 1; c < n; c++) s -= A[r][c] * y[c]; y[r] = s / A[r][r]; }
+    const D = new Float64Array(nDof);
+    free.forEach((g, i) => D[g] = y[i]);
+    return D;
+  };
+}
 
-  const pts = [];
+// Internal V, M at the output points and support reactions for one load state.
+// wOf(e): uniform load on element e (klf, +up); pl: optional point load { elem, a, F } (F kips, +up)
+function solveState(m, solve, wOf, pl) {
+  const F = new Float64Array(m.nodes.length * 2);
+  const fe = m.elems.map(e => {
+    const f = feqUniform(wOf(e), e.L);
+    if (pl && pl.elem === e.id) feqPoint(pl.F, pl.a, e.L).forEach((v, r) => f[r] += v);
+    dofsOf(e).forEach((g, r) => F[g] += f[r]);
+    return f;
+  });
+  const D = solve(F);
+  const V = [], M = [];
   const react = new Map(m.supports.map(sn => [sn, 0]));
-  m.elems.forEach(e => {
-    const k = ke(E * e.I, e.L), w = wOfElem(e), f = feq(w, e.L), d = dofs(e);
+  m.elems.forEach((e, ei) => {
+    const k = ke(e.I, e.L), d = dofsOf(e), f = fe[ei], w = wOf(e);
     const end = [0, 1, 2, 3].map(r => k[r].reduce((s, kv, c) => s + kv * D[d[c]], 0) - f[r]);
-    const [V1, M1] = end;                       // forces from nodes on the element (+up, +ccw)
+    const [V1, M1] = end;                                       // forces from the nodes on the element (+up, +ccw)
     if (react.has(e.i)) react.set(e.i, react.get(e.i) + end[0]);
     if (react.has(e.j)) react.set(e.j, react.get(e.j) + end[2]);
-    const xI = m.nodes[e.i - 1].x;
-    [0, 0.25, 0.5, 0.75, 1].forEach(t => {
-      const x = t * e.L;
-      pts.push({ x: xI + x, V: V1 + w * x, M: -M1 + V1 * x + w * x * x / 2, elem: e.id, t });
+    const hasP = pl && pl.elem === e.id;
+    T_PTS.forEach(t => {
+      const x = t * e.L, past = hasP && x > pl.a + 1e-9;
+      V.push(V1 + w * x + (past ? pl.F : 0));
+      M.push(-M1 + V1 * x + w * x * x / 2 + (past ? pl.F * (x - pl.a) : 0));
     });
   });
-  return { pts, react };
+  return { V, M, react };
+}
+
+// Output point list (same order as solveState)
+function outPoints(m) {
+  const pts = [];
+  m.elems.forEach(e => T_PTS.forEach(t => pts.push({ x: m.nodes[e.i - 1].x + t * e.L, elem: e.id, t })));
+  return pts;
+}
+const staticCase = (pts, st) => ({
+  pts: pts.map((p, i) => ({ ...p, Mmax: st.M[i], Mmin: st.M[i], Vmax: st.V[i], Vmin: st.V[i] })),
+  react: new Map([...st.react].map(([k, v]) => [k, { max: v, min: v }])),
+});
+
+/* ---- HL-93 envelope from influence lines ----
+   Unit downward load at every output point -> influence values for every output V, M and every support reaction.
+   Influence lines are resampled on a 0.5 ft grid; axle loads are moved along the grid in both directions. */
+const HL93 = { truck: [8, 32, 32], front: 14, rearMin: 14, rearMax: 30, tandem: [25, 25], tandemGap: 4, lane: 0.64, dualHeadway: 50 };
+function hl93Envelope(m, solve, opts) {
+  const posAll = outPoints(m);
+  const seen = new Set(), pos = [];
+  posAll.forEach(p => { const k = p.x.toFixed(6); if (!seen.has(k)) { seen.add(k); pos.push(p); } });
+  const nOut = posAll.length, sup = m.supports;
+  const ilV = Array.from({ length: nOut }, () => new Float64Array(pos.length));
+  const ilM = Array.from({ length: nOut }, () => new Float64Array(pos.length));
+  const ilR = sup.map(() => new Float64Array(pos.length));
+  pos.forEach((p, j) => {
+    const e = m.elems[p.elem - 1];
+    const st = solveState(m, solve, () => 0, { elem: e.id, a: p.t * e.L, F: -1 });   // 1 kip downward
+    for (let i = 0; i < nOut; i++) { ilV[i][j] = st.V[i]; ilM[i][j] = st.M[i]; }
+    sup.forEach((n, k) => ilR[k][j] = st.react.get(n));
+  });
+  const g = 0.5, Ltot = m.length, Ng = Math.floor(Ltot / g + 1e-9) + 1;
+  const px = pos.map(p => p.x);
+  const toGrid = il => {                                         // linear resampling of an influence line on the grid
+    const out = new Float64Array(Ng); let j = 0;
+    for (let k = 0; k < Ng; k++) {
+      const x = Math.min(k * g, Ltot);
+      while (j < px.length - 2 && px[j + 1] < x) j++;
+      const t = (x - px[j]) / ((px[j + 1] - px[j]) || 1);
+      out[k] = il[j] + (il[j + 1] - il[j]) * Math.max(0, Math.min(1, t));
+    }
+    return out;
+  };
+  // axle groups: offsets in grid steps, loads in kips; both directions of travel
+  const gi = d => Math.round(d / g);
+  const groups = { truck: [], tandem: [[[0, gi(HL93.tandemGap)], HL93.tandem]], dual: [] };
+  for (let r = HL93.rearMin; r <= HL93.rearMax; r += 2) {
+    groups.truck.push([[0, gi(HL93.front), gi(HL93.front + r)], HL93.truck]);
+    groups.truck.push([[0, -gi(HL93.front), -gi(HL93.front + r)], HL93.truck]);
+  }
+  const tl = 2 * HL93.front;                                     // dual trucks: 14 ft / 14 ft each, headway >= 50 ft
+  for (let h = HL93.dualHeadway; h <= Ltot; h += 2) for (const sgn of [1, -1]) {
+    const o = [0, HL93.front, tl, tl + h, tl + h + HL93.front, 2 * tl + h].map(d => sgn * gi(d));
+    groups.dual.push([o, [...HL93.truck, ...HL93.truck]]);
+  }
+  const extremes = (r, list) => {                                // max and min of sum(P * IL) over all positions
+    let mx = 0, mn = 0;
+    for (const [off, P] of list) {
+      const lo = -Math.max(...off), hi = Ng - 1 - Math.min(...off);
+      for (let k = lo; k <= hi; k++) {
+        let s = 0;
+        for (let a = 0; a < off.length; a++) { const q = k + off[a]; if (q >= 0 && q < Ng) s += P[a] * r[q]; }
+        if (s > mx) mx = s; if (s < mn) mn = s;
+      }
+    }
+    return [mx, mn];
+  };
+  const laneParts = r => {                                       // 0.64 klf on the adverse parts only (trapezoid rule)
+    let pos = 0, neg = 0;
+    for (let k = 0; k < Ng - 1; k++) {
+      const a = (r[k] + r[k + 1]) / 2 * g;
+      if (a > 0) pos += a; else neg += a;
+    }
+    return [HL93.lane * pos, HL93.lane * neg];
+  };
+  const env = (il, df, useDual) => {
+    const r = toGrid(il), [tMx, tMn] = extremes(r, groups.truck), [dMx, dMn] = extremes(r, groups.tandem), [lMx, lMn] = laneParts(r);
+    const f = df * opts.mpf, i1 = 1 + opts.im;
+    let mx = f * (i1 * Math.max(tMx, dMx) + lMx), mn = f * (i1 * Math.min(tMn, dMn) + lMn);
+    let dual = null;
+    if (useDual) { const [uMx, uMn] = extremes(r, groups.dual); dual = { mx: f * 0.9 * (i1 * uMx + lMx), mn: f * 0.9 * (i1 * uMn + lMn) }; }
+    return { mx, mn, dual };
+  };
+  // negative-moment region: M < 0 under a uniform load on all spans (for the 90% two-truck case)
+  const uni = solveState(m, solve, () => -1, null);
+  const out = posAll.map((p, i) => {
+    const em = env(ilM[i], opts.dfM, opts.dual && uni.M[i] < 0), ev = env(ilV[i], opts.dfV, false);
+    return { ...p, Mmax: em.mx, Mmin: em.dual ? Math.min(em.mn, em.dual.mn) : em.mn, Vmax: ev.mx, Vmin: ev.mn };
+  });
+  const react = new Map(sup.map((n, k) => {
+    const interior = k > 0 && k < sup.length - 1, er = env(ilR[k], opts.dfV, opts.dual && interior);
+    return [n, { max: er.dual ? Math.max(er.mx, er.dual.mx) : er.mx, min: er.mn }];
+  }));
+  return { pts: out, react };
 }
 
 function showSectInfo(m) {
@@ -548,38 +667,44 @@ function showSectInfo(m) {
     (byH.length > 1 ? `<br>Deepest: ${fmt(byH[byH.length - 1])}.` : '');
 }
 
+// max = Σ f·static + f_LL·LL_max, min = Σ f·static + f_LL·LL_min
+function combine(dc, dw, ll, f) {
+  const pts = dc.pts.map((p, i) => {
+    const sV = f.DC * p.Vmax + f.DW * dw.pts[i].Vmax, sM = f.DC * p.Mmax + f.DW * dw.pts[i].Mmax, q = ll.pts[i];
+    return { x: p.x, elem: p.elem, t: p.t, Mmax: sM + f.LL * q.Mmax, Mmin: sM + f.LL * q.Mmin, Vmax: sV + f.LL * q.Vmax, Vmin: sV + f.LL * q.Vmin };
+  });
+  const react = new Map([...dc.react.keys()].map(k => {
+    const s = f.DC * dc.react.get(k).max + f.DW * dw.react.get(k).max, l = ll.react.get(k);
+    return [k, { max: s + f.LL * l.max, min: s + f.LL * l.min }];
+  }));
+  return { pts, react };
+}
+
 function runLocal() {
   model = buildModel();
   showSectInfo(model);
   const lv = loadVals();
-  const base = {
-    DC: solveBeam(model, e => -lv.gamma * e.A),
-    DW: solveBeam(model, () => -lv.wDW),
-    LL: solveBeam(model, () => -lv.wLL),
-  };
-  const combo = (fac) => {
-    const pts = base.DC.pts.map((p, i) => ({
-      x: p.x, elem: p.elem, t: p.t,
-      V: fac.DC * p.V + fac.DW * base.DW.pts[i].V + fac.LL * base.LL.pts[i].V,
-      M: fac.DC * p.M + fac.DW * base.DW.pts[i].M + fac.LL * base.LL.pts[i].M }));
-    const react = new Map([...base.DC.react.keys()].map(k =>
-      [k, fac.DC * base.DC.react.get(k) + fac.DW * base.DW.react.get(k) + fac.LL * base.LL.react.get(k)]));
-    return { pts, react };
-  };
-  local = {
-    DC: base.DC, DW: base.DW, LL: base.LL,
-    'STR-I': combo(lv.f),
-    'SER-I': combo({ DC: 1, DW: 1, LL: 1 }),
-  };
-  // statics check: sum of reactions = total load
+  const t0 = performance.now();
+  const solve = makeSolver(model), pts = outPoints(model);
+  const DC = staticCase(pts, solveState(model, solve, e => -lv.gamma * e.A, null));
+  const DW = staticCase(pts, solveState(model, solve, () => -lv.wDW, null));
+  const LL = hl93Envelope(model, solve, lv);
+  local = { DC, DW, 'LL+IM': LL, 'STR-I': combine(DC, DW, LL, lv.f), 'SER-I': combine(DC, DW, LL, { DC: 1, DW: 1, LL: 1 }) };
   const totDC = model.elems.reduce((s, e) => s + lv.gamma * e.A * e.L, 0);
-  const sumDC = [...local.DC.react.values()].reduce((a, b) => a + b, 0);
-  log(`Check solver: ${model.nodes.length} nodes, ${model.elems.length} elements, ${model.sects.length} sections. ` +
-      `DC total ${totDC.toFixed(2)} k, ΣR ${sumDC.toFixed(2)} k`, Math.abs(totDC - sumDC) < 1e-6 * Math.max(1, totDC) ? 'ok' : 'err');
+  const sumDC = [...DC.react.values()].reduce((a, b) => a + b.max, 0);
+  log(`Check solver: ${model.nodes.length} nodes, ${model.elems.length} elements, ${model.sects.length} sections; ` +
+      `DC total ${totDC.toFixed(2)} k, ΣR ${sumDC.toFixed(2)} k; HL-93 envelope ${(performance.now() - t0).toFixed(0)} ms` +
+      (lv.dual ? ' (incl. 90% two trucks)' : ''), Math.abs(totDC - sumDC) < 1e-6 * Math.max(1, totDC) ? 'ok' : 'err');
   $('jsonPreview').textContent = JSON.stringify(buildRequests(), null, 1);
 }
 
 /* ---------------- MIDAS request bodies ---------------- */
+// Moving-load results are read one load name per table request, so max and min can't be mixed up
+const RESULT_LOADS = ['DC(ST)', 'DW(ST)', 'LLM(MV:max)', 'LLM(MV:min)', 'LLV(MV:max)', 'LLV(MV:min)',
+  'STR-I-M(CB:max)', 'STR-I-M(CB:min)', 'STR-I-V(CB:max)', 'STR-I-V(CB:min)',
+  'SER-I-M(CB:max)', 'SER-I-M(CB:min)', 'SER-I-V(CB:max)', 'SER-I-V(CB:min)'];
+const REACT_LOADS = ['DC(ST)', 'DW(ST)', 'LLV(MV:max)', 'LLV(MV:min)', 'STR-I-V(CB:max)', 'STR-I-V(CB:min)', 'SER-I-V(CB:max)', 'SER-I-V(CB:min)'];
+
 function buildRequests() {
   const m = model || buildModel();
   const lv = loadVals();
@@ -627,29 +752,48 @@ function buildRequests() {
   reqs.push(['POST', '/db/CONS', { Assign: cons }]);
   reqs.push(['POST', '/db/STLD', { Assign: {
     1: { NAME: 'DC', TYPE: 'USER', DESC: 'Girder self weight (gamma*A as beam load)' },
-    2: { NAME: 'DW', TYPE: 'USER', DESC: 'Wearing surface / superimposed' },
-    3: { NAME: 'LL', TYPE: 'USER', DESC: 'Uniform live load (all spans)' } } }]);
+    2: { NAME: 'DW', TYPE: 'USER', DESC: 'Wearing surface / superimposed' } } }]);
   const bm = {};
   m.elems.forEach(e => {
     const items = [];
     const add = (lc, w) => { if (w) items.push({ ID: items.length + 1, LCNAME: lc, CMD: 'BEAM', TYPE: 'UNILOAD', DIRECTION: 'GZ', D: [0, 1], P: [r6(w), r6(w)] }); };
-    add('DC', -lv.gamma * e.A); add('DW', -lv.wDW); add('LL', -lv.wLL);
+    add('DC', -lv.gamma * e.A); add('DW', -lv.wDW);
     if (items.length) bm[e.id] = { ITEMS: items };
   });
   reqs.push(['POST', '/db/BMLD', { Assign: bm }]);
-  const comb = (name, f) => ({ NAME: name, ACTIVE: 'ACTIVE', iTYPE: 0, vCOMB: [
-    { ANAL: 'ST', LCNAME: 'DC', FACTOR: f.DC }, { ANAL: 'ST', LCNAME: 'DW', FACTOR: f.DW }, { ANAL: 'ST', LCNAME: 'LL', FACTOR: f.LL }] });
-  reqs.push(['POST', '/db/LCOM-GEN', { Assign: { 1: comb('STR-I', lv.f), 2: comb('SER-I', { DC: 1, DW: 1, LL: 1 }) } }]);
+
+  // ---- HL-93 moving load (key sets per MIDAS JSON manual / midas-civil library; created with PUT like the library) ----
+  reqs.push(['PUT', '/db/MVCD', { Assign: { 1: { CODE: 'AASHTO LRFD' } } }]);
+  const spanStart = new Set();                                   // first element of every span = "Span Start"
+  { let k = 0; spans.forEach(s => { spanStart.add(k + 1); k += s.n; }); }
+  reqs.push(['PUT', '/db/LLAN', { Assign: { 1: {
+    COMMON: { LL_NAME: 'LANE1', LOAD_DIST: 'LANE', GROUP_NAME: '', SKEW_START: 0, SKEW_END: 0, MOVING: 'BOTH',
+              WHEEL_SPACE: 6, WIDTH: 10, OPT_AUTO_LANE: false, ALLOW_WIDTH: 0 },
+    LANE_ITEMS: m.elems.map(e => ({ ELEM: e.id, ECC: 0, CENT_F: 0, SPAN_START: spanStart.has(e.id) })) } } }]);
+  const veh = (name) => ({ MVLD_CODE: 2, VEHICLE_LOAD_NAME: name, VEHICLE_LOAD_NUM: 1, VEHICLE_TYPE_NAME: name,
+    STANDARD_CODE: 'AASHTO-LRFD', VEH_DEFAULT: { DYN_LOAD_ALLOWANCE: r6(lv.im * 100), CENT_F: false } });
+  reqs.push(['PUT', '/db/MVHL', { Assign: { 1: veh('HL-93TRK'), 2: veh('HL-93TDM') } }]);
+  const mvCase = (name, df, desc) => ({ LCNAME: name, DESC: desc, TYPE: 0, DEFAULT: {
+    SCALE_FACTORS: [lv.mpf, 1, 0.85, 0.65, 0.65, 0.65], COMB_OPTION: 'INDEPENDENT', LANE_FACTOR_TYPE: 1,
+    SUB_LOAD_DATAS: ['HL-93TRK', 'HL-93TDM'].map(v => ({ VEHICLE_TYPE: 'VL', VEHICLE_NAME: v, SCALE_FACTOR: r6(df),
+      MIN_LOADED_LANE: 1, MAX_LOADED_LANE: 1, LANE_NAMES: ['LANE1'] })) } });
+  reqs.push(['PUT', '/db/MVLD', { Assign: { 1: mvCase('LLM', lv.dfM, 'HL-93 x moment DF'), 2: mvCase('LLV', lv.dfV, 'HL-93 x shear DF') } }]);
+  reqs.push(['PUT', '/db/MVCT', { Assign: { 1: {
+    METHOD: 'EXACT', POINT: 'INF', iIGP: 0, iIGPN: 3, PLATE: 'CENTER', FRAME: 'NORMAL',
+    bSTRCALC: false, bCONCURRENT: false, bCONCLINK: false, bCSTRCALC: false,
+    bREAC: true, bRG: false, RGN: '', bDISP: true, bDG: false, DGN: '', bFM: true, bFG: false, FGN: '', bL: false, bLG: false, LGN: '' } } }]);
+
+  const comb = (name, f, mv) => ({ NAME: name, ACTIVE: 'ACTIVE', iTYPE: 0, vCOMB: [
+    { ANAL: 'ST', LCNAME: 'DC', FACTOR: f.DC }, { ANAL: 'ST', LCNAME: 'DW', FACTOR: f.DW }, { ANAL: 'MV', LCNAME: mv, FACTOR: f.LL }] });
+  const one = { DC: 1, DW: 1, LL: 1 };
+  reqs.push(['POST', '/db/LCOM-GEN', { Assign: {
+    1: comb('STR-I-M', lv.f, 'LLM'), 2: comb('STR-I-V', lv.f, 'LLV'), 3: comb('SER-I-M', one, 'LLM'), 4: comb('SER-I-V', one, 'LLV') } }]);
   reqs.push(['POST', '/doc/ANAL', {}]);
-  reqs.push(['POST', '/post/TABLE', { Argument: {
-    TABLE_NAME: 'BeamForce', TABLE_TYPE: 'BEAMFORCE',
-    UNIT: { FORCE: 'KIPS', DIST: 'FT' },
-    COMPONENTS: ['Elem', 'Load', 'Part', 'Shear-z', 'Moment-y'],
-    LOAD_CASE_NAMES: ['DC(ST)', 'DW(ST)', 'LL(ST)', 'STR-I(CB)', 'SER-I(CB)'] } }]);
-  reqs.push(['POST', '/post/TABLE', { Argument: {
-    TABLE_NAME: 'Reaction', TABLE_TYPE: 'REACTIONG',
-    UNIT: { FORCE: 'KIPS', DIST: 'FT' },
-    LOAD_CASE_NAMES: ['DC(ST)', 'DW(ST)', 'LL(ST)', 'STR-I(CB)', 'SER-I(CB)'] } }]);
+  RESULT_LOADS.forEach(L => reqs.push(['POST', '/post/TABLE', { Argument: {
+    TABLE_NAME: 'BeamForce', TABLE_TYPE: 'BEAMFORCE', UNIT: { FORCE: 'KIPS', DIST: 'FT' },
+    COMPONENTS: ['Elem', 'Load', 'Part', 'Shear-z', 'Moment-y'], LOAD_CASE_NAMES: [L] } }]));
+  REACT_LOADS.forEach(L => reqs.push(['POST', '/post/TABLE', { Argument: {
+    TABLE_NAME: 'Reaction', TABLE_TYPE: 'REACTIONG', UNIT: { FORCE: 'KIPS', DIST: 'FT' }, LOAD_CASE_NAMES: [L] } }]));
   return reqs;
 }
 
@@ -709,12 +853,14 @@ async function runMidas() {
     setStatus($('runStatus'), 'Sending model to Civil NX…');
     if ($('newModel').checked) await c.post('/doc/NEW', {});
     const reqs = buildRequests();
-    let forceResp = null, reactResp = null;
+    const tables = { force: {}, react: {} };
+    midasTables = [];
     for (const [method, ep, body] of reqs) {
       if (ep === '/doc/ANAL') {
         await checkModel(c, reqs);
-        setStatus($('runStatus'), 'Running analysis in Civil NX…');
+        setStatus($('runStatus'), 'Running analysis in Civil NX (moving load can take a minute)…');
       }
+      if (ep === '/post/TABLE') setStatus($('runStatus'), 'Reading results: ' + body.Argument.LOAD_CASE_NAMES[0]);
       let r;
       try { r = await c.request(method, ep, body); }
       catch (e) {
@@ -723,15 +869,18 @@ async function runMidas() {
           ($('matSrc').value === 'DB' ? 'If the material is the problem, switch Material source to "User-defined".' : '');
         throw e;
       }
-      if (ep === '/db/SECT' || ep === '/db/MATL') log(`${ep} response: ${JSON.stringify(r).slice(0, 300)}`);
+      if (['/db/SECT', '/db/MATL', '/db/LLAN', '/db/MVHL', '/db/MVLD', '/db/MVCT'].includes(ep)) log(`${ep} response: ${JSON.stringify(r).slice(0, 300)}`);
       if (method !== 'GET' && ep !== '/post/TABLE') {
         const txt = JSON.stringify(r);
         if (txt && txt !== '{}' && /error|fail|invalid|message/i.test(txt)) log(`${ep} response: ${txt.slice(0, 400)}`, 'err');
       }
-      if (ep === '/post/TABLE' && body.Argument.TABLE_TYPE === 'BEAMFORCE') forceResp = r;
-      if (ep === '/post/TABLE' && body.Argument.TABLE_TYPE === 'REACTIONG') reactResp = r;
+      if (ep === '/post/TABLE') {
+        const L = body.Argument.LOAD_CASE_NAMES[0], t = r[body.Argument.TABLE_NAME] || Object.values(r)[0];
+        (body.Argument.TABLE_TYPE === 'BEAMFORCE' ? tables.force : tables.react)[L] = t;
+        if (t) midasTables.push({ name: `${body.Argument.TABLE_TYPE} ${L}`, table: t });
+      }
     }
-    parseMidas(forceResp, reactResp);
+    parseMidas(tables);
     setStatus($('runStatus'), 'Done. MIDAS results loaded.', 'ok');
     draw();
   } catch (e) {
@@ -749,7 +898,8 @@ const NOT_CONNECTED_MSG = 'Civil NX is not connected under this MAPI-Key. In Civ
 async function checkModel(c, reqs) {
   const want = ep => { const r = reqs.find(q => q[1] === ep); return r ? Object.keys(r[2].Assign || {}) : []; };
   const problems = [];
-  for (const [ep, key] of [['/db/MATL', 'MATL'], ['/db/SECT', 'SECT'], ['/db/NODE', 'NODE'], ['/db/ELEM', 'ELEM']]) {
+  for (const [ep, key] of [['/db/MATL', 'MATL'], ['/db/SECT', 'SECT'], ['/db/NODE', 'NODE'], ['/db/ELEM', 'ELEM'],
+                           ['/db/LLAN', 'LLAN'], ['/db/MVHL', 'MVHL'], ['/db/MVLD', 'MVLD'], ['/db/MVCT', 'MVCT']]) {
     let got = {};
     try { const r = await c.get(ep); got = r[key] || Object.values(r)[0] || {}; }
     catch (e) { problems.push(`${ep}: could not read back (${e.message})`); continue; }
@@ -758,41 +908,57 @@ async function checkModel(c, reqs) {
     if (missing.length) problems.push(`${ep}: ${missing.length} of ${want(ep).length} not stored (e.g. ID ${missing[0]})`);
     if (ep === '/db/MATL' && got['1']) log('stored material 1: ' + JSON.stringify(got['1']).slice(0, 400));
     if (ep === '/db/SECT' && got['1']) log('stored section 1: ' + JSON.stringify(got['1']).slice(0, 400));
+    if (['/db/LLAN', '/db/MVHL', '/db/MVLD', '/db/MVCT'].includes(ep) && got['1']) log(`stored ${key} 1: ` + JSON.stringify(got['1']).slice(0, 400));
   }
   if (problems.length) throw new Error('Civil NX did not store everything that was sent: ' + problems.join('; ') +
     '. See the log for what was stored.' + ($('matSrc').value === 'DB' ? ' (Material: try source "User-defined".)' : ''));
 }
 
-function parseMidas(forceResp, reactResp) {
-  const t = forceResp && (forceResp.BeamForce || Object.values(forceResp)[0]);
-  if (!t || !t.HEAD || !t.DATA) throw new Error('BEAMFORCE table came back empty: ' + JSON.stringify(forceResp).slice(0, 300));
-  const iE = col(t.HEAD, ['elem']), iL = col(t.HEAD, ['load']), iP = col(t.HEAD, ['part']);
-  const iV = col(t.HEAD, ['shear-z', 'shearz']), iM = col(t.HEAD, ['moment-y', 'momenty']);
-  if ([iE, iL, iP, iV, iM].some(i => i < 0)) throw new Error('Unexpected table columns: ' + t.HEAD.join(', '));
-  midasRaw = t;
-  midasRes = {};
-  let skipped = 0;
-  t.DATA.forEach(r => {
-    const ck = caseKey(r[iL]), pos = partPos(r[iP]), e = model.elems[+r[iE] - 1];
-    if (!ck || pos === null || !e) { skipped++; return; }
-    (midasRes[ck] = midasRes[ck] || []).push({
-      x: model.nodes[e.i - 1].x + pos * e.L, V: parseFloat(r[iV]), M: parseFloat(r[iM]), elem: e.id, t: pos, part: r[iP] });
-  });
-  Object.values(midasRes).forEach(a => a.sort((p, q) => p.x - q.x || p.t - q.t));
-  log(`MIDAS beam forces: ${t.DATA.length} rows (${t.FORCE || '?'}, ${t.DIST || '?'})` + (skipped ? `, ${skipped} rows skipped` : ''), 'ok');
-
-  // reactions
-  midasRes._react = {};
-  const rt = reactResp && (reactResp.Reaction || Object.values(reactResp)[0]);
-  if (rt && rt.HEAD) {
-    const iN = col(rt.HEAD, ['node']), iLd = col(rt.HEAD, ['load']), iFz = col(rt.HEAD, ['fz']);
-    if (iN >= 0 && iLd >= 0 && iFz >= 0) rt.DATA.forEach(r => {
-      const ck = caseKey(r[iLd]); if (!ck) return;
-      (midasRes._react[ck] = midasRes._react[ck] || {})[+r[iN]] = parseFloat(r[iFz]);
+// One table per load name -> { case: { pts: [{x,elem,t,Mmax,Mmin,Vmax,Vmin}] }, _react: { case: { node: {max,min} } } }
+function parseMidas(tables) {
+  const rows = (t, label) => {
+    if (!t || !t.HEAD || !t.DATA) throw new Error(`Result table for ${label} came back empty. Check the log; in Civil NX look at Results > Result Tables.`);
+    const iE = col(t.HEAD, ['elem']), iP = col(t.HEAD, ['part']), iV = col(t.HEAD, ['shear-z', 'shearz']), iM = col(t.HEAD, ['moment-y', 'momenty']);
+    if ([iE, iP, iV, iM].some(i => i < 0)) throw new Error(`Unexpected columns in ${label}: ` + t.HEAD.join(', '));
+    const map = new Map();
+    t.DATA.forEach(r => {
+      const pos = partPos(r[iP]), e = model.elems[+r[iE] - 1];
+      if (pos === null || !e) return;
+      map.set(e.id + '|' + pos, { V: parseFloat(r[iV]), M: parseFloat(r[iM]) });
     });
-  }
+    return map;
+  };
+  const F = {};
+  RESULT_LOADS.forEach(L => F[L] = rows(tables.force[L], L));
+  const pts = outPoints(model);
+  const build = (mMax, mMin, vMax, vMin) => ({ pts: pts.map(p => {
+    const k = p.elem + '|' + p.t, g = (L, q) => { const v = F[L].get(k); return v ? v[q] : NaN; };
+    return { ...p, Mmax: g(mMax, 'M'), Mmin: g(mMin, 'M'), Vmax: g(vMax, 'V'), Vmin: g(vMin, 'V') };
+  }) });
+  midasRes = {
+    DC: build('DC(ST)', 'DC(ST)', 'DC(ST)', 'DC(ST)'),
+    DW: build('DW(ST)', 'DW(ST)', 'DW(ST)', 'DW(ST)'),
+    'LL+IM': build('LLM(MV:max)', 'LLM(MV:min)', 'LLV(MV:max)', 'LLV(MV:min)'),
+    'STR-I': build('STR-I-M(CB:max)', 'STR-I-M(CB:min)', 'STR-I-V(CB:max)', 'STR-I-V(CB:min)'),
+    'SER-I': build('SER-I-M(CB:max)', 'SER-I-M(CB:min)', 'SER-I-V(CB:max)', 'SER-I-V(CB:min)'),
+  };
+  const missing = midasRes.DC.pts.filter(p => !isFinite(p.Mmax)).length;
+  log(`MIDAS beam forces: ${RESULT_LOADS.length} tables read` + (missing ? `, ${missing} output points without a row` : ''), missing ? 'err' : 'ok');
 
-  // sign-convention check against the check solver (DC case)
+  // reactions (FZ, +up)
+  const R = {};
+  REACT_LOADS.forEach(L => {
+    const t = tables.react[L], m = new Map();
+    if (t && t.HEAD) {
+      const iN = col(t.HEAD, ['node']), iFz = col(t.HEAD, ['fz']);
+      if (iN >= 0 && iFz >= 0) t.DATA.forEach(r => m.set(+r[iN], parseFloat(r[iFz])));
+    }
+    R[L] = m;
+  });
+  const rc = (a, b) => Object.fromEntries(model.supports.map(n => [n, { max: R[a].get(n), min: R[b].get(n) }]));
+  midasRes._react = { DC: rc('DC(ST)', 'DC(ST)'), DW: rc('DW(ST)', 'DW(ST)'), 'LL+IM': rc('LLV(MV:max)', 'LLV(MV:min)'),
+    'STR-I': rc('STR-I-V(CB:max)', 'STR-I-V(CB:min)'), 'SER-I': rc('SER-I-V(CB:max)', 'SER-I-V(CB:min)') };
+
   autoSign();
   $('btnCsv').disabled = false;
 }
@@ -800,17 +966,25 @@ function parseMidas(forceResp, reactResp) {
 function autoSign() {
   const a = midasRes && midasRes.DC, b = local && local.DC;
   if (!a || !b) return;
-  const key = p => p.elem + '|' + p.t;
-  const lm = new Map(b.pts.map(p => [key(p), p]));
   let sv = 0, sm = 0;
-  a.forEach(p => { const q = lm.get(key(p)); if (q) { sv += p.V * q.V; sm += p.M * q.M; } });
+  a.pts.forEach((p, i) => { const q = b.pts[i]; if (isFinite(p.Mmax)) { sv += p.Vmax * q.Vmax; sm += p.Mmax * q.Mmax; } });
   $('flipV').checked = sv < 0; $('flipM').checked = sm < 0;
   const msgs = [];
   if (sv < 0) msgs.push('shear');
   if (sm < 0) msgs.push('moment');
   $('signNote').textContent = msgs.length
-    ? `MIDAS ${msgs.join(' and ')} sign is opposite to the check solver's convention (sagging +, shear + = left side up), so it was flipped for plotting. Untick to see raw MIDAS signs.`
+    ? `MIDAS ${msgs.join(' and ')} sign is opposite to the check solver's convention (sagging +, shear + = left side up), so it was flipped for plotting (max and min swap). Untick to see raw MIDAS signs.`
     : 'MIDAS signs match the check solver convention (sagging +, shear + = left side up).';
+}
+
+// MIDAS envelope in the check-solver sign convention: flipping a quantity negates it and swaps max/min
+function midasView(ck) {
+  const c = midasRes && midasRes[ck];
+  if (!c) return null;
+  const fv = $('flipV').checked, fm = $('flipM').checked;
+  return { pts: c.pts.map(p => ({ ...p,
+    Mmax: fm ? -p.Mmin : p.Mmax, Mmin: fm ? -p.Mmax : p.Mmin,
+    Vmax: fv ? -p.Vmin : p.Vmax, Vmin: fv ? -p.Vmax : p.Vmin })) };
 }
 
 /* ---------------- plotting ---------------- */
@@ -842,65 +1016,75 @@ function drawElevation() {
 function draw() {
   drawElevation();
   const ck = $('caseSel').value || 'STR-I';
-  const flipV = $('flipV').checked ? -1 : 1, flipM = $('flipM').checked ? -1 : 1;
+  const mv = midasView(ck), lc = local && local[ck];
+  const css = v => getComputedStyle(document.body).getPropertyValue(v);
+  const isEnv = c => c && c.pts.some(p => Math.abs(p.Mmax - p.Mmin) > 1e-9 || Math.abs(p.Vmax - p.Vmin) > 1e-9);
   const traces = q => {
     const out = [];
-    if (midasRes && midasRes[ck]) out.push({
-      x: midasRes[ck].map(p => p.x), y: midasRes[ck].map(p => p[q] * (q === 'V' ? flipV : flipM)),
-      mode: 'lines+markers', marker: { size: 3 }, line: { color: getComputedStyle(document.body).getPropertyValue('--midas'), width: 2 },
-      name: 'MIDAS', hovertemplate: `x=%{x:.2f} ft<br>${q}=%{y:.2f}<extra>MIDAS</extra>` });
-    if (local && local[ck]) out.push({
-      x: local[ck].pts.map(p => p.x), y: local[ck].pts.map(p => p[q]),
-      mode: 'lines', line: { color: getComputedStyle(document.body).getPropertyValue('--local'), width: 2, dash: 'dash' },
-      name: 'Check', hovertemplate: `x=%{x:.2f} ft<br>${q}=%{y:.2f}<extra>Check</extra>` });
+    const add = (c, src, color, dash) => {
+      if (!c) return;
+      const keys = isEnv(c) ? [q + 'max', q + 'min'] : [q + 'max'];
+      keys.forEach(k => out.push({ x: c.pts.map(p => p.x), y: c.pts.map(p => p[k]), mode: src === 'MIDAS' ? 'lines+markers' : 'lines',
+        marker: { size: 3 }, line: { color, width: 2, dash }, name: `${src} ${keys.length > 1 ? k.slice(1) : ''}`,
+        hovertemplate: `x=%{x:.2f} ft<br>${q}=%{y:.2f}<extra>${src}${keys.length > 1 ? ' ' + k.slice(1) : ''}</extra>` }));
+    };
+    add(mv, 'MIDAS', css('--midas'), 'solid');
+    add(lc, 'Check', css('--local'), 'dash');
     return out;
   };
   const supShapes = model ? model.supports.map(n => ({ type: 'line', x0: model.nodes[n - 1].x, x1: model.nodes[n - 1].x, yref: 'paper', y0: 0, y1: 1, line: { color: '#c3ccd6', width: 1, dash: 'dot' } })) : [];
   const lay = (title) => ({ margin: { l: 60, r: 10, t: 28, b: 35 }, title: { text: title, font: { size: 13 } }, showlegend: false,
     xaxis: { title: 'x (ft)' }, yaxis: { zeroline: true, zerolinecolor: '#1d2733' }, shapes: supShapes });
-  Plotly.react('plotV', traces('V'), lay(`Shear V (kips): ${ck}`), PLOT_CFG);
-  Plotly.react('plotM', traces('M'), lay(`Moment M (kip-ft, sagging +): ${ck}`), PLOT_CFG);
-  drawSummary(ck, flipV, flipM);
+  const envTxt = isEnv(lc) ? ' envelope (max/min)' : '';
+  Plotly.react('plotV', traces('V'), lay(`Shear V (kips): ${ck}${envTxt}`), PLOT_CFG);
+  Plotly.react('plotM', traces('M'), lay(`Moment M (kip-ft, sagging +): ${ck}${envTxt}`), PLOT_CFG);
+  drawSummary(ck);
 }
 
-function drawSummary(ck, flipV, flipM) {
+function drawSummary(ck) {
   if (!local) { $('summary').innerHTML = ''; return; }
-  const ext = (arr, k, s = 1) => arr && arr.length ? [Math.max(...arr.map(p => p[k] * s)), Math.min(...arr.map(p => p[k] * s))] : [NaN, NaN];
   const fmt = v => isFinite(v) ? v.toFixed(1) : '–';
   const diff = (a, b) => isFinite(a) && isFinite(b) && Math.abs(b) > 1e-9 ? (((a - b) / Math.abs(b) * 100).toFixed(2).replace(/^-0\.00$/, '0.00')) + '%' : '–';
-  let html = '<table><thead><tr><th>Case</th><th>+M max</th><th>−M max</th><th>|V| max</th><th>MIDAS +M</th><th>MIDAS −M</th><th>MIDAS |V|</th><th>Δ M+</th><th>Δ M−</th></tr></thead><tbody>';
+  const ext = c => {
+    if (!c) return [NaN, NaN, NaN];
+    const ok = c.pts.filter(p => isFinite(p.Mmax));
+    if (!ok.length) return [NaN, NaN, NaN];
+    return [Math.max(...ok.map(p => p.Mmax)), Math.min(...ok.map(p => p.Mmin)), Math.max(...ok.map(p => Math.max(Math.abs(p.Vmax), Math.abs(p.Vmin))))];
+  };
+  let html = '<table><thead><tr><th>Case</th><th>+M</th><th>−M</th><th>|V|</th><th>MIDAS +M</th><th>MIDAS −M</th><th>MIDAS |V|</th><th>Δ +M</th><th>Δ −M</th><th>Δ |V|</th></tr></thead><tbody>';
   CASES.forEach(c => {
-    const L = local[c].pts, Mm = midasRes && midasRes[c];
-    const [lmx, lmn] = ext(L, 'M'), lv = Math.max(...L.map(p => Math.abs(p.V)));
-    const [mmx, mmn] = ext(Mm, 'M', flipM);
-    const mv = Mm ? Math.max(...Mm.map(p => Math.abs(p.V))) : NaN;
-    html += `<tr${c === ck ? ' style="background:#eef4fb"' : ''}><td>${c}</td><td>${fmt(lmx)}</td><td>${fmt(lmn)}</td><td>${fmt(lv)}</td>` +
-      `<td>${fmt(mmx)}</td><td>${fmt(mmn)}</td><td>${fmt(mv)}</td><td>${diff(mmx, lmx)}</td><td>${diff(mmn, lmn)}</td></tr>`;
+    const [a1, a2, a3] = ext(local[c]), [b1, b2, b3] = ext(midasView(c));
+    html += `<tr${c === ck ? ' style="background:#eef4fb"' : ''}><td>${c}</td><td>${fmt(a1)}</td><td>${fmt(a2)}</td><td>${fmt(a3)}</td>` +
+      `<td>${fmt(b1)}</td><td>${fmt(b2)}</td><td>${fmt(b3)}</td><td>${diff(b1, a1)}</td><td>${diff(b2, a2)}</td><td>${diff(b3, a3)}</td></tr>`;
   });
   html += '</tbody></table>';
-  // reactions
   const mr = midasRes && midasRes._react && midasRes._react[ck];
-  html += `<h2 style="margin-top:12px">Reactions: ${ck} (kips, +up)</h2><table><thead><tr><th>Support</th><th>x (ft)</th><th>Check</th><th>MIDAS FZ</th></tr></thead><tbody>`;
+  html += `<h2 style="margin-top:12px">Reactions: ${ck} (kips, +up)</h2><table><thead><tr><th>Support</th><th>x (ft)</th><th>Check max</th><th>Check min</th><th>MIDAS max</th><th>MIDAS min</th></tr></thead><tbody>`;
   model.supports.forEach((n, i) => {
-    html += `<tr><td>${i + 1} (node ${n})</td><td>${model.nodes[n - 1].x.toFixed(1)}</td><td>${fmt(local[ck].react.get(n))}</td><td>${mr && mr[n] !== undefined ? fmt(mr[n]) : '–'}</td></tr>`;
+    const r = local[ck].react.get(n), q = mr && mr[n];
+    html += `<tr><td>${i + 1} (node ${n})</td><td>${model.nodes[n - 1].x.toFixed(1)}</td><td>${fmt(r.max)}</td><td>${fmt(r.min)}</td>` +
+      `<td>${q ? fmt(q.max) : '–'}</td><td>${q ? fmt(q.min) : '–'}</td></tr>`;
   });
-  html += '</tbody></table><div class="note">Units: kips, ft. Check solver = Euler-Bernoulli direct stiffness on the same stepped elements (shear deformation off in both). Differences should be near 0%. A large Δ means a units, load or sign-mapping issue worth investigating.</div>';
+  html += '</tbody></table><div class="note">Units: kips, ft. Δ = (MIDAS − check)/|check|. Check solver: Euler-Bernoulli direct stiffness on the same stepped elements (shear deformation off in both). DC and DW should agree to ~0%. LL+IM: the check moves the HL-93 axles over influence lines resampled at 0.5 ft (rear truck spacing in 2 ft steps), so small differences from MIDAS\'s moving-load solver are expected, mostly in shear right at a section (the influence-line jump is smoothed over one output-point interval); large ones mean the vehicle, lane or factor setup differs. Moments use the moment DF, shears and reactions the shear DF.</div>';
   $('summary').innerHTML = html;
 }
 
 function downloadCsv() {
-  if (!midasRaw) return;
+  if (!midasTables.length) return;
   const esc = v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : v;
-  const lines = [midasRaw.HEAD.map(esc).join(','), ...midasRaw.DATA.map(r => r.map(esc).join(','))];
+  const lines = [];
+  midasTables.forEach(({ name, table }) => {
+    lines.push(esc(name), table.HEAD.map(esc).join(','), ...table.DATA.map(r => r.map(esc).join(',')), '');
+  });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }));
-  a.download = 'midas_beam_forces.csv'; a.click();
+  a.download = 'midas_results.csv'; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 /* ---------------- wiring ---------------- */
 function refreshGeometry() {
-  try { midasRes = null; midasRaw = null; $('btnCsv').disabled = true; $('signNote').textContent = '';
+  try { midasRes = null; midasTables = []; $('btnCsv').disabled = true; $('signNote').textContent = '';
         runLocal(); draw(); }
   catch (e) { log(e.message, 'err'); }
 }
@@ -932,6 +1116,7 @@ function init() {
   $('btnMidas').onclick = runMidas;
   $('btnCsv').onclick = downloadCsv;
   ['caseSel', 'flipV', 'flipM'].forEach(id => $(id).addEventListener('change', draw));
+  $('caseSel').value = 'STR-I';
   if (typeof Plotly === 'undefined') { log('Plotly did not load (no internet / CDN blocked). Diagrams unavailable.', 'err'); return; }
   refreshGeometry();
   log('Ready. Enter Base URL + MAPI-Key, click Verify, then Build in Civil NX.');

@@ -161,3 +161,46 @@ failure ("make Property"), which happened with the rectangular SB section.
   sections; if not, the log now shows MIDAS's reply to `/db/SECT`.
 ### Other copies
 - `apps/continuous-beam.html` in mlococo88/MIDAS_Civil_NX_References: updated the same way.
+
+## 2026-11-17 — MCB6: HL-93 moving load replaces the uniform static LL (engineer request)
+Engineer confirmed the MCB5 build ran end to end in Civil NX ("That worked"), then asked for the moving-load analysis.
+### Where
+- `apps/midas-continuous-beam/index.html`: Loads card (LL klf input `wLL` removed; new `dfM`, `dfV`, `imPct`, `mpf`, `dualTruck`;
+  note text), `CASES` (LL → LL+IM), `FIELDS` (+ `fieldVal` / `setFieldVal` for the checkbox), `loadVals`, the whole check-solver
+  block (`ke`, `feqUniform`, new `feqPoint`, `makeSolver` (LU once), `solveState`, `outPoints`, `staticCase`, `HL93`, `hl93Envelope`,
+  `combine`, `runLocal`), `buildRequests` (+ `RESULT_LOADS`, `REACT_LOADS`), `runMidas` table collection, `checkModel` list,
+  `parseMidas`, `autoSign`, new `midasView`, `draw`, `drawSummary`, `downloadCsv`.
+### Before / after (§4 callout)
+- **Live load.** Before: static uniform `LL` = 0.64 klf on all spans (a user input), in STR-I/SER-I. After: HL-93 moving load,
+  AASHTO LRFD 9th Ed. 3.6.1.2: design truck 8/32/32 kips, 14 ft, rear spacing 14–30 ft (3.6.1.2.2); design tandem 25/25 kips at
+  4 ft (3.6.1.2.3); design lane 0.64 klf (3.6.1.2.4); truck and tandem each with lane, taken separately (3.6.1.3.1); IM 33% on
+  truck/tandem only (3.6.2.1, Table 3.6.2.1-1); × distribution factor (moment DF for M; shear DF for V and reactions) × m (default
+  1.0, 3.6.1.1.2: m not applied with approximate DFs). 90% two trucks (≥50 ft headway) + 90% lane for negative moment between
+  contraflexure points and interior reactions (3.6.1.3.1): check solver only, optional, because Civil NX needs Lane Supports
+  (`/db/MLSP`, format not yet known) — stated in the tool.
+- **Combinations.** Before: STR-I = 1.25 DC + 1.50 DW + 1.75 LL (static), SER-I = 1.0 each. After: same factors on LL+IM, as
+  envelopes: max = static + f·LL_max, min = static + f·LL_min; in Civil NX STR-I-M / STR-I-V / SER-I-M / SER-I-V (moving case LLM or LLV
+  with ANAL "MV"). No minimum (0.90 / 0.65) DC/DW factors — stated in the tool.
+- **Civil NX requests (new, all PUT):** `/db/MVCD` {CODE "AASHTO LRFD"}; `/db/LLAN` LANE1 on all elements (ECC 0, WHEEL_SPACE 6 ft,
+  WIDTH 10 ft, SPAN_START on the first element of each span); `/db/MVHL` HL-93TRK and HL-93TDM (MVLD_CODE 2, STANDARD_CODE
+  "AASHTO-LRFD", DYN_LOAD_ALLOWANCE = IM %); `/db/MVLD` LLM and LLV (TYPE 0, SCALE_FACTORS [m, 1, 0.85, 0.65, 0.65, 0.65],
+  INDEPENDENT, one lane, vehicle SCALE_FACTOR = DF); `/db/MVCT` (EXACT, POINT "INF", 3 points per element, reactions /
+  displacements / forces on). Formats from the MIDAS JSON manual (Vehicles – AASHTO LRFD, Moving Load Cases, Moving Load Analysis
+  Control) and the midas-civil library (MVCD, LLAN). Results read one load name per `/post/TABLE` request (14 beam-force, 8 reaction).
+- **Check solver.** Influence lines from unit loads at every output point (5 per element), resampled on a 0.5 ft grid; axle groups
+  moved over the grid in both directions; rear spacing in 2 ft steps; lane load on the adverse parts (trapezoid rule).
+- **Saved data:** `cbeam.inputs.v2` gains `dfM`, `dfV`, `imPct`, `mpf`, `dualTruck`; an old `wLL` value is ignored (left in place).
+### Check cases (check solver; DF = m = 1)
+- Single 100 ft span, IM 33%: truck M = 72(50 − 2.333)²/100 − 8·14 = 1523.9 k-ft; lane 0.64·100²/8 = 800; LL+IM = 1.33·1523.9 + 800 =
+  2826.8 hand → 2824.8 app (max over output points 1.25 ft apart; truck peak at 47.67 ft). End shear: truck 32 + 32·0.86 + 8·0.72 =
+  65.28, lane 32 → 1.33·65.28 + 32 = 118.82 hand = 118.82 app.
+- Two equal 100 ft spans, IM 0: pier M (truck/tandem + lane) −1466.4 k-ft (lane part −0.64·100²/8 = −800); interior reaction 151.1 k;
+  with the 90% two-truck option −1918.3 k-ft and 174.8 k.
+### How verified
+- The two checks above in headless Chrome. Full mocked Civil NX round trip (DB data stored/read back, 22 tables answered from the check
+  solver with the moment sign reversed): all requests sent, sign flip detected with max/min swapped, Δ = 0.00 % in every case and
+  reaction; 0 console errors. `tests/check-syntax.mjs` passes.
+- **Needs a live run:** that Civil NX accepts the vehicle names HL-93TRK / HL-93TDM, MVCT POINT "INF", ANAL "MV" in LCOM-GEN; and how
+  close its moving-load envelope is to the check (HL-93TRK is assumed to include the lane load, as the Civil NX HL-93 vehicles do).
+### Open items
+- Lane Supports (`/db/MLSP`, `/db/MLSR`) for the 90% two-truck case in Civil NX; fatigue truck; pedestrian load.

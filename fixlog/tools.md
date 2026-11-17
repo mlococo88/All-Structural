@@ -142,3 +142,9 @@
 - **Before:** `MIDAS Civil NX API: Continuous Beam (demo)` / "Variable-depth (haunched) continuous beam built in MIDAS Civil NX through its API".
 - **After:** `MIDAS Civil NX API: Continuous I-Girder (demo)` / "Variable-depth (haunched) steel I-girder built in MIDAS Civil NX through its API". Link and tags unchanged.
 - **Formulas, factors, units, code references:** none. **Saved data:** none. **How verified:** see the PR. **Other copies:** none. **Open items:** none.
+
+## 2026-11-17 — PR: claude/midas-beam-hl93 (MCB6) — card text: HL-93 moving load   [display only]
+- **Where:** card `href="apps/midas-continuous-beam/index.html"`.
+- **Before:** "…pulls beam forces and reactions, and plots shear and moment diagrams against a built-in stiffness solver."
+- **After:** "…runs an HL-93 moving-load analysis, pulls beam forces and reactions, and plots shear and moment envelopes against a built-in stiffness / influence-line solver."
+- **Formulas, factors, units, code references:** none on this page. **Saved data:** none. **How verified:** see the PR.
