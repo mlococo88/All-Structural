@@ -376,6 +376,11 @@
     const isTr = gr.S.kind === 'crawler', y0 = -hA * 0.35;
     F.push(txt([r0, y0], `${gr.mode === 'rigid' ? 'Rigid body (entered weights and CGs)' : 'ESTIMATE (bounding): verify with the manufacturer\'s outrigger calculator'}; V = ${fmt(s.V, 0)} lb at this slew${gr.mode === 'rigid' ? `, resultant X = ${fmt(s.X, 2)} ft, Y = ${fmt(s.Y, 2)} ft` : ''}`, { size: 0.72, assumed: gr.mode !== 'rigid', v: 'w.V', val: s.V, src: 'engine' }));
     gr.max.forEach((mx, i) => F.push({ t: 'text', at: [r0, y0], off: [0, -1.25 * (i + 1)], size: 0.72, s: `${mx.name} (${mx.id}): max ${isTr ? `V_t ${fmt(mx.load, 0)} lb, q_max ${fmt(mx.q, 0)} psf` : fmt(mx.load, 0) + ' lb'} at θ ${fmt(mx.theta, 1)}°, R ${fmt(mx.R, 2)} ft${mx === gr.gov ? ' (governing)' : ''}`, v: 'max.' + mx.id, val: mx.load, src: 'engine', bold: mx === gr.gov }));
+    // 2026-11-17 (QA): entered weights far below the file's gross working weight (placeholders?): flagged, nothing changed
+    const gw = window.CranePickGround && window.CranePickGround.fileGross ? window.CranePickGround.fileGross(m.c) : null, gwAt = gw && window.CranePickGround.fileGrossAt ? window.CranePickGround.fileGrossAt(m.c) : null;
+    if (gr.mode === 'rigid' && isNum(gw) && gw > 0) { const sumE = [inp.Wc, inp.Wu, inp.Wb, inp.Wcw].filter(isNum).reduce((a, b) => a + b, 0);
+      if (sumE < 0.8 * gw) F.push({ t: 'text', at: [r0, y0], off: [0, -1.25 * (gr.max.length + 1.4)], size: 0.74, warn: true, assumed: true,
+        s: `CHECK THE ENTERED WEIGHTS: carrier + upperworks + boom + counterweight = ${fmt(sumE, 0)} lb, ${fmt(100 * sumE / gw, 0)} % of the file's gross working weight ${fmt(gw, 0)} lb${gwAt && gwAt.page != null ? ' (p. ' + gwAt.page + ')' : ''}` }); }
     return { prims: F, scale: true, title: `Weights and CGs used for the ${isTr ? 'track' : 'outrigger'} loads (C4)` };
   }
 
@@ -402,7 +407,7 @@
         const xl = at[0] + ox - (a === 1 ? w0 / 2 : a === 2 ? w0 : 0); bb.x0 = Math.min(bb.x0, xl); bb.x1 = Math.max(bb.x1, xl + w0); bb.y0 = Math.min(bb.y0, at[1] + oy - fs / k); bb.y1 = Math.max(bb.y1, at[1] + oy + fs / k); });
       k = Math.min((W - 2 * pad) / Math.max(bb.x1 - bb.x0, 1e-6), (Hmax - 2 * pad) / Math.max(bb.y1 - bb.y0, 1e-6)); }
     const Ht = Math.ceil((bb.y1 - bb.y0) * k + 2 * pad), X = x => +(pad + (x - bb.x0) * k).toFixed(1), Y = y => +(Ht - pad - (y - bb.y0) * k).toFixed(1);
-    const out = [], col = c => COL[c] || '#334155';
+    const out = [], dimL = [], col = c => COL[c] || '#334155';
     const stroke = c => ({ grid: 0.6, col: 0.9, colUse: 1.2, use: 2.4, boomL: 2.6, ground: 1.4, zone: 1, dim: 0.8, tail: 1, 'thr-caution': 1.1, 'thr-critical': 1.1, 'thr-limit': 1.3, 'thr-tandem': 1.1 })[c] || 1.3;
     const dash = c => ({ tail: '6 4', zone: '2 3', cwopen: '4 3', 'thr-caution': '5 3', 'thr-critical': '7 3 2 3', 'thr-limit': '8 3', 'thr-tandem': '3 3', axis: '', grid: '' })[c] || '';
     const dAttr = c => dash(c) ? ` stroke-dasharray="${dash(c)}"` : '';
@@ -430,12 +435,19 @@
       else if (p.t === 'dim') { const x1 = X(p.a[0]), y1 = Y(p.a[1]), x2 = X(p.b[0]), y2 = Y(p.b[1]), L = Math.hypot(x2 - x1, y2 - y1) || 1, ux = (x2 - x1) / L, uy = (y2 - y1) / L, t = 4;
         out.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${COL.dim}" stroke-width="0.8"/><path d="M${x1 - uy * t} ${y1 + ux * t}L${x1 + uy * t} ${y1 - ux * t}M${x2 - uy * t} ${y2 + ux * t}L${x2 + uy * t} ${y2 - ux * t}" stroke="${COL.dim}" stroke-width="1"/>`);
         const fs = fs0 * (p.small ? 0.72 : 0.8), vert = Math.abs(uy) > Math.abs(ux), mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
-        out.push(vert ? label(mx + (p.side === -1 ? -5 : 5), my + fs / 3, p.s, p, fs, p.side === -1 ? 2 : 0) : label(mx, my - 4, p.s, p, fs, 1)); }
+        const lx = vert ? mx + (p.side === -1 ? -5 : 5) : mx, ly = vert ? my + fs / 3 : my - 4, an = vert ? (p.side === -1 ? 2 : 0) : 1;
+        dimL.push({ p, fs, x: lx, y: ly, a: an, dim: true }); }
     });
+    // 2026-11-17 (QA): labels never overlap: dimension labels first, then the texts; a label that would overlap one already placed moves
+    // by 1.25 text heights (down, up, down 2, up 2, …; stacks keep their order) to the first free place. The geometry does not move.
+    const placed = [], boxOf = q => { const srcS = q.p.src && q.p.src !== 'engine' && (q.p.t === 'dim' || (q.p.v && !/^\w+\./.test(q.p.v))) ? ` [${q.p.src}]` : '', w = tw(q.p.s + srcS, q.fs), x0 = q.a === 1 ? q.x - w / 2 : q.a === 2 ? q.x - w : q.x; return [x0 - 1, q.y - q.fs * 0.95, x0 + w + 1, q.y + q.fs * 0.3]; };
+    const hit = b => placed.some(c => b[0] < c[2] && b[2] > c[0] && b[1] < c[3] && b[3] > c[1]);
+    const settle = q => { const y0 = q.y; for (let i = 0; i < 24; i++) { const st = i === 0 ? 0 : (i % 2 ? 1 : -1) * Math.ceil(i / 2) * 1.25 * q.fs; q.y = y0 + st; if (i && (q.y > Ht - 2 || q.y < q.fs)) continue; const b = boxOf(q); if (!hit(b)) { placed.push(b); return; } } q.y = y0; placed.push(boxOf(q)); };
+    dimL.forEach(q => { settle(q); out.push(label(q.x, q.y, q.p.s, q.p, q.fs, q.a)); });
     const tl = fig.prims.filter(p => p.t === 'text').map(p => { const fs = fs0 * (p.size || 0.9); return { p, fs, x: X(p.at[0]) + ((p.off && p.off[0]) || 0) * fs, y: Y(p.at[1]) - ((p.off && p.off[1]) || 0) * fs }; });
     // labels of one stack (values that can coincide, e.g. block top / hook / load bottom): kept 1.25 text heights apart, top down
     [...new Set(tl.filter(q => q.p.stack).map(q => q.p.stack))].forEach(sk => { let last = -Infinity; tl.filter(q => q.p.stack === sk).sort((a, b2) => a.y - b2.y).forEach(q => { q.y = Math.max(q.y, last + q.fs * 1.25); last = q.y; }); });
-    tl.forEach(q => out.push(label(q.x, q.y, q.p.s, q.p, q.fs, q.p.a || 0)));
+    tl.forEach(q => { q.a = q.p.a || 0; settle(q); out.push(label(q.x, q.y, q.p.s, q.p, q.fs, q.a)); });
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${Ht}" width="${W}" height="${Ht}" role="img" aria-label="${esc(fig.title || 'crane figure')}" font-family="Segoe UI, Roboto, Arial, sans-serif" style="max-width:100%;height:auto;background:#fff">`
       + (o.legend !== false && fig.legend ? '' : '') + out.join('') + '</svg>';
   }

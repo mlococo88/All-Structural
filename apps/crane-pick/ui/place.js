@@ -87,7 +87,10 @@
      to the setup's selected pick, else its first pick (the boom to the pick point, the load L × W at the hook); a setup without a pick
      shows the upperworks over the carrier front, no boom. Small zoom (tail-swing radius under 40 px on the screen): "simple" detail. */
   const CG = () => window.CranePickCraneGfx;
-  const SYM_G = ['carrier', 'outrigger', 'upper', 'cwt', 'boom', 'hook', 'load'];
+  const SYM_G = ['mat', 'carrier', 'outrigger', 'upper', 'cwt', 'boom', 'hook', 'load'];
+  /* 2026-11-17: float / track-end coordinate labels (toggle on the setup card): local x / y from the rotation centre and State Plane */
+  function flLabels(u, c) { try { return c && window.CranePickCraneGfx ? window.CranePickCraneGfx.floatTable(c, u, A.P.site.zone, null) : []; } catch (e) { return []; } }
+  function flHtml(r) { const z = G.zone(A.P.site.zone); return `<span class="gl">${esc(r.id)} x ${fmt(r.lx, 2)} y ${fmt(r.ly, 2)} · E ${fmt(r.E, 2)} N ${fmt(r.N, 2)}${z.unit === 'm' ? ' m' : ''}</span>`; }
   function symOpt(u) {
     const ks = picksOf(u), k = ks.find(x => x.id === selK) || ks[0], m = MP().map, c = craneOf(u);
     const tail = (c && K.planDims(c).tail) || 15, lat = m ? m.getCenter().lat : 40, ftPx = 156543.03392804097 * Math.cos(lat * Math.PI / 180) / Math.pow(2, m ? m.getZoom() : 18) / 0.3048006;
@@ -100,7 +103,7 @@
     s.parts.forEach(q => { if (q.src === 'fp' || !out[q.g]) return; if (q.closed) out[q.g].cl.push([lls(q.pts)]); else out[q.g].op.push(lls(q.pts)); });
     return out;
   }
-  const SYM_STYLE = { carrier: ['#1E3A5F', '#64748B', 0.35], outrigger: ['#0E7490', '#0E7490', 0.45], upper: ['#166534', '#22C55E', 0.3], cwt: ['#5B21B6', '#7C3AED', 0.45], boom: ['#0F172A', '#CBD5E1', 0.55], hook: ['#B91C1C', '#DC2626', 0.6], load: ['#B91C1C', '#F87171', 0.25] };
+  const SYM_STYLE = { mat: ['#92400E', '#D97706', 0.25], carrier: ['#1E3A5F', '#64748B', 0.35], outrigger: ['#0E7490', '#0E7490', 0.45], upper: ['#166534', '#22C55E', 0.3], cwt: ['#5B21B6', '#7C3AED', 0.45], boom: ['#0F172A', '#CBD5E1', 0.55], hook: ['#B91C1C', '#DC2626', 0.6], load: ['#B91C1C', '#F87171', 0.25] };
   function makeSym(u, add, col) {
     const Lf = L_(), geo = symGeo(u), o = {};
     SYM_G.forEach(g => { const [st, fc, fo] = SYM_STYLE[g]; o[g] = { pg: add(Lf.polygon(geo[g].cl, { color: st, weight: 1.2, fillColor: fc, fillOpacity: fo, interactive: false, className: 'crSym crSym-' + g })),
@@ -119,6 +122,7 @@
     g.beams = fp.beams.length ? add(Lf.polyline(fp.beams.map(lls), { color: col, weight: 3, interactive: false })) : null;
     g.floats = fp.floats.map(f => add(Lf.polygon(lls(f), Object.assign({}, opt, { fillColor: '#F59E0B', fillOpacity: 0.7 }))));
     g.front = add(Lf.polyline(lls([LF.toGrid(u, 0, 0), headPos(u, fp)]), { color: col, weight: 1.5, dashArray: '2 4', interactive: false }));
+    g.flbl = A.ui.floatLbl ? flLabels(u, c).map(r => add(Lf.marker(MP().toLL(r), { pane: 'markerPane', interactive: false, keyboard: false, zIndexOffset: 1250, icon: Lf.divIcon({ className: 'crGrLbl', iconSize: null, iconAnchor: [-8, 18], html: flHtml(r) }) }))) : [];
     g.sym = makeSym(u, add, col);   // 2026-11-17: the crane symbol (engine/cranegfx.js): axles / wheels / tracks, outrigger beams, the upperworks turned to the pick, boom, hook, load
     [g.body].concat(g.tracks, g.floats).filter(Boolean).forEach(x => x.on('click', () => select(u.id, null)));
     g.cor = add(Lf.marker(MP().toLL(u), { icon: hIcon('crCor', '✥', 'Drag to move the crane (centre of rotation)'), draggable: true, keyboard: false, zIndexOffset: 1000 }));
@@ -179,6 +183,7 @@
     if (g.beams) g.beams.setLatLngs(fp.beams.map(lls));
     g.front.setLatLngs(lls([LF.toGrid(u, 0, 0), headPos(u, fp)]));
     placeSym(u, g.sym);
+    if (g.flbl && g.flbl.length) flLabels(u, c).forEach((r, i) => { const mk = g.flbl[i]; if (!mk) return; mk.setLatLng(MP().toLL(r)); const el2 = mk.getElement && mk.getElement(); if (el2) el2.innerHTML = flHtml(r); });
     const mv = h => h.dragging && h.dragging._draggable && h.dragging._draggable._moving;
     if (!mv(g.cor)) g.cor.setLatLng(MP().toLL(u)); if (!mv(g.head)) g.head.setLatLng(MP().toLL(headPos(u, fp)));
     picksOf(u).forEach(k => { const pk = g.picks.get(k.id); if (pk) placePick(u, k, pk); });
@@ -246,13 +251,28 @@
       ${gr && gr.zones.some(x => x !== '360') ? `<p class="note">Zone charts: ${gr.zones.map(x => esc(K.ZONES[x])).join(', ')}. Sectors (Cranes tab): over front ±${sec.front != null ? sec.front + '°' : ' not set'}, over rear ±${sec.rear != null ? sec.rear + '°' : ' not set'}; outside them: over side${gr.configs['360'] ? ' (the 360° chart)' : ''}.</p>` : ''}
       ${numIn('luBoom', u.boom, 'Boom length', 'ft', { ph: 'ft' })}<p class="note">Tabulated: ${booms.map(b => fmt(b, b % 1 ? 1 : 0)).join(', ') || '—'} ft (a length between them reads the next longer column).</p>
       ${modes.length ? `<div class="fRow"><label for="luMode">Telescoping mode</label><select id="luMode"><option value="">lowest of the columns</option>${modes.map(x => `<option${u.mode === x ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></div>` : ''}
-      <div class="fRow"><label>Support</label><span>${esc(any ? any.support || '—' : '—')}${sk ? ` (spread ${esc(sk)} ${fmt(p.outr.spreads[sk], 2)} ft drawn)` : ''}</span></div>
+      <div class="fRow"><label>Support</label><span>${esc(any ? any.support || '—' : '—')}${sk ? ` (chart spread ${esc(sk)} ${fmt(p.outr.spreads[sk], 2)} ft)` : ''}</span></div>
+      ${spreadHtml(u, c, p, sk)}
       ${numIn('luPad', u.pad, 'Crane pad elevation', 'ft', { ph: 'not entered: 0.00 (datum)' })}
       ${numIn('luHead', (+u.heading).toFixed(1), 'Carrier heading', '° (az.)')}${numIn('luE', G.ftToNative(z.id, u.x).toFixed(2), 'Rotation E', un)}${numIn('luN', G.ftToNative(z.id, u.y).toFixed(2), 'Rotation N', un)}
       <p class="note">On the map: drag ✥ to move the crane, ↻ to turn it.</p>
       <div class="goRow"><button type="button" data-la="addPick">Add a pick</button><button type="button" data-la="zoomU">Show on the map</button><button type="button" class="danger" data-la="delU">Remove setup</button></div>
       <div class="itGrp"><div class="itGrpH">Picks (${picksOf(u).length})</div>${picksOf(u).map(k => `<div class="itRow${k.id === selK ? ' on' : ''}"><button type="button" class="itSel" data-selk="${k.id}">${esc(k.name)}</button><span class="itSum">${sumText(k)}</span><button type="button" class="itDel" data-delk="${k.id}" aria-label="Delete ${esc(k.name)}">×</button></div>`).join('')}</div></div></div>`;
   }
+  /* 2026-11-17: the outrigger spread the crane is drawn at (setup.spread). The chart group's spread by default; another spread of the
+     crane is drawing only when the chart group has no chart at it (flagged; capacities and ground stay at the chart's spread: pick the
+     chart group of that spread above where the crane has one). Float centre table and the map labels toggle. */
+  function spreadHtml(u, c, p, sk) {
+    if (!c || !p || p.kind === 'crawler' || !p.outr || !Object.keys(p.outr.spreads || {}).length) return '';
+    const fp = LF.footprint(c, u), keys = Object.keys(p.outr.spreads), gs = K.groups(c);
+    const hasChart = k => gs.some(g => { const a = g.configs['360'] || g.configs[g.zones[0]]; return K.spreadKey(a, p) === k; });
+    const z = G.zone(A.P.site.zone), un = z.unit === 'm' ? 'm' : 'ft', rows = window.CranePickCraneGfx ? window.CranePickCraneGfx.floatTable(c, u, A.P.site.zone, window.proj4) : [];
+    return `<div class="fRow"><label for="luSpread">Outriggers drawn at</label><select id="luSpread"><option value=""${!u.spread ? ' selected' : ''}>the chart's spread${sk ? ' (' + esc(sk) + ')' : ''}</option>${keys.map(k => `<option value="${esc(k)}"${u.spread === k ? ' selected' : ''}>${esc(k)}: ${fmt(p.outr.spreads[k], 2)} ft${hasChart(k) ? (k === sk ? ' (this chart)' : ' (chart available: choose its chart group)') : ' (drawing only: no chart)'}</option>`).join('')}</select></div>
+      ${fp.drawOnly ? `<p class="note warnT">Drawn at "${esc(fp.spread)}", but the chart group is for "${esc(fp.chartSpread || '—')}": capacities and ground loads use the "${esc(fp.chartSpread || '—')}" chart. Not valid for this setup until a chart for this spread is used.</p>` : ''}
+      ${rows.length ? `<details class="note" id="luFloats"${floatsOpen ? ' open' : ''}><summary>Float centres (x along the carrier, y across, from the rotation centre; State Plane ${un})</summary><table class="tbl"><thead><tr><th></th><th>x</th><th>y</th><th>E</th><th>N</th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r.id)}</td><td class="n">${fmt(r.lx, 2)}</td><td class="n">${fmt(r.ly, 2)}</td><td class="n">${fmt(r.E, 2)}</td><td class="n">${fmt(r.N, 2)}</td></tr>`).join('')}</tbody></table></details>` : ''}
+      <label class="note" style="display:block"><input type="checkbox" id="luFlLbl"${A.ui.floatLbl ? ' checked' : ''}> Float / support coordinates on the map</label>`;
+  }
+  let floatsOpen = false;
   function sumText(k) { const ev = evalPick(k); return ev ? (ev.cls === 'np' ? 'not permitted' : fmt(ev.gov.pct, 1) + ' %') : ''; }
   function pickHtml(k) {
     const u = setupOf(k.setupId), c = craneOf(u), hb = c ? K.hookBlocks(c) : [], z = G.zone(A.P.site.zone), un = z.unit === 'm' ? 'm' : 'ft';
@@ -323,6 +343,8 @@
     if (u) {
       if (t.id === 'luName') return up(() => { u.name = t.value || 'Crane setup'; }, 'setups', u.id);
       if (t.id === 'luGroup') return up(() => { u.group = t.value; u.mode = null; }, 'setups', u.id);
+      if (t.id === 'luSpread') return up(() => { u.spread = t.value; }, 'setups', u.id);
+      if (t.id === 'luFlLbl') { A.ui.floatLbl = t.checked; A.saveUi(); renderAll(); return; }
       if (t.id === 'luMode') return up(() => { u.mode = t.value || null; }, 'setups', u.id);
       if (t.id === 'luBoom') { const v = num(); if (v === undefined || (v !== null && v <= 0)) { t.classList.add('bad'); return; } return up(() => { u.boom = v; }, 'setups', u.id); }
       if (t.id === 'luPad') { const v = num(); if (v === undefined) return; return up(() => { u.pad = v; }, 'setups', u.id); }
@@ -343,7 +365,7 @@
     }
   }
   /* ---------- wiring ---------- */
-  function build(p) { el = p; p.addEventListener('click', onClick); p.addEventListener('change', onChange); p.addEventListener('toggle', e => { if (e.target.id === 'lfSteps') stepsOpen = e.target.open; if (e.target.id === 'lkElev') elevOpen = e.target.open; }, true); drawTab(); }
+  function build(p) { el = p; p.addEventListener('click', onClick); p.addEventListener('change', onChange); p.addEventListener('toggle', e => { if (e.target.id === 'lfSteps') stepsOpen = e.target.open; if (e.target.id === 'lkElev') elevOpen = e.target.open; if (e.target.id === 'luFloats') floatsOpen = e.target.open; }, true); drawTab(); }
   A.inTab({ id: 'lifts', label: 'Lifts', build, show: drawTab });
   A.on('project', () => { rev++; renderAll(); drawTab(); });
   ['change', 'live'].forEach(e => A.on(e, o => { if (!(o && o.kind === 'lifts')) rev++; }));   // pick / setup drags change the memo key themselves
