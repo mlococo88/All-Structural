@@ -145,6 +145,18 @@
     if (s.planScale > 0 && s.pageIn) return { s: s.planScale * s.pageIn.w / s.w, what: 'plan scale' };
     return null;
   }
+  /* QA 2026-11-17: an aligned sheet moved, rotated or rescaled afterwards (the move / rotate handles, the rotation field, a reload at
+     another size before this fix) no longer has the placement its alignment record gives. -> null, or { a, b }: how far (ft) the current
+     placement puts the sheet points A and B from where the recorded alignment puts them. Decision (pending engineer review): 0.10 ft. */
+  const DRIFT = 0.1;
+  function alignDrift(s) {
+    if (!s || s.basis !== 'align' || !s.align) return null; const a0 = s.align;
+    const r = G.align2(a0.p1, a0.p2, a0.m1, a0.m2, s.w, s.h); if (!r) return null;
+    const ref = refScale(s), pl = a0.keep === 'ref' && ref ? G.rescaleAbout(r.place, ref.s, (a0.p1.px + a0.p2.px) / 2, (a0.p1.py + a0.p2.py) / 2) : r.place;
+    const d = q => { const u = G.pxToFt(pl, q.px, q.py), v = G.pxToFt(s.place, q.px, q.py); return Math.hypot(u.x - v.x, u.y - v.y); };
+    const a = d(a0.p1), b = d(a0.p2); return a > DRIFT || b > DRIFT ? { a, b } : null;
+  }
+  const driftText = (s, D) => `The placement no longer matches the alignment: the sheet was moved, rotated or rescaled after it was aligned (A is now ${fmt(D.a, 2)} ft and B ${fmt(D.b, 2)} ft from where the alignment put them). The scale, rotation and position shown are the current placement; the alignment steps are as recorded. Align the sheet again (Plan sheets tab) or check it against known points.`;
   function alSolve(s) {   // -> the result (null until four points); s.place is set (live: no undo step until Done)
     if (!al || al.sp.length < 2 || al.mp.length < 2) return null;
     const r = G.align2(al.sp[0], al.sp[1], al.mp[0], al.mp[1], s.w, s.h); if (!r) return null;
@@ -291,7 +303,7 @@
   function alCard(s) {   // the "Align to map" block of the sheet's card
     const mine = al && al.id === s.id, miss = urls.get(s.id) === null;
     if (!mine) return `<div class="shBlk"><b>Align to map (2 points)</b> <span class="note">click a point on the sheet, then the same point on the map; twice. Places the sheet (scale, rotation, position).</span>
-      <div class="goRow"><button type="button" class="primary" data-a="align" data-id="${s.id}" ${miss ? 'disabled' : ''}>Align to map…</button>${s.basis === 'align' && s.align ? `<span class="note">aligned: A–B ${fmt(Math.hypot(s.align.m2.x - s.align.m1.x, s.align.m2.y - s.align.m1.y), 2)} ft on the map</span>` : ''}</div></div>`;
+      <div class="goRow"><button type="button" class="primary" data-a="align" data-id="${s.id}" ${miss ? 'disabled' : ''}>Align to map…</button>${s.basis === 'align' && s.align ? `<span class="note">aligned: A–B ${fmt(Math.hypot(s.align.m2.x - s.align.m1.x, s.align.m2.y - s.align.m1.y), 2)} ft on the map</span>` : ''}</div>${alignDrift(s) ? `<p class="note"><b class="warnT">⚠ ${esc(driftText(s, alignDrift(s)))}</b></p>` : ''}</div>`;
     const n = alN(), lab = ['A on the sheet', 'A′ on the map', 'B on the sheet', 'B′ on the map'];
     const I = alInfo(s);
     return `<div class="shBlk alBlk"><b>Align to map (2 points)</b>
@@ -350,7 +362,7 @@
       if (s.w !== d.w || s.h !== d.h) {
         const k = d.w / s.w;   // the same ground size: the pixels scale, the scale per pixel scales inversely
         A.update(() => { s.place = Object.assign({}, s.place, { s: s.place.s / k }); const sc = p => ({ px: p.px * k, py: p.py * k });
-          if (s.cal) { s.cal.p1 = sc(s.cal.p1); s.cal.p2 = sc(s.cal.p2); } if (s.geo) { s.geo.p1 = sc(s.geo.p1); s.geo.p2 = sc(s.geo.p2); } s.w = d.w; s.h = d.h; }, 'sheets', { id });
+          if (s.cal) { s.cal.p1 = sc(s.cal.p1); s.cal.p2 = sc(s.cal.p2); } if (s.geo) { s.geo.p1 = sc(s.geo.p1); s.geo.p2 = sc(s.geo.p2); } if (s.align) { s.align.p1 = sc(s.align.p1); s.align.p2 = sc(s.align.p2); }   /* QA 2026-11-17: the alignment's sheet points too */ s.w = d.w; s.h = d.h; }, 'sheets', { id });
         A.notice(`"${esc(s.name)}" reloaded at a different size (${d.w} × ${d.h} px): the sheet keeps its place and size on the ground. Check it against a known point.`, 'warn');
       } else { sync(); drawTab(); }
       tellMissing(); return;
@@ -533,7 +545,7 @@
     if (!P.sheets.length) return '';
     return `<div class="sec"><div class="secHead">Plan sheets</div><div class="secBody"><div class="tscroll"><table class="tbl"><thead><tr><th>Sheet</th><th>Image</th><th>Scale (ft/px)</th><th>Rotation</th><th>Scale set by</th><th>In this browser</th></tr></thead><tbody>
       ${P.sheets.map(s => `<tr><td>${esc(s.name)}</td><td class="n">${fmt(s.w, 0)} × ${fmt(s.h, 0)} px</td><td class="n">${fmt(s.place.s, 5)}</td><td class="n">${fmt(deg(s.place.rot), 3)}°</td><td>${esc(M.BASIS[s.basis || 'none'])}</td><td>${urls.get(s.id) === null ? '<b class="warnT">no: load it again</b>' : 'yes'}</td></tr>`).join('')}</tbody></table></div>
-      ${P.sheets.map((s, i) => { const parts = sheetSteps(s, 'sh' + (i + 1)); return parts.length ? `<div id="site-sh-${s.id}"><h4 class="stH">${esc(s.name)}</h4>${parts.map(q => `<div class="note"><b>${esc(q.title)}</b></div>${window.CranePickSite.steps(q.steps)}`).join('')}</div>` : ''; }).join('')}
+      ${P.sheets.map((s, i) => { const parts = sheetSteps(s, 'sh' + (i + 1)); const D = alignDrift(s); return parts.length ? `<div id="site-sh-${s.id}"><h4 class="stH">${esc(s.name)}</h4>${D ? `<p class="note"><b class="warnT">⚠ ${esc(driftText(s, D))}</b></p>` : ''}${parts.map(q => `<div class="note"><b>${esc(q.title)}</b></div>${window.CranePickSite.steps(q.steps)}`).join('')}</div>` : ''; }).join('')}
       </div></div>`;
   });
   window.CranePickReport && window.CranePickReport.add(P => {
@@ -542,6 +554,7 @@
       { type: 'kv', rows: [['Image', `${fmt(s.w, 0)} × ${fmt(s.h, 0)} px${s.kind === 'pdf' ? `, PDF page ${s.page}` : ''}`], ['Scale', `${fmt(s.place.s, 5)} ft/px`], ['Rotation', `${fmt(deg(s.place.rot), 3)}° counter-clockwise from grid east`],
         ['Scale set by', M.BASIS[s.basis || 'none']], ['Pixel (0, 0) at', `x ${fmt(s.place.x, 2)} ft, y ${fmt(s.place.y, 2)} ft (grid)`]] },
       ...(s.basis === 'none' ? [{ type: 'note', warn: true, text: 'The scale of this sheet has not been set (placed by hand): distances read from it are not reliable.' }] : []),
+      ...(alignDrift(s) ? [{ type: 'note', warn: true, text: driftText(s, alignDrift(s)) }] : []),
       ...sheetSteps(s, 'sh' + (i + 1)).map(q => ({ type: 'steps', scope: 'sheets', title: q.title, steps: q.steps }))
     ] })) }];
   });
@@ -553,5 +566,5 @@
   A.on('ready', () => { if (window.CranePickProject) window.CranePickProject.setImages(imagesFor, afterImport); });
   A.on('tab', id => { if (id === 'plan') setTimeout(sync, 0); });
   A.on('itab', () => sync());
-  window.CranePickSheets = { sync, select: id => { sel = id; sync(); drawTab(); }, get selected() { return sel; }, startPick, endPick, get pick() { return pick; }, startAlign, endAlign, alignDone: () => alDone(), get align() { return al; }, urls, applyCal, applyGeo, applyPlanScale, fitSheet, cleanUp, onFile };
+  window.CranePickSheets = { alignDrift, sync, select: id => { sel = id; sync(); drawTab(); }, get selected() { return sel; }, startPick, endPick, get pick() { return pick; }, startAlign, endAlign, alignDone: () => alDone(), get align() { return al; }, urls, applyCal, applyGeo, applyPlanScale, fitSheet, cleanUp, onFile };
 })();
