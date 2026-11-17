@@ -5,7 +5,9 @@
 //      Picks tab, Summary count); entering the load removes it; nothing computed changes (the % of chart = W / C as before);
 //   2. Drawings sheet index: a Report link whose label names a section ("Report §Site plan (aerial)") reads "Report §<number>", not
 //      "Report plan (aerial)§<number>";
-//   3. 0 console errors.
+//   3. a plan sheet aligned to the map and then rotated by hand: a warning that the placement no longer matches the alignment (card,
+//      Site tab, Report; hand check 1.561 ft); untouched: none;
+//   4. 0 console errors.
 //   SHOTS=<dir> node tests/smoke/crane-qa.mjs
 import path from 'path';
 import fs from 'fs';
@@ -49,6 +51,28 @@ try {
   aer.forEach(t => { assert.match(t, /Report §\d+(\.\d+)?/, t); assert.doesNotMatch(t, /Report plan/, t); });
   idx.forEach(t => assert.doesNotMatch(t, /Report [a-z][^§]*§/, t));
   ok(`Drawings index: the aerial sheets link "Report §n" (${aer.length} rows), no "Report plan (aerial)§n"`);
+
+  // 3. a plan sheet aligned to the map, then rotated by hand: the alignment record no longer gives the placement -> a warning (card,
+  //    Site tab, Report); aligned and untouched: no warning. Synthetic sheet (no image; the "not stored" notice is expected).
+  const dr = await p.evaluate(() => {
+    const G = CranePickGeo, M = CranePickModel, al = { p1: { px: 100, py: 100 }, p2: { px: 900, py: 500 }, m1: { x: 1000, y: 3000 }, m2: { x: 1080, y: 2960 }, keep: 'pts' };
+    const r = G.align2(al.p1, al.p2, al.m1, al.m2, 1000, 600);
+    CranePickApp.update(P => { P.sheets.push(M.normSheet({ id: 'sq', name: 'QA sheet', kind: 'image', page: 1, w: 1000, h: 600, place: r.place, opacity: 0.5, basis: 'align', align: al })); }, 'sheets');
+    const s = () => CranePickApp.P.sheets.find(x => x.id === 'sq'), d0 = CranePickSheets.alignDrift(s());
+    const back = CranePickModel.normalize(JSON.parse(JSON.stringify(CranePickApp.P))).sheets.find(x => x.id === 'sq');   // the record survives save / load
+    CranePickApp.update(() => { s().place = G.rotateAbout(s().place, s().place.rot + 2 * Math.PI / 180, 500, 300); }, 'sheets');   // the rotation field: +2° about the centre
+    const d1 = CranePickSheets.alignDrift(s()), rpt = SharedReport.text(SharedReport.build(CranePickReport.model(CranePickApp.P)));
+    return { d0, d1, kept: !!(back && back.align && back.basis === 'align'), rpt: /placement no longer matches the alignment/.test(rpt) };
+  });
+  assert.equal(dr.d0, null, 'aligned, untouched: no drift'); assert.ok(dr.kept, 'align record kept by normalize');
+  // hand check: +2° about the centre (500, 300) px; A (100, 100) is 447.2 px from it; s = |A'B'| / |AB| = 89.443 / 894.43 = 0.1 ft/px
+  // -> A moves 2 × 0.1 × 447.21 × sin(1°) = 1.561 ft; B (900, 500): also 447.2 px -> 1.561 ft
+  near(dr.d1.a, 1.561, 0.002, 'A drift'); near(dr.d1.b, 1.561, 0.002, 'B drift'); assert.ok(dr.rpt, 'Report note');
+  await p.click('#tabBar [data-otab=site]'); await p.waitForTimeout(300); assert.match(await p.$eval('#out [data-opane=site]', d => d.innerText), /⚠ The placement no longer matches the alignment[^\n]*A is now 1\.56 ft and B 1\.56 ft/);
+  await p.click('#inTabs [data-itab=sheets]'); await p.evaluate(() => CranePickSheets.select('sq')); await p.waitForTimeout(300);
+  assert.match(await p.$eval('[data-pane=sheets]', d => d.innerText), /placement no longer matches the alignment/); await shot('qa-sheet-drift');
+  ok(`plan sheet aligned then rotated 2° by hand: drift A ${dr.d1.a.toFixed(3)} / B ${dr.d1.b.toFixed(3)} ft (hand 1.561) -> warning on the card, the Site tab and the Report; untouched: none`);
+  errs.splice(0, errs.length, ...errs.filter(e => !/not stored|ERR_FILE_NOT_FOUND/.test(e)));
 
   assert.deepEqual(errs, []); ok('0 console errors');
   console.log(`crane-qa: ${n} checks passed`);
