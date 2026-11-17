@@ -1589,7 +1589,7 @@ Set the project's State Plane zone to Rhode Island in Site & map.
 H look-up, I second service, J backoff, K RI / CT, L diagnose); smokes `crane-road` (11), new `crane-road-states` (4: Greenwood RI with
 Overpass 502 + RIDOT 0 features -> picked layer -> POST RD, 0 MassDOT requests; Tried + Retry; Diagnose 9 rows; 'massdot' setting
 migration, 390 px, 0 console errors), `crane-manual` (8), `crane-route` (5), `crane-drawings` (5), `crane-shell` (11).
-## 2026-11-17 — Input tabs reorganised: "Cranes & setups" (setups under their crane), one "Lifts" tab for every lift (engineer decision; PR #PRNUM)
+## 2026-11-17 — Input tabs reorganised: "Cranes & setups" (setups under their crane), one "Lifts" tab for every lift (engineer decision; PR #1628, https://github.com/mlococo88/All-Structural/pull/1628)
 Display / UX only. Engineer decision 2026-11-17: (1) the Cranes input tab becomes **Cranes & setups**: the library as before, and under each
 project crane its setups (moved from the Lifts tab: name, chart group, boom length, telescoping mode, heading, position, pad elevation,
 outrigger spread drawn, links to its Ground / Terrain inputs and the Crane tab) with **Add setup (place on the map)**; one crane definition,
