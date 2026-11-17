@@ -265,6 +265,7 @@
         if (g.assumed.length) items.push({ type: 'note', warn: true, text: 'Elevation geometry assumed (not in the file, not entered): ' + g.assumed.join('; ') + '. Decision (pending engineer review): the lowest boom.' }); }
       if (['upperLb', 'upperCg', 'carrierLb', 'carrierCg', 'floatFt', 'boomLb', 'boomCgF', 'cwLb', 'cwRad', 'grossLb'].some(k => ph[k] != null)) items.push({ type: 'kv', rows: [['Upperworks weight (lb)', fmt(ph.upperLb, 0)], ['Upperworks CG from rotation (ft)', fmt(ph.upperCg, 2)], ['Carrier / carbody weight (lb)', fmt(ph.carrierLb, 0)], ['Carrier / carbody CG (ft)', fmt(ph.carrierCg, 2)], ['Float / shoe size (ft)', fmt(ph.floatFt, 2)],
         ['Boom weight (lb)', fmt(ph.boomLb, 0)], ['Boom CG (fraction foot to tip)', ph.boomCgF == null ? '0.50 (assumed)' : fmt(ph.boomCgF, 2)], ['Counterweight (lb)', ph.cwLb == null ? 'chart configuration' : fmt(ph.cwLb, 0)], ['Counterweight CG radius (ft)', ph.cwRad == null ? 'tail-swing radius (assumed)' : fmt(ph.cwRad, 2)], ['Gross operating weight (lb)', fmt(ph.grossLb, 0)]] });
+      if (window.CranePickCraneTab) items.push(...window.CranePickCraneTab.reportItems(P, c.id));   // C9: the Crane tab's figures and input table per setup used by a lift
       return { id: 'c' + (n + 1), key: 'crane-' + c.id, title: K.name(d), items };
     }) }];
   });

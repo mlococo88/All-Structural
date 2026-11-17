@@ -45,25 +45,26 @@
   const rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI;
   const dval = v => v && typeof v === 'object' && isNum(v.value) ? v.value : (isNum(v) ? v : null);
   const FROM = { entered: 'entered', file: 'crane file', assumed: 'assumed' };
-  /* geomOf(crane) -> { footH, footE, head, boomW, cwBot, cwTop, tail, maxAng, from: { key: 'entered' | 'file' | 'assumed' }, assumed: [text] } */
+  /* geomOf(crane) -> { footH, footE, head, boomW, cwBot, cwTop, tail, maxAng, from: { key: 'entered' | 'file' | 'assumed' }, assumed: [text], page: { key: printed page } } */
   function geomOf(c) {
     const d = (c && c.dims) || {}, bf = d.boom_foot || {}, cc = d.carrier_or_carbody || {}, ai = (c && c.app_inputs) || {}, gi = ai.geom || {}, pl = ai.plan || {};
-    const from = {}, assumed = [], o = {};
-    const pick = (k, entered, file, dflt, why) => {
+    const from = {}, assumed = [], o = {}, page = {};   // page (C9, the Crane tab; provenance only): the printed page of a value read from the file
+    const pick = (k, entered, file, dflt, why, pg) => {
       if (isNum(entered)) { o[k] = entered; from[k] = 'entered'; }
-      else if (isNum(file)) { o[k] = file; from[k] = 'file'; }
+      else if (isNum(file)) { o[k] = file; from[k] = 'file'; if (pg != null) page[k] = pg; }
       else { o[k] = dflt; from[k] = 'assumed'; if (why) assumed.push(why); }
     };
-    let cwTopFile = dval(cc.counterweight_top_height);
-    if (cwTopFile == null && Array.isArray(cc.counterweight_heights)) { const vs = cc.counterweight_heights.map(x => dval(x)).filter(isNum); if (vs.length) cwTopFile = Math.max(...vs); }
-    pick('footH', gi.footH, dval(bf.height_above_ground), 0, 'boom-foot pin height 0 ft (at the pad: the lowest boom)');
-    pick('footE', pl.boomFoot, dval(bf.ahead_of_rotation), 0, 'boom-foot pin on the rotation centre (0 ft ahead)');
+    const pgOf = v => v && typeof v === 'object' && v.page != null ? v.page : null;
+    let cwTopFile = dval(cc.counterweight_top_height), cwTopPg = pgOf(cc.counterweight_top_height);
+    if (cwTopFile == null && Array.isArray(cc.counterweight_heights)) { const vs = cc.counterweight_heights.map(x => dval(x)).filter(isNum); if (vs.length) { cwTopFile = Math.max(...vs); cwTopPg = pgOf(cc.counterweight_heights[cc.counterweight_heights.map(x => dval(x)).indexOf(cwTopFile)]); } }
+    pick('footH', gi.footH, dval(bf.height_above_ground), 0, 'boom-foot pin height 0 ft (at the pad: the lowest boom)', pgOf(bf.height_above_ground));
+    pick('footE', pl.boomFoot, dval(bf.ahead_of_rotation), 0, 'boom-foot pin on the rotation centre (0 ft ahead)', pgOf(bf.ahead_of_rotation));
     pick('head', gi.head, null, 0, 'head allowance 0 ft (the hook block may reach the tip pin: enter the two-block clearance)');
     pick('boomW', gi.boomW, null, 0, 'boom section width 0 ft (the boom is checked as its centre line)');
-    pick('cwBot', gi.cwBot, dval(cc.counterweight_ground_clearance), 0, 'counterweight bottom at the pad (0 ft)');
-    pick('cwTop', gi.cwTop, cwTopFile, null, 'counterweight top not limited (the tail-swing cylinder reaches up without limit)');
-    o.tail = K().planDims(c).tail; o.maxAng = dval(d.max_boom_angle_deg);
-    o.from = from; o.assumed = assumed;
+    pick('cwBot', gi.cwBot, dval(cc.counterweight_ground_clearance), 0, 'counterweight bottom at the pad (0 ft)', pgOf(cc.counterweight_ground_clearance));
+    pick('cwTop', gi.cwTop, cwTopFile, null, 'counterweight top not limited (the tail-swing cylinder reaches up without limit)', cwTopPg);
+    o.tail = K().planDims(c).tail; o.maxAng = dval(d.max_boom_angle_deg); if (o.maxAng != null && pgOf(d.max_boom_angle_deg) != null) page.maxAng = pgOf(d.max_boom_angle_deg);
+    o.from = from; o.assumed = assumed; o.page = page;
     return o;
   }
   /* chartAngle(cfg, L, R, mode) -> { deg, how, R1, R2, a1, a2 } | null (the config's printed boom-angle table at boom L, radius R) */
