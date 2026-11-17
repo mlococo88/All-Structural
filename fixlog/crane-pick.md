@@ -1515,3 +1515,63 @@ blocks that server (ask IT, or type a reachable mirror in Route tab → Road dat
 `node tests/check-syntax.mjs` (237 files); `node tests/engine/run.mjs crane` (18 files, 136 passed; new `crane-roadsrc` 5);
 `tests/smoke/crane-road.mjs` (11 checks: + mocked failure status / Test connection / request order, fallback endpoint, MassDOT by choice);
 `crane-manual` (8), `crane-route` (5), `crane-drawings` (5), `crane-shell` (11).
+
+## 2026-11-17 — Input tabs reorganised: "Cranes & setups" (setups under their crane), one "Lifts" tab for every lift (engineer decision; PR #PRNUM)
+Display / UX only. Engineer decision 2026-11-17: (1) the Cranes input tab becomes **Cranes & setups**: the library as before, and under each
+project crane its setups (moved from the Lifts tab: name, chart group, boom length, telescoping mode, heading, position, pad elevation,
+outrigger spread drawn, links to its Ground / Terrain inputs and the Crane tab) with **Add setup (place on the map)**; one crane definition,
+any number of setups (two identical cranes in a tandem = one crane, two setups). (2) One **Lifts** tab: the settings together at the top
+(caution / critical / limit, interpolation, tandem limit, path model, obstruction clearance), every lift in one list (single picks and girder
+lifts of one or two cranes, with type badges), **Add single pick** (setup chosen) / **Add girder lift (tandem, two cranes)** / **Add girder
+lift (one crane)**, and the card of the selected lift (the existing pick card or girder-lift card, moved, not rewritten). (3) The Girder lifts
+input tab is removed.
+### What changed (re-apply by hand)
+- `ui/app.js` (anchor `try { Object.assign(ui, JSON.parse(`): `ITAB_ALIAS = { tandem: 'lifts' }`; a saved `crane.ui` with `itab: 'tandem'`
+  opens `lifts` with `ui.liftCard = 'tandem'`; `showITab(id)` maps the alias first (`id = ITAB_ALIAS[id] || id;`).
+- `ui/place.js`: `sEl` (the Cranes & setups pane) and `card()` / `setCard(k)` (`A.ui.liftCard`: 'pick' | 'tandem'). New `setupsBlock(craneId)`
+  ("Setups of this crane (n)", the one-definition-many-setups note, the setup rows `data-selu` / `data-delu`, `data-ca="place"` **Add setup
+  (place on the map)**, the selected setup's `setupHtml(u)`), `orphansBlock()` (setups whose crane is not in the project), `drawSetups()`,
+  `usesHtml(u)` (the lifts using a setup: picks `data-selk`, girder lifts `data-selt`), `attachSetups(pane)`, `reveal(id)`. `setupHtml`:
+  "Add a pick" → **Add a single pick** (`data-la="addPick"`, opens Lifts), the picks list → "Lifts using this setup", the `#luLinks` line
+  (Ground tab `groundIn`, Terrain tab `terrainIn`, Crane tab `craneOut`). `pickHtml`: `#lkSetup` row with **edit setup: Cranes & setups tab**
+  (`data-la="editSetup"`). `drawTab()`: the settings (plus `CranePickTandemUI.settingsHtml()`), "Lifts (n)" (`#lkNewU` + `addPickTo`,
+  `data-ta="newT"` / `"newS"`, `#lfList` rows), then `pickHtml(k)` or `CranePickTandemUI.cardHtml(t)` per `card()`; it also calls
+  `drawSetups()`. `select(uid, kid)`: with a pick → Lifts tab (card 'pick'), without → Cranes & setups tab. `placeCrane`: shows Cranes &
+  setups (the new setup's card) instead of Lifts; it still makes the setup's first pick, as before. `data-selk` selects the pick's own setup.
+  `liveSetupFields` reads the fields from `sEl`. Exports `drawTab, setupsBlock, orphansBlock, attachSetups, setCard, card`.
+- `ui/tandem.js`: no `A.inTab` (the Girder lifts tab is gone): `attach(pane)` (the Lifts pane's click / change / input / toggle, as the old
+  `build`), `settingsHtml()` (the tandem limit and its note, now "uses the thresholds above"), `drawTab()` → `CranePickPlace.drawTab()`;
+  `select(id)` and `newLift` set `setCard('tandem')` and show `lifts`; `active()` (the elevation dock): `itab === 'lifts' && card === 'tandem'`
+  (before `itab === 'tandem'`). Exports `attach, cardHtml, settingsHtml, sumText`.
+- `ui/cranes.js`: tab label **Cranes & setups**; `cardHtml` puts `<div class="crSetups" data-crane>` + `setupsBlock` under the card head;
+  the card's "Place on the map" button moved into that block as **Add setup (place on the map)** (same `data-ca="place"`); `#crSetupsOrphan`
+  after the cards; `build` calls `CranePickPlace.attachSetups(p)`.
+- Links / wording to the new tabs: `ui/cranetab.js` (Settings rows → "Lifts tab (settings)", Setup rows and boom → "edit setup (Cranes &
+  setups tab)" = `CranePickPlace.select(setupId)`; girder lift → `lifts`), `ui/summary.js`, `ui/route.js` (`data-ra="tandem"` opens the
+  route's girder lift on Lifts), `ui/drawset.js` + `ui/cranefig.js` (Drawings index sources), `ui/picks.js`, `ui/elev.js`, `ui/ground.js`,
+  `ui/project.js`, `engine/route.js` (staging flag "Lifts tab"), `engine/elev.js` ("Cranes & setups tab"). `index.html`: CSS `.chip.chipG`,
+  `.crSetups`, `h4.crSetH`; script comments.
+- `ui/manual.js`: quick start (still ten steps: "Add a setup, then the pick and the set"), workflows single pick / tandem, "Input tabs",
+  thresholds, the assumed-values table, crane data; every `in:tandem` link → `in:lifts>Lift settings` / `in:lifts>Lifts`.
+- Tests: `tests/smoke/crane-tabs.mjs` (new); crane smokes: `setF` switches to the tab of the field (`#lu*` Cranes & setups; `#lk*` / `#ls*` /
+  `#tl*` Lifts); `[data-itab=tandem]` → `lifts`; crane-library tab list; crane-place first-tab assertion; crane-manual quoted labels.
+### Calculations (CLAUDE.md §4)
+None changed. No engine function touched except two message strings (tab names). Check: the saved project JSON and the text of every output
+tab (Plan, Summary, Crane, Picks, Ground, Route, Terrain, Site, Drawings, Report) and the Report text of five projects — FAKECO single pick
+(with a 115 kV line), FAKECO tandem + one-crane girder lift, FAKECO route to a tandem, FAKECO crawler with ground inputs and a water main, and
+a private local project (import only, not committed) — compared between origin/main and this branch: 60 files, identical after
+normalising the tab names (e.g. "Cranes tab" → "Cranes & setups tab", "Girder lifts input tab" → "Lifts input tab (girder lift)").
+### Saved data (§5)
+No key or format changed. `crane.ui` (the page's tab preferences) gains the optional field `liftCard`; an old `itab: 'tandem'` maps to
+`lifts` (and its girder-lift card); `'cranes'` / `'lifts'` keep their ids.
+### Decisions (pending engineer review)
+- **Add setup** keeps the old "Place on the map" behaviour: it places the crane at the map centre **with a first pick** (as before), and now
+  opens the setup card on Cranes & setups (before: the Lifts tab). A map click on a crane opens its setup card on Cranes & setups; a click on
+  P / S opens the pick on Lifts.
+- The setups sit at the top of each crane card (before the chart data), the selected setup's card inside it; single picks are listed before
+  girder lifts, each group in project order. The Lifts tab shows one card at a time (the last pick or girder lift opened).
+- `tests/smoke/crane-terrain.mjs` fails on origin/main as well (Report "Terrain … not adequate to certify" assertion), not from this change.
+### How verified
+`node tests/check-syntax.mjs`; `node tests/engine/run.mjs crane` (18 files, 136 passed); crane smokes 3d, aerial, align, clear3d, cranetab,
+draw, drawings, elev, geometry, ground, library, manual (8), picks, place, qa, road, route, sheets, shell, tandem, truck, **tabs** (new, 5)
+pass with 0 console errors (terrain: fails the same way on main); 390 px checked in crane-tabs / crane-manual.
