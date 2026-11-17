@@ -102,13 +102,21 @@
     </div>
 
     <div class="card">
-      <h2>Material (Civil NX database)</h2>
-      <div class="row3">
+      <h2>Material</h2>
+      <div class="row">
         <div><label>Type</label><select id="matType"><option value="STEEL">Steel</option><option value="CONC">Concrete</option></select></div>
+        <div><label>Source</label><select id="matSrc"><option value="USER">User-defined (E, ν, γ)</option><option value="DB">Civil NX database</option></select></div>
+      </div>
+      <div class="row3" id="matUserRow">
+        <div><label>E (ksi)</label><input id="matE" type="number" step="1" value="29000"></div>
+        <div><label>ν</label><input id="matNu" type="number" step="0.01" value="0.30"></div>
+        <div><label>γ</label><input type="text" value="from Loads" disabled></div>
+      </div>
+      <div class="row" id="matDbRow">
         <div><label>Standard</label><input id="matStd" type="text" value="ASTM(S)"></div>
         <div><label>Grade (DB name)</label><input id="matDb" type="text" value="A709-50"></div>
       </div>
-      <div class="note">E doesn't affect the moments when there's one material. "ASTM(S)" is one of Civil NX's steel standards; the grade name "A709-50" is a guess. If Civil NX rejects it, enter the material once by hand and GET <code>/db/MATL</code> to see its exact names (for concrete, MIDAS's own sample uses <b>AS17(RC)</b> / <b>C32</b>). Switching the type also switches γ to 0.490 (steel) or 0.150 (concrete) kcf.</div>
+      <div class="note">User-defined (default) sends E, ν and γ directly, so it doesn't depend on Civil NX's database names (density γ = the Loads card value; mass = γ/g). E doesn't affect the moments when there's one material. Defaults: steel E 29,000 ksi, ν 0.30; concrete E = 57,000√4000 psi = 3,605 ksi, ν 0.20. "Civil NX database" needs the exact standard and grade names: "ASTM(S)" is a Civil NX steel standard but "A709-50" is a guess; enter the material once by hand and GET <code>/db/MATL</code> to see the exact names. Switching the type also switches γ to 0.490 (steel) or 0.150 (concrete) kcf.</div>
     </div>
 
     <div class="card">
@@ -343,8 +351,9 @@ const DEFAULT_SPANS = [
   { L: 100, DL: 84, DM: 54, DR: 54, tw: 0.5625, bt: 16, tt: 1, bb: 18, tb: 1.25, n: 16 },
 ];
 const SPAN_KEYS = ['L', 'DL', 'DM', 'DR', 'tw', 'bt', 'tt', 'bb', 'tb', 'n'];
-const FIELDS = ['gamma', 'wDW', 'wLL', 'fDC', 'fDW', 'fLL', 'matType', 'matStd', 'matDb'];
-const MAT_DEFAULTS = { STEEL: { std: 'ASTM(S)', db: 'A709-50', gamma: '0.490' }, CONC: { std: 'ASTM(RC)', db: 'Grade C4000', gamma: '0.150' } };
+const FIELDS = ['gamma', 'wDW', 'wLL', 'fDC', 'fDW', 'fLL', 'matType', 'matSrc', 'matE', 'matNu', 'matStd', 'matDb'];
+const MAT_DEFAULTS = { STEEL: { std: 'ASTM(S)', db: 'A709-50', gamma: '0.490', E: '29000', nu: '0.30', damp: 0.02, alpha: 6.5e-6 },
+                       CONC: { std: 'ASTM(RC)', db: 'Grade C4000', gamma: '0.150', E: '3605', nu: '0.20', damp: 0.05, alpha: 6.0e-6 } };
 
 function saveInputs() {
   const o = { spans };
@@ -577,9 +586,22 @@ function buildRequests() {
   const r6 = v => Math.round(v * 1e6) / 1e6;
   const reqs = [];
   reqs.push(['PUT', '/db/UNIT', { Assign: { 1: { DIST: 'FT', FORCE: 'KIPS' } } }]);
-  reqs.push(['POST', '/db/MATL', { Assign: { 1: {
-    TYPE: $('matType').value, NAME: $('matDb').value.trim(),
-    PARAM: [{ P_TYPE: 1, STANDARD: $('matStd').value.trim(), DB: $('matDb').value.trim() }] } } }]);
+  const mt = $('matType').value, md = MAT_DEFAULTS[mt];
+  if ($('matSrc').value === 'USER') {
+    // User-defined isotropic (TYPE "USER", P_TYPE 2), in the model units kips / ft:
+    // ELAST ksi x 144 = ksf; DEN = weight density (kcf); MASS = DEN / g (g = 32.174 ft/s²); THERMAL per °F (not used: no thermal loads)
+    const E = parseFloat($('matE').value) || 0;
+    reqs.push(['POST', '/db/MATL', { Assign: { 1: {
+      TYPE: 'USER', NAME: mt === 'STEEL' ? 'Steel-user' : 'Concrete-user',
+      HE_SPEC: 0, HE_COND: 0, PLMT: 0, P_NAME: '', bMASS_DENS: false, DAMP_RAT: md.damp,
+      PARAM: [{ P_TYPE: 2, ELAST: r6(E * 144), POISN: parseFloat($('matNu').value) || 0,
+                THERMAL: md.alpha, DEN: r6(lv.gamma), MASS: r6(lv.gamma / 32.174) }] } } }]);
+  } else {
+    reqs.push(['POST', '/db/MATL', { Assign: { 1: {
+      TYPE: mt, NAME: $('matDb').value.trim(),
+      HE_SPEC: 0, HE_COND: 0, PLMT: 0, P_NAME: '', bMASS_DENS: false, DAMP_RAT: md.damp,
+      PARAM: [{ P_TYPE: 1, STANDARD: $('matStd').value.trim(), CODE: '', DB: $('matDb').value.trim(), bELAST: false }] } } }]);
+  }
   const sect = {};
   const ft = v => r6(v / 12);
   m.sects.forEach(s => sect[s.id] = {
@@ -675,8 +697,22 @@ async function runMidas() {
     const reqs = buildRequests();
     let forceResp = null, reactResp = null;
     for (const [method, ep, body] of reqs) {
-      if (ep === '/doc/ANAL') setStatus($('runStatus'), 'Running analysis in Civil NX…');
-      const r = await c.request(method, ep, body);
+      if (ep === '/doc/ANAL') {
+        await checkModel(c, reqs);
+        setStatus($('runStatus'), 'Running analysis in Civil NX…');
+      }
+      let r;
+      try { r = await c.request(method, ep, body); }
+      catch (e) {
+        if (ep === '/doc/ANAL') e.message += ' — The model was sent, but Civil NX could not build the analysis data. ' +
+          'Open it in Civil NX and check Properties > Material and Section (or run Analysis > Perform Analysis there to see the message). ' +
+          ($('matSrc').value === 'DB' ? 'If the material is the problem, switch Material source to "User-defined".' : '');
+        throw e;
+      }
+      if (method !== 'GET' && ep !== '/post/TABLE') {
+        const txt = JSON.stringify(r);
+        if (txt && txt !== '{}' && /error|fail|invalid|message/i.test(txt)) log(`${ep} response: ${txt.slice(0, 400)}`, 'err');
+      }
       if (ep === '/post/TABLE' && body.Argument.TABLE_TYPE === 'BEAMFORCE') forceResp = r;
       if (ep === '/post/TABLE' && body.Argument.TABLE_TYPE === 'REACTIONG') reactResp = r;
     }
@@ -688,6 +724,24 @@ async function runMidas() {
     log(e.message, 'err');
     if (e.data) log('response: ' + JSON.stringify(e.data).slice(0, 600), 'err');
   } finally { btn.disabled = false; }
+}
+
+// Read back what Civil NX stored before running the analysis, so a bad material or section is caught with a clear message
+async function checkModel(c, reqs) {
+  const want = ep => { const r = reqs.find(q => q[1] === ep); return r ? Object.keys(r[2].Assign || {}) : []; };
+  const problems = [];
+  for (const [ep, key] of [['/db/MATL', 'MATL'], ['/db/SECT', 'SECT'], ['/db/NODE', 'NODE'], ['/db/ELEM', 'ELEM']]) {
+    let got = {};
+    try { const r = await c.get(ep); got = r[key] || Object.values(r)[0] || {}; }
+    catch (e) { problems.push(`${ep}: could not read back (${e.message})`); continue; }
+    const missing = want(ep).filter(id => !(id in got));
+    log(`check ${ep}: ${Object.keys(got).length} stored, ${missing.length} missing`, missing.length ? 'err' : 'ok');
+    if (missing.length) problems.push(`${ep}: ${missing.length} of ${want(ep).length} not stored (e.g. ID ${missing[0]})`);
+    if (ep === '/db/MATL' && got['1']) log('stored material 1: ' + JSON.stringify(got['1']).slice(0, 400));
+    if (ep === '/db/SECT' && got['1']) log('stored section 1: ' + JSON.stringify(got['1']).slice(0, 400));
+  }
+  if (problems.length) throw new Error('Civil NX did not store everything that was sent: ' + problems.join('; ') +
+    '. See the log for what was stored.' + ($('matSrc').value === 'DB' ? ' (Material: try source "User-defined".)' : ''));
 }
 
 function parseMidas(forceResp, reactResp) {
@@ -845,8 +899,12 @@ function init() {
     if ($('matStd').value === from.std) $('matStd').value = to.std;
     if ($('matDb').value === from.db) $('matDb').value = to.db;
     if ($('gamma').value === from.gamma || +$('gamma').value === +from.gamma) $('gamma').value = to.gamma;
+    if (+$('matE').value === +from.E) $('matE').value = to.E;
+    if (+$('matNu').value === +from.nu) $('matNu').value = to.nu;
     prevType = $('matType').value;
   });
+  const showMatRows = () => { const u = $('matSrc').value === 'USER'; $('matUserRow').style.display = u ? '' : 'none'; $('matDbRow').style.display = u ? 'none' : ''; };
+  $('matSrc').addEventListener('change', showMatRows); showMatRows();
   FIELDS.forEach(f => $(f).addEventListener('change', () => { saveInputs(); refreshGeometry(); }));
   $('btnAddSpan').onclick = () => { const s = spans[spans.length - 1]; spans.push({ ...s }); saveInputs(); renderSpans(); refreshGeometry(); };
   $('btnHaunch').onclick = () => { spans = JSON.parse(JSON.stringify(DEFAULT_SPANS)); saveInputs(); renderSpans(); refreshGeometry(); };
