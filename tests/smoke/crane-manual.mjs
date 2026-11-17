@@ -132,6 +132,8 @@ try {
   assert.equal(await p.evaluate(() => CranePickReport.model(CranePickApp.P).sections.some(s => s.id === 'manual')), false);
   ok('Report appendix: off by default; ticked → last section "Appendix: User manual", no unresolved / duplicate keys, no NaN, its tab links open the input tab; empty project: no dangling § link');
 
+  await p.waitForTimeout(1100); assert.equal(await p.inputValue('#manQ'), '', 'the print fallback timer does not restore an old filter');
+  await p.evaluate(() => document.querySelectorAll('#notices .notice').forEach(x => x.remove()));
   await p.evaluate(() => { CranePickApp.showOTab('man'); document.getElementById('man-start').scrollIntoView(); }); await p.waitForTimeout(100); await shot('manual-1280');
   await p.evaluate(() => document.getElementById('man-meth').scrollIntoView()); await p.waitForTimeout(100); await shot('manual-methods');
   // 7. 390 px

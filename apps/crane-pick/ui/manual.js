@@ -48,7 +48,7 @@
         { p: 'A girder (or two girders with cross-frames, lifted as one object) carried by two cranes from the truck to the bearings, or by one crane.' },
         { ol: [
           '[[in:tandem>Girder lifts|Girder lifts tab]]: **New tandem lift** (or **New one-crane girder lift**). For crane 1 and crane 2 choose a crane setup, or **Place for crane 1** / **Place for crane 2** to place a new one; each setup\'s chart, boom and position are edited on the Lifts tab.',
-          '**Girder**: length L, weight, **CG from end A** (and across, and its height: information only), depth H, width in plan. Tick **Paired girders with cross-frames** for two girders lifted as one object (each girder\'s weight and CG, the cross-frame weight and the spacing).',
+          '**Girder**: length L, weight, **CG from end A**, the CG offset across (it shifts the hooks in plan) and the CG height (information only), depth H, width in plan. Tick **Paired girders with cross-frames** for two girders lifted as one object (each girder\'s weight and CG, the cross-frame weight and the spacing).',
           '**Hook 1 / Hook 2**: the **lifting point from end A**, spreader length (drawn), rigging weight, hook block, other deductions, rigging height and hook block height. The load share follows from the CG and the lifting points with plumb hooks.',
           '**Path**: the pick pose on the truck and the set pose on the bearings (centre E / N, heading A→B, girder bottom elevation), the travel elevation and **Add a waypoint** for a path around obstacles. On the map drag P / S, ↻ (turn), ◆ (CG), H1 / H2 (lifting points) and W1… (waypoints).',
           'Read the result: load share, the governing step of each crane (% of chart against the **tandem limit**, set in [[in:tandem>Girder lift settings|Girder lift settings]], default 75 % per crane), heights, crane–crane distance, girder level, clearances and ground per crane. The **scrubber** (step slider and **Play**) moves the girder along the path on the map, in the elevation and in 3D.',
@@ -120,7 +120,7 @@
     ] },
     { id: 'meth', title: '4. Methods and limits', topics: [
       { id: 'm-lookup', title: 'Chart capacity (lookup rule)', blocks: [
-        { p: 'No interpolation (the default, conservative): C is the chart cell at the **next longer tabulated boom length** and the **next larger tabulated radius**. Not permitted: a radius below the smallest or above the largest tabulated radius, a boom longer than the longest column, a blank cell, or a cell the file marks "special equipment". Where the next shorter boom length gives a lower value at that radius, the lower value is used. Linear interpolation between tabulated radii is offered only where the chart notes permit it (Lift settings). Total load W = load + rigging + hook block + other deductions (the charts are gross); %chart = W / C × 100. Worked in [[rpt:lift-rule|Report §Lifts › Basis]] and for each pick in [[rpt:lifts|§Lifts]].' }
+        { p: 'No interpolation (the default, conservative): C is the chart cell at the **next longer tabulated boom length** and the **next larger tabulated radius**. Not permitted: a radius below the smallest or above the largest tabulated radius, a boom longer than the longest column, a blank cell, or a cell the file marks "special equipment". When the boom lies between two tabulated lengths and the next shorter length gives a lower value at that radius, the lower value is used; repeated columns at one length (telescoping modes) give the lowest unless a mode is chosen on the setup. Linear interpolation between tabulated radii is offered only where the chart notes permit it (Lift settings). Total load W = load + rigging + hook block + other deductions (the charts are gross); %chart = W / C × 100. Worked in [[rpt:lift-rule|Report §Lifts › Basis]] and for each pick in [[rpt:lifts|§Lifts]].' }
       ] },
       { id: 'm-thresh', title: 'Thresholds and the tandem limit', blocks: [
         { p: 'Single-crane lifts: caution ≥ 75 %, critical lift ≥ 75 %, limit 100 % of chart (project inputs, [[in:lifts>Lift settings|Lift settings]]). Tandem lifts: each crane is flagged at or above the **tandem limit** (default 75 % of chart, [[in:tandem>Girder lift settings|Girder lift settings]]); at the limit counts as over; a one-crane girder lift uses the single-crane thresholds. The chart\'s rating basis (% of tipping) is shown with them; it is not used in a calculation. See [[rpt:basis-notes|Report §2 Basis]] and [[rpt:tandem-basis|§Tandem lifts › Basis]].' }
@@ -167,12 +167,12 @@
     { id: 'data', title: '5. Crane data', topics: [
       { id: 'd-source', title: 'Where the crane data come from', blocks: [
         { p: 'The crane files (one JSON file per crane, extracted from the manufacturers\' official load charts) are in the engineer\'s **private** GitHub repository Structural_References, branch **crane-charts**, folder "Crane Load Charts/library/" — the defaults under [[in:cranes#crSrc|Cranes tab → Library settings (GitHub)]]. **Load crane library from GitHub** reads them with the Cloud sync token (nothing is written there); **Load crane file(s)…** reads files you have. The library is kept in this browser; a project carries its own copy of each crane it uses (the card shows a fingerprint, and **Use the library copy** when the library\'s chart data differ).' },
-        { p: 'Each crane card shows the source document, revision, date, pages, the file and where it was loaded from, PRELIMINARY when the document is marked so, and the **terms**: the data are for reference in planning only. [[rpt:cranes|Report §Cranes]] lists the same for every crane.' },
+        { p: 'Each crane card shows the source document, revision, date, pages, the file and where it was loaded from, PRELIMINARY when the document is marked so, and the **terms** stated in the file: the library\'s charts are for reference in planning only. [[rpt:cranes|Report §Cranes]] lists the same for every crane.' },
         { key: 'The load chart in the cab for the specific crane (serial number, configuration and counterweight as rigged) governs. Check every value the lift depends on against it.' }
       ] },
       { id: 'd-paste', title: 'Adding a crane by pasting a chart', blocks: [
         { ol: [
-          '[[in:cranes>Crane library|Cranes tab]] → **New crane (paste a chart)…**: the crane data (make, model, source document, revision), plan dimensions and elevation geometry.',
+          '[[in:cranes>Crane library|Cranes tab]] → **New crane (paste a chart)…**: the crane data (make, model, source document, revision, terms), plan dimensions and elevation geometry.',
           'For each configuration, paste the chart from Excel: first row a label cell, then the boom lengths in ft; each next row the radius in ft, then the capacities. Blank, - or — = no rating (never interpolated). Tick **kip (× 1,000)** if the chart is in kips. Press **Read the chart** and check the preview (a capacity higher than at the smaller radius above it is marked).',
           '**Save to the project** (tick **also keep in this browser\'s library**), or **Add to the library and the project**. An edited chart is marked "edited here" on the card and in the Report.'
         ] }
@@ -309,7 +309,7 @@
     const keep = q; if (q) { el.querySelector('#manQ').value = ''; filter(''); }
     if (A.ui.otab !== 'man') A.showOTab('man');
     document.body.classList.add('manPrinting');
-    const done = () => { document.body.classList.remove('manPrinting'); window.removeEventListener('afterprint', done); if (keep) { el.querySelector('#manQ').value = keep; filter(keep); } };
+    let over = false; const done = () => { if (over) return; over = true; document.body.classList.remove('manPrinting'); window.removeEventListener('afterprint', done); if (keep) { el.querySelector('#manQ').value = keep; filter(keep); } };
     window.addEventListener('afterprint', done); window.print(); setTimeout(() => { if (!window.matchMedia || !window.matchMedia('print').matches) done(); }, 1000);
   }
   /* ---------- links ---------- */
