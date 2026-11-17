@@ -1302,7 +1302,7 @@ After: `esc(w[2].replace(/§.*$/, '') + (ref(w[1]) || '§'))` — "Report §6". 
 `crane-drawings` (5); new `tests/smoke/crane-qa.mjs` (3: the flag on card / Picks / Summary and gone once the load is entered, % = W / C
 unchanged; index labels "Report §n"; 0 console errors).
 
-## 2026-11-17 — QA walkthrough fixes 2: plan sheet placement vs its alignment (PR #PRNUM)
+## 2026-11-17 — QA walkthrough fixes 2: plan sheet placement vs its alignment (PR #1623)
 Found by the QA walkthrough: a sheet aligned to the map and then moved, rotated or reloaded at another size kept basis "aligned". The Site
 tab and Report §Plan sheets showed the current placement and, below it, "Align to map" steps giving a different scale and rotation,
 with nothing saying they disagree.
