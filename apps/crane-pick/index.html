@@ -89,7 +89,7 @@
     'engine/elev.js',       // C3-1: the lift in elevation: boom angle, tip, hook and load heights, hook reach
     'engine/clear3d.js',    // C3-2: 3D clearances along the path (boom, load line, load, counterweight vs power lines, obstructions, exclusion zones)
     'engine/cranegfx.js',   // 2026-11-17: the crane's plan symbol (carrier / tracks, outriggers, upperworks turned with the slew, boom, hook, load): map, Drawings, DXF, Crane tab
-    'ui/place.js',          // C2-2: Lifts input tab; cranes, pick and set points dragged on the map with live capacity
+    'ui/place.js',          // C2-2: Lifts input tab (every lift, 2026-11-17) and the setup cards of the Cranes & setups tab; cranes, pick and set points dragged on the map with live capacity
     'ui/picks.js',          // C2-3: Picks output tab (every pick, links) and the Report's §Lifts
     'ui/elev.js',           // C3-2: the elevation view along the boom (dock under the map, Report §Elevations)
     'ui/view3d.js',         // C3-3: the 3D view in the same dock (three.js r128 + OrbitControls, loaded from the CDN when first opened)
@@ -97,7 +97,7 @@
     'engine/ground.js',     // C4: float / track loads along the swing, bounding estimate, mats, bearing, stress at depth
     'ui/ground.js',         // C4: Ground input and output tabs, the pressure map and float-load labels, Report §Ground
     'engine/tandem.js',     // C5: girder lifts (one crane or two in tandem): load share, the girder path, per-step checks
-    'ui/tandem.js',         // C5: Girder lifts input tab, the girder poses on the map, scrubber, Picks rows, Report §Tandem lifts
+    'ui/tandem.js',         // C5: the girder-lift card and tandem limit (Lifts tab), the girder poses on the map, scrubber, Picks rows, Report §Tandem lifts
     'engine/align.js',      // 2026-11-17: the fitted alignment (tangents + circular curves) of a drawn / traced / OpenStreetMap route line
     'engine/osm.js',        // 2026-11-17: OpenStreetMap roads (Overpass API): road graph, snapping, shortest path along the roads, names, one-way
     'engine/roadsrc.js',    // 2026-11-17: where the roads come from: Overpass endpoints with fallbacks (POST, GET), MassDOT / MassGIS (MA), error types
@@ -216,6 +216,11 @@
   .alSteps{margin:4px 0 4px 18px;padding:0;font-size:9pt;color:#475569;} .alSteps li.done{color:#15803D;} .alSteps li.now{font-weight:700;color:#0f172a;}
   .chip{display:inline-block;font-size:8pt;padding:0 6px;border-radius:9px;border:1px solid var(--slate-400);background:var(--slate-100);color:#334155;white-space:nowrap;}
   .chip.chipOk{background:#DCFCE7;border-color:#86EFAC;color:#166534;} .chip.chipW{background:#FEF3C7;border-color:#FCD34D;color:#92400E;}
+.chip.chipG{background:#EDE9FE;border-color:#C4B5FD;color:#5B21B6;}
+.crSetups{border:1px solid #93C5FD;border-radius:6px;background:#F8FBFF;margin:6px 0;padding:4px 8px;}
+.crSetups .sec{margin:6px 0 2px;}
+h4.crSetH{margin:2px 0;font-size:10pt;color:var(--color-primary);}
+.itRow > .chip{flex:0 0 auto;}
   .shCard{border:1px solid var(--color-border);border-radius:6px;margin:8px 0;padding:6px 8px;background:#fff;} .shCard.on{border-color:#93C5FD;background:#F8FBFF;}
   .shHead{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;} .shName{font-weight:600;border:none;background:none;padding:2px 0;text-align:left;color:var(--color-primary);overflow-wrap:anywhere;flex:1 1 100px;min-width:0;}
   .shTg{font-size:9pt;white-space:nowrap;} .shBlk{border-top:1px dotted var(--line);margin-top:6px;padding-top:5px;}

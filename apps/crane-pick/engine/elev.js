@@ -171,7 +171,7 @@
       if (p.ang.used === 'chart' && Math.abs(p.ang.chart - p.ang.geom) > 0.5) flags.push({ kind: 'elev', level: 'info', text: `At the ${p.which}: the chart's loaded boom angle ${fmt(p.ang.chart, 1)}° is used (geometric ${fmt(p.ang.geom, 1)}°).` });
     });
     if (min && min.m < 0) flags.push({ kind: 'elev', level: 'stop', text: min.m === -Infinity ? 'During the swing: the boom cannot reach every point of the path.' : `During the swing: the hook block reaches above the allowed height (margin ${fmt(min.m, 2)} ft at R = ${fmt(min.R, 1)} ft).` });
-    if (g.assumed.length) flags.push({ kind: 'geom', level: 'info', text: `Crane geometry assumed (not in the file, not entered): ${g.assumed.join('; ')}. Heights and 3D clearances use these values: enter the crane's own (Cranes tab).` });
+    if (g.assumed.length) flags.push({ kind: 'geom', level: 'info', text: `Crane geometry assumed (not in the file, not entered): ${g.assumed.join('; ')}. Heights and 3D clearances use these values: enter the crane's own (Cranes & setups tab).` });
     const geoSteps = [st(idp, { id: 'hf', label: 'Boom-foot pin height above the pad', sym: 'h_{f}', value: g.footH, unit: 'ft', note: FROM[g.from.footH] }),
       st(idp, { id: 'e', label: 'Boom-foot pin ahead of the rotation centre', sym: 'e', value: g.footE, unit: 'ft', note: FROM[g.from.footE] }),
       st(idp, { id: 'hd', label: 'Head allowance (tip pin to the highest block position)', sym: 'H_{hd}', value: g.head, unit: 'ft', note: FROM[g.from.head] })];

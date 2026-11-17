@@ -498,7 +498,7 @@
     options(P).filter(o => o.used).forEach(o => {
       const m = model(P, ctx, { craneId: o.craneId, setupId: o.setupId, at: 'gov' }); if (!m) return;
       out.push({ id: 'crane-' + o.setupId, title: `CRANE: ${m.u.name} (${m.name})`, kmin: 48, c: { m },
-        fn: (D, C) => sheetFn(D, C.m), src: [['out', 'crane', 'Crane tab'], ['in', 'cranes', 'Cranes input tab'], ['rpt', 'crane-' + o.craneId, 'Report §Cranes']] });
+        fn: (D, C) => sheetFn(D, C.m), src: [['out', 'crane', 'Crane tab'], ['in', 'cranes', 'Cranes & setups input tab'], ['rpt', 'crane-' + o.craneId, 'Report §Cranes']] });
     });
     return out;
   }

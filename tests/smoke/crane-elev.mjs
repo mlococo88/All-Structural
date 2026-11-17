@@ -24,7 +24,9 @@ const near = (a, b, tol, m) => assert.ok(Math.abs(a - b) <= tol, `${m || ''}: ${
 const { b, p, errs } = await openPage(FILE, { vw: 1280, vh: 860, ls: { 'crane.ui': '{"base":"none","itab":"cranes"}' } });
 const proj = () => p.evaluate(() => JSON.parse(localStorage.getItem('crane.project.current')));
 const shot = async nm => { if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); await p.screenshot({ path: path.join(SHOTS, nm + '.png') }); } };
-const setF = async (sel, v) => { await p.fill(sel, String(v)); await p.dispatchEvent(sel, 'change'); await p.waitForTimeout(80); };
+const itabOf = sel => /^#lu|^\[data-la=(addPick|delU|zoomU)\]/.test(sel) ? 'cranes' : /^#(lk|ls|lf|tl)|lkSwing|^\[data-(la|ta)=/.test(sel) ? 'lifts' : null;   // 2026-11-17: setups on Cranes & setups, picks / girder lifts on Lifts
+const goTab = async sel => { const t = itabOf(sel); if (t) await p.evaluate(t => { if (CranePickApp.ui.itab !== t) CranePickApp.showITab(t); }, t); };
+const setF = async (sel, v) => { await goTab(sel); await p.fill(sel, String(v)); await p.dispatchEvent(sel, 'change'); await p.waitForTimeout(80); };
 const txt = sel => p.$eval(sel, e => (e.innerText || e.textContent).replace(/\s+/g, ' '));
 const settle = () => p.waitForTimeout(450);
 const scr = q => p.evaluate(q => { const m = CranePickMap.map, cp = m.latLngToContainerPoint(CranePickMap.toLL(q)), r = m.getContainer().getBoundingClientRect(); return { x: r.x + cp.x, y: r.y + cp.y }; }, q);
@@ -51,7 +53,7 @@ try {
   await p.click(`[data-ca=place][data-id="${cid}"]`); await p.waitForTimeout(400);
   await setF('#luE', 1000); await setF('#luN', 2000); await setF('#luHead', 0); await setF('#luBoom', 60); await setF('#luPad', 100);
   await setF('#lkPE', 1030); await setF('#lkPN', 2000); await setF('#lkSE', 1000); await setF('#lkSN', 2020); await setF('#lkLoad', 20000);
-  await p.click('#lkElev summary'); await p.waitForTimeout(80);
+  await goTab('#lkElev summary'); await p.click('#lkElev summary'); await p.waitForTimeout(80);
   for (const [id, v] of [['#lkPg', 98], ['#lkPh', 4], ['#lkSh', 20], ['#lkLH', 6], ['#lkRigH', 12], ['#lkBlk', 5], ['#lkLL', 40], ['#lkLW', 4]]) await setF(id, v);
   P = await proj(); assert.deepEqual(P.picks[0].elev, { pg: 98, sg: null, trav: null, ph: 4, sh: 20, rig: 12, blk: 5, L: 40, W: 4, H: 6 }); assert.equal(P.setups[0].pad, 100);
   assert.equal(await txt('#lfHeights'), 'Heights: boom angle 61.0° (chart) at the pick / 72.0° (chart) at the set · tip el. 160.48 / 165.06 ft · hook el. 120.00 / 138.00 ft · load bottom el. 102.00 / 120.00 ft (travel 120.00) · hook reach margin 32.48 ft / 19.06 ft / swing 14.48 ft');

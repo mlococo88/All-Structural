@@ -26,7 +26,9 @@ const near = (a, b, tol, m) => assert.ok(Math.abs(a - b) <= tol, `${m || ''}: ${
 const { b, p, errs } = await openPage(FILE, { vw: 1280, vh: 860, ls: { 'crane.ui': '{"base":"none","itab":"cranes"}' } });
 const proj = () => p.evaluate(() => JSON.parse(localStorage.getItem('crane.project.current')));
 const shot = async nm => { if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); await p.screenshot({ path: path.join(SHOTS, nm + '.png') }); } };
-const setF = async (sel, v) => { await p.fill(sel, String(v)); await p.dispatchEvent(sel, 'change'); await p.waitForTimeout(80); };
+const itabOf = sel => /^#lu|^\[data-la=(addPick|delU|zoomU)\]/.test(sel) ? 'cranes' : /^#(lk|ls|lf|tl)|lkSwing|^\[data-(la|ta)=/.test(sel) ? 'lifts' : null;   // 2026-11-17: setups on Cranes & setups, picks / girder lifts on Lifts
+const goTab = async sel => { const t = itabOf(sel); if (t) await p.evaluate(t => { if (CranePickApp.ui.itab !== t) CranePickApp.showITab(t); }, t); };
+const setF = async (sel, v) => { await goTab(sel); await p.fill(sel, String(v)); await p.dispatchEvent(sel, 'change'); await p.waitForTimeout(80); };
 const txt = sel => p.$eval(sel, e => (e.innerText || e.textContent).replace(/\s+/g, ' '));
 const settle = () => p.waitForTimeout(450);
 const scr = q => p.evaluate(q => { const m = CranePickMap.map, cp = m.latLngToContainerPoint(CranePickMap.toLL(q)), r = m.getContainer().getBoundingClientRect(); return { x: r.x + cp.x, y: r.y + cp.y }; }, q);
@@ -39,7 +41,7 @@ try {
   await p.click('[data-ca=add]'); await p.waitForTimeout(150); await p.click('[data-ca=place]'); await p.waitForTimeout(400);
   await setF('#luE', 1000); await setF('#luN', 2000); await setF('#luBoom', 60); await setF('#luPad', 100);
   await setF('#lkPE', 1030); await setF('#lkPN', 2000); await setF('#lkSE', 1000); await setF('#lkSN', 2020); await setF('#lkLoad', 20000);
-  await p.click('#lkElev summary'); await p.waitForTimeout(80);
+  await goTab('#lkElev summary'); await p.click('#lkElev summary'); await p.waitForTimeout(80);
   for (const [id, v] of [['#lkPg', 98], ['#lkPh', 4], ['#lkSh', 20], ['#lkLH', 6], ['#lkRigH', 12], ['#lkBlk', 5], ['#lkLL', 40], ['#lkLW', 4]]) await setF(id, v);
   // 1. power line
   await p.evaluate(() => CranePickApp.update(P => { P.items.push(CranePickModel.normItem({ id: 'pl1', type: 'power', name: 'OH 115 kV', kv: 115, height: 50, gradeEl: 100, pts: [{ x: 1040, y: 1900 }, { x: 1040, y: 2100 }] })); }, 'items')); await p.waitForTimeout(200);
@@ -81,7 +83,7 @@ try {
   // 4. path model
   await p.evaluate(() => CranePickApp.update(P => { P.items = [CranePickModel.normItem({ id: 'ex1', type: 'excl', name: 'Lane', pts: [{ x: 1016, y: 2016 }, { x: 1019, y: 2016 }, { x: 1019, y: 2019 }, { x: 1016, y: 2019 }] })]; P.picks[0].elev.L = null; P.picks[0].elev.W = null; }, 'items')); await p.waitForTimeout(200);
   r = await c3(); assert.equal(r.res[0].comps.load, 0); assert.match(r.flags.join('|'), /Over the exclusion zone "Lane": boom, load line, load/);
-  await p.selectOption('#lsPath', 'luff'); await p.dispatchEvent('#lsPath', 'change'); await p.waitForTimeout(200);
+  await goTab('#lsPath'); await p.selectOption('#lsPath', 'luff'); await p.dispatchEvent('#lsPath', 'change'); await p.waitForTimeout(200);
   P = await proj(); assert.equal(P.lift.path, 'luff'); r = await c3(); near(r.res[0].comps.load, Math.hypot(16, 16) - 20, 1e-6); assert.doesNotMatch(r.flags.join('|'), /load \(/);
   assert.match(await txt('#lfSteps'), /Path model \(project setting\): luff at the pick, then swing at the set radius/);
   await settle(); await p.click('#bUndo'); await p.waitForTimeout(200); assert.equal((await proj()).lift.path, 'uniform'); assert.equal(await p.inputValue('#lsPath'), 'uniform');

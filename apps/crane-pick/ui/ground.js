@@ -65,9 +65,9 @@
     if (!inEl) return;
     const P = A.P, utils = P.items.filter(i => i.type === 'util'), caps = (P.ground && P.ground.caps) || {};
     inEl.innerHTML = `<div class="sec"><div class="secHead">Ground and supports</div><div class="secBody">
-      <p class="note">Float / track loads along every pick's swing (1° steps): the rigid-body method when the crane's weights and CGs are entered on its card (Cranes tab), else the bounding <b>estimate</b> (gross operating weight + counterweight + hook load at the most unfavourable CG). Results on the <a href="#" data-gt="out">Ground tab</a>, the map and the Report.</p>
+      <p class="note">Float / track loads along every pick's swing (1° steps): the rigid-body method when the crane's weights and CGs are entered on its card (Cranes &amp; setups tab), else the bounding <b>estimate</b> (gross operating weight + counterweight + hook load at the most unfavourable CG). Results on the <a href="#" data-gt="out">Ground tab</a>, the map and the Report.</p>
       <label class="note" style="display:block"><input type="checkbox" id="grMap"${showMap() ? ' checked' : ''}> Show the ground pressures and float loads on the map</label></div></div>
-      ${P.setups.length ? P.setups.map(u => setupIn(u)).join('') : '<div class="sec"><div class="secBody"><p class="note">No crane setup yet (Lifts tab).</p></div></div>'}
+      ${P.setups.length ? P.setups.map(u => setupIn(u)).join('') : '<div class="sec"><div class="secBody"><p class="note">No crane setup yet (Cranes &amp; setups tab).</p></div></div>'}
       <div class="sec"><div class="secHead">Buried utilities, culverts, walls (${utils.length})</div><div class="secBody">
         ${utils.length ? utils.map(it => `<div class="itRow"><span class="itSum" style="flex:1 1 100%">${esc(it.name || M.UTIL_KINDS[it.kind] || 'utility')}: ${isNum(it.depth) ? 'depth to top ' + fmt(it.depth, 2) + ' ft' : isNum(it.topEl) ? 'top el. ' + fmt(it.topEl, 2) + ' ft' : '<span class="warnT">depth not entered (Site items)</span>'}</span></div>
           ${numIn('grCap_' + it.id, caps[it.id], 'Allowable stress increase at its top', 'psf', 'optional: report only', ` data-cap="${esc(it.id)}"`)}`).join('') : '<p class="note">Draw them on the Site items tab (with the depth to top or the top elevation) for the stress-at-depth checks.</p>'}</div></div>`;

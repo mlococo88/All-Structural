@@ -23,8 +23,8 @@
     const pk = L && L.kind === 'pick' ? L : null, tl = L && L.kind === 'tandem' ? L : null;
     if (['Plan', 'Elevation', 'Chart', 'Setup', 'Settings'].includes(r.grp)) { if (pk) out.push(`<a href="#" data-cg="pick" data-id="${esc(pk.id)}">worked: ${esc(pk.name)}</a>`); if (tl) out.push(`<a href="#" data-cg="tandem" data-id="${esc(tl.id)}">worked: ${esc(tl.name)}</a>`); }
     if (['Weights', 'Ground'].includes(r.grp) || (r.grp === 'Plan' && /outrigger|spread|track|gauge/i.test(r.label))) { if (pk) out.push(`<a href="#" data-cg="ground" data-id="${esc(pk.id)}">ground: ${esc(pk.name)}</a>`); if (tl) out.push(`<a href="#" data-cg="tandem" data-id="${esc(tl.id)}">ground: ${esc(tl.name)}</a>`); }
-    if (['Plan', 'Elevation', 'Weights', 'Chart', 'Ground'].includes(r.grp)) out.push(`<a href="#" data-cg="cranes">Cranes tab</a>`);
-    if (r.grp === 'Setup' || r.id === 'boom' || r.grp === 'Settings') out.push(`<a href="#" data-cg="lifts">Lifts tab</a>`);
+    if (['Plan', 'Elevation', 'Weights', 'Chart', 'Ground'].includes(r.grp)) out.push(`<a href="#" data-cg="cranes">Cranes &amp; setups tab</a>`);
+    if (r.grp === 'Setup' || r.id === 'boom' || r.grp === 'Settings') out.push(`<a href="#" data-cg="${r.grp === 'Settings' ? 'lifts' : 'setup'}" data-id="${esc(m.u ? m.u.id : '')}">${r.grp === 'Settings' ? 'Lifts tab (settings)' : 'edit setup (Cranes &amp; setups tab)'}</a>`);
     return out.join(' · ');
   }
   function legend() { return '<p class="note crnLeg">Each value is labelled with its source: <span class="crnS">[file p.x]</span> the crane file (printed page) · <span class="crnS">[chart p.x]</span> the chart configuration · <span class="crnS">[entered]</span> entered in this tool · <span class="crnA">[ASSUMED (default)]</span> / <span class="crnA">not given</span>: guessed by the app, check it · values without a tag are the engine\'s results at the point shown.</p>'; }
@@ -109,11 +109,12 @@
     if (k === 'csv') return stakeout();
     if (k === 'cranes') return A.showITab('cranes');
     if (k === 'lifts') return A.showITab('lifts');
+    if (k === 'setup') { const sid = id; if (sid && window.CranePickPlace && A.P.setups.some(u => u.id === sid)) return window.CranePickPlace.select(sid, null); return A.showITab('cranes'); }   // 2026-11-17: the setups are on the Cranes & setups tab
     if (k === 'rpt') return gotoReport(a.dataset.key);
     if (k === 'dwg') return window.CranePickDrawingsUI && window.CranePickDrawingsUI.show(a.dataset.sheet);
     if (k === 'pick') { A.showOTab('picks'); setTimeout(() => { const d = document.getElementById('pk-' + id); if (d) { d.open = true; d.scrollIntoView({ block: 'start' }); } }, 30); return; }
     if (k === 'ground') { A.showOTab('ground'); setTimeout(() => { const d = document.getElementById('gr-' + id); if (d) { if (d.tagName === 'DETAILS') d.open = true; d.scrollIntoView({ block: 'start' }); } }, 30); return; }
-    if (k === 'tandem') { A.showITab('tandem'); if (window.CranePickTandemUI) window.CranePickTandemUI.select(id); }
+    if (k === 'tandem') { A.showITab('lifts'); if (window.CranePickTandemUI) window.CranePickTandemUI.select(id); }
   }
   /* ---------- Report §Cranes: the figures of each setup of a crane used by a lift (ui/cranes.js adds them to the crane's subsection) ---------- */
   function reportItems(P, craneId) {

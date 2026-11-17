@@ -663,10 +663,10 @@
       list.push({ id: 'tlift-' + t.id, title: `${rr.single ? 'GIRDER LIFT' : 'TANDEM LIFT'} PLAN: ${t.name}`, fn: viewSheet, kmin: 48, c: { ...C, tl, planFn: tandemPlan, elevs: govs.map(i => (D2, C2) => tandemElev(D2, C2, i)), rowsFn: tandemRows, flags: rr.flags, tableTitle: 'LIFT DATA',
         notes: ['PLAN TO SCALE, GRID NORTH UP. GIRDER ON THE TRUCK (PICK) AND ON THE BEARINGS (SET), THE PATH OF ITS CENTRE (DASHED), W1...: WAYPOINTS; EACH CRANE\'S BOOM AT ITS GOVERNING STEP (CENTER LINE) TO ITS HOOK H1 / H2; F1...: 3D CLEARANCE FLAGS.',
           `ELEVATION IN THE VERTICAL PLANE THROUGH ${nC(t) > 1 ? 'BOTH CRANES' : 'THE CRANE AND ITS HOOK'}, AT THE GOVERNING STEP, TO THE SAME SCALE.`] },
-        src: [['in', 'tandem', 'Girder lifts input tab'], ['out', 'picks', 'Picks tab (girder lifts)'], ['rpt', 'tandem-' + t.id, 'Report §Tandem lifts']] });
+        src: [['in', 'lifts', 'Lifts input tab (girder lift)'], ['out', 'picks', 'Picks tab (girder lifts)'], ['rpt', 'tandem-' + t.id, 'Report §Tandem lifts']] });
       if (opt.aerial) list.push({ id: 'aerial-' + t.id, title: `SITE PLAN - AERIAL: ${t.name}`, fn: aerialSheet, kmin: 48, aerial: true, c: { ...C, ae: { P, w: tl.w, ctx, only: { tandems: [t.id] }, title: `AERIAL: ${t.name}` }, notes: AERIAL_NOTES },
-        src: [['in', 'tandem', 'Girder lifts input tab'], ['out', 'plan', 'Plan tab (map)'], ['rpt', 'aerial', 'Report §Site plan (aerial)']] });
-      list.push({ id: 'rig-' + t.id, title: `RIGGING AND LOAD SHARE: ${t.name}`, fn: rigging, kmin: 24, c: { ...C, tl }, src: [['in', 'tandem', 'Girder lifts input tab (girder, hooks)'], ['rpt', 'tandem-' + t.id, 'Report §Tandem lifts (load share)']] });
+        src: [['in', 'lifts', 'Lifts input tab (girder lift)'], ['out', 'plan', 'Plan tab (map)'], ['rpt', 'aerial', 'Report §Site plan (aerial)']] });
+      list.push({ id: 'rig-' + t.id, title: `RIGGING AND LOAD SHARE: ${t.name}`, fn: rigging, kmin: 24, c: { ...C, tl }, src: [['in', 'lifts', 'Lifts input tab (girder lift: girder, hooks)'], ['rpt', 'tandem-' + t.id, 'Report §Tandem lifts (load share)']] });
     });
     // the ground sheet
     const gm = groundModel(P, ctx);
@@ -681,14 +681,14 @@
       if (window.CranePickTruckGfx && ev.geo) list.push({ id: 'routeveh-' + r.i, title: `TRUCKING ROUTE: ${r.name} - VEHICLE AND LOAD`, fn: routeVehSheet, kmin: 24, c: { ...C, ro: { P, rt: r.rt, ev, row: r } }, src: [['in', 'route', 'Route input tab (vehicle, load)'], ['out', 'route', 'Route tab (Vehicle and load)'], ['rpt', r.key, 'Report §Route']] });   // 2026-11-17
     });
     EXTRA.forEach(fn => { try { (fn(P, ctx, C) || []).forEach(s => list.push(Object.assign({ kmin: 1, c: { ...C } }, s))); } catch (e) { miss.push(['ADDED SHEET', String(e.message)]); } });
-    if (!sum.length) miss.push(['LIFT PLAN SHEETS', 'NO LIFT YET (LIFTS OR GIRDER LIFTS TAB)']);
+    if (!sum.length) miss.push(['LIFT PLAN SHEETS', 'NO LIFT YET (LIFTS TAB)']);
     // the general notes (second) and the cover with the sheet index (first): the cover's own sheets counted in the index
     // the aerial site plan of the whole site: first after the general notes (the per-lift aerial sheets follow each lift's plan sheet)
     const sw = opt.aerial ? siteWindow(P, ctx) : null;
     if (sw) list.unshift({ id: 'aerial', title: 'SITE PLAN - AERIAL', fn: aerialSheet, kmin: 48, aerial: true, c: { ...C, ae: { P, w: sw, ctx, title: 'SITE PLAN - AERIAL' }, notes: AERIAL_NOTES },
       src: [['out', 'plan', 'Plan tab (map)'], ['in', 'items', 'Site items input tab'], ['rpt', 'aerial', 'Report §Site plan (aerial)']] });
     const head = [], notesL = [], npg = blockPages(notesBlocks(P, ctx), aw, ah);
-    npg.forEach((items, i) => notesL.push({ id: i ? `notes${i + 1}` : 'notes', title: npg.length > 1 ? `GENERAL NOTES (${i + 1} OF ${npg.length})` : 'GENERAL NOTES', fn: pageFn(items), c: { ...C }, kmin: 1, noScale: true, src: [['in', 'cranes', 'Cranes input tab'], ['in', 'lifts', 'Lifts input tab (settings)'], ['rpt', 'basis', 'Report §Basis']] }));
+    npg.forEach((items, i) => notesL.push({ id: i ? `notes${i + 1}` : 'notes', title: npg.length > 1 ? `GENERAL NOTES (${i + 1} OF ${npg.length})` : 'GENERAL NOTES', fn: pageFn(items), c: { ...C }, kmin: 1, noScale: true, src: [['in', 'cranes', 'Cranes & setups input tab'], ['in', 'lifts', 'Lifts input tab (settings)'], ['rpt', 'basis', 'Report §Basis']] }));
     let nC0 = 1, cpg = null;
     for (let it = 0; it < 5; it++) {
       const titles = [...Array.from({ length: nC0 }, (_, i) => [nC0 > 1 ? `COVER AND SHEET INDEX (${i + 1} OF ${nC0})` : 'COVER AND SHEET INDEX', i ? `cover${i + 1}` : 'cover']), ...notesL.map(q => [q.title, q.id]), ...list.map(q => [q.title, q.id])];

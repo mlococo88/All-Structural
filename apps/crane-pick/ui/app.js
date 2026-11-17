@@ -15,6 +15,11 @@
   let P = M.newProject(), openName = '', H = null, autoFailed = false;
   let ui = { itab: 'proj', otab: 'plan', base: 'sat' };
   try { Object.assign(ui, JSON.parse((store && store.getItem(M.KEYS.ui)) || '{}')); } catch (e) { /* defaults */ }
+  /* 2026-11-17 (engineer decision): the input tabs were reorganised: "Cranes & setups" (id cranes: the crane library, the project's cranes
+     and each crane's setups) and one "Lifts" tab (id lifts: single picks and girder lifts). The old "Girder lifts" tab (id tandem) maps to
+     Lifts with the girder-lift card shown (ui.liftCard); a saved preference 'cranes' / 'lifts' keeps its id. */
+  const ITAB_ALIAS = { tandem: 'lifts' };
+  if (ui.itab === 'tandem') { ui.itab = 'lifts'; ui.liftCard = 'tandem'; }
   const saveUi = () => { try { store && store.setItem(M.KEYS.ui, JSON.stringify(ui)); } catch (e) { /* not kept */ } };
   const subs = {};
   const on = (ev, fn) => { (subs[ev] || (subs[ev] = [])).push(fn); };
@@ -51,6 +56,7 @@
   function inTab(t) { inTabs.push(t); }
   function outTab(t) { const i = t.before ? outTabs.findIndex(x => x.id === t.before) : -1; if (i >= 0) outTabs.splice(i, 0, t); else outTabs.push(t); }   // before (C2-3): the id of the tab it goes in front of
   function showITab(id) {
+    id = ITAB_ALIAS[id] || id;
     if (!inTabs.some(t => t.id === id)) id = inTabs[0].id;
     ui.itab = id; saveUi();
     document.querySelectorAll('#inTabs [data-itab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.itab === id)));

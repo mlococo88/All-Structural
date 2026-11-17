@@ -2,7 +2,7 @@
 // Crane Pick Analyzer (apps/crane-pick), C2-2: crane placement and live capacity. Headless Chromium, file://, base map None. Only the
 // SYNTHETIC fake crane (tests/smoke/crane-fake-wheeled.json) is used.
 //   1. fake crane loaded from a file, added, "Place on the map": a setup drawn to scale (carrier, 4 floats at the full spread, tail-swing
-//      circle, ✥ and ↻ handles) with a first pick (P, S, boom lines, swing path, live labels); the Lifts tab;
+//      circle, ✥ and ↻ handles) with a first pick (P, S, boom lines, swing path, live labels); the setup card under its crane (Cranes & setups tab);
 //   2. the hand-check case typed in (rotation E/N, boom 60 ft, pick +30 ft E, set +20 ft N, W = 20,000 + 1,000 + hook block 1,000 lb from
 //      the crane's list): R 30.00 ft → C 39,000 lb → 56.4 %; set 20.00 ft → 58,000 lb → 37.9 %; the map labels and the live card agree;
 //   3. dragging the pick point: the label and the live card change during the drag (values = the engine's for the dragged position),
@@ -26,7 +26,9 @@ const near = (a, b, tol, m) => assert.ok(Math.abs(a - b) <= tol, `${m || ''}: ${
 const { b, p, errs } = await openPage(FILE, { vw: 1280, vh: 860, ls: { 'crane.ui': '{"base":"none","itab":"cranes"}' } });
 const proj = () => p.evaluate(() => JSON.parse(localStorage.getItem('crane.project.current')));
 const shot = async nm => { if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); await p.screenshot({ path: path.join(SHOTS, nm + '.png') }); } };
-const setF = async (sel, v) => { await p.fill(sel, String(v)); await p.dispatchEvent(sel, 'change'); await p.waitForTimeout(80); };
+const itabOf = sel => /^#lu|^\[data-la=(addPick|delU|zoomU)\]/.test(sel) ? 'cranes' : /^#(lk|ls|lf|tl)|lkSwing|^\[data-(la|ta)=/.test(sel) ? 'lifts' : null;   // 2026-11-17: setups on Cranes & setups, picks / girder lifts on Lifts
+const goTab = async sel => { const t = itabOf(sel); if (t) await p.evaluate(t => { if (CranePickApp.ui.itab !== t) CranePickApp.showITab(t); }, t); };
+const setF = async (sel, v) => { await goTab(sel); await p.fill(sel, String(v)); await p.dispatchEvent(sel, 'change'); await p.waitForTimeout(80); };
 const txt = sel => p.$eval(sel, e => (e.innerText || e.textContent).replace(/\s+/g, ' '));
 const settle = () => p.waitForTimeout(450);
 const scr = q => p.evaluate(q => { const m = CranePickMap.map, cp = m.latLngToContainerPoint(CranePickMap.toLL(q)), r = m.getContainer().getBoundingClientRect(); return { x: r.x + cp.x, y: r.y + cp.y }; }, q);
@@ -39,17 +41,17 @@ try {
   await p.setInputFiles('#crFiles', [FW]); await p.waitForFunction(() => /1 crane loaded/.test(document.querySelector('#crStatus').textContent));
   await p.click('[data-ca=add]'); await p.waitForTimeout(150); await p.click('[data-ca=place]'); await p.waitForTimeout(400);
   let P = await proj(); assert.equal(P.setups.length, 1); assert.equal(P.picks.length, 1); assert.equal(P.picks[0].setupId, P.setups[0].id);
-  assert.equal(await p.$eval('#inTabs [aria-selected=true]', e => e.textContent), 'Lifts');
+  assert.equal(await p.$eval('#inTabs [aria-selected=true]', e => e.textContent), 'Cranes & setups'); assert.ok(await p.$('.crSetups #luCard'), 'the new setup\'s card opens under its crane');
   assert.equal(await p.$$eval('.crHandle.crCor', a => a.length), 1); assert.equal(await p.$$eval('.crHandle.crRot', a => a.length), 1);
   assert.equal(await p.$$eval('.crPtP', a => a.length), 1); assert.equal(await p.$$eval('.crPtS', a => a.length), 1); assert.equal((await labels()).length, 2);
   const g = await p.evaluate(() => { const g = CranePickPlace.layers.values().next().value; return { floats: g.floats.length, body: !!g.body, tail: !!g.tail, beams: !!g.beams }; });
   assert.deepEqual(g, { floats: 4, body: true, tail: true, beams: true });
-  ok('Place on the map: setup drawn to scale (carrier, beams, 4 floats, tail-swing circle, ✥ / ↻) with a first pick (P, S, path, 2 live labels); Lifts tab');
+  ok('Place on the map: setup drawn to scale (carrier, beams, 4 floats, tail-swing circle, ✥ / ↻) with a first pick (P, S, path, 2 live labels); the setup card opens under its crane (Cranes & setups tab)');
 
   // 2. the hand check
   await setF('#luE', 1000); await setF('#luN', 2000); await setF('#luHead', 0); await setF('#luBoom', 60);
   await setF('#lkPE', 1030); await setF('#lkPN', 2000); await setF('#lkSE', 1000); await setF('#lkSN', 2020);
-  await setF('#lkLoad', '20,000'); await setF('#lkRig', 1000); await p.selectOption('#lkHookSel', '0'); await p.waitForTimeout(100);
+  await setF('#lkLoad', '20,000'); await setF('#lkRig', 1000); await goTab('#lkHookSel'); await p.selectOption('#lkHookSel', '0'); await p.waitForTimeout(100);
   P = await proj(); assert.deepEqual([P.picks[0].hook, P.picks[0].hookLabel], [1000, 'FAKE 50 t block']);
   await p.evaluate(() => CranePickPlace.select(CranePickApp.P.setups[0].id, CranePickApp.P.picks[0].id)); await p.waitForTimeout(150);
   await p.evaluate(() => { const u = CranePickApp.P.setups[0]; CranePickMap.fit([{ x: u.x - 45, y: u.y - 45 }, { x: u.x + 45, y: u.y + 45 }]); }); await p.waitForTimeout(200);
@@ -109,16 +111,16 @@ try {
 
   // 6. chart group, interpolation, swing direction
   await setF('#lkPE', 1025); assert.equal((await engine()).C, 39000, 'R 25 → R_tab 30');
-  assert.equal(await p.$eval('#lsInterp', e => e.disabled), false); await p.check('#lsInterp'); await p.dispatchEvent('#lsInterp', 'change'); await p.waitForTimeout(150);
+  assert.equal(await p.$eval('#lsInterp', e => e.disabled), false); await goTab('#lsInterp'); await p.check('#lsInterp'); await p.dispatchEvent('#lsInterp', 'change'); await p.waitForTimeout(150);
   assert.equal((await engine()).C, 48500, 'interpolated 58,000 + (39,000 − 58,000)(5 / 10)'); assert.match(await p.$eval('#lfSteps', e => e.textContent), /Linear interpolation/);
-  await p.uncheck('#lsInterp'); await p.dispatchEvent('#lsInterp', 'change'); await p.waitForTimeout(100); await setF('#lkPE', 1030);
-  await p.check('input[name=lkSwing][value=cw]'); await p.dispatchEvent('input[name=lkSwing][value=cw]', 'change'); await p.waitForTimeout(150);
-  assert.match(await txt('#lfRes'), /swing 270\.0° clockwise/); await p.check('input[name=lkSwing][value=short]'); await p.dispatchEvent('input[name=lkSwing][value=short]', 'change'); await p.waitForTimeout(100);
+  await goTab('#lsInterp'); await p.uncheck('#lsInterp'); await p.dispatchEvent('#lsInterp', 'change'); await p.waitForTimeout(100); await setF('#lkPE', 1030);
+  await goTab('input[name=lkSwing][value=cw]'); await p.check('input[name=lkSwing][value=cw]'); await p.dispatchEvent('input[name=lkSwing][value=cw]', 'change'); await p.waitForTimeout(150);
+  assert.match(await txt('#lfRes'), /swing 270\.0° clockwise/); await goTab('input[name=lkSwing][value=short]'); await p.check('input[name=lkSwing][value=short]'); await p.dispatchEvent('input[name=lkSwing][value=short]', 'change'); await p.waitForTimeout(100);
   const rub = await p.$$eval('#luGroup option', a => a.find(o => /on rubber/.test(o.textContent)).value);
-  await p.selectOption('#luGroup', rub); await p.waitForTimeout(200); await setF('#luBoom', 40);
+  await goTab('#luGroup'); await p.selectOption('#luGroup', rub); await p.waitForTimeout(200); await setF('#luBoom', 40);
   assert.equal(await p.evaluate(() => CranePickPlace.layers.values().next().value.floats.length), 0, 'on rubber: no floats');
   assert.match(await txt('#luCard'), /Zone charts: 360°, over front/);
-  await p.selectOption('#luGroup', await p.$$eval('#luGroup option', a => a[0].value)); await p.waitForTimeout(150); await setF('#luBoom', 60);
+  await goTab('#luGroup'); await p.selectOption('#luGroup', await p.$$eval('#luGroup option', a => a[0].value)); await p.waitForTimeout(150); await setF('#luBoom', 60);
   ok('interpolation (notes permit it) 39,000 → 48,500 lb at R 25 ft; clockwise swing 270°; chart group on rubber: no floats, zone charts listed');
 
   // 7. plan clearance to a power line
