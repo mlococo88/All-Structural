@@ -33,7 +33,7 @@
   /* ---------- evaluation (memoized for an unchanged state) ---------- */
   const memo = new Map();
   function evalRoute(r, live) {
-    const P = A.P, t = RT.tandemOf(r, P), key = JSON.stringify([r, P.items, P.routeMarks, P.picks, P.setups, t, (P.cranes || []).map(c => c.id + c.fp), P.lift, !!live]);
+    const P = A.P, t = RT.tandemOf(r, P), key = JSON.stringify([r, P.items, P.routeMarks, P.picks, P.setups, t, (P.cranes || []).map(c => c.id + c.fp), P.lift, P.routeSet, !!live]);
     if (memo.has(key)) return memo.get(key);
     const tev = t && window.CranePickTandemUI ? window.CranePickTandemUI.evalT(t) : null;   // C5: the girder lift (its pick pose: both cranes)
     const ev = RT.evaluate(r, P, 'rt' + ((P.routes || []).indexOf(r) + 1), Object.assign(live ? { step: 1 } : {}, { tev }));
@@ -63,7 +63,7 @@
       const pl = add(Lf.polyline(lls(pathPts(ev.sim)), { color: COL.path, weight: on ? 4 : 3, opacity: 0.9, className: 'crRtPath', bubblingMouseEvents: false }));
       pl.on('click', e => { if (MP().tool) return; Lf.DomEvent.stop(e); select(r.id); });
       pl.bindTooltip(`${esc(r.name)} · ${fmt(ev.sim.pa.L, 0)} ft · max off-tracking ${fmt(ev.otMax, 1)} ft`, { sticky: true, className: 'crName' });
-      const q = vehAt(r, ev); if (q) q.parts.forEach(pp => add(Lf.polygon(lls(pp.poly), { color: pp.part === 'load' ? COL.load : '#0F172A', weight: 1.5, fillColor: pp.part === 'load' ? COL.load : '#fff', fillOpacity: pp.part === 'load' ? 0.35 : 0.6, interactive: false })));
+      const q = vehAt(r, ev); if (q) vehLayers(r, ev, q, add);
       ev.turns.forEach(t => { const mid = RT.at(ev.sim.pa, (t.s0 + t.s1) / 2); const cls = t.flags.some(f => f.level === 'stop') ? 'stop' : t.flags.length ? 'warn' : 'ok';
         add(Lf.marker(MP().toLL(mid), { icon: Lf.divIcon({ className: 'crRtLbl', html: `<span class="rt-${cls}">${tagOf(t)} ${t.kind ? 'R' : 'r'} ${fmt(t.r, 0)} · OT ${fmt(t.ot, 1)} ft</span>`, iconSize: null, iconAnchor: [0, 0] }), interactive: false, keyboard: false })); });
       ev.flags.filter(f => isNum(f.s) && f.level !== 'info').forEach(f => { const p = RT.at(ev.sim.pa, f.s);
@@ -71,6 +71,17 @@
       if (ev.stage && ev.stage.cg) add(Lf.circleMarker(MP().toLL(ev.stage.cg), { radius: 5, color: COL.load, weight: 2, fillColor: '#fff', fillOpacity: 1, interactive: false }));
     }
     layers.set(r.id, { all, ev });
+  }
+  /* the vehicle on the map at the chosen position: engine/truckgfx.js plan() at the simulation's pose (the same drawing as the Route tab,
+     the Report and the vehicle sheet; its unit outlines are the swept path's): outlines, the cab back, axles and tyres, the pins, the CG */
+  function vehLayers(r, ev, q, add) {
+    const Lf = L_(), TG = window.CranePickTruckGfx, ll = a => a.map(c => MP().toLL({ x: c[0], y: c[1] }));
+    if (!TG) { q.parts.forEach(pp => add(Lf.polygon(lls(pp.poly), { color: pp.part === 'load' ? COL.load : '#0F172A', weight: 1.5, fillColor: pp.part === 'load' ? COL.load : '#fff', fillOpacity: pp.part === 'load' ? 0.35 : 0.6, interactive: false }))); return; }
+    const fig = TG.plan(TG.model(r, A.P, ev), q.p, { dims: false, labels: false }), outl = fig.prims.filter(p => p.part), tyres = fig.prims.filter(p => p.c === 'tyre'), lines = fig.prims.filter(p => p.t === 'line');
+    outl.forEach(p => add(Lf.polygon(ll(p.pts), { color: p.part === 'load' ? COL.load : '#0F172A', weight: 1.5, fillColor: p.part === 'load' ? COL.load : '#fff', fillOpacity: p.part === 'load' ? 0.35 : 0.6, interactive: false, className: 'crRtVeh crRtVeh-' + p.part })));
+    if (tyres.length) add(Lf.polygon(tyres.map(p => ll(p.pts)), { color: '#334155', weight: 0.5, fillColor: '#334155', fillOpacity: 0.85, interactive: false, className: 'crRtTyre' }));
+    if (lines.length) add(Lf.polyline(lines.map(p => ll([p.a, p.b])), { color: '#475569', weight: 1, interactive: false }));
+    fig.prims.filter(p => p.c === 'cg').forEach(p => add(Lf.circleMarker(MP().toLL({ x: p.at[0], y: p.at[1] }), { radius: 3, color: '#DC2626', weight: 1.5, fillColor: '#fff', fillOpacity: 1, interactive: false })));
   }
   function drawMark(mk) {
     const m = MP() && MP().map; if (!m) return; removeLayer('m:' + mk.id);
@@ -187,6 +198,7 @@
       const prev = (A.P.routes || [])[A.P.routes.length - 1], n = (A.P.routes || []).length + 1;
       const r = M.normRoute(Object.assign({ name: `Route ${n}`, pts }, prev ? { veh: prev.veh, load: prev.load, tyre: prev.tyre, pickId: prev.pickId, rDef: prev.rDef } : { pickId: (A.P.picks[0] || {}).id || '' }));
       r.rad = pts.map(() => null); r.src = { kind: 'click', at: '', names: [], against: [], cl: [], snaps: [] }; refit(r);   // 2026-11-17: fitted (tangents + curves)
+      newGeo(r, prev);
       A.update(P => { P.routes.push(r); }, 'route', { id: r.id }); select(r.id);
     } else {
       const n = (A.P.routeMarks || []).filter(x => x.type === d.t.type).length + 1;
@@ -194,11 +206,14 @@
       A.update(P => { P.routeMarks.push(mk); }, 'route', { id: mk.id }); selectMark(mk.id);
     }
   }
+  /* 2026-11-17: a new route's dolly / jeep body wheelbase comes from the load length (L2src 'load'), unless it copies a vehicle whose L2
+     was entered (a saved route without L2src keeps its L2: legacy) */
+  function newGeo(r, prev) { const pv = prev && prev.veh; if (!r.veh.L2src) r.veh.L2src = pv && pv.L2src ? pv.L2src : pv && isNum(pv.L2) ? 'entered' : 'load'; }
   /* addRoute(pts, extra): a new fitted route from a line (ui/road.js: an OpenStreetMap path or a trace), the vehicle as the last route */
   function addRoute(pts, extra) {
     const prev = (A.P.routes || [])[A.P.routes.length - 1], n = (A.P.routes || []).length + 1;
     const r = M.normRoute(Object.assign({ name: `Route ${n}`, pts }, prev ? { veh: prev.veh, load: prev.load, tyre: prev.tyre, pickId: prev.pickId, rDef: prev.rDef } : { pickId: (A.P.picks[0] || {}).id || '' }, extra || {}));
-    if (!r) return null; r.rad = r.pts.map(() => null); refit(r);
+    if (!r) return null; r.rad = r.pts.map(() => null); refit(r); newGeo(r, prev);
     A.update(P => { P.routes.push(r); }, 'route', { id: r.id }); select(r.id); return r;
   }
   function select(id) { selR = routeOf(id) ? id : null; selM = null; renderAll(); A.showITab('route'); drawTab(); }
@@ -207,13 +222,15 @@
   const numIn = (id, v, lbl, unit, hint) => `<div class="fRow"><label for="${id}">${lbl}</label><input type="text" inputmode="decimal" id="${id}" value="${v == null ? '' : v}" placeholder="${hint == null ? '' : hint}"><span class="unit">${unit}</span></div>`;
   const VFIELDS = [
     ['L1', 'Tractor wheelbase (steer axle to drive-group centre)', 'ft'], ['e', 'Kingpin ahead of the drive-group centre (+)', 'ft'], ['fo', 'Tractor front overhang (ahead of the steer axle)', 'ft'], ['ro', 'Tractor rear overhang (behind the drive group)', 'ft'], ['Wt', 'Tractor width', 'ft'],
-    ['L2', 'Body wheelbase: kingpin (jeep bolster) to the rear group / dolly pivot', 'ft'], ['Wb', 'Trailer / dolly width', 'ft'], ['dF', 'Deck ahead of the kingpin', 'ft', 'semi'], ['dR', 'Deck behind the rear group', 'ft', 'semi'],
+    ['cab', 'Back of the cab / headache rack behind the steer axle', 'ft'],
+    ['L2', 'Body wheelbase: kingpin (jeep bolster) to the rear group / dolly pivot', 'ft', 'L2'], ['L2c', 'Stretch: closed body wheelbase', 'ft', 'stretch', 'not entered'], ['xMax', 'Stretch: largest extension', 'ft', 'stretch', 'not entered'], ['Wb', 'Trailer / dolly width', 'ft'], ['dF', 'Deck ahead of the kingpin', 'ft', 'semi'], ['dR', 'Deck behind the rear group', 'ft', 'semi'],
     ['Lj', 'Jeep: kingpin to its axle-group centre', 'ft', 'jeep'], ['ej', 'Jeep bolster ahead of its axle group (+)', 'ft', 'jeep'], ['Ld', 'Rear dolly length (drawn)', 'ft', 'dolly'], ['k', 'Rear dolly effective steering ratio k (δ = −k γ)', '0–1', 'dolly'], ['dmax', 'Rear dolly largest steer angle', 'deg', 'dolly'],
-    ['Rmin', 'Minimum turning radius (steer-axle centre)', 'ft'], ['hDeck', 'Deck / bolster height above the road', 'ft']];
+    ['Rmin', 'Minimum turning radius (steer-axle centre)', 'ft'], ['hDeck', 'Deck / bolster height above the road', 'ft'], ['hV', 'Vehicle height (cab / headache rack / empty trailer; optional)', 'ft', null, 'not entered']];
   const WFIELDS = [['Wtr', 'Tractor tare weight', 'lb'], ['xt', 'Tractor CG behind the steer axle', 'ft'], ['Wtl', 'Trailer tare weight', 'lb', 'semi'], ['xtl', 'Trailer CG behind the kingpin', 'ft', 'semi'], ['Wj', 'Jeep tare (at its axles)', 'lb', 'jeep'], ['Wd', 'Rear dolly tare (at its pivot)', 'lb', 'dolly'],
     ['nS', 'Steer axles', 'no.'], ['tS', 'Tyres per steer axle', 'no.'], ['nD', 'Drive axles', 'no.'], ['tD', 'Tyres per drive axle', 'no.'], ['nJ', 'Jeep axles', 'no.', 'jeep'], ['tJ', 'Tyres per jeep axle', 'no.', 'jeep'], ['nR', 'Rear group / dolly axles', 'no.'], ['tR', 'Tyres per rear axle', 'no.']];
-  const LFIELDS = [['L', 'Load length', 'ft'], ['W', 'Load weight', 'lb'], ['B', 'Load width', 'ft'], ['r', 'Rear overhang behind the rear group / dolly pivot', 'ft'], ['cg', 'Load CG from its front end', 'ft', null, 'L / 2'], ['h', 'Load height above the deck', 'ft']];
-  const showF = (v, f) => !f[3] || (f[3] === 'semi' ? !RT.steered(v) : f[3] === 'dolly' ? RT.steered(v) : RT.hasJeep(v));
+  const LFIELDS = [['L', 'Load length', 'ft'], ['W', 'Load weight', 'lb'], ['B', 'Load width', 'ft'], ['fF', 'Front overhang ahead of the front bolster (kingpin / jeep bolster)', 'ft', 'dolly'], ['r', 'Rear overhang behind the rear group / dolly pivot', 'ft'], ['cg', 'Load CG from its front end', 'ft', null, 'L / 2'], ['h', 'Load height above the deck', 'ft'], ['hB', 'Blocking / dunnage height (between the deck and the load)', 'ft']];
+  /* 2026-11-17: 'L2' — the body wheelbase input shows unless a dolly / jeep takes it from the load; 'stretch' — the stretch trailer only */
+  const showF = (v, f) => !f[3] || (f[3] === 'semi' ? !RT.steered(v) : f[3] === 'dolly' ? RT.steered(v) : f[3] === 'L2' ? v.L2src !== 'load' : f[3] === 'stretch' ? v.type === 'stretch' : RT.hasJeep(v));
   const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
   function curveCount(ev) { const c = ev.turns.filter(t => t.kind === 'curve').length, t = ev.turns.length - c; return `${plural(c, 'curve')}${t ? ' + ' + plural(t, 'intersection turn') : ''} (fitted alignment)`; }
   /* the Alignment block of the route card (fitted: the source, lane offset, fit inputs, the curve table; legacy: the points and radii) */
@@ -246,12 +263,26 @@
   function liveBox(r, ev) {
     if (!ev.sim.ok) return `<div class="crOut bad" id="rtLive">${esc(ev.flags[0] ? ev.flags[0].text : 'not computed')}</div>`;
     const n = { stop: 0, warn: 0, info: 0 }; ev.flags.forEach(f => { n[f.level]++; });
-    return `<div class="crOut${n.stop ? ' bad' : ''}" id="rtLive"><b>${fmt(ev.sim.pa.L, 0)} ft</b> · ${isFit(r) ? curveCount(ev) : `${ev.turns.length} turn${ev.turns.length === 1 ? '' : 's'}`} · max off-tracking <b>${fmt(ev.otMax, 2)} ft</b> · gross ${fmt(ev.ax.gross, 0)} lb (${fmt(ev.ax.gross / RT.LB_PER_TON, 1)} t) · load top ${fmt(ev.oh.Htop, 2)} ft<br>
+    return `<div class="crOut${n.stop ? ' bad' : ''}" id="rtLive"><b>${fmt(ev.sim.pa.L, 0)} ft</b> · ${isFit(r) ? curveCount(ev) : `${ev.turns.length} turn${ev.turns.length === 1 ? '' : 's'}`} · max off-tracking <b>${fmt(ev.otMax, 2)} ft</b> · gross ${fmt(ev.ax.gross, 0)} lb (${fmt(ev.ax.gross / RT.LB_PER_TON, 1)} t) · load top ${fmt(ev.oh.LT, 2)} ft${isNum(ev.oh.hV) ? ` (checked ${fmt(ev.oh.Htop, 2)} ft)` : ''}<br>
       <span class="lfDot lf-stop">●</span>${n.stop} stop <span class="lfDot lf-warn">●</span>${n.warn} warn <span class="lfDot lf-info">●</span>${n.info} info <a href="#" class="wk" data-ra="out">worked: Route tab</a>
       ${ev.flags.filter(f => f.level !== 'info').slice(0, 6).map(f => `<div class="note ${f.level === 'stop' ? 'warnT' : ''}">${esc(f.text)}</div>`).join('')}</div>`;
   }
   function liveTab(r, live) { if (!inEl || r.id !== selR) return; const b = inEl.querySelector('#rtLive'); if (b) b.outerHTML = liveBox(r, evalRoute(r, live)); const z = A.P.site.zone;
     inEl.querySelectorAll('[data-rvx]').forEach(i => { const p = r.pts[+i.dataset.rvx]; if (p && document.activeElement !== i) i.value = G.ftToNative(z, i.dataset.c === 'E' ? p.x : p.y).toFixed(2); }); }
+  /* 2026-11-17: the vehicle / load geometry and the height stack-up in the route card (the values of engine/route.js geometry() and overhead()) */
+  function geoBox(r, ev, v, l) {
+    const g = ev.geo; if (!g) return '';
+    const L2 = v.L2src === 'load' ? `L2 = L − a<sub>F</sub> − r = ${fmt(v.L2calc.L, 2)} − ${fmt(v.L2calc.fF, 2)} − ${fmt(v.L2calc.r, 2)} = <b>${fmt(v.L2, 2)} ft</b> (from the load${l.tandem ? `: girder of "${esc(l.tandem.name)}"` : ''})` : `L2 = <b>${fmt(v.L2, 2)} ft</b> (${v.L2src})`;
+    const deck = RT.steered(v) ? '' : ` · deck d<sub>F</sub> + L2 + d<sub>R</sub> = <b>${fmt(g.Ldeck, 2)} ft</b> vs load ${fmt(l.L, 2)} ft (overhang front ${fmt(g.oF, 2)}, rear ${fmt(g.oR, 2)} ft)`;
+    const gf = (ev.flags || []).filter(f => f.kind === 'geo' && f.level !== 'info');
+    return `<div class="crOut${gf.some(f => f.level === 'stop') ? ' bad' : ''}" id="rtGeo">${L2}${deck}<br>Rear overhang beyond the ${RT.steered(v) ? 'rear dolly' : 'deck'} <b>${fmt(g.oRear, 2)} ft</b> (limit ${fmt(g.lim, 2)} ft) · load front ${fmt(g.f, 2)} ft ahead of the hitch vs ${fmt(g.cCab, 2)} ft to the back of the cab${v.from.cab === 'default' ? ' (cab position ASSUMED)' : ''} · overall ${fmt(g.Lov, 2)} × ${fmt(g.Wov, 2)} × ${fmt(g.Hov, 2)} ft
+      ${gf.map(f => `<div class="note ${f.level === 'stop' ? 'warnT' : ''}">${esc(f.text)}</div>`).join('')} <a href="#" class="wk" data-ra="veh">drawing and worked steps: Route tab › Vehicle and load</a></div>`;
+  }
+  function heightBox(ev, v, l) {
+    if (!ev.oh) return '';
+    const o = ev.oh;
+    return `<div class="crOut" id="rtHeight">Height of the load top above the road = deck ${fmt(v.hDeck, 2)} + blocking ${fmt(o.hB, 2)} + load ${fmt(l.h, 2)} = <b>${fmt(o.LT, 2)} ft</b>${isNum(o.hV) ? ` · overhead checks use max(vehicle ${fmt(o.hV, 2)}, load top ${fmt(o.LT, 2)}) = <b>${fmt(o.Htop, 2)} ft</b>` : ' · vehicle height not entered (assumed lower than the load top)'}</div>`;
+  }
   function routeHtml(r) {
     const ev = evalRoute(r), v = RT.vehOf(r, A.P), l = RT.loadOf(r, A.P), z = G.zone(A.P.site.zone), V = r.veh, Ld = r.load;
     const fld = (pre, src, defs, eff, list) => list.filter(f => showF(v, f)).map(f => numIn(pre + f[0], src[f[0]], f[1], f[2], f[4] != null ? f[4] : fmt(defs[f[0]], f[2] === 'lb' || f[2] === 'no.' ? 0 : 2))).join('');
@@ -262,7 +293,9 @@
       <h4 class="stH">Alignment</h4>${alignHtml(r, ev, z)}
       <h4 class="stH">Vehicle</h4>
       <div class="fRow"><label for="rtType">Type</label><select id="rtType">${Object.entries(RT.TYPES).map(([k, t]) => `<option value="${k}" ${v.type === k ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>
+      ${RT.steered(v) ? `<div class="fRow"><label for="rtL2src">Body wheelbase L2</label><select id="rtL2src"><option value="load" ${v.L2src === 'load' ? 'selected' : ''}>from the load length: L − front overhang − rear overhang</option><option value="entered" ${v.L2src !== 'load' ? 'selected' : ''}>entered</option></select></div>` : ''}
       ${fld('rv_', V, RT.VDEF, v, VFIELDS)}
+      ${geoBox(r, ev, v, l)}
       <details class="crVxList"><summary>Weights and axles</summary>${fld('rv_', V, RT.VDEF, v, WFIELDS)}
         <label class="note" style="display:block"><input type="checkbox" id="rtAxOn" ${r.axIn.on ? 'checked' : ''}> Use entered axle-group loads (weigh tickets, the hauler's calculation)</label>
         ${r.axIn.on ? numIn('ra_S', r.axIn.S, 'Steer axle', 'lb') + numIn('ra_D', r.axIn.D, 'Drive group', 'lb') + (RT.hasJeep(v) ? numIn('ra_J', r.axIn.J, 'Jeep group', 'lb') : '') + numIn('ra_R', r.axIn.R, 'Rear group / dolly', 'lb') : ''}
@@ -271,8 +304,10 @@
       <div class="fRow"><label for="rtTandem">Girder lift (C5)</label><select id="rtTandem"><option value="">— none: enter the load —</option>${(A.P.tandems || []).map(t => `<option value="${t.id}" ${t.id === r.tandemId ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div>
       ${l.tandem ? `<div class="fRow"><label for="rtEndA">Girder end A on the truck</label><select id="rtEndA"><option value="front" ${l.endA !== 'rear' ? 'selected' : ''}>toward the tractor</option><option value="rear" ${l.endA === 'rear' ? 'selected' : ''}>to the rear</option></select></div>
         <div class="crOut">From the girder object of "${esc(l.tandem.name)}"${l.ob.pair ? ' (paired girders with cross-frames)' : ''}: L = ${fmt(l.L, 2)} ft, W = ${fmt(l.W, 0)} lb, width ${fmt(l.B, 2)} ft, depth ${fmt(l.h, 2)} ft, CG ${fmt(l.cg, 2)} ft from the front end. <a href="#" class="wk" data-ra="tandem">Girder lifts tab</a></div>
-        ${fld('rl_', Ld, RT.LDEF, l, LFIELDS.filter(f => f[0] === 'r'))}` : fld('rl_', Ld, RT.LDEF, l, LFIELDS)}
+        ${fld('rl_', Ld, RT.LDEF, l, LFIELDS.filter(f => ['fF', 'r', 'hB'].indexOf(f[0]) >= 0))}` : fld('rl_', Ld, RT.LDEF, l, LFIELDS)}
       <p class="note">The load's front is then ${fmt(l.L - v.L2 - l.r, 2)} ft ${l.L - v.L2 - l.r >= 0 ? 'ahead of' : 'behind'} the ${RT.hasJeep(v) ? 'jeep bolster' : 'kingpin'}.</p>
+      ${heightBox(ev, v, l)}
+      ${numIn('rtOhRear', A.P.routeSet && A.P.routeSet.ohRear, 'Rear overhang limit (project, every route)', 'ft', fmt(RT.OH_REAR, 2))}
       ${l.tandem ? '' : `<div class="fRow"><label for="rtPick">Delivers to pick (C2)</label><select id="rtPick"><option value="">— none —</option>${A.P.picks.map(k => `<option value="${k.id}" ${k.id === r.pickId ? 'selected' : ''}>${esc(k.name)}</option>`).join('')}</select></div>`}
       <div class="goRow"><button type="button" data-ra="zoom">Show on the map</button>${ev.stage && ev.stage.tandem ? '<button type="button" data-ra="totandem">Move the girder lift\'s pick pose to the girder on the truck</button>' : ev.stage && ev.stage.pick ? '<button type="button" data-ra="topick">Move the pick point to the load</button>' : ''}<button type="button" class="danger" data-ra="del">Delete route</button></div>`;
   }
@@ -311,6 +346,7 @@
     const dm = e.target.closest('[data-mdel]'); if (dm && dm.dataset.mdel) { delMark(dm.dataset.mdel); return; }
     const a = e.target.closest('[data-ra]'); if (!a) return; e.preventDefault();
     const r = routeOf(selR);
+    if (a.dataset.ra === 'veh') { A.showOTab('route'); setTimeout(() => { const x = document.getElementById('rt-' + selR + '-veh'); if (x) x.scrollIntoView({ block: 'start' }); }, 50); return; }
     if (a.dataset.ra === 'out') { A.showOTab('route'); setTimeout(() => { const x = document.getElementById('rt-' + selR); if (x) x.scrollIntoView({ block: 'start' }); }, 50); }
     if (a.dataset.ra === 'zoom') zoom();
     if (a.dataset.ra === 'refit' && r) { A.update(() => { refit(r); }, 'route', { id: r.id }); renderAll(); drawTab(); return; }
@@ -333,6 +369,7 @@
       if (t.id === 'rtName') return commit(() => { r.name = t.value; });
       if (t.id === 'rtPick') return commit(() => { r.pickId = t.value; });
       if (t.id === 'rtType') return commit(() => { r.veh.type = t.value; });
+      if (t.id === 'rtL2src') return commit(() => { r.veh.L2src = t.value === 'load' ? 'load' : 'entered'; });
       if (t.id === 'rtTandem') return commit(() => { r.tandemId = t.value; });
       if (t.id === 'rtEndA') return commit(() => { r.endA = t.value; });
       if (t.id === 'rtAxOn') return commit(() => { r.axIn.on = t.checked; });
@@ -345,6 +382,7 @@
       if (t.id === 'rtRdef') { if (v != null && !(v > 0)) { t.classList.add('bad'); return; } return commit(() => { r.rDef = v == null ? 50 : v; }); }
       if (t.id === 'rtMargin') { if (!nonneg()) return; return commit(() => { r.margin = v; }); }
       if (t.id === 'rtTol') { if (!nonneg()) return; return commit(() => { r.stageTol = v; }); }
+      if (t.id === 'rtOhRear') { if (!nonneg()) return; return commit(() => { A.P.routeSet = Object.assign({}, A.P.routeSet || {}, { ohRear: v }); }); }
       if (t.id === 'rtTyre') { if (v != null && !(v > 0)) { t.classList.add('bad'); return; } return commit(() => { r.tyre.A = v; }); }
       if (t.dataset.rarad) { if (v != null && !(v > 0)) { t.classList.add('bad'); return; } return commit(() => { r.al.rad[+t.dataset.rarad] = v; r.al.edited = true; }); }
       if (t.id === 'rtLaneW') { if (v != null && !(v > 0)) { t.classList.add('bad'); return; } return commit(() => { r.lane.w = v; laneApply(r); }); }
@@ -352,7 +390,7 @@
       if (t.dataset.rrad) { if (v != null && !(v > 0)) { t.classList.add('bad'); return; } return commit(() => { r.rad[+t.dataset.rrad] = v; }); }
       if (t.dataset.rvx) { if (v == null) return; const i = +t.dataset.rvx, k = t.dataset.c === 'E' ? 'x' : 'y'; return commit(() => { r.pts[i] = Object.assign({}, r.pts[i], { [k]: G.nativeToFt(A.P.site.zone, v) }); }); }
       if (t.id.indexOf('rv_') === 0) { const k = t.id.slice(3); if (['e', 'ej', 'xt', 'xtl'].indexOf(k) < 0 && !nonneg()) return; if (k === 'k' && v != null && v > 1) { t.classList.add('bad'); return; } return commit(() => { r.veh[k] = v; }); }
-      if (t.id.indexOf('rl_') === 0) { const k = t.id.slice(3); if (k !== 'r' && !nonneg()) return; return commit(() => { r.load[k] = v; }); }
+      if (t.id.indexOf('rl_') === 0) { const k = t.id.slice(3); if (k !== 'r' && k !== 'fF' && !nonneg()) return; return commit(() => { r.load[k] = v; }); }
       if (t.id.indexOf('ra_') === 0) { if (!nonneg()) return; return commit(() => { r.axIn[t.id.slice(3)] = v; }); }
     }
     if (mk) {
@@ -384,6 +422,19 @@
       ${ev.turns.length ? `<div class="tscroll"><table class="tbl lfTbl" id="rtCurveTbl-${id}"><thead><tr>${CURVE_HEAD.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${curveRows(ev).map((c, k) => `<tr><td><a href="#rt-${id}-t${k + 1}">${esc(c[0])}</a></td>${c.slice(1).map((x, j) => `<td${j > 0 && j < 9 ? ' class="n"' : ''}>${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : ''}
       <p class="note">Method (engine/align.js): Douglas–Peucker simplification, curves found from the heading-change rate, tangents by least squares, each curve's radius by least squares as the arc tangent to both tangents (the free least-squares circle is in its worked steps). Stations along the steer-axle path. The swept path below follows this alignment, not the raw vertices.</p>`;
   }
+  /* 2026-11-17: "Vehicle and load": the truck carrying its load to scale (engine/truckgfx.js: the drawing the map, the Report and the
+     vehicle sheet use), the geometry the engine uses and its worked steps (engine/route.js geometry()) */
+  function vehFigs(r, ev) { const TG = window.CranePickTruckGfx; if (!TG || !ev.geo) return null; const m = TG.model(r, A.P, ev); return { m, plan: TG.plan(m), side: TG.side(m) }; }
+  function vehOut(r, ev, v, l) {
+    const F = vehFigs(r, ev), g = ev.geo, id = r.id; if (!F) return '';
+    const rows = [['Vehicle', RT.TYPES[v.type]], ['Body wheelbase L2', `${fmt(v.L2, 2)} ft (${v.L2src === 'load' ? `from the load: L − a_F − r = ${fmt(v.L2calc.L, 2)} − ${fmt(v.L2calc.fF, 2)} − ${fmt(v.L2calc.r, 2)}` : v.L2src})`],
+      ['Load front ahead of the hitch f', fmt(g.f, 2) + ' ft'], ...(RT.steered(v) ? [] : [['Deck length dF + L2 + dR', `${fmt(g.Ldeck, 2)} ft (load ${fmt(l.L, 2)} ft; overhang front ${fmt(g.oF, 2)}, rear ${fmt(g.oR, 2)} ft)`]]),
+      ['Rear overhang beyond the ' + (RT.steered(v) ? 'rear dolly' : 'deck'), `${fmt(g.oRear, 2)} ft (limit ${fmt(g.lim, 2)} ft, ${g.limFrom})`], ['Clear length, hitch to the back of the cab', `${fmt(g.cCab, 2)} ft${v.from.cab === 'default' ? ' (cab position ASSUMED)' : ''}${isNum(g.rho) ? `; front-corner swing ${fmt(g.rho, 2)} ft` : ''}`],
+      ['Overall length × width × height', `${fmt(g.Lov, 2)} × ${fmt(g.Wov, 2)} × ${fmt(g.Hov, 2)} ft`], ['Min. turning radius', fmt(v.Rmin, 1) + ' ft (input)']];
+    return `<div id="rt-${id}-veh"><h4 class="stH">Vehicle and load</h4><div class="tgWrap">${window.CranePickTruckGfx.svg(F.plan)}</div><div class="tgWrap">${window.CranePickTruckGfx.svg(F.side)}</div>
+      <p class="note">To scale (scale bar). Drawn from the values the route checks use: the unit outlines are the swept path's, the axle-group loads the statics below (<a href="#rt-${id}-ax">worked</a>), the heights the overhead checks (<a href="#rt-${id}-top">worked</a>). Axle spread, tyre size, frame and cab are schematic.</p>
+      ${S().kv(rows)}${det(`rt-${id}-geo`, 'Vehicle and load geometry', g.steps)}</div>`;
+  }
   function routeOut(r, i) {
     const ev = evalRoute(r), v = RT.vehOf(r, A.P), l = RT.loadOf(r, A.P), id = r.id;
     if (!ev.sim.ok) return `<div class="sec" id="rt-${id}"><div class="secHead">${esc(r.name)}</div><div class="secBody"><p class="note">${esc(ev.flags[0].text)}</p></div></div>`;
@@ -392,13 +443,14 @@
     const ax = ev.ax.groups.map(g => `<tr><td>${esc(g.label)}</td><td class="n">${fmt(g.load, 0)}</td><td class="n">${g.n}</td><td class="n">${fmt(g.perAxle, 0)}</td><td class="n">${fmt(g.perTyre, 0)}</td></tr>`).join('');
     const st = ev.stage;
     return `<div class="sec" id="rt-${id}"><div class="secHead">${esc(r.name)} — ${esc(RT.TYPES[v.type])}</div><div class="secBody">
-      ${S().kv([['Length (steer-axle path)', fmt(ev.sim.pa.L, 1) + ' ft'], ['Max off-tracking', fmt(ev.otMax, 2) + ' ft'], ['Gross weight', `${fmt(ev.ax.gross, 0)} lb (${fmt(ev.ax.gross / RT.LB_PER_TON, 2)} t)`], ['Load top', fmt(ev.oh.Htop, 2) + ' ft'], ['Min. turning radius (input)', fmt(v.Rmin, 1) + ' ft'], ['Load', `${fmt(l.L, 1)} × ${fmt(l.B, 1)} ft, ${fmt(l.W, 0)} lb`]])}
+      ${S().kv([['Length (steer-axle path)', fmt(ev.sim.pa.L, 1) + ' ft'], ['Max off-tracking', fmt(ev.otMax, 2) + ' ft'], ['Gross weight', `${fmt(ev.ax.gross, 0)} lb (${fmt(ev.ax.gross / RT.LB_PER_TON, 2)} t)`], ['Load top above the road', `${fmt(ev.oh.LT, 2)} ft (deck ${fmt(v.hDeck, 2)} + blocking ${fmt(ev.oh.hB, 2)} + load ${fmt(l.h, 2)})${isNum(ev.oh.hV) ? `; overhead checks: ${fmt(ev.oh.Htop, 2)} ft (vehicle ${fmt(ev.oh.hV, 2)} ft)` : ''}`], ['Min. turning radius (input)', fmt(v.Rmin, 1) + ' ft'], ['Load', `${fmt(l.L, 1)} × ${fmt(l.B, 1)} ft, ${fmt(l.W, 0)} lb`]])}
+      ${vehOut(r, ev, v, l)}
       <h4 class="stH">Flags</h4>${ev.flags.length ? `<ul class="lfFlags">${ev.flags.map(flagLi).join('')}</ul>` : '<p class="note">None.</p>'}
       ${isFit(r) ? alignOut(r, ev) : ''}<h4 class="stH">${isFit(r) ? 'Curves (swept path)' : 'Turns (swept path)'}</h4>${ev.turns.length ? `<div class="tscroll"><table class="tbl lfTbl"><thead><tr><th>Turn</th><th>At pt</th><th>Δ (°)</th><th>r (ft)</th><th>OT max (ft)</th><th>OT steady (ft)</th><th>R inside (ft)</th><th>R outside (ft)</th><th>Swept width (ft)</th><th></th></tr></thead><tbody>${tRows}</tbody></table></div>
         ${ev.turns.some(t => t.reduced) ? '<p class="note">* radius reduced to fit the drawn tangents.</p>' : ''}${ev.turns.map(t => det(`rt-${id}-t${t.n}`, t.lbl || `Turn ${t.n}`, t.steps)).join('')}` : '<p class="note">No bends: a straight route.</p>'}
       <p class="note">Method: ${esc(RT.REF.ot)}; RK4 integration every ${RT.STEP} ft of steer-axle travel; the outlines every 1 ft. Off-tracking = the distance of the ${RT.steered(v) ? 'rear dolly pivot' : 'trailer rear-group centre'} from the steer-axle path.</p>
       <h4 class="stH">Conflicts with the site</h4>${ev.conf.length ? `<ul class="lfFlags">${ev.conf.map(flagLi).join('')}</ul>` : '<p class="note">None: no obstruction, exclusion zone, crane footprint or power-line buffer reached.</p>'}
-      <h4 class="stH">Overhead clearances</h4>${det(`rt-${id}-top`, 'Load top', ev.oh.top, false)}${oh ? `<div class="tscroll"><table class="tbl lfTbl"><thead><tr><th>Item</th><th>Kind</th><th>Height (ft)</th><th>Load top (ft)</th><th>Clearance (ft)</th><th></th></tr></thead><tbody>${oh}</tbody></table></div>${ev.oh.list.map(o => det(`rt-${id}-oh-${o.id}`, o.name, o.steps)).join('')}` : '<p class="note">Nothing overhead on the route.</p>'}
+      <h4 class="stH">Overhead clearances</h4>${det(`rt-${id}-top`, 'Load top', ev.oh.top, false)}${oh ? `<div class="tscroll"><table class="tbl lfTbl"><thead><tr><th>Item</th><th>Kind</th><th>Height (ft)</th><th>Top checked (ft)</th><th>Clearance (ft)</th><th></th></tr></thead><tbody>${oh}</tbody></table></div>${ev.oh.list.map(o => det(`rt-${id}-oh-${o.id}`, o.name, o.steps)).join('')}` : '<p class="note">Nothing overhead on the route.</p>'}
       <p class="note">Power lines: 29 CFR 1926.1411 Table T (travel, no load: up to 0.75 kV 4 ft; over 0.75 to 50 kV 6 ft; over 50 to 345 kV 10 ft; over 345 to 750 kV 16 ft; over 750 to 1,000 kV 20 ft; over 1,000 kV as set by the utility / RPE; paraphrased); a dedicated spotter within 20 ft (1926.1411(b)(4)). Applied to the haul vehicle and its load (engineer's instruction; 1926.1411 is written for equipment travelling without a load); engineer to confirm.</p>
       <h4 class="stH">Axle loads (${ev.ax.mode === 'entered' ? 'entered' : 'statics'})</h4><div class="tscroll"><table class="tbl lfTbl"><thead><tr><th>Group</th><th>Load (lb)</th><th>Axles</th><th>Per axle (lb)</th><th>Per tyre (lb)</th></tr></thead><tbody>${ax}<tr><td><b>Gross</b></td><td class="n"><b>${fmt(ev.ax.gross, 0)}</b></td><td></td><td></td><td></td></tr></tbody></table></div>${det(`rt-${id}-ax`, 'Axle loads', ev.ax.steps)}
       <h4 class="stH">Haul road bearing</h4>${ev.haul.filter(h => !h.flagOnly).length ? ev.haul.filter(h => !h.flagOnly).map(h => `<p class="note"><b>${esc(h.name)}</b>: heaviest tyre ${fmt(h.P, 0)} lb, q<sub>g</sub> = ${fmt(h.qg, 0)} psf${h.qa ? ` vs q<sub>a</sub> = ${fmt(h.qa, 0)} psf (${fmt(h.ratio * 100, 0)} %)` : ' (allowable not entered)'}</p>${det(`rt-${id}-h-${h.id}`, h.name, h.steps)}`).join('') : '<p class="note">The route does not use a drawn haul road / mat run.</p>'}
@@ -439,8 +491,12 @@
       const ev = evalRoute(r), v = RT.vehOf(r, A.P), l = RT.loadOf(r, A.P), items = [];
       if (!ev.sim.ok) { subs.push({ id: 'r' + i, key: 'route-' + i, title: r.name, items: [{ type: 'note', text: ev.flags[0].text }] }); return; }
       items.push({ type: 'figure', svg: routeSvg(P, r, ev), caption: `${r.name}: the steer-axle path, the swept path (outlines every ${fmt(Math.max(2, ev.sim.pa.L / 150), 1)} ft) and the vehicle at the truck stop (north up)${isFit(r) ? '; dashed grey: the line the alignment is fitted to' : ''}${isOsm(r) ? `. Road geometry ${OSM().NOT_SURVEY}; ${OSM().ATTR} (ODbL)` : ''}.` });
+      { const F = vehFigs(r, ev); if (F) { const TG = window.CranePickTruckGfx;   // 2026-11-17: the vehicle carrying its load, to scale (the Route tab's figures)
+        items.push({ type: 'figure', svg: TG.svg(F.plan, { w: 680 }), caption: `${r.name}: vehicle and load in plan, to scale (front to the right): the unit outlines of the swept path, axles and tyres, kingpin / bolster / rear pivot, the load with its CG${l.tandem ? ' and ends A / B' : ''}; dimensions as the route checks use them.` },
+          { type: 'figure', svg: TG.svg(F.side, { w: 680 }), caption: `${r.name}: side elevation, to scale: deck, blocking, load and the load top above the road (the overhead checks), the axle-group loads (statics).` });
+        items.push({ type: 'steps', scope: 'route', title: `${r.name}: vehicle and load geometry`, steps: ev.geo.steps }); } }
       items.push({ type: 'kv', rows: [['Vehicle', RT.TYPES[v.type]], ['Tractor', `L1 ${fmt(v.L1, 2)} ft, kingpin ${fmt(v.e, 2)} ft ahead of the drive group, width ${fmt(v.Wt, 2)} ft`], ['Body', `L2 ${fmt(v.L2, 2)} ft${RT.hasJeep(v) ? `, jeep ${fmt(v.Lj, 2)} ft (bolster ${fmt(v.ej, 2)} ft)` : ''}${RT.steered(v) ? `, rear dolly k = ${fmt(v.k, 2)}, δmax ${fmt(v.dmax, 0)}°` : ''}`],
-        ['Load', `${fmt(l.L, 2)} ft × ${fmt(l.B, 2)} ft, ${fmt(l.W, 0)} lb, rear overhang ${fmt(l.r, 2)} ft, height ${fmt(l.h, 2)} ft on a ${fmt(v.hDeck, 2)} ft deck`], ['Min. turning radius', fmt(v.Rmin, 1) + ' ft'], ['Route length', fmt(ev.sim.pa.L, 1) + ' ft'], ['Max off-tracking', fmt(ev.otMax, 2) + ' ft'],
+        ['Load', `${fmt(l.L, 2)} ft × ${fmt(l.B, 2)} ft, ${fmt(l.W, 0)} lb, rear overhang ${fmt(l.r, 2)} ft, height ${fmt(l.h, 2)} ft on ${fmt(ev.oh.hB, 2)} ft of blocking on a ${fmt(v.hDeck, 2)} ft deck: load top ${fmt(ev.oh.LT, 2)} ft${isNum(ev.oh.hV) ? `; vehicle ${fmt(ev.oh.hV, 2)} ft; overhead checks at ${fmt(ev.oh.Htop, 2)} ft` : ''}`], ['Min. turning radius', fmt(v.Rmin, 1) + ' ft'], ['Route length', fmt(ev.sim.pa.L, 1) + ' ft'], ['Max off-tracking', fmt(ev.otMax, 2) + ' ft'],
         ['Gross weight', `${fmt(ev.ax.gross, 0)} lb (${fmt(ev.ax.gross / RT.LB_PER_TON, 2)} t), axle loads by ${ev.ax.mode}`]] });
       items.push({ type: 'note', text: ev.flags.length ? 'Flags: ' + ev.flags.map(f => `[${f.level}] ${f.text}`).join(' ') : 'Flags: none.' });
       if (isFit(r)) { const a = ev.align || {}, sr = r.src || {}, O = OSM();

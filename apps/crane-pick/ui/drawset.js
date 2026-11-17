@@ -498,7 +498,7 @@
   }
   function routeTables(D, C) {
     const { P, rt, ev, row } = C.ro, h = D.h, lL = D.layer('TBL', 8), lT = D.layer('TEXT', 7), RT = window.CranePickRoute, v = RT.vehOf(rt, P), l = RT.loadOf(rt, P);
-    let y = table(D, lL, lT, 0, 0, ['ITEM', 'VALUE'], [['VEHICLE', RT.TYPES[v.type]], ['LOAD', `${fmt(l.L, 2)} X ${fmt(l.B, 2)} FT, ${fmt(l.W, 0)} LB, HEIGHT ${fmt(l.h, 2)} FT ON A ${fmt(v.hDeck, 2)} FT DECK`],
+    let y = table(D, lL, lT, 0, 0, ['ITEM', 'VALUE'], [['VEHICLE', RT.TYPES[v.type]], ['LOAD', `${fmt(l.L, 2)} X ${fmt(l.B, 2)} FT, ${fmt(l.W, 0)} LB, HEIGHT ${fmt(l.h, 2)} FT ON A ${fmt(v.hDeck, 2)} FT DECK${ev.oh && ev.oh.hB > 0 ? ` + ${fmt(ev.oh.hB, 2)} FT BLOCKING` : ''}${ev.oh ? `: TOP ${fmt(ev.oh.LT, 2)} FT` : ''}`],
       ['DELIVERS TO', row.to ? row.to.name : '-'], ['ROUTE LENGTH', fmt(ev.sim.pa.L, 1) + ' FT'], ['MAX OFF-TRACKING', fmt(ev.otMax, 2) + ' FT'], ['GROSS WEIGHT', `${fmt(ev.ax.gross, 0)} LB (${fmt(ev.ax.gross / RT.LB_PER_TON, 2)} T)`],
       ['LEAST OVERHEAD CLEARANCE', row.oh ? row.oh.text : '-'], ['WORKED', seeRef(C, row.key)]], 'ROUTE DATA').y;
     if ((ev.turns || []).length) y = table(D, lL, lT, 0, y - h, ['TURN', 'DELTA (DEG)', 'R (FT)', 'OT MAX (FT)', 'R INSIDE (FT)', 'R OUTSIDE (FT)', 'SWEPT WIDTH (FT)'], ev.turns.map(t => [`T${t.n}`, fmt(t.D * 180 / Math.PI, 1), fmt(t.r, 1) + (t.reduced ? ' *' : ''), fmt(t.ot, 2), fmt(t.Rin, 2), fmt(t.Rout, 2), fmt(t.Rout - t.Rin, 2)]), 'TURNS (SWEPT PATH)').y;
@@ -508,7 +508,26 @@
     const fl = ev.flags.filter(f => f.level !== 'info').map(f => f.text);
     y = notesBlk(D, lT, 0, y - h, fl.length ? 'FLAGS' : 'FLAGS: NONE', fl, 100);
     notesBlk(D, lT, 0, y - h, 'NOTES', ['SWEPT PATH: LOW-SPEED KINEMATIC OFF-TRACKING OF THE DRAWN STEER-AXLE PATH (OUTLINES OF THE TRACTOR, BODY / DOLLY AND LOAD); VEHICLE DRAWN AT THE TRUCK STOP.',
+      ...(window.CranePickTruckGfx && ev.geo ? ['THE VEHICLE AND LOAD TO SCALE (PLAN, SIDE ELEVATION, DIMENSIONS, AXLE-GROUP LOADS): THE NEXT SHEET, "' + U(rt.name) + ' - VEHICLE AND LOAD".'] : []),
       `STAGING AND THE LIFT IT DELIVERS TO: ${seeRef(C, row.to && row.to.key)}. VALUES: THE APP'S ENGINE (ROUTE TAB, REPORT).`], 100);
+  }
+  /* 2026-11-17: the vehicle carrying its load, to scale (engine/truckgfx.js: the drawing of the map vehicle, the Route tab and the Report):
+     plan and side elevation at 1 FT = 12 units with a scale bar, the geometry table */
+  function routeVehSheet(D, C) {
+    const { P, rt, ev, row } = C.ro, h = D.h, TG = window.CranePickTruckGfx, RT = window.CranePickRoute, lT = D.layer('TEXT', 7), lL = D.layer('TBL', 8), m = TG.model(rt, P, ev), pl = TG.plan(m), sd = TG.side(m), g = ev.geo, v = m.v, l = m.l;
+    const bp = TG.bounds(pl.prims), bs = TG.bounds(sd.prims), gap = 6 * h;
+    D.text(lT, bp.x0 * 12, bp.y1 * 12 + 1.5 * h, 1.1 * h, U(`PLAN: ${rt.name} - ${RT.TYPES[v.type]} (TO SCALE, FRONT TO THE RIGHT)`));
+    TG.dxf(D, pl, { x0: 0, y0: 0 });
+    const ys = bp.y0 * 12 - gap - bs.y1 * 12; D.text(lT, bs.x0 * 12, ys + bs.y1 * 12 + 1.5 * h, 1.1 * h, 'SIDE ELEVATION (TO SCALE)');
+    TG.dxf(D, sd, { x0: 0, y0: ys });
+    TG.dxfScale(D, bs.x0 * 12, ys + bs.y0 * 12 - 3 * h, bs.x1 - bs.x0);
+    const rows = [['BODY WHEELBASE L2', `${fmt(v.L2, 2)} FT ${v.L2src === 'load' ? `(FROM THE LOAD: ${fmt(v.L2calc.L, 2)} - ${fmt(v.L2calc.fF, 2)} - ${fmt(v.L2calc.r, 2)})` : '(' + U(v.L2src) + ')'}`], ['LOAD FRONT AHEAD OF THE HITCH', fmt(g.f, 2) + ' FT'],
+      ...(RT.steered(v) ? [] : [['DECK LENGTH', `${fmt(g.Ldeck, 2)} FT VS LOAD ${fmt(l.L, 2)} FT (OVERHANG FRONT ${fmt(g.oF, 2)}, REAR ${fmt(g.oR, 2)})`]]), ['REAR OVERHANG BEYOND THE ' + (RT.steered(v) ? 'REAR DOLLY' : 'DECK'), `${fmt(g.oRear, 2)} FT (LIMIT ${fmt(g.lim, 2)} FT)`],
+      ['HITCH TO THE BACK OF THE CAB', `${fmt(g.cCab, 2)} FT${v.from.cab === 'default' ? ' (CAB POSITION ASSUMED)' : ''}`], ['LOAD TOP ABOVE THE ROAD', `${fmt(ev.oh.LT, 2)} FT = DECK ${fmt(v.hDeck, 2)} + BLOCKING ${fmt(ev.oh.hB, 2)} + LOAD ${fmt(l.h, 2)}`], ['HEIGHT FOR THE OVERHEAD CHECKS', fmt(ev.oh.Htop, 2) + ' FT'],
+      ['OVERALL L X W X H', `${fmt(g.Lov, 2)} X ${fmt(g.Wov, 2)} X ${fmt(g.Hov, 2)} FT`], ['MIN. TURNING RADIUS', fmt(v.Rmin, 1) + ' FT (INPUT)'], ['WORKED', seeRef(C, row.key)]];
+    const y = table(D, lL, lT, bp.x1 * 12 + gap, bp.y1 * 12, ['ITEM', 'VALUE'], rows, 'VEHICLE AND LOAD').y;
+    notesBlk(D, lT, bp.x1 * 12 + gap, y - h, 'NOTES', ['OUTLINES OF THE TRACTOR, JEEP, DECK / DOLLY AND LOAD AS THE SWEPT PATH USES THEM; AXLE-GROUP LOADS FROM THE ROUTE STATICS; HEIGHTS AS THE OVERHEAD CHECKS USE THEM.',
+      'SCHEMATIC: AXLES 4.5 FT APART ABOUT EACH GROUP CENTRE, TYRES 3.4 X 0.9 FT, FRAME AND CAB.'], 90);
   }
   function routeSheet(D, C) { const h = D.h, i0 = D.mark(); routePlan(D, C); const bp = D.bbox(i0), t0 = D.mark(); routeTables(D, C); const bt = D.bbox(t0); D.move(t0, bp[2] + 4 * h - bt[0], bp[3] - bt[3]); }
 
@@ -630,6 +649,7 @@
       if (r.missing) { miss.push([`TRUCKING ROUTE: ${r.name}`, r.missing]); return; }
       const ev = r.ev, pts = [].concat(...ev.sim.samples.map(q => q.parts.map(p => p.poly).flat())); (P.routeMarks || []).forEach(m => m.pts.forEach(p => pts.push(p)));
       list.push({ id: 'route-' + r.i, title: `TRUCKING ROUTE: ${r.name}`, fn: routeSheet, kmin: 48, c: { ...C, ro: { P, rt: r.rt, ev, row: r, w: windowOf(pts, 0.06) } }, src: [['in', 'route', 'Route input tab'], ['out', 'route', 'Route tab'], ['rpt', r.key, 'Report §Route']] });
+      if (window.CranePickTruckGfx && ev.geo) list.push({ id: 'routeveh-' + r.i, title: `TRUCKING ROUTE: ${r.name} - VEHICLE AND LOAD`, fn: routeVehSheet, kmin: 24, c: { ...C, ro: { P, rt: r.rt, ev, row: r } }, src: [['in', 'route', 'Route input tab (vehicle, load)'], ['out', 'route', 'Route tab (Vehicle and load)'], ['rpt', r.key, 'Report §Route']] });   // 2026-11-17
     });
     EXTRA.forEach(fn => { try { (fn(P, ctx, C) || []).forEach(s => list.push(Object.assign({ kmin: 1, c: { ...C } }, s))); } catch (e) { miss.push(['ADDED SHEET', String(e.message)]); } });
     if (!sum.length) miss.push(['LIFT PLAN SHEETS', 'NO LIFT YET (LIFTS OR GIRDER LIFTS TAB)']);
