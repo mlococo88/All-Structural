@@ -90,3 +90,33 @@ Labelling: "DEMO — NOT FOR DESIGN USE" in the header and on the tools.html car
 - `apps/continuous-beam.html` in mlococo88/MIDAS_Civil_NX_References: updated the same way.
 ### Open items
 - Composite section (deck), cover plates / flange transitions within a span, and web haunch shapes other than parabolic are not modelled.
+
+## 2026-11-17 — MCB3: user-defined material by default; read-back check before analysis (engineer report)
+Engineer's first live run stopped at `/doc/ANAL` with "failed to making analysis data: make Property". The most likely cause is the
+material: the database grade name `A709-50` was a guess, and the DB request also lacked the `CODE` / `bELAST` keys MIDAS's example has.
+### Where
+- `apps/midas-continuous-beam/index.html`: Material card (new `matSrc` select, `matE`, `matNu`, rows `matUserRow` / `matDbRow`),
+  `FIELDS`, `MAT_DEFAULTS` (E, ν, damping, α per type), `buildRequests` (`/db/MATL` body), init (type switch also swaps E / ν; row
+  toggle), `runMidas` loop (response logging, `/doc/ANAL` error hint), new `checkModel`.
+### Before / after
+- **Material.** Before: always database, `{ TYPE, NAME, PARAM: [{ P_TYPE: 1, STANDARD, DB }] }`. After: source select, default
+  **User-defined**: `{ TYPE: 'USER', NAME, HE_SPEC: 0, HE_COND: 0, PLMT: 0, P_NAME: '', bMASS_DENS: false, DAMP_RAT, PARAM: [{ P_TYPE: 2,
+  ELAST: E·144 (ksi → ksf), POISN: ν, THERMAL: α, DEN: γ (kcf), MASS: γ/32.174 }] }` (format per MIDAS JSON manual, Material Properties,
+  user-defined isotropic example). Defaults: steel E 29,000 ksi, ν 0.30, damping 0.02, α 6.5e-6; concrete E 3,605 ksi
+  (57,000·√4000 psi), ν 0.20, damping 0.05, α 6.0e-6. Database source kept, now also sending `HE_SPEC … DAMP_RAT`, `CODE: ''`,
+  `bELAST: false`.
+- **Read-back check.** New: before `/doc/ANAL`, GET `/db/MATL`, `/db/SECT`, `/db/NODE`, `/db/ELEM` and stop with a clear message if any
+  ID sent is not stored; logs the stored material 1 and section 1.
+- **Errors.** `/doc/ANAL` failures add a hint (check Material / Section in Civil NX); POST/PUT responses mentioning error / fail /
+  invalid / message are logged.
+- E, ν, α, damping don't change the analysis results here (one material, linear static, no thermal loads); DEN/MASS are not used by
+  the loads (DC is γ·A beam loads).
+### Check case
+- Steel default: ELAST = 29,000 × 144 = 4,176,000 ksf; DEN 0.49 kcf; MASS = 0.49 / 32.174 = 0.01523 kip·s²/ft⁴ (as sent, see below).
+- Analysis results unchanged: mocked run Δ = 0.00 %; 2-span check case as MCB1.
+### How verified
+- Headless Chrome with a mock that stores POSTed DB data and answers GETs: full run passes the read-back and loads results; with the
+  material dropped by the mock, the run stops before `/doc/ANAL` with "/db/MATL: 1 of 1 not stored". 0 console errors.
+- **Not yet confirmed on live Civil NX** that `TYPE: 'USER'` is accepted (the manual's spec table writes "User", its example "USER").
+### Other copies
+- `apps/continuous-beam.html` in mlococo88/MIDAS_Civil_NX_References: updated the same way.
