@@ -1,6 +1,7 @@
 /* apps/crane-pick/ui/sheets.js — plan-sheet underlays (window.CranePickSheets). C1-2 (2026-11-16).
    A PNG / JPG, or a PDF page rendered with pdf.js 3.11.174 (loaded on first use from jsDelivr, pinned; isEvalSupported false), is placed
    on the map under the drawn items. Its placement (engine/geo.js: grid ft of pixel (0, 0), ft per pixel, rotation) is set by
+   - align to the map (the main way, 2026-11-17): a point on the sheet, then the same point on the map; twice (scale, rotation, position),
    - dragging its move handle (and its rotate handle) while it is not locked,
    - scale calibration: two points picked on the sheet and the real distance between them (s = D / d_px, about their midpoint),
    - the plan's stated scale on a PDF's page size (s = S · W_in / W_px; to be checked with a known dimension),
@@ -233,7 +234,7 @@
       `A–B: ${fmt(r.dpx, 1)} px on the sheet (${fmt(r.dpx * I.sOld, 2)} ft at its scale before) · ${fmt(r.dft, 2)} ft on the map`];
     const warn = [];
     if (r.close) warn.push(`A and B are close together (${fmt(r.frac * 100, 1)} % of the sheet's size): a small error in a click turns the sheet a lot. Pick points far apart.`);
-    if (I.conflict) warn.push(`The points give a scale ${fmt(Math.abs(I.diff) * 100, 1)} % ${I.diff > 0 ? 'smaller' : 'larger'} than the ${I.ref.what} scale (${fmt(I.ref.s, 5)} ft/px).`);
+    if (I.conflict) warn.push(`The points give ${fmt(r.s, 5)} ft/px, ${fmt(Math.abs(I.diff) * 100, 1)} % ${I.diff > 0 ? 'less' : 'more'} than the ${I.ref.what} scale (${fmt(I.ref.s, 5)} ft/px): choose which to keep on the Plan sheets tab.`);
     const h = parts.join(long ? '<br>' : ' · ') + warn.map(w => `<br><b class="warnT">⚠ ${w}</b>`).join('');
     return h;
   }
@@ -249,9 +250,9 @@
     const on = (k, f) => { const b = document.getElementById(k); if (b) b.onclick = f; };
     on('alBack', alBack); on('alCancel', endAlign); on('alDone', alDone);
   }
-  /* markers: sheet points (white squares, red A / B) and map points (filled blue circles, A′ / B′), a dashed line from each sheet point
+  /* markers: sheet points (white squares, red A / B, the point at the box's top-right corner) and map points (filled blue circles, A′ / B′), a dashed line from each sheet point
      to its map point; draggable after the fourth click */
-  const alIcon = (cls, t) => window.L.divIcon({ className: 'crAl ' + cls, html: `<span>${t}</span>`, iconSize: [24, 24], iconAnchor: [12, 12] });
+  const alIcon = (cls, t) => window.L.divIcon({ className: 'crAl ' + cls, html: `<span>${t}</span>`, iconSize: [22, 22], iconAnchor: cls === 'crAlS' ? [22, 0] : [11, 11] });   // a sheet point: the box's top-right corner
   function alDraw() {
     if (!al) return; const s = sheetOf(al.id), m = MP().map, Lf = window.L; if (!s || !m) return;
     al.mk.forEach(k => k.remove()); al.ln.forEach(l => l.remove()); al.mk = []; al.ln = [];

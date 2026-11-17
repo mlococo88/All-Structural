@@ -190,8 +190,9 @@
   .crHandle.crRot span{cursor:grab;border-color:#7C3AED;color:#7C3AED;}
   .crPickTip{font-weight:700;color:#B91C1C;}
   /* align to map (2 points, 2026-11-17): sheet points white squares (red letter), map points filled blue circles; steps list */
-  .crAl span{display:flex;align-items:center;justify-content:center;width:22px;height:22px;font:700 11px/1 Arial,sans-serif;box-shadow:0 1px 4px rgba(0,0,0,.4);}
-  .crAl.crAlS span{background:#fff;border:2px solid #DC2626;color:#B91C1C;border-radius:3px;}
+  .crAl span{display:flex;box-sizing:border-box;align-items:center;justify-content:center;width:22px;height:22px;font:700 11px/1 Arial,sans-serif;box-shadow:0 1px 4px rgba(0,0,0,.4);}
+  .crAl.crAlS span{position:relative;box-sizing:border-box;background:#fff;border:2px solid #DC2626;color:#B91C1C;border-radius:3px;}   /* the point is the box's top-right corner (the dot): the box stays grabbable under a map marker */
+  .crAl.crAlS span::after{content:'';position:absolute;right:-6px;top:-6px;width:8px;height:8px;border-radius:50%;background:#DC2626;border:1px solid #fff;}
   .crAl.crAlM span{background:#1D4ED8;border:2px solid #fff;color:#fff;border-radius:50%;}
   .crAl.leaflet-marker-draggable span{cursor:move;}
   .alSteps{margin:4px 0 4px 18px;padding:0;font-size:9pt;color:#475569;} .alSteps li.done{color:#15803D;} .alSteps li.now{font-weight:700;color:#0f172a;}
