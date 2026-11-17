@@ -1182,3 +1182,98 @@ attribution, PNG + .pgw = the sheet frame in the DXF, State Plane .pgw, DXF vali
 (tiles refused) "AERIAL NOT AVAILABLE - PRINTED WITHOUT BACKGROUND" and still prints; Print plan view; Report figure and notes; 390 px; 0
 console errors); `crane-drawings` (5), `crane-cranetab` (6), `crane-place` (9), `crane-picks` (5), `crane-manual` (8);
 `node tests/engine/run.mjs crane` (14 files, 111 passed); `node tests/check-syntax.mjs`. Screenshots: scratchpad `crane/accurate-*.png`.
+
+## 2026-11-17 — Route: Snap to road (OpenStreetMap) and the fitted alignment (tangents + circular curves) (engineer feedback)
+PR #1621: https://github.com/mlococo88/All-Structural/pull/1621
+Engineer (2026-11-17): "I have to make many clicks to follow the curve of the road and each one is modeled as a turn which isn't really
+true. Can I simply select the road and the app can pull out info like radius of curves and such?"
+### Where
+- `apps/crane-pick/engine/align.js` (new, `window.CranePickAlign`, no DOM): Douglas–Peucker `simplify`, `resample`, total-least-squares
+  `fitLine`, `fitCircle` (Kåsa + Gauss–Newton), `fitRadius` (the arc tangent to both tangents, least squares), `runs` (heading-change
+  rate), `fit(pts, opt)` -> `al` (PIs, radius / kind / fit per PI), `deviation`, `offset` (right-hand lane), `sta` (12+34.56).
+- `apps/crane-pick/engine/osm.js` (new, `window.CranePickOSM`, no DOM, no fetch): the Overpass query (drivable `highway=*` ways, `out geom`),
+  `graph` (nodes by OSM node id, edges along each way), `snap`, `dijkstra` (binary heap), `route` (start / via / end: virtual nodes on
+  the snapped edges, the path, road names along it, one-way roads travelled against their direction), `ATTR`, `NOT_SURVEY`.
+- `apps/crane-pick/ui/road.js` (new, `window.CranePickRoadUI`): Route tab buttons **Snap to road (OpenStreetMap)** (clicks, Enter /
+  Finish -> fetch or cache -> route) and **Trace** (pointer drag on the map, map panning off while tracing); the per-browser cache
+  (IndexedDB `crane.osm.v1`, store `roads`, keyed by the query box; a cached box containing the new one is reused); the offline message.
+- `engine/route.js`: `fitted(r)`, `pathAl(r)` (method 1b) — `path(r)` calls it first for `mode: 'fit'` and is otherwise unchanged
+  (anchor `function path(r) {`: one added line `if (fitted(r)) return pathAl(r);`); `turnsOf`: fitted curves get their name ("Curve 1",
+  "Intersection turn 2"), the PI number, and three steps first (radius fitted, arc length L = rΔ, tangent T with PC / PI / PT stations);
+  legacy labels and flags unchanged (`nm = t.lbl || \`Turn ${k + 1}\``); `alignOf` (deviation, smallest radius, OSM flags) added to
+  `evaluate` only for fitted routes (`res.align`; a legacy result has no new key).
+- `engine/model.js`: `normRouteFit` — `mode`, `al`, `src`, `lane` kept only when present (an old route gains no field).
+- `ui/route.js`: new routes (clicks) are fitted; the route card's **Alignment** block (Curves: Fitted alignment / Each vertex is a turn
+  (legacy); the line's source, road names, attribution; lane offset (OSM); summary; curve table with kind and radius inputs; Add
+  intersection turn; Refit from the line; Fit settings); map: the raw line (grey dashed), the tangents, PI handles, radius handles, "+"
+  handles (add an intersection turn), labels "C1 R 300 · OT 3.3 ft"; Leaflet attribution "Roads: © OpenStreetMap contributors (ODbL),
+  from OpenStreetMap — not survey" while an OSM route exists; Route output tab "Alignment (fitted)" (curve table No. / kind / R / Δ / L /
+  T / PC / PI / PT stations / OT / radius source); Report §Route note + curve table + figure with the raw line; `addRoute`, `refit`.
+- `ui/drawset.js`: route sheet labels of fitted curves "C1 R 300" (legacy "T1" unchanged); an OSM route's sheet carries "ROAD GEOMETRY
+  FROM OPENSTREETMAP - NOT SURVEY. (C) OPENSTREETMAP CONTRIBUTORS, ODBL.".
+- `ui/manual.js`: the trucking-route workflow, the Route input tab line, new topics "Fitted route alignment and OpenStreetMap roads"
+  (methods) and "Snap to road (OpenStreetMap) errors" (troubleshooting), the ASSUMED defaults row.
+- `index.html`: the three scripts; CSS for the radius / PI handles. Tests: `tests/engine/crane-road.test.mjs` (new),
+  `tests/smoke/crane-road.mjs` (new), `tests/smoke/crane-route.mjs` (a new click route is now fitted: it checks that, then switches the
+  route to legacy for the C6 checks, which are unchanged), `tests/smoke/crane-manual.mjs` (+2 quoted labels).
+### Calculations (CLAUDE.md §4: new calculation; no existing formula, factor or reference changed; Decisions pending engineer review)
+Legacy ("each vertex is a turn"): unchanged. **Before / after for a saved route: none** — a route without `mode` computes exactly as
+on main (checked: `evaluate()` JSON identical, old vs new engine, on four routes incl. the C6 cases; Node test G pins main's numbers).
+New routes: **before** every interior vertex was a curve of the route default radius (50 ft); **after** the drawn / traced / OSM line is
+fitted with tangents and circular curves:
+1. Douglas–Peucker simplification, tolerance 1.5 ft; resampled every h = max(1, w / 10) ft.
+2. Smoothed heading θ̄(s) = direction of the chord s − w/2 → s + w/2 (w = 50 ft); κ(s) = (θ̄(s + w/2) − θ̄(s − w/2)) / w; curved where
+   |κ| > 1 / R_max (5,000 ft). Same-sign runs closer than w merged; |Δ| < 3° dropped; a run whose central 90 % of heading change lies
+   within 12 ft is an intersection turn (a corner), not a curve.
+3. Tangents: total least squares through the line's points between curves; PI = intersection of the tangents either side; start / end
+   = projections of the line's ends.
+4. Curve radius: R minimising Σ d_i² from the line's points (middle of the tangent before to the middle of the one after) to the
+   tangent–curve–tangent with T = R tan(|Δ|/2), R ≤ the half tangents next to it (48 log-spaced trials, then golden section). Check
+   value: the free least-squares circle (Kåsa, then Gauss–Newton on |p − c| − R) through the curve's core points.
+5. Path (1b): PIs + radii as in C6 method 1, except a shared tangent too short for T_i + T_i+1 scales both in proportion (legacy:
+   halves); intersection turns: the entered radius, else the route default. The kinematic off-tracking / swept path (C6 method 2–3) is
+   then run on this path, so a road curve is one curve with its real radius. Stations along the steer-axle path.
+6. Radius handle: R = E / (sec(Δ/2) − 1), E = the distance from the PI to the handle (the curve's mid-point).
+7. Max deviation: the largest distance from the line (every 2 ft) to the alignment (intersection turns measured to their PI); > 10 ft warns.
+8. OSM: Dijkstra over the road graph (edge weight = grid distance, ft); one-way tags not obeyed (warning: "travels against the one-way
+   direction of …"); clicks more than 150 ft from every road are refused; lane offset w/2 to the right (default lane 12 ft), mitred.
+### Check cases (`tests/engine/crane-road.test.mjs`, hand-computed)
+- Free circle: R 200 ft, 90° arc, σ = 0.5 ft noise, 30 seeds: every R_LS within 1 % (worst 0.43 %); exact points R = 200.000.
+- T–C–T: 300 ft tangent, left R 250 ft Δ 60°, 300 ft tangent (σ 0.3): PI x = 300 + 250 tan 30° = 444.34, y 0; one curve, R within 1 %,
+  L = RΔ ≈ 261.80 ft; reverse curves R 200 (40° L) / R 300 (50° R) found with their signs and radii.
+- Clicks every 10° on R 150 (Δ 90°): legacy 10 turns of r 50; fitted 1 curve R 151.2 (chords inside the circle by ≤ 150 (1 − cos 5°) =
+  0.57 ft).
+- Corners (0,0)-(200,0)-(200,160)-(400,160): PIs on the clicks, 2 intersection turns r 50: path L = 560 − 200 + 50π = 517.08 ft; radii
+  150 / 50 on the 160 ft tangent: T 150 + 50 > 160 → × 0.8: r 120 and 40 (flagged; 40 < R_min 45 stop).
+- Lane offset: a left arc R 100 offset 6 ft right → 106 ft from its centre. Stations 1,234.567 → "12+34.57".
+- Mocked OSM block: square 300 ft + diagonal: near A → near C = 10 + 424.26 + 10 ft along the diagonal; diagonal one-way C→A: same path,
+  one "against" warning of 424.26 ft; footways ignored.
+- Smoke (mocked Overpass): Main Street with a 300 ft, 60° curve (OSM nodes every 5°): one curve R 300.0, Δ 60.00°, L 314.2, T 173.2
+  (= 300 tan 30°), max deviation 0.29 ft.
+### Saved data (§5)
+New route fields only when present: `mode` ('fit' | 'legacy'), `al`, `src`, `lane` (`normRouteFit`); a saved route without them is a
+legacy route, computes as before and gains no field. New per-browser cache: IndexedDB database `crane.osm.v1` (prefixed per tool; the
+OSM answers only, not project data). No localStorage key added or changed.
+### Decisions (pending engineer review)
+- New routes (also click routes) default to the fitted alignment; saved routes stay legacy until switched.
+- Fit defaults: tolerance 1.5 ft, window 50 ft, straight over R 5,000 ft, curves under 3° ignored, corner within 12 ft; compound curves
+  of one direction are fitted as one simple curve (add a PI to split); no spirals.
+- Intersection turn radius default = the route default radius (50 ft), limited by the tangents ("from the corner geometry": OSM has no
+  curb returns); enter the real radius.
+- Drivable highway values: motorway … residential, service, track, living_street, road, *_link, construction, busway; footway, path,
+  cycleway, steps, bridleway, platform, proposed, abandoned left out. One-way = warning only. Snap limit 150 ft; query box padded 600 ft
+  and rounded out to 0.001°; cache never expires (fetch date shown; delete the browser's site data to refresh).
+- Lane offset: right-hand lane, half the lane width (12 ft default), off by default; the OSM line is taken as the road centreline.
+- Max-deviation warning at 10 ft.
+- **Not verified against the live Overpass API** (overpass-api.de was blocked from this session: proxy 403). Built to the documented
+  format (OSM wiki "Overpass API": POST `data=`, `out geom` gives each way `nodes` and `geometry`; CORS handled by the server); the
+  engineer to press "Snap to road" once on file:// and once on GitHub Pages.
+### How verified
+`node tests/engine/run.mjs crane` (15 files, 119 passed; crane-road 8 incl. KaTeX of the new steps); `node tests/check-syntax.mjs`;
+`node tests/smoke/crane-road.mjs` (8 checks: snap between two clicks follows the mocked road, curve table R 300 / 60°, attribution on
+card / map / flags, radius typed → off-tracking 3.35 → 7.77 ft, Refit, radius-handle and PI drags with one undo step each; second snap:
+intersection turn + one-way warning from the cache (1 request in all); Trace of a 200 ft quarter circle → one curve R 199.3; offline
+message and click drawing still works; legacy saved route = engine legacy, card "legacy"; Route tab / Report / DXF with curve table and
+attribution; 390 px; 0 console errors); `crane-route` (5), `crane-manual` (8), `crane-drawings` (5), `crane-terrain` (7), `crane-shell`
+(11). Legacy equivalence: old vs new `engine/route.js` + `model.js`, `evaluate()` JSON identical on 4 routes. Screenshots: scratchpad
+`crane/road-*.png`.

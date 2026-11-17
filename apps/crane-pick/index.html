@@ -95,8 +95,11 @@
     'ui/ground.js',         // C4: Ground input and output tabs, the pressure map and float-load labels, Report §Ground
     'engine/tandem.js',     // C5: girder lifts (one crane or two in tandem): load share, the girder path, per-step checks
     'ui/tandem.js',         // C5: Girder lifts input tab, the girder poses on the map, scrubber, Picks rows, Report §Tandem lifts
+    'engine/align.js',      // 2026-11-17: the fitted alignment (tangents + circular curves) of a drawn / traced / OpenStreetMap route line
+    'engine/osm.js',        // 2026-11-17: OpenStreetMap roads (Overpass API): road graph, snapping, shortest path along the roads, names, one-way
     'engine/route.js',      // C6: trucking route: path, kinematic swept path, overhead clearances, axle loads, haul road, posted bridges, staging
     'ui/route.js',          // C6: Route input and output tabs, the route on the map (live while dragging), Report §Route
+    'ui/road.js',           // 2026-11-17: Snap to road (OpenStreetMap, cached per browser) and Trace tools of the Route tab
     '../../shared/dxf.js',  // C7: the DXF R12 writer, previews and sheet printing (shared, unchanged; also the bridge apps)
     'ui/aerial.js',         // 2026-11-17: the aerial background of the plan sheets (Esri World Imagery tiles -> one image per sheet; PNG + world file)
     'ui/drawset.js',        // C7: the lift-plan drawing set (cover, notes, lift plans, rigging, ground, route sheets) and the multi-lift summary
@@ -226,6 +229,7 @@
   .crDimTxt span{display:inline-block;white-space:nowrap;text-align:center;font-size:8.5pt;font-weight:600;color:#0f172a;background:rgba(255,255,255,.9);padding:1px 4px;border:1px solid #0f172a;border-radius:3px;transform:translate(-50%,-50%);line-height:1.2;}
   .crDimTxt small{font-weight:400;font-size:7.5pt;}
   .crVx span{display:block;width:14px;height:14px;background:#fff;border:2px solid var(--blue-600);border-radius:2px;box-shadow:0 1px 3px rgba(0,0,0,.35);cursor:move;}
+  .crVxR span{width:12px;height:12px;margin:1px;border-radius:50%;border-color:#7C3AED;background:#F5F3FF;cursor:ew-resize;} .crRtPI span{border-color:#0F172A;}   /* 2026-11-17: fitted alignment: radius handle, PI */
   .crVxM span{width:10px;height:10px;margin:2px;border-radius:50%;border-color:#64748B;opacity:.8;cursor:copy;}
   .crLive{font-variant-numeric:tabular-nums;color:#1E3A8A;font-weight:600;}
   .crOut{border:1px solid var(--color-border);border-left:4px solid var(--blue-600);border-radius:5px;background:#F8FBFF;padding:5px 8px;margin:6px 0;font-size:9.5pt;}
