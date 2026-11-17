@@ -128,3 +128,11 @@
 - **Why:** the new tool (engineer decisions 2026-11-16); the card comes with the tool (§7 practice). The home page's Saved projects panel lists its projects through `shared/project-registry.js` (`fixlog/shared-project-registry.md`).
 - **Formulas, factors, units, code references:** none. **Saved data:** none.
 - **How verified:** `node tests/smoke/home-projects.mjs`, `node tests/smoke/home-sync.mjs` (crane included). **Other copies:** none.
+
+## 2026-11-17 — PR: claude/midas-continuous-beam (MCB1) — card "MIDAS Civil NX API: Continuous Beam (demo)"   [navigation only]
+- **Where:** "Loads & analysis" section, right after the card `href="Shear%20and%20Moment%20Diagrams.html"`.
+- **Before:** no link.
+- **After:** `<a class="card" href="apps/midas-continuous-beam/index.html" target="_blank"><div class="name">MIDAS Civil NX API: Continuous Beam (demo)</div>…` with Needs (Civil NX open and connected, internet) and Not for design use items; tags "MIDAS Civil NX API", "Analysis". Relative link, works from file://.
+- **Why:** the new app (engineer request 2026-11-17); the card comes with the tool (§7 practice). What the app does: `fixlog/midas-continuous-beam.md`.
+- **Formulas, factors, units, code references:** none. **Saved data:** none.
+- **How verified:** headless Chrome: see the PR. **Other copies:** none. **Open items:** none.

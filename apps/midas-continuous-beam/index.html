@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Continuous Beam → MIDAS Civil NX</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  :root {
+    --bg: #f4f6f9; --panel: #ffffff; --ink: #1d2733; --muted: #5d6b7a; --line: #d9e0e8;
+    --accent: #0b5cad; --accent-ink: #ffffff; --ok: #1e7d43; --warn: #a15c00; --err: #b3261e;
+    --midas: #0b5cad; --local: #d04a02;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); }
+  header { padding: 12px 18px; background: var(--panel); border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; }
+  header span { color: var(--muted); font-size: 13px; }
+  main { display: grid; grid-template-columns: minmax(340px, 430px) 1fr; gap: 14px; padding: 14px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
+  .card h2 { font-size: 14px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 6px 0 2px; }
+  input[type=text], input[type=password], input[type=number], select {
+    width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 5px; font: inherit; background: #fff; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink); margin-top: 8px; }
+  button { font: inherit; padding: 7px 12px; border-radius: 5px; border: 1px solid var(--accent); background: #fff; color: var(--accent); cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-ink); }
+  button:disabled { opacity: .5; cursor: default; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { border-bottom: 1px solid var(--line); padding: 4px 5px; text-align: right; }
+  th { color: var(--muted); font-weight: 600; }
+  th:first-child, td:first-child { text-align: left; }
+  #spans input { width: 100%; padding: 4px; text-align: right; }
+  .status { font-size: 13px; margin-top: 8px; padding: 6px 8px; border-radius: 5px; background: #eef2f6; }
+  .status.ok { background: #e6f4ea; color: var(--ok); }
+  .status.err { background: #fbe9e7; color: var(--err); }
+  .status.warn { background: #fff4e0; color: var(--warn); }
+  .plot { width: 100%; height: 300px; }
+  .plot.small { height: 210px; }
+  #log { font: 12px/1.35 ui-monospace, Consolas, monospace; background: #0f1720; color: #cfe3f5; border-radius: 6px; padding: 8px; max-height: 220px; overflow: auto; white-space: pre-wrap; }
+  .note { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .legend-line { display: inline-block; width: 22px; height: 0; border-top: 3px solid; vertical-align: middle; margin-right: 4px; }
+  details summary { cursor: pointer; color: var(--accent); }
+  pre.json { max-height: 260px; overflow: auto; background: #f7f9fb; border: 1px solid var(--line); padding: 8px; font-size: 12px; }
+  .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .toolbar select { width: auto; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Continuous Beam → MIDAS Civil NX</h1>
+  <span>Variable-depth spans · builds the model through the Civil NX API · shear and moment diagrams · independent check</span>
+  <span style="background:#fff4e0;color:#a15c00;border-radius:5px;padding:1px 8px;font-size:12px;font-weight:600">DEMO — NOT FOR DESIGN USE</span>
+</header>
+
+<main>
+  <!-- ============ LEFT: INPUTS ============ -->
+  <section>
+    <div class="card">
+      <h2>Civil NX connection</h2>
+      <label>Base URL (Apps → API Settings → Copy)</label>
+      <input id="baseUrl" type="text" placeholder="https://moa-engineers.midasit.com:443/civil">
+      <label>MAPI-Key (stored on this PC only)</label>
+      <input id="mapiKey" type="password" placeholder="paste key">
+      <div class="check"><input id="useProxy" type="checkbox"><label for="useProxy" style="margin:0;color:inherit">Use local proxy (run local_proxy.py from this folder)</label></div>
+      <div class="btns"><button id="btnVerify">Verify connection</button></div>
+      <div id="connStatus" class="status">Not checked. Civil NX must be open and show "Connected".</div>
+    </div>
+
+    <div class="card">
+      <h2>Spans &amp; section (rectangular, depth varies parabolically)</h2>
+      <table id="spans">
+        <thead><tr><th>#</th><th>L (ft)</th><th>b (in)</th><th>h left</th><th>h mid</th><th>h right</th><th>elems</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="btns"><button id="btnAddSpan">+ Span</button><button id="btnHaunch">Example: haunched 3-span</button></div>
+      <div class="note">Depths in inches. Each element gets a prismatic section using the depth at its midpoint (a stepped approximation of the taper), so more elements gives a closer match.</div>
+    </div>
+
+    <div class="card">
+      <h2>Loads &amp; combinations</h2>
+      <div class="row3">
+        <div><label>γ concrete (kcf)</label><input id="gamma" type="number" step="0.005" value="0.150"></div>
+        <div><label>DW (klf)</label><input id="wDW" type="number" step="0.05" value="0.50"></div>
+        <div><label>LL (klf)</label><input id="wLL" type="number" step="0.05" value="0.64"></div>
+      </div>
+      <div class="note">DC = γ·A is applied as an element uniform load (not as MIDAS self-weight), so MIDAS and the check solver use the same weight. DW and LL are uniform on all spans; there's no pattern loading.</div>
+      <div class="row3">
+        <div><label>STR-I: DC</label><input id="fDC" type="number" step="0.05" value="1.25"></div>
+        <div><label>DW</label><input id="fDW" type="number" step="0.05" value="1.50"></div>
+        <div><label>LL</label><input id="fLL" type="number" step="0.05" value="1.75"></div>
+      </div>
+      <div class="note">SER-I uses 1.0 on all three.</div>
+    </div>
+
+    <div class="card">
+      <h2>Material (Civil NX database)</h2>
+      <div class="row">
+        <div><label>Standard</label><input id="matStd" type="text" value="ASTM(RC)"></div>
+        <div><label>Grade (DB name)</label><input id="matDb" type="text" value="Grade C4000"></div>
+      </div>
+      <div class="note">E doesn't affect the moments when there's one material. If Civil NX rejects the material, try <b>AS17(RC)</b> / <b>C32</b> (the combination used in MIDAS's own sample), or enter one by hand and GET <code>/db/MATL</code> to see its exact names.</div>
+    </div>
+
+    <div class="card">
+      <h2>Run</h2>
+      <div class="check"><input id="newModel" type="checkbox" checked><label for="newModel" style="margin:0;color:inherit">Start a new model (/doc/NEW). Discards the open model!</label></div>
+      <div class="btns">
+        <button id="btnLocal">Run check solver only</button>
+        <button id="btnMidas" class="primary">Build in Civil NX + analyze</button>
+      </div>
+      <div id="runStatus" class="status">Ready.</div>
+      <details style="margin-top:10px"><summary>Show API requests (JSON)</summary><pre id="jsonPreview" class="json"></pre></details>
+    </div>
+  </section>
+
+  <!-- ============ RIGHT: RESULTS ============ -->
+  <section>
+    <div class="card">
+      <h2>Elevation</h2>
+      <div id="plotElev" class="plot small"></div>
+    </div>
+
+    <div class="card">
+      <div class="toolbar">
+        <h2 style="margin:0">Diagrams</h2>
+        <select id="caseSel"></select>
+        <span class="note" style="margin:0"><span class="legend-line" style="border-color:var(--midas)"></span>MIDAS
+          &nbsp;<span class="legend-line" style="border-color:var(--local);border-top-style:dashed"></span>Check solver</span>
+        <label class="check" style="margin:0"><input id="flipV" type="checkbox">Flip MIDAS V</label>
+        <label class="check" style="margin:0"><input id="flipM" type="checkbox">Flip MIDAS M</label>
+      </div>
+      <div id="signNote" class="note"></div>
+      <div id="plotV" class="plot"></div>
+      <div id="plotM" class="plot"></div>
+    </div>
+
+    <div class="card">
+      <h2>Summary</h2>
+      <div id="summary"></div>
+      <div class="btns"><button id="btnCsv" disabled>Download MIDAS beam forces (CSV)</button></div>
+    </div>
+
+    <div class="card">
+      <h2>Log</h2>
+      <div id="log"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+/* ===================== MIDAS API CLIENT (from js/midas-api.js) ===================== */
+/*
+ * midas-api.js — minimal MIDAS Civil NX API client for single-file HTML apps.
+ *
+ * Paste this into a <script> block (or load it) and use:
+ *
+ *   const midas = MidasAPI.fromStorage();          // or new MidasAPI(baseUrl, key)
+ *   await midas.verify();                          // { keyVerified, status, ... }
+ *   const nodes = await midas.get('/db/NODE');     // { NODE: { "1": {X,Y,Z}, ... } }
+ *   await midas.post('/db/NODE', { Assign: { 1: { X: 0, Y: 0, Z: 0 } } });
+ *   await midas.analyze();
+ *   const rows = await midas.table({ TABLE_TYPE: 'BEAMFORCE', LOAD_CASE_NAMES: ['DC(ST)'] });
+ *
+ * Notes
+ *  - Civil NX must be open and "Connected" in Apps > API Settings.
+ *  - The key is kept in localStorage on this machine only, never in the HTML file.
+ *  - If the browser blocks the call (CORS), set useProxy: true and run local_proxy.py.
+ */
+(function (global) {
+  'use strict';
+
+  const LS_URL = 'midas.baseUrl';
+  const LS_KEY = 'midas.mapiKey';
+  const LS_PROXY = 'midas.useProxy';
+  const PROXY_ORIGIN = 'http://127.0.0.1:8765';
+
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* storage unavailable */ } }
+
+  class MidasAPI {
+    constructor(baseUrl, mapiKey, opts = {}) {
+      this.baseUrl = (baseUrl || '').trim().replace(/\/+$/, '');
+      this.mapiKey = (mapiKey || '').trim();
+      this.useProxy = !!opts.useProxy;
+      this.timeoutMs = opts.timeoutMs || 120000;   // analysis can take a while
+      this.log = opts.log || null;                 // optional fn(method, endpoint, status)
+    }
+
+    static fromStorage(opts = {}) {
+      return new MidasAPI(lsGet(LS_URL) || 'https://moa-engineers.midasit.com:443/civil',
+                          lsGet(LS_KEY) || '',
+                          Object.assign({ useProxy: lsGet(LS_PROXY) === '1' }, opts));
+    }
+
+    save() {
+      lsSet(LS_URL, this.baseUrl);
+      lsSet(LS_KEY, this.mapiKey);
+      lsSet(LS_PROXY, this.useProxy ? '1' : '0');
+    }
+
+    /** Build the URL, routing through the local proxy if enabled. */
+    _url(full) {
+      if (!this.useProxy) return full;
+      return PROXY_ORIGIN + '/?target=' + encodeURIComponent(full);
+    }
+
+    async request(method, endpoint, body) {
+      if (!this.mapiKey) throw new Error('No MAPI-Key set. Copy it from Civil NX > Apps > API Settings.');
+      const ep = endpoint.startsWith('/') ? endpoint : '/' + endpoint;
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
+      let res;
+      try {
+        res = await fetch(this._url(this.baseUrl + ep), {
+          method,
+          headers: { 'Content-Type': 'application/json', 'MAPI-Key': this.mapiKey },
+          body: (method === 'GET' || body === undefined) ? undefined : JSON.stringify(body),
+          signal: ctrl.signal,
+        });
+      } catch (e) {
+        throw new Error(
+          e.name === 'AbortError'
+            ? `MIDAS ${method} ${ep} timed out after ${this.timeoutMs / 1000}s`
+            : `MIDAS ${method} ${ep} failed to send (${e.message}). ` +
+              `If the console shows a CORS error, enable the local proxy (local_proxy.py in this app's folder).`
+        );
+      } finally {
+        clearTimeout(timer);
+      }
+      if (this.log) this.log(method, ep, res.status);
+      const text = await res.text();
+      let data;
+      try { data = text ? JSON.parse(text) : {}; } catch (e) { data = { raw: text }; }
+      if (!res.ok) {
+        const err = new Error(`MIDAS ${method} ${ep} → HTTP ${res.status}: ${text.slice(0, 300)}`);
+        err.status = res.status; err.data = data;
+        throw err;
+      }
+      return data;
+    }
+
+    get(ep)        { return this.request('GET', ep); }
+    post(ep, body) { return this.request('POST', ep, body === undefined ? {} : body); }
+    put(ep, body)  { return this.request('PUT', ep, body); }
+    del(ep, body)  { return this.request('DELETE', ep, body); }
+
+    /** GET {server}/mapikey/verify: the base URL with the product part (/civil) removed. */
+    async verify() {
+      const u = new URL(this.baseUrl);
+      const verifyUrl = u.origin + '/mapikey/verify';
+      const res = await fetch(this._url(verifyUrl), { headers: { 'MAPI-Key': this.mapiKey } });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(`verify → HTTP ${res.status}`);
+      return data;
+    }
+
+    /** Read a DB item and return just the records object, e.g. records('/db/NODE') → { "1": {...} }. */
+    async records(ep) {
+      const r = await this.get(ep);
+      const k = Object.keys(r)[0];
+      return k ? r[k] : {};
+    }
+
+    /** Send records with POST (create) or PUT (modify), wrapped in "Assign". */
+    assign(ep, records, method = 'POST') {
+      return this.request(method, ep, { Assign: records });
+    }
+
+    analyze(argument) {
+      return this.post('/doc/ANAL', argument ? { Argument: argument } : {});
+    }
+
+    /** POST /post/TABLE and return an array of row objects (numeric strings converted to numbers). */
+    async table(argument) {
+      const arg = Object.assign({ TABLE_NAME: 'T' }, argument);
+      const resp = await this.post('/post/TABLE', { Argument: arg });
+      const t = resp[arg.TABLE_NAME] || Object.values(resp)[0];
+      if (!t || !Array.isArray(t.DATA)) return [];
+      const rows = t.DATA.map(r => {
+        const o = {};
+        t.HEAD.forEach((h, i) => {
+          const v = r[i];
+          o[h] = (v !== '' && v != null && !isNaN(+v)) ? +v : v;
+        });
+        return o;
+      });
+      rows.units = { FORCE: t.FORCE, DIST: t.DIST };
+      return rows;
+    }
+
+    /** Push an existing .mct text into the open model via /doc/IMPORTMXT. */
+    importMct(argument) {
+      // Argument format: see the "Import to mct/mgt" page in the MIDAS JSON manual.
+      return this.post('/doc/IMPORTMXT', { Argument: argument });
+    }
+  }
+
+  global.MidasAPI = MidasAPI;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const LS_INPUTS = 'cbeam.inputs.v1';
+const CASES = ['DC', 'DW', 'LL', 'STR-I', 'SER-I'];
+
+/* ---------------- state ---------------- */
+let spans = [];          // [{L,b,hL,hM,hR,n}]
+let model = null;        // built geometry
+let local = null;        // {case: [{x,V,M}]}, reactions
+let midasRes = null;     // {case: [{x,V,M,elem,part}]}
+let midasRaw = null;     // raw rows for CSV
+
+/* ---------------- logging ---------------- */
+function log(msg, cls) {
+  const t = new Date().toLocaleTimeString();
+  const line = document.createElement('div');
+  line.textContent = `[${t}] ${msg}`;
+  if (cls === 'err') line.style.color = '#ff9b8f';
+  if (cls === 'ok') line.style.color = '#9be3b0';
+  $('log').appendChild(line);
+  $('log').scrollTop = $('log').scrollHeight;
+}
+function setStatus(el, msg, cls) { el.textContent = msg; el.className = 'status' + (cls ? ' ' + cls : ''); }
+
+/* ---------------- inputs ---------------- */
+const DEFAULT_SPANS = [
+  { L: 60, b: 36, hL: 30, hM: 30, hR: 48, n: 12 },
+  { L: 80, b: 36, hL: 48, hM: 30, hR: 48, n: 16 },
+  { L: 60, b: 36, hL: 48, hM: 30, hR: 30, n: 12 },
+];
+const FIELDS = ['gamma', 'wDW', 'wLL', 'fDC', 'fDW', 'fLL', 'matStd', 'matDb'];
+
+function saveInputs() {
+  const o = { spans };
+  FIELDS.forEach(f => o[f] = $(f).value);
+  try { localStorage.setItem(LS_INPUTS, JSON.stringify(o)); } catch (e) {}
+}
+function loadInputs() {
+  let o = null;
+  try { o = JSON.parse(localStorage.getItem(LS_INPUTS) || 'null'); } catch (e) {}
+  spans = (o && Array.isArray(o.spans) && o.spans.length) ? o.spans : JSON.parse(JSON.stringify(DEFAULT_SPANS));
+  if (o) FIELDS.forEach(f => { if (o[f] !== undefined) $(f).value = o[f]; });
+}
+
+function renderSpans() {
+  const tb = $('spans').querySelector('tbody');
+  tb.innerHTML = '';
+  spans.forEach((s, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${i + 1}</td>` +
+      ['L', 'b', 'hL', 'hM', 'hR', 'n'].map(k =>
+        `<td><input type="number" data-i="${i}" data-k="${k}" value="${s[k]}" step="${k === 'n' ? 1 : 0.5}" min="${k === 'n' ? 2 : 0.1}"></td>`).join('') +
+      `<td><button data-del="${i}" title="Remove span" ${spans.length < 2 ? 'disabled' : ''}>×</button></td>`;
+    tb.appendChild(tr);
+  });
+  tb.querySelectorAll('input').forEach(inp => inp.addEventListener('change', e => {
+    const i = +e.target.dataset.i, k = e.target.dataset.k;
+    let v = parseFloat(e.target.value);
+    if (k === 'n') v = Math.max(2, Math.round(v || 2));
+    if (!(v > 0)) { e.target.value = spans[i][k]; return; }
+    spans[i][k] = v; saveInputs(); refreshGeometry();
+  }));
+  tb.querySelectorAll('button[data-del]').forEach(b => b.addEventListener('click', () => {
+    spans.splice(+b.dataset.del, 1); saveInputs(); renderSpans(); refreshGeometry();
+  }));
+}
+
+/* ---------------- geometry ---------------- */
+// Quadratic (parabolic) depth through left / mid / right values, xi in [0,1]
+function depthAt(s, xi) {
+  return s.hL * (1 - xi) * (1 - 2 * xi) + s.hM * 4 * xi * (1 - xi) + s.hR * xi * (2 * xi - 1);
+}
+
+function buildModel() {
+  const nodes = [{ id: 1, x: 0 }];
+  const elems = [];
+  const supports = [1];
+  const sectMap = new Map();   // key "b|h" -> id
+  const sects = [];
+  let x0 = 0;
+  spans.forEach((s, si) => {
+    for (let k = 0; k < s.n; k++) {
+      const xiMid = (k + 0.5) / s.n;
+      const h = Math.round(depthAt(s, xiMid) * 100) / 100;      // in
+      const key = s.b + '|' + h;
+      if (!sectMap.has(key)) { sectMap.set(key, sects.length + 1); sects.push({ id: sects.length + 1, b: s.b, h }); }
+      const xj = x0 + s.L * (k + 1) / s.n;
+      nodes.push({ id: nodes.length + 1, x: xj });
+      const A = (s.b / 12) * (h / 12);                             // ft^2
+      const I = (s.b / 12) * Math.pow(h / 12, 3) / 12;            // ft^4
+      elems.push({ id: elems.length + 1, i: nodes.length - 1, j: nodes.length, sect: sectMap.get(key),
+                   L: s.L / s.n, A, I, h, b: s.b, span: si + 1 });
+    }
+    x0 += s.L;
+    supports.push(nodes.length);
+  });
+  return { nodes, elems, sects, supports, length: x0 };
+}
+
+function loadVals() {
+  const g = parseFloat($('gamma').value) || 0;
+  return {
+    gamma: g,
+    wDW: parseFloat($('wDW').value) || 0,
+    wLL: parseFloat($('wLL').value) || 0,
+    f: { DC: parseFloat($('fDC').value) || 0, DW: parseFloat($('fDW').value) || 0, LL: parseFloat($('fLL').value) || 0 },
+  };
+}
+
+/* ---------------- independent check solver (2D Euler-Bernoulli, direct stiffness) ---------------- */
+// Loads per element: w (klf, +up). Returns sample points (5 per element) and support reactions.
+function solveBeam(m, wOfElem) {
+  const nDof = m.nodes.length * 2;            // [v, theta] per node
+  const K = Array.from({ length: nDof }, () => new Float64Array(nDof));
+  const F = new Float64Array(nDof);
+  const E = 1;                                 // single material: E cancels for forces
+  const ke = (EI, L) => {
+    const a = EI / (L * L * L);
+    return [
+      [12 * a, 6 * L * a, -12 * a, 6 * L * a],
+      [6 * L * a, 4 * L * L * a, -6 * L * a, 2 * L * L * a],
+      [-12 * a, -6 * L * a, 12 * a, -6 * L * a],
+      [6 * L * a, 2 * L * L * a, -6 * L * a, 4 * L * L * a]];
+  };
+  const feq = (w, L) => [w * L / 2, w * L * L / 12, w * L / 2, -w * L * L / 12];
+  const dofs = e => [2 * (e.i - 1), 2 * (e.i - 1) + 1, 2 * (e.j - 1), 2 * (e.j - 1) + 1];
+
+  m.elems.forEach(e => {
+    const k = ke(E * e.I, e.L), f = feq(wOfElem(e), e.L), d = dofs(e);
+    for (let r = 0; r < 4; r++) { F[d[r]] += f[r]; for (let c = 0; c < 4; c++) K[d[r]][d[c]] += k[r][c]; }
+  });
+
+  const fixed = new Set(m.supports.map(n => 2 * (n - 1)));     // vertical restraint at supports
+  const free = [...Array(nDof).keys()].filter(i => !fixed.has(i));
+  const n = free.length;
+  const A = free.map(r => free.map(c => K[r][c]));
+  const b = free.map(r => F[r]);
+  // Gaussian elimination with partial pivoting
+  for (let c = 0; c < n; c++) {
+    let p = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
+    [A[c], A[p]] = [A[p], A[c]]; [b[c], b[p]] = [b[p], b[c]];
+    if (Math.abs(A[c][c]) < 1e-300) throw new Error('Singular stiffness matrix (unstable supports?)');
+    for (let r = c + 1; r < n; r++) {
+      const fct = A[r][c] / A[c][c];
+      if (!fct) continue;
+      for (let cc = c; cc < n; cc++) A[r][cc] -= fct * A[c][cc];
+      b[r] -= fct * b[c];
+    }
+  }
+  const xs = new Float64Array(n);
+  for (let r = n - 1; r >= 0; r--) {
+    let s = b[r];
+    for (let c = r + 1; c < n; c++) s -= A[r][c] * xs[c];
+    xs[r] = s / A[r][r];
+  }
+  const D = new Float64Array(nDof);
+  free.forEach((g, i) => D[g] = xs[i]);
+
+  const pts = [];
+  const react = new Map(m.supports.map(sn => [sn, 0]));
+  m.elems.forEach(e => {
+    const k = ke(E * e.I, e.L), w = wOfElem(e), f = feq(w, e.L), d = dofs(e);
+    const end = [0, 1, 2, 3].map(r => k[r].reduce((s, kv, c) => s + kv * D[d[c]], 0) - f[r]);
+    const [V1, M1] = end;                       // forces from nodes on the element (+up, +ccw)
+    if (react.has(e.i)) react.set(e.i, react.get(e.i) + end[0]);
+    if (react.has(e.j)) react.set(e.j, react.get(e.j) + end[2]);
+    const xI = m.nodes[e.i - 1].x;
+    [0, 0.25, 0.5, 0.75, 1].forEach(t => {
+      const x = t * e.L;
+      pts.push({ x: xI + x, V: V1 + w * x, M: -M1 + V1 * x + w * x * x / 2, elem: e.id, t });
+    });
+  });
+  return { pts, react };
+}
+
+function runLocal() {
+  model = buildModel();
+  const lv = loadVals();
+  const base = {
+    DC: solveBeam(model, e => -lv.gamma * e.A),
+    DW: solveBeam(model, () => -lv.wDW),
+    LL: solveBeam(model, () => -lv.wLL),
+  };
+  const combo = (fac) => {
+    const pts = base.DC.pts.map((p, i) => ({
+      x: p.x, elem: p.elem, t: p.t,
+      V: fac.DC * p.V + fac.DW * base.DW.pts[i].V + fac.LL * base.LL.pts[i].V,
+      M: fac.DC * p.M + fac.DW * base.DW.pts[i].M + fac.LL * base.LL.pts[i].M }));
+    const react = new Map([...base.DC.react.keys()].map(k =>
+      [k, fac.DC * base.DC.react.get(k) + fac.DW * base.DW.react.get(k) + fac.LL * base.LL.react.get(k)]));
+    return { pts, react };
+  };
+  local = {
+    DC: base.DC, DW: base.DW, LL: base.LL,
+    'STR-I': combo(lv.f),
+    'SER-I': combo({ DC: 1, DW: 1, LL: 1 }),
+  };
+  // statics check: sum of reactions = total load
+  const totDC = model.elems.reduce((s, e) => s + lv.gamma * e.A * e.L, 0);
+  const sumDC = [...local.DC.react.values()].reduce((a, b) => a + b, 0);
+  log(`Check solver: ${model.nodes.length} nodes, ${model.elems.length} elements, ${model.sects.length} sections. ` +
+      `DC total ${totDC.toFixed(2)} k, ΣR ${sumDC.toFixed(2)} k`, Math.abs(totDC - sumDC) < 1e-6 * Math.max(1, totDC) ? 'ok' : 'err');
+  $('jsonPreview').textContent = JSON.stringify(buildRequests(), null, 1);
+}
+
+/* ---------------- MIDAS request bodies ---------------- */
+function buildRequests() {
+  const m = model || buildModel();
+  const lv = loadVals();
+  const r6 = v => Math.round(v * 1e6) / 1e6;
+  const reqs = [];
+  reqs.push(['PUT', '/db/UNIT', { Assign: { 1: { DIST: 'FT', FORCE: 'KIPS' } } }]);
+  reqs.push(['POST', '/db/MATL', { Assign: { 1: {
+    TYPE: 'CONC', NAME: $('matDb').value.trim(),
+    PARAM: [{ P_TYPE: 1, STANDARD: $('matStd').value.trim(), DB: $('matDb').value.trim() }] } } }]);
+  const sect = {};
+  m.sects.forEach(s => sect[s.id] = {
+    SECTTYPE: 'DBUSER', SECT_NAME: `R${s.b}x${s.h}`,
+    SECT_BEFORE: { USE_SHEAR_DEFORM: false, SHAPE: 'SB', DATATYPE: 2, SECT_I: { vSIZE: [r6(s.h / 12), r6(s.b / 12)] } } });
+  reqs.push(['POST', '/db/SECT', { Assign: sect }]);
+  const node = {};
+  m.nodes.forEach(n => node[n.id] = { X: r6(n.x), Y: 0, Z: 0 });
+  reqs.push(['POST', '/db/NODE', { Assign: node }]);
+  const elem = {};
+  m.elems.forEach(e => elem[e.id] = { TYPE: 'BEAM', MATL: 1, SECT: e.sect, NODE: [e.i, e.j] });
+  reqs.push(['POST', '/db/ELEM', { Assign: elem }]);
+  const cons = {};
+  m.supports.forEach((n, k) => cons[n] = { ITEMS: [{ ID: 1, CONSTRAINT: k === 0 ? '1111000' : '0111000' }] });
+  reqs.push(['POST', '/db/CONS', { Assign: cons }]);
+  reqs.push(['POST', '/db/STLD', { Assign: {
+    1: { NAME: 'DC', TYPE: 'USER', DESC: 'Self weight (gamma*A as beam load)' },
+    2: { NAME: 'DW', TYPE: 'USER', DESC: 'Wearing surface / superimposed' },
+    3: { NAME: 'LL', TYPE: 'USER', DESC: 'Uniform live load (all spans)' } } }]);
+  const bm = {};
+  m.elems.forEach(e => {
+    const items = [];
+    const add = (lc, w) => { if (w) items.push({ ID: items.length + 1, LCNAME: lc, CMD: 'BEAM', TYPE: 'UNILOAD', DIRECTION: 'GZ', D: [0, 1], P: [r6(w), r6(w)] }); };
+    add('DC', -lv.gamma * e.A); add('DW', -lv.wDW); add('LL', -lv.wLL);
+    if (items.length) bm[e.id] = { ITEMS: items };
+  });
+  reqs.push(['POST', '/db/BMLD', { Assign: bm }]);
+  const comb = (name, f) => ({ NAME: name, ACTIVE: 'ACTIVE', iTYPE: 0, vCOMB: [
+    { ANAL: 'ST', LCNAME: 'DC', FACTOR: f.DC }, { ANAL: 'ST', LCNAME: 'DW', FACTOR: f.DW }, { ANAL: 'ST', LCNAME: 'LL', FACTOR: f.LL }] });
+  reqs.push(['POST', '/db/LCOM-GEN', { Assign: { 1: comb('STR-I', lv.f), 2: comb('SER-I', { DC: 1, DW: 1, LL: 1 }) } }]);
+  reqs.push(['POST', '/doc/ANAL', {}]);
+  reqs.push(['POST', '/post/TABLE', { Argument: {
+    TABLE_NAME: 'BeamForce', TABLE_TYPE: 'BEAMFORCE',
+    UNIT: { FORCE: 'KIPS', DIST: 'FT' },
+    COMPONENTS: ['Elem', 'Load', 'Part', 'Shear-z', 'Moment-y'],
+    LOAD_CASE_NAMES: ['DC(ST)', 'DW(ST)', 'LL(ST)', 'STR-I(CB)', 'SER-I(CB)'] } }]);
+  reqs.push(['POST', '/post/TABLE', { Argument: {
+    TABLE_NAME: 'Reaction', TABLE_TYPE: 'REACTIONG',
+    UNIT: { FORCE: 'KIPS', DIST: 'FT' },
+    LOAD_CASE_NAMES: ['DC(ST)', 'DW(ST)', 'LL(ST)', 'STR-I(CB)', 'SER-I(CB)'] } }]);
+  return reqs;
+}
+
+/* ---------------- MIDAS run ---------------- */
+function client() {
+  const c = new MidasAPI($('baseUrl').value, $('mapiKey').value,
+    { useProxy: $('useProxy').checked, timeoutMs: 300000, log: (m, ep, st) => log(`${m} ${ep} → ${st}`, st < 300 ? 'ok' : 'err') });
+  c.save();
+  return c;
+}
+
+async function verify() {
+  try {
+    const c = client();
+    setStatus($('connStatus'), 'Checking…');
+    const r = await c.verify();
+    const good = r.keyVerified && String(r.status).toLowerCase() === 'connected';
+    setStatus($('connStatus'), good ? `Connected (user ${r.user || '?'}, program ${r.program || '?'})`
+      : `Server answered but not ready: keyVerified=${r.keyVerified}, status=${r.status}`, good ? 'ok' : 'warn');
+    log('verify: ' + JSON.stringify(r), good ? 'ok' : 'err');
+  } catch (e) {
+    setStatus($('connStatus'), e.message, 'err');
+    log(e.message, 'err');
+  }
+}
+
+function partPos(label) {
+  const s = String(label).replace(/\s+/g, '').toUpperCase();
+  if (/^(PART)?I(\[|$)/.test(s)) return 0;
+  if (/^(PART)?J(\[|$)/.test(s)) return 1;
+  const m = s.match(/(\d)\/(\d)/);
+  return m ? (+m[1] / +m[2]) : null;
+}
+function caseKey(label) {
+  const s = String(label).replace(/\(.*\)$/, '').trim().toUpperCase();
+  return CASES.find(c => c === s) || null;
+}
+function col(head, names) {
+  const H = head.map(h => String(h).toLowerCase().replace(/\s+/g, ''));
+  for (const n of names) { const i = H.indexOf(n); if (i >= 0) return i; }
+  return -1;
+}
+
+async function runMidas() {
+  if (!model) runLocal();
+  if ($('newModel').checked && !confirm('This starts a NEW model in Civil NX (/doc/NEW). Unsaved changes in the open model will be lost. Continue?')) return;
+  const btn = $('btnMidas'); btn.disabled = true;
+  try {
+    const c = client();
+    setStatus($('runStatus'), 'Sending model to Civil NX…');
+    if ($('newModel').checked) await c.post('/doc/NEW', {});
+    const reqs = buildRequests();
+    let forceResp = null, reactResp = null;
+    for (const [method, ep, body] of reqs) {
+      if (ep === '/doc/ANAL') setStatus($('runStatus'), 'Running analysis in Civil NX…');
+      const r = await c.request(method, ep, body);
+      if (ep === '/post/TABLE' && body.Argument.TABLE_TYPE === 'BEAMFORCE') forceResp = r;
+      if (ep === '/post/TABLE' && body.Argument.TABLE_TYPE === 'REACTIONG') reactResp = r;
+    }
+    parseMidas(forceResp, reactResp);
+    setStatus($('runStatus'), 'Done. MIDAS results loaded.', 'ok');
+    draw();
+  } catch (e) {
+    setStatus($('runStatus'), e.message, 'err');
+    log(e.message, 'err');
+    if (e.data) log('response: ' + JSON.stringify(e.data).slice(0, 600), 'err');
+  } finally { btn.disabled = false; }
+}
+
+function parseMidas(forceResp, reactResp) {
+  const t = forceResp && (forceResp.BeamForce || Object.values(forceResp)[0]);
+  if (!t || !t.HEAD || !t.DATA) throw new Error('BEAMFORCE table came back empty: ' + JSON.stringify(forceResp).slice(0, 300));
+  const iE = col(t.HEAD, ['elem']), iL = col(t.HEAD, ['load']), iP = col(t.HEAD, ['part']);
+  const iV = col(t.HEAD, ['shear-z', 'shearz']), iM = col(t.HEAD, ['moment-y', 'momenty']);
+  if ([iE, iL, iP, iV, iM].some(i => i < 0)) throw new Error('Unexpected table columns: ' + t.HEAD.join(', '));
+  midasRaw = t;
+  midasRes = {};
+  let skipped = 0;
+  t.DATA.forEach(r => {
+    const ck = caseKey(r[iL]), pos = partPos(r[iP]), e = model.elems[+r[iE] - 1];
+    if (!ck || pos === null || !e) { skipped++; return; }
+    (midasRes[ck] = midasRes[ck] || []).push({
+      x: model.nodes[e.i - 1].x + pos * e.L, V: parseFloat(r[iV]), M: parseFloat(r[iM]), elem: e.id, t: pos, part: r[iP] });
+  });
+  Object.values(midasRes).forEach(a => a.sort((p, q) => p.x - q.x || p.t - q.t));
+  log(`MIDAS beam forces: ${t.DATA.length} rows (${t.FORCE || '?'}, ${t.DIST || '?'})` + (skipped ? `, ${skipped} rows skipped` : ''), 'ok');
+
+  // reactions
+  midasRes._react = {};
+  const rt = reactResp && (reactResp.Reaction || Object.values(reactResp)[0]);
+  if (rt && rt.HEAD) {
+    const iN = col(rt.HEAD, ['node']), iLd = col(rt.HEAD, ['load']), iFz = col(rt.HEAD, ['fz']);
+    if (iN >= 0 && iLd >= 0 && iFz >= 0) rt.DATA.forEach(r => {
+      const ck = caseKey(r[iLd]); if (!ck) return;
+      (midasRes._react[ck] = midasRes._react[ck] || {})[+r[iN]] = parseFloat(r[iFz]);
+    });
+  }
+
+  // sign-convention check against the check solver (DC case)
+  autoSign();
+  $('btnCsv').disabled = false;
+}
+
+function autoSign() {
+  const a = midasRes && midasRes.DC, b = local && local.DC;
+  if (!a || !b) return;
+  const key = p => p.elem + '|' + p.t;
+  const lm = new Map(b.pts.map(p => [key(p), p]));
+  let sv = 0, sm = 0;
+  a.forEach(p => { const q = lm.get(key(p)); if (q) { sv += p.V * q.V; sm += p.M * q.M; } });
+  $('flipV').checked = sv < 0; $('flipM').checked = sm < 0;
+  const msgs = [];
+  if (sv < 0) msgs.push('shear');
+  if (sm < 0) msgs.push('moment');
+  $('signNote').textContent = msgs.length
+    ? `MIDAS ${msgs.join(' and ')} sign is opposite to the check solver's convention (sagging +, shear + = left side up), so it was flipped for plotting. Untick to see raw MIDAS signs.`
+    : 'MIDAS signs match the check solver convention (sagging +, shear + = left side up).';
+}
+
+/* ---------------- plotting ---------------- */
+const PLOT_CFG = { responsive: true, displaylogo: false, modeBarButtonsToRemove: ['lasso2d', 'select2d'] };
+
+function drawElevation() {
+  if (!model) return;
+  const xs = [], top = [], bot = [];
+  model.elems.forEach(e => {
+    const xi = model.nodes[e.i - 1].x, xj = model.nodes[e.j - 1].x;
+    xs.push(xi, xj); top.push(0, 0); bot.push(-e.h, -e.h);
+  });
+  // smooth true profile
+  const sx = [], sy = [];
+  let x0 = 0;
+  spans.forEach(s => { for (let k = 0; k <= 40; k++) { sx.push(x0 + s.L * k / 40); sy.push(-depthAt(s, k / 40)); } x0 += s.L; });
+  const supX = model.supports.map(n => model.nodes[n - 1].x);
+  const hmax = Math.max(...model.elems.map(e => e.h));
+  Plotly.react('plotElev', [
+    { x: xs, y: bot, mode: 'lines', line: { color: '#7b8a99', width: 1, shape: 'hv' }, name: 'Model (stepped)', hoverinfo: 'skip' },
+    { x: sx, y: sy, mode: 'lines', line: { color: '#1d2733', width: 2 }, fill: 'tozeroy', fillcolor: 'rgba(11,92,173,.08)', name: 'Profile', hovertemplate: 'x=%{x:.1f} ft<br>h=%{customdata:.1f} in<extra></extra>', customdata: sy.map(v => -v) },
+    { x: supX, y: supX.map(() => -hmax * 1.05), mode: 'markers', marker: { symbol: 'triangle-up', size: 14, color: '#0b5cad' }, name: 'Supports', hovertemplate: 'Support x=%{x:.1f} ft<extra></extra>' },
+  ], {
+    margin: { l: 50, r: 10, t: 10, b: 35 }, showlegend: false,
+    xaxis: { title: 'x (ft)', zeroline: false }, yaxis: { title: 'depth (in)', zeroline: true },
+  }, PLOT_CFG);
+}
+
+function draw() {
+  drawElevation();
+  const ck = $('caseSel').value || 'STR-I';
+  const flipV = $('flipV').checked ? -1 : 1, flipM = $('flipM').checked ? -1 : 1;
+  const traces = q => {
+    const out = [];
+    if (midasRes && midasRes[ck]) out.push({
+      x: midasRes[ck].map(p => p.x), y: midasRes[ck].map(p => p[q] * (q === 'V' ? flipV : flipM)),
+      mode: 'lines+markers', marker: { size: 3 }, line: { color: getComputedStyle(document.body).getPropertyValue('--midas'), width: 2 },
+      name: 'MIDAS', hovertemplate: `x=%{x:.2f} ft<br>${q}=%{y:.2f}<extra>MIDAS</extra>` });
+    if (local && local[ck]) out.push({
+      x: local[ck].pts.map(p => p.x), y: local[ck].pts.map(p => p[q]),
+      mode: 'lines', line: { color: getComputedStyle(document.body).getPropertyValue('--local'), width: 2, dash: 'dash' },
+      name: 'Check', hovertemplate: `x=%{x:.2f} ft<br>${q}=%{y:.2f}<extra>Check</extra>` });
+    return out;
+  };
+  const supShapes = model ? model.supports.map(n => ({ type: 'line', x0: model.nodes[n - 1].x, x1: model.nodes[n - 1].x, yref: 'paper', y0: 0, y1: 1, line: { color: '#c3ccd6', width: 1, dash: 'dot' } })) : [];
+  const lay = (title) => ({ margin: { l: 60, r: 10, t: 28, b: 35 }, title: { text: title, font: { size: 13 } }, showlegend: false,
+    xaxis: { title: 'x (ft)' }, yaxis: { zeroline: true, zerolinecolor: '#1d2733' }, shapes: supShapes });
+  Plotly.react('plotV', traces('V'), lay(`Shear V (kips): ${ck}`), PLOT_CFG);
+  Plotly.react('plotM', traces('M'), lay(`Moment M (kip-ft, sagging +): ${ck}`), PLOT_CFG);
+  drawSummary(ck, flipV, flipM);
+}
+
+function drawSummary(ck, flipV, flipM) {
+  if (!local) { $('summary').innerHTML = ''; return; }
+  const ext = (arr, k, s = 1) => arr && arr.length ? [Math.max(...arr.map(p => p[k] * s)), Math.min(...arr.map(p => p[k] * s))] : [NaN, NaN];
+  const fmt = v => isFinite(v) ? v.toFixed(1) : '–';
+  const diff = (a, b) => isFinite(a) && isFinite(b) && Math.abs(b) > 1e-9 ? (((a - b) / Math.abs(b) * 100).toFixed(2).replace(/^-0\.00$/, '0.00')) + '%' : '–';
+  let html = '<table><thead><tr><th>Case</th><th>+M max</th><th>−M max</th><th>|V| max</th><th>MIDAS +M</th><th>MIDAS −M</th><th>MIDAS |V|</th><th>Δ M+</th><th>Δ M−</th></tr></thead><tbody>';
+  CASES.forEach(c => {
+    const L = local[c].pts, Mm = midasRes && midasRes[c];
+    const [lmx, lmn] = ext(L, 'M'), lv = Math.max(...L.map(p => Math.abs(p.V)));
+    const [mmx, mmn] = ext(Mm, 'M', flipM);
+    const mv = Mm ? Math.max(...Mm.map(p => Math.abs(p.V))) : NaN;
+    html += `<tr${c === ck ? ' style="background:#eef4fb"' : ''}><td>${c}</td><td>${fmt(lmx)}</td><td>${fmt(lmn)}</td><td>${fmt(lv)}</td>` +
+      `<td>${fmt(mmx)}</td><td>${fmt(mmn)}</td><td>${fmt(mv)}</td><td>${diff(mmx, lmx)}</td><td>${diff(mmn, lmn)}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  // reactions
+  const mr = midasRes && midasRes._react && midasRes._react[ck];
+  html += `<h2 style="margin-top:12px">Reactions: ${ck} (kips, +up)</h2><table><thead><tr><th>Support</th><th>x (ft)</th><th>Check</th><th>MIDAS FZ</th></tr></thead><tbody>`;
+  model.supports.forEach((n, i) => {
+    html += `<tr><td>${i + 1} (node ${n})</td><td>${model.nodes[n - 1].x.toFixed(1)}</td><td>${fmt(local[ck].react.get(n))}</td><td>${mr && mr[n] !== undefined ? fmt(mr[n]) : '–'}</td></tr>`;
+  });
+  html += '</tbody></table><div class="note">Units: kips, ft. Check solver = Euler-Bernoulli direct stiffness on the same stepped elements (shear deformation off in both). Differences should be near 0%. A large Δ means a units, load or sign-mapping issue worth investigating.</div>';
+  $('summary').innerHTML = html;
+}
+
+function downloadCsv() {
+  if (!midasRaw) return;
+  const esc = v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : v;
+  const lines = [midasRaw.HEAD.map(esc).join(','), ...midasRaw.DATA.map(r => r.map(esc).join(','))];
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }));
+  a.download = 'midas_beam_forces.csv'; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+/* ---------------- wiring ---------------- */
+function refreshGeometry() {
+  try { midasRes = null; midasRaw = null; $('btnCsv').disabled = true; $('signNote').textContent = '';
+        runLocal(); draw(); }
+  catch (e) { log(e.message, 'err'); }
+}
+
+function init() {
+  CASES.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; $('caseSel').appendChild(o); });
+  $('caseSel').value = 'STR-I';
+  const c = MidasAPI.fromStorage();
+  $('baseUrl').value = c.baseUrl; $('mapiKey').value = c.mapiKey; $('useProxy').checked = c.useProxy;
+  loadInputs(); renderSpans();
+  FIELDS.forEach(f => $(f).addEventListener('change', () => { saveInputs(); refreshGeometry(); }));
+  $('btnAddSpan').onclick = () => { const s = spans[spans.length - 1]; spans.push({ ...s }); saveInputs(); renderSpans(); refreshGeometry(); };
+  $('btnHaunch').onclick = () => { spans = JSON.parse(JSON.stringify(DEFAULT_SPANS)); saveInputs(); renderSpans(); refreshGeometry(); };
+  $('btnVerify').onclick = verify;
+  $('btnLocal').onclick = () => { refreshGeometry(); setStatus($('runStatus'), 'Check solver updated.', 'ok'); };
+  $('btnMidas').onclick = runMidas;
+  $('btnCsv').onclick = downloadCsv;
+  ['caseSel', 'flipV', 'flipM'].forEach(id => $(id).addEventListener('change', draw));
+  if (typeof Plotly === 'undefined') { log('Plotly did not load (no internet / CDN blocked). Diagrams unavailable.', 'err'); return; }
+  refreshGeometry();
+  log('Ready. Enter Base URL + MAPI-Key, click Verify, then Build in Civil NX.');
+}
+init();
+</script>
+</body>
+</html>
