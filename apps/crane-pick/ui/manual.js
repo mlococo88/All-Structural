@@ -84,8 +84,9 @@
           'The images stay in this browser (IndexedDB), not in the saved-project list or on GitHub. [[in:sheets>Images in this browser|Images in this browser]]: tick **Include the plan-sheet images in Export JSON** to carry them in the file; **Clean up unused images…** frees space. The worked scale steps are on the [[out:site|Site tab]] and in [[rpt:sheets|Report §Plan sheets]].'
         ] }
       ] },
-      { id: 'wf-coming', title: 'Coming: the site-plan sheet', blocks: [
-        { p: 'In progress, to be described here when released: a more accurate crane plan symbol and an aerial **site-plan sheet** exported as PNG with a world file.' }
+      { id: 'wf-aerial', title: 'Crane symbols and the aerial site plan', blocks: [
+        { p: 'Every crane is drawn as a schematic plan symbol from its crane file (the same on the [[out:plan|map]], the [[out:dwg|Drawings]], the DXF and the [[out:crane|Crane tab]]): carrier with axles and wheels, or carbody and tracks with tumblers; outrigger beams and floats (true size) at the chart\'s spread; the upperworks, operator cab and counterweight (rear corners on the tail-swing radius) turned to the pick; the boom (telescopic sections or lattice chords) to the hook, the hook block and the load L × W. Dimensions the file does not give are assumed and listed on the crane card ([[in:cranes|Cranes tab]]). Drawing only: the checks use the engine footprint, radii and heights.' },
+        { p: 'The [[out:dwg|Drawings]] add **SITE PLAN - AERIAL** sheets (tick **Aerial site-plan sheets**): one for the whole site and one per lift, with the Esri World Imagery under the site items, cranes, booms, swing paths, girder poses, routes and power-line buffers, and the imagery attribution. Offline or blocked, the sheet says "aerial not available" and prints without it. The DXF (R12) holds no image: **Download aerial image (PNG + world file)** gives the PNG and a .pgw in the DXF\'s coordinates (attach it in CAD); **World file in State Plane coordinates** places the same PNG in grid coordinates. The [[out:plan|Plan tab]]\'s ⎙ button prints the current map view the same way. Imagery date varies; not a survey.' }
       ] }
     ] },
     { id: 'tabs', title: '3. What each tab does', topics: [
@@ -113,7 +114,7 @@
           '[[out:route|Route]]: per route the turns, conflicts, overhead clearances, axle loads, haul road, posted bridges, staging, worked steps.',
           '[[out:terrain|Terrain]]: levelness and blocking per crane, slopes, pad cut / fill, the route profile with crests / sags and the long-load clearance.',
           '[[out:site|Site]]: the project, the coordinate system, the plan sheets and the site items with their worked values.',
-          '[[out:dwg|Drawings]]: the lift-plan drawing set (cover, general notes, a lift plan per pick and per girder lift, rigging / load share, ground, route, a Crane sheet per setup); paper D or B; Download DXF; Print sheet / Print all sheets.',
+          '[[out:dwg|Drawings]]: the lift-plan drawing set (cover, general notes, a lift plan per pick and per girder lift, rigging / load share, ground, route, a Crane sheet per setup, and the SITE PLAN - AERIAL sheets); paper D or B; Download DXF; Download aerial image (PNG + world file); Print sheet / Print all sheets.',
           '[[out:man|Manual]]: this manual (filter box, Print manual, and the box that adds it to the Report).',
           '[[out:rpt|Report]]: the calculation report: §1 Summary, §2 Basis, then Site, Plan sheets, Site items, Cranes, Lifts, Tandem lifts, Ground, Route, Terrain, Elevations, 3D view — each value worked (equation, values, result). Search, Expand / Collapse all, Print report.'
         ] }

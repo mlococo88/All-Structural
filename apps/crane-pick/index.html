@@ -43,7 +43,9 @@
      Report §Terrain. Not adequate to certify crane levelness: survey data governs.
      C9: the Crane output tab (ui/cranefig.js, ui/cranetab.js): the crane as the analysis uses it (plan, side elevation, the load chart with
      the operating points, weights and CGs), every value labelled with its source (file p.x / chart p.x / entered / ASSUMED (default)), the
-     input table with links; Report §Cranes figures; a Crane sheet per setup in the Drawings set. -->
+     input table with links; Report §Cranes figures; a Crane sheet per setup in the Drawings set.
+     2026-11-17 (engineer requests A, B): the crane's plan symbol (engine/cranegfx.js) on the map, the sheets and the DXF; aerial site-plan
+     sheets (ui/aerial.js: Esri World Imagery under the plan, PNG + world file for CAD), Report §Site plan (aerial), Print plan view. -->
 <!-- pdf.js 3.11.174 (engineer-approved 2026-11-16; BasePlateAnchorDesigner.html's pinned jsDelivr URL) is loaded by ui/sheets.js when the
      first PDF is opened: https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js (worker: build/pdf.worker.min.js) -->
 <!-- three.js r128 + OrbitControls (engineer-approved 2026-11-16 for C3; the pinned files apps/steel-bridge/index.html uses) are loaded by
@@ -83,6 +85,7 @@
     'engine/lift.js',       // C2-2: setups, picks, capacity at the hook, swing path, plan footprint and clearances
     'engine/elev.js',       // C3-1: the lift in elevation: boom angle, tip, hook and load heights, hook reach
     'engine/clear3d.js',    // C3-2: 3D clearances along the path (boom, load line, load, counterweight vs power lines, obstructions, exclusion zones)
+    'engine/cranegfx.js',   // 2026-11-17: the crane's plan symbol (carrier / tracks, outriggers, upperworks turned with the slew, boom, hook, load): map, Drawings, DXF, Crane tab
     'ui/place.js',          // C2-2: Lifts input tab; cranes, pick and set points dragged on the map with live capacity
     'ui/picks.js',          // C2-3: Picks output tab (every pick, links) and the Report's §Lifts
     'ui/elev.js',           // C3-2: the elevation view along the boom (dock under the map, Report §Elevations)
@@ -95,6 +98,7 @@
     'engine/route.js',      // C6: trucking route: path, kinematic swept path, overhead clearances, axle loads, haul road, posted bridges, staging
     'ui/route.js',          // C6: Route input and output tabs, the route on the map (live while dragging), Report §Route
     '../../shared/dxf.js',  // C7: the DXF R12 writer, previews and sheet printing (shared, unchanged; also the bridge apps)
+    'ui/aerial.js',         // 2026-11-17: the aerial background of the plan sheets (Esri World Imagery tiles -> one image per sheet; PNG + world file)
     'ui/drawset.js',        // C7: the lift-plan drawing set (cover, notes, lift plans, rigging, ground, route sheets) and the multi-lift summary
     'ui/drawings.js',       // C7: Drawings output tab (paper, preview, Download DXF, Print sheet / all, sheet index with links)
     'ui/summary.js',        // C7: Summary output tab (every lift and route in one table, with links)

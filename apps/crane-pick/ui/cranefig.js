@@ -228,10 +228,21 @@
   function plan(m) {
     const F = [], { pd, fp, vals, chs, c, pt, inp, u, virt } = m, w = p => [p.x, p.y];   // footprint at heading 0, origin: grid x = −y_local, y = x_local
     const span = Math.max(isNum(pd.tail) ? pd.tail : 10, fp.dims.body ? Math.max(fp.dims.body.front, fp.dims.body.rear) : 10, (fp.dims.outr && fp.dims.outr.spreads[fp.spread] || 0) / 2, 8), d = span / 9;
-    if (fp.body) F.push({ t: 'pl', pts: fp.body.map(w), closed: true, c: 'obj' });
-    fp.tracks.forEach(q => F.push({ t: 'pl', pts: q.map(w), closed: true, c: 'obj', fill: 'track' }));
-    fp.beams.forEach(b => F.push({ t: 'line', a: w(b[0]), b: w(b[1]), c: 'obj' }));
-    fp.floatC.forEach(q => F.push({ t: 'circle', at: w(q), r: q.r, c: 'float' }));
+    // 2026-11-17: the crane symbol (engine/cranegfx.js, the same geometry as the map, the lift plans and the DXF): carrier / tracks, axles
+    // and wheels, outrigger beams and floats, the upperworks turned to the chosen point, the counterweight at the tail radius, the boom
+    // (drawn in full when the hook is within 1.4 × the figure span, else the boom centre line below is cut), the hook block and the load
+    const CG = window.CranePickCraneGfx, u0 = { x: 0, y: 0, heading: 0, group: u.group, boom: u.boom, mode: u.mode };
+    let sym = null;
+    if (CG) { const spanB = Math.max(isNum(pd.tail) ? pd.tail : 10, 8) * 1.4, th = pt && isNum(pt.theta) ? pt.theta : null, R = th != null ? pt.R : null;
+      const o = th == null ? { labels: false } : R <= spanB ? { hook: { x: R * Math.sin(rad(th)), y: R * Math.cos(rad(th)) }, labels: false } : { slew: th, R, boom: false, labels: false };
+      try { sym = CG.symbol(c, u0, o); } catch (e) { sym = null; } }
+    if (sym) { const CLS = { carrier: 'carrier', outrigger: 'outrigger', float: 'float', upper: 'upper', cwt: 'cwt', boom: 'boom', hook: 'hook', load: 'load' };
+      sym.parts.forEach(q => { if (q.g === 'cor' || !CLS[q.g]) return; F.push({ t: 'pl', pts: q.pts.map(w), closed: q.closed, c: CLS[q.g], fill: q.closed && q.g === 'carrier' && q.src === 'fp' && pd.kind === 'crawler' ? 'track' : undefined }); });
+      sym.circles.forEach(q => { if (q.g === 'float') F.push({ t: 'circle', at: w(q.c), r: q.r, c: 'float' }); }); }
+    else { if (fp.body) F.push({ t: 'pl', pts: fp.body.map(w), closed: true, c: 'obj' });
+      fp.tracks.forEach(q => F.push({ t: 'pl', pts: q.map(w), closed: true, c: 'obj', fill: 'track' }));
+      fp.beams.forEach(b => F.push({ t: 'line', a: w(b[0]), b: w(b[1]), c: 'obj' }));
+      fp.floatC.forEach(q => F.push({ t: 'circle', at: w(q), r: q.r, c: 'float' })); }
     if (isNum(fp.tail)) F.push({ t: 'circle', at: [0, 0], r: fp.tail, c: 'tail' });
     F.push({ t: 'cross', at: [0, 0], r: span / 25, c: 'obj' }); F.push(txt([0, 0], 'rotation centre', { a: 2, off: [-0.8, -1.5], size: 0.75 }));
     // heading arrow (carrier front) and the boom direction at the chosen point (slew θ), the counterweight at −r_cw on it
@@ -369,7 +380,7 @@
   }
 
   /* ---------- SVG renderer ---------- */
-  const COL = { obj: '#1E3A5F', float: '#2563EB', tail: '#7C3AED', head: '#059669', boom: '#0F172A', boomL: '#0F172A', cw: '#64748B', cwopen: '#94A3B8', dim: '#475569', zone: '#DB2777', ground: '#78716C', axis: '#334155', grid: '#E2E8F0',
+  const COL = { carrier: '#1E3A5F', outrigger: '#0E7490', upper: '#166534', cwt: '#7C3AED', load: '#DC2626', obj: '#1E3A5F', float: '#2563EB', tail: '#7C3AED', head: '#059669', boom: '#0F172A', boomL: '#0F172A', cw: '#64748B', cwopen: '#94A3B8', dim: '#475569', zone: '#DB2777', ground: '#78716C', axis: '#334155', grid: '#E2E8F0',
     rope: '#334155', block: '#334155', load: '#2563EB', col: '#94A3B8', colUse: '#94A3B8', use: '#1D4ED8', tab: '#475569', mute: '#94A3B8', wt: '#0F766E', hook: '#B91C1C', sup: '#334155',
     'thr-caution': '#D97706', 'thr-critical': '#EA580C', 'thr-limit': '#DC2626', 'thr-tandem': '#7C3AED', track: '#CBD5E1' };
   const OPC = { ok: '#059669', caution: '#D97706', critical: '#EA580C', over: '#DC2626', np: '#DC2626' };
@@ -435,7 +446,7 @@
   /* dxf(D, fig, o = { kx (inches per world unit), title }) draws fig at the origin; returns the bbox index range */
   function dxf(D, fig, o) {
     if (!fig) return; o = o || {}; const kx = o.kx || 12, h = D.h, X = x => x * kx, Y = y => y * kx;
-    const lay = c => D.layer('CRANE-' + String(c || 'obj').toUpperCase().replace(/[^A-Z0-9]/g, '-'), ({ obj: 5, float: 30, tail: 6, head: 3, boom: 7, boomL: 7, use: 5, col: 8, colUse: 8, grid: 9, zone: 6, 'thr-caution': 30, 'thr-critical': 30, 'thr-limit': 1, 'thr-tandem': 6, hook: 1, wt: 4, dim: 2 })[c] || 7);
+    const lay = c => D.layer('CRANE-' + String(c || 'obj').toUpperCase().replace(/[^A-Z0-9]/g, '-'), ({ carrier: 5, outrigger: 4, upper: 3, cwt: 6, load: 1, obj: 5, float: 30, tail: 6, head: 3, boom: 7, boomL: 7, use: 5, col: 8, colUse: 8, grid: 9, zone: 6, 'thr-caution': 30, 'thr-critical': 30, 'thr-limit': 1, 'thr-tandem': 6, hook: 1, wt: 4, dim: 2 })[c] || 7);
     const lT = D.layer('TEXT', 7), lA = D.layer('CRANE-ASSUMED', 30);
     const lt = c => ({ tail: 'PHANTOM', zone: 'DASHED', cwopen: 'DASHED', 'thr-caution': 'DASHED', 'thr-critical': 'CENTER', 'thr-limit': 'DASHED', 'thr-tandem': 'HIDDEN' })[c];
     const stk = {};
