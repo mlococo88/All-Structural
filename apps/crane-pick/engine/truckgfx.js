@@ -81,7 +81,7 @@
       // widths at the front (overall) and at the load's rear end (the load)
       const xw = g.xF + 2.5; F.push({ t: 'dim', a: [xw, -W2], b: [xw, W2], s: `width ${ft(g.Wov)}`, v: 'Wov', val: g.Wov, side: 1 });
       const xb = x.lr - 2.5; F.push({ t: 'dim', a: [xb, -l.B / 2], b: [xb, l.B / 2], s: `B ${ft(l.B)}`, v: 'B', val: l.B, side: -1 });
-      F.push({ t: 'text', at: [g.xR, row(7)], s: `Min. turning radius R_min = ${ft(v.Rmin)} (vehicle input; steer-axle centre). Axles drawn ${fmt(SCH.axleSp, 1)} ft apart about each group centre, tyres ${fmt(SCH.tyreD, 1)} × ${fmt(SCH.tyreW, 1)} ft (schematic); outlines as the swept path.`, a: 0, size: 0.8, v: 'Rmin', val: v.Rmin });
+      F.push({ t: 'text', at: [g.xR, row(7)], s: `Min. turning radius R_min = ${ft(v.Rmin)} (vehicle input)`, a: 0, size: 0.8, v: 'Rmin', val: v.Rmin });
     }
     return { prims: F, scale: true, title: straight ? 'Plan (to scale, front to the right)' : 'Plan (at the route position)' };
   }
@@ -110,7 +110,7 @@
     // the axle-group loads under each group (axles(): statics or entered), with the axles and tyres
     gs.forEach((q, i) => { const gg = q.g; if (!gg) return; const xc = q.o.x, z = -1.6 - (i % 2) * 2.6;
       F.push({ t: 'text', at: [xc, z], s: `${gg.label}: ${fmt(gg.load, 0)} lb`, a: 1, size: 0.8, v: 'ax' + q.k, val: gg.load }, { t: 'text', at: [xc, z - 1.15], s: `${gg.n} axle${gg.n === 1 ? '' : 's'} × ${gg.tyres} tyres${isNum(gg.perTyre) ? `, ${fmt(gg.perTyre, 0)} lb / tyre` : ''}`, a: 1, size: 0.7 }); });
-    F.push({ t: 'text', at: [g.xR - 7, -7.6], s: `Axle loads by ${m.ax.mode}. Frame and cab ${isNum(v.hV) ? '' : `(cab ${fmt(SCH.cabH, 0)} ft, dashed: the vehicle height is not entered) `}schematic; deck, blocking, load and heights as the overhead checks use them.`, a: 0, size: 0.7 });
+    // the notes (axle loads by statics / entered, the schematic parts) are in the captions of the figures (Route tab, Report, sheet)
     return { prims: F, scale: true, title: 'Side elevation (to scale, front to the right)' };
   }
   /* ---------- SVG ---------- */
@@ -120,31 +120,44 @@
     prims.forEach(p => { if (p.t === 'pl') p.pts.forEach(add); else if (p.t === 'line' || p.t === 'dim') { add(p.a); add(p.b); } else if (p.t === 'circle') { add([p.at[0] - p.r, p.at[1] - p.r]); add([p.at[0] + p.r, p.at[1] + p.r]); } else if (p.at) add(p.at); }); return { x0, x1, y0, y1 }; }
   const nice = v => { if (!(v > 0)) return 1; const e = Math.pow(10, Math.floor(Math.log10(v))); return [1, 2, 5, 10].map(q => q * e).filter(q => q <= v).pop() || e; };
   const tw = (s, fs) => String(s).length * fs * 0.56;
+  /* the labels (text and dimension values) as boxes in px: anchor point, width, height; placed so that they do not overlap (a label that
+     would overlap one placed before is moved away from its line, 1.1 text heights at a time, alternately below and above) */
+  function labels(fig, fs) {
+    const out = []; fig.prims.forEach(p => {
+      if (p.t === 'dim') { const vert = Math.abs(p.b[1] - p.a[1]) > Math.abs(p.b[0] - p.a[0]), f2 = fs * 0.8;
+        out.push({ p, s: p.s, f: f2, at: [(p.a[0] + p.b[0]) / 2, (p.a[1] + p.b[1]) / 2], a: vert ? (p.side === -1 ? 2 : 0) : 1, dx: vert ? (p.side === -1 ? -4 : 4) : 0, dy: vert ? f2 / 3 : -3, vert, c: 'dim' }); }
+      else if (p.t === 'text' && p.s) out.push({ p, s: p.s, f: fs * (p.size || 0.9), at: p.at, a: p.a || 0, dx: 0, dy: 0, c: p.c }); });
+    return out;
+  }
   function svg(fig, o) {
-    if (!fig) return ''; o = o || {}; const W = o.w || 760, fs = o.fs || 11, pad = 16, b = bounds(fig.prims); if (!isFinite(b.x0)) return '';
-    // the scale from the geometry, widened for the text that runs past it (left-anchored notes)
-    let bx1 = b.x1, k = (W - 2 * pad) / Math.max(1e-6, b.x1 - b.x0);
-    for (let it = 0; it < 3; it++) { bx1 = b.x1; fig.prims.forEach(p => { if (p.t === 'text' && (p.a || 0) === 0) bx1 = Math.max(bx1, p.at[0] + tw(p.s, fs * (p.size || 0.9)) / k); }); k = (W - 2 * pad) / Math.max(1e-6, bx1 - b.x0); }
-    const yPad = 2.2 * fs / k, Ht = Math.ceil((b.y1 - b.y0 + 2 * yPad) * k + 2 * pad + 22), X = x => +(pad + (x - b.x0) * k).toFixed(2), Y = y => +(pad + (b.y1 + yPad - y) * k).toFixed(2), out = [];
+    if (!fig) return ''; o = o || {}; const W = o.w || 760, fs = o.fs || 11, pad = 10, b = bounds(fig.prims); if (!isFinite(b.x0)) return '';
+    const LB = labels(fig, fs), box = (q, k, X, Y) => { const w = tw(q.s, q.f), x = X(q.at[0]) + q.dx, y = Y(q.at[1]) + q.dy + (q.oy || 0), x0 = q.a === 1 ? x - w / 2 : q.a === 2 ? x - w : x; return [x0, y - q.f * 0.85, x0 + w, y + q.f * 0.25]; };
+    // the scale: the geometry plus the labels' extents fit the width (iterated: the labels' size in ft depends on the scale)
+    let k = (W - 2 * pad) / Math.max(1e-6, b.x1 - b.x0), ex = { x0: b.x0, x1: b.x1 };
+    for (let it = 0; it < 4; it++) { ex = { x0: b.x0, x1: b.x1 }; LB.forEach(q => { const w = tw(q.s, q.f) / k, x = q.at[0] + q.dx / k, x0 = q.a === 1 ? x - w / 2 : q.a === 2 ? x - w : x; ex.x0 = Math.min(ex.x0, x0); ex.x1 = Math.max(ex.x1, x0 + w); }); k = (W - 2 * pad) / Math.max(1e-6, ex.x1 - ex.x0); }
+    // place the labels (px, before the vertical extent is known: y measured from the top of the geometry)
+    const X = x => +(pad + (x - ex.x0) * k).toFixed(2), Y0 = y => (b.y1 - y) * k, placed = [];
+    const hit = (r1) => placed.some(r2 => r1[0] < r2[2] && r2[0] < r1[2] && r1[1] < r2[3] && r2[1] < r1[3]);
+    LB.forEach(q => { q.oy = 0;       for (let j = 1; j < 12 && hit(box(q, k, X, Y0)); j++) q.oy = (j % 2 ? 1 : -1) * Math.ceil(j / 2) * q.f * 1.1;
+      placed.push(box(q, k, X, Y0)); });
+    let ytop = 0, ybot = (b.y1 - b.y0) * k; placed.forEach(r => { ytop = Math.min(ytop, r[1]); ybot = Math.max(ybot, r[3]); });
+    const off = pad - ytop, Ht = Math.ceil(ybot - ytop + 2 * pad + 22), Y = y => +(off + Y0(y)).toFixed(2), out = [];
     const sw = c => ({ road: 1.6, load: 1.6, axle: 1.2, dim: 0.8, cab: 1.6 })[c] || 1.1;
     fig.prims.forEach(p => {
       const c = COL[p.c] || '#334155', dash = p.dash ? ' stroke-dasharray="5 3"' : '';
       if (p.t === 'pl') out.push(`<${p.closed ? 'polygon' : 'polyline'} class="tg-${esc(p.c)}" points="${p.pts.map(q => X(q[0]) + ',' + Y(q[1])).join(' ')}" fill="${p.closed && FILL[p.c] ? FILL[p.c] : 'none'}" stroke="${c}" stroke-width="${sw(p.c)}"${dash} stroke-linejoin="round"/>`);
       else if (p.t === 'line') out.push(`<line class="tg-${esc(p.c)}" x1="${X(p.a[0])}" y1="${Y(p.a[1])}" x2="${X(p.b[0])}" y2="${Y(p.b[1])}" stroke="${c}" stroke-width="${sw(p.c)}"/>`);
-      else if (p.t === 'circle') out.push(`<circle class="tg-${esc(p.c)}" cx="${X(p.at[0])}" cy="${Y(p.at[1])}" r="${Math.max(1.5, p.r * k).toFixed(2)}" fill="${p.c === 'cg' ? '#fff' : p.c === 'pin' ? '#0F172A' : 'none'}" stroke="${c}" stroke-width="${p.c === 'cg' ? 1.6 : 1}"/>`
-        + (p.c === 'cg' ? `<path d="M${X(p.at[0]) - Math.max(1.5, p.r * k)} ${Y(p.at[1])}H${X(p.at[0]) + Math.max(1.5, p.r * k)}M${X(p.at[0])} ${Y(p.at[1]) - Math.max(1.5, p.r * k)}V${Y(p.at[1]) + Math.max(1.5, p.r * k)}" stroke="${c}" stroke-width="1"/>` : ''));
+      else if (p.t === 'circle') { const r = Math.max(1.5, p.r * k), x = X(p.at[0]), y = Y(p.at[1]); out.push(`<circle class="tg-${esc(p.c)}" cx="${x}" cy="${y}" r="${r.toFixed(2)}" fill="${p.c === 'cg' ? '#fff' : p.c === 'pin' ? '#0F172A' : 'none'}" stroke="${c}" stroke-width="${p.c === 'cg' ? 1.6 : 1}"/>`
+        + (p.c === 'cg' ? `<path d="M${(x - r).toFixed(2)} ${y}H${(x + r).toFixed(2)}M${x} ${(y - r).toFixed(2)}V${(y + r).toFixed(2)}" stroke="${c}" stroke-width="1"/>` : '')); }
+      else if (p.t === 'dim') { const x1 = X(p.a[0]), y1 = Y(p.a[1]), x2 = X(p.b[0]), y2 = Y(p.b[1]), L = Math.hypot(x2 - x1, y2 - y1) || 1, ux = (x2 - x1) / L, uy = (y2 - y1) / L, t = 3.5;
+        out.push(`<line class="tg-dimln" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${COL.dim}" stroke-width="0.8"/><path d="M${x1 - uy * t} ${y1 + ux * t}L${x1 + uy * t} ${y1 - ux * t}M${x2 - uy * t} ${y2 + ux * t}L${x2 + uy * t} ${y2 - ux * t}" stroke="${COL.dim}" stroke-width="1.1"/>`); }
     });
-    fig.prims.forEach(p => {
-      const data = p.v ? ` data-v="${esc(p.v)}"${p.val != null ? ` data-val="${esc(p.val)}"` : ''}` : '';
-      if (p.t === 'dim') { const x1 = X(p.a[0]), y1 = Y(p.a[1]), x2 = X(p.b[0]), y2 = Y(p.b[1]), L = Math.hypot(x2 - x1, y2 - y1) || 1, ux = (x2 - x1) / L, uy = (y2 - y1) / L, t = 3.5;
-        out.push(`<g class="tg-dim"${data}><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${COL.dim}" stroke-width="0.8"/><path d="M${x1 - uy * t} ${y1 + ux * t}L${x1 + uy * t} ${y1 - ux * t}M${x2 - uy * t} ${y2 + ux * t}L${x2 + uy * t} ${y2 - ux * t}" stroke="${COL.dim}" stroke-width="1.1"/>`);
-        const f2 = fs * 0.8, vert = Math.abs(uy) > Math.abs(ux), mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
-        out.push(vert ? `<text x="${(mx + (p.side === -1 ? -4 : 4)).toFixed(1)}" y="${(my + f2 / 3).toFixed(1)}" font-size="${f2.toFixed(1)}" fill="${COL.dim}"${p.side === -1 ? ' text-anchor="end"' : ''}>${esc(p.s)}</text></g>` : `<text x="${mx.toFixed(1)}" y="${(my - 3).toFixed(1)}" font-size="${f2.toFixed(1)}" fill="${COL.dim}" text-anchor="middle">${esc(p.s)}</text></g>`); }
-      else if (p.t === 'text' && p.s) out.push(`<text x="${X(p.at[0])}" y="${Y(p.at[1])}" font-size="${(fs * (p.size || 0.9)).toFixed(1)}" fill="${COL[p.c] || '#0F172A'}"${p.a === 1 ? ' text-anchor="middle"' : p.a === 2 ? ' text-anchor="end"' : ''}${data}>${esc(p.s)}</text>`);
-    });
+    LB.forEach(q => { const p = q.p, data = p.v ? ` data-v="${esc(p.v)}"${p.val != null ? ` data-val="${esc(p.val)}"` : ''}` : '', x = X(q.at[0]) + q.dx, y = Y(q.at[1]) + q.dy + q.oy;
+      if (q.oy && p.t === 'dim' && !q.vert) out.push(`<line x1="${x}" y1="${(Y(q.at[1])).toFixed(1)}" x2="${x}" y2="${(y - q.f * 0.8).toFixed(1)}" stroke="${COL.dim}" stroke-width="0.5" stroke-dasharray="2 2"/>`);
+      out.push(`<text class="${p.t === 'dim' ? 'tg-dim' : 'tg-txt'}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" font-size="${q.f.toFixed(1)}" fill="${p.t === 'dim' ? COL.dim : COL[p.c] || '#0F172A'}"${q.a === 1 ? ' text-anchor="middle"' : q.a === 2 ? ' text-anchor="end"' : ''}${data}${p.t === 'dim' || q.oy ? ' paint-order="stroke" stroke="#fff" stroke-width="2.5"' : ''}>${esc(q.s)}</text>`); });
     // the scale bar (one scale for both directions: the figure is to scale)
-    const sb = nice((b.x1 - b.x0) / 5), L = sb * k, by = Ht - 12;
-    out.push(`<g class="tg-scale" data-ftpx="${k.toFixed(4)}"><rect x="${pad}" y="${by - 5}" width="${(L / 2).toFixed(1)}" height="5" fill="#0F172A"/><rect x="${(pad + L / 2).toFixed(1)}" y="${by - 5}" width="${(L / 2).toFixed(1)}" height="5" fill="#fff" stroke="#0F172A"/><text x="${(pad + L + 6).toFixed(1)}" y="${by}" font-size="${(fs * 0.8).toFixed(1)}">0 – ${fmt(sb, 0)} ft (to scale)</text></g>`);
+    const sb = nice((b.x1 - b.x0) / 5), Lb = sb * k, by = Ht - 10;
+    out.push(`<g class="tg-scale" data-ftpx="${k.toFixed(4)}"><rect x="${pad}" y="${by - 5}" width="${(Lb / 2).toFixed(1)}" height="5" fill="#0F172A"/><rect x="${(pad + Lb / 2).toFixed(1)}" y="${by - 5}" width="${(Lb / 2).toFixed(1)}" height="5" fill="#fff" stroke="#0F172A"/><text x="${(pad + Lb + 6).toFixed(1)}" y="${by}" font-size="${(fs * 0.8).toFixed(1)}">0 – ${fmt(sb, 0)} ft (to scale)</text></g>`);
     return `<svg xmlns="http://www.w3.org/2000/svg" class="tgFig" viewBox="0 0 ${W} ${Ht}" width="${W}" height="${Ht}" role="img" aria-label="${esc(fig.title || 'vehicle and load')}" font-family="Segoe UI, Roboto, Arial, sans-serif" style="max-width:100%;height:auto;background:#fff">${out.join('')}</svg>`;
   }
   /* ---------- DXF (shared/dxf.js): 1 ft = 12 units ---------- */
