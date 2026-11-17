@@ -253,7 +253,7 @@
   function liveTab(r, live) { if (!inEl || r.id !== selR) return; const b = inEl.querySelector('#rtLive'); if (b) b.outerHTML = liveBox(r, evalRoute(r, live)); const z = A.P.site.zone;
     inEl.querySelectorAll('[data-rvx]').forEach(i => { const p = r.pts[+i.dataset.rvx]; if (p && document.activeElement !== i) i.value = G.ftToNative(z, i.dataset.c === 'E' ? p.x : p.y).toFixed(2); }); }
   function routeHtml(r) {
-    const ev = evalRoute(r), v = RT.vehOf(r), l = RT.loadOf(r, A.P), z = G.zone(A.P.site.zone), V = r.veh, Ld = r.load;
+    const ev = evalRoute(r), v = RT.vehOf(r, A.P), l = RT.loadOf(r, A.P), z = G.zone(A.P.site.zone), V = r.veh, Ld = r.load;
     const fld = (pre, src, defs, eff, list) => list.filter(f => showF(v, f)).map(f => numIn(pre + f[0], src[f[0]], f[1], f[2], f[4] != null ? f[4] : fmt(defs[f[0]], f[2] === 'lb' || f[2] === 'no.' ? 0 : 2))).join('');
     return `${liveBox(r, ev)}
       <div class="fRow"><label for="rtName">Name</label><input type="text" id="rtName" value="${esc(r.name)}"></div>
@@ -385,7 +385,7 @@
       <p class="note">Method (engine/align.js): Douglas–Peucker simplification, curves found from the heading-change rate, tangents by least squares, each curve's radius by least squares as the arc tangent to both tangents (the free least-squares circle is in its worked steps). Stations along the steer-axle path. The swept path below follows this alignment, not the raw vertices.</p>`;
   }
   function routeOut(r, i) {
-    const ev = evalRoute(r), v = RT.vehOf(r), l = RT.loadOf(r, A.P), id = r.id;
+    const ev = evalRoute(r), v = RT.vehOf(r, A.P), l = RT.loadOf(r, A.P), id = r.id;
     if (!ev.sim.ok) return `<div class="sec" id="rt-${id}"><div class="secHead">${esc(r.name)}</div><div class="secBody"><p class="note">${esc(ev.flags[0].text)}</p></div></div>`;
     const tRows = ev.turns.map(t => `<tr><td><a href="#rt-${id}-t${t.n}">${tagOf(t)}</a></td><td class="n">${t.kind ? 'PI ' + t.i : t.i + 1}</td><td class="n">${fmt(t.D * 180 / Math.PI, 1)}</td><td class="n">${fmt(t.r, 1)}${t.reduced ? ' *' : ''}</td><td class="n">${fmt(t.ot, 2)}</td><td class="n">${t.ss ? fmt(t.ss.OT, 2) : '—'}</td><td class="n">${fmt(t.Rin, 2)}</td><td class="n">${fmt(t.Rout, 2)}</td><td class="n">${fmt(t.Rout - t.Rin, 2)}</td><td>${t.flags.map(f => `<span class="lfDot lf-${f.level}">●</span>`).join('') || 'OK'}</td></tr>`).join('');
     const oh = ev.oh.list.map(o => `<tr><td><a href="#rt-${id}-oh-${o.id}">${esc(o.name)}</a></td><td>${o.kind === 'power' ? 'power line' : 'overhead'}</td><td class="n">${o.kind === 'power' ? fmt(o.hw, 2) : fmt(o.h, 2)}</td><td class="n">${fmt(o.Htop, 2)}</td><td class="n">${o.kind === 'power' ? fmt(o.d, 2) + ' (D_T ' + fmt(o.DT, 0) + ')' : fmt(o.c, 2)}</td><td>${o.flag ? `<span class="lfDot lf-${o.flag.level}">●</span>${esc(o.flag.level)}` : 'OK'}</td></tr>`).join('');
@@ -436,7 +436,7 @@
     if (!(P.routes || []).length) return [];
     const subs = [];
     P.routes.forEach((r, i) => {
-      const ev = evalRoute(r), v = RT.vehOf(r), l = RT.loadOf(r, A.P), items = [];
+      const ev = evalRoute(r), v = RT.vehOf(r, A.P), l = RT.loadOf(r, A.P), items = [];
       if (!ev.sim.ok) { subs.push({ id: 'r' + i, key: 'route-' + i, title: r.name, items: [{ type: 'note', text: ev.flags[0].text }] }); return; }
       items.push({ type: 'figure', svg: routeSvg(P, r, ev), caption: `${r.name}: the steer-axle path, the swept path (outlines every ${fmt(Math.max(2, ev.sim.pa.L / 150), 1)} ft) and the vehicle at the truck stop (north up)${isFit(r) ? '; dashed grey: the line the alignment is fitted to' : ''}${isOsm(r) ? `. Road geometry ${OSM().NOT_SURVEY}; ${OSM().ATTR} (ODbL)` : ''}.` });
       items.push({ type: 'kv', rows: [['Vehicle', RT.TYPES[v.type]], ['Tractor', `L1 ${fmt(v.L1, 2)} ft, kingpin ${fmt(v.e, 2)} ft ahead of the drive group, width ${fmt(v.Wt, 2)} ft`], ['Body', `L2 ${fmt(v.L2, 2)} ft${RT.hasJeep(v) ? `, jeep ${fmt(v.Lj, 2)} ft (bolster ${fmt(v.ej, 2)} ft)` : ''}${RT.steered(v) ? `, rear dolly k = ${fmt(v.k, 2)}, δmax ${fmt(v.dmax, 0)}°` : ''}`],

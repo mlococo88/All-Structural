@@ -497,7 +497,7 @@
     frameLayer(D, V, P, `PLAN: ${rt.name}`);
   }
   function routeTables(D, C) {
-    const { P, rt, ev, row } = C.ro, h = D.h, lL = D.layer('TBL', 8), lT = D.layer('TEXT', 7), RT = window.CranePickRoute, v = RT.vehOf(rt), l = RT.loadOf(rt, P);
+    const { P, rt, ev, row } = C.ro, h = D.h, lL = D.layer('TBL', 8), lT = D.layer('TEXT', 7), RT = window.CranePickRoute, v = RT.vehOf(rt, P), l = RT.loadOf(rt, P);
     let y = table(D, lL, lT, 0, 0, ['ITEM', 'VALUE'], [['VEHICLE', RT.TYPES[v.type]], ['LOAD', `${fmt(l.L, 2)} X ${fmt(l.B, 2)} FT, ${fmt(l.W, 0)} LB, HEIGHT ${fmt(l.h, 2)} FT ON A ${fmt(v.hDeck, 2)} FT DECK`],
       ['DELIVERS TO', row.to ? row.to.name : '-'], ['ROUTE LENGTH', fmt(ev.sim.pa.L, 1) + ' FT'], ['MAX OFF-TRACKING', fmt(ev.otMax, 2) + ' FT'], ['GROSS WEIGHT', `${fmt(ev.ax.gross, 0)} LB (${fmt(ev.ax.gross / RT.LB_PER_TON, 2)} T)`],
       ['LEAST OVERHEAD CLEARANCE', row.oh ? row.oh.text : '-'], ['WORKED', seeRef(C, row.key)]], 'ROUTE DATA').y;
