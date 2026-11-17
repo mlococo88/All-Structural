@@ -135,7 +135,10 @@ try {
   const rp = await p.$eval('#out [data-opane=rpt]', x => x.textContent.replace(/\s+/g, ' '));
   assert.match(rp, /Alignment: fitted to the OpenStreetMap road centreline.*© OpenStreetMap contributors, ODbL; from OpenStreetMap — not survey/); assert.match(rp, /PC sta\./); assert.ok(!/NaN|undefined|\[\[/.test(rp));
   await shot('road-report');
-  ok('Route tab: alignment section with the curve table and attribution; Report §Route: the fitted alignment note (attribution, "not survey") and the curve table; no NaN / undefined');
+  await p.click('#tabBar [data-otab=dwg]'); await p.waitForTimeout(900);
+  const dx = await p.evaluate(() => { let got = ''; const d0 = SharedDxf.download; SharedDxf.download = t => { got = t; }; document.getElementById('dwg_dxf').click(); SharedDxf.download = d0; return { t: got, ok: CranePickDrawingsUI.lastDxf.check.ok }; });
+  assert.ok(dx.ok); assert.match(dx.t, /ROAD GEOMETRY FROM OPENSTREETMAP - NOT SURVEY\. \(C\) OPENSTREETMAP CONTRIBUTORS, ODBL\./); assert.match(dx.t, /\nC1 R 300\r?\n/);
+  ok('Route tab: alignment section with the curve table and attribution; Report §Route: the fitted alignment note (attribution, "not survey") and the curve table; no NaN / undefined; the DXF route sheet: "C1 R 300" and the OpenStreetMap attribution');
   await p.click('#tabBar [data-otab=plan]'); await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(500);
   await p.click('#inTabs [data-itab=route]'); await p.evaluate(() => CranePickRouteUI.select(CranePickApp.P.routes[0].id)); await p.waitForTimeout(400);
   const sx = await p.evaluate(() => document.documentElement.scrollWidth - window.innerWidth); assert.ok(sx <= 0, 'no sideways scroll: ' + sx);

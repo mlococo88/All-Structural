@@ -57,12 +57,14 @@
       ] },
       { id: 'wf-route', title: 'A trucking route', blocks: [
         { ol: [
-          '[[in:route>Draw|Route tab → Draw]]: **Route**, then click the path of the tractor\'s **steer-axle centre**; double-click or Enter ends it. Each bend becomes a circular curve of the radius given (no automatic road routing).',
-          'In the route card: the curve radius (per vertex in the points table), the **Vehicle** (tractor + semi-trailer, stretch trailer, steerable rear dolly, or jeep + dolly; wheelbases, overhangs, widths, minimum turning radius, deck height), **Weights and axles**, and the **Load on the trailer**: link a **Girder lift** (its girder gives the load) or enter the load; or **Delivers to pick** for a single pick.',
-          'Drag the route\'s points: the **swept path** (off-tracking of the trailer, the load\'s swing-out at turns) is re-simulated live against obstructions, exclusion zones, crane footprints and power-line buffers.',
+          '[[in:route>Draw|Route tab → Draw]], one of three ways to give the path of the tractor\'s **steer-axle centre**: **Snap to road (OpenStreetMap)**: click a start point, any via points and an end point near the roads, then Enter or **Finish**: the app gets the OpenStreetMap roads of the area (Overpass API, cached in this browser) and the route follows the roads by the shortest path (one-way roads are a warning only: escorted convoys). **Trace**: press and drag along the road on the aerial. **Route**: click points; double-click or Enter ends it.',
+          'The line is then fitted with an **alignment** of tangents and circular curves: a gentle road curve is **one curve with its real radius**, a corner (e.g. a junction) is an **intersection turn** with the route\'s default radius. The route card\'s **Alignment** shows the line\'s source and road names, the curve table (No., kind, R, Δ, L, PC / PT stations, off-tracking), the smallest radius against the vehicle\'s minimum and the largest deviation of the line from the alignment. Type a radius or change a kind in the table; on the map drag a **PI**, a curve\'s round **radius handle** or a "+" handle (adds an intersection turn); **Add intersection turn** then a click adds one where a true turn happens; **Refit from the line** starts again; **Fit settings** (tolerance, detection window, …) refit. For an OpenStreetMap route, tick the right-hand travel lane to offset the road centreline by half a lane width.',
+          'Routes saved before 2026-11-17 keep **Each vertex is a turn with the radius entered (legacy)** (Curves list) and compute exactly as before; choose **Fitted alignment** to fit them.',
+          'In the route card: the default radius (intersection turns; legacy: the vertices), the **Vehicle** (tractor + semi-trailer, stretch trailer, steerable rear dolly, or jeep + dolly; wheelbases, overhangs, widths, minimum turning radius, deck height), **Weights and axles**, and the **Load on the trailer**: link a **Girder lift** (its girder gives the load) or enter the load; or **Delivers to pick** for a single pick.',
+          'Drag the PIs (legacy: the route\'s points): the **swept path** (off-tracking of the trailer, the load\'s swing-out at turns) is re-simulated live against obstructions, exclusion zones, crane footprints and power-line buffers.',
           'Draw the **marks**: **Overhead clearance (point)** or **Overhead clearance (line)** (with its clearance height above the road), **Haul road / mats** (width, allowable bearing, mats), **Posted bridge** (postings in tons). Overhead power lines are checked with the travel clearance (OSHA Table T).',
           '**Staging**: the girder on the truck at the stop is compared with the girder lift\'s pick pose (tolerance 2 ft, 2°); **Move the girder lift\'s pick pose to the girder on the truck** aligns them.',
-          'Results on the [[out:route|Route output tab]] (turns, conflicts, overheads, axle loads, haul road, posted bridges, staging) and in [[rpt:route|Report §Route]].'
+          'Results on the [[out:route|Route output tab]] (the alignment and curve table, curves / turns, conflicts, overheads, axle loads, haul road, posted bridges, staging) and in [[rpt:route|Report §Route]].'
         ] }
       ] },
       { id: 'wf-terrain', title: 'Terrain (preliminary, USGS 3DEP)', blocks: [
@@ -100,7 +102,7 @@
           '[[in:lifts|Lifts]]: the lift settings (thresholds, interpolation, path model, obstruction clearance), the crane setups and their picks, and the live result card with worked steps.',
           '[[in:ground|Ground]]: per crane setup the allowable bearing pressure and the mat / plate; per buried item an optional allowable stress; the map layer of ground pressures.',
           '[[in:tandem|Girder lifts]]: the tandem limit, girder lifts (cranes, girder, hooks, path), the scrubber and the live result.',
-          '[[in:route|Route]]: route and mark drawing tools, the vehicle and load, the live route card.',
+          '[[in:route|Route]]: route and mark drawing tools (Snap to road from OpenStreetMap, Trace, Route by clicks), the fitted alignment (curve table, PIs, radius handles, intersection turns), the vehicle and load, the live route card.',
           '[[in:terrain|Terrain]]: fetch the USGS 3DEP terrain, use it for ground elevations, contours / slopes, levelness, pad grading and route-profile inputs.'
         ] }
       ] },
@@ -144,6 +146,10 @@
       { id: 'm-offtrack', title: 'Off-tracking and the swept path', blocks: [
         { p: 'Low-speed kinematic off-tracking of the drawn steer-axle path (each unit\'s rear axle group moves along its own axis; SAE J695, NCHRP Report 505, AASHTO Green Book 7th Ed. §2.1.4), integrated every 0.25 ft; a steerable rear dolly by a proportional steering ratio k (enter the dolly maker\'s). The outlines of the tractor, trailer and load every foot form the swept path; per turn the largest off-tracking, inside and outside radii and swept width. Axle loads by statics (or entered weigh tickets). Worked in [[rpt:route|Report §Route]].' }
       ] },
+      { id: 'm-align', title: 'Fitted route alignment and OpenStreetMap roads', blocks: [
+        { p: 'The route line (clicks, a trace or an OpenStreetMap path) is simplified (Douglas–Peucker, tolerance 1.5 ft), resampled, and its heading-change rate over a detection window (50 ft) marks the curves (radius under 5,000 ft); curves of the same direction less than a window apart are merged, curves under 3° dropped; a heading change within 12 ft is an intersection turn. Tangents are least-squares lines through the points between curves; each curve\'s radius is the least-squares arc tangent to both tangents (the free least-squares circle is shown beside it as a check). The swept path and the route profile (Terrain) follow this alignment, not the raw vertices. Worked per curve in [[rpt:route|Report §Route]].' },
+        { p: 'Road geometry from OpenStreetMap (Overpass API) is **from OpenStreetMap — not survey**: centrelines drawn by volunteers, no curb returns or widths; check curves and clear widths on site. Data © OpenStreetMap contributors, Open Database License (ODbL): the attribution is shown on the map, the route card, the Route tab and the Report. One-way roads travelled against their direction are flagged (escort / permit), not avoided.' }
+      ] },
       { id: 'm-terrain', title: 'Terrain', blocks: [
         { p: 'USGS 3DEP elevations on a grid, bilinear interpolation between nodes. Levelness from the four support points\' plane (slope along, across and the steepest, against the level tolerance) and the blocking under each float to the levelling datum; pad cut / fill by the grid method (bank volumes, no slopes); route grades over a base length, crests / sags, and the long-load ground clearance. **Preliminary only — not for certifying levelness.** Worked in [[rpt:terrain-basis|Report §Terrain › Basis]].' }
       ] },
@@ -160,7 +166,7 @@
           ['Obstruction clearance 2 ft; path model uniform', 'Lifts tab: Lift settings'],
           ['Outrigger loads without the weights and CGs: bounding estimate; boom CG at 0.5 of foot-to-tip; counterweight CG at the tail-swing radius; mat spread 1 : 1', 'Cranes tab: the weights and CGs on the crane card; Ground tab: the mat'],
           ['Girder CG not entered: L / 2; travel elevation = the higher of pick and set; girder elevations = crane 1\'s pad', 'Girder lifts tab: Girder and Path'],
-          ['Route: curve radius 50 ft; vehicle (tractor wheelbase 20 ft, trailer 40 ft, deck 5 ft, minimum turning radius 45 ft …, shown as placeholders); overhead margin 1 ft; staging 2 ft / 2°; tyre area 100 in²', 'Route tab: the route card and the vehicle'],
+          ['Route: radius 50 ft at intersection turns (legacy: at the vertices); alignment fit tolerance 1.5 ft, window 50 ft, straight over R 5,000 ft, curves under 3° ignored, corner within 12 ft; lane width 12 ft; vehicle (tractor wheelbase 20 ft, trailer 40 ft, deck 5 ft, minimum turning radius 45 ft …, shown as placeholders); overhead margin 1 ft; staging 2 ft / 2°; tyre area 100 in²', 'Route tab: the route card and the vehicle'],
           ['Terrain: level tolerance 1 %, blocking limit 24 in, maximum grade 8 %, grade base 20 ft, clearance margin 0.5 ft', 'Terrain tab: per crane and per route']
         ] } },
         { p: 'The general notes of the drawings and [[rpt:basis-notes|Report §2 Basis]] repeat the governing assumptions with a § link to each.' }
@@ -197,6 +203,9 @@
       ] },
       { id: 'tr-usgs', title: 'USGS terrain fetch errors', blocks: [
         { p: '"Could not reach the USGS 3DEP elevation service": offline, blocked by the network, or no answer. Terrain is optional; everything else works. Try again later or from another network. "NoData" points are left out (shown as no terrain under a support). A large area is fetched at a coarser spacing (at most 10,000 points; the app says so). The grid is cached in this browser only: another computer fetches it again. [[in:terrain>Terrain (USGS 3DEP)|Terrain tab]].' }
+      ] },
+      { id: 'tr-osm', title: 'Snap to road (OpenStreetMap) errors', blocks: [
+        { p: '"Could not get the OpenStreetMap roads": offline, blocked by the network, or no answer from the Overpass API (overpass-api.de). The first snap in an area needs the internet; the roads are then cached in this browser. "Too many requests (HTTP 429)" or "busy (HTTP 504)": the public server is limiting; wait a minute and try again. "Point N is … ft from the nearest OpenStreetMap road": click nearer a road (within 150 ft). "Do not connect": the roads in the area are not joined in the data; add a via point or draw that part with **Trace** or **Route**, which work offline.' }
       ] },
       { id: 'tr-sheets', title: 'Plan sheet image missing on another computer', blocks: [
         { p: 'Sheet images are kept per browser. A project opened from GitHub, from a file without images, or on another computer shows each sheet\'s outline with "image missing": on the [[in:sheets>Plan sheets|Plan sheets tab]] press **Reload image…** and choose the same file again; the placement and the alignment are kept. To move a project with its images, Export JSON with **Include the plan-sheet images** ticked.' }
