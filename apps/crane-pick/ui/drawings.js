@@ -31,7 +31,7 @@
     const u = st(), paper = u.paper === 'B' ? 'B' : 'D', z = ZOOM.some(q => q[0] === u.z) ? u.z : 1;
     let B; try { B = build(paper); } catch (e) { console.error(e); el.innerHTML = `<div class="sec"><div class="secHead">Drawings</div><div class="secBody"><p class="warnT">The drawings could not be drawn: ${esc(e.message)}</p></div></div>`; return; }
     lastBuild = B; const sh = B.sheets, cur = sh.find(s => s.id === u.sheet) || sh[0], ref = B.ctx.ref;
-    const link = w => w[0] === 'rpt' ? `<a href="#" data-dgr="${esc(w[1])}">${esc(w[2].replace(/§\S*/, '') + (ref(w[1]) || '§'))}</a>` : `<a href="#" data-dg${w[0] === 'out' ? 'o' : 'i'}="${esc(w[1])}">${esc(w[2])}</a>`;
+    const link = w => w[0] === 'rpt' ? `<a href="#" data-dgr="${esc(w[1])}">${esc(w[2].replace(/§.*$/, '') + (ref(w[1]) || '§'))}</a>` : `<a href="#" data-dg${w[0] === 'out' ? 'o' : 'i'}="${esc(w[1])}">${esc(w[2])}</a>`;
     el.innerHTML = `<div class="sec"><div class="secHead">Lift-plan drawings (DXF R12): ${sh.length} sheet${sh.length === 1 ? '' : 's'}</div><div class="secBody">
       <div class="dwg-bar"><label for="dwg_paper">Paper</label><select id="dwg_paper"><option value="D"${paper === 'D' ? ' selected' : ''}>D, 34 × 22 in</option><option value="B"${paper === 'B' ? ' selected' : ''}>B, 17 × 11 in</option></select>
         <label for="dwg_sheet">Sheet</label><select id="dwg_sheet">${sh.map(s => `<option value="${esc(s.id)}"${s === cur ? ' selected' : ''}>${s.n}. ${esc(s.title)}</option>`).join('')}</select>

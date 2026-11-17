@@ -37,6 +37,9 @@
     if (c3) { ev.c3 = window.CranePickClear.check(c, u, k, ev, A.P.items, S(), 'k.c3'); ev.flags = ev.c3.flags.concat(ev.flags); }   // C3-2: 3D clearances (the plan-only power / exclusion / tail / boom-over flags replaced)
     if (window.CranePickGround) { ev.ground = window.CranePickGround.evaluate(c, u, k, A.P, 'k.gr'); ev.flags = ev.flags.concat(ev.ground.flags || []); }   // C4: float / track loads, mats, bearing, stress at depth
     if (window.CranePickTerrainUI) { ev.level = window.CranePickTerrainUI.levelOf(u); if (ev.level && ev.level.ok) ev.flags = ev.flags.concat(ev.level.flags || []); }   // C8: crane levelness on the preliminary terrain (USGS 3DEP)
+    // QA 2026-11-17: a pick without its load reads "0.0 %, within the chart" (W = rigging + hook block + other only): say so (a check flag;
+    // nothing computed changes). Decision (pending engineer review): a check (amber) flag, not a stop.
+    if (!(typeof k.load === 'number' && k.load > 0)) ev.flags.unshift({ level: 'warn', text: `Load not entered: W = ${ev.W.toLocaleString('en-US')} lb (rigging, hook block and other deductions only), so the % of chart and the float / track loads are for an empty hook. Enter the load on the Lifts tab.` });
     return ev;
   }
   /* ---------- placing ---------- */
