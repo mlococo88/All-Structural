@@ -40,7 +40,7 @@ try {
   ok('a project: crane A with a single pick, cranes 1 and 2 on a tandem girder lift (synthetic fake crane)');
 
   // 2. the tab and the single-pick crane
-  assert.deepEqual(await p.$$eval('#tabBar [data-otab]', a => a.map(x => x.textContent)), ['Plan', 'Summary', 'Crane', 'Picks', 'Ground', 'Route', 'Terrain', 'Site', 'Drawings', 'Report']);
+  assert.deepEqual(await p.$$eval('#tabBar [data-otab]', a => a.map(x => x.textContent)), ['Plan', 'Summary', 'Crane', 'Picks', 'Ground', 'Route', 'Terrain', 'Site', 'Drawings', 'Manual', 'Report']);
   await p.click('#tabBar [data-otab=crane]'); await p.waitForSelector('#crnPlan svg');
   assert.equal(await p.$$eval('#crnSel option', o => o.length), 3);
   await p.selectOption('#crnAt', 'pick'); await p.waitForTimeout(100);

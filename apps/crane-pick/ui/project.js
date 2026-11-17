@@ -35,8 +35,9 @@
         power lines (OSHA minimum clearance), buried utilities, culverts and walls, exclusion zones, labels and dimensions. Every item can be dragged and edited, and every change can be undone.</p>
         <p class="note">Cranes (C2): load the crane library (Cranes tab: from GitHub or from files, or paste a chart), add cranes to the project, place them on the map (Lifts tab) and drag the crane, the pick and the set points: radius, chart capacity and % of chart follow live; every pick is listed on the Picks tab and in the Report.</p>
         <p class="note">Girder lifts (C5, Girder lifts tab): a girder (or paired girders with cross-frames) lifted by one crane or by two in tandem, from the truck to the bearings: load share, every step of the path checked for each crane (capacity against the tandem limit, heights, 3D clearances, crane to crane, ground).</p>
-        <p class="note">Coming next: the trucking route (C6), lift plan sheets, DXF and the multi-lift Report (C7).</p>
+        <p class="note">How to use the app: the <a href="#" data-goman="1">Manual</a> tab (quick start, workflows, what each tab does, methods and limits, crane data, troubleshooting).</p>
         <p class="note">Units: US customary (ft, kip, psf / ksf). Positions: State Plane grid, US survey feet (Site &amp; map tab).</p></div></div>`;
+    p.addEventListener('click', e => { if (e.target.closest('[data-goman]')) { e.preventDefault(); A.showOTab('man'); } });
     p.addEventListener('change', e => {
       const t = e.target;
       if (t.dataset.tb) A.update(P => { P.title[t.dataset.tb] = t.value; }, 'title');

@@ -1040,3 +1040,62 @@ picker → tandem crane: 50 operating points, governing 88.9 %, tandem-limit cur
 (R 30 → 40 ft, C 28,000 lb, 78.6 % mid-drag), one undo step; Report §Cranes figures (12), no unresolved keys / NaN; Drawings: 3 Crane sheets;
 390 px; 0 console errors), `crane-shell` (11), `crane-picks` (5), `crane-drawings` (5), `crane-library` (9). Screenshots (fake crane; real-crane
 shots local only, not committed): scratchpad `crane/cranetab-*.png`.
+
+## 2026-11-17 — Manual output tab (how to use the app; filter, print, optional Report appendix)
+PR #1619: https://github.com/mlococo88/All-Structural/pull/1619
+Engineer request 2026-11-17: "We should also add a manual or a tab that explains how to use the app." Built like the suite's manuals (Spread
+Footing "User Manual", Timber "Method & Manual"): the text lives in the app's files, the tab has a filter box and prints on its own, and the
+Report takes it as an optional appendix (as Spread Footing's "Include this manual" box; off by default).
+### What the user sees
+Output tab **Manual** (after Drawings, before Report): a filter box ("n of 27 topics"; every word typed must be in the topic; matches marked;
+Esc clears), **Print manual** (prints the whole manual alone), **Include this manual in the Report (appendix)**, part buttons, then 7 parts:
+1. Quick start (ten steps: new project → zone → base map / plan sheet → Align to map → site items → Cloud sync token for the private library →
+   load the library / add a crane → place crane, pick, set → read the results → ground, Report, Drawings, save); 2. Workflows (single pick,
+   tandem girder lift, trucking route, terrain, plan sheets; a "coming" line for the aerial site-plan sheet (PNG + world file), not on main
+   when this was written); 3. What each tab does (every input and output tab, incl. C9's Crane tab); 4. Methods and limits (chart lookup rule,
+   thresholds / tandem limit, 3D clearances and OSHA Tables A / T with "verify against the current eCFR", outrigger loads entered vs estimate,
+   mats, Boussinesq, off-tracking, terrain, the ASSUMED defaults table with where to replace each); 5. Crane data (private Structural_References,
+   crane-charts; terms; pasting a chart; the in-cab chart for the serial number governs; never in a public repository + the sync warning);
+   6. Troubleshooting (GitHub "Not found": fine-grained token with Structural_References and Contents, classic `repo`; tiles / OSM from file://;
+   USGS errors; sheet images per browser; full storage); 7. Keyboard and mouse.
+Every link ([[in:/out:/rpt:/man: …]] in the text) opens the tab and brings the card (heading or element id) or the Report section (shared/report.js
+`jump`) into view with a brief outline; a Report section not in the report yet gives a notice. The Project tab's stale "Coming next: …" line is
+replaced by a link to the Manual.
+### Where
+- `apps/crane-pick/ui/manual.js` (new, `window.CranePickManual`: `PARTS`, `links`, `topics`, `go`, `filter`, `text`): the content, the tab, the
+  links, the print, the Report appendix (`CranePickReport.add`: section id / key `manual`, "Appendix: User manual"; only while ticked).
+- `apps/crane-pick/index.html`: loads `ui/manual.js` last. Before: `'ui/terrain.js'         // C8: …` (last entry); after: `'ui/terrain.js',        // C8: …`
+  then `'ui/manual.js'          // Manual output tab (2026-11-17) …`.
+- `apps/crane-pick/report/builders.js`: `ORDER` before `[… 'elev', 'v3']`, after `[… 'elev', 'v3', 'manual']` (the appendix last); after the C7
+  §1 / §2 link clean-up, new: in the `manual` section a note's " ([[key]])" is removed when that key is not in this report (an empty project
+  has no §Lifts …), so the appendix never leaves an unresolved § reference.
+- `apps/crane-pick/ui/report.js` `onGoto`: before `if (k === 'item' && …) …select(id, true); else A.showOTab(k);`, after `… else if (k === 'in')
+  A.showITab(id); else A.showOTab(k);` (a `[[tab:in:<id>|…]]` link in the Report opens an input tab).
+- `apps/crane-pick/ui/project.js`: About text "Coming next: the trucking route (C6), lift plan sheets, DXF and the multi-lift Report (C7)." →
+  "How to use the app: the Manual tab (…)" with a link (`data-goman`).
+- Tests: `tests/smoke/crane-manual.mjs` (new); `crane-shell.mjs`, `crane-picks.mjs`, `crane-cranetab.mjs` (output-tab lists + Manual).
+### Calculations
+None (CLAUDE.md §4): no formula, factor, unit or code reference changed. The Methods part summarises the existing methods (as in this log, C1–C9)
+and links to the Report section where each is worked (CLAUDE.md §6).
+### Saved data (§5)
+No new key; `crane.ui` (existing per-browser view key) gains `manRpt` (true = the appendix is in the Report). Project format unchanged.
+### Decisions (pending engineer review)
+- The appendix choice is per browser (`crane.ui.manRpt`), not saved with the project (Spread Footing keeps its box in the project): the project
+  format stays unchanged. Off by default.
+- In the appendix, input-tab and output-tab links are Report tab links; links to Report sections print as "see §x.y"; manual-to-manual links print
+  as plain text.
+- Fine-grained token advice: one token for both repositories (sync writes the projects repository, the library is read), Contents: Read and
+  write; a classic token needs `repo` (the Cloud sync dialog asks for a fine-grained token; `shared/github-sync.js` accepts either form).
+- The OSHA values are quoted as the app uses them, with "verify against the current eCFR" (as C1 / C6 recorded).
+- Lighter checks per the engineer's speed rule (below).
+### Open items (not changed here)
+- The Picks tab's note still says "Clearances: plan only (heights in C3)" (`ui/picks.js`); 3D clearances exist since C3-2. UI text only.
+### How verified
+`node tests/smoke/crane-manual.mjs` (8 checks: the tab before Report, 7 parts, 88 links each naming an existing tab; a populated project (fake
+crane: pick, tandem lift, route, power line, buried utility, plan sheet, mocked terrain source): every link resolves to its tab and card /
+element / Report section, spot checks (card outlined, `<details>` opened, Report scrolled to §Lifts › Basis); 35 button labels the manual quotes
+are on the page and in the text; filter ("token", "fine-grained repo" → the GitHub topic only, nonsense → message, Esc, a man: link clears it);
+Print manual (whole manual, filter restored, no stale restore); Report appendix off by default / last when ticked, no unresolved or duplicate
+keys, no NaN, its tab links open the input tab, empty project clean; 390 px no sideways scroll and a link brings the input card into view;
+0 console errors); `crane-shell` (11), `crane-picks` (5), `crane-cranetab` (6), `crane-drawings` (5); `node tests/engine/run.mjs crane`
+(13 files, 105 passed); `node tests/check-syntax.mjs`. Screenshots: scratchpad `crane/manual-*.png` (1280, 390, filter, methods, report).
