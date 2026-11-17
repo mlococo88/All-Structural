@@ -27,7 +27,7 @@
           '**Cloud sync token (crane library access).** The crane library is read from the engineer\'s private GitHub repository with the Cloud sync token: [[in:proj>Save and open|Project tab → Save and open]] → **Saved projects…** → **Cloud sync (GitHub)…**: paste a token that can read the private library repository (Structural_References) as well as write your projects repository. See [[man:tr-notfound|GitHub "Not found"]].',
           '**Load the library, add a crane.** [[in:cranes>Crane library|Cranes tab]]: **Load crane library from GitHub** (or **Load crane file(s)…**). In the library list press **Add to project**; the crane card appears under [[in:cranes>Cranes in this project|Cranes in this project]]. Read its source document, revision and terms.',
           '**Place the crane, the pick and the set.** On the crane card press **Place on the map** (or [[in:lifts>Crane setups|Lifts tab → Place at the map centre]]). Drag ✥ to move the crane and ↻ to turn it; drag **P** (pick) and **S** (set). In the setup card choose the chart, the boom length and enter the crane pad elevation; in the pick card enter the load, rigging, hook block and other deductions.',
-          '**Read the results.** The live card on the [[in:lifts|Lifts tab]] and the labels on the map show R, the chart capacity C and the % of chart at the pick, the set and the governing point. The [[out:picks|Picks tab]] lists every pick (with heights and the closest 3D clearance), the [[out:summary|Summary tab]] every lift; the elevation / 3D dock under the [[out:plan#elevDock|map]] shows the boom and clearances.',
+          '**Read the results.** The live card on the [[in:lifts|Lifts tab]] and the labels on the map show R, the chart capacity C and the % of chart at the pick, the set and the governing point. The [[out:picks|Picks tab]] lists every pick (with heights and the closest 3D clearance), the [[out:summary|Summary tab]] every lift, the [[out:crane|Crane tab]] the crane as the analysis uses it; the elevation / 3D dock under the [[out:plan#elevDock|map]] shows the boom and clearances.',
           '**Ground, then issue.** [[in:ground>Ground and supports|Ground tab]]: the allowable bearing pressure and the mat under each float (the crane\'s weights and CGs on its card for "entered data" loads). Then the [[out:rpt|Report]] (Print report), the [[out:dwg|Drawings]] (Download DXF, Print sheets) and **Save** / **Export JSON** on the [[in:proj>Save and open|Project tab]].'
         ] },
         { key: 'Every change is one Undo step (header, Ctrl+Z / Ctrl+Y). The project is autosaved in this browser while you work, but autosave is not a saved project: use Save or Export JSON.' }
@@ -41,7 +41,7 @@
           'In the pick card: **Load**, **Rigging (slings, spreader…)**, **Hook block** (from the crane\'s list or entered) and **Other deductions** with what they are. The chart\'s deduction notes are shown beside them: deduct everything they require. **Swing**: shortest, clockwise or counter-clockwise.',
           '**Heights** (for hook reach and 3D clearances): ground elevation and load bottom at the pick and the set, load height / length / width, rigging height (hook to load top), hook block height, and the load bottom during the swing.',
           '**Add a pick** adds another pick to the same setup. Drag P and S on the map: the live card shows the pick, the set and the governing point along the swing, the thresholds and every flag. [[in:lifts>Lift settings|Lift settings]] hold the caution / critical / limit % and the path model.',
-          'Check the [[out:picks|Picks tab]] (worked steps under each row), the elevation / 3D dock and the [[out:ground|Ground tab]]; the Report has the pick in [[rpt:lifts|§Lifts]].'
+          'Check the [[out:picks|Picks tab]] (worked steps under each row), the elevation / 3D dock and the [[out:ground|Ground tab]]; the [[out:crane|Crane tab]] draws the crane with every value the analysis uses and where it comes from (file, entered or assumed — assumed in amber). The Report has the pick in [[rpt:lifts|§Lifts]].'
         ] }
       ] },
       { id: 'wf-tandem', title: 'A tandem girder lift', blocks: [
@@ -84,8 +84,8 @@
           'The images stay in this browser (IndexedDB), not in the saved-project list or on GitHub. [[in:sheets>Images in this browser|Images in this browser]]: tick **Include the plan-sheet images in Export JSON** to carry them in the file; **Clean up unused images…** frees space. The worked scale steps are on the [[out:site|Site tab]] and in [[rpt:sheets|Report §Plan sheets]].'
         ] }
       ] },
-      { id: 'wf-coming', title: 'Coming: the Crane tab and the site-plan sheet', blocks: [
-        { p: 'Two additions are in progress and will be described here when they are released: a **Crane** output tab (the crane\'s data and where each value comes from), and a more accurate crane plan symbol with an aerial **site-plan sheet** exported as PNG with a world file.' }
+      { id: 'wf-coming', title: 'Coming: the site-plan sheet', blocks: [
+        { p: 'In progress, to be described here when released: a more accurate crane plan symbol and an aerial **site-plan sheet** exported as PNG with a world file.' }
       ] }
     ] },
     { id: 'tabs', title: '3. What each tab does', topics: [
@@ -107,12 +107,13 @@
         { ul: [
           '[[out:plan|Plan]]: the map with the Draw bar, every item, crane, swing path and label; the elevation / 3D dock underneath (▾ Elevation; Elevation or 3D; at the pick, the set, the capacity governing point or the closest 3D clearance).',
           '[[out:summary|Summary]]: every lift and route in one table (governing % of chart, status, closest clearance, largest float / track load, bearing ratio, level, flags) with links: map · worked · Report · drawing.',
+          '[[out:crane|Crane]]: the crane as the analysis uses it, for the crane / setup and the lift and point you choose (pick, set or governing; for a girder lift its first, last or governing step): plan to scale, side elevation along the boom, the load chart with the operating points and the threshold lines, the weights and CGs of the outrigger / track loads, and a table of every crane input with its source (file and page, entered, derived or assumed) and links to where it is used. The same figures are in [[rpt:cranes|Report §Cranes]] and on a Crane drawing sheet per setup.',
           '[[out:picks|Picks]]: one row per pick (radius, capacity, % of chart, heights, hook reach, closest 3D) with its worked steps; the girder lifts per crane.',
           '[[out:ground|Ground]]: per pick the largest load on each float / track along the swing, bearing under the mat, mat checks, stress at depth, worked steps.',
           '[[out:route|Route]]: per route the turns, conflicts, overhead clearances, axle loads, haul road, posted bridges, staging, worked steps.',
           '[[out:terrain|Terrain]]: levelness and blocking per crane, slopes, pad cut / fill, the route profile with crests / sags and the long-load clearance.',
           '[[out:site|Site]]: the project, the coordinate system, the plan sheets and the site items with their worked values.',
-          '[[out:dwg|Drawings]]: the lift-plan drawing set (cover, general notes, a lift plan per pick and per girder lift, rigging / load share, ground, route); paper D or B; Download DXF; Print sheet / Print all sheets.',
+          '[[out:dwg|Drawings]]: the lift-plan drawing set (cover, general notes, a lift plan per pick and per girder lift, rigging / load share, ground, route, a Crane sheet per setup); paper D or B; Download DXF; Print sheet / Print all sheets.',
           '[[out:man|Manual]]: this manual (filter box, Print manual, and the box that adds it to the Report).',
           '[[out:rpt|Report]]: the calculation report: §1 Summary, §2 Basis, then Site, Plan sheets, Site items, Cranes, Lifts, Tandem lifts, Ground, Route, Terrain, Elevations, 3D view — each value worked (equation, values, result). Search, Expand / Collapse all, Print report.'
         ] }

@@ -40,7 +40,7 @@ try {
   ok('two fake cranes placed; three picks (hand check, one over the chart, a crawler pick); an exclusion zone across the first set point');
 
   // 2. Picks tab
-  assert.deepEqual(await p.$$eval('#tabBar [data-otab]', a => a.map(x => x.textContent)), ['Plan', 'Summary', 'Picks', 'Ground', 'Route', 'Terrain', 'Site', 'Drawings', 'Manual', 'Report']);   // C7: Summary, Drawings; C8: Terrain; Manual (2026-11-17);   // C4 adds Ground, C6 Route
+  assert.deepEqual(await p.$$eval('#tabBar [data-otab]', a => a.map(x => x.textContent)), ['Plan', 'Summary', 'Crane', 'Picks', 'Ground', 'Route', 'Terrain', 'Site', 'Drawings', 'Manual', 'Report']);   // C7: Summary, Drawings; C8: Terrain; C9: Crane; Manual (2026-11-17);   // C4 adds Ground, C6 Route
   await p.click('#tabBar [data-otab=picks]'); await p.waitForSelector('#pkTbl');
   const rows = await rowTexts(); assert.equal(rows.length, 3);
   assert.deepEqual(rows[0].slice(0, 13), ['Pick 1', 'Crane 1: FAKECO TEST-AT 100 (FAKE TEST DATA)', 'Main boom, outriggers full 24 ft, 360 deg, 20,000 lb counterweight (FAKE)', '60.0', '30.00', '20.00', '30.00', '39,000', '58,000', '22,000', 'at the pick (C 39,000 lb)', '56.4 %', 'within the chart']);
