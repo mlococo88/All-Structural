@@ -661,10 +661,11 @@ async function verify() {
     const r = await c.verify();
     const good = r.keyVerified && String(r.status).toLowerCase() === 'connected';
     setStatus($('connStatus'), good ? `Connected (user ${r.user || '?'}, program ${r.program || '?'})`
-      : `Server answered but not ready: keyVerified=${r.keyVerified}, status=${r.status}`, good ? 'ok' : 'warn');
+      : `${NOT_CONNECTED_MSG} (keyVerified=${r.keyVerified}, status=${r.status})`, good ? 'ok' : 'warn');
     log('verify: ' + JSON.stringify(r), good ? 'ok' : 'err');
   } catch (e) {
-    setStatus($('connStatus'), e.message, 'err');
+    const msg = /HTTP 4\d\d/.test(e.message) ? `${NOT_CONNECTED_MSG} (${e.message})` : e.message;
+    setStatus($('connStatus'), msg, 'err');
     log(e.message, 'err');
   }
 }
@@ -692,6 +693,12 @@ async function runMidas() {
   const btn = $('btnMidas'); btn.disabled = true;
   try {
     const c = client();
+    // Make sure Civil NX is connected under this key before sending anything
+    setStatus($('runStatus'), 'Checking the Civil NX connection…');
+    let v = null;
+    try { v = await c.verify(); } catch (e) { log('verify: ' + e.message, 'err'); }
+    if (v) log('verify: ' + JSON.stringify(v), v.keyVerified && String(v.status).toLowerCase() === 'connected' ? 'ok' : 'err');
+    if (v && !(v.keyVerified && String(v.status).toLowerCase() === 'connected')) throw new Error(NOT_CONNECTED_MSG);
     setStatus($('runStatus'), 'Sending model to Civil NX…');
     if ($('newModel').checked) await c.post('/doc/NEW', {});
     const reqs = buildRequests();
@@ -720,11 +727,15 @@ async function runMidas() {
     setStatus($('runStatus'), 'Done. MIDAS results loaded.', 'ok');
     draw();
   } catch (e) {
+    if (/client does not exist/i.test(e.message) && e.message !== NOT_CONNECTED_MSG) e.message = NOT_CONNECTED_MSG + ' (MIDAS replied: client does not exist)';
     setStatus($('runStatus'), e.message, 'err');
     log(e.message, 'err');
     if (e.data) log('response: ' + JSON.stringify(e.data).slice(0, 600), 'err');
   } finally { btn.disabled = false; }
 }
+
+const NOT_CONNECTED_MSG = 'Civil NX is not connected under this MAPI-Key. In Civil NX: open a model, Apps > API Settings > Connect, ' +
+  'and wait for Status "Connected". If you clicked Refresh there, copy the new MAPI-Key into this page. Then click Verify connection.';
 
 // Read back what Civil NX stored before running the analysis, so a bad material or section is caught with a clear message
 async function checkModel(c, reqs) {
