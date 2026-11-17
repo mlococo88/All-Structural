@@ -516,11 +516,15 @@
     res.worst = res.flags.length ? res.flags[0].level : 'ok';
     return res;
   }
-  /* the fitted alignment's summary (route.mode 'fit'): the deviation of the drawn / traced / OSM line from it, the smallest radius vs
+  /* the fitted alignment's summary (route.mode 'fit'): the deviation of the drawn / traced / OSM line from it (intersection turns: to their PI), the smallest radius vs
      the vehicle's R_min, the source (OpenStreetMap: attribution, "not survey", one-way roads travelled against their direction) */
   function alignOf(r, sim) {
     if (!sim.pa.fitted) return null;
-    const AL = window.CranePickAlign, flags = [], src = r.src || {}, apts = sim.dense.filter(q => q.s >= 0);
+    const AL = window.CranePickAlign, flags = [], src = r.src || {}, apts = [];
+    // the alignment as a polyline for the deviation: tangents, fitted curves every 2 ft; an intersection turn by its PI (the vehicle's
+    // rounding of a corner is by design, not a fit error)
+    sim.pa.segs.forEach(g => { if (g.type === 'line') { apts.push(g.a, g.b); return; } const t = sim.pa.turns[g.turn];
+      if (t && t.kind === 'turn') { apts.push(g.a, t.PI, g.b); return; } const k = Math.max(2, Math.ceil(g.L / 2)); for (let j = 0; j <= k; j++) { const q = at(sim.pa, g.s0 + g.L * j / k); apts.push({ x: q.x, y: q.y }); } });
     const dev = AL && (r.pts || []).length >= 2 ? AL.deviation(r.pts, apts) : null, curves = sim.pa.turns;
     const rmin = curves.reduce((m, t) => Math.min(m, t.r), Infinity), Rv = sim.v.Rmin;
     if (src.kind === 'osm') flags.push({ level: 'info', kind: 'osm', text: `Road geometry ${window.CranePickOSM ? window.CranePickOSM.NOT_SURVEY : 'from OpenStreetMap — not survey'} (${window.CranePickOSM ? window.CranePickOSM.ATTR : '© OpenStreetMap contributors'}, fetched ${String(src.at || '').slice(0, 10) || '—'}): check the curves and the clear widths on site.` });

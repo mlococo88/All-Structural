@@ -18,16 +18,16 @@
       Δ_min (default 3°) is dropped (a tangent). Δ of a run = the heading after it − the heading before it (the chords next to it).
    5. Intersection turn: the length L_c over which the central 90 % of a run's heading change happens (5 % to 95 % of Σ|Δθ| along the
       chords) is less than L_corner (default 12 ft): a corner (e.g. two OSM centrelines meeting at a junction node), not a curve.
-   6. Tangents: a total-least-squares line through the points between two curves (centroid, principal direction); a gap shorter than
+   6. Tangents: a total-least-squares line through the line's points between two curves (centroid, principal direction); a gap shorter than
       2 h: the line through its middle point along θ̄. A curve at the very start / end of the line: the tangent at the start / end point
       is that of the curve's free circle there.
    7. PI_k = the intersection of the tangents before and after curve k; the alignment starts / ends at the projections of the line's
       first / last points onto the first / last tangent.
-   8. Curve radius: the arc tangent to both tangents (PC = PI − T û_in, PT = PI + T û_out, T = R tan(|Δ|/2)) whose tangent–curve–tangent
+   8. Curve radius : the arc tangent to both tangents (PC = PI − T û_in, PT = PI + T û_out, T = R tan(|Δ|/2)) whose tangent–curve–tangent
       polyline is closest, by least squares, to the line's points from the middle of the tangent before to the middle of the one after:
       min_R Σ d_i(R)², R from 1 ft to the largest that fits half of each tangent next to it; 48 trial radii (log-spaced), then golden
       section about the best. The free least-squares circle (Kåsa algebraic fit, then Gauss–Newton on the geometric distances
-      |p_i − c| − R) is reported beside it as a check (CLAUDE.md §6).
+      |p_i − c| − R) through the curve's core points (5 % to 95 % of its heading change) is reported beside it as a check (CLAUDE.md §6).
    9. Max deviation: the largest distance from a point of the line (resampled) to the alignment. */
 (function () {
   'use strict';
@@ -122,7 +122,7 @@
     R.forEach(r => {   // the length holding the central 90 % of the heading change
       const i0 = Math.max(0, r.a - 1), i1 = Math.min(cth.length - 1, r.b); let tot = 0; const c = [0]; for (let i = i0 + 1; i <= i1; i++) { tot += Math.abs(cth[i] - cth[i - 1]); c.push(tot); }
       const sAt = f => { for (let k = 1; k < c.length; k++) if (c[k] >= f * tot) return Q[i0 + k].s; return Q[i1].s; };
-      r.Lc = tot > 0 ? sAt(0.95) - sAt(0.05) : 0; r.corner = r.Lc < o.cornerL;
+      r.s5 = sAt(0.05); r.s95 = sAt(0.95); r.Lc = tot > 0 ? r.s95 - r.s5 : 0; r.corner = r.Lc < o.cornerL;
     });
     return { R, ths, m };
   }
@@ -133,11 +133,15 @@
     const S = simplify(raw, o.tol), h = Math.max(1, o.win / 10), Q = resample(S, h), n = Q.length;
     if (n < 3 || Q[n - 1].s < 1) { return { ok: true, al: { pis: [raw[0], raw[raw.length - 1]], rad: [null, null], kind: ['end', 'end'], fit: [null, null], opt: uo }, Q, runs: [] }; }
     const { R: C, ths } = runs(Q, o, h);
+    // each point of the (cleaned) line -> the nearest resampled point (the line runs the same way): the fits use the line's own points
+    const qi = []; { let j = 0; raw.forEach(p => { let bd = Infinity, bj = j; for (let k = Math.max(0, j - 5); k < Math.min(n, j + 400); k++) { const d = dist(p, Q[k]); if (d < bd) { bd = d; bj = k; } } qi.push(bj); j = bj; }); }
+    const rawIn = (a, b) => raw.filter((_, k) => qi[k] >= a && qi[k] <= b);
+    const rawS = (s0, s1) => raw.filter((_, k) => Q[qi[k]].s >= s0 - h && Q[qi[k]].s <= s1 + h);
     const tg = []; let ok = [];   // tangents: tg[k] lies before curve k (k = 0 … C.length)
     const dirAt = i => { const t = ths[i]; return { x: Math.cos(t), y: Math.sin(t) }; };
     for (let k = 0; k <= C.length; k++) {
       const a = k === 0 ? 0 : C[k - 1].b, b = k === C.length ? n - 1 : C[k].a, P = Q.slice(a, b + 1);
-      if (P.length >= 3 && P[P.length - 1].s - P[0].s >= 2 * h) { const L = fitLine(P); tg.push({ c: L.c, u: L.u, a, b, from: 'ls' }); continue; }
+      if (P.length >= 3 && P[P.length - 1].s - P[0].s >= 2 * h) { const PR = rawIn(a, b), L = fitLine(PR.length >= 3 ? PR : P); tg.push({ c: L.c, u: L.u, a, b, from: 'ls' }); continue; }
       if (k === 0 || k === C.length) {   // the line starts / ends in a curve: the curve's circle at the end point
         const cv = C[k === 0 ? 0 : C.length - 1], cc = fitCircle(Q.slice(cv.a, cv.b + 1)), e = k === 0 ? Q[0] : Q[n - 1];
         let u = cc ? unit(left(sub(e, cc.c))) : dirAt(k === 0 ? 0 : n - 1); if (cc && Math.sign(cv.D) < 0) u = mul(u, -1);
@@ -164,8 +168,8 @@
       const ui = unit(sub(pis[i], pis[i - 1])), uo = unit(sub(pis[i + 1], pis[i])), D = ang(Math.atan2(uo.y, uo.x) - Math.atan2(ui.y, ui.x));
       const Lb = dist(pis[i - 1], pis[i]) * (i - 1 === 0 ? 1 : 0.5), Lf = dist(pis[i], pis[i + 1]) * (i + 1 === pis.length - 1 ? 1 : 0.5), t = Math.tan(Math.abs(D) / 2);
       if (f.corner) { fitI[i] = { Lc: f.Lc, corner: true }; continue; }
-      const a = Math.round((f.prev.a + f.prev.b) / 2), b = Math.round((f.next.a + f.next.b) / 2), P = Q.slice(Math.max(0, a), Math.min(n - 1, b) + 1);
-      const fr = fitRadius(P, pis[i], ui, uo, D, Math.max(1, Math.min(Lb, Lf) / t)), cc = fitCircle(Q.slice(C[f.k].a, C[f.k].b + 1));
+      const a = Math.round((f.prev.a + f.prev.b) / 2), b = Math.round((f.next.a + f.next.b) / 2), P0 = rawIn(Math.max(0, a), Math.min(n - 1, b)), P = P0.length >= 3 ? P0 : Q.slice(Math.max(0, a), Math.min(n - 1, b) + 1);
+      const fr = fitRadius(P, pis[i], ui, uo, D, Math.max(1, Math.min(Lb, Lf) / t)), core = rawS(C[f.k].s5, C[f.k].s95), cc = fitCircle(core.length >= 3 ? core : Q.slice(C[f.k].a, C[f.k].b + 1));   // the free circle: the points of the curve's core (5 % – 95 % of its heading change)
       rad[i] = fr.R; fitI[i] = { Rls: cc ? cc.R : null, rms: Math.sqrt(fr.ss / P.length), n: P.length, Lc: f.Lc, R0: fr.R, atMax: fr.atMax };
     }
     return { ok: true, al: { pis, rad, kind, fit: fitI, opt: uo }, Q, runs: C };

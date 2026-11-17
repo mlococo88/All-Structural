@@ -35,11 +35,17 @@ try {
   for (const q of P0) await clickFt(q);
   await p.keyboard.press('Enter'); await p.waitForTimeout(400);
   let R = (await p.evaluate(() => CranePickApp.P.routes))[0]; assert.equal(R.pts.length, 4);
+  // 2026-11-17: a new route is a fitted alignment: the 4 clicks' corners are 2 intersection turns (r 50 ft default) = the same path; the
+  // rest of this smoke checks the legacy mode ("each vertex is a turn"), unchanged since C6
+  const fitOt = await p.evaluate(() => CranePickRouteUI.evalRoute(CranePickApp.P.routes[0]).otMax);
+  assert.equal(R.mode, 'fit'); assert.match(await txt('#rtLive'), new RegExp(`0 curves \\+ 2 intersection turns \\(fitted alignment\\) · max off-tracking ${fitOt.toFixed(2)} ft`));
+  await p.selectOption('#rtMode', 'legacy'); await p.waitForTimeout(300); R = (await p.evaluate(() => CranePickApp.P.routes))[0]; assert.equal(R.mode, 'legacy');
   let e = await engine(); assert.equal(e.turns.length, 2); near(e.turns[0].r, 50, 1e-9, 'default curve radius'); near(e.gross, 75000, 1e-6, 'default vehicle and load: 75,000 lb');
   assert.match(await txt('#rtLive'), new RegExp(`2 turns · max off-tracking ${e.ot.toFixed(2)} ft · gross 75,000 lb`));
   assert.ok(await p.$('.crRtSwept'), 'swept path drawn'); assert.equal((await p.$$('.crRtLbl')).length, 2, 'two turn labels');
   await shot('c6-route-map');
-  ok(`route drawn by 4 clicks: ${e.L.toFixed(1)} ft, 2 turns (r 50 ft default), max off-tracking ${e.ot.toFixed(2)} ft, gross 75,000 lb; swept path and turn labels on the map`);
+  near(e.ot, fitOt, 1e-9, 'fitted (2 intersection turns) = legacy (2 vertices) for these clicks');
+  ok(`route drawn by 4 clicks: fitted = 2 intersection turns; switched to legacy: ${e.L.toFixed(1)} ft, 2 turns (r 50 ft default), max off-tracking ${e.ot.toFixed(2)} ft (= fitted), gross 75,000 lb; swept path and turn labels on the map`);
 
   // 2. obstruction inside turn 1, drag the vertex away
   await p.evaluate(q => { const it = CranePickModel.normItem({ type: 'obst', name: 'Pier 1', height: 20, pts: [{ x: q.x - 22, y: q.y + 14 }, { x: q.x - 14, y: q.y + 14 }, { x: q.x - 14, y: q.y + 22 }, { x: q.x - 22, y: q.y + 22 }] }); CranePickApp.update(P => { P.items.push(it); }, 'items'); }, P0[1]);
