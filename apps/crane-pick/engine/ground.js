@@ -83,7 +83,10 @@
   const FLOATS = [{ id: 'FL', name: 'front left', sx: 1, sy: 1 }, { id: 'FR', name: 'front right', sx: 1, sy: -1 }, { id: 'RL', name: 'rear left', sx: -1, sy: 1 }, { id: 'RR', name: 'rear right', sx: -1, sy: -1 }];
   const TRACKS = [{ id: 'TL', name: 'left track', sy: 1 }, { id: 'TR', name: 'right track', sy: -1 }];
   const dval = v => isNum(v) ? v : (v && typeof v === 'object' ? (isNum(v.value) ? v.value : isNum(v.lb) ? v.lb : null) : null);
-  function fileGross(c) { const w = (c && c.weights) || {}; for (const k of ['gross_operating_weight', 'gross_vehicle_weight', 'operating_weight', 'gvw']) { const v = dval(w[k]); if (isNum(v) && v > 0) return v; } return null; }
+  const GROSS_KEYS = ['gross_operating_weight', 'gross_vehicle_weight', 'operating_weight', 'gvw'];
+  function fileGross(c) { const w = (c && c.weights) || {}; for (const k of GROSS_KEYS) { const v = dval(w[k]); if (isNum(v) && v > 0) return v; } return null; }
+  /* fileGrossAt(c): the key and printed page of the value fileGross reads (provenance only; the Crane tab, C9) */
+  function fileGrossAt(c) { const w = (c && c.weights) || {}; for (const k of GROSS_KEYS) { const v = dval(w[k]); if (isNum(v) && v > 0) return { key: k, page: w[k] && typeof w[k] === 'object' && w[k].page != null ? w[k].page : null }; } return null; }
   function cfgOf(crane, setup) { const chs = LF().chartsOf(crane, setup), gr = chs.gr; return gr ? (gr.configs['360'] || gr.configs[gr.zones[0]]) : null; }
 
   /* inputsOf(crane, setup) -> the weights and CGs, where each comes from, and the mode they allow */
@@ -453,5 +456,5 @@
     const sup = S.items.map((it, i) => { let best = null; evs.forEach(x => { const m = x.g.max[i], v = isTr ? m.q : m.load; if (!best || v > best.v) best = { v, m, b: x.g.bear[i], k: x.k, g: x.g }; }); return Object.assign({ it }, best); });
     return { S, sup, mode: evs.some(x => x.g.mode === 'estimate') ? 'estimate' : 'rigid', qa: evs[0].g.qa, evs };
   }
-  window.CranePickGround = { U, DEF, MAT_TYPES, FLOATS, TRACKS, REF, inputsOf, supports, parts, resultant, floatDist, trackP, trackDist, rigidAt, boundAt, boundCandidates, restBox, matOf, bearing, bearingArea, evaluate, stressAt, depthOf, toLocal, toGrid, depthPair, setupSummary, fileGross };
+  window.CranePickGround = { U, DEF, MAT_TYPES, FLOATS, TRACKS, REF, inputsOf, supports, parts, resultant, floatDist, trackP, trackDist, rigidAt, boundAt, boundCandidates, restBox, matOf, bearing, bearingArea, evaluate, stressAt, depthOf, toLocal, toGrid, depthPair, setupSummary, fileGross, fileGrossAt };
 })();

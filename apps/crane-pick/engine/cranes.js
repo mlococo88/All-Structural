@@ -219,44 +219,58 @@
     return (Array.isArray(hb) ? hb : []).filter(h => h && isNum(h.lb)).map(h => ({ label: h.item || (h.capacity_lb ? fmtN(h.capacity_lb, 0) + ' lb block' : 'hook block') + (h.sheaves ? `, ${h.sheaves} sheave${h.sheaves > 1 ? 's' : ''}` : ''), lb: h.lb, page: h.page }));
   }
   const dval = v => v && typeof v === 'object' && isNum(v.value) ? v.value : (isNum(v) ? v : null);
+  const dpage = v => v && typeof v === 'object' && v.page != null ? v.page : null;
   function first(o, ks) { if (!o) return null; for (const k of ks) { const v = dval(o[k]); if (v != null) return v; } return null; }
+  /* firstAt(o, ks): the key and printed page of the value first() reads (provenance only; Crane tab, C9) */
+  function firstAt(o, ks) { if (!o) return null; for (const k of ks) { const v = dval(o[k]); if (v != null) return { key: k, page: dpage(o[k]) }; } return null; }
   /* planDims(crane) -> the plan geometry the map draws (ft, from the centre of rotation; x forward along the carrier, y to the left):
      { kind: 'crawler' | 'wheeled', tail, boomFoot, body: { front, rear, width }, outr: { xFront, xRear, spreads: { key: ft }, float },
-       crawler: { length, gauge, shoe }, assumed: [text] }. From the file's dims where they are given; app_inputs.plan overrides any value.
-     Display and plan clearance only (no capacity depends on it). */
+       crawler: { length, gauge, shoe }, assumed: [text], src }. From the file's dims where they are given; app_inputs.plan overrides any value.
+     Display and plan clearance only (no capacity depends on it).
+     src (C9, the Crane tab; provenance only, no value changed): { 'tail' | 'boomFoot' | 'body.front' | … | 'outr.spreads.<k>' | 'crawler.shoe':
+       { from: 'file' | 'entered' | 'assumed' | 'derived', key, page, note } } for every value set (a value not set has no entry). */
   function planDims(c) {
     const d = (c && c.dims) || {}, cc = d.carrier_or_carbody || {}, o = d.outriggers || {}, cr = d.crawler || {}, cor = d.center_of_rotation || {};
-    const kind = (c && c.type) === 'crawler' ? 'crawler' : 'wheeled', assumed = [];
-    const p = { kind, tail: dval(d.tail_swing_radius), boomFoot: first(d.boom_foot, ['ahead_of_rotation']) || 0, body: null, outr: null, crawler: null, assumed };
+    const kind = (c && c.type) === 'crawler' ? 'crawler' : 'wheeled', assumed = [], src = {};
+    const fileS = (k, at) => { if (at) src[k] = { from: 'file', key: at.key, page: at.page }; };
+    const p = { kind, tail: dval(d.tail_swing_radius), boomFoot: first(d.boom_foot, ['ahead_of_rotation']) || 0, body: null, outr: null, crawler: null, assumed, src };
+    if (p.tail != null) src.tail = { from: 'file', key: 'tail_swing_radius', page: dpage(d.tail_swing_radius) };
+    if (first(d.boom_foot, ['ahead_of_rotation']) != null) fileS('boomFoot', firstAt(d.boom_foot, ['ahead_of_rotation'])); else src.boomFoot = { from: 'assumed', note: 'boom-foot offset 0 ft (on the rotation centre)' };
     if (kind === 'crawler') {
       const len = first(cr, ['track_length_overall', 'tumbler_centres']), shoe = first(cr, ['shoe_width']);
-      let gauge = first(cr, ['track_gauge_extended']);
-      if (gauge == null && shoe != null) { const w = first(cr, ['width_over_tracks_extended', 'overall_width_outermost']); if (w != null) { gauge = w - shoe; assumed.push('track gauge = width over tracks − shoe width'); } }
+      fileS('crawler.length', firstAt(cr, ['track_length_overall', 'tumbler_centres'])); fileS('crawler.shoe', firstAt(cr, ['shoe_width']));
+      let gauge = first(cr, ['track_gauge_extended']); fileS('crawler.gauge', firstAt(cr, ['track_gauge_extended']));
+      if (gauge == null && shoe != null) { const w = first(cr, ['width_over_tracks_extended', 'overall_width_outermost']); if (w != null) { gauge = w - shoe; assumed.push('track gauge = width over tracks − shoe width');
+        const at = firstAt(cr, ['width_over_tracks_extended', 'overall_width_outermost']); src['crawler.gauge'] = { from: 'derived', key: at.key, page: at.page, note: 'width over tracks − shoe width' }; } }
       p.crawler = { length: len, gauge, shoe };
       if (len != null) assumed.push('crawler centred on the centre of rotation');
       const bl = first(cc, ['carbody_length']), bw = first(cc, ['carbody_width', 'upper_width']);
-      if (bl != null && bw != null) p.body = { front: bl / 2, rear: bl / 2, width: bw };
+      if (bl != null && bw != null) { p.body = { front: bl / 2, rear: bl / 2, width: bw }; const at = firstAt(cc, ['carbody_length']);
+        src['body.front'] = src['body.rear'] = { from: 'derived', key: at.key, page: at.page, note: 'carbody length / 2 (carbody centred on the rotation centre)' }; fileS('body.width', firstAt(cc, ['carbody_width', 'upper_width'])); }
     } else {
       const st = o.spread_transverse || {}, sl = o.spread_longitudinal || {}, spreads = {};
-      Object.keys(st).forEach(k => { const v = dval(st[k]); if (v != null && v > 0) spreads[k] = v; });
+      Object.keys(st).forEach(k => { const v = dval(st[k]); if (v != null && v > 0) { spreads[k] = v; src['outr.spreads.' + k] = { from: 'file', key: 'spread_transverse.' + k, page: dpage(st[k]) }; } });
       let xF = first(sl, ['front_outrigger_to_rotation']), xR = first(sl, ['rotation_to_rear_outrigger']);
-      if (xR == null) xR = first(cor, ['rotation_to_rear_outrigger']);
-      const tot = first(sl, ['total', 'total_derived', 'top_chain_total']);
-      if (tot != null && xF == null && xR != null) { xF = tot - xR; assumed.push('front outrigger position = longitudinal spread − rear distance'); }
-      if (tot != null && xR == null && xF != null) { xR = tot - xF; assumed.push('rear outrigger position = longitudinal spread − front distance'); }
-      if (tot != null && xF == null && xR == null) { xF = xR = tot / 2; assumed.push('outrigger beams centred on the centre of rotation'); }
-      p.outr = { xFront: xF, xRear: xR, spreads, float: first(o, ['float_size']) };
+      fileS('outr.xFront', firstAt(sl, ['front_outrigger_to_rotation'])); fileS('outr.xRear', firstAt(sl, ['rotation_to_rear_outrigger']));
+      if (xR == null) { xR = first(cor, ['rotation_to_rear_outrigger']); fileS('outr.xRear', firstAt(cor, ['rotation_to_rear_outrigger'])); }
+      const tot = first(sl, ['total', 'total_derived', 'top_chain_total']), totAt = firstAt(sl, ['total', 'total_derived', 'top_chain_total']);
+      if (tot != null && xF == null && xR != null) { xF = tot - xR; assumed.push('front outrigger position = longitudinal spread − rear distance'); src['outr.xFront'] = { from: 'derived', key: totAt.key, page: totAt.page, note: 'longitudinal spread − rear distance' }; }
+      if (tot != null && xR == null && xF != null) { xR = tot - xF; assumed.push('rear outrigger position = longitudinal spread − front distance'); src['outr.xRear'] = { from: 'derived', key: totAt.key, page: totAt.page, note: 'longitudinal spread − front distance' }; }
+      if (tot != null && xF == null && xR == null) { xF = xR = tot / 2; assumed.push('outrigger beams centred on the centre of rotation'); src['outr.xFront'] = src['outr.xRear'] = { from: 'assumed', key: totAt.key, page: totAt.page, note: 'outrigger beams centred on the centre of rotation (spread / 2)' }; }
+      p.outr = { xFront: xF, xRear: xR, spreads, float: first(o, ['float_size']) }; fileS('outr.float', firstAt(o, ['float_size']));
       const L = first(cc, ['overall_carrier_length', 'carrier_length', 'overall_length']), W = first(cc, ['carrier_width', 'overall_width', 'carrier_width_overall']);
       if (L != null && W != null) {
-        let rear = first(cor, ['rotation_to_rear_of_carrier']);
-        if (rear == null) { rear = L / 2 - ((xF != null && xR != null) ? (xF - xR) / 2 : 0); assumed.push('carrier centred between the outrigger beams'); }
+        const Lat = firstAt(cc, ['overall_carrier_length', 'carrier_length', 'overall_length']);
+        let rear = first(cor, ['rotation_to_rear_of_carrier']); fileS('body.rear', firstAt(cor, ['rotation_to_rear_of_carrier']));
+        if (rear == null) { rear = L / 2 - ((xF != null && xR != null) ? (xF - xR) / 2 : 0); assumed.push('carrier centred between the outrigger beams'); src['body.rear'] = { from: 'assumed', key: Lat.key, page: Lat.page, note: 'carrier centred between the outrigger beams' }; }
         p.body = { front: L - rear, rear, width: W };
+        src['body.front'] = { from: src['body.rear'].from === 'assumed' ? 'assumed' : 'derived', key: Lat.key, page: Lat.page, note: 'carrier length − rotation to rear of carrier' }; fileS('body.width', firstAt(cc, ['carrier_width', 'overall_width', 'carrier_width_overall']));
       }
     }
     const ov = c && c.app_inputs && c.app_inputs.plan;
     if (ov && typeof ov === 'object') {
-      ['tail', 'boomFoot'].forEach(k => { if (isNum(ov[k])) p[k] = ov[k]; });
-      ['body', 'outr', 'crawler'].forEach(k => { if (ov[k] && typeof ov[k] === 'object') { p[k] = Object.assign({}, p[k] || {}); Object.keys(ov[k]).forEach(q => { const v = ov[k][q]; if (q === 'spreads' && v && typeof v === 'object') p[k].spreads = Object.assign({}, p[k].spreads || {}, v); else if (isNum(v)) p[k][q] = v; }); } });
+      ['tail', 'boomFoot'].forEach(k => { if (isNum(ov[k])) { p[k] = ov[k]; src[k] = { from: 'entered' }; } });
+      ['body', 'outr', 'crawler'].forEach(k => { if (ov[k] && typeof ov[k] === 'object') { p[k] = Object.assign({}, p[k] || {}); Object.keys(ov[k]).forEach(q => { const v = ov[k][q]; if (q === 'spreads' && v && typeof v === 'object') { p[k].spreads = Object.assign({}, p[k].spreads || {}, v); Object.keys(v).forEach(sk => { if (isNum(v[sk])) src[`${k}.spreads.${sk}`] = { from: 'entered' }; }); } else if (isNum(v)) { p[k][q] = v; src[k + '.' + q] = { from: 'entered' }; } }); } });
     }
     return p;
   }
@@ -300,5 +314,5 @@
       source: { file: '', doc: '', revision: '', date: '', pages: '', terms: '' }, units: { length: 'ft', weight: 'lb' }, dims: {}, weights: {}, configs: [], app_inputs: {} };
   }
   window.CranePickCranes = { SCHEMA, TYPES, ZONES, parse, lookup, ratingBasis, interpPermitted, groups, zoneOf, chartFor, norm180, planDims, spreadKey,
-    hookBlocks, pasteChart, chartText, fingerprint, key, name, slug, blank, modeOf, cellFlag };
+    hookBlocks, pasteChart, chartText, fingerprint, key, name, slug, blank, modeOf, cellFlag, dval, dpage };
 })();
