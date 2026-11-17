@@ -48,3 +48,45 @@ Labelling: "DEMO — NOT FOR DESIGN USE" in the header and on the tools.html car
 
 ### Open items
 - Pattern live loading, moving loads (`/db/MVLD` etc.), steel/composite sections and a calculation report are not included.
+
+## 2026-11-17 — MCB2: I-shaped section instead of rectangular (engineer request)
+### Where
+- `apps/midas-continuous-beam/index.html`: the "Spans & section" card (now "Spans & I-section"), `DEFAULT_SPANS`, `SPAN_KEYS`,
+  `migrateV1`, `loadInputs`, `renderSpans`, `depthAt`, new `iProps` and `showSectInfo`, `buildModel`, `buildRequests` (`/db/MATL`
+  TYPE, `/db/SECT`), `drawElevation`; the Material card (new Type select, `MAT_DEFAULTS`); γ default; header title.
+### Before / after
+- **Span inputs.** Before: `{ L, b, hL, hM, hR, n }` (rectangle b × h, h parabolic). After: `{ L, DL, DM, DR, tw, bt, tt, bb, tb, n }`:
+  web depth D (clear between flanges) parabolic through left / mid / right, `D(ξ) = DL(1−ξ)(1−2ξ) + DM·4ξ(1−ξ) + DR·ξ(2ξ−1)`; web
+  t<sub>w</sub>, top flange b × t, bottom flange b × t constant within a span. Total depth H = D + t<sub>top</sub> + t<sub>bot</sub>.
+- **Section properties (check solver and DC).** Before: `A = b·h`, `I = b·h³/12`. After (`iProps`, inches): three rectangles
+  (bottom flange, web, top flange), `A = Σ Aᵢ`, `ȳ_bot = Σ(Aᵢ·yᵢ)/A`, `I = Σ(I₀ᵢ + Aᵢ·(yᵢ − ȳ)²)`; then ft² / ft⁴ (÷144, ÷20736).
+  The smallest and largest section are worked on screen (`#sectInfo`).
+- **Civil NX section.** Before: `SHAPE: 'SB'`, `vSIZE: [h, b]`. After: `SHAPE: 'H'`, `vSIZE: [H, B1, tw, tf1, B2, tf2, r1, r2]` =
+  `[H, b_top, t_w, t_top, b_bot, t_bot, 0, 0]` in ft (parameter order per the MIDAS-RnD midas-civil Python library's DBUSER docs; B1 /
+  tf1 taken as the top flange, as in the Civil NX dialog). Element axis at the section centroid (MIDAS default offset), shear
+  deformation off.
+- **Material.** Before: `TYPE: 'CONC'`, `ASTM(RC)` / `Grade C4000`, γ 0.150 kcf. After: Type select (Steel / Concrete); Steel default
+  `ASTM(S)` (a Civil NX steel standard) / `A709-50` (grade name not confirmed), γ 0.490 kcf; Concrete keeps the old defaults. Switching the
+  type swaps standard / grade / γ only where they are still at the other type's defaults.
+- **DC.** Still γ·A as element uniform loads; A is now the I-section area (girder only: no deck, haunch or details allowance; stated in the tool).
+- **Saved data.** New key `cbeam.inputs.v2`. If it is missing, `cbeam.inputs.v1` is read once and converted (`migrateV1`): L, elements,
+  loads, factors, material names kept, type set to Concrete, web depth = old h − 1 − 1.25 in with the default plates (16 × 1 top,
+  18 × 1.25 bottom, t<sub>w</sub> 0.5625). The v1 key is not changed or removed.
+- **Default example.** 100 / 130 / 100 ft; D 54 in in the spans, 84 in over the interior supports; t<sub>w</sub> 0.5625; top 16 × 1;
+  bottom 18 × 1.25; 16 / 20 / 16 elements.
+### Check case
+- D = 54, t<sub>w</sub> = 0.5625, top 16 × 1, bottom 18 × 1.25 (in):
+  A = 22.5 + 30.375 + 16 = 68.875 in²; y = 0.625 / 28.25 / 55.75 in; ȳ_bot = (14.06 + 858.09 + 892.00) / 68.875 = 25.614 in;
+  I₀ = 2.93 + 7381.13 + 1.33; A·d² = 22.5·24.989² + 30.375·2.636² + 16·30.136² = 14050 + 211 + 14531;
+  I = 36177 in⁴ (`iProps` gives 68.875 / 25.614 / 36177.4). H = 56.25 in.
+- Analysis (unchanged code): two equal 50 ft spans, w = 1 klf: −312.50 k-ft, 18.75 / 62.50 / 18.75 k (MCB1 check).
+### How verified
+- Headless Chrome: `iProps` value above; `/db/SECT` body for section 1 shows `SHAPE: "H"` and the 8-value vSIZE in ft; `/db/MATL` TYPE
+  STEEL; mocked MIDAS run (tables built from the check solver) Δ = 0.00 % for all cases; v1 → v2 migration (spans converted, Concrete,
+  γ and DW kept, v1 key still present); Type switch Steel → Concrete swaps standard / grade / γ; 0 console errors.
+- **Still not run against a live Civil NX session:** confirm the H-section vSIZE order (B1 = top flange) by opening section 1 in Civil NX
+  after a run, and the steel grade name.
+### Other copies
+- `apps/continuous-beam.html` in mlococo88/MIDAS_Civil_NX_References: updated the same way.
+### Open items
+- Composite section (deck), cover plates / flange transitions within a span, and web haunch shapes other than parabolic are not modelled.

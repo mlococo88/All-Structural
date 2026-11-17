@@ -136,3 +136,9 @@
 - **Why:** the new app (engineer request 2026-11-17); the card comes with the tool (§7 practice). What the app does: `fixlog/midas-continuous-beam.md`.
 - **Formulas, factors, units, code references:** none. **Saved data:** none.
 - **How verified:** headless Chrome: see the PR. **Other copies:** none. **Open items:** none.
+
+## 2026-11-17 — PR: claude/midas-beam-i-section (MCB2) — card renamed for the I-girder version   [display only]
+- **Where:** "Loads & analysis", card `href="apps/midas-continuous-beam/index.html"` (MCB1).
+- **Before:** `MIDAS Civil NX API: Continuous Beam (demo)` / "Variable-depth (haunched) continuous beam built in MIDAS Civil NX through its API".
+- **After:** `MIDAS Civil NX API: Continuous I-Girder (demo)` / "Variable-depth (haunched) steel I-girder built in MIDAS Civil NX through its API". Link and tags unchanged.
+- **Formulas, factors, units, code references:** none. **Saved data:** none. **How verified:** see the PR. **Other copies:** none. **Open items:** none.
