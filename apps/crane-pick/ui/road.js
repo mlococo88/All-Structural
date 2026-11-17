@@ -188,7 +188,7 @@
     let out; try { out = await RS.diagnose(fetchFn, c, { zone: zoneOf(), ovp: st.ovp, lastOvp: st.lastOvp, urls: st }); } catch (x) { diagBusy = false; setMsg(`Diagnose road data: ${esc(String((x && x.message) || x))}`); return; }
     diagBusy = false;
     const so = out.state || {}, when = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
-    setMsg(`<b>Diagnose road data</b> (${esc(when)}; site ${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}; state: ${esc(so.st ? RS.STATES[so.st].name + ' (' + RS.STATES[so.st].label + ', by ' + so.by + ')' : 'none')}${so.note ? '; ' + esc(so.note) : ''}; zone ${esc(zoneOf())}):
+    setMsg(`<b>Diagnose road data</b> (${esc(when)}; site ${c.lat.toFixed(5)}, ${c.lng.toFixed(5)} (${lastSnap ? 'the last snap' : 'the map centre'}); state: ${esc(so.st ? RS.STATES[so.st].name + ' (' + RS.STATES[so.st].label + ', by ' + so.by + ')' : 'none')}${so.note ? '; ' + esc(so.note) : ''}; zone ${esc(zoneOf())}):
       <div class="crDiag" id="rdDiag" style="font-family:ui-monospace,Consolas,monospace;font-size:11px;white-space:pre-wrap;word-break:break-all;max-height:22em;overflow:auto;border:1px solid var(--line,#ccc);padding:4px;margin-top:4px">${out.map(r => `<div data-rddiag="${esc(r.label)}"><b>${esc(r.src)} · ${esc(r.label)}</b>: ${r.http != null ? 'HTTP ' + r.http : esc(r.err)} · ${r.ms} ms\n${esc(r.url)}${r.body ? '\n' + esc(r.body) : ''}</div>`).join('')}</div>
       Screenshot this list for IT or the developer. HTTP 200 with a body = the server answered this page; an "error" in an ArcGIS body = the layer refused the request; "network error" = blocked, offline or no CORS header.`);
   }
