@@ -325,7 +325,8 @@
     F.push(txt([X(ch.Rmax * 1.05) / 2, 0], 'radius R from the rotation centre (ft)', { a: 1, off: [0, -2.6], size: 0.8 })); F.push(txt([0, Y(Wmax * 1.08)], 'capacity / load (kip)', { off: [0.4, 0.6], size: 0.8 }));
     // every tabulated boom length: the rule's steps (thin) and the tabulated points (markers)
     ch.curves.forEach(cv => { const inUse = ch.use && Math.abs(cv.L - ch.use.Ltab) < 1e-6; cv.segs.forEach(sg => F.push({ t: 'pl', pts: sg.map(p => [X(p.R), Y(p.C)]), c: inUse ? 'colUse' : 'col' }));
-      const last = cv.segs.length ? cv.segs[cv.segs.length - 1].slice(-1)[0] : null; if (last) F.push(txt([X(last.R), Y(last.C)], `L ${fmt(cv.L, 0)} ft`, { off: [0.4, 0.2], size: 0.65, c: inUse ? 'use' : 'mute', stack: 'len' })); });
+      const many = ch.curves.length > 6, ci = ch.curves.indexOf(cv), last = cv.segs.length ? cv.segs[cv.segs.length - 1].slice(-1)[0] : null;   // many columns: only the boom in use, the shortest and the longest are named
+      if (last && (!many || inUse || ci === 0 || ci === ch.curves.length - 1)) F.push(txt([X(last.R), Y(last.C)], `L ${fmt(cv.L, 0)} ft`, { off: [0.4, 0.2], size: 0.65, c: inUse ? 'use' : 'mute' })); });
     ch.cols.forEach(col => col.pts.forEach(p => F.push({ t: 'mark', at: [X(p.R), Y(p.C)], c: 'tab', v: `cell.${col.j}.${p.R}`, val: p.C, L: col.L, R: p.R })));
     if (ch.use) { ch.use.segs.forEach(sg => F.push({ t: 'pl', pts: sg.map(p => [X(p.R), Y(p.C)]), c: 'use' }));
       ch.thr.forEach(th => ch.use.segs.forEach((sg, i) => { F.push({ t: 'pl', pts: sg.map(p => [X(p.R), Y(p.C * th.pct / 100)]), c: 'thr-' + th.id });
