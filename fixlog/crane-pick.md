@@ -1515,3 +1515,77 @@ blocks that server (ask IT, or type a reachable mirror in Route tab → Road dat
 `node tests/check-syntax.mjs` (237 files); `node tests/engine/run.mjs crane` (18 files, 136 passed; new `crane-roadsrc` 5);
 `tests/smoke/crane-road.mjs` (11 checks: + mocked failure status / Test connection / request order, fallback endpoint, MassDOT by choice);
 `crane-manual` (8), `crane-route` (5), `crane-drawings` (5), `crane-shell` (11).
+
+## 2026-11-17 — Snap to road: the state road source follows the site's state (MA / RI / CT), ArcGIS { error } and layer look-up, Overpass backoff, Retry, Diagnose road data (PR #1627)
+PR #1627: https://github.com/mlococo88/All-Structural/pull/1627
+Engineer bug report (2026-11-17 ~6 AM, after #1626, project "Greenwood"): overpass-api.de/api/status answered "502 Gateway Timeout —
+This Overpass API server is currently at capacity … Retry your request using exponential backoff"; the app said "OpenStreetMap failed:
+timed out after 15 s …", then "Snap to road: no drivable MassDOT / MassGIS roads in the area. 0 road segments in the area (MassDOT /
+MassGIS from gis.massdot.state.ma.us …)". Engineer's correction: the site is Greenwood, Warwick, **Rhode Island** (Post Road / US 1,
+Kernick St, Greene St). Cause: #1626's "in Massachusetts" test was the box 41.18–42.89° N, 73.51–69.86° W, which also covers all of RI
+and most of CT, so MassDOT was asked for an RI site and rightly had no roads there. No server reachable from the build session.
+### Where
+- `engine/states.js` (new, `window.CranePickStates`, data only): MA / RI / CT outer rings `[[lng, lat], …]` (MA 155, RI 67, CT 56 points),
+  decoded from us-atlas 3.0.1 `states-10m.json` (US Census cartographic boundaries 2017, simplified; ISC) by a decoder written for this
+  (not the package's code), rounded to 0.0001°. Coarse (~1 km at borders).
+- `engine/roadsrc.js` (anchor `/* stateOf(lat, lng, zone, S)`): before `const MA = { s: 41.18, w: -73.51, n: 42.89, e: -69.86 }; const inMA = …`
+  (removed); after `stateOf`: point in polygon -> the state; if the zone's state differs and the site is within `BORDER_KM` = 2 km of
+  the zone state's outline, the zone decides; off every outline but within 5 km of the zone's state -> the zone; else none.
+  `ZONE_STATE` EPSG:2249 / 26986 -> MA, 3438 -> RI, 2234 -> CT. `STATES` (before `MASSDOT` only): MA MassDOT Road Inventory
+  FeatureServer/10 + MassGIS-MassDOT Roads FeatureServer/0 (unchanged URLs); RI `https://risegis.ri.gov/hosting/rest/services/RIDOT/Road_Centerlines/MapServer/0`;
+  CT `https://gisportal.dot.ct.gov/server/rest/services/Datamart/State_Routes_and_Local_Roads/FeatureServer/1` (Local Roads) `also` …/0
+  (State Routes), merged.
+- `arcgisQueryUrl`: before `['geometry', [b.w, b.s, b.e, b.n].join(',')]`; after `['geometry', JSON.stringify({ xmin: b.w, ymin: b.s,
+  xmax: b.e, ymax: b.n, spatialReference: { wkid: 4326 } })]` (+ optional extra params: `resultRecordCount=1` for Diagnose).
+- `errOf(j)` (new): any JSON `{ error: { code, message, details } }` -> server error "code N: message: details" (also in `checkOverpass`,
+  `checkArcgis`, `checkInfo`); `one()` now returns the HTTP status with the value and puts it on thrown errors, so a 200-with-error is
+  reported "HTTP 200, the server reported an error: code 499: Token Required".
+- `fetchState(b, fetchFn, { st })` (replaces `fetchMassDOT`, kept as `fetchState(…, { st: 'MA' })`): per layer f=geojson, f=json if
+  refused (server / JSON error / HTTP 400 / 404); an answer with 0 road lines (0 features or features without line geometry) -> layer
+  info `<layer>?f=json` + service info `<service>?f=json` (+ per-layer info for ≤ 4 road-like layers when the root lists no geometry
+  types) -> `pickLayer`: `geometryType esriGeometryPolyline`, not a Table, ranked by name `/road|inventory|centerline|centreline|street|arc|route|rdwy|roadway/i`,
+  then the current layer, then lowest id -> that layer once with f=json; then the next layer of the state. `reps[]` (what, layer, name,
+  f, HTTP, error, features, road lines; `repText`) shown in the Route tab. Result `empty: true` when layers answered with no roads.
+- `run()` backoff (anchor `A "busy" answer`): with `o.backoff` (Overpass only; `BACKOFF = { delays: [2000, 4000, 8000], budget: 30000,
+  codes: [429, 502, 503, 504] }`) a timeout or busy code -> the same attempt again after the next delay while (time on that endpoint +
+  delay) ≤ 30 s; then that endpoint's GET is skipped (as before). `sleep` / `now` injectable. `summary()` adds "(N tries, backoff 2 + 4 + 8 s)"
+  and `hosts` (all tried). `diagnose(fetchFn, ll, o)`: per Overpass endpoint the status page + `[out:json][timeout:10];way["highway"](around:30,lat,lon);out ids 1;`
+  (GET); per layer of the site's state: layer info, service info, a 1-record query (0.001° box); raw HTTP, time, first 300 characters.
+  `toOverpass` also reads names ROAD_NAME / ROADNAME / RD_NAME / FULLNAME / FULL_NAME / NAME and ROUTE_NUM; one-way only MassDOT FT / TF.
+- `engine/osm.js`: `SOURCES.ri` ("RIGIS / RIDOT", rigis.org) and `SOURCES.ct` ("CTDOT / CT DEEP", portal.ct.gov/dot) with "… road
+  centrelines — not survey" and DXF texts; `srcInfo(src)` reads `src.data` or an id (unknown = OpenStreetMap). `query(b)`: before
+  `way["highway"~"^(…)$"](bbox);out geom;` after `way["highway"~"^(…)$"]["service"!~"^(parking_aisle|drive-through)$"](bbox);out geom;`
+  ([timeout:25] unchanged).
+- `ui/road.js`: `orderOf` by `RS.stateOf(centre, P.site.zone)`; Road data: Automatic (OSM, then the state roads) / OpenStreetMap only /
+  State roads only; settings `ri`, `ct`, `lastRi`, `lastCt` + a layer URL per state; `PAD_FT` 600 -> 400; busy text and status bar count
+  the backoff ("… is busy: asking again in 4 s (retry 2 of 3)"); failure bar "… Tried: overpass-api.de, overpass.private.coffee,
+  maps.mail.ru. Test connection Retry"; per-source request report; the state note ("the site is in Rhode Island (the project's State
+  Plane zone is Massachusetts)"); `snapRoads(clicks, fresh)` (Retry, status bar and "Retry snap"); **Diagnose road data** (Route tab).
+- `engine/model.js` `normRouteFit`: keeps `src.data` 'massdot' | 'ri' | 'ct' (before: 'massdot' only). `ui/route.js` map attribution for every
+  source in `SOURCES`. `ui/manual.js`: workflow line + troubleshooting table (backoff, ArcGIS error codes, 0 features / picked layer,
+  state vs zone, no state source). `index.html` loads `engine/states.js` before `engine/roadsrc.js`.
+### Calculations (CLAUDE.md §4)
+None changed (road graph, snapping, Dijkstra, fitted alignment as before). Check case (`crane-roadsrc` H): the 300 ft block + diagonal
+served by a layer found by the look-up: route A -> C = 300√2 = 424.26 ft, as test E. Existing smoke numbers unchanged (crane-road: Main
+Street 1342 ft, R 300.0 ft, off-tracking 3.35 -> 7.77 ft).
+### Saved data (§5)
+`crane.road`: `src: 'massdot'` (saved by #1626) is read as `'state'` (migration in `settings()`; rewritten on the next save); new optional
+fields `ri`, `ct`, `lastRi`, `lastCt`. Route `src.data` may also be `'ri'` / `'ct'`. IndexedDB `crane.osm.v1` entries `ri:<box>`, `ct:<box>`
+(MassDOT entries keep `massdot:<box>`). No key renamed.
+### Decisions (pending engineer review)
+- The state from the site's location; the State Plane zone decides only within 2 km of a border (the outlines are coarse) — because a
+  project left at the default MA zone in RI would otherwise ask MassDOT again (the reported case).
+- RI and CT services found by web search, **not reachable from the build session** (risegis.ri.gov, gisportal.dot.ct.gov,
+  gis.massdot.state.ma.us blocked here): RIDOT layer index 0 assumed (the look-up corrects a wrong index); field names unverified. Each
+  URL is editable in Road data settings; Diagnose road data shows what the servers answer.
+- Backoff 2 / 4 / 8 s, ≤ 30 s per Overpass endpoint (worst case ~1.5 min with 15 s timeouts on all three); ArcGIS not retried.
+- Lighter query: parking aisles and drive-throughs left out (driveways kept); box padding 400 ft (was 600).
+### How the engineer checks it
+Route tab → Snap to road at Greenwood: if OpenStreetMap is busy the status bar counts the retries, then RIGIS / RIDOT is asked (never
+MassDOT for an RI site) and the Route tab lists each request. If it still fails: **Retry**, or **Diagnose road data** and screenshot the list.
+Set the project's State Plane zone to Rhode Island in Site & map.
+### How verified
+`node tests/check-syntax.mjs`; `node tests/engine/run.mjs crane` (18 files, 143 passed; `crane-roadsrc` 12: + F state, G ArcGIS {error},
+H look-up, I second service, J backoff, K RI / CT, L diagnose); smokes `crane-road` (11), new `crane-road-states` (4: Greenwood RI with
+Overpass 502 + RIDOT 0 features -> picked layer -> POST RD, 0 MassDOT requests; Tried + Retry; Diagnose 9 rows; 'massdot' setting
+migration, 390 px, 0 console errors), `crane-manual` (8), `crane-route` (5), `crane-drawings` (5), `crane-shell` (11).
