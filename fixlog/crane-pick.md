@@ -909,7 +909,7 @@ had failed on main since C5 — fixed by C7, Terrain added), `crane-drawings` (5
 `crane-elev` (7), `crane-route` (5), `crane-tandem` (6); `node tests/check-syntax.mjs`.
 
 ## 2026-11-17 — Plan sheets: "Align to map (2 points)" (engineer request)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1617: https://github.com/mlococo88/All-Structural/pull/1617
 Engineer request 2026-11-17: "When adding a sheet, the two point feature should work by selecting a point on the plan then a point on the
 map; doing this twice should be enough to orient the plan correctly." Added as the main way to place a sheet; scale calibration, the
 plan's stated scale and the State Plane georeference stay as alternatives.
