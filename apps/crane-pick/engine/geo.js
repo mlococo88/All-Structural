@@ -137,6 +137,20 @@
   function placementMove(a, b) {
     return p => { const q = ftToPx(a, p.x, p.y); return pxToFt(b, q.px, q.py); };
   }
+  /* align to the map (two points, engineer request 2026-11-17): sheet pixels p1, p2 (picked on the sheet wherever it sits) and the grid
+     points m1, m2 (ft, picked on the map or the site grid) they must land on -> the 2-D similarity (uniform scale, rotation, translation;
+     no mirror) that takes p1 -> m1 and p2 -> m2 exactly. The solve is georef()'s (s = L_m / d_px, θ = atan2(ΔN, ΔE) − atan2(−Δp_y, Δp_x),
+     o = m1 − s·R(θ)·u1); the checks: the sheet points closer than ALIGN_CLOSE of the sheet's longer side (a small error in a click turns
+     the sheet a lot), and the azimuth the sheet's "up" points to (clockwise from grid north: −θ). Points closer than ALIGN_MIN_PX on the
+     sheet or ALIGN_MIN_FT on the map are rejected (null). */
+  const ALIGN_MIN_PX = 1, ALIGN_MIN_FT = 0.01, ALIGN_CLOSE = 0.05;
+  function align2(p1, p2, m1, m2, w, h) {
+    if (!p1 || !p2 || !m1 || !m2 || ![p1.px, p1.py, p2.px, p2.py, m1.x, m1.y, m2.x, m2.y].every(isFinite)) return null;
+    const r = georef(p1, p2, m1, m2); if (!r || r.dpx < ALIGN_MIN_PX || r.dft < ALIGN_MIN_FT) return null;
+    const size = Math.max(+w || 0, +h || 0), frac = size > 0 ? r.dpx / size : 1;
+    let upAz = -r.rot * 180 / Math.PI; upAz = ((upAz % 360) + 360) % 360; if (upAz >= 360 - 1e-12) upAz = 0;
+    return { place: { x: r.x, y: r.y, s: r.s, rot: r.rot }, s: r.s, rot: r.rot, dpx: r.dpx, dft: r.dft, frac, close: frac < ALIGN_CLOSE, upAz };
+  }
   /* drawing scale text: 1" = N ft at a given printed resolution is not shown (plans are scanned at any dpi); the sheet's ft per pixel
      and the stated plan scale (1" = S ft, the user's) give the scan resolution: dpi = S / s */
 
@@ -169,6 +183,7 @@
     (Q.sheets || []).forEach(s => {
       const a = mv(pxToFt(s.place, 0, 0)), b = mv(pxToFt(s.place, s.w, 0));
       const r = georef({ px: 0, py: 0 }, { px: s.w, py: 0 }, a, b); if (r) s.place = { x: r.x, y: r.y, s: r.s, rot: r.rot };
+      if (s.align) ['m1', 'm2'].forEach(k => { s.align[k] = mv(s.align[k]); });   // align to the map (2026-11-17): its map points are grid ft
       if (s.geo) ['g1', 'g2'].forEach(k => { const g = s.geo[k], ll = nativeToLl(proj4, from, g.E, g.N), n = llToNative(proj4, to, ll.lat, ll.lng); s.geo[k] = { E: n.E, N: n.N }; });
     });
     return Q;
@@ -176,5 +191,5 @@
 
   window.CranePickGeo = { FT_US, reproject, ZONES, WGS, DEFAULT_ZONE, zone, nativeToFt, ftToNative, llToNative, nativeToLl, llToFt, ftToLl,
     dist, azimuth, bearingText, dms, polyLength, signedArea, area, perimeter, centroid, segDist, lineDist, inside, bufferRings,
-    pxToFt, ftToPx, calScale, rescaleAbout, rotateAbout, georef, normRot, placementMove, parseAngle, parseNum };
+    pxToFt, ftToPx, calScale, rescaleAbout, rotateAbout, georef, normRot, placementMove, align2, ALIGN_MIN_PX, ALIGN_MIN_FT, ALIGN_CLOSE, parseAngle, parseNum };
 })();
