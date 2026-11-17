@@ -37,7 +37,7 @@ try {
   assert.equal(await p.getAttribute(`#cr_cwR_${cid}`, 'placeholder'), '15.00 (tail swing, assumed)');
   await p.click(`[data-ca=place][data-id="${cid}"]`); await p.waitForTimeout(400);
   await setF('#luE', 1000); await setF('#luN', 2000); await setF('#luHead', 90); await setF('#luBoom', 60);
-  await setF('#lkPE', 1030); await setF('#lkPN', 2000); await setF('#lkSE', 1000); await setF('#lkSN', 1970);
+  await goTab('[data-la=addPick]'); await p.click('[data-la=addPick]'); await p.waitForTimeout(150);   /* 2026-11-17: Add setup makes no pick */ await setF('#lkPE', 1030); await setF('#lkPN', 2000); await setF('#lkSE', 1000); await setF('#lkSN', 1970);
   await setF('#lkLoad', 20000); await setF('#lkRig', 1000); await setF('#lkHook', 1000);
   // 1. no weights: not computed; gross weight only: the estimate
   assert.equal((await engine()).mode, 'none');

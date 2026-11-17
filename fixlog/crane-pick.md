@@ -1648,3 +1648,60 @@ No key or format changed. `crane.ui` (the page's tab preferences) gains the opti
 `node tests/check-syntax.mjs`; `node tests/engine/run.mjs crane` (18 files, 136 passed); crane smokes 3d, aerial, align, clear3d, cranetab,
 draw, drawings, elev, geometry, ground, library, manual (8), picks, place, qa, road, route, sheets, shell, tandem, truck, **tabs** (new, 5)
 pass with 0 console errors (terrain: fails the same way on main); 390 px checked in crane-tabs / crane-manual.
+## 2026-11-17 — "Add setup" makes the setup only (no first pick); neutral boom "no lift yet"; crane-terrain smoke reads §Terrain's own text (PR #1629, https://github.com/mlococo88/All-Structural/pull/1629)
+Engineer request 2026-11-17: the engineer mostly does girder lifts; the empty pick that "Add setup (place on the map)" made (carried over from
+the old "Place on the map") showed "Load not entered" and cluttered Lifts / Summary / Picks / Drawings. Now a new setup is the setup only;
+single picks are made only by **Add single pick** (Lifts tab) / **Add a single pick** (setup card). Existing saved picks are untouched.
+### What changed (re-apply by hand)
+- `ui/place.js` `placeCrane(craneId, at)` (anchor `const u = M.normSetup({ name: \`Crane ${n}: ${K.name(c.def)}\``): before
+  `const k = M.normPick({ name: \`Pick ${A.P.picks.length + 1}\`, setupId: u.id, pick: { x: ctr.x + d.R, y: ctr.y }, set: { x: ctr.x, y: ctr.y + d.R }, load: null, rigging: null, hook: null, ded: null, swing: 'short' });`
+  `A.update(P => { P.setups.push(u); P.picks.push(k); }, 'setups', { id: u.id });`
+  `selU = u.id; selK = k.id; setCard('pick'); A.showOTab('plan'); …`; after (no `k`): `A.update(P => { P.setups.push(u); }, 'setups', { id: u.id });`
+  `selU = u.id; selK = null; A.showOTab('plan'); A.showITab('cranes'); renderAll(); drawTab(); reveal('luCard');`. The setup itself is
+  unchanged: map centre, heading 0, `defaults(c)` chart group and the shortest tabulated boom. "Place for crane i" on a girder-lift card
+  (`ui/tandem.js placeFor`) already made no pick (unchanged).
+- `ui/place.js` new `usedByGirder(u)`, `idleBoom(u)` (before `function symOpt(u)`): a setup with no pick and no girder lift ->
+  `{ R, tip: LF.toGrid(u, R, 0) }`, R = (min + max)/2 of the radii the setup's chart (`360` config, else the first zone) rates for the
+  setup's boom length (capacity > 0), else of all its radii, else 30 ft. `symOpt(u)`: `if (idle) return { slew: u.heading || 0, R: idle.R, … }`
+  (the crane symbol draws the boom along the heading to R). `IDLE_HTML` / `placeIdle(u, g)`: a marker `g.idle` (class `crIdle`, "no lift
+  yet — add a single pick or a girder lift (Lifts tab)") at the tip, opacity 0 when the setup has a lift; made in `makeSetup`, moved in
+  `placeSetup`; the `change` handler re-places it (and the symbol) on `tandem` changes. `index.html`: CSS `.crIdle`.
+- `ui/elev.js` / `ui/ground.js` empty states: before "No pick yet: add a crane setup (Cranes & setups tab) and a pick (Lifts tab)." /
+  "No pick yet: place a crane (Lifts tab)."; after (both) "No pick yet: add a crane setup (Cranes & setups tab: "Add setup"), then a single
+  pick (Lifts tab: "Add single pick")."
+- `ui/manual.js`: quick start step "Add a setup, then the pick and the set" (placed at the map centre, heading 0, default chart and boom,
+  no lift yet; then **Add single pick** or a girder lift) and workflow "A single pick" step 3 ("choose the setup and press **Add single
+  pick** (a setup is made without a pick; a girder lift needs none)").
+- `tests/smoke/crane-terrain.mjs` (Report assertion, anchor `const rp =`): before `const rp = await txt('#out [data-opane=rpt]');`; after
+  the `textContent` of the Report section whose heading is "n. Terrain".
+- Tests: crane smokes 3d, clear3d, elev, ground, picks, terrain: **Add a single pick** after Add setup; crane-place: Add setup -> 0 picks,
+  "no lift yet", then Add a single pick -> 1 pick; new `tests/smoke/crane-setup-nopick.mjs`.
+### crane-terrain on origin/main (cause)
+Failed since #1625 (passes at 626c706 / #1624, fails at 7d829bb / #1625). The test jumps to §Terrain and reads the Report tab's
+`innerText`. The Report's subsections are `content-visibility: auto` (`shared/report.js` `.rp-sub`): after `jump('terrain')` scrolls
+§10 into view, the subsections above it are rendered at their real height; #1625 put three to-scale figures in §9.1 Route (far taller
+than the 800 px placeholder), so §10 is pushed ~2,500 px below the view and its body is skipped by `innerText` (rendered text only). The
+statement is in the Report ("Preliminary terrain from USGS 3DEP (about 1–3 m data): not adequate to certify crane levelness or grades;
+survey data governs.", `engine/terrain.js` `CERT`), so the test was wrong; it now reads §Terrain's `textContent`. Open item (not
+changed, shared file): `shared/report.js` `go()` scrolls once (search already re-scrolls after layout), so a § link to a section below
+tall figures can land short of it; raise for a shared-file PR.
+### Calculations (CLAUDE.md §4)
+None changed. A pick, girder lift, ground, elevation, 3D, drawing or report value is computed exactly as before; the only difference is
+that a new setup no longer has an empty pick. The neutral boom is display only (map), nothing is computed from it; Drawings / DXF / Report
+draw a setup without a lift as before (no boom). Check (FAKECO TEST-AT 100, chart "outriggers full 360", default boom 40 ft): rated radii
+for 40 ft = 10, 15, 20, 30 ft (40 ft and beyond blank) -> R = (10 + 30)/2 = 20 ft; heading 0 -> tip 20 ft north of the rotation centre,
+heading 90 -> 20 ft east (crane-setup-nopick).
+### Saved data (§5)
+No key or format changed. Saved projects keep their picks (including any empty first pick made before this change).
+### Decisions (pending engineer review)
+- A setup with no lift shows its boom (along the heading, at the chart's mid radius for the boom, label "no lift yet") rather than no boom:
+  the map then always shows the crane's boom and reach, and the label says why nothing is checked. A setup used by a girder lift shows the
+  girder lift's boom (as before); Drawings / DXF / Report keep no boom for a setup without a lift (no fictitious boom on a drawing).
+- crane-terrain: the test was fixed, not the app (the Report has the statement); the § jump scrolling short is an open item for
+  `shared/report.js`.
+### How verified
+`node tests/check-syntax.mjs` (all pass); `node tests/engine/run.mjs crane` (18 files, 143 passed); smokes place (9), picks (5), 3d (7),
+clear3d (8), elev (7), ground (5), terrain (7, passes again), tabs (5), tandem (6), manual (8), drawings (5), new **setup-nopick** (6: Add
+setup -> 0 picks, neutral boom R 20 ft at heading 0 / 90; every output tab, dock, 3D and DXF with a setup and no lift and with a setup used
+only by a one-crane girder lift: no NaN / undefined, no "Load not entered"; Place for crane 1 -> setup without pick; 390 px; 0 console
+errors). Screenshot of Cranes & setups after Add setup checked by eye.

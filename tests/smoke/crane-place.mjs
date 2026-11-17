@@ -40,13 +40,17 @@ try {
   // 1.
   await p.setInputFiles('#crFiles', [FW]); await p.waitForFunction(() => /1 crane loaded/.test(document.querySelector('#crStatus').textContent));
   await p.click('[data-ca=add]'); await p.waitForTimeout(150); await p.click('[data-ca=place]'); await p.waitForTimeout(400);
-  let P = await proj(); assert.equal(P.setups.length, 1); assert.equal(P.picks.length, 1); assert.equal(P.picks[0].setupId, P.setups[0].id);
+  let P = await proj(); assert.equal(P.setups.length, 1); assert.equal(P.picks.length, 0, '2026-11-17: Add setup makes the setup only, no pick');
   assert.equal(await p.$eval('#inTabs [aria-selected=true]', e => e.textContent), 'Cranes & setups'); assert.ok(await p.$('.crSetups #luCard'), 'the new setup\'s card opens under its crane');
   assert.equal(await p.$$eval('.crHandle.crCor', a => a.length), 1); assert.equal(await p.$$eval('.crHandle.crRot', a => a.length), 1);
+  assert.equal(await p.$$eval('.crPtP', a => a.length), 0); assert.ok(await p.isVisible('.crIdle'), 'no lift yet label at the neutral boom');
+  await goTab('[data-la=addPick]'); await p.click('[data-la=addPick]'); await p.waitForTimeout(200);
+  P = await proj(); assert.equal(P.picks.length, 1); assert.equal(P.picks[0].setupId, P.setups[0].id);
+  assert.equal(await p.$eval('#inTabs [aria-selected=true]', e => e.textContent), 'Lifts'); assert.equal(await p.$eval('.crIdle', e => getComputedStyle(e).opacity), '0');
   assert.equal(await p.$$eval('.crPtP', a => a.length), 1); assert.equal(await p.$$eval('.crPtS', a => a.length), 1); assert.equal((await labels()).length, 2);
   const g = await p.evaluate(() => { const g = CranePickPlace.layers.values().next().value; return { floats: g.floats.length, body: !!g.body, tail: !!g.tail, beams: !!g.beams }; });
   assert.deepEqual(g, { floats: 4, body: true, tail: true, beams: true });
-  ok('Place on the map: setup drawn to scale (carrier, beams, 4 floats, tail-swing circle, ✥ / ↻) with a first pick (P, S, path, 2 live labels); the setup card opens under its crane (Cranes & setups tab)');
+  ok('Add setup: setup drawn to scale (carrier, beams, 4 floats, tail-swing circle, ✥ / ↻), no pick, "no lift yet" boom; the setup card opens under its crane (Cranes & setups tab); Add a single pick: P, S, path, 2 live labels');
 
   // 2. the hand check
   await setF('#luE', 1000); await setF('#luN', 2000); await setF('#luHead', 0); await setF('#luBoom', 60);

@@ -61,9 +61,10 @@
     if (!MP() || !MP().map) { A.notice('The map is not available (the map libraries did not load).', 'err'); return null; }
     const ctr = at || MP().toFt(MP().map.getCenter()), d = defaults(c.def), n = A.P.setups.length + 1;
     const u = M.normSetup({ name: `Crane ${n}: ${K.name(c.def)}`, craneId, x: ctr.x, y: ctr.y, heading: 0, group: d.group, boom: d.boom });
-    const k = M.normPick({ name: `Pick ${A.P.picks.length + 1}`, setupId: u.id, pick: { x: ctr.x + d.R, y: ctr.y }, set: { x: ctr.x, y: ctr.y + d.R }, load: null, rigging: null, hook: null, ded: null, swing: 'short' });
-    A.update(P => { P.setups.push(u); P.picks.push(k); }, 'setups', { id: u.id });
-    selU = u.id; selK = k.id; setCard('pick'); A.showOTab('plan'); A.showITab('cranes'); renderAll(); drawTab(); reveal('luCard');
+    // 2026-11-17 (engineer): a new setup is the setup only, no pick (before: it also made "Pick n" with no load, which showed "Load not
+    // entered" everywhere). Single picks are added on the Lifts tab (Add single pick) or the setup card (Add a single pick).
+    A.update(P => { P.setups.push(u); }, 'setups', { id: u.id });
+    selU = u.id; selK = null; A.showOTab('plan'); A.showITab('cranes'); renderAll(); drawTab(); reveal('luCard');
     MP().fit([{ x: ctr.x - d.R * 1.4, y: ctr.y - d.R * 1.4 }, { x: ctr.x + d.R * 1.4, y: ctr.y + d.R * 1.4 }]);
     return u.id;
   }
@@ -92,18 +93,36 @@
      footprint layers above stay (body, tracks, floats, beams: clickable, and what the checks use); the symbol adds the rest, one multi-
      polygon and one multi-polyline per group (a fixed number of Leaflet layers, so a drag only moves points). The upperworks and boom turn
      to the setup's selected pick, else its first pick (the boom to the pick point, the load L × W at the hook); a setup without a pick
-     shows the upperworks over the carrier front, no boom. Small zoom (tail-swing radius under 40 px on the screen): "simple" detail. */
+     or girder lift shows its boom at a neutral pose (idleBoom, "no lift yet"; before 2026-11-17: no boom). Small zoom (tail-swing radius under 40 px on the screen): "simple" detail. */
   const CG = () => window.CranePickCraneGfx;
   const SYM_G = ['mat', 'carrier', 'outrigger', 'upper', 'cwt', 'boom', 'hook', 'load'];
   /* 2026-11-17: float / track-end coordinate labels (toggle on the setup card): local x / y from the rotation centre and State Plane */
   function flLabels(u, c) { try { return c && window.CranePickCraneGfx ? window.CranePickCraneGfx.floatTable(c, u, A.P.site.zone, null) : []; } catch (e) { return []; } }
   function flHtml(r) { const z = G.zone(A.P.site.zone); return `<span class="gl">${esc(r.id)} x ${fmt(r.lx, 2)} y ${fmt(r.ly, 2)} · E ${fmt(r.E, 2)} N ${fmt(r.N, 2)}${z.unit === 'm' ? ' m' : ''}</span>`; }
+  /* 2026-11-17: a setup with no lift yet (no pick, no girder lift: a new setup is made without a pick) shows its boom at a neutral pose:
+     along the carrier heading at the chart's mid radius for the setup's boom (the mid-point of the radii the chart rates for that boom
+     length, else of all its radii, else 30 ft), labelled "no lift yet" on the map. Display only: nothing is computed from it. A setup
+     used only by a girder lift keeps its girder-lift boom (ui/tandem.js). */
+  const usedByGirder = u => (A.P.tandems || []).some(t => (t.slots || []).indexOf(u.id) >= 0);
+  function idleBoom(u) {
+    if (picksOf(u).length || usedByGirder(u)) return null;
+    const c = craneOf(u); if (!c) return null;
+    const gs = K.groups(c), gr = gs.find(g => g.key === u.group) || gs[0], cfg = gr ? (gr.configs['360'] || gr.configs[gr.zones[0]]) : null, ch = cfg && cfg.chart;
+    let rs = ch && Array.isArray(ch.radii_ft) ? ch.radii_ft.filter(r => typeof r === 'number' && isFinite(r)) : [];
+    const bi = ch && Array.isArray(ch.boom_lengths_ft) ? ch.boom_lengths_ft.indexOf(u.boom) : -1;
+    if (bi >= 0 && Array.isArray(ch.capacity_lb)) { const ok = ch.radii_ft.filter((r, i) => ch.capacity_lb[i] && typeof ch.capacity_lb[i][bi] === 'number' && ch.capacity_lb[i][bi] > 0); if (ok.length) rs = ok; }
+    const R = rs.length ? (Math.min(...rs) + Math.max(...rs)) / 2 : 30;
+    return { R, tip: LF.toGrid(u, R, 0) };
+  }
   function symOpt(u) {
     const ks = picksOf(u), k = ks.find(x => x.id === selK) || ks[0], m = MP().map, c = craneOf(u);
     const tail = (c && K.planDims(c).tail) || 15, lat = m ? m.getCenter().lat : 40, ftPx = 156543.03392804097 * Math.cos(lat * Math.PI / 180) / Math.pow(2, m ? m.getZoom() : 18) / 0.3048006;
-    const e = k && k.elev, load = e && e.L > 0 && e.W > 0 ? { L: e.L, W: e.W } : null;
+    const e = k && k.elev, load = e && e.L > 0 && e.W > 0 ? { L: e.L, W: e.W } : null, idle = k ? null : idleBoom(u);
+    if (idle) return { slew: u.heading || 0, R: idle.R, detail: tail / ftPx >= 40 ? 'full' : 'simple', labels: false };
     return { hook: k ? k.pick : null, load, detail: tail / ftPx >= 40 ? 'full' : 'simple', labels: false };
   }
+  const IDLE_HTML = '<span><i>no lift yet</i> add a single pick or a girder lift (Lifts tab)</span>';
+  function placeIdle(u, g) { const i = idleBoom(u); if (!g.idle) return; if (i) { g.idle.setLatLng(MP().toLL(i.tip)); g.idle.setOpacity(1); } else g.idle.setOpacity(0); }
   function symGeo(u) {
     const c = craneOf(u), out = {}; SYM_G.forEach(g => { out[g] = { cl: [], op: [] }; }); if (!c || !CG()) return out;
     let s; try { s = CG().symbol(c, u, symOpt(u)); } catch (e) { console.error(e); return out; }
@@ -130,6 +149,7 @@
     g.floats = fp.floats.map(f => add(Lf.polygon(lls(f), Object.assign({}, opt, { fillColor: '#F59E0B', fillOpacity: 0.7 }))));
     g.front = add(Lf.polyline(lls([LF.toGrid(u, 0, 0), headPos(u, fp)]), { color: col, weight: 1.5, dashArray: '2 4', interactive: false }));
     g.flbl = A.ui.floatLbl ? flLabels(u, c).map(r => add(Lf.marker(MP().toLL(r), { pane: 'markerPane', interactive: false, keyboard: false, zIndexOffset: 1250, icon: Lf.divIcon({ className: 'crGrLbl', iconSize: null, iconAnchor: [-8, 18], html: flHtml(r) }) }))) : [];
+    g.idle = add(Lf.marker(MP().toLL(u), { icon: Lf.divIcon({ className: 'crIdle', html: IDLE_HTML, iconSize: null, iconAnchor: [-10, 10] }), interactive: false, keyboard: false, zIndexOffset: 1200 })); placeIdle(u, g);   // 2026-11-17: "no lift yet" at the neutral boom tip
     g.sym = makeSym(u, add, col);   // 2026-11-17: the crane symbol (engine/cranegfx.js): axles / wheels / tracks, outrigger beams, the upperworks turned to the pick, boom, hook, load
     [g.body].concat(g.tracks, g.floats).filter(Boolean).forEach(x => x.on('click', () => select(u.id, null)));
     g.cor = add(Lf.marker(MP().toLL(u), { icon: hIcon('crCor', '✥', 'Drag to move the crane (centre of rotation)'), draggable: true, keyboard: false, zIndexOffset: 1000 }));
@@ -189,7 +209,7 @@
     g.tracks.forEach((t, i) => t.setLatLngs(lls(fp.tracks[i]))); g.floats.forEach((t, i) => t.setLatLngs(lls(fp.floats[i])));
     if (g.beams) g.beams.setLatLngs(fp.beams.map(lls));
     g.front.setLatLngs(lls([LF.toGrid(u, 0, 0), headPos(u, fp)]));
-    placeSym(u, g.sym);
+    placeSym(u, g.sym); placeIdle(u, g);
     if (g.flbl && g.flbl.length) flLabels(u, c).forEach((r, i) => { const mk = g.flbl[i]; if (!mk) return; mk.setLatLng(MP().toLL(r)); const el2 = mk.getElement && mk.getElement(); if (el2) el2.innerHTML = flHtml(r); });
     const mv = h => h.dragging && h.dragging._draggable && h.dragging._draggable._moving;
     if (!mv(g.cor)) g.cor.setLatLng(MP().toLL(u)); if (!mv(g.head)) g.head.setLatLng(MP().toLL(headPos(u, fp)));
@@ -433,6 +453,7 @@
   A.on('project', () => { rev++; renderAll(); drawTab(); });
   ['change', 'live'].forEach(e => A.on(e, o => { if (!(o && o.kind === 'lifts')) rev++; }));   // pick / setup drags change the memo key themselves
   A.on('change', o => {
+    if (o.kind === 'tandem' || o.kind === 'project') (A.P.setups || []).forEach(u => { const g = layers.get(u.id); if (g) { placeIdle(u, g); placeSym(u, g.sym); } });   // 2026-11-17: a girder lift took / left a setup: its neutral boom and "no lift yet"
     if (['lifts', 'setups', 'picks', 'cranes', 'items', 'site'].indexOf(o.kind) < 0) return;
     if (o.kind === 'lifts' && Date.now() - dragEnd < 400) { (A.P.setups || []).forEach(placeSetup); drawTab(); return; }   // a drag ended: geometry is in place
     renderAll(); drawTab();

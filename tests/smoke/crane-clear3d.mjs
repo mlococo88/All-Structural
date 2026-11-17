@@ -40,7 +40,7 @@ try {
   await p.setInputFiles('#crFiles', [FW]); await p.waitForFunction(() => /1 crane loaded/.test(document.querySelector('#crStatus').textContent));
   await p.click('[data-ca=add]'); await p.waitForTimeout(150); await p.click('[data-ca=place]'); await p.waitForTimeout(400);
   await setF('#luE', 1000); await setF('#luN', 2000); await setF('#luBoom', 60); await setF('#luPad', 100);
-  await setF('#lkPE', 1030); await setF('#lkPN', 2000); await setF('#lkSE', 1000); await setF('#lkSN', 2020); await setF('#lkLoad', 20000);
+  await goTab('[data-la=addPick]'); await p.click('[data-la=addPick]'); await p.waitForTimeout(150);   /* 2026-11-17: Add setup makes no pick */ await setF('#lkPE', 1030); await setF('#lkPN', 2000); await setF('#lkSE', 1000); await setF('#lkSN', 2020); await setF('#lkLoad', 20000);
   await goTab('#lkElev summary'); await p.click('#lkElev summary'); await p.waitForTimeout(80);
   for (const [id, v] of [['#lkPg', 98], ['#lkPh', 4], ['#lkSh', 20], ['#lkLH', 6], ['#lkRigH', 12], ['#lkBlk', 5], ['#lkLL', 40], ['#lkLW', 4]]) await setF(id, v);
   // 1. power line

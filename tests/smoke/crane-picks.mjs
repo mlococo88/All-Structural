@@ -32,11 +32,11 @@ try {
   await p.click('[data-ca=add][data-k="fakeco-test-at-100-fake-test-data"]'); await p.waitForTimeout(100); await p.click('[data-ca=add][data-k="fakeco-test-cr-200-fake-test-data"]'); await p.waitForTimeout(100);
   const ids = await p.evaluate(() => CranePickApp.P.cranes.map(c => c.id));
   await p.evaluate(id => CranePickPlace.placeCrane(id, { x: 1000, y: 2000 }), ids[0]); await p.waitForTimeout(200);
-  await setF('#luBoom', 60); await setF('#lkPE', 1030); await setF('#lkPN', 2000); await setF('#lkSE', 1000); await setF('#lkSN', 2020); await setF('#lkLoad', 20000); await setF('#lkRig', 1000); await setF('#lkHook', 1000);
+  await setF('#luBoom', 60); await goTab('[data-la=addPick]'); await p.click('[data-la=addPick]'); await p.waitForTimeout(150);   /* 2026-11-17: Add setup makes no pick */ await setF('#lkPE', 1030); await setF('#lkPN', 2000); await setF('#lkSE', 1000); await setF('#lkSN', 2020); await setF('#lkLoad', 20000); await setF('#lkRig', 1000); await setF('#lkHook', 1000);
   await goTab('[data-la=addPick]'); await p.click('[data-la=addPick]'); await p.waitForTimeout(150);
   await setF('#lkName', 'Girder G2'); await setF('#lkPE', 1045); await setF('#lkPN', 2000); await setF('#lkSE', 1000); await setF('#lkSN', 2040); await setF('#lkLoad', 21000);
   await p.evaluate(id => CranePickPlace.placeCrane(id, { x: 1200, y: 2000 }), ids[1]); await p.waitForTimeout(200);
-  await setF('#luBoom', 120); await setF('#lkPE', 1240); await setF('#lkPN', 2000); await setF('#lkSE', 1200); await setF('#lkSN', 2060); await setF('#lkLoad', 40000); await setF('#lkHook', 2000);
+  await setF('#luBoom', 120); await goTab('[data-la=addPick]'); await p.click('[data-la=addPick]'); await p.waitForTimeout(150);   /* 2026-11-17: Add setup makes no pick */ await setF('#lkPE', 1240); await setF('#lkPN', 2000); await setF('#lkSE', 1200); await setF('#lkSN', 2060); await setF('#lkLoad', 40000); await setF('#lkHook', 2000);
   await p.evaluate(() => CranePickApp.update(P => { P.items.push(CranePickModel.normItem({ type: 'excl', name: 'Lane 1', pts: [{ x: 990, y: 2015 }, { x: 1010, y: 2015 }, { x: 1010, y: 2025 }, { x: 990, y: 2025 }] })); }, 'items')); await p.waitForTimeout(150);
   const P = await p.evaluate(() => CranePickApp.P); assert.equal(P.setups.length, 2); assert.equal(P.picks.length, 3);
   ok('two fake cranes placed; three picks (hand check, one over the chart, a crawler pick); an exclusion zone across the first set point');
