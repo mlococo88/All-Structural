@@ -9,7 +9,7 @@
    Positions: lat / lon in, the site frame out through proj(lat, lon) -> { x, y } (grid ft). Graph distances: grid ft.
    2026-11-17 (bug report): the endpoints, their fallbacks and the MassDOT / MassGIS road layer are in engine/roadsrc.js (its roads are
    normalised to the same Overpass JSON shape); SOURCES / srcInfo(src) give each data source's attribution and "not survey" label (a
-   route's src.data 'massdot'; none = OpenStreetMap, as before). */
+   route's src.data 'massdot' | 'ri' | 'ct'; none = OpenStreetMap, as before). */
 (function () {
   'use strict';
   const URL = 'https://overpass-api.de/api/interpreter';
@@ -19,8 +19,14 @@
   const SOURCES = {
     osm: { id: 'osm', label: 'OpenStreetMap', ATTR, ATTR_URL, NOT_SURVEY, lic: 'ODbL', dxf: 'ROAD GEOMETRY FROM OPENSTREETMAP - NOT SURVEY. (C) OPENSTREETMAP CONTRIBUTORS, ODBL.' },
     massdot: { id: 'massdot', label: 'MassDOT / MassGIS', ATTR: 'MassDOT / MassGIS', ATTR_URL: 'https://www.mass.gov/info-details/massgis-data-massgis-massdot-roads',
-      NOT_SURVEY: 'from MassDOT / MassGIS road centrelines — not survey', lic: '', dxf: 'ROAD GEOMETRY FROM MASSDOT / MASSGIS ROAD INVENTORY - NOT SURVEY.' } };
-  const srcInfo = src => SOURCES[src && (src.data === 'massdot' || src === 'massdot') ? 'massdot' : 'osm'];
+      NOT_SURVEY: 'from MassDOT / MassGIS road centrelines — not survey', lic: '', dxf: 'ROAD GEOMETRY FROM MASSDOT / MASSGIS ROAD INVENTORY - NOT SURVEY.' },
+    // 2026-11-17 (Greenwood, Warwick RI bug report): Rhode Island and Connecticut state road centrelines (engine/roadsrc.js STATES)
+    ri: { id: 'ri', label: 'RIGIS / RIDOT', ATTR: 'RIGIS / RIDOT', ATTR_URL: 'https://www.rigis.org/',
+      NOT_SURVEY: 'from RIGIS / RIDOT road centrelines — not survey', lic: '', dxf: 'ROAD GEOMETRY FROM RIGIS / RIDOT ROAD CENTERLINES - NOT SURVEY.' },
+    ct: { id: 'ct', label: 'CTDOT / CT DEEP', ATTR: 'CTDOT / CT DEEP', ATTR_URL: 'https://portal.ct.gov/dot',
+      NOT_SURVEY: 'from CTDOT / CT DEEP road centrelines — not survey', lic: '', dxf: 'ROAD GEOMETRY FROM CTDOT / CT DEEP ROAD CENTERLINES - NOT SURVEY.' } };
+  /* srcInfo(src): a route's src ({ data }) or a source id; none / unknown = OpenStreetMap */
+  const srcInfo = src => { const d = src && typeof src === 'object' ? src.data : src; return d && d !== 'osm' && SOURCES[d] ? SOURCES[d] : SOURCES.osm; };
   // drivable highway values (Decision pending engineer review: footways, paths, cycleways, steps, bridleways, platforms, proposed and
   // abandoned ways are left out; service roads, tracks and roads under construction are kept: a construction convoy may use them)
   const HW = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential', 'service', 'track', 'living_street', 'road',
@@ -36,7 +42,10 @@
   }
   const bboxKey = b => [b.s, b.w, b.n, b.e].map(v => v.toFixed(3)).join(',');
   const contains = (a, b) => a.s <= b.s + 1e-9 && a.w <= b.w + 1e-9 && a.n >= b.n - 1e-9 && a.e >= b.e - 1e-9;
-  function query(b) { return `[out:json][timeout:25];way["highway"~"^(${HW.join('|')})$"](${b.s},${b.w},${b.n},${b.e});out geom;`; }
+  /* 2026-11-17 (overpass-api.de "at capacity"): a lighter query: parking aisles and drive-throughs (service=parking_aisle |
+     drive-through) are left out (Decision pending engineer review: driveways stay, a site access may be one). Overpass "!~" also
+     keeps ways with no service tag. [timeout:25] as before. */
+  function query(b) { return `[out:json][timeout:25];way["highway"~"^(${HW.join('|')})$"]["service"!~"^(parking_aisle|drive-through)$"](${b.s},${b.w},${b.n},${b.e});out geom;`; }
   function body(b) { return 'data=' + encodeURIComponent(query(b)); }
   /* one-way: +1 along the way's node order, −1 against it, 0 both ways (oneway=yes/true/1, -1/reverse; roundabouts and motorways
      are one-way unless oneway=no) */

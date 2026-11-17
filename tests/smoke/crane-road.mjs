@@ -125,7 +125,8 @@ try {
   assert.deepEqual(tl, { href: 'https://overpass-api.de/api/status', t: '_blank', txt: 'Test connection' });
   assert.deepEqual(net, ['POST overpass-api.de', 'GET overpass-api.de', 'POST overpass.private.coffee', 'GET overpass.private.coffee', 'POST maps.mail.ru', 'GET maps.mail.ru', 'GET gis.massdot.state.ma.us', 'GET services1.arcgis.com']);
   const rm = await txt('#rdMsg');
-  assert.match(rm, /OpenStreetMap: overpass-api\.de POST \+ GET: network error \(offline, blocked, or no CORS header\); overpass\.private\.coffee POST \+ GET.*maps\.mail\.ru POST \+ GET.*MassDOT \/ MassGIS: gis\.massdot\.state\.ma\.us GET f=geojson.*Test connection opens the server's status page.*Trace.*Route.*work offline/);
+  assert.match(rm, /OpenStreetMap: overpass-api\.de POST \+ GET: network error \(offline, blocked, or no CORS header\); overpass\.private\.coffee POST \+ GET.*maps\.mail\.ru POST \+ GET.*MassDOT \/ MassGIS: gis\.massdot\.state\.ma\.us FeatureServer\/10 \(MassDOT Road Inventory 2024 .*\) f=geojson: network error.*services1\.arcgis\.com FeatureServer\/0 .* f=geojson: network error.*Test connection opens the server's status page.*Trace.*Route.*work offline/);
+  assert.match(bar, /Tried: overpass-api\.de, overpass\.private\.coffee, maps\.mail\.ru\. Test connection Retry/);
   assert.equal(await p.$$eval('#rdMsg a[data-rdtest]', a => a.length), 5);
   await shot('road-fail-status');
   ok('failure: the status bar names the error type (network / CORS) and the endpoint (overpass-api.de POST; 2 more failed; MassDOT also failed) with a Test connection link to https://overpass-api.de/api/status (new tab); requests: 3 Overpass endpoints × POST + GET, then 2 MassDOT layers; the Route tab lists each and 5 Test links');
@@ -168,7 +169,7 @@ try {
   // MassDOT / MassGIS by choice (Road data settings), the mocked layer answers GeoJSON
   const MD = await road(-9000, -3000, 'SALEM STREET', true); let mdq = '';
   await p.route('https://gis.massdot.state.ma.us/**', async r => { mdq = r.request().url(); await r.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(MD) }); });
-  await p.click('#rdSet > summary'); await p.selectOption('#rdSrc', 'massdot'); await p.click('[data-road=setSave]'); await p.waitForTimeout(200);
+  await p.click('#rdSet > summary'); await p.selectOption('#rdSrc', 'state'); await p.click('[data-road=setSave]'); await p.waitForTimeout(200);
   assert.match(await txt('#rdMsg'), /Road data settings saved/); assert.equal(await p.$eval('#rdSet', d => d.open), true);
   await p.evaluate(q => CranePickMap.map.setView(CranePickMap.toLL(q), 18, { animate: false }), { x: c.x - 9000, y: c.y - 3000 }); await p.waitForTimeout(300);
   net.length = 0; await p.click('[data-road=snap]'); await clickFt({ x: c.x - 9300, y: c.y - 2990 }); await clickFt({ x: c.x - 8700, y: c.y - 3010 }); await p.keyboard.press('Enter');
