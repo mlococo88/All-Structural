@@ -1042,7 +1042,7 @@ picker → tandem crane: 50 operating points, governing 88.9 %, tandem-limit cur
 shots local only, not committed): scratchpad `crane/cranetab-*.png`.
 
 ## 2026-11-17 — Manual output tab (how to use the app; filter, print, optional Report appendix)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1619: https://github.com/mlococo88/All-Structural/pull/1619
 Engineer request 2026-11-17: "We should also add a manual or a tab that explains how to use the app." Built like the suite's manuals (Spread
 Footing "User Manual", Timber "Method & Manual"): the text lives in the app's files, the tab has a filter box and prints on its own, and the
 Report takes it as an optional appendix (as Spread Footing's "Include this manual" box; off by default).
