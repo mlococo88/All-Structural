@@ -20,7 +20,9 @@ const FW = path.join(REPO, 'tests/smoke/crane-fake-wheeled.json'), FC = path.joi
 let n = 0; const ok = m => { n++; console.log('  ok  ', m); };
 const { b, p, errs } = await openPage(FILE, { vw: 1280, vh: 860, ls: { 'crane.ui': '{"base":"none","itab":"cranes"}' } });
 const shot = async nm => { if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); await p.screenshot({ path: path.join(SHOTS, nm + '.png') }); } };
-const setF = async (sel, v) => { await p.fill(sel, String(v)); await p.dispatchEvent(sel, 'change'); await p.waitForTimeout(80); };
+const itabOf = sel => /^#lu|^\[data-la=(addPick|delU|zoomU)\]/.test(sel) ? 'cranes' : /^#(lk|ls|lf|tl)|lkSwing|^\[data-(la|ta)=/.test(sel) ? 'lifts' : null;   // 2026-11-17: setups on Cranes & setups, picks / girder lifts on Lifts
+const goTab = async sel => { const t = itabOf(sel); if (t) await p.evaluate(t => { if (CranePickApp.ui.itab !== t) CranePickApp.showITab(t); }, t); };
+const setF = async (sel, v) => { await goTab(sel); await p.fill(sel, String(v)); await p.dispatchEvent(sel, 'change'); await p.waitForTimeout(80); };
 const settle = () => p.waitForTimeout(450);
 const rowTexts = () => p.$$eval('#pkTbl tbody tr', a => a.map(r => [...r.cells].map(c => c.innerText.trim())));
 try {
@@ -31,7 +33,7 @@ try {
   const ids = await p.evaluate(() => CranePickApp.P.cranes.map(c => c.id));
   await p.evaluate(id => CranePickPlace.placeCrane(id, { x: 1000, y: 2000 }), ids[0]); await p.waitForTimeout(200);
   await setF('#luBoom', 60); await setF('#lkPE', 1030); await setF('#lkPN', 2000); await setF('#lkSE', 1000); await setF('#lkSN', 2020); await setF('#lkLoad', 20000); await setF('#lkRig', 1000); await setF('#lkHook', 1000);
-  await p.click('[data-la=addPick]'); await p.waitForTimeout(150);
+  await goTab('[data-la=addPick]'); await p.click('[data-la=addPick]'); await p.waitForTimeout(150);
   await setF('#lkName', 'Girder G2'); await setF('#lkPE', 1045); await setF('#lkPN', 2000); await setF('#lkSE', 1000); await setF('#lkSN', 2040); await setF('#lkLoad', 21000);
   await p.evaluate(id => CranePickPlace.placeCrane(id, { x: 1200, y: 2000 }), ids[1]); await p.waitForTimeout(200);
   await setF('#luBoom', 120); await setF('#lkPE', 1240); await setF('#lkPN', 2000); await setF('#lkSE', 1200); await setF('#lkSN', 2060); await setF('#lkLoad', 40000); await setF('#lkHook', 2000);
@@ -73,7 +75,7 @@ try {
   await shot('c2-3-report');
   // the Lifts tab link
   await p.click('#tabBar [data-otab=plan]'); await p.evaluate(() => CranePickPlace.select(CranePickApp.P.setups[0].id, CranePickApp.P.picks[0].id)); await p.waitForTimeout(150);
-  await p.click('[data-la=rptPick]'); await p.waitForTimeout(300); assert.equal(await p.$eval('#tabBar [aria-selected=true]', e => e.textContent), 'Report');
+  await goTab('[data-la=rptPick]'); await p.click('[data-la=rptPick]'); await p.waitForTimeout(300); assert.equal(await p.$eval('#tabBar [aria-selected=true]', e => e.textContent), 'Report');
   ok(`Report §Lifts: basis, summary (§ links to each pick: ${doc.refPick}), plan figure, inputs (§ link to the crane: ${doc.refCrane}), flags, worked steps; no unresolved / duplicate keys, no NaN; Picks-tab and Lifts-tab links jump to the pick's §`);
 
   // 4. changes follow; 390 px

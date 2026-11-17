@@ -23,7 +23,9 @@ const near = (a, b, tol, m) => assert.ok(Math.abs(a - b) <= tol, `${m || ''}: ${
 const { b, p, errs } = await openPage(FILE, { vw: 1280, vh: 900, ls: { 'crane.ui': '{"base":"none","itab":"cranes"}' } });
 const proj = () => p.evaluate(() => JSON.parse(localStorage.getItem('crane.project.current')));
 const shot = async nm => { if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); await p.screenshot({ path: path.join(SHOTS, nm + '.png') }); } };
-const setF = async (sel, v) => { await p.fill(sel, String(v)); await p.dispatchEvent(sel, 'change'); await p.waitForTimeout(60); };
+const itabOf = sel => /^#lu|^\[data-la=(addPick|delU|zoomU)\]/.test(sel) ? 'cranes' : /^#(lk|ls|lf|tl)|lkSwing|^\[data-(la|ta)=/.test(sel) ? 'lifts' : null;   // 2026-11-17: setups on Cranes & setups, picks / girder lifts on Lifts
+const goTab = async sel => { const t = itabOf(sel); if (t) await p.evaluate(t => { if (CranePickApp.ui.itab !== t) CranePickApp.showITab(t); }, t); };
+const setF = async (sel, v) => { await goTab(sel); await p.fill(sel, String(v)); await p.dispatchEvent(sel, 'change'); await p.waitForTimeout(60); };
 const txt = sel => p.$eval(sel, e => (e.innerText || e.textContent).replace(/\s+/g, ' '));
 const scr = q => p.evaluate(q => { const m = CranePickMap.map, cp = m.latLngToContainerPoint(CranePickMap.toLL(q)), r = m.getContainer().getBoundingClientRect(); return { x: r.x + cp.x, y: r.y + cp.y }; }, q);
 const eng = () => p.evaluate(() => { const t = CranePickApp.P.tandems[0], r = CranePickTandemUI.evalT(t), j = CranePickTandemUI.step, q = r.steps[j];
@@ -42,7 +44,7 @@ try {
   await p.click('[data-ca=add]'); await p.waitForTimeout(200);
   await p.evaluate(() => { const K = CranePickCranes, c = CranePickApp.P.cranes[0], g = K.groups(c.def).find(g => Object.values(g.configs).some(x => x.id === 'or-full-360')).key;
     CranePickApp.update(P => { [1000, 1100].forEach((x, i) => P.setups.push(CranePickModel.normSetup({ name: 'Crane ' + (i + 1), craneId: c.id, x, y: 2000, heading: 0, group: g, boom: 80, pad: 100 }))); }, 'setups'); });
-  await p.click('#inTabs [data-itab=tandem]'); await p.waitForTimeout(150);
+  await p.click('#inTabs [data-itab=lifts]'); await p.waitForTimeout(150);
   await p.click('[data-ta=newT]'); await p.waitForTimeout(300);
   for (const [s, v] of [['#tlL', 60], ['#tlW', 40000], ['#tlCg', 28], ['#tlH', 6], ['#tlH0s', 10], ['#tlH0rig', 1000], ['#tlH0hook', 1000], ['#tlH0rigH', 10], ['#tlH0blk', 4],
     ['#tlH1s', 50], ['#tlH1rig', 1000], ['#tlH1hook', 1000], ['#tlH1rigH', 10], ['#tlH1blk', 4], ['#tlPE', 1050], ['#tlPN', 1980], ['#tlPH', 90], ['#tlPZ', 105], ['#tlSE', 1050], ['#tlSN', 2000], ['#tlSH', 90], ['#tlSZ', 120]]) await setF(s, v);
@@ -99,7 +101,7 @@ try {
   // 4. ground: the C4 weights (hand check A of crane-ground) and a pipe between the cranes
   await p.evaluate(() => CranePickApp.update(P => { P.cranes[0].def.app_inputs = Object.assign({}, P.cranes[0].def.app_inputs, { ph4: { carrierLb: 40000, carrierCg: 0, upperLb: 30000, upperCg: 0, boomLb: 6000, cwRad: 10 } });
     P.items.push(CranePickModel.normItem({ type: 'util', name: 'Water main', kind: 'utility', depth: 25, pts: [{ x: 1050, y: 1950 }, { x: 1050, y: 2050 }] })); }, 'cranes'));
-  await p.waitForTimeout(200); await p.click('#inTabs [data-itab=tandem]'); await p.waitForTimeout(150);
+  await p.waitForTimeout(200); await p.click('#inTabs [data-itab=lifts]'); await p.waitForTimeout(150);
   e = await eng(); assert.deepEqual(e.ground.cr.map(g => [g.mode, g.W]), [['rigid', 24000], ['rigid', 20000]]);
   assert.equal(e.ground.pair.length, 1); near(e.ground.pair[0].ds, e.ground.pair[0].parts[0] + e.ground.pair[0].parts[1], 1e-9); assert.ok(e.ground.pair[0].parts.every(v => v > 0));
   await p.click('#tlGround summary'); await p.waitForTimeout(150);
@@ -119,7 +121,7 @@ try {
   await shot('c5-tandem-report');
   await p.reload(); await p.waitForSelector('[data-sp=chip]'); await p.waitForTimeout(400);
   P = await proj(); assert.equal(P.tandems[0].hooks[1].s, 50); assert.equal(P.tandems[0].girder.cg, 28);
-  await p.setViewportSize({ width: 390, height: 800 }); await p.click('#inTabs [data-itab=tandem]'); await p.waitForTimeout(200);
+  await p.setViewportSize({ width: 390, height: 800 }); await p.click('#inTabs [data-itab=lifts]'); await p.waitForTimeout(200);
   await p.click('[data-tasel-t]'); await p.waitForTimeout(300);
   assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'no sideways scroll');
   await shot('c5-tandem-390');

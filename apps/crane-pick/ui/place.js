@@ -4,16 +4,23 @@
    rotation) and rotated (↻ handle ahead of the carrier: the carrier heading). Each pick has a pick point (P) and a set point (S), both
    draggable, the boom lines from the centre of rotation, the swing path (shortest way by default) and live labels at the hook (radius,
    chart capacity, % of chart). Every drag updates the values once per animation frame (CranePickMap.raf) and is one undo step when it
-   ends. Lifts input tab: the settings (thresholds, interpolation), the setups (chart group, boom length, mode, heading, position) and
-   the picks (load, rigging, hook block, other deductions, swing direction, points) with the live card: results, plan-clearance flags and
-   the worked steps (CLAUDE.md §6). */
+   ends. Input tabs (reorganised 2026-11-17, engineer decision; display only): the setups (chart group, boom length, mode, heading,
+   position, pad) are drawn under their crane on the "Cranes & setups" tab (ui/cranes.js puts setupsBlock(craneId) in each crane card);
+   the "Lifts" tab holds the project's lift settings (thresholds, interpolation, path model, clearance; ui/tandem.js adds the tandem
+   limit), the list of every lift (single picks and girder lifts, ui/tandem.js) and the card of the selected one: a pick (load, rigging,
+   hook block, other deductions, swing direction, points) with the live card: results, plan-clearance flags and the worked steps
+   (CLAUDE.md §6), or a girder lift (ui/tandem.js cardHtml). */
 (function () {
   'use strict';
   const A = window.CranePickApp, G = window.CranePickGeo, K = window.CranePickCranes, LF = window.CranePickLift, M = window.CranePickModel, esc = A.esc;
   const MP = () => window.CranePickMap, L_ = () => window.L;
   const fmt = (v, d) => (typeof v === 'number' && isFinite(v)) ? v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—';
   const COLS = { ok: '#059669', caution: '#D97706', critical: '#EA580C', over: '#DC2626', np: '#DC2626' };
-  let el = null, selU = null, selK = null, dragEnd = 0, stepsOpen = false, elevOpen = false;
+  let el = null, sEl = null, selU = null, selK = null, dragEnd = 0, stepsOpen = false, elevOpen = false;   // el: the Lifts tab; sEl: the Cranes & setups tab
+  const TU = () => window.CranePickTandemUI;
+  /* the card the Lifts tab shows: 'pick' (the selected pick) or 'tandem' (the selected girder lift); kept with the page's tabs (crane.ui) */
+  const card = () => (A.ui.liftCard === 'tandem' ? 'tandem' : 'pick');
+  function setCard(k) { if (A.ui.liftCard !== k) { A.ui.liftCard = k; A.saveUi(); } }
   const layers = new Map();   // setup id -> { parts..., picks: Map(pick id -> layers) }
   const setupOf = id => (A.P.setups || []).find(u => u.id === id) || null;
   const pickOf = id => (A.P.picks || []).find(k => k.id === id) || null;
@@ -56,14 +63,14 @@
     const u = M.normSetup({ name: `Crane ${n}: ${K.name(c.def)}`, craneId, x: ctr.x, y: ctr.y, heading: 0, group: d.group, boom: d.boom });
     const k = M.normPick({ name: `Pick ${A.P.picks.length + 1}`, setupId: u.id, pick: { x: ctr.x + d.R, y: ctr.y }, set: { x: ctr.x, y: ctr.y + d.R }, load: null, rigging: null, hook: null, ded: null, swing: 'short' });
     A.update(P => { P.setups.push(u); P.picks.push(k); }, 'setups', { id: u.id });
-    selU = u.id; selK = k.id; A.showOTab('plan'); A.showITab('lifts'); renderAll(); drawTab();
+    selU = u.id; selK = k.id; setCard('pick'); A.showOTab('plan'); A.showITab('cranes'); renderAll(); drawTab(); reveal('luCard');
     MP().fit([{ x: ctr.x - d.R * 1.4, y: ctr.y - d.R * 1.4 }, { x: ctr.x + d.R * 1.4, y: ctr.y + d.R * 1.4 }]);
     return u.id;
   }
   function addPick(uid) {
     const u = setupOf(uid); if (!u) return; const d = defaults(craneOf(u)), h = (u.heading || 0) * Math.PI / 180;
     const k = M.normPick({ name: `Pick ${A.P.picks.length + 1}`, setupId: uid, pick: { x: u.x + d.R * Math.sin(h + Math.PI / 2), y: u.y + d.R * Math.cos(h + Math.PI / 2) }, set: { x: u.x + d.R * Math.sin(h), y: u.y + d.R * Math.cos(h) }, swing: 'short' });
-    A.update(P => { P.picks.push(k); }, 'picks', { id: k.id }); selK = k.id; renderAll(); drawTab();
+    A.update(P => { P.picks.push(k); }, 'picks', { id: k.id }); selU = uid; selK = k.id; setCard('pick'); A.showITab('lifts'); renderAll(); drawTab(); reveal('lkCard');
   }
   function delSetup(uid) { A.update(P => { P.setups = P.setups.filter(u => u.id !== uid); P.picks = P.picks.filter(k => k.setupId !== uid); }, 'setups'); if (selU === uid) { selU = null; selK = null; } renderAll(); drawTab(); }
   function delPick(kid) { A.update(P => { P.picks = P.picks.filter(k => k.id !== kid); }, 'picks'); if (selK === kid) selK = null; renderAll(); drawTab(); }
@@ -194,9 +201,12 @@
   function select(uid, kid) {
     const was = [selU, selK]; selU = uid; selK = kid || (uid && uid !== was[0] ? (picksOf(setupOf(uid))[0] || {}).id || null : was[1]);
     if (selK && pickOf(selK) && pickOf(selK).setupId !== selU) selK = null;
-    renderAll(); drawTab(); A.showITab('lifts'); A.emit('change', { kind: 'select-lift', id: selK || selU });
+    if (kid) setCard('pick');
+    renderAll(); drawTab(); A.showITab(kid ? 'lifts' : 'cranes'); reveal(kid ? 'lkCard' : 'luCard'); A.emit('change', { kind: 'select-lift', id: selK || selU });
   }
-  /* ---------- the Lifts tab ---------- */
+  /* bring a card into view in its tab (the setup card sits inside its crane's card on the Cranes & setups tab) */
+  function reveal(id) { const x = document.getElementById(id); if (x && x.scrollIntoView && !x.closest('[hidden]')) x.scrollIntoView({ block: 'nearest' }); }
+  /* ---------- the Lifts tab and the setup cards (Cranes & setups tab) ---------- */
   const numIn = (id, v, lbl, unit, o) => `<div class="fRow"><label for="${id}">${lbl}</label><input type="text" inputmode="decimal" id="${id}" value="${v == null ? '' : esc(String(v))}"${o && o.ph ? ` placeholder="${esc(o.ph)}"` : ''}${o && o.dis ? ' disabled' : ''}><span class="unit">${unit}</span></div>`;
   const cl = e => `<span class="lv lv-${e.cls}">${esc(LF.CLS[e.cls])}</span>`;
   function resHtml(k) {
@@ -231,7 +241,7 @@
   }
   function liveCard() { if (!el) return; const k = pickOf(selK), x = el.querySelector('#lfLive'); if (k && x) x.innerHTML = resHtml(k); }
   function liveSetupFields(u) {
-    if (!el || u.id !== selU) return; const z = A.P.site.zone, f = (id, v) => { const i = el.querySelector(id); if (i && document.activeElement !== i) i.value = v; };
+    if (!sEl || u.id !== selU) return; const z = A.P.site.zone, f = (id, v) => { const i = sEl.querySelector(id); if (i && document.activeElement !== i) i.value = v; };
     f('#luE', G.ftToNative(z, u.x).toFixed(2)); f('#luN', G.ftToNative(z, u.y).toFixed(2)); f('#luHead', (+u.heading).toFixed(1));
   }
   function livePickFields(k) {
@@ -248,7 +258,7 @@
       <div class="fRow"><label for="luName">Name</label><input type="text" id="luName" value="${esc(u.name)}"></div>
       <div class="fRow"><label>Crane</label><span>${c ? esc(K.name(c)) + (c.preliminary ? ' <span class="chip chipW">PRELIMINARY</span>' : '') : '<span class="warnT">not in the project</span>'}</span></div>
       <div class="fRow"><label for="luGroup">Chart</label><select id="luGroup">${gs.map(g => `<option value="${esc(g.key)}"${gr && g.key === gr.key ? ' selected' : ''}>${esc(g.label)} [${g.zones.map(x => K.ZONES[x]).join(', ')}]</option>`).join('')}</select></div>
-      ${gr && gr.zones.some(x => x !== '360') ? `<p class="note">Zone charts: ${gr.zones.map(x => esc(K.ZONES[x])).join(', ')}. Sectors (Cranes tab): over front ±${sec.front != null ? sec.front + '°' : ' not set'}, over rear ±${sec.rear != null ? sec.rear + '°' : ' not set'}; outside them: over side${gr.configs['360'] ? ' (the 360° chart)' : ''}.</p>` : ''}
+      ${gr && gr.zones.some(x => x !== '360') ? `<p class="note">Zone charts: ${gr.zones.map(x => esc(K.ZONES[x])).join(', ')}. Sectors (Cranes &amp; setups tab): over front ±${sec.front != null ? sec.front + '°' : ' not set'}, over rear ±${sec.rear != null ? sec.rear + '°' : ' not set'}; outside them: over side${gr.configs['360'] ? ' (the 360° chart)' : ''}.</p>` : ''}
       ${numIn('luBoom', u.boom, 'Boom length', 'ft', { ph: 'ft' })}<p class="note">Tabulated: ${booms.map(b => fmt(b, b % 1 ? 1 : 0)).join(', ') || '—'} ft (a length between them reads the next longer column).</p>
       ${modes.length ? `<div class="fRow"><label for="luMode">Telescoping mode</label><select id="luMode"><option value="">lowest of the columns</option>${modes.map(x => `<option${u.mode === x ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></div>` : ''}
       <div class="fRow"><label>Support</label><span>${esc(any ? any.support || '—' : '—')}${sk ? ` (chart spread ${esc(sk)} ${fmt(p.outr.spreads[sk], 2)} ft)` : ''}</span></div>
@@ -256,8 +266,41 @@
       ${numIn('luPad', u.pad, 'Crane pad elevation', 'ft', { ph: 'not entered: 0.00 (datum)' })}
       ${numIn('luHead', (+u.heading).toFixed(1), 'Carrier heading', '° (az.)')}${numIn('luE', G.ftToNative(z.id, u.x).toFixed(2), 'Rotation E', un)}${numIn('luN', G.ftToNative(z.id, u.y).toFixed(2), 'Rotation N', un)}
       <p class="note">On the map: drag ✥ to move the crane, ↻ to turn it.</p>
-      <div class="goRow"><button type="button" data-la="addPick">Add a pick</button><button type="button" data-la="zoomU">Show on the map</button><button type="button" class="danger" data-la="delU">Remove setup</button></div>
-      <div class="itGrp"><div class="itGrpH">Picks (${picksOf(u).length})</div>${picksOf(u).map(k => `<div class="itRow${k.id === selK ? ' on' : ''}"><button type="button" class="itSel" data-selk="${k.id}">${esc(k.name)}</button><span class="itSum">${sumText(k)}</span><button type="button" class="itDel" data-delk="${k.id}" aria-label="Delete ${esc(k.name)}">×</button></div>`).join('')}</div></div></div>`;
+      <p class="note" id="luLinks">Ground under this setup (allowable bearing, mats): <a href="#" class="wk" data-la="groundIn">Ground tab</a> · levelness, blocking: <a href="#" class="wk" data-la="terrainIn">Terrain tab</a> · the crane as analysed: <a href="#" class="wk" data-la="craneOut">Crane tab</a></p>
+      <div class="goRow"><button type="button" data-la="addPick">Add a single pick</button><button type="button" data-la="zoomU">Show on the map</button><button type="button" class="danger" data-la="delU">Remove setup</button></div>
+      ${usesHtml(u)}</div></div>`;
+  }
+  /* the lifts that use a setup (its picks and the girder lifts it is a crane of): links to their cards on the Lifts tab */
+  function tandemsOf(u) { return (A.P.tandems || []).filter(t => t.slots.slice(0, t.type === 'single' ? 1 : 2).indexOf(u.id) >= 0); }
+  function usesHtml(u) {
+    const ks = picksOf(u), ts = tandemsOf(u), T = TU();
+    return `<div class="itGrp" id="luUses"><div class="itGrpH">Lifts using this setup (${ks.length + ts.length}): edit them on the Lifts tab</div>
+      ${ks.map(k => `<div class="itRow${k.id === selK ? ' on' : ''}"><span class="chip">single pick</span><button type="button" class="itSel" data-selk="${k.id}">${esc(k.name)}</button><span class="itSum">${sumText(k)}</span></div>`).join('')}
+      ${ts.map(t => `<div class="itRow"><span class="chip chipG">girder lift</span><button type="button" class="itSel" data-selt="${t.id}">${esc(t.name)}</button><span class="itSum">crane ${t.slots.indexOf(u.id) + 1}${T ? ' · ' + T.sumText(t) : ''}</span></div>`).join('')}
+      ${ks.length + ts.length ? '' : '<p class="note">None yet.</p>'}</div>`;
+  }
+  /* setupsBlock(craneId): the setups of one project crane, drawn inside its card on the Cranes & setups tab (ui/cranes.js); the selected
+     setup's card opens under its row */
+  function setupsBlock(craneId) {
+    const us = (A.P.setups || []).filter(u => u.craneId === craneId), su = setupOf(selU);
+    return `<h4 class="crSetH">Setups of this crane (${us.length})</h4>
+      <p class="note">One crane definition, any number of setups: a setup is this crane at one place on the site, with its own chart group, boom length, heading, position and pad (two identical cranes in a tandem lift = this crane, two setups).</p>
+      ${us.map(u => `<div class="itRow${u.id === selU ? ' on' : ''}"><button type="button" class="itSel" data-selu="${u.id}">${esc(u.name)}</button><span class="itSum">boom ${fmt(u.boom, 1)} ft · ${picksOf(u).length + tandemsOf(u).length} lift${picksOf(u).length + tandemsOf(u).length === 1 ? '' : 's'}</span><button type="button" class="itDel" data-delu="${u.id}" aria-label="Remove ${esc(u.name)}">×</button></div>`).join('')}
+      <div class="goRow"><button type="button" class="primary" data-ca="place" data-id="${craneId}">Add setup (place on the map)</button></div>
+      ${su && su.craneId === craneId ? setupHtml(su) : ''}`;
+  }
+  /* setups whose crane is not in the project (not made by the app; an edited file): listed so they can be removed */
+  function orphansBlock() {
+    const us = (A.P.setups || []).filter(u => !A.P.cranes.some(c => c.id === u.craneId)); if (!us.length) return '';
+    const su = setupOf(selU);
+    return `<div class="sec"><div class="secHead">Setups without a crane in this project (${us.length})</div><div class="secBody">
+      ${us.map(u => `<div class="itRow${u.id === selU ? ' on' : ''}"><button type="button" class="itSel" data-selu="${u.id}">${esc(u.name)}</button><button type="button" class="itDel" data-delu="${u.id}" aria-label="Remove ${esc(u.name)}">×</button></div>`).join('')}
+      ${su && us.indexOf(su) >= 0 ? setupHtml(su) : ''}</div></div>`;
+  }
+  function drawSetups() {
+    if (!sEl) return;
+    sEl.querySelectorAll('.crSetups[data-crane]').forEach(x => { x.innerHTML = setupsBlock(x.dataset.crane); });
+    const o = sEl.querySelector('#crSetupsOrphan'); if (o) o.innerHTML = orphansBlock();
   }
   /* 2026-11-17: the outrigger spread the crane is drawn at (setup.spread). The chart group's spread by default; another spread of the
      crane is drawing only when the chart group has no chart at it (flagged; capacities and ground stay at the chart's spread: pick the
@@ -279,6 +322,7 @@
     const hsel = hb.findIndex(h => h.lb === k.hook && h.label === k.hookLabel);
     return `<div class="sec" id="lkCard"><div class="secHead">Pick: ${esc(k.name)}</div><div class="secBody">
       <div class="fRow"><label for="lkName">Name</label><input type="text" id="lkName" value="${esc(k.name)}"></div>
+      <div class="fRow"><label>Crane setup</label><span id="lkSetup">${u ? esc(u.name) : '<span class="warnT">not in the project</span>'}${c ? ' (' + esc(K.name(c)) + ')' : ''} · <a href="#" class="wk" data-la="editSetup">edit setup: Cranes &amp; setups tab</a></span></div>
       ${numIn('lkLoad', k.load, 'Load', 'lb')}${numIn('lkRig', k.rigging, 'Rigging (slings, spreader…)', 'lb')}
       <div class="fRow"><label for="lkHookSel">Hook block</label><select id="lkHookSel"><option value="">entered below</option>${hb.map((h, i) => `<option value="${i}"${i === hsel ? ' selected' : ''}>${esc(h.label)} (${fmt(h.lb, 0)} lb)</option>`).join('')}</select></div>
       ${numIn('lkHook', k.hook, 'Hook block weight', 'lb')}${numIn('lkDed', k.ded, 'Other deductions', 'lb', { ph: 'per the chart notes' })}
@@ -301,35 +345,51 @@
       ${numIn('lkTrav', E.trav, 'Load bottom el. during the swing', 'ft', { ph: 'higher of pick / set' })}</details>`;
   }
   function drawTab() {
+    drawSetups();
     if (!el) return;
     if (selU && !setupOf(selU)) selU = null; if (selK && !pickOf(selK)) selK = null;
-    const s = S(), u = setupOf(selU), k = pickOf(selK);
+    const s = S(), k = pickOf(selK), T = TU(), ts = A.P.tandems || [], tSel = T && T.selected && ts.find(x => x.id === T.selected);
+    const show = card() === 'tandem' ? (tSel ? 'tandem' : k ? 'pick' : '') : (k ? 'pick' : tSel ? 'tandem' : '');
     const anyInterp = (A.P.setups || []).some(x => { const c = craneOf(x); return c && LF.chartsOf(c, x).gr && Object.values(LF.chartsOf(c, x).gr.configs).some(K.interpPermitted); });
+    const n = A.P.picks.length + ts.length, sName = u => u ? esc(u.name) : '<span class="warnT">no setup</span>';
     el.innerHTML = `<div class="sec"><div class="secHead">Lift settings (project)</div><div class="secBody">
         ${numIn('lsCaution', s.caution, 'Caution at (% of chart)', '%')}${numIn('lsCritical', s.critical, 'Critical lift at (% of chart)', '%')}${numIn('lsLimit', s.limit, 'Limit (% of chart)', '%')}
         <label class="note" style="display:block"><input type="checkbox" id="lsInterp"${s.interp ? ' checked' : ''}${anyInterp || s.interp ? '' : ' disabled'}> Linear interpolation between tabulated radii where the chart notes permit it${anyInterp ? '' : ' (no chart in use permits it)'}</label>
-        <p class="note">Default (conservative): no interpolation: the next longer tabulated boom length and the next larger tabulated radius; outside the chart = not permitted. Each chart's rating basis (% of tipping) is on the Cranes tab.</p>
+        <p class="note">Default (conservative): no interpolation: the next longer tabulated boom length and the next larger tabulated radius; outside the chart = not permitted. Each chart's rating basis (% of tipping) is on the Cranes &amp; setups tab.</p>
+        ${T && T.settingsHtml ? T.settingsHtml() : ''}
         <div class="fRow"><label for="lsPath">Path model</label><select id="lsPath"><option value="uniform"${s.path === 'uniform' ? ' selected' : ''}>uniform: radius changes with the swing angle (default)</option><option value="luff"${s.path === 'luff' ? ' selected' : ''}>luff at the pick, then swing at the set radius</option></select></div>
         ${numIn('lsObst', s.obstClr, 'Clearance to obstructions', 'ft')}
         <p class="note">3D clearances: power lines to 29 CFR 1926.1408 D_min (boom, load line, load, counterweight); obstructions: contact red, closer than the clearance above amber; exclusion zones in plan.</p></div></div>
-      <div class="sec"><div class="secHead">Crane setups (${A.P.setups.length})</div><div class="secBody">
-        ${A.P.cranes.length ? `<div class="goRow"><select id="luNew" aria-label="Crane to place">${A.P.cranes.map(c => `<option value="${c.id}">${esc(K.name(c.def))}</option>`).join('')}</select><button type="button" class="primary" data-la="place">Place at the map centre</button></div>` : '<p class="note">Add a crane to the project first (Cranes tab).</p>'}
-        ${A.P.setups.map(x => `<div class="itRow${x.id === selU ? ' on' : ''}"><button type="button" class="itSel" data-selu="${x.id}">${esc(x.name)}</button><span class="itSum">${picksOf(x).length} pick${picksOf(x).length === 1 ? '' : 's'}</span><button type="button" class="itDel" data-delu="${x.id}" aria-label="Remove ${esc(x.name)}">×</button></div>`).join('')}</div></div>
-      ${u ? setupHtml(u) : ''}${k ? pickHtml(k) : ''}`;
+      <div class="sec"><div class="secHead">Lifts (${n})</div><div class="secBody">
+        <p class="note">Every lift of the project: single picks (one crane setup, a pick and a set point) and girder lifts (a girder carried by one crane, or by two in tandem). The crane setups are on the <a href="#" class="wk" data-la="cranesIn">Cranes &amp; setups tab</a>.</p>
+        ${A.P.setups.length ? `<div class="goRow"><select id="lkNewU" aria-label="Crane setup of the new pick">${A.P.setups.map(u => `<option value="${u.id}"${u.id === selU ? ' selected' : ''}>${esc(u.name)}</option>`).join('')}</select><button type="button" class="primary" data-la="addPickTo">Add single pick</button></div>`
+          : `<p class="note">${A.P.cranes.length ? 'Add a crane setup first (Cranes &amp; setups tab: "Add setup" under the crane).' : 'Add a crane to the project first, then a setup (Cranes &amp; setups tab).'}</p>`}
+        ${T ? '<div class="goRow"><button type="button" data-ta="newT">Add girder lift (tandem, two cranes)</button><button type="button" data-ta="newS">Add girder lift (one crane)</button></div>' : ''}
+        <div class="itGrp" id="lfList">${A.P.picks.map(x => { const u = setupOf(x.setupId); return `<div class="itRow${show === 'pick' && x.id === selK ? ' on' : ''}"><span class="chip">single pick</span><button type="button" class="itSel" data-selk="${x.id}">${esc(x.name)}</button><span class="itSum">${sName(u)} · ${sumText(x)}</span><button type="button" class="itDel" data-delk="${x.id}" aria-label="Delete ${esc(x.name)}">×</button></div>`; }).join('')}
+          ${T ? ts.map(x => `<div class="itRow${show === 'tandem' && tSel && x.id === tSel.id ? ' on' : ''}"><span class="chip chipG">${x.type === 'single' ? 'girder lift · 1 crane' : 'girder lift · 2 cranes'}</span><button type="button" class="itSel" data-tasel-t="${x.id}">${esc(x.name)}</button><span class="itSum">${T.sumText(x)}</span><button type="button" class="itDel" data-tadel="${x.id}" aria-label="Delete ${esc(x.name)}">×</button></div>`).join('') : ''}
+          ${n ? '' : '<p class="note">No lift yet.</p>'}</div></div></div>
+      ${show === 'pick' ? pickHtml(k) : show === 'tandem' ? T.cardHtml(tSel) : ''}`;
   }
   function onClick(e) {
-    const t = e.target.closest('[data-la],[data-selu],[data-delu],[data-selk],[data-delk]'); if (!t) return;
+    const t = e.target.closest('[data-la],[data-selu],[data-delu],[data-selk],[data-delk],[data-selt]'); if (!t) return;
     if (t.dataset.selu) { select(t.dataset.selu, null); return; }
     if (t.dataset.delu) { delSetup(t.dataset.delu); return; }
-    if (t.dataset.selk) { select(selU, t.dataset.selk); return; }
+    if (t.dataset.selk) { const k = pickOf(t.dataset.selk); if (k) select(k.setupId, k.id); return; }
     if (t.dataset.delk) { delPick(t.dataset.delk); return; }
+    if (t.dataset.selt) { if (TU()) { A.showITab('lifts'); TU().select(t.dataset.selt); reveal('tlCard'); } return; }
     const a = t.dataset.la;
-    if (a === 'place') placeCrane(el.querySelector('#luNew').value);
-    else if (a === 'addPick') addPick(selU);
+    if (/In$|Out$|Tab$|^rpt|^edit/.test(a)) e.preventDefault();
+    if (a === 'addPick') addPick(selU);
+    else if (a === 'addPickTo') addPick(el.querySelector('#lkNewU').value);
     else if (a === 'delU') delSetup(selU);
     else if (a === 'zoomU') zoomTo(selU);
-    else if (a === 'picksTab') { e.preventDefault(); A.showOTab(window.CranePickPicks ? 'picks' : 'plan'); }
-    else if (a === 'rptPick') { e.preventDefault(); if (window.CranePickPicks && selK) window.CranePickPicks.gotoReport(selK); }
+    else if (a === 'editSetup') { const k = pickOf(selK); if (k) select(k.setupId, null); }
+    else if (a === 'cranesIn') A.showITab('cranes');
+    else if (a === 'groundIn') { A.showITab('ground'); reveal('grU-' + selU); }
+    else if (a === 'terrainIn') A.showITab('terrain');
+    else if (a === 'craneOut') A.showOTab('crane');
+    else if (a === 'picksTab') A.showOTab(window.CranePickPicks ? 'picks' : 'plan');
+    else if (a === 'rptPick') { if (window.CranePickPicks && selK) window.CranePickPicks.gotoReport(selK); }
   }
   function zoomTo(uid) { const u = setupOf(uid); if (!u) return; A.showOTab('plan'); const pts = [u].concat(...picksOf(u).map(k => [k.pick, k.set])); const r = Math.max(30, ...pts.map(p => G.dist(u, p))); MP().fit([{ x: u.x - r, y: u.y - r }, { x: u.x + r, y: u.y + r }]); }
   function onChange(e) {
@@ -365,7 +425,10 @@
     }
   }
   /* ---------- wiring ---------- */
-  function build(p) { el = p; p.addEventListener('click', onClick); p.addEventListener('change', onChange); p.addEventListener('toggle', e => { if (e.target.id === 'lfSteps') stepsOpen = e.target.open; if (e.target.id === 'lkElev') elevOpen = e.target.open; if (e.target.id === 'luFloats') floatsOpen = e.target.open; }, true); drawTab(); }
+  const onToggle = e => { if (e.target.id === 'lfSteps') stepsOpen = e.target.open; if (e.target.id === 'lkElev') elevOpen = e.target.open; if (e.target.id === 'luFloats') floatsOpen = e.target.open; };
+  function build(p) { el = p; p.addEventListener('click', onClick); p.addEventListener('change', onChange); p.addEventListener('toggle', onToggle, true); if (TU() && TU().attach) TU().attach(p); drawTab(); }
+  /* attachSetups(pane): the Cranes & setups tab (ui/cranes.js build) holds the setup cards: their clicks and changes come here */
+  function attachSetups(p) { sEl = p; p.addEventListener('click', onClick); p.addEventListener('change', onChange); p.addEventListener('toggle', onToggle, true); }
   A.inTab({ id: 'lifts', label: 'Lifts', build, show: drawTab });
   A.on('project', () => { rev++; renderAll(); drawTab(); });
   ['change', 'live'].forEach(e => A.on(e, o => { if (!(o && o.kind === 'lifts')) rev++; }));   // pick / setup drags change the memo key themselves
@@ -377,5 +440,6 @@
   A.on('live', o => { if (o.kind === 'items') (A.P.setups || []).forEach(u => { const g = layers.get(u.id); if (g) picksOf(u).forEach(k => { const pk = g.picks.get(k.id); if (pk) placePick(u, k, pk); }); }); });
   A.on('tab', id => { if (id === 'plan') setTimeout(() => (A.P.setups || []).forEach(placeSetup), 0); });
   A.on('ready', () => { const m = MP() && MP().map; if (m) m.on('zoomend', () => (A.P.setups || []).forEach(u => { const g = layers.get(u.id); if (g) placeSym(u, g.sym); })); });   // detail by zoom
-  window.CranePickPlace = { placeCrane, addPick, select, evalPick, delSetup, delPick, renderAll, layers, get selected() { return { setup: selU, pick: selK }; } };
+  window.CranePickPlace = { placeCrane, addPick, select, evalPick, delSetup, delPick, renderAll, layers, get selected() { return { setup: selU, pick: selK }; },
+    drawTab, setupsBlock, orphansBlock, attachSetups, setCard, get card() { return card(); } };
 })();

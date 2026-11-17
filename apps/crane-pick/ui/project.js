@@ -33,8 +33,8 @@
       <div class="sec"><div class="secHead">Notes</div><div class="secBody"><textarea id="prjNotes" aria-label="Project notes" placeholder="Lift sequence, contacts, site constraints, open questions…"></textarea><p class="note">Printed in the Report.</p></div></div>
       <div class="sec"><div class="secHead">About this tool</div><div class="secBody"><p class="note"><b>Lift-planning aid.</b> Draw the site on the map or on a plan sheet: obstructions,
         power lines (OSHA minimum clearance), buried utilities, culverts and walls, exclusion zones, labels and dimensions. Every item can be dragged and edited, and every change can be undone.</p>
-        <p class="note">Cranes (C2): load the crane library (Cranes tab: from GitHub or from files, or paste a chart), add cranes to the project, place them on the map (Lifts tab) and drag the crane, the pick and the set points: radius, chart capacity and % of chart follow live; every pick is listed on the Picks tab and in the Report.</p>
-        <p class="note">Girder lifts (C5, Girder lifts tab): a girder (or paired girders with cross-frames) lifted by one crane or by two in tandem, from the truck to the bearings: load share, every step of the path checked for each crane (capacity against the tandem limit, heights, 3D clearances, crane to crane, ground).</p>
+        <p class="note">Cranes (C2): load the crane library (Cranes &amp; setups tab: from GitHub or from files, or paste a chart), add cranes to the project, add their setups (place them on the map, same tab), add the picks (Lifts tab) and drag the crane, the pick and the set points: radius, chart capacity and % of chart follow live; every pick is listed on the Picks tab and in the Report.</p>
+        <p class="note">Girder lifts (C5, Lifts tab): a girder (or paired girders with cross-frames) lifted by one crane or by two in tandem, from the truck to the bearings: load share, every step of the path checked for each crane (capacity against the tandem limit, heights, 3D clearances, crane to crane, ground).</p>
         <p class="note">How to use the app: the <a href="#" data-goman="1">Manual</a> tab (quick start, workflows, what each tab does, methods and limits, crane data, troubleshooting).</p>
         <p class="note">Units: US customary (ft, kip, psf / ksf). Positions: State Plane grid, US survey feet (Site &amp; map tab).</p></div></div>`;
     p.addEventListener('click', e => { if (e.target.closest('[data-goman]')) { e.preventDefault(); A.showOTab('man'); } });
@@ -58,7 +58,7 @@
     const cloud = A.store && window.SharedGitHubSync ? { cloud: { tool: 'crane-pick', label: 'Crane Pick Analyzer', space: 1, toFile: i => toFile(i), fromFile: f => M.fromFile(f).project } } : {};
     A.pb = SharedProjectsUI.projectBar(Object.assign({ store: ms, storage: A.LS, label: 'Crane Pick Analyzer', id: 'crLibDlg', omit: ['view', 'savedAt'], askUnsaved: 'always',
       getState: () => A.P,
-      save: n => { if (window.CranePickCraneUI && !window.CranePickCraneUI.beforeSave(n)) return { ok: false, message: 'Not saved (the project holds crane chart data and the Cloud sync repository is public or not checked: see the Cranes tab).' };   // C2-1
+      save: n => { if (window.CranePickCraneUI && !window.CranePickCraneUI.beforeSave(n)) return { ok: false, message: 'Not saved (the project holds crane chart data and the Cloud sync repository is public or not checked: see the Cranes &amp; setups tab).' };   // C2-1
         const it = JSON.parse(JSON.stringify(A.P)); it.savedAt = new Date().toISOString(); const r = ms.save(n, it); if (r.ok) A.setOpen(n); return r; },
       open: n => { const it = ms.get(n); if (!it) return false; A.loadProject(it, n); return true; },
       current: () => A.openName, setCurrent: n => A.setOpen(n),

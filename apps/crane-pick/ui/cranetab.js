@@ -23,15 +23,15 @@
     const pk = L && L.kind === 'pick' ? L : null, tl = L && L.kind === 'tandem' ? L : null;
     if (['Plan', 'Elevation', 'Chart', 'Setup', 'Settings'].includes(r.grp)) { if (pk) out.push(`<a href="#" data-cg="pick" data-id="${esc(pk.id)}">worked: ${esc(pk.name)}</a>`); if (tl) out.push(`<a href="#" data-cg="tandem" data-id="${esc(tl.id)}">worked: ${esc(tl.name)}</a>`); }
     if (['Weights', 'Ground'].includes(r.grp) || (r.grp === 'Plan' && /outrigger|spread|track|gauge/i.test(r.label))) { if (pk) out.push(`<a href="#" data-cg="ground" data-id="${esc(pk.id)}">ground: ${esc(pk.name)}</a>`); if (tl) out.push(`<a href="#" data-cg="tandem" data-id="${esc(tl.id)}">ground: ${esc(tl.name)}</a>`); }
-    if (['Plan', 'Elevation', 'Weights', 'Chart', 'Ground'].includes(r.grp)) out.push(`<a href="#" data-cg="cranes">Cranes tab</a>`);
-    if (r.grp === 'Setup' || r.id === 'boom' || r.grp === 'Settings') out.push(`<a href="#" data-cg="lifts">Lifts tab</a>`);
+    if (['Plan', 'Elevation', 'Weights', 'Chart', 'Ground'].includes(r.grp)) out.push(`<a href="#" data-cg="cranes">Cranes &amp; setups tab</a>`);
+    if (r.grp === 'Setup' || r.id === 'boom' || r.grp === 'Settings') out.push(`<a href="#" data-cg="${r.grp === 'Settings' ? 'lifts' : 'setup'}" data-id="${esc(m.u ? m.u.id : '')}">${r.grp === 'Settings' ? 'Lifts tab (settings)' : 'edit setup (Cranes &amp; setups tab)'}</a>`);
     return out.join(' · ');
   }
   function legend() { return '<p class="note crnLeg">Each value is labelled with its source: <span class="crnS">[file p.x]</span> the crane file (printed page) · <span class="crnS">[chart p.x]</span> the chart configuration · <span class="crnS">[entered]</span> entered in this tool · <span class="crnA">[ASSUMED (default)]</span> / <span class="crnA">not given</span>: guessed by the app, check it · values without a tag are the engine\'s results at the point shown.</p>'; }
   function draw() {
     if (!el || !F()) return; dirty = false;
     const P = A.P, opts = F().options(P);
-    if (!opts.length) { el.innerHTML = '<div class="sec"><div class="secHead">Crane</div><div class="secBody"><p class="note">No crane in the project yet: load one and add it on the Cranes tab.</p></div></div>'; return; }
+    if (!opts.length) { el.innerHTML = '<div class="sec"><div class="secHead">Crane</div><div class="secBody"><p class="note">No crane in the project yet: load one and add it on the Cranes &amp; setups tab.</p></div></div>'; return; }
     const s = st(); let o = opts.find(x => optKey(x) === optKey(s)) || opts.find(x => x.used) || opts[0];
     let m; try { m = F().model(P, ctx(), { craneId: o.craneId, setupId: o.setupId, group: o.group, lift: s.lift, at: s.at, cfg: s.cfg }); } catch (e) { console.error(e); el.innerHTML = `<div class="sec"><div class="secBody"><p class="warnT">The crane could not be drawn: ${esc(e.message)}</p></div></div>`; return; }
     if (!m) return;
@@ -43,8 +43,8 @@
     const ptLine = pt ? `<p class="note crnPt" id="crnPtLine">${esc(pt.lift.name)}, ${esc(pt.where)}: R = <b>${fmtN(pt.R, 2)} ft</b>, W = <b>${fmtN(pt.W, 0)} lb</b>, C = ${pt.look && pt.look.ok ? fmtN(pt.C, 0) + ' lb' : 'not permitted'}${pt.look && pt.look.ok ? `, <b>${fmtN(pt.pct, 1)} % of chart</b>` : ''}${isFinite(pt.m) && pt.m != null ? `, hook reach margin ${fmtN(pt.m, 2)} ft` : ''}.</p>` : '';
     el.innerHTML = `<div class="sec"><div class="secHead">Crane used in the analysis</div><div class="secBody">
       <div class="crnBar"><label for="crnSel">Crane / setup</label><select id="crnSel">${opts.map(x => `<option value="${esc(optKey(x))}"${x === o ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}</select>${liftSel}${zSel}</div>
-      <p class="note"><b>${esc(m.name)}</b>${m.virt ? ' (not placed)' : ` · setup <b>${esc(m.u.name)}</b>`} · ${esc(m.chs.gr ? m.chs.gr.label : 'no chart')} · source: ${esc(so.doc || 'not stated')}, rev. ${esc(so.revision || '—')}, ${esc(so.date || '—')}${d.preliminary ? ' · <span class="crnA">PRELIMINARY document</span>' : ''}${d.app_inputs && d.app_inputs.edited ? ' · <span class="crnA">chart edited in this tool</span>' : ''} · <a href="#" data-cg="cranes">edit on the Cranes tab</a> · <a href="#" data-cg="rpt" data-key="crane-${esc(m.crane.id)}">Report §Cranes</a>${m.virt ? '' : ` · <a href="#" data-cg="dwg" data-sheet="crane-${esc(m.u.id)}">drawing</a>`}</p>
-      ${nA ? `<p class="note"><span class="crnA">${nA} value${nA > 1 ? 's' : ''} assumed or not given</span>: highlighted in the figures and the table; enter the crane's own on the Cranes tab.</p>` : ''}
+      <p class="note"><b>${esc(m.name)}</b>${m.virt ? ' (not placed)' : ` · setup <b>${esc(m.u.name)}</b>`} · ${esc(m.chs.gr ? m.chs.gr.label : 'no chart')} · source: ${esc(so.doc || 'not stated')}, rev. ${esc(so.revision || '—')}, ${esc(so.date || '—')}${d.preliminary ? ' · <span class="crnA">PRELIMINARY document</span>' : ''}${d.app_inputs && d.app_inputs.edited ? ' · <span class="crnA">chart edited in this tool</span>' : ''} · <a href="#" data-cg="cranes">edit on the Cranes &amp; setups tab</a> · <a href="#" data-cg="rpt" data-key="crane-${esc(m.crane.id)}">Report §Cranes</a>${m.virt ? '' : ` · <a href="#" data-cg="dwg" data-sheet="crane-${esc(m.u.id)}">drawing</a>`}</p>
+      ${nA ? `<p class="note"><span class="crnA">${nA} value${nA > 1 ? 's' : ''} assumed or not given</span>: highlighted in the figures and the table; enter the crane's own on the Cranes &amp; setups tab.</p>` : ''}
       ${legend()}${ptLine}</div></div>
       <div class="crnGrid">
         <div class="sec"><div class="secHead">1. Plan (crane frame, carrier front up; to scale)</div><div class="secBody crnFig" id="crnPlan">${svgP}
@@ -64,7 +64,7 @@
   /* 2026-11-17 (engineer: "I need to see exactly where the outriggers sit"): 6. Dimension check (each drawn dimension against the
      manufacturer's value and page: engine/cranegfx.js dimCheck) and 7. support locations (float centres / track ends: local x / y and
      State Plane, cranegfx floatTable), with the stake-out CSV. A project copy of a crane without the manufacturer geometry block, while the
-     library copy has one, is flagged (Cranes tab: "Use the library copy"). */
+     library copy has one, is flagged (Cranes & setups tab: "Use the library copy"). */
   function libHasGeo(c) {
     try { const K = window.CranePickCranes, v = JSON.parse(localStorage.getItem(window.CranePickModel.KEYS.library) || 'null'), e = v && v.cranes && v.cranes[K.key(c)];
       const d = e && (e.def || e.crane || e); return !!(d && K.geometryOf(d)); } catch (e) { return false; }
@@ -74,7 +74,7 @@
     const c = m.c, has = !!K.geometryOf(c), u = m.u || { x: 0, y: 0, heading: 0 };
     let rows = [], fl = []; try { rows = CG.dimCheck(c, u); fl = m.virt ? [] : CG.floatTable(c, u, A.P.site.zone, window.proj4); } catch (e) { console.error(e); }
     const fp = window.CranePickLift.footprint(c, u), d = v => fmtN(v, 2), z = window.CranePickGeo.zone(A.P.site.zone), un = z.unit === 'm' ? 'm' : 'ft';
-    const flag = has ? '' : `<p class="note"><span class="crnA">This crane's project copy has no manufacturer geometry block</span>${libHasGeo(c) ? ': the library copy has one: <b>Cranes tab → Use the library copy</b> to draw it (and place the floats) from the manufacturer\'s dimension drawings.' : ': the floats and outline are drawn from the file\'s dimensions and the assumptions listed below.'}</p>`;
+    const flag = has ? '' : `<p class="note"><span class="crnA">This crane's project copy has no manufacturer geometry block</span>${libHasGeo(c) ? ': the library copy has one: <b>Cranes &amp; setups tab → Use the library copy</b> to draw it (and place the floats) from the manufacturer\'s dimension drawings.' : ': the floats and outline are drawn from the file\'s dimensions and the assumptions listed below.'}</p>`;
     const ok = r => r.ok === true ? '<span class="ok">matches</span>' : r.ok === false ? '<span class="crnA">differs</span>' : r.mfr == null ? '<span class="crnA">not given</span>' : '—';
     const spr = fp.drawOnly ? `<p class="note"><span class="crnA">Outriggers drawn at "${esc(fp.spread)}"</span>: the chart group has no chart at this spread: the capacities and the ground loads use the "${esc(fp.chartSpread || '—')}" chart. Not valid for this setup until a chart for this spread is used.</p>` : '';
     return `<div class="sec" id="crnDim"><div class="secHead">6. Dimension check: drawn vs manufacturer</div><div class="secBody">${flag}${spr}
@@ -109,11 +109,12 @@
     if (k === 'csv') return stakeout();
     if (k === 'cranes') return A.showITab('cranes');
     if (k === 'lifts') return A.showITab('lifts');
+    if (k === 'setup') { const sid = id; if (sid && window.CranePickPlace && A.P.setups.some(u => u.id === sid)) return window.CranePickPlace.select(sid, null); return A.showITab('cranes'); }   // 2026-11-17: the setups are on the Cranes & setups tab
     if (k === 'rpt') return gotoReport(a.dataset.key);
     if (k === 'dwg') return window.CranePickDrawingsUI && window.CranePickDrawingsUI.show(a.dataset.sheet);
     if (k === 'pick') { A.showOTab('picks'); setTimeout(() => { const d = document.getElementById('pk-' + id); if (d) { d.open = true; d.scrollIntoView({ block: 'start' }); } }, 30); return; }
     if (k === 'ground') { A.showOTab('ground'); setTimeout(() => { const d = document.getElementById('gr-' + id); if (d) { if (d.tagName === 'DETAILS') d.open = true; d.scrollIntoView({ block: 'start' }); } }, 30); return; }
-    if (k === 'tandem') { A.showITab('tandem'); if (window.CranePickTandemUI) window.CranePickTandemUI.select(id); }
+    if (k === 'tandem') { A.showITab('lifts'); if (window.CranePickTandemUI) window.CranePickTandemUI.select(id); }
   }
   /* ---------- Report §Cranes: the figures of each setup of a crane used by a lift (ui/cranes.js adds them to the crane's subsection) ---------- */
   function reportItems(P, craneId) {

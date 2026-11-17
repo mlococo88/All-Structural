@@ -10,7 +10,9 @@
    data. Cloud sync copies saved projects to the repository set in Cloud sync (any repository the user names): before a project with chart
    data is saved there, its visibility is checked (crane.syncCheck) and a public (or unchecked) repository is warned about.
    Cards: source document, revision, date, preliminary flag, rating basis (% of tipping), terms, the configs, the plan dimensions, the
-   phase-4 inputs (outrigger loads, C4). Report: §"Cranes". */
+   phase-4 inputs (outrigger loads, C4). Report: §"Cranes".
+   Tab "Cranes & setups" (2026-11-17, engineer decision; display only): each project crane's card also lists its setups (ui/place.js
+   setupsBlock: one crane definition, any number of setups) with "Add setup" and the selected setup's card. */
 (function () {
   'use strict';
   const A = window.CranePickApp, M = window.CranePickModel, K = window.CranePickCranes, esc = A.esc;
@@ -93,7 +95,7 @@
   }
   function used(id) { return (A.P.setups || []).some(s => s.craneId === id); }
   function removeFromProject(id) {
-    if (used(id)) { A.notice('This crane is placed on the map: remove its setups (Lifts tab) first.', 'warn'); return; }
+    if (used(id)) { A.notice('This crane is placed on the map: remove its setups (listed in its card, Cranes &amp; setups tab) first.', 'warn'); return; }
     A.update(P => { P.cranes = P.cranes.filter(c => c.id !== id); }, 'cranes');
   }
   function updateFromLibrary(id) {
@@ -129,7 +131,7 @@
   function syncWarn(added) {
     const i = syncInfo(); if (!i || !A.P.cranes.length) return;
     if (i.priv === null && !checking) checkRepo().catch(() => {});
-    if (added && i.priv !== true) A.notice(`This project now holds crane chart data. Cloud sync copies saved projects to <b>${esc(i.repo)}</b>${i.priv === false ? ', a <b>PUBLIC</b> repository' : ' (visibility not checked yet)'}: see the Cranes tab before saving to GitHub.`, 'warn', { id: 'crSyncNote' });
+    if (added && i.priv !== true) A.notice(`This project now holds crane chart data. Cloud sync copies saved projects to <b>${esc(i.repo)}</b>${i.priv === false ? ', a <b>PUBLIC</b> repository' : ' (visibility not checked yet)'}: see the Cranes &amp; setups tab before saving to GitHub.`, 'warn', { id: 'crSyncNote' });
   }
   /* beforeSave(name) (ui/project.js): false = do not save. Asks once per repository and session when the repository is public or
      unchecked and the project would be uploaded (not held as "This browser only"). */
@@ -140,7 +142,7 @@
     if (i.priv === null && acked[i.repo]) return true;
     const ok = window.confirm(i.priv === false
       ? `${i.repo} is a PUBLIC repository. Saving "${name}" uploads its crane chart data (manufacturer load charts) there.\n\nOK = save and upload anyway. Cancel = do not save (use Save as → "This browser only").`
-      : `Saving "${name}" uploads its crane chart data to ${i.repo}, whose visibility has not been checked (Cranes tab → Check the repository).\n\nOK = save and upload. Cancel = do not save.`);
+      : `Saving "${name}" uploads its crane chart data to ${i.repo}, whose visibility has not been checked (Cranes & setups tab → Check the repository).\n\nOK = save and upload. Cancel = do not save.`);
     if (ok && i.priv === null) acked[i.repo] = true;
     return ok;
   }
@@ -153,6 +155,7 @@
     const zoned = (d.configs || []).some(g => g.zone !== '360'), ph = ai.ph4 || {};
     const num = (k, v, lbl, unit, hint) => `<div class="fRow"><label for="cr_${k}_${c.id}">${lbl}</label><input type="text" inputmode="decimal" id="cr_${k}_${c.id}" data-cr="${c.id}" data-k="${k}" value="${v == null ? '' : v}" placeholder="${esc(hint || '')}"><span class="unit">${unit}</span></div>`;
     return `<div class="shCard crCard" id="crCard-${c.id}"><div class="shHead"><b class="shName">${esc(K.name(d))}</b>${chip(d.type || 'type not set')}${d.preliminary ? chip('PRELIMINARY', 'chipW', 'The source document is marked preliminary') : ''}${ai.edited ? chip('edited here', 'chipW', 'Chart data changed in this tool: ' + (ai.edited.at || '')) : ''}</div>
+      ${window.CranePickPlace ? `<div class="crSetups" data-crane="${c.id}">${window.CranePickPlace.setupsBlock(c.id)}</div>` : ''}
       <div class="kv">${[['Source document', esc(s.doc || '—')], ['Revision', esc(s.revision || '—')], ['Date', esc(s.date || '—')], ['Pages', esc(s.pages || '—')], ['File', esc(s.file || '—')],
         ['Loaded from', esc(srcText(c.src))], ['Chart data fingerprint', `<code>${fp}</code>${le && le.fp !== fp ? ' <span class="warnT">(library copy differs)</span>' : ''}`]].map(([k, v]) => `<div><span>${k}</span><span>${v}</span></div>`).join('')}</div>
       ${s.terms ? `<p class="note"><b>Terms:</b> ${esc(s.terms)}</p>` : ''}
@@ -173,7 +176,7 @@
         ${num('grLb', ph.grossLb, 'Gross operating weight (no counterweight)', 'lb', window.CranePickGround && window.CranePickGround.fileGross(d) ? fmt(window.CranePickGround.fileGross(d), 0) + ' (file)' : 'for the estimate')}
         ${num('flt', ph.floatFt, d.type === 'crawler' ? 'Track shoe width' : 'Float size', 'ft', d.type === 'crawler' ? (p.crawler && p.crawler.shoe != null ? String(p.crawler.shoe) + ' (file)' : '') : (p.outr && p.outr.float != null ? String(p.outr.float) + ' (file)' : ''))}</div>
       ${(d.gaps || []).length ? `<details class="crSteps"><summary>Gaps noted in the file (${d.gaps.length})</summary><ul class="note">${d.gaps.map(g => `<li>${esc(g)}</li>`).join('')}</ul></details>` : ''}
-      <div class="goRow"><button type="button" data-ca="edit" data-id="${c.id}">Edit…</button>${le && le.fp !== fp ? `<button type="button" data-ca="upd" data-id="${c.id}">Use the library copy</button>` : ''}${window.CranePickPlace ? `<button type="button" data-ca="place" data-id="${c.id}">Place on the map</button>` : ''}<button type="button" class="danger" data-ca="rm" data-id="${c.id}">Remove from project</button></div></div>`;
+      <div class="goRow"><button type="button" data-ca="edit" data-id="${c.id}">Edit…</button>${le && le.fp !== fp ? `<button type="button" data-ca="upd" data-id="${c.id}">Use the library copy</button>` : ''}<button type="button" class="danger" data-ca="rm" data-id="${c.id}">Remove from project</button></div></div>`;
   }
   /* C3-1: the elevation geometry (engine/elev.js geomOf): entered here (app_inputs.geom), else the file's, else the stated assumption */
   function geomHtml(c, num) {
@@ -212,7 +215,8 @@
           : '<p class="note">The library is empty: load it from GitHub or from files. The chart data stay in this browser and in the projects that use them.</p>'}
       </div></div>
       <div class="sec"><div class="secHead">Cranes in this project (${A.P.cranes.length})</div><div class="secBody">${syncHtml()}
-        ${A.P.cranes.length ? A.P.cranes.map(cardHtml).join('') : '<p class="note">No crane yet: "Add to project" from the library. The project keeps its own copy of each crane (a saved project is self-contained).</p>'}</div></div>`;
+        ${A.P.cranes.length ? A.P.cranes.map(cardHtml).join('') : '<p class="note">No crane yet: "Add to project" from the library. The project keeps its own copy of each crane (a saved project is self-contained).</p>'}</div></div>
+      <div id="crSetupsOrphan">${window.CranePickPlace ? window.CranePickPlace.orphansBlock() : ''}</div>`;
   }
   function onClick(e) {
     const b = e.target.closest('[data-ca]'); if (!b) return; const a = b.dataset.ca;
@@ -270,8 +274,8 @@
     }) }];
   });
   /* ---------- wiring ---------- */
-  function build(p) { el = p; p.addEventListener('click', onClick); p.addEventListener('change', onChange); p.addEventListener('toggle', e => { if (e.target.id === 'crSrc') srcOpen = e.target.open; }, true); draw(); }
-  A.inTab({ id: 'cranes', label: 'Cranes', build, show: () => { draw(); syncWarn(false); } });
+  function build(p) { el = p; p.addEventListener('click', onClick); p.addEventListener('change', onChange); p.addEventListener('toggle', e => { if (e.target.id === 'crSrc') srcOpen = e.target.open; }, true); if (window.CranePickPlace) window.CranePickPlace.attachSetups(p); draw(); }
+  A.inTab({ id: 'cranes', label: 'Cranes & setups', build, show: () => { draw(); syncWarn(false); } });
   A.on('project', draw); A.on('change', o => { if (o.kind === 'cranes' || o.kind === 'setups') draw(); });
   window.CranePickCraneUI = { lib, libSrc, DEF_SRC, addToLibrary, removeFromLibrary, ingest, loadFiles, loadGitHub, addToProject, addDefToProject, removeFromProject, updateFromLibrary,
     syncInfo, checkRepo, beforeSave, redraw: draw, crane: pc, srcText, planText };

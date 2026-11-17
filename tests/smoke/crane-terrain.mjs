@@ -21,7 +21,9 @@ let n = 0; const ok = m => { n++; console.log('  ok  ', m); };
 const near = (a, b, tol, m) => assert.ok(Math.abs(a - b) <= tol, `${m || ''}: ${a} vs ${b} (tol ${tol})`);
 const { b, p, errs } = await openPage(FILE, { vw: 1280, vh: 960, ls: { 'crane.ui': '{"base":"none","itab":"cranes"}' } });
 const shot = async nm => { if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); await p.screenshot({ path: path.join(SHOTS, nm + '.png') }); } };
-const setF = async (sel, v) => { await p.fill(sel, String(v)); await p.dispatchEvent(sel, 'change'); await p.waitForTimeout(80); };
+const itabOf = sel => /^#lu|^\[data-la=(addPick|delU|zoomU)\]/.test(sel) ? 'cranes' : /^#(lk|ls|lf|tl)|lkSwing|^\[data-(la|ta)=/.test(sel) ? 'lifts' : null;   // 2026-11-17: setups on Cranes & setups, picks / girder lifts on Lifts
+const goTab = async sel => { const t = itabOf(sel); if (t) await p.evaluate(t => { if (CranePickApp.ui.itab !== t) CranePickApp.showITab(t); }, t); };
+const setF = async (sel, v) => { await goTab(sel); await p.fill(sel, String(v)); await p.dispatchEvent(sel, 'change'); await p.waitForTimeout(80); };
 const txt = sel => p.$eval(sel, e => (e.innerText || e.textContent).replace(/\s+/g, ' '));
 const scr = q => p.evaluate(q => { const m = CranePickMap.map, cp = m.latLngToContainerPoint(CranePickMap.toLL(q)), r = m.getContainer().getBoundingClientRect(); return { x: r.x + cp.x, y: r.y + cp.y }; }, q);
 const surf = (E) => E < 1040 ? 100 : 100 + 0.05 * (E - 1040);   // ft

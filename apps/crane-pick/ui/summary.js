@@ -26,7 +26,7 @@
     if (!el || !window.CranePickDrawSet) return; dirty = false;
     const DS = window.CranePickDrawSet; let S; try { S = DS.summary(A.P, ctx()); } catch (e) { console.error(e); el.innerHTML = `<div class="sec"><div class="secBody"><p class="warnT">${esc(e.message)}</p></div></div>`; return; }
     const L = S.filter(r => r.kind !== 'route'), R = S.filter(r => r.kind === 'route'), s = window.CranePickLift.settingsOf(A.P), tl = (A.P.lift && A.P.lift.tandem) || 75;
-    if (!S.length) { el.innerHTML = '<div class="sec"><div class="secHead">Summary</div><div class="secBody"><p class="note">No lift yet: place a crane (Cranes or Lifts tab) or add a girder lift (Girder lifts tab).</p></div></div>'; return; }
+    if (!S.length) { el.innerHTML = '<div class="sec"><div class="secHead">Summary</div><div class="secBody"><p class="note">No lift yet: add a crane setup (Cranes &amp; setups tab), then a single pick or a girder lift (Lifts tab).</p></div></div>'; return; }
     const rows = []; L.forEach(r => {
       if (r.missing) { rows.push(`<tr data-lift="${esc(r.id)}"><td>${esc(r.name)}</td><td colspan="9" class="warnT">${esc(r.missing)}</td><td>${links(r)}</td></tr>`); return; }
       r.cranes.forEach((c, i) => rows.push(`<tr data-lift="${esc(r.id)}"><td>${i ? '' : esc(r.name)}</td><td>${r.kind === 'pick' ? 'single pick' : r.single ? 'girder lift, one crane' : 'tandem, crane ' + (i + 1)}: ${esc(c.setup)}</td>
@@ -47,7 +47,7 @@
     if (k === 'pick') { const pk = P.picks.find(x => x.id === id); if (!pk) return;
       if (a.dataset.sm === 'map') { A.showOTab('plan'); if (window.CranePickPlace) window.CranePickPlace.select(pk.setupId, pk.id); }
       else { A.showOTab('picks'); setTimeout(() => { const d = document.getElementById('pk-' + id); if (d) { d.open = true; d.scrollIntoView({ block: 'start' }); } }, 30); } return; }
-    if (k === 'tandem') { A.showITab('tandem'); if (a.dataset.sm === 'map') A.showOTab('plan'); if (window.CranePickTandemUI) window.CranePickTandemUI.select(id); return; }
+    if (k === 'tandem') { A.showITab('lifts'); if (a.dataset.sm === 'map') A.showOTab('plan'); if (window.CranePickTandemUI) window.CranePickTandemUI.select(id); return; }
     if (k === 'route') { A.showITab('route'); if (a.dataset.sm === 'map') { A.showOTab('plan'); if (window.CranePickRouteUI) window.CranePickRouteUI.select(id); } else A.showOTab('route'); }
   }
   A.outTab({ id: 'summary', label: 'Summary', before: 'picks', build: p => { el = p; p.addEventListener('click', onClick); }, show: () => { if (dirty) draw(); } });

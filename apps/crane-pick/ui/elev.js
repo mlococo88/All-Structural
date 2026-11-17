@@ -132,7 +132,7 @@
     if (v3) { box.innerHTML = ''; dock.querySelector('#elInfo').textContent = tg ? tg.name : c ? c.k.name : ''; window.CranePickView3D.show(b3, c, s.which); return; }
     if (window.CranePickView3D) window.CranePickView3D.hide();
     if (tg) { box.innerHTML = TU.dockSvg(Math.max(360, Math.min(1100, box.clientWidth || 760))); dock.querySelector('#elInfo').textContent = `${tg.name}, step ${TU.step}`; return; }
-    if (!c) { box.innerHTML = '<p class="note">No pick yet: place a crane (Cranes or Lifts tab).</p>'; dock.querySelector('#elInfo').textContent = ''; return; }
+    if (!c) { box.innerHTML = '<p class="note">No pick yet: add a crane setup (Cranes &amp; setups tab) and a pick (Lifts tab).</p>'; dock.querySelector('#elInfo').textContent = ''; return; }
     box.innerHTML = svg(c.ev, c.k, c.u, A.P.items, s.which, { w: Math.max(360, Math.min(1100, box.clientWidth || 760)), h: 260 });
     dock.querySelector('#elInfo').textContent = c.k.name;
   }

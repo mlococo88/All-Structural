@@ -25,13 +25,15 @@ const count = p => p.evaluate(() => { const c = {}; CranePickView3D.scene.traver
 const { b, p, errs } = await openPage(FILE, { vw: 1280, vh: 900, ls: { 'crane.ui': '{"base":"none","itab":"cranes"}' } });
 let b2 = null;
 try {
-  const setF = async (sel, v) => { await p.fill(sel, String(v)); await p.dispatchEvent(sel, 'change'); await p.waitForTimeout(80); };
+  const itabOf = sel => /^#lu|^\[data-la=(addPick|delU|zoomU)\]/.test(sel) ? 'cranes' : /^#(lk|ls|lf|tl)|lkSwing|^\[data-(la|ta)=/.test(sel) ? 'lifts' : null;   // 2026-11-17: setups on Cranes & setups, picks / girder lifts on Lifts
+  const goTab = async sel => { const t = itabOf(sel); if (t) await p.evaluate(t => { if (CranePickApp.ui.itab !== t) CranePickApp.showITab(t); }, t); };
+  const setF = async (sel, v) => { await goTab(sel); await p.fill(sel, String(v)); await p.dispatchEvent(sel, 'change'); await p.waitForTimeout(80); };
   await p.waitForSelector('[data-sp=chip]'); await p.waitForTimeout(300);
   await p.setInputFiles('#crFiles', [FW]); await p.waitForFunction(() => /1 crane loaded/.test(document.querySelector('#crStatus').textContent));
   await p.click('[data-ca=add]'); await p.waitForTimeout(150); await p.click('[data-ca=place]'); await p.waitForTimeout(400);
   await setF('#luE', 1000); await setF('#luN', 2000); await setF('#luBoom', 60); await setF('#luPad', 100);
   await setF('#lkPE', 1030); await setF('#lkPN', 2000); await setF('#lkSE', 1000); await setF('#lkSN', 2020); await setF('#lkLoad', 20000);
-  await p.click('#lkElev summary'); await p.waitForTimeout(80);
+  await goTab('#lkElev summary'); await p.click('#lkElev summary'); await p.waitForTimeout(80);
   for (const [id, v] of [['#lkPg', 98], ['#lkPh', 4], ['#lkSh', 20], ['#lkLH', 6], ['#lkRigH', 12], ['#lkBlk', 5], ['#lkLL', 40], ['#lkLW', 4]]) await setF(id, v);
   await p.evaluate(() => CranePickApp.update(P => { const N = CranePickModel.normItem;
     P.items.push(N({ type: 'power', name: 'OH 115 kV', kv: 115, height: 50, gradeEl: 100, pts: [{ x: 1040, y: 1900 }, { x: 1040, y: 2100 }] }), N({ type: 'obst', name: 'Pier', height: 8, gradeEl: 100, pts: [{ x: 960, y: 2010 }, { x: 975, y: 2010 }, { x: 975, y: 2030 }, { x: 960, y: 2030 }] }),

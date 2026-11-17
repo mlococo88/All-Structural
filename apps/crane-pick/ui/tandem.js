@@ -1,5 +1,6 @@
-/* apps/crane-pick/ui/tandem.js — girder lifts (one crane, or two in tandem) on the map, the Girder lifts input tab, the Picks tab rows and
-   the Report's §Tandem lifts (window.CranePickTandemUI). C5 (2026-11-16). Values: engine/tandem.js (CLAUDE.md §6: every value is worked in
+/* apps/crane-pick/ui/tandem.js — girder lifts (one crane, or two in tandem) on the map, their card and the tandem limit on the Lifts input
+   tab (2026-11-17: the separate "Girder lifts" tab joined the Lifts tab; ui/place.js draws that tab and puts cardHtml / settingsHtml in
+   it, this file still handles their inputs: attach(pane)), the Picks tab rows and the Report's §Tandem lifts (window.CranePickTandemUI). C5 (2026-11-16). Values: engine/tandem.js (CLAUDE.md §6: every value is worked in
    the card's worked steps and in the Report).
    Map, for each girder lift: the girder drawn to scale at its pick pose (blue: on the truck) and its set pose (green: on the bearings),
    the path of its centre through the waypoints, the girder at the scrubbed step (grey, dashed) with the boom line of each crane to its
@@ -10,7 +11,7 @@
 (function () {
   'use strict';
   const A = window.CranePickApp, G = window.CranePickGeo, K = window.CranePickCranes, LF = window.CranePickLift, M = window.CranePickModel, esc = A.esc;
-  const T = () => window.CranePickTandem, EL = () => window.CranePickElev, MP = () => window.CranePickMap, L_ = () => window.L;
+  const PL = () => window.CranePickPlace, T = () => window.CranePickTandem, EL = () => window.CranePickElev, MP = () => window.CranePickMap, L_ = () => window.L;
   const isNum = v => typeof v === 'number' && isFinite(v);
   const fmt = (v, d) => isNum(v) ? v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—';
   const COLS = { ok: '#059669', caution: '#D97706', critical: '#EA580C', over: '#DC2626', np: '#DC2626' };
@@ -34,7 +35,7 @@
     const c = MP() && MP().map ? MP().toFt(MP().map.getCenter()) : { x: 0, y: 0 }, n = (A.P.tandems || []).length + 1;
     const t = M.normTandem({ name: `${type === 'single' ? 'Girder lift' : 'Tandem lift'} ${n}`, type, girder: { L: 100 }, pick: { x: c.x, y: c.y - 30, h: 90 }, set: { x: c.x, y: c.y + 30, h: 90 },
       slots: [0, 1].map(i => ((A.P.setups || [])[i] || {}).id || '') });
-    A.update(P => { P.tandems.push(t); }, 'tandem', { id: t.id }); sel = t.id; scrub = 0; A.showITab('tandem'); renderAll(); drawTab();
+    A.update(P => { P.tandems.push(t); }, 'tandem', { id: t.id }); sel = t.id; scrub = 0; if (PL()) PL().setCard('tandem'); A.showITab('lifts'); renderAll(); drawTab();
     if (MP() && MP().map) MP().fit([{ x: c.x - 90, y: c.y - 90 }, { x: c.x + 90, y: c.y + 90 }]);
     return t.id;
   }
@@ -180,7 +181,7 @@
     const slot = i => { const u = setupOf(t.slots[i]);
       return `<div class="fRow"><label for="tlSlot${i}">Crane ${i + 1}</label><select id="tlSlot${i}"><option value="">— choose a crane setup —</option>${(A.P.setups || []).map(x => `<option value="${x.id}"${x.id === t.slots[i] ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select></div>
         ${A.P.cranes.length ? `<div class="goRow"><select id="tlNew${i}" aria-label="Crane to place for crane ${i + 1}">${A.P.cranes.map(c => `<option value="${c.id}">${esc(K.name(c.def))}</option>`).join('')}</select><button type="button" data-ta="place${i}">Place for crane ${i + 1}</button></div>` : ''}
-        ${u ? `<p class="note">${esc(u.name)}: boom ${fmt(u.boom, 1)} ft, pad ${u.pad == null ? '0.00 (datum)' : fmt(u.pad, 2)}; chart, boom, position on the Lifts tab (<a href="#" data-tasel="${u.id}">edit setup</a>).</p>` : ''}`; };
+        ${u ? `<p class="note">${esc(u.name)}: boom ${fmt(u.boom, 1)} ft, pad ${u.pad == null ? '0.00 (datum)' : fmt(u.pad, 2)}; chart, boom, position on the Cranes &amp; setups tab (<a href="#" data-tasel="${u.id}">edit setup</a>).</p>` : ''}`; };
     const hook = i => { const h = t.hooks[i], u = setupOf(t.slots[i]), c = craneDef(u), hb = c ? K.hookBlocks(c) : [], hs = hb.findIndex(b => b.lb === h.hook && b.label === h.hookLabel);
       return `<div class="itGrpH">Hook ${i + 1} (crane ${i + 1})</div>
         ${t.type === 'single' ? '<p class="note">Single crane: the hook is plumb above the CG (spreader / lifting beam to the lifting points).</p>' : numIn(`tlH${i}s`, h.s, 'Lifting point from end A', 'ft', { ph: 'or the spreader centre' })}
@@ -207,18 +208,16 @@
       <div class="goRow"><button type="button" data-ta="addWay">Add a waypoint</button><button type="button" data-ta="zoom">Show on the map</button><button type="button" class="danger" data-ta="del">Delete lift</button></div>
       <div id="tlLive">${resHtml(t)}</div></div></div>`;
   }
-  function drawTab() {
-    if (!el) return; if (sel && !tOf(sel)) sel = null; const t = tOf(sel), s = settings();
-    el.innerHTML = `<div class="sec"><div class="secHead">Girder lift settings (project)</div><div class="secBody">
-        ${numIn('tlLimit', s.tandem, 'Tandem limit (% of chart, each crane)', '%')}
-        <p class="note">A crane in a tandem lift is flagged at or above this share of its chart capacity (default 75 %); a single-crane girder lift uses the lift thresholds (Lifts tab: caution ${s.caution} %, critical ${s.critical} %, limit ${s.limit} %).</p></div></div>
-      <div class="sec"><div class="secHead">Girder lifts (${(A.P.tandems || []).length})</div><div class="secBody">
-        <div class="goRow"><button type="button" class="primary" data-ta="newT">New tandem lift</button><button type="button" data-ta="newS">New one-crane girder lift</button></div>
-        ${(A.P.tandems || []).map(x => `<div class="itRow${x.id === sel ? ' on' : ''}"><button type="button" class="itSel" data-tasel-t="${x.id}">${esc(x.name)}</button><span class="itSum">${sumText(x)}</span><button type="button" class="itDel" data-tadel="${x.id}" aria-label="Delete ${esc(x.name)}">×</button></div>`).join('')}
-        ${A.P.cranes.length ? '' : '<p class="note">Add a crane to the project first (Cranes tab).</p>'}</div></div>${t ? cardHtml(t) : ''}`;
+  /* the tandem limit, in the Lifts tab's settings (ui/place.js drawTab) */
+  function settingsHtml() {
+    const s = settings();
+    return `${numIn('tlLimit', s.tandem, 'Tandem limit (% of chart, each crane)', '%')}
+        <p class="note">A crane in a tandem lift is flagged at or above this share of its chart capacity (default 75 %); a one-crane girder lift uses the thresholds above (caution ${s.caution} %, critical ${s.critical} %, limit ${s.limit} %).</p>`;
   }
+  /* the Lifts tab is drawn by ui/place.js (the list of every lift, and this file's card for the selected girder lift) */
+  function drawTab() { if (!el) return; if (sel && !tOf(sel)) sel = null; if (PL()) PL().drawTab(); }
   function sumText(t) { const r = evalT(t); return r.gov.length ? r.gov.map(g => g.c.e.look.ok ? fmt(g.c.pct, 1) + ' %' : 'n.p.').join(' / ') : 'incomplete'; }
-  function select(id) { sel = id; scrub = 0; renderAll(); drawTab(); A.emit('change', { kind: 'select-lift', id }); if (window.CranePickElevView) window.CranePickElevView.redraw(); }
+  function select(id) { sel = id; scrub = 0; if (id && PL()) PL().setCard('tandem'); renderAll(); drawTab(); A.emit('change', { kind: 'select-lift', id }); if (window.CranePickElevView) window.CranePickElevView.redraw(); }
   function setStep(j) { const t = tOf(sel); if (!t) return; const r = evalT(t); scrub = stepIdx(r, j); place(t); liveCard(); if (window.CranePickElevView) window.CranePickElevView.redraw(); }
   function onClick(e) {
     const s = e.target.closest('[data-tgstep]'); if (s) { e.preventDefault(); setStep(+s.dataset.tgstep); return; }
@@ -296,9 +295,9 @@
     out += `<text x="8" y="12" font-weight="bold">${esc(t.name)}, step ${j}: ${esc(T().where(q.x))} (girder bottom el. ${fmt(zb, 2)}; plane through ${us[1] && q.cr[1] ? 'both cranes' : 'the crane and its hook'}; to scale)</text></svg>`;
     return out;
   }
-  /* the elevation dock under the map (ui/elev.js): the selected girder lift while the Girder lifts tab is open (or when there is no pick) */
-  function active() { const t = tOf(sel); return t && (A.ui.itab === 'tandem' || !A.P.picks.length) ? t : null; }
-  function dockSvg(w) { const t = active(); if (!t) return ''; const r = evalT(t); return elevSvg(t, r, stepIdx(r, scrub), { w, h: 260 }) || '<p class="note">Choose the crane setups and enter the girder (Girder lifts tab).</p>'; }
+  /* the elevation dock under the map (ui/elev.js): the selected girder lift while the Lifts tab shows its card (or when there is no pick) */
+  function active() { const t = tOf(sel); return t && ((A.ui.itab === 'lifts' && PL() && PL().card === 'tandem') || !A.P.picks.length) ? t : null; }
+  function dockSvg(w) { const t = active(); if (!t) return ''; const r = evalT(t); return elevSvg(t, r, stepIdx(r, scrub), { w, h: 260 }) || '<p class="note">Choose the crane setups and enter the girder (Lifts tab).</p>'; }
   /* ---------- 3D (ui/view3d.js calls draw3d while it builds the lift group) ---------- */
   function draw3d(h) {
     const t = tOf(sel) || (A.P.tandems || [])[0]; if (!t) return false; const r = evalT(t), j = t.id === sel ? stepIdx(r, scrub) : 0, q = r.steps[j]; if (!q) return false;
@@ -320,7 +319,7 @@
       <div class="tscroll"><table class="tbl" id="tgTbl"><thead><tr><th>Lift</th><th>Crane</th><th>Setup</th><th>Boom (ft)</th><th>W hook (lb)</th><th>Step</th><th>Governing</th><th>R (ft)</th><th>C (lb)</th><th>% chart</th><th>Status</th><th>Flags</th><th></th></tr></thead><tbody>${rows.join('')}</tbody></table></div></div></div>`;
   }
   document.addEventListener('click', e => { const m = e.target.closest('[data-tgmap],[data-tgr]'); if (!m || !m.closest('#tgPicks')) return; e.preventDefault();
-    if (m.dataset.tgmap) { A.showOTab('plan'); select(m.dataset.tgmap); A.showITab('tandem'); const t = tOf(m.dataset.tgmap); if (t) zoomTo(t); } else gotoReport(m.dataset.tgr); });
+    if (m.dataset.tgmap) { A.showOTab('plan'); select(m.dataset.tgmap); A.showITab('lifts'); const t = tOf(m.dataset.tgmap); if (t) zoomTo(t); } else gotoReport(m.dataset.tgr); });
   function gotoReport(id) { A.showOTab('rpt'); const j = () => { const v = window.CranePickReportUI && window.CranePickReportUI.view; if (v && v.jump) v.jump(id ? 'tandem-' + id : 'tandem'); }; setTimeout(j, 60); setTimeout(j, 160); setTimeout(j, 420); }
   /* ---------- Report §Tandem lifts ---------- */
   window.CranePickReport && window.CranePickReport.add(P => {
@@ -380,9 +379,9 @@
     return [{ id: 'tandem', key: 'tandem', title: 'Tandem lifts', subs }];
   });
   /* ---------- wiring ---------- */
-  function build(p) { el = p; p.addEventListener('click', onClick); p.addEventListener('change', onChange); p.addEventListener('input', onInput);
-    p.addEventListener('toggle', e => { if (e.target.id === 'tlSteps') { stepsOpen = e.target.open; if (stepsOpen) liveCard(); } if (e.target.id === 'tlGround') grOpen = e.target.open; }, true); drawTab(); }
-  A.inTab({ id: 'tandem', label: 'Girder lifts', build, show: drawTab });
+  /* attach(pane): the Lifts tab's pane (ui/place.js build): the girder-lift card's clicks, changes and the scrubber come here */
+  function attach(p) { el = p; p.addEventListener('click', onClick); p.addEventListener('change', onChange); p.addEventListener('input', onInput);
+    p.addEventListener('toggle', e => { if (e.target.id === 'tlSteps') { stepsOpen = e.target.open; if (stepsOpen) liveCard(); } if (e.target.id === 'tlGround') grOpen = e.target.open; }, true); }
   A.on('project', () => { rev++; memo.clear(); renderAll(); drawTab(); });
   A.on('change', o => { if (o.kind !== 'tandem' && o.kind !== 'select' && o.kind !== 'select-lift') rev++;
     if (['tandem', 'lifts', 'setups', 'picks', 'cranes', 'items', 'site'].indexOf(o.kind) < 0) return;
@@ -390,5 +389,6 @@
     renderAll(); drawTab(); });
   A.on('live', o => { if (o.kind === 'items') rev++; if (o.kind === 'lifts' || o.kind === 'items') { (A.P.tandems || []).forEach(t => place(t)); liveCard(); } });
   A.on('tab', id => { if (id === 'plan') setTimeout(() => (A.P.tandems || []).forEach(t => place(t)), 0); });
-  window.CranePickTandemUI = { active, dockSvg, newLift, placeFor, select, setStep, evalT, renderAll, picksHtml, elevSvg, draw3d, layers, get selected() { return sel; }, get step() { return scrub; } };
+  window.CranePickTandemUI = { active, dockSvg, newLift, placeFor, select, setStep, evalT, renderAll, picksHtml, elevSvg, draw3d, layers, get selected() { return sel; }, get step() { return scrub; },
+    attach, cardHtml, settingsHtml, sumText };
 })();
