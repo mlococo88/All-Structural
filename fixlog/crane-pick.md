@@ -1329,7 +1329,7 @@ Untouched gives no warning. Rotated +2° about the centre (500, 300): A and B ar
 `tests/smoke/crane-qa.mjs` (4, new step 3).
 
 ## 2026-11-17 — Route: girder length drives the hauler geometry, height stack-up, the vehicle and load drawn to scale (engineer requests; QA items)
-PR #TBD
+PR #1625: https://github.com/mlococo88/All-Structural/pull/1625
 Engineer (2026-11-17): "wouldn't the route analysis need the girder length?"; "where is the truck height entered?"; "a Route output section
 with a to-scale graphic of the truck carrying the girder".
 ### Where
