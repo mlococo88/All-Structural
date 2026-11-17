@@ -126,3 +126,15 @@ test('G. legacy routes compute as on main; mode "legacy" = no mode; normalize ke
   assert.equal(JSON.stringify(M.normRoute(JSON.parse(JSON.stringify(nr)))), JSON.stringify(nr), 'round trip');
   const eo = RT.evaluate(nr, P0, 'rt1'); assert.ok(eo.flags.some(x => x.level === 'info' && /from OpenStreetMap — not survey \(© OpenStreetMap contributors, fetched 2026-11-17\)/.test(x.text)));
 });
+
+test('H. steps of the fitted curves: KaTeX (strict); no NaN / undefined', async () => {
+  const { createRequire } = await import('node:module');
+  const katex = createRequire(import.meta.url)(path.join(ROOT, 'tests/libs/katex@0.16.9/dist/katex.min.js'));
+  const parse = x => katex.renderToString(x, { ...W.SharedSteps.katexOpt, throwOnError: true, strict: 'error' });
+  const pts = tct(250, 60, 0.3, 7).concat([{ x: 900, y: 600 }]), f = AL.fit(pts); f.al.kind[f.al.kind.length - 2] = 'turn';
+  const ev = RT.evaluate(M.normRoute({ id: 'h', pts, mode: 'fit', al: f.al }), P0, 'rt1'); let n = 0;
+  assert.ok(ev.turns.some(t => t.kind === 'turn') && ev.turns.some(t => t.kind === 'curve'));
+  for (const s of [].concat(...ev.turns.map(t => t.steps))) { for (const k of ['sym', 'eq', 'sub']) if (s[k]) { parse(s[k]); n++; } if (s.unit) { parse(W.SharedSteps.unitTeX(s.unit)); n++; }
+    assert.ok(!/NaN|undefined/.test(W.SharedSteps.toText([s])), s.id + ' ' + W.SharedSteps.toText([s])); }
+  assert.ok(n > 20, String(n));
+});
