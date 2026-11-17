@@ -972,7 +972,7 @@ Done one undo step, Undo / Redo; item moved; Site tab / Report steps; Esc / Canc
 `node tests/smoke/crane-sheets.mjs` (8 checks); `node tests/check-syntax.mjs`.
 
 ## 2026-11-17 — C9: the Crane output tab (graphics of the crane as the analysis uses it), Report §Cranes figures, Crane drawing sheets
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1618: https://github.com/mlococo88/All-Structural/pull/1618
 Engineer request 2026-11-17: "We should have a crane output tab that has graphics for the crane showing what is being used in the analysis."
 ### Where
 - `apps/crane-pick/ui/cranefig.js` (new, `window.CranePickCraneFig`, no DOM, Node-tested): `options` (the picker: each setup of each project crane;
