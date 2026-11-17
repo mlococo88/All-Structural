@@ -96,7 +96,7 @@
     A.update(() => { const g = M.normSetupGround(u.ground);
       if (f === 'qa') g.qa = v == null ? null : (g.qaUnit === 'ksf' ? v * 1000 : v);
       else if (f === 'qaUnit') g.qaUnit = v;
-      else if (f === 'type') g.mat.type = v; else g.mat[f] = v;
+      else if (f === 'type') g.mat.type = v; else if ((f === 'w' || f === 'n') && v == null) delete g.mat[f]; else g.mat[f] = v;
       u.ground = g; }, 'ground', { id: u.id });
     if (f === 'type' || f === 'qaUnit') drawIn();
   }

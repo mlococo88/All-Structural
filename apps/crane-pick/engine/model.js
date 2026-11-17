@@ -133,7 +133,8 @@
      k (spread, horizontal : 1 vertical); 2026-11-17, drawing only: crawlers w (each mat's width along the track, ft), n (mats per track) }, qa (allowable bearing pressure, psf), qaUnit ('psf' | 'ksf': how it is shown) */
   function normSetupGround(g) {
     g = g && typeof g === 'object' ? g : {}; const m = g.mat && typeof g.mat === 'object' ? g.mat : {}, mat = { type: ['timber', 'steel'].indexOf(m.type) >= 0 ? m.type : 'none' };
-    ['B', 'L', 't', 'Fb', 'Fv', 'E', 'Fy', 'gamma', 'k', 'w', 'n'].forEach(k => { const v = numOrNull(m[k]); mat[k] = v != null && v >= 0 ? v : null; });
+    ['B', 'L', 't', 'Fb', 'Fv', 'E', 'Fy', 'gamma', 'k'].forEach(k => { const v = numOrNull(m[k]); mat[k] = v != null && v >= 0 ? v : null; });
+    ['w', 'n'].forEach(k => { const v = numOrNull(m[k]); if (v != null && v >= 0) mat[k] = v; });   // 2026-11-17 crawler mats (drawing only): kept only when entered
     const qa = numOrNull(g.qa); return { mat, qa: qa != null && qa > 0 ? qa : null, qaUnit: g.qaUnit === 'ksf' ? 'ksf' : 'psf' };
   }
   /* C8: terrain inputs (null = not entered). setup.lvl: level tolerance tol (%), blocking limit maxBlk (ft), levelling datum (ft; null: the

@@ -418,7 +418,11 @@
   /* a view sheet: the plan, the elevations under it, the data table and the flags to the right */
   function viewSheet(D, C) {
     const h = D.h, i0 = D.mark(); C.planFn(D, C); let x = D.bbox(i0)[2] + 5 * h; const top = D.bbox(i0)[3];
-    (C.elevs || []).forEach(fn => { const j0 = D.mark(); if (!fn(D, C)) { D.E.length = j0; return; } const b = D.bbox(j0); D.move(j0, x - b[0], top - b[3]); x = D.bbox(j0)[2] + 5 * h; });
+    // 2026-11-17 (QA: the plan was small beside two tall elevations): the elevations stacked in one column right of the plan, so the
+    // sheet scale (the same for plan and elevations) grows and the crane / outriggers read clearly
+    let yTop = top;
+    (C.elevs || []).forEach(fn => { const j0 = D.mark(); if (!fn(D, C)) { D.E.length = j0; return; } const b = D.bbox(j0);
+      if (C.stackElev) { D.move(j0, x - b[0], yTop - b[3]); yTop = D.bbox(j0)[1] - 4 * h; } else { D.move(j0, x - b[0], top - b[3]); x = D.bbox(j0)[2] + 5 * h; } });
     const ba = D.bbox(i0), t0 = D.mark(), rows = C.rowsFn(C);
     let yy = table(D, D.layer('TBL', 8), D.layer('TEXT', 7), 0, 0, ['ITEM', 'VALUE'], rows, C.tableTitle || 'LIFT DATA').y;
     const fl = (C.flagText || []).concat((C.flags || []).filter(f => f.level !== 'info' && !f.p).map(f => f.text));
@@ -623,7 +627,7 @@
       const { ev, u } = r, k = (P.picks || []).find(x => x.id === r.id), f = LF().footprint(r.c.def, u), pts = [u, k.pick, k.set].concat(ev.path.pts);
       if (isNum(f.tail)) pts.push({ x: u.x - f.tail, y: u.y - f.tail }, { x: u.x + f.tail, y: u.y + f.tail }); [].concat(f.body ? [f.body] : [], f.tracks).forEach(q => pts.push(...q)); f.floatC.forEach(q => pts.push(q));
       const pick = { P, k, u, c: r.c, ev, w: windowOf(pts) };
-      list.push({ id: 'lift-' + k.id, title: `LIFT PLAN: ${k.name}`, fn: viewSheet, kmin: 48, c: { ...C, pick, planFn: pickPlan, elevs: [(D2, C2) => pickElev(D2, C2, 'pick'), (D2, C2) => pickElev(D2, C2, 'set')], rowsFn: pickRows, flags: ev.flags,
+      list.push({ id: 'lift-' + k.id, title: `LIFT PLAN: ${k.name}`, fn: viewSheet, kmin: 48, c: { ...C, pick, planFn: pickPlan, elevs: [(D2, C2) => pickElev(D2, C2, 'pick'), (D2, C2) => pickElev(D2, C2, 'set')], rowsFn: pickRows, stackElev: true, flags: ev.flags,
         notes: ['PLAN TO SCALE, GRID NORTH UP. P: PICK, S: SET, G: CAPACITY-GOVERNING POINT ON THE SWING; BOOM AT THE PICK (SOLID), THE SET (DASHED) AND THE GOVERNING POINT (CENTER LINE); SWING PATH; TAIL-SWING CIRCLE (PHANTOM); MATS WHERE ENTERED; F1...: RED / AMBER 3D CLEARANCE FLAGS (CLOSEST POINT, DASHED TO THE ITEM).',
           'ELEVATIONS ALONG THE BOOM AT THE PICK AND THE SET, TO THE SAME SCALE. VALUES: THE APP\'S ENGINE (PICKS TAB, LIFTS TAB, REPORT).'] },
         src: [['out', 'picks', 'Picks tab'], ['in', 'lifts', 'Lifts input tab'], ['rpt', 'pick-' + k.id, 'Report §Lifts']] });
