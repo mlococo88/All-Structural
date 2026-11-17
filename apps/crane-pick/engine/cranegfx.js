@@ -16,11 +16,12 @@
    dims(crane) -> { kind, type, boomType ('telescopic' | 'lattice'), carrier: { front, rear, width }, axles: [x], tyre: { d, w }, carCab,
      beamW, tumbler: { r, xs }, shoePitch, upper: { width, front, rear }, cw: { width, depth, aRear, aFront }, cab: { a0, a1, b0, b1 },
      footE, boomW, sections, tail, from: { key: 'file' | 'entered' | 'engine' | 'assumed' }, assumed: [text] }
-   symbol(crane, setup, o) -> { parts: [{ g, pts, closed }], circles: [{ g, c, r }], texts: [{ g, p, s, rot, size }], key, dims, assumed }
+   symbol(crane, setup, o) -> { parts: [{ g, pts, closed, src }], circles: [{ g, c, r, src }], texts: [{ g, p, s, rot, size }], key, dims, assumed }
      o = { hook: { x, y } (the boom points at it; R = its distance from the rotation centre) | slew (azimuth, deg) + R, boom (default true
            when a hook or R is given), load: { L, W } (C2 load in plan, centred on the hook, L along the boom) | loadPolys: [[pt]] (C5 girder),
            detail: 'full' | 'simple' (the map at small zoom), labels (default true) }
      key = { cor, heading, slewAz, slewRel (from the carrier front, −180 … 180), R, foot, tip, floatC (engine/lift.js), tail, cwPts, fp }
+     src 'fp': the part is engine/lift.js footprint geometry itself (carrier / carbody outline, tracks, floats; the map draws those already).
      g (group) -> GROUPS[g].layer: the DXF layer (prefixed by the drawing, e.g. C-CRANE-BOOM) and its colour.
    draw(sym, out): out = { poly(g, pts, closed), circle(g, c, r), text(g, p, s, rot, size) } — the one walk every renderer uses.
    svg(sym, X, Y, k, o): SVG markup of the symbol (X, Y: grid ft -> SVG px; k: px per ft), for figures and the Crane tab. */
@@ -115,13 +116,13 @@
     if (o.hook && isNum(o.hook.x) && isNum(o.hook.y)) { R = Math.hypot(o.hook.x - u.x, o.hook.y - u.y); if (R > 1e-6) slewAz = G().azimuth(u, o.hook); }
     else if (isNum(o.slew)) { slewAz = o.slew; R = isNum(o.R) ? o.R : null; }
     const UF = { x: u.x, y: u.y, heading: slewAz }, UP = (a, b) => LF().toGrid(UF, a, b);
-    const add = (g, pts, closed) => { if (pts && pts.length > 1) parts.push({ g, pts, closed: !!closed }); };
+    const add = (g, pts, closed, src) => { if (pts && pts.length > 1) parts.push(src ? { g, pts, closed: !!closed, src } : { g, pts, closed: !!closed }); };
     const inC = q => q.map(([a, b]) => CF(a, b)), inU = q => q.map(([a, b]) => UP(a, b));
     // carrier / carbody (the engine footprint where it has one)
     const cw = D.carrier;
-    if (fp.body) add('carrier', fp.body, true); else add('carrier', inC(rectL(-cw.rear, cw.front, -cw.width / 2, cw.width / 2)), true);
+    if (fp.body) add('carrier', fp.body, true, 'fp'); else add('carrier', inC(rectL(-cw.rear, cw.front, -cw.width / 2, cw.width / 2)), true);
     if (D.kind === 'crawler') {
-      fp.tracks.forEach(t => add('carrier', t, true));
+      fp.tracks.forEach(t => add('carrier', t, true, 'fp'));
       const p = K().planDims(c), sh = p.crawler && isNum(p.crawler.shoe) ? p.crawler.shoe : 3, g2 = p.crawler && isNum(p.crawler.gauge) ? p.crawler.gauge / 2 : null, L2 = p.crawler && isNum(p.crawler.length) ? p.crawler.length / 2 : null;
       if (g2 != null && L2 != null) [g2, -g2].forEach(y => {
         D.tumbler.xs.forEach(x => { const r = D.tumbler.r; add('carrier', inC(rectL(x - r, x + r, y - sh / 2 + 0.3, y + sh / 2 - 0.3)), true); add('carrier', inC([[x, y - sh / 2], [x, y + sh / 2]]), false); });
@@ -137,7 +138,7 @@
       fp.beams.forEach(([a, b]) => { const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy); if (L < 1e-6) return; const ux = dx / L, uy = dy / L, nx = -uy * D.beamW / 2, ny = ux * D.beamW / 2;
         const s0 = Math.min(L, hw - 0.5 > 0 ? hw - 0.5 : 0), p0 = { x: a.x + ux * s0, y: a.y + uy * s0 };
         add('outrigger', [{ x: p0.x + nx, y: p0.y + ny }, { x: b.x + nx, y: b.y + ny }, { x: b.x - nx, y: b.y - ny }, { x: p0.x - nx, y: p0.y - ny }], true); });
-      fp.floatC.forEach(q => circles.push({ g: 'float', c: { x: q.x, y: q.y }, r: q.r }));
+      fp.floatC.forEach(q => circles.push({ g: 'float', c: { x: q.x, y: q.y }, r: q.r, src: 'fp' }));
     }
     // front arrow of the carrier (heading)
     const fr = D.kind === 'crawler' ? Math.max(cw.front, (K().planDims(c).crawler || {}).length / 2 || 0) : cw.front;

@@ -78,6 +78,33 @@
     [...layers.keys()].forEach(removeSetupLayers);
     (A.P.setups || []).forEach(u => { if (craneOf(u)) layers.set(u.id, makeSetup(u)); });
   }
+  /* 2026-11-17 (engineer request A): the crane symbol on the map (engine/cranegfx.js, the same geometry as the Drawings / DXF). The engine
+     footprint layers above stay (body, tracks, floats, beams: clickable, and what the checks use); the symbol adds the rest, one multi-
+     polygon and one multi-polyline per group (a fixed number of Leaflet layers, so a drag only moves points). The upperworks and boom turn
+     to the setup's selected pick, else its first pick (the boom to the pick point, the load L × W at the hook); a setup without a pick
+     shows the upperworks over the carrier front, no boom. Small zoom (tail-swing radius under 40 px on the screen): "simple" detail. */
+  const CG = () => window.CranePickCraneGfx;
+  const SYM_G = ['carrier', 'outrigger', 'upper', 'cwt', 'boom', 'hook', 'load'];
+  function symOpt(u) {
+    const ks = picksOf(u), k = ks.find(x => x.id === selK) || ks[0], m = MP().map, c = craneOf(u);
+    const tail = (c && K.planDims(c).tail) || 15, lat = m ? m.getCenter().lat : 40, ftPx = 156543.03392804097 * Math.cos(lat * Math.PI / 180) / Math.pow(2, m ? m.getZoom() : 18) / 0.3048006;
+    const e = k && k.elev, load = e && e.L > 0 && e.W > 0 ? { L: e.L, W: e.W } : null;
+    return { hook: k ? k.pick : null, load, detail: tail / ftPx >= 40 ? 'full' : 'simple', labels: false };
+  }
+  function symGeo(u) {
+    const c = craneOf(u), out = {}; SYM_G.forEach(g => { out[g] = { cl: [], op: [] }; }); if (!c || !CG()) return out;
+    let s; try { s = CG().symbol(c, u, symOpt(u)); } catch (e) { console.error(e); return out; }
+    s.parts.forEach(q => { if (q.src === 'fp' || !out[q.g]) return; if (q.closed) out[q.g].cl.push([lls(q.pts)]); else out[q.g].op.push(lls(q.pts)); });
+    return out;
+  }
+  const SYM_STYLE = { carrier: ['#1E3A5F', '#64748B', 0.35], outrigger: ['#0E7490', '#0E7490', 0.45], upper: ['#166534', '#22C55E', 0.3], cwt: ['#5B21B6', '#7C3AED', 0.45], boom: ['#0F172A', '#CBD5E1', 0.55], hook: ['#B91C1C', '#DC2626', 0.6], load: ['#B91C1C', '#F87171', 0.25] };
+  function makeSym(u, add, col) {
+    const Lf = L_(), geo = symGeo(u), o = {};
+    SYM_G.forEach(g => { const [st, fc, fo] = SYM_STYLE[g]; o[g] = { pg: add(Lf.polygon(geo[g].cl, { color: st, weight: 1.2, fillColor: fc, fillOpacity: fo, interactive: false, className: 'crSym crSym-' + g })),
+      pl: add(Lf.polyline(geo[g].op, { color: st, weight: 1, interactive: false, className: 'crSym crSym-' + g })) }; });
+    void col; return o;
+  }
+  function placeSym(u, o) { if (!o) return; const geo = symGeo(u); SYM_G.forEach(g => { o[g].pg.setLatLngs(geo[g].cl); o[g].pl.setLatLngs(geo[g].op); }); }
   function makeSetup(u) {
     const Lf = L_(), m = MP().map, c = craneOf(u), fp = LF.footprint(c, u), on = u.id === selU, col = on ? '#1E3A8A' : '#334155';
     const g = { all: [], picks: new Map(), fpn: fp.tracks.length + fp.floats.length + (fp.body ? 1 : 0) };
@@ -89,6 +116,7 @@
     g.beams = fp.beams.length ? add(Lf.polyline(fp.beams.map(lls), { color: col, weight: 3, interactive: false })) : null;
     g.floats = fp.floats.map(f => add(Lf.polygon(lls(f), Object.assign({}, opt, { fillColor: '#F59E0B', fillOpacity: 0.7 }))));
     g.front = add(Lf.polyline(lls([LF.toGrid(u, 0, 0), headPos(u, fp)]), { color: col, weight: 1.5, dashArray: '2 4', interactive: false }));
+    g.sym = makeSym(u, add, col);   // 2026-11-17: the crane symbol (engine/cranegfx.js): axles / wheels / tracks, outrigger beams, the upperworks turned to the pick, boom, hook, load
     [g.body].concat(g.tracks, g.floats).filter(Boolean).forEach(x => x.on('click', () => select(u.id, null)));
     g.cor = add(Lf.marker(MP().toLL(u), { icon: hIcon('crCor', '✥', 'Drag to move the crane (centre of rotation)'), draggable: true, keyboard: false, zIndexOffset: 1000 }));
     g.cor.bindTooltip(esc(u.name), { direction: 'bottom', offset: [0, 14], className: 'crName' });
@@ -147,12 +175,13 @@
     g.tracks.forEach((t, i) => t.setLatLngs(lls(fp.tracks[i]))); g.floats.forEach((t, i) => t.setLatLngs(lls(fp.floats[i])));
     if (g.beams) g.beams.setLatLngs(fp.beams.map(lls));
     g.front.setLatLngs(lls([LF.toGrid(u, 0, 0), headPos(u, fp)]));
+    placeSym(u, g.sym);
     const mv = h => h.dragging && h.dragging._draggable && h.dragging._draggable._moving;
     if (!mv(g.cor)) g.cor.setLatLng(MP().toLL(u)); if (!mv(g.head)) g.head.setLatLng(MP().toLL(headPos(u, fp)));
     picksOf(u).forEach(k => { const pk = g.picks.get(k.id); if (pk) placePick(u, k, pk); });
   }
   function liveSetup(u, why) { MP().raf('lift', () => { placeSetup(u); A.live('lifts', { id: u.id, why }); liveCard(); liveSetupFields(u); }); }
-  function livePick(u, k) { MP().raf('lift', () => { const g = layers.get(u.id), pk = g && g.picks.get(k.id); if (pk) placePick(u, k, pk); A.live('lifts', { id: k.id }); liveCard(); livePickFields(k); }); }
+  function livePick(u, k) { MP().raf('lift', () => { const g = layers.get(u.id), pk = g && g.picks.get(k.id); if (pk) placePick(u, k, pk); if (g) placeSym(u, g.sym); A.live('lifts', { id: k.id }); liveCard(); livePickFields(k); }); }
   /* ---------- selection ---------- */
   function select(uid, kid) {
     const was = [selU, selK]; selU = uid; selK = kid || (uid && uid !== was[0] ? (picksOf(setupOf(uid))[0] || {}).id || null : was[1]);
@@ -322,5 +351,6 @@
   });
   A.on('live', o => { if (o.kind === 'items') (A.P.setups || []).forEach(u => { const g = layers.get(u.id); if (g) picksOf(u).forEach(k => { const pk = g.picks.get(k.id); if (pk) placePick(u, k, pk); }); }); });
   A.on('tab', id => { if (id === 'plan') setTimeout(() => (A.P.setups || []).forEach(placeSetup), 0); });
+  A.on('ready', () => { const m = MP() && MP().map; if (m) m.on('zoomend', () => (A.P.setups || []).forEach(u => { const g = layers.get(u.id); if (g) placeSym(u, g.sym); })); });   // detail by zoom
   window.CranePickPlace = { placeCrane, addPick, select, evalPick, delSetup, delPick, renderAll, layers, get selected() { return { setup: selU, pick: selK }; } };
 })();

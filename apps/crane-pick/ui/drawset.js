@@ -230,12 +230,19 @@
       else if (it.type === 'label' && it.pts[0] && inWin(it.pts[0], V.w)) D.text(lT, V.X(it.pts[0].x), V.Y(it.pts[0].y), h, U(it.text || it.name || ''), 1);
     });
   }
-  /* a crane setup to scale: carrier / carbody, tracks, outrigger beams and floats, the tail-swing circle, the centre of rotation; the mats */
+  /* a crane setup to scale: the crane symbol (engine/cranegfx.js, 2026-11-17: carrier / carbody with axles and wheels or tracks with
+     tumblers and shoes, outrigger beams and floats at the chart's spread, the upperworks turned to o.hook with its operator cab and the
+     counterweight at the tail radius, the boom with its sections / chords and head sheaves, the hook block, the load o.load (L × W) or
+     o.loadPolys), one DXF layer per part (CRANE-CARRIER, CRANE-OUTRIGGER, CRANE-FLOAT, CRANE-UPPER, CRANE-CWT, CRANE-BOOM, CRANE-HOOK,
+     CRANE-LOAD; polylines), the tail-swing circle, the centre of rotation, the heading / slew labels; the mats */
   function setupLayer(D, V, P, u, o) {
     o = o || {}; const c = craneOf(P, u); if (!c) return; const f = LF().footprint(c.def, u), h = D.h;
     const lC = D.layer('CRANE', 5), lF = D.layer('CRANE-FLOAT', 30), lM = D.layer('CRANE-MAT', 32), lW = D.layer('CRANE-TAIL', 6, 'PHANTOM'), lT = D.layer('TEXT', 7), ph = D.ltype('PHANTOM');
-    if (f.body) drawPoly(D, V, lC, f.body, true); f.tracks.forEach(q => drawPoly(D, V, lC, q, true)); f.beams.forEach(b => drawPoly(D, V, lC, b, false));
-    f.floatC.forEach(q => drawCircle(D, V, lF, q, q.r));
+    const CG = window.CranePickCraneGfx;
+    if (CG) { const sy = CG.symbol(c.def, u, { hook: o.hook, load: o.load, loadPolys: o.loadPolys, labels: true }), Ly = g => D.layer(CG.GROUPS[g].layer, CG.GROUPS[g].aci);
+      CG.draw(sy, { poly: (g, pts, cl) => { if (g !== 'cor') drawPoly(D, V, Ly(g), pts, cl); }, circle: (g, q, r) => { if (g !== 'cor') drawCircle(D, V, Ly(g), q, r); },
+        text: (g, p, t, rot, sz) => { if (inWin(p, V.w)) D.text(lT, V.X(p.x), V.Y(p.y), 0.6 * (sz || 1) * h, U(t), 0, rot); } }); }
+    else { if (f.body) drawPoly(D, V, lC, f.body, true); f.tracks.forEach(q => drawPoly(D, V, lC, q, true)); f.beams.forEach(b => drawPoly(D, V, lC, b, false)); f.floatC.forEach(q => drawCircle(D, V, lF, q, q.r)); }
     if (isNum(f.tail)) drawPoly(D, V, lW, LF().circle(u, f.tail, 72), true, ph);
     // mats (setup.ground): wheeled B (forward) × L (across) at each float; crawler: the mat length across each track, under its length
     const m = u.ground && u.ground.mat, S = GR() && GR().supports(c.def, u);
@@ -246,6 +253,9 @@
     if (inWin(u, V.w)) { const x = V.X(u.x), y = V.Y(u.y), r = 0.6 * h; D.circle(lC, x, y, r); D.line(lC, x - 2 * r, y, x + 2 * r, y); D.line(lC, x, y - 2 * r, x, y + 2 * r);
       D.text(lT, x + 1.2 * h, y - 2.2 * h, 0.85 * h, U(`${u.name}${o.tag ? ' (' + o.tag + ')' : ''}`)); D.text(lT, x + 1.2 * h, y - 3.4 * h, 0.7 * h, U(`BOOM ${fmt(u.boom, 1)} FT, HEADING ${fmt(u.heading || 0, 1)} DEG`)); }
   }
+  /* the C2 load in plan at the hook (the pick's Heights inputs L × W), and a setup's first single pick (the ground sheet's upperworks) */
+  const loadOf = k => { const e = k && k.elev; return e && e.L > 0 && e.W > 0 ? { L: e.L, W: e.W } : null; };
+  const hookOf = (P, u) => { const k = (P.picks || []).find(x => x.setupId === u.id); return k ? { hook: k.pick, load: loadOf(k) } : {}; };
   const mark = (D, V, l, p, t, lT) => { if (!inWin(p, V.w)) return; const x = V.X(p.x), y = V.Y(p.y), r = 0.9 * D.h; D.circle(l, x, y, r); D.text(lT, x, y - 0.35 * D.h, 0.8 * D.h, t, 1); };
   /* flags of the 3D clearances (p: the closest point of the crane / load, q: of the item) */
   function flagLayer(D, V, flags) {
@@ -274,7 +284,7 @@
   /* the plan view of one pick: site, its setup, the boom at the pick / set / governing point, the swing path, P / S / G, the flags */
   function pickPlan(D, C) {
     const { P, k, u, ev, w } = C.pick, V = pv(w), h = D.h, lB = D.layer('BOOM', 7), lBs = D.layer('BOOM-SET', 7, 'DASHED'), lBg = D.layer('BOOM-GOV', 1, 'CENTER'), lS = D.layer('SWING', 4), lT = D.layer('TEXT', 7), lP = D.layer('POINT', 5);
-    siteLayer(D, V, P); setupLayer(D, V, P, u);
+    siteLayer(D, V, P); setupLayer(D, V, P, u, { hook: k.pick, load: loadOf(k) });
     const seg = (l, a, b, lt) => { const c = clip(a, b, w); if (c) D.line(l, V.X(c[0].x), V.Y(c[0].y), V.X(c[1].x), V.Y(c[1].y), lt); };
     seg(lB, u, k.pick); seg(lBs, u, k.set, D.ltype('DASHED'));
     const gp = ev.gov && ev.gov.p; if (gp && ev.govWhere.indexOf('swing') >= 0) { seg(lBg, u, gp, D.ltype('CENTER')); mark(D, V, lP, gp, 'G', lT); }
@@ -288,7 +298,7 @@
      the booms at each crane's governing step, the hooks */
   function tandemPlan(D, C) {
     const { P, t, r, w } = C.tl, V = pv(w), h = D.h, lG = D.layer('GIRDER', 4), lGs = D.layer('GIRDER-SET', 3), lPa = D.layer('PATH', 6, 'DASHED'), lB = D.layer('BOOM-GOV', 1, 'CENTER'), lT = D.layer('TEXT', 7), lP = D.layer('POINT', 5);
-    siteLayer(D, V, P); t.slots.slice(0, nC(t)).forEach((id, i) => { const u = setupOf(P, id); if (u) setupLayer(D, V, P, u, { tag: `CRANE ${i + 1}` }); });
+    siteLayer(D, V, P); t.slots.slice(0, nC(t)).forEach((id, i) => { const u = setupOf(P, id), g = r.gov[i], q = g && r.steps[g.i], cr = q && q.cr[i]; if (u) setupLayer(D, V, P, u, { tag: `CRANE ${i + 1}`, hook: cr && cr.p }); });
     const ob = r.sh.ob, pose = (q, l) => { const o = T().outline(t, q, ob); drawPoly(D, V, l, o.box, o.box.length > 2); o.lines.forEach(ln => drawPoly(D, V, l, ln, false)); };
     pose(Object.assign({ z: r.path.zP }, t.pick), lG); pose(Object.assign({ z: r.path.zS }, t.set), lGs);
     if (r.steps.length > 1) drawPoly(D, V, lPa, r.steps.map(q => ({ x: q.x.pose.x, y: q.x.pose.y })), false, D.ltype('DASHED'));
@@ -438,7 +448,7 @@
     const { P } = C.gr, h = D.h, lT = D.layer('TEXT', 7), lF = D.layer('CRANE-FLOAT', 30), c = craneOf(P, gs.u), pts = [gs.u];
     if (c) { const f = LF().footprint(c.def, gs.u); f.floatC.forEach(q => pts.push({ x: q.x - 4, y: q.y - 4 }, { x: q.x + 4, y: q.y + 4 })); [].concat(f.body ? [f.body] : [], f.tracks).forEach(q => pts.push(...q)); }
     const w = windowOf(pts, 0.35), V = pv(w);
-    siteLayer(D, V, P); setupLayer(D, V, P, gs.u);
+    siteLayer(D, V, P); setupLayer(D, V, P, gs.u, hookOf(P, gs.u));
     (gs.sup || []).forEach(x => { const p = LF().toGrid(gs.u, x.it.lx, x.it.ly); if (!inWin(p, w)) return;
       if (gs.S.kind === 'crawler') { const rect = [[gs.S.Lt / 2, x.it.ly + gs.S.s / 2], [gs.S.Lt / 2, x.it.ly - gs.S.s / 2], [-gs.S.Lt / 2, x.it.ly - gs.S.s / 2], [-gs.S.Lt / 2, x.it.ly + gs.S.s / 2]].map(([a, b]) => LF().toGrid(gs.u, a, b)); drawPoly(D, V, lF, rect, true); }
       const dx = p.x - gs.u.x, dy = p.y - gs.u.y, L = Math.hypot(dx, dy) || 1, right = dx >= 0, yo = dy >= 0 ? 1.6 * h : -2.4 * h;
@@ -518,6 +528,60 @@
   }
   function notesBlocks(P, ctx) { return [{ t: 'notes', title: 'GENERAL NOTES', lines: notesModel(P, ctx).map(n => `${n.topic}: ${n.text}`), wc: 110 }]; }
 
+  /* ---------- the aerial site plan (2026-11-17, engineer request B) ---------- */
+  /* aerialPlan(D, C): the plan window C.ae.w with everything of the project in it (or of one lift, C.ae.only): plan-sheet outlines, site
+     items, power-line D_min buffers (siteLayer), each crane symbol (turned to its first pick, or a girder lift's governing hook), the booms
+     to the pick / set, the swing paths, P / S, the girder at the pick and the set with its path, the routes (path and swept outline), the
+     frame with grid ticks, the north arrow and the scale bar, the imagery attribution and the DXF note. The image itself is not in the
+     DXF (R12 has no images): ui/aerial.js draws it under the sheet's plan window (C.aerial: the frame entity, moved with the sheet). */
+  function aerialPlan(D, C) {
+    const { P, w, ctx, only, title } = C.ae, V = pv(w), h = D.h, lT = D.layer('TEXT', 7), lP = D.layer('POINT', 5), lS = D.layer('SWING', 4), lB = D.layer('BOOM', 7), lBs = D.layer('BOOM-SET', 7, 'DASHED');
+    const has = (kind, id) => !only || (only[kind] || []).includes(id);
+    siteLayer(D, V, P);
+    const RT = window.CranePickRoute;
+    if (RT && !only) (P.routes || []).forEach(r => { let ev = null; try { ev = ctx.evalRoute && ctx.evalRoute(r); } catch (e) { ev = null; } if (!ev || !ev.sim || !ev.sim.dense) return;
+      const sw = RT.swept(ev.sim, Math.max(2, ev.sim.pa.L / 120)); sw.rings.forEach(q => drawPoly(D, V, D.layer('ROUTE-SWEPT', 9), q, true));
+      drawPoly(D, V, D.layer('ROUTE-PATH', 4, 'CENTER'), ev.sim.dense.filter(q => q.s >= 0), false, D.ltype('CENTER'));
+      const m = ev.sim.dense.find(q => q.s >= 0 && inWin(q, w)); if (m) D.text(lT, V.X(m.x) + h, V.Y(m.y) + 0.5 * h, 0.75 * h, U(`ROUTE: ${r.name}`)); });
+    const drawn = new Set();
+    (P.picks || []).forEach(k => { if (!has('picks', k.id)) return; const u = setupOf(P, k.setupId); if (!u || !craneOf(P, u)) return; let ev = null; try { ev = ctx.evalPick(k); } catch (e) { ev = null; }
+      if (!drawn.has(u.id)) { drawn.add(u.id); setupLayer(D, V, P, u, { hook: k.pick, load: loadOf(k) }); }
+      const seg = (l, a, b, lt) => { const c = clip(a, b, w); if (c) D.line(l, V.X(c[0].x), V.Y(c[0].y), V.X(c[1].x), V.Y(c[1].y), lt); };
+      seg(lB, u, k.pick); seg(lBs, u, k.set, D.ltype('DASHED')); if (ev && ev.path) drawPoly(D, V, lS, ev.path.pts, false);
+      mark(D, V, lP, k.pick, 'P', lT); mark(D, V, lP, k.set, 'S', lT); if (inWin(k.pick, w)) D.text(lT, V.X(k.pick.x) + 1.4 * h, V.Y(k.pick.y) + 0.6 * h, 0.75 * h, U(k.name)); });
+    (P.tandems || []).forEach(t => { if (!has('tandems', t.id)) return; let r = null; try { r = ctx.evalT && ctx.evalT(t); } catch (e) { r = null; }
+      t.slots.slice(0, nC(t)).forEach((id, i) => { const u = setupOf(P, id); if (!u || drawn.has(u.id) || !craneOf(P, u)) return; drawn.add(u.id); const g = r && r.gov && r.gov[i], q = g && r.steps[g.i], cr = q && q.cr[i]; setupLayer(D, V, P, u, { tag: `CRANE ${i + 1}`, hook: cr && cr.p }); });
+      if (!r || !r.sh) return; const ob = r.sh.ob, pose = (q, l) => { const o = T().outline(t, q, ob); drawPoly(D, V, l, o.box, o.box.length > 2); o.lines.forEach(ln => drawPoly(D, V, l, ln, false)); };
+      pose(Object.assign({ z: r.path.zP }, t.pick), D.layer('GIRDER', 4)); pose(Object.assign({ z: r.path.zS }, t.set), D.layer('GIRDER-SET', 3));
+      if (r.steps.length > 1) drawPoly(D, V, D.layer('PATH', 6, 'DASHED'), r.steps.map(q => ({ x: q.x.pose.x, y: q.x.pose.y })), false, D.ltype('DASHED'));
+      if (inWin(t.set, w)) D.text(lT, V.X(t.set.x) + 1.2 * h, V.Y(t.set.y) - 2 * h, 0.75 * h, U(`GIRDER LIFT: ${t.name}`)); });
+    if (!only) (P.setups || []).forEach(u => { if (!drawn.has(u.id) && craneOf(P, u)) setupLayer(D, V, P, u); });
+    const i0 = D.mark(); frameLayer(D, V, P, title || 'SITE PLAN - AERIAL'); C.aerial = { e: D.E[i0], w, h };
+    const X0 = V.X(w.x0), Y0 = V.Y(w.y0), AE = window.CranePickAerial, at = AE ? AE.ATTR : 'Tiles (c) Esri - Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community';
+    D.text(lT, X0, Y0 - 4.0 * h, 0.7 * h, U(`AERIAL BACKGROUND: ESRI WORLD IMAGERY. ${at}. IMAGERY DATE VARIES; NOT A SURVEY.`));
+    D.text(lT, X0, Y0 - 5.1 * h, 0.7 * h, U('DXF (R12) HAS NO IMAGES: ATTACH THE AERIAL PNG WITH ITS WORLD FILE (.PGW, IN THESE DXF COORDINATES) FROM THE DRAWINGS TAB, "DOWNLOAD AERIAL IMAGE".'));
+  }
+  /* the windows of the aerial sheets: the whole site (every setup with its tail circle and floats, picks, swing paths, girder poses,
+     routes, site items), and one per lift (the lift plan's own window) */
+  function siteWindow(P, ctx) {
+    const pts = [];
+    (P.setups || []).forEach(u => { const c = craneOf(P, u); if (!c) return; pts.push(u); const f = LF().footprint(c.def, u); if (isNum(f.tail)) pts.push({ x: u.x - f.tail, y: u.y - f.tail }, { x: u.x + f.tail, y: u.y + f.tail }); f.floatC.forEach(q => pts.push(q)); });
+    (P.picks || []).forEach(k => { pts.push(k.pick, k.set); let ev = null; try { ev = ctx.evalPick(k); } catch (e) { ev = null; } if (ev && ev.path) pts.push(...ev.path.pts); });
+    (P.tandems || []).forEach(t => pts.push(t.pick, t.set));
+    (P.routes || []).forEach(r => (r.pts || []).forEach(p => pts.push(p)));
+    (P.items || []).forEach(it => (it.pts || []).forEach(p => pts.push(p)));
+    return pts.length ? windowOf(pts, 0.08) : null;
+  }
+  function aerialSheet(D, C) { const h = D.h, i0 = D.mark(); aerialPlan(D, C); const ba = D.bbox(i0), t0 = D.mark(); notesBlk(D, D.layer('TEXT', 7), 0, 0, 'NOTES', C.notes || [], 110); const bt = D.bbox(t0); D.move(t0, ba[0] - bt[0], ba[1] - 2 * h - bt[3]); }
+  const AERIAL_NOTES = ['PLAN TO SCALE, GRID NORTH UP, ON AN AERIAL BACKGROUND (ESRI WORLD IMAGERY; IMAGERY DATE VARIES; NOT A SURVEY: THE OVERLAYS ARE THE PROJECT\'S GRID COORDINATES).',
+    'CRANES DRAWN AS SCHEMATIC SYMBOLS FROM THE CRANE FILES (ASSUMED DIMENSIONS LISTED ON THE CRANE CARDS); TAIL-SWING CIRCLE (PHANTOM); SWING PATHS; P: PICK, S: SET; POWER-LINE D_MIN BUFFERS (DASHED).'];
+  /* buildView(P, ctx, w, opt): one aerial sheet of the window w (the Plan tab's "Print plan view") -> { D, sheets } */
+  function buildView(P, ctx, w, opt) {
+    opt = opt || {}; const D = X_().drawing({ prefix: 'C-' }), C = { P, date: (ctx && ctx.date) || new Date().toISOString().slice(0, 10) };
+    const S = { id: 'view', title: opt.title || 'PLAN VIEW (AERIAL)', fn: aerialPlan, kmin: 1, c: { ...C, ae: { P, w, ctx: ctx || {}, title: opt.title || 'PLAN VIEW' } }, paper: opt.paper || 'B', n: 1, of: 1 };
+    const r = sheet(D, S, 0, C); r.aerial = S.c.aerial; return { D, sheets: [r] };
+  }
+
   /* ---------- the set ---------- */
   const EXTRA = [];   // addSheets(fn): fn(P, ctx, C) -> [{ id, title, fn(D, C), c, kmin, src }] | null (sheets of other modules, after the route sheets)
   /* (C6 merged before C7: the route sheets are drawn here, routeSheet; addSheets stays for later modules.) */
@@ -537,6 +601,8 @@
         notes: ['PLAN TO SCALE, GRID NORTH UP. P: PICK, S: SET, G: CAPACITY-GOVERNING POINT ON THE SWING; BOOM AT THE PICK (SOLID), THE SET (DASHED) AND THE GOVERNING POINT (CENTER LINE); SWING PATH; TAIL-SWING CIRCLE (PHANTOM); MATS WHERE ENTERED; F1...: RED / AMBER 3D CLEARANCE FLAGS (CLOSEST POINT, DASHED TO THE ITEM).',
           'ELEVATIONS ALONG THE BOOM AT THE PICK AND THE SET, TO THE SAME SCALE. VALUES: THE APP\'S ENGINE (PICKS TAB, LIFTS TAB, REPORT).'] },
         src: [['out', 'picks', 'Picks tab'], ['in', 'lifts', 'Lifts input tab'], ['rpt', 'pick-' + k.id, 'Report §Lifts']] });
+      if (opt.aerial) list.push({ id: 'aerial-' + k.id, title: `SITE PLAN - AERIAL: ${k.name}`, fn: aerialSheet, kmin: 48, aerial: true, c: { ...C, ae: { P, w: pick.w, ctx, only: { picks: [k.id] }, title: `AERIAL: ${k.name}` }, notes: AERIAL_NOTES },
+        src: [['in', 'lifts', 'Lifts input tab'], ['out', 'plan', 'Plan tab (map)'], ['rpt', 'aerial', 'Report §Site plan (aerial)']] });
     });
     // a lift plan sheet and a rigging sheet per girder lift
     sum.filter(r => r.kind === 'tandem').forEach(r => {
@@ -549,6 +615,8 @@
         notes: ['PLAN TO SCALE, GRID NORTH UP. GIRDER ON THE TRUCK (PICK) AND ON THE BEARINGS (SET), THE PATH OF ITS CENTRE (DASHED), W1...: WAYPOINTS; EACH CRANE\'S BOOM AT ITS GOVERNING STEP (CENTER LINE) TO ITS HOOK H1 / H2; F1...: 3D CLEARANCE FLAGS.',
           `ELEVATION IN THE VERTICAL PLANE THROUGH ${nC(t) > 1 ? 'BOTH CRANES' : 'THE CRANE AND ITS HOOK'}, AT THE GOVERNING STEP, TO THE SAME SCALE.`] },
         src: [['in', 'tandem', 'Girder lifts input tab'], ['out', 'picks', 'Picks tab (girder lifts)'], ['rpt', 'tandem-' + t.id, 'Report §Tandem lifts']] });
+      if (opt.aerial) list.push({ id: 'aerial-' + t.id, title: `SITE PLAN - AERIAL: ${t.name}`, fn: aerialSheet, kmin: 48, aerial: true, c: { ...C, ae: { P, w: tl.w, ctx, only: { tandems: [t.id] }, title: `AERIAL: ${t.name}` }, notes: AERIAL_NOTES },
+        src: [['in', 'tandem', 'Girder lifts input tab'], ['out', 'plan', 'Plan tab (map)'], ['rpt', 'aerial', 'Report §Site plan (aerial)']] });
       list.push({ id: 'rig-' + t.id, title: `RIGGING AND LOAD SHARE: ${t.name}`, fn: rigging, kmin: 24, c: { ...C, tl }, src: [['in', 'tandem', 'Girder lifts input tab (girder, hooks)'], ['rpt', 'tandem-' + t.id, 'Report §Tandem lifts (load share)']] });
     });
     // the ground sheet
@@ -565,6 +633,10 @@
     EXTRA.forEach(fn => { try { (fn(P, ctx, C) || []).forEach(s => list.push(Object.assign({ kmin: 1, c: { ...C } }, s))); } catch (e) { miss.push(['ADDED SHEET', String(e.message)]); } });
     if (!sum.length) miss.push(['LIFT PLAN SHEETS', 'NO LIFT YET (LIFTS OR GIRDER LIFTS TAB)']);
     // the general notes (second) and the cover with the sheet index (first): the cover's own sheets counted in the index
+    // the aerial site plan of the whole site: first after the general notes (the per-lift aerial sheets follow each lift's plan sheet)
+    const sw = opt.aerial ? siteWindow(P, ctx) : null;
+    if (sw) list.unshift({ id: 'aerial', title: 'SITE PLAN - AERIAL', fn: aerialSheet, kmin: 48, aerial: true, c: { ...C, ae: { P, w: sw, ctx, title: 'SITE PLAN - AERIAL' }, notes: AERIAL_NOTES },
+      src: [['out', 'plan', 'Plan tab (map)'], ['in', 'items', 'Site items input tab'], ['rpt', 'aerial', 'Report §Site plan (aerial)']] });
     const head = [], notesL = [], npg = blockPages(notesBlocks(P, ctx), aw, ah);
     npg.forEach((items, i) => notesL.push({ id: i ? `notes${i + 1}` : 'notes', title: npg.length > 1 ? `GENERAL NOTES (${i + 1} OF ${npg.length})` : 'GENERAL NOTES', fn: pageFn(items), c: { ...C }, kmin: 1, noScale: true, src: [['in', 'cranes', 'Cranes input tab'], ['in', 'lifts', 'Lifts input tab (settings)'], ['rpt', 'basis', 'Report §Basis']] }));
     let nC0 = 1, cpg = null;
@@ -575,8 +647,8 @@
     cpg.forEach((items, i) => head.push({ id: i ? `cover${i + 1}` : 'cover', title: cpg.length > 1 ? `COVER AND SHEET INDEX (${i + 1} OF ${cpg.length})` : 'COVER AND SHEET INDEX', fn: pageFn(items), c: { ...C }, kmin: 1, noScale: true, src: [['out', 'summary', 'Summary tab'], ['in', 'proj', 'Project input tab (title block)']] }));
     const all = [...head, ...notesL, ...list];
     let ox = 0; const sheets = [];
-    all.forEach((S, i) => { const m0 = D.mark(); try { const r = sheet(D, { ...S, paper: opt.paper || 'D', n: i + 1, of: all.length, half: !!opt.half }, ox, C); sheets.push(r); ox += r.W + 2 * r.k * 12; } catch (e) { D.E.length = m0; errors.push(`${S.title}: ${e.message}`); } });
+    all.forEach((S, i) => { const m0 = D.mark(); try { const S2 = { ...S, paper: opt.paper || 'D', n: i + 1, of: all.length, half: !!opt.half }, r = sheet(D, S2, ox, C); if (S.aerial && S.c.aerial) r.aerial = S.c.aerial; sheets.push(r); ox += r.W + 2 * r.k * 12; } catch (e) { D.E.length = m0; errors.push(`${S.title}: ${e.message}`); } });
     return { D, sheets, miss, errors, summary: sum };
   }
-  window.CranePickDrawSet = { PAPER, SCALES, SCALE_NAME, TXT, summary, notesModel, govClr, groundSum, groundModel, build, addSheets, clip, windowOf, pctText, clrText, grText, stepText };
+  window.CranePickDrawSet = { PAPER, SCALES, SCALE_NAME, TXT, summary, notesModel, govClr, groundSum, groundModel, build, buildView, siteWindow, aerialPlan, addSheets, clip, windowOf, pctText, clrText, grText, stepText };
 })();
