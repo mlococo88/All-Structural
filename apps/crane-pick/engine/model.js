@@ -24,7 +24,9 @@
        savedAt? }
      sheet = { id, name, kind: 'image' | 'pdf', page, w, h (px), place: { x, y, s, rot }, opacity (0–1), locked, visible,
                cal: { p1: { px, py }, p2, dist (ft) } | null, geo: { p1, p2, g1: { E, N }, g2 (zone units) } | null,
-               pageIn: { w, h } (PDF page size, in) | null, planScale (the plan's stated scale, ft per in) | null, basis (BASIS key) }
+               pageIn: { w, h } (PDF page size, in) | null, planScale (the plan's stated scale, ft per in) | null, basis (BASIS key),
+               align?: { p1: { px, py }, p2, m1: { x, y }, m2 (grid ft), keep: 'pts' | 'ref' } (align to the map, 2026-11-17; optional:
+               absent in older projects; keep 'ref' = the scale kept from the calibration / plan scale, rotation and position from the points) }
      item  = { id, type, name, pts: [{ x, y }], ... }   type: 'obst' (polygon: height ft, topEl, gradeEl (C3-2)), 'power' (polyline: kv,
              le350, setFt, height (lowest wire above grade), gradeEl, sag, sway (C3-2: ft)),
              'util' (polyline or polygon (closed): kind, depth ft, topEl ft, size ft), 'excl' (polygon: reason), 'label' (one point:
@@ -67,7 +69,7 @@
   };
   /* how a sheet's scale was set: none (placed only), plan (the plan's stated scale on the PDF page size), cal (two points and a known
      distance), geo (two points with State Plane coordinates: scale, rotation and position) */
-  const BASIS = { none: 'not set', plan: 'stated plan scale (PDF page size)', cal: 'calibrated (two points, known distance)', geo: 'georeferenced (two State Plane points)' };
+  const BASIS = { none: 'not set', plan: 'stated plan scale (PDF page size)', cal: 'calibrated (two points, known distance)', geo: 'georeferenced (two State Plane points)', align: 'aligned to the map (two points: sheet → map)' };
   const UTIL_KINDS = { utility: 'Buried utility', culvert: 'Culvert', wall: 'Wall', other: 'Other' };
   const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
   function newProject(o) {
@@ -104,11 +106,13 @@
     const cal = s.cal && pxp(s.cal.p1) && pxp(s.cal.p2) && num(s.cal.dist, 0) > 0 ? { p1: pxp(s.cal.p1), p2: pxp(s.cal.p2), dist: +s.cal.dist } : null;
     const g = s.geo, gp = q => q && isFinite(q.E) && isFinite(q.N) ? { E: +q.E, N: +q.N } : null;
     const geo = g && pxp(g.p1) && pxp(g.p2) && gp(g.g1) && gp(g.g2) ? { p1: pxp(g.p1), p2: pxp(g.p2), g1: gp(g.g1), g2: gp(g.g2) } : null;
+    const al = s.align, mp = q => q && isFinite(q.x) && isFinite(q.y) ? { x: +q.x, y: +q.y } : null;
+    const align = al && pxp(al.p1) && pxp(al.p2) && mp(al.m1) && mp(al.m2) ? { p1: pxp(al.p1), p2: pxp(al.p2), m1: mp(al.m1), m2: mp(al.m2), keep: al.keep === 'ref' ? 'ref' : 'pts' } : null;
     return { id: str(s.id) || uid('s'), name: str(s.name, 'Plan sheet'), kind: s.kind === 'pdf' ? 'pdf' : 'image', page: Math.max(1, Math.round(num(s.page, 1))),
       w: +s.w, h: +s.h, place: { x: num(pl.x, 0), y: num(pl.y, 0), s: +pl.s, rot: num(pl.rot, 0) },
       opacity: Math.max(0.05, Math.min(1, num(s.opacity, 0.8))), locked: !!s.locked, visible: s.visible !== false, cal, geo,
       pageIn: s.pageIn && num(s.pageIn.w, 0) > 0 && num(s.pageIn.h, 0) > 0 ? { w: +s.pageIn.w, h: +s.pageIn.h } : null,
-      planScale: num(s.planScale, 0) > 0 ? +s.planScale : null, basis: BASIS[s.basis] ? s.basis : 'none' };
+      planScale: num(s.planScale, 0) > 0 ? +s.planScale : null, basis: BASIS[s.basis] ? s.basis : 'none', ...(align ? { align } : {}) };
   }
   /* a project crane: kept as loaded (a crane file that no longer passes the check is kept too, so nothing is lost; the UI says so) */
   function normCrane(c) {

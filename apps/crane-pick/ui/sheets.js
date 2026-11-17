@@ -76,6 +76,7 @@
       const u = urls.get(s.id);
       if (u && !L.img) { const im = document.createElement('img'); im.className = 'crSheet leaflet-image-layer leaflet-zoom-animated'; im.alt = ''; im.draggable = false; im.src = u; im.dataset.sheet = s.id; pane.appendChild(im); L.img = im; }
       if (L.img) { L.img.style.width = s.w + 'px'; L.img.style.height = s.h + 'px'; L.img.style.opacity = String(s.opacity); L.img.style.display = s.visible ? '' : 'none'; L.img.style.zIndex = String(i + 1); }
+      if (L.img && al && al.id === s.id) { L.img.style.display = ''; if (!alSheetStep() && alN() < 4) L.img.style.opacity = String(Math.min(AL_FADE, s.opacity)); }   // aligning: shown; faded while a map point is picked
       const on = s.id === sel && A.ui.itab === 'sheets', miss = u === null;
       L.foot.setStyle({ color: on ? '#2563EB' : miss ? '#B45309' : '#64748B', dashArray: on ? null : '6 4', opacity: s.visible || on ? 0.9 : 0.35, weight: on ? 2 : 1.5,
         fill: miss, fillColor: '#FDE68A', fillOpacity: miss ? 0.25 : 0 });
@@ -88,7 +89,7 @@
   function clearHandles() { handles.forEach(h => h.remove()); handles = []; }
   function drawHandles() {
     clearHandles();
-    const s = sheetOf(sel), m = MP() && MP().map; if (!s || !m || s.locked || !s.visible || pick || A.ui.itab !== 'sheets') return;   // handles while the Plan sheets tab is open
+    const s = sheetOf(sel), m = MP() && MP().map; if (!s || !m || s.locked || !s.visible || pick || al || A.ui.itab !== 'sheets') return;   // handles while the Plan sheets tab is open
     const Lf = window.L, cpx = { px: s.w / 2, py: s.h / 2 };
     const cen = Lf.marker(MP().toLL(G.pxToFt(s.place, cpx.px, cpx.py)), { icon: hIcon('crMove', '✥', 'Drag to move the sheet'), draggable: true, keyboard: false, zIndexOffset: 1000 }).addTo(m);
     const rpx = () => ({ px: s.w / 2, py: -Math.max(s.h * 0.08, 40) });
@@ -128,14 +129,187 @@
     const b = document.getElementById('pkCancel'); if (b) b.onclick = endPick;
     if (n >= 2) A.showITab('sheets');
   }
+  /* ---------- align to the map: two points, sheet -> map (engineer request 2026-11-17) ----------
+     Click A on the sheet (its own pixel, wherever the sheet sits), A on the map, B on the sheet, B on the map: the sheet is placed by the
+     similarity transform that takes A -> A′ and B -> B′ exactly (engine/geo.js align2). While a map point is picked the sheet is faded;
+     the four markers stay draggable until Done (a map marker re-solves live; a sheet marker re-picks its point on the sheet). Done = one
+     undo step; Esc / Cancel restores the sheet; Backspace (or Undo while aligning) takes back the last click. With no base map the map
+     points are site grid points. al = { id, sp: [{ px, py }], mp: [{ x, y }], orig (placement), keep: 'pts' | 'ref', move, mk, ln, done } */
+  let al = null, alKeys = null;
+  const AL_FADE = 0.15, AL_REF = 0.02;   // the sheet's opacity while a map point is picked; scales differing by more than 2 % are reported
+  const alN = () => al ? al.sp.length + al.mp.length : 0;
+  const alSheetStep = () => alN() % 2 === 0;   // 0, 2: a sheet point next; 1, 3: a map point
+  function refScale(s) {   // the scale already set by a calibration or the plan's stated scale (the alignment is checked against it)
+    if (s.cal) { const r = G.calScale(s.cal.p1, s.cal.p2, s.cal.dist); if (r.s > 0) return { s: r.s, what: 'calibrated' }; }
+    if (s.planScale > 0 && s.pageIn) return { s: s.planScale * s.pageIn.w / s.w, what: 'plan scale' };
+    return null;
+  }
+  function alSolve(s) {   // -> the result (null until four points); s.place is set (live: no undo step until Done)
+    if (!al || al.sp.length < 2 || al.mp.length < 2) return null;
+    const r = G.align2(al.sp[0], al.sp[1], al.mp[0], al.mp[1], s.w, s.h); if (!r) return null;
+    const ref = refScale(s), keep = al.keep === 'ref' && ref;
+    const pl = keep ? G.rescaleAbout(r.place, ref.s, (al.sp[0].px + al.sp[1].px) / 2, (al.sp[0].py + al.sp[1].py) / 2) : r.place;
+    Object.assign(s.place, pl); return r;
+  }
+  function startAlign(id) {
+    const s = sheetOf(id); if (!s || !MP().map || urls.get(s.id) === null) return;
+    if (s.locked && !confirm(`"${s.name}" is locked. Unlock it to align it to the map? (It is unlocked when you press Done.)`)) return;
+    if (s.geo && !confirm(`"${s.name}" is georeferenced from State Plane coordinates. Aligning it to the map replaces that placement (Undo brings it back). Continue?`)) return;
+    if (pick) endPick(); if (al) endAlign();
+    sel = id; A.showOTab('plan');
+    al = { id, sp: [], mp: [], orig: Object.assign({}, s.place), keep: 'pts', move: true, mk: [], ln: [], done: false };
+    const m = MP().map; if (!m.getBounds().contains(MP().toLL(G.pxToFt(s.place, s.w / 2, s.h / 2)))) fitSheet(id);
+    MP().setTool({ cursor: 'crosshair', click: ft => alClick(ft), key: alKey, end: alEnd });
+    alKeys = e => {   // while aligning, Undo / Redo (Ctrl+Z / Ctrl+Y, the toolbar buttons) act on the clicks, not on the project
+      if (e.type === 'keydown') { if (!(e.ctrlKey || e.metaKey) || e.altKey) return; const k = (e.key || '').toLowerCase(); if (k !== 'z' && k !== 'y') return;
+        const t = e.target; if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+        e.preventDefault(); e.stopImmediatePropagation(); if (k === 'z' && !e.shiftKey) alBack(); return; }
+      const b = e.target && e.target.closest && e.target.closest('#bUndo, #bRedo'); if (!b) return;
+      e.preventDefault(); e.stopImmediatePropagation(); if (b.id === 'bUndo') alBack();
+    };
+    window.addEventListener('keydown', alKeys, true); window.addEventListener('click', alKeys, true);
+    sync(); alDraw(); alStatus(); drawTab();
+  }
+  function alClick(ft) {
+    const s = sheetOf(al && al.id); if (!s || alN() >= 4) return;
+    if (alSheetStep()) {
+      const q = G.ftToPx(s.place, ft.x, ft.y);
+      if (q.px < 0 || q.py < 0 || q.px > s.w || q.py > s.h) { alStatus('That click is off the sheet: click a point on the sheet itself.'); return; }
+      if (al.sp.length === 1 && Math.hypot(q.px - al.sp[0].px, q.py - al.sp[0].py) < G.ALIGN_MIN_PX) { alStatus('B is the same point as A on the sheet: pick a point far from A.'); return; }
+      al.sp.push({ px: q.px, py: q.py });
+    } else {
+      if (al.mp.length === 1 && Math.hypot(ft.x - al.mp[0].x, ft.y - al.mp[0].y) < G.ALIGN_MIN_FT) { alStatus('B′ is the same point as A′ on the map: click where B is.'); return; }
+      al.mp.push({ x: ft.x, y: ft.y });
+    }
+    if (alN() === 4) alSolve(s);
+    alAfter(s);
+  }
+  function alAfter(s) { sync(); alDraw(); alStatus(); drawTab(); A.live('sheets', { id: s.id }); }
+  function alBack() {   // take back the last click (after the fourth: the sheet goes back to where it was)
+    const s = sheetOf(al && al.id); if (!s) return; const n = alN(); if (!n) return;
+    if (n === 4) Object.assign(s.place, al.orig);
+    if (n % 2 === 0) al.mp.pop(); else al.sp.pop();
+    alAfter(s);
+  }
+  function alKey(e) {
+    if (e.key === 'Escape') { endAlign(); return; }
+    if (e.key === 'Backspace') { e.preventDefault(); alBack(); return; }
+    if (e.key === 'Enter' && alN() === 4) { e.preventDefault(); alDone(); }
+  }
+  function endAlign() { if (al) MP().setTool(null); }   // Cancel / Esc: the tool's end() restores the sheet
+  function alEnd() {   // the map tool ends (Cancel, Done, another tool, another project)
+    if (!al) return; const s = sheetOf(al.id), done = al.done;
+    if (s && !done) Object.assign(s.place, al.orig);
+    al.mk.forEach(m => m.remove()); al.ln.forEach(l => l.remove());
+    window.removeEventListener('keydown', alKeys, true); window.removeEventListener('click', alKeys, true); alKeys = null;
+    al = null; MP().status('');
+    if (s && !done) { sync(); A.live('sheets', { id: s.id }); }
+    drawHandles(); drawTab();
+  }
+  function alDone() {
+    const s = sheetOf(al && al.id); if (!s || alN() < 4) return; const r = alSolve(s); if (!r) return;
+    const old = al.orig, now = Object.assign({}, s.place), keep = al.keep === 'ref' && refScale(s) ? 'ref' : 'pts', move = al.move;
+    const rec = { p1: al.sp[0], p2: al.sp[1], m1: al.mp[0], m2: al.mp[1], keep }, foot = [[0, 0], [s.w, 0], [s.w, s.h], [0, s.h]].map(([x, y]) => G.pxToFt(old, x, y));
+    al.done = true; MP().setTool(null);
+    let moved = 0;
+    A.update(P => {   // one undo step: the placement before the alignment is the last recorded state
+      if (move) { const mv = G.placementMove(old, now); (P.items || []).forEach(it => { if (it.pts.every(p => G.inside(p, foot))) { it.pts = it.pts.map(mv); moved++; } }); }
+      s.place = now; s.align = rec; s.basis = 'align'; s.geo = null; s.locked = false;
+    }, 'sheets', { id: s.id });
+    const ref = refScale(s);
+    A.notice(`"${esc(s.name)}" aligned to the map: scale ${fmt(s.place.s, 5)} ft/px, rotation ${fmt(deg(s.place.rot), 3)}° (sheet up → ${G.bearingText(r.upAz)}).${keep === 'ref' ? ` The ${ref.what} scale was kept.` : ''}${move ? ` ${moved} item${moved === 1 ? '' : 's'} drawn on it moved with it.` : ''} Check a third point on the map.`, '', { id: 'shAlign' });
+  }
+  /* the alignment's numbers (the status bar and the sheet's card) */
+  function alInfo(s) {
+    if (!al || alN() < 4) return null;
+    const r = G.align2(al.sp[0], al.sp[1], al.mp[0], al.mp[1], s.w, s.h); if (!r) return null;
+    const ref = refScale(s), diff = ref ? ref.s / r.s - 1 : null;
+    return { r, ref, diff, conflict: ref && Math.abs(diff) > AL_REF, sOld: al.orig.s, inch: s.pageIn ? s.place.s * s.w / s.pageIn.w : null, dpi: s.pageIn ? s.w / s.pageIn.w : null };
+  }
+  function alSummary(s, long) {
+    const I = alInfo(s); if (!I) return ''; const r = I.r;
+    const sc = `${I.inch ? `1″ = ${fmt(I.inch, 2)} ft at ${fmt(I.dpi, 0)} dpi · ` : ''}${fmt(s.place.s, 5)} ft per image px`;
+    const parts = [`<b>Aligned</b>: ${sc}; rotation ${fmt(deg(s.place.rot), 3)}° CCW (sheet up → ${G.bearingText(r.upAz)})`,
+      `A–B: ${fmt(r.dpx, 1)} px on the sheet (${fmt(r.dpx * I.sOld, 2)} ft at its scale before) · ${fmt(r.dft, 2)} ft on the map`];
+    const warn = [];
+    if (r.close) warn.push(`A and B are close together (${fmt(r.frac * 100, 1)} % of the sheet's size): a small error in a click turns the sheet a lot. Pick points far apart.`);
+    if (I.conflict) warn.push(`The points give a scale ${fmt(Math.abs(I.diff) * 100, 1)} % ${I.diff > 0 ? 'smaller' : 'larger'} than the ${I.ref.what} scale (${fmt(I.ref.s, 5)} ft/px).`);
+    const h = parts.join(long ? '<br>' : ' · ') + warn.map(w => `<br><b class="warnT">⚠ ${w}</b>`).join('');
+    return h;
+  }
+  function alStatus(msg) {
+    if (!al) return; const s = sheetOf(al.id); if (!s) return; const n = alN(), grid = MP().base === 'none';
+    const btn = `<button type="button" id="alBack" ${n ? '' : 'disabled'}>Back</button><button type="button" id="alCancel">Cancel</button>`;
+    const step = ['Click point <b>A on the sheet</b> (a corner, a grid line crossing, a bearing …; zoom in for precision).',
+      `Click the same point <b>A on the ${grid ? 'site grid' : 'map'}</b>${grid ? ' (no base map: a grid point whose position you know)' : ''}. The sheet is faded.`,
+      'Click point <b>B on the sheet</b>, far from A.',
+      `Click the same point <b>B on the ${grid ? 'site grid' : 'map'}</b>.`];
+    MP().status(n < 4 ? `<b>Align to map</b> ${n + 1}/4: ${step[n]}${msg ? ` <b class="warnT">${esc(msg)}</b>` : ''} ${btn}`
+      : `${alSummary(s, false)}<br><span class="note">Drag a marker to adjust (map marker: moves the target; sheet marker: re-picks the point on the sheet).</span> <button type="button" class="primary" id="alDone">Done</button>${btn}`);
+    const on = (k, f) => { const b = document.getElementById(k); if (b) b.onclick = f; };
+    on('alBack', alBack); on('alCancel', endAlign); on('alDone', alDone);
+  }
+  /* markers: sheet points (white squares, red A / B) and map points (filled blue circles, A′ / B′), a dashed line from each sheet point
+     to its map point; draggable after the fourth click */
+  const alIcon = (cls, t) => window.L.divIcon({ className: 'crAl ' + cls, html: `<span>${t}</span>`, iconSize: [24, 24], iconAnchor: [12, 12] });
+  function alDraw() {
+    if (!al) return; const s = sheetOf(al.id), m = MP().map, Lf = window.L; if (!s || !m) return;
+    al.mk.forEach(k => k.remove()); al.ln.forEach(l => l.remove()); al.mk = []; al.ln = [];
+    const edit = alN() === 4, nm = ['A', 'B'];
+    al.sp.forEach((q, i) => {
+      const k = Lf.marker(MP().toLL(G.pxToFt(s.place, q.px, q.py)), { icon: alIcon('crAlS', nm[i]), draggable: edit, interactive: edit, keyboard: false, zIndexOffset: 1200, title: `Sheet point ${nm[i]}` }).addTo(m);
+      k._al = { t: 's', i }; al.mk.push(k);
+    });
+    al.mp.forEach((q, i) => {
+      const k = Lf.marker(MP().toLL(q), { icon: alIcon('crAlM', nm[i] + '′'), draggable: edit, interactive: edit, keyboard: false, zIndexOffset: 1300, title: `Map point ${nm[i]}′` }).addTo(m);
+      k._al = { t: 'm', i }; al.mk.push(k);
+    });
+    al.mp.forEach((q, i) => { if (al.sp[i]) al.ln.push(Lf.polyline([MP().toLL(G.pxToFt(s.place, al.sp[i].px, al.sp[i].py)), MP().toLL(q)], { color: '#DC2626', weight: 2, dashArray: '6 5', interactive: false }).addTo(m)); });
+    if (!edit) return;
+    al.mk.forEach(k => {
+      const { t, i } = k._al;
+      k.on('drag', () => {
+        if (t === 'm') { al.mp[i] = MP().toFt(k.getLatLng()); alSolve(s); MP().raf('align', () => { position(s); alMove(k); alStatus(); A.live('sheets', { id: s.id }); }); }
+        else MP().raf('align', () => { const ln = al.ln[i]; if (ln) ln.setLatLngs([k.getLatLng(), MP().toLL(al.mp[i])]); });
+      });
+      k.on('dragend', () => {
+        if (t === 's') {   // the sheet held still during the drag: the pixel under the marker is the new sheet point
+          const f = MP().toFt(k.getLatLng()), q = G.ftToPx(s.place, f.x, f.y), o = al.sp[1 - i];
+          if (q.px >= 0 && q.py >= 0 && q.px <= s.w && q.py <= s.h && Math.hypot(q.px - o.px, q.py - o.py) >= G.ALIGN_MIN_PX) al.sp[i] = { px: q.px, py: q.py };
+          alSolve(s);
+        }
+        alAfter(s);
+      });
+    });
+  }
+  function alMove(except) {   // while a map marker is dragged: the other markers and the lines follow the re-solved sheet
+    if (!al) return; const s = sheetOf(al.id);
+    al.mk.forEach(k => { if (k === except) return; const { t, i } = k._al; k.setLatLng(MP().toLL(t === 's' ? G.pxToFt(s.place, al.sp[i].px, al.sp[i].py) : al.mp[i])); });
+    al.ln.forEach((l, i) => l.setLatLngs([MP().toLL(G.pxToFt(s.place, al.sp[i].px, al.sp[i].py)), MP().toLL(al.mp[i])]));
+  }
+  function alCard(s) {   // the "Align to map" block of the sheet's card
+    const mine = al && al.id === s.id, miss = urls.get(s.id) === null;
+    if (!mine) return `<div class="shBlk"><b>Align to map (2 points)</b> <span class="note">click a point on the sheet, then the same point on the map; twice. Places the sheet (scale, rotation, position).</span>
+      <div class="goRow"><button type="button" class="primary" data-a="align" data-id="${s.id}" ${miss ? 'disabled' : ''}>Align to map…</button>${s.basis === 'align' && s.align ? `<span class="note">aligned: A–B ${fmt(Math.hypot(s.align.m2.x - s.align.m1.x, s.align.m2.y - s.align.m1.y), 2)} ft on the map</span>` : ''}</div></div>`;
+    const n = alN(), lab = ['A on the sheet', 'A′ on the map', 'B on the sheet', 'B′ on the map'];
+    const I = alInfo(s);
+    return `<div class="shBlk alBlk"><b>Align to map (2 points)</b>
+      <ol class="alSteps">${lab.map((t, i) => `<li class="${i < n ? 'done' : i === n ? 'now' : ''}">${i < n ? '✓ ' : ''}${t}</li>`).join('')}</ol>
+      ${I ? `<p class="note">${alSummary(s, true)}</p>
+        ${I.conflict ? `<div class="goRow" role="radiogroup" aria-label="Which scale to keep"><label class="note"><input type="radio" name="alKeep" value="pts" ${al.keep !== 'ref' ? 'checked' : ''}> Keep the map points (scale ${fmt(I.r.s, 5)} ft/px; A, B exact)</label>
+          <label class="note"><input type="radio" name="alKeep" value="ref" ${al.keep === 'ref' ? 'checked' : ''}> Keep the ${I.ref.what} scale (${fmt(I.ref.s, 5)} ft/px; rotation and position from the points; A, B miss by up to ${fmt(Math.abs(I.r.dft - I.ref.s * I.r.dpx) / 2, 2)} ft)</label></div>` : ''}
+        <label class="note" style="display:block"><input type="checkbox" id="alMove" ${al.move ? 'checked' : ''}> Move the items drawn on this sheet with it</label>
+        <div class="goRow"><button type="button" class="primary" data-a="alDone">Done</button><button type="button" data-a="alBack">Back</button><button type="button" data-a="alCancel">Cancel</button></div>`
+        : `<div class="goRow"><button type="button" data-a="alBack" ${n ? '' : 'disabled'}>Back</button><button type="button" data-a="alCancel">Cancel</button><span class="note">Esc cancels; Backspace takes back the last click.</span></div>`}</div>`;
+  }
   /* ---------- actions ---------- */
   function applyCal(id, dist) {
     const s = sheetOf(id); if (!s || !pick || pick.pts.length < 2) return;
     const [p1, p2] = pick.pts, r = G.calScale(p1, p2, dist); if (!(r.s > 0)) { A.notice('Enter a real distance greater than 0 and pick two different points.', 'err'); return; }
-    const geo = !!s.geo;
+    const geo = !!s.geo || s.basis === 'align';   // 2026-11-17: an aligned sheet keeps its placement too
     A.update(() => { s.cal = { p1, p2, dist }; if (!geo) { s.place = G.rescaleAbout(s.place, r.s, (p1.px + p2.px) / 2, (p1.py + p2.py) / 2); s.basis = 'cal'; } }, 'sheets', { id });
     endPick();
-    if (geo) A.notice(`"${esc(s.name)}" is georeferenced, so its scale was not changed: the calibration is kept as a check (Site tab).`);
+    if (geo) A.notice(`"${esc(s.name)}" is ${s.geo ? 'georeferenced' : 'aligned to the map'}, so its scale was not changed: the calibration is kept as a check (Site tab).`);
   }
   function applyGeo(id, g1n, g2n, moveItems) {
     const s = sheetOf(id); if (!s || !pick || pick.pts.length < 2) return;
@@ -152,7 +326,7 @@
   }
   function applyPlanScale(id, S) {
     const s = sheetOf(id); if (!s || !s.pageIn || !(S > 0)) return;
-    if (s.geo) { A.notice(`"${esc(s.name)}" is georeferenced; its scale comes from the georeference.`, 'warn'); return; }
+    if (s.geo || s.basis === 'align') { A.notice(`"${esc(s.name)}" is ${s.geo ? 'georeferenced; its scale comes from the georeference' : 'aligned to the map; its scale comes from the two points'}.`, 'warn'); return; }
     A.update(() => { s.planScale = S; s.place = G.rescaleAbout(s.place, S * s.pageIn.w / s.w, s.w / 2, s.h / 2); s.basis = 'plan'; s.cal = null; }, 'sheets', { id });
   }
   function fitSheet(id) { const s = sheetOf(id); if (s) MP().fit([[0, 0], [s.w, s.h], [s.w, 0], [0, s.h]].map(([x, y]) => G.pxToFt(s.place, x, y))); }
@@ -183,7 +357,8 @@
     const sheet = M.normSheet({ id, name: o.name, kind: o.kind || 'image', page: o.page || 1, w: d.w, h: d.h, place: initialPlace(d.w, d.h), opacity: 0.8, pageIn: o.pageIn || null });
     sel = id;
     A.update(P => { P.sheets.push(sheet); }, 'sheets', { id });
-    A.notice(`"${esc(o.name)}" placed at the map centre. Set its scale: calibrate with two points and a known distance${o.pageIn ? ', or enter the plan\'s stated scale' : ''}, or georeference it with two State Plane points.`, '', { id: 'shPlaced' });
+    A.notice(`"${esc(o.name)}" placed at the map centre. Place it: <b>Align to map</b> (click a point on the sheet, then the same point on the map; twice), or calibrate its scale with two points and a known distance${o.pageIn ? ', or enter the plan\'s stated scale' : ''}, or georeference it with two State Plane points.`, '',
+      { id: 'shPlaced', buttons: [{ label: 'Align to map', run: () => startAlign(id) }] });
   }
   async function onFile(file, reloadId) {
     if (!file) return;
@@ -257,7 +432,7 @@
   }
   function basisChip(s) {
     const b = s.basis || 'none', cls = b === 'none' ? 'chipW' : 'chipOk';
-    return `<span class="chip ${cls}" title="${esc(M.BASIS[b])}">${b === 'none' ? 'scale not set' : b === 'plan' ? 'plan scale' : b === 'cal' ? 'calibrated' : 'georeferenced'}</span>`;
+    return `<span class="chip ${cls}" title="${esc(M.BASIS[b])}">${b === 'none' ? 'scale not set' : b === 'plan' ? 'plan scale' : b === 'cal' ? 'calibrated' : b === 'align' ? 'aligned to map' : 'georeferenced'}</span>`;
   }
   function card(s) {
     const on = s.id === sel, u = urls.get(s.id), miss = u === null, z = G.zone(A.P.site.zone), unit = z.unit === 'm' ? 'm' : 'ft';
@@ -269,6 +444,7 @@
         <div class="fRow"><label>Scale</label><span>${fmt(sc, 5)} ft/px${inch ? ` · 1 in on the page = ${fmt(inch, 2)} ft` : ''} · ${esc(M.BASIS[s.basis || 'none'])}</span></div>
         <div class="fRow"><label for="shOp">Opacity</label><input type="range" id="shOp" min="0.05" max="1" step="0.05" value="${s.opacity}" data-sh="${s.id}"><span class="unit">${Math.round(s.opacity * 100)} %</span></div>
         <div class="fRow"><label for="shRot">Rotation</label><input type="number" id="shRot" step="0.1" value="${fmt(deg(s.place.rot), 3).replace(/,/g, '')}" data-sh="${s.id}"><span class="unit">° CCW</span></div>
+        ${alCard(s)}
         <div class="shBlk"><b>Scale calibration</b> <span class="note">two points a known distance apart (s = D / d<sub>px</sub>)</span>
           ${pk && pk.mode === 'cal' ? (pk.pts.length < 2 ? `<p class="note">Click point ${pk.pts.length + 1} of 2 on the map. <button type="button" data-a="cancel">Cancel</button></p>`
             : `<p class="note">d<sub>px</sub> = ${fmt(G.calScale(pk.pts[0], pk.pts[1], 1).dpx, 1)} px (now ${fmt(G.calScale(pk.pts[0], pk.pts[1], 1).dpx * sc, 2)} ft)</p>
@@ -312,6 +488,10 @@
     if (a === 'sel') { sel = sel === id ? null : id; if (pick && pick.id !== sel) endPick(); sync(); drawTab(); return; }
     if (a === 'cal' || a === 'geo') { startPick(id, a); return; }
     if (a === 'cancel') { endPick(); return; }
+    if (a === 'align') { startAlign(id); return; }
+    if (a === 'alDone') { alDone(); return; }
+    if (a === 'alBack') { alBack(); return; }
+    if (a === 'alCancel') { endAlign(); return; }
     if (a === 'calApply') { const d = G.parseNum(el.querySelector('#calD').value); if (!(d > 0)) { el.querySelector('#calD').classList.add('bad'); return; } applyCal(id, d); return; }
     if (a === 'geoApply') { const v = k => G.parseNum(el.querySelector('#' + k).value), q = { E1: v('gE1'), N1: v('gN1'), E2: v('gE2'), N2: v('gN2') };
       const bad = Object.keys(q).filter(k => !isFinite(q[k])); el.querySelectorAll('#gE1,#gN1,#gE2,#gN2').forEach(i => i.classList.toggle('bad', bad.includes(i.id.slice(1))));
@@ -328,6 +508,8 @@
     const t = e.target;
     if (t.id === 'shFile') { const f = t.files && t.files[0], r = t.dataset.reload || ''; t.value = ''; onFile(f, r || null); return; }
     if (t.id === 'shExp') { A.ui.expImages = t.checked; A.saveUi(); return; }
+    if (t.id === 'alMove' && al) { al.move = t.checked; return; }
+    if (t.name === 'alKeep' && al) { const s = sheetOf(al.id); al.keep = t.value === 'ref' ? 'ref' : 'pts'; if (s) { alSolve(s); alAfter(s); } return; }
     const s = sheetOf(t.dataset.sh); if (!s) return;
     if (t.dataset.t) { const k = t.dataset.t; A.update(() => { s[k] = t.checked; }, 'sheets', { id: s.id }); return; }
     if (t.id === 'shOp') { A.update(() => { s.opacity = +t.value; }, 'sheets', { id: s.id }); return; }
@@ -340,9 +522,10 @@
   /* ---------- Site tab and Report ---------- */
   function sheetSteps(s, pre) {
     const z = A.P.site.zone, out = [];
-    const c = W.cal(s, pre + '.cal'); if (c) out.push({ title: s.geo ? 'Scale calibration (a check: the georeference governs)' : 'Scale calibration', steps: c.steps });
+    const c = W.cal(s, pre + '.cal'); if (c) out.push({ title: s.geo ? 'Scale calibration (a check: the georeference governs)' : s.basis === 'align' ? 'Scale calibration (a check: the map alignment governs)' : 'Scale calibration', steps: c.steps });
     const p = W.planScale(s, pre + '.plan'); if (p && s.basis === 'plan') out.push({ title: 'Scale from the plan\'s stated scale', steps: p.steps });
     const g = W.geo(s, z, pre + '.geo'); if (g) out.push({ title: 'Georeference', steps: g.steps });
+    if (s.basis === 'align') { const r = refScale(s), w = W.align(s, pre + '.al', r ? r.s : NaN); if (w) out.push({ title: 'Align to map (two points: sheet → map)', steps: w.steps }); }
     return out;
   }
   window.CranePickSite && window.CranePickSite.section(P => {
@@ -363,11 +546,11 @@
   });
   /* ---------- wiring ---------- */
   A.inTab({ id: 'sheets', label: 'Plan sheets', build });
-  A.on('project', () => { if (pick) endPick(); if (sel && !sheetOf(sel)) sel = null; sync(); drawTab(); setTimeout(tellMissing, 0); });
+  A.on('project', () => { if (pick) endPick(); if (al) { al.done = true; endAlign(); }   /* another project / an undo: nothing to restore */ if (sel && !sheetOf(sel)) sel = null; sync(); drawTab(); setTimeout(tellMissing, 0); });
   A.on('change', o => { if (o.kind === 'sheets' || o.kind === 'site') { sync(); if (!(o.kind === 'sheets' && o.live)) drawTab(); } });
   A.on('live', o => { if (o.kind === 'sheets') { /* drawn by the handle itself */ } });
   A.on('ready', () => { if (window.CranePickProject) window.CranePickProject.setImages(imagesFor, afterImport); });
   A.on('tab', id => { if (id === 'plan') setTimeout(sync, 0); });
   A.on('itab', () => sync());
-  window.CranePickSheets = { sync, select: id => { sel = id; sync(); drawTab(); }, get selected() { return sel; }, startPick, endPick, get pick() { return pick; }, urls, applyCal, applyGeo, applyPlanScale, fitSheet, cleanUp, onFile };
+  window.CranePickSheets = { sync, select: id => { sel = id; sync(); drawTab(); }, get selected() { return sel; }, startPick, endPick, get pick() { return pick; }, startAlign, endAlign, alignDone: () => alDone(), get align() { return al; }, urls, applyCal, applyGeo, applyPlanScale, fitSheet, cleanUp, onFile };
 })();
