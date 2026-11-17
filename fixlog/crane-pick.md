@@ -907,3 +907,66 @@ statement, Picks and Summary columns; reload restores the grid from IndexedDB; 3
 resource" lines of the deliberate offline fetch excluded)); `crane-shell` (11), `crane-picks` (5), `crane-library` (9; its input-tab list
 had failed on main since C5 — fixed by C7, Terrain added), `crane-drawings` (5), `crane-clear3d` (8), `crane-place` (9), `crane-ground` (5),
 `crane-elev` (7), `crane-route` (5), `crane-tandem` (6); `node tests/check-syntax.mjs`.
+
+## 2026-11-17 — Plan sheets: "Align to map (2 points)" (engineer request)
+PR #1617: https://github.com/mlococo88/All-Structural/pull/1617
+Engineer request 2026-11-17: "When adding a sheet, the two point feature should work by selecting a point on the plan then a point on the
+map; doing this twice should be enough to orient the plan correctly." Added as the main way to place a sheet; scale calibration, the
+plan's stated scale and the State Plane georeference stay as alternatives.
+### What the user sees
+Plan sheets tab → the sheet's card → **Align to map (2 points)** → "Align to map…" (also a button on the notice shown when a sheet is
+added). The map's status bar walks through 1/4 "Click point A on the sheet" → 2/4 "Click the same point A on the map" (the sheet fades to
+15 % opacity so the map shows; with no base map: "on the site grid") → 3/4 "point B on the sheet" → 4/4 "B on the map". Markers: sheet
+points = white squares with a red A / B (the point is the box's top-right corner, marked by a red dot); map points = blue circles A′ / B′;
+a dashed red line from each sheet point to its map point. After the fourth click the sheet is placed and the status bar and the card show
+the scale (ft per image px; 1″ = … ft at … dpi for a PDF page), the rotation (° CCW from grid east and the bearing the sheet's "up"
+points to), A–B on the sheet (px, and ft at the scale before) vs on the map (ft); warnings: points closer than 5 % of the sheet's longer
+side; a scale more than 2 % off a calibrated / plan scale, with a choice "Keep the map points" (default) or "Keep the calibrated scale"
+(rotation and position from the points, scaled about the A–B midpoint; how far A, B then miss is shown). Until **Done**, map markers drag
+(the sheet re-solves live) and sheet markers drag (re-pick that point on the sheet; the sheet holds still during the drag). Done = one
+undo step. Esc / Cancel = no change. Backspace, or Undo / Ctrl+Z while aligning, takes back the last click. A locked sheet asks to unlock
+(unlocked at Done); a georeferenced sheet asks before its georeference is replaced. "Move the items drawn on this sheet with it" (default
+on, as the georeference): items whose points all lie inside the sheet's footprint before the alignment get the same transform.
+### Where
+- `engine/geo.js`: new `align2(p1, p2, m1, m2, w, h)` (+ `ALIGN_MIN_PX` 1, `ALIGN_MIN_FT` 0.01, `ALIGN_CLOSE` 0.05). The solve is the
+  existing `georef()` (unchanged); `align2` adds the rejection of degenerate points, the "close" flag and the up-azimuth. `reproject()`:
+  added `if (s.align) ['m1', 'm2'].forEach(k => { s.align[k] = mv(s.align[k]); });` before the `s.geo` line (the map points are grid ft).
+- `engine/worked.js`: new `align(sheet, pre, refS)` (worked steps: d_px, L_m, s, θ, o_x, o_y; check vs the calibrated / plan scale; the
+  kept scale).
+- `engine/model.js`: `BASIS.align = 'aligned to the map (two points: sheet → map)'`; `normSheet` keeps an optional `align`
+  `{ p1, p2 (px), m1, m2 (grid ft), keep: 'pts' | 'ref' }` (only when complete; not added to sheets without it).
+- `ui/sheets.js`: the alignment section (`startAlign`, `alClick`, `alBack`, `alKey`, `endAlign`, `alEnd`, `alDone`, `alInfo`, `alSummary`,
+  `alStatus`, `alDraw`, `alMove`, `alCard`, `refScale`, `alSolve`); `sync` (fade / show the sheet while aligning); `drawHandles` (no
+  handles while aligning: `|| al`); `card` (`${alCard(s)}` before "Scale calibration"); `onClick` / `onChange` (align, alDone, alBack,
+  alCancel, alMove, alKeep); `basisChip` ('aligned to map'); `sheetSteps` (the align steps; the calibration titled "a check: the map
+  alignment governs"); `addImage` notice (text + "Align to map" button); the 'project' handler ends an alignment without restoring.
+  Changed existing behaviour (before → after):
+  - `applyCal`: `const geo = !!s.geo;` → `const geo = !!s.geo || s.basis === 'align';` (a calibration on an aligned sheet is kept as a
+    check and does not rescale it, as for a georeferenced sheet); notice text names which.
+  - `applyPlanScale`: `if (s.geo) {…}` → `if (s.geo || s.basis === 'align') {…}` (same reason).
+- `index.html`: CSS `.crAl`, `.crAlS`, `.crAlM`, `.alSteps`.
+- Tests: `tests/engine/crane-align.test.mjs` (new), `tests/smoke/crane-align.mjs` (new).
+### Calculation (CLAUDE.md §4: no existing formula changed; the new placement uses the existing georef() solve)
+2-D similarity, pixel axes with up positive u = (p_x, −p_y): s = L_m / d_px; θ = atan2(Δy_m, Δx_m) − atan2(−Δp_y, Δp_x); o = A′ − s·R(θ)·u_A;
+grid of any pixel = o + s·R(θ)·u. Sheet "up" azimuth = −θ (mod 360). Keep the calibrated scale: the placement rescaled to s_ref about
+the A–B pixel midpoint (`rescaleAbout`), A and B then miss by |L_m − s_ref·d_px| / 2 each along A–B.
+Check case (`crane-align.test.mjs`, by hand): A (0, 0), B (100, 0) px → A′ (1000, 2000), B′ (1000, 2050) ft: d_px = 100, L_m = 50,
+s = 0.5 ft/px; θ = atan2(50, 0) − atan2(0, 100) = 90°; o = (1000, 2000); C = pixel (0, 40): u = (0, −40), R(90°)u = (40, 0) →
+C′ = (1000 + 0.5·40, 2000) = (1020, 2000); sheet up → azimuth 270°. Reference scale 0.55: (0.55 − 0.5)/0.5 = +10 %; kept → A, B miss by
+|50 − 55| / 2 = 2.50 ft. Also: 200 random transforms recovered (round trip); 45° / scale 2 sign check; degenerate points rejected
+(same point, < 1 px, < 0.01 ft, NaN); normSheet / reproject.
+### Saved data (§5)
+The placement is stored as before (`sheet.place`); new optional `sheet.align` and `basis: 'align'`. Older projects read unchanged (no
+`align` key added). An older copy of the app reading a newer project: `basis` 'align' → 'none' (placement kept). No key changed.
+### Decisions (pending engineer review)
+- "Too close" warning below 5 % of the sheet's longer side; scale-conflict report above 2 %; points < 1 px / < 0.01 ft rejected.
+- The alignment replaces a georeference (`s.geo` cleared at Done, after a prompt; Undo restores it); a calibration is kept as a check.
+- A locked sheet is unlocked at Done (not re-locked). Items "on the sheet" = all points inside the footprint before (as the georeference).
+- Undo / Ctrl+Z while aligning takes back a click (not a project undo). Map-marker drags show the sheet live; drawn items move at Done.
+- Moving / rotating an aligned sheet by its handles keeps basis 'align' (as for a georeferenced sheet today).
+### How verified
+`node tests/engine/run.mjs crane` (12 files, 100 tests incl. 6 new); `node tests/smoke/crane-align.mjs` (5 checks: 4 real clicks with
+Backspace, fade, markers and dashed lines, lands 0.007 / 0.019 ft from the targets; map-marker drag re-solves; sheet-marker drag re-picks;
+Done one undo step, Undo / Redo; item moved; Site tab / Report steps; Esc / Cancel unchanged; Ctrl+Z takes back a click; lock prompt;
+10 % calibration conflict and "keep the calibrated scale"; 390 px touch taps land within 0.03 ft; 0 console errors);
+`node tests/smoke/crane-sheets.mjs` (8 checks); `node tests/check-syntax.mjs`.
