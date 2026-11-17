@@ -241,7 +241,7 @@
     const CG = window.CranePickCraneGfx;
     if (CG) { const sy = CG.symbol(c.def, u, { hook: o.hook, load: o.load, loadPolys: o.loadPolys, labels: true }), Ly = g => D.layer(CG.GROUPS[g].layer, CG.GROUPS[g].aci);
       CG.draw(sy, { poly: (g, pts, cl) => { if (g !== 'cor') drawPoly(D, V, Ly(g), pts, cl); }, circle: (g, q, r) => { if (g !== 'cor') drawCircle(D, V, Ly(g), q, r); },
-        text: (g, p, t, rot, sz) => { if (inWin(p, V.w)) D.text(lT, V.X(p.x), V.Y(p.y), 0.6 * (sz || 1) * h, U(t), 0, rot); } }); }
+        text: (g, p, t, rot, sz) => { if (inWin(p, V.w)) D.text(lT, V.X(p.x), V.Y(p.y), 0.6 * (sz || 1) * h, U(String(t).replace(/°/g, ' DEG')), 0, rot); } }); }
     else { if (f.body) drawPoly(D, V, lC, f.body, true); f.tracks.forEach(q => drawPoly(D, V, lC, q, true)); f.beams.forEach(b => drawPoly(D, V, lC, b, false)); f.floatC.forEach(q => drawCircle(D, V, lF, q, q.r)); }
     if (isNum(f.tail)) drawPoly(D, V, lW, LF().circle(u, f.tail, 72), true, ph);
     // mats (setup.ground): wheeled B (forward) × L (across) at each float; crawler: the mat length across each track, under its length

@@ -21,7 +21,7 @@ const near = (a, b, tol, m) => assert.ok(Math.abs(a - b) <= tol, `${m || ''}: ${
 const raw = JSON.parse(fs.readFileSync(path.join(REPO, 'tests/smoke/crane-fake-wheeled.json'), 'utf8'));
 raw.app_inputs = Object.assign({}, raw.app_inputs, { ph4: { carrierLb: 40000, carrierCg: 0, upperLb: 30000, upperCg: 0, boomLb: 6000, cwRad: 10 } });
 const FW = path.join(process.env.TMPDIR || '/tmp', 'crane-fake-wheeled-ph4.json'); fs.writeFileSync(FW, JSON.stringify(raw));
-const { b, p, errs } = await openPage(FILE, { vw: 1280, vh: 900, ls: { 'crane.ui': '{"base":"none","itab":"cranes"}' } });
+const { b, p, errs } = await openPage(FILE, { vw: 1280, vh: 900, ls: { 'crane.ui': '{"base":"none","itab":"cranes","dwg":{"aerial":false}}' } });
 const shot = async nm => { if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); await p.screenshot({ path: path.join(SHOTS, nm + '.png') }); } };
 const rowsOf = sel => p.$$eval(sel + ' tbody tr', r => r.map(x => [...x.querySelectorAll('td')].map(t => t.innerText.trim())));
 try {
@@ -84,11 +84,11 @@ try {
 
   // 4. Report
   const rp = await p.evaluate(() => { const m = CranePickReport.model(CranePickApp.P), d = SharedReport.build(m); return { secs: m.sections.map(s => s.title), un: d.unresolved, dup: d.dup, text: SharedReport.text(d), head: m.head }; });
-  assert.deepEqual(rp.secs, ['Summary', 'Basis', 'Site', 'Site items', 'Cranes', 'Lifts', 'Tandem lifts', 'Ground', 'Route', 'Elevations']);
+  assert.deepEqual(rp.secs, ['Summary', 'Basis', 'Site', 'Site items', 'Site plan (aerial)', 'Cranes', 'Lifts', 'Tandem lifts', 'Ground', 'Route', 'Elevations']);
   assert.deepEqual(rp.un, []); assert.deepEqual(rp.dup, []); assert.ok(!/NaN|undefined/.test(rp.text));
   assert.match(rp.text, /Summary of every lift[\s\S]*Pick 1[\s\S]*56\.4 %[\s\S]*Tandem 1[\s\S]*88\.9 %[\s\S]*Trucking routes[\s\S]*Route 1/);
   assert.match(rp.text, /General notes \(as on the drawings\)[\s\S]*FAKECO test chart TC-1[\s\S]*29 CFR 1926\.1408 Table A/); assert.match(rp.text, /Figure 1\./); assert.match(rp.text, /Figure 2\./);
-  assert.match(rp.text, /Staging serves the girder lift "Tandem 1"[^\n]*§7\.\d/); assert.match(rp.head.left, /LIFT-PLANNING AID/);
+  assert.match(rp.text, /Staging serves the girder lift "Tandem 1"[^\n]*§8\.\d/); assert.match(rp.head.left, /LIFT-PLANNING AID/);
   await p.click('#tabBar [data-otab=rpt]'); await p.waitForTimeout(500); await shot('c7-report');
   ok(`Report: ${rp.secs.join(' · ')}; §1 lift table with § links; §2 Basis = the general notes; figures numbered; staging → §Tandem lifts; no unresolved keys, no NaN; planning-aid running header`);
 

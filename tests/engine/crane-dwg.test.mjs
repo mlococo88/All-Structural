@@ -141,6 +141,6 @@ test('2026-11-17: crane symbol layers in the DXF; aerial sheets (site + one per 
   // without opt.aerial the set is unchanged
   same(DS.build(P, ctx, { paper: 'D' }).sheets.map(s => s.id).filter(id => id !== 'route'), ['cover', 'notes', 'lift-k1', 'tlift-t1', 'rig-t1', 'ground', 'route-0']);
   // the lift plan's crane symbol: the upperworks turned to the pick (30 ft over the front) -> the slew label
-  assert.match(textsOf(B, "lift-k1"), /SLEW \+0%%D FROM FRONT, R 30\.0 FT/);
+  assert.match(textsOf(B, "lift-k1"), /SLEW \+0 DEG FROM FRONT, R 30\.0 FT/);
   const vw = DS.buildView(P, ctx, { x0: 450, x1: 650, y0: 1950, y1: 2100 }, { title: 'PLAN VIEW' }); assert.equal(vw.sheets.length, 1); assert.ok(vw.sheets[0].aerial.e);
 });

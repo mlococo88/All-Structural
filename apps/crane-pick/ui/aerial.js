@@ -85,7 +85,7 @@
         const mos = document.createElement('canvas'); mos.width = (pl.tl.x1 - pl.tl.x0 + 1) * 256; mos.height = (pl.tl.y1 - pl.tl.y0 + 1) * 256;
         const mx = mos.getContext('2d'), jobs = [];
         for (let ty = pl.tl.y0; ty <= pl.tl.y1; ty++) for (let tx = pl.tl.x0; tx <= pl.tl.x1; tx++) {
-          const url = ESRI.replace('{z}', pl.z).replace('{y}', ty).replace('{x}', tx);
+          const url = api.url.replace('{z}', pl.z).replace('{y}', ty).replace('{x}', tx);
           jobs.push(loadTile(url).then(im => { if (im) { mx.drawImage(im, (tx - pl.tl.x0) * 256, (ty - pl.tl.y0) * 256); return 1; } return 0; }));
         }
         const got = (await Promise.all(jobs)).reduce((a, b) => a + b, 0); st.nOk = got;
@@ -128,6 +128,7 @@
   }
   function save(href, name) { const a = document.createElement('a'); a.href = href; a.download = name; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove(); }
   function saveText(text, name) { const u = URL.createObjectURL(new Blob([text], { type: 'text/plain' })); save(u, name); setTimeout(() => URL.revokeObjectURL(u), 4000); }
-  window.CranePickAerial = { ESRI, ATTR, NOTE, MAX_TILES, MAX_PX, ZMAX, merc, res, pickZoom, tiles, affine, apply, invert, worldFile, pgw, sizeFor, plan, request, onDone, inject, files, save, saveText, frameOf,
-    get cache() { return cache; }, clear: () => cache.clear() };
+  const api = { url: ESRI };   // the tile URL template (a test points it elsewhere: the browser's image cache would answer the same URLs)
+  window.CranePickAerial = Object.assign(api, { ESRI, ATTR, NOTE, MAX_TILES, MAX_PX, ZMAX, merc, res, pickZoom, tiles, affine, apply, invert, worldFile, pgw, sizeFor, plan, request, onDone, inject, files, save, saveText, frameOf,
+    get cache() { return cache; }, clear: () => cache.clear() });
 })();
