@@ -45,7 +45,10 @@
      the operating points, weights and CGs), every value labelled with its source (file p.x / chart p.x / entered / ASSUMED (default)), the
      input table with links; Report §Cranes figures; a Crane sheet per setup in the Drawings set.
      2026-11-17 (engineer requests A, B): the crane's plan symbol (engine/cranegfx.js) on the map, the sheets and the DXF; aerial site-plan
-     sheets (ui/aerial.js: Esri World Imagery under the plan, PNG + world file for CAD), Report §Site plan (aerial), Print plan view. -->
+     sheets (ui/aerial.js: Esri World Imagery under the plan, PNG + world file for CAD), Report §Site plan (aerial), Print plan view.
+     2026-11-17 (route / girder geometry): the body wheelbase of a dolly / jeep hauler from the load length, the deck fit and overhangs,
+     the height stack-up (deck + blocking + load; the vehicle height), and the vehicle carrying its load drawn to scale (engine/truckgfx.js:
+     the map vehicle, Route tab "Vehicle and load", Report §Route, the route's vehicle sheet). -->
 <!-- pdf.js 3.11.174 (engineer-approved 2026-11-16; BasePlateAnchorDesigner.html's pinned jsDelivr URL) is loaded by ui/sheets.js when the
      first PDF is opened: https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js (worker: build/pdf.worker.min.js) -->
 <!-- three.js r128 + OrbitControls (engineer-approved 2026-11-16 for C3; the pinned files apps/steel-bridge/index.html uses) are loaded by
@@ -98,6 +101,7 @@
     'engine/align.js',      // 2026-11-17: the fitted alignment (tangents + circular curves) of a drawn / traced / OpenStreetMap route line
     'engine/osm.js',        // 2026-11-17: OpenStreetMap roads (Overpass API): road graph, snapping, shortest path along the roads, names, one-way
     'engine/route.js',      // C6: trucking route: path, kinematic swept path, overhead clearances, axle loads, haul road, posted bridges, staging
+    'engine/truckgfx.js',   // 2026-11-17: the haul vehicle carrying its load, drawn (plan, side elevation; the map vehicle, Route tab, Report, route sheet)
     'ui/route.js',          // C6: Route input and output tabs, the route on the map (live while dragging), Report §Route
     'ui/road.js',           // 2026-11-17: Snap to road (OpenStreetMap, cached per browser) and Trace tools of the Route tab
     '../../shared/dxf.js',  // C7: the DXF R12 writer, previews and sheet printing (shared, unchanged; also the bridge apps)
@@ -286,6 +290,7 @@
   .crTool .leaflet-overlay-pane path.crRtPath,.crTool .leaflet-overlay-pane path.crRtMk{pointer-events:none!important;}   /* a drawing tool's clicks pass through the routes */
   .crRtLbl{pointer-events:none!important;} .crRtLbl span{display:inline-block;white-space:nowrap;font-size:8pt;line-height:1.2;background:rgba(255,255,255,.92);border:1px solid #94A3B8;border-left:4px solid #059669;border-radius:3px;padding:0 4px;color:#0f172a;transform:translate(-50%,-140%);}
   .crRtLbl span.rt-warn{border-left-color:#D97706;} .crRtLbl span.rt-stop{border-left-color:#DC2626;background:#FEF2F2;}
+  .tgWrap{margin:6px 0;max-width:100%;overflow-x:auto;} .tgWrap svg{display:block;border:1px solid #E2E8F0;border-radius:4px;}   /* 2026-11-17: Route tab, Vehicle and load */
   #mbStatus button[data-rtb]{margin-left:6px;}
   /* C8: terrain */
   .crLvl{pointer-events:none!important;} .lvb{display:inline-block;white-space:nowrap;font-size:8pt;line-height:1.25;border:1px solid;border-radius:9px;padding:0 6px;}

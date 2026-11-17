@@ -88,14 +88,26 @@
   const REF = { ot: 'kinematic off-tracking (SAE J695; NCHRP Report 505, 2003, ch. 3; AASHTO Green Book 7th Ed. 2018 §2.1.4)', t: '29 CFR 1926.1411 Table T', a: '29 CFR 1926.1408 Table A', statics: 'statics (moments about the hitch / axle)' };
   const TYPES = { semi: 'Tractor + semi-trailer', stretch: 'Tractor + stretch (extendable) trailer', dolly: 'Tractor + load + steerable rear dolly', jeep: 'Tractor + jeep + load + steerable rear dolly' };
   const VDEF = { type: 'semi', L1: 20, e: 1, fo: 4, ro: 3, Wt: 8.5, L2: 40, Wb: 8.5, dF: 3, dR: 4, Lj: 10, ej: 0, Ld: 12, k: 0, dmax: 45, Rmin: 45, hDeck: 5,
-    Wtr: 20000, xt: 8, Wtl: 15000, xtl: 25, Wj: 8000, Wd: 12000, nS: 1, nD: 2, nJ: 2, nR: 3, tS: 2, tD: 4, tJ: 4, tR: 4 };
-  const LDEF = { L: 50, W: 40000, B: 8, r: 2, cg: null, h: 6 };
+    Wtr: 20000, xt: 8, Wtl: 15000, xtl: 25, Wj: 8000, Wd: 12000, nS: 1, nD: 2, nJ: 2, nR: 3, tS: 2, tD: 4, tJ: 4, tR: 4, cab: 8 };
+  /* 2026-11-17 (route / girder geometry): load.fF (the load's front overhang ahead of the front bolster / kingpin: dolly and jeep haulers,
+     the body wheelbase L2 from the load length), load.hB (blocking / dunnage between the deck and the load); veh.cab (the back of the cab /
+     headache rack behind the steer axle: the front-reach check), veh.hV (the vehicle's own height: cab, headache rack, empty trailer;
+     null = not entered), veh.L2c / veh.xMax (stretch trailer: closed body wheelbase and its largest extension; null = not entered),
+     veh.L2src ('load': L2 = L − a_F − r for the dolly / jeep types; absent or 'entered': veh.L2 as before). P.routeSet.ohRear: the
+     project's rear-overhang limit (default 10 ft; a project input, not a state limit). */
+  const LDEF = { L: 50, W: 40000, B: 8, r: 2, cg: null, h: 6, fF: 2, hB: 0 };
+  const OH_REAR = 10;
   const RDEF = 50, STEP = 0.25, SAMPLE = 1;
   const steered = v => v.type === 'dolly' || v.type === 'jeep';
   const hasJeep = v => v.type === 'jeep';
   /* vehOf / loadOf: the inputs with the defaults filled (null / missing = default; the "from" lists what was assumed) */
-  function vehOf(r) { const v = Object.assign({}, VDEF), src = (r && r.veh) || {}, from = {}; Object.keys(VDEF).forEach(k => { if (k === 'type') { v.type = TYPES[src.type] ? src.type : VDEF.type; return; } if (isNum(src[k])) v[k] = src[k]; else from[k] = 'default'; });
-    if (!steered(v)) { v.k = 0; } v.k = Math.max(0, Math.min(1, v.k)); v.from = from; return v; }
+  function vehOf(r, P) { const v = Object.assign({}, VDEF), src = (r && r.veh) || {}, from = {}; Object.keys(VDEF).forEach(k => { if (k === 'type') { v.type = TYPES[src.type] ? src.type : VDEF.type; return; } if (isNum(src[k])) v[k] = src[k]; else from[k] = 'default'; });
+    if (!steered(v)) { v.k = 0; } v.k = Math.max(0, Math.min(1, v.k)); v.from = from;
+    // 2026-11-17: the vehicle height (optional), the stretch range, and L2 from the load length (dolly / jeep with L2src 'load')
+    v.hV = isNum(src.hV) && src.hV > 0 ? src.hV : null; v.L2c = isNum(src.L2c) && src.L2c > 0 ? src.L2c : null; v.xMax = isNum(src.xMax) && src.xMax >= 0 ? src.xMax : null;
+    v.L2src = steered(v) && src.L2src === 'load' ? 'load' : isNum(src.L2) ? 'entered' : 'default';
+    if (v.L2src === 'load') { const l = loadOf(r, P); v.L2in = isNum(src.L2) ? src.L2 : null; v.L2 = l.L - l.fF - l.r; from.L2 = 'load'; v.L2calc = { L: l.L, fF: l.fF, r: l.r, from: l.from }; }
+    return v; }
   /* loadOf(r, P): the load; linked to a C5 girder lift (r.tandemId) its length, weight, width, depth and CG come from that girder object
      (engine/tandem.js object(): a pair of girders with cross-frames as one load); r.endA: 'front' (end A toward the tractor, default) or
      'rear'. The rear overhang stays a route input (how the load sits on the trailer). */
@@ -105,7 +117,9 @@
     const t = tandemOf(r, P), T = window.CranePickTandem;
     if (t && T) { const ob = T.object(t); l.L = ob.L; l.W = ob.Wg; l.B = Math.max(ob.tmax - ob.tmin, 0.5); l.h = ob.H > 0 ? ob.H : l.h; l.endA = r.endA === 'rear' ? 'rear' : 'front';
       l.cg = l.endA === 'front' ? ob.xcg : ob.L - ob.xcg; l.tcg = ob.tcg; l.from = `girder lift "${t.name}"`; l.tandem = t; l.ob = ob; return l; }
-    if (!isNum(l.cg)) l.cg = l.L / 2; l.from = 'entered'; return l; }
+    // 2026-11-17 (QA): the load values not entered (the defaults are used): listed, flagged by geometry() and marked "default" in the outputs
+    l.dflt = ['L', 'W', 'B', 'h'].filter(k => !isNum(src[k]));
+    if (!isNum(l.cg)) l.cg = l.L / 2; l.from = l.dflt.length ? 'entered / default' : 'entered'; return l; }
   /* ---------- 1. the path ---------- */
   const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y }), add = (a, b) => ({ x: a.x + b.x, y: a.y + b.y }), mul = (a, k) => ({ x: a.x * k, y: a.y * k });
   const len = a => Math.hypot(a.x, a.y), unit = a => { const l = len(a) || 1; return { x: a.x / l, y: a.y / l }; }, left = a => ({ x: -a.y, y: a.x });
@@ -216,8 +230,8 @@
   }
   /* simulate(route) -> { pa, v, l, samples: [{ s, p (pose), ot (off-tracking), parts }], end (pose), ok } */
   function simulate(r, o) {
-    const STP = o && o.step > 0 ? o.step : STEP, v = vehOf(r), l = loadOf(r, o && o.P), pa = path(r);
-    if (!pa.ok || !(v.L1 > 0) || !(v.L2 > 0) || (hasJeep(v) && !(v.Lj > 0))) return { pa, v, l, samples: [], ok: false, why: !pa.ok ? 'draw at least two points' : 'enter the wheelbases' };
+    const STP = o && o.step > 0 ? o.step : STEP, v = vehOf(r, o && o.P), l = loadOf(r, o && o.P), pa = path(r);
+    if (!pa.ok || !(v.L1 > 0) || !(v.L2 > 0) || (hasJeep(v) && !(v.Lj > 0))) return { pa, v, l, samples: [], ok: false, why: !pa.ok ? 'draw at least two points' : v.L2src === 'load' && !(v.L2 > 0) ? `the body wheelbase from the load L2 = L − a_F − r = ${fmt(v.L2calc.L, 2)} − ${fmt(v.L2calc.fF, 2)} − ${fmt(v.L2calc.r, 2)} = ${fmt(v.L2, 2)} ft is not positive: check the load length and its overhangs` : 'enter the wheelbases' };
     const a0 = at(pa, 0).th; let th1 = a0, thj = a0, th2 = a0, s = 0;
     const samples = [], push = () => { const q = at(pa, s), p = pose(v, { x: q.x, y: q.y }, th1, thj, th2); samples.push({ s, p, parts: outlines(v, l, p) }); };
     push(); let nextS = SAMPLE;
@@ -273,11 +287,14 @@
       let ot = 0, otS = t.s0, Rin = Infinity, Rout = 0, inPart = '', outPart = '';
       // the radii are measured in the curve's sector (between the radii to its tangent points): outside it the vehicle is on a tangent
       const a0 = Math.atan2(t.A.y - t.c.y, t.A.x - t.c.x), sg = Math.sign(t.D), inSec = p => { const a = ang(Math.atan2(p.y - t.c.y, p.x - t.c.x) - a0) * sg; return a >= -1e-9 && a <= Math.abs(t.D) + 1e-9; };
+      // QA 2026-11-17: the window (curve start to one vehicle length past its end) is reported with the value; when it runs into the next
+      // curve the value can include that curve's off-tracking (kept: conservative; a long vehicle's own peak can come after the next PC)
+      const nx = pa.turns[k + 1], over = nx && nx.s0 < end - 1e-9;
       inT.forEach(q => { if (q.ot > ot) { ot = q.ot; otS = q.s; } q.parts.forEach(pp => { if (!pp.poly.some(inSec)) return; const d = polyDist(t.c, pp.poly); if (d < Rin) { Rin = d; inPart = pp.part; } pp.poly.forEach(c => { if (!inSec(c)) return; const e = G().dist(t.c, c); if (e > Rout) { Rout = e; outPart = pp.part; } }); }); });
       const ss = steady(v, t.r), pre = `${idp}.t${k + 1}`, steps = [];
       const nm = t.lbl || `Turn ${k + 1}`;
       steps.push(st(pre, { id: 'D', label: `${nm}: deflection at ${t.kind ? 'PI ' + t.i : 'vertex ' + (t.i + 1)} (+ left)`, sym: '\\Delta', eq: '\\text{atan2}(\\hat{u}_{in} \\times \\hat{u}_{out},\\; \\hat{u}_{in} \\cdot \\hat{u}_{out})', sub: '', value: t.D / DEG, unit: 'deg', d: 1 }),
-        st(pre, { id: 'T', label: `Tangent length (radius ${fmt(t.rq, 1)} ft ${t.from})`, sym: 'T', eq: 'r \\tan\\frac{|\\Delta|}{2}', sub: `${tx(t.rq, 2)} \\tan\\frac{${tx(Math.abs(t.D) / DEG, 2)}°}{2}`, value: t.rq * Math.tan(Math.abs(t.D) / 2), unit: 'ft', d: 2,
+        st(pre, { id: 'T', label: `Tangent length (radius ${fmt(t.rq, 1)} ft ${t.from})`, sym: 'T', eq: 'r \\tan(|\\Delta|/2)', sub: `${tx(t.rq, 2)} \\tan(${tx(Math.abs(t.D) / DEG, 2)}°/2)`, value: t.rq * Math.tan(Math.abs(t.D) / 2), unit: 'ft', d: 2,
           note: t.reduced ? `More than the tangent available (${fmt(t.T, 2)} ft): r reduced to T / tan(|Δ|/2) = ${fmt(t.r, 2)} ft.` : '' }));
       if (t.reduced) steps.push(st(pre, { id: 'r', label: 'Curve radius used (the tangent available governs)', sym: 'r', eq: '\\frac{T_{avail}}{\\tan(|\\Delta|/2)}', sub: `\\frac{${tx(t.T, 2)}}{\\tan(${tx(Math.abs(t.D) / DEG / 2, 2)}°)}`, value: t.r, unit: 'ft', d: 2 }));
       if (ss) {
@@ -291,7 +308,7 @@
         steps.push(st(pre, { id: 'OTss', label: 'Steady-state off-tracking (the limit on a long curve of this radius)', sym: 'OT_{ss}', eq: 'r \\minus R_{D}', sub: `${tx(t.r, 2)} \\minus ${tx(ss.RD, 2)}`, value: ss.OT, unit: 'ft', d: 2 }));
       } else steps.push(st(pre, { id: 'OTss', label: 'Steady state: the radius is shorter than the wheelbases allow (no steady state)', sym: 'OT_{ss}', eq: '', sub: '', value: 'none', d: 0 }));
       const frac = t.r * Math.abs(t.D) / Math.max(1e-9, v.L1 + v.L2);
-      steps.push(st(pre, { id: 'OT', label: `Max off-tracking in the turn (simulation, at ${fmt(otS, 1)} ft along the route; arc length ${fmt(t.r * Math.abs(t.D), 1)} ft = ${fmt(frac, 2)} × the wheelbases: ${frac < 2 ? 'transient, below the steady state' : 'near the steady state'})`, sym: 'OT_{max}', eq: '\\max_{s} d(D(s),\\, \\text{path})', sub: '', value: ot, unit: 'ft', d: 2, ref: REF.ot }),
+      steps.push(st(pre, { id: 'OT', label: `Max off-tracking in the turn (simulation, searched from ${fmt(t.s0, 1)} to ${fmt(Math.min(end, pa.L), 1)} ft along the route (one vehicle length past the curve${over ? `; this window runs into ${nx.lbl || 'turn ' + (k + 2)} from ${fmt(nx.s0, 1)} ft: the value can include its off-tracking (conservative)` : ''}); at ${fmt(otS, 1)} ft; arc length ${fmt(t.r * Math.abs(t.D), 1)} ft = ${fmt(frac, 2)} × the wheelbases: ${frac < 2 ? 'transient, below the steady state' : 'near the steady state'})`, sym: 'OT_{max}', eq: '\\max_{s} d(D(s),\\, \\text{path})', sub: '', value: ot, unit: 'ft', d: 2, ref: REF.ot }),
         st(pre, { id: 'Rin', label: `Inside radius of the swept path (least distance from the curve centre; ${inPart})`, sym: 'R_{in}', eq: '\\min d(O, \\text{outlines in the curve\'s sector})', sub: '', value: Rin, unit: 'ft', d: 2 }),
         st(pre, { id: 'Rout', label: `Outside radius of the swept path (largest; ${outPart}${outPart === 'load' ? ': the load\'s swing-out' : ''})`, sym: 'R_{out}', eq: '\\max d(O, \\text{corners in the curve\'s sector})', sub: '', value: Rout, unit: 'ft', d: 2 }),
         st(pre, { id: 'Wsw', label: 'Swept width in the turn', sym: 'W_{sw}', eq: 'R_{out} \\minus R_{in}', sub: `${tx(Rout, 2)} \\minus ${tx(Rin, 2)}`, value: Rout - Rin, unit: 'ft', d: 2 }));
@@ -301,14 +318,14 @@
       if (t.kind) {   // fitted alignment: the curve's geometry (PC, PT, length, stations; the fit check)
         const La = t.r * Math.abs(t.D), AL = window.CranePickAlign, sta = AL ? AL.sta : (x => fmt(x, 2));
         const g = [st(pre, { id: 'L', label: `${nm}: arc length`, sym: 'L', eq: 'r\\,|\\Delta|', sub: `${tx(t.r, 2)} \\times ${tx(Math.abs(t.D), 5)}\\ \\text{rad}`, value: La, unit: 'ft', d: 2 }),
-          st(pre, { id: 'Tu', label: `${nm}: tangent length used (PI to PC and PT)`, sym: 'T', eq: 'r \\tan\\frac{|\\Delta|}{2}', sub: `${tx(t.r, 2)} \\tan\\frac{${tx(Math.abs(t.D) / DEG, 2)}°}{2}`, value: t.T, unit: 'ft', d: 2,
+          st(pre, { id: 'Tu', label: `${nm}: tangent length used (PI to PC and PT)`, sym: 'T', eq: 'r \\tan(|\\Delta|/2)', sub: `${tx(t.r, 2)} \\tan(${tx(Math.abs(t.D) / DEG, 2)}°/2)`, value: t.T, unit: 'ft', d: 2,
             note: `PC sta. ${sta(t.s0)}, PI sta. ${sta(t.s0 + t.T)}, PT sta. ${sta(t.s1)} (stations along the steer-axle path from its start).` })];
         if (t.fit && isNum(t.fit.R0)) g.unshift(st(pre, { id: 'Rf', label: `${nm}: radius fitted to the line (least squares, the arc tangent to both tangents; ${t.fit.n} points, rms ${fmt(t.fit.rms, 2)} ft)`, sym: 'R_{fit}', eq: '\\arg\\min_{R} \\sum d_{i}(R)^{2}', sub: '', value: t.fit.R0, unit: 'ft', d: 2,
           note: `Check: the free least-squares circle through the curve's points R_LS = ${fmt(t.fit.Rls, 2)} ft.${t.fit.atMax ? ' The fit reached the largest radius that fits the tangents.' : ''}${Math.abs(t.fit.R0 - t.rq) > 1e-9 ? ` Radius entered: ${fmt(t.rq, 2)} ft.` : ''}` }));
         steps.unshift(...g);
         if (t.kind === 'turn') steps.unshift(st(pre, { id: 'kind', label: `${nm}: an intersection turn (the heading changes within ${fmt(t.fit && isNum(t.fit.Lc) ? t.fit.Lc : 0, 1)} ft: a corner, not a road curve); radius ${t.from}`, sym: 'r', eq: '', sub: '', value: t.rq, unit: 'ft', d: 2 }));
       }
-      out.push(Object.assign({ n: k + 1, i: t.i, D: t.D, r: t.r, rq: t.rq, reduced: t.reduced, c: t.c, s0: t.s0, s1: t.s1, ot, otS, Rin, Rout, inPart, outPart, ss, steps, flags },
+      out.push(Object.assign({ n: k + 1, i: t.i, D: t.D, r: t.r, rq: t.rq, reduced: t.reduced, c: t.c, s0: t.s0, s1: t.s1, ot, otS, otWin: [t.s0, Math.min(end, pa.L)], otOver: !!over, Rin, Rout, inPart, outPart, ss, steps, flags },
         t.kind ? { kind: t.kind, lbl: t.lbl, tag: t.tag, T: t.T, PC: t.A, PT: t.B, PI: t.PI, Lc: t.r * Math.abs(t.D), from: t.from, fit: t.fit } : {}));
     });
     return out;
@@ -346,16 +363,20 @@
   }
   /* ---------- 5. overhead ---------- */
   function overhead(sim, P, marks, r, idp) {
-    const v = sim.v, l = sim.l, Htop = v.hDeck + l.h, mg = isNum(r && r.margin) && r.margin >= 0 ? r.margin : 1, out = [];
-    const top = [st(idp, { id: 'Htop', label: 'Load top above the road', sym: 'H_{top}', eq: 'h_{deck} + h_{load}', sub: `${tx(v.hDeck, 2)} + ${tx(l.h, 2)}`, value: Htop, unit: 'ft', d: 2, note: 'The tractor, jeep and dolly are assumed lower than the load top; enter the load height so that it governs.' })];
+    // 2026-11-17 height stack-up: H_top = h_deck + h_B (blocking / dunnage) + h_load; the overhead checks use H = max(h_veh, H_top) when
+    // the vehicle's own height is entered (cab, headache rack, empty trailer); h_B = 0 and no h_veh give the C6 value H_top = h_deck + h_load
+    const v = sim.v, l = sim.l, hB = isNum(l.hB) && l.hB > 0 ? l.hB : 0, LT = v.hDeck + hB + l.h, Htop = isNum(v.hV) ? Math.max(v.hV, LT) : LT, mg = isNum(r && r.margin) && r.margin >= 0 ? r.margin : 1, out = [];
+    const top = [st(idp, { id: 'Htop', label: 'Load top above the road (deck + blocking + load)', sym: 'H_{top}', eq: 'h_{deck} + h_{B} + h_{load}', sub: `${tx(v.hDeck, 2)} + ${tx(hB, 2)} + ${tx(l.h, 2)}`, value: LT, unit: 'ft', d: 2,
+      note: isNum(v.hV) ? '' : 'The vehicle\'s own height (cab, headache rack, empty trailer) is not entered: the tractor, jeep and dolly are assumed lower than the load top.' })];
+    if (isNum(v.hV)) top.push(st(idp, { id: 'H', label: `Height for the overhead checks (the higher of the vehicle and the load top: ${v.hV > LT ? 'the vehicle' : 'the load top'})`, sym: 'H', eq: '\\max(h_{veh},\\; H_{top})', sub: `\\max(${tx(v.hV, 2)},\\; ${tx(LT, 2)})`, value: Htop, unit: 'ft', d: 2 }));
     (marks || []).filter(m => m.type === 'overhead').forEach((m, k) => {
       const pre = `${idp}.oh${k + 1}`, isPt = m.pts.length === 1, rad = isPt ? (isNum(m.w) && m.w > 0 ? m.w : 2) : 0;
       const shape = isPt ? LF().circle(m.pts[0], Math.max(rad, 0.01), 24) : m.pts;
       const h = firstHit(sim, shape, isPt, 0, d => d === 0); if (!h) return;
       const hc = isNum(m.h) ? m.h : null, c = hc != null ? hc - Htop : null;
-      const steps = hc != null ? [st(pre, { id: 'c', label: `Clearance under "${m.name || 'overhead'}"`, sym: 'c', eq: 'h \\minus H_{top}', sub: `${tx(hc, 2)} \\minus ${tx(Htop, 2)}`, value: c, unit: 'ft', d: 2, note: c >= mg ? `OK (≥ the margin ${fmt(mg, 2)} ft)` : `LESS than the margin ${fmt(mg, 2)} ft` })] : [];
-      const fl = hc == null ? { level: 'stop', text: `"${m.name || 'Overhead'}" is on the route but its clearance height is not entered.` } : c < 0 ? { level: 'stop', text: `"${m.name || 'Overhead'}": the load top (${fmt(Htop, 2)} ft) is ${fmt(-c, 2)} ft above the clearance (${fmt(hc, 2)} ft).` } : c < mg ? { level: 'warn', text: `"${m.name || 'Overhead'}": clearance ${fmt(c, 2)} ft is less than the margin ${fmt(mg, 2)} ft.` } : null;
-      out.push({ kind: 'mark', id: m.id, name: m.name || 'Overhead', h: hc, Htop, c, s: h.s, ok: !fl, steps, flag: fl ? Object.assign({ kind: 'overhead', item: m.id, s: h.s }, fl) : null });
+      const steps = hc != null ? [st(pre, { id: 'c', label: `Clearance under "${m.name || 'overhead'}"`, sym: 'c', eq: isNum(v.hV) ? 'h \\minus H' : 'h \\minus H_{top}', sub: `${tx(hc, 2)} \\minus ${tx(Htop, 2)}`, value: c, unit: 'ft', d: 2, note: c >= mg ? `OK (≥ the margin ${fmt(mg, 2)} ft)` : `LESS than the margin ${fmt(mg, 2)} ft` })] : [];
+      const fl = hc == null ? { level: 'stop', text: `"${m.name || 'Overhead'}" is on the route but its clearance height is not entered.` } : c < 0 ? { level: 'stop', text: `"${m.name || 'Overhead'}": the ${isNum(v.hV) && v.hV > LT ? 'vehicle' : 'load'} top (${fmt(Htop, 2)} ft) is ${fmt(-c, 2)} ft above the clearance (${fmt(hc, 2)} ft).` } : c < mg ? { level: 'warn', text: `"${m.name || 'Overhead'}": clearance ${fmt(c, 2)} ft is less than the margin ${fmt(mg, 2)} ft.` } : null;
+      out.push({ kind: 'mark', id: m.id, name: m.name || 'Overhead', h: hc, Htop, LT, c, s: h.s, ok: !fl, steps, flag: fl ? Object.assign({ kind: 'overhead', item: m.id, s: h.s }, fl) : null });
     });
     ((P && P.items) || []).filter(i => i.type === 'power').forEach((it, k) => {
       const D = O().travel({ kv: it.kv, setFt: it.setFt }, `${idp}.pw${k + 1}`), pad = Math.max(isNum(D.ft) ? D.ft : 20, O().SPOTTER_FT) + n0(it.sway) + 1;
@@ -364,7 +385,7 @@
       let d = null; const nm = it.name || 'Power line';
       steps.push(st(pre, { id: 'dh', label: `Least horizontal distance, ${m.part} to the line in plan, less the sway allowance (at ${fmt(m.s, 0)} ft along the route)`, sym: 'd_{h}', eq: '\\max(0,\\; d_{plan} \\minus s_{w})', sub: `\\max(0,\\; ${tx(m.d, 2)} \\minus ${tx(n0(it.sway), 2)})`, value: dh, unit: 'ft', d: 2 }));
       if (hw != null) { const dv = Math.max(0, hw - Htop); d = Math.hypot(dh, dv);
-        steps.push(st(pre, { id: 'dv', label: 'Vertical gap, lowest wire (less the sag allowance) above the load top', sym: 'd_{v}', eq: '\\max(0,\\; h_{w} \\minus s_{g} \\minus H_{top})', sub: `\\max(0,\\; ${tx(it.height, 2)} \\minus ${tx(n0(it.sag), 2)} \\minus ${tx(Htop, 2)})`, value: dv, unit: 'ft', d: 2 }),
+        steps.push(st(pre, { id: 'dv', label: `Vertical gap, lowest wire (less the sag allowance) above the ${isNum(v.hV) ? 'vehicle / load top' : 'load top'}`, sym: 'd_{v}', eq: isNum(v.hV) ? '\\max(0,\\; h_{w} \\minus s_{g} \\minus H)' : '\\max(0,\\; h_{w} \\minus s_{g} \\minus H_{top})', sub: `\\max(0,\\; ${tx(it.height, 2)} \\minus ${tx(n0(it.sag), 2)} \\minus ${tx(Htop, 2)})`, value: dv, unit: 'ft', d: 2 }),
           st(pre, { id: 'd', label: 'Least distance, load / vehicle to the wire', sym: 'd', eq: '\\sqrt{d_{h}^{2} + d_{v}^{2}}', sub: `\\sqrt{${tx(dh, 2)}^{2} + ${tx(dv, 2)}^{2}}`, value: d, unit: 'ft', d: 2, ref: REF.t,
             note: isNum(D.ft) ? (d >= D.ft ? `≥ D_T = ${fmt(D.ft, 0)} ft: OK` : `LESS than D_T = ${fmt(D.ft, 0)} ft`) : 'D_T not set' })); }
       else if (dh > 0) d = dh;
@@ -374,13 +395,13 @@
       else if (d < D.ft - 1e-9) fl = { level: 'stop', text: `"${nm}": ${fmt(d, 1)} ft from the load / vehicle, less than the travel clearance D_T = ${fmt(D.ft, 0)} ft (29 CFR 1926.1411 Table T).` };
       else if (d < O().SPOTTER_FT - 1e-9) fl = { level: 'warn', text: `"${nm}": ${fmt(d, 1)} ft (< 20 ft): a dedicated spotter in continuous contact with the driver (29 CFR 1926.1411(b)(4)).` };
       if (!D.known && fl == null) fl = { level: 'info', text: `"${nm}": voltage not known, D_T = 20 ft used.` };
-      out.push({ kind: 'power', id: it.id, name: nm, kv: it.kv, DT: D.ft, basis: D.basis, dh, hw, d, Htop, s: m.s, ok: !fl || fl.level === 'info', steps, flag: fl ? Object.assign({ kind: 'power', item: it.id, s: m.s }, fl) : null });
+      out.push({ kind: 'power', id: it.id, name: nm, kv: it.kv, DT: D.ft, basis: D.basis, dh, hw, d, Htop, LT, s: m.s, ok: !fl || fl.level === 'info', steps, flag: fl ? Object.assign({ kind: 'power', item: it.id, s: m.s }, fl) : null });
     });
-    return { Htop, margin: mg, top, list: out };
+    return { Htop, LT, hB, hV: v.hV, margin: mg, top, list: out };
   }
   /* ---------- 6. axle loads ---------- */
   function axles(r, idp, P) {
-    const v = vehOf(r), l = loadOf(r, P), steps = [], pre = idp || 'ax', ai = (r && r.axIn) || {};
+    const v = vehOf(r, P), l = loadOf(r, P), steps = [], pre = idp || 'ax', ai = (r && r.axIn) || {};
     const f = l.L - v.L2 - l.r, xL = l.cg - f;
     steps.push(st(pre, { id: 'f', label: 'Load front ahead of the hitch (kingpin / jeep bolster; − = behind it)', sym: 'f', eq: 'L_{load} \\minus L_{2} \\minus r', sub: `${tx(l.L, 2)} \\minus ${tx(v.L2, 2)} \\minus ${tx(l.r, 2)}`, value: f, unit: 'ft', d: 2 }),
       st(pre, { id: 'xL', label: 'Load CG behind the hitch', sym: 'x_{L}', eq: 'c_{L} \\minus f', sub: `${tx(l.cg, 2)} \\minus ${tp(f, 2)}`, value: xL, unit: 'ft', d: 2 }));
@@ -496,6 +517,64 @@
     } else out.flags.push({ level: 'warn', kind: 'stage', text: `Staging: the pick "${k.name}" has no crane setup / crane.` });
     return out;
   }
+  /* ---------- 10. vehicle and load geometry (2026-11-17: the route / girder geometry link) ----------
+     Positions along the straight vehicle, x forward from the steer axle (ft): front bumper f_o; drive-group centre −L1; kingpin −L1 + e;
+     jeep axle K − Lj, bolster J + ej (hitch H = K without a jeep); rear group / dolly pivot D = H − L2; load front H + f, load rear D − r
+     (f = L − L2 − r); deck H + dF … D − dR (semi / stretch); dolly D ± Ld / 2; tractor rear −L1 − r_o. These are the points of pose() on a
+     straight heading: the swept path, the axle statics and the drawings use the same ones.
+     a. Dolly / jeep with L2 from the load (veh.L2src 'load'): L2 = L − a_F − r (a_F: the load's front overhang ahead of the front
+        bolster / kingpin, r: behind the rear dolly pivot), so f = a_F.
+     b. Semi / stretch: deck length L_deck = dF + L2 + dR vs the load length; the load's overhang beyond the deck front o_F = f − dF and
+        beyond the deck rear o_R = r − dR; stretch: L2 within the closed length … closed + the largest extension (entered).
+     c. Rear overhang beyond the rear of the vehicle (deck rear, or the rear dolly's rear end D − Ld/2): o_rear = r − dR (or r − Ld/2),
+        flagged over the project's limit (P.routeSet.ohRear, default 10 ft: a project input, not a state limit; permits govern).
+     d. Front reach: the clear length from the hitch forward to the back of the cab / headache rack c_cab = (L1 − e) [+ (Lj − ej) with
+        a jeep] − x_cab; the load front f ≥ c_cab reaches the cab (stop; warn while x_cab is the default); f > 0 and the front corners'
+        swing radius about the hitch ρ = √(f² + (B/2)²) > c_cab: they can strike the back of the cab in a turn (swing clearance, warn).
+     e. Overall length (front-most to rear-most point, straight), width max(W_t, W_b, B), height max(h_veh, H_top). */
+  function geometry(r, P, idp) {
+    const v = vehOf(r, P), l = loadOf(r, P), pre = idp || 'geo', steps = [], flags = [], semiT = !steered(v);
+    const lim = P && P.routeSet && isNum(P.routeSet.ohRear) && P.routeSet.ohRear >= 0 ? P.routeSet.ohRear : OH_REAR, limFrom = P && P.routeSet && isNum(P.routeSet.ohRear) && P.routeSet.ohRear >= 0 ? 'project input' : 'default';
+    const K = -v.L1 + v.e, J = hasJeep(v) ? K - v.Lj : null, H = hasJeep(v) ? J + v.ej : K, D = H - v.L2, f = l.L - v.L2 - l.r;
+    const x = { F: 0, front: v.fo, T: -v.L1, K, J, H, D, lf: H + f, lr: D - l.r, rearT: -v.L1 - v.ro, cab: -v.cab };
+    if (semiT) { x.df = H + v.dF; x.dr = D - v.dR; } else { x.df = D + v.Ld / 2; x.dr = D - v.Ld / 2; }
+    if (v.L2src === 'load') steps.push(st(pre, { id: 'L2', label: `Body wheelbase from the load (${hasJeep(v) ? 'jeep bolster' : 'tractor fifth-wheel bolster'} to the rear dolly pivot; load ${l.from})`, sym: 'L_{2}', eq: 'L \\minus a_{F} \\minus r', sub: `${tx(l.L, 2)} \\minus ${tx(l.fF, 2)} \\minus ${tx(l.r, 2)}`, value: v.L2, unit: 'ft', d: 2,
+      note: isNum(v.L2in) ? `The L2 entered (${fmt(v.L2in, 2)} ft) is not used: choose "entered" to use it.` : '' }));
+    else steps.push(st(pre, { id: 'L2', label: `Body wheelbase (${v.L2src === 'entered' ? 'entered' : 'default'})`, sym: 'L_{2}', eq: '', sub: '', value: v.L2, unit: 'ft', d: 2 }));
+    steps.push(st(pre, { id: 'f', label: `Load front ahead of the ${hasJeep(v) ? 'jeep bolster' : 'kingpin'} (− = behind it)`, sym: 'f', eq: 'L \\minus L_{2} \\minus r', sub: `${tx(l.L, 2)} \\minus ${tx(v.L2, 2)} \\minus ${tx(l.r, 2)}`, value: f, unit: 'ft', d: 2 }));
+    const out = { v, l, x, f, lim, limFrom, steps, flags };
+    if (!l.tandem && l.dflt && l.dflt.length) { const NM = { L: `length ${fmt(l.L, 2)} ft`, W: `weight ${fmt(l.W, 0)} lb`, B: `width ${fmt(l.B, 2)} ft`, h: `height ${fmt(l.h, 2)} ft` }, k = r && r.pickId && P && (P.picks || []).find(q => q.id === r.pickId);
+      flags.push({ level: 'warn', kind: 'load', text: `The load on the truck is not fully entered: the DEFAULT ${l.dflt.map(q => NM[q]).join(', ')} ${l.dflt.length > 1 ? 'are' : 'is'} used${k ? ` (the pick "${k.name}" does not give the load's size)` : ''}: enter the load (Route tab, Load on the trailer) or link a girder lift.` }); }
+    if (semiT) {
+      const Ld = v.dF + v.L2 + v.dR, oF = f - v.dF, oR = l.r - v.dR; Object.assign(out, { Ldeck: Ld, oF, oR });
+      steps.push(st(pre, { id: 'Ldeck', label: 'Deck length (ahead of the kingpin + body wheelbase + behind the rear group)', sym: 'L_{deck}', eq: 'd_{F} + L_{2} + d_{R}', sub: `${tx(v.dF, 2)} + ${tx(v.L2, 2)} + ${tx(v.dR, 2)}`, value: Ld, unit: 'ft', d: 2, note: `load length ${fmt(l.L, 2)} ft: ${l.L > Ld + 1e-9 ? 'longer than the deck' : 'on the deck'}` }),
+        st(pre, { id: 'oF', label: 'Load overhang beyond the deck front (− = back from it)', sym: 'o_{F}', eq: 'f \\minus d_{F}', sub: `${tp(f, 2)} \\minus ${tx(v.dF, 2)}`, value: oF, unit: 'ft', d: 2 }),
+        st(pre, { id: 'oR', label: 'Load overhang beyond the deck rear (− = forward of it)', sym: 'o_{R}', eq: 'r \\minus d_{R}', sub: `${tp(l.r, 2)} \\minus ${tx(v.dR, 2)}`, value: oR, unit: 'ft', d: 2 }));
+      if (oF > 1e-9 || oR > 1e-9) flags.push({ level: 'info', kind: 'geo', text: `The load (${fmt(l.L, 2)} ft) overhangs the ${fmt(Ld, 2)} ft deck${oF > 1e-9 ? ` by ${fmt(oF, 2)} ft at the front` : ''}${oF > 1e-9 && oR > 1e-9 ? ' and' : ''}${oR > 1e-9 ? ` by ${fmt(oR, 2)} ft at the rear` : ''}.` });
+      if (v.type === 'stretch' && isNum(v.L2c)) { const hi = isNum(v.xMax) ? v.L2c + v.xMax : null; out.L2rng = [v.L2c, hi];
+        steps.push(st(pre, { id: 'L2rng', label: `Stretch trailer: body wheelbase vs its range (closed ${fmt(v.L2c, 2)} ft${hi != null ? `, largest extension ${fmt(v.xMax, 2)} ft` : ''})`, sym: 'L_{2,max}', eq: 'L_{2,c} + x_{max}', sub: hi != null ? `${tx(v.L2c, 2)} + ${tx(v.xMax, 2)}` : '', value: hi != null ? hi : 'not entered', unit: hi != null ? 'ft' : '', d: 2, note: `L2 = ${fmt(v.L2, 2)} ft` }));
+        if (v.L2 < v.L2c - 1e-9) flags.push({ level: 'stop', kind: 'geo', text: `Stretch trailer: L2 = ${fmt(v.L2, 2)} ft is shorter than the closed body wheelbase ${fmt(v.L2c, 2)} ft.` });
+        else if (hi != null && v.L2 > hi + 1e-9) flags.push({ level: 'stop', kind: 'geo', text: `Stretch trailer: L2 = ${fmt(v.L2, 2)} ft is beyond the largest extension (${fmt(v.L2c, 2)} + ${fmt(v.xMax, 2)} = ${fmt(hi, 2)} ft).` }); }
+    }
+    const oRear = semiT ? l.r - v.dR : l.r - v.Ld / 2; out.oRear = oRear;
+    steps.push(st(pre, { id: 'oRear', label: `Rear overhang of the load beyond the rear of the ${semiT ? 'deck' : 'rear dolly'} (limit ${fmt(lim, 2)} ft, ${limFrom})`, sym: 'o_{rear}', eq: semiT ? 'r \\minus d_{R}' : 'r \\minus \\frac{L_{d}}{2}', sub: semiT ? `${tp(l.r, 2)} \\minus ${tx(v.dR, 2)}` : `${tp(l.r, 2)} \\minus \\frac{${tx(v.Ld, 2)}}{2}`, value: oRear, unit: 'ft', d: 2,
+      note: oRear > lim + 1e-9 ? `MORE than the limit ${fmt(lim, 2)} ft` : `≤ the limit ${fmt(lim, 2)} ft` }));
+    if (oRear > lim + 1e-9) flags.push({ level: 'warn', kind: 'geo', text: `Rear overhang ${fmt(oRear, 2)} ft beyond the rear of the ${semiT ? 'deck' : 'rear dolly'} is more than the project limit ${fmt(lim, 2)} ft (${limFrom}): check the permit's overhang, flagging and lighting requirements.` });
+    const cc = (v.L1 - v.e) + (hasJeep(v) ? v.Lj - v.ej : 0) - v.cab, cabAs = v.from.cab === 'default'; out.cCab = cc;
+    steps.push(st(pre, { id: 'cCab', label: `Clear length from the ${hasJeep(v) ? 'jeep bolster' : 'kingpin'} forward to the back of the cab / headache rack (${fmt(v.cab, 2)} ft behind the steer axle, ${cabAs ? 'ASSUMED (default): enter it' : 'entered'})`, sym: 'c_{cab}', eq: hasJeep(v) ? '(L_{1} \\minus e) + (L_{j} \\minus e_{j}) \\minus x_{cab}' : '(L_{1} \\minus e) \\minus x_{cab}',
+      sub: hasJeep(v) ? `(${tx(v.L1, 2)} \\minus ${tp(v.e, 2)}) + (${tx(v.Lj, 2)} \\minus ${tp(v.ej, 2)}) \\minus ${tx(v.cab, 2)}` : `(${tx(v.L1, 2)} \\minus ${tp(v.e, 2)}) \\minus ${tx(v.cab, 2)}`, value: cc, unit: 'ft', d: 2 }));
+    if (f >= cc - 1e-9) flags.push({ level: cabAs ? 'warn' : 'stop', kind: 'geo', text: `The load front (${fmt(f, 2)} ft ahead of the ${hasJeep(v) ? 'jeep bolster' : 'kingpin'}) reaches the back of the cab / headache rack (${fmt(cc, 2)} ft ahead of it${cabAs ? '; cab position ASSUMED: enter it' : ''}).` });
+    else if (f > 0) { const rho = Math.hypot(f, l.B / 2); out.rho = rho;
+      steps.push(st(pre, { id: 'rho', label: `Swing radius of the load's front corners about the ${hasJeep(v) ? 'jeep bolster' : 'kingpin'} (swing clearance to the cab)`, sym: '\\rho', eq: '\\sqrt{f^{2} + (B/2)^{2}}', sub: `\\sqrt{${tx(f, 2)}^{2} + (${tx(l.B, 2)}/2)^{2}}`, value: rho, unit: 'ft', d: 2, note: rho > cc ? `MORE than c_cab = ${fmt(cc, 2)} ft` : `≤ c_cab = ${fmt(cc, 2)} ft: clear` }));
+      if (rho > cc + 1e-9) flags.push({ level: 'warn', kind: 'geo', text: `The load's front corners swing ${fmt(rho, 2)} ft about the ${hasJeep(v) ? 'jeep bolster' : 'kingpin'}, more than the ${fmt(cc, 2)} ft to the back of the cab${cabAs ? ' (cab position ASSUMED)' : ''}: they can strike the cab in a turn.` }); }
+    const xs = [x.front, x.rearT, x.lf, x.lr, x.df, x.dr].concat(hasJeep(v) ? [K + 1, J - 3] : []), xF = Math.max(...xs), xR = Math.min(...xs);
+    const hB = isNum(l.hB) && l.hB > 0 ? l.hB : 0, LT = v.hDeck + hB + l.h, Hov = isNum(v.hV) ? Math.max(v.hV, LT) : LT, Wov = Math.max(v.Wt, v.Wb, l.B);
+    Object.assign(out, { Lov: xF - xR, xF, xR, Wov, Hov, LT, hB });
+    steps.push(st(pre, { id: 'Lov', label: 'Overall length, straight (front-most to rear-most point of the tractor, deck / dolly and load)', sym: 'L_{ov}', eq: 'x_{front} \\minus x_{rear}', sub: `${tp(xF, 2)} \\minus ${tp(xR, 2)}`, value: xF - xR, unit: 'ft', d: 2 }),
+      st(pre, { id: 'Wov', label: 'Overall width', sym: 'W_{ov}', eq: '\\max(W_{t},\; W_{b},\; B)', sub: `\\max(${tx(v.Wt, 2)},\; ${tx(v.Wb, 2)},\; ${tx(l.B, 2)})`, value: Wov, unit: 'ft', d: 2 }),
+      st(pre, { id: 'Hov', label: isNum(v.hV) ? 'Overall height (vehicle or load top)' : 'Overall height (the load top; the vehicle height is not entered)', sym: 'H_{ov}', eq: isNum(v.hV) ? '\\max(h_{veh},\; h_{deck} + h_{B} + h_{load})' : 'h_{deck} + h_{B} + h_{load}', sub: isNum(v.hV) ? `\\max(${tx(v.hV, 2)},\; ${tx(v.hDeck, 2)} + ${tx(hB, 2)} + ${tx(l.h, 2)})` : `${tx(v.hDeck, 2)} + ${tx(hB, 2)} + ${tx(l.h, 2)}`, value: Hov, unit: 'ft', d: 2 }));
+    return out;
+  }
   /* ---------- the whole route ---------- */
   function evaluate(r, P, idp, o) {
     idp = idp || 'rt'; const sim = simulate(r, Object.assign({ P }, o || {}));
@@ -509,9 +588,10 @@
     res.haul = haul(sim, res.ax, marks, r, idp + '.hl');
     res.br = bridges(sim, res.ax, marks, idp + '.br');
     res.stage = staging(sim, r, P, LF() ? LF().settingsOf(P) : null, idp + '.sg', o && o.tev);
+    res.geo = geometry(r, P, idp + '.geo');   // 2026-11-17: the vehicle and load geometry (L2 from the load, deck fit, overhangs, front reach, overall size)
     res.otMax = sim.samples.reduce((m, q) => Math.max(m, q.ot), 0);
     { const al = alignOf(r, sim); if (al) res.align = al; }   // fitted alignment only (a legacy route's result is as before)
-    res.flags = [].concat(...res.turns.map(t => t.flags), res.align ? res.align.flags : [], res.conf, res.ax.flags, res.oh.list.map(o => o.flag).filter(Boolean), res.haul.map(h => h.flag).filter(Boolean), res.br.map(b => b.flag).filter(Boolean), res.stage.flags);
+    res.flags = [].concat(...res.turns.map(t => t.flags), res.align ? res.align.flags : [], res.conf, res.geo.flags, res.ax.flags, res.oh.list.map(o => o.flag).filter(Boolean), res.haul.map(h => h.flag).filter(Boolean), res.br.map(b => b.flag).filter(Boolean), res.stage.flags);
     const rank = { stop: 0, warn: 1, info: 2 }; res.flags.sort((a, b) => rank[a.level] - rank[b.level]);
     res.worst = res.flags.length ? res.flags[0].level : 'ok';
     return res;
@@ -538,5 +618,5 @@
     let last = -Infinity; sim.samples.forEach((q, i) => { if (q.s - last >= every - 1e-9 || i === sim.samples.length - 1) { last = q.s; q.parts.forEach(pp => rings.push(pp.poly)); } q.parts.forEach(pp => pp.poly.forEach((c, j) => { const key = pp.part + j; (tr[key] || (tr[key] = [])).push(c); })); });
     return { rings, traces: tr };
   }
-  window.CranePickRoute = { fitted, pathAl, alignOf, KIND_LBL, loadPose, tandemOf, TYPES, VDEF, LDEF, RDEF, STEP, REF, LB_PER_TON, vehOf, loadOf, path, at, simulate, steady, turnsOf, conflicts, overhead, axles, haul, bridges, staging, loadCg, evaluate, swept, outlines, pose, steered, hasJeep };
+  window.CranePickRoute = { geometry, OH_REAR, fitted, pathAl, alignOf, KIND_LBL, loadPose, tandemOf, TYPES, VDEF, LDEF, RDEF, STEP, REF, LB_PER_TON, vehOf, loadOf, path, at, simulate, steady, turnsOf, conflicts, overhead, axles, haul, bridges, staging, loadCg, evaluate, swept, outlines, pose, steered, hasJeep };
 })();

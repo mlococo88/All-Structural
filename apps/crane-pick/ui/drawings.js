@@ -123,7 +123,7 @@
     const stx = a.status === 'loading' ? 'The imagery is loading (the figure is redrawn when it arrives).' : a.status === 'fail' ? `Aerial not available — the figure is shown without the background (${a.why}).` : `Imagery tiles at zoom ${a.z} (${a.nOk} of ${a.n}); placement residual ${a.resid.toFixed(3)} ft.`;
     return [{ id: 'aerial', key: 'aerial', title: 'Site plan (aerial)', subs: [{ id: 'aes', key: 'aerial-site', title: 'Site plan on the aerial background', items: [
       { type: 'figure', svg, caption: `Site plan on the aerial background (grid north up, to scale): site items, power-line D_min buffers, crane symbols, booms, swing paths, girder poses, routes. ${AE().ATTR}. Imagery date varies; not survey.` },
-      { type: 'note', text: `${AE().NOTE} ${stx} The crane symbols are schematic (assumed dimensions on the crane cards, [[cranes]]); the checks use the engines' footprints, radii and heights ([[lifts]]). Drawings: "SITE PLAN - AERIAL" sheets; the DXF has no images (R12): the PNG and its world file are separate downloads.` }] }] }];
+      { type: 'note', text: `${AE().NOTE} ${stx} The crane symbols are schematic (assumed dimensions on the crane cards, [[cranes]]); the checks use the engines' footprints, radii and heights (${[(P.picks || []).length ? '[[lifts]]' : '', (P.tandems || []).length ? '[[tandem]]' : ''].filter(Boolean).join(', ') || 'Lifts tab'}). Drawings: "SITE PLAN - AERIAL" sheets; the DXF has no images (R12): the PNG and its world file are separate downloads.` }] }] }];
   });
   /* the Plan tab's "Print plan view": the map's current view as one 11 × 17 sheet (ui/drawset.js buildView) on the aerial background */
   function printView() {

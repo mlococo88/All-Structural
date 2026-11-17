@@ -1328,6 +1328,91 @@ Untouched gives no warning. Rotated +2° about the centre (500, 300): A and B ar
 `node tests/check-syntax.mjs`; `node tests/engine/run.mjs crane` (119 passed); smokes `crane-align` (5), `crane-sheets` (8),
 `tests/smoke/crane-qa.mjs` (4, new step 3).
 
+## 2026-11-17 — Route: girder length drives the hauler geometry, height stack-up, the vehicle and load drawn to scale (engineer requests; QA items)
+PR #1625: https://github.com/mlococo88/All-Structural/pull/1625
+Engineer (2026-11-17): "wouldn't the route analysis need the girder length?"; "where is the truck height entered?"; "a Route output section
+with a to-scale graphic of the truck carrying the girder".
+### Where
+- `apps/crane-pick/engine/route.js`:
+  - `VDEF` + `cab: 8`; `LDEF` + `fF: 2, hB: 0`; `OH_REAR = 10` (anchor `const VDEF = {`).
+  - `vehOf(r, P)` (was `vehOf(r)`; callers in ui/route.js, ui/drawset.js, engine/terrain.js now pass P): `v.hV`, `v.L2c`, `v.xMax`;
+    `v.L2src` = `'load'` only for dolly / jeep with `veh.L2src === 'load'`, else `'entered'` / `'default'`; with `'load'`:
+    `v.L2 = l.L - l.fF - l.r` (`from.L2 = 'load'`, `v.L2calc`). `simulate`: a non-positive derived L2 gives its own message.
+  - `loadOf`: `l.dflt` (L, W, B, h not entered); `l.from` 'entered / default' then.
+  - `overhead()`: before `Htop = v.hDeck + l.h`; after `LT = v.hDeck + hB + l.h`, `Htop = hV != null ? max(hV, LT) : LT` (Htop = the
+    height used in the checks); steps `Htop` (h_deck + h_B + h_load) and `H` (max, only with a vehicle height); clearance / d_v use Htop;
+    result + `LT, hB, hV`; each list item + `LT`.
+  - new `geometry(r, P, idp)` (method 10, header comment) → `res.geo` in `evaluate` (its flags join `res.flags`).
+  - `turnsOf` (QA): the OT step label states the search window and, when it runs into the next curve, that the value can include its
+    off-tracking (conservative); `otWin`, `otOver` added. Values unchanged.
+  - Tangent steps (QA): eq `r \tan\frac{|\Delta|}{2}` → `r \tan(|\Delta|/2)`, sub likewise (plain text read "r tan (|Δ|)/2").
+- `apps/crane-pick/engine/truckgfx.js` (new, `window.CranePickTruckGfx`, no DOM): `model`, `plan(m, pose)`, `side(m)`, `svg`, `dxf`,
+  `dxfScale` — the one drawing of the vehicle carrying its load (map vehicle, Route tab, Report, drawing sheet).
+- `apps/crane-pick/engine/model.js`: `normRoute` keeps `veh.cab, hV, L2c, xMax, L2src`, `load.fF, hB` only when present; new
+  `normRouteSet` / `P.routeSet = { ohRear }`.
+- `apps/crane-pick/ui/route.js`: route card — "Body wheelbase L2: from the load length / entered" (dolly, jeep), inputs back of cab,
+  vehicle height, stretch closed L2 / largest extension, front overhang a_F, blocking, Rear overhang limit (project); the geometry box
+  (#rtGeo: L2 worked, deck vs load, overhangs, cab reach, overall size, geometry flags) and the line "Height of the load top above the
+  road = deck + blocking + load" (#rtHeight); the map vehicle drawn by `truckgfx.plan` at the route pose (outlines, tyres, axles, cab
+  back, CG); Route tab "Vehicle and load" (plan + side SVG to scale, table, worked steps `rt-<id>-geo`); overhead column "Top checked";
+  Report §Route: the two figures, the geometry steps, load row with blocking / load top / vehicle; "DEFAULT" marks on the load (QA);
+  new routes get `veh.L2src = 'load'` (unless copying a vehicle with an entered L2).
+- `apps/crane-pick/ui/drawset.js`: new sheet `routeveh-<i>` "TRUCKING ROUTE: <name> - VEHICLE AND LOAD" right after each route sheet
+  (plan + side at 1 ft = 12 units, scale bar, geometry table, notes); the route sheet's LOAD row + blocking / top and a note pointing to it.
+- `apps/crane-pick/ui/manual.js`: the trucking-route workflow (2 paragraphs), the Route output line, new methods topic "Vehicle and
+  load geometry, height stack-up", the ASSUMED defaults row. `index.html`: the script, the comment, `.tgWrap` CSS.
+- Tests: `tests/engine/crane-truck.test.mjs` (new, 6), `tests/smoke/crane-truck.mjs` (new, 6), `tests/smoke/crane-drawings.mjs` (sheet list
+  + `routeveh-0`: 11 sheets on D, 12 on B (the cover index takes a second B sheet)).
+### Calculations (CLAUDE.md §4: new calculations; the C6 formulas, factors and references unchanged)
+- **L2 from the load** (dolly / jeep, `L2src: 'load'`): before L2 = the entered value (default 40 ft); after L2 = L − a_F − r. Check:
+  L 120, a_F 3, r 5 → 112 ft; f = 3 = a_F; load 90,000 lb, CG 60: x_L 57, R_b 45,803.57, rear dolly 57,803.57, R_H 44,196.43,
+  drive 49,986.61, steer 14,209.82, gross 122,000 lb. Steady OT at R 150 (L1 20, e 1): R_T 148.6607, R_K 148.6641, R_D 97.7599,
+  OT 52.2401 ft; girder 100 ft → L2 92 → R_D 116.7776, OT 33.2224 ft.
+- **Deck fit** (semi / stretch): L_deck = dF + L2 + dR; o_F = f − dF; o_R = r − dR (info flag when > 0). Check: L2 40, dF 3, dR 4 → 47;
+  girder 60, r 6 → f 14, o_F 11, o_R 2. Stretch: L2 < closed, or > closed + extension → stop (closed 40 + 30: 75 and 35 stop, 60 OK).
+- **Rear overhang** beyond the deck (r − dR) or the rear dolly (r − Ld/2) vs P.routeSet.ohRear (default 10 ft) → warn. r 16, dR 4 → 12 >
+  10 warn; limit 15 → none. Dolly r 10, Ld 12 → 4 ft.
+- **Front reach**: c_cab = (L1 − e) [+ (Lj − ej)] − x_cab; f ≥ c_cab → stop (warn while x_cab is the default); f > 0 and
+  ρ = √(f² + (B/2)²) > c_cab → warn (corner swing). Check: c = 20 − 1 − 8 = 11; f 14 → reaches; f 8, B 8 → ρ 8.9443 clear; B 20 → ρ
+  12.8062 warn; jeep (Lj 10, ej 0.5) c = 20.5.
+- **Height stack-up**: before H_top = h_deck + h_load; after H_top = h_deck + h_B + h_load and the checks use H = max(h_veh, H_top) when
+  h_veh is entered. With h_B = 0 and no h_veh: unchanged. Check: 5 + 0.5 + 6 = 11.5; overhead 12.0 → c 0.5 warn; h_veh 13.5 → c −1.5
+  stop; power line 20 ft, sag 1 → d_v = 7.5 ft.
+- **Overall** length (front-most − rear-most point, straight), width max(Wt, Wb, B), height max(h_veh, H_top). Check: default semi +
+  50 ft load: front +4, rear −63 (deck) → 67 ft.
+- **Legacy routes keep their numbers**: a route without `L2src` uses its L2 as before. Checked: `evaluate()` of 5 routes (semi, jeep +
+  girder lift, dolly, stretch, fitted dolly) on main's route.js / model.js vs this branch — every number identical incl. every step value
+  (JSON compare, new keys removed: geo, LT / hB / hV, l.fF / hB / dflt, otWin / otOver, the geo / load flags); `crane-road` G (main's
+  per-turn values) and C6 tests unchanged and green.
+### Saved data (§5)
+New optional fields only, kept only when present: `route.veh.{cab, hV, L2c, xMax, L2src}`, `route.load.{fF, hB}`; new project field
+`routeSet: { ohRear }` (normalize gives `{ ohRear: null }`). No storage key added or changed.
+### Decisions (pending engineer review)
+- Rear-overhang limit default 10 ft as a project input (Route card) — **not a state limit**; the flag says "check the permit's overhang,
+  flagging and lighting requirements". Rear overhang measured beyond the deck rear (semi / stretch) or the rear dolly's end (D − Ld/2).
+- Back of the cab / headache rack default 8 ft behind the steer axle (ASSUMED); while it is the default the "reaches the cab" flag is
+  a warn, entered → stop. The corner-swing check is about the hitch only (with a jeep the tractor–jeep articulation is not added).
+- Load front overhang a_F default 2 ft. New routes take L2 from the load (dolly / jeep); saved routes keep "entered" until switched.
+- Blocking default 0; the vehicle height optional (not entered = the C6 assumption that the vehicle is lower than the load top).
+  The route profile's load-underside default (engine/terrain.js, h_deck for dolly / jeep) does **not** add the blocking — not changed
+  here (open item, raise with the engineer).
+- The drawing's axle spread 4.5 ft, tyres 3.4 × 0.9 ft, frame and cab (9 ft when no vehicle height) are schematic and stated; the
+  outlines, stations, heights and axle loads are the engine's.
+- The vehicle drawing is its own sheet right after the route sheet (a route plan at 1" = 20' or smaller would make a 2 ft dimension
+  unreadable); the route sheet notes point to it.
+- QA (agent A): turn off-tracking window — kept (curve start to one vehicle length past its end; a long vehicle's own peak can come after
+  the next PC), now stated in the step label with "runs into Curve n …: the value can include its off-tracking (conservative)". The
+  load defaults (not entered) are flagged warn and marked "DEFAULT" (Route tab, Report).
+### Report cross-references (coordinator: `tests/smoke/crane-tandem.mjs` failed on main at its unresolved-key check)
+Cause: two Report § links to sections that exist only with a single pick, in a project with only a girder lift: `ui/cranetab.js`
+(the weights figure caption, before `see [[${pt && pt.lift.kind === 'pick' ? 'gr-' + pt.lift.id : 'ground'}]]`; after: a pick →
+`gr-<id>`, a girder lift → `tandem-<id>` (its support loads are worked in §Tandem lifts), no lift → no link) and `ui/drawings.js` (the
+aerial note, before `([[lifts]])`; after: `[[lifts]]` when there are picks, `[[tandem]]` when there are girder lifts). Text only; no value.
+### How verified
+`node tests/check-syntax.mjs`; `node tests/engine/run.mjs crane` (17 files after merging main, 131 passed; crane-truck 6 incl. KaTeX of the new steps); smoke `crane-tandem` (6, was failing on main), `crane-cranetab` (6), `crane-aerial` (5);
+smokes `crane-truck` (6), `crane-route` (5), `crane-road` (8), `crane-drawings` (5), `crane-manual` (8); the legacy JSON comparison
+above. Screenshots: scratchpad `crane/truck-*.png`.
+
 ## 2026-11-17 — Manufacturer geometry: floats where the manufacturer puts them, dimension check, float table / stake-out CSV, mats to scale, plan clearance dimensions (PR #1624)
 Engineer: "A big priority is to get the cranes drawing as accurately as possible. I need to see exactly where the outriggers sit."
 The private crane library (Structural_References, branch crane-charts) now carries a `geometry` block per crane (`crane-pick.geometry.v1`,

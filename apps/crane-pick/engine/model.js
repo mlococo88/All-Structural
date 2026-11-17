@@ -51,6 +51,7 @@
              saved before C5 has none: normalize gives [].
      routes = [ route ], routeMarks = [ mark ]   C6: trucking routes and their marks (engine/route.js has the fields; normRoute,
              normRouteMark). A project saved before C6 has none: normalize gives [].
+     routeSet = { ohRear (ft | null: default 10) }   2026-11-17: the project's route settings (normRouteSet; absent = defaults).
      terrain (C8) = { use (ground elevations from the terrain), spacing (ft), ext ('view' | 'site'), contour (ft), src: null | { id (the
              grid's key in this browser's IndexedDB crane.terrain.v1), at (fetch date, ISO), svc, x0, y0, dx, nx, ny, n, nodata, res (m),
              zmin, zmax, zone } }: the settings and what was used — the elevations themselves stay in the browser's cache (normTerrain);
@@ -78,7 +79,7 @@
     o = o || {};
     return { schema: FORMAT, v: 1,
       title: { name: 'New crane pick', number: '', location: '', client: '', by: '', checker: '', date: today(), rev: '' },
-      notes: '', site: { zone: o.zone || 'EPSG:2249' }, view: o.view || null, sheets: [], items: [], cranes: [], setups: [], picks: [], ground: { caps: {} }, tandems: [], routes: [], routeMarks: [], terrain: normTerrain(null),
+      notes: '', site: { zone: o.zone || 'EPSG:2249' }, view: o.view || null, sheets: [], items: [], cranes: [], setups: [], picks: [], ground: { caps: {} }, tandems: [], routes: [], routeMarks: [], routeSet: normRouteSet(null), terrain: normTerrain(null),
       lift: { caution: 75, critical: 75, limit: 100, interp: false, path: 'uniform', obstClr: 2, tandem: 75 } };
   }
   const num = (v, d) => typeof v === 'number' && isFinite(v) ? v : d;
@@ -181,12 +182,17 @@
     const veh = { type: ROUTE_VEH.indexOf(v0.type) >= 0 ? v0.type : 'semi' }; VEH_KEYS.forEach(k => { veh[k] = VEH_SIGNED.indexOf(k) >= 0 ? numOrNull(v0[k]) : nn(v0[k]); });
     const load = {}; ['L', 'W', 'B', 'r', 'cg', 'h'].forEach(k => { load[k] = k === 'r' ? numOrNull(l0[k]) : nn(l0[k]); });
     const rad = pts.map((_, i) => { const x = Array.isArray(r.rad) ? nn(r.rad[i]) : null; return x != null && x > 0 ? x : null; });
+    // 2026-11-17 (route / girder geometry): kept only when present (an older route gains no field): veh.cab, hV, L2c, xMax, L2src; load.fF, hB
+    ['cab', 'hV', 'L2c', 'xMax'].forEach(k => { const x = nn(v0[k]); if (x != null) veh[k] = x; }); if (v0.L2src === 'load' || v0.L2src === 'entered') veh.L2src = v0.L2src;
+    ['fF', 'hB'].forEach(k => { const x = k === 'fF' ? numOrNull(l0[k]) : nn(l0[k]); if (x != null) load[k] = x; });
     return { id: str(r.id) || uid('r'), name: str(r.name, 'Route'), pts, rad, rDef: numPos(r.rDef, 50), veh, load, tyre: { A: nn(r.tyre && r.tyre.A) },
       axIn: { on: !!a0.on, S: nn(a0.S), D: nn(a0.D), J: nn(a0.J), R: nn(a0.R) }, pickId: str(r.pickId), tandemId: str(r.tandemId), endA: r.endA === 'rear' ? 'rear' : 'front', stageTol: nn(r.stageTol), margin: nn(r.margin), at: nn(r.at), grade: normGrade(r.grade) ,
       ...normRouteFit(r) };   // 2026-11-17: the fitted alignment, its source and the lane offset (only when present: older routes are unchanged)
   }
   /* 2026-11-17: route.mode 'fit' + route.al (the fitted alignment), route.src (where the line came from: clicks, a trace, OpenStreetMap),
      route.lane (the travel-lane offset). A route without them is a legacy route ("each vertex is a turn"): nothing is added. */
+  /* 2026-11-17: the project's route settings: ohRear (the rear-overhang limit, ft; null = the engine default 10 ft) */
+  function normRouteSet(o) { o = o && typeof o === 'object' ? o : {}; const x = numOrNull(o.ohRear); return { ohRear: x != null && x >= 0 ? x : null }; }
   function normRouteFit(r) {
     const o = {}, nn = v => { const x = numOrNull(v); return x != null && x >= 0 ? x : null; };
     const a = r.al && typeof r.al === 'object' ? r.al : null, pis = a && Array.isArray(a.pis) ? a.pis.map(pt).filter(Boolean) : [];
@@ -246,7 +252,7 @@
       setups: (Array.isArray(p.setups) ? p.setups : []).map(normSetup).filter(Boolean),
       picks: (Array.isArray(p.picks) ? p.picks : []).map(normPick).filter(Boolean), lift: normLift(p.lift), ground: normGround(p.ground),
       tandems: (Array.isArray(p.tandems) ? p.tandems : []).map(normTandem).filter(Boolean),   // C5
-      routes: (Array.isArray(p.routes) ? p.routes : []).map(normRoute).filter(Boolean), routeMarks: (Array.isArray(p.routeMarks) ? p.routeMarks : []).map(normRouteMark).filter(Boolean), terrain: normTerrain(p.terrain) };   // C6; C8 terrain
+      routes: (Array.isArray(p.routes) ? p.routes : []).map(normRoute).filter(Boolean), routeMarks: (Array.isArray(p.routeMarks) ? p.routeMarks : []).map(normRouteMark).filter(Boolean), routeSet: normRouteSet(p.routeSet), terrain: normTerrain(p.terrain) };   // C6; C8 terrain
     Object.keys(d.title).forEach(k => { o.title[k] = str(t[k], k === 'date' ? '' : ''); });
     if (p.savedAt) o.savedAt = str(p.savedAt);
     return o;
@@ -269,5 +275,5 @@
   }
   /* text of the inputs (undo / "unsaved changes"): the project without the view and the saved time */
   function inputsText(P) { const o = Object.assign({}, P); delete o.view; delete o.savedAt; return JSON.stringify(o); }
-  window.CranePickModel = { KEYS, FORMAT, TYPES, UTIL_KINDS, BASIS, newProject, normalize, normItem, normSheet, normCrane, normSetup, normPick, normElev, normLift, normSetupGround, normGround, normTandem, normRoute, normRouteMark, normTerrain, normLvl, normGrade, MARK_TYPES, ROUTE_VEH, load, save, toFile, fromFile, inputsText, uid };
+  window.CranePickModel = { KEYS, FORMAT, TYPES, UTIL_KINDS, BASIS, newProject, normalize, normItem, normSheet, normCrane, normSetup, normPick, normElev, normLift, normSetupGround, normGround, normTandem, normRoute, normRouteMark, normRouteSet, normTerrain, normLvl, normGrade, MARK_TYPES, ROUTE_VEH, load, save, toFile, fromFile, inputsText, uid };
 })();

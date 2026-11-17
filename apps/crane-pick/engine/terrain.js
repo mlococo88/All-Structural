@@ -178,7 +178,7 @@
   /* the vehicle along the path (stations behind the steer axle; off-tracking not included in the profile: Decision): hitch H (kingpin,
      or the jeep's bolster), rear group / dolly pivot R, load front f ahead of H, rear overhang r behind R */
   function vehStations(RT, r, P) {
-    const v = RT.vehOf(r), l = RT.loadOf(r, P), jeep = RT.hasJeep(v), dH = v.L1 - v.e + (jeep ? v.Lj - v.ej : 0), f = l.L - v.L2 - l.r;
+    const v = RT.vehOf(r, P), l = RT.loadOf(r, P), jeep = RT.hasJeep(v), dH = v.L1 - v.e + (jeep ? v.Lj - v.ej : 0), f = l.L - v.L2 - l.r;
     const huDef = (v.type === 'dolly' || v.type === 'jeep') ? v.hDeck : Math.max(v.hDeck - 1, 0.5);
     return { v, l, dH, L2: v.L2, f, r: l.r, huDef, huFrom: (v.type === 'dolly' || v.type === 'jeep') ? 'default: the deck / bolster height h_deck (the load spans between the bolsters)' : 'default: h_deck − 1 ft (deck structure, assumed)' };
   }
