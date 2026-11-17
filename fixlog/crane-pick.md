@@ -1278,7 +1278,7 @@ attribution; 390 px; 0 console errors); `crane-route` (5), `crane-manual` (8), `
 (11). Legacy equivalence: old vs new `engine/route.js` + `model.js`, `evaluate()` JSON identical on 4 routes. Screenshots: scratchpad
 `crane/road-*.png`.
 
-## 2026-11-17 — QA walkthrough fixes 1: "Load not entered" flag; Drawings index Report links (PR: see below)
+## 2026-11-17 — QA walkthrough fixes 1: "Load not entered" flag; Drawings index Report links (PR #1622)
 Found by the QA walkthrough of a real project (local only; no project data in this repo): its pick has no load entered, and every tab
 showed "0.0 %, within the chart" with no flag; the Drawings sheet index showed "Report plan (aerial)§6".
 ### Fix 1 — `ui/place.js` `evalPick0()` (anchor: `// C8: crane levelness on the preliminary terrain`)
