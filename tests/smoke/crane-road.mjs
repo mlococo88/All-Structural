@@ -9,6 +9,11 @@
 //      warning; the roads come from this browser's cache (no second request);
 //   3. Trace: a drag along a 200 ft radius quarter circle -> one fitted curve (R within 3 %);
 //   4. offline (Overpass not answered) -> the clear message; drawing by clicks still works;
+//      2026-11-17 (bug report): the status bar names the error type and the endpoint, with a "Test connection" link (the status page,
+//      new tab); every Overpass endpoint was tried (POST, GET) and, in Massachusetts, the MassDOT / MassGIS layers;
+//   4b. overpass-api.de refused, overpass.private.coffee answers -> the route snaps, "a fallback endpoint", remembered (crane.road) and
+//      tried first next time; Road data: MassDOT / MassGIS (settings) with a mocked ArcGIS GeoJSON answer -> a MassDOT route labelled
+//      "MassDOT / MassGIS … not survey" (card, flags, map attribution);
 //   5. a legacy saved route (no mode) computes as before and its card says "each vertex is a turn"; Report §Route (curve table,
 //      attribution); 390 px: no sideways scroll; 0 console errors (the refused request's own network error aside).
 //   SHOTS=<dir> node tests/smoke/crane-road.mjs
@@ -110,8 +115,22 @@ try {
   // 4. offline: Overpass not answered (the test harness refuses it) in a new area
   await p.unroute('https://overpass-api.de/**');
   await p.evaluate(q => CranePickMap.map.setView(CranePickMap.toLL(q), 18, { animate: false }), { x: c.x + 9000, y: c.y }); await p.waitForTimeout(300);
-  await p.click('[data-road=snap]'); await clickFt({ x: c.x + 8900, y: c.y }); await clickFt({ x: c.x + 9100, y: c.y + 50 }); await p.keyboard.press('Enter'); await p.waitForTimeout(1500);
-  assert.match(await txt('#rdMsg'), /Could not get the OpenStreetMap roads \(offline, blocked by the network.*Trace.*Route.*work offline/);
+  const net = [];
+  p.on('request', q => { if (/overpass|massdot|arcgis\.com|mail\.ru/.test(q.url())) net.push(q.method() + ' ' + new URL(q.url()).host); });
+  await p.click('[data-road=snap]'); await clickFt({ x: c.x + 8900, y: c.y }); await clickFt({ x: c.x + 9100, y: c.y + 50 }); await p.keyboard.press('Enter');
+  await p.waitForFunction(() => /Could not get the roads/.test(document.getElementById('rdMsg').textContent), null, { timeout: 20000 });
+  const bar = await txt('#mbStatus');
+  assert.match(bar, /Snap to road: could not get the OpenStreetMap roads: network error: offline, the network \/ firewall blocks the server, or the answer had no CORS header \(the browser does not say which\) — overpass-api\.de POST; 2 more endpoints also failed; MassDOT \/ MassGIS also failed \(network error/);
+  const tl = await p.$eval('#mbStatus a[data-rdtest=bar]', a => ({ href: a.href, t: a.target, txt: a.textContent }));
+  assert.deepEqual(tl, { href: 'https://overpass-api.de/api/status', t: '_blank', txt: 'Test connection' });
+  assert.deepEqual(net, ['POST overpass-api.de', 'GET overpass-api.de', 'POST overpass.private.coffee', 'GET overpass.private.coffee', 'POST maps.mail.ru', 'GET maps.mail.ru', 'GET gis.massdot.state.ma.us', 'GET services1.arcgis.com']);
+  const rm = await txt('#rdMsg');
+  assert.match(rm, /OpenStreetMap: overpass-api\.de POST \+ GET: network error \(offline, blocked, or no CORS header\); overpass\.private\.coffee POST \+ GET.*maps\.mail\.ru POST \+ GET.*MassDOT \/ MassGIS: gis\.massdot\.state\.ma\.us GET f=geojson.*Test connection opens the server's status page.*Trace.*Route.*work offline/);
+  assert.equal(await p.$$eval('#rdMsg a[data-rdtest]', a => a.length), 5);
+  await shot('road-fail-status');
+  ok('failure: the status bar names the error type (network / CORS) and the endpoint (overpass-api.de POST; 2 more failed; MassDOT also failed) with a Test connection link to https://overpass-api.de/api/status (new tab); requests: 3 Overpass endpoints × POST + GET, then 2 MassDOT layers; the Route tab lists each and 5 Test links');
+  await p.click('#mbStatus [data-rdb=clear]');
+  assert.match(await txt('#rdMsg'), /Could not get the roads.*Trace.*Route.*work offline/);
   await p.click('[data-rtool=route]'); await clickFt({ x: c.x + 8900, y: c.y }); await clickFt({ x: c.x + 9100, y: c.y + 50 }); await p.keyboard.press('Enter'); await p.waitForTimeout(400);
   assert.equal(await p.evaluate(() => CranePickApp.P.routes.length), 4, 'a route drawn by clicks while offline');
   await shot('road-offline');
@@ -126,6 +145,45 @@ try {
   assert.equal(L.mode, null); assert.equal(L.fitted, false); assert.deepEqual(L.r, [60, 50]); near(L.ot, L.ot2, 1e-12);
   assert.equal(await p.$eval('#rtMode', s => s.value), 'legacy'); assert.match(await txt('#rtLive'), /2 turns · max off-tracking/);
   ok(`legacy saved route (no mode): 2 turns at its vertices (r 60, 50 ft), off-tracking ${L.ot.toFixed(3)} ft = the engine's legacy path; the card says "each vertex is a turn (legacy)"`);
+
+  // 4b. a fallback endpoint answers; then MassDOT / MassGIS by choice (both mocked); a straight road along x at y0 in a new area
+  const road = (X0, Y0, nm, ll) => p.evaluate(([c, X0, Y0, nm, ll]) => { const pts = []; for (let x = -400; x <= 400; x += 50) { const q = CranePickMap.toLL({ x: c.x + X0 + x, y: c.y + Y0 }); pts.push(ll ? [q.lng, q.lat] : { lat: q.lat, lon: q.lng }); }
+    return ll ? { type: 'FeatureCollection', features: [{ type: 'Feature', id: 1, properties: { OBJECTID: 1, St_Name: nm, Oneway: null }, geometry: { type: 'LineString', coordinates: pts } }] }
+      : { version: 0.6, elements: [{ type: 'way', id: 77, nodes: pts.map((_, i) => 7000 + i), geometry: pts, tags: { highway: 'tertiary', name: nm } }] }; }, [c, X0, Y0, nm, ll]);
+  const OSM2 = await road(-9000, 0, 'Fallback Avenue', false); let coffee = 0;
+  await p.route('https://overpass.private.coffee/**', async r => { coffee++; await r.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(OSM2) }); });
+  await p.evaluate(q => CranePickMap.map.setView(CranePickMap.toLL(q), 18, { animate: false }), { x: c.x - 9000, y: c.y }); await p.waitForTimeout(300);
+  net.length = 0; const nR = await p.evaluate(() => CranePickApp.P.routes.length);
+  await p.click('[data-road=snap]'); await clickFt({ x: c.x - 9300, y: c.y + 10 }); await clickFt({ x: c.x - 8700, y: c.y - 10 }); await p.keyboard.press('Enter');
+  await p.waitForFunction(n => CranePickApp.P.routes.length === n + 1, nR, { timeout: 15000 }); await p.waitForTimeout(300);
+  assert.deepEqual(net, ['POST overpass-api.de', 'GET overpass-api.de', 'POST overpass.private.coffee']);
+  assert.match(await txt('#rdMsg'), /Snapped along Fallback Avenue \((59\d|60\d) ft\)\. Roads from overpass\.private\.coffee \(a fallback endpoint\)\. © OpenStreetMap contributors; from OpenStreetMap — not survey\./);
+  assert.equal(JSON.parse(await p.evaluate(() => localStorage.getItem('crane.road'))).lastOvp, 'https://overpass.private.coffee/api/interpreter');
+  // the next area: the endpoint that worked is tried first
+  await p.evaluate(q => CranePickMap.map.setView(CranePickMap.toLL(q), 18, { animate: false }), { x: c.x - 9000, y: c.y + 3000 }); await p.waitForTimeout(300);
+  net.length = 0; await p.click('[data-road=snap]'); await clickFt({ x: c.x - 9100, y: c.y + 3000 }); await clickFt({ x: c.x - 8900, y: c.y + 3000 }); await p.keyboard.press('Enter');
+  await p.waitForFunction(() => /no drivable|from the nearest/.test(document.getElementById('rdMsg').textContent), null, { timeout: 15000 });
+  assert.deepEqual(net, ['POST overpass.private.coffee']);
+  ok('fallback: overpass-api.de refused (POST, GET), overpass.private.coffee answered: the route snaps along Fallback Avenue, the Route tab says "a fallback endpoint"; remembered in crane.road and tried first in the next area');
+  // MassDOT / MassGIS by choice (Road data settings), the mocked layer answers GeoJSON
+  const MD = await road(-9000, -3000, 'SALEM STREET', true); let mdq = '';
+  await p.route('https://gis.massdot.state.ma.us/**', async r => { mdq = r.request().url(); await r.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(MD) }); });
+  await p.click('#rdSet > summary'); await p.selectOption('#rdSrc', 'massdot'); await p.click('[data-road=setSave]'); await p.waitForTimeout(200);
+  assert.match(await txt('#rdMsg'), /Road data settings saved/); assert.equal(await p.$eval('#rdSet', d => d.open), true);
+  await p.evaluate(q => CranePickMap.map.setView(CranePickMap.toLL(q), 18, { animate: false }), { x: c.x - 9000, y: c.y - 3000 }); await p.waitForTimeout(300);
+  net.length = 0; await p.click('[data-road=snap]'); await clickFt({ x: c.x - 9300, y: c.y - 2990 }); await clickFt({ x: c.x - 8700, y: c.y - 3010 }); await p.keyboard.press('Enter');
+  await p.waitForFunction(n => CranePickApp.P.routes.length === n + 2, nR, { timeout: 15000 }); await p.waitForTimeout(400);
+  assert.deepEqual(net, ['GET gis.massdot.state.ma.us']); const mu = new URL(mdq);
+  assert.equal(mu.pathname, '/arcgis/rest/services/Roads/RoadInventoryYearEndFiles/FeatureServer/10/query'); assert.equal(mu.searchParams.get('outSR'), '4326'); assert.equal(mu.searchParams.get('f'), 'geojson');
+  const md = await p.evaluate(() => { const r = CranePickApp.P.routes[CranePickApp.P.routes.length - 1], ev = CranePickRouteUI.evalRoute(r); return { src: r.src, flags: ev.flags.map(f => f.level + ': ' + f.text) }; });
+  assert.equal(md.src.data, 'massdot'); assert.equal(md.src.kind, 'osm'); assert.deepEqual(md.src.names.map(n => n.name), ['SALEM STREET']);
+  assert.ok(md.flags.some(f => /^info: Road geometry from MassDOT \/ MassGIS road centrelines — not survey \(MassDOT \/ MassGIS, fetched/.test(f)), md.flags.join(' | '));
+  const cardM = await txt('#rtCard'); assert.match(cardM, /MassDOT \/ MassGIS road centreline/); assert.match(cardM, /from MassDOT \/ MassGIS road centrelines — not survey/);
+  assert.match(await p.$eval('.leaflet-control-attribution', x => x.textContent), /MassDOT \/ MassGIS, from MassDOT \/ MassGIS road centrelines — not survey/);
+  assert.equal(await p.evaluate(() => CranePickModel.normRoute(JSON.parse(JSON.stringify(CranePickApp.P.routes[CranePickApp.P.routes.length - 1]))).src.data), 'massdot', 'saved and reloaded: src.data kept');
+  await shot('road-massdot');
+  ok('Road data: MassDOT / MassGIS (settings): one GET to the MassDOT Road Inventory layer query (outSR 4326, f=geojson); the route follows SALEM STREET; card, flag and map attribution "MassDOT / MassGIS … not survey"; src.data kept on reload');
+  await p.click('[data-road=setReset]'); await p.waitForTimeout(150); assert.equal(JSON.parse(await p.evaluate(() => localStorage.getItem('crane.road'))).src, 'auto');
 
   // Report and the Route tab
   await p.click('#tabBar [data-otab=route]'); await p.waitForTimeout(400);

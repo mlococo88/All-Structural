@@ -58,7 +58,7 @@
     if (x.kind === 'json') return { kind: 'json', text: 'the answer is not the expected JSON' + (x.detail ? ' (' + x.detail + ')' : '') + ' (a proxy / login page in its place?)' };
     if (x.kind === 'server') return { kind: 'server', text: 'the server reported an error' + (x.detail ? ': ' + x.detail : '') };
     if (x.kind === 'empty') return { kind: 'empty', text: x.detail || 'no roads in the answer' };
-    if (x.name === 'TypeError' || /fetch|network|cors|load failed/i.test(String(x.message || ''))) return { kind: 'network', text: 'network error: offline, the network / firewall blocks the server, or the answer had no CORS header (the browser does not say which)' };
+    if (x.name === 'TypeError' || /fetch|network|cors|load failed/i.test(String(x.message || ''))) return { kind: 'network', text: 'network error: offline, the network / firewall blocks the server, or the answer had no CORS header (the browser does not say which)', brief: 'network error (offline, blocked, or no CORS header)' };
     return { kind: 'other', text: String(x.message || x) };
   }
   /* one attempt with a timeout; check(json) throws an error object or returns the json */
@@ -80,7 +80,7 @@
     for (const a of attempts) {
       if (skip.has(a.ep.url)) continue;
       try { const json = await one(fetchFn, a, ms, check); log.push({ ep: a.ep, how: a.how, ok: true }); return { ok: true, json, used: a, log }; }
-      catch (x) { const c = classify(x, ms); log.push({ ep: a.ep, how: a.how, ok: false, kind: c.kind, code: c.code, text: c.text });
+      catch (x) { const c = classify(x, ms); log.push({ ep: a.ep, how: a.how, ok: false, kind: c.kind, code: c.code, text: c.text, brief: c.brief || c.text });
         if (c.kind === 'timeout' || (c.kind === 'http' && (c.code === 429 || c.code >= 500))) skip.add(a.ep.url); if (o && o.onTry) o.onTry(log); }
     }
     return { ok: false, log };
@@ -142,11 +142,13 @@
     });
     return { elements: els, n };
   }
-  /* summary(log) -> the short reason (the first endpoint's error) and the full per-attempt text */
+  /* summary(log) -> short: the first endpoint's error (and how many more failed); full: one line per endpoint and error ("host POST + GET:
+     network error (…)"); first: the first failed attempt */
   function summary(log) {
     const bad = (log || []).filter(l => !l.ok); if (!bad.length) return { short: '', full: [] };
-    const first = bad[0], hosts = [...new Set(bad.map(l => host(l.ep.url)))];
-    return { short: `${first.text} — ${host(first.ep.url)} ${first.how}${hosts.length > 1 ? `; ${hosts.length - 1} more endpoint${hosts.length > 2 ? 's' : ''} also failed` : ''}`, full: bad.map(l => `${host(l.ep.url)} ${l.how}: ${l.text}`), first };
+    const first = bad[0], hosts = [...new Set(bad.map(l => host(l.ep.url)))], grp = [];
+    bad.forEach(l => { const h = host(l.ep.url), t = l.brief || l.text, g = grp.find(x => x.h === h && x.t === t); if (g) g.how.push(l.how); else grp.push({ h, t, how: [l.how] }); });
+    return { short: `${first.text} — ${host(first.ep.url)} ${first.how}${hosts.length > 1 ? `; ${hosts.length - 1} more endpoint${hosts.length > 2 ? 's' : ''} also failed` : ''}`, full: grp.map(g => `${g.h} ${g.how.join(' + ')}: ${g.t}`), first };
   }
   window.CranePickRoadSrc = { OVERPASS, MASSDOT, MA, TIMEOUT_MS, MAX_PAGES, inMA, host, validUrl, statusUrl, overpassOrder, massdotOrder, overpassAttempts, arcgisQueryUrl,
     classify, run, checkOverpass, checkArcgis, fetchOverpass, fetchMassDOT, toOverpass, summary };

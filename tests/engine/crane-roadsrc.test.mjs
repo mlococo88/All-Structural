@@ -73,7 +73,7 @@ test('C. fallback: the first endpoint fails (network, both forms), the second an
   // every endpoint refuses: ok false, the summary names the first endpoint and counts the others
   const m2 = mock(() => netErr()), r2 = await RS.fetchOverpass(B, m2.f, { OSM, timeoutMs: 2000 });
   assert.equal(r2.ok, false); assert.equal(m2.calls.length, 6); const s = RS.summary(r2.log);
-  assert.match(s.short, /^network error: .* — overpass-api\.de POST; 2 more endpoints also failed$/); assert.equal(s.full.length, 6);
+  assert.match(s.short, /^network error: .* — overpass-api\.de POST; 2 more endpoints also failed$/); deq(s.full, ['overpass-api.de POST + GET: network error (offline, blocked, or no CORS header)', 'overpass.private.coffee POST + GET: network error (offline, blocked, or no CORS header)', 'maps.mail.ru POST + GET: network error (offline, blocked, or no CORS header)']);
 });
 
 test('D. GET fallback after HTTP 405; a timeout skips that endpoint\'s GET; bad JSON moves on', async () => {
