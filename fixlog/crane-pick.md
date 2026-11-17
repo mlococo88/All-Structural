@@ -1277,3 +1277,53 @@ message and click drawing still works; legacy saved route = engine legacy, card 
 attribution; 390 px; 0 console errors); `crane-route` (5), `crane-manual` (8), `crane-drawings` (5), `crane-terrain` (7), `crane-shell`
 (11). Legacy equivalence: old vs new `engine/route.js` + `model.js`, `evaluate()` JSON identical on 4 routes. Screenshots: scratchpad
 `crane/road-*.png`.
+
+## 2026-11-17 — QA walkthrough fixes 1: "Load not entered" flag; Drawings index Report links (PR #1622)
+Found by the QA walkthrough of a real project (local only; no project data in this repo): its pick has no load entered, and every tab
+showed "0.0 %, within the chart" with no flag; the Drawings sheet index showed "Report plan (aerial)§6".
+### Fix 1 — `ui/place.js` `evalPick0()` (anchor: `// C8: crane levelness on the preliminary terrain`)
+Before: `... ev.flags = ev.flags.concat(ev.level.flags || []); }` then `return ev;`
+After (inserted before `return ev;`):
+```js
+if (!(typeof k.load === 'number' && k.load > 0)) ev.flags.unshift({ level: 'warn', text: `Load not entered: W = ${ev.W.toLocaleString('en-US')} lb (rigging, hook block and other deductions only), so the % of chart and the float / track loads are for an empty hook. Enter the load on the Lifts tab.` });
+```
+No calculation changes (§4): W, C, % of chart, class and the ground loads are computed exactly as before; one flag is added (the live
+card, the Picks tab flag dots, Summary / Report / cover-sheet flag counts: one more "check").
+Check case: FAKECO wheeled crane, boom 60, pick at 30 ft, load not entered, rigging 1,000 + hook 1,000 lb: W = 2,000 lb, C = 39,000 lb,
+% = 2,000 / 39,000 = 5.1 % (unchanged) + flag "Load not entered: W = 2,000 lb"; load 20,000 lb entered: W = 22,000 lb, 56.4 %, no flag.
+### Fix 2 — `ui/drawings.js` sheet index link label (anchor: `const link = w => w[0] === 'rpt'`)
+Before: `esc(w[2].replace(/§\S*/, '') + (ref(w[1]) || '§'))` — removed only the first word after "§": "Report §Site plan (aerial)" became
+"Report plan (aerial)§6", "Report §Tandem lifts (load share)" became "Report lifts (load share)§8".
+After: `esc(w[2].replace(/§.*$/, '') + (ref(w[1]) || '§'))` — "Report §6". Labels "Report §Route" etc. unchanged ("Report §10.1").
+### Decisions (pending engineer review)
+- "Load not entered" is a check (amber) flag, not a stop; it fires when the load is blank or ≤ 0 (rigging / hook alone are not a load).
+### How verified
+`node tests/check-syntax.mjs`; `node tests/engine/run.mjs crane` (15 files, 119 passed); smokes `crane-place` (9), `crane-picks` (5),
+`crane-drawings` (5); new `tests/smoke/crane-qa.mjs` (3: the flag on card / Picks / Summary and gone once the load is entered, % = W / C
+unchanged; index labels "Report §n"; 0 console errors).
+
+## 2026-11-17 — QA walkthrough fixes 2: plan sheet placement vs its alignment (PR #1623)
+Found by the QA walkthrough: a sheet aligned to the map and then moved, rotated or reloaded at another size kept basis "aligned". The Site
+tab and Report §Plan sheets showed the current placement and, below it, "Align to map" steps giving a different scale and rotation,
+with nothing saying they disagree.
+### Fix 1 — `ui/sheets.js` `onFile()` reload at a different size (anchor: `if (s.cal) { s.cal.p1 = sc(s.cal.p1);`)
+Before: the calibration and georeference sheet points were rescaled (× k = new width / old width), the alignment points were not.
+After: appended `if (s.align) { s.align.p1 = sc(s.align.p1); s.align.p2 = sc(s.align.p2); }`. This is not a calculation change. The
+recorded alignment keeps describing the same ground points. Check: the image reloaded at 2 × the width means the points double, so
+d_px doubles and s = L_m / d_px halves, which equals the placement's s / 2 after the reload.
+### Fix 2 — `ui/sheets.js` new `alignDrift(s)` / `driftText()` (after `refScale()`), shown in `alCard()`, the Site-tab section and the
+Report items
+`alignDrift` re-solves the recorded alignment (`G.align2`, and with keep = 'ref' the same `rescaleAbout` as `alSolve`). It compares where
+that placement and the current `s.place` put the sheet points A and B. Over 0.10 ft in either gives a warning: "The placement no longer
+matches the alignment: … (A is now x ft and B y ft from where the alignment put them) … Align the sheet again …". Nothing computed
+changes. The saved data is unchanged (§5).
+Check case (smoke): sheet 1000 × 600 px, A (100, 100) → A′ (1000, 3000), B (900, 500) → B′ (1080, 2960). s = 89.443 / 894.43 = 0.1 ft/px.
+Untouched gives no warning. Rotated +2° about the centre (500, 300): A and B are 447.21 px × 0.1 = 44.72 ft from it. Each moves
+2 × 44.72 × sin 1° = 1.561 ft. The app gives 1.561 / 1.561 and shows the warning.
+### Decisions (pending engineer review)
+- Tolerance 0.10 ft. The touch alignment in `crane-align` lands within 0.025 ft, so no false warning.
+- Moving by hand stays allowed (the sheet is unlocked after Done, as before); only a warning is added. Georeferenced sheets moved by hand
+  are not checked (needs the zone unit conversion).
+### How verified
+`node tests/check-syntax.mjs`; `node tests/engine/run.mjs crane` (119 passed); smokes `crane-align` (5), `crane-sheets` (8),
+`tests/smoke/crane-qa.mjs` (4, new step 3).
