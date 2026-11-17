@@ -1184,7 +1184,7 @@ console errors); `crane-drawings` (5), `crane-cranetab` (6), `crane-place` (9), 
 `node tests/engine/run.mjs crane` (14 files, 111 passed); `node tests/check-syntax.mjs`. Screenshots: scratchpad `crane/accurate-*.png`.
 
 ## 2026-11-17 — Route: Snap to road (OpenStreetMap) and the fitted alignment (tangents + circular curves) (engineer feedback)
-PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1621: https://github.com/mlococo88/All-Structural/pull/1621
 Engineer (2026-11-17): "I have to make many clicks to follow the curve of the road and each one is modeled as a turn which isn't really
 true. Can I simply select the road and the app can pull out info like radius of curves and such?"
 ### Where
