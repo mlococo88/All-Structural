@@ -62,12 +62,12 @@ try {
 
   // 3. Drawings tab
   const ids = await p.$$eval('#dwg_sheet option', o => o.map(x => x.value));
-  assert.deepEqual(ids, ['cover', 'notes', 'lift-k1', 'tlift-t1', 'rig-t1', 'ground', 'route-0']);
+  assert.deepEqual(ids, ['cover', 'notes', 'lift-k1', 'tlift-t1', 'rig-t1', 'ground', 'route-0', 'crane-u0', 'crane-u1', 'crane-u2']);   // C9: a Crane sheet per setup used by a lift
   for (const id of ids) { await p.selectOption('#dwg_sheet', id); await p.waitForTimeout(120); const t = await p.$eval('.dwg-box svg', s => ({ n: s.querySelectorAll('text').length, l: s.querySelectorAll('line,path,polyline,polygon,circle').length })); assert.ok(t.n > 10 && t.l > 5, id + ' ' + JSON.stringify(t)); }
   await p.selectOption('#dwg_sheet', 'lift-k1'); await p.waitForTimeout(150);
   assert.match(await p.$eval('.dwg-box svg', s => s.textContent), /P: R 30\.00 FT, 39,000 LB, 56\.4 %/);
   await shot('c7-drawings-lift');
-  const idx = await rowsOf('#dwgIdx'); assert.equal(idx.length, 7); assert.match(idx[2][3], /Picks tab · Lifts input tab · Report §\d+\.\d+/);
+  const idx = await rowsOf('#dwgIdx'); assert.equal(idx.length, 10); assert.match(idx[2][3], /Picks tab · Lifts input tab · Report §\d+\.\d+/);
   await p.click('#dwgIdx tr:nth-child(3) [data-dgr]'); await p.waitForTimeout(500); assert.equal(await p.evaluate(() => CranePickApp.ui.otab), 'rpt');
   await p.click('#tabBar [data-otab=dwg]'); await p.waitForSelector('#dwgIdx');
   for (const id of ['tlift-t1', 'rig-t1', 'ground', 'route-0', 'cover']) { await p.selectOption('#dwg_sheet', id); await p.waitForTimeout(150); await shot('c7-drawings-' + id); }
@@ -77,10 +77,10 @@ try {
   assert.ok(dx.ok, dx.errs.join('; ')); assert.ok(dx.got && /^SMOKE_LIFT_PLAN_lift_plan\.dxf$/.test(dx.got.f), JSON.stringify(dx.got)); assert.ok(dx.text > 200);
   const pr = await p.evaluate(() => { let pages = []; window.print = () => { pages.push(document.querySelectorAll('#sdx-print .sdx-sheet').length); };
     document.getElementById('dwg_printAll').click(); document.getElementById('dwg_print1').click(); window.dispatchEvent(new Event('afterprint')); return { pages, r: CranePickDrawingsUI.lastPrint.pages }; });
-  assert.deepEqual(pr.pages, [7, 1]);
-  await p.selectOption('#dwg_paper', 'B'); await p.waitForTimeout(300); assert.equal((await p.$$eval('#dwg_sheet option', o => o.length)), 7); assert.match(await p.$eval('[data-opane=dwg] .secHead', h => h.textContent), /7 sheets/);
+  assert.deepEqual(pr.pages, [10, 1]);
+  await p.selectOption('#dwg_paper', 'B'); await p.waitForTimeout(300); assert.equal((await p.$$eval('#dwg_sheet option', o => o.length)), 10); assert.match(await p.$eval('[data-opane=dwg] .secHead', h => h.textContent), /10 sheets/);
   await p.selectOption('#dwg_paper', 'D'); await p.waitForTimeout(200);
-  ok(`Drawings tab: 7 sheets render (cover, notes, lift plan, tandem plan, rigging, ground, route); index links to the tabs / Report §; Download DXF valid (${dx.text} TEXT, ${dx.layers} layers); Print all = 7 pages, Print sheet = 1; paper B`);
+  ok(`Drawings tab: 10 sheets render (cover, notes, lift plan, tandem plan, rigging, ground, route, 3 crane sheets (C9)); index links to the tabs / Report §; Download DXF valid (${dx.text} TEXT, ${dx.layers} layers); Print all = 10 pages, Print sheet = 1; paper B`);
 
   // 4. Report
   const rp = await p.evaluate(() => { const m = CranePickReport.model(CranePickApp.P), d = SharedReport.build(m); return { secs: m.sections.map(s => s.title), un: d.unresolved, dup: d.dup, text: SharedReport.text(d), head: m.head }; });

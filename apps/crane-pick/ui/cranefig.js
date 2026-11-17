@@ -239,7 +239,7 @@
     F.push({ t: 'arrow', a: [0, ah - d * 1.8], b: [0, ah + d * 0.6], c: 'head' }); F.push(txt([0, ah + d * 0.9], virt ? 'carrier front' : `carrier front: heading ${fmt(u.heading || 0, 1)}° (grid)`, { a: 1, size: 0.8, v: virt ? undefined : 'heading', val: virt ? undefined : u.heading || 0, src: virt ? undefined : 'entered' }));
     if (vals.e) { F.push({ t: 'dot', at: [0, vals.e.v], c: 'boom' }); }
     if (pt && isNum(pt.theta)) { const ux = Math.sin(rad(pt.theta)), uy = Math.cos(rad(pt.theta)), Lb = Math.min(pt.R, span * 1.4);   // local û = (cos θ, −sin θ) -> world (sin θ, cos θ)
-      F.push({ t: 'line', a: [ux * vals.e.v, uy * vals.e.v], b: [ux * Lb, uy * Lb], c: 'boom' }); F.push(txt([ux * Lb, uy * Lb], `boom at ${pt.where}: slew θ = ${fmt(pt.theta, 1)}°, R = ${fmt(pt.R, 2)} ft${pt.R > Lb ? ' (cut)' : ''}`, { size: 0.75, off: [0.4, 0.4], v: 'pt.R', val: pt.R, src: 'engine' }));
+      F.push({ t: 'line', a: [ux * vals.e.v, uy * vals.e.v], b: [ux * Lb, uy * Lb], c: 'boom' }); F.push(txt([ux * Lb, uy * Lb], `boom: θ ${fmt(pt.theta, 1)}°, R ${fmt(pt.R, 2)} ft${pt.R > Lb ? ' (cut)' : ''}`, { size: 0.75, a: ux < -0.3 ? 2 : ux > 0.3 ? 0 : 1, off: [ux < -0.3 ? -0.4 : 0.4, 0.5], v: 'pt.R', val: pt.R, src: 'engine' }));
       if (isNum(inp.rcw)) { const r = inp.rcw; F.push({ t: 'pl', pts: [[-ux * r - uy * d, -uy * r + ux * d], [-ux * r + uy * d, -uy * r - ux * d], [-ux * (r - d) + uy * d, -uy * (r - d) - ux * d], [-ux * (r - d) - uy * d, -uy * (r - d) + ux * d]], closed: true, c: 'cw' });
         F.push(lbl(m, 'rcw', [-ux * r, -uy * r], { pre: 'counterweight CG r_cw = ', a: 2, off: [-1.2, 0.3], size: 0.75 })); } }
     // dimensions
@@ -276,7 +276,7 @@
   function elev(m) {
     const F = [], { g, pt, u, vals } = m; if (!pt) return null;
     const zp = EL().padEl(u), R = pt.R, tail = isNum(g.tail) ? g.tail : 10, fz = zp + g.footH, e = g.footE, d = Math.max(R, 20) / 30;
-    F.push({ t: 'line', a: [-tail - 6, zp], b: [R + Math.max(8, (pt.Lload || 0) / 2 + 6), zp], c: 'ground' }); F.push(lbl(m, 'pad', [-tail - 6, zp], { pre: 'pad el. ', off: [0, 0.5], size: 0.8 }));
+    F.push({ t: 'line', a: [-tail - 6, zp], b: [R + Math.max(8, (pt.Lload || 0) / 2 + 6), zp], c: 'ground' }); F.push(lbl(m, 'pad', [R + Math.max(8, (pt.Lload || 0) / 2 + 6), zp], { pre: 'pad el. ', a: 2, off: [0, -1.3], size: 0.8 }));
     if (isNum(pt.zg) && Math.abs(pt.zg - zp) > 1e-6) F.push({ t: 'line', a: [R - 8, pt.zg], b: [R + 8, pt.zg], c: 'ground' });
     // counterweight (bottom / top above the pad) to the tail-swing radius
     const cb = zp + g.cwBot, ct = isNum(g.cwTop) ? zp + g.cwTop : null, cx0 = -tail, cx1 = -tail * 0.55;
@@ -308,7 +308,7 @@
       F.push({ t: 'text', at: [x, pt.zBk], s: `block top el. ${fmt(pt.zBk, 2)} (h_bk ${fmt(pt.hbk, 2)} ft)`, size: 0.75, stack: 'hk', v: 'pt.zBk', val: pt.zBk, src: 'engine' });
       F.push({ t: 'text', at: [x, pt.zHk], s: `hook el. ${fmt(pt.zHk, 2)} (rigging h_r ${fmt(pt.hr, 2)} ft)`, size: 0.75, stack: 'hk', v: 'pt.zHk', val: pt.zHk, src: 'engine' });
       F.push({ t: 'text', at: [x, pt.zLb], s: `${pt.girder ? 'girder' : 'load'} bottom el. ${fmt(pt.zLb, 2)}${pt.trav ? (pt.travEntered ? ' (travel, entered)' : ' (travel: higher of pick / set)') : ''}, H ${fmt(pt.H, 2)} ft`, size: 0.75, stack: 'hk', v: 'pt.zLb', val: pt.zLb, src: 'engine' });
-      F.push({ t: 'text', at: [R, pt.zLb], s: `W = ${fmt(pt.W, 0)} lb (load + rigging + block + other)`, a: 1, off: [0, -2.6], size: 0.8, v: 'pt.W', val: pt.W, src: 'engine' });
+      F.push({ t: 'text', at: [R + hw + d * 2, pt.zLb], s: `W = ${fmt(pt.W, 0)} lb (load + rigging + block + other)`, stack: 'hk', size: 0.8, v: 'pt.W', val: pt.W, src: 'engine' });
       if (isNum(pt.m)) F.push({ t: 'text', at: [x, (pt.zBk + (isNum(pt.zTip) ? pt.zTip - g.head : pt.zBk)) / 2], s: `hook reach margin m = ${fmt(pt.m, 2)} ft${pt.m < 0 ? ' (CANNOT REACH)' : ''}`, size: 0.8, v: 'pt.m', val: pt.m, src: 'engine', warn: pt.m < 0 });
     }
     return { prims: F.filter(Boolean), scale: true, title: `Side elevation along the boom, ${pt.where} (to scale)` };
@@ -377,14 +377,14 @@
     prims.forEach(p => { if (p.t === 'line' || p.t === 'arrow' || p.t === 'dim') { add(...p.a); add(...p.b); } else if (p.t === 'pl') p.pts.forEach(q => add(...q)); else if (p.t === 'circle') { add(p.at[0] - p.r, p.at[1] - p.r); add(p.at[0] + p.r, p.at[1] + p.r); } else if (p.at) add(...p.at); });
     return { x0, x1, y0, y1 };
   }
-  const tw = (s, fs) => String(s).length * fs * 0.55;
+  const tw = (s, fs) => String(s).length * fs * 0.58;
   /* svg(fig, o = { w, h, fs }) -> '<svg …>' (text carries data-v / data-val / data-src: the Node test reads them) */
   function svg(fig, o) {
     if (!fig) return ''; o = o || {}; const W = o.w || 640, Hmax = o.h || 460, fs0 = o.fs || 11, pad = 14;
     const b = bounds(fig.prims); if (!isFinite(b.x0)) return '';
     // two passes: the scale from the geometry, then grown to keep the labels inside
     let k = Math.min((W - 2 * pad) / Math.max(b.x1 - b.x0, 1e-6), (Hmax - 2 * pad) / Math.max(b.y1 - b.y0, 1e-6)), bb = Object.assign({}, b);
-    for (let it = 0; it < 2; it++) { bb = Object.assign({}, b);
+    for (let it = 0; it < 5; it++) { bb = Object.assign({}, b);
       fig.prims.forEach(p => { if (p.t !== 'text' && p.t !== 'dim') return; const fs = fs0 * (p.size || 0.9), s = p.t === 'dim' ? p.s + (p.src && p.src !== 'engine' ? ` [${p.src}]` : '') : p.s + (p.src && p.src !== 'engine' && p.v && !/^\w+\./.test(p.v) ? ` [${p.src}]` : ''), w0 = tw(s, fs) / k;
         const at = p.t === 'dim' ? [(p.a[0] + p.b[0]) / 2, (p.a[1] + p.b[1]) / 2] : p.at, ox = ((p.off && p.off[0]) || 0) * fs / k, oy = ((p.off && p.off[1]) || 0) * fs / k, a = p.t === 'dim' ? (Math.abs(p.b[0] - p.a[0]) < Math.abs(p.b[1] - p.a[1]) ? (p.side === -1 ? 2 : 0) : 1) : p.a || 0;
         const xl = at[0] + ox - (a === 1 ? w0 / 2 : a === 2 ? w0 : 0); bb.x0 = Math.min(bb.x0, xl); bb.x1 = Math.max(bb.x1, xl + w0); bb.y0 = Math.min(bb.y0, at[1] + oy - fs / k); bb.y1 = Math.max(bb.y1, at[1] + oy + fs / k); });
@@ -429,7 +429,7 @@
   }
 
   /* ---------- DXF (the Crane sheet): the same primitives with shared/dxf.js ---------- */
-  const asc = s => String(s == null ? '' : s).replace(/[θ]/g, 'THETA ').replace(/[±]/g, '+/-').replace(/[°]/g, ' DEG').replace(/[—–]/g, '-').replace(/[·]/g, '-').replace(/[≥]/g, '>=').replace(/[≤]/g, '<=').replace(/[²]/g, '2').replace(/[^\x20-\x7E]/g, '');
+  const asc = s => String(s == null ? '' : s).replace(/[θ]/g, 'THETA').replace(/[±]/g, '+/-').replace(/[°]/g, ' DEG').replace(/[—–]/g, '-').replace(/[·]/g, '-').replace(/[≥]/g, '>=').replace(/[≤]/g, '<=').replace(/[²]/g, '2').replace(/[^\x20-\x7E]/g, '');
   const UP = s => asc(s).toUpperCase();
   /* dxf(D, fig, o = { kx (inches per world unit), title }) draws fig at the origin; returns the bbox index range */
   function dxf(D, fig, o) {

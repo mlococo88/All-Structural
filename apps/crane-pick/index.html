@@ -278,8 +278,9 @@
   .crTrCl{pointer-events:none!important;} .crTrCl span{display:inline-block;transform:translate(-50%,-50%);font-size:7.5pt;color:#7C2D12;background:rgba(255,255,255,.75);padding:0 2px;border-radius:2px;}
   .crTrTag{font-size:7.5pt;color:#92400E;} .trProf svg{display:block;max-width:100%;height:auto;}
   /* C9: Crane tab */
-  .crnBar{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:4px 0 8px;} .crnBar select{max-width:100%;min-width:0;} #crnSel{max-width:min(560px,100%);}
-  .crnGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,560px),1fr));gap:0 14px;} .crnFig svg{display:block;max-width:100%;height:auto;}
+  .crnBar{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:4px 0 8px;} .crnBar select{max-width:100%;min-width:0;} #crnSel{min-width:min(320px,100%);max-width:min(560px,100%);}
+  .crnGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,560px),1fr));gap:0 14px;} .crnFig{overflow-x:auto;overscroll-behavior-x:contain;} .crnFig svg{display:block;max-width:100%;height:auto;}
+  @media screen and (max-width:899.98px){ .crnFig svg{max-width:none;width:600px;} }   /* phones: the figure at a readable size, scrolled inside its card */
   .crnA{background:#FEF3C7;color:#92400E;border:1px solid #F59E0B;border-radius:3px;padding:0 4px;} .crnS{color:#475569;} tr.crnRowA td{background:#FFFBEB;}
   #crnTbl td{font-size:8.5pt;}
   /* C2-3: Picks tab */
