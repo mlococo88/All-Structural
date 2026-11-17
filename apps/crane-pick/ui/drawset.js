@@ -246,7 +246,7 @@
     if (isNum(f.tail)) drawPoly(D, V, lW, LF().circle(u, f.tail, 72), true, ph);
     // mats (setup.ground): wheeled B (forward) × L (across) at each float; crawler: the mat length across each track, under its length
     const m = u.ground && u.ground.mat, S = GR() && GR().supports(c.def, u);
-    if (m && m.type !== 'none' && S && S.ok && isNum(m.B) && m.B > 0) {
+    if (!CG && m && m.type !== 'none' && S && S.ok && isNum(m.B) && m.B > 0) {   // 2026-11-17: with the symbol, the mats are its 'mat' group (to scale, count / orientation, size label)
       const rect = (cx, cy, bx, by) => [[cx + bx / 2, cy + by / 2], [cx + bx / 2, cy - by / 2], [cx - bx / 2, cy - by / 2], [cx - bx / 2, cy + by / 2]].map(([x, y]) => LF().toGrid(u, x, y));
       S.items.forEach(it => { if (S.kind === 'wheeled') drawPoly(D, V, lM, rect(it.lx, it.ly, m.B, isNum(m.L) && m.L > 0 ? m.L : m.B), true); else drawPoly(D, V, lM, rect(0, it.ly, S.Lt, m.B), true); });
     }
@@ -290,9 +290,30 @@
     const gp = ev.gov && ev.gov.p; if (gp && ev.govWhere.indexOf('swing') >= 0) { seg(lBg, u, gp, D.ltype('CENTER')); mark(D, V, lP, gp, 'G', lT); }
     drawPoly(D, V, lS, ev.path.pts, false);
     mark(D, V, lP, k.pick, 'P', lT); mark(D, V, lP, k.set, 'S', lT);
+    C.clrDims = clrDimLayer(D, V, P, u);
     [[k.pick, ev.pick, 'P'], [k.set, ev.set, 'S']].forEach(([q, e, t]) => { if (inWin(q, w)) D.text(lT, V.X(q.x) + 1.4 * h, V.Y(q.y) + 0.6 * h, 0.8 * h, U(`${t}: R ${fmt(e.R, 2)} FT, ${e.look.ok ? fmt(e.C, 0) + ' LB, ' + fmt(e.pct, 1) + ' %' : 'NOT PERMITTED'}`)); });
     C.flagText = flagLayer(D, V, ev.c3 && ev.c3.flags);
     frameLayer(D, V, P, `PLAN: ${k.name}`);
+  }
+  /* 2026-11-17: plan clearance dimensions from each float / track and the tail-swing circle to the nearest site item (CranePickCraneGfx
+     clearDims; display only), dimensioned on the lift plan; returns the rows for the data table */
+  function clrDimLayer(D, V, P, u) {
+    const c = craneOf(P, u), CG = window.CranePickCraneGfx; if (!c || !CG || !CG.clearDims) return [];
+    const lD = D.layer('CLR-DIM', 2), lT = D.layer('TEXT', 7), h = D.h, rows = [];
+    CG.clearDims(c.def, u, P.items).forEach(r => {
+      rows.push([`CLEARANCE ${r.from === 'TAIL' ? 'TAIL SWING' : r.from}`, r.d > 0 ? `${fmt(r.d, 2)} FT TO ${r.name} (${r.type})` : `OVERLAPS ${r.name} (${r.type})`]);
+      if (!(r.d > 0)) return; const cc = clip(r.p, r.q, V.w); if (!cc) return;
+      const x0 = V.X(cc[0].x), y0 = V.Y(cc[0].y), x1 = V.X(cc[1].x), y1 = V.Y(cc[1].y), a = Math.atan2(y1 - y0, x1 - x0), t = 0.5 * h;
+      D.line(lD, x0, y0, x1, y1); [[x0, y0, 1], [x1, y1, -1]].forEach(([x, y, sg]) => { D.line(lD, x, y, x + sg * t * Math.cos(a + 0.4), y + sg * t * Math.sin(a + 0.4)); D.line(lD, x, y, x + sg * t * Math.cos(a - 0.4), y + sg * t * Math.sin(a - 0.4)); });
+      let rot = a * 180 / Math.PI; if (rot > 90) rot -= 180; if (rot < -90) rot += 180;
+      D.text(lT, (x0 + x1) / 2, (y0 + y1) / 2 + 0.3 * h, 0.6 * h, U(`${r.from === 'TAIL' ? 'TAIL' : r.from} ${fmt(r.d, 2)} FT`), 1, rot); });
+    return rows;
+  }
+  /* support locations (float centres / track ends) for the sheet tables: local x / y and State Plane */
+  function supportRows(P, u) {
+    const c = craneOf(P, u), CG = window.CranePickCraneGfx; if (!c || !CG || !CG.floatTable) return [];
+    const z = G().zone(P.site.zone), un = z.unit === 'm' ? 'M' : 'FT';
+    return CG.floatTable(c.def, u, P.site.zone, null).map(r => [`${r.id} (${r.name})`, `X ${fmt(r.lx, 2)}, Y ${fmt(r.ly, 2)} FT; E ${fmt(r.E, 2)}, N ${fmt(r.N, 2)} ${un}`]);
   }
   /* the plan view of a girder lift: both setups, the girder at the pick (on the truck) and the set (on the bearings), the centre's path,
      the booms at each crane's governing step, the hooks */
@@ -373,6 +394,8 @@
     rs.forEach((r, i) => rows.push([i ? '' : 'CLOSEST 3D CLEARANCES', clrText({ name: r.name, type: r.type, d: r.gov.d, req: r.type === 'power' ? (isNum(r.D) ? r.D : 0) : r.req || 0, comp: r.gov.comp, crane: r.gov.crane })]));
     if (!rs.length) rows.push(['CLOSEST 3D CLEARANCES', 'NO POWER LINE / OBSTRUCTION DRAWN']);
     rows.push(['GROUND', gr && !gr.none ? `${gr.mode === 'rigid' ? 'ENTERED DATA' : 'ESTIMATE - VERIFY WITH THE MANUFACTURER\'S CALCULATOR'}; MAX ${kip(gr.load)} KIP (${gr.sup})${gr.ratio != null ? ', BEARING RATIO ' + fmt(gr.ratio, 2) : ''}` : 'NOT COMPUTED']);
+    supportRows(C.pick.P, u).forEach((r, i) => rows.push([(i ? '' : 'SUPPORTS (X ALONG CARRIER, Y ACROSS, FROM CR): ') + r[0], r[1]]));
+    (C.clrDims || []).forEach(r => rows.push(r));
     rows.push(['WORKED', `${seeRef(C, 'pick-' + k.id)} (LIFT); ${seeRef(C, 'gr-' + k.id)} (GROUND); ${seeRef(C, 'elev-' + k.id)} (ELEVATIONS)`]);
     return rows;
   }
@@ -395,7 +418,11 @@
   /* a view sheet: the plan, the elevations under it, the data table and the flags to the right */
   function viewSheet(D, C) {
     const h = D.h, i0 = D.mark(); C.planFn(D, C); let x = D.bbox(i0)[2] + 5 * h; const top = D.bbox(i0)[3];
-    (C.elevs || []).forEach(fn => { const j0 = D.mark(); if (!fn(D, C)) { D.E.length = j0; return; } const b = D.bbox(j0); D.move(j0, x - b[0], top - b[3]); x = D.bbox(j0)[2] + 5 * h; });
+    // 2026-11-17 (QA: the plan was small beside two tall elevations): the elevations stacked in one column right of the plan, so the
+    // sheet scale (the same for plan and elevations) grows and the crane / outriggers read clearly
+    let yTop = top;
+    (C.elevs || []).forEach(fn => { const j0 = D.mark(); if (!fn(D, C)) { D.E.length = j0; return; } const b = D.bbox(j0);
+      if (C.stackElev) { D.move(j0, x - b[0], yTop - b[3]); yTop = D.bbox(j0)[1] - 4 * h; } else { D.move(j0, x - b[0], top - b[3]); x = D.bbox(j0)[2] + 5 * h; } });
     const ba = D.bbox(i0), t0 = D.mark(), rows = C.rowsFn(C);
     let yy = table(D, D.layer('TBL', 8), D.layer('TEXT', 7), 0, 0, ['ITEM', 'VALUE'], rows, C.tableTitle || 'LIFT DATA').y;
     const fl = (C.flagText || []).concat((C.flags || []).filter(f => f.level !== 'info' && !f.p).map(f => f.text));
@@ -470,6 +497,8 @@
     const pairs = new Set(); gm.forEach(s => s.list.forEach(x => { if (!x.pair || pairs.has(x.key)) return; pairs.add(x.key); x.pair.filter(d => !d.none && !d.far).forEach(d => dz.push([x.name.replace(/ \(crane \d\)$/, ''), d.name, Array.isArray(d.z) ? d.z.map(v => fmt(v, 2)).join(' / ') : fmt(d.z, 2), fmt(d.ds, 0), 'STEP ' + d.j, d.cap ? fmt(d.cap, 0) : 'NOT ENTERED', d.ratio == null ? '-' : fmt(d.ratio, 2), 'BOTH CRANES (SUM)'])); }));
     let y = table(D, lL, lT, 0, 0, ['SETUP', 'FLOAT / TRACK', 'LOAD (KIP)', 'Q MAX TRACK (PSF)', 'GOVERNING LIFT', 'SLEW (DEG)', 'R (FT)', 'Q_G (PSF)', 'Q_A (PSF)', 'Q_G / Q_A', 'MAT M / V RATIOS', 'METHOD'], rows, 'FLOAT / TRACK LOADS AND BEARING (LARGEST OVER THE LIFTS OF EACH SETUP)').y;
     y = table(D, lL, lT, 0, y - h, ['SETUP', 'MAT', 'SIZE', 'MATERIAL', 'UNIT WEIGHT', 'SPREAD', 'ALLOWABLE BEARING'], mats, 'MAT SPECIFICATION AND ALLOWABLE BEARING PRESSURE').y;
+    const loc = []; gm.forEach(s => supportRows(P, s.u).forEach(r => loc.push([s.u.name, r[0], r[1]])));
+    if (loc.length) y = table(D, lL, lT, 0, y - h, ['SETUP', 'SUPPORT', 'LOCATION (X ALONG CARRIER, Y ACROSS, FROM THE CENTRE OF ROTATION; STATE PLANE)'], loc, 'FLOAT / TRACK LOCATIONS (STAKE-OUT)').y;
     if (dz.length) y = table(D, lL, lT, 0, y - h, ['LIFT', 'BURIED ITEM', 'Z (FT)', 'DELTA SIGMA_Z (PSF)', 'SLEW / STEP', 'ALLOWABLE (PSF)', 'RATIO', 'FROM'], dz, 'STRESS AT DEPTH (BOUSSINESQ)').y;
     notesBlk(D, lT, 0, y - h, 'NOTES', ['METHOD: "ENTERED DATA" = RIGID-BODY STATICS WITH THE WEIGHTS AND CGS ON THE CRANE CARD; "ESTIMATE" = THE BOUNDING ESTIMATE: VERIFY WITH THE MANUFACTURER\'S OUTRIGGER CALCULATOR.',
       `WORKED: ${seeRef(C, 'ground')} (SINGLE PICKS) AND ${seeRef(C, 'tandem')} (GIRDER LIFTS); BASIS ${seeRef(C, 'ground-basis')}.`, 'ALLOWABLE BEARING PRESSURES FROM THE GEOTECHNICAL ENGINEER (GROUND INPUT TAB).'], 110);
@@ -598,7 +627,7 @@
       const { ev, u } = r, k = (P.picks || []).find(x => x.id === r.id), f = LF().footprint(r.c.def, u), pts = [u, k.pick, k.set].concat(ev.path.pts);
       if (isNum(f.tail)) pts.push({ x: u.x - f.tail, y: u.y - f.tail }, { x: u.x + f.tail, y: u.y + f.tail }); [].concat(f.body ? [f.body] : [], f.tracks).forEach(q => pts.push(...q)); f.floatC.forEach(q => pts.push(q));
       const pick = { P, k, u, c: r.c, ev, w: windowOf(pts) };
-      list.push({ id: 'lift-' + k.id, title: `LIFT PLAN: ${k.name}`, fn: viewSheet, kmin: 48, c: { ...C, pick, planFn: pickPlan, elevs: [(D2, C2) => pickElev(D2, C2, 'pick'), (D2, C2) => pickElev(D2, C2, 'set')], rowsFn: pickRows, flags: ev.flags,
+      list.push({ id: 'lift-' + k.id, title: `LIFT PLAN: ${k.name}`, fn: viewSheet, kmin: 48, c: { ...C, pick, planFn: pickPlan, elevs: [(D2, C2) => pickElev(D2, C2, 'pick'), (D2, C2) => pickElev(D2, C2, 'set')], rowsFn: pickRows, stackElev: true, flags: ev.flags,
         notes: ['PLAN TO SCALE, GRID NORTH UP. P: PICK, S: SET, G: CAPACITY-GOVERNING POINT ON THE SWING; BOOM AT THE PICK (SOLID), THE SET (DASHED) AND THE GOVERNING POINT (CENTER LINE); SWING PATH; TAIL-SWING CIRCLE (PHANTOM); MATS WHERE ENTERED; F1...: RED / AMBER 3D CLEARANCE FLAGS (CLOSEST POINT, DASHED TO THE ITEM).',
           'ELEVATIONS ALONG THE BOOM AT THE PICK AND THE SET, TO THE SAME SCALE. VALUES: THE APP\'S ENGINE (PICKS TAB, LIFTS TAB, REPORT).'] },
         src: [['out', 'picks', 'Picks tab'], ['in', 'lifts', 'Lifts input tab'], ['rpt', 'pick-' + k.id, 'Report §Lifts']] });

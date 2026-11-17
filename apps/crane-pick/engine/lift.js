@@ -129,10 +129,19 @@
     }
     const chs = chartsOf(crane, setup), any = chs.gr && (chs.gr.configs['360'] || chs.gr.configs[chs.gr.zones[0]]);
     const key = any ? K().spreadKey(any, p) : null;
-    if (p.kind !== 'crawler' && key && p.outr && isNum(p.outr.xFront) && isNum(p.outr.xRear)) {
-      const half = p.outr.spreads[key] / 2, f = isNum(p.outr.float) ? p.outr.float : 2; out.spread = key;
-      [p.outr.xFront, -p.outr.xRear].forEach(x => [half, -half].forEach(y => {
-        const c = toGrid(setup, x, y); out.beams.push([toGrid(setup, x, 0), c]); out.floatC.push({ x: c.x, y: c.y, r: f / 2 }); out.floats.push(circle(c, f / 2, 16)); }));
+    // 2026-11-17: the drawn spread (setup.spread, a key of the crane's spreads): where the chart group has no chart at it, it is drawing
+    // only (out.drawOnly; the capacities and the ground loads stay at the chart's spread, out.chartSpread, and the Plan / Crane tabs flag it)
+    const dk = setup.spread && p.outr && p.outr.spreads && isNum(p.outr.spreads[setup.spread]) ? setup.spread : key;
+    out.chartSpread = key; out.drawOnly = !!dk && dk !== key;
+    if (p.kind !== 'crawler' && dk && p.outr && isNum(p.outr.xFront) && isNum(p.outr.xRear)) {
+      const gm = K().geometryOf ? K().geometryOf(crane) : null, go = gm && gm.outriggers || {}, gv = e => K().geomVal(e);
+      const spF = go.spreads_front && gv(go.spreads_front[dk]) != null && !(crane.app_inputs && crane.app_inputs.plan && crane.app_inputs.plan.outr) ? gv(go.spreads_front[dk]) : p.outr.spreads[dk];
+      const xb = go.x_by_float && !(crane.app_inputs && crane.app_inputs.plan && crane.app_inputs.plan.outr) ? go.x_by_float : null;
+      const f = isNum(p.outr.float) ? p.outr.float : 2, sq = p.outr.floatShape === 'square'; out.spread = dk; out.floatShape = sq ? 'square' : 'round';
+      [['F', p.outr.xFront], ['R', -p.outr.xRear]].forEach(([e, x]) => ['L', 'R'].forEach(sd => {
+        const id = e + sd, xs = xb && gv(xb[id]) != null ? (e === 'F' ? gv(xb[id]) : -gv(xb[id])) : x, hh = (e === 'F' ? spF : p.outr.spreads[dk]) / 2, y = sd === 'L' ? hh : -hh;
+        const c = toGrid(setup, xs, y); out.beams.push([toGrid(setup, xs, 0), c]); out.floatC.push({ id, x: c.x, y: c.y, r: f / 2, lx: xs, ly: y, shape: out.floatShape });
+        out.floats.push(sq ? rect(setup, xs - f / 2, xs + f / 2, y - f / 2, y + f / 2) : circle(c, f / 2, 16)); }));
     }
     return out;
   }
@@ -179,6 +188,7 @@
         if (!x3 && minDist(sector, true, it.pts, true) === 0) out.push({ kind: 'obst', level: 'info', item: it.id, text: `The boom / load passes over the obstruction "${nm}"${isNum(it.height) ? ` (${fmt(it.height, 1)} ft high)` : ''} in plan: check the boom and load heights (C3).` });
       }
     });
+    if (fp.drawOnly) out.push({ kind: 'spread', level: 'stop', text: `Outriggers drawn at "${fp.spread}" but the chart group is for "${fp.chartSpread || 'no outrigger spread'}": the capacity and the ground loads are for that chart, not for the drawn spread. Use a chart for the drawn spread (setup card: chart group) or draw the chart's spread.` });
     if (!isNum(fp.tail)) out.push({ kind: 'tail', level: 'info', text: 'Tail-swing radius not given: enter it (crane editor) for the tail-swing checks.' });
     return out;
   }

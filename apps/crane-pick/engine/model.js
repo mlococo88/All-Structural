@@ -41,6 +41,8 @@
                'cw' | 'ccw', elev: { pg, ph, sg, sh, rig, blk, trav, L, W, H } (C3-1: heights, ft; normElev) }         C2-2
      crane.def.app_inputs.geom = { footH, head, boomW, cwBot, cwTop } (ft, C3-1: the crane's elevation geometry entered in this tool;
                engine/elev.js geomOf; the boom-foot offset and the tail radius stay in app_inputs.plan)
+     setup.spread (2026-11-17): the outrigger spread key the crane is DRAWN at ('' = the chart group's spread); drawing only where the
+       chart group has no chart at it (flagged).
      setup.ground (C4) = { mat: { type, B, L, t, Fb, Fv, E, Fy, gamma, k }, qa (psf), qaUnit } (normSetupGround); ground (C4, project) = { caps: { <util id>: psf } }
      lift  = { caution: 75, critical: 75, limit: 100 (% of chart), interp: false, path: 'uniform' | 'luff', obstClr: 2 (ft),
                tandem: 75 (% of chart per crane in a tandem lift, C5) }
@@ -125,13 +127,14 @@
   function normSetup(u) {
     if (!u || typeof u !== 'object' || !isFinite(u.x) || !isFinite(u.y)) return null;
     return { id: str(u.id) || uid('u'), name: str(u.name, 'Crane setup'), craneId: str(u.craneId), x: +u.x, y: +u.y, heading: ((num(u.heading, 0) % 360) + 360) % 360,
-      group: str(u.group), boom: numOrNull(u.boom), mode: u.mode == null || u.mode === '' ? null : str(u.mode), pad: numOrNull(u.pad), ground: normSetupGround(u.ground), lvl: normLvl(u.lvl) };
+      group: str(u.group), boom: numOrNull(u.boom), mode: u.mode == null || u.mode === '' ? null : str(u.mode), pad: numOrNull(u.pad), ground: normSetupGround(u.ground), lvl: normLvl(u.lvl), spread: str(u.spread) };
   }
   /* C4: the setup's ground inputs: mat { type: 'none' | 'timber' | 'steel', B, L (ft), t (in), Fb, Fv, E (psi), Fy (ksi), gamma (pcf),
-     k (spread, horizontal : 1 vertical) }, qa (allowable bearing pressure, psf), qaUnit ('psf' | 'ksf': how it is shown) */
+     k (spread, horizontal : 1 vertical); 2026-11-17, drawing only: crawlers w (each mat's width along the track, ft), n (mats per track) }, qa (allowable bearing pressure, psf), qaUnit ('psf' | 'ksf': how it is shown) */
   function normSetupGround(g) {
     g = g && typeof g === 'object' ? g : {}; const m = g.mat && typeof g.mat === 'object' ? g.mat : {}, mat = { type: ['timber', 'steel'].indexOf(m.type) >= 0 ? m.type : 'none' };
     ['B', 'L', 't', 'Fb', 'Fv', 'E', 'Fy', 'gamma', 'k'].forEach(k => { const v = numOrNull(m[k]); mat[k] = v != null && v >= 0 ? v : null; });
+    ['w', 'n'].forEach(k => { const v = numOrNull(m[k]); if (v != null && v >= 0) mat[k] = v; });   // 2026-11-17 crawler mats (drawing only): kept only when entered
     const qa = numOrNull(g.qa); return { mat, qa: qa != null && qa > 0 ? qa : null, qaUnit: g.qaUnit === 'ksf' ? 'ksf' : 'psf' };
   }
   /* C8: terrain inputs (null = not entered). setup.lvl: level tolerance tol (%), blocking limit maxBlk (ft), levelling datum (ft; null: the

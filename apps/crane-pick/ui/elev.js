@@ -97,8 +97,10 @@
     out += `<rect x="${X(R - 1)}" y="${Y(zBk)}" width="${(2 * k0).toFixed(1)}" height="${Math.max(2, hbk * k0).toFixed(1)}" fill="#F59E0B" stroke="#78350F"/>`;
     if (hr > 0) out += lineS([R, zHk], [R - Math.max(rL, 1) * 0.8, zLt], 'stroke="#78350F"') + lineS([R, zHk], [R + Math.max(rL, 1) * 0.8, zLt], 'stroke="#78350F"');
     out += `<rect class="crElLoad" x="${X(R - Math.max(rL, 0.5))}" y="${Y(zLt)}" width="${(2 * Math.max(rL, 0.5) * k0).toFixed(1)}" height="${Math.max(2, H * k0).toFixed(1)}" fill="#2563EB" fill-opacity="0.35" stroke="#1E3A8A"/>`;
-    out += txt(R, lb, `load bottom el. ${fmt(lb, 2)}`, 'start', `dx="${(Math.max(rL, 0.5) * k0 + 4).toFixed(0)}" dy="0" fill="#1E3A8A"`) + txt(R, zHk, `hook el. ${fmt(zHk, 2)}`, 'start', `dx="${(Math.max(rL, 0.5) * k0 + 4).toFixed(0)}" fill="#78350F"`);
-    if (isNum(S.zg) && Math.abs(S.zg - zp) > 0.005) out += lineS([R - rL - 6, S.zg], [R + rL + 6, S.zg], 'stroke="#57534E" stroke-width="2"') + txt(R + rL + 6, S.zg, `ground el. ${fmt(S.zg, 2)}`, 'start', 'dx="3" dy="4" fill="#57534E"');
+    // 2026-11-17 (QA): the right-hand labels (hook, load bottom, ground) kept 12 px apart (they coincide when no load / heights are entered)
+    const xr = (+X(R) + Math.max(rL, 0.5) * k0 + 4).toFixed(1), yLb = +Y(lb) + 3, yHk = Math.min(+Y(zHk), yLb - 12);
+    out += `<text x="${xr}" y="${yLb.toFixed(1)}" fill="#1E3A8A">${esc(`load bottom el. ${fmt(lb, 2)}`)}</text><text x="${xr}" y="${yHk.toFixed(1)}" fill="#78350F">${esc(`hook el. ${fmt(zHk, 2)}`)}</text>`;
+    if (isNum(S.zg) && Math.abs(S.zg - zp) > 0.005) out += lineS([R - rL - 6, S.zg], [R + rL + 6, S.zg], 'stroke="#57534E" stroke-width="2"') + `<text x="${(+X(R + rL + 6) + 3).toFixed(1)}" y="${Math.max(+Y(S.zg) + 4, yLb + 12).toFixed(1)}" fill="#57534E">${esc(`ground el. ${fmt(S.zg, 2)}`)}</text>`;
     // radius dimension
     const zd = z0 + 3 / k0 * 4; out += lineS([0, zd], [R, zd], 'stroke="#0F172A" marker-start="url(#crA)" marker-end="url(#crA)"') + txt(R / 2, zd, `R ${fmt(R, 2)} ft`, 'middle', 'dy="-3"');
     out += `<defs><marker id="crA" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#0F172A"/></marker></defs>`;

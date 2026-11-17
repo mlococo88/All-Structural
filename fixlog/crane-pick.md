@@ -1327,3 +1327,54 @@ Untouched gives no warning. Rotated +2° about the centre (500, 300): A and B ar
 ### How verified
 `node tests/check-syntax.mjs`; `node tests/engine/run.mjs crane` (119 passed); smokes `crane-align` (5), `crane-sheets` (8),
 `tests/smoke/crane-qa.mjs` (4, new step 3).
+
+## 2026-11-17 — Manufacturer geometry: floats where the manufacturer puts them, dimension check, float table / stake-out CSV, mats to scale, plan clearance dimensions (PR #1624)
+Engineer: "A big priority is to get the cranes drawing as accurately as possible. I need to see exactly where the outriggers sit."
+The private crane library (Structural_References, branch crane-charts) now carries a `geometry` block per crane (`crane-pick.geometry.v1`,
+values read from the manufacturers' dimension drawings, page and basis per value; SCHEMA.md there). No real geometry is in this repo.
+### Fix 1 — `engine/cranes.js` `planDims()` (anchor: `const ov = c && c.app_inputs && c.app_inputs.plan;`) + new `applyGeometry`, `geometryOf`, `geomVal`
+Before: float positions / spreads / float size / carrier outline / tail from `dims` (outrigger beams and carrier partly assumed).
+After: `applyGeometry(c, p)` runs first; it takes the geometry's **printed or derived** values only (`basis: 'scaled'` values are drawing
+only, never used in a calculation): `outr.xFront`, `outr.xRear`, `outr.spreads.<key>`, `outr.float` (+ `floatShape`), `body` (front /
+rear / width), `tail`, crawler `length` / `gauge` / `shoe`. `app_inputs.plan` still overrides. `src` = `{ from: 'file', key: 'geometry.…', page, basis }`.
+§4 callout (float centres feed the outrigger loads, AASHTO not applicable; method: rigid-body plane of loads, CIRIA C703 (2003), unchanged):
+- before: x_F, x_R, b from `dims`; after: from `geometry` where the crane file has it. Formula unchanged: P_i = V/4 (1 + s_x u + s_y v),
+  u = (X − x̄)/a, x̄ = (x_F − x_R)/2, a = (x_F + x_R)/2, v = Y/b.
+- Check case (FAKECO, `tests/engine/crane-geometry.test.mjs` G2; weights of C4 case A, V = 118,000 lb, X = 4.711864 ft, Y = 0):
+  before (dims: x_F = x_R = 12, spread 24): x̄ = 0, a = 12, u = 0.392655 → front 29,500 × 1.392655 = **41,083.33 lb** each, rear **17,916.67 lb**;
+  after (geometry: x_F = 13, x_R = 11, spread 22): x̄ = 1, a = 12, u = (4.711864 − 1)/12 = 0.309322 → front 29,500 × 1.309322 = **38,625.00 lb**, rear **20,375.00 lb**.
+- Projects keep the crane copy they carry: nothing changes until the engineer presses **Use the library copy** (Cranes tab; the fingerprint
+  includes the geometry block). The Crane tab flags a project copy without the block when the library copy has one.
+### Fix 2 — `engine/lift.js` `footprint()` (anchor: `const key = any ? K().spreadKey(any, p) : null;`)
+Floats get ids FL / FR / RL / RR and local lx / ly; square floats are square polygons (clearances); staggered floats (`x_by_float`) and
+different front spreads (`spreads_front`) are drawn where the manufacturer shows them. New `setup.spread` (model, optional, '' = the
+chart's spread): another spread is drawn only (`drawOnly`); `clearances()` adds a stop flag "Outriggers drawn at … but the chart group is for …";
+ground loads stay at the chart's spread.
+### Fix 3 — `engine/cranegfx.js`: drawing from the geometry (any basis): axles, tyre size, carrier outline, cab side / length, upper width,
+counterweight width / depth, tumbler centres, the manufacturer's boom-foot pin marker (⊕, drawing only: the Heights tab offset e is
+unchanged); new `matsOf` (mats to scale: floats B along the carrier × L across; crawlers n mats B × w per track, new mat inputs `w`, `n`,
+drawing only), `floatTable`, `stakeoutCsv`, `dimCheck`, `clearDims` (display only).
+### Fix 4 — UI: Crane tab §6 Dimension check and §7 float table + "Download stake-out CSV" (`ui/cranetab.js`); setup card "Outriggers
+drawn at", float table, "Float / support coordinates on the map" (`ui/place.js`); mats on the map (symbol group `mat`); Ground input
+labels "B (along the carrier)", "L (across)", crawler mat width / count (`ui/ground.js`); lift-plan sheet: clearance dimensions from
+each float / track and the tail-swing circle to the nearest obstruction / utility / exclusion / power line, support rows; ground sheet:
+float / track location table (`ui/drawset.js`).
+### Fix 5 — QA items (agent A): `ui/cranefig.js svg()` labels never overlap (dimension labels first, then texts, each moved by 1.25 text
+heights to the first free place); `ui/elev.js` hook / load-bottom / ground labels kept 12 px apart; lift-plan sheet elevations stacked in
+one column (`viewSheet`, `stackElev`) so the plan gets a larger scale; Crane tab Weights figure: "CHECK THE ENTERED WEIGHTS" when
+carrier + upperworks + boom + counterweight < 80 % of the file's gross working weight (nothing changed).
+### Decisions (pending engineer review)
+- Engines use printed / derived geometry only; scaled values (±0.5 ft off the drawing) are drawn only.
+- Where mm and ft-in disagree: positions / spreads / float sizes take the smaller, tail radius the larger.
+- Square floats: bearing keeps the round-float area π f²/4 (smaller than f², conservative).
+- Crawler centre offset (|x_centre| ≤ 0.13 ft in the library) not used: crawler kept centred on the rotation centre.
+- Staggered floats: ground uses the smaller x_F / x_R (smaller base, larger float loads).
+- Manufacturer boom pivot behind the rotation centre (telescopics) is marked only; the height checks keep the Heights tab offset e.
+- Weights flag threshold 80 % of the file's gross working weight.
+- Lift-plan elevations stacked in one column (was one row).
+### How verified
+`node tests/check-syntax.mjs`; `node tests/engine/run.mjs crane` (16 files, 125 passed, new `crane-geometry.test.mjs` G1–G5 hand checks);
+smokes: new `crane-geometry` (7), `crane-cranetab` (6), `crane-drawings` (5), `crane-ground` (5), `crane-place` (9), `crane-elev` (7), `crane-qa` (4),
+`crane-picks` (5) pass; `crane-tandem` fails at its Report duplicate-key check (§5.1 / §6.1 keys) — it fails the same way on origin/main
+before this change (not caused here; reported to the coordinator).
+Real library (local only, never committed): screenshots in the scratchpad, drawn plan beside the PDF dimension page.
