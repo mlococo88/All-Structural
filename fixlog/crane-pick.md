@@ -1403,8 +1403,13 @@ New optional fields only, kept only when present: `route.veh.{cab, hV, L2c, xMax
 - QA (agent A): turn off-tracking window — kept (curve start to one vehicle length past its end; a long vehicle's own peak can come after
   the next PC), now stated in the step label with "runs into Curve n …: the value can include its off-tracking (conservative)". The
   load defaults (not entered) are flagged warn and marked "DEFAULT" (Route tab, Report).
+### Report cross-references (coordinator: `tests/smoke/crane-tandem.mjs` failed on main at its unresolved-key check)
+Cause: two Report § links to sections that exist only with a single pick, in a project with only a girder lift: `ui/cranetab.js`
+(the weights figure caption, before `see [[${pt && pt.lift.kind === 'pick' ? 'gr-' + pt.lift.id : 'ground'}]]`; after: a pick →
+`gr-<id>`, a girder lift → `tandem-<id>` (its support loads are worked in §Tandem lifts), no lift → no link) and `ui/drawings.js` (the
+aerial note, before `([[lifts]])`; after: `[[lifts]]` when there are picks, `[[tandem]]` when there are girder lifts). Text only; no value.
 ### How verified
-`node tests/check-syntax.mjs`; `node tests/engine/run.mjs crane` (16 files, 125 passed; crane-truck 6 incl. KaTeX of the new steps);
+`node tests/check-syntax.mjs`; `node tests/engine/run.mjs crane` (17 files after merging main, 131 passed; crane-truck 6 incl. KaTeX of the new steps); smoke `crane-tandem` (6, was failing on main), `crane-cranetab` (6), `crane-aerial` (5);
 smokes `crane-truck` (6), `crane-route` (5), `crane-road` (8), `crane-drawings` (5), `crane-manual` (8); the legacy JSON comparison
 above. Screenshots: scratchpad `crane/truck-*.png`.
 
