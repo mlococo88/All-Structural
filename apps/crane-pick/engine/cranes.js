@@ -267,12 +267,48 @@
         src['body.front'] = { from: src['body.rear'].from === 'assumed' ? 'assumed' : 'derived', key: Lat.key, page: Lat.page, note: 'carrier length − rotation to rear of carrier' }; fileS('body.width', firstAt(cc, ['carrier_width', 'overall_width', 'carrier_width_overall']));
       }
     }
+    applyGeometry(c, p);
     const ov = c && c.app_inputs && c.app_inputs.plan;
     if (ov && typeof ov === 'object') {
       ['tail', 'boomFoot'].forEach(k => { if (isNum(ov[k])) { p[k] = ov[k]; src[k] = { from: 'entered' }; } });
       ['body', 'outr', 'crawler'].forEach(k => { if (ov[k] && typeof ov[k] === 'object') { p[k] = Object.assign({}, p[k] || {}); Object.keys(ov[k]).forEach(q => { const v = ov[k][q]; if (q === 'spreads' && v && typeof v === 'object') { p[k].spreads = Object.assign({}, p[k].spreads || {}, v); Object.keys(v).forEach(sk => { if (isNum(v[sk])) src[`${k}.spreads.${sk}`] = { from: 'entered' }; }); } else if (isNum(v)) { p[k][q] = v; src[k + '.' + q] = { from: 'entered' }; } }); } });
     }
     return p;
+  }
+  /* geometry block (2026-11-17, crane-pick.geometry.v1: the manufacturer's dimension drawings, private library): geomVal(e) -> the value
+     of an entry the CALCULATIONS may use: basis 'printed' or 'derived' only ('scaled' = measured off the drawing: drawing only, never in
+     a calculation). applyGeometry(c, p) puts those values into planDims (they replace the dims values; app_inputs.plan still overrides),
+     src = { from: 'file', key: 'geometry.<path>', page, basis }. Not used by the engines (drawing only, engine/cranegfx.js): the crawler's
+     x_centre (the engines keep the crawler centred on the rotation centre: |x_centre| ≤ 0.13 ft in the library), per-float staggered
+     positions (x_front / x_rear hold the smaller ones), front spreads that differ from the rear ones, the float shape (bearing keeps the
+     round float of diameter = size: π/4·f² ≤ f², conservative), the boom-foot pin (the Heights tab offset e is unchanged). */
+  const GEO_SCHEMA = 'crane-pick.geometry.v1';
+  function geometryOf(c) { const g = c && c.geometry; return g && typeof g === 'object' && g.schema === GEO_SCHEMA ? g : null; }
+  function geomVal(e) { return e && typeof e === 'object' && isNum(e.value) && (e.basis === 'printed' || e.basis === 'derived') ? e.value : null; }
+  function applyGeometry(c, p) {
+    const g = geometryOf(c); if (!g) return; p.geometry = true;
+    const set = (obj, k, e, srcKey, path) => { const v = geomVal(e); if (v == null || !(v > 0) && k !== 'shoe') return false; obj[k] = v; p.src[srcKey] = { from: 'file', key: 'geometry.' + path, page: e.page, basis: e.basis, note: e.note || '' }; return true; };
+    const tl = g.counterweight && g.counterweight.tail_radius; if (geomVal(tl) != null) { p.tail = geomVal(tl); p.src.tail = { from: 'file', key: 'geometry.counterweight.tail_radius', page: tl.page, basis: tl.basis }; }
+    const ca = g.carrier || {};
+    if (p.kind === 'crawler') {
+      const cr = g.crawler || {}; p.crawler = Object.assign({}, p.crawler || {});
+      set(p.crawler, 'length', cr.length, 'crawler.length', 'crawler.length'); set(p.crawler, 'shoe', cr.shoe, 'crawler.shoe', 'crawler.shoe');
+      if (set(p.crawler, 'gauge', cr.gauge, 'crawler.gauge', 'crawler.gauge')) for (let i = p.assumed.length - 1; i >= 0; i--) if (/track gauge =/.test(p.assumed[i])) p.assumed.splice(i, 1);
+      return;
+    }
+    const o = g.outriggers || {}, sp = o.spreads || {};
+    if (geomVal(o.x_front) != null || geomVal(o.x_rear) != null || Object.keys(sp).length) {
+      p.outr = Object.assign({ spreads: {} }, p.outr || {}); p.outr.spreads = Object.assign({}, p.outr.spreads || {});
+      set(p.outr, 'xFront', o.x_front, 'outr.xFront', 'outriggers.x_front'); set(p.outr, 'xRear', o.x_rear, 'outr.xRear', 'outriggers.x_rear');
+      Object.keys(sp).forEach(k => set(p.outr.spreads, k, sp[k], 'outr.spreads.' + k, 'outriggers.spreads.' + k));
+      if (o.float) { set(p.outr, 'float', o.float.size, 'outr.float', 'outriggers.float.size'); if (o.float.shape === 'square' || o.float.shape === 'round') p.outr.floatShape = o.float.shape; }
+    }
+    const F = geomVal(ca.front), R = geomVal(ca.rear), W = geomVal(ca.width);
+    if (F != null && R != null && W != null) {
+      p.body = { front: F, rear: R, width: W };
+      [['front', 'body.front'], ['rear', 'body.rear'], ['width', 'body.width']].forEach(([k, sk]) => { p.src[sk] = { from: 'file', key: 'geometry.carrier.' + k, page: ca[k].page, basis: ca[k].basis, note: ca[k].note || '' }; });
+      for (let i = p.assumed.length - 1; i >= 0; i--) if (/carrier centred/.test(p.assumed[i])) p.assumed.splice(i, 1);
+    }
   }
   /* the outrigger position a config's support names ('outriggers-full' -> 'full'), when the crane lists it */
   function spreadKey(cfg, p) { const m = /^outriggers-(.+)$/.exec(cfg && cfg.support || ''); if (!m || !p.outr) return null; return p.outr.spreads[m[1]] != null ? m[1] : null; }
@@ -313,6 +349,6 @@
     return { schema: SCHEMA, make: o.make || 'New', model: o.model || 'crane', type: o.type || 'all-terrain', preliminary: false,
       source: { file: '', doc: '', revision: '', date: '', pages: '', terms: '' }, units: { length: 'ft', weight: 'lb' }, dims: {}, weights: {}, configs: [], app_inputs: {} };
   }
-  window.CranePickCranes = { SCHEMA, TYPES, ZONES, parse, lookup, ratingBasis, interpPermitted, groups, zoneOf, chartFor, norm180, planDims, spreadKey,
+  window.CranePickCranes = { GEO_SCHEMA, geometryOf, geomVal, SCHEMA, TYPES, ZONES, parse, lookup, ratingBasis, interpPermitted, groups, zoneOf, chartFor, norm180, planDims, spreadKey,
     hookBlocks, pasteChart, chartText, fingerprint, key, name, slug, blank, modeOf, cellFlag, dval, dpage };
 })();

@@ -59,7 +59,40 @@
       </div>
       <div class="sec"><div class="secHead">5. Crane inputs used in the analysis (${rs.length})</div><div class="secBody"><div class="tscroll"><table class="tbl" id="crnTbl"><thead><tr><th>Group</th><th>Input</th><th>Value</th><th>Source</th><th>Used in</th><th>Worked / entered</th></tr></thead><tbody>
         ${rs.map(r => `<tr data-v="${esc(r.id)}"${r.assumed ? ' class="crnRowA"' : ''}><td>${esc(r.grp)}</td><td>${esc(r.label)}</td><td class="n">${esc(r.value)}</td><td>${r.assumed ? `<span class="crnA">${esc(r.src)}</span>` : esc(r.src)}${r.note ? `<br><span class="note">${esc(r.note)}</span>` : ''}</td><td>${esc(r.used.join('; '))}</td><td>${workLinks(r, m)}</td></tr>`).join('')}
-      </tbody></table></div></div></div>`;
+      </tbody></table></div></div></div>${dimHtml(m)}`;
+  }
+  /* 2026-11-17 (engineer: "I need to see exactly where the outriggers sit"): 6. Dimension check (each drawn dimension against the
+     manufacturer's value and page: engine/cranegfx.js dimCheck) and 7. support locations (float centres / track ends: local x / y and
+     State Plane, cranegfx floatTable), with the stake-out CSV. A project copy of a crane without the manufacturer geometry block, while the
+     library copy has one, is flagged (Cranes tab: "Use the library copy"). */
+  function libHasGeo(c) {
+    try { const K = window.CranePickCranes, v = JSON.parse(localStorage.getItem(window.CranePickModel.KEYS.library) || 'null'), e = v && v.cranes && v.cranes[K.key(c)];
+      const d = e && (e.def || e.crane || e); return !!(d && K.geometryOf(d)); } catch (e) { return false; }
+  }
+  function dimHtml(m) {
+    const CG = window.CranePickCraneGfx, K = window.CranePickCranes; if (!CG || !CG.dimCheck) return '';
+    const c = m.c, has = !!K.geometryOf(c), u = m.u || { x: 0, y: 0, heading: 0 };
+    let rows = [], fl = []; try { rows = CG.dimCheck(c, u); fl = m.virt ? [] : CG.floatTable(c, u, A.P.site.zone, window.proj4); } catch (e) { console.error(e); }
+    const fp = window.CranePickLift.footprint(c, u), d = v => fmtN(v, 2), z = window.CranePickGeo.zone(A.P.site.zone), un = z.unit === 'm' ? 'm' : 'ft';
+    const flag = has ? '' : `<p class="note"><span class="crnA">This crane's project copy has no manufacturer geometry block</span>${libHasGeo(c) ? ': the library copy has one: <b>Cranes tab → Use the library copy</b> to draw it (and place the floats) from the manufacturer\'s dimension drawings.' : ': the floats and outline are drawn from the file\'s dimensions and the assumptions listed below.'}</p>`;
+    const ok = r => r.ok === true ? '<span class="ok">matches</span>' : r.ok === false ? '<span class="crnA">differs</span>' : r.mfr == null ? '<span class="crnA">not given</span>' : '—';
+    const spr = fp.drawOnly ? `<p class="note"><span class="crnA">Outriggers drawn at "${esc(fp.spread)}"</span>: the chart group has no chart at this spread: the capacities and the ground loads use the "${esc(fp.chartSpread || '—')}" chart. Not valid for this setup until a chart for this spread is used.</p>` : '';
+    return `<div class="sec" id="crnDim"><div class="secHead">6. Dimension check: drawn vs manufacturer</div><div class="secBody">${flag}${spr}
+      <p class="note">Each dimension the plan drawing uses, against the manufacturer's value and its page (basis: printed, derived from printed values, or scaled off the drawing ±0.5 ft — scaled values are drawn only, never used in a calculation). Units ft, from the centre of rotation.</p>
+      <div class="tscroll"><table class="tbl" id="crnDimTbl"><thead><tr><th>Dimension</th><th>Drawn</th><th>Manufacturer</th><th>Page</th><th>Basis</th><th>Check</th><th>Note</th></tr></thead><tbody>
+      ${rows.map(r => `<tr${r.ok === false ? ' class="crnRowA"' : ''}><td>${esc(r.item)}</td><td class="n">${d(r.drawn)}</td><td class="n">${d(r.mfr)}</td><td>${r.page != null ? 'p. ' + esc(String(r.page)) : '—'}</td><td>${esc(r.basis || '—')}</td><td>${ok(r)}</td><td class="note">${esc(r.note || '')}</td></tr>`).join('')}
+      </tbody></table></div></div></div>
+      ${fl.length ? `<div class="sec" id="crnFloats"><div class="secHead">7. ${fp.floatC.length ? 'Float centres' : 'Track centre-line ends'}: where they sit (setup ${esc(u.name || '')})</div><div class="secBody">
+      <p class="note">Local x along the carrier (+ toward the front), y across (+ left), from the centre of rotation; State Plane ${esc(z.short || z.id)} (${un}); latitude / longitude NAD 83. ${fp.spread ? `Spread "${esc(fp.spread)}".` : ''}</p>
+      <div class="tscroll"><table class="tbl" id="crnFloatTbl"><thead><tr><th>Support</th><th>x (ft)</th><th>y (ft)</th><th>Easting (${un})</th><th>Northing (${un})</th><th>Latitude</th><th>Longitude</th></tr></thead><tbody>
+      ${fl.map(r => `<tr><td>${esc(r.id)} — ${esc(r.name)}</td><td class="n">${d(r.lx)}</td><td class="n">${d(r.ly)}</td><td class="n">${fmtN(r.E, 2)}</td><td class="n">${fmtN(r.N, 2)}</td><td class="n">${fmtN(r.lat, 7)}</td><td class="n">${fmtN(r.lng, 7)}</td></tr>`).join('')}
+      </tbody></table></div><div class="goRow"><button type="button" data-cg="csv">Download stake-out CSV</button></div></div></div>` : ''}`;
+  }
+  function stakeout() {
+    const CG = window.CranePickCraneGfx, P = A.P; if (!CG) return;
+    const byId = id => (P.cranes || []).find(c => c.id === id), craneOf = u => { const c = byId(u.craneId); return c ? c.def : null; };
+    const txt = CG.stakeoutCsv(P, window.proj4, craneOf), b = new Blob([txt], { type: 'text/csv' }), a = document.createElement('a');
+    a.href = URL.createObjectURL(b); a.download = ((P.name || 'crane-pick').replace(/[^\w.-]+/g, '_')) + '-stakeout.csv'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   }
   const fmtN = (v, d) => (typeof v === 'number' && isFinite(v)) ? v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—';
   function onChange(e) {
@@ -73,6 +106,7 @@
   }
   function onClick(e) {
     const a = e.target.closest('[data-cg]'); if (!a) return; e.preventDefault(); const k = a.dataset.cg, id = a.dataset.id;
+    if (k === 'csv') return stakeout();
     if (k === 'cranes') return A.showITab('cranes');
     if (k === 'lifts') return A.showITab('lifts');
     if (k === 'rpt') return gotoReport(a.dataset.key);
@@ -103,5 +137,5 @@
   A.on('project', mark); A.on('change', o => { if (o.kind !== 'select' && o.kind !== 'select-lift') mark(); });
   A.on('live', o => { if (!o || (o.kind !== 'lifts' && o.kind !== 'items' && o.kind !== 'tandem')) return; dirty = true; if (A.ui.otab !== 'crane') return; const fr = MP() && MP().raf; if (fr) fr('craneTab', draw); else draw(); });
   if (window.CranePickDrawSet) window.CranePickDrawSet.addSheets((P, c) => F() ? F().sheets(P, c) : []);
-  window.CranePickCraneTab = { redraw: mark, draw, reportItems, get state() { return st(); } };
+  window.CranePickCraneTab = { stakeout, redraw: mark, draw, reportItems, get state() { return st(); } };
 })();
