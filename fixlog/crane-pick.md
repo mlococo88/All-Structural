@@ -1101,7 +1101,7 @@ keys, no NaN, its tab links open the input tab, empty project clean; 390 px no s
 (13 files, 105 passed); `node tests/check-syntax.mjs`. Screenshots: scratchpad `crane/manual-*.png` (1280, 390, filter, methods, report).
 
 ## 2026-11-17 — Crane plan symbol (map, sheets, DXF, Crane tab) and the aerial site plan (engineer requests A and B)
-PR: https://github.com/mlococo88/All-Structural/pull/PRNUM
+PR #1620: https://github.com/mlococo88/All-Structural/pull/1620
 ### What changed
 - `apps/crane-pick/engine/cranegfx.js` (new, `window.CranePickCraneGfx`, no DOM): ONE plan symbol of a crane for every renderer. `dims(crane)`
   (with `from` / `assumed`), `symbol(crane, setup, { hook | slew + R, load {L, W} | loadPolys, detail, labels })`, `draw(sym, out)`, `svg()`,
