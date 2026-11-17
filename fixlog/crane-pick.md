@@ -1328,7 +1328,7 @@ Untouched gives no warning. Rotated +2° about the centre (500, 300): A and B ar
 `node tests/check-syntax.mjs`; `node tests/engine/run.mjs crane` (119 passed); smokes `crane-align` (5), `crane-sheets` (8),
 `tests/smoke/crane-qa.mjs` (4, new step 3).
 
-## 2026-11-17 — Manufacturer geometry: floats where the manufacturer puts them, dimension check, float table / stake-out CSV, mats to scale, plan clearance dimensions (PR #PRNUM)
+## 2026-11-17 — Manufacturer geometry: floats where the manufacturer puts them, dimension check, float table / stake-out CSV, mats to scale, plan clearance dimensions (PR #1624)
 Engineer: "A big priority is to get the cranes drawing as accurately as possible. I need to see exactly where the outriggers sit."
 The private crane library (Structural_References, branch crane-charts) now carries a `geometry` block per crane (`crane-pick.geometry.v1`,
 values read from the manufacturers' dimension drawings, page and basis per value; SCHEMA.md there). No real geometry is in this repo.
