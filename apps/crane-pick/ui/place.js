@@ -453,6 +453,7 @@
   A.on('project', () => { rev++; renderAll(); drawTab(); });
   ['change', 'live'].forEach(e => A.on(e, o => { if (!(o && o.kind === 'lifts')) rev++; }));   // pick / setup drags change the memo key themselves
   A.on('change', o => {
+    if (o.kind === 'tandem' || o.kind === 'project') (A.P.setups || []).forEach(u => { const g = layers.get(u.id); if (g) { placeIdle(u, g); placeSym(u, g.sym); } });   // 2026-11-17: a girder lift took / left a setup: its neutral boom and "no lift yet"
     if (['lifts', 'setups', 'picks', 'cranes', 'items', 'site'].indexOf(o.kind) < 0) return;
     if (o.kind === 'lifts' && Date.now() - dragEnd < 400) { (A.P.setups || []).forEach(placeSetup); drawTab(); return; }   // a drag ended: geometry is in place
     renderAll(); drawTab();

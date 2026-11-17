@@ -128,7 +128,7 @@
   function drawOut() {
     if (!outEl) return; dirty = false;
     const R = rows();
-    if (!R.length) { outEl.innerHTML = '<div class="sec"><div class="secHead">Ground</div><div class="secBody"><p class="note">No pick yet: place a crane (Lifts tab).</p></div></div>'; return; }
+    if (!R.length) { outEl.innerHTML = '<div class="sec"><div class="secHead">Ground</div><div class="secBody"><p class="note">No pick yet: add a crane setup (Cranes &amp; setups tab: "Add setup"), then a single pick (Lifts tab: "Add single pick").</p></div></div>'; return; }
     outEl.innerHTML = `<div class="sec"><div class="secHead">Ground and supports (${R.length} pick${R.length === 1 ? '' : 's'})</div><div class="secBody">
       <p class="note">Per pick, the largest load on each float / track along the swing (every 1°), its governing slew angle, the bearing pressure under it (with the mat when one is entered) against the allowable, the mat checks and the vertical stress increase at the buried items. <a href="#" data-gt="rpt">Report §Ground</a></p></div></div>
       ${R.map(({ k, u, g }) => `<div class="sec grPick" id="gr-${esc(k.id)}"><div class="secHead">${esc(k.name)} · ${esc(u ? u.name : '?')}</div><div class="secBody">
