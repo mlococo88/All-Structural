@@ -60,7 +60,7 @@ try {
   // 1. shell
   assert.match(await p.textContent('#hdr h1'), /Crane Pick Analyzer\s*LIFT-PLANNING AID/);
   assert.deepEqual((await p.$$eval('#inTabs [data-itab]', a => a.map(x => x.textContent))).slice(0, 2), ['Project', 'Site & map']);
-  assert.deepEqual(await p.$$eval('#tabBar [data-otab]', a => a.map(x => x.textContent)), ['Plan', 'Summary', 'Picks', 'Ground', 'Route', 'Terrain', 'Site', 'Drawings', 'Report']);   // C7: Summary, Drawings; C8: Terrain;   // C2-3 adds Picks, C4 Ground, C6 Route
+  assert.deepEqual(await p.$$eval('#tabBar [data-otab]', a => a.map(x => x.textContent)), ['Plan', 'Summary', 'Crane', 'Picks', 'Ground', 'Route', 'Terrain', 'Site', 'Drawings', 'Report']);   // C7: Summary, Drawings; C8: Terrain; C9: Crane;   // C2-3 adds Picks, C4 Ground, C6 Route
   assert.equal(await p.evaluate(() => [...document.querySelectorAll('#hdrBtns [data-sp]')].map(b => b.dataset.sp).join()), 'chip');
   assert.ok(await p.$('#bUndo[disabled]') && await p.$('#bRedo[disabled]'));
   assert.ok(await p.$('.leaflet-control-zoom') && await p.$('.leaflet-control-layers') && await p.$('.leaflet-control-scale'));

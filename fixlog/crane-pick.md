@@ -970,3 +970,73 @@ Backspace, fade, markers and dashed lines, lands 0.007 / 0.019 ft from the targe
 Done one undo step, Undo / Redo; item moved; Site tab / Report steps; Esc / Cancel unchanged; Ctrl+Z takes back a click; lock prompt;
 10 % calibration conflict and "keep the calibrated scale"; 390 px touch taps land within 0.03 ft; 0 console errors);
 `node tests/smoke/crane-sheets.mjs` (8 checks); `node tests/check-syntax.mjs`.
+
+## 2026-11-17 — C9: the Crane output tab (graphics of the crane as the analysis uses it), Report §Cranes figures, Crane drawing sheets
+PR #1618: https://github.com/mlococo88/All-Structural/pull/1618
+Engineer request 2026-11-17: "We should have a crane output tab that has graphics for the crane showing what is being used in the analysis."
+### Where
+- `apps/crane-pick/ui/cranefig.js` (new, `window.CranePickCraneFig`, no DOM, Node-tested): `options` (the picker: each setup of each project crane;
+  a crane not placed: each chart group), `model` (one crane + setup + the chosen lift and point: the values the engines use, each with its source
+  and where it is used), the figures as primitive lists `plan` / `elev` / `chart` / `weights`, the renderers `svg` (labels carry `data-v` /
+  `data-val` / `data-src` / `data-assumed`) and `dxf` (shared/dxf.js), `rows` (the input table), `sheets` (the Crane drawing sheets).
+  The plan view is one function (`plan(m)`), so it can switch to the shared crane-symbol module another agent is building when it lands.
+- `apps/crane-pick/ui/cranetab.js` (new, `window.CranePickCraneTab`): the Crane output tab after Summary, before Picks (Plan · Summary · Crane ·
+  Picks …: the crane is what every lift tab below it uses; Summary stays the first table after the map): picker (crane / setup), lift and point
+  (pick / set / governing; a girder lift: first step, last step, the crane's governing step), zone chart (zoned groups); 1. plan (crane frame,
+  carrier front up, to scale: carrier / carbody, tracks (length, gauge, shoe) or outrigger beams at the chart's spread and floats, rotation
+  centre, boom-foot pin, tail-swing circle, counterweight CG on the boom line, heading arrow with the grid azimuth, zone-sector rays where the
+  group has zone charts); 2. side elevation along the boom (pad, counterweight bottom / top and tail radius, h_f, e, R, boom L and θ (chart or
+  geometry), tip el., head allowance, block, rigging, load, W, hook reach margin); 3. the load chart (every rated cell a marker, each tabulated
+  boom length as the lookup reads it (thin steps), the boom in use bold, capacity × each threshold dashed (caution / critical / limit, tandem
+  limit when a tandem uses the setup), the operating points of every pick (P / S / G) and every tandem step, coloured by status; rating basis
+  and source document / revision / preliminary beside it); 4. weights and CGs of C4 (arrows at their CG radii projected on the boom line at the
+  governing slew, value and source; estimate mode: Q = G + W_cw over the rest box; the largest float / track loads); 5. the input table (value,
+  unit, source, used in, links to the worked steps: Picks tab details, Ground tab, Girder lifts, Cranes / Lifts tabs). Live: redrawn per drag
+  frame while shown. View state in `crane.ui.crn` (existing per-browser key).
+- `ui/cranes.js` Report §Cranes: each crane's subsection appends `CranePickCraneTab.reportItems(P, craneId)` (per setup used by a lift: plan,
+  elevation at the governing point, chart, weights, input table). Drawings: `CranePickDrawSet.addSheets` → a sheet "CRANE: <setup>" per setup
+  used by a lift (plan, elevation, chart (not to scale), input table; C7 sheet frame).
+- `index.html`: two scripts, CSS (`.crn*`), header comment, footer v0.9. Tests: `tests/engine/crane-fig.test.mjs` (new), `tests/smoke/crane-cranetab.mjs`
+  (new); `crane-shell.mjs`, `crane-picks.mjs` (output tabs + Crane), `crane-drawings.mjs` (10 sheets: + crane-u0 / u1 / u2).
+### Provenance added to the engines (CLAUDE.md §4: no value changed)
+- `engine/cranes.js` `planDims`: new field `src` (`{ 'tail' | 'boomFoot' | 'body.front' | 'body.rear' | 'body.width' | 'outr.xFront' | 'outr.xRear' |
+  'outr.spreads.<k>' | 'outr.float' | 'crawler.length' | 'crawler.gauge' | 'crawler.shoe': { from: 'file' | 'derived' | 'assumed' | 'entered', key,
+  page, note } }`), recorded where each value is set; helpers `firstAt`, `dpage`; exports `dval`, `dpage`. Every value expression is as before.
+- `engine/elev.js` `geomOf`: new field `page` (the printed page of each value read from the file); `pick(k, entered, file, dflt, why)` →
+  `pick(k, entered, file, dflt, why, pg)`.
+- `engine/ground.js`: `fileGross` reads the key list `GROSS_KEYS` (same list); new `fileGrossAt(c)` (its key and page).
+- How checked: a script compared `planDims`, `geomOf` (without `src` / `page`) and `fileGross` of origin/main and this branch for the two fake
+  cranes and the 10 private library files (each with and without `app_inputs` overrides): identical (24 cases); `node tests/engine/run.mjs crane`
+  unchanged results (the 94 earlier tests pass unchanged).
+### Calculations
+None (CLAUDE.md §4): every number drawn is an engine value. The only arithmetic is drawing geometry, and for a single pick's governing point
+on the swing the elevation values engine/elev.js forms there itself (z_tip = tipAt(R), z_bk = z_tr + H + h_r + h_bk (elev.js swing.zBk),
+m = z_tip − H_hd − z_bk, as elev.js's travel check). The chart's step lines are `CranePickCranes.lookup` sampled at the tabulated radii and
+4 points in each interval (the rule applied, incl. the lesser-of-adjacent-lengths and the optional interpolation).
+**Check cases** (`tests/engine/crane-fig.test.mjs`, fake crane): plan: tail 15.00 ft [file p.1], spread (full) 24.00 [file p.1], x_F = x_R 12.00,
+carrier front 26.00 [file p.1 (derived)], rear 14.00, width 10.00, float 2.00, r_cw 10.00 [entered]; elevation at the pick (C3-1): R 30.00,
+θ 61° (chart), z_tip = 100 + 8 + 60 sin 61° = 160.4772, W 22,000 lb, head allowance 0 [ASSUMED (default)] (amber); chart: 23 rated cells,
+step at L 60: 39,000 lb for 20 < R ≤ 30; operating points 22,000 / 39,000 = 56.41 % (P), 22,000 / 58,000 = 37.93 % (S); tandem crane 1: one point
+per step (50), governing step 0: 88.89 %, thresholds caution 75 / limit 100 / tandem 75; weights (C4 case A): V 118,000 lb, FL 41,083.33 lb; crawler
+fake crane: boom foot, heights, head allowance, boom width assumed; Crane sheets inside their borders, DXF valid.
+### Saved data (§5)
+None in the project; `crane.ui` gains `crn` (per-browser view state; existing key).
+### Decisions (pending engineer review)
+- Tab position: after Summary, before Picks (reason above).
+- Thresholds equal to the defaults are labelled "project setting (= default)" (not amber): they are project inputs, not crane data.
+- "Not given" values (e.g. weights not entered) are highlighted like assumed ones.
+- Float / shoe size: the drawn size (footprint: file, else 2 ft / 3 ft) and the size the bearing calculation uses (entered float / shoe size,
+  else the file's, else 2 ft / 3 ft) are both listed when they differ.
+- The chart graphic shows the zone chart used at the chosen point (a selector for the others); points rated on another zone chart are counted.
+- Tandem steps: every step a small dot; only the governing step labelled. Chart columns: with more than 6 boom lengths only the boom in use, the
+  shortest and the longest are named.
+- Crane sheet: one per setup used by a lift; the elevation at the governing point of its first lift; the input table without "used in" (on the
+  tab and in the Report); a tall tandem elevation can push the sheet to 1" = 20'-0".
+- Engineer instruction 2026-11-16 (speed): one PR, lighter checks.
+### How verified
+`node tests/check-syntax.mjs`; `node tests/engine/run.mjs crane` (12 files, 99 tests, 0 failed; 5 new); `node tests/smoke/crane-cranetab.mjs`
+(6 checks: tab order; single-pick crane labels = engine (R, tip, margin, %, front float), sources, amber assumed values, table and its links;
+picker → tandem crane: 50 operating points, governing 88.9 %, tandem-limit curve, point selector; a pick moved live with the tab shown
+(R 30 → 40 ft, C 28,000 lb, 78.6 % mid-drag), one undo step; Report §Cranes figures (12), no unresolved keys / NaN; Drawings: 3 Crane sheets;
+390 px; 0 console errors), `crane-shell` (11), `crane-picks` (5), `crane-drawings` (5), `crane-library` (9). Screenshots (fake crane; real-crane
+shots local only, not committed): scratchpad `crane/cranetab-*.png`.
