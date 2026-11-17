@@ -14,7 +14,7 @@ import path from 'node:path';
 import { test, loadShared, ROOT } from './harness.mjs';
 
 const APP = path.join(ROOT, 'apps', 'crane-pick');
-const W = loadShared('steps.js', 'boussinesq.js', 'dxf.js', ...['geo', 'model', 'osha', 'cranes', 'lift', 'elev', 'clear3d', 'ground', 'tandem', 'route'].map(f => path.join(APP, 'engine', f + '.js')),
+const W = loadShared('steps.js', 'boussinesq.js', 'dxf.js', ...['geo', 'model', 'osha', 'cranes', 'lift', 'elev', 'cranegfx', 'clear3d', 'ground', 'tandem', 'route'].map(f => path.join(APP, 'engine', f + '.js')),
   path.join(APP, 'report', 'builders.js'), path.join(APP, 'ui', 'drawset.js'), path.join(APP, 'ui', 'cranefig.js'));
 const K = W.CranePickCranes, LF = W.CranePickLift, M = W.CranePickModel, T = W.CranePickTandem, GR = W.CranePickGround, EL = W.CranePickElev, F = W.CranePickCraneFig, DS = W.CranePickDrawSet;
 const J = v => JSON.parse(JSON.stringify(v)), same = (a, b, m) => assert.deepEqual(J(a), J(b), m);
@@ -112,4 +112,11 @@ test('crane figures: picker options, the Crane drawing sheets (inside the border
   const t = B.D.E.slice(cs[0].i0, cs[0].i1).filter(e => e.t === 'TEXT').map(e => e.s).join(' | ');
   assert.match(t, /TIP EL\. 160\.48/); assert.match(t, /SPREAD \(FULL\) 24\.00 FT \[FILE P\.1\]/); assert.match(t, /RATING BASIS: 85 % OF TIPPING/); assert.match(t, /HEAD ALLOWANCE \(TIP PIN[^|]*\| 0\.00 FT \| ASSUMED \(DEFAULT\)/);
   const v = W.SharedDxf.validate(B.D.toDXF({ ltscale: 1 })); assert.ok(v.ok, v.errors.join('; '));
+});
+
+test('2026-11-17: the Crane tab plan draws the shared crane symbol (engine/cranegfx.js): upperworks, counterweight, outrigger beams, floats = footprint', () => {
+  const P = project(), m = F.model(P, ctxOf(P), { craneId: 'c1', setupId: 'u0', at: 'pick' }), f = F.plan(m), cs = new Set(f.prims.map(p => p.c));
+  ['carrier', 'outrigger', 'upper', 'cwt', 'float'].forEach(c => assert.ok(cs.has(c), 'class ' + c));
+  const fl = f.prims.filter(p => p.t === 'circle' && p.c === 'float'); assert.equal(fl.length, m.fp.floatC.length);
+  fl.forEach((q, i) => { assert.ok(Math.abs(q.at[0] - m.fp.floatC[i].x) < 1e-9 && Math.abs(q.at[1] - m.fp.floatC[i].y) < 1e-9); });
 });

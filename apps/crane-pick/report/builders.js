@@ -4,7 +4,7 @@
    C7 (2026-11-16): §1 Summary (title block, the lift-planning-aid statement, the summary of every lift with § links to where each value is
    worked, notes), §2 Basis (the general notes of the drawing set, ui/drawset.js notesModel: crane data sources, rating basis, thresholds,
    tandem limit, outrigger-load method, OSHA power-line basis, coordinate system, each with a § link), then the added sections in a fixed
-   order (ORDER: Site, Plan sheets, Site items, Cranes, Lifts, Tandem lifts, Ground, Route, Elevations, 3D view; a section not listed goes
+   order (ORDER: Site, Plan sheets, Site items, Site plan (aerial, 2026-11-17), Cranes, Lifts, Tandem lifts, Ground, Route, Elevations, 3D view; a section not listed goes
    after Ground, where the C6 route section belongs); figures numbered "Figure n." in that order; the lift-planning-aid statement in the
    running header of every printed page. Section ids and keys are unchanged (links and saved data unaffected). */
 (function () {
@@ -38,6 +38,8 @@
     sections.filter(s => s.id === 'proj' || s.id === 'basis').forEach(s => s.subs.forEach(u => u.items.forEach(it => {
       if (it.type === 'kv') it.rows = it.rows.map(r => r.length > 2 && !keys.has(r[2]) ? r.slice(0, 2) : r);
       if (it.type === 'table') it.rows.forEach(r => (Array.isArray(r) ? r : r.cells).forEach(c => { if (c && typeof c === 'object' && c.key && !keys.has(c.key)) delete c.key; })); })));
+    // Manual appendix (ui/manual.js, 2026-11-17): a "([[key]])" link only to a section that is in this report
+    sections.filter(s => s.id === 'manual').forEach(s => s.subs.forEach(u => u.items.forEach(it => { if (it.type === 'note') it.text = it.text.replace(/ \(\[\[([^\]|]+)\]\]\)/g, (m, k) => keys.has(k) ? m : ''); })));
     // figures numbered in report order
     let nf = 0; sections.forEach(s => (s.subs || []).forEach(u => (u.items || []).forEach(it => { if (it.type === 'figure' && it.svg) { nf++; it.caption = `Figure ${nf}. ${it.caption || ''}`.trim(); } })));
     return { title: 'Crane Pick Analyzer', subtitle: t.name || 'Crane pick', code: 'Lift-planning aid',
@@ -45,7 +47,7 @@
       head: { left: 'Crane Pick Analyzer — LIFT-PLANNING AID', center: 'The crane manufacturer\'s charts, the lift plan and the site checks govern', right: t.name || '' }, sections };
   }
   /* C7: the summary of every lift (ui/drawset.js summary: the engine values through the page's evaluations), with § links */
-  const ORDER = ['site', 'sheets', 'items', 'cranes', 'lifts', 'tandem', 'ground', 'route', 'elev', 'v3'];
+  const ORDER = ['site', 'sheets', 'items', 'aerial', 'cranes', 'lifts', 'tandem', 'ground', 'route', 'elev', 'v3', 'manual'];   // aerial: Site plan (aerial, 2026-11-17); manual: the optional appendix, last (2026-11-17)
   const ctxOf = () => ({ evalPick: k => (window.CranePickPlace ? window.CranePickPlace.evalPick(k) : null), evalT: t => (window.CranePickTandemUI ? window.CranePickTandemUI.evalT(t) : null), evalRoute: r => (window.CranePickRouteUI ? window.CranePickRouteUI.evalRoute(r) : null) });
   const f = (v, d) => (typeof v === 'number' && isFinite(v)) ? v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—';
   function liftSummary(P) {

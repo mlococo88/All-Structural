@@ -21,7 +21,7 @@ import path from 'node:path';
 import { test, loadShared, ROOT } from './harness.mjs';
 
 const APP = path.join(ROOT, 'apps', 'crane-pick');
-const W = loadShared('steps.js', 'boussinesq.js', 'dxf.js', ...['geo', 'model', 'osha', 'cranes', 'lift', 'elev', 'clear3d', 'ground', 'tandem', 'route'].map(f => path.join(APP, 'engine', f + '.js')),
+const W = loadShared('steps.js', 'boussinesq.js', 'dxf.js', ...['geo', 'model', 'osha', 'cranes', 'lift', 'elev', 'cranegfx', 'clear3d', 'ground', 'tandem', 'route'].map(f => path.join(APP, 'engine', f + '.js')),
   path.join(APP, 'report', 'builders.js'), path.join(APP, 'ui', 'drawset.js'));
 const K = W.CranePickCranes, LF = W.CranePickLift, M = W.CranePickModel, T = W.CranePickTandem, GR = W.CranePickGround, DS = W.CranePickDrawSet, X = W.SharedDxf;
 const J = v => JSON.parse(JSON.stringify(v)), same = (a, b, m) => assert.deepEqual(J(a), J(b), m);
@@ -121,4 +121,26 @@ test('route (C6): summary row and the route sheet (gross weight hand check, turn
   const B = DS.build(P, ctx, { paper: 'D' }); same(B.errors, []); assert.ok(B.sheets.some(s => s.id === 'route-0'));
   const rt = textsOf(B, 'route-0'); assert.match(rt, /GROSS WEIGHT \| 75,000 LB \(37\.50 T\)/); assert.match(rt, /\| T1 \|/); assert.match(rt, /DELIVERS TO \| TANDEM 1/); assert.match(rt, /REPORT SEC\. 8\.1/); assert.match(rt, /REPORT SEC\. 6\.3/);
   assert.match(textsOf(B, 'cover'), /TRUCKING ROUTES/); assert.ok(X.validate(B.D.toDXF()).ok);
+});
+
+test('2026-11-17: crane symbol layers in the DXF; aerial sheets (site + one per lift) with the attribution, the frame entity for the image', () => {
+  const P = project({ route: true }), ctx = ctxOf(P), B = DS.build(P, ctx, { paper: 'D', aerial: true });
+  same(B.errors, []);
+  same(B.sheets.map(s => s.id).filter(id => id !== 'route'), ['cover', 'notes', 'aerial', 'lift-k1', 'aerial-k1', 'tlift-t1', 'aerial-t1', 'rig-t1', 'ground', 'route-0']);
+  const txt = B.D.toDXF({ ltscale: 1 }), v = X.validate(txt); assert.ok(v.ok, v.errors.join('; '));
+  ['C-CRANE-CARRIER', 'C-CRANE-OUTRIGGER', 'C-CRANE-FLOAT', 'C-CRANE-UPPER', 'C-CRANE-CWT', 'C-CRANE-BOOM', 'C-CRANE-HOOK', 'C-CRANE'].forEach(l => assert.ok(v.layers.includes(l), 'layer ' + l));
+  B.sheets.filter(s => /^aerial/.test(s.id)).forEach(s => {
+    assert.ok(s.aerial && s.aerial.e && s.aerial.e.t === 'PL' && s.aerial.e.pts.length === 4, s.id + ': frame entity');
+    const xs = s.aerial.e.pts.map(p => p[0]), ys = s.aerial.e.pts.map(p => p[1]);
+    near((Math.max(...xs) - Math.min(...xs)) / 12, s.aerial.w.x1 - s.aerial.w.x0, 1e-6, s.id + ': frame = window, 12 units per ft'); near((Math.max(...ys) - Math.min(...ys)) / 12, s.aerial.w.y1 - s.aerial.w.y0, 1e-6);
+    assert.ok(Math.min(...xs) >= s.ox && Math.max(...xs) <= s.ox + s.W && Math.min(...ys) >= 0 && Math.max(...ys) <= s.H, s.id + ': frame inside its sheet');
+    const t = textsOf(B, s.id); assert.match(t, /ESRI WORLD IMAGERY\. TILES \(C\) ESRI - SOURCE: ESRI, MAXAR, EARTHSTAR GEOGRAPHICS, AND THE GIS USER COMMUNITY\. IMAGERY DATE VARIES; NOT A SURVEY\./);
+    assert.match(t, /WORLD FILE \(\.PGW, IN THESE DXF COORDINATES\)/); });
+  // the whole-site window holds every setup, pick, girder pose and route point
+  const w = B.sheets.find(s => s.id === 'aerial').aerial.w; [...P.setups, ...P.picks.map(k => k.pick), P.tandems[0].set, ...P.routes[0].pts].forEach(p => assert.ok(p.x > w.x0 && p.x < w.x1 && p.y > w.y0 && p.y < w.y1));
+  // without opt.aerial the set is unchanged
+  same(DS.build(P, ctx, { paper: 'D' }).sheets.map(s => s.id).filter(id => id !== 'route'), ['cover', 'notes', 'lift-k1', 'tlift-t1', 'rig-t1', 'ground', 'route-0']);
+  // the lift plan's crane symbol: the upperworks turned to the pick (30 ft over the front) -> the slew label
+  assert.match(textsOf(B, "lift-k1"), /SLEW \+0 DEG FROM FRONT, R 30\.0 FT/);
+  const vw = DS.buildView(P, ctx, { x0: 450, x1: 650, y0: 1950, y1: 2100 }, { title: 'PLAN VIEW' }); assert.equal(vw.sheets.length, 1); assert.ok(vw.sheets[0].aerial.e);
 });

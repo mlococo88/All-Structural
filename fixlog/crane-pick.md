@@ -1040,3 +1040,145 @@ picker → tandem crane: 50 operating points, governing 88.9 %, tandem-limit cur
 (R 30 → 40 ft, C 28,000 lb, 78.6 % mid-drag), one undo step; Report §Cranes figures (12), no unresolved keys / NaN; Drawings: 3 Crane sheets;
 390 px; 0 console errors), `crane-shell` (11), `crane-picks` (5), `crane-drawings` (5), `crane-library` (9). Screenshots (fake crane; real-crane
 shots local only, not committed): scratchpad `crane/cranetab-*.png`.
+
+## 2026-11-17 — Manual output tab (how to use the app; filter, print, optional Report appendix)
+PR #1619: https://github.com/mlococo88/All-Structural/pull/1619
+Engineer request 2026-11-17: "We should also add a manual or a tab that explains how to use the app." Built like the suite's manuals (Spread
+Footing "User Manual", Timber "Method & Manual"): the text lives in the app's files, the tab has a filter box and prints on its own, and the
+Report takes it as an optional appendix (as Spread Footing's "Include this manual" box; off by default).
+### What the user sees
+Output tab **Manual** (after Drawings, before Report): a filter box ("n of 27 topics"; every word typed must be in the topic; matches marked;
+Esc clears), **Print manual** (prints the whole manual alone), **Include this manual in the Report (appendix)**, part buttons, then 7 parts:
+1. Quick start (ten steps: new project → zone → base map / plan sheet → Align to map → site items → Cloud sync token for the private library →
+   load the library / add a crane → place crane, pick, set → read the results → ground, Report, Drawings, save); 2. Workflows (single pick,
+   tandem girder lift, trucking route, terrain, plan sheets; a "coming" line for the aerial site-plan sheet (PNG + world file), not on main
+   when this was written); 3. What each tab does (every input and output tab, incl. C9's Crane tab); 4. Methods and limits (chart lookup rule,
+   thresholds / tandem limit, 3D clearances and OSHA Tables A / T with "verify against the current eCFR", outrigger loads entered vs estimate,
+   mats, Boussinesq, off-tracking, terrain, the ASSUMED defaults table with where to replace each); 5. Crane data (private Structural_References,
+   crane-charts; terms; pasting a chart; the in-cab chart for the serial number governs; never in a public repository + the sync warning);
+   6. Troubleshooting (GitHub "Not found": fine-grained token with Structural_References and Contents, classic `repo`; tiles / OSM from file://;
+   USGS errors; sheet images per browser; full storage); 7. Keyboard and mouse.
+Every link ([[in:/out:/rpt:/man: …]] in the text) opens the tab and brings the card (heading or element id) or the Report section (shared/report.js
+`jump`) into view with a brief outline; a Report section not in the report yet gives a notice. The Project tab's stale "Coming next: …" line is
+replaced by a link to the Manual.
+### Where
+- `apps/crane-pick/ui/manual.js` (new, `window.CranePickManual`: `PARTS`, `links`, `topics`, `go`, `filter`, `text`): the content, the tab, the
+  links, the print, the Report appendix (`CranePickReport.add`: section id / key `manual`, "Appendix: User manual"; only while ticked).
+- `apps/crane-pick/index.html`: loads `ui/manual.js` last. Before: `'ui/terrain.js'         // C8: …` (last entry); after: `'ui/terrain.js',        // C8: …`
+  then `'ui/manual.js'          // Manual output tab (2026-11-17) …`.
+- `apps/crane-pick/report/builders.js`: `ORDER` before `[… 'elev', 'v3']`, after `[… 'elev', 'v3', 'manual']` (the appendix last); after the C7
+  §1 / §2 link clean-up, new: in the `manual` section a note's " ([[key]])" is removed when that key is not in this report (an empty project
+  has no §Lifts …), so the appendix never leaves an unresolved § reference.
+- `apps/crane-pick/ui/report.js` `onGoto`: before `if (k === 'item' && …) …select(id, true); else A.showOTab(k);`, after `… else if (k === 'in')
+  A.showITab(id); else A.showOTab(k);` (a `[[tab:in:<id>|…]]` link in the Report opens an input tab).
+- `apps/crane-pick/ui/project.js`: About text "Coming next: the trucking route (C6), lift plan sheets, DXF and the multi-lift Report (C7)." →
+  "How to use the app: the Manual tab (…)" with a link (`data-goman`).
+- Tests: `tests/smoke/crane-manual.mjs` (new); `crane-shell.mjs`, `crane-picks.mjs`, `crane-cranetab.mjs` (output-tab lists + Manual).
+### Calculations
+None (CLAUDE.md §4): no formula, factor, unit or code reference changed. The Methods part summarises the existing methods (as in this log, C1–C9)
+and links to the Report section where each is worked (CLAUDE.md §6).
+### Saved data (§5)
+No new key; `crane.ui` (existing per-browser view key) gains `manRpt` (true = the appendix is in the Report). Project format unchanged.
+### Decisions (pending engineer review)
+- The appendix choice is per browser (`crane.ui.manRpt`), not saved with the project (Spread Footing keeps its box in the project): the project
+  format stays unchanged. Off by default.
+- In the appendix, input-tab and output-tab links are Report tab links; links to Report sections print as "see §x.y"; manual-to-manual links print
+  as plain text.
+- Fine-grained token advice: one token for both repositories (sync writes the projects repository, the library is read), Contents: Read and
+  write; a classic token needs `repo` (the Cloud sync dialog asks for a fine-grained token; `shared/github-sync.js` accepts either form).
+- The OSHA values are quoted as the app uses them, with "verify against the current eCFR" (as C1 / C6 recorded).
+- Lighter checks per the engineer's speed rule (below).
+### Open items (not changed here)
+- The Picks tab's note still says "Clearances: plan only (heights in C3)" (`ui/picks.js`); 3D clearances exist since C3-2. UI text only.
+### How verified
+`node tests/smoke/crane-manual.mjs` (8 checks: the tab before Report, 7 parts, 88 links each naming an existing tab; a populated project (fake
+crane: pick, tandem lift, route, power line, buried utility, plan sheet, mocked terrain source): every link resolves to its tab and card /
+element / Report section, spot checks (card outlined, `<details>` opened, Report scrolled to §Lifts › Basis); 35 button labels the manual quotes
+are on the page and in the text; filter ("token", "fine-grained repo" → the GitHub topic only, nonsense → message, Esc, a man: link clears it);
+Print manual (whole manual, filter restored, no stale restore); Report appendix off by default / last when ticked, no unresolved or duplicate
+keys, no NaN, its tab links open the input tab, empty project clean; 390 px no sideways scroll and a link brings the input card into view;
+0 console errors); `crane-shell` (11), `crane-picks` (5), `crane-cranetab` (6), `crane-drawings` (5); `node tests/engine/run.mjs crane`
+(13 files, 105 passed); `node tests/check-syntax.mjs`. Screenshots: scratchpad `crane/manual-*.png` (1280, 390, filter, methods, report).
+
+## 2026-11-17 — Crane plan symbol (map, sheets, DXF, Crane tab) and the aerial site plan (engineer requests A and B)
+PR #1620: https://github.com/mlococo88/All-Structural/pull/1620
+### What changed
+- `apps/crane-pick/engine/cranegfx.js` (new, `window.CranePickCraneGfx`, no DOM): ONE plan symbol of a crane for every renderer. `dims(crane)`
+  (with `from` / `assumed`), `symbol(crane, setup, { hook | slew + R, load {L, W} | loadPolys, detail, labels })`, `draw(sym, out)`, `svg()`,
+  `GROUPS` (DXF layers CRANE-CARRIER, CRANE-OUTRIGGER, CRANE-FLOAT, CRANE-UPPER, CRANE-CWT, CRANE-BOOM, CRANE-HOOK, CRANE-LOAD, CRANE,
+  CRANE-TEXT). Engine geometry reused unchanged: carrier / carbody, tracks, outrigger beams, floats = `CranePickLift.footprint`; tail radius =
+  `planDims().tail`; boom-foot offset = `geomOf().footE`; tip over the hook at R. Schematic parts from the file or a stated assumption: axles
+  (count from type / length), tyres, carrier cab, beam width 1.5 ft, tumbler radius / centres, shoe pitch, upperworks width (`upper_width`),
+  counterweight width (`upper_width_over_counterweight`) and depth (0.22 R_t, min 2.5 ft) with its rear corners ON the tail-swing circle
+  (a_rear = −√(R_t² − (w_cw/2)²)), operator cab (left, 3.5 × 7.5 ft), boom width (Heights-tab boom width if entered, else 3 ft telescopic /
+  6 ft lattice), 5 telescopic sections tapering to 55 %, lattice lacing, head sheaves, hook block 1.4 × 1.8 ft, load L along the boom.
+  Optional overrides in `crane.app_inputs.gfx` (boomType, axles, tyreD, tyreW, beamW, tumblerR, shoePitch, upperW, cwW, cwD, upperFront,
+  cabSide, boomW, sections) — read only; no editor added.
+- `ui/place.js` (map): the footprint layers stay (clickable; what the checks use); `makeSym` / `placeSym` / `symGeo` add one multipolygon +
+  one multipolyline per group, turned to the setup's selected (else first) pick; updated on every drag frame of the setup or its pick and on
+  `zoomend`; "simple" detail (no wheels' detail / lacing / shoes) when the tail radius is under 40 screen px.
+- `ui/drawset.js`: `setupLayer` draws the symbol (layers above) with `{ hook, load }`; lift plans: at the pick; tandem plans: each crane at its
+  governing hook; ground sheet: the setup's first pick. Slew / heading labels ("SLEW +45 DEG FROM FRONT, R 30.0 FT"). New `aerialPlan`,
+  `aerialSheet`, `siteWindow`, `buildView`; `build(P, ctx, { aerial: true })` adds "SITE PLAN - AERIAL" (whole site, after the general notes)
+  and "SITE PLAN - AERIAL: <lift>" after each lift plan; each such sheet record carries `aerial = { e (frame entity), w (window), h }`.
+  Without `opt.aerial` the set is unchanged.
+- `ui/aerial.js` (new, `window.CranePickAerial`): tiles → one image per sheet window (see the header: zoom choice, ≤ 64 tiles, ≤ 3,000 px,
+  crossOrigin 'anonymous', one affine fit with its residual reported), `inject` (image + status note into the sheet SVG), world files
+  (`worldFile`, `pgw`: DXF inches and State Plane native unit), downloads. In-memory cache only.
+- `ui/drawings.js`: "Aerial site-plan sheets" checkbox (`crane.ui.dwg.aerial`, default on), the imagery in the preview and the print (the
+  print waits up to 25 s for loading images), "Download aerial image (PNG + world file)", "World file in State Plane coordinates", the
+  imagery note; Report §Site plan (aerial) (figure + note); the Plan tab's ⎙ "Print plan view" (Leaflet control; one 11 × 17 sheet of the
+  current map view through `buildView`).
+- `ui/cranefig.js` `plan(m)` (Crane tab, coordinator request): the footprint primitives replaced by the shared symbol (classes carrier,
+  outrigger, upper, cwt, boom, hook, load → DXF CRANE-*), the boom drawn in full when R ≤ 1.4 × the figure span, else the upperworks turned
+  and the existing cut boom line; dimension labels and source flags unchanged.
+- `ui/cranes.js`: crane card and Report §Cranes list the symbol's assumptions. `report/builders.js`: ORDER + 'aerial'. `index.html`: the two
+  scripts. `ui/manual.js`: "Coming: the site-plan sheet" → "Crane symbols and the aerial site plan"; Drawings topic. `ui/picks.js`: the stale
+  note "Clearances: plan only (heights in C3)" → plan and 3D (C3-2) (the open item of the Manual entry above).
+- Tests: `tests/engine/crane-gfx.test.mjs` (new), `crane-dwg.test.mjs` (+ symbol layers, aerial sheets), `crane-fig.test.mjs` (+ symbol in
+  the Crane plan); `tests/smoke/crane-aerial.mjs` (new); `crane-drawings.mjs` (aerial off in its seed; + Report section, § shift);
+  `tests/lib.mjs` mock tiles answer with `Access-Control-Allow-Origin: *`.
+### Anchors (re-apply by hand)
+- `ui/drawset.js setupLayer`: before `if (f.body) drawPoly(D, V, lC, f.body, true); f.tracks.forEach(...); f.beams.forEach(...); f.floatC.forEach(q => drawCircle(D, V, lF, q, q.r));`
+  after `CG.draw(CG.symbol(c.def, u, { hook: o.hook, load: o.load, loadPolys: o.loadPolys, labels: true }), { poly → drawPoly(D, V, layer(GROUPS[g]), …), circle → drawCircle, text → D.text(...) })`
+  (the old lines kept as the fallback when `CranePickCraneGfx` is absent).
+- `ui/drawset.js pickPlan`: `setupLayer(D, V, P, u)` → `setupLayer(D, V, P, u, { hook: k.pick, load: loadOf(k) })`.
+- `ui/place.js makeSetup`: after the `g.front` line, `g.sym = makeSym(u, add, col);`; `placeSetup`: after `g.front.setLatLngs(...)`, `placeSym(u, g.sym);`; `livePick`: `+ if (g) placeSym(u, g.sym);`.
+### Calculations
+None (CLAUDE.md §4): no formula, factor, unit or code reference changed; no check reads the symbol or the image. How checked: every crane
+engine test unchanged and passing (111); the lift-plan sheet scale with and without the symbol compared (1/8" = 1'-0" both); the
+Summary / Picks / Drawings smoke values unchanged.
+### Check cases (hand)
+- Wheeled fake AT, centre (500, 2,000), heading 30°, full spread 24 ft, beams 12 / 12 ft, float 2 ft: front-left float centre
+  (500 + 12 sin 30° − 12 cos 30°, 2,000 + 12 cos 30° + 12 sin 30°) = (495.608, 2,016.392), r = 1.000 (= the engine footprint). Hook 30 ft at
+  azimuth 75°: slew +45° from the front, tip = hook, foot 2 ft ahead = (501.932, 2,000.518); counterweight width = upperworks width =
+  carrier width 10 − 1 = 9 ft (assumed): rear face at a = −√(15² − 4.5²) = −14.309 ft, its rear corners at |p − c| = 15.000 = R_t.
+- World file: window E 1,000 … 1,300, N 2,000 … 2,200 ft, 600 × 400 px → s = 0.5 ft/px; grid: A 0.5, D 0, B 0, E −0.5, C 1,000.25,
+  F 2,199.75; DXF (frame lower-left (40, 30) in, 12 units/ft): A 6, E −6, C 43, F 30 + 2,400 − 3 = 2,427.
+- Tile zoom at 42° N: res(z) = 156,543.03 cos 42° / 2^z m: z 18 = 0.444 m, z 17 = 0.888 m; an image of 2 ft/px (0.610 m) → z 18.
+### Saved data (§5)
+No new key, no project-format change. `crane.ui` (existing per-browser view key) gains `dwg.aerial` (false = no aerial sheets). The images
+are not stored (memory only). `crane.app_inputs.gfx` overrides are read if present; nothing writes them.
+### Decisions (pending engineer review)
+- Aerial sheets: one for the whole site AND one per lift (the site sheet shows how lifts, routes and power lines relate; the per-lift sheet is
+  at the lift plan's own window and scale, so the ground under the floats / mats is readable). Default on; a checkbox turns them off.
+- Imagery placed by one affine fit per image (three window corners, grid → lat/long by proj4 → Web Mercator); the residual at the fourth
+  corner and the centre is shown (0.002 ft in the smoke's site). Image ≤ 3,000 px, ≤ 64 tiles, 150 dpi at full size, not finer than zoom 19.
+- The .pgw that matches the PNG's name is in the DXF's coordinates (inches, as placed on that sheet), not in grid feet: the DXF itself is
+  sheets side by side in inches, so this is what lands the image under the plan in CAD. The grid version (State Plane native unit) is a
+  second download, to rename for GIS / civil files.
+- The symbol on the map follows the selected (else first) single pick of the setup; a setup used only in a girder lift shows the upperworks
+  over the carrier front, no boom (the girder-lift layer draws its own booms).
+- No jib drawn: the crane files have main-boom configurations only.
+- Load L × W drawn with L along the boom (its orientation is not an input; the clearance check uses the enclosing cylinder).
+- Map hides the symbol's detail below 40 px tail radius; lacing and shoes only at "full" detail.
+- Attribution text on every aerial sheet / figure: "Tiles (c) Esri - Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+  (ASCII for R12) + "IMAGERY DATE VARIES; NOT A SURVEY".
+- Lighter checks per the engineer's speed rule.
+### How verified
+`node tests/smoke/crane-aerial.mjs` (5 checks: map symbol with CW corners on R_t = 15.000 ft, lattice chords, the upperworks following a
+mouse-dragged pick at ~17 ms per move, simple detail at zoom 15; Drawings aerial sheets with the image (mocked striped tiles with CORS) and the
+attribution, PNG + .pgw = the sheet frame in the DXF, State Plane .pgw, DXF valid with the CRANE-* layers, print with the image; offline
+(tiles refused) "AERIAL NOT AVAILABLE - PRINTED WITHOUT BACKGROUND" and still prints; Print plan view; Report figure and notes; 390 px; 0
+console errors); `crane-drawings` (5), `crane-cranetab` (6), `crane-place` (9), `crane-picks` (5), `crane-manual` (8);
+`node tests/engine/run.mjs crane` (14 files, 111 passed); `node tests/check-syntax.mjs`. Screenshots: scratchpad `crane/accurate-*.png`.

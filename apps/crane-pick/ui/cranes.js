@@ -163,6 +163,7 @@
       ${zoned ? `<div class="shBlk"><div class="note"><b>Working-area zones</b> (from the chart's working-area diagram; slew angle from the carrier front). A zone chart is used only inside its sector; not set = not used (the 360° or over-side chart applies).</div>
         ${num('secF', ai.sectors && ai.sectors.front, 'Over-front half-angle', '°', 'not set')}${num('secR', ai.sectors && ai.sectors.rear, 'Over-rear half-angle', '°', 'not set')}</div>` : ''}
       <div class="shBlk"><div class="note"><b>Plan dimensions</b> (the map symbol and plan clearances): ${planText(p)}${p.assumed.length ? `<br><span class="warnT">Assumed: ${esc(p.assumed.join('; '))}.</span>` : ''} (Edit… to change)</div></div>
+      ${(() => { const CG = window.CranePickCraneGfx; let q = null; try { q = CG && CG.dims(d); } catch (e) { q = null; } return q && q.assumed.length ? `<div class="shBlk"><div class="note" id="crGfxAss-${c.id}"><b>Crane symbol</b> (map, drawings, DXF; drawing only, no check uses it): ${esc(q.boomType)} boom; assumed where the file has no dimension: ${esc(q.assumed.join('; '))}.</div></div>` : ''; })()}
       ${geomHtml(c, num)}
       <div class="shBlk"><div class="note"><b>For outrigger / track loads (Ground)</b>: from the manufacturer when known. All the weights and CGs entered → rigid-body loads ("entered data"); otherwise, with the gross operating weight, the bounding estimate.</div>
         ${num('upLb', ph.upperLb, 'Upperworks weight', 'lb')}${num('upCg', ph.upperCg, 'Upperworks CG from rotation', 'ft', '+ toward the boom')}
@@ -257,6 +258,8 @@
       const sec = (d.app_inputs || {}).sectors;
       if ((d.configs || []).some(g => g.zone !== '360')) items.push({ type: 'note', text: `Working-area sectors (entered): over front ±${sec && sec.front != null ? sec.front + '°' : ' not set'}; over rear ±${sec && sec.rear != null ? sec.rear + '°' : ' not set'} about the carrier axis. A zone chart is used only inside its sector.` });
       items.push({ type: 'note', text: 'Plan dimensions: ' + planText(p).replace(/<[^>]+>/g, '') + (p.assumed.length ? '. Assumed: ' + p.assumed.join('; ') : '') + '.' });
+      { const CG = window.CranePickCraneGfx; let q = null; try { q = CG && CG.dims(d); } catch (e) { q = null; }
+        if (q && q.assumed.length) items.push({ type: 'note', text: `Crane symbol on the plans (drawing only; no check uses it): ${q.boomType} boom; assumed where the file has no dimension: ${q.assumed.join('; ')}.` }); }
       if (window.CranePickElev) { const g = window.CranePickElev.geomOf(d), F = window.CranePickElev.FROM, r = (k, nm) => [nm, (g[k] == null ? 'not limited' : fmt(g[k], 2)) + ' (' + F[g.from[k]] + ')'];
         items.push({ type: 'kv', rows: [r('footH', 'Boom-foot pin height above the pad (ft)'), r('footE', 'Boom-foot pin ahead of rotation (ft)'), r('head', 'Head allowance (ft)'), r('boomW', 'Boom section width (ft)'), r('cwBot', 'Counterweight bottom (ft)'), r('cwTop', 'Counterweight top (ft)'), ['Maximum boom angle', g.maxAng == null ? 'not given' : fmt(g.maxAng, 1) + '° (file)']] });
         if (g.assumed.length) items.push({ type: 'note', warn: true, text: 'Elevation geometry assumed (not in the file, not entered): ' + g.assumed.join('; ') + '. Decision (pending engineer review): the lowest boom.' }); }

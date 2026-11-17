@@ -61,7 +61,7 @@ export async function openPage(file, { ls, vw = 1400, vh = 1000, hash = '', time
     if (/^https?:\/\/fonts\.(googleapis|gstatic)\.com/.test(u)) return r.fulfill({ body: '', contentType: 'text/css' });
     // map tiles (Esri World Imagery, OpenStreetMap; the Crane Pick Analyzer's and Bridge Geometry's base maps): a blank 256 px tile, so a map opens
     // without console errors and without the network (2026-11-16). A smoke that tests the offline case routes them on its page (p.route wins).
-    if (TILE.test(u)) return r.fulfill({ body: BLANK_TILE, contentType: 'image/png' });
+    if (TILE.test(u)) return r.fulfill({ body: BLANK_TILE, contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' } });   // CORS as the real servers (the aerial sheets draw tiles into a canvas, 2026-11-17)
     blocked.add(u.slice(0, 160)); return r.abort();
   });
   const errs = [], dialogs = [];
