@@ -607,8 +607,10 @@
       if (t && t.kind === 'turn') { apts.push(g.a, t.PI, g.b); return; } const k = Math.max(2, Math.ceil(g.L / 2)); for (let j = 0; j <= k; j++) { const q = at(sim.pa, g.s0 + g.L * j / k); apts.push({ x: q.x, y: q.y }); } });
     const dev = AL && (r.pts || []).length >= 2 ? AL.deviation(r.pts, apts) : null, curves = sim.pa.turns;
     const rmin = curves.reduce((m, t) => Math.min(m, t.r), Infinity), Rv = sim.v.Rmin;
-    if (src.kind === 'osm') flags.push({ level: 'info', kind: 'osm', text: `Road geometry ${window.CranePickOSM ? window.CranePickOSM.NOT_SURVEY : 'from OpenStreetMap — not survey'} (${window.CranePickOSM ? window.CranePickOSM.ATTR : '© OpenStreetMap contributors'}, fetched ${String(src.at || '').slice(0, 10) || '—'}): check the curves and the clear widths on site.` });
-    (src.against || []).forEach(a => flags.push({ level: 'warn', kind: 'oneway', text: `The route travels against the one-way direction of ${a.name} for ${fmt(a.s1 - a.s0, 0)} ft (from ${fmt(a.s0, 0)} ft along the OpenStreetMap path): an escort / traffic control or a permit is needed.` }));
+    // 2026-11-17: the data source's labels (OpenStreetMap, or MassDOT / MassGIS when src.data is 'massdot'); OpenStreetMap text unchanged
+    const SI = window.CranePickOSM && window.CranePickOSM.srcInfo ? window.CranePickOSM.srcInfo(src) : { label: 'OpenStreetMap', NOT_SURVEY: 'from OpenStreetMap — not survey', ATTR: '© OpenStreetMap contributors' };
+    if (src.kind === 'osm') flags.push({ level: 'info', kind: 'osm', text: `Road geometry ${SI.NOT_SURVEY} (${SI.ATTR}, fetched ${String(src.at || '').slice(0, 10) || '—'}): check the curves and the clear widths on site.` });
+    (src.against || []).forEach(a => flags.push({ level: 'warn', kind: 'oneway', text: `The route travels against the one-way direction of ${a.name} for ${fmt(a.s1 - a.s0, 0)} ft (from ${fmt(a.s0, 0)} ft along the ${SI.label} path): an escort / traffic control or a permit is needed.` }));
     if (dev && dev.max > 10) flags.push({ level: 'warn', kind: 'align', text: `The fitted alignment is up to ${fmt(dev.max, 1)} ft from the line it was fitted to: check the fit (tolerance, detection window) or edit the PIs.` });
     return { dev, n: curves.length, rmin: isFinite(rmin) ? rmin : null, Rv, src: src.kind || 'click', flags };
   }

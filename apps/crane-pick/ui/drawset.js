@@ -521,7 +521,7 @@
     // turn labels on the outside of each curve (away from its centre: right of the path for a left turn)
     (ev.turns || []).forEach(t => { const m = RT.at(ev.sim.pa, (t.s0 + t.s1) / 2); if (!m || !inWin(m, w)) return; const sg = t.D > 0 ? -1 : 1, nx = -Math.sin(m.th) * sg, ny = Math.cos(m.th) * sg, off = 3 * h;
       D.text(lT, V.X(m.x) + nx * off, V.Y(m.y) + ny * off - 0.35 * h, 0.8 * h, t.tag ? `${t.tag} R ${fmt(t.r, 0)}` : `T${t.n}`, 1); });   // 2026-11-17: fitted alignment: C1 / T1 with the radius
-    if (rt.src && rt.src.kind === 'osm') D.text(lT, V.X(w.x0) + h, V.Y(w.y0) + h, 0.7 * h, 'ROAD GEOMETRY FROM OPENSTREETMAP - NOT SURVEY. (C) OPENSTREETMAP CONTRIBUTORS, ODBL.');   // ODbL attribution on the printed sheet
+    if (rt.src && rt.src.kind === 'osm') D.text(lT, V.X(w.x0) + h, V.Y(w.y0) + h, 0.7 * h, window.CranePickOSM && window.CranePickOSM.srcInfo ? window.CranePickOSM.srcInfo(rt.src).dxf : 'ROAD GEOMETRY FROM OPENSTREETMAP - NOT SURVEY. (C) OPENSTREETMAP CONTRIBUTORS, ODBL.');   // ODbL attribution on the printed sheet
     const st = ev.stage; if (st && st.cg && inWin(st.cg, w)) { const x = V.X(st.cg.x), y = V.Y(st.cg.y); D.circle(lL, x, y, 0.7 * h); D.text(lT, x + 1.2 * h, y - 0.3 * h, 0.7 * h, 'LOAD CG AT THE STOP'); }
     frameLayer(D, V, P, `PLAN: ${rt.name}`);
   }

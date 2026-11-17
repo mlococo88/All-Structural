@@ -6,13 +6,21 @@
    Overpass API (https://overpass-api.de/api/interpreter): POST, body "data=" + the URL-encoded query (a CORS "simple" request: form
    content type, no preflight). The query asks for the drivable highway=* ways in the box with their geometry ("out geom": each way
    has "nodes" (OSM node ids) and "geometry" [{ lat, lon }] of the same length, and "tags").
-   Positions: lat / lon in, the site frame out through proj(lat, lon) -> { x, y } (grid ft). Graph distances: grid ft. */
+   Positions: lat / lon in, the site frame out through proj(lat, lon) -> { x, y } (grid ft). Graph distances: grid ft.
+   2026-11-17 (bug report): the endpoints, their fallbacks and the MassDOT / MassGIS road layer are in engine/roadsrc.js (its roads are
+   normalised to the same Overpass JSON shape); SOURCES / srcInfo(src) give each data source's attribution and "not survey" label (a
+   route's src.data 'massdot'; none = OpenStreetMap, as before). */
 (function () {
   'use strict';
   const URL = 'https://overpass-api.de/api/interpreter';
   const ATTR = '© OpenStreetMap contributors';
   const ATTR_URL = 'https://www.openstreetmap.org/copyright';
   const NOT_SURVEY = 'from OpenStreetMap — not survey';
+  const SOURCES = {
+    osm: { id: 'osm', label: 'OpenStreetMap', ATTR, ATTR_URL, NOT_SURVEY, lic: 'ODbL', dxf: 'ROAD GEOMETRY FROM OPENSTREETMAP - NOT SURVEY. (C) OPENSTREETMAP CONTRIBUTORS, ODBL.' },
+    massdot: { id: 'massdot', label: 'MassDOT / MassGIS', ATTR: 'MassDOT / MassGIS', ATTR_URL: 'https://www.mass.gov/info-details/massgis-data-massgis-massdot-roads',
+      NOT_SURVEY: 'from MassDOT / MassGIS road centrelines — not survey', lic: '', dxf: 'ROAD GEOMETRY FROM MASSDOT / MASSGIS ROAD INVENTORY - NOT SURVEY.' } };
+  const srcInfo = src => SOURCES[src && (src.data === 'massdot' || src === 'massdot') ? 'massdot' : 'osm'];
   // drivable highway values (Decision pending engineer review: footways, paths, cycleways, steps, bridleways, platforms, proposed and
   // abandoned ways are left out; service roads, tracks and roads under construction are kept: a construction convoy may use them)
   const HW = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential', 'service', 'track', 'living_street', 'road',
@@ -80,11 +88,11 @@
      names: [{ name, s0, s1 }], against: [{ name, s0, s1 }] (one-way roads travelled against their direction) }
      pts: the start, any via points, the end (site frame); o.maxSnap (ft, default 150): farther from every road = not snapped */
   function route(g, pts, o) {
-    const maxSnap = o && isNum(o.maxSnap) ? o.maxSnap : 150;
-    if (!g || !g.edges.length) return { ok: false, why: 'no drivable OpenStreetMap roads in the area' };
+    const maxSnap = o && isNum(o.maxSnap) ? o.maxSnap : 150, lb = (o && o.label) || 'OpenStreetMap';
+    if (!g || !g.edges.length) return { ok: false, why: `no drivable ${lb} roads in the area` };
     if (!pts || pts.length < 2) return { ok: false, why: 'click a start and an end point' };
     const sn = pts.map(p => snap(g, p));
-    const far = sn.findIndex(s => !s || s.d > maxSnap); if (far >= 0) return { ok: false, why: `point ${far + 1} is ${sn[far] ? Math.round(sn[far].d) + ' ft' : 'too far'} from the nearest OpenStreetMap road (limit ${maxSnap} ft): click nearer a road` };
+    const far = sn.findIndex(s => !s || s.d > maxSnap); if (far >= 0) return { ok: false, why: `point ${far + 1} is ${sn[far] ? Math.round(sn[far].d) + ' ft' : 'too far'} from the nearest ${lb} road (limit ${maxSnap} ft): click nearer a road` };
     const out = [], seq = [];   // seq: [{ p, way, fwd }] the travelled points with the way they are reached along
     for (let k = 0; k < sn.length - 1; k++) {
       const a = sn[k], b = sn[k + 1], adj = new Map(g.adj), S = 'v:s' + k, E = 'v:e' + k;
@@ -94,7 +102,7 @@
         else { vlink(adj, s.e.a, V, L * s.t, s.e.way, true); vlink(adj, s.e.b, V, L * (1 - s.t), s.e.way, false); } };
       virt(S, a, true); virt(E, b, false);
       if (a.e === b.e) vlink(adj, S, E, Math.abs(b.t - a.t) * Math.hypot(g.nodes.get(a.e.b).x - g.nodes.get(a.e.a).x, g.nodes.get(a.e.b).y - g.nodes.get(a.e.a).y), a.e.way, b.t >= a.t);
-      const r = dijkstra(adj, S, E); if (!r) return { ok: false, why: `points ${k + 1} and ${k + 2} are on roads that do not connect in the OpenStreetMap data of this area` };
+      const r = dijkstra(adj, S, E); if (!r) return { ok: false, why: `points ${k + 1} and ${k + 2} are on roads that do not connect in the ${lb} data of this area` };
       const ptOf = key => key === S ? a.q : key === E ? b.q : g.nodes.get(key);
       r.path.forEach((key, i) => { const p = ptOf(key); if (i === 0 && seq.length) return; seq.push({ p: { x: p.x, y: p.y }, way: i ? r.steps[i - 1].way : r.steps[0] ? r.steps[0].way : a.e.way, fwd: i ? r.steps[i - 1].fwd : true }); });
     }
@@ -110,5 +118,5 @@
     if (out.length < 2) return { ok: false, why: 'the snapped points are the same point on the road' };
     return { ok: true, pts: out, L: s, snaps: sn.map(x => ({ d: x.d, q: x.q, name: (g.ways.get(x.e.way) || {}).name })), names, against };
   }
-  window.CranePickOSM = { URL, ATTR, ATTR_URL, NOT_SURVEY, HW, bboxOf, bboxKey, contains, query, body, oneway, wayName, graph, snap, dijkstra, route };
+  window.CranePickOSM = { URL, ATTR, ATTR_URL, NOT_SURVEY, SOURCES, srcInfo, HW, bboxOf, bboxKey, contains, query, body, oneway, wayName, graph, snap, dijkstra, route };
 })();

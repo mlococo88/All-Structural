@@ -60,7 +60,8 @@
 (function () {
   'use strict';
   const KEYS = { current: 'crane.project.current', list: 'crane.projects.v1', open: 'crane.open', ui: 'crane.ui', idb: 'crane.sheets.v1',
-    library: 'crane.library.v1', libsrc: 'crane.libsrc', syncCheck: 'crane.syncCheck', terrainDb: 'crane.terrain.v1' };
+    library: 'crane.library.v1', libsrc: 'crane.libsrc', syncCheck: 'crane.syncCheck', terrainDb: 'crane.terrain.v1',
+    road: 'crane.road' };   // 2026-11-17: Snap to road settings (road data source, endpoint URLs, the endpoint that last worked), per browser
   const FORMAT = 'crane-pick.project';
   const TYPES = {
     obst: { label: 'Obstruction', geom: 'polygon', min: 3 },
@@ -210,6 +211,7 @@
       const seg = l => (Array.isArray(l) ? l : []).filter(x => x && typeof x === 'object').map(x => ({ name: str(x.name, 'road'), s0: numOrNull(x.s0) || 0, s1: numOrNull(x.s1) || 0 }));
       o.src = { kind: sr.kind, at: str(sr.at), names: seg(sr.names), against: seg(sr.against), cl: Array.isArray(sr.cl) ? sr.cl.map(pt).filter(Boolean) : [],
         snaps: (Array.isArray(sr.snaps) ? sr.snaps : []).map(x => ({ d: numOrNull(x && x.d), name: str(x && x.name) })) };
+      if (sr.kind === 'osm' && sr.data === 'massdot') o.src.data = 'massdot';   // 2026-11-17: road data from MassDOT / MassGIS (none = OpenStreetMap)
     }
     if (r.lane && typeof r.lane === 'object') o.lane = { on: !!r.lane.on, w: nn(r.lane.w) };
     return o;
