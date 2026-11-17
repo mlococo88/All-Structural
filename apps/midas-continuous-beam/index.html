@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Continuous Beam → MIDAS Civil NX</title>
+<title>Continuous I-Girder → MIDAS Civil NX</title>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
   :root {
@@ -34,7 +34,13 @@
   th, td { border-bottom: 1px solid var(--line); padding: 4px 5px; text-align: right; }
   th { color: var(--muted); font-weight: 600; }
   th:first-child, td:first-child { text-align: left; }
-  #spans input { width: 100%; padding: 4px; text-align: right; }
+  .span-blk { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px 8px; margin-bottom: 8px; }
+  .span-hd { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 13px; }
+  .span-hd button { padding: 1px 8px; }
+  .sg { display: grid; grid-template-columns: 74px repeat(3, 1fr); gap: 4px 6px; align-items: center; margin-top: 4px; }
+  .sg .lab { font-size: 12px; color: var(--muted); }
+  .sg input { padding: 4px 6px; text-align: right; }
+  .sg .sub { font-size: 11px; color: var(--muted); text-align: center; }
   .status { font-size: 13px; margin-top: 8px; padding: 6px 8px; border-radius: 5px; background: #eef2f6; }
   .status.ok { background: #e6f4ea; color: var(--ok); }
   .status.err { background: #fbe9e7; color: var(--err); }
@@ -52,8 +58,8 @@
 </head>
 <body>
 <header>
-  <h1>Continuous Beam → MIDAS Civil NX</h1>
-  <span>Variable-depth spans · builds the model through the Civil NX API · shear and moment diagrams · independent check</span>
+  <h1>Continuous I-Girder → MIDAS Civil NX</h1>
+  <span>Variable-depth I-girder · builds the model through the Civil NX API · shear and moment diagrams · independent check</span>
   <span style="background:#fff4e0;color:#a15c00;border-radius:5px;padding:1px 8px;font-size:12px;font-weight:600">DEMO — NOT FOR DESIGN USE</span>
 </header>
 
@@ -72,23 +78,21 @@
     </div>
 
     <div class="card">
-      <h2>Spans &amp; section (rectangular, depth varies parabolically)</h2>
-      <table id="spans">
-        <thead><tr><th>#</th><th>L (ft)</th><th>b (in)</th><th>h left</th><th>h mid</th><th>h right</th><th>elems</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
-      <div class="btns"><button id="btnAddSpan">+ Span</button><button id="btnHaunch">Example: haunched 3-span</button></div>
-      <div class="note">Depths in inches. Each element gets a prismatic section using the depth at its midpoint (a stepped approximation of the taper), so more elements gives a closer match.</div>
+      <h2>Spans &amp; I-section (web depth varies parabolically)</h2>
+      <div id="spans"></div>
+      <div class="btns"><button id="btnAddSpan">+ Span</button><button id="btnHaunch">Example: haunched 3-span plate girder</button></div>
+      <div id="sectInfo" class="note"></div>
+      <div class="note">Web depth D is clear between flanges; total depth = D + t<sub>top</sub> + t<sub>bot</sub>. D varies along each span as a parabola through the left, mid and right values; flange plates are constant within a span. Each element gets a prismatic I-section at the depth of its midpoint (a stepped approximation of the haunch), so more elements give a closer match. Sent to Civil NX as a DB/User "H" section, [H, B1, tw, tf1, B2, tf2, r1, r2] = [total depth, top flange width, web, top flange thickness, bottom flange width, bottom flange thickness, 0, 0], with the element axis at the section centroid. Non-composite steel section only; no deck.</div>
     </div>
 
     <div class="card">
       <h2>Loads &amp; combinations</h2>
       <div class="row3">
-        <div><label>γ concrete (kcf)</label><input id="gamma" type="number" step="0.005" value="0.150"></div>
+        <div><label>γ material (kcf)</label><input id="gamma" type="number" step="0.005" value="0.490"></div>
         <div><label>DW (klf)</label><input id="wDW" type="number" step="0.05" value="0.50"></div>
         <div><label>LL (klf)</label><input id="wLL" type="number" step="0.05" value="0.64"></div>
       </div>
-      <div class="note">DC = γ·A is applied as an element uniform load (not as MIDAS self-weight), so MIDAS and the check solver use the same weight. DW and LL are uniform on all spans; there's no pattern loading.</div>
+      <div class="note">DC = γ·A of the I-section (girder only, no deck, haunch or details allowance) is applied as an element uniform load (not as MIDAS self-weight), so MIDAS and the check solver use the same weight. DW and LL are uniform on all spans; there's no pattern loading.</div>
       <div class="row3">
         <div><label>STR-I: DC</label><input id="fDC" type="number" step="0.05" value="1.25"></div>
         <div><label>DW</label><input id="fDW" type="number" step="0.05" value="1.50"></div>
@@ -99,11 +103,12 @@
 
     <div class="card">
       <h2>Material (Civil NX database)</h2>
-      <div class="row">
-        <div><label>Standard</label><input id="matStd" type="text" value="ASTM(RC)"></div>
-        <div><label>Grade (DB name)</label><input id="matDb" type="text" value="Grade C4000"></div>
+      <div class="row3">
+        <div><label>Type</label><select id="matType"><option value="STEEL">Steel</option><option value="CONC">Concrete</option></select></div>
+        <div><label>Standard</label><input id="matStd" type="text" value="ASTM(S)"></div>
+        <div><label>Grade (DB name)</label><input id="matDb" type="text" value="A709-50"></div>
       </div>
-      <div class="note">E doesn't affect the moments when there's one material. If Civil NX rejects the material, try <b>AS17(RC)</b> / <b>C32</b> (the combination used in MIDAS's own sample), or enter one by hand and GET <code>/db/MATL</code> to see its exact names.</div>
+      <div class="note">E doesn't affect the moments when there's one material. "ASTM(S)" is one of Civil NX's steel standards; the grade name "A709-50" is a guess. If Civil NX rejects it, enter the material once by hand and GET <code>/db/MATL</code> to see its exact names (for concrete, MIDAS's own sample uses <b>AS17(RC)</b> / <b>C32</b>). Switching the type also switches γ to 0.490 (steel) or 0.150 (concrete) kcf.</div>
     </div>
 
     <div class="card">
@@ -308,11 +313,12 @@
 <script>
 'use strict';
 const $ = id => document.getElementById(id);
-const LS_INPUTS = 'cbeam.inputs.v1';
+const LS_INPUTS = 'cbeam.inputs.v2';
+const LS_INPUTS_V1 = 'cbeam.inputs.v1';   // rectangular version (read once for migration, never written)
 const CASES = ['DC', 'DW', 'LL', 'STR-I', 'SER-I'];
 
 /* ---------------- state ---------------- */
-let spans = [];          // [{L,b,hL,hM,hR,n}]
+let spans = [];          // [{L,DL,DM,DR,tw,bt,tt,bb,tb,n}] (L ft, the rest in)
 let model = null;        // built geometry
 let local = null;        // {case: [{x,V,M}]}, reactions
 let midasRes = null;     // {case: [{x,V,M,elem,part}]}
@@ -332,72 +338,113 @@ function setStatus(el, msg, cls) { el.textContent = msg; el.className = 'status'
 
 /* ---------------- inputs ---------------- */
 const DEFAULT_SPANS = [
-  { L: 60, b: 36, hL: 30, hM: 30, hR: 48, n: 12 },
-  { L: 80, b: 36, hL: 48, hM: 30, hR: 48, n: 16 },
-  { L: 60, b: 36, hL: 48, hM: 30, hR: 30, n: 12 },
+  { L: 100, DL: 54, DM: 54, DR: 84, tw: 0.5625, bt: 16, tt: 1, bb: 18, tb: 1.25, n: 16 },
+  { L: 130, DL: 84, DM: 54, DR: 84, tw: 0.5625, bt: 16, tt: 1, bb: 18, tb: 1.25, n: 20 },
+  { L: 100, DL: 84, DM: 54, DR: 54, tw: 0.5625, bt: 16, tt: 1, bb: 18, tb: 1.25, n: 16 },
 ];
-const FIELDS = ['gamma', 'wDW', 'wLL', 'fDC', 'fDW', 'fLL', 'matStd', 'matDb'];
+const SPAN_KEYS = ['L', 'DL', 'DM', 'DR', 'tw', 'bt', 'tt', 'bb', 'tb', 'n'];
+const FIELDS = ['gamma', 'wDW', 'wLL', 'fDC', 'fDW', 'fLL', 'matType', 'matStd', 'matDb'];
+const MAT_DEFAULTS = { STEEL: { std: 'ASTM(S)', db: 'A709-50', gamma: '0.490' }, CONC: { std: 'ASTM(RC)', db: 'Grade C4000', gamma: '0.150' } };
 
 function saveInputs() {
   const o = { spans };
   FIELDS.forEach(f => o[f] = $(f).value);
   try { localStorage.setItem(LS_INPUTS, JSON.stringify(o)); } catch (e) {}
 }
+// v1 (rectangular b x h) -> v2 (I-section). Keeps L, element count, loads, factors and the concrete material;
+// the old total depths become web depths (h - tt - tb) with default plates. The v1 key is left as it was.
+function migrateV1(o1) {
+  const d = DEFAULT_SPANS[0];
+  const web = h => Math.max(1, Math.round((h - d.tt - d.tb) * 100) / 100);
+  const o = { spans: o1.spans.map(s => ({ L: s.L, DL: web(s.hL), DM: web(s.hM), DR: web(s.hR),
+                                          tw: d.tw, bt: d.bt, tt: d.tt, bb: d.bb, tb: d.tb, n: s.n })) };
+  ['gamma', 'wDW', 'wLL', 'fDC', 'fDW', 'fLL', 'matStd', 'matDb'].forEach(f => { if (o1[f] !== undefined) o[f] = o1[f]; });
+  o.matType = 'CONC';
+  return o;
+}
 function loadInputs() {
   let o = null;
   try { o = JSON.parse(localStorage.getItem(LS_INPUTS) || 'null'); } catch (e) {}
-  spans = (o && Array.isArray(o.spans) && o.spans.length) ? o.spans : JSON.parse(JSON.stringify(DEFAULT_SPANS));
+  if (!o) {
+    let o1 = null;
+    try { o1 = JSON.parse(localStorage.getItem(LS_INPUTS_V1) || 'null'); } catch (e) {}
+    if (o1 && Array.isArray(o1.spans) && o1.spans.length) o = migrateV1(o1);
+  }
+  const ok = o && Array.isArray(o.spans) && o.spans.length && o.spans.every(s => SPAN_KEYS.every(k => s[k] > 0));
+  spans = ok ? o.spans : JSON.parse(JSON.stringify(DEFAULT_SPANS));
   if (o) FIELDS.forEach(f => { if (o[f] !== undefined) $(f).value = o[f]; });
 }
 
 function renderSpans() {
-  const tb = $('spans').querySelector('tbody');
-  tb.innerHTML = '';
+  const box = $('spans');
+  box.innerHTML = '';
+  const inp = (i, k, step) => `<input type="number" data-i="${i}" data-k="${k}" value="${spans[i][k]}" step="${step}" min="${k === 'n' ? 2 : 0.01}" aria-label="Span ${i + 1} ${k}">`;
   spans.forEach((s, i) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${i + 1}</td>` +
-      ['L', 'b', 'hL', 'hM', 'hR', 'n'].map(k =>
-        `<td><input type="number" data-i="${i}" data-k="${k}" value="${s[k]}" step="${k === 'n' ? 1 : 0.5}" min="${k === 'n' ? 2 : 0.1}"></td>`).join('') +
-      `<td><button data-del="${i}" title="Remove span" ${spans.length < 2 ? 'disabled' : ''}>×</button></td>`;
-    tb.appendChild(tr);
+    const d = document.createElement('div');
+    d.className = 'span-blk';
+    d.innerHTML = `<div class="span-hd"><span>Span ${i + 1}</span><button data-del="${i}" title="Remove span" ${spans.length < 2 ? 'disabled' : ''}>×</button></div>
+      <div class="sg">
+        <span class="lab">L (ft)</span>${inp(i, 'L', 0.5)}<span class="lab" style="text-align:right">elements</span>${inp(i, 'n', 1)}
+        <span></span><span class="sub">left</span><span class="sub">mid</span><span class="sub">right</span>
+        <span class="lab">Web D (in)</span>${inp(i, 'DL', 0.5)}${inp(i, 'DM', 0.5)}${inp(i, 'DR', 0.5)}
+        <span class="lab">Web t<sub>w</sub> (in)</span>${inp(i, 'tw', 0.0625)}<span></span><span></span>
+        <span></span><span></span><span class="sub">width b (in)</span><span class="sub">thick t (in)</span>
+        <span class="lab">Top flange</span><span></span>${inp(i, 'bt', 0.5)}${inp(i, 'tt', 0.0625)}
+        <span class="lab">Bot. flange</span><span></span>${inp(i, 'bb', 0.5)}${inp(i, 'tb', 0.0625)}
+      </div>`;
+    box.appendChild(d);
   });
-  tb.querySelectorAll('input').forEach(inp => inp.addEventListener('change', e => {
+  box.querySelectorAll('input').forEach(el => el.addEventListener('change', e => {
     const i = +e.target.dataset.i, k = e.target.dataset.k;
     let v = parseFloat(e.target.value);
     if (k === 'n') v = Math.max(2, Math.round(v || 2));
     if (!(v > 0)) { e.target.value = spans[i][k]; return; }
-    spans[i][k] = v; saveInputs(); refreshGeometry();
+    spans[i][k] = v; e.target.value = v; saveInputs(); refreshGeometry();
   }));
-  tb.querySelectorAll('button[data-del]').forEach(b => b.addEventListener('click', () => {
+  box.querySelectorAll('button[data-del]').forEach(b => b.addEventListener('click', () => {
     spans.splice(+b.dataset.del, 1); saveInputs(); renderSpans(); refreshGeometry();
   }));
 }
 
 /* ---------------- geometry ---------------- */
-// Quadratic (parabolic) depth through left / mid / right values, xi in [0,1]
+// Quadratic (parabolic) web depth through left / mid / right values, xi in [0,1]
 function depthAt(s, xi) {
-  return s.hL * (1 - xi) * (1 - 2 * xi) + s.hM * 4 * xi * (1 - xi) + s.hR * xi * (2 * xi - 1);
+  return s.DL * (1 - xi) * (1 - 2 * xi) + s.DM * 4 * xi * (1 - xi) + s.DR * xi * (2 * xi - 1);
+}
+// I-section properties (inches): flanges as rectangles, web D x tw between them; y measured up from the bottom
+function iProps(D, tw, bt, tt, bb, tb) {
+  const parts = [
+    { A: bb * tb, y: tb / 2, I0: bb * tb ** 3 / 12 },
+    { A: D * tw, y: tb + D / 2, I0: tw * D ** 3 / 12 },
+    { A: bt * tt, y: tb + D + tt / 2, I0: bt * tt ** 3 / 12 },
+  ];
+  const A = parts.reduce((s, p) => s + p.A, 0);
+  const yb = parts.reduce((s, p) => s + p.A * p.y, 0) / A;
+  const I = parts.reduce((s, p) => s + p.I0 + p.A * (p.y - yb) ** 2, 0);
+  return { A, yb, I, H: D + tt + tb, parts };
 }
 
 function buildModel() {
   const nodes = [{ id: 1, x: 0 }];
   const elems = [];
   const supports = [1];
-  const sectMap = new Map();   // key "b|h" -> id
+  const sectMap = new Map();   // key of all plate sizes -> id
   const sects = [];
   let x0 = 0;
   spans.forEach((s, si) => {
     for (let k = 0; k < s.n; k++) {
       const xiMid = (k + 0.5) / s.n;
-      const h = Math.round(depthAt(s, xiMid) * 100) / 100;      // in
-      const key = s.b + '|' + h;
-      if (!sectMap.has(key)) { sectMap.set(key, sects.length + 1); sects.push({ id: sects.length + 1, b: s.b, h }); }
+      const D = Math.round(depthAt(s, xiMid) * 100) / 100;      // web depth, in
+      const key = [D, s.tw, s.bt, s.tt, s.bb, s.tb].join('|');
+      const p = iProps(D, s.tw, s.bt, s.tt, s.bb, s.tb);        // in, in^2, in^4
+      if (!sectMap.has(key)) {
+        sectMap.set(key, sects.length + 1);
+        sects.push({ id: sects.length + 1, D, tw: s.tw, bt: s.bt, tt: s.tt, bb: s.bb, tb: s.tb, H: p.H, A: p.A, I: p.I, yb: p.yb });
+      }
       const xj = x0 + s.L * (k + 1) / s.n;
       nodes.push({ id: nodes.length + 1, x: xj });
-      const A = (s.b / 12) * (h / 12);                             // ft^2
-      const I = (s.b / 12) * Math.pow(h / 12, 3) / 12;            // ft^4
       elems.push({ id: elems.length + 1, i: nodes.length - 1, j: nodes.length, sect: sectMap.get(key),
-                   L: s.L / s.n, A, I, h, b: s.b, span: si + 1 });
+                   L: s.L / s.n, A: p.A / 144, I: p.I / 20736, h: p.H, D, span: si + 1 });   // A ft^2, I ft^4
     }
     x0 += s.L;
     supports.push(nodes.length);
@@ -482,8 +529,19 @@ function solveBeam(m, wOfElem) {
   return { pts, react };
 }
 
+function showSectInfo(m) {
+  // smallest and largest section in the model, worked from the plate sizes (inches)
+  const byH = [...m.sects].sort((a, b) => a.H - b.H);
+  const fmt = s => `H = ${s.D} + ${s.tt} + ${s.tb} = ${s.H.toFixed(2)} in; ` +
+    `A = ${s.bt}×${s.tt} + ${s.D}×${s.tw} + ${s.bb}×${s.tb} = ${s.A.toFixed(2)} in²; ` +
+    `ȳ<sub>bot</sub> = Σ(A·y)/A = ${s.yb.toFixed(2)} in; I<sub>x</sub> = Σ(I<sub>0</sub> + A·d²) = ${s.I.toFixed(0)} in⁴`;
+  $('sectInfo').innerHTML = `${m.sects.length} section(s). Shallowest: ${fmt(byH[0])}.` +
+    (byH.length > 1 ? `<br>Deepest: ${fmt(byH[byH.length - 1])}.` : '');
+}
+
 function runLocal() {
   model = buildModel();
+  showSectInfo(model);
   const lv = loadVals();
   const base = {
     DC: solveBeam(model, e => -lv.gamma * e.A),
@@ -520,12 +578,14 @@ function buildRequests() {
   const reqs = [];
   reqs.push(['PUT', '/db/UNIT', { Assign: { 1: { DIST: 'FT', FORCE: 'KIPS' } } }]);
   reqs.push(['POST', '/db/MATL', { Assign: { 1: {
-    TYPE: 'CONC', NAME: $('matDb').value.trim(),
+    TYPE: $('matType').value, NAME: $('matDb').value.trim(),
     PARAM: [{ P_TYPE: 1, STANDARD: $('matStd').value.trim(), DB: $('matDb').value.trim() }] } } }]);
   const sect = {};
+  const ft = v => r6(v / 12);
   m.sects.forEach(s => sect[s.id] = {
-    SECTTYPE: 'DBUSER', SECT_NAME: `R${s.b}x${s.h}`,
-    SECT_BEFORE: { USE_SHEAR_DEFORM: false, SHAPE: 'SB', DATATYPE: 2, SECT_I: { vSIZE: [r6(s.h / 12), r6(s.b / 12)] } } });
+    SECTTYPE: 'DBUSER', SECT_NAME: `I${s.H}-W${s.D}x${s.tw}-T${s.bt}x${s.tt}-B${s.bb}x${s.tb}`.slice(0, 60),
+    SECT_BEFORE: { USE_SHEAR_DEFORM: false, SHAPE: 'H', DATATYPE: 2,
+      SECT_I: { vSIZE: [ft(s.H), ft(s.bt), ft(s.tw), ft(s.tt), ft(s.bb), ft(s.tb), 0, 0] } } });
   reqs.push(['POST', '/db/SECT', { Assign: sect }]);
   const node = {};
   m.nodes.forEach(n => node[n.id] = { X: r6(n.x), Y: 0, Z: 0 });
@@ -537,7 +597,7 @@ function buildRequests() {
   m.supports.forEach((n, k) => cons[n] = { ITEMS: [{ ID: 1, CONSTRAINT: k === 0 ? '1111000' : '0111000' }] });
   reqs.push(['POST', '/db/CONS', { Assign: cons }]);
   reqs.push(['POST', '/db/STLD', { Assign: {
-    1: { NAME: 'DC', TYPE: 'USER', DESC: 'Self weight (gamma*A as beam load)' },
+    1: { NAME: 'DC', TYPE: 'USER', DESC: 'Girder self weight (gamma*A as beam load)' },
     2: { NAME: 'DW', TYPE: 'USER', DESC: 'Wearing surface / superimposed' },
     3: { NAME: 'LL', TYPE: 'USER', DESC: 'Uniform live load (all spans)' } } }]);
   const bm = {};
@@ -693,16 +753,16 @@ function drawElevation() {
   // smooth true profile
   const sx = [], sy = [];
   let x0 = 0;
-  spans.forEach(s => { for (let k = 0; k <= 40; k++) { sx.push(x0 + s.L * k / 40); sy.push(-depthAt(s, k / 40)); } x0 += s.L; });
+  spans.forEach(s => { for (let k = 0; k <= 40; k++) { sx.push(x0 + s.L * k / 40); sy.push(-(depthAt(s, k / 40) + s.tt + s.tb)); } x0 += s.L; });
   const supX = model.supports.map(n => model.nodes[n - 1].x);
   const hmax = Math.max(...model.elems.map(e => e.h));
   Plotly.react('plotElev', [
     { x: xs, y: bot, mode: 'lines', line: { color: '#7b8a99', width: 1, shape: 'hv' }, name: 'Model (stepped)', hoverinfo: 'skip' },
-    { x: sx, y: sy, mode: 'lines', line: { color: '#1d2733', width: 2 }, fill: 'tozeroy', fillcolor: 'rgba(11,92,173,.08)', name: 'Profile', hovertemplate: 'x=%{x:.1f} ft<br>h=%{customdata:.1f} in<extra></extra>', customdata: sy.map(v => -v) },
+    { x: sx, y: sy, mode: 'lines', line: { color: '#1d2733', width: 2 }, fill: 'tozeroy', fillcolor: 'rgba(11,92,173,.08)', name: 'Profile', hovertemplate: 'x=%{x:.1f} ft<br>total depth=%{customdata:.1f} in<extra></extra>', customdata: sy.map(v => -v) },
     { x: supX, y: supX.map(() => -hmax * 1.05), mode: 'markers', marker: { symbol: 'triangle-up', size: 14, color: '#0b5cad' }, name: 'Supports', hovertemplate: 'Support x=%{x:.1f} ft<extra></extra>' },
   ], {
     margin: { l: 50, r: 10, t: 10, b: 35 }, showlegend: false,
-    xaxis: { title: 'x (ft)', zeroline: false }, yaxis: { title: 'depth (in)', zeroline: true },
+    xaxis: { title: 'x (ft)', zeroline: false }, yaxis: { title: 'girder depth (in)', zeroline: true },
   }, PLOT_CFG);
 }
 
@@ -778,6 +838,15 @@ function init() {
   const c = MidasAPI.fromStorage();
   $('baseUrl').value = c.baseUrl; $('mapiKey').value = c.mapiKey; $('useProxy').checked = c.useProxy;
   loadInputs(); renderSpans();
+  // Switching the material type swaps the standard / grade / γ defaults, but only fields still at the other type's defaults
+  let prevType = $('matType').value;
+  $('matType').addEventListener('change', () => {
+    const from = MAT_DEFAULTS[prevType], to = MAT_DEFAULTS[$('matType').value];
+    if ($('matStd').value === from.std) $('matStd').value = to.std;
+    if ($('matDb').value === from.db) $('matDb').value = to.db;
+    if ($('gamma').value === from.gamma || +$('gamma').value === +from.gamma) $('gamma').value = to.gamma;
+    prevType = $('matType').value;
+  });
   FIELDS.forEach(f => $(f).addEventListener('change', () => { saveInputs(); refreshGeometry(); }));
   $('btnAddSpan').onclick = () => { const s = spans[spans.length - 1]; spans.push({ ...s }); saveInputs(); renderSpans(); refreshGeometry(); };
   $('btnHaunch').onclick = () => { spans = JSON.parse(JSON.stringify(DEFAULT_SPANS)); saveInputs(); renderSpans(); refreshGeometry(); };
