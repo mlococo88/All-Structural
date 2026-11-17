@@ -18,10 +18,13 @@
   const tagOf = t => t.tag || 'T' + t.n;
   const isOsm = r => !!(r && r.src && r.src.kind === 'osm');
   function refit(r) { const o = r.al && r.al.opt ? r.al.opt : null, f = AL().fit(r.pts, o); r.mode = 'fit'; r.al = f.al; }
-  function attrHtml() { const O = OSM(); return O ? `Roads: <a href="${O.ATTR_URL}" target="_blank" rel="noopener">${esc(O.ATTR)}</a> (ODbL), ${esc(O.NOT_SURVEY)}` : ''; }
-  let attrOn = false;
-  function syncAttr() { const m = MP() && MP().map; if (!m || !m.attributionControl) return; const want = (A.P.routes || []).some(isOsm);
-    if (want && !attrOn) { m.attributionControl.addAttribution(attrHtml()); attrOn = true; } else if (!want && attrOn) { m.attributionControl.removeAttribution(attrHtml()); attrOn = false; } }
+  /* 2026-11-17: the road data source of an OSM-kind route (OpenStreetMap, or MassDOT / MassGIS: src.data 'massdot') */
+  const SI = r => { const O = OSM(); return O && O.srcInfo ? O.srcInfo(r && r.src) : O; };
+  function attrHtml(id) { const O = OSM(), S = O && O.SOURCES ? O.SOURCES[id || 'osm'] : O; return S ? `Roads: <a href="${S.ATTR_URL}" target="_blank" rel="noopener">${esc(S.ATTR)}</a>${S.lic === '' ? '' : ' (ODbL)'}, ${esc(S.NOT_SURVEY)}` : ''; }
+  const attrOn = new Set();
+  function syncAttr() { const m = MP() && MP().map; if (!m || !m.attributionControl) return;
+    const want = new Set((A.P.routes || []).filter(isOsm).map(r => (SI(r) || {}).id || 'osm'));
+    ['osm', 'massdot'].forEach(id => { if (want.has(id) && !attrOn.has(id)) { m.attributionControl.addAttribution(attrHtml(id)); attrOn.add(id); } else if (!want.has(id) && attrOn.has(id)) { m.attributionControl.removeAttribution(attrHtml(id)); attrOn.delete(id); } }); }
   const isNum = v => typeof v === 'number' && isFinite(v);
   const fmt = (v, d) => isNum(v) ? v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—';
   const COL = { path: '#1D4ED8', swept: '#2563EB', load: '#7C3AED', overhead: '#B45309', haul: '#78716C', bridge: '#0E7490', stop: '#DC2626', warn: '#D97706', info: '#64748B' };
@@ -236,8 +239,8 @@
   /* the Alignment block of the route card (fitted: the source, lane offset, fit inputs, the curve table; legacy: the points and radii) */
   const FOPT = [['tol', 'Simplify tolerance (Douglas–Peucker)', 'ft'], ['win', 'Curve detection window', 'ft'], ['Rmax', 'Straight when the radius is over', 'ft'], ['minDelta', 'Ignore curves with a deflection under', 'deg'], ['cornerL', 'Intersection turn when the heading changes within', 'ft']];
   function srcText(r) {
-    const s = r.src || {}, O = OSM();
-    if (s.kind === 'osm') return `OpenStreetMap road centreline${r.lane && r.lane.on ? `, offset ${fmt((r.lane.w || 12) / 2, 2)} ft to the right (travel lane)` : ''} · ${r.pts.length} points · fetched ${esc(String(s.at || '').slice(0, 10))} · <b>${esc(O ? O.NOT_SURVEY : '')}</b> · <a href="${O ? O.ATTR_URL : '#'}" target="_blank" rel="noopener">${esc(O ? O.ATTR : '')}</a>`;
+    const s = r.src || {}, O = SI(r);
+    if (s.kind === 'osm') return `${esc(O ? O.label : 'OpenStreetMap')} road centreline${r.lane && r.lane.on ? `, offset ${fmt((r.lane.w || 12) / 2, 2)} ft to the right (travel lane)` : ''} · ${r.pts.length} points · fetched ${esc(String(s.at || '').slice(0, 10))} · <b>${esc(O ? O.NOT_SURVEY : '')}</b> · <a href="${O ? O.ATTR_URL : '#'}" target="_blank" rel="noopener">${esc(O ? O.ATTR : '')}</a>`;
     if (s.kind === 'trace') return `traced on the map (${r.pts.length} points)`;
     return `${r.pts.length} clicked points`;
   }
@@ -418,7 +421,7 @@
   const CURVE_HEAD = ['No.', 'Kind', 'R (ft)', 'Δ (°)', 'L (ft)', 'T (ft)', 'PC sta.', 'PI sta.', 'PT sta.', 'OT max (ft)', 'Radius'];
   function alignOut(r, ev) {
     const a = ev.align || {}, id = r.id, s = r.src || {};
-    return `<h4 class="stH">Alignment (fitted)</h4><p class="note">Fitted to: ${srcText(r)}${(s.names || []).length ? `<br>Roads along the OpenStreetMap path: ${s.names.map(n => `${esc(n.name)} (${fmt(n.s0, 0)}–${fmt(n.s1, 0)} ft)`).join(' → ')}` : ''}</p>
+    return `<h4 class="stH">Alignment (fitted)</h4><p class="note">Fitted to: ${srcText(r)}${(s.names || []).length ? `<br>Roads along the ${esc((SI(r) || {}).label || 'OpenStreetMap')} path: ${s.names.map(n => `${esc(n.name)} (${fmt(n.s0, 0)}–${fmt(n.s1, 0)} ft)`).join(' → ')}` : ''}</p>
       ${S().kv([['Curves', `${ev.turns.filter(t => t.kind === 'curve').length} fitted, ${ev.turns.filter(t => t.kind === 'turn').length} intersection turns`], ['Smallest radius', a.rmin != null ? `${fmt(a.rmin, 1)} ft vs the vehicle's minimum turning radius ${fmt(a.Rv, 1)} ft: ${a.rmin < a.Rv ? 'TIGHTER (stop flag)' : 'OK'}` : '—'],
         ['Max deviation of the line from the alignment', a.dev ? `${fmt(a.dev.max, 2)} ft (rms ${fmt(a.dev.rms, 2)} ft)` : '—']])}
       ${ev.turns.length ? `<div class="tscroll"><table class="tbl lfTbl" id="rtCurveTbl-${id}"><thead><tr>${CURVE_HEAD.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${curveRows(ev).map((c, k) => `<tr><td><a href="#rt-${id}-t${k + 1}">${esc(c[0])}</a></td>${c.slice(1).map((x, j) => `<td${j > 0 && j < 9 ? ' class="n"' : ''}>${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : ''}
@@ -492,7 +495,7 @@
     P.routes.forEach((r, i) => {
       const ev = evalRoute(r), v = RT.vehOf(r, A.P), l = RT.loadOf(r, A.P), items = [];
       if (!ev.sim.ok) { subs.push({ id: 'r' + i, key: 'route-' + i, title: r.name, items: [{ type: 'note', text: ev.flags[0].text }] }); return; }
-      items.push({ type: 'figure', svg: routeSvg(P, r, ev), caption: `${r.name}: the steer-axle path, the swept path (outlines every ${fmt(Math.max(2, ev.sim.pa.L / 150), 1)} ft) and the vehicle at the truck stop (north up)${isFit(r) ? '; dashed grey: the line the alignment is fitted to' : ''}${isOsm(r) ? `. Road geometry ${OSM().NOT_SURVEY}; ${OSM().ATTR} (ODbL)` : ''}.` });
+      items.push({ type: 'figure', svg: routeSvg(P, r, ev), caption: `${r.name}: the steer-axle path, the swept path (outlines every ${fmt(Math.max(2, ev.sim.pa.L / 150), 1)} ft) and the vehicle at the truck stop (north up)${isFit(r) ? '; dashed grey: the line the alignment is fitted to' : ''}${isOsm(r) ? `. Road geometry ${SI(r).NOT_SURVEY}; ${SI(r).ATTR}${SI(r).lic === '' ? '' : ' (ODbL)'}` : ''}.` });
       { const F = vehFigs(r, ev); if (F) { const TG = window.CranePickTruckGfx;   // 2026-11-17: the vehicle carrying its load, to scale (the Route tab's figures)
         items.push({ type: 'figure', svg: TG.svg(F.plan, { w: 680 }), caption: `${r.name}: vehicle and load in plan, to scale (front to the right): the unit outlines of the swept path, axles and tyres, kingpin / bolster / rear pivot, the load with its CG${l.tandem ? ' and ends A / B' : ''}; dimensions as the route checks use them.` },
           { type: 'figure', svg: TG.svg(F.side, { w: 680 }), caption: `${r.name}: side elevation, to scale: deck, blocking, load and the load top above the road (the overhead checks), the axle-group loads (statics).` });
@@ -502,7 +505,7 @@
         ['Gross weight', `${fmt(ev.ax.gross, 0)} lb (${fmt(ev.ax.gross / RT.LB_PER_TON, 2)} t), axle loads by ${ev.ax.mode}`]] });
       items.push({ type: 'note', text: ev.flags.length ? 'Flags: ' + ev.flags.map(f => `[${f.level}] ${f.text}`).join(' ') : 'Flags: none.' });
       if (isFit(r)) { const a = ev.align || {}, sr = r.src || {}, O = OSM();
-        items.push({ type: 'note', text: `Alignment: fitted to ${sr.kind === 'osm' ? `the OpenStreetMap road centreline${r.lane && r.lane.on ? ' offset to the right-hand travel lane' : ''} (fetched ${String(sr.at || '').slice(0, 10)}; ${O.ATTR}, ODbL; ${O.NOT_SURVEY})` : sr.kind === 'trace' ? 'a line traced on the aerial map' : 'the clicked points'}: tangents and circular curves (Douglas–Peucker, heading-change rate, least-squares tangents and radii); smallest radius ${a.rmin != null ? fmt(a.rmin, 1) : '—'} ft vs the vehicle's minimum ${fmt(a.Rv, 1)} ft; max deviation of the line ${a.dev ? fmt(a.dev.max, 2) : '—'} ft.${(sr.names || []).length ? ' Roads: ' + sr.names.map(n => n.name).join(' → ') + '.' : ''}` });
+        items.push({ type: 'note', text: `Alignment: fitted to ${sr.kind === 'osm' ? `the ${SI(r).label} road centreline${r.lane && r.lane.on ? ' offset to the right-hand travel lane' : ''} (fetched ${String(sr.at || '').slice(0, 10)}; ${SI(r).ATTR}${SI(r).lic === '' ? '' : ', ODbL'}; ${SI(r).NOT_SURVEY})` : sr.kind === 'trace' ? 'a line traced on the aerial map' : 'the clicked points'}: tangents and circular curves (Douglas–Peucker, heading-change rate, least-squares tangents and radii); smallest radius ${a.rmin != null ? fmt(a.rmin, 1) : '—'} ft vs the vehicle's minimum ${fmt(a.Rv, 1)} ft; max deviation of the line ${a.dev ? fmt(a.dev.max, 2) : '—'} ft.${(sr.names || []).length ? ' Roads: ' + sr.names.map(n => n.name).join(' → ') + '.' : ''}` });
         if (ev.turns.length) items.push({ type: 'table', head: CURVE_HEAD, rows: curveRows(ev) }); }
       if (ev.turns.length) items.push({ type: 'table', head: ['Turn', 'Δ (°)', 'r (ft)', 'OT max (ft)', 'OT steady (ft)', 'R inside (ft)', 'R outside (ft)', 'Swept width (ft)'], rows: ev.turns.map(t => [tagOf(t), fmt(t.D * 180 / Math.PI, 1), fmt(t.r, 1) + (t.reduced ? ' *' : ''), fmt(t.ot, 2), t.ss ? fmt(t.ss.OT, 2) : '—', fmt(t.Rin, 2), fmt(t.Rout, 2), fmt(t.Rout - t.Rin, 2)]) });
       items.push({ type: 'note', text: `Swept path: ${RT.REF.ot}, paraphrased; the vehicle follows the drawn path (steer-axle centre) at low speed without tyre slip; outlines of the tractor, ${RT.steered(v) ? 'rear dolly' : 'trailer deck'} and load. Turns worked below.` });

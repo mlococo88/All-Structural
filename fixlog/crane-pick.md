@@ -1463,3 +1463,55 @@ smokes: new `crane-geometry` (7), `crane-cranetab` (6), `crane-drawings` (5), `c
 `crane-picks` (5) pass; `crane-tandem` fails at its Report duplicate-key check (§5.1 / §6.1 keys) — it fails the same way on origin/main
 before this change (not caused here; reported to the coordinator).
 Real library (local only, never committed): screenshots in the scratchpad, drawn plan beside the PDF dimension page.
+
+## 2026-11-17 — Snap to road: the real error, Test connection, Overpass endpoint fallbacks, MassDOT / MassGIS roads, road data settings (PR #1626)
+PR #1626: https://github.com/mlococo88/All-Structural/pull/1626
+Engineer bug report (2026-11-17, screenshot, Greenwood, Wakefield MA): "Snap to road: no OpenStreetMap roads (offline or blocked)" while
+the OSM street tiles loaded. The fetch to overpass-api.de threw. Not reproducible here (overpass-api.de blocked from the build session).
+### Where
+- `engine/roadsrc.js` (new, `window.CranePickRoadSrc`, no DOM, fetch passed in): `OVERPASS` (overpass-api.de, overpass.private.coffee,
+  maps.mail.ru: `/api/interpreter`, status `/api/status`), `MASSDOT` (MassDOT Road Inventory 2024
+  `https://gis.massdot.state.ma.us/arcgis/rest/services/Roads/RoadInventoryYearEndFiles/FeatureServer/10`; MassGIS-MassDOT Roads
+  `https://services1.arcgis.com/hGdibHYSPO59RG1h/ArcGIS/rest/services/MassDOTRoads_gdb/FeatureServer/0`), `inMA`, `statusUrl`,
+  `overpassOrder(custom, last)`, `massdotOrder`, `overpassAttempts` (POST `data=` form, then GET `?data=`), `arcgisQueryUrl` (envelope,
+  inSR / outSR 4326, f=geojson | json, resultOffset), `classify` (network / timeout / http / json / server), `run` (attempts in order, 15 s
+  each; after a timeout or HTTP 429 / 5xx that endpoint's other form is skipped), `fetchOverpass`, `fetchMassDOT` (f=geojson, f=json on a
+  server / JSON error; pages on exceededTransferLimit, ≤ 10), `toOverpass` (ArcGIS features -> Overpass ways: name St_Name / STREET_NAME /
+  STREETNAME / STREET_NAM, ref RT_NUMBER, Oneway FT -> yes, TF -> -1, highway 'road'), `summary(log)`.
+- `ui/road.js` `roads(b, fresh, ll)` (anchor `/* the roads in box b (centre ll)`): replaces the single `fetch(OSM.URL, POST)` (before:
+  one POST to overpass-api.de, 30 s; any throw -> status bar "Snap to road: no OpenStreetMap roads (offline or blocked).") with the
+  sources in order (settings; Automatic adds MassDOT in Massachusetts), each from the cache first. `failText(x)`: the status bar
+  "Snap to road: could not get the <source> roads: <error> — <host> <POST|GET>; N more endpoints also failed[; MassDOT / MassGIS also
+  failed (…)]. Test connection" (link = the first endpoint's status URL, new tab); the Route tab: per source one line per endpoint
+  ("host POST + GET: error") with a Test connection link each, and what to do. Success says which server answered ("a fallback endpoint",
+  or "OpenStreetMap failed: …" when MassDOT was used). Road data settings (`setHtml`, `setAct`): source select, Overpass endpoint URL,
+  MassDOT layer URL, Save / Defaults. Cache: entries carry `src` (none = OSM, as cached before); MassDOT ids `massdot:<box>`.
+- `engine/osm.js`: `SOURCES` / `srcInfo(src)`; `route(g, pts, o)` takes `o.label` for its messages (default 'OpenStreetMap': unchanged).
+- `engine/route.js` `alignOf` (anchor `if (src.kind === 'osm') flags.push`): flag texts from `srcInfo` — OSM text identical.
+- `ui/route.js`: `SI(r)`, `attrHtml(id)` / `syncAttr` per source, `srcText`, Route-tab "Roads along the … path", Report figure caption and
+  alignment note per source (OSM text identical). `ui/drawset.js` route sheet label = `srcInfo(rt.src).dxf` (OSM text identical).
+- `engine/model.js`: `KEYS.road = 'crane.road'`; `normRouteFit` keeps `src.data = 'massdot'` (only then).
+- `ui/manual.js`: troubleshooting "Snap to road (OpenStreetMap) errors" rewritten (message / meaning / what to do table, Test connection,
+  MassDOT, Trace / Route); the workflow line links Road data settings. `index.html`: loads `engine/roadsrc.js` after `engine/osm.js`.
+### Calculations (CLAUDE.md §4)
+None changed: road graph, snapping, Dijkstra and the fitted alignment as before; MassDOT data enter the same graph. Check case
+(`tests/engine/crane-roadsrc.test.mjs` E): a 300 ft square block + diagonal A–C as ArcGIS features, diagonal `Oneway: TF`: clicks 10 ft
+beyond A and C snap to A and C; route = the diagonal 300√2 = 424.26 ft (not 600 ft round the block); one "against the one-way direction"
+warning of 424.26 ft. Existing crane-road numbers unchanged (smoke: R 300.0 ft, off-tracking 3.35 -> 7.77 ft).
+### Saved data (§5)
+New localStorage key `crane.road` (per browser: `{ src, ovp, md, lastOvp, lastMd }`). New optional route field `src.data` ('massdot').
+IndexedDB `crane.osm.v1` records gain `src` (old records read as OSM). No key or format changed.
+### Decisions (pending engineer review)
+- Endpoints found by web search (OSM wiki "Overpass API" instance list; MassDOT ArcGIS Server / MassGIS ArcGIS Online), **not reachable
+  from the build session**: CORS and the MassDOT field names not verified live. Both layer URLs and an Overpass endpoint are editable in
+  Road data settings. overpass.kumi.systems left out (the wiki lists it as the former name of overpass.private.coffee).
+- 15 s per request; Massachusetts = the box 41.18–42.89° N, 73.51–69.86° W; MassDOT routes stored as `src.kind 'osm'` + `data: 'massdot'`;
+  every MassDOT feature drivable; one-way from Oneway FT / TF only; MassDOT ways joined at identical end coordinates.
+### How the engineer diagnoses it
+Press Snap to road; read the status bar (error type + endpoint); click **Test connection**: no status page in the new tab = the network
+blocks that server (ask IT, or type a reachable mirror in Route tab → Road data settings); the page opens = the server refused this page
+(busy / rate limit / CORS): try later, or Road data: MassDOT / MassGIS, or Trace.
+### How verified
+`node tests/check-syntax.mjs` (237 files); `node tests/engine/run.mjs crane` (18 files, 136 passed; new `crane-roadsrc` 5);
+`tests/smoke/crane-road.mjs` (11 checks: + mocked failure status / Test connection / request order, fallback endpoint, MassDOT by choice);
+`crane-manual` (8), `crane-route` (5), `crane-drawings` (5), `crane-shell` (11).
