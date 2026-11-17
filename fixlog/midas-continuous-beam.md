@@ -120,3 +120,22 @@ material: the database grade name `A709-50` was a guess, and the DB request also
 - **Not yet confirmed on live Civil NX** that `TYPE: 'USER'` is accepted (the manual's spec table writes "User", its example "USER").
 ### Other copies
 - `apps/continuous-beam.html` in mlococo88/MIDAS_Civil_NX_References: updated the same way.
+
+## 2026-11-17 — MCB4: connection check before building; plain message for "client does not exist" (engineer report)
+Engineer's run: every `POST /doc/NEW` returned HTTP 404 `{"error":{"message":"client does not exist"}}`. The request reached the MIDAS
+server from the browser (so direct browser calls work, no proxy needed), but no Civil NX session was connected under that MAPI-Key.
+### Where
+- `apps/midas-continuous-beam/index.html`: `runMidas` (verify first), its `catch`, `verify()` (status text and `catch`), new constant
+  `NOT_CONNECTED_MSG` (above `checkModel`).
+### Before / after
+- Before: the run started with `/doc/NEW` and showed MIDAS's raw 404 text. After: the run first calls `/mapikey/verify`; if the key
+  isn't verified or the status isn't "connected" it stops before sending anything, with `NOT_CONNECTED_MSG` (open a model, Apps > API
+  Settings > Connect, wait for "Connected", copy the new key if it was refreshed, Verify). A "client does not exist" reply from any
+  request, or a 4xx from Verify, shows the same message.
+- No engineering content changed. **Saved data:** none.
+### How verified
+- Headless Chrome mocks: verify "disconnected" → stops after the verify call only, with the message; 404 "client does not exist" on
+  every call → same message + MIDAS's text; Verify button 404 → same message; normal connected run → results loaded (Δ 0.00 %);
+  0 console errors.
+### Other copies
+- `apps/continuous-beam.html` in mlococo88/MIDAS_Civil_NX_References: updated the same way.
