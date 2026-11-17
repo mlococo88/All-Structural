@@ -35,7 +35,7 @@ try {
   const cid = await p.evaluate(() => CranePickApp.P.cranes[0].id);
   await p.click(`[data-ca=place][data-id="${cid}"]`); await p.waitForTimeout(400);
   await setF('#luE', 1000); await setF('#luN', 2000); await setF('#luHead', 0); await setF('#luBoom', 60);
-  await setF('#lkPE', 1000); await setF('#lkPN', 2030); await setF('#lkSE', 970); await setF('#lkSN', 2000);
+  await goTab('[data-la=addPick]'); await p.click('[data-la=addPick]'); await p.waitForTimeout(150);   /* 2026-11-17: Add setup makes no pick */ await setF('#lkPE', 1000); await setF('#lkPN', 2030); await setF('#lkSE', 970); await setF('#lkSN', 2000);
   await p.evaluate(() => CranePickMap.fit([{ x: 900, y: 1900 }, { x: 1200, y: 2150 }])); await p.waitForTimeout(200);
   // the affine map lat/lng -> site frame near the crane (for the mock), from the page's own projection
   aff = await p.evaluate(() => { const o = CranePickMap.toLL({ x: 1000, y: 2000 }), d = 1e-4, fe = CranePickMap.toFt({ lat: o.lat, lng: o.lng + d }), fn = CranePickMap.toFt({ lat: o.lat + d, lng: o.lng }), f0 = CranePickMap.toFt(o);
@@ -95,7 +95,11 @@ try {
   ok(`route profile: chart drawn, steepest grade ${pr.g.toFixed(2)} %, sag at sta. ${pr.sag[0].toFixed(0)}, least clearance ${pr.clr.toFixed(2)} ft`);
   await p.click('#tabBar [data-otab=rpt]'); await p.waitForTimeout(800);
   await p.evaluate(() => CranePickReportUI.view.jump('terrain')); await p.waitForTimeout(600);
-  const rp = await txt('#out [data-opane=rpt]'); assert.match(rp, /Terrain.*not adequate to certify crane levelness.*survey data governs/); assert.ok(!/NaN|undefined/.test(rp));
+  // 2026-11-17: the §Terrain section's own text (textContent), not innerText of the whole tab: the Report's subsections are
+  // content-visibility: auto, and since #1625 the §Route figures above it grow on render and push §Terrain out of view after the jump,
+  // so innerText (rendered text only) left out §Terrain's body.
+  const rp = await p.$eval('#out [data-opane=rpt]', e => { const h = [...e.querySelectorAll('.rp-sec > .rp-h1')].find(x => /^\d+\. Terrain$/.test(x.textContent.trim())); return h ? h.parentElement.textContent.replace(/\s+/g, ' ') : ''; });
+  assert.match(rp, /Terrain.*not adequate to certify crane levelness.*survey data governs/); assert.ok(!/NaN|undefined/.test(rp));
   await shot('c8-report');
   await p.click('#tabBar [data-otab=picks]'); await p.waitForTimeout(300); assert.match(await txt('#pkTbl'), new RegExp(`Level \\(terrain\\).*${Math.abs(e.sMax).toFixed(2)} % · max block ${(e.bMax * 12).toFixed(1)} in`));
   await p.click('#tabBar [data-otab=summary]'); await p.waitForSelector('#smTbl'); assert.match(await txt('#smTbl'), new RegExp(`Level \\(terrain\\).*${Math.abs(e.sMax).toFixed(2)} % · block ${(e.bMax * 12).toFixed(1)} in`));
