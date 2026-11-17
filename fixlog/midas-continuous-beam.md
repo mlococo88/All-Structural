@@ -139,3 +139,25 @@ server from the browser (so direct browser calls work, no proxy needed), but no 
   0 console errors.
 ### Other copies
 - `apps/continuous-beam.html` in mlococo88/MIDAS_Civil_NX_References: updated the same way.
+
+## 2026-11-17 — MCB5: sections sent with the full DB/User key set, by PUT (engineer report)
+Engineer's run (connected, user-defined material stored): the read-back check stopped with "/db/SECT: 17 of 17 not stored"; material,
+nodes and elements were stored. So Civil NX dropped every section without an error. This probably also caused the first live
+failure ("make Property"), which happened with the rectangular SB section.
+### Where
+- `apps/midas-continuous-beam/index.html`: `buildRequests` (`/db/SECT` body and method); `runMidas` loop (always logs the `/db/SECT`
+  and `/db/MATL` responses).
+### Before / after
+- Before: `POST /db/SECT`, `SECT_BEFORE: { USE_SHEAR_DEFORM: false, SHAPE: 'H', DATATYPE: 2, SECT_I: { vSIZE } }`, name
+  `I55.37-W53.12x0.5625-…`.
+- After: `PUT /db/SECT`; `SECT_BEFORE` adds `OFFSET_PT: 'CC'`, `OFFSET_CENTER: 0`, `USER_OFFSET_REF: 0`, `HORZ_OFFSET_OPT: 0`,
+  `USERDEF_OFFSET_YI/YJ: 0`, `VERT_OFFSET_OPT: 0`, `USERDEF_OFFSET_ZI/ZJ: 0`, `USE_WARPING_EFFECT: false`; name `GIRDER_<id>`. This is the key
+  set and method MIDAS's own midas-civil Python library (v1.8.0, `_SS_DBUSER.toJSON`, `Offset.JS`, `Section.create` → `PUT /db/SECT`)
+  uses, and matches the manual's "Section Properties - Common" examples (OFFSET_PT, HORZ/VERT_OFFSET_OPT, USE_WARPING_EFFECT).
+- vSIZE values, units and order are unchanged; offset at the centroid = the element axis the check solver assumes. No engineering
+  content changed. **Saved data:** none.
+### How verified
+- Headless Chrome mocked run: results loaded, Δ 0.00 %; 0 console errors. **Needs a live re-run** to confirm Civil NX now stores the
+  sections; if not, the log now shows MIDAS's reply to `/db/SECT`.
+### Other copies
+- `apps/continuous-beam.html` in mlococo88/MIDAS_Civil_NX_References: updated the same way.

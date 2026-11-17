@@ -604,11 +604,18 @@ function buildRequests() {
   }
   const sect = {};
   const ft = v => r6(v / 12);
+  // Same key set and method (PUT) as MIDAS's own midas-civil Python library (_SS_DBUSER.toJSON + Offset.JS, Section.create):
+  // offset at the centroid ("CC", OFFSET_CENTER 0), no user offsets, no warping, shear deformation off.
   m.sects.forEach(s => sect[s.id] = {
-    SECTTYPE: 'DBUSER', SECT_NAME: `I${s.H}-W${s.D}x${s.tw}-T${s.bt}x${s.tt}-B${s.bb}x${s.tb}`.slice(0, 60),
-    SECT_BEFORE: { USE_SHEAR_DEFORM: false, SHAPE: 'H', DATATYPE: 2,
-      SECT_I: { vSIZE: [ft(s.H), ft(s.bt), ft(s.tw), ft(s.tt), ft(s.bb), ft(s.tb), 0, 0] } } });
-  reqs.push(['POST', '/db/SECT', { Assign: sect }]);
+    SECTTYPE: 'DBUSER', SECT_NAME: `GIRDER_${s.id}`,
+    SECT_BEFORE: {
+      SHAPE: 'H', DATATYPE: 2,
+      SECT_I: { vSIZE: [ft(s.H), ft(s.bt), ft(s.tw), ft(s.tt), ft(s.bb), ft(s.tb), 0, 0] },
+      OFFSET_PT: 'CC', OFFSET_CENTER: 0, USER_OFFSET_REF: 0,
+      HORZ_OFFSET_OPT: 0, USERDEF_OFFSET_YI: 0, USERDEF_OFFSET_YJ: 0,
+      VERT_OFFSET_OPT: 0, USERDEF_OFFSET_ZI: 0, USERDEF_OFFSET_ZJ: 0,
+      USE_SHEAR_DEFORM: false, USE_WARPING_EFFECT: false } });
+  reqs.push(['PUT', '/db/SECT', { Assign: sect }]);
   const node = {};
   m.nodes.forEach(n => node[n.id] = { X: r6(n.x), Y: 0, Z: 0 });
   reqs.push(['POST', '/db/NODE', { Assign: node }]);
@@ -716,6 +723,7 @@ async function runMidas() {
           ($('matSrc').value === 'DB' ? 'If the material is the problem, switch Material source to "User-defined".' : '');
         throw e;
       }
+      if (ep === '/db/SECT' || ep === '/db/MATL') log(`${ep} response: ${JSON.stringify(r).slice(0, 300)}`);
       if (method !== 'GET' && ep !== '/post/TABLE') {
         const txt = JSON.stringify(r);
         if (txt && txt !== '{}' && /error|fail|invalid|message/i.test(txt)) log(`${ep} response: ${txt.slice(0, 400)}`, 'err');
