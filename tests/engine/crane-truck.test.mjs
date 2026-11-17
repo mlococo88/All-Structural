@@ -124,3 +124,15 @@ test('E. saved data: the new fields only when present (normRoute); steps KaTeX (
   evs.forEach(ev => [].concat(ev.geo.steps, ev.oh.top).forEach(s => { for (const f of ['sym', 'eq', 'sub']) if (s[f]) { parse(s[f]); n++; } if (s.unit) { parse(W.SharedSteps.unitTeX(s.unit)); n++; } assert.ok(!/NaN|undefined/.test(W.SharedSteps.toText([s])), s.id + ' ' + W.SharedSteps.toText([s])); }));
   assert.ok(n > 60, String(n));
 });
+
+test('F. QA 2026-11-17: tangent-length text r tan(|Δ|/2); the off-tracking window reported; the load defaults flagged', () => {
+  const r = { pts: [{ x: 0, y: 0 }, { x: 120, y: 10 }, { x: 220, y: 60 }, { x: 300, y: 160 }, { x: 330, y: 300 }], rad: [null, 80, null, 40, null], veh: { type: 'jeep', L1: 18, e: 1, Lj: 12, ej: 0.5, L2: 90, k: 0.6 }, load: { L: 110, r: 5, W: 90000 }, pickId: 'k1' };
+  const P = Object.assign({}, P0, { picks: [{ id: 'k1', name: 'Pick 1', pick: { x: 0, y: 0 }, set: { x: 0, y: 0 } }] }), ev = RT.evaluate(r, P, 'rt');
+  const T = ev.turns[0].steps.find(s => s.id.endsWith('.T')); assert.equal(W.SharedSteps.toText(T.eq), 'r tan(|Δ|/2)'); assert.match(W.SharedSteps.toText(T.sub), /^80\.00 tan\([\d.]+°\/2\)$/);
+  // turn 1's window (curve start + one vehicle length) runs into turn 2: labelled; the values are unchanged (pinned in crane-road G)
+  const ot = ev.turns[0].steps.find(s => s.id.endsWith('.OT')); assert.match(ot.label, /searched from 105\.0 to [\d,.]+ ft .*runs into turn 2 from 220\.9 ft: the value can include its off-tracking \(conservative\)/); assert.equal(ev.turns[0].otOver, true);
+  near(ev.turns[0].ot, 6.140997313745413, 1e-9, 'unchanged');
+  const fl = ev.flags.filter(f => f.kind === 'load'); assert.equal(fl.length, 1); assert.equal(fl[0].level, 'warn');
+  assert.match(fl[0].text, /the DEFAULT width 8\.00 ft, height 6\.00 ft are used \(the pick "Pick 1" does not give the load's size\)/);
+  assert.equal(RT.evaluate(Object.assign({}, r, { load: { L: 110, r: 5, W: 90000, B: 8, h: 6 } }), P, 'rt').flags.filter(f => f.kind === 'load').length, 0, 'all entered: no flag');
+});

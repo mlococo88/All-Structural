@@ -117,7 +117,9 @@
     const t = tandemOf(r, P), T = window.CranePickTandem;
     if (t && T) { const ob = T.object(t); l.L = ob.L; l.W = ob.Wg; l.B = Math.max(ob.tmax - ob.tmin, 0.5); l.h = ob.H > 0 ? ob.H : l.h; l.endA = r.endA === 'rear' ? 'rear' : 'front';
       l.cg = l.endA === 'front' ? ob.xcg : ob.L - ob.xcg; l.tcg = ob.tcg; l.from = `girder lift "${t.name}"`; l.tandem = t; l.ob = ob; return l; }
-    if (!isNum(l.cg)) l.cg = l.L / 2; l.from = 'entered'; return l; }
+    // 2026-11-17 (QA): the load values not entered (the defaults are used): listed, flagged by geometry() and marked "default" in the outputs
+    l.dflt = ['L', 'W', 'B', 'h'].filter(k => !isNum(src[k]));
+    if (!isNum(l.cg)) l.cg = l.L / 2; l.from = l.dflt.length ? 'entered / default' : 'entered'; return l; }
   /* ---------- 1. the path ---------- */
   const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y }), add = (a, b) => ({ x: a.x + b.x, y: a.y + b.y }), mul = (a, k) => ({ x: a.x * k, y: a.y * k });
   const len = a => Math.hypot(a.x, a.y), unit = a => { const l = len(a) || 1; return { x: a.x / l, y: a.y / l }; }, left = a => ({ x: -a.y, y: a.x });
@@ -285,11 +287,14 @@
       let ot = 0, otS = t.s0, Rin = Infinity, Rout = 0, inPart = '', outPart = '';
       // the radii are measured in the curve's sector (between the radii to its tangent points): outside it the vehicle is on a tangent
       const a0 = Math.atan2(t.A.y - t.c.y, t.A.x - t.c.x), sg = Math.sign(t.D), inSec = p => { const a = ang(Math.atan2(p.y - t.c.y, p.x - t.c.x) - a0) * sg; return a >= -1e-9 && a <= Math.abs(t.D) + 1e-9; };
+      // QA 2026-11-17: the window (curve start to one vehicle length past its end) is reported with the value; when it runs into the next
+      // curve the value can include that curve's off-tracking (kept: conservative; a long vehicle's own peak can come after the next PC)
+      const nx = pa.turns[k + 1], over = nx && nx.s0 < end - 1e-9;
       inT.forEach(q => { if (q.ot > ot) { ot = q.ot; otS = q.s; } q.parts.forEach(pp => { if (!pp.poly.some(inSec)) return; const d = polyDist(t.c, pp.poly); if (d < Rin) { Rin = d; inPart = pp.part; } pp.poly.forEach(c => { if (!inSec(c)) return; const e = G().dist(t.c, c); if (e > Rout) { Rout = e; outPart = pp.part; } }); }); });
       const ss = steady(v, t.r), pre = `${idp}.t${k + 1}`, steps = [];
       const nm = t.lbl || `Turn ${k + 1}`;
       steps.push(st(pre, { id: 'D', label: `${nm}: deflection at ${t.kind ? 'PI ' + t.i : 'vertex ' + (t.i + 1)} (+ left)`, sym: '\\Delta', eq: '\\text{atan2}(\\hat{u}_{in} \\times \\hat{u}_{out},\\; \\hat{u}_{in} \\cdot \\hat{u}_{out})', sub: '', value: t.D / DEG, unit: 'deg', d: 1 }),
-        st(pre, { id: 'T', label: `Tangent length (radius ${fmt(t.rq, 1)} ft ${t.from})`, sym: 'T', eq: 'r \\tan\\frac{|\\Delta|}{2}', sub: `${tx(t.rq, 2)} \\tan\\frac{${tx(Math.abs(t.D) / DEG, 2)}°}{2}`, value: t.rq * Math.tan(Math.abs(t.D) / 2), unit: 'ft', d: 2,
+        st(pre, { id: 'T', label: `Tangent length (radius ${fmt(t.rq, 1)} ft ${t.from})`, sym: 'T', eq: 'r \\tan(|\\Delta|/2)', sub: `${tx(t.rq, 2)} \\tan(${tx(Math.abs(t.D) / DEG, 2)}°/2)`, value: t.rq * Math.tan(Math.abs(t.D) / 2), unit: 'ft', d: 2,
           note: t.reduced ? `More than the tangent available (${fmt(t.T, 2)} ft): r reduced to T / tan(|Δ|/2) = ${fmt(t.r, 2)} ft.` : '' }));
       if (t.reduced) steps.push(st(pre, { id: 'r', label: 'Curve radius used (the tangent available governs)', sym: 'r', eq: '\\frac{T_{avail}}{\\tan(|\\Delta|/2)}', sub: `\\frac{${tx(t.T, 2)}}{\\tan(${tx(Math.abs(t.D) / DEG / 2, 2)}°)}`, value: t.r, unit: 'ft', d: 2 }));
       if (ss) {
@@ -303,7 +308,7 @@
         steps.push(st(pre, { id: 'OTss', label: 'Steady-state off-tracking (the limit on a long curve of this radius)', sym: 'OT_{ss}', eq: 'r \\minus R_{D}', sub: `${tx(t.r, 2)} \\minus ${tx(ss.RD, 2)}`, value: ss.OT, unit: 'ft', d: 2 }));
       } else steps.push(st(pre, { id: 'OTss', label: 'Steady state: the radius is shorter than the wheelbases allow (no steady state)', sym: 'OT_{ss}', eq: '', sub: '', value: 'none', d: 0 }));
       const frac = t.r * Math.abs(t.D) / Math.max(1e-9, v.L1 + v.L2);
-      steps.push(st(pre, { id: 'OT', label: `Max off-tracking in the turn (simulation, at ${fmt(otS, 1)} ft along the route; arc length ${fmt(t.r * Math.abs(t.D), 1)} ft = ${fmt(frac, 2)} × the wheelbases: ${frac < 2 ? 'transient, below the steady state' : 'near the steady state'})`, sym: 'OT_{max}', eq: '\\max_{s} d(D(s),\\, \\text{path})', sub: '', value: ot, unit: 'ft', d: 2, ref: REF.ot }),
+      steps.push(st(pre, { id: 'OT', label: `Max off-tracking in the turn (simulation, searched from ${fmt(t.s0, 1)} to ${fmt(Math.min(end, pa.L), 1)} ft along the route (one vehicle length past the curve${over ? `; this window runs into ${nx.lbl || 'turn ' + (k + 2)} from ${fmt(nx.s0, 1)} ft: the value can include its off-tracking (conservative)` : ''}); at ${fmt(otS, 1)} ft; arc length ${fmt(t.r * Math.abs(t.D), 1)} ft = ${fmt(frac, 2)} × the wheelbases: ${frac < 2 ? 'transient, below the steady state' : 'near the steady state'})`, sym: 'OT_{max}', eq: '\\max_{s} d(D(s),\\, \\text{path})', sub: '', value: ot, unit: 'ft', d: 2, ref: REF.ot }),
         st(pre, { id: 'Rin', label: `Inside radius of the swept path (least distance from the curve centre; ${inPart})`, sym: 'R_{in}', eq: '\\min d(O, \\text{outlines in the curve\'s sector})', sub: '', value: Rin, unit: 'ft', d: 2 }),
         st(pre, { id: 'Rout', label: `Outside radius of the swept path (largest; ${outPart}${outPart === 'load' ? ': the load\'s swing-out' : ''})`, sym: 'R_{out}', eq: '\\max d(O, \\text{corners in the curve\'s sector})', sub: '', value: Rout, unit: 'ft', d: 2 }),
         st(pre, { id: 'Wsw', label: 'Swept width in the turn', sym: 'W_{sw}', eq: 'R_{out} \\minus R_{in}', sub: `${tx(Rout, 2)} \\minus ${tx(Rin, 2)}`, value: Rout - Rin, unit: 'ft', d: 2 }));
@@ -313,14 +318,14 @@
       if (t.kind) {   // fitted alignment: the curve's geometry (PC, PT, length, stations; the fit check)
         const La = t.r * Math.abs(t.D), AL = window.CranePickAlign, sta = AL ? AL.sta : (x => fmt(x, 2));
         const g = [st(pre, { id: 'L', label: `${nm}: arc length`, sym: 'L', eq: 'r\\,|\\Delta|', sub: `${tx(t.r, 2)} \\times ${tx(Math.abs(t.D), 5)}\\ \\text{rad}`, value: La, unit: 'ft', d: 2 }),
-          st(pre, { id: 'Tu', label: `${nm}: tangent length used (PI to PC and PT)`, sym: 'T', eq: 'r \\tan\\frac{|\\Delta|}{2}', sub: `${tx(t.r, 2)} \\tan\\frac{${tx(Math.abs(t.D) / DEG, 2)}°}{2}`, value: t.T, unit: 'ft', d: 2,
+          st(pre, { id: 'Tu', label: `${nm}: tangent length used (PI to PC and PT)`, sym: 'T', eq: 'r \\tan(|\\Delta|/2)', sub: `${tx(t.r, 2)} \\tan(${tx(Math.abs(t.D) / DEG, 2)}°/2)`, value: t.T, unit: 'ft', d: 2,
             note: `PC sta. ${sta(t.s0)}, PI sta. ${sta(t.s0 + t.T)}, PT sta. ${sta(t.s1)} (stations along the steer-axle path from its start).` })];
         if (t.fit && isNum(t.fit.R0)) g.unshift(st(pre, { id: 'Rf', label: `${nm}: radius fitted to the line (least squares, the arc tangent to both tangents; ${t.fit.n} points, rms ${fmt(t.fit.rms, 2)} ft)`, sym: 'R_{fit}', eq: '\\arg\\min_{R} \\sum d_{i}(R)^{2}', sub: '', value: t.fit.R0, unit: 'ft', d: 2,
           note: `Check: the free least-squares circle through the curve's points R_LS = ${fmt(t.fit.Rls, 2)} ft.${t.fit.atMax ? ' The fit reached the largest radius that fits the tangents.' : ''}${Math.abs(t.fit.R0 - t.rq) > 1e-9 ? ` Radius entered: ${fmt(t.rq, 2)} ft.` : ''}` }));
         steps.unshift(...g);
         if (t.kind === 'turn') steps.unshift(st(pre, { id: 'kind', label: `${nm}: an intersection turn (the heading changes within ${fmt(t.fit && isNum(t.fit.Lc) ? t.fit.Lc : 0, 1)} ft: a corner, not a road curve); radius ${t.from}`, sym: 'r', eq: '', sub: '', value: t.rq, unit: 'ft', d: 2 }));
       }
-      out.push(Object.assign({ n: k + 1, i: t.i, D: t.D, r: t.r, rq: t.rq, reduced: t.reduced, c: t.c, s0: t.s0, s1: t.s1, ot, otS, Rin, Rout, inPart, outPart, ss, steps, flags },
+      out.push(Object.assign({ n: k + 1, i: t.i, D: t.D, r: t.r, rq: t.rq, reduced: t.reduced, c: t.c, s0: t.s0, s1: t.s1, ot, otS, otWin: [t.s0, Math.min(end, pa.L)], otOver: !!over, Rin, Rout, inPart, outPart, ss, steps, flags },
         t.kind ? { kind: t.kind, lbl: t.lbl, tag: t.tag, T: t.T, PC: t.A, PT: t.B, PI: t.PI, Lc: t.r * Math.abs(t.D), from: t.from, fit: t.fit } : {}));
     });
     return out;
@@ -538,6 +543,8 @@
     else steps.push(st(pre, { id: 'L2', label: `Body wheelbase (${v.L2src === 'entered' ? 'entered' : 'default'})`, sym: 'L_{2}', eq: '', sub: '', value: v.L2, unit: 'ft', d: 2 }));
     steps.push(st(pre, { id: 'f', label: `Load front ahead of the ${hasJeep(v) ? 'jeep bolster' : 'kingpin'} (− = behind it)`, sym: 'f', eq: 'L \\minus L_{2} \\minus r', sub: `${tx(l.L, 2)} \\minus ${tx(v.L2, 2)} \\minus ${tx(l.r, 2)}`, value: f, unit: 'ft', d: 2 }));
     const out = { v, l, x, f, lim, limFrom, steps, flags };
+    if (!l.tandem && l.dflt && l.dflt.length) { const NM = { L: `length ${fmt(l.L, 2)} ft`, W: `weight ${fmt(l.W, 0)} lb`, B: `width ${fmt(l.B, 2)} ft`, h: `height ${fmt(l.h, 2)} ft` }, k = r && r.pickId && P && (P.picks || []).find(q => q.id === r.pickId);
+      flags.push({ level: 'warn', kind: 'load', text: `The load on the truck is not fully entered: the DEFAULT ${l.dflt.map(q => NM[q]).join(', ')} ${l.dflt.length > 1 ? 'are' : 'is'} used${k ? ` (the pick "${k.name}" does not give the load's size)` : ''}: enter the load (Route tab, Load on the trailer) or link a girder lift.` }); }
     if (semiT) {
       const Ld = v.dF + v.L2 + v.dR, oF = f - v.dF, oR = l.r - v.dR; Object.assign(out, { Ldeck: Ld, oF, oR });
       steps.push(st(pre, { id: 'Ldeck', label: 'Deck length (ahead of the kingpin + body wheelbase + behind the rear group)', sym: 'L_{deck}', eq: 'd_{F} + L_{2} + d_{R}', sub: `${tx(v.dF, 2)} + ${tx(v.L2, 2)} + ${tx(v.dR, 2)}`, value: Ld, unit: 'ft', d: 2, note: `load length ${fmt(l.L, 2)} ft: ${l.L > Ld + 1e-9 ? 'longer than the deck' : 'on the deck'}` }),
