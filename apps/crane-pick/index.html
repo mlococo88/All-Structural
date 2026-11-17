@@ -100,7 +100,8 @@
     'ui/tandem.js',         // C5: the girder-lift card and tandem limit (Lifts tab), the girder poses on the map, scrubber, Picks rows, Report §Tandem lifts
     'engine/align.js',      // 2026-11-17: the fitted alignment (tangents + circular curves) of a drawn / traced / OpenStreetMap route line
     'engine/osm.js',        // 2026-11-17: OpenStreetMap roads (Overpass API): road graph, snapping, shortest path along the roads, names, one-way
-    'engine/roadsrc.js',    // 2026-11-17: where the roads come from: Overpass endpoints with fallbacks (POST, GET), MassDOT / MassGIS (MA), error types
+    'engine/states.js',     // 2026-11-17: MA / RI / CT outlines (Census cartographic boundaries, simplified): which state road source to ask
+    'engine/roadsrc.js',    // 2026-11-17: where the roads come from: Overpass endpoints (backoff, fallbacks), state road layers (MA / RI / CT), diagnose
     'engine/route.js',      // C6: trucking route: path, kinematic swept path, overhead clearances, axle loads, haul road, posted bridges, staging
     'engine/truckgfx.js',   // 2026-11-17: the haul vehicle carrying its load, drawn (plan, side elevation; the map vehicle, Route tab, Report, route sheet)
     'ui/route.js',          // C6: Route input and output tabs, the route on the map (live while dragging), Report §Route

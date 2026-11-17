@@ -74,7 +74,7 @@ try {
   const labels = ['Save as…', 'Saved projects…', 'New', 'Export JSON', 'Add plan sheet…', 'Align to map…', 'Pick two points…', 'Replace image…', 'Clean up unused images…',
     'Load crane library from GitHub', 'Load crane file(s)…', 'New crane (paste a chart)…', 'Defaults', 'Add setup (place on the map)', 'Edit…', 'Add a single pick', 'Add single pick',
     'Add girder lift (tandem, two cranes)', 'Add girder lift (one crane)', 'Place for crane 1', 'Place for crane 2', 'Add a waypoint', 'Play', 'Route', 'Overhead clearance (point)', 'Overhead clearance (line)',
-    'Haul road / mats', 'Posted bridge', 'Snap to road (OpenStreetMap)', 'Trace', 'Move the girder lift\'s pick pose to the girder on the truck', 'Fetch terrain for this site', 'Download DXF', 'Print sheet', 'Print all sheets', 'Print report', 'Print manual'];
+    'Haul road / mats', 'Posted bridge', 'Snap to road (OpenStreetMap)', 'Trace', 'Diagnose road data', 'Move the girder lift\'s pick pose to the girder on the truck', 'Fetch terrain for this site', 'Download DXF', 'Print sheet', 'Print all sheets', 'Print report', 'Print manual'];
   const found = await p.evaluate(async L => {
     const sel = n => { const b = [...document.querySelectorAll('#inPanes [data-pane=cranes] button, #inPanes [data-pane=lifts] button, #inPanes [data-pane=route] button')].find(x => x.textContent.trim() === n); if (b) b.click(); };
     CranePickApp.showITab('cranes'); sel('Crane A'); CranePickApp.showITab('lifts'); sel('Tandem 1'); CranePickApp.showITab('route'); sel('Route 1');

@@ -18,13 +18,13 @@
   const tagOf = t => t.tag || 'T' + t.n;
   const isOsm = r => !!(r && r.src && r.src.kind === 'osm');
   function refit(r) { const o = r.al && r.al.opt ? r.al.opt : null, f = AL().fit(r.pts, o); r.mode = 'fit'; r.al = f.al; }
-  /* 2026-11-17: the road data source of an OSM-kind route (OpenStreetMap, or MassDOT / MassGIS: src.data 'massdot') */
+  /* 2026-11-17: the road data source of an OSM-kind route (OpenStreetMap, or a state source: src.data 'massdot' | 'ri' | 'ct') */
   const SI = r => { const O = OSM(); return O && O.srcInfo ? O.srcInfo(r && r.src) : O; };
   function attrHtml(id) { const O = OSM(), S = O && O.SOURCES ? O.SOURCES[id || 'osm'] : O; return S ? `Roads: <a href="${S.ATTR_URL}" target="_blank" rel="noopener">${esc(S.ATTR)}</a>${S.lic === '' ? '' : ' (ODbL)'}, ${esc(S.NOT_SURVEY)}` : ''; }
   const attrOn = new Set();
   function syncAttr() { const m = MP() && MP().map; if (!m || !m.attributionControl) return;
     const want = new Set((A.P.routes || []).filter(isOsm).map(r => (SI(r) || {}).id || 'osm'));
-    ['osm', 'massdot'].forEach(id => { if (want.has(id) && !attrOn.has(id)) { m.attributionControl.addAttribution(attrHtml(id)); attrOn.add(id); } else if (!want.has(id) && attrOn.has(id)) { m.attributionControl.removeAttribution(attrHtml(id)); attrOn.delete(id); } }); }
+    Object.keys((OSM() || {}).SOURCES || { osm: 1 }).forEach(id => { if (want.has(id) && !attrOn.has(id)) { m.attributionControl.addAttribution(attrHtml(id)); attrOn.add(id); } else if (!want.has(id) && attrOn.has(id)) { m.attributionControl.removeAttribution(attrHtml(id)); attrOn.delete(id); } }); }
   const isNum = v => typeof v === 'number' && isFinite(v);
   const fmt = (v, d) => isNum(v) ? v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—';
   const COL = { path: '#1D4ED8', swept: '#2563EB', load: '#7C3AED', overhead: '#B45309', haul: '#78716C', bridge: '#0E7490', stop: '#DC2626', warn: '#D97706', info: '#64748B' };

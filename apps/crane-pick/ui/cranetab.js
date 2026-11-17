@@ -31,7 +31,7 @@
   function draw() {
     if (!el || !F()) return; dirty = false;
     const P = A.P, opts = F().options(P);
-    if (!opts.length) { el.innerHTML = '<div class="sec"><div class="secHead">Crane</div><div class="secBody"><p class="note">No crane in the project yet: load one and add it on the Cranes tab.</p></div></div>'; return; }
+    if (!opts.length) { el.innerHTML = '<div class="sec"><div class="secHead">Crane</div><div class="secBody"><p class="note">No crane in the project yet: load one and add it on the Cranes &amp; setups tab.</p></div></div>'; return; }
     const s = st(); let o = opts.find(x => optKey(x) === optKey(s)) || opts.find(x => x.used) || opts[0];
     let m; try { m = F().model(P, ctx(), { craneId: o.craneId, setupId: o.setupId, group: o.group, lift: s.lift, at: s.at, cfg: s.cfg }); } catch (e) { console.error(e); el.innerHTML = `<div class="sec"><div class="secBody"><p class="warnT">The crane could not be drawn: ${esc(e.message)}</p></div></div>`; return; }
     if (!m) return;
@@ -43,8 +43,8 @@
     const ptLine = pt ? `<p class="note crnPt" id="crnPtLine">${esc(pt.lift.name)}, ${esc(pt.where)}: R = <b>${fmtN(pt.R, 2)} ft</b>, W = <b>${fmtN(pt.W, 0)} lb</b>, C = ${pt.look && pt.look.ok ? fmtN(pt.C, 0) + ' lb' : 'not permitted'}${pt.look && pt.look.ok ? `, <b>${fmtN(pt.pct, 1)} % of chart</b>` : ''}${isFinite(pt.m) && pt.m != null ? `, hook reach margin ${fmtN(pt.m, 2)} ft` : ''}.</p>` : '';
     el.innerHTML = `<div class="sec"><div class="secHead">Crane used in the analysis</div><div class="secBody">
       <div class="crnBar"><label for="crnSel">Crane / setup</label><select id="crnSel">${opts.map(x => `<option value="${esc(optKey(x))}"${x === o ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}</select>${liftSel}${zSel}</div>
-      <p class="note"><b>${esc(m.name)}</b>${m.virt ? ' (not placed)' : ` · setup <b>${esc(m.u.name)}</b>`} · ${esc(m.chs.gr ? m.chs.gr.label : 'no chart')} · source: ${esc(so.doc || 'not stated')}, rev. ${esc(so.revision || '—')}, ${esc(so.date || '—')}${d.preliminary ? ' · <span class="crnA">PRELIMINARY document</span>' : ''}${d.app_inputs && d.app_inputs.edited ? ' · <span class="crnA">chart edited in this tool</span>' : ''} · <a href="#" data-cg="cranes">edit on the Cranes tab</a> · <a href="#" data-cg="rpt" data-key="crane-${esc(m.crane.id)}">Report §Cranes</a>${m.virt ? '' : ` · <a href="#" data-cg="dwg" data-sheet="crane-${esc(m.u.id)}">drawing</a>`}</p>
-      ${nA ? `<p class="note"><span class="crnA">${nA} value${nA > 1 ? 's' : ''} assumed or not given</span>: highlighted in the figures and the table; enter the crane's own on the Cranes tab.</p>` : ''}
+      <p class="note"><b>${esc(m.name)}</b>${m.virt ? ' (not placed)' : ` · setup <b>${esc(m.u.name)}</b>`} · ${esc(m.chs.gr ? m.chs.gr.label : 'no chart')} · source: ${esc(so.doc || 'not stated')}, rev. ${esc(so.revision || '—')}, ${esc(so.date || '—')}${d.preliminary ? ' · <span class="crnA">PRELIMINARY document</span>' : ''}${d.app_inputs && d.app_inputs.edited ? ' · <span class="crnA">chart edited in this tool</span>' : ''} · <a href="#" data-cg="cranes">edit on the Cranes &amp; setups tab</a> · <a href="#" data-cg="rpt" data-key="crane-${esc(m.crane.id)}">Report §Cranes</a>${m.virt ? '' : ` · <a href="#" data-cg="dwg" data-sheet="crane-${esc(m.u.id)}">drawing</a>`}</p>
+      ${nA ? `<p class="note"><span class="crnA">${nA} value${nA > 1 ? 's' : ''} assumed or not given</span>: highlighted in the figures and the table; enter the crane's own on the Cranes &amp; setups tab.</p>` : ''}
       ${legend()}${ptLine}</div></div>
       <div class="crnGrid">
         <div class="sec"><div class="secHead">1. Plan (crane frame, carrier front up; to scale)</div><div class="secBody crnFig" id="crnPlan">${svgP}
@@ -64,7 +64,7 @@
   /* 2026-11-17 (engineer: "I need to see exactly where the outriggers sit"): 6. Dimension check (each drawn dimension against the
      manufacturer's value and page: engine/cranegfx.js dimCheck) and 7. support locations (float centres / track ends: local x / y and
      State Plane, cranegfx floatTable), with the stake-out CSV. A project copy of a crane without the manufacturer geometry block, while the
-     library copy has one, is flagged (Cranes tab: "Use the library copy"). */
+     library copy has one, is flagged (Cranes & setups tab: "Use the library copy"). */
   function libHasGeo(c) {
     try { const K = window.CranePickCranes, v = JSON.parse(localStorage.getItem(window.CranePickModel.KEYS.library) || 'null'), e = v && v.cranes && v.cranes[K.key(c)];
       const d = e && (e.def || e.crane || e); return !!(d && K.geometryOf(d)); } catch (e) { return false; }
@@ -74,7 +74,7 @@
     const c = m.c, has = !!K.geometryOf(c), u = m.u || { x: 0, y: 0, heading: 0 };
     let rows = [], fl = []; try { rows = CG.dimCheck(c, u); fl = m.virt ? [] : CG.floatTable(c, u, A.P.site.zone, window.proj4); } catch (e) { console.error(e); }
     const fp = window.CranePickLift.footprint(c, u), d = v => fmtN(v, 2), z = window.CranePickGeo.zone(A.P.site.zone), un = z.unit === 'm' ? 'm' : 'ft';
-    const flag = has ? '' : `<p class="note"><span class="crnA">This crane's project copy has no manufacturer geometry block</span>${libHasGeo(c) ? ': the library copy has one: <b>Cranes tab → Use the library copy</b> to draw it (and place the floats) from the manufacturer\'s dimension drawings.' : ': the floats and outline are drawn from the file\'s dimensions and the assumptions listed below.'}</p>`;
+    const flag = has ? '' : `<p class="note"><span class="crnA">This crane's project copy has no manufacturer geometry block</span>${libHasGeo(c) ? ': the library copy has one: <b>Cranes &amp; setups tab → Use the library copy</b> to draw it (and place the floats) from the manufacturer\'s dimension drawings.' : ': the floats and outline are drawn from the file\'s dimensions and the assumptions listed below.'}</p>`;
     const ok = r => r.ok === true ? '<span class="ok">matches</span>' : r.ok === false ? '<span class="crnA">differs</span>' : r.mfr == null ? '<span class="crnA">not given</span>' : '—';
     const spr = fp.drawOnly ? `<p class="note"><span class="crnA">Outriggers drawn at "${esc(fp.spread)}"</span>: the chart group has no chart at this spread: the capacities and the ground loads use the "${esc(fp.chartSpread || '—')}" chart. Not valid for this setup until a chart for this spread is used.</p>` : '';
     return `<div class="sec" id="crnDim"><div class="secHead">6. Dimension check: drawn vs manufacturer</div><div class="secBody">${flag}${spr}
