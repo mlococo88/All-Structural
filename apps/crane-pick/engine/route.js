@@ -24,6 +24,12 @@
            road, ft), w (overhead point: radius; haul road / bridge: width, ft), qa (haul: allowable bearing, psf), mat (haul: as C4's mat
            { type, B, L, t, Fb, Fv, E, Fy, gamma, k }), post: { gross, axle, tLabel, tTons } (bridge: tons) }
 
+   2026-11-17 (fitted alignment): route.mode = 'fit' (absent = the legacy "each vertex is a turn" path below, unchanged); route.al = the
+           alignment fitted to route.pts (engine/align.js: PIs, radius and kind ('curve' | 'turn') per PI); route.src = { kind: 'click' |
+           'trace' | 'osm', at (fetch date), names: [{ name, s0, s1 }], against: [{ name, s0, s1 }] (one-way roads travelled against
+           their direction), cl (the OSM road centreline), snaps } (OSM: engine/osm.js); route.lane = { on, w } (the travel-lane offset
+           of the OSM centreline: w / 2 to the right). In 'fit' mode route.pts is the line the alignment is fitted to (the clicks, the
+           trace or the OSM path, after the lane offset) and the path is built from route.al (pathAl, method 1b).
    Methods (CLAUDE.md §4: new calculation; Decisions pending engineer review):
    1. Path: straight tangents between the drawn vertices, joined at each interior vertex by a circular curve of radius r (entered per
       vertex, else rDef): deflection Δ (signed, + left), tangent length T = r tan(|Δ|/2); T is limited to the available tangent (half of
@@ -104,7 +110,45 @@
   const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y }), add = (a, b) => ({ x: a.x + b.x, y: a.y + b.y }), mul = (a, k) => ({ x: a.x * k, y: a.y * k });
   const len = a => Math.hypot(a.x, a.y), unit = a => { const l = len(a) || 1; return { x: a.x / l, y: a.y / l }; }, left = a => ({ x: -a.y, y: a.x });
   const U = th => ({ x: Math.cos(th), y: Math.sin(th) }), N = th => ({ x: -Math.sin(th), y: Math.cos(th) }), dot = (a, b) => a.x * b.x + a.y * b.y;
+  /* ---------- 1b. the fitted alignment (route.mode 'fit', 2026-11-17; engine/align.js fits route.al from the drawn line) ----------
+     The same tangent–curve construction on the alignment's PIs with each PI's radius (al.rad; null = the route default rDef). T is
+     limited where two curves share a tangent: when T_i + T_i+1 > the tangent's length both are scaled down in proportion (an end
+     tangent: its whole length), and r = T / tan(|Δ|/2) (flagged). Legacy routes (no mode) keep path() below exactly as before. */
+  const fitted = r => !!(r && r.mode === 'fit' && r.al && Array.isArray(r.al.pis) && r.al.pis.length >= 2);
+  const KIND_LBL = { curve: 'Curve', turn: 'Intersection turn' };
+  function pathAl(r) {
+    const al = r.al, pts = al.pis, n = pts.length, rDef = isNum(r.rDef) && r.rDef > 0 ? r.rDef : RDEF, segs = [], turns = [];
+    const L = []; for (let i = 0; i < n - 1; i++) L.push(G().dist(pts[i], pts[i + 1]));
+    const q = [null];
+    for (let i = 1; i < n - 1; i++) {
+      const ui = unit(sub(pts[i], pts[i - 1])), uo = unit(sub(pts[i + 1], pts[i])), cr = ui.x * uo.y - ui.y * uo.x, D = Math.atan2(cr, dot(ui, uo));
+      if (Math.abs(D) < 0.5 * DEG || L[i - 1] < 1e-6 || L[i] < 1e-6) { q.push(null); continue; }
+      const kind = al.kind && al.kind[i] === 'turn' ? 'turn' : 'curve', has = isNum(al.rad && al.rad[i]) && al.rad[i] > 0, rq = has ? al.rad[i] : rDef, f = al.fit && al.fit[i];
+      const from = !has ? 'route default' : kind === 'curve' && f && isNum(f.R0) && Math.abs(f.R0 - rq) < 1e-9 ? 'fitted to the line' : 'entered';
+      q.push({ i, D, ui, uo, rq, Treq: rq * Math.tan(Math.abs(D) / 2), kind, from, fit: f || null });
+    }
+    q.push(null);
+    const fac = []; for (let j = 0; j < n - 1; j++) { const a = q[j] ? q[j].Treq : 0, b = q[j + 1] ? q[j + 1].Treq : 0; fac.push(a + b > L[j] ? L[j] / (a + b) : 1); }
+    const corner = [];
+    for (let i = 1; i < n - 1; i++) {
+      const c = q[i]; if (!c) { corner.push(null); continue; }
+      const t = Math.tan(Math.abs(c.D) / 2), k = Math.min(fac[i - 1], fac[i]); let T = c.Treq, rr = c.rq, reduced = false; if (k < 1 - 1e-12) { T = c.Treq * k; rr = T / t; reduced = true; }
+      const A = sub(pts[i], mul(c.ui, T)), B = add(pts[i], mul(c.uo, T)), cc = add(A, mul(left(c.ui), Math.sign(c.D) * rr));
+      corner.push({ i, D: c.D, rq: c.rq, r: rr, T, reduced, A, B, c: cc, ui: c.ui, uo: c.uo, from: c.from, kind: c.kind, fit: c.fit, PI: pts[i] });
+    }
+    let s = 0, cur = pts[0];
+    for (let i = 1; i < n; i++) {
+      const cn = i < n - 1 ? corner[i - 1] : null, end = cn ? cn.A : pts[i];
+      const ll = G().dist(cur, end); if (ll > 1e-9) { segs.push({ type: 'line', a: cur, b: end, th: Math.atan2(end.y - cur.y, end.x - cur.x), s0: s, L: ll }); s += ll; }
+      if (cn) { const th0 = Math.atan2(cn.ui.y, cn.ui.x), La = cn.r * Math.abs(cn.D);
+        segs.push({ type: 'arc', c: cn.c, r: cn.r, th0, dir: Math.sign(cn.D), D: cn.D, s0: s, L: La, a: cn.A, b: cn.B, turn: turns.length });
+        const nn = turns.length + 1; turns.push(Object.assign({}, cn, { s0: s, s1: s + La, n: nn, lbl: `${KIND_LBL[cn.kind]} ${nn}`, tag: (cn.kind === 'turn' ? 'T' : 'C') + nn })); s += La; cur = cn.B; }
+      else cur = pts[i];
+    }
+    return { segs, turns, L: s, ok: s > 0, fitted: true };
+  }
   function path(r) {
+    if (fitted(r)) return pathAl(r);
     const pts = (r && r.pts) || [], n = pts.length, rDef = isNum(r && r.rDef) && r.rDef > 0 ? r.rDef : RDEF, segs = [], turns = [];
     if (n < 2) return { segs, turns, L: 0, ok: false };
     const L = []; for (let i = 0; i < n - 1; i++) L.push(G().dist(pts[i], pts[i + 1]));
@@ -231,7 +275,8 @@
       const a0 = Math.atan2(t.A.y - t.c.y, t.A.x - t.c.x), sg = Math.sign(t.D), inSec = p => { const a = ang(Math.atan2(p.y - t.c.y, p.x - t.c.x) - a0) * sg; return a >= -1e-9 && a <= Math.abs(t.D) + 1e-9; };
       inT.forEach(q => { if (q.ot > ot) { ot = q.ot; otS = q.s; } q.parts.forEach(pp => { if (!pp.poly.some(inSec)) return; const d = polyDist(t.c, pp.poly); if (d < Rin) { Rin = d; inPart = pp.part; } pp.poly.forEach(c => { if (!inSec(c)) return; const e = G().dist(t.c, c); if (e > Rout) { Rout = e; outPart = pp.part; } }); }); });
       const ss = steady(v, t.r), pre = `${idp}.t${k + 1}`, steps = [];
-      steps.push(st(pre, { id: 'D', label: `Turn ${k + 1}: deflection at vertex ${t.i + 1} (+ left)`, sym: '\\Delta', eq: '\\text{atan2}(\\hat{u}_{in} \\times \\hat{u}_{out},\\; \\hat{u}_{in} \\cdot \\hat{u}_{out})', sub: '', value: t.D / DEG, unit: 'deg', d: 1 }),
+      const nm = t.lbl || `Turn ${k + 1}`;
+      steps.push(st(pre, { id: 'D', label: `${nm}: deflection at ${t.kind ? 'PI ' + t.i : 'vertex ' + (t.i + 1)} (+ left)`, sym: '\\Delta', eq: '\\text{atan2}(\\hat{u}_{in} \\times \\hat{u}_{out},\\; \\hat{u}_{in} \\cdot \\hat{u}_{out})', sub: '', value: t.D / DEG, unit: 'deg', d: 1 }),
         st(pre, { id: 'T', label: `Tangent length (radius ${fmt(t.rq, 1)} ft ${t.from})`, sym: 'T', eq: 'r \\tan\\frac{|\\Delta|}{2}', sub: `${tx(t.rq, 2)} \\tan\\frac{${tx(Math.abs(t.D) / DEG, 2)}°}{2}`, value: t.rq * Math.tan(Math.abs(t.D) / 2), unit: 'ft', d: 2,
           note: t.reduced ? `More than the tangent available (${fmt(t.T, 2)} ft): r reduced to T / tan(|Δ|/2) = ${fmt(t.r, 2)} ft.` : '' }));
       if (t.reduced) steps.push(st(pre, { id: 'r', label: 'Curve radius used (the tangent available governs)', sym: 'r', eq: '\\frac{T_{avail}}{\\tan(|\\Delta|/2)}', sub: `\\frac{${tx(t.T, 2)}}{\\tan(${tx(Math.abs(t.D) / DEG / 2, 2)}°)}`, value: t.r, unit: 'ft', d: 2 }));
@@ -251,9 +296,20 @@
         st(pre, { id: 'Rout', label: `Outside radius of the swept path (largest; ${outPart}${outPart === 'load' ? ': the load\'s swing-out' : ''})`, sym: 'R_{out}', eq: '\\max d(O, \\text{corners in the curve\'s sector})', sub: '', value: Rout, unit: 'ft', d: 2 }),
         st(pre, { id: 'Wsw', label: 'Swept width in the turn', sym: 'W_{sw}', eq: 'R_{out} \\minus R_{in}', sub: `${tx(Rout, 2)} \\minus ${tx(Rin, 2)}`, value: Rout - Rin, unit: 'ft', d: 2 }));
       const flags = [];
-      if (t.r < v.Rmin - 1e-9) flags.push({ level: 'stop', kind: 'radius', turn: k + 1, text: `Turn ${k + 1}: radius ${fmt(t.r, 1)} ft is tighter than the vehicle's minimum turning radius ${fmt(v.Rmin, 1)} ft.` });
-      if (t.reduced) flags.push({ level: 'warn', kind: 'radius', turn: k + 1, text: `Turn ${k + 1}: the radius asked for (${fmt(t.rq, 1)} ft) does not fit the drawn tangents; ${fmt(t.r, 1)} ft is used. Move the vertices apart or lower the radius.` });
-      out.push({ n: k + 1, i: t.i, D: t.D, r: t.r, rq: t.rq, reduced: t.reduced, c: t.c, s0: t.s0, s1: t.s1, ot, otS, Rin, Rout, inPart, outPart, ss, steps, flags });
+      if (t.r < v.Rmin - 1e-9) flags.push({ level: 'stop', kind: 'radius', turn: k + 1, text: `${nm}: radius ${fmt(t.r, 1)} ft is tighter than the vehicle's minimum turning radius ${fmt(v.Rmin, 1)} ft.` });
+      if (t.reduced) flags.push({ level: 'warn', kind: 'radius', turn: k + 1, text: t.kind ? `${nm}: the radius asked for (${fmt(t.rq, 1)} ft) does not fit the tangents next to it; ${fmt(t.r, 1)} ft is used. Move the PIs apart or lower the radius.` : `Turn ${k + 1}: the radius asked for (${fmt(t.rq, 1)} ft) does not fit the drawn tangents; ${fmt(t.r, 1)} ft is used. Move the vertices apart or lower the radius.` });
+      if (t.kind) {   // fitted alignment: the curve's geometry (PC, PT, length, stations; the fit check)
+        const La = t.r * Math.abs(t.D), AL = window.CranePickAlign, sta = AL ? AL.sta : (x => fmt(x, 2));
+        const g = [st(pre, { id: 'L', label: `${nm}: arc length`, sym: 'L', eq: 'r\\,|\\Delta|', sub: `${tx(t.r, 2)} \\times ${tx(Math.abs(t.D), 5)}\\ \\text{rad}`, value: La, unit: 'ft', d: 2 }),
+          st(pre, { id: 'Tu', label: `${nm}: tangent length used (PI to PC and PT)`, sym: 'T', eq: 'r \\tan\\frac{|\\Delta|}{2}', sub: `${tx(t.r, 2)} \\tan\\frac{${tx(Math.abs(t.D) / DEG, 2)}°}{2}`, value: t.T, unit: 'ft', d: 2,
+            note: `PC sta. ${sta(t.s0)}, PI sta. ${sta(t.s0 + t.T)}, PT sta. ${sta(t.s1)} (stations along the steer-axle path from its start).` })];
+        if (t.fit && isNum(t.fit.R0)) g.unshift(st(pre, { id: 'Rf', label: `${nm}: radius fitted to the line (least squares, the arc tangent to both tangents; ${t.fit.n} points, rms ${fmt(t.fit.rms, 2)} ft)`, sym: 'R_{fit}', eq: '\\arg\\min_{R} \\sum d_{i}(R)^{2}', sub: '', value: t.fit.R0, unit: 'ft', d: 2,
+          note: `Check: the free least-squares circle through the curve's points R_LS = ${fmt(t.fit.Rls, 2)} ft.${t.fit.atMax ? ' The fit reached the largest radius that fits the tangents.' : ''}${Math.abs(t.fit.R0 - t.rq) > 1e-9 ? ` Radius entered: ${fmt(t.rq, 2)} ft.` : ''}` }));
+        steps.unshift(...g);
+        if (t.kind === 'turn') steps.unshift(st(pre, { id: 'kind', label: `${nm}: an intersection turn (the heading changes within ${fmt(t.fit && isNum(t.fit.Lc) ? t.fit.Lc : 0, 1)} ft: a corner, not a road curve); radius ${t.from}`, sym: 'r', eq: '', sub: '', value: t.rq, unit: 'ft', d: 2 }));
+      }
+      out.push(Object.assign({ n: k + 1, i: t.i, D: t.D, r: t.r, rq: t.rq, reduced: t.reduced, c: t.c, s0: t.s0, s1: t.s1, ot, otS, Rin, Rout, inPart, outPart, ss, steps, flags },
+        t.kind ? { kind: t.kind, lbl: t.lbl, tag: t.tag, T: t.T, PC: t.A, PT: t.B, PI: t.PI, Lc: t.r * Math.abs(t.D), from: t.from, fit: t.fit } : {}));
     });
     return out;
   }
@@ -454,10 +510,23 @@
     res.br = bridges(sim, res.ax, marks, idp + '.br');
     res.stage = staging(sim, r, P, LF() ? LF().settingsOf(P) : null, idp + '.sg', o && o.tev);
     res.otMax = sim.samples.reduce((m, q) => Math.max(m, q.ot), 0);
-    res.flags = [].concat(...res.turns.map(t => t.flags), res.conf, res.ax.flags, res.oh.list.map(o => o.flag).filter(Boolean), res.haul.map(h => h.flag).filter(Boolean), res.br.map(b => b.flag).filter(Boolean), res.stage.flags);
+    { const al = alignOf(r, sim); if (al) res.align = al; }   // fitted alignment only (a legacy route's result is as before)
+    res.flags = [].concat(...res.turns.map(t => t.flags), res.align ? res.align.flags : [], res.conf, res.ax.flags, res.oh.list.map(o => o.flag).filter(Boolean), res.haul.map(h => h.flag).filter(Boolean), res.br.map(b => b.flag).filter(Boolean), res.stage.flags);
     const rank = { stop: 0, warn: 1, info: 2 }; res.flags.sort((a, b) => rank[a.level] - rank[b.level]);
     res.worst = res.flags.length ? res.flags[0].level : 'ok';
     return res;
+  }
+  /* the fitted alignment's summary (route.mode 'fit'): the deviation of the drawn / traced / OSM line from it, the smallest radius vs
+     the vehicle's R_min, the source (OpenStreetMap: attribution, "not survey", one-way roads travelled against their direction) */
+  function alignOf(r, sim) {
+    if (!sim.pa.fitted) return null;
+    const AL = window.CranePickAlign, flags = [], src = r.src || {}, apts = sim.dense.filter(q => q.s >= 0);
+    const dev = AL && (r.pts || []).length >= 2 ? AL.deviation(r.pts, apts) : null, curves = sim.pa.turns;
+    const rmin = curves.reduce((m, t) => Math.min(m, t.r), Infinity), Rv = sim.v.Rmin;
+    if (src.kind === 'osm') flags.push({ level: 'info', kind: 'osm', text: `Road geometry ${window.CranePickOSM ? window.CranePickOSM.NOT_SURVEY : 'from OpenStreetMap — not survey'} (${window.CranePickOSM ? window.CranePickOSM.ATTR : '© OpenStreetMap contributors'}, fetched ${String(src.at || '').slice(0, 10) || '—'}): check the curves and the clear widths on site.` });
+    (src.against || []).forEach(a => flags.push({ level: 'warn', kind: 'oneway', text: `The route travels against the one-way direction of ${a.name} for ${fmt(a.s1 - a.s0, 0)} ft (from ${fmt(a.s0, 0)} ft along the OpenStreetMap path): an escort / traffic control or a permit is needed.` }));
+    if (dev && dev.max > 10) flags.push({ level: 'warn', kind: 'align', text: `The fitted alignment is up to ${fmt(dev.max, 1)} ft from the line it was fitted to: check the fit (tolerance, detection window) or edit the PIs.` });
+    return { dev, n: curves.length, rmin: isFinite(rmin) ? rmin : null, Rv, src: src.kind || 'click', flags };
   }
   /* the swept outline rings (every `every` ft) and the corner traces, for drawing */
   function swept(sim, every) {
@@ -465,5 +534,5 @@
     let last = -Infinity; sim.samples.forEach((q, i) => { if (q.s - last >= every - 1e-9 || i === sim.samples.length - 1) { last = q.s; q.parts.forEach(pp => rings.push(pp.poly)); } q.parts.forEach(pp => pp.poly.forEach((c, j) => { const key = pp.part + j; (tr[key] || (tr[key] = [])).push(c); })); });
     return { rings, traces: tr };
   }
-  window.CranePickRoute = { loadPose, tandemOf, TYPES, VDEF, LDEF, RDEF, STEP, REF, LB_PER_TON, vehOf, loadOf, path, at, simulate, steady, turnsOf, conflicts, overhead, axles, haul, bridges, staging, loadCg, evaluate, swept, outlines, pose, steered, hasJeep };
+  window.CranePickRoute = { fitted, pathAl, alignOf, KIND_LBL, loadPose, tandemOf, TYPES, VDEF, LDEF, RDEF, STEP, REF, LB_PER_TON, vehOf, loadOf, path, at, simulate, steady, turnsOf, conflicts, overhead, axles, haul, bridges, staging, loadCg, evaluate, swept, outlines, pose, steered, hasJeep };
 })();

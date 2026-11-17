@@ -179,7 +179,31 @@
     const load = {}; ['L', 'W', 'B', 'r', 'cg', 'h'].forEach(k => { load[k] = k === 'r' ? numOrNull(l0[k]) : nn(l0[k]); });
     const rad = pts.map((_, i) => { const x = Array.isArray(r.rad) ? nn(r.rad[i]) : null; return x != null && x > 0 ? x : null; });
     return { id: str(r.id) || uid('r'), name: str(r.name, 'Route'), pts, rad, rDef: numPos(r.rDef, 50), veh, load, tyre: { A: nn(r.tyre && r.tyre.A) },
-      axIn: { on: !!a0.on, S: nn(a0.S), D: nn(a0.D), J: nn(a0.J), R: nn(a0.R) }, pickId: str(r.pickId), tandemId: str(r.tandemId), endA: r.endA === 'rear' ? 'rear' : 'front', stageTol: nn(r.stageTol), margin: nn(r.margin), at: nn(r.at), grade: normGrade(r.grade) };
+      axIn: { on: !!a0.on, S: nn(a0.S), D: nn(a0.D), J: nn(a0.J), R: nn(a0.R) }, pickId: str(r.pickId), tandemId: str(r.tandemId), endA: r.endA === 'rear' ? 'rear' : 'front', stageTol: nn(r.stageTol), margin: nn(r.margin), at: nn(r.at), grade: normGrade(r.grade) ,
+      ...normRouteFit(r) };   // 2026-11-17: the fitted alignment, its source and the lane offset (only when present: older routes are unchanged)
+  }
+  /* 2026-11-17: route.mode 'fit' + route.al (the fitted alignment), route.src (where the line came from: clicks, a trace, OpenStreetMap),
+     route.lane (the travel-lane offset). A route without them is a legacy route ("each vertex is a turn"): nothing is added. */
+  function normRouteFit(r) {
+    const o = {}, nn = v => { const x = numOrNull(v); return x != null && x >= 0 ? x : null; };
+    const a = r.al && typeof r.al === 'object' ? r.al : null, pis = a && Array.isArray(a.pis) ? a.pis.map(pt).filter(Boolean) : [];
+    if (r.mode === 'fit' && pis.length >= 2 && pis.length === a.pis.length) {
+      const fit = (Array.isArray(a.fit) ? a.fit : []), num1 = v => numOrNull(v);
+      o.mode = 'fit';
+      o.al = { pis, rad: pis.map((_, i) => { const x = Array.isArray(a.rad) ? nn(a.rad[i]) : null; return x != null && x > 0 && i > 0 && i < pis.length - 1 ? x : null; }),
+        kind: pis.map((_, i) => i === 0 || i === pis.length - 1 ? 'end' : Array.isArray(a.kind) && a.kind[i] === 'turn' ? 'turn' : 'curve'),
+        fit: pis.map((_, i) => { const f = fit[i]; return f && typeof f === 'object' ? { Rls: num1(f.Rls), rms: num1(f.rms), n: num1(f.n), Lc: num1(f.Lc), R0: num1(f.R0), atMax: !!f.atMax, corner: !!f.corner } : null; }),
+        opt: {}, edited: !!a.edited };
+      const op = a.opt && typeof a.opt === 'object' ? a.opt : {}; ['tol', 'win', 'Rmax', 'minDelta', 'cornerL'].forEach(k => { const x = nn(op[k]); if (x != null && x > 0) o.al.opt[k] = x; });
+    } else if (r.mode === 'legacy') o.mode = 'legacy';
+    const sr = r.src && typeof r.src === 'object' ? r.src : null;
+    if (sr && ['click', 'trace', 'osm'].indexOf(sr.kind) >= 0) {
+      const seg = l => (Array.isArray(l) ? l : []).filter(x => x && typeof x === 'object').map(x => ({ name: str(x.name, 'road'), s0: numOrNull(x.s0) || 0, s1: numOrNull(x.s1) || 0 }));
+      o.src = { kind: sr.kind, at: str(sr.at), names: seg(sr.names), against: seg(sr.against), cl: Array.isArray(sr.cl) ? sr.cl.map(pt).filter(Boolean) : [],
+        snaps: (Array.isArray(sr.snaps) ? sr.snaps : []).map(x => ({ d: numOrNull(x && x.d), name: str(x && x.name) })) };
+    }
+    if (r.lane && typeof r.lane === 'object') o.lane = { on: !!r.lane.on, w: nn(r.lane.w) };
+    return o;
   }
   const MARK_TYPES = { overhead: 'Overhead clearance', haul: 'Haul road / mats', bridge: 'Posted bridge' };
   function normRouteMark(m) {
