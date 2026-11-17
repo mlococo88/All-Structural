@@ -1277,3 +1277,27 @@ message and click drawing still works; legacy saved route = engine legacy, card 
 attribution; 390 px; 0 console errors); `crane-route` (5), `crane-manual` (8), `crane-drawings` (5), `crane-terrain` (7), `crane-shell`
 (11). Legacy equivalence: old vs new `engine/route.js` + `model.js`, `evaluate()` JSON identical on 4 routes. Screenshots: scratchpad
 `crane/road-*.png`.
+
+## 2026-11-17 — QA walkthrough fixes 1: "Load not entered" flag; Drawings index Report links (PR: see below)
+Found by the QA walkthrough of a real project (local only; no project data in this repo): its pick has no load entered, and every tab
+showed "0.0 %, within the chart" with no flag; the Drawings sheet index showed "Report plan (aerial)§6".
+### Fix 1 — `ui/place.js` `evalPick0()` (anchor: `// C8: crane levelness on the preliminary terrain`)
+Before: `... ev.flags = ev.flags.concat(ev.level.flags || []); }` then `return ev;`
+After (inserted before `return ev;`):
+```js
+if (!(typeof k.load === 'number' && k.load > 0)) ev.flags.unshift({ level: 'warn', text: `Load not entered: W = ${ev.W.toLocaleString('en-US')} lb (rigging, hook block and other deductions only), so the % of chart and the float / track loads are for an empty hook. Enter the load on the Lifts tab.` });
+```
+No calculation changes (§4): W, C, % of chart, class and the ground loads are computed exactly as before; one flag is added (the live
+card, the Picks tab flag dots, Summary / Report / cover-sheet flag counts: one more "check").
+Check case: FAKECO wheeled crane, boom 60, pick at 30 ft, load not entered, rigging 1,000 + hook 1,000 lb: W = 2,000 lb, C = 39,000 lb,
+% = 2,000 / 39,000 = 5.1 % (unchanged) + flag "Load not entered: W = 2,000 lb"; load 20,000 lb entered: W = 22,000 lb, 56.4 %, no flag.
+### Fix 2 — `ui/drawings.js` sheet index link label (anchor: `const link = w => w[0] === 'rpt'`)
+Before: `esc(w[2].replace(/§\S*/, '') + (ref(w[1]) || '§'))` — removed only the first word after "§": "Report §Site plan (aerial)" became
+"Report plan (aerial)§6", "Report §Tandem lifts (load share)" became "Report lifts (load share)§8".
+After: `esc(w[2].replace(/§.*$/, '') + (ref(w[1]) || '§'))` — "Report §6". Labels "Report §Route" etc. unchanged ("Report §10.1").
+### Decisions (pending engineer review)
+- "Load not entered" is a check (amber) flag, not a stop; it fires when the load is blank or ≤ 0 (rigging / hook alone are not a load).
+### How verified
+`node tests/check-syntax.mjs`; `node tests/engine/run.mjs crane` (15 files, 119 passed); smokes `crane-place` (9), `crane-picks` (5),
+`crane-drawings` (5); new `tests/smoke/crane-qa.mjs` (3: the flag on card / Picks / Summary and gone once the load is entered, % = W / C
+unchanged; index labels "Report §n"; 0 console errors).
