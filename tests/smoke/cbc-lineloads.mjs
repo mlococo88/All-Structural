@@ -13,6 +13,8 @@
 //  (labels M_u,line = 112.00, V_u,line = 22.40, −22.40), per case (M,line = 60.00) and per combination from the selector; Report
 //  Figure LL-1 with its values table and § links; cantilever with V at d: the d marker and its value (= the combination V_u);
 //  an older save: no card, no figure.
+// CBST2 (2026-11-18): one-way slab, a pressure row uses the slab width as b_trib (greyed box "= slab width (1.00 ft)"); q = 100 psf on the
+//  12 in strip -> w = 0.100 klf; "override" enters b (flagged "entered"), "use slab width" returns to it; an older slab row with b entered keeps it.
 //   node tests/smoke/cbc-lineloads.mjs [--file <Concrete Beam Capacity.html>] [--shots <dir>]
 import path from 'path';
 import { openPage, REPO } from '../lib.mjs';
@@ -108,6 +110,32 @@ for (const vw of [1400, 390]) {
   r = await f.evaluate(() => { S.ui.tab = 'tabLoads'; refresh(); return { card: !!document.querySelector('#ldLine') || !!document.querySelector('#ldBeam'), t: SharedReport.text(SharedReport.build(mrModel()), { legacy: true }) }; });
   ok(!r.card && !/Line loads/.test(r.t) && !/Figure LL-1/.test(r.t), 'older save: no Line Loads card, no line-load section or Figure LL-1 in the Report');
   ok(!errs.length, 'console errors (older save): ' + errs.length);
+  await b.close();
+}
+// CBST2: one-way slab, tributary width = the slab width
+for (const vw of [1400, 390]) {
+  console.log('--- slab, viewport ' + vw + ' px');
+  const SLAB = { proj: { name: 'Slab LL' }, code: 'ACI', memberType: 'slab', loadMode: 'service', tor: { present: false }, sec: { type: 'rect', bw: 12, h: 8 },
+    svc: { cases: {}, rev: { W: true, E: true }, l05: false, ll: { L: 20, sup: 'simple', vAt: 'face', rows: [{ k: 'D', lab: 'floor', mode: 'q', w: 0, q: 100, b: 0 }, { k: 'L', lab: 'old', mode: 'q', w: 0, q: 50, b: 3 }] } } };
+  const { b, p, errs } = await openPage(FILE, { hash: '#capacity', vw, vh: 900, ls: { rcbeam_v2_auto: JSON.stringify(SLAB) } });
+  const f = await frameOf(p);
+  const st = () => f.evaluate(() => { const X = cbcLlX(), a = document.querySelector('#inputPanel input.llBAuto'); return { slab: cbcSlab(), wD: X.cases.D.w, wL: X.cases.L.w, MD: X.cases.D.M, b0: S.svc.ll.rows[0].b,
+    auto: a ? a.value + '|' + a.disabled : '', txt: [...document.querySelectorAll('#inputPanel table.cbT')].map(t => t.innerText).join(' | ') }; });
+  let r = await st();
+  ok(r.slab && near(r.wD, 0.1) && near(r.MD, 5) && r.auto === '1.00|true' && /= slab width \(1\.00 ft\)/.test(r.txt) && r.b0 === 0, `slab: q 100 psf -> b_trib 1.00 ft (greyed), w_D ${r.wD} (0.100), M_D ${r.MD} (5.00); saved b stays 0`);
+  ok(near(r.wL, 0.15) && /ft \(entered\)/.test(r.txt), `older slab row with b = 3 ft entered: kept, flagged entered (w_L ${r.wL})`);
+  await f.evaluate(() => [...document.querySelectorAll('#inputPanel button')].find(x => x.textContent === 'override').click());
+  await typeIn(p, f, 'llB0', '2'); r = await st();
+  ok(near(r.wD, 0.2) && r.b0 === 2, `override: b = 2 ft entered, w_D ${r.wD} (0.200)`);
+  await f.evaluate(() => [...document.querySelectorAll('#inputPanel button')].find(x => x.textContent === 'use slab width').click()); r = await st();
+  ok(near(r.wD, 0.1) && r.b0 === 0 && r.auto === '1.00|true', 'use slab width: back to b_trib = 1.00 ft, b saved as 0');
+  r = await f.evaluate(() => { S.ui.tab = 'tabLoads'; refresh(); return { ann: [...document.querySelectorAll('#ldLine annotation')].map(a => a.textContent).join(' ‖ '), t: SharedReport.text(SharedReport.build(mrModel()), { legacy: true }) }; });
+  ok(r.ann.includes('(1.00\\text{ ft, slab width})}{1000} = 0.100') && /b_trib = the slab width, 1\.00 ft/.test(r.t) && /1\.00 ft \(= slab width\)/.test(r.t) && /3\.00 ft \(entered\)/.test(r.t) && !/NaN|undefined|\[\[/.test(r.t),
+    'worked step w = q·b/1000 with b = slab width (tab and Report); the entered row flagged in the Report');
+  const sw = await sideways(f); ok(!sw.length, 'slab: no sideways scroll' + (sw.length ? ': ' + sw.join(', ') : ''));
+  if (SHOTS) { await f.evaluate(() => { const e = [...document.querySelectorAll('#inputPanel h3')].find(h => h.textContent === 'Line loads (optional)'); e.scrollIntoView({ block: 'start' }); }); await p.waitForTimeout(200);
+    await p.screenshot({ path: path.join(SHOTS, `cb-slabtrib-inputs-${vw}.png`) }); }
+  ok(!errs.length, 'console errors (slab): ' + errs.length + (errs.length ? ' ' + errs.slice(0, 3).join(' | ') : ''));
   await b.close();
 }
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASS');

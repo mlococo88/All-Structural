@@ -7498,3 +7498,46 @@ A "Beam analysis" output card for the line loads (shown when line loads are ente
 
 ### Open items
 - The decisions above, pending engineer review.
+
+## 2026-11-18 — PR: claude/cbc-slab-trib (PR #1640: https://github.com/mlococo88/All-Structural/pull/1640) (CBST2) — line loads on a one-way slab: a pressure row q uses the slab design width as its tributary width automatically, with an override   [COMPUTATION CHANGE (slab, service mode, pressure rows with b not entered); beams unchanged; saved format unchanged (b = 0 = not entered); no new storage key]
+
+The file uses CRLF line endings; keep them. The code is in the Beam Capacity srcdoc. When re-applying, escape `&` as `&amp;` and `"` as `&quot;`. The sites are tagged CBST2.
+
+### Engineer request (2026-11-18)
+When the member is a one-way slab (12 in strip, or the actual width b), a pressure row q (psf) uses the slab design width as its tributary width: b_trib = 12/12 = 1.00 ft, or b/12 ft. The tributary-width box is filled and greyed, showing "= slab width (x.xx ft)", with an "override" to type a different value (rare; flagged "entered"). Beams keep the manual tributary width. The worked step shows w = q·b/1000 with b = the slab width. Saved data: the override is stored only when used; an older saved slab row with an entered b keeps that value, marked "entered".
+
+### Rule and decisions
+- **Rule:** on a slab (`cbcSlab()`: ACI mode, member type slab), a pressure row whose saved b is not entered (b ≤ 0, the default of a new row) uses b_trib = S.sec.bw/12 ft (the slab design width: 12 in strip or the actual width b, as the CBLL self-weight A_g uses). A row with b > 0 uses its b ("entered"). "override" stores b = the slab width (then editable); "use slab width" stores b = 0.
+- **Decision (pending engineer review):** an older slab row saved with b = 0 (q entered, b left blank) gave w = q·0/1000 = 0 before this PR; it now takes the slab width (w = q·b_slab/1000, larger, more conservative). Older slab rows with b > 0 keep their b exactly. CBLL was merged the same day (#1637), so saves with a blank b on a slab are unlikely.
+
+### §4 callout
+- **Before:** slab or beam, w = q·b/1000 with b as entered (b blank = 0 → w = 0).
+- **After:** beam: unchanged. Slab, b not entered: w = q·(b_slab/12)/1000. Slab, b entered: unchanged (flagged "entered").
+- **Basis:** statics, the load on the design width of the one-way slab (ACI 318-19 Ch. 7: the slab is designed as a strip of width b; the actions are per that width, as entered elsewhere in slab mode, `cbcSlabPer()`).
+- **Check case:** slab, 12 in strip, q = 100 psf (D), L = 20 ft simple span. b_trib = 12/12 = 1.00 ft; w_D = 100(1.00)/1000 = **0.100 klf** (per ft strip); M_D = 0.100(20)²/8 = **5.00 k-ft**; V_D = 0.100(10) = **1.00 kip**. Before: w_D = 0, M_D = 0, V_D = 0. Actual width b = 48 in: b_trib = 4.00 ft, w = 0.400 klf. Entered b = 3 ft with q = 50 psf: w = 0.150 klf before and after.
+
+### Where (Beam Capacity srcdoc)
+- **`cbcLineLoads(ll,sec)`** — after `const o=cbcLlNorm(ll), cant=…, xMax=cant?L:L/2;` add `const slabB=+(sec&&sec.slabB)||0;`. Before: `const rows=o.rows.map((r,i)=>Object.assign({},r,{i,wk:r.mode==="q"?r.q*r.b/1000:r.w})).filter(r=>r.k===k);` after:
+  ```js
+  const rows=o.rows.map((r,i)=>{ const bAuto=r.mode==="q"&&slabB>0&&!(r.b>0), bU=bAuto?slabB/12:r.b;
+    return Object.assign({},r,{i,bAuto,bU,wk:r.mode==="q"?r.q*bU/1000:r.w}); }).filter(r=>r.k===k);
+  ```
+  and the return adds `slabB`: `return Object.assign(o,{cant,Lc:L,dIn,Ag,xV,dFall,swW,cases,any,slabB}); }`.
+- **`cbcLlSec()`** — before: `return {d,Ag}; }` after: `return {d,Ag,slabB:cbcSlab()?(+bw||0):0}; }`.
+- **New** before `/* the service cases the combinations use …`: `cbcLlRow(X,i)` (row i as computed) and `cbcLlBTxt(X,r)` ("1.00 ft (= slab width)" / "3.00 ft (entered)" on a slab; "10.00 ft" on a beam).
+- **`cbcLlInputs(b)`** — the q row: on a slab with b not entered, a disabled box (class `llBAuto`) showing the slab width, "ft = slab width (x.xx ft)" and an "override" button (`r.b = slab width`); with b entered, the b box, "ft (entered)" and a "use slab width" button (`r.b = 0`). Beams: unchanged. The "One-way slab:" note states the rule.
+- **`cbcLlTex`** — the q-row step substitutes `r.bU` (", slab width" in the unit where automatic). **`cbcLlWork`** vars: `"q = … psf × b = "+cbcLlBTxt(X,r)`.
+- **Report** — Inputs, Line loads table: the Input column `q = … psf × b = `+`cbcLlBTxt` and w from the computed row (`cbcLlRow`); the worked step label adds "(b_trib = the slab width, x.xx ft)" or "(b_trib entered)" on a slab, and substitutes `r.bU`.
+
+### Saved data (§5)
+- No format change: rows keep `{k, lab, mode, w, q, b}`; b = 0 means "not entered" (slab: the slab width is used and nothing is stored); b > 0 is an entered (override) value. Older saves read unchanged; see the decision above for an older slab row with b = 0.
+
+### How verified
+- **Identity probe, origin/main vs branch, 12 projects:** the 10 of CBBD (beams, factored, AASHTO, slab without line loads, the CBLL cases) are identical in `CC`, `VALIDATION`, every tab's text, the input panel, the autosave and the Report text. A slab with an entered b: identical results; the tab and Report text add "(entered)". A slab with b blank: results change as the check case (intended); autosave identical (b stays 0).
+- **Tests:** `node tests/engine/run.mjs cbc-` (20 passed, 1 new); `tests/smoke/cbc-lineloads.mjs` extended (slab at 1400 and 390 px: greyed box, 0.100 klf, override and "use slab width", the older entered row kept and flagged, the worked step on the tab and in the Report); every `tests/smoke/cbc-*.mjs` and `decimal-entry.mjs` pass; `node tests/check-syntax.mjs` passes.
+
+### Other copies
+- None. The embedded ACI rebar development-length app is not touched.
+
+### Open items
+- The decision above (older slab row with b blank), pending engineer review.

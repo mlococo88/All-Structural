@@ -152,3 +152,20 @@ test('CBBD diagrams: entered M, V are point values only (no diagram); line + ent
   near(g.eM, 6, 'Σγ M entered = 1.2(5)'); near(g.Mc, 112, 'line part unchanged'); near(g.M, 118, 'M_u = 112 + 6');
   assert.ok(R.some(x => x.terms.some(t => t.k === 'W' && t.s < 0)), 'a reversed W row is checked');
 });
+
+// CBST2 (2026-11-18, engineer request): one-way slab, a pressure row q uses the slab design width as its tributary width unless a b is
+// entered (override, b > 0). Hand check: 12 in strip, q = 100 psf -> b_trib = 12/12 = 1.00 ft, w = 100(1.00)/1000 = 0.100 klf (per ft strip);
+// 20 ft simple span: M = 0.1(400)/8 = 5.00 k-ft, V = 0.1(10) = 1.00 kip. Actual width b = 48 in: b_trib = 4.00 ft, w = 0.400 klf.
+test('CBST2 slab: q = 100 psf on a 12 in strip -> b_trib 1.00 ft (slab width), w 0.100 klf; an entered b is kept; beams unchanged', () => {
+  const C = load(), ll = { L: 20, rows: [{ k: 'D', mode: 'q', q: 100, b: 0 }, { k: 'L', mode: 'q', q: 50, b: 2.5 }] };
+  const X = C.cbcLineLoads(ll, { d: 6, Ag: 96, slabB: 12 });
+  const rD = X.cases.D.rows[0], rL = X.cases.L.rows[0];
+  assert.equal(rD.bAuto, true); near(rD.bU, 1, 'b_trib = slab width'); near(X.cases.D.w, 0.1, 'w_D'); near(X.cases.D.M, 5, 'M_D'); near(X.cases.D.V, 1, 'V_D');
+  assert.equal(rL.bAuto, false); near(rL.bU, 2.5, 'entered b kept'); near(X.cases.L.w, 0.125, 'w_L (entered b)');
+  near(C.cbcLineLoads(ll, { d: 6, Ag: 384, slabB: 48 }).cases.D.w, 0.4, 'actual width 48 in: 4.00 ft');
+  // a beam (no slabB): b as entered, 0 gives 0 (as before)
+  const B = C.cbcLineLoads(ll, { d: 15.5, Ag: 216 }); assert.equal(B.cases.D.rows[0].bAuto, false); near(B.cases.D.w, 0, 'beam, b not entered');
+  near(B.cases.L.w, 0.125, 'beam, b entered');
+  // the saved row is not changed (b stays 0: the override is stored only when used)
+  assert.equal(C.cbcLlNorm(ll).rows[0].b, 0);
+});
