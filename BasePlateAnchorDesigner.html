@@ -1130,6 +1130,11 @@ function defaultState(){
               BC-8, engineer decision 2026-11-06: a third value "lesser" (the smaller φN_cbg of reduced / not reduced) is the default.
               Values: "lesser" | true (reduced) | false (not reduced); a stored true / false is kept). */
            shape:"rect", D:36, circHefReduce:"lesser",
+           /* BCSQ (2026-11-18, engineer request): how a circular pier is modelled for the anchor concrete checks,
+              circModel: "exact" (the circle, BC-2; default — a save without the field reads as "exact") | "chord"
+              (equivalent square, side = the chord of the circle through the anchor row nearest the edge checked) |
+              "inscribed" (square of side D/√2). See bpCircModel(). */
+           circModel:"exact",
            /* BC-5 (2026-11-01): the pier cage of a circular pier as anchor reinforcement (bpCageTension / bpCageShear) */
            cage:{ present:false, nBars:8, barSize:"#8", grade:"gr60", cover:3.0, angle0:0, topCover:3.0, topHook:false,
                   tieType:"tie", tieSize:"#4", tieGrade:"gr60", tieTop:3.0, pitch:4.0, ackDetail:false } },
@@ -1425,6 +1430,7 @@ const BPAD_TABNAME={tabInput:"Input & Schematics",tabSummary:"Summary",tabPlate:
 const BPAD_CARDS={pbBend:["tabPlate","Base Plate Bending"],pbTear:["tabPlate","Bolt Bearing / Tearout in Plate"],
   coBrg:["tabConc","Concrete Bearing"],coPedTie:["tabConc","Pedestal Ties at Anchor Bolts"],coPull:["tabConc","Pullout"],coTB:["tabConc","Concrete Breakout — Tension"],coSFB:["tabConc","Side-Face Blowout"],
   coVB:["tabConc","Concrete Breakout — Shear"],coPry:["tabConc","Pryout"],
+  iePierModel:["tabInput","Circular Pier — Modelling Method"],   /* BCSQ */
   anSteelT:["tabAnchor","Steel Strength — Tension"],anSteelV:["tabAnchor","Steel Strength — Shear"],anLevNut:["tabAnchor","Stand-off Bending"],
   anRodComp:["tabAnchor","Exposed Rod Compression"],anInt:["tabAnchor","Combined Tension–Shear Interaction"],
   anInstall:["tabAnchor","Installation Limits — Spacing & Edge Distance"],
@@ -1631,11 +1637,13 @@ function anchorGeom(){
   /* plate (and its anchor pattern) may be offset on the pedestal.
      px,py = plate-center position in pedestal-center coordinates. */
   const px=C.plate_off_x||0, py=C.plate_off_y||0;
-  /* geometric edge distances to concrete edges, accounting for the offset */
-  let ca_x_pos = C.Bx/2 - (xmax + px);
-  let ca_x_neg = C.Bx/2 + (xmin + px);
-  let ca_y_pos = C.By/2 - (ymax + py);
-  let ca_y_neg = C.By/2 + (ymin + py);
+  /* geometric edge distances to concrete edges, accounting for the offset
+     (BCSQ: a circular pier modelled as an equivalent square uses that square, s × s, bpPedDims) */
+  const PD=bpPedDims();
+  let ca_x_pos = PD.Bx/2 - (xmax + px);
+  let ca_x_neg = PD.Bx/2 + (xmin + px);
+  let ca_y_pos = PD.By/2 - (ymax + py);
+  let ca_y_neg = PD.By/2 + (ymin + py);
   /* optional manual override of the four edge distances */
   if(C.ca_override && !bpCircPier()){   /* BC-2: no c_a override on a circular pier */
     if(C.ca_x_pos>0) ca_x_pos=C.ca_x_pos;
@@ -1648,7 +1656,7 @@ function anchorGeom(){
   let circ;
   if(bpCircPier()){ const AG=bpAG(), R=bpPierR(), q=pts.map(p=>({x:p.x+px,y:p.y+py}));
     const ray=(ux,uy)=>Math.min(...q.map(p=>AG.rayToCircle(p.x,p.y,ux,uy,0,0,R)));
-    ca_x_pos=ray(1,0); ca_x_neg=ray(-1,0); ca_y_pos=ray(0,1); ca_y_neg=ray(0,-1);
+    if(bpCircCalc()){ ca_x_pos=ray(1,0); ca_x_neg=ray(-1,0); ca_y_pos=ray(0,1); ca_y_neg=ray(0,-1); }   /* BCSQ: the square methods keep the square's c_a */
     const caRad=q.map(p=>AG.radialEdge(p.x,p.y,0,0,R));
     circ={R, caRad, caRadMin:Math.min(...caRad)}; }
   return {pts,xmax,xmin,ymax,ymin,px,py,ca_x_pos,ca_x_neg,ca_y_pos,ca_y_neg,circ,
@@ -1976,6 +1984,76 @@ function bpAG(){ if(!window.SharedAnchorGeom) throw new Error("shared/anchor-geo
 function bpPierR(){ return Math.max(+S.conc.D||0,0)/2; }
 /* anchors in pier coordinates (origin at the pier centre) */
 function bpPierPts(pts){ const C=S.conc, ox=C.plate_off_x||0, oy=C.plate_off_y||0; return (pts||anchorCoords()).map(p=>Object.assign({},p,{x:p.x+ox,y:p.y+oy})); }
+/* ---------------------------------------------------------------
+   BCSQ (2026-11-18, engineer request): CIRCULAR PIER MODELLING METHOD, conc.circModel (Pedestal input, "Circular pier
+   modelled as"):
+   - "exact"     the circle itself (BC-2 … BC-9). DEFAULT: a save without the field (every save before BCSQ) reads as
+                 "exact", so its results are unchanged (CLAUDE.md §5).
+   - "chord"     equivalent square, the engineer's method (sketch 2026-11-18): the side of the square is the chord of the
+                 pier circle drawn through the anchor row nearest the edge being checked. For each edge direction
+                 d = +x, −x, +y, −y: o_d = signed offset, from the pier centre, of the outermost anchor row parallel to
+                 that edge (pier coordinates: max x for +x, min x for −x, …); s_d = 2√(R² − o_d²). The square is
+                 CONCENTRIC with the pier, so at that row the side edge distances equal the true ones (the chord ends
+                 lie on the circle).
+   - "inscribed" square of side D/√2 = 0.707D, concentric with the pier.
+   Both squares go through the RECTANGULAR code paths (a pedestal Bx = By = s with the same plate offset): c_a, A_Nc,
+   A_Vc, ψ_ed, §17.6.2.1.2 (the rectangular rule, as for any rectangular pedestal; conc.circHefReduce is the circle's
+   by-analogy option and governs the "exact" method only), §17.7.2.1.2, side-face blowout, pryout.
+   Decisions pending engineer review (2026-11-18), "chord":
+   (1) a check toward one edge (shear breakout toward +x, −x, +y or −y and its §17.7.2.1(c) parallel check) uses the
+       square of that edge's direction, s_d;
+   (2) the checks that involve every edge at once (tension breakout A_Nc / ψ_ed,N / §17.6.2.1.2, pryout, side-face
+       blowout) and the c_a values reported for the group use the SMALLEST s_d (conservative);
+   Both squares: (3) concrete bearing (A_2) and the installation edge distance (§17.9) stay on the true circle; (4) the
+   pier cage (BC-5) stays evaluated on the true circle (its bars and ties are where they are);
+   (5) every anchor must lie inside the square used for the tension checks, otherwise the input is blocked.
+   --------------------------------------------------------------- */
+function bpCircModel(){ if(!bpCircPier()) return "exact"; const v=S.conc.circModel; return (v==="chord"||v==="inscribed")? v : "exact"; }
+/* the exact-circle code paths (BC-2) run only for a circular pier modelled as the circle */
+function bpCircCalc(){ return bpCircPier() && bpCircModel()==="exact"; }
+let __bpSqDir=null;   /* internal ("chord"): the edge direction whose square is in force ("+x" | "-x" | "+y" | "-y"); null = the smallest */
+function bpEqSquares(){
+  const R=bpPierR(), D=2*R, q=bpPierPts(anchorCoords());
+  const chord=o=>{ const r=R*R-o*o; return r>0? 2*Math.sqrt(r) : 0; };
+  const xs=q.map(p=>p.x), ys=q.map(p=>p.y);
+  const dirs=[["+x","x",Math.max(...xs)],["-x","x",Math.min(...xs)],["+y","y",Math.max(...ys)],["-y","y",Math.min(...ys)]]
+    .map(([name,ax,o])=>{ const s=chord(o), sg=name[0]==="+"? 1 : -1;
+      return {name,ax,o,s,ca:s/2-sg*o}; });   /* ca: the row's distance to that edge of its own square */
+  const by={}; dirs.forEach(d=>{ by[d.name]=d; });
+  const gov=dirs.reduce((m,d)=>(d.s<m.s-1e-12)? d : m, dirs[0]);
+  const sIns=D/Math.SQRT2;
+  const inside=s=>q.every(p=>Math.abs(p.x)<s/2-1e-9 && Math.abs(p.y)<s/2-1e-9);
+  return {R,D,q,dirs,by,sMin:gov.s,govDir:gov.name,sIns,inside};
+}
+/* BCSQ: the worked step of the equivalent square a check uses (kind "T": the tension checks, the smallest s_d;
+   kind "V": shear breakout toward edge dir). Empty for the exact circle and for a rectangular pedestal. */
+function bpSqSteps(kind, dir){
+  const m=bpCircModel(); if(m==="exact") return [];
+  const E=bpEqSquares(), R=E.R, see="Derivation, figure and the comparison of the three methods: Input & Schematics tab, card “Circular Pier — Modelling Method”.";
+  if(m==="inscribed"){ const sq=E.sIns;
+    return [{title:"Circular pier Ø"+fmt(E.D,2)+" in modelled as the inscribed square (user setting)",ref:"Pedestal input “Circular pier modelled as”; ACI 318-19 §17.6.2.1, §17.7.2.1 applied to the square",
+      lines:["s=\\frac{D}{\\sqrt{2}}=\\frac{"+fmt(E.D,3)+"}{\\sqrt{2}}="+fmt(sq,3)+"\\ \\text{in}\\quad\\text{(concentric with the pier)}"],
+      vars:[["s",fmt(sq,3)+" in","side of the inscribed square (0.707D)"],
+            ["model","","The checks below take a rectangular pedestal "+fmt(sq,3)+" × "+fmt(sq,3)+" in with the same plate offset: edge distances, A_Nc, A_Vc and §17.6.2.1.2 / §17.7.2.1.2 follow the rectangular rules. "+see]]}]; }
+  const d=(kind==="V" && dir && E.by[dir])? E.by[dir] : E.by[E.govDir], f=v=>fmt(v,3);
+  const chordLine=o=>"s_{"+o.name+"}=2\\sqrt{R^2-o_{"+o.name+"}^2}=2\\sqrt{"+f(R)+"^2-("+f(o.o)+")^2}="+f(o.s)+"\\ \\text{in}";
+  const lines=["R=\\frac{D}{2}="+f(R)+"\\ \\text{in};\\quad o_{d}=\\text{offset of the outermost anchor row parallel to edge }d\\text{ from the pier centre}"];
+  if(kind==="V") lines.push(chordLine(d));
+  else { E.dirs.forEach(o=>lines.push(chordLine(o)));
+    lines.push("s=\\min(s_{+x},s_{-x},s_{+y},s_{-y})=\\min("+E.dirs.map(o=>f(o.s)).join(",\\ ")+")="+f(E.sMin)+"\\ \\text{in}\\ (\\text{edge }"+E.govDir+")"); }
+  const sq=(kind==="V")? d.s : E.sMin;
+  return [{title:"Circular pier Ø"+fmt(E.D,2)+" in modelled as the equivalent square — chord through the anchor row (user setting)",ref:"Pedestal input “Circular pier modelled as”; ACI 318-19 §17.6.2.1, §17.7.2.1 applied to the square",
+    lines,
+    vars:[["s",f(sq)+" in",kind==="V"? ("side of the square for the "+d.name+" edge (the chord of the pier circle along the anchor row nearest that edge)") : "the smallest of the four chords: the tension checks involve every edge at once (decision pending engineer review: conservative)"],
+          ["model","","The checks below take a rectangular pedestal "+f(sq)+" × "+f(sq)+" in, concentric with the pier, with the same plate offset: edge distances, "+(kind==="V"?"A_Vc, ψ_ed,V and §17.7.2.1.2":"A_Nc, ψ_ed,N and §17.6.2.1.2 (the rectangular rule)")+" follow the rectangular rules. "+see]]}];
+}
+/* the side of the equivalent square in force (null: not a square method) */
+function bpSqSide(){ const m=bpCircModel(); if(m==="exact") return null; const E=bpEqSquares();
+  return m==="inscribed"? E.sIns : ((__bpSqDir && E.by[__bpSqDir])? E.by[__bpSqDir].s : E.sMin); }
+/* pedestal plan dimensions the anchor concrete checks use: Bx × By, or the equivalent square s × s */
+function bpPedDims(){ const s=bpSqSide(); return s===null? {Bx:S.conc.Bx, By:S.conc.By} : {Bx:s, By:s}; }
+/* run fn with the square of edge direction nm in force ("chord" only; otherwise fn() as is) */
+function bpWithSqDir(nm, fn){ if(bpCircModel()!=="chord") return fn(); const o=__bpSqDir; __bpSqDir=nm; try{ return fn(); } finally{ __bpSqDir=o; } }
 /* §17.6.2.1.2 by analogy for a circle. c(θ) = distance from the anchor group to the tangent of the pier circle with
    outward normal θ (SharedAnchorGeom.supportEdge), at 1° steps. "Within 1.5h_ef of three or more edges" is read as
    c(θ) < 1.5h_ef over at least 270° of the circumference (three of the four sides of a rectangle). c_a,max = the
@@ -2010,7 +2088,7 @@ function bpHefCirc(hef){
     byEdge:caMax/1.5, byS:s/3, gov, circ:true, geomApplies, nearDeg, opt, mode, R};
 }
 function hefEffective(){
-  if(bpCircPier()) return bpHefCirc(S.anchor.hef);
+  if(bpCircCalc()) return bpHefCirc(S.anchor.hef);   /* BCSQ: an equivalent square takes the rectangular rule below */
   const A=S.anchor, hef=A.hef, g=anchorGeom();
   const edges=[g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg];
   const nearEdges=edges.filter(e=>e<1.5*hef);
@@ -2274,7 +2352,7 @@ function tensionBreakoutGroup(nT, ca_min, eccX, eccY, tensPts, condA){
      combination (same tension anchors, eccentricity and condition) and keep the smaller φN_cbg; a tie keeps the full
      h_ef. The pick then governs everything built on this breakout for the combination, pryout included (N_cpg uses
      this result's A_Nc,all / A_Nco, ψ_ed,N and N_b). */
-  if(__bpHefForce===null && __bpHefPick===null && bpCircPier() && bpHefMode()==="lesser" && hefEffective().geomApplies){
+  if(__bpHefForce===null && __bpHefPick===null && bpCircCalc() && bpHefMode()==="lesser" && hefEffective().geomApplies){
     let pr, pf;
     __bpHefForce=true;  try{ pr=tensionBreakoutGroup(nT, ca_min, eccX, eccY, tensPts, condA).phiNcbg; } finally{ __bpHefForce=null; }
     __bpHefForce=false; try{ pf=tensionBreakoutGroup(nT, ca_min, eccX, eccY, tensPts, condA).phiNcbg; } finally{ __bpHefForce=null; }
@@ -2323,7 +2401,7 @@ function tensionBreakoutGroup(nT, ca_min, eccX, eccY, tensPts, condA){
      (geometric or overridden) plus its set-back from the outermost anchor line.
      (Previously c_a,min of ALL anchors.) Pryout keeps the all-anchor value
      (caAll / psi_edAll), matching its all-anchor cone. */
-  const cir=bpCircPier(), Rp=cir? bpPierR() : 0;
+  const cir=bpCircCalc(), Rp=cir? bpPierR() : 0;   /* BCSQ: the exact circle only */
   /* BC-2: circular pier — c_a of an anchor is its radial distance to the circle, R − |p| (pier coordinates) */
   const caOf=cir? (p=>Rp-Math.hypot(p.x+pxo,p.y+pyo))
                 : (p=>Math.min(g.ca_x_pos+(g.xmax-p.x), g.ca_x_neg+(p.x-g.xmin),
@@ -2356,7 +2434,7 @@ function tensionBreakoutGroup(nT, ca_min, eccX, eccY, tensPts, condA){
   let alt=null;
   if(cir && he.geomApplies && __bpHefForce===null){ __bpHefForce=!he.applies;
     try{ alt=tensionBreakoutGroup(nT, ca_min, eccX, eccY, tensPts, condA); } finally{ __bpHefForce=null; } }
-  const circSteps=!cir? [] : [{title:"Circular pier — projected area A_Nc and edge distance",ref:"ACI 318-19 §17.6.2.1, Fig. R17.6.2.1(b); §17.6.2.4 (c_a to the circle)",
+  const circSteps=!cir? bpSqSteps("T") : [{title:"Circular pier — projected area A_Nc and edge distance",ref:"ACI 318-19 §17.6.2.1, Fig. R17.6.2.1(b); §17.6.2.4 (c_a to the circle)",
        lines:[
         "A_{Nc}=\\text{area}\\left(\\bigcup_{i\\in T}\\left[x_i\\pm1.5h_{ef}\\right]\\times\\left[y_i\\pm1.5h_{ef}\\right]\\ \\cap\\ \\text{pier disc }\\varnothing"+fmt(2*Rp,2)+"\\right)",
         "1.5h_{ef}="+fmt(1.5*hef,3)+"\\ \\text{in};\\quad \\text{union of the squares}="+fmt(ext.circ.unionArea,2)+"\\ \\text{in}^2\\ \\to\\ \\cap\\ \\text{disc}="+fmt(ANc,2)+"\\ \\text{in}^2\\ \\text{(exact: "+ext.circ.cells+" cells, each rectangle}\\cap\\text{circle in closed form)}",
@@ -2416,7 +2494,7 @@ function tensionBreakoutGroup(nT, ca_min, eccX, eccY, tensPts, condA){
    1.5·h_ef beyond the outermost points, clipped by the pedestal edges.
    Shared by tensionBreakoutGroup() and drawBreakout() so they cannot drift. */
 function breakoutExtents(pts, hef, C, pxo, pyo){
-  if(bpCircPier()){   /* BC-2: (∪ of the 1.5h_ef squares) ∩ the pier disc, exact; plate coordinates, disc centre (−pxo, −pyo) */
+  if(bpCircCalc()){   /* BC-2: (∪ of the 1.5h_ef squares) ∩ the pier disc, exact; plate coordinates, disc centre (−pxo, −pyo) */
     const AG=bpAG(), R=bpPierR(), cx=-(pxo||0), cy=-(pyo||0);
     const xs=pts.map(p=>p.x), ys=pts.map(p=>p.y);
     const xmin=Math.min(...xs), xmax=Math.max(...xs), ymin=Math.min(...ys), ymax=Math.max(...ys);
@@ -2433,8 +2511,9 @@ function breakoutExtents(pts, hef, C, pxo, pyo){
   /* member edges in plate coordinates: the pedestal, or (BP-E2, 2026-10-21) the four
      overridden edge distances measured from the outer anchors, so A_Nc is clipped by
      the same edges the c_a values describe */
-  let ex1=-C.Bx/2 - pxo, ex2=C.Bx/2 - pxo, ey1=-C.By/2 - pyo, ey2=C.By/2 - pyo;
-  if(C.ca_override){ const G=anchorGeom();
+  const PD=bpPedDims();   /* BCSQ: Bx × By, or the equivalent square of a circular pier */
+  let ex1=-PD.Bx/2 - pxo, ex2=PD.Bx/2 - pxo, ey1=-PD.By/2 - pyo, ey2=PD.By/2 - pyo;
+  if(C.ca_override && !bpCircPier()){ const G=anchorGeom();
     ex1=G.xmin-G.ca_x_neg; ex2=G.xmax+G.ca_x_pos; ey1=G.ymin-G.ca_y_neg; ey2=G.ymax+G.ca_y_pos; }
   const x1=Math.max(ux1, ex1), x2=Math.min(ux2, ex2);
   const y1=Math.max(uy1, ey1), y2=Math.min(uy2, ey2);
@@ -2469,7 +2548,7 @@ function breakoutExtents(pts, hef, C, pxo, pyo){
    Returns the summed tension of the anchors nearest the controlling edge.
    --------------------------------------------------------------------- */
 function sfbEdgeDemand(combo, g){
-  if(bpCircPier()){ const sf=sideFaceBlowoutCirc(combo,false); return sf.na? 0 : sf.demand; }   /* BC-2 */
+  if(bpCircCalc()){ const sf=sideFaceBlowoutCirc(combo,false); return sf.na? 0 : sf.demand; }   /* BC-2 (BCSQ: exact circle only) */
   const per = combo.perAnchor||[];
   if(!per.length) return combo.Tu_group||0;
   const edges=[{k:"x",s:+1,c:g.ca_x_pos},{k:"x",s:-1,c:g.ca_x_neg},
@@ -2689,7 +2768,7 @@ function sideFaceBlowoutEdges(combo, nT, condA){
    than something the figure spells out, and it is labelled as such in the
    output and the manual.                                                    */
 function shearCases(cb, condA){
-  if(bpCircPier()) return shearCasesCirc(cb, condA);   /* BC-2 */
+  if(bpCircCalc()) return shearCasesCirc(cb, condA);   /* BC-2 (BCSQ: exact circle only) */
   const g=anchorGeom(), C=S.conc;
   /* accept either a RAW combination ({Vx,Vy}) or a COMPUTED one (which carries
      the factored input under .raw and the magnitude as .Vres) */
@@ -2704,8 +2783,9 @@ function shearCases(cb, condA){
   const sign=domX? (Math.sign(Vx)||1) : (Math.sign(Vy)||1);
   const coord=domX? g.pts.map(p=>p.x) : g.pts.map(p=>p.y);
   const edgeName=domX? (sign>0?"+x":"-x") : (sign>0?"+y":"-y");
-  const caLead = edgeName==="+x"? g.ca_x_pos : edgeName==="-x"? g.ca_x_neg
-               : edgeName==="+y"? g.ca_y_pos : g.ca_y_neg;
+  const gL = bpWithSqDir(edgeName, anchorGeom);   /* BCSQ ("chord"): the square of the edge the shear pushes toward; otherwise g */
+  const caLead = edgeName==="+x"? gL.ca_x_pos : edgeName==="-x"? gL.ca_x_neg
+               : edgeName==="+y"? gL.ca_y_pos : gL.ca_y_neg;
   const lead = sign>0? Math.max(...coord) : Math.min(...coord);
   const dir  = {x:Vx/Vres, y:Vy/Vres};
 
@@ -2940,13 +3020,18 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset, condA, rowPts){
      (Condition A only when the hairpin intercept check passes — conditionA()) */
   const phi = (condA===true)?0.75:0.70;
   /* Evaluate breakout toward each of the four edges; the smallest governs (corner check §17.7.2). */
+  /* BCSQ (2026-11-18): circular pier, "chord" — each edge is evaluated on the equivalent square of its own direction
+     (decision pending engineer review); every other case: gOf(name) = g, unchanged */
+  const gOf = bpCircModel()==="chord"? (nm=>bpWithSqDir(nm, anchorGeom)) : (()=>g);
+  const gE={"+x":gOf("+x"),"-x":gOf("-x"),"+y":gOf("+y"),"-y":gOf("-y")};
   const edgeList=[
-    {name:"+x", ca1:g.ca_x_pos, ca2:Math.min(g.ca_y_pos,g.ca_y_neg)},
-    {name:"-x", ca1:g.ca_x_neg, ca2:Math.min(g.ca_y_pos,g.ca_y_neg)},
-    {name:"+y", ca1:g.ca_y_pos, ca2:Math.min(g.ca_x_pos,g.ca_x_neg)},
-    {name:"-y", ca1:g.ca_y_neg, ca2:Math.min(g.ca_x_pos,g.ca_x_neg)}
+    {name:"+x", ca1:gE["+x"].ca_x_pos, ca2:Math.min(gE["+x"].ca_y_pos,gE["+x"].ca_y_neg)},
+    {name:"-x", ca1:gE["-x"].ca_x_neg, ca2:Math.min(gE["-x"].ca_y_pos,gE["-x"].ca_y_neg)},
+    {name:"+y", ca1:gE["+y"].ca_y_pos, ca2:Math.min(gE["+y"].ca_x_pos,gE["+y"].ca_x_neg)},
+    {name:"-y", ca1:gE["-y"].ca_y_neg, ca2:Math.min(gE["-y"].ca_x_pos,gE["-y"].ca_x_neg)}
   ];
   function evalEdge(e, parallel){
+    const g=gE[e.name];   /* BCSQ: that edge's geometry (the same object as the outer g except for "chord") */
     const c1raw=Math.max(e.ca1,0.01);
     const isX = (e.name==="+x"||e.name==="-x");
     /* §17.7.2.1.2 — narrow, thin member: where c_a2 < 1.5c_a1 on BOTH sides
@@ -3054,7 +3139,7 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset, condA, rowPts){
   const psi_hVg=gov.psi_hV;
   const isCorner=(gov.ca2<1.5*gov.ca1);
   return {phi,ca1,ca2,ha,le,da,Vb,VbA,VbB,VbGov,castInHeaded,AVco,AVc,AVcRatio,psi_edV,psi_cV,psi_cV_why,psi_hV:psi_hVg,narrow,width,depth,Vcbg,phiVcbg:phi*Vcbg,govEdge:gov.name,isCorner,evals,
-    steps:[
+    steps:bpSqSteps("V",String(gov.name).split(" ")[0]).concat([   /* BCSQ: the equivalent square of the governing edge (circular pier, square methods) */
       {title:"Step 1 — Governing edge and geometry",ref:"ACI 318-19 §17.7.2.1, Fig. R17.7.2.1(b)",
        lines:[
         "\\text{Shear pushes toward the }"+gov.name+"\\text{ edge}\\quad\\Rightarrow\\quad c_{a1}="+fmt(ca1,3)+"\\ \\text{in},\\ \\ c_{a2}="+fmt(ca2,3)+"\\ \\text{in}",
@@ -3109,7 +3194,7 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset, condA, rowPts){
         "\\phi V_{cbg}="+fmt(phi,2)+"\\times"+fmt(Vcbg,3)+"="+fmt(phi*Vcbg,3)+"\\ \\text{kip}"],
        vars:[["\\phi",fmt(phi,2),(condA===true)?"Condition A — hairpins cross the failure surface (the intercept check credits at least one leg), Table 17.5.3":(S.vRebar.present?"Condition B — reinforcement present but its intercept check does not pass, Table 17.5.3":"Condition B, no supplementary reinforcement, Table 17.5.3")],
              ["governing edge",gov.name,"checked all edges the shear pushes toward; this one gave the lowest capacity"]]}
-    ]};
+    ])};
 }
 
 /* ---- PRYOUT §17.7.3 (Vcp = kcp * Ncb) ----
@@ -3590,7 +3675,7 @@ function computeAll(){
 
   /* capacities are geometry/material based (same every combo) */
   const stT=steelTension(1), stV=steelShear(1);
-  const ca_minT=bpCircPier()? g.circ.caRadMin : Math.min(g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg);   /* BC-2: radial c_a,min to the circle */
+  const ca_minT=bpCircCalc()? g.circ.caRadMin : Math.min(g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg);   /* BC-2: radial c_a,min to the circle (BCSQ: a square method, the square's) */
   return {combos,g,bc,nTot,sp,stT,stV,ca_minT};
 }
 
@@ -3801,7 +3886,7 @@ function comboCapacities(cc, combo){
   const tb0 = tensionBreakoutGroup(nT, ca_minT, combo.eccN_x, combo.eccN_y, tensPts, condAT);
   const tb = bpSeisScale(tb0, "phiNcbg", "b");   /* BPM5: §17.10.5.4 (SDC C–F only); pryout keeps tb0 (shear: no reduction) */
   const ca1 = Math.min(g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg);
-  const sfb = bpSeisScale(bpCircPier()? sideFaceBlowoutCirc(combo, condAT) : sideFaceBlowoutEdges(combo, nT, condAT), "phiNsb", "d");   /* BC-2; BPM1: every edge within 0.4h_ef; BPM5: §17.10.5.4 */
+  const sfb = bpSeisScale(bpCircCalc()? sideFaceBlowoutCirc(combo, condAT) : sideFaceBlowoutEdges(combo, nT, condAT), "phiNsb", "d");   /* BC-2; BPM1: every edge within 0.4h_ef; BPM5: §17.10.5.4 */
   /* ---- enveloped tension capacity -------------------------------------------
      THE DEMAND BASIS DIFFERS BY MODE, and ACI 318-19 Table 17.5.2 separates
      "individual anchor" from "anchor group" columns precisely for this reason:
@@ -3878,7 +3963,7 @@ function comboCapacities(cc, combo){
   const shearDir={x:combo.raw.Vx/Vr, y:combo.raw.Vy/Vr};
   /* the critical row is whichever the governing case selected, so the breakout
      must be projected from THAT row's axis (§17.7.2.1.1) */
-  const sbk = bpCircPier()? shearBreakoutCirc(nV, combo.vRowMask? g.pts.filter((p,i)=>combo.vRowMask[i]) : null, shearDir, C.H, condAV)   /* BC-2 */
+  const sbk = bpCircCalc()? shearBreakoutCirc(nV, combo.vRowMask? g.pts.filter((p,i)=>combo.vRowMask[i]) : null, shearDir, C.H, condAV)   /* BC-2 */
             : shearBreakout(nV, ca1v, C.H, shearDir, combo.vCaseOffset||0, condAV, combo.vRowMask? g.pts.filter((p,i)=>combo.vRowMask[i]) : null);
   let pry = pryout(nV, tb0);   /* BPM5: the unreduced breakout (pryout is shear) */
   /* BC-9 (2026-11-06, engineer): circular pier, "lesser" — pryout takes its OWN minimum: V_cpg is worked with N_cpg from
@@ -3949,7 +4034,7 @@ function comboCapacities(cc, combo){
      torsion sweep already take it. Before: V_res for every case (Case 1 read twice its own ratio for a 2 × 2 group). */
   if(!combo.tors && sbkDem===undefined && combo.vCase && isFinite(combo.vCase.V)) sbkDem=combo.vCase.V;
   let sbkComp=null;
-  if(!combo.tors && !bpCircPier()){
+  if(!combo.tors && !bpCircCalc()){   /* BCSQ: an equivalent square is a rectangular pedestal here */
     const vx0=+combo.raw.Vx||0, vy0=+combo.raw.Vy||0;
     if(Math.abs(vx0)>1e-9 && Math.abs(vy0)>1e-9){
       const baseV=(sbkDem!==undefined)? sbkDem : combo.Vres;   /* BPM2: the resultant check's case demand */
@@ -6144,15 +6229,20 @@ function buildInputPanel(){
     fRow(body,"f'c",numInput(()=>S.conc.fc,v=>S.conc.fc=v,0.5),"ksi");
     /* BC-2 (2026-11-01): rectangular pedestal (default) or circular pier / drilled shaft */
     fRow(body,"Pier shape",selInput([["rect","Rectangular Bx × By"],["circle","Circular (drilled shaft / round pier)"]],
-      ()=>S.conc.shape||"rect",v=>{ if(v==="circle" && S.conc.shape!=="circle") S.conc.circHefReduce="lesser";   /* BC-6 / BC-7 / BC-8 (2026-11-06): a design becoming a round pier takes the default (lesser) */
+      ()=>S.conc.shape||"rect",v=>{ if(v==="circle" && S.conc.shape!=="circle"){ S.conc.circHefReduce="lesser"; S.conc.circModel="exact"; }   /* BC-6 / BC-7 / BC-8 (2026-11-06): a design becoming a round pier takes the default (lesser); BCSQ: and the exact circle */
         S.conc.shape=v; if(v==="circle"){ if(!(+S.conc.D>0)) S.conc.D=Math.max(S.conc.Bx,S.conc.By); S.conc.Bx=S.conc.D; S.conc.By=S.conc.D;
         S.conc.ca_override=false; S.tRebar.present=false; S.vRebar.present=false; S.ped.present=false; } },o=>o[1],o=>o[0]),"");
     if(bpCircPier()){
       fRow(body,"Pier diameter D",numInput(()=>S.conc.D,v=>{ S.conc.D=v; S.conc.Bx=v; S.conc.By=v; },1),"in");
+      /* BCSQ (2026-11-18, engineer request): how the pier is modelled for the anchor concrete checks */
+      fRow(body,"Circular pier modelled as",selInput([["exact","Exact circle (default)"],["chord","Equivalent square — chord through the anchor row"],["inscribed","Inscribed square (0.707 D)"]],
+        ()=>bpCircModel(),v=>{ S.conc.circModel=v; },o=>o[1],o=>o[0]),"",
+        "<b>Exact circle</b>: A<sub>Nc</sub>, A<sub>Vc</sub> clipped by the circle, c<sub>a</sub> to the circle. <b>Equivalent square — chord</b>: for each edge checked, a square concentric with the pier whose side is the chord of the circle through the anchor row nearest that edge, s = 2√(R² − o²); tension checks use the smallest. <b>Inscribed square</b>: side D/√2. The squares use the rectangular rules (§17.6.2.1.2 and §17.7.2.1.2 as for a rectangular pedestal). Derivation, figure and a comparison of the three: Input & Schematics tab.");
       /* BC-8 (2026-11-06): three choices in the same saved field ("lesser" | true | false) */
-      fRow(body,"h_ef for a circular pier",selInput([["lesser","Lesser of reduced / not reduced (default)"],["reduced","Reduced (§17.6.2.1.2 by analogy)"],["full","Not reduced"]],
+      fRow(body,"h_ef for a circular pier"+(bpCircModel()!=="exact"? " (exact circle only)" : ""),selInput([["lesser","Lesser of reduced / not reduced (default)"],["reduced","Reduced (§17.6.2.1.2 by analogy)"],["full","Not reduced"]],
         ()=>bpHefMode(),v=>{ S.conc.circHefReduce=(v==="lesser")? "lesser" : (v==="reduced"); },o=>o[1],o=>o[0]),"",
         "ACI 318-19 §17.6.2.1.2 is written for anchors within 1.5h<sub>ef</sub> of three or more <b>straight</b> edges. Applied here by analogy: the circle counts when it lies within 1.5h<sub>ef</sub> of the anchor group over at least 270° of its circumference; h′<sub>ef</sub> = max(c<sub>a,max</sub>/1.5, s/3). <b>Default: the lesser of the two</b> — the breakout is worked with the reduced h′<sub>ef</sub> and with the full h<sub>ef</sub> for every combination and the smaller φN<sub>cbg</sub> is used (pryout takes its own minimum the same way, so it may use the other h<sub>ef</sub>). Choosing “Reduced” accepts the analogy outright; “Not reduced” uses the full h<sub>ef</sub>. It lowers N<sub>b</sub> and A<sub>Nco</sub> and raises A<sub>Nc</sub>/A<sub>Nco</sub>; the net effect on φN<sub>cbg</sub> (usually an increase, i.e. the less conservative result — R17.6.2.1.2 calls the unreduced result overly conservative) is shown with both values in the Concrete Embedment tab. Engineer decision 2026-11-06: the lesser of the two by default (a saved project keeps the choice it was saved with: reduced or not reduced).");
+      if(bpCircModel()!=="exact") body.appendChild(el("div","note","Circular pier modelled as "+(bpCircModel()==="chord"? "the equivalent square (chord through the anchor row)" : "the inscribed square (0.707D)")+": the anchor concrete checks take a rectangular pedestal s × s concentric with the pier (rectangular rules). The rectangular anchor / pedestal reinforcement inputs do not apply; enter the pier cage below to credit it (§17.5.2.1).")); else   /* BCSQ */
       body.appendChild(el("div","note","Circular pier: A_Nc / A_Vc are the projected areas clipped by the circle (exact), c_a is measured to the circle (radial for ψ_ed,N and side-face blowout), and shear breakout uses the tangent-edge model (the edge is the tangent to the circle where the shear direction meets it). The rectangular anchor / pedestal reinforcement inputs do not apply; enter the pier cage below to credit it (§17.5.2.1)."));
       /* BC-5 (2026-11-01): the pier cage as anchor reinforcement */
       const K=S.conc.cage;
@@ -6210,6 +6300,10 @@ function buildInputPanel(){
     /* live readout of resulting edge distances */
     const g=anchorGeom();
     const caNote=el("div","note");
+    if(bpCircPier() && !bpCircCalc()){ const E=bpEqSquares(), m=bpCircModel();   /* BCSQ */
+      caNote.innerHTML="Radial edge distances to the circle, c<sub>a,i</sub> = R − r<sub>i</sub>: "+g.circ.caRad.map((c,i)=>(i+1)+": "+fmt(c,2)+"″").join(", ")+" (c<sub>a,min</sub> = "+fmt(g.circ.caRadMin,2)+"″, installation limits). "+
+        (m==="chord"? "Equivalent squares (chord through the outermost row): s<sub>+x</sub> / s<sub>−x</sub> / s<sub>+y</sub> / s<sub>−y</sub> = "+E.dirs.map(d=>fmt(d.s,2)+"″").join(" / ")+"; tension checks: s = "+fmt(E.sMin,2)+"″" : "Inscribed square s = D/√2 = "+fmt(E.sIns,2)+"″")+
+        ". Edge distances to that square: c<sub>a,+x</sub>="+fmt(g.ca_x_pos,2)+"″, c<sub>a,−x</sub>="+fmt(g.ca_x_neg,2)+"″, c<sub>a,+y</sub>="+fmt(g.ca_y_pos,2)+"″, c<sub>a,−y</sub>="+fmt(g.ca_y_neg,2)+"″."; } else
     if(bpCircPier()) caNote.innerHTML="Radial edge distances to the circle, c<sub>a,i</sub> = R − r<sub>i</sub>: "+g.circ.caRad.map((c,i)=>(i+1)+": "+fmt(c,2)+"″").join(", ")+" (c<sub>a,min</sub> = "+fmt(g.circ.caRadMin,2)+"″). Along ±x / ±y to the circle: "+fmt(g.ca_x_pos,2)+"″ / "+fmt(g.ca_x_neg,2)+"″ / "+fmt(g.ca_y_pos,2)+"″ / "+fmt(g.ca_y_neg,2)+"″."; else
     caNote.innerHTML="Resulting anchor edge distances to concrete: "+
       "c<sub>a,+x</sub>="+fmt(g.ca_x_pos,2)+'″, c<sub>a,−x</sub>='+fmt(g.ca_x_neg,2)+'″, '+
@@ -8035,6 +8129,8 @@ function buildInputEcho(pg){
     body.appendChild(t);
   },pg);
 
+  if(bpCircPier()) mkSection("iePierModel","Circular Pier — Modelling Method",body=>{ bpCircModelCard(body); },pg);   /* BCSQ */
+
   mkSection("ieLoads","Load Combinations (pre-factored)",body=>{
     const t=el("table","tbl"); const hd=el("tr");
     const Fu=forceUnit(), Mu=momentUnit();
@@ -8050,6 +8146,112 @@ function buildInputEcho(pg){
   mkSection("iePlan","Plan View",body=>{ drawPlan(body); },pg);
   mkSection("ieElevX","Elevation — looking along x (shows Mx, Vy)",body=>{ drawElevation(body,"x"); },pg);
   mkSection("ieElevY","Elevation — looking along y (shows My, Vx)",body=>{ drawElevation(body,"y"); },pg);
+}
+/* ---------------------------------------------------------------
+   BCSQ (2026-11-18): circular pier — the three modelling methods worked side by side. The selected method
+   (conc.circModel) drives every check; the comparison runs the whole design once per method and restores the state.
+   --------------------------------------------------------------- */
+const BP_CIRC_MODELS=[["exact","Exact circle"],["chord","Equivalent square — chord through the anchor row"],["inscribed","Inscribed square (0.707D)"]];
+function bpCircCompare(){
+  if(!bpCircPier()) return null;
+  const had=Object.prototype.hasOwnProperty.call(S.conc,"circModel"), keep=S.conc.circModel, sel=bpCircModel(), CC0=CC, rows=[];
+  try{
+    BP_CIRC_MODELS.forEach(([m,label])=>{
+      S.conc.circModel=m; const row={m,label,sel:m===sel};
+      try{
+        const E=bpEqSquares();
+        row.s=(m==="exact")? null : (m==="inscribed"? E.sIns : E.sMin);
+        if(m!=="exact" && !E.inside(row.s)){ row.na="an anchor lies on or outside this square"; rows.push(row); return; }
+        CC=computeAll();
+        row.caMin=CC.ca_minT;
+        let tB=null, vB=null;
+        CC.combos.forEach(c=>{ const cap=comboCapacities(CC,c), tb=cap.tb, sb=cap.sbk;
+          const dT=(c.Tu_group||0)>1e-9? c.Tu_group/tb.phiNcbg : 0;
+          if(!tB || dT>tB.dcr) tB={dcr:dT,combo:c.name,phi:tb.phiNcbg,Ncbg:tb.Ncbg,ANc:tb.ANc,ANco:tb.ANco,psi:tb.psi_ed,hef:tb.hef,ca:tb.ca};
+          const vd=(cap.sbkDem!==undefined? cap.sbkDem : c.Vres)||0, dV=vd>1e-9? vd/sb.phiVcbg : 0;
+          if(!vB || dV>vB.dcr) vB={dcr:dV,combo:c.name,phi:sb.phiVcbg,AVc:sb.AVc,ca1:sb.ca1,edge:sb.govEdge}; });
+        const gov=allChecks().reduce((a,x)=>(!a || x.dcr>a.dcr)? x : a, null);
+        Object.assign(row,{tB,vB,gov});
+      }catch(e){ row.na="not computed: "+(e&&e.message); }
+      rows.push(row);
+    });
+  } finally { if(had) S.conc.circModel=keep; else delete S.conc.circModel; CC=CC0; }
+  return rows;
+}
+/* plan figure: the pier circle, the anchors, the chords through the outermost rows (red), the chord square(s) and the
+   inscribed square; the selected method's square drawn heavier */
+function bpCircModelFigure(body){
+  const E=bpEqSquares(), R=E.R, m=bpCircModel(), W=560, H=470, pad=60;
+  const sc=(Math.min(W,H)-2*pad)/(2*R), cx=W/2, cy=H/2+6, X=x=>cx+x*sc, Y=y=>cy-y*sc;
+  const s=svg(W,H);
+  circ(s,X(0),Y(0),R*sc,"#f2efe8","#555",1.4);
+  line(s,X(-R-6),Y(0),X(R+6),Y(0),"#bbb",0.8,"3 3"); line(s,X(0),Y(-R-6),X(0),Y(R+6),"#bbb",0.8,"3 3");
+  /* inscribed square */
+  { const h=E.sIns/2; tip(rect(s,X(-h),Y(h),2*h*sc,2*h*sc,"none","#1f4e79",m==="inscribed"?2.4:1,m==="inscribed"?null:"5 4"),
+      "Inscribed square s = D/√2 = "+fmt(E.sIns,3)+"″");
+    txt(s,X(-h)+4,Y(-h)-5,"inscribed s = "+fmt(E.sIns,2)+"″","lblTxt","start",10,"#1f4e79"); }
+  /* chord squares (one per distinct side) and the chords */
+  const seen=[];
+  E.dirs.forEach(d=>{ if(seen.some(v=>Math.abs(v-d.s)<1e-6)) return; seen.push(d.s);
+    const h=d.s/2, gov=Math.abs(d.s-E.sMin)<1e-9;
+    tip(rect(s,X(-h),Y(h),2*h*sc,2*h*sc,"none","#2e7d32",(m==="chord"&&gov)?2.4:1,(m==="chord"&&gov)?null:"7 3"),
+      "Chord square s = "+fmt(d.s,3)+"″ (edge "+E.dirs.filter(o=>Math.abs(o.s-d.s)<1e-6).map(o=>o.name).join(", ")+")"+(gov?" — the smallest: tension checks":"")); });
+  E.dirs.forEach((d,i)=>{ const h=d.s/2;
+    const a=d.ax==="x"? [X(d.o),Y(-h),X(d.o),Y(h)] : [X(-h),Y(d.o),X(h),Y(d.o)];
+    tip(line(s,a[0],a[1],a[2],a[3],"#c62828",1.8),"Chord through the outermost anchor row toward "+d.name+": o = "+fmt(d.o,3)+"″, s = 2√(R² − o²) = "+fmt(d.s,3)+"″");
+    const lx=d.ax==="x"? X(d.o)+(d.name[0]==="+"?4:-4) : X(h)-4, ly=d.ax==="x"? Y(h)+12+i*0 : Y(d.o)+(d.name[0]==="+"?-4:12);
+    txt(s,lx,ly,"s"+d.name+" = "+fmt(d.s,2)+"″","lblTxt",(d.ax==="x"? (d.name[0]==="+"?"start":"end") : "end"),10,"#c62828"); });
+  E.q.forEach((p,i)=>{ tip(circ(s,X(p.x),Y(p.y),Math.max(3,(+S.anchor.dia||1)/2*sc),"#333","#000",0.8),"Anchor "+(i+1)+" ("+fmt(p.x,2)+", "+fmt(p.y,2)+")″, pier coordinates"); });
+  txt(s,W/2,16,"Plan (pier coordinates), Ø"+fmt(2*R,2)+"″ pier","lblTxt","middle",11,"#333");
+  txt(s,W/2,30,"red: chords through the outermost anchor rows · green: chord square · blue: inscribed square","lblTxt","middle",10,"#333");
+  { const h=E.sMin/2; txt(s,X(h)-4,Y(-h)-5,"chord square s = "+fmt(E.sMin,2)+"″","lblTxt","end",10,"#2e7d32"); }
+  txt(s,W/2,H-10,"Selected: "+(BP_CIRC_MODELS.find(o=>o[0]===m)||["",""])[1]+" (drawn solid and heavier)","lblTxt","middle",10,"#333");
+  body.appendChild(svgWithControls(s));
+}
+function bpCircModelCard(body){
+  const E=bpEqSquares(), m=bpCircModel(), R=E.R, f=v=>fmt(v,3);
+  body.appendChild(elH("div","note","<b>Selected (Pedestal input “Circular pier modelled as”): "+(BP_CIRC_MODELS.find(o=>o[0]===m)||["",""])[1]+".</b> It drives every anchor concrete check (Concrete Embedment tab). "+
+    "The squares are concentric with the pier and are checked as a rectangular pedestal s × s with the same plate offset. "+
+    "The h<sub>ef</sub> choice for a circular pier (§17.6.2.1.2 by analogy, “"+({lesser:"lesser of reduced / not reduced",reduced:"reduced",full:"not reduced"})[bpHefMode()]+"”) applies to the exact circle; "+
+    "for a square the rectangular §17.6.2.1.2 rule applies as for any rectangular pedestal (three or more edges within 1.5h<sub>ef</sub>: h′<sub>ef</sub> = max(c<sub>a,max</sub>/1.5, s/3)). "+
+    "Concrete bearing (A<sub>2</sub>), the installation edge distance (§17.9) and the pier cage stay on the true circle."));
+  /* derivation */
+  const chordLines=["R=\\frac{D}{2}=\\frac{"+f(E.D)+"}{2}="+f(R)+"\\ \\text{in}"].concat([].concat(...E.dirs.map(d=>[
+    "\\text{edge }"+d.name+":\\ o="+f(d.o)+"\\ \\text{in},\\quad s_{"+d.name+"}=2\\sqrt{R^2-o^2}=2\\sqrt{"+f(R)+"^2-("+f(d.o)+")^2}="+f(d.s)+"\\ \\text{in}",
+    "c_{a,"+d.name+"}=\\frac{s_{"+d.name+"}}{2}"+(d.name[0]==="+"?"-":"+")+"("+f(d.o)+")="+f(d.ca)+"\\ \\text{in}"])))
+    .concat(["s_{T}=\\min(s_{+x},s_{-x},s_{+y},s_{-y})="+f(E.sMin)+"\\ \\text{in (edge "+E.govDir+"; tension checks)}"]);
+  renderSteps(body,[{title:"Equivalent square — chord through the anchor row",ref:"engineer's method (2026-11-18); interpretation pending engineer review",
+      lines:chordLines,
+      vars:[["o","","signed offset from the pier centre of the outermost anchor row parallel to the edge (pier coordinates: plate coordinates + plate offset)"],
+            ["s_d","","the chord of the pier circle along that row = the side of a square concentric with the pier; at the row the side edge distances equal the true ones (the chord ends lie on the circle)"],
+            ["c_a","","distance from that row to the edge of its own square"],
+            ["rule","","a check toward one edge (shear breakout toward +x, −x, +y or −y, and its parallel check) uses that edge's square; the checks that involve every edge at once (tension breakout, pryout, side-face blowout) use the smallest square s_T (decision pending engineer review: conservative)"]]},
+    {title:"Inscribed square",ref:"square of side 0.707D concentric with the pier",
+      lines:["s=\\frac{D}{\\sqrt{2}}=\\frac{"+f(E.D)+"}{\\sqrt{2}}="+f(E.sIns)+"\\ \\text{in};\\quad c_{a,+x}="+f(E.sIns/2-E.by["+x"].o)+",\\ c_{a,-x}="+f(E.sIns/2+E.by["-x"].o)+",\\ c_{a,+y}="+f(E.sIns/2-E.by["+y"].o)+",\\ c_{a,-y}="+f(E.sIns/2+E.by["-y"].o)+"\\ \\text{in}"],
+      vars:[]}]);
+  if(E.sMin*E.sMin>Math.PI*R*R) body.appendChild(elH("div","warnBox","The chord square for the tension checks (s² = "+fmt(E.sMin*E.sMin,1)+" in²) is LARGER than the pier cross-section (πR² = "+fmt(Math.PI*R*R,1)+" in²): its projected areas can exceed those of the exact circle (unconservative relative to the exact circle; see the comparison below)."));
+  bpCircModelFigure(body);
+  /* comparison */
+  const rows=bpCircCompare()||[], Fu=forceUnit(), ff=forceFactor();
+  body.appendChild(el("h3",null,"Comparison — exact circle vs chord square vs inscribed square"));
+  const t=el("table","tbl"), hd=el("tr"); hd.appendChild(el("th",null,"Quantity"));
+  rows.forEach(r=>hd.appendChild(el("th",null,r.label+(r.sel?" (selected)":"")))); t.appendChild(hd);
+  const val=(r,fn)=>r.na? "n/a ("+r.na+")" : fn(r);
+  const lines=[
+    ["Square side s (in)",r=>r.m==="exact"? "— (circle Ø"+fmt(E.D,2)+")" : fmt(r.s,3)],
+    ["c_a,min, tension anchors (in)",r=>r.tB? fmt(r.tB.ca,3)+(r.m==="exact"?" (radial)":"") : "—"],
+    ["h_ef used in tension breakout (in)",r=>r.tB? fmt(r.tB.hef,3) : "—"],
+    ["A_Nc / A_Nco (in²)",r=>r.tB? fmt(r.tB.ANc,1)+" / "+fmt(r.tB.ANco,1) : "—"],
+    ["ψ_ed,N",r=>r.tB? fmt(r.tB.psi,4) : "—"],
+    ["N_cbg ("+Fu+")",r=>r.tB? fmt(r.tB.Ncbg*ff,2) : "—"],
+    ["φN_cbg ("+Fu+") [combination]",r=>r.tB? fmt(r.tB.phi*ff,2)+" ["+r.tB.combo+"], DCR "+fmtDCR(r.tB.dcr,3) : "—"],
+    ["c_a1 / A_Vc, shear breakout (in, in²)",r=>r.vB? fmt(r.vB.ca1,3)+" / "+fmt(r.vB.AVc,1)+" ("+r.vB.edge+")" : "—"],
+    ["φV_cbg ("+Fu+") [combination]",r=>r.vB? fmt(r.vB.phi*ff,2)+" ["+r.vB.combo+"], DCR "+fmtDCR(r.vB.dcr,3) : "—"],
+    ["Governing DCR (all checks)",r=>r.gov? fmtDCR(r.gov.dcr,3)+" — "+r.gov.label : "—"]];
+  lines.forEach(([lab,fn])=>{ const tr=el("tr"); tr.appendChild(el("td","lft",lab)); rows.forEach(r=>{ const td=el("td",null,val(r,fn)); if(r.sel) td.style.fontWeight="bold"; tr.appendChild(td); }); t.appendChild(tr); });
+  body.appendChild(t);
+  body.appendChild(elH("div","note","Each column is the whole design worked with that method (every combination; the φN<sub>cbg</sub> and φV<sub>cbg</sub> shown are those of the combination with the largest breakout ratio). Only the selected method drives the checks, the Summary and the Report; the others are shown for comparison. The worked derivations of the selected method are on the Concrete Embedment tab."));
+  bpadWorkedIn(body,[{card:"coTB",ci:S.detailCombo},{card:"coVB",ci:S.detailCombo}]);
 }
 function comboSelectorNote(pg){
   const n=el("div","note","Schematics are to scale and update live with inputs. Force arrows on elevations reflect the governing combination.");
@@ -8381,6 +8583,7 @@ function buildConcTab(pg){
     mkSection("coTB","3. Concrete Breakout — Tension",body=>{
       if(S.tRebar.present)
         body.appendChild(el("div","warnBox","Tension anchor reinforcement is present, but the \u00a717.5.2.1 substitution is NOT yet justified (see the Tension Rebar tab), so concrete breakout is still evaluated and enforced here."));
+      if(bpCircPier() && !bpCircCalc()) bpadWorkedIn(body,[{card:"iePierModel",txt:"Equivalent square of the circular pier"}]);   /* BCSQ */
       renderSteps(body,cap.tb.steps);
       dcrBox(body,c.Tu_group/cap.tb.phiNcbg,false,
         {load:c.Tu_group*forceFactor(),cap:cap.tb.phiNcbg*forceFactor(),unit:forceUnit(),
@@ -8412,6 +8615,7 @@ function buildConcTab(pg){
     mkSection("coVB","5. Concrete Breakout — Shear",body=>{
       if(S.vRebar.present)
         body.appendChild(el("div","warnBox","Shear anchor reinforcement (hairpins) is present, but the \u00a717.5.2.1 substitution is NOT yet justified (see the Shear Rebar tab), so concrete breakout in shear is still evaluated and enforced here."));
+      if(bpCircPier() && !bpCircCalc()) bpadWorkedIn(body,[{card:"iePierModel",txt:"Equivalent square of the circular pier"}]);   /* BCSQ */
       renderSteps(body,cap.sbk.steps);
       {const vd=(cap.sbkDem!==undefined?cap.sbkDem:c.Vres);   /* BC-3 */
       dcrBox(body,vd/cap.sbk.phiVcbg,false,
@@ -11231,7 +11435,7 @@ function drawBreakout(body,c){
   const A=S.anchor, C=S.conc, g=anchorGeom();
   /* BC-8 (2026-11-06): circular pier, "lesser" — draw the h_ef this combination's breakout uses */
   let he=null;
-  if(c && CC && bpCircPier() && bpHefMode()==="lesser"){ const pk=!!comboCapacities(CC,c).tb.hefEff.applies;
+  if(c && CC && bpCircCalc() && bpHefMode()==="lesser"){ const pk=!!comboCapacities(CC,c).tb.hefEff.applies;
     __bpHefPick=pk; try{ he=hefEffective(); } finally{ __bpHefPick=null; } }
   else he=hefEffective();
   const hef=he.hefEff;
@@ -11265,9 +11469,13 @@ function drawBreakout(body,c){
       "Un-clipped projection: 1.5\u00b7h_ef = "+fmt(1.5*hef,2)+"\u2033 beyond the outermost anchors.\n"+
       "The concrete edges cut this down to the solid area.");
   }
-  /* pedestal (BC-2: circular pier as a circle) */
+  /* pedestal (BC-2: circular pier as a circle; BCSQ: a circular pier modelled as a square — the square, with the true
+     circle dashed) */
+  const PDd=bpPedDims();
   if(ext.circ) circ(s,X(ext.circ.cx),Y(ext.circ.cy),ext.circ.R*sc,"#f2efe8","#555",1.2); else
-  rect(s,X(-C.Bx/2-pxo),Y(C.By/2-pyo),C.Bx*sc,C.By*sc,"#f2efe8","#555",1.2);
+  rect(s,X(-PDd.Bx/2-pxo),Y(PDd.By/2-pyo),PDd.Bx*sc,PDd.By*sc,"#f2efe8","#555",1.2);
+  if(!ext.circ && bpCircPier()) tip((()=>{ const o=circ(s,X(-pxo),Y(-pyo),bpPierR()*sc,"none","#8a8577",1); o.setAttribute("stroke-dasharray","6 4"); return o; })(),
+    "True pier circle Ø"+fmt(2*bpPierR(),2)+"\u2033; the checks use the equivalent square "+fmt(PDd.Bx,3)+"\u2033 ("+(bpCircModel()==="chord"? "chord through the anchor row, smallest of the four directions" : "inscribed, D/\u221a2")+").");
   /* A_Nco reference square, centred on the tension-anchor cluster centroid */
   const gcx=(ext.xmin+ext.xmax)/2, gcy=(ext.ymin+ext.ymax)/2, side=3*hef;
   tip(rect(s,X(gcx-side/2),Y(gcy+side/2),side*sc,side*sc,"none","#1f4e79",1.1,"2 3"),
@@ -13538,6 +13746,8 @@ function validateInputs(){
     if(!(+C.D>0)) errs.push({block:true, code:"input", msg:"Pier diameter D must be positive."});
     else {
       if(!(g.circ.caRadMin>0)) errs.push({block:true, code:"geometry", msg:"An anchor lies on or outside the pier circle (c_a,min = "+fmt(g.circ.caRadMin,2)+"″)."});
+      else if(bpCircModel()!=="exact"){ const E=bpEqSquares(), sq=bpCircModel()==="inscribed"? E.sIns : E.sMin;   /* BCSQ */
+        if(!E.inside(sq)) errs.push({block:true, code:"model", msg:"Circular pier modelled as "+(bpCircModel()==="inscribed"? "the inscribed square" : "the equivalent square (chord)")+": an anchor lies on or outside the square s = "+fmt(sq,2)+"″ the tension checks use. Choose “Exact circle” (Pedestal input) for this layout."}); }
       const ox=C.plate_off_x||0, oy=C.plate_off_y||0, R=bpPierR();
       const over=bpCircPlate()? (Math.hypot(ox,oy)+P.D/2>R+1e-9) : [[1,1],[1,-1],[-1,1],[-1,-1]].some(([a,b])=>Math.hypot(ox+a*P.B/2,oy+b*P.N/2)>R+1e-9);
       if(over) warns.push("The base plate extends beyond the pier circle (overhang).");
@@ -18523,7 +18733,7 @@ function bpGroupResultFor(i){
        stored choice; any other design (a rectangular pedestal, where the choice is hidden and has no effect) takes the
        default. BC-7 (2026-11-06): the default is applied (true); the hand-off carries no such choice.
        BC-8 (2026-11-06): the default is "lesser". */
-    if(!wasCirc) d.conc.circHefReduce="lesser";
+    if(!wasCirc){ d.conc.circHefReduce="lesser"; d.conc.circModel="exact"; }   /* BCSQ (2026-11-18): and the exact circle */
     d.combos=G.combos.map(function(c){ return Object.assign({},c); });
     d.tRebar=Object.assign({},d.tRebar,{present:false}); d.vRebar=Object.assign({},d.vRebar,{present:false}); d.ped=Object.assign({},d.ped,{present:false});
     d.detailCombo=0;

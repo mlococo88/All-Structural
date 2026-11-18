@@ -405,6 +405,15 @@ node tests/bpad-circle.mjs        # origin/main vs working tree on 31 rectangula
 
 Section 1 compares `computeAll()`, every combination's capacities, `allChecks()`, the validation messages, the print-report text and the Report-tab model between `--a` (default `origin/main`; its `shared/` folder is extracted next to it) and `--b` on 31 rectangular projects (default, the PROFIS validation cases, the anchor comparison's C1/C3/C4/C5 in four force-model variants, eleven reinforcement / stand-off / option variants) and, on the computed results only, 2 round-pier projects with the pier cage: any difference fails. Section 2, on `--b`: 4 bolts at 45° on BC = 12√2 must equal the 2×2 grid (≤ 1e-9 relative, 16 cases), hand checks H1 (8-bolt elastic group), H2 (circular plate, LRFDLTS bending line), H3 (round pier: A_Nc by clipping, ψ factors, φN_cbg with and without §17.6.2.1.2), H4 (torsion, vector-sum anchor shear), H5 (`anchorGroup` import with the `lightPole-v1` sign mapping, the anchor-group picker, the `anchorGroupResult` payload), and every worked line of those designs must typeset in KaTeX (the test kit's KaTeX 0.16.9 is injected when the tool's version is not in `libs/`).
 
+## Base Plate & Anchor Designer: circular pier as an equivalent square (`bpad-circsq.mjs`)
+
+```bash
+node tests/bpad-circsq.mjs        # origin/main vs working tree on round-pier saves + hand checks of the three pier models
+node tests/bpad-circsq.mjs --shots <dir>   # also screenshots of the selector, derivation, figure and comparison
+```
+
+BCSQ (2026-11-18): §1 round-pier saves without `conc.circModel` give identical computed results on `--a` (default `origin/main`) and `--b`, and on `--b` the same results as `"exact"`. §2 hand case (Ø36 in pier, 4 anchors at (±6, ±6), h_ef 12 in, uplift 40 kip, V_x 10 kip) for the exact circle, the chord square and the inscribed square: c_a, h_ef, A_Nc, A_Nco, ψ_ed,N, N_b, N_cbg, φN_cbg against values worked in the test, and the shear Case 1 / 2 c_a1. §3 per-direction chord squares with a plate offset. §4 the Input & Schematics card (figure, comparison, state restored), the Report, the validation block for an anchor outside the square, and KaTeX for every worked line. One browser at a time.
+
 ## Anchor parity, Light Pole vs Base Plate (`anchor-parity.mjs`)
 
 ```bash
