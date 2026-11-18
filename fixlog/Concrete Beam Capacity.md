@@ -7448,7 +7448,7 @@ The file uses CRLF line endings; keep them. The code is in the Beam Capacity src
 - The decisions above, pending engineer review.
 - Point loads, partial-length loads, continuous spans and propped cantilevers are not built: enter their M and V by hand in the case table (they add to the line-load values).
 
-## 2026-11-18 — PR: claude/cbc-beam-diagrams (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CBBD) — Load Combinations tab: "Beam Analysis" card for the line loads (beam sketch, V and M diagrams per case and for the governing combinations), and Report Figure LL-1   [DISPLAY ONLY: no formula, factor, combination or result changed; no saved-data change; no new storage key]
+## 2026-11-18 — PR: claude/cbc-beam-diagrams (PR #1639: https://github.com/mlococo88/All-Structural/pull/1639) (CBBD) — Load Combinations tab: "Beam Analysis" card for the line loads (beam sketch, V and M diagrams per case and for the governing combinations), and Report Figure LL-1   [DISPLAY ONLY: no formula, factor, combination or result changed; no saved-data change; no new storage key]
 
 The file uses CRLF line endings; keep them. The code is in the Beam Capacity srcdoc. When re-applying, escape `&` as `&amp;` and `"` as `&quot;`. The sites are tagged CBBD.
 
