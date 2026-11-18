@@ -1133,8 +1133,8 @@ function defaultState(){
            /* BCSQ (2026-11-18, engineer request): how a circular pier is modelled for the anchor concrete checks,
               circModel: "exact" (the circle, BC-2; default — a save without the field reads as "exact") | "chord"
               (equivalent square, side = the chord of the circle through the anchor row nearest the edge checked) |
-              "inscribed" (square of side D/√2). See bpCircModel(). */
-           circModel:"exact",
+              "inscribed" (square of side D/√2). See bpCircModel(). The field is NOT in the defaults: it is written only
+              when the user picks a method, so the saved data of every project that never picks one is unchanged. */
            /* BC-5 (2026-11-01): the pier cage of a circular pier as anchor reinforcement (bpCageTension / bpCageShear) */
            cage:{ present:false, nBars:8, barSize:"#8", grade:"gr60", cover:3.0, angle0:0, topCover:3.0, topHook:false,
                   tieType:"tie", tieSize:"#4", tieGrade:"gr60", tieTop:3.0, pitch:4.0, ackDetail:false } },
@@ -6229,7 +6229,7 @@ function buildInputPanel(){
     fRow(body,"f'c",numInput(()=>S.conc.fc,v=>S.conc.fc=v,0.5),"ksi");
     /* BC-2 (2026-11-01): rectangular pedestal (default) or circular pier / drilled shaft */
     fRow(body,"Pier shape",selInput([["rect","Rectangular Bx × By"],["circle","Circular (drilled shaft / round pier)"]],
-      ()=>S.conc.shape||"rect",v=>{ if(v==="circle" && S.conc.shape!=="circle"){ S.conc.circHefReduce="lesser"; S.conc.circModel="exact"; }   /* BC-6 / BC-7 / BC-8 (2026-11-06): a design becoming a round pier takes the default (lesser); BCSQ: and the exact circle */
+      ()=>S.conc.shape||"rect",v=>{ if(v==="circle" && S.conc.shape!=="circle"){ S.conc.circHefReduce="lesser"; delete S.conc.circModel; }   /* BC-6 / BC-7 / BC-8 (2026-11-06): a design becoming a round pier takes the default (lesser); BCSQ: and the exact circle */
         S.conc.shape=v; if(v==="circle"){ if(!(+S.conc.D>0)) S.conc.D=Math.max(S.conc.Bx,S.conc.By); S.conc.Bx=S.conc.D; S.conc.By=S.conc.D;
         S.conc.ca_override=false; S.tRebar.present=false; S.vRebar.present=false; S.ped.present=false; } },o=>o[1],o=>o[0]),"");
     if(bpCircPier()){
@@ -18733,7 +18733,7 @@ function bpGroupResultFor(i){
        stored choice; any other design (a rectangular pedestal, where the choice is hidden and has no effect) takes the
        default. BC-7 (2026-11-06): the default is applied (true); the hand-off carries no such choice.
        BC-8 (2026-11-06): the default is "lesser". */
-    if(!wasCirc){ d.conc.circHefReduce="lesser"; d.conc.circModel="exact"; }   /* BCSQ (2026-11-18): and the exact circle */
+    if(!wasCirc){ d.conc.circHefReduce="lesser"; delete d.conc.circModel; }   /* BCSQ (2026-11-18): and the exact circle (no field = "exact") */
     d.combos=G.combos.map(function(c){ return Object.assign({},c); });
     d.tRebar=Object.assign({},d.tRebar,{present:false}); d.vRebar=Object.assign({},d.vRebar,{present:false}); d.ped=Object.assign({},d.ped,{present:false});
     d.detailCombo=0;
