@@ -795,16 +795,18 @@ function cbcLlNorm(x){ const o=(x&amp;&amp;typeof x===&quot;object&quot;)?x:{}, 
       mode:r.mode===&quot;q&quot;?&quot;q&quot;:&quot;w&quot;,w:num(r.w),q:num(r.q),b:num(r.b)}))}; }
 function cbcLineLoads(ll,sec){
   const o=cbcLlNorm(ll), cant=o.sup===&quot;cant&quot;, L=o.L>0?o.L:0, dIn=+(sec&amp;&amp;sec.d)||0, Ag=+(sec&amp;&amp;sec.Ag)||0, xMax=cant?L:L/2;
+  const slabB=+(sec&amp;&amp;sec.slabB)||0;   /* CBST2: one-way slab, the design width b (in); 0 = a beam */
   let xV=0, dFall=false;
   if(o.vAt===&quot;d&quot;){ if(dIn/12<xMax) xV=dIn/12; else dFall=true; }
   const swW=o.sw?o.gc*Ag/144/1000:0, cases={}; let any=o.sw;
   CBC_LD_KEYS.forEach(k=>{
-    const rows=o.rows.map((r,i)=>Object.assign({},r,{i,wk:r.mode===&quot;q&quot;?r.q*r.b/1000:r.w})).filter(r=>r.k===k);
+    const rows=o.rows.map((r,i)=>{ const bAuto=r.mode===&quot;q&quot;&amp;&amp;slabB>0&amp;&amp;!(r.b>0), bU=bAuto?slabB/12:r.b;   /* CBST2: slab, b not entered -> b_trib = the slab width */
+      return Object.assign({},r,{i,bAuto,bU,wk:r.mode===&quot;q&quot;?r.q*bU/1000:r.w}); }).filter(r=>r.k===k);
     const sw=(k===&quot;D&quot;&amp;&amp;o.sw)?swW:0, w=rows.reduce((s,r)=>s+r.wk,0)+sw, has=rows.length>0||(k===&quot;D&quot;&amp;&amp;o.sw);
     if(rows.length) any=true;
     cases[k]={rows,sw,w,has,M:cant?-w*L*L/2:w*L*L/8,V:cant?w*(L-xV):w*(L/2-xV)};
   });
-  return Object.assign(o,{cant,Lc:L,dIn,Ag,xV,dFall,swW,cases,any}); }
+  return Object.assign(o,{cant,Lc:L,dIn,Ag,xV,dFall,swW,cases,any,slabB}); }
 function cbcSvcTotal(svc,X){
   if(!X||!X.any) return svc;
   const c={}; CBC_LD_KEYS.forEach(k=>{ const e=(svc&amp;&amp;svc.cases&amp;&amp;svc.cases[k])||{}, x=X.cases[k];
@@ -814,10 +816,14 @@ function cbcSvcTotal(svc,X){
 function cbcLlSec(){ const ll=S.svc&amp;&amp;S.svc.ll, {bw,h,bf,hf,type}=S.sec;
   const Ag=type===&quot;tee&quot;?bf*hf+bw*(h-hf):bw*h; let d=0;
   if(ll&amp;&amp;(ll.rows.length||ll.sw)){ try{ const F=flexure(ll.sup===&quot;cant&quot;); d=F.dCent||0.9*h; }catch(e){ d=0.9*h; } }
-  return {d,Ag}; }
+  return {d,Ag,slabB:cbcSlab()?(+bw||0):0}; }   /* CBST2: slabB, the slab design width (in) */
 let CBC_LLC={k:null,v:null};
 function cbcLlX(){ const k=JSON.stringify([S.svc&amp;&amp;S.svc.ll,S.sec,S.layers,S.cover,S.stir,S.layerClear,S.mat,S.code,S.memberType,S.slab]);
   if(CBC_LLC.k!==k) CBC_LLC={k,v:cbcLineLoads(S.svc.ll,cbcLlSec())}; return CBC_LLC.v; }
+/* CBST2: row i of the line loads as computed (bU, bAuto, wk) */
+function cbcLlRow(X,i){ let o=null; CBC_LD_KEYS.forEach(k=>X.cases[k].rows.forEach(r=>{ if(r.i===i) o=r; })); return o; }
+/* CBST2: the tributary width of a pressure row as text, with its source on a slab */
+function cbcLlBTxt(X,r){ return fmt(r.bU)+&quot; ft&quot;+(r.bAuto?&quot; (= slab width)&quot;:(X.slabB>0?&quot; (entered)&quot;:&quot;&quot;)); }
 /* the service cases the combinations use: as entered, plus the line loads (service mode only) */
 function cbcSvcEff(){ return cbcSvcTotal(S.svc,cbcLlX()); }
 /* the default combinations of every save made before CBSL (used only where such a save has no combinations, as before) */
@@ -2660,7 +2666,7 @@ function cbcLlInputs(b){
   b.appendChild(el(&quot;h3&quot;,null,&quot;Line loads (optional)&quot;));
   b.appendChild(cbNL(&quot;note&quot;,&quot;Uniform line loads per load case, on a simple span or a cantilever. Each case’s M and V used in the combinations = the M and V entered above + the line-load M and V (so point-load effects can still be added by hand above). T is as entered.&quot;,[
     [&quot;Line load:&quot;,&quot;w (klf) entered, or a pressure q (psf) × tributary width b (ft): w = q·b/1000.&quot;],
-    ...(cbcSlab()?[[&quot;One-way slab:&quot;,&quot;enter w on the width the actions are &quot;+cbcSlabPer()+&quot; (per 1 ft strip: q × 1 ft).&quot;]]:[])]));
+    ...(cbcSlab()?[[&quot;One-way slab:&quot;,&quot;enter w on the width the actions are &quot;+cbcSlabPer()+&quot;. A pressure q uses the slab width as its tributary width, b = &quot;+fmt(S.sec.bw/12)+&quot; ft (w = q·b/1000); “override” enters a different b (rare; flagged “entered”).&quot;]]:[])]));   /* CBST2 */
   fRow(b,&quot;Span for the line loads, L&quot;,numIn(()=>ll.L,v=>{ll.L=v;},&quot;0.5&quot;,&quot;llL&quot;),&quot;ft&quot;);
   if(S.minh&amp;&amp;S.minh.span>0&amp;&amp;Math.abs(S.minh.span-ll.L)>1e-9) b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Minimum Thickness span ℓ = &quot;+fmt(S.minh.span)+&quot; ft (not linked; the line loads use L above).&quot;));
   fRow(b,&quot;Support&quot;,selIn([&quot;simple&quot;,&quot;cant&quot;],()=>ll.sup,v=>{ll.sup=(v===&quot;cant&quot;?&quot;cant&quot;:&quot;simple&quot;);},o=>o===&quot;cant&quot;?&quot;Cantilever&quot;:&quot;Simple span&quot;,o=>o,&quot;llSup&quot;),&quot;&quot;);
@@ -2674,7 +2680,13 @@ function cbcLlInputs(b){
     const c2=el(&quot;td&quot;), w=el(&quot;div&quot;); w.style.cssText=&quot;display:flex;flex-wrap:wrap;gap:3px;align-items:center&quot;;
     const ms=selIn([&quot;w&quot;,&quot;q&quot;],()=>r.mode,v=>{r.mode=(v===&quot;q&quot;?&quot;q&quot;:&quot;w&quot;);},o=>o===&quot;q&quot;?&quot;q × b&quot;:&quot;w&quot;,o=>o,&quot;llM&quot;+i); ms.style.width=&quot;auto&quot;; w.appendChild(ms);
     const ni=(get,set,key,u)=>{ const x=numIn(get,set,&quot;any&quot;,key); x.style.width=&quot;62px&quot;; x.style.flex=&quot;1 1 52px&quot;; w.appendChild(x); w.appendChild(el(&quot;span&quot;,&quot;unit&quot;,u)); };
-    if(r.mode===&quot;q&quot;){ ni(()=>r.q,v=>{r.q=v;},&quot;llQ&quot;+i,&quot;psf ×&quot;); ni(()=>r.b,v=>{r.b=v;},&quot;llB&quot;+i,&quot;ft&quot;); }
+    if(r.mode===&quot;q&quot;){ ni(()=>r.q,v=>{r.q=v;},&quot;llQ&quot;+i,&quot;psf ×&quot;);
+      const bS=cbcSlab()?(+S.sec.bw||0)/12:0;   /* CBST2: on a slab the tributary width is the slab width unless overridden (b entered > 0) */
+      if(bS>0&amp;&amp;!(r.b>0)){ const x=el(&quot;input&quot;); x.type=&quot;text&quot;; x.value=fmt(bS); x.disabled=true; x.className=&quot;llBAuto&quot;; x.title=&quot;Tributary width = the slab design width&quot;;
+        x.style.cssText=&quot;width:62px;flex:1 1 52px;background:#f1f5f9;color:#475569&quot;; w.appendChild(x); w.appendChild(el(&quot;span&quot;,&quot;unit&quot;,&quot;ft = slab width (&quot;+fmt(bS)+&quot; ft)&quot;));
+        const ob=el(&quot;button&quot;,null,&quot;override&quot;); ob.type=&quot;button&quot;; ob.title=&quot;Enter a different tributary width (flagged “entered”)&quot;; ob.addEventListener(&quot;click&quot;,()=>{ r.b=bS; refresh(); }); w.appendChild(ob); }
+      else { ni(()=>r.b,v=>{r.b=v;},&quot;llB&quot;+i,bS>0?&quot;ft (entered)&quot;:&quot;ft&quot;);
+        if(bS>0){ const ub=el(&quot;button&quot;,null,&quot;use slab width&quot;); ub.type=&quot;button&quot;; ub.title=&quot;Tributary width = the slab design width (&quot;+fmt(bS)+&quot; ft)&quot;; ub.addEventListener(&quot;click&quot;,()=>{ r.b=0; refresh(); }); w.appendChild(ub); } } }
     else ni(()=>r.w,v=>{r.w=v;},&quot;llW&quot;+i,&quot;klf&quot;);
     c2.appendChild(w); tr.appendChild(c2);
     const c3=el(&quot;td&quot;,&quot;x&quot;), rm=el(&quot;button&quot;,null,&quot;\u00d7&quot;); rm.title=&quot;Remove&quot;; rm.addEventListener(&quot;click&quot;,()=>{ ll.rows.splice(i,1); refresh(); }); c3.appendChild(rm); tr.appendChild(c3);
@@ -3321,7 +3333,7 @@ function buildLoadsTab(pg){
 /* CBLL (2026-11-18): the line loads worked per case (symbolic -> values -> result), then entered + line = the case's M and V */
 function cbcLlTex(X,k){ const c=X.cases[k], e=S.svc.cases[k]||{}, L=X.Lc, ws=[], out=[];
   c.rows.forEach((r,j)=>{ const s=&quot;w_{&quot;+k+&quot;,&quot;+(j+1)+&quot;}&quot;;
-    out.push(r.mode===&quot;q&quot;?s+&quot; = \\dfrac{q\\,b_{trib}}{1000} = \\dfrac{(&quot;+fmt(r.q)+&quot;\\text{ psf})(&quot;+fmt(r.b)+&quot;\\text{ ft})}{1000} = &quot;+fmt(r.wk,3)+&quot;\\text{ klf}&quot;
+    out.push(r.mode===&quot;q&quot;?s+&quot; = \\dfrac{q\\,b_{trib}}{1000} = \\dfrac{(&quot;+fmt(r.q)+&quot;\\text{ psf})(&quot;+fmt(r.bU)+&quot;\\text{ ft&quot;+(r.bAuto?&quot;, slab width&quot;:&quot;&quot;)+&quot;})}{1000} = &quot;+fmt(r.wk,3)+&quot;\\text{ klf}&quot;
       :s+&quot; = &quot;+fmt(r.wk,3)+&quot;\\text{ klf (entered)}&quot;); ws.push(fmt(r.wk,3)); });
   if(c.sw){ out.push(&quot;w_{sw} = \\dfrac{\\gamma_c A_g}{144\\,(1000)} = \\dfrac{(&quot;+fmt(X.gc)+&quot;\\text{ pcf})(&quot;+fmt(X.Ag,1)+&quot;\\text{ in}^2)}{144\\,(1000)} = &quot;+fmt(c.sw,3)+&quot;\\text{ klf}&quot;); ws.push(fmt(c.sw,3)); }
   out.push(&quot;w_{&quot;+k+&quot;} = &quot;+(ws.length>1?ws.join(&quot; + &quot;)+&quot; = &quot;:&quot;&quot;)+fmt(c.w,3)+&quot;\\text{ klf}&quot;);
@@ -3349,7 +3361,7 @@ function cbcLlWork(b,X){
   b.appendChild(cbNL(&quot;note&quot;,null,notes));
   CBC_LD_KEYS.forEach(k=>{ const c=X.cases[k]; if(!c.has) return;
     b.appendChild(eqBlock({title:&quot;Case &quot;+CBC_LD_SYM[k].replace(&quot;_r&quot;,&quot;r&quot;)+&quot; — &quot;+CBC_LD_NAME[k],ref:X.cant?&quot;cantilever, uniform w&quot;:&quot;simple span, uniform w&quot;,lines:cbcLlTex(X,k),
-      vars:c.rows.map((r,j)=>[&quot;w_{&quot;+k+&quot;,&quot;+(j+1)+&quot;}&quot;,(r.lab?r.lab+&quot;: &quot;:&quot;&quot;)+(r.mode===&quot;q&quot;?&quot;q = &quot;+fmt(r.q)+&quot; psf × b = &quot;+fmt(r.b)+&quot; ft&quot;:&quot;w entered&quot;),fmt(r.wk,3),&quot;klf&quot;])
+      vars:c.rows.map((r,j)=>[&quot;w_{&quot;+k+&quot;,&quot;+(j+1)+&quot;}&quot;,(r.lab?r.lab+&quot;: &quot;:&quot;&quot;)+(r.mode===&quot;q&quot;?&quot;q = &quot;+fmt(r.q)+&quot; psf × b = &quot;+cbcLlBTxt(X,r):&quot;w entered&quot;),fmt(r.wk,3),&quot;klf&quot;])
         .concat(c.sw?[[&quot;w_{sw}&quot;,&quot;Self-weight of the member&quot;,fmt(c.sw,3),&quot;klf&quot;]]:[])}));
   });
 }
@@ -6327,7 +6339,7 @@ function cbcRptModel(){
         subs.push({title:'Line loads',items:[{type:'table',head:['Item','Value','Unit'],rows:[['Span for the line loads L',{t:fmt(ll.L),n:true},'ft'],['Support',LX.cant?'cantilever':'simple span',''],
             ['V taken at',LX.xV>0?'d from the support face (d = '+fmt(LX.dIn)+' in)':'the support face'+(LX.dFall?' (d not less than '+(LX.cant?'L':'L/2')+')':''),''],
             ['Self-weight as D',ll.sw?'yes, γ_c = '+fmt(ll.gc)+' pcf, A_g = '+fmt(LX.Ag,1)+' in²':'no','']]},
-          {type:'table',head:['Case','Label','Input','w (klf)'],rows:ll.rows.map((r,i)=>['$'+CBC_LD_SYM[r.k]+'$',r.lab||'—',r.mode==='q'?'q = '+fmt(r.q)+' psf × b = '+fmt(r.b)+' ft':'w entered',{t:fmt(r.mode==='q'?r.q*r.b/1000:r.w,3),n:true}])},
+          {type:'table',head:['Case','Label','Input','w (klf)'],rows:ll.rows.map((r,i)=>{ const x=cbcLlRow(LX,i)||{bU:r.b,wk:r.mode==='q'?r.q*r.b/1000:r.w}; return ['$'+CBC_LD_SYM[r.k]+'$',r.lab||'—',r.mode==='q'?'q = '+fmt(r.q)+' psf × b = '+cbcLlBTxt(LX,x):'w entered',{t:fmt(x.wk,3),n:true}]; })},   /* CBST2 */
           {type:'note',text:cbcLlWhere(LX)}]}); }
       subs.push({title:'Load combinations',items:[{type:'table',head:['#','Eq.','Combination','$M_{u}$ (kip-ft)','$V_{u}$ (kip)'].concat(hasT?['$T_{u}$ (kip-ft)']:[]),rows:CC.combos.map(r=>[String(r.ci+1),'('+r.gen.eq+')',r.name,{t:fmt(r.Mu),n:true,key:'ld'+r.ci+'/Mu'},{t:fmt(r.Vu),n:true,key:'ld'+r.ci+'/Vu'}].concat(hasT?[{t:fmt(r.Tu),n:true,key:tuU?'ld'+r.ci+'/Tu':undefined}]:[]))}]});
     } else
@@ -6342,7 +6354,7 @@ function cbcRptModel(){
     { const LX=cbcLlX();   /* CBLL: the line loads worked per case; keys ll/M<k>, ll/V<k> (the case totals used by the combinations) */
       if(LX.any){ const T=[];
         CBC_LD_KEYS.forEach(k=>{ const c=LX.cases[k]; if(!c.has) return; const e=S.svc.cases[k]||{}, L=LX.Lc, st=[];
-          c.rows.forEach((r,j)=>st.push(r.mode==='q'?cS({id:'w'+k+(j+1),label:'Line load '+(r.lab?'“'+r.lab+'”':k+(j+1))+': pressure × tributary width',sym:'w_{'+k+','+(j+1)+'}',eq:'\\dfrac{q\\,b_{trib}}{1000}',sub:'\\dfrac{('+fmt(r.q)+')('+fmt(r.b)+')}{1000}',value:r.wk,unit:'klf',d:3})
+          c.rows.forEach((r,j)=>st.push(r.mode==='q'?cS({id:'w'+k+(j+1),label:'Line load '+(r.lab?'“'+r.lab+'”':k+(j+1))+': pressure × tributary width'+(r.bAuto?' (b_trib = the slab width, '+fmt(r.bU)+' ft)':(LX.slabB>0?' (b_trib entered)':'')),sym:'w_{'+k+','+(j+1)+'}',eq:'\\dfrac{q\\,b_{trib}}{1000}',sub:'\\dfrac{('+fmt(r.q)+')('+fmt(r.bU)+')}{1000}',value:r.wk,unit:'klf',d:3})
             :cS({id:'w'+k+(j+1),label:'Line load '+(r.lab?'“'+r.lab+'”':k+(j+1))+' (entered)',sym:'w_{'+k+','+(j+1)+'}',value:r.wk,unit:'klf',d:3})));
           if(c.sw) st.push(cS({id:'sw'+k,label:'Self-weight of the member',sym:'w_{sw}',eq:'\\dfrac{\\gamma_c A_g}{144\\,(1000)}',sub:'\\dfrac{('+fmt(LX.gc)+')('+fmt(LX.Ag,1)+')}{144\\,(1000)}',value:c.sw,unit:'klf',d:3}));
           st.push(cS({id:'w'+k,label:'Line load, case '+k,sym:'w_{'+k+'}',eq:'\\sum w',sub:c.rows.map(r=>fmt(r.wk,3)).concat(c.sw?[fmt(c.sw,3)]:[]).join(' + '),value:c.w,unit:'klf',d:3}));
