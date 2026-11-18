@@ -7384,3 +7384,66 @@ Every site is tagged RBBZ. The file uses CRLF line endings; keep them. The code 
 ### How verified
 - **`tests/smoke/cbc-bar-size.mjs` extended** (both cases, 1400 and 390 px, 0 console errors; Beam Capacity's `cbdwDev()` reads the tab as an input error, no throw).
 - **Identity probe:** origin/main vs branch, 6 Development & Splice projects (default; ACI #8 top bar with A_tr; AASHTO #6 epoxy, Hook tab; #14 tension splice; excess reinforcement with Class A; a project saved without `barSize`). The autosave, `readInputs()`, `computeFactors()`, `rbInputErrors()`, the check summary panel, the text of every output tab and Beam Capacity's `cbdwDev()` are all identical.
+
+## 2026-11-18 — PR: claude/cbc-line-loads (PR #1637: https://github.com/mlococo88/All-Structural/pull/1637) (CBLL) — Beam Capacity tab, service mode: line loads per load case (w, or q × tributary width), simple span or cantilever, added to the M and V entered per case   [NEW COMPUTATION PATH (service mode, ACI); no existing formula, factor or combination changed; saved format: additive `svc.ll` (absent = no line loads, results unchanged); no new storage key]
+
+The file uses CRLF line endings; keep them. The code is in the Beam Capacity srcdoc. When re-applying, escape `&` as `&amp;` and `"` as `&quot;`. The sites are tagged CBLL.
+
+### Engineer request (2026-11-18) and decisions
+- **Request:** enter linear loads per load case, as a line load w (klf) or as a pressure q (psf) × tributary width b (ft), w = q·b/1000, in addition to the M and V entered per case. Supports: **simple span and cantilever** (engineer decision).
+- **Engineer decisions:** self-weight of the member as D (A_g·γ_c, γ_c default 150 pcf) is a tick box, **off by default**; V is taken at the **support face by default**, with the option "at d from the support face".
+- **Decisions (pending engineer review):**
+  - **Span:** a separate "Span for the line loads, L" in the Loads card, not the Minimum Thickness span (that span has four support conditions and its own basis, Table 9.3.1.1; linking the two would make one input change two checks). Where the Minimum Thickness span is entered and differs, a note shows it ("not linked").
+  - **One L for M and V:** M = wL²/8 and V = wL/2 use the same L. Entering the span to the support centrelines is conservative for both (V = wL/2 is then more than the face value).
+  - **d for "V at d":** the d of the shear check (centroid of the tension steel, `flexure(neg).dCent || 0.9h`): +M (bottom steel) for a simple span, −M (top steel) for a cantilever. Where d is not less than L/2 (simple) or L (cantilever), V is taken at the support face (warning).
+  - **Signs:** +w is downward; the simple-span M is + (sagging), the cantilever M is − (hogging); V is taken positive for +w. A negative w (uplift) gives the opposite signs.
+  - **"V at d" note:** cites ACI 318-19 9.4.3.2 (support reaction in compression in the end region, loads at or near the top, no concentrated load within d of the face) as conditions to confirm; the tool does not check them.
+  - **A_g for self-weight:** b_w·h (rectangle, slab strip or slab width b) or b_f·h_f + b_w(h − h_f) (T-beam), as the gross area used elsewhere in the tool.
+
+### Where (new code, Beam Capacity srcdoc)
+- **After `cbcSvcNorm`** (anchor `CBLL (2026-11-18, engineer request): LINE LOADS per service load case`): `cbcLlNorm(x)`, `cbcLineLoads(ll,sec)`, `cbcSvcTotal(svc,X)`, `cbcLlSec()`, `cbcLlX()` (memoised on the inputs), `cbcSvcEff()`. The computation (verbatim):
+  ```js
+  let xV=0, dFall=false;
+  if(o.vAt==="d"){ if(dIn/12<xMax) xV=dIn/12; else dFall=true; }
+  const swW=o.sw?o.gc*Ag/144/1000:0, cases={}; let any=o.sw;
+  CBC_LD_KEYS.forEach(k=>{
+    const rows=o.rows.map((r,i)=>Object.assign({},r,{i,wk:r.mode==="q"?r.q*r.b/1000:r.w})).filter(r=>r.k===k);
+    const sw=(k==="D"&&o.sw)?swW:0, w=rows.reduce((s,r)=>s+r.wk,0)+sw, has=rows.length>0||(k==="D"&&o.sw);
+    if(rows.length) any=true;
+    cases[k]={rows,sw,w,has,M:cant?-w*L*L/2:w*L*L/8,V:cant?w*(L-xV):w*(L/2-xV)};
+  });
+  ```
+  with `L = o.L>0 ? o.L : 0`, `xMax = cant ? L : L/2`. `cbcSvcTotal` returns `svc` itself when there is no line load, else each case `{M: entered M + line M, V: entered V + line V, T: entered T}`.
+- **`cbcSvcDefault()`** — before: `return {cases:c,rev:{W:true,E:true},l05:false}; }` after: `return {cases:c,rev:{W:true,E:true},l05:false,ll:cbcLlNorm(null)}; }`.
+- **`cbcSvcNorm(x)`** — before: `d.l05=!!x.l05; return d; }` after: `d.l05=!!x.l05; d.ll=cbcLlNorm(x.ll); return d; }`.
+- **`cbcCombos()`** — before: `cbcBuildCombos(S.svc)` after: `cbcBuildCombos(cbcSvcEff())`. `cbcBuildCombos` itself is unchanged.
+- **`cbcLdTex(g,a)`** — before: `fmt((S.svc.cases[t.k]||{})[a]||0)` after: `fmt((cbcSvcEff().cases[t.k]||{})[a]||0)` (the substituted values are the case totals).
+- **`buildSvcLoads(b)`** — before: `const G=cbcBuildCombos(SV);` after: `cbcLlInputs(b);` then `const G=cbcBuildCombos(cbcSvcEff());`. New `cbcLlInputs(b)`: heading "Line loads (optional)", span L (`llL`), Support (`llSup`), V taken at (`llVat`), the rows (case `llK<i>`, label `llN<i>`, w / q × b `llM<i>`, `llW<i>` or `llQ<i>`/`llB<i>`, ×), "+ Add line load", self-weight tick box (`llSw`) and γ_c (`llGc`), then the line-load w, M, V per case with the location note and a link to the Line Loads card.
+- **`buildLoadsTab(pg)`** — before: `const SV=S.svc, tuShow=cbcTuUsed(), G=CC.combos;` after: `const SV=cbcSvcEff(), tuShow=cbcTuUsed(), G=CC.combos, LX=cbcLlX();`. With line loads: a note and link under the cases table, and the new card `ldLine` "Line Loads — Simple Span / Cantilever, Service Actions per Case" (`cbcLlWork`, `cbcLlTex`): span and d, location and sign notes, then per case w per row (q·b/1000 or entered), self-weight, Σw, M_line, V_line, M = M_entered + M_line, V = V_entered + V_line.
+- **`validate()`** — before `if(allZero) W.push(...)`: a warning where line loads are entered and L ≤ 0; a warning where d is not less than L/2 (L); a note stating where M and V are taken (`cbcLlWhere`).
+- **Report (`cbcRptModel`)** — Inputs: the service load cases table shows the case totals, each M / V linked to its worked step (`ll/M<k>`, `ll/V<k>`), and a "Line loads" subsection (span, support, V location, self-weight, the rows). Load combinations section: "Line loads — simple span / cantilever, L = … ft" with the location note and the worked steps (scope `ll`), then "The combinations below use these case totals: D [[ll/MD]], [[ll/VD]]; …".
+
+### Saved data (§5)
+- **Additive field only:** `svc.ll = {L, sup, vAt, sw, gc, rows:[{k, lab, mode, w, q, b}]}` in the autosave `rcbeam_v2_auto`, saved projects and Export JSON. No key renamed or added.
+- **Migration:** a save without `svc.ll` (every save before this PR) reads as no line loads (`cbcLlNorm(undefined)`: L 0, simple, face, self-weight off, γ_c 150, no rows), and `cbcSvcTotal` then returns the cases as entered, so the combinations are computed from the same object as before.
+
+### Check cases (Node test `tests/engine/cbc-lineloads.test.mjs`; smoke `tests/smoke/cbc-lineloads.mjs`)
+- **1. Simple span (engineer's case), V at the support face.** L = 20 ft. D: q = 100 psf × 10 ft → w = 100(10)/1000 = 1.000 klf, plus w = 0.200 klf → w_D = 1.200 klf. L: 50 psf × 10 ft → w_L = 0.500 klf.
+  - M_D = 1.2(20)²/8 = 60.00 k-ft; V_D = 1.2(20/2) = 12.00 kip; M_L = 0.5(400)/8 = 25.00 k-ft; V_L = 0.5(10) = 5.00 kip.
+  - (5.3.1b) 1.2D + 1.6L + 0.5Lr: M_u = 1.2(60) + 1.6(25) = 72 + 40 = **112.00 k-ft**; V_u = 1.2(12) + 1.6(5) = 14.4 + 8.0 = **22.40 kip**. (5.3.1a) 1.4D: 84.00 / 16.80.
+  - Before (no line-load path): the cases had to be entered as M_D 60, V_D 12, M_L 25, V_L 5 by hand; the combinations from those are the same numbers.
+- **2. The same, V at d = 18 in = 1.5 ft:** V_D = 1.2(10 − 1.5) = 10.20 kip, V_L = 0.5(8.5) = 4.25 kip; V_u = 12.24 + 6.80 = 19.04 kip; M unchanged.
+- **3. Cantilever L = 8 ft, D w = 1.5 klf, L 40 psf × 12.5 ft = 0.5 klf:** M_D = −1.5(64)/2 = −48.00 k-ft, V_D = 1.5(8) = 12.00 kip; M_L = −16.00, V_L = 4.00. 1.2D + 1.6L: M_u = −57.6 − 25.6 = **−83.20 k-ft (hogging)**, V_u = 14.4 + 6.4 = **20.80 kip**. At d = 15 in = 1.25 ft: V_D = 1.5(6.75) = 10.125, V_L = 3.375, V_u = 12.15 + 5.40 = 17.55 kip.
+- **4. Self-weight**, 12 × 18 in, γ_c 150 pcf: w_sw = 150(216)/144/1000 = 0.225 klf; 20 ft simple span: M = 11.25 k-ft, V = 2.25 kip (110 pcf: 0.165 klf).
+- **Entered + line:** D entered M 5, V 2, T 3 with check case 1 → M_D 65, V_D 14, T_D 3.
+
+### How verified
+- **Identity probe, origin/main vs branch, 7 projects** (a new project; an older factored save; AASHTO with service cases stored; a same-sign service project with torsion and 5.3.3; the CBOM mixed-sign service project; a one-way slab in service mode; a T-beam in factored mode): `computeAll()`, `VALIDATION`, the Report text, the text of every output tab, the input panel and the autosave (less the new `svc.ll`) are identical; 0 console errors.
+- **Tests:** `node tests/engine/run.mjs cbc-` (15 passed: 7 new in `cbc-lineloads.test.mjs`, 8 in `cbc-loads.test.mjs` unchanged); `tests/smoke/cbc-lineloads.mjs` (new, 1400 and 390 px); every `tests/smoke/cbc-*.mjs` (asd-mbe4, bar-size, input-fit, leg-width, lineloads, loads, min-thickness, shear-limit, slab, slab-st-drawings) and `tests/smoke/decimal-entry.mjs`, all pass; `node tests/check-syntax.mjs`, all pass.
+
+### Other copies
+- None. The ACI rebar development-length app embedded in this file (Development & Splice tab) is not touched.
+
+### Open items
+- The decisions above, pending engineer review.
+- Point loads, partial-length loads, continuous spans and propped cantilevers are not built: enter their M and V by hand in the case table (they add to the line-load values).

@@ -773,23 +773,66 @@ function cbcBuildCombos(svc){
   return rows;
 }
 /* the load cases as entered (all zero = blank); W and E reverse by default (conservative: both signs are built) */
-function cbcSvcDefault(){ const c={}; CBC_LD_KEYS.forEach(k=>c[k]={M:0,V:0,T:0}); return {cases:c,rev:{W:true,E:true},l05:false}; }
+function cbcSvcDefault(){ const c={}; CBC_LD_KEYS.forEach(k=>c[k]={M:0,V:0,T:0}); return {cases:c,rev:{W:true,E:true},l05:false,ll:cbcLlNorm(null)}; }   /* CBLL: ll */
 function cbcSvcNorm(x){ const d=cbcSvcDefault(); if(!x||typeof x!==&quot;object&quot;) return d;
   const c=x.cases||{}; CBC_LD_KEYS.forEach(k=>{ const o=c[k]||{}; d.cases[k]={M:+o.M||0,V:+o.V||0,T:+o.T||0}; });
-  const r=x.rev||{}; d.rev={W:r.W!==false,E:r.E!==false}; d.l05=!!x.l05; return d; }
+  const r=x.rev||{}; d.rev={W:r.W!==false,E:r.E!==false}; d.l05=!!x.l05; d.ll=cbcLlNorm(x.ll); return d; }   /* CBLL: absent ll = no line loads */
+/* =====================================================================
+   CBLL (2026-11-18, engineer request): LINE LOADS per service load case, in addition to the M, V entered per case.
+   S.svc.ll = {L (ft), sup &quot;simple&quot;|&quot;cant&quot;, vAt &quot;face&quot;|&quot;d&quot;, sw (self-weight as D), gc (pcf), rows:[{k, lab, mode &quot;w&quot;|&quot;q&quot;, w (klf),
+   q (psf), b (ft)}]}; a row's line load is w, or q·b/1000 (pressure × tributary width). Older saves have no ll: no line loads,
+   the cases as entered, results unchanged. Per case: w = Σ rows (+ self-weight γ_c·A_g/144/1000 in D, where ticked);
+     simple span: M = wL²/8 (+, midspan), V = w(L/2 − x);   cantilever: M = −wL²/2 (support), V = w(L − x);
+     x = 0 (V at the support face, default) or d (V at d from the support face; where d is not less than L/2 (simple) or
+     L (cantilever) the face value is used, dFall).
+   The case's M and V used by the combinations = entered + line load (cbcSvcTotal); T as entered. cbcLineLoads and cbcSvcTotal
+   are pure functions (Node test: tests/engine/cbc-lineloads.test.mjs).
+   ===================================================================== */
+function cbcLlNorm(x){ const o=(x&amp;&amp;typeof x===&quot;object&quot;)?x:{}, num=v=>{ const n=+v; return isFinite(n)?n:0; };
+  return {L:num(o.L),sup:o.sup===&quot;cant&quot;?&quot;cant&quot;:&quot;simple&quot;,vAt:o.vAt===&quot;d&quot;?&quot;d&quot;:&quot;face&quot;,sw:!!o.sw,
+    gc:(o.gc==null||o.gc===&quot;&quot;||!isFinite(+o.gc))?150:+o.gc,
+    rows:(Array.isArray(o.rows)?o.rows:[]).filter(r=>r&amp;&amp;typeof r===&quot;object&quot;).map(r=>({k:CBC_LD_KEYS.indexOf(r.k)>=0?r.k:&quot;D&quot;,lab:String(r.lab==null?&quot;&quot;:r.lab),
+      mode:r.mode===&quot;q&quot;?&quot;q&quot;:&quot;w&quot;,w:num(r.w),q:num(r.q),b:num(r.b)}))}; }
+function cbcLineLoads(ll,sec){
+  const o=cbcLlNorm(ll), cant=o.sup===&quot;cant&quot;, L=o.L>0?o.L:0, dIn=+(sec&amp;&amp;sec.d)||0, Ag=+(sec&amp;&amp;sec.Ag)||0, xMax=cant?L:L/2;
+  let xV=0, dFall=false;
+  if(o.vAt===&quot;d&quot;){ if(dIn/12<xMax) xV=dIn/12; else dFall=true; }
+  const swW=o.sw?o.gc*Ag/144/1000:0, cases={}; let any=o.sw;
+  CBC_LD_KEYS.forEach(k=>{
+    const rows=o.rows.map((r,i)=>Object.assign({},r,{i,wk:r.mode===&quot;q&quot;?r.q*r.b/1000:r.w})).filter(r=>r.k===k);
+    const sw=(k===&quot;D&quot;&amp;&amp;o.sw)?swW:0, w=rows.reduce((s,r)=>s+r.wk,0)+sw, has=rows.length>0||(k===&quot;D&quot;&amp;&amp;o.sw);
+    if(rows.length) any=true;
+    cases[k]={rows,sw,w,has,M:cant?-w*L*L/2:w*L*L/8,V:cant?w*(L-xV):w*(L/2-xV)};
+  });
+  return Object.assign(o,{cant,Lc:L,dIn,Ag,xV,dFall,swW,cases,any}); }
+function cbcSvcTotal(svc,X){
+  if(!X||!X.any) return svc;
+  const c={}; CBC_LD_KEYS.forEach(k=>{ const e=(svc&amp;&amp;svc.cases&amp;&amp;svc.cases[k])||{}, x=X.cases[k];
+    c[k]={M:(+e.M||0)+x.M,V:(+e.V||0)+x.V,T:+e.T||0}; });
+  return Object.assign({},svc,{cases:c}); }
+/* the section's d (as the shear check: centroid of the tension steel, +M for a simple span, −M for a cantilever) and A_g */
+function cbcLlSec(){ const ll=S.svc&amp;&amp;S.svc.ll, {bw,h,bf,hf,type}=S.sec;
+  const Ag=type===&quot;tee&quot;?bf*hf+bw*(h-hf):bw*h; let d=0;
+  if(ll&amp;&amp;(ll.rows.length||ll.sw)){ try{ const F=flexure(ll.sup===&quot;cant&quot;); d=F.dCent||0.9*h; }catch(e){ d=0.9*h; } }
+  return {d,Ag}; }
+let CBC_LLC={k:null,v:null};
+function cbcLlX(){ const k=JSON.stringify([S.svc&amp;&amp;S.svc.ll,S.sec,S.layers,S.cover,S.stir,S.layerClear,S.mat,S.code,S.memberType,S.slab]);
+  if(CBC_LLC.k!==k) CBC_LLC={k,v:cbcLineLoads(S.svc.ll,cbcLlSec())}; return CBC_LLC.v; }
+/* the service cases the combinations use: as entered, plus the line loads (service mode only) */
+function cbcSvcEff(){ return cbcSvcTotal(S.svc,cbcLlX()); }
 /* the default combinations of every save made before CBSL (used only where such a save has no combinations, as before) */
 const CBC_LEGACY_COMBOS=[{name:&quot;1.2D + 1.6L&quot;,Mu:0,Vu:0,Tu:13.5},{name:&quot;1.2D + 1.0W + L&quot;,Mu:0,Vu:0,Tu:0},{name:&quot;0.9D + 1.0W&quot;,Mu:0,Vu:0,Tu:0}];
 /* service mode is used in ACI mode only; AASHTO mode always takes the typed factored actions (S.combos) */
 function cbcSvcOn(){ return S.loadMode==='service'&amp;&amp;S.code==='ACI'; }
 /* the combinations the checks use: built from the load cases (service mode) or as typed (factored mode, unchanged) */
-function cbcCombos(){ return cbcSvcOn()?cbcBuildCombos(S.svc).map(r=>({name:r.name,Mu:r.Mu,Vu:r.Vu,Tu:r.Tu,gen:r})):S.combos; }
+function cbcCombos(){ return cbcSvcOn()?cbcBuildCombos(cbcSvcEff()).map(r=>({name:r.name,Mu:r.Mu,Vu:r.Vu,Tu:r.Tu,gen:r})):S.combos; }
 const CBC_LD_SYM={D:&quot;D&quot;,L:&quot;L&quot;,Lr:&quot;L_r&quot;,S:&quot;S&quot;,R:&quot;R&quot;,W:&quot;W&quot;,E:&quot;E&quot;};
 const CBC_LD_NAME={D:&quot;Dead&quot;,L:&quot;Live&quot;,Lr:&quot;Roof live&quot;,S:&quot;Snow&quot;,R:&quot;Rain&quot;,W:&quot;Wind, strength-level (ASCE 7)&quot;,E:&quot;Earthquake, strength-level (ASCE 7)&quot;};   /* CBWE (CB-9): labels */
 /* one generated row as TeX: the symbolic form U = ..., and for action a (&quot;M&quot;|&quot;V&quot;|&quot;T&quot;) the substituted form and the result */
 function cbcLdTex(g,a){
   const sym=g.terms.map((t,i)=>(i===0?(t.s<0?&quot;-&quot;:&quot;&quot;):(t.s<0?&quot; - &quot;:&quot; + &quot;))+t.f.toFixed(1)+CBC_LD_SYM[t.k]).join(&quot;&quot;);
   if(!a) return &quot;U = &quot;+sym;
-  const sub=g.terms.map((t,i)=>(i===0?(t.s<0?&quot;-&quot;:&quot;&quot;):(t.s<0?&quot; - &quot;:&quot; + &quot;))+t.f.toFixed(1)+&quot;(&quot;+fmt((S.svc.cases[t.k]||{})[a]||0)+&quot;)&quot;).join(&quot;&quot;);
+  const sub=g.terms.map((t,i)=>(i===0?(t.s<0?&quot;-&quot;:&quot;&quot;):(t.s<0?&quot; - &quot;:&quot; + &quot;))+t.f.toFixed(1)+&quot;(&quot;+fmt((cbcSvcEff().cases[t.k]||{})[a]||0)+&quot;)&quot;).join(&quot;&quot;);   /* CBLL: entered + line load */
   const symA=g.terms.map((t,i)=>(i===0?(t.s<0?&quot;-&quot;:&quot;&quot;):(t.s<0?&quot; - &quot;:&quot; + &quot;))+t.f.toFixed(1)+a+&quot;_{&quot;+CBC_LD_SYM[t.k]+&quot;}&quot;).join(&quot;&quot;);
   return {sym:symA,sub,val:a===&quot;M&quot;?g.Mu:(a===&quot;V&quot;?g.Vu:g.Tu)};
 }
@@ -2005,6 +2048,10 @@ function validate(){
   const CO=cbcCombos();   /* CBSL */
   if(!CO.length) B.push({code:&quot;Loads&quot;,msg:&quot;At least one load combination is required.&quot;});
   const allZero=CO.every(c=>!c.Mu&amp;&amp;!c.Vu&amp;&amp;!(cbcTuUsed()&amp;&amp;c.Tu));   /* CBTU: a hidden T_u is not a demand */
+  if(cbcSvcOn()){ const X=cbcLlX();   /* CBLL */
+    if(X.any&amp;&amp;!(X.Lc>0)) W.push({code:&quot;Loads&quot;,msg:&quot;Line loads are entered but the span L for the line loads is &quot;+(X.L<0?&quot;negative&quot;:&quot;0&quot;)+&quot;: they add nothing. Enter L (Loads, Line loads).&quot;});
+    if(X.any&amp;&amp;X.dFall) W.push({code:&quot;Loads&quot;,msg:&quot;Line loads: d = &quot;+fmt(X.dIn)+&quot; in is not less than &quot;+(X.cant?&quot;L&quot;:&quot;L/2&quot;)+&quot;, so V is taken at the support face.&quot;});
+    if(X.any&amp;&amp;X.Lc>0) N.push({code:&quot;Loads&quot;,msg:&quot;Line loads: &quot;+cbcLlWhere(X)+&quot; Each case’s M and V = entered + line load (Load Combinations tab, Line Loads).&quot;}); }
   if(allZero) W.push({code:&quot;Loads&quot;,msg:cbcSvcOn()?&quot;All service load cases are zero, so every factored action is zero. Capacities are reported, but no demand/capacity ratio is meaningful.&quot;:&quot;All factored actions are zero. Capacities are reported, but no demand/capacity ratio is meaningful.&quot;});
   if(cbcSvcOn()) N.push({code:&quot;ACI 5.3.1&quot;,msg:&quot;Loads: the factored combinations are built from the service load cases by ACI 318-19 Table 5.3.1, Eqs. (5.3.1a)–(5.3.1g) (Load Combinations tab)&quot;+(S.svc.l05?&quot;; the load factor on L in Eqs. (5.3.1c)–(5.3.1e) is 0.5 (5.3.3), as selected — confirm the area is not a garage, a place of public assembly, or an area with L over 100 psf.&quot;:&quot;; the load factor on L is 1.0 in every equation (5.3.3 reduction not taken).&quot;)});
   /* torsion */
@@ -2593,7 +2640,8 @@ function buildSvcLoads(b){
   r5.appendChild(el(&quot;label&quot;,null,&quot;Load factor on L of 0.5 in Eqs. (5.3.1c)–(5.3.1e) (ACI 318-19 5.3.3)&quot;)); b.appendChild(r5);
   b.appendChild(cbNL(&quot;note&quot;,&quot;5.3.3 (paraphrased): the factor on L in Eqs. (5.3.1c), (5.3.1d) and (5.3.1e) may be taken as 0.5, except for garages, areas of public assembly, and areas where L is more than 100 psf.&quot;,
     [[&quot;Off (default):&quot;,&quot;1.0 on L in those equations (conservative).&quot;]]));
-  const G=cbcBuildCombos(SV);
+  cbcLlInputs(b);   /* CBLL */
+  const G=cbcBuildCombos(cbcSvcEff());
   const t2=el(&quot;table&quot;,&quot;cbT&quot;);
   t2.innerHTML=&quot;<tr><th>#</th><th>Eq.</th><th>Combination</th><th>M_u</th><th>V_u</th>&quot;+(tuShow?&quot;<th>T_u</th>&quot;:&quot;&quot;)+&quot;</tr>&quot;;
   G.forEach((g,i)=>{ const tr=el(&quot;tr&quot;);
@@ -2604,6 +2652,53 @@ function buildSvcLoads(b){
     t2.appendChild(tr); });
   b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Combinations built by ACI 318-19 Table 5.3.1 (k-ft, kip). Each is worked on the Load Combinations tab (click a name) and checked in full on the result tabs.&quot;));
   b.appendChild(t2);
+}
+/* CBLL (2026-11-18): the line-load inputs (Loads card, service mode): span, support, where V is taken, the rows, self-weight;
+   then the line-load M and V per case (worked on the Load Combinations tab, card &quot;Line Loads&quot;). */
+function cbcLlInputs(b){
+  const ll=S.svc.ll, X=cbcLlX(), cant=ll.sup===&quot;cant&quot;;
+  b.appendChild(el(&quot;h3&quot;,null,&quot;Line loads (optional)&quot;));
+  b.appendChild(cbNL(&quot;note&quot;,&quot;Uniform line loads per load case, on a simple span or a cantilever. Each case’s M and V used in the combinations = the M and V entered above + the line-load M and V (so point-load effects can still be added by hand above). T is as entered.&quot;,[
+    [&quot;Line load:&quot;,&quot;w (klf) entered, or a pressure q (psf) × tributary width b (ft): w = q·b/1000.&quot;],
+    ...(cbcSlab()?[[&quot;One-way slab:&quot;,&quot;enter w on the width the actions are &quot;+cbcSlabPer()+&quot; (per 1 ft strip: q × 1 ft).&quot;]]:[])]));
+  fRow(b,&quot;Span for the line loads, L&quot;,numIn(()=>ll.L,v=>{ll.L=v;},&quot;0.5&quot;,&quot;llL&quot;),&quot;ft&quot;);
+  if(S.minh&amp;&amp;S.minh.span>0&amp;&amp;Math.abs(S.minh.span-ll.L)>1e-9) b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Minimum Thickness span ℓ = &quot;+fmt(S.minh.span)+&quot; ft (not linked; the line loads use L above).&quot;));
+  fRow(b,&quot;Support&quot;,selIn([&quot;simple&quot;,&quot;cant&quot;],()=>ll.sup,v=>{ll.sup=(v===&quot;cant&quot;?&quot;cant&quot;:&quot;simple&quot;);},o=>o===&quot;cant&quot;?&quot;Cantilever&quot;:&quot;Simple span&quot;,o=>o,&quot;llSup&quot;),&quot;&quot;);
+  fRow(b,&quot;V taken at&quot;,selIn([&quot;face&quot;,&quot;d&quot;],()=>ll.vAt,v=>{ll.vAt=(v===&quot;d&quot;?&quot;d&quot;:&quot;face&quot;);},
+    o=>o===&quot;d&quot;?(cant?&quot;d from the support face, V = w(L − d)&quot;:&quot;d from the support face, V = w(L/2 − d)&quot;):(cant?&quot;Support face, V = wL&quot;:&quot;Support face, V = wL/2&quot;),o=>o,&quot;llVat&quot;),&quot;&quot;);
+  const t=el(&quot;table&quot;,&quot;cbT&quot;);
+  t.innerHTML=&quot;<tr><th>Case</th><th>Label</th><th>Line load</th><th></th></tr>&quot;;
+  ll.rows.forEach((r,i)=>{ const tr=el(&quot;tr&quot;);
+    const c0=el(&quot;td&quot;); c0.appendChild(selIn(CBC_LD_KEYS,()=>r.k,v=>{r.k=CBC_LD_KEYS.indexOf(v)>=0?v:&quot;D&quot;;},o=>o===&quot;Lr&quot;?&quot;Lr&quot;:o,o=>o,&quot;llK&quot;+i)); tr.appendChild(c0);
+    const c1=el(&quot;td&quot;); const nm=txtIn(()=>r.lab,v=>{r.lab=v;},&quot;llN&quot;+i); nm.className=&quot;nm&quot;; c1.appendChild(nm); tr.appendChild(c1);
+    const c2=el(&quot;td&quot;), w=el(&quot;div&quot;); w.style.cssText=&quot;display:flex;flex-wrap:wrap;gap:3px;align-items:center&quot;;
+    const ms=selIn([&quot;w&quot;,&quot;q&quot;],()=>r.mode,v=>{r.mode=(v===&quot;q&quot;?&quot;q&quot;:&quot;w&quot;);},o=>o===&quot;q&quot;?&quot;q × b&quot;:&quot;w&quot;,o=>o,&quot;llM&quot;+i); ms.style.width=&quot;auto&quot;; w.appendChild(ms);
+    const ni=(get,set,key,u)=>{ const x=numIn(get,set,&quot;any&quot;,key); x.style.width=&quot;62px&quot;; x.style.flex=&quot;1 1 52px&quot;; w.appendChild(x); w.appendChild(el(&quot;span&quot;,&quot;unit&quot;,u)); };
+    if(r.mode===&quot;q&quot;){ ni(()=>r.q,v=>{r.q=v;},&quot;llQ&quot;+i,&quot;psf ×&quot;); ni(()=>r.b,v=>{r.b=v;},&quot;llB&quot;+i,&quot;ft&quot;); }
+    else ni(()=>r.w,v=>{r.w=v;},&quot;llW&quot;+i,&quot;klf&quot;);
+    c2.appendChild(w); tr.appendChild(c2);
+    const c3=el(&quot;td&quot;,&quot;x&quot;), rm=el(&quot;button&quot;,null,&quot;\u00d7&quot;); rm.title=&quot;Remove&quot;; rm.addEventListener(&quot;click&quot;,()=>{ ll.rows.splice(i,1); refresh(); }); c3.appendChild(rm); tr.appendChild(c3);
+    t.appendChild(tr); });
+  if(ll.rows.length) b.appendChild(t);
+  const br=el(&quot;div&quot;,&quot;btnRow&quot;), add=el(&quot;button&quot;,&quot;b&quot;,&quot;+ Add line load&quot;);
+  add.addEventListener(&quot;click&quot;,()=>{ ll.rows.push({k:&quot;D&quot;,lab:&quot;&quot;,mode:&quot;w&quot;,w:0,q:0,b:0}); refresh(); });
+  br.appendChild(add); b.appendChild(br);
+  const r1=el(&quot;div&quot;,&quot;fRow chk&quot;); r1.appendChild(chkIn(()=>ll.sw,v=>{ll.sw=!!v;},&quot;llSw&quot;)); r1.appendChild(el(&quot;label&quot;,null,&quot;Self-weight of the member as D, w = γ_c·A_g&quot;)); b.appendChild(r1);
+  if(ll.sw){ fRow(b,&quot;Unit weight of concrete, γ_c&quot;,numIn(()=>ll.gc,v=>{ll.gc=v;},&quot;5&quot;,&quot;llGc&quot;),&quot;pcf&quot;);
+    b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;A_g = &quot;+fmt(X.Ag,1)+&quot; in² → w_sw = &quot;+fmt(X.gc)+&quot; × &quot;+fmt(X.Ag,1)+&quot;/144/1000 = &quot;+fmt(X.swW,3)+&quot; klf (in D).&quot;)); }
+  if(!X.any) return;
+  if(!(X.Lc>0)) b.appendChild(el(&quot;div&quot;,&quot;note warnBox&quot;,&quot;Line loads are entered but the span L is &quot;+(ll.L<0?&quot;negative&quot;:&quot;0&quot;)+&quot;: they add nothing. Enter L.&quot;));
+  const t2=el(&quot;table&quot;,&quot;cbT&quot;);
+  t2.innerHTML=&quot;<tr><th>Case</th><th>w (klf)</th><th>M line (k-ft)</th><th>V line (kip)</th></tr>&quot;;
+  CBC_LD_KEYS.forEach(k=>{ const c=X.cases[k]; if(!c.has) return; const tr=el(&quot;tr&quot;);
+    tr.appendChild(el(&quot;td&quot;,null,k)); tr.appendChild(el(&quot;td&quot;,null,fmt(c.w,3))); tr.appendChild(el(&quot;td&quot;,null,fmt(c.M))); tr.appendChild(el(&quot;td&quot;,null,fmt(c.V)));
+    t2.appendChild(tr); });
+  b.appendChild(t2);
+  b.appendChild(cbNL(&quot;note&quot;,null,[
+    [&quot;Where:&quot;,cbcLlWhere(X)],
+    ...(X.dFall?[[&quot;V at d:&quot;,&quot;d = &quot;+fmt(X.dIn)+&quot; in is not less than &quot;+(cant?&quot;L&quot;:&quot;L/2&quot;)+&quot;; V is taken at the support face.&quot;]]:[]),
+    [&quot;Totals:&quot;,&quot;these are added to the M and V entered above for each case.&quot;]]));
+  cbcWorkedIn(b,[{tab:&quot;tabLoads&quot;,c:{card:&quot;ldLine&quot;,name:&quot;Line Loads&quot;},txt:&quot;w, M, V per case and the totals&quot;}]);
 }
 /* CBIE (2026-11-05, engineer): required inputs that are blank (stored as 0) or invalid: the box is outlined red and the reason
    is written under its row. These are the input blockers of validate(), field by field; validate() still decides that the
@@ -3177,7 +3272,7 @@ function cbcLdRules(){ const SV=S.svc;
       [&quot;Not included:&quot;,&quot;other loads of 5.3 (fluid, lateral earth pressure, self-straining effects, flood, ice and others) are not built; enter such cases in factored mode.&quot;]];
 }
 function buildLoadsTab(pg){
-  const SV=S.svc, tuShow=cbcTuUsed(), G=CC.combos;
+  const SV=cbcSvcEff(), tuShow=cbcTuUsed(), G=CC.combos, LX=cbcLlX();   /* CBLL: SV = entered + line loads */
   mkSection(&quot;ldCases&quot;,&quot;Service Load Cases at the Section&quot;,b=>{
     const t=el(&quot;table&quot;,&quot;rt&quot;);
     t.innerHTML=&quot;<tr><th>Case</th><th>Load</th><th>M (k-ft)</th><th>V (kip)</th>&quot;+(tuShow?&quot;<th>T (k-ft)</th>&quot;:&quot;&quot;)+&quot;</tr>&quot;;
@@ -3186,8 +3281,11 @@ function buildLoadsTab(pg){
       tr.appendChild(el(&quot;td&quot;,null,fmt(c.M))); tr.appendChild(el(&quot;td&quot;,null,fmt(c.V))); if(tuShow) tr.appendChild(el(&quot;td&quot;,null,fmt(c.T)));
       t.appendChild(tr); });
     b.appendChild(t);
+    if(LX.any){ b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;M and V of each case = the values entered + the line-load M and V (Line Loads card).&quot;));
+      cbcWorkedIn(b,[{tab:&quot;tabLoads&quot;,c:{card:&quot;ldLine&quot;,name:&quot;Line Loads&quot;},txt:&quot;line-load M, V&quot;}]); }   /* CBLL */
     b.appendChild(cbNL(&quot;note&quot;,&quot;How the combinations are built (ACI 318-19 5.3.1, Table 5.3.1, Eqs. (5.3.1a)–(5.3.1g)):&quot;,cbcLdRules()));
   },pg);
+  if(LX.any) mkSection(&quot;ldLine&quot;,&quot;Line Loads — &quot;+(LX.cant?&quot;Cantilever&quot;:&quot;Simple Span&quot;)+&quot;, Service Actions per Case&quot;,b=>cbcLlWork(b,LX),pg);   /* CBLL */
   mkSection(&quot;ldAll&quot;,&quot;Factored Combinations — ACI 318-19 Table 5.3.1&quot;,b=>{
     const t=el(&quot;table&quot;,&quot;rt&quot;);
     t.innerHTML=&quot;<tr><th>#</th><th>Eq.</th><th>Combination</th><th>M_u (k-ft)</th><th>V_u (kip)</th>&quot;+(tuShow?&quot;<th>T_u (k-ft)</th>&quot;:&quot;&quot;)+&quot;<th>Note</th></tr>&quot;;
@@ -3216,6 +3314,42 @@ function buildLoadsTab(pg){
       if(notes.length) b.appendChild(cbNL(&quot;note&quot;,null,notes));
       cbcWorkedIn(b,[{tab:&quot;tabFlex&quot;,c:cbcComboCard(&quot;flexC&quot;,r.ci),txt:&quot;M_u used&quot;},{tab:&quot;tabShear&quot;,c:cbcComboCard(&quot;shC&quot;,r.ci),txt:&quot;V_u used&quot;}].concat(tuShow&amp;&amp;S.code==='ACI'&amp;&amp;S.tor.present?[{tab:&quot;tabTor&quot;,c:cbcComboCard(&quot;torC&quot;,r.ci),txt:&quot;T_u used&quot;}]:[]));
     },pg,r.ci===CC.govIndex?&quot;govSec&quot;:&quot;&quot;);
+  });
+}
+
+/* CBLL (2026-11-18): the line loads worked per case (symbolic -> values -> result), then entered + line = the case's M and V */
+function cbcLlTex(X,k){ const c=X.cases[k], e=S.svc.cases[k]||{}, L=X.Lc, ws=[], out=[];
+  c.rows.forEach((r,j)=>{ const s=&quot;w_{&quot;+k+&quot;,&quot;+(j+1)+&quot;}&quot;;
+    out.push(r.mode===&quot;q&quot;?s+&quot; = \\dfrac{q\\,b_{trib}}{1000} = \\dfrac{(&quot;+fmt(r.q)+&quot;\\text{ psf})(&quot;+fmt(r.b)+&quot;\\text{ ft})}{1000} = &quot;+fmt(r.wk,3)+&quot;\\text{ klf}&quot;
+      :s+&quot; = &quot;+fmt(r.wk,3)+&quot;\\text{ klf (entered)}&quot;); ws.push(fmt(r.wk,3)); });
+  if(c.sw){ out.push(&quot;w_{sw} = \\dfrac{\\gamma_c A_g}{144\\,(1000)} = \\dfrac{(&quot;+fmt(X.gc)+&quot;\\text{ pcf})(&quot;+fmt(X.Ag,1)+&quot;\\text{ in}^2)}{144\\,(1000)} = &quot;+fmt(c.sw,3)+&quot;\\text{ klf}&quot;); ws.push(fmt(c.sw,3)); }
+  out.push(&quot;w_{&quot;+k+&quot;} = &quot;+(ws.length>1?ws.join(&quot; + &quot;)+&quot; = &quot;:&quot;&quot;)+fmt(c.w,3)+&quot;\\text{ klf}&quot;);
+  const xs=X.xV>0?&quot;d&quot;:&quot;&quot;, xv=X.xV>0?&quot; - &quot;+fmt(X.xV,3):&quot;&quot;;
+  if(X.cant){ out.push(&quot;M_{&quot;+k+&quot;,line} = -\\dfrac{w_{&quot;+k+&quot;} L^2}{2} = -\\dfrac{(&quot;+fmt(c.w,3)+&quot;)(&quot;+fmt(L)+&quot;)^2}{2} = &quot;+fmt(c.M)+&quot;\\text{ kip-ft}&quot;);
+    out.push(&quot;V_{&quot;+k+&quot;,line} = w_{&quot;+k+&quot;}(L&quot;+(xs?&quot; - d&quot;:&quot;&quot;)+&quot;) = &quot;+fmt(c.w,3)+&quot;(&quot;+fmt(L)+xv+&quot;) = &quot;+fmt(c.V)+&quot;\\text{ kip}&quot;); }
+  else { out.push(&quot;M_{&quot;+k+&quot;,line} = \\dfrac{w_{&quot;+k+&quot;} L^2}{8} = \\dfrac{(&quot;+fmt(c.w,3)+&quot;)(&quot;+fmt(L)+&quot;)^2}{8} = &quot;+fmt(c.M)+&quot;\\text{ kip-ft}&quot;);
+    out.push(&quot;V_{&quot;+k+&quot;,line} = w_{&quot;+k+&quot;}\\left(\\dfrac{L}{2}&quot;+(xs?&quot; - d&quot;:&quot;&quot;)+&quot;\\right) = &quot;+fmt(c.w,3)+&quot;\\left(&quot;+fmt(L/2)+xv+&quot;\\right) = &quot;+fmt(c.V)+&quot;\\text{ kip}&quot;); }
+  out.push(&quot;M_{&quot;+k+&quot;} = M_{&quot;+k+&quot;,entered} + M_{&quot;+k+&quot;,line} = &quot;+fmt(+e.M||0)+&quot; + &quot;+(c.M<0?&quot;(&quot;+fmt(c.M)+&quot;)&quot;:fmt(c.M))+&quot; = &quot;+fmt((+e.M||0)+c.M)+&quot;\\text{ kip-ft}&quot;);
+  out.push(&quot;V_{&quot;+k+&quot;} = V_{&quot;+k+&quot;,entered} + V_{&quot;+k+&quot;,line} = &quot;+fmt(+e.V||0)+&quot; + &quot;+fmt(c.V)+&quot; = &quot;+fmt((+e.V||0)+c.V)+&quot;\\text{ kip}&quot;);
+  return out; }
+function cbcLlWhere(X){ return X.cant
+  ?&quot;Cantilever: M = −wL²/2 (hogging) at the support face&quot;+(X.xV>0?&quot;; V = w(L − d) at d = &quot;+fmt(X.dIn)+&quot; in from the support face&quot;:&quot; and V = wL at the support face (the same section)&quot;)+&quot;.&quot;
+  :&quot;Simple span: M = wL²/8 is the maximum (sagging) moment, at midspan; &quot;+(X.xV>0?&quot;V = w(L/2 − d) is the shear at d = &quot;+fmt(X.dIn)+&quot; in from the support face&quot;:&quot;V = wL/2 is the maximum shear, at the support face&quot;)+&quot;. M and V come from different locations and are checked together on this one section (the maximum of each), as is conventional for a simple beam.&quot;; }
+function cbcLlWork(b,X){
+  b.appendChild(eqBlock({title:&quot;Span, support and section&quot;,ref:&quot;Statics, uniform load&quot;,lines:[
+      &quot;L = &quot;+fmt(X.Lc)+&quot;\\text{ ft},\\quad \\text{&quot;+(X.cant?&quot;cantilever&quot;:&quot;simple span&quot;)+&quot;},\\quad d = &quot;+fmt(X.dIn)+&quot;\\text{ in} = &quot;+fmt(X.dIn/12,3)+&quot;\\text{ ft}&quot;,
+      &quot;x_V = &quot;+(X.xV>0?&quot;d = &quot;+fmt(X.xV,3)+&quot;\\text{ ft (V at d from the support face)}&quot;:&quot;0\\text{ (V at the support face)}&quot;)],
+    vars:[[&quot;L&quot;,&quot;Span for the line loads&quot;,fmt(X.Lc),&quot;ft&quot;],[&quot;d&quot;,&quot;Depth to the centroid of the tension steel (&quot;+(X.cant?&quot;−M&quot;:&quot;+M&quot;)+&quot;), as the shear check&quot;,fmt(X.dIn),&quot;in&quot;]].concat(X.sw?[[&quot;A_g&quot;,&quot;Gross area&quot;,fmt(X.Ag,1),&quot;in²&quot;],[&quot;\\gamma_c&quot;,&quot;Unit weight of concrete&quot;,fmt(X.gc),&quot;pcf&quot;]]:[])}));
+  const notes=[[&quot;Location:&quot;,cbcLlWhere(X)]];
+  if(X.dFall) notes.push([&quot;V at d:&quot;,&quot;d is not less than &quot;+(X.cant?&quot;L&quot;:&quot;L/2&quot;)+&quot;, so V is taken at the support face.&quot;]);
+  if(X.xV>0) notes.push([&quot;V at d:&quot;,&quot;ACI 318-19 9.4.3.2 permits sections between the support face and d to be designed for V_u at d only where the support reaction introduces compression into the end region, the loads are applied at or near the top, and no concentrated load acts within d of the face. Confirm these conditions.&quot;]);
+  if(!(X.Lc>0)) notes.push([&quot;Span:&quot;,&quot;L is not entered (0): the line loads add nothing.&quot;]);
+  notes.push([&quot;Signs:&quot;,&quot;+w is downward (gravity); M is signed as the input (+ sagging); V is taken positive for +w.&quot;]);
+  b.appendChild(cbNL(&quot;note&quot;,null,notes));
+  CBC_LD_KEYS.forEach(k=>{ const c=X.cases[k]; if(!c.has) return;
+    b.appendChild(eqBlock({title:&quot;Case &quot;+CBC_LD_SYM[k].replace(&quot;_r&quot;,&quot;r&quot;)+&quot; — &quot;+CBC_LD_NAME[k],ref:X.cant?&quot;cantilever, uniform w&quot;:&quot;simple span, uniform w&quot;,lines:cbcLlTex(X,k),
+      vars:c.rows.map((r,j)=>[&quot;w_{&quot;+k+&quot;,&quot;+(j+1)+&quot;}&quot;,(r.lab?r.lab+&quot;: &quot;:&quot;&quot;)+(r.mode===&quot;q&quot;?&quot;q = &quot;+fmt(r.q)+&quot; psf × b = &quot;+fmt(r.b)+&quot; ft&quot;:&quot;w entered&quot;),fmt(r.wk,3),&quot;klf&quot;])
+        .concat(c.sw?[[&quot;w_{sw}&quot;,&quot;Self-weight of the member&quot;,fmt(c.sw,3),&quot;klf&quot;]]:[])}));
   });
 }
 
@@ -6005,9 +6139,16 @@ function cbcRptModel(){
       ...cbrNL('Other reinforcement:',[S.stir.present?['Transverse:',S.stir.legs+'-leg #'+S.stir.size+' closed stirrup at '+fmt(S.stir.s)+' in. ($A_{v}$ = '+fmt(S.stir.legs*REBAR[S.stir.size].a)+' in²).']:'No transverse reinforcement specified.',S.tor.present&amp;&amp;ACI?['Torsion:',(S.tor.kind==='compatibility'?'compatibility':'equilibrium')+' torsion, θ = '+fmt(S.tor.theta,0)+'°, $A_{\\ell}$ = '+fmt(S.tor.Al)+' in².']:null,S.skin&amp;&amp;S.skin.size&amp;&amp;S.skin.s>0?['Skin bars:','#'+S.skin.size+' at '+fmt(S.skin.s)+' in on each side face (drawn over the zone of 9.7.2.3 / 5.6.7 only, the first one spacing from the outermost tension layer).']:['Skin bars:','none entered.'],['Clear spacing between layers:',fmt(S.layerClear)+' in.']])]});   /* CBM3: skin bars; CBNL: as a list */
     const hasT=(S.tor.present&amp;&amp;ACI)||!ACI;   /* CBH1b: T_u shown in AASHTO mode (as the Loads input) */
     if(cbcSvcOn()){   /* CBSL: the service load cases, then the combinations built (each value links to its worked step) */
-      const SV=S.svc, tuU=cbcTuUsed();
-      subs.push({title:'Service load cases',items:[{type:'table',head:['Case','Load','M (kip-ft)','V (kip)'].concat(tuU?['T (kip-ft)']:[]),rows:CBC_LD_KEYS.map(k=>['$'+CBC_LD_SYM[k]+'$',CBC_LD_NAME[k]+((k==='W'||k==='E')&amp;&amp;SV.rev[k]?' — reverses (±)':''),{t:fmt(SV.cases[k].M),n:true},{t:fmt(SV.cases[k].V),n:true}].concat(tuU?[{t:fmt(SV.cases[k].T),n:true}]:[]))},
-        {type:'note',text:'Loads: service load cases; the factored combinations are built by ACI 318-19 Table 5.3.1 (section Load combinations).'}]});
+      const SV=cbcSvcEff(), tuU=cbcTuUsed(), LX=cbcLlX();   /* CBLL: M, V = entered + line load; each linked to its worked step */
+      const lk=(k,a)=>LX.any&amp;&amp;LX.cases[k].has?'ll/'+a+k:undefined;
+      subs.push({title:'Service load cases',items:[{type:'table',head:['Case','Load','M (kip-ft)','V (kip)'].concat(tuU?['T (kip-ft)']:[]),rows:CBC_LD_KEYS.map(k=>['$'+CBC_LD_SYM[k]+'$',CBC_LD_NAME[k]+((k==='W'||k==='E')&amp;&amp;SV.rev[k]?' — reverses (±)':''),{t:fmt(SV.cases[k].M),n:true,key:lk(k,'M')},{t:fmt(SV.cases[k].V),n:true,key:lk(k,'V')}].concat(tuU?[{t:fmt(SV.cases[k].T),n:true}]:[]))},
+        {type:'note',text:'Loads: service load cases; the factored combinations are built by ACI 318-19 Table 5.3.1 (section Load combinations).'+(LX.any?' M and V of each case = the values entered + the line-load M and V (section Load combinations, Line loads).':'')}]});
+      if(LX.any){ const ll=S.svc.ll;
+        subs.push({title:'Line loads',items:[{type:'table',head:['Item','Value','Unit'],rows:[['Span for the line loads L',{t:fmt(ll.L),n:true},'ft'],['Support',LX.cant?'cantilever':'simple span',''],
+            ['V taken at',LX.xV>0?'d from the support face (d = '+fmt(LX.dIn)+' in)':'the support face'+(LX.dFall?' (d not less than '+(LX.cant?'L':'L/2')+')':''),''],
+            ['Self-weight as D',ll.sw?'yes, γ_c = '+fmt(ll.gc)+' pcf, A_g = '+fmt(LX.Ag,1)+' in²':'no','']]},
+          {type:'table',head:['Case','Label','Input','w (klf)'],rows:ll.rows.map((r,i)=>['$'+CBC_LD_SYM[r.k]+'$',r.lab||'—',r.mode==='q'?'q = '+fmt(r.q)+' psf × b = '+fmt(r.b)+' ft':'w entered',{t:fmt(r.mode==='q'?r.q*r.b/1000:r.w,3),n:true}])},
+          {type:'note',text:cbcLlWhere(LX)}]}); }
       subs.push({title:'Load combinations',items:[{type:'table',head:['#','Eq.','Combination','$M_{u}$ (kip-ft)','$V_{u}$ (kip)'].concat(hasT?['$T_{u}$ (kip-ft)']:[]),rows:CC.combos.map(r=>[String(r.ci+1),'('+r.gen.eq+')',r.name,{t:fmt(r.Mu),n:true,key:'ld'+r.ci+'/Mu'},{t:fmt(r.Vu),n:true,key:'ld'+r.ci+'/Vu'}].concat(hasT?[{t:fmt(r.Tu),n:true,key:tuU?'ld'+r.ci+'/Tu':undefined}]:[]))}]});
     } else
     subs.push({title:'Load combinations',items:[{type:'table',head:['#','Combination','$M_{u}$ (kip-ft)','$V_{u}$ (kip)'].concat(hasT?['$T_{u}$ (kip-ft)']:[]),rows:CC.combos.map(r=>[String(r.ci+1),r.name,{t:fmt(r.Mu),n:true},{t:fmt(r.Vu),n:true}].concat(hasT?[{t:fmt(r.Tu),n:true}]:[]))}]});
@@ -6018,6 +6159,22 @@ function cbcRptModel(){
      step keys ld<ci>/Mu, /Vu, /Tu (linked from the Inputs table and from each Flexure / Shear / Torsion combination) */
   if(cbcSvcOn()){ const tuU=cbcTuUsed();
     const subs=[{title:'How the combinations are built',items:cbrNL('ACI 318-19 5.3.1, Table 5.3.1, Eqs. (5.3.1a)–(5.3.1g):',cbcLdRules()).concat([{type:'note',text:'[[tab:tabLoads|On screen: Load Combinations tab]]'}])}];
+    { const LX=cbcLlX();   /* CBLL: the line loads worked per case; keys ll/M<k>, ll/V<k> (the case totals used by the combinations) */
+      if(LX.any){ const T=[];
+        CBC_LD_KEYS.forEach(k=>{ const c=LX.cases[k]; if(!c.has) return; const e=S.svc.cases[k]||{}, L=LX.Lc, st=[];
+          c.rows.forEach((r,j)=>st.push(r.mode==='q'?cS({id:'w'+k+(j+1),label:'Line load '+(r.lab?'“'+r.lab+'”':k+(j+1))+': pressure × tributary width',sym:'w_{'+k+','+(j+1)+'}',eq:'\\dfrac{q\\,b_{trib}}{1000}',sub:'\\dfrac{('+fmt(r.q)+')('+fmt(r.b)+')}{1000}',value:r.wk,unit:'klf',d:3})
+            :cS({id:'w'+k+(j+1),label:'Line load '+(r.lab?'“'+r.lab+'”':k+(j+1))+' (entered)',sym:'w_{'+k+','+(j+1)+'}',value:r.wk,unit:'klf',d:3})));
+          if(c.sw) st.push(cS({id:'sw'+k,label:'Self-weight of the member',sym:'w_{sw}',eq:'\\dfrac{\\gamma_c A_g}{144\\,(1000)}',sub:'\\dfrac{('+fmt(LX.gc)+')('+fmt(LX.Ag,1)+')}{144\\,(1000)}',value:c.sw,unit:'klf',d:3}));
+          st.push(cS({id:'w'+k,label:'Line load, case '+k,sym:'w_{'+k+'}',eq:'\\sum w',sub:c.rows.map(r=>fmt(r.wk,3)).concat(c.sw?[fmt(c.sw,3)]:[]).join(' + '),value:c.w,unit:'klf',d:3}));
+          st.push(LX.cant?cS({id:'Ml'+k,label:'Line-load moment at the support (hogging)',sym:'M_{'+k+',line}',eq:'-\\dfrac{w L^2}{2}',sub:'-\\dfrac{('+fmt(c.w,3)+')('+fmt(L)+')^2}{2}',value:c.M,unit:'kip-ft'})
+            :cS({id:'Ml'+k,label:'Line-load moment at midspan',sym:'M_{'+k+',line}',eq:'\\dfrac{w L^2}{8}',sub:'\\dfrac{('+fmt(c.w,3)+')('+fmt(L)+')^2}{8}',value:c.M,unit:'kip-ft'}));
+          st.push(cS({id:'Vl'+k,label:'Line-load shear at '+(LX.xV>0?'d from the support face':'the support face'),sym:'V_{'+k+',line}',eq:LX.cant?(LX.xV>0?'w(L-d)':'wL'):(LX.xV>0?'w\\left(\\dfrac{L}{2}-d\\right)':'\\dfrac{wL}{2}'),
+            sub:fmt(c.w,3)+'('+(LX.cant?fmt(L):fmt(L/2))+(LX.xV>0?' - '+fmt(LX.xV,3):'')+')',value:c.V,unit:'kip'}));
+          st.push(cS({id:'M'+k,label:'Service moment of case '+k+' used in the combinations',sym:'M_{'+k+'}',eq:'M_{entered}+M_{line}',sub:fmt(+e.M||0)+' + '+(c.M<0?'('+fmt(c.M)+')':fmt(c.M)),value:(+e.M||0)+c.M,unit:'kip-ft'}));
+          st.push(cS({id:'V'+k,label:'Service shear of case '+k+' used in the combinations',sym:'V_{'+k+'}',eq:'V_{entered}+V_{line}',sub:fmt(+e.V||0)+' + '+fmt(c.V),value:(+e.V||0)+c.V,unit:'kip'}));
+          T.push({title:'Case '+k+' — '+CBC_LD_NAME[k],ref:LX.cant?'Statics: cantilever, uniform load':'Statics: simple span, uniform load',steps:st}); });
+        subs.push({title:'Line loads — '+(LX.cant?'cantilever':'simple span')+', L = '+fmt(LX.Lc)+' ft',items:[{type:'note',text:cbcLlWhere(LX)}].concat(LX.xV>0?[{type:'note',text:'V at d: ACI 318-19 9.4.3.2 conditions (support reaction in compression, loads at or near the top, no concentrated load within d of the face) to be confirmed.'}]:[])
+          .concat([{type:'topics',scope:'ll',title:'Worked steps',list:T},{type:'note',text:'The combinations below use these case totals: '+CBC_LD_KEYS.filter(k=>LX.cases[k].has).map(k=>k+' [[ll/M'+k+']], [[ll/V'+k+']]').join('; ')+'. [[tab:tabLoads|On screen: Load Combinations tab, Line Loads]]'}])}); } }
     CC.combos.forEach(r=>{ const g=r.gen;
       const st=['M','V'].concat(tuU?['T']:[]).map(a=>{ const x=cbcLdTex(g,a);
         return cS({id:a+'u',label:'Factored '+({M:'moment',V:'shear',T:'torsion'}[a])+' (U = '+r.name+')',sym:a+'_{u}',eq:x.sym,sub:x.sub,value:x.val,unit:a==='V'?'kip':'kip-ft'}); });
