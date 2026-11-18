@@ -3286,6 +3286,7 @@ function buildLoadsTab(pg){
     b.appendChild(cbNL(&quot;note&quot;,&quot;How the combinations are built (ACI 318-19 5.3.1, Table 5.3.1, Eqs. (5.3.1a)–(5.3.1g)):&quot;,cbcLdRules()));
   },pg);
   if(LX.any) mkSection(&quot;ldLine&quot;,&quot;Line Loads — &quot;+(LX.cant?&quot;Cantilever&quot;:&quot;Simple Span&quot;)+&quot;, Service Actions per Case&quot;,b=>cbcLlWork(b,LX),pg);   /* CBLL */
+  if(LX.any) mkSection(&quot;ldBeam&quot;,&quot;Beam Analysis — Line Loads, V and M Diagrams&quot;,b=>cbcBdCard(b,LX),pg);   /* CBBD */
   mkSection(&quot;ldAll&quot;,&quot;Factored Combinations — ACI 318-19 Table 5.3.1&quot;,b=>{
     const t=el(&quot;table&quot;,&quot;rt&quot;);
     t.innerHTML=&quot;<tr><th>#</th><th>Eq.</th><th>Combination</th><th>M_u (k-ft)</th><th>V_u (kip)</th>&quot;+(tuShow?&quot;<th>T_u (k-ft)</th>&quot;:&quot;&quot;)+&quot;<th>Note</th></tr>&quot;;
@@ -3351,6 +3352,185 @@ function cbcLlWork(b,X){
       vars:c.rows.map((r,j)=>[&quot;w_{&quot;+k+&quot;,&quot;+(j+1)+&quot;}&quot;,(r.lab?r.lab+&quot;: &quot;:&quot;&quot;)+(r.mode===&quot;q&quot;?&quot;q = &quot;+fmt(r.q)+&quot; psf × b = &quot;+fmt(r.b)+&quot; ft&quot;:&quot;w entered&quot;),fmt(r.wk,3),&quot;klf&quot;])
         .concat(c.sw?[[&quot;w_{sw}&quot;,&quot;Self-weight of the member&quot;,fmt(c.sw,3),&quot;klf&quot;]]:[])}));
   });
+}
+
+/* =====================================================================
+   CBBD (2026-11-18, engineer request): BEAM ANALYSIS of the line loads — the beam sketch and the V and M diagrams (Load
+   Combinations tab, card &quot;Beam Analysis&quot;; the Report, Figure LL-1). Display only: nothing here is used by a check, nothing
+   is saved (the card's selector is kept in memory, CBBD_SEL).
+   Ordinates of the line-load diagrams, x from the support face (simple span: the left support; cantilever: the fixed support,
+   free end at x = L), for terms [{k, f, s}] (a load case: [{k, f:1, s:1}]; a combination: its terms), summed as f·s × each
+   case's diagram (statics, uniform w):
+     simple span: V(x) = w(L/2 − x), M(x) = w·x(L − x)/2;   cantilever: V(x) = w(L − x), M(x) = −w(L − x)²/2.
+   At the sections the tool checks they are the worked values of cbcLineLoads: M(L/2) = wL²/8 (simple), M(0) = −wL²/2
+   (cantilever), V(0) = wL/2 or wL, V(d) = w(L/2 − d) or w(L − d). The M and V entered per case are not from line loads: they
+   are point values at the check section only (eM, eV), so line + entered = the case total, or the combination's M_u, V_u.
+   cbcLlOrd and cbcLlDiag are pure functions (Node test: tests/engine/cbc-lineloads.test.mjs).
+   ===================================================================== */
+function cbcLlOrd(X,w,x){ const L=X.Lc; return X.cant?{V:w*(L-x),M:-w*(L-x)*(L-x)/2}:{V:w*(L/2-x),M:w*x*(L-x)/2}; }
+function cbcLlDiag(X,terms,ent){
+  const L=X.Lc, xM=X.cant?0:L/2, xs=[], n=48;
+  for(let i=0;i<=n;i++) xs.push(L*i/n);
+  if(X.xV>0&amp;&amp;xs.indexOf(X.xV)<0) xs.push(X.xV);
+  xs.sort((a,b)=>a-b);
+  const T=terms.filter(t=>X.cases[t.k]&amp;&amp;X.cases[t.k].has);
+  const at=x=>{ let V=0,M=0; T.forEach(t=>{ const o=cbcLlOrd(X,X.cases[t.k].w,x); V+=t.f*t.s*o.V; M+=t.f*t.s*o.M; }); return {x,V,M}; };
+  const sumE=a=>terms.reduce((s,t)=>s+t.f*t.s*(+(((ent||{})[t.k])||{})[a]||0),0);
+  const Mc=at(xM).M, V0=at(0).V, VL=at(L).V, Vd=at(X.xV).V, eM=sumE(&quot;M&quot;), eV=sumE(&quot;V&quot;);
+  return {L,cant:X.cant,xM,xV:X.xV,terms,T,pts:xs.map(at),Mc,V0,VL,Vd,eM,eV,M:Mc+eM,V:Vd+eV};
+}
+let CBBD_SEL=&quot;gov&quot;;
+/* the combinations with the largest |M_u| and the largest |V_u| (first of equals) */
+function cbcBdGov(){ const G=(CC&amp;&amp;CC.combos)||[]; let iM=0,iV=0;
+  G.forEach((r,i)=>{ if(Math.abs(r.Mu)>Math.abs(G[iM].Mu)+1e-9) iM=i; if(Math.abs(r.Vu)>Math.abs(G[iV].Vu)+1e-9) iV=i; });
+  return {iM,iV}; }
+function cbcBdOpts(X){
+  const o=[{v:&quot;gov&quot;,t:&quot;Governing: largest |M_u| (M) and largest |V_u| (V)&quot;}];
+  CBC_LD_KEYS.forEach(k=>{ if(X.cases[k].has) o.push({v:&quot;k:&quot;+k,t:&quot;Case &quot;+k+&quot; — &quot;+CBC_LD_NAME[k]+&quot; (service)&quot;}); });
+  ((CC&amp;&amp;CC.combos)||[]).forEach((r,i)=>o.push({v:&quot;c:&quot;+i,t:&quot;Combination &quot;+(i+1)+&quot;: &quot;+r.name}));
+  return o; }
+/* what one view shows: the diagram for M (dM) and for V (dV), each with its name */
+function cbcBdView(X,sel){
+  const ent=S.svc.cases, G=(CC&amp;&amp;CC.combos)||[], cmb=i=>({d:cbcLlDiag(X,G[i].gen.terms,ent),ci:i,name:&quot;Combination &quot;+(i+1)+&quot; (&quot;+G[i].name+&quot;)&quot;,fac:true});
+  if(sel&amp;&amp;sel.indexOf(&quot;k:&quot;)===0){ const k=sel.slice(2), d=cbcLlDiag(X,[{k,f:1,s:1}],ent), o={d,k,name:&quot;Case &quot;+k+&quot; (service)&quot;,fac:false}; return {M:o,V:o}; }
+  if(sel&amp;&amp;sel.indexOf(&quot;c:&quot;)===0){ const i=+sel.slice(2); if(G[i]){ const o=cmb(i); return {M:o,V:o}; } }
+  if(!G.length) return null;
+  const g=cbcBdGov(), M=cmb(g.iM), V=cmb(g.iV); M.why=&quot;largest |M_u|&quot;; V.why=&quot;largest |V_u|&quot;; return {M,V,gov:true}; }
+/* the values labelled on the diagrams, worked: [quantity, expression, values, result] (plain text) */
+function cbcBdRows(X,v){
+  const L=X.Lc, rows=[], sg=(t,i)=>(i===0?(t.f*t.s<0?&quot;−&quot;:&quot;&quot;):(t.f*t.s<0?&quot; − &quot;:&quot; + &quot;))+t.f.toFixed(1);
+  const sum=(d,fn)=>d.T.map((t,i)=>sg(t,i)+&quot;(&quot;+fn(X.cases[t.k])+&quot;)&quot;).join(&quot;&quot;)||&quot;0&quot;;
+  const nm=o=>o.fac?&quot;Combination &quot;+(o.ci+1):&quot;case &quot;+o.k, u=o=>o.fac?&quot;_u&quot;:&quot;&quot;;
+  const one=(o,a)=>{ const d=o.d, k=o.k, c=k?X.cases[k]:null;
+    if(a===&quot;M&quot;){
+      if(c) rows.push([&quot;M&quot;+(X.cant?&quot; at the support, x = 0&quot;:&quot; at midspan, x = L/2&quot;)+&quot; — &quot;+nm(o),X.cant?&quot;−wL²/2&quot;:&quot;wL²/8&quot;,X.cant?&quot;−(&quot;+fmt(c.w,3)+&quot;)(&quot;+fmt(L)+&quot;)²/2&quot;:&quot;(&quot;+fmt(c.w,3)+&quot;)(&quot;+fmt(L)+&quot;)²/8&quot;,fmt(d.Mc)+&quot; kip-ft&quot;]);
+      else rows.push([&quot;M_u,line&quot;+(X.cant?&quot; at the support, x = 0&quot;:&quot; at midspan, x = L/2&quot;)+&quot; — &quot;+nm(o),&quot;Σγ M_line (case values)&quot;,sum(d,c=>fmt(c.M)),fmt(d.Mc)+&quot; kip-ft&quot;]);
+      if(Math.abs(d.eM)>1e-12){ rows.push([&quot;M&quot;+u(o)+&quot; entered (point value, no diagram)&quot;,c?&quot;as entered&quot;:&quot;Σγ M_entered&quot;,c?fmt(d.eM):d.terms.map((t,i)=>sg(t,i)+&quot;(&quot;+fmt(+((S.svc.cases[t.k]||{}).M)||0)+&quot;)&quot;).join(&quot;&quot;),fmt(d.eM)+&quot; kip-ft&quot;]);
+        rows.push([&quot;M&quot;+u(o)+&quot; at the check section&quot;,&quot;line + entered&quot;,fmt(d.Mc)+&quot; + &quot;+(d.eM<0?&quot;(&quot;+fmt(d.eM)+&quot;)&quot;:fmt(d.eM)),fmt(d.M)+&quot; kip-ft&quot;]); }
+      return; }
+    const fV=(x,lab)=>{ const face=x===0;
+      if(c) rows.push([&quot;V at &quot;+lab+&quot; — &quot;+nm(o),X.cant?(face?&quot;wL&quot;:&quot;w(L − d)&quot;):(face?&quot;wL/2&quot;:&quot;w(L/2 − d)&quot;),fmt(c.w,3)+&quot;(&quot;+(X.cant?fmt(L):fmt(L/2))+(face?&quot;&quot;:&quot; − &quot;+fmt(X.xV,3))+&quot;)&quot;,fmt(face?d.V0:d.Vd)+&quot; kip&quot;]);
+      else if(face&amp;&amp;X.xV>0) rows.push([&quot;V_u,line at &quot;+lab+&quot; — &quot;+nm(o),X.cant?&quot;(Σγ w) L&quot;:&quot;(Σγ w) L/2&quot;,&quot;[&quot;+sum(d,c=>fmt(c.w,3))+&quot;](&quot;+(X.cant?fmt(L):fmt(L/2))+&quot;)&quot;,fmt(d.V0)+&quot; kip&quot;]);
+      else rows.push([&quot;V_u,line at &quot;+lab+&quot; — &quot;+nm(o),&quot;Σγ V_line (case values)&quot;,sum(d,c=>fmt(c.V)),fmt(face?d.V0:d.Vd)+&quot; kip&quot;]); };
+    fV(0,&quot;the support face, x = 0&quot;);
+    if(!X.cant) rows.push([&quot;V&quot;+u(o)+&quot;,line at the other support, x = L&quot;,&quot;−V(0)&quot;,&quot;−(&quot;+fmt(d.V0)+&quot;)&quot;,fmt(d.VL)+&quot; kip&quot;]);
+    if(X.xV>0) fV(X.xV,&quot;d, x = d = &quot;+fmt(X.xV,3)+&quot; ft&quot;);
+    if(Math.abs(d.eV)>1e-12){ rows.push([&quot;V&quot;+u(o)+&quot; entered (point value, no diagram)&quot;,c?&quot;as entered&quot;:&quot;Σγ V_entered&quot;,c?fmt(d.eV):d.terms.map((t,i)=>sg(t,i)+&quot;(&quot;+fmt(+((S.svc.cases[t.k]||{}).V)||0)+&quot;)&quot;).join(&quot;&quot;),fmt(d.eV)+&quot; kip&quot;]);
+      rows.push([&quot;V&quot;+u(o)+&quot; at the check section&quot;,&quot;line + entered&quot;,fmt(d.Vd)+&quot; + &quot;+(d.eV<0?&quot;(&quot;+fmt(d.eV)+&quot;)&quot;:fmt(d.eV)),fmt(d.V)+&quot; kip&quot;]); }
+  };
+  one(v.M,&quot;M&quot;); one(v.V,&quot;V&quot;);
+  return rows; }
+const CBBD_COL={D:&quot;#475569&quot;,L:&quot;#2563EB&quot;,Lr:&quot;#0891B2&quot;,S:&quot;#0E7490&quot;,R:&quot;#4F46E5&quot;,W:&quot;#7C3AED&quot;,E:&quot;#C2410C&quot;};
+/* the figure: the beam with the line loads per case (service w), supports, span, the sections checked; then the V and M diagrams
+   of view v (cbcBdView). x to scale; ordinates each to its own scale; +M sagging plotted up; V as the tool's (+ for +w at x = 0). */
+function cbcBeamSVG(X,v,narrow){
+  const L=X.Lc, W=narrow?360:560, xa=narrow?36:58, xb=W-(narrow?36:58), sx=(xb-xa)/L, PX=x=>xa+x*sx, E=s=>String(s).replace(/[&amp;<>]/g,c=>({&quot;&amp;&quot;:&quot;&amp;amp;&quot;,&quot;<&quot;:&quot;&amp;lt;&quot;,&quot;>&quot;:&quot;&amp;gt;&quot;}[c]));
+  const T=(x,y,s,o)=>`<text x=&quot;${x.toFixed(1)}&quot; y=&quot;${y.toFixed(1)}&quot;${o||&quot;&quot;}>${E(s)}</text>`;
+  const halo=' stroke=&quot;#fff&quot; stroke-width=&quot;3&quot; paint-order=&quot;stroke&quot;';
+  /* text wrapped to the figure width (about 0.55 em a character); returns the svg and the height used */
+  const WT=(x,y,str,fs,o)=>{ const n=Math.max(12,Math.floor((W-x-6)/(fs*0.55))), words=String(str).split(&quot; &quot;), out=[]; let ln=&quot;&quot;;
+    words.forEach(w=>{ if(ln&amp;&amp;(ln+&quot; &quot;+w).length>n){ out.push(ln); ln=w; } else ln=ln?ln+&quot; &quot;+w:w; }); if(ln) out.push(ln);
+    return {svg:out.map((q,i)=>T(x,y+i*(fs+3),q,' font-size=&quot;'+fs+'&quot;'+(o||&quot;&quot;))).join(&quot;&quot;),h:out.length*(fs+3)}; };
+  const LC=CBC_LD_KEYS.filter(k=>X.cases[k].has);
+  let y=20, s=&quot;&quot;;
+  s+=T(10,y,&quot;Beam and line loads (service w per case)&quot;,' font-weight=&quot;bold&quot;'); y+=12;
+  /* load bands, one per case, arrows in the direction of w */
+  LC.forEach(k=>{ const c=X.cases[k], col=CBBD_COL[k]||&quot;#475569&quot;, h=20, up=c.w<0;
+    s+=`<rect x=&quot;${xa}&quot; y=&quot;${y}&quot; width=&quot;${xb-xa}&quot; height=&quot;${h}&quot; fill=&quot;${col}&quot; fill-opacity=&quot;0.08&quot; stroke=&quot;${col}&quot; stroke-width=&quot;1&quot;/>`;
+    const lb=&quot;w_&quot;+k+&quot; = &quot;+fmt(c.w,3)+&quot; klf&quot;+(c.sw?&quot; (incl. self-wt &quot;+fmt(c.sw,3)+&quot;)&quot;:&quot;&quot;)+(up?&quot; (upward)&quot;:&quot;&quot;), x0=xa+12+lb.length*7;   /* arrows right of the label */
+    for(let x=xb-8;x>=x0;x-=26) s+=up?cbcArrow(x,y+h-1,x,y+3,col,1):cbcArrow(x,y+3,x,y+h-1,col,1);
+    s+=T(xa+5,y+15,lb,' font-size=&quot;12.5&quot; font-weight=&quot;bold&quot; fill=&quot;'+col+'&quot;'+halo);
+    y+=h+4; });
+  const yb=y+4, hb=9;
+  s+=`<rect x=&quot;${xa}&quot; y=&quot;${yb}&quot; width=&quot;${xb-xa}&quot; height=&quot;${hb}&quot; fill=&quot;#cbd5e1&quot; stroke=&quot;#0F172A&quot; stroke-width=&quot;1.3&quot;/>`;
+  const ys=yb+hb;
+  if(X.cant){   /* fixed support at x = 0 (hatched), free end at x = L */
+    s+=`<line x1=&quot;${xa}&quot; y1=&quot;${yb-16}&quot; x2=&quot;${xa}&quot; y2=&quot;${ys+16}&quot; stroke=&quot;#0F172A&quot; stroke-width=&quot;2.4&quot;/>`;
+    for(let q=yb-14;q<=ys+16;q+=6) s+=`<line x1=&quot;${xa}&quot; y1=&quot;${q}&quot; x2=&quot;${xa-7}&quot; y2=&quot;${q+6}&quot; stroke=&quot;#0F172A&quot; stroke-width=&quot;0.9&quot;/>`;
+    s+=T(xa-8,ys+30,&quot;fixed&quot;,' font-size=&quot;11.5&quot; fill=&quot;#334155&quot;')+T(xb,ys+30,&quot;free end&quot;,' font-size=&quot;11.5&quot; fill=&quot;#334155&quot; text-anchor=&quot;end&quot;');
+  } else {      /* pin at x = 0, roller at x = L */
+    s+=`<polygon points=&quot;${xa},${ys} ${xa-8},${ys+13} ${xa+8},${ys+13}&quot; fill=&quot;#fff&quot; stroke=&quot;#0F172A&quot; stroke-width=&quot;1.2&quot;/>`;
+    s+=`<line x1=&quot;${xa-12}&quot; y1=&quot;${ys+13}&quot; x2=&quot;${xa+12}&quot; y2=&quot;${ys+13}&quot; stroke=&quot;#0F172A&quot; stroke-width=&quot;1.2&quot;/>`;
+    s+=`<polygon points=&quot;${xb},${ys} ${xb-8},${ys+10} ${xb+8},${ys+10}&quot; fill=&quot;#fff&quot; stroke=&quot;#0F172A&quot; stroke-width=&quot;1.2&quot;/>`;
+    s+=`<circle cx=&quot;${xb-4}&quot; cy=&quot;${ys+12.5}&quot; r=&quot;2.4&quot; fill=&quot;#fff&quot; stroke=&quot;#0F172A&quot; stroke-width=&quot;1&quot;/><circle cx=&quot;${xb+4}&quot; cy=&quot;${ys+12.5}&quot; r=&quot;2.4&quot; fill=&quot;#fff&quot; stroke=&quot;#0F172A&quot; stroke-width=&quot;1&quot;/>`;
+    s+=`<line x1=&quot;${xb-12}&quot; y1=&quot;${ys+15}&quot; x2=&quot;${xb+12}&quot; y2=&quot;${ys+15}&quot; stroke=&quot;#0F172A&quot; stroke-width=&quot;1.2&quot;/>`;
+    s+=T(xa,ys+28,&quot;pin&quot;,' font-size=&quot;11.5&quot; fill=&quot;#334155&quot; text-anchor=&quot;middle&quot;')+T(xb,ys+28,&quot;roller&quot;,' font-size=&quot;11.5&quot; fill=&quot;#334155&quot; text-anchor=&quot;middle&quot;');
+  }
+  const yd=ys+44;
+  s+=cbcArrow(xa,yd,xb,yd,&quot;#334155&quot;,1,true);
+  s+=`<line x1=&quot;${xa}&quot; y1=&quot;${ys+18}&quot; x2=&quot;${xa}&quot; y2=&quot;${yd+5}&quot; stroke=&quot;#94A3B8&quot; stroke-width=&quot;0.7&quot;/><line x1=&quot;${xb}&quot; y1=&quot;${ys+18}&quot; x2=&quot;${xb}&quot; y2=&quot;${yd+5}&quot; stroke=&quot;#94A3B8&quot; stroke-width=&quot;0.7&quot;/>`;
+  s+=T((xa+xb)/2,yd-5,&quot;L = &quot;+fmt(L)+&quot; ft&quot;,' text-anchor=&quot;middle&quot; font-weight=&quot;bold&quot;'+halo);
+  /* the sections checked */
+  let yk=yd+20; const xVp=PX(X.xV);
+  s+=T(X.cant?10:PX(L/2),yk,X.cant?&quot;M&quot;+(X.xV>0?&quot;&quot;:&quot; and V&quot;)+&quot; checked at the support face&quot;:&quot;M checked at midspan&quot;,' font-size=&quot;12.5&quot; fill=&quot;#B45309&quot; text-anchor=&quot;'+(X.cant?&quot;start&quot;:&quot;middle&quot;)+'&quot;');
+  if(X.xV>0){ yk+=16; s+=T(xVp>W/2?xVp:Math.max(10,xVp-12),yk,&quot;V checked at d = &quot;+fmt(X.xV*12)+&quot; in = &quot;+fmt(X.xV,3)+&quot; ft&quot;,' font-size=&quot;12.5&quot; fill=&quot;#B45309&quot;'+(xVp>W/2?' text-anchor=&quot;end&quot;':&quot;&quot;)); }
+  else if(!X.cant){ yk+=16; s+=T(10,yk,&quot;V checked at the support face&quot;,' font-size=&quot;12.5&quot; fill=&quot;#B45309&quot;'); }
+  /* the two diagrams */
+  const panel=(y0,o,a)=>{
+    const d=o.d, unit=a===&quot;V&quot;?&quot;kip&quot;:&quot;kip-ft&quot;, val=p=>a===&quot;V&quot;?p.V:p.M, H=120, tot=a===&quot;V&quot;?d.V:d.M, ev=a===&quot;V&quot;?d.eV:d.eM, eN=Math.abs(ev)>1e-12, sy=a+(o.fac?&quot;_u&quot;:&quot;&quot;);
+    let t=&quot;&quot;, mx=0, mn=0; d.pts.forEach(p=>{ mx=Math.max(mx,val(p)); mn=Math.min(mn,val(p)); }); if(eN){ mx=Math.max(mx,tot); mn=Math.min(mn,tot); }
+    let yy=y0+16; t+=T(10,yy,sy+&quot; (&quot;+unit+&quot;)&quot;+(o.why?&quot; — &quot;+o.why:&quot;&quot;),' font-weight=&quot;bold&quot;');
+    const w1=WT(10,yy+16,o.name+(o.fac?&quot;: line loads Σγ × the case diagrams&quot;:&quot;: line loads of the case&quot;),12); t+=w1.svg; yy+=16+w1.h;
+    const top=yy+14, span=(mx-mn)||1, sc=(H-36)/span, Y=q=>top+(mx-q)*sc, y00=Y(0), col=a===&quot;V&quot;?&quot;#1d4ed8&quot;:&quot;#6d28d9&quot;, fill=a===&quot;V&quot;?&quot;#bfdbfe&quot;:&quot;#ddd6fe&quot;;
+    const P=d.pts.map(p=>PX(p.x).toFixed(1)+&quot;,&quot;+Y(val(p)).toFixed(1)).join(&quot; &quot;);
+    t+=`<polygon points=&quot;${PX(0)},${y00} ${P} ${PX(L)},${y00}&quot; fill=&quot;${fill}&quot; fill-opacity=&quot;0.8&quot; stroke=&quot;none&quot;/>`;
+    t+=`<polyline points=&quot;${P}&quot; fill=&quot;none&quot; stroke=&quot;${col}&quot; stroke-width=&quot;2&quot;/>`;
+    t+=`<line x1=&quot;${xa}&quot; y1=&quot;${y00}&quot; x2=&quot;${xb}&quot; y2=&quot;${y00}&quot; stroke=&quot;#0F172A&quot; stroke-width=&quot;1&quot;/>`;
+    const xs=a===&quot;V&quot;?X.xV:d.xM, pxs=PX(xs);
+    if(a===&quot;M&quot;&amp;&amp;!X.cant||a===&quot;V&quot;&amp;&amp;X.xV>0) t+=`<line x1=&quot;${pxs}&quot; y1=&quot;${top-8}&quot; x2=&quot;${pxs}&quot; y2=&quot;${top+H-30}&quot; stroke=&quot;#B45309&quot; stroke-width=&quot;1&quot; stroke-dasharray=&quot;4,3&quot;/>`;
+    const lab=(x,q,s1,o2)=>{ const px=PX(x), py=Y(q), anc=x<=L*0.15?&quot;start&quot;:(x>=L*0.85?&quot;end&quot;:&quot;middle&quot;), dx=anc===&quot;start&quot;?2:(anc===&quot;end&quot;?-2:0);
+      return `<circle cx=&quot;${px}&quot; cy=&quot;${py}&quot; r=&quot;3&quot; fill=&quot;${col}&quot;/>`+T(px+dx,q>=0?py-7:py+16,s1,' font-size=&quot;13&quot; text-anchor=&quot;'+anc+'&quot;'+(o2||&quot;&quot;)+halo); };
+    if(a===&quot;M&quot;) t+=lab(d.xM,d.Mc,sy+&quot;,line = &quot;+fmt(d.Mc),' font-weight=&quot;bold&quot;');
+    else { t+=lab(0,d.V0,sy+&quot;,line = &quot;+fmt(d.V0),X.xV===0?' font-weight=&quot;bold&quot;':&quot;&quot;);
+      if(!X.cant) t+=lab(L,d.VL,fmt(d.VL));
+      if(X.xV>0){ t+=`<circle cx=&quot;${pxs}&quot; cy=&quot;${Y(d.Vd)}&quot; r=&quot;4&quot; fill=&quot;#B45309&quot;/>`+T(pxs+6,Y(d.Vd)+(d.Vd>=0?17:-8),&quot;at d: &quot;+fmt(d.Vd),' font-size=&quot;13&quot; font-weight=&quot;bold&quot; fill=&quot;#B45309&quot;'+halo); } }
+    let hh=top+H-30-y0+12;
+    if(eN){ const py=Y(tot);
+      t+=`<polygon points=&quot;${pxs},${py-6} ${pxs+6},${py} ${pxs},${py+6} ${pxs-6},${py}&quot; fill=&quot;#fff&quot; stroke=&quot;#DC2626&quot; stroke-width=&quot;1.6&quot;/>`;
+      const w2=WT(10,y0+hh+14,&quot;◇ &quot;+sy+&quot; entered — no diagram: &quot;+(ev>0?&quot;+&quot;:&quot;&quot;)+fmt(ev)+&quot; at the check section; &quot;+sy+&quot; = &quot;+fmt(a===&quot;V&quot;?d.Vd:d.Mc)+&quot; + &quot;+(ev<0?&quot;(&quot;+fmt(ev)+&quot;)&quot;:fmt(ev))+&quot; = &quot;+fmt(tot),12,' fill=&quot;#DC2626&quot;'); t+=w2.svg; hh+=w2.h+6; }
+    return {svg:t,h:hh+8}; };
+  const yTop=yk+8, pV=panel(yTop,v.V,&quot;V&quot;), pM=panel(yTop+pV.h,v.M,&quot;M&quot;);
+  s+=pV.svg+pM.svg;
+  let yE=yTop+pV.h+pM.h+6;
+  s+=T(xa,yE,&quot;0&quot;,' font-size=&quot;11.5&quot; text-anchor=&quot;middle&quot; fill=&quot;#334155&quot;')+T(PX(L/2),yE,fmt(L/2)+&quot; ft&quot;,' font-size=&quot;11.5&quot; text-anchor=&quot;middle&quot; fill=&quot;#334155&quot;')+T(xb,yE,fmt(L)+&quot; ft&quot;,' font-size=&quot;11.5&quot; text-anchor=&quot;middle&quot; fill=&quot;#334155&quot;');
+  const w3=WT(10,yE+18,&quot;x from the &quot;+(X.cant?&quot;fixed support (support face)&quot;:&quot;left support&quot;)+&quot;, to scale; ordinates each to their own scale. +M sagging, plotted up; V positive for downward w at x = 0 (the tool's signs).&quot;,11.5,' fill=&quot;#334155&quot;');
+  s+=w3.svg;
+  const H=Math.ceil(yE+18+w3.h);
+  return `<svg class=&quot;dwg cbbd&quot; viewBox=&quot;0 0 ${W} ${H}&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot; style=&quot;max-width:${W}px&quot; font-family=&quot;Arial,Helvetica,sans-serif&quot; font-size=&quot;13.5&quot; fill=&quot;#0F172A&quot;>`
+    +`<rect x=&quot;0&quot; y=&quot;0&quot; width=&quot;${W}&quot; height=&quot;${H}&quot; fill=&quot;#fff&quot;/>`+s+`</svg>`;
+}
+/* the card (Load Combinations tab, after Line Loads) */
+function cbcBdCard(b,X){
+  if(!(X.Lc>0)){ b.appendChild(el(&quot;div&quot;,&quot;note warnBox&quot;,&quot;The span L is not entered (Loads card, Line loads): no diagrams.&quot;)); return; }
+  const opts=cbcBdOpts(X); if(!opts.some(o=>o.v===CBBD_SEL)) CBBD_SEL=&quot;gov&quot;;
+  const r=el(&quot;div&quot;,&quot;fRow&quot;); r.appendChild(el(&quot;label&quot;,null,&quot;Diagrams for&quot;));
+  const s=el(&quot;select&quot;); s.className=&quot;cbbdSel&quot;; s.style.maxWidth=&quot;100%&quot;;
+  opts.forEach(o=>{ const op=el(&quot;option&quot;,null,o.t); op.value=o.v; s.appendChild(op); }); s.value=CBBD_SEL; r.appendChild(s); b.appendChild(r);
+  const host=el(&quot;div&quot;); b.appendChild(host);
+  const draw=()=>{ host.innerHTML=&quot;&quot;; const v=cbcBdView(X,CBBD_SEL); if(!v) return;
+    const f=el(&quot;div&quot;,&quot;figWrap&quot;); f.innerHTML=cbcBeamSVG(X,v,(window.innerWidth||1000)<600); host.appendChild(f);
+    host.appendChild(cbNL(&quot;figCap&quot;,&quot;Figure LL-1 — Beam analysis, line loads: &quot;+(X.cant?&quot;cantilever&quot;:&quot;simple span&quot;)+&quot;, L = &quot;+fmt(X.Lc)+&quot; ft.&quot;,[
+      [&quot;Shown:&quot;,v.gov?&quot;V of the combination with the largest |V_u| and M of the combination with the largest |M_u| (select a load case or any combination above).&quot;:&quot;the &quot;+(v.M.fac?&quot;factored&quot;:&quot;service&quot;)+&quot; diagrams of &quot;+v.M.name+&quot;.&quot;],
+      [&quot;Line loads:&quot;,v.M.fac?&quot;the factored diagram = Σ γ_i × the case diagram (the combination's factors, signs as Table 5.3.1).&quot;:&quot;the case's w (all its rows&quot;+(X.cases[v.M.k].sw?&quot; and the self-weight&quot;:&quot;&quot;)+&quot;).&quot;],
+      [&quot;Entered M, V:&quot;,&quot;not from line loads, so they have no diagram: shown as a point value at the check section only (red ◇), added to the line-load value.&quot;],
+      [&quot;Values:&quot;,&quot;every labelled value is worked in the table below; the case values are worked on the Line Loads card, the factored totals in the combination cards.&quot;]]));
+    const t=el(&quot;table&quot;,&quot;rt&quot;); t.innerHTML=&quot;<tr><th>Quantity</th><th>Expression</th><th>Values</th><th>Result</th></tr>&quot;;
+    cbcBdRows(X,v).forEach(rw=>{ const tr=el(&quot;tr&quot;); rw.forEach(c=>tr.appendChild(el(&quot;td&quot;,null,c))); t.appendChild(tr); });
+    host.appendChild(t);
+    const L=[{tab:&quot;tabLoads&quot;,c:{card:&quot;ldLine&quot;,name:&quot;Line Loads&quot;},txt:&quot;w, M, V per case&quot;}];
+    [v.M,v.V].forEach(o=>{ if(o.fac&amp;&amp;!L.some(q=>q.c.card===&quot;ldC&quot;+o.ci)) L.push({tab:&quot;tabLoads&quot;,c:{card:&quot;ldC&quot;+o.ci,name:&quot;Combination &quot;+(o.ci+1)},txt:&quot;M_u, V_u&quot;}); });
+    cbcWorkedIn(host,L); };
+  s.addEventListener(&quot;change&quot;,()=>{ CBBD_SEL=s.value; draw(); });
+  draw();
+}
+/* CBBD: Figure LL-1, the beam and the V and M diagrams of the governing combinations, with its values worked */
+function cbcBdRpt(LX){
+  if(!(LX.Lc>0)) return [];
+  const v=cbcBdView(LX,&quot;gov&quot;); if(!v) return [];
+  const ks=CBC_LD_KEYS.filter(k=>LX.cases[k].has);
+  return [{type:'figure',svg:cbcBeamSVG(LX,v),caption:'Figure LL-1: Beam analysis, line loads — '+(LX.cant?'cantilever (fixed at the support, free end)':'simple span (pin, roller)')+', L = '+fmt(LX.Lc)+' ft: the line loads per case (service w); V of '+v.V.name+' (largest |V_u|) and M of '+v.M.name+' (largest |M_u|), each the line loads as Σγ × the case diagrams; entered M, V as point values at the check section (entered — no diagram). x to scale, ordinates to their own scale; +M sagging, plotted up. The case values are worked in '+ks.map(k=>k+' [[ll/Ml'+k+']], [[ll/Vl'+k+']]').join('; ')+'.'},
+    {type:'table',caption:'Values on Figure LL-1, worked',head:['Quantity','Expression','Values','Result'],rows:cbcBdRows(LX,v)},
+    {type:'note',text:'The factored totals are worked in '+[['M_u',v.M.ci],['V_u',v.V.ci]].map(q=>q[0]+' [[ld'+q[1]+'/'+(q[0]==='M_u'?'Mu':'Vu')+']]').join(', ')+'. [[tab:tabLoads|On screen: Load Combinations tab, Beam Analysis]]'}];
 }
 
 /* ---------------- FLEXURE tab ---------------- */
@@ -6174,7 +6354,7 @@ function cbcRptModel(){
           st.push(cS({id:'V'+k,label:'Service shear of case '+k+' used in the combinations',sym:'V_{'+k+'}',eq:'V_{entered}+V_{line}',sub:fmt(+e.V||0)+' + '+fmt(c.V),value:(+e.V||0)+c.V,unit:'kip'}));
           T.push({title:'Case '+k+' — '+CBC_LD_NAME[k],ref:LX.cant?'Statics: cantilever, uniform load':'Statics: simple span, uniform load',steps:st}); });
         subs.push({title:'Line loads — '+(LX.cant?'cantilever':'simple span')+', L = '+fmt(LX.Lc)+' ft',items:[{type:'note',text:cbcLlWhere(LX)}].concat(LX.xV>0?[{type:'note',text:'V at d: ACI 318-19 9.4.3.2 conditions (support reaction in compression, loads at or near the top, no concentrated load within d of the face) to be confirmed.'}]:[])
-          .concat([{type:'topics',scope:'ll',title:'Worked steps',list:T},{type:'note',text:'The combinations below use these case totals: '+CBC_LD_KEYS.filter(k=>LX.cases[k].has).map(k=>k+' [[ll/M'+k+']], [[ll/V'+k+']]').join('; ')+'. [[tab:tabLoads|On screen: Load Combinations tab, Line Loads]]'}])}); } }
+          .concat([{type:'topics',scope:'ll',title:'Worked steps',list:T},{type:'note',text:'The combinations below use these case totals: '+CBC_LD_KEYS.filter(k=>LX.cases[k].has).map(k=>k+' [[ll/M'+k+']], [[ll/V'+k+']]').join('; ')+'. [[tab:tabLoads|On screen: Load Combinations tab, Line Loads]]'}]).concat(cbcBdRpt(LX))}); } }   /* CBBD: Figure LL-1 */
     CC.combos.forEach(r=>{ const g=r.gen;
       const st=['M','V'].concat(tuU?['T']:[]).map(a=>{ const x=cbcLdTex(g,a);
         return cS({id:a+'u',label:'Factored '+({M:'moment',V:'shear',T:'torsion'}[a])+' (U = '+r.name+')',sym:a+'_{u}',eq:x.sym,sub:x.sub,value:x.val,unit:a==='V'?'kip':'kip-ft'}); });

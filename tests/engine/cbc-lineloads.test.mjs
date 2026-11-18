@@ -1,4 +1,4 @@
-// "Concrete Beam Capacity.html", Beam Capacity tab (CBLL, 2026-11-18): line loads per service load case (simple span or cantilever),
+// "Concrete Beam Capacity.html", Beam Capacity tab (CBLL, 2026-11-18; CBBD diagrams, 2026-11-18): line loads per service load case (simple span or cantilever),
 // cbcLlNorm / cbcLineLoads / cbcSvcTotal, taken from the text of the Beam Capacity frame (its srcdoc, decoded) and run in a Node vm
 // with cbcBuildCombos (ACI 318-19 Table 5.3.1). Hand checks of the PR in the comments.
 import fs from 'node:fs';
@@ -15,7 +15,8 @@ function load() {
     for (let i = 1; i < lines.length; i++) { const L = lines[i]; if (/^[\s})\]]/.test(L) || L === '' || L === '\r') out.push(L); else break; } return out.join('\n'); };
   const ctx = {}; vm.createContext(ctx);
   vm.runInContext([grab(/\nconst CBC_LD_KEYS=/).replace(/^const /, 'var '), grab(/\nfunction cbcBuildCombos\(/), grab(/\nfunction cbcSvcDefault\(/),
-    grab(/\nfunction cbcSvcNorm\(/), grab(/\nfunction cbcLlNorm\(/), grab(/\nfunction cbcLineLoads\(/), grab(/\nfunction cbcSvcTotal\(/)].join('\n'), ctx);
+    grab(/\nfunction cbcSvcNorm\(/), grab(/\nfunction cbcLlNorm\(/), grab(/\nfunction cbcLineLoads\(/), grab(/\nfunction cbcSvcTotal\(/),
+    grab(/\nfunction cbcLlOrd\(/), grab(/\nfunction cbcLlDiag\(/)].join('\n'), ctx);
   return ctx;
 }
 const near = (a, b, what, tol = 1e-9) => assert.ok(Math.abs(a - b) <= tol, `${what}: ${a} vs ${b}`);
@@ -110,4 +111,44 @@ test('span 0 or negative: line loads add nothing', () => {
   const C = load();
   for (const L of [0, -5]) { const X = C.cbcLineLoads({ L, rows: [{ k: 'D', mode: 'w', w: 2 }] }, { d: 15, Ag: 216 });
     assert.equal(X.any, true); near(X.cases.D.M, 0, 'M'); near(X.cases.D.V, 0, 'V'); }
+});
+
+// CBBD (2026-11-18): the V and M diagram ordinates (cbcLlOrd / cbcLlDiag, the Beam Analysis card and Report Figure LL-1) equal the
+// worked values at x = L/2, 0 and d. The factored diagram = Σ γ_i × the case diagram; line + entered = the combination's M_u, V_u.
+const svcOf = (C, X, cs) => C.cbcSvcTotal({ cases: cs || blank(), rev: { W: true, E: true }, l05: false }, X);
+test('CBBD diagrams, hand check 1: 20 ft simple span, 1.2D + 1.6L: M_u(L/2) 112.0, V_u(0) 22.4, V_u(L) −22.4; per case wL²/8, wL/2', () => {
+  const C = load(), X = C.cbcLineLoads(LL1, { d: 18, Ag: 216 }), r = row(C.cbcBuildCombos(svcOf(C, X)), '1.2D + 1.6L + 0.5Lr');
+  const g = C.cbcLlDiag(X, r.terms, blank());
+  near(g.xM, 10, 'x of M'); near(g.Mc, 112, 'M_u at L/2'); near(g.V0, 22.4, 'V_u at 0'); near(g.VL, -22.4, 'V_u at L'); near(g.Vd, 22.4, 'V_u at the face (x_V = 0)');
+  near(g.M, r.Mu, 'diagram = the combination M_u', 1e-9); near(g.V, r.Vu, 'diagram = the combination V_u', 1e-9);
+  // ordinates at the ends and midspan of the polyline; M(x) = w x (L − x)/2 at x = 5: 2.24(5)(15)/2 = 84.0
+  near(g.pts[0].M, 0, 'M(0)'); near(g.pts[g.pts.length - 1].M, 0, 'M(L)'); near(g.pts.find(p => Math.abs(p.x - 10) < 1e-12).M, 112, 'M(L/2) polyline');
+  near(C.cbcLlOrd(X, 2.24, 5).M, 84, 'M(5 ft)');
+  const D = C.cbcLlDiag(X, [{ k: 'D', f: 1, s: 1 }], blank());
+  near(D.Mc, X.cases.D.M, 'case D: M(L/2) = wL²/8 = 60.0'); near(D.V0, X.cases.D.V, 'case D: V(0) = wL/2 = 12.0'); near(D.Mc, 60, 'M_D'); near(D.V0, 12, 'V_D');
+});
+test('CBBD diagrams, hand check 2: V at d = 18 in: V_u(d) = 19.04 = the combination V_u; V_u(0) 22.4 (face, labelled)', () => {
+  const C = load(), X = C.cbcLineLoads(Object.assign({}, LL1, { vAt: 'd' }), { d: 18, Ag: 216 });
+  const r = row(C.cbcBuildCombos(svcOf(C, X)), '1.2D + 1.6L + 0.5Lr'), g = C.cbcLlDiag(X, r.terms, blank());
+  near(g.xV, 1.5, 'x_V'); near(g.Vd, 19.04, 'V_u at d'); near(g.V, r.Vu, 'diagram at d = the combination V_u'); near(g.V0, 22.4, 'V_u at the face'); near(g.Mc, 112, 'M_u');
+  assert.ok(g.pts.some(p => Math.abs(p.x - 1.5) < 1e-12), 'the polyline has a point at x = d');
+  const D = C.cbcLlDiag(X, [{ k: 'D', f: 1, s: 1 }], blank()); near(D.Vd, X.cases.D.V, 'case D at d = w(L/2 − d) = 10.2'); near(D.Vd, 10.2, 'V_D at d');
+});
+test('CBBD diagrams, hand check 3: 8 ft cantilever, 1.2D + 1.6L: M_u(0) −83.2, V_u(0) 20.8, free end 0; at d = 15 in 17.55', () => {
+  const C = load(), ll = { L: 8, sup: 'cant', rows: [{ k: 'D', mode: 'w', w: 1.5 }, { k: 'L', mode: 'q', q: 40, b: 12.5 }] };
+  const X = C.cbcLineLoads(ll, { d: 15, Ag: 216 }), r = row(C.cbcBuildCombos(svcOf(C, X)), '1.2D + 1.6L + 0.5Lr'), g = C.cbcLlDiag(X, r.terms, blank());
+  near(g.xM, 0, 'x of M'); near(g.Mc, -83.2, 'M_u at the support'); near(g.V0, 20.8, 'V_u at the support'); near(g.VL, 0, 'V at the free end');
+  near(g.pts[g.pts.length - 1].M, 0, 'M at the free end'); near(g.M, r.Mu, 'M_u'); near(g.V, r.Vu, 'V_u');
+  const Xd = C.cbcLineLoads(Object.assign({}, ll, { vAt: 'd' }), { d: 15, Ag: 216 }), rd = row(C.cbcBuildCombos(svcOf(C, Xd)), '1.2D + 1.6L + 0.5Lr');
+  const gd = C.cbcLlDiag(Xd, rd.terms, blank()); near(gd.Vd, 17.55, 'V_u at d'); near(gd.V, rd.Vu, 'V_u at d = the combination');
+  const D = C.cbcLlDiag(X, [{ k: 'D', f: 1, s: 1 }], blank()); near(D.Mc, -48, 'M_D = −wL²/2'); near(D.V0, 12, 'V_D = wL');
+});
+test('CBBD diagrams: entered M, V are point values only (no diagram); line + entered = M_u, V_u; reversed W', () => {
+  const C = load(), X = C.cbcLineLoads(Object.assign({}, LL1, { rows: LL1.rows.concat([{ k: 'W', mode: 'w', w: 0.3 }]) }), { d: 18, Ag: 216 }), cs = blank();
+  cs.D = { M: 5, V: 2, T: 0 }; cs.W = { M: 1, V: 0.5, T: 0 };
+  const R = C.cbcBuildCombos(svcOf(C, X, cs));
+  R.forEach(r => { const g = C.cbcLlDiag(X, r.terms, cs); near(g.M, r.Mu, r.name + ' M_u', 1e-9); near(g.V, r.Vu, r.name + ' V_u', 1e-9); });
+  const r = row(R, '1.2D + 1.6L + 0.5Lr'), g = C.cbcLlDiag(X, r.terms, cs);
+  near(g.eM, 6, 'Σγ M entered = 1.2(5)'); near(g.Mc, 112, 'line part unchanged'); near(g.M, 118, 'M_u = 112 + 6');
+  assert.ok(R.some(x => x.terms.some(t => t.k === 'W' && t.s < 0)), 'a reversed W row is checked');
 });
