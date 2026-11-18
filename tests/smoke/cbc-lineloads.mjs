@@ -9,6 +9,10 @@
 //  - reload keeps it; cantilever: M_D −240.00 (−1.2·400/2), V_D 24.00; V at d: V_D = 1.2(20 − d/12);
 //  - an older service save (no svc.ll) opens with no line loads and the same 14 rows as before (hand check of cbc-loads.mjs);
 //  - no sideways page scroll on any tab.
+// CBBD (2026-11-18): the "Beam Analysis" card (after Line Loads): beam sketch, V and M diagrams of the governing combinations
+//  (labels M_u,line = 112.00, V_u,line = 22.40, −22.40), per case (M,line = 60.00) and per combination from the selector; Report
+//  Figure LL-1 with its values table and § links; cantilever with V at d: the d marker and its value (= the combination V_u);
+//  an older save: no card, no figure.
 //   node tests/smoke/cbc-lineloads.mjs [--file <Concrete Beam Capacity.html>] [--shots <dir>]
 import path from 'path';
 import { openPage, REPO } from '../lib.mjs';
@@ -65,7 +69,18 @@ for (const vw of [1400, 390]) {
   ok(/different locations/.test(r.txt), 'Line Loads card states that M (midspan) and V (support) come from different locations');
   ok(r.c7.includes('M_u = 1.2(60.00) + 1.6(25.00) + 0.5(0.00) = 112.00') && r.c7.includes('V_u = 1.2(12.00) + 1.6(5.00) + 0.5(0.00) = 22.40'), 'combination card (5.3.1b) uses the case totals: 112.00 / 22.40');
   if (SHOTS) { const c = await f.$('#ldLine'); await c.screenshot({ path: path.join(SHOTS, `cb-lineloads-worked-${vw}.png`) }); }
+  // CBBD: the Beam Analysis card
+  r = await f.evaluate(() => { const c = document.querySelector('#ldBeam'), sv = c && c.querySelector('svg.cbbd'); const tx = sv ? [...sv.querySelectorAll('text')].map(t => t.textContent).join(' | ') : '';
+    const after = c && c.previousElementSibling && c.previousElementSibling.id; const sel = c && c.querySelector('select.cbbdSel'); const w = sv ? sv.getBoundingClientRect().width : 0;
+    let caseD = ''; if (sel) { sel.value = 'k:D'; sel.dispatchEvent(new Event('change')); caseD = [...c.querySelectorAll('svg.cbbd text')].map(t => t.textContent).join(' | '); sel.value = 'gov'; sel.dispatchEvent(new Event('change')); }
+    return { has: !!sv, after, tx, caseD, w, tbl: c ? c.querySelector('table.rt').innerText : '', ln: !!(c && c.querySelector('a.wkA[data-card="ldLine"]')) }; });
+  ok(r.has && r.after === 'ldLine' && /M_u,line = 112\.00/.test(r.tx) && /V_u,line = 22\.40/.test(r.tx) && /-22\.40/.test(r.tx) && /pin/.test(r.tx) && /roller/.test(r.tx) && /w_D = 1\.200 klf/.test(r.tx) && /M checked at midspan/.test(r.tx),
+    'Beam Analysis card after Line Loads: sketch (pin, roller, w_D), M_u,line 112.00 at midspan, V_u,line 22.40 / −22.40');
+  ok(/M,line = 60\.00/.test(r.caseD) && /V,line = 12\.00/.test(r.caseD), 'selector: case D diagrams, M 60.00 (wL²/8), V 12.00 (wL/2)');
+  ok(/1\.2\(60\.00\) \+ 1\.6\(25\.00\)/.test(r.tbl) && /112\.00 kip-ft/.test(r.tbl) && r.ln && r.w > 200 && r.w <= vw, `values table worked, link to Line Loads; figure ${Math.round(r.w)} px wide`);
+  if (SHOTS) { const c = await f.$('#ldBeam'); await c.screenshot({ path: path.join(SHOTS, `cb-diagrams-card-${vw}.png`) }); }
   r = await f.evaluate(() => { const M = mrModel(), t = SharedReport.text(SharedReport.build(M), { legacy: true }); return { t }; });
+  ok(/Figure LL-1: Beam analysis/.test(r.t) && /Values on Figure LL-1, worked/.test(r.t) && /D §\d+\.\d+, §\d+\.\d+/.test(r.t) && /M_u §\d+\.\d+, V_u §\d+\.\d+/.test(r.t), 'Report: Figure LL-1, its values worked, § links to the line-load and combination steps');
   ok(/Line loads/.test(r.t) && /floor/.test(r.t) && /60\.00 §\d+\.\d+/.test(r.t) && /12\.00 §\d+\.\d+/.test(r.t) && /different locations/.test(r.t) && !/\[\[|NaN|undefined/.test(r.t),
     'Report: line-load inputs, worked steps, the case table links to them (§), no unresolved link or NaN');
   const sw = await sideways(f); ok(!sw.length, 'no sideways scroll on any tab' + (sw.length ? ': ' + sw.join(', ') : ''));
@@ -79,6 +94,10 @@ for (const vw of [1400, 390]) {
   await pick(f, 'llVat', 'd');
   r = await f.evaluate(() => { const X = cbcLlX(); const c = CC.combos.find(x => x.name === '1.2D + 1.6L + 0.5Lr'); return { VD: X.cases.D.V, VL: X.cases.L.V, d: X.dIn, vu: c.Vu, mu: c.Mu, neg: c.Mu < 0 }; });
   ok(r.d > 0 && near(r.VD, 1.2 * (20 - r.d / 12)) && near(r.vu, 1.2 * r.VD + 1.6 * r.VL) && near(r.mu, -1.2 * 240 - 1.6 * 100), `cantilever, V at d = ${r.d.toFixed(2)} in: V_D ${r.VD.toFixed(3)}; M_u ${r.mu} (−448.00, hogging), V_u ${r.vu.toFixed(3)}`);
+  r = await f.evaluate(() => { S.ui.tab = 'tabLoads'; refresh(); const c = CC.combos.find(x => x.name === '1.2D + 1.6L + 0.5Lr');
+    return { tx: [...document.querySelectorAll('#ldBeam svg.cbbd text')].map(t => t.textContent).join(' | '), vu: c.Vu }; });
+  ok(/fixed/.test(r.tx) && /free end/.test(r.tx) && r.tx.includes('at d: ' + r.vu.toFixed(2)) && /V checked at d/.test(r.tx), `cantilever, V at d: fixed / free end, the d marker = V_u ${r.vu.toFixed(2)}`);
+  if (SHOTS) { const c = await f.$('#ldBeam'); await c.screenshot({ path: path.join(SHOTS, `cb-diagrams-cant-d-${vw}.png`) }); }
   ok(!errs.length, 'console errors: ' + errs.length + (errs.length ? ' ' + errs.slice(0, 3).join(' | ') : ''));
   await b.close();
   // an older service save without svc.ll
@@ -86,8 +105,8 @@ for (const vw of [1400, 390]) {
   f = await frameOf(p);
   r = await f.evaluate(() => ({ rows: CC.combos.map(x => [x.name, x.Mu, x.Vu]), any: cbcLlX().any, card: !!document.querySelector('#ldLine') }));
   ok(!r.any && r.rows.length === HAND.length && HAND.every((h, i) => r.rows[i][0] === h[0] && near(r.rows[i][1], h[1]) && near(r.rows[i][2], h[2])), 'older service save (no svc.ll): no line loads, the 14 rows as before');
-  r = await f.evaluate(() => { S.ui.tab = 'tabLoads'; refresh(); return { card: !!document.querySelector('#ldLine'), t: SharedReport.text(SharedReport.build(mrModel()), { legacy: true }) }; });
-  ok(!r.card && !/Line loads/.test(r.t), 'older save: no Line Loads card, no line-load section in the Report');
+  r = await f.evaluate(() => { S.ui.tab = 'tabLoads'; refresh(); return { card: !!document.querySelector('#ldLine') || !!document.querySelector('#ldBeam'), t: SharedReport.text(SharedReport.build(mrModel()), { legacy: true }) }; });
+  ok(!r.card && !/Line loads/.test(r.t) && !/Figure LL-1/.test(r.t), 'older save: no Line Loads card, no line-load section or Figure LL-1 in the Report');
   ok(!errs.length, 'console errors (older save): ' + errs.length);
   await b.close();
 }

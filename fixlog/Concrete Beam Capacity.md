@@ -7447,3 +7447,54 @@ The file uses CRLF line endings; keep them. The code is in the Beam Capacity src
 ### Open items
 - The decisions above, pending engineer review.
 - Point loads, partial-length loads, continuous spans and propped cantilevers are not built: enter their M and V by hand in the case table (they add to the line-load values).
+
+## 2026-11-18 — PR: claude/cbc-beam-diagrams (PR #1639: https://github.com/mlococo88/All-Structural/pull/1639) (CBBD) — Load Combinations tab: "Beam Analysis" card for the line loads (beam sketch, V and M diagrams per case and for the governing combinations), and Report Figure LL-1   [DISPLAY ONLY: no formula, factor, combination or result changed; no saved-data change; no new storage key]
+
+The file uses CRLF line endings; keep them. The code is in the Beam Capacity srcdoc. When re-applying, escape `&` as `&amp;` and `"` as `&quot;`. The sites are tagged CBBD.
+
+### Engineer request (2026-11-18)
+A "Beam analysis" output card for the line loads (shown when line loads are entered), after the Line Loads card and in the Report: a beam sketch (span L, pin / roller or fixed / free end, the line loads per case as load bands with their w in klf, the sections checked, the "V at d" location); V and M diagrams along the span per load case and for the governing factored combinations (factored diagram = Σ γ_i × case diagram); M and V entered per case (not from line loads) shown as point values at the check section only, labelled "entered — no diagram"; max values labelled; the V at d point marked with its value; +M sagging. The numbers on the diagrams equal the worked values.
+
+### Decisions (pending engineer review)
+- **"Governing" combinations:** the combination with the largest |M_u| (for the M diagram) and the one with the largest |V_u| (for the V diagram), first of equals, from the existing combination results (`CC.combos`). This is the load-effect envelope, not the D/C-governing combination of the result tabs (with unequal +M / −M capacities those can differ). Any case or combination can be selected on the card.
+- **Ordinates:** x from the support face (simple span: the left support; cantilever: the fixed support, free end at x = L). Simple span V(x) = w(L/2 − x), M(x) = w·x(L − x)/2; cantilever V(x) = w(L − x), M(x) = −w(L − x)²/2 (statics, uniform w). V positive for downward w at x = 0, as the tool's V; +M sagging, plotted up.
+- **The face shear when V is taken at d:** the diagram labels V at x = 0 (the maximum) as well as V at d; it is not used by any check, so the card's values table works it: (Σγ w) L/2 for a combination, wL/2 for a case.
+- **Selector** (case / combination): in memory only (`CBBD_SEL`), not saved; the Report always shows the governing view.
+- **Figure size:** a 360-unit-wide layout below a 600 px frame width (readable at 390 px), 560 otherwise; the Report uses the wide layout. Arrowheads are polygons (no ids), so the print copy is unaffected.
+
+### Where (Beam Capacity srcdoc)
+- **New block before `/* ---------------- FLEXURE tab ---------------- */`** (anchor `CBBD (2026-11-18, engineer request): BEAM ANALYSIS of the line loads`): `cbcLlOrd`, `cbcLlDiag`, `CBBD_SEL`, `cbcBdGov`, `cbcBdOpts`, `cbcBdView`, `cbcBdRows` (the values table: quantity, expression, values, result), `CBBD_COL`, `cbcBeamSVG(X,v,narrow)`, `cbcBdCard(b,X)`, `cbcBdRpt(LX)`. The ordinates (verbatim):
+  ```js
+  function cbcLlOrd(X,w,x){ const L=X.Lc; return X.cant?{V:w*(L-x),M:-w*(L-x)*(L-x)/2}:{V:w*(L/2-x),M:w*x*(L-x)/2}; }
+  function cbcLlDiag(X,terms,ent){
+    const L=X.Lc, xM=X.cant?0:L/2, xs=[], n=48;
+    for(let i=0;i<=n;i++) xs.push(L*i/n);
+    if(X.xV>0&&xs.indexOf(X.xV)<0) xs.push(X.xV);
+    xs.sort((a,b)=>a-b);
+    const T=terms.filter(t=>X.cases[t.k]&&X.cases[t.k].has);
+    const at=x=>{ let V=0,M=0; T.forEach(t=>{ const o=cbcLlOrd(X,X.cases[t.k].w,x); V+=t.f*t.s*o.V; M+=t.f*t.s*o.M; }); return {x,V,M}; };
+    const sumE=a=>terms.reduce((s,t)=>s+t.f*t.s*(+(((ent||{})[t.k])||{})[a]||0),0);
+    const Mc=at(xM).M, V0=at(0).V, VL=at(L).V, Vd=at(X.xV).V, eM=sumE("M"), eV=sumE("V");
+    return {L,cant:X.cant,xM,xV:X.xV,terms,T,pts:xs.map(at),Mc,V0,VL,Vd,eM,eV,M:Mc+eM,V:Vd+eV};
+  }
+  ```
+  `terms` are a combination's `gen.terms` ({k, f, s}) or `[{k, f:1, s:1}]` for a case; `ent` = `S.svc.cases` (the M, V entered).
+- **`buildLoadsTab(pg)`** — after the line `if(LX.any) mkSection("ldLine",…,b=>cbcLlWork(b,LX),pg);   /* CBLL */` add `if(LX.any) mkSection("ldBeam","Beam Analysis — Line Loads, V and M Diagrams",b=>cbcBdCard(b,LX),pg);   /* CBBD */`. The card: a selector (governing / each case with line loads / each combination), the figure (Figure LL-1), its caption notes, the values table, and "Worked in" links to the Line Loads card and the combination cards. With L = 0: a note, no diagram.
+- **Report (`cbcRptModel`, Load combinations section, subsection "Line loads — …")** — before: `… [[tab:tabLoads|On screen: Load Combinations tab, Line Loads]]'}])}); } }` after: `… [[tab:tabLoads|On screen: Load Combinations tab, Line Loads]]'}]).concat(cbcBdRpt(LX))}); } }   /* CBBD: Figure LL-1 */`. Items added: the figure (caption "Figure LL-1: Beam analysis, line loads — …", with "see §" links to each case's worked line-load M and V, `ll/Ml<k>`, `ll/Vl<k>`), the table "Values on Figure LL-1, worked", and a note linking the factored totals (`ld<ci>/Mu`, `ld<ci>/Vu`) and the on-screen card. The Load Combinations tab is not one of the tabs the Report copies (`reportTabList`), so the card is not copied twice.
+
+### Check cases (Node test `tests/engine/cbc-lineloads.test.mjs`, 4 new tests; smoke `tests/smoke/cbc-lineloads.mjs`, extended)
+- **1. 20 ft simple span** (CBLL check case 1): 1.2D + 1.6L, w_u = 1.2(1.200) + 1.6(0.500) = 2.240 klf. M_u(L/2) = 1.2(60.00) + 1.6(25.00) = **112.00 k-ft** (= 2.24(20)²/8); V_u(0) = 1.2(12.00) + 1.6(5.00) = **22.40 kip**; V_u(L) = −22.40; M(5 ft) = 2.24(5)(15)/2 = 84.00. Case D: M = 1.2(20)²/8 = 60.00, V = 1.2(10) = 12.00.
+- **2. The same with V at d = 18 in = 1.5 ft:** V_u(d) = 1.2(10.20) + 1.6(4.25) = **19.04 kip** = the combination V_u; the face value 22.40 is labelled and worked as (Σγ w) L/2 = [1.2(1.200) + 1.6(0.500)](10.00).
+- **3. 8 ft cantilever** (CBLL check case 3): M_u(0) = 1.2(−48.00) + 1.6(−16.00) = **−83.20 k-ft**; V_u(0) = 1.2(12.00) + 1.6(4.00) = **20.80 kip**; 0 at the free end; with V at d = 15 in: 17.55 kip.
+- **Entered + line:** D entered M 5, V 2 with check case 1: M_u = 112.00 (line, diagram) + 1.2(5.00) = 6.00 (entered — no diagram) = 118.00 = the combination M_u; checked for every row of Table 5.3.1, including reversed W and 5.3.2 omitted rows.
+- Before / after: every computed result unchanged (display only).
+
+### How verified
+- **Identity probe, origin/main vs branch, 10 projects** (a new project; an older factored save; AASHTO with service cases stored; service with torsion and 5.3.3; the CBOM mixed-sign service project; a one-way slab in service mode; a T-beam in factored mode; the CBLL check cases 1, 2 (V at d, with entered D) and 3 (cantilever with self-weight)): `CC`, `VALIDATION`, the input panel, the text of every output tab (less the new card), the autosave and the Report text are identical; the Report text differs only by the added Figure LL-1 block (projects with line loads). 0 console errors.
+- **Tests:** `node tests/engine/run.mjs cbc-` (19 passed, 4 new); every `tests/smoke/cbc-*.mjs` and `tests/smoke/decimal-entry.mjs`, all pass (cbc-lineloads extended: the card, the selector, the cantilever V-at-d marker, the Report figure and its § links, an older save without the card); `node tests/check-syntax.mjs`, all pass. Screenshots at 1400 and 390 px.
+
+### Other copies
+- None. The ACI rebar development-length app embedded in this file is not touched.
+
+### Open items
+- The decisions above, pending engineer review.
