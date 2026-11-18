@@ -7542,7 +7542,7 @@ When the member is a one-way slab (12 in strip, or the actual width b), a pressu
 ### Open items
 - The decision above (older slab row with b blank), pending engineer review.
 
-## 2026-11-18 — PR: claude/cbc-deflection (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CBDF) — Beam Capacity tab, ACI mode: deflection check, ACI 318-19 24.2, from the line loads (simple span / cantilever): I_e per Table 24.2.3.5 at each load level, immediate and long-term deflection, limits of Table 24.2.2   [NEW CHECK (ACI, service mode with line loads); every existing result identical; saved format: additive `defl` (absent = the defaults); no new storage key]
+## 2026-11-18 — PR: claude/cbc-deflection (PR #1641: https://github.com/mlococo88/All-Structural/pull/1641) (CBDF) — Beam Capacity tab, ACI mode: deflection check, ACI 318-19 24.2, from the line loads (simple span / cantilever): I_e per Table 24.2.3.5 at each load level, immediate and long-term deflection, limits of Table 24.2.2   [NEW CHECK (ACI, service mode with line loads); every existing result identical; saved format: additive `defl` (absent = the defaults); no new storage key]
 
 The file uses CRLF line endings; keep them. The code is in the Beam Capacity srcdoc. When re-applying, escape `&` as `&amp;` and `"` as `&quot;`. Every site is tagged CBDF.
 
