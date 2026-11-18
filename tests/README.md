@@ -245,6 +245,13 @@ node tests/smoke/rebar-comp-lap.mjs [--file <Concrete Beam Capacity.html>]
 # (the builder itself: node tests/engine/run.mjs cbc-loads)
 node tests/smoke/cbc-loads.mjs [--file <Concrete Beam Capacity.html>] [--shots <dir>]
 
+# Beam Capacity tab, service mode, line loads per load case (CBLL): w or q x tributary width, simple span / cantilever, V at the face or at d,
+# self-weight as D (off by default). Hand check typed into the fields (20 ft simple span, D 100 psf x 10 ft + 0.2 klf, L 50 psf x 10 ft:
+# M_D 60.00 / V_D 12.00, M_L 25.00 / V_L 5.00; 1.2D + 1.6L: M_u 112.00, V_u 22.40); the Line Loads card (symbolic, substituted, result,
+# entered + line = total); the Report links; reload; cantilever and V at d; an older service save opens with no line loads and the same
+# rows; 1400 and 390 px, 0 console errors. ~1 min (the functions themselves: node tests/engine/run.mjs cbc-lineloads)
+node tests/smoke/cbc-lineloads.mjs [--file <Concrete Beam Capacity.html>] [--shots <dir>]
+
 # Beam Capacity tab, ACI: section size limit V_u <= phi(V_c + 8 sqrt(f'c) b_w d) (22.5.1.2) and V_c <= 5 lambda sqrt(f'c) b_w d (22.5.5.1.1) (CBSZ):
 # hand check b_w 12, d 20, f'c 4 (V_c 30.36, limit 113.84, V_c,max 75.89; V_u 50 / 120 -> D/C 0.439 / 1.054), check summary, the All
 # Combinations x Limit States column, Shear tab, Report, AASHTO without the row, 1400 and 390 px, 0 console errors. ~30 s
