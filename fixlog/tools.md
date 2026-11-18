@@ -148,3 +148,8 @@
 - **Before:** "…pulls beam forces and reactions, and plots shear and moment diagrams against a built-in stiffness solver."
 - **After:** "…runs an HL-93 moving-load analysis, pulls beam forces and reactions, and plots shear and moment envelopes against a built-in stiffness / influence-line solver."
 - **Formulas, factors, units, code references:** none on this page. **Saved data:** none. **How verified:** see the PR.
+
+## 2026-11-17 — PR: claude/midas-model-inspector (MI1) — card "MIDAS Civil NX API: Model Inspector"   [navigation only]
+- **Where:** "Loads & analysis", right after the card `href="apps/midas-continuous-beam/index.html"`.
+- **Before:** no link. **After:** `<a class="card" href="apps/midas-model-inspector/index.html" target="_blank"><div class="name">MIDAS Civil NX API: Model Inspector</div>…` with Needs / Read-only items; tags "MIDAS Civil NX API", "Utility". Relative link.
+- **Formulas, factors, units, code references:** none. **Saved data:** none. **How verified:** see the PR.

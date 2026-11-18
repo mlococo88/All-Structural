@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MIDAS Civil NX Model Inspector</title>
+<style>
+  :root { --bg: #f4f6f9; --panel: #fff; --ink: #1d2733; --muted: #5d6b7a; --line: #d9e0e8; --accent: #0b5cad;
+          --ok: #1e7d43; --warn: #a15c00; --err: #b3261e; --add: #e6f4ea; --chg: #fff4e0; --del: #fbe9e7; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); }
+  header { padding: 12px 18px; background: var(--panel); border-bottom: 1px solid var(--line); display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; } header span { color: var(--muted); font-size: 13px; }
+  main { display: grid; grid-template-columns: minmax(320px, 400px) 1fr; gap: 14px; padding: 14px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
+  .card h2 { font-size: 14px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 6px 0 2px; }
+  input[type=text], input[type=password], select { width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 5px; font: inherit; }
+  .check { display: flex; align-items: center; gap: 6px; font-size: 13px; margin-top: 6px; }
+  button { font: inherit; padding: 6px 11px; border-radius: 5px; border: 1px solid var(--accent); background: #fff; color: var(--accent); cursor: pointer; }
+  button.primary { background: var(--accent); color: #fff; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.small { padding: 2px 8px; font-size: 12px; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .status { font-size: 13px; margin-top: 8px; padding: 6px 8px; border-radius: 5px; background: #eef2f6; }
+  .status.ok { background: var(--add); color: var(--ok); } .status.err { background: var(--del); color: var(--err); } .status.warn { background: var(--chg); color: var(--warn); }
+  .note { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  #epList { max-height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; margin-top: 6px; }
+  #epList details { margin: 2px 0; } #epList summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+  #epList .ep { display: flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 1px 0 1px 14px; }
+  #epList .ep code { min-width: 92px; display: inline-block; }
+  #epList .ep span { color: var(--muted); }
+  .res { border: 1px solid var(--line); border-radius: 6px; margin-bottom: 8px; background: #fff; }
+  .res > summary { cursor: pointer; padding: 6px 10px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .res > summary code { font-weight: 700; }
+  .badge { font-size: 11px; padding: 1px 6px; border-radius: 10px; background: #eef2f6; color: var(--muted); }
+  .badge.add { background: var(--add); color: var(--ok); } .badge.chg { background: var(--chg); color: var(--warn); } .badge.del { background: var(--del); color: var(--err); }
+  .res .body { padding: 0 10px 10px; }
+  pre { margin: 6px 0 0; max-height: 420px; overflow: auto; background: #f7f9fb; border: 1px solid var(--line); border-radius: 5px; padding: 8px; font: 12px/1.35 ui-monospace, Consolas, monospace; white-space: pre; }
+  #log { font: 12px/1.35 ui-monospace, Consolas, monospace; background: #0f1720; color: #cfe3f5; border-radius: 6px; padding: 8px; max-height: 180px; overflow: auto; white-space: pre-wrap; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .toolbar input { width: auto; flex: 1; min-width: 140px; }
+  .empty { color: var(--muted); font-size: 13px; padding: 10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>MIDAS Civil NX Model Inspector</h1>
+  <span>Read the JSON behind any part of the open model · copy it as an API request · record what a GUI change does</span>
+</header>
+<main>
+  <section>
+    <div class="card">
+      <h2>Civil NX connection</h2>
+      <label>Base URL (Apps → API Settings → Copy)</label>
+      <input id="baseUrl" type="text" placeholder="https://moa-engineers.midasit.com:443/civil">
+      <label>MAPI-Key (stored on this PC only)</label>
+      <input id="mapiKey" type="password" placeholder="paste key">
+      <div class="check"><input id="useProxy" type="checkbox"><label for="useProxy" style="margin:0;color:inherit">Use local proxy (local_proxy.py from the continuous beam app folder)</label></div>
+      <div class="btns"><button id="btnVerify">Verify connection</button></div>
+      <div id="connStatus" class="status">Not checked. Civil NX must be open with a model, and "Connected" in Apps → API Settings.</div>
+      <div class="note">Shares the Base URL / key / proxy setting with the continuous beam app. Everything here only <b>reads</b> the model (GET), except the two Export buttons, which write a file on the Civil NX PC.</div>
+    </div>
+
+    <div class="card">
+      <h2>Endpoints</h2>
+      <div class="toolbar">
+        <select id="preset" style="width:auto">
+          <option value="">Select…</option>
+          <option value="basic">Model basics</option>
+          <option value="loads">Static loads</option>
+          <option value="moving">Moving load</option>
+          <option value="cs">Construction stage / PS</option>
+          <option value="all">All</option>
+          <option value="none">None</option>
+        </select>
+        <input id="epFilter" type="text" placeholder="filter, e.g. MV or lane">
+      </div>
+      <div id="epList"></div>
+      <div class="btns">
+        <button id="btnRead" class="primary">Read selected</button>
+        <button id="btnInfo">Field info (/info)</button>
+      </div>
+      <label>Any other endpoint (GET)</label>
+      <div class="toolbar"><input id="customEp" type="text" placeholder="/db/MLSP  or  /db/MVLD"><button id="btnCustom">Read</button></div>
+      <div class="note">Empty items (nothing defined in the model) are skipped. Tip: set up a feature once by hand in Civil NX, then read its endpoint; "Copy as Assign" gives the request body an app sends to create the same thing.</div>
+    </div>
+
+    <div class="card">
+      <h2>Record a change (snapshot → compare)</h2>
+      <div class="note" style="margin-top:0">Like recording a macro: take a snapshot, make the change in Civil NX by hand, then compare. The result lists every endpoint that changed and the records added, changed or removed, as ready-to-send JSON.</div>
+      <div class="btns">
+        <button id="btnSnap">1. Take snapshot</button>
+        <button id="btnCompare" disabled>2. Compare with model now</button>
+      </div>
+      <div id="snapStatus" class="note">No snapshot. The snapshot reads every endpoint in the list (about a minute).</div>
+    </div>
+
+    <div class="card">
+      <h2>Export whole model (file on the Civil NX PC)</h2>
+      <label>Folder on the Civil NX PC</label>
+      <input id="exportDir" type="text" value="C:\MIDAS">
+      <div class="btns"><button id="btnExpJson">Export JSON (/doc/EXPORT)</button><button id="btnExpMct">Export MCT (/doc/EXPORTMXT)</button></div>
+      <div class="note">Civil NX writes the file itself (to <code>&lt;folder&gt;\model_&lt;date-time&gt;.json</code> / <code>.mct</code>); the folder must exist on that PC.</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="card">
+      <div class="toolbar">
+        <h2 style="margin:0">Results</h2>
+        <span id="resCount" class="badge">0</span>
+        <span style="flex:1"></span>
+        <button id="btnDlAll" class="small" disabled>Download all (JSON)</button>
+        <button id="btnClear" class="small">Clear</button>
+      </div>
+      <div id="results" style="margin-top:10px"><div class="empty">Nothing read yet.</div></div>
+    </div>
+    <div class="card">
+      <h2>Log</h2>
+      <div id="log"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+/* ===================== MIDAS API CLIENT (copy of js/midas-api.js; same as apps/midas-continuous-beam) ===================== */
+/*
+ * midas-api.js — minimal MIDAS Civil NX API client for single-file HTML apps.
+ *
+ * Paste this into a <script> block (or load it) and use:
+ *
+ *   const midas = MidasAPI.fromStorage();          // or new MidasAPI(baseUrl, key)
+ *   await midas.verify();                          // { keyVerified, status, ... }
+ *   const nodes = await midas.get('/db/NODE');     // { NODE: { "1": {X,Y,Z}, ... } }
+ *   await midas.post('/db/NODE', { Assign: { 1: { X: 0, Y: 0, Z: 0 } } });
+ *   await midas.analyze();
+ *   const rows = await midas.table({ TABLE_TYPE: 'BEAMFORCE', LOAD_CASE_NAMES: ['DC(ST)'] });
+ *
+ * Notes
+ *  - Civil NX must be open and "Connected" in Apps > API Settings.
+ *  - The key is kept in localStorage on this machine only, never in the HTML file.
+ *  - If the browser blocks the call (CORS), set useProxy: true and run apps/midas-continuous-beam/local_proxy.py.
+ */
+(function (global) {
+  'use strict';
+
+  const LS_URL = 'midas.baseUrl';
+  const LS_KEY = 'midas.mapiKey';
+  const LS_PROXY = 'midas.useProxy';
+  const PROXY_ORIGIN = 'http://127.0.0.1:8765';
+
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* storage unavailable */ } }
+
+  class MidasAPI {
+    constructor(baseUrl, mapiKey, opts = {}) {
+      this.baseUrl = (baseUrl || '').trim().replace(/\/+$/, '');
+      this.mapiKey = (mapiKey || '').trim();
+      this.useProxy = !!opts.useProxy;
+      this.timeoutMs = opts.timeoutMs || 120000;   // analysis can take a while
+      this.log = opts.log || null;                 // optional fn(method, endpoint, status)
+    }
+
+    static fromStorage(opts = {}) {
+      return new MidasAPI(lsGet(LS_URL) || 'https://moa-engineers.midasit.com:443/civil',
+                          lsGet(LS_KEY) || '',
+                          Object.assign({ useProxy: lsGet(LS_PROXY) === '1' }, opts));
+    }
+
+    save() {
+      lsSet(LS_URL, this.baseUrl);
+      lsSet(LS_KEY, this.mapiKey);
+      lsSet(LS_PROXY, this.useProxy ? '1' : '0');
+    }
+
+    /** Build the URL, routing through the local proxy if enabled. */
+    _url(full) {
+      if (!this.useProxy) return full;
+      return PROXY_ORIGIN + '/?target=' + encodeURIComponent(full);
+    }
+
+    async request(method, endpoint, body) {
+      if (!this.mapiKey) throw new Error('No MAPI-Key set. Copy it from Civil NX > Apps > API Settings.');
+      const ep = endpoint.startsWith('/') ? endpoint : '/' + endpoint;
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
+      let res;
+      try {
+        res = await fetch(this._url(this.baseUrl + ep), {
+          method,
+          headers: { 'Content-Type': 'application/json', 'MAPI-Key': this.mapiKey },
+          body: (method === 'GET' || body === undefined) ? undefined : JSON.stringify(body),
+          signal: ctrl.signal,
+        });
+      } catch (e) {
+        throw new Error(
+          e.name === 'AbortError'
+            ? `MIDAS ${method} ${ep} timed out after ${this.timeoutMs / 1000}s`
+            : `MIDAS ${method} ${ep} failed to send (${e.message}). ` +
+              `If the console shows a CORS error, enable the local proxy (local_proxy.py in apps/midas-continuous-beam/).`
+        );
+      } finally {
+        clearTimeout(timer);
+      }
+      if (this.log) this.log(method, ep, res.status);
+      const text = await res.text();
+      let data;
+      try { data = text ? JSON.parse(text) : {}; } catch (e) { data = { raw: text }; }
+      if (!res.ok) {
+        const err = new Error(`MIDAS ${method} ${ep} → HTTP ${res.status}: ${text.slice(0, 300)}`);
+        err.status = res.status; err.data = data;
+        throw err;
+      }
+      return data;
+    }
+
+    get(ep)        { return this.request('GET', ep); }
+    post(ep, body) { return this.request('POST', ep, body === undefined ? {} : body); }
+    put(ep, body)  { return this.request('PUT', ep, body); }
+    del(ep, body)  { return this.request('DELETE', ep, body); }
+
+    /** GET {server}/mapikey/verify: the base URL with the product part (/civil) removed. */
+    async verify() {
+      const u = new URL(this.baseUrl);
+      const verifyUrl = u.origin + '/mapikey/verify';
+      const res = await fetch(this._url(verifyUrl), { headers: { 'MAPI-Key': this.mapiKey } });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(`verify → HTTP ${res.status}`);
+      return data;
+    }
+
+    /** Read a DB item and return just the records object, e.g. records('/db/NODE') → { "1": {...} }. */
+    async records(ep) {
+      const r = await this.get(ep);
+      const k = Object.keys(r)[0];
+      return k ? r[k] : {};
+    }
+
+    /** Send records with POST (create) or PUT (modify), wrapped in "Assign". */
+    assign(ep, records, method = 'POST') {
+      return this.request(method, ep, { Assign: records });
+    }
+
+    analyze(argument) {
+      return this.post('/doc/ANAL', argument ? { Argument: argument } : {});
+    }
+
+    /** POST /post/TABLE and return an array of row objects (numeric strings converted to numbers). */
+    async table(argument) {
+      const arg = Object.assign({ TABLE_NAME: 'T' }, argument);
+      const resp = await this.post('/post/TABLE', { Argument: arg });
+      const t = resp[arg.TABLE_NAME] || Object.values(resp)[0];
+      if (!t || !Array.isArray(t.DATA)) return [];
+      const rows = t.DATA.map(r => {
+        const o = {};
+        t.HEAD.forEach((h, i) => {
+          const v = r[i];
+          o[h] = (v !== '' && v != null && !isNaN(+v)) ? +v : v;
+        });
+        return o;
+      });
+      rows.units = { FORCE: t.FORCE, DIST: t.DIST };
+      return rows;
+    }
+
+    /** Push an existing .mct text into the open model via /doc/IMPORTMXT. */
+    importMct(argument) {
+      // Argument format: see the "Import to mct/mgt" page in the MIDAS JSON manual.
+      return this.post('/doc/IMPORTMXT', { Argument: argument });
+    }
+  }
+
+  global.MidasAPI = MidasAPI;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+
+/* Endpoint catalogue (from the MIDAS API online manual), grouped as in the manual. [endpoint, name] */
+const EP_GROUPS = [
+  ['Project', [['UNIT', 'Unit system'], ['STYP', 'Structure type'], ['PJCF', 'Project information'], ['GRUP', 'Structure group'], ['BNGR', 'Boundary group'], ['LDGR', 'Load group'], ['TDGR', 'Tendon group'], ['NPLN', 'Named plane']]],
+  ['Structure', [['SPAN', 'Span information'], ['STOR', 'Story data']]],
+  ['Node / element', [['NODE', 'Nodes'], ['ELEM', 'Elements'], ['SKEW', 'Node local axis'], ['MADO', 'Domain'], ['SBDO', 'Sub-domain'], ['DOEL', 'Domain-element']]],
+  ['Properties', [['MATL', 'Material'], ['TDMT', 'Time-dep. creep/shrinkage'], ['TDME', 'Time-dep. strength'], ['TMAT', 'Time-dep. link'], ['TDMF', 'Time-dep. user'], ['SECT', 'Sections'], ['THIK', 'Thickness'], ['TSGR', 'Tapered group'], ['SECF', 'Section stiffness'], ['RPSC', 'Section reinforcement'], ['STRPSSM', 'Stress points'], ['PSSF', 'Plate stiffness factor'], ['EWSF', 'Effective width factor'], ['ESSF', 'Element stiffness factor'], ['EDMP', 'Change property'], ['EPMT', 'Plastic material'], ['IMFM', 'Inelastic material (fiber)'], ['IEHC', 'Inelastic hinge control'], ['IEHG', 'Inelastic hinge assign'], ['GRDP', 'Group damping']]],
+  ['Boundary', [['CONS', 'Supports'], ['NSPR', 'Point springs'], ['GSTP', 'General spring type'], ['GSPR', 'General springs'], ['SSPS', 'Surface springs'], ['ELNK', 'Elastic links'], ['RIGD', 'Rigid links'], ['NLLP', 'General link property'], ['NLNK', 'General links'], ['FRLS', 'Beam end release'], ['OFFS', 'Beam end offsets'], ['PRLS', 'Plate end release'], ['MCON', 'Linear constraints'], ['CLDR', 'Constraint label dir.'], ['DRLS', 'Diaphragm disconnect'], ['PZEF', 'Panel zone']]],
+  ['Static loads', [['STLD', 'Static load cases'], ['BODF', 'Self-weight'], ['CNLD', 'Nodal loads'], ['BMLD', 'Beam loads'], ['SDSP', 'Specified displacements'], ['NMAS', 'Nodal masses'], ['LTOM', 'Loads to masses'], ['NBOF', 'Nodal body force'], ['PSLT', 'Pressure load type'], ['PRES', 'Pressure loads'], ['PNLD', 'Plane load type'], ['PNLA', 'Plane loads'], ['FBLD', 'Floor load type'], ['FBLA', 'Floor loads'], ['FMLD', 'Finishing material'], ['POSP', 'Soil properties'], ['EPST', 'Static earth pressure'], ['EPSE', 'Seismic earth pressure'], ['POSL', 'Seismic load parameters'], ['SWIND', 'Static wind'], ['SSEIS', 'Static seismic']]],
+  ['Temperature', [['ETMP', 'Element temperature'], ['GTMP', 'Temperature gradient'], ['BTMP', 'Beam section temperature'], ['STMP', 'System temperature'], ['NTMP', 'Nodal temperature']]],
+  ['Prestress', [['TDNT', 'Tendon property'], ['TDNA', 'Tendon profile'], ['TDCS', 'Tendon location (composite)'], ['TDPL', 'Tendon prestress'], ['PRST', 'Prestress beam loads'], ['PTNS', 'Pretension loads'], ['EXLD', 'External load case (pretension)']]],
+  ['Moving load', [['MVCD', 'Moving load code'], ['LLAN', 'Traffic line lanes'], ['SLAN', 'Traffic surface lanes'], ['MVHL', 'Vehicles'], ['MVLD', 'Moving load cases'], ['MVHC', 'Vehicle classes'], ['CRGR', 'Concurrent reaction group'], ['CJFG', 'Concurrent joint force group'], ['SINF', 'Influence surface plates'], ['MLSP', 'Lane support – neg. moment'], ['MLSR', 'Lane support – reactions'], ['DYLA', 'Dynamic load allowance'], ['IMPF', 'Additional impact factor'], ['DYFG', 'Railway dynamic factor'], ['DYNF', 'Railway dyn. factor by element']]],
+  ['Dynamic', [['SPFC', 'Response spectrum functions'], ['SPLC', 'Response spectrum cases'], ['THGC', 'Time history control'], ['THIS', 'Time history cases'], ['THFC', 'Time history functions'], ['THGA', 'Ground acceleration'], ['THNL', 'Dynamic nodal loads'], ['THSL', 'Time-varying static loads'], ['THMS', 'Multiple support excitation']]],
+  ['Construction stage', [['STAG', 'Construction stages'], ['CSCS', 'Composite section for C.S.'], ['TMLD', 'Time loads'], ['STBK', 'Set-back loads'], ['CMCS', 'Camber'], ['CRPC', 'Creep coefficient']]],
+  ['Settlement / misc. loads', [['SMPT', 'Settlement group'], ['SMLC', 'Settlement load cases'], ['PLCB', 'Pre-composite section'], ['LDSQ', 'Load sequence (nonlinear)'], ['WVLD', 'Wave loads'], ['IELC', 'Ignore elements for load cases'], ['IFGS', 'Initial forces (geom. stiffness)'], ['EFCT', 'Initial force control'], ['INMF', 'Initial element force']]],
+  ['Analysis control', [['ACTL', 'Main control data'], ['PDEL', 'P-Delta'], ['BUCK', 'Buckling'], ['EIGV', 'Eigenvalue'], ['MVCT', 'Moving load analysis control'], ['SMCT', 'Settlement analysis control'], ['NLCT', 'Nonlinear control'], ['STCT', 'Construction stage control'], ['BCCT', 'Boundary change']]],
+  ['Results setup', [['LCOM-GEN', 'Load combinations – general'], ['LCOM-CONC', 'Load comb. – concrete'], ['LCOM-STEEL', 'Load comb. – steel'], ['LCOM-SRC', 'Load comb. – SRC'], ['LCOM-STLCOMP', 'Load comb. – composite steel girder'], ['LCOM-SEISMIC', 'Load comb. – seismic'], ['CUTL', 'Cutting line'], ['GSBG', 'Bridge girder diagrams'], ['GCMB', 'Camber control'], ['CAMB', 'FCM camber']]],
+  ['Pushover / design', [['POGD', 'Pushover control'], ['PHGE', 'Pushover hinges'], ['POLC', 'Pushover load cases'], ['DCON', 'RC design code'], ['DSTL', 'Steel design code'], ['MATD', 'Modify concrete materials'], ['RCHK', 'Rebar for checking'], ['LENG', 'Unbraced length'], ['MEMB', 'Member assignment'], ['DCTL', 'Definition of frame']]],
+];
+const PRESETS = {
+  basic: ['UNIT', 'STYP', 'GRUP', 'NODE', 'ELEM', 'MATL', 'SECT', 'CONS', 'FRLS', 'OFFS', 'ELNK', 'RIGD'],
+  loads: ['STLD', 'BODF', 'CNLD', 'BMLD', 'PRES', 'GTMP', 'STMP', 'LCOM-GEN', 'LCOM-STLCOMP'],
+  moving: ['MVCD', 'LLAN', 'SLAN', 'MVHL', 'MVLD', 'MLSP', 'MLSR', 'DYLA', 'MVCT', 'CRGR'],
+  cs: ['STAG', 'CSCS', 'TDMT', 'TDME', 'TMAT', 'TDNT', 'TDNA', 'TDPL', 'STCT', 'TDGR'],
+};
+const ALL_EPS = EP_GROUPS.flatMap(([, list]) => list.map(([k]) => k));
+const LS_SEL = 'midasInspector.selected.v1';
+const LS_DIR = 'midasInspector.exportDir.v1';
+
+let results = [];        // [{ ep, data, kind: 'read'|'info'|'diff', extra }]
+let snapshot = null;     // { time, data: { EP: records } }
+
+/* ---------------- helpers ---------------- */
+function log(msg, cls) {
+  const d = document.createElement('div');
+  d.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  if (cls === 'err') d.style.color = '#ff9b8f'; if (cls === 'ok') d.style.color = '#9be3b0';
+  $('log').appendChild(d); $('log').scrollTop = $('log').scrollHeight;
+}
+function setStatus(el, msg, cls) { el.textContent = msg; el.className = 'status' + (cls ? ' ' + cls : ''); }
+const NOT_CONNECTED_MSG = 'Civil NX is not connected under this MAPI-Key. In Civil NX: open a model, Apps > API Settings > Connect, ' +
+  'and wait for Status "Connected". If you clicked Refresh there, copy the new MAPI-Key into this page.';
+function client() {
+  const c = new MidasAPI($('baseUrl').value, $('mapiKey').value, { useProxy: $('useProxy').checked, timeoutMs: 120000 });
+  c.save();
+  return c;
+}
+const normEp = s => { let e = String(s || '').trim(); if (!e) return ''; if (!e.startsWith('/')) e = '/' + e; if (!/^\/(db|info|view|ope|post|doc|design)\//i.test(e)) e = '/db' + e; return e; };
+// Top-level key of a GET reply ("NODE", "LCOM-GEN", …) and its records
+const recordsOf = r => { const k = r && Object.keys(r)[0]; return k ? { key: k, rec: r[k] || {} } : { key: '', rec: {} }; };
+const asAssign = rec => ({ Assign: rec });
+const pretty = o => JSON.stringify(o, null, 2);
+const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+async function copyText(t, what) {
+  try { await navigator.clipboard.writeText(t); log(`Copied ${what} (${t.length} chars)`, 'ok'); }
+  catch (e) {                                                       // file:// or blocked clipboard: fall back to a selection copy
+    const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); log(`Copied ${what}`, 'ok'); } catch (e2) { log('Copy failed: select the text and copy it by hand.', 'err'); }
+    ta.remove();
+  }
+}
+function download(name, text) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+const stamp = () => new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '').replace(/^(\d{8})/, '$1_');
+
+/* ---------------- endpoint list ---------------- */
+function renderList() {
+  let sel = [];
+  try { sel = JSON.parse(localStorage.getItem(LS_SEL) || 'null') || PRESETS.basic; } catch (e) { sel = PRESETS.basic; }
+  const box = $('epList'); box.innerHTML = '';
+  EP_GROUPS.forEach(([g, list], gi) => {
+    const d = document.createElement('details');
+    d.open = gi < 3;
+    d.innerHTML = `<summary>${esc(g)}</summary>` + list.map(([k, n]) =>
+      `<label class="ep"><input type="checkbox" value="${k}" ${sel.includes(k) ? 'checked' : ''}><code>${k}</code><span>${esc(n)}</span></label>`).join('');
+    box.appendChild(d);
+  });
+  box.addEventListener('change', saveSel);
+}
+const selected = () => [...$('epList').querySelectorAll('input:checked')].map(i => i.value);
+function saveSel() { try { localStorage.setItem(LS_SEL, JSON.stringify(selected())); } catch (e) {} }
+function applyPreset(p) {
+  const want = p === 'all' ? ALL_EPS : p === 'none' ? [] : PRESETS[p] || [];
+  $('epList').querySelectorAll('input').forEach(i => { i.checked = want.includes(i.value); });
+  $('epList').querySelectorAll('details').forEach(d => { if (d.querySelector('input:checked')) d.open = true; });
+  saveSel();
+}
+function filterList() {
+  const q = $('epFilter').value.trim().toLowerCase();
+  $('epList').querySelectorAll('.ep').forEach(l => { l.style.display = !q || l.textContent.toLowerCase().includes(q) ? '' : 'none'; });
+  $('epList').querySelectorAll('details').forEach(d => { if (q) d.open = [...d.querySelectorAll('.ep')].some(l => l.style.display !== 'none'); });
+}
+
+/* ---------------- reading ---------------- */
+// GET several endpoints, 4 at a time. Returns { EP: reply | {__error} }
+async function readMany(c, eps, onEach) {
+  const out = {}; let i = 0;
+  const worker = async () => {
+    while (i < eps.length) {
+      const ep = eps[i++];
+      try { out[ep] = await c.get('/db/' + ep); }
+      catch (e) { out[ep] = { __error: e.message, __status: e.status }; }
+      if (onEach) onEach(ep, out[ep]);
+    }
+  };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  return out;
+}
+const isEmptyReply = r => !r || r.__error || Object.keys(recordsOf(r).rec).length === 0;
+
+async function readSelected() {
+  const eps = selected();
+  if (!eps.length) { log('No endpoints selected.', 'err'); return; }
+  const btn = $('btnRead'); btn.disabled = true;
+  try {
+    const c = client(); let done = 0, found = 0;
+    const res = await readMany(c, eps, () => { done++; btn.textContent = `Reading ${done}/${eps.length}…`; });
+    eps.forEach(ep => {
+      const r = res[ep];
+      if (r.__error) {
+        if (/client does not exist/i.test(r.__error)) throw new Error(NOT_CONNECTED_MSG);
+        log(`${ep}: ${r.__error.slice(0, 160)}`, 'err'); return;
+      }
+      if (isEmptyReply(r)) return;
+      found++; addResult({ ep: '/db/' + ep, data: r, kind: 'read' });
+    });
+    log(`Read ${eps.length} endpoint(s): ${found} with data, ${eps.length - found} empty or not available.`, 'ok');
+  } catch (e) { log(e.message, 'err'); setStatus($('connStatus'), e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = 'Read selected'; }
+}
+
+async function readCustom() {
+  const ep = normEp($('customEp').value);
+  if (!ep) return;
+  try {
+    const r = await client().get(ep);
+    addResult({ ep, data: r, kind: 'read' });
+    log(`${ep}: ${Object.keys(recordsOf(r).rec).length} record(s)`, 'ok');
+  } catch (e) { log(`${ep}: ${e.message}`, 'err'); }
+}
+
+async function readInfo() {
+  const eps = selected();
+  if (!eps.length) { log('Select the endpoint(s) to explain first.', 'err'); return; }
+  const c = client();
+  for (const ep of eps.slice(0, 12)) {
+    try { const r = await c.get('/info/db/' + ep); addResult({ ep: '/info/db/' + ep, data: r, kind: 'info' }); }
+    catch (e) { log(`/info/db/${ep}: ${e.message}`, 'err'); }
+  }
+  if (eps.length > 12) log('Field info: only the first 12 selected endpoints were read.', 'err');
+}
+
+/* ---------------- snapshot / compare ---------------- */
+async function takeSnapshot() {
+  const btn = $('btnSnap'); btn.disabled = true;
+  try {
+    const c = client(); let done = 0;
+    const res = await readMany(c, ALL_EPS, () => { done++; $('snapStatus').textContent = `Reading ${done}/${ALL_EPS.length}…`; });
+    if (Object.values(res).some(r => r.__error && /client does not exist/i.test(r.__error))) throw new Error(NOT_CONNECTED_MSG);
+    const data = {};
+    Object.entries(res).forEach(([ep, r]) => { if (!r.__error) data[ep] = recordsOf(r).rec; });
+    snapshot = { time: new Date(), data };
+    const n = Object.values(data).filter(r => Object.keys(r).length).length;
+    $('snapStatus').textContent = `Snapshot taken ${snapshot.time.toLocaleTimeString()} (${n} endpoints with data). Make your change in Civil NX, then click Compare.`;
+    $('btnCompare').disabled = false;
+    log(`Snapshot: ${n} endpoints with data`, 'ok');
+  } catch (e) { $('snapStatus').textContent = e.message; log(e.message, 'err'); }
+  finally { btn.disabled = false; }
+}
+
+async function compare() {
+  if (!snapshot) return;
+  const btn = $('btnCompare'); btn.disabled = true;
+  try {
+    const c = client(); let done = 0;
+    const res = await readMany(c, ALL_EPS, () => { done++; $('snapStatus').textContent = `Comparing ${done}/${ALL_EPS.length}…`; });
+    let nChanged = 0;
+    ALL_EPS.forEach(ep => {
+      const r = res[ep]; if (!r || r.__error) return;
+      const now = recordsOf(r).rec, before = snapshot.data[ep] || {};
+      const added = {}, changed = {}, removed = [];
+      Object.keys(now).forEach(id => {
+        if (!(id in before)) added[id] = now[id];
+        else if (JSON.stringify(now[id]) !== JSON.stringify(before[id])) changed[id] = now[id];
+      });
+      Object.keys(before).forEach(id => { if (!(id in now)) removed.push(id); });
+      const nA = Object.keys(added).length, nC = Object.keys(changed).length;
+      if (!nA && !nC && !removed.length) return;
+      nChanged++;
+      const beforeOf = {}; Object.keys(changed).forEach(id => beforeOf[id] = before[id]);
+      addResult({ ep: '/db/' + ep, kind: 'diff', data: { [recordsOf(r).key || ep]: { ...added, ...changed } },
+                  extra: { added, changed, removed, beforeOf } });
+    });
+    $('snapStatus').textContent = nChanged
+      ? `Compared at ${new Date().toLocaleTimeString()}: ${nChanged} endpoint(s) changed since the snapshot (see Results). The snapshot is kept; compare again after more changes, or take a new one.`
+      : 'No differences found since the snapshot.';
+    log(`Compare: ${nChanged} endpoint(s) changed`, 'ok');
+  } catch (e) { $('snapStatus').textContent = e.message; log(e.message, 'err'); }
+  finally { btn.disabled = false; }
+}
+
+/* ---------------- export ---------------- */
+async function exportModel(kind) {
+  const dir = $('exportDir').value.trim().replace(/[\\/]+$/, '');
+  if (!dir) return;
+  try { localStorage.setItem(LS_DIR, dir); } catch (e) {}
+  const path = `${dir}\\model_${stamp()}.${kind === 'mct' ? 'mct' : 'json'}`;
+  const ep = kind === 'mct' ? '/doc/EXPORTMXT' : '/doc/EXPORT';
+  try {
+    const r = await client().post(ep, { Argument: path });          // body format per MIDAS JSON manual: { "Argument": "<file path>" }
+    log(`${ep} → ${path}: ${JSON.stringify(r).slice(0, 200)}`, 'ok');
+  } catch (e) { log(`${ep}: ${e.message}`, 'err'); }
+}
+
+/* ---------------- results ---------------- */
+function addResult(r) {
+  results.unshift(r);
+  renderResults();
+}
+function renderResults() {
+  $('resCount').textContent = results.length;
+  $('btnDlAll').disabled = !results.length;
+  const box = $('results');
+  if (!results.length) { box.innerHTML = '<div class="empty">Nothing read yet.</div>'; return; }
+  box.innerHTML = '';
+  results.forEach((r, idx) => {
+    const { key, rec } = recordsOf(r.data);
+    const n = Object.keys(rec).length;
+    const d = document.createElement('details');
+    d.className = 'res'; d.open = idx === 0;
+    let badges = `<span class="badge">${r.kind === 'info' ? 'field info' : n + ' record' + (n === 1 ? '' : 's')}</span>`;
+    if (r.kind === 'diff') {
+      const x = r.extra;
+      badges = (Object.keys(x.added).length ? `<span class="badge add">+${Object.keys(x.added).length} added</span>` : '') +
+               (Object.keys(x.changed).length ? `<span class="badge chg">${Object.keys(x.changed).length} changed</span>` : '') +
+               (x.removed.length ? `<span class="badge del">−${x.removed.length} removed</span>` : '');
+    }
+    const shown = r.kind === 'info' ? r.data : r.kind === 'diff' ? asAssign(rec) : r.data;
+    const methodHint = r.kind === 'diff'
+      ? `Send with PUT ${r.ep} (creates new IDs and updates changed ones).` + (r.extra.removed.length ? ` Removed IDs: ${r.extra.removed.join(', ')} (DELETE ${r.ep} with those IDs).` : '')
+      : r.kind === 'read' ? `"Copy as Assign" turns this into the body for PUT/POST ${r.ep}.` : '';
+    d.innerHTML = `<summary><code>${esc(r.ep)}</code>${badges}${r.kind === 'diff' ? '<span class="badge">recorded change</span>' : ''}</summary>
+      <div class="body">
+        <div class="btns">
+          ${r.kind !== 'info' ? '<button class="small" data-a="assign">Copy as Assign</button>' : ''}
+          <button class="small" data-a="raw">Copy ${r.kind === 'diff' ? 'shown' : 'reply'}</button>
+          <button class="small" data-a="dl">Download</button>
+          ${r.kind === 'diff' && Object.keys(r.extra.changed).length ? '<button class="small" data-a="before">Copy "before" values</button>' : ''}
+          <button class="small" data-a="x">Remove</button>
+        </div>
+        <div class="note">${esc(methodHint)}</div>
+        <pre></pre>
+      </div>`;
+    d.querySelector('pre').textContent = pretty(shown);
+    d.querySelector('.btns').addEventListener('click', e => {
+      const a = e.target.dataset.a; if (!a) return;
+      const name = r.ep.replace(/^\//, '').replace(/\//g, '_');
+      if (a === 'assign') copyText(pretty(asAssign(rec)), `${r.ep} as Assign`);
+      if (a === 'raw') copyText(pretty(shown), r.ep);
+      if (a === 'dl') download(`${name}_${stamp()}.json`, pretty(shown));
+      if (a === 'before') copyText(pretty(asAssign(r.extra.beforeOf)), `${r.ep} before values`);
+      if (a === 'x') { results.splice(idx, 1); renderResults(); }
+    });
+    box.appendChild(d);
+  });
+}
+function downloadAll() {
+  const o = {};
+  results.slice().reverse().forEach(r => { o[`${r.kind}:${r.ep}`] = r.kind === 'diff' ? { ...r.extra, assign: asAssign(recordsOf(r.data).rec) } : r.data; });
+  download(`midas_inspector_${stamp()}.json`, pretty(o));
+}
+
+async function verify() {
+  try {
+    setStatus($('connStatus'), 'Checking…');
+    const r = await client().verify();
+    const good = r.keyVerified && String(r.status).toLowerCase() === 'connected';
+    setStatus($('connStatus'), good ? `Connected (user ${r.user || '?'}, program ${r.program || '?'})` : `${NOT_CONNECTED_MSG} (status=${r.status})`, good ? 'ok' : 'warn');
+    log('verify: ' + JSON.stringify(r), good ? 'ok' : 'err');
+  } catch (e) {
+    setStatus($('connStatus'), /HTTP 4\d\d/.test(e.message) ? `${NOT_CONNECTED_MSG} (${e.message})` : e.message, 'err');
+    log(e.message, 'err');
+  }
+}
+
+function init() {
+  const c = MidasAPI.fromStorage();
+  $('baseUrl').value = c.baseUrl; $('mapiKey').value = c.mapiKey; $('useProxy').checked = c.useProxy;
+  try { const d = localStorage.getItem(LS_DIR); if (d) $('exportDir').value = d; } catch (e) {}
+  renderList();
+  $('preset').onchange = e => { if (e.target.value) applyPreset(e.target.value); e.target.value = ''; };
+  $('epFilter').oninput = filterList;
+  $('btnVerify').onclick = verify;
+  $('btnRead').onclick = readSelected;
+  $('btnInfo').onclick = readInfo;
+  $('btnCustom').onclick = readCustom;
+  $('customEp').addEventListener('keydown', e => { if (e.key === 'Enter') readCustom(); });
+  $('btnSnap').onclick = takeSnapshot;
+  $('btnCompare').onclick = compare;
+  $('btnExpJson').onclick = () => exportModel('json');
+  $('btnExpMct').onclick = () => exportModel('mct');
+  $('btnDlAll').onclick = downloadAll;
+  $('btnClear').onclick = () => { results = []; renderResults(); };
+  log('Ready. Verify the connection, pick endpoints, Read. Or: Take snapshot → change the model in Civil NX → Compare.');
+}
+init();
+</script>
+</body>
+</html>
