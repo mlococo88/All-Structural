@@ -7541,3 +7541,78 @@ When the member is a one-way slab (12 in strip, or the actual width b), a pressu
 
 ### Open items
 - The decision above (older slab row with b blank), pending engineer review.
+
+## 2026-11-18 — PR: claude/cbc-deflection (PR #1641: https://github.com/mlococo88/All-Structural/pull/1641) (CBDF) — Beam Capacity tab, ACI mode: deflection check, ACI 318-19 24.2, from the line loads (simple span / cantilever): I_e per Table 24.2.3.5 at each load level, immediate and long-term deflection, limits of Table 24.2.2   [NEW CHECK (ACI, service mode with line loads); every existing result identical; saved format: additive `defl` (absent = the defaults); no new storage key]
+
+The file uses CRLF line endings; keep them. The code is in the Beam Capacity srcdoc. When re-applying, escape `&` as `&amp;` and `"` as `&quot;`. Every site is tagged CBDF.
+
+### Engineer decision (2026-11-18)
+Add an ACI 318-19 deflection check (ACI mode only; AASHTO keeps "not evaluated") using the CBLL line-load model (span L, simple span or cantilever, w per case): I_g (T-beam aware), M_cr, I_cr (cracked transformed, singly / doubly reinforced, T-beam with the NA in the web), E_c, at midspan (+M, simple span) or the support (−M, cantilever); I_e per Table 24.2.3.5 for D, D + L and the sustained load; immediate Δ for D and D + L each with its own I_e, Δ_L = Δ_(D+L) − Δ_D; long-term λ_Δ = ξ/(1 + 50ρ′); limits of Table 24.2.2 with a member-type selector. Only where line loads and a span are defined; otherwise "not calculated — enter line loads and span". The minimum-thickness check is unchanged.
+
+### Provisions (ACI 318-19, read in structural_references ACI-318-19-2019.pdf, PDF pages 457–460 (printed 455–458); paraphrased)
+- **24.2.2, Table 24.2.2:** flat roofs not supporting / attached to nonstructural elements likely to be damaged: immediate deflection due to the largest of L_r, S and R ≤ ℓ/180; floors, same condition: immediate deflection due to L ≤ ℓ/360; roofs or floors supporting or attached to nonstructural elements: the part of the total deflection after attachment (time-dependent deflection of all sustained loads + immediate deflection of any additional live load) ≤ ℓ/480 (likely to be damaged) or ℓ/240 (not likely). Footnote [2]: the time-dependent part may be reduced by the deflection before attachment, from data on similar members.
+- **24.2.3.4:** E_c by 19.2.2. **24.2.3.5:** M_cr = f_r I_g / y_t (Eq. 24.2.3.5); Table 24.2.3.5: I_e = I_g where M_a ≤ (2/3)M_cr (a); I_e = I_cr / [1 − ((2/3)M_cr/M_a)²(1 − I_cr/I_g)] where M_a > (2/3)M_cr (b). (The decision note cites "Eq. 24.2.3.5a"; in the 2019 edition the expression is Table 24.2.3.5(b) and Eq. 24.2.3.5 is M_cr. The tool cites the 2019 numbering.)
+- **24.2.3.7:** prismatic members: I_e at midspan for simple spans, at the support for cantilevers.
+- **24.2.4.1.1:** additional time-dependent deflection = λ_Δ × immediate deflection of the sustained load, λ_Δ = ξ/(1 + 50ρ′) (Eq. 24.2.4.1.1); **24.2.4.1.2:** ρ′ at midspan (simple) or the support (cantilever); **Table 24.2.4.1.3:** ξ = 1.0 (3 months), 1.2 (6), 1.4 (12), 2.0 (60 or more).
+- **19.2.2.1:** E_c = w_c^1.5·33√f′c (a), 57,000√f′c for normalweight (b). **19.2.3.1:** f_r = 7.5λ√f′c.
+
+### §4 callout (new calculation; no existing formula changed)
+- **Before:** no deflection calculation ("Deflection … not evaluated").
+- **After (ACI, service mode, line loads with L > 0):** w_live = w_L + max(w_Lr, w_S, w_R); w_sus = w_D + α·w_live (α = sustained % / 100); for w in {w_D, w_D + w_live, w_sus}: M_a = |w|ℓ²/8 (simple) or |w|ℓ²/2 (cantilever), I_e by Table 24.2.3.5, Δ = 5(w/12)(12ℓ)⁴/(384E_cI_e) or (w/12)(12ℓ)⁴/(8E_cI_e) (in); Δ_live = Δ_(D+L) − Δ_D; λ_Δ = ξ/(1 + 50ρ′), ρ′ = A′_s/(b d); Δ_after = λ_Δ·Δ_sus + Δ_live. Checks: |Δ_live| ≤ ℓ/180 (roof) or ℓ/360 (floor), every member type; |Δ_after| ≤ ℓ/480 or ℓ/240 for the "supporting or attached" types. ℓ = 12L in.
+- **Section properties:** `servicecalc(null,neg)` (f_r, I_g, y_t, M_cr, as the Serviceability tab), `serviceSteelStress(neg,1,E)` (kd, I_cr, as crack control), E_c from `cbcDeflE()`.
+- **Hand check 1 (engineer's case):** 20 ft simple span, 12 × 24 in, f′c 4 ksi, 3 #8 bottom (c_c 1.5, #4 stirrups, d = 21.5 in), w_D 1.2, w_L 0.5 klf, floor attached to elements not likely to be damaged, 0 % sustained, 5 years.
+  - E_c = 57,000√4000 = 3,605 ksi; n = 8.044; f_r = 474.3 psi; I_g = 12(24)³/12 = 13,824 in⁴; y_t = 12 in; M_cr = 0.4743(13,824)/12/12 = 45.54 k-ft; (2/3)M_cr = 30.36.
+  - kd from 6kd² + 19.065kd − 19.065(21.5) = 0: kd = 6.828 in; I_cr = 12(6.828)³/3 + 19.065(14.672)² = 5,377 in⁴.
+  - D: M_a = 1.2(20)²/8 = 60.00 k-ft; I_e = 5,377/[1 − (30.36/60)²(1 − 5,377/13,824)] = 6,375 in⁴; Δ_D = 5(0.1)(240)⁴/(384 · 3,605 · 6,375) = 0.188 in.
+  - D + L: M_a = 85.00 k-ft; I_e = 5,832 in⁴; Δ_D+L = 0.291 in; Δ_L = 0.103 in ≤ 240/360 = 0.667 in, ratio **0.155**.
+  - λ_Δ = 2.0/(1 + 0) = 2.000; Δ_sus = Δ_D = 0.188; Δ_after = 2.000(0.188) + 0.103 = 0.479 in ≤ 240/240 = 1.000 in, ratio **0.479** (ℓ/480 = 0.500 in: ratio 0.958).
+- **Hand check 2 (cantilever, doubly reinforced):** L = 8 ft, 12 × 20 in, top 3 #7 (d = 17.5625 in), bottom 2 #5 (d′ = 2.3125 in), w_D 1.0, w_L 0.6 klf, floor, likely damaged. I_g = 8,000; M_cr = 31.62 k-ft; kd = 5.251 in; I_cr = 12(5.251)³/3 + 7.044(0.62)(2.938)² + 8.044(1.80)(12.312)² = 2,812 in⁴. D: M_a = 32.00, I_e = 3,913, Δ_D = 0.0627 in; D + L: M_a = 51.20, I_e = 3,159, Δ_D+L = 0.1243 in; Δ_L = 0.0616 ≤ 96/360 = 0.267 (0.231). ρ′ = 0.62/(12 × 17.5625) = 0.00294; λ_Δ = 2.0/1.147 = 1.744; Δ_after = 1.744(0.0627) + 0.0616 = 0.171 ≤ 96/480 = 0.200 in (0.855).
+- **Hand check 3 (T-beam, NA in the web):** 24 ft simple span, b_f 48, h_f 4, b_w 12, h 24 in, 4 #9 (d = 21.436 in), w_D 1.5, w_L 1.0 klf, floor, likely damaged. ȳ_b = 15.333 in; I_g = 23,616 in⁴; M_cr = 60.88 k-ft; kd = 4.774 in (> h_f); I_cr = 48(4.774)³/3 − 36(0.774)³/3 + 32.18(16.662)² = 10,669 in⁴. Δ_D = 0.269 (I_e 11,564), Δ_D+L = 0.472 (I_e 10,974), Δ_L = 0.203 ≤ 0.800 (0.254); Δ_after = 2(0.269) + 0.203 = 0.740 > 288/480 = 0.600 in: ratio 1.234, **FAIL**.
+- Before: none of these was calculated.
+
+### Decisions (pending engineer review)
+- **Live-type load** = w_L + the largest of w_Lr, w_S, w_R for every member type (conservative; equals Table 24.2.2's L for floors and max(L_r, S, R) for roofs when only those are entered). W and E line loads are not used (24.2: gravity loads); a note says so.
+- **Sustained load** = D + α × the live-type load (α the input %, default 0 %); its immediate deflection uses its own I_e (M_a at w_sus).
+- **After attachment** = λ_Δ·Δ_sus + Δ_live: the whole live-load deflection; the immediate D deflection taken as before attachment; no footnote-[2] reduction of the time-dependent part.
+- **Immediate live-load check also applied** to the "supporting or attached" member types (ℓ/360 floor, ℓ/180 roof), in addition to ℓ/480 or ℓ/240 (conservative).
+- **Default member type:** floor supporting or attached to elements likely to be damaged (ℓ/360 and ℓ/480, the most stringent). Default duration 5 years or more (ξ = 2.0); ξ is one of the four Table 24.2.4.1.3 rows (no interpolation).
+- **ℓ for a cantilever** = the cantilever length L (stated on the card).
+- **ρ′ = A′_s/(b d)** with b = the compression-face width (b_f for a T-beam at +M: smaller ρ′, larger λ_Δ; b_w otherwise), A′_s = the bars on the compression face, d to the tension-steel centroid.
+- **Lightweight concrete (λ < 1):** E_c = w_c^1.5·33√f′c with w_c the unit weight entered under Minimum Thickness, else 90 pcf (lowest E_c). Normalweight: 57,000√f′c (as crack control). Crack control's E_c is unchanged.
+- **M entered by hand per case** (not a line load) is not included in the deflection (no load shape); a warning (Validation, card, inputs) says so.
+- **Status:** forceOK = ratio ≤ 1 (+1e-9); the deflection rows enter the Summary verdict and status chip, not the combination "worst" or the governing combination.
+
+### Where (Beam Capacity srcdoc)
+- **After `servicecalc`** (anchor `CBDF (2026-11-18, engineer decision): DEFLECTION, ACI 318-19 24.2`): `CBDF_MEM`, `CBDF_MEMK`, `CBDF_XI`, `cbcDeflNorm`, `cbcDeflCalc` (pure), `cbcDeflE`, `cbcDeflSec`, `CBDF_C`, `cbcDeflX` (memoised), `cbcDeflBuild`, `cbcDeflChecks`. The computation (verbatim):
+  ```js
+  const lev=wv=>{ const Ma=Math.abs(wv)*L*L*kM, cr=Ma>Mcr23, q=cr?Mcr23/Ma:0,
+      Ie=cr?Math.min(p.Ig,p.Icr/(1-q*q*(1-p.Icr/p.Ig))):p.Ig;
+    return {w:wv,Ma,cr,q,Ie,D:kD*(wv/12)*Math.pow(li,4)/(p.Ec*Ie)}; };
+  const D=lev(wD), DL=lev(wD+wLv), SU=lev(wD+al*wLv);
+  const dL=DL.D-D.D, rhoP=(p.b>0&&p.d>0)?(+p.Asp||0)/(p.b*p.d):0, xi=CBDF_XI[o.dur], lam=xi/(1+50*rhoP);
+  const dLT=lam*SU.D, dA=dLT+dL;
+  ```
+  with `kM = cant ? 0.5 : 0.125`, `kD = cant ? 1/8 : 5/384`, `li = 12L`, `Mcr = fr·Ig/yt/12`, `Mcr23 = 2/3·Mcr`, `wLv = w.L + max(w.Lr, w.S, w.R)`.
+- **`serviceSteelStress`** — before: `function serviceSteelStress(neg,Ms){` … `const E=concreteE(), n=ES/E.Ec;` after: `function serviceSteelStress(neg,Ms,Eov){` … `const E=Eov||concreteE(), n=ES/E.Ec;` (every existing call passes no Eov: unchanged).
+- **`defaultState()`** — adds `defl:{mem:"floorDmg",sus:0,dur:60},` after `minh`. **`mergeState()`** — after the `S.minh=` line: `S.defl=cbcDeflNorm(st.defl);`.
+- **`buildSvcLoads(b)`** — after `cbcLlInputs(b);` add `cbcDeflInputs(b);` (heading "Deflection (ACI 318-19 24.2)", member `dfMem` (short labels, e.g. “Floor, damageable: ℓ/480”, with the full Table 24.2.2 wording in a note below; tests/smoke/cbc-input-fit.mjs), sustained % `dfSus`, duration `dfDur`, the result lines and a link to the card).
+- **`allChecks()`** — before `return out;`: `if(S.code==='ACI') cbcDeflChecks().forEach(c=>out.push(c));` (rows `deflI`, `deflA`, tab tabServ, `rkey` df/…; N/A row `defl` with `naWhy` where not calculated).
+- **`cbcCheckCard`** — `if(c.id&&/^defl/.test(c.id)) return {card:"svcDefl",…}`. **`buildSummaryTab`** — the N/A list adds the deflection N/A row. **`cbcDashItems`** — N/A text uses `c.naWhy`. **Report keyOf** and **CBMR `sum`** — `c.rkey` links the D/C to `df/deflI`, `df/deflA`.
+- **`buildServTab`** — ACI: the note reads "Crack-width control is not evaluated by this tool. Deflection: see the Deflection card below (ACI 318-19 24.2)." (AASHTO unchanged), then the card `svcDefl` (`cbcDfCard`). **Report** — Serviceability: the same note change (ACI) and the subsection from `cbcDfRpt()` (steps scope `df`, the checks table, Figure DF-1, § links to the line-load steps `ll/w<k>`).
+- **`cbcBdCard`** — after `draw();` add `cbcDfBd(b);` (Figure DF-1, the deflected shape, with a link to the Deflection card).
+- **`validate()`** — a warning where M is entered by hand for D, L, Lr, S or R while the deflection is calculated; a note where W / E line loads are entered; the Scope note in ACI mode reads "Development length, bar cut-offs, fatigue and strut-and-tie are not evaluated. Deflection (ACI 318-19 24.2): <calculated … / not calculated — …>." (AASHTO unchanged); the CBMH note and the Minimum Thickness input note no longer say the tool does not calculate deflections.
+- **New block before `/* ---------------- FLEXURE tab ---------------- */`**: `cbcDfLevTex`, `cbcDfBasis`, `cbcDfCard`, `cbcDfSVG`, `cbcDfBd`, `cbcDeflInputs`, `cbcDfRpt`.
+
+### Saved data (§5)
+- Additive `defl = {mem, sus, dur}` in `rcbeam_v2_auto`, saved projects and Export JSON. No key renamed or added. A save without `defl` reads as the defaults (`cbcDeflNorm(undefined)`); no other field is read differently.
+
+### How verified
+- **Identity probe, origin/main vs branch, 9 projects** (new project; older factored save; AASHTO with service cases; an older service save; service with torsion and 5.3.3; one-way slab in service mode; T-beam factored; the CBLL check case with V at d and an entered D; a cantilever with self-weight): `CC` (computeAll), the autosave less `defl`, every `allChecks` row other than the deflection rows, and the input panel less the deflection block are identical. VALIDATION and the tab texts differ only by the reworded Scope / minimum-thickness notes, the new warning (entered M with line loads) and, on projects with line loads, the deflection rows in the Summary count. 0 console errors.
+- **Tests:** `node tests/engine/run.mjs` (new `tests/engine/cbc-deflection.test.mjs`: 8 tests, the three hand checks worked independently plus sustained / duration, uncracked, roof live, defaults, lightweight E_c); `tests/smoke/cbc-lineloads.mjs` extended (1400 and 390 px); every `tests/smoke/cbc-*.mjs` and `tests/smoke/decimal-entry.mjs`; `node tests/check-syntax.mjs`.
+
+### Other copies
+- None. The ACI rebar development-length app embedded in this file is not touched.
+
+### Open items
+- The decisions above, pending engineer review.
+- Continuous spans (24.2.3.6 average I_e), point loads, two-way slabs and prestressed members are not covered; camber and ponding are not checked.

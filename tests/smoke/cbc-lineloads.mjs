@@ -15,6 +15,11 @@
 //  an older save: no card, no figure.
 // CBST2 (2026-11-18): one-way slab, a pressure row uses the slab width as b_trib (greyed box "= slab width (1.00 ft)"); q = 100 psf on the
 //  12 in strip -> w = 0.100 klf; "override" enters b (flagged "entered"), "use slab width" returns to it; an older slab row with b entered keeps it.
+// CBDF (2026-11-18): ACI 318-19 24.2 deflection from the line loads (hand check 1 of tests/engine/cbc-deflection.test.mjs: 20 ft simple span,
+//  12 × 24, 3 #8, w_D 1.2, w_L 0.5): Summary rows (ℓ/360 0.15, ℓ/240 0.48; ℓ/480 0.96 after a member-type change), the Deflection card
+//  (I_g 13824, M_cr 45.54, I_cr 5377, I_e 6375 / 5832, Δ 0.188 / 0.291 / 0.103, 0.479), inputs (member, sustained %, duration) saved in
+//  rcbeam_v2_auto `defl`, Figure DF-1 on the Beam Analysis card, the Report subsection with § links; an older save without defl and without
+//  line loads: the defaults, one N/A row "not calculated — enter line loads and span"; AASHTO: no deflection row, "not evaluated" text kept.
 //   node tests/smoke/cbc-lineloads.mjs [--file <Concrete Beam Capacity.html>] [--shots <dir>]
 import path from 'path';
 import { openPage, REPO } from '../lib.mjs';
@@ -136,6 +141,55 @@ for (const vw of [1400, 390]) {
   if (SHOTS) { await f.evaluate(() => { const e = [...document.querySelectorAll('#inputPanel h3')].find(h => h.textContent === 'Line loads (optional)'); e.scrollIntoView({ block: 'start' }); }); await p.waitForTimeout(200);
     await p.screenshot({ path: path.join(SHOTS, `cb-slabtrib-inputs-${vw}.png`) }); }
   ok(!errs.length, 'console errors (slab): ' + errs.length + (errs.length ? ' ' + errs.slice(0, 3).join(' | ') : ''));
+  await b.close();
+}
+// CBDF: deflection
+const DF1 = { proj: { name: 'Defl 1' }, code: 'ACI', loadMode: 'service', tor: { present: false }, sec: { type: 'rect', bw: 12, h: 24, bf: 36, hf: 6 },
+  mat: { fc: 4, fy: 60, fyt: 60, lambda: 1 }, cover: { cc: 1.5, exposure: 'interior', req: 1.5, userEdited: true }, stir: { present: true, size: '4', legs: 2, s: 10 },
+  layers: [{ n: 3, size: '8', face: 'tension', dMan: null }], defl: { mem: 'floorNd', sus: 0, dur: 60 },
+  svc: { cases: {}, rev: { W: true, E: true }, l05: false, ll: { L: 20, sup: 'simple', vAt: 'face', rows: [{ k: 'D', lab: '', mode: 'w', w: 1.2 }, { k: 'L', lab: '', mode: 'w', w: 0.5 }] } } };
+const n3 = (a, b) => Math.abs(a - b) < 5e-4;
+for (const vw of [1400, 390]) {
+  console.log('--- deflection, viewport ' + vw + ' px');
+  let { b, p, errs } = await openPage(FILE, { hash: '#capacity', vw, vh: 900, ls: { rcbeam_v2_auto: JSON.stringify(DF1) } });
+  let f = await frameOf(p);
+  let r = await f.evaluate(() => { const R = cbcDeflX(); S.ui.tab = 'tabSummary'; refresh(); const t = document.querySelector('.dash').innerText;
+    S.ui.tab = 'tabServ'; refresh(); const c = document.querySelector('#svcDefl'); const ann = c ? [...c.querySelectorAll('annotation')].map(a => a.textContent).join(' ‖ ') : '';
+    return { on: R.on, dD: R.D.D, dDL: R.DL.D, dL: R.dL, dA: R.dA, t, ann, link: !!(c && c.querySelector('a.wkA[data-card="ldLine"]')), fig: !!(c && c.querySelector('svg.cbdf')) }; });
+  ok(r.on && n3(r.dD, 0.188) && n3(r.dDL, 0.291) && n3(r.dL, 0.103) && n3(r.dA, 0.479), `Δ_D ${r.dD.toFixed(4)}, Δ_D+L ${r.dDL.toFixed(4)}, Δ_L ${r.dL.toFixed(4)}, after attachment ${r.dA.toFixed(4)} (0.188, 0.291, 0.103, 0.479)`);
+  ok(/Deflection, immediate, live load ≤ ℓ\/360\s+ACI Table 24\.2\.2\s+0\.15/.test(r.t) && /after attachment, long-term \+ live ≤ ℓ\/240\s+ACI Table 24\.2\.2\s+0\.48/.test(r.t) && /Serviceability · Deflection/.test(r.t), 'Summary: ℓ/360 0.15, ℓ/240 0.48, linked to the Deflection card');
+  ok(['I_g = \\dfrac{b h^3}{12} = \\dfrac{(12.00)(24.00)^3}{12} = 13824', '= 45.54\\text{ k-ft}', '= 5377\\text{ in}^4', '= 6375\\text{ in}^4', '= 5832\\text{ in}^4', '= 0.188\\text{ in}', '= 0.291\\text{ in}',
+    '0.291-0.188 = 0.103', '2.000(0.188)+0.103 = 0.479', '\\dfrac{240.0}{360} = 0.667'].every(x => r.ann.includes(x)) && r.link && r.fig, 'Deflection card: worked steps (I_g, M_cr, I_cr, I_e, Δ, limits), Figure DF-1, link to Line Loads');
+  if (SHOTS) { await f.evaluate(() => document.querySelector('#svcDefl').scrollIntoView()); await p.waitForTimeout(200); await (await f.$('#svcDefl')).screenshot({ path: path.join(SHOTS, `cb-defl-card-${vw}.png`) }); }
+  await pick(f, 'dfMem', 'floorDmg'); await typeIn(p, f, 'dfSus', '50'); await pick(f, 'dfDur', '12');
+  r = await f.evaluate(() => { const R = cbcDeflX(), a = JSON.parse(localStorage.getItem('rcbeam_v2_auto')); S.ui.tab = 'tabSummary'; refresh();
+    return { d: a.defl, div: R.chk.map(c => c.div), xi: R.xi, wS: R.SU.w, t: document.querySelector('.dash').innerText }; });
+  ok(r.d.mem === 'floorDmg' && r.d.sus === 50 && r.d.dur === 12 && r.div.join() === '360,480' && r.xi === 1.4 && near(r.wS, 1.45) && /ℓ\/480/.test(r.t), `inputs saved (${JSON.stringify(r.d)}), ℓ/360 + ℓ/480, ξ 1.4, w_sus 1.45`);
+  r = await f.evaluate(() => { S.ui.tab = 'tabLoads'; refresh(); const c = document.querySelector('#ldBeam'); return { fig: !!(c && c.querySelector('svg.cbdf')), ln: !!(c && c.querySelector('a.wkA[data-card="svcDefl"]')),
+    t: SharedReport.text(SharedReport.build(mrModel()), { legacy: true }) }; });
+  const i = r.t.indexOf('Deflection (ACI 318-19 24.2) —'), sub = i >= 0 ? r.t.slice(i, i + 9000) : '';
+  ok(r.fig && r.ln, 'Beam Analysis card: deflected shape (Figure DF-1) and a link to the Deflection card');
+  ok(i > 0 && /w_D = 1\.200 klf §\d+\.\d+/.test(sub) && /Figure DF-1/.test(sub) && /Deflection checks, ACI 318-19 Table 24\.2\.2/.test(sub) && /Δ_D = 0\.188 in §\d+\.\d+/.test(sub)
+    && /Deflection, immediate, live load ≤ ℓ\/360 \| ACI 318-19 Table 24\.2\.2 \| 0\.155 §/.test(r.t) && !/\[\[|NaN|undefined/.test(r.t), 'Report: the Deflection subsection, worked steps, § links (line loads, Summary of checks), no NaN');
+  await p.reload(); f = await frameOf(p);
+  r = await f.evaluate(() => ({ d: S.defl, on: cbcDeflX().on }));
+  ok(r.on && r.d.mem === 'floorDmg' && r.d.sus === 50 && r.d.dur === 12, 'after a reload: the deflection inputs kept');
+  ok(!errs.length, 'console errors (deflection): ' + errs.length + (errs.length ? ' ' + errs.slice(0, 3).join(' | ') : ''));
+  await b.close();
+  // an older ACI save (no defl, no line loads) and an AASHTO save
+  ({ b, p, errs } = await openPage(FILE, { hash: '#capacity', vw, vh: 900, ls: { rcbeam_v2_auto: JSON.stringify(OLDSVC) } }));
+  f = await frameOf(p);
+  r = await f.evaluate(() => { const K = allChecks().filter(c => /^defl/.test(c.id || '')); S.ui.tab = 'tabServ'; refresh();
+    return { d: S.defl, K: K.map(c => [c.label, c.na, c.naWhy]), card: document.querySelector('#svcDefl').innerText }; });
+  ok(JSON.stringify(r.d) === '{"mem":"floorDmg","sus":0,"dur":60}' && r.K.length === 1 && r.K[0][1] && /not calculated — enter line loads and span/.test(r.K[0][2]) && /not calculated — enter line loads and span/.test(r.card),
+    'older save: defaults, one N/A row and the card "not calculated — enter line loads and span"');
+  ok(!errs.length, 'console errors (older save, deflection): ' + errs.length);
+  await b.close();
+  ({ b, p, errs } = await openPage(FILE, { hash: '#capacity', vw, vh: 900, ls: { rcbeam_v2_auto: JSON.stringify(Object.assign({}, DF1, { code: 'AASHTO' })) } }));
+  f = await frameOf(p);
+  r = await f.evaluate(() => { S.ui.tab = 'tabServ'; refresh(); return { K: allChecks().filter(c => /^defl/.test(c.id || '')).length, card: !!document.querySelector('#svcDefl'), txt: document.querySelector('#svcMain').innerText }; });
+  ok(r.K === 0 && !r.card && /Deflection and crack-width control are not evaluated by this tool\./.test(r.txt), 'AASHTO: no deflection row or card; "not evaluated" kept');
+  ok(!errs.length, 'console errors (AASHTO): ' + errs.length);
   await b.close();
 }
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASS');
