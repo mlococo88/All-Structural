@@ -856,6 +856,7 @@ function defaultState(){
     memberType:&quot;beam&quot;,   /* CBSB: &quot;beam&quot; | &quot;slab&quot; (one-way slab, ACI mode) */
     slab:{stSize:&quot;&quot;,stS:0},
     minh:{span:0,sup:&quot;simple&quot;,wc:0},   /* CBMH: span (ft, 0 = not entered), support condition, w_c (pcf, lightweight only; 0 = not entered) */   /* CBSB: shrinkage and temperature bars perpendicular to the span (&quot;&quot; = none entered) */
+    defl:{mem:&quot;floorDmg&quot;,sus:0,dur:60},   /* CBDF: deflection, member type (Table 24.2.2), sustained part of the live load (%), duration (months) */
     sec:{type:&quot;rect&quot;,bw:12,h:18,bf:36,hf:6,asminSupport:&quot;determinate&quot;},   /* asminSupport: CBM4, ACI 9.6.1.2 flange in tension */
     mat:{fc:4,fy:60,fyt:60,dagg:1.0,lambda:1.0,gamma3:0.67,fyt100:false,wc:0},   /* wc: CBL7b, AASHTO unit weight (kcf), 0 = not entered */
     cover:{cc:2.0,exposure:&quot;exposed&quot;,req:2.0,userEdited:false},
@@ -898,6 +899,7 @@ function mergeState(st){
      per strip follow from its spacing. */
   S.memberType=(st.memberType==='slab')?'slab':'beam';
   S.minh={span:+(st.minh&amp;&amp;st.minh.span)||0,sup:[&quot;simple&quot;,&quot;one&quot;,&quot;both&quot;,&quot;cant&quot;].indexOf(st.minh&amp;&amp;st.minh.sup)>=0?st.minh.sup:&quot;simple&quot;,wc:+(st.minh&amp;&amp;st.minh.wc)||0};   /* CBMH: absent = not entered */
+  S.defl=cbcDeflNorm(st.defl);   /* CBDF: absent (every save before CBDF) = the defaults; results unchanged (the check is new) */
   S.slab={stSize:String((st.slab&amp;&amp;st.slab.stSize)||&quot;&quot;),stS:+(st.slab&amp;&amp;st.slab.stS)||0,
     ...(st.slab&amp;&amp;st.slab.bMode==='actual'?{bMode:'actual'}:{}),...(st.slab&amp;&amp;st.slab.b!=null&amp;&amp;st.slab.b!==''&amp;&amp;isFinite(+st.slab.b)?{b:+st.slab.b}:{})};
   /* CBSW migration (2026-11-13): no slab.bMode -> per 1 ft strip, b = 12 in (results as before); 'actual' -> b = slab.b (cbcSlabSync) */
@@ -1240,10 +1242,10 @@ function concreteE(){
   return {Ec:57000*Math.sqrt(fc*1000)/1000, ref:&quot;ACI 19.2.2.1&quot;,
           expr:`E_c = 57{,}000\\sqrt{f'_c} = 57{,}000\\sqrt{${fmt(fc*1000,0)}\\text{ psi}}`};
 }
-function serviceSteelStress(neg,Ms){
+function serviceSteelStress(neg,Ms,Eov){   /* CBDF: Eov = the E_c of the deflection check (cbcDeflE); absent = concreteE(), as before */
   const {bw,h,bf,hf,type}=S.sec;
   if(!(Ms>0)) return null;
-  const E=concreteE(), n=ES/E.Ec;
+  const E=Eov||concreteE(), n=ES/E.Ec;
   const G=layerGeom(neg);
   const T=G.filter(L=>L.side==='T'), C=G.filter(L=>L.side==='C');
   if(!T.length) return null;
@@ -1327,6 +1329,91 @@ function servicecalc(F,neg){
   } else { Ig=bw*Math.pow(h,3)/12; yt=h/2; }
   const Mcr=fr*Ig/yt/12;
   return {fr,Ig,yt,Mcr};
+}
+/* =====================================================================
+   CBDF (2026-11-18, engineer decision): DEFLECTION, ACI 318-19 24.2 (ACI mode; service mode with line loads only).
+   S.defl = {mem, sus, dur}: member type (Table 24.2.2 row), sustained part of the live-type load (%, 0..100), duration of the
+   sustained load (months: 3, 6, 12 or 60 = 5 years or more, Table 24.2.4.1.3). Absent (every save before CBDF) = the defaults
+   (cbcDeflNorm): floorDmg, 0 %, 60 months. Section checked: midspan (+M) of a simple span, the support (−M) of a cantilever
+   (24.2.3.7; ρ' at the same section, 24.2.4.1.2).
+     M_cr = f_r I_g / y_t (Eq. 24.2.3.5), f_r = 7.5λ√f'c (19.2.3.1) (servicecalc); I_cr of the cracked transformed section,
+     n = E_s/E_c (serviceSteelStress); E_c 19.2.2.1: 57,000√f'c (normalweight), w_c^1.5·33√f'c (lightweight, λ < 1);
+     I_e = I_g where M_a ≤ (2/3)M_cr, else I_cr / [1 − ((2/3)M_cr/M_a)²(1 − I_cr/I_g)] (Table 24.2.3.5 (a), (b));
+     Δ = 5wℓ⁴/(384E_cI_e) (simple span, midspan) or wℓ⁴/(8E_cI_e) (cantilever, free end), each load level with its own I_e:
+       D; D + live; sustained = D + (sus/100)·live;   Δ_live = Δ_(D+live) − Δ_D;
+     λ_Δ = ξ/(1 + 50ρ') (Eq. 24.2.4.1.1), ρ' = A'_s/(b d);  after attachment: Δ = λ_Δ·Δ_sus + Δ_live (Table 24.2.2, rows 3 and 4).
+   Live-type load: w_live = w_L + max(w_Lr, w_S, w_R) (Table 24.2.2: L for floors, the largest of L_r, S and R for roofs).
+   W and E are not service-level gravity loads (24.2): not included. M entered by hand per case is not included (no load shape).
+   cbcDeflNorm and cbcDeflCalc are pure functions (Node test: tests/engine/cbc-deflection.test.mjs). Every site is tagged CBDF.
+   ===================================================================== */
+const CBDF_MEM={
+  roofFlat:{t:&quot;Flat roof, not supporting or attached to nonstructural elements likely to be damaged by large deflections&quot;,s:&quot;Flat roof, no damageable elements&quot;,roof:true,imm:180,aft:0},
+  floor:{t:&quot;Floor, not supporting or attached to nonstructural elements likely to be damaged by large deflections&quot;,s:&quot;Floor, no damageable elements&quot;,roof:false,imm:360,aft:0},
+  roofDmg:{t:&quot;Roof supporting or attached to nonstructural elements likely to be damaged by large deflections&quot;,s:&quot;Roof, supports elements likely to be damaged&quot;,roof:true,imm:180,aft:480},
+  floorDmg:{t:&quot;Floor supporting or attached to nonstructural elements likely to be damaged by large deflections&quot;,s:&quot;Floor, supports elements likely to be damaged&quot;,roof:false,imm:360,aft:480},
+  roofNd:{t:&quot;Roof supporting or attached to nonstructural elements not likely to be damaged by large deflections&quot;,s:&quot;Roof, supports elements not likely to be damaged&quot;,roof:true,imm:180,aft:240},
+  floorNd:{t:&quot;Floor supporting or attached to nonstructural elements not likely to be damaged by large deflections&quot;,s:&quot;Floor, supports elements not likely to be damaged&quot;,roof:false,imm:360,aft:240}};
+const CBDF_MEMK=[&quot;roofFlat&quot;,&quot;floor&quot;,&quot;roofDmg&quot;,&quot;floorDmg&quot;,&quot;roofNd&quot;,&quot;floorNd&quot;];
+const CBDF_XI={3:1.0,6:1.2,12:1.4,60:2.0};   /* Table 24.2.4.1.3: sustained load duration (months) -> ξ */
+function cbcDeflNorm(x){ const o=(x&amp;&amp;typeof x===&quot;object&quot;)?x:{}, s=+o.sus, d=+o.dur;
+  return {mem:CBDF_MEM[o.mem]?o.mem:&quot;floorDmg&quot;,sus:isFinite(s)?Math.min(100,Math.max(0,s)):0,dur:CBDF_XI[d]!=null?d:60}; }
+/* p: {cant, L (ft), w:{D,L,Lr,S,R} (klf), Ec (ksi), Ig, Icr (in^4), yt (in), fr (ksi), Asp (in²), b, d (in), mem, sus (%), dur (months)} */
+function cbcDeflCalc(p){
+  const o=cbcDeflNorm(p), M=CBDF_MEM[o.mem], L=+p.L||0, li=12*L, cant=!!p.cant, kM=cant?0.5:0.125, kD=cant?1/8:5/384;
+  const w=k=>{ const v=+((p.w||{})[k]); return isFinite(v)?v:0; };
+  const Mcr=p.fr*p.Ig/p.yt/12, Mcr23=2/3*Mcr;
+  const r3=[&quot;Lr&quot;,&quot;S&quot;,&quot;R&quot;].reduce((a,k)=>w(k)>a.v?{k,v:w(k)}:a,{k:null,v:0});
+  const wD=w(&quot;D&quot;), wL=w(&quot;L&quot;), wLv=wL+r3.v, al=o.sus/100;
+  const lev=wv=>{ const Ma=Math.abs(wv)*L*L*kM, cr=Ma>Mcr23, q=cr?Mcr23/Ma:0,
+      Ie=cr?Math.min(p.Ig,p.Icr/(1-q*q*(1-p.Icr/p.Ig))):p.Ig;
+    return {w:wv,Ma,cr,q,Ie,D:kD*(wv/12)*Math.pow(li,4)/(p.Ec*Ie)}; };
+  const D=lev(wD), DL=lev(wD+wLv), SU=lev(wD+al*wLv);
+  const dL=DL.D-D.D, rhoP=(p.b>0&amp;&amp;p.d>0)?(+p.Asp||0)/(p.b*p.d):0, xi=CBDF_XI[o.dur], lam=xi/(1+50*rhoP);
+  const dLT=lam*SU.D, dA=dLT+dL;
+  const chk=[{id:&quot;deflI&quot;,div:M.imm,lim:li/M.imm,val:Math.abs(dL)}];
+  if(M.aft) chk.push({id:&quot;deflA&quot;,div:M.aft,lim:li/M.aft,val:Math.abs(dA)});
+  chk.forEach(c=>{ c.dcr=c.lim>0?c.val/c.lim:Infinity; c.ok=c.dcr<=1+1e-9; });
+  return {mem:o.mem,M,sus:o.sus,dur:o.dur,cant,L,li,kM,kD,Mcr,Mcr23,wD,wL,r3,wLv,al,D,DL,SU,dL,rhoP,xi,lam,dLT,dA,chk};
+}
+/* E_c for the deflection (ACI 318-19 19.2.2.1): normalweight 57,000√f'c (concreteE, as the crack-control check); lightweight
+   (λ < 1) w_c^1.5·33√f'c with w_c the lightweight unit weight entered under Minimum Thickness, else 90 pcf (the lowest E_c) */
+function cbcDeflE(){ const fc=S.mat.fc;
+  if(!(S.mat.lambda<1)){ const E=concreteE(); return {Ec:E.Ec,lw:false,ref:&quot;ACI 19.2.2.1(b)&quot;,expr:E.expr}; }
+  const wIn=!!(S.minh&amp;&amp;S.minh.wc>0), wc=wIn?S.minh.wc:90;
+  return {Ec:Math.pow(wc,1.5)*33*Math.sqrt(fc*1000)/1000,lw:true,wc,wIn,ref:&quot;ACI 19.2.2.1(a)&quot;,
+    expr:`E_c = w_c^{1.5}\\,33\\sqrt{f'_c} = (${fmt(wc,0)})^{1.5}(33)\\sqrt{${fmt(fc*1000,0)}\\text{ psi}}\\Big/1000`}; }
+/* the section of the deflection check: neg = cantilever (−M at the support), else +M at midspan */
+function cbcDeflSec(neg){
+  const E=cbcDeflE(), sv=servicecalc(null,neg), SS=serviceSteelStress(neg,1,E);
+  const G=layerGeom(neg), C=G.filter(L=>L.side===&quot;C&quot;), Asp=C.reduce((s,L)=>s+L.As,0);
+  const tee=S.sec.type===&quot;tee&quot;, b=(tee&amp;&amp;!neg)?S.sec.bf:S.sec.bw;   /* ρ' on the compression face width (b_f where the flange is in compression) */
+  return {E,sv,SS,Asp,b,tee,neg,d:SS?SS.dCent:0,C};
+}
+let CBDF_C={k:null,v:null};
+function cbcDeflX(){
+  const k=JSON.stringify([S.code,S.loadMode,S.svc,S.defl,S.sec,S.layers,S.cover,S.stir,S.layerClear,S.mat,S.memberType,S.slab,S.minh]);
+  if(CBDF_C.k!==k){ let v; try{ v=cbcDeflBuild(); }catch(e){ v={on:false,why:&quot;not calculated — the section could not be solved&quot;}; } CBDF_C={k,v}; }
+  return CBDF_C.v; }
+function cbcDeflBuild(){
+  if(S.code!=='ACI') return {on:false,aashto:true,why:&quot;not evaluated&quot;};
+  const why=&quot;not calculated — enter line loads and span&quot;;
+  if(!cbcSvcOn()) return {on:false,why:why+&quot; (service load cases, Loads card)&quot;};
+  const X=cbcLlX(); if(!X.any||!(X.Lc>0)) return {on:false,why:why+&quot; (Loads card)&quot;};
+  const sec=cbcDeflSec(X.cant);
+  if(!sec.SS) return {on:false,X,why:&quot;not calculated — no reinforcement on the &quot;+(X.cant?&quot;top face (the tension face of the cantilever)&quot;:&quot;bottom face (the tension face at midspan)&quot;)+&quot;, so I_cr cannot be found&quot;};
+  const w={}; [&quot;D&quot;,&quot;L&quot;,&quot;Lr&quot;,&quot;S&quot;,&quot;R&quot;].forEach(k=>{ w[k]=X.cases[k].w; });
+  const o=cbcDeflNorm(S.defl);
+  const R=cbcDeflCalc({cant:X.cant,L:X.Lc,w,Ec:sec.E.Ec,Ig:sec.sv.Ig,yt:sec.sv.yt,fr:sec.sv.fr,Icr:sec.SS.Icr,Asp:sec.Asp,b:sec.b,d:sec.d,mem:o.mem,sus:o.sus,dur:o.dur});
+  const ent=[&quot;D&quot;,&quot;L&quot;,&quot;Lr&quot;,&quot;S&quot;,&quot;R&quot;].filter(k=>Math.abs(+((S.svc.cases[k]||{}).M)||0)>1e-12);
+  const wx=[&quot;W&quot;,&quot;E&quot;].filter(k=>X.cases[k].has&amp;&amp;Math.abs(X.cases[k].w)>1e-12);
+  return Object.assign(R,{on:true,X,sec,ent,wx});
+}
+/* the dashboard rows (allChecks), ACI mode */
+function cbcDeflChecks(){
+  const R=cbcDeflX(); if(R.aashto) return [];
+  if(!R.on) return [{label:&quot;Deflection&quot;,ref:&quot;ACI 24.2.2&quot;,dcr:null,combo:&quot;—&quot;,na:true,tab:&quot;tabServ&quot;,id:&quot;defl&quot;,naWhy:R.why}];
+  return R.chk.map(c=>({label:c.id===&quot;deflI&quot;?&quot;Deflection, immediate, &quot;+(R.M.roof?&quot;roof live load&quot;:&quot;live load&quot;)+&quot; ≤ ℓ/&quot;+c.div:&quot;Deflection after attachment, long-term + live ≤ ℓ/&quot;+c.div,
+    ref:&quot;ACI Table 24.2.2&quot;,dcr:c.dcr,combo:c.id===&quot;deflI&quot;?&quot;Service: D + live&quot;:&quot;Service: sustained D + &quot;+fmt(R.sus,0)+&quot;% live; live&quot;,na:false,tab:&quot;tabServ&quot;,id:c.id,forceOK:c.ok,rkey:&quot;df/&quot;+c.id}));
 }
 
 /* =====================================================================
@@ -2108,8 +2195,11 @@ function validate(){
     N.push({code:&quot;ACI 9.7.5.1&quot;,msg:&quot;Longitudinal torsion steel is entered as a total area, so the requirement for a bar at every corner of the closed stirrup and a maximum 12 in spacing around p_h cannot be verified automatically. That check is reported N/A and must be confirmed by inspection.&quot;});
   if(S.code==='ACI') N.push({code:&quot;ACI 9.6.1.3&quot;,msg:&quot;The exception allowing A_{s,min} to be waived where A_s provided is at least 4/3 of A_s required is NOT applied; the full 9.6.1.2 minimum is always enforced. This is conservative.&quot;});
   if(cbcSlabAct()) N.push({code:&quot;Slab width&quot;,msg:&quot;One-way slab, actual width b = &quot;+fmt(S.sec.bw)+&quot; in: each layer has n = floor(b/s) bars (&quot;+S.layers.map((L,i)=>&quot;layer &quot;+(i+1)+&quot;: floor(&quot;+fmt(S.sec.bw)+&quot;/&quot;+fmt(L.s)+&quot;) = &quot;+L.n).join(&quot;; &quot;)+&quot;; rounded down, a part bar is not counted). The actions entered and every result are for the full width b.&quot;});   /* CBSW */
-  if(S.code==='ACI') N.push({code:cbcSlab()?&quot;ACI 7.3.1&quot;:&quot;ACI 9.3.1&quot;,msg:&quot;Minimum &quot;+(cbcSlab()?&quot;thickness (Table 7.3.1.1)&quot;:&quot;depth (Table 9.3.1.1)&quot;)+&quot;: &quot;+((S.minh&amp;&amp;S.minh.span>0)?&quot;checked for a span of &quot;+fmt(S.minh.span)+&quot; ft&quot;:&quot;not checked (span not entered)&quot;)+&quot;. The table applies to members not supporting or attached to partitions or other construction likely to be damaged by large deflections (assumed); otherwise deflections must be calculated, which this tool does not do.&quot;});   /* CBMH */
-  N.push({code:&quot;Scope&quot;,msg:&quot;Deflection, development length, bar cut-offs, fatigue and strut-and-tie are not evaluated. Crack control is checked as a bar-spacing limit; explicit crack-width prediction is not performed.&quot;});
+  if(S.code==='ACI') N.push({code:cbcSlab()?&quot;ACI 7.3.1&quot;:&quot;ACI 9.3.1&quot;,msg:&quot;Minimum &quot;+(cbcSlab()?&quot;thickness (Table 7.3.1.1)&quot;:&quot;depth (Table 9.3.1.1)&quot;)+&quot;: &quot;+((S.minh&amp;&amp;S.minh.span>0)?&quot;checked for a span of &quot;+fmt(S.minh.span)+&quot; ft&quot;:&quot;not checked (span not entered)&quot;)+&quot;. The table applies to members not supporting or attached to partitions or other construction likely to be damaged by large deflections (assumed); otherwise deflections must be calculated: the Deflection check (ACI 318-19 24.2, Serviceability tab) does so from the line loads (service mode).&quot;});   /* CBMH; CBDF: text */
+  const DF=cbcDeflX();   /* CBDF */
+  if(DF.on&amp;&amp;DF.ent.length) W.push({code:&quot;ACI 24.2&quot;,msg:&quot;Deflection: the M entered by hand for case &quot;+DF.ent.join(&quot;, &quot;)+&quot; is not included (the deflection uses the line loads only); enter that load as a line load if it acts along the span.&quot;});
+  if(DF.on&amp;&amp;DF.wx.length) N.push({code:&quot;ACI 24.2&quot;,msg:&quot;Deflection: the line loads of case &quot;+DF.wx.join(&quot; and &quot;)+&quot; are not included (24.2: service-level gravity loads).&quot;});
+  N.push({code:&quot;Scope&quot;,msg:(S.code==='ACI'?&quot;Development length, bar cut-offs, fatigue and strut-and-tie are not evaluated. Deflection (ACI 318-19 24.2): &quot;+(DF.on?&quot;calculated from the line loads (Serviceability tab, Deflection)&quot;:DF.why)+&quot;.&quot;:&quot;Deflection, development length, bar cut-offs, fatigue and strut-and-tie are not evaluated.&quot;)+&quot; Crack control is checked as a bar-spacing limit; explicit crack-width prediction is not performed.&quot;});   /* CBDF: ACI text */
   return {blockers:B,warnings:W,notes:N};
 }
 
@@ -2232,6 +2322,7 @@ function cbcCheckCard(c){
   if(c.id===&quot;lonA&quot;) return {card:&quot;shLonA&quot;,name:&quot;Longitudinal Reinforcement (AASHTO 5.7.3.5)&quot;};   /* CBM2 */
   if(c.tab===&quot;tabShear&quot;) return cbcComboCard(&quot;shC&quot;,c.ci);
   if(c.tab===&quot;tabTor&quot;) return cbcComboCard(&quot;torC&quot;,c.ci);
+  if(c.id&amp;&amp;/^defl/.test(c.id)) return {card:&quot;svcDefl&quot;,name:&quot;Deflection (ACI 24.2)&quot;};   /* CBDF */
   if(c.tab===&quot;tabServ&quot;) return S.code==='AASHTO'?{card:&quot;svcMinAll&quot;,name:&quot;Minimum Reinforcement \u2014 Every Combination&quot;}:{card:&quot;svcMain&quot;,name:&quot;Cracking Moment and Minimum Reinforcement&quot;};   /* CBM1 */
   if(c.tab===&quot;tabDetail&quot;&amp;&amp;c.id) return {card:&quot;det&quot;+c.id,name:c.label};
   return null;
@@ -2543,7 +2634,7 @@ function buildInput(){
       o=>({simple:&quot;Simply supported&quot;,one:&quot;One end continuous&quot;,both:&quot;Both ends continuous&quot;,cant:&quot;Cantilever&quot;})[o],o=>o,&quot;mhSup&quot;),&quot;&quot;);
     if(S.mat.lambda<1) fRow(b,&quot;Unit weight w_c (lightweight; blank = 90)&quot;,numIn(()=>S.minh.wc>0?S.minh.wc:&quot;&quot;,v=>{S.minh.wc=Math.max(0,v);},&quot;1&quot;,&quot;mhWc&quot;),&quot;pcf&quot;);
     b.appendChild(cbNL(&quot;note&quot;,&quot;Minimum &quot;+(cbcSlab()?&quot;thickness&quot;:&quot;depth&quot;)+&quot; h for a member that does not support, and is not attached to, partitions or other construction likely to be damaged by large deflections (assumed).&quot;,
-      [[&quot;Otherwise:&quot;,&quot;deflections must be calculated (9.3.2 / 7.3.2); this tool does not calculate deflections.&quot;],[&quot;Table:&quot;,cbcSlab()?&quot;7.3.1.1: ℓ/20, ℓ/24, ℓ/28, ℓ/10.&quot;:&quot;9.3.1.1: ℓ/16, ℓ/18.5, ℓ/21, ℓ/8.&quot;],
+      [[&quot;Otherwise:&quot;,&quot;deflections must be calculated (9.3.2 / 7.3.2): the Deflection check (ACI 318-19 24.2, Serviceability tab) does so from the line loads (Loads card, service mode).&quot;],[&quot;Table:&quot;,cbcSlab()?&quot;7.3.1.1: ℓ/20, ℓ/24, ℓ/28, ℓ/10.&quot;:&quot;9.3.1.1: ℓ/16, ℓ/18.5, ℓ/21, ℓ/8.&quot;],
        [&quot;Modifiers:&quot;,&quot;× (0.4 + f_y/100,000) where f_y ≠ 60,000 psi; lightweight concrete with w_c of 90 to 115 pcf × the greater of (1.65 − 0.005w_c) and 1.09.&quot;]]));
   },P);
   mkSection(&quot;inCrack&quot;,NT(&quot;Crack Control&quot;),b=>{
@@ -2647,6 +2738,7 @@ function buildSvcLoads(b){
   b.appendChild(cbNL(&quot;note&quot;,&quot;5.3.3 (paraphrased): the factor on L in Eqs. (5.3.1c), (5.3.1d) and (5.3.1e) may be taken as 0.5, except for garages, areas of public assembly, and areas where L is more than 100 psf.&quot;,
     [[&quot;Off (default):&quot;,&quot;1.0 on L in those equations (conservative).&quot;]]));
   cbcLlInputs(b);   /* CBLL */
+  cbcDeflInputs(b);   /* CBDF */
   const G=cbcBuildCombos(cbcSvcEff());
   const t2=el(&quot;table&quot;,&quot;cbT&quot;);
   t2.innerHTML=&quot;<tr><th>#</th><th>Eq.</th><th>Combination</th><th>M_u</th><th>V_u</th>&quot;+(tuShow?&quot;<th>T_u</th>&quot;:&quot;&quot;)+&quot;</tr>&quot;;
@@ -3042,6 +3134,7 @@ function allChecks(){
         have0:!E.na&amp;&amp;!!E.entry&amp;&amp;E.entry.cmp===&quot;\\ge&quot;&amp;&amp;E.entry.need>0&amp;&amp;!(E.entry.have>1e-12)});   /* CBAZ: D/C shown as cbcDcZero(c) */
     });
   }
+  if(S.code==='ACI') cbcDeflChecks().forEach(c=>out.push(c));   /* CBDF: ACI 318-19 24.2 deflection (N/A where not calculated) */
   return out;
 }
 
@@ -3156,7 +3249,7 @@ function buildSummaryTab(pg){
   });
   d.appendChild(t); pg.appendChild(d);
   /* N/A explanations */
-  const nas=detEnvelope().filter(x=>x.na);
+  const nas=detEnvelope().filter(x=>x.na).concat(checks.filter(c=>c.na&amp;&amp;c.naWhy&amp;&amp;/^defl/.test(c.id||&quot;&quot;)).map(c=>({name:c.label,naWhy:c.naWhy})));   /* CBDF */
   if(nas.length){
     const b=cbNL(&quot;infoBox&quot;,&quot;Checks reported as N/A&quot;,nas.map(x=>[x.name+&quot; —&quot;,x.naWhy]));   /* CBNL: a list (was &quot;• &quot; lines) */
     pg.appendChild(b);
@@ -3534,6 +3627,7 @@ function cbcBdCard(b,X){
     cbcWorkedIn(host,L); };
   s.addEventListener(&quot;change&quot;,()=>{ CBBD_SEL=s.value; draw(); });
   draw();
+  cbcDfBd(b);   /* CBDF: the deflected shape */
 }
 /* CBBD: Figure LL-1, the beam and the V and M diagrams of the governing combinations, with its values worked */
 function cbcBdRpt(LX){
@@ -3543,6 +3637,181 @@ function cbcBdRpt(LX){
   return [{type:'figure',svg:cbcBeamSVG(LX,v),caption:'Figure LL-1: Beam analysis, line loads — '+(LX.cant?'cantilever (fixed at the support, free end)':'simple span (pin, roller)')+', L = '+fmt(LX.Lc)+' ft: the line loads per case (service w); V of '+v.V.name+' (largest |V_u|) and M of '+v.M.name+' (largest |M_u|), each the line loads as Σγ × the case diagrams; entered M, V as point values at the check section (entered — no diagram). x to scale, ordinates to their own scale; +M sagging, plotted up. The case values are worked in '+ks.map(k=>k+' [[ll/Ml'+k+']], [[ll/Vl'+k+']]').join('; ')+'.'},
     {type:'table',caption:'Values on Figure LL-1, worked',head:['Quantity','Expression','Values','Result'],rows:cbcBdRows(LX,v)},
     {type:'note',text:'The factored totals are worked in '+[['M_u',v.M.ci],['V_u',v.V.ci]].map(q=>q[0]+' [[ld'+q[1]+'/'+(q[0]==='M_u'?'Mu':'Vu')+']]').join(', ')+'. [[tab:tabLoads|On screen: Load Combinations tab, Beam Analysis]]'}];
+}
+
+/* =====================================================================
+   CBDF (2026-11-18): the Deflection card (Serviceability tab), the deflected shape (also on the Beam Analysis card), the inputs
+   (Loads card, after the line loads) and the Report subsection. Display only: every value is cbcDeflX()'s.
+   ===================================================================== */
+function cbcDfLevTex(R,lv,sym){
+  const L=R.L, cant=R.cant, f3=v=>fmt(v,3), Mf=cant?&quot;\\dfrac{w\\ell^2}{2}&quot;:&quot;\\dfrac{w\\ell^2}{8}&quot;, Md=cant?&quot;2&quot;:&quot;8&quot;;
+  const out=[`M_{a,${sym}} = ${Mf} = \\dfrac{(${f3(Math.abs(lv.w))})(${fmt(L)})^2}{${Md}} = ${fmt(lv.Ma)}\\text{ k-ft}`];
+  if(lv.cr){
+    out.push(`M_{a,${sym}} = ${fmt(lv.Ma)} > \\tfrac{2}{3}M_{cr} = ${fmt(R.Mcr23)}\\text{ k-ft}\\;\\Rightarrow\\;\\text{Table 24.2.3.5(b)}`);
+    out.push(`I_{e,${sym}} = \\dfrac{I_{cr}}{1-\\left(\\dfrac{(2/3)M_{cr}}{M_a}\\right)^2\\left(1-\\dfrac{I_{cr}}{I_g}\\right)} = \\dfrac{${fmt(R.sec.SS.Icr,0)}}{1-\\left(\\dfrac{${fmt(R.Mcr23)}}{${fmt(lv.Ma)}}\\right)^2\\left(1-\\dfrac{${fmt(R.sec.SS.Icr,0)}}{${fmt(R.sec.sv.Ig,0)}}\\right)} = ${fmt(lv.Ie,0)}\\text{ in}^4`);
+  } else out.push(`M_{a,${sym}} = ${fmt(lv.Ma)} \\le \\tfrac{2}{3}M_{cr} = ${fmt(R.Mcr23)}\\text{ k-ft}\\;\\Rightarrow\\;I_{e,${sym}} = I_g = ${fmt(lv.Ie,0)}\\text{ in}^4\\;\\text{(Table 24.2.3.5(a))}`);
+  out.push(cant?`\\Delta_{${sym}} = \\dfrac{w\\ell^4}{8E_cI_e} = \\dfrac{(${f3(lv.w)}/12)(${fmt(R.li,1)})^4}{8(${fmt(R.sec.E.Ec,0)})(${fmt(lv.Ie,0)})} = ${f3(lv.D)}\\text{ in}`
+    :`\\Delta_{${sym}} = \\dfrac{5w\\ell^4}{384E_cI_e} = \\dfrac{5(${f3(lv.w)}/12)(${fmt(R.li,1)})^4}{384(${fmt(R.sec.E.Ec,0)})(${fmt(lv.Ie,0)})} = ${f3(lv.D)}\\text{ in}`);
+  return out; }
+/* the text of the basis notes (card and Report) */
+function cbcDfBasis(R){
+  return [[&quot;Section:&quot;,R.cant?&quot;the support of the cantilever (−M, top face in tension): I_e and ρ′ at the support (24.2.3.7, 24.2.4.1.2).&quot;:&quot;midspan of the simple span (+M, bottom face in tension): I_e and ρ′ at midspan (24.2.3.7, 24.2.4.1.2).&quot;],
+    [&quot;Member:&quot;,R.M.t+&quot; (Table 24.2.2): immediate live-load deflection ≤ ℓ/&quot;+R.M.imm+(R.M.aft?&quot;; deflection after attachment of the nonstructural elements ≤ ℓ/&quot;+R.M.aft:&quot;&quot;)+&quot;.&quot;],
+    [&quot;ℓ:&quot;,R.cant?&quot;the cantilever length L = &quot;+fmt(R.L)+&quot; ft (the line-load span).&quot;:&quot;the span L = &quot;+fmt(R.L)+&quot; ft (the line-load span).&quot;],
+    [&quot;Live load:&quot;,&quot;w_live = w_L + the largest of w_Lr, w_S and w_R (Table 24.2.2: L for floors; the largest of L_r, S and R for roofs). W and E are not included (24.2: service-level gravity loads).&quot;],
+    [&quot;Loads:&quot;,&quot;the uniform line loads per case (Line Loads card), including the self-weight where ticked.&quot;+(R.ent.length?&quot; The M entered by hand for case &quot;+R.ent.join(&quot;, &quot;)+&quot; is not included (it has no load shape).&quot;:&quot;&quot;)],
+    ...(R.M.aft?[[&quot;After attachment:&quot;,&quot;λ_Δ·Δ_sus + Δ_live: the time-dependent deflection of the sustained load plus the immediate deflection of the live load; the immediate dead-load deflection is taken to occur before the elements are attached, and no part of the time-dependent deflection is deducted (footnote [2] permits that from data on similar members).&quot;]]:[]),
+    [&quot;Not included:&quot;,&quot;camber, ponding (footnote [1]: check separately), construction tolerances.&quot;]]; }
+function cbcDfCard(b){
+  const R=cbcDeflX();
+  if(!R.on){ b.appendChild(cbNL(&quot;infoBox&quot;,&quot;Deflection: &quot;+R.why+&quot;.&quot;,[[&quot;How:&quot;,&quot;in service mode, enter the line loads per case and the span L in the Loads card. The deflection is then calculated for the member type, the sustained part of the live load and its duration entered below the line loads (ACI 318-19 24.2).&quot;],
+      [&quot;Minimum thickness:&quot;,&quot;the Minimum Thickness check (Table &quot;+(cbcSlab()?&quot;7.3.1.1&quot;:&quot;9.3.1.1&quot;)+&quot;) is separate and unchanged.&quot;]])); return; }
+  const sec=R.sec, sv=sec.sv, SS=sec.SS, E=sec.E, X=R.X, f3=v=>fmt(v,3), {bw,h,bf,hf}=S.sec;
+  b.appendChild(cbNL(&quot;note&quot;,&quot;Deflection under service gravity loads, ACI 318-19 24.2, from the line loads: &quot;+(R.cant?&quot;cantilever&quot;:&quot;simple span&quot;)+&quot;, ℓ = &quot;+fmt(R.L)+&quot; ft.&quot;+(cbcSlab()?&quot; One-way slab: &quot;+cbcSlabPer()+&quot;.&quot;:&quot;&quot;),cbcDfBasis(R),
+    {act:R.ent.length?[&quot;M entered by hand for case &quot;+R.ent.join(&quot;, &quot;)+&quot; is not included in the deflection (line loads only).&quot;]:[]}));
+  const r3=R.r3.k?R.r3.k:&quot;none&quot;;
+  b.appendChild(eqBlock({title:&quot;Service line loads at each load level&quot;,ref:&quot;ACI 24.2.4.1&quot;,lines:[
+    `w_D = ${f3(R.wD)}\\text{ klf}`,
+    `w_{live} = w_L + \\max\\left(w_{L_r},\\,w_S,\\,w_R\\right) = ${f3(R.wL)} + \\max\\left(${f3(X.cases.Lr.w)},\\,${f3(X.cases.S.w)},\\,${f3(X.cases.R.w)}\\right) = ${f3(R.wLv)}\\text{ klf}`,
+    `w_{D+live} = w_D + w_{live} = ${f3(R.wD)} + ${f3(R.wLv)} = ${f3(R.DL.w)}\\text{ klf}`,
+    `w_{sus} = w_D + \\alpha\\,w_{live} = ${f3(R.wD)} + (${fmt(R.al)})(${f3(R.wLv)}) = ${f3(R.SU.w)}\\text{ klf}`],
+    vars:[[&quot;w_D&quot;,&quot;Dead load, case D (all its rows&quot;+(X.cases.D.sw?&quot; and the self-weight&quot;:&quot;&quot;)+&quot;)&quot;,f3(R.wD),&quot;klf&quot;],[&quot;w_{live}&quot;,&quot;Live-type load (largest of L_r, S, R: &quot;+r3+&quot;)&quot;,f3(R.wLv),&quot;klf&quot;],
+      [&quot;\\alpha&quot;,&quot;Sustained part of the live-type load (input)&quot;,fmt(R.al),&quot;&quot;]]}));
+  b.appendChild(eqBlock({title:&quot;Modulus of elasticity of concrete&quot;,ref:E.ref,lines:[E.expr+` = ${fmt(E.Ec,0)}\\text{ ksi}`,`n = \\dfrac{E_s}{E_c} = \\dfrac{29{,}000}{${fmt(E.Ec,0)}} = ${fmt(SS.n,2)}`]}));
+  if(E.lw) b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Lightweight concrete (λ = &quot;+fmt(S.mat.lambda,2)+&quot;): w_c = &quot;+fmt(E.wc,0)+&quot; pcf&quot;+(E.wIn?&quot; (entered under Minimum Thickness)&quot;:&quot; (not entered under Minimum Thickness: 90 pcf, the lowest E_c)&quot;)+&quot;.&quot;));
+  const gl=[`f_r = 7.5\\lambda\\sqrt{f'_c} = 7.5(${fmt(S.mat.lambda,2)})\\sqrt{${fmt(S.mat.fc*1000,0)}} = ${fmt(sv.fr*1000,1)}\\text{ psi} = ${fmt(sv.fr,4)}\\text{ ksi}`];
+  if(sec.tee){ const A1=bf*hf, A2=bw*(h-hf), yb=(A1*(h-hf/2)+A2*((h-hf)/2))/(A1+A2);
+    gl.push(`\\bar y_b = \\dfrac{b_f h_f\\left(h-\\tfrac{h_f}{2}\\right)+b_w(h-h_f)\\tfrac{h-h_f}{2}}{b_f h_f+b_w(h-h_f)} = \\dfrac{(${fmt(bf)})(${fmt(hf)})(${fmt(h-hf/2)})+(${fmt(bw)})(${fmt(h-hf)})(${fmt((h-hf)/2)})}{(${fmt(bf)})(${fmt(hf)})+(${fmt(bw)})(${fmt(h-hf)})} = ${fmt(yb,3)}\\text{ in}`);
+    gl.push(`I_g = \\dfrac{b_f h_f^3}{12}+b_f h_f\\left(h-\\tfrac{h_f}{2}-\\bar y_b\\right)^2+\\dfrac{b_w (h-h_f)^3}{12}+b_w(h-h_f)\\left(\\tfrac{h-h_f}{2}-\\bar y_b\\right)^2`);
+    gl.push(`I_g = \\dfrac{(${fmt(bf)})(${fmt(hf)})^3}{12}+(${fmt(A1,1)})(${fmt(h-hf/2)}-${fmt(yb,3)})^2+\\dfrac{(${fmt(bw)})(${fmt(h-hf)})^3}{12}+(${fmt(A2,1)})(${fmt((h-hf)/2)}-${fmt(yb,3)})^2 = ${fmt(sv.Ig,0)}\\text{ in}^4`);
+    gl.push(R.cant?`y_t = h-\\bar y_b = ${fmt(h)}-${fmt(yb,3)} = ${fmt(sv.yt,3)}\\text{ in (to the top face, in tension)}`:`y_t = \\bar y_b = ${fmt(sv.yt,3)}\\text{ in (to the bottom face, in tension)}`); }
+  else { gl.push(`I_g = \\dfrac{b h^3}{12} = \\dfrac{(${fmt(bw)})(${fmt(h)})^3}{12} = ${fmt(sv.Ig,0)}\\text{ in}^4`); gl.push(`y_t = \\dfrac{h}{2} = ${fmt(sv.yt)}\\text{ in}`); }
+  gl.push(`M_{cr} = \\dfrac{f_r I_g}{y_t} = \\dfrac{(${fmt(sv.fr,4)})(${fmt(sv.Ig,0)})}{${fmt(sv.yt,3)}}\\Big/12 = ${fmt(R.Mcr)}\\text{ k-ft},\\qquad \\tfrac{2}{3}M_{cr} = ${fmt(R.Mcr23)}\\text{ k-ft}`);
+  b.appendChild(eqBlock({title:&quot;Gross section and cracking moment&quot;+(sec.tee?(R.cant?&quot; (T-beam, flange in tension)&quot;:&quot; (T-beam)&quot;):&quot;&quot;),ref:&quot;ACI 24.2.3.5 / Eq. 24.2.3.5 / 19.2.3.1&quot;,lines:gl,
+    vars:[[&quot;I_g&quot;,&quot;Gross moment of inertia, reinforcement neglected&quot;,fmt(sv.Ig,0),&quot;in\u2074&quot;],[&quot;y_t&quot;,&quot;Centroid to the extreme tension fibre&quot;,fmt(sv.yt,3),&quot;in&quot;],[&quot;M_{cr}&quot;,&quot;Cracking moment&quot;,fmt(R.Mcr),&quot;k-ft&quot;]]}));
+  const tf=SS.tee&amp;&amp;SS.kd>hf, bT=SS.bTop, n=SS.n;
+  const G=layerGeom(R.cant), Ct=G.filter(L=>L.side===&quot;C&quot;), Tt=G.filter(L=>L.side===&quot;T&quot;);
+  const cTerm=L=>(L.d<SS.kd?&quot;(&quot;+fmt(n-1,2)+&quot;)&quot;:&quot;(&quot;+fmt(n,2)+&quot;)&quot;)+&quot;(&quot;+fmt(L.As,2)+&quot;)(&quot;+fmt(SS.kd,3)+&quot; - &quot;+fmt(L.d,3)+&quot;)&quot;;
+  const conc=tf?`b_f h_f\\left(kd-\\tfrac{h_f}{2}\\right)+\\dfrac{b_w (kd-h_f)^2}{2}`:`\\dfrac{b\\,(kd)^2}{2}`;
+  const concS=tf?`(${fmt(bf)})(${fmt(hf)})(${fmt(SS.kd,3)}-${fmt(hf/2)})+\\dfrac{(${fmt(bw)})(${fmt(SS.kd,3)}-${fmt(hf)})^2}{2}`:`\\dfrac{(${fmt(bT)})(${fmt(SS.kd,3)})^2}{2}`;
+  const icr=tf?`\\dfrac{b_f (kd)^3}{3}-\\dfrac{(b_f-b_w)(kd-h_f)^3}{3}`:`\\dfrac{b\\,(kd)^3}{3}`;
+  const icrS=tf?`\\dfrac{(${fmt(bf)})(${fmt(SS.kd,3)})^3}{3}-\\dfrac{(${fmt(bf-bw)})(${fmt(SS.kd-hf,3)})^3}{3}`:`\\dfrac{(${fmt(bT)})(${fmt(SS.kd,3)})^3}{3}`;
+  const sq=L=>(L.d<SS.kd?&quot;(&quot;+fmt(n-1,2)+&quot;)&quot;:&quot;(&quot;+fmt(n,2)+&quot;)&quot;)+&quot;(&quot;+fmt(L.As,2)+&quot;)(&quot;+fmt(Math.abs(L.d-SS.kd),3)+&quot;)^2&quot;;
+  b.appendChild(eqBlock({title:&quot;Cracked transformed section&quot;+(tf?&quot; (T-beam, neutral axis in the web)&quot;:&quot;&quot;),ref:&quot;ACI 24.2.3.5&quot;,lines:[
+    `${conc}${Ct.length?&quot;+\\sum (n-1)A'_s(kd-d')&quot;:&quot;&quot;} = \\sum nA_s(d-kd)\\quad\\text{(first moments about the neutral axis)}`,
+    `${concS}${Ct.map(L=>&quot;+&quot;+cTerm(L)).join(&quot;&quot;)} = ${Tt.map(L=>&quot;(&quot;+fmt(n,2)+&quot;)(&quot;+fmt(L.As,2)+&quot;)(&quot;+fmt(L.d,3)+&quot; - &quot;+fmt(SS.kd,3)+&quot;)&quot;).join(&quot;+&quot;)}\\;\\Rightarrow\\;kd = ${fmt(SS.kd,3)}\\text{ in}`,
+    `I_{cr} = ${icr}${Ct.length?&quot;+\\sum (n-1)A'_s(kd-d')^2&quot;:&quot;&quot;}+\\sum nA_s(d-kd)^2`,
+    `I_{cr} = ${icrS}${Ct.map(L=>&quot;+&quot;+sq(L)).join(&quot;&quot;)}${Tt.map(L=>&quot;+&quot;+sq(L)).join(&quot;&quot;)} = ${fmt(SS.Icr,0)}\\text{ in}^4`],
+    vars:[[&quot;n&quot;,&quot;Modular ratio&quot;,fmt(n,2),&quot;&quot;],[&quot;kd&quot;,&quot;Neutral-axis depth, cracked&quot;,fmt(SS.kd,3),&quot;in&quot;],[&quot;I_{cr}&quot;,&quot;Cracked transformed moment of inertia&quot;,fmt(SS.Icr,0),&quot;in\u2074&quot;]]}));
+  if(Ct.some(L=>L.d>=SS.kd)) b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;A compression-face layer below the neutral axis is in tension and is transformed by n (not n − 1).&quot;));
+  b.appendChild(eqBlock({title:&quot;Dead load D&quot;,ref:&quot;ACI Table 24.2.3.5 / 24.2.3.1&quot;,lines:cbcDfLevTex(R,R.D,&quot;D&quot;)}));
+  b.appendChild(eqBlock({title:&quot;Dead + live load, D + live&quot;,ref:&quot;ACI Table 24.2.3.5 / 24.2.3.1&quot;,lines:cbcDfLevTex(R,R.DL,&quot;D+L&quot;)}));
+  b.appendChild(eqBlock({title:&quot;Immediate live-load deflection&quot;,ref:&quot;ACI 24.2.3 / Table 24.2.2&quot;,lines:[`\\Delta_{live} = \\Delta_{D+L}-\\Delta_D = ${f3(R.DL.D)}-${f3(R.D.D)} = ${f3(R.dL)}\\text{ in}`]}));
+  b.appendChild(eqBlock({title:&quot;Sustained load, D + &quot;+fmt(R.sus,0)+&quot;% of the live load&quot;,ref:&quot;ACI Table 24.2.3.5 / 24.2.4.1&quot;,lines:R.al>0?cbcDfLevTex(R,R.SU,&quot;sus&quot;):[`\\alpha = 0:\\;w_{sus} = w_D\\;\\Rightarrow\\;\\Delta_{sus} = \\Delta_D = ${f3(R.SU.D)}\\text{ in}`]}));
+  b.appendChild(eqBlock({title:&quot;Time-dependent factor&quot;,ref:&quot;ACI 24.2.4.1.1 / Eq. 24.2.4.1.1 / Table 24.2.4.1.3&quot;,lines:[
+    `\\rho' = \\dfrac{A'_s}{b\\,d} = \\dfrac{${fmt(sec.Asp,2)}}{(${fmt(sec.b)})(${fmt(sec.d,3)})} = ${fmt(R.rhoP,5)}`,
+    `\\xi = ${fmt(R.xi,1)}\\quad\\text{(${R.dur===60?&quot;5 years or more&quot;:R.dur+&quot; months&quot;}, Table 24.2.4.1.3)}`,
+    `\\lambda_\\Delta = \\dfrac{\\xi}{1+50\\rho'} = \\dfrac{${fmt(R.xi,1)}}{1+50(${fmt(R.rhoP,5)})} = ${f3(R.lam)}`],
+    vars:[[&quot;A'_s&quot;,&quot;Compression-face reinforcement at the section&quot;+(sec.Asp>0?&quot;&quot;:&quot; (none)&quot;),fmt(sec.Asp,2),&quot;in\u00b2&quot;],[&quot;b&quot;,&quot;Width of the compression face&quot;+(sec.tee&amp;&amp;!R.cant?&quot; (b_f)&quot;:&quot;&quot;),fmt(sec.b),&quot;in&quot;],[&quot;d&quot;,&quot;Depth to the centroid of the tension reinforcement&quot;,fmt(sec.d,3),&quot;in&quot;]]}));
+  if(R.M.aft) b.appendChild(eqBlock({title:&quot;Deflection after attachment of the nonstructural elements&quot;,ref:&quot;ACI Table 24.2.2 / 24.2.4.1&quot;,lines:[
+    `\\Delta_{after} = \\lambda_\\Delta\\Delta_{sus}+\\Delta_{live} = ${f3(R.lam)}(${f3(R.SU.D)})+${f3(R.dL)} = ${f3(R.dA)}\\text{ in}`]}));
+  const lines=R.chk.map(c=>(c.id===&quot;deflI&quot;?`|\\Delta_{live}| = ${f3(c.val)}`:`|\\Delta_{after}| = ${f3(c.val)}`)+`\\text{ in}\\;${c.ok?&quot;\\le&quot;:&quot;>&quot;}\\;\\dfrac{\\ell}{${c.div}} = \\dfrac{${fmt(R.li,1)}}{${c.div}} = ${f3(c.lim)}\\text{ in},\\qquad \\text{ratio} = ${f3(c.dcr)}`);
+  b.appendChild(eqBlock({title:&quot;Limits&quot;,ref:&quot;ACI Table 24.2.2&quot;,lines}));
+  const allOk=R.chk.every(c=>c.ok), v=el(&quot;div&quot;,allOk?&quot;okBox&quot;:&quot;errBox&quot;);
+  v.innerHTML=&quot;<b>&quot;+(allOk?&quot;PASS&quot;:&quot;FAIL&quot;)+&quot;</b> — &quot;+R.chk.map(c=>(c.id===&quot;deflI&quot;?&quot;immediate live load &quot;:&quot;after attachment &quot;)+f3(c.val)+&quot; in vs ℓ/&quot;+c.div+&quot; = &quot;+f3(c.lim)+&quot; in (&quot;+(c.ok?&quot;PASS&quot;:&quot;FAIL&quot;)+&quot;)&quot;).join(&quot;; &quot;)+&quot;.&quot;;
+  b.appendChild(v);
+  const fw=el(&quot;div&quot;,&quot;figWrap&quot;); fw.innerHTML=cbcDfSVG(R,(window.innerWidth||1000)<600); b.appendChild(fw);
+  b.appendChild(el(&quot;div&quot;,&quot;figCap&quot;,&quot;Figure DF-1 — Deflected shape, immediate, under the service line loads: D and D + live, each with its own I_e (exaggerated vertical scale).&quot;));
+  cbcWorkedIn(b,[{tab:&quot;tabLoads&quot;,c:{card:&quot;ldLine&quot;,name:&quot;Line Loads&quot;},txt:&quot;w per case&quot;},{tab:&quot;tabLoads&quot;,c:{card:&quot;ldBeam&quot;,name:&quot;Beam Analysis&quot;},txt:&quot;diagrams, deflected shape&quot;}]);
+}
+/* Figure DF-1: the elastic curve of a uniform load, Δ(x) = Δ_max·s(x): simple span s = (16/5)ξ(1 − 2ξ² + ξ³), cantilever
+   (fixed at x = 0) s = ξ²(6 − 4ξ + ξ²)/3, ξ = x/L. Downward deflection plotted down. */
+function cbcDfSVG(R,narrow){
+  const W=narrow?360:560, xa=narrow?30:50, xb=W-(narrow?30:50), L=R.L, E=s=>String(s).replace(/[&amp;<>]/g,c=>({&quot;&amp;&quot;:&quot;&amp;amp;&quot;,&quot;<&quot;:&quot;&amp;lt;&quot;,&quot;>&quot;:&quot;&amp;gt;&quot;}[c]));
+  const T=(x,y,s,o)=>`<text x=&quot;${x.toFixed(1)}&quot; y=&quot;${y.toFixed(1)}&quot;${o||&quot;&quot;}>${E(s)}</text>`, halo=' stroke=&quot;#fff&quot; stroke-width=&quot;3&quot; paint-order=&quot;stroke&quot;';
+  const sh=t=>R.cant?t*t*(6-4*t+t*t)/3:16/5*t*(1-2*t*t+t*t*t);
+  const y0=46, mx=Math.max(Math.abs(R.D.D),Math.abs(R.DL.D),1e-9), sc=86/mx, PX=x=>xa+(xb-xa)*x/L;
+  let s=T(10,18,&quot;Deflected shape (service, immediate)&quot;,' font-weight=&quot;bold&quot;');
+  s+=`<line x1=&quot;${xa}&quot; y1=&quot;${y0}&quot; x2=&quot;${xb}&quot; y2=&quot;${y0}&quot; stroke=&quot;#94A3B8&quot; stroke-width=&quot;1&quot; stroke-dasharray=&quot;5,3&quot;/>`;
+  if(R.cant){ s+=`<line x1=&quot;${xa}&quot; y1=&quot;${y0-18}&quot; x2=&quot;${xa}&quot; y2=&quot;${y0+18}&quot; stroke=&quot;#0F172A&quot; stroke-width=&quot;2.4&quot;/>`;
+    for(let q=y0-16;q<=y0+16;q+=6) s+=`<line x1=&quot;${xa}&quot; y1=&quot;${q}&quot; x2=&quot;${xa-7}&quot; y2=&quot;${q+6}&quot; stroke=&quot;#0F172A&quot; stroke-width=&quot;0.9&quot;/>`; }
+  else { s+=`<polygon points=&quot;${xa},${y0} ${xa-7},${y0+12} ${xa+7},${y0+12}&quot; fill=&quot;#fff&quot; stroke=&quot;#0F172A&quot; stroke-width=&quot;1.2&quot;/>`;
+    s+=`<polygon points=&quot;${xb},${y0} ${xb-7},${y0+10} ${xb+7},${y0+10}&quot; fill=&quot;#fff&quot; stroke=&quot;#0F172A&quot; stroke-width=&quot;1.2&quot;/><line x1=&quot;${xb-10}&quot; y1=&quot;${y0+13}&quot; x2=&quot;${xb+10}&quot; y2=&quot;${y0+13}&quot; stroke=&quot;#0F172A&quot; stroke-width=&quot;1.2&quot;/>`; }
+  const curve=(Dm,col,lab,dy)=>{ const P=[]; for(let i=0;i<=48;i++){ const t=i/48; P.push(PX(t*L).toFixed(1)+&quot;,&quot;+(y0+Dm*sh(t)*sc).toFixed(1)); }
+    const xm=R.cant?L:L/2, px=PX(xm), py=y0+Dm*sc;
+    return `<polyline points=&quot;${P.join(&quot; &quot;)}&quot; fill=&quot;none&quot; stroke=&quot;${col}&quot; stroke-width=&quot;2&quot;/><circle cx=&quot;${px}&quot; cy=&quot;${py}&quot; r=&quot;3&quot; fill=&quot;${col}&quot;/>`+
+      T(R.cant?px-6:px,py+dy,lab,' font-size=&quot;12.5&quot; font-weight=&quot;bold&quot; fill=&quot;'+col+'&quot;'+(R.cant?' text-anchor=&quot;end&quot;':' text-anchor=&quot;middle&quot;')+halo); };
+  s+=curve(R.D.D,&quot;#475569&quot;,&quot;Δ_D = &quot;+fmt(R.D.D,3)+&quot; in&quot;,R.D.D>=0?-7:15)+curve(R.DL.D,&quot;#2563EB&quot;,&quot;Δ_D+L = &quot;+fmt(R.DL.D,3)+&quot; in&quot;,R.DL.D>=0?17:-7);
+  const yE=y0+Math.max(0,86*Math.max(R.D.D,R.DL.D)/mx)+34;
+  s+=T(xa,yE,&quot;0&quot;,' font-size=&quot;11.5&quot; text-anchor=&quot;middle&quot; fill=&quot;#334155&quot;')+T(xb,yE,fmt(L)+&quot; ft&quot;,' font-size=&quot;11.5&quot; text-anchor=&quot;middle&quot; fill=&quot;#334155&quot;');
+  s+=T(10,yE+18,&quot;Δ_live = Δ_D+L − Δ_D = &quot;+fmt(R.dL,3)+&quot; in; &quot;+(R.cant?&quot;free end&quot;:&quot;midspan&quot;)+&quot;; I_e,D = &quot;+fmt(R.D.Ie,0)+&quot;, I_e,D+L = &quot;+fmt(R.DL.Ie,0)+&quot; in⁴.&quot;,' font-size=&quot;11.5&quot; fill=&quot;#334155&quot;');
+  const H=Math.ceil(yE+28);
+  return `<svg class=&quot;dwg cbdf&quot; viewBox=&quot;0 0 ${W} ${H}&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot; style=&quot;max-width:${W}px&quot; font-family=&quot;Arial,Helvetica,sans-serif&quot; font-size=&quot;13.5&quot; fill=&quot;#0F172A&quot;>`
+    +`<rect x=&quot;0&quot; y=&quot;0&quot; width=&quot;${W}&quot; height=&quot;${H}&quot; fill=&quot;#fff&quot;/>`+s+`</svg>`;
+}
+/* the deflected shape on the Beam Analysis card (Load Combinations tab) */
+function cbcDfBd(b){
+  const R=cbcDeflX(); if(!R.on) return;
+  const f=el(&quot;div&quot;,&quot;figWrap&quot;); f.innerHTML=cbcDfSVG(R,(window.innerWidth||1000)<600); b.appendChild(f);
+  b.appendChild(el(&quot;div&quot;,&quot;figCap&quot;,&quot;Figure DF-1 — Deflected shape, immediate, service D and D + live (ACI 318-19 24.2; exaggerated vertical scale).&quot;));
+  cbcWorkedIn(b,[{tab:&quot;tabServ&quot;,c:{card:&quot;svcDefl&quot;,name:&quot;Deflection (ACI 24.2)&quot;},txt:&quot;Δ, I_e, limits&quot;}]);
+}
+/* the inputs (Loads card, service mode, after the line loads) */
+function cbcDeflInputs(b){
+  if(S.code!=='ACI') return;
+  if(!S.defl||typeof S.defl!==&quot;object&quot;) S.defl=cbcDeflNorm(null);
+  const o=S.defl;
+  b.appendChild(el(&quot;h3&quot;,null,&quot;Deflection (ACI 318-19 24.2)&quot;));
+  const ms=selIn(CBDF_MEMK,()=>cbcDeflNorm(o).mem,v=>{o.mem=CBDF_MEM[v]?v:&quot;floorDmg&quot;;},k=>CBDF_MEM[k].s+&quot; (ℓ/&quot;+CBDF_MEM[k].imm+(CBDF_MEM[k].aft?&quot;, ℓ/&quot;+CBDF_MEM[k].aft:&quot;&quot;)+&quot;)&quot;,k=>k,&quot;dfMem&quot;);
+  ms.style.maxWidth=&quot;100%&quot;; fRow(b,&quot;Member (Table 24.2.2)&quot;,ms,&quot;&quot;);
+  fRow(b,&quot;Sustained part of the live load&quot;,numIn(()=>cbcDeflNorm(o).sus,v=>{o.sus=Math.min(100,Math.max(0,v));},&quot;5&quot;,&quot;dfSus&quot;),&quot;%&quot;);
+  fRow(b,&quot;Duration of the sustained load&quot;,selIn([3,6,12,60],()=>cbcDeflNorm(o).dur,v=>{o.dur=+v;},k=>(k===60?&quot;5 years or more&quot;:k+&quot; months&quot;)+&quot; (ξ = &quot;+fmt(CBDF_XI[k],1)+&quot;)&quot;,k=>String(k),&quot;dfDur&quot;),&quot;&quot;);
+  const R=cbcDeflX();
+  if(!R.on){ b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Deflection: &quot;+R.why+&quot;.&quot;)); return; }
+  b.appendChild(cbNL(&quot;note&quot;,&quot;Deflection: &quot;+(R.cant?&quot;cantilever&quot;:&quot;simple span&quot;)+&quot;, ℓ = &quot;+fmt(R.L)+&quot; ft; live load = L + the largest of L_r, S, R.&quot;,[
+    ...R.chk.map(c=>[c.id===&quot;deflI&quot;?&quot;Immediate live:&quot;:&quot;After attachment:&quot;,fmt(c.val,3)+&quot; in vs ℓ/&quot;+c.div+&quot; = &quot;+fmt(c.lim,3)+&quot; in, ratio &quot;+fmt(c.dcr,3)+&quot; — <b>&quot;+(c.ok?&quot;PASS&quot;:&quot;FAIL&quot;)+&quot;</b>&quot;])],
+    {act:R.ent.length?[&quot;M entered by hand for case &quot;+R.ent.join(&quot;, &quot;)+&quot; is not included in the deflection.&quot;]:[]}));
+  cbcWorkedIn(b,[{tab:&quot;tabServ&quot;,c:{card:&quot;svcDefl&quot;,name:&quot;Deflection (ACI 24.2)&quot;},txt:&quot;worked&quot;}]);
+}
+/* the Report subsection (Serviceability section, ACI): steps scope df; keys df/deflI, df/deflA (linked from the Summary of checks) */
+function cbcDfRpt(){
+  const R=cbcDeflX(); if(R.aashto) return [];
+  if(!R.on) return [{title:'Deflection (ACI 318-19 24.2)',items:[{type:'note',text:'Deflection: '+R.why+'. In service mode, the line loads per case and the span L (Loads card) give the deflection. [[tab:tabServ|On screen: Serviceability tab, Deflection]]'}]}];
+  const sec=R.sec, sv=sec.sv, SS=sec.SS, E=sec.E, X=R.X, f3=v=>fmt(v,3), {bw,h,bf,hf}=S.sec, T=[];
+  T.push({title:'Service line loads',ref:'ACI 318-19 24.2.4.1',steps:[
+    cS({id:'wD',label:'Dead load, case D (see the line-load step)',sym:'w_{D}',value:R.wD,unit:'klf',d:3}),
+    cS({id:'wlv',label:'Live-type load',sym:'w_{live}',eq:'w_L+\\max(w_{L_r},w_S,w_R)',sub:f3(R.wL)+'+\\max('+f3(X.cases.Lr.w)+','+f3(X.cases.S.w)+','+f3(X.cases.R.w)+')',value:R.wLv,unit:'klf',d:3}),
+    cS({id:'wDL',label:'Dead + live',sym:'w_{D+L}',eq:'w_D+w_{live}',sub:f3(R.wD)+'+'+f3(R.wLv),value:R.DL.w,unit:'klf',d:3}),
+    cS({id:'wsus',label:'Sustained load, α = '+fmt(R.al)+' (input)',sym:'w_{sus}',eq:'w_D+\\alpha w_{live}',sub:f3(R.wD)+'+('+fmt(R.al)+')('+f3(R.wLv)+')',value:R.SU.w,unit:'klf',d:3})]});
+  const st=[cS({id:'Ec',label:'Modulus of elasticity of concrete',sym:'E_{c}',eq:E.lw?'w_c^{1.5}33\\sqrt{f\'_c}':'57{,}000\\sqrt{f\'_c}',sub:E.lw?'('+fmt(E.wc,0)+')^{1.5}(33)\\sqrt{'+fmt(S.mat.fc*1000,0)+'}/1000':'57{,}000\\sqrt{'+fmt(S.mat.fc*1000,0)+'}/1000',value:E.Ec,unit:'ksi',d:0,ref:cRef(E.ref)}),
+    cS({id:'n',label:'Modular ratio',sym:'n',eq:'E_s/E_c',sub:'29{,}000/'+fmt(E.Ec,0),value:SS.n,d:2}),
+    cS({id:'fr',label:'Modulus of rupture',sym:'f_{r}',eq:&quot;7.5\\lambda\\sqrt{f'_c}&quot;,sub:'7.5('+fmt(S.mat.lambda,2)+')\\sqrt{'+fmt(S.mat.fc*1000,0)+'}/1000',value:sv.fr,unit:'ksi',d:4,ref:cRef('ACI 19.2.3.1')}),
+    sec.tee?cS({id:'Ig',label:'Gross moment of inertia, T-section (flange '+fmt(bf)+' × '+fmt(hf)+' in, web '+fmt(bw)+' in, h = '+fmt(h)+' in)',sym:'I_{g}',eq:'\\sum\\left(\\dfrac{b h^3}{12}+A\\bar y^2\\right)',value:sv.Ig,unit:'in^{4}',d:0})
+      :cS({id:'Ig',label:'Gross moment of inertia',sym:'I_{g}',eq:'\\dfrac{b h^3}{12}',sub:'\\dfrac{('+fmt(bw)+')('+fmt(h)+')^3}{12}',value:sv.Ig,unit:'in^{4}',d:0}),
+    cS({id:'yt',label:'Centroid to the extreme tension fibre ('+(R.cant?'top':'bottom')+' face)',sym:'y_{t}',value:sv.yt,unit:'in',d:3}),
+    cS({id:'Mcr',label:'Cracking moment',sym:'M_{cr}',eq:'\\dfrac{f_r I_g}{y_t}',sub:'\\dfrac{('+fmt(sv.fr,4)+')('+fmt(sv.Ig,0)+')}{'+fmt(sv.yt,3)+'}/12',value:R.Mcr,unit:'kip-ft',ref:cRef('ACI 24.2.3.5')}),
+    cS({id:'kd',label:'Neutral-axis depth of the cracked transformed section, from first moments of the transformed area about the axis'+(SS.tee&amp;&amp;SS.kd>hf?' (T-beam, in the web)':''),sym:'kd',value:SS.kd,unit:'in',d:3}),
+    cS({id:'Icr',label:'Cracked transformed moment of inertia',sym:'I_{cr}',eq:(SS.tee&amp;&amp;SS.kd>hf?'\\dfrac{b_f(kd)^3}{3}-\\dfrac{(b_f-b_w)(kd-h_f)^3}{3}':'\\dfrac{b(kd)^3}{3}')+'+\\sum(n-1)A\'_s(kd-d\')^2+\\sum nA_s(d-kd)^2',value:SS.Icr,unit:'in^{4}',d:0})];
+  T.push({title:'Section properties at '+(R.cant?'the support (cantilever)':'midspan'),ref:'ACI 318-19 24.2.3.5, 24.2.3.7',steps:st});
+  const lev=(lv,sym,id)=>{ const Mf=R.cant?'\\dfrac{w\\ell^2}{2}':'\\dfrac{w\\ell^2}{8}';
+    return [cS({id:'Ma'+id,label:'Service moment',sym:'M_{a,'+sym+'}',eq:Mf,sub:'\\dfrac{('+f3(Math.abs(lv.w))+')('+fmt(R.L)+')^2}{'+(R.cant?2:8)+'}',value:lv.Ma,unit:'kip-ft'}),
+      lv.cr?cS({id:'Ie'+id,label:'Effective moment of inertia, M_a > (2/3)M_cr = '+fmt(R.Mcr23)+' kip-ft (Table 24.2.3.5(b))',sym:'I_{e,'+sym+'}',eq:'\\dfrac{I_{cr}}{1-\\left(\\dfrac{(2/3)M_{cr}}{M_a}\\right)^2\\left(1-\\dfrac{I_{cr}}{I_g}\\right)}',sub:'\\dfrac{'+fmt(SS.Icr,0)+'}{1-\\left(\\dfrac{'+fmt(R.Mcr23)+'}{'+fmt(lv.Ma)+'}\\right)^2\\left(1-\\dfrac{'+fmt(SS.Icr,0)+'}{'+fmt(sv.Ig,0)+'}\\right)}',value:lv.Ie,unit:'in^{4}',d:0,ref:cRef('ACI Table 24.2.3.5')})
+        :cS({id:'Ie'+id,label:'Effective moment of inertia, M_a ≤ (2/3)M_cr = '+fmt(R.Mcr23)+' kip-ft (Table 24.2.3.5(a))',sym:'I_{e,'+sym+'}',eq:'I_g',value:lv.Ie,unit:'in^{4}',d:0,ref:cRef('ACI Table 24.2.3.5')}),
+      cS({id:'d'+id,label:'Immediate deflection',sym:'\\Delta_{'+sym+'}',eq:R.cant?'\\dfrac{w\\ell^4}{8E_cI_e}':'\\dfrac{5w\\ell^4}{384E_cI_e}',sub:R.cant?'\\dfrac{('+f3(lv.w)+'/12)('+fmt(R.li,1)+')^4}{8('+fmt(E.Ec,0)+')('+fmt(lv.Ie,0)+')}':'\\dfrac{5('+f3(lv.w)+'/12)('+fmt(R.li,1)+')^4}{384('+fmt(E.Ec,0)+')('+fmt(lv.Ie,0)+')}',value:lv.D,unit:'in',d:3})]; };
+  T.push({title:'Dead load D',ref:'ACI 318-19 24.2.3',steps:lev(R.D,'D','D')});
+  T.push({title:'Dead + live load',ref:'ACI 318-19 24.2.3',steps:lev(R.DL,'D+L','DL').concat([cS({id:'dL',label:'Immediate live-load deflection',sym:'\\Delta_{live}',eq:'\\Delta_{D+L}-\\Delta_D',sub:f3(R.DL.D)+'-'+f3(R.D.D),value:R.dL,unit:'in',d:3})])});
+  T.push({title:'Sustained load and time-dependent factor',ref:'ACI 318-19 24.2.4.1',steps:(R.al>0?lev(R.SU,'sus','S'):[cS({id:'dS',label:'Sustained load = D (α = 0)',sym:'\\Delta_{sus}',eq:'\\Delta_D',value:R.SU.D,unit:'in',d:3})]).concat([
+    cS({id:'rho',label:'Compression reinforcement ratio at the section (b = '+fmt(sec.b)+' in, the compression-face width)',sym:&quot;\\rho'&quot;,eq:&quot;\\dfrac{A'_s}{b d}&quot;,sub:'\\dfrac{'+fmt(sec.Asp,2)+'}{('+fmt(sec.b)+')('+fmt(sec.d,3)+')}',value:R.rhoP,d:5,ref:cRef('ACI 24.2.4.1.2')}),
+    cS({id:'xi',label:'Time-dependent factor, '+(R.dur===60?'5 years or more':R.dur+' months'),sym:'\\xi',value:R.xi,d:1,ref:cRef('ACI Table 24.2.4.1.3')}),
+    cS({id:'lam',label:'Long-term multiplier',sym:'\\lambda_{\\Delta}',eq:&quot;\\dfrac{\\xi}{1+50\\rho'}&quot;,sub:'\\dfrac{'+fmt(R.xi,1)+'}{1+50('+fmt(R.rhoP,5)+')}',value:R.lam,d:3,ref:cRef('ACI Eq. 24.2.4.1.1')})]).concat(R.M.aft?[
+    cS({id:'dA',label:'Deflection after attachment: time-dependent (sustained) + immediate live',sym:'\\Delta_{after}',eq:'\\lambda_{\\Delta}\\Delta_{sus}+\\Delta_{live}',sub:f3(R.lam)+'('+f3(R.SU.D)+')+'+f3(R.dL),value:R.dA,unit:'in',d:3})]:[])});
+  T.push({title:'Limits',ref:'ACI 318-19 Table 24.2.2',steps:R.chk.map(c=>cS({id:c.id,label:(c.id==='deflI'?'Immediate live-load deflection':'Deflection after attachment')+' / (ℓ/'+c.div+'), ℓ/'+c.div+' = '+fmt(R.li,1)+'/'+c.div+' = '+f3(c.lim)+' in',sym:c.id==='deflI'?'|\\Delta_{live}|/(\\ell/'+c.div+')':'|\\Delta_{after}|/(\\ell/'+c.div+')',eq:'\\le 1',sub:'\\dfrac{'+f3(c.val)+'}{'+f3(c.lim)+'}',value:c.dcr,d:3,ok:c.ok}))});
+  return [{title:'Deflection (ACI 318-19 24.2) — '+(R.cant?'cantilever':'simple span')+', ℓ = '+fmt(R.L)+' ft',items:cbrNL('Basis:',cbcDfBasis(R),{act:R.ent.length?['M entered by hand for case '+R.ent.join(', ')+' is not included in the deflection (line loads only).']:[]}).concat([
+    {type:'note',text:'Line loads per case: '+['D','L','Lr','S','R'].filter(k=>X.cases[k].has).map(k=>'w_'+k+' = '+f3(X.cases[k].w)+' klf [[ll/w'+k+']]').join('; ')+'.'},
+    {type:'topics',scope:'df',title:'Worked steps',list:T},
+    {type:'table',caption:'Deflection checks, ACI 318-19 Table 24.2.2',head:['Check','Deflection (in)','Limit (in)','Ratio','Status'],rows:R.chk.map(c=>[c.id==='deflI'?'Immediate live load, ℓ/'+c.div:'After attachment, ℓ/'+c.div,{t:f3(c.val),n:true},{t:f3(c.lim),n:true},{t:f3(c.dcr),n:true,key:'df/'+c.id},{t:c.ok?'PASS':'FAIL',cls:c.ok?'ok':'ng'}])},
+    {type:'figure',svg:cbcDfSVG(R),caption:'Figure DF-1: Deflected shape, immediate, under the service line loads — D: Δ_D = '+f3(R.D.D)+' in [[df/dD]]; D + live: Δ_D+L = '+f3(R.DL.D)+' in [[df/dDL]] (exaggerated vertical scale).'},
+    {type:'note',text:'[[tab:tabServ|On screen: Serviceability tab, Deflection]]'}])}];
 }
 
 /* ---------------- FLEXURE tab ---------------- */
@@ -4338,8 +4607,9 @@ function buildServTab(pg){
       b.appendChild(v);
       cbcWorkedIn(b,[{tab:&quot;tabFlex&quot;,c:cbcComboCard(&quot;flexC&quot;,g.ci),txt:&quot;\u03c6M_n&quot;}]);   /* D11 link */
     }
-    b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Deflection and crack-width control are not evaluated by this tool.&quot;));
+    b.appendChild(el(&quot;div&quot;,&quot;note&quot;,S.code==='ACI'?&quot;Crack-width control is not evaluated by this tool. Deflection: see the Deflection card below (ACI 318-19 24.2).&quot;:&quot;Deflection and crack-width control are not evaluated by this tool.&quot;));   /* CBDF: ACI text */
   },pg);
+  if(S.code==='ACI') mkSection(&quot;svcDefl&quot;,&quot;Deflection (ACI 318-19 24.2)&quot;,b=>cbcDfCard(b),pg);   /* CBDF */
   if(S.code==='AASHTO'){   /* CBM1 (2026-11-07): 5.6.3.3 for every combination, each in its own sense of bending */
     mkSection(&quot;svcMinAll&quot;,&quot;Minimum Reinforcement \u2014 Every Combination&quot;,b=>{
       b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;AASHTO 5.6.3.3 applies at every section and in both senses of bending: each combination is checked with the cracking moment of the face it puts in tension (y_t to that face) and its own \u03c6M_n. The Summary shows the largest ratio.&quot;));
@@ -6381,7 +6651,8 @@ function cbcRptModel(){
     secs.push({title:'Load combinations',subs});
   }
   /* 2. summary of checks */
-  { const K=allChecks(), keyOf=c=>{ if(c.na||c.ci==null) return undefined;
+  { const K=allChecks(), keyOf=c=>{ if(!c.na&amp;&amp;c.rkey) return c.rkey;   /* CBDF */
+      if(c.na||c.ci==null) return undefined;
       if(c.tab==='tabFlex') return 'fx'+c.ci+'/DCR'; if(c.id==='szA') return 'sh'+cbcComboCi(c.ci)+'/szDC'; if(c.id==='torA') return 'tth/Tu'+c.ci; if(c.id==='torAT'||c.id==='torAC'||c.id==='torAS') return 'tad/'+({torAT:'dcT',torAC:'dcC',torAS:'dcS'}[c.id])+cbcComboCi(c.ci); if(c.id==='lonA') return 'lon/dc'+c.ci; if(c.tab==='tabShear') return CC.combos[c.ci].share?'sh'+c.ci+'/DCRs':'sh'+c.ci+'/DCR';
       if(c.tab==='tabTor') return /cross/i.test(c.label)?'tq'+c.ci+'/size':(/Combined/.test(c.label)?'tq'+c.ci+'/combVT':'tq'+c.ci+'/DCR');
       if(c.tab==='tabServ') return c.ci!=null?'svm/minr'+c.ci:'sv/minr';   /* CBM1: the combination that governs 5.6.3.3 */ if(c.tab==='tabDetail') return 'dt/'+c.id+'.cmp'; };
@@ -6457,7 +6728,7 @@ function cbcRptModel(){
         cS({id:'need',label:'Required resistance',sym:'\\min\\left(M_{cr},\\;1.33M_u\\right)',eq:'',sub:'\\min\\left('+fmt(McrF)+',\\;'+(Math.abs(g.Mu)>0?fmt(1.33*Math.abs(g.Mu)):'\\text{n/a}')+'\\right)',value:need,unit:'kip-ft'}),
         cS({id:'minr',label:'Minimum reinforcement: required / M_r ('+cn(g)+')',sym:'\\dfrac{\\min(M_{cr},1.33M_u)}{\\phi M_n}',eq:'',sub:'\\dfrac{'+fmt(need)+'}{'+fmt(g.phiMn)+'}',value:g.phiMn>0?need/g.phiMn:Infinity,d:3,ok,note:'φM_n: see §phiMn'})]});
     }
-    subs.push({title:'Cracking moment and minimum reinforcement ('+cn(g)+')',items:[{type:'topics',scope:'sv',see:'fx'+g.ci,title:'Worked steps',list:T},{type:'note',text:'Deflection and crack-width control are not evaluated by this tool. [[tab:tabServ|On screen: Serviceability tab]]'}]});
+    subs.push({title:'Cracking moment and minimum reinforcement ('+cn(g)+')',items:[{type:'topics',scope:'sv',see:'fx'+g.ci,title:'Worked steps',list:T},{type:'note',text:(ACI?'Crack-width control is not evaluated by this tool; deflection: see the Deflection subsection below.':'Deflection and crack-width control are not evaluated by this tool.')+' [[tab:tabServ|On screen: Serviceability tab]]'}]});   /* CBDF: ACI text */
     if(!ACI){   /* CBM1 (2026-11-07): 5.6.3.3 for every combination, each in its own sense of bending */
       const L=[], fxk=r=>'fx'+(r.sameAs!==undefined?r.sameAs:r.ci)+'/phiMn';
       CC.combos.forEach(r=>{ const m=r.mr; if(!m) return; const c='C'+(r.ci+1);
@@ -6478,6 +6749,7 @@ function cbcRptModel(){
           {type:'note',warn:SS.fsOuter>0.6*S.mat.fy,text:'$f_{s}$ = '+fmt(SS.fsOuter,1)+' ksi at the bar closest to the tension face ('+fmt(100*SS.fsOuter/S.mat.fy,0)+'% of $f_{y}$); 0.6 $f_{y}$ = '+fmt(0.6*S.mat.fy,1)+' ksi.'}]});
       });
     }
+    if(ACI) cbcDfRpt().forEach(x=>subs.push(x));   /* CBDF: ACI 318-19 24.2 */
     secs.push({title:'Serviceability',subs});
   }
   /* 7. detailing: every check, at its governing combination (detEnvelope, as the tab) */
@@ -6533,7 +6805,7 @@ function cbcDashItems(){
       else if(c.id==='szA') cond='section too small (stirrups will not help)';   /* CBSZ */
     }
     let text='';
-    if(c.na) text=E?('N/A: '+(E.naWhy||'')):'N/A: no load combination has this action.';
+    if(c.na) text=E?('N/A: '+(E.naWhy||'')):(c.naWhy?'N/A: '+c.naWhy:'N/A: no load combination has this action.');   /* CBDF: naWhy */
     else if(en&amp;&amp;!en.na&amp;&amp;en.cmp){
       const dec=en.unit==='in²/in'?4:(en.unit===''?5:2), u=en.unit?' '+en.unit:'';
       text=fmt(en.have,dec)+u+(en.cmp==='\\le'?' provided, limit ≤ ':' provided, required ≥ ')+fmt(en.need,dec)+u+'; governing combination: '+c.combo;
@@ -7000,6 +7272,7 @@ var CBMR_CFG={name:'Beam Capacity',title:'Beam Capacity — Calculation Report',
         else if(c.tab==='tabTor') ks=[/cross/i.test(c.label)?'tq'+ci+'/size':(/Combined/.test(c.label)?'tq'+ci+'/combVT':'tq'+ci+'/DCR')];
         else if(c.tab==='tabServ') ks=['svm/minr'+ci,'sv/minr'];   /* CBM1: the combination that governs 5.6.3.3 */
         else if(c.tab==='tabDetail') ks=['dt/'+c.id+'.cmp']; }
+      if(!c.na&amp;&amp;c.rkey) ks=[c.rkey];   /* CBDF */
       ks=ks.concat(ks.length?['omit-'+ks[0].split('/')[0]]:[],c.tab?['cbro:'+c.tab]:[]);
       var det=it.text+(it.cond&amp;&amp;it.dc?'; '+it.dc+(it.within?' (the ratio is within its limit; the status comes from the condition)':''):'');
       rows.push(row(it.name,it.cond||it.dc,it.st,det,it.ref,ks)); });
