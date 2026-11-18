@@ -7499,7 +7499,7 @@ A "Beam analysis" output card for the line loads (shown when line loads are ente
 ### Open items
 - The decisions above, pending engineer review.
 
-## 2026-11-18 — PR: claude/cbc-slab-trib (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CBST2) — line loads on a one-way slab: a pressure row q uses the slab design width as its tributary width automatically, with an override   [COMPUTATION CHANGE (slab, service mode, pressure rows with b not entered); beams unchanged; saved format unchanged (b = 0 = not entered); no new storage key]
+## 2026-11-18 — PR: claude/cbc-slab-trib (PR #1640: https://github.com/mlococo88/All-Structural/pull/1640) (CBST2) — line loads on a one-way slab: a pressure row q uses the slab design width as its tributary width automatically, with an override   [COMPUTATION CHANGE (slab, service mode, pressure rows with b not entered); beams unchanged; saved format unchanged (b = 0 = not entered); no new storage key]
 
 The file uses CRLF line endings; keep them. The code is in the Beam Capacity srcdoc. When re-applying, escape `&` as `&amp;` and `"` as `&quot;`. The sites are tagged CBST2.
 
