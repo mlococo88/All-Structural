@@ -22,14 +22,14 @@ try {
     secs: [...document.querySelectorAll('.rp-doc .rp-h1')].map(h => h.textContent.trim()), toc: document.querySelectorAll('.rp-toc a').length, bad: document.querySelectorAll('.rp-doc .rp-bad').length,
     text: document.querySelector('.rp-doc').innerText }));
   assert.ok(s1.katex, 'KaTeX loaded'); assert.equal(s1.kErr, 0, 'katex errors'); assert.equal(s1.bad, 0, 'unresolved § references');
-  assert.ok(s1.steps > 1000, `${s1.steps} steps`); assert.equal(s1.secs.length, 14, s1.secs.join(' | '));   // 14 since DEFL (2026-11-09): Deflection after Analysis
-  assert.ok(/^1\. Summary/.test(s1.secs[0]), s1.secs[0]);
+  assert.ok(s1.steps > 1000, `${s1.steps} steps`); assert.equal(s1.secs.length, 18, s1.secs.join(' | '));   // 14 since DEFL (2026-11-09): Deflection after Analysis; 18 since PR3 (2026-11-19): Executive summary, Basis of design, bill of materials, sign-off
+  assert.ok(/^1\. Executive summary/.test(s1.secs[0]), s1.secs[0]); assert.ok(/^2\. Basis of design/.test(s1.secs[1]) && /^3\. Summary/.test(s1.secs[2]), s1.secs.slice(0, 3).join(' | '));   // PR3 (2026-11-19)
   assert.ok(!/NaN|undefined|\[object/.test(s1.text), 'NaN / undefined in the report text');
   // a "see §" link of the summary jumps to its step
   const j = await p.evaluate(() => { const a = document.querySelector('.rp-doc .rp-see'), id = a.getAttribute('href').slice(1); a.click(); const el = document.getElementById(id), r = el.getBoundingClientRect(); return { id, txt: a.textContent, inView: r.top >= -2 && r.top < innerHeight, step: el.classList.contains('rp-step') }; });
   assert.ok(j.step && j.inView, JSON.stringify(j));
   // collapse all, expand all, search
-  await p.click('[data-rpact="col"]'); assert.equal(await p.locator('.rp-doc .rp-sec.rp-closed').count(), 14);
+  await p.click('[data-rpact="col"]'); assert.equal(await p.locator('.rp-doc .rp-sec.rp-closed').count(), 18);
   await p.click('[data-rpact="exp"]'); assert.equal(await p.locator('.rp-doc .rp-closed').count(), 0);
   await p.fill('.rp-q', 'bearing stiffeners'); await p.waitForTimeout(400);
   const vis = await p.evaluate(() => [...document.querySelectorAll('.rp-doc .rp-sub')].filter(x => !x.closest('.rp-hide')).length);

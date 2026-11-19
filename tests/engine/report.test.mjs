@@ -75,7 +75,7 @@ function checkReport(W, B, name) {
   const out = {};
   for (const detail of ['gov', 'all']) {
     const M = W.SBDReportBuild.model(B, { detail }), doc = W.SharedReport.build(M), txt = W.SharedReport.text(doc);
-    assert.equal(M.sections.length, 14, `${name} ${detail}: sections`); assert.equal(M.sections[0].id, 'sum');   // 14 since DEFL (2026-11-09): the Deflection section after Analysis
+    assert.equal(M.sections.length, 18, `${name} ${detail}: sections`); assert.equal(M.sections[0].id, 'exec'); assert.equal(M.sections[2].id, 'sum');   // 14 since DEFL (2026-11-09): the Deflection section after Analysis; 18 since PR3 (2026-11-19): Executive summary, Basis of design first, bill of materials, sign-off last
     assert.deepEqual(J(doc.unresolved), [], `${name} ${detail}: unresolved references`);
     assert.deepEqual(J(doc.dup), [], `${name} ${detail}: duplicate step keys`);
     const nums = new Set(doc.toc.flatMap(s => s.subs.map(q => q.n)));
@@ -115,7 +115,7 @@ test('Steel Bridge report: the built-in project (its own analysis), every sectio
   const fresh2 = W.SBDAnalysis.analyzeGirder(P, 0, { ll: false }); assert.equal(JSON.stringify(B.memo.get('0|{"ll":false}')), JSON.stringify(fresh2));
   // sections not chosen: no dangling reference, the summary rows stay unlinked
   const M3 = W.SBDReportBuild.model(B, { detail: 'gov', include: { flex: false, an: false, sec: false } }), d3 = W.SharedReport.build(M3);
-  assert.deepEqual(J(d3.unresolved), []); assert.equal(M3.sections.length, 11);   // 11 since DEFL (the Deflection section)
+  assert.deepEqual(J(d3.unresolved), []); assert.equal(M3.sections.length, 15);   // 11 since DEFL (the Deflection section); 15 since PR3 (2026-11-19: exec, basis, bom, sign)
   assert.ok(M3.gov.find(q => q.mod === 'Flexure' && q.key === null && /not included/.test(q.loc)));
   console.log(`       built-in: gov ${o.gov.steps} steps, ${o.gov.refs} references; all ${o.all.steps} steps, ${o.all.refs} references; all resolve; non-finite steps ${o.gov.nf}`);
 });
