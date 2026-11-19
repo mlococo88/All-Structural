@@ -164,7 +164,7 @@
         ${h.sel('crossframes.gA', 'Angle grade', grs)}${h.sel('crossframes.gG', 'Gusset grade', grs)}${mem('top')}${mem('bot')}${mem('diag')}
         <h4 class="sub">End connections</h4>${conn}${h.num('crossframes.conn.n', 'Bolts per member end', '')}${h.num('crossframes.conn.s', 'Pitch', 'in')}${h.num('crossframes.conn.e', 'End distance', 'in')}${h.num('crossframes.conn.tg', 'Gusset thickness', 'in')}
         <p class="note">S (largest girder spacing), the girder depth d and L<sub>b</sub> (largest unbraced length on any girder) come from the project and the layout.</p>`}`)
-      + h.card('Flange lateral bending from skew (C6.10.1)', `${h.num('framing.flSkI', 'f<sub>ℓ</sub>, interior girders', 'ksi')}${h.num('framing.flSkE', 'f<sub>ℓ</sub>, exterior girders', 'ksi')}${h.num('framing.flSkG', 'Load factor on f<sub>ℓ</sub>', '')}
+      + h.card('Flange lateral bending from skew (C6.10.1)', `${h.num('framing.flSkI', 'f<sub>ℓ</sub>, interior girders (unfactored)', 'ksi')}${h.num('framing.flSkE', 'f<sub>ℓ</sub>, exterior girders, lines discontinuous near the supports only (unfactored)', 'ksi')}${h.num('framing.flSkE2', 'f<sub>ℓ</sub>, exterior girders, lines discontinuous over the whole span (unfactored; blank = 2.0)', 'ksi')}${h.num('framing.flSkG', 'Load factor on f<sub>ℓ</sub>, deck placement only (Strength I and Service II split f<sub>ℓ</sub> between dead and live load)', '')}
         <p class="note">Used where any support is skewed more than 20°, in lieu of a refined analysis (as GirderDetail): the Flexure tab takes it with a hand-off file of this bridge.</p>`)
       + h.card('Stability bracing during deck placement (6.7.4.2.2)', `${h.sel('crossframes.sb.on', 'Check stability bracing', [['yes', 'Yes'], ['no', 'No']])}${h.sel('crossframes.sb.full', 'Depth and connection plates', [['auto', 'Automatic (h ≥ 0.8D: full depth)'], ['yes', '≥ 0.8 girder depth, full-depth plates (2.4)'], ['no', 'Otherwise (3.6)']])}
         ${h.num('crossframes.sb.Mu', 'Factored deck-placement M<sub>u</sub> (blank: analysis)', 'kip-ft', { text: true })}${h.num('crossframes.sb.Cb', 'C<sub>b</sub>', '')}
@@ -207,7 +207,7 @@
     const I = CF.inputsOf(P, { L, A, gi }), env = CF.envOf(P), R = CF.compute(I.p, env);
     const C = R.errors ? (R.errors.length ? null : CF.checks(R)) : null;
     const G = P.girders[gi] || P.girders[0], line = Math.min(FRM.lineOf(P, G), L.FR.girders.length - 1), ext = line === 0 || line === L.FR.girders.length - 1;
-    const fl = FRM.flSkew(L.m.skews, ext, P.framing), XF = CF.pointLoads(P, gi, { L }), br = FRM.girderBraces(P, gi, L);
+    const fl = FRM.flSkew(L.m.skews, ext, P.framing, FRM.flLayout(P, line, L, ext, FRM.settings(P))), XF = CF.pointLoads(P, gi, { L }), br = FRM.girderBraces(P, gi, L);
     // SB-23 (2026-11-13; the engineer's request for this DXF change): the tab graphic's Download DXF draws one cross-frame per distinct bay depth,
     // as the Drawings cross-frame sheet (CF.bayGroups): each group's frame is the reported type's inputs with the group's h and d, computed and
     // checked, at the group's first bay (dxfG). One depth, or a project saved before girder types: the frame checked (B), as before for equal
@@ -312,7 +312,8 @@
       <p class="note">This plate girder takes cross-section girder G${line + 1}: its brace points (bearings and ${bn}, mapped to the analysis stations proportionally within each span) are the L<sub>b</sub> points of the Flexure tab with a hand-off file of this bridge and the ${dOn ? 'diaphragm' : 'cross-frame'} bays of the Shear &amp; stiffeners tab (${br ? br.ints.length : 0} intermediate ${dOn ? 'diaphragms' : 'frames'}).</p></div></section>`;
     // f_l and DC1
     h += `<section class="sec"><div class="secHead">Flange lateral bending and DC1</div><div class="secBody"><div class="kv">
-      <div><span>f<sub>ℓ</sub> from skew, G${line + 1} (C6.10.1)</span><span>${fmt(fl.fl, 2)} ksi ${wk('flsk.fl')}</span></div>
+      <div><span>f<sub>ℓ,skew</sub>, unfactored estimate, G${line + 1} (C6.10.1, by the cross-frame lines; largest on the girder)</span><span>${fmt(fl.f0, 2)} ksi ${wk('flsk.f0')}</span></div>
+      <div><span>γf<sub>ℓ,skew</sub>, deck placement (Constructibility)</span><span>${fmt(fl.fl, 2)} ksi ${wk('flsk.fl')}</span></div>
       <div><span>${dOn ? 'Diaphragm' : 'Cross-frame'} point loads on G${line + 1}</span><span>${XF ? `${XF.pts.length}, ${fmt(XF.tot, 2)} kip` : 'not included'}</span></div>
       ${XF ? `<div><span>Weight model</span><span>${esc(XF.X.kind === 'ovr' ? 'entered per frame' : XF.X.kind === 'dia' ? 'diaphragms' : 'angles')}${XF.X.allow ? ` + ${fmt(XF.X.allow, 0)} %` : ''}</span></div>` : ''}</div>
       ${XF ? `<details><summary class="note">Point loads (x ft : P kip)</summary><p class="note">${XF.pts.map(q => `${fmt(q.x, 2)} : ${fmt(q.P, 3)}${q.end ? ' (bearing line)' : ''}`).join('; ')}</p></details>` : ''}</div></section>`;

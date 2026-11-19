@@ -298,7 +298,7 @@
   /* ================= the project model (new) ================= */
   /* DEF: framing settings of a new project: Preliminary sizing's built-in framing (P.framing) and limits (spliceClear, tol; flSkI, flSkE, flSkG: the
      skew f_ℓ below), no field splices */
-  const DEF = { spacing: 25, spPier: '', pierLen: '', orient: 'auto', arrange: 'contiguous', supClear: 3, stagMin: 4, spliceClear: 2, tol: 0.5, splices: [], flSkI: 10, flSkE: 7.5, flSkG: 1.25 };
+  const DEF = { spacing: 25, spPier: '', pierLen: '', orient: 'auto', arrange: 'contiguous', supClear: 3, stagMin: 4, spliceClear: 2, tol: 0.5, splices: [], flSkI: 10, flSkE: 7.5, flSkE2: 2.0, flSkG: 1.25 };   // flSkE2 (F3, 2026-11-19): exterior girders, discontinuous lines over the whole span (C6.10.1)
   const isNum = v => typeof v === 'number' && isFinite(v);
   const numList = v => (Array.isArray(v) ? v : String(v == null ? '' : v).split(/[,;\s]+/)).map(Number).filter(x => isFinite(x)).sort((a, b) => a - b);
   /* settings(P): project.framing with the defaults filled in (null when the project has no framing block) */
@@ -372,16 +372,81 @@
     if (sel && sel.line != null) { if (!(sel.line >= 0 && sel.line < L.FR.girders.length)) return null; const Q = { ...P, girders: [{ ...(P.girders[0] || {}), line: sel.line }] }; return girderBraces(Q, 0, L); }
     return girderBraces(P, (sel && sel.gi) || 0, L);
   }
-  /* flSkew(skews, ext, F): flange lateral bending from skew in lieu of a refined analysis (AASHTO LRFD C6.10.1), as Preliminary sizing sends it
-     to GirderDetail's Girder section rows (anchor `flange lateral bending from skew in lieu of a refined analysis`): where any support is skewed
-     more than 20°, f_ℓ = γ(10 ksi interior, 7.5 ksi exterior girders), γ = 1.25 (settings flSkI, flSkE, flSkG), rounded to 0.01 ksi; else 0.
-     GirderDetail uses the same value for Strength I and Service II (SB2-O11). Returns { fl, skMax, steps }. */
-  function flSkew(skews, ext, F) {
+  /* flSkew(skews, ext, F, lay): flange lateral bending from skew in lieu of a refined analysis (AASHTO LRFD 10th Ed. C6.10.1, p. 6-160).
+     C6.10.1 gives total UNFACTORED estimates at a cross-frame, for discontinuous cross-frame lines with skews over 20°: lines discontinuous
+     at or near the supports only, 10.0 ksi interior and 7.5 ksi exterior girders, and none needed where the cross-frames are contiguous;
+     lines discontinuous over the whole bridge, 10.0 ksi interior and 2.0 ksi exterior. It suggests splitting the estimate between dead and
+     live load in the proportion of the unfactored major-axis stresses at the section (done per location in engine/flexure.js location(),
+     F2/F3 2026-11-19: Strength I and Service II with their own load factors).
+     lay (flLayout below, optional): the girder's estimate from the cross-frame layout; f0 = its largest value. Without lay (no framing, the
+     layout has errors, or the demands are of another bridge): f0 = 10 ksi interior / 7.5 ksi exterior where any support is skewed more than
+     20°, else 0 (the near-support case over the whole girder, as before 2026-11-19).
+     fl = γ f0, γ = flSkG (1.25), rounded to 0.01 ksi: the factored value for deck placement (Constructibility; the whole estimate taken as
+     DC, decision pending engineer review) and for factored (Custom) demands. Before 2026-11-19 this γ f0 was also the Strength I and
+     Service II value. Settings flSkI, flSkE, flSkE2, flSkG. Returns { fl, f0, g, skMax, lay, steps }. */
+  function flSkew(skews, ext, F, lay) {
     F = F || DEF; const num = v => (v === '' || v == null ? NaN : +v), skM = Math.max(...(skews || [0]).map(v => Math.abs(v))), gI = num(F.flSkI) || 10, gE = num(F.flSkE) || 7.5, gG = num(F.flSkG) || 1.25;
-    const f0 = ext ? gE : gI, fl = skM > 20 + 1e-9 ? +(gG * f0).toFixed(2) : 0, w = St().work('flsk');
-    w.add({ id: 'fl', label: `Flange lateral bending from skew, ${ext ? 'exterior' : 'interior'} girder (largest support skew ${n2(skM)}° ${skM > 20 + 1e-9 ? '> 20°' : '≤ 20°: none'})`, sym: 'f_{\\ell}', eq: skM > 20 + 1e-9 ? '\\gamma f_{\\ell,skew}' : '0', sub: skM > 20 + 1e-9 ? `${n2(gG)}(${n2(f0)})` : '', value: fl, unit: 'ksi', d: 2, ref: `${ED} C6.10.1`,
-      note: 'In lieu of a refined analysis: 10 ksi interior, 7.5 ksi exterior girders (unfactored), times the load factor; the same value is used at Service II (GirderDetail; SB2-O11).' });
-    return { fl, skMax: skM, steps: w.steps };
+    const w = St().work('flsk'), gt = skM > 20 + 1e-9, who = ext ? 'exterior' : 'interior';
+    let f0;
+    if (lay) {
+      f0 = lay.fMax;
+      lay.spans.forEach(q => w.add({ id: 'k' + q.k, label: `Span ${q.k + 1}: cross-frame lines for the skew estimate (skew θ = ${n2(q.th)}°)`, sym: '', eq: '', sub: '', value: q.txt, unit: '', ref: `${ED} C6.10.1 (p. 6-160)`, note: q.why }));
+      const dp = lay.braces.filter(q => q.disc);
+      w.add({ id: 'pts', label: `G${lay.line + 1}: brace points with a discontinuous cross-frame (a frame with no frame continuing it across the ${ext ? 'adjacent girder' : 'girder'})`, sym: 'n', eq: '', sub: '', value: dp.length, unit: '', d: 0, ref: `${ED} C6.10.1 (p. 6-160)`,
+        note: dp.length ? `x (ft): f_ℓ,skew (ksi): ${dp.map(q => `${n2(q.x)}: ${n2(q.v)}`).join('; ')}. Elsewhere 0 (contiguous lines, bearings, or a span skewed 20° or less). A location takes the larger value at the two brace points of its unbraced length (6.10.1.6: the largest f_ℓ in the unbraced length).` : 'None: every cross-frame on this girder is in a contiguous line, so the estimate need not be considered.' });
+      w.add({ id: 'f0', label: `Flange lateral bending from skew, unfactored estimate, ${who} girder (largest on the girder)`, sym: 'f_{\\ell,skew}', eq: '\\max_{j} f_{\\ell,skew,j}', sub: '', value: f0, unit: 'ksi', d: 2, ref: `${ED} C6.10.1 (p. 6-160)`,
+        note: `Per brace point from the cross-frame layout: interior ${n2(lay.fI)} ksi; exterior ${n2(lay.fE)} ksi (discontinuous near the supports only) or ${n2(lay.fE2)} ksi (discontinuous over the whole span); 0 at contiguous frames. Strength I and Service II: split between dead and live load and factored per location (Flexure tab, step fx.flp).` });
+    } else {
+      f0 = gt ? (ext ? gE : gI) : 0;
+      w.add({ id: 'f0', label: `Flange lateral bending from skew, unfactored estimate, ${who} girder (largest support skew ${n2(skM)}° ${gt ? '> 20°' : '≤ 20°: none'})`, sym: 'f_{\\ell,skew}', eq: gt ? `f_{\\ell,${ext ? 'ext' : 'int'}}` : '0', sub: '', value: f0, unit: 'ksi', d: 2, ref: `${ED} C6.10.1 (p. 6-160)`,
+        note: 'The cross-frame layout is not available here (no framing on the Framing & bracing tab, the layout has errors, or the demands are of another bridge): the estimate for lines discontinuous near the supports (10 ksi interior, 7.5 ksi exterior) over the whole girder, as before. Strength I and Service II: split between dead and live load and factored per location (Flexure tab, step fx.flp).' });
+    }
+    const fl = +(gG * f0).toFixed(2);
+    w.add({ id: 'fl', label: `Flange lateral bending from skew, factored for deck placement (Constructibility) and factored demands, ${who} girder`, sym: 'f_{\\ell}', eq: f0 > 0 ? '\\gamma f_{\\ell,skew}' : '0', sub: f0 > 0 ? `${n2(gG)}(${n2(f0)})` : '', value: fl, unit: 'ksi', d: 2, ref: `${ED} C6.10.1`,
+      note: 'The whole estimate taken as DC with γ (decision pending engineer review). Strength I and Service II do not use this value since 2026-11-19: they split f_ℓ,skew between dead and live load with their own load factors.' });
+    return { fl, f0, g: gG, skMax: skM, lay: lay || null, steps: w.steps };
+  }
+
+  /* flLayout(P, line, L, ext, F) (F3, 2026-11-19; AASHTO LRFD 10th Ed. C6.10.1, p. 6-160): the unfactored skew f_ℓ estimate of
+     cross-section girder `line` at each of its brace points, from the cross-frame layout (compute(P); L reused). An intermediate frame on the
+     girder is discontinuous when no frame continues it at the same station across the girder (interior girder: the bay on the girder's other
+     side; exterior girder: the bay beyond the adjacent girder; two girders: never). Its brace point takes, in a span skewed more than 20°
+     (θ the larger skew of the span's supports): interior girder flSkI (10 ksi); exterior girder flSkE (7.5 ksi) where the span's lines are
+     discontinuous near the supports only (normal frames, contiguous arrangement) or flSkE2 (2.0 ksi) where they are discontinuous over the
+     whole span (normal frames staggered, not collapsed to contiguous, or stepped). Every other brace point (contiguous frame, bearing, span
+     skewed 20° or less): 0. at(x): the value at analysis station x, the larger of the two brace points of its unbraced length (both
+     neighbours at a brace point; 6.10.1.6). Returns null without a valid layout, else { line, ext, fI, fE, fE2, spans, braces, fMax, at }. */
+  function flLayout(P, line, L, ext, F) {
+    const R = L || compute(P); if (!R || R.errors.length) return null;
+    F = F || settings(P) || DEF;
+    const FR = R.FR, gs = FR.girders, nG = gs.length, sup = R.m.sup; if (!(line >= 0 && line < nG)) return null;
+    const num = v => (v === '' || v == null ? NaN : +v), fI = num(F.flSkI) || 10, fE = num(F.flSkE) || 7.5, fE2 = num(F.flSkE2) || 2.0, TOL = 0.05;
+    const xOn = (f, i) => (f.bay === i ? f.xa : f.xc);   // plan station of frame f where it meets girder i (bay b joins girders b and b + 1)
+    const hasAt = (i, bay, x) => bay >= 0 && bay <= nG - 2 && FR.frames.some(f => f.type === 'int' && f.bay === bay && Math.abs(xOn(f, i) - x) < TOL);
+    const disc = f => { const x = xOn(f, line), oth = f.bay === line ? line - 1 : line;   // the bay on the other side of this girder
+      if (oth >= 0 && oth <= nG - 2) return !hasAt(line, oth, x);
+      const j = f.bay === line ? line + 1 : line - 1, beyond = f.bay === line ? j : j - 1;   // exterior girder: across the adjacent girder j
+      if (!(beyond >= 0 && beyond <= nG - 2)) return false;
+      return !hasAt(j, beyond, xOn(f, j)); };
+    const spans = FR.orient.map(o => { const whole = o.o === 'normal' && ((o.arr === 'staggered' && !o.flat) || o.arr === 'stepped'), gt = o.th > 20 + 1e-9;
+      const txt = o.o === 'normal' ? `normal to the girders, ${o.flat ? 'contiguous (staggered offset below d_min)' : o.arr}: ${whole ? 'discontinuous over the whole span' : 'contiguous lines, discontinuous near the supports only'}` : 'parallel to the skew: contiguous lines';
+      const why = !gt ? 'Skew 20° or less: no estimate (C6.10.1 gives it for skews over 20°).' : whole ? `At each discontinuous frame: ${n2(fI)} ksi interior, ${n2(fE2)} ksi exterior girders.` : `At each discontinuous frame (near the supports): ${n2(fI)} ksi interior, ${n2(fE)} ksi exterior girders; contiguous frames 0.`;
+      return { k: o.k, th: o.th, o: o.o, arr: o.arr, flat: !!o.flat, whole, gt, txt, why }; });
+    const own = braceG(FR, line), pts = gs[line].pts.filter(q => q.f.type === 'int').map(q => { const x = toX(FR, line, sup, q.s), sp = spans[Math.min(spanX(sup, x), spans.length - 1)], d = disc(q.f);
+      return { s: q.s, d, v: d && sp && sp.gt ? (ext ? (sp.whole ? fE2 : fE) : fI) : 0 }; });
+    const braces = own.map(s => { const near = pts.filter(q => Math.abs(q.s - s) < 0.26); return { s, x: toX(FR, line, sup, s), v: Math.max(0, ...near.map(q => q.v)), disc: near.some(q => q.d) }; });
+    const xs = braces.map(q => q.x), vs = braces.map(q => q.v);
+    const at = x => { let v = 0; for (let k = 0; k < xs.length - 1; k++) if (x >= xs[k] - 1e-6 && x <= xs[k + 1] + 1e-6) v = Math.max(v, vs[k], vs[k + 1]); return v; };
+    return { line, ext: !!ext, fI, fE, fE2, spans, braces, fMax: Math.max(0, ...vs), at };
+  }
+
+  /* flWhy(flS): one sentence (plain text) saying where the skew estimate f_ℓ,skew comes from (flSkew result): the layout case or the fallback */
+  function flWhy(flS) {
+    if (!flS) return '';
+    const L = flS.lay, f2 = v => St().n(v, 2);
+    if (!L) return flS.skMax > 20 + 1e-9 ? `largest support skew ${f2(flS.skMax)}° > 20°, cross-frame layout not available here: ${f2(flS.f0)} ksi (discontinuous lines near the supports assumed) over the whole girder` : `largest support skew ${f2(flS.skMax)}° ≤ 20°: none`;
+    const nD = L.braces.filter(q => q.disc && q.v > 0).length;
+    return `cross-frame layout of G${L.line + 1} (${L.ext ? 'exterior' : 'interior'}): ${L.spans.map(q => `span ${q.k + 1} ${q.txt}${q.gt ? '' : ' (skew ≤ 20°: none)'}`).join('; ')}; ${nD} brace point(s) with a discontinuous frame: f_ℓ,skew up to ${f2(L.fMax)} ksi there, 0 elsewhere`;
   }
 
   /* design(P, gi, o): the brace points and the first-order f_ℓ of one girder's design checks: ONE source for every demand path (added
@@ -392,15 +457,20 @@
            P.girders[gi].position === 'exterior'), fl (f_ℓ entered, ksi: > 0 overrides the skew value; blank, 0 or absent: none entered) }
      Brace points: the Framing & bracing tab (forGirder: the girder's bearings and cross-frames as analysis stations, lenOf its own unbraced length);
      null when the project has no framing, the layout has errors or the demands are of another bridge (the caller keeps its fallback and
-     says so). f_ℓ: as entered, else from skew (flSkew, C6.10.1, the project's framing settings flSkI, flSkE, flSkG).
-     Returns { br (forGirder result or null), braces, lenOf, fl (ksi), flSrc: 'entered' | 'skew', flS (flSkew: fl, skMax, steps) }. */
+     says so). f_ℓ: as entered, else from skew (flSkew, C6.10.1; F3 2026-11-19: from the cross-frame layout, flLayout, where br is found).
+     Returns { br (forGirder result or null), braces, lenOf, fl (ksi: entered, or γ f_ℓ,skew for Constructibility), flSrc: 'entered' | 'skew',
+     flS (flSkew), flAt(x) (unfactored skew estimate at analysis station x; null when entered), locFl(x) ({ fl } entered, or { fl: γ f_ℓ,skew(x),
+     flSk: f_ℓ,skew(x) }: the fields of a flexure location, engine/flexure.js location()) }. */
   function design(P, gi, o) {
     o = o || {}; const gs = (P && P.girders) || [], g = gs[gi] || gs[0] || {};
     const br = P && P.framing ? forGirder(P, o.line != null ? { line: o.line } : { gi }, o.sup || null) : null;
     const sk = Array.isArray(o.skews) && o.skews.length ? o.skews.map(v => +v || 0) : (((P && P.xs) || {}).skews || [0]).map(v => +v || 0);
-    const ext = o.ext != null ? !!o.ext : g.position === 'exterior', flS = flSkew(sk, ext, P && P.framing), en = +o.fl > 0;
-    return { br, braces: br ? br.braces : null, lenOf: br ? br.lenOf : null, fl: en ? +o.fl : flS.fl, flSrc: en ? 'entered' : 'skew', flS };
+    const ext = o.ext != null ? !!o.ext : g.position === 'exterior', en = +o.fl > 0;
+    const lay = !en && br ? flLayout(P, br.line, null, ext, settings(P)) : null, flS = flSkew(sk, ext, P && P.framing, lay);
+    const flAt = en ? null : lay ? lay.at : (() => flS.f0);
+    const locFl = x => en ? { fl: +o.fl } : (v => ({ fl: +(flS.g * v).toFixed(2), flSk: v }))(flAt(x));
+    return { br, braces: br ? br.braces : null, lenOf: br ? br.lenOf : null, fl: en ? +o.fl : flS.fl, flSrc: en ? 'entered' : 'skew', flS, flAt, locFl };
   }
 
-  window.SBDFraming = { DEF, settings, modelOf, layout, compute, girderBraces, forGirder, flSkew, design, lineOf, plPierSp, plPierLen, plOwnXf, plXfDef, braceG, toG, toX, lbMax };
+  window.SBDFraming = { DEF, settings, modelOf, layout, compute, girderBraces, forGirder, flSkew, flLayout, flWhy, design, lineOf, plPierSp, plPierLen, plOwnXf, plXfDef, braceG, toG, toX, lbMax };
 })();

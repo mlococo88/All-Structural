@@ -49,7 +49,7 @@
   /* f_ℓ during deck placement entered (first order, ksi): saved in the project, P.constr.flC; absent, not a number or ≤ 0: none entered
      (the skew value of C6.10.1 is used: engine/framing.js design, SB2-W1) */
   const flOf = P => { const v = P.constr && +P.constr.flC; return isFinite(v) && v > 0 ? v : 0; };
-  const flTxt = D => `f<sub>ℓ</sub> during deck placement ${D.flSrc === 'entered' ? `${fmt(D.fl, 2)} ksi as entered` : `from skew (C6.10.1; largest support skew ${fmt(D.flS.skMax, 1)}° ${D.flS.skMax > 20 + 1e-9 ? `&gt; 20°: γf<sub>ℓ,skew</sub> = ${esc(D.flS.steps[0].sub)} = ${fmt(D.fl, 2)} ksi` : '≤ 20°: 0'}; <a href="#" data-gotab="cf">Cross-frames tab</a>)`}`;
+  const flTxt = D => `f<sub>ℓ</sub> during deck placement ${D.flSrc === 'entered' ? `${fmt(D.fl, 2)} ksi as entered` : `from skew (C6.10.1, p. 6-160: ${esc(window.SBDFraming.flWhy(D.flS))}; ${D.flS.f0 > 0 ? `γf<sub>ℓ,skew</sub> = ${esc((D.flS.steps.find(t => t.id === 'fl') || {}).sub || '')} = ${fmt(D.fl, 2)} ksi, the largest on the girder taken as DC over its length` : '0'}; <a href="#" data-gotab="cf">Cross-frames tab</a>)`}`;
 
   /* build(ctx): the calculation without the page (the tab, the Report tab). ctx = { P, g, src: 'project' | 'file' (else the tab's own),
      pl (hand-off payload; else the tab's file), plName }. Brace points and f_ℓ: engine/framing.js design() (the Framing &amp; bracing tab; f_ℓ entered,

@@ -105,6 +105,8 @@
     if (B.wd && B.wd.C) B.wd.C.forEach(c => c.items.forEach(it => { if (it.st === 'warn' || it.st === 'adv') out.warn.push(`Welds: ${c.id} ${it.loc}: ${it.st === 'warn' ? 'Warning' : 'Advisory'}${it.note ? ' (' + it.note + ')' : ''}.`); }));
     if (B.spl && B.spl.list) B.spl.list.forEach(s => (s.warn || []).forEach(w => out.warn.push(`Field splices: ${s.name}: ${w}`)));
     out.warn = [...new Set(out.warn)];
+    // F6 (2026-11-19): span-to-depth guidance (2.5.2.6.3, optional): a note only; not a column, chip, ratio, status or verdict count
+    { const AD = W().SBDAutoDesign; if (AD && AD.depthFlag) { try { const q = AD.depthFlag(P, gi); if (q) out.depth = q; } catch (e) { /* informational only */ } } }
     return out;
   }
   function errOf(B, k, col) {
@@ -180,7 +182,7 @@
         if (!b || rank(x) > rank(b.x) || (rank(x) === 2 && rank(b.x) === 2 && (c.rf ? v < b.x.rf : gr(v) > gr(b.x.r)))) b = { x, j: q.j }; });
       if (b) out.cells[c.id] = { ...b.x, ln: b.j }; });
     const top = J.reduce((b, q) => { const r = Math.max(-Infinity, ...COLS.filter(c => !c.rf).map(c => { const x = q.G.cells[c.id]; return x && x.st !== 'notrun' && x.st !== 'na' ? gr(x.r) : -Infinity; })); return !b || r > b.r ? { q, r } : b; }, null);
-    out.gov = (top ? top.q.G : J[0].G).gov; out.govLine = top ? top.q.j : J[0].j;
+    out.gov = (top ? top.q.G : J[0].G).gov; out.govLine = top ? top.q.j : J[0].j; if (J[0].G.depth) out.depth = J[0].G.depth;   // F6: per girder type
     const wl = new Map(); J.forEach(q => (q.G.warn || []).forEach(w => { if (!wl.has(w)) wl.set(w, []); wl.get(w).push(q.j); }));   // a warning of several lines listed once, with its lines
     wl.forEach((js, w) => out.warn.push(`${js.map(j => 'G' + (j + 1)).join(', ')}: ${w}`));
     J.forEach(q => { Object.entries(q.G.err || {}).forEach(([k, v]) => { if (!out.err[k]) out.err[k] = v; }); });

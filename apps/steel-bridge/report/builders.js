@@ -47,7 +47,8 @@
   /* f_ℓ of a module and where it comes from (engine/framing.js design: entered, else from skew, C6.10.1; paths PR 2026-10-30); the skew
      value links to its step in the Framing section when that section works the same value */
   const flNote = (B, D, tab) => !D ? '' : D.flSrc === 'entered' ? `$f_{\\ell}$ = ${f(D.fl, 2)} ksi as entered on the ${tab}`
-    : `$f_{\\ell}$ from skew (C6.10.1, in lieu of a refined analysis): largest support skew ${f(D.flS.skMax, 1)}°${D.flS.skMax > 20 + 1e-9 ? ` > 20°, $f_{\\ell}$ = ${D.flS.steps[0].sub} = ${f(D.fl, 2)} ksi` : ' ≤ 20°, $f_{\\ell}$ = 0'}${B.frm && B.frm.fl && B.frm.fl.fl === D.fl && B.frm.fl.skMax === D.flS.skMax ? ' [[flsk.fl]]' : ''}`;
+    : `$f_{\\ell}$ from skew (C6.10.1, p. 6-160, in lieu of a refined analysis): ${window.SBDFraming.flWhy(D.flS)}${/cn\|/.test(tab) ? (D.flS.f0 > 0 ? `; deck placement $\\gamma f_{\\ell,skew}$ = ${(D.flS.steps.find(t => t.id === 'fl') || {}).sub || ''} = ${f(D.fl, 2)} ksi (the largest on the girder, as DC)` : '')
+      : '; Strength I and Service II split $f_{\\ell,skew}$ between dead and live load at each location with their own load factors (worked steps fx.flp.S, fx.flp.V of each location)'}${B.frm && B.frm.fl && B.frm.fl.fl === D.fl && B.frm.fl.skMax === D.flS.skMax ? ' [[flsk.fl]]' : ''}`;
   const brNote = Gr => Gr.frB ? `the brace points of the Framing & bracing tab (G${Gr.frB.line + 1}'s bearings and cross-frames)` : 'the cross-frame stations of the stiffener layout (the project has no framing)';
 
   /* ---------- 2. project and owner ---------- */
@@ -403,7 +404,7 @@
       tbl(['Girder', 'Intermediate frames', 'Largest $L_{b}$ (ft)', 'Brace points (ft)'], L.girders.map(g => ({ cells: [`G${g.i + 1}`, String(g.nInt), { ...N(g.lb, 2), key: `fr.g${g.i}.lb` }, g.braces.map(v => f(v, 2)).join(', ')], cls: g.i === line ? 'gov' : '' }))),
       note(`The reported girder takes cross-section girder G${line + 1}: its brace points are the $L_{b}$ points of the flexure and the ${dOn ? 'diaphragm' : 'cross-frame'} bays of the stiffener panels (${br ? br.ints.length : 0} intermediate ${dOn ? 'diaphragms' : 'frames'}). As on the [[tab:cf|${dOn ? 'Diaphragms' : 'Cross-frames'} tab]].`),
       note(`Orientation: ${(B.P.framing || {}).orient === 'parallel' ? 'parallel to the skew' : (B.P.framing || {}).orient === 'normal' ? 'normal to the girders' : 'automatic, parallel to the skew in a span whose supports are both skewed 20° or less, else normal to the girders (6.7.4.2.1); an owner rule xf.orient, where the owner has one, decides for the whole bridge'} (Framing & bracing tab). At a support skewed more than 20° the first normal frame is at least max(clear distance, $4b_{f}$, 0.4s) from the bearing (C6.7.4.2.1). Each frame puts half its weight on each girder it connects, at that girder's station, on the steel section (DC1).`)]));
-    subs.push(sub('fl', `Flange lateral bending from skew and ${dOn ? 'diaphragm' : 'cross-frame'} loads`, [kv([[`$f_{\\ell}$ from skew, G${line + 1} (C6.10.1)`, `${f(fl.fl, 2)} ksi`, 'flsk.fl'], [`${dOn ? 'Diaphragm' : 'Cross-frame'} point loads on G${line + 1}`, XF ? `${XF.pts.length}, ${f(XF.tot, 2)} kip` : 'not included']])]));
+    subs.push(sub('fl', `Flange lateral bending from skew and ${dOn ? 'diaphragm' : 'cross-frame'} loads`, [kv([[`$f_{\\ell,skew}$, unfactored estimate, G${line + 1} (C6.10.1, by the cross-frame lines; largest on the girder)`, `${f(fl.f0, 2)} ksi`, 'flsk.f0'], [`$\\gamma f_{\\ell,skew}$, deck placement`, `${f(fl.fl, 2)} ksi`, 'flsk.fl'], [`${dOn ? 'Diaphragm' : 'Cross-frame'} point loads on G${line + 1}`, XF ? `${XF.pts.length}, ${f(XF.tot, 2)} kip` : 'not included']])]));
     if (C) subs.push(sub('ck', FUI && FUI.ckHead ? FUI.ckHead(C, dOn) : `Checks (CF1 to CF11${C.some(c => c.id === 'CFD') ? ', CFD, CFE' : ''})`, [kv([['S (largest spacing)', `${f(I.p.S, 2)} in`], ['h / d', `${f(I.p.h, 2)} / ${f(I.p.dg, 2)} in`, I.p.xfBay ? 'cf.h' : 'cf.dg'], ...xb.kv, ['$L_{b}$ (largest)', `${f(I.p.Lb, 2)} ft`, 'cf.Lb']]), xb.note,
       R.errors && R.errors.length ? note(R.errors.join(' '), true) : null,
       tbl(['Check', 'Item', 'Demand', 'Resistance / limit', 'Ratio', 'Status'], C.flatMap(c => c.items.length ? c.items.map(it => [`${c.id} ${c.title}`, locR(c, it), isFinite(it.demand) ? N(it.demand, 2) : (it.cells || [])[0] || '', isFinite(it.capacity) ? N(it.capacity, 2) : (it.cells || [])[1] || '',
@@ -542,14 +543,26 @@
       : { cells: [q.mod, q.check, q.loc, R3(q.r, q.key), q.status === 'warn' ? 'Warning' : okT(q.r)], cls: q.r > 1 + 1e-9 ? 'gov' : '' });
     const errs = Object.entries(B.err).filter(([k]) => built.includes(k) || k === 'all');
     const top = X.gov.filter(q => q.rf == null && isFinite(q.r)).reduce((a, q) => (!a || q.r > a.r ? q : a), null);
+    // F6 (2026-11-19): span-to-depth guidance, informational only (engine/autodesign.js depthFlag; not a check, not in any ratio or status)
+    // SA4 (2026-11-19): applicability of the line-girder analysis (engine/analysis.js applicability), near the front with its worked steps
+    let AP = null; try { AP = window.SBDAnalysis && window.SBDAnalysis.applicability ? window.SBDAnalysis.applicability(B.P) : null; } catch (e) { AP = null; }
+    const apLv = { fail: 'FAIL: refined analysis required', warn: 'WARNING: line-girder results approximate; a 2D grid or 3D analysis is recommended', note: 'NOTE: skew effects a line-girder analysis cannot compute' };
+    const apNote = AP && AP.level !== 'ok' ? note(`Applicability of the line-girder analysis (SA4): ${['fail', 'warn', 'note'].filter(k => AP.items.some(q => q.level === k)).map(k => `${apLv[k]} (${AP.items.filter(q => q.level === k).map(q => `${q.title}, ${q.val}${q.step ? ` [[${q.step}]]` : ''}`).join('; ')})`).join('. ')}. ${AP.level === 'fail' ? 'A FAIL counts in the Summary tab\'s verdict.' : 'Warnings and notes do not change the verdict.'}`, AP.level !== 'note') : null;
+    const apSub = AP ? sub('ap', 'Applicability of the line-girder analysis (SA4; 4.6.2.2, 4.6.3.3.2, C6.10.1)', [tbl(['Item', 'This bridge', 'Result', 'Status'], AP.items.map(q => [q.title, q.val, q.msg, { fail: 'FAIL', warn: 'WARNING', note: 'NOTE', ok: 'OK' }[q.level]])), steps('', AP.steps)]) : null;
+    const DF = window.SBDAutoDesign && window.SBDAutoDesign.depthFlag ? window.SBDAutoDesign.depthFlag(B.P, B.g) : null;
+    const dfNote = DF ? note(`Note (informational, not in the verdict): ${DF.flagged ? 'below optional AASHTO depth guidance' : 'meets the optional AASHTO depth guidance'} (Art. 2.5.2.6.3, Table 2.5.2.6.3-1; optional criteria, e.g. clearance-limited structures may be shallower) [[dg.${DF.comp ? 'O' : 'I'}]].`) : null;
+    const dfSub = DF ? sub('depth', 'Span-to-depth guidance (informational; Art. 2.5.2.6.3, optional criteria)', [note(DF.text.replace(/≤/g, '$\\le$').replace(/ > /g, ' $>$ ')),
+      note('Optional criteria: they apply where the owner invokes span-to-depth controls (2.5.2.6.3); a structure may be shallower, e.g. where clearance limits the depth. Shown for information: not a check, not counted in any ratio, status or verdict.'), steps('', DF.steps)]) : null;
     return { title: 'Summary of governing ratios', subs: [sub('gov', `Girder ${gName(B.girder)}: governing demand / capacity of each check group`, [
+      apNote,
       note(`Each ratio links to the step that works it. Ratio = demand / capacity (OK ≤ 1.0); rating factors RF (OK ≥ 1.0). Demands: ${B.src === 'file' ? `the hand-off file ${B.plName || ''} for flexure, shear, fatigue, constructibility and rating; this project for the rest` : B.custom ? `entered on the tab (Custom) for ${cdMods(B)}; this project's analysis for the rest` : "this project's analysis"}. ${ED}.`),
       top ? note(`Largest ratio: ${f(top.r, 3)} (${top.mod}, ${top.check}, ${top.loc})${top.key ? ` [[${top.key}]]` : ''}.`) : null,
       note('Every girder at once, with the overall verdict and a link from each value to the tab that works it: the [[tab:sum|Summary tab]]. There a rating factor RF < 1.0 counts as FAIL, and a check with a Warning status (welds, cross-frames, deflection over the owner\'s preferred limit) as REVIEW.'),   // Summary tab (2026-11-09)
       summaryFig(B, X),
       tbl(['Module', 'Check', 'Location', 'Ratio / RF', 'Status'], rows, { wide: true }),
       ...X.warn.map(w => note(w, true)),
-      errs.length ? note('Not in this report: ' + errs.map(([k, v]) => `${(SECTIONS.find(s => s[0] === k) || [k, k])[1]}: ${v}`).join('; '), true) : null])] };
+      dfNote,
+      errs.length ? note('Not in this report: ' + errs.map(([k, v]) => `${(SECTIONS.find(s => s[0] === k) || [k, k])[1]}: ${v}`).join('; '), true) : null]), apSub, dfSub].filter(Boolean) };
   }
 
   const BUILD = { proj, loads, an, defl, sec, flex, shear, fat, cn, frm, spl, wd, rt };

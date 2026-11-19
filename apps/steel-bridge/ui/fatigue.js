@@ -36,6 +36,13 @@
   /* fatI(P) (SCGAM, 2026-11-01, engineer's "one source", as Welds #525 and Splices #545): Fatigue I γ of the studs = the Fatigue & studs input
      fatigue.gam.fI (1.75 without one). oldGamFat(P): the saved studs.gamFat (this tab's former "γ Fatigue I (studs)" input; kept in the file,
      not used) when it differs from it, else null */
+  /* F1 (2026-11-19): the deck concrete for E_c and n as every other tab takes it (Section properties, Flexure, Analysis: OWN17 w_c for E_c,
+     materials.concrete.wcE, blank = w_c; the project's K_1 and n rounding). prjN(pl): demands of this project (its analysis, Custom rows or
+     the example), not a GirderDetail hand-off file (whose own materials stay as given). Before: w_c (not w_c for E_c) and, on the analysis
+     and Custom paths, K_1 = 1 and n exact. */
+  const wcE = m => (m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc);
+  const prjN = pl => !pl || pl._schema === 'sbd2-analysis' || pl._schema === 'sbd2-custom';
+  const nPrj = m => ({ fc: m.concrete.fc, wc: wcE(m), K1: m.concrete.K1, nRule: m.concrete.nRule });
   const fatI = P => { const v = +(((P && P.fatigue) || {}).gam || {}).fI; return v > 0 ? v : 1.75; };
   const oldGamFat = P => { const v = ((P && P.studs) || {}).gamFat; return v != null && v !== '' && !(Math.abs(+v - fatI(P)) <= 1e-9) ? { was: v, now: fatI(P) } : null; };
   function inputs(P, h) {
@@ -137,7 +144,7 @@
     const FA = window.SBDFatigue, FX = window.SBDFlexure, Q = P.studs, g = P.girders[gi], m = P.materials, d = P.deck, ext = P.girders.find(q => q.position === 'exterior'), beffB = (ext || g).beff;
     const R = { sup, spans, cont };
     const dd = +Q.d, Zr = 7.0 * Math.PI * dd * dd / 4, segAt = x => g.segments.find(s => x >= s.x0 - 1e-9 && x < s.x1) || g.segments[g.segments.length - 1];
-    const n = window.SBDSections.modularRatio(m.concrete.fc, m.concrete.wc, m.concrete.K1, m.concrete.nRule).n, r1 = v => +(+v).toFixed(1), r2 = v => +(+v).toFixed(2);
+    const n = window.SBDSections.modularRatio(m.concrete.fc, wcE(m), m.concrete.K1, m.concrete.nRule).n, r1 = v => +(+v).toFixed(1), r2 = v => +(+v).toFixed(2);
     const vRng = (a, b) => Math.max(0, ...stations.filter(s => s.x >= a - 1e-9 && s.x <= b + 1e-9).map(s => s.V_FATpos - s.V_FATneg));
     const zs = [], qz = [];
     R.spans.forEach((L, k) => { const x0 = R.sup[k]; for (let z = 0; z < 10; z++) { const a = x0 + z * L / 10, b = a + L / 10, s = segAt((a + b) / 2), S = FA.secSet(s.D, s, { ts: d.ts, hh: h0 ? 0 : d.haunch, beff: beffB, n, Ar: 0, dr: 0 }), c = S.cn, Qs = beffB * d.ts / n * (S.ySlab - c.yb);
@@ -179,17 +186,19 @@
     const rows = pl ? FA.detailsFromPayload(pl, { frames, stiffened: !P.stiffeners || P.stiffeners.layout.web !== 'unstiffened', splices: splX.length ? splX : plSpl.map(q => q.x) }) : JSON.parse(JSON.stringify(FA.DEFAULT.rows));
     if (CU && Array.isArray(rows)) { const x0 = Math.min(...CU.xs), x1 = Math.max(...CU.xs); rows.splice(0, rows.length, ...rows.filter(r => +r.x >= x0 - 1e-6 && +r.x <= x1 + 1e-6)); }
     const faIn = { limit: F.limit, gam: { ...F.gam }, ADTT: F.ADTT, p: F.p, life: F.life, gW: m.steel.web, negSec: F.negSec, dist: { ...F.dist }, ev: F.ev && F.ev.on === 'yes' ? { ...F.ev, spans } : { on: 'no' },   // MBE 4th Ed. evaluation (2026-11-10): P.fatigue.ev, optional; spans for R_p's L
-      ts: pl ? dk.ts : P.deck.ts, hh: pl ? dk.haunch : P.deck.haunch, beff: pl ? dk.beff : G.beff, fc: pl ? +pm.fc : m.concrete.fc, wc: pl ? +pm.wc || 0.15 : m.concrete.wc, K1: pl ? 1 : m.concrete.K1, nRule: pl ? 'exact' : m.concrete.nRule,
+      ts: pl ? dk.ts : P.deck.ts, hh: pl ? dk.haunch : P.deck.haunch, beff: pl ? dk.beff : G.beff, ...(prjN(pl) ? nPrj(m) : { fc: +pm.fc, wc: +pm.wc || 0.15, K1: 1, nRule: 'exact' }),   // F1: the project's n (w_c for E_c, K_1, rounding); a hand-off file's own
       Ar: pl ? +dk.Ar || 0 : (P.deck.rebar.top.A || 0) + (P.deck.rebar.bot.A || 0), dr: pl ? dk.ts / 2 : P.deck.ts / 2, rows };
     const FR = FA.compute(faIn, { owner: own.owner, lf, dia: !!(window.SBDCrossframes && P.crossframes && window.SBDCrossframes.cfDiaOn(P.crossframes)) }), FC = FR.errors.length ? null : FA.checks(FR);
     // ---- GS17 (file only): every station GirderDetail checks
     let gs17 = null;
-    if (pl) { const d = FX.fromPayload(pl, { owner: own.owner, ...(frB ? { braces: frB.braces, lenOf: frB.lenOf } : {}) }), Gr = FX.girder(CU ? window.SBDCustomDemands.keepAt(d.locs, CU.xs) : d.locs, d.prj, { supports: d.supports });
+    if (pl) { const d = FX.fromPayload(pl, { owner: own.owner, ...(frB ? { braces: frB.braces, lenOf: frB.lenOf } : {}) });
+      if (prjN(pl)) { const q = nPrj(m); d.prj.n = window.SBDSections.modularRatio(q.fc, q.wc, q.K1, q.nRule).n; }   // F1: as the Flexure tab (ui/flexure.js F.prj.n)
+      const Gr = FX.girder(CU ? window.SBDCustomDemands.keepAt(d.locs, CU.xs) : d.locs, d.prj, { supports: d.supports });
       gs17 = Gr.rows.map(r => ({ r, o: FA.flange(r, { set, B, catT: F.catT, catB: F.catB }) })); }
     // ---- studs (SC1–SC7)
     let scIn, scEnv = env;
-    if (pl) { const d0 = SC.fromPayload(pl, { beffMode: Q.beffMode, fI: fatI(P) }); if (!d0) return { err: 'The hand-off file has no stud results (GirderDetail Shear connectors, S2-6): re-export it from GirderDetail.' }; scIn = d0.p; }
-    else { scIn = JSON.parse(JSON.stringify(SC.DEFAULT)); Object.assign(scIn, { ts: P.deck.ts, hh: P.deck.haunch, tdeck: P.deck.tdeck, fc: m.concrete.fc, wc: m.concrete.wc, K1: m.concrete.K1, nRule: m.concrete.nRule, gF: m.steel.top, gW: m.steel.web,
+    if (pl) { const d0 = SC.fromPayload(pl, { beffMode: Q.beffMode, fI: fatI(P) }); if (!d0) return { err: 'The hand-off file has no stud results (GirderDetail Shear connectors, S2-6): re-export it from GirderDetail.' }; scIn = d0.p; if (prjN(pl)) Object.assign(scIn, nPrj(m)); }
+    else { scIn = JSON.parse(JSON.stringify(SC.DEFAULT)); Object.assign(scIn, { ts: P.deck.ts, hh: P.deck.haunch, tdeck: P.deck.tdeck, ...nPrj(m), gF: m.steel.top, gW: m.steel.web,
       beff: Math.max(...P.girders.map(q => +q.beff || 0)) || G.beff, ...(Q.beffMode === 'girder' ? { beffMode: 'girder', beffG: G.beff } : {}) }); }
     Object.assign(scIn, { d: String(Q.d), h: Q.h, st: Q.st, Fu: Q.Fu, Qn10: Q.Qn10, gam: { fat: fatI(P) }, Frc: Q.Frc, wv: Q.wv });   // SCGAM (2026-11-01): was gam: { fat: Q.gamFat }; every path (analysis, file, Custom, example)
     if (Q.skew !== 'auto') scIn.skew = Q.skew; else if (!pl) scIn.skew = (P.xs && (P.xs.skews || []).some(s => Math.abs(s) > 20)) ? 'yes' : 'no';

@@ -183,7 +183,7 @@
       const fl = r.stg.LL[f]; if (!(Math.abs(fl) > 1e-6)) return;
       const sg = Math.sign(fl), T = f === 'top' ? 't' : 'b', fn = f === 'top' ? 'top' : 'bottom', Fy = f === 'top' ? FyT : FyB;
       const s1 = X => sg * (r.stg[X] ? r.stg[X][f] : 0);
-      const DC = s1('DC1') + s1('DC2') + adds(s1('UF')), DW = s1('DW') + adds(s1('UT')), flat = r.nc ? (f === 'top' ? Math.max(r.flT || 0, 0) : Math.max(r.fl || 0, 0)) : f === 'bot' ? Math.max(r.fl || 0, 0) : 0;
+      const DC = s1('DC1') + s1('DC2') + adds(s1('UF')), DW = s1('DW') + adds(s1('UT')), flSv = r.flSv != null ? r.flSv : r.fl, flat = r.nc ? (f === 'top' ? Math.max(r.flT || 0, 0) : Math.max(flSv || 0, 0)) : f === 'bot' ? Math.max(flSv || 0, 0) : 0;   // F2 (2026-11-19): f_ℓ at Service II (engine/flexure.js r.flSv), as GS12
       out.push(make({ ...base, key: 'sv' + T, title: `Service II, ${fn} flange (permanent deformation)`, ref: `${ED} Eq. 6.10.4.2.2-${r.nc ? 3 : f === 'top' ? 1 : 2}`,
         Rn: r.nc ? coef * r.Rh * Fy : coef * Fy, RnSym: r.nc ? `${coef.toFixed(2)}R_{h}F_{yf}` : `${coef.toFixed(2)}F_{yf}`, RnSub: r.nc ? `${coef.toFixed(2)}(${n3(r.Rh)})(${n2(Fy)})` : `${coef.toFixed(2)}(${n2(Fy)})`,
         RnLabel: `Service II flange stress limit f_R (${r.nc ? 'noncomposite: 0.80R_hF_yf' : 'composite: 0.95F_yf, no R_h'}; MBE 4th Ed. Art. 6A.6.4.2.2)`, RnRef: `${MBE} Art. 6A.6.4.2.2 (p. 6-66)`, RnStep: `fx.sv${f === 'top' ? 't' : 'b'}.ok`, RnTab: 'flexure',
