@@ -4,13 +4,13 @@
 // the A610 functions from the tool file and checks, on 10,000 random inputs per function plus the edge cases, that each returns exactly
 // (Object.is, bit for bit) what the expression it replaced returned, copied below verbatim from the code before the change (main at cb584ac).
 // It also checks that the SBD-SHARED block is well formed and that the Preliminary sizing page holds its placeholder exactly once.
-// Usage: node tests/a610-prop.mjs [--file "Steel Bridge Design.html"] [--n 10000]   Exit code 0 when every check passes.
+// Usage: node tests/a610-prop.mjs [--file "archive/Steel Bridge Design (archived 2026-11-19).html"] [--n 10000]   Exit code 0 when every check passes.
 import fs from 'fs';
 import path from 'path';
-import { REPO } from './lib.mjs';
+import { REPO, SBD_ARCHIVE_FILE } from './lib.mjs';
 
 const av = process.argv.slice(2), arg = k => { const i = av.indexOf(k); return i >= 0 ? av[i + 1] : null; };
-const FILE = path.resolve(REPO, arg('--file') || 'Steel Bridge Design.html'), N = +(arg('--n') || 10000);
+const FILE = path.resolve(REPO, arg('--file') || SBD_ARCHIVE_FILE), N = +(arg('--n') || 10000);
 const html = fs.readFileSync(FILE, 'utf8');
 let bad = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) bad++; };
 

@@ -21,7 +21,7 @@ const FOLDER = { asce7: 'asce7-load-generator', baseplate: 'base-plate-anchor', 
   rebar: 'aci-rebar-development', spreadfooting: 'spread-footing', cbc: 'concrete-beam-capacity', asd: 'concrete-beam-asd',
   // GHS2 (2026-11-05): tools with their own project dialog or panel (statusCell + decorate(body, ui, { rows: false }))
   abutment: 'abutment-calculator', edm: 'elastomeric-bearing', bgeo: 'bridge-geometry', sbapp: 'steel-bridge-app',
-  gd: 'steel-bridge-design', pile: 'pile-designer' };   // Steel Bridge Design.html: the shared Saved projects dialog (GHS2)
+  gd: 'steel-bridge-design', pile: 'pile-designer' };   // Steel Bridge Design (archived copy since 2026-11-19): the shared Saved projects dialog (GHS2)
 // Tools with their own project dialog: how to show it (with sync on, the GitHub rows are drawn into it), and whether it is open.
 // Default: the shared Saved projects dialog (dialog.spLib).
 const OWN = {

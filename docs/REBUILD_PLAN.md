@@ -110,7 +110,7 @@ Any difference comes to you with its cause before it's accepted. The current app
 | 1 | **Pilot:** `shared/moving-load.js` (Moving Load Generator's engine, extended with DL stages, construction and pour cases, span count as needed) + `vehicles.js`; Moving Load Generator switched to them, results unchanged | 3–4 |
 | 2 | `shared/report.js` + `ui.js`; this replaces the queued "Report tab in 17 apps" work with one viewer | 2–3, then 1 small PR per app |
 | 3 | Steel Bridge rebuild: engine module by module, with the UI and report as each lands | 20–30 |
-| 4 | Switch-over: `Steel Bridge Design.html` becomes a redirect, old projects import | 1–2 |
+| 4 | Switch-over: `Steel Bridge Design.html` becomes a redirect, old projects import. **Done 2026-11-19:** `Steel Bridge Design.html` redirects to `apps/steel-bridge/index.html`; the old app is archived as `archive/Steel Bridge Design (archived 2026-11-19).html` (not maintained); the engineer confirmed that no old projects need migrating | 1–2 |
 | later | `shared/lldf.js`, `rebar.js`, `aisc-shapes.js`; split the big tools when next worked on | as needed |
 
 Phase 1 is the trial. If the new way isn't clearly faster and cheaper there, we stop and reconsider before the big rebuild.

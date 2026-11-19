@@ -2,7 +2,7 @@
 // Syntax check of every inline script of a tool (Tier 0): classic scripts with `node --check`; text/babel (JSX) scripts transpiled
 // first with the offline Babel in tests/libs (same version the tools load); GirderDetail's embedded Preliminary sizing page and (since 2026-10-22) ST-Girder page
 // (<script type="text/plain" id="pl-src"> / id="st-src", un-escaped as plSrc() / stSrc() do) is checked too. Usage: node tests/check-syntax.mjs <tool.html|file.js> [...]
-// With no arguments (since 2026-11-02): every tool HTML at the repo root, every apps/*/index.html, every apps/**/*.js and shared/*.js,
+// With no arguments (since 2026-11-02): every tool HTML at the repo root and (SBDA, 2026-11-19) in archive/, every apps/*/index.html, every apps/**/*.js and shared/*.js,
 // each checked exactly as a file-specific run checks it (before, a run without arguments checked nothing and still said "all scripts pass").
 import fs from 'fs';
 import os from 'os';
@@ -28,7 +28,7 @@ function check(name, html) {
     const attrs = m[1], body = m[2];
     if (/\bsrc=/.test(attrs) || !body.trim()) continue;
     if (/type="text\/plain"/.test(attrs)) {
-      if (/id="(pl|st)-src"/.test(attrs)) check(name + ' > ' + /id="(pl|st)-src"/.exec(attrs)[1] + '-src', body.replace(/<\\(\\*)(\/script|!--)/gi, '<$1$2'));   // st-src: the embedded ST-Girder page (Steel Bridge Design, 2026-10-22)
+      if (/id="(pl|st)-src"/.test(attrs)) check(name + ' > ' + /id="(pl|st)-src"/.exec(attrs)[1] + '-src', body.replace(/<\\(\\*)(\/script|!--)/gi, '<$1$2'));   // st-src: the embedded ST-Girder page (Steel Bridge Design, 2026-10-22; archived copy since 2026-11-19)
       continue;
     }
     if (/type="(application\/json|importmap|text\/template)"/.test(attrs)) continue;
@@ -55,11 +55,12 @@ function walkJs(d) {
 }
 function allFiles() {
   const root = fs.readdirSync(REPO).filter(n => n.endsWith('.html') && fs.statSync(path.join(REPO, n)).isFile()).sort().map(n => path.join(REPO, n));
+  const arch = fs.existsSync(path.join(REPO, 'archive')) ? fs.readdirSync(path.join(REPO, 'archive')).filter(n => n.endsWith('.html')).sort().map(n => path.join(REPO, 'archive', n)) : [];
   const apps = fs.existsSync(path.join(REPO, 'apps')) ? fs.readdirSync(path.join(REPO, 'apps')).sort().map(n => path.join(REPO, 'apps', n)) : [];
   const appHtml = apps.map(d => path.join(d, 'index.html')).filter(f => fs.existsSync(f));
   const appJs = apps.filter(d => fs.statSync(d).isDirectory()).flatMap(walkJs);
   const sharedJs = fs.existsSync(path.join(REPO, 'shared')) ? fs.readdirSync(path.join(REPO, 'shared')).filter(n => n.endsWith('.js')).sort().map(n => path.join(REPO, 'shared', n)) : [];
-  return [...root, ...appHtml, ...appJs, ...sharedJs];
+  return [...root, ...arch, ...appHtml, ...appJs, ...sharedJs];
 }
 const argv = process.argv.slice(2);
 const list = argv.length ? argv : allFiles();
@@ -69,6 +70,6 @@ for (const f of list) {
   if (f.endsWith('.js')) checkJs(name, f); else check(name, fs.readFileSync(f, 'utf8'));
 }
 fs.rmSync(dir, { recursive: true, force: true });
-if (!argv.length) console.log(`${files} file(s) checked (repo-root tools, apps/*/index.html, apps/**/*.js, shared/*.js)`);
+if (!argv.length) console.log(`${files} file(s) checked (repo-root tools, archive/*.html, apps/*/index.html, apps/**/*.js, shared/*.js)`);
 console.log(bad ? `${bad} script(s) failed` : 'all scripts pass');
 process.exit(bad ? 1 : 0);

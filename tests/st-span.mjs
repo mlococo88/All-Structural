@@ -34,13 +34,13 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { HERE, openPage, resolveFile, hash, diff } from './lib.mjs';
+import { HERE, openPage, resolveFile, hash, diff, SBD_ARCHIVE_FILE } from './lib.mjs';
 
 const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
 const TARGET = args.target || (fs.existsSync(path.join(HERE, '..', 'stgirder.html')) ? 'st' : 'sbd');   // stgirder.html was removed at the cut-over (2026-10-22): the frame by default
 if (!['st', 'sbd'].includes(TARGET)) { console.error('--target must be st or sbd'); process.exit(2); }
-const FILE = args.file || (TARGET === 'sbd' ? 'Steel Bridge Design.html' : 'stgirder.html');
+const FILE = args.file || (TARGET === 'sbd' ? SBD_ARCHIVE_FILE : 'stgirder.html');   // SBDA (2026-11-19): the archived copy
 const BASE = args.baseline ? path.resolve(args.baseline) : null, REC = args['record-baseline'] ? path.resolve(args['record-baseline']) : null;
 const A = BASE ? { label: 'baseline ' + path.relative(process.cwd(), BASE), file: null } : resolveFile(args.a || 'origin/main', FILE);
 const B = REC ? null : resolveFile(args.b || FILE, FILE);   // --record-baseline runs A only
@@ -174,6 +174,7 @@ async function RUN(src, c) {
 
 /* ---------------- cases, run, report (as compare.mjs) ---------------- */
 const normalize = R => JSON.parse(JSON.stringify(R)
+  .replace(/Steel(%20| )Bridge\1Design\1\(archived\1(?:2026-11-19)\)\.html/g, 'Steel$1Bridge$1Design.html')   // SBDA (2026-11-19): the archived copy's file name = the old one
   .replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z/g, '(time)')
   .replace(/\b\d{4}-\d\d-\d\d\b/g, '(date)')
   .replace(/\b\d{1,2}\/\d{1,2}\/\d{4}(,? \d{1,2}:\d{2}(:\d{2})?\s?(AM|PM)?)?/g, '(date)')

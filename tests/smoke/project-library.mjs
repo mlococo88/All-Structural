@@ -17,7 +17,7 @@ import os from 'os';
 import path from 'path';
 import assert from 'assert/strict';
 import { execFileSync } from 'child_process';
-import { openPage, REPO, diff } from '../lib.mjs';
+import { openPage, REPO, diff, SBD_ARCHIVE_FILE } from '../lib.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
 const SHOTS = arg('shots', process.env.SHOTS);
@@ -238,7 +238,8 @@ export const TOOLS = {
     // Steel Bridge Design.html (GirderDetail): used by tests/smoke/github-sync-tools.mjs and home-projects.mjs (GHS2, 2026-11-05; its
     // shared Saved projects dialog); not run by this file (results: tests/compare.mjs --tool gd). Results after gdIdle: the modules'
     // project P (without ui, ts zeroed) and the open module's checks; save = Save as (asks the name; a name in use asks to overwrite).
-    file: 'Steel Bridge Design.html', list: 'girderdetail_projects_v1', auto: 'girderdetail_autosave_v1', noRun: true,
+    file: SBD_ARCHIVE_FILE, list: 'girderdetail_projects_v1',   // SBDA (2026-11-19): the archived copy
+    auto: 'girderdetail_autosave_v1', noRun: true,
     // STDS-G (2026-11-06): the standard save (one Save writes both girderdetail_projects_v1 and plateline_projects_v1); main: the old pane
     ready: async p => { await p.waitForFunction(() => typeof window.gdIdle === 'function' && (document.getElementById('pb_saveas') || (window.SharedProjectsUI && SharedProjectsUI.bars && SharedProjectsUI.bars[0])), null, { timeout: 120000 }); await p.evaluate(() => window.gdIdle({ quiet: 3000 })); },
     results: async p => { await p.evaluate(() => window.gdIdle({ quiet: 3000 })); return p.evaluate(() => { const q = JSON.parse(JSON.stringify(P)); delete q.ui;

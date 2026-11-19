@@ -8,10 +8,10 @@
 //   Preliminary sizing's own "Revert" bar hidden when embedded (plateline_undo_v1 untouched); no console errors.
 //   node tests/smoke/sbd-undo.mjs [--shots <dir>]
 import path from 'path';
-import { openPage, REPO } from '../lib.mjs';
+import { openPage, REPO, SBD_ARCHIVE_FILE } from '../lib.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
-const SHOTS = arg('shots', process.env.SHOTS), FILE = path.join(REPO, 'Steel Bridge Design.html');
+const SHOTS = arg('shots', process.env.SHOTS), FILE = path.join(REPO, SBD_ARCHIVE_FILE);
 let fails = 0; const ok = (c, m) => { console.log((c ? '  ok   ' : '  FAIL ') + m); if (!c) fails++; return c; };
 console.log('sbd-undo: ' + FILE);
 const o = await openPage(FILE, { vw: 1400, vh: 900, timeout: 120000 }), p = o.p;
