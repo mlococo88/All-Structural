@@ -220,6 +220,37 @@
     return w.steps;
   }
 
+  /* ---------- span-to-depth guidance (AASHTO LRFD 10th Ed. Art. 2.5.2.6.3, Table 2.5.2.6.3-1, p. 2-14: optional criteria) ----------
+     depthGuide(spans, cont): the steel I-girder rows of the table, L = the longest span (ft): depth of the I-beam portion of a composite
+     I-beam k_I L (0.033 simple, 0.027 continuous) and overall depth of the composite I-beam k_O L (0.040 simple, 0.032 continuous), in
+     inches (× 12). The Auto design depth rule (proportions(), depthList) takes the I-beam portion row; depthFlag() both rows (F6). */
+  function depthGuide(spans, cont) {
+    const Ls = Math.max(...spans.map(Number)), kI = cont ? 0.027 : 0.033, kO = cont ? 0.032 : 0.040;
+    return { Ls, cont: !!cont, kI, kO, needI: kI * Ls * 12, needO: kO * Ls * 12 };
+  }
+  /* depthFlag(P, gi) (F6, 2026-11-19; engineer: an informational flag, never a failure): girder type gi against depthGuide. d_s = the
+     shallowest D + t_ft + t_fb of its plate segments (the I-beam portion); d_o = d_s + haunch + t_deck (deck total thickness: the overall
+     composite depth; noncomposite: d_s). Below either row: flagged ("below optional AASHTO depth guidance"). The owner decides whether
+     2.5.2.6.3 applies (it is optional, e.g. clearance-limited structures); nothing here enters a check, ratio or verdict.
+     Returns null without plates or spans, else { gi, label, G (depthGuide), ds, dO, rows: [{ id, row, k, need, have, ok }], flagged, text, steps }. */
+  function depthFlag(P, gi) {
+    const g = (P.girders || [])[gi], spans = ((P.spans || {}).lengths || []).map(Number).filter(v => v > 0); if (!g || !(g.segments || []).length || !spans.length) return null;
+    const cont = P.spans.continuity !== 'simple' && spans.length > 1, G = depthGuide(spans, cont), d = P.deck || {}, comp = d.composite !== false, n = St().n;
+    const sg = g.segments.reduce((b, s) => (!b || s.D + s.topT + s.botT < b.D + b.topT + b.botT ? s : b), null), ds = sg.D + sg.topT + sg.botT;
+    const hh = +d.haunch || 0, td = +d.tdeck > 0 ? +d.tdeck : +d.ts || 0, dO = comp ? ds + hh + td : ds, w = St().work('dg'), sp = cont ? 'continuous' : 'simple', ref = `${ED} Art. 2.5.2.6.3, Table 2.5.2.6.3-1 (p. 2-14)`;
+    w.add({ id: 'L', label: `Span length L for the table (the longest span; ${sp} spans)`, sym: 'L', eq: '\\max L_{k}', sub: spans.map(v => n(v, 2)).join(',\\ '), value: G.Ls, unit: 'ft', d: 2, ref });
+    w.add({ id: 'ds', label: `Depth of the steel I-beam portion (shallowest plate segment, x = ${n(sg.x0, 2)} to ${n(sg.x1, 2)} ft)`, sym: 'd_{s}', eq: 'D + t_{ft} + t_{fb}', sub: `${n(sg.D, 3)} + ${n(sg.topT, 4)} + ${n(sg.botT, 4)}`, value: ds, unit: 'in', d: 3, ref });
+    const rows = [{ id: 'I', row: 'Depth of I-beam portion of composite I-beam', k: G.kI, need: G.needI, have: ds, sym: 'd_{s}' }];
+    if (comp) { w.add({ id: 'do', label: 'Overall depth of the composite I-beam (steel + haunch + deck total thickness)', sym: 'd_{o}', eq: 'd_{s} + h_{h} + t_{deck}', sub: `${n(ds, 3)} + ${n(hh, 3)} + ${n(td, 3)}`, value: dO, unit: 'in', d: 3, ref });
+      rows.unshift({ id: 'O', row: 'Overall depth of composite I-beam', k: G.kO, need: G.needO, have: dO, sym: 'd_{o}' }); }
+    rows.forEach(q => { q.ok = q.have >= q.need - 1e-9;
+      w.add({ id: q.id, label: `${q.row} (${sp} spans): ${q.ok ? 'meets' : 'below'} the optional guidance`, sym: `${q.k}L(12)`, eq: `\\le ${q.sym}`, sub: `${q.k}(${n(G.Ls, 2)})(12) = ${n(q.need, 2)}\\ \\text{in}\\ ${q.ok ? '\\le' : '\\gt'}\\ ${n(q.have, 2)}`, value: q.ok ? 'meets' : 'below (Note)', unit: '', ref, ok: q.ok,
+        note: 'Optional criterion (2.5.2.6.3: applies where the owner invokes span-to-depth controls; e.g. clearance-limited structures may be shallower). Informational: not a check, not in any ratio, status or verdict.' }); });
+    const flagged = rows.some(q => !q.ok), lab = g.label || g.id || `G${gi + 1}`;
+    const text = `${lab}: ${flagged ? 'below optional AASHTO depth guidance' : 'meets the optional AASHTO depth guidance'} (2.5.2.6.3, Table 2.5.2.6.3-1, ${sp} spans, L = ${n(G.Ls, 2)} ft): ${rows.map(q => `${q.row.toLowerCase()} ${q.k}L = ${q.k}(${n(G.Ls, 2)})(12) = ${n(q.need, 2)} in ${q.ok ? '≤' : '>'} ${n(q.have, 2)} in`).join('; ')}.`;
+    return { gi, label: lab, G, ds, dO, hh, td, seg: { D: sg.D, topT: sg.topT, botT: sg.botT, x0: sg.x0, x1: sg.x1 }, comp, rows, flagged, text, steps: w.steps };
+  }
+
   /* ---------- 6.10.2 proportion limits and the depth rule (sizing rules, also reported) ---------- */
   function proportions(L, P, S) {
     const w = St().work('ad.prop'), n = St().n, out = []; const segs = segmentsOf(L), Ls = Math.max(...P.spans.lengths.map(Number)), cont = P.spans.continuity !== 'simple' && P.spans.lengths.length > 1;
@@ -235,7 +266,7 @@
         add(`d${f[0]}${k}`, `Segment ${k}: ${nm} flange width`, '\\frac{D}{6}', '\\le b_{f}', `\\frac{${n(s.D, 2)}}{6} = ${n(s.D / 6, 2)} \\le ${n(b, 2)}`, s.D / 6, b, `${ED} Eq. 6.10.2.2-2`);
         add(`t${f[0]}${k}`, `Segment ${k}: ${nm} flange thickness`, '1.1t_{w}', '\\le t_{f}', `1.1(${n(s.tw, 4)}) = ${n(1.1 * s.tw, 3)} \\le ${n(t, 4)}`, 1.1 * s.tw, t, `${ED} Eq. 6.10.2.2-3`); });
       add(`i${k}`, `Segment ${k}: flange proportions`, '0.1 \\le \\frac{I_{yc}}{I_{yt}}', '\\le 10', `\\frac{I_{yc}}{I_{yt}} = \\frac{${n(Iyc, 1)}}{${n(Iyt, 1)}} = ${n(Iyc / Iyt, 3)}`, Math.max(0.1 / (Iyc / Iyt), (Iyc / Iyt) / 10), 1, `${ED} Eq. 6.10.2.2-4`); });
-    if (S.lim.depthRule) { const tf = Math.min(...segs.map(s => s.topT + s.botT)), dg = L.D + tf, k = cont ? 0.027 : 0.033, need = k * Ls * 12;
+    if (S.lim.depthRule) { const tf = Math.min(...segs.map(s => s.topT + s.botT)), dg = L.D + tf, DG = depthGuide(P.spans.lengths, cont), k = DG.kI, need = DG.needI;   // F6: depthGuide (same values)
       add('depth', 'Minimum depth of the steel I-beam portion (optional criterion, applied as Preliminary sizing does)', 'd_{min}', `${k}L`, `${k}(${n(Ls, 1)})(12) = ${n(need, 2)} \\le D + t_{ft} + t_{fb} = ${n(dg, 2)}`, need, dg, `${ED} Table 2.5.2.6.3-1`); }
     return { ok: out.every(q => q.ok || q.warn), items: out, steps: w.steps, warns: out.filter(q => q.warn).map(q => ({ id: q.id, label: q.label, r: q.r, ref: q.ref, step: q.step })) };
   }
@@ -273,7 +304,7 @@
         skew: { bySupport: ((P.xs || {}).skews || []).slice(), max: Math.max(0, ...((P.xs || {}).skews || []).map(Math.abs)) }, details: {} } };
     const gFI = (v => v > 0 ? v : 1.75)(+((P.fatigue || {}).gam || {}).fI);   // FONE (2026-11-01): pitch sizing with the Fatigue I γ of the inputs (was 1.75)
     const dd = +Q.d, Zr = 7.0 * Math.PI * dd * dd / 4, segAt = x => g.segments.find(s => x >= s.x0 - 1e-9 && x < s.x1) || g.segments[g.segments.length - 1];
-    const n = SEC().modularRatio(m.concrete.fc, m.concrete.wc, m.concrete.K1, m.concrete.nRule).n, r1 = v => +(+v).toFixed(1), r2 = v => +(+v).toFixed(2);
+    const n = SEC().modularRatio(m.concrete.fc, m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc, m.concrete.K1, m.concrete.nRule).n, r1 = v => +(+v).toFixed(1), r2 = v => +(+v).toFixed(2);   // F1 (2026-11-19): w_c for E_c (OWN17), as ui/fatigue.js studsOf
     const vRng = (a, b) => Math.max(0, ...stations.filter(s => s.x >= a - 1e-9 && s.x <= b + 1e-9).map(s => s.V_FATpos - s.V_FATneg));
     const zs = [], qz = [];
     R.spans.forEach((L, k) => { const x0 = R.sup[k]; for (let z = 0; z < 10; z++) { const a = x0 + z * L / 10, b = a + L / 10, s = segAt((a + b) / 2), S = FA_.secSet(s.D, s, { ts: d.ts, hh: h0 ? 0 : d.haunch, beff: beffB, n, Ar: 0, dr: 0 }), c = S.cn, Qs = beffB * d.ts / n * (S.ySlab - c.yb);
@@ -346,7 +377,7 @@
       const nr = SEC().modularRatio(m.concrete.fc, m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc, m.concrete.K1, m.concrete.nRule);
       Object.assign(d.prj, { n: nr.n, mat: { Fyt: G[m.steel.top].Fy, Fyb: G[m.steel.bot].Fy, Fyw: G[m.steel.web].Fy, Fyr: m.rebar.Fyr, fc: m.concrete.fc }, rebarInPositive: !!P.deck.rebarInPositiveMp });
       d.prj.deck.tdeck = P.deck.tdeck; if (P.deck.composite === false) d.prj.deck.composite = false;
-      d.locs.forEach(L => { L.fl = DF ? DF.fl || 0 : 0; });
+      d.locs.forEach(L => { L.fl = DF ? DF.fl || 0 : 0; if (DF) Object.assign(L, DF.locFl(L.x)); });   // F3 (2026-11-19): f_ℓ,skew per location (as the Flexure tab)
       const Gr = FX().girder(d.locs, d.prj, { supports: d.supports }); mods['flex' + gi] = Gr;
       Gr.rows.forEach(r => r.checks.forEach(c => { if (!c.inUse || !isFinite(c.ratio)) return; const o = { ...gm, mod: 'flexure', tab: 'flex', id: c.id, title: c.title, r: c.ratio, x: r.x, step: c.step, part: partOf(c, r.pos) }; hits.push(o); take(o); }));
       // flange fatigue GS17 (engine/fatigue.js flange on each flexure row, as the Fatigue & studs tab)
@@ -990,5 +1021,5 @@
   }
   /* applyJoint(P, J): the girders of the joint run (every type's best plates, J.G) for P, and the girders before for Undo: { girders, undo } */
   function applyJoint(P, J) { const keep = clone(P.girders); return { girders: P.girders.map((g, t) => ({ ...clone(g), segments: clone(J.G[t].segments) })), undo: { girders: keep } }; }
-  window.SBDAutoDesign = { TYPE_LOCK, typeScope, typeProject, typeOpt, detBack, applyType, lockD, jointRun, applyJoint, relayout, splPlan, splCheck, framesOf, DEF, STEEL, VARS, DET_KEYS, APPLY_KEYS, ohLimit, ohCands, pickOh, varsOf, sizeDetails, lockText, settings, layoutOf, segmentsOf, projectWith, lineWeight, transitions, costOf, proportions, boltFitWidth, payloadOf, evaluate, sizeFlanges, design, trim, run, runChunked, apply, undo, depthList, nbList };
+  window.SBDAutoDesign = { depthGuide, depthFlag, TYPE_LOCK, typeScope, typeProject, typeOpt, detBack, applyType, lockD, jointRun, applyJoint, relayout, splPlan, splCheck, framesOf, DEF, STEEL, VARS, DET_KEYS, APPLY_KEYS, ohLimit, ohCands, pickOh, varsOf, sizeDetails, lockText, settings, layoutOf, segmentsOf, projectWith, lineWeight, transitions, costOf, proportions, boltFitWidth, payloadOf, evaluate, sizeFlanges, design, trim, run, runChunked, apply, undo, depthList, nbList };
 })();

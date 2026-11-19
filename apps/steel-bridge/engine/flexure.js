@@ -267,6 +267,22 @@
       r.Mu = A.DC1 + A.DC2 + A.DW + A.LL + A.UT + A.UF; r.Ms = B.DC1 + B.DC2 + B.DW + B.LL + B.UT + B.UF; r.Mrev = null; r.rev = false;
       r.MD1 = A.DC1 + A.UT + A.UF; r.MD2 = A.DC2 + A.DW;
     }
+    // f_ℓ from skew (F2/F3, 2026-11-19; AASHTO LRFD 10th Ed. C6.10.1, p. 6-160): L.flSk is the unfactored estimate at this location
+    // (engine/framing.js design locFl). C6.10.1 suggests splitting it between dead and live load in the proportion of the unfactored
+    // major-axis stresses at the section; each part then takes its load factor: f_ℓ = f_ℓ,skew Σγ_i|f_i| / Σ|f_i| over DC1, DC2, DW, UT, UF
+    // and LL+IM at the bottom of the steel (the flange f_ℓ is applied to), with the Strength I factors (r.fl) and the Service II factors
+    // (r.flSv, Eqs. 6.10.4.2.2-2, -3). Before: r.fl = r.flSv = 1.25 f_ℓ,skew for both. Factored demands (no unfactored parts): r.fl as
+    // passed (γ f_ℓ,skew) and r.flSv = f_ℓ,skew (decision pending engineer review). f_ℓ entered (no L.flSk): the value for both, as before.
+    r.flSv = r.fl;
+    if (L.flSk != null && isFinite(+L.flSk)) {
+      r.flSk = +L.flSk;
+      if (!F) {
+        const ks = ['DC1', 'DC2', 'DW', 'UT', 'UF', 'LL'], a = k => Math.abs(r.stg[k].bot), gS = { ...r.gm, LL: G.ll }, gV = { DC1: 1, DC2: 1, DW: 1, UT: 1, UF: r.svU, LL: G.sll };
+        const sum = ks.reduce((t, k) => t + a(k), 0), kS = sum > 1e-9 ? ks.reduce((t, k) => t + gS[k] * a(k), 0) / sum : r.gm.DC1, kV = sum > 1e-9 ? ks.reduce((t, k) => t + gV[k] * a(k), 0) / sum : 1;
+        r.flp = { ks, a: Object.fromEntries(ks.map(k => [k, a(k)])), gS, gV, sum, kS, kV };
+        r.fl = r.flSk * kS; r.flSv = r.flSk * kV;
+      } else r.flSv = r.flSk;
+    }
     // compression and tension flange; fl: their first-order lateral bending (composite: the bottom flange only)
     r.cF = pos ? { lab: 'top', b: p.topB, t: p.topT, Fy: Fyt, f: -r.str.top, fl: r.flT } : { lab: 'bottom', b: p.botB, t: p.botT, Fy: Fyb, f: -r.str.bot, fl: r.fl };
     r.tF = pos ? { lab: 'bottom', b: p.botB, t: p.botT, Fy: Fyb, f: r.str.bot, fl: r.fl } : { lab: 'top', b: p.topB, t: p.topT, Fy: Fyt, f: r.str.top, fl: r.flT };
@@ -402,9 +418,9 @@
     }
     if (nc) flLims(r).forEach(q => { if (q.fl > 0) out.push(ck({ id: 'GS10', key: q.key, title: `Flange lateral bending, ${q.lab} flange, f_ℓ ≤ 0.6F_yf`, ref: `${ED} Eq. 6.10.1.6-1`, demand: q.fl, capacity: 0.6 * q.Fy, unit: 'ksi', step: `fx.${q.st}.ok`, ...(q.und ? { ng: AMP_NG } : {}) })); });
     else { const fS = r.pos ? r.fl : r.am.fl; if (fS > 0) out.push(ck({ id: 'GS10', key: 'fl', title: 'Flange lateral bending, f_ℓ ≤ 0.6F_yf', ref: `${ED} Eq. 6.10.1.6-1`, demand: fS, capacity: 0.6 * Fyb, unit: 'ksi', step: 'fx.flim.ok', ...(!r.pos && r.am.und ? { ng: AMP_NG } : {}) })); }
-    if (nc) [['top', r.svc.top, Fyt, Math.max(r.flT, 0)], ['bottom', r.svc.bot, Fyb, Math.max(r.fl, 0)]].forEach(([f, v, Fy, fl]) => {   // noncomposite: both flanges, Eq. 6.10.4.2.2-3
+    if (nc) [['top', r.svc.top, Fyt, Math.max(r.flT, 0)], ['bottom', r.svc.bot, Fyb, Math.max(r.flSv, 0)]].forEach(([f, v, Fy, fl]) => {   // noncomposite: both flanges, Eq. 6.10.4.2.2-3; F2: f_ℓ at Service II (r.flSv)
       out.push(ck({ id: 'GS12', key: 'sv' + f[0], title: `Service II, ${f} flange (noncomposite), ${fl > 0 ? 'f_f + f_ℓ/2' : 'f_f'} ≤ 0.80R_hF_yf`, ref: `${ED} Eq. 6.10.4.2.2-3`, demand: Math.abs(v) + fl / 2, capacity: 0.80 * r.Rh * Fy, unit: 'ksi', step: `fx.sv${f[0]}.ok` })); });
-    else [['top', r.svc.top, Fyt, 0], ['bottom', r.svc.bot, Fyb, Math.max(r.fl, 0)]].forEach(([f, v, Fy, fl]) => {
+    else [['top', r.svc.top, Fyt, 0], ['bottom', r.svc.bot, Fyb, Math.max(r.flSv, 0)]].forEach(([f, v, Fy, fl]) => {   // F2: f_ℓ at Service II (r.flSv)
       out.push(ck({ id: 'GS12', key: 'sv' + f[0], title: `Service II, ${f} flange, ${fl > 0 ? 'f_f + f_ℓ/2' : 'f_f'} ≤ 0.95R_hF_yf`, ref: `${ED} Eq. 6.10.4.2.2-${f === 'top' ? 1 : 2}`, demand: Math.abs(v) + fl / 2, capacity: 0.95 * r.Rh * Fy, unit: 'ksi', step: `fx.sv${f[0]}.ok` })); });
     if (!(r.p7 && r.D / r.tw <= 150)) { const fcS = Math.max(r.svcC, 0); out.push(ck({ id: 'GS13', key: 'web', title: 'Service II, web bend-buckling, f_c ≤ F_crw', ref: `${ED} Eq. 6.10.4.2.2-4; 6.10.1.9.1`, demand: fcS, capacity: r.webS.F, unit: 'ksi', step: 'fx.web.ok' })); }
     else out.push({ id: 'GS13', key: 'web', title: 'Service II, web bend-buckling', ref: `${ED} Art. 6.10.4.2.2`, na: 'Not required: composite section in positive flexure with D/t_w ≤ 150.', inUse: false, ratio: NaN, step: 'fx.web.na' });
@@ -448,6 +464,20 @@
     ['top', 'bot'].forEach(f => w.add({ id: `svc.${f}`, label: `Service II stress, ${f === 'top' ? 'top' : 'bottom'} of steel (tension +)`, sym: `f_{f,${f}}`, eq: r.factored ? '\\sum f_{s,i}' : 'f_{DC1} + f_{DC2} + f_{DW} + 1.30f_{LL+IM}',
       sub: r.factored ? ['DC1', 'DC2', 'DW', 'LL', 'UT', 'UF'].map(k => n2(r.stgS[k][f])).join(' + ') : `${n2(r.stg.DC1[f])} + ${n2(r.stg.DC2[f])} + ${n2(r.stg.DW[f])} + ${n2(G.sll)}(${n2(r.stg.LL[f])})` + (r.ut ? ` + ${n2(r.stg.UT[f])} + ${r.svU}(${n2(r.stg.UF[f])})` : ''),
       value: r.svc[f], unit: 'ksi', d: 2, ref: tbl }));
+    // F2/F3 (2026-11-19): f_ℓ from skew split between dead and live load and factored (C6.10.1; location() above)
+    if (r.flSk != null) {
+      const ref = `${ED} C6.10.1 (p. 6-160); Table 3.4.1-1`, lead = `f_ℓ,skew = ${n2(r.flSk)} ksi at this location (unfactored; the cross-frame layout case and brace points: Framing & bracing tab, steps flsk).`;
+      if (!r.factored) {
+        const P_ = r.flp, nm = { DC1: 'DC1', DC2: 'DC2', DW: 'DW', UT: 'UT', UF: 'UF', LL: 'LL+IM' }, on = P_.ks.filter(k => P_.a[k] > 1e-9);
+        const den = on.length ? on.map(k => n2(P_.a[k])).join(' + ') : '0', num = g => on.length ? on.map(k => `${n2(g[k])}(${n2(P_.a[k])})`).join(' + ') : '';
+        const nt = `${lead} |f_i|: unfactored bottom-of-steel stresses of each load (${on.map(k => `${nm[k]} ${n2(P_.a[k])}`).join(', ') || 'all zero'} ksi), so the dead-load share is ${n2(P_.sum > 1e-9 ? (P_.sum - P_.a.LL) / P_.sum * 100 : 100)} %.${P_.sum > 1e-9 ? '' : ' No stress here: the DC1 factor is used.'}`;
+        w.add({ id: 'flp.S', label: 'Flange lateral bending from skew, Strength I: the estimate split between dead and live load in the proportion of their unfactored stresses, each part with its load factor', sym: 'f_{\\ell}', eq: 'f_{\\ell,skew}\\frac{\\sum \\gamma_{i}|f_{i}|}{\\sum |f_{i}|}', sub: P_.sum > 1e-9 ? `${n2(r.flSk)}\\frac{${num(P_.gS)}}{${den}}` : `${n2(P_.gS.DC1)}(${n2(r.flSk)})`, value: r.fl, unit: 'ksi', d: 2, ref, note: nt });
+        w.add({ id: 'flp.V', label: 'Flange lateral bending from skew, Service II: the same split with the Service II load factors', sym: 'f_{\\ell,SII}', eq: 'f_{\\ell,skew}\\frac{\\sum \\gamma_{i,SII}|f_{i}|}{\\sum |f_{i}|}', sub: P_.sum > 1e-9 ? `${n2(r.flSk)}\\frac{${num(P_.gV)}}{${den}}` : n2(r.flSk), value: r.flSv, unit: 'ksi', d: 2, ref: `${ED} C6.10.1 (p. 6-160); Art. 6.10.4.2.2; Table 3.4.1-1`, note: 'Used in GS12 (f_f + f_ℓ/2). Before 2026-11-19 Service II took the factored 1.25 f_ℓ,skew.' });
+      } else {
+        w.add({ id: 'flp.S', label: 'Flange lateral bending from skew, Strength I (factored demands: no unfactored parts to split by)', sym: 'f_{\\ell}', eq: '\\gamma f_{\\ell,skew}', sub: `${n2(r.flSk > 0 ? r.fl / r.flSk : 0)}(${n2(r.flSk)})`, value: r.fl, unit: 'ksi', d: 2, ref, note: `${lead} γ f_ℓ,skew as for deck placement (decision pending engineer review).` });
+        w.add({ id: 'flp.V', label: 'Flange lateral bending from skew, Service II (factored demands): unfactored estimate', sym: 'f_{\\ell,SII}', eq: 'f_{\\ell,skew}', sub: '', value: r.flSv, unit: 'ksi', d: 2, ref: `${ED} C6.10.1 (p. 6-160); Art. 6.10.4.2.2`, note: 'Decision pending engineer review.' });
+      }
+    }
     // yield moments, D6.2.1 (noncomposite) / D6.2.2 / D6.2.3
     if (nc) [['T', r.yT, 'top', Fyt, 'S_{top}'], ['B', r.yB, 'bottom', Fyb, 'S_{bot}']].forEach(([k, y, f, Fy, Ss]) => w.add({ id: `My${k}`, label: `Yield moment, ${f} flange (noncomposite: steel section)`, sym: `M_{y,${f}}`,
       eq: `\\frac{F_{y}${Ss}}{12}`, sub: `\\frac{${n2(Fy)}(${g0(y.S1)})}{12}`, value: y.My, unit: 'kip-ft', d: 1, ref: `${ED} App. D6.2.1`, note: `S of the steel section: see ${k === 'T' ? 'sec.s.St' : 'sec.s.Sb'}.` }));
@@ -535,7 +565,7 @@
     else { const fS = pos ? r.fl : r.am.fl; if (fS > 0) w.add({ id: 'flim.ok', label: 'Flange lateral bending limit', sym: 'f_{\\ell}', eq: '\\le 0.6F_{yf}', sub: `${n2(fS)} \\le 0.6(${n2(Fyb)})`, value: okv(fS, 0.6 * Fyb), unit: '', ref: `${ED} Eq. 6.10.1.6-1`, ok: fS <= 0.6 * Fyb + 1e-9 }); }
     // Service II
     const kS = nc ? 0.80 : 0.95;   // noncomposite: both flanges, Eq. 6.10.4.2.2-3
-    [['t', 'top', r.svc.top, Fyt, nc ? Math.max(r.flT, 0) : 0], ['b', 'bottom', r.svc.bot, Fyb, Math.max(r.fl, 0)]].forEach(([k, f, v, Fy, fl]) => { const a = Math.abs(v) + fl / 2, cap = kS * r.Rh * Fy;
+    [['t', 'top', r.svc.top, Fyt, nc ? Math.max(r.flT, 0) : 0], ['b', 'bottom', r.svc.bot, Fyb, Math.max(r.flSv, 0)]].forEach(([k, f, v, Fy, fl]) => { const a = Math.abs(v) + fl / 2, cap = kS * r.Rh * Fy;
       w.add({ id: `sv${k}.ok`, label: `Service II permanent deformations, ${f} flange${nc ? ' (noncomposite)' : ''}`, sym: fl > 0 ? '|f_{f}| + \\frac{f_{\\ell}}{2}' : '|f_{f}|', eq: `\\le ${n2(kS)}R_{h}F_{yf}`, sub: `${fl > 0 ? `${n2(Math.abs(v))} + \\frac{${n2(fl)}}{2} = ${n2(a)}` : n2(a)} \\le ${n2(kS)}(${n3(r.Rh)})(${n2(Fy)}) = ${n2(cap)}`, value: okv(a, cap), unit: '', ref: `${ED} Eq. 6.10.4.2.2-${nc ? 3 : k === 't' ? 1 : 2}`, ok: a <= cap + 1e-9 }); });
     { const fcS = Math.max(r.svcC, 0);
       w.add({ id: 'DcS', label: `Depth of the web in compression from the Service II stresses${nc ? ' (noncomposite: the elastic D_c of the steel section)' : pos ? ' (composite, positive flexure)' : ''}`, sym: 'D_{c}', eq: '\\frac{f_{c}}{f_{c} + |f_{t}|}d - t_{fc} \\ge 0', sub: `\\frac{${n2(fcS)}}{${n2(fcS)} + ${n2(Math.abs(r.svcT))}}(${n3(r.d)}) - ${n4(pos ? r.topT : r.botT)}`, value: r.DcS, unit: 'in', d: 3, ref: `${ED} App. D6.3.1, Eq. D6.3.1-1` });
@@ -573,7 +603,7 @@
      (linear between the payload stations), plates, region (Strength I max ≥ |min| at the nearest station: positive) and, from
      bracing(), L_b, C_b and the nonprismatic data with brace points every ≤ L_b in each span (the payload has the cross-frame
      spacing, not the stations; with a project that has framing, the caller passes that girder's own brace points: braces and lenOf from
-     SBDFraming.forGirder, SB2-O9). opt: { G, Lb (ft), braces, lenOf, fl, rebar (two layers, instead of the payload's A_r at mid-depth), xs (stations to check; default every payload station), impl, owner (the payload's
+     SBDFraming.forGirder, SB2-O9). opt: { G, Lb (ft), braces, lenOf, fl, locFl (F3, 2026-11-19: x → { fl, flSk }, SBDFraming design locFl; overrides fl), rebar (two layers, instead of the payload's A_r at mid-depth), xs (stations to check; default every payload station), impl, owner (the payload's
      owner, which the payload does not state: with window.SBDOwners loaded, OWN8 takes the haunch as 0 in every section property
      for RIDOT and MassDOT, as the Section properties tab and GirderDetail gdHP do) }. n = E_s/E_c exact from f′c, w_c,
      K_1 = 1 (the payload's n is the same, rounded); the deck rebar A_r is one layer at slab mid-depth (as the payload states it). Returns { prj, locs, env, supports, braces }. */
@@ -612,7 +642,7 @@
       const npr = br.npr ? { kind: br.npr, b: br.lbB, t: br.lbT, K: br.lbK, geA: br.geA || null, gov: br.nprG || null, Ir: br.lbIr, why: br.nprWhy } : null;
       const Mx = { DC1: at(env.MDC1), DC2: at(env.MDC2), DW: at(env.MDW), LLp: Math.max(0, at(env.Mp)), LLn: Math.min(0, at(env.Mn)), UT: at(env.MUT), UF: at(env.MUF), FATp: at(env.MfP), FATn: at(env.MfN) };
       const qp = Mx.LLp > 0 ? at(env.Pp) : 0, qn = Mx.LLn < 0 ? at(env.Pn) : 0, plT = {}; if (qp) plT.LLp = [qp, Mx.LLp]; if (qn) plT.LLn = [qn, Mx.LLn];   // GD45: the pedestrian parts
-      return { name: `x = ${x.toFixed(2)} ft`, x, region, cont, plates: zAt(x), beff: dk.beff, Lb: br.Lb, Cb: br.Cb, fl: opt.fl || 0, npr, seg: br.seg, cbParts: br.cbParts, M: Mx, ...(qp || qn ? { pl: plT } : {}) };
+      return { name: `x = ${x.toFixed(2)} ft`, x, region, cont, plates: zAt(x), beff: dk.beff, Lb: br.Lb, Cb: br.Cb, fl: opt.fl || 0, ...(opt.locFl ? opt.locFl(x) : {}), npr, seg: br.seg, cbParts: br.cbParts, M: Mx, ...(qp || qn ? { pl: plT } : {}) };
     });
     return { prj, locs, env, supports: sup, braces, Lb, lf: lfO };
   }
