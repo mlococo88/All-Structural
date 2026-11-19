@@ -81,14 +81,18 @@ test('F6: span-to-depth guidance flags a made-up shallow girder, not the normal 
   assert.ok(!SM.COLS.some(c => /depth/i.test(c.id)));
 });
 
-test('SA4: applicability of the line-girder analysis: no skew (nothing), 25° short wide span (I_S 0.41: WARNING), 65° (FAIL)', () => {
+test('SA4: applicability of the line-girder analysis: no skew (nothing), 25° short wide span (I_S 0.41: NOTE, was WARNING before SBIS), 65° (FAIL)', () => {
   const AN = W.SBDAnalysis;
   let A = AN.applicability(M.defaultProject()); assert.equal(A.level, 'ok');
   // made-up simple span 43 ft, 5 girders at 9.5 ft (w_g = 38 ft), 25°: I_S = 38 tan25° / 43 = 38(0.46631)/43 = 0.412 > 0.30
   const P = M.defaultProject(); P.spans.lengths = [43]; P.spans.continuity = 'simple'; P.xs.skews = [25, 25];
   P.girders[0].segments = [{ ...P.girders[0].segments[0], x0: 0, x1: 43, D: 24 }];
   A = AN.applicability(P); near(A.Is[0].Is, 0.412, 0.001, 'I_S'); near(A.wg, 38, 1e-9, 'w_g');
-  assert.equal(A.items.find(q => q.id === 'Is0').level, 'warn'); assert.ok(A.items.some(q => q.id === 'sk20' && q.level === 'note'));
+  // SBIS (engineer 2026-11-19; 10th Ed. 4.6.3.3.2, p. 4-72): I_S > 0.30 is a NOTE (before: 'warn'); 4.6.3.3.2 cited only in its own note
+  const iS = A.items.find(q => q.id === 'Is0'); assert.equal(iS.level, 'note'); assert.match(iS.msg, /Not a code limit on line-girder analysis/); assert.match(iS.msg, /4\.6\.3\.3\.2; C4\.6\.3\.3\.2/);
+  assert.equal(A.level, 'note', 'only notes here (before: warn)'); assert.ok(!A.items.some(q => q.id !== 'Is0' && /4\.6\.3\.3\.2/.test(q.title + q.msg)));
+  const sIs = A.steps.find(t => t.id === 'ap.Is0'); assert.equal(sIs.ok, undefined, 'no pass/fail mark on I_S'); assert.match(sIs.note, /Not a code limit/);
+  assert.ok(A.items.some(q => q.id === 'sk20' && q.level === 'note'));
   assert.notEqual(A.level, 'ok'); assert.ok(A.steps.some(t => t.id === 'ap.Is0' && /tan/.test(t.sub)));
   const Q = M.defaultProject(); Q.xs.skews = Q.xs.skews.map(() => 65); A = AN.applicability(Q); assert.equal(A.level, 'fail'); assert.equal(A.items.find(q => q.id === 'skew60').level, 'fail');
 });

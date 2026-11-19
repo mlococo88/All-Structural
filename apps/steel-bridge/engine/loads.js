@@ -277,6 +277,40 @@
       df: rg.map(r => ({ id: r.id, kind: r.kind, label: r.label, gM: r.members[j].gM, gV: r.members[j].gV, fatM: r.members[j].fatM, fatV: r.members[j].fatV, method: r.members[j].method })) };
   }
 
+  /* segDC1(D, segs): show the work of A2 (SBSW, 2026-11-19; CLAUDE.md §6; display only, no value used by a calculation). The analysis
+     (engine/analysis.js analyzeGirder, anchor "// A2 (2026-11-19)") adds to w_DC1 over each plate segment Δw = (h/12)(Δb_f/12)w_c −
+     (q_SIP/1000)n_bays(Δb_f/12)/2, Δb_f = b_f,seg − b_f,0, with girder(R, j).adj; here the same expressions, operation for operation, per
+     cross-section line j and per distinct top flange width of the plates segs (the girder type the tab is computed for), so that the Loads
+     tab and the Report work the haunch, the SIP forms and DC1 with the width the analysis uses. Returns, per line j, [{ topB, base (b_f = b_f,0),
+     xr: [[x0, x1]], db, dh, ds, w, haunch, sip, dc1 }] in the order of the first segment of each width. */
+  function segDC1(D, segs) {
+    const out = [];
+    for (let j = 0; j < D.N; j++) {
+      const A = { bf0: D.bf * 12, hh: D.hhIn, uc: D.uc, sipq: D.sipq, nAdj: (j > 0 ? 1 : 0) + (j < D.N - 1 ? 1 : 0) }, rows = [];   // = girder(R, j).adj
+      (segs || []).forEach(sg => { const topB = +sg.topB; let r = rows.find(q => q.topB === topB);
+        if (!r) { const db = (topB - A.bf0) / 12, base = Math.abs(db) < 1e-9, dh = base ? 0 : A.hh / 12 * db * A.uc, ds = base ? 0 : -A.sipq / 1000 * A.nAdj * db / 2;   // engine/analysis.js wetCorr
+          r = { topB, base, xr: [], db, dh, ds, w: dh + ds, haunch: D.haunch[j] + dh, sip: D.sip[j] + ds, dc1: D.dc1[j] + (dh + ds) }; rows.push(r); }
+        r.xr.push([+sg.x0, +sg.x1]); });
+      out.push(rows);
+    }
+    return out;
+  }
+  /* segSteps(D, segs, a): the worked steps of segDC1 (ids dl.G<j+1>.haunch.b<k>, .sip.b<k>, .DC1.b<k>, k the width's index in segDC1, for
+     each width other than b_f,0), inserted after each line's DC1 step; returns the new step list (D.steps is not changed). */
+  function segSteps(D, segs) {
+    const S = segDC1(D, segs), ref3 = `${ED} Art. 3.5.1`, xr = r => r.xr.map(([a, b]) => `${n2(a)} to ${n2(b)}`).join(', '), out = [];
+    D.steps.forEach(st => { out.push(st); const m = /^dl\.G(\d+)\.DC1$/.exec(st.id); if (!m) return; const j = +m[1] - 1, g = `G${j + 1}`, rows = S[j] || [];
+      if (!rows.some(r => !r.base)) return; const w = St().work('dl');
+      rows.forEach((r, k) => { if (r.base) return; const bys = [j > 0 ? D.bays[j - 1] : null, j < D.N - 1 ? D.bays[j] : null].filter(v => v != null);
+        w.add({ id: `${g}.haunch.b${k}`, label: `${g}: haunch over the top flange b_f = ${n2(r.topB)} in (x = ${xr(r)} ft), as the analysis takes it (DC1)`, sym: 'w_{h}', eq: '\\frac{h}{12}\\frac{b_{f}}{12}w_{c}', sub: `\\frac{${n2(D.hhIn)}}{12}\\frac{${n2(r.topB)}}{12}(${n3(D.uc)})`, value: r.haunch, unit: 'klf', d: 4, ref: ref3 });
+        w.add({ id: `${g}.sip.b${k}`, label: `${g}: stay-in-place forms on the clear bays with b_f = ${n2(r.topB)} in (x = ${xr(r)} ft), as the analysis takes it (DC1)`, sym: 'w_{SIP}', eq: '\\frac{q_{SIP}}{1000}\\sum\\frac{S - b_{f}}{2}', sub: `\\frac{${n2(D.sipq)}}{1000}(${bys.map(v => `\\frac{${n3(v - r.db)}}{2}`).join(' + ')})`, value: r.sip, unit: 'klf', d: 4, ref: ref3,
+          note: `Clear bay S − b_f = (S − b_f,0) − Δb_f, Δb_f = ${n2(r.topB)} − ${n2(D.bf * 12)} = ${n2(r.db * 12)} in (both flanges of the bay taken at this segment's width, as the analysis).` });
+        w.add({ id: `${g}.DC1.b${k}`, label: `${g}: DC1 on the steel section over x = ${xr(r)} ft (b_f = ${n2(r.topB)} in): the analysis's w_DC1 there`, sym: 'w_{DC1}', eq: 'w_{DC1,0} - w_{h,0} - w_{SIP,0} + w_{h} + w_{SIP}', sub: `${n4(D.dc1[j])} - ${n4(D.haunch[j])} - ${n4(D.sip[j])} + ${n4(r.haunch)} + ${n4(r.sip)}`, value: r.dc1, unit: 'klf', d: 4, ref: ref3,
+          note: `w_DC1,0 = ${n4(D.dc1[j])} klf with b_f,0 = ${n2(D.bf * 12)} in (the first region's top flange); Δw = ${n4(r.w)} klf, the analysis's wet-deck correction of these segments (Analysis tab, an.wet). Used where DC1 comes from this tab (an entered DC1 is used as entered).` }); });
+      out.push(...w.steps); });
+    return out;
+  }
+
   /* fromModel(project, opts): the module input { b, p } from the sbd2 project (engine/model.js; xs, ownerRules, deck, materials, spans,
      girders). opts.girder: the girder (index) whose plates give the regions' sections (default 0); opts.x: span stations of the sections. */
   function fromModel(P, opts) {
@@ -298,5 +332,5 @@
     return { b, p };
   }
 
-  window.SBDLoads = { STEEL_PLF, CATS, DIST, CLS, METHODS, parseDim, numRows, xsIn, edgeIn, bridgeEff, edgeLoads, llFaces, dead, steelWeight, compute, girder, fromModel };
+  window.SBDLoads = { STEEL_PLF, CATS, DIST, CLS, METHODS, parseDim, numRows, xsIn, edgeIn, bridgeEff, edgeLoads, llFaces, dead, steelWeight, compute, girder, segDC1, segSteps, fromModel };
 })();

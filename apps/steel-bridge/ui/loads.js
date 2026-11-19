@@ -142,6 +142,8 @@
       const g = P.girders[gi] || P.girders[0], { b, p } = LD().fromModel(P, { girder: P.girders.indexOf(g) }), R = LD().compute(b, p);
       if (R.errors.length) return { errors: R.errors };
       R.steel = LD().steelWeight(g.segments, b.allow, g.id); R.girderLabel = g.label || g.id; R.girderId = g.id; R.ranges = window.SBDLldf.ranges(R, b.tsDeck, b.nb);
+      // SBSW (2026-11-19, show the work of A2): haunch, SIP and DC1 with each plate segment's top flange, as the analysis takes them (display only)
+      R.segDC1 = LD().segDC1(R.dead, g.segments); R.dead.steps = LD().segSteps(R.dead, g.segments);
       return R;
     } catch (e) { return { errors: [`The loads could not be computed: ${e.message}`] }; }
   }
@@ -154,7 +156,7 @@
     { key: 'geo', title: 'Cross-section geometry and live-load faces', ref: A + '3.6.1.1.1, 4.6.2.2.1', ids: /^(xs\.(?!n$)|df\.geo\.)/ },
     { key: 'n', title: 'Modular ratio for the stiffness parameter', ref: A + '4.6.2.2.1', ids: /^(n\.|xs\.n$)/, res: /^n\.n$/ },
     { key: 'steel', title: 'Girder steel self-weight (DC1)', ref: A + '3.5.1', ids: /^dl\.steel\./, res: /\.avg$/ },
-    { key: 'dc1', title: 'Deck, haunch and forms (DC1)', ref: A + '3.3.2, 3.5.1', ids: /^dl\.G\d+\.(trib|deck|haunch|sip|DC1)$/, res: /\.DC1$/ },
+    { key: 'dc1', title: 'Deck, haunch and forms (DC1)', ref: A + '3.3.2, 3.5.1', ids: /^dl\.G\d+\.(trib|deck|haunch|sip|DC1)(\.b\d+)?$/, res: /\.DC1$/ },   // SBSW: .b<k> per top flange width
     { key: 'dc2', title: 'Barriers and wearing surface (DC2, DW)', ref: A + '3.3.2, 3.5.1', ids: /^dl\.(xbar|S\d+$|load\.|G\d+\.(barL|barR|ws|DC2|DW)$)/, res: /\.DW$/ },
     { key: 'kg', title: 'Longitudinal stiffness parameter', ref: A + '4.6.2.2.1', ids: /^df\.[sp]\d+\.(eg|Kg\d*|KgAvg)$/, res: /\.Kg$/ },
     { key: 'int', title: 'Interior girder equations (one and two lanes)', ref: A + '4.6.2.2.2b, 4.6.2.2.3a', ids: /^df\.[sp]\d+\.G\d+\.(S|kterm|mom\d*|shr\d*)$/ },
@@ -169,6 +171,14 @@
   const stepsHtml = (list, kind) => window.SharedSteps.groupsHTML(groups(kind, list), { open: OPEN, item: stepLi });
   const wk = (id, t, sel) => `<a class="wk" href="#st-${esc(id)}"${sel && sel.lg != null ? ` data-lg="${sel.lg}"` : ''}${sel && sel.lr != null ? ` data-lr="${sel.lr}"` : ''}>${t || '§'}</a>`;
   const card = (t, b) => `<section class="sec"><div class="secHead">${t}</div><div class="secBody">${b}</div></section>`;
+  /* segCard(R, lg): SBSW (2026-11-19; CLAUDE.md §6): where the plates' top flange width varies, the haunch, SIP forms and DC1 of girder lg
+     per width, as the analysis takes them (A2, engine/analysis.js wetCorr; worked in steps dl.G<i>.*.b<k>). Display only. */
+  function segCard(R, lg) {
+    const rows = (R.segDC1 || [])[lg] || [], D = R.dead, g = `G${lg + 1}`; if (!rows.some(r => !r.base)) return '';
+    const xr = r => r.xr.map(([a, b]) => `${f(a, 2)}–${f(b, 2)}`).join(', ');
+    return `<p class="note" id="ld-segdc1"><b>${g}, DC1 with each plate segment's top flange (${esc(R.girderLabel)}'s plates), as the analysis takes it.</b> The table above works the haunch and the SIP forms with b<sub>f,0</sub> = ${f(D.bf * 12, 2)} in (the first region's top flange); the analysis adds the difference over each segment of another width (<a href="#" data-gotab="an">Analysis tab</a>, wet deck).</p>
+      <div class="tscroll"><table class="tbl"><thead><tr><th>b<sub>f</sub> (in)</th><th class="lft">Segments x (ft)</th><th>Haunch</th><th>SIP</th><th>DC1</th></tr></thead><tbody>${rows.map((r, k) => `<tr><td>${f(r.topB, 2)}</td><td class="lft">${xr(r)}</td><td>${f(r.haunch, 4)} ${wk(r.base ? `dl.${g}.haunch` : `dl.${g}.haunch.b${k}`, '', { lg })}</td><td>${f(r.sip, 4)} ${wk(r.base ? `dl.${g}.sip` : `dl.${g}.sip.b${k}`, '', { lg })}</td><td>${f(r.dc1, 4)} ${wk(r.base ? `dl.${g}.DC1` : `dl.${g}.DC1.b${k}`, '', { lg })}</td></tr>`).join('')}</tbody></table></div>`;
+  }
   function output(R, ui, errors) {
     if (errors && errors.length) return `<div class="alert err"><b>Input errors.</b><ul>${errors.map(e => `<li>${esc(e.msg || e)}</li>`).join('')}</ul></div>`;
     if (!R) return '';
@@ -185,6 +195,7 @@
     h += card(`Dead loads per girder (klf), ${esc(LD().METHODS[D.method])}`, `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Girder</th><th class="lft">Class</th><th>Deck</th><th>Haunch</th><th>SIP</th><th>DC1</th><th>DC2</th><th>DW</th>${D.pl.some(v => v) ? '<th>PL</th>' : ''}${D.ut ? '<th>UT</th><th>UF</th>' : ''}</tr></thead><tbody>${Array.from({ length: N }, (_, i) => row(i)).join('')}</tbody></table></div>
       <div class="kv"><div><span>Girder steel, ${esc(R.girderLabel)} (average)</span><span>${f(R.steel.avg, 4)} klf ${wk(`dl.steel.${R.girderId}.avg`)}</span></div>
       <div><span>Steel range along the girder</span><span>${f(R.steel.min, 4)} to ${f(R.steel.max, 4)} klf</span></div><div><span>Deck width</span><span>${f(D.Wd, 2)} ft</span></div><div><span>Live-load faces L / R</span><span>${f(R.ll.L.r, 2)} / ${f(R.ll.R.r, 2)} ft ${wk('xs.rL')}</span></div></div>
+      ${segCard(R, lg)}
       <p class="note">DC1 excludes the girder self-weight (separate, per plate segment) and the cross-frames (point loads from the framing and the cross-frame weights, <a href="#" data-goto="framing">Framing &amp; bracing tab</a>); both are added in the analysis (Analysis tab). Line loads: ${D.per.map(q => `${esc(q.desc)} ${f(q.plf, 4)} klf at x = ${f(q.x, 2)} ft (${esc(q.cat)}, ${esc(LD().DIST[q.dist] || q.dist)}) ${wk('dl.load.' + q.id)}`).join('; ') || 'none'}.</p>`);
     const geo = R.regions[0].geo, rows = R.regions.map((q, k) => q.members.map((m, j) => `<tr${j === lg && q === rg ? ' class="sel"' : ''}><td class="lft">${esc(q.label)}</td><td class="lft">${esc(m.label)} (${m.type === 'ext' ? 'ext.' : 'int.'})</td><td>${f(m.gM, 4)} ${wk(`df.${q.id}.G${j + 1}.gM`, '', { lg: j, lr: k })}</td><td>${q.kind === 'span' ? f(m.gV, 4) : '—'}</td><td>${f(m.fatM, 4)}</td><td>${q.kind === 'span' ? f(m.fatV, 4) : '—'}</td><td class="lft">${esc(m.method)}</td></tr>`).join('')).join('');
     h += card('Live-load distribution factors (lanes per girder)', `<div class="kv"><div><span>Design lanes N<sub>L</sub></span><span>${geo.NL} ${wk('df.geo.NL')}</span></div><div><span>Roadway</span><span>${f(geo.roadway, 2)} ft ${wk('df.geo.w')}</span></div><div><span>d<sub>e</sub> left / right</span><span>${f(geo.deL, 2)} / ${f(geo.deR, 2)} ft ${wk('df.geo.deL')}</span></div><div><span>Deflection factor</span><span>${f(R.regions[0].gDef, 4)} ${wk(`df.${R.regions[0].id}.gDef`, '', { lr: 0 })}</span></div></div>

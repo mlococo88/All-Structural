@@ -223,7 +223,7 @@
     if (!AP || AP.level === 'ok') return '';
     const L = (q, t) => q.step && link ? `${t} ${link(q.step)}` : t, lv = AP.level;
     const rows = ['fail', 'warn', 'note'].map(k => { const it = AP.items.filter(q => q.level === k); return it.length ? `<li><b>${AP_T[k]}.</b> ${it.map(q => L(q, `${esc(q.title)} (${esc(q.val)}): ${esc(q.msg)}`)).join(' ')}</li>` : ''; }).join('');
-    return `<div class="${lv === 'fail' ? 'alert err' : lv === 'warn' ? 'alert' : 'note'}" data-apbanner="1" role="status"><b>Applicability of the line-girder analysis (SA4; AASHTO LRFD 10th Ed. 4.6.2.2, 4.6.3.3.2, C6.10.1).</b> ${lv === 'fail' ? 'A FAIL here counts in the Summary verdict.' : 'Warnings and notes do not change the verdict.'}<ul>${rows}</ul></div>`;
+    return `<div class="${lv === 'fail' ? 'alert err' : lv === 'warn' ? 'alert' : 'note'}" data-apbanner="1" role="status"><b>Applicability of the line-girder analysis (SA4; AASHTO LRFD 10th Ed. 4.6.2.2, C6.10.1).</b> ${lv === 'fail' ? 'A FAIL here counts in the Summary verdict.' : 'Warnings and notes do not change the verdict.'}<ul>${rows}</ul></div>`;
   }
   function apCard(AP) {
     if (!AP) return '';

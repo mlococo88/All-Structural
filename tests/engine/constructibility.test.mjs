@@ -249,7 +249,9 @@ test('the stored hand-off girderDetail.checks.constr (GirderDetail\'s own govern
   console.log(`       with L_b,C, C_b,C, nprC from 1.25M_DC1 + 1.5M_CL (as GirderDetail): governing location and ratio per span and group as GirderDetail's own: ${same} of ${tot}; otherwise: ${Object.entries(why).map(([k, v]) => `${v} ${k}`).join(', ')}`);
   console.log(`       as this app checks (C_b,C, nprC from M_DCc, SBCON; a deliberate difference from GirderDetail): ${sameN} of ${tot} as GirderDetail's own; ${nSb} governing items differ from the M_DC1 basis, largest increase ${upSb.d.toFixed(4)}${upSb.f ? ` (${upSb.f} span ${upSb.k + 1} ${upSb.key}: ${upSb.a.toFixed(4)} -> ${upSb.b.toFixed(4)})` : ''}`);
   assert.ok(n >= 1150 && nOH >= 230); assert.ok(!why.other && !why.none, 'every governing-item difference has a known cause');
-  assert.equal(same, 606, 'on the M_DC1 basis, the parity with GirderDetail\'s governing items as before SBCON'); assert.ok(nSb > 0 && sameN < same);
+  // SBCA (2026-11-19): 606 → 588. bracingC now takes the unbraced segment on the location's own side (as the design checks since A3);
+  // GirderDetail takes both segments within 0.25 ft of a brace point (a deliberate difference, counted under "L_b,C or C_b,C differ")
+  assert.equal(same, 588, 'on the M_DC1 basis, the parity with GirderDetail\'s governing items as before SBCON (606 before SBCA)'); assert.ok(nSb > 0 && sameN < same);
 });
 
 test('this app\'s pour sequence (engine/analysis.js) in place of the payload\'s M_DCc: the SB2-A1 difference, keyed location by location', () => {
@@ -297,7 +299,13 @@ test('fromAnalysis(): the project path (analysis, cross-frames, stiffener panels
   assert.ok(F.locs.length > 300); assert.ok(F.seq); assert.equal(F.ext, true); assert.equal(G.oh.rows.length, 3);
   // the governing per span is close to the payload path (same plates, this app's own M_DCc and shears)
   const A = C.fromPayload(pl), GA = C.girder(A.locs, A.prj, { supports: A.supports });
-  G.spans.forEach((s, k) => ['top', 'bot', 'tens'].forEach(key => { if (s[key] && GA.spans[k][key]) close(s[key].ratio, GA.spans[k][key].ratio, 0.03, `span ${k + 1} ${key}`); }));
+  // SBCA (2026-11-19): bracingC takes the segment on the location's own side (as A3), so a span's row next to a pier takes that span's own
+  // unbraced length, which here differs between the two paths' brace points (project framing 110–133.33 ft, L_b 23.33 ft; payload every
+  // ≤ L_b, 110–130 ft, 20 ft): span 2 bot at 110.01 ft, analysis 0.3554 → 0.3531, payload 0.3583 → 0.3106 (before, both took span 1's
+  // 88–110 ft, 22 ft). Same L_b,C: within 0.03 as before; different L_b,C: within 0.05.
+  G.spans.forEach((s, k) => ['top', 'bot', 'tens'].forEach(key => { const a = s[key], b = GA.spans[k][key]; if (!a || !b) return;
+    if (Math.abs(a.row.LbC - b.row.LbC) < 0.01) close(a.ratio, b.ratio, 0.03, `span ${k + 1} ${key}`);
+    else close(a.ratio, b.ratio, 0.05, `span ${k + 1} ${key} (L_b,C ${a.row.LbC} vs ${b.row.LbC})`); }));
   G.rows.slice(0, 20).forEach(r => { const ids = new Set(r.steps.map(s => s.id)); r.checks.forEach(c => assert.ok(ids.has(c.step), c.step)); });
   G.oh.rows.forEach(r => { const ids = new Set(r.steps.map(s => s.id)); r.checks.forEach(c => assert.ok(ids.has(c.step), c.step)); });
 });
