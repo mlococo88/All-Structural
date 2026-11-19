@@ -1733,7 +1733,7 @@ function iceWorkedHTML(inp, pw, fxs){
   if(inp.pProj>0) H+=`<p class="eq-why">Shaft projection p = ${fmt(inp.pProj,2)} ft: the heights z are above grade, z = (height above the ${inp.mode==='sign'?'post':'pole'} base) + p.</p>`;   // LPPJ
   H+=g(`t_d(${inp.pProj>0?'H{+}p':'H'}{=}${fmt(lppZg(inp,inp.H),1)}) = ${fmt(inp.tIce,3)}(${fmt(iceFz(lppZg(inp,inp.H)),3)})(${fmt(kz,3)})(${fmt(Ii,2)}) = ${fmt(iceTd(inp,lppZg(inp,inp.H)),3)}\\ \\text{in}\\qquad t_d(${inp.pProj>0?'H/2{+}p':'H/2'}) = ${fmt(inp.tIce,3)}(${fmt(iceFz(lppZg(inp,inp.H/2)),3)})(${fmt(kz,3)})(${fmt(Ii,2)}) = ${fmt(iceTd(inp,lppZg(inp,inp.H/2)),3)}\\ \\text{in}`);
   (fxs||[]).forEach((fc,i)=>{ H+=g(`\\text{Fixture ${i+1}: } t_d(${fmt(lppZg(inp,fc.hf),1)}) = ${fmt(inp.tIce,3)}(${fmt(iceFz(lppZg(inp,fc.hf)),3)})(${fmt(kz,3)})(${fmt(Ii,2)}) = ${fmt(fc.td,3)}\\ \\text{in}`); });
-  H+=g(`W_{ice,mast} = \\sum_i \\frac{\\pi\\left[(D_i/2+t_{d,i})^2-(D_i/2)^2\\right]}{144}\\,\\gamma_{ice}\\,\\Delta z = ${fmt(pw.WiceMast,1)}\\ \\text{lb}`);
+  H+=g(`W_{ice,mast} = \\sum_i \\frac{\\pi\\left[(D_i/2+t_{d,i})^2-(D_i/2)^2\\right]}{144}\\,\\gamma_{ice}\\,L_i = ${fmt(pw.WiceMast,1)}\\ \\text{lb}`);
   return H;
 }
 
@@ -5957,8 +5957,8 @@ function windWorkedHTML(pw, inp, o){   // o.fold (LPBM, 2026-11-19): the ice and
   H+=lppMastSegTableHTML(pw,inp);   // LPSG (2026-11-19): one row per segment (was: the sum over 100 strips)
   H+=g(`F_{pole} = \\sum_i F_i = ${fmt(pw.Fpole,0)}\\ \\text{lb}\\qquad M_{pole} = \\sum_i F_i\\,z_i = ${fmt(pw.Mpole,0)}\\ \\text{lb}{\\cdot}\\text{ft}\\qquad \\bar z_F = \\frac{M_{pole}}{F_{pole}} = ${fmt(pw.zF,2)}\\ \\text{ft}`);
   if(pw.rectDir){   // LPH2 (2026-11-07): rectangular pole, wind on the depth face
-    H+=`<div class="eq-why lpNL">${lpNL(`Rectangular pole: the values above are for wind toward 0° / 180° on the width B = ${fmt(inp.poleDiaTop,2)} in face.`,[['Other directions:',`wind toward 90° / 270° acts on the depth face (${fmt(inp.poleDepthTop,2)} in), and between the axes the projected strip width is |cos φ|·B + |sin φ|·depth (as in the LRFDLTS mode).`],['C<sub>f</sub>','stays the least-dimension value.'],['Ice weight:','the mast ice is taken as a radial ring on a round of diameter B (the width), not on the rectangle.']])}</div>`;   // LPNL; ASM (2026-11-10): ice basis stated
-    H+=g(`F_{pole,90} = \\sum_i q_z(z_i)\\,G\\,C_f\\,d(z_i)\\,\\Delta z = ${fmt(pw.Fd,0)}\\ \\text{lb}\\qquad M_{pole,90} = ${fmt(pw.Md,0)}\\ \\text{lb}{\\cdot}\\text{ft}\\qquad F_{pole}(\\varphi) = |\\cos\\varphi|\\,F_{pole} + |\\sin\\varphi|\\,F_{pole,90}`);
+    H+=`<div class="eq-why lpNL">${lpNL(`Rectangular pole: the values above are for wind toward 0° / 180° on the width B = ${fmt(inp.poleDiaTop,2)} in face.`,[['Other directions:',`wind toward 90° / 270° acts on the depth face (${fmt(inp.poleDepthTop,2)} in), and between the axes the projected width is |cos φ|·B + |sin φ|·depth (as in the LRFDLTS mode).`],['C<sub>f</sub>','stays the least-dimension value.'],['Ice weight:','the mast ice is taken as a radial ring on a round of diameter B (the width), not on the rectangle.']])}</div>`;   // LPNL; ASM (2026-11-10): ice basis stated
+    H+=g(`F_{pole,90} = \\sum_i q_z(z_i)K_d\\,G\\,C_f\\,d(z_i)\\,L_i = ${fmt(pw.Fd,0)}\\ \\text{lb}\\qquad M_{pole,90} = ${fmt(pw.Md,0)}\\ \\text{lb}{\\cdot}\\text{ft}\\qquad F_{pole}(\\varphi) = |\\cos\\varphi|\\,F_{pole} + |\\sin\\varphi|\\,F_{pole,90}`);
   }
   { const fold=(o&&o.fold)?((t,x)=>x?`<details class="calc lpFold"><summary>${t}</summary>${x}</details>`:''):((t,x)=>x);
     H+=fold('Design ice thickness t<sub>d</sub>(z) and ice on the mast — worked derivation (click to open)',iceWorkedHTML(inp,pw,null));
@@ -6725,7 +6725,7 @@ function buildReport(inp,allCombos,gov,embed,struct){
     'Wind force on the pole shaft',
     [`The wind on the shaft is taken in the pole's own ${pw.NSTRIP} segments of length L_i = H/${pw.NSTRIP} (tabulated below):`,[['Each segment','uses q_z at its mid-height z_i and its own width D(z_i), and its force acts at z_i (ASCE 7 §29.4, §26.10: q_z at the height of the centroid of the area).'],['C_f','is the drag coefficient for a round section (≈0.7).'],['For reference,',`the single mid-height resultant would be q<sub>z,mid</sub>·G·C<sub>f</sub>·A<sub>pole</sub> = ${n(pw.qzMid*inp.G*inp.cfPole*pw.Apole,0)} lb at H/2.`]]],   // LPNL
     `F_{pole}=\\sum_i q_z(z_i)K_d\\,G\\,C_f\\,D(z_i)\\,L_i=${n(pw.Fpole,0)}\\ \\text{lb}`,
-    pw.rectDir?[`Base moment M<sub>pole</sub> = Σ F_i·z_i = ${n(pw.Mpole,0)} lb·ft (resultant at z = ${n(pw.zF,2)} ft), combined with fixture and cable moments in each load combination (${lppSecRef('4')}).`,[['Rectangular pole:','these values are for wind toward 0° / 180° (width B).'],['Depth face:',`wind toward 90° / 270° acts on the depth face, F<sub>pole,90</sub> = ${n(pw.Fd,0)} lb, M<sub>pole,90</sub> = ${n(pw.Md,0)} lb·ft.`],['Between the axes','the strip width is |cos φ|·B + |sin φ|·depth.']]]   // LPNL
+    pw.rectDir?[`Base moment M<sub>pole</sub> = Σ F_i·z_i = ${n(pw.Mpole,0)} lb·ft (resultant at z = ${n(pw.zF,2)} ft), combined with fixture and cable moments in each load combination (${lppSecRef('4')}).`,[['Rectangular pole:','these values are for wind toward 0° / 180° (width B).'],['Depth face:',`wind toward 90° / 270° acts on the depth face, F<sub>pole,90</sub> = ${n(pw.Fd,0)} lb, M<sub>pole,90</sub> = ${n(pw.Md,0)} lb·ft.`],['Between the axes','the projected width is |cos φ|·B + |sin φ|·depth.']]]   // LPNL
       :`Base moment M<sub>pole</sub> = Σ F_i·z_i = ${n(pw.Mpole,0)} lb·ft (resultant at z = ${n(pw.zF,2)} ft), combined with fixture and cable moments in each load combination (${lppSecRef('4')}).`);
   H+=lppMastSegTableHTML(pw,inp);   // LPSG (2026-11-19)
   H+=`</div></details>`;
@@ -7410,11 +7410,11 @@ function lprModel(){
           S({id:'Fp',label:'Mast wind ('+pw.NSTRIP+' pole segments, q_z at each mid-height)',sym:'F_{pole}',eq:'\\sum q_{z}(z_{i})K_{d}G\\,C_{f}\\,D(z_{i})\\,L_{i}',sub:'',value:pw.Fpole,unit:'lb',d:0}),
           S({id:'Mp',label:'Mast wind moment at the base',sym:'M_{pole}',eq:'\\sum F_{i}z_{i}',sub:'',value:pw.Mpole,unit:'lb-ft',d:0}),
           S({id:'zF',label:'Height of the resultant',sym:'\\bar{z}_{F}',eq:'\\frac{M_{pole}}{F_{pole}}',sub:'\\frac{'+N(pw.Mpole,0)+'}{'+N(pw.Fpole,0)+'}',value:pw.zF,unit:'ft'})].concat(pw.rectDir?[   // LPH2: rectangular pole, depth face
-          S({id:'Fpd',label:'Mast wind on the depth face (wind toward 90° / 270°)',sym:'F_{pole,90}',eq:'\\sum q_{z}(z_{i})K_{d}G\\,C_{f}\\,d(z_{i})\\,\\Delta z',sub:'',value:pw.Fd,unit:'lb',d:0}),
+          S({id:'Fpd',label:'Mast wind on the depth face (wind toward 90° / 270°; '+pw.NSTRIP+' pole segments, q_z at each mid-height)',sym:'F_{pole,90}',eq:'\\sum q_{z}(z_{i})K_{d}G\\,C_{f}\\,d(z_{i})\\,L_{i}',sub:'',value:pw.Fd,unit:'lb',d:0}),
           S({id:'Mpd',label:'Its moment at the base (any azimuth: |cos φ|·M_pole + |sin φ|·M_pole,90)',sym:'M_{pole,90}',eq:'\\sum F_{i}z_{i}',sub:'',value:pw.Md,unit:'lb-ft',d:0})]:[])},
         {title:'Design ice thickness',ref:'ASCE 7-16 §10.4.6',steps:[
           S({id:'td',label:inp.iceBasis==='map'?'Design ice at the top (t_d = t f_z K_zt^0.35 I_i; cables use t)':'Uniform design ice (as entered)',sym:'t_{d}(H)',eq:inp.iceBasis==='map'?'t\\,f_{z}K_{zt}^{0.35}I_{i}':'t',sub:'',value:pw.tdTop,unit:'in',d:3}),
-          S({id:'Wim',label:'Ice on the mast',sym:'W_{ice,mast}',eq:'\\sum \\gamma_{ice}A_{ring}(t_{d})\\Delta z',sub:'',value:pw.WiceMast,unit:'lb',d:1})]}])]});
+          S({id:'Wim',label:'Ice on the mast',sym:'W_{ice,mast}',eq:'\\sum \\gamma_{ice}A_{ring}(t_{d})\\,L_{i}',sub:'',value:pw.WiceMast,unit:'lb',d:1})]}])]});
       if(fxs.length) subs.push({title:'Fixtures and arms',items:[{type:'table',head:['Fixture','h (ft)','θ (°)','a (ft)','q_zK_dG (psf)','F_w (lb)','F_w,ice (lb)','W_ice (lb)','F_arm,max (lb)'],
         rows:fxs.map((f,i)=>['F'+(i+1),lprCell(f.hf,1),lprCell(f.th,0),lprCell(f.x.a,1),lprCell(f.qz,2),lprCell(f.Fw,1),lprCell(f.Fwi,1),lprCell(f.Wice,1),lprCell(f.FarmMax||0,1)])},
         {type:'note',text:'Worked on the [[tab:loading|Loading tab]] (fixture loads, arm wind and torsion T = Σ(F_w + ½F_arm)·a·sin(φ − θ)).'}]});
