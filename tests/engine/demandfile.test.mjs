@@ -15,7 +15,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { loadShared, test, ROOT } from './harness.mjs';
+import { loadShared, test, ROOT, SBD_ARCHIVE } from './harness.mjs';
 import { stSession, stCompute, stEngine } from './st-source.mjs';
 
 const W = loadShared('units.js', 'steps.js', path.join(ROOT, 'apps/steel-bridge/engine/demandfile.js'), path.join(ROOT, 'apps/steel-bridge/engine/sections.js'),
@@ -50,7 +50,7 @@ test('MCT / MIDAS, PS-Beam and steel-beam demand files are refused, as ST-Girder
     assert.equal(E.extFromGD(p), false, f);
   }
   // the refusal condition is ST-Girder's: its Import text, then this port
-  const html = fs.readFileSync(path.join(ROOT, 'Steel Bridge Design.html'), 'utf8');
+  const html = fs.readFileSync(SBD_ARCHIVE, 'utf8');
   assert.ok(html.includes("if(p._schema==='stgirder-external-demands'&&extFromGD(p)){ gdAdopt(p,'file '+f.name); return; }"));
   assert.ok(html.includes("if(p._schema==='psbeam-external-demands'||p._schema==='stgirder-external-demands'||p._schema==='steelbeam-external-demands'||Array.isArray(p.stations)){"));
   assert.ok(html.includes('function extFromGD(ext){ return !!(ext&&ext.producer===\'GirderDetail\'&&ext.girderDetail); }'));

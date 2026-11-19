@@ -32,7 +32,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
-import { loadShared, test, ROOT } from './harness.mjs';
+import { loadShared, test, ROOT, SBD_ARCHIVE } from './harness.mjs';
 import { gdDecl, gdBlock } from './gd-source.mjs';
 import { payloadFiles, readPayload, projectFromPayload } from './an-fixture.mjs';
 
@@ -303,7 +303,7 @@ test('fromAnalysis(): the project path (analysis, cross-frames, stiffener panels
 });
 
 test('bracingC(): L_b,C, C_b,C and nprC with Preliminary sizing\'s own fe* functions: identical', () => {
-  const html = fs.readFileSync(path.join(ROOT, 'Steel Bridge Design.html'), 'utf8'), ctx = {}; vm.createContext(ctx); let code = 'const ES = 29000;\n';
+  const html = fs.readFileSync(SBD_ARCHIVE, 'utf8'), ctx = {}; vm.createContext(ctx); let code = 'const ES = 29000;\n';
   for (const n of ['feCb', 'feAt', 'feNpr', 'feGe', 'feGeA', 'feGov']) { const a = html.indexOf(`\nfunction ${n}(`); assert.ok(a > 0, n); const b = html.indexOf('\n}\n', a); code += html.slice(a + 1, b + 3); }
   vm.runInContext(code + 'this.FE = { feCb, feAt, feNpr, feGe, feGeA, feGov };', ctx, { filename: 'Steel Bridge Design.html (fe*)' });
   let n = 0; const kinds = {};

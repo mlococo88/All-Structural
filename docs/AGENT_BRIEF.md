@@ -39,7 +39,7 @@ Run from the repo root (details in `tests/README.md`):
 
 ```bash
 git fetch origin main
-node tests/check-syntax.mjs "Steel Bridge Design.html"
+node tests/check-syntax.mjs "archive/Steel Bridge Design (archived 2026-11-19).html"
 node tests/compare.mjs --tool gd                                      # Tier 1
 node tests/compare.mjs --tool gd --project builtin,builtin28,xsA,curb --owner AASHTO,RIDOT,MassDOT,CTDOT   # Tier 3
 node tests/compare.mjs --tool st --payload def15_AASHTO_G2,def15_RIDOT_Iyes_G2,xsA_RIDOT_Iyes_G1
@@ -48,6 +48,8 @@ node tests/compare.mjs --tool st --payload def15_AASHTO_G2,def15_RIDOT_Iyes_G2,x
 It uses the globally installed `playwright` package and `/opt/pw-browsers/chromium`. It downloads nothing and needs no network: libraries are routed to `tests/libs`. It prints per-section hashes and every value that differs. The exit code is 0 only when everything is identical and there are no console errors.
 
 ## 5. GirderDetail architecture notes (`Steel Bridge Design.html`, named `Steel Bridge Beam Modules.html` until 2026-10-22)
+
+**Archived 2026-11-19.** This app is now `archive/Steel Bridge Design (archived 2026-11-19).html`, kept unmaintained; `Steel Bridge Design.html` is a redirect page to the current Steel Bridge Design, `apps/steel-bridge/index.html`. The notes below describe the archived copy.
 
 - **Two apps in one file.** GirderDetail (the main page) and **Preliminary sizing** (the PlateLine app). Preliminary sizing runs in an iframe whose `srcdoc` is built from the plain-text block `<script type="text/plain" id="pl-src">` (since 2026-10-15; before that, the one-line base64 string `PL_B64`). Edit the page in place. Inside the block, write closing script tags as `<\/script>` and HTML comment openers as `<\!--`; `plSrc()` removes that one backslash (fixlog PLSRC). The owner rules table (`OWN_RULES`) is injected into the frame as `window.GD_OWN_RULES` before its scripts run. Both apps have a global `P` (project), so check which frame you are in.
 - **Messages.** The frame and the main page talk by `postMessage`, and the main page accepts messages only from the frame (`gdFromPL`). Preliminary sizing publishes the **bridge record** (`gd-bridge`: geometry, girders, owner, load factors…, stored in GirderDetail `P.df.bridge`). GirderDetail sends model settings, fatigue, cross-frame weights, title block and mode (`gd-an`, `gd-xs`, `gd-dfx`, `gd-owner`, `gd-mode`, `gd-tb`). Demands come back as `gd-inbox` (stored in `girderdetail_inbox_v1`) and sections as `gd-gs`.

@@ -49,11 +49,19 @@ See `AUDIT.md` for the current inventory, known issues, and the work plan, and
   (`psbeam.html` until 2026-10-22). (The ACI rebar development-length app
   now exists only as the Development & Splice tab of
   `Concrete Beam Capacity.html`: its standalone file was retired 2026-11-05.)
+  The old single-file `Steel Bridge Design.html` was archived 2026-11-19 (see
+  below); copies taken from it (e.g. the SBD-SHARED line-girder block in
+  `Prestressed Bridge Design.html` and `apps/ps-bridge/engine/pbd-model.js`)
+  are not kept in step with the archived copy, which is not maintained.
   See `AUDIT.md`.
-- ST-Girder lives only inside `Steel Bridge Design.html` (GirderDetail, renamed
-  from `Steel Bridge Beam Modules.html`) as the `st-src` block; `stgirder.html`
-  was deleted at the cut-over (2026-10-22, #422). Edit ST-Girder in `st-src`
-  (escaped as `pl-src`; `tests/check-syntax.mjs` checks it).
+- Steel Bridge Design is the folder app `apps/steel-bridge/` (2026-11-19). The
+  old single-file app (GirderDetail; `Steel Bridge Design.html` until
+  2026-11-19, `Steel Bridge Beam Modules.html` until 2026-10-22) is archived,
+  not maintained, as `archive/Steel Bridge Design (archived 2026-11-19).html`.
+  ST-Girder's only copy is that file's `st-src` block (`stgirder.html` was
+  deleted at the cut-over, 2026-10-22, #422); the engine parity tests read
+  GirderDetail, PlateLine (`pl-src`) and ST-Girder (`st-src`) from it
+  (`tests/check-syntax.mjs` checks both blocks).
 
 ## 4. Engineering calculations: change control
 
@@ -112,8 +120,9 @@ See `AUDIT.md` for the current inventory, known issues, and the work plan, and
   into `apps/<tool>/`, its old file name stays as a small redirect page.
   Other tools link to
   some of them by file name (`index.html`, `lldf.html`, `psbeam.html`,
-  `elastomeric_design_module.html`, `Steel Bridge Design.html`;
-  `Steel Bridge Beam Modules.html` is kept as a redirect page to it;
+  `elastomeric_design_module.html`, `Steel Bridge Design.html`, which since
+  2026-11-19 is a redirect page to `apps/steel-bridge/index.html`;
+  `Steel Bridge Beam Modules.html` is kept as a redirect page to the same;
   `Prestressed Bridge Design.html`, with `psbeam.html` kept as a redirect page
   to it).
 

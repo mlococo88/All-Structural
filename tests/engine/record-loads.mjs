@@ -8,10 +8,10 @@
 // values here and the payloads; then the new engine against it. Run only to (re)record:  node tests/engine/record-loads.mjs [project,..] [owner,..]
 import fs from 'node:fs';
 import path from 'node:path';
-import { openPage, REPO } from '../lib.mjs';
+import { openPage, REPO, SBD_ARCHIVE_FILE } from '../lib.mjs';
 
 const OUT = path.join(REPO, 'tests/projects/sbd2-loads'); fs.mkdirSync(OUT, { recursive: true });
-const FILE = path.join(REPO, 'Steel Bridge Design.html');
+const FILE = path.join(REPO, SBD_ARCHIVE_FILE);
 const projects = (process.argv[2] || 'builtin,builtin28,xsA,curb,util').split(','), owners = (process.argv[3] || 'AASHTO,RIDOT,MassDOT,CTDOT').split(',');
 
 async function idle(p, quiet = 8000) { return p.evaluate(o => window.gdIdle(o), { quiet }); }

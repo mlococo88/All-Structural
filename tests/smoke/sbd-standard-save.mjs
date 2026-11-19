@@ -14,10 +14,10 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { execFileSync } from 'child_process';
-import { openPage, REPO, diff } from '../lib.mjs';
+import { openPage, REPO, diff, SBD_ARCHIVE_FILE } from '../lib.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
-const REF = arg('a', 'origin/main'), SHOTS = arg('shots', process.env.SHOTS), FILE = 'Steel Bridge Design.html';
+const REF = arg('a', 'origin/main'), SHOTS = arg('shots', process.env.SHOTS), FILE = SBD_ARCHIVE_FILE;
 const sha = execFileSync('git', ['-C', REPO, 'rev-parse', '--short', REF], { encoding: 'utf8' }).trim();
 const ADIR = path.join(os.tmpdir(), 'allstruct-tests', 'tree-' + sha);
 if (!fs.existsSync(path.join(ADIR, '.done'))) { fs.mkdirSync(ADIR, { recursive: true }); execFileSync('sh', ['-c', `git -C "${REPO}" archive ${sha} | tar -x -C "${ADIR}"`]); fs.writeFileSync(path.join(ADIR, '.done'), sha); }
@@ -48,7 +48,8 @@ const same = (a, b, m) => { const bad = Object.keys(a).filter(k => JSON.stringif
     else { const x = a[k], y = b[k]; let i = 0; while (i < x.length && x[i] === y[i]) i++; console.log(`       ${k} A: …${x.slice(Math.max(0, i - 80), i + 120)}\n       ${k} B: …${y.slice(Math.max(0, i - 80), i + 120)}`); } } };
 
 console.log(`sbd-standard-save: ${FILE}  A = ${REF} (${sha})  B = working tree`);
-const [A, B] = await Promise.all([run(path.join(ADIR, FILE)), run(path.join(REPO, FILE))]);
+const FA = fs.existsSync(path.join(ADIR, FILE)) ? path.join(ADIR, FILE) : path.join(ADIR, 'Steel Bridge Design.html');   // a ref before SBDA (2026-11-19): the old name
+const [A, B] = await Promise.all([run(FA), run(path.join(REPO, FILE))]);
 const a0 = await state(A.p), b0 = await state(B.p); same(a0, b0, 'on load: localStorage (every key), Export JSON, report, page text identical');
 // an input change in Preliminary sizing (the view open on load): its first visible number input + 1, with input and change events
 const plFrame = async p => { for (const f of p.frames()) { if (f === p.mainFrame()) continue; try { if (await f.evaluate(() => typeof postBridge === 'function' && typeof AN !== 'undefined')) return f; } catch (e) { } } return null; };

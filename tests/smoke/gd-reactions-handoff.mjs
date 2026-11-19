@@ -5,10 +5,10 @@
 //   node tests/smoke/gd-reactions-handoff.mjs
 import path from 'path';
 import assert from 'assert/strict';
-import { openPage, REPO } from '../lib.mjs';
+import { openPage, REPO, SBD_ARCHIVE_FILE } from '../lib.mjs';
 
 const NS = 'bridgeSuite.v1.superReactions', t0 = Date.now();
-const { b, p, errs, dialogs } = await openPage(path.join(REPO, 'Steel Bridge Design.html'), { vw: 1400, vh: 900, timeout: 120000 });
+const { b, p, errs, dialogs } = await openPage(path.join(REPO, SBD_ARCHIVE_FILE), { vw: 1400, vh: 900, timeout: 120000 });
 try {
   await p.waitForFunction(() => typeof window.gdIdle === 'function' && typeof gdSrPayload === 'function', null, { timeout: 120000 });
   await p.evaluate(() => window.gdIdle({ quiet: 3000 }));

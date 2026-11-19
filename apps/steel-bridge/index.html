@@ -6,7 +6,7 @@
 <!-- CBUST (2026-11-09): ask browsers to revalidate this page. Best effort only: Chrome, Edge and Firefox ignore http-equiv Cache-Control;
      the server's header (GitHub Pages: max-age=600) governs. The ?v= stamp below makes the scripts follow whichever index.html is loaded. -->
 <meta http-equiv="Cache-Control" content="no-cache">
-<title>Steel Bridge Design (new, in development)</title>
+<title>Steel Bridge Design</title>
 <!-- Steel Bridge Design, rebuild (docs/REBUILD_PLAN.md §5). Plain HTML/JS/CSS, classic scripts, opens from file://.
      Engine: engine/*.js (no DOM). Shared: ../../shared/*.js. Saved data: localStorage keys sbd2.* only (engine/model.js). -->
 <!-- KaTeX for the worked-step equations (shared/steps.js toHTML; approved 2026-10-29). Same pinned version and URL as GirderDetail
@@ -309,7 +309,7 @@
   <header id="hdr">
     <div class="titleRow">
       <div>
-        <h1>Steel Bridge Design <span style="font-weight:400;font-size:11pt">(new, in development)</span></h1>
+        <h1>Steel Bridge Design</h1>
         <div class="byline">AASHTO LRFD 10th Ed. (2024) <span id="saveState" aria-live="polite"></span></div>
         <a class="allToolsLink" href="../../tools.html" title="Open the list of all tools">&larr; All tools</a>
       </div>
@@ -706,7 +706,7 @@
   }
   const snapC = new Map();   // normalised text of a saved item, by id and saved time ("unsaved changes" and the start-up match)
   const SPUI = window.SharedProjectsUI, B_EX = $('bExport'), B_IM = $('bImport'), B_OLD = $('bOld');   // moved into the card (detached until the Project tab is drawn)
-  pb = SPUI.projectBar({ store: vStore, storage: LS, label: 'Steel Bridge Design (new app)', id: 'sbdLibDlg', askUnsaved: 'always',
+  pb = SPUI.projectBar({ store: vStore, storage: LS, label: 'Steel Bridge Design', id: 'sbdLibDlg', askUnsaved: 'always',
     snapshot: () => norm(P),
     snapOf: v => { const i = vItem(v); if (!i) return null; if (i.id === cur.id && cur.text != null) return cur.text;
       const k = i.id + '|' + i.saved; if (!snapC.has(k)) { const r = LIB.open(LS, i.id); snapC.set(k, r.ok ? norm(r.project) : null); } return snapC.get(k); },
@@ -729,7 +729,7 @@
     deleted: () => { if (cur.id && !LIB.list(LS).some(i => i.id === cur.id)) cur = { id: null, text: null }; syncBar(); },
     changed: () => syncBar(),
     ghNote: v => { const i = vItem(v); return i && v !== i.name ? '<span class="note" data-sp="gh-cell">not synced: a newer saved project has the same name (Rename this one to sync it)</span>' : ''; },
-    ...(store && window.SharedGitHubSync ? { cloud: { tool: 'steel-bridge-app', label: 'Steel Bridge Design (new app)', toFile: t => t, store: ghStore,   // no browser storage: no sync (as before)
+    ...(store && window.SharedGitHubSync ? { cloud: { tool: 'steel-bridge-app', label: 'Steel Bridge Design', toFile: t => t, store: ghStore,   // no browser storage: no sync (as before)
       fromFile: (j, n) => { const r = M.importJSON(JSON.stringify(j)); if (!r.ok) throw new Error(r.error); r.project.project.name = n; return r.project; } } } : {}) });
   $('pbMove').remove();
   $('bUndo').addEventListener('click', undo); $('bRedo').addEventListener('click', redo);
