@@ -2774,7 +2774,7 @@ Engineer's decision 2026-11-10 (the tool's basis is ASCE 7-16). This closes open
 - **Decisions (pending engineer review):** (1) The result stays displayed per anchor group on the Anchorage tab and the Summary (item level); the card has the import and the status with a link. (2) "Last sent" is the existing status line (`#lpAnchStatus`, this session).
 - **Other copies:** none.
 
-## 2026-11-19 — PR: claude/lightpole-base-moment-clarity (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — Loading tab: base reactions box, base moment build-up, long derivations collapsed (LPBM)   [display only; no computed value, cable value, saved key or format change]
+## 2026-11-19 — PR: claude/lightpole-base-moment-clarity (PR #1649: https://github.com/mlococo88/All-Structural/pull/1649) — Loading tab: base reactions box, base moment build-up, long derivations collapsed (LPBM)   [display only; no computed value, cable value, saved key or format change]
 
 Engineer, 2026-11-19: "I want the load development calcs to be a little more clear, it takes me a long time to just find the moment at the base."
 - **Where (`Light Pole and Sign Post.html`):**
