@@ -17,7 +17,7 @@ const setD = (P, gi, D) => P.girders[gi].segments.forEach(s => { s.D = D; });
 const three = () => { const P = M.newProject(); P.xs.nb = 6; P.xs.bays = [9.5, 9.5, 9.5, 9.5, 9.5];
   M.setLines(P, 1, [0, 5]); M.setLines(P, 0, [1, 4]); P.girders[0].label = 'Mid'; setD(P, 1, 30); setD(P, 0, 36);
   const c = M.addType(P, 0, { label: 'Core', lines: [2, 3] }); setD(P, c, 42); return P; };
-const NO = Object.fromEntries(['sum', 'proj', 'loads', 'an', 'defl', 'sec', 'flex', 'shear', 'fat', 'cn', 'spl', 'wd', 'rt'].map(k => [k, false]));
+const NO = Object.fromEntries(['exec', 'basis', 'sum', 'proj', 'loads', 'an', 'defl', 'sec', 'flex', 'shear', 'fat', 'cn', 'spl', 'wd', 'rt', 'bom', 'sign'].map(k => [k, false]));
 const ckSub = (P, gi) => { const B = W.SBDReportData.compute(P, gi, { want: { frm: true } }), Mo = W.SBDReportBuild.model(B, { detail: 'gov', include: NO }), doc = W.SharedReport.build(Mo);
   assert.deepEqual(J(doc.unresolved), [], 'every [[key]] resolves'); return { sub: Mo.sections[0].subs.find(s => s.id === 'ck'), B }; };
 

@@ -17,7 +17,7 @@ const setD = (P, gi, D) => P.girders[gi].segments.forEach(s => { s.D = D; });
 const three = () => { const P = M.newProject(); P.xs.nb = 6; P.xs.bays = [9.5, 9.5, 9.5, 9.5, 9.5];
   M.setLines(P, 1, [0, 5]); M.setLines(P, 0, [1, 4]); P.girders[0].label = 'Mid'; setD(P, 1, 30); setD(P, 0, 36);
   const c = M.addType(P, 0, { label: 'Core', lines: [2, 3] }); setD(P, c, 42); return P; };
-const NO = Object.fromEntries(['sum', 'proj', 'loads', 'an', 'defl', 'sec', 'flex', 'shear', 'fat', 'cn', 'spl', 'wd', 'rt'].map(k => [k, false]));
+const NO = Object.fromEntries(['exec', 'basis', 'sum', 'proj', 'loads', 'an', 'defl', 'sec', 'flex', 'shear', 'fat', 'cn', 'spl', 'wd', 'rt', 'bom', 'sign'].map(k => [k, false]));
 
 test('three types 30 / 36 / 42, Mid: β_sec ratio 1.235 is labelled a component of β_T, not "OK"; the system row fails; CF8 fails as before', () => {
   const B = FUI.build({ P: three(), g: 0 }), c = B.C.find(q => q.id === 'CF8'), [br, sec, g, T] = c.items;

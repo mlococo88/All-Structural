@@ -11,7 +11,7 @@ const W = loadShared(...['units.js', 'steps.js', 'vehicles.js', 'moving-load.js'
   'engine/constructibility.js', 'engine/splices.js', 'engine/rating.js', 'ui/flexure.js', 'ui/loads.js', 'ui/shear.js', 'ui/fatigue.js', 'ui/framing.js', 'ui/rating.js', 'ui/splices.js', 'ui/constructibility.js', 'engine/welds.js', 'ui/welds.js',
   'engine/sheets.js', 'ui/deflection.js', 'report/data.js', 'report/builders.js'].map(E)));
 const M = W.SBDModel, FUI = W.SBDFramingUI, J = o => JSON.parse(JSON.stringify(o));
-const NO = Object.fromEntries(['sum', 'proj', 'loads', 'an', 'defl', 'sec', 'flex', 'shear', 'fat', 'cn', 'spl', 'wd', 'rt'].map(k => [k, false]));
+const NO = Object.fromEntries(['exec', 'basis', 'sum', 'proj', 'loads', 'an', 'defl', 'sec', 'flex', 'shear', 'fat', 'cn', 'spl', 'wd', 'rt', 'bom', 'sign'].map(k => [k, false]));
 const notes = P => { const B = W.SBDReportData.compute(P, 0, { want: { frm: true } }), Mo = W.SBDReportBuild.model(B, { detail: 'gov', include: NO }), doc = W.SharedReport.build(Mo);
   assert.deepEqual(J(doc.unresolved), [], 'every [[key]] resolves'); return Mo.sections[0].subs.find(s => s.id === 'ck').items.filter(i => i.type === 'note').map(i => i.text); };
 const h = { num: (p, l) => `<input data-path="${p}">`, sel: () => '', card: (t, b) => b, esc: s => String(s) };

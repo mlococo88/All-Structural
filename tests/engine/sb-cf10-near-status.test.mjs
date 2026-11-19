@@ -20,7 +20,7 @@ const three = (De, Dm, Dc) => { const P = M.newProject(); P.xs.nb = 6; P.xs.bays
   M.setLines(P, 1, [0, 5]); M.setLines(P, 0, [1, 4]); P.girders[0].label = 'Mid'; setD(P, 1, De); setD(P, 0, Dm);
   const c = M.addType(P, 0, { label: 'Core', lines: [2, 3] }); setD(P, c, Dc); return P; };
 const dia = (P, sh, grp) => { Object.assign(P.crossframes.dia, { on: 'yes', shape: sh }); if (grp) P.crossframes.dia.grp = grp; return P; };
-const NO = Object.fromEntries(['sum', 'proj', 'loads', 'an', 'defl', 'sec', 'flex', 'shear', 'fat', 'cn', 'spl', 'wd', 'rt'].map(k => [k, false]));
+const NO = Object.fromEntries(['exec', 'basis', 'sum', 'proj', 'loads', 'an', 'defl', 'sec', 'flex', 'shear', 'fat', 'cn', 'spl', 'wd', 'rt', 'bom', 'sign'].map(k => [k, false]));
 const cf10 = (P, gi) => FUI.build({ P, g: gi }).C.find(c => c.id === 'CF10');
 const rptSt = (P, gi) => { const B = W.SBDReportData.compute(P, gi, { want: { frm: true } }), Mo = W.SBDReportBuild.model(B, { detail: 'gov', include: NO });
   const row = Mo.sections[0].subs.find(s => s.id === 'ck').items.find(i => i.type === 'table').rows.find(r => /^CF10 /.test(r[0])); return row[row.length - 1]; };

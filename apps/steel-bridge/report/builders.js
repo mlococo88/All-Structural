@@ -18,8 +18,8 @@
 (function () {
   'use strict';
   const U = () => window.SharedUnits, f = (x, d) => U().fmt(x, d);
-  const SECTIONS = [['sum', 'Summary'], ['proj', 'Project & owner'], ['loads', 'Cross-section & loads'], ['an', 'Analysis'], ['defl', 'Deflection'], ['sec', 'Section properties'], ['flex', 'Flexure'],
-    ['shear', 'Shear & stiffeners'], ['fat', 'Fatigue & studs'], ['cn', 'Constructibility'], ['frm', 'Framing & cross-frames'], ['spl', 'Splices'], ['wd', 'Welds'], ['rt', 'Rating']];
+  const SECTIONS = [['exec', 'Executive summary'], ['basis', 'Basis of design'], ['sum', 'Summary'], ['proj', 'Project & owner'], ['loads', 'Cross-section & loads'], ['an', 'Analysis'], ['defl', 'Deflection'], ['sec', 'Section properties'], ['flex', 'Flexure'],
+    ['shear', 'Shear & stiffeners'], ['fat', 'Fatigue & studs'], ['cn', 'Constructibility'], ['frm', 'Framing & cross-frames'], ['spl', 'Splices'], ['wd', 'Welds'], ['rt', 'Rating'], ['bom', 'Steel bill of materials'], ['sign', 'Sign-off & revisions']];   // exec, basis, bom, sign: PR3 (2026-11-19)
   const K = (scope, id) => (scope ? scope + '/' + id : String(id));
   const rc = r => !isFinite(r) ? '' : r > 1 + 1e-9 ? 'ng' : r >= 0.9 ? 'hi' : 'ok';
   const okT = r => !isFinite(r) ? '—' : r > 1 + 1e-9 ? 'NG' : 'OK';
@@ -95,6 +95,7 @@
           return [q.label, `${m.label} (${m.type === 'ext' ? 'ext.' : 'int.'})`, { ...N(m.gM, 4), key: `df.${q.id}.G${j + 1}.gM` }, q.kind === 'span' ? N(m.gV, 4) : '—', N(m.fatM, 4), q.kind === 'span' ? N(m.fatV, 4) : '—', m.method]; }))),
         note('Span regions: positive moment and shear (L = span); pier regions: negative moment and interior reactions (L = average of the adjacent spans). Support skews enter as their size |θ| (the sign gives only the direction). Moment skew reduction judged per span: none in a span whose two support lines differ by more than 10°, and none in a pier region where either adjacent span\'s two support lines do (4.6.2.2.2e). Fatigue: one lane, multiple presence 1.2 removed (3.6.1.4.3b); the exterior girder\'s factor not less than the rigid cross-section value (4.6.2.2.2d).'),
         R.ranges.filter(q => !q.ok).length ? note(`Outside the range of applicability (Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1, 4.6.2.2.2d-1): ${R.ranges.filter(q => !q.ok).map(q => `${q.region} ${q.name} = ${f(q.value, q.key === 'Kg' ? 0 : 2)}`).join('; ')}.`, true) : null]),
+      ...(() => { const F = dfFigs(B); return F.length ? [sub('dfsk', 'Distribution factor sketches (wheel positions of each case)', F)] : []; })(),   // PR3 (2026-11-19)
       sub('w', 'Worked steps', [gsteps('SBDUiLoads:x', '', [...R.steps, ...dead, ...R.steel.steps, ...regSteps])])] };
   }
 
@@ -255,7 +256,7 @@
       const pg = PS.gov.reduce((b, q) => (!b || q.c.ratio > b.c.ratio ? q : b), null);
       if (pg) X.gov.push({ mod: 'Flexure', grp: 'Cross-section proportions and minimum deck reinforcement (GS1–GS4)', check: `${pg.id} ${tt(pg.c.title)}`, loc: at(pg.row, 2), r: pg.c.ratio, key: K(scOf(pg.row), pg.c.step) });
     }
-    const one = r => [checksTbl(r, scOf(r)), kv([['$M_{u}$ / $M_{s}$', `${f(r.Mu, 1)} / ${f(r.Ms, 1)} kip-ft`, K(scOf(r), 'fx.Mu')], ['$D_{c}$ (Service II)', `${f(r.DcS, 3)} in`, K(scOf(r), 'fx.DcS')],
+    const one = r => [ptHead(B, r), checksTbl(r, scOf(r)), kv([['$M_{u}$ / $M_{s}$', `${f(r.Mu, 1)} / ${f(r.Ms, 1)} kip-ft`, K(scOf(r), 'fx.Mu')], ['$D_{c}$ (Service II)', `${f(r.DcS, 3)} in`, K(scOf(r), 'fx.DcS')],
       ['Fatigue I Δf top / bottom', `${f(r.dfT, 2)} / ${f(r.dfB, 2)} ksi`, K(scOf(r), 'fx.fatT')]])];
     const detailed = all ? (Gr.gov ? [Gr.gov] : []) : [...new Set(govRows.concat(PS ? PS.gov.map(q => q.row) : []))].sort((a, b) => a.x - b.x);   // B3: the proportions' locations too (their links)
     const stF = r => (window.SBDFlexureUI.stepsOf ? window.SBDFlexureUI.stepsOf(Gr, r) : r.steps);   // with custom demands the step that names them first
@@ -565,6 +566,107 @@
       errs.length ? note('Not in this report: ' + errs.map(([k, v]) => `${(SECTIONS.find(s => s[0] === k) || [k, k])[1]}: ${v}`).join('; '), true) : null]), apSub, dfSub].filter(Boolean) };
   }
 
+
+  /* ---------- PR3 (2026-11-19, engineer's request; report and presentation only: every value below is a value a module computes, shown again
+     and linked to the step that works it; nothing new is calculated except the steel bill of materials' weights, worked in its table) ---------- */
+  const FXC = id => /^GS1[23]$/.test(id) ? 'svc' : /^GS([1-4]|22)$/.test(id) ? 'prop' : 'str';   // report/summary.js FLEX_CLS
+  const grv = r => (isFinite(r) ? r : Infinity);
+  /* banner(text, kind): the verdict as a print-safe SVG box (black on white: border weight and the word carry the status) */
+  const banner = (t, sub2) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 74" width="100%" role="img" aria-label="${t}"><rect x="2" y="2" width="636" height="70" fill="#fff" stroke="#000" stroke-width="${t === 'PASS' ? 2 : 5}"${t === 'PASS WITH NOTES' ? ' stroke-dasharray="14 6"' : ''}/><text x="320" y="40" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="#000">${t}</text><text x="320" y="62" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#000">${sub2}</text></svg>`;
+  /* exec(B, X): Executive summary (first section): verdict, governing D/C, one row per limit state / check group, the items not in the verdict */
+  function exec(B, X) {
+    const rows = [], Gr = B.flex, scOf = r => 'flex@' + Gr.rows.indexOf(r), G = gName(B.girder), wk = r => (!X.on || X.on('flex')) && X.have.has(r) && (X.detail !== 'all' || r === Gr.gov), sumOn = !X.on || X.on('sum');   // linked where the location's steps are written out
+    if (Gr && !Gr.err && Gr.rows) {
+      const cats = [['strP', 'Flexure, Strength I, positive moment (M+)', r => r.pos], ['strN', 'Flexure, Strength I, negative moment (M−)', r => !r.pos], ['svc', 'Flexure, Service II (GS12, GS13)', () => true], ['prop', 'Cross-section proportions (GS1–GS4)', () => true]];
+      cats.forEach(([k, t, inR]) => { let b = null; Gr.rows.forEach(r => { if (!inR(r)) return; r.checks.forEach(c => { if (!(c.inUse && c.na == null && c.ratio !== undefined)) return; const cl = FXC(c.id); if ((k === 'strP' || k === 'strN') ? cl !== 'str' : cl !== k) return; if (!b || grv(c.ratio) > grv(b.c.ratio) || (grv(c.ratio) === grv(b.c.ratio) && r === Gr.gov && c === Gr.gov.gov)) b = { r, c }; }); });   // a tie: the Flexure section's governing location
+        if (b) rows.push({ cat: t, check: `${b.c.id} ${tt(b.c.title)}`, loc: at(b.r, 2) + (wk(b.r) ? '' : X.on && !X.on('flex') ? ' (section not included)' : ' (Flexure section, results table)'), r: b.c.ratio, key: wk(b.r) ? K(scOf(b.r), b.c.step) : null }); });   // linked where the location is worked in this report
+    }
+    X.gov.forEach(q => { if (q.mod === 'Flexure') return; rows.push({ cat: q.grp || q.mod, check: q.check, loc: q.loc, r: q.r, rf: q.rf, key: q.key, status: q.status }); });
+    const st = q => q.rf != null ? (!isFinite(q.rf) ? 'REVIEW' : q.rf < 1 - 1e-9 ? 'FAIL' : 'OK') : !isFinite(q.r) ? 'REVIEW' : q.r > 1 + 1e-9 ? 'FAIL' : q.status === 'warn' ? 'Warning' : 'OK';
+    let AP = null; try { AP = window.SBDAnalysis && window.SBDAnalysis.applicability ? window.SBDAnalysis.applicability(B.P) : null; } catch (e) { AP = null; }
+    let DF = null; try { DF = window.SBDAutoDesign && window.SBDAutoDesign.depthFlag ? window.SBDAutoDesign.depthFlag(B.P, B.g) : null; } catch (e) { DF = null; }
+    const nFail = rows.filter(q => st(q) === 'FAIL').length + (AP && AP.level === 'fail' ? 1 : 0), nRev = rows.filter(q => st(q) === 'REVIEW' || st(q) === 'Warning').length;
+    const out = [];   // not in the verdict
+    if (DF) out.push([`Span-to-depth guidance (Art. 2.5.2.6.3, optional criteria)`, DF.flagged ? 'below optional AASHTO depth guidance' : 'meets the optional guidance', DF.rows.map(q => `${q.k}L = ${f(q.need, 2)} in vs ${f(q.have, 2)} in`).join('; '), sumOn ? `dg.${DF.comp ? 'O' : 'I'}` : null]);
+    if (AP) AP.items.filter(q => q.level === 'warn' || q.level === 'note').forEach(q => out.push([`Applicability of the line-girder analysis (SA4): ${q.title}`, q.level === 'warn' ? 'WARNING' : 'NOTE', `${q.val}: ${q.msg}`, sumOn ? q.step : null]));
+    X.warn.forEach(w => out.push(['Warning', 'Warning', w, null]));
+    const notes = out.some(q => q[1] !== 'meets the optional guidance') || nRev > 0;
+    const verdict = nFail ? 'FAIL' : notes ? 'PASS WITH NOTES' : 'PASS';
+    const top = rows.filter(q => q.rf == null).reduce((a, q) => (!a || grv(q.r) > grv(a.r) ? q : a), null), low = rows.filter(q => q.rf != null && isFinite(q.rf)).reduce((a, q) => (!a || q.rf < a.rf ? q : a), null);
+    const items = [{ type: 'figure', svg: banner(verdict, `Girder ${G}: ${nFail} FAIL, ${nRev} REVIEW / warning, ${rows.length - nFail - nRev + (AP && AP.level === 'fail' ? 1 : 0)} OK of ${rows.length} check groups${AP && AP.level === 'fail' ? ' + analysis applicability FAIL' : ''}`), caption: 'Verdict of this girder: FAIL where any check group exceeds 1.0 (or a rating factor is below 1.0) or the line-girder analysis is not applicable (SA4 FAIL); PASS WITH NOTES where a check has a warning, a ratio is not a number (REVIEW) or an item below is flagged; else PASS.' },
+      top ? note(`Governing D/C: ${f(top.r, 3)} (${top.cat}; ${top.check}, ${top.loc})${top.key ? ` [[${top.key}]]` : ''}.${low ? ` Lowest rating factor: ${f(low.rf, 2)} (${low.check}, ${low.loc})${low.key ? ` [[${low.key}]]` : ''}.` : ''}`) : null,
+      AP && AP.level === 'fail' ? note(`Line-girder analysis not applicable (SA4 FAIL): ${AP.items.filter(q => q.level === 'fail').map(q => `${q.title}, ${q.val}`).join('; ')}: refined analysis required${sumOn ? ' [[ap.th]]' : ''}.`, true) : null,
+      tbl(['Limit state / check group', 'Governing check', 'Girder', 'Location', 'D/C or RF', 'Status'], rows.map(q => ({ cells: [q.cat, q.check, G, q.loc, q.rf != null ? { t: `RF ${isFinite(q.rf) ? f(q.rf, 2) : '—'}`, n: true, key: q.key } : R3(q.r, q.key), st(q)], cls: st(q) === 'FAIL' ? 'gov' : '' })), { wide: true, caption: 'Every check group the app computes for this girder (each value links to the step that works it); the per-group detail is in the Summary section and the module sections' }),
+      out.length ? tbl(['Not included in the verdict', 'Status', 'Value', 'Work'], out.map(q => [q[0], q[1], q[2], q[3] ? { t: '', key: q[3] } : ''])) : note('Not included in the verdict: none.'),
+      note('Items not included in the verdict are listed so that this summary never reads as all-pass while a check fails: the span-to-depth guidance is optional (2.5.2.6.3; e.g. clearance-limited structures), applicability warnings and notes do not change the verdict, warnings are for review.')];
+    return { title: 'Executive summary', subs: [sub('v', `Girder ${G}: verdict`, items)] };
+  }
+  /* basis(B, X): Basis of design: specification, owner, materials, factors, combinations, IM, fatigue traffic, analysis method and its applicability */
+  function basis(B, X) {
+    const P = B.P, m = P.materials, Gd = window.SBDModel.GRADES, own = P.ownerRules || {}, OW = window.SBDOwners, lf = OW.loadFactors(own.owner, own.eta, (P.xs || {}).nb), FX = window.SBDFlexure;
+    const G = FX.factorsOwner ? FX.factorsOwner(lf) : FX.factors(), C = window.SBDConstr && window.SBDConstr.factorsOwner ? window.SBDConstr.factorsOwner(lf) : { cdc: 1.25, ccl: 1.5 };
+    const wcE = m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc, MR = window.SBDSections.modularRatio(m.concrete.fc, wcE, m.concrete.K1, m.concrete.nRule);
+    const AS = window.SBDAnalysis ? window.SBDAnalysis.settings(P) : { im: 33, imf: 15 }, FA = window.SBDFatigue, FS = FA ? FA.settings(P.fatigue || window.SBDModel.defaultFatigue()) : null, fa = P.fatigue || {};
+    const PHI = (window.SBDSplices && window.SBDSplices.PHI) || {}, sh = window.SBDShear ? window.SBDShear.PHIV : 1.0;
+    let AP = null; try { AP = window.SBDAnalysis.applicability(P); } catch (e) { AP = null; }
+    const lv = { fail: 'FAIL (refined analysis required)', warn: 'WARNING (results approximate)', note: 'NOTE (skew effects listed)', ok: 'within the limits' };
+    return { title: 'Basis of design', subs: [
+      sub('spec', 'Specification and owner', [kv([['Design specification', ED], ['Load rating', 'AASHTO MBE 4th Ed. (2026)'], ['Owner profile', lf.o || 'AASHTO', 'own.eta'], ['Load modifier η (maximum / minimum Strength factors)', `${f(lf.eta, 3)} / ${f(lf.etaN, 3)}`, 'own.eta'], ['Design load multiplier m on LL+IM', f(lf.m, 2), 'own.m'], ['Haunch in section properties', lf.h0 ? '0 (owner rule)' : 'as entered']])]),
+      sub('mat', 'Materials', [kv([['Steel $F_{y}$, top / bottom flange, web', `${Gd[m.steel.top].Fy} / ${Gd[m.steel.bot].Fy} / ${Gd[m.steel.web].Fy} ksi (${m.steel.top} / ${m.steel.bot} / ${m.steel.web})`], ['$E_{s}$', `${f(m.Es || 29000, 0)} ksi`], ["$f'_{c}$", `${f(m.concrete.fc, 2)} ksi`],
+        ['$E_{c}$', `${f(MR.Ec, 0)} ksi = 120,000 K₁ w_c² f′c^0.33 (Eq. 5.4.2.4-1; $w_{c}$${m.concrete.wcE > 0 ? ' for $E_{c}$' : ''} ${f(wcE, 3)} kcf, $K_{1}$ ${f(m.concrete.K1, 2)})`, 'n.Ec'], ['Modular ratio n', `${f(MR.n, 3)}${MR.rule === 'round' ? ` → ${MR.n}` : ''} (Art. 6.10.1.1.1b)`, 'n.n'],
+        ['Unit weights', `steel 490 pcf (Table 3.5.1-1); concrete $w_{c}$ ${f(m.concrete.wc, 3)} kcf (dead load)`], ['Deck rebar $F_{yr}$', `${f(m.rebar.Fyr, 0)} ksi`]])]),
+      sub('phi', 'Resistance factors (Art. 6.5.4.2)', [tbl(['Resistance', 'φ'], [['Flexure $\\phi_{f}$', '1.00'], ['Shear $\\phi_{v}$', f(sh, 2)], ['Shear connectors $\\phi_{sc}$', '1.00'], ['Axial compression $\\phi_{c}$ (cross-frames)', f(PHI.c != null ? PHI.c : 0.9, 2)], ['Tension, yielding / fracture $\\phi_{y}$ / $\\phi_{u}$', `${f(PHI.y != null ? PHI.y : 0.95, 2)} / ${f(PHI.u != null ? PHI.u : 0.8, 2)}`], ['Bolts in shear $\\phi_{s}$, bearing $\\phi_{bb}$', `${f(PHI.s != null ? PHI.s : 0.8, 2)} / ${f(PHI.bb != null ? PHI.bb : 0.8, 2)}`], ['Weld metal $\\phi_{e2}$ (fillet, shear)', f(window.SBDWelds && window.SBDWelds.PHI_VU != null ? window.SBDWelds.PHI_VU : 0.8, 2)]])]),
+      sub('lc', 'Load combinations used (Tables 3.4.1-1, 3.4.1-2; owner η and m applied)', [tbl(['Combination', 'γ_DC (max / min)', 'γ_DW (max / min)', 'γ_LL+IM', 'Use'], [
+        ['Strength I', `${f(G.dc, 3)} / ${f(G.dcMin, 3)}`, `${f(G.dw, 3)} / ${f(G.dwMin, 3)}`, f(G.ll, 3), 'flexure, shear, stiffeners, splices, welds, studs (strength)'],
+        ['Service II', '1.00', '1.00', f(G.sll, 3), 'flange stresses (GS12, GS13), splice slip'], ['Fatigue I', '—', '—', f(FS ? FS.gI : 1.75, 2), 'infinite life details'], ['Fatigue II', '—', '—', f(FS ? FS.gII : 0.8, 2), 'finite life details'],
+        ['Deck placement (constructibility)', f(C.cdc, 3), '—', `${f(C.ccl, 3)} (construction LL)`, 'GS14–GS16, overhang brackets']])]),
+      sub('ll', 'Live load', [kv([['HL-93 dynamic load allowance IM, Strength / Service', `${f(AS.im, 0)} % (truck and tandem; not on the lane load, Table 3.6.2.1-1)`], ['Fatigue IM', `${f(AS.imf, 0)} %`], ['Fatigue truck', 'one design truck, 30 ft rear axle spacing (3.6.1.4.1)'],
+        ['$ADTT_{SL}$ = p ADTT', FS ? `${f(FS.p, 2)}(${f(FS.ADTT, 0)}) = ${f(FS.ADTTSL, 0)} trucks/day (Eq. 3.6.1.4.2-1); design life ${f(FS.life, 0)} years` : '—'], ['Flange fatigue categories (GS17), top / bottom', `${fa.catT || 'B'} / ${fa.catB || 'B'}`]])]),
+      sub('an', 'Analysis method', [kv([['Method', 'Line-girder analysis (stiffness method, staged sections: DC1 on the steel, DC2 and DW on 3n, LL on n) with the approximate distribution factors of Art. 4.6.2.2'],
+        ['Applicability (SA4)', AP ? `${lv[AP.level]}${AP.items.filter(q => q.level !== 'ok').length ? ': ' + AP.items.filter(q => q.level !== 'ok').map(q => `${q.title} (${q.val})`).join('; ') : ''}` : '—', 'ap.th']])])] };   // the SA4 steps are worked in the Summary section (ap.*)
+  }
+  /* bom(B, X): steel bill of materials of the plate girders: per girder type and plate segment */
+  function bom(B, X) {
+    const P = B.P, M = window.SBDModel, plf = (window.SBDAnalysis && window.SBDAnalysis.STEEL_PLF) || 490 / 144, rows = [], sumT = [];
+    let tot = 0;
+    (P.girders || []).forEach((g, gi) => { const ln = M.typeLines ? M.typeLines(P, gi) : [], nL = ln.length || 1; let w = 0;
+      (g.segments || []).forEach((s, k) => { const A = s.D * s.tw + s.topB * s.topT + s.botB * s.botT, wf = A * plf, L = s.x1 - s.x0, W = wf * L / 1000; w += W;
+        rows.push([gName(g), String(k + 1), `${f(s.x0, 2)}–${f(s.x1, 2)}`, `web ${f(s.D, 3)} × ${f(s.tw, 4)}; top ${f(s.topB, 3)} × ${f(s.topT, 4)}; bot ${f(s.botB, 3)} × ${f(s.botT, 4)}`, N(A, 3), N(wf, 2), N(L, 2), N(W, 3)]); });
+      sumT.push([gName(g), N(w, 3), ln.length ? ln.map(j => 'G' + (j + 1)).join(', ') : 'design line (no line assigned)', String(nL), N(w * nL, 3)]); tot += w * nL; });
+    return { title: 'Steel bill of materials', subs: [sub('b', 'Plate girders', [
+      note(`Per plate segment: A = D t_w + b_t t_t + b_b t_b (in²); w = A × 490/144 = A × ${f(plf, 4)} lb/ft (steel 490 pcf, Table 3.5.1-1); W = w ℓ / 1000 (kip). The weights are of the plates as entered (Girders & plates tab).`),
+      tbl(['Girder type', 'Segment', 'x (ft)', 'Plates (in)', 'A (in²)', 'w (lb/ft)', 'ℓ (ft)', 'W (kip)'], rows, { wide: true }),
+      tbl(['Girder type', 'One girder (kip)', 'Lines', 'Number', 'Total (kip)'], sumT.concat([['Bridge total', '', '', '', N(tot, 3)]]), { caption: 'Girder subtotals and the bridge total (plate girders only)' }),
+      ...(() => { const U = M.unassigned ? M.unassigned(P) : []; return U.length ? [note(`Girder lines without a girder type (${U.map(j => 'G' + (j + 1)).join(', ')}) are not checked and not in this total (Girders & plates tab).`, true)] : []; })(),
+      note(`Not included: transverse and bearing stiffeners, connection plates, shear studs, field splice plates and bolts, cross-frames or diaphragms, bearings. The analysis adds a detail allowance of ${f(+((P.xs || {}).allow) || 0, 0)} % to the girder steel dead load (DC1, Analysis section) and the cross-frame weights as point loads; neither is in this table.`)])] };
+  }
+  /* dfFigs(B): the cross-section with the wheel positions of each LLDF case (ui/gfxa.js loadsGraphic, the tab's own drawing), exterior girder G1 and the reported girder, span 1 */
+  function dfFigs(B) {
+    const GA = window.SBDGfxA, GG = window.SBDGraphics, R = B.loads; if (!GA || !GA.loadsGraphic || !GG || !GG.tightSvg || !R || !R.regions) return [];
+    const AN = window.SBDAnalysis, line = AN ? AN.lineOf(B.P, B.girder) : 0, out = [], lines = [...new Set([0, line])];
+    lines.forEach(lg => { let g0; try { g0 = GA.loadsGraphic(B.P, R, lg, 0, ''); } catch (e) { return; } if (!g0 || g0.errors) return;
+      (g0.opts || []).forEach(([k, t]) => { let g; try { g = GA.loadsGraphic(B.P, R, lg, 0, k); } catch (e) { return; } if (!g || !g.D) return;
+        out.push({ type: 'figure', svg: GG.tightSvg(g.D, { bg: '#fff', width: '100%' }), caption: `G${lg + 1}${lg === 0 ? ' (exterior)' : ''}, ${R.regions[0].label}: ${t}. ${k === 'rigid' ? 'Rigid cross-section method (4.6.2.2.2d): lanes from the side that governs; R = N_L/N_b + X_ext Σe/Σx².' : 'Lever rule: the deck hinged over the adjacent girder (the first interior girder for G1); wheels 2 ft from the traffic face, 6 ft apart; R from statics; g = mR.'} Worked in the distribution factor steps of this section.` }); }); });
+    return out;
+  }
+  /* sign(B): sign-off and revision history (the project's title-block fields; blank lines to be filled in by hand) */
+  function sign(B) {
+    const p = B.P.project || {}, box = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 260" width="200" role="img" aria-label="P.E. seal"><rect x="2" y="2" width="256" height="256" fill="#fff" stroke="#000" stroke-width="1.5"/><text x="130" y="135" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#000">P.E. seal</text></svg>`;
+    return { title: 'Sign-off and revision history', subs: [sub('s', 'Sign-off', [
+      tbl(['Role', 'Name', 'Signature', 'Date'], [['Designed by', p.designer || '', '', p.date || ''], ['Checked by', p.checker || '', '', ''], ['Approved by', '', '', '']]),
+      { type: 'figure', svg: box, caption: 'Professional Engineer seal and signature' },
+      tbl(['Rev.', 'Date', 'Description', 'By', 'Checked'], [['0', p.date || '', 'Issued', p.designer || '', p.checker || ''], ['', '', '', '', ''], ['', '', '', '', ''], ['', '', '', '', '']], { caption: 'Revisions (Designed by, Checked by and Date: the project fields on the Project tab; the rest to be filled in by hand)' })])] };
+  }
+  /* ptHead(B, r): the design-point header of a worked flexure location: station, span and x/L, plates, unbraced length and its L_p / L_r, d_o, plate-transition side */
+  function ptHead(B, r) {
+    const sup = B.sup || [], k = spanOf(sup, r.x), L = sup[k] - sup[k - 1], segs = (B.girder && B.girder.segments) || [], s = r.seg, lt = r.lt || null;
+    const chg = segs.slice(0, -1).map(q => q.x1).find(x => Math.abs(x - r.x) < 0.02), sh = B.shear && B.shear.stations ? B.shear.stations.reduce((a, q) => (!a || Math.abs(q.x - r.x) < Math.abs(a.x - r.x) ? q : a), null) : null;
+    return kv([['Station', `x = ${f(r.x, 2)} ft${chg != null ? ` (${r.x < chg ? 'left' : 'right'} of the plate transition at ${f(chg, 2)} ft)` : ''}`], ['Span, x/L', isFinite(L) && L > 0 ? `span ${k}, x/L = ${f((r.x - sup[k - 1]) / L, 3)}` : '—'],
+      ['Plates (in)', `web ${f(r.D, 3)} × ${f(r.tw, 4)}; top ${f(r.topB, 3)} × ${f(r.topT, 4)}; bottom ${f(r.botB, 3)} × ${f(r.botT, 4)}`],
+      ['Unbraced length $L_{b}$, $C_{b}$', `${f(r.Lb, 2)} ft${s ? ` (${f(s.xa, 2)} to ${f(s.xb, 2)} ft)` : ''}, $C_{b}$ = ${f(r.Cb, 3)}${lt && isFinite(lt.Lp) ? `; $L_{p}$ = ${f(lt.Lp / 12, 2)} ft, $L_{r}$ = ${f(lt.Lr / 12, 2)} ft` : ''}`],
+      ['Stiffener panel $d_{o}$', sh && +sh.do > 0 ? `${f(+sh.do, 2)} in (Shear & stiffeners section, x = ${f(sh.x, 2)} ft)` : sh ? 'unstiffened web' : '—']]);
+  }
+
   const BUILD = { proj, loads, an, defl, sec, flex, shear, fat, cn, frm, spl, wd, rt };
   const NEED = { loads: 'loads', an: 'an', defl: 'an', sec: 'sec', flex: 'flex', shear: 'shear', fat: 'fat', cn: 'cn', frm: 'frm', spl: 'spl', wd: 'wd', rt: 'rating' };
   function model(B, opt) {
@@ -573,7 +675,8 @@
     const P = B.P, p = P.project || {}, secs = [], built = [], dropped = [];
     const dataOf = { loads: B.loads, an: B.src === 'file' ? B.pl : B.an, defl: B.src === 'file' ? null : B.an, sec: B.sec, flex: B.flex, shear: B.shear, fat: B.fat, cn: B.cn, frm: B.frm, spl: B.spl, wd: B.wd, rt: B.rating };
     SECTIONS.forEach(([k, label]) => {
-      if (k === 'sum') return;
+      if (k === 'sum' || k === 'exec' || k === 'sign') return;   // built after the modules (exec, sum) or last (sign)
+      if (k === 'basis' || k === 'bom') { if (on(k)) { let s0; try { s0 = (k === 'basis' ? basis : bom)(B, X); } catch (e) { s0 = { title: label, subs: [sub('n', 'Not available', [note('Report error: ' + (e && e.message), true)])] }; } secs.push({ id: k, ...s0 }); } return; }
       const want = on(k);
       if (k === 'proj') { if (want) secs.push({ id: k, ...proj(B, X) }); return; }
       if (k === 'defl' && !DEFL_ON()) return;
@@ -602,6 +705,18 @@
         return it; }); }); });
     }
     if (on('sum')) secs.unshift({ id: 'sum', ...summary(B, X, built) });
+    // PR3: Basis of design and the Executive summary at the front (the summary reads the governing rows of every module built above), Sign-off last
+    { const bi = secs.findIndex(q => q.id === 'basis'); if (bi >= 0) secs.unshift(secs.splice(bi, 1)[0]); }
+    X.on = on;   // exec links only into the sections included
+    if (on('exec')) { let s0; try { s0 = exec(B, X); } catch (e) { s0 = { title: 'Executive summary', subs: [sub('n', 'Not available', [note('Report error: ' + (e && e.message), true)])] }; } secs.unshift({ id: 'exec', ...s0 }); }
+    if (on('sign')) secs.push({ id: 'sign', ...sign(B) });
+    // the executive summary and the basis of design link only to steps written in this report (a value not worked here keeps its text, without a link)
+    secs.filter(q => q.id === 'exec' || q.id === 'basis').forEach(E => { { const have = new Set();
+      secs.forEach(q => q.subs.forEach(u => u.items.forEach(it => { if (it && it.type === 'steps') (it.steps || []).forEach(t => have.add(K(it.scope, t.id))); })));
+      const cell = c => (c && typeof c === 'object' && c.key && !have.has(c.key) ? { ...c, key: null } : c);
+      E.subs.forEach(u => { u.items = u.items.map(it => !it ? it : it.type === 'note' ? { ...it, text: String(it.text).replace(/ ?\[\[([^\]|]+)\]\]/g, (m, k) => (have.has(k) ? m : '')) }
+        : it.type === 'table' ? { ...it, rows: it.rows.map(r => (Array.isArray(r) ? r.map(cell) : { ...r, cells: r.cells.map(cell) })) }
+        : it.type === 'kv' ? { ...it, rows: it.rows.map(r => (r[2] && !have.has(r[2]) ? [r[0], r[1], null] : r)) } : it); }); } });   // exec and basis (PR3)
     const girder = B.girder;
     return { title: 'Steel Bridge Design', subtitle: `Calculation report: girder ${gName(girder)}${p.name ? ', ' + p.name : ''}`, code: `${ED}; MBE 4th Ed. (2026) (load rating). ${X.detail === 'all' ? 'Every station worked.' : 'Governing location of each check worked.'}`,
       info: [['Project No', p.number], ['Computed by', p.designer], ['Date', p.date], ['Project', p.name], ['Checked by', p.checker], ['Owner', window.SBDModel.clientName(P)]],
