@@ -710,6 +710,13 @@
     X.on = on;   // exec links only into the sections included
     if (on('exec')) { let s0; try { s0 = exec(B, X); } catch (e) { s0 = { title: 'Executive summary', subs: [sub('n', 'Not available', [note('Report error: ' + (e && e.message), true)])] }; } secs.unshift({ id: 'exec', ...s0 }); }
     if (on('sign')) secs.push({ id: 'sign', ...sign(B) });
+    // the executive summary and the basis of design link only to steps written in this report (a value not worked here keeps its text, without a link)
+    secs.filter(q => q.id === 'exec' || q.id === 'basis').forEach(E => { { const have = new Set();
+      secs.forEach(q => q.subs.forEach(u => u.items.forEach(it => { if (it && it.type === 'steps') (it.steps || []).forEach(t => have.add(K(it.scope, t.id))); })));
+      const cell = c => (c && typeof c === 'object' && c.key && !have.has(c.key) ? { ...c, key: null } : c);
+      E.subs.forEach(u => { u.items = u.items.map(it => !it ? it : it.type === 'note' ? { ...it, text: String(it.text).replace(/ ?\[\[([^\]|]+)\]\]/g, (m, k) => (have.has(k) ? m : '')) }
+        : it.type === 'table' ? { ...it, rows: it.rows.map(r => (Array.isArray(r) ? r.map(cell) : { ...r, cells: r.cells.map(cell) })) }
+        : it.type === 'kv' ? { ...it, rows: it.rows.map(r => (r[2] && !have.has(r[2]) ? [r[0], r[1], null] : r)) } : it); }); } });   // exec and basis (PR3)
     const girder = B.girder;
     return { title: 'Steel Bridge Design', subtitle: `Calculation report: girder ${gName(girder)}${p.name ? ', ' + p.name : ''}`, code: `${ED}; MBE 4th Ed. (2026) (load rating). ${X.detail === 'all' ? 'Every station worked.' : 'Governing location of each check worked.'}`,
       info: [['Project No', p.number], ['Computed by', p.designer], ['Date', p.date], ['Project', p.name], ['Checked by', p.checker], ['Owner', window.SBDModel.clientName(P)]],

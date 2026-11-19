@@ -23,7 +23,7 @@ const dia = (P, sh) => { Object.assign(P.crossframes.dia, { on: 'yes', shape: sh
 const TR = (P, gi = 0) => CF.cfTypeRec(CF.inputsOf(P, { gi }).p, CF.envOf(P));
 const near = (sec, req, D0, lim, d, short, ratio) => `rolled diaphragm ${sec}: the nearest section, FAILS the depth requirement (no channel or W of the list meets both the least depth ${req} in and the fit d ≤ D_0 − c = ${D0} − 2.00 = ${lim} in; the deepest that fits, d = ${d} in, is ${short} in short, ratio ${ratio}; SB-27)`;
 const W27 = near('W27x84', '28.41', '30.00', '28.00', '26.70', '1.71', '1.064'), W33 = near('W33x118', '32.91', '36.00', '34.00', '32.90', '0.01', '1.000');
-const NO = Object.fromEntries(['sum', 'proj', 'loads', 'an', 'defl', 'sec', 'flex', 'shear', 'fat', 'cn', 'spl', 'wd', 'rt'].map(k => [k, false]));
+const NO = Object.fromEntries(['exec', 'basis', 'sum', 'proj', 'loads', 'an', 'defl', 'sec', 'flex', 'shear', 'fat', 'cn', 'spl', 'wd', 'rt', 'bom', 'sign'].map(k => [k, false]));
 const ckSub = (P, gi) => { const B = W.SBDReportData.compute(P, gi, { want: { frm: true } }), Mo = W.SBDReportBuild.model(B, { detail: 'gov', include: NO }), doc = W.SharedReport.build(Mo);
   assert.deepEqual(J(doc.unresolved), [], 'every [[key]] resolves'); return Mo.sections[0].subs.find(s => s.id === 'ck'); };
 
