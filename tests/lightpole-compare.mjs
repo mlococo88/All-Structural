@@ -77,6 +77,9 @@ export const CASES = {
   // LRFDLTS monopost sign on a square post (added 2026-11-07, LPL8: the base weld of a square tube as a rectangular line weld)
   ltssignsq: { inputs: { poleShape: 'square', poleDiaTop: '8', poleTwTop: '0.25', ltsRi: '0.5', ltsV: '115', shaftProj: '1.5', ltsIce: '0.5', bromsSoil: 'cohesionless', bromsPhi: '30', bromsGam: '0.115' }, top: { codeMode: 'lts', appMode: 'sign', signPosts: 1 } },
   deep12: { inputs: { H: '50', poleDiaTop: '6', poleDiaBase: '12', poleTwBase: '0.3125', soilClass: 'clay', S1: '100', b: '2', V: '170' } },
+  // IBC monopost sign on a rectangular 6 × 12 post, depth along the panel normal, small panel high up (added 2026-11-19, LPEW: the
+  // edge-on check about the weak axis governs the post, embedment and shaft)
+  signrect: { inputs: { poleShape: 'rect', poleDiaTop: '6', poleDepthTop: '12', poleTwTop: '0.25', V: '130', signB: '3', signS: '1.5', signClr: '30', signWt: '60' }, top: { appMode: 'sign', signPosts: 1 } },
 };
 
 if (args.list) { console.log(Object.keys(CASES).join('\n')); process.exit(0); }
