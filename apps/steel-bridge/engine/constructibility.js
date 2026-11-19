@@ -224,9 +224,13 @@
     const xs = env.xs, N = xs.length, Lend = opt.L, C0 = opt.G || factors(), dcc = xs.map((_, k) => !env.Mc && (MS ? true : !!env.MDCc && useDCc(env.MDCc[k])));
     const Mc = env.Mc || xs.map((_, k) => C0.cdc * (MS ? +MS[k] : dcc[k] ? +env.MDCc[k] : env.MDC1[k]) + C0.ccl * env.MCL[k]);
     const bp = [...new Set(opt.braces.map(v => +(+v).toFixed(3)))].sort((p1, p2) => p1 - p2).filter((v, k, arr) => k === 0 || v - arr[k - 1] > 0.25);
-    const ib = bp.findIndex(v => Math.abs(v - x) < 0.25), Lg = bp[bp.length - 1], segs = [];
-    if (ib >= 0) { if (ib > 0) segs.push([bp[ib - 1], bp[ib]]); if (ib < bp.length - 1) segs.push([bp[ib], bp[ib + 1]]); }
-    else segs.push([[...bp].reverse().find(v => v < x) ?? 0, bp.find(v => v > x) ?? Lg]);
+    // SBCA (2026-11-19; AASHTO LRFD 10th Ed. Art. 6.10.8.2.3, 6.10.1.6): the segment on the point's own side, as the design checks (A3,
+    // SBDFlexure.sideSegs); a point at a brace itself (≤ 0.001 ft) takes the governing of both. Before: a point within 0.25 ft of a brace
+    // point took both adjacent segments and the governing one:
+    //   const ib = bp.findIndex(v => Math.abs(v - x) < 0.25), Lg = bp[bp.length - 1], segs = [];
+    //   if (ib >= 0) { if (ib > 0) segs.push([bp[ib - 1], bp[ib]]); if (ib < bp.length - 1) segs.push([bp[ib], bp[ib + 1]]); }
+    //   else segs.push([[...bp].reverse().find(v => v < x) ?? 0, bp.find(v => v > x) ?? Lg]);
+    const segs = F.sideSegs(bp, x);
     const node = q => { let b = 0; xs.forEach((v, i) => { if (Math.abs(v - q) < Math.abs(xs[b] - q)) b = i; }); return b; }, i = node(x);
     const secAt = q => opt.secAt(Math.min(Math.max(q, 1e-6), Lend - 1e-6)), s = secAt(x);
     const stP = q => { const d = q.D + q.topT + q.botT, parts = [[q.botB * q.botT, q.botT / 2, q.botB * q.botT ** 3 / 12], [q.D * q.tw, q.botT + q.D / 2, q.tw * q.D ** 3 / 12], [q.topB * q.topT, d - q.topT / 2, q.topB * q.topT ** 3 / 12]];

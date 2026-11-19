@@ -158,18 +158,25 @@
              FyF (flange F_y), G, lenOf (optional, added with the framing PR: lenOf(a, b) = the girder's own length between analysis stations a and b,
              SBDFraming.girderBraces; Preliminary sizing's L = p1 − p0 in the girder's own stations; default b − a) }.
      Returns the row fields { Lb, Cb, lbB, lbT, npr, lbK, lbIr, nprWhy, geA, nprG, seg: { xa, xb }, cbParts }. */
-  function bracing(x, env, opt) {
-    const I = opt.impl || {}, feCb_ = I.feCb || feCb, feNpr_ = I.feNpr || feNpr, feGe_ = I.feGe || feGe, feGeA_ = I.feGeA || feGeA, feGov_ = I.feGov || feGov, feAt_ = I.feAt || feAt;
-    const xs = env.xs, N = xs.length, Lend = opt.L, region = opt.region, G = opt.G || factors();
-    const bp = [...new Set(opt.braces.map(v => +(+v).toFixed(3)))].sort((p1, p2) => p1 - p2).filter((v, k, arr) => k === 0 || v - arr[k - 1] > 0.25);
+  /* sideSegs(bp, x): the unbraced segment(s) [x_a, x_b] whose L_b and C_b the location at x takes; bp = the sorted brace points (ft, points
+     closer than 0.25 ft merged). A3 (2026-11-19; AASHTO LRFD 10th Ed. Art. 6.10.8.2.3, L_b of the unbraced length containing the section): a
+     point within 0.25 ft of a brace point takes the unbraced segment on its own side (x left of the brace: the segment ending there; right:
+     the one starting there); only a point at the brace itself (|x − brace| ≤ 0.001 ft) takes both, and the caller keeps the governing one
+     (6.10.1.6). Before A3: both adjacent segments at any point within 0.25 ft, e.g. x = 139.99 ft (left of an interior support at 140) took
+     the next span's L_b. SBCA (2026-11-19): moved out of bracing() unchanged so that Constructibility's bracingC uses the same rule. */
+  function sideSegs(bp, x) {
     const ib = bp.findIndex(v => Math.abs(v - x) < 0.25), Lg = bp[bp.length - 1], segs = [];
-    // A3 (2026-11-19): a point within 0.25 ft of a brace point takes the unbraced segment on its own side (x left of the brace: the segment
-    // ending there; right: the one starting there); only a point at the brace itself (|x − brace| ≤ 0.001 ft) takes the governing of both.
-    // Before: both adjacent segments at any point within 0.25 ft, e.g. x = 139.99 ft (left of an interior support at 140) took the next span's L_b.
     if (ib >= 0) { const lf = x < bp[ib] - 1e-3, rt = x > bp[ib] + 1e-3;
       if (ib > 0 && !rt) segs.push([bp[ib - 1], bp[ib]]); if (ib < bp.length - 1 && !lf) segs.push([bp[ib], bp[ib + 1]]);
       if (!segs.length) segs.push(ib > 0 ? [bp[ib - 1], bp[ib]] : [bp[ib], bp[ib + 1]]); }
     else segs.push([[...bp].reverse().find(v => v < x) ?? 0, bp.find(v => v > x) ?? Lg]);
+    return segs;
+  }
+  function bracing(x, env, opt) {
+    const I = opt.impl || {}, feCb_ = I.feCb || feCb, feNpr_ = I.feNpr || feNpr, feGe_ = I.feGe || feGe, feGeA_ = I.feGeA || feGeA, feGov_ = I.feGov || feGov, feAt_ = I.feAt || feAt;
+    const xs = env.xs, N = xs.length, Lend = opt.L, region = opt.region, G = opt.G || factors();
+    const bp = [...new Set(opt.braces.map(v => +(+v).toFixed(3)))].sort((p1, p2) => p1 - p2).filter((v, k, arr) => k === 0 || v - arr[k - 1] > 0.25);
+    const segs = sideSegs(bp, x);   // A3 (2026-11-19): the segment on the point's own side (sideSegs; SBCA 2026-11-19: moved into a helper, same code)
     const node = q => { let b = 0; xs.forEach((v, i) => { if (Math.abs(v - q) < Math.abs(xs[b] - q)) b = i; }); return b; }, i = node(x);
     const secAt = q => opt.secAt(Math.min(Math.max(q, 1e-6), Lend - 1e-6));
     // Preliminary sizing's own section and stress for γ_e and the governing section (stP, crk, fBotN, rbN): the deck rebar Ar at yr
@@ -652,5 +659,5 @@
     return { prj, locs, env, supports: sup, braces, Lb, lf: lfO };
   }
 
-  window.SBDFlexure = { ES, AMP_NG, guard, gr, govern, crwOf, factors, factorsOwner, envelopeStrI, feAt, feCb, feNpr, feGe, feGeA, feGov, bracing, rbFactor, ltbFnc, ampFl, fcrw, gsGov, location, girder, fromPayload };
+  window.SBDFlexure = { ES, AMP_NG, guard, gr, govern, crwOf, factors, factorsOwner, envelopeStrI, feAt, feCb, feNpr, feGe, feGeA, feGov, sideSegs, bracing, rbFactor, ltbFnc, ampFl, fcrw, gsGov, location, girder, fromPayload };
 })();
