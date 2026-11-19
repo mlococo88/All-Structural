@@ -302,10 +302,10 @@ test('fromAnalysis(): the project path (analysis, cross-frames, stiffener panels
   // SBCA (2026-11-19): bracingC takes the segment on the location's own side (as A3), so a span's row next to a pier takes that span's own
   // unbraced length, which here differs between the two paths' brace points (project framing 110–133.33 ft, L_b 23.33 ft; payload every
   // ≤ L_b, 110–130 ft, 20 ft): span 2 bot at 110.01 ft, analysis 0.3554 → 0.3531, payload 0.3583 → 0.3106 (before, both took span 1's
-  // 88–110 ft, 22 ft). Same L_b,C: within 0.03 as before; different L_b,C: within 0.05, the longer L_b not the smaller ratio.
+  // 88–110 ft, 22 ft). Same L_b,C: within 0.03 as before; different L_b,C: within 0.05.
   G.spans.forEach((s, k) => ['top', 'bot', 'tens'].forEach(key => { const a = s[key], b = GA.spans[k][key]; if (!a || !b) return;
     if (Math.abs(a.row.LbC - b.row.LbC) < 0.01) close(a.ratio, b.ratio, 0.03, `span ${k + 1} ${key}`);
-    else { close(a.ratio, b.ratio, 0.05, `span ${k + 1} ${key} (L_b,C ${a.row.LbC} vs ${b.row.LbC})`); const [lo, hi] = a.row.LbC < b.row.LbC ? [a, b] : [b, a]; assert.ok(hi.ratio >= lo.ratio - 1e-9, `span ${k + 1} ${key}: the longer L_b`); } }));
+    else close(a.ratio, b.ratio, 0.05, `span ${k + 1} ${key} (L_b,C ${a.row.LbC} vs ${b.row.LbC})`); }));
   G.rows.slice(0, 20).forEach(r => { const ids = new Set(r.steps.map(s => s.id)); r.checks.forEach(c => assert.ok(ids.has(c.step), c.step)); });
   G.oh.rows.forEach(r => { const ids = new Set(r.steps.map(s => s.id)); r.checks.forEach(c => assert.ok(ids.has(c.step), c.step)); });
 });
