@@ -1435,11 +1435,11 @@ function applyMode(){
   } else if(signPosts===1){
     eyebrow='Monopost Sign · Laterally Loaded Drilled Pier';
     title='Monopost Sign Pier Designer';
-    subtxt=`A single post supporting a solid sign panel. The ASCE 7-16 Ch. 29 wind force on the panel — plus the post's own drag — drives the IBC §1807.3 embedment and the ACI 318 shaft. Cases A, B and C are applied; the eccentric Cases B/C twist the single post, and that torsion is checked in the post (AISC §H3), the anchor bolts and the shaft threshold (ACI §22.7). Wind is enveloped over four directions.`;
+    subtxt=`A single post supporting a solid sign panel. The ASCE 7-16 Ch. 29 wind force on the panel — plus the post's own drag — drives the IBC §1807.3 embedment and the ACI 318 shaft. Cases A, B and C are applied; the eccentric Cases B/C twist the single post, and that torsion is checked in the post (AISC §H3), the anchor bolts and the shaft threshold (ACI §22.7). Wind is enveloped over the directions normal to the panel (toward 0° and 180°); a rectangular post is also checked edge-on (weak axis).`;
   } else {
     eyebrow='Double-Post Sign · Independent Drilled Piers';
     title='Double-Post Sign Pier Designer';
-    subtxt=`Two posts supporting a solid sign panel, each on its own drilled shaft. The ASCE 7-16 Ch. 29 panel wind (Cases A, B, and C where applicable) is distributed to the posts by statics about the post spacing — eccentric cases load one post more without inducing torsion. Each post and foundation is designed independently for its worst case across all four wind directions.`;
+    subtxt=`Two posts supporting a solid sign panel, each on its own drilled shaft. The ASCE 7-16 Ch. 29 panel wind (Cases A, B, and C where applicable) is distributed to the posts by statics about the post spacing — eccentric cases load one post more without inducing torsion. Each post and foundation is designed independently for its worst case across the wind directions normal to the panel (toward 0° and 180°); a rectangular post is also checked edge-on (weak axis).`;
   }
   if(codeMode==='lts'){   // LTS-1: masthead text of the LRFDLTS mode
     eyebrow=!sign?'Highway Luminaire Pole · AASHTO LRFDLTS':signPosts===1?'Monopost Roadside Sign · AASHTO LRFDLTS':'Two-Post Roadside Sign · AASHTO LRFDLTS';
@@ -1916,6 +1916,14 @@ function signWind(inp){
     const F=0.00256*Kzs*inp.Kzt*inp.Kd*inp.G*inp.V*inp.V*cfPost*(postW_in/12)*dzp;   // lb (z above the post base; + p above grade, LPPJ)
     postStrips.push({z,F,zBot:i*dzp,zTop:(i+1)*dzp,L:dzp,Kz:Kzs}); Fpost+=F; Mpost+=F*z;
   }
+  // LPEW (2026-11-19, engineer): a RECTANGULAR post (width B across the panel, depth d along the panel normal = x, as lppAnchBase
+  // sends it) also takes the edge-on wind (toward 90°): the panel carries none (Fig. 29.3-1 is for wind normal or oblique to the
+  // face) and the exposed post drag acts on its depth face, the same segments, q_z and C_f, width d in place of B (as the pole
+  // mode's depth face, poleWindNominal LPH2). It bends the post about its y axis (S_y, Z_y: the weak axis when d > B).
+  const edge=inp.poleShape==='rect' && inp.poleDepthTop>0;
+  const postD_in=edge?(inp.poleDepthTop+(inp.poleDepthBase!==undefined?inp.poleDepthBase:inp.poleDepthTop))/2:0;   // in, mean post depth
+  let FpostD=0, MpostD=0;
+  if(edge) postStrips.forEach(st=>{ st.Fd=st.F*postD_in/postW_in; FpostD+=st.Fd; MpostD+=st.Fd*st.z; });
   const qzPost=Apost>0? Fpost/(cfPost*Apost) : qzMidPost;  // psf, area-average q_z over the exposed height
   const zPost=Fpost>0? Mpost/Fpost : postExpH/2;            // ft, height of the drag resultant above the post base
   // Case A resultant height: centroid, raised 0.05h if s/h==1 (approx: if sh>=0.99)
@@ -1970,11 +1978,47 @@ function signWind(inp){
   let FpostI=0, MpostI=0;
   postStrips.forEach(st=>{ const td=iceTd(inp,lppZg(inp,st.z)); st.td=td;
     st.FI=0.00256*Kz(lppZg(inp,st.z),inp.expo)*inp.Kzt*inp.Kd*inp.G*inp.Vice*inp.Vice*cfPost*((postW_in+2*td)/12)*dzp; FpostI+=st.FI; MpostI+=st.FI*st.z; });
+  let FpostDI=0, MpostDI=0;   // LPEW: wind on the iced depth face, d + 2t_d
+  if(edge) postStrips.forEach(st=>{ st.FId=0.00256*Kz(lppZg(inp,st.z),inp.expo)*inp.Kzt*inp.Kd*inp.G*inp.Vice*inp.Vice*cfPost*((postD_in+2*st.td)/12)*dzp; FpostDI+=st.FId; MpostDI+=st.FId*st.z; });
   const tdPost=iceTd(inp, inp.pProj>0?(h+inp.pProj)/2:h/2);   // at the post mid-height above grade (LPPJ: the post runs from p to h)
   const WiPost=iceWeight(tdPost, postW_in, inp.iceDen)*(inp.pProj>0?h-inp.pProj:h);   // lb per post (whole post, top of shaft to the top of the panel)
   return {B,s,clr,h,zc,zA,As,bs,sh,Kzh,qh,cfAB,cfAuto,cfManual,F_A,eB,caseC,
           Fpost,Mpost,zPost,postExpH,Apost,qzPost,qzMidPost,postStrips,postW_in,cfPost,
-          tdP,qhI,AsI,BI,sI,hI,bsI,shI,cfAutoI,cfABI,F_Ai,iceScale,WiPanel,FpostI,MpostI,tdPost,WiPost};
+          tdP,qhI,AsI,BI,sI,hI,bsI,shI,cfAutoI,cfABI,F_Ai,iceScale,WiPanel,FpostI,MpostI,tdPost,WiPost,
+          ...(edge?{edge:true, edgeWeak:postD_in>postW_in, postD_in, FpostD, MpostD, FpostDI, MpostDI, ApostD:(postD_in/12)*postExpH,
+                    zPostD:FpostD>0?MpostD/FpostD:postExpH/2}:{})};   // LPEW: rectangular post, edge-on (depth face)
+}
+// LPEW (2026-11-19, engineer): the sign wind directions. Fig. 29.3-1 Cases A/B/C act with the wind normal (or oblique) to the
+// face: toward 0° and 180°. Edge-on (90°/270°) the panel takes no wind and only the posts' own drag acts; for a round or square
+// post that is never more than the normal case (same drag, no panel), so it is not evaluated (before: 0°, 90°, 180°, 270° for
+// every post). A rectangular post adds the edge-on direction 90° (270° is its mirror): depth-face drag, y-axis bending.
+function lppSignDirs(sw){ return sw&&sw.edge ? [0,90,180] : [0,180]; }
+function lppSignEdgeLbl(sw){ return sw&&sw.edgeWeak===false ? 'edge-on (y axis)' : 'edge-on (weak axis)'; }
+// the note (Loading tab, Report): which directions a sign post is checked for, and why (engineer, 2026-11-19)
+function lppSignEdgeNote(sw){
+  return ['Edge-on wind (toward 90° / 270°):',`the Fig. 29.3-1 panel cases are for wind normal or oblique to the face; with the wind along the panel the panel carries no wind and only the posts' own drag acts. ${sw&&sw.edge
+    ?`For this rectangular post the drag is on its depth face and bends the post about its ${sw.edgeWeak===false?'y':'weak'} axis, so it is checked (${lppGoA('sgEdgeOn','step 3b')}): wind toward 90°, ${lppSignEdgeLbl(sw)}; 270° is its mirror image.`
+    :'For a round or square post that drag is never more than in the normal directions (the same drag, and no panel force), so only wind toward 0° and 180° is evaluated.'}`];
+}
+// Loading tab / Report, step 3b: the edge-on post drag of a rectangular post, per segment (LPEW)
+function lppSignEdgeStepHTML(inp,sw){
+  const g=t=>`\\[${t}\\]`, pj=inp.pProj>0?inp.pProj:0;
+  let H=`<div class="step-label" id="sgEdgeOn">3b · Edge-on wind — rectangular post, ${lppSignEdgeLbl(sw)} <span class="eq-ref">[ASCE 7-16 §29.4, Fig. 29.4-1; AISC 360-16 §F7, §H1.1]</span></div>`;
+  H+=`<div class="eq-why lpNL">${lpNL(`Wind toward 90° (along the panel): the panel takes no wind; each post takes its own drag on its depth face d = ${fmt(sw.postD_in,2)} in (width B = ${fmt(sw.postW_in,2)} in across the panel).`,[
+    ['Same segments, q_z and C_f','as the drag in the normal directions above, with d in place of B (as the depth face of a rectangular pole, wind toward 90°); C<sub>f</sub> = '+fmt(sw.cfPost,3)+' (Fig. 29.4-1, the value used for the post, D = the least dimension).'],
+    ['Axis:',`the drag bends the post about its y axis, S<sub>y</sub>, Z<sub>y</sub> (${sw.edgeWeak===false?'here the stronger axis, since d < B':'the weak axis'}); the post check, the anchors, the shaft and the embedment take it as their own load case (Post, Anchorage and Shaft tabs).`],
+    ['Ice:','the iced depth face d + 2t<sub>d</sub> at V<sub>ice</sub>.']])}</div>`;
+  let t=`<table class="tbl"><tr><th>Seg</th><th>z_i<span class="sym">(ft)</span></th><th>L_i<span class="sym">(ft)</span></th><th>K_z</th><th>q_zK_dG<span class="sym">(psf)</span></th><th>F_d,i<span class="sym">(lb)</span></th><th>F_d,i z_i<span class="sym">(lb·ft)</span></th>${inp.tIce>0?'<th>F_d,i,ice<span class="sym">(lb)</span></th>':''}</tr>`;
+  sw.postStrips.forEach((st,i)=>{ const q=0.00256*st.Kz*inp.Kzt*inp.Kd*inp.G*inp.V*inp.V;
+    t+=`<tr><td>${i+1}</td><td>${fmt(st.z,2)}</td><td>${fmt(st.L,2)}</td><td>${fmt(st.Kz,4)}</td><td>${fmt(q,2)}</td><td>${fmt(st.Fd,1)}</td><td>${fmt(st.Fd*st.z,0)}</td>${inp.tIce>0?`<td>${fmt(st.FId,1)}</td>`:''}</tr>`; });
+  t+=`<tr style="font-weight:700"><td>Σ</td><td></td><td>${fmt(sw.postExpH,2)}</td><td></td><td></td><td>${fmt(sw.FpostD,1)}</td><td>${fmt(sw.MpostD,0)}</td>${inp.tIce>0?`<td>${fmt(sw.FpostDI,1)}</td>`:''}</tr></table>`;
+  const s1=sw.postStrips[0], q1=s1?0.00256*s1.Kz*inp.Kzt*inp.Kd*inp.G*inp.V*inp.V:0;
+  if(s1) H+=g(`F_{d,i} = q_z(z_i)K_dG\\,C_f\\,\\tfrac{d}{12}\\,L_i\\quad\\text{(seg. 1)}:\\ ${fmt(q1,2)}(${fmt(sw.cfPost,3)})\\tfrac{${fmt(sw.postD_in,2)}}{12}(${fmt(s1.L,2)}) = ${fmt(s1.Fd,1)}\\ \\text{lb at } z_1 = ${fmt(s1.z,2)}\\ \\text{ft}${pj>0?'\\ (K_z\\text{ at } z + p)':''}`);
+  H+=t;
+  H+=g(`F_{drag,d} = \\sum F_{d,i} = ${fmt(sw.FpostD,1)}\\ \\text{lb}\\qquad M_{drag,d} = \\sum F_{d,i}z_i = ${fmt(sw.MpostD,0)}\\ \\text{lb}{\\cdot}\\text{ft}\\qquad z_{drag,d} = \\frac{${fmt(sw.MpostD,0)}}{${fmt(sw.FpostD,1)}} = ${fmt(sw.zPostD,2)}\\ \\text{ft}`);
+  if(inp.tIce>0) H+=g(`F_{drag,d,ice} = ${fmt(sw.FpostDI,1)}\\ \\text{lb}\\qquad M_{drag,d,ice} = ${fmt(sw.MpostDI,0)}\\ \\text{lb}{\\cdot}\\text{ft}`);
+  H+=`<p class="eq-result">Per post, nominal, wind toward 90°: V = F<sub>drag,d</sub> = ${fmt(sw.FpostD,0)} lb, M = M<sub>drag,d</sub> = ${fmt(sw.MpostD,0)} lb·ft (no panel share; for comparison, wind toward 0°: drag ${fmt(sw.Fpost,0)} lb plus the panel share). Factored with each combination's γ<sub>W</sub> (γ<sub>Wi</sub> on the iced values) in the ${lppGoA('sgComboTbl','per-post demand')} and checked about the y axis in the Post tab.</p>`;
+  return H;
 }
 
 // ---- fixture load components (per fixture, unfactored, by source) ----
@@ -2611,7 +2655,7 @@ manPart("p0","0. Read This First",[
  "<b>Monopost sign</b> \u2014 a single post supporting a solid sign panel, loaded by ASCE 7-16 Ch. 29 panel wind plus the post's own drag.",
  "<b>Two-post sign</b> \u2014 the same panel on two posts, each on its own shaft, with the eccentric wind cases resolved as an unequal force split rather than as torsion."
 ]},
-{p:"For every configuration it assembles the base demand (lateral P, overturning M, axial N) over all applicable ASCE 7 load combinations at four wind azimuths, then designs or checks five things:"},
+{p:"For every configuration it assembles the base demand (lateral P, overturning M, axial N) over all applicable ASCE 7 load combinations at four wind azimuths (a sign: wind toward 0° and 180°, normal to the panel, and for a rectangular post also edge-on, about its weak axis), then designs or checks five things:"},
 {tbl:{head:["What","Against","Load basis"],rows:[
  ["Embedment depth","IBC §1807.3 lateral bearing","Service (ASD)"],
  ["Soil bearing at the base","IBC Table 1806.2 allowable","Service (ASD)"],
@@ -2922,6 +2966,7 @@ manPart("p3","3. Output Reference",[
 {h3:"3.3.5 Sign load path (sign mode)"},
 {p:"Five steps from panel to groundline: geometry and lever arms; the dead-load axial path; the wind cases and their force split between posts; the shear and moment assembly per post and per case; and the governing factored demand for each post."},
 {note:"The step-4 table is tabulated at <b>wind toward 0°</b> only. Step 5 recomputes each post's share at that post's own governing azimuth, which is usually a different direction \u2014 the two posts of a symmetric sign govern at equal magnitude but opposite directions."},
+{note:"Wind directions: the Fig. 29.3-1 panel cases are for wind normal or oblique to the face, so they are evaluated with the wind toward 0° and 180°. With the wind along the panel (90° / 270°) the panel carries no wind and only the posts' own drag acts; for a round or square post that is never more than the normal case, so it is not evaluated. A rectangular post (depth along the panel normal) is checked edge-on as well (step 3b): the drag on its depth face bends it about its weak axis, and the post, anchor, shaft and embedment checks take it as one more load case."},
 
 {h3:"3.3.6 Load combination matrix"},
 {p:"Every combination evaluated, showing the resultant, its azimuth, P, M, h and N, with the governing LRFD and ASD rows marked. Eight combinations are evaluated for a light pole; signs use only the four non-ice combinations, since ice is not applied to panels."},
@@ -3453,13 +3498,13 @@ function signLoadPathHTML(inp,sw,pw,postGovList){
 
   // ---- 3 · wind cases → force split ----
   H+=step(`3 · Wind cases → post shears ${ref('ASCE 7-16 Fig. 29.3-1 + statics')}`);
-  H+=`<div class="eq-why lpNL">${lpNL('Wind fully loads the panel only blowing normal to it (front or back).',[['Edge-on directions','leave only the posts\' own drag, so the normal directions always govern.'],two?['Two posts:',`for a resultant F at distance x from the post-group centerline, statics about the spacing L<sub>p</sub> = ${fmt(Lp,2)} ft gives the split <b>share = F(½ ± x/L<sub>p</sub>)</b> — the eccentric Cases B/C load the windward post harder without inducing torsion.`]:['One post:','a single post takes the full resultant of every case; the eccentric Cases B/C also twist the monopost, T = F·|x| (checked in the post, anchors and shaft — see the torsion note above).']])}</div>`;   // LPNL
+  H+=`<div class="eq-why lpNL">${lpNL('Wind fully loads the panel only blowing normal to it (front or back): wind toward 0° and 180°, every Fig. 29.3-1 case (A, B and C where it applies).',[lppSignEdgeNote(sw),two?['Two posts:',`for a resultant F at distance x from the post-group centerline, statics about the spacing L<sub>p</sub> = ${fmt(Lp,2)} ft gives the split <b>share = F(½ ± x/L<sub>p</sub>)</b> — the eccentric Cases B/C load the windward post harder without inducing torsion.`]:['One post:','a single post takes the full resultant of every case; the eccentric Cases B/C also twist the monopost, T = F·|x| (checked in the post, anchors and shaft — see the torsion note above).']])}</div>`;   // LPNL
   // build case rows exactly as evalSignComboDir does (nominal, onFace=1, windSign=+1)
   const cases=[{name:'A',F:sw.F_A,x:0,z:zArm(sw.zA)}];
   cases.push({name:'B',F:sw.F_A,x:0.2*sw.B,z:zArm(sw.zA)});
   if(sw.caseC) cases.push({name:'C',F:sw.caseC.F,x:sw.caseC.e,z:zArm(sw.zc)});
   const Fdrag=sw.Fpost, Mdrag=sw.Mpost;
-  H+=`<div class="eq-why lpNL">${lpNL('Post drag on the exposed column.',[['Exposed length:','each post is itself a member in the wind stream, but only the length <b>below the panel</b> is exposed \u2014 the strip behind the sign is already accounted for in the panel force above, so applying wind over the full post height would double-count it.'],['Exposed height:',`the clearance, h<sub>exp</sub> = ${pj>0?`clr − p = ${fmt(sw.clr,2)} − ${fmt(pj,2)} = ${fmt(sw.postExpH,2)} ft (top of the shaft to the bottom of the panel; K<sub>z</sub> at z + p above grade)`:`${fmt(sw.clr,2)} ft (grade to bottom of panel)`}.`],['Segments:',`the exposed height is taken in ${sw.postStrips?sw.postStrips.length:1} equal segment(s) of at most 5 ft (q_z at each segment mid-height; K_z is constant below 15 ft), so q̄_z below is their area-average and z<sub>drag</sub> = ΣF_i z_i/ΣF_i = ${fmt(sw.zPost,2)} ft:`],['Width:','w<sub>post</sub> is the mean post width (B for a square or rectangular post) for every wind direction; the depth of a rectangular post is not used for the edge-on directions.']])}</div>`;   // LPNL
+  H+=`<div class="eq-why lpNL">${lpNL('Post drag on the exposed column.',[['Exposed length:','each post is itself a member in the wind stream, but only the length <b>below the panel</b> is exposed \u2014 the strip behind the sign is already accounted for in the panel force above, so applying wind over the full post height would double-count it.'],['Exposed height:',`the clearance, h<sub>exp</sub> = ${pj>0?`clr − p = ${fmt(sw.clr,2)} − ${fmt(pj,2)} = ${fmt(sw.postExpH,2)} ft (top of the shaft to the bottom of the panel; K<sub>z</sub> at z + p above grade)`:`${fmt(sw.clr,2)} ft (grade to bottom of panel)`}.`],['Segments:',`the exposed height is taken in ${sw.postStrips?sw.postStrips.length:1} equal segment(s) of at most 5 ft (q_z at each segment mid-height; K_z is constant below 15 ft), so q̄_z below is their area-average and z<sub>drag</sub> = ΣF_i z_i/ΣF_i = ${fmt(sw.zPost,2)} ft:`],['Width:',sw.edge?`w<sub>post</sub> is the mean post width B (the face across the panel) for wind toward 0° / 180°; edge-on the depth face d is exposed (${lppGoA('sgEdgeOn','step 3b')}).`:'w<sub>post</sub> is the mean post width (B for a square post).']])}</div>`;   // LPNL; LPEW
   H+=g(`\\overline{q_{z}K_dG} = \\frac{1}{h_{exp}}\\sum_i 0.00256\\,K_z(z_i) K_{zt} K_e V^2\\cdot K_d\\,G\\,L_i = ${fmt(sw.qzPost,1)}\\ \\text{psf}\\quad(q_z(clr/2) = ${fmt(sw.qzMidPost!==undefined?sw.qzMidPost:sw.qzPost,1)})\\qquad A_{exp} = w_{post}\\,h_{exp} = \\tfrac{${fmt(sw.postW_in,2)}}{12}(${fmt(sw.postExpH,2)}) = ${fmt(sw.Apost,2)}\\ \\text{ft}^2`);
   H+=g(`F_{drag,post} = \\bar q_z\\,C_f\\,A_{exp} = ${fmt(sw.qzPost,1)}(${fmt(sw.cfPost,2)})(${fmt(sw.Apost,2)}) = ${fmt(Fdrag,0)}\\ \\text{lb (per post, at } z_{drag}=${fmt(sw.zPost,2)}\\text{ ft)}`);
   cases.forEach(cs=>{
@@ -3470,6 +3515,8 @@ function signLoadPathHTML(inp,sw,pw,postGovList){
       H+=g(`\\text{Case ${cs.name}: } F=${fmt(cs.F,0)}\\ \\text{lb} \\Rightarrow \\text{single post takes } ${fmt(sh[0],0)}\\ \\text{lb}${cs.x?`,\\ T = F|x| = ${fmt(cs.F,0)}(${fmt(Math.abs(cs.x),2)}) = ${fmt(Math.abs(cs.F*cs.x),0)}\\ \\text{lb}{\\cdot}\\text{ft}`:''}`);
     }
   });
+
+  if(sw.edge) H+=lppSignEdgeStepHTML(inp,sw);   // LPEW: rectangular post, edge-on (step 3b)
 
   // ---- 4 · per-post V, M assembly (nominal) then factored governing ----
   H+=step(`4 · Shear &amp; moment assembly per post — wind toward 0° (nominal)`);
@@ -3492,6 +3539,14 @@ function signLoadPathHTML(inp,sw,pw,postGovList){
     const gl=pg.gLRFD, cf=COMBOS[gl.key]||COMBOS.L1;
     const fW=cf.W, fD=cf.D;
     if(cf.Wi>0||cf.Di>0){ H+=`<p class="eq-why" style="margin-top:10px"><b>Post ${p+1}</b> — governs under the ice combination <b>${gl.name}</b>, wind toward ${fmt(gl.phi||0,0)}°, Case ${gl.case}: V<sub>u</sub> = ${fmt(gl.P,0)} lb, M<sub>u</sub> = ${fmt(gl.M,0)} lb·ft, N<sub>u</sub> = ${fmt(gl.axial,0)} lb (wind on the iced panel and post and the ice weight, worked in the sign wind section).</p>`; return; }
+    if(gl.edge && sw.edge){   // LPEW: the edge-on record of a rectangular post governs the moment of this post
+      H+=`<p class="eq-why" style="margin-top:10px"><b>Post ${p+1}</b> \u2014 governs under <b>${gl.name}</b>, wind toward <b>${fmt(gl.phi||90,0)}\u00b0</b>: the panel takes no wind; the post drag acts on the depth face (${lppGoA('sgEdgeOn','step 3b')}) and bends the post about its y axis.</p>`;
+      H+=g(`V_u = ${fmt(fW,1)}\\,F_{drag,d}${cf.Wi?` + ${fmt(cf.Wi,1)}\\,F_{drag,d,ice}`:''} = ${fmt(fW,1)}(${fmt(sw.FpostD,0)})${cf.Wi?` + ${fmt(cf.Wi,1)}(${fmt(sw.FpostDI,0)})`:''} = ${fmt(gl.P,0)}\\ \\text{lb}`);
+      H+=g(`M_u = ${fmt(fW,1)}\\,M_{drag,d}${cf.Wi?` + ${fmt(cf.Wi,1)}\\,M_{drag,d,ice}`:''} = ${fmt(fW,1)}(${fmt(sw.MpostD,0)})${cf.Wi?` + ${fmt(cf.Wi,1)}(${fmt(sw.MpostDI,0)})`:''} = ${fmt(gl.M,0)}\\ \\text{lb}{\\cdot}\\text{ft}\\qquad h=\\frac{M_u}{V_u}=${fmt(gl.h,2)}\\ \\text{ft}`);
+      H+=g(`N_u = ${fmt(fD,1)}\\,(${fmt(Wp/nP,0)}+${fmt(selfW,0)}+${fmt(DLp,0)}) = ${fmt(gl.axial,0)}\\ \\text{lb}`);
+      if(gl.B2) H+=`<p class="eq-why">P-Δ (AISC 360-16 App. 8, drift with I<sub>y</sub>): the anchors and the shaft use B₂·M_u = ${fmt(gl.B2,3)} × ${fmt(gl.M,0)} = ${fmt(gl.B2*gl.M,0)} lb·ft.</p>`;
+      return;
+    }
     // rebuild this post's governing case at its own azimuth, exactly as evalSignComboDir does
     const phi=gl.phi||0;
     const faceFactor=Math.max(0,Math.cos(phi*RAD)), faceBack=Math.max(0,-Math.cos(phi*RAD));
@@ -3542,21 +3597,25 @@ function evalSignComboDir(key,inp,pw,sw,phi){
   const faceFactorBack=Math.max(0, -Math.cos(phi*RAD)); // wind on the back face (phi=180)
   const onFace=faceFactor+faceFactorBack;             // 1 when normal (front or back), 0 edge-on
   const windSign=Math.cos(phi*RAD)>=0?1:-1;           // which edge is windward
+  // LPEW (2026-11-19): a rectangular post edge-on (90°/270°) takes the drag on its depth face (sw.FpostD), bending about y; the
+  // panel force is exactly 0 there (cos 90° is 6e-17 in floating point, which would leave a 1e-13 lb share)
+  const edge=!!sw.edge && onFace<1e-9;
+  const onF=edge?0:onFace;
 
   // choose governing sign wind case per post
   // Case A: centered. Case B: e=0.2B. Case C: e = sw.caseC.e (net). Force magnitudes:
   const cases=[];
-  cases.push({name:'A', F:sw.F_A*onFace, FI:(sw.F_Ai||0)*onFace, x:0});
+  cases.push({name:'A', F:sw.F_A*onF, FI:(sw.F_Ai||0)*onF, x:0});
   // Cases B and C apply to every sign (ASCE 7-16 Fig. 29.3-1). On two posts their eccentricity is
   // resolved by statics into an unequal force split; on a MONOPOST it twists the post: torsion
   // T = F·|x| about the post axis (added 2026-10-12; previously only Case A was used on a monopost).
-  cases.push({name:'B', F:sw.F_A*onFace, FI:(sw.F_Ai||0)*onFace, x:0.2*sw.B*windSign});
-  if(sw.caseC){ cases.push({name:'C', F:sw.caseC.F*onFace, FI:(sw.caseC.FI||0)*onFace, x:sw.caseC.e*windSign}); }
+  cases.push({name:'B', F:sw.F_A*onF, FI:(sw.F_Ai||0)*onF, x:0.2*sw.B*windSign});
+  if(sw.caseC){ cases.push({name:'C', F:sw.caseC.F*onF, FI:(sw.caseC.FI||0)*onF, x:sw.caseC.e*windSign}); }
   // post self-wind (drag on the EXPOSED post below the panel), acts along wind dir, per post.
   // Uses the clearance-height drag from signWind (sw.Fpost), NOT the full-height mast wind,
   // so the strip behind the panel is not double-counted.
-  const postWindEach = f.W*sw.Fpost + f.Wi*(sw.FpostI||0);   // lb (per post, nominal*factor; + wind on the iced post, 2026-11-01)
-  const postWindMEach= f.W*sw.Mpost + f.Wi*(sw.MpostI||0);   // lb-ft
+  const postWindEach = edge ? f.W*sw.FpostD + f.Wi*(sw.FpostDI||0) : f.W*sw.Fpost + f.Wi*(sw.FpostI||0);   // lb (per post, nominal*factor; + wind on the iced post, 2026-11-01)
+  const postWindMEach= edge ? f.W*sw.MpostD + f.Wi*(sw.MpostDI||0) : f.W*sw.Mpost + f.Wi*(sw.MpostI||0);   // lb-ft
 
   // sign dead load split evenly; each post self-weight added
   const signWt=inp.signWt;                            // lb, total panel weight
@@ -3577,7 +3636,7 @@ function evalSignComboDir(key,inp,pw,sw,phi){
       const axial=f.D*(perPostDeadSign+postSelfW+(inp.DL||0)) + f.Di*((sw.WiPanel||0)/nPost + (sw.WiPost||0));   // + misc. DL (2026-10-12); + ice (2026-11-01)
       const M=Mwind, P=Vwind;
       const T=nPost===1? Math.abs(Fp*cs.x) : 0;        // lb-ft, monopost torsion
-      const rec={case:cs.name, Fp, P, M, h:P>0?M/P:0, axial, zarm, T};
+      const rec={case:edge?'edge-on':cs.name, Fp, P, M, h:P>0?M/P:0, axial, zarm, T, ...(edge?{edge:true}:{})};   // LPEW: edge-on, no panel case
       if(!worst || M>worst.M) worst=rec;
       if(!worstT || T>worstT.T || (T===worstT.T && M>worstT.M)) worstT=rec;
     });
@@ -3591,20 +3650,22 @@ function evalSignComboDir(key,inp,pw,sw,phi){
           h:posts[0]?posts[0].h:0};
 }
 
-// Across four directions; keep, PER POST, the worst-moment direction/case.
+// Across the sign wind directions (lppSignDirs: 0° and 180°; a rectangular post also 90°, edge-on); keep, PER POST, the
+// worst-moment direction/case (postGov). LPEW (2026-11-19): postGovN = the same over the panel-normal directions only, postEdge =
+// the edge-on record of a rectangular post (its own axis, so the post, the anchors and the shaft check it as well, not only when
+// its moment is the larger). Before: WIND_DIRS (0°, 90°, 180°, 270°) for every post.
 function evalSignCombo(key,inp,pw,sw){
-  const all=WIND_DIRS.map(phi=>evalSignComboDir(key,inp,pw,sw,phi));
+  const all=lppSignDirs(sw).map(phi=>evalSignComboDir(key,inp,pw,sw,phi));
   const nPost=inp.signPosts;
   // per post, find the direction giving that post its worst moment
-  const postGov=[];
-  for(let p=0;p<nPost;p++){
-    let best=null;
-    all.forEach(dr=>{ const pd=dr.posts[p]; if(!best||pd.M>best.M) best={...pd,phi:dr.phi}; });
-    postGov.push(best);
-  }
+  const best=dirs=>{ const out=[];
+    for(let p=0;p<nPost;p++){ let b=null; dirs.forEach(dr=>{ const pd=dr.posts[p]; if(!b||pd.M>b.M) b={...pd,phi:dr.phi}; }); out.push(b); }
+    return out; };
+  const postGov=best(all);
+  const nrm=all.filter(dr=>!(dr.onFace<1e-9)), edg=all.filter(dr=>dr.onFace<1e-9);
   // group governing (largest of any post) for the combo matrix
   const gov=all.reduce((a,x)=>x.M>a.M?x:a);
-  return {...gov, dirs:all, postGov};
+  return {...gov, dirs:all, postGov, postGovN:edg.length?best(nrm):postGov, ...(edg.length?{postEdge:best(edg)}:{})};
 }
 
 // ================= POLE / POST COMBINED STRESS — AISC 360-16 (LRFD) =================
@@ -4305,8 +4366,8 @@ function lppGradePost(x,key,sp,B){
   r.phi=x.phi; r.Mang=x.phi||0; return r;
 }
 // sign: one post's grade demand of a combination r (evalSignCombo), the direction with the largest M_F
-function lppGradeBestPost(r,pi,sp,B){
-  return (r.dirs||[]).map(dr=>lppGradePost(Object.assign({}, dr.posts[pi], {phi:dr.phi, name:r.name, key:r.key}), r.key, sp, B)).reduce((a,x)=>x.M>a.M?x:a);
+function lppGradeBestPost(r,pi,sp,B,dirs){   // LPEW: dirs = a subset of r.dirs (the normal or the edge-on directions)
+  return (dirs||r.dirs||[]).map(dr=>lppGradePost(Object.assign({}, dr.posts[pi], {phi:dr.phi, name:r.name, key:r.key}), r.key, sp, B)).reduce((a,x)=>x.M>a.M?x:a);
 }
 // worked steps (Shaft tab and report): the projection's wind and weight, and the grade demands of the embedment (ASD) and the shaft
 // (LRFD) combinations. a, l: lppGradeDir results; sign: scalar form along the wind.
@@ -4418,10 +4479,18 @@ function calcSign(inp){
   const postGovList=[];
   for(let p=0;p<nPost;p++){
     // gather this post's demand from every combo (each combo already picked worst direction per post)
-    const asdCombos=allCombos.filter(r=>r.fam==='ASD').map(r=>({...r.postGov[p], name:r.name, key:r.key}));
-    const lrfdCombos=allCombos.filter(r=>r.fam==='LRFD').map(r=>({...r.postGov[p], name:r.name, key:r.key}));
-    const gASD=asdCombos.reduce((a,x)=>x.M>a.M?x:a);
-    const gLRFD=lrfdCombos.reduce((a,x)=>x.M>a.M?x:a);
+    // LPEW (2026-11-19): the panel-normal records (postGovN: 0° / 180°; for a round or square post the same as postGov) and, for a
+    // rectangular post, the edge-on records (postEdge, 90°, named '…, edge-on (weak axis)'). Each is checked on its own axis.
+    const eSfx=', '+lppSignEdgeLbl(sw);
+    const asdCombos=allCombos.filter(r=>r.fam==='ASD').map(r=>({...r.postGovN[p], name:r.name, key:r.key}));
+    const lrfdCombos=allCombos.filter(r=>r.fam==='LRFD').map(r=>({...r.postGovN[p], name:r.name, key:r.key}));
+    const asdE=allCombos.filter(r=>r.fam==='ASD'&&r.postEdge).map(r=>({...r.postEdge[p], name:r.name+eSfx, key:r.key}));
+    const lrfdE=allCombos.filter(r=>r.fam==='LRFD'&&r.postEdge).map(r=>({...r.postEdge[p], name:r.name+eSfx, key:r.key}));
+    const maxM=L=>L.reduce((a,x)=>x.M>a.M?x:a);
+    // embedment (IBC §1807.3, P and h = M/P): of the normal and the edge-on largest-M records, the one with the larger d governs
+    const embPick=(a,b)=>{ if(!b) return a; const da=solveEmbed(a.P,a.M,a.h,inp).d, db=solveEmbed(b.P,b.M,b.h,inp).d; return db>da?b:a; };
+    const gASD=embPick(maxM(asdCombos), asdE.length?maxM(asdE):null);
+    const gLRFD=maxM(lrfdCombos.concat(lrfdE));
     postGovList.push({gASD,gLRFD});
     // synthetic gov objects for the stress engine (needs phi, factors, per, poleWind)
     const govLRFDfull={...gLRFD, factors:COMBOS[gLRFD.key||'L1']||COMBOS.L1,
@@ -4430,40 +4499,53 @@ function calcSign(inp){
     // post stress for EVERY LRFD combination (max-moment case, and on a monopost also the
     // max-torsion Case B/C with its own M and V); the largest ratio governs. Each combination's
     // P-Δ factor B2 (max-moment case) amplifies its LRFD moment for the anchors and the shaft.
-    const psList=[];
+    // LPEW: a rectangular post also every edge-on record (y-axis bending, its own B2); the largest ratio of all governs.
+    const psList=[], psE=[];
     lrfdCombos.forEach(x=>{
       const ps=signPostStress(inp,poleSeg,pw,x,sw); psList.push(ps); x.B2=ps.B2;
       if(x.tCase && x.tCase.T>0 && x.tCase.case!==x.case){
         psList.push(signPostStress(inp,poleSeg,pw,Object.assign({},x.tCase,{key:x.key,name:x.name,phi:x.phi}),sw));
       }
     });
-    const pstress=psList.reduce((a,x)=>(isNaN(x.govRow.ratio)||x.govRow.ratio>a.govRow.ratio)?x:a);
+    lrfdE.forEach(x=>{ const ps=signPostStress(inp,poleSeg,pw,x,sw); psE.push(ps); x.B2=ps.B2; });
+    const pickPs=L=>L.reduce((a,x)=>(isNaN(x.govRow.ratio)||x.govRow.ratio>a.govRow.ratio)?x:a);
+    const pstressN=pickPs(psList), pstressE=psE.length?pickPs(psE):null;
+    const pstress=pstressE?pickPs([pstressN,pstressE]):pstressN;
     // LPPJ (2026-11-03): shaft projection p > 0 → embedment, bearing and shaft at grade (each combination at the direction with the
     // largest M_F, this post; the LRFD ones with the combination's B₂ on the post base moment); the anchors keep the post-base values
+    // LPEW: the normal directions and (rectangular post) the edge-on direction separately, each with its own B₂
     const sp=lppShaftProj(inp);
-    const asdG=sp? allCombos.filter(r=>r.fam==='ASD').map(r=>lppGradeBestPost(r,p,sp,1)) : null;
-    const lrfdG=sp? allCombos.filter(r=>r.fam==='LRFD').map(r=>{ const x=lrfdCombos.find(y=>y.key===r.key); return lppGradeBestPost(r,p,sp,(x&&x.B2)||1); }) : null;
-    const asdF=sp? asdG.reduce((a,x)=>x.M>a.M?x:a) : gASD, lrfdF=sp? lrfdG.reduce((a,x)=>x.M>a.M?x:a) : null;
+    const nDirs=r=>(r.dirs||[]).filter(dr=>!(dr.onFace<1e-9)), eDirs=r=>(r.dirs||[]).filter(dr=>dr.onFace<1e-9);
+    const asdG=sp? allCombos.filter(r=>r.fam==='ASD').map(r=>lppGradeBestPost(r,p,sp,1,nDirs(r))) : null;
+    const lrfdG=sp? allCombos.filter(r=>r.fam==='LRFD').map(r=>{ const x=lrfdCombos.find(y=>y.key===r.key); return lppGradeBestPost(r,p,sp,(x&&x.B2)||1,nDirs(r)); }) : null;
+    const asdGE=(sp&&asdE.length)? allCombos.filter(r=>r.fam==='ASD').map(r=>Object.assign(lppGradeBestPost(r,p,sp,1,eDirs(r)),{name:r.name+eSfx})) : [];
+    const lrfdGE=(sp&&lrfdE.length)? allCombos.filter(r=>r.fam==='LRFD').map(r=>{ const x=lrfdE.find(y=>y.key===r.key); return Object.assign(lppGradeBestPost(r,p,sp,(x&&x.B2)||1,eDirs(r)),{name:r.name+eSfx}); }) : [];
+    const asdF=sp? embPick(maxM(asdG), asdGE.length?maxM(asdGE):null) : gASD, lrfdF=sp? maxM(lrfdG.concat(lrfdGE)) : null;
+    const lrfdAllRecs=lrfdCombos.concat(lrfdE);
     const found=designFoundationStack(inp,
       {P:asdF.P,M:asdF.M,h:asdF.h,axial:asdF.axial,name:asdF.name},
       sp? {P:lrfdF.P,M:lrfdF.M,axial:lrfdF.axial,name:lrfdF.name} : {P:gLRFD.P,M:gLRFD.M*(gLRFD.B2||1),axial:gLRFD.axial,name:gLRFD.name},
       gLRFD.phi||0,
-      lrfdCombos.map(x=>({name:x.name, M:x.M*(x.B2||1), M1:x.M, B2:x.B2||1, axial:x.axial, P:x.P, Mang:x.phi||0, T:x.Tmax||0})),
+      lrfdAllRecs.map(x=>({name:x.name, M:x.M*(x.B2||1), M1:x.M, B2:x.B2||1, axial:x.axial, P:x.P, Mang:x.phi||0, T:x.Tmax||0})),
       (sp?asdG:asdCombos).map(x=>({name:x.name, axial:x.axial})),
-      sp? lrfdG.map(x=>({name:x.name, M:x.M, P:x.P, axial:x.axial})) : null);
-    if(sp) found.proj={sp, asd:asdF, lrfd:lrfdG.find(x=>x.name===found.shaftCombo)||lrfdF, sign:true};
+      sp? lrfdG.concat(lrfdGE).map(x=>({name:x.name, M:x.M, P:x.P, axial:x.axial})) : null);
+    if(sp) found.proj={sp, asd:asdF, lrfd:lrfdG.concat(lrfdGE).find(x=>x.name===found.shaftCombo)||lrfdF, sign:true};
     // natural frequency (Rayleigh): post segments + this post's share of the panel at the panel centroid
-    const b2r=lrfdCombos.map(x=>x.B2||1);
+    const b2r=lrfdAllRecs.map(x=>x.B2||1);
     const b2=Object.assign({}, {name:gLRFD.name, B2:gLRFD.B2||1, B2min:Math.min(...b2r), B2max:Math.max(...b2r)});
-    postDesigns.push(Object.assign({p:p+1,gASD,gLRFD,found,pstress,nat,b2,lrfdB2:Object.fromEntries(lrfdCombos.map(x=>[x.name,x.B2||1]))}, sp?{gASDF:asdF}:{}));
+    postDesigns.push(Object.assign({p:p+1,gASD,gLRFD,found,pstress,nat,b2,lrfdB2:Object.fromEntries(lrfdAllRecs.map(x=>[x.name,x.B2||1]))}, sp?{gASDF:asdF}:{},
+      pstressE?{pstressN, pstressE, edgeLbl:lppSignEdgeLbl(sw), eSfx, lrfdE, asdE}:{}));
   }
   window.__signPostGov=postGovList;
   // anchorGroup hand-off (HANDOFF.md §4.11): per post, every LRFD combination at each wind direction; the post moment acts along the
   // wind (panel normal ±x), × that combination's B₂ for the post; monopost torsion T = |F·x| (taken positive)
+  // LPEW (2026-11-19): the directions of lppSignDirs (0°, 180°; a rectangular post also 90° edge-on, with its edge-on B₂); before:
+  // 0°, 90°, 180°, 270° for every post
   LPP_ANCH={mode:'sign', groups:postDesigns.map((pd,pi)=>({id:'post'+(pi+1), label:'Post '+(pi+1), combos:[].concat(...allCombos.filter(r=>r.fam==='LRFD').map(r=>{
       const b2=(pd.lrfdB2&&pd.lrfdB2[r.name])||1;   // the B₂ of this post's combination (signPostStress), as the anchors use
-      return (r.dirs||[]).map(dr=>{ const pp=dr.posts[pi], c=Math.cos(dr.phi*RAD), s=Math.sin(dr.phi*RAD);
-        return {name:r.name+', wind '+fmt(dr.phi,0)+'°, Case '+pp.case, P:pp.axial, Vx:pp.P*c, Vy:pp.P*s, Mx:b2*pp.M*c, My:b2*pp.M*s, T:pp.T||0, B2:b2}; }); }))}))};
+      const b2e=(pd.lrfdB2&&pd.eSfx&&pd.lrfdB2[r.name+pd.eSfx])||1;
+      return (r.dirs||[]).map(dr=>{ const pp=dr.posts[pi], c=Math.cos(dr.phi*RAD), s=Math.sin(dr.phi*RAD), B=pp.edge?b2e:b2;
+        return {name:r.name+', wind '+fmt(dr.phi,0)+'°, '+(pp.edge?lppSignEdgeLbl(sw):'Case '+pp.case), P:pp.axial, Vx:pp.P*c, Vy:pp.P*s, Mx:B*pp.M*c, My:B*pp.M*s, T:pp.T||0, B2:B}; }); }))}))};
   renderSignLoadPath(inp,sw,pw,postGovList);
   lppBmbRenderSign(inp,sw,postGovList);   // LPBM (2026-11-19): base reactions and base moment build-up per post (display only)
   renderSummary({inp, mode:'sign',
@@ -4490,6 +4572,11 @@ function signPostStress(inp,poleSeg,pw,gLRFD,sw){
   const Tu=gLRFD.T||0;                     // factored torsion on the post (lb-ft), monopost only
   const Npanel=f.D*(inp.signWt||0)/(inp.signPosts||1) + f.Di*(sw.WiPanel||0)/(inp.signPosts||1);   // this post's share of the panel dead load (+ panel ice, 2026-11-01)
   const wIcePost=(sw.WiPost||0)/Math.max(inp.H,1e-9);   // lb/ft of ice on the post (2026-11-01)
+  // LPEW (2026-11-19, engineer): the edge-on record of a rectangular post (gLRFD.edge): no panel share, the drag on the depth face
+  // (strips Fd / FId of signWind), bending about the y axis (S_y, Z_y; the weak axis when the depth exceeds the width B), the P-Δ
+  // drift with I_y (poleB2, My). The axial, the capacity in compression and the rest of the check are those of the normal case.
+  const edge=!!(gLRFD.edge && sw.edge);
+  const sF=edge?(st=>f.W*(st.Fd||0) + f.Wi*(st.FId||0)):(st=>f.W*st.F + f.Wi*(st.FI||0));
   // first-order moment / shear at height z
   const secM=(z)=>{
     let M=0,V=0;
@@ -4498,7 +4585,7 @@ function signPostStress(inp,poleSeg,pw,gLRFD,sw){
     // above the panel bottom the post is shielded and the panel force already covers that wind.
     // 2026-10-12: the factored drag strips of signWind (q_z varies with height) replace the uniform w.
     if(sw.postStrips){
-      sw.postStrips.forEach(st=>{ const q=lppSegPart(st,z); if(q){ const Fs=(f.W*st.F + f.Wi*(st.FI||0))*q.k; V+=Fs; M+=Fs*q.arm; } });   // LPSG: segment part above the cut
+      sw.postStrips.forEach(st=>{ const q=lppSegPart(st,z); if(q){ const Fs=sF(st)*q.k; V+=Fs; M+=Fs*q.arm; } });   // LPSG: segment part above the cut (LPEW: depth face edge-on)
     } else if(z < clrH){
       const hAbove=clrH - z;            // exposed length above this section, up to the panel bottom
       const Hm=wMast*hAbove;            // shear from the exposed strip above this cut
@@ -4506,7 +4593,7 @@ function signPostStress(inp,poleSeg,pw,gLRFD,sw){
     }
     return {M,V};
   };
-  const p2=poleB2(inp, z=>({Mx:secM(z).M, My:0}), f.D*(poleSeg.totalW+(inp.DL||0))+Npanel+f.Di*wIcePost*inp.H);
+  const p2=poleB2(inp, z=>{ const m=secM(z).M; return edge?{Mx:0, My:m}:{Mx:m, My:0}; }, f.D*(poleSeg.totalW+(inp.DL||0))+Npanel+f.Di*wIcePost*inp.H);
   const B2=p2.B2;
   const rows=poleSeg.segs.concat([poleBaseSection(poleSeg,inp)]).map(s=>{
     const z=s.zMid;
@@ -4517,8 +4604,9 @@ function signPostStress(inp,poleSeg,pw,gLRFD,sw){
     const Pr=N/1000;                                  // kip
     const Mr=M*12/1000;                               // kip-in (single axis: strong for the panel face)
     // wind on the sign acts on the panel face → bending about the axis perpendicular to the face.
-    // Use the strong axis (Sx/Zx) as the face-normal bending axis.
-    const mn=hssMn(shape, s.Sx, s.Zx, s.Dt_ratio, Fy, E);
+    // Use the strong axis (Sx/Zx) as the face-normal bending axis. LPEW: edge-on, the y axis (Sy/Zy).
+    const mnx=hssMn(shape, s.Sx, s.Zx, s.Dt_ratio, Fy, E), mny=hssMn(shape, s.Sy, s.Zy, s.Dt_ratio, Fy, E);
+    const mn=edge?mny:mnx;
     const Mc=phib*mn.Mn;                              // kip-in
     const rr=Math.min(s.rx,s.ry);
     const pn=hssPn(s.A_in2, rr, inp.H, Kfac, Fy, E);
@@ -4535,17 +4623,18 @@ function signPostStress(inp,poleSeg,pw,gLRFD,sw){
       tv={...ts, Tr, Vr, trTc:ts.Tc>0?Tr/ts.Tc:Infinity, applies:Tr>0.2*ts.Tc};
       if(tv.applies){ ratio=(prPc+mratio)+Math.pow(Vr/ts.Vc+Tr/ts.Tc,2); form='H3-6'; }
     }
-    const fa=Pr/s.A_in2, fb=Mr/s.Sx;
+    const fa=Pr/s.A_in2, fb=Mr/(edge?s.Sy:s.Sx);
     return {i:s.i,z,Do:s.Do,tw:s.tw,B:s.B,Ht:s.Ht,Dt:s.Dt_ratio,slendKind:s.slendKind,A:s.A_in2,Sx:s.Sx,Sy:s.Sy,Zx:s.Zx,Zy:s.Zy,
-            cls:mn.cls,sub:mn.sub,Pr,Mrx:Mr,Mry:0,M,M1,B2,N,Vsh:V,tv,
+            cls:mn.cls,sub:mn.sub,Pr,Mrx:edge?0:Mr,Mry:edge?Mr:0,M,M1,B2,N,Vsh:V,tv,
             mnx:mn,Mcx:Mc,pn,Pc,prPc,mterm:mratio,fa,fb,
-            Z:s.Sx,Fcr:mn.Fcr,Fb:phib*mn.Fcr,Fa:phic*Fy,ratio,form,ok:ratio<=1.0};
+            ...(edge?{mny, Mcy:Mc, mnxS:mnx, McxS:phib*mnx.Mn}:{}),   // LPEW: edge-on, mnx / Mcx hold the y-axis values (the axis checked)
+            Z:edge?s.Sy:s.Sx,Fcr:mn.Fcr,Fb:phib*mn.Fcr,Fa:phic*Fy,ratio,form,ok:ratio<=1.0};
   });
   const fcr0=hssFcr(shape,poleSeg.segs[0].Dt_ratio,Fy,E);
   // prismatic post → base governs; rows[last] is now the BASE section itself (z = 0)
   const govRow=rows[rows.length-1];
   return {rows,govRow,lam_p:fcr0.lp,lam_r:fcr0.lr,E,Fy,shape,prismatic:true,Kfac,phib,phic,lim:hssLimitFlags(rows,shape,E,Fy),
-          B2, p2, comboName:gLRFD.name, phi:gLRFD.phi, tCase:gLRFD.case, Tu};
+          B2, p2, comboName:gLRFD.name, phi:gLRFD.phi, tCase:edge?undefined:gLRFD.case, Tu, ...(edge?{edge:true, axis:'y'}:{})};
 }
 
 // ================= SIGN RENDER =================
@@ -4561,7 +4650,11 @@ function renderSign(inp,sw,pw,allCombos,postDesigns,poleSeg){
   // per-post combination matrix (non-ice combos, enveloped over cases & directions)
   if($('sgComboTbl')){
     let cm=`<tr><th>Family</th><th style="text-align:left">Combination</th>`;
-    for(let p=0;p<nPost;p++) cm+=`<th>P${nPost>1?p+1:''} lateral<span class="sym">P (lb)</span></th><th>P${nPost>1?p+1:''} moment<span class="sym">M (lb·ft)</span></th><th>P${nPost>1?p+1:''} h<span class="sym">(ft)</span></th>`;
+    // LPEW (2026-11-19): the panel-normal records (0° / 180°, postGovN; = postGov for a round or square post) and, for a
+    // rectangular post, the edge-on record of each post in its own columns
+    const ed=!!sw.edge, nd=ed?' (0° / 180°)':'', el=lppSignEdgeLbl(sw);
+    for(let p=0;p<nPost;p++){ cm+=`<th>P${nPost>1?p+1:''} lateral${nd}<span class="sym">P (lb)</span></th><th>P${nPost>1?p+1:''} moment${nd}<span class="sym">M (lb·ft)</span></th><th>P${nPost>1?p+1:''} h<span class="sym">(ft)</span></th>`;
+      if(ed) cm+=`<th>P${nPost>1?p+1:''} ${el}, 90°<span class="sym">P (lb)</span></th><th>P${nPost>1?p+1:''} ${el}, 90°<span class="sym">M (lb·ft)</span></th>`; }
     cm+=`</tr>`;
     // find governing combo per family per post (largest M on any post)
     const govKeys={};
@@ -4575,8 +4668,10 @@ function renderSign(inp,sw,pw,allCombos,postDesigns,poleSeg){
     });
     allCombos.forEach(r=>{
       const gf=govKeys[r.key];
-      cm+=`<tr${gf?' style="background:var(--accent-wash);font-weight:700"':''}><td>${r.fam}</td><td style="text-align:left">${r.name}${gf?' ◄ governs '+gf:''}</td>`;
-      r.postGov.forEach(pg=>{cm+=`<td>${fmt(pg.P,0)}</td><td>${fmt(pg.M,0)}</td><td>${fmt(pg.h,2)}</td>`;});
+      const gEdge=gf&&ed&&r.postGov.some(pg=>pg.edge&&pg.M>=Math.max(...r.postGov.map(x=>x.M)));
+      cm+=`<tr${gf?' style="background:var(--accent-wash);font-weight:700"':''}><td>${r.fam}</td><td style="text-align:left">${r.name}${gf?' ◄ governs '+gf+(gEdge?', '+el:''):''}</td>`;
+      r.postGovN.forEach((pg,p)=>{cm+=`<td>${fmt(pg.P,0)}</td><td>${fmt(pg.M,0)}</td><td>${fmt(pg.h,2)}</td>`;
+        if(ed){ const pe=r.postEdge[p]; cm+=`<td>${fmt(pe.P,0)}</td><td>${fmt(pe.M,0)}</td>`; } });
       cm+=`</tr>`;
     });
     $('sgComboTbl').innerHTML=cm;
@@ -4611,7 +4706,7 @@ function renderSign(inp,sw,pw,allCombos,postDesigns,poleSeg){
   // ---- per-post foundation cards ----
   $('sgPostIntro').innerHTML = nPost===1
     ? `Single post. The sign wind (Cases A, B and C; B/C also cause torsion) plus the post's own drag drive one drilled-shaft foundation.`
-    : lpNL(`Two posts, spacing ${fmt(inp.signSpacing,1)} ft, panel centered.`,[['Design:','each post is designed independently for the worst force it sees across all cases and all four wind directions.'],['Cases B and C','bias load onto the windward post; because wind reverses, each post becomes the windward one under some direction, so a symmetric layout yields two equal designs — the eccentric cases still raise the per-post demand above a naïve 50/50 split.']]);   // LPNL
+    : lpNL(`Two posts, spacing ${fmt(inp.signSpacing,1)} ft, panel centered.`,[['Design:',`each post is designed independently for the worst force it sees across all cases and the wind directions 0° and 180°${sw.edge?' and edge-on (90°, '+lppSignEdgeLbl(sw)+')':''}.`],['Cases B and C','bias load onto the windward post; because wind reverses, each post becomes the windward one under some direction, so a symmetric layout yields two equal designs — the eccentric cases still raise the per-post demand above a naïve 50/50 split.']]);   // LPNL
 
   let html='';
   postDesigns.forEach(pd=>{
@@ -4635,6 +4730,7 @@ function renderSign(inp,sw,pw,allCombos,postDesigns,poleSeg){
       <div class="resrow"><span class="k">Shear Vu vs φVc</span><span class="v">${fmt(F.Vu,0)} vs ${fmt(F.phiVc,0)} lb <span class="pill ${F.shearOK?'ok':'bad'}">${F.shearOK?'OK':'NG'}</span></span></div>
       <div class="resrow"><span class="k">Soil bearing q vs q_allow</span><span class="v">${fmt(F.bearing.q,2)} vs ${fmt(F.bearing.qAllow,2)} ksf <span class="pill ${F.bearing.ok?'ok':'bad'}">${F.bearing.ok?'OK':'NG'}</span></span></div>
       <div class="resrow"><span class="k">Post stress (governing seg ${ps.govRow.i})</span><span class="v">ratio ${fmt(ps.govRow.ratio,3)} (${ps.govRow.form}, ${ps.comboName||'—'}${ps.tCase?' case '+ps.tCase:''}, B₂ ${fmt(ps.B2,3)}) <span class="pill ${ps.govRow.ok?'ok':'bad'}">${ps.govRow.ok?'OK':'NG'}</span></span></div>
+      ${pd.pstressE?`<div class="resrow"><span class="k">Post stress, normal (0° / 180°) · ${pd.edgeLbl} (90°)</span><span class="v">${fmt(pd.pstressN.govRow.ratio,3)} · ${fmt(pd.pstressE.govRow.ratio,3)}${pd.pstress.edge?' — edge-on governs':''} ${lppGoA('poleStrEdge_sp'+pd.p,'worked →')}</span></div>`:''}
       ${F.Tu>0?`<div class="resrow"><span class="k">Torsion T_u (Case B/C) vs shaft φT_th</span><span class="v">${fmt(F.Tu,0)} vs ${fmt(F.phiTth,0)} lb·ft <span class="pill ${F.Tu<F.phiTth?'ok':'bad'}">${F.Tu<F.phiTth?'OK':'NG'}</span></span></div>`:''}
       <div class="resrow"><span class="k">Anchor bolts (${inp.boltQty}) ${fmt(inp.boltDia,3)}″ Gr.${inp.boltGrade}</span><span class="v">T_max ${fmt(F.bolts.Tmax,0)} lb · interaction ${fmt(F.bolts.inter,2)} <span class="pill ${F.bolts.interOK?'ok':'bad'}">${F.bolts.interOK?'OK':'NG'}</span></span></div>
     </div>`;
@@ -4654,6 +4750,7 @@ function renderSign(inp,sw,pw,allCombos,postDesigns,poleSeg){
       return {p:pd.p, sfx:'_sp'+pd.p, ctx:{
         inp, found:F, d:F.d, ratio:F.ratio, rows:F.emb.rows, reo:F.reo, bolts:F.bolts, bearing:F.bearing,
         pstress:pd.pstress, Mu:F.Mu, Pu:F.Pu, Vu:F.Vu,
+        ...(pd.pstressE?{pstressN:pd.pstressN, pstressE:pd.pstressE, edgeLbl:pd.edgeLbl}:{}),   // LPEW
         asd:{P:ga.P, M:ga.M, h:ga.h, axial:ga.axial, name:ga.name},
         asdBase:pd.gASDF?{P:pd.gASD.P, M:pd.gASD.M, h:pd.gASD.h, axial:pd.gASD.axial, name:pd.gASD.name}:null,   // LPPJ: the post-base demand (worked) when p > 0
         caseLabel:`ASD ${ga.name||''} (case ${ga.case||'A'}, wind ${fmt(ga.phi||0,0)}°${pd.gASDF?', at grade':''}) · LRFD ${pd.gLRFD.name||''}`,
@@ -4809,7 +4906,7 @@ function buildSignReport(inp,sw,pw,allCombos,postDesigns,poleSeg){
       H+=eqB('Two-post force split',
         `A resultant F acting at horizontal distance x from the post-group centerline is shared between the two posts by statics: the post nearer the resultant takes more. Case A gives 50/50; Cases B and C bias load onto the windward post.`,
         `R_{windward} = F\\left(\\tfrac12 + \\tfrac{x}{L_p}\\right),\\qquad R_{leeward} = F\\left(\\tfrac12 - \\tfrac{x}{L_p}\\right),\\quad L_p = ${n(inp.signSpacing,1)}\\ \\text{ft}`,
-        `Because wind reverses, each post is windward in some directions — so each post's governing load comes from the direction and case that make it worst. The four-direction envelope handles this automatically.`, null);
+        `Because wind reverses, each post is windward in some directions — so each post's governing load comes from the direction and case that make it worst. The envelope over wind toward 0° and 180°${sw.edge?' (and edge-on, 90°, for the rectangular posts)':''} handles this automatically.`, null);
     }
     H+=postDesigns.map((pd,pi)=>lppRes('combo',pi)).join('');
     H+=`</div></details>`;
@@ -4837,7 +4934,9 @@ function buildSignReport(inp,sw,pw,allCombos,postDesigns,poleSeg){
     H+=`<p class="eq-why">Anchor rods ((${inp.boltQty}) ${n(inp.boltDia,3)}″ Gr.${inp.boltGrade} on a ${n(F.bolts.BC,0)}″ circle, h_ef ${n(F.bolts.hef,0)}″): designed in the Anchorage app (Base Plate &amp; Anchor Bolt Designer); the base plate is checked here.</p>`;
     H+=basePlateWorkedHTML(F.bolts,inp)+lppRes('anchors',pi);
     H+=`<div class="eq-title">Post combined stress <span class="eq-ref">[AISC 360-16 (LRFD)]</span></div>`;
-    H+=poleWorkedBody(ps, inp, ps.govRow)+lppRes('post b2',pi);
+    H+=poleWorkedBody(ps, inp, ps.govRow);
+    if(pd.pstressE) H+=lppEdgePsHTML({inp, pstress:ps, pstressN:pd.pstressN, pstressE:pd.pstressE, edgeLbl:pd.edgeLbl}, null);   // LPEW: both axes worked
+    H+=lppRes('post b2',pi);
     if(ps&&ps.lim&&ps.shape==='round') H+=`<div class="eq-title">Round HSS wall slenderness <span class="eq-ref">[AISC 360-16 §F8 scope]</span></div>`+lppDtHTML(ps).replace(/^<div class="step-label">[\s\S]*?<\/div>/,'')+lppRes('dt',pi);
     H+=`</div></details>`;
   });
@@ -5420,6 +5519,7 @@ function poleWorkedBody(pstress, inp, r){
   const step=(t)=>`<div class="step-label">${t}</div>`;
   const ref=(s)=>`<span class="eq-ref">[${s}]</span>`;
   const mnx=r.mnx, pn=r.pn;
+  const ey=!!pstress.edge;   // LPEW: sign post edge-on, bending about y (mnx / Mcx of the row hold the y-axis values)
   let H='';
 
   H+=step(`1 · Factored demands at this section (z = ${fmt(r.z,2)} ft), governing LRFD combination`);
@@ -5430,6 +5530,7 @@ function poleWorkedBody(pstress, inp, r){
     H+=g(`P_{e,story} = R_M\\frac{M_0}{\\Delta_H} = 0.85\\,\\frac{${fmt((p2.M0||0)*12/1000,1)}\\ \\text{kip-in}}{${fmt(p2.drift||0,3)}\\ \\text{in}} = ${fmt((p2.PeStory||0)/1000,1)}\\ \\text{kip}\\qquad B_2 = \\frac{1}{1-\\alpha P_{story}/P_{e,story}} = \\frac{1}{1-${fmt((p2.Pstory||0)/1000,2)}/${fmt((p2.PeStory||0)/1000,1)}} = ${fmt(r.B2,3)}`);
     H+=g(`M_r = B_2\\,M_1 = ${fmt(r.B2,3)}(${fmt(r.M1,0)}) = ${fmt(r.M,0)}\\ \\text{lb}{\\cdot}\\text{ft}`);
   }
+  if(ey) H+=`<p class="eq-why"><b>Edge-on (wind toward 90°, along the panel):</b> M<sub>1</sub> is the moment of the post drag on the depth face alone (no panel share, Loading tab step 3b); it bends the post about its y axis, so M<sub>ry</sub> = M<sub>r</sub>, M<sub>rx</sub> = 0, and the capacity is φ<sub>b</sub>M<sub>ny</sub> from Z<sub>y</sub>, S<sub>y</sub>. B<sub>2</sub> takes the drift with I<sub>y</sub>.</p>`;
   H+=g(`P_r = ${fmt(r.Pr,2)}\\ \\text{kip}\\qquad M_r = ${fmt(r.M*12/1000,1)}\\ \\text{kip}{\\cdot}\\text{in} = ${fmt(r.M,0)}\\ \\text{lb}{\\cdot}\\text{ft}`);
 
   H+=step(`2 · Section properties — derived`);
@@ -5458,8 +5559,9 @@ function poleWorkedBody(pstress, inp, r){
     H+=g(`\\lambda_p = 1.12\\sqrt{\\tfrac{E}{F_y}} = ${fmt(pstress.lam_p,1)}\\qquad \\lambda_r = 1.40\\sqrt{\\tfrac{E}{F_y}} = ${fmt(pstress.lam_r,1)}\\quad\\Rightarrow\\quad \\textbf{${r.cls}}\\ (\\text{${mnx.sub}})`);
   }
 
-  H+=step(`4 · Nominal flexural strength, M_n ${ref(round?'§F8':'§F7')}`);
-  H+=g(`M_p = F_y Z = ${fmt(inp.poleFy,0)}(${fmt(r.Zx,2)}) = ${fmt(mnx.Mp,0)}\\ \\text{kip}{\\cdot}\\text{in}`);
+  H+=step(`4 · Nominal flexural strength, M_n${ey?'y (y axis, edge-on)':''} ${ref(round?'§F8':'§F7')}`);
+  H+=ey?g(`M_{py} = F_y Z_y = ${fmt(inp.poleFy,0)}(${fmt(r.Zy,2)}) = ${fmt(mnx.Mp,0)}\\ \\text{kip}{\\cdot}\\text{in}\\qquad S_y = ${fmt(r.Sy,2)}\\ \\text{in}^3`)
+    :g(`M_p = F_y Z = ${fmt(inp.poleFy,0)}(${fmt(r.Zx,2)}) = ${fmt(mnx.Mp,0)}\\ \\text{kip}{\\cdot}\\text{in}`);
   if(mnx.cls==='compact'){
     H+=`<p class="eq-why">The section is compact, so local buckling does not reduce capacity — the full plastic moment develops.</p>`;
     H+=g(`M_n = M_p = ${fmt(mnx.Mn,0)}\\ \\text{kip}{\\cdot}\\text{in}`);
@@ -5470,7 +5572,9 @@ function poleWorkedBody(pstress, inp, r){
     H+=`<p class="eq-why">Noncompact flange: F7.2 linearly reduces M<sub>p</sub> toward the yield-moment F<sub>y</sub>S as b/t grows.</p>`;
     H+=g(`M_n = M_p-(M_p-F_yS)\\!\\left(3.57\\tfrac{b}{t}\\sqrt{\\tfrac{F_y}{E}}-4.0\\right) = ${fmt(mnx.Mn,0)}\\ \\text{kip}{\\cdot}\\text{in}`);
   }
-  H+=g(`\\phi_b M_n = 0.90(${fmt(mnx.Mn,0)}) = ${fmt(r.Mcx,0)}\\ \\text{kip}{\\cdot}\\text{in}${round||!r.Mcy?'':`\\quad(\\text{weak axis } \\phi_b M_{ny}=${fmt(r.Mcy,0)})`}`);
+  H+=ey?g(`\\phi_b M_{ny} = 0.90(${fmt(mnx.Mn,0)}) = ${fmt(r.Mcx,0)}\\ \\text{kip}{\\cdot}\\text{in}\\quad(\\text{x axis, not loaded edge-on: } \\phi_b M_{nx}=${fmt(r.McxS,0)})`)
+    :g(`\\phi_b M_n = 0.90(${fmt(mnx.Mn,0)}) = ${fmt(r.Mcx,0)}\\ \\text{kip}{\\cdot}\\text{in}${round||!r.Mcy?'':`\\quad(\\text{weak axis } \\phi_b M_{ny}=${fmt(r.Mcy,0)})`}`);
+  if(ey) H+=g(`f_{by} = \\frac{M_{ry}}{S_y} = \\frac{${fmt(r.M*12/1000,1)}}{${fmt(r.Sy,2)}} = ${fmt(r.fb,2)}\\ \\text{ksi}`);
 
   H+=step(`5 · Nominal compressive strength, P_n — flexural buckling ${ref('§E3')}`);
   H+=`<p class="eq-why">The pole is a flagpole: fixed base, free top. AISC Commentary Table C-A-7.1 recommends K = 2.1 for this cantilever (the theoretical 2.0 raised for real base flexibility).</p>`;
@@ -5496,6 +5600,11 @@ function poleWorkedBody(pstress, inp, r){
   if(r.form==='H3-6'){
     const tv=r.tv;
     H+=g(`\\left(\\frac{P_r}{P_c}+\\frac{M_r}{M_c}\\right)+\\left(\\frac{V_r}{V_c}+\\frac{T_r}{T_c}\\right)^2 = (${fmt(r.prPc,3)}+${fmt(r.mterm,3)})+(${fmt(tv.Vr/tv.Vc,3)}+${fmt(tv.trTc,3)})^2 = ${fmt(r.ratio,3)}\\quad(\\text{Eq. H3-6})`);
+  } else if(ey){   // LPEW: edge-on, M_rx = 0
+    const mt=`\\frac{M_{ry}}{\\phi_b M_{ny}} = \\frac{${fmt(r.M*12/1000,1)}}{${fmt(r.Mcx,0)}} = ${fmt(r.mterm,3)}`;
+    H+=g(mt);
+    H+=g(r.form==='H1-1a'?`\\frac{P_r}{\\phi_c P_n}+\\frac{8}{9}\\left(0+\\frac{M_{ry}}{\\phi_b M_{ny}}\\right) = ${fmt(r.prPc,3)}+\\tfrac{8}{9}(${fmt(r.mterm,3)}) = ${fmt(r.ratio,3)}`
+      :`\\frac{P_r}{2\\phi_c P_n}+\\left(0+\\frac{M_{ry}}{\\phi_b M_{ny}}\\right) = \\frac{${fmt(r.prPc,3)}}{2}+${fmt(r.mterm,3)} = ${fmt(r.ratio,3)}`);
   } else if(r.form==='H1-1a'){
     H+=g(`\\frac{P_r}{\\phi_c P_n}+\\frac{8}{9}\\left(${round?`\\frac{M_r}{\\phi_b M_n}`:`\\frac{M_{rx}}{\\phi_b M_{nx}}+\\frac{M_{ry}}{\\phi_b M_{ny}}`}\\right) = ${fmt(r.prPc,3)}+\\tfrac{8}{9}(${fmt(r.mterm,3)}) = ${fmt(r.ratio,3)}`);
   } else {
@@ -5506,6 +5615,23 @@ function poleWorkedBody(pstress, inp, r){
 }
 function poleWorkedReportHTML(pstress, inp, r){ return poleWorkedBody(pstress, inp, r); }
 
+// LPEW (2026-11-19): rectangular sign post, the Post tab's worked checks: the normal (0° / 180°, x axis) and the edge-on (90°,
+// y axis) governing runs, both worked in full; the larger ratio governs the post
+function lppEdgePsHTML(o,sfx){
+  const N=o.pstressN, E=o.pstressE, inp=o.inp, gE=o.pstress===E;
+  let H=`<div class="eq-why lpNL">${lpNL(`Rectangular post: two checks, each worked in full below; the larger ratio governs.`,[
+    ['Normal wind (0° / 180°):',`the panel and the post drag bend the post about its x axis (depth along the panel normal): ${fmt(N.govRow.ratio,3)} (${lppEsc(N.comboName||'')}).`],
+    [o.edgeLbl+' (90°):',`only the post drag on the depth face; it bends the post about its y axis: ${fmt(E.govRow.ratio,3)} (${lppEsc(E.comboName||'')}).`],
+    ['Governs:',gE?`edge-on, ${fmt(E.govRow.ratio,3)} &gt; ${fmt(N.govRow.ratio,3)}.`:`the normal wind, ${fmt(N.govRow.ratio,3)} ≥ ${fmt(E.govRow.ratio,3)}.`]])}</div>`;
+  H+=`<div class="subhead2" style="margin-top:12px">${gE?'Normal wind (0° / 180°), x axis — does not govern':'Normal wind (0° / 180°), x axis — governs'}</div>`+(gE?poleWorkedBody(N,inp,N.govRow):'<p class="eq-why">Worked above.</p>');
+  H+=`<div class="subhead2" style="margin-top:12px"${sfx!=null?` id="poleStrEdge${sfx}"`:''}>${o.edgeLbl}, wind toward 90°, y axis — ${gE?'governs (worked above)':'does not govern'}</div>`+(gE?`<p class="eq-why">Worked above (the governing run).</p>`:poleWorkedBody(E,inp,E.govRow));
+  return H;
+}
+function lppRenderEdgePs(ctx,sfx){
+  const box=$('poleStrExample'+(sfx||'')); if(!box) return;
+  const d=document.createElement('div'); d.innerHTML=lppEdgePsHTML(ctx,sfx||''); box.appendChild(d);
+  if(window.renderMathInElement) renderMathInElement(d,{delimiters:[{left:'\\[',right:'\\]',display:true},{left:'$',right:'$',display:false}],throwOnError:false});
+}
 function renderPoleStressExample(pstress,inp,sfx){
   sfx=sfx||'';
   const box=$('poleStrExample'+sfx); if(!box) return;
@@ -6224,13 +6350,16 @@ function lppBmbSignPost(inp,sw,gl,p){
   if(gl.case==='B') x=0.2*sw.B*wsg;
   else if(gl.case==='C' && sw.caseC){ F=sw.caseC.F*onFace; FI=(sw.caseC.FI||0)*onFace; x=sw.caseC.e*wsg; }
   const sh=signPostSplit(F,x,Lp,nP)[p], shI=signPostSplit(FI,x,Lp,nP)[p], z=gl.zarm;
-  rows.push({name:'Sign panel wind, Case '+gl.case+(nP>1?' (post '+(p+1)+' share)':''), key:'panel', az:phi, wind:true, F:{W:sh, Wi:shI}, arm:z, armSym:'z',
+  const edge=!!(gl.edge && sw.edge);   // LPEW (2026-11-19): rectangular post edge-on: no panel wind, the drag on the depth face
+  if(!edge) rows.push({name:'Sign panel wind, Case '+gl.case+(nP>1?' (post '+(p+1)+' share)':''), key:'panel', az:phi, wind:true, F:{W:sh, Wi:shI}, arm:z, armSym:'z',
     m:{D:0,W:sh*z,Di:0,Wi:shI*z}, mu:gl.Fp*z});
-  rows.push({name:'Post drag (exposed post below the panel)', key:'post', az:phi, wind:true, F:{W:sw.Fpost, Wi:sw.FpostI||0}, arm:sw.zPost, armSym:'z_{drag}',
+  if(edge) rows.push({name:'Post drag on the depth face (edge-on: the panel takes no wind)', key:'post', az:phi, wind:true, F:{W:sw.FpostD, Wi:sw.FpostDI||0}, arm:sw.zPostD, armSym:'z_{drag}',
+    m:{D:0,W:sw.MpostD,Di:0,Wi:sw.MpostDI||0}, mu:f.W*sw.MpostD + f.Wi*(sw.MpostDI||0)});
+  else rows.push({name:'Post drag (exposed post below the panel)', key:'post', az:phi, wind:true, F:{W:sw.Fpost, Wi:sw.FpostI||0}, arm:sw.zPost, armSym:'z_{drag}',
     m:{D:0,W:sw.Mpost,Di:0,Wi:sw.MpostI||0}, mu:f.W*sw.Mpost + f.Wi*(sw.MpostI||0)});
   rows.push({name:'Panel share + post self-weight + misc. dead'+((sw.WiPanel||0)>0?', ice':''), key:'axial', axial:true, az:null, m:{D:0,W:0,Di:0,Wi:0}, mu:0,
     F:{D:(inp.signWt||0)/nP + (inp.__poleTotalW||0) + (inp.DL||0), Di:(sw.WiPanel||0)/nP + (sw.WiPost||0)}});
-  return lppBmbTotals({mode:'sign', post:p+1, name:gl.name, fam:f.fam, key:gl.key, f, phi, case:gl.case, rows, sh, shI, z,
+  return lppBmbTotals({mode:'sign', post:p+1, name:gl.name, fam:f.fam, key:gl.key, f, phi, case:edge?lppSignEdgeLbl(sw):gl.case, edge, rows, sh:edge?0:sh, shI:edge?0:shI, z,
     env:{M:gl.M, P:gl.P, N:gl.axial}});
 }
 // per-case vector totals (M_x = Σ M cos θ, M_y = Σ M sin θ), the factored sum Σγ·M (+ the cable pulls of the combination) and
@@ -6290,8 +6419,10 @@ function lppBmbWorkedTex(b,sym){
     T.push(`M_{${sb}} = \\sqrt{M_{${sb},x}^2 + M_{${sb},y}^2} = \\sqrt{${fp(b.X)}^2 + ${fp(b.Y)}^2} = ${nf(Mr)}${LF}`);
   } else {
     // one axis: each load case's moment M_c = V_share·z + M_drag, worked first
-    C.forEach(k=>{ const sv=k==='W'?b.sh:b.shI, dr=b.rows[1].m[k], t=LPP_BMB_TEX[k];
-      T.push(`M_{${t}} = V_{share,${t}}\\,z + M_{drag,${t}} = (${nf(sv,1)})(${nf(b.z,2)}) + ${fp(dr)} = ${nf(b.tot[k].x)}${LF}`); });
+    const dRow=b.rows.find(r=>r.key==='post');   // LPEW: edge-on (rectangular post) the drag on the depth face is the only row
+    C.forEach(k=>{ const sv=k==='W'?b.sh:b.shI, dr=dRow.m[k], t=LPP_BMB_TEX[k];
+      T.push(b.edge?`M_{${t}} = M_{drag,d,${t}} = \\sum_i F_{d,i}z_i = ${nf(b.tot[k].x)}${LF}`
+        :`M_{${t}} = V_{share,${t}}\\,z + M_{drag,${t}} = (${nf(sv,1)})(${nf(b.z,2)}) + ${fp(dr)} = ${nf(b.tot[k].x)}${LF}`); });
     const x=sum('',t=>t.x,0,'');
     T.push(`M_{${sb}} = ${x[0]} = ${x[1]} = ${nf(Mr)}${LF}`);
   }
@@ -6347,6 +6478,7 @@ function lppBmbRenderPole(inp,comps,fxs,pw,govLRFD,govASD,b2){
   }
 }
 // sign mode: per post, its governing LRFD and ASD demand (postGovList from calcSign)
+const lppBmbCaseTxt=b=>b.edge?'post drag only':'Case '+b.case;   // LPEW: an edge-on record has no Fig. 29.3-1 case
 function lppBmbRenderSign(inp,sw,postGovList){
   const posts=postGovList.map((pg,p)=>({lrfd:lppBmbSignPost(inp,sw,pg.gLRFD,p), asd:lppBmbSignPost(inp,sw,pg.gASD,p), gL:pg.gLRFD, gA:pg.gASD}));
   LPP_BMB={mode:'sign', posts};
@@ -6366,12 +6498,12 @@ function lppBmbRenderSign(inp,sw,postGovList){
     let H=`<div class="tbl-note lpNL">${lpNL('The base moment of each post, built up from its parts.',[
       ['Rows:','the post\'s share of the sign panel wind at its arm z, the post\'s own drag, and the dead load (axial only: the panel hangs concentrically on the posts).'],
       ['One axis:','the wind acts along the panel normal, so the moments add directly.'],
-      ['Direction and case:',`each post at its own governing wind direction and Fig. 29.3-1 case; the envelope checks 0°, 90°, 180° and 270° and every case (${lppGoA('sgComboTbl','per-post demand')}). The shares are worked in the ${lppGoA('signLoadPath','load path')}.`]])}</div>`;
+      ['Direction and case:',`each post at its own governing wind direction and Fig. 29.3-1 case; the envelope checks wind toward 0° and 180° and every case${sw.edge?`, and, for this rectangular post, wind toward 90° (${lppSignEdgeLbl(sw)}: the post drag on the depth face only, ${lppGoA('sgEdgeOn','step 3b')})`:''} (${lppGoA('sgComboTbl','per-post demand')}). The shares are worked in the ${lppGoA('signLoadPath','load path')}.`]])}</div>`;
     posts.forEach((P,p)=>{
       const L=P.lrfd, A=P.asd, pl=two?'Post '+(p+1)+' — ':'';
-      H+=`<div class="subhead2" style="margin-top:12px">${pl}${lppEsc(L.name)}, wind toward ${fmt(L.phi,0)}°, Case ${L.case}</div>`+lppBmbTableHTML(L);
+      H+=`<div class="subhead2" style="margin-top:12px">${pl}${lppEsc(L.name)}, wind toward ${fmt(L.phi,0)}°, ${lppBmbCaseTxt(L)}</div>`+lppBmbTableHTML(L);
       H+=`<div class="example-box" style="margin-top:8px"><div class="step-label" id="lppBmbW_L${p+1}">${pl}governing LRFD combination — ${lppEsc(L.name)}</div>`+lppBmbWorkedHTML(L,'M_u')+lppBmbResultHTML(L,'per-post demand card');
-      H+=`<div class="step-label" id="lppBmbW_A${p+1}" style="margin-top:12px">${pl}governing ASD combination — ${lppEsc(A.name)}, wind toward ${fmt(A.phi,0)}°, Case ${A.case}</div>`+lppBmbWorkedHTML(A,'M_a')+lppBmbResultHTML(A,'per-post demand card')+`</div>`;
+      H+=`<div class="step-label" id="lppBmbW_A${p+1}" style="margin-top:12px">${pl}governing ASD combination — ${lppEsc(A.name)}, wind toward ${fmt(A.phi,0)}°, ${lppBmbCaseTxt(A)}</div>`+lppBmbWorkedHTML(A,'M_a')+lppBmbResultHTML(A,'per-post demand card')+`</div>`;
     });
     el.innerHTML=H; lppBmbMath(el);
   }
@@ -6419,9 +6551,9 @@ function lprBmbSubs(){
       ...lprBmbWorked(A,'M_a'),res(A,'lp:env')]}]; }
   return B.posts.map((P,p)=>{ const L=P.lrfd, A=P.asd;
     return {title:'Post '+(p+1)+' base moment build-up',key:'lp:bmb:p'+(p+1),items:[
-      ...lprNL('The base moment of the post, built up from its parts (values of the [[tab:loading|Loading tab]]).',[['Rows:','the post\'s share of the panel wind at its arm z, the post\'s own drag, and the dead load (axial only).'],['One axis:','the wind acts along the panel normal; '+L.name+' at wind toward '+lprN(L.phi,0)+'°, Case '+L.case+'.']]),
+      ...lprNL('The base moment of the post, built up from its parts (values of the [[tab:loading|Loading tab]]).',[['Rows:','the post\'s share of the panel wind at its arm z, the post\'s own drag, and the dead load (axial only).'],['One axis:',(L.edge?'edge-on, the wind acts along the panel (y axis); ':'the wind acts along the panel normal; ')+L.name+' at wind toward '+lprN(L.phi,0)+'°, '+lppBmbCaseTxt(L)+'.']]),
       lprBmbTable(L),{type:'note',text:'Governing LRFD combination, '+L.name+':'},...lprBmbWorked(L,'M_u'),res(L,'lp:env:p'+(p+1)),
-      {type:'note',text:'Governing ASD combination, '+A.name+', wind toward '+lprN(A.phi,0)+'°, Case '+A.case+':'},...lprBmbWorked(A,'M_a'),res(A,'lp:env:p'+(p+1))]}; });
+      {type:'note',text:'Governing ASD combination, '+A.name+', wind toward '+lprN(A.phi,0)+'°, '+lppBmbCaseTxt(A)+':'},...lprBmbWorked(A,'M_a'),res(A,'lp:env:p'+(p+1))]}; });
 }
 
 // ================= D11 (2026-10-18): CALCULATION-SHEET REPORT + DERIVATION LINKS =================
@@ -7239,14 +7371,18 @@ function populateDetailStack(sfx, ctx){
   renderBoltExample(bolts,inp,sfx);
   // pole stress table + example (AISC LRFD) — prismatic post → base section only
   const slk=pstress.rows[0]?pstress.rows[0].slendKind:'D/t';
-  const showRows = pstress.prismatic ? [pstress.govRow] : pstress.rows;
+  // LPEW (2026-11-19): a rectangular sign post shows its base section for the normal (x axis) and the edge-on (y axis) check
+  const psE=ctx.pstressE, psN=ctx.pstressN;
+  const showRows = psE ? [psN.govRow, psE.govRow] : pstress.prismatic ? [pstress.govRow] : pstress.rows;
+  const rowLbl = r => psE ? (r===psE.govRow?'Base, '+ctx.edgeLbl+' (90°)':'Base, normal (0° / 180°)') : (pstress.prismatic?'Base':r.i);
   let ps=`<tr><th>${pstress.prismatic?'Section':'Seg'}</th><th>Elev<span class="sym">z (ft)</span></th><th>Slend<span class="sym">${slk}</span></th><th>Class</th><th>Axial<span class="sym">P_r (kip)</span></th><th>Moment<span class="sym">M_r (k·in)</span></th><th>φP_n<span class="sym">(kip)</span></th><th>φM_n<span class="sym">(k·in)</span></th><th>Eq.</th><th>H1.1</th><th>Check</th></tr>`;
-  showRows.forEach(r=>{const g=r.i===pstress.govRow.i;
-    ps+=`<tr${g&&!pstress.prismatic?' style="background:var(--accent-wash);font-weight:700"':''}><td>${pstress.prismatic?'Base':r.i}</td><td>${fmt(r.z,1)}</td><td>${fmt(r.Dt,1)}</td><td>${r.cls}</td><td>${fmt(r.Pr,2)}</td><td>${fmt(r.M*12/1000,1)}</td><td>${fmt(r.Pc,1)}</td><td>${fmt(r.Mcx,0)}</td><td>${r.form}</td><td>${fmt(r.ratio,3)}</td><td><span class="pill ${r.ok?'ok':'bad'}">${r.ok?'OK':'NG'}</span></td></tr>`;});
+  showRows.forEach(r=>{const g=psE ? r===pstress.govRow : r.i===pstress.govRow.i;
+    ps+=`<tr${g&&(psE||!pstress.prismatic)?' style="background:var(--accent-wash);font-weight:700"':''}><td>${rowLbl(r)}</td><td>${fmt(r.z,1)}</td><td>${fmt(r.Dt,1)}</td><td>${r.cls}</td><td>${fmt(r.Pr,2)}</td><td>${fmt(r.M*12/1000,1)}</td><td>${fmt(r.Pc,1)}</td><td>${fmt(r.Mcx,0)}</td><td>${r.form}</td><td>${fmt(r.ratio,3)}</td><td><span class="pill ${r.ok?'ok':'bad'}">${r.ok?'OK':'NG'}</span></td></tr>`;});
   S('poleStressTbl').innerHTML=ps;
   const gv=pstress.govRow;
-  S('oPoleGov').innerHTML=`${pstress.prismatic?'Base section':'Segment '+gv.i} (z=${fmt(gv.z,1)} ft) · H1.1 = ${fmt(gv.ratio,3)} <span class="pill ${gv.ok?'ok':'bad'}">${gv.ok?'OK':'NG'}</span>`;
+  S('oPoleGov').innerHTML=`${pstress.prismatic?'Base section':'Segment '+gv.i} (z=${fmt(gv.z,1)} ft) · H1.1 = ${fmt(gv.ratio,3)} <span class="pill ${gv.ok?'ok':'bad'}">${gv.ok?'OK':'NG'}</span>${psE?` (${pstress.edge?ctx.edgeLbl+', wind toward 90°':'normal, wind toward '+fmt(pstress.phi||0,0)+'°'} governs; ${lppGoA('poleStrEdge'+sfx,'edge-on check →')})`:''}`;
   renderPoleStressExample(pstress,inp,sfx);
+  if(psE) lppRenderEdgePs(ctx,sfx);   // LPEW
   // shaft detail drawing
   drawShaftDetail(inp,d,reo,bolts,asd,sfx);
   // worked calculations: demand + embedment + rebar + bearing
@@ -7452,8 +7588,15 @@ function lprModel(){
         rows:L.allCombos.map(r=>({cells:[r.fam,r.name,lprCell(r.phi,0),lprCell(r.P,0),lprCell(r.M,0),lprCell(r.h,2),lprCell(r.axial,0),lprCell(r.Tmax||0,0)],cls:(r.key===L.gov.govASD.key||r.key===L.gov.govLRFD.key)?'gov':''}))},
         ...lprNL('ASCE 7-16 §2.3 (LRFD) and §2.4 (ASD), including the atmospheric-ice combinations.',[['Wind directions:','wind is checked toward 0°, 90°, 180° and 270°; the largest moment governs each combination.'],['Cable loads','as on the [[tab:loading|Loading tab]].']])]});   // LPNL
     } else {
+      // LPEW (2026-11-19): the panel-normal records (0° / 180°); a rectangular post adds its edge-on rows (90°, y axis)
+      const sw=L.sw, ed=!!(sw&&sw.edge);
       L.postDesigns.forEach((pd,pi)=>subs.push({title:'Post '+(pi+1)+' demand, every combination',key:'lp:env:p'+(pi+1),items:[{type:'table',head:['Family','Combination','Case','P (lb)','M (lb·ft)','N (lb)','T (lb·ft)'],
-        rows:L.allCombos.map(r=>{const g=r.postGov[pi]; return {cells:[r.fam,r.name,g.case,lprCell(g.P,0),lprCell(g.M,0),lprCell(g.axial,0),lprCell(g.Tmax||0,0)],cls:(r.name===pd.gASD.name||r.name===pd.gLRFD.name)?'gov':''};})}]}));
+        rows:[].concat(...L.allCombos.map(r=>{ const out=[]; const g=r.postGovN[pi];
+          out.push({cells:[r.fam,r.name,g.case,lprCell(g.P,0),lprCell(g.M,0),lprCell(g.axial,0),lprCell(g.Tmax||0,0)],cls:(r.name===pd.gASD.name||r.name===pd.gLRFD.name)?'gov':''});
+          if(ed){ const e=r.postEdge[pi], nm=r.name+', '+lppSignEdgeLbl(sw);
+            out.push({cells:[r.fam,nm,'edge-on',lprCell(e.P,0),lprCell(e.M,0),lprCell(e.axial,0),'0'],cls:(nm===pd.gASD.name||nm===pd.gLRFD.name)?'gov':''}); }
+          return out; }))},
+        ...lprNL('Wind toward 0° and 180° (normal to the panel), every Fig. 29.3-1 case; each row is the case and direction with the largest M of the post.',[lppSignEdgeNote(sw).map(x=>String(x).replace(/<[^>]+>/g,''))])]}));
     }
     subs.push(...lprBmbSubs());   // LPBM (2026-11-19): the base moment build-up
     subs.push(...xs(sign?['1b','2']:['4','4b']));   // LPRX
@@ -7474,7 +7617,17 @@ function lprModel(){
           S({id:'Pr',label:'Axial',sym:'P_{r}',eq:'',sub:'',value:r.Pr,unit:'kip',d:3})].concat(r.tv?[
           S({id:'Tr',label:'Torsion / design torsional strength',sym:'T_{r}/T_{c}',eq:'',sub:N(r.tv.Tr,1)+'/'+N(r.tv.Tc,1),value:r.tv.trTc,unit:'',d:3})]:[]).concat([
           S({id:'ratio',label:'Interaction ('+r.form+')',sym:'ratio',eq:'',sub:'',value:r.ratio,unit:'',d:3,ok:r.ok})])}];
-      subs.push({title:(sign?'Post':'Pole')+lab(st),items:[lprTopics('post'+si,T),{type:'note',text:'Worked in full on the [[tab:post|Post tab]].'}]});
+      // LPEW (2026-11-19): a rectangular sign post, the normal (x axis) and the edge-on (y axis) checks side by side
+      const pdE=sign&&L.postDesigns&&L.postDesigns[si]&&L.postDesigns[si].pstressE?L.postDesigns[si]:null;
+      if(pdE){ const E=pdE.pstressE.govRow, Nr=pdE.pstressN.govRow;
+        T.push({title:pdE.edgeLbl+', wind toward 90° ('+pdE.pstressE.comboName+')',ref:'AISC 360-16 §F7, §H1.1 (y axis)',steps:[
+          S({id:'eM',label:'Second-order moment, post drag on the depth face (B₂ = '+N(E.B2,3)+')',sym:'M_{ry}',eq:'B_{2}M_{1}',sub:N(E.B2,3)+'('+N(E.M1,0)+')',value:E.M,unit:'lb-ft',d:0}),
+          S({id:'eZ',label:'Plastic / elastic modulus, y axis',sym:'Z_{y}',eq:'',sub:'S_{y} = '+N(E.Sy,2),value:E.Zy,unit:'in^{3}',d:3}),
+          S({id:'efb',label:'Bending stress, y axis',sym:'f_{by}',eq:'\\frac{M_{ry}}{S_{y}}',sub:'\\frac{'+N(E.M*12/1000,1)+'}{'+N(E.Sy,2)+'}',value:E.fb,unit:'ksi',d:2}),
+          S({id:'eMc',label:'Design flexural strength, y axis ('+E.sub+')',sym:'\\phi M_{ny}',eq:'0.90\\,M_{ny}',sub:'0.90('+N(E.mnx.Mn,1)+')',value:E.Mcx,unit:'kip-in',d:1}),
+          S({id:'eratio',label:'Interaction ('+E.form+')',sym:'ratio',eq:'',sub:'',value:E.ratio,unit:'',d:3,ok:E.ok}),
+          S({id:'enr',label:'Normal wind (0° / 180°, x axis), '+pdE.pstressN.comboName,sym:'ratio_{N}',eq:'',sub:'',value:Nr.ratio,unit:'',d:3,ok:Nr.ok,note:ps.edge?'edge-on governs':'normal governs'})]}); }
+      subs.push({title:(sign?'Post':'Pole')+lab(st),items:[lprTopics('post'+si,T),{type:'note',text:'Worked in full on the [[tab:post|Post tab]]'+(pdE?' (both axes).':'.')}]});
     });
     subs.push(...(sign?xps('post','post combined stress'):xs(['4c'])));   // LPRX
     if(subs.length) secs.push({title:sign?'Post check':'Pole check',subs});
@@ -7531,7 +7684,8 @@ function lprModel(){
   /* 8. Assumptions, open items, references */
   secs.push({title:'Assumptions and references',subs:[
     {title:'Assumptions',items:[
-      'Wind toward 0°, 90°, 180° and 270° only; arms or fixtures off these axes are flagged (the results may be unconservative).',
+      sign?'Sign: wind toward 0° and 180° (normal to the panel), every Fig. 29.3-1 case'+(L.sw&&L.sw.edge?'; the rectangular posts also edge-on (toward 90°, '+lppSignEdgeLbl(L.sw)+': the post drag on the depth face, no panel wind).':'. Edge-on (90° / 270°) only the post drag acts, never more than the normal case for a round or square post, so it is not evaluated.')
+        :'Wind toward 0°, 90°, 180° and 270° only; arms or fixtures off these axes are flagged (the results may be unconservative).',
       'K_d (source "Per component", ASCE 7-16 Table 26.6-1): round mast or post 1.0 (the ASCE 7-22 value, conservative against 0.95), square or rectangular 0.90, solid sign panel 0.85; cables and fixtures take the mast value (the table has no row for them; conservative). With the source "Single value" the entered K_d applies to every component.',   // ASM (2026-11-10)
       'Cables: catenary pull model as on the Loading tab; cable ice uses the entered thickness t; the entered cable C_f is also used for the ice case (ASCE 7-16 §10.5.5 gives 1.2 for ice-covered cables; kept as entered by engineer\'s decision).',
       'Anchor rods (ACI 318-19 Ch. 17) are not checked in this tool; they are designed in the Anchorage app. The soil torsional resistance is not checked.',
@@ -8167,8 +8321,10 @@ function lppAnchorPayload(){
   const inp=ctx.inp, notes=[];
   lppAnchBaseNotes(inp).forEach(x=>notes.push(x));   // LPAS
   notes.push('Double-nut base: the leveling-nut standoff is not a Light Pole input (standoffClear sent as 0); set it in the Anchorage app.');
-  notes.push('Moments are second-order (B₂·M, AISC 360-16 App. 8) at the top of the shaft; all LRFD combinations of ASCE 7-16 §2.3 incl. the atmospheric-ice ones, each at wind toward 0°, 90°, 180°, 270°.');
-  if(ctx.mode==='sign') notes.push('Sign posts: the post moment and shear act along the wind direction (panel normal); monopost torsion T = |F·x| (sign not carried).');
+  const sgn=ctx.mode==='sign', sgE=sgn&&LPP_LAST&&LPP_LAST.sw&&LPP_LAST.sw.edge;   // LPEW (2026-11-19): the sign directions
+  const dirTxt=sgn?('wind toward 0° and 180°'+(sgE?' and 90° ('+lppSignEdgeLbl(LPP_LAST.sw)+', the post drag on the depth face)':'')):'wind toward 0°, 90°, 180°, 270°';
+  notes.push('Moments are second-order (B₂·M, AISC 360-16 App. 8) at the top of the shaft; all LRFD combinations of ASCE 7-16 §2.3 incl. the atmospheric-ice ones, each at '+dirTxt+'.');
+  if(ctx.mode==='sign') notes.push('Sign posts: the post moment and shear act along the wind direction (panel normal'+(sgE?'; edge-on along y':'')+'); monopost torsion T = |F·x| (sign not carried).');
   if(inp.pProj>0) notes.push('Shaft projection above grade p = '+fmt(inp.pProj,2)+' ft: pier depth = embedment + p (the full concrete below the plate); the combinations are the actions at the top of the shaft.');   // LPPJ
   const groups=A.groups.map((g,gi)=>{ const st=ctx.stacks[Math.min(gi,ctx.stacks.length-1)], f=st.found, reo=f.reo, b=f.bolts;
     return {id:g.id, label:g.label,
@@ -8182,7 +8338,7 @@ function lppAnchorPayload(){
   const inputsHash=lppHash(JSON.stringify(body));
   return {payload:Object.assign({_schema:'bridge-anchor-group', schemaVersion:1, producer:'Light Pole and Sign Post', producerFile:'Light Pole and Sign Post.html',
     project:{name:activeProject||'', bridgeId:''},
-    basis:{factored:true, method:'LRFD', combos:'ASCE 7-16 §2.3 (LRFD) incl. atmospheric ice; wind toward 0°/90°/180°/270°', B2:'AISC 360-16 App. 8 B₂ of each combination and direction applied to M'},
+    basis:{factored:true, method:'LRFD', combos:'ASCE 7-16 §2.3 (LRFD) incl. atmospheric ice; wind toward '+(sgn?(sgE?'0°/90° (edge-on)/180°':'0°/180°'):'0°/90°/180°/270°'), B2:'AISC 360-16 App. 8 B₂ of each combination and direction applied to M'},
     inputsHash, notes}, body)};
 }
 // ---- anchorGroupResult (HANDOFF.md §4.12; added 2026-11-01): the Anchorage app's governing anchor D/C per group, display only ----
