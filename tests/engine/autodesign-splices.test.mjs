@@ -5,7 +5,8 @@
 //      69a382b by the same quick run: New design with N_b, overhang locked and D 66–70 in, and Refine; screen only). Re-recorded
 //      2026-11-10 (SBCON: Constructibility C_b / γ_e from the M_DCc the check uses): the New design candidates change (the default project's
 //      false Constructibility 0.758 at x = 77 no longer drives the plates; best candidate 446,421 → 424,888 lb, governing GS7 x = 110.01
-//      0.957 → GS9 x = 249.99 0.934); the Refine result is unchanged.
+//      0.957 → GS9 x = 249.99 0.934); the Refine result is unchanged. Re-recorded 2026-11-19 (PR #1644: A2 haunch and SIP with each segment's top
+//      flange width, A3 the unbraced segment on the row's own side, N2 stud F_fat at end supports): see the PR for the candidates before / after.
 //   2. Hand check of the placement rule on the built-in 110-140-110 ft unit: the permanent-load points of contraflexure (interpolated) and
 //      the stations (rounded to the foot); the rule's other branches on hand-made inputs (simple spans: odd equal pieces and MassDOT's
 //      quarter points; the shipping weight split; the minimum distance from a support; merging; symmetry).
@@ -57,7 +58,7 @@ test('Hand check: the placement rule on the built-in 3-span unit (contraflexure 
   assert.equal(JSON.stringify(cf.pts.map(c => [c.pier, c.side, c.xr])), JSON.stringify([[1, 'L', 78], [1, 'R', 143], [2, 'L', 217], [2, 'R', 282]]));
   near(cf.pts[0].x, 77 + 71.14 / (71.14 + 1.10), 2e-3, 'x_cf pier 1 back'); near(cf.pts[1].x, 143 + 2.82 / (2.82 + 65.56), 2e-3, 'x_cf pier 1 ahead');
   const X = R.x, i77 = X.indexOf(77), i78 = X.indexOf(78), dc1 = i => st.DC1.M[i];
-  near(77 + dc1(i77) / (dc1(i77) - dc1(i78)), 77.766, 1e-3, 'M_DC1 alone');
+  near(77 + dc1(i77) / (dc1(i77) - dc1(i78)), 77.767, 1e-3, 'M_DC1 alone');   // A2 (2026-11-19): 77.766 → 77.767 (haunch and SIP per segment flange width)
   // the rule: pieces 78, 65, 74, 65, 78 ft ≤ 120 ft (no split); 32 and 33 ft from the piers ≥ 10 ft (none moved); symmetric
   const ref = SP.reference(P, cf, S.splR, AD.segmentsOf(L0), P.xs.allow);
   assert.equal(JSON.stringify(ref.spl), '[78,143,217,282]'); assert.equal(ref.notes.length, 0);

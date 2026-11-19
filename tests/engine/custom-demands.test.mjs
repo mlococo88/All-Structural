@@ -144,10 +144,12 @@ test('Flexure: a pier entered alone takes C_b = 1.0 (the rows do not reach the b
 test('Flexure, factored entry: the same checks as the unfactored rows with the factors applied by hand (positive and pier)', () => {
   const P = W.SBDModel.defaultProject(), P2 = J(P);
   const U = [{ x: 44, M_DC1: 1450, M_DC2: 210, M_DW: 240, M_LLpos: 1650, M_LLneg: -400, M_FATpos: 620, M_FATneg: -150 }, { x: 109.995, M_DC1: -2300, M_DC2: -330, M_DW: -380, M_LLpos: 250, M_LLneg: -2400, M_FATpos: 120, M_FATneg: -520 }];
-  U[1].x = 109.99;   // a row at the location checked beside the pier (no interpolation: the two entries are compared at their own values)
+  U[1].x = 110.01;   // a row at the location checked beside the pier (no interpolation: the two entries are compared at their own values)
+  // A3 (2026-11-19): was 109.99 ft; that row now takes its own unbraced segment 90.20–110 ft, which the rows (44, 109.99 ft) reach, so its C_b comes from the
+  // entered moments: the unfactored envelope (minimum factors where they relieve) and the factored rows then differ (1.155 vs 1.249). 110.01 ft keeps C_b = 1.0 in both.
   setRows(P, 'flex', 0, U);
   // by hand, Table 3.4.1-1: positive (x = 44): steel 1.25(1450), long-term 1.25(210) + 1.50(240), short-term 1.75(1650); Service II 1.0, 1.0, 1.30; Fatigue I 1.75
-  //          pier (x = 109.99): 1.25(−2300), 1.25(−330) + 1.50(−380), 1.75(−2400); Service II −2300, −710, 1.30(−2400); Fatigue I 1.75(120), 1.75(−520)
+  //          pier (x = 110.01): 1.25(−2300), 1.25(−330) + 1.50(−380), 1.75(−2400); Service II −2300, −710, 1.30(−2400); Fatigue I 1.75(120), 1.75(−520)
   const fac = u => { const pos = u.x < 100, LL = pos ? u.M_LLpos : u.M_LLneg; return { x: u.x, Mu_s: 1.25 * u.M_DC1, Mu_l: 1.25 * u.M_DC2 + 1.5 * u.M_DW, Mu_n: 1.75 * LL, Ms_s: u.M_DC1, Ms_l: u.M_DC2 + u.M_DW, Ms_n: 1.3 * LL, Mf_p: 1.75 * u.M_FATpos, Mf_n: 1.75 * u.M_FATneg }; };
   setRows(P2, 'flex', 0, U.map(fac), { mode: 'fac' });
   const A = W.SBDFlexureUI.build({ P, g: 0, src: 'custom', method: 'auto' }), B = W.SBDFlexureUI.build({ P: P2, g: 0, src: 'custom', method: 'auto' });

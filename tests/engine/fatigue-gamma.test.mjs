@@ -23,7 +23,7 @@ test('Fatigue I γ: the default 1.75 = no fatigue inputs = the old hard-coded 1.
   const r60 = d.fx.rows.find(r => /60\.00/.test(r.name)); assert.ok(Math.abs(r60.dfB - 8.0188) < 1e-3, r60.dfB);
   // Shear GS18 at x = 109.99 ft: V_u = 103.157 + 17.705 + 14.664 + γ(45.226) = 214.671 kip (1.75) → 203.365 kip (1.50); V_cr = 786.63 kip
   const i = d.sh.stations.findIndex(r => /109\.99/.test(r.name)), a = d.sh.stations[i], b = q.sh.stations[i];
-  assert.ok(Math.abs(a.VuF - 214.671) < 1e-3 && Math.abs(b.VuF - 203.365) < 1e-3, `${a.VuF} ${b.VuF}`);
+  assert.ok(Math.abs(a.VuF - 214.707) < 1e-3 && Math.abs(b.VuF - 203.400) < 1e-3, `${a.VuF} ${b.VuF}`);   // A2 (2026-11-19): haunch and SIP forms with the pier segments' 18 in top flanges (DC1 +0.0017 klf over 88–128 and 232–272 ft): 214.671 → 214.707, 203.365 → 203.400
   assert.ok(Math.abs(b.VuF - (a.VDC1 + a.VDC2 + a.VDW + a.VUT + a.VUF + 1.5 * a.Vf)) < 1e-9);
   assert.equal(d.sh.TS.g.fat, 1.75); assert.equal(q.sh.TS.g.fat, 1.5);   // CP2: γ(Δf) at the stiffener weld toes
   // CF9, diagonal: γ(0.65)ΔP/A_g = 1.75(0.65)(3)/3.609375 = 0.9455 ksi → 1.50(0.65)(3)/3.609375 = 0.8104 ksi

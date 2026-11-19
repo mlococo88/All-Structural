@@ -297,7 +297,7 @@
     { key: 'sgeo', title: 'Stud dimensions, cover and penetration', ref: A + '6.10.10.1.4', ids: /^sc\.(Asc|hd|cov|pen)$/ },
     { key: 'sn', title: 'Modular ratio and effective flange width', ref: A + '4.6.2.6.1, 6.10.1.1.1b', ids: /^sc\.(n|beff)$/ },
     { key: 'sZ', title: 'Fatigue resistance of one stud', ref: A + '6.10.10.2', ids: /^sc\.(ZrI|Ffat)$|^scz\d+\.Zr$/ },
-    { key: 'sz', title: 'Fatigue pitch by zone', ref: A + '6.10.10.1.2, 6.10.10.2', ids: /^scz\d+\.(I|Q|Vfat|Vsr|lim|preq|ok)$/ },
+    { key: 'sz', title: 'Fatigue pitch by zone', ref: A + '6.10.10.1.2, 6.10.10.2', ids: /^scz\d+\.(I|Q|Vfat|Ffat|Vsr|lim|preq|ok)$/ },
     { key: 'sp', title: 'Pitch limits and transverse spacing', ref: A + '6.10.10.1.2, 6.10.10.1.3', ids: /^scz\d+\.(pl|st|edge)$/ },
     { key: 'sQ', title: 'Strength resistance of one stud', ref: A + '6.10.10.4.1, 6.10.10.4.3', ids: /^sc\.(QnE|Qr)$/ },
     { key: 'sP', title: 'Longitudinal force in each region', ref: A + '6.10.10.4.2', ids: /^scr\d+\.(P|Pc|Pp|Ps|Pn|Pnc|Pns)$/ },

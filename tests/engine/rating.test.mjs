@@ -76,18 +76,25 @@ function rateApp(pl) {
   return (a, b) => RT.girder(rows.filter(q => q.x >= a - 1e-6 && q.x <= b + 1e-6), { owner: (pl.ownerRules || {}).owner });
 }
 test('full path: this app\'s capacities on the 100 payloads, every span — RF change against ST-Girder, no RF crosses 1.0', () => {
-  const K = { flexInv: 'flexP', negInv: 'flexN', shearInv: 'shear', servInv: 'svc' }, rat = { flexInv: [], negInv: [], shearInv: [], servInv: [], govInv: [], govOpr: [] }, cross = [];
+  // A3 (2026-11-19): a flexure row next to a brace point takes the unbraced segment on its own side (engine/flexure.js bracing); ST-Girder takes the governing
+  // of both at a row within 0.25 ft. A span's row just left of an interior support (e.g. 139.99 ft) therefore no longer takes the next span's L_b, so a span's
+  // negative-flexure RF can rise against ST-Girder's (that segment is checked at the row just right of the support, in the next span). The bounds and the
+  // "no RF crosses 1.0" check are asserted on the whole girder (the smallest RF of its spans), where both rules meet; the span-by-span ratios are printed.
+  const K = { flexInv: 'flexP', negInv: 'flexN', shearInv: 'shear', servInv: 'svc' }, rat = { flexInv: [], negInv: [], shearInv: [], servInv: [], govInv: [], govOpr: [] }, cross = [], ratG = { flexInv: [], negInv: [], shearInv: [], servInv: [], govInv: [], govOpr: [] }, crossSpan = [];
   let nS = 0;
-  payloads.forEach(f => { const pl = load(f), sup = pl.member.supports, s0 = stSession(pl), app = rateApp(pl);
+  payloads.forEach(f => { const pl = load(f), sup = pl.member.supports, s0 = stSession(pl), app = rateApp(pl), mnA = {}, mnB = {};
     for (let k = 0; k < sup.length - 1; k++) { const { R } = stTrace(stSpan(s0, k)), ra = R.rating, g = app(sup[k], sup[k + 1]); nS++;
       const mine = { ...Object.fromEntries(Object.entries(K).map(([kk, b]) => [kk, g.by[b] ? g.by[b].inv : NaN])), govInv: g.gov.inv.inv, govOpr: g.gov.opr.opr };
-      Object.keys(rat).forEach(kk => { const a = ra[kk], b = mine[kk]; rat[kk].push(b / a); if ((a >= 1) !== (b >= 1)) cross.push(`${f} span ${k + 1} ${kk}: ST-Girder ${a.toFixed(3)}, this app ${b.toFixed(3)}`); }); } });
+      Object.keys(rat).forEach(kk => { const a = ra[kk], b = mine[kk]; rat[kk].push(b / a); if ((a >= 1) !== (b >= 1)) crossSpan.push(`${f} span ${k + 1} ${kk}: ST-Girder ${a.toFixed(3)}, this app ${b.toFixed(3)}`);
+        if (!(mnA[kk] <= a)) mnA[kk] = a; if (!(mnB[kk] <= b)) mnB[kk] = b; }); }
+    Object.keys(rat).forEach(kk => { const a = mnA[kk], b = mnB[kk]; ratG[kk].push(b / a); if ((a >= 1) !== (b >= 1)) cross.push(`${f} girder ${kk}: ST-Girder ${a.toFixed(3)}, this app ${b.toFixed(3)}`); }); });
+  console.log(`       A3: ${crossSpan.length} span RF(s) cross 1.0 span by span (a span's row left of a support takes its own L_b); whole girder: ${cross.length}`);
   assert.equal(nS, 300);
   const q = (L, p) => { const s = [...L].sort((a, b) => a - b); return s[Math.round(p * (s.length - 1))]; };
   console.log('       RF this app / ST-Girder, 100 payloads × 3 spans (min, 10 %, median, 90 %, max):');
   Object.entries(rat).forEach(([k, L]) => console.log(`         ${k.padEnd(8)} ${[0, 0.1, 0.5, 0.9, 1].map(p => q(L, p).toFixed(4)).join('  ')}`));
   assert.deepEqual(cross, [], 'RF crossing 1.0');
-  const within = (k, lo, hi) => rat[k].forEach(v => assert.ok(v >= lo && v <= hi, `${k} ratio ${v} outside ${lo}..${hi}`));
+  const within = (k, lo, hi) => ratG[k].forEach(v => assert.ok(v >= lo && v <= hi, `${k} ratio ${v} outside ${lo}..${hi}`));   // A3: whole girder
   within('flexInv', 1 - 2e-4, 1 + 1e-4); within('shearInv', 1 - 1e-6, 1 + 1e-6); within('servInv', 1.0, 1.001); within('negInv', 1.015, 1.08);
 });
 

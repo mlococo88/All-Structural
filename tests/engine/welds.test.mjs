@@ -178,7 +178,7 @@ test('Welds tab load factors (2026-11-01): the project\'s, not P.welds.gam (kept
   // hand check, G1 Pier 2 left, top (FW1 governing): v_u = Σ γ V Q/I; the LL+IM term 1.75(129.164)(2549.405)/162131.93 = 3.5543 kip/in (with the old
   // γ_LL 1.50: 3.0465); v_u = 1.6324 + 0.3300 + 0.3280 + 3.5543 = 5.8446 kip/in; R_r = 14.847 kip/in; FW1 = 5.8446/14.847 = 0.3937 (was 0.3595)
   const r = B0.R.fw.find(q => B0.gov.FW1.loc === `${q.name}, top`), t = r.terms.find(q => q.n === 'LL+IM');
-  near(t.vt, 1.75 * t.V * t.Qt / t.I, 1e-12, 'LL term'); near(t.vt, 3.5543, 1e-4, 'LL term value'); near(r.vuT, 5.8446, 1e-4, 'v_u'); near(B0.gov.FW1.r, 0.3937, 1e-4, 'FW1');
+  near(t.vt, 1.75 * t.V * t.Qt / t.I, 1e-12, 'LL term'); near(t.vt, 3.5543, 1e-4, 'LL term value'); near(r.vuT, 5.8451, 1e-4, 'v_u');   /* A2 (2026-11-19): 5.8446 → 5.8451 (haunch and SIP per segment flange width) */ near(B0.gov.FW1.r, 0.3937, 1e-4, 'FW1');
   // the Fatigue I factor follows the Fatigue & studs input: 1.50 → FW3 and TR1 × 1.50/1.75
   const F = J(P); F.fatigue.gam.fI = 1.5; const BF = UI.build({ P: F, g: 0 }); near(BF.gov.FW3.r, B0.gov.FW3.r * 1.5 / 1.75, 1e-12, 'FW3'); near(BF.gov.TR1.r, B0.gov.TR1.r * 1.5 / 1.75, 1e-12, 'TR1');
   assert.equal(BF.gov.FW1.r, B0.gov.FW1.r);

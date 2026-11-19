@@ -78,6 +78,19 @@ function itemPairs(mine, theirs) {
     c.items.forEach((it, i) => { const q = m.items[i] || {}; stats.items++; P(`${c.id}[${i}] loc`, q.loc, it.loc); P(`${c.id}[${i}] st`, q.st, it.st); if (it.r != null || q.r != null) P(`${c.id}[${i}] r`, q.r ?? null, it.r ?? null); }); });
   return out;
 }
+/* N2 (2026-11-19; AASHTO LRFD 10th Ed. Art. 6.10.10.1.2, p. 6-224): GirderDetail takes w = 48 in in every zone; this engine takes w/2 = 24 in in a zone
+   at an end support (F_fat = F_rc/(w/2)). n2fix applies that one difference to GirderDetail's values by hand (V_sr = √(V_fat² + F_fat²) with GirderDetail's
+   own V_fat, p_max = nZ_r/V_sr, SC1 r = p/p_max), so that every other value is still compared to GirderDetail's. Returns the number of zones adjusted. */
+function n2fix(m, zs, c1, mc1, rounded) {   // rounded: GirderDetail's values are the hand-off's (to 1e-6): V_fat compared on its own; V_sr from this engine's V_fat (exact)
+  if (!m.skew) return 0; let n = 0;
+  m.zones.forEach((z, i) => { if (!z.end) return; const o = zs[i]; if (!o) return; n++;
+    o.Vsr = Math.hypot(rounded ? z.Vfat : o.Vfat, z.Ffat); o.preq = o.Vsr > 0 ? z.nr * (rounded ? z.Zr : o.Zr != null ? o.Zr : z.Zr) / o.Vsr : Infinity;
+    if ('r' in o) o.r = z.p / o.preq; if ('ok' in o) o.ok = o.preq >= z.p - 1e-9;
+    if (c1 && c1.items[i]) { const it = c1.items[i]; it.r = z.p / o.preq; it.st = o.preq >= z.p - 1e-9 ? 'pass' : 'fail'; if ('capacity' in it) it.capacity = o.preq; } });
+  if (n && c1 && mc1) { c1.status = mc1.status; c1.gov = mc1.gov; }
+  return n;
+}
+let n2Zones = 0;
 function cmpSc(m, g, where) {
   if (g.errors.length || m.errors.length) { cmp([['errors', JSON.stringify([...m.errors]), JSON.stringify([...g.errors])]], where); return; }
   cmp(['Asc', 'QnE', 'Qn', 'Qr', 'Zr', 'Ffat', 'gf', 'h', 'st', 'tdeck'].map(k => [k, m[k], g[k]]).concat([['n', m.dk.n, g.dk.n], ['gaps', JSON.stringify(m.gaps), JSON.stringify(g.gaps)]]), where);
@@ -117,13 +130,15 @@ test('parity with GirderDetail Shear connectors (SC1–SC7) on the recorded inpu
       g.R.regions.forEach((r, i) => { const b = fx.gd.sc.regions[i]; ['P', 'nreq', 'nprov', 'lost', 'nnet'].forEach(k => nb(r[k], b[k], `${where} r${i} ${k}`)); });
       browserItems(g.C).forEach(([id, its], j) => its.forEach((it, i) => { nb(it[1], fx.gd.sc.checks[j][1][i][1], `${where} ${id} ${i}`); nb(it[2], fx.gd.sc.checks[j][1][i][2], `${where} ${id} ${i} st`); }));
     }
-    const m = SC.compute(clone(P.sc), E); cmpSc(m, g.R, where); if (!m.errors.length && g.C) cmp(itemPairs(SC.checks(m), g.C), where + ' checks');
+    const m = SC.compute(clone(P.sc), E); if (!m.errors.length && !g.R.errors.length) { const mC = SC.checks(m); n2Zones += n2fix(m, g.R.zones, g.C && g.C.find(c => c.id === 'SC1'), mC.find(c => c.id === 'SC1')); }
+    cmpSc(m, g.R, where); if (!m.errors.length && g.C) cmp(itemPairs(SC.checks(m), g.C), where + ' checks');
     if (!m.errors.length) { nZ += m.zones.length; nR += m.regions.length;
       const ids = new Set(SC.steps(m).map(s => s.id)); SC.checks(m).forEach(c => c.items.forEach(it => assert.ok(!it.step || ids.has(it.step), `${where}: step ${it.step}`))); }
   }
   assert.equal(JSON.stringify(SC.DEFAULT), JSON.stringify(G.ctx.GM.sc.def), 'DEFAULT = GM.sc.def');
   console.log(`       ${fixtures.length} recorded inputs + ${cases.length - fixtures.length} variations and built-in cases: ${nZ} zones, ${nR} regions; ${stats.vals} values, ${stats.items} check items; Node = browser on ${nodeB} values (${nodeDiff} differ); largest relative difference ${stats.worst.rel.toExponential(2)}${stats.worst.what ? ' (' + stats.worst.what + ')' : ''}`);
   assert.equal(nodeDiff, 0, 'GirderDetail in Node differs from the browser');
+  console.log(`       N2: ${n2Zones} end-support zones of skewed cases with w/2 = 24 in applied to GirderDetail's values by hand`); assert.ok(n2Zones > 0);
   assert.deepEqual(stats.diffs.slice(0, 20), [], `${stats.diffs.length} differences`);
 });
 
@@ -137,7 +152,7 @@ test('fromPayload: this engine on the 100 gd_* payloads = the stud results Girde
   for (const f of payloads) {
     const pl = JSON.parse(fs.readFileSync(path.join(DIR, f), 'utf8')).payload, q = pl.girderDetail.details.studs.results, d = SC.fromPayload(pl);
     assert.ok(d, `${f}: no stud results`); nP++;
-    const R = SC.compute(d.p, d.env); assert.deepEqual([...R.errors], [], f); const C = SC.checks(R), c1 = C.find(c => c.id === 'SC1'), c2 = C.find(c => c.id === 'SC2'), i6 = C.find(c => c.id === 'SC6').items.slice(R.gaps.length);
+    const R = SC.compute(d.p, d.env); assert.deepEqual([...R.errors], [], f); n2fix(R, q.zones = q.zones.map(o => ({ ...o })), null, null, true); const C = SC.checks(R), c1 = C.find(c => c.id === 'SC1'), c2 = C.find(c => c.id === 'SC2'), i6 = C.find(c => c.id === 'SC6').items.slice(R.gaps.length);
     [['Asc', R.Asc], ['QnE', R.QnE], ['Qn', R.Qn], ['phiSc', R.phiSc], ['Qr', R.Qr], ['ZrI', R.Zr], ['gamI', R.gf], ['Ffat', R.Ffat], ['n', R.MR.n], ['fc', R.fc], ['beff', R.dk.beff], ['ts', R.dk.ts]].forEach(([k, v]) => T(k, r6(v), q[k], f));
     R.zones.forEach((z, i) => { nZ++; const o = q.zones[i], w = `${f} zone ${i}`, it = c1.items[i];
       [['I', z.I], ['Q', z.Q], ['Aslab', z.Aslab], ['gam', z.fat.gam], ['Zr', z.Zr], ['nn', z.fat.nn], ['N', z.fat.N], ['dFn', z.fat.dFn], ['Vfat', z.Vfat], ['Vsr', z.Vsr], ['preq', z.preq], ['r', it.r]].forEach(([k, v]) => T(k, r6(v), o[k], w));

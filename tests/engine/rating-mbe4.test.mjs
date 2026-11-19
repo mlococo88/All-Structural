@@ -20,13 +20,13 @@ test('MBE 4th Ed. 6A.4.2.4: φ_s = 1.0 on shear, flexure keeps φ_c φ_s (built-
   // V_n = 905.410 kip, V_DC = 119.370, V_DW = 14.664, V_LL+IM = 126.194 kip (direction −1)
   // φ_c = φ_s = 1.0 (default): C = 905.410; RF_inv = (905.410 − 1.25(119.370) − 1.50(14.664))/(1.75(126.194)) = 734.200/220.839 = 3.3246 (unchanged)
   const R0 = rate(), q0 = row(R0, 'x = 109.99 ft', 'v');
-  near(q0.C, 905.410, 0.001, 'C'); near(q0.inv, 3.3246, 5e-5, 'RF inv'); near(q0.opr, 4.3097, 5e-5, 'RF opr');
+  near(q0.C, 905.410, 0.001, 'C'); near(q0.inv, 3.3244, 5e-5, 'RF inv'); near(q0.opr, 4.3094, 5e-5, 'RF opr');   // A2 (2026-11-19): haunch and SIP forms with the pier segments' 18 in top flanges (DC1 +0.0017 klf over 88–128 and 232–272 ft): 3.3246 → 3.3244, 4.3097 → 4.3094
   // φ_s = 0.90: before C = 0.90(905.410) = 814.869, RF_inv = 643.659/220.839 = 2.9146; after C = 1.0(905.410), RF_inv = 3.3246
   const R1 = rate(P => { P.rating = { phiC: 1.0, phiS: 0.90 }; }), q1 = row(R1, 'x = 109.99 ft', 'v');
-  near(q1.C, 905.410, 0.001, 'C φs 0.90'); near(q1.inv, 3.3246, 5e-5, 'RF inv φs 0.90');
+  near(q1.C, 905.410, 0.001, 'C φs 0.90'); near(q1.inv, 3.3244, 5e-5, 'RF inv φs 0.90');
   assert.match(q1.steps.find(s => s.id === 'rt.phiCS').ref, /6A\.4\.2\.4/);
   // flexure keeps φ_cφ_s: x = 316 ft, C = 0.90(9,625.952) = 8,663.356
-  near(row(R1, 'x = 316.00 ft', 'mp').C, 8663.356, 0.001, 'flexure C φs 0.90');
+  near(row(R1, 'x = 316.00 ft', 'mp').C, 8663.325, 0.001, 'flexure C φs 0.90');   // A2 (2026-11-19): haunch and SIP forms with the pier segments' 18 in top flanges (DC1 +0.0017 klf over 88–128 and 232–272 ft): 8,663.356 → 8,663.325
   // φ_c = 0.95, φ_s = 0.95: shear C = max(0.95(1.0), 0.85)(905.410) = 860.139 (before 0.9025(905.410) = 817.132)
   const R2 = rate(P => { P.rating = { phiC: 0.95, phiS: 0.95 }; }); near(row(R2, 'x = 109.99 ft', 'v').C, 860.139, 0.001, 'C φc 0.95 φs 0.95');
   assert.equal(RT.phi(0.85, 0.85).vV, 0.85); assert.equal(RT.phi(1, 0.85).vV, 1);
@@ -34,10 +34,10 @@ test('MBE 4th Ed. 6A.4.2.4: φ_s = 1.0 on shear, flexure keeps φ_c φ_s (built-
 test('MBE 4th Ed. 6A.6.4.2.2: Service II f_R = 0.95F_yf composite (no R_h); built-in project and a hybrid web', () => {
   // built-in (homogeneous, R_h = 1.0), top flange at x = 249.99 ft: f_R = 0.95(50) = 47.5 ksi (unchanged); f_DC = 16.764, f_DW = 1.565, f_LL = 10.149 ksi
   // RF_inv = (47.5 − 16.764 − 1.565)/(1.30(10.149)) = 29.171/13.193 = 2.2111; RF_op = 29.171/10.149 = 2.8744
-  const q0 = row(rate(), 'x = 249.99 ft', 'svt'); near(q0.C, 47.5, 1e-9, 'f_R'); near(q0.inv, 2.2111, 5e-5, 'RF inv'); near(q0.opr, 2.8744, 5e-5, 'RF opr');
+  const q0 = row(rate(), 'x = 249.99 ft', 'svt'); near(q0.C, 47.5, 1e-9, 'f_R'); near(q0.inv, 2.2109, 5e-5, 'RF inv'); near(q0.opr, 2.8742, 5e-5, 'RF opr');   // A2 (2026-11-19): haunch and SIP forms with the pier segments' 18 in top flanges (DC1 +0.0017 klf over 88–128 and 232–272 ft): 2.2111 → 2.2109, 2.8744 → 2.8742
   // Grade 36 web (hybrid, R_h = 0.98526): before f_R = 0.95(0.98526)(50) = 46.800, RF_inv 2.1580; after f_R = 47.5, RF_inv 2.2111
   const q1 = row(rate(P => { P.materials.steel.web = '36'; }), 'x = 249.99 ft', 'svt');
-  near(q1.C, 47.5, 1e-9, 'f_R hybrid'); near(q1.inv, 2.2111, 5e-5, 'RF inv hybrid');
+  near(q1.C, 47.5, 1e-9, 'f_R hybrid'); near(q1.inv, 2.2109, 5e-5, 'RF inv hybrid');
   assert.match(q1.steps.find(s => s.id === 'rt.C').note, /without the hybrid factor/);
   assert.match(RT.BASIS.svc, /0\.95F_yf.*0\.80R_hF_yf/);
 });

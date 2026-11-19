@@ -167,6 +167,7 @@
   const TOPICS = { x: () => [window.SBDFlexureUI.TP.n, { key: 'ann', title: 'Modular ratio for the stiffness', ref: A + '6.10.1.1.1b', ids: /^an\.n$/ }, ...TPX('steel', 'c3', 'cn', 'cr'),
     { key: 'wst', title: 'Girder steel weight by segment', ref: A + '3.5.1', ids: /^an\.wst/ },
     { key: 'I', title: 'Stiffness of each segment (steel, 3n, n)', ref: A + '4.6.2.1, 6.10.1.1.1', ids: /^an\.I\d+/ },
+    { key: 'wet', title: 'Haunch and SIP forms with each segment\'s top flange (DC1 wet deck)', ref: A + '3.5.1', ids: /^an\.wet\./ },   // A2 (2026-11-19)
     { key: 'eq', title: 'Equilibrium checks of the dead-load analyses', ref: '', ids: /^an\.eq\./ },
     { key: 'dc', title: 'Permanent-load moments (DC1, DC2, DW)', ref: A + '4.6.2.1, 6.10.1.1.1', ids: /^an\.M\.(DC|perm)/ },
     { key: 'll', title: 'Live-load envelopes and reactions (LL+IM)', ref: A + '3.6.1.2, 3.6.1.3.1, 3.6.2.1', ids: /^an\.(M\.LL|R\.LL)/ },

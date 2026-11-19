@@ -163,7 +163,12 @@
     const xs = env.xs, N = xs.length, Lend = opt.L, region = opt.region, G = opt.G || factors();
     const bp = [...new Set(opt.braces.map(v => +(+v).toFixed(3)))].sort((p1, p2) => p1 - p2).filter((v, k, arr) => k === 0 || v - arr[k - 1] > 0.25);
     const ib = bp.findIndex(v => Math.abs(v - x) < 0.25), Lg = bp[bp.length - 1], segs = [];
-    if (ib >= 0) { if (ib > 0) segs.push([bp[ib - 1], bp[ib]]); if (ib < bp.length - 1) segs.push([bp[ib], bp[ib + 1]]); }
+    // A3 (2026-11-19): a point within 0.25 ft of a brace point takes the unbraced segment on its own side (x left of the brace: the segment
+    // ending there; right: the one starting there); only a point at the brace itself (|x − brace| ≤ 0.001 ft) takes the governing of both.
+    // Before: both adjacent segments at any point within 0.25 ft, e.g. x = 139.99 ft (left of an interior support at 140) took the next span's L_b.
+    if (ib >= 0) { const lf = x < bp[ib] - 1e-3, rt = x > bp[ib] + 1e-3;
+      if (ib > 0 && !rt) segs.push([bp[ib - 1], bp[ib]]); if (ib < bp.length - 1 && !lf) segs.push([bp[ib], bp[ib + 1]]);
+      if (!segs.length) segs.push(ib > 0 ? [bp[ib - 1], bp[ib]] : [bp[ib], bp[ib + 1]]); }
     else segs.push([[...bp].reverse().find(v => v < x) ?? 0, bp.find(v => v > x) ?? Lg]);
     const node = q => { let b = 0; xs.forEach((v, i) => { if (Math.abs(v - q) < Math.abs(xs[b] - q)) b = i; }); return b; }, i = node(x);
     const secAt = q => opt.secAt(Math.min(Math.max(q, 1e-6), Lend - 1e-6));

@@ -41,10 +41,10 @@ test('Deck placement factors × the owner\'s η (not m): Constructibility, overh
   assert.equal(JSON.stringify(W.SBDConstrUI.ohOldGam(P).map(q => q.k)), '["dc","cl"]'); near(W.SBDConstrUI.build({ P: J(P), g: 0, src: 'project' }).oh.wu, 0.85739, 1e-5, 'saved γ not used');
   assert.equal(W.SBDConstrUI.ohOldGam(proj(false, true)).length, 0);
   // Shear GS16 at x = 0.01 ft: V_u = 1.25(54.821) = 68.53 → 1.3125(54.821) = 71.95 kip
-  near(W.SBDShearUI.build({ P: J(proj(true)), g: 0, src: 'analysis' }).stations[0].VuC, 71.952, 1e-3, 'V_u deck placement');
+  near(W.SBDShearUI.build({ P: J(proj(true)), g: 0, src: 'analysis' }).stations[0].VuC, 71.954, 1e-3, 'V_u deck placement');   // A2 (2026-11-19): haunch and SIP forms with the pier segments' 18 in top flanges: 71.952 → 71.954
   // Cross-frames: bracing M_u = 1.25M_DC1 + 1.5M_CL = 1339.7 → × 1.05 = 1406.7 kip-ft (x = 321.0 ft)
   assert.equal(W.SBDFramingUI.build({ P: J(proj(false)), g: 0 }).I.p.sb.Mu, 1339.7); assert.equal(W.SBDFramingUI.build({ P: J(proj(true)), g: 0 }).I.p.sb.Mu, 1406.7);
   // Splices, deck placement combination: γ × η in the engine (OWN_K.cn), the factors shown unchanged
   const sp = W.SBDSplicesUI.build({ P: J(proj(true)), g: 0, src: 'analysis' }), con = sp.list[0].R.combos.find(c => c.type === 'con');
-  near(con.fac.DC1, 1.3125, 1e-12, 'splice γ_DC'); near(con.fac.CL, 1.575, 1e-12, 'splice γ_CL'); near(con.M, -322.6125, 1e-6, 'splice M (−307.25 × 1.05)');
+  near(con.fac.DC1, 1.3125, 1e-12, 'splice γ_DC'); near(con.fac.CL, 1.575, 1e-12, 'splice γ_CL'); near(con.M, -322.48125, 1e-6, 'splice M (−307.125 × 1.05)');   // A2 (2026-11-19): haunch and SIP forms with the pier segments' 18 in top flanges: −307.25 × 1.05 = −322.6125 before
 });
