@@ -30,7 +30,7 @@ for (const vw of [1400, 390]) {
     assert.ok(r.row, 'the two-line bolt item'); assert.match(r.link, /cf\.cfd\.bolt/); assert.ok(r.steps, 'the worked steps'); assert.equal(r.kerr, 0); assert.ok(r.bolts >= 16, `bolts drawn ${r.bolts}`);
     const st = await p.$('[id="st-cf.cfd.bolt"]'); if (st) await st.scrollIntoViewIfNeeded();
     if (SHOTS) await p.screenshot({ path: path.join(SHOTS, `sbdia-check-${vw}.png`) });
-    const sv = await p.$('#out svg[aria-label="Diaphragm elevation"]'); if (sv) { await sv.scrollIntoViewIfNeeded(); if (SHOTS) await p.screenshot({ path: path.join(SHOTS, `sbdia-elev-${vw}.png`) }); }
+    if (await p.evaluate(() => { const v = [...document.querySelectorAll('#out svg[aria-label="Diaphragm elevation"]')].find(e => e.getBoundingClientRect().height > 0); if (v) v.scrollIntoView({ block: 'center' }); return !!v; }) && SHOTS) await p.screenshot({ path: path.join(SHOTS, `sbdia-elev-${vw}.png`) });   // the visible one of the wide / narrow drawings
     allErrs.push(...errs); console.log(`  ok   ${vw} px: inputs, the two-line item linked to its steps, ${r.bolts} bolts in the elevation`);
   } finally { await b.close(); }
 }
