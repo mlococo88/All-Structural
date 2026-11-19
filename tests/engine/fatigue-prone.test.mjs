@@ -20,7 +20,7 @@ test('MBE 4th Ed. 7.2.3 (FA8): default project with the evaluation on — four b
   const P = U.SBDModel.defaultProject(); P.fatigue.ev = { ...FA.EV_DEF, on: 'yes' };
   const R = U.SBDFatigueUI.build({ P, g: 0, src: 'analysis' }); assert.ok(!R.err, R.err);
   const r = R.FR.rows.find(q => q.name === 'Bottom flange shop transition at 88.00 ft, G1'), e = r.ev;
-  near(e.Rp, 1.007983, 1e-6, 'R_p'); near(e.ft0, 1.34895, 5e-6, 'f_LL,t'); near(e.dft, 1.08777, 5e-6, '(Δf)_tension'); near(2.2 * e.dft, 2.39310, 5e-5, '2.2(Δf)_tension'); near(e.fdc, 7.24431, 5e-6, 'f_DL,c');
+  near(e.Rp, 1.007983, 1e-6, 'R_p'); near(e.ft0, 1.34895, 5e-6, 'f_LL,t'); near(e.dft, 1.08777, 5e-6, '(Δf)_tension'); near(2.2 * e.dft, 2.39310, 5e-5, '2.2(Δf)_tension'); near(e.fdc, 7.24341,   /* A2 (2026-11-19): haunch and SIP forms with the pier segments' 18 in top flanges (DC1 +0.0017 klf over 88–128 and 232–272 ft): 7.24431 → 7.24341 */ 5e-6, 'f_DL,c');
   assert.equal(e.prone, false);
   const ck = id => R.FC.find(c => c.id === id);
   assert.ok(ck('FA8').items.find(it => it.step === `fa${r.i}.prone`).loc.includes('not fatigue-prone'));

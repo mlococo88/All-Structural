@@ -32,7 +32,7 @@ test('two-sign check at skewed G2 x = 71 ft: the positive pour moment is checked
   near(p.MDCc, 408.45, 0.01, 'M_DCc+'); near(p.Mc, 499.86, 0.01, 'M_c+'); assert.equal(p.conC.lab, 'top'); near(p.conC.f, 5.2252, 1e-4, 'f_bu+');
   near(ck(p, 'yield').ratio, 0.3545, 1e-4, 'GS14 yield +'); near(p.ltC.npr.ge, 9.7961, 1e-4, 'γ_e +'); near(p.ltC.Fnc, 41.9057, 1e-3, 'F_nc +'); near(ck(p, 'buckling').ratio, 0.2241, 1e-4, 'GS14 buckling +');
   // negative case: as checked before this change (M_c = 1.25(−50.48) + 1.50(−7.14) = −73.81 kip-ft, bottom flange; GS15 tension 0.2654)
-  near(n.Mc, -73.808, 0.01, 'M_c−'); assert.equal(n.conC.lab, 'bottom'); near(n.gov.ratio, 0.26543, 1e-4, 'GS15 −'); near(n.ltC.npr.ge, 8.7534, 1e-4, 'γ_e −');
+  near(n.Mc, -73.781, 0.01, 'M_c−');   /* A2 (2026-11-19): haunch and SIP forms with the pier segments' 18 in top flanges: −73.808 → −73.781 */ assert.equal(n.conC.lab, 'bottom'); near(n.gov.ratio, 0.26543, 1e-4, 'GS15 −'); near(n.ltC.npr.ge, 8.7534, 1e-4, 'γ_e −');
   assert.ok(/Both signs occur here and both are checked/.test(r.steps.find(s => s.id === 'cn.Mc').note), 'the worked M_c names both cases');
   // x = 70: the pour stages give one sign only, one case, unchanged (GS14 yield 0.3683); x = 72: the negative case governs (0.3521) with the positive also checked (0.3404)
   const a = at(R, 70), b = at(R, 72); assert.ok(!a.cases, 'x = 70: one case'); near(a.gov.ratio, 0.36829, 1e-4, 'x = 70');

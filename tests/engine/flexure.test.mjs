@@ -305,7 +305,9 @@ test('SB2-R2 hand check: built-in project, this app\'s analysis, G1 x = 109.99 f
   const U = loadShared('units.js', 'steps.js', 'vehicles.js', 'moving-load.js', A('engine/model.js'), A('engine/sections.js'), A('engine/flexure.js'), A('engine/owners.js'), 'lldf.js', A('engine/lldf.js'), A('engine/loads.js'),
     A('engine/shear.js'), A('engine/stiffeners.js'), A('engine/analysis.js'), A('engine/fatigue.js'), A('engine/rating.js'), A('engine/framing.js'), A('ui/shear.js'), A('ui/flexure.js'), A('ui/rating.js'));
   const R = U.SBDRatingUI.build({ P: U.SBDModel.defaultProject(), g: 0, src: 'analysis' }); assert.ok(!R.err, R.err);
-  const r = R.flex.rows.find(q => Math.abs(q.x - 109.99) < 1e-6), c = r.checks.find(q => q.id === 'GS7');
+  // A3 (2026-11-19): moved from x = 109.99 ft (left of the pier at 110 ft) to 110.01 ft: the row left of the pier now takes its own unbraced segment
+  // (90.20 to 110 ft, L_b = 19.80 ft, F_nc 50 ksi, no longer this case); 110.01 ft takes the segment 110 to 133.33 ft that 109.99 ft took before.
+  const r = R.flex.rows.find(q => Math.abs(q.x - 110.01) < 1e-6), c = r.checks.find(q => q.id === 'GS7');
   // f_bu = 39.667 ksi; nonprismatic L_b (6.10.8.2.3c): F_e = γ_e f_bu,gov = 0.88119(39.683) = 34.968 ksi = F_cr = F_nc,LTB; F_nc,FLB = 50 -> F_nc = 34.968
   // f_bu/F_cr = 1.1344 ≥ 1: AF undefined; f_l = 0 -> amplified f_l = 0; GS7 = (39.667 + 0/3)/34.968 = 1.1344 (before: NaN, not reported)
   // (the Rating tab's framing gives 39.670 / 34.968 here: L_b from the project's cross-frames)
@@ -317,7 +319,7 @@ test('SB2-R2 hand check: built-in project, this app\'s analysis, G1 x = 109.99 f
   const F = FX.fromPayload(R.pl, { owner: 'AASHTO', Lb: 25 }), G = FX.girder(F.locs.map(L => ({ ...L, fl: 7.5 })), F.prj, { supports: F.supports });
   assert.equal(G.gov.gov.ratio, Infinity); assert.equal(G.gov.gov.ng, FX.AMP_NG); assert.equal(G.gov.gov.ok, false);
   // GirderDetail (SB2-R2, #485) at that row: the same GS7 ratio, f_l = 0
-  const GS = gdGirderSection(), L = F.locs.find(q => Math.abs(q.x - 109.99) < 1e-6), mine = FX.girder([L], F.prj, {}).rows[0].checks.find(k => k.id === 'GS7');
+  const GS = gdGirderSection(), L = F.locs.find(q => Math.abs(q.x - 110.01) < 1e-6), mine = FX.girder([L], F.prj, {}).rows[0].checks.find(k => k.id === 'GS7');
   const { R: GR, CK } = gdRunCase(GS, gdModule(GS, F.prj, [gdRow(GS, L, 0)]), (F.prj.a6 && F.prj.a6.skews) || []);
   const it = CK.find(k => k.id === 'GS7').items[0]; assert.ok(Math.abs(it.r - mine.ratio) < 1e-9, `GirderDetail ${it.r} vs ${mine.ratio}`); assert.equal(GR.rows[0].am.fl, 0);
 });
