@@ -289,6 +289,16 @@
     const allow = LD.steelAllowPct, plf = isNum(opt.steelPlf) ? opt.steelPlf : STEEL_PLF, wSteel = segs.map(s => s.As * plf / 1000 * (1 + allow / 100));
     const distSteel = segs.map((s, i) => [s.x0, s.x1, wSteel[i]]);
     const xfP = LD.xf.map(q => [q.x, q.P]);
+    // A2 (2026-11-19): haunch and SIP forms with each plate segment's top flange width. The loads module works them with one b_f (the first
+    // region's: span 1, its section of maximum positive moment); here each segment adds Δw = (h/12)(Δb_f/12)w_c − (q_SIP/1000)n_bays(Δb_f/12)/2,
+    // Δb_f = b_f,seg − b_f,0 (the haunch over the wider flange; the SIP forms over the narrower clear bays, n_bays = 1 exterior, 2 interior).
+    // Only where DC1 comes from the loads module (an entered DC1 is used as entered). Before: b_f,0 along the whole girder.
+    const wetCorr = [], AJ = LD.src.DC1wet === 'module' && mod && mod.G && mod.G.adj ? mod.G.adj : null;
+    if (AJ) segs.forEach(s => { const db = (s.p.topB - AJ.bf0) / 12; if (Math.abs(db) < 1e-9) return; const dh = AJ.hh / 12 * db * AJ.uc, ds = -AJ.sipq / 1000 * AJ.nAdj * db / 2;
+      wetCorr.push({ x0: s.x0, x1: s.x1, topB: s.p.topB, db, dh, ds, w: dh + ds }); });
+    const wetL = wetCorr.length ? { dist: [[0, Lt, LD.DC1wet], ...wetCorr.map(c => [c.x0, c.x1, c.w])] } : { w: LD.DC1wet };
+    const wetIn = (a, b) => [[a, b, LD.DC1wet], ...wetCorr.map(c => [Math.max(a, c.x0), Math.min(b, c.x1), c.w]).filter(q => q[1] > q[0] + 1e-9)];
+    const wetTot = LD.DC1wet * Lt + wetCorr.reduce((t, c) => t + c.w * (c.x1 - c.x0), 0);
     const SA = (sb, loads, stations) => ML().staticAnalysis({ spans, E, sb, simple: !cont, loads, stations: stations || xs });
 
     // cracked zones (feStages): grid elements, continuous girders only
@@ -297,7 +307,7 @@
     if (cont && comp && S.crack !== 'none') {
       const ck = new Uint8Array(N - 1);
       if (S.crack === 'dl') {
-        const a = SA(sbS, { dist: [...distSteel, [0, Lt, LD.DC1wet]], P: xfP }), b = SA(sbOf(segs, 'I3u'), { w: LD.DC2 + LD.DW });
+        const a = SA(sbS, { dist: [...distSteel, ...wetIn(0, Lt)], P: xfP }), b = SA(sbOf(segs, 'I3u'), { w: LD.DC2 + LD.DW });
         const Mt = a.M.map((v, i) => v + b.M[i]); for (let e = 0; e < N - 1; e++) ck[e] = Mt[e] < 0 && Mt[e + 1] < 0 ? 1 : 0;
       } else for (let k = 1; k < ns; k++) { const xp = xs[supIdx[k]], a = 0.15 * spans[k - 1], c = 0.15 * spans[k];
         for (let e = 0; e < N - 1; e++) { const xm = (xs[e] + xs[e + 1]) / 2; if (xm >= xp - a - 1e-9 && xm <= xp + c + 1e-9) ck[e] = 1; } }
@@ -308,7 +318,7 @@
     // dead-load stages (staticAnalysis, loads applied exactly)
     const st = {};
     st.DC1steel = SA(sbS, { dist: distSteel, P: xfP });
-    st.DC1wet = SA(sbS, { w: LD.DC1wet });
+    st.DC1wet = SA(sbS, wetL);
     st.DC2 = SA(sb3, { w: LD.DC2 });
     st.DW = SA(sb3, { w: LD.DW });
     st.CL = SA(sbS, { w: LD.CL });
@@ -323,7 +333,7 @@
     for (let k = 1; k < ns && cont; k++) { let l = supIdx[k], r = supIdx[k]; while (l > 0 && Mperm[l - 1] < 0) l--; while (r < N - 1 && Mperm[r + 1] < 0) r++; for (let i = l; i <= r; i++) region[i] = k; }
 
     // camber (dead-load deflection per stage): steel + cross-frames, wet deck (both on I_s), DC2 + DW (I_3n, cracked zones), existing utilities
-    const camberStages = [{ spans, E, sb: sbS, simple: !cont, loads: { dist: distSteel, P: xfP } }, { spans, E, sb: sbS, simple: !cont, loads: { w: LD.DC1wet } },
+    const camberStages = [{ spans, E, sb: sbS, simple: !cont, loads: { dist: distSteel, P: xfP } }, { spans, E, sb: sbS, simple: !cont, loads: wetL },
       { spans, E, sb: sb3, simple: !cont, loads: { w: LD.DC2 + LD.DW } }];
     if (LD.UT) camberStages.push({ spans, E, sb: sbS, simple: !cont, loads: { w: LD.UT } });
     const cam = ML().camber(camberStages, { stations: xs });
@@ -425,7 +435,7 @@
       pours.forEach((q, k) => {
         const sbq = sbOf(segs, 'Is').flatMap(([a, b, I]) => { const cuts = [a, b]; done.forEach(([p, r]) => [p, r].forEach(v => { if (v > a + 1e-9 && v < b - 1e-9) cuts.push(v); })); cuts.sort((u, v) => u - v);
           return cuts.slice(0, -1).map((u, i) => { const xm = (u + cuts[i + 1]) / 2, seg = segAt(xm); return [u, cuts[i + 1], done.some(([p, r]) => xm >= p && xm <= r) ? seg[key] : I]; }); });
-        const M = SA(sbq, { dist: [[q.a, q.b, LD.DC1wet]] }).M;
+        const M = SA(sbq, { dist: wetIn(q.a, q.b) }).M;
         for (let i = 0; i < N; i++) { cum[i] += M[i]; if (compN[i]) { const c = secs[i]; fdk[i] += -M[i] * 12 * (c.yd - c.yb) / c.I / nrS; } else { envP[i] = Math.max(envP[i], cum[i]); envN[i] = Math.min(envN[i], cum[i]); } }
         xs.forEach((x, i) => { if (inP(x, q)) compN[i] = 1; }); done.push([q.a, q.b]); stages.push({ name: `Pour ${k + 1} (${n1(q.a)} to ${n1(q.b)} ft)`, M, q }); });
       const eP = Array.from(envP).map(v => Math.max(v, 0)), eN = Array.from(envN).map(v => Math.min(v, 0));
@@ -438,7 +448,7 @@
     }
 
     const R = { errors: [], warnings, settings: S, fc: m.concrete.fc, h0, line: mod && mod.j != null ? mod.j : null, girder: g, gi, spans, sup, supIdx, cont, Lt, x: xs, n, nr, segs, plf, wSteel, loads: LD, df: DF, crack, sb: { s: sbS, c3: sb3, cn: sbN }, region,
-      st, camber, ll, fat, llR, lld, seq, pl: ped, fm };
+      st, camber, ll, fat, llR, lld, seq, pl: ped, fm, wetCorr, wetTot };
     R.steps = steps(R);
     return R;
   }
@@ -460,8 +470,13 @@
     const tot = (stg, wl, pts) => { const sR = R.st[stg].R.reduce((a, b) => a + b, 0); return sR; };
     const wsTot = R.segs.reduce((a, s, i) => a + R.wSteel[i] * (s.x1 - s.x0), 0), xfTot = L.xf.reduce((a, q) => a + q.P, 0);
     w.add({ id: 'eq.DC1steel', label: 'Equilibrium, DC1 girder steel and cross-frames: ΣR = Σw_s ℓ + ΣP', sym: '\\sum R', eq: '\\sum w_{s}\\ell + \\sum P_{xf}', sub: `${n2(wsTot)} + ${n2(xfTot)}`, value: tot('DC1steel'), unit: kip, d: 2, ref: 'Statics', ok: Math.abs(tot('DC1steel') - wsTot - xfTot) <= 1e-6 * Math.max(1, wsTot + xfTot) });
+    // A2 (2026-11-19): haunch and SIP forms per plate segment (top flange width of the segment)
+    if (R.wetCorr && R.wetCorr.length) { const n4 = v => St().n(v, 4);
+      R.wetCorr.forEach((c, k) => w.add({ id: 'wet.s' + k, label: `DC1 wet deck, x = ${n2(c.x0)} to ${n2(c.x1)} ft: haunch and SIP forms with this segment's top flange b_f = ${n2(c.topB)} in (the loads module used b_f,0 = ${n2(c.topB - c.db * 12)} in)`,
+        sym: '\\Delta w', eq: '\\frac{h}{12}\\frac{\\Delta b_{f}}{12}w_{c} - \\frac{q_{SIP}}{1000}n_{bays}\\frac{\\Delta b_{f}}{2(12)}', sub: `${n4(c.dh)} + (${n4(c.ds)})`, value: c.w, unit: 'klf', d: 4, ref: `${ED} Art. 3.5.1`,
+        note: `Δb_f = ${n2(c.db * 12)} in. Added to w_DC1 over the segment (wet deck stage, camber and pour sequence); the equilibrium check below includes it.` })); }
     [['DC1wet', 'DC1 wet deck (deck, haunch, SIP, other DC1)', 'w_{DC1}'], ['DC2', 'DC2', 'w_{DC2}'], ['DW', 'DW', 'w_{DW}'], ['CL', 'construction live load', 'w_{CL}']].forEach(([k, t, sy]) => {
-      const a = L[k] * R.Lt, sk = k === 'CL' && R.st.CLu ? 'CLu' : k; w.add({ id: 'eq.' + k, label: `Equilibrium, ${t}${sk === 'CLu' ? ' (uniform part)' : ''}: ΣR = wL`, sym: '\\sum R', eq: `${sy}L`, sub: `${St().n(L[k], 4)}(${n2(R.Lt)})`, value: tot(sk), unit: kip, d: 2, ref: 'Statics', ok: Math.abs(tot(sk) - a) <= 1e-6 * Math.max(1, a),
+      const a = k === 'DC1wet' && R.wetCorr && R.wetCorr.length ? R.wetTot : L[k] * R.Lt, sk = k === 'CL' && R.st.CLu ? 'CLu' : k; w.add({ id: 'eq.' + k, label: `Equilibrium, ${t}${sk === 'CLu' ? ' (uniform part)' : ''}: ΣR = wL`, sym: '\\sum R', eq: `${sy}L`, sub: `${St().n(L[k], 4)}(${n2(R.Lt)})`, value: tot(sk), unit: kip, d: 2, ref: 'Statics', ok: Math.abs(tot(sk) - a) <= 1e-6 * Math.max(1, a),
         note: `w = ${St().n(L[k], 4)} klf (${{ girder: 'girder loads', module: 'loads module', manual: 'entered', none: 'none entered', calc: 'calculated, q_CL × b_trib' }[L.src[k]]}).` }); });
     // construction live load and finishing machine (CLC, 2026-11-09): the calculated w_CL, the machine's share and its largest moments
     if (L.src.CL === 'calc') { const C = L.cl, G = R.line != null ? `G${R.line + 1}` : 'the girder';

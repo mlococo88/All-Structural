@@ -75,9 +75,14 @@
     const beff = p.beffMode === 'girder' ? nm(p.beffG) : g('beff');
     const MR = SEC().modularRatio(g('fc'), g('wc'), g('K1'), p.nRule), dk = { ts: g('ts'), hh: g('hh'), beff, n: MR.n, Ar: 0, dr: 0 }, dkP = { ...dk, hh: E.lf && E.lf.h0 ? 0 : dk.hh }, gf = nm(p.gam.fat), Ffat = p.skew === 'yes' ? g('Frc') / g('wv') : 0;
     const anyPier = regions.some(q => q.kind === 'pier'), FS = E.fat;
+    // N2 (2026-11-19; AASHTO LRFD 10th Ed. Art. 6.10.10.1.2, p. 6-224, w in Eq. 6.10.10.1.2-6): the effective deck length w is 48.0 in, except at end
+    // supports where it may be taken as 24.0 in (C6.10.10.1.2: halved): a zone that reaches an end support (the first and last supports of the
+    // bridge; without them, x = 0 only) takes w/2, F_fat = F_rc/(w/2). Before: w everywhere.
+    const sB = FS.B && FS.B.sup && FS.B.sup.length > 1 ? FS.B.sup : null, xE0 = sB ? sB[0] : 0, xE1 = sB ? sB[sB.length - 1] : Infinity;   // no bridge (the module's example): the left end x = 0 only
+    zones.forEach(z => { z.end = z.x1 <= xE0 + 1e-6 || z.x2 >= xE1 - 1e-6; z.wv = z.end ? g('wv') / 2 : g('wv'); z.Ffat = p.skew === 'yes' ? g('Frc') / z.wv : 0; });
     zones.forEach(z => { const S = FA().secSet(z.D, z, dkP), c = S.cn; z.I = c.I; z.yb = c.yb; z.ySlab = S.ySlab; z.Aslab = dk.beff * dk.ts / dk.n; z.Q = z.Aslab * (S.ySlab - c.yb);
       z.fat = FA().studLimit(FA().nRange(z.x1, z.x2, true, anyPier, FS.B), d, Zr, gf, FS.set); z.Zr = z.fat.Zr;
-      z.Vfat = z.fat.gam * z.Vfr * z.Q / z.I; z.Vsr = Math.hypot(z.Vfat, Ffat); z.preq = z.Vsr > 0 ? z.nr * z.Zr / z.Vsr : Infinity; z.pmax = z.D >= 24 ? 48 : 24;
+      z.Vfat = z.fat.gam * z.Vfr * z.Q / z.I; z.Vsr = Math.hypot(z.Vfat, z.Ffat); z.preq = z.Vsr > 0 ? z.nr * z.Zr / z.Vsr : Infinity; z.pmax = z.D >= 24 ? 48 : 24;
       z.edge = (z.topB - (z.nr - 1) * g('st') - d) / 2; });
     const Fyf = GRADES[p.gF].Fy, Fyw = GRADES[p.gW].Fy;
     regions.forEach(r => { r.Pc = 0.85 * fc * dk.beff * dk.ts; r.Ps = Fyw * r.D * r.tw + Fyf * (r.topB * r.topT + r.botB * r.botT); r.Pp = Math.min(r.Pc, r.Ps);
@@ -136,7 +141,7 @@
     w.add({ id: 'ZrI', label: 'Fatigue resistance of one stud, Fatigue I', sym: 'Z_{r}', eq: '(\\Delta F)_{TH}A_{sc} = 7.0A_{sc}', sub: `7.0(${n3(R.Asc)})`, value: R.Zr, unit: 'kip', d: 3, ref: `${ED} Eq. 6.10.10.2-1, Table 6.6.1.2.3-1 (Condition 9.2)` });
     w.add({ id: 'n', label: 'Modular ratio', sym: 'n', eq: '\\frac{E_{s}}{E_{c}}', sub: `\\frac{29{,}000}{${n0(R.MR.Ec)}}`, value: R.dk.n, unit: '', d: 3, ref: `${ED} Eq. 5.4.2.4-1, Art. 6.10.1.1.1b`, note: `f′c = ${n2(R.fc)} ksi${R.MR.rule === 'round' ? '; rounded' : ''}.` });
     w.add({ id: 'beff', label: R.beffMode === 'girder' ? 'Effective flange width of this girder (option: b_eff per girder)' : 'Effective flange width (bridge-wide, as GirderDetail: one set of zones for the girders)', sym: 'b_{eff}', eq: '', sub: '', value: R.dk.beff, unit: 'in', d: 2, ref: `${ED} Art. 4.6.2.6` });
-    w.add({ id: 'Ffat', label: 'Radial fatigue shear range per unit length', sym: 'F_{fat}', eq: R.skew ? '\\frac{F_{rc}}{w}' : '', sub: R.skew ? `\\frac{${n2(R.Frc)}}{${n2(R.wv)}}` : '\\text{straight, skew} \\le 20°: 0', value: R.Ffat, unit: '\\text{kip/in}', d: 4, ref: `${ED} Eq. 6.10.10.1.2-4` });
+    w.add({ id: 'Ffat', label: R.skew ? 'Radial fatigue shear range per unit length, away from the end supports (a zone at an end support: w/2, its own step)' : 'Radial fatigue shear range per unit length', sym: 'F_{fat}', eq: R.skew ? '\\frac{F_{rc}}{w}' : '', sub: R.skew ? `\\frac{${n2(R.Frc)}}{${n2(R.wv)}}` : '\\text{straight, skew} \\le 20°: 0', value: R.Ffat, unit: '\\text{kip/in}', d: 4, ref: `${ED} Eq. 6.10.10.1.2-4` });
     const hd = R.h / d, pen = R.h - R.dk.hh, cov = R.tdeck + R.dk.hh - R.h;
     w.add({ id: 'hd', label: 'Height-to-diameter ratio (normal weight concrete; 7.0 in lightweight concrete)', sym: '\\frac{h}{d} \\ge 5.0', eq: '', sub: `\\frac{${n2(R.h)}}{${n3(d)}} = ${n2(hd)}`, value: 5 / hd, unit: '', d: 3, ref: `${ED} Art. 6.10.10.1.1`, ok: ge(hd, 5) });
     w.add({ id: 'pen', label: 'Penetration into the deck', sym: 'h - h_{haunch} \\ge 2.0', eq: '', sub: `${n2(R.h)} - ${n2(R.dk.hh)} = ${n2(pen)}`, value: 2 / pen, unit: '', d: 3, ref: `${ED} Art. 6.10.10.1.4`, ok: ge(pen, 2) });
@@ -152,7 +157,8 @@
       if (q.lim === 'II') wz.add({ id: 'Zr', label: 'Fatigue resistance of one stud, Fatigue II', sym: 'Z_{r}', eq: '(\\Delta F)_{n}A_{sc},\\ (\\Delta F)_{n} = \\left(\\frac{A}{N}\\right)^{1/5}', sub: `\\left(\\frac{1040\\times10^{8}}{${n0(q.N)}}\\right)^{1/5}(${n3(q.Asc)}) = ${n3(q.dFn)}(${n3(q.Asc)})`, value: z.Zr, unit: 'kip', d: 3, ref: `${ED} Eq. 6.10.10.2-1, Eq. 6.6.1.2.5-2`, note: `N = 365(${n0(q.s.life)})(${q.nn})(${n0(q.s.ADTTSL)}).` });
       else wz.add({ id: 'Zr', label: 'Fatigue resistance of one stud, Fatigue I', sym: 'Z_{r}', eq: '7.0A_{sc}', sub: `7.0(${n3(R.Asc)})`, value: z.Zr, unit: 'kip', d: 3, ref: `${ED} Eq. 6.10.10.2-1` });
       wz.add({ id: 'Vfat', label: `Longitudinal fatigue shear range per unit length (V_f = ${n2(z.Vfr)} kip, unfactored fatigue truck)`, sym: 'V_{fat}', eq: '\\frac{\\gamma V_{f}Q}{I}', sub: `\\frac{${n2(q.gam)}(${n2(z.Vfr)})(${n2(z.Q)})}{${n0(z.I)}}`, value: z.Vfat, unit: '\\text{kip/in}', d: 4, ref: `${ED} Eq. 6.10.10.1.2-3` });
-      wz.add({ id: 'Vsr', label: 'Horizontal fatigue shear range per unit length', sym: 'V_{sr}', eq: '\\sqrt{V_{fat}^{2} + F_{fat}^{2}}', sub: `\\sqrt{${n3(z.Vfat)}^{2} + ${n3(R.Ffat)}^{2}}`, value: z.Vsr, unit: '\\text{kip/in}', d: 4, ref: `${ED} Eq. 6.10.10.1.2-2` });
+      if (R.skew && z.end) wz.add({ id: 'Ffat', label: 'Radial fatigue shear range per unit length at an end support (w halved)', sym: 'F_{fat}', eq: '\\frac{F_{rc}}{w/2}', sub: `\\frac{${n2(R.Frc)}}{${n2(z.wv)}}`, value: z.Ffat, unit: '\\text{kip/in}', d: 4, ref: `${ED} Eq. 6.10.10.1.2-6; Art. 6.10.10.1.2 (w at end supports, p. 6-224)`, note: 'This zone reaches an end support (abutment): w = 24.0 in for the entered 48.0 in (w/2).' });
+      wz.add({ id: 'Vsr', label: 'Horizontal fatigue shear range per unit length', sym: 'V_{sr}', eq: '\\sqrt{V_{fat}^{2} + F_{fat}^{2}}', sub: `\\sqrt{${n3(z.Vfat)}^{2} + ${n3(z.Ffat)}^{2}}`, value: z.Vsr, unit: '\\text{kip/in}', d: 4, ref: `${ED} Eq. 6.10.10.1.2-2` });
       wz.add({ id: 'preq', label: 'Maximum pitch for fatigue', sym: 'p_{max}', eq: '\\frac{nZ_{r}}{V_{sr}}', sub: `\\frac{${z.nr}(${n3(z.Zr)})}{${n3(z.Vsr)}}`, value: z.preq, unit: 'in', d: 2, ref: `${ED} Eq. 6.10.10.1.2-1` });
       wz.add({ id: 'ok', label: 'Fatigue pitch (SC1)', sym: 'p \\le p_{max}', eq: '', sub: `${n2(z.p)} ${okS(z.p, z.preq) ? '\\le' : '\\gt'} ${isFinite(z.preq) ? n2(z.preq) : '\\infty'}`, value: z.p / z.preq, unit: '', d: 3, ref: `${ED} Eq. 6.10.10.1.2-1`, ok: okS(z.p, z.preq) });
       const okP = ge(z.p, kp * d) && ge(z.pmax, z.p);

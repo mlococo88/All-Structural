@@ -170,7 +170,7 @@
     const per = F.map(L => { const dist = L.dist && L.dist !== 'auto' ? L.dist : (L.forceEqual ? 'equal' : rAuto(L) || (method === 'massdot' ? (L.dist === 'auto' && L.cat === 'DW' ? 'equal' : 'pilecap') : 'equal')), r = dist === 'equal' ? equal(L.plf) : dist === 'two' ? two(L.plf, L.x) : dist === 'r64' ? r64(L) : pile(L.plf, L.x);
       (L.cat === 'DC1' ? dc1 : L.cat === 'DW' ? dw : L.cat === 'PL' ? pl : L.cat === 'UT' ? ut : L.cat === 'UF' ? uf : dc2).forEach((_, i, arr) => arr[i] += r[i]);
       const out = { ...L, dist, ...(L.dist === 'auto' ? { byMethod: true } : {}), e: L.x - xbar, r: r.slice() }; if (r.car) { out.car = r.car; out.rest = r.rest; } return out; });
-    const R = { N, ub, xbar, c, S2, trib, deck, haunch, sip, bf, bays, dc1, dc2, dw, pl, ...(ut.some(v => v !== 0) || uf.some(v => v !== 0) ? { ut, uf } : {}), cls, method, per, Wd, ...(a.bcls ? { clsAuto } : {}) };
+    const R = { N, ub, xbar, c, S2, trib, deck, haunch, sip, bf, bays, hhIn: a.hh || 0, uc, sipq: a.sip || 0, dc1, dc2, dw, pl, ...(ut.some(v => v !== 0) || uf.some(v => v !== 0) ? { ut, uf } : {}), cls, method, per, Wd, ...(a.bcls ? { clsAuto } : {}) };
     R.steps = deadSteps(R, p, a);
     return R;
   }
@@ -271,7 +271,8 @@
   function girder(R, j) {
     const D = R.dead, rg = R.regions;
     return { j, label: `G${j + 1}`, type: j === 0 || j === D.N - 1 ? 'exterior' : 'interior', cls: D.cls[j], clsLabel: CLS[D.cls[j]] || D.cls[j],
-      deck: D.deck[j], haunch: D.haunch[j], sip: D.sip[j], trib: D.trib[j], DC1: D.dc1[j], DC2: D.dc2[j], DW: D.dw[j], PL: D.pl[j], UT: D.ut ? D.ut[j] : 0, UF: D.uf ? D.uf[j] : 0,
+      deck: D.deck[j], haunch: D.haunch[j], sip: D.sip[j], trib: D.trib[j],
+      adj: { bf0: D.bf * 12, hh: D.hhIn, uc: D.uc, sipq: D.sipq, nAdj: (j > 0 ? 1 : 0) + (j < D.N - 1 ? 1 : 0) }, DC1: D.dc1[j], DC2: D.dc2[j], DW: D.dw[j], PL: D.pl[j], UT: D.ut ? D.ut[j] : 0, UF: D.uf ? D.uf[j] : 0,   // adj: A2 (2026-11-19), engine/analysis.js wetCorr
       rows: D.per.map(L => ({ id: L.id, desc: L.desc, cat: L.cat, dist: L.dist, distLabel: DIST[L.dist] || L.dist, w: L.r[j], wTotal: L.plf, x: L.x })),
       df: rg.map(r => ({ id: r.id, kind: r.kind, label: r.label, gM: r.members[j].gM, gV: r.members[j].gV, fatM: r.members[j].fatM, fatV: r.members[j].fatV, method: r.members[j].method })) };
   }

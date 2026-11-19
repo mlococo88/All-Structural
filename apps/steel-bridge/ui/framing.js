@@ -201,7 +201,11 @@
 
   /* ---------- calculation ---------- */
   function build(ctx) {
-    const P = ensure(ctx.P), FRM = window.SBDFraming, CF = window.SBDCrossframes, AN = window.SBDAnalysis, gi = ctx.g || 0;
+    // N5 (2026-11-19): read-only. A project without framing or cross-frame inputs is computed on a copy with the defaults filled in, so that
+    // building this tab (or the Report, report/data.js, and the Summary) does not write default framing into the saved project. Before:
+    // ensure(ctx.P) added P.framing / P.crossframes, which then changed the brace points, the skew f_ℓ and the DC1 cross-frame loads of every
+    // later calculation of the project. The input tab still adds them when the engineer edits them (ensure in inputs / onChange).
+    const P0 = ctx.P, full = P0.framing && P0.crossframes && P0.crossframes.userMode, P = full ? P0 : ensure(JSON.parse(JSON.stringify(P0))), FRM = window.SBDFraming, CF = window.SBDCrossframes, AN = window.SBDAnalysis, gi = ctx.g || 0;
     const L = FRM.compute(P); if (L.errors.length) return { err: L.errors.join(' ') };
     let A = null; if (AN) { try { A = AN.analyzeGirder(P, gi, { ll: false }); } catch (e) { A = null; } }
     const I = CF.inputsOf(P, { L, A, gi }), env = CF.envOf(P), R = CF.compute(I.p, env);
@@ -214,7 +218,7 @@
     // depths. (Was SBXF dxfB: the reported girder's own depth when the governing bay's differed.)
     let dxfG; if (I.p.xfBay) { const GR = CF.bayGroups(P); if (GR) dxfG = GR.map(g => { const p = { ...I.p, h: g.h, dg: g.dg }, Rg = CF.compute(p, env);
       return { L, I: { ...I, p }, R: Rg, C: Rg.errors && !Rg.errors.length ? CF.checks(Rg) : null, line: g.bays[0], grp: g }; }); }
-    return { L, I, R, C, fl, XF, br, line, G, A, dxfG };
+    return { L, I, R, C, fl, XF, br, line, G, A, dxfG, dflt: !full };
   }
   const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>`;
   const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
@@ -304,7 +308,7 @@
     h += dOn ? `<section class="sec"><div class="secHead">Diaphragms: elevation</div><div class="secBody">${R.DIAg && R.DIAg.length ? R.DIAg.map(q => `<h4 class="sub">Bays ${q.bays.map(j => `G${j + 1}–G${j + 2}`).join(', ')}: ${esc(q.DIA.i ? q.DIA.i.nm_ : q.shape)} (d = ${fmt(q.dg, 2)} in, G${q.s.line + 1} ${esc(q.s.label)}; engineer decision SB-24)</h4>${diaSvg({ ...B, I: { ...I, p: q.p }, R: { ...R, DIA: q.DIA } })}`).join('') : diaSvg(B)}</div></section>`   // SBDIA: the diaphragm, not the X / K truss; SB-24: one per bay depth group
       : `<section class="sec"><div class="secHead">Cross-frames: elevation</div><div class="secBody"><div data-gfxb="crossframe"></div></div></section>`;   // drawn by ui/tabgraphics-b.js from the results below
     // layout
-    h += `<section class="sec"><div class="secHead">Framing (6.7.4.2.1)</div><div class="secBody">${plan(L, dOn, { ui: true })}
+    h += `<section class="sec"><div class="secHead">Framing (6.7.4.2.1)</div><div class="secBody">${B.dflt ? '<p class="note">This project has no framing or cross-frame inputs: shown with the default framing (not saved in the project, and not used by the other tabs until it is entered on the Framing &amp; bracing input tab).</p>' : ''}${plan(L, dOn, { ui: true })}
       <div class="tscroll"><table class="tbl"><thead><tr><th>Span</th><th>Skew θ (°)</th><th class="lft">Orientation</th><th>Frames</th><th>Spacing (ft)</th><th>Conflicts</th><th></th></tr></thead><tbody>
       ${FR.orient.map(o => `<tr><td>${o.k + 1}</td><td>${fmt(o.th, 2)}</td><td class="lft">${o.o === 'normal' ? `normal, ${o.flat ? 'contiguous' : esc(o.arr)}` : 'parallel to the skew'}</td><td>${o.n}</td><td>${fmt(o.s, 3)}</td><td class="${o.conflicts ? 'fx-hi' : ''}">${o.conflicts || 0}</td><td>${wk(`fr.k${o.k}.s`)}</td></tr>`).join('')}</tbody></table></div>
       <div class="tscroll"><table class="tbl"><thead><tr><th>Girder</th><th>Intermediate frames</th><th>Largest L<sub>b</sub> (ft)</th><th class="lft">Brace points (own stations, ft)</th><th></th></tr></thead><tbody>
