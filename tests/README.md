@@ -4,6 +4,8 @@ The tools stay single, self-contained HTML files with no build step and no npm (
 
 **Engine tests (Node only, no browser):** `node tests/engine/run.mjs` loads the classic scripts in `shared/` into a Node `vm` context and runs every `tests/engine/*.test.mjs` (add a name fragment to run some: `node tests/engine/run.mjs moving-load`). See `shared/README.md`.
 
+**Steel Bridge Design (2026-11-19, SBDA):** the old single-file app is archived as `archive/Steel Bridge Design (archived 2026-11-19).html`; the GirderDetail / Preliminary sizing / ST-Girder tests and scripts below read that file (constant `SBD_ARCHIVE_FILE` in `tests/engine/harness.mjs`, re-exported by `tests/lib.mjs`), and a git ref older than the archiving is read under its old name. `Steel Bridge Design.html` is now a redirect page to `apps/steel-bridge/index.html`.
+
 ## Requirements
 
 - Node 18 or later (tested on Node 22).
@@ -35,7 +37,7 @@ node tests/compare.mjs --tool sbd --project builtin,xsA --owner AASHTO,RIDOT
 
 # Baselines: record A's section hashes (A = origin/main), later compare B against them without running A
 node tests/compare.mjs --tool gd --project builtin --owner AASHTO --record-baseline tests/baselines/gd.json
-node tests/compare.mjs --tool gd --project builtin --owner AASHTO --baseline tests/baselines/gd.json --b "Steel Bridge Design.html"
+node tests/compare.mjs --tool gd --project builtin --owner AASHTO --baseline tests/baselines/gd.json --b "archive/Steel Bridge Design (archived 2026-11-19).html"
 
 # Regenerate the per-girder hand-off payloads in projects/st from GirderDetail (B) for the projects and owners of the run
 node tests/compare.mjs --tool gd --project builtin,builtin28,xsA,curb,util --owner AASHTO,RIDOT,MassDOT,CTDOT --save-st
@@ -324,7 +326,7 @@ node tests/smoke/index-report.mjs --file <index.html> --case base|lfr|arema --mo
 
 # Syntax check (Tier 0): every inline script; JSX transpiled with the offline Babel; embedded pages (pl-src, st-src, iframe srcdoc) included
 node tests/check-syntax.mjs                                                   # no arguments: every repo-root tool HTML, apps/*/index.html, apps/**/*.js, shared/*.js
-node tests/check-syntax.mjs "Steel Bridge Design.html"                        # one tool: the merged tool includes its embedded pages (pl-src, st-src)
+node tests/check-syntax.mjs "archive/Steel Bridge Design (archived 2026-11-19).html"                    # one tool: the merged tool includes its embedded pages (pl-src, st-src)
 ```
 
 Options of `compare.mjs`: `--tool gd|st|sbd|page`, `--a` (default `origin/main`; for `sbd` the last `stgirder.html` in the repository history, removed at the cut-over), `--b` (default the working-tree file), `--file` (tool file; default per tool), `--project` (`builtin`, `builtin28` = built-in with all skews 28°, `xsA`, `curb`, `util`, or a path to a localStorage JSON), `--owner`, `--skew`, `--mode pl|mod`, `--payload` (`builtin` = no hand-off, a name in `projects/st`, a path, or `all`; default `builtin,def15_AASHTO_G2`), `--quiet` (ms the project data must stay unchanged; default 8000), `--jobs N` (cases run N at a time, each in its own browsers; default the number of CPUs; each case's report is printed whole, in case order; added 2026-10-22), `--max-diffs` (values listed per section; default 25), `--out` (folder for the raw readouts; default `<tmp>/allstruct-tests/out`), `--wait` (page tool, ms), `--save-st [dir]` (gd: write B's per-girder payloads as `gd_<project>_<owner>_G<n>.json` to `projects/st` or `dir`), `--record-baseline FILE` (write A's section hashes per case), `--baseline FILE` (use those hashes as A; A is not run, so differing values are not listed: rerun with `--a <ref>` for them).

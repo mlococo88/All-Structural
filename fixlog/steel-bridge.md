@@ -10310,3 +10310,14 @@ Basis: AASHTO LRFD 10th Ed. (2024). N2, A2 and A3 are §4 changes.
 - **Check case:** built-in example (made-up): a comment on step rp-st1 and one on a selected note; resolve; reload and rebuild: both kept; reviewed copy contains both, numbered, and the appendix; print emulation: the appendix in the print box, the markup UI hidden.
 - **How verified:** old-save identity check (every module result and the saved project byte-identical, base origin/main vs this branch); `tests/engine/sb-report-review.test.mjs` (new: prefixed keys, per-project lists, project object untouched, unreadable storage → empty, escaping); smoke `tests/smoke/steel-bridge-report-review.mjs` (new, 1400 px and 390 px); smokes steel-bridge-report, -report-pr3, -wiring, -summary; check-syntax.
 - **Open items / decisions pending engineer review:** (1) comments are kept in this browser only (localStorage), not in the project file: a project exported to another computer does not carry them (the reviewed copy does); (2) a comment is anchored to the item's id in this report build: if the report changes (new sections, other demands), "Go to" says the item is no longer there; (3) the reviewed copy loads KaTeX's stylesheet from its pinned CDN for the equation fonts (offline: equations fall back to the browser's fonts).
+
+## 2026-11-19 — PR: claude/archive-old-steel-app (PR #1647: https://github.com/mlococo88/All-Structural/pull/1647) (SBDA) — the app is now "Steel Bridge Design" (no longer "new, in development")   [display only; no result change]
+- **Why:** engineer decision 2026-11-19: the old single-file app is archived (`archive/Steel Bridge Design (archived 2026-11-19).html`); this app is the only Steel Bridge Design. `Steel Bridge Design.html` and `Steel Bridge Beam Modules.html` now redirect here (query and hash kept).
+- **Where / Before / After (`apps/steel-bridge/index.html` only):**
+  - `<title>Steel Bridge Design (new, in development)</title>` → `<title>Steel Bridge Design</title>`.
+  - `<h1>Steel Bridge Design <span style="font-weight:400;font-size:11pt">(new, in development)</span></h1>` → `<h1>Steel Bridge Design</h1>`.
+  - `SPUI.projectBar({ … label: 'Steel Bridge Design (new app)', id: 'sbdLibDlg'` → `label: 'Steel Bridge Design'` (dialog title only).
+  - `cloud: { tool: 'steel-bridge-app', label: 'Steel Bridge Design (new app)'` → `label: 'Steel Bridge Design'` (GitHub commit message text only; the sync folder `tool` is unchanged), kept equal to `shared/project-registry.js` (`steel-bridge-app` entry).
+- **Saved data:** none changed (`sbd2.*` keys, the GitHub folder `steel-bridge-app`).
+- **Governing provision / check case:** none (no calculation). The page title reads "Steel Bridge Design".
+- **Other copies:** `shared/project-registry.js` (label, name, read-only message).

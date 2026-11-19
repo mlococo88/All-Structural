@@ -9155,3 +9155,6 @@ index f238426..be7d210 100644
 +  window.PSB3DUI = { render, geom, camera, LAY, DG, series, snapshot, state: () => ({ cage: V.cage || null, snap: !!V.snap, camNote: V.camNote, sfcNote: V.sfcNote, counts: V.counts, info: V.info, fences: V.fences.length, dg: V.dgLbl, tg: V.tg ? V.tg.map(t => t[0]) : null, mode: V.mode }) };
  })();
 ```
+
+## 2026-11-19 — PR: claude/archive-old-steel-app (PR #1647: https://github.com/mlococo88/All-Structural/pull/1647) (SBDA) — comment only in engine/pbd-model.js: the SBD-SHARED copy note names the archived copy   [no code change]
+- **Where:** `apps/ps-bridge/engine/pbd-model.js`, anchor `COPY (CLAUDE.md §3, kept duplicated): FE_CACHE, sgBeam`. Same before/after as fixlog/Prestressed Bridge Design.md (SBDA): "Steel Bridge Design.html" → the archived copy "archive/Steel Bridge Design (archived 2026-11-19).html", not maintained.

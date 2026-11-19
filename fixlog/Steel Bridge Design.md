@@ -22917,3 +22917,18 @@ Basis: AASHTO LRFD 10th Ed. (2024). Reference implementation: `lldf.html` `membe
 - **How verified:** new `tests/smoke/gd-reactions-handoff.mjs` (keys, same payload, project, alert; 0 console errors);
   `node tests/compare.mjs --tool gd` (origin/main vs branch: identical); `node tests/smoke/sbd-standard-save.mjs`; `node tests/check-syntax.mjs`.
 - **Other copies:** none (the new Steel Bridge app writes its own per-project copy under producer id `steelbridge`, GXF-2).
+
+## 2026-11-19 — PR: claude/archive-old-steel-app (PR #1647: https://github.com/mlococo88/All-Structural/pull/1647) (SBDA) — the old single-file app archived; the root name and "Steel Bridge Beam Modules.html" redirect to apps/steel-bridge   [no result change; saved data: none changed]
+- **Why:** engineer decision 2026-11-19: archive the old single-file app (do not delete it); `apps/steel-bridge/` becomes the only Steel Bridge Design. The engineer confirmed no old projects need migrating.
+- **Where / Before / After:**
+  - `git mv "Steel Bridge Design.html" "archive/Steel Bridge Design (archived 2026-11-19).html"`. In the moved file only:
+    - `<script src="shared/projects.js">`, `shared/projects-ui.js`, `shared/github-sync.js`, `shared/handoff-store.js` → `<script src="../shared/…">` (head, ~line 1178).
+    - `href="tools.html"` → `href="../tools.html"`, twice: the header link (anchor `<a class="bx-all-tools" href=`) and ST-Girder's link inside `st-src` (anchor `<a className="bx-alltools" href=`; the frame is a `srcdoc`, so its relative links resolve against this file's folder).
+    - A banner after the first `<body>` (anchor `<div id="sbd-archived-banner"`): "Archived 2026-11-19. Not maintained. … Its results may differ from the current app: it lacks the 2026-11 fixes. Use the current Steel Bridge Design" linking `../apps/steel-bridge/index.html`. Inline styles, `flex-shrink:0` (the body is a flex column).
+    - Nothing else changed: no code, no localStorage key, no saved format. Hand-off constants (`GD_ST.file`, `GD_SR.file`, `FILE` of the project-info block) still say `Steel Bridge Design.html`; defaults taken from the page address (ST-Girder's `appPaths` entry, `GD_ST_HOST.file`) now give the archived name and folder.
+  - New root `Steel Bridge Design.html`: a redirect page (script `location.replace('apps/steel-bridge/index.html' + search + hash)`; `<noscript>` meta refresh; visible links to the current app and to the archived copy; a note that in Firefox/Safari the archived copy, under its new file name, does not see the old app's saved projects, in Chrome/Edge it does). Reads and writes no saved data.
+  - `Steel Bridge Beam Modules.html`: `var to = 'Steel%20Bridge%20Design.html' + …` → `var to = 'apps/steel-bridge/index.html' + …`; the link and text likewise, plus a link to the archived copy.
+- **Governing provision:** none (no calculation).
+- **Check case:** opened from file://: `Steel Bridge Design.html?q=1#h=2` → `apps/steel-bridge/index.html?q=1#h=2`; `Steel Bridge Beam Modules.html#x=1` → `apps/steel-bridge/index.html#x=1`; the archived copy opens with the banner, all four shared scripts loaded, "All tools" → `tools.html`, no console errors.
+- **How verified:** see the PR (engine parity tests read the archived copy unchanged; `tests/engine/final-compare.mjs` main vs branch; smokes; `tests/check-syntax.mjs` now also checks `archive/*.html`).
+- **Other copies:** none.
