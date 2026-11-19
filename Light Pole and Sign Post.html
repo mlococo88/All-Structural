@@ -382,6 +382,11 @@
   /* D11 links (CLAUDE.md §6): "Worked in: → Tab · Card" on screen, "see §n.k" in the report */
   .wkLink{font-size:11.5px;color:var(--slate-600);margin:4px 0 2px} a.wkA{color:var(--steel);text-decoration:none;cursor:pointer} a.wkA:hover{text-decoration:underline}
   td>a.wkA{font-size:11.5px}
+  /* LPBM (2026-11-19): base reactions and base moment build-up (Loading tab); the folded worked derivations (details.lpFold) */
+  .lppBmbNote{font-size:10px;color:var(--slate-600);font-weight:400} td.lppBmbAlone{color:var(--slate-600);font-style:italic}
+  table.tbl tr.lppBmbTot td{background:var(--slate-50);font-weight:600} table.tbl tr.lppBmbAx td{color:var(--slate-600)}
+  table.lppRxTbl td b{font-size:12.5px} details.lpFold{margin:8px 0 4px;border:1px solid var(--line);border-radius:4px;padding:0 8px}
+  details.lpFold>summary{padding:6px 2px}
   .wkFlash{animation:lppWkFlash 1.4s ease-out} @keyframes lppWkFlash{from{background:#DBEAFE}to{background:transparent}}
   @media (prefers-reduced-motion: reduce){.wkFlash{animation:none}}
   @media print{ header.masthead,#postSelBar{display:none!important} }
@@ -865,6 +870,16 @@
           </div>
         </div>
       </div>
+    </section>
+
+    <!-- LPBM (2026-11-19): base reactions and the base moment build-up, first on the Loading tab (display only; IBC mode, pole and sign) -->
+    <section class="card" id="lppBaseRxCard" data-tab="loading">
+      <div class="card-h"><span class="num">R</span><h2>Base reactions — governing</h2><span class="hint">M, V and N at the base, LRFD and ASD</span></div>
+      <div class="card-body" id="lppBaseRx"><p class="tbl-note">—</p></div>
+    </section>
+    <section class="card" id="lppBmbCard" data-tab="loading">
+      <div class="card-h"><span class="num">M</span><h2>Base moment build-up</h2><span class="hint">components → load cases → governing combination</span></div>
+      <div class="card-body" id="lppBmb"><p class="tbl-note">—</p></div>
     </section>
 
     <!-- SIGN RESULTS (shown only in sign mode) -->
@@ -4437,6 +4452,7 @@ function calcSign(inp){
       return (r.dirs||[]).map(dr=>{ const pp=dr.posts[pi], c=Math.cos(dr.phi*RAD), s=Math.sin(dr.phi*RAD);
         return {name:r.name+', wind '+fmt(dr.phi,0)+'°, Case '+pp.case, P:pp.axial, Vx:pp.P*c, Vy:pp.P*s, Mx:b2*pp.M*c, My:b2*pp.M*s, T:pp.T||0, B2:b2}; }); }))}))};
   renderSignLoadPath(inp,sw,pw,postGovList);
+  lppBmbRenderSign(inp,sw,postGovList);   // LPBM (2026-11-19): base reactions and base moment build-up per post (display only)
   renderSummary({inp, mode:'sign',
     stacks:postDesigns.map((pd,i)=>({label:'P'+(i+1), found:pd.found, pstress:pd.pstress, nat:pd.nat, b2:pd.b2,
       asd:{...(pd.gASDF||pd.gASD)}, lrfd:{...pd.gLRFD},
@@ -4968,6 +4984,7 @@ function lppCalcIbc(){
   // blocking input errors (LP-O6): a blank or non-positive geometry/material input used to crash
   // calc() (e.g. "Invalid array length" in drawElev) and leave the previous results on screen.
   lppLastInp=null;
+  lppBmbClear();   // LPBM: no stale base reactions / build-up (display only)
   { const errs=lppInputErrors(inp), le=(codeMode==='lts')?lppLtsInputErrors(inp):[]; lppLtsBlocked=le.length>0; lppShowInputErrors(errs.concat(le)); if(errs.length) return; }   // LTS-L2
   lppLastInp=inp;   // LTS-1: the LRFDLTS engine reads the same geometry
 
@@ -5196,6 +5213,7 @@ function lppCalcIbc(){
     });
     $('comboMatrixTbl').innerHTML=cm;
   }
+  lppBmbRenderPole(inp,comps,fxs,pw,govLRFD,govASD,govB2);   // LPBM (2026-11-19): base reactions and base moment build-up (display only)
 
   // ---- POLE STRESS TABLE ----
   if($('poleStressTbl')){
@@ -5891,7 +5909,7 @@ function renderBearingExample(bearing,N,inp,sfx){
 }
 
 // ---- WIND worked example (pole mode): ASCE 7-16 velocity pressure + mast/fixture force ----
-function windWorkedHTML(pw, inp){
+function windWorkedHTML(pw, inp, o){   // o.fold (LPBM, 2026-11-19): the ice and n1 / G_f derivations in collapsed <details> (Loading tab); content unchanged
   const g=(t)=>`\\[${t}\\]`, step=(t)=>`<div class="step-label">${t}</div>`, ref=(s)=>`<span class="eq-ref">[${s}]</span>`;
   let H='';
   H+=step(`1 · Velocity pressure exposure coefficient ${ref('ASCE 7-16 Table 26.10-1')}`);
@@ -5911,8 +5929,9 @@ function windWorkedHTML(pw, inp){
     H+=`<div class="eq-why lpNL">${lpNL(`Rectangular pole: the values above are for wind toward 0° / 180° on the width B = ${fmt(inp.poleDiaTop,2)} in face.`,[['Other directions:',`wind toward 90° / 270° acts on the depth face (${fmt(inp.poleDepthTop,2)} in), and between the axes the projected strip width is |cos φ|·B + |sin φ|·depth (as in the LRFDLTS mode).`],['C<sub>f</sub>','stays the least-dimension value.'],['Ice weight:','the mast ice is taken as a radial ring on a round of diameter B (the width), not on the rectangle.']])}</div>`;   // LPNL; ASM (2026-11-10): ice basis stated
     H+=g(`F_{pole,90} = \\sum_i q_z(z_i)\\,G\\,C_f\\,d(z_i)\\,\\Delta z = ${fmt(pw.Fd,0)}\\ \\text{lb}\\qquad M_{pole,90} = ${fmt(pw.Md,0)}\\ \\text{lb}{\\cdot}\\text{ft}\\qquad F_{pole}(\\varphi) = |\\cos\\varphi|\\,F_{pole} + |\\sin\\varphi|\\,F_{pole,90}`);
   }
-  H+=iceWorkedHTML(inp,pw,null);
-  H+=natGfWorkedHTML(inp);
+  { const fold=(o&&o.fold)?((t,x)=>x?`<details class="calc lpFold"><summary>${t}</summary>${x}</details>`:''):((t,x)=>x);
+    H+=fold('Design ice thickness t<sub>d</sub>(z) and ice on the mast — worked derivation (click to open)',iceWorkedHTML(inp,pw,null));
+    H+=fold('Natural frequency n<sub>1</sub> (Rayleigh table) and gust-effect factor — worked derivation (click to open)',natGfWorkedHTML(inp)); }
   H+=`<p class="eq-result">Mast wind F_pole = ${fmt(pw.Fpole,0)} lb, resultant at z = ${fmt(pw.zF,2)} ft (H/2 = ${fmt(inp.H/2,2)} ft), giving base moment ${fmt(pw.Mpole,0)} lb·ft. Fixture and cable wind (tabulated above) use the same q_z form at their own heights.</p>`;
   return H;
 }
@@ -5923,8 +5942,8 @@ function renderCableExample(comps,inp){
 }
 function renderWindExample(pw,inp,fxs){
   const box=$('windExample'); if(!box) return;
-  let H=windWorkedHTML(pw,inp);
-  if(fxs && fxs.length){ H+=`<div class="step-label" style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">Fixture loads — worked derivations</div>`+fixtureWorkedHTML(fxs,inp); }
+  let H=windWorkedHTML(pw,inp,{fold:true});
+  if(fxs && fxs.length){ H+=`<details class="calc lpFold"><summary>Fixture loads — worked derivations: wind, iced wind, ice weight, arm wind, eccentric moment (click to open)</summary><div class="step-label" style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">Fixture loads — worked derivations</div>`+fixtureWorkedHTML(fxs,inp)+`</details>`; }   // LPBM: collapsed, content unchanged
   box.innerHTML=H;
   if(window.renderMathInElement) renderMathInElement(box,{delimiters:[{left:'\\[',right:'\\]',display:true},{left:'$',right:'$',display:false}],throwOnError:false});
 }
@@ -6123,6 +6142,255 @@ function renderSignWindExample(sw,inp){
   const box=$('signWindExample'); if(!box) return;
   box.innerHTML=signWindWorkedHTML(sw,inp);
   if(window.renderMathInElement) renderMathInElement(box,{delimiters:[{left:'\\[',right:'\\]',display:true},{left:'$',right:'$',display:false}],throwOnError:false});
+}
+
+// ================= LPBM (2026-11-19): base reactions and the base moment build-up (display only) =================
+// Engineer, 2026-11-19: "it takes me a long time to just find the moment at the base". Display only: no result changes. Every
+// number is a value the engine already computed: the components (fixtureComponents, cableComponents, poleWindNominal /
+// lppPoleWindDir, signWind) for the unfactored load cases, and the governing combination's own per-component terms
+// (evalComboDir: perF, per, poleWindM; evalSignComboDir: Fp, zarm) for the factored column. The factored total is compared with
+// the envelope value of the same combination and direction; a mismatch is shown as a flag (tests/engine/lightpole-bmb.test.mjs).
+// Nothing is stored or saved (LPP_BMB is the last calc()'s display data, read by the Report tab).
+let LPP_BMB=null;
+const LPP_BMB_C=['D','W','Di','Wi'];
+const LPP_BMB_TEX={D:'D',W:'W',Di:'D_i',Wi:'W_i'};
+const LPP_BMB_HT={D:'D',W:'W',Di:'D<sub>i</sub>',Wi:'W<sub>i</sub>'};
+const lppBmbRel=(a,b)=>Math.abs(a-b)<=1e-9*Math.max(1,Math.abs(b));
+// Pole mode: one combination at its governing wind direction (gov = an evalCombo result)
+function lppBmbPole(inp,comps,fxs,pw,gov){
+  const f=gov.factors, phi=gov.phi, pwd=lppPoleWindDir(pw,phi), rows=[];
+  const row=o=>{ const r=Object.assign({F:{},arm:null,m:{D:0,W:0,Di:0,Wi:0},mu:0},o); rows.push(r); return r; };
+  // mast wind: the strip-integrated force and its base moment (z̄ = M/F), along the wind
+  row({name:'Mast wind', key:'mast', az:phi, wind:true, F:{W:pwd.Wpole, Wi:pwd.FpoleI}, arm:pwd.Wpole>0?pwd.Mpole/pwd.Wpole:0, armSym:'z̄',
+    armI:pwd.FpoleI>0?pwd.MpoleI/pwd.FpoleI:0, m:{D:0,W:pwd.Mpole,Di:0,Wi:pwd.MpoleI}, mu:gov.poleWindM});
+  fxs.forEach((fc,i)=>{ const pf=(gov.perF&&gov.perF[i])||{}, lab='Fixture '+(i+1);
+    row({name:lab+' wind', key:'fx', az:phi, wind:true, F:{W:fc.Fw, Wi:fc.Fwi}, arm:fc.hf, armSym:'h', m:{D:0,W:fc.Fw*fc.hf,Di:0,Wi:fc.Fwi*fc.hf}, mu:(pf.Fw||0)*fc.hf});
+    if((fc.FarmMax||0)>0 || (fc.FarmMaxI||0)>0){ const s=Math.abs(Math.sin((fc.th-phi)*RAD));
+      row({name:lab+' arm wind', key:'fx', az:phi, wind:true, F:{W:(fc.FarmMax||0)*s, Wi:(fc.FarmMaxI||0)*s}, arm:fc.hf, armSym:'h', sinNote:s,
+        m:{D:0,W:(fc.FarmMax||0)*s*fc.hf,Di:0,Wi:(fc.FarmMaxI||0)*s*fc.hf}, mu:(pf.Fa||0)*fc.hf}); }
+    const a=Math.hypot(fc.ex,fc.ey);
+    if(a>0) row({name:lab+' eccentric weight W·a', key:'fx', az:fc.th, F:{D:fc.Wdead, Di:fc.Wice}, arm:a, armSym:'a',
+      m:{D:fc.Wdead*a,W:0,Di:fc.Wice*a,Wi:0}, mu:(pf.Wg||0)*a});
+  });
+  (gov.per||[]).forEach((pc,j)=>{ const cp=pc.cp, c=cp.c, lab='Cable '+(j+1), pl=w=>cp.pullFromLoad(w);
+    // the along-cable pull follows the catenary law of the combined factored line load w_R = √(w_v² + w_h²): not a sum of
+    // the load cases, so the case columns show each source alone (for reference) and the combination column the engine's pull
+    row({name:lab+' pull', key:'cable', az:c.th, cable:true, F:{D:pl(cp.D_v),W:pl(cp.W_h),Di:pl(cp.Di_v),Wi:pl(cp.Wi_h)}, Fu:pc.Hpull, wR:pc.wRes, arm:c.hc, armSym:'h_c',
+      m:{D:pl(cp.D_v)*c.hc,W:pl(cp.W_h)*c.hc,Di:pl(cp.Di_v)*c.hc,Wi:pl(cp.Wi_h)*c.hc}, mu:pc.Hpull*c.hc});
+    if(cp.W_h>0 || cp.Wi_h>0) row({name:lab+' transverse wind w·L/2', key:'cable', az:phi, wind:true, F:{W:cp.W_h*c.L/2, Wi:cp.Wi_h*c.L/2}, arm:c.hc, armSym:'h_c',
+      m:{D:0,W:cp.W_h*c.L/2*c.hc,Di:0,Wi:cp.Wi_h*c.L/2*c.hc}, mu:pc.Hw*c.hc});
+  });
+  row({name:'Misc. top dead + pole self-weight'+((pw.WiceMast||0)>0?', mast ice':''), key:'axial', axial:true, az:null,
+    F:{D:(inp.DLaxial!==undefined?inp.DLaxial:(inp.DLtotal!==undefined?inp.DLtotal:inp.DL)), Di:pw.WiceMast||0}});
+  return lppBmbTotals({mode:'pole', name:gov.name, fam:gov.fam, key:gov.key, f, phi, rows,
+    env:{M:gov.M, Mx:gov.Mx, My:gov.My, P:gov.P, N:gov.axial}});
+}
+// Sign mode: one post (p, 0-based) in one combination at that post's governing direction and case (gl = postGov[p] + key)
+function lppBmbSignPost(inp,sw,gl,p){
+  const f=COMBOS[gl.key]||COMBOS.L1, phi=gl.phi||0, nP=inp.signPosts, Lp=inp.signSpacing, rows=[];
+  const onFace=Math.max(0,Math.cos(phi*RAD))+Math.max(0,-Math.cos(phi*RAD)), wsg=Math.cos(phi*RAD)>=0?1:-1;
+  let F=sw.F_A*onFace, FI=(sw.F_Ai||0)*onFace, x=0;
+  if(gl.case==='B') x=0.2*sw.B*wsg;
+  else if(gl.case==='C' && sw.caseC){ F=sw.caseC.F*onFace; FI=(sw.caseC.FI||0)*onFace; x=sw.caseC.e*wsg; }
+  const sh=signPostSplit(F,x,Lp,nP)[p], shI=signPostSplit(FI,x,Lp,nP)[p], z=gl.zarm;
+  rows.push({name:'Sign panel wind, Case '+gl.case+(nP>1?' (post '+(p+1)+' share)':''), key:'panel', az:phi, wind:true, F:{W:sh, Wi:shI}, arm:z, armSym:'z',
+    m:{D:0,W:sh*z,Di:0,Wi:shI*z}, mu:gl.Fp*z});
+  rows.push({name:'Post drag (exposed post below the panel)', key:'post', az:phi, wind:true, F:{W:sw.Fpost, Wi:sw.FpostI||0}, arm:sw.zPost, armSym:'z_{drag}',
+    m:{D:0,W:sw.Mpost,Di:0,Wi:sw.MpostI||0}, mu:f.W*sw.Mpost + f.Wi*(sw.MpostI||0)});
+  rows.push({name:'Panel share + post self-weight + misc. dead'+((sw.WiPanel||0)>0?', ice':''), key:'axial', axial:true, az:null, m:{D:0,W:0,Di:0,Wi:0}, mu:0,
+    F:{D:(inp.signWt||0)/nP + (inp.__poleTotalW||0) + (inp.DL||0), Di:(sw.WiPanel||0)/nP + (sw.WiPost||0)}});
+  return lppBmbTotals({mode:'sign', post:p+1, name:gl.name, fam:f.fam, key:gl.key, f, phi, case:gl.case, rows, sh, shI, z,
+    env:{M:gl.M, P:gl.P, N:gl.axial}});
+}
+// per-case vector totals (M_x = Σ M cos θ, M_y = Σ M sin θ), the factored sum Σγ·M (+ the cable pulls of the combination) and
+// the sum of the combination's own terms; ok when both equal the envelope M (relative 1e-9: floating-point summation order)
+function lppBmbTotals(b){
+  const one=b.mode==='sign', cs=r=>one?1:Math.cos(r.az*RAD), sn=r=>one?0:Math.sin(r.az*RAD), mrows=b.rows.filter(r=>!r.axial);
+  b.tot={}; LPP_BMB_C.forEach(k=>{ let x=0,y=0; mrows.forEach(r=>{ if(r.cable) return; x+=r.m[k]*cs(r); y+=r.m[k]*sn(r); }); b.tot[k]={x,y,m:Math.hypot(x,y)}; });
+  let cx=0,cy=0; mrows.forEach(r=>{ if(r.cable){ cx+=r.mu*cs(r); cy+=r.mu*sn(r); } });
+  b.cab={x:cx, y:cy, has:mrows.some(r=>r.cable)};
+  b.X=LPP_BMB_C.reduce((s,k)=>s+b.f[k]*b.tot[k].x,0)+cx; b.Y=LPP_BMB_C.reduce((s,k)=>s+b.f[k]*b.tot[k].y,0)+cy; b.M=Math.hypot(b.X,b.Y);
+  let ux=0,uy=0; mrows.forEach(r=>{ ux+=r.mu*cs(r); uy+=r.mu*sn(r); }); b.ux=ux; b.uy=uy; b.Mu=Math.hypot(ux,uy);
+  b.ok=lppBmbRel(b.M,b.env.M) && lppBmbRel(b.Mu,b.env.M);
+  return b;
+}
+// ---- display ----
+const lppBmbN=(v,d)=>(typeof v==='number' && Math.abs(v)<1e-9)?'—':fmt(v,d==null?0:d);
+const lppBmb0=v=>Math.abs(v)<0.5?0:v;   // a total that rounds to 0 is shown as 0, not −0
+const lppBmbAz=a=>a==null?'—':fmt(((a%360)+360)%360,0);
+function lppBmbForceTxt(r,html){
+  const sub=html?(k=>LPP_BMB_HT[k]):(k=>k==='Di'?'Di':k==='Wi'?'Wi':k);
+  const L=LPP_BMB_C.filter(k=>Math.abs(r.F[k]||0)>1e-9).map(k=>sub(k)+' '+fmt(r.F[k],0));
+  return L.length?L.join(' · '):'—';
+}
+function lppBmbArmTxt(r){ if(r.arm==null) return '—'; return fmt(r.arm,2)+(r.armI && Math.abs(r.armI-r.arm)>0.005?' (W<sub>i</sub> '+fmt(r.armI,2)+')':''); }
+function lppBmbTableHTML(b){
+  const ice=b.rows.some(r=>!r.axial && (Math.abs(r.m.Di)>1e-9 || Math.abs(r.m.Wi)>1e-9));
+  const C=ice?LPP_BMB_C:['D','W'];
+  let h=`<div class="lppTblScroll"><table class="tbl lppBmbTbl"><tr><th style="text-align:left">Component</th><th>Acts along<span class="sym">θ (°)</span></th><th>Force by load case<span class="sym">(lb)</span></th><th>Arm<span class="sym">(ft)</span></th>`+
+    C.map(k=>`<th>M<sub>${LPP_BMB_HT[k]}</sub><span class="sym">(lb·ft)</span></th>`).join('')+`<th>${lppEsc(b.name)}<span class="sym">γ-factored M (lb·ft)</span></th></tr>`;
+  b.rows.forEach(r=>{
+    if(r.axial){ h+=`<tr class="lppBmbAx"><td style="text-align:left">${lppEsc(r.name)}</td><td>—</td><td>${lppBmbForceTxt(r,true)}</td><td>—</td>`+C.map(()=>`<td>0</td>`).join('')+`<td>0 <span class="lppBmbNote">axial N only</span></td></tr>`; return; }
+    const cells=C.map(k=>r.cable?`<td class="lppBmbAlone">${Math.abs(r.m[k])>1e-9?'('+fmt(r.m[k],0)+')':'—'}</td>`:`<td>${lppBmbN(r.m[k])}</td>`).join('');
+    const fTxt=r.cable?`${fmt(r.Fu,0)} <span class="lppBmbNote">from w<sub>R</sub> = ${fmt(r.wR,3)} lb/ft</span>`:lppBmbForceTxt(r,true);
+    h+=`<tr><td style="text-align:left">${lppEsc(r.name)}${r.cable?' ‡':''}</td><td>${lppBmbAz(r.az)}${r.wind?' <span class="lppBmbNote">wind</span>':''}</td><td>${fTxt}</td><td>${lppBmbArmTxt(r)}</td>${cells}<td><b>${lppBmbN(r.mu)}</b></td></tr>`;
+  });
+  const tr=(lab,fn,last)=>`<tr class="lppBmbTot"><td style="text-align:left" colspan="4">${lab}</td>`+C.map(k=>`<td>${fmt(lppBmb0(fn(b.tot[k])),0)}</td>`).join('')+`<td><b>${fmt(lppBmb0(last),0)}</b></td></tr>`;
+  if(b.mode==='pole'){ h+=tr('Σ M<sub>x</sub> = Σ M cos θ'+(b.cab.has?' (case columns: without the cable pulls ‡)':''),t=>t.x,b.ux); h+=tr('Σ M<sub>y</sub> = Σ M sin θ',t=>t.y,b.uy); }
+  h+=tr(b.mode==='pole'?'Resultant |M| = √(M<sub>x</sub>² + M<sub>y</sub>²)':'Σ M (one axis, along the wind)',t=>t.m,b.Mu);
+  h+=`</table></div>`;
+  return h;
+}
+// worked factored combination, as TeX lines: symbolic, values substituted, result
+function lppBmbWorkedTex(b,sym){
+  const sb=sym.slice(2), Mr=b.ok?b.env.M:b.M, gm=v=>fmt(v,1), T=[], LF='\\ \\text{lb}{\\cdot}\\text{ft}';
+  // a number in TeX: rounded to the lb·ft, a rounded −0 shown as 0, the thousands comma as {,} (no KaTeX punctuation space)
+  const nf=(v,d)=>{ const r=fmt(Math.abs(v)<0.5*Math.pow(10,-(d||0))?0:v,d||0); return r.replace(/,/g,'{,}'); }, fp=v=>'('+nf(v)+')';
+  const C=LPP_BMB_C.filter(k=>b.f[k]>0 && b.rows.some(r=>!r.axial && !r.cable && Math.abs(r.m[k])>1e-9)), cab=b.cab.has;
+  const sum=(ax,tot,cv,trig)=>{
+    const s=C.map(k=>`${gm(b.f[k])}\\,M_{${ax}${LPP_BMB_TEX[k]}}`).concat(cab?[`\\sum_j H_{j}h_{j}${trig}`]:[]);
+    const v=C.map(k=>`${gm(b.f[k])}${fp(tot(b.tot[k]))}`).concat(cab?[fp(cv)]:[]);
+    return s.length?[s.join(' + '), v.join(' + ')]:['0','0'];
+  };
+  if(b.mode==='pole'){
+    const x=sum('x,',t=>t.x,b.cab.x,'\\cos\\theta_j'), y=sum('y,',t=>t.y,b.cab.y,'\\sin\\theta_j');
+    T.push(`M_{${sb},x} = ${x[0]} = ${x[1]} = ${nf(b.X)}${LF}`);
+    T.push(`M_{${sb},y} = ${y[0]} = ${y[1]} = ${nf(b.Y)}${LF}`);
+    T.push(`M_{${sb}} = \\sqrt{M_{${sb},x}^2 + M_{${sb},y}^2} = \\sqrt{${fp(b.X)}^2 + ${fp(b.Y)}^2} = ${nf(Mr)}${LF}`);
+  } else {
+    // one axis: each load case's moment M_c = V_share·z + M_drag, worked first
+    C.forEach(k=>{ const sv=k==='W'?b.sh:b.shI, dr=b.rows[1].m[k], t=LPP_BMB_TEX[k];
+      T.push(`M_{${t}} = V_{share,${t}}\\,z + M_{drag,${t}} = (${nf(sv,1)})(${nf(b.z,2)}) + ${fp(dr)} = ${nf(b.tot[k].x)}${LF}`); });
+    const x=sum('',t=>t.x,0,'');
+    T.push(`M_{${sb}} = ${x[0]} = ${x[1]} = ${nf(Mr)}${LF}`);
+  }
+  return T;
+}
+function lppBmbWorkedHTML(b,sym){ return lppBmbWorkedTex(b,sym).map(t=>`\\[${t}\\]`).join(''); }
+function lppBmbResultHTML(b,where){
+  return b.ok
+    ? `<p class="eq-result">${b.fam==='LRFD'?'M<sub>u</sub>':'M<sub>a</sub>'} = ${fmt(b.M,0)} lb·ft: the envelope value of ${lppEsc(b.name)}${b.mode==='sign'?', post '+b.post:''} (${where}) is ${fmt(b.env.M,0)} lb·ft ✓</p>`
+    : `<div class="flag bad">The build-up (${fmt(b.M,0)} lb·ft) does not reconcile with the envelope value (${fmt(b.env.M,0)} lb·ft) of ${lppEsc(b.name)}: please report this; the envelope value is the one used by the checks.</div>`;
+}
+// links to a card / table on another tab (§6): opens its tab, scrolls to it and flashes it; changes nothing else
+function lppGoId(id){
+  const e=$(id); if(!e) return; const pg=e.closest('.tabpage'); if(pg) switchTab(pg.dataset.page);
+  const d=e.closest('details'); if(d) d.open=true;
+  e.scrollIntoView({behavior:'smooth',block:'start'}); e.classList.add('wkFlash'); setTimeout(()=>e.classList.remove('wkFlash'),1400);
+}
+document.addEventListener('click',ev=>{ const a=ev.target.closest&&ev.target.closest('a[data-lpgo]'); if(!a) return; ev.preventDefault(); lppGoId(a.dataset.lpgo); });
+const lppGoA=(id,txt)=>`<a href="#" class="wkA" data-lpgo="${id}">${txt}</a>`;
+function lppBmbClear(){ LPP_BMB=null; ['lppBaseRx','lppBmb'].forEach(id=>{ if($(id)) $(id).innerHTML='<p class="tbl-note">—</p>'; }); }
+function lppBmbMath(el){ if(el && window.renderMathInElement) renderMathInElement(el,{delimiters:[{left:'\\[',right:'\\]',display:true},{left:'$',right:'$',display:false}],throwOnError:false}); }
+// pole mode: govLRFD / govASD of the envelope; b2 = the B₂ of the governing LRFD combination (display)
+function lppBmbRenderPole(inp,comps,fxs,pw,govLRFD,govASD,b2){
+  const L=lppBmbPole(inp,comps,fxs,pw,govLRFD), A=lppBmbPole(inp,comps,fxs,pw,govASD);
+  LPP_BMB={mode:'pole', lrfd:L, asd:A, b2};
+  const box=$('lppBaseRx');
+  if(box){
+    const c=(v,u,go,t)=>`<b>${fmt(v,0)} ${u}</b> ${lppGoA(go,t)}`;
+    box.innerHTML=`<div class="lppTblScroll"><table class="tbl lppRxTbl"><tr><th style="text-align:left">At the pole base</th><th>LRFD (strength)</th><th>ASD (service)</th></tr>`+
+      `<tr><td style="text-align:left">Moment M (resultant)</td><td>${c(L.env.M,'lb·ft','lppBmbW_L','worked →')}</td><td>${c(A.env.M,'lb·ft','lppBmbW_A','worked →')}</td></tr>`+
+      `<tr><td style="text-align:left">Shear V (resultant)</td><td>${c(govLRFD.P,'lb','windDirLRFD','by direction →')}</td><td>${c(govASD.P,'lb','windDirASD','by direction →')}</td></tr>`+
+      `<tr><td style="text-align:left">Axial N</td><td>${c(govLRFD.axial,'lb','comboMatrixTbl','envelope →')}</td><td>${c(govASD.axial,'lb','comboMatrixTbl','envelope →')}</td></tr>`+
+      `<tr><td style="text-align:left">Combination</td><td>${lppEsc(govLRFD.name)}</td><td>${lppEsc(govASD.name)}</td></tr>`+
+      `<tr><td style="text-align:left">Wind toward</td><td>${fmt(govLRFD.phi,0)}°</td><td>${fmt(govASD.phi,0)}°</td></tr></table></div>`+
+      `<div class="tbl-note lpNL">${lpNL('The combination with the largest base moment in each family, at its own worst wind direction; V and N are those of the same combination and direction.',[
+        ['First-order:',`as in the envelope (${lppGoA('comboMatrixTbl','Load combinations')}). With P-Δ, the pole, base plate and shaft use B₂·M<sub>u</sub>${b2&&b2.B2?` = ${fmt(b2.B2,3)} × ${fmt(L.env.M,0)} = ${fmt(b2.B2*L.env.M,0)} lb·ft`:''} ${lppLink('b2',0)}.`],
+        ['Every combination','is checked; the shaft and the anchors may be governed by another one (Shaft and Anchorage tabs).']])}</div>`;
+  }
+  const el=$('lppBmb');
+  if(el){
+    let H=`<div class="tbl-note lpNL">${lpNL('The base moment of the governing combination, built up from its parts.',[
+      ['Rows:','each component\'s force, its height (or arm a), and its moment about the base for each unfactored load case; dead (D), wind (W), ice (D<sub>i</sub>) and wind on ice (W<sub>i</sub>).'],
+      ['Vectors:','wind terms act along the wind direction; eccentric weights and cable pulls along their own plan azimuth θ. The totals are M<sub>x</sub> = Σ M cos θ and M<sub>y</sub> = Σ M sin θ.'],
+      ['Direction:',`shown for wind toward <b>${fmt(L.phi,0)}°</b>, the governing direction of ${lppEsc(L.name)}. The ${lppGoA('windDirLRFD','wind direction study')} checks 0°, 90°, 180° and 270°.`],
+      ...(L.cab.has?[['‡ Cable pulls:','the along-cable pull follows the catenary law of the combined factored line load w<sub>R</sub> = √(w<sub>v</sub>² + w<sub>h</sub>²) (Cable loading card), which is not a sum of the load cases. The case columns show each source alone, in parentheses, for reference only; the combination column and the totals use the pull of the combination.']]:[]),
+      ['Worked:',`mast wind in the ${lppGoA('windExample','velocity-pressure calculation')}${fxs.length?`, fixtures in the ${lppGoA('fixLoadTbl','fixture table')} and its derivations`:''}${comps.length?`, cables in the ${lppGoA('cableOutCard','Cable loading card')}`:''}.`]])}</div>`;
+    H+=lppBmbTableHTML(L);
+    H+=`<div class="example-box" style="margin-top:10px"><div class="step-label" id="lppBmbW_L">Governing LRFD combination — ${lppEsc(L.name)}, wind toward ${fmt(L.phi,0)}° (vector sum)</div>`+lppBmbWorkedHTML(L,'M_u')+lppBmbResultHTML(L,'Load combinations card');
+    H+=`<div class="step-label" id="lppBmbW_A" style="margin-top:12px">Governing ASD combination — ${lppEsc(A.name)}, wind toward ${fmt(A.phi,0)}°</div>`;
+    if(A.phi!==L.phi) H+=`<p class="eq-why">This combination governs at another wind direction: its case totals at ${fmt(A.phi,0)}° are</p>`+lppBmbTableHTML(A);
+    H+=lppBmbWorkedHTML(A,'M_a')+lppBmbResultHTML(A,'Load combinations card')+`</div>`;
+    el.innerHTML=H; lppBmbMath(el);
+  }
+}
+// sign mode: per post, its governing LRFD and ASD demand (postGovList from calcSign)
+function lppBmbRenderSign(inp,sw,postGovList){
+  const posts=postGovList.map((pg,p)=>({lrfd:lppBmbSignPost(inp,sw,pg.gLRFD,p), asd:lppBmbSignPost(inp,sw,pg.gASD,p), gL:pg.gLRFD, gA:pg.gASD}));
+  LPP_BMB={mode:'sign', posts};
+  const two=posts.length>1, box=$('lppBaseRx');
+  if(box){
+    let h=`<div class="lppTblScroll"><table class="tbl lppRxTbl"><tr>${two?'<th>Post</th>':''}<th>Family</th><th style="text-align:left">Combination</th><th>Case</th><th>Wind toward</th><th>Moment M<span class="sym">(lb·ft)</span></th><th>Shear V<span class="sym">(lb)</span></th><th>Axial N<span class="sym">(lb)</span></th></tr>`;
+    posts.forEach((P,p)=>[['LRFD',P.gL,'L'],['ASD',P.gA,'A']].forEach(([fam,gx,t])=>{
+      h+=`<tr>${two?`<td>P${p+1}</td>`:''}<td>${fam}</td><td style="text-align:left">${lppEsc(gx.name)}</td><td>${gx.case}</td><td>${fmt(gx.phi||0,0)}°</td>`+
+        `<td><b>${fmt(gx.M,0)}</b> ${lppGoA('lppBmbW_'+t+(p+1),'worked →')}</td><td><b>${fmt(gx.P,0)}</b> ${lppGoA('sgComboTbl','→')}</td><td><b>${fmt(gx.axial,0)}</b> ${lppGoA('signLoadPath','→')}</td></tr>`; }));
+    h+=`</table></div><div class="tbl-note lpNL">${lpNL('At each post base: the combination with the largest moment in each family, at that post\'s worst wind direction and Fig. 29.3-1 case; V and N are those of the same combination.',[
+      ['First-order:','as in the per-post envelope; with P-Δ the post, base plate and shaft use B₂·M<sub>u</sub> (Post tab).'],
+      ['Every combination','is checked; the shaft and the anchors may be governed by another one (Shaft and Anchorage tabs).']])}</div>`;
+    box.innerHTML=h;
+  }
+  const el=$('lppBmb');
+  if(el){
+    let H=`<div class="tbl-note lpNL">${lpNL('The base moment of each post, built up from its parts.',[
+      ['Rows:','the post\'s share of the sign panel wind at its arm z, the post\'s own drag, and the dead load (axial only: the panel hangs concentrically on the posts).'],
+      ['One axis:','the wind acts along the panel normal, so the moments add directly.'],
+      ['Direction and case:',`each post at its own governing wind direction and Fig. 29.3-1 case; the envelope checks 0°, 90°, 180° and 270° and every case (${lppGoA('sgComboTbl','per-post demand')}). The shares are worked in the ${lppGoA('signLoadPath','load path')}.`]])}</div>`;
+    posts.forEach((P,p)=>{
+      const L=P.lrfd, A=P.asd, pl=two?'Post '+(p+1)+' — ':'';
+      H+=`<div class="subhead2" style="margin-top:12px">${pl}${lppEsc(L.name)}, wind toward ${fmt(L.phi,0)}°, Case ${L.case}</div>`+lppBmbTableHTML(L);
+      H+=`<div class="example-box" style="margin-top:8px"><div class="step-label" id="lppBmbW_L${p+1}">${pl}governing LRFD combination — ${lppEsc(L.name)}</div>`+lppBmbWorkedHTML(L,'M_u')+lppBmbResultHTML(L,'per-post demand card');
+      H+=`<div class="step-label" id="lppBmbW_A${p+1}" style="margin-top:12px">${pl}governing ASD combination — ${lppEsc(A.name)}, wind toward ${fmt(A.phi,0)}°, Case ${A.case}</div>`+lppBmbWorkedHTML(A,'M_a')+lppBmbResultHTML(A,'per-post demand card')+`</div>`;
+    });
+    el.innerHTML=H; lppBmbMath(el);
+  }
+}
+// Report tab: the base reactions (first subsection of the design summary) and the build-up (load combinations)
+function lprBmbRx(){
+  const B=LPP_BMB; if(!B) return null;
+  if(B.mode==='pole'){ const L=B.lrfd, A=B.asd;
+    return {title:'Base reactions (governing)',key:'lp:rx',items:[{type:'table',head:['At the pole base','LRFD (strength)','ASD (service)'],rows:[
+      ['Moment M (resultant, lb·ft)',{t:lprN(L.env.M,0),n:true,key:'lp:bmb'},{t:lprN(A.env.M,0),n:true,key:'lp:bmb'}],
+      ['Shear V (resultant, lb)',{t:lprN(L.env.P,0),n:true,key:'lp:env'},{t:lprN(A.env.P,0),n:true,key:'lp:env'}],
+      ['Axial N (lb)',{t:lprN(L.env.N,0),n:true,key:'lp:env'},{t:lprN(A.env.N,0),n:true,key:'lp:env'}],
+      ['Combination',L.name,A.name],['Wind toward (°)',lprCell(L.phi,0),lprCell(A.phi,0)]]},
+      {type:'note',text:'The combination with the largest base moment in each family, at its own worst wind direction; V and N of the same combination and direction. First-order values, as in the envelope; with P-Δ the pole, base plate and shaft use B₂·M_u'+(B.b2&&B.b2.B2?' = '+lprN(B.b2.B2,3)+' × '+lprN(L.env.M,0)+' = '+lprN(B.b2.B2*L.env.M,0)+' lb·ft':'')+' (Pole check). Every combination is checked; the shaft and the anchors may be governed by another one.'}]}; }
+  const two=B.posts.length>1;
+  return {title:'Base reactions (governing, per post)',key:'lp:rx',items:[{type:'table',head:(two?['Post']:[]).concat(['Family','Combination','Case','Wind toward (°)','M (lb·ft)','V (lb)','N (lb)']),
+    rows:[].concat(...B.posts.map((P,p)=>[['LRFD',P.gL],['ASD',P.gA]].map(([fam,g])=>(two?['P'+(p+1)]:[]).concat([fam,g.name,g.case,lprCell(g.phi||0,0),
+      {t:lprN(g.M,0),n:true,key:'lp:bmb:p'+(p+1)},{t:lprN(g.P,0),n:true,key:'lp:env:p'+(p+1)},{t:lprN(g.axial,0),n:true,key:'lp:env:p'+(p+1)}]))))},
+    {type:'note',text:'At each post base, the combination with the largest moment in each family at that post\'s worst wind direction and Fig. 29.3-1 case; V and N of the same combination. First-order values; with P-Δ the post, base plate and shaft use B₂·M_u (Post check).'}]};
+}
+function lprBmbTable(b){
+  const C=b.rows.some(r=>!r.axial && (Math.abs(r.m.Di)>1e-9 || Math.abs(r.m.Wi)>1e-9))?LPP_BMB_C:['D','W'];
+  const head=['Component','θ (°)','Force (lb)','Arm (ft)'].concat(C.map(k=>'M_'+LPP_BMB_TEX[k].replace('_','')+' (lb·ft)'),[b.name+' (lb·ft)']);
+  const rows=b.rows.map(r=>r.axial?[r.name,'—',lppBmbForceTxt(r,false),'—'].concat(C.map(()=>'0'),['0 (axial N only)'])
+    :[r.name+(r.cable?' ‡':''),lppBmbAz(r.az)+(r.wind?' (wind)':''),r.cable?lprN(r.Fu,0)+' (w_R '+lprN(r.wR,3)+' lb/ft)':lppBmbForceTxt(r,false),lprCell(r.arm,2)]
+      .concat(C.map(k=>r.cable?(Math.abs(r.m[k])>1e-9?'('+lprN(r.m[k],0)+')':'—'):{t:lppBmbN(r.m[k]),n:true}),[{t:lppBmbN(r.mu),n:true,cls:'hi'}]));
+  const tot=(lab,fn,last)=>({cells:[lab,'','',''].concat(C.map(k=>({t:lprN(lppBmb0(fn(b.tot[k])),0),n:true})),[{t:lprN(lppBmb0(last),0),n:true}]),cls:'gov'});
+  if(b.mode==='pole'){ rows.push(tot('Σ M_x = Σ M cos θ'+(b.cab.has?' (case columns without ‡)':''),t=>t.x,b.ux)); rows.push(tot('Σ M_y = Σ M sin θ',t=>t.y,b.uy)); }
+  rows.push(tot(b.mode==='pole'?'|M| = √(M_x² + M_y²)':'Σ M (one axis, along the wind)',t=>t.m,b.Mu));
+  return {type:'table',head,rows,wide:true};
+}
+function lprBmbWorked(b,sym){ return lppBmbWorkedTex(b,sym).map(t=>({type:'note',text:'$'+t+'$'})); }
+function lprBmbSubs(){
+  const B=LPP_BMB; if(!B) return [];
+  const res=(b,where)=>({type:'note',warn:!b.ok,text:b.ok?((b.fam==='LRFD'?'M_u':'M_a')+' = '+lprN(b.M,0)+' lb·ft: equals the envelope value of '+b.name+' (see [['+where+']]).'):('The build-up ('+lprN(b.M,0)+' lb·ft) does not reconcile with the envelope value ('+lprN(b.env.M,0)+' lb·ft).')});
+  if(B.mode==='pole'){ const L=B.lrfd, A=B.asd;
+    return [{title:'Base moment build-up ('+L.name+', wind toward '+lprN(L.phi,0)+'°)',key:'lp:bmb',items:[
+      ...lprNL('The base moment of the governing combination, built up from its parts (values of the [[tab:loading|Loading tab]]).',[
+        ['Rows:','each component\'s force, its height or arm, and its moment about the base for each unfactored load case (D, W, D_i, W_i).'],
+        ['Vectors:','wind terms act along the wind direction; eccentric weights and cable pulls along their own azimuth θ; M_x = Σ M cos θ, M_y = Σ M sin θ.'],
+        ['Direction:','shown for the governing direction of '+L.name+'; wind toward 0°, 90°, 180° and 270° is checked (see [[lp:env]]). Mast wind moment: see [[wind/Mp]].'],
+        ...(L.cab.has?[['‡ Cable pulls:','the pull follows the catenary law of the combined factored line load, not a sum of the load cases; the case columns show each source alone (in parentheses, reference only), the combination column and totals the pull of the combination.']]:[])]),
+      lprBmbTable(L),{type:'note',text:'Governing LRFD combination, '+L.name+', wind toward '+lprN(L.phi,0)+'° (vector sum):'},...lprBmbWorked(L,'M_u'),res(L,'lp:env'),
+      ...(A.phi!==L.phi?[{type:'note',text:'Governing ASD combination, '+A.name+', at wind toward '+lprN(A.phi,0)+'°:'},lprBmbTable(A)]:[{type:'note',text:'Governing ASD combination, '+A.name+', wind toward '+lprN(A.phi,0)+'°:'}]),
+      ...lprBmbWorked(A,'M_a'),res(A,'lp:env')]}]; }
+  return B.posts.map((P,p)=>{ const L=P.lrfd, A=P.asd;
+    return {title:'Post '+(p+1)+' base moment build-up',key:'lp:bmb:p'+(p+1),items:[
+      ...lprNL('The base moment of the post, built up from its parts (values of the [[tab:loading|Loading tab]]).',[['Rows:','the post\'s share of the panel wind at its arm z, the post\'s own drag, and the dead load (axial only).'],['One axis:','the wind acts along the panel normal; '+L.name+' at wind toward '+lprN(L.phi,0)+'°, Case '+L.case+'.']]),
+      lprBmbTable(L),{type:'note',text:'Governing LRFD combination, '+L.name+':'},...lprBmbWorked(L,'M_u'),res(L,'lp:env:p'+(p+1)),
+      {type:'note',text:'Governing ASD combination, '+A.name+', wind toward '+lprN(A.phi,0)+'°, Case '+A.case+':'},...lprBmbWorked(A,'M_a'),res(A,'lp:env:p'+(p+1))]}; });
 }
 
 // ================= D11 (2026-10-18): CALCULATION-SHEET REPORT + DERIVATION LINKS =================
@@ -7091,6 +7359,7 @@ function lprModel(){
     });
     { const sm=document.createElement('div'); sm.innerHTML=summaryHTML(ctx);   // LPRX: the Summary tab's content (same function, same context), as the Calc sheet printed it
       subs.unshift(xsub('Verdict, design and governing demands (Summary tab)',sm)); }
+    { const rx=lprBmbRx(); if(rx) subs.unshift(rx); }   // LPBM (2026-11-19): the base reactions first
     secs.push({title:'Design summary',subs});
   }
   /* 3. Wind and ice */
@@ -7147,13 +7416,14 @@ function lprModel(){
   /* 4. Load combinations */
   { const subs=[];
     if(!sign){
-      subs.push({title:'Base demand, every combination (governing azimuth)',items:[{type:'table',head:['Family','Combination','Wind toward (°)','P (lb)','M (lb·ft)','h (ft)','N (lb)','T (lb·ft)'],
+      subs.push({title:'Base demand, every combination (governing azimuth)',key:'lp:env',items:[{type:'table',head:['Family','Combination','Wind toward (°)','P (lb)','M (lb·ft)','h (ft)','N (lb)','T (lb·ft)'],
         rows:L.allCombos.map(r=>({cells:[r.fam,r.name,lprCell(r.phi,0),lprCell(r.P,0),lprCell(r.M,0),lprCell(r.h,2),lprCell(r.axial,0),lprCell(r.Tmax||0,0)],cls:(r.key===L.gov.govASD.key||r.key===L.gov.govLRFD.key)?'gov':''}))},
         ...lprNL('ASCE 7-16 §2.3 (LRFD) and §2.4 (ASD), including the atmospheric-ice combinations.',[['Wind directions:','wind is checked toward 0°, 90°, 180° and 270°; the largest moment governs each combination.'],['Cable loads','as on the [[tab:loading|Loading tab]].']])]});   // LPNL
     } else {
-      L.postDesigns.forEach((pd,pi)=>subs.push({title:'Post '+(pi+1)+' demand, every combination',items:[{type:'table',head:['Family','Combination','Case','P (lb)','M (lb·ft)','N (lb)','T (lb·ft)'],
+      L.postDesigns.forEach((pd,pi)=>subs.push({title:'Post '+(pi+1)+' demand, every combination',key:'lp:env:p'+(pi+1),items:[{type:'table',head:['Family','Combination','Case','P (lb)','M (lb·ft)','N (lb)','T (lb·ft)'],
         rows:L.allCombos.map(r=>{const g=r.postGov[pi]; return {cells:[r.fam,r.name,g.case,lprCell(g.P,0),lprCell(g.M,0),lprCell(g.axial,0),lprCell(g.Tmax||0,0)],cls:(r.name===pd.gASD.name||r.name===pd.gLRFD.name)?'gov':''};})}]}));
     }
+    subs.push(...lprBmbSubs());   // LPBM (2026-11-19): the base moment build-up
     subs.push(...xs(sign?['1b','2']:['4','4b']));   // LPRX
     secs.push({title:'Load combinations',subs});
   }
@@ -8892,6 +9162,10 @@ window.addEventListener('beforeprint',()=>{
     document.body.classList.add('rp-printing'); return;
   }
 });
+// LPBM (2026-11-19): the collapsed worked derivations (details.lpFold) print open; their state on screen comes back after printing
+let lppFoldBack=[];
+window.addEventListener('beforeprint',()=>{ document.querySelectorAll('details.lpFold:not([open])').forEach(d=>{ d.open=true; lppFoldBack.push(d); }); });
+window.addEventListener('afterprint',()=>{ lppFoldBack.forEach(d=>{ d.open=false; }); lppFoldBack=[]; });
 window.addEventListener('afterprint',()=>{ if(lppPrintBack){ const t=lppPrintBack; lppPrintBack=null; switchTab(t,true); } });
 </script>
 </body>
