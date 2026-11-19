@@ -82,7 +82,7 @@
     for (let i = 1; i < SIGN_LW.length; i++) if (r <= SIGN_LW[i]) return SIGN_CD[i - 1] + (SIGN_CD[i] - SIGN_CD[i - 1]) * (r - SIGN_LW[i - 1]) / (SIGN_LW[i] - SIGN_LW[i - 1]);
     return 1.30;
   }
-  const RAD = Math.PI / 180, NSTRIP = 100, ICE_DEN = 56;   // pcf, atmospheric ice density (Owner-specified ice; as the IBC mode)
+  const RAD = Math.PI / 180, NSTRIP = 10, ICE_DEN = 56;   // LPSG (2026-11-19): NSTRIP = the 10 pole segments (was 100 strips); ICE_DEN pcf, atmospheric ice density (Owner-specified ice; as the IBC mode)
   const f = (x, d) => (typeof x === 'number' && isFinite(x) ? x.toFixed(d == null ? 2 : d) : '—');
 
   /* windForces(g, V, state, psi): the horizontal wind forces for wind blowing toward bearing psi (deg, the tool's convention:
@@ -96,14 +96,16 @@
     const c = Math.cos(psi * RAD), sn = Math.sin(psi * RAD), Kd = kd(g.shape), Cv = cv(state), out = [];
     const zp = g.zp > 0 ? g.zp : 0, kzg = z => kz(zp > 0 ? z + zp : z);   // LPPJ
     const dz = g.H / NSTRIP, isSign = g.mode === 'sign';
-    // vertical support(s): strip integration (Art. 3.9.3, W_v); the post of a sign is prismatic
+    // vertical support(s) (Art. 3.9.3, W_v): LPSG (2026-11-19, engineer) per pole segment, the 10 segments of the IBC mode (L_i = H/10):
+    // P_z, C_d and the width d at the segment mid-height z_i, F_i = P_z·d·L_i at z_i (was 100 strips); for a section cut inside a
+    // segment its force is taken as uniform over the segment (sectionWind, zBot / zTop). The post of a sign is prismatic
     const nPost = isSign ? Math.max(1, g.sign.nPost || 1) : 1;
     for (let i = 0; i < NSTRIP; i++) {
       const z = (i + 0.5) * dz, dB = g.Dtop + (g.Dbase - g.Dtop) * (g.H - z) / g.H;
       // face width seen by the wind: B for a wind along x; a rectangular tube shows its depth Ht to a wind along y (LTS-3)
       const d = g.shape === 'rect' && g.Ht > 0 ? Math.abs(c) * dB + Math.abs(sn) * g.Ht : dB, dft = d / 12;
       const Cd = cdMember(g.shape, Cv * V * dft, g.rs), Pz = 0.00256 * kzg(z) * Kd * G * V * V * Cd, F = Pz * dft * dz * nPost;
-      out.push({ name: 'support', kind: 'strip', z, Fx: F * c, Fy: F * sn, T: 0, Cd, Pz, d });
+      out.push({ name: 'support', kind: 'strip', z, zBot: i * dz, zTop: (i + 1) * dz, Fx: F * c, Fy: F * sn, T: 0, Cd, Pz, d });
     }
     if (!isSign) {
       (g.fixtures || []).forEach((x, k) => {
@@ -133,7 +135,12 @@
   /* resultant at a section at height z0 (lb, lb·ft): forces above z0 */
   function sectionWind(forces, z0) {
     let Vx = 0, Vy = 0, Mx = 0, My = 0, T = 0, T015 = 0;
-    forces.forEach(q => { if (q.z < z0) return; Vx += q.Fx; Vy += q.Fy; Mx += q.Fx * (q.z - z0); My += q.Fy * (q.z - z0); T += q.T; T015 += (q.T015 || 0); });
+    forces.forEach(q => {
+      if (q.zTop !== undefined && q.zBot < z0) {   // LPSG: a support segment cut at z0: its part above z0 (uniform over the segment)
+        if (q.zTop <= z0) return; const k = (q.zTop - z0) / (q.zTop - q.zBot), arm = (q.zTop - z0) / 2;
+        Vx += q.Fx * k; Vy += q.Fy * k; Mx += q.Fx * k * arm; My += q.Fy * k * arm; T += q.T * k; return;
+      }
+      if (q.z < z0) return; Vx += q.Fx; Vy += q.Fy; Mx += q.Fx * (q.z - z0); My += q.Fy * (q.z - z0); T += q.T; T015 += (q.T015 || 0); });
     return { Vx, Vy, Mx, My, T: T + (T >= 0 ? 1 : -1) * T015 };
   }
   /* Table 3.9.3-1 (p. 3-24): load cases for wind from any direction. Case 1: full wind normal (psi = 0 and 180),
@@ -210,7 +217,11 @@
     st.push({ id: 'w.pzBase', label: `Design wind pressure at the base${g.zp > 0 ? ` (p = ${f(g.zp, 2)} ft above grade)` : ''} (heights below 16 ft are taken at 16 ft)`, sym: 'P_{z}', eq: '0.00256\\,K_{z}K_{d}GV^{2}C_{d}',
       sub: `0.00256\\cdot${f(KzB, 3)}\\cdot${f(Kd, 2)}\\cdot${f(G, 2)}\\cdot${f(V, 0)}^{2}\\cdot${f(CdB, 3)}`, value: PzB, unit: 'psf', d: 2, ref: ref('Eq. 3.8.1-1 (p. 3-14)') });
     const fr = windForces(g, V, 'extreme', 0), sup = fr.filter(q => q.kind === 'strip'), Fs = sup.reduce((a, q) => a + q.Fx, 0), Ms = sup.reduce((a, q) => a + q.Fx * q.z, 0);
-    st.push({ id: 'w.fsup', label: `Wind on the ${isSign ? 'post(s)' : 'pole'}, integrated over ${NSTRIP} strips (P_z, C_d and d at each strip)`, sym: 'W_{v}', eq: '\\sum P_{z}\\,d\\,\\Delta z',
+    // LPSG (2026-11-19): one worked line per support segment (top to base), then the sum
+    sup.slice().reverse().forEach((q, k) => st.push({ id: 'w.seg' + (k + 1), label: `Segment ${k + 1}: z_i = ${f(q.z, 2)} ft, L_i = ${f(q.zTop - q.zBot, 2)} ft, d = ${f(q.d, 3)} in, C_d = ${f(q.Cd, 3)}`,
+      sym: 'F_{i}', eq: 'P_{z}(z_{i})\\,d\\,L_{i}', sub: `${f(q.Pz, 2)}\\cdot\\frac{${f(q.d, 3)}}{12}\\cdot${f(q.zTop - q.zBot, 2)}${isSign && (g.sign.nPost || 1) > 1 ? `\\cdot${g.sign.nPost}` : ''}`,
+      value: q.Fx, unit: 'lb', d: 2, ref: ref('Eq. 3.8.1-1; Art. 3.9.3 (pp. 3-14, 3-23)'), note: `M_i = F_i z_i = ${f(q.Fx * q.z, 1)} lb·ft` }));
+    st.push({ id: 'w.fsup', label: `Wind on the ${isSign ? 'post(s)' : 'pole'}, the sum over its ${NSTRIP} segments (P_z, C_d and d at each segment mid-height, F_i = P_z d L_i)`, sym: 'W_{v}', eq: '\\sum P_{z}\\,d\\,L_{i}',
       sub: '', value: Fs, unit: 'lb', d: 0, ref: ref('Art. 3.9.3 (p. 3-23)'), note: `Moment at the base ${f(Ms, 0)} lb·ft; resultant at ${f(Fs > 0 ? Ms / Fs : 0, 2)} ft.` });
     fr.filter(q => q.kind === 'fixture').forEach((q, k) => st.push({ id: 'w.fix' + k, label: `${q.name} at ${f(q.z, 1)} ft (manufacturer EPA: P_z without C_d, times the EPA)`, sym: 'W_{l}',
       eq: '0.00256\\,K_{z}K_{d}GV^{2}\\cdot EPA', sub: `${f(q.q, 2)}\\cdot${f(Math.hypot(q.Fx, q.Fy) / Math.max(q.q, 1e-9), 2)}`, value: Math.hypot(q.Fx, q.Fy), unit: 'lb', d: 1, ref: ref('Art. 3.9.1 (p. 3-23); Table 3.8.7-1 attachments') }));

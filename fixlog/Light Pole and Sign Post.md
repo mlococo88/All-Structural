@@ -2801,3 +2801,74 @@ Engineer, 2026-11-19: "I want the load development calcs to be a little more cle
   - `tests/engine/run.mjs lightpole`, `check-syntax`, `lightpole-projection`, `lightpole-anchor-handoff`, `lightpole-signviews` pass.
 - **Decision (pending engineer review):** (1) the build-up is shown for the governing-moment combination of each family at its own wind direction (V and N in the box are those of the same combination and direction, not the largest V or N of all combinations); (2) cable pulls are not superposed per load case (catenary law of the combined line load); the case columns show each source alone in parentheses, for reference; (3) first-order M is shown, as in the envelope, with B₂·M_u quoted in the note; (4) the ice t_d, n₁ / G_f and fixture derivations start collapsed on every load (no stored UI state, so no new storage key); (5) the LRFDLTS mode is not covered (its own engine and Loading card, `apps/light-pole/lts-engine.js`); (6) sign mode: one axis per post (the wind acts along the panel normal), the dead load is axial only.
 - **Saved data:** none changed (no new storage key). **Other copies:** none.
+
+## 2026-11-19 — PR: claude/lightpole-mast-segments (PR #1650: https://github.com/mlococo88/All-Structural/pull/1650) — mast wind per pole segment instead of 100 strips (LPSG)   [§4 calculation change: method of summing the mast wind; q_z, G, C_f, ice and load factors unchanged; no saved key or format change; cable values unchanged]
+
+Engineer, 2026-11-19 (approved): no integration-level calculation for the mast, "it should be more simple than that": the pole's own segments, one row each, checkable by hand.
+- **Provisions (unchanged, as the tool cites them):** ASCE 7-16 §26.10 (Eq. 26.10-1, q_z at height z) and §29.4 (other structures, F = q_z G C_f A_f, with q_z at the height of the centroid of the area A_f); ice ASCE 7-16 §10.4.6 (t_d at height z) and §10.5 (wind on ice, width D + 2t_d at V_ice). LRFDLTS 1st Ed. (2015, 2017 Interim) Art. 3.8.1 (Eq. 3.8.1-1, P_z) and Art. 3.9.3 (W_v on the support). The provisions do not prescribe strips or segments; the segment is the area A_f.
+- **Before / After:**
+  1. `poleWindNominal()` (IBC mode, pole and the sign's mast object), anchor `const NSTRIP=`: `const NSTRIP=100, dzs=inp.H/NSTRIP, strips=[];` → `const NSTRIP=NSEG, dzs=inp.H/NSTRIP, strips=[];` (NSEG = 10, the segments of `poleSegments()`, the Pole properties card and the n₁ table: L_i = H/10). The per-part expressions are unchanged: z_i = (i + ½)L_i, D(z_i) linear taper, F_i = 0.00256·K_z(z_i)·K_zt·K_d·V²·G·C_f·(D(z_i)/12)·L_i, F_i,ice with (D + 2t_d(z_i)) at V_ice, W_i,ice = iceWeight(t_d(z_i), D(z_i))·L_i; F = ΣF_i, M = ΣF_i z_i. Each part now also carries `zBot, zTop, L, w_in, Kz`.
+     - Before: F_pole = Σ_{100 strips} q_z(z)·G·C_f·D(z)·Δz, Δz = H/100. After: F_pole = Σ_{10 segments} q_z(z_i)·G·C_f·D(z_i)·L_i, L_i = H/10.
+  2. New `lppSegPart(st,z)`: the part of a segment above a cut at z, with the segment load uniform over its length: k = 1 and arm z_i − z when z_bot ≥ z; k = (z_top − z)/L_i and arm (z_top − z)/2 inside; none below. At the base this is exactly F_i at z_i.
+     - `poleStress()` `secForces`: before `sList.forEach(st=>{ if(st.z>z){ … st.F … (st.z-z) … }})` (point loads at 100 strip centroids), after the same through `lppSegPart` (F·k at arm).
+     - `pw.iceAbove(z)` (map basis): before `Σ(st.z>z ? W_i : 0)`, after `Σ W_i·k`.
+  3. `signWind()` exposed post drag, anchor `const NPS=`: `const NPS=50` → `const NPS=Math.max(1,Math.ceil(postExpH/5-1e-9))` (equal segments of at most 5 ft over the exposed height: the pole segments are over the whole post, not the exposed clearance). `signPostStress()` `secM`: `if(st.z>z){…}` → `lppSegPart`.
+  4. LRFDLTS engine `apps/light-pole/lts-engine.js`:
+     - `NSTRIP = 100` → `NSTRIP = 10`.
+     - `windForces()` support parts carry `zBot, zTop` (P_z, C_d and d at the segment mid-height, F_i = P_z·d·L_i, unchanged form).
+     - `sectionWind()`: a support segment cut at z0 contributes F·k at arm (z_top − z0)/2 (was: point loads with z ≥ z0).
+     - `windSteps()`: one worked step per segment (`w.seg1…10`, F_i = P_z d L_i, M_i), and the label "integrated over 100 strips" → "the sum over its 10 segments".
+  5. Display: new `lppMastSegTableHTML(pw,inp)`, one row per segment (z_i, L_i, D, K_z, q_zK_d, F_i, M_i, t_d, F_i,ice, M_i,ice, W_i,ice) with totals, on the Loading tab (step 3) and in the Report §2. The texts "integrated over N strips" are now "taken in the pole's own 10 segments" (Loading tab, Report §2, `lprModel` step `Fp`, sign post drag note, Σ in place of ∫).
+- **Not changed:** the natural frequency n₁ (Rayleigh) deflection stations and the LRFDLTS deflection integration (structural analysis, not load development); q_z, K_z, G / G_f, C_f / C_d, the ice thickness and density, the load factors and combinations; the sign panel; fixtures; cables (1,578 / 768 / 363 values per pole case identical).
+- **Check case (default pole, by hand):** H 35 ft, D 6 → 10 in, Exposure C, V 115 mph, K_zt 1.0, K_d 1.0, G 0.85, C_f 0.7, L_i = 3.5 ft:
+
+  | Seg | z_i (ft) | D (in) | K_z | q_zK_d (psf) | F_i (lb) | M_i (lb·ft) |
+  |---|---|---|---|---|---|---|
+  | 1 | 33.25 | 6.2 | 1.0038 | 33.98 | 36.56 | 1,215.8 |
+  | 2 | 29.75 | 6.6 | 0.9805 | 33.20 | 38.02 | 1,131.2 |
+  | 3 | 26.25 | 7.0 | 0.9550 | 32.33 | 39.28 | 1,031.1 |
+  | 4 | 22.75 | 7.4 | 0.9267 | 31.37 | 40.29 | 916.6 |
+  | 5 | 19.25 | 7.8 | 0.8947 | 30.29 | 41.00 | 789.3 |
+  | 6 | 15.75 | 8.2 | 0.8576 | 29.04 | 41.32 | 650.8 |
+  | 7 | 12.25 | 8.6 | 0.8489 | 28.74 | 42.89 | 525.4 |
+  | 8 | 8.75 | 9.0 | 0.8489 | 28.74 | 44.89 | 392.8 |
+  | 9 | 5.25 | 9.4 | 0.8489 | 28.74 | 46.88 | 246.1 |
+  | 10 | 1.75 | 9.8 | 0.8489 | 28.74 | 48.88 | 85.5 |
+  | Σ | | | | | **420.02** | **6,984.5** |
+
+  Row 10: K_z at 15 ft = 2.01(15/900)^(2/9.5) = 0.8489; q_zK_d = 0.00256(0.8489)(115²) = 28.74 psf; F = 28.74(0.85)(0.7)(9.8/12)(3.5) = 48.88 lb; M = 48.88(1.75) = 85.5 lb·ft.
+  Before / after: F_pole 420.03 → 420.02 lb (−0.002 %); M_pole 6,980.2 → 6,984.5 lb·ft (+0.062 %); z̄ 16.62 → 16.63 ft. Iced: F 88.60 → 88.61 lb, M 1,493.6 → 1,494.4 lb·ft; mast ice weight (map basis) 163.60 → 164.08 lb.
+- **Results before → after** (`node tests/lightpole-compare.mjs --out`, exact):
+
+  | Project | Value | Before | After | Change |
+  |---|---|---|---|---|
+  | default pole | M LRFD (1.2D + 1.0W, 270°) | 21,239.0 lb·ft | 21,243.4 | +0.020 % |
+  | | V / N LRFD | 877.3 / 955.8 lb | 877.3 / 955.8 | −0.001 % / 0 |
+  | | M ASD (D + 0.6W) | 12,752.3 | 12,754.9 | +0.020 % |
+  | | V / N ASD | 527.0 / 796.5 | 527.0 / 796.5 | −0.001 % / 0 |
+  | | Pole stress ratio | 0.2644 | 0.2644 | +0.019 % |
+  | | Embedment d | 6.464 ft | 6.464 | +0.006 % |
+  | | Shaft flexure / shear D/C | 0.06216 / 0.02896 | 0.06217 / 0.02896 | +0.021 % / −0.001 % |
+  | tall (H 60 ft, D 6 → 12 in) | M LRFD / ASD | 38,862.8 / 23,326.1 | 38,875.1 / 23,333.5 | +0.032 % |
+  | | V LRFD / ASD | 1,324.2 / 795.1 | 1,323.6 / 794.7 | −0.047 % |
+  | | Pole stress / d / flexure / shear | 0.3116 / 7.487 / 0.07555 / 0.03428 | 0.3117 / 7.487 / 0.07558 / 0.03426 | +0.03 / +0.006 / +0.04 / −0.05 % |
+  | nocable (rect 8 × 6 in, V 140) | M LRFD / ASD | 34,041.3 / 20,424.8 | 34,031.2 / 20,418.7 | −0.029 % |
+  | | Pole stress / d / flexure / shear | 0.6986 / 5.472 / 0.1016 / 0.05783 | 0.6984 / 5.471 / 0.1016 / 0.05782 | −0.03 / −0.01 / −0.03 / −0.01 % |
+  | sign1, sign2 (IBC) | every value | | | 0 (exposed post below 15 ft, prismatic: K_z and D constant, the sum is the same) |
+  | LRFDLTS, H 45 ft, D 6 → 12 in (made up) | W_v support / its base M | 733.78 lb / 16,715.6 lb·ft | 733.44 / 16,708.5 | −0.05 % / −0.04 % |
+  | | Extreme I M / V (case 2) | 26,339.2 / 1,008.7 | 26,332.1 / 1,008.4 | −0.03 % |
+  | | Member ratio / base plate P_rod / weld | 0.20102 / 13,098 lb / 0.41290 | 0.20098 / 13,094 / 0.41279 | −0.02 % / −0.03 % / −0.03 % |
+  | | Broms L / shaft flexure / shear | 7.1186 ft / 0.05775 / 0.02611 | 7.1183 / 0.05774 / 0.02610 | −0.004 % / −0.03 % / −0.03 % |
+  | LRFDLTS HC-1 (engine test) | base ratio / M_u | 0.50999 / 225.80 kip-in | 0.50978 / 225.70 | −0.04 % |
+  | | P_rod / t_req / weld | 17,958.7 lb / 0.9392 in / 0.6682 | 17,951.2 / 0.9390 / 0.6679 | −0.04 % |
+  | LRFDLTS monopost sign | every value | | | 0 to round-off (post below 16 ft: K_z constant, prismatic) |
+
+  All changes are below 0.1 %. Axial N is unchanged except through the map-basis mast ice weight (+0.3 % of the ice weight, the ice combinations only).
+- **Build-up (LPBM):** the mast is still one row (F_pole, z̄ = M/F); it reconciles exactly (`tests/engine/lightpole-bmb.test.mjs`, 1e-12).
+- **How verified:**
+  - `node tests/lightpole-compare.mjs` (30 cases): every difference is a value listed above, the per-part arrays (10 parts instead of 100 / 50) and the new table text; cable values identical; 0 console errors.
+  - New `tests/engine/lightpole-segments.test.mjs`: the hand check above, `lppSegPart`, map-basis ice above a cut, LRFDLTS 10 segments and `sectionWind` at the base and at a mid-segment cut.
+  - `tests/engine/lightpole-lts.test.mjs` expectations updated with before → after in comments.
+  - Engine tests, `check-syntax`, `lightpole-basemoment`, `lightpole-projection`, `lightpole-anchor-handoff`, `lightpole-signviews` and `phone-layout --tool lp` pass.
+- **Decision (pending engineer review):** (1) the pole segments are the 10 equal segments of the Pole properties card (L_i = H/10, 3.5 ft on the default pole; 6 ft on a 60 ft pole). (2) Within a segment the force is taken as uniform over its length for section cuts above the base (pole stress, LRFDLTS member checks and deflection); the base gets exactly ΣF_i z_i. (3) Sign posts: the exposed height (clearance − p) in equal segments of at most 5 ft, because the pole segments span the whole post and not the exposed part. (4) The LRFDLTS support uses the same 10 segments (the sign post: its full height, as before). (5) The 'design' (uniform) ice basis keeps its mean-diameter mast ice weight; only the map basis sums the segments.
+- **Saved data:** none changed. **Other copies:** none.

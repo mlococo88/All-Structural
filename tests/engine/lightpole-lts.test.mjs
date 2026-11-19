@@ -128,8 +128,9 @@ test('LTS-3 HC-1: base φM_n 520.72, φP_nc 4.516, φV_n 65.42, φT_n 540.04 kip
   near(b.Mrx, 520.72, 0.01, 'φMn'); assert.equal(b.mx.cls, 'noncompact');
   near(b.Pr, 4.516, 0.001, 'φPnc'); near(b.Vr, 65.42, 0.01, 'φVn'); near(b.Tr, 540.04, 0.05, 'φTn');
   near(mc.Bs.E1max.B, 1.02992, 2e-5, 'B2'); assert.equal(mc.Bs.E1max.valid, true); near(mc.Bs.E1max.klr, 447.08, 0.02, 'kL/r');
-  near(b.gov.ratio, 0.50999, 2e-4, 'ratio'); assert.equal(b.gov.eq, '5.12.1-3'); assert.ok(['d45', 'd315'].includes(b.gov.lc));
-  near(b.gov.Mu, 225.80, 0.01, 'Mu');
+  // LPSG (2026-11-19): pole wind per 10 segments (was 100 strips): ratio 0.50999 → 0.50978, M_u 225.80 → 225.70 kip-in
+  near(b.gov.ratio, 0.50978, 2e-4, 'ratio'); assert.equal(b.gov.eq, '5.12.1-3'); assert.ok(['d45', 'd315'].includes(b.gov.lc));
+  near(b.gov.Mu, 225.70, 0.01, 'Mu');
 });
 test('LTS-3: Table 5.8.2-1 round branches and λ > λmax not permitted; Eq. 5.12.1-1 used when T_u/T_r > 0.20', () => {
   const L = ltsEngine(), sec = { shape: 'round', D: 10, t: 0.25 };
@@ -190,9 +191,10 @@ test('LTS-6 HC-1: base plate P_rod 17,959 lb, t_req 0.939 in ≤ 1.25 in; fillet
   const L = ltsEngine(), secs = roundSecs(40, 4.5, 8, 0.1793, 490), g = { ...HC1, DCpole: secs[0].Wabove, taper: true }, LL = { V: 130, Vsvc: 76, tIce: 0 };
   const ba = L.baseActions(g, LL), mc = L.memberCheck(g, LL, secs, 55);
   const bp = L.basePlate(ba, mc.Bs, { n: 4, BC: 13, theta0: 0, D: 8, Fy: 36, t: 1.25 });
-  near(bp.gov.Prod, 17958.7, 1.0, 'P_rod'); near(bp.m, 2.5, 1e-12, 'm'); near(bp.beff, 6.28319, 1e-4, 'b_eff'); near(bp.tReq, 0.9392, 2e-4, 't_req'); assert.equal(bp.ok, true);
+  // LPSG (2026-11-19): pole wind per 10 segments (was 100 strips): P_rod 17,958.7 → 17,951.2 lb, t_req 0.9392 → 0.9390 in, q 4.6507 → 4.6486, ratio 0.6682 → 0.6679
+  near(bp.gov.Prod, 17951.2, 1.0, 'P_rod'); near(bp.m, 2.5, 1e-12, 'm'); near(bp.beff, 6.28319, 1e-4, 'b_eff'); near(bp.tReq, 0.9390, 2e-4, 't_req'); assert.equal(bp.ok, true);
   const wd = L.baseWeld(ba, mc.Bs, { type: 'fillet', size: 0.3125, Fexx: 70, D: 8 });
-  near(wd.phiRn, 6.9596, 1e-3, 'φRn'); near(wd.gov.q, 4.6507, 2e-3, 'q'); near(wd.ratio, 0.6682, 5e-4, 'ratio'); assert.ok(['d45', 'd315'].includes(wd.gov.lc));
+  near(wd.phiRn, 6.9596, 1e-3, 'φRn'); near(wd.gov.q, 4.6486, 2e-3, 'q'); near(wd.ratio, 0.6679, 5e-4, 'ratio'); assert.ok(['d45', 'd315'].includes(wd.gov.lc));
   assert.equal(L.baseWeld(ba, mc.Bs, { type: 'cjp' }).ok, true);
 });
 /* LPL8 (2026-11-07): rectangular tube, the weld as a rectangular line group. Hand check, B_x = 8 in (along x), B_y = 6 in, one row
