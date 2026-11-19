@@ -68,6 +68,7 @@
     window.SharedReport.mount(box, M, { controls: controls(ctx, true), closed: S.closed, stick: tb ? tb.offsetHeight : 0, onGoto: t => { if (ctx.goto) ctx.goto(t); } });
     if (bar) box.insertAdjacentHTML('afterbegin', bar);
     wire();
+    if (window.SBDReportReview) window.SBDReportReview.attach(box, ctx);   // review tools (ui/rpreview.js, 2026-11-19): contents sidebar, markup, reviewed copy
   }
 
   /* ---------- every girder ---------- */
@@ -91,6 +92,7 @@
     const tb = document.getElementById('tabBar');
     window.SharedReport.mount(box, M, { controls: controls(ctx, true), closed: S.closed, stick: tb ? tb.offsetHeight : 0, onGoto: t => { if (ctx.goto) ctx.goto(t); } });
     wire();
+    if (window.SBDReportReview) window.SBDReportReview.attach(box, ctx);   // review tools (ui/rpreview.js)
   }
   /* one girder after the other, one per timer tick (the page stays responsive and shows the progress); a girder whose rows are kept
      for this project state is not run again */
