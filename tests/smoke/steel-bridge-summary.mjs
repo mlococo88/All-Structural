@@ -49,7 +49,7 @@ async function cellsMatch(p) {
     await p.waitForFunction(() => /Running .*\(\d+\/\d+\)/.test((document.querySelector('#out .sum-run') || {}).textContent || ''), null, { timeout: 10000 });
     await upToDate(p); const runS = (Date.now() - s0) / 1000;
     const v = await p.evaluate(() => ({ badge: document.querySelector('.sum-badge').textContent, gov: document.querySelector('.sum-gov').innerText, run: document.querySelector('.sum-run').innerText }));
-    assert.equal(v.badge, 'FAIL'); assert.match(v.gov, /^Governing: Flexure, Strength I, girder G1, x = 249\.99 ft: GS7 .*D\/C 1\.229/);
+    assert.equal(v.badge, 'FAIL'); assert.match(v.gov, /^Governing: Flexure, Strength I, girder G1, x = 250\.01 ft: GS7 .*D\/C 1\.229/);   // A3 (2026-11-19): the same GS7 1.229, reported at 250.01 ft (249.99 ft now takes its own unbraced segment)
     await cellsMatch(p);
     console.log(`  ok   default project: ${runS.toFixed(1)} s to "Up to date" (${v.run.split('\n')[0]}); ${v.gov.split('\n')[0].slice(0, 120)}`);
     await shot(p, 'sum-default-1440');
