@@ -175,6 +175,12 @@ node tests/lightpole-compare.mjs [--cases default,sign1] [--old-saves] [--tol 1e
 # length clr + s − p and its input errors, DXF / Report with p. ~2 min
 node tests/smoke/lightpole-projection.mjs
 
+# Light Pole and Sign Post, base reactions and base moment build-up (LPBM, 2026-11-19; display only): the two cards first on the Loading
+# tab, the shown M / V / N = the envelope tables' text, the build-up result = the envelope M (pole and sign, cables, stiff, projection),
+# KaTeX, links, the collapsed derivations (open for print), the Report subsections with § links resolved, 390 px, 0 console errors.
+# The reconciliation for every combination and direction is in tests/engine/lightpole-bmb.test.mjs. ~3 min
+node tests/smoke/lightpole-basemoment.mjs [--shots <dir>]
+
 # Saved-project list and Undo / Redo (shared/projects.js, PLIB): main vs the working tree (results on load, after an input change, B on
 # main's autosave and project list), Undo / Redo / Ctrl+Z / Ctrl+Y, the dialog (rename, duplicate, delete, open), quota refusal, 390 px
 node tests/smoke/project-library.mjs --tool asce7 [--a origin/main] [--shots <dir>]
