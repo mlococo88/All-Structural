@@ -77,6 +77,12 @@
                   crossframes.dia.clr: the clearance c (in, total) of the diaphragm fit check CFD (d ≤ D_0 − c, D_0 the web depth of the
                   shallower girder of the bay at the first support) and of CF10's per-group fit rule; absent, blank (null, NaN) or not a number
                   ≥ 0: 2 in (1 in top and bottom for clips / welds; engine/crossframes.js diaClr). Nothing is rewritten on load.
+                  -- added 2026-11-19 (SB2L, engineer request 2026-11-19; optional: absent = one bolt line, as before) --
+                  crossframes.dia.nl: vertical bolt lines per diaphragm end, 1 or 2 (string '1' / '2' from the input, or a number;
+                  absent or anything else: 1); crossframes.dia.g: the spacing between the two lines (in; absent, blank or not a number
+                  > 0: 3 in); crossframes.dia.eNl: the end (bearing-line) diaphragms' lines, 1 or 2 (absent or blank: dia.nl). dia.nb is
+                  the bolts in each line; dia.ecc is from the girder web centerline to the first line (engine/crossframes.js cfDiaNl,
+                  cfDiaG, cfDiaEnd). Nothing is rewritten on load.
      -- added 2026-10-29 (analysis PR), optional, read by engine/analysis.js (absent = its defaults) --
      analysis:  { im, imf (%), crack: 'none' | '15' | 'dl', deflLimit (L/…), seq: 'on' | 'off', seqMod: 'n' | '3n', seqCustom (text),
                   steelAllowPct (%; used when xs.allow is not available), haunchInStiffness (true | false; absent = the owner rule) }
@@ -524,6 +530,9 @@
       ['V', 'Kz', 'G', 'Cd'].forEach(k => nn((C.wind || {})[k], `${cp}.wind.${k}`, `Wind ${k}`));
       if (C.sb && C.sb.Mu !== '' && C.sb.Mu != null && !isNum(C.sb.Mu)) E(`${cp}.sb.Mu`, 'Deck-placement M_u must be a number (or blank: from the analysis).');
       { const v = (C.dia || {}).clr; if (v != null && v !== '' && !Number.isNaN(v) && !(isNum(+v) && +v >= 0)) E(`${cp}.dia.clr`, 'Diaphragm fit clearance must be a number of at least 0 in (or blank: 2 in).'); }   // SB-25
+      { const q = C.dia || {}, ln = v => v == null || v === '' || [1, 2].includes(+v);   // SB2L: bolt lines and their spacing (optional)
+        if (!ln(q.nl)) E(`${cp}.dia.nl`, 'Diaphragm bolt lines per end: 1 or 2.'); if (!ln(q.eNl)) E(`${cp}.dia.eNl`, 'End diaphragm bolt lines per end: 1 or 2 (or blank: as the intermediate).');
+        if (q.g != null && q.g !== '' && !Number.isNaN(q.g) && !(isNum(+q.g) && +q.g > 0)) E(`${cp}.dia.g`, 'Spacing between the diaphragm bolt lines must be positive (or blank: 3 in).'); }
       ['StrI', 'Con'].forEach(k => { const v = (C.userMode || {})[k]; if (v != null && !['add', 'replace'].includes(v)) E(`${cp}.userMode.${k}`, 'Entered member forces: add to or replace the computed forces.'); }); }
     // added 2026-10-29 (field splices PR): the optional field splice inputs
     if (p.splices != null) { const Q = p.splices || {}, B = Q.bolts || {};

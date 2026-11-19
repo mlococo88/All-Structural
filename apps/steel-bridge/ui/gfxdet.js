@@ -465,18 +465,19 @@
      picks one (container query); print shows the wide one. */
   function diaphragm(B) {
     const CF = window.SBDCrossframes, U = window.SharedUnits, fmt = (v, d) => U.fmt(v, d), p = B.I.p, q = p.dia || {}, Xs = CF.cfDiaSec(q), g = CF.cfDiaGap(q), S0 = +p.S, dg = +p.dg, D = B.R.DIA && B.R.DIA.i;
+    const nl = CF.cfDiaNl ? CF.cfDiaNl(q) : 1, gl = nl === 2 ? CF.cfDiaG(q) : 0;   // SB2L (2026-11-19): two vertical bolt lines, g apart, the first ec from the web
     const bf = 16, tfl = 1, nb = Math.max(2, Math.round(+q.nb || 2)), sp = +q.pitch || 3, ec = +q.ecc || 3.5, bs = 5, yT = dg - (dg - Xs.d) / 2, yB = yT - Xs.d;   // y up from the bottom flange
     const draw = W => { const Sc = VK().scene(), nar = W < 560;
       [0, S0].forEach((xg, k) => { Sc.rect(xg - bf / 2, dg - tfl, xg + bf / 2, dg, 'dt-st'); Sc.rect(xg - bf / 2, 0, xg + bf / 2, tfl, 'dt-st'); Sc.rect(xg - 0.35, tfl, xg + 0.35, dg - tfl, 'dt-st');
         const sg = k ? -1 : 1; Sc.rect(Math.min(xg, xg + sg * bs), tfl + 1, Math.max(xg, xg + sg * bs), dg - tfl - 1, 'dt-pl', { fill: '#E2E8F0', stroke: '#94A3B8' }); });
       Sc.rect(g, yB, S0 - g, yT, 'dt-st'); Sc.line(g, yT - Xs.tf, S0 - g, yT - Xs.tf, 'dt-ol', { stroke: '#E2E8F0', sw: 0.8 }); Sc.line(g, yB + Xs.tf, S0 - g, yB + Xs.tf, 'dt-ol', { stroke: '#E2E8F0', sw: 0.8 });
-      [ec, S0 - ec].forEach(xb => { for (let i = 0; i < nb; i++) Sc.circ(xb, dg / 2 + (i - (nb - 1) / 2) * sp, 0.5, 'dt-bolt'); });
+      (nl === 2 ? [ec, ec + gl, S0 - ec, S0 - ec - gl] : [ec, S0 - ec]).forEach(xb => { for (let i = 0; i < nb; i++) Sc.circ(xb, dg / 2 + (i - (nb - 1) / 2) * sp, 0.5, 'dt-bolt'); });   // SB2L: both bolt lines
       Sc.text(S0 / 2, yT, `${Xs.nm_} ${Xs.chS ? 'channel' : 'rolled W'} diaphragm, d = ${fmt(Xs.d, 2)} in`, { dy: -8, a: 'middle', sz: 12, w: true, maxw: nar ? W * 0.55 : W - 20, up: true });
       Sc.dimH(0, S0, 0, -22, `S = ${fmt(S0, 2)} in`); Sc.dimV(0, dg, -bf / 2, -14, `d = ${fmt(dg, 2)} in`, { xr: -bf / 2 });
       Sc.region(g, yB, S0 - g, yT, `Diaphragm ${Xs.nm_}, d = ${fmt(Xs.d, 2)} in${D ? `; φf Mn = ${fmt(D.Mn, 0)} kip-in, φv Vn = ${fmt(D.Vn, 2)} kip` : ''}`);
       return Sc.render({ W, maxH: nar ? 260 : 320, label: 'Diaphragm elevation' }).svg; };
     VK().detCss();
-    const cap = `${nb} bolts each end at ${fmt(sp, 2)} in, ${fmt(ec, 2)} in from the web; diaphragm centred on the girder depth${D ? `; φ_f M_n = ${fmt(D.Mn, 0)} kip-in, φ_v V_n = ${fmt(D.Vn, 2)} kip` : ''}.`;
+    const cap = `${nl === 2 ? `2 lines of ${nb} bolts each end at ${fmt(sp, 2)} in, lines ${fmt(gl, 2)} in apart, the first ${fmt(ec, 2)} in from the web` : `${nb} bolts each end at ${fmt(sp, 2)} in, ${fmt(ec, 2)} in from the web`}; diaphragm centred on the girder depth${D ? `; φ_f M_n = ${fmt(D.Mn, 0)} kip-in, φ_v V_n = ${fmt(D.Vn, 2)} kip` : ''}.`;
     if (typeof document !== 'undefined' && !document.getElementById('vk-dia-css')) { const st = document.createElement('style'); st.id = 'vk-dia-css';
       st.textContent = '.vk-dia{container-type:inline-size;} .vk-dia .dn{display:none;} @container (max-width:560px){.vk-dia .dw{display:none;} .vk-dia .dn{display:block;}} @media print{.vk-dia .dw{display:block!important;} .vk-dia .dn{display:none!important;}}'; document.head.appendChild(st); }
     return `<div class="vk vk-det vk-dia"><div class="vk-hd"><h3>Intermediate diaphragm, elevation<small>Looking along the girders; S = largest girder spacing; nominal dimensions</small></h3></div><div class="vk-fig"><div class="dw">${draw(720)}</div><div class="dn">${draw(360)}</div></div>`
