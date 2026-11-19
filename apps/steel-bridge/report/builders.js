@@ -118,6 +118,8 @@
     tick(0, X1, 8).forEach(v => { g += `<text x="${sx(v).toFixed(1)}" y="${H - b + 13}" text-anchor="middle" fill="#333">${f(v, 0)}</text>`; });
     g += `<line x1="${l}" x2="${W - r}" y1="${sy(0).toFixed(1)}" y2="${sy(0).toFixed(1)}" stroke="#000" stroke-width="0.8"/>`;
     series.forEach((s, k) => { g += `<polyline fill="none" stroke="${s.c || COL[k % COL.length]}" stroke-width="1.4"${s.dash ? ` stroke-dasharray="${s.dash}"` : ''} points="${s.y.map((v, i) => isFinite(v) ? `${sx(x[i]).toFixed(1)},${sy(v).toFixed(1)}` : null).filter(Boolean).join(' ')}"/>`; });
+    (o.mark || []).forEach(m => { if (!m || !isFinite(m.x) || !isFinite(m.y)) return; const X = sx(m.x), Y = sy(m.y), rt = X > (l + W - r) / 2, ty = Math.min(H - b - 4, Math.max(t + 10, m.y >= 0 ? Y - 6 : Y + 13));   // SBFD (2026-11-19): o.mark (optional), the governing value
+      g += `<circle cx="${X.toFixed(1)}" cy="${Y.toFixed(1)}" r="3" fill="#000"/><text x="${(X + (rt ? -6 : 6)).toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="${rt ? 'end' : 'start'}" fill="#000" font-weight="bold">${m.t}</text>`; });
     let lx = l; series.forEach((s, k) => { g += `<line x1="${lx}" x2="${lx + 18}" y1="${H - 4}" y2="${H - 4}" stroke="${s.c || COL[k % COL.length]}" stroke-width="2"${s.dash ? ` stroke-dasharray="${s.dash}"` : ''}/><text x="${lx + 22}" y="${H - 1}" fill="#333">${s.name}</text>`; lx += 30 + s.name.length * 5.6; });
     return g + `<text x="12" y="${(t + H - b) / 2}" transform="rotate(-90 12 ${(t + H - b) / 2})" text-anchor="middle" fill="#333">${o.unit}</text></svg>`;
   }
@@ -159,6 +161,11 @@
     subs.push(sub('dg', 'Moment and shear diagrams', [{ type: 'figure', svg: chart(x, Mser, { title: 'Moments', unit: 'kip-ft', sup }), caption: 'Moments, unfactored, per girder (LL+IM with g); kip-ft' },
       { type: 'figure', svg: chart(x, Vser, { title: 'Shears', unit: 'kip', sup }), caption: 'Shears (sum of the forces to the left, up +); kip' },
       A.crack.length ? note(`Cracked zones: ${A.crack.map(([a, b]) => `${f(a, 1)}–${f(b, 1)} ft`).join(', ')} [[an.crack]].`) : null]));
+    // SBFD (2026-11-19): the factored diagrams, the check modules' own demands at their locations (ui/factored.js; display only). The module
+    // results of this report are taken where they are this project's analysis (not Custom); otherwise built here from the analysis
+    if (window.SBDFactoredUI) { const cu = B.custom || {}; let FD = null;
+      try { FD = window.SBDFactoredUI.compute(B.P, B.g, A, { flex: !cu.flex && B.flex && !B.flex.err ? B.flex : null, shear: !cu.shear && B.shear && !B.shear.err ? B.shear : null, cn: !cu.cn && B.cn && !B.cn.err ? B.cn : null }); } catch (e) { FD = null; }
+      if (FD) subs.push(sub('fdg', 'Factored moment and shear diagrams (Strength I, Service II, Fatigue I, deck placement)', window.SBDFactoredUI.report(FD, { chart, note, tbl, steps, N, f }))); }
     const rr = (k, o) => o.R[k];
     subs.push(sub('r', 'Reactions (unfactored, kip)', [tbl(['Support', 'DC1', 'DC2', 'DW', 'Constr. LL', ...(ll ? ['LL+IM max', 'LL+IM min'] : [])],
       sup.map((v, k) => [`${k === 0 ? 'Abut. 1' : k === sup.length - 1 ? 'Abut. 2' : 'Pier ' + k} (x = ${f(v, 1)} ft)`, N(rr(k, s.DC1), 2), N(rr(k, s.DC2), 2), N(rr(k, s.DW), 2), N(rr(k, s.CL), 2),

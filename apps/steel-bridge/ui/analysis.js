@@ -12,6 +12,7 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const f = (x, d) => U().fmt(x, d);
   let res = null, resKey = '', busy = false, view = 'M';
+  let fac = null, facKey = '', facBusy = false, facView = 'strI';   // SBFD (2026-11-19): the factored diagrams (ui/factored.js) of res, the combination shown (page view only)
   const card = (title, body, id) => `<section class="sec"${id ? ` id="${id}"` : ''}><div class="secHead">${title}</div><div class="secBody">${body}</div></section>`;
   const wk = (id, t) => `<a class="wk" href="#st-${esc(id)}">${t || '§'}</a>`;
   const keyOf = (P, gi) => JSON.stringify([P, gi]);
@@ -155,6 +156,9 @@
     g += `<line x1="${l}" x2="${W - r}" y1="${sy(0)}" y2="${sy(0)}" stroke="#0F172A" stroke-width="0.8"/>`;
     series.forEach((s, k) => { const pts = s.y.map((v, i) => isFinite(v) ? `${sx(xs[i]).toFixed(1)},${sy(v).toFixed(1)}` : null).filter(Boolean).join(' ');
       g += `<polyline fill="none" stroke="${s.c || COL[k % COL.length]}" stroke-width="${s.w || 1.4}"${s.dash ? ` stroke-dasharray="${s.dash}"` : ''} points="${pts}"/>`; });
+    // SBFD (2026-11-19): o.mark (optional) = [{ x, y, t, c }]: a dot and a label at the governing value
+    (o.mark || []).forEach(m => { if (!m || !isFinite(m.x) || !isFinite(m.y)) return; const X = sx(m.x), Y = sy(m.y), rt = X > (l + W - r) / 2, ty = Math.min(H - b - 4, Math.max(t + 10, m.y >= 0 ? Y - 6 : Y + 13));
+      g += `<circle cx="${X.toFixed(1)}" cy="${Y.toFixed(1)}" r="3.2" fill="${m.c || '#0F172A'}"/><text x="${(X + (rt ? -6 : 6)).toFixed(1)}" y="${ty.toFixed(1)}" text-anchor="${rt ? 'end' : 'start'}" fill="${m.c || '#0F172A'}" font-weight="600">${esc(m.t)}</text>`; });
     g += `<text x="${(l + W - r) / 2}" y="${H - 3}" text-anchor="middle" fill="#475569">x (ft)</text><text x="12" y="${(t + H - b) / 2}" transform="rotate(-90 12 ${(t + H - b) / 2})" text-anchor="middle" fill="#475569">${esc(o.unit)}</text></svg>`;
     const leg = series.map((s, k) => `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px"><svg width="22" height="8" aria-hidden="true"><line x1="0" x2="22" y1="4" y2="4" stroke="${s.c || COL[k % COL.length]}" stroke-width="2"${s.dash ? ` stroke-dasharray="${s.dash}"` : ''}/></svg>${window.SBDSub.html(s.name)}</span>`).join('');
     return `<figure style="margin:6px 0"><figcaption class="note" style="font-weight:600">${esc(o.title)}</figcaption>${g}<div class="note">${leg}</div></figure>`;
@@ -189,6 +193,9 @@
     h += '<div id="gfx_an"></div>';   // graphic (ui/gfxa.js)
     h += card('Diagrams', `${chart(x, Mser, { title: 'Moments (unfactored, per girder; LL+IM with g)', unit: 'kip-ft', sup })}${chart(x, Vser, { title: 'Shears (V = sum of forces to the left, up +)', unit: 'kip', sup })}
       <p class="note">Stations: GirderDetail's grid, ${N} points. ${R.cont ? 'Continuous' : 'Simple spans'}; ${R.crack.length ? `cracked zones ${R.crack.map(([a, b]) => `${f(a, 1)}–${f(b, 1)} ft`).join(', ')} ${wk('an.crack')}` : 'no cracked zones'}. Engine: shared beam elements (stiffness method), loads applied exactly.</p>`, 'an-diag');
+    // SBFD (2026-11-19): the factored diagrams, the check modules' own demands (ui/factored.js; display only)
+    h += card('Factored diagrams', !window.SBDFactoredUI ? '<p class="note">ui/factored.js is not loaded.</p>' : fac && facKey === resKey ? window.SBDFactoredUI.card(fac, { view: facView, chart })
+      : '<p class="note">Calculating the factored diagrams (the Flexure, Shear &amp; stiffeners and Constructibility demands of this analysis)…</p>', 'an-fac');
     // reactions
     const rr = (k, o) => o.R[k];
     h += card('Reactions (unfactored, kip)', `<div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Support</th><th>DC1</th><th>DC2</th><th>DW</th><th>Constr. LL</th>${ll ? '<th>LL+IM max</th><th>LL+IM min</th>' : ''}</tr></thead><tbody>
@@ -246,7 +253,10 @@
     ST().wire(el, { onToggle: (k, open) => { if (open) OPEN.add(k); else OPEN.delete(k); } });
     { const sl = el.querySelector('#gfx_an'); if (sl && res && !stale && window.SBDGfxA) window.SBDGfxA.analysis(sl, { P, gi, R: res }); }
     el.querySelectorAll('[data-gotab]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const b = document.querySelector(`#tabBar [data-otab="${a.dataset.gotab}"]`); if (b) b.click(); }));   // AIN: links to the other output tabs
-    el.oninput = null; el.onchange = e => { if (e.target.id === 'an_view') { view = e.target.value; draw(el, ctx); return; } onInput(e, ctx); };
+    // SBFD: the factored diagrams of a current result, once per result, after the unfactored ones are on screen
+    if (res && !stale && !busy && !(res.errors && res.errors.length) && window.SBDFactoredUI && facKey !== key && !facBusy) { facBusy = true;
+      setTimeout(() => { facBusy = false; if (keyOf(P, gi) !== key || resKey !== key) return; try { fac = window.SBDFactoredUI.compute(P, gi, res); } catch (err) { const m = 'Calculation error: ' + (err && err.message); fac = { err: { flex: m, shear: m, cn: m } }; } facKey = key; draw(el, ctx); }, 30); }
+    el.oninput = null; el.onchange = e => { if (e.target.id === 'an_view') { view = e.target.value; draw(el, ctx); return; } if (e.target.id === 'an_fac') { facView = e.target.value; draw(el, ctx); return; } onInput(e, ctx); };
     el.onclick = e => { if (e.target.id !== 'anCalc') return; busy = true; draw(el, ctx);
       setTimeout(() => { try { res = AN().analyzeGirder(P, gi); } catch (err) { res = { errors: [String(err && err.message || err)] }; } resKey = keyOf(P, gi); busy = false; draw(el, ctx); }, 30); };
   }
