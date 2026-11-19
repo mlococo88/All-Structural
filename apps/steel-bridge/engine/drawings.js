@@ -105,6 +105,8 @@
       else warnings.push(`Appurtenances not drawn: ${R.errors.join(' ')}`); } catch (e) { warnings.push(`Appurtenances not drawn (${e.message}).`); } }
     const cf = P.crossframes || (M ? M.defaultCrossframes() : {}), CFm = window.SBDCrossframes;
     const dia = CFm && CFm.cfDiaOn(cf) ? { int: CFm.cfDiaSec(cf.dia), end: CFm.cfDiaSec(CFm.cfDiaEnd(cf.dia)), gap: CFm.cfDiaGap(cf.dia) } : null;
+    if (dia && CFm.diaCope && (CFm.cfDiaCopeOn(cf.dia) || CFm.cfDiaCopeOn(CFm.cfDiaEnd(cf.dia)))) { try { const I = CFm.inputsOf(P, {}), cI = CFm.diaCope(I.p, cf.dia), cE = CFm.diaCope(I.p, CFm.cfDiaEnd(cf.dia), dia.end);   // SBCOPE: the coped ends (the 3D view)
+      if (cI && !cI.bad) dia.copeI = cI; if (cE && !cE.bad) dia.copeE = cE; } catch (e) { /* drawn uncoped */ } }
     const GR = (M && M.GRADES) || {}, mt = (P.materials || {}).steel || {};
     return { errors: [], warnings, nb, ys: FR.ys.slice(), sup: sup.slice(), spans: m.spans.slice(), skews: m.skews.slice(), cont: m.cont, splices: m.splices.slice(), FR, frames: FR.frames, orient: FR.orient,
       girders, deck, app, xs, cf: { type: cf.type || 'X', h: nm(cf.h), dia }, stf: st, mat: { top: mt.top, bot: mt.bot, web: mt.web, fc: ((P.materials || {}).concrete || {}).fc, GR }, P };

@@ -112,8 +112,9 @@
     { const Dt = Dmax + tTmax + tBmax, h = Math.min(G.cf.h > 0 ? G.cf.h : Dmax * 0.8, Dt - 4), yb = -tBmax + (Dt - h) / 2, yt = yb + h, r = 1.4, dia = G.cf.dia, ym = -tBmax + Dt / 2;
       if (!single) FR.frames.forEach(f => { const za = Z(f.bay), zc = Z(f.bay + 1), xa = f.xa * 12, xc = f.xc * 12, A = [xa, yb, za], At = [xa, yt, za], Bb = [xc, yb, zc], Bt = [xc, yt, zc];
         if (dia) { const DX = f.type === 'sup' ? dia.end : dia.int, dx = xc - xa, dz = zc - za, L = Math.hypot(dx, dz), Lm = Math.max(1, L - 2 * dia.gap), ry = Math.atan2(-dz, dx), ux = dx / L, uz = dz / L, cx = (xa + xc) / 2, cz = (za + zc) / 2;
-          const pc = (off, y, sy, sz) => { const b = box('xf', cx - uz * off, y, cz + ux * off, Lm, sy, sz, MT.xf); if (b) b.rotation.y = ry; };
-          pc(0, ym, DX.d - 2 * DX.tf, DX.tw); const fo = DX.chS ? (DX.bf - DX.tw) / 2 : 0; pc(fo, ym + (DX.d - DX.tf) / 2, DX.tf, DX.bf); pc(fo, ym - (DX.d - DX.tf) / 2, DX.tf, DX.bf); return; }
+          const pc = (off, y, sy, sz, Ls) => { const b = box('xf', cx - uz * off, y, cz + ux * off, Ls || Lm, sy, sz, MT.xf); if (b) b.rotation.y = ry; };
+          const CPv = f.type === 'sup' ? dia.copeE : dia.copeI, Lf = c => Math.max(1, Lm - 2 * (c > 0 && CPv ? CPv.cL : 0));   // SBCOPE: a coped flange stops at the cope length from each end (the web drawn full depth)
+          pc(0, ym, DX.d - 2 * DX.tf, DX.tw); const fo = DX.chS ? (DX.bf - DX.tw) / 2 : 0; pc(fo, ym + (DX.d - DX.tf) / 2, DX.tf, DX.bf, Lf(CPv && CPv.cT)); pc(fo, ym - (DX.d - DX.tf) / 2, DX.tf, DX.bf, Lf(CPv && CPv.cB)); return; }
         rod('xf', A, Bb, r, MT.xf); rod('xf', At, Bt, r, MT.xf);
         if ((G.cf.type === 'Kb' || G.cf.type === 'K') && f.type !== 'sup') { const Mb = [(xa + xc) / 2, yb, (za + zc) / 2]; rod('xf', At, Mb, r, MT.xf); rod('xf', Bt, Mb, r, MT.xf); }
         else if (G.cf.type === 'Kt' && f.type !== 'sup') { const Mt = [(xa + xc) / 2, yt, (za + zc) / 2]; rod('xf', A, Mt, r, MT.xf); rod('xf', Bb, Mt, r, MT.xf); }
