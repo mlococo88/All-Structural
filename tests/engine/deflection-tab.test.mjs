@@ -49,7 +49,8 @@ function check(W, P, gi, nm) {
   const B = W.SBDReportData.compute(P, gi, { src: 'analysis' }), M = W.SBDReportBuild.model(B, { detail: 'gov' });
   const ids = M.sections.map(s => s.id); assert.equal(ids.indexOf('defl'), ids.indexOf('an') + 1, `${nm}: Deflection after Analysis`);
   const D = M.sections.find(s => s.id === 'defl'), A = M.sections.find(s => s.id === 'an');
-  const stepIds = sec => sec.subs.flatMap(q => q.items.filter(it => it.type === 'steps').flatMap(it => it.steps.map(s => s.id)));
+  // SBFD (2026-11-19): the Analysis section's factored subsection repeats the check modules' governing steps (scopes anf.*), not analysis steps
+  const stepIds = sec => sec.subs.flatMap(q => q.items.filter(it => it.type === 'steps' && !/^anf\./.test(it.scope || '')).flatMap(it => it.steps.map(s => s.id)));
   assert.ok(stepIds(D).length > 0 && stepIds(D).every(id => /^an\.(defl\.|camber)/.test(id)), `${nm}: Deflection steps`);
   assert.ok(stepIds(A).every(id => !/^an\.(defl\.|camber)/.test(id)), `${nm}: Analysis steps without deflection`);
   assert.equal(stepIds(D).length + stepIds(A).length, B.an.steps.length, `${nm}: every analysis step once`);
