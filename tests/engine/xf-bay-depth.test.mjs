@@ -62,7 +62,7 @@ test('Exterior 6 in shallower: the governing bay G1–G2, h = 46 in, d = 55.88 i
   assert.ok(Math.abs(a.R.SB.Mbr / b.R.SB.Mbr - 1.5) < 1e-12, 'M_br ∝ C');
   const top = R => R.combos.find(c => c.id === 'Con').f.find(q => q.e.k === 'top').br;
   assert.ok(Math.abs(top(a.R) - a.R.SB.Mbr / 46) < 1e-9 && Math.abs(top(b.R) - b.R.SB.Mbr / 52) < 1e-9, 'chord force = M_br / h');
-  assert.ok(Math.abs(a.R.mem.top.Tu - 5.135) < 5e-4 && Math.abs(b.R.mem.top.Tu - 3.029) < 5e-4, `top chord ${a.R.mem.top.Tu} / ${b.R.mem.top.Tu}`);
+  assert.ok(Math.abs(a.R.mem.top.Tu - 5.136) < 5e-4 /* A2 (2026-11-19): 5.135 → 5.136 */ && Math.abs(b.R.mem.top.Tu - 3.029) < 5e-4, `top chord ${a.R.mem.top.Tu} / ${b.R.mem.top.Tu}`);
   const X = CF.pointLoads(P, 0); assert.deepEqual(J(X.X.hb), [46, 52, 52, 46]);
   // a frame of G1–G2 weighs xfW with h = 46, of G2–G3 with h = 52
   const L = W.SBDFraming.compute(P), f0 = L.xf.f.find(f => f[2] === 0 && !f[0]), f1 = L.xf.f.find(f => f[2] === 1 && !f[0]), G = CF.xfPts({ spans: P.spans.lengths.map(Number), xf: L.xf }, X.X);

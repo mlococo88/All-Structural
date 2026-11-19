@@ -88,7 +88,7 @@ test('The full check\'s shear, stiffeners, flexure and deck placement equal the 
   assert.deepEqual(plain([A.tsGov.it.r, A.bsGov.it.r]), plain([S.tsGov.it.r, S.bsGov.it.r]));
   // largest V_u: x = 110.01 ft (just right of Pier 1), V_u = 1.25(V_DC1 + V_DC2) + 1.50 V_DW + 1.75 V_LL+IM = 1.25(100.980 + 17.537) + 1.50(14.525) + 1.75(129.164)
   //   = 148.146 + 21.787 + 226.037 = 395.97 kip (before the fix: no V_LL, largest 172.96 kip at 249.99 ft); GS11 V_u/φ_vV_n = 395.97/905.41 = 0.437
-  const g = A.stations.reduce((a, r) => r.Vu > a.Vu ? r : a); near(g.x, 110.01, 1e-9, 'x of V_u,max'); near(g.Vu, 395.97, 0.005, 'V_u,max'); near(g.VLL, 129.16, 0.005, 'V_LL+IM');
+  const g = A.stations.reduce((a, r) => r.Vu > a.Vu ? r : a); near(g.x, 110.01, 1e-9, 'x of V_u,max'); near(g.Vu, 396.008, 0.005, 'V_u,max');   /* A2 (2026-11-19): haunch and SIP with the pier segments' 18 in top flange: 395.97 → 396.01 kip */ near(g.VLL, 129.16, 0.005, 'V_LL+IM');
   near(g.checks.find(c => c.id === 'GS11').ratio, 0.437, 0.0005, 'GS11');
   // bearing, Abut. 1: R_u = 1.25(R_DC1 + R_DC2) + 1.50 R_DW + 1.75 R_LL+IM = 1.25(55.360 + 9.853) + 1.50(8.161) + 1.75(107.842) = 81.516 + 12.241 + 188.724 = 282.48 kip
   near(A.BS.rows[0].RLL, 107.84, 0.005, 'R_LL+IM Abut. 1'); near(A.BS.rows[1].RLL, 215.3, 0.05, 'R_LL+IM Pier 1'); near(A.BS.rows[0].Ru, 282.48, 0.005, 'R_u Abut. 1');

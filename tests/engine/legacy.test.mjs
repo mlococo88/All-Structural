@@ -93,7 +93,9 @@ test('import the 20 recorded projects (Steel Bridge Design files), compute G1–
       // xsA (sidewalks with a pedestrian load) listed apart
       const sfx = pr === 'xsA' ? ' [xsA, pedestrian]' : '';
       for (const sp of nf.spans) { const a = sup[sp.span - 1], b = sup[sp.span];
-        const rows = G.rows.filter(q => q.region === 'neg' && q.x >= a - 1e-6 && q.x <= b + 1e-6), mx = ids => Math.max(0, ...rows.flatMap(q => q.checks.filter(c => ids.includes(c.id) && c.inUse && isFinite(c.ratio)).map(c => c.ratio)));
+        // A3 (2026-11-19): a row next to a support takes the unbraced segment on its own side; GirderDetail's row 0.01 ft inside the span took the
+        // governing of both segments, i.e. the one this app checks at the row 0.01 ft across the support: those rows (within 0.25 ft) are included
+        const rows = G.rows.filter(q => q.region === 'neg' && q.x >= a - 0.25 && q.x <= b + 0.25), mx = ids => Math.max(0, ...rows.flatMap(q => q.checks.filter(c => ids.includes(c.id) && c.inUse && isFinite(c.ratio)).map(c => c.ratio)));
         if (sp.comp) note('negFlex comp. flange (GS7/GS9)' + sfx, mx(['GS7', 'GS9']), sp.comp.r, `${where} span ${sp.span}`);
         if (sp.tens) note('negFlex tens. flange (GS8)' + sfx, mx(['GS8']), sp.tens.r, `${where} span ${sp.span}`); }
     }

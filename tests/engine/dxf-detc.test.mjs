@@ -8,6 +8,8 @@
 // builder (SBDGfxA.ltbGraphic, constrOhGraphic) its DXF is checked to be the same text.
 // SBBDXF (2026-11-10, engineer decision): the one exception is #8 the overhang bracket. Its CAD builder read R.F.oh.a ... (absent; the inputs are R.F.oh.p),
 // so its DXF only ever held an "inputs above" note; it now draws the bracket from R.F.oh.p. Only the three "|oh" baseline entries were re-recorded.
+// 2026-11-19 (PR #1644, A2 haunch and SIP per segment flange width; A3 the unbraced segment on the row's own side): re-recorded; 190 of 1362 entries
+// change (the LTB sketches, transverse / bearing stiffener and weld details print the changed demands, L_b and C_b); every other drawing identical.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
