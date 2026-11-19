@@ -195,7 +195,7 @@
     rows.forEach(r => { ['P', 'Vx', 'Vy', 'Mx', 'My', 'T'].forEach(k => { r[k] = z0(r[k]); }); r.M = Math.hypot(r.Mx, r.My); r.V = Math.hypot(r.Vx, r.Vy); });
     return { gravity: gr, rows };
   }
-  /* windSteps(g, L): the worked steps of the wind loads (Extreme I, wind toward 0°; the same equations at every strip) */
+  /* windSteps(g, L): the worked steps of the wind loads (Extreme I, wind toward 0°; the same equations at every segment) */
   function windSteps(g, L) {
     const st = [], V = L.V, Kd = kd(g.shape), Cv = cv('extreme'), isSign = g.mode === 'sign';
     st.push({ id: 'w.kd', label: 'Directionality factor (pole/post, ' + g.shape + ')', sym: 'K_{d}', eq: '', sub: '', value: Kd, unit: '', d: 2, ref: ref('Table 3.8.5-1 (p. 3-16)'),
