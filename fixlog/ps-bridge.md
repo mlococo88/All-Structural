@@ -9158,3 +9158,11 @@ index f238426..be7d210 100644
 
 ## 2026-11-19 — PR: claude/archive-old-steel-app (PR #1647: https://github.com/mlococo88/All-Structural/pull/1647) (SBDA) — comment only in engine/pbd-model.js: the SBD-SHARED copy note names the archived copy   [no code change]
 - **Where:** `apps/ps-bridge/engine/pbd-model.js`, anchor `COPY (CLAUDE.md §3, kept duplicated): FE_CACHE, sgBeam`. Same before/after as fixlog/Prestressed Bridge Design.md (SBDA): "Steel Bridge Design.html" → the archived copy "archive/Steel Bridge Design (archived 2026-11-19).html", not maintained.
+
+## 2026-11-19 — PR: claude/ps-verbatim-fix (PSVF) — engine/pbd-model.js: the PR #1647 comment edit reverted (the file is a byte-for-byte slice)   [no code change]
+- **Why:** `engine/pbd-model.js` must equal its slice of the pinned old page byte for byte (`tests/engine/psbridge-verbatim.test.mjs`). The SBDA comment edit of PR #1647 (entry above) made that test fail (`pbd-model.js: the code differs from lines 1902-2420 of the old page`), found by a full engine run on main at f07420d (1418 passed, 1 failed).
+- **Where:** `apps/ps-bridge/engine/pbd-model.js`, anchor `COPY (CLAUDE.md §3, kept duplicated): FE_CACHE, sgBeam`.
+- **Before (PR #1647):** `from Steel Bridge Design.html, now the archived copy "archive/Steel Bridge Design (archived 2026-11-19).html" (its` … `Copies: the archived copy (one copy, shared by its Preliminary sizing page and its modules; not maintained) and this file.`
+- **After (as at the pin, restored exactly from the commit before 9bfd739):** `from Steel Bridge Design.html (its SBD-SHARED block: …). Copies: Steel Bridge Design.html (one copy, shared by its Preliminary sizing page and its modules) and this file.`
+- **Note:** "Steel Bridge Design.html" in that comment now means the archived copy `archive/Steel Bridge Design (archived 2026-11-19).html` (not maintained); recorded here because the comment itself cannot change. The comment edit in the old `Prestressed Bridge Design.html` (fixlog/Prestressed Bridge Design.md, SBDA) stays: the test pins an older commit of that page.
+- **Check:** `node tests/engine/run.mjs psbridge-verbatim`: 3 passed, 0 failed (before: 1 failed). No computed value changes (comment only).
