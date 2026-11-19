@@ -133,7 +133,7 @@ Forms are paraphrased; symbols as in the tool. Every row has been read on the ci
 | P12 | Luminaires, attachments | Table 3.8.7-1 (p. 3-19 (2017)); **Art. 3.9.1** (p. 3-23) | When the EPA is given (= C_d × area), P_z is computed **without** C_d and multiplied by the EPA. Otherwise C_d = 0.50 (rounded) / 1.20 (flat-sided) for luminaires, 1.0 for other attachments. The tool's fixture input is the EPA. | Confirmed |
 | P13 | Load cases for wind from any direction | **Art. 3.9.3, Table 3.9.3-1** (pp. 3-23, 3-24) | (1) 1.0·BL_n; (2) 1.0·BL_t; (3) 0.75·BL_n + 0.75·BL_t together. The tool runs 0/90/180/270° (cases 1 and 2, both senses) plus the four diagonal combinations of case 3. | Confirmed. Was "4 azimuths". |
 | P14 | Unsymmetrical wind: torsion | **Art. 3.9.4.2, C3.9.4.2** (p. 3-25) | Concentric attachments on single-support roadside signs, pole-top luminaires and high-level poles: T = W·0.15b (b = out-to-out width of the attachments). Non-concentric (arm-mounted fixtures): net torque (the tool's LP-7 fixture torsion). Two-post signs: not named; **Decision (Q-C2):** no eccentric case, posts share equally under normal wind. Flagged. | Confirmed; decision flagged |
-| P15 | Wind on the pole / post | Art. 3.9.3 (W_v) | strip integration of P_z(z)·d(z) with C_d(z) per P6–P10 (d changes with taper) | Confirmed (method as IBC mode) |
+| P15 | Wind on the pole / post | Art. 3.9.3 (W_v) | P_z·d·L_i per pole segment (10 segments, P_z, C_d and d at each mid-height; LPSG 2026-11-19, was strip integration) with C_d per P6–P10 (d changes with taper) | Confirmed (method as IBC mode) |
 
 ### 2.3 Analysis and second-order effects
 

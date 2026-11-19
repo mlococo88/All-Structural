@@ -1739,6 +1739,14 @@ function iceWorkedHTML(inp, pw, fxs){
 
 // pole direct wind (regular wind, with gust). avg diameter = (top+base)/2
 // Fixture wind is now handled separately by fixtureComponents(); this covers the mast only.
+// LPSG (2026-11-19): the part of a segment {zBot, zTop, z} above a cut at height z, its load taken as uniform over the segment:
+// null below the cut; k = the loaded fraction above the cut and arm = the lever arm of that part about the cut. A segment wholly
+// above the cut acts at its mid-height z (k = 1, arm = z_i − z), so the base (z = 0) gets F_i at z_i exactly.
+function lppSegPart(st,z){
+  if(st.zBot>=z) return {k:1, arm:st.z-z};
+  if(st.zTop<=z) return null;
+  return {k:(st.zTop-z)/(st.zTop-st.zBot), arm:(st.zTop-z)/2};
+}
 function poleWindNominal(inp){
   const KzTop=Kz(lppZg(inp,inp.H),inp.expo), qzTop=0.00256*KzTop*inp.Kzt*inp.Kd*inp.V*inp.V;   // LPPJ: heights above grade (z + p)
   const KzMid=Kz(lppZg(inp,inp.H/2),inp.expo), qzMid=0.00256*KzMid*inp.Kzt*inp.Kd*inp.V*inp.V;
@@ -1749,11 +1757,13 @@ function poleWindNominal(inp){
   const qzMidI=0.00256*KzMid*inp.Kzt*inp.Kd*inp.Vice*inp.Vice;
   const DavgI=(Davg_in+2*inp.tIce)/12;
   const ApoleI=DavgI*inp.H;
-  // Mast wind is integrated over the height in NSTRIP strips (ASCE 7-16 §29.4.1 applied to each
-  // strip: q_z at the strip centroid, local width). A single resultant at q_z(H/2) acting at H/2
-  // under-estimated the base moment of a prismatic mast (power-law profile) and ignored the taper.
-  // Wind-on-ice uses the iced width D + 2t and the gust factor G (ASCE 7-16 §10.5 → Ch. 26–31; G per §26.11).
-  const NSTRIP=100, dzs=inp.H/NSTRIP, strips=[];
+  // LPSG (2026-11-19, engineer: "it should be more simple than that"): the mast wind is taken per pole segment, the pole's own
+  // NSEG = 10 segments of the Pole properties card (L_i = H/10): q_z, the width D and t_d at the segment mid-height z_i,
+  // F_i = q_z(z_i)·G·C_f·D(z_i)·L_i acting at z_i (ASCE 7-16 §29.4 / §26.10: q_z at the height of the centroid of the area),
+  // M = ΣF_i·z_i. Before: 100 strips (NSTRIP = 100). Within a segment the force is taken as uniform over its length for the
+  // section forces above a cut (poleStress, lppSegPart); at the base this is exactly F_i at z_i.
+  // Wind-on-ice uses the iced width D + 2t_d and the gust factor G (ASCE 7-16 §10.5 → Ch. 26–31; G per §26.11).
+  const NSTRIP=NSEG, dzs=inp.H/NSTRIP, strips=[];
   let Fpole=0, Mpole=0, FpoleI=0, MpoleI=0;
   const rectDir=inp.poleShape==='rect' && inp.mode!=='sign' && inp.poleDepthTop>0;   // LPH2
   let Fd=0, Md=0, FdI=0, MdI=0;
@@ -1765,7 +1775,7 @@ function poleWindNominal(inp){
     const td=iceTd(inp,lppZg(inp,z));                                                              // in, design ice at z (+ p, LPPJ)
     const FI=0.00256*Kzs*inp.Kzt*inp.Kd*inp.Vice*inp.Vice*inp.G*inp.cfPole*((w_in+2*td)/12)*dzs; // lb
     const Wi=iceWeight(td, w_in, inp.iceDen)*dzs;                                                  // lb, ice on the strip
-    const st={z,F,FI,td,Wi};
+    const st={z,F,FI,td,Wi,zBot:i*dzs,zTop:(i+1)*dzs,L:dzs,w_in,Kz:Kzs};
     // LPH2 (2026-11-07): a rectangular pole (pole mode) also gets the strip force on its depth face (depth along x, width B
     // along y): wind toward 0°/180° sees B, toward 90°/270° sees the depth; lppPoleWindDir() combines them per azimuth.
     if(rectDir){
@@ -1778,12 +1788,12 @@ function poleWindNominal(inp){
     Fpole+=F; Mpole+=F*z; FpoleI+=FI; MpoleI+=FI*z;
   }
   // mast ice weight: basis 'design' keeps the former mean-diameter form (identical results for old saves); basis 'map'
-  // sums the strips (t_d varies with height)
+  // sums the segments (t_d varies with height; LPSG: per segment, uniform within a segment above a cut)
   const iceMap=inp.iceBasis==='map';
   const WiceMast=iceMap ? strips.reduce((a,st)=>a+st.Wi,0) : iceWeight(inp.tIce, Davg_in, inp.iceDen)*inp.H;
   const wIceMast=WiceMast/inp.H;
   // ice weight above height z (lb)
-  const iceAbove=z=> iceMap ? strips.reduce((a,st)=>a+(st.z>z?st.Wi:0),0) : wIceMast*(inp.H-z);
+  const iceAbove=z=> iceMap ? strips.reduce((a,st)=>{ const q=lppSegPart(st,z); return a+(q?st.Wi*q.k:0); },0) : wIceMast*(inp.H-z);
   return {Wpole:Fpole, Mpole, Fpole, FpoleI, MpoleI, strips, NSTRIP, zF:Fpole>0?Mpole/Fpole:inp.H/2,
           ...(rectDir?{rectDir, Fd, Md, FdI, MdI, zFd:Fd>0?Md/Fd:inp.H/2}:{}),   // LPH2: rectangular pole, wind on the depth face
           WiceMast, wIceMast, iceAbove, tdTop:iceTd(inp,lppZg(inp,inp.H)), Apole, ApoleI, Davg, Davg_in, qzTop, qzMid, qzMidI, KzTop, KzMid};
@@ -1889,20 +1899,22 @@ function signWind(inp){
   // ---- exposed post drag (per post) ----
   // Only the CLEARANCE height (grade to bottom of panel) is exposed to wind; the strip
   // behind the panel is already captured by the panel force, so applying post drag over
-  // the full height would double-count. 2026-10-12: the drag is integrated over the exposed
-  // height in NPS strips (q_z at each strip centroid, ASCE 7-16 §29.4.1 per strip, as the mast in
+  // the full height would double-count. 2026-10-12: the drag is taken over the exposed
+  // height in NPS parts (q_z at each mid-height, ASCE 7-16 §29.4 per part, as the mast in
   // poleWindNominal); it was one force at q_z(clr/2) acting at clr/2.
   const postW_in=(inp.poleDiaBase+inp.poleDiaTop)/2;         // in, mean post width
   const postExpH=Math.max(0,inp.pProj>0?clr-inp.pProj:clr);  // ft, exposed height = clearance (LPPJ: − p, the post starts on the shaft top)
   const qzMidPost=0.00256*Kz(lppZg(inp,postExpH/2),inp.expo)*inp.Kzt*inp.Kd*inp.G*inp.V*inp.V;  // psf at exposed mid-height (reference)
   const Apost=(postW_in/12)*postExpH;                        // ft^2 exposed area
   const cfPost=inp.cfPole;                                   // post shape drag coeff
-  const NPS=50, dzp=postExpH/NPS, postStrips=[];
+  // LPSG (2026-11-19): equal segments of at most 5 ft over the exposed height (n = ⌈h_exp/5⌉), q_z at each segment mid-height
+  // (was 50 strips, NPS = 50); uniform within a segment above a cut (signPostStress, lppSegPart)
+  const NPS=Math.max(1,Math.ceil(postExpH/5-1e-9)), dzp=postExpH/NPS, postStrips=[];
   let Fpost=0, Mpost=0;
   for(let i=0;i<NPS && dzp>0;i++){
-    const z=(i+0.5)*dzp;
-    const F=0.00256*Kz(lppZg(inp,z),inp.expo)*inp.Kzt*inp.Kd*inp.G*inp.V*inp.V*cfPost*(postW_in/12)*dzp;   // lb (z above the post base; + p above grade, LPPJ)
-    postStrips.push({z,F}); Fpost+=F; Mpost+=F*z;
+    const z=(i+0.5)*dzp, Kzs=Kz(lppZg(inp,z),inp.expo);
+    const F=0.00256*Kzs*inp.Kzt*inp.Kd*inp.G*inp.V*inp.V*cfPost*(postW_in/12)*dzp;   // lb (z above the post base; + p above grade, LPPJ)
+    postStrips.push({z,F,zBot:i*dzp,zTop:(i+1)*dzp,L:dzp,Kz:Kzs}); Fpost+=F; Mpost+=F*z;
   }
   const qzPost=Apost>0? Fpost/(cfPost*Apost) : qzMidPost;  // psf, area-average q_z over the exposed height
   const zPost=Fpost>0? Mpost/Fpost : postExpH/2;            // ft, height of the drag resultant above the post base
@@ -1956,7 +1968,7 @@ function signWind(inp){
   if(caseC) caseC.FI=caseC.F*iceScale;
   const WiPanel=inp.iceDen*Math.PI*0.8*As*tdPft;           // lb (total panel ice; V_i = 0.8·π·t_d·A_s, Eq. 10.4-2; π added 2026-11-10)
   let FpostI=0, MpostI=0;
-  postStrips.forEach(st=>{ const td=iceTd(inp,lppZg(inp,st.z));
+  postStrips.forEach(st=>{ const td=iceTd(inp,lppZg(inp,st.z)); st.td=td;
     st.FI=0.00256*Kz(lppZg(inp,st.z),inp.expo)*inp.Kzt*inp.Kd*inp.G*inp.Vice*inp.Vice*cfPost*((postW_in+2*td)/12)*dzp; FpostI+=st.FI; MpostI+=st.FI*st.z; });
   const tdPost=iceTd(inp, inp.pProj>0?(h+inp.pProj)/2:h/2);   // at the post mid-height above grade (LPPJ: the post runs from p to h)
   const WiPost=iceWeight(tdPost, postW_in, inp.iceDen)*(inp.pProj>0?h-inp.pProj:h);   // lb per post (whole post, top of shaft to the top of the panel)
@@ -3447,8 +3459,8 @@ function signLoadPathHTML(inp,sw,pw,postGovList){
   cases.push({name:'B',F:sw.F_A,x:0.2*sw.B,z:zArm(sw.zA)});
   if(sw.caseC) cases.push({name:'C',F:sw.caseC.F,x:sw.caseC.e,z:zArm(sw.zc)});
   const Fdrag=sw.Fpost, Mdrag=sw.Mpost;
-  H+=`<div class="eq-why lpNL">${lpNL('Post drag on the exposed column.',[['Exposed length:','each post is itself a member in the wind stream, but only the length <b>below the panel</b> is exposed \u2014 the strip behind the sign is already accounted for in the panel force above, so applying wind over the full post height would double-count it.'],['Exposed height:',`the clearance, h<sub>exp</sub> = ${pj>0?`clr − p = ${fmt(sw.clr,2)} − ${fmt(pj,2)} = ${fmt(sw.postExpH,2)} ft (top of the shaft to the bottom of the panel; K<sub>z</sub> at z + p above grade)`:`${fmt(sw.clr,2)} ft (grade to bottom of panel)`}.`],['Integration:',`the drag is integrated over that height in ${sw.postStrips?sw.postStrips.length:1} strips (q_z at each strip centroid; K_z is constant below 15 ft), so q̄_z below is the area-average and z<sub>drag</sub> = ΣF_i z_i/ΣF_i = ${fmt(sw.zPost,2)} ft:`],['Width:','w<sub>post</sub> is the mean post width (B for a square or rectangular post) for every wind direction; the depth of a rectangular post is not used for the edge-on directions.']])}</div>`;   // LPNL
-  H+=g(`\\overline{q_{z}K_dG} = \\frac{1}{h_{exp}}\\int_0^{h_{exp}} 0.00256\\,K_z(z) K_{zt} K_e V^2\\cdot K_d\\,G\\,dz = ${fmt(sw.qzPost,1)}\\ \\text{psf}\\quad(q_z(clr/2) = ${fmt(sw.qzMidPost!==undefined?sw.qzMidPost:sw.qzPost,1)})\\qquad A_{exp} = w_{post}\\,h_{exp} = \\tfrac{${fmt(sw.postW_in,2)}}{12}(${fmt(sw.postExpH,2)}) = ${fmt(sw.Apost,2)}\\ \\text{ft}^2`);
+  H+=`<div class="eq-why lpNL">${lpNL('Post drag on the exposed column.',[['Exposed length:','each post is itself a member in the wind stream, but only the length <b>below the panel</b> is exposed \u2014 the strip behind the sign is already accounted for in the panel force above, so applying wind over the full post height would double-count it.'],['Exposed height:',`the clearance, h<sub>exp</sub> = ${pj>0?`clr − p = ${fmt(sw.clr,2)} − ${fmt(pj,2)} = ${fmt(sw.postExpH,2)} ft (top of the shaft to the bottom of the panel; K<sub>z</sub> at z + p above grade)`:`${fmt(sw.clr,2)} ft (grade to bottom of panel)`}.`],['Segments:',`the exposed height is taken in ${sw.postStrips?sw.postStrips.length:1} equal segment(s) of at most 5 ft (q_z at each segment mid-height; K_z is constant below 15 ft), so q̄_z below is their area-average and z<sub>drag</sub> = ΣF_i z_i/ΣF_i = ${fmt(sw.zPost,2)} ft:`],['Width:','w<sub>post</sub> is the mean post width (B for a square or rectangular post) for every wind direction; the depth of a rectangular post is not used for the edge-on directions.']])}</div>`;   // LPNL
+  H+=g(`\\overline{q_{z}K_dG} = \\frac{1}{h_{exp}}\\sum_i 0.00256\\,K_z(z_i) K_{zt} K_e V^2\\cdot K_d\\,G\\,L_i = ${fmt(sw.qzPost,1)}\\ \\text{psf}\\quad(q_z(clr/2) = ${fmt(sw.qzMidPost!==undefined?sw.qzMidPost:sw.qzPost,1)})\\qquad A_{exp} = w_{post}\\,h_{exp} = \\tfrac{${fmt(sw.postW_in,2)}}{12}(${fmt(sw.postExpH,2)}) = ${fmt(sw.Apost,2)}\\ \\text{ft}^2`);
   H+=g(`F_{drag,post} = \\bar q_z\\,C_f\\,A_{exp} = ${fmt(sw.qzPost,1)}(${fmt(sw.cfPost,2)})(${fmt(sw.Apost,2)}) = ${fmt(Fdrag,0)}\\ \\text{lb (per post, at } z_{drag}=${fmt(sw.zPost,2)}\\text{ ft)}`);
   cases.forEach(cs=>{
     const sh=signPostSplit(cs.F,cs.x,Lp,nP);
@@ -3618,7 +3630,7 @@ function poleStress(inp,poleSeg,comps,fxs,pw,gov){
   const cList=gov.per.map(r=>({hc:r.cp.c.hc, Hx:r.Hx+(r.Hw||0)*cw, Hy:r.Hy+(r.Hw||0)*sw, Vc:r.Vc}));
   // mast wind: the factored strips of poleWindNominal (same distribution as the base moment)
   const pwd=lppPoleWindDir(pw, phi);   // LPH2: rectangular pole, strip width by direction
-  const sList=(pw.strips||[]).map(st=>({z:st.z, F:f.W*pwd.sF(st) + f.Wi*pwd.sFI(st)}));
+  const sList=(pw.strips||[]).map(st=>({z:st.z, zBot:st.zBot, zTop:st.zTop, F:f.W*pwd.sF(st) + f.Wi*pwd.sFI(st)}));   // LPSG: segments
 
   // first-order section forces at height z (everything above the cut)
   const secForces=(z)=>{
@@ -3633,9 +3645,10 @@ function poleStress(inp,poleSeg,comps,fxs,pw,gov){
       Vx+=c.Hx; Vy+=c.Hy;
       Mx+=c.Hx*(c.hc-z); My+=c.Hy*(c.hc-z);
     }});
-    sList.forEach(st=>{ if(st.z>z){
-      Vx+=st.F*cw; Vy+=st.F*sw;
-      Mx+=st.F*cw*(st.z-z); My+=st.F*sw*(st.z-z);
+    sList.forEach(st=>{ const q=lppSegPart(st,z); if(q){   // LPSG: the part of the segment above the cut (was: strips with z_i > z)
+      const Fq=st.F*q.k;
+      Vx+=Fq*cw; Vy+=Fq*sw;
+      Mx+=Fq*cw*q.arm; My+=Fq*sw*q.arm;
     }});
     return {Mx,My,Vx,Vy};
   };
@@ -4485,7 +4498,7 @@ function signPostStress(inp,poleSeg,pw,gLRFD,sw){
     // above the panel bottom the post is shielded and the panel force already covers that wind.
     // 2026-10-12: the factored drag strips of signWind (q_z varies with height) replace the uniform w.
     if(sw.postStrips){
-      sw.postStrips.forEach(st=>{ if(st.z>z){ const Fs=f.W*st.F + f.Wi*(st.FI||0); V+=Fs; M+=Fs*(st.z-z); } });
+      sw.postStrips.forEach(st=>{ const q=lppSegPart(st,z); if(q){ const Fs=(f.W*st.F + f.Wi*(st.FI||0))*q.k; V+=Fs; M+=Fs*q.arm; } });   // LPSG: segment part above the cut
     } else if(z < clrH){
       const hAbove=clrH - z;            // exposed length above this section, up to the panel bottom
       const Hm=wMast*hAbove;            // shear from the exposed strip above this cut
@@ -5909,6 +5922,22 @@ function renderBearingExample(bearing,N,inp,sfx){
 }
 
 // ---- WIND worked example (pole mode): ASCE 7-16 velocity pressure + mast/fixture force ----
+// LPSG (2026-11-19): the mast wind per pole segment, one row per segment (top to base) with the totals; the hand check of F_pole and
+// M_pole. qK = q_z·K_d at z_i (psf, no G); F_i = q_zK_d·G·C_f·(D/12)·L_i; iced: width D + 2t_d at V_ice. Display only.
+function lppMastSegTableHTML(pw,inp){
+  const S=(pw.strips||[]).slice().reverse(), ice=S.some(st=>st.FI>0), iceW=inp.iceBasis==='map';
+  const qK=st=>0.00256*st.Kz*inp.Kzt*inp.Kd*inp.V*inp.V;
+  let h=`<div class="lppTblScroll"><table class="tbl lppSegTbl"><tr><th>Seg</th><th>Mid-height<span class="sym">z<sub>i</sub> (ft)</span></th><th>Length<span class="sym">L<sub>i</sub> (ft)</span></th>`+
+    `<th>Width<span class="sym">D(z<sub>i</sub>) (in)</span></th><th>K<sub>z</sub>(z<sub>i</sub>)</th><th>q<sub>z</sub>K<sub>d</sub><span class="sym">(psf)</span></th>`+
+    `<th>F<sub>i</sub> = q<sub>z</sub>K<sub>d</sub>G C<sub>f</sub> D L<sub>i</sub><span class="sym">(lb)</span></th><th>M<sub>i</sub> = F<sub>i</sub>z<sub>i</sub><span class="sym">(lb·ft)</span></th>`+
+    (ice?`<th>t<sub>d</sub>(z<sub>i</sub>)<span class="sym">(in)</span></th><th>F<sub>i,ice</sub> (D + 2t<sub>d</sub>, V<sub>ice</sub>)<span class="sym">(lb)</span></th><th>M<sub>i,ice</sub><span class="sym">(lb·ft)</span></th>`:'')+
+    (iceW?`<th>W<sub>i,ice</sub><span class="sym">(lb)</span></th>`:'')+`</tr>`;
+  S.forEach((st,k)=>{ h+=`<tr><td>${k+1}</td><td>${fmt(st.z,2)}</td><td>${fmt(st.L,2)}</td><td>${fmt(st.w_in,3)}</td><td>${fmt(st.Kz,3)}</td><td>${fmt(qK(st),2)}</td>`+
+    `<td>${fmt(st.F,2)}</td><td>${fmt(st.F*st.z,1)}</td>`+(ice?`<td>${fmt(st.td,3)}</td><td>${fmt(st.FI,2)}</td><td>${fmt(st.FI*st.z,1)}</td>`:'')+(iceW?`<td>${fmt(st.Wi,2)}</td>`:'')+`</tr>`; });
+  h+=`<tr class="lppBmbTot"><td colspan="6" style="text-align:right">Σ</td><td><b>${fmt(pw.Fpole,1)}</b></td><td><b>${fmt(pw.Mpole,0)}</b></td>`+
+    (ice?`<td></td><td><b>${fmt(pw.FpoleI,1)}</b></td><td><b>${fmt(pw.MpoleI,0)}</b></td>`:'')+(iceW?`<td><b>${fmt(pw.WiceMast,1)}</b></td>`:'')+`</tr></table></div>`;
+  return h;
+}
 function windWorkedHTML(pw, inp, o){   // o.fold (LPBM, 2026-11-19): the ice and n1 / G_f derivations in collapsed <details> (Loading tab); content unchanged
   const g=(t)=>`\\[${t}\\]`, step=(t)=>`<div class="step-label">${t}</div>`, ref=(s)=>`<span class="eq-ref">[${s}]</span>`;
   let H='';
@@ -5920,11 +5949,13 @@ function windWorkedHTML(pw, inp, o){   // o.fold (LPBM, 2026-11-19): the ice and
   H+=g(`q_z K_d = 0.00256\\,K_z K_{zt} K_e V^2\\cdot K_d = 0.00256(${fmt(pw.KzMid,3)})(${fmt(inp.Kzt,2)})(1.00)(${inp.V})^2(${fmt(inp.Kd,2)}) = ${fmt(pw.qzMid,1)}\\ \\text{psf}`);
   H+=cfPoleWorkedHTML(inp);
   H+=step(`3 · Wind force on the mast ${ref('ASCE 7-16 §29.4')}`);
-  H+=`<div class="eq-why lpNL">${lpNL('The mast is treated as a slender element.',[['Factors:','the gust factor G amplifies for turbulence, and C_f is the shape drag coefficient.'],['Strips:',`the mast is divided into ${pw.NSTRIP} strips of height Δz = H/${pw.NSTRIP}: each strip takes q_z at its own centroid height z_i and its own width D(z_i) (taper), and acts at z_i.`],['For reference only:','the mid-height single-resultant values are shown first.']])}</div>`;   // LPNL
+  H+=`<div class="eq-why lpNL">${lpNL('The mast is treated as a slender element.',[['Factors:','the gust factor G amplifies for turbulence, and C_f is the shape drag coefficient.'],['Segments:',`the mast is taken in the pole's own ${pw.NSTRIP} segments of length L<sub>i</sub> = H/${pw.NSTRIP} = ${fmt(inp.H/pw.NSTRIP,2)} ft (Pole properties card): each segment takes q_z, its width D and t<sub>d</sub> at its mid-height z_i (taper), and its force acts at z_i (tabulated below).`],['For reference only:','the mid-height single-resultant values are shown first.']])}</div>`;   // LPNL
   H+=g(`A_{pole} = \\bar D\\,H = ${fmt(pw.Davg,3)}(${fmt(inp.H,1)}) = ${fmt(pw.Apole,2)}\\ \\text{ft}^2`);
   H+=`<p class="eq-why">Reference only (not used for the force): the design pressure at mid-height and the single resultant it would give:</p>`;
   H+=g(`p(H/2) = q_z\\,G\\,C_f = ${fmt(pw.qzMid,1)}(${fmt(inp.G,2)})(${fmt(inp.cfPole,2)}) = ${fmt(pw.qzMid*inp.G*inp.cfPole,1)}\\ \\text{psf}\\qquad p(H/2)\\,A_{pole} = ${fmt(pw.qzMid*inp.G*inp.cfPole*pw.Apole,0)}\\ \\text{lb}`);
-  H+=g(`F_{pole} = \\sum_i q_z(z_i)\\,G\\,C_f\\,D(z_i)\\,\\Delta z = ${fmt(pw.Fpole,0)}\\ \\text{lb}\\qquad M_{pole} = \\sum_i F_i\\,z_i = ${fmt(pw.Mpole,0)}\\ \\text{lb}{\\cdot}\\text{ft}\\qquad \\bar z_F = \\frac{M_{pole}}{F_{pole}} = ${fmt(pw.zF,2)}\\ \\text{ft}`);
+  H+=g(`F_i = q_z(z_i)K_d\\,G\\,C_f\\,D(z_i)\\,L_i\\qquad M_i = F_i\\,z_i`);
+  H+=lppMastSegTableHTML(pw,inp);   // LPSG (2026-11-19): one row per segment (was: the sum over 100 strips)
+  H+=g(`F_{pole} = \\sum_i F_i = ${fmt(pw.Fpole,0)}\\ \\text{lb}\\qquad M_{pole} = \\sum_i F_i\\,z_i = ${fmt(pw.Mpole,0)}\\ \\text{lb}{\\cdot}\\text{ft}\\qquad \\bar z_F = \\frac{M_{pole}}{F_{pole}} = ${fmt(pw.zF,2)}\\ \\text{ft}`);
   if(pw.rectDir){   // LPH2 (2026-11-07): rectangular pole, wind on the depth face
     H+=`<div class="eq-why lpNL">${lpNL(`Rectangular pole: the values above are for wind toward 0° / 180° on the width B = ${fmt(inp.poleDiaTop,2)} in face.`,[['Other directions:',`wind toward 90° / 270° acts on the depth face (${fmt(inp.poleDepthTop,2)} in), and between the axes the projected strip width is |cos φ|·B + |sin φ|·depth (as in the LRFDLTS mode).`],['C<sub>f</sub>','stays the least-dimension value.'],['Ice weight:','the mast ice is taken as a radial ring on a round of diameter B (the width), not on the rectangle.']])}</div>`;   // LPNL; ASM (2026-11-10): ice basis stated
     H+=g(`F_{pole,90} = \\sum_i q_z(z_i)\\,G\\,C_f\\,d(z_i)\\,\\Delta z = ${fmt(pw.Fd,0)}\\ \\text{lb}\\qquad M_{pole,90} = ${fmt(pw.Md,0)}\\ \\text{lb}{\\cdot}\\text{ft}\\qquad F_{pole}(\\varphi) = |\\cos\\varphi|\\,F_{pole} + |\\sin\\varphi|\\,F_{pole,90}`);
@@ -6160,7 +6191,7 @@ const lppBmbRel=(a,b)=>Math.abs(a-b)<=1e-9*Math.max(1,Math.abs(b));
 function lppBmbPole(inp,comps,fxs,pw,gov){
   const f=gov.factors, phi=gov.phi, pwd=lppPoleWindDir(pw,phi), rows=[];
   const row=o=>{ const r=Object.assign({F:{},arm:null,m:{D:0,W:0,Di:0,Wi:0},mu:0},o); rows.push(r); return r; };
-  // mast wind: the strip-integrated force and its base moment (z̄ = M/F), along the wind
+  // mast wind: the per-segment force and its base moment (z̄ = M/F), along the wind (LPSG: 10 pole segments)
   row({name:'Mast wind', key:'mast', az:phi, wind:true, F:{W:pwd.Wpole, Wi:pwd.FpoleI}, arm:pwd.Wpole>0?pwd.Mpole/pwd.Wpole:0, armSym:'z̄',
     armI:pwd.FpoleI>0?pwd.MpoleI/pwd.FpoleI:0, m:{D:0,W:pwd.Mpole,Di:0,Wi:pwd.MpoleI}, mu:gov.poleWindM});
   fxs.forEach((fc,i)=>{ const pf=(gov.perF&&gov.perF[i])||{}, lab='Fixture '+(i+1);
@@ -6692,10 +6723,11 @@ function buildReport(inp,allCombos,gov,embed,struct){
   H+=natGfWorkedHTML(inp);
   H+=eqB(
     'Wind force on the pole shaft',
-    [`The distributed wind on the shaft is integrated over ${pw.NSTRIP} strips of height Δz = H/${pw.NSTRIP}:`,[['Each strip','uses q_z at its own centroid height z_i and its own width D(z_i), and acts at z_i (ASCE 7 §29.4.1 per strip).'],['C_f','is the drag coefficient for a round section (≈0.7).'],['For reference,',`the single mid-height resultant would be q<sub>z,mid</sub>·G·C<sub>f</sub>·A<sub>pole</sub> = ${n(pw.qzMid*inp.G*inp.cfPole*pw.Apole,0)} lb at H/2.`]]],   // LPNL
-    `F_{pole}=\\sum_i q_z(z_i)\\,G\\,C_f\\,D(z_i)\\,\\Delta z=${n(pw.Fpole,0)}\\ \\text{lb}`,
+    [`The wind on the shaft is taken in the pole's own ${pw.NSTRIP} segments of length L_i = H/${pw.NSTRIP} (tabulated below):`,[['Each segment','uses q_z at its mid-height z_i and its own width D(z_i), and its force acts at z_i (ASCE 7 §29.4, §26.10: q_z at the height of the centroid of the area).'],['C_f','is the drag coefficient for a round section (≈0.7).'],['For reference,',`the single mid-height resultant would be q<sub>z,mid</sub>·G·C<sub>f</sub>·A<sub>pole</sub> = ${n(pw.qzMid*inp.G*inp.cfPole*pw.Apole,0)} lb at H/2.`]]],   // LPNL
+    `F_{pole}=\\sum_i q_z(z_i)K_d\\,G\\,C_f\\,D(z_i)\\,L_i=${n(pw.Fpole,0)}\\ \\text{lb}`,
     pw.rectDir?[`Base moment M<sub>pole</sub> = Σ F_i·z_i = ${n(pw.Mpole,0)} lb·ft (resultant at z = ${n(pw.zF,2)} ft), combined with fixture and cable moments in each load combination (${lppSecRef('4')}).`,[['Rectangular pole:','these values are for wind toward 0° / 180° (width B).'],['Depth face:',`wind toward 90° / 270° acts on the depth face, F<sub>pole,90</sub> = ${n(pw.Fd,0)} lb, M<sub>pole,90</sub> = ${n(pw.Md,0)} lb·ft.`],['Between the axes','the strip width is |cos φ|·B + |sin φ|·depth.']]]   // LPNL
       :`Base moment M<sub>pole</sub> = Σ F_i·z_i = ${n(pw.Mpole,0)} lb·ft (resultant at z = ${n(pw.zF,2)} ft), combined with fixture and cable moments in each load combination (${lppSecRef('4')}).`);
+  H+=lppMastSegTableHTML(pw,inp);   // LPSG (2026-11-19)
   H+=`</div></details>`;
 
   // ---- 2b. Fixture loads ----
@@ -7374,8 +7406,8 @@ function lprModel(){
         {title:'Pole force coefficient',ref:'ASCE 7-16 Fig. 29.4-1',steps:inp.cfAuto?[
           S({id:'hD',label:'Height / width',sym:'h/D',eq:'\\frac{h}{D}',sub:'\\frac{'+N(inp.cfAuto.h)+'}{'+N(inp.cfAuto.D,3)+'}',value:inp.cfAuto.hD,unit:'',d:1}),
           S({id:'cf',label:'C_f ('+inp.cfAuto.lbl+')'+(inp.cfPoleMode==='auto'?'':' — not used: manual C_f = '+N(inp.cfPole)),sym:'C_{f}',eq:'',sub:'',value:inp.cfAuto.cf,unit:'',d:3})]:[]},
-        {title:'Wind on the mast',ref:'ASCE 7-16 §29.4 (strip integration)',steps:[
-          S({id:'Fp',label:'Mast wind ('+pw.NSTRIP+' strips)',sym:'F_{pole}',eq:'\\sum q_{z}(z_{i})K_{d}G\\,C_{f}\\,D(z_{i})\\,\\Delta z',sub:'',value:pw.Fpole,unit:'lb',d:0}),
+        {title:'Wind on the mast',ref:'ASCE 7-16 §29.4, §26.10 (per pole segment)',steps:[
+          S({id:'Fp',label:'Mast wind ('+pw.NSTRIP+' pole segments, q_z at each mid-height)',sym:'F_{pole}',eq:'\\sum q_{z}(z_{i})K_{d}G\\,C_{f}\\,D(z_{i})\\,L_{i}',sub:'',value:pw.Fpole,unit:'lb',d:0}),
           S({id:'Mp',label:'Mast wind moment at the base',sym:'M_{pole}',eq:'\\sum F_{i}z_{i}',sub:'',value:pw.Mpole,unit:'lb-ft',d:0}),
           S({id:'zF',label:'Height of the resultant',sym:'\\bar{z}_{F}',eq:'\\frac{M_{pole}}{F_{pole}}',sub:'\\frac{'+N(pw.Mpole,0)+'}{'+N(pw.Fpole,0)+'}',value:pw.zF,unit:'ft'})].concat(pw.rectDir?[   // LPH2: rectangular pole, depth face
           S({id:'Fpd',label:'Mast wind on the depth face (wind toward 90° / 270°)',sym:'F_{pole,90}',eq:'\\sum q_{z}(z_{i})K_{d}G\\,C_{f}\\,d(z_{i})\\,\\Delta z',sub:'',value:pw.Fd,unit:'lb',d:0}),
