@@ -10150,6 +10150,69 @@ index 58d25a5..b6463e8 100644
   - Engine and smokes: see the PR.
 - **Other copies:** `apps/ps-bridge/ui/lists.js` (to be put in step in its own PR, CLAUDE.md §3 and §7).
 
+## 2026-11-19 — PR: steel-lga-import-export (PR #1643: https://github.com/mlococo88/All-Structural/pull/1643) — MIDAS Civil NX "Line Girder Analysis" (.lga) import and export (LGA; new files; input mapping only, no calculation change)
+
+- **What:** two buttons in the Project tab's "Save and open" card. **Import MIDAS (.lga)** reads a MIDAS Line Girder Analysis project file (FileReader, works from `file://`), builds the bridge as a new project or into the open project (after a choice; one Undo step), and shows an import report: every field mapped (MIDAS value → app input, with the conversion), every field not supported or ignored, the inconsistencies found inside the file, and notes. **Export to MIDAS (.lga)** writes the open project as a .lga file named after the project (all 141 keys of the format, in its order; MIDAS defaults for what the app does not model) with three options, default on: distribution factors as user-defined (lldf_mode user and the eight factors), n written explicitly (n_override_enabled with the app's n), dead-load distribution as Custom percentages equal to the app's DC1 / DC2 / DW split. A summary lists what was written and every approximation. A Help dialog (from both dialogs) is the manual section: what it does, the conversions, the options, the limits.
+- **Where (new files, complete in the PR):** `apps/steel-bridge/engine/lga.js` (window.SBDLga: `fromLga`, `exportCalc`, `toLga`, `reportText`; no DOM, no fetch), `apps/steel-bridge/ui/lga.js` (window.SBDLgaUI: dialogs, file picker, download, help; the two buttons by delegated click because the card is detached until the Project tab is drawn), `tests/engine/lga.test.mjs`, `tests/smoke/steel-bridge-lga.mjs`.
+- **Where (existing files):**
+  - `apps/steel-bridge/index.html`, the script list (anchor `'ui/lists.js'`): before `'ui/lists.js'` / after `'ui/lists.js',` `'engine/lga.js',` `'ui/lga.js'`.
+  - `#pbMove` (anchor `id="bOld"`): after the From old app button, `<button type="button" id="bLgaIn" …>Import MIDAS (.lga)</button>` and `<button type="button" id="bLgaOut" …>Export to MIDAS (.lga)</button>`.
+  - projectBar options: before `fileButtons: [B_EX, B_IM], extras: [B_OLD],` / after `fileButtons: [B_EX, B_IM], extras: [B_OLD, $('bLgaIn'), $('bLgaOut')],`.
+  - After the `B_OLD.addEventListener(…)` statement: `if (window.SBDLgaUI) window.SBDLgaUI.init({ getP: () => P, dirty: () => pb.dirty(), loadNew: q => loadAs(q, null, null), replace: q => { P = q; ui.g = Math.min(ui.g, P.girders.length - 1); ui.seg = 0; changed(true); }, calc: () => calc() });`
+  - `apps/steel-bridge/engine/model.js` header comment only (after the `demandSrc` line): the optional `midasLga` key documented.
+- **Field mapping (MIDAS ↔ app; the export does the reverse):**
+
+  | MIDAS (.lga) | App input | Conversion |
+  |---|---|---|
+  | project_name, job_number, client_owner, designer, checked_by, report_date | project.name, number, owner, designer, checker, date | text |
+  | num_spans, span_lengths | spans.lengths (continuity continuous for > 1 span) | — |
+  | skew_angle | xs.skews (every support) | export: the largest skew when they differ |
+  | num_girders, girder_spacing, deck_overhang | xs.nb, xs.bays, xs.ohL / ohR | export: averages when they differ |
+  | barrier_width, w_parapet, n_parapets, barrier_apply | xs.edges.L/R (barrier, bw, bwt) | export barrier_width = mean traffic face |
+  | roadway_width | derived (deck width − traffic faces) | checked on import; written on export |
+  | t_deck, t_wear_integral | deck.ts, deck.tdeck | t_s = t_deck; total = t_deck + t_wear_integral |
+  | d_haunch (top of web to soffit), segments[].haunch | deck.haunch (top of steel to soffit) | haunch = d_haunch − thickest t_f,top |
+  | segments / girder_segments_by_label / _by_span, girder_schedule_same_all | girder types (girders[i].segments, lines, position, b_eff) | per-span lengths → x0/x1; identical plates + position = one type; b_eff = tributary width |
+  | Fy_steel, tf_fy, web_fy, bf_fy | materials.steel.top/web/bot | 50 → '50', 36 → '36', 70 → 'HPS70W' |
+  | rebar zones (or top/bot_rebar_area, spacing, cover), fy_rebar | deck.rebar.top/bot.A, c; materials.rebar.Fyr | A = floor(b_eff,int / s) A_b; c = cover + d_b/2 |
+  | fc_concrete, wc_concrete | materials.concrete.fc, wc | — |
+  | n_override (enabled), Ec_override (enabled), Es_override (enabled) | materials.concrete.wcE; materials.Es | w_cE = √(E_c/(120,000 K₁ f′c^0.33)), E_c = 29,000/n |
+  | w_fws_ksf | xs.ws.psf | × 1000 |
+  | w_deckforms | xs.sip | × 1000 |
+  | w_crossframes (bridge total) | xs.extra DC1 row "MIDAS w_crossframes", equal; crossframes.weight.mode off | — |
+  | w_misc, w_utilities (per girder) | xs.extra DC1 / DW rows, equal | × N_b |
+  | girder_self_weight_apply | xs.allow = 0 | MIDAS: plates × 490 pcf |
+  | dc2_dist_mode, dw_dist_mode (Equal) | xs.dlMethod 'aashto' | DC1 custom shares compared, not mapped |
+  | moving_load_entries (HL-93, fatigue) IM | analysis.im, analysis.imf | — |
+  | ADTT_SL | fatigue.ADTT, fatigue.p | ADTT = ADTT_SL / p, p by lanes (Table 3.6.1.4.2-1) |
+  | fatigue_detail_category | fatigue.catT, catB | — |
+  | load_combinations Fatigue I / II LL | fatigue.gam.fI, fII | Strength I / Service II compared only |
+  | lldf_mode user + 8 values | girders[i].dfPull (per type, every span and pier) | g = max(1L, 2L); fatigue = 1L / 1.2 |
+  | cross_frame_spacing, cross_frame_locations (by label) | framing.spacing, framing.orient (the one that reproduces the stations); stiffeners.layout.frames.at | stations compared with the app's framing |
+  | bracing_details (X, sections) | crossframes.type, crossframes.mem | angle names as the app's list |
+  | field_splice_locations | framing.splices | — |
+  | girder_transverse_stiffener_zones_by_label (flat, at a station) | stiffeners.layout (mode bays, per bay n, e0, e1), transverse.types.A | stations at bearings / cross-frames skipped (noted) |
+  | girder_connector_properties / zones_by_label | studs.d, h, Fu, st, zones | — |
+  | deck_pour_sequence | analysis.seq, seqCustom (pour 1) | — |
+
+- **Not supported / ignored (listed in the report, kept in `midasLga.keep` and written back on export):** support_restraints, curvature (radius, direction, N), MIDAS mesh fields, design points and locations, negative_moment_regions, phi factors, design_use_appendix_a6, code_edition, load combinations other than Strength I / Service II / Fatigue I / II, vehicle catalog lists, title-block fields the app lacks, haunch_width, deck / haunch / self-weight / barrier / FWS overrides (flagged when enabled), tee stiffeners, stiffener zones with a length, bearing-role stiffeners, girder_connector_neg_composite_by_label, bracing assignment rows. midas_url is never stored and is written as "".
+- **Inconsistencies the importer flags:** num_spans vs span_lengths; segment lengths vs span; same_all vs by-label schedules; segment haunch vs d_haunch; d_haunch < t_f; project rebar fields vs rebar zones; rebar zones varying along a girder or between girders; roadway_width vs (N_b − 1)S + 2 overhang − 2 barrier; custom DC1/DC2/DW shares vs the app's tributary split (> 0.5 percentage point); Equal DC1 vs the app's tributary deck; HL-93 IM ≠ 33 %, fatigue IM ≠ 15 %; Strength I / Service II factors vs Table 3.4.1-1; inactive combinations; F_y varying; skew flags off (auto mode); framing not reproducing the stations; stiffeners not evenly spaced / differing between girders of a type; studs differing between girders; curvature; overrides enabled; missing keys.
+- **Multi-span (unverified):** the only MIDAS sample is single-span. segments / girder_segments_by_span are read and written per span (index = span), the labels S<span>-<n>; girder_segments_by_label is the flat list; field splices, cross-frame stations and design locations are stations from the left end; cross_frame_spacing_by_span is the largest gap per span; girder_cross_frame_schedule_by_label is "n@s" per span joined by ", "; support_restraints Pinned then Roller; negative_moment_regions written []. Marked "unverified until a multi-span MIDAS sample is checked" here, in the PR and in the import / export dialogs (an info note).
+- **Saved data (§5):** no existing key or format changed. New optional project key `midasLga` (written only by an import; not read by any calculation; documented in engine/model.js). No browser-storage key added.
+- **Governing provision:** none changed. The conversions cite AASHTO LRFD 10th Ed. (2024) Eq. 5.4.2.4-1 (E_c), Art. 4.6.2.6.1 (b_eff), Eq. 3.6.1.4.2-1 and Table 3.6.1.4.2-1 (ADTT_SL, p), C3.6.1.1.2 (fatigue factor = one lane / 1.2), Table 3.6.2.1-1 (IM), Table 3.4.1-1 (load factors).
+- **Check case (made-up 1-span bridge of tests/engine/lga.test.mjs, 80 ft, 5 girders at 9 ft, overhang 3 ft, barriers 1.5 ft):** d_haunch 3.0 in, thickest top flange 1.25 in → haunch 1.75 in. t_deck 8.5 + t_wear 0.5 → t_s 8.5, total 9.0 in. Top #6 @ 6 in, cover 2.5: b_eff 108 in → floor(108/6) = 18 bars × 0.44 = 7.92 in², c = 2.5 + 0.375 = 2.875 in. Bottom #5 @ 9 in, cover 1.0: 12 × 0.31 = 3.72 in², c = 1.3125 in. n_override 8 → E_c = 29,000/8 = 3,625 ksi → w_cE = √(3,625/(120,000 × 4^0.33)) = √(3,625/189,610) = 0.13827 kcf → n = 8.000. ADTT_SL 1600, roadway 42 − 3 = 39 ft → 3 lanes → p 0.80 → ADTT 2000. User interior M 0.41 / 0.56 → g_M 0.56, fatigue 0.41/1.2 = 0.3417. Export of the same project writes these values back.
+- **How verified:** `node tests/engine/run.mjs lga`: 9 tests (lga → app → lga, 1 span with a schedule per girder and 3 continuous spans: every mapped and kept field identical; app → lga → app, 1 and 3 spans: the inputs identical, and the app's distribution factors, n, cross-frame and stiffener stations identical; the conversions; the inconsistencies; the export options; the MassDOT pile-cap DC2 through the override). `node tests/smoke/steel-bridge-lga.mjs` (headless Chromium, 1440 and 390 px): buttons, export download (141 keys, midas_url ""), import report, project generated, Help, into the open project with Undo, no sideways scroll, 0 console errors. `node tests/check-syntax.mjs`. The full engine suite (see the PR). A private single-span MIDAS file was imported in a scratch run (not committed): the generated bridge matched its report's inputs.
+- **Decisions (pending engineer review):**
+  1. t_deck read as the structural slab and t_wear_integral added on top (total = t_deck + t_wear). MIDAS's report has used t_deck as the total in its deck weight and t_deck − t_wear in its section properties (but t_deck in K_g).
+  2. The haunch reference flange: the thickest top flange of all girder types (app haunch = d_haunch − t_f,max; one haunch for the bridge). With thinner flanges elsewhere the app's clear haunch there is smaller than MIDAS's.
+  3. Deck rebar as whole bars, floor(b_eff/s) (conservative; MIDAS's own count rule is not documented and differed by girder in the sample's report); b_eff of the interior design line for the one deck reinforcement of the app.
+  4. F_y 50 ksi imported as grade 50 (F_u 65 ksi), not 50W.
+  5. MIDAS n is not forced when no override is enabled (the app computes its own n; the report shows it). Export option "n explicitly" writes the app's n.
+  6. User LLDF on export: 1 lane = the app's fatigue factor × 1.2, 2+ lanes = its governing g (max over spans and piers), skew flags off (the app's factors include the skew corrections); on import the user factors are used as written (no skew correction added). Whether MIDAS applies skew factors to user values is unverified.
+  7. Cross-frame orientation chosen as the first of parallel / normal / auto that reproduces the file's stations on every girder (MIDAS's angle_type is reported, not mapped).
+  8. MIDAS deck / haunch / self-weight / barrier / FWS overrides are not imported as inputs (reported); the export writes the deck override (when there is an integral wearing surface) and the barrier / FWS overrides (when the app's per-girder DC2 / DW adds up to other than MIDAS's computed total), read as bridge totals like deck_override_klf (assumed).
+  9. Multi-span field structures (above) inferred, unverified.
+- **Other copies:** none.
 ## 2026-11-19 — PR: steel-f1-f2-f6 (PR #1642: https://github.com/mlococo88/All-Structural/pull/1642) — F1 n from w_c for E_c on Fatigue & studs; F2/F3 skew f_ℓ by the cross-frame layout, split between dead and live load per load combination; F6 span-to-depth note; SA4 applicability of the line-girder analysis (engineer's approvals 2026-11-19)
 Basis: AASHTO LRFD 10th Ed. (2024). Every calculation change below is a §4 change; the full diff is in the PR.
 
