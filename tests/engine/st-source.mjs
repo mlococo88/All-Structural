@@ -12,12 +12,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
-import { ROOT } from './harness.mjs';
+import { ROOT, SBD_ARCHIVE } from './harness.mjs';
 import { gdRun } from './gd-source.mjs';
 
 let ST = null;
 function stText() {
-  const html = fs.readFileSync(path.join(ROOT, 'Steel Bridge Design.html'), 'utf8');
+  const html = fs.readFileSync(SBD_ARCHIVE, 'utf8');
   const a = html.indexOf('<script type="text/plain" id="st-src">'); if (a < 0) throw new Error('st-src not found');
   const b = html.indexOf('</script>', a);
   return html.slice(a, b).replace(/<\\(\\*)(\/script|!--)/gi, '<$1$2');   // the page's stSrc() unescaping

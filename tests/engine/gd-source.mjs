@@ -8,12 +8,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
-import { ROOT } from './harness.mjs';
+import { SBD_ARCHIVE } from './harness.mjs';
 
 let SRC = null;
 function src() {
   if (SRC) return SRC;
-  const html = fs.readFileSync(path.join(ROOT, 'Steel Bridge Design.html'), 'utf8');
+  const html = fs.readFileSync(SBD_ARCHIVE, 'utf8');
   const a = html.indexOf('SBD-SHARED-BEGIN');
   if (a < 0) throw new Error('SBD-SHARED-BEGIN not found in Steel Bridge Design.html');
   return (SRC = html.slice(html.lastIndexOf('\n<script>', a)));

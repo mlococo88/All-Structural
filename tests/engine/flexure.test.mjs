@@ -20,7 +20,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
-import { loadShared, test, ROOT } from './harness.mjs';
+import { loadShared, test, ROOT, SBD_ARCHIVE } from './harness.mjs';
 import { gdGirderSection, gdRun } from './gd-source.mjs';
 
 const W = loadShared('units.js', 'steps.js', path.join(ROOT, 'apps/steel-bridge/engine/sections.js'), path.join(ROOT, 'apps/steel-bridge/engine/owners.js'), path.join(ROOT, 'apps/steel-bridge/engine/flexure.js'));
@@ -34,7 +34,7 @@ const readP = f => JSON.parse(fs.readFileSync(path.join(DIR, f), 'utf8')).payloa
 let FE = null;
 function gdFe() {
   if (FE) return FE;
-  const html = fs.readFileSync(path.join(ROOT, 'Steel Bridge Design.html'), 'utf8'), ctx = {}; vm.createContext(ctx);
+  const html = fs.readFileSync(SBD_ARCHIVE, 'utf8'), ctx = {}; vm.createContext(ctx);
   let code = 'const ES = 29000;\n';
   for (const n of ['feCb', 'feAt', 'feNpr', 'feGe', 'feGeA', 'feGov']) {
     const a = html.indexOf(`\nfunction ${n}(`); assert.ok(a > 0, `${n} not found`); const b = html.indexOf('\n}\n', a); code += html.slice(a + 1, b + 3);

@@ -105,7 +105,7 @@
     function byName() { const r = idx(), m = new Map();
       r.items.slice().sort((a, b) => a.saved < b.saved ? 1 : a.saved > b.saved ? -1 : 0).forEach(i => { if (!m.has(i.name)) m.set(i.name, i); });
       return { r, m }; }
-    const no = () => ({ ok: false, error: 'readonly', message: 'Open Steel Bridge Design (new app) to change its saved projects.' });
+    const no = () => ({ ok: false, error: 'readonly', message: 'Open Steel Bridge Design to change its saved projects.' });
     return { key: IDX,
       read: () => { const r = idx(); return r.ok ? { ok: true, map: {} } : { ok: false, error: r.error, map: {} }; },
       list: () => [...byName().m.values()].map(i => ({ name: i.name, saved: i.saved && i.saved > '1971' ? i.saved : null, size: i.size || 0 })),
@@ -113,7 +113,7 @@
       item: n => { const i = byName().m.get(n); if (!i) return undefined; let t = null; try { t = storage.getItem(PRE + i.id); } catch (e) { t = null; } return t == null ? undefined : t; },
       get: () => null, save: no, duplicate: no, rename: no, remove: no };
   }
-  TOOLS.unshift({ tool: 'steel-bridge-app', label: 'Steel Bridge Design (new app)', name: 'Steel Bridge Design (new app)', href: 'apps/steel-bridge/index.html',
+  TOOLS.unshift({ tool: 'steel-bridge-app', label: 'Steel Bridge Design', name: 'Steel Bridge Design', href: 'apps/steel-bridge/index.html',
     key: 'sbd2.lib.index', toFile: t => t, view: sbd2View });   // card order: before Moving Load Generator; its own list (items by id): the file is the stored item text (= Export JSON)
   /* psb2View(storage) (PS5-D3, 2026-11-14): apps/ps-bridge's list, the same structure as the Steel Bridge app's (its engine/library.js is an
      adapted copy: psb2.lib.index { schema: 'psb2.library', items: [{ id, name, number, saved, size }] } + one key psb2.lib.p.<id> per item,
@@ -167,10 +167,11 @@
       has: n => own.call(read().map, n), item, get: n => { const i = item(n); return i === undefined ? null : i; },
       save: no, duplicate: no, rename: no, remove: no, stamp: () => raw(G) + '\u0000' + raw(L) };
   }
-  // card order: first (GirderDetail's card comes before the new app's). toFile = the tool's own sbdPairFile (v = its SBD_V, 1;
+  // card order: first (GirderDetail's card comes before the new app's). SBDA (2026-11-19): the old single-file app is archived; this entry
+  // stays for its saved-project lists (unchanged keys) and opens the archived copy. toFile = the tool's own sbdPairFile (v = its SBD_V, 1;
   // tests/smoke/home-sync.mjs fails if they differ): { app, v, name, data (the modules' part, when saved), pl (Preliminary sizing's
   // part as its own file { app: 'PlateLine', v: 1, name, data }, when saved) }; a project with the modules' part only gives the GHS2 file
-  TOOLS.unshift({ tool: 'steel-bridge-design', label: 'Steel Bridge Design', name: 'Steel Bridge Design (GirderDetail)', href: 'Steel%20Bridge%20Design.html',
+  TOOLS.unshift({ tool: 'steel-bridge-design', label: 'Steel Bridge Design', name: 'Steel Bridge Design (archived)', href: 'archive/Steel%20Bridge%20Design%20(archived%202026-11-19).html',
     key: 'girderdetail_projects_v1', space: 2, view: sbdPairView,
     toFile: (i, n) => { const f = { app: 'SteelBridgeDesign', v: 1, name: n }; if (i.gd !== undefined) f.data = i.gd; if (i.pl !== undefined) f.pl = { app: 'PlateLine', v: 1, name: n, data: i.pl }; return f; } });
   /* pileView(storage) (STDS-P, 2026-11-06): Pile Designer's list. Its projects are in IndexedDB (micropile_lrfd_db, which another page

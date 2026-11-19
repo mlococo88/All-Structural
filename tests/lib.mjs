@@ -85,7 +85,10 @@ export async function openPage(file, { ls, vw = 1400, vh = 1000, hash = '', time
 
 // "Steel Bridge Design.html" (working tree), "origin/main" (bare ref: same file name as `tool`), or "abc123:stgirder.html".
 // A git ref older than a file's rename is read under the file's previous name (RENAMED): GirderDetail was "Steel Bridge Beam Modules.html" until 2026-10-22.
-const RENAMED = { 'Steel Bridge Design.html': ['Steel Bridge Beam Modules.html'] };
+// SBDA (2026-11-19): that file was archived as SBD_ARCHIVE_FILE; a ref older than the archiving has it as "Steel Bridge Design.html".
+export { SBD_ARCHIVE_FILE } from './engine/harness.mjs';
+import { SBD_ARCHIVE_FILE } from './engine/harness.mjs';
+const RENAMED = { 'Steel Bridge Design.html': ['Steel Bridge Beam Modules.html'], [SBD_ARCHIVE_FILE]: ['Steel Bridge Design.html', 'Steel Bridge Beam Modules.html'] };
 export function resolveFile(spec, tool) {
   const wt = path.resolve(REPO, spec);
   if (fs.existsSync(wt) && fs.statSync(wt).isFile()) { const rel = path.relative(REPO, wt); return { file: wt, label: rel.startsWith('..') ? wt : rel }; }

@@ -106,3 +106,10 @@ Loaded by: see `shared/README.md` (row `project-registry.js`). Tests: `node test
 - **How verified:** `node tests/engine/run.mjs project-registry github-sync projects` (all pass; the "one entry per tool" test reads the
   key and ctx.cloud from `def`); `node tests/smoke/home-projects.mjs` and `node tests/smoke/home-sync.mjs` with the crane entry
   (`tests/smoke/project-library.mjs` TOOLS `crane`, `home-projects.mjs` FOLDER `crane`).
+
+## 2026-11-19 — PR: claude/archive-old-steel-app (PR #1647: https://github.com/mlococo88/All-Structural/pull/1647) (SBDA) — Steel Bridge Design entries: the new app named "Steel Bridge Design", the old one "(archived)"   [display/link only; keys unchanged]
+- **Where / Before / After:**
+  - `sbd2View` read-only message: `'Open Steel Bridge Design (new app) to change its saved projects.'` → `'Open Steel Bridge Design to change its saved projects.'`
+  - `steel-bridge-app` entry: `label: 'Steel Bridge Design (new app)', name: 'Steel Bridge Design (new app)'` → `label: 'Steel Bridge Design', name: 'Steel Bridge Design'` (label = the app's ctx.cloud.label, changed with it).
+  - `steel-bridge-design` entry (kept: it lists the old app's `girderdetail_projects_v1` / `plateline_projects_v1`): `name: 'Steel Bridge Design (GirderDetail)', href: 'Steel%20Bridge%20Design.html'` → `name: 'Steel Bridge Design (archived)', href: 'archive/Steel%20Bridge%20Design%20(archived%202026-11-19).html'`; key, tool, label, toFile, view unchanged.
+- **Saved data:** none changed. **Loaded by:** `tools.html` (home page Saved projects); covered by tests/smoke/home-projects.mjs and home-sync.mjs, tests/engine/project-registry.test.mjs.

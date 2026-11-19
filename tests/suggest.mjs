@@ -12,11 +12,11 @@
 // Exit code: 0 all pass, 1 a failure, 2 an error.
 import fs from 'fs';
 import path from 'path';
-import { HERE, openPage, resolveFile, diff } from './lib.mjs';
+import { HERE, openPage, resolveFile, diff, SBD_ARCHIVE_FILE } from './lib.mjs';
 
 const args = {}; const av = process.argv.slice(2); const CMD = av[0] && !av[0].startsWith('--') ? av.shift() : 'same';
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
-const FILE = 'Steel Bridge Design.html', A = resolveFile(args.a || 'origin/main', FILE), B = resolveFile(args.b || FILE, FILE);
+const FILE = SBD_ARCHIVE_FILE, A = resolveFile(args.a || 'origin/main', FILE), B = resolveFile(args.b || FILE, FILE);
 const list = (v, d) => String(v || d).split(',').map(s => s.trim()).filter(Boolean);
 const FULL = (args.full || 'yes') !== 'no';
 const seed = pr => pr === 'builtin' ? undefined : JSON.parse(fs.readFileSync(fs.existsSync(pr) ? pr : path.join(HERE, 'projects', 'gd', pr + '.json'), 'utf8'));

@@ -13,6 +13,10 @@ import { fileURLToPath } from 'node:url';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const SHARED = path.join(ROOT, 'shared');
+// The old single-file Steel Bridge Design (GirderDetail + Preliminary sizing pl-src + ST-Girder st-src), archived 2026-11-19 (SBDA): the
+// parity tests read GirderDetail's, PlateLine's and ST-Girder's own code from this copy. The root "Steel Bridge Design.html" is now a redirect.
+export const SBD_ARCHIVE_FILE = 'archive/Steel Bridge Design (archived 2026-11-19).html';
+export const SBD_ARCHIVE = path.join(ROOT, SBD_ARCHIVE_FILE);
 
 export function loadShared(...files) {
   const ctx = { console };

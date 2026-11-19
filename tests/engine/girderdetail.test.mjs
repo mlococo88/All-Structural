@@ -13,13 +13,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
-import { loadShared, test, ROOT } from './harness.mjs';
+import { loadShared, test, ROOT, SBD_ARCHIVE } from './harness.mjs';
 
 const PAYLOADS = ['gd_builtin_AASHTO_G1', 'gd_builtin_AASHTO_G2', 'gd_builtin_AASHTO_G3', 'gd_xsA_AASHTO_G2', 'gd_curb_AASHTO_G1'];
 const VERBOSE = !!process.env.GD_VERBOSE;
 
 function gdEngine() {
-  const html = fs.readFileSync(path.join(ROOT, 'Steel Bridge Design.html'), 'utf8');
+  const html = fs.readFileSync(SBD_ARCHIVE, 'utf8');
   const a = html.indexOf('const FE_CACHE = new Map();'), b = html.indexOf('\n/* Staged stiffness', a);
   assert.ok(a > 0 && b > a, 'sgBeam block not found in Steel Bridge Design.html');
   const im = html.match(/\nfunction feIM\(e, im\) \{.*\}\n/);

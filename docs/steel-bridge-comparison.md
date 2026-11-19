@@ -251,6 +251,8 @@ The LLDF, c_rw, pier skew rule, |θ|, 6.10.1.6 amplification and pedestrian-load
 
 ## (d) Final comparison, new app vs old app (2026-11-01, B5)
 
+**Historical (note added 2026-11-19).** This section records the comparison as run before the switch-over. Since 2026-11-19 the old app is archived as `archive/Steel Bridge Design (archived 2026-11-19).html` (not maintained), `Steel Bridge Design.html` is a redirect page to `apps/steel-bridge/index.html`, and the parity tests and `tests/engine/final-compare.mjs` read the old app's code from the archived copy.
+
 **Basis:** origin/main after #527, #529, #533, #534, #535, #539, #540 and #545. Node only (no browser compare runs, per the 2026-10-29 rules).
 
 ### Method

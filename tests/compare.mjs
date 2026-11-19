@@ -11,7 +11,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { execFileSync } from 'child_process';
-import { HERE, REPO, openPage, resolveFile, hash, diff } from './lib.mjs';
+import { HERE, REPO, openPage, resolveFile, hash, diff, SBD_ARCHIVE_FILE } from './lib.mjs';
 
 const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
@@ -19,7 +19,7 @@ const TOOL = args.tool || 'gd';
 // sbd: B is the merged tool (Steel Bridge Design.html, from PR 1 of the merge), A is stgirder.html (removed at the cut-over, 2026-10-22: by default
 // the last copy in git history). st: ST-Girder; since the cut-over its only copy is the Design & Rating view of Steel Bridge Design.html, read in its frame
 // (a file that holds the st-src block); a stand-alone stgirder.html (a git ref or --a/--b path) is still read as a page.
-const FILE = args.file || { gd: 'Steel Bridge Design.html', st: 'Steel Bridge Design.html', sbd: 'Steel Bridge Design.html' }[TOOL];
+const FILE = args.file || { gd: SBD_ARCHIVE_FILE, st: SBD_ARCHIVE_FILE, sbd: SBD_ARCHIVE_FILE }[TOOL];   // SBDA (2026-11-19): the archived copy of the old single-file app
 function lastStgirder() { if (fs.existsSync(path.join(REPO, 'stgirder.html'))) return 'stgirder.html';
   const g = a => execFileSync('git', ['-C', REPO, ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
   const c = g(['rev-list', '-1', 'HEAD', '--', 'stgirder.html']); try { g(['cat-file', '-e', `${c}:stgirder.html`]); return `${c}:stgirder.html`; } catch (e) { return `${c}^:stgirder.html`; } }
@@ -229,6 +229,7 @@ async function pageRun(src, c) {
 // volatile values that differ between any two runs: ISO time stamps and dates, local date/time text, millisecond time stamps under time-like keys,
 // the file:// folder a page was opened from, and GirderDetail's file name (renamed to "Steel Bridge Design.html" by the merge, PR 1)
 const normalize = R => JSON.parse(JSON.stringify(R)
+  .replace(/Steel(%20| )Bridge\1Design\1\(archived\1(?:2026-11-19)\)\.html/g, 'Steel$1Bridge$1Design.html')   // SBDA (2026-11-19): the archived copy's file name = the old one
   .replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z/g, '(time)')
   .replace(/\b\d{4}-\d\d-\d\d\b/g, '(date)')
   .replace(/\b\d{1,2}\/\d{1,2}\/\d{4}(,? \d{1,2}:\d{2}(:\d{2})?\s?(AM|PM)?)?/g, '(date)')

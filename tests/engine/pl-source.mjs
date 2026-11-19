@@ -8,13 +8,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
-import { ROOT } from './harness.mjs';
+import { SBD_ARCHIVE } from './harness.mjs';
 import { gdDecl } from './gd-source.mjs';
 
 let PL = null;
 function plText() {
   if (PL) return PL;
-  const html = fs.readFileSync(path.join(ROOT, 'Steel Bridge Design.html'), 'utf8');
+  const html = fs.readFileSync(SBD_ARCHIVE, 'utf8');
   const a = html.indexOf('<script type="text/plain" id="pl-src">'), b = html.indexOf('</script>', a);
   if (a < 0 || b < 0) throw new Error('pl-src not found in Steel Bridge Design.html');
   return (PL = '\n' + html.slice(a, b).replace(/<\\(\\*)(\/script|!--)/gi, '<$1$2'));

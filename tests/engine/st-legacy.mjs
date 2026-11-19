@@ -8,12 +8,12 @@
 // the caller supplies the component's state (inpRef, setInp, setGdAuto, setGdNew, gdIsNew) and window.confirm.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ROOT } from './harness.mjs';
+import { SBD_ARCHIVE } from './harness.mjs';
 
 let ST = null;
 export function stText() {
   if (ST) return ST;
-  const html = fs.readFileSync(path.join(ROOT, 'Steel Bridge Design.html'), 'utf8');
+  const html = fs.readFileSync(SBD_ARCHIVE, 'utf8');
   const a = html.indexOf('<script type="text/plain" id="st-src">'), b = html.indexOf('</script>', a);
   if (a < 0 || b < 0) throw new Error('st-src not found in Steel Bridge Design.html');
   return (ST = '\n' + html.slice(a, b).replace(/<\\(\\*)(\/script|!--)/gi, '<$1$2'));

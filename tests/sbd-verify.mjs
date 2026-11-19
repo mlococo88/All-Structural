@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Steel Bridge Design (merged GirderDetail + ST-Girder), PR 1 checks that compare.mjs does not cover (dev tooling only):
-//  1. redirect: "Steel Bridge Beam Modules.html#<hash>" forwards to "Steel Bridge Design.html#<hash>";
+//  1. redirect: "Steel Bridge Beam Modules.html#<hash>" and the root "Steel Bridge Design.html#<hash>" forward to "apps/steel-bridge/index.html#<hash>"
+//     (SBDA, 2026-11-19: the old single-file app is archived; the checks below run on the archived copy);
 //  2. saved data: a browser with GirderDetail (girderdetail_*), Preliminary sizing (plateline_*) and ST-Girder (stgirder.session, stgirder.ui.v1)
 //     data saved by the old files opens it unchanged in the merged tool, and the ST-Girder view shows the saved ST-Girder session;
 //  3. the view from the UI: the module tab opens it (first-open time to ST-Girder ready), the girder selector loads a girder; the live link (PR 2):
@@ -8,21 +9,22 @@
 //     block (PR 3): the project title block shown read-only in the view, ST-Girder's saved fields kept; printing
 //     (ST-Girder's Print button prints the frame, not the page; the top bar's Print report opens ST-Girder's Report tab; Ctrl+P prints the frame);
 //  one report (PR 3): a module's Print with Appendix A (ST-Girder's report, A.n numbering, see §A.n.k), the Girder report with its ST-Girder chapter;
-//  one project file (PR 4): export holds every part, read back, a newer version refused; console errors of every page. Usage: node tests/sbd-verify.mjs [--file "Steel Bridge Design.html"]   Exit code 0 when every check passes.
+//  one project file (PR 4): export holds every part, read back, a newer version refused; console errors of every page. Usage: node tests/sbd-verify.mjs [--file "archive/Steel Bridge Design (archived 2026-11-19).html"]   Exit code 0 when every check passes.
 import fs from 'fs';
 import path from 'path';
-import { REPO, HERE, openPage } from './lib.mjs';
+import { REPO, HERE, openPage, SBD_ARCHIVE_FILE } from './lib.mjs';
 
 const av = process.argv.slice(2), fi = av.indexOf('--file');
-const FILE = path.resolve(REPO, fi >= 0 ? av[fi + 1] : 'Steel Bridge Design.html'), OLD = path.join(path.dirname(FILE), 'Steel Bridge Beam Modules.html');
+const FILE = path.resolve(REPO, fi >= 0 ? av[fi + 1] : SBD_ARCHIVE_FILE), OLDS = ['Steel Bridge Beam Modules.html', 'Steel Bridge Design.html'].map(n => path.join(REPO, n));
 let bad = 0; const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) bad++; };
 const errsOf = o => o.errs.filter(e => !/^Failed to load resource|^\[BABEL\] Note: The code generator has deoptimised/.test(e));
 
 // 1. redirect with a hash (and a query)
-{ const o = await openPage(OLD, { hash: '#gdtest=1&x=%20y' });
-  try { await o.p.waitForURL(/Steel%20Bridge%20Design\.html/, { timeout: 15000 }); const u = o.p.url();
-    ok(/Steel%20Bridge%20Design\.html#gdtest=1&x=%20y$/.test(u), 'redirect keeps the hash: ' + u.replace(/^.*\//, ''));
-    ok((await o.p.evaluate(() => document.title)) === 'Steel Bridge Design', 'redirect lands on Steel Bridge Design');
+for (const OLD of OLDS) { const o = await openPage(OLD, { hash: '#gdtest=1&x=%20y' }), n = path.basename(OLD);
+  try { await o.p.waitForURL(/apps\/steel-bridge\/index\.html/, { timeout: 15000 }); const u = o.p.url();
+    ok(/apps\/steel-bridge\/index\.html#gdtest=1&x=%20y$/.test(u), n + ': redirect keeps the hash: ' + u.replace(/^.*\/(?=apps\/)/, ''));
+    await o.p.waitForLoadState('load');
+    ok((await o.p.evaluate(() => document.title)) === 'Steel Bridge Design', n + ': redirect lands on Steel Bridge Design (apps/steel-bridge)');
   } finally { await o.b.close(); } }
 
 // 2. saved data from the old files

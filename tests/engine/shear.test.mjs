@@ -13,7 +13,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { loadShared, test, ROOT } from './harness.mjs';
+import { loadShared, test, ROOT, SBD_ARCHIVE } from './harness.mjs';
 import vm from 'node:vm';
 import { gdBlock, gdDecl } from './gd-source.mjs';
 
@@ -57,7 +57,7 @@ function gdGirderSection() {
 }
 /* Preliminary sizing's tsVn (stored in the page as the text of pl-src): its declaration from the whole file */
 function plTsVn(GS) {
-  const html = fs.readFileSync(path.join(ROOT, 'Steel Bridge Design.html'), 'utf8'), a = html.indexOf('\nfunction tsVn('), lines = html.slice(a + 1).split('\n'), out = [lines[0]];
+  const html = fs.readFileSync(SBD_ARCHIVE, 'utf8'), a = html.indexOf('\nfunction tsVn('), lines = html.slice(a + 1).split('\n'), out = [lines[0]];
   for (let i = 1; i < lines.length; i++) { const L = lines[i]; if (L === '' || /^[\s})\]]/.test(L)) out.push(L); else break; }
   vm.runInContext(out.join('\n') + '\nthis.__tsVn = tsVn;' + TAG, GS.ctx, { filename: 'Steel Bridge Design.html (pl-src tsVn)' });
   return GS.ctx.__tsVn;

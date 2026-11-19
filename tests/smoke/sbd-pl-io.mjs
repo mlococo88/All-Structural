@@ -9,11 +9,11 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { openPage, REPO } from '../lib.mjs';
+import { openPage, REPO, SBD_ARCHIVE_FILE } from '../lib.mjs';
 
 let fails = 0; const ok = (c, m) => { console.log((c ? '  ok   ' : '  FAIL ') + m); if (!c) fails++; return c; };
 const Z = t => String(t).replace(/"(ts|producedAt|seenAt|savedAt|at)":\s*\d+/g, '"$1":0');
-const FILE = path.join(REPO, 'Steel Bridge Design.html'), TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'sbd-pl-io-'));
+const FILE = path.join(REPO, SBD_ARCHIVE_FILE), TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'sbd-pl-io-'));
 console.log('sbd-pl-io: ' + FILE);
 const o = await openPage(FILE, { vw: 1400, vh: 900, timeout: 120000 }), p = o.p;
 await p.waitForFunction(() => typeof window.gdIdle === 'function' && typeof plEnsure === 'function', null, { timeout: 120000 });

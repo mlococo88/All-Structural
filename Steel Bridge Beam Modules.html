@@ -4,9 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Steel Bridge Design (moved)</title>
-<!-- Redirect page (SBD1, 2026-10-22). GirderDetail ("Steel Bridge Beam Modules.html") is now "Steel Bridge Design.html" in the same folder.
-     This page only forwards there, keeping the address's #hash and ?query. It loads no library and reads or writes no saved data: the
-     projects saved by GirderDetail open in Steel Bridge Design as before (same browser storage keys). -->
+<!-- Redirect page (SBD1, 2026-10-22). GirderDetail ("Steel Bridge Beam Modules.html") became "Steel Bridge Design.html" in the same folder.
+     SBDA (2026-11-19): that single-file app is archived as "archive/Steel Bridge Design (archived 2026-11-19).html"; Steel Bridge Design
+     is now "apps/steel-bridge/index.html", and this page forwards straight there, keeping the address's #hash and ?query. It loads no
+     library and reads or writes no saved data. -->
 <style>
   body { font: 15px/1.5 'Segoe UI', Arial, sans-serif; color: #17212b; background: #eceeeb; margin: 0; padding: 40px 16px; }
   main { max-width: 560px; margin: 0 auto; background: #fff; border: 1px solid #dde1db; border-radius: 10px; padding: 24px; }
@@ -16,12 +17,13 @@
 <body>
 <main>
   <h1 style="font-size:20px;margin:0 0 8px">GirderDetail is now Steel Bridge Design</h1>
-  <p>This tool was renamed. Its file is now <b>Steel Bridge Design.html</b>, in the same folder. Your saved projects open there as before.</p>
-  <p><a id="go" href="Steel%20Bridge%20Design.html">Open Steel Bridge Design</a></p>
+  <p>This tool was renamed. Steel Bridge Design is now <b>apps/steel-bridge/index.html</b>, in this folder.</p>
+  <p><a id="go" href="apps/steel-bridge/index.html">Open Steel Bridge Design</a></p>
+  <p>The old single-file app is archived (2026-11-19, not maintained): <a href="archive/Steel%20Bridge%20Design%20(archived%202026-11-19).html">open the archived copy</a>.</p>
 </main>
 <script>
 (function () {
-  var to = 'Steel%20Bridge%20Design.html' + (location.search || '') + (location.hash || '');
+  var to = 'apps/steel-bridge/index.html' + (location.search || '') + (location.hash || '');
   document.getElementById('go').setAttribute('href', to);
   try { location.replace(to); } catch (e) { }
 })();

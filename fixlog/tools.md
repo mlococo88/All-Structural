@@ -153,3 +153,9 @@
 - **Where:** "Loads & analysis", right after the card `href="apps/midas-continuous-beam/index.html"`.
 - **Before:** no link. **After:** `<a class="card" href="apps/midas-model-inspector/index.html" target="_blank"><div class="name">MIDAS Civil NX API: Model Inspector</div>…` with Needs / Read-only items; tags "MIDAS Civil NX API", "Utility". Relative link.
 - **Formulas, factors, units, code references:** none. **Saved data:** none. **How verified:** see the PR.
+
+## 2026-11-19 — PR: claude/archive-old-steel-app (PR #1647: https://github.com/mlococo88/All-Structural/pull/1647) (SBDA) — Steel Bridge Design cards   [navigation only]
+- **Where:** `tools.html`, `<section><h2>Steel Bridge Design</h2>`.
+- **Before:** card 1 `href="Steel%20Bridge%20Design.html"` "Steel Bridge Design (GirderDetail)"; card 2 `href="apps/steel-bridge/index.html"` "Steel Bridge Design (new, in development)" with "So far: …" and "Not for design use yet: use the card above."
+- **After:** card 1 `href="apps/steel-bridge/index.html"` "Steel Bridge Design" ("Steel girder bridge design (one engine, worked steps for every value)."); card 2 `href="archive/Steel%20Bridge%20Design%20(archived%202026-11-19).html"` "Archived: old Steel Bridge Design (GirderDetail)", tag "Archived", text: archived 2026-11-19, not maintained, results may differ (lacks the 2026-11 fixes), kept to open old saved projects.
+- **Why:** engineer decision 2026-11-19 (archive the old single-file app). **Check case:** both cards open their pages from file:// (Playwright, no console errors).
