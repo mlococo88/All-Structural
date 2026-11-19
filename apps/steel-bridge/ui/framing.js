@@ -132,6 +132,12 @@
      3 in, bolt line 3.5 in from the web; DEF) is kept as a starting value; this hint, next to the connection inputs and in the Report's
      framing check notes (report/builders.js frm), says it is a placeholder to be designed. No value or input changes. */
   const CONN_HINT = 'Hint (engineer decision SB-26): the default end connection of the diaphragm (4 bolts per end in one row at 3 in pitch, the bolt line 3.5 in from the girder web, the bolt diameter and grade above) is a placeholder, not a design. It usually fails the CFD / CFE bolted connection checks as entered: design the connection (bolts, pitch, bolt line, connection plate) for the project.';
+  /* SB2L (2026-11-19; engineer request 2026-11-19): the diaphragm's bolt lines per end (crossframes.dia.nl: 1 or 2, absent: 1) and, with two,
+     the spacing between them (crossframes.dia.g, in; blank or absent: 3 in, shown as the placeholder; engine/crossframes.js cfDiaNl, cfDiaG).
+     LINES_HINT states the convention of the bolt line input (dia.ecc). Angle cross-frame members keep one line (crossframes.conn). */
+  function gRow(C) { const v = (C.dia || {}).g, ok = v != null && v !== '' && isFinite(+v);
+    return `<div class="fRow"><label for="i_crossframes.dia.g">Spacing between the two bolt lines g (gage; at least 3d, 6.13.2.6.1; blank: 3 in)</label><input type="number" step="any" id="i_crossframes.dia.g" data-path="crossframes.dia.g" data-kind="num" value="${ok ? esc(String(v)) : ''}" placeholder="3"><span class="unit">in</span></div>`; }
+  const LINES_HINT = 'Bolt lines (diaphragms only; angle cross-frame members keep one line): "Bolts per end" is the number of bolts in each vertical line. The bolt line distance is from the girder web centerline to the first line, the one nearest the web; with two lines the second line is g farther from the web, the bolt group centroid is at e + g/2 (the eccentricity of the bolt check CFD / CFE), and the outer line must keep the edge distance to the connection plate\'s free edge. The end diaphragms take the same lines unless crossframes.dia.eNl is set in the project file.';
   function inputs(P, h) {
     ensure(P); const F = P.framing, C = P.crossframes, CF = window.SBDCrossframes, FRM = window.SBDFraming;
     let L = null; try { L = FRM.compute(P); } catch (e) { L = { errors: [e.message] }; }
@@ -155,7 +161,8 @@
         ${h.num('crossframes.dMinXF', 'Minimum girder depth for cross-frames', 'in')}${dOn ? `${h.sel('crossframes.dia.shape', 'Shape', br === 'ch' ? CF.CF_CH.map(s => [s[0], s[0]]) : [...CF.CF_DIA.map(s => [s[0], s[0]]), ['custom', 'Custom W']])}
         ${C.dia.shape === 'custom' ? `${h.num('crossframes.dia.d', 'Depth d', 'in')}${h.num('crossframes.dia.bf', 'Flange width', 'in')}${h.num('crossframes.dia.tf', 'Flange thickness', 'in')}${h.num('crossframes.dia.tw', 'Web thickness', 'in')}` : ''}
         ${h.sel('crossframes.dia.gr', 'Grade', [['36', '36'], ['50', '50']])}${clrRow(C, h)}${grpCard(P, C, br)}
-        <h4 class="sub">End connections</h4>${conn}${h.num('crossframes.dia.nb', 'Bolts per end (one row)', '')}${h.num('crossframes.dia.pitch', 'Bolt pitch', 'in')}${h.num('crossframes.dia.ecc', 'Bolt line from the girder web', 'in')}
+        <h4 class="sub">End connections</h4>${conn}${h.num('crossframes.dia.nb', CF.cfDiaNl(C.dia) === 2 ? 'Bolts per end in each line' : 'Bolts per end (one row)', '')}${h.num('crossframes.dia.pitch', 'Bolt pitch', 'in')}${h.sel('crossframes.dia.nl', 'Vertical bolt lines per end', [['1', 'One line'], ['2', 'Two lines']], String(CF.cfDiaNl(C.dia)))}${CF.cfDiaNl(C.dia) === 2 ? gRow(C) : ''}${h.num('crossframes.dia.ecc', CF.cfDiaNl(C.dia) === 2 ? 'First bolt line from the girder web' : 'Bolt line from the girder web', 'in')}
+        <p class="note">${LINES_HINT}</p>
         <p class="note">${CONN_HINT}</p>
         <h4 class="sub">End diaphragms (bearing lines)</h4>${h.sel('crossframes.dia.end', 'Jacking at the end diaphragms', [['no', 'No'], ['yes', 'Yes']])}${h.num('crossframes.dia.Rj', 'Jacking reaction R<sub>j</sub>', 'kip')}${h.num('crossframes.dia.aj', 'at a<sub>j</sub> from the girder', 'in')}
         <p class="note">The diaphragm is the intermediate bracing (checks CFD) and the end diaphragm at the bearing lines (CFE); the angle checks CF1 to CF9 and member forces entered from a refined analysis do not apply. S (largest girder spacing) and the girder depth d come from the project and the layout. On a change between a rolled W and a channel, the shape starts at the one last used in that family on this page, else the shape that check CF10 recommends for the girder depth, else W21x44 / MC18x42.7: a starting choice, checked by CFD like any other.</p>`
@@ -272,10 +279,11 @@
       const sg = xg ? -1 : 1; o += `<rect x="${x(Math.min(xg, xg + sg * bs))}" y="${y(tfl + 1)}" width="${(bs * sc).toFixed(1)}" height="${((dg - 2 * tfl - 2) * sc).toFixed(1)}" fill="none" stroke="#94a3b8" stroke-width="1"/>`; });
     o += `<rect x="${x(g)}" y="${y(y0)}" width="${((S - 2 * g) * sc).toFixed(1)}" height="${(X.d * sc).toFixed(1)}" fill="#E8EEF6" stroke="#16304F" stroke-width="1.6"/>`
       + `<line x1="${x(g)}" y1="${y(y0 + X.tf)}" x2="${x(S - g)}" y2="${y(y0 + X.tf)}" stroke="#16304F" stroke-width="0.8"/><line x1="${x(g)}" y1="${y(y0 + X.d - X.tf)}" x2="${x(S - g)}" y2="${y(y0 + X.d - X.tf)}" stroke="#16304F" stroke-width="0.8"/>`;
-    [ec, S - ec].forEach(xb => { for (let i = 0; i < nb; i++) o += `<circle cx="${x(xb)}" cy="${y(dg / 2 + (i - (nb - 1) / 2) * sp)}" r="3" fill="#B45309"/>`; });
+    const nl = CF.cfDiaNl(q), gl = nl === 2 ? CF.cfDiaG(q) : 0, xl = nl === 2 ? [ec, ec + gl, S - ec, S - ec - gl] : [ec, S - ec];   // SB2L: both bolt lines
+    xl.forEach(xb => { for (let i = 0; i < nb; i++) o += `<circle cx="${x(xb)}" cy="${y(dg / 2 + (i - (nb - 1) / 2) * sp)}" r="3" fill="#B45309"/>`; });
     o += `<text x="${x(S / 2)}" y="${(+y(y0) - 6).toFixed(1)}" font-size="11" text-anchor="middle" fill="#16304F" font-weight="600">${esc(X.nm_)} ${X.chS ? 'channel' : 'rolled W'} diaphragm, d = ${fmt(X.d, 2)} in</text>`
       + `<line x1="${x(0)}" y1="${(+y(dg) + 16).toFixed(1)}" x2="${x(S)}" y2="${(+y(dg) + 16).toFixed(1)}" stroke="#475569" stroke-width="0.8"/><text x="${x(S / 2)}" y="${(+y(dg) + 30).toFixed(1)}" font-size="10" text-anchor="middle" fill="#475569">S = ${fmt(S, 2)} in (largest girder spacing); girder depth d = ${fmt(dg, 2)} in</text>`
-      + `<text x="${x(0)}" y="${(+y(dg) + 46).toFixed(1)}" font-size="10" fill="#475569">${nb} bolts each end at ${fmt(sp, 2)} in, ${fmt(ec, 2)} in from the web; diaphragm centred on the girder depth${D ? `; φ<tspan baseline-shift="sub" font-size="8">f</tspan>M<tspan baseline-shift="sub" font-size="8">n</tspan> = ${fmt(D.Mn, 0)} kip-in, φ<tspan baseline-shift="sub" font-size="8">v</tspan>V<tspan baseline-shift="sub" font-size="8">n</tspan> = ${fmt(D.Vn, 2)} kip` : ''}.</text>`;
+      + `<text x="${x(0)}" y="${(+y(dg) + 46).toFixed(1)}" font-size="10" fill="#475569">${nl === 2 ? `2 lines of ${nb} bolts each end at ${fmt(sp, 2)} in, lines ${fmt(gl, 2)} in apart, the first ${fmt(ec, 2)} in from the web` : `${nb} bolts each end at ${fmt(sp, 2)} in, ${fmt(ec, 2)} in from the web`}; diaphragm centred on the girder depth${D ? `; φ<tspan baseline-shift="sub" font-size="8">f</tspan>M<tspan baseline-shift="sub" font-size="8">n</tspan> = ${fmt(D.Mn, 0)} kip-in, φ<tspan baseline-shift="sub" font-size="8">v</tspan>V<tspan baseline-shift="sub" font-size="8">n</tspan> = ${fmt(D.Vn, 2)} kip` : ''}.</text>`;
     return `<svg viewBox="0 0 ${W} ${H.toFixed(0)}" style="width:100%;height:auto;max-height:60vh;background:#fff;border:1px solid #e4e7eb;border-radius:4px" role="img" aria-label="Diaphragm elevation">${o}</svg>
       <p class="note">Intermediate diaphragm looking along the girders (connection plates grey, bolts brown), nominal dimensions. Checks CFD (intermediate) and CFE (end diaphragms at the bearing lines) below; the details sheet is on the Drawings tab.</p>`;
   }
@@ -352,5 +360,5 @@
     host.querySelectorAll('[data-cfgo]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const t = host.querySelector('#st-' + a.dataset.cfgo.replace(/[^\w.-]/g, '').replace(/\./g, '\\.')); if (t) { t.scrollIntoView({ block: 'center' }); t.style.background = '#FFF7D6'; } }));
   }
 
-  window.SBDFramingUI = { ensure, braceOf, setBrace, inputs, windCard, layoutPlan, onChange, onClick, render, build, plan, TOPICS, groups, isDia, ckHead, diaSvg, ckRec, recStep, ckNotes, CONN_HINT };
+  window.SBDFramingUI = { ensure, braceOf, setBrace, inputs, windCard, layoutPlan, onChange, onClick, render, build, plan, TOPICS, groups, isDia, ckHead, diaSvg, ckRec, recStep, ckNotes, CONN_HINT, LINES_HINT };
 })();

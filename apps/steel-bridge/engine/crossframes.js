@@ -90,7 +90,18 @@
   }
   const cfDiaOn = p => ((p || {}).dia || {}).on === 'yes';
   const cfDiaGap = q => Math.max(0.5, (+q.ecc || 3.5) - 1.5);   // diaphragm end from each girder web: bolt line less a 1.5 in end distance (assumption)
-  const cfDiaEnd = q => ({ ...q, shape: q.eShape || q.shape, nb: +q.eNb >= 2 ? q.eNb : q.nb });   // end (bearing-line) diaphragms: own shape / bolts, else the intermediate
+  const cfDiaEnd = q => ({ ...q, shape: q.eShape || q.shape, nb: +q.eNb >= 2 ? q.eNb : q.nb, ...(+q.eNl === 1 || +q.eNl === 2 ? { nl: +q.eNl } : {}) });   // end (bearing-line) diaphragms: own shape / bolts / bolt lines (SB2L), else the intermediate
+  /* SB2L (2026-11-19; engineer request 2026-11-19: two vertical bolt lines at the diaphragm end connection; diaphragms only, angle cross-frame
+     members keep one line). Saved fields (optional; absent in every project saved before: one line, as before):
+       crossframes.dia.nl: bolt lines per end, 1 or 2 (absent, blank or any other value: 1);
+       crossframes.dia.g: the spacing between the two lines (gage, in; absent, blank or not a number > 0: DIA_G = 3 in);
+       crossframes.dia.eNl: the end (bearing-line) diaphragms' bolt lines, 1 or 2 (absent or blank: the intermediate's nl; cfDiaEnd).
+     Convention (Decision pending engineer review): dia.ecc stays the distance from the girder web centerline to the FIRST bolt line, the line
+     nearest the web; the second line is g farther from the web. The diaphragm end (cfDiaGap: ecc − 1.5 in), its length and weight are
+     unchanged by the second line; the bolt group centroid is at ecc + (nl − 1)g/2 from the web. With nl = 1 every value is as before. */
+  const DIA_G = 3;
+  const cfDiaNl = q => (+(q || {}).nl === 2 ? 2 : 1);
+  function cfDiaG(q) { const v = (q || {}).g, n = v == null || v === '' ? NaN : +v; return isFinite(n) && n > 0 ? n : DIA_G; }
 
   /* ---------- environment (GirderDetail page state) ---------- */
   function env0(env) {
@@ -209,14 +220,18 @@
     const bs = nm(sb.bs) > 0 ? nm(sb.bs) : 5, tp = nm(sb.tsp) > 0 ? nm(sb.tsp) : 0.5, tsB = E.ts && E.ts.types && E.ts.types.B;
     return { bs, tp, tw, c: tsB && +tsB.c > 0 ? +tsB.c : 1, src: 'cf', ts: null, cB: !!(tsB && +tsB.c > 0) };
   }
-  /* cfDiaFit: bolt row on the connection plate, end bolts, diaphragm end clear of the web; the items that do not fit */
+  /* cfDiaFit: bolt row on the connection plate, end bolts, diaphragm end clear of the web; the items that do not fit.
+     SB2L: with two bolt lines (cfDiaNl) the edge distance is from the outer line (ecc + g) to the plate's free edge, and the line spacing g
+     must be at least 3d (6.13.2.6.1); the end bolts, the diaphragm end and its distance to the first line as before. One line: as before. */
   function cfDiaFit(R, q, cp, tB, tT) {
     const dg = nm(R.p.dg), ecc = +q.ecc || 3.5, nb = Math.max(2, Math.round(+q.nb || 2)), s = +q.pitch || 3, em = R.emin, gap = cfDiaGap(q), bad = [];
-    const edge = cp.tw / 2 + cp.bs - ecc, yEnd = dg / 2 - (nb - 1) / 2 * s, vEdge = Math.min(yEnd - tB - cp.c, dg - tT - cp.c - (dg / 2 + (nb - 1) / 2 * s)), lap = cp.tw / 2 + cp.bs - gap;
-    if (edge < em - 1e-9) bad.push(edge < 0 ? `bolt line ${f2(ecc)} in from the web is outside the ${frac(cp.bs)} in plate (free edge at ${f2(cp.tw / 2 + cp.bs)} in)` : `edge distance to the plate's free edge ${f2(edge)} in < ${frac(em)} in`);
+    const nl = cfDiaNl(q), gl = nl === 2 ? cfDiaG(q) : 0, out = nl === 2 ? ecc + gl : ecc, db = (R.bolt && R.bolt.d) || +((R.p.conn || {}).d) || 0.875;
+    const edge = cp.tw / 2 + cp.bs - out, yEnd = dg / 2 - (nb - 1) / 2 * s, vEdge = Math.min(yEnd - tB - cp.c, dg - tT - cp.c - (dg / 2 + (nb - 1) / 2 * s)), lap = cp.tw / 2 + cp.bs - gap;
+    if (edge < em - 1e-9) bad.push(edge < 0 ? `${nl === 2 ? 'outer ' : ''}bolt line ${f2(out)} in from the web is outside the ${frac(cp.bs)} in plate (free edge at ${f2(cp.tw / 2 + cp.bs)} in)` : `edge distance to the plate's free edge ${f2(edge)} in < ${frac(em)} in`);
     if (vEdge < em - 1e-9) bad.push(`end bolt to the plate end (clip) ${f2(vEdge)} in < ${frac(em)} in`);
     if (gap < cp.tw / 2 + 1e-9) bad.push(`diaphragm end ${f2(gap)} in from the web centerline reaches the web`);
-    return { ecc, edge, vEdge, lap, gap, em, bad };
+    if (nl === 2 && gl < 3 * db - 1e-9) bad.push(`bolt line spacing ${f2(gl)} in < 3d = ${f2(3 * db)} in`);   // SB2L
+    return { ecc, edge, vEdge, lap, gap, em, bad, ...(nl === 2 ? { nl, g: gl, out, gMin: 3 * db } : {}) };
   }
 
   /* userModes(p): how the entered member forces combine with the computed ones, per group (CFRM, 2026-11-01): { StrI, Con: 'add' | 'replace' };
@@ -389,8 +404,8 @@
         if (rT && rT.value.endCh) { if (dOn) (DG && !q.eShape ? DG.map(g => [g, cfDiaEnd({ ...q, shape: g.shape })]) : [[null, cfDiaEnd(q)]]).forEach(([g, e]) => { const ok = rT.value.endCh.includes(e.shape);   // SB-24: each group's end diaphragm when it takes the intermediate shape
             c.items.push({ loc: `End bearing diaphragms (6.7.4.2.1bCT)${g ? `, bays ${bl(g)}` : ''}`, cells: [String(cfDiaSec(e).nm_), `channel, preferably ${rT.value.endCh.join(' or ')}`], st: ok ? 'pass' : 'warn' }); });
           else c.items.push({ loc: 'End bearing cross-frames (6.7.4.2.2bCT)', cells: ['the intermediate type (this module)', 'K-frame with a channel top chord'], st: 'adv' }); }
-        if (rB) { const n = dOn ? Math.max(2, Math.round(+q.nb || 2)) : Math.round(+(R.p.conn || {}).n || 0), ok = n >= rB.value.n;
-          c.items.push({ loc: dOn ? 'Bolts per diaphragm end' : 'Bolts per cross-frame member end', cells: [String(n), `at least ${rB.value.n}`], st: ok ? 'pass' : 'warn', r: rB.value.n / Math.max(n, 1), demand: rB.value.n, capacity: n }); }
+        if (rB) { const nl = dOn ? cfDiaNl(q) : 1, nr = dOn ? Math.max(2, Math.round(+q.nb || 2)) : 0, n = dOn ? nr * nl : Math.round(+(R.p.conn || {}).n || 0), ok = n >= rB.value.n;   // SB2L: the total bolts of the diaphragm connection, every line (Decision pending engineer review)
+          c.items.push({ loc: dOn ? 'Bolts per diaphragm end' : 'Bolts per cross-frame member end', cells: [nl === 2 ? `${n} (2 lines of ${nr})` : String(n), `at least ${rB.value.n}`], st: ok ? 'pass' : 'warn', r: rB.value.n / Math.max(n, 1), demand: rB.value.n, capacity: n }); }
         if (c.items.length) out.add(c); } }
     return out;
   }
@@ -512,17 +527,24 @@
       it(`Wind, Strength ${wk}: axial and flexure (6.9.2.2, P_u/P_r = ${n3(pr)})`, `${n3(ia)}`, '≤ 1.0', ia <= 1 + 1e-12 ? 'pass' : 'fail', ia, ia, 1, `cf.${st}.ax.ia`); tag('sbdx'); tag('mn'); }
     const nb = Math.max(2, Math.round(+q.nb || 2)), s = +q.pitch || 3, db = +((p.conn || {}).d) || 0.875, Ab = Math.PI * db * db / 4, thr = (p.conn || {}).thr === 'excl' ? 0.56 : 0.45, phiRs = 0.80 * thr * Ab * (FUB[(p.conn || {}).gr] || 120), phiRb = 0.80 * 2.4 * db * tw * (Fy === 36 ? 58 : 65);
     const ys = [...Array(nb)].map((_, i) => (i - (nb - 1) / 2) * s), sy2 = ys.reduce((a, y) => a + y * y, 0), ym = Math.max(...ys.map(Math.abs)), res = Math.min(phiRs, phiRb);
-    const V = SB ? 2 * SB.Mbr / S : 0, Vt = V + (end && q.end === 'yes' ? +q.Rj || 0 : 0), M = (SB ? SB.Mbr : 0) + Vt * (+q.ecc || 0), fmax = Math.hypot(Vt / nb, M * ym / (sy2 || 1)), r = fmax / res;
-    it(`Bolted connection: ${nb} bolts at ${f2(s)} in, eccentric shear and moment (6.13.1, 6.13.2)`, `${f2(fmax)} kip per bolt`, `${f2(res)} kip (shear ${f2(phiRs)}, bearing ${f2(phiRb)})`, r <= 1 ? 'pass' : 'fail', r, fmax, res);
-    const Mc = Mw + Vw * (+q.ecc || 0), fw = Math.hypot(Vw / nb, Mc * ym / (sy2 || 1) + Fw / nb), rw = fw / res;
-    it(`Bolted connection under wind, Strength ${wk}: V = ${f2(Vw)} kip, M = ${f0(Mc)} kip-in, H = F_w = ${f2(Fw)} kip (6.13.2)`, `${f2(fw)} kip per bolt`, `${f2(res)} kip`, rw <= 1 ? 'pass' : 'fail', rw, fw, res);
+    /* SB2L (2026-11-19): two vertical bolt lines (nl = 2, g apart): bolts at (x_j, y_i) about the group centroid, x_j = ±g/2; polar moment
+       J = Σ(x² + y²) = n_l Σy² + n Σx²; the eccentricity to the group centroid e_c = ecc + g/2 (ecc: girder web to the first line); the
+       corner bolt carries V/N + M x_max/J (vertical) and M y_max/J (+ F_w/N under wind, horizontal), N = n n_l, combined vectorially
+       (elastic method, as the one-line check). One line (nl = 1): the expressions as before, operation for operation. */
+    const nl = cfDiaNl(q), gl = nl === 2 ? cfDiaG(q) : 0, N = nb * nl, xm = nl === 2 ? gl / 2 : 0, sx2 = nl === 2 ? nb * 2 * xm * xm : 0, J = nl === 2 ? nl * sy2 + sx2 : sy2, ec = nl === 2 ? (+q.ecc || 0) + gl / 2 : (+q.ecc || 0);
+    const V = SB ? 2 * SB.Mbr / S : 0, Vt = V + (end && q.end === 'yes' ? +q.Rj || 0 : 0), M = (SB ? SB.Mbr : 0) + Vt * ec, fmax = nl === 2 ? Math.hypot(Vt / N + M * xm / J, M * ym / J) : Math.hypot(Vt / nb, M * ym / (sy2 || 1)), r = fmax / res;
+    const bT_ = nl === 2 ? `2 lines of ${nb} bolts (${N} per end) at ${f2(s)} in pitch, lines ${f2(gl)} in apart` : `${nb} bolts at ${f2(s)} in`;
+    it(`Bolted connection: ${bT_}, eccentric shear and moment${nl === 2 ? ' (elastic method, eccentricity to the bolt group centroid; corner bolt)' : ''} (6.13.1, 6.13.2)`, `${f2(fmax)} kip per bolt`, `${f2(res)} kip (shear ${f2(phiRs)}, bearing ${f2(phiRb)})`, r <= 1 ? 'pass' : 'fail', r, fmax, res, nl === 2 ? `cf.${st}.bolt` : undefined);
+    const Mc = Mw + Vw * ec, fw = nl === 2 ? Math.hypot(Vw / N + Mc * xm / J, Mc * ym / J + Fw / N) : Math.hypot(Vw / nb, Mc * ym / (sy2 || 1) + Fw / nb), rw = fw / res;
+    it(`Bolted connection under wind, Strength ${wk}: V = ${f2(Vw)} kip, M = ${f0(Mc)} kip-in, H = F_w = ${f2(Fw)} kip${nl === 2 ? `; ${bT_}, corner bolt` : ''} (6.13.2)`, `${f2(fw)} kip per bolt`, `${f2(res)} kip`, rw <= 1 ? 'pass' : 'fail', rw, fw, res, nl === 2 ? `cf.${st}.boltw` : undefined);
     const em = R.emin, avail = d - 2 * tf - 1.0, need = (nb - 1) * s + 2 * em, okG = s >= 3 * db - 1e-9 && need <= avail + 1e-9;
-    it(`Bolt line: pitch ≥ 3d (6.13.2.6.1) and ${nb} bolts with ${frac(em)} in end distances within the web depth d − 2t_f − 1 in`, `s = ${f2(s)} in, ${f2(need)} in`, `≥ ${f2(3 * db)} in, ≤ ${f2(avail)} in`, okG ? 'pass' : 'fail', Math.max(3 * db / s, need / (avail > 0 ? avail : 1e-9)), need, avail);
+    it(`Bolt line${nl === 2 ? 's (each line)' : ''}: pitch ≥ 3d (6.13.2.6.1) and ${nb} bolts with ${frac(em)} in end distances within the web depth d − 2t_f − 1 in`, `s = ${f2(s)} in, ${f2(need)} in`, `≥ ${f2(3 * db)} in, ≤ ${f2(avail)} in`, okG ? 'pass' : 'fail', Math.max(3 * db / s, need / (avail > 0 ? avail : 1e-9)), need, avail);
+    if (nl === 2) it('Bolt lines: spacing between the two lines g ≥ 3d (6.13.2.6.1)', `g = ${f2(gl)} in`, `≥ ${f2(3 * db)} in`, gl >= 3 * db - 1e-9 ? 'pass' : 'fail', 3 * db / gl, 3 * db, gl);   // SB2L
     const cp = cfCP(p, end, E), G = cfDiaFit(R, q, cp, SB ? SB.tt : 1, SB ? SB.tc : 0.75), de = G.ecc - G.gap, mA = Math.min(G.edge, de), okA = mA >= em - 1e-9 && G.gap >= cp.tw / 2 + 1e-9;
     const src = cp.src === 'bs' ? `bearing stiffener Type ${cp.bsT.k}` : cp.src === 'ts' ? `Transverse stiffeners Type ${cp.ts.k}` : 'inputs b_s, t_s', pl = `${frac(cp.bs)} × ${frac(cp.tp)} in, ${src}`;
-    it(`Connection plate fit: bolt line ${f2(G.ecc)} in from the web centerline, edge distances to the plate's free edge and to the diaphragm end (6.13.2.6.6)`, `${f2(G.edge)} in to the plate edge, ${f2(de)} in to the diaphragm end${G.gap < cp.tw / 2 + 1e-9 ? ' (diaphragm end reaches the web)' : ''}`, `≥ ${frac(em)} in (plate ${pl})`, okA ? 'pass' : 'fail', mA > 0 ? em / mA : 99.99, em, mA);
+    it(nl === 2 ? `Connection plate fit: bolt lines ${f2(G.ecc)} and ${f2(G.out)} in from the web centerline, edge distances from the outer line to the plate's free edge and from the first line to the diaphragm end (6.13.2.6.6)` : `Connection plate fit: bolt line ${f2(G.ecc)} in from the web centerline, edge distances to the plate's free edge and to the diaphragm end (6.13.2.6.6)`, `${f2(G.edge)} in to the plate edge, ${f2(de)} in to the diaphragm end${G.gap < cp.tw / 2 + 1e-9 ? ' (diaphragm end reaches the web)' : ''}`, `≥ ${frac(em)} in (plate ${pl})`, okA ? 'pass' : 'fail', mA > 0 ? em / mA : 99.99, em, mA);
     it(`Connection plate fit: end bolts to the plate ends (flange faces less the ${frac(cp.c)} in corner clip; 6.13.2.6.6)`, `${f2(G.vEdge)} in`, `≥ ${frac(em)} in`, G.vEdge >= em - 1e-9 ? 'pass' : 'fail', G.vEdge > 0 ? em / G.vEdge : 99.99, em, G.vEdge);
-    (R.DIA = R.DIA || {})[end ? 'e' : 'i'] = { nm_, chS, d, bf, tf, tw, hw, A, Ix, Sx, Iy, ry, Mn, Fnc: lt.Fnc, lt, CH, AX, MnI: lt.Fnc * Sx, Fy, Vn, C, lam, wk, Fw, Mw, Vw, Mbr: SB ? SB.Mbr : null, bbr, bT, fit: FT, jack: end && q.end === 'yes' && +q.Rj > 0 ? { Rj: +q.Rj, aj: +q.aj } : null, nb, s, db, Ab, thr, ecc: +q.ecc || 0, ys, sy2, ym, V, Vt, M, fmax, Mc, fw, res, phiRs, phiRb, need, avail, cp, G, fD };
+    (R.DIA = R.DIA || {})[end ? 'e' : 'i'] = { nm_, chS, d, bf, tf, tw, hw, A, Ix, Sx, Iy, ry, Mn, Fnc: lt.Fnc, lt, CH, AX, MnI: lt.Fnc * Sx, Fy, Vn, C, lam, wk, Fw, Mw, Vw, Mbr: SB ? SB.Mbr : null, bbr, bT, fit: FT, jack: end && q.end === 'yes' && +q.Rj > 0 ? { Rj: +q.Rj, aj: +q.aj } : null, nb, s, db, Ab, thr, ecc: +q.ecc || 0, ys, sy2, ym, V, Vt, M, fmax, Mc, fw, res, phiRs, phiRb, need, avail, cp, G, fD, ...(nl === 2 ? { nl, g: gl, N, xm, sx2, J, ec } : {}) };
     diaSteps(R, end);
     out.add(c);
   }
@@ -666,8 +688,15 @@
       w.add({ id: `${id}.ax.ia`, label: `${lab}: axial force and wind moment (P_u = F_w, M_u = M_w; P_u/P_r = ${n3(X.pr)} ${X.pr < 0.2 ? '< 0.2' : '≥ 0.2'})`, sym: '', eq: X.pr < 0.2 ? '\\frac{P_{u}}{2P_{r}} + \\frac{M_{u}}{M_{r}} \\le 1.0' : '\\frac{P_{u}}{P_{r}} + \\frac{8}{9}\\frac{M_{u}}{M_{r}} \\le 1.0', sub: X.pr < 0.2 ? `\\frac{${n2(D.Fw)}}{2(${n2(X.Pr)})} + \\frac{${n0(D.Mw)}}{${n0(D.Mn)}}` : `\\frac{${n2(D.Fw)}}{${n2(X.Pr)}} + \\frac{8}{9}\\frac{${n0(D.Mw)}}{${n0(D.Mn)}}`, value: X.ia, unit: '', d: 3, ref: `${ED} Eqs. 6.9.2.2-1, -2`, ok: X.ia <= 1 + 1e-12,
         note: `Compression with the wind moment (the compressive resistance governs over tension). M_u is not amplified for second-order effects: P_u/P_e = ${n4(D.Fw / X.Pe)}, so the amplification 1/(1 − P_u/(0.95P_e)) = ${n4(1 / (1 - D.Fw / (0.95 * X.Pe)))} is taken as 1.0 (assumption).` }); }
     if (D.bbr != null) w.add({ id: `${id}.bT`, label: `${lab}: brace system stiffness with β_br = 6EI_x/S = ${n0(D.bbr)}`, sym: '\\beta_{T}', eq: '', sub: '', value: D.bT, unit: 'kip-in/rad', d: 0, ref: `${ED} Art. 6.7.4.2.2`, ok: R.SB ? D.bT >= R.SB.bReq : undefined });
-    w.add({ id: `${id}.bolt`, label: `${lab}: largest bolt force, ${D.nb} bolts at ${n2(D.s)} in (brace moment${D.jack ? ' and jacking' : ''})`, sym: 'f', eq: '\\sqrt{(V/n)^{2} + (My_{max}/\\sum y^{2})^{2}}', sub: `\\sqrt{(${n2(D.Vt)}/${D.nb})^{2} + (${n0(D.M)}(${n2(D.ym)})/${n2(D.sy2)})^{2}}`, value: D.fmax, unit: 'kip', d: 2, ref: `${ED} Art. 6.13.2`, ok: D.fmax <= D.res });
-    w.add({ id: `${id}.boltw`, label: `${lab}: largest bolt force under wind`, sym: 'f_{w}', eq: '\\sqrt{(V_{w}/n)^{2} + (M_{c}y_{max}/\\sum y^{2} + F_{w}/n)^{2}}', sub: `\\sqrt{(${n2(D.Vw)}/${D.nb})^{2} + (${n0(D.Mc)}(${n2(D.ym)})/${n2(D.sy2)} + ${n2(D.Fw)}/${D.nb})^{2}}`, value: D.fw, unit: 'kip', d: 2, ref: `${ED} Art. 6.13.2`, ok: D.fw <= D.res });
+    if (D.nl === 2) { const ED2 = `${ED} Arts. 6.13.1, 6.13.2 (elastic method)`, x = n3(D.xm);   // SB2L: two bolt lines, worked
+      w.add({ id: `${id}.boltJ`, label: `${lab}: polar moment of the bolt group about its centroid, 2 lines of ${D.nb} bolts, pitch s = ${n2(D.s)} in, lines g = ${n2(D.g)} in apart (x = ±g/2 = ±${x} in)`, sym: 'J', eq: 'n_{l}\\sum y^{2} + n\\sum x^{2}', sub: `2(${n2(D.sy2)}) + ${D.nb}(2)(${x})^{2}`, value: D.J, unit: 'in^{2}', d: 2, ref: ED2,
+        note: `Σy² of one line = ${n2(D.sy2)} in² (rows at ${D.ys.map(v => n2(v)).join(', ')} in about mid-depth); Σx² of one row = 2(${x})² = ${n3(2 * D.xm * D.xm)} in². N = n n_l = ${D.nb}(2) = ${D.N} bolts per end.` });
+      w.add({ id: `${id}.boltM`, label: `${lab}: moment on the bolt group, eccentricity to its centroid e_c = e + g/2 = ${n2(D.ecc)} + ${n2(D.g)}/2 = ${n2(D.ec)} in (e: girder web to the first line)`, sym: 'M', eq: 'M_{br} + V e_{c}', sub: `${n0(D.Mbr || 0)} + ${n2(D.Vt)}(${n2(D.ec)})`, value: D.M, unit: 'kip-in', d: 0, ref: ED2,
+        note: `V = 2M_br/S${D.jack ? ' + R_j' : ''} = ${n2(D.Vt)} kip. Convention (Decision pending engineer review): the bolt line input e is the distance from the girder web centerline to the first line, the one nearest the web; the second line is g farther out.` });
+      w.add({ id: `${id}.bolt`, label: `${lab}: largest bolt force, the corner bolt of 2 lines of ${D.nb} bolts (brace moment${D.jack ? ' and jacking' : ''}): V/N and Mx/J vertical, My/J horizontal, combined vectorially`, sym: 'f', eq: '\\sqrt{(V/N + Mx_{max}/J)^{2} + (My_{max}/J)^{2}}', sub: `\\sqrt{(${n2(D.Vt)}/${D.N} + ${n0(D.M)}(${x})/${n2(D.J)})^{2} + (${n0(D.M)}(${n2(D.ym)})/${n2(D.J)})^{2}}`, value: D.fmax, unit: 'kip', d: 2, ref: ED2, ok: D.fmax <= D.res });
+      w.add({ id: `${id}.boltw`, label: `${lab}: largest bolt force under wind, the corner bolt (M_c = M_w + V_w e_c = ${n0(D.Mw)} + ${n2(D.Vw)}(${n2(D.ec)}) = ${n0(D.Mc)} kip-in)`, sym: 'f_{w}', eq: '\\sqrt{(V_{w}/N + M_{c}x_{max}/J)^{2} + (M_{c}y_{max}/J + F_{w}/N)^{2}}', sub: `\\sqrt{(${n2(D.Vw)}/${D.N} + ${n0(D.Mc)}(${x})/${n2(D.J)})^{2} + (${n0(D.Mc)}(${n2(D.ym)})/${n2(D.J)} + ${n2(D.Fw)}/${D.N})^{2}}`, value: D.fw, unit: 'kip', d: 2, ref: ED2, ok: D.fw <= D.res }); }
+    else w.add({ id: `${id}.bolt`, label: `${lab}: largest bolt force, ${D.nb} bolts at ${n2(D.s)} in (brace moment${D.jack ? ' and jacking' : ''})`, sym: 'f', eq: '\\sqrt{(V/n)^{2} + (My_{max}/\\sum y^{2})^{2}}', sub: `\\sqrt{(${n2(D.Vt)}/${D.nb})^{2} + (${n0(D.M)}(${n2(D.ym)})/${n2(D.sy2)})^{2}}`, value: D.fmax, unit: 'kip', d: 2, ref: `${ED} Art. 6.13.2`, ok: D.fmax <= D.res });
+    if (D.nl !== 2) w.add({ id: `${id}.boltw`, label: `${lab}: largest bolt force under wind`, sym: 'f_{w}', eq: '\\sqrt{(V_{w}/n)^{2} + (M_{c}y_{max}/\\sum y^{2} + F_{w}/n)^{2}}', sub: `\\sqrt{(${n2(D.Vw)}/${D.nb})^{2} + (${n0(D.Mc)}(${n2(D.ym)})/${n2(D.sy2)} + ${n2(D.Fw)}/${D.nb})^{2}}`, value: D.fw, unit: 'kip', d: 2, ref: `${ED} Art. 6.13.2`, ok: D.fw <= D.res });
     w.add({ id: `${id}`, label: `${lab}: bolt resistance, the lesser of shear and bearing on the diaphragm web`, sym: '\\phi R_{n}', eq: '\\min(\\phi_{s}R_{n},\\ \\phi_{bb}R_{n})', sub: `\\min(${n2(D.phiRs)},\\ ${n2(D.phiRb)})`, value: D.res, unit: 'kip', d: 2, ref: `${ED} Arts. 6.13.2.7, 6.13.2.9` });
     R.steps.push(...w.steps);
   }
@@ -887,6 +916,6 @@
     return { line, X, pts: G[line], tot: G[line].reduce((a, q) => a + q.P, 0) };
   }
 
-  window.SBDCrossframes = { ES, DEF, GD_GR, BOLT, FUB, PHI, ANGLES, CF_MEM, CF_CH, CF_DIA, angleProps, cfDiaSec, cfDiaOn, cfDiaGap, cfDiaEnd, cfTypeRec, cfTsCP, cfCPsize, cfBsCP, cfCP, cfDiaFit, bayGroups, grpOf, grpKey, grpShape, diaGroups, DIA_CLR, diaClr, diaFit,
+  window.SBDCrossframes = { ES, DEF, GD_GR, BOLT, FUB, PHI, ANGLES, CF_MEM, CF_CH, CF_DIA, angleProps, cfDiaSec, cfDiaOn, cfDiaGap, cfDiaEnd, DIA_G, cfDiaNl, cfDiaG, cfTypeRec, cfTsCP, cfCPsize, cfBsCP, cfCP, cfDiaFit, bayGroups, grpOf, grpKey, grpShape, diaGroups, DIA_CLR, diaClr, diaFit,
     env0, compute, checks, userModes, xfW, xfModel, xfPts, defaults, inputsOf, envOf, pointLoads, girderDepth, bayDepths, typeGov, extDepth, diaDepthReq };
 })();
