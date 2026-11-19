@@ -70,6 +70,6 @@ for (const f of list) {
   if (f.endsWith('.js')) checkJs(name, f); else check(name, fs.readFileSync(f, 'utf8'));
 }
 fs.rmSync(dir, { recursive: true, force: true });
-if (!argv.length) console.log(`${files} file(s) checked (repo-root tools, apps/*/index.html, apps/**/*.js, shared/*.js)`);
+if (!argv.length) console.log(`${files} file(s) checked (repo-root tools, archive/*.html, apps/*/index.html, apps/**/*.js, shared/*.js)`);
 console.log(bad ? `${bad} script(s) failed` : 'all scripts pass');
 process.exit(bad ? 1 : 0);
