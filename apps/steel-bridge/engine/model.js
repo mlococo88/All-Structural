@@ -83,6 +83,10 @@
                   > 0: 3 in); crossframes.dia.eNl: the end (bearing-line) diaphragms' lines, 1 or 2 (absent or blank: dia.nl). dia.nb is
                   the bolts in each line; dia.ecc is from the girder web centerline to the first line (engine/crossframes.js cfDiaNl,
                   cfDiaG, cfDiaEnd). Nothing is rewritten on load.
+                  -- added 2026-11-19 (SBCOPE, engineer request 2026-11-19; optional: absent = no cope, as before) --
+                  crossframes.dia.cope: 'yes' | 'no' (coped diaphragm ends; absent: 'no'); crossframes.dia.eCope: the end diaphragms
+                  ('yes' | 'no'; absent or blank: dia.cope); crossframes.dia.cT, cB (top / bottom cope depth, in), cL (cope length from the
+                  diaphragm end, in), cR (corner radius, in): blank or absent = auto (engine/crossframes.js diaCope; cR 1/2 in).
      -- added 2026-10-29 (analysis PR), optional, read by engine/analysis.js (absent = its defaults) --
      analysis:  { im, imf (%), crack: 'none' | '15' | 'dl', deflLimit (L/…), seq: 'on' | 'off', seqMod: 'n' | '3n', seqCustom (text),
                   steelAllowPct (%; used when xs.allow is not available), haunchInStiffness (true | false; absent = the owner rule) }
@@ -532,7 +536,9 @@
       { const v = (C.dia || {}).clr; if (v != null && v !== '' && !Number.isNaN(v) && !(isNum(+v) && +v >= 0)) E(`${cp}.dia.clr`, 'Diaphragm fit clearance must be a number of at least 0 in (or blank: 2 in).'); }   // SB-25
       { const q = C.dia || {}, ln = v => v == null || v === '' || [1, 2].includes(+v);   // SB2L: bolt lines and their spacing (optional)
         if (!ln(q.nl)) E(`${cp}.dia.nl`, 'Diaphragm bolt lines per end: 1 or 2.'); if (!ln(q.eNl)) E(`${cp}.dia.eNl`, 'End diaphragm bolt lines per end: 1 or 2 (or blank: as the intermediate).');
-        if (q.g != null && q.g !== '' && !Number.isNaN(q.g) && !(isNum(+q.g) && +q.g > 0)) E(`${cp}.dia.g`, 'Spacing between the diaphragm bolt lines must be positive (or blank: 3 in).'); }
+        if (q.g != null && q.g !== '' && !Number.isNaN(q.g) && !(isNum(+q.g) && +q.g > 0)) E(`${cp}.dia.g`, 'Spacing between the diaphragm bolt lines must be positive (or blank: 3 in).');
+        if (q.cope != null && !['yes', 'no', ''].includes(q.cope)) E(`${cp}.dia.cope`, 'Coped ends: yes or no.'); if (q.eCope != null && !['yes', 'no', ''].includes(q.eCope)) E(`${cp}.dia.eCope`, 'End diaphragm coped ends: yes, no or blank.');   // SBCOPE
+        ['cT', 'cB', 'cL', 'cR'].forEach(k => { const v = q[k]; if (v != null && v !== '' && !Number.isNaN(v) && !(isNum(+v) && +v >= 0)) E(`${cp}.dia.${k}`, 'Cope dimensions must be zero or positive (or blank: auto).'); }); }
       ['StrI', 'Con'].forEach(k => { const v = (C.userMode || {})[k]; if (v != null && !['add', 'replace'].includes(v)) E(`${cp}.userMode.${k}`, 'Entered member forces: add to or replace the computed forces.'); }); }
     // added 2026-10-29 (field splices PR): the optional field splice inputs
     if (p.splices != null) { const Q = p.splices || {}, B = Q.bolts || {};

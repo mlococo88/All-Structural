@@ -138,6 +138,13 @@
   function gRow(C) { const v = (C.dia || {}).g, ok = v != null && v !== '' && isFinite(+v);
     return `<div class="fRow"><label for="i_crossframes.dia.g">Spacing between the two bolt lines g (gage; at least 3d, 6.13.2.6.1; blank: 3 in)</label><input type="number" step="any" id="i_crossframes.dia.g" data-path="crossframes.dia.g" data-kind="num" value="${ok ? esc(String(v)) : ''}" placeholder="3"><span class="unit">in</span></div>`; }
   const LINES_HINT = 'Bolt lines (diaphragms only; angle cross-frame members keep one line): "Bolts per end" is the number of bolts in each vertical line. The bolt line distance is from the girder web centerline to the first line, the one nearest the web; with two lines the second line is g farther from the web, the bolt group centroid is at e + g/2 (the eccentricity of the bolt check CFD / CFE), and the outer line must keep the edge distance to the connection plate\'s free edge. The end diaphragms take the same lines unless crossframes.dia.eNl is set in the project file.';
+  /* copeRows(C, h) (SBCOPE, 2026-11-19; engineer request 2026-11-19): coped ends of the diaphragm (crossframes.dia.cope 'yes' | 'no', absent:
+     no cope) and, when on, the top and bottom cope depths cT, cB, the cope length cL and the corner radius cR (in; blank: auto, sized by
+     engine/crossframes.js diaCope and worked on the Diaphragms tab; radius blank: 1/2 in). COPE_HINT: what the cope does and the fatigue note. */
+  const COPE_HINT = 'Coped ends (an option): the diaphragm ends are coped top and / or bottom so that a section deep enough for the least depth fits between the girder flanges; the least depth is checked on the full depth d, the fit on the coped end h_e = d − d_ct − d_cb, and the full depth beyond the flange tips must stay within d_g − c. Blank cope values are sized automatically (the work is on the Diaphragms tab). The coped end is checked for shear, block shear (6.13.4), flexure and local buckling at the cope (AISC Manual Part 9 guidance) and the wind force. A cope corner radius of at least 1/2 in is a fabrication minimum; at least 1 in where fatigue may matter (re-entrant corner, Category C with R ≥ 1 in; diaphragm fatigue is not checked by this app). CF10 suggests a coped section when no section fits uncoped; it is applied only when this is turned on.';
+  function copeRows(C, h) { const q = C.dia || {}, on = q.cope === 'yes', v = k => { const x = q[k]; return x != null && x !== '' && isFinite(+x) ? esc(String(x)) : ''; };
+    const row = (k, l, ph) => `<div class="fRow"><label for="i_crossframes.dia.${k}">${l}</label><input type="number" step="any" id="i_crossframes.dia.${k}" data-path="crossframes.dia.${k}" data-kind="num" value="${v(k)}" placeholder="${ph}"><span class="unit">in</span></div>`;
+    return `${h.sel('crossframes.dia.cope', 'Coped ends', [['no', 'No'], ['yes', 'Yes: cope the ends to fit between the flanges']], on ? 'yes' : 'no')}${on ? `${row('cT', 'Top cope depth d<sub>ct</sub> (blank: auto)', 'auto')}${row('cB', 'Bottom cope depth d<sub>cb</sub> (blank: auto)', 'auto')}${row('cL', 'Cope length c from the diaphragm end (blank: auto)', 'auto')}${row('cR', 'Cope corner radius (blank: 1/2 in)', '0.5')}<p class="note">${COPE_HINT}</p>` : ''}`; }
   function inputs(P, h) {
     ensure(P); const F = P.framing, C = P.crossframes, CF = window.SBDCrossframes, FRM = window.SBDFraming;
     let L = null; try { L = FRM.compute(P); } catch (e) { L = { errors: [e.message] }; }
@@ -160,7 +167,7 @@
       + h.card('Intermediate bracing (6.7.4.2)', `${h.sel('crossframes.type', 'Intermediate bracing', BRACE, br).replace('<select ', '<select style="width:200px;max-width:100%" ')}
         ${h.num('crossframes.dMinXF', 'Minimum girder depth for cross-frames', 'in')}${dOn ? `${h.sel('crossframes.dia.shape', 'Shape', br === 'ch' ? CF.CF_CH.map(s => [s[0], s[0]]) : [...CF.CF_DIA.map(s => [s[0], s[0]]), ['custom', 'Custom W']])}
         ${C.dia.shape === 'custom' ? `${h.num('crossframes.dia.d', 'Depth d', 'in')}${h.num('crossframes.dia.bf', 'Flange width', 'in')}${h.num('crossframes.dia.tf', 'Flange thickness', 'in')}${h.num('crossframes.dia.tw', 'Web thickness', 'in')}` : ''}
-        ${h.sel('crossframes.dia.gr', 'Grade', [['36', '36'], ['50', '50']])}${clrRow(C, h)}${grpCard(P, C, br)}
+        ${h.sel('crossframes.dia.gr', 'Grade', [['36', '36'], ['50', '50']])}${clrRow(C, h)}${copeRows(C, h)}${grpCard(P, C, br)}
         <h4 class="sub">End connections</h4>${conn}${h.num('crossframes.dia.nb', CF.cfDiaNl(C.dia) === 2 ? 'Bolts per end in each line' : 'Bolts per end (one row)', '')}${h.num('crossframes.dia.pitch', 'Bolt pitch', 'in')}${h.sel('crossframes.dia.nl', 'Vertical bolt lines per end', [['1', 'One line'], ['2', 'Two lines']], String(CF.cfDiaNl(C.dia)))}${CF.cfDiaNl(C.dia) === 2 ? gRow(C) : ''}${h.num('crossframes.dia.ecc', CF.cfDiaNl(C.dia) === 2 ? 'First bolt line from the girder web' : 'Bolt line from the girder web', 'in')}
         <p class="note">${LINES_HINT}</p>
         <p class="note">${CONN_HINT}</p>
@@ -277,7 +284,9 @@
     let o = '';
     [0, S].forEach(xg => { o += `<rect x="${x(xg - bf / 2)}" y="${y(0)}" width="${(bf * sc).toFixed(1)}" height="${(tfl * sc).toFixed(1)}" fill="#2563EB"/><rect x="${x(xg - bf / 2)}" y="${y(dg - tfl)}" width="${(bf * sc).toFixed(1)}" height="${(tfl * sc).toFixed(1)}" fill="#2563EB"/><line x1="${x(xg)}" y1="${y(0)}" x2="${x(xg)}" y2="${y(dg)}" stroke="#2563EB" stroke-width="2.4"/>`;
       const sg = xg ? -1 : 1; o += `<rect x="${x(Math.min(xg, xg + sg * bs))}" y="${y(tfl + 1)}" width="${(bs * sc).toFixed(1)}" height="${((dg - 2 * tfl - 2) * sc).toFixed(1)}" fill="none" stroke="#94a3b8" stroke-width="1"/>`; });
-    o += `<rect x="${x(g)}" y="${y(y0)}" width="${((S - 2 * g) * sc).toFixed(1)}" height="${(X.d * sc).toFixed(1)}" fill="#E8EEF6" stroke="#16304F" stroke-width="1.6"/>`
+    const CPf = CF.diaCope ? CF.diaCope(p, q, X) : null;   // SBCOPE: the coped ends (y down in this sketch: the copes mirrored)
+    o += (CPf && !CPf.bad ? `<polygon points="${CF.copePts(g, S - g, dg - y0 - X.d, dg - y0, CPf).map(([a, b]) => `${x(a)},${y(dg - b)}`).join(' ')}" fill="#E8EEF6" stroke="#16304F" stroke-width="1.6"/>`
+      : `<rect x="${x(g)}" y="${y(y0)}" width="${((S - 2 * g) * sc).toFixed(1)}" height="${(X.d * sc).toFixed(1)}" fill="#E8EEF6" stroke="#16304F" stroke-width="1.6"/>`)
       + `<line x1="${x(g)}" y1="${y(y0 + X.tf)}" x2="${x(S - g)}" y2="${y(y0 + X.tf)}" stroke="#16304F" stroke-width="0.8"/><line x1="${x(g)}" y1="${y(y0 + X.d - X.tf)}" x2="${x(S - g)}" y2="${y(y0 + X.d - X.tf)}" stroke="#16304F" stroke-width="0.8"/>`;
     const nl = CF.cfDiaNl(q), gl = nl === 2 ? CF.cfDiaG(q) : 0, xl = nl === 2 ? [ec, ec + gl, S - ec, S - ec - gl] : [ec, S - ec];   // SB2L: both bolt lines
     xl.forEach(xb => { for (let i = 0; i < nb; i++) o += `<circle cx="${x(xb)}" cy="${y(dg / 2 + (i - (nb - 1) / 2) * sp)}" r="3" fill="#B45309"/>`; });
@@ -360,5 +369,5 @@
     host.querySelectorAll('[data-cfgo]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const t = host.querySelector('#st-' + a.dataset.cfgo.replace(/[^\w.-]/g, '').replace(/\./g, '\\.')); if (t) { t.scrollIntoView({ block: 'center' }); t.style.background = '#FFF7D6'; } }));
   }
 
-  window.SBDFramingUI = { ensure, braceOf, setBrace, inputs, windCard, layoutPlan, onChange, onClick, render, build, plan, TOPICS, groups, isDia, ckHead, diaSvg, ckRec, recStep, ckNotes, CONN_HINT, LINES_HINT };
+  window.SBDFramingUI = { ensure, braceOf, setBrace, inputs, windCard, layoutPlan, onChange, onClick, render, build, plan, TOPICS, groups, isDia, ckHead, diaSvg, ckRec, recStep, ckNotes, CONN_HINT, LINES_HINT, COPE_HINT };
 })();
