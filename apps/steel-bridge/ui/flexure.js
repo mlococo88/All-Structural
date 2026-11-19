@@ -13,7 +13,8 @@
    Brace points (L_b, C_b) and f_ℓ (added 2026-10-30, paths PR; engineer's decisions SB2-W1, SB2-W2): one source for every path,
    engine/framing.js design(): the brace points of the Framing &amp; bracing tab (the girder's bearings and cross-frames; a project without framing keeps
    the stiffener layout's cross-frames, a file of another bridge its own spacing), and f_ℓ as entered on this tab (saved in the project,
-   P.flexure.fl) or else from skew (C6.10.1: 1.25 × 10 / 7.5 ksi interior / exterior where a support is skewed more than 20°). The Rating tab
+   P.flexure.fl) or else from skew (C6.10.1: by the cross-frame layout, engine/framing.js flLayout; split between dead and live load per
+   location with the Strength I / Service II factors, engine/flexure.js location(); F2/F3 2026-11-19, before: 1.25 × 10 / 7.5 ksi for both). The Rating tab
    takes its flexure from build() here, and the Constructibility tab the same brace points and skew f_ℓ (its own entry, P.constr.flC).
    Before, the analysis path took the stiffener layout's cross-frames and f_ℓ = 0 unless entered (the file path: framing and skew f_ℓ).
    The demand source and the other choices live in memory for this page view; f_ℓ entered is saved with the project.
@@ -26,8 +27,8 @@
   /* f_ℓ entered for the girder design (ksi; saved in the project, P.flexure.fl; 0 or blank: none, the skew value is used) */
   const flEntered = P => { const v = +((P && P.flexure) || {}).fl; return isFinite(v) && v > 0 ? v : 0; };
   /* the sentence that states f_ℓ and where it comes from (equation, values, result: C6.10.1, engine/framing.js flSkew) */
-  const flText = D => D.flSrc === 'entered' ? `f<sub>ℓ</sub> = ${fmt(D.fl, 2)} ksi as entered on the Flexure tab`
-    : `f<sub>ℓ</sub> from skew (C6.10.1, in lieu of a refined analysis): largest support skew ${fmt(D.flS.skMax, 1)}° ${D.flS.skMax > 20 + 1e-9 ? `&gt; 20°: f<sub>ℓ</sub> = γf<sub>ℓ,skew</sub> = ${esc(D.flS.steps[0].sub)} = ${fmt(D.fl, 2)} ksi` : '≤ 20°: f<sub>ℓ</sub> = 0'} (worked on the <a href="#" data-gotab="cf">Cross-frames tab</a>)`;
+  const flText = D => D.flSrc === 'entered' ? `f<sub>ℓ</sub> = ${fmt(D.fl, 2)} ksi as entered on the Flexure tab (Strength I and Service II)`
+    : `f<sub>ℓ</sub> from skew (C6.10.1, p. 6-160, in lieu of a refined analysis): ${esc(window.SBDFraming.flWhy(D.flS))}. The unfactored f<sub>ℓ,skew</sub> is split at each location between dead and live load in the proportion of their unfactored stresses, each part with its load factor: Strength I f<sub>ℓ</sub> and Service II f<sub>ℓ,SII</sub> (GS12), steps fx.flp at each location (worked on the <a href="#" data-gotab="cf">Cross-frames tab</a>)`;
   const fmt = (x, d) => window.SharedUnits.fmt(x, d);
   /* the demand source: the one chosen (S.src), else the default: this project's analysis when the project is complete, else the example */
   const rdOf = ctx => (window.SBDAnalysis && window.SBDAnalysis.ready ? window.SBDAnalysis.ready(ctx.P, ctx.P.girders[ctx.g] ? ctx.g : 0) : { ok: false, why: ['The analysis module is not loaded.'] });
@@ -57,7 +58,7 @@
     web: { key: 'web', title: 'Web bend-buckling resistance', ref: A + '6.10.1.9.1', ids: /^fx\.(DcS|Fcrw)$/, res: /^fx\.Fcrw$/ },
     svc: { key: 'svc', title: 'Service II: permanent deformations', ref: A + '6.10.4.2.2', ids: /^fx\.(svt\.ok|svb\.ok|web\.)/ },
     fat: { key: 'fat', title: 'Fatigue I stress range', ref: A + '6.6.1.2, 6.10.5.1', ids: /^fx\.fat[TB]$/, res: /^fx\.fatT$/ },
-    lat: { key: 'lat', title: 'Flange lateral bending', ref: A + '6.10.1.6', ids: /^(flsk\.|fx\.flim\.)/ },
+    lat: { key: 'lat', title: 'Flange lateral bending', ref: A + '6.10.1.6', ids: /^(flsk\.|fx\.(flim|flp)\.)/ },
     yld: { key: 'yld', title: 'Yield moment and compactness', ref: A + '6.10.7.1.1', ids: /^fx\.(MyT|MyB|Rh|Dp|cmp|My|Sxt)$/, res: /^fx\.My$/, info: /^fx\.cmp$/ },
     mn: { key: 'mn', title: 'Compact positive flexure: nominal resistance and ductility', ref: A + '6.10.7.1.2, 6.10.7.3', ids: /^fx\.(Mn\d*|cap\d*|mn\.ok|duct\.ok)$/ },
     rev: { key: 'rev', title: 'Opposite extreme (moment reversal)', ref: '', ids: /^fx\.rev$/, info: /./ },
@@ -135,7 +136,7 @@
       const own = (pl.ownerRules || {}).owner;
       // the owner load rules the file states (ownerRules: eta max/min, llMultiplier m; GirderDetail's own checks apply them; sb-ped-owner PR)
       const ro = pl.ownerRules || {}, re = ro.eta || {}, lfF = { eta: +re.max > 0 ? +re.max : 1, etaN: +re.min > 0 ? +re.min : 1, m: ro.llMultiplier && +ro.llMultiplier.m > 0 ? +ro.llMultiplier.m : 1, o: ro.owner || '' };
-      const F = FX.fromPayload(pl, { fl, lf: lfF, G: { fat: fatI(P) }, ...(own ? { owner: own } : {}), ...(frB ? { braces: frB.braces, lenOf: frB.lenOf } : {}) });
+      const F = FX.fromPayload(pl, { fl, locFl: D.locFl, lf: lfF, G: { fat: fatI(P) }, ...(own ? { owner: own } : {}), ...(frB ? { braces: frB.braces, lenOf: frB.lenOf } : {}) });
       F.prj.a6.method = meth;
       return { prj: F.prj, locs: F.locs, supports: F.supports, fl, flS: D.flS, frB, D, what: `${esc(plName)}: ${F.locs.length} stations (every station GirderDetail checks); plates, deck and skews from the file; L<sub>b</sub>, C<sub>b</sub> ${frB ? `from this project's framing, girder G${frB.line + 1} (its own bearings and cross-frames; Cross-frames tab)` : `from its cross-frame spacing ${fmt(F.Lb, 2)} ft (the file is not of this project's bridge, or the project has no framing)`}; ${flText(D)}.` };
     }
@@ -152,7 +153,7 @@
       // multiplier m is kept off it; fromPayload does not add M_PL again (SB2-R1). The owner load rules η, m: factorsOwner (OWN6/OWN7)
       const plR = A.pl, sup = (plR.member || {}).supports || [], own = (P.ownerRules || {}).owner || 'AASHTO', lf = OW.loadFactors(own, (P.ownerRules || {}).eta, (P.xs || {}).nb);
       // brace points and f_ℓ: engine/framing.js design() (SB2-W1, SB2-W2): the Framing &amp; bracing tab, f_ℓ entered or from skew
-      const D = window.SBDFraming.design(P, gi, { fl: flIn }), fopt = { owner: own, rebar: d.rebar, fl: D.fl, lf, G: { fat: fatI(P) } };
+      const D = window.SBDFraming.design(P, gi, { fl: flIn }), fopt = { owner: own, rebar: d.rebar, fl: D.fl, locFl: D.locFl, lf, G: { fat: fatI(P) } };
       let bTxt;
       if (D.br) { fopt.braces = D.braces; fopt.lenOf = D.lenOf; bTxt = `the Framing &amp; bracing tab: G${D.br.line + 1}'s bearings and cross-frames (${D.braces.length} brace points; Cross-frames tab)`; }
       else { const fr = ((P.stiffeners || {}).layout || {}).frames || {};   // no framing (Framing &amp; bracing tab) or its layout has errors: the stiffener layout's cross-frames, as before
@@ -181,7 +182,7 @@
     const segAt = x => g.segments.find(s => x >= s.x0 && x < s.x1) || g.segments[g.segments.length - 1];
     const DX = window.SBDFraming.design(P, ctx.g, { fl: flIn });   // f_ℓ entered, else from the project's skews (SB2-W1); L_b, C_b as entered here
     const cont = P.spans.continuity === 'continuous' && P.spans.lengths.length > 1;
-    const locs = EX.filter(e => cont || e.region === 'pos').map(e => { const s = segAt(e.x); return { name: e.name, x: e.x, region: e.region, cont, plates: { D: s.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT }, beff: g.beff, Lb: S.Lb, Cb: S.Cb, fl: DX.fl, flT: nc ? S.flT : 0, M: e.M }; });
+    const locs = EX.filter(e => cont || e.region === 'pos').map(e => { const s = segAt(e.x); return { name: e.name, x: e.x, region: e.region, cont, plates: { D: s.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT }, beff: g.beff, Lb: S.Lb, Cb: S.Cb, fl: DX.fl, ...DX.locFl(e.x), flT: nc ? S.flT : 0, M: e.M }; });
     return { prj, locs, supports: null, fl: DX.fl, flS: DX.flS, frB: null, D: DX, what: `Example demands: GirderDetail's built-in Girder section moments, on ${esc(g.label || g.id)} (its plates at x = 44 and 109.99 ft). L<sub>b</sub> = ${fmt(S.Lb, 2)} ft, C<sub>b</sub> = ${fmt(S.Cb, 2)} as entered; ${flText(DX)}.`
       + (lf && lf.h0 && !nc ? ` Haunch taken as 0 in the section properties (${esc(lf.cite.h)}; owner rule OWN8), as on the Section properties tab.` : '')
       + (nc ? ' <b>Noncomposite girder:</b> every load on the steel section alone, no deck rebar; 6.10.8 or App. A6 (6.10.6.2.3) in both regions, top flange in compression in positive flexure; Service II Eq. 6.10.4.2.2-3.' : '') };

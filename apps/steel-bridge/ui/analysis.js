@@ -215,12 +215,32 @@
     return h;
   }
 
+  /* SA4 (2026-11-19): applicability of the line-girder analysis (engine/analysis.js applicability, ported from the old app's SA4).
+     apBanner(AP, link): the banner (FAIL: alert err; WARNING: alert; NOTE: note); link(id) the HTML of a link to a worked step (§).
+     apCard(AP): the worked card on this tab (items, then the steps I_S = w_g tanθ / L_s per span). */
+  const AP_T = { fail: 'FAIL: refined analysis required', warn: 'WARNING: line-girder results approximate; a 2D grid or 3D analysis is recommended', note: 'NOTE: skew effects a line-girder analysis cannot compute' };
+  function apBanner(AP, link) {
+    if (!AP || AP.level === 'ok') return '';
+    const L = (q, t) => q.step && link ? `${t} ${link(q.step)}` : t, lv = AP.level;
+    const rows = ['fail', 'warn', 'note'].map(k => { const it = AP.items.filter(q => q.level === k); return it.length ? `<li><b>${AP_T[k]}.</b> ${it.map(q => L(q, `${esc(q.title)} (${esc(q.val)}): ${esc(q.msg)}`)).join(' ')}</li>` : ''; }).join('');
+    return `<div class="${lv === 'fail' ? 'alert err' : lv === 'warn' ? 'alert' : 'note'}" data-apbanner="1" role="status"><b>Applicability of the line-girder analysis (SA4; AASHTO LRFD 10th Ed. 4.6.2.2, 4.6.3.3.2, C6.10.1).</b> ${lv === 'fail' ? 'A FAIL here counts in the Summary verdict.' : 'Warnings and notes do not change the verdict.'}<ul>${rows}</ul></div>`;
+  }
+  function apCard(AP) {
+    if (!AP) return '';
+    const st = { fail: 'FAIL', warn: 'WARNING', note: 'NOTE', ok: 'OK' }, li = t => `<li id="st-${esc(t.id)}"${t.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(t.label)}${t.ref ? `<span class="ref">${esc(t.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(t, true)}</div>${t.note ? `<div class="nt">${window.SBDSub.html(t.note)}</div>` : ''}</li>`;
+    return card('Applicability of the line-girder analysis (SA4)', `<p class="note">This tab is a line-girder analysis with the approximate distribution factors of 4.6.2.2. Each item: its limit and result; FAIL counts in the Summary verdict, WARNING and NOTE do not.</p>
+      <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Item</th><th class="lft">This bridge</th><th class="lft">Result</th><th>Status</th></tr></thead><tbody>${AP.items.map(q => `<tr><td class="lft">${esc(q.title)}</td><td class="lft">${esc(q.val)}${q.step ? ' ' + wk(q.step) : ''}</td><td class="lft">${esc(q.msg)}</td><td class="${q.level === 'fail' ? 'fx-hi' : ''}">${st[q.level]}</td></tr>`).join('')}</tbody></table></div>
+      <ol class="steps">${AP.steps.map(li).join('')}</ol>`, 'an-ap');
+  }
   function draw(el, ctx) {
     const P = ctx.P, gi = Math.min(ctx.gi, P.girders.length - 1), key = keyOf(P, gi), stale = !res || resKey !== key;
     let h = `<div class="alert stale"${stale && !busy ? '' : ' hidden'}><span>${res ? 'Analysis results are out of date: inputs changed.' : 'The analysis has not been run.'} Live load takes a few seconds.</span><button type="button" class="primary" id="anCalc">Run analysis</button></div>`;
     if (busy) h += '<div class="alert">Calculating…</div>';
     h += `<p class="note">Girder <b>${esc(P.girders[gi].label || P.girders[gi].id)}</b> (choose the girder on the Girders &amp; plates tab). Unfactored effects per girder: DC1 (steel, then the wet deck) on the steel section, DC2 and DW on 3n, LL+IM on n (AASHTO LRFD 10th Ed. 4.6.2, 6.10.1.1.1, 6.10.1.5).</p>`;
+    let AP = null; try { AP = AN().applicability(P); } catch (e) { AP = null; }   // SA4 (2026-11-19): banner at the top, worked card below
+    h = h.replace(/^/, apBanner(AP, id => wk(id)));
     h += usedHtml(P, gi);
+    h += apCard(AP);
     if (res && !stale) h += resultsHtml(res);
     el.innerHTML = h;
     ST().wire(el, { onToggle: (k, open) => { if (open) OPEN.add(k); else OPEN.delete(k); } });
@@ -240,5 +260,5 @@
     const why = o.auto ? (an ? (rd.ok ? 'the default: the project is complete' : `the project is not complete: ${rd.why.map(esc).join(' ')}`) : o.src === 'example' && !rd.ok ? `the default while the project is not complete: ${rd.why.map(esc).join(' ')}` : 'the default') : 'as chosen below';
     return `<div class="srcBar${an && !rd.ok ? ' warn' : o.src === 'example' || o.src === 'custom' ? ' ex' : ''}" role="status"><span>Demands:</span> <b>${what}</b> <span class="srcWhy">(${why})</span></div>`;
   }
-  window.SBDAnalysisUI = { draw, srcBar, TOPICS, groups, inputs, onInputChange, chart };   // chart: also the Deflection tab's diagram (DEFL)
+  window.SBDAnalysisUI = { apBanner, apCard, draw, srcBar, TOPICS, groups, inputs, onInputChange, chart };   // chart: also the Deflection tab's diagram (DEFL)
 })();

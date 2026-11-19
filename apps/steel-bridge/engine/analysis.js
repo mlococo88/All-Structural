@@ -569,5 +569,45 @@
       R: (R.llR || []).map((r, k) => ({ max: r.max + (Q ? Q.R[k].max : 0), min: r.min + (Q ? Q.R[k].min : 0) })), pl: Q };
   }
 
-  window.SBDAnalysis = { DEF, STEEL_PLF, grid, settings, lineOf, deflOwner, moduleOf, loadsOf, dfOf, deadOverride, dfOverride, clOf, fmOf, sbOf, analyzeGirder, pourRegions, ready, llPL };
+  /* applicability(P) (SA4, 2026-11-19; ported from "Steel Bridge Design.html" check SA4, anchor `// SA4: is a line-girder analysis with
+     distribution factors permitted for this bridge?`): the limits of this app's line-girder analysis with the approximate distribution
+     factors of 4.6.2.2, AASHTO LRFD 10th Ed. Items (level):
+       skew θ_max of the bearing lines > 60° (outside the skew corrections of Tables 4.6.2.2.2e-1, 4.6.2.2.3c-1): FAIL, refined analysis required;
+       distribution factor equations outside their range of applicability (Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1, 4.6.2.2.2d-1; SBDLldf.ranges of each
+         girder type): FAIL (engineer's level, 2026-11-19; the old app's SA4 had a warning here: decision pending engineer review);
+       skew index per span I_S = w_g tanθ / L_s (Eq. 4.6.3.3.2-2, p. 4-72; w_g = out-to-out width between the exterior girders, Σ bays; θ the larger
+         skew of the span's two bearing lines; L_s the span) > 0.30: WARNING, line-girder results approximate, a 2D grid (with warping, 4.6.3.3.2)
+         or 3D analysis recommended;
+       horizontal curvature (4.6.1.2.4; I_C, Eq. 4.6.3.3.2-1): this app models straight girders only (no radius input): not applicable;
+       fewer than four girders: WARNING (as the old SA4);
+       θ_max > 20°: NOTE listing what a line-girder analysis cannot compute (C6.10.1: cross-frame live-load forces, flange lateral bending;
+         obtuse-corner reaction increase and acute-corner uplift; girder end rotations).
+     A FAIL counts in the Summary verdict (as a failed SA4 item failed the old app's Structural analysis check); WARNING and NOTE never do.
+     Returns { level: 'fail' | 'warn' | 'note' | 'ok', items: [{ id, level, title, val, msg, step }], th, wg, Is: [{ k, Ls, th, Is }], steps }. */
+  function applicability(P) {
+    const xs = P.xs || {}, nb = Math.round(+xs.nb || 0), bays = (xs.bays || []).map(Number), S0 = +xs.S || 0, n2 = v => St().n(v, 2), n3 = v => St().n(v, 3);
+    const wg = bays.length === nb - 1 && bays.length && bays.every(v => v > 0) ? bays.reduce((a, b) => a + b, 0) : Math.max(nb - 1, 0) * S0;
+    const spans = ((P.spans || {}).lengths || []).map(Number), sk = (xs.skews || []).map(v => Math.abs(+v || 0)), th = sk.length ? Math.max(...sk) : 0;
+    const w = St().work('ap'), items = [], E = 'AASHTO LRFD 10th Ed.';
+    const it = (id, level, title, val, msg, step) => items.push({ id, level, title, val, msg, step: step || null });
+    w.add({ id: 'th', label: 'Largest bearing-line skew', sym: '\\theta_{max}', eq: '\\max|\\theta_{k}|', sub: sk.map(n2).join(',\\ ') || '0', value: th, unit: 'deg', d: 2, ref: `${E} Tables 4.6.2.2.2e-1, 4.6.2.2.3c-1` });
+    it('skew60', th > 60 + 1e-9 ? 'fail' : 'ok', 'Skew for the skew corrections of the distribution factors', `θ_max = ${n2(th)}°`, th > 60 + 1e-9 ? 'θ > 60°: outside the skew corrections of Tables 4.6.2.2.2e-1 and 4.6.2.2.3c-1: refined analysis required (4.6.3).' : 'θ ≤ 60°: the skew corrections apply.', 'ap.th');
+    let out = null; try { const LD = window.SBDLoads, LL = window.SBDLldf; if (LD && LL) { out = []; (P.girders || []).forEach((g, gi) => { const { b, p } = LD.fromModel(P, { girder: gi }), R = LD.compute(b, p);
+      if (!R.errors.length) LL.ranges(R, b.tsDeck, b.nb).forEach(q => out.push({ ...q, g: g.label || g.id })); }); } } catch (e) { out = null; }
+    if (out) { const bad = out.filter(q => !q.ok); it('df', bad.length ? 'fail' : 'ok', 'Distribution factor equations, range of applicability (4.6.2.2)', bad.length ? `${bad.length} item(s) outside` : 'within range',
+      bad.length ? `Outside Tables 4.6.2.2.2b-1 / 4.6.2.2.3a-1 / 4.6.2.2.2d-1: ${[...new Set(bad.map(q => `${q.g} ${q.region}: ${q.name} = ${n2(q.value)} ${q.unit || ''} (range ${q.lo} to ${q.hi})`.replace(/ +\(/, ' (')))].join('; ')}. Refined analysis required (or the lever rule where the specification permits it); see the Loads & LLDF tab.` : 'The approximate equations apply (Loads & LLDF tab).'); }
+    w.add({ id: 'wg', label: 'Width between the exterior girders (out to out of the girder lines)', sym: 'w_{g}', eq: bays.length === nb - 1 && bays.length ? '\\sum S_{j}' : '(N_{b} - 1)S', sub: bays.length === nb - 1 && bays.length ? bays.map(n2).join(' + ') : `(${nb} - 1)(${n2(S0)})`, value: wg, unit: 'ft', d: 2, ref: `${E} Art. 4.6.3.3.2` });
+    const Is = spans.map((Ls, k) => { const t = Math.max(sk[k] || 0, sk[k + 1] || 0), v = Ls > 0 ? wg * Math.tan(t * Math.PI / 180) / Ls : 0;
+      w.add({ id: 'Is' + k, label: `Skew index, span ${k + 1} (θ the larger skew of its bearing lines)`, sym: 'I_{S}', eq: '\\frac{w_{g}\\tan\\theta}{L_{s}} \\le 0.30', sub: `\\frac{${n2(wg)}\\tan(${n2(t)}^{\\circ})}{${n2(Ls)}}`, value: v, unit: '', d: 3, ref: `${E} Art. 4.6.3.3.2, Eq. 4.6.3.3.2-2`, ok: v <= 0.30 + 1e-9,
+        note: v <= 0.30 + 1e-9 ? 'At most 0.30.' : 'Above 0.30: a 2D grid analysis must include the girders\' warping rigidity (4.6.3.3.2); line-girder results are approximate.' });
+      it('Is' + k, v > 0.30 + 1e-9 ? 'warn' : 'ok', `Skew index, span ${k + 1}`, `I_S = ${n3(v)}`, v > 0.30 + 1e-9 ? 'I_S > 0.30: line-girder results approximate; a 2D grid (with warping, 4.6.3.3.2) or 3D analysis recommended.' : 'I_S ≤ 0.30.', 'ap.Is' + k);
+      return { k, Ls, th: t, Is: v }; });
+    it('curv', 'ok', 'Horizontal curvature (4.6.1.2.4; connectivity index I_C, Eq. 4.6.3.3.2-1)', 'straight girders', 'This app models straight girders only: I_C not applicable.');
+    it('nb', nb >= 4 ? 'ok' : 'warn', 'Number of girders', `N_b = ${nb}`, nb >= 4 ? 'N_b ≥ 4.' : 'Fewer than four girders: see the distribution factor provisions for N_b = 3 and the lever rule (4.6.2.2).');
+    if (th > 20 + 1e-9) it('sk20', 'note', 'Skew effects a line-girder analysis cannot compute', `θ_max = ${n2(th)}° > 20°`, 'Not computed here: cross-frame live-load forces (enter them from a refined analysis on the Cross-frames tab); flange lateral bending (estimated per C6.10.1 from the cross-frame layout); the reaction increase at obtuse corners and possible uplift at acute corners; girder end rotations about the skewed bearing lines.', 'ap.th');
+    const lv = items.some(q => q.level === 'fail') ? 'fail' : items.some(q => q.level === 'warn') ? 'warn' : items.some(q => q.level === 'note') ? 'note' : 'ok';
+    return { level: lv, items, th, wg, Is, steps: w.steps };
+  }
+
+  window.SBDAnalysis = { applicability, DEF, STEEL_PLF, grid, settings, lineOf, deflOwner, moduleOf, loadsOf, dfOf, deadOverride, dfOverride, clOf, fmOf, sbOf, analyzeGirder, pourRegions, ready, llPL };
 })();

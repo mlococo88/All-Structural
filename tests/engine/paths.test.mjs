@@ -35,7 +35,9 @@ test('One source of f_ℓ and brace points: Flexure, Constructibility and Rating
     assert.equal(D.fl, pos === 'interior' ? 12.5 : 9.38); assert.equal(D.flSrc, 'skew'); assert.ok(D.br && D.braces.length > 10);
     const F = W.SBDFlexureUI.build({ P, g: 0, src: 'analysis', method: 'auto' }), R = W.SBDRatingUI.build({ P, g: 0, src: 'analysis' }), C = W.SBDConstrUI.build({ P, g: 0, src: 'project' });
     assert.ok(!F.err && !R.err && !C.err, F.err || R.err || C.err);
-    assert.ok(F.rows.every(r => r.fl === D.fl), 'Flexure f_ℓ'); assert.ok(R.flex.rows.every(r => r.fl === D.fl), 'Rating f_ℓ'); assert.ok(C.rows.every(r => r.flC === D.fl), 'Constructibility f_ℓ');
+    // F2/F3 (2026-11-19): every location takes the unfactored f_ℓ,skew of the layout at its station (D.flAt), split per load combination (sb-flskew-appl.test.mjs)
+    assert.ok(F.rows.every(r => r.flSk === D.flAt(r.x)), 'Flexure f_ℓ,skew'); assert.ok(F.rows.some(r => r.flSk > 0) && F.rows.some(r => r.flSk === 0), 'regional');
+    assert.ok(R.flex.rows.every(r => r.flSk === D.flAt(r.x)), 'Rating f_ℓ,skew'); assert.ok(C.rows.every(r => r.flC === D.fl), 'Constructibility f_ℓ');
     assert.deepEqual(J(F.D.braces), J(D.braces)); assert.deepEqual(J(R.flex.D.braces), J(D.braces)); assert.deepEqual(J(C.F.braces), J(D.braces));
     // every flexure location's unbraced segment lies between two of those brace points (both flexure results)
     const bs = new Set(D.braces.map(v => +v.toFixed(6)));
@@ -46,7 +48,8 @@ test('One source of f_ℓ and brace points: Flexure, Constructibility and Rating
     P.flexure = { fl: 3 }; P.constr = { flC: 2 };
     const F2 = W.SBDFlexureUI.build({ P, g: 0, src: 'analysis', method: 'auto' }), R2 = W.SBDRatingUI.build({ P, g: 0, src: 'analysis' }), C2 = W.SBDConstrUI.build({ P, g: 0, src: 'project' });
     assert.ok(F2.rows.every(r => r.fl === 3) && R2.flex.rows.every(r => r.fl === 3) && C2.rows.every(r => r.flC === 2));
-    P.flexure.fl = 0; P.constr.flC = 0; assert.ok(W.SBDFlexureUI.build({ P, g: 0, src: 'analysis', method: 'auto' }).rows.every(r => r.fl === D.fl));
+    assert.ok(F2.rows.every(r => r.flSv === 3 && r.flSk === undefined), 'an entry: the same value at Service II');
+    P.flexure.fl = 0; P.constr.flC = 0; assert.ok(W.SBDFlexureUI.build({ P, g: 0, src: 'analysis', method: 'auto' }).rows.every(r => r.flSk === D.flAt(r.x)));
     assert.ok(W.SBDConstrUI.build({ P, g: 0, src: 'project' }).rows.every(r => r.flC === D.fl));
   }
   // the model: P.flexure.fl validated (a number ≥ 0) and kept through export / import
@@ -61,7 +64,7 @@ test('One source with a hand-off file of this bridge (gd_builtin28_AASHTO_G2): F
   assert.equal(D.fl, 12.5); assert.ok(D.br, 'same supports: this project\'s framing');
   const F = W.SBDFlexureUI.build({ P, g: 0, src: 'file', pl, plName: 'f', method: 'auto' }), R = W.SBDRatingUI.build({ P, g: 0, pl }), C = W.SBDConstrUI.build({ P, g: 0, pl });
   assert.ok(!F.err && !R.err && !C.err, F.err || R.err || C.err);
-  assert.ok(F.rows.every(r => r.fl === 12.5) && R.flex.rows.every(r => r.fl === 12.5) && C.rows.every(r => r.flC === 12.5), 'f_ℓ (the rating took 0 before)');
+  assert.ok(F.rows.every(r => r.flSk === D.flAt(r.x)) && R.flex.rows.every(r => r.flSk === D.flAt(r.x)) && C.rows.every(r => r.flC === 12.5), 'f_ℓ (the rating took 0 before)');   // F3: by the layout
   assert.deepEqual(J(F.D.braces), J(D.braces)); assert.deepEqual(J(R.flex.D.braces), J(D.braces)); assert.deepEqual(J(C.F.braces), J(D.braces));
   assert.ok(W.SBDReportData.sameFlex(F, R.flex));
 });
@@ -118,16 +121,15 @@ test('Hand check (SB2-W1): built-in project skewed 28°, G1 interior, x = 44 ft 
   const P = skewed(), A = W.SBDRatingUI.fromAnalysis(P, 0);
   const F = W.SBDFlexureUI.build({ P, g: 0, src: 'analysis', an: A, method: 'auto' }), F0 = W.SBDFlexureUI.build({ P, g: 0, src: 'analysis', an: A, method: 'auto', fl: 1e-12 });
   const r = F.rows.find(q => Math.abs(q.x - 44) < 1e-6), r0 = F0.rows.find(q => Math.abs(q.x - 44) < 1e-6), ck = (row, id, t) => row.checks.find(c => c.id === id && (!t || t.test(c.title)));
-  assert.equal(r.fl, 12.5);
-  // GS12, Service II bottom flange (Eq. 6.10.4.2.2-2): f_f + f_ℓ/2 ≤ 0.95R_hF_yf = 0.95(1.0)(50) = 47.50 ksi; f_f = 26.692 ksi (cross-frame weights in DC1, SB2-A6)
-  //   before: 26.692 + 0/2 = 26.692 → 26.692/47.50 = 0.5619; after: 26.692 + 12.50/2 = 32.942 → 32.942/47.50 = 0.6935
+  // F3 (2026-11-19, C6.10.1 p. 6-160): x = 44 ft lies between two contiguous cross-frames (normal frames, contiguous lines): the skew estimate need not
+  // be considered there: f_ℓ = 0 (before 2026-11-19: 1.25(10) = 12.50 ksi everywhere; GS12 32.942 ksi 0.6935, GS6 0.5839, GS10 0.4167)
+  assert.equal(r.flSk, 0); assert.equal(r.fl, 0); assert.equal(r.flSv, 0);
+  // GS12, Service II bottom flange (Eq. 6.10.4.2.2-2): f_f + f_ℓ/2 = 26.692 + 0 = 26.692 ≤ 0.95(1.0)(50) = 47.50 ksi → 0.5619 (f_f with the cross-frame weights in DC1, SB2-A6)
   const s = ck(r, 'GS12', /bottom/), s0 = ck(r0, 'GS12', /bottom/);
-  assert.ok(Math.abs(s0.demand - 26.6923) < 1e-3 && Math.abs(s.demand - (s0.demand + 6.25)) < 1e-6 && s.capacity === 47.5, `${s0.demand} ${s.demand}`);
-  assert.ok(Math.abs(s0.ratio - 0.5619) < 1e-4 && Math.abs(s.ratio - 0.6935) < 1e-4);
-  // GS6, compact section (Eq. 6.10.7.1.1-1): M_u + f_ℓS_xt/3 ≤ φ_fM_n; M_u = 4,998.44 kip-ft, φ_fM_n = 9,616.14 kip-ft, S_xt = 1,775.29 in³
-  //   after: 4,998.44 + 12.50(1,775.29)/3/12 = 4,998.44 + 616.42 = 5,614.86 → 5,614.86/9,616.14 = 0.5839 (before 4,998.44/9,616.14 = 0.5198)
-  const g6 = ck(r, 'GS6'), g60 = ck(r0, 'GS6');
-  assert.ok(Math.abs(g60.ratio - 0.5198) < 1e-4 && Math.abs(g6.ratio - 0.5839) < 1e-4 && Math.abs(g6.demand - 5614.86) < 0.01, `${g6.demand}`);
-  // GS10 (Eq. 6.10.1.6-1): f_ℓ ≤ 0.6F_yf = 30 ksi: 12.50/30 = 0.4167
-  assert.ok(Math.abs(ck(r, 'GS10').ratio - 12.5 / 30) < 1e-12);
+  assert.ok(Math.abs(s0.demand - 26.6923) < 1e-3 && Math.abs(s.demand - s0.demand) < 1e-9 && s.capacity === 47.5, `${s0.demand} ${s.demand}`);
+  assert.ok(Math.abs(s.ratio - 0.5619) < 1e-4);
+  // GS6, compact section (Eq. 6.10.7.1.1-1): M_u = 4,998.44 kip-ft ≤ φ_fM_n = 9,616.14 kip-ft → 0.5198; no GS10 (f_ℓ = 0)
+  const g6 = ck(r, 'GS6'); assert.ok(Math.abs(g6.ratio - 0.5198) < 1e-4, `${g6.ratio}`); assert.equal(ck(r, 'GS10'), undefined);
+  // a location next to a discontinuous frame takes 10 ksi, split per combination (hand check in sb-flskew-appl.test.mjs)
+  assert.ok(F.rows.some(q => q.flSk === 10 && q.fl > 10 && q.flSv > 10 && q.flSv < q.fl));
 });

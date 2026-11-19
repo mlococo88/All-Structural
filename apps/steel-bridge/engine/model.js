@@ -155,6 +155,9 @@
                   (the columns of ui/demands.js SPECS: hand-off station fields, e.g. M_DC1, M_LLpos (kip-ft), V_DC1 (kip); a blank cell is absent),
                   sup: [ { DC1, DC2, DW, LL, PL, UT, UF (kip) } ] (Shear: the support reactions, one per support) } } }: entered on the tab
      demandSrc: { <module>: 'analysis' | 'example' | 'project' | 'custom' }: the demand source chosen on the tab (a hand-off file is not saved)
+     -- added 2026-11-19 (LGA, MIDAS .lga import), optional, written only by an import of a MIDAS Line Girder Analysis file (engine/lga.js) --
+     midasLga:  { importedAt, fileName, appVersion, saved, keep: the file's project object without midas_url (the MIDAS inputs the app does
+                  not model, written back by the .lga export) }; not read by any calculation
    } */
 (function () {
   'use strict';

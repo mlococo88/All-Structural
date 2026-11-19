@@ -83,7 +83,9 @@
     'ui/bridgexfer.js',
     'ui/handoffs.js',
     'ui/inputcheck.js',   // SBINV: the field marks, the tab counts and the banner (display only)
-    'ui/lists.js'
+    'ui/lists.js',
+    'engine/lga.js',   // LGA (2026-11-19): MIDAS Line Girder Analysis (.lga) import and export (no DOM)
+    'ui/lga.js'
   ].forEach(function (s) { document.write('<script src="' + s + '?v=' + v + '"><\/script>'); });
 })();
 </script>
@@ -321,6 +323,8 @@
         <button type="button" id="bExport" title="Save the open project as a .json file">Export JSON</button>
         <button type="button" id="bImport" title="A project of this app, or of the old Steel Bridge Design (GirderDetail, Preliminary sizing, ST-Girder)">Import JSON</button>
         <button type="button" id="bOld" title="Import the project the old Steel Bridge Design autosaved in this browser (read only: the old app's saved data is not changed)">From old app</button>
+        <button type="button" id="bLgaIn" title="Build the bridge from a MIDAS Civil NX Line Girder Analysis project file (.lga), with a report of every field">Import MIDAS (.lga)</button>
+        <button type="button" id="bLgaOut" title="Write the open project as a MIDAS Civil NX Line Girder Analysis project file (.lga)">Export to MIDAS (.lga)</button>
       </div>
     </div>
   </header>
@@ -715,7 +719,7 @@
     exportFile: v => { if (!v || v === vName(cur.id) || v === P.project.name) { exportFile(P); return; } const Q = JSON.parse(JSON.stringify(P)); Q.project.name = v; exportFile(Q); },
     importFile: () => $('fImport').click(),
     exportOne: v => { const i = vItem(v); if (!i) return; const t = LIB.text(LS, i.id); if (t != null) SPUI.download(String(i.name || 'steel-bridge').replace(/[^\w.-]+/g, '_') + '.sbd2.json', t); },
-    fileButtons: [B_EX, B_IM], extras: [B_OLD],
+    fileButtons: [B_EX, B_IM], extras: [B_OLD, $('bLgaIn'), $('bLgaOut')],
     header: $('hdrBtns'), chipBefore: $('hdrUR'), card: true,
     /* HDRS (2026-11-06, engineer: every app's header as in Spread Footing #884): the header has the chip only (no Save / Saved
        projects… buttons: they are in the "Save and open" card; Ctrl+S / Ctrl+Shift+S work from anywhere). A chip click opens the Project input tab (its tab button is clicked) and brings the card into view. */
@@ -895,6 +899,7 @@
   B_OLD.addEventListener('click', () => { const r = window.SBDLegacy.fromStorage(store || memStore); if (!r.ok) { alert(r.error); return; }
     if (!confirm('Import the project the old Steel Bridge Design autosaved in this browser? It replaces the current project here (export it first to keep it). The old app\'s data is not changed.')) return;
     loadAs(r.project, null, null); window.SBDLegacyUI.show(r.summary); });
+  if (window.SBDLgaUI) window.SBDLgaUI.init({ getP: () => P, dirty: () => pb.dirty(), loadNew: q => loadAs(q, null, null), replace: q => { P = q; ui.g = Math.min(ui.g, P.girders.length - 1); ui.seg = 0; changed(true); }, calc: () => calc() });   // LGA (2026-11-19): MIDAS .lga import / export (ui/lga.js)
 
   drawInputs(); calc();
   if (window.SBDDashUI) window.SBDDashUI.init({ el: $('sbDashCol'), store, getP: () => P, ui: () => ui, goto: gotoOut, fix: i => gotoErr(icErr[i]), errUi: icO });   // DASH (2026-11-09)
