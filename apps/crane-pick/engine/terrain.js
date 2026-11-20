@@ -180,7 +180,7 @@
   function vehStations(RT, r, P) {
     const v = RT.vehOf(r, P), l = RT.loadOf(r, P), jeep = RT.hasJeep(v), dH = v.L1 - v.e + (jeep ? v.Lj - v.ej : 0), f = l.L - v.L2 - l.r;
     const huDef = (v.type === 'dolly' || v.type === 'jeep') ? v.hDeck : Math.max(v.hDeck - 1, 0.5);
-    return { v, l, dH, L2: v.L2, f, r: l.r, huDef, huFrom: (v.type === 'dolly' || v.type === 'jeep') ? 'default: the deck / bolster height h_deck (the load spans between the bolsters)' : 'default: h_deck − 1 ft (deck structure, assumed)' };
+    return { v, l, dH, L2: v.L2, f, r: l.r, huDef, huFrom: (v.type === 'dolly' || v.type === 'jeep') ? 'default: the deck / bolster height h_deck (the load spans between the bolsters); the blocking height h_B is not added (conservative): enter h_u = h_deck + h_B to include it' : 'default: h_deck − 1 ft (deck structure, assumed)' };
   }
   /* profile(RT, r, P, G, o { maxGrade %, base ft, hu ft, clr ft }, idp) -> { st, grades, segs, crest, sag, clr, steps, flags } */
   function profile(RT, r, P, G, o, idp) {
