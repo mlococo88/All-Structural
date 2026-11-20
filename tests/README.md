@@ -52,6 +52,10 @@ node tests/compare.mjs --tool st --a a8bf5e7:stgirder.html --payload all      # 
 # Steel Bridge (apps/steel-bridge) Report tab: browser smoke test with print emulation (0 console errors, 0 KaTeX errors, links, print)
 node tests/smoke/steel-bridge-report.mjs
 
+# shared/report.js: a § link ends with its target at the top of the reading area although the report above it is still being laid out
+# (content-visibility, a figure that grows late), in the window and in a scroll container; a key pressed meanwhile stops it (RGS)
+node tests/smoke/report-go-scroll.mjs [--dir <folder with a shared/ folder, e.g. an origin/main checkout>]
+
 # Steel Bridge remaining fatigue life (MBE 4th Ed. Section 7): turn the evaluation on, Example demands, the Category E gusset's Y_REM,
 # an entered g, the Summary / left column notes, the Report subsection, 390 px, 0 console errors
 node tests/smoke/steel-bridge-fatlife.mjs

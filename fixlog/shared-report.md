@@ -352,3 +352,49 @@ Loaded by: `apps/steel-bridge/index.html` (Report tab, `ui/report.js`). Tests: `
   get `rp-seen` for 14 cell texts, kv keys and a note; the plain text unchanged. Full `node tests/engine/run.mjs`; the report smoke tests (see the PR).
 - **Other copies:** none (the rule is only in this file).
 - **Open items:** none.
+
+## 2026-11-20 — PR: claude/report-scroll-fix (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — a § link ends at its target although the report above it is still being laid out (RGS; display only)
+- **Problem (before):** `go(id)` (contents entries, `[[key]]` § links, `jump(key)` from the tools) called `el.scrollIntoView({ block: 'start' })`
+  once. The subsections are `content-visibility:auto` with an 800 px placeholder (`.rp-sub{content-visibility:auto;contain-intrinsic-size:auto 800px;}`),
+  so the subsections the scroll passes into view are laid out only after it and the target moves: a § link to a section below tall figures
+  stopped short of it (measured: the contents entry of §36 in a report of 40 sections with 1400 px figures left the heading 665 px below the
+  top of the reading area, in the window and in a scroll container). A figure or equation that grows after the scroll (late image, KaTeX)
+  in a browser or box without scroll anchoring moved it again. The report search (`step`) already scrolls a second time after one frame.
+- **Where:** `shared/report.js`, `mount()`, anchor text `const go = id => { const el = root.querySelector('#' + id);`.
+  - Before:
+    ```js
+    const go = id => { const el = root.querySelector('#' + id); if (!el) return false; open(el); el.scrollIntoView({ block: 'start' }); flash(el); return true; };
+    ```
+  - After (`go` calls `settle(el)`; new `unsettle` and `settle` right after it, before `function jump(key)`):
+    ```js
+    const go = id => { const el = root.querySelector('#' + id); if (!el) return false; open(el); el.scrollIntoView({ block: 'start' }); flash(el); settle(el); return true; };
+    let unsettle = null;
+    function settle(el) {
+      if (unsettle) unsettle();
+      if (typeof requestAnimationFrame === 'undefined') return;
+      const UI = ['wheel', 'touchstart', 'keydown', 'pointerdown'];
+      let raf = 0, n = 0, still = 0, y = el.getBoundingClientRect().top, ro = null;
+      const stop = () => { if (raf) cancelAnimationFrame(raf); raf = 0; clearTimeout(tm); if (ro) ro.disconnect(); UI.forEach(t => window.removeEventListener(t, stop, true)); if (unsettle === stop) unsettle = null; };
+      const tick = () => { raf = 0; if (!el.isConnected) { stop(); return; }
+        const t = el.getBoundingClientRect().top; if (Math.abs(t - y) > 1) { el.scrollIntoView({ block: 'start' }); y = el.getBoundingClientRect().top; still = 0; } else still++;
+        if (still < 3 && ++n < 60) raf = requestAnimationFrame(tick); };
+      const kick = () => { if (!raf && unsettle === stop) { still = 0; n = 0; raf = requestAnimationFrame(tick); } };
+      const tm = setTimeout(stop, 2000); unsettle = stop;
+      UI.forEach(t => window.addEventListener(t, stop, { capture: true, passive: true }));
+      if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(kick); ro.observe(art); }
+      raf = requestAnimationFrame(tick);
+    }
+    ```
+  - Behaviour: each animation frame the target's top is compared with where the last scroll put it; if it moved more than 1 px it is scrolled
+    to again. The frames stop once it has stayed put for 3 frames (at most 60 frames); a size change of the report (`ResizeObserver` on
+    `.rp-doc`) restarts them; all of it ends after 2 s, at the next § link, or at the reader's own wheel, touch, key or pointer press (the
+    report is never scrolled back against the reader). Same block, flash and scroll margins as before; print unchanged.
+- **Governing provision:** none (display only). No formula, factor, unit, value, code reference, storage key or saved format changes; no new key.
+- **Check case:** `node tests/smoke/report-go-scroll.mjs` (new): 40 sections, each a 1400 px figure; the contents entry of §36: heading
+  665.2 px (window) / 666.2 px (scroll container) below the top of the reading area before, 0.2 px after; the figure above the target step
+  of §38 grows 900 px 300 ms after its [[key]] link is clicked (scroll anchoring off): 900.3 px before, 0.3 px after; a key pressed before
+  that growth: the target stays 900 px down (not scrolled back), before and after. `--dir <origin/main checkout>` shows the failures.
+- **How verified:** the new smoke on the branch (16/16) and on origin/main's `shared/` (4 failures, as above); `node tests/check-syntax.mjs`;
+  `node tests/engine/run.mjs report`; the smoke tests of the tools that load this file (see the PR).
+- **Other copies:** none (the search's own second scroll in `step` is unchanged).
+- **Open items:** none.
