@@ -1705,3 +1705,13 @@ clear3d (8), elev (7), ground (5), terrain (7, passes again), tabs (5), tandem (
 setup -> 0 picks, neutral boom R 20 ft at heading 0 / 90; every output tab, dock, 3D and DXF with a setup and no lift and with a setup used
 only by a one-crane girder lift: no NaN / undefined, no "Load not entered"; Place for crane 1 -> setup without pick; 390 px; 0 console
 errors). Screenshot of Cranes & setups after Add setup checked by eye.
+
+## 2026-11-20 — PR: claude/crane-terrain-hu-note (CRHU) — route profile h_u: the blocking is not added, now stated (text only)   [no computed value changes]
+- **Engineer decision (2026-11-20):** the dolly / jeep route-profile load-underside default stays h_deck, without the blocking height h_B. This closes the open item of the PR #1625 entry ("The route profile's load-underside default … does not add the blocking"). Reason: the clearance c = z_R + h_u + (z_H − z_R)(s − s_R)/L_2 − z(s) grows one-for-one with h_u, so adding h_B would raise every clearance and could clear "load grounds" / margin flags. The conservative default is kept; a user who wants the blocking included enters h_u = h_deck + h_B on the Terrain input tab. Semi / stretch (h_deck − 1 ft): unchanged, since the blocking sits on top of the deck.
+- **Where 1:** `apps/crane-pick/engine/terrain.js`, `vehStations()`, anchor `huFrom: (v.type === 'dolly' || v.type === 'jeep') ?`.
+  - Before: `'default: the deck / bolster height h_deck (the load spans between the bolsters)'`
+  - After: `'default: the deck / bolster height h_deck (the load spans between the bolsters); the blocking height h_B is not added (conservative): enter h_u = h_deck + h_B to include it'`
+- **Where 2:** `apps/crane-pick/ui/terrain.js`, the `trHu_` input, placeholder.
+  - Before: `'deck height (−1 ft on a trailer deck)'`
+  - After: `'deck height, blocking not added (−1 ft on a trailer deck)'`
+- **Check:** no computed value changes (text only). Dolly, h_deck 5.0 ft, h_B 0.5 ft, supports at 100.00, crest 104.20: c = 105.00 − 104.20 = 0.80 ft, as before; with h_u entered 5.50: c = 1.30 ft, as before.
