@@ -387,7 +387,28 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
     const size = () => { if (bar.offsetHeight) root.style.setProperty('--rp-top', (bar.offsetHeight + 8) + 'px'); }; size();
     const open = el => { let p = el.closest('.rp-closed'); while (p) { p.classList.remove('rp-closed'); closed.delete((p.querySelector('.rp-h1,.rp-h2') || {}).id); p = p.parentElement && p.parentElement.closest('.rp-closed'); } };
     const flash = el => { el.classList.remove('rp-flash'); void el.offsetWidth; el.classList.add('rp-flash'); setTimeout(() => el.classList.remove('rp-flash'), 1700); };
-    const go = id => { const el = root.querySelector('#' + id); if (!el) return false; open(el); el.scrollIntoView({ block: 'start' }); flash(el); return true; };
+    const go = id => { const el = root.querySelector('#' + id); if (!el) return false; open(el); el.scrollIntoView({ block: 'start' }); flash(el); settle(el); return true; };
+    /* RGS (2026-11-20, display only): a § link scrolled once, so a target below figures, equations or subsections still being laid out
+       (content-visibility, KaTeX, images) could stop short of it. As the search does (step), the target is scrolled to again while the
+       layout settles: each frame its top is compared with where the scroll put it and, if it moved, it is scrolled to again; the frames
+       stop once it has not moved for 3 of them (at most 60), and restart when the report changes size (a late image), for at most 2 s.
+       The next § link, or the reader's own wheel, touch, key or pointer, ends it. */
+    let unsettle = null;
+    function settle(el) {
+      if (unsettle) unsettle();
+      if (typeof requestAnimationFrame === 'undefined') return;
+      const UI = ['wheel', 'touchstart', 'keydown', 'pointerdown'];
+      let raf = 0, n = 0, still = 0, y = el.getBoundingClientRect().top, ro = null;
+      const stop = () => { if (raf) cancelAnimationFrame(raf); raf = 0; clearTimeout(tm); if (ro) ro.disconnect(); UI.forEach(t => window.removeEventListener(t, stop, true)); if (unsettle === stop) unsettle = null; };
+      const tick = () => { raf = 0; if (!el.isConnected) { stop(); return; }
+        const t = el.getBoundingClientRect().top; if (Math.abs(t - y) > 1) { el.scrollIntoView({ block: 'start' }); y = el.getBoundingClientRect().top; still = 0; } else still++;
+        if (still < 3 && ++n < 60) raf = requestAnimationFrame(tick); };
+      const kick = () => { if (!raf && unsettle === stop) { still = 0; n = 0; raf = requestAnimationFrame(tick); } };
+      const tm = setTimeout(stop, 2000); unsettle = stop;
+      UI.forEach(t => window.addEventListener(t, stop, { capture: true, passive: true }));
+      if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(kick); ro.observe(art); }
+      raf = requestAnimationFrame(tick);
+    }
     function jump(key) {
       const e = doc.index.get(key); if (!e) return false;
       if (e.lz != null) { const d = art.querySelector(`details.rp-lz[data-rplz="${e.lz}"]`); if (d) { fillOne(d); d.open = true; } }
