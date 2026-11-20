@@ -174,7 +174,7 @@
       ${(P.routes || []).map(r => { const q = r.grade || {}; return `<div class="sec"><div class="secHead">Route: ${esc(r.name)}</div><div class="secBody" data-tr="${esc(r.id)}">
         ${numIn('trGm_' + r.id, q.max, 'Maximum grade', '%', String(T.DEF.maxGrade) + ' (assumed: enter the hauler\'s limit)', ' data-f="max"')}
         ${numIn('trGb_' + r.id, q.base, 'Grade base length', 'ft', String(T.DEF.base), ' data-f="base"')}
-        ${numIn('trHu_' + r.id, q.hu, 'Load / deck underside above the ground at its supports', 'ft', 'deck height (−1 ft on a trailer deck)', ' data-f="hu"')}
+        ${numIn('trHu_' + r.id, q.hu, 'Load / deck underside above the ground at its supports', 'ft', 'deck height, blocking not added (−1 ft on a trailer deck)', ' data-f="hu"')}
         ${numIn('trCl_' + r.id, q.clr, 'Ground clearance margin', 'ft', String(T.DEF.clr), ' data-f="clr"')}</div></div>`; }).join('')}
       ${g ? '' : P.setups.length || (P.routes || []).length ? '<p class="note">Fetch terrain to see the levelness, pad grading and route profiles (Terrain output tab).</p>' : ''}`;
   }
