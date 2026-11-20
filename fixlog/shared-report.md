@@ -353,7 +353,7 @@ Loaded by: `apps/steel-bridge/index.html` (Report tab, `ui/report.js`). Tests: `
 - **Other copies:** none (the rule is only in this file).
 - **Open items:** none.
 
-## 2026-11-20 — PR: claude/report-scroll-fix (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — a § link ends at its target although the report above it is still being laid out (RGS; display only)
+## 2026-11-20 — PR: claude/report-scroll-fix (PR #1658: https://github.com/mlococo88/All-Structural/pull/1658) — a § link ends at its target although the report above it is still being laid out (RGS; display only)
 - **Problem (before):** `go(id)` (contents entries, `[[key]]` § links, `jump(key)` from the tools) called `el.scrollIntoView({ block: 'start' })`
   once. The subsections are `content-visibility:auto` with an 800 px placeholder (`.rp-sub{content-visibility:auto;contain-intrinsic-size:auto 800px;}`),
   so the subsections the scroll passes into view are laid out only after it and the target moves: a § link to a section below tall figures
