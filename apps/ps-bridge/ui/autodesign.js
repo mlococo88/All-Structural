@@ -16,7 +16,7 @@
   const fx = (v, d) => (typeof v === 'number' && isFinite(v)) ? v.toFixed(d) : '—';
   const AD = () => window.PSBAutoDesign, BR = () => window.PSBBridge;
   const S = { running: false, stop: false, prog: null, R: null, key: '', sel: {}, err: '', t0: 0, ap: null, rev: 0 };   // ap, rev: ADB (basis())
-  const keyOf = P => JSON.stringify(Object.assign({}, P, { design: undefined, notices: undefined }));
+  const keyOf = P => JSON.stringify(Object.assign({}, P, { design: undefined, notices: undefined, handoffs: undefined }));   // HO-D2: a send / its record is not an input change
   function css() {
     if (typeof document === 'undefined' || document.getElementById('psbad-css')) return;
     const st = document.createElement('style'); st.id = 'psbad-css';
