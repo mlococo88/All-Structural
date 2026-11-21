@@ -59,6 +59,7 @@
     'engine/inputcheck.js',  // PR 2b: the blocking input errors (the steel app's pattern)
     'engine/legacy.js',      // PR 2f: "From the old app": read-only import of the old app's saved designs and Export JSON files
     'engine/handoffs.js',    // 2026-11-14 (item 12): the old app's bridgeSuite.v1.* hand-off payloads (its code; formats unchanged)
+    'engine/hostale.js',     // HO-D2 (2026-11-21): the hand-off stale check (what this project last sent / loaded, P.handoffs; display only)
     'engine/compare.js',     // batch G4 (2026-11-15): the Compare tab's design sweep (the old app's sweepDesign on this app's engine call)
     'engine/autodesign.js',  // item A (2026-11-14): Auto design, a search over each girder type's inputs judged by the page's own engine call (no new formula)
     'engine/worked.js',      // PR 2b-2: the worked steps of the Section properties, Loads & LLDF and Analysis tabs (values = the engine's)
@@ -238,6 +239,11 @@
   #notices .notice,#out .notice{display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px 10px;background:#fff;border:1px solid var(--slate-400);border-left:4px solid var(--navy-800);border-radius:6px;padding:7px 10px;font-family:var(--font-ui);font-size:9.5pt;}
   #notices .notice>div:first-child,#out .notice>div:first-child{flex:1 1 240px;min-width:0;overflow-wrap:anywhere;} #notices .nBtns,#out .nBtns{display:flex;gap:6px;margin-left:auto;}
   #out .notice{margin:8px 0;}   /* PS-23: the d_e notice of the Loads & LLDF tab, the same banner in the tab's content */
+  /* HO-D2 (2026-11-21): the hand-off stale banners (above the output tabs, and in the Project tab's Hand-offs card), the same banner */
+  #out .notice.hoStaleBar{border-left-color:#b45309;background:#fffbeb;} .hoStList{margin:3px 0 0;padding-left:18px;} .hoStList li{margin:2px 0;} .hoStList button{margin-left:6px;}
+  #hoStale .notice{display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px 10px;background:#fffbeb;border:1px solid var(--slate-400);border-left:4px solid #b45309;border-radius:6px;padding:7px 10px;margin:0 0 6px;font-family:var(--font-ui);font-size:9.5pt;}
+  #hoStale .notice>div:first-child{flex:1 1 200px;min-width:0;overflow-wrap:anywhere;} #hoStale .nBtns{display:flex;gap:6px;margin-left:auto;}
+  @media print{ .hoStaleBar{display:none!important;} }
   @media print{ #hdrBtns,#notices,#libDlg,.inTabs,#tabBar,#autoBar,#inputPanel{display:none!important;} html,body{overflow:visible;height:auto;} #app{height:auto;box-shadow:none;} #outputPanel{overflow:visible;}
     .steps li{break-inside:avoid;} .katex,.katex *{-webkit-print-color-adjust:exact;print-color-adjust:exact;} .katex .frac-line,.katex .overline-line,.katex .underline-line{border-bottom-color:#000!important;min-height:1px;} .katex-display{overflow:visible;} }
   /* DASH (2026-11-09): the left check summary column (ui/dash.js), as the other apps' (RW/SF/LP #984/#988/#991, GirderDetail #1196): at the far
@@ -518,8 +524,14 @@
   /* 2026-11-14 (item 12): the Hand-offs card (ui/handoffs.js): the girder type and line the output tabs show, its engine inputs and result */
   const hoCtx = { P: () => P, result: () => (errs.length ? null : result()), cell: () => hoCell(), changed: () => changed(),
     toast: (t, u) => toast(t, u), redraw: () => drawOut(),   // batch D3: + the MCT banners' notice and redraw
-    all: () => (errs.length ? null : allResults(true)), redrawIn: () => drawInputs(), pick: (k, g) => pick(k, g) };   // batch F3: pick = the design beam chip's Show G<i>   // batch F: every girder type on every line (the page's cache, as the Report); the card's "Last sent"
-  HOUI.init(() => drawOut());   // the "new data" marks follow the other tools' sends (storage event); batch D3: the MCT banners too
+    all: () => (errs.length ? null : allResults(true)), redrawIn: () => drawInputs(), pick: (k, g) => pick(k, g),
+    // HO-D2 (2026-11-21): the stale check reads the page's cached results only: a girder type x line (the one shown: result()), every line
+    // when already computed (allResults() without force: null while running), the input error count, and the Project tab's card
+    resultOf: (k, g) => { if (errs.length) return null; const c = hoCell(); if (c && c.k === k && c.g === g) { const r = result(); return r.R.error ? null : r; }
+      const inp = window.PSBDesign.cellInputs(P, k, g), R = cellR(inp); return R.error ? null : { inp, R }; },
+    allNow: () => (errs.length ? null : allResults()), errN: () => errs.length,
+    goin: () => { ui.itab = 'proj'; saveUi(); drawInputs(); const el = $('psbHo'); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'start' }); } };   // batch F3: pick = the design beam chip's Show G<i>   // batch F: every girder type on every line (the page's cache, as the Report); the card's "Last sent"
+  HOUI.init(() => drawOut(), hoCtx);   // the "new data" marks follow the other tools' sends (storage event); batch D3: the MCT banners too
   /* PR 2f: "From the old app" (ui/legacy.js): an import replaces the open project, as Import JSON does (asked first there) */
   const lgCtx = { store: LS, gotoOut: t => gotoOut(t), pickFile: () => pb.importJSON(),   // PR 5: asks first on unsaved changes, then the file chooser
     replace: Q => { BR.migrate(Q); const rn = window.PSBLegacy.restore(Q); if (window.PSBSections) window.PSBSections.migrate(Q); ui.itab = 'proj'; loadAs(Q, null); if (rn) toast(rn); } };   // PR 3a-4 (PS-17): the old model's other designs restored; PR 5: not a saved project (chip "not saved")
@@ -588,11 +600,11 @@
     undoS.push(snap); if (undoS.length > UNDO_MAX) undoS.shift(); redoS.length = 0; snap = t; stepNo++;
     document.querySelectorAll('#notices .nUndo').forEach(u => u.remove());
   }
-  const onlyShown = (a, b) => { try { const x = JSON.parse(a), y = JSON.parse(b); delete x.design; delete y.design; return JSON.stringify(x) === JSON.stringify(y); } catch (e) { return false; } };
+  const onlyShown = (a, b) => window.PSBHoStale.noStep(a, b);   // HO-D2 (2026-11-21): nor is a send (P.handoffs.sent, what this project sent: a fact, not an input)
   /* restore(from, to): the newest snapshot of from back on screen (the one on screen goes to to); the results follow (every result is
      computed from the project on screen, keyed by its inputs: result(), allResults()) */
   function restore(from, to) {
-    if (!from.length) return; to.push(snap); snap = from.pop(); P = JSON.parse(snap);
+    if (!from.length) return; to.push(snap); const P0 = P; snap = from.pop(); P = window.PSBHoStale.carrySent(P0, JSON.parse(snap)); snap = JSON.stringify(P);   // HO-D2: a send stays sent through Undo / Redo
     document.querySelectorAll('#notices .nUndo').forEach(u => u.remove());
     changed(true);
   }
@@ -679,6 +691,7 @@
     if (L.note) h += `<div class="alert err">${esc(L.note)}</div>`;
     h += secNotice();   // PS-31: the old box / voided slab section corrected (or removed)
     h += HOUI.mctBanner(P);   // batch D3: the MCT demands hand-off and geometry changes (click only)
+    h += HOUI.staleBar(hoCtx);   // HO-D2 (2026-11-21): the hand-offs out of date since this project sent / loaded them (click only)
     h += HOUI.beamChip(P);    // batch F3: the old app's Design beam chip (LL & DL's design beam; read only, Show G<i> by click)
     if (errs.length) h += window.PSBInputCheckUI.blocked(errs, icO());
     h += `<div class="alert">In development: Section properties, Loads &amp; LLDF, Analysis, Losses, Stresses, Flexure, Shear, End zone &amp; hold-down, Camber &amp; deflection, Handling, Deck and Rating show the results of the girder type and line chosen above them; the Summary, the check summary column and the Report cover every girder type on every line. Use the old <a href="../../Prestressed%20Bridge%20Design.html">Prestressed Bridge Design</a> for design work.</div>`;

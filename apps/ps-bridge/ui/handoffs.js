@@ -19,8 +19,12 @@
    psbridge, HANDOFF.md §5.1; uploaded with Cloud sync as the Steel Bridge app's). The one-line "Send reactions" row above is unchanged.
    Batch F3 / F4 (2026-11-15): the old app's Design beam chip above the output tabs (beamChip; designBeam / beamRoster read only, "Show
    G<i>" by click) and "Import hand-off (JSON)" of the distribution factors (lldfPull from a file, the Steel Bridge app's lldfFile).
-   Not here (fixlog/ps-bridge.md, Open items): writing designBeam / beamRoster, the channel locks (BridgeLocks; HO-D2 pending), appPaths and the
-   shared Bridge Suite project list (switch-over). */
+   HO-D2 (engineer decision 2026-11-21): the hand-offs stay click only (no channel locks: nothing is sent or loaded on its own) and a stale
+   banner names each channel whose data changed since this project last sent or loaded it, with a one-click Send / Load that runs the click
+   action of the card (staleBar: above the output tabs, every tab; the card's #hoStale). The record of what this project last sent / loaded
+   is P.handoffs (engine/hostale.js, PSBHoStale; the MCT demands: P.demands, as loaded); a project without it shows no banner.
+   Not here (fixlog/ps-bridge.md, Open items): writing designBeam / beamRoster, appPaths and the shared Bridge Suite project list
+   (switch-over). */
 (function () {
   'use strict';
   const H = () => window.PSBHandoffs, BX = () => window.BridgeXfer;
@@ -46,6 +50,7 @@
     const st = ch => has(ch) ? '' : ' <span class="note">(nothing sent yet)</span>';
     const btn = (a, t, tip) => `<button type="button" data-ho="${a}" title="${esc(tip)}">${t}</button>`;
     return `<section class="sec" id="psbHo"><div class="secHead">Hand-offs</div><div class="secBody">
+      <div id="hoStale">${cardHtml}</div>
       <p class="note">The same hand-offs as the old Prestressed Bridge Design (same keys and formats; the other tools read them as before). Nothing is applied or sent until you click: each pull shows what changes and asks first. The girder hand-offs are for the girder type and line shown on the output tabs: <b id="hoCell">${shownText(c)}</b>. Opened as files, the tools share data in Chrome or Edge only (one folder); otherwise use the JSON files.</p>
       <p class="note"><b>Receive</b></p>
       <div class="fRow">${btn('pmUse', 'Use shared project info', 'Fill Name, Number, Client name, Designer, Checker and Date from the project info shared by another tool (asks first; never blanks a field)')}</div>
@@ -60,7 +65,7 @@
       <div class="fRow">${btn('geoSend', 'Send geometry to LL &amp; DL', 'Spans, girder count and spacing, deck, skew and girder section properties for LL & DL Distribution (bridgeSuite.v1.lldfGeom)')}${btn('geoExport', 'Export (JSON)', 'The same geometry hand-off as a JSON file')}</div>
       <div class="fRow">${btn('secSend', 'Send section properties', 'The composite section properties and outline for the MCT generator and LL & DL (bridgeSuite.v1.psSection)')}${btn('secExport', 'Export (JSON)', 'The same section hand-off as a JSON file')}</div>
       <div class="fRow">${btn('capSend', 'Send capacity to the MCT rating', 'φMn± and φVn at every station of the girder for the MCT generator\'s AASHTO rating (bridgeSuite.v1.capacity)')}${btn('capExport', 'Export (JSON)', 'The same capacity hand-off as a JSON file')}</div>
-      <p class="note">Each send replaces what the old app (or another copy of this app) last sent on the same channel, as two copies of the old app would. The shared design beam is shown above the output tabs (read only; it is chosen in LL &amp; DL). The channel locks (auto-follow) of the old app are not part of this app yet.</p>
+      <p class="note">Each send replaces what the old app (or another copy of this app) last sent on the same channel, as two copies of the old app would. The shared design beam is shown above the output tabs (read only; it is chosen in LL &amp; DL). Every hand-off is a click (the old app's channel locks are not used): when a channel's data changes after this project sent or loaded it, a banner names it (here and above the output tabs) with Send / Load, which is the same click as the button here.</p>
     </div></section>`;
   }
 
@@ -76,12 +81,16 @@
     const P = ctx.P(), pl = H().pmPlan(P, r.payload), src = BX().describe(r.payload);
     if (!pl.lines.length) { say('Shared project info (' + src + ') already matches this tool. Nothing to change.'); return; }
     if (!window.confirm('Use shared project info?\nFrom: ' + src + '\n\nThis will overwrite:\n' + pl.lines.join('\n'))) return;
+    HSt().setLoaded(P, 'projectMeta', { at: r.payload.producedAt || '', sig: 'same' });   // HO-D2: what this project loaded
     Object.assign(P.project, pl.upd); ctx.changed();
   }
   function pmShare(ctx) {
     const f = H().pmFields(ctx.P());
     const r = BX().publish('projectMeta', { _schema: 'bridge-project-meta', fields: f }, document.title, FILE);
-    if (r.error) say('Could not share project info: ' + r.error); else say('Project info shared. Other tools can load it with "Use shared project info".');
+    if (r.error) { say('Could not share project info: ' + r.error); return; }
+    const P = ctx.P(); HSt().setSent(P, 'projectMeta', { sig: HSt().pmSig(H(), P), at: r.payload.producedAt });   // HO-D2: what this project sent
+    if (HSt().loadedOf(P, 'projectMeta')) HSt().setLoaded(P, 'projectMeta', { at: r.payload.producedAt, sig: 'same' });   // the shared info is now this project's own
+    say('Project info shared. Other tools can load it with "Use shared project info".'); ctx.changed();
   }
   /* the pulls write the girder type shown (its overrides); without girder types (a project not yet migrated) the base design */
   function applyLoads(ctx, fields) { H().applyLoads(ctx.P(), ctx.cell(), fields); ctx.changed(); }
@@ -89,9 +98,9 @@
   function lldfPull(ctx, raw0, via) {
     const rr = ctx.result(); if (!rr || !rr.inp) { say('There is no girder design to pull for.'); return; }
     const P = ctx.P(), c = ctx.cell(), inp = rr.inp, raw = raw0 != null ? raw0 : getRaw('bridgeSuite.v1.lldf');
-    let nb = null; try { nb = raw ? JSON.parse(raw).Nb : null; } catch (e) { nb = null; }
-    // the design beam of the old app = the line shown, when LL & DL has the same girder count (its beam numbers are these lines)
-    const db = c && nb != null && +nb === +P.xs.nb ? { index: c.g, label: 'G' + c.g, clsLabel: inp.loads.pos === 'exterior' ? 'exterior' : 'interior' } : null;
+    // the design beam of the old app = the line shown, when LL & DL has the same girder count (its beam numbers are these lines; HO-D2:
+    // the same rule moved to engine/hostale.js lldfBeam, unchanged, so the stale check reads the pull as the pull does)
+    const db = HSt().lldfBeam(P, c, inp, raw);
     const r = H().lldfResolve(inp, raw, db);
     if (r.why) { say(r.why); return; }
     const when = (r.at || '').slice(0, 16).replace('T', ' ');
@@ -104,6 +113,7 @@
       + (c ? '\nIt changes the girder type ' + c.label + ' (every line of that type).' : '')
       + '\n\nApply?';
     if (!window.confirm(msg)) return;
+    HSt().setLoaded(P, 'lldf', { at: r.at, sig: HSt().sig(H().lldfFields(inp, r)), cell: cellRef(ctx), via: via || 'LL & DL' });   // HO-D2: what this design uses
     applyLoads(ctx, H().lldfFields(inp, r));
     BX().markAdopted('lldf', H().RX, r.at);
   }
@@ -121,6 +131,7 @@
       + (c ? '\nIt changes the girder type ' + c.label + ' (every line of that type).\n' : '')
       + '\nApply the DC2 and DW values?';
     if (!window.confirm(msg)) return;
+    HSt().setLoaded(P, 'dlLoads', { at: r.at, sig: HSt().sig(H().dlTheirs(r)), cell: cellRef(ctx) });   // HO-D2: what this design uses
     applyLoads(ctx, H().dlTheirs(r));
     BX().markAdopted('dlLoads', H().RX, r.at);
   }
@@ -138,7 +149,9 @@
     const r = BX().publish('superReactions', payload, H().PRODUCER, FILE);
     if (r.error) { say('Could not send the reactions: ' + r.error); return; }
     write(BX().NS + 'superReactions.by.' + H().SR_ID, JSON.stringify(r.payload));
+    HSt().setSent(ctx.P(), 'superReactions', { sig: HSt().sig(payload), at: r.payload.producedAt, cell: cellRef(ctx) });   // HO-D2
     say('Reactions sent to Substructure Loading (unfactored, kip, one girder line):\n\n' + srSummary(r.payload) + '\n\nIn Bridge Substructure Loading, Reactions tab, click "Pull from PS-Beam".');
+    ctx.changed();
   }
   function srExport(ctx) {
     const payload = srBuilt(ctx); if (!payload) return;
@@ -150,49 +163,55 @@
   function secSend(ctx, exp) {
     const r = needR(ctx); if (!r) return; const p = H().psSection(r.inp, r.R, new Date().toISOString()); if (!p) { say('No section properties (input error).'); return; }
     if (exp) { exportP('psSection', p); return; }
-    if (write('bridgeSuite.v1.psSection', JSON.stringify(p)) && write('bridgeSuite.v1.psSection.updatedAt', p.producedAt))
-      say('Section properties sent (composite I = ' + Math.round(p.Ic) + ' in⁴, ' + (p.memberKey || 'this girder') + '). The MCT generator and LL & DL Distribution can use them.');
+    if (write('bridgeSuite.v1.psSection', JSON.stringify(p)) && write('bridgeSuite.v1.psSection.updatedAt', p.producedAt)) {
+      HSt().setSent(ctx.P(), 'psSection', { sig: HSt().sig(p), at: p.producedAt, cell: cellRef(ctx) });   // HO-D2
+      say('Section properties sent (composite I = ' + Math.round(p.Ic) + ' in⁴, ' + (p.memberKey || 'this girder') + '). The MCT generator and LL & DL Distribution can use them.'); ctx.changed(); }
   }
   function geoSend(ctx, exp) {
     const r = needR(ctx); if (!r) return; const b = H().lldfGeom(r.inp, r.R, new Date().toISOString()); if (b.error) { say(b.error); return; }
     if (exp) { exportP('lldfGeom', b.payload); return; }
-    if (write('bridgeSuite.v1.lldfGeom', JSON.stringify(b.payload)))
-      say('Geometry sent to LL & DL Distribution (' + b.payload.Nb + ' girders at ' + f3(b.payload.inputs.spacings[0]) + ' ft, span ' + b.payload.inputs.spans.map(f2).join(', ') + ' ft). Open LL & DL Distribution to adopt it.');
+    if (write('bridgeSuite.v1.lldfGeom', JSON.stringify(b.payload))) {
+      HSt().setSent(ctx.P(), 'lldfGeom', { sig: HSt().sig(b.payload), at: b.payload.producedAt, cell: cellRef(ctx) });   // HO-D2
+      say('Geometry sent to LL & DL Distribution (' + b.payload.Nb + ' girders at ' + f3(b.payload.inputs.spacings[0]) + ' ft, span ' + b.payload.inputs.spans.map(f2).join(', ') + ' ft). Open LL & DL Distribution to adopt it.'); ctx.changed(); }
   }
   function capSend(ctx, exp) {
     const r = needR(ctx); if (!r) return; const b = H().capacity(r.inp, r.R, new Date().toISOString()); if (b.error) { say(b.error); return; }
     if (exp) { exportP('capacity', b.payload); return; }
-    if (write('bridgeSuite.v1.capacity', JSON.stringify(b.payload)) && write('bridgeSuite.v1.capacity.updatedAt', b.payload.producedAt))
-      say('Capacity published — ' + b.payload.stationCount + ' stations over ' + b.spans + ' span(s).\n\nOpen the MCT app → AASHTO Rating and apply the "Design capacity received" banner.' + (b.warns.length ? '\n\nWarnings:\n• ' + b.warns.join('\n• ') : ''));
+    if (write('bridgeSuite.v1.capacity', JSON.stringify(b.payload)) && write('bridgeSuite.v1.capacity.updatedAt', b.payload.producedAt)) {
+      HSt().setSent(ctx.P(), 'capacity', { sig: HSt().capSig(r.inp, b.payload), at: b.payload.producedAt, cell: cellRef(ctx) });   // HO-D2
+      say('Capacity published — ' + b.payload.stationCount + ' stations over ' + b.spans + ' span(s).\n\nOpen the MCT app → AASHTO Rating and apply the "Design capacity received" banner.' + (b.warns.length ? '\n\nWarnings:\n• ' + b.warns.join('\n• ') : '')); ctx.changed(); }
   }
 
   /* batch F: subSend(ctx, file): the Steel Bridge app's subSend. Every ticked channel is built first (nothing is sent when one fails), then
      published (channel key, .updatedAt), its .by copy and its per-project copy (and upload with Cloud sync); file: one JSON file per box. */
-  async function subSend(ctx, file) {
-    const todo = [SEND.geo && 'geo', SEND.rx && 'rx'].filter(Boolean);
+  async function subSend(ctx, file, only) {   // only (HO-D2, the stale banner's Send): ['geo'] or ['rx'] whatever the boxes
+    const todo = (only || [SEND.geo && 'geo', SEND.rx && 'rx']).filter(Boolean);
     if (!todo.length) { say('Tick Geometry, Reactions or both.'); return; }
     const A = ctx.all ? ctx.all() : null;
     if (!A) { say(`Nothing was ${file ? 'exported' : 'sent'}: fix the inputs first (the input errors are listed above the results).`); return; }
     const P = ctx.P(), built = {}, errs = [];
     todo.forEach(k => { const r = k === 'geo' ? H().sgPayload(P, A.cells) : H().srAll(P, A.cells); if (r.error) errs.push(`${k === 'geo' ? 'Geometry' : 'Reactions'}: ${r.error}`); else built[k] = r; });
     if (errs.length) { say(`Nothing was ${file ? 'exported' : 'sent'}.\n\n${errs.join('\n')}`); return; }
+    const sg = {}; todo.forEach(k => { sg[k] = HSt().sig(built[k].payload); });   // HO-D2: the sig of what is sent (before the device field)
     const dev = HS() ? HS().deviceName(localStorage) : ''; todo.forEach(k => { if (dev) built[k].payload.device = dev; });   // §5.1 optional envelope field
     const CH = { geo: { ch: 'superGeometry', by: H().GEO_ID }, rx: { ch: 'superReactions', by: H().SR_ID } };
     if (file) { todo.forEach(k => exportP(CH[k].ch, Object.assign({}, built[k].payload, { producedAt: new Date().toISOString() }))); return; }
-    const out = [], pname = String((P.project || {}).name || '').trim();
+    const out = [], pname = String((P.project || {}).name || '').trim(); let sent = 0;
     for (const k of todo) {
       const c = CH[k], w = BX().publish(c.ch, built[k].payload, H().PRODUCER, FILE);
       if (w.error) { out.push(`${k === 'geo' ? 'Geometry' : 'Reactions'}: NOT sent: ${w.error} Use "Export hand-off (JSON)" instead.`); continue; }
       write(BX().NS + c.ch + '.by.' + c.by, JSON.stringify(w.payload));   // the .by copy (§4.4, §4.14)
+      HSt().setSent(P, k === 'geo' ? 'superGeometry' : 'superReactionsAll', { sig: sg[k], at: w.payload.producedAt }); sent++;   // HO-D2
       let cl = '';
       if (HS()) { const r = await HS().send({ storage: localStorage, channel: c.ch, producer: H().GEO_ID, payload: w.payload, fetch: (u, i) => window.fetch(u, i) });
         cl = !r.ok ? ` (the per-project copy was not saved: ${r.error})` : !r.pid ? '' : r.cloud && r.cloud.ok ? '; also uploaded to GitHub' : r.cloud && r.cloud.queued ? `; GitHub upload waiting (${r.cloud.error})` : ''; }
       out.push(k === 'geo' ? `Geometry sent: ${built.geo.sum}${cl}.` : `Reactions sent (unfactored, kip, DC1 / DC2 / DW of every girder line)${cl}:\n${built.rx.sum}`);
     }
     say(`${pname ? `Kept for project "${pname}".` : 'This project has no name, so the send is kept only as the latest hand-off (no project). Enter a project name on this tab to keep one copy per project.'}\n\n${out.join('\n\n')}\n\nIn Bridge Substructure Loading: Project tab, Hand-offs card, "Pull geometry from Steel Bridge Design" and "Pull from PS-Beam / GirderDetail". Each asks which project first.`);
-    if (ctx.redrawIn) ctx.redrawIn();   // the card's "Last sent"
+    if (sent) ctx.changed(); else if (ctx.redrawIn) ctx.redrawIn();   // the card's "Last sent" (HO-D2: and the record of this project's sends)
   }
   function onClick(e, ctx) {
+    if (onStale(e, ctx)) return true;   // HO-D2: the card's stale banners
     const b = e.target.closest('[data-ho]'); if (!b) return false;
     if (!BX() || !H()) { say('The hand-off helper is not available in this browser.'); return true; }
     const a = b.dataset.ho;
@@ -205,6 +224,92 @@
     return true;
   }
   function refresh() { document.querySelectorAll('[data-ho-new]').forEach(s => { s.hidden = !isNew(s.dataset.hoNew); }); }
+  /* ---- HO-D2 (engineer decision 2026-11-21): the stale banners (display only; each button is the card's own click action) ----
+     staleItems(ctx): every channel this project has a record of (engine/hostale.js), with its state; kept while the project text, the
+     result state and the stored hand-offs are the same (the payloads are rebuilt from the page's cached results only when one changes).
+     staleBar(ctx): the banner above the output tabs (every tab; the channels out of date, each with Send / Load) and the card's #hoStale
+     (the same banners and each recorded channel's status). ctx = hoCtx (index.html): + resultOf(k, g), allNow(), errN(), goin(). */
+  const HSt = () => window.PSBHoStale;
+  let CTX = null, cardHtml = '', memo = { key: null, items: [] };
+  const cellRef = ctx => { const c = ctx.cell(), P = ctx.P(); return c && P.types && P.types[c.k] ? { id: P.types[c.k].id, g: c.g, label: c.label } : null; };
+  const cellTxt = c => c ? ` of ${c.label} on G${c.g}` : '';
+  /* cellRes(ctx, cell): { inp, R } of the girder type (id) and line recorded, { gone: true } when it is no longer in the project, null: not now */
+  function cellRes(ctx, cell) {
+    const P = ctx.P(), B = window.PSBBridge;
+    if (!cell) { const r = ctx.result(); return r && r.R && !r.R.error ? r : null; }
+    const k = (P.types || []).findIndex(t => t.id === cell.id);
+    if (k < 0 || !B || !B.typeLines(P, k).includes(cell.g)) return { gone: true };
+    return ctx.resultOf ? ctx.resultOf(k, cell.g) : null;
+  }
+  const atOf = raw => { try { const p = raw ? JSON.parse(raw) : null; return (p && p.producedAt) || ''; } catch (e) { return ''; } };
+  const WATCH = ['psSection', 'lldfGeom', 'capacity', 'superReactions', 'superGeometry', 'projectMeta', 'lldf', 'dlLoads'];
+  function staleItems(ctx) {
+    const S = HSt(), h = H(), B = window.PSBBridge; if (!S || !h || !ctx || !BX()) return [];
+    const P = ctx.P(); if (!P || (!P.handoffs && !P.demands)) return [];   // nothing recorded (every project saved before): no banner
+    const NS = BX().NS, raw = {}; WATCH.forEach(c => { raw[c] = getRaw(NS + c) || ''; });
+    const K = h.MCT_K, mraw = [K.latest, K.map, K.geom, K.geomAdopted].map(k => getRaw(k) || '');
+    const A = !(ctx.errN && ctx.errN()) && ctx.allNow ? ctx.allNow() : null;
+    const key = [JSON.stringify(P), ctx.errN ? ctx.errN() : 0, A ? 1 : 0].concat(WATCH.map(c => raw[c]), mraw).join('\u0001');
+    if (memo.key === key) return memo.items;
+    const it = [];
+    S.OUT_IDS.forEach(id => {
+      const rec = S.sentOf(P, id); if (!rec) return;
+      const C = S.CH[id]; let cur = null, gone = false;
+      if (C.cell) { const r = cellRes(ctx, rec.cell); if (r && r.gone) gone = true; else if (r) cur = S.cellSig(h, id, r.inp, r.R); }
+      else if (id === 'projectMeta') cur = S.pmSig(h, P);
+      else cur = A ? S.allSig(h, id, P, A.cells) : null;
+      const st = gone ? 'gone' : S.outState(rec, cur), sh = atOf(raw[C.ch]);
+      it.push({ id, dir: 'out', state: st, rec, later: sh && rec.at && sh !== rec.at ? sh : '', head: `${C.label} (${C.ch})${cellTxt(rec.cell)}`, msg: `changed since last sent to ${C.to}`, btn: 'Send' });
+    });
+    S.IN_IDS.forEach(id => {
+      const C = S.CH[id], rec = S.loadedOf(P, C.rec || id); if (!rec) return;
+      let cur = null, st;
+      if (id === 'projectMetaIn') st = S.inState(rec, S.pmCur(h, P, raw.projectMeta));
+      else { const r = cellRes(ctx, rec.cell);
+        if (r && r.gone) st = 'gone'; else if (!r) st = 'unchecked';
+        else { cur = id === 'lldf' ? S.lldfCur(h, P, rec.cell ? { g: rec.cell.g } : ctx.cell(), r.inp, raw.lldf) : S.dlCur(h, raw.dlLoads); st = S.inState(rec, cur); } }
+      it.push({ id, dir: 'in', state: st, rec, head: `${C.label} (${C.ch})${cellTxt(rec.cell)}`, msg: id === 'projectMetaIn' ? 'another tool has shared newer project info than this project uses' : 'the LLDF tool has newer data than this design uses', btn: 'Load' });
+    });
+    const mct = B ? S.mctState(P, B.types(P), getRaw, K) : [];
+    mct.forEach(q => it.push({ id: 'mct', tid: q.id, dir: 'in', state: q.state, rec: { at: q.at }, head: `MCT demands (handoffs) of ${q.label}`, msg: `the MCT Generator has published newer demands${q.member ? ` for ${q.member}` : ''} than this design uses (loaded: hand-off ${q.hid}; latest: ${q.latest})`, btn: 'Load' }));
+    const g = S.geoState(mct, h.geomPending(getRaw));
+    if (g) it.push({ id: 'geometryChanges', dir: 'in', state: g.state, rec: {}, head: 'MCT geometry changes (geometryChanges)', msg: `the MCT model changed (${g.n} change${g.n === 1 ? '' : 's'}) after the demands of ${g.types.join(', ')} were loaded`, btn: 'Review' });
+    memo = { key, items: it };
+    return it;
+  }
+  const STX = { current: 'up to date', stale: 'out of date', unchecked: 'cannot be checked now (input errors, or the results are still running)', gone: 'the girder type or line is no longer in the project', none: 'the data is no longer in this browser', unknown: '' };
+  const btnOf = q => `<button type="button" class="pri" data-hos="${q.id}"${q.tid ? ` data-tid="${esc(q.tid)}"` : ''}>${q.btn}</button>`;
+  function cardBody(it) {
+    const st = it.filter(q => q.state === 'stale');
+    const ban = st.map(q => `<div class="notice hoStaleN" data-hos-ch="${q.id}${q.tid ? '.' + esc(q.tid) : ''}"><div><b>${esc(q.head)}</b>: ${esc(q.msg)}.</div><div class="nBtns">${btnOf(q)}</div></div>`).join('');
+    const rows = it.filter(q => q.id !== 'mct' && q.id !== 'geometryChanges').map(q => `<li>${esc(q.head)}: ${q.dir === 'out' ? 'sent' : 'loaded'} ${esc(whenL(q.rec.at))}${q.rec.via && q.rec.via !== 'LL & DL' ? ` (${esc(q.rec.via)})` : ''} — <b>${esc(STX[q.state] || q.state)}</b>${q.later ? ` <span class="note">(the shared key now holds a later send, ${esc(whenL(q.later))})</span>` : ''}</li>`).join('');
+    return ban + `<p class="note"><b>This project's hand-offs:</b> ${rows ? '' : 'nothing sent or loaded from this project yet (or only before this app kept a record of it), so no banner is shown.'}</p>${rows ? `<ul class="note hoStList">${rows}</ul>` : ''}`;
+  }
+  function staleBar(ctx) {
+    ctx = ctx || CTX; let it = [];
+    try { it = staleItems(ctx); } catch (e) { console.warn(e); it = []; }
+    cardHtml = cardBody(it); const el = document.getElementById('hoStale'); if (el) el.innerHTML = cardHtml;
+    const h = H(), pend = h && h.mctPending ? h.mctPending(getRaw) : null, gp = h && h.geomPending ? h.geomPending(getRaw) : null;
+    const bar = it.filter(q => q.state === 'stale' && !(q.id === 'mct' && pend) && !(q.id === 'geometryChanges' && gp));   // the MCT banners above say it already
+    if (!bar.length) return '';
+    return `<div class="notice hoStaleBar" id="hoStaleBar" role="status"><div><b>Hand-offs out of date</b> (this project; nothing is sent or loaded until you click):<ul class="hoStList">${bar.map(q => `<li><b>${esc(q.head)}</b>: ${esc(q.msg)} ${btnOf(q)}</li>`).join('')}</ul></div><div class="nBtns"><button type="button" data-hos-go>Hand-offs card</button></div></div>`;
+  }
+  /* onStale(e, ctx): a stale banner's button = the card's click action (a girder hand-off: its girder type and line shown first, ctx.pick) */
+  function onStale(e, ctx) {
+    if (e.target.closest('[data-hos-go]')) { e.preventDefault(); if (ctx.goin) ctx.goin(); return true; }
+    const b = e.target.closest('[data-hos]'); if (!b) return false;
+    e.preventDefault(); if (!BX() || !H() || !HSt()) { say('The hand-off helper is not available in this browser.'); return true; }
+    const id = b.dataset.hos, P = ctx.P(), S = HSt(), C = S.CH[id] || {}, rec = C.dir === 'out' ? S.sentOf(P, id) : S.loadedOf(P, C.rec || id);
+    const show = cell => { if (!cell || !ctx.pick) return; const k = (P.types || []).findIndex(t => t.id === cell.id), sh = ctx.cell(); if (k >= 0 && (!sh || sh.k !== k || sh.g !== cell.g)) ctx.pick(k, cell.g); };
+    const run = {
+      psSection: c => secSend(c, false), lldfGeom: c => geoSend(c, false), capacity: c => capSend(c, false), superReactions: srSend,
+      superReactionsAll: c => subSend(c, false, ['rx']), superGeometry: c => subSend(c, false, ['geo']), projectMeta: pmShare,
+      lldf: c => lldfPull(c), dlLoads: dlPull, projectMetaIn: pmUse, mct: c => mctLoad(c, b.dataset.tid), geometryChanges: openGeo }[id];
+    if (!run) return true;
+    if (rec && rec.cell) show(rec.cell);
+    run(ctx); refresh();
+    return true;
+  }
   /* ---- batch D3 (2026-11-15): the MCT demands hand-off and the MCT geometry changes (the old app's banners, O:9603-9662) ----
      mctBanner(P): the banners at the top of the output panel: "New analysis data available" (Load into a girder type / Not now) or, for a
      payload newer than this app reads, "Analysis output is newer than this app" (dismiss); "Geometry has been updated in MCT – click to
@@ -272,9 +377,9 @@
     return `<div class="note" id="dbChip" role="status"><b>Design beam</b> (LL &amp; DL Distribution, bridgeSuite.v1.designBeam): <b>${lbl}</b>${act}</div>`;
   }
   /* mctLoad(ctx): Load the pending hand-off into the girder type chosen in the banner (one change = one Undo step) */
-  function mctLoad(ctx) {
-    const h = H(), D = window.PSBDemands, B = window.PSBBridge, P = ctx.P(), r = h.mctPending(getRaw); if (!r || !r.supported) return false;
-    const sel = document.getElementById('mctType'), id = sel ? sel.value : (window.PSBDemandsUI.shownType(P) || {}).id, T = B.types(P).find(t => t.id === id);
+  function mctLoad(ctx, tid) {   // tid (HO-D2, the stale banner's Load): that girder type, and the latest hand-off even if "Not now" was clicked
+    const h = H(), D = window.PSBDemands, B = window.PSBBridge, P = ctx.P(), r = h.mctPending(tid ? k => (k === h.MCT_K.adopted ? null : getRaw(k)) : getRaw); if (!r || !r.supported) return false;
+    const sel = document.getElementById('mctType'), id = tid || (sel ? sel.value : (window.PSBDemandsUI.shownType(P) || {}).id), T = B.types(P).find(t => t.id === id);
     if (!T) { say('Choose the girder type to load the demands into.'); return false; }
     const q = h.mctPlan(P, T, r.payload); if (!q.ok) { say(`The MCT hand-off cannot be loaded: ${q.error}`); return false; }
     const lines = q.lines.slice();
@@ -287,16 +392,18 @@
   }
   /* onMct(e, ctx): the banners' buttons (ctx: hoCtx + toast, redraw) */
   function onMct(e, ctx) {
+    if (onStale(e, ctx)) return true;   // HO-D2: the stale banner above the output tabs
     const b = e.target.closest('[data-mct]'); if (!b || !H() || !H().mctPending) return false;
     e.preventDefault(); const h = H(), a = b.dataset.mct;
     if (a === 'dbShow') { if (ctx.pick) ctx.pick(+b.dataset.k, +b.dataset.g); return true; }   // batch F3: the design beam's line
     if (a === 'load') { mctLoad(ctx); return true; }
     if (a === 'dismiss') { const r = h.mctPending(getRaw); if (r) setRaw(h.MCT_K.adopted, r.token); ctx.redraw(); return true; }
-    if (a === 'geo') { const d = geoDialog(ctx.P()); if (d) { d.__ctx = ctx; if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', ''); } return true; }
+    if (a === 'geo') { openGeo(ctx); return true; }
     return true;
   }
-  function init(onMctChange) { document.addEventListener('change', e => { const t = e.target; if (t && t.dataset && t.dataset.hoOpt) SEND[t.dataset.hoOpt] = !!t.checked; });   // batch F
+  function openGeo(ctx) { const d = geoDialog(ctx.P()); if (d) { d.__ctx = ctx; if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', ''); } }
+  function init(onMctChange, ctx) { if (ctx) CTX = ctx; document.addEventListener('change', e => { const t = e.target; if (t && t.dataset && t.dataset.hoOpt) SEND[t.dataset.hoOpt] = !!t.checked; });   // batch F
     window.addEventListener('storage', e => { if (!e.key || /^bridgeSuite\.v1\.(lldf|dlLoads)/.test(e.key)) refresh();
-    if (onMctChange && (!e.key || /^bridgeSuite\.v1\.(latestId|updatedAt|handoffs|geometryChanges|designBeam|beamRoster)/.test(e.key))) onMctChange(); }); }   // batch F3: + the design beam chip   // batch D3: the banners follow the MCT Generator's sends
-  window.PSBHandoffUI = { card, onClick, refresh, init, mctBanner, onMct, mctLoad, beamChip };
+    if (onMctChange && (!e.key || /^bridgeSuite\.v1\.(latestId|updatedAt|handoffs|geometryChanges|designBeam|beamRoster|lldf|dlLoads|projectMeta|psSection|capacity|superReactions|superGeometry)/.test(e.key))) onMctChange(); }); }   // HO-D2: + every channel of the stale banners   // batch F3: + the design beam chip   // batch D3: the banners follow the MCT Generator's sends
+  window.PSBHandoffUI = { card, onClick, refresh, init, mctBanner, onMct, mctLoad, beamChip, staleBar, staleItems };
 })();

@@ -260,7 +260,8 @@
      figure of §2 after the framing plan; a note when the inputs changed after the capture. Display only; none in Node unless given. */
   function snapFig(P, X) {
     const f = X.snap3d; if (!f || !/^data:image\/png;base64,/.test(String(f.png || ''))) return [];
-    const stale = f.key && f.key !== JSON.stringify(P);
+    const noHo = t => { try { const o = JSON.parse(t); delete o.handoffs; return JSON.stringify(o); } catch (e) { return t; } };   // HO-D2: a send (P.handoffs) is not an input change
+    const stale = f.key && noHo(f.key) !== noHo(JSON.stringify(P));
     return [{ type: 'figure', caption: `3D view (captured on the 3D view tab, ${f.at || ''}): ${f.meta || ''}`, svg: `<img src="${f.png}" alt="3D view of the bridge" style="width:100%;max-width:7.3in;height:auto;display:block">` },
       note(stale ? 'Captured before the last input change: capture again on the [[tab:3d|3D view tab]] for the inputs this report works.' : 'Display only: the girders, deck, supports and the reinforcement layers chosen on the [[tab:3d|3D view tab]] when it was captured.', !!stale)];
   }

@@ -66,6 +66,11 @@
                       demand table) or 'midas' (a MIDAS demands file, kept as read). Absent (every project saved before) = every type uses this
                       app's analysis, as before: those projects are byte-identical and compute as before (no migration). An old-app design
                       with MIDAS demands (engine/legacy.js) gets them here for its type (PS-18), so it computes as the old app.
+     handoffs: { sent: { <id>: { sig, at, cell? } }, loaded: { <id>: { sig, at, cell?, via? } } }  added 2026-11-21 (engineer decision
+                      HO-D2), optional within version 1: what this project last sent / loaded on each bridgeSuite.v1 hand-off channel
+                      (engine/hostale.js header), written only by a click of Send / Load (ui/handoffs.js). Read by the stale banners only:
+                      no calculation reads it, a send is no Undo step (it stays through Undo / Redo). Absent (every project saved
+                      before) = nothing recorded: no stale banner; those projects are byte-identical and compute as before (no migration).
    }
    Needs the moved engine (engine/pbd-*.js) loaded first for base; without it (a test of this file alone) base is left as it is.
    From PR 2b the engine computes the design girder from base and the bridge values (engine/design.js). */
