@@ -40,8 +40,12 @@ test('2. hand check: web 22 in, flanges 14 × 2 in (d_g = 26 in): no section fit
   // block shear (one line, U_bs = 1): L_ev = 20.70/2 − 0.50 − 4.5 = 5.35; A_vg = (5.35 + 9)(0.35) = 5.0225; A_vn = 5.0225 − 3.5(0.9375)(0.35) = 3.8741;
   // A_tn = (1.5 − 0.5(0.9375))(0.35) = 0.3609; 0.80 min(0.58(65)(3.8741) + 65(0.3609), 0.58(50)(5.0225) + 65(0.3609)) = 0.80 min(169.51, 169.11) = 135.29 kip
   near(Q.Lev, 5.35, 1e-9, 'L_ev'); near(Q.Rbs, 135.29, 5e-3, 'block shear'); near(Q.Vb / Q.Rbs, 0.081, 1e-3, 'block shear ratio');
-  // flexure at the cope: M = 621.25 + 10.899(2.0 + 6.0) = 708.44 kip-in; λ = 19.7√50/(10(0.35)√(475 + 280(19.7/6)²)) = 0.673 ≤ 0.7: Q = 1; φM_n = 0.9(50)(22.64) = 1018.7; ratio 0.695
-  near(Q.Mcp, 708.44, 0.01, 'M at the cope'); near(Q.lamC, 0.6734, 1e-4, 'λ'); assert.equal(Q.Q, 1); near(Q.phiMc, 1018.74, 0.01, 'φM_n'); near(Q.Mcp / Q.phiMc, 0.695, 1e-3, 'flexure ratio');
+  // flexure at the cope: M = 621.25 + 10.899(2.0 + 6.0) = 708.44 kip-in; λ = 19.7√50/(10(0.35)√(475 + 280(19.7/6)²)) = 0.673 ≤ 0.7: Q = 1; φ_f M_n = 1.00(50)(22.64) = 1131.9; ratio 0.626
+  // (SBCOPEPHI, engineer decision 2026-11-21: φ_f = 1.00, AASHTO LRFD 10th Ed. Art. 6.5.4.2; before φ = 0.9: 1018.7, ratio 0.695)
+  near(Q.Mcp, 708.44, 0.01, 'M at the cope'); near(Q.lamC, 0.6734, 1e-4, 'λ'); assert.equal(Q.Q, 1); near(Q.phiMc, 1131.93, 0.01, 'φM_n'); near(Q.Mcp / Q.phiMc, 0.626, 1e-3, 'flexure ratio');
+  // wind at the cope: F_w/P_r + M_w/φ_f M_n = 1.523/290.29 + 45.16/1131.93 = 0.0052 + 0.0399 = 0.045 (before, φ = 0.9: 0.0052 + 0.0443 = 0.050)
+  near(Q.iaC, 1.5232533 / 290.29 + 45.163125 / 1131.929, 1e-5, 'wind at the cope'); near(Q.iaC, 0.045, 1e-3, 'wind at the cope');
+  { const st = k.R.steps.find(t => t.id === 'cf.cfd.cope.M'); assert.match(st.sub, /^1\.00\(50\)/); assert.match(st.ref, /6\.5\.4\.2 \(engineer decision 2026-11-21\)/); assert.match(st.note, /φ_f = 1\.00/); }
   // every coped item passes; the fit on h_e passes (19.70 ≤ 20.00)
   const cp = k.d.items.filter(i => i.cope); assert.equal(cp.length, 8); assert.deepEqual(J(cp.filter(i => i.st !== 'pass').map(i => i.loc)), []);
   assert.equal(k.R.SB.hBr, 19.7, 'the 0.8D test takes h_e');

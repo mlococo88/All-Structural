@@ -574,7 +574,7 @@
      factors of 4.6.2.2, AASHTO LRFD 10th Ed. Items (level):
        skew θ_max of the bearing lines > 60° (outside the skew corrections of Tables 4.6.2.2.2e-1, 4.6.2.2.3c-1): FAIL, refined analysis required;
        distribution factor equations outside their range of applicability (Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1, 4.6.2.2.2d-1; SBDLldf.ranges of each
-         girder type): FAIL (engineer's level, 2026-11-19; the old app's SA4 had a warning here: decision pending engineer review);
+         girder type): FAIL (engineer's level, 2026-11-19; the old app's SA4 had a warning here: approved by the engineer 2026-11-21);
        skew index per span I_S = w_g tanθ / L_s (Eq. 4.6.3.3.2-2, p. 4-72; w_g = out-to-out width between the exterior girders, Σ bays; θ the larger
          skew of the span's two bearing lines; L_s the span) > 0.30: NOTE (SBIS, engineer 2026-11-19; was WARNING): 4.6.3.3.2 governs 2D grid and
          plate-and-eccentric-beam models (above 0.30 such a model must include the girders' warping rigidity) and sets no limit on a line-girder
