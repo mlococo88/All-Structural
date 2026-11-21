@@ -155,7 +155,10 @@
     const { kit, n } = PW(), K = kit('rt'), add = K.add;
     const rt = R.rating, sh = R.shrRating, sv = R.svcRating, G = R.g, cp = R.cp;
     add({ id: 'phiCS', label: 'Condition × system factor (used)', sym: '\\phi_{c}\\phi_{s}', eq: '\\min(\\max(\\phi_{c}\\phi_{s},\\ 0.85),\\ 1.0)', sub: `\\min(\\max(${n(rt.phiC, 2)}(${n(rt.phiS, 2)}),\\ 0.85),\\ 1.0)`, value: rt.phiCS, unit: '', d: 3, ref: 'MBE Eq. 6A.4.2.1-3',
-      note: 'φ_c and φ_s: Loads tab (MBE Tables 6A.4.2.3-1, 6A.4.2.4-1; blank = 1.00). Applied to the flexure and shear ratings and the vehicles, not to Service III.' }, clamp(rt.phiC * rt.phiS, 0.85, 1.0), 'rating.phiCS');
+      note: 'φ_c and φ_s: Loads tab (MBE Tables 6A.4.2.3-1, 6A.4.2.4-1; blank = 1.00). Applied to the flexure ratings and the vehicles\' flexure; shear takes φ_s = 1.0 (next step); not to Service III.' }, clamp(rt.phiC * rt.phiS, 0.85, 1.0), 'rating.phiCS');
+    // E1-D4 (engineer decision 2026-11-21): φ_s = 1.0 for shear (engine/rating-along.js apply)
+    if ('phiCSv' in rt) add({ id: 'phiCSv', label: 'Shear: condition factor with φ_s = 1.0 (used)', sym: '\\phi_{c}\\phi_{s,V}', eq: '\\min(\\max(\\phi_{c}(1.0),\\ 0.85),\\ 1.0)', sub: `\\min(\\max(${n(rt.phiC, 2)}(1.0),\\ 0.85),\\ 1.0)`, value: rt.phiCSv, unit: '', d: 3, ref: 'MBE 4th Ed. (2026) Art. 6A.4.2.4; Eq. 6A.4.2.1-3',
+      note: `φ_s = 1.0 (MBE 6A.4.2.4): the system factor is 1.0 for shear at the strength limit state (engineer decision E1-D4, 2026-11-21; as the Steel Bridge app). The lower limit 0.85 is kept on φ_c × 1.0.${rt.phiS !== 1 ? ` The entered φ_s = ${n(rt.phiS, 2)} applies to flexure only.` : ''}` }, clamp(rt.phiC * 1.0, 0.85, 1.0), 'rating.phiCSv');
     // flexure at the governing station
     const fr = R.flexFull.find(r => r.x === rt.x && r.mLLpos > 1e-6);
     add({ id: 'Rn', label: `Flexure: factored resistance at x = ${n(rt.x, 2)} ft (the governing station: lowest inventory RF)`, sym: '\\phi M_{n}', value: rt.Rn, unit: 'kip-ft', d: 1, ref: 'MBE 6A.4', note: 'The strength check\'s φM_n at that station (Flexure tab, the flexure stations).' }, fr ? fr.phiMn / 12 : undefined, 'rating.Rn');
@@ -163,21 +166,32 @@
     else add({ id: 'MDC', label: 'Flexure: dead-load moment (DC) at midspan', sym: 'M_{DC}', value: rt.MDC, unit: 'kip-ft', d: 1, note: 'No station with positive live-load moment: rated at midspan.' }, undefined, 'rating.MDC');
     add({ id: 'MDW', label: 'Flexure: wearing-surface moment (DW)', sym: 'M_{DW}', value: rt.MDW, unit: 'kip-ft', d: 1 }, fr ? fr.mDW : undefined, 'rating.MDW');
     add({ id: 'MLL', label: 'Flexure: live-load moment (HL-93 with IM and DF)', sym: 'M_{LL+IM}', value: rt.MLL, unit: 'kip-ft', d: 1, note: 'Analysis tab.' }, fr ? fr.mLLpos : undefined, 'rating.MLL');
-    const rfEq = (g, R_, Dc, Dw, L_) => `\\frac{${n(rt.phiCS, 3)}(${n(R_, 1)}) - 1.25(${n(Dc, 1)}) - 1.50(${n(Dw, 1)})}{${g}(${n(L_, 1)})}`;
-    const rfF = (Rn, Dc, Dw, Ll, g) => (rt.phiCS * Rn - 1.25 * Dc - 1.50 * Dw) / (g * Ll);
+    // E1-D5 (engineer decision 2026-11-21): each dead-load part with its own factor where one relieves the positive moment (dl: rating-along.js
+    // posDL of the station); where every part adds, the engine's 1.25 M_DC + 1.50 M_DW (dl.max, or no dl)
+    const relv = dl => !!(dl && !dl.max), cs = rt.phiCS, AL0 = window.PSBRatingAlong;
+    const rfEq = (g, R_, Dc, Dw, L_, dl) => relv(dl) ? `\\frac{${n(cs, 3)}(${n(R_, 1)}) - [${n(dl.gNC, 2)}(${n(dl.sNC, 1)}) + ${n(dl.g2, 2)}(${n(dl.s2, 1)}) + ${n(dl.gW, 2)}(${n(dl.sW, 1)})]}{${g}(${n(L_, 1)})}`
+      : `\\frac{${n(cs, 3)}(${n(R_, 1)}) - 1.25(${n(Dc, 1)}) - 1.50(${n(Dw, 1)})}{${g}(${n(L_, 1)})}`;
+    const rfF = (Rn, Dc, Dw, Ll, g, dl) => (relv(dl) ? cs * Rn - dl.D : cs * Rn - 1.25 * Dc - 1.50 * Dw) / (g * Ll);
     const eqM = '\\frac{\\phi_{c}\\phi_{s}\\,\\phi M_{n} - \\gamma_{DC}M_{DC} - \\gamma_{DW}M_{DW}}{\\gamma_{LL}\\,M_{LL+IM}}';
-    add({ id: 'RFinv', label: 'Flexure: inventory rating factor (γ_LL = 1.75)', sym: 'RF_{inv}', eq: eqM, sub: rfEq('1.75', rt.Rn, rt.MDC, rt.MDW, rt.MLL), value: rt.RFinv, unit: '', d: 3, ok: rt.okInv, ref: 'MBE Eq. 6A.4.2.1-1', note: 'γ_DC = 1.25, γ_DW = 1.50 (MBE Table 6A.4.2.2-1, Strength I).' }, rfF(rt.Rn, rt.MDC, rt.MDW, rt.MLL, 1.75), 'rating.RFinv');
-    add({ id: 'RFopr', label: 'Flexure: operating rating factor (γ_LL = 1.35)', sym: 'RF_{opr}', eq: eqM, sub: rfEq('1.35', rt.Rn, rt.MDC, rt.MDW, rt.MLL), value: rt.RFopr, unit: '', d: 3, ok: rt.okOpr, ref: 'MBE Eq. 6A.4.2.1-1' }, rfF(rt.Rn, rt.MDC, rt.MDW, rt.MLL, 1.35), 'rating.RFopr');
+    const eqMp = '\\frac{\\phi_{c}\\phi_{s}\\,\\phi M_{n} - [\\gamma_{nc}(M_{g} + M_{DC1}) + \\gamma_{2}M_{DC2} + \\gamma_{w}M_{DW}]}{\\gamma_{LL}\\,M_{LL+IM}}';
+    const gN = dl => (dl && AL0 && AL0.dlNote ? ' ' + AL0.dlNote(dl) : '');
+    add({ id: 'RFinv', label: 'Flexure: inventory rating factor (γ_LL = 1.75)', sym: 'RF_{inv}', eq: relv(rt.dl) ? eqMp : eqM, sub: rfEq('1.75', rt.Rn, rt.MDC, rt.MDW, rt.MLL, rt.dl), value: rt.RFinv, unit: '', d: 3, ok: rt.okInv, ref: 'MBE Eq. 6A.4.2.1-1', note: `${relv(rt.dl) ? 'Strength I (MBE Table 6A.4.2.2-1; AASHTO LRFD 10th Ed. Table 3.4.1-2 for a relieving part).' : 'γ_DC = 1.25, γ_DW = 1.50 (MBE Table 6A.4.2.2-1, Strength I).'}${gN(rt.dl)}` }, rfF(rt.Rn, rt.MDC, rt.MDW, rt.MLL, 1.75, rt.dl), 'rating.RFinv');
+    add({ id: 'RFopr', label: 'Flexure: operating rating factor (γ_LL = 1.35)', sym: 'RF_{opr}', eq: relv(rt.dl) ? eqMp : eqM, sub: rfEq('1.35', rt.Rn, rt.MDC, rt.MDW, rt.MLL, rt.dl), value: rt.RFopr, unit: '', d: 3, ok: rt.okOpr, ref: 'MBE Eq. 6A.4.2.1-1' }, rfF(rt.Rn, rt.MDC, rt.MDW, rt.MLL, 1.35, rt.dl), 'rating.RFopr');
     const md = rt.mid;
-    add({ id: 'RFmid', label: 'Flexure: inventory rating factor at midspan (for comparison)', sym: 'RF_{inv,mid}', eq: eqM, sub: rfEq('1.75', md.Rn, md.MDC, md.MDW, md.MLL), value: md.RFinv, unit: '', d: 3, note: 'Midspan φM_n and demands; also the capacity side of the vehicles below.' }, rfF(md.Rn, md.MDC, md.MDW, md.MLL, 1.75), 'rating.mid.RFinv');
+    add({ id: 'RFmid', label: 'Flexure: inventory rating factor at midspan (for comparison)', sym: 'RF_{inv,mid}', eq: relv(md.dl) ? eqMp : eqM, sub: rfEq('1.75', md.Rn, md.MDC, md.MDW, md.MLL, md.dl), value: md.RFinv, unit: '', d: 3, note: `Midspan φM_n and demands; also the capacity side of the vehicles below.${relv(md.dl) ? gN(md.dl) : ''}` }, rfF(md.Rn, md.MDC, md.MDW, md.MLL, 1.75, md.dl), 'rating.mid.RFinv');
     // shear at the governing shear section
     add({ id: 'phiVn', label: `Shear: factored resistance at x = ${n(sh.x, 2)} ft (the governing shear section)`, sym: '\\phi V_{n}', eq: '\\phi_{v}\\,V_{n}', sub: `${n(R.phiV, 2)}(${n(R.wShear.Vn, 2)})`, value: sh.phiVn, unit: 'kip', d: 1, ref: 'MBE 6A.5.6', note: 'The design\'s general-procedure (MCFT) V_n (Shear tab), where V_u/φV_n is greatest (bearing face excluded).' }, R.phiV * R.wShear.Vn, 'shrRating.phiVn');
     add({ id: 'VDC', label: 'Shear: dead-load shear (DC)', sym: 'V_{DC}', value: sh.VDC, unit: 'kip', d: 1, note: '|V_g + V_DC1 + V_DC2| at x (the engine\'s shear functions; Analysis tab).' }, undefined, 'shrRating.VDC');
     add({ id: 'VDW', label: 'Shear: wearing-surface shear (DW)', sym: 'V_{DW}', value: sh.VDW, unit: 'kip', d: 1 }, undefined, 'shrRating.VDW');
     add({ id: 'VLL', label: 'Shear: live-load shear (HL-93 with IM and DF, envelope)', sym: 'V_{LL+IM}', value: sh.VLL, unit: 'kip', d: 1 }, undefined, 'shrRating.VLL');
-    const eqV = '\\frac{\\phi_{c}\\phi_{s}\\,\\phi V_{n} - \\gamma_{DC}V_{DC} - \\gamma_{DW}V_{DW}}{\\gamma_{LL}\\,V_{LL+IM}}', vOK = sh.VLL > 0;
-    add({ id: 'RFvInv', label: 'Shear: inventory rating factor (γ_LL = 1.75)', sym: 'RF_{v,inv}', eq: eqV, sub: rfEq('1.75', sh.phiVn, sh.VDC, sh.VDW, sh.VLL), value: sh.RFinv, unit: '', d: 3, ok: sh.okInv, ref: 'MBE 6A.5.6', note: vOK ? '' : 'No live-load shear at x: the engine reports 99.' }, vOK ? rfF(sh.phiVn, sh.VDC, sh.VDW, sh.VLL, 1.75) : 99, 'shrRating.RFinv');
-    add({ id: 'RFvOpr', label: 'Shear: operating rating factor (γ_LL = 1.35)', sym: 'RF_{v,opr}', eq: eqV, sub: rfEq('1.35', sh.phiVn, sh.VDC, sh.VDW, sh.VLL), value: sh.RFopr, unit: '', d: 3, ok: sh.okOpr, ref: 'MBE 6A.5.6' }, vOK ? rfF(sh.phiVn, sh.VDC, sh.VDW, sh.VLL, 1.35) : 99, 'shrRating.RFopr');
+    // E1-D4: shear with φ_s = 1.0 (MBE 4th Ed. Art. 6A.4.2.4): φ_c (1.0) = rating.phiCSv (rating.phiCS without engine/rating-along.js)
+    const csV = 'phiCSv' in rt ? rt.phiCSv : rt.phiCS, sV = csV === rt.phiCS && !('phiCSv' in rt);
+    const eqV = sV ? '\\frac{\\phi_{c}\\phi_{s}\\,\\phi V_{n} - \\gamma_{DC}V_{DC} - \\gamma_{DW}V_{DW}}{\\gamma_{LL}\\,V_{LL+IM}}' : '\\frac{\\phi_{c}(1.0)\\,\\phi V_{n} - \\gamma_{DC}V_{DC} - \\gamma_{DW}V_{DW}}{\\gamma_{LL}\\,V_{LL+IM}}', vOK = sh.VLL > 0;
+    const vEq = (g, R_, Dc, Dw, L_) => `\\frac{${n(csV, 3)}(${n(R_, 1)}) - 1.25(${n(Dc, 1)}) - 1.50(${n(Dw, 1)})}{${g}(${n(L_, 1)})}`;
+    const vF = (Rn, Dc, Dw, Ll, g) => (csV * Rn - 1.25 * Dc - 1.50 * Dw) / (g * Ll);
+    const vNote = sV ? '' : `φ_s = 1.0 (MBE 6A.4.2.4): φ_c(1.0) = ${n(csV, 3)} (step "Shear: condition factor with φ_s = 1.0"). `;
+    add({ id: 'RFvInv', label: 'Shear: inventory rating factor (γ_LL = 1.75)', sym: 'RF_{v,inv}', eq: eqV, sub: vEq('1.75', sh.phiVn, sh.VDC, sh.VDW, sh.VLL), value: sh.RFinv, unit: '', d: 3, ok: sh.okInv, ref: 'MBE 6A.5.6', note: vNote + (vOK ? '' : 'No live-load shear at x: the engine reports 99.') }, vOK ? vF(sh.phiVn, sh.VDC, sh.VDW, sh.VLL, 1.75) : 99, 'shrRating.RFinv');
+    add({ id: 'RFvOpr', label: 'Shear: operating rating factor (γ_LL = 1.35)', sym: 'RF_{v,opr}', eq: eqV, sub: vEq('1.35', sh.phiVn, sh.VDC, sh.VDW, sh.VLL), value: sh.RFopr, unit: '', d: 3, ok: sh.okOpr, ref: 'MBE 6A.5.6' }, vOK ? vF(sh.phiVn, sh.VDC, sh.VDW, sh.VLL, 1.35) : 99, 'shrRating.RFopr');
     // Service III at the governing bottom-tension section
     const row = R.grid.find(r => r.x === sv.x), dg = R.diagrams.find(r => r.x === sv.x);
     if (row) {
@@ -194,13 +208,14 @@
     add({ id: 'RFs3', label: 'Service III rating factor (γ_DC = γ_DW = 1.0, γ_LL = 0.8)', sym: 'RF_{SIII}', eq: '\\frac{f_{r} + f_{ps} - \\gamma_{DC}f_{DC} - \\gamma_{DW}f_{DW}}{\\gamma_{LL}\\,f_{LL}}', sub: `\\frac{${n(sv.fr, 3)} + ${n(sv.fPS, 3)} - ${n(sv.fDC, 3)} - ${n(sv.fDW, 3)}}{0.8(${n(sv.fLL, 3)})}`, value: sv.RF, unit: '', d: 3, ok: sv.ok, ref: 'MBE 6A.5.4.1',
       note: sOK ? 'MBE Table 6A.4.2.2-1 (Service III). Mandatory for prestressed concrete; not × φ_c φ_s.' : 'No live-load tension at the bottom fibre: the engine reports 99 (not applicable).' }, sOK ? (sv.fr + sv.fPS - sv.fDC - sv.fDW) / (0.8 * sv.fLL) : 99, 'svcRating.RF');
     // the entered vehicles
-    const capM = rt.phiCS * md.Rn - 1.25 * md.MDC - 1.50 * md.MDW, capV = rt.phiCS * sh.phiVn - 1.25 * sh.VDC - 1.50 * sh.VDW;
+    const capM = relv(md.dl) ? cs * md.Rn - md.dl.D : cs * md.Rn - 1.25 * md.MDC - 1.50 * md.MDW, capV = csV * sh.phiVn - 1.25 * sh.VDC - 1.50 * sh.VDW;   // E1-D5 / E1-D4
     (R.vehRatings || []).forEach((v, i) => {
       const P = `vehRatings.${i}.`, nm = `Vehicle ${i + 1} (${v.name})`;
-      add({ id: `veh${i}.RFm`, label: `${nm}: flexure (midspan)`, sym: 'RF_{M}', eq: '\\frac{\\phi_{c}\\phi_{s}\\,\\phi M_{n} - 1.25\\,M_{DC} - 1.50\\,M_{DW}}{M_{LL,fact}}', sub: `\\frac{${n(rt.phiCS, 3)}(${n(md.Rn, 1)}) - 1.25(${n(md.MDC, 1)}) - 1.50(${n(md.MDW, 1)})}{${n(v.M, 1)}}`, value: v.RFm, unit: '', d: 3, ref: 'MBE 6A.4.4, 6A.4.5',
-        note: v.M > 0 ? `Entered factored M = ${n(v.M, 1)} kip-ft (DF, IM, MPF and γ_LL applied by you); net capacity ${n(capM, 1)} kip-ft (display).` : 'No moment entered: the engine reports 99.' }, v.M > 0 ? capM / v.M : 99, P + 'RFm');
-      add({ id: `veh${i}.RFv`, label: `${nm}: shear (governing shear section)`, sym: 'RF_{V}', eq: '\\frac{\\phi_{c}\\phi_{s}\\,\\phi V_{n} - 1.25\\,V_{DC} - 1.50\\,V_{DW}}{V_{LL,fact}}', sub: `\\frac{${n(rt.phiCS, 3)}(${n(sh.phiVn, 1)}) - 1.25(${n(sh.VDC, 1)}) - 1.50(${n(sh.VDW, 1)})}{${n(v.V, 1)}}`, value: v.RFv, unit: '', d: 3,
-        note: v.V > 0 ? `Net capacity ${n(capV, 1)} kip (display).` : 'No shear entered: the engine reports 99.' }, v.V > 0 ? capV / v.V : 99, P + 'RFv');
+      add({ id: `veh${i}.RFm`, label: `${nm}: flexure (midspan)`, sym: 'RF_{M}', eq: relv(md.dl) ? '\\frac{\\phi_{c}\\phi_{s}\\,\\phi M_{n} - [\\gamma_{nc}(M_{g} + M_{DC1}) + \\gamma_{2}M_{DC2} + \\gamma_{w}M_{DW}]}{M_{LL,fact}}' : '\\frac{\\phi_{c}\\phi_{s}\\,\\phi M_{n} - 1.25\\,M_{DC} - 1.50\\,M_{DW}}{M_{LL,fact}}',
+        sub: relv(md.dl) ? `\\frac{${n(cs, 3)}(${n(md.Rn, 1)}) - [${n(md.dl.gNC, 2)}(${n(md.dl.sNC, 1)}) + ${n(md.dl.g2, 2)}(${n(md.dl.s2, 1)}) + ${n(md.dl.gW, 2)}(${n(md.dl.sW, 1)})]}{${n(v.M, 1)}}` : `\\frac{${n(cs, 3)}(${n(md.Rn, 1)}) - 1.25(${n(md.MDC, 1)}) - 1.50(${n(md.MDW, 1)})}{${n(v.M, 1)}}`, value: v.RFm, unit: '', d: 3, ref: 'MBE 6A.4.4, 6A.4.5',
+        note: (v.M > 0 ? `Entered factored M = ${n(v.M, 1)} kip-ft (DF, IM, MPF and γ_LL applied by you); net capacity ${n(capM, 1)} kip-ft (display).` : 'No moment entered: the engine reports 99.') + (relv(md.dl) ? gN(md.dl) : '') }, v.M > 0 ? capM / v.M : 99, P + 'RFm');
+      add({ id: `veh${i}.RFv`, label: `${nm}: shear (governing shear section)`, sym: 'RF_{V}', eq: sV ? '\\frac{\\phi_{c}\\phi_{s}\\,\\phi V_{n} - 1.25\\,V_{DC} - 1.50\\,V_{DW}}{V_{LL,fact}}' : '\\frac{\\phi_{c}(1.0)\\,\\phi V_{n} - 1.25\\,V_{DC} - 1.50\\,V_{DW}}{V_{LL,fact}}', sub: `\\frac{${n(csV, 3)}(${n(sh.phiVn, 1)}) - 1.25(${n(sh.VDC, 1)}) - 1.50(${n(sh.VDW, 1)})}{${n(v.V, 1)}}`, value: v.RFv, unit: '', d: 3,
+        note: vNote + (v.V > 0 ? `Net capacity ${n(capV, 1)} kip (display).` : 'No shear entered: the engine reports 99.') }, v.V > 0 ? capV / v.V : 99, P + 'RFv');
       add({ id: `veh${i}.RF`, label: `${nm}: rating factor (governing: ${v.gov})`, sym: 'RF', eq: '\\min(RF_{M},\\ RF_{V})', sub: `\\min(${n(v.RFm, 3)},\\ ${n(v.RFv, 3)})`, value: v.RF, unit: '', d: 3, ok: v.ok }, Math.min(v.RFm, v.RFv), P + 'RF');
       if (v.W > 0) add({ id: `veh${i}.RT`, label: `${nm}: rated load`, sym: 'RT', eq: 'RF\\,W', sub: `${n(v.RF, 3)}(${n(v.W, 1)})`, value: v.RT, unit: 'ton', d: 1 }, v.RF * v.W, P + 'RT');
     });

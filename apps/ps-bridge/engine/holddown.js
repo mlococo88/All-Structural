@@ -37,6 +37,9 @@
   // PS-35 (2026-11-14): a box beam or voided slab gets the type (f) / (g) distribution factors (engine/lldf-fg.js); every other shape the engine's
   const compute0 = inp => apply(inp, window.PSBLldfFG ? window.PSBLldfFG.run(inp, engine) : engine(inp));
   // PS-34 (2026-11-14): the pier compression block checked against the family's thickness (engine/pierblock.js; a warning only)
-  const compute = inp => { const R = compute0(inp); return window.PSBPierBlock ? window.PSBPierBlock.apply(inp, R) : R; };
+  const compute1 = inp => { const R = compute0(inp); return window.PSBPierBlock ? window.PSBPierBlock.apply(inp, R) : R; };
+  // E1-D4 / E1-D5 (engineer decisions 2026-11-21): the engine's load rating with φ_s = 1.0 for shear and the positive-moment dead-load
+  // factors part by part (engine/rating-along.js apply)
+  const compute = inp => { const R = compute1(inp); return window.PSBRatingAlong && window.PSBRatingAlong.apply ? window.PSBRatingAlong.apply(inp, R) : R; };
   window.PSBHoldDown = { NAME, FRAC, apply, compute, fracOf };
 })();
