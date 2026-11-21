@@ -150,3 +150,84 @@ test('rating along the girder: an old project (no new field) computes, and a sin
   const P = M.defaultProject(), j = JSON.parse(M.exportJSON(P)), P2 = M.importJSON(JSON.stringify(j)).project, { A } = run(P2);
   assert.ok(A.gov.flexP && A.gov.shear && A.gov.s3); assert.equal(A.gov.flexN, null); assert.equal(A.negNote, '');
 });
+
+// E1-D4 / E1-D5 (engineer decisions 2026-11-21; engine/rating-along.js apply): the engine's rating without the apply (the moved engine's own)
+const raw = inp => { const ap = AL.apply; AL.apply = (i, R) => R; try { return W.PSBHoldDown.compute(JSON.parse(JSON.stringify(inp))); } finally { AL.apply = ap; } };
+const nums = o => JSON.parse(JSON.stringify(o, (k, v) => (['phiCSv', 'phiCSvFloor', 'dl', 'cs'].includes(k) ? undefined : v)));
+
+test('E1-D5 / E1-D4: identity where nothing changes (every dead-load part adds; φ_s = 1.00): the engine\'s rating values bit for bit', () => {
+  let nRel = 0;
+  for (const [name, P] of [...Object.entries(CASES), ...Object.entries(MCASES)]) {
+    const inp = W.PSBDesign.inputs(P); inp.rateVeh = (inp.rateVeh || []).concat([{ name: 'T', M: 1500, V: 60, W: 25 }]);
+    const R1 = W.PSBHoldDown.compute(JSON.parse(JSON.stringify(inp))), R0 = raw(inp), A = AL.of(R1), cs = R1.rating.phiCS;
+    // every positive-flexure row whose parts all add: the engine's rateAt expression, in its order of operations (Object.is)
+    A.rows.filter(r => r.kind === 'flexP').forEach(r => { const p = r.parts;
+      if (p.dl.max) { const cap = cs * p.Rn - 1.25 * (p.mSW + p.mDC1 + p.mDC2) - 1.50 * r.DW; assert.ok(Object.is(r.inv, cap / (1.75 * r.LL)) && Object.is(r.opr, cap / (1.35 * r.LL)), `${name} x = ${r.x}`); }
+      else { nRel++; assert.ok(p.dl.sNC < 0 || p.dl.s2 < 0 || p.dl.sW < 0, 'a relieving part'); } });
+    if (R1.rating.phiS === 1) {
+      // φ_s = 1.00 and no governing station with a relieving part (true on every design here): R.rating, R.shrRating, R.vehRatings unchanged
+      assert.ok(!R1.rating.dl || R1.rating.dl.max, `${name}: the governing flexure station has every part adding`);
+      assert.deepEqual(nums(R1.rating), nums(R0.rating), name); assert.deepEqual(nums(R1.shrRating), nums(R0.shrRating), name); assert.deepEqual(nums(R1.vehRatings), nums(R0.vehRatings), name);
+      assert.ok(Object.is(R1.rating.phiCSv, R1.rating.phiCS), 'shear factor = flexure factor when φ_s = 1.00');
+    }
+    if (!R1.cont && !R1.fe && !R1.useExt) assert.ok(A.rows.filter(r => r.kind === 'flexP').every(r => r.parts.dl.max), `${name}: a simple span has no relieving part`);
+  }
+  assert.ok(nRel > 100, 'the continuous designs have stations with a relieving part: ' + nRel);
+});
+
+test('E1-D5 hand check: continuous 3 spans 100 / 125 / 100 ft, x = 12.5 ft from the left pier (DC2 and DW relieve the positive moment)', () => {
+  const { R, A } = run(CASES['continuous 3 spans, exterior G6 in span 2, skew 35°, restraint, haunch in the section']), q = A.rows.find(r => r.kind === 'flexP' && r.x === 12.5), p = q.parts, dl = p.dl;
+  close(q.C, 11531.840, 1e-5, 'φM_n'); close(p.mSW + p.mDC1, 1239.673, 1e-5, 'M_g + M_DC1'); close(p.mDC2, -174.253, 1e-5, 'M_DC2'); close(q.DW, -145.211, 1e-5, 'M_DW'); close(q.LL, 348.458, 1e-5, 'M_LL+IM');
+  assert.equal(dl.gNC, 1.25); assert.equal(dl.g2, 0.90); assert.equal(dl.gW, 0.65); assert.equal(dl.max, false);
+  // before (1.25 on the net DC, 1.50 on DW): (11531.840 − 1.25 × 1065.420 + 1.50 × 145.211)/(1.75 × 348.458) = 10417.880/609.801 = 17.084
+  const before = (q.C - 1.25 * q.DC - 1.50 * q.DW) / (1.75 * q.LL); close(before, 17.0841, 1e-4, 'before');
+  // after: D = 1.25 × 1239.673 + 0.90 × (−174.253) + 0.65 × (−145.211) = 1549.591 − 156.827 − 94.387 = 1298.377; (11531.840 − 1298.377)/609.801 = 16.782
+  close(dl.D, 1298.377, 1e-5, 'D_u'); close((11531.840 - 1298.377) / (1.75 * 348.458), q.inv, 1e-5, 'hand RF_inv'); close(q.inv, 16.7816, 1e-4, 'RF_inv'); close(q.opr, 21.7540, 1e-4, 'RF_opr');
+  // the governing positive-flexure RF of the design is unchanged (midspan of span 2, every part adding): the engine's, after the apply
+  assert.equal(R.rating.x, 62.5); close(R.rating.RFinv, 2.9416, 1e-4, 'governing'); assert.ok(Object.is(A.gov.flexP.inv, R.rating.RFinv)); assert.equal(R.rating.dl.max, true);
+  // the worked step shows the factor of each part and why
+  const st = AL.steps(A, q, 'rt.sel'), d = st.find(s => s.id === 'rt.sel.D');
+  assert.ok(d && Object.is(d.value, dl.D)); assert.match(d.note, /M_DC2 = -174\.3: relieves: 0\.90/); assert.match(d.note, /M_DW = -145\.2: relieves: 0\.65/); assert.match(d.note, /M_g \+ M_DC1 = 1239\.7: adds: 1\.25/);
+  assert.match(d.sub, /^1\.25\(1239\.7\) \+ 0\.90\(-174\.3\) \+ 0\.65\(-145\.2\)$/);
+  // a station where every part adds: no D step, the engine's expression and the "adds" note
+  const g = AL.steps(A, A.gov.flexP, 'rt.al.fp'); assert.ok(!g.some(s => s.id === 'rt.al.fp.D')); assert.match(g.find(s => s.id === 'rt.al.fp.RFinv').note, /M_DC2 = [0-9.]+: adds: 1\.25/);
+});
+
+test('E1-D5: a station of the engine\'s rating that governs with a relieving part (made-up demands): R.rating and the along-girder row agree', () => {
+  // the engine's result of the 3-span design with M_DC2 and M_DW at x = 12.5 ft scaled so that this station governs, through apply
+  const inp = W.PSBDesign.inputs(CASES['continuous 3 spans, exterior G6 in span 2, skew 35°, restraint, haunch in the section']), R = raw(inp);
+  const r = R.flexFull.find(q => q.x === 12.5); r.phiMn = 12 * 1400; r.mDC2 = -400; r.mDW = -300;
+  W.PSBRatingAlong.apply(inp, R); const A = AL.of(R), q = A.gov.flexP;
+  assert.equal(R.rating.x, 12.5); assert.equal(q.x, 12.5); assert.ok(Object.is(q.inv, R.rating.RFinv)); assert.ok(Object.is(q.opr, R.rating.RFopr));
+  const D = 1.25 * (r.mSW + r.mDC1) + 0.90 * -400 + 0.65 * -300; close(R.rating.RFinv, (1400 - D) / (1.75 * r.mLLpos), 1e-12, 'RF_inv');
+  close(R.rating.RFinv, (1400 - (1549.591 - 360 - 195)) / (1.75 * 348.458), 1e-5, 'hand');
+  const before = (1400 - 1.25 * (r.mSW + r.mDC1 - 400) + 1.50 * 300) / (1.75 * r.mLLpos); assert.ok(R.rating.RFinv < before, `after ${R.rating.RFinv} < before ${before}`);
+  const Wr = W.PSBWorkedHDR.rating(inp, R), s = Wr.steps.find(z => z.id === 'rt.RFinv');
+  assert.ok(Object.is(s.value, R.rating.RFinv)); assert.match(s.sub, /\[1\.25\(1239\.7\) \+ 0\.90\(-400\.0\) \+ 0\.65\(-300\.0\)\]/); assert.match(s.note, /relieves: 0\.90/);
+  Wr.pairs.forEach(z => close(z.shown, z.engine, 1e-9, z.id));
+});
+
+test('E1-D4 hand check: φ_s = 0.85 entered, the default BT-72 simple span: shear C = φ_c φV_n (φ_s = 1.0, MBE 4th Ed. Art. 6A.4.2.4)', () => {
+  const inp = W.PSBDesign.inputs(CASES['default (BT-72, interior, simple)']); inp.opt.rtPhiS = 0.85; inp.rateVeh = [{ name: 'T', M: 1500, V: 60, W: 25 }];
+  const R = W.PSBHoldDown.compute(JSON.parse(JSON.stringify(inp))), R0 = raw(inp), sh = R.shrRating, rt = R.rating;
+  assert.equal(rt.phiCS, 0.85); assert.equal(rt.phiCSv, 1); assert.equal(sh.x, 30.01);
+  close(sh.phiVn, 334.550, 1e-5, 'φV_n'); close(sh.VDC, 66.371, 1e-5, 'V_DC'); close(sh.VDW, 7.4975, 1e-9, 'V_DW'); close(sh.VLL, 83.989, 1e-5, 'V_LL');
+  // before: (0.85 × 334.550 − 1.25 × 66.371 − 1.50 × 7.498)/(1.75 × 83.989) = (284.368 − 82.963 − 11.246)/146.981 = 190.158/146.981 = 1.2938
+  close(R0.shrRating.RFinv, (0.85 * 334.550 - 1.25 * 66.371 - 1.50 * 7.4975) / (1.75 * 83.989), 1e-5, 'hand before'); close(R0.shrRating.RFinv, 1.2938, 1e-4, 'before');
+  // after: (1.00 × 334.550 − 82.963 − 11.246)/146.981 = 240.341/146.981 = 1.6352; operating 240.341/113.385 = 2.1197
+  close(sh.RFinv, (334.550 - 1.25 * 66.371 - 1.50 * 7.4975) / (1.75 * 83.989), 1e-5, 'hand after'); close(sh.RFinv, 1.6352, 1e-4, 'after'); close(sh.RFopr, 2.1197, 1e-4, 'opr');
+  // flexure and Service III keep the entered φ_s (unchanged); the vehicle's shear takes φ_c too
+  assert.ok(Object.is(rt.RFinv, R0.rating.RFinv)); assert.ok(Object.is(R.svcRating.RF, R0.svcRating.RF)); assert.ok(Object.is(R.vehRatings[0].RFm, R0.vehRatings[0].RFm));
+  close(R.vehRatings[0].RFv, (334.550 - 1.25 * 66.371 - 1.50 * 7.4975) / 60, 1e-5, 'vehicle RF_V');
+  // along the girder: the shear rows with φ_c (the engine's row the same value), flexure with φ_c φ_s
+  const A = AL.of(R); assert.equal(A.phiCSv, 1); assert.ok(Object.is(A.rows.find(r => r.kind === 'shear' && r.src === 'engine').inv, sh.RFinv)); assert.ok(Object.is(A.gov.flexP.inv, rt.RFinv));
+  // the worked steps: φ_s = 1.0 stated, the substituted values = the engine's
+  const Wr = W.PSBWorkedHDR.rating(inp, R), v = Wr.steps.find(s => s.id === 'rt.phiCSv'), c = AL.steps(A, A.gov.shear, 'rt.al.v').find(s => s.id === 'rt.al.v.C');
+  assert.ok(v && v.value === 1 && /φ_s = 1\.0 \(MBE 6A\.4\.2\.4\)/.test(v.note)); assert.match(c.note, /φ_s = 1\.0 \(MBE 6A\.4\.2\.4/); assert.match(Wr.steps.find(s => s.id === 'rt.RFvInv').sub, /^\\frac\{1\.000\(334\.6\)/);
+  Wr.pairs.forEach(z => close(z.shown, z.engine, 1e-9, z.id));
+  // φ_c below 0.85: the lower limit on φ_c × 1.0 (φ_c = 0.80, φ_s = 0.90: flexure 0.85, shear 0.85)
+  const i2 = JSON.parse(JSON.stringify(inp)); i2.opt.rtPhiC = 0.80; i2.opt.rtPhiS = 0.90; const R2 = W.PSBHoldDown.compute(i2); assert.equal(R2.rating.phiCS, 0.85); assert.equal(R2.rating.phiCSv, 0.85); assert.equal(R2.rating.phiCSvFloor, true);
+  // the Rating tab states it
+  const tab = W.PSBUiRating.output({ P: CASES['default (BT-72, interior, simple)'], inp, R, W: { rating: Wr }, ui: {}, redraw() {} });
+  assert.match(tab, /φ<sub>c<\/sub>\(1\.0\) used, shear \(φ<sub>s<\/sub> = 1\.0, MBE 4th Ed\. Art\. 6A\.4\.2\.4\)/);
+});
