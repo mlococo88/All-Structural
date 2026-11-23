@@ -159,9 +159,9 @@ for (const vw of [1400, 390]) {
     check(await p.evaluate(() => !document.querySelector('#inPanes [data-pane="layout"]').hidden && !!document.querySelector('#planFig svg')), 'the plan link opens the Bridge layout tab with its plan');
     await p.click('#tabBar [data-otab="rpt"]'); await p.waitForTimeout(2500);
     const q = await p.evaluate(() => { const t = (document.getElementById('rptHost') || {}).textContent || ''; const svg = [...document.querySelectorAll('#rptHost svg[aria-label^="Framing plan"]')].filter(e => e.getBoundingClientRect().width > 0);
-      return { fig: /Figure 2\.1: Framing plan/.test(t), n: svg.length, lines: svg[0] ? svg[0].querySelectorAll('line.xs-gl').length : 0, see: /cross-section of each worked girder's span[^.]*: see §4/.test(t) }; });
-    check(q.fig && q.n === 1 && q.lines === 10, `Report §2: Figure 2.1 framing plan (${q.n}, ${q.lines} lines)`);
-    check(q.see, 'Report §2: the cross-section "see §4" reference');
+      return { fig: /Figure 3\.1: Framing plan/.test(t), n: svg.length, lines: svg[0] ? svg[0].querySelectorAll('line.xs-gl').length : 0, see: /cross-section of each worked girder's span[^.]*: see §6/.test(t) }; });
+    check(q.fig && q.n === 1 && q.lines === 10, `Report §3: Figure 3.1 framing plan (${q.n}, ${q.lines} lines)`);
+    check(q.see, 'Report §3: the cross-section "see §6" reference');
   }
   check(pg.errs.length === 0, `${tag}: console errors ${pg.errs.slice(0, 3).join(' | ')}`);
   await pg.b.close();

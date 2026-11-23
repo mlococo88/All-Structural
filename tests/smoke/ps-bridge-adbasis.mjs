@@ -30,7 +30,7 @@ try {
   // 1. no run
   await otab('rpt'); await until(() => adb(), 60000, 'the Report');
   let a = await adb();
-  assert.ok(/^2\.\d+$/.test(a.n), JSON.stringify(a)); assert.ok(/No auto design was run in this page view: nothing in this report comes from an auto design/.test(a.text), a.text);
+  assert.ok(/^3\.\d+$/.test(a.n), JSON.stringify(a)); assert.ok(/No auto design was run in this page view: nothing in this report comes from an auto design/.test(a.text), a.text);
   assert.ok(a.text.split('\n').filter(Boolean).length <= 3, 'short: ' + a.text);
   ok(`before a run: §${a.n} Auto design basis: no auto design was run (one note)`);
   // 2. Run, then the output tab's link

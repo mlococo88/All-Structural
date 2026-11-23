@@ -5,6 +5,12 @@
 
    model(bundle, opt) -> report model; opt = { detail: 'gov' (the governing location of each check group, default) | 'all' (every
    station, worked steps opened on demand), include: { key: false } to leave a section out (default all) }.
+   RPX (2026-11-23; engineer 2026-11-23: the Report extras of the Prestressed Bridge app), display only:
+     opt.figures = { <section key>: [{ caption, svg }] } (ui/report.js figures(): each output tab's own graphics, drawn by the tab's own code
+       from the module results of the bundle; none in Node): a last subsection "Graphics of the … tab" in that section;
+     opt.snap3d = { png (a data URL), at, meta, stale } (the 3D view tab's "Capture for the Report"): a last subsection of Project and owner;
+     every figure with a caption is numbered "Figure n.m" (section n; numberFigs), the verdict banner and the seal box aside (plain);
+     model.refs: the References of the front matter (shared/report.js), the articles the worked steps of this report cite (refsOf).
    Section keys (SECTIONS, in the workflow order; the summary is put first):
      sum   Summary of governing ratios (links to each check)     proj  Project and owner        loads Cross-section, loads and LLDF
      an    Analysis                                               defl  Deflection (added 2026-11-09, DEFL: the LL deflection check and the
@@ -50,6 +56,51 @@
     : `$f_{\\ell}$ from skew (C6.10.1, p. 6-160, in lieu of a refined analysis): ${window.SBDFraming.flWhy(D.flS)}${/cn\|/.test(tab) ? (D.flS.f0 > 0 ? `; deck placement $\\gamma f_{\\ell,skew}$ = ${(D.flS.steps.find(t => t.id === 'fl') || {}).sub || ''} = ${f(D.fl, 2)} ksi (the largest on the girder, as DC)` : '')
       : '; Strength I and Service II split $f_{\\ell,skew}$ between dead and live load at each location with their own load factors (worked steps fx.flp.S, fx.flp.V of each location)'}${B.frm && B.frm.fl && B.frm.fl.fl === D.fl && B.frm.fl.skMax === D.flS.skMax ? ' [[flsk.fl]]' : ''}`;
   const brNote = Gr => Gr.frB ? `the brace points of the Framing & bracing tab (G${Gr.frB.line + 1}'s bearings and cross-frames)` : 'the cross-frame stations of the stiffener layout (the project has no framing)';
+
+  /* ---------- RPX (2026-11-23): figure numbers, the tabs' graphics, the 3D capture, the References (display only) ---------- */
+  /* numberFigs(secs): "Figure n.m: caption" for every figure with a caption in section n (in the order printed); a figure marked plain
+     (the verdict banner, the seal box) keeps its caption. The items are the builders' own objects of this build (figSub copies the tabs'). */
+  function numberFigs(secs) {
+    secs.forEach((sc, i) => { let m = 0; (sc.subs || []).forEach(q => (q.items || []).forEach(it => { if (it && it.type === 'figure' && it.caption && !it.plain && !it.no) { m++; it.no = `${i + 1}.${m}`; it.caption = `Figure ${it.no}: ${it.caption}`; } })); });
+    return secs;
+  }
+  /* figSub(k, label, figs): the tab's own graphics (opt.figures[k]) as the last subsection of its section; null when none */
+  const FIG_TAB = { sec: ['sec', 'Section properties'], loads: ['loads', 'Loads & LLDF'], an: ['an', 'Analysis'], flex: ['flex', 'Flexure'], shear: ['shear', 'Shear & stiffeners'], fat: ['fat', 'Fatigue & studs'], cn: ['cn', 'Constructibility'],
+    frm: ['cf', 'Cross-frames'], wd: ['wt', 'Welds'], rt: ['rt', 'Rating'] };
+  function figSub(k, figs) {
+    const T = FIG_TAB[k], L = (figs || []).filter(q => q && q.svg); if (!T || !L.length) return null;
+    return sub('fg', `Graphics of the ${T[1]} tab`, [note(`The graphics of the [[tab:${T[0]}|${T[1]} tab]], drawn from the results this section works (display only: each value drawn is one of this section's tables or worked steps). Where the tab has a selection, the graphic shows the tab's default (the governing location).`),
+      ...L.map(q => ({ type: 'figure', svg: q.svg, caption: q.caption || '' }))]);
+  }
+  /* snapSub(X): the 3D view captured on the 3D view tab ("Capture for the Report"; ui/view3d.js snapshot, this page view only) */
+  function snapSub(X) {
+    const q = X.snap3d; if (!q || !/^data:image\/png;base64,/.test(String(q.png || ''))) return null;
+    return sub('v3', '3D view (captured)', [{ type: 'figure', caption: `3D view (captured on the 3D view tab, ${q.at || ''}): ${q.meta || ''}`, svg: `<img src="${q.png}" alt="3D view of the bridge" style="width:100%;max-width:7.3in;height:auto;display:block">` },
+      note(q.stale ? 'Captured before the last input change: capture again on the [[tab:3d|3D view tab]] for the inputs this report works.' : 'Display only: the bridge as drawn on the [[tab:3d|3D view tab]] when it was captured (the view, the layers and the diagram chosen there).', !!q.stale)]);
+  }
+  /* refsOf(secs, P): the References table: the articles cited by the worked steps written in this report (each step's ref; the article
+     numbers only, equation / table suffixes -n and page notes dropped), per source; the other sources named by a step; the owner's manual */
+  const artKey = a => a.replace(/^C/, '').split('.').map(q => { const m = /^([A-D]?)(\d+)([A-Za-z]*)$/.exec(q); return m ? [m[1] ? 1000 + m[1].charCodeAt(0) : 0, +m[2], m[3]] : [0, 0, q]; });
+  const artCmp = (a, b) => { const x = artKey(a), y = artKey(b); for (let i = 0; i < Math.max(x.length, y.length); i++) { if (!x[i]) return -1; if (!y[i]) return 1; for (let j = 0; j < 3; j++) if (x[i][j] !== y[i][j]) return x[i][j] < y[i][j] ? -1 : 1; } return a < b ? -1 : a > b ? 1 : 0; };
+  function citedRefs(secs) {
+    const lrfd = new Set(), mbe = new Set(), other = new Set();
+    const arts = (t, set) => { const re = /(?:^|[\s,(])(C?(?:[A-D]?\d+[A-D]?)(?:\.\d+[a-z]?)+)(?:-\d+)?/g; let m; while ((m = re.exec(t))) set.add(m[1]); };
+    secs.forEach(sc => (sc.subs || []).forEach(q => (q.items || []).forEach(it => { if (!it || it.type !== 'steps') return; (it.steps || []).forEach(st => {
+      let cur = null;
+      String(st.ref || '').split(';').forEach(part => { const t = part.replace(/\([^)]*\)/g, ' ').trim(); if (!t) return;
+        if (/AASHTO LRFD/.test(t)) cur = 'lrfd'; else if (/\bMBE\b/.test(t)) cur = 'mbe'; else if (!/^(Art|Arts|Eq|Eqs|Table|Tables|App|Fig|C?\d|[A-D]\d)/.test(t)) cur = 'other';
+        if (cur === 'lrfd') arts(t.replace(/AASHTO LRFD( 10th Ed\.?)?/, ' ').replace(/\b(Arts?|Eqs?|Tables?|App|Fig)\.?/g, ' '), lrfd);
+        else if (cur === 'mbe') arts(t.replace(/(AASHTO )?MBE( 4th Ed\.?)?/, ' ').replace(/\b(Arts?|Eqs?|Tables?|App|Fig)\.?/g, ' '), mbe);
+        else if (cur === 'other' && !/^Statics$/.test(t)) other.add(part.trim()); }); }); })));
+    return { lrfd: [...lrfd].sort(artCmp), mbe: [...mbe].sort(artCmp), other: [...other].sort() };
+  }
+  function refsOf(secs, P) {
+    const c = citedRefs(secs), OW = window.SBDOwners, o = ((P || {}).ownerRules || {}).owner, ow = o && o !== 'AASHTO' && OW && OW.RULES && OW.RULES.owners ? OW.RULES.owners[o] : null;
+    return [['AASHTO LRFD', `AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). Articles cited in the worked steps of this report${c.lrfd.length ? ': ' + c.lrfd.join('; ') : ': none (no worked step in the sections chosen)'} (each step names its article, equation or table).`],
+      ...(c.mbe.length ? [['MBE', `AASHTO Manual for Bridge Evaluation, 4th Ed. (2026), Section 6 Part A (LRFR). Articles cited: ${c.mbe.join('; ')}.`]] : []),
+      ...(ow && ow.manual ? [[o, `${ow.manual} (the owner rules chosen on the Project tab; each rule applied is cited where it is worked).`]] : []),
+      ...(c.other.length ? [['Other', `Also named by a worked step: ${c.other.join('; ')}.`]] : [])];
+  }
 
   /* ---------- 2. project and owner ---------- */
   function proj(B, X) {
@@ -621,7 +672,7 @@
     const notes = out.some(q => q[1] !== 'meets the optional guidance') || nRev > 0;
     const verdict = nFail ? 'FAIL' : notes ? 'PASS WITH NOTES' : 'PASS';
     const top = rows.filter(q => q.rf == null).reduce((a, q) => (!a || grv(q.r) > grv(a.r) ? q : a), null), low = rows.filter(q => q.rf != null && isFinite(q.rf)).reduce((a, q) => (!a || q.rf < a.rf ? q : a), null);
-    const items = [{ type: 'figure', svg: banner(verdict, `Girder ${G}: ${nFail} FAIL, ${nRev} REVIEW / warning, ${rows.length - nFail - nRev + (AP && AP.level === 'fail' ? 1 : 0)} OK of ${rows.length} check groups${AP && AP.level === 'fail' ? ' + analysis applicability FAIL' : ''}`), caption: 'Verdict of this girder: FAIL where any check group exceeds 1.0 (or a rating factor is below 1.0) or the line-girder analysis is not applicable (SA4 FAIL); PASS WITH NOTES where a check has a warning, a ratio is not a number (REVIEW) or an item below is flagged; else PASS.' },
+    const items = [{ type: 'figure', plain: true, svg: banner(verdict, `Girder ${G}: ${nFail} FAIL, ${nRev} REVIEW / warning, ${rows.length - nFail - nRev + (AP && AP.level === 'fail' ? 1 : 0)} OK of ${rows.length} check groups${AP && AP.level === 'fail' ? ' + analysis applicability FAIL' : ''}`), caption: 'Verdict of this girder: FAIL where any check group exceeds 1.0 (or a rating factor is below 1.0) or the line-girder analysis is not applicable (SA4 FAIL); PASS WITH NOTES where a check has a warning, a ratio is not a number (REVIEW) or an item below is flagged; else PASS.' },
       top ? note(`Governing D/C: ${f(top.r, 3)} (${top.cat}; ${top.check}, ${top.loc})${top.key ? ` [[${top.key}]]` : ''}.${low ? ` Lowest rating factor: ${f(low.rf, 2)} (${low.check}, ${low.loc})${low.key ? ` [[${low.key}]]` : ''}.` : ''}`) : null,
       AP && AP.level === 'fail' ? note(`Line-girder analysis not applicable (SA4 FAIL): ${AP.items.filter(q => q.level === 'fail').map(q => `${q.title}, ${q.val}`).join('; ')}: refined analysis required${sumOn ? ' [[ap.th]]' : ''}.`, true) : null,
       tbl(['Limit state / check group', 'Governing check', 'Girder', 'Location', 'D/C or RF', 'Status'], rows.map(q => ({ cells: [q.cat, q.check, G, q.loc, q.rf != null ? { t: `RF ${isFinite(q.rf) ? f(q.rf, 2) : '—'}`, n: true, key: q.key } : R3(q.r, q.key), st(q)], cls: st(q) === 'FAIL' ? 'gov' : '' })), { wide: true, caption: 'Every check group the app computes for this girder (each value links to the step that works it); the per-group detail is in the Summary section and the module sections' }),
@@ -777,7 +828,7 @@
     const p = B.P.project || {}, box = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 260" width="200" role="img" aria-label="P.E. seal"><rect x="2" y="2" width="256" height="256" fill="#fff" stroke="#000" stroke-width="1.5"/><text x="130" y="135" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#000">P.E. seal</text></svg>`;
     return { title: 'Sign-off and revision history', subs: [sub('s', 'Sign-off', [
       tbl(['Role', 'Name', 'Signature', 'Date'], [['Designed by', p.designer || '', '', p.date || ''], ['Checked by', p.checker || '', '', ''], ['Approved by', '', '', '']]),
-      { type: 'figure', svg: box, caption: 'Professional Engineer seal and signature' },
+      { type: 'figure', plain: true, svg: box, caption: 'Professional Engineer seal and signature' },
       tbl(['Rev.', 'Date', 'Description', 'By', 'Checked'], [['0', p.date || '', 'Issued', p.designer || '', p.checker || ''], ['', '', '', '', ''], ['', '', '', '', ''], ['', '', '', '', '']], { caption: 'Revisions (Designed by, Checked by and Date: the project fields on the Project tab; the rest to be filled in by hand)' })])] };
   }
   /* ptHead(B, r): the design-point header of a worked flexure location: station, span and x/L, plates, unbraced length and its L_p / L_r, d_o, plate-transition side */
@@ -802,7 +853,7 @@
       if (k === 'sum' || k === 'exec' || k === 'sign') return;   // built after the modules (exec, sum) or last (sign)
       if (k === 'basis' || k === 'bom') { if (on(k)) { let s0; try { s0 = (k === 'basis' ? basis : bom)(B, X); } catch (e) { s0 = { title: label, subs: [sub('n', 'Not available', [note('Report error: ' + (e && e.message), true)])] }; } secs.push({ id: k, ...s0 }); } return; }
       const want = on(k);
-      if (k === 'proj') { if (want) secs.push({ id: k, ...proj(B, X) }); return; }
+      if (k === 'proj') { if (want) { const s0 = proj(B, X), v3 = snapSub({ snap3d: opt.snap3d }); if (v3) s0.subs.push(v3); secs.push({ id: k, ...s0 }); } return; }   // RPX: + the 3D view captured
       if (k === 'defl' && !DEFL_ON()) return;
       if (k === 'defl' && B.src === 'file') { if (want) secs.push({ id: k, title: 'Deflection', subs: [sub('n', 'Not in this report', [note('Deflections are calculated from this project\'s analysis; this report takes its demands from a hand-off file. Choose "This project\'s analysis" to include them, or see the [[tab:defl|Deflection tab]].')])] }); return; }   // DEFL
       if (k === 'spl' && B.src === 'file') { if (want) secs.push({ id: k, title: 'Field splices', subs: [sub('n', 'Not in this report', [note('Field splices are designed from this project\'s analysis; this report takes its demands from a hand-off file. Choose "This project\'s analysis" to include them, or see the [[tab:spl|Field splices tab]].')])] }); return; }
@@ -811,6 +862,7 @@
       const g0 = X.gov.length, h0 = new Set(X.have.keys());
       let s; try { s = BUILD[k](B, X); } catch (e) { s = { title: label, subs: [sub('n', 'Not available', [note('Report error: ' + (e && e.message), true)])] }; }
       if (want) { if (BOM_ANCH[k]) s.subs.forEach(q => { const a = BOM_ANCH[k][q.id]; if (a && !q.key) { q.key = a; X.anch.add(a); } });   // BOM2: "§n.m" anchors of the subsections the bill of materials takes its sizes from
+        { const fg = opt.figures ? figSub(k, opt.figures[k]) : null; if (fg) s.subs.push(fg); }   // RPX: the tab's own graphics, last in the section
         built.push(k); secs.push({ id: k, ...s }); return; }
       // not chosen: its summary rows stay, without a link (their work is not in this report); later sections do not link into it
       X.gov.slice(g0).forEach(q => { q.key = null; q.loc += ' (section not included)'; });
@@ -843,7 +895,8 @@
         : it.type === 'table' ? { ...it, rows: it.rows.map(r => (Array.isArray(r) ? r.map(cell) : { ...r, cells: r.cells.map(cell) })) }
         : it.type === 'kv' ? { ...it, rows: it.rows.map(r => (r[2] && !have.has(r[2]) ? [r[0], r[1], null] : r)) } : it); }); } });   // exec and basis (PR3)
     const girder = B.girder;
-    return { title: 'Steel Bridge Design', subtitle: `Calculation report: girder ${gName(girder)}${p.name ? ', ' + p.name : ''}`, code: `${ED}; MBE 4th Ed. (2026) (load rating). ${X.detail === 'all' ? 'Every station worked.' : 'Governing location of each check worked.'}`,
+    numberFigs(secs);   // RPX: Figure n.m
+    return { refs: refsOf(secs, P), title: 'Steel Bridge Design', subtitle: `Calculation report: girder ${gName(girder)}${p.name ? ', ' + p.name : ''}`, code: `${ED}; MBE 4th Ed. (2026) (load rating). ${X.detail === 'all' ? 'Every station worked.' : 'Governing location of each check worked.'}`,
       info: [['Project No', p.number], ['Computed by', p.designer], ['Date', p.date], ['Project', p.name], ['Checked by', p.checker], ['Owner', window.SBDModel.clientName(P)]],
       head: { left: `${p.name || 'Steel Bridge Design'}${p.number ? ' (' + p.number + ')' : ''}\nGirder ${gName(girder)}`, right: `Computed by: ${p.designer || '—'}  Date: ${p.date || '—'}\nChecked by: ${p.checker || '—'}`, foot: `Steel Bridge Design, ${ED}` },
       sections: secs, gov: X.gov };
@@ -890,7 +943,7 @@
     T.forEach(t => (t.S.warn || []).forEach(w => out.push(['Warning (for review)', t.S.label, 'Warning', w])));
     const top = ov.top, low = ov.low, CD = window.SBDCustomDemands, cu = CD && CD.srcGet ? ['flex', 'shear', 'cn', 'fat', 'rt', 'spl', 'wt'].filter(k => CD.srcGet(P, k) === 'custom') : [];
     const Ua = window.SBDModel.unassigned ? window.SBDModel.unassigned(P) : [];
-    const items = [{ type: 'figure', svg: banner(verdict, `Every girder: ${n.fail} FAIL, ${n.review} REVIEW, ${n.pass} PASS${n.na ? `, ${n.na} n/a` : ''} (${T.length} girder type${T.length === 1 ? '' : 's'} × ${COLS.length} limit states)${apFail ? ' + analysis applicability FAIL' : ''}`),
+    const items = [{ type: 'figure', plain: true, svg: banner(verdict, `Every girder: ${n.fail} FAIL, ${n.review} REVIEW, ${n.pass} PASS${n.na ? `, ${n.na} n/a` : ''} (${T.length} girder type${T.length === 1 ? '' : 's'} × ${COLS.length} limit states)${apFail ? ' + analysis applicability FAIL' : ''}`),
         caption: 'Verdict of the bridge, by the rules of the [[tab:sum|Summary tab]]: FAIL where a demand / capacity ratio exceeds 1.0, a rating factor RF is below 1.0, or the line-girder analysis is not applicable (SA4 FAIL); else REVIEW where a ratio is not a number or a module item has a Warning status (welds, cross-frames, deflection over the owner\'s preferred limit); else PASS. Counts: one per girder type and limit state (the columns of the Summary tab).' },
       top ? note(`Governing D/C: ${nf(top.q.r)} (${top.c.head}; girder ${gl(top.G, top.q)}, ${chk(top.c, top.q)}, ${top.q.loc}) [[per.g${kOf(top.G, top.q)}]].${low ? ` Lowest rating factor: ${f(low.q.rf, 2)} (${low.c.head.replace('Rating, ', '')}; girder ${gl(low.G, low.q)}, ${low.q.loc}) [[per.g${kOf(low.G, low.q)}]].` : ''}`, top.q.r > 1 + 1e-9) : low ? note(`Lowest rating factor: ${f(low.q.rf, 2)} (girder ${gl(low.G, low.q)}, ${low.q.loc}) [[per.g${kOf(low.G, low.q)}]].`, low.q.rf < 1 - 1e-9) : null,
       apFail ? note(`Line-girder analysis not applicable (SA4 FAIL): ${AP.items.filter(q => q.level === 'fail').map(q => `${q.title}, ${q.val}`).join('; ')}: refined analysis required (worked in each girder's report, Summary section, and on the [[tab:an|Analysis tab]]).`, true) : null,
@@ -947,11 +1000,13 @@
     // EXA, BOM2 (2026-11-23): the Executive summary first, the bill of materials last (each only when every girder's data is there)
     let EX = null, BM = null; try { EX = allExec(P, list); } catch (e) { EX = { id: 'exec', title: 'Executive summary', subs: [sub('n', 'Not available', [note('Report error: ' + (e && e.message), true)])] }; }
     try { BM = allBom(P, list); } catch (e) { BM = { id: 'bom', title: 'Steel bill of materials', subs: [sub('n', 'Not available', [note('Report error: ' + (e && e.message), true)])] }; }
-    return { title: 'Steel Bridge Design', subtitle: `Calculation report: every girder (governing ratios)${p.name ? ', ' + p.name : ''}`, code: `${ED}; MBE 4th Ed. (2026) (load rating). Governing ratio of each check group, every girder; each value is worked in that girder's own report.`,
+    const allSecs = numberFigs([EX ? { id: EX.id, title: EX.title, subs: EX.subs } : null, { id: 'all', title: 'Summary of every girder', subs }, { id: 'per', title: 'Governing checks of each girder', subs: per }, BM].filter(Boolean));   // RPX: Figure n.m
+    return { refs: [['AASHTO LRFD', 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). The articles are cited step by step in each girder\'s own report (Report tab, scope "Selected girder": its References list them).'], ['MBE', 'AASHTO Manual for Bridge Evaluation, 4th Ed. (2026), Section 6 Part A (LRFR): the load rating rows.']],
+      title: 'Steel Bridge Design', subtitle: `Calculation report: every girder (governing ratios)${p.name ? ', ' + p.name : ''}`, code: `${ED}; MBE 4th Ed. (2026) (load rating). Governing ratio of each check group, every girder; each value is worked in that girder's own report.`,
       info: [['Project No', p.number], ['Computed by', p.designer], ['Date', p.date], ['Project', p.name], ['Checked by', p.checker], ['Owner', window.SBDModel.clientName(P)]],
       head: { left: `${p.name || 'Steel Bridge Design'}${p.number ? ' (' + p.number + ')' : ''}\nEvery girder`, right: `Computed by: ${p.designer || '—'}  Date: ${p.date || '—'}\nChecked by: ${p.checker || '—'}`, foot: `Steel Bridge Design, ${ED}` },
-      sections: [EX ? { id: EX.id, title: EX.title, subs: EX.subs } : null, { id: 'all', title: 'Summary of every girder', subs }, { id: 'per', title: 'Governing checks of each girder', subs: per }, BM].filter(Boolean), top, low, ctl: C, verdict: EX && EX.verdict, ov: EX && EX.ov };
+      sections: allSecs, top, low, ctl: C, verdict: EX && EX.verdict, ov: EX && EX.ov };
   }
 
-  window.SBDReportBuild = { SECTIONS, model, govRows, allModel, bomItems };
+  window.SBDReportBuild = { SECTIONS, model, govRows, allModel, bomItems, citedRefs, refsOf, numberFigs, FIG_TAB };
 })();
