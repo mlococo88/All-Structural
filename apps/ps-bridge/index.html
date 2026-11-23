@@ -49,6 +49,7 @@
     'engine/model.js',
     'engine/rigid.js',       // PS-19: the exterior rigid-section factor on the real girder lines (unequal bays; an engine addition, §4)
     'engine/lldf-fg.js',     // PS-35: box beams and voided slabs, live-load distribution types (f) / (g) (an app-side override of distFactors, §4)
+    'engine/lldf-opt.js',    // LL-O: the two optional distribution options (exterior not less than interior; shear skew correction on the exterior girders only), off by default (§4)
     'engine/ut.js',          // UT-N: utilities on the noncomposite section (DW factors) and the future utility allowance (γ 1.25 / 0), as the Steel Bridge app (§4)
     'engine/pl.js',          // PL-A: the pedestrian live load (3.6.1.6) added to the engine's live load for a girder that has one (§4)
     'engine/applicability.js', // AP-B: the ranges of applicability of the LLDF equations, every section family (a FAIL when a computed factor is outside, §4)
@@ -449,6 +450,7 @@
           <p class="note">${P.xs.spMode === 'equal' ? '' : `Bays left to right (${Math.max(0, (P.xs.nb | 0) - 1)} values). `} Unequal bays (PS-9): each girder's spacing S is the bay next to it (exterior) or the mean of its two bays (interior); see Loads &amp; LLDF. Overhangs from the exterior girder centreline. Deck width ${fmt(deckW, 2)} ft. A change of the girder count re-assigns the girder types' lines (the outer lines keep the exterior types; a notice lists each change, with Undo).</p>`)
         + lineTypeCard()   // 2026-11-14: the girder type of each line (the Girders & strands tab's line boxes, the same data)
         + IN.cards('xsec', P)
+        + lldfOptCard()   // LL-O (2026-11-23): the two optional live-load distribution options (P.xs.lldf, engine/lldf-opt.js)
         + DLUI.card(P),   // PR 3a-3: DC2 / DW to each girder line (PS-9)
       gird: TY.card(P, ui) + TY.shownCard(P) + TY.scopeBar(P, ui, 'gird') + IN.cards('gird', V)
         + `<section class="sec"><div class="secHead">Strand pattern${sk >= 0 ? ` of ${esc(P.types[sk].label)}` : ''}</div><div class="secBody" id="gfx_strands_in"><p class="note">Shown when the inputs have no error.</p></div></section>`
@@ -459,6 +461,16 @@
       own: IN.cards('own', P, ownRes()),
       ad: window.PSBAutoDesignUI.inputs(P)   // item A (2026-11-14): settings and Run (ui/autodesign.js)
     };
+  }
+  /* LL-O (2026-11-23): the Cross-section tab's card "Live-load distribution options": the Steel Bridge app's two selects (its Loads tab,
+     Distribution: xs.lldf.skewV, xs.lldf.extMin), the same labels and values; both off by default (P.xs.lldf absent). Input only. */
+  function lldfOptCard() {
+    const LO = window.PSBLldfOpt; if (!LO) return '';
+    const o = LO.ofProject(P), T = LO.TXT, opt = (v, t, on) => `<option value="${v}"${on ? ' selected' : ''}>${esc(t)}</option>`;
+    return `<section class="sec" id="card-lldfopt"><div class="secHead">Live-load distribution options <span class="secRef">AASHTO LRFD 10th Ed. 4.6.2.2.3c; owner / engineer policy</span></div><div class="secBody">
+      <div class="fRow"><label for="i_xs.lldf.skewV">${esc(T.skewV)}</label><select id="i_xs.lldf.skewV" data-path="xs.lldf.skewV" data-lo="skewV">${opt('all', T.all, !o.skewExt)}${opt('ext', T.ext, o.skewExt)}</select></div>
+      <div class="fRow"><label for="i_xs.lldf.extMin">${esc(T.extMin)}</label><select id="i_xs.lldf.extMin" data-path="xs.lldf.extMin" data-lo="extMin">${opt('false', 'No', !o.extMin)}${opt('true', 'Yes', o.extMin)}</select></div>
+      <p class="note" id="lldfOptNote">${LO.noteHTML(P)}</p></div></section>`;
   }
   /* 2026-11-14 (equal spacing, the Steel Bridge app's EQSP, apps/steel-bridge/ui/loads.js equalRows): W_cc and the worked step
      S = W_cc / (N_b − 1); every bay takes S (M.applyEqual on each change); the deck width out to out shown */
@@ -548,6 +560,8 @@
     if (el.dataset.dm) { DMUI.onChange(el, P, ui, dmCtx); return; }   // batch D1: the Demands card (source, MIDAS file, custom table)
     if (el.dataset.ty) { typesDone(TY.onChange(el, P, ui)); return; }   // PR 3a-1
     if (el.dataset.dl && DLUI.onChange(el, P)) { changed(); return; }   // PR 3a-3
+    if (el.dataset.lo) { const q = P.xs.lldf = Object.assign({ skewV: 'all', extMin: false }, P.xs.lldf && typeof P.xs.lldf === 'object' ? P.xs.lldf : null);   // LL-O: the distribution options (the Steel Bridge app's xs.lldf fields)
+      if (el.dataset.lo === 'skewV') q.skewV = el.value === 'ext' ? 'ext' : 'all'; else q.extMin = el.value === 'true'; changed(); return; }
     if (el.dataset.lt) { const [s, g] = el.dataset.lt.split('|').map(Number), k = +el.value; if (el.value !== '' && P.types[k] && P.types[k].span === s) { BR.assignLine(P, k, g); changed(); } return; }   // 2026-11-14: girder type of each line
     const path = el.dataset.path, k = el.dataset.kind; if (!path) return;
     // PR 3a-1: in a girder type's scope the edit goes to the type's own inputs (its overrides of the base design)

@@ -30,7 +30,9 @@
      spans made continuous (the engine's FE unit, PBD.contFE / sgBeam): the + and − areas of each node's influence line, which the
        engine already has for its 0.64 klf lane load (lanePos, laneNeg of each node's HL-93 row): A± = lane± / 0.64 (ft² for moments, ft
        for shears); M_PL±(x) = w A_M±, V_PL±(x) = w A_V±, linear between the nodes as PBD.contFE.at; at the pier M_PL,n = −w A_M−
-     imported demands (a MIDAS file or a custom table): NOT added (the file is the composite-stage analysis; a warning says so).
+     imported demands (a MIDAS file or a custom table): NOT added (the file is the composite-stage analysis and is used as given: it is
+       assumed to include the pedestrian load, engineer's decision 2026-11-23; the note of engine/demands.js assumed() says so on the
+       input side, the output tabs and in the Report).
    The owner's design load multiplier m (RIDOT) multiplies the engine's whole live-load term, so it also multiplies PL here (conservative;
    the Steel Bridge app keeps m off PL: decision pending, fixlog). The engine's R.MLL / R.VLL (midspan / support HL-93 values) stay HL-93
    only: the live-load deflection and the Loads tab's HL-93 values are unchanged.
@@ -104,7 +106,8 @@
     out.Mhl = ch.MLLpos(L / 2) / 12; out.Vhl = ch.VLLx(0);   // the engine's HL-93 + IM per girder at the same sections (display)
     LAST = out; return o;
   }
-  const WARN_EXT = 'Pedestrian live load: this girder type takes its composite-stage demands from an imported file or table, so the pedestrian load of the Cross-section tab is NOT added: include it in the imported live load (AASHTO LRFD 10th Ed. 3.6.1.6).';
+  // IMP-N (2026-11-23, engineer's decision): imported demands are used as given and are ASSUMED to include the pedestrian load (wording only)
+  const WARN_EXT = 'Pedestrian live load: this girder type takes its composite-stage demands from an imported file or table, which are used as given. The imported live load must already include the pedestrian load of the Cross-section tab: it is NOT added by this app (AASHTO LRFD 10th Ed. 3.6.1.6).';
   /* run(inp, inner): inner(inp) (the app's engine call) with the global computeAll replaced by the copy for that call when the girder has a
      pedestrian load (restored after); R.pl = the pedestrian part. No pedestrian load: inner(inp), nothing else. */
   function run(inp, inner) {

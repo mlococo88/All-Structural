@@ -120,9 +120,13 @@
   /* withDemands(P, T, o) (batch D1, 2026-11-15): the demand source of girder type T (engine/demands.js): a MIDAS file or a custom table is
      given to the engine as inputs.external, the old app's own input (its MIDAS import; computeAll reads it through buildExternal); this
      app's analysis (every project saved before: no P.demands): o unchanged. */
-  function withDemands(P, T, o) {
+  function withDemands(P, T, o, gLine) {
     const DM = window.PSBDemands, x = DM && T ? DM.external(P, T) : null;
     if (x) o.external = x;
+    // IMP-N (2026-11-23; display only, no engine value reads it): a type on imported demands whose girder line has a composite utility
+    // share (in its DW, engine/bridge-dl.js line().UT): named in inputs.imp so that the note "imported demands are used as given"
+    // (engine/demands.js assumed()) can say that the imported DW must include it. No imported demands or no such share: nothing added.
+    if (x && window.PSBBridgeDL && P.xs && P.xs.dl) { const g = gLine != null ? gLine : sel(P).g, q = window.PSBBridgeDL.line(P, g); if (q && q.UT) o.imp = { utc: q.UT }; }
     return o;
   }
   /* cellInputs(P, k, g): the engine inputs of girder type k (engine/bridge.js) on girder line g of its span: the type's inputs (the base
@@ -130,7 +134,7 @@
      girder (one()). A type with no override on the design girder's line gives exactly one(P). */
   function cellInputs(P, k, g) {
     const B = window.PSBBridge, T = B.types(P)[k];
-    return withDemands(P, T, one(Object.assign({}, P, { base: B.effBase(P, k), design: { g, s: T.span }, types: undefined })));
+    return withDemands(P, T, one(Object.assign({}, P, { base: B.effBase(P, k), design: { g, s: T.span }, types: undefined })), g);
   }
   /* one(P): the engine inputs of the design girder P.design (PR 2b; unchanged) */
   function one(P) {
@@ -162,6 +166,9 @@
     // PS-19 (§4): with unequal bays the exterior rigid-section factor on the real girder lines (engine/rigid.js); equal bays and interior lines: nothing added
     const B = (P.xs && P.xs.bays) || [];
     if ((d.g === 1 || d.g === P.xs.nb) && B.length >= 2 && B.some(v => Math.abs(v - B[0]) > 1e-9)) { /* exterior lines only (the rigid section is theirs) */ const x = [0]; B.forEach(v => x.push(x[x.length - 1] + v)); o.rigidX = { x, g: d.g }; }
+    // LL-O (§4, only with a distribution option of the Cross-section tab on: P.xs.lldf.skewV 'ext' or extMin true, engine/lldf-opt.js): the
+    // options and, for an exterior line, the largest interior girder spacing; both off (every project saved before): no inputs.lldf
+    const lo = window.PSBLldfOpt ? window.PSBLldfOpt.forInputs(P, d.g, lineS) : null; if (lo) o.lldf = lo;
     return o;
   }
   /* driven(P): the bridge values of the design, for display: [{ key, label, value, unit, where }] (where = the input tab that holds them) */

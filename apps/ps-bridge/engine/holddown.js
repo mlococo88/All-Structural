@@ -33,7 +33,10 @@
     R.checks.push({ n: NAME, v: Ftot, lim, r, loc: ss.hp.frac * L, u: 'kip', pass: r <= 1.0001 });
     return R;
   }
-  const engine = inp => (window.PSBRigid ? window.PSBRigid.run(inp) : computeAll(inp));   // PS-19: the rigid section on the real girder lines (engine/rigid.js)
+  const engine0 = inp => (window.PSBRigid ? window.PSBRigid.run(inp) : computeAll(inp));   // PS-19: the rigid section on the real girder lines (engine/rigid.js)
+  // LL-O (2026-11-23): the two optional distribution options of the bridge (inputs.lldf: exterior not less than interior; the shear skew
+  // correction on the exterior girders only; engine/lldf-opt.js, which also applies PS-19 itself); no inputs.lldf (both off): engine0 itself
+  const engine = inp => (window.PSBLldfOpt && inp && inp.lldf ? window.PSBLldfOpt.run(inp, engine0) : engine0(inp));
   // PS-35 (2026-11-14): a box beam or voided slab gets the type (f) / (g) distribution factors (engine/lldf-fg.js); every other shape the engine's
   const compute0 = inp => apply(inp, window.PSBLldfFG ? window.PSBLldfFG.run(inp, engine) : engine(inp));
   // PS-34 (2026-11-14): the pier compression block checked against the family's thickness (engine/pierblock.js; a warning only)
@@ -49,6 +52,9 @@
   const compute3 = inp => (window.PSBPL && inp && inp.pl ? window.PSBPL.run(inp, compute2u) : compute2u(inp));
   // AP-B (2026-11-23): the ranges of applicability of the distribution factor equations (engine/applicability.js): R.ap, and a failing check
   // and a warning only when a computed factor is outside its range (a girder inside every range: the result as before)
-  const compute = inp => { const R = compute3(inp); return window.PSBApplic ? window.PSBApplic.apply(inp, R) : R; };
+  const compute4 = inp => { const R = compute3(inp); return window.PSBApplic ? window.PSBApplic.apply(inp, R) : R; };
+  // IMP-N (2026-11-23, engineer's decision; a note only, no value changes): imported demands are used as given and are assumed to include the
+  // pedestrian load and a composite utility entered on the Cross-section tab (engine/demands.js assumed(): R.imp and one design warning)
+  const compute = inp => { const R = compute4(inp); return window.PSBDemands && window.PSBDemands.assumed ? window.PSBDemands.assumed(inp, R) : R; };
   window.PSBHoldDown = { NAME, FRAC, apply, compute, fracOf };
 })();
