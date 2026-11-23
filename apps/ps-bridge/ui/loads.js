@@ -21,14 +21,14 @@
     { key: 'fgj', title: 'Box beam / slab: I and J (types f / g)', ref: A + '4.6.2.2.1, Eqs. C4.6.2.2.1-2, C4.6.2.2.1-3', ids: /^ld\.(fgI|Jtw|Jtb|Jtt|JtT|JyT|Jb0|Jh0|JA0|Jst|JhJ|JA|JIx|JIy|JIp|Jc|J|IJ)$/, res: /^ld\.J$/ },
     { key: 'int', title: 'Interior girder equations', ref: A + 'Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1', ids: /^ld\.(k|m1|m2|v1|v2)$/ },
     { key: 'ext', title: 'Exterior girder: lever rule, e, rigid section', ref: A + '4.6.2.2.2d, 4.6.2.2.3b', ids: /^ld\.(lever|eM|eV|rigid|rigXbar|rigXext|rigSx2|eM1|eM2|eV1|eV2|f48)$/ },
-    { key: 'df', title: 'Distribution factors used', ref: A + '4.6.2.2.2e, 4.6.2.2.3c', ids: /^ld\.(dfmRaw|dfvRaw|c1|skM|skV|dfm|dfv)$/, res: /^ld\.dfm$/ },
+    { key: 'df', title: 'Distribution factors used', ref: A + '4.6.2.2.2e, 4.6.2.2.3c', ids: /^ld\.(dfmRaw|dfvRaw|c1|skM|skV|lo\.\w+|dfm|dfv)$/, res: /^ld\.dfm$/ },   // lo.*: LL-O, the distribution options (engine/lldf-opt.js; only with one on)
     // AP-B (2026-11-23): the ranges of applicability of the distribution factor equations (engine/applicability.js, steps ld.ap.*)
     { key: 'ap', title: 'Line-girder analysis: ranges of applicability of the distribution factors', ref: A + '4.6.2.2, Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1, 4.6.2.2.2e-1, 4.6.2.2.3a-1, 4.6.2.2.3b-1, 4.6.2.2.3c-1', ids: /^ld\.ap\./, res: /^ld\.ap\.r$/ },
     // PL-A (2026-11-23): the pedestrian live load (engine/pl.js, steps ld.pl.*; only with one)
     { key: 'pl', title: 'Pedestrian live load (with the vehicular live load)', ref: A + '3.6.1.6, 3.6.2.1, Table 3.4.1-1', ids: /^ld\.pl\./, res: /^ld\.pl\.MLLPL$/ },
     // UT-N (2026-11-23): utilities on the noncomposite section and the future utility allowance (engine/ut.js, steps ld.ut.*; only with one)
     { key: 'ut', title: 'Utilities on the noncomposite section (UT) and the future utility allowance (UF)', ref: A + '3.5.1, Tables 3.4.1-1, 3.4.1-2; as the Steel Bridge app', ids: /^ld\.ut\./, res: /^ld\.ut\.MuU$/ },
-    { key: 'll', title: 'Live load per girder', ref: A + '3.6.1.3, 4.6.2.2', ids: /^ld\.(xfp|xfn|xfv|MLL|VLL)$/, res: /^ld\.MLL$/ }];   // xf*: batch D1, the factors on imported live load
+    { key: 'll', title: 'Live load per girder', ref: A + '3.6.1.3, 4.6.2.2', ids: /^ld\.(xfp|xfn|xfv|MLL|VLL|imp)$/, res: /^ld\.MLL$/ }];   // xf*: batch D1, the factors on imported live load
   function output(ctx) {
     const { R, inp, P } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, df = R.df, cp = R.cp, own = R.own;
     const simple = !R.fe && !R.useExt, DL = window.PSBBridgeDL, dist = !!(DL && DL.on(P)), dg = window.PSBDesign.sel(P).g;   // PR 3a-3
@@ -59,6 +59,7 @@
       ['g<sub>M</sub>: one lane / two or more', `${ev('df.m1', 4)} / ${ev('df.m2', 4)} ${wk('ld.m1')}`], ['g<sub>V</sub>: one lane / two or more', `${ev('df.v1', 4)} / ${ev('df.v2', 4)} ${wk('ld.v1')}`],
       ...(ext ? [['Lever rule (one lane, m = 1.2)', `${ev('df.lever', 4)} ${wk('ld.lever')}`], ['e<sub>M</sub> / e<sub>V</sub>', `${ev('df.eM', 4)} / ${ev('df.eV', 4)} ${wk('ld.eM')}`], ['Rigid cross-section', `${ev('df.rigid', 4)} (${df.rigidNL} lane${df.rigidNL === 1 ? '' : 's'}) ${wk('ld.rigid')}`]] : []),
       ['Skew θ', ev('df.th', 1, '°')], ['Moment skew reduction r<sub>M</sub>', `${ev('df.skM', 4)} ${wk('ld.skM')}`], ['Shear skew correction', `${ev('df.skV', 4)} ${wk('ld.skV')}`],
+      ...optRows(R),
       ['DF<sub>M</sub> used', `<b>${ev('dfm', 4, 'lanes')}</b> ${wk('ld.dfm')}`], ['DF<sub>V</sub> used', `<b>${ev('dfv', 4, 'lanes')}</b> ${wk('ld.dfv')}`],
       ['M<sub>LL+IM</sub> per girder, midspan', `<b>${ev('MLL', 1, 'kip-ft')}</b> ${wk('ld.MLL')}`], ['V<sub>LL+IM</sub> per girder, support', `<b>${ev('VLL', 2, 'kip')}</b> ${wk('ld.VLL')}`]];
     // PS-35 (engine/lldf-fg.js): a box beam or voided slab: the type (f) / (g) factors
@@ -74,6 +75,7 @@
         ['g<sub>M</sub>: one lane / two or more', `${ev('df.m1', 4)} / ${ev('df.m2', 4)} ${wk('ld.m1')}`], ['g<sub>V</sub>: one lane / two or more', `${ev('df.v1', 4)} / ${ev('df.v2', 4)} ${wk('ld.v1')}`],
         ...(ext ? [['e<sub>M</sub>: one lane / two or more', `${ev('df.fg.eM1', 4)} / ${ev('df.fg.eM2', 4)} ${wk('ld.eM1')}`], ['e<sub>V</sub>: one lane / two or more', `${ev('df.fg.eV1', 4)} / ${ev('df.fg.eV2', 4)} ${wk('ld.eV1')}`]] : []),
         ['Skew θ (shear) / θ<sub>M</sub> (moment)', `${ev('df.fg.thV', 1, '°')} / ${ev('df.fg.thM', 1, '°')}`], ['Moment skew reduction r<sub>M</sub>', `${ev('df.skM', 4)} ${wk('ld.skM')}`], ['Shear skew correction c<sub>V</sub>', `${ev('df.skV', 4)} ${wk('ld.skV')}`],
+        ...optRows(R),
         ['DF<sub>M</sub> used', `<b>${ev('dfm', 4, 'lanes')}</b> ${wk('ld.dfm')}`], ['DF<sub>V</sub> used', `<b>${ev('dfv', 4, 'lanes')}</b> ${wk('ld.dfv')}`],
         ['M<sub>LL+IM</sub> per girder, midspan', `<b>${ev('MLL', 1, 'kip-ft')}</b> ${wk('ld.MLL')}`], ['V<sub>LL+IM</sub> per girder, support', `<b>${ev('VLL', 2, 'kip')}</b> ${wk('ld.VLL')}`]];
       const out = fg.out.length ? `<div class="alert" id="fgRange"><b>Outside the range of applicability (PS-35)</b><ul>${fg.out.map(o => `<li>${k.esc(o.text)}</li>`).join('')}</ul>The equations are used all the same (flagged here, in the design warnings and the Report): check the factors (refined analysis, 4.6.3, or enter them on the Loads tab).</div>` : '';
@@ -92,6 +94,18 @@
     h += everyLine(ctx);   // 2026-11-15 (batch C): the dead loads and distribution factors of every girder line (the steel app's tables)
     h += k.card('Worked steps: loads and distribution factors', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value.</p>${k.steps(ctx.W.loads.steps, TOPICS, OPEN)}`);
     return h;
+  }
+  /* optRows(R) (LL-O, 2026-11-23): the rows of the distribution factor card for the optional distribution options (engine/lldf-opt.js; R.df.opt
+     only when one is on and applies): the shear skew correction applied, the interior girder's factors and whether a factor was raised,
+     each with the § of its worked step. No option: no row (the card as before). Display only. */
+  function optRows(R) {
+    const q = R.df && R.df.opt, k = K(), wk = k.wk, T = window.PSBLldfOpt ? window.PSBLldfOpt.TXT : null; if (!q || !T) return [];
+    const rows = [];
+    if (q.skewV === 'ext') rows.push([`Shear skew correction applied (option "${T.ext}")`, `<span id="loCV">${k.fx(q.cV, 4)}</span> ${wk('ld.lo.cV')}${q.skewOff ? ` (not applied to this interior girder; all girders: DF<sub>V</sub> ${k.fx(q.dfv0, 4)})` : q.fgKeep ? ' (adjacent beams keep it)' : ''}`]);
+    if (q.extMin && q.int) rows.push([`Interior girder DF<sub>M</sub> / DF<sub>V</sub> (option "${T.extMin}", S<sub>int</sub> = ${k.fx(q.int.S, 3)} ft)`, `<span id="loInt">${k.fx(q.int.dfm, 4)} / ${k.fx(q.int.dfv, 4)}</span> ${wk('ld.lo.dfmI')}`],
+      ['Exterior DF<sub>M</sub> / DF<sub>V</sub> before the option', `${k.fx(q.dfm0, 4)} / ${k.fx(q.dfv0, 4)} ${wk('ld.lo.dfmE')}: ${q.policyM || q.policyV ? `<b id="loPol">${q.policyM && q.policyV ? 'both' : q.policyM ? 'DF<sub>M</sub>' : 'DF<sub>V</sub>'} raised to interior (policy)</b>` : '<span id="loPol">the exterior factors govern, no change</span>'}`]);
+    else if (q.extMin && q.ext) rows.push([`Option "${T.extMin}"`, `no interior girder line: no change ${wk('ld.lo.pol')}`]);
+    return rows;
   }
   /* apCard(ctx) (AP-B, 2026-11-23; the Steel Bridge app's SA4 banner): is the line-girder analysis with the approximate distribution
      factors permitted for the girder shown? R.ap (engine/applicability.js): each tested value with its range, table and result, the other
@@ -162,6 +176,7 @@
       ['Span of the file', x.sel ? `span ${x.sel.idx || '—'}: ${k.fx(+x.sel.x0, 2)}–${k.fx(+x.sel.x1, 2)} ft, ${x.nStations} stations` : '—'], ['LL type', k.esc(x.liveLoadType || '—')],
       ['f<sub>+M</sub> = DF<sub>+M</sub> m', `${F ? k.fx(F.pos, 3) : '—'} ${wk('ld.xfp')}`], ['f<sub>−M</sub> = DF<sub>−M</sub> m', `${F ? k.fx(F.neg, 3) : '—'} ${wk('ld.xfn')}`], ['f<sub>V</sub> = DF<sub>V</sub> m', `${F ? k.fx(F.v, 3) : '—'} ${wk('ld.xfv')}`],
       ['M<sub>LL+IM</sub> per girder, midspan', `<b>${ev('MLL', 1, 'kip-ft')}</b> ${wk('ld.MLL')}`], ['V<sub>LL+IM</sub> per girder, support', `<b>${ev('VLL', 2, 'kip')}</b> ${wk('ld.VLL')}`]])
+      + (R.imp ? `<div class="alert" id="impNote" role="status"><b>Imported demands are used as given.</b> ${k.esc(R.imp.text)} ${wk('ld.imp')}</div>` : '')
       + '<p class="note">Impact is in the imported live load (not applied again); DF and m per effect from the Loads tab (blank = 1.0). The distribution factors above are this app\'s own: used for the fatigue check (this app\'s fatigue truck) (and shown for comparison), not for the imported live load. The imported values at every station and their combinations: <a href="#" data-gotab="an">Analysis tab</a>.</p>');
   }
   /* everyLine(ctx): 2026-11-15 (batch C; the steel app's Loads & LLDF "dead loads of every girder line" and "LLDF of every girder × region"):
@@ -176,7 +191,7 @@
     if (!A || !A.cells || !A.cells.length) return window.PSBBridge && window.PSBBridge.hasTypes(ctx.P) ? k.card('Dead loads and distribution factors of every girder line', '<p class="note">Shown once every girder type × line is computed (the Summary tab runs them).</p>') : '';
     const P = ctx.P, d = window.PSBDesign.sel(P), DL = window.PSBBridgeDL, dist = !!(DL && DL.on(P));
     const go = (c, tab, st) => `<a class="wk" href="#" data-sumgo="${c.k}|${c.g}|${tab}|${k.esc(st)}|" title="Worked: ${tab === 'lds' ? 'Loads &amp; LLDF' : tab === 'sec' ? 'Section properties' : 'Stresses'} tab with this girder type and line">§</a>`;
-    const meth = R => { const df = R.df || {}; if (R.useExt) return 'imported'; if (df.fg) return `type (${df.fg.type}), ${df.ext ? 'exterior' : 'interior'}`; return df.ext ? 'exterior: lever rule, e, rigid section' : `interior: equations${df.isNext ? ' (NEXT)' : ''}`; };
+    const meth = R => { const df = R.df || {}; if (R.useExt) return 'imported'; if (df.fg) { const lf = window.PSBLldfOpt ? window.PSBLldfOpt.label(R) : ''; return `type (${df.fg.type}), ${df.ext ? 'exterior' : 'interior'}${lf ? '; ' + lf : ''}`; } const lo = window.PSBLldfOpt ? window.PSBLldfOpt.label(R) : '', t = df.ext ? 'exterior: lever rule, e, rigid section' : `interior: equations${df.isNext ? ' (NEXT)' : ''}`; return lo ? `${t}; ${lo}` : t; };
     const cs = A.cells.slice().sort((a, b) => a.s - b.s || a.g - b.g);
     const rows = cs.map(c => { const R = c.R, on = c.g === d.g && c.s === d.s, lab = k.esc((P.types[c.k] || {}).label || '');
       if (!R || R.error) return `<tr><td>${c.s}</td><td class="lft">G${c.g}</td><td class="lft">${lab}</td><td class="lft" colspan="9">engine error${R && R.error ? ': ' + k.esc(R.error) : ''}</td></tr>`;

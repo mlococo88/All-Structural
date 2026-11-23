@@ -80,6 +80,9 @@
       it('Nb', 'Number of beams', 'N_b', '', 0, Math.round(+inp.nGirders || 0), RANGE.Nb[0], RANGE.Nb[1], TK.int, { note: 'With three beams the tables take the lesser of the equation and the lever rule, which the equations here do not do.' });
       if (!(next && df.kgOmitted)) it('Kg', 'Longitudinal stiffness parameter', 'K_g', 'in⁴', 0, df.Kg, RANGE.Kg[0], RANGE.Kg[1], TK.kg);
       if (df.ext) it('de', 'Exterior web to the barrier face', 'd_e', 'ft', 3, +ld.de || 0, RANGE.de[0], RANGE.de[1], TK.ext);
+      // LL-O (2026-11-23): with "Exterior not less than interior" on, the interior equations are also used at the interior girder spacing
+      // S_int (engine/lldf-opt.js): tested where it differs from this line's S (the same S: the item above is that test)
+      { const oi = df.opt && df.opt.int; if (oi && !next && isNum(oi.S) && Math.abs(oi.S - (+inp.S)) > 1e-9) it('Sint', 'Interior girder spacing (option "Exterior not less than interior")', 'S_int', 'ft', 3, oi.S, RANGE.S[0], RANGE.S[1], TK.int); }
       it('th', 'Skew of the supports', 'θ', '°', 1, th, RANGE.th[0], RANGE.th[1], TK.skew, { note: 'Above 60° the moment reduction takes θ = 60° (the engine also caps the shear correction at 60°): refined analysis, 4.6.3.' });
     }
     const ex = (id, level, title, val, msg) => out.extra.push({ id, level, title, val, msg });

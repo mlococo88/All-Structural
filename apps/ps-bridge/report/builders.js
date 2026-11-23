@@ -146,7 +146,7 @@
         ['Owner', ownR ? `${own} (${ownR.manual})` : own]]), note('Entered values (Project, Bridge layout, Cross-section and Girders & strands tabs); the engine inputs of the design girder are those of the [[tab:in:gird|Girders & strands tab]].'), ...planFig(P, X), ...snapFig(P, X)]),
       sub('c', 'Basis', [kv([['Design specification', ED], ['Load rating', 'AASHTO Manual for Bridge Evaluation (MBE), LRFR; article numbers as the old app'], ['Owner manual', ownR && !ownR.none ? `${ownR.manual} (AASHTO LRFD ${ownR.aashto} basis); its rules as listed below` : 'none (AASHTO only)'],
         ['Units', 'in, kip, ksi, ft, klf, kip-ft'], ['Sign convention', 'stresses + compression, − tension; moments + sagging']])]),
-      { ...sub('a', 'Assumptions', [...(asm ? asm.items : []), ...ASSUME.map(t => note('• ' + t)), ...deNote(P), ...voidNotes(B), ...tbcNotes(B), ...rowNotes(B), ...fgNotes(B), ...secNotes(B)]), key: 'rs.asm' }];   // rs.asm (2026-11-23): the Basis of design section links here
+      { ...sub('a', 'Assumptions', [...(asm ? asm.items : []), ...ASSUME.map(t => note('• ' + t)), ...deNote(P), ...loNotes(P), ...impNotes(P), ...voidNotes(B), ...tbcNotes(B), ...rowNotes(B), ...fgNotes(B), ...secNotes(B)]), key: 'rs.asm' }];   // rs.asm (2026-11-23): the Basis of design section links here
     ownSubs.forEach((s, j) => subs.push({ ...sub('o' + j, `Owner rules: ${s.title}`, s.items), ...(j === 0 ? { key: X.ownKey } : {}) }));
     return { title: 'Project, basis and assumptions', subs };
   }
@@ -294,6 +294,23 @@
   }
   /* deNote(P): PS-23 (engineer decision 2026-11-13): the entered d_e that differs from the d_e computed from the cross-section (PS-20), the
      same rows as the Loads & LLDF tab's notice, listed in the assumptions always (also after the notice is dismissed); none where they match */
+  /* loNotes(P) (LL-O, 2026-11-23): an optional live-load distribution option of the Cross-section tab is on (P.xs.lldf, engine/lldf-opt.js):
+     one assumption naming it, with the Loads & LLDF reference (its worked steps ld.lo.*). Both off: nothing (the report as before). */
+  function loNotes(P) {
+    const LO = window.PSBLldfOpt; if (!LO) return [];
+    const o = LO.ofProject(P), T = LO.TXT; if (!o.skewExt && !o.extMin) return [];
+    const t = [];
+    if (o.skewExt) t.push(`${T.skewV}: ${T.ext} (AASHTO LRFD 10th Ed. 4.6.2.2.3c: an interior I-girder, bulb tee or NEXT beam takes no shear skew correction; adjacent box beams and deck slabs keep it on every beam)`);
+    if (o.extMin) t.push(`${T.extMin} (owner / engineer policy: an exterior girder's moment and shear distribution factors are not taken less than the interior girder's by the equations of 4.6.2.2.2b and 4.6.2.2.3a; the fatigue factor is not raised)`);
+    return [note(`• Live-load distribution options (Cross-section tab), applied to the factors this app computes (not to entered factors or imported live load): ${t.join('; ')}. Worked in the Loads & LLDF steps "Distribution factors used" (see [[rs.lds]]).`)];
+  }
+  /* impNotes(P) (IMP-N, 2026-11-23, engineer's decision): a girder type on imported demands with a pedestrian load or a composite utility
+     on the Cross-section tab: the imported values are used as given and must include them (engine/demands.js assumedOf). Else nothing. */
+  function impNotes(P) {
+    const DM = window.PSBDemands, BR = window.PSBBridge; if (!DM || !DM.assumedOf || !BR) return [];
+    const ts = BR.types(P).map(T => ({ T, a: DM.assumedOf(P, T) })).filter(z => z.a);
+    return ts.length ? [note(`• Girder type${ts.length > 1 ? 's' : ''} ${ts.map(z => plain(z.T.label)).join(', ')}: ${plain(ts[0].a.text)} (see [[rs.lds]])`)] : [];
+  }
   function deNote(P) { const DS = window.PSBDesign, D = DS && DS.deDiff ? DS.deDiff(P) : { rows: [] }; return D.rows.length ? [note(`• ${DS.deText(D, t => `$_{${t}}$`)} (see [[rs.lds]])`)] : []; }
 
   /* secNotes(B): PS-31 (engineer decision 2026-11-14): the project used one of the old library's box beams or voided deck slabs and was

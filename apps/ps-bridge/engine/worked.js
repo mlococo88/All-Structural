@@ -315,7 +315,15 @@
     add({ id: 'skV', label: `Skew correction, shear (θ = ${n(df.th, 1)}°)`, sym: 'c_{V}', eq: '1 + 0.20\\left(\\frac{12\\,L\\,t_{s}^{3}}{K_{g}}\\right)^{0.3}\\tan\\theta', sub: df.isNext && df.kgOmitted ? '' : `1 + 0.20\\left(\\frac{12(${n(L, 2)})(${n(ts, 2)})^{3}}{${g(df.Kg, 0)}}\\right)^{0.3}(${n(tanT, 4)})`, value: df.skV, unit: '', d: 4, ref: A10 + 'Table 4.6.2.2.3c-1' },
       df.isNext && df.kgOmitted ? 1 + 0.2 * tanT : 1 + 0.2 * Math.pow(12 * L * ts3 / df.Kg, 0.3) * tanT);
     }
+    // LL-O (2026-11-23): the optional distribution options (engine/lldf-opt.js; df.opt only when one is on): their steps ld.lo.* and the
+    // equation of the two factors used; no option (every project saved before): the two steps exactly as before
+    const LO = df.opt && window.PSBLldfOpt ? window.PSBLldfOpt : null, lu = LO ? LO.used(inp, R, n) : null;
+    if (LO) LO.steps(add, inp, R, { n, g, par });
+    if (lu && lu.m) add({ id: 'dfm', label: 'Moment distribution factor', sym: 'DF_{M}', eq: lu.m.eq, sub: lu.m.sub, value: R.dfm, unit: 'lanes', d: 4, note: lu.m.note }, lu.m.shown);
+    else
     add({ id: 'dfm', label: 'Moment distribution factor', sym: 'DF_{M}', eq: inp.loads.dfAuto ? 'r_{M}\\,g_{M}' : '', sub: inp.loads.dfAuto ? `${n(df.skM, 4)}(${n(df.dfmRaw, 4)})` : '', value: R.dfm, unit: 'lanes', d: 4, note: inp.loads.dfAuto ? '' : 'Entered on the Loads tab.' }, inp.loads.dfAuto ? df.skM * df.dfmRaw : +inp.loads.dfm);
+    if (lu && lu.v) add({ id: 'dfv', label: 'Shear distribution factor', sym: 'DF_{V}', eq: lu.v.eq, sub: lu.v.sub, value: R.dfv, unit: 'lanes', d: 4, note: lu.v.note }, lu.v.shown);
+    else
     add({ id: 'dfv', label: 'Shear distribution factor', sym: 'DF_{V}', eq: inp.loads.dfAuto ? 'c_{V}\\,g_{V}' : '', sub: inp.loads.dfAuto ? `${n(df.skV, 4)}(${n(df.dfvRaw, 4)})` : '', value: R.dfv, unit: 'lanes', d: 4, note: inp.loads.dfAuto ? '' : 'Entered on the Loads tab.' }, inp.loads.dfAuto ? df.skV * df.dfvRaw : +inp.loads.dfv);
     const simple = !R.fe && !R.useExt;
     if (simple && inp.loads.llAuto) {
@@ -344,6 +352,9 @@
       add({ id: 'MLL', label: 'Live load moment per girder at midspan (continuous unit)', sym: 'M_{LL+IM}', value: R.MLL, unit: 'kip-ft', d: 1, note: 'HL-93 on the continuous unit (influence lines of the FE model, Analysis tab) × DF_M.' });
       add({ id: 'VLL', label: 'Live load shear per girder at the support (continuous unit)', sym: 'V_{LL+IM}', value: R.VLL, unit: 'kip', d: 2, note: 'HL-93 on the continuous unit × DF_V (Analysis tab).' });
     }
+    // IMP-N (2026-11-23): imported demands are used as given: the pedestrian load / composite utility of the Cross-section tab not added (R.imp, engine/demands.js)
+    if (R.imp) add({ id: 'imp', label: 'Imported demands are used as given: loads of the Cross-section tab that this app does NOT add to them', sym: 'w', value: (R.imp.pl || 0) + (R.imp.utc || 0), unit: 'klf', d: 4, ref: A10 + '3.6.1.6, 3.5.1',
+      note: `${R.imp.text} The value shown is the girder line's pedestrian load${R.imp.utc ? ' plus its composite utility' : ''} that is not added (klf).` });
     if (R.ap && window.PSBApplic) window.PSBApplic.steps(add, inp, R, { n, g, par });   // AP-B: the ranges of applicability (4.6.2.2), steps ld.ap.*
     if (R.pl && window.PSBPL) window.PSBPL.steps(add, inp, R, { n, g, par });   // PL-A: the pedestrian live load (3.6.1.6), steps ld.pl.*
     if (R.ut && window.PSBUT) window.PSBUT.steps(add, inp, R, { n, g, par });   // UT-N: utilities on the noncomposite section and the future utility allowance, steps ld.ut.*

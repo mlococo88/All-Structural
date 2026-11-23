@@ -138,7 +138,7 @@ test('continuous unit (2 × 100 ft): the pier M_PL = w L² / 8 (both spans loade
 test('imported demands: the pedestrian load is not added and a warning says so', () => {
   const ch = { MLLx: x => 1, VLLx: x => 2, MLLpos: x => 3, MLLneg: x => 4, VLLpos: x => 5, VLLneg: x => 6 };
   const o = PL.channels({ inp: { pl: { w: 0.1 } }, L: 100, useExt: true, useFE: false, fe: null }, ch);
-  assert.equal(o.MLLx, ch.MLLx); assert.equal(o.VLLneg, ch.VLLneg); assert.equal(o.pierNeg({}), 0); assert.match(PL.WARN_EXT, /NOT added/);
+  assert.equal(o.MLLx, ch.MLLx); assert.equal(o.VLLneg, ch.VLLneg); assert.equal(o.pierNeg({}), 0); assert.match(PL.WARN_EXT, /NOT added by this app/); assert.match(PL.WARN_EXT, /must already include/);
   const z = PL.channels({ inp: {}, L: 100, useExt: false, useFE: false, fe: null }, ch); assert.equal(z.MLLpos, ch.MLLpos);
 });
 
