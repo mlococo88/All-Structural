@@ -205,24 +205,24 @@
       const n = St().n, S = r.S, T = r.A4, d = T.d;
       w.add({ id: 'wDC', label: 'Slab weight per square foot (DC)', sym: 'w_{DC}', eq: '\\frac{t}{12}\\,w_{c}', sub: `\\frac{${n(o.tL, 2)}}{12}(${n(o.wc, 3)})`, value: r.wDC, unit: 'ksf', d: 4, ref: ED + 'Art. 3.5.1', note: o.wDCnote || '' });
       w.add({ id: 'wDW', label: 'Wearing surface (DW)', sym: 'w_{DW}', eq: '', sub: o.wDWsub || '', value: r.wDW, unit: 'ksf', d: 4, ref: ED + 'Art. 3.5.1', note: o.wDWnote || '' });
-      w.add({ id: 'MDCp', label: 'Slab moment, positive (continuous slab)', sym: 'M_{DC,+}', eq: '\\frac{w_{DC}S^{2}}{11}', sub: `\\frac{${n(r.wDC, 4)}(${n(S, 3)})^{2}}{11}`, value: r.MDC_pos, unit: 'kip-ft/ft', d: 3, ref: 'Continuous-beam coefficient', note: 'S = the girder spacing, centre to centre.' });
-      w.add({ id: 'MDWp', label: 'Wearing-surface moment, positive', sym: 'M_{DW,+}', eq: '\\frac{w_{DW}S^{2}}{11}', sub: `\\frac{${n(r.wDW, 4)}(${n(S, 3)})^{2}}{11}`, value: r.MDW_pos, unit: 'kip-ft/ft', d: 3, ref: 'Continuous-beam coefficient' });
-      w.add({ id: 'MDCn', label: 'Slab moment, negative', sym: 'M_{DC,-}', eq: '\\frac{w_{DC}S^{2}}{10}', sub: `\\frac{${n(r.wDC, 4)}(${n(S, 3)})^{2}}{10}`, value: r.MDC_neg, unit: 'kip-ft/ft', d: 3, ref: 'Continuous-beam coefficient' });
-      w.add({ id: 'MDWn', label: 'Wearing-surface moment, negative', sym: 'M_{DW,-}', eq: '\\frac{w_{DW}S^{2}}{10}', sub: `\\frac{${n(r.wDW, 4)}(${n(S, 3)})^{2}}{10}`, value: r.MDW_neg, unit: 'kip-ft/ft', d: 3, ref: 'Continuous-beam coefficient' });
+      w.add({ id: 'MDCp', label: 'Slab moment, positive (continuous slab)', sym: 'M_{DC,pos}', eq: '\\frac{w_{DC}S^{2}}{11}', sub: `\\frac{${n(r.wDC, 4)}(${n(S, 3)})^{2}}{11}`, value: r.MDC_pos, unit: 'kip-ft/ft', d: 3, ref: 'Continuous-beam coefficient', note: 'S = the girder spacing, centre to centre.' });
+      w.add({ id: 'MDWp', label: 'Wearing-surface moment, positive', sym: 'M_{DW,pos}', eq: '\\frac{w_{DW}S^{2}}{11}', sub: `\\frac{${n(r.wDW, 4)}(${n(S, 3)})^{2}}{11}`, value: r.MDW_pos, unit: 'kip-ft/ft', d: 3, ref: 'Continuous-beam coefficient' });
+      w.add({ id: 'MDCn', label: 'Slab moment, negative', sym: 'M_{DC,neg}', eq: '\\frac{w_{DC}S^{2}}{10}', sub: `\\frac{${n(r.wDC, 4)}(${n(S, 3)})^{2}}{10}`, value: r.MDC_neg, unit: 'kip-ft/ft', d: 3, ref: 'Continuous-beam coefficient' });
+      w.add({ id: 'MDWn', label: 'Wearing-surface moment, negative', sym: 'M_{DW,neg}', eq: '\\frac{w_{DW}S^{2}}{10}', sub: `\\frac{${n(r.wDW, 4)}(${n(S, 3)})^{2}}{10}`, value: r.MDW_neg, unit: 'kip-ft/ft', d: 3, ref: 'Continuous-beam coefficient' });
       const xs = o.xs || { kind: 'entered', xent: r.xneg }, b = +xs.b || 0, R6 = ED + 'Art. 4.6.2.1.6';
       if (xs.kind === 'steel') w.add({ id: 'xneg', label: 'Negative-moment design section from the girder centreline (steel I-girder: one quarter of the flange width)', sym: 'x', eq: '\\frac{b_{f}}{4}', sub: `\\frac{${n(b, 2)}}{4}`, value: r.xneg, unit: 'in', d: 2, ref: R6, note: xs.note || 'Kept within 0 to 24 in (Table A4-1).' });
       else if (xs.kind === 'box') w.add({ id: 'xneg', label: 'Negative-moment design section (closed box: the face of the support)', sym: 'x', eq: '\\frac{b}{2}', sub: `\\frac{${n(b, 2)}}{2}`, value: r.xneg, unit: 'in', d: 2, ref: R6, note: xs.note || 'Kept within 0 to 24 in (Table A4-1).' });
       else if (xs.kind === 'precast') w.add({ id: 'xneg', label: 'Negative-moment design section (precast I / open box: one third of the flange width, not more than 15 in)', sym: 'x', eq: '\\min\\left(\\frac{b_{tf}}{3},\\ 15\\right)', sub: `\\min\\left(\\frac{${n(b, 2)}}{3},\\ 15\\right)`, value: r.xneg, unit: 'in', d: 2, ref: R6, note: xs.note || '' });
       else w.add({ id: 'xneg', label: 'Negative-moment design section from the girder centreline (entered, 0 to 24 in)', sym: 'x', eq: '\\min(\\max(x_{ent}, 0), 24)', sub: `\\min(\\max(${n(+xs.xent || 0, 2)}, 0), 24)`, value: r.xneg, unit: 'in', d: 2, ref: R6, note: xs.note || '' });
       const Am = T.outOfRange ? (T.below ? ' S is below 4 ft: the 4 ft row is used.' : ' S is above 15 ft: the 15 ft row is used; a refined analysis is required.') : '';
-      w.add({ id: 'MLLp', label: 'Live load + IM, positive (Table A4-1, interpolated on S)', sym: 'M_{LL,+}', eq: 'M_{+}(S_{0}) + \\left(M_{+}(S_{1}) - M_{+}(S_{0})\\right)\\frac{S - S_{0}}{0.25}',
+      w.add({ id: 'MLLp', label: 'Live load + IM, positive (Table A4-1, interpolated on S)', sym: 'M_{LL,pos}', eq: 'M_{+}(S_{0}) + \\left(M_{+}(S_{1}) - M_{+}(S_{0})\\right)\\frac{S - S_{0}}{0.25}',
         sub: `${n(d.r0[1], 2)} + (${n(d.r1[1], 2)} - ${n(d.r0[1], 2)})\\frac{${n(T.Sused, 3)} - ${n(d.r0[0], 2)}}{0.25}`, value: r.MLL_pos, unit: 'kip-ft/ft', d: 3, ref: ED + 'Table A4-1',
         note: `Rows S_0 = ${n(d.r0[0], 2)} ft and S_1 = ${n(d.r1[0], 2)} ft. The tabulated values include the multiple presence factors and the 33 % dynamic load allowance: no further IM.${Am}` });
-      w.add({ id: 'MLLn', label: 'Live load + IM, negative at the design section (Table A4-1, interpolated on S, then on x)', sym: 'M_{LL,-}', eq: 'M_{-}(x_{j}) + \\left(M_{-}(x_{j+1}) - M_{-}(x_{j})\\right)\\frac{x - x_{j}}{x_{j+1} - x_{j}}',
+      w.add({ id: 'MLLn', label: 'Live load + IM, negative at the design section (Table A4-1, interpolated on S, then on x)', sym: 'M_{LL,neg}', eq: 'M_{-}(x_{j}) + \\left(M_{-}(x_{j+1}) - M_{-}(x_{j})\\right)\\frac{x - x_{j}}{x_{j+1} - x_{j}}',
         sub: `${n(d.row[2 + d.j], 3)} + (${n(d.row[3 + d.j], 3)} - ${n(d.row[2 + d.j], 3)})\\frac{${n(T.xUsed, 2)} - ${d.X[0]}}{${d.X[1]} - ${d.X[0]}}`, value: r.MLL_neg, unit: 'kip-ft/ft', d: 3, ref: ED + 'Table A4-1',
         note: `Columns x_j = ${d.X[0]} in and x_j+1 = ${d.X[1]} in of the row interpolated at S = ${n(T.Sused, 3)} ft.${T.xClamped ? ' x is above 24 in: 24 in is used.' : ''}` });
-      w.add(muStep(r, 'Mup', 'Factored positive moment, Strength I', 'M_{u,+}', ',+', r.MDC_pos, r.MDW_pos, r.MLL_pos, r.Mu_pos));
-      w.add(muStep(r, 'Mun', 'Factored negative moment, Strength I', 'M_{u,-}', ',-', r.MDC_neg, r.MDW_neg, r.MLL_neg, r.Mu_neg));
+      w.add(muStep(r, 'Mup', 'Factored positive moment, Strength I', 'M_{u,pos}', ',pos', r.MDC_pos, r.MDW_pos, r.MLL_pos, r.Mu_pos));
+      w.add(muStep(r, 'Mun', 'Factored negative moment, Strength I', 'M_{u,neg}', ',neg', r.MDC_neg, r.MDW_neg, r.MLL_neg, r.Mu_neg));
     },
     /* capacity(w, key, name, c, o): c = capacity(); key 'pos' | 'neg' | 'oh'; o = { muSym, check (text after the label of the ratio step), short: true (phi M_n and the ratio only) } */
     capacity(w, key, name, c, o) {
@@ -263,7 +263,7 @@
       const n = St().n; o = o || {};
       w.add({ id: 'dist', label: 'Distribution reinforcement, percent of the positive-moment steel', sym: 'p_{d}', eq: '\\min\\left(\\frac{220}{\\sqrt{S}},\\ 67\\right)', sub: `\\min\\left(\\frac{220}{\\sqrt{${n(S, 3)}}},\\ 67\\right)`, value: pct, unit: '', d: 1, ref: ED + 'Art. 9.7.3.2',
         note: o.note || 'S in ft, taken as the girder spacing. Bottom bars parallel to the girders.' });
-      if (o.As != null) w.add({ id: 'distAs', label: 'Distribution reinforcement, area per foot of deck width', sym: 'A_{s,d}', eq: '\\frac{p_{d}}{100}\\,A_{s,+}', sub: `\\frac{${n(pct, 1)}}{100}(${n(o.As, 3)})`, value: pct / 100 * o.As, unit: 'in^{2}/ft', d: 3, ref: ED + 'Art. 9.7.3.2' });
+      if (o.As != null) w.add({ id: 'distAs', label: 'Distribution reinforcement, area per foot of deck width', sym: 'A_{s,d}', eq: '\\frac{p_{d}}{100}\\,A_{s,pos}', sub: `\\frac{${n(pct, 1)}}{100}(${n(o.As, 3)})`, value: pct / 100 * o.As, unit: 'in^{2}/ft', d: 3, ref: ED + 'Art. 9.7.3.2' });
     }
   };
 

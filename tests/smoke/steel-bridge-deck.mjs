@@ -6,6 +6,7 @@
 //      the values used with links, the worked steps (KaTeX, 0 errors); a § link opens its topic;
 //   3. the input card: bottom bars at 8 in changes DK1 to 0.974 at once; the project file now holds deckDesign; Undo brings 6 in back;
 //   4. a failing design (top bars at 12 in) shows NG; switching the module off returns the off card and keeps the entered bars;
+//   6. (part 2) the Summary tab's deck card and verdict counts, the left column chip, the Report section, summaries and bill of materials;
 //   5. the other tabs are as before (the Section properties tab still calculates); 390 px wide: no sideways page scroll; 0 console errors.
 //   node tests/smoke/steel-bridge-deck.mjs        (SBD_SHOT_DIR=<folder>: screenshots)
 import path from 'path';
@@ -73,6 +74,29 @@ try {
   S = await saved(); if (S) { const D = S.deckDesign; assert.equal(D.on, false); assert.equal(D.sTop, 5); assert.equal(D.barTop, 0.44); }
   await p.selectOption('#dk_on', 'true'); await p.waitForSelector('#out tr[data-dkck="DK2"]'); assert.equal(await p.locator('#dk_sTop').inputValue(), '5');
   ok('a failing design shows NG; an input error is reported; off returns the off card and keeps the entered bars');
+
+  // 6. part 2: Summary tab and left column, Report, Nomenclature (deck on: top #5 at 5 in, #6 bars → all pass)
+  await otab('sum'); await p.waitForFunction(() => /Up to date/.test((document.querySelector('#out .sum-run') || {}).textContent || ''), null, { timeout: 600000 });
+  const sm = await p.evaluate(() => ({ rows: [...document.querySelectorAll('#out #sum-deck tbody tr')].map(t => [...t.children].map(c => c.innerText.trim())), verd: document.querySelector('#out #sum-verdict .sum-verd').innerText, chip: (document.querySelector('#sbDash [data-sdgrp="Deck"]') || {}).innerText || '', cols: [...document.querySelectorAll('#out #sum-table thead th, #out table.sum-tbl thead th')].map(h => h.innerText) }));
+  assert.equal(sm.rows.length, 3); assert.match(sm.rows[0][0], /^DK1 /); assert.ok(sm.rows.every(r => r[5] === 'PASS'), JSON.stringify(sm.rows)); assert.match(sm.chip, /Deck slab[\s\S]*PASS/);
+  assert.ok(!sm.cols.some(c => /Deck/.test(c)), 'not a column of the girder table');
+  const nPass = +(/(\d+) PASS/.exec(sm.verd) || [0, 0])[1];
+  await itab('xsec'); await p.selectOption('#dk_on', 'false'); await p.waitForFunction(() => /Up to date/.test((document.querySelector('#out .sum-run') || {}).textContent || ''), null, { timeout: 600000 });
+  const off = await p.evaluate(() => ({ card: !!document.querySelector('#out #sum-deck'), verd: document.querySelector('#out #sum-verdict .sum-verd').innerText, chip: !!document.querySelector('#sbDash [data-sdgrp="Deck"]') }));
+  assert.equal(off.card, false); assert.equal(off.chip, false); assert.equal(+(/(\d+) PASS/.exec(off.verd) || [0, 0])[1], nPass - 3, 'three counts fewer with the deck design off');
+  await p.selectOption('#dk_on', 'true'); await p.waitForSelector('#out #sum-deck');
+  await p.evaluate(() => document.querySelector('#sbDash [data-sdgrp="Deck"] a').click()); await p.waitForSelector('#out tr[data-dkck="DK1"]');
+  assert.equal(await p.evaluate(() => document.querySelector('#tabBar [aria-selected="true"]').dataset.otab), 'dk');
+  await shot('sb-deck-4-summary-chip.png');
+  ok(`Summary: deck card with DK1–DK3, counted once in the verdict (${nPass} PASS with, ${nPass - 3} without), left column chip opens the Deck tab; not a girder column`);
+  await otab('rpt'); assert.equal(await p.locator('#out [data-rpinc="dk"]').count(), 1); await p.click('#rp_build'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 300000 });
+  const rp = await p.evaluate(() => ({ kErr: document.querySelectorAll('.rp-doc .katex-error').length, bad: document.querySelectorAll('.rp-doc .rp-bad').length, secs: [...document.querySelectorAll('.rp-doc .rp-h1')].map(h => h.textContent.trim()), text: document.querySelector('.rp-doc').innerText, tc: document.querySelector('.rp-doc').textContent, fig: document.querySelectorAll('.rp-doc svg.dk-fig').length }));
+  assert.equal(rp.kErr, 0); assert.equal(rp.bad, 0, 'unresolved § references'); assert.equal(rp.secs.length, 19, rp.secs.join(' | '));
+  const iD = rp.secs.findIndex(t => /Deck slab \(transverse design\)/.test(t)); assert.ok(iD > 0 && /rating/i.test(rp.secs[iD + 1]), rp.secs.join(' | '));
+  ['DK2 Deck negative moment, top bars (Strength I)', 'Deck reinforcement (Deck tab; rebar, not in the steel totals)', 'Deck slab (bridge)'].forEach(t => assert.ok(rp.tc.includes(t), t)); assert.equal(rp.fig, 1);
+  assert.ok(!/NaN|undefined|\[object/.test(rp.text));
+  await p.evaluate(() => { const h = [...document.querySelectorAll('.rp-doc .rp-h1')].find(q => /Deck slab \(transverse/.test(q.textContent)); h.scrollIntoView(); }); await p.waitForTimeout(400); await shot('sb-deck-5-report.png');
+  ok(`Report: 19 sections, "${rp.secs[iD]}" before the Rating, its figure, the deck rows in the summaries and the bill of materials; 0 KaTeX errors, 0 unresolved links`);
 
   // 5. other tabs, phone width, console
   await otab('sec'); await p.waitForFunction(() => { const a = document.querySelector('#out .alert.stale'); return a && a.hidden; }, null, { timeout: 120000 });

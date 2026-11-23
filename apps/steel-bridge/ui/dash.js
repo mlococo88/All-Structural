@@ -62,7 +62,10 @@
       const rows = S.all.map(z => `<li><a href="#" data-sdgo="${z.G.gi}|${z.c.id}" class="sd-${z.q.st}${list[z.G.gi].old[z.c.id] ? ' sdOldV' : ''}">${S.cols.length > 1 ? esc(z.c.short) + ', ' : ''}${esc(z.G.label)}${lnT(z.G, z.q)}: ${vOf(z.q, z.c)}</a></li>`).join('');
       return `<div class="sdChip sd-${S.st}${old ? ' sdOldC' : ''}" data-sdgrp="${esc(gp)}"><button type="button" class="sdX" data-sdx="${esc(gp)}" aria-expanded="${op}" title="${op ? 'Hide' : 'Show'} each girder">${op ? '▾' : '▸'}</button><a href="#" class="sdMain" data-sdgo="${go}" title="${esc(g ? `${SM().label(g.c, P).head}, ${g.G.label}: ${String(g.q.check || '').replace(/\$|\{\}|[{}]|\\/g, '')} (${String(g.q.loc || '').replace(/\$|[{}]/g, '')})` : S.st === 'na' ? 'Not applicable' : 'Not run yet: click to run it and open its tab')}">
         <span class="sdName">${esc(SM().grpLabel ? SM().grpLabel(gp, P) : gp)}</span><span class="sdVal">${v}</span><span class="sdSt">${S.st === 'notrun' ? '' : LBL[S.st]}${rf && g ? '' : ''}</span></a>${op ? `<ul class="sdList">${rows}</ul>` : ''}</div>`;
-    }).join('');
+    }).join('')
+      // DK (2026-11-23): the deck slab checks of the bridge, a chip only where the project has the deck design on (report/summary.js deckOf)
+      + (ov.deck ? (() => { const d = ov.deck, g = d.gov; return `<div class="sdChip sd-${d.st}" data-sdgrp="Deck"><span class="sdX"></span><a href="#" class="sdMain" data-sdgo="0|deck" title="${esc(`${g.check} (${g.loc})`)}">
+        <span class="sdName">Deck slab</span><span class="sdVal">${g.r != null && isFinite(g.r) ? fmt(g.r, 3) : '—'} · bridge</span><span class="sdSt">${LBL[d.st] || ''}</span></a></div>`; })() : '');
     o.el.innerHTML = head + verdict + `<div id="sbDash">${chips}</div><p class="sdNote">Each chip: the governing value over every girder (ratio = demand / capacity, OK ≤ 1.0; RF OK ≥ 1.0), as on the <a href="#" data-sdtab="sum">Summary tab</a>. Click: its tab, girder and the card that works it.${window.SBDRating && window.SBDRating.BASIS ? ' ' + esc(window.SBDRating.BASIS.short) : ''}${P.fatigue && P.fatigue.ev && P.fatigue.ev.on === 'yes' ? ' Fatigue includes the remaining fatigue life (FA6, MBE 4th Ed. Section 7; fatigue-prone details only, 7.2.3).' : ''}</p>`;
   }
   function init(o) {

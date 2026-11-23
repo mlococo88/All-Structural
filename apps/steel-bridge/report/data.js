@@ -19,6 +19,7 @@
      splices      engine/splices.js girder() on the analysis, as ui/splices.js calc() (Field splices tab); this app's analysis only
      rating       ui/rating.js build() (Rating tab)
      welds        ui/welds.js build() (Welds tab; added 2026-10-30, paths PR), this app's analysis or the hand-off file
+     dk           engine/deck.js calc() (Deck tab; added 2026-11-23, DK), only when the deck design is switched on (B.dkOn)
    The full analysis (live load, a few seconds) is run once and shared by the modules for this build (analyzeGirder is memoised for
    the duration of compute(), keyed by girder and options; the modules only read its result: tests/engine/report.test.mjs checks it).
    Since 2026-10-30 (report wiring PR, every-girder report) the memo is kept between builds: analysis(P, gi, o) caches each girder's
@@ -82,6 +83,9 @@
       if ((on('spl') || on('sum')) && cu('spl')) B.spl = run('spl', () => W().SBDSplicesUI.build({ P, g, src: 'custom' }));
       else if ((on('spl') || on('sum')) && src === 'analysis') B.spl = run('spl', () => { if (!((P.framing || {}).splices || []).length) return { err: 'No field splice stations: enter them on the Splices tab.' };
         if (!B.an) return { err: B.err.an || 'No analysis.' }; return W().SBDSplices.girder(P, g, B.an, { env: W().SBDSplicesUI.envOf(P) }); });
+      // DK (2026-11-23): the deck slab design (engine/deck.js calc), only where the project has it switched on (P.deckDesign.on); a project
+      // without it gets no B.dk, no B.dkOn and no Deck section. Not one girder's: the same result in every girder's report.
+      if (on('dk') && W().SBDDeck && W().SBDDeck.isOn(P)) { B.dkOn = true; B.dk = run('dk', () => W().SBDDeck.calc(P)); }
       if (on('wd') || on('sum')) B.wd = run('wd', () => W().SBDWeldsUI.build(cu('wt') ? { P, g, src: 'custom' } : src === 'file' ? { P, g, src: 'file', pl, plName: B.plName } : { P, g, src: 'analysis' }));
     } finally { if (AN) AN.analyzeGirder = orig; }
     B.sup = B.an ? B.an.sup : pl ? ((pl.member || {}).supports || []).map(Number) : null;

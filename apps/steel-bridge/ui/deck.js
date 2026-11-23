@@ -128,6 +128,14 @@
     return h;
   }
 
+  /* summaryCard(deck, counted): the Summary tab's card of the bridge's deck slab checks (report/summary.js deckOf: the engine's values) */
+  function summaryCard(d, counted) {
+    css();
+    const row = q => `<tr><td class="lft">${esc(q.check)}</td><td class="lft">${esc(q.loc)}</td><td>${q.Mu != null ? fmt(q.Mu, 2) : '—'}</td><td>${q.phiMn != null ? fmt(q.phiMn, 2) : '—'}</td><td class="${q.r != null ? cls(q.r) : 'dk-hi'}"><a href="#" data-sumgo="0|deck">${q.r != null && isFinite(q.r) ? fmt(q.r, 3) : '—'}</a></td><td class="${q.st === 'pass' ? 'dk-ok' : q.st === 'fail' ? 'dk-ng' : 'dk-hi'}">${{ pass: 'PASS', fail: 'FAIL', review: 'REVIEW' }[q.st] || esc(q.st)}</td></tr>`;
+    return `<section class="sec" id="sum-deck"><div class="secHead">Deck slab (the bridge's deck)</div><div class="secBody">
+      <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Check</th><th class="lft">Governing location</th><th>M<sub>u</sub><br>kip-ft/ft</th><th>φM<sub>n</sub><br>kip-ft/ft</th><th>D/C</th><th>Status</th></tr></thead><tbody>${d.cells.map(row).join('')}</tbody></table></div>
+      <p class="note">The transverse deck design (<a href="#" data-sumgo="0|deck">Deck tab</a>), switched on for this project on the Cross-section tab. One count per check in the verdict above${counted ? '' : ' once a girder module has run'}; it is the bridge's deck, not a column of the girder table. Not checked there: the Extreme Event II overhang cases (A13.4), crack control, minimum and temperature reinforcement.</p></div></section>`;
+  }
   const build = ctx => DK().calc(ctx.P);
   function render(host, ctx) {
     css();
@@ -147,5 +155,5 @@
       const c = el.dataset.goin === 'xsec' ? document.getElementById('dkIn') : null; if (c && c.scrollIntoView) c.scrollIntoView({ block: 'center' }); }));
   }
 
-  window.SBDDeckUI = { inputs, onChange, render, build, groups, figure, stepLi };
+  window.SBDDeckUI = { inputs, onChange, render, build, groups, figure, stepLi, summaryCard };
 })();

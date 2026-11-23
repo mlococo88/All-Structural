@@ -103,12 +103,12 @@
     bays.forEach((q, k) => { const w = St().work('dk.b' + (k + 1));
       S.steps.interior(w, q.I, { tL, wc, wDCnote: `t = the total deck thickness (Cross-section tab: structural slab ${St().fmt(ts, 2)} in${tL - ts > 1e-9 ? ` + ${St().fmt(tL - ts, 2)} in dead load only` : ''}); w_c the deck concrete (Materials tab).`,
         wDWsub, wDWnote: dwA.length ? `${dwA.map(a => a.name).join(' + ')} (Loads tab), as the Loads & LLDF module.` : 'No wearing surface or overlay (Loads tab).', xs });
-      if (k !== gp) S.steps.capacity(w, 'pos', 'Positive moment, bottom bars', q.pos, { short: true, shortNote: 'The same bars as the governing bay.', muSym: 'M_{u,+}', check: `DK1 Positive moment, ${q.name}` });
-      if (k !== gn) S.steps.capacity(w, 'neg', 'Negative moment, top bars', q.neg, { short: true, shortNote: 'The same bars as the governing bay.', muSym: 'M_{u,-}', check: `DK2 Negative moment, ${q.name}` });
+      if (k !== gp) S.steps.capacity(w, 'pos', 'Positive moment, bottom bars', q.pos, { short: true, shortNote: 'The same bars as the governing bay.', muSym: 'M_{u,pos}', check: `DK1 Positive moment, ${q.name}` });
+      if (k !== gn) S.steps.capacity(w, 'neg', 'Negative moment, top bars', q.neg, { short: true, shortNote: 'The same bars as the governing bay.', muSym: 'M_{u,neg}', check: `DK2 Negative moment, ${q.name}` });
       w.steps.forEach(s => { if (many) s.label = `${s.label} [S = ${St().fmt(q.S, 2)} ft]`; steps.push(s); }); });
     { const w = St().work('dk');
-      S.steps.capacity(w, 'pos', 'Positive moment, bottom bars', bays[gp].pos, { muSym: 'M_{u,+}', check: `DK1 Positive moment, bottom bars${many ? `, governing ${bays[gp].name}` : ''}` });
-      S.steps.capacity(w, 'neg', 'Negative moment, top bars', bays[gn].neg, { muSym: 'M_{u,-}', check: `DK2 Negative moment, top bars${many ? `, governing ${bays[gn].name}` : ''}` });
+      S.steps.capacity(w, 'pos', 'Positive moment, bottom bars', bays[gp].pos, { muSym: 'M_{u,pos}', check: `DK1 Positive moment, bottom bars${many ? `, governing ${bays[gp].name}` : ''}` });
+      S.steps.capacity(w, 'neg', 'Negative moment, top bars', bays[gn].neg, { muSym: 'M_{u,neg}', check: `DK2 Negative moment, top bars${many ? `, governing ${bays[gn].name}` : ''}` });
       steps.push(...w.steps); }
     ['L', 'R'].forEach(sd => { const q = oh[sd], w = St().work('dk.oh' + sd);
       S.steps.overhang(w, q.O, { faceNote: `o_h = the ${sd === 'L' ? 'left' : 'right'} overhang, exterior girder centreline to the deck edge (Cross-section tab); x_f = the deck edge to the traffic face${q.faceBy ? ` (${q.faceBy})` : ''}, as the Loads & LLDF module.` });

@@ -149,6 +149,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
   /* gotoCell(gi, id, cx): the cell's tab, girder and step (cx: the caller's { P, goto } when the Summary tab has not been drawn: the left
      summary); a module not run yet is run (and its tab, selected, runs itself: #1260) */
   function gotoCell(gi, id, cx, j) {
+    if (id === 'deck') { const X0 = cx || S.ctx; if (X0) X0.goto('dk', null); return; }   // DK (2026-11-23): a deck slab check (the bridge's deck): the Deck tab
     const X = cx || S.ctx, col = (SM().ALL || SM().COLS).find(q => q.id === id); if (!X || !col) return;
     sync(X.P); const G = S.list[gi], c0 = G && G.cells[id], bl = j != null && G && G.byLine ? G.byLine.find(q => q.j === j) : null, c = bl ? { ...bl.cells[id], ln: j } : c0;
     if (!c || c.st === 'notrun') { S.pendFocus = { gi, id }; start(X.P, { mods: [SM().modOf(id).k] }); } else S.pendFocus = null;
@@ -242,7 +243,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
     const verdict = apFail ? 'FAIL' : !done && !n.fail && !n.review ? (n.pass ? 'INCOMPLETE' : '—') : ov.verdict;
     const bcls = verdict === 'FAIL' ? 'fail' : verdict === 'PASS' ? 'pass' : verdict === 'REVIEW' ? 'review' : 'none';
     const link = (G, col, c, t) => `<a href="#" data-sumgo="${G.gi}|${col.id}">${t}</a>`;
-    const govTxt = top ? `<b>Governing:</b> ${esc(LB(top.c).head)}, girder ${esc(top.G.label)}${lnTxt(top.G, top.q)}, ${txt(top.q.loc)}: ${txt(top.q.check)} — ${link(top.G, top.c, top.q, `${top.c.rf ? 'RF ' + fmt(top.q.rf, 2) : 'D/C ' + (isFinite(top.q.r) ? fmt(top.q.r, 3) : 'not a number')}`)}` : 'No check has run yet.';
+    const govTxt = top ? `<b>Governing:</b> ${esc(LB(top.c).head)}, ${top.G.deck ? '' : 'girder '}${esc(top.G.label)}${lnTxt(top.G, top.q)}, ${txt(top.q.loc)}: ${txt(top.q.check)} — ${link(top.G, top.c, top.q, `${top.c.rf ? 'RF ' + fmt(top.q.rf, 2) : 'D/C ' + (isFinite(top.q.r) ? fmt(top.q.r, 3) : 'not a number')}`)}` : 'No check has run yet.';
     const nanTxt = ov.nan.length ? `<span class="sum-low"><b>Not evaluated</b> (ratio not finite, REVIEW): ${ov.nan.map(z => `${esc(LB(z.c).head)}, ${esc(z.G.label)} ${link(z.G, z.c, z.q, txt(z.q.loc))}: ${txt(z.q.check)} — <span title="${esc(NF_WHY[nfTxt(z.q.r)])}">ratio ${nfTxt(z.q.r)}</span>`).join('; ')}.</span>` : '';
     const low = ov.low && ov.low !== top ? `<span class="sum-low"><b>Lowest rating factor:</b> ${esc(ov.low.c.head.replace('Rating, ', ''))} ${link(ov.low.G, ov.low.c, ov.low.q, fmt(ov.low.q.rf, 2))} (${esc(ov.low.G.label)}${lnTxt(ov.low.G, ov.low.q)}, ${txt(ov.low.q.loc)}).</span>` : '';
     const AD = window.SBDAutoDesignUI && window.SBDAutoDesignUI.lastWarns ? window.SBDAutoDesignUI.lastWarns(P) : null;
@@ -257,6 +258,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
         <button type="button" id="sum_rerun" title="Run every module of every girder again">Re-run all</button>
         <a href="#" id="sum_rpt" title="The Report tab, every girder: the governing ratios of each girder with the work of each girder's report">Report: every girder</a></div></div></section>`;
     h += gfxCard(P);   // GFXS: near the top, after the verdict
+    if (ov.deck && window.SBDDeckUI && window.SBDDeckUI.summaryCard) h += window.SBDDeckUI.summaryCard(ov.deck, ov.deckIn);   // DK (2026-11-23): the deck slab checks of the bridge (only with the deck design on)
     // project overview
     const gF = ui => Math.min(Math.max(0, +(ui && ui.g) || 0), P.girders.length - 1), fg = figure(P, list[gF(ctx.ui)]);
     h += `<section class="sec" id="sum-project"><div class="secHead">Project overview</div><div class="secBody">${overview(P, list)}
