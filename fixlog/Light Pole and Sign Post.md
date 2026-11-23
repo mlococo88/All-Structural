@@ -3124,3 +3124,72 @@ The Loading sub-tab pattern of LPLS applied to the Shaft (foundation) output: 1 
 - **Raised, not changed:** `tests/smoke/lightpole-combo-view.mjs` reads the bars from the DOM and does not check that they are visible in the LRFDLTS mode. Manual §3.7 still lists the Report chapters "Wind and ice loads, Load combinations".
 - **Tests:** new `tests/smoke/lightpole-shaft-subtabs.mjs` (190 checks with `--base`); `tests/README.md`: its entry. Run: `node tests/check-syntax.mjs`; `node tests/engine/run.mjs lightpole`; `node tests/lightpole-compare.mjs`; the lightpole smokes (combo-view, loading-subtabs, basemoment, projection, signviews, anchor-handoff, default-sign); `node tests/smoke/phone-layout.mjs --tool lp`.
 - **Saved data:** none changed. Two new per-browser UI keys, `lpp_shaftSub_v1` and `lpp_postSub_v1`. **Other copies:** none.
+
+## 2026-11-23 — PR: claude/lp-governing-default (PR #1679: https://github.com/mlococo88/All-Structural/pull/1679) — opens on "Governing combination only"; Shaft strip: largest strength D/C + Detailing OK / NG; Manual §3.7 chapter list (LPGD)   [display only; no formula, factor, unit, code reference, check, ratio, governing case, verdict, cable value, hand-off payload, saved key or saved format change]
+
+Engineer (approved, 2026-11-23): (1) the combination-view switch opens on "Governing combination only"; (2) Manual §3.7 lists the Report's real chapters; (3) the Shaft strip's Reinforcement entry shows the largest strength ratio with its name and a separate "Detailing OK / NG".
+
+### LPGD-1. Default of the "All load combinations / Governing combination only" switch
+- **Problem:** with nothing saved the tool opened on "All load combinations" (LPCV decision 8). Display only: every combination is always evaluated in both views.
+- **Where:** the LPCV block, anchor `const LPP_CV_KEY='lpp_comboView_v1';` (~line 7254).
+- **Before:**
+  ```js
+  // Per-browser UI key lpp_comboView_v1 ('gov' | 'all'; absent = all); not in the project, the session or the export; not printed.
+  const LPP_CV_KEY='lpp_comboView_v1';
+  let lppCvGov=false;
+  try{ lppCvGov=localStorage.getItem(LPP_CV_KEY)==='gov'; }catch(e){}
+  ```
+- **After:**
+  ```js
+  // Per-browser UI key lpp_comboView_v1 ('gov' | 'all'); not in the project, the session or the export; not printed.
+  // LPGD (2026-11-23): with no saved choice the tool opens on "Governing combination only" (before: on "All"); a saved 'all' or 'gov' is kept.
+  const LPP_CV_KEY='lpp_comboView_v1';
+  let lppCvGov=true;
+  try{ lppCvGov=localStorage.getItem(LPP_CV_KEY)!=='all'; }catch(e){}
+  ```
+- **Saved data:** key `lpp_comboView_v1` and its values `gov` / `all` unchanged; a stored `all` opens on "All", a stored `gov` on "Governing"; nothing is written until the switch is used. The Report follows the switch as before (LPCV).
+- **Check case:** new browser profile, default pole, Loading → 7 · Combinations: LRFD 1 of 6 rows (1.2D + 1.0W), ASD 2 of 5, envelope 3 of 11, each with its note and "show all" (the LPCV check case, now without touching the switch); `localStorage.getItem('lpp_comboView_v1')` is `null`. With `lpp_comboView_v1 = all` stored: 6, 5 and 11 rows, no note. Summary, check panel, copy summary and hand-off payload identical in both views.
+
+### LPGD-2. Shaft summary strip: 4 · Reinforcement
+- **Problem:** the entry showed the largest D/C of all the shaft reinforcement checks, so on an auto-sized cage it read "D/C 1.00 OK · Tie spacing" (12 in provided vs the 12 in limit) or minimum steel 0.96, which says nothing about the strength utilisation (LPSS decision 3).
+- **Where:** the LPSS block. (a) after `const LPP_SH_LTSCARD={ltsMemberCard:'member',ltsDeflCard:'defl'};`; (b) `lppShSum(pg)`, after the `gov=L=>{…}` helper and its two `out.reo=` lines; (c) `lppShSync()`, the line that builds `sub`.
+- **Before:**
+  ```js
+  // (b) lppShSum
+      out.reo=gov(ltsShaftChecks(X.fd)); }
+  …
+  out.reo=gov(of(['flex','shear','asmin','asmax','spacing','ties','torsion']));
+  // (c) lppShSync
+      if(r&&r.txt) sub=r.txt; else if(r){ sub=`D/C ${isFinite(r.dc)?fmt(r.dc,2):'∞'} ${r.ok?'OK':'NG'} · ${r.name}`; if(!r.ok) cls=' ng'; }
+  ```
+- **After:**
+  ```js
+  // (a)
+  const LPP_SH_STR=['Shaft flexure (P–M)','Shaft shear','Shaft torsion ≤ φT_th (neglect)','Tie spacing, shear'];
+  // (b) lppShSum, after the gov helper
+  const reoSum=L=>{ L=(L||[]).filter(c=>c&&c.ratio!=null&&!isNaN(c.ratio)); if(!L.length) return null;
+    const isStr=c=>LPP_SH_STR.indexOf(c.name)>=0, r=gov(L.filter(isStr))||gov(L), dt=L.filter(c=>!isStr(c)), bad=dt.filter(c=>!c.ok).map(c=>c.name);
+    r.det=dt.length?{ok:!bad.length,bad}:null; r.allOk=L.every(c=>c.ok); return r; };
+      out.reo=reoSum(ltsShaftChecks(X.fd)); }
+  …
+  out.reo=reoSum(of(['flex','shear','asmin','asmax','spacing','ties','torsion']));
+  // (c) lppShSync
+      if(r&&r.txt) sub=r.txt; else if(r){ sub=`D/C ${isFinite(r.dc)?fmt(r.dc,2):'∞'} ${r.ok?'OK':'NG'} · ${r.name}`; if(!r.ok) cls=' ng';
+        if(r.det){ sub+=` · Detailing ${r.det.ok?'OK':'NG ('+r.det.bad.join('; ')+')'}`; if(r.allOk===false) cls=' ng'; } }   // LPGD (2026-11-23)
+  ```
+- **What is shown:** strength = the rows named in `LPP_SH_STR` (flexure, shear, the torsion threshold when T_u > 0, and the shear tie spacing of a manual cage); detailing = the other rows of `lppShaftRows` (Longitudinal steel min / max, Bar clear spacing, Tie spacing, Tie size). The D/C, its OK / NG and the name are those of the strength rows; "Detailing OK" when every detailing row passes, else "Detailing NG (the failed rows)"; the entry's NG mark (class `ng`) is set when any row of either list fails, as before. The rows, their ratios and verdicts are the ones the Summary and the check panel list: `lppShaftRows`, `collectChecks` and `ltsShaftChecks` are not changed. Applies to the pole, to each sign post (the post of "Showing results for") and to the LRFDLTS mode (same rows through `ltsShaftChecks`). The Soil bearing entry and the LRFDLTS Post strip are unchanged.
+- **Provisions:** none changed (ACI 318-19 §22.4, §22.5, §22.7.1.1, §10.6.1.1, §25.2.3, §25.7.2, as cited by the rows).
+- **Check case (default pole):** before "D/C 1.00 OK · Tie spacing"; after "D/C 0.06 OK · Shaft flexure (P–M) · Detailing OK" (flexure 0.062 with M_u 21,961 lb·ft, the larger of the two strength rows; the four detailing rows pass, tie spacing 1.000). Check panel: the same six lines with the same ratios before and after.
+- **Check case (default pole, Rebar = manual, tie spacing 18 in):** "D/C 0.05 OK · Shaft flexure (P–M) · Detailing NG (Tie spacing)", entry marked NG (tie spacing 18 in vs 16 in, 1.125; the three strength rows pass).
+- **Check case (monopost sign, V 130 mph, 16 × 8 ft panel, clearance 10 ft, 2 ft shaft, manual 4 #4):** "D/C 2.38 NG · Shaft flexure (P–M) · Detailing NG (Longitudinal steel, min; Tie spacing)", marked NG (before: "D/C 2.83 NG · Longitudinal steel, min").
+- **Check case (LRFDLTS pole, default geometry without cables, Broms cohesive c = 1.0 ksf):** before "D/C 1.00 OK · Tie spacing"; after "D/C 0.07 OK · Shaft flexure (P–M) · Detailing OK" (0.065).
+
+### LPGD-3. Manual text
+- §3.7 "Sections:" — before: "…, Wind and ice loads, Load combinations, Pole / Post check, Base plate, Drilled shaft, Assumptions and references." After: "…, Loading (wind and ice loads, the forces at the base and the load combinations, in the order of the Loading tab), Pole check (Post check for a sign), Base plate, Drilled shaft, Assumptions and references. The combination tables follow the “All load combinations / Governing combination only” switch (3.3.6)." (the chapter titles of `lprModel()`: Project and scope, Design summary, Loading, Pole check | Post check, Base plate, Drilled shaft, Assumptions and references; one Loading chapter since #1672).
+- §3.3.6, the LPCV note — inserted after "…not saved in the project and not printed.": "The tool opens on “Governing combination only” until a choice is made in this browser; a choice already made is kept."
+- §3.6, the LPSS note — inserted after "…and opens it.": "For the reinforcement it gives the largest <b>strength</b> D/C (shaft flexure, shear, the torsion threshold when there is torsion, and the shear tie spacing of a manual cage) with the check’s name, and separately “Detailing OK” or “Detailing NG” with the failed limits named (minimum and maximum longitudinal steel, bar clear spacing, tie spacing, tie size); the entry is marked NG when any of them fails."
+
+- **How verified (every computed result identical):** (1) `tests/lightpole-compare.mjs --a origin/main`, both sides in the "all" view: results, cable values, tab text and drawings identical in all 34 cases. (2) `tests/smoke/lightpole-shaft-subtabs.mjs --base origin/main`, 9 cases: 778 items (output elements of the Shaft, Post and Anchorage pages by id, LRFDLTS cards, Summary, check panel, copy summary, hand-off payload, Loading and Geometry pages) compared with main, 0 differ; 233 checks pass. (3) `tests/smoke/lightpole-combo-view.mjs`: 355 checks pass; with the #1673 selector `body.lts-mode .tabpage > .lppCvBar{display:flex!important}` put back for a trial, its new visibility check fails in the LRFDLTS case (and passes again with the #1676 selector).
+- **Decision (pending engineer review):** (1) "Tie spacing, shear" (manual cage: the spacing against the one required for shear, ACI 318-19 §22.5 / §10.6.2) is listed with the strength rows, since its ratio is a shear demand ratio, and "Tie size" with the detailing limits: a shear-related ratio is never folded into "Detailing OK"; (2) the OK / NG beside the D/C is the strength rows' verdict, the detailing limits have their own, and the NG mark of the entry covers both; (3) failed detailing limits are named, separated by ";" (a row name contains a comma); (4) when `localStorage` cannot be read the view is the new default (Governing); (5) LPCV decision 8 ("absent = all") and LPSS decision 3 are replaced by this entry.
+- **Tests:** `tests/smoke/lightpole-combo-view.mjs` (first visit = Governing with no key; each of the five bars visible on its tab in both views and both modes: computed display, visibility, size, both buttons, no hidden ancestor; the "all" reference view set by a click; a saved "all" honoured over a reload; no key → Governing, nothing stored); `tests/smoke/lightpole-shaft-subtabs.mjs` (the strip's new entry; new case `detail_ng`; the view set explicitly; `--base` compares both versions in the "all" view, the switch bar left out of the Loading fingerprint because the attribute order of its buttons depends on the view the page opened on); `tests/smoke/lightpole-default-sign.mjs` (the "all" view set before reading the caption "for all eleven combinations", which is the "all" view's); `tests/lightpole-compare.mjs` (both sides opened with `lpp_comboView_v1 = all`); `tests/README.md`. Run: `node tests/check-syntax.mjs`; `node tests/engine/run.mjs lightpole`; `node tests/lightpole-compare.mjs`; the lightpole smokes (combo-view, shaft-subtabs, loading-subtabs, basemoment, projection, signviews, anchor-handoff, default-sign); `node tests/smoke/phone-layout.mjs --tool lp`.
+- **Saved data:** none changed (no new key). **Other copies:** none. **Open items:** none.

@@ -180,6 +180,7 @@ node tests/smoke/gusset-mbe4.mjs
 node tests/smoke/lldf-layout.mjs [--shots <dir>] [--no-index]
 
 # Light Pole and Sign Post: every computed result, every cable value, tab text and drawings, origin/main vs the working tree (13 cases)
+# (both sides are opened with lpp_comboView_v1 = all, so every combination row is compared: LPGD, 2026-11-23)
 node tests/lightpole-compare.mjs [--cases default,sign1] [--old-saves] [--tol 1e-12]
 
 # Light Pole and Sign Post, shaft projection above grade p (LPPJ): cable values identical at p = 2 ft, hand-off payload byte-identical at
@@ -199,6 +200,8 @@ node tests/smoke/lightpole-basemoment.mjs [--shots <dir>]
 # the engine's governing records of every check (IBC pole and sign per post, LRFDLTS), each named, numbers as in the "all" view; the
 # note and "show all"; Summary / check panel / hand-off payload identical in both views; the Report in both views (§ references, the
 # view statement); links; print; 390 px; 0 console errors. 8 cases at 1400 px, 2 at 390 px. ~5 min
+# LPGD (2026-11-23): a fresh browser opens on "Governing combination only"; a saved "all" (or "gov") is honoured over a reload; each
+# of the five bars is really VISIBLE on its tab in both views and both modes (computed display, size, both buttons), not only in the DOM.
 node tests/smoke/lightpole-combo-view.mjs [--shots <dir>]
 # The new-project sign on its default inputs (LPDF, 2026-11-23): no failing check for the monopost and the two-post sign (IBC; LRFDLTS with a
 # Broms soil), the IBC monopost's governing post / base plate D/C within 0.60 to 0.95; a project saved with the former sign defaults keeps
@@ -212,6 +215,8 @@ node tests/smoke/lightpole-default-sign.mjs
 # same order with every § reference resolved; nothing hidden in print; the LRFDLTS Post sub-tabs; 390 px. 8 cases. With --base <ref> it also
 # compares every output element of the Shaft / Post / Anchorage pages, the Summary, the check panel and the hand-off payload with that
 # version (run against the parent commit for the PR: 731 items, 0 differ). ~6 min, ~8 min with --base
+# LPGD (2026-11-23): the strip's 4 · Reinforcement = the largest strength D/C with its name + "Detailing OK / NG (failed limits)"; case
+# detail_ng (strength passes, tie spacing fails) is marked NG. 9 cases. --base compares both versions in the "all" view.
 node tests/smoke/lightpole-shaft-subtabs.mjs [--shots <dir>] [--base <ref|file>]
 
 # Saved-project list and Undo / Redo (shared/projects.js, PLIB): main vs the working tree (results on load, after an input change, B on
