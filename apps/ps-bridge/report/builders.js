@@ -12,12 +12,15 @@
    their own code; 2026-11-13) puts each tab's graphics at their places in its section, numbered "Figure n.m". Every number written by this file goes through V(), which records { sec, path, d, div, text } in model.vals with the
    numbers the tabs record (report/fromtab.js); tests/psbridge-compare.mjs compares each with the old app's value, tests/engine/
    psbridge-report.test.mjs with R. Step anchors: scope '' (the step ids of the tabs are unique across the app: sec., ld., an., ls., st., fx.,
-   sh., ez., cb., hn., dk., rt.), key = the step id, so a step note "§<id>" of one tab finds its step in another; section keys 'rs.<tab>'. */
+   sh., ez., cb., hn., dk., rt.), key = the step id, so a step note "§<id>" of one tab finds its step in another; section keys 'rs.<tab>'.
+   2026-11-23 (the steel report's features; display only): the Executive summary (first), the Basis of design (after the project section),
+   the Bill of materials and the Sign-off (last), and a design-point header in the result sections: see "Report package" below. The bill of
+   materials' quantities and the header's x/L are worked there from engine values and entered dimensions; they are not engine results. */
 (function () {
   'use strict';
-  const SECTIONS = [['sum', 'Summary of checks'], ['proj', 'Project, basis and assumptions'], ['sec', 'Section properties'], ['lds', 'Loads & LLDF'], ['an', 'Analysis'],
+  const SECTIONS = [['exec', 'Executive summary'], ['sum', 'Summary of checks'], ['proj', 'Project, basis and assumptions'], ['basis', 'Basis of design'], ['sec', 'Section properties'], ['lds', 'Loads & LLDF'], ['an', 'Analysis'],
     ['loss', 'Prestress losses'], ['str', 'Stresses'], ['flex', 'Flexure'], ['shear', 'Shear'], ['end', 'End zone & hold-down'], ['camb', 'Camber & deflection'],
-    ['hand', 'Handling'], ['deck', 'Deck'], ['rt', 'Rating']];
+    ['hand', 'Handling'], ['deck', 'Deck'], ['rt', 'Rating'], ['bom', 'Bill of materials'], ['sign', 'Sign-off & revisions']];   // exec, basis, bom, sign: 2026-11-23 (the steel report's sections)
   /* each result tab: its UI module (ui/*.js output(ctx), TOPICS) and its worked steps in B.W */
   const TABS = { sec: ['PSBUiSection', 'section'], lds: ['PSBUiLoads', 'loads'], an: ['PSBUiAnalysis', 'analysis'], loss: ['PSBUiLosses', 'losses'], str: ['PSBUiStresses', 'stresses'],
     flex: ['PSBUiFlexure', 'flexure'], shear: ['PSBUiShear', 'shear'], end: ['PSBUiEndZone', 'endzone'], camb: ['PSBUiCamber', 'camber'], hand: ['PSBUiHandling', 'handling'],
@@ -143,7 +146,7 @@
         ['Owner', ownR ? `${own} (${ownR.manual})` : own]]), note('Entered values (Project, Bridge layout, Cross-section and Girders & strands tabs); the engine inputs of the design girder are those of the [[tab:in:gird|Girders & strands tab]].'), ...planFig(P, X), ...snapFig(P, X)]),
       sub('c', 'Basis', [kv([['Design specification', ED], ['Load rating', 'AASHTO Manual for Bridge Evaluation (MBE), LRFR; article numbers as the old app'], ['Owner manual', ownR && !ownR.none ? `${ownR.manual} (AASHTO LRFD ${ownR.aashto} basis); its rules as listed below` : 'none (AASHTO only)'],
         ['Units', 'in, kip, ksi, ft, klf, kip-ft'], ['Sign convention', 'stresses + compression, − tension; moments + sagging']])]),
-      sub('a', 'Assumptions', [...(asm ? asm.items : []), ...ASSUME.map(t => note('• ' + t)), ...deNote(P), ...voidNotes(B), ...tbcNotes(B), ...rowNotes(B), ...fgNotes(B), ...secNotes(B)])];
+      { ...sub('a', 'Assumptions', [...(asm ? asm.items : []), ...ASSUME.map(t => note('• ' + t)), ...deNote(P), ...voidNotes(B), ...tbcNotes(B), ...rowNotes(B), ...fgNotes(B), ...secNotes(B)]), key: 'rs.asm' }];   // rs.asm (2026-11-23): the Basis of design section links here
     ownSubs.forEach((s, j) => subs.push({ ...sub('o' + j, `Owner rules: ${s.title}`, s.items), ...(j === 0 ? { key: X.ownKey } : {}) }));
     return { title: 'Project, basis and assumptions', subs };
   }
@@ -354,6 +357,8 @@
       if (s.steps) { const W = (B.W[wk] || { steps: [] }).steps; if (W.length) subs.push(sub('w', 'Worked steps', [...s.items, gsteps('', W, U.TOPICS)])); return; }
       subs.push(sub('c' + j, s.title || '—', s.items.length ? s.items : [note('—')]));
     });
+    // 2026-11-23: the design-point header (each check of the section at its station, with the strand context there), before the worked steps
+    { let pt = null; try { pt = ptSub(B, k); } catch (e) { pt = null; } if (pt) { const i = subs.findIndex(q => q.id === 'w'); subs.splice(i < 0 ? subs.length : i, 0, pt); } }
     if (!subs.length) subs.push(sub('n', 'Not available', [note('This tab shows nothing for this design.')]));
     return { title: (SECTIONS.find(q => q[0] === k) || [k, k])[1], subs };
   }
@@ -376,6 +381,252 @@
       ...(cam ? [['PCI', 'PCI Design Handbook: the long-term camber multipliers (Camber & deflection; the multipliers entered on the Materials tab). Edition not stated by the old app: verify.']] : []),
       ...(hn ? [['Handling', 'Lateral stability by a simplified screening of the old app: the lateral deflection z_o uses the Mast expression; the factors of safety are not the PCI (2016) / Mast method (Handling tab).']] : []),
       ...(B.inp.owner && B.inp.owner !== 'AASHTO' && window.PBD ? [[B.inp.owner, window.PBD.OWN_RULES.owners[B.inp.owner].manual]] : [])]; };
+
+  /* ---------- Report package (2026-11-23, engineer's request: the Steel Bridge report's features, apps/steel-bridge/report/builders.js exec /
+     basis / bom / sign / ptHead, PRs #1645; display only) ----------
+     exec: the Executive summary (first section): the verdict banner by the Summary tab's rule (ui/summary.js verdict: FAIL where a check does
+       not pass, REVIEW where every check passes but a ratio is not a finite number, else PASS; counted once per girder type and check, its
+       worst line), the governing D/C, one row per check group with the governing girder type, line and station and a "see §" link to the
+       step that works it (the unit of this report that works that type; else its section, else the result tab), and the items not included
+       in the verdict (rating factors, groups switched off, lines with no girder type, engine errors and warnings, LLDF outside its range).
+     basis: Basis of design: specification, materials, resistance factors, load combinations with their factors and η, IM, the analysis and
+       loss methods, the owner rules in effect; the assumptions stay in "Project, basis and assumptions" (key rs.asm), linked from here.
+     bom: Bill of materials: girder concrete and weight, strands, the mild steel the app checks (stirrups, splitting, confinement), deck and
+       haunch concrete, deck bars where the deck is designed; each quantity worked in its note; what is not known is listed "not included".
+     sign: Sign-off and revision history (the project's title-block fields; the rest blank lines to fill in by hand; no saved field added).
+     ptSub: the design-point header of a result section: each check of the section at its station with the span, x/L and the strand context
+       (transfer and development lengths, debonded rows, hold-down points, stirrup zone).
+     Every engine value written here is read from the same engine results as the tabs (B.R, B.units[].R, B.all.cells[].R) and recorded in
+     model.vals (recOf: u = the worked unit, cell = 'k|g' for a line the report does not work in full); the bill of materials' quantities
+     (volumes, lengths, weights, bar counts) and the header's x/L are worked here from those values and the entered dimensions and are not
+     engine results: no check, ratio or verdict uses them. */
+  const fin = v => typeof v === 'number' && isFinite(v), badR = x => typeof x !== 'number' || isNaN(x);
+  const worse = (a, b) => (badR(a) && !badR(b)) || (!badR(a) && !badR(b) && a > b);   // ui/summary.js worse: a ratio that is not a number first, then the larger
+  const stQ = q => (!q.pass ? 'FAIL' : !fin(q.r) ? 'REVIEW' : 'PASS');
+  const SW = 490 / 144;   // steel 490 pcf: lb/ft per in² of bar or strand
+  const lk = key => (key ? { t: '', key } : '—');
+  /* banner(t, sub2): the verdict as a print-safe SVG box (black on white: the border weight and the word carry the status), as the steel report's */
+  const banner = (t, sub2) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 74" width="100%" role="img" aria-label="${t}"><rect x="2" y="2" width="636" height="70" fill="#fff" stroke="#000" stroke-width="${t === 'PASS' ? 2 : 5}"${t === 'REVIEW' ? ' stroke-dasharray="14 6"' : ''}/><text x="320" y="40" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="#000">${t}</text><text x="320" y="62" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#000">${sub2}</text></svg>`;
+  /* recOf(B, X, sec): rec(z, path, d, div) writes the engine value at path of z's result and records it; z = { k, g, R } (k null: the design
+     girder). rec.chk(z, name, field, d): a field of the check named, in the result the value is read from. */
+  function recOf(B, X, sec) {
+    const src = z => { const e = {}; let R = z.R;
+      if (z.k != null) {
+        if (B.multi) { const j = B.units.findIndex(u => u.k === z.k && u.g === z.g); if (j >= 0) { e.u = j; R = B.units[j].R; } else e.cell = `${z.k}|${z.g}`; }
+        else if (B.cell && (B.cell.k !== z.k || B.cell.g !== z.g)) e.cell = `${z.k}|${z.g}`;
+        else R = B.R;
+      }
+      return { e, R }; };
+    const rec = (z, path, d, div) => { const { e, R } = src(z), v = at(R, path); if (typeof v !== 'number') return '—'; const text = OK().fx(div ? v / div : v, d); X.vals.push({ sec, path, d, div: div || 0, text, ...e }); return text; };
+    rec.chk = (z, name, f, d) => { const i = src(z).R.checks.findIndex(q => q.n === name); return i < 0 ? '—' : rec(z, `checks.${i}.${f}`, d); };
+    return rec;
+  }
+  const whoOf = B => z => (z.k != null ? `${plain(z.label)} on G${z.g}, span ${z.s}` : `design girder ${plain(B.inp.proj && B.inp.proj.girderId)}, span ${z.s}`);
+  /* seeOf(B, X, keys): where a check of group gp (step st) of girder type k on line g is worked in this report: the step of the unit that
+     works that type (that line in "every line"), else that unit's section, else the result tab (the type to choose there named) */
+  function seeOf(B, X, keys) {
+    return z => {
+      const gp = z.gp;
+      if (gp.input) return X.ownKey && keys.has(X.ownKey) ? `see [[${X.ownKey}]]` : `[[tab:in:${gp.tab}|${plain(gp.name)}]] (Owner rules tab)`;
+      let key = null, sk = null, ln = '';
+      if (B.multi) { const j = B.units.findIndex(u => u.k === z.k && (B.mode !== 'all' || u.g === z.g)); if (j >= 0) { key = `u${j}/${z.st}`; sk = `rs.${gp.tab}@u${j}`; if (B.units[j].g !== z.g) ln = ` (worked for G${B.units[j].g})`; } }
+      else if (z.k == null || !B.cell || B.cell.k === z.k) { key = z.st; sk = 'rs.' + gp.tab; if (z.k != null && B.cell && B.cell.g !== z.g) ln = ` (worked for G${B.cell.g})`; }
+      return key && keys.has(key) ? `see [[${key}]]${ln}` : sk && keys.has(sk) ? `see [[${sk}]]${ln}` : `[[tab:${gp.tab}|${plain(gp.name)} tab]]${z.k != null ? `, type ${plain(z.label)} on G${z.g} chosen` : ''}`;
+    };
+  }
+  /* execRows(B): the Summary tab's values (ui/summary.js model, every girder type × line) or, with no girder types (one design girder), the
+     same choices over its own checks: one row per check group (its governing check), the counts, the governing check and the lowest RF */
+  function execRows(B) {
+    const DU = window.PSBDashUI, SU = window.PSBSummaryUI, GR = (DU && DU.GROUPS) || [], RT = DU && DU.RATING;
+    if (B.all && SU) {
+      const SM = SU.model(B.P, B.all), rows = [], cellOf = (k, g) => B.all.cells.find(c => c.k === k && c.g === g);
+      SM.used.forEach(gp => { let b = null; SM.types.forEach(T => { const z = T.groups[gp.id]; if (z && (!b || worse(z.q.r, b.q.r))) b = z; });
+        if (b) { const c = cellOf(b.k, b.g); rows.push({ gp, q: b.q, st: b.st, k: b.k, g: b.g, s: c.s, label: c.label, R: c.R }); } });
+      const top = SM.top ? { gp: SM.top.gp, q: SM.top.c, st: SM.top.st, k: SM.top.cell.k, g: SM.top.cell.g, s: SM.top.cell.s, label: SM.top.cell.label, R: SM.top.cell.R } : null;
+      const lc = SM.low && cellOf(SM.low.k, SM.low.g), low = lc ? { gp: RT, n: SM.low.n, v: SM.low.v, st: SM.low.st, path: SM.low.path, k: lc.k, g: lc.g, s: lc.s, label: lc.label, R: lc.R } : null;
+      return { rows, nF: SM.nF, nR: SM.nR, nP: SM.nP, top, low, off: SM.off, errs: SM.cells.filter(z => z.err).map(z => z.c),
+        what: `${B.all.types.length} girder type${B.all.types.length > 1 ? 's' : ''} on ${B.all.n} girder line${B.all.n > 1 ? 's' : ''}`, per: 'one count per girder type and check, its worst line' };
+    }
+    const R = B.R, rows = [], me = { k: null, g: null, s: B.sel.s, label: null, R }; let nF = 0, nR = 0, nP = 0, top = null;
+    GR.forEach(gp => { const all = gp.checks.map(([n, st]) => { const c = R.checks.find(q => q.n === n); return c ? { c, st } : null; }).filter(Boolean); if (!all.length) return;
+      all.forEach(z => { if (!z.c.pass) nF++; else if (!fin(z.c.r)) nR++; else nP++; if (!top || worse(z.c.r, top.q.r)) top = { gp, q: z.c, st: z.st, ...me }; });
+      const b = all.reduce((b0, z) => (!b0 || worse(z.c.r, b0.c.r) ? z : b0), null); rows.push({ gp, q: b.c, st: b.st, ...me }); });
+    const lw = RT && R.rating ? RT.rf.map(([n, f, st, p]) => ({ n, v: f(R), st, path: p ? p(R) : null })).filter(z => typeof z.v === 'number' && z.v < 99).reduce((b, z) => (!b || z.v < b.v ? z : b), null) : null;
+    return { rows, nF, nR, nP, top, low: lw ? { gp: RT, ...lw, ...me } : null, off: GR.filter(gp => gp.off && !rows.some(r => r.gp === gp)), errs: [], what: 'the design girder', per: 'one count per check of the design girder' };
+  }
+  function exec(B, X, secs) {
+    const E = execRows(B), keys = keysOf(secs), rec = recOf(B, X, 'exec'), who = whoOf(B), see = seeOf(B, X, keys), fx = OK().fx, BR = window.PSBBridge, GR = (window.PSBDashUI && window.PSBDashUI.GROUPS) || [];
+    const verdict = E.nF ? 'FAIL' : E.nR ? 'REVIEW' : 'PASS';
+    const loc = z => (z.gp.input ? 'Owner rules (no station)' : z.gp.id === 'deck' ? 'deck design strip' : `x = ${rec.chk(z, z.q.n, 'loc', 2)} ft`);
+    const rows = E.rows.map(z => ({ cells: [z.gp.name, plain(z.q.n), who(z), loc(z), { t: rec.chk(z, z.q.n, 'r', 3), n: true, cls: !z.q.pass ? 'ng' : z.q.r >= 0.9 ? 'hi' : 'ok' }, { t: stQ(z.q), cls: z.q.pass ? 'ok' : 'ng' }, see(z)], cls: z.q.pass ? '' : 'gov' }));
+    // not included in the verdict
+    const out = [], worked = B.multi ? B.units.map(u => ({ k: u.k, g: u.g, s: u.s, label: u.label, R: u.R })) : [B.cell && B.all ? { k: B.cell.k, g: B.cell.g, s: B.cell.s, label: B.P.types[B.cell.k].label, R: B.R } : { k: null, g: null, s: B.sel.s, label: null, R: B.R }];
+    if (E.low) { const z = E.low; out.push([`Load rating: lowest HL-93 inventory rating factor (${plain(z.n)})`, z.v >= 1 ? 'RF ≥ 1' : 'RF < 1', `RF ${z.path ? rec(z, z.path, 3) : fx(z.v, 3)}, ${who(z)}; a rating factor is not a design check`, see(z)]); }
+    E.off.forEach(gp => out.push([`${gp.name} checks`, 'off', 'switched off for this project: no check made', '—']));
+    if (BR && BR.hasTypes && BR.hasTypes(B.P)) { const un = BR.unassigned(B.P); if (un.length) out.push(['Girder lines with no girder type', 'not checked', un.map(q => `G${q.g}/S${q.s}`).join(', '), '[[tab:in:gird|Girders & strands tab]]']); }
+    E.errs.forEach(c => out.push([`${plain(c.label)} on G${c.g}, span ${c.s}`, 'engine error', `not computed: ${plain(c.R && c.R.error)}`, '—']));
+    worked.forEach(z => {
+      const R = z.R;
+      R.checks.filter(c => !GR.some(gp => gp.checks.some(([n]) => n === c.n))).forEach(c => out.push([`${plain(c.n)} (${who(z)})`, c.pass ? 'PASS' : 'FAIL', 'a check in no group of the check summary: listed in the Summary of checks', keys.has('rs.sum') ? 'see [[rs.sum]]' : '—']));
+      if (R.df && R.df.fg && R.df.fg.out && R.df.fg.out.length) out.push([`Live-load distribution outside its range of applicability (${who(z)})`, 'NOTE', R.df.fg.out.map(o => plain(o.text)).join('; '), see({ gp: { tab: 'lds', name: 'Loads & LLDF' }, st: 'ld.dfm', k: z.k, g: z.g, label: z.label })]);
+      if (R.handling) out.push([`Hauling stresses (${who(z)})`, 'not checked', 'shown for comparison; impact during transport is not included', see({ gp: { tab: 'hand', name: 'Handling' }, st: 'hn.lift.r', k: z.k, g: z.g, label: z.label })]);
+      (R.warns || []).forEach(w => out.push([`Design warning of the engine (${who(z)})`, 'Warning', plain(w), '—']));
+    });
+    const top = E.top, items = [
+      { type: 'figure', svg: banner(verdict, `${E.what}: ${E.nF} FAIL, ${E.nR} REVIEW, ${E.nP} PASS (${E.per})`), caption: 'Verdict, by the rule of the Summary tab: FAIL where a check does not pass (ratio = demand / limit over 1.0; PASS when ≤ 1.0001, the engine\'s rule); REVIEW where every check passes but a ratio is not a finite number; else PASS.' },
+      top ? note(`Governing D/C: ${rec.chk(top, top.q.n, 'r', 3)} (${top.gp.name}: ${plain(top.q.n)}; ${who(top)}${top.gp.input || top.gp.id === 'deck' ? '' : `, x = ${rec.chk(top, top.q.n, 'loc', 2)} ft`}), ${see(top)}.`, E.nF > 0) : note('No check was made.', true),
+      tbl(['Limit state / check group', 'Governing check', 'Girder type, line', 'Location', 'D/C', 'Status', 'Worked'], rows, { wide: true, caption: 'One row per check group: its governing check over every girder type and line checked (the largest ratio), where it governs, and the step of this report that works it' }),
+      out.length ? tbl(['Not included in the verdict', 'Status', 'Value', 'Worked'], out, { wide: true }) : note('Not included in the verdict: none.'),
+      note(`Items not included in the verdict are listed so that this summary never reads as all-pass while something is open: rating factors are not design checks (RF ≥ 1.0 is OK), a check group switched off makes no check, a girder line with no girder type is not checked, and the engine's warnings are for review.${B.all ? ' The same verdict, counts and values, with every girder type and line: the [[tab:sum|Summary tab]].' : ''}${keys.has('rs.sum') ? ' Every check with its demand and limit: [[rs.sum]].' : ''}`)];
+    return { title: 'Executive summary', subs: [sub('v', `Verdict: ${E.what}`, items)] };
+  }
+  /* basis(B, X, secs): the values are those of the first worked girder (the design girder); a "see §" link where this report writes the step */
+  function basis(B, X, secs) {
+    const u0 = B.multi ? B.units[0] : null, inp = u0 ? u0.inp : B.inp, R = u0 ? u0.R : B.R, Wk = (u0 ? u0.W : B.W) || {}, P = B.P, keys = keysOf(secs), fx = OK().fx;
+    const k = id => { const key = u0 ? `u0/${id}` : id; return keys.has(key) ? key : null; };
+    const V = (p, d, div) => (typeof at(R, p) === 'number' ? X.V(p, d, div) : '—');
+    const m = inp.mat || {}, s = inp.str || {}, o = inp.opt || {}, ld = inp.loads || {}, own = inp.owner || 'AASHTO', PB = window.PBD || {}, OR = PB.OWN_RULES, ownR = OR && OR.owners[own];
+    const OL = PB.ownLoads ? PB.ownLoads(inp) : { etaD: 1, etaR: 1, etaI: 1, eta: 1, mLL: 1 }, mTxt = OL.mLL !== 1 ? ` × m = ${fx(OL.mLL, 2)}` : '';
+    const nS = P.spans.lengths.length, cont = P.spans.continuity === 'composite' && nS > 1, stp = id => ((Wk.rating && Wk.rating.steps) || []).find(q => q.id === id);
+    const phi = [['Flexure, prestressed section (midspan)', V('fMid.phi', 2), '0.75 ≤ φ ≤ 1.00 by the net tensile strain (Eq. 5.5.4.2-2)', lk(k('fx.phi'))]];
+    if (R.cont && typeof R.cont.phiN === 'number') phi.push(['Flexure, reinforced section over the interior support (deck bars)', V('cont.phiN', 2), '0.75 ≤ φ ≤ 0.90 by the net tensile strain (Eq. 5.5.4.2-1)', lk(k('fx.pier.phi'))]);
+    phi.push(['Shear', V('phiV', 2), 'Art. 5.5.4.2', lk(k('sh.dc'))]);
+    if (R.deck && R.deck.pos) phi.push(['Deck slab flexure, positive / negative', `${V('deck.pos.phi', 2)} / ${V('deck.neg.phi', 2)}`, '0.75 ≤ φ ≤ 0.90 by the net tensile strain (Eq. 5.5.4.2-1)', lk(k('dk.pos.r'))]);
+    { const q = stp('rt.phiCS'); if (q && fin(q.value)) phi.push(['Load rating: condition × system factor $\\phi_{c}\\phi_{s}$ (flexure)', fx(q.value, 3), 'MBE Eq. 6A.4.2.1-3; shear takes $\\phi_{s}$ = 1.0', lk(k('rt.phiCS'))]); }
+    const rules = OR && ownR && !ownR.none ? OR.rules.filter(r => r.owner === own) : [], KIND = { default: 'input default', load: 'load factor', 'shall-check': 'check (counted in the verdict)', 'should-warning': 'warning', report: 'reported' };
+    const asm = keys.has('rs.asm') ? 'see [[rs.asm]]' : '(section not included)';
+    return { title: 'Basis of design', subs: [
+      sub('spec', 'Specification and owner', [kv([['Design specification', ED], ['Load rating', 'AASHTO Manual for Bridge Evaluation (MBE), LRFR; the rating along the girder cites the MBE 4th Ed. (2026)'],
+        ['Owner', ownR ? `${own} (${ownR.manual})` : own], ['Units', 'in, kip, ksi, ft, klf, kip-ft'], ['Sign convention', 'stresses + compression, − tension; moments + sagging'],
+        ['Values listed here', u0 ? `${uTitle(u0)} (the first worked girder; each girder type's own values are in its sections)` : `the design girder ${plain(inp.proj && inp.proj.girderId)}`]])]),
+      sub('mat', 'Materials', [kv([["Girder concrete $f'_{c}$ / $f'_{ci}$", `${fx(+m.fc, 2)} / ${fx(+m.fci, 2)} ksi`],
+        ['$E_{c}$ of the girder, final / at transfer', `${V('cp.Ecg', 0)} / ${V('lo.Eci', 0)} ksi (Eq. 5.4.2.4-1)`, k('sec.Ecg')],
+        ["Deck concrete $f'_{c}$, $E_{c}$", `${fx(+m.fcd, 2)} ksi, ${V('cp.Ecd', 0)} ksi`, k('sec.Ecd')], ['Modular ratio n (deck / girder)', V('cp.n', 4), k('sec.n')],
+        ['Unit weights', `girder ${fx(+m.wc, 3)} kcf for $E_{c}$ and ${fx(+m.wcLoad, 3)} kcf for dead load; deck ${fx(+m.wcd, 3)} kcf and ${fx(+m.wcdLoad, 3)} kcf`],
+        ['Strand', `${plain(s.size)}, $f_{pu}$ = ${fx(+s.fpu, 0)} ksi, ${s.lowlax ? 'low relaxation' : 'stress relieved'}, $E_{p}$ = ${fx(+s.Ep, 0)} ksi, $A_{b}$ = ${V('ss.st.Ab', 3)} in²`],
+        ['Strand stress before transfer $f_{pbt}$', `${fx(+s.jack, 3)} $f_{pu}$ = ${V('fpbt', 1)} ksi`, k('ls.fpbt')],
+        ['Mild steel $f_{y}$', `stirrups ${fx(+o.fy, 0)}, splitting steel ${fx(+o.splitFy, 0)}, release-tension steel ${fx(+o.relFy, 0)}, bottom longitudinal steel ${fx(+o.longFy, 0)}${R.deck && inp.deck ? `, deck bars ${fx(+inp.deck.fyd, 0)}` : ''}${inp.cont && inp.cont.on ? `, continuity bars ${fx(+inp.cont.fy, 0)}` : ''} ksi`],
+        ['Environment and ages', `H = ${fx(+m.H, 0)} %, V/S = ${fx(+m.VS, 2)} in; transfer at ${fx(+m.ti, 0)} days, deck placement at ${fx(+m.td, 0)} days, final ${fx(+m.tfin, 0)} days`]])]),
+      sub('phi', 'Resistance factors (Art. 5.5.4.2)', [tbl(['Resistance', 'φ used', 'Basis', 'Worked'], phi, { wide: true }),
+        note('The splitting resistance uses a working stress of the steel (5.9.4.4.1), and the service and fatigue limits are stresses: no resistance factor.')]),
+      sub('lc', 'Load combinations and load factors (Tables 3.4.1-1, 3.4.1-2, 3.4.1-4)', [
+        tbl(['Combination', 'η', '$\\gamma_{DC}$', '$\\gamma_{DW}$', '$\\gamma_{LL+IM}$', 'Use', 'Worked'], [
+          ['Strength I', fx(OL.eta, 3), '1.25', '1.50', `1.75${mTxt}`, 'flexure, minimum reinforcement, shear, longitudinal reinforcement, interface shear, negative moment over an interior support, deck slab', lk(k('an.MuS'))],
+          ['Service I', '1.00', '1.00', '1.00', `1.00${mTxt}`, 'compression stresses of the girder and the deck', lk(k('an.MsI'))],
+          ['Service III', '1.00', '1.00', '1.00', `${fx(+o.gLLs3, 2)}${mTxt}`, 'tension in the precompressed tensile zone', lk(k('an.MsIII'))],
+          ['Fatigue I', '—', '—', '—', '1.75', 'fatigue truck with IM 15 %: strand stress range, concrete compression', lk(k('st.fat.M1'))],
+          ['Design-load rating, inventory (MBE Table 6A.4.2.2-1)', '—', '1.25', '1.50', '1.75', 'HL-93 rating factors; Service III rating with $\\gamma_{LL}$ = 0.80', lk(k('rt.RFinv'))]], { wide: true, caption: 'The factors the engine applies; each row links to a step that applies them' }),
+        kv([['Load modifier η = $\\eta_{D}\\,\\eta_{R}\\,\\eta_{I}$ (Strength I, Art. 1.3.2.1)', `${fx(OL.etaD, 2)} × ${fx(OL.etaR, 2)} × ${fx(OL.etaI, 2)} = ${fx(OL.eta, 3)}`, k('ld.eta')],
+          ['Design load multiplier m on HL-93 (LL+IM)', `${fx(OL.mLL, 2)} (Strength I, Service I and Service III; not on the live-load deflection, fatigue or the load rating)`, k('ld.mLL')]])]),
+      sub('ll', 'Live load', [kv([['Design live load', ld.llAuto === false ? 'entered $M_{LL}$ and $V_{LL}$ per lane (Loads tab)' : 'HL-93: the design truck or the design tandem, with the design lane load (3.6.1.2)', k('ld.M')],
+        ['Dynamic load allowance IM', '33 % on the truck and the tandem, not on the lane load; 15 % on the fatigue truck (Table 3.6.2.1-1)', k('ld.M')],
+        ['Distribution factors $DF_{M}$ / $DF_{V}$', `${V('dfm', 3)} / ${V('dfv', 3)} (${ld.dfAuto === false ? 'entered' : `computed, Art. 4.6.2.2${R.df && R.df.fg ? `, cross-section type (${plain(R.df.fg.type)})` : ''}`}; ${ld.pos === 'exterior' ? 'exterior' : 'interior'} girder)`, k('ld.dfm')],
+        ['Design lanes $N_{L}$, skew', `${fx(+ld.NL, 0)}, ${fx(+ld.skew, 1)}°`]])]),
+      sub('an', 'Analysis method', [kv([['Method', 'Line-girder analysis of each girder type on its line, at the analysis stations along the span: the girder and DC1 on the bare girder, DC2, DW and LL+IM on the composite section; the live load per girder by the distribution factors'],
+        ['Spans', cont ? 'made continuous for composite loads (5.12.3.3): the girder and DC1 on the simple span; DC2, DW and live load on the continuous unit; restraint moments as switched on the Bridge layout tab' : 'simple spans', k(cont ? 'an.pier.Mu' : 'an.MuS')],
+        ['Section properties', `${o.useTrans ? 'transformed section at release' : 'gross section of the girder at release'}; the haunch ${inp.haunchInProps ? 'is' : 'is not'} in the composite section`, k('sec.Ic')]])]),
+      sub('loss', 'Prestress loss method', [kv([['Time-dependent losses', o.lossMethod === 'refined' ? 'refined estimate (Art. 5.9.3.4)' : 'approximate estimate (Art. 5.9.3.3)', k(o.lossMethod === 'refined' ? 'ls.ref.total' : 'ls.apx.total')],
+        ['Elastic shortening $\\Delta f_{pES}$', `${V('lo.dfES', 2)} ksi (Art. 5.9.3.2.3)`, k('ls.dfES')],
+        ['Total loss, effective prestress $f_{pe}$', `${V('totalLoss', 2)} ksi (${V('pctLoss', 1)} %), ${V('fpe', 2)} ksi`, k('ls.total')]])]),
+      sub('own', 'Owner rules in effect', [
+        kv([['Owner', ownR ? `${own} (${ownR.manual})` : own], ['Edition the owner manual is written to', ownR ? `AASHTO LRFD ${ownR.aashto}; this report applies ${ED} with the owner rules on top` : '—'],
+          ['Hold-down force limit', R.ps10 && typeof R.ps10.frac === 'number' ? `${V('ps10.frac', 2)} W (${plain(R.ps10.owner)})` : R.ps10 && R.ps10.off ? 'no limit checked (the box on the Owner rules tab is off)' : 'the owner\'s own rule, where it has one', k('ez.hd.lim')]]),
+        rules.length ? tbl(['Manual article', 'Rule', 'Kind'], rules.map(r => [plain(r.sec), plain(r.lbl || r.nm || r.where || r.id), KIND[r.kind] || plain(r.kind)]), { wide: true }) : note('No owner rule: AASHTO LRFD only.'),
+        rules.length ? note(X.ownKey && keys.has(X.ownKey) ? 'Each rule with the value applied, the engine\'s value, its limit and ratio: see [[rs.own]].' : 'Each rule with the value applied: the [[tab:in:own|Owner rules tab]].') : null]),
+      sub('asm', 'Assumptions', [note(`The assumptions of this report (handling, deck strip method, rating, hold-down force, continuity, and the notes of the sections used) are listed in the project section: ${asm}.`)])] };
+  }
+  /* bom(B, X, secs): quantities per girder type (one girder × its lines) and the bridge totals */
+  function bom(B, X, secs) {
+    const P = B.P, fx = OK().fx, rec = recOf(B, X, 'bom'), num = v => (fin(v) ? v : 0), Lg = c => c.R.L + 2 * (+c.inp.opt.endOh || 0) / 12;
+    const all = B.all ? B.all.cells.filter(c => c.R && !c.R.error && c.R.g) : [{ k: null, g: B.sel.g, s: B.sel.s, label: `Design girder ${plain(B.inp.proj && B.inp.proj.girderId)}`, inp: B.inp, R: B.R }];
+    const types = []; all.forEach(c => { let T = types.find(q => q.k === c.k); if (!T) types.push(T = { k: c.k, label: plain(c.label), s: c.s, cells: [] }); T.cells.push(c); });
+    const lines = T => (T.k == null ? `G${T.cells[0].g}` : T.cells.map(c => 'G' + c.g).join(', '));
+    // 1. girder concrete and weight
+    const vol = c => c.R.g.A * Lg(c) / 144, wt = c => (fin(c.W) ? c.W : c.R.g.wsw * Lg(c));
+    let tV = 0, tW = 0; const r1 = types.map(T => { const c = T.cells[0], V = T.cells.reduce((a, q) => a + vol(q), 0), W = T.cells.reduce((a, q) => a + wt(q), 0); tV += V; tW += W;
+      return [T.label, String(T.s), plain(c.inp.girder), { t: rec(c, 'g.A', 1), n: true }, { t: fx(Lg(c), 2), n: true }, { t: fx(vol(c), 1), n: true }, { t: rec(c, 'g.wsw', 4), n: true }, { t: fx(wt(c), 1), n: true }, lines(T), { t: fx(V / 27, 1), n: true }, { t: fx(W, 1), n: true }]; });
+    r1.push({ cells: ['Bridge total', '', '', '', '', '', '', '', `${all.length} line${all.length > 1 ? 's' : ''}`, { t: fx(tV / 27, 1), n: true }, { t: fx(tW, 1), n: true }], cls: 'gov' });
+    const c0 = all[0];
+    // 2. strands
+    let tL = 0, tS = 0; const sLen = c => c.R.ss.Ntot * Lg(c), sWt = c => sLen(c) * c.R.ss.st.Ab * SW;
+    const r2 = types.map(T => { const c = T.cells[0], L = T.cells.reduce((a, q) => a + sLen(q), 0), W = T.cells.reduce((a, q) => a + sWt(q), 0); tL += L; tS += W;
+      return [T.label, String(T.s), plain(c.inp.str && c.inp.str.size), { t: rec(c, 'ss.Ntot', 0), n: true }, { t: rec(c, 'ss.st.Ab', 3), n: true }, { t: fx(Lg(c), 2), n: true }, { t: fx(sLen(c), 0), n: true }, { t: fx(c.R.ss.st.Ab * SW, 3), n: true }, { t: fx(sWt(c), 0), n: true }, lines(T), { t: fx(L, 0), n: true }, { t: fx(W, 0), n: true }]; });
+    r2.push({ cells: ['Bridge total', '', '', '', '', '', '', '', '', `${all.length} line${all.length > 1 ? 's' : ''}`, { t: fx(tL, 0), n: true }, { t: fx(tS, 0), n: true }], cls: 'gov' });
+    // 3. mild steel the app checks: stirrups, splitting steel, confinement steel (sizes, spacings and counts as entered)
+    const stir = c => { const o = c.inp.opt, L = c.R.L, z = num(+o.endZoneLen) * L, sE = +o.sEnd, sI = +o.sInt; if (!(sE > 0) || !(sI > 0)) return null;
+      return { z, sE, sI, n: 2 * Math.ceil(12 * z / sE) + Math.ceil(12 * (L - 2 * z) / sI) + 1 }; };
+    const r3 = types.map(T => { const c = T.cells[0], o = c.inp.opt, q = stir(c), cf = c.R.conf, nL = T.cells.length;
+      return [T.label, String(T.s), q ? `$A_{v}$ = ${fx(+o.stirAv, 2)} in² per set at ${fx(q.sE, 1)} in over ${fx(q.z, 2)} ft from each ℄ bearing and ${fx(q.sI, 1)} in between: ${q.n} sets per girder` : 'spacing not entered: not included',
+        `${fx(+o.splitN, 0)} legs of ${fx(+o.splitAv, 2)} in² within h/4 = ${rec(c, 'splitZone', 1)} in of each end ($A_{s}$ = ${rec(c, 'AsSplitProv', 2)} in²): ${fx(2 * num(+o.splitN), 0)} legs per girder`,
+        cf && !cf.exempt ? `No. ${fx(+cf.barNo, 0)} at ${fx(+cf.s, 1)} in, ${fx(+cf.n, 0)} bars over ${fx(+cf.provExt, 1)} in from each end: ${fx(2 * num(+cf.n), 0)} bars per girder` : 'not required for this section',
+        `${lines(T)}: × ${nL}`]; });
+    // 4. deck / topping slab and haunch concrete, per span
+    const Wd = (P.xs.bays || []).reduce((a, x) => a + num(+x), 0) + num(+P.xs.ohL) + num(+P.xs.ohR), spans = P.spans.lengths.map(Number);
+    let tD = 0, tH = 0; const r4 = []; spans.forEach((L, j) => { const cs = all.filter(c => c.s === j + 1); if (!cs.length) { r4.push([String(j + 1), { t: fx(L, 2), n: true }, { t: fx(Wd, 2), n: true }, 'no girder type on this span: not included', '', '', '', '']); return; }
+      const c = cs[0], ts = num(c.R.cp.tsLoad), vD = Wd * ts / 12 * L, vH = cs.reduce((a, q) => a + num(+q.inp.th) * num(q.R.cp.wdkHW) / 144 * q.R.L, 0); tD += vD; tH += vH;
+      r4.push([String(j + 1), { t: fx(L, 2), n: true }, { t: fx(Wd, 2), n: true }, { t: rec(c, 'cp.tsLoad', 2), n: true }, { t: fx(vD / 27, 1), n: true }, `${cs.length} line${cs.length > 1 ? 's' : ''}: ${rec(c, 'cp.wdkHW', 1)} × ${fx(+c.inp.th, 2)} in`, { t: fx(vH / 27, 1), n: true }, { t: fx((vD + vH) / 27, 1), n: true }]); });
+    r4.push({ cells: ['Bridge total', '', '', '', { t: fx(tD / 27, 1), n: true }, '', { t: fx(tH / 27, 1), n: true }, { t: fx((tD + tH) / 27, 1), n: true }], cls: 'gov' });
+    // 5. deck bars, where the deck is designed (the Deck tab's bars)
+    const cd = all.find(c => c.R.deck && c.inp.deck), Lt = spans.reduce((a, x) => a + num(x), 0), r5 = [];
+    if (cd) { const d = cd.inp.deck, bar = (lab, Ab, sp) => { if (!(+sp > 0) || !(+Ab > 0)) return; const n = Math.ceil(12 * Lt / +sp) + 1; r5.push([lab, `${fx(+Ab, 2)} in² at ${fx(+sp, 1)} in`, { t: fx(n, 0), n: true }, { t: fx(Wd, 2), n: true }, { t: fx(n * Wd * +Ab * SW, 0), n: true }]); };
+      bar('Transverse, top', d.barTop, d.sTop); bar('Transverse, bottom', d.barBot, d.sBot);
+      if (+d.sBot > 0 && +d.barBot > 0 && fin(cd.R.deck.distPct)) { const A = cd.R.deck.distPct / 100 * +d.barBot * 12 / +d.sBot; r5.push(['Distribution (bottom, longitudinal)', `${rec(cd, 'deck.distPct', 0)} % of the bottom transverse steel = ${fx(A, 3)} in²/ft of width`, '—', { t: fx(Lt, 2), n: true }, { t: fx(A * Wd * Lt * SW, 0), n: true }]); } }
+    const un = window.PSBBridge && window.PSBBridge.hasTypes && window.PSBBridge.hasTypes(P) ? window.PSBBridge.unassigned(P) : [], er = B.all ? B.all.cells.filter(c => !c.R || c.R.error || !c.R.g) : [];
+    const eg = c0 ? `Check, ${plain(types[0].label)}: V = ${fx(c0.R.g.A, 1)}(${fx(Lg(c0), 2)})/144 = ${fx(vol(c0), 1)} ft³ = ${fx(vol(c0) / 27, 2)} yd³; W = ${fx(c0.R.g.wsw, 4)}(${fx(Lg(c0), 2)}) = ${fx(wt(c0), 1)} kip.` : '';
+    const egS = c0 ? `Check, ${plain(types[0].label)}: ${fx(c0.R.ss.Ntot, 0)}(${fx(Lg(c0), 2)}) = ${fx(sLen(c0), 0)} ft; w = ${fx(c0.R.ss.st.Ab, 3)}(490/144) = ${fx(c0.R.ss.st.Ab * SW, 3)} lb/ft; ${fx(sLen(c0), 0)}(${fx(c0.R.ss.st.Ab * SW, 3)}) = ${fx(sWt(c0), 0)} lb.` : '';
+    const subs = [
+      sub('g', 'Girder concrete and weight', [
+        note(`Per girder: $L_{g}$ = L + 2 $e_{end}$/12, the girder length (℄ bearing to ℄ bearing plus the girder ends past the bearings); V = A $L_{g}$ / 144 (ft³; ÷ 27 for yd³); W = $w_{sw}$ $L_{g}$, the girder weight of the hold-down check and of the Summary tab. A and $w_{sw}$ are the section's values of the Section properties section. A girder type's total is the sum over its lines. ${eg}`),
+        tbl(['Girder type', 'Span', 'Section', 'A (in²)', '$L_{g}$ (ft)', 'V, one girder (ft³)', '$w_{sw}$ (klf)', 'W, one girder (kip)', 'Lines', 'Concrete (yd³)', 'Weight (kip)'], r1, { wide: true, caption: 'Precast girders: concrete volume and weight per girder type and the bridge total' })]),
+      sub('s', 'Prestressing strand', [
+        note(`Per girder: N strands, each of the girder length $L_{g}$ (the slope of the draped strands and the strand past the girder ends for stressing are not added); w = $A_{b}$ × 490/144 lb/ft (steel at 490 pcf, AASHTO LRFD 10th Ed. Table 3.5.1-1); weight = N $L_{g}$ w. ${egS}`),
+        tbl(['Girder type', 'Span', 'Strand', 'N', '$A_{b}$ (in²)', '$L_{g}$ (ft)', 'Length, one girder (ft)', 'w (lb/ft)', 'Weight, one girder (lb)', 'Lines', 'Length (ft)', 'Weight (lb)'], r2, { wide: true, caption: 'Strand: count, size, length and weight per girder type and the bridge total' })]),
+      sub('m', 'Mild steel of the girder (as entered and checked)', [
+        note('The stirrups, the splitting steel and the confinement steel the app checks, with the areas, spacings and counts entered (End zone and Shear inputs). Stirrup sets per girder = 2 ⌈12 z / $s_{end}$⌉ + ⌈12 (L − 2z) / $s_{int}$⌉ + 1, z the end-zone length from each ℄ bearing (a count of the spaces; the fabricator\'s detailing governs). Bar sizes of the stirrups and the bar lengths are not inputs: weights are not included.'),
+        tbl(['Girder type', 'Span', 'Stirrups', 'Splitting steel', 'Confinement steel', 'Lines'], r3, { wide: true })]),
+      sub('d', 'Deck and haunch concrete', [
+        note('Deck (or topping) slab: V = deck width × $t_{s}$ / 12 × L, the deck width = the bays + the two overhangs (Cross-section tab), $t_{s}$ the slab thickness used for dead load, L the span between ℄ bearings (the deck past the bearings, skewed ends and the barriers are not added). Haunch: V = $b_{h}$ $t_{h}$ / 144 × L per girder line, $b_{h}$ the haunch width and $t_{h}$ the haunch thickness of the dead load (Loads & LLDF section), summed over the lines with a girder type. yd³ = ft³ / 27.'),
+        tbl(['Span', 'L (ft)', 'Deck width (ft)', '$t_{s}$ (in)', 'Deck slab (yd³)', 'Haunch: lines, $b_{h}$ × $t_{h}$', 'Haunch (yd³)', 'Total (yd³)'], r4, { wide: true })]),
+      r5.length ? sub('b', 'Deck reinforcement (Deck tab)', [
+        note(`The transverse bars of the deck design and its distribution reinforcement: number of transverse bars = ⌈12 L / s⌉ + 1 over the bridge length L = ${fx(Lt, 2)} ft, each of the deck width ${fx(Wd, 2)} ft; weight = number × length × $A_{b}$ × 490/144 lb/ft. Distribution steel: its area per foot of deck width × the deck width × L × 490/144. Laps, hooks and bends are not added.`),
+        tbl(['Layer', 'Bars', 'Number', 'Length each (ft)', 'Weight (lb)'], r5, { wide: true })]) : null,
+      sub('x', 'Not included', [note(`Not included in this bill of materials (not designed by the app, or a dimension it needs is not an input): the weight of the stirrups, splitting steel and confinement steel (bar lengths); the bonded release-tension steel and the bottom longitudinal mild steel of the girder (areas only are entered); the continuity reinforcement over interior supports and the positive moment connection; ${r5.length ? '' : 'the deck reinforcement (the deck design is off); '}the top longitudinal (temperature and shrinkage) deck bars and any additional overhang bars; diaphragms, barriers, sidewalks and the wearing surface; bearings, inserts and lifting devices; strand waste beyond the girder ends.`),
+        un.length ? note(`Girder lines with no girder type (${un.map(q => `G${q.g}/S${q.s}`).join(', ')}) are not checked and not in these quantities; the deck slab is taken over the full deck width.`, true) : null,
+        er.length ? note(`Not computed (engine error) and not in these quantities: ${er.map(c => `${plain(c.label)} on G${c.g}, span ${c.s}`).join('; ')}.`, true) : null,
+        !B.all ? note('One design girder (no girder types on the lines): the quantities above are of that girder; the deck slab is taken over the full deck width.') : null])].filter(Boolean);
+    return { title: 'Bill of materials', subs };
+  }
+  /* sign(B): sign-off and revision history (the project's title-block fields; blank lines to be filled in by hand), as the steel report's */
+  function sign(B) {
+    const p = B.P.project || {}, box = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 260" width="200" role="img" aria-label="P.E. seal"><rect x="2" y="2" width="256" height="256" fill="#fff" stroke="#000" stroke-width="1.5"/><text x="130" y="135" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#000">P.E. seal</text></svg>`;
+    return { title: 'Sign-off and revision history', subs: [sub('s', 'Sign-off', [
+      tbl(['Role', 'Name', 'Signature', 'Date'], [['Designed by', plain(p.designer || ''), '', plain(p.date || '')], ['Checked by', plain(p.checker || ''), '', ''], ['Approved by', '', '', '']]),
+      { type: 'figure', svg: box, caption: 'Professional Engineer seal and signature' },
+      tbl(['Rev.', 'Date', 'Description', 'By', 'Checked'], [['0', plain(p.date || ''), 'Issued', plain(p.designer || ''), plain(p.checker || '')], ['', '', '', '', ''], ['', '', '', '', ''], ['', '', '', '', '']], { caption: 'Revisions (Computed by, Checked by and Date: the project fields on the Project tab; the rest to be filled in by hand)' })])] };
+  }
+  /* ptSub(Bu, k): the design-point header of result section k: each engine check of the section (ui/dash.js GROUPS on that tab) at its
+     station: x, span and x/L, and the strand context there. x is from the left ℄ bearing; the bonded length of a strand is measured from
+     the girder end, min(x, L − x) + e_end, less its debonded length (engine/pbd-strands.js). Display only: nothing is checked here. */
+  const PT_TABS = { str: 1, flex: 1, shear: 1, end: 1, camb: 1 };
+  function ptSub(Bu, k) {
+    if (!PT_TABS[k]) return null;
+    const GR = (window.PSBDashUI && window.PSBDashUI.GROUPS) || [], R = Bu.R, inp = Bu.inp, fx = OK().fx, L = R.L, ss = R.ss || {}, o = inp.opt || {};
+    const cs = []; GR.filter(gp => gp.tab === k && !gp.input).forEach(gp => gp.checks.forEach(([n, st]) => { const c = R.checks.find(q => q.n === n); if (c && fin(c.loc)) cs.push({ c, st }); }));
+    if (!cs.length || !(L > 0)) return null;
+    const eE = (+o.endOh || 0) / 12, lt = num0(ss.lt) / 12, ld = num0(R.ldBonded) / 12, a = ss.nh > 0 && ss.hp ? +ss.hp.frac * L : NaN, zE = num0(+o.endZoneLen) * L, db = (ss.rows || []).filter(r => +r.nd > 0 && +r.dbnd > 0);
+    const region = x => { const xp = Math.min(x, L - x), xb = xp + eE, out = [];
+      out.push(xb <= lt ? `within the transfer length (${fx(xb, 2)} ft from the girder end ≤ $l_{t}$ = ${fx(lt, 2)} ft)` : ld > 0 && xb <= ld ? `within the development length of the bonded strands ($l_{t}$ = ${fx(lt, 2)} ft < ${fx(xb, 2)} ft ≤ $l_{d}$ = ${fx(ld, 2)} ft)` : `beyond the development length of the bonded strands (${fx(xb, 2)} ft from the girder end${ld > 0 ? ` > $l_{d}$ = ${fx(ld, 2)} ft` : ''})`);
+      db.forEach(r => { if (xb <= +r.dbnd) out.push(`${fx(+r.nd, 0)} strands of the row at ${fx(+r.y, 2)} in debonded here (to ${fx(+r.dbnd, 2)} ft from the girder end)`);
+        else if (xb - +r.dbnd <= lt) out.push(`${fx(+r.nd, 0)} debonded strands of the row at ${fx(+r.y, 2)} in within their transfer length (bonded from ${fx(+r.dbnd, 2)} ft)`); });   // past its transfer length: bonded, not listed
+      if (fin(a)) out.push(xp < a - 1e-9 ? `draped strands on their slope (hold-down point at ${fx(a, 2)} ft)` : `at or between the hold-down points (${fx(a, 2)} ft and ${fx(L - a, 2)} ft)`);
+      if (k === 'shear' && +o.sEnd > 0 && +o.sInt > 0) out.push(xp <= zE ? `end-zone stirrup spacing ${fx(+o.sEnd, 1)} in (to ${fx(zE, 2)} ft)` : `interior stirrup spacing ${fx(+o.sInt, 1)} in`);
+      return out.join('; '); };
+    const rows = cs.map(({ c, st }) => [plain(c.n), { t: fx(c.loc, 2), n: true }, `span ${Bu.sel.s}, x/L = ${fx(c.loc / L, 3)}`, region(c.loc), { t: '', key: st }]);
+    return sub('pt', 'Design points: where each check of this section governs', [
+      tbl(['Check', 'x (ft)', 'Span, x/L', 'Strands and reinforcement at the station', 'Worked'], rows, { wide: true }),
+      note(`x from the left ℄ bearing of the span (L = ${fx(L, 2)} ft). Transfer length $l_{t}$ = ${fx(lt, 2)} ft and development length of the bonded strands $l_{d}$ = ${fx(ld, 2)} ft, measured from the girder end${eE > 0 ? ` (${fx(eE * 12, 1)} in past the ℄ bearing)` : ''}${db.length ? `; debonded strands (${db.map(r => `${fx(+r.nd, 0)} at ${fx(+r.y, 2)} in to ${fx(+r.dbnd, 2)} ft`).join(', ')}) from the end of their debonded length` : ''}${fin(a) ? `; hold-down points of the draped strands at ${fx(a, 2)} ft from each ℄ bearing` : '; no draped strands'}. A check that is not at a station of the girder (a steel area at the girder end, a ratio of the whole girder) is listed at the station the engine reports for it.`)]);
+  }
+  const num0 = v => (fin(+v) ? +v : 0);
 
   /* ---------- PS-25: several worked units ----------
      Engineer decision PS-25 (2026-11-13): the worked sections (§3–§14, figures included) are printed once per girder type for its governing
@@ -471,6 +722,7 @@
     const secs = [], dropped = [];
     if (B.multi) multiSecs(B, X, opt, on, secs, dropped);   // PS-25: the worked sections once per girder type (or per line)
     else SECTIONS.forEach(([k]) => {
+      if (k !== 'sum' && k !== 'proj' && !TABS[k]) return;   // exec, basis, bom, sign (2026-11-23): built below
       X.cur = k; const n0 = vals.length;
       let s; try { s = k === 'sum' ? summary(B, X) : k === 'proj' ? proj(B, X) : tabSec(B, k, X); }
       catch (e) { s = { title: (SECTIONS.find(q => q[0] === k) || [k, k])[1], subs: [sub('n', 'Not available', [note('Report error: ' + (e && e.message), true)])] }; }
@@ -493,6 +745,16 @@
         if (it.type === 'table') return { ...it, head: it.head.map(fixC), rows: it.rows.map(r => Array.isArray(r) ? r.map(fixC) : { ...r, cells: r.cells.map(fixC) }) };
         return it; }); }));
     }
+    // Report package (2026-11-23): the Basis of design after the project section, the bill of materials and the sign-off last, the Executive
+    // summary first (built last: its links go to the steps of the sections shown). Each is built only when chosen; its values are recorded.
+    { const failS = (k, e) => ({ title: (SECTIONS.find(q => q[0] === k) || [k, k])[1], subs: [sub('n', 'Not available', [note('Report error: ' + (e && e.message), true)])] });
+      const pack = (k, f) => { if (!on(k)) return null; const n0 = vals.length; X.cur = k; let s; try { s = f(); } catch (e) { vals.splice(n0); s = failS(k, e); } vals.slice(n0).forEach(v => { v.sec = k; }); return { id: k, key: 'rs.' + k, ...s }; };
+      X.R = B.multi ? B.units[0].R : null; X.u = B.multi ? 0 : null;
+      const sb = pack('basis', () => basis(B, X, secs)); X.R = null; X.u = null;
+      if (sb) { const i = secs.findIndex(q => q.id === 'proj'), j = secs.findIndex(q => q.id === 'sum'); secs.splice(i >= 0 ? i + 1 : j >= 0 ? j + 1 : 0, 0, sb); }
+      const sm = pack('bom', () => bom(B, X, secs)); if (sm) secs.push(sm);
+      if (on('sign')) secs.push({ id: 'sign', key: 'rs.sign', ...sign(B) });
+      const se = pack('exec', () => exec(B, X, secs)); if (se) secs.unshift(se); }
     // the figures (each tab's own graphics, opt.figures from ui/report.js; none in Node): numbered "Figure n.m" by section n (the numbers of
     // the shared viewer: the sections shown, in order) and their order m in it, as the caption's lead
     secs.forEach((s, i) => { let m = 0; s.subs.forEach(q => q.items.forEach(it => { if (it.type === 'figure') { m++; it.no = `${i + 1}.${m}`; it.caption = `Figure ${i + 1}.${m}: ${it.caption || ''}`; } })); });

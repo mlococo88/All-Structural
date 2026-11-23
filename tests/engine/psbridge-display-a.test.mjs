@@ -35,7 +35,7 @@ for (const [name, P] of Object.entries(CASES)) {
       assert.equal(g.cls, ng ? 'ng' : 'ok', `${g.key} ${g.chip}`); assert.equal(g.chip, isFinite(lo) ? `RF ${OK.fx(lo, 3)}${ng ? ' NG' : ''}` : 'RF —');
       if (!ng) assert.ok(lo >= 1, g.key); });
     // §1: the engine's 99 shown "—" (not "99.000")
-    const rt = M.sections[0].subs[0].items.filter(i => i.type === 'table')[1];
+    const rt = M.sections.find(s => s.id === 'sum').subs[0].items.filter(i => i.type === 'table')[1];
     if (rt) rt.rows.forEach(r => { assert.notEqual(r[1].t, '99.000'); });
     assert.ok(!/99 = not applicable/.test(T));
   });
