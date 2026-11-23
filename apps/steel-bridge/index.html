@@ -80,6 +80,7 @@
     'report/summary.js',   // Summary tab (2026-11-09): every girder's governing values from the modules (no DOM)
     'ui/report.js',
     'ui/rpreview.js',   // Report review tools (2026-11-19): contents sidebar, markup mode, reviewed copy
+    'ui/nomen.js',   // NOM (2026-11-23): the Nomenclature tab (the symbols of the worked steps; display only)
     'ui/summary.js',
     'ui/dash.js',
     'ui/bridgexfer.js',
@@ -143,6 +144,9 @@
   #hdr .allToolsLink{font-size:8.5pt;color:#C7D4E4;text-decoration:none;font-family:var(--font-ui);}
   #hdr .allToolsLink:hover{color:#fff;text-decoration:underline;}
   #main{flex:1 1 auto;display:flex;min-height:0;}
+  /* FOOT (2026-11-23; the PS Bridge app's footer): the app's name, design code and units, and the design-aid statement; not in the printed report */
+  #appFoot{flex:0 0 auto;display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 16px;padding:3px 14px;border-top:1px solid var(--color-border);background:var(--slate-100);color:#475569;font-family:var(--font-ui);font-size:7.5pt;letter-spacing:.04em;text-transform:uppercase;}
+  @media print{ body:has(#tabBar [data-otab="rpt"][aria-selected="true"]) #appFoot{display:none!important;} }
   #inputPanel{flex:0 0 calc(100% * var(--sbIn,.33));max-width:calc(100% * var(--sbIn,.33));border-right:1px solid var(--color-border);overflow-y:auto;position:relative;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;background:var(--color-bg);padding:10px 12px 60px;font-family:var(--font-ui);font-size:9.5pt;}
   #outputPanel{flex:1 1 67%;min-width:0;overflow-y:auto;position:relative;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:0 16px 80px;background:var(--paper);}
   @media screen and (max-width:899.98px){
@@ -347,12 +351,13 @@
     </aside>
     <div id="sbSplit" role="separator" aria-orientation="vertical" aria-controls="inputPanel outputPanel" aria-label="Width of the input and output panels (arrow keys move it, Home / End to the limits, double-click or Enter resets)" tabindex="0" title="Drag to change the width of the input and output panels; double-click to reset"></div><!-- SBW (2026-11-09): splitter, ui/splitter.js -->
     <main id="outputPanel">
-      <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="false" data-otab="sum">Summary</button><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button><button type="button" role="tab" aria-selected="false" data-otab="flex">Flexure</button><button type="button" role="tab" aria-selected="false" data-otab="loads">Loads &amp; LLDF</button><button type="button" role="tab" aria-selected="false" data-otab="shear">Shear &amp; stiffeners</button><button type="button" role="tab" aria-selected="false" data-otab="fat">Fatigue &amp; studs</button><button type="button" role="tab" aria-selected="false" data-otab="an">Analysis</button><button type="button" role="tab" aria-selected="false" data-otab="defl">Deflection</button><button type="button" role="tab" aria-selected="false" data-otab="cn">Constructibility</button><button type="button" role="tab" aria-selected="false" data-otab="cf">Cross-frames</button><button type="button" role="tab" aria-selected="false" data-otab="spl">Field splices</button><button type="button" role="tab" aria-selected="false" data-otab="rt">Rating</button><button type="button" role="tab" aria-selected="false" data-otab="wt">Welds</button><button type="button" role="tab" aria-selected="false" data-otab="rpt">Report</button><button type="button" role="tab" aria-selected="false" data-otab="dwg">Drawings</button><button type="button" role="tab" aria-selected="false" data-otab="ad">Auto design</button><button type="button" role="tab" aria-selected="false" data-otab="3d">3D view</button></div>
+      <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="false" data-otab="sum">Summary</button><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button><button type="button" role="tab" aria-selected="false" data-otab="flex">Flexure</button><button type="button" role="tab" aria-selected="false" data-otab="loads">Loads &amp; LLDF</button><button type="button" role="tab" aria-selected="false" data-otab="shear">Shear &amp; stiffeners</button><button type="button" role="tab" aria-selected="false" data-otab="fat">Fatigue &amp; studs</button><button type="button" role="tab" aria-selected="false" data-otab="an">Analysis</button><button type="button" role="tab" aria-selected="false" data-otab="defl">Deflection</button><button type="button" role="tab" aria-selected="false" data-otab="cn">Constructibility</button><button type="button" role="tab" aria-selected="false" data-otab="cf">Cross-frames</button><button type="button" role="tab" aria-selected="false" data-otab="spl">Field splices</button><button type="button" role="tab" aria-selected="false" data-otab="rt">Rating</button><button type="button" role="tab" aria-selected="false" data-otab="wt">Welds</button><button type="button" role="tab" aria-selected="false" data-otab="rpt">Report</button><button type="button" role="tab" aria-selected="false" data-otab="dwg">Drawings</button><button type="button" role="tab" aria-selected="false" data-otab="ad">Auto design</button><button type="button" role="tab" aria-selected="false" data-otab="3d">3D view</button><button type="button" role="tab" aria-selected="false" data-otab="nm">Nomenclature</button></div>
       <div id="gBar" hidden></div><!-- SB-2 PR 2: the girder type and line of the output tab --><div id="autoBar" hidden><span id="autoMsg" role="status" aria-live="polite"></span><button type="button" id="bRerun" title="Calculate this tab again now">Re-run</button></div>
       <div id="sbdHoBar" role="status" hidden></div><!-- SHO (2026-11-23): hand-offs out of date since this project sent / loaded them (ui/handoffs.js; click only) -->
       <div id="out"></div>
     </main>
   </div>
+  <footer id="appFoot"><span>Steel Bridge Design · AASHTO LRFD 10th Ed. (2024) · MBE 4th Ed. (2026) (rating) · units: kip, ft, in, ksi</span><span>Design aid — independent verification by a licensed engineer required</span></footer>
 </div>
 <script>
 (function () {
@@ -783,7 +788,7 @@
      the results are those of a manual run. The Re-run button presses it again on request. Auto design (heavy; its Run button on the Auto
      design input tab) and the Report (its Build button) stay manual. A run that leaves the tab out of date (an error) is not repeated until
      the project or the tab's choices change (autoLast). */
-  const AUTO_BTN = { sec: '#bCalc', loads: '#bCalc', flex: '#fx_calc', shear: '#sh_calc', an: '#anCalc', defl: '#df_calc', fat: '#fa_calc', cn: '#cn_calc', spl: '#sp_calc', rt: '#rt_calc', wt: '#wt_calc', dwg: '#dwg_calc' };
+  const AUTO_BTN = { sec: '#bCalc', loads: '#bCalc', flex: '#fx_calc', shear: '#sh_calc', an: '#anCalc', defl: '#df_calc', fat: '#fa_calc', cn: '#cn_calc', spl: '#sp_calc', rt: '#rt_calc', wt: '#wt_calc', dwg: '#dwg_calc', nm: '#nm_calc' };   // nm: the Nomenclature tab (NOM, 2026-11-23)
   const AUTO_MS = 600, autoLast = {};
   let autoT = null, autoNow = false, autoBusy = false, autoPend = false;
   const autoBtn = t => AUTO_BTN[t] ? $('out').querySelector(AUTO_BTN[t]) : null;
@@ -814,7 +819,7 @@
      Welds inputs, a Custom demand table, …) is drawn for the fix, out of date and with its Calculate button off (hostFix). */
   /* gBar (SB-2 PR 2): above a per-girder output tab, the girder type (ui.g, as the Girders & plates tab) and the line it is worked on (ui.ln,
      as the Loads tab; the type's design line by default, whose results are the project's own). Shown when there is a choice to make. */
-  const G_TABS = ['sec', 'flex', 'loads', 'shear', 'an', 'fat', 'cf', 'spl', 'cn', 'rt', 'wt', 'rpt'];
+  const G_TABS = ['sec', 'flex', 'loads', 'shear', 'an', 'fat', 'cf', 'spl', 'cn', 'rt', 'wt', 'rpt', 'nm'];
   function drawGBar() {
     const b = $('gBar'), t = ui.otab || 'sec', gi = Math.min(ui.g, P.girders.length - 1), L = M.typeLines(P, gi), j = lnSel(), dl = M.designLine(P, P.girders[gi]);
     if (!G_TABS.includes(t) || (P.girders.length < 2 && L.length < 2) || (t === 'rpt' && ui.rpt && ui.rpt.scope === 'all')) { b.hidden = true; b.innerHTML = ''; return; }
@@ -865,6 +870,7 @@
       goto: gotoOut, inTab: t => { ui.itab = t; saveUi(); drawInputs(); $('inputPanel').scrollTop = 0; },   // GFXS: the graphics' links to the input tabs
       report: () => { ui.rpt = ui.rpt || {}; ui.rpt.scope = 'all'; ui.otab = 'rpt'; saveUi(); drawOut(); $('outputPanel').scrollTop = 0; } }); return; }
     if (ui.otab === '3d') { window.SBD3DUI.render($('out'), { P, ui, saveUi }); return; }   // 3D view tab (ui/view3d.js)
+    if (ui.otab === 'nm') { window.SBDNomenUI.render($('out'), { P: loadsView(), g: ui.g, goto: t => { ui.otab = t; saveUi(); autoNow = true; drawOut(); $('outputPanel').scrollTop = 0; } }); return; }   // Nomenclature tab (ui/nomen.js; NOM, 2026-11-23)
     const g = P.girders[ui.g] || P.girders[0], s = g && g.segments[ui.seg];
     let h = `<div class="alert stale"${stale ? '' : ' hidden'}><span>Results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="bCalc">Calculate</button></div>`;
     if (L.note) h += `<div class="alert">${esc(L.note)}</div>`;
