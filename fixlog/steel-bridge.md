@@ -10718,3 +10718,34 @@ Basis: AASHTO Manual for Bridge Evaluation, 4th Ed. (2026), Section 6A (cited an
 9. **ADTT** for γ_LL is the Fatigue & studs ADTT (one direction); there is no separate rating ADTT.
 10. **Load-dependent capacities** (C_b, the f_ℓ amplification, D_c) are worked by the Flexure module from the vehicle's own moments with that module's design load factors, exactly as the HL-93 rating does with the HL-93 moments.
 11. **Service II for permit loads** is rated (γ_LL 1.00) and can govern the permit RF.
+
+## 2026-11-23 — PR: claude/sb-smoke-fixes (SMK) — two browser smokes brought up to date with merged display changes (test files only; no app file, no calculation, no saved data changed)
+### Problem
+Three Steel Bridge browser smokes were reported failing on origin/main (8daf9e1); the Node engine suite was clean. Each was run alone, twice.
+- `tests/smoke/steel-bridge-library.mjs`: stale test. It expected the buttons of the "Save and open" card to be exactly
+  `Save | Save as… | Saved projects… | New | Export JSON | Import JSON | From old app`. PR #1643 (LGA, https://github.com/mlococo88/All-Structural/pull/1643)
+  added `Import MIDAS (.lga)` and `Export to MIDAS (.lga)` to that card on purpose (`apps/steel-bridge/index.html`, anchor `id="bLgaIn"`), so `deepEqual` failed.
+- `tests/smoke/steel-bridge-tabgraphics-b.mjs`: stale test. Its Report check read the first `#out .rp-fig svg` and expected the summary figure (more than 10 texts).
+  Since PR #1645 (https://github.com/mlococo88/All-Structural/pull/1645; `report/builders.js`, anchor `caption: 'Verdict of this girder:`) the Report's first
+  figure is the verdict banner of the executive summary (2 texts), and PR #1668 (RPX) added every tab graphic as a figure. The summary figure is still in the Report,
+  unchanged (measured: 44 texts, 423 px wide, caption "Figure 3.1: Governing check of each group along girder G1 …"). Failure message: `FAIL {"texts":2,"w":423.015625}`.
+- `tests/smoke/steel-bridge-scroll.mjs`: no failure found, nothing changed. The full run (1280×800, 1366×768, 1920×1080) passes with 0 failed checks but takes
+  1113 s alone on this machine (18 output tabs, 11 input tabs, 89 links per size; 282 scripted scroll actions); `--quick` (1280×800 only) passes in 386 s (94 actions).
+  A run under a time limit shorter than about 20 minutes is killed before it prints its result.
+### Where / Before / After
+- `tests/smoke/steel-bridge-library.mjs`, anchor `[data-sp=card] button`:
+  - Before: `…, 'Export JSON', 'Import JSON', 'From old app']);`
+  - After: `…, 'Export JSON', 'Import JSON', 'From old app', 'Import MIDAS (.lga)', 'Export to MIDAS (.lga)']);   // the two .lga buttons: PR #1643 (LGA)`
+- `tests/smoke/steel-bridge-tabgraphics-b.mjs`, anchor `---- Report: the summary section carries the figure`:
+  - Before: `const fig = await p.$eval('#out .rp-fig svg', s => ({ texts: …, w: … })); assert.ok(fig.texts > 10 && fig.w > 300, …); … await shot('report-summary', '#out .rp-fig');`
+  - After: `const SUMFIG = '#out .rp-fig:has(figcaption:text("Governing check of each group along girder"))';`
+    `assert.equal(await p.locator(SUMFIG).count(), 1, …);` then the same `$eval` on `SUMFIG + ' svg'` with the same limits (`texts > 10 && w > 300`), and `shot('report-summary', SUMFIG)`.
+    The check is not weaker: the same limits on the figure it was written for, plus "exactly one such figure".
+### Governing provision
+None (tests only; no formula, factor, unit or reference touched).
+### How verified
+- Each smoke alone on the branch: `steel-bridge-library.mjs` ok (0 console errors); `steel-bridge-tabgraphics-b.mjs` ok (13 graphics, 33 s);
+  `steel-bridge-scroll.mjs` PASS (282 actions, 1113 s; unchanged file). `node tests/check-syntax.mjs`: 253 files, all pass.
+### Decisions (pending engineer review)
+- SMK-D1. `steel-bridge-scroll.mjs` is left as it is (three window sizes, about 19 minutes). Making it shorter would mean dropping sizes or links from the default run,
+  which is a coverage choice for the engineer; `--quick` already exists for a 6-minute run.
