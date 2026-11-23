@@ -129,8 +129,8 @@ check(!/to fix/.test(await p.textContent('#sbDashCol')), 'unequal bays: no input
   const e = await evCheck(p); check(e.n >= 20 && !e.bad.length, `Interior on G3 (S = 10 ft): ${e.n} values ${e.bad.slice(0, 3).join(' | ')}`);
   if (args.shots) { await p.click('#tabBar [data-otab="sum"]'); await p.waitForTimeout(300); await p.screenshot({ path: path.join(args.shots, 'ps3a-1400-summary-types.png') }); }
   await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 60000 }); await p.waitForTimeout(200);
-  const rp = await p.evaluate(() => { const s1 = document.querySelector('.rp-doc section[data-rpsec="rp-s1"]'); return s1 ? s1.textContent.replace(/\s+/g, ' ') : ''; });
-  check(/Every girder type and line/.test(rp) && /2 girder types on 5 girder lines/.test(rp) && /each girder type on its governing line/.test(rp) && /Interior S1 on G3, span 1 \(§3–§14\)/.test(rp), "Report §1: every type and line; PS-25: Interior worked on its governing line G3 (S = 10 ft), §3–§14 " + rp.slice(rp.indexOf("This report works"), rp.indexOf("This report works") + 200)); }
+  const rp = await p.evaluate(() => { const s1 = document.querySelector('.rp-doc section[data-rpsec="rp-s2"]'); return s1 ? s1.textContent.replace(/\s+/g, ' ') : ''; });
+  check(/Every girder type and line/.test(rp) && /2 girder types on 5 girder lines/.test(rp) && /each girder type on its governing line/.test(rp) && /Interior S1 on G3, span 1 \(§5–§16\)/.test(rp), "Report §1: every type and line; PS-25: Interior worked on its governing line G3 (S = 10 ft), §3–§14 " + rp.slice(rp.indexOf("This report works"), rp.indexOf("This report works") + 200)); }
 // PS-19: the exterior rigid section on the real girder lines (8, 10, 10, 8 ft): Exterior S1 on G1, Loads & LLDF: X_ext 18, Σx² 848, R = DF_M 0.7821
 await p.click('#tabBar [data-otab="lds"]'); await p.selectOption('#tyOutT', { label: 'Exterior S1 (span 1)' }); await p.waitForTimeout(150); await p.selectOption('#tyOutL', '1'); await p.waitForTimeout(300);
 { const r = await p.evaluate(() => ({ s: !!document.getElementById('st-ld.rigSx2'), x: !!document.getElementById('st-ld.rigXext'), dfm: (document.querySelector('#out .kv [data-ev="dfm"]') || document.querySelector('#out [data-ev="dfm"]') || {}).textContent }));
@@ -286,20 +286,20 @@ const RPQ = () => p.evaluate(() => ({ secs: [...document.querySelectorAll('.rp-d
 const rptOpen = async () => { await p.click('#tabBar [data-otab="rpt"]'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 120000 }); await p.waitForTimeout(300); };
 await rptOpen();
 { const r = await RPQ();
-  check(r.gov && !r.all && r.secs.length === 26 && /^3\. Section properties: Interior S1 on G2, span 1$/.test(r.secs[2]) && /^15\. Section properties: Exterior S1 on G1, span 1$/.test(r.secs[14]) && /^26\. Rating: Exterior S1 on G1, span 1$/.test(r.secs[25]) && !r.unres && !r.kErr && r.steps === r.nSt,
+  check(r.gov && !r.all && r.secs.length === 30 && /^5\. Section properties: Interior S1 on G2, span 1$/.test(r.secs[4]) && /^17\. Section properties: Exterior S1 on G1, span 1$/.test(r.secs[16]) && /^28\. Rating: Exterior S1 on G1, span 1$/.test(r.secs[27]) && !r.unres && !r.kErr && r.steps === r.nSt,
     'PS-25 default: each type on its governing line, §3–§14 Interior, §15–§26 Exterior ' + JSON.stringify({ n: r.secs.length, unres: r.unres, steps: r.steps, nSt: r.nSt }));
   // §1: the grid row of G5 (Exterior S1) points to Exterior's End zone section §22; a click jumps there
-  const j = await p.evaluate(() => { const s1 = document.querySelector('.rp-doc section[data-rpsec="rp-s1"]'), tr = [...s1.querySelectorAll('table tbody tr')].find(t => t.children[0].textContent.trim() === 'G5');
+  const j = await p.evaluate(() => { const s1 = document.querySelector('.rp-doc section[data-rpsec="rp-s2"]'), tr = [...s1.querySelectorAll('table tbody tr')].find(t => t.children[0].textContent.trim() === 'G5');
     const a = tr && tr.querySelector('a[href^="#"]'); if (!a) return null; const id = a.getAttribute('href').slice(1); a.click(); const el = document.getElementById(id), b = el.getBoundingClientRect();
     return { text: a.textContent, h: (el.closest('section.rp-sec') || el).querySelector('.rp-h1').textContent, inView: b.top >= -2 && b.top < innerHeight }; });
-  check(j && j.text === '§22' && /^22\. End zone & hold-down: Exterior S1 on G1, span 1$/.test(j.h) && j.inView, 'PS-25: §1 grid G5 → its type\'s section §22 ' + JSON.stringify(j));
-  if (args.shots) { await p.evaluate(() => document.querySelector('.rp-doc section[data-rpsec="rp-s1"]').scrollIntoView()); await p.waitForTimeout(200); await p.screenshot({ path: path.join(args.shots, 'ps25-1400-report-s1.png') });
-    await p.evaluate(() => [...document.querySelectorAll('.rp-doc .rp-h1')][14].scrollIntoView()); await p.waitForTimeout(200); await p.screenshot({ path: path.join(args.shots, 'ps25-1400-report-exterior.png') }); } }
+  check(j && j.text === '§24' && /^24\. End zone & hold-down: Exterior S1 on G1, span 1$/.test(j.h) && j.inView, 'PS-25: §1 grid G5 → its type\'s section §22 ' + JSON.stringify(j));
+  if (args.shots) { await p.evaluate(() => document.querySelector('.rp-doc section[data-rpsec="rp-s2"]').scrollIntoView()); await p.waitForTimeout(200); await p.screenshot({ path: path.join(args.shots, 'ps25-1400-report-s1.png') });
+    await p.evaluate(() => [...document.querySelectorAll(".rp-doc .rp-h1")][16].scrollIntoView()); await p.waitForTimeout(200); await p.screenshot({ path: path.join(args.shots, 'ps25-1400-report-exterior.png') }); } }
 // every girder line: 2 + 12 × 5 sections; kept in psb2.ui, the project untouched; again after a reload
 { const proj0 = (await RPQ()).proj;
-  await p.check('[data-rpworked="all"]'); await p.waitForFunction(() => document.querySelectorAll('.rp-doc .rp-h1').length === 62, null, { timeout: 120000 }); await p.waitForTimeout(300);
+  await p.check('[data-rpworked="all"]'); await p.waitForFunction(() => document.querySelectorAll('.rp-doc .rp-h1').length === 66, null, { timeout: 120000 }); await p.waitForTimeout(300);
   const r = await RPQ(), want = ['Interior S1 on G2', 'Interior S1 on G3', 'Interior S1 on G4', 'Exterior S1 on G1', 'Exterior S1 on G5'];
-  check(r.all && want.every((t, i) => r.secs[2 + 12 * i].endsWith(`: ${t}, span 1`) && r.secs[2 + 12 * i].startsWith(`${3 + 12 * i}. Section properties`)) && !r.unres && !r.kErr && r.steps === r.nSt, 'PS-25 every girder line: 62 sections in type and line order ' + JSON.stringify({ n: r.secs.length, unres: r.unres }));
+  check(r.all && want.every((t, i) => r.secs[4 + 12 * i].endsWith(`: ${t}, span 1`) && r.secs[4 + 12 * i].startsWith(`${5 + 12 * i}. Section properties`)) && !r.unres && !r.kErr && r.steps === r.nSt, 'PS-25 every girder line: 66 sections in type and line order ' + JSON.stringify({ n: r.secs.length, unres: r.unres }));
   check(r.ui.rpt && r.ui.rpt.worked === 'all' && r.proj === proj0 && Object.keys(await lsSnap(p)).every(k => k.startsWith('psb2.')), 'PS-25: the choice in psb2.ui (rpt.worked), the project not changed, no new key');
   // print: Print report (the whole report alone) has every unit's sections, steps and figures
   await p.evaluate(() => { window.__printed = 0; window.print = () => { window.__printed++; }; });
@@ -307,34 +307,34 @@ await rptOpen();
   const pr = await p.evaluate(() => { const vis = el => !!el && getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().height > 0, box = document.getElementById('rp-print');
     return { box: vis(box), app: vis(document.getElementById('app')), h: [...box.querySelectorAll('.rp-h1')].filter(vis).length, steps: box.querySelectorAll('.rp-step').length, hidden: [...box.querySelectorAll('.rp-step')].filter(x => !vis(x)).length,
       figs: box.querySelectorAll('.rp-fig').length, docFigs: document.querySelectorAll('#rptHost .rp-doc .rp-fig').length, ext: [...box.querySelectorAll('.rp-h1')].filter(h => /Exterior S1 on G5, span 1$/.test(h.textContent)).length }; });
-  check(pr.box && !pr.app && pr.h === 62 && pr.steps === r.steps && !pr.hidden && pr.figs === pr.docFigs && pr.figs >= 60 && pr.ext === 12, 'PS-25 print: every unit printed (headings, steps, figures) ' + JSON.stringify(pr));
+  check(pr.box && !pr.app && pr.h === 66 && pr.steps === r.steps && !pr.hidden && pr.figs === pr.docFigs && pr.figs >= 60 && pr.ext === 12, 'PS-25 print: every unit printed (headings, steps, figures) ' + JSON.stringify(pr));
   await p.emulateMedia({ media: 'screen' }); await p.evaluate(() => window.dispatchEvent(new Event('afterprint')));
-  await p.reload(); await ready(p); await rptOpen(); await p.waitForFunction(() => document.querySelectorAll('.rp-doc .rp-h1').length === 62, null, { timeout: 120000 });
+  await p.reload(); await ready(p); await rptOpen(); await p.waitForFunction(() => document.querySelectorAll('.rp-doc .rp-h1').length === 66, null, { timeout: 120000 });
   check((await RPQ()).all, 'PS-25: the choice kept after a reload');
-  await p.check('[data-rpworked="gov"]'); await p.waitForFunction(() => document.querySelectorAll('.rp-doc .rp-h1').length === 26, null, { timeout: 120000 }); }
+  await p.check('[data-rpworked="gov"]'); await p.waitForFunction(() => document.querySelectorAll('.rp-doc .rp-h1').length === 30, null, { timeout: 120000 }); }
 // PS-26 (engineer decision 2026-11-13): RIDOT, the Exterior type's own f′c 9.0 ksi: §2's Owner rules table has one "Applied here" column per
 // girder type (its f′c, limit and ratio), each heading's "see §" goes to that type's sections; the in-app Owner rules tab keeps one column (the
 // type shown) with the same cell as that type's column; §1 Key quantities "DF_M / DF_V (see §)" goes to the Moment distribution factor step
 await p.evaluate(() => { const P = window.PSBModel.newProject(); P.base.owner = 'RIDOT'; P.types[1].ovr = { 'mat.fc': 9 }; localStorage.setItem('psb2.project.current', window.PSBModel.exportJSON(P)); });
 await p.reload(); await ready(p); await rptOpen();
-{ const r = await p.evaluate(() => { const s2 = document.querySelector('.rp-doc section[data-rpsec="rp-s2"]'), tb = [...s2.querySelectorAll('table')].find(t => /Applied here/.test(t.querySelector('thead') ? t.querySelector('thead').textContent : ''));
+{ const r = await p.evaluate(() => { const s2 = document.querySelector('.rp-doc section[data-rpsec="rp-s3"]'), tb = [...s2.querySelectorAll('table')].find(t => /Applied here/.test(t.querySelector('thead') ? t.querySelector('thead').textContent : ''));
     if (!tb) return null; const th = [...tb.querySelectorAll('thead th')].map(x => x.textContent.trim()), fc = [...tb.querySelectorAll('tbody tr')].find(tr => /minimum compressive strength 5000 psi/.test(tr.textContent));
     const a = tb.querySelectorAll('thead th')[4].querySelector('a[href^="#"]'), id = a && a.getAttribute('href').slice(1); if (a) a.click(); const el = id && document.getElementById(id);
     return { th, fc: fc ? [...fc.children].slice(3).map(x => x.textContent.trim()) : null, bad: document.querySelectorAll('.rp-doc .rp-bad').length, jump: el ? (el.closest('section.rp-sec') || el).querySelector('.rp-h1').textContent : '' }; });
-  check(r && r.th.length === 5 && /^Applied here: Interior S1 on G\d, span 1 \(see §3–§14\)$/.test(r.th[3]) && /^Applied here: Exterior S1 on G\d, span 1 \(see §15–§26\)$/.test(r.th[4])
-    && /f′c = 8\.50 ksi.*ratio = 5\.00 \/ 8\.50 = 0\.588 PASS/.test(r.fc[0]) && /f′c = 9\.00 ksi.*ratio = 5\.00 \/ 9\.00 = 0\.556 PASS/.test(r.fc[1]) && !r.bad && /^15\. Section properties: Exterior S1/.test(r.jump), 'PS-26: §2 one column per girder type ' + JSON.stringify(r));
-  const k = await p.evaluate(() => { const s1 = document.querySelector('.rp-doc section[data-rpsec="rp-s1"]'), row = [...s1.querySelectorAll('.rp-kv > div, tr, .rp-kvr')].filter(x => /^DF/.test(x.textContent.trim())).map(x => x.querySelector('a[href^="#"]')).filter(Boolean);
+  check(r && r.th.length === 5 && /^Applied here: Interior S1 on G\d, span 1 \(see §5–§16\)$/.test(r.th[3]) && /^Applied here: Exterior S1 on G\d, span 1 \(see §17–§28\)$/.test(r.th[4])
+    && /f′c = 8\.50 ksi.*ratio = 5\.00 \/ 8\.50 = 0\.588 PASS/.test(r.fc[0]) && /f′c = 9\.00 ksi.*ratio = 5\.00 \/ 9\.00 = 0\.556 PASS/.test(r.fc[1]) && !r.bad && /^17\. Section properties: Exterior S1/.test(r.jump), 'PS-26: §2 one column per girder type ' + JSON.stringify(r));
+  const k = await p.evaluate(() => { const s1 = document.querySelector('.rp-doc section[data-rpsec="rp-s2"]'), row = [...s1.querySelectorAll('.rp-kv > div, tr, .rp-kvr')].filter(x => /^DF/.test(x.textContent.trim())).map(x => x.querySelector('a[href^="#"]')).filter(Boolean);
     return row.map(a => { const el = document.getElementById(a.getAttribute('href').slice(1)); return el ? el.textContent.replace(/\s+/g, ' ').slice(0, 60) : null; }); });
   check(k.length === 2 && k.every(t => t && /Moment distribution factor/.test(t)), 'PS-26: §1 Key quantities DF link → the Moment distribution factor step ' + JSON.stringify(k));
   await p.click('#inTabs [data-itab="own"]'); await p.waitForTimeout(250);
   const t = await p.evaluate(() => { const tr = document.getElementById('own-rule-fc.min'); return tr ? { n: tr.children.length, c: tr.children[3].textContent.replace(/\s+/g, ' ').trim() } : null; });
   const rat = x => (/= (\d+\.\d+) ksi; governing minimum (\d+\.\d+) ksi; ratio = .* = (\d\.\d+) (PASS|FAIL)/.exec(x || '') || []).slice(1).join(' ');   // (the tab's <br>: no space before f′c)
   check(t && t.n === 4 && rat(t.c) && r && r.fc.some(x => rat(x) === rat(t.c)), 'PS-26: the Owner rules tab: one column, the cell of the type shown ' + JSON.stringify(t));
-  if (args.shots) { await p.click('#tabBar [data-otab="rpt"]'); await p.waitForTimeout(400); await p.evaluate(() => { const t = [...document.querySelectorAll('.rp-doc section[data-rpsec="rp-s2"] table')].find(x => /Applied here/.test(x.textContent)); t.scrollIntoView(); window.scrollBy(0, -260); }); await p.waitForTimeout(200); await p.screenshot({ path: path.join(args.shots, 'ps26-1400-report-s2.png') }); } }
+  if (args.shots) { await p.click('#tabBar [data-otab="rpt"]'); await p.waitForTimeout(400); await p.evaluate(() => { const t = [...document.querySelectorAll('.rp-doc section[data-rpsec="rp-s3"] table')].find(x => /Applied here/.test(x.textContent)); t.scrollIntoView(); window.scrollBy(0, -260); }); await p.waitForTimeout(200); await p.screenshot({ path: path.join(args.shots, 'ps26-1400-report-s2.png') }); } }
 // one girder type on one line: the one-girder report (14 sections, no unit headings, no choice shown)
 await p.evaluate(() => { const P = window.PSBModel.newProject(); P.types = [{ id: 'T1', label: 'One S1', span: 1, lines: [2], ovr: {} }]; localStorage.setItem('psb2.project.current', window.PSBModel.exportJSON(P)); });
 await p.reload(); await ready(p); await rptOpen();
-{ const r = await RPQ(); check(r.secs.length === 14 && /^3\. Section properties/.test(r.secs[2]) && !r.secs.some(t => / on G\d+, span \d+$/.test(t)) && !(await p.$('[data-rpworked]')) && !r.unres, 'PS-25: one girder type on one line: the one-girder report ' + r.secs.slice(0, 3).join(' | ')); }
+{ const r = await RPQ(); check(r.secs.length === 18 && /^5\. Section properties/.test(r.secs[4]) && !r.secs.some(t => / on G\d+, span \d+$/.test(t)) && !(await p.$('[data-rpworked]')) && !r.unres, 'PS-25: one girder type on one line: the one-girder report ' + r.secs.slice(0, 3).join(' | ')); }
 check(!o.errs.length, 'console errors (PS-25): ' + o.errs.join(' | '));
 await o.b.close();
 

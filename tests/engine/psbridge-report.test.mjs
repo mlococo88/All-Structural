@@ -1,6 +1,7 @@
 // apps/ps-bridge PR 2e: the Report (report/fromtab.js, report/data.js, report/builders.js on shared/report.js), in Node on every design of
 //   psbridge-tab-cases.mjs:
-//   - 14 sections in the workflow order (summary, project, the twelve result tabs), numbered; every "see §" reference resolves (no "§?"),
+//   - 18 sections in the workflow order (2026-11-23: the executive summary, the summary, project, basis of design, the twelve result tabs,
+//     the bill of materials, the sign-off; 14 before), numbered; every "see §" reference resolves (no "§?"),
 //     no duplicate anchor; no NaN / undefined / [object in the text; no "pending engineer review";
 //   - every number written in the report is recorded (model.vals) and equals the engine value at its R path as the tabs format it
 //     (PSBOutKit.fx, ÷ divisor); each result tab's section records exactly the values the tab shows (data-ev of its output());
@@ -50,7 +51,7 @@ for (const [name, P] of Object.entries(CASES)) {
       Object.entries(B.W[wk].paths || {}).forEach(([id, p]) => assert.ok(Object.is(st.find(s => s.id === id).value, at(B.R, p)), `${k}: ${id}`));
     }
     // the summary: every check once, linked to its step
-    const sum = M.sections[0], rows = sum.subs[0].items.find(i => i.type === 'table').rows;
+    const sum = M.sections.find(s => s.id === 'sum'), rows = sum.subs[0].items.find(i => i.type === 'table').rows;
     assert.equal(rows.length, B.R.checks.length);
     B.R.checks.forEach((c, i) => { assert.ok(M.vals.some(v => v.sec === 'sum' && v.path === `checks.${i}.r`), c.n);
       const r = rows.find(q => q.cells[1] === c.n.replace(/<[^>]*>/g, '')); assert.ok(r && /^see \[\[[\w.]+\]\]$/.test(r.cells[8]), `check ${c.n} has a link`);
@@ -70,7 +71,7 @@ const MATG = () => W.PSBDashUI.GROUPS.find(g => g.id === 'mat');
 const colCount = R => { const N = new Set(W.PSBDashUI.GROUPS.flatMap(g => g.checks.map(q => q[0]))), cs = R.checks.filter(c => N.has(c.n)); return { n: cs.length, nF: cs.filter(c => !c.pass).length, out: R.checks.filter(c => !N.has(c.n)) }; };
 for (const [name, P] of Object.entries(CASES)) {
   test(`check summary column and §1: ${name}`, () => {
-    const B = W.PSBReportData.compute(P, null), M = RB.model(B), rows = M.sections[0].subs[0].items.find(i => i.type === 'table').rows, cc = colCount(B.R);
+    const B = W.PSBReportData.compute(P, null), M = RB.model(B), rows = M.sections.find(s => s.id === 'sum').subs[0].items.find(i => i.type === 'table').rows, cc = colCount(B.R);
     assert.deepEqual(J(cc.out.map(c => c.n)), [], 'every check of the tab designs is in a group of the column');
     assert.equal(rows.filter(r => r.cells[0] !== '—').length, cc.n); assert.equal(rows.filter(r => r.cells[7].t === 'FAIL').length, cc.nF);
     rows.forEach(r => { const g = W.PSBDashUI.GROUPS.find(q => q.checks.some(z => z[0] === r.cells[1])); assert.equal(r.cells[0], g.name, r.cells[1]); });
@@ -91,7 +92,7 @@ test('Owner limits: CTDOT f′ci 6.8 > 6.5 ksi FAILs (ratio 1.046), counted in t
   assert.ok(/FAIL/.test(h.slice(h.indexOf('own-rule-fci.range'))));
   // the girder f′c (CTDOT range 6.0–10.0 ksi): f′c 8.5 ksi, governing maximum 10.0, ratio 0.850 = value / limit
   const j = R.checks.findIndex(c => c.n === 'Girder f′c (CTDOT 5.9.1.2)'); assert.equal(fx(R.checks[j].r, 3), '0.850'); assert.match(h, /governing maximum/);
-  const M = RB.model(B), own = M.sections[1].subs.find(s => s.key === 'rs.own'); assert.ok(own && JSON.stringify(own.items).includes('1.046'));
+  const M = RB.model(B), own = M.sections.find(s => s.id === 'proj').subs.find(s => s.key === 'rs.own'); assert.ok(own && JSON.stringify(own.items).includes('1.046'));
   assert.ok(M.vals.some(v => v.sec === 'proj' && v.path === `checks.${i}.r` && v.text === '1.046'));
   // without a result (an input error) the table says so and shows no number
   assert.match(W.PSBInputsUI.cards('own', P), /shown when the inputs have no error/);
@@ -116,7 +117,7 @@ test('Owner limits: RIDOT girder age at continuity (t_d 60 < 90 days FAILs, 1.50
   const cell = row.slice(0, row.indexOf('</tr>'));
   assert.ok(cell.includes(`t<sub>d</sub> (girder age at continuity) = <span data-ev="checks.${i}.v" data-d="0">60</span> days; governing minimum <span data-ev="checks.${i}.lim" data-d="0">90</span> days; ratio = <span data-ev="checks.${i}.lim" data-d="0">90</span> / <span data-ev="checks.${i}.v" data-d="0">60</span> = <b><span data-ev="checks.${i}.r" data-d="3">1.500</span></b>`), cell);
   assert.match(cell, /FAIL/); assert.match(cell, /check summary: Owner limits/);
-  const M = RB.model(B), rows = M.sections[0].subs[0].items.find(q => q.type === 'table').rows, r = rows.find(q => q.cells[1] === N);
+  const M = RB.model(B), rows = M.sections.find(s => s.id === 'sum').subs[0].items.find(q => q.type === 'table').rows, r = rows.find(q => q.cells[1] === N);
   assert.equal(r.cells[0], 'Owner limits'); assert.equal(r.cells[8], 'see [[rs.own]]'); assert.equal(r.cells[7].t, 'FAIL'); assert.equal(r.cells[6].t, '1.500');
   const T = W.SharedReport.text(W.SharedReport.build(M)); assert.ok(!T.includes('Not in the check summary column')); assert.ok(T.includes('Owner limits'));
   assert.ok(M.vals.some(v => v.sec === 'proj' && v.path === `checks.${i}.r` && v.text === '1.500'));
