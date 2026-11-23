@@ -346,8 +346,10 @@
         const sg = own ? segs : gg.segments.map(t => { const p = { D: t.D, tw: t.tw, topB: t.topB, topT: t.topT, botB: t.botB, botT: t.botT }, dk = { ...deckS, beff: gg.beff }, st0 = SEC().steelCore(p);
           return { x0: t.x0, x1: t.x1, Inu: comp ? SEC().composite(p, dk, n, 1).I : st0.I, Icr: comp ? SEC().withRebar(p, dk).I : st0.I }; });
         return { gi: k, label: gg.label || gg.id || 'G' + (k + 1), lines, sb: own ? sbN : sbOf(sg, 'Inu', crack) }; });
+      const tOf = []; types.forEach((t, ti) => t.lines.forEach(j => { tOf[j] = ti; }));
       const same = types.length === 1 && types[0].gi === gi, Iof = (t, x) => { const v = IAt(t.sb, x); return v != null ? v : IAt(sbN, x); };
-      const at = x => { const xe = Math.min(Math.max(x, 1e-6), Lt - 1e-6), parts = types.map(t => ({ label: t.label, n: t.lines.length, lines: t.lines, I: Iof(t, xe) })), sumI = parts.reduce((a, q) => a + q.n * q.I, 0);
+      const at = x => { const xe = Math.min(Math.max(x, 1e-6), Lt - 1e-6), parts = types.map(t => ({ label: t.label, n: t.lines.length, lines: t.lines, I: Iof(t, xe) }));
+        let sumI = 0; for (let j = 0; j < nb; j++) sumI += parts[tOf[j]].I;   // line by line (G1 … Gn), so that the sum does not depend on how the lines are grouped in types
         return { x, nb, E, parts, sumI, Iavg: same ? IAt(sbN, xe) : sumI / nb, Iown: IAt(sbN, xe), same }; };
       let sb = sbN;
       if (!same) { const cuts = new Set(); types.forEach(t => t.sb.forEach(r => { cuts.add(+r[0].toFixed(9)); cuts.add(+r[1].toFixed(9)); })); sbN.forEach(r => { cuts.add(+r[0].toFixed(9)); cuts.add(+r[1].toFixed(9)); });
