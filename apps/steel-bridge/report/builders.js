@@ -202,7 +202,12 @@
       subs.push(sub('d', 'Live load deflection (SA3, 2.5.2.6.2, 3.6.1.3.2)', [tbl(['Span', 'L (ft)', 'x (ft)', '$g_{\\Delta}$', 'Per lane (in)', 'Governing case', '$\\Delta_{LL}$ (in)', 'Limit (in)', 'D/C', 'Status'],
         Mo.ll.map(q => [String(q.k + 1), N(q.L, 2), N(q.x, 1), N(q.gD, 3), N(q.perLane, 3), q.case || '—', { ...N(q.d, 3), key: 'an.defl.LL' + (q.k + 1) }, { ...N(q.lim, 3), key: 'an.defl.lim' + (q.k + 1) }, R3(q.dc), ST[q.status] || q.status])),
         note(why),
-        note(`$\\Delta_{LL} = g_{\\Delta}\\max(\\Delta_{truck}(1 + IM),\\ 0.25\\Delta_{truck}(1 + IM) + \\Delta_{lane})$, IM ${f(S.im, 0)} % on the truck, per lane; the larger of the two cases is kept at each section and named (Governing case); the two are not listed side by side. D/C = $\\Delta_{LL}/\\Delta_{lim}$. $g_{\\Delta}$: all lanes loaded, all girders deflecting equally (2.5.2.6.2), ${A.df && A.df.src}; worked on the [[tab:loads|Loads & LLDF tab]]. Truck axles that do not add to the deflection are neglected (3.6.1.3.1).`)])); }
+        note(`$\\Delta_{LL} = g_{\\Delta}\\max(\\Delta_{truck}(1 + IM),\\ 0.25\\Delta_{truck}(1 + IM) + \\Delta_{lane})$, IM ${f(S.im, 0)} % on the truck, per lane; the larger of the two cases is kept at each section and named (Governing case); the two are not listed side by side. D/C = $\\Delta_{LL}/\\Delta_{lim}$. $g_{\\Delta}$: all lanes loaded, all girders deflecting equally (2.5.2.6.2), ${A.df && A.df.src}; worked on the [[tab:loads|Loads & LLDF tab]]. Truck axles that do not add to the deflection are neglected (3.6.1.3.1).`),
+        // CAMG (2026-11-23): the check of the governing span in one line, with the analysis' own steps of that span and its own note (nothing
+        // about the method is written here: whatever steps and note the engine gives are listed and quoted)
+        ...(() => { const gv = Mo.ll.filter(q => q.status !== 'na').sort((a, b) => b.dc - a.dc)[0] || Mo.ll[0]; if (!gv) return [];
+          const re = new RegExp('^an\\.defl\\.[A-Za-z]+' + (gv.k + 1) + '$'), L = A.steps.filter(q => re.test(q.id)), main = L.find(q => q.id === 'an.defl.LL' + (gv.k + 1)), nt = main && (typeof main.note === 'string' ? main.note : main.note && main.note.lead) || '';
+          return [note(`Check summary, governing span ${gv.k + 1} (x = ${f(gv.x, 1)} ft): $\\Delta_{LL}$ = ${f(gv.d, 3)} in against the criterion L/${gv.ratio} = ${f(gv.lim, 3)} in: D/C = ${f(gv.dc, 3)}, ${ST[gv.status] || gv.status}.${L.length ? ` The analysis' steps of this span: ${L.map(q => `${String(q.label).replace(/\$/g, '')} [[${q.id}]]`).join('; ')}.` : ''}${nt ? ` The step's own note: "${String(nt).replace(/\$/g, '')}"` : ''}`)]; })()])); }
     const c = A.camber, comps = Mo.comps, ser = comps.map(o => ({ name: o.k === 'wet' ? 'Wet deck' : o.name, y: o.y })).concat([{ name: 'Total', y: c.total, c: '#000000' }]);
     const pts = X.detail === 'all' ? c.x.map((x, i) => ({ nm: '', x, v: Object.fromEntries(comps.map(o => [o.k, o.y[i]]).concat([['total', c.total[i]]])), node: i })) : Mo.pts.map(t => ({ nm: `Span ${t.k + 1}, ${t.q === 0 ? '0.0' : t.q === 10 ? '1.0' : '0.' + t.q}L`, x: t.x, v: t.v, node: t.node }));
     subs.push(sub('c', 'Dead-load deflections and camber (6.7.2)', [{ type: 'figure', svg: chart(c.x, ser, { title: 'Dead-load deflections', unit: 'in', sup: A.sup, invert: true }), caption: 'Dead-load deflected shape (downward +, drawn down); in' },
@@ -214,7 +219,17 @@
       if (ok) { const pts = SH.tenths(ok.sup);
         subs.push(sub('all', 'Camber of every girder (tenth points)', [tbl(['Point', 'x (ft)', ...B.cam.map(q => `G${q.j + 1}${q.j === 0 || q.j === nb - 1 ? ' (ext.)' : ''}`)],
           pts.map(t => [`Span ${t.k + 1}, ${t.q === 0 ? '0.0' : t.q === 10 ? '1.0' : '0.' + t.q}L`, N(t.x, 2), ...B.cam.map(q => (q.camber ? N(SH.at(q.camber.x, q.camber.total, t.x), 3) : '—'))]), { caption: 'Total dead-load deflection = camber; in, downward +', wide: true }),
-          note(`Camber = steel + cross-frames + wet deck + DC2 + DW${B.cam.some(q => q.camber && q.camber.ut) ? ' + existing utilities' : ''} of each girder: its own dead loads (deck and overhang, DC2 and DW shares, cross-frame point loads) on the plates of its plate girder (${B.cam.map(q => `G${q.j + 1}: ${(B.P.girders[q.pg] || {}).label || q.pg + 1}`).join(', ')}); the same analysis as the [[tab:defl|Deflection tab]]. Excludes the vertical profile. A girder with no plate girder of its own also takes that plate girder's effective flange width $b_{eff}$ (an exterior girder on an interior plate girder: the interior $b_{eff}$), and any dead loads or distribution factors entered for it as overrides on the Loads tab. A tenth point between two analysis stations: linear between them.${B.cam.some(q => q.err) ? ' Not available: ' + B.cam.filter(q => q.err).map(q => `G${q.j + 1} (${q.err})`).join('; ') + '.' : ''}`)])); } }
+          note(`Camber = steel + cross-frames + wet deck + DC2 + DW${B.cam.some(q => q.camber && q.camber.ut) ? ' + existing utilities' : ''} of each girder: its own dead loads (deck and overhang, DC2 and DW shares, cross-frame point loads) on the plates of its plate girder (${B.cam.map(q => `G${q.j + 1}: ${(B.P.girders[q.pg] || {}).label || q.pg + 1}`).join(', ')}); the same analysis as the [[tab:defl|Deflection tab]]. Excludes the vertical profile. A girder with no plate girder of its own also takes that plate girder's effective flange width $b_{eff}$ (an exterior girder on an interior plate girder: the interior $b_{eff}$), and any dead loads or distribution factors entered for it as overrides on the Loads tab. A tenth point between two analysis stations: linear between them.${B.cam.some(q => q.err) ? ' Not available: ' + B.cam.filter(q => q.err).map(q => `G${q.j + 1} (${q.err})`).join('; ') + '.' : ''}`)]));
+        // CAMG (2026-11-23, engineer's request; display only): each girder's own camber table (the components at the tenth points) and camber
+        // diagram (chart(), the report's plot helper), from the same B.cam values as the table above
+        { const CN = [['steel', 'DC1 steel + cross-frames', 'DC1 steel'], ['wet', 'DC1 wet deck (deck, haunch, forms)', 'DC1 wet deck'], ['sd', 'DC2 + DW', 'DC2 + DW'], ['ut', 'Existing utilities', 'Utilities']], its = [
+            note('Camber = the total dead-load deflection, built into the girder upward: DC1 steel + cross-frames and DC1 wet deck (the whole deck at once) on the steel section, DC2 + DW on 3n. The values are those of the table above and of the [[tab:defl|Deflection tab]] (each girder\'s own analysis); the diagrams plot them upward, the largest total of each span marked. Excludes the vertical profile.')];
+          B.cam.forEach(q => { const cq = q.camber, nm = `G${q.j + 1}${q.j === 0 || q.j === nb - 1 ? ' (exterior)' : ''}`, pg = (B.P.girders[q.pg] || {}).label || q.pg + 1; if (!cq) { its.push(note(`${nm}: not available${q.err ? ` (${q.err})` : ''}.`, true)); return; }
+            const cs = CN.filter(([k]) => k !== 'ut' || cq.ut), sp = q.sup || ok.sup, si = q.supIdx || [];
+            const mk = si.slice(0, -1).map((a, k) => { let i = a; for (let j2 = a; j2 <= si[k + 1]; j2++) if (cq.total[j2] > cq.total[i]) i = j2; return { x: cq.x[i], y: cq.total[i], t: f(cq.total[i], 3) }; });
+            its.push({ type: 'figure', svg: chart(cq.x, cs.map(([k, , n]) => ({ name: n, y: cq[k] })).concat([{ name: 'Total camber', y: cq.total, c: '#000000' }]), { title: `Camber diagram, ${nm}`, unit: 'in', sup: sp, mark: mk }), caption: `Camber diagram, ${nm} (plates of ${pg}): upward camber, in; x in ft; the largest total of each span marked` });
+            its.push(tbl(['Point', 'x (ft)', ...cs.map(([, n]) => n), 'Total camber'], SH.tenths(sp).map(t => [`Span ${t.k + 1}, ${t.q === 0 ? '0.0' : t.q === 10 ? '1.0' : '0.' + t.q}L`, N(t.x, 2), ...cs.map(([k]) => N(SH.at(cq.x, cq[k], t.x), 3)), N(SH.at(cq.x, cq.total, t.x), 3)]), { caption: `Camber table, ${nm}: tenth points; in (a tenth point between two analysis stations: linear between them)` })); });
+          subs.push(sub('cg', 'Camber table and diagram of each girder', its)); } } }
     subs.push(sub('w', 'Worked steps', [gsteps('SBDAnalysisUI:x', '', A.steps.filter(q => DEFL_ID.test(q.id)))]));
     return { title: 'Deflection', note: 'From this girder\'s analysis, as on the [[tab:defl|Deflection tab]].', subs };
   }
@@ -585,7 +600,7 @@
   const FXC = id => /^GS1[23]$/.test(id) ? 'svc' : /^GS([1-4]|22)$/.test(id) ? 'prop' : 'str';   // report/summary.js FLEX_CLS
   const grv = r => (isFinite(r) ? r : Infinity);
   /* banner(text, kind): the verdict as a print-safe SVG box (black on white: border weight and the word carry the status) */
-  const banner = (t, sub2) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 74" width="100%" role="img" aria-label="${t}"><rect x="2" y="2" width="636" height="70" fill="#fff" stroke="#000" stroke-width="${t === 'PASS' ? 2 : 5}"${t === 'PASS WITH NOTES' ? ' stroke-dasharray="14 6"' : ''}/><text x="320" y="40" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="#000">${t}</text><text x="320" y="62" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#000">${sub2}</text></svg>`;
+  const banner = (t, sub2) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 74" width="100%" role="img" aria-label="${t}"><rect x="2" y="2" width="636" height="70" fill="#fff" stroke="#000" stroke-width="${t === 'PASS' ? 2 : 5}"${t === 'PASS WITH NOTES' || t === 'REVIEW' ? ' stroke-dasharray="14 6"' : ''}/><text x="320" y="40" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="#000">${t}</text><text x="320" y="62" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#000">${sub2}</text></svg>`;
   /* exec(B, X): Executive summary (first section): verdict, governing D/C, one row per limit state / check group, the items not in the verdict */
   function exec(B, X) {
     const rows = [], Gr = B.flex, scOf = r => 'flex@' + Gr.rows.indexOf(r), G = gName(B.girder), wk = r => (!X.on || X.on('flex')) && X.have.has(r) && (X.detail !== 'all' || r === Gr.gov), sumOn = !X.on || X.on('sum');   // linked where the location's steps are written out
@@ -638,20 +653,115 @@
       sub('an', 'Analysis method', [kv([['Method', 'Line-girder analysis (stiffness method, staged sections: DC1 on the steel, DC2 and DW on 3n, LL on n) with the approximate distribution factors of Art. 4.6.2.2'],
         ['Applicability (SA4)', AP ? `${lv[AP.level]}${AP.items.filter(q => q.level !== 'ok').length ? ': ' + AP.items.filter(q => q.level !== 'ok').map(q => `${q.title} (${q.val})`).join('; ') : ''}` : '—', 'ap.th']])])] };   // the SA4 steps are worked in the Summary section (ap.*)
   }
-  /* bom(B, X): steel bill of materials of the plate girders: per girder type and plate segment */
-  function bom(B, X) {
-    const P = B.P, M = window.SBDModel, plf = (window.SBDAnalysis && window.SBDAnalysis.STEEL_PLF) || 490 / 144, rows = [], sumT = [];
-    let tot = 0;
+  /* ---------- BOM2 (2026-11-23, engineer's request; report only: no value a check uses is calculated or changed here) ----------
+     The steel the app sizes besides the girder plates, as bill-of-materials items: transverse stiffeners and connection plates and bearing
+     stiffeners (the stiffener types and layout of the Shear & stiffeners module: its TS and BS rows), field splice plates (the Field splices
+     design: fl.top / fl.bot / web of each splice) and cross-frames or diaphragms (the weight the analysis puts in DC1: engine/crossframes.js
+     xfPts, one call per frame of the framing). Each plate: W = b t ℓ × 490/1728 lb, the plate girders' unit weight (STEEL_PLF / 12).
+     bomItems(B) -> plain data of the reported girder { label, stf, brg: [{ item, b, t, L (in), n, how }], spl: [{ name, rows, bolts, … }],
+     xf: { rows, tot, … } | null (the bridge's frames), miss: [text] (what is not known, listed as not included) }. */
+  const PLF = () => (window.SBDAnalysis && window.SBDAnalysis.STEEL_PLF) || 490 / 144;   // lb/ft per in²: steel 490 pcf
+  const plLb = (b, t, L) => b * t * L * PLF() / 12;   // one plate b × t × ℓ (in): lb
+  const bomSum = rows => (rows || []).reduce((a, q) => a + q.n * plLb(q.b, q.t, q.L) / 1000, 0);   // kip
+  function bomItems(B) {
+    const P = B.P, out = { label: gName(B.girder), stf: [], brg: [], spl: [], xf: null, miss: [] }, err = B.err || {};
+    const S = B.shear, TS = S && S.TS, BS = S && S.BS, pl = n => (n === 1 ? '' : 's');
+    if (TS && Array.isArray(TS.rows)) { const m = new Map();
+      TS.rows.forEach(r => { const t = r.t || (TS.types || {})[r.type] || {}, bt = +t.bt, tp = +t.tp, D = +r.D, per = +t.sides === 2 ? 2 : 1; if (!(bt > 0 && tp > 0 && D > 0)) return;
+        const k = [r.type, bt, tp, per, D].join('|'); if (!m.has(k)) m.set(k, { item: `${t.name || 'Type ' + r.type} (type ${r.type}: ${t.role === 'cp' ? 'connection plate' : 'intermediate transverse stiffener'})`, b: bt, t: tp, L: D, loc: 0, per }); m.get(k).loc++; });
+      m.forEach(q => out.stf.push({ item: q.item, b: q.b, t: q.t, L: q.L, n: q.loc * q.per, how: `${q.loc} location${pl(q.loc)} × ${q.per}, ${q.per === 2 ? 'both sides' : 'one side'} of the web` })); }
+    else out.miss.push(`transverse stiffeners and connection plates of ${out.label} (${err.shear || err.an || 'Shear & stiffeners not calculated'})`);
+    if (BS && Array.isArray(BS.rows)) { const m = new Map();
+      BS.rows.forEach(r => { const t = (BS.types || {})[r.type] || {}, bt = +t.bt, tp = +t.tp, np = Math.round(+t.np) || 0, D = +(r.D != null ? r.D : BS.D); if (!(bt > 0 && tp > 0 && np > 0 && D > 0)) return;
+        const k = [r.type, bt, tp, np, D].join('|'); if (!m.has(k)) m.set(k, { item: `Bearing stiffener, ${t.name || 'type ' + r.type} (type ${r.type})`, b: bt, t: tp, L: D, loc: 0, per: 2 * np }); m.get(k).loc++; });
+      m.forEach(q => out.brg.push({ item: q.item, b: q.b, t: q.t, L: q.L, n: q.loc * q.per, how: `${q.loc} support${pl(q.loc)} × ${q.per}, ${q.per / 2} pair${pl(q.per / 2)}` })); }
+    else out.miss.push(`bearing stiffeners of ${out.label} (${err.shear || err.an || 'Shear & stiffeners not calculated'})`);
+    const SL = B.spl && Array.isArray(B.spl.list) ? B.spl.list : null, ok = q => +q.b > 0 && +q.t > 0 && +q.L > 0;
+    if (SL) SL.forEach(s => { const R = s.R, F = R && R.fl, Wb = R && R.web, nm = s.name || `Splice at ${f(s.x, 2)} ft`;
+      if (!F || !F.top || !F.bot || !Wb || !(F.top.Lpl > 0) || !(F.bot.Lpl > 0)) { out.miss.push(`the plates of ${nm}, ${out.label} (no splice design)`); return; }
+      const rows = [], gap = +R.gap || 0, Lw = gap + 2 * (Wb.ew + (Wb.ncw - 1) * Wb.sh + Wb.ewp), bl = (s.p && s.p.bolts) || {};
+      [['Top', F.top], ['Bottom', F.bot]].forEach(([k, q]) => { rows.push({ item: `${k} flange, outer plate`, b: +q.bo, t: +q.to, L: +q.Lpl, n: 1 }); if (q.inner) rows.push({ item: `${k} flange, inner plates`, b: +q.bi, t: +q.ti, L: +q.Lpl, n: 2 });
+        if (q.tfill > 0) out.miss.push(`the ${k.toLowerCase()} flange fill plate of ${nm}, ${out.label} (thickness ${f(q.tfill, 4)} in; its plan size is not an output of the splice design)`); });
+      rows.push({ item: 'Web plates', b: +Wb.hw, t: +Wb.twp, L: Lw, n: 2 });
+      out.spl.push({ name: nm, rows: rows.filter(ok), bolts: 2 * ((+F.top.n || 0) + (+F.bot.n || 0) + (+Wb.nw || 0)), bolt: bl.d ? `${bl.d} in ${bl.gr || ''}`.trim() : '', gap,
+        fl: { ef: F.top.ef, nr: F.top.nr, s: F.top.s, ep: F.top.ep, L: F.top.Lpl }, web: { ew: Wb.ew, nc: Wb.ncw, sh: Wb.sh, ewp: Wb.ewp, L: Lw } }); });
+    else if (err.spl && !/No field splice/.test(err.spl)) out.miss.push(`field splice plates of ${out.label} (${err.spl})`);
+    // cross-frames / diaphragms of the bridge: each frame's weight as the analysis puts it in DC1 (xfPts with that one frame: W, the whole frame)
+    const Fm = B.frm, XF = window.SBDCrossframes, L = Fm && Fm.L, X = Fm && Fm.XF && Fm.XF.X;
+    if (L && L.xf && Array.isArray(L.xf.f) && XF && XF.xfPts && X && X.on) { const m = new Map(), sp = P.spans.lengths.map(Number), k1 = 1 + (+X.allow || 0) / 100;
+      L.xf.f.forEach(fr => { const [sup, , bay, , , Lf] = fr, end = !!sup, G = XF.xfPts({ spans: sp, xf: { g: L.xf.g, f: [fr] } }, X), e = G && G[bay] && G[bay][0]; if (!e || !(e.W >= 0)) return;
+        const ab = X.ab && X.ab[bay], h = X.kind === 'xf' ? (X.hb && X.hb[bay] > 0 ? X.hb[bay] : X.h) : null, S12 = Lf * 12;
+        let mem, work, after = '';
+        if (X.kind === 'ovr') { mem = 'weight per frame entered on the Cross-frames tab'; work = 'entered'; }
+        else if (X.kind === 'dia') { const A = end ? (ab && ab.Ae ? ab.Ae : X.Ae) : (ab ? ab.A : X.A), g = end ? X.ge : X.g, nmD = end ? (ab && ab.Ae ? ab.nm : X.nmE) : (ab && ab.nm ? ab.nm : X.nm);
+          mem = `${nmD || 'diaphragm'}, A = ${f(A, 2)} in²`; work = `$A(S - 2g)(0.2836)(1 + a)/1000$ = ${f(A, 2)}(${f(S12, 2)} − 2(${f(g, 2)}))(0.2836)(${f(k1, 2)})/1000`; }
+        else { const X0 = end || X.type === 'X', d = X0 ? Math.hypot(S12, h) : Math.hypot(S12 / 2, h);
+          mem = `${X0 ? 'X' : X.type === 'Kb' ? 'K (bottom apex)' : 'K (top apex)'}: top ${X.nmT}, bottom ${X.nmB}, 2 diagonals ${X.nmD}`;
+          work = `$(S(A_{t} + A_{b}) + 2 d A_{d})(0.2836)(1 + a)/1000$ = (${f(S12, 2)}(${f(X.At, 3)} + ${f(X.Ab, 3)}) + 2(${f(d, 2)})(${f(X.Ad, 3)}))(0.2836)(${f(k1, 2)})/1000`; after = `, with d = $\\sqrt{${X0 ? 'S^{2}' : '(S/2)^{2}'} + h^{2}}$ = ${f(d, 2)} in`; }
+        const k = [end, Lf, h, mem, e.W].join('|'); if (!m.has(k)) m.set(k, { item: end ? 'At a support' : 'Intermediate', mem, n: 0, Lf, h, W: e.W, work, after }); m.get(k).n++; });
+      const rows = [...m.values()]; out.xf = { kind: X.kind, allow: +X.allow || 0, dia: X.kind === 'dia' || (X.kind === 'ovr' && XF.cfDiaOn && XF.cfDiaOn(P.crossframes || {})), rows, tot: rows.reduce((a, q) => a + q.n * q.W, 0) }; }
+    else out.miss.push(`cross-frames or diaphragms (${(Fm && Fm.L && Fm.L.errors && Fm.L.errors.length ? 'the framing has errors' : '') || err.frm || 'their weight in DC1 is off or not calculated: Cross-frames tab'})`);
+    return out;
+  }
+  /* the tables of one girder's items: [subs], ref(k) = the text / link after "worked in" for section k (shear, spl) */
+  const BOM_HEAD = ['Item', 'Plate b × t (in)', 'Count', 'Length ℓ (in)', 'Each (lb)', 'W (kip)'];
+  const bomRow = q => [q.item, `${f(q.b, 3)} × ${f(q.t, 4)}`, q.how ? `${q.n} (${q.how})` : String(q.n), N(q.L, 3), N(plLb(q.b, q.t, q.L), 1), N(q.n * plLb(q.b, q.t, q.L) / 1000, 3)];
+  const bomEg = q => `${f(q.b, 3)}(${f(q.t, 4)})(${f(q.L, 3)})(490/1728) = ${f(plLb(q.b, q.t, q.L), 1)} lb; × ${q.n} = ${f(q.n * plLb(q.b, q.t, q.L) / 1000, 3)} kip`;
+  function bomItemSubs(id, who, it, ref) {
+    const subs = [], st = it.stf.concat(it.brg);
+    if (st.length) subs.push(sub(id + 's', `Stiffeners and connection plates, ${who}`, [
+      note(`Each plate: W = b t ℓ × 490/1728 lb (steel 490 pcf, Table 3.5.1-1: ${f(PLF() / 12, 5)} lb/in³, the plate girders' unit weight). e.g. ${st[0].item}: ${bomEg(st[0])}. Length ℓ: the web depth D at the stiffener (the corner clips and any cut-back at a flange are not deducted). Width, thickness and the number at each location: the stiffener types of the [[tab:shear|Shear & stiffeners tab]]; the locations: its stiffener layout and the supports${ref('shear')}.`),
+      tbl(BOM_HEAD, st.map(bomRow).concat([['Subtotal: transverse stiffeners and connection plates', '', '', '', '', N(bomSum(it.stf), 3)], ['Subtotal: bearing stiffeners', '', '', '', '', N(bomSum(it.brg), 3)]]), { wide: true, caption: `Quantities of one girder (${who})` })]));
+    if (it.spl.length) { const s0 = it.spl[0], all = [].concat(...it.spl.map(s => s.rows));
+      subs.push(sub(id + 'p', `Field splice plates, ${who}`, [
+        note(`Each plate: W = b t ℓ × 490/1728 lb. Flange plates: ℓ = the splice design's plate length, gap + 2($e_{f}$ + ($n_{r}$ − 1)s + $e_{p}$); e.g. ${s0.name}, top: ${f(s0.gap, 3)} + 2(${f(s0.fl.ef, 3)} + (${s0.fl.nr} − 1)(${f(s0.fl.s, 3)}) + ${f(s0.fl.ep, 3)}) = ${f(s0.fl.L, 3)} in. Web plates (two): ℓ = gap + 2($e_{w}$ + ($n_{c}$ − 1)$s_{h}$ + $e_{wp}$) = ${f(s0.gap, 3)} + 2(${f(s0.web.ew, 3)} + (${s0.web.nc} − 1)(${f(s0.web.sh, 3)}) + ${f(s0.web.ewp, 3)}) = ${f(s0.web.L, 3)} in (as the Drawings' splice detail). e.g. ${s0.name}, ${s0.rows[0].item.toLowerCase()}: ${bomEg(s0.rows[0])}. Plate sizes and bolt patterns: the Field splices design${ref('spl')}.`),
+        tbl(['Splice', ...BOM_HEAD], [].concat(...it.spl.map(s => s.rows.map((q, i) => [i ? '' : s.name, ...bomRow(q)]).concat([[`Subtotal ${s.name}`, '', '', '', '', '', N(bomSum(s.rows), 3)]]))).concat([['Subtotal: field splice plates', '', '', '', '', '', N(bomSum(all), 3)]]), { wide: true, caption: `Quantities of one girder (${who})` }),
+        note(`Bolts (count only; no weight in this table): ${it.spl.map(s => `${s.name}: ${s.bolts}${s.bolt ? ` × ${s.bolt}` : ''}`).join('; ')}.`)])); }
+    return subs;
+  }
+  const bomXfSub = xf => sub('xf', xf.dia ? 'Diaphragms (bridge)' : 'Cross-frames (bridge)', [
+    note(xf.kind === 'ovr' ? 'The weight of each frame is the value entered on the [[tab:cf|Cross-frames tab]] (weight in DC1: entered); member sizes are not listed.'
+      : `Each frame: the weight the analysis puts in DC1 (half on each girder it connects; [[tab:cf|Cross-frames tab]], weight in DC1 from the member sizes), S = the frame length between the girder webs${xf.kind === 'xf' ? ', h = the frame depth, d = the diagonal length' : ', g = the end gap'}, steel 0.2836 lb/in³ (490 pcf), a = the allowance of ${f(xf.allow, 0)} % for gussets, connection plates and bolts. ${xf.rows[0] ? `e.g. ${xf.rows[0].item.toLowerCase()}: ${xf.rows[0].work} = ${f(xf.rows[0].W, 3)} kip${xf.rows[0].after || ''}.` : ''}`),
+    tbl(['Frame', 'Members', 'Count', 'S (ft)', 'h (in)', 'Each (kip)', 'W (kip)'], xf.rows.map(q => [q.item, q.mem, String(q.n), N(q.Lf, 2), q.h != null ? N(q.h, 2) : '—', N(q.W, 3), N(q.n * q.W, 3)]).concat([['Subtotal: ' + (xf.dia ? 'diaphragms' : 'cross-frames'), '', String(xf.rows.reduce((a, q) => a + q.n, 0)), '', '', '', N(xf.tot, 3)]]), { wide: true, caption: 'Every frame of the framing plan (all bays)' })]);
+  /* bomPlates(P): the plate girders (PR3, unchanged): rows per segment, per-type weights w[gi] (kip, one girder) and lines */
+  function bomPlates(P) {
+    const M = window.SBDModel, plf = PLF(), rows = [], sumT = [], w1 = [], nLs = []; let tot = 0;
     (P.girders || []).forEach((g, gi) => { const ln = M.typeLines ? M.typeLines(P, gi) : [], nL = ln.length || 1; let w = 0;
       (g.segments || []).forEach((s, k) => { const A = s.D * s.tw + s.topB * s.topT + s.botB * s.botT, wf = A * plf, L = s.x1 - s.x0, W = wf * L / 1000; w += W;
         rows.push([gName(g), String(k + 1), `${f(s.x0, 2)}–${f(s.x1, 2)}`, `web ${f(s.D, 3)} × ${f(s.tw, 4)}; top ${f(s.topB, 3)} × ${f(s.topT, 4)}; bot ${f(s.botB, 3)} × ${f(s.botT, 4)}`, N(A, 3), N(wf, 2), N(L, 2), N(W, 3)]); });
-      sumT.push([gName(g), N(w, 3), ln.length ? ln.map(j => 'G' + (j + 1)).join(', ') : 'design line (no line assigned)', String(nL), N(w * nL, 3)]); tot += w * nL; });
-    return { title: 'Steel bill of materials', subs: [sub('b', 'Plate girders', [
-      note(`Per plate segment: A = D t_w + b_t t_t + b_b t_b (in²); w = A × 490/144 = A × ${f(plf, 4)} lb/ft (steel 490 pcf, Table 3.5.1-1); W = w ℓ / 1000 (kip). The weights are of the plates as entered (Girders & plates tab).`),
-      tbl(['Girder type', 'Segment', 'x (ft)', 'Plates (in)', 'A (in²)', 'w (lb/ft)', 'ℓ (ft)', 'W (kip)'], rows, { wide: true }),
-      tbl(['Girder type', 'One girder (kip)', 'Lines', 'Number', 'Total (kip)'], sumT.concat([['Bridge total', '', '', '', N(tot, 3)]]), { caption: 'Girder subtotals and the bridge total (plate girders only)' }),
-      ...(() => { const U = M.unassigned ? M.unassigned(P) : []; return U.length ? [note(`Girder lines without a girder type (${U.map(j => 'G' + (j + 1)).join(', ')}) are not checked and not in this total (Girders & plates tab).`, true)] : []; })(),
-      note(`Not included: transverse and bearing stiffeners, connection plates, shear studs, field splice plates and bolts, cross-frames or diaphragms, bearings. The analysis adds a detail allowance of ${f(+((P.xs || {}).allow) || 0, 0)} % to the girder steel dead load (DC1, Analysis section) and the cross-frame weights as point loads; neither is in this table.`)])] };
+      sumT.push([gName(g), N(w, 3), ln.length ? ln.map(j => 'G' + (j + 1)).join(', ') : 'design line (no line assigned)', String(nL), N(w * nL, 3)]); tot += w * nL; w1.push(w); nLs.push(nL); });
+    return { plf, rows, sumT, tot, w1, nLs };
+  }
+  const bomPlatesItems = (P, PL) => [
+    note(`Per plate segment: A = D t_w + b_t t_t + b_b t_b (in²); w = A × 490/144 = A × ${f(PL.plf, 4)} lb/ft (steel 490 pcf, Table 3.5.1-1); W = w ℓ / 1000 (kip). The weights are of the plates as entered (Girders & plates tab).`),
+    tbl(['Girder type', 'Segment', 'x (ft)', 'Plates (in)', 'A (in²)', 'w (lb/ft)', 'ℓ (ft)', 'W (kip)'], PL.rows, { wide: true }),
+    tbl(['Girder type', 'One girder (kip)', 'Lines', 'Number', 'Total (kip)'], PL.sumT.concat([['Bridge total', '', '', '', N(PL.tot, 3)]]), { caption: 'Girder subtotals and the bridge total (plate girders only)' }),
+    ...(() => { const M = window.SBDModel, U = M.unassigned ? M.unassigned(P) : []; return U.length ? [note(`Girder lines without a girder type (${U.map(j => 'G' + (j + 1)).join(', ')}) are not checked and not in this total (Girders & plates tab).`, true)] : []; })()];
+  /* bomTotals(P, PL, units, xf, rest): units = [{ who, gi, n (girders), it }] (the girders whose items are listed), rest = [gi] (girder types
+     with their plates only: the single-girder report); the girder and bridge totals, with what is not included */
+  function bomTotals(P, PL, units, xf, rest) {
+    const rows = []; let tot = 0; const miss = [];
+    units.forEach(u => { const a = PL.w1[u.gi] || 0, b = bomSum(u.it.stf), c = bomSum(u.it.brg), d = bomSum([].concat(...u.it.spl.map(s => s.rows))), one = a + b + c + d; tot += one * u.n;
+      rows.push([u.who, N(a, 3), N(b, 3), N(c, 3), N(d, 3), N(one, 3), String(u.n), N(one * u.n, 3)]); (u.it.miss || []).forEach(t => { if (!/^cross-frames/.test(t) && !miss.includes(t)) miss.push(t); }); });
+    (rest || []).forEach(gi => { const a = PL.w1[gi] || 0, n = PL.nLs[gi] || 1; tot += a * n; rows.push([`${gName(P.girders[gi])} (plates only: its stiffeners and splice plates are in the every-girder report)`, N(a, 3), '—', '—', '—', N(a, 3), String(n), N(a * n, 3)]); });
+    if (xf) { tot += xf.tot; rows.push([xf.dia ? 'Diaphragms (bridge)' : 'Cross-frames (bridge)', '', '', '', '', '', String(xf.rows.reduce((a, q) => a + q.n, 0)), N(xf.tot, 3)]); }
+    else { const t = units.map(u => (u.it.miss || []).find(q => /^cross-frames/.test(q))).find(Boolean); if (t) miss.push(t); }
+    rows.push([(rest || []).length ? 'Bridge total (the other girder types: plates only)' : 'Bridge total', '', '', '', '', '', '', N(tot, 3)]);
+    const al = +((P.xs || {}).allow) || 0, Ua = window.SBDModel.unassigned ? window.SBDModel.unassigned(P) : [];
+    return sub('t', 'Girder and bridge totals', [
+      tbl(['Girder', 'Plates (kip)', 'Transverse stiffeners, connection plates (kip)', 'Bearing stiffeners (kip)', 'Splice plates (kip)', 'One girder (kip)', 'Number', 'Total (kip)'], rows, { wide: true, caption: 'One girder = plates + stiffeners + connection plates + bearing stiffeners + splice plates; total = one girder × number; bridge total = the sum of the rows' }),
+      note(`Not included: shear studs; field splice bolts (counted above, no weight) and fill plates; cross-frame gusset and connection plates and their bolts beyond the allowance in the frame weight; lateral bracing; bearings and sole plates; welds${miss.length ? '; ' + miss.join('; ') : ''}. The analysis adds a detail allowance of ${f(al, 0)} % to the girder steel dead load (DC1, Analysis section) and the cross-frame weights as point loads; the allowance is not in this table.${Ua.length ? ` Girder lines without a girder type (${Ua.map(j => 'G' + (j + 1)).join(', ')}) have no girder in these totals; the frames of every bay are counted.` : ''}`)]);
+  }
+  /* bom(B, X): steel bill of materials: the plate girders of every type (PR3), then the reported girder's stiffeners, connection plates and
+     splice plates and the bridge's cross-frames (BOM2), the girder and bridge totals */
+  function bom(B, X) {
+    const P = B.P, PL = bomPlates(P), it = bomItems(B), G = gName(B.girder), an = (X && X.anch) || new Set();
+    const ref = k => { const ks = (k === 'shear' ? ['bom.ts', 'bom.bs'] : ['bom.spl']).filter(a => an.has(a)); return ks.length ? ` (see ${ks.map(a => `[[${a}]]`).join(', ')})` : ` (the ${k === 'shear' ? 'Shear & stiffeners' : 'Field splices'} section is not in this report)`; };
+    const rest = (P.girders || []).map((g, gi) => gi).filter(gi => gi !== B.g);
+    return { title: 'Steel bill of materials', subs: [sub('b', 'Plate girders', bomPlatesItems(P, PL)),
+      ...bomItemSubs('g', `girder ${G}`, it, ref), ...(it.xf ? [bomXfSub(it.xf)] : []),
+      bomTotals(P, PL, [{ who: `Girder ${G}`, gi: B.g, n: PL.nLs[B.g] || 1, it }], it.xf, rest)].concat(
+      (PL.nLs[B.g] || 1) > 1 ? [sub('n', 'Lines of this girder type', [note(`Girder type ${G} is on ${PL.nLs[B.g]} lines: its stiffeners, connection plates and splice plates are counted here as those of the reported line on each of them. The every-girder report (Report tab, scope "Every girder") lists each line's own.`)])] : []) };
   }
   /* dfFigs(B): the cross-section with the wheel positions of each LLDF case (ui/gfxa.js loadsGraphic, the tab's own drawing), exterior girder G1 and the reported girder, span 1 */
   function dfFigs(B) {
@@ -681,10 +791,11 @@
   }
 
   const BUILD = { proj, loads, an, defl, sec, flex, shear, fat, cn, frm, spl, wd, rt };
+  const BOM_ANCH = { shear: { ts: 'bom.ts', bs: 'bom.bs' }, spl: { list: 'bom.spl' } };   // section: { sub id: anchor key }
   const NEED = { loads: 'loads', an: 'an', defl: 'an', sec: 'sec', flex: 'flex', shear: 'shear', fat: 'fat', cn: 'cn', frm: 'frm', spl: 'spl', wd: 'wd', rt: 'rating' };
   function model(B, opt) {
     opt = opt || {};
-    const inc = opt.include || null, on = k => !inc || inc[k] !== false, X = { detail: opt.detail === 'all' ? 'all' : 'gov', have: new Map(), gov: [], warn: [] };
+    const inc = opt.include || null, on = k => !inc || inc[k] !== false, X = { detail: opt.detail === 'all' ? 'all' : 'gov', have: new Map(), gov: [], warn: [], on, anch: new Set() };   // on, anch: BOM2 (2026-11-23), the bill of materials links only into the subsections written in this report (BOM_ANCH)
     const P = B.P, p = P.project || {}, secs = [], built = [], dropped = [];
     const dataOf = { loads: B.loads, an: B.src === 'file' ? B.pl : B.an, defl: B.src === 'file' ? null : B.an, sec: B.sec, flex: B.flex, shear: B.shear, fat: B.fat, cn: B.cn, frm: B.frm, spl: B.spl, wd: B.wd, rt: B.rating };
     SECTIONS.forEach(([k, label]) => {
@@ -699,7 +810,8 @@
       // every module is built (the summary links to its governing check; references into it are found below); a section not chosen is dropped
       const g0 = X.gov.length, h0 = new Set(X.have.keys());
       let s; try { s = BUILD[k](B, X); } catch (e) { s = { title: label, subs: [sub('n', 'Not available', [note('Report error: ' + (e && e.message), true)])] }; }
-      if (want) { built.push(k); secs.push({ id: k, ...s }); return; }
+      if (want) { if (BOM_ANCH[k]) s.subs.forEach(q => { const a = BOM_ANCH[k][q.id]; if (a && !q.key) { q.key = a; X.anch.add(a); } });   // BOM2: "§n.m" anchors of the subsections the bill of materials takes its sizes from
+        built.push(k); secs.push({ id: k, ...s }); return; }
       // not chosen: its summary rows stay, without a link (their work is not in this report); later sections do not link into it
       X.gov.slice(g0).forEach(q => { q.key = null; q.loc += ' (section not included)'; });
       [...X.have.keys()].forEach(r => { if (!h0.has(r)) X.have.delete(r); });
@@ -741,7 +853,65 @@
   /* govRows(B): one girder's summary rows (model(B).gov: each check group's governing ratio or RF, the modules' own values), as plain data */
   function govRows(B) {
     const M = model(B, { detail: 'gov' });
-    return { rows: M.gov.map(q => ({ grp: q.grp || q.mod, mod: q.mod, check: q.check, loc: q.loc, r: q.r, rf: q.rf, status: q.status })), err: { ...B.err } };
+    const out = { rows: M.gov.map(q => ({ grp: q.grp || q.mod, mod: q.mod, check: q.check, loc: q.loc, r: q.r, rf: q.rf, status: q.status })), err: { ...B.err } };
+    // EXA (2026-11-23): the girder's Summary cells (report/summary.js cells(): the Summary tab's own columns and statuses, from this bundle),
+    // for the every-girder Executive summary; BOM2: its bill-of-materials items. Plain data; absent when the module is not loaded.
+    const SM = window.SBDSummary;
+    if (SM && SM.cells && SM.MODS && B.src !== 'file' && !B.custom) { try { const parts = {}; SM.MODS.forEach(m => { parts[m.k] = m.k === 'an' ? B : {}; });
+      const G = SM.cells(B.P, B.g, parts), D = G.depth; out.sum = { gi: G.gi, label: G.label, cells: G.cells, warn: G.warn, notes: [], err: G.err, gov: [], ...(D ? { depth: { flagged: !!D.flagged, comp: D.comp, rows: (D.rows || []).map(q => ({ k: q.k, need: q.need, have: q.have })) } } : {}) }; } catch (e) { /* no Executive summary for this build */ } }
+    try { out.bom = bomItems(B); } catch (e) { /* no bill of materials items */ }
+    return out;
+  }
+  /* ---------- every girder: Executive summary and bill of materials (EXA, BOM2; 2026-11-23, engineer's request; display only) ----------
+     allExec(P, list): the Summary tab's own verdict of the bridge. Each girder's Summary cells (report/summary.js cells(), kept by govRows
+     as G.sum) go through the same merge() (a type on several lines) and overall() the Summary tab calls, so the verdict, the counts, the
+     governing D/C and each limit state's governing girder are that tab's values by construction (with this project's analysis as the
+     demands). One row per limit state (the Summary tab's columns); each value links to that girder's governing checks in this report (§)
+     and names the tab that works it (in-app link). null when the Summary module or a girder's cells are missing (no section then). */
+  const TABN = { flex: 'Flexure', shear: 'Shear & stiffeners', fat: 'Fatigue & studs', cn: 'Constructibility', cf: 'Cross-frames', spl: 'Field splices', wt: 'Welds', defl: 'Deflection', rt: 'Rating', an: 'Analysis' };
+  function allExec(P, list) {
+    const SM = window.SBDSummary; if (!SM || !SM.overall || !SM.merge || !list.length || !list.every(G => G.sum && G.sum.cells)) return null;
+    const by = new Map(); list.forEach((G, k) => { if (!by.has(G.gi)) by.set(G.gi, []); by.get(G.gi).push({ j: G.j, G: G.sum, k }); });
+    const T = [...by.entries()].map(([gi, us]) => ({ gi, us, S: SM.merge(P, gi, us) })).filter(t => t.S);
+    const ov = SM.overall(P, T.map(t => t.S)), n = ov.n, COLS = SM.COLS.map(c => SM.label(c, P));
+    let AP = null; try { AP = window.SBDAnalysis && window.SBDAnalysis.applicability ? window.SBDAnalysis.applicability(P) : null; } catch (e) { AP = null; }
+    const apFail = !!(AP && AP.level === 'fail'), verdict = apFail ? 'FAIL' : ov.verdict;   // ui/summary.js paint(): an applicability FAIL fails the verdict
+    const kOf = (S, q) => { const t = T.find(z => z.S === S), u = t && (q.ln != null ? t.us.find(z => z.j === q.ln) : null) || (t && t.us[0]); return u ? u.k : 0; };
+    const gl = (S, q) => `${S.label}${q.ln != null ? ` on G${q.ln + 1}` : ''}`, nf = r => (isFinite(r) ? f(r, 3) : r === Infinity ? '∞' : r === -Infinity ? '−∞' : 'NaN');
+    const stT = { pass: 'PASS', fail: 'FAIL', review: 'REVIEW', na: 'n/a', notrun: 'not run' }, chk = (c, q) => (q.check ? (/^flex/.test(c.id) ? tt(q.check) : q.check) : '—');
+    const val = (c, q, k) => (q.st === 'na' || q.st === 'notrun' ? '—' : c.rf ? { t: `RF ${isFinite(q.rf) ? f(q.rf, 2) : '—'}`, n: true, cls: !isFinite(q.rf) ? '' : q.rf < 1 - 1e-9 ? 'ng' : q.rf < 1.1 ? 'hi' : 'ok', key: 'per.g' + k } : { t: nf(q.r), n: true, cls: rc(q.r), key: 'per.g' + k });
+    const cnt = c => { const a = { fail: 0, review: 0, pass: 0 }; T.forEach(t => { const q = t.S.cells[c.id]; if (q && a[q.st] != null) a[q.st]++; }); return `${a.fail} / ${a.review} / ${a.pass}`; };
+    const rows = COLS.map(c => { const z = ov.byCol[c.id]; if (!z) return null; const q = z.q, k = kOf(z.G, q);
+      return { cells: [c.head, chk(c, q), q.st === 'na' || q.st === 'notrun' ? '—' : gl(z.G, q), q.loc || '—', val(c, q, k), stT[q.st] || q.st, cnt(c), `[[tab:${c.tab}|${TABN[c.tab] || c.tab} tab]]`], cls: q.st === 'fail' ? 'gov' : '' }; }).filter(Boolean);
+    const out = [];   // not in the verdict
+    T.forEach(t => { const D = t.S.depth; if (D) out.push(['Span-to-depth guidance (Art. 2.5.2.6.3, optional criteria)', t.S.label, D.flagged ? 'below optional AASHTO depth guidance' : 'meets the optional guidance', (D.rows || []).map(q => `${q.k}L = ${f(q.need, 2)} in vs ${f(q.have, 2)} in`).join('; ')]); });
+    if (AP) AP.items.filter(q => q.level === 'warn' || q.level === 'note').forEach(q => out.push([`Applicability of the line-girder analysis (SA4): ${q.title}`, 'bridge', q.level === 'warn' ? 'WARNING' : 'NOTE', `${q.val}: ${q.msg}`]));
+    COLS.forEach(c => T.forEach(t => { const q = t.S.cells[c.id]; if (q && (q.st === 'na' || q.st === 'notrun')) out.push([`${c.head}: no check`, t.S.label, stT[q.st], q.why || '']); }));
+    T.forEach(t => (t.S.warn || []).forEach(w => out.push(['Warning (for review)', t.S.label, 'Warning', w])));
+    const top = ov.top, low = ov.low, CD = window.SBDCustomDemands, cu = CD && CD.srcGet ? ['flex', 'shear', 'cn', 'fat', 'rt', 'spl', 'wt'].filter(k => CD.srcGet(P, k) === 'custom') : [];
+    const Ua = window.SBDModel.unassigned ? window.SBDModel.unassigned(P) : [];
+    const items = [{ type: 'figure', svg: banner(verdict, `Every girder: ${n.fail} FAIL, ${n.review} REVIEW, ${n.pass} PASS${n.na ? `, ${n.na} n/a` : ''} (${T.length} girder type${T.length === 1 ? '' : 's'} × ${COLS.length} limit states)${apFail ? ' + analysis applicability FAIL' : ''}`),
+        caption: 'Verdict of the bridge, by the rules of the [[tab:sum|Summary tab]]: FAIL where a demand / capacity ratio exceeds 1.0, a rating factor RF is below 1.0, or the line-girder analysis is not applicable (SA4 FAIL); else REVIEW where a ratio is not a number or a module item has a Warning status (welds, cross-frames, deflection over the owner\'s preferred limit); else PASS. Counts: one per girder type and limit state (the columns of the Summary tab).' },
+      top ? note(`Governing D/C: ${nf(top.q.r)} (${top.c.head}; girder ${gl(top.G, top.q)}, ${chk(top.c, top.q)}, ${top.q.loc}) [[per.g${kOf(top.G, top.q)}]].${low ? ` Lowest rating factor: ${f(low.q.rf, 2)} (${low.c.head.replace('Rating, ', '')}; girder ${gl(low.G, low.q)}, ${low.q.loc}) [[per.g${kOf(low.G, low.q)}]].` : ''}`, top.q.r > 1 + 1e-9) : low ? note(`Lowest rating factor: ${f(low.q.rf, 2)} (girder ${gl(low.G, low.q)}, ${low.q.loc}) [[per.g${kOf(low.G, low.q)}]].`, low.q.rf < 1 - 1e-9) : null,
+      apFail ? note(`Line-girder analysis not applicable (SA4 FAIL): ${AP.items.filter(q => q.level === 'fail').map(q => `${q.title}, ${q.val}`).join('; ')}: refined analysis required (worked in each girder's report, Summary section, and on the [[tab:an|Analysis tab]]).`, true) : null,
+      ov.nan.length ? note(`Not evaluated (ratio not a number; counted as REVIEW): ${ov.nan.map(z => `${z.c.head}, girder ${gl(z.G, z.q)}, ${z.q.loc}: ${chk(z.c, z.q)}, ratio ${nf(z.q.r)}`).join('; ')}.`, true) : null,
+      cu.length ? note(`Custom (entered) demands are chosen on a tab (${cu.map(k => (CD.SPECS && CD.SPECS[k] ? CD.SPECS[k].name : k)).join(', ')}): the Summary tab uses them for those modules; this report uses this project's analysis for every module, so those rows can differ from the Summary tab.`, true) : null,
+      Ua.length ? note(`Line${Ua.length > 1 ? 's' : ''} ${Ua.map(j => 'G' + (j + 1)).join(', ')} ${Ua.length > 1 ? 'have' : 'has'} no girder type and ${Ua.length > 1 ? 'are' : 'is'} not checked: the verdict covers the lines of the girder types only.`, true) : null,
+      tbl(['Limit state', 'Governing check', 'Governing girder', 'Location', 'D/C or RF', 'Status', 'Girder types FAIL / REVIEW / PASS', 'Worked on'], rows, { wide: true, caption: 'One row per limit state: the girder that governs it (the largest D/C; the smallest RF), the same values as the Summary tab. Each D/C or RF links to that girder\'s governing checks in this report; the value is worked on the tab named and in that girder\'s own report (Report tab, scope "Selected girder"), in the section of the same name.' }),
+      out.length ? tbl(['Not included in the verdict', 'Girder', 'Status', 'Value'], out) : note('Not included in the verdict: none.'),
+      note('Items not included in the verdict are listed so that this summary never reads as all-pass while something is open: the span-to-depth guidance is optional (2.5.2.6.3; e.g. clearance-limited structures), applicability warnings and notes do not change the verdict, a limit state with no check is not counted, warnings are for review (a module item with a Warning status is already counted as REVIEW above).')];
+    return { id: 'exec', title: 'Executive summary', subs: [sub('v', 'Every girder: verdict', items)], verdict, ov };
+  }
+  /* allBom(P, list): the bill of materials of the bridge from every girder's items (govRows().bom): the plate girders, each girder's
+     stiffeners, connection plates and splice plates (girders with the same items listed once), the cross-frames, the totals */
+  function allBom(P, list) {
+    if (!list.length || !list.every(G => G.bom)) return null;
+    const PL = bomPlates(P), grp = new Map();
+    list.forEach(G => { const it = G.bom, k = JSON.stringify([G.gi, it.stf, it.brg, it.spl]); if (!grp.has(k)) grp.set(k, { gi: G.gi, it, labs: [], miss: [] }); const g = grp.get(k); g.labs.push(G.label); (it.miss || []).forEach(t => { if (!g.miss.includes(t)) g.miss.push(t); }); });
+    const U = [...grp.values()].map(g => ({ who: `Girder ${g.labs.join(', ')}`, gi: g.gi, n: g.labs.length, it: { ...g.it, miss: g.miss } }));
+    const xf = (list.find(G => G.bom.xf) || { bom: {} }).bom.xf || null, ref = k => ` (that girder's report, ${k === 'shear' ? 'Shear & stiffeners' : 'Field splices'} section)`;
+    return { id: 'bom', title: 'Steel bill of materials', subs: [sub('b', 'Plate girders', bomPlatesItems(P, PL)),
+      ...[].concat(...U.map((u, i) => bomItemSubs('g' + i, u.who.replace(/^Girder/, 'girder'), u.it, ref))), ...(xf ? [bomXfSub(xf)] : []), bomTotals(P, PL, U, xf, [])] };
   }
   /* allModel(P, list, opt): the report of every girder: per check group the governing ratio (or RF) of each girder, the controlling
      girder of the group (largest ratio; smallest RF) marked, and the girder that controls the whole bridge; then each girder's governing
@@ -770,15 +940,18 @@
       low ? note(`Lowest rating factor: ${low.G.label}, ${low.q.check.replace(/,.*$/, '')} ${f(low.q.rf, 2)} (${low.q.loc}).`, low.q.rf < 1 - 1e-9) : null,
       tbl(head, rows, { wide: true }),
       errs.length ? note('Not in this summary: ' + errs.map(G => `${G.label}: ${Object.entries(G.err).map(([k, v]) => `${(SECTIONS.find(s => s[0] === k) || [k, k])[1]} ${v}`).join('; ')}`).join(' | '), true) : null])];
-    const per = list.map((G, k) => sub('g' + k, `Girder ${G.label}${top && G === top.G ? ' (controls)' : ''}`, [
+    const per = list.map((G, k) => ({ key: 'per.g' + k, ...sub('g' + k, `Girder ${G.label}${top && G === top.G ? ' (controls)' : ''}`, [
       tbl(['Module', 'Check', 'Location', 'Ratio / RF', 'Status'], (G.rows || []).map(q => q.rf != null
         ? [q.mod, q.check, q.loc, { t: `RF ${isFinite(q.rf) ? f(q.rf, 2) : '—'}`, n: true, cls: !isFinite(q.rf) ? '' : q.rf < 1 - 1e-9 ? 'ng' : q.rf < 1.1 ? 'hi' : 'ok' }, isFinite(q.rf) ? (q.rf >= 1 - 1e-9 ? 'OK' : 'RF < 1') : '—']
-        : { cells: [q.mod, q.check, q.loc, R3(q.r), q.status === 'warn' ? 'Warning' : okT(q.r)], cls: q.r > 1 + 1e-9 ? 'gov' : '' }), { wide: true })]));
+        : { cells: [q.mod, q.check, q.loc, R3(q.r), q.status === 'warn' ? 'Warning' : okT(q.r)], cls: q.r > 1 + 1e-9 ? 'gov' : '' }), { wide: true })]) }));
+    // EXA, BOM2 (2026-11-23): the Executive summary first, the bill of materials last (each only when every girder's data is there)
+    let EX = null, BM = null; try { EX = allExec(P, list); } catch (e) { EX = { id: 'exec', title: 'Executive summary', subs: [sub('n', 'Not available', [note('Report error: ' + (e && e.message), true)])] }; }
+    try { BM = allBom(P, list); } catch (e) { BM = { id: 'bom', title: 'Steel bill of materials', subs: [sub('n', 'Not available', [note('Report error: ' + (e && e.message), true)])] }; }
     return { title: 'Steel Bridge Design', subtitle: `Calculation report: every girder (governing ratios)${p.name ? ', ' + p.name : ''}`, code: `${ED}; MBE 4th Ed. (2026) (load rating). Governing ratio of each check group, every girder; each value is worked in that girder's own report.`,
       info: [['Project No', p.number], ['Computed by', p.designer], ['Date', p.date], ['Project', p.name], ['Checked by', p.checker], ['Owner', window.SBDModel.clientName(P)]],
       head: { left: `${p.name || 'Steel Bridge Design'}${p.number ? ' (' + p.number + ')' : ''}\nEvery girder`, right: `Computed by: ${p.designer || '—'}  Date: ${p.date || '—'}\nChecked by: ${p.checker || '—'}`, foot: `Steel Bridge Design, ${ED}` },
-      sections: [{ id: 'all', title: 'Summary of every girder', subs }, { id: 'per', title: 'Governing checks of each girder', subs: per }], top, low, ctl: C };
+      sections: [EX ? { id: EX.id, title: EX.title, subs: EX.subs } : null, { id: 'all', title: 'Summary of every girder', subs }, { id: 'per', title: 'Governing checks of each girder', subs: per }, BM].filter(Boolean), top, low, ctl: C, verdict: EX && EX.verdict, ov: EX && EX.ov };
   }
 
-  window.SBDReportBuild = { SECTIONS, model, govRows, allModel };
+  window.SBDReportBuild = { SECTIONS, model, govRows, allModel, bomItems };
 })();

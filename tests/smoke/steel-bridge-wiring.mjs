@@ -51,7 +51,7 @@ try {
   await p.waitForSelector('.rp-doc .rp-tbl', { timeout: 180000 });
   const rp = await p.evaluate(() => ({ secs: [...document.querySelectorAll('.rp-doc .rp-h1')].map(h => h.textContent.trim()), kErr: document.querySelectorAll('.rp-doc .katex-error').length,
     rows: document.querySelectorAll('.rp-doc .rp-tbl')[0].querySelectorAll('tbody tr').length, text: document.querySelector('.rp-doc').innerText }));
-  assert.equal(rp.kErr, 0); assert.ok(rp.rows >= 12, `${rp.rows} check groups`); assert.match(rp.secs[0], /Summary of every girder/); assert.match(rp.text, /Controlling girder: G1/);
+  assert.equal(rp.kErr, 0); assert.ok(rp.rows >= 12, `${rp.rows} check groups`); assert.match(rp.secs[0], /Executive summary/); assert.match(rp.secs[1], /Summary of every girder/);   // the Executive summary first (2026-11-23) assert.match(rp.text, /Controlling girder: G1/);
   assert.ok(!/NaN|undefined|\[object/.test(rp.text), 'bad text');
   await p.selectOption('#rp_scope', 'girder'); await p.waitForSelector('#rp_detail');
   assert.deepEqual(errs, [], 'console errors');
