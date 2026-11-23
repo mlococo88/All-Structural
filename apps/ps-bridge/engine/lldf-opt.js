@@ -103,7 +103,7 @@
     const o = ofProject(P);
     return `<b>${TXT.skewV}</b> (AASHTO LRFD 10th Ed. Art. 4.6.2.2.3c, Table 4.6.2.2.3c-1). <b>${TXT.all}</b> (default): the correction c<sub>V</sub> on the shear distribution factor of every girder line. <b>${TXT.ext}</b>: on the exterior girder lines only; an interior I-girder, bulb tee or NEXT beam takes DF<sub>V</sub> = g<sub>V</sub> (no correction). Box beams and deck slabs (adjacent beams, types f / g) keep the correction on every beam with either choice. `
       + `<b>${TXT.extMin}</b> (owner / engineer policy; default No): Yes: an exterior girder's DF<sub>M</sub> and DF<sub>V</sub> are not taken less than the interior girder's, computed by the interior equations (4.6.2.2.2b, 4.6.2.2.3a) with the exterior girder type's own section and the largest interior girder spacing; the fatigue factor is not raised. `
-      + `Both as the Steel Bridge app (its Loads tab, Distribution). They apply to the factors this app computes: not to entered factors, nor to imported live load. Worked on the <a href="#" data-gotab="lds">Loads &amp; LLDF tab</a> (steps "Distribution options").`
+      + `Both as the Steel Bridge app (its Loads tab, Distribution). They apply to the factors this app computes: not to entered factors, nor to imported live load. Worked on the <a href="#" data-gotab="lds">Loads &amp; LLDF tab</a> (steps "Distribution factors used").`
       + (o.skewExt || o.extMin ? ` <b>On now:</b> ${[o.skewExt ? `${TXT.skewV}: ${TXT.ext}` : '', o.extMin ? TXT.extMin : ''].filter(Boolean).join('; ')}.` : '');
   }
   /* steps(add, inp, R, h): the worked steps of the options (ids ld.lo.*), placed before the two "distribution factor used" steps */
