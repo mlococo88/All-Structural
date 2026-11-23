@@ -46,6 +46,9 @@
                       2026-11-23 (PL-A), optional within it: ped (psf, the pedestrian live load of AASHTO LRFD 10th Ed. 3.6.1.6 on the
                       sidewalks wider than 2.0 ft; absent, blank or 0 = none: no result changes) and extra[i].cat 'UT' (a utility line
                       load, DW) (engine/bridge-dl.js, engine/pl.js).
+                      2026-11-23 (UT-N), optional within it: extra[i].cat 'UTN' (a utility on the noncomposite section, DW load factors)
+                      and 'UF' (the future utility allowance, noncomposite, γ 1.25 / 0), the Steel Bridge app's UT and UF
+                      (engine/bridge-dl.js, engine/ut.js). 'UT' stays the composite utility of PL-A. Absent = as before.
      types:   [{ id, label, span, lines: [g, …], ovr: { '<engine path>': value } }]  added 2026-11-13 (PR 3a-1, plan §2.4 "groups", PS-8), optional
                       within version 1: the girder types of each span on its girder lines (engine/bridge.js): each type is the base design with
                       its own overrides (ovr), checked on every line in lines (1-based, of nb). A project saved without it is migrated on load

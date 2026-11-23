@@ -131,7 +131,7 @@ test('round trip: export -> import -> export byte-identical with every new field
 test('input checks of the new fields', () => {
   const P = M.newProject(), q = P.xs.dl;
   q.barL = { type: 'curb', cw: 12 }; q.barR.face = -1; q.swL = { w: 4, t: 8, fenceX: 5 }; q.med = { w: 2 }; q.wcA = 0; q.wsMode = 'thk';
-  q.ovl = [{ name: 'o', mode: 'thk', thk: 1 }]; q.extra = [{ name: 'x', cat: 'UF', x: 3, plf: 0.1, dist: 'r64' }];   // PL-A (2026-11-23): 'UT' is offered now (a utility, DW); 'UF' is still not
+  q.ovl = [{ name: 'o', mode: 'thk', thk: 1 }]; q.extra = [{ name: 'x', cat: 'PL', x: 3, plf: 0.1, dist: 'r64' }];   // PL-A (2026-11-23): 'UT' is offered now (a utility, DW). UT-N (2026-11-23): 'UTN' and 'UF' too; 'PL' is not a row category (the pedestrian load is entered with the sidewalks)
   const E = W.PSBInputCheck.collect(P).errors.map(e => e.path);
   ['xs.dl.barL.ch', 'xs.dl.barL.rw', 'xs.dl.barL.rp', 'xs.dl.barR.face', 'xs.dl.swL.fenceX', 'xs.dl.med.t', 'xs.dl.wcA', 'xs.dl.wsThk', 'xs.dl.wsGam', 'xs.dl.ovl.0.gam', 'xs.dl.extra.0.cat', 'xs.dl.extra.0.dist']
     .forEach(p => assert.ok(E.includes(p), p + ' in ' + E.join()));

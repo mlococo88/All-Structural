@@ -26,6 +26,8 @@
     { key: 'ap', title: 'Line-girder analysis: ranges of applicability of the distribution factors', ref: A + '4.6.2.2, Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1, 4.6.2.2.2e-1, 4.6.2.2.3a-1, 4.6.2.2.3b-1, 4.6.2.2.3c-1', ids: /^ld\.ap\./, res: /^ld\.ap\.r$/ },
     // PL-A (2026-11-23): the pedestrian live load (engine/pl.js, steps ld.pl.*; only with one)
     { key: 'pl', title: 'Pedestrian live load (with the vehicular live load)', ref: A + '3.6.1.6, 3.6.2.1, Table 3.4.1-1', ids: /^ld\.pl\./, res: /^ld\.pl\.MLLPL$/ },
+    // UT-N (2026-11-23): utilities on the noncomposite section and the future utility allowance (engine/ut.js, steps ld.ut.*; only with one)
+    { key: 'ut', title: 'Utilities on the noncomposite section (UT) and the future utility allowance (UF)', ref: A + '3.5.1, Tables 3.4.1-1, 3.4.1-2; as the Steel Bridge app', ids: /^ld\.ut\./, res: /^ld\.ut\.MuU$/ },
     { key: 'll', title: 'Live load per girder', ref: A + '3.6.1.3, 4.6.2.2', ids: /^ld\.(xfp|xfn|xfv|MLL|VLL)$/, res: /^ld\.MLL$/ }];   // xf*: batch D1, the factors on imported live load
   function output(ctx) {
     const { R, inp, P } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, df = R.df, cp = R.cp, own = R.own;
@@ -85,6 +87,7 @@
       + `<p class="note">${inp.loads.dfAuto ? `AASHTO equations, cross-section type ${df.isNext ? '(i)/(j)' : '(k)'}; S = ${k.fx(df.isNext ? df.Sf : inp.S, 3)} ft, L = ${k.fx(R.L, 2)} ft, N<sub>b</sub> = ${inp.nGirders}.` : 'Distribution factors entered on the Loads tab.'} Position and skew from the bridge (<a href="#" data-goin="gird">Design girder card</a>).</p>`);
     }
     if (R.pl) h += pedCard(ctx);   // PL-A: the pedestrian live load of this girder line
+    if (R.ut) h += utCard(ctx);    // UT-N: the noncomposite utilities of this girder line
     if (R.useExt) h += importedLL(ctx);   // batch D1: the imported live load and its factors
     h += everyLine(ctx);   // 2026-11-15 (batch C): the dead loads and distribution factors of every girder line (the steel app's tables)
     h += k.card('Worked steps: loads and distribution factors', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value.</p>${k.steps(ctx.W.loads.steps, TOPICS, OPEN)}`);
@@ -107,6 +110,37 @@
     return k.card(`Line-girder analysis applicability: ${k.esc(a.kind)}`, `<div class="${a.level === 'fail' && !a.entered ? 'alert err' : a.level === 'warn' ? 'alert' : 'note'}" id="apBanner" data-aplevel="${a.entered ? 'entered' : a.level}" role="${a.level === 'fail' ? 'alert' : 'status'}">${head}</div>
       <div class="tscroll"><table class="tbl" id="apTbl"><thead><tr><th class="lft">Item</th><th>Value</th><th>Range</th><th class="lft">AASHTO LRFD 10th Ed.</th><th class="lft">Result</th></tr></thead><tbody>${rows}${extra}</tbody></table></div>
       <p class="note">The values the distribution factors of this girder line were computed with (S, t<sub>s</sub>, L, N<sub>b</sub>, K<sub>g</sub>, d<sub>e</sub>, the larger skew of the span's supports). As the Steel Bridge app's applicability check: a computed factor outside its range is a FAIL; entered factors are not tested. Every girder type and line is tested (the check summary and the Summary tab show the ones that fail).</p>`, 'card-ap');
+  }
+  /* utCard(ctx) (UT-N, 2026-11-23): the utility on the noncomposite section (UT) and the future utility allowance (UF) of the girder shown
+     (R.ut, engine/ut.js): the line's shares, their moments and shears on the girder alone, the load factors and where each enters, each
+     with the § of its worked step; with an allowance, the checks whose ratio is larger with it absent. Display only. */
+  function utCard(ctx) {
+    const { R, P } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, q = R.ut, dg = window.PSBDesign.sel(P).g, DL = window.PSBBridgeDL, dist = !!(DL && DL.on(P));
+    const hasT = q.wUT !== 0, hasF = q.wUF !== 0, f = (v, d) => (typeof v === 'number' && isFinite(v) ? k.fx(v, d) : '—');
+    // one column per load: the share, its effects on the girder alone, the load factors and where it enters, each with its §
+    const c = (t, u) => `<td>${hasT ? t : '—'}</td><td>${hasF ? u : '—'}</td>`;
+    const tbl = `<div class="tscroll"><table class="tbl" id="utTbl"><thead><tr><th class="lft">Noncomposite utilities of this girder line</th><th>Utility (UT)</th><th>Future utility allowance (UF)</th></tr></thead><tbody>
+      <tr><td class="lft">Line load on this girder line</td>${c(`<b>${ev('ut.wUT', 4, 'klf')}</b> ${dist ? wk(`dl.G${dg}.UTN`) : wk('ld.ut.wUT')}`, `<b>${ev('ut.wUF', 4, 'klf')}</b> ${dist ? wk(`dl.G${dg}.UF`) : wk('ld.ut.wUF')}`)}</tr>
+      <tr><td class="lft">Moment at midspan (simple span, girder alone)</td>${c(`${ev('ut.MUT', 1, 'kip-ft')} ${wk('ld.ut.MUT')}`, `${ev('ut.MUF', 1, 'kip-ft')} ${wk('ld.ut.MUF')}`)}</tr>
+      <tr><td class="lft">Shear at the support</td>${c(`${ev('ut.VUT', 2, 'kip')} ${wk('ld.ut.VUT')}`, `${ev('ut.VUF', 2, 'kip')} ${wk('ld.ut.VUF')}`)}</tr>
+      <tr><td class="lft">Strength I load factor</td>${c(`${ev('ut.gUT', 2)} ${wk('ld.ut.gUT')}<br><span class="unit">${q.wUT >= 0 ? '0.65 where it relieves' : '1.50 where it adds'}</span>`, `1.25 or 0 ${wk('ld.ut.abs')}<br><span class="unit">present or absent</span>`)}</tr>
+      <tr><td class="lft">Service I / III (girder section)</td>${c('1.00', '1.00 or 0')}</tr>
+      <tr><td class="lft">Losses (elastic gain, Δf<sub>cd</sub>)</td>${c('as DC1', 'as DC1 when present')}</tr>
+      <tr><td class="lft">Camber (Δ<sub>dk</sub>)</td>${c(q.dUT != null ? `${ev('ut.dUT', 3, 'in')} ${wk('ld.ut.cam')}` : `included ${wk('ld.ut.cam')}`, `not in the camber ${wk('ld.ut.cam')}`)}</tr>
+      <tr><td class="lft">Load rating</td>${c('with DW (γ<sub>DW</sub>)', 'with DC, where it adds')}</tr></tbody></table></div>`;
+    const rows = [['w<sub>NC</sub> the engine takes (with the utilities)', `${k.fx(+ctx.inp.loads.wNC, 4)} klf ${wk('ld.ut.wNC')}`]];
+    if (hasT) rows.push(['Strength I, UT above the 1.25 of DC1: ΔM<sub>u</sub>', `${ev('ut.dMu', 1, 'kip-ft')} ${wk('ld.ut.dMu')}`], ['Strength I, UT above the 1.25 of DC1: ΔV<sub>u</sub>', `${ev('ut.dVu', 2, 'kip')} ${wk('ld.ut.dVu')}`]);
+    rows.push(['Strength I moment of the utilities at midspan', `<b>${ev('ut.MuU', 1, 'kip-ft')}</b> ${wk('ld.ut.MuU')}`]);
+    rows.push(['Service stress at midspan, bottom', `${ev('ut.fb', 4, 'ksi')} ${wk('ld.ut.fb')}`], ['Service stress at midspan, top', `${ev('ut.ft', 4, 'ksi')} ${wk('ld.ut.ft')}`]);
+    if (q.gain != null) rows.push(['Their part of the elastic gain of DC1', `${ev('ut.gain', 3, 'ksi')} ${wk('ld.ut.gain')}`]);
+    let abs = '';
+    if (hasF && q.abs) {
+      const g = q.abs.rows.filter(r => r.gov === 'absent');
+      abs = `<div id="utAbs" data-n="${g.length}"><p class="note"><b>Future utility allowance present or absent, whichever governs</b> ${wk('ld.ut.abs')}: the design is computed with the allowance (γ 1.25, Service 1.00: the values on every tab) and without it (γ 0). ${g.length ? `${g.length} check${g.length > 1 ? 's have' : ' has'} a larger ratio with it absent; each is in the check summary as "UF absent: …".` : 'No check has a larger ratio with it absent: the state with it present governs every check.'}</p>`
+        + `<div class="tscroll"><table class="tbl" id="utAbsTbl"><thead><tr><th class="lft">Check</th><th>Ratio, allowance present</th><th>Ratio, allowance absent</th><th>Governs</th></tr></thead><tbody>${q.abs.rows.map(r => `<tr${r.gov === 'absent' ? ' class="utAbsGov"' : ''}><td class="lft">${k.esc(r.n)}</td><td>${f(r.rP, 4)}</td><td>${f(r.rA, 4)}</td><td>${r.gov === 'absent' ? '<b>absent</b>' : Object.is(r.rP, r.rA) ? 'same' : 'present'}</td></tr>`).join('')}</tbody></table></div></div>`;
+    }
+    return k.card('Utilities on the noncomposite section' + (hasF ? ' and the future utility allowance' : ''), tbl + k.kv(rows) + abs
+      + `<p class="note" id="utNote">The line loads of the <a href="#" data-goin="xsec">Cross-section tab</a> (categories "Utility (noncomposite, DW factors)" and "Future utility allowance (noncomposite, γ 1.25/0)"), distributed to the girder lines as the Steel Bridge app distributes them. They act on the precast girder alone, on the simple span, so they are added to w<sub>NC</sub> and are inside every DC1 of the <a href="#" data-gotab="an">Analysis</a>, Losses, Stresses, Flexure, Shear, Camber and Rating tabs. ${hasT ? 'The utility takes the DW load factors (AASHTO LRFD 10th Ed. Table 3.4.1-2: 1.50, 0.65 where it relieves): M<sub>u</sub> and V<sub>u</sub> carry "+ (γ<sub>UT</sub> − 1.25) M<sub>UT</sub>" beside the 1.25 of DC1; in the rating it is with DW. ' : ''}${hasF ? 'The future utility allowance takes 1.25 or 0 (present or absent, whichever governs each check) and is not in the camber. ' : ''}Service I and III: γ = 1.00 on the girder section.</p>`, 'card-ut');
   }
   /* pedCard(ctx) (PL-A, 2026-11-23): the pedestrian live load of the girder shown (R.pl, engine/pl.js): w_PL of the line (the distribution's
      step), M_PL and V_PL and the live load the checks take, each linked to its worked step; where it is and is not used */
