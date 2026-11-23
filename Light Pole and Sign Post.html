@@ -624,16 +624,16 @@
     <section class="card" id="signCard" style="display:none">
       <div class="card-h"><span class="num">2b</span><h2>Sign panel</h2><span class="hint"><span class="ibcOnly">ASCE 7 Ch.29 solid sign</span><span class="ltsOnly">LRFDLTS Table 3.8.7-1 sign panel</span></span></div>
       <div class="card-body">
-        <div class="row"><label>Panel width, B</label><div class="ctl"><input id="signB" type="number" value="12" step="0.5"><span class="unit">ft</span></div></div>
-        <div class="row"><label>Panel height, s</label><div class="ctl"><input id="signS" type="number" value="6" step="0.5"><span class="unit">ft</span></div></div>
-        <div class="row"><label>Clearance to bottom<span class="note">grade to bottom of panel</span></label><div class="ctl"><input id="signClr" type="number" value="10" step="0.5"><span class="unit">ft</span></div></div>
-        <div class="row"><label>Panel weight<span class="note">total dead, both faces + frame</span></label><div class="ctl"><input id="signWt" type="number" value="400" step="50"><span class="unit">lb</span></div></div>
+        <div class="row"><label>Panel width, B</label><div class="ctl"><input id="signB" type="number" value="8" step="0.5"><span class="unit">ft</span></div></div>
+        <div class="row"><label>Panel height, s</label><div class="ctl"><input id="signS" type="number" value="4" step="0.5"><span class="unit">ft</span></div></div>
+        <div class="row"><label>Clearance to bottom<span class="note">grade to bottom of panel</span></label><div class="ctl"><input id="signClr" type="number" value="7" step="0.5"><span class="unit">ft</span></div></div>
+        <div class="row"><label>Panel weight<span class="note">total dead, both faces + frame</span></label><div class="ctl"><input id="signWt" type="number" value="200" step="50"><span class="unit">lb</span></div></div>
         <div class="row ibcOnly"><label>Force coeff. C<sub>f</sub> mode<span class="note">auto = ASCE 7-16 Fig. 29.3-1</span></label><div class="ctl"><select id="signCfMode" class="combo-sel">
           <option value="auto" selected>Auto — computed from B/s and s/h</option>
           <option value="manual">Manual — override C_f</option>
         </select></div></div>
         <div class="row ibcOnly" id="rowSignCfMan" style="display:none"><label>Override C<sub>f</sub><span class="note">applied to Cases A &amp; B</span></label><div class="ctl"><input id="signCfMan" type="number" value="1.20" step="0.05" min="0.1"><span class="unit">—</span></div></div>
-        <div class="row" id="rowSpacing" style="display:none"><label>Post spacing<span class="note">between the two posts, panel centered<span class="ltsOnly">; LRFDLTS mode: drawings only, each post carries half the panel load (decision Q-C2)</span></span></label><div class="ctl"><input id="signSpacing" type="number" value="8" step="0.5"><span class="unit">ft</span></div></div>
+        <div class="row" id="rowSpacing" style="display:none"><label>Post spacing<span class="note">between the two posts, panel centered<span class="ltsOnly">; LRFDLTS mode: drawings only, each post carries half the panel load (decision Q-C2)</span></span></label><div class="ctl"><input id="signSpacing" type="number" value="5" step="0.5"><span class="unit">ft</span></div></div>
         <p class="tbl-note ibcOnly" id="signCaseNote" style="margin-top:6px"></p>
       </div>
     </section>
@@ -1071,7 +1071,7 @@
 
     <!-- 5b. LOAD COMBINATIONS MATRIX -->
     <section class="card poleOnly" id="lppComboMatCard" data-tab="loading" data-ldsub="combos">
-      <div class="card-h"><span class="num">5b</span><h2>Load combinations — base demand envelope</h2><span class="hint">all ten ASCE 7 combinations</span></div>
+      <div class="card-h"><span class="num">5b</span><h2>Load combinations — base demand envelope</h2><span class="hint">all eleven ASCE 7 combinations</span></div>
       <div class="card-body">
         <div class="tbl-note lpNL"><div class="lpNLl">Every ASCE 7 combination is evaluated at its own worst wind direction.</div><ul class="lpNLu"><li><b class="lpNLk">Embedment</b> (a service check against presumptive soil bearing): driven by the worst <b>ASD</b> row.</li><li><b class="lpNLk">Reinforced-concrete shaft</b> (a strength check): driven by the worst <b>LRFD</b> row.</li><li>Governing rows are highlighted.</li></ul></div>
         <table class="tbl" id="comboMatrixTbl"></table><div class="lppCvHost" id="lppCvN_comboMat"></div>
@@ -1809,7 +1809,7 @@ function iceWorkedHTML(inp, pw, fxs){
     return H;
   }
   const kz=Math.pow(inp.Kzt,0.35), Ii=inp.iceIi>0?inp.iceIi:1.0;
-  H+=`<div class="eq-why lpNL">${lpNL('Design ice thickness t<sub>d</sub>:',[['Entered t:',`the entered t = ${fmt(inp.tIce,3)} in is the nominal (map) ice thickness.`],['Increase:','it is increased with height by f<sub>z</sub> and for topography by K<sub>zt</sub><sup>0.35</sup>, times the ice importance factor I<sub>i</sub>.'],['Mast:',`the mast uses t<sub>d</sub> at each of its ${pw.NSTRIP} strips (ice weight and the iced width for wind-on-ice).`],['Fixtures:','each fixture uses t<sub>d</sub> at its mount height.'],['Cables:','the cables keep the entered t (cable features unchanged, engineer 2026-11-01).']])}</div>`;   // LPNL
+  H+=`<div class="eq-why lpNL">${lpNL('Design ice thickness t<sub>d</sub>:',[['Entered t:',`the entered t = ${fmt(inp.tIce,3)} in is the nominal (map) ice thickness.`],['Increase:','it is increased with height by f<sub>z</sub> and for topography by K<sub>zt</sub><sup>0.35</sup>, times the ice importance factor I<sub>i</sub>.'],['Mast:',`the mast uses t<sub>d</sub> at the mid-height of each of its ${pw.NSTRIP} segments (ice weight and the iced width for wind-on-ice).`],['Fixtures:','each fixture uses t<sub>d</sub> at its mount height.'],['Cables:','the cables keep the entered t (cable features unchanged, engineer 2026-11-01).']])}</div>`;   // LPNL
   H+=g(`t_d(z) = t\\,f_z\\,K_{zt}^{0.35}\\,I_i,\\qquad f_z = \\left(\\frac{z}{33}\\right)^{0.10}`);
   if(inp.pProj>0) H+=`<p class="eq-why">Shaft projection p = ${fmt(inp.pProj,2)} ft: the heights z are above grade, z = (height above the ${inp.mode==='sign'?'post':'pole'} base) + p.</p>`;   // LPPJ
   H+=g(`t_d(${inp.pProj>0?'H{+}p':'H'}{=}${fmt(lppZg(inp,inp.H),1)}) = ${fmt(inp.tIce,3)}(${fmt(iceFz(lppZg(inp,inp.H)),3)})(${fmt(kz,3)})(${fmt(Ii,2)}) = ${fmt(iceTd(inp,lppZg(inp,inp.H)),3)}\\ \\text{in}\\qquad t_d(${inp.pProj>0?'H/2{+}p':'H/2'}) = ${fmt(inp.tIce,3)}(${fmt(iceFz(lppZg(inp,inp.H/2)),3)})(${fmt(kz,3)})(${fmt(Ii,2)}) = ${fmt(iceTd(inp,lppZg(inp,inp.H/2)),3)}\\ \\text{in}`);
@@ -3050,7 +3050,7 @@ manPart("p3","3. Output Reference",[
 {note:"Wind directions: the Fig. 29.3-1 panel cases are for wind normal or oblique to the face, so they are evaluated with the wind toward 0° and 180°. With the wind along the panel (90° / 270°) the panel carries no wind and only the posts' own drag acts; for a round or square post that is never more than the normal case, so it is not evaluated. A rectangular post (depth along the panel normal) is checked edge-on as well (step 3b): the drag on its depth face bends it about its weak axis, and the post, anchor, shaft and embedment checks take it as one more load case."},
 
 {h3:"3.3.6 Load combination matrix"},
-{p:"Every combination evaluated, showing the resultant, its azimuth, P, M, h and N, with the governing LRFD and ASD rows marked. Eight combinations are evaluated for a light pole; signs use only the four non-ice combinations, since ice is not applied to panels."},
+{p:"Every combination evaluated, showing the resultant, its azimuth, P, M, h and N, with the governing LRFD and ASD rows marked. Eleven combinations are evaluated, six LRFD and five ASD, for a light pole and for a sign alike; a sign carries ice and wind-on-ice on its panel and posts in the ice combinations (since 2026-11-01)."},
 {note:"<b>All load combinations / Governing combination only</b> (LPCV, 2026-11-23): a switch at the top of the Loading, Post, Anchorage, Shaft and Report tabs; one setting for the whole tool, remembered in this browser, not saved in the project and not printed. \u201cAll load combinations\u201d lists every combination. \u201cGoverning combination only\u201d keeps, in each table with one row per combination, the row of each check\u2019s governing combination, named with the check it governs, with a line saying how many combinations were checked and a \u201cshow all\u201d link. The switch changes only what is listed: every combination is always checked, and no result, governing case or verdict changes. The Report states which view it shows."},
 
 {h:"3.4 Post tab"},
@@ -3298,7 +3298,7 @@ manPart("p5","5. Verification",[
  ["Broms cohesionless cubic","Bisection residual","f(L) = 0 to machine precision; K<sub>p</sub> = 3.000 exactly at \u03c6 = 30°"],
  ["IBC embedment self-consistency","Back-substitution of d into A and the depth equation","Consistent within 0.02 ft"],
  ["Gust factor application","Reconstruction of F with G applied once vs twice","Single application confirmed for pole, sign, and ice cases"],
- ["Load combination factors","ASCE 7-16 tabulated factors","All ten combinations correct (0.9D + Di + Wi and 0.6D + 0.7Di + 0.7Wi added 2026-11-01); no combination mixes W with W<sub>i</sub>"],
+ ["Load combination factors","ASCE 7-16 tabulated factors","All eleven combinations correct (0.9D + Di + Wi and 0.6D + 0.7Di + 0.7Wi added 2026-11-01, 1.4D added 2026-11-07); no combination mixes W with W<sub>i</sub>"],
  ["Sign post force split","\u03a3 shares vs total case force","Sums exactly for Cases A, B and C"],
  ["Cable resultant decomposition","\u03a3 perpendicular components in the aligned frame","Sums to zero \u2014 built-in check"]
 ]}},
@@ -6335,13 +6335,13 @@ function fixtureWorkedHTML(fxs, inp, part){   // part (LPLS, 2026-11-23): 'wind'
   H+=g(`q_z(h)K_dG = 0.00256\\,K_z(h)K_{zt}K_e V^2\\cdot K_d\\,G = 0.00256(${fmt(fg.Kzf,3)})(${fmt(inp.Kzt,2)})(1.00)(${inp.V})^2(${fmt(inp.Kd,2)})(${fmt(inp.G,2)}) = ${fmt(fg.qz,2)}\\ \\text{psf}`);
   H+=g(`F_w = q_z\\,EPA\\,C_f = ${fmt(fg.qz,2)}(${fmt(fg.x.epa,2)})(${fmt(inp.cfLum,2)}) = ${fmt(fg.Fw,0)}\\ \\text{lb}`);
   H+=step(`2 · Iced fixture wind ${ref('ASCE 7-16 §10.5')}`);
-  H+=`<p class="eq-why">Under the wind-on-ice case the fixture face grows by the radial ice thickness t on every edge (face modeled as a square of side √EPA), and the concurrent wind speed V_ice applies with the same gust factor G:</p>`;
-  H+=g(`EPA_i = \\left(\\sqrt{EPA}+2t\\right)^2 = \\left(${fmt(fg.side,2)}+2(${fmt(tft,3)})\\right)^2 = ${fmt(fg.epaI,2)}\\ \\text{ft}^2`);
+  H+=`<p class="eq-why">Under the wind-on-ice case the fixture face grows by the design ice thickness t<sub>d</sub> at its mount height on every edge (face modeled as a square of side √EPA), and the concurrent wind speed V_ice applies with the same gust factor G:</p>`;
+  H+=g(`EPA_i = \\left(\\sqrt{EPA}+2t_d\\right)^2 = \\left(${fmt(fg.side,2)}+2(${fmt(tft,3)})\\right)^2 = ${fmt(fg.epaI,2)}\\ \\text{ft}^2`);
   H+=g(`q_{zi}K_dG = 0.00256\\,K_z K_{zt} K_e V_{ice}^2\\cdot K_d\\,G = ${fmt(fg.qzi,2)}\\ \\text{psf}\\qquad F_{wi} = q_{zi}\\,EPA_i\\,C_f = ${fmt(fg.qzi,2)}(${fmt(fg.epaI,2)})(${fmt(inp.cfLum,2)}) = ${fmt(fg.Fwi,0)}\\ \\text{lb}`);
   H+=step(`3 · Ice weight ${ref('ASCE 7-16 §10.4.1')}`);
-  H+=`<p class="eq-why">Ice forms a glaze skin of radial thickness t over the wetted surface — both faces of the catch area plus a perimeter band over the catch depth d_ice:</p>`;
+  H+=`<p class="eq-why">Ice forms a glaze skin of radial thickness t<sub>d</sub> (the design ice thickness at the mount height) over the wetted surface — both faces of the catch area plus a perimeter band over the catch depth d_ice:</p>`;
   H+=g(`A_{surf} = 2A_{ice}+4\\sqrt{EPA}\\,d_{ice} = 2(${fmt(fg.x.aIce,2)})+4(${fmt(fg.side,2)})(${fmt(fg.x.tIce,2)}) = ${fmt(fg.surf,2)}\\ \\text{ft}^2`);
-  H+=g(`W_{ice} = \\gamma_{ice}\\,t\\,A_{surf} = ${fmt(inp.iceDen,0)}(${fmt(tft,3)})(${fmt(fg.surf,2)}) = ${fmt(fg.Wice,0)}\\ \\text{lb}`);
+  H+=g(`W_{ice} = \\gamma_{ice}\\,t_d\\,A_{surf} = ${fmt(inp.iceDen,0)}(${fmt(tft,3)})(${fmt(fg.surf,2)}) = ${fmt(fg.Wice,0)}\\ \\text{lb}`);
   H+=step(`4 · Eccentric gravity moment`);
   H+=`<p class="eq-why">The fixture dead load acts at the arm tip, a horizontal distance a from the pole centerline, producing an overturning moment directed along the arm azimuth θ — resolved as M_x = W·a·cosθ, M_y = W·a·sinθ:</p>`;
   H+=g(`\\vec M_{ecc} = W\\,a\\,(\\cos\\theta,\\ \\sin\\theta) = ${fmt(fg.Wdead,0)}(${fmt(fg.x.a,1)})(\\cos${fmt(fg.th,0)}°,\\ \\sin${fmt(fg.th,0)}°) = (${fmt(fg.Wdead*fg.x.a*Math.cos(fg.th*RAD),0)},\\ ${fmt(fg.Wdead*fg.x.a*Math.sin(fg.th*RAD),0)})\\ \\text{lb}{\\cdot}\\text{ft}`);
@@ -7604,7 +7604,7 @@ function buildReport(inp,allCombos,gov,embed,struct){
   H+=`<div class="eq-why lpNL">${lpNL('The foundation uses the correct family for each check:',[['Embedment:','the drilled-shaft <b>embedment</b> is an allowable-stress (service) check paired with presumptive soil bearing, so it is driven by the worst <b>ASD</b> combination.'],['Shaft:','the reinforced-concrete <b>shaft</b> is a strength check, so it is driven by the worst <b>LRFD</b> combination.'],['Highlighted:','both governing rows are highlighted below.']])}</div>`;   // LPNL
   const cvU=(lppCvGov&&LPP_LD&&LPP_LD.mode==='pole')?lppCvUseMap(LPP_LD,0):null, cvAC=cvU?allCombos.filter(r=>(cvU[r.name]||[]).length):allCombos;   // LPCV (2026-11-23)
   H+=cvU?`<table class="matrix"><caption>Pole base demand — ${lppCvTxt(cvAC.length,allCombos.length)} Each row names what it governs; highlighted rows govern each design family (largest overturning moment).</caption>`
-    :`<table class="matrix"><caption>Pole base demand for all ten combinations. Highlighted rows govern each design family (largest overturning moment).</caption>`;
+    :`<table class="matrix"><caption>Pole base demand for all eleven combinations. Highlighted rows govern each design family (largest overturning moment).</caption>`;
   H+=`<thead><tr><th>Design<br>family</th><th>Load combination</th><th>Net cable pull<span class="sym">R_cable (lb)</span></th><th>Pull direction<span class="sym">φ (°)</span></th><th>Total lateral<span class="sym">P (lb)</span></th><th>Overturning moment<span class="sym">M (lb·ft)</span></th><th>Resultant height<span class="sym">h = M/P (ft)</span></th><th>Axial<span class="sym">N (lb)</span></th></tr></thead><tbody>`;
   cvAC.forEach(r=>{
     const isGov=(r.key===govASD.key||r.key===govLRFD.key);
@@ -9328,7 +9328,7 @@ function ltsCalc(){
         :{id:'wd.q',label:`Weld force per inch around the tube (as a line, D = ${n2(inp.poleDiaBase,3)} in): ${gw.name}, ${gw.lcName}`,sym:'q',eq:'\\sqrt{\\left(\\frac{BM}{S_{w}} + \\frac{P}{\\pi D}\\right)^{2} + \\left(\\frac{2V}{\\pi D} + \\frac{2T}{\\pi D^{2}}\\right)^{2}},\\, S_{w} = \\pi D^{2}/4',
           sub:`\\sqrt{${n2(gw.qn,3)}^{2} + ${n2(gw.qs,3)}^{2}}`,value:gw.q,unit:'kip/in',d:3,ref:'line-weld section'},
         {id:'wd.cap',label:'Fillet weld strength per inch',sym:'\\phi R_{n}',eq:'0.75\\cdot 0.60F_{EXX}\\cdot 0.707w',sub:`0.75\\cdot 0.60\\cdot${n2(num('ltsFexx')||70,0)}\\cdot 0.707\\cdot${n2(num('ltsWeldW')||0.3125,4)}`,value:wd.phiRn,unit:'kip/in',d:3,ref:'AWS D1.1 / AISC 360-16 §J2.4 (LRFDLTS Art. 5.14, p. 5-35, 2017, refers to AWS D1.1)',ok:wd.ok,
-          note:`Ratio ${n2(wd.ratio,3)} → ${wd.ok?'OK':'NOT OK'}. LRFDLTS gives no weld strength method; AWS D1.1 / AISC 360-16 §J2 with φ = 0.75 and no directional increase (accepted by the engineer, 2026-11-02).`}]); }
+          note:`Ratio ${n2(wd.ratio,3)} → ${wd.ok?'OK':'NOT OK'}. LRFDLTS gives no weld strength method; AWS D1.1 / AISC 360-16 Section J2 with φ = 0.75 and no directional increase (accepted by the engineer, 2026-11-02).`}]); }
       ltsAddCard('anchors','ltsBpCard','7',(g.mode==='sign'?'Post':'Pole')+' base plate and base weld','engineering method · AWS D1.1',
         basis+`<div class="lts-dev lpNL">${lpNL(...lppBpVerifyNL())}</div>`+(lppBpSqNote(inp)?`<div class="tbl-note lpNL">${lpNL(...lppBpSqNL(inp))}</div>`:'')+ltsStepsHTML(bpSteps)
         +`<p class="eq-title" style="margin-top:10px"><b>Pole-to-base-plate weld</b></p>`+wSteps
