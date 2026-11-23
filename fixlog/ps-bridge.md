@@ -9342,3 +9342,18 @@ PR: claude/ps-lldf-applicability (link in the PR)
 - **AP-B-D8 (not done, option C of the request).** The Steel Bridge app's LLDF options "exterior not less than interior" and "shear skew correction on exterior girders only" are not added: the engine's distFactors result is re-derived by engine/rigid.js and worked step by step on the Loads & LLDF tab, so the options need a wrapper ordered after the rigid-section one and new worked steps (not a small change). Today: the exterior factor is not raised to the interior one; the shear skew correction is on every girder.
 ### Other copies
 - None. The Steel Bridge app has its own SA4 (not changed).
+
+## 2026-11-23 — Engineer approvals recorded: E1-D5a, E1-D5b (PR #1660) and HO-D2-a to HO-D2-e (PR #1659)   [no code change]
+Recorded with the AP-B PR (claude/ps-lldf-applicability). A note only: no file of the tool changes, and the earlier entries are not edited.
+### Approved by the engineer, 2026-11-23
+- Load rating, entry "E1-D4 / E1-D5" of 2026-11-21 (PR #1660), its "Decisions (pending engineer review)":
+  - **E1-D5a approved:** the relieving-load factors (γ_DC 0.90, γ_DW 0.65 for a dead-load part that relieves the positive moment, part by part) also apply to the flexure rating of the legal and permit vehicles (rated at midspan).
+  - **E1-D5b approved:** a dead-load part that is exactly zero takes the maximum factor (no effect on the rating factor).
+- Hand-offs, entry "HO-D2 decided" of 2026-11-21 (PR #1659), its "Decisions (pending engineer review)":
+  - **HO-D2-a approved:** the record of what the project sent and loaded lives in the project (`P.handoffs`) and travels with Export JSON and the saved projects; a Send is not an Undo step.
+  - **HO-D2-b approved:** Export JSON is not a send.
+  - **HO-D2-c approved:** incoming data re-published with a newer time but the same values is not stale.
+  - **HO-D2-d approved:** an old project with loaded MCT demands may show the MCT stale banner (when the MCT Generator has since published for the same member and project).
+  - **HO-D2-e approved:** a recorded girder hand-off whose girder type or line was removed shows a neutral note in the card, no banner.
+### Still pending
+- The other decisions of those two entries, and of the E1 entry (PR #1580), are as listed there.
