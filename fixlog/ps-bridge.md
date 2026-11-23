@@ -9561,3 +9561,38 @@ PR #1682: https://github.com/mlococo88/All-Structural/pull/1682 (claude/psb-pl-l
 - **IMP-N-D2.** The note is a warning (not a failing check): it does not change the verdict.
 ### Other copies
 - None.
+
+## 2026-11-23 — SRP: the pedestrian reaction and the utility reactions sent to Bridge Substructure Loading as separate optional items of superReactions (engine/handoffs.js, engine/design.js, ui/handoffs.js; cross-tool PR with Bridge Substructure Loading; no design value changes)
+PR: claude/psb-subloads-items (cross-tool, CLAUDE.md §7 / HANDOFF.md; the receiver's entry: fixlog/Bridge Substructure Loading.md, SRP).
+### Request
+- Engineer, 2026-11-23 (approved): send the pedestrian reaction as its own live-load item and the utility reactions (composite, noncomposite, future allowance) as their own dead-load items in the hand-off to Substructure Loading, so the receiver can factor each correctly. `bridgeSuite.v1.*` keys and existing fields keep their meaning; new OPTIONAL fields only; old payloads load as today; no double count.
+### What was found
+- Today's payload (the moved engine's `bxSuperRxPayload`, and `srAll` built from it): `DC1 = (w_g + w_DC1) L / 2 + diaphragms`, where w_DC1 contains w_NC, and since UT-N w_NC contains the noncomposite utility (UTN) and the future allowance (UF): **DC1 contains UT and UF**. `DW = w_DW L / 2` (or the continuous end shears), and since PL-A w_DW contains the composite utility: **DW contains UTc**. The pedestrian load is in no field. So the receiver factored UT at the DC factor and could not take UF as present / absent.
+- The Steel Bridge app sends its (noncomposite) utilities as `girders[].UT` / `girders[].UF` **outside** DC1 with a `utilities` descriptor, and its pedestrian reactions in `notes` only (no field). The receiver has UT / UF keys for them and a pedestrian load of its own (computed from its sidewalks), no received-PL input.
+### What changed
+- The moved engine (`engine/pbd-*.js`, `bxSuperRxPayload` included) is **not changed**.
+- **`engine/handoffs.js`**:
+  - `srPayload(inp, R)` (anchor `function srPayload(inp, R) {`). Before: `return W.bxSuperRxPayload(inp, R);`. After: the same payload `b`; when `srParts(inp, R)` is not null: `supports[k].girders[0].separate = sepAt(q, k)`, `payload.separate = sepInfo(q.has)` and the notes of `sepNotes()`; else `b` unchanged (byte for byte).
+  - New: `srParts(inp, R)` (the items of one line's two end reactions), `endAreas(spans, s)` (the + / − end-shear influence areas of a span of the continuous unit: `PSBPL.areas(PBD.contFE(spans, s))`, kept per unit), `sepAt`, `sepInfo`, `sepNotes`, `SEPK = ['PL', 'PLmin', 'UT', 'UF', 'UTc']`.
+  - `srAll(P, cells)`: each end's `separate` kept in the shares; `sepSum(a)` sums them at a support (as DC1 / DC2 / DW); `payload.separate` and the notes when any line has an item; the summary text lists them.
+- **`engine/design.js`** `one()` (anchor `if (q && q.PL > 0) o.pl = { w: q.PL };`, added after it): `if (q && q.UT) o.utc = q.UT;` (the line's composite utility share, klf; no engine code reads it). `withDemands` no longer sets `inputs.imp` (IMP-N reads `inputs.utc`: **`engine/demands.js`** `assumed()`: `utc = isNum(+inp.utc) && +inp.utc !== 0 ? +inp.utc : 0`).
+- **`ui/handoffs.js`** `srSummary`: the one-line send's message lists the separate items.
+### Expressions (unfactored, kip, + up; made-up line loads w in klf)
+- `UT = w_UT L / 2`, `UF = w_UF L / 2` at each end (simple non-composite span). `UTc = w_UTc L / 2`; continuity on: `w_UTc V_w(0)`, `−w_UTc V_w(L)` (the engine's unit-load end shears, as its DW). `PL = w_PL L / 2` (PLmin 0); continuity on: left end `w_PL A+`, `w_PL A−`; right end `−w_PL A−`, `−w_PL A+` (max, min; A± the + / − areas of the end-shear influence line, engine/pl.js `areas`). Pier: the sum of the two spans' end values. Imported demands: no PL, no UTc.
+### Saved data / hand-off format (CLAUDE.md §5)
+- Channel `bridgeSuite.v1.superReactions` (and its `.by.psbeam`, `.by.psbridge.<project id>` copies): new OPTIONAL fields `supports[].girders[].separate` and top-level `separate` only; `_schema`, `schemaVersion` (1) and every existing field unchanged in meaning and value. A project with no pedestrian load and no utility sends the same text as before. No key added or renamed. Engine inputs: the optional `utc` (not stored; built from the project).
+- Stale banner (HO-D2): a project that has these loads and sent before this change shows "changed since last sent" once (the payload it would send now has the new fields). A project without them: no banner.
+### Check cases (made-up bridge: a new project, 5 BT-72 at 9 ft, AASHTO equal distribution, a 6 ft left sidewalk with PL 75 psf, added line loads UTN 0.10 klf, UF 0.05 klf, UT 0.06 klf)
+- Per girder line: w_PL = 0.075 × (6 − 1.5) / 5 = 0.0675 klf; w_UT = 0.02, w_UF = 0.01, w_UTc = 0.012 klf.
+- One 120 ft simple span, each end, every girder: `separate = { PL: 4.05, PLmin: 0, UT: 1.2, UF: 0.6, UTc: 0.72 }` (0.0675 × 60; 0.02 × 60; 0.01 × 60; 0.012 × 60). G2: DC1 116.585 kip (114.785 without the utilities + 1.2 + 0.6), DW 11.07 (10.35 + 0.72), DC2 15.30 (unchanged). Before this change: the same DC1, DC2, DW and no `separate`.
+- Two continuous spans 100 + 100 ft: abutment UT 1.0, UF 0.5, UTc 0.375 w L = 0.45, PL 7/16 w L = 2.953, PLmin −1/16 w L = −0.422; pier UT 2.0, UF 1.0, UTc 1.25 w L = 1.5, PL 1.25 w L = 8.438, PLmin 0.
+- Custom demand table: `separate = { UT: 1.2, UF: 0.6 }` only; the notes say why PL and UTc are not sent.
+### Tests
+- `tests/engine/psbridge-subloads-sep.test.mjs` (new, 5 tests): no items: the one-line payload = `bxSuperRxPayload` byte for byte, no "separate" anywhere; the hand cases above; the totals move by exactly the items; imported demands; the receiver's own `check()` (cut from its file) on old payloads, new payloads, Steel's form, both forms, a bad number, kN. `tests/engine/psbridge-handoffs.test.mjs` (the payloads = the old page's code) and `psbridge-subloads.test.mjs` unchanged and passing. `tests/smoke/ps-bridge-subloads-sep.mjs` (new, 7 checks; both pages); `tests/smoke/ps-bridge-subloads.mjs` (the path without items) unchanged.
+### Decisions (pending engineer review)
+- **SRP-D1.** The existing totals keep their meaning (DC1 and DW still contain the utilities) and the new items say which field contains each (`includedIn`), instead of moving the utilities out of DC1 into the Steel Bridge app's top-level `UT` / `UF` (which are outside DC1). Reason: CLAUDE.md §5 and the request ("existing fields must not change meaning"); a stored or exported payload and a receiver that ignores the new fields read exactly what they read before. The two senders therefore differ in form (documented in HANDOFF.md §4.4); the receiver reads both and refuses a girder that has both.
+- **SRP-D2.** `PL` at a pier of continuous spans = the sum of the two spans' largest end reactions (an upper bound of the true pier reaction where the two maxima do not occur together).
+- **SRP-D3.** The owner's design load multiplier m and η are not in the items (unfactored values, as the other fields).
+- **SRP-D4.** With imported demands no PL and no UTc item is sent (IMP-N: used as given).
+### Other copies
+- None changed. The `bridgeSuite.v1.*` bootstrap / BridgeXfer snippet (index.html, lldf.html, this app's ui/bridgexfer.js) is not touched. The Steel Bridge app (apps/steel-bridge/ui/handoffs.js `srPayload`) is not changed: its pedestrian reactions stay in `notes`.

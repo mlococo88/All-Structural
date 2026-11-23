@@ -120,13 +120,9 @@
   /* withDemands(P, T, o) (batch D1, 2026-11-15): the demand source of girder type T (engine/demands.js): a MIDAS file or a custom table is
      given to the engine as inputs.external, the old app's own input (its MIDAS import; computeAll reads it through buildExternal); this
      app's analysis (every project saved before: no P.demands): o unchanged. */
-  function withDemands(P, T, o, gLine) {
+  function withDemands(P, T, o) {
     const DM = window.PSBDemands, x = DM && T ? DM.external(P, T) : null;
     if (x) o.external = x;
-    // IMP-N (2026-11-23; display only, no engine value reads it): a type on imported demands whose girder line has a composite utility
-    // share (in its DW, engine/bridge-dl.js line().UT): named in inputs.imp so that the note "imported demands are used as given"
-    // (engine/demands.js assumed()) can say that the imported DW must include it. No imported demands or no such share: nothing added.
-    if (x && window.PSBBridgeDL && P.xs && P.xs.dl) { const g = gLine != null ? gLine : sel(P).g, q = window.PSBBridgeDL.line(P, g); if (q && q.UT) o.imp = { utc: q.UT }; }
     return o;
   }
   /* cellInputs(P, k, g): the engine inputs of girder type k (engine/bridge.js) on girder line g of its span: the type's inputs (the base
@@ -134,7 +130,7 @@
      girder (one()). A type with no override on the design girder's line gives exactly one(P). */
   function cellInputs(P, k, g) {
     const B = window.PSBBridge, T = B.types(P)[k];
-    return withDemands(P, T, one(Object.assign({}, P, { base: B.effBase(P, k), design: { g, s: T.span }, types: undefined })), g);
+    return withDemands(P, T, one(Object.assign({}, P, { base: B.effBase(P, k), design: { g, s: T.span }, types: undefined })));
   }
   /* one(P): the engine inputs of the design girder P.design (PR 2b; unchanged) */
   function one(P) {
@@ -161,6 +157,10 @@
     // PL-A (§4, only with a pedestrian live load on the Cross-section tab, AASHTO LRFD 10th Ed. 3.6.1.6): this line's share w_PL (klf), which
     // engine/pl.js adds to the engine's live load; no pedestrian load (every project saved before): no inputs.pl, the engine's own run
     if (q && q.PL > 0) o.pl = { w: q.PL };
+    // SRP / IMP-N (2026-11-23; no engine value reads it): the line's share of the utilities on the composite section (category UT; already
+    // inside w_DW above), named in inputs.utc for the hand-off's separate item (engine/handoffs.js srParts) and for the note "imported
+    // demands are used as given" (engine/demands.js assumed()). No such utility (every project saved before PL-A): nothing added.
+    if (q && q.UT) o.utc = q.UT;
     // PS-20 (§4): d_e of an exterior line from the bridge cross-section (deOf) when the project has its barriers (P.xs.dl); else as entered
     const de = deOf(P, d.g); if (de != null) o.loads = Object.assign({}, o.loads, { de });
     // PS-19 (§4): with unequal bays the exterior rigid-section factor on the real girder lines (engine/rigid.js); equal bays and interior lines: nothing added
