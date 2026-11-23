@@ -25,6 +25,8 @@
     '../../shared/steps.js',
     '../../shared/list-input.js',
     'engine/model.js',
+    '../../shared/aisc-w.js',   // ROLL (2026-11-23): the AISC W shapes (data), for the rolled-beam girder segments
+    'engine/rolled.js',   // ROLL: a rolled segment = its shape name + the equivalent three plates in the plate fields (no DOM)
     'engine/demandfile.js',
     'engine/library.js',
     // STDS-B (2026-11-06): the standard save (shared/projects-ui.js projectBar: header chip, Save, Saved projects…, the "Save and open" card,
@@ -218,6 +220,7 @@
   table.tbl th{background:#f1efe9;font-weight:bold;}
   table.tbl td.lft,table.tbl th.lft{text-align:left;}
   table.tbl td input{width:62px;font-size:9pt;padding:1px 3px;text-align:right;}
+  table.tbl td input.rl-ro{background:#eef0ec;color:#4b5561;}   /* ROLL: plate sizes set by a rolled shape (read-only) */
   table.tbl tr.sel{background:#eef4fb;}
   .tscroll{overflow-x:auto;}
   .fp-sc{overflow-x:auto;max-width:100%;} .fp-ex{display:block;font-family:var(--font-ui);font-size:9pt;margin:2px 0 4px;} @media print{.fp-sc svg{min-width:0!important;}}   /* SKP: the framing plan (ui/framing.js plan) */
@@ -430,6 +433,51 @@
   }
   /* typesCard(): the Girder types card (Girders & plates tab): one row per type, its lines; Add / Copy / Delete; the selected type's lines
      as check boxes (checking a line moves it to this type; a line leaves a type only by being assigned to another, so it always keeps one) */
+  /* ---------- ROLL (2026-11-23): rolled-beam (W-shape) segments. engine/rolled.js holds the rules; this card picks the shape ---------- */
+  const rlName = s => (window.SBDRolled ? window.SBDRolled.label(s) : '');
+  let rlAsk = null, rlFind = '', rlRun = null, rlNom = { min: '', max: '' };   // page state, not saved: the segment set to "Rolled shape" before a shape is picked; the search text; the W-shape search
+  const rlKey = () => `${ui.g}.${Math.min(ui.seg, P.girders[ui.g].segments.length - 1)}`;
+  function rlOptions(cur) {
+    const A = window.SharedAiscW, f = rlFind.toUpperCase().replace(/\s+/g, '');
+    return `<option value="">${cur ? 'Choose a shape…' : 'Choose a shape…'}</option>` + A.groups().map(G => { const L = G.names.filter(n => !f || n.indexOf(f) >= 0 || n === cur);
+      return L.length ? `<optgroup label="W${G.nom}: nominal depth ${G.nom} in">${L.map(n => { const q = A.get(n); return `<option value="${n}"${n === cur ? ' selected' : ''}>${n} · d ${q.d} in · b_f ${q.bf} in · ${q.W} lb/ft</option>`; }).join('')}</optgroup>` : ''; }).join('');
+  }
+  function rolledCard(g) {
+    const RL = window.SBDRolled, A = window.SharedAiscW; if (!RL || !A) return '';
+    const i = Math.min(ui.seg, g.segments.length - 1), s = g.segments[i], q = RL.state(s), on = q.status !== 'plate' || rlAsk === rlKey(), sh = q.status === 'rolled' ? q.sh : null, pr = sh ? RL.props(sh) : null;
+    const f3 = v => U.fmt(v, 3), warn = q.status === 'unknown' || q.status === 'edited' ? RL.warnings({ girders: [{ label: g.label, id: g.id, segments: g.segments.map((z, k) => (k === i ? z : {})) }] }).map(w => w.msg) : [];
+    const hyb = RL.hybridErr(P);
+    return card(`Section type of segment ${i + 1}: plate girder or rolled shape`, `
+      <div class="fRow"><label for="rl_type">Section type</label><select id="rl_type"><option value="plate"${on ? '' : ' selected'}>Plate girder (enter the plates)</option><option value="rolled"${on ? ' selected' : ''}>Rolled shape (AISC W shape)</option></select></div>
+      ${on ? `<div class="fRow"><label for="rl_find">Search the shapes</label><input type="text" id="rl_find" value="${esc(rlFind)}" placeholder="e.g. W36 or X135" autocomplete="off" spellcheck="false"><span class="unit"></span></div>
+      <div class="fRow"><label for="rl_shape">W shape</label><select id="rl_shape">${rlOptions(sh ? sh.name : '')}</select></div>` : ''}
+      ${warn.map(m => `<div class="alert">${esc(m)}</div>`).join('')}${hyb.map(e => `<div class="alert err">${esc(e.msg)} <a href="#" data-itgo="mat">Materials tab</a></div>`).join('')}
+      ${sh ? `<div class="tscroll"><table class="tbl" id="rl_tbl"><thead><tr><th class="lft">${esc(sh.name)}</th><th>d<br>in</th><th>b<sub>f</sub><br>in</th><th>t<sub>f</sub><br>in</th><th>t<sub>w</sub><br>in</th><th>A<br>in²</th><th>I<sub>x</sub><br>in⁴</th><th>Weight<br>lb/ft</th></tr></thead><tbody>
+        <tr><td class="lft">Tabulated (${esc(A.VERSION)})</td><td>${f3(sh.d)}</td><td>${f3(sh.bf)}</td><td>${f3(sh.tf)}</td><td>${f3(sh.tw)}</td><td>${U.fmt(sh.A, 2)}</td><td>${U.fmtInt(sh.Ix)}</td><td>${U.fmt(sh.W, 1)}</td></tr>
+        <tr><td class="lft">Three plates used in the checks (web D = d − 2t<sub>f</sub> = ${U.fmt(pr.pl.D, 4)} in)</td><td>${f3(sh.d)}</td><td>${f3(sh.bf)}</td><td>${f3(sh.tf)}</td><td>${f3(sh.tw)}</td><td>${U.fmt(pr.A3, 2)}</td><td>${U.fmtInt(pr.I3)}</td><td>${U.fmt(pr.W3, 1)}</td></tr>
+        <tr><td class="lft">Three plates / tabulated</td><td></td><td></td><td></td><td></td><td>${f3(pr.rA)}</td><td>${f3(pr.rI)}</td><td></td></tr></tbody></table></div>
+        <p class="note">The checks take ${esc(sh.name)} as three plates (the fillets are left out); the girder weight is the tabulated ${U.fmt(sh.W, 1)} lb/ft. Worked in <b>Section properties</b>, topic "Rolled shape". One steel grade (Materials tab); no flange-to-web welds; cover plates are not modelled.
+        Set the flange fatigue category for the rolled section (base metal, Category A, unless a detail governs) on the Fatigue &amp; studs tab.</p>
+        <button type="button" id="rl_all"${g.segments.length < 2 ? ' hidden' : ''}>Use ${esc(sh.name)} on every segment of this type</button>
+        <div class="fRow"><label for="rl_nmin">W-shape search: nominal depth from / to</label><input type="number" step="1" id="rl_nmin" value="${esc(rlNom.min)}" placeholder="any" style="width:70px"><input type="number" step="1" id="rl_nmax" value="${esc(rlNom.max)}" placeholder="any" style="width:70px"><span class="unit">in</span></div>
+        <button type="button" id="rl_auto" title="Tries the W shapes from the lightest up on the rolled segments of this type and stops at the first that passes every check of Auto design's full evaluation">Find the lightest W shape that passes</button>
+        <div id="rl_autoOut">${rlRun && rlRun.g === ui.g ? rlRun.html : ''}</div>` : on ? '<p class="note">Pick a shape: its flange and web sizes fill the plate fields above (read-only). Until a shape is picked the segment stays a plate girder.</p>' : ''}`);
+  }
+  function rlSearch() {
+    const RL = window.SBDRolled, AD = window.SBDAutoDesign, gi = ui.g, out = () => $('rl_autoOut'); if (!RL || !AD || (rlRun && rlRun.busy)) return;
+    const IE = window.SBDInputCheck ? window.SBDInputCheck.collect(P).errors : []; if (IE.length) { alert(`The W-shape search cannot run: ${IE.length} input${IE.length > 1 ? 's need' : ' needs'} fixing first.`); return; }
+    const cS = {}, cF = {}, nm = k => { const v = parseFloat(($(k) || {}).value); return v > 0 ? v : 0; }; rlNom = { min: ($('rl_nmin') || {}).value || '', max: ($('rl_nmax') || {}).value || '' };
+    const Q0 = JSON.parse(JSON.stringify(P)), it = RL.lightest(Q0, gi, Q => { const E = AD.evaluate(Q, { level: 'full', ctx: cF }); return { pass: E.pass, ratio: E.ratio, gov: E.gov }; },
+      { nomMin: nm('rl_nmin'), nomMax: nm('rl_nmax'), skipAbove: 1.25, screen: Q => AD.evaluate(Q, { level: 'screen', ctx: cS }).ratio });
+    rlRun = { g: gi, busy: true, html: '<p class="note">Searching…</p>' };
+    const step = () => { let r; try { r = it.next(); } catch (e) { rlRun = { g: gi, html: `<div class="alert err">The W-shape search failed: ${esc(e && e.message)}</div>` }; if (out()) out().innerHTML = rlRun.html; return; }
+      if (!r.done) { rlRun.html = `<p class="note">Searching: ${esc(r.value.name)} (${r.value.i + 1} of ${r.value.n}, lightest first)… <button type="button" id="rl_stop">Stop</button></p>`; if (out()) out().innerHTML = rlRun.html; if (rlRun.stop) { rlRun = { g: gi, html: '<p class="note">Search stopped.</p>' }; if (out()) out().innerHTML = rlRun.html; return; } setTimeout(step, 0); return; }
+      const F = r.value.found, near = r.value.tried.filter(q => !q.skipped && !q.pass).slice(-4).reverse();
+      rlRun = { g: gi, found: F ? F.name : null, html: F ? `<div class="alert"><b>Lightest W shape that passes: ${esc(F.name)}</b> (${U.fmt(F.W, 0)} lb/ft; governing ratio ${U.fmt(F.ratio, 3)}${F.gov ? `, ${esc(F.gov.id || '')} ${window.SBDSub.html(F.gov.title || '')}` : ''}). ${r.value.tried.length} lighter or equal shapes tried, lightest first: ${r.value.nFull} checked in full, ${r.value.nSkip} left out by the quick check (flexure and shear ratio above 1.25). Full check: every module, as Auto design evaluates the project, with the detail inputs as entered (stiffeners, cross-frames, studs, splices). <button type="button" id="rl_use" class="primary">Use ${esc(F.name)}</button>${near.length ? `<br>Lighter shapes checked in full that do not pass (the heaviest ${near.length}): ${near.map(q => `${esc(q.name)}: ${q.gov ? `${esc(q.gov.id || '')} ${window.SBDSub.html(q.gov.title || '')}` : ''}${isFinite(q.ratio) ? ', ratio ' + U.fmt(q.ratio, 3) : ''}`).join('; ')}.` : ''}</div>`
+        : `<div class="alert err">No W shape of the list passes every check (${r.value.tried.length} tried: ${r.value.nFull} in full, ${r.value.nSkip} left out by the quick check). The span or the loads need a plate girder, or other inputs (girder spacing, bracing, stiffeners) must change.</div>` };
+      if (out()) out().innerHTML = rlRun.html; };
+    setTimeout(step, 0);
+  }
   function typesCard() {
     const nb = P.xs ? M.lineTypes(P).length : 0, gi0 = Math.min(ui.g, P.girders.length - 1), g = P.girders[gi0], L = M.typeLines(P, gi0);
     const rows = P.girders.map((q, gi) => { const Lq = M.typeLines(P, gi); return `<tr class="${gi === gi0 ? 'sel' : ''}"><td><button type="button" data-gsel="${gi}" title="Select this type">${esc(tyName(gi))}</button></td><td>${esc(q.position)}</td><td class="lft">${Lq.length ? lnList(Lq) : '<i>none</i>'}</td><td>${Lq.length ? lnName(M.designLine(P, q)) : ''}</td></tr>`; }).join('');
@@ -507,8 +555,9 @@
           <p class="note">Slab thickness, haunch and the rebar areas: <a href="#" data-itgo="xsec">Cross-section tab</a>.</p>`),
       gird: typesCard()
         + card(`Plate segments of ${esc(g.label || g.id)} (from the left end)`, `<div class="tscroll"><table class="tbl"><thead><tr><th></th><th>x<sub>0</sub><br>ft</th><th>x<sub>1</sub><br>ft</th><th>D<br>in</th><th>t<sub>w</sub><br>in</th><th>b<sub>t</sub><br>in</th><th>t<sub>t</sub><br>in</th><th>b<sub>b</sub><br>in</th><th>t<sub>b</sub><br>in</th><th></th></tr></thead><tbody>
-          ${g.segments.map((s, i) => `<tr class="${i === ui.seg ? 'sel' : ''}"><td><button type="button" data-seg="${i}" title="Show this segment's section properties">${i + 1}</button></td>${['x0', 'x1', 'D', 'tw', 'topB', 'topT', 'botB', 'botT'].map(k => `<td><input type="number" step="any" data-path="girders.${ui.g}.segments.${i}.${k}" data-kind="num" value="${esc(s[k])}" aria-label="segment ${i + 1} ${k}"></td>`).join('')}<td><button type="button" data-del="${i}" title="Remove this segment"${g.segments.length < 2 ? ' disabled' : ''}>×</button></td></tr>`).join('')}
-          </tbody></table></div><button type="button" id="bAddSeg">Add segment</button><p class="note">Segments are contiguous: each starts where the one before ends. Plate thicknesses may be typed as decimals (0.5625).</p>`),
+          ${g.segments.map((s, i) => `<tr class="${i === ui.seg ? 'sel' : ''}"><td><button type="button" data-seg="${i}" title="Show this segment's section properties">${i + 1}</button></td>${['x0', 'x1', 'D', 'tw', 'topB', 'topT', 'botB', 'botT'].map(k => `<td><input type="number" step="any" data-path="girders.${ui.g}.segments.${i}.${k}" data-kind="num" value="${esc(s[k])}" aria-label="segment ${i + 1} ${k}"${rlName(s) && k !== 'x0' && k !== 'x1' ? ` readonly class="rl-ro" title="${esc(rlName(s))}: set by the rolled shape (Section type card below)"` : ''}></td>`).join('')}<td><button type="button" data-del="${i}" title="Remove this segment"${g.segments.length < 2 ? ' disabled' : ''}>×</button></td></tr>`).join('')}
+          </tbody></table></div><button type="button" id="bAddSeg">Add segment</button><p class="note">Segments are contiguous: each starts where the one before ends. Plate thicknesses may be typed as decimals (0.5625).${g.segments.some(rlName) ? ` Rolled shapes: ${g.segments.map((s, i) => (rlName(s) ? `segment ${i + 1} ${esc(rlName(s))}` : '')).filter(Boolean).join(', ')} (plate sizes set by the shape, shaded).` : ''}</p>`)
+        + rolledCard(g),
       framing: window.SBDFramingUI.inputs(P, { num, sel, card, esc }, ui),   // framing.* and crossframes.* (the wind card: Loads tab)
       loads: xsp.ws + xsp.extra + xsp.dist + window.SBDFramingUI.windCard(P, { num, sel, card, esc })
         + loadsPick() + window.SBDAnalysisUI.inputs(loadsView(), Math.min(ui.g, P.girders.length - 1), { lov: lovCtx() }),   // AIN (2026-11-09): the analysis inputs, moved here from the Analysis output tab
@@ -557,7 +606,11 @@
   $('inPanes').addEventListener('change', e => {
     const el = e.target;
     if (el.id === 'i__g' || el.id === 'i__gHo' || el.id === 'i__gLd') { ui.g = +el.value; ui.seg = 0; delete ui.ln; delAsk = null; saveUi(); drawInputs(); markStale(); return; }
-    if (el.id === 'i__lnLd') { ui.ln = +el.value; saveUi(); drawInputs(); return; }   // SB-2: the line of the Loads tab's cards (display only)
+    if (el.id === 'i__lnLd') { ui.ln = +el.value; saveUi(); drawInputs(); return; }
+    if (el.id === 'rl_find' || el.id === 'rl_nmin' || el.id === 'rl_nmax') { if (el.id !== 'rl_find') rlNom[el.id === 'rl_nmin' ? 'min' : 'max'] = el.value; return; }   // ROLL: the search text (page state; the list is filtered on input)
+    if (el.id === 'rl_type' || el.id === 'rl_shape') { const g = P.girders[ui.g], s = g.segments[Math.min(ui.seg, g.segments.length - 1)], RL = window.SBDRolled;   // ROLL: plate girder / rolled shape of the selected segment
+      if (el.id === 'rl_type') { if (el.value === 'rolled') { rlAsk = rlKey(); drawInputs(); } else { rlAsk = null; if (s.shape != null) { RL.clear(s); changed(true); } else drawInputs(); } return; }
+      if (el.value && RL.apply(s, el.value)) { rlAsk = null; rlRun = null; changed(true); } return; }   // SB-2: the line of the Loads tab's cards (display only)
     if (el.id === 'i__lovLd') { ui.lov = el.value === 'line'; saveUi(); drawInputs(); return; }   // SBLO: entered for the type or the line only (UI choice, sbd2.ui)
     if (window.SBDAnalysisUI.onInputChange(el, P, Math.min(ui.g, P.girders.length - 1), { lov: lovOn() ? { j: lnSel() } : null })) { changed(true); return; }   // AIN: the analysis inputs (ui/analysis.js)
     if (el.dataset.path === 'xs.nb') { const LT0 = M.lineTypes(P), nb0 = LT0.length; if (UL.onChange(el, P)) { const ch = M.renumberLines(P, LT0); changed(true); if (ch) nbNotice(nb0, ch); else nbOffer(nb0); return; } }   // SB-2: N_b changed; SBNB (SB-14): typed projects re-assigned at once, with a notice and Undo
@@ -590,6 +643,10 @@
       if (id === 'bDelType') { delAsk = gi; drawInputs(); return; }
       if (id === 'bDelTypeNo') { delAsk = null; drawInputs(); return; }
       if (id === 'bDelTypeOk') { const to = $('i_delTo') ? +$('i_delTo').value : (gi ? 0 : 1); delAsk = null; if (M.deleteType(P, gi, to)) { ui.g = Math.min(to > gi ? to - 1 : to, P.girders.length - 1); ui.seg = 0; saveUi(); changed(true); } return; } }
+    if (e.target.id === 'rl_all') { const g = P.girders[ui.g], nm = rlName(g.segments[Math.min(ui.seg, g.segments.length - 1)]); if (nm) { g.segments.forEach(z => window.SBDRolled.apply(z, nm)); changed(true); } return; }   // ROLL
+    if (e.target.id === 'rl_auto') { rlSearch(); return; }
+    if (e.target.id === 'rl_stop') { if (rlRun) rlRun.stop = true; return; }
+    if (e.target.id === 'rl_use') { if (rlRun && rlRun.found && rlRun.g === ui.g) { const g = P.girders[ui.g], R0 = g.segments.some(z => rlName(z)); g.segments.forEach(z => { if (!R0 || rlName(z)) window.SBDRolled.apply(z, rlRun.found); }); rlRun = null; changed(true); } return; }
     const s = e.target.closest('[data-seg]'), d = e.target.closest('[data-del]');
     if (s) { ui.seg = +s.dataset.seg; saveUi(); drawInputs(); markStale(); return; }
     if (d) { const g = P.girders[ui.g], i = +d.dataset.del, S = g.segments; S.splice(i, 1); if (S[i]) S[i].x0 = i ? S[i - 1].x1 : 0; ui.seg = Math.min(ui.seg, S.length - 1); changed(true); return; }
@@ -756,6 +813,7 @@
   $('pbMove').remove();
   $('bUndo').addEventListener('click', undo); $('bRedo').addEventListener('click', redo);
   document.addEventListener('input', e => { if (e.target && e.target.dataset) e.target.dataset.typing = '1'; }, true);
+  $('inPanes').addEventListener('input', e => { if (e.target.id !== 'rl_find') return; rlFind = e.target.value; const sl = $('rl_shape'); if (sl) sl.innerHTML = rlOptions(rlName(P.girders[ui.g].segments[Math.min(ui.seg, P.girders[ui.g].segments.length - 1)])); });   // ROLL: the shape list filtered as typed (page state)
   document.addEventListener('change', e => { if (e.target && e.target.dataset) delete e.target.dataset.typing; }, true);
   document.addEventListener('blur', e => { if (e.target && e.target.dataset) delete e.target.dataset.typing; }, true);
   document.addEventListener('keydown', e => {
@@ -876,7 +934,7 @@
     let h = `<div class="alert stale"${stale ? '' : ' hidden'}><span>Results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="bCalc">Calculate</button></div>`;
     if (L.note) h += `<div class="alert">${esc(L.note)}</div>`;
     if (ui.otab === 'loads') { $('out').innerHTML = h + UL.output(R && !stale && !R.errors ? R.loads : null, ui, R && !stale && R.errors); if (UL.after) UL.after($('out'), P, R && !stale && !R.errors ? R.loads : null, ui); return; }
-    h += `<div class="fRow"><label>Location</label><span>${esc(g ? g.label || g.id : '')}, segment ${ui.seg + 1}${s ? ` (x = ${U.fmt(s.x0, 2)} to ${U.fmt(s.x1, 2)} ft)` : ''}</span></div>
+    h += `<div class="fRow"><label>Location</label><span>${esc(g ? g.label || g.id : '')}, segment ${ui.seg + 1}${s ? ` (x = ${U.fmt(s.x0, 2)} to ${U.fmt(s.x1, 2)} ft)` : ''}${s && rlName(s) ? `: rolled shape <b>${esc(rlName(s))}</b>, as three plates (<a class="wk" href="#st-rolled.D">see work</a>)` : ''}</span></div>
       <div class="fRow"><label for="o_region">Flexure region</label><select id="o_region"><option value="pos"${ui.region === 'pos' ? ' selected' : ''}>Positive (top flange in compression)</option><option value="neg"${ui.region === 'neg' ? ' selected' : ''}>Negative (bottom flange in compression)</option></select></div>`;
     if (R && R.errors) h += `<div class="alert err"><b>Input errors.</b><ul>${R.errors.map(e => `<li>${esc(e.msg)}</li>`).join('')}</ul></div>`;
     else if (R && !stale) {
@@ -893,7 +951,7 @@
         ${c.pl.below ? '<div class="alert err">The plastic neutral axis falls below the web: outside Table D6.1-1 and D6.3.2 (see the work).</div>' : ''}
         ${R.lf.h0 ? `<div class="alert">Haunch taken as 0 in the composite properties (${esc(R.lf.cite.h)}; owner rule): see the Loads &amp; LLDF tab. Its weight stays in DC1.</div>` : ''}${R.nr.wc !== P.materials.concrete.wc ? `<div class="alert">E<sub>c</sub> from w<sub>c</sub> = ${U.fmt(R.nr.wc, 3)} kcf (w<sub>c</sub> for E<sub>c</sub>, Materials input tab).</div>` : ''}
         ${R.warnings.length ? `<div class="alert">${R.warnings.map(w => esc(w.msg)).join('<br>')}</div>` : ''}`);
-      h += card('Worked steps', `<p class="note">Each value above links here (§). AASHTO LRFD 10th Ed. (2024). y is measured up from the bottom of the steel.</p>${stepsHtml(R.nr.steps.concat(c.steps))}`);
+      h += card('Worked steps', `<p class="note">Each value above links here (§). AASHTO LRFD 10th Ed. (2024). y is measured up from the bottom of the steel.</p>${stepsHtml(R.nr.steps.concat(window.SBDRolled ? window.SBDRolled.steps(R.s) : [], c.steps))}`);   // ROLL: a rolled segment's shape, tabulated values and three plates first
     }
     $('out').innerHTML = h;
     ST.wire($('out'), { onToggle: (k, open) => { if (open) secOpen.add(k); else secOpen.delete(k); } });

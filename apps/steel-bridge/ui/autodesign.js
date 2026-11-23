@@ -80,6 +80,8 @@
   const scopes = P => { const n = (P.girders || []).length, typed = AD().typeScope(P) === 'each'; return typed ? ['each'] : (n > 1 ? ['together', 'each'] : ['together']); };
   const joint = P => (P.girders || []).length > 1;
   const scopeOf = P => { const L = scopes(P); return L.includes(S.scope) ? S.scope : L[0]; };
+  /* ROLL (2026-11-23): the girder types of the run's scope that have a rolled shape (engine/rolled.js): Auto design sizes plates only */
+  const rolledTypes = P => { const RL = window.SBDRolled; if (!RL) return []; const T = scopeOf(P) === 'sel' ? [Math.min(S.gi || 0, P.girders.length - 1)] : P.girders.map((_, q) => q); return T.filter(q => RL.girderRolled(P.girders[q])); };
   const tyLab = (P, t) => { const g = P.girders[t] || {}, M = window.SBDModel, L = M.typeLines ? M.typeLines(P, t) : []; return `${g.label || g.id}${L.length ? ` (${L.map(j => 'G' + (j + 1)).join(', ')})` : ''}`; };
   const lockLab = P => ((P.girders || []).length > 1 ? AD().TYPE_LOCK : ['nb']).map(id => (AD().VARS.find(v => v.id === id) || { label: id }).label);
   function scopeHtml(P, gi) {
@@ -90,7 +92,7 @@
   function runBar(P, gi) {
     const IE = window.SBDInputCheck ? window.SBDInputCheck.collect(P).errors : [];   // SBINV (2026-11-10): Run is refused while an input error exists
     return `<section class="sec"><div class="secBody">${IE.length ? `<div class="alert err" id="ad_blocked">Auto design cannot run: ${IE.length} input${IE.length > 1 ? 's need' : ' needs'} fixing first (marked in red on their tabs and listed above the results).</div>` : ''}
-      ${scopeHtml(P, gi)}<div class="fRow"><button type="button" class="primary" id="ad_run"${S.running || IE.length ? ' disabled' : ''}>Run Auto design</button><button type="button" id="ad_stop"${S.running ? '' : ' disabled'}>Stop</button>
+      ${scopeHtml(P, gi)}<div class="fRow"><button type="button" class="primary" id="ad_run"${S.running || IE.length ? ' disabled' : ''}>Run Auto design</button><button type="button" id="ad_stop"${S.running ? '' : ' disabled'}>Stop</button>${rolledTypes(P).length ? `<p class="note" id="ad_rolled" style="flex-basis:100%"><b>Rolled shapes:</b> Auto design sizes plate girders and does not run while a girder type it would size has a rolled shape (${rolledTypes(P).map(t => esc(tyLab(P, t))).join(', ')}). For a rolled shape use "Find the lightest W shape that passes" on the Girders &amp; plates tab.</p>` : ''}
 </div>
       ${bar()}<p class="note">The candidates, Apply and Undo the last Apply are on the <a href="#" data-adout="1">Auto design output tab</a>.</p></div></section>`;
   }
@@ -326,6 +328,7 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
       setTimeout(() => { if (ctx.changed) ctx.changed(true); }, 0); });
     on('#ad_run', 'click', () => { const IE = window.SBDInputCheck ? window.SBDInputCheck.collect(P).errors : [];   // SBINV (2026-11-10): no run while an input error exists
       if (IE.length) { alert(`Auto design cannot run: ${IE.length} input${IE.length > 1 ? 's need' : ' needs'} fixing first.\n\n${IE.slice(0, 12).map(e => '- ' + e.msg).join('\n')}`); return; }
+      { const RLt = rolledTypes(P); if (RLt.length) { alert(`Auto design sizes plate girders. ${RLt.map(t => tyLab(P, t)).join(', ')} ${RLt.length > 1 ? 'have' : 'has'} a rolled shape, which it does not size.\n\nFor a rolled shape: Girders & plates tab, "Find the lightest W shape that passes". To size plates here instead, set the segments to Plate girder first.`); return; } }   // ROLL (2026-11-23)
       S.running = true; S.stop = false; S.err = ''; S.R = null; S.RT = null; S.J = null; S.selT = null; S.sel = 0; S.cmp = ['cur', '0']; S.prog = { f: 0, msg: 'Starting…' }; const k = key(P); redraw(); if (ctx.showOut) ctx.showOut();
       const sc = scopeOf(P);
       if (sc !== 'together' && joint(P)) {   // SBJD (SB-4, SB-11): the joint run of every type with one common web depth

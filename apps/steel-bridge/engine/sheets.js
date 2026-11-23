@@ -112,13 +112,14 @@
   /* weld size of a plate segment as the Welds tab takes it (engine/welds.js fromDemands): the entered size, else the minimum for the
      thickest of the flanges and the web (Table 6.13.3.4-1) */
   const fwSize = (P, s) => { const w = (P.welds || {}).w; return w === '' || w == null ? window.SBDWelds.wMinFor(Math.max(s.topT, s.botT, s.tw)) : +w; };
+  const rlA = s => (window.SBDRolled ? window.SBDRolled.wtA(s) : null);   // ROLL (2026-11-23): the weight area of a rolled segment (W / (490/144)); null for a plate segment
   function quantities(G, RS) {
     const P = G.P, T = ((G.stf || {}).transverse || {}).types || {}, Bt = ((G.stf || {}).bearing || {}).types || {}, rows = [], welds = [];
     let lb = 0, nCp = 0, nSt = 0, nBs = 0, nSpl = 0, nBolt = 0, nStud = 0, okBolt = true;
     const fw = new Map(), add = (k, w, lines, L) => { const key = `${k}|${w}`, q = fw.get(key) || { k, w, lines, L: 0 }; q.L += lines * L; fw.set(key, q); };   // L: total weld length (lines x welded length), in
     const zonesOf = g => (P.studs && P.studs.zones && P.studs.zones.length) ? P.studs.zones : ((resOf({ RS }, g) || {}).fat || {}).SR ? resOf({ RS }, g).fat.SR.zones : [];
     G.girders.forEach(g => {
-      g.segs.forEach(s => { const L = (s.s1 - s.s0) * 12; lb += L * (s.topB * s.topT + s.botB * s.botT + s.D * s.tw) * GAM; add('FLANGE-TO-WEB FILLET WELDS (2 PER FLANGE)', fwSize(P, s), 4, L); });
+      g.segs.forEach(s => { const L = (s.s1 - s.s0) * 12; lb += L * (rlA(s) || (s.topB * s.topT + s.botB * s.botT + s.D * s.tw)) * GAM; if (!rlA(s)) add('FLANGE-TO-WEB FILLET WELDS (2 PER FLANGE)', fwSize(P, s), 4, L); });   // ROLL (2026-11-23): a rolled segment at its tabulated weight, and without flange-to-web welds
       const D = g.Dmax, cp = T.B || { bt: 6, tp: 0.5, w: 0.25, c: 1, sides: '1' }, ts = T.A || cp, sd = t => (String(t.sides) === '2' ? 2 : 1);
       nCp += g.cps.length; add('CONNECTION PLATE-TO-WEB FILLET WELDS', +cp.w || 0.25, 2, g.cps.length * (D - 2 * (+cp.c || 1))); add('CONNECTION PLATE-TO-FLANGE FILLET WELDS', +cp.w || 0.25, 4, g.cps.length * Math.max(0, (+cp.bt || 6) - (+cp.c || 1)));
       nSt += g.stiff.length * sd(ts); add('INTERMEDIATE STIFFENER-TO-WEB FILLET WELDS', +ts.w || 0.25, 2, g.stiff.length * sd(ts) * (D - (+ts.c || 1) - (+ts.gap || 0)));
@@ -164,7 +165,7 @@
   }
 
   /* ---------- erection diagram, shipping pieces, girder layout (dxfErect) ---------- */
-  const wtAt = (S, a, b) => S.reduce((v, s) => v + Math.max(0, Math.min(b, s.s1) - Math.max(a, s.s0)) * 12 * (s.topB * s.topT + s.botB * s.botT + s.D * s.tw), 0) * GAM / 1000;
+  const wtAt = (S, a, b) => S.reduce((v, s) => v + Math.max(0, Math.min(b, s.s1) - Math.max(a, s.s0)) * 12 * (rlA(s) || (s.topB * s.topT + s.botB * s.botT + s.D * s.tw)), 0) * GAM / 1000;
   /* SBFLIP (2026-11-10, engineer): drawn as the framing plan (DW.plan), G1 at the top, G_nb at the bottom, stations to the right:
      Y(y) = (y_nb − y)·12; the support lines run past G1 and G_nb by 2h, the FS marks below G_nb, the title above G1, the tables below */
   function erect(D, C) {
@@ -237,10 +238,11 @@
     const room = d => { const i = j + d; if (i < 0 || i >= G.nb) return Infinity; const q = sec[i]; return Math.abs(G.ys[i] * 12 - x) - Math.max(q.topB, q.botB) / 2 - s.tw / 2 - 0.6 * h; };
     const wT = 8.4 * h + tl(nT) > room(1), wB = 8.4 * h + tl(nB) > room(-1);
     const rT = -Math.max(1.0 * h, Math.min(3 * h, yTj - yLo - (wT ? 2.5 : 1.3) * h)), rB = Math.max(1.0 * h, Math.min(3 * h, s.D - 1.0 * h));
-    weld(D, lt, x + s.tw / 2, yTj, dIn(w), true, 'fillet', C.split ? '' : nT, 1, { rise: rT, wrap: wT }); weld(D, lt, x - s.tw / 2, yBj, dIn(w), true, 'fillet', C.split ? '' : nB, -1, { rise: rB, wrap: wB });
+    const rlS = !!rlA(s);   // ROLL (2026-11-23): the section drawn is a rolled shape: no flange-to-web weld symbols
+    if (!rlS) { weld(D, lt, x + s.tw / 2, yTj, dIn(w), true, 'fillet', C.split ? '' : nT, 1, { rise: rT, wrap: wT }); weld(D, lt, x - s.tw / 2, yBj, dIn(w), true, 'fillet', C.split ? '' : nB, -1, { rise: rB, wrap: wB }); }
     /* SBTXT (paper B, where the section is drawn at a smaller scale): each weld note where it is clear, first its place on paper D, else
        the nearest clear place in rows 1.2 h apart, with a leader from the end of the reference line */
-    if (C.split) { const F = DW().fit, S = F.scene(D, i0), pad = 0.08 * h, nh = 0.7 * h;
+    if (C.split && !rlS) { const F = DW().fit, S = F.scene(D, i0), pad = 0.08 * h, nh = 0.7 * h;
       [[x + s.tw / 2, yTj, rT, 1, nT, wT], [x - s.tw / 2, yBj, rB, -1, nB, wB]].forEach(([wx, wy, rise, dir, note, wrap]) => {
         const rx = wx + dir * 3 * h, ry = wy + rise, x1 = rx + dir * 5 * h, j = dir > 0 ? 0 : 2, at = (xx, yy) => ({ xx, yy, B: F.txBox(note, xx, yy, nh, j) });
         let pick = null; const first = wrap ? at(rx, ry - 2.4 * h) : at(x1 + dir * 0.4 * h, ry - 0.35 * h);
