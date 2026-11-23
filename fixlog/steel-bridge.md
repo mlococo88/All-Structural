@@ -10719,7 +10719,7 @@ Basis: AASHTO Manual for Bridge Evaluation, 4th Ed. (2026), Section 6A (cited an
 10. **Load-dependent capacities** (C_b, the f_ℓ amplification, D_c) are worked by the Flexure module from the vehicle's own moments with that module's design load factors, exactly as the HL-93 rating does with the HL-93 moments.
 11. **Service II for permit loads** is rated (γ_LL 1.00) and can govern the permit RF.
 
-## 2026-11-23 — PR: claude/sb-smoke-fixes (SMK) — two browser smokes brought up to date with merged display changes (test files only; no app file, no calculation, no saved data changed)
+## 2026-11-23 — PR: claude/sb-smoke-fixes (PR #1677: https://github.com/mlococo88/All-Structural/pull/1677) (SMK) — two browser smokes brought up to date with merged display changes (test files only; no app file, no calculation, no saved data changed)
 ### Problem
 Three Steel Bridge browser smokes were reported failing on origin/main (8daf9e1); the Node engine suite was clean. Each was run alone, twice.
 - `tests/smoke/steel-bridge-library.mjs`: stale test. It expected the buttons of the "Save and open" card to be exactly
