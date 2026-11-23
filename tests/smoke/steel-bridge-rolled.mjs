@@ -111,6 +111,13 @@ try {
   assert.match(rpt, /positive flexure, rolled shape W36X135/);
   assert.match(rpt, /W36X135 \(rolled shape; d 35\.600/);
   mark('B report');
+  // Drawings: the sheets build; the elevation and the plate schedule name the shape
+  const dwg = await p.evaluate(() => { const Q = JSON.parse(localStorage.getItem('sbd2.project.current')), B = window.SBDSheets.build(window.SBDDrawings.model(Q), null, { paper: 'D' }), txt = B.D.toDXF({ ltscale: 1 });
+    return { n: B.sheets.length, ok: window.SharedDxf.validate(txt).ok !== false, txt }; });
+  assert.ok(dwg.n >= 8, 'sheets built: ' + dwg.n);
+  assert.match(dwg.txt, /W36X135 \(ROLLED SHAPE\)/); assert.match(dwg.txt, /^ROLLED SHAPE\r?$/m, 'plate schedule row'); assert.match(dwg.txt, /^W36X135\r?$/m); assert.ok(!/FLANGE-TO-WEB FILLET WELDS/.test(dwg.txt), 'no flange-to-web weld quantity'); assert.ok(!/TOP FL\. 12/.test(dwg.txt));
+  await p.click('#tabBar [data-otab="dwg"]'); await p.waitForSelector('.dwg-box svg', { timeout: 600000 });
+  mark('B drawings');
   // Nomenclature: the symbols of the rolled steps
   const nm = await outTab(p, 'nm'); assert.match(nm, /Flange face to the web toe of the fillet/);
   // Auto design: plates only

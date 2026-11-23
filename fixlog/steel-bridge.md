@@ -10878,7 +10878,7 @@ None (tests only; no formula, factor, unit or reference touched).
 ### Open items (not changed; for the engineer)
 - ROLL-D1 to ROLL-D9 above are decisions pending review.
 - Diaphragm / cross-frame fit (CFD, CF10): d ≤ D_0 − c with D_0 = the web depth D = d − 2 t_f and the entered clearance c (default 2 in,
-  1 in top and bottom). The fillet of a rolled girder is not checked against c/2 (k_des − t_f is 0.4 to 1.3 in for the list).
+  1 in top and bottom). The fillet of a rolled girder is not checked against c/2 (k_des − t_f is 0.25 to 1.18 in for the list).
 - Bearing and transverse stiffeners, connection plates: sized and checked as on a plate girder (widths against (b_f − t_w)/2, welds to
   the web and flanges, clips). The clip is not checked against the fillet radius.
 - Cover plates are not modelled (said on the card). Camber of a rolled beam (mill camber, heat cambering limits) is not addressed:
