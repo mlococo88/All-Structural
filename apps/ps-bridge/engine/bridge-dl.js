@@ -268,6 +268,7 @@
         on0(w.fence, `xs.dl.sw${s}.fence`, `${side} sidewalk railing or fence weight`);
         if (!(isNum(w.fenceX) && w.fenceX > 0 && w.fenceX <= (+w.w > 0 ? +w.w : 0) + 1e-9)) e(`xs.dl.sw${s}.fenceX`, `${side} sidewalk railing or fence: its position from the deck edge must be on the sidewalk (0 < x ≤ ${+w.w > 0 ? w.w + ' ft' : 'the sidewalk width; no sidewalk is entered'}).`); } });
     if (q.med) { nn(q.med.w, 'xs.dl.med.w', 'Raised median width'); if (+q.med.w > 0) nn(q.med.t, 'xs.dl.med.t', 'Median thickness'); }   // PR 9
+    if (!blank(q.ped)) nn(q.ped, 'xs.dl.ped', 'Pedestrian live load');   // PL-A
     if (!blank(q.wcA) && !(isNum(q.wcA) && q.wcA > 0)) e('xs.dl.wcA', 'Curb / sidewalk / median concrete unit weight must be positive (or blank for the deck w_c).');
     if (q.wsMode === 'thk') { if (!(isNum(q.wsThk) && q.wsThk > 0)) e('xs.dl.wsThk', 'Wearing surface by thickness: enter a positive thickness.'); if (!(isNum(q.wsGam) && q.wsGam > 0)) e('xs.dl.wsGam', 'Wearing surface by thickness: enter a positive unit weight.'); }
     else { if (q.wsMode != null && q.wsMode !== 'psf') e('xs.dl.wsMode', 'Choose how the wearing surface is entered.'); nn(q.fws, 'xs.dl.fws', 'Wearing surface'); }
@@ -276,7 +277,7 @@
       else nn(r.psf, `xs.dl.ovl.${i}.psf`, `${L}: the weight`); });
     const Wd = deckWidth(P);
     (Array.isArray(q.extra) ? q.extra : []).forEach((r, i) => {
-      if (!CATS.includes(r.cat)) e(`xs.dl.extra.${i}.cat`, `Added line load ${i + 1}: choose DC2, DW or DC1.`);
+      if (!CATS.includes(r.cat)) e(`xs.dl.extra.${i}.cat`, `Added line load ${i + 1}: choose DC2, DW, DC1 or Utility.`);
       if (r.dist != null && !XDIST.includes(r.dist)) e(`xs.dl.extra.${i}.dist`, `Added line load ${i + 1}: choose its distribution.`);
       if (!(isNum(r.x) && r.x >= 0 && (!isNum(Wd) || r.x <= Wd + 1e-9))) e(`xs.dl.extra.${i}.x`, `Added line load ${i + 1}: x must be from 0 to the deck width${isNum(Wd) ? ` ${Wd.toFixed(2)} ft` : ''}.`);
       nn(r.plf, `xs.dl.extra.${i}.plf`, `Added line load ${i + 1}: the line load`); });
@@ -298,9 +299,19 @@
        med: { w (ft), t (in), joint (true / false) } (raised median at the deck centre); wcA (kcf, curb / sidewalk / median concrete,
        blank = the deck's w_c for loads); wsMode ('psf' default | 'thk') with wsThk (in), wsGam (kcf); ovl: [{ name, mode ('psf' | 'thk'),
        psf, thk, gam }] (overlays, DW); extra[i].dist ('auto' default | 'pilecap' | 'equal' | 'two'); extra[i].cat also 'DC1'.
-     Not offered (the moved engine has no input for them): the steel app's pedestrian live load (PL), utilities on the noncomposite
-     section with DW factors (UT) and the future utility allowance (UF), stay-in-place forms by area and the steel detail allowance. */
-  const CATS = ['DC2', 'DW', 'DC1'], XDIST = ['auto', 'pilecap', 'equal', 'two'];
+     Not offered (the moved engine has no input for them): the future utility allowance on the noncomposite section (UF), stay-in-place
+     forms by area and the steel detail allowance.
+     PL-A (2026-11-23, engineer: "close the gaps vs the Steel Bridge app"; fixlog/ps-bridge.md PL-A; optional within psb2.project v1, absent
+     or 0 in every project saved before: the results as before):
+       ped (psf): the pedestrian live load of AASHTO LRFD 10th Ed. Art. 3.6.1.6 (0.075 ksf = 75 psf) on each sidewalk wider than 2.0 ft
+         (PED_MIN), on its walkable width b_walk = sidewalk width − the deck edge's traffic face (the steel app's dead(): a line load
+         PL / 1000 × b_walk at the middle of the walkable width), distributed to the girder lines by the project's method exactly as the
+         steel app distributes it (dead(): 'massdot' the pile-cap method, 'aashto' equally to all beams, 'ridot' the two adjacent beams by
+         the lever rule). pl(P) / line(P, g).PL; the engine takes it through engine/pl.js (inputs.pl).
+       extra[i].cat 'UT': a utility line load (DW, AASHTO LRFD 10th Ed. Art. 3.5.1: DW = wearing surfaces and utilities; Table 3.4.1-2
+         γ_DW), distributed as the steel app distributes its UT rows (dead()), added to the line's DW (the engine's w_DW: on the composite
+         section, on the continuous unit when made continuous). */
+  const CATS = ['DC2', 'DW', 'DC1', 'UT'], XDIST = ['auto', 'pilecap', 'equal', 'two'], PED_MIN = 2.0;
   const edgesOf = q => { const o = {}; ['L', 'R'].forEach(s => { const b = q['bar' + s] || {};
     o[s] = { type: b.type === 'curb' ? 'curb' : 'barrier', bw: b.bw, bwt: b.w, cw: b.cw, ch: b.ch, rw: b.rw, rp: b.rp, rf: b.rf, face: b.face }; }); return o; };
   const xsInOf = (q, sw) => ({ dl: { wcA: q.wcA, swL: sw('L'), swR: sw('R'), fenceL: (q.swL || {}).fence, fenceXL: (q.swL || {}).fenceX, fenceR: (q.swR || {}).fence, fenceXR: (q.swR || {}).fenceX,
@@ -326,34 +337,57 @@
     // (EDGE: edgeIn, bridgeEff, edgeLoads, xsIn). A barrier with none of the new inputs gives the same line load, x and traffic face as before.
     const Ed = EDGE.edgeIn(edgesOf(q), err), xi = EDGE.xsIn(xsInOf(q, sw), err); if (err.length) return null;
     const edges = EDGE.edgeLoads(EDGE.bridgeEff({ wc }, Ed), xi.wcA), med = q.med || {};
-    const R = dead({ Nb: N, OL: +x.ohL, ts, fL: Ed.L.f, fR: Ed.R.f }, { pos, Wdeck: Wd },
-      { method: q.method, ped: 0, swL: sw('L'), swThkL: swt('L'), swR: sw('R'), swThkR: swt('R'), medW: +med.w > 0 ? +med.w : 0, medThk: +med.w > 0 ? +med.t || 0 : 0, medJoint: med.joint ? 'yes' : 'no',
+    const args = (ped, swL, swR) => [{ Nb: N, OL: +x.ohL, ts, fL: Ed.L.f, fR: Ed.R.f }, { pos, Wdeck: Wd },
+      { method: q.method, ped, swL, swThkL: swt('L'), swR, swThkR: swt('R'), medW: +med.w > 0 ? +med.w : 0, medThk: +med.w > 0 ? +med.t || 0 : 0, medJoint: med.joint ? 'yes' : 'no',
         fws: xi.fws !== null ? xi.fws : +q.fws || 0, uwc: wc, uwcA: xi.wcA, hh: 0, sip: 0, bf: 0,
         fenceL: xi.fenceL, fenceXL: xi.fenceXL, fenceR: xi.fenceR, fenceXR: xi.fenceXR, wsThk: xi.wsThk, wsGam: xi.wsGam,
-        edges, extra: (q.extra || []).map((r, i) => ({ desc: r.name || `Added line load ${i + 1}`, cat: r.cat, x: +r.x, plf: +r.plf, dist: r.dist || 'auto' })), ovl: xi.ovl, ovr: null, bcls: null });
+        edges, extra: (q.extra || []).map((r, i) => ({ desc: r.name || `Added line load ${i + 1}`, cat: r.cat, x: +r.x, plf: +r.plf, dist: r.dist || 'auto' })), ovl: xi.ovl, ovr: null, bcls: null }];
+    const R = dead(...args(0, sw('L'), sw('R')));   // the dead loads: the same call as before PL-A (ped 0)
     const out = Object.assign({}, R, { wc, ts, Wd, edge: Ed });
+    // PL-A: the pedestrian live load, by a second call of the steel app's dead() with ped and only the sidewalks wider than 2.0 ft
+    // (3.6.1.6); each line load's shares do not depend on the other loads, so only its pedestrian rows, shares and steps are taken
+    const ped = +q.ped > 0 ? +q.ped : 0, pw = s => (sw(s) > PED_MIN + 1e-9 ? sw(s) : 0);
+    if (ped > 0) { const R2 = dead(...args(ped, pw('L'), pw('R'))), per = R2.per.filter(L => L.cat === 'PL');
+      out.ped = { q: ped, per, pl: R2.pl.slice(), narrow: ['L', 'R'].filter(s => sw(s) > 0 && !pw(s)), none: !per.length,
+        steps: R2.steps.filter(s => /^dl\.(load\.ped[LR]|G\d+\.ped[LR]|G\d+\.PL)$/.test(s.id)) }; }
     CACHE.key = key; CACHE.R = out; return out;
   }
+  /* pl(P) (PL-A): the pedestrian live load of the bridge: { q (psf), per: [the line loads], pl: [klf per girder line], narrow: [sides whose
+     sidewalk is 2.0 ft or narrower: no pedestrian load, 3.6.1.6], none, steps }; null when no pedestrian load is entered or not distributed */
+  function pl(P) { const R = distribute(P); return R && R.ped ? R.ped : null; }
   /* line(P, g): { DC2, DW } of girder line g (1-based) when distributed, else null. PR 9: with added line loads of category DC1, also
      DC1 = the line's share of them (added to the engine's w_NC, the non-composite DC1 on the bare girder; engine/design.js one()). */
   function line(P, g) { const R = distribute(P); if (!R) return null; const o = { DC2: R.dc2[g - 1], DW: R.dw[g - 1] };
+    // PL-A: utility line loads (UT) are DW (3.5.1): the line's share added to its DW (no UT row: DW exactly as before); PL its own value
+    if (R.ut && R.per.some(L => L.cat === 'UT')) { o.UT = R.ut[g - 1]; o.DWonly = o.DW; o.DW = o.DW + o.UT; }
+    if (R.ped && R.ped.pl[g - 1] !== 0) o.PL = R.ped.pl[g - 1];
     const d1 = R.per.filter(L => L.cat === 'DC1'); if (d1.length) o.DC1 = d1.reduce((a, L) => a + L.r[g - 1], 0); return o; }
   /* stepsFor(P, g): the worked steps of the distribution that give line g its DC2 and DW (ids dl.*): x̄, Σc² (pile-cap), each line load,
      the line's share of each and its DC2 and DW sums (dead()'s DC1 steps left out: the engine's own DC1 is worked on the Loads & LLDF tab) */
   function stepsFor(P, g) {
     const R = distribute(P); if (!R) return [];
-    const G = `dl.G${g}.`, keep = s => !/^dl\.G\d+\./.test(s.id) || (s.id.indexOf(G) === 0 && !/\.(trib|deck|haunch|sip|DC1)$/.test(s.id));
-    return R.steps.filter(keep);
+    const G = `dl.G${g}.`, keep = s => !/^dl\.G\d+\./.test(s.id) || (s.id.indexOf(G) === 0 && !/\.(trib|deck|haunch|sip|DC1|UF)$/.test(s.id));
+    let S = R.steps.filter(keep);
+    // PL-A: a utility (UT) row: the steel app's step relabelled (this app: DW, on the composite section) and the DW the engine takes
+    const q = line(P, g);
+    if (q && q.UT != null) {
+      S = S.map(s => s.id === G + 'UT' ? Object.assign({}, s, { label: `G${g}: utilities (DW)`, ref: `${ED} Art. 3.5.1` }) : s);
+      S.push(St().step({ id: G + 'DWt', label: `G${g}: DW the girder design takes (wearing surface and overlays + utilities), on the composite section`, sym: 'w_{DW}', eq: 'w_{DW,ws} + w_{UT}', sub: `${n4(q.DWonly)} + ${n4(q.UT)}`, value: q.DW, unit: 'klf', d: 4, ref: `${ED} Art. 3.5.1, Table 3.4.1-2`,
+        note: 'Utilities are DW (3.5.1) and take γ_DW; they act with the wearing surface on the composite section (on the continuous unit when the spans are made continuous). A utility hung before the deck is cast can be entered as a DC1 line load instead (bare girder, γ_DC).' }));
+    }
+    // PL-A: the pedestrian live load: its line loads, this line's shares and its w_PL (the steel app's steps)
+    if (R.ped) S = S.concat(R.ped.steps.filter(keep));
+    return S;
   }
   /* withSteps(Wl, P): the Loads & LLDF worked steps (engine/worked.js loads(): { steps, pairs, paths }) with the distribution's steps of the
      line shown appended, and the DC2 / DW input steps (ld.wDC2, ld.wDW) saying where their value comes from (§ link to the line's sum).
      Wl is changed and returned; nothing when not distributed. */
   function withSteps(Wl, P) {
     if (!Wl || !on(P) || !distribute(P)) return Wl;
-    const g = window.PSBDesign.sel(P).g;
+    const g = window.PSBDesign.sel(P).g, q0 = line(P, g);
     Wl.steps = Wl.steps.map(s => s.id === 'ld.wDC2' || s.id === 'ld.wDW' ? Object.assign({}, s, { label: `${s.id === 'ld.wDC2' ? 'DC2 superimposed dead load' : 'DW wearing surface'} (distributed to G${g})`,
-      note: `Distributed to girder line G${g} by the Steel Bridge app's method (§dl.G${g}.${s.id === 'ld.wDC2' ? 'DC2' : 'DW'}); on the composite section.` }) : s).concat(stepsFor(P, g));
-    const q = line(P, g);   // PR 9: added DC1 line loads: the line's share, added to w_NC (§dl.G<g>.DC1x)
+      note: `Distributed to girder line G${g} by the Steel Bridge app's method (§dl.G${g}.${s.id === 'ld.wDC2' ? 'DC2' : q0 && q0.UT != null ? 'DWt' : 'DW'}); on the composite section.` }) : s).concat(stepsFor(P, g));
+    const q = q0;   // PR 9: added DC1 line loads: the line's share, added to w_NC (§dl.G<g>.DC1x)
     if (q && q.DC1 != null) {
       const R = distribute(P), parts = R.per.filter(L => L.cat === 'DC1'), n4 = v => St().n(v, 4);
       Wl.steps = Wl.steps.map(s => s.id === 'ld.wDC1' ? Object.assign({}, s, { note: `${s.note ? s.note + ' ' : ''}w_NC includes G${g}'s share of the added DC1 line loads of the Cross-section tab, ${n4(q.DC1)} klf (§dl.G${g}.DC1x).` }) : s);
@@ -361,5 +395,5 @@
     }
     return Wl;
   }
-  window.PSBBridgeDL = { edgeFace, llFace, CATS, XDIST, OWNER_METHOD, ownerMethod, onOwner, withSteps, METHODS, DIST, defaults, on, checks, distribute, line, stepsFor, deckWidth, dead };
+  window.PSBBridgeDL = { pl, PED_MIN, edgeFace, llFace, CATS, XDIST, OWNER_METHOD, ownerMethod, onOwner, withSteps, METHODS, DIST, defaults, on, checks, distribute, line, stepsFor, deckWidth, dead };
 })();

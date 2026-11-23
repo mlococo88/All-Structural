@@ -223,7 +223,7 @@
     // engine path: the rating factor is formed app-side from the engine's demands and capacities at that station)
     const AL = window.PSBRatingAlong, A = AL ? AL.of(R) : null;
     if (A) K.w.take(AL.govSteps(A));
-    return K.done();
+    return window.PSBPL ? window.PSBPL.note(K.done(), R) : K.done();   // PL-A
   }
 
   window.PSBWorkedHDR = { handling, deck, rating };

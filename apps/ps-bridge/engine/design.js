@@ -150,6 +150,9 @@
     // PR 9 (§4, only with added line loads of category DC1 on the Cross-section tab): the line's share of them added to w_NC (the
     // non-composite DC1 on the bare girder); no DC1 line load: w_NC as entered (unchanged)
     if (q && q.DC1 != null) o.loads = Object.assign({}, o.loads, { wNC: +o.loads.wNC + q.DC1 });
+    // PL-A (§4, only with a pedestrian live load on the Cross-section tab, AASHTO LRFD 10th Ed. 3.6.1.6): this line's share w_PL (klf), which
+    // engine/pl.js adds to the engine's live load; no pedestrian load (every project saved before): no inputs.pl, the engine's own run
+    if (q && q.PL > 0) o.pl = { w: q.PL };
     // PS-20 (§4): d_e of an exterior line from the bridge cross-section (deOf) when the project has its barriers (P.xs.dl); else as entered
     const de = deOf(P, d.g); if (de != null) o.loads = Object.assign({}, o.loads, { de });
     // PS-19 (§4): with unequal bays the exterior rigid-section factor on the real girder lines (engine/rigid.js); equal bays and interior lines: nothing added
