@@ -205,6 +205,14 @@ node tests/smoke/lightpole-combo-view.mjs [--shots <dir>]
 # its values and results; the default pole unchanged; the combination count in the hint, the Report caption and the Manual = the number
 # of combinations in COMBOS; "segments" and t_d in the ice notes; the LRFDLTS Report without unresolved references. ~1 min
 node tests/smoke/lightpole-default-sign.mjs
+# The Shaft output in sub-tabs that follow the load path (LPSS, 2026-11-23; display only): 1 · Forces, 2 · Embedment, 3 · Soil bearing,
+# 4 · Reinforcement (LRFDLTS: no soil bearing), each showing only its cards, every output element in exactly one sub-tab; the summary strip
+# = the engine's depth and the check panel's largest D/C; per-browser key lpp_shaftSub_v1 (not in the project, kept over a reload); the
+# combination-view switch in every sub-tab; links open their sub-tab; the post selector; the Report's one "Drilled shaft" chapter in the
+# same order with every § reference resolved; nothing hidden in print; the LRFDLTS Post sub-tabs; 390 px. 8 cases. With --base <ref> it also
+# compares every output element of the Shaft / Post / Anchorage pages, the Summary, the check panel and the hand-off payload with that
+# version (run against the parent commit for the PR: 731 items, 0 differ). ~6 min, ~8 min with --base
+node tests/smoke/lightpole-shaft-subtabs.mjs [--shots <dir>] [--base <ref|file>]
 
 # Saved-project list and Undo / Redo (shared/projects.js, PLIB): main vs the working tree (results on load, after an input change, B on
 # main's autosave and project list), Undo / Redo / Ctrl+Z / Ctrl+Y, the dialog (rename, duplicate, delete, open), quota refusal, 390 px

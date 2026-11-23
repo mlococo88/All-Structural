@@ -411,6 +411,15 @@
   .lppCvBar button{font-family:var(--font-ui);font-size:11.5px;border:1px solid var(--line);background:#fff;color:var(--slate-600);padding:4px 9px;cursor:pointer;border-radius:4px}
   .lppCvBar button.on{background:#EFF6FF;border-color:var(--blue-600);color:#1E3A5F;font-weight:600} .lppCvBar button:hover:not(.on){background:var(--slate-100)}
   .lppCvBar .lppCvInfo{flex:1 1 200px;min-width:0} .lppCvNote{margin:4px 0 8px} .lppCvNote a{font-weight:600} .lppCvHost:empty{display:none}
+  /* LPSS (2026-11-23): Shaft output (and the LRFDLTS Post output) in sub-tabs. Display only: a card or block marked data-shsub is shown
+     when its page's data-shcur names it (screen only: nothing is hidden in print). The bar and the summary strip reuse the Loading
+     sub-tab styles (.lppLdBar, .lppLdStrip, .lppLdNode: LPLS). Per-browser keys lpp_shaftSub_v1 / lpp_postSub_v1. */
+  @media screen{
+    #page-shaft[data-shcur="forces"] [data-shsub]:not([data-shsub="forces"]), #page-shaft[data-shcur="embed"] [data-shsub]:not([data-shsub="embed"]),
+    #page-shaft[data-shcur="bearing"] [data-shsub]:not([data-shsub="bearing"]), #page-shaft[data-shcur="reo"] [data-shsub]:not([data-shsub="reo"]),
+    #page-post[data-shcur="member"] [data-shsub]:not([data-shsub="member"]), #page-post[data-shcur="defl"] [data-shsub]:not([data-shsub="defl"]){display:none!important}
+  }
+  .lppShBox .lppLdStrip{margin:0 0 6px} .lppShNode.ng{border-color:#FCA5A5;background:#FEF2F2;color:var(--bad)} .lppShLbl{align-self:center;font-family:var(--font-ui);font-size:8.5pt;font-weight:600;color:#1E3A5F}
   @media print{ header.masthead,#postSelBar{display:none!important} }
   /* LTS-1 (2026-11-02): code mode. IBC mode: the LTS cards are hidden. LTS mode: the IBC input cards marked ibcOnly and every
      output card except the LTS cards and the Manual are hidden (the IBC engine still runs underneath, unchanged). */
@@ -418,9 +427,13 @@
   body.lts-mode .ibcOnly{display:none!important}
   body.lts-mode .tabpage:not([data-page=manual]) > *:not(.ltsCard){display:none!important}
   body.lts-mode #postSelBar{display:none!important}
-  body.lts-mode .tabpage > .lppCvBar{display:flex!important}   /* LPCV: the combination-view switch serves both modes */
-  @media print{ .tabpage > .lppCvBar, body.lts-mode .tabpage > .lppCvBar{display:none!important} }
+  /* LPCV: the combination-view switch serves both modes. LPSS (2026-11-23): the selector repeats :not([data-page=manual]) so that it outranks
+     the rule above; before, `body.lts-mode .tabpage > .lppCvBar` lost to it and the bar was not shown in the LRFDLTS mode. */
+  body.lts-mode .tabpage:not([data-page=manual]) > .lppCvBar{display:flex!important}
+  @media print{ .tabpage > .lppCvBar, body.lts-mode .tabpage:not([data-page=manual]) > .lppCvBar{display:none!important} }
   body.lts-mode .tabpage > #lpAnchCard{display:block!important}   /* LTS-8: the Anchorage hand-off card serves both modes */
+  body.lts-mode .tabpage > #lppSh, body.lts-mode .tabpage > #lppPs{display:block!important}   /* LPSS: the sub-tab bar and summary strip serve both modes */
+  @media print{ body .tabpage > #lppSh, body .tabpage > #lppPs, body.lts-mode .tabpage > #lppSh, body.lts-mode .tabpage > #lppPs{display:none!important} }
   .lts-basis{font-family:var(--font-ui);font-size:9pt;color:#1E3A5F;background:#EFF6FF;border:1px solid #BFDBFE;border-left:4px solid var(--steel);border-radius:4px;padding:5px 9px;margin:0 0 8px}
   .lts-dev{font-family:var(--font-ui);font-size:9pt;color:#78350F;background:#FFFBEB;border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:4px;padding:5px 9px;margin:0 0 8px}
   .lts-flag{font-family:var(--font-ui);font-size:8pt;font-weight:600;color:#92400E;background:#FEF3C7;border-radius:4px;padding:0 5px;margin-left:4px;white-space:nowrap}
@@ -881,6 +894,11 @@
     <div class="lppCvBar noprint" data-tab="report" data-cvtab="report" role="group" aria-label="Load combinations shown"><span class="lppCvLbl">Show:</span><span class="lppCvSeg"><button type="button" data-cv="all">All load combinations</button><button type="button" data-cv="gov">Governing combination only</button></span><span class="lppCvInfo"></span></div>
 
 
+    <!-- LPSS (2026-11-23): Shaft sub-tabs (IBC pole / sign and LRFDLTS) and the LRFDLTS Post sub-tabs: a summary strip (each sub-tab's
+         governing result, a link into it) and the sub-tab bar. Display only; filled by lppShSync(). -->
+    <div id="lppSh" class="lppShBox noprint" data-tab="shaft"><div class="lppLdStrip" id="lppShStrip" aria-label="Shaft: governing result of each sub-tab"></div><div class="lppLdBar" id="lppShBar" role="tablist" aria-label="Shaft sub-tabs"></div></div>
+    <div id="lppPs" class="lppShBox noprint" data-tab="post" style="display:none"><div class="lppLdStrip" id="lppPsStrip" aria-label="Post: governing result of each sub-tab"></div><div class="lppLdBar" id="lppPsBar" role="tablist" aria-label="Post sub-tabs"></div></div>
+
     <!-- 1. SCHEMATICS -->
     <section class="card" data-tab="geometry">
       <div class="card-h"><span class="num">1</span><h2>Schematics</h2><span class="hint">plan &amp; elevation</span></div>
@@ -1105,28 +1123,41 @@
       </div>
     </section>
 
-    <!-- 7. FOUNDATION DEMAND & EMBEDMENT -->
-    <section class="card poleOnly" data-tab="shaft">
-      <div class="card-h"><span class="num">7</span><h2>Foundation demand &amp; embedment</h2><span class="hint">IBC §1807.3</span></div>
+    <!-- 7 / 8. SHAFT (LPSS, 2026-11-23): the former cards "7 Foundation demand & embedment" and "8 Shaft structural check" as four cards
+         that follow the load path, one per Shaft sub-tab (data-shsub): forces, embedment, soil bearing, reinforcement. Every output id is
+         unchanged; #flagsEmb is new (the d/b flag, which was the first line of #flags). Display / organisation only. -->
+    <section class="card poleOnly" data-tab="shaft" data-shsub="forces">
+      <div class="card-h"><span class="num">1</span><h2>Forces on the shaft</h2><span class="hint">top of the shaft → grade · ASD: embedment, bearing · LRFD: shaft section</span></div>
+      <div class="card-body">
+        <div class="resrow"><span class="k">Governing case</span><span class="v" id="oCase">—</span></div>
+        <div class="resrow"><span class="k">Total lateral demand at grade, P</span><span class="v" id="oP">—</span></div>
+        <div class="resrow"><span class="k">Overturning moment, M</span><span class="v" id="oM">—</span></div>
+        <div class="resrow"><span class="k">Effective resultant height, h = M/P</span><span class="v big" id="oH">—</span></div>
+        <div class="resrow"><span class="k">Total axial (pole + cable verticals)</span><span class="v" id="oN">—</span></div>
+        <div class="resrow" style="border-top:1px solid var(--line);padding-top:8px;margin-top:6px"><span class="k">Factored moment, M<sub>u</sub></span><span class="v" id="oMu">—</span></div>
+        <div class="resrow"><span class="k">Factored axial, P<sub>u</sub></span><span class="v" id="oPu">—</span></div>
+        <div class="resrow"><span class="k">Factored shear, V<sub>u</sub></span><span class="v" id="oVu">—</span></div>
+        <div id="flags"></div>
+        <details class="calc"><summary>Show force breakdown</summary>
+          <div class="steps" id="stepsBox">—</div>
+        </details>
+        <details class="calc" open style="margin-top:8px"><summary>Governing demand assembly — worked calculation</summary>
+          <div id="demandExample" class="example-box"></div>
+        </details>
+      </div>
+    </section>
+    <section class="card poleOnly" data-tab="shaft" data-shsub="embed">
+      <div class="card-h"><span class="num">2</span><h2>Embedment</h2><span class="hint">IBC §1807.3</span></div>
       <div class="card-body">
         <div class="headline">
           <div class="cell"><div class="lab">Embedment d</div><div class="num" id="oDepth">—<span class="u"> ft</span></div></div>
           <div class="cell"><div class="lab">Diameter b</div><div class="num" id="oDia">—<span class="u"> ft</span></div></div>
           <div class="cell"><div class="lab">d / b</div><div class="num" id="oRatio">—</div></div>
         </div>
-        <div class="resrow"><span class="k">Governing case</span><span class="v" id="oCase">—</span></div>
-        <div class="resrow"><span class="k">Total lateral demand at grade, P</span><span class="v" id="oP">—</span></div>
-        <div class="resrow"><span class="k">Overturning moment, M</span><span class="v" id="oM">—</span></div>
-        <div class="resrow"><span class="k">Effective resultant height, h = M/P</span><span class="v big" id="oH">—</span></div>
-        <div class="resrow"><span class="k">Total axial (pole + cable verticals)</span><span class="v" id="oN">—</span></div>
         <div class="resrow"><span class="k">Rigid-pier validity (d/b)</span><span class="v" id="oRigid">—</span></div>
-        <div id="flags"></div>
-        <details class="calc"><summary>Show force breakdown &amp; embedment iteration</summary>
-          <div class="steps" id="stepsBox">—</div>
+        <div id="flagsEmb"></div>
+        <details class="calc"><summary>Show embedment iteration</summary>
           <table class="tbl" id="iterTbl"></table>
-        </details>
-        <details class="calc" open style="margin-top:8px"><summary>Governing demand assembly — worked calculation</summary>
-          <div id="demandExample" class="example-box"></div>
         </details>
         <details class="calc" open style="margin-top:8px"><summary>IBC §1807.3 embedment — worked calculation</summary>
           <div id="embedExample" class="example-box"></div>
@@ -1136,15 +1167,17 @@
         </details>
       </div>
     </section>
-
-    <!-- 8. SHAFT STRUCTURAL CHECK + AUTO REBAR -->
-    <section class="card poleOnly" data-tab="shaft">
-      <div class="card-h"><span class="num">8</span><h2>Shaft structural check</h2><span class="hint">ACI 318 · auto-sized reinforcement</span></div>
+    <section class="card poleOnly" data-tab="shaft" data-shsub="bearing">
+      <div class="card-h"><span class="num">3</span><h2>Soil bearing</h2><span class="hint">IBC Table 1806.2 · axial</span></div>
       <div class="card-body">
-        <div class="resrow"><span class="k">Factored moment, M<sub>u</sub></span><span class="v" id="oMu">—</span></div>
-        <div class="resrow"><span class="k">Factored axial, P<sub>u</sub></span><span class="v" id="oPu">—</span></div>
-        <div class="resrow"><span class="k">Factored shear, V<sub>u</sub></span><span class="v" id="oVu">—</span></div>
-        <div class="resrow" style="border-top:1px solid var(--line);padding-top:8px;margin-top:6px"><span class="k">Min longitudinal steel (ρ<sub>min</sub>·A<sub>g</sub>)</span><span class="v" id="oAsMin">—</span></div>
+        <div class="resrow"><span class="k">Soil bearing q = P/A<sub>base</sub> vs q<sub>allow</sub></span><span class="v" id="oBearing">—</span></div>
+        <div id="bearingExample" class="example-box" style="margin-top:6px"></div>
+      </div>
+    </section>
+    <section class="card poleOnly" data-tab="shaft" data-shsub="reo">
+      <div class="card-h"><span class="num">4</span><h2>Shaft reinforcement</h2><span class="hint">ACI 318 · auto-sized reinforcement</span></div>
+      <div class="card-body">
+        <div class="resrow"><span class="k">Min longitudinal steel (ρ<sub>min</sub>·A<sub>g</sub>)</span><span class="v" id="oAsMin">—</span></div>
         <div class="resrow"><span class="k">Required flexural steel, A<sub>s,req</sub></span><span class="v" id="oAs">—</span></div>
         <div class="resrow"><span class="k">Provided vertical reinforcement</span><span class="v big" id="oBars">—</span></div>
         <div class="resrow"><span class="k">Provided steel ratio, ρ</span><span class="v" id="oRho">—</span></div>
@@ -1152,8 +1185,6 @@
         <div class="resrow" style="border-top:1px solid var(--line);padding-top:8px;margin-top:6px"><span class="k">Transverse ties (shear + confinement)</span><span class="v big" id="oTies">—</span></div>
         <div class="resrow"><span class="k">Tie spacing — top confinement zone</span><span class="v" id="oTiesTop">—</span></div>
         <div class="resrow"><span class="k">Shear V<sub>u</sub> vs φV<sub>c</sub></span><span class="v" id="oShear">—</span></div>
-        <div class="resrow" style="border-top:1px solid var(--line);padding-top:8px;margin-top:6px"><span class="k">Soil bearing q = P/A<sub>base</sub> vs q<sub>allow</sub></span><span class="v" id="oBearing">—</span></div>
-        <div id="bearingExample" class="example-box" style="margin-top:6px"></div>
         <details class="calc" open style="margin-top:12px"><summary>ACI 318-19 shaft reinforcement — worked calculation</summary>
           <div id="rebarExample" class="example-box"></div>
         </details>
@@ -3068,6 +3099,7 @@ manPart("p3","3. Output Reference",[
 {nl:["Anchor rod design (ACI 318-19 Chapter 17) is done in the Anchorage app (BasePlateAnchorDesigner.html).", [["This tab keeps", "the anchor and base plate inputs;", ["the Anchorage card (send the anchor pattern, the shaft and every LRFD combination to the Anchorage app, or export them as JSON; the D/C the app returns is shown there and on the Summary);", "the base plate check (bending line at the pole face, double-nut; an engineering method, not an LRFDLTS article)."]], ["Background:", "Part 4C.3 is kept as background."]]],c:"manP"},
 
 {h:"3.6 Shaft tab"},
+{note:"<b>Sub-tabs</b> (LPSS, 2026-11-23): the Shaft tab follows the load path in four sub-tabs: <b>1 \u00b7 Forces</b> (the governing demand at the top of the shaft and at grade: 3.6.1), <b>2 \u00b7 Embedment</b> (3.6.2, with the Broms reference check), <b>3 \u00b7 Soil bearing</b> (3.6.4) and <b>4 \u00b7 Reinforcement</b> (3.6.3). The strip above the sub-tabs gives each one\u2019s governing result (the largest D/C of its checks; the required depth for the embedment, which is a depth and not a ratio) and opens it. For a two-post sign it shows the post chosen in \u201cShowing results for\u201d. In the LRFDLTS mode the soil bearing sub-tab is not shown (the axial bearing of the shaft is not checked in that mode), and the Post tab has two sub-tabs (member check; deflection and fatigue). The chosen sub-tab is remembered in this browser, not in the project; a link to a check opens its sub-tab. The Report keeps one Drilled shaft chapter in the same order, and nothing is hidden in print."},
 {h3:"3.6.1 Foundation demand"},
 {p:"The governing service demand carried into the embedment calculation: total lateral P, overturning M, effective height h = M/P, and total axial N. Flags appear here for shallow d/b and for partially cancelling cable pulls."},
 {h3:"3.6.2 Embedment"},
@@ -5142,6 +5174,7 @@ function calc(){
   lppDashRender();   // LPDC (2026-11-03): the check summary panel, from the results just shown
   if(codeMode==='lts') ltsCvApply();   // LPCV (2026-11-23): governing-only view of the LRFDLTS tables (display only; nothing in the "all" view)
   lppCvSync();   // LPCV: the switch bars
+  lppShSync();   // LPSS: the Shaft / Post sub-tab bars and summary strips
 }
 function lppCalcIbc(){
   const inp={V:num('V'),expo:$('expo').value,Kzt:num('Kzt'),Kd:kdComponents().mast,KdSign:kdComponents().sign,KdMode:kdComponents().mode,G:num('G'),beta:($('lppBeta')?num('lppBeta'):0.005),
@@ -5317,6 +5350,7 @@ function lppCalcIbc(){
   if(ratio>10)f+=`<div class="flag bad">d/b = ${fmt(ratio,1)} exceeds the rigid range — run a p-y / LPILE lateral analysis.</div>`;
   else if(ratio<3)f+=`<div class="flag">d/b = ${fmt(ratio,1)} is shallow for rigid-pier behavior; verify assumptions.</div>`;
   else f+=`<div class="flag ok">d/b = ${fmt(ratio,1)} within rigid short-pier range.</div>`;
+  if($('flagsEmb')){ $('flagsEmb').innerHTML=f; f=''; }   // LPSS (2026-11-23): the d/b flag on the Embedment sub-tab; the flags below on Forces
   f+=`<div class="flag ok">Embedment governed by ASD <b>${fASD.name}</b>; shaft P–M governed by LRFD <b>${shaftGov.name}</b> (all LRFD combinations checked); soil bearing by ASD <b>${govAxASD.name}</b> (max axial); base plate <b>${(bolts.byCheck.BP||bolts).comboName}</b>.</div>`;
   f+=`<div class="flag lpNL${govB2.B2max>1.10?' bad':''}">${lpNL(`P-Δ (AISC 360-16 App. 8): B<sub>2</sub> = ${fmt(govB2.B2,3)} for ${govB2.name} (range ${fmt(govB2.B2min,3)}–${fmt(govB2.B2max,3)} over the LRFD combinations).`,[['Applied:','each combination\'s B<sub>2</sub> multiplies its LRFD moments for the pole, anchors and shaft.'],['Pole stress',`governed by <b>${pstress.comboName}</b>, wind toward ${fmt(pstress.phi,0)}° (all LRFD combinations and azimuths checked).`]])}</div>`;   // LPNL
   if(!(nat.n1>=1.0)) f+=`<div class="flag bad">Natural frequency n<sub>1</sub> ≈ ${fmt(nat.n1,2)} Hz &lt; 1 Hz (Rayleigh estimate): the pole is <b>flexible</b> (ASCE 7-16 §26.2). G<sub>f</sub> = ${inp.gf?fmt(inp.gf.Gf,3):'—'} (§26.11.5, β = ${fmt(inp.beta,3)}); G used = max(${fmt(inp.Ginput,2)}, G<sub>f</sub>) = <b>${fmt(inp.G,3)}</b> for every wind force.</div>`;
@@ -6563,6 +6597,7 @@ function lppBmbResultHTML(b,where){
 function lppGoId(id){
   const e=$(id); if(!e) return; const pg=e.closest('.tabpage'); if(pg) switchTab(pg.dataset.page);
   lppLdReveal(e);   // LPLS: its Loading sub-tab
+  lppShReveal(e);   // LPSS: its Shaft / Post sub-tab
   const d=e.closest('details'); if(d) d.open=true;
   e.scrollIntoView({behavior:'smooth',block:'start'}); e.classList.add('wkFlash'); setTimeout(()=>e.classList.remove('wkFlash'),1400);
 }
@@ -7160,11 +7195,11 @@ function lppLdGo(k){
   const st=__selectedPost>1?__selectedPost-1:0;
   if(k==='loads'){ lppLdSet('wind'); return; }
   if(k==='shaft'){ lppLdSet('base'); return; }
-  lppGoto(k==='post'?'post':k==='bp'?'anchors':'dem',st);
+  lppGoto(k==='post'?'post':k==='bp'?'anchors':'emb',st);   // LPSS: 'soil' opens the Embedment sub-tab (before: 'dem', the card that held the embedment)
 }
 document.addEventListener('click',ev=>{ const t=ev.target; if(!t||!t.closest) return;
   const b=t.closest('#lppLdBar button[data-ldsub]'); if(b){ lppLdSet(b.dataset.ldsub); return; }
-  const n=t.closest('.lppLdNode'); if(n){ lppLdGo(n.dataset.ldgo); return; }
+  const n=t.closest('.lppLdNode[data-ldgo]'); if(n){ lppLdGo(n.dataset.ldgo); return; }   // LPSS: the Loading strip's nodes only (the Shaft strip reuses the class)
   const a=t.closest('a[data-lpsub]'); if(a){ ev.preventDefault(); switchTab('loading'); lppLdSet(a.dataset.lpsub); if(!a.closest('#lppLd')) lppOutToTop(); else { const p=$('lppLd'); if(p) p.scrollIntoView({block:'start'}); } } });
 document.addEventListener('change',ev=>{ const c=ev.target; if(c&&c.classList&&c.classList.contains('lppLdDirChk')) lppLdDirs(c.checked); });
 // ---- Report: the same seven sections (items built from the same table models) ----
@@ -7273,6 +7308,76 @@ function ltsCvApply(){
   if(X.dfl) cut(find('ltsDeflCard',5,'Service I load case'),X.dfl.rows,r=>ltsCvDflLbl(X.dfl,r),'Service I load cases');
 }
 
+// ================= LPSS (2026-11-23): SHAFT OUTPUT SUB-TABS (AND THE LRFDLTS POST SUB-TABS) =================
+// Display / organisation only. The Shaft tab follows the load path in four sub-tabs: 1 · Forces (at the top of the shaft → at grade /
+// the design section), 2 · Embedment, 3 · Soil bearing, 4 · Reinforcement; a summary strip on top gives each sub-tab's governing
+// result (the D/C of the checks the Summary and the check panel already list; the required depth for the embedment, which is a
+// depth and not a ratio) and opens it. A card or block marked data-shsub="<sub>" is shown when its page carries data-shcur="<sub>"
+// (CSS, screen only), so the per-post cards of a sign and the LRFDLTS card, which are rebuilt by every calc(), need no re-filing.
+// The LRFDLTS Post tab gets two sub-tabs the same way (member check; deflection and fatigue); the IBC Post tab keeps its single view.
+// Bar, strip and node styles: the Loading sub-tabs' (LPLS). Nothing is computed here and nothing is saved in the project: the chosen
+// sub-tab is a per-browser UI key (lpp_shaftSub_v1, lpp_postSub_v1).
+const LPP_SH={
+  shaft:{key:'lpp_shaftSub_v1',cur:'forces',box:'lppSh',subs:[['forces','1 · Forces'],['embed','2 · Embedment'],['bearing','3 · Soil bearing'],['reo','4 · Reinforcement']]},
+  post:{key:'lpp_postSub_v1',cur:'member',box:'lppPs',subs:[['member','1 · Member check'],['defl','2 · Deflection and fatigue']]}};
+const LPP_SH_LTSCARD={ltsMemberCard:'member',ltsDeflCard:'defl'};
+Object.keys(LPP_SH).forEach(pg=>{ try{ const t=localStorage.getItem(LPP_SH[pg].key); if(LPP_SH[pg].subs.some(x=>x[0]===t)) LPP_SH[pg].cur=t; }catch(e){} });
+// the sub-tabs of a page now: {} = all, {k:false} = k does not apply (hidden), null = the page has no sub-tabs in this mode
+function lppShApplicable(pg){
+  const lts=codeMode==='lts';
+  if(pg==='post') return lts?{}:null;                 // IBC: the single Post view (a monopost or the selected post)
+  return lts?{bearing:false}:{};                      // LRFDLTS: the axial bearing of the shaft is not checked in that mode (LPL10)
+}
+function lppShShown(pg){ const c=LPP_SH[pg], ap=lppShApplicable(pg); if(!ap) return null; return ap[c.cur]===false?c.subs.find(x=>ap[x[0]]!==false)[0]:c.cur; }
+// each sub-tab's governing result, read from what the tab, the Summary and the check panel hold: {txt} or {dc, ok, name}
+function lppShSum(pg){
+  const out={}, gov=L=>{ L=(L||[]).filter(c=>c&&c.ratio!=null&&!isNaN(c.ratio)); if(!L.length) return null;
+    const g=L.reduce((a,b)=>b.ratio>a.ratio?b:a,L[0]); return {dc:g.ratio,ok:L.every(c=>c.ok),name:g.name}; };
+  if(codeMode==='lts'){ const X=lppLtsLast; if(!X) return out;
+    if(pg==='post'){
+      if(X.mc){ const gv=X.mc.gov.gov; out.member={dc:gv.ratio,ok:gv.ratio<=1&&X.mc.valid,name:'combined forces'}; }
+      if(X.dfl){ const ap=X.dfl.checks.filter(c=>c.applies); out.defl=ap.length?gov(ap.map(c=>({ratio:c.ratio,ok:c.ok,name:c.label}))):{txt:'information only'}; }
+    } else if(X.fd&&X.fd.gov){ const b=X.fd.gov.br;
+      out.forces={txt:`M_F ${fmt(b.MF,2)} kip-ft · V_F ${fmt(b.VF,3)} kip`};
+      out.embed={txt:`L = ${fmt(b.L,2)} ft required (Broms)`};
+      out.reo=gov(ltsShaftChecks(X.fd)); }
+    return out; }
+  const ctx=LPP_SUMCTX; if(!ctx||pg!=='shaft') return out;
+  const s=ctx.stacks[ctx.mode==='sign'&&ctx.stacks.length>1?Math.min(ctx.stacks.length,Math.max(1,__selectedPost))-1:0]; if(!s||!s.found) return out;
+  const ch=collectChecks({found:s.found,pstress:s.pstress,inp:ctx.inp,label:s.label}), of=ks=>ch.filter(c=>ks.indexOf(LPP_CHK2K[c.name])>=0);
+  out.forces={txt:`M_u ${fmt(s.found.Mu,0)} lb·ft · V_u ${fmt(s.found.Vu,0)} lb`};
+  out.embed={txt:`d = ${fmt(s.found.d,2)} ft required · d/b ${fmt(s.found.ratio,2)}`};
+  out.bearing=gov(of(['bearing']));
+  out.reo=gov(of(['flex','shear','asmin','asmax','spacing','ties','torsion']));
+  return out;
+}
+function lppShSync(){
+  Object.keys(LPP_SH).forEach(pg=>{ const c=LPP_SH[pg], page=$('page-'+pg), box=$(c.box); if(!page||!box) return;
+    const ap=lppShApplicable(pg), cur=lppShShown(pg), bar=box.querySelector('.lppLdBar'), st=box.querySelector('.lppLdStrip');
+    box.style.display=ap?'':'none';
+    if(!ap){ page.removeAttribute('data-shcur'); bar.innerHTML=''; st.innerHTML=''; return; }
+    page.setAttribute('data-shcur',cur);
+    const subs=c.subs.filter(x=>ap[x[0]]!==false);
+    bar.innerHTML=subs.map(([k,t])=>`<button type="button" role="tab" data-shgo="${k}" data-shpg="${pg}"${k===cur?' class="on"':''} aria-selected="${k===cur?'true':'false'}">${t}</button>`).join('');
+    const er=$('lppInErr'), S=(er&&er.classList.contains('on'))?{}:lppShSum(pg);
+    const two=pg==='shaft'&&codeMode!=='lts'&&LPP_SUMCTX&&LPP_SUMCTX.mode==='sign'&&LPP_SUMCTX.stacks.length>1;
+    st.innerHTML=`<span class="lppShLbl">Governing${two?' · Post '+__selectedPost:''}:</span>`+subs.map(([k,t],i)=>{ const r=S[k]; let sub='—', cls='';
+      if(r&&r.txt) sub=r.txt; else if(r){ sub=`D/C ${isFinite(r.dc)?fmt(r.dc,2):'∞'} ${r.ok?'OK':'NG'} · ${r.name}`; if(!r.ok) cls=' ng'; }
+      return (i?'<span class="lppLdArw" aria-hidden="true">→</span>':'')+`<button type="button" class="lppLdNode lppShNode${k===cur?' on':''}${cls}" data-shgo="${k}" data-shpg="${pg}"${k===cur?' aria-current="step"':''} title="Open the sub-tab ${lppEsc(t)}"><b>${t}</b><span>${lppEsc(sub)}</span></button>`; }).join('');
+  });
+}
+function lppShSet(pg,sub,noSave){
+  const c=LPP_SH[pg]; if(!c||!c.subs.some(x=>x[0]===sub)) return; c.cur=sub;
+  if(!noSave){ try{ localStorage.setItem(c.key,sub); }catch(e){} }
+  lppShSync();
+}
+// a link target inside the Shaft / Post tab: show its sub-tab; not remembered
+function lppShReveal(e){
+  const x=e&&e.closest?e.closest('[data-shsub]'):null, page=x?x.closest('.tabpage'):null; if(!page||!LPP_SH[page.dataset.page]) return;
+  const cur=page.getAttribute('data-shcur'); if(cur&&x.getAttribute('data-shsub')!==cur) lppShSet(page.dataset.page,x.getAttribute('data-shsub'),true);
+}
+document.addEventListener('click',ev=>{ const b=ev.target&&ev.target.closest?ev.target.closest('[data-shgo]'):null; if(!b) return; ev.preventDefault(); lppShSet(b.dataset.shpg,b.dataset.shgo); });
+
 // ================= D11 (2026-10-18): CALCULATION-SHEET REPORT + DERIVATION LINKS =================
 // Display only. No value is computed here: every number is a result object the tabs already show
 // (the Summary context saved by renderSummary, the check list of collectChecks, and the worked-
@@ -7285,13 +7390,15 @@ const LPP_CHK2K={'Shaft flexure (P–M)':'flex','Shaft shear':'shear','Longitudi
   'Bar clear spacing':'spacing','Tie spacing':'ties','Tie size':'ties','Tie spacing, shear':'ties','Soil bearing':'bearing','Anchor tension':'anchors','Anchor shear':'anchors',
   'Anchor T–V interaction':'anchors','Anchor breakout (group)':'anchors','Base plate thickness':'anchors','Anchor reinforcement, tension':'anchors','Anchor reinforcement, development':'anchors','Anchor reinforcement within 0.5h_ef':'anchors','Anchor min. spacing':'anchors','Anchor min. edge distance':'anchors','Shaft torsion ≤ φT_th (neglect)':'torsion','Post combined stress':'post','Round HSS D/t < 0.45E/Fy':'dt'};
 // derivation key -> [tab, element id (sign mode: + '_sp' + post), card]
-const LPP_K2TGT={flex:['shaft','rebarExample','Shaft structural check'],shear:['shaft','rebarExample','Shaft structural check'],
-  asmin:['shaft','rebarExample','Shaft structural check'],asmax:['shaft','rebarExample','Shaft structural check'],
-  spacing:['shaft','rebarExample','Shaft structural check'],ties:['shaft','rebarExample','Shaft structural check'],
-  bearing:['shaft','bearingExample','Shaft structural check (soil bearing)'],
-  anchors:['anchors','boltExample','Base plate'],torsion:['shaft','rebarExample','Shaft structural check'],anchorage:['anchors','lpAnchCard','Anchorage'],
+// LPSS (2026-11-23): the Shaft cards are "Forces on the shaft", "Embedment", "Soil bearing" and "Shaft reinforcement" (one per sub-tab);
+// the element ids are unchanged. Before: 'Shaft structural check', 'Shaft structural check (soil bearing)', 'Foundation demand & embedment'.
+const LPP_K2TGT={flex:['shaft','rebarExample','Shaft reinforcement'],shear:['shaft','rebarExample','Shaft reinforcement'],
+  asmin:['shaft','rebarExample','Shaft reinforcement'],asmax:['shaft','rebarExample','Shaft reinforcement'],
+  spacing:['shaft','rebarExample','Shaft reinforcement'],ties:['shaft','rebarExample','Shaft reinforcement'],
+  bearing:['shaft','bearingExample','Soil bearing'],emb:['shaft','embedExample','Embedment'],
+  anchors:['anchors','boltExample','Base plate'],torsion:['shaft','rebarExample','Shaft reinforcement'],anchorage:['anchors','lpAnchCard','Anchorage'],
   post:['post','poleStrExample','Pole combined stress'],dt:['post','poleStressTbl','Pole combined stress'],b2:['post','poleStrExample','Pole combined stress'],
-  dem:['shaft','demandExample','Foundation demand & embedment'],proj:['shaft','projWorked','Foundation demand at grade (shaft projection)'],combo:['loading','comboMatrixTbl','Load combinations']};
+  dem:['shaft','demandExample','Forces on the shaft'],proj:['shaft','projWorked','Forces on the shaft (at grade, shaft projection)'],combo:['loading','comboMatrixTbl','Load combinations']};
 function lppTgt(k,st){
   const t=LPP_K2TGT[k]; if(!t) return null;
   if(k==='anchorage'||!(LPP_SUMCTX&&LPP_SUMCTX.mode==='sign')) return {tab:t[0],id:t[1],card:t[2]};
@@ -7310,6 +7417,7 @@ function lppGoto(k,st){
   switchTab(t.tab);
   const e=$(t.id); if(!e) return;
   lppLdReveal(e);   // LPLS: its Loading sub-tab
+  lppShReveal(e);   // LPSS: its Shaft / Post sub-tab
   const d=e.closest('details'); if(d) d.open=true;
   e.scrollIntoView({behavior:'smooth',block:'start'});
   e.classList.add('wkFlash'); setTimeout(()=>e.classList.remove('wkFlash'),1400);
@@ -7337,6 +7445,7 @@ function lppDashCond(it){
 function lppDashGoEl(tab,id){
   switchTab(tab); const e=$(id); if(!e) return;
   lppLdReveal(e);   // LPLS: its Loading sub-tab
+  lppShReveal(e);   // LPSS: its Shaft / Post sub-tab
   e.scrollIntoView({behavior:'smooth',block:'start'});
   e.classList.add('wkFlash'); setTimeout(()=>e.classList.remove('wkFlash'),1400);
 }
@@ -7967,27 +8076,38 @@ function detailStackHTML(sfx, titlePrefix){
         <div id="poleStrExample${sfx}" class="example-box"></div>
       </div>
     </section>
-    <section class="card" data-disc="shaft">
-      <div class="card-h"><h2>${P}Foundation demand &amp; embedment</h2><span class="hint">IBC §1807.3</span></div>
+    <section class="card" data-disc="shaft" data-shsub="forces">
+      <div class="card-h"><span class="num">1</span><h2>${P}Forces on the shaft</h2><span class="hint">top of the shaft → grade · ASD: embedment, bearing · LRFD: shaft section</span></div>
+      <div class="card-body">
+        <div class="resrow"><span class="k">Governing case</span><span class="v" id="oCase${sfx}">—</span></div>
+        <div class="resrow"><span class="k">Total lateral demand at grade, P</span><span class="v" id="oP${sfx}">—</span></div>
+        <div class="resrow"><span class="k">Overturning moment, M</span><span class="v" id="oM${sfx}">—</span></div>
+        <div class="resrow"><span class="k">Effective resultant height, h = M/P</span><span class="v big" id="oH${sfx}">—</span></div>
+        <div class="resrow"><span class="k">Total axial</span><span class="v" id="oN${sfx}">—</span></div>
+        <div class="resrow" style="border-top:1px solid var(--line);padding-top:8px;margin-top:6px"><span class="k">Factored moment, M<sub>u</sub></span><span class="v" id="oMu${sfx}">—</span></div>
+        <div class="resrow"><span class="k">Factored axial, P<sub>u</sub></span><span class="v" id="oPu${sfx}">—</span></div>
+        <div class="resrow"><span class="k">Factored shear, V<sub>u</sub></span><span class="v" id="oVu${sfx}">—</span></div>
+        <div id="flags${sfx}"></div>
+        <details class="calc"><summary>Show force breakdown</summary>
+          <div class="steps" id="stepsBox${sfx}">—</div>
+        </details>
+        <details class="calc" open style="margin-top:8px"><summary>Governing demand assembly — worked calculation</summary>
+          <div id="demandExample${sfx}" class="example-box"></div>
+        </details>
+      </div>
+    </section>
+    <section class="card" data-disc="shaft" data-shsub="embed">
+      <div class="card-h"><span class="num">2</span><h2>${P}Embedment</h2><span class="hint">IBC §1807.3</span></div>
       <div class="card-body">
         <div class="headline">
           <div class="cell"><div class="lab">Embedment d</div><div class="num" id="oDepth${sfx}">—<span class="u"> ft</span></div></div>
           <div class="cell"><div class="lab">Diameter b</div><div class="num" id="oDia${sfx}">—<span class="u"> ft</span></div></div>
           <div class="cell"><div class="lab">d / b</div><div class="num" id="oRatio${sfx}">—</div></div>
         </div>
-        <div class="resrow"><span class="k">Governing case</span><span class="v" id="oCase${sfx}">—</span></div>
-        <div class="resrow"><span class="k">Total lateral demand at grade, P</span><span class="v" id="oP${sfx}">—</span></div>
-        <div class="resrow"><span class="k">Overturning moment, M</span><span class="v" id="oM${sfx}">—</span></div>
-        <div class="resrow"><span class="k">Effective resultant height, h = M/P</span><span class="v big" id="oH${sfx}">—</span></div>
-        <div class="resrow"><span class="k">Total axial</span><span class="v" id="oN${sfx}">—</span></div>
         <div class="resrow"><span class="k">Rigid-pier validity (d/b)</span><span class="v" id="oRigid${sfx}">—</span></div>
-        <div id="flags${sfx}"></div>
-        <details class="calc"><summary>Show force breakdown &amp; embedment iteration</summary>
-          <div class="steps" id="stepsBox${sfx}">—</div>
+        <div id="flagsEmb${sfx}"></div>
+        <details class="calc"><summary>Show embedment iteration</summary>
           <table class="tbl" id="iterTbl${sfx}"></table>
-        </details>
-        <details class="calc" open style="margin-top:8px"><summary>Governing demand assembly — worked calculation</summary>
-          <div id="demandExample${sfx}" class="example-box"></div>
         </details>
         <details class="calc" open style="margin-top:8px"><summary>IBC §1807.3 embedment — worked calculation</summary>
           <div id="embedExample${sfx}" class="example-box"></div>
@@ -7997,13 +8117,17 @@ function detailStackHTML(sfx, titlePrefix){
         </details>
       </div>
     </section>
-    <section class="card" data-disc="shaft">
-      <div class="card-h"><h2>${P}Shaft structural check</h2><span class="hint">ACI 318 · auto-sized reinforcement</span></div>
+    <section class="card" data-disc="shaft" data-shsub="bearing">
+      <div class="card-h"><span class="num">3</span><h2>${P}Soil bearing</h2><span class="hint">IBC Table 1806.2 · axial</span></div>
       <div class="card-body">
-        <div class="resrow"><span class="k">Factored moment, M<sub>u</sub></span><span class="v" id="oMu${sfx}">—</span></div>
-        <div class="resrow"><span class="k">Factored axial, P<sub>u</sub></span><span class="v" id="oPu${sfx}">—</span></div>
-        <div class="resrow"><span class="k">Factored shear, V<sub>u</sub></span><span class="v" id="oVu${sfx}">—</span></div>
-        <div class="resrow" style="border-top:1px solid var(--line);padding-top:8px;margin-top:6px"><span class="k">Min longitudinal steel (ρ<sub>min</sub>·A<sub>g</sub>)</span><span class="v" id="oAsMin${sfx}">—</span></div>
+        <div class="resrow"><span class="k">Soil bearing q vs q<sub>allow</sub></span><span class="v" id="oBearing${sfx}">—</span></div>
+        <div id="bearingExample${sfx}" class="example-box" style="margin-top:6px"></div>
+      </div>
+    </section>
+    <section class="card" data-disc="shaft" data-shsub="reo">
+      <div class="card-h"><span class="num">4</span><h2>${P}Shaft reinforcement</h2><span class="hint">ACI 318 · auto-sized reinforcement</span></div>
+      <div class="card-body">
+        <div class="resrow"><span class="k">Min longitudinal steel (ρ<sub>min</sub>·A<sub>g</sub>)</span><span class="v" id="oAsMin${sfx}">—</span></div>
         <div class="resrow"><span class="k">Required flexural steel, A<sub>s,req</sub></span><span class="v" id="oAs${sfx}">—</span></div>
         <div class="resrow"><span class="k">Provided vertical reinforcement</span><span class="v big" id="oBars${sfx}">—</span></div>
         <div class="resrow"><span class="k">Provided steel ratio, ρ</span><span class="v" id="oRho${sfx}">—</span></div>
@@ -8011,8 +8135,6 @@ function detailStackHTML(sfx, titlePrefix){
         <div class="resrow" style="border-top:1px solid var(--line);padding-top:8px;margin-top:6px"><span class="k">Transverse ties</span><span class="v big" id="oTies${sfx}">—</span></div>
         <div class="resrow"><span class="k">Tie spacing — top confinement zone</span><span class="v" id="oTiesTop${sfx}">—</span></div>
         <div class="resrow"><span class="k">Shear V<sub>u</sub> vs φV<sub>c</sub></span><span class="v" id="oShear${sfx}">—</span></div>
-        <div class="resrow" style="border-top:1px solid var(--line);padding-top:8px;margin-top:6px"><span class="k">Soil bearing q vs q<sub>allow</sub></span><span class="v" id="oBearing${sfx}">—</span></div>
-        <div id="bearingExample${sfx}" class="example-box" style="margin-top:6px"></div>
         <details class="calc" open style="margin-top:12px"><summary>ACI 318-19 shaft reinforcement — worked calculation</summary>
           <div id="rebarExample${sfx}" class="example-box"></div>
         </details>
@@ -8067,7 +8189,7 @@ function populateDetailStack(sfx, ctx){
   if(ratio>10)f+=`<div class="flag bad">d/b = ${fmt(ratio,1)} exceeds the rigid range — run a p-y / LPILE analysis.</div>`;
   else if(ratio<3)f+=`<div class="flag">d/b = ${fmt(ratio,1)} is shallow for rigid-pier behavior; verify assumptions.</div>`;
   else f+=`<div class="flag ok">d/b = ${fmt(ratio,1)} within rigid short-pier range.</div>`;
-  S('flags').innerHTML=f;
+  if(S('flagsEmb')){ S('flagsEmb').innerHTML=f; S('flags').innerHTML=''; } else S('flags').innerHTML=f;   // LPSS (2026-11-23): the d/b flag on the Embedment sub-tab
   // iteration
   S('stepsBox').textContent=ctx.stepsText||`P = ${fmt(asd.P,0)} lb   M = ${fmt(asd.M,0)} lb·ft   h = ${fmt(asd.h,2)} ft\nMu = ${fmt(Mu,0)} lb·ft   Vu = ${fmt(Vu,0)} lb`;
   let it=`<tr><th>Iteration</th><th>Depth assumed<span class="sym">d (ft)</span></th><th>Allow. lateral bearing<span class="sym">S₁ at min(d,12)/3 (psf)</span></th><th>Coefficient<span class="sym">A</span></th><th>Depth computed<span class="sym">d (ft)</span></th></tr>`;
@@ -8208,9 +8330,9 @@ function lprxSecs(H){
     return {old:dt.dataset.old||'',title:t?lprxPlain(t.innerHTML):'',body:dt.querySelector(':scope>.rpt-body')||document.createElement('div')}; });
 }
 // a sign post section split at its .eq-title headings: route(title) -> 'post' | 'bp' | 'shaft'; the lead text goes with the shaft
-function lprxSplit(body,route){
-  const out={post:document.createElement('div'),bp:document.createElement('div'),shaft:document.createElement('div')}; let r='shaft';
-  Array.from(body.childNodes).forEach(nd=>{ if(nd.nodeType===1&&nd.classList.contains('eq-title')) r=route(nd.textContent); out[r].appendChild(nd.cloneNode(true)); });
+function lprxSplit(body,route,lead){   // lead (LPSS): the part that takes the text before the first heading (default 'shaft'); a part is made when first routed to
+  const out={post:document.createElement('div'),bp:document.createElement('div'),shaft:document.createElement('div')}; let r=lead||'shaft';
+  Array.from(body.childNodes).forEach(nd=>{ if(nd.nodeType===1&&nd.classList.contains('eq-title')) r=route(nd.textContent); (out[r]||(out[r]=document.createElement('div'))).appendChild(nd.cloneNode(true)); });
   return out;
 }
 function lprModel(){
@@ -8223,7 +8345,9 @@ function lprModel(){
   const xsub=(title,body,key)=>{ const q={title,items:lprxItems(body,'cs'+(++xn),checks,has)}; if(key) q.key=key; if(!q.items.length) q.items=[{type:'note',text:'—'}]; return q; };
   const xs=olds=>X.filter(x=>olds.indexOf(x.old)>=0).map(x=>xsub(x.title,x.body,'lpcs:'+x.old));
   const xpost=[];   // sign: each post section split into its post / base plate / foundation parts
-  if(sign) X.filter(x=>/^3/.test(x.old)).forEach(x=>xpost.push(lprxSplit(x.body,t=>/^\s*(Post combined|Round HSS)/.test(t)?'post':/^\s*Base plate/.test(t)?'bp':'shaft')));
+  // LPSS (2026-11-23): the foundation part of a post section in the four parts of the Shaft sub-tabs (forces, embed, bearing, reo), by its headings
+  if(sign) X.filter(x=>/^3/.test(x.old)).forEach(x=>xpost.push(lprxSplit(x.body,t=>/^\s*(Post combined|Round HSS)/.test(t)?'post':/^\s*Base plate/.test(t)?'bp'
+    :/^\s*(Embedment|Broms)/.test(t)?'embed':/^\s*Soil bearing/.test(t)?'bearing':/^\s*Shaft (reinforcement|torsion)/.test(t)?'reo':'forces','forces')));
   const xps=(part,suffix)=>X.filter(x=>/^3/.test(x.old)).map((x,i)=>xsub(x.title+' — '+suffix,xpost[i][part])).filter(q=>!(q.items.length===1&&q.items[0].text==='—'));
   /* 1. Project and scope */
   secs.push({title:'Project and scope',subs:[{title:'Project',items:[{type:'kv',rows:[
@@ -8406,12 +8530,23 @@ function lprModel(){
       if(f.Tu>0) tp.push({title:'Torsion threshold',ref:'ACI 318-19 §22.7.1.1, Table 22.7.4.1(a)',steps:[
         S({id:'tth',label:'Threshold torsion',sym:'\\phi T_{th}',eq:'0.75\\lambda\\sqrt{f^{\\prime}_{c}}\\frac{A_{cp}^{2}}{p_{cp}}',sub:'0.75\\sqrt{'+N(inp.fc,0)+'}\\frac{'+N(f.Acp,1)+'^{2}}{'+N(f.pcp,2)+'}\\cdot\\frac{1}{12}',value:f.phiTth,unit:'lb-ft',d:0}),
         S({id:'tr',label:'Torsion may be neglected',sym:'T_{u}/\\phi T_{th}',eq:'',sub:N(f.Tu,0)+'/'+N(f.phiTth,0),value:f.Tu/f.phiTth,unit:'',d:3,ok:f.Tu<f.phiTth})]});
-      subs.push({title:'Shaft'+lab(st)+' ('+(inp.shaftShape==='square'?'':'Ø')+N(inp.b)+' ft'+(inp.shaftShape==='square'?' square':'')+')',items:[lprTopics('sh'+si,tp),
+      /* LPSS (2026-11-23): one chapter in the order of the Shaft sub-tabs (the load path): Forces → Embedment → Soil bearing → Reinforcement,
+         per shaft. Every item of before is kept under its part's name: the steps of 'Shaft …' (scope sh<i>, keys unchanged) are split by
+         part; the former sections keep their keys lpcs:5 / 6 / 6b / 7 (pole); a sign post's foundation text is split at its headings. */
+      const shT='Shaft'+lab(st)+' ('+(inp.shaftShape==='square'?'':'Ø')+N(inp.b)+' ft'+(inp.shaftShape==='square'?' square':'')+')', tpOf=re=>tp.filter(t=>re.test(t.title));
+      const XP=X.filter(x=>/^3/.test(x.old)), legacy=(pre,old,part)=>sign?(XP[si]&&xpost[si]&&xpost[si][part]?[xsub(pre+' — '+XP[si].title,xpost[si][part])].filter(q=>!(q.items.length===1&&q.items[0].text==='—')):[])
+        :X.filter(x=>x.old===old).map(x=>xsub(pre+' — '+x.title,x.body,'lpcs:'+x.old));
+      subs.push(...legacy('Forces','5','forces'));
+      subs.push({title:'Embedment — '+shT,items:[lprTopics('sh'+si,tpOf(/^Embedment/)),
         {type:'table',caption:'IBC embedment iteration',head:['Step','d assumed (ft)','S₁ (psf)','A','d computed (ft)'],rows:f.emb.rows.map(r=>[String(r.i),lprCell(r.dA),lprCell(r.S1,0),lprCell(r.A,3),lprCell(r.dC)])},
-        {type:'note',text:'Worked in full on the [[tab:shaft|Shaft tab]].'}]});
-      if(st.broms) subs.push({title:'Broms reference check'+lab(st),items:[{type:'kv',rows:[['Broms embedment (AASHTO LTS C13.6.1.1, reference only)',N(st.broms.L)+' ft'],['IBC §1807.3 embedment (governs)',N(f.d)+' ft']]}]});
+        {type:'note',text:'Worked in full on the [[tab:shaft|Shaft tab]] (sub-tabs Forces, Embedment, Soil bearing, Reinforcement).'}]});
+      subs.push(...legacy('Embedment','6','embed'));
+      if(st.broms) subs.push({title:'Embedment — Broms reference check'+lab(st),items:[{type:'kv',rows:[['Broms embedment (AASHTO LTS C13.6.1.1, reference only)',N(st.broms.L)+' ft'],['IBC §1807.3 embedment (governs)',N(f.d)+' ft']]}]});
+      subs.push({title:'Soil bearing — '+shT,items:[lprTopics('sh'+si,tpOf(/^Soil bearing/))]});
+      subs.push(...legacy('Soil bearing','6b','bearing'));
+      subs.push({title:'Reinforcement — '+shT,items:[lprTopics('sh'+si,tpOf(/^(Flexure|Shear|Torsion)/))]});
+      subs.push(...legacy('Reinforcement','7','reo'));
     });
-    subs.push(...(sign?xps('shaft','demand, embedment, bearing and shaft'):xs(['5','6','6b','7'])));   // LPRX
     secs.push({title:'Drilled shaft',subs});
   }
   /* 8. Assumptions, open items, references */
@@ -9240,11 +9375,12 @@ function ltsInputs(){
 function ltsAddCard(page,id,nm,title,hint,body){
   const pg=$('page-'+page); if(!pg) return null;
   const c=document.createElement('section'); c.className='card ltsCard'; c.id=id;
+  if(LPP_SH_LTSCARD[id]) c.setAttribute('data-shsub',LPP_SH_LTSCARD[id]);   // LPSS: the Post sub-tab of this card
   c.innerHTML=`<div class="card-h"><span class="num">${nm}</span><h2>${title}</h2><span class="hint">${hint||''}</span></div><div class="card-body">${body}</div>`;
   pg.appendChild(c); return c;
 }
-function ltsStepsHTML(steps){
-  return `<ol class="steps">${steps.map(s=>`<li id="st-lts-${lppEsc(s.id)}"><b>${lppEsc(s.label)}:</b> ${SharedSteps.line(s,true)}${s.ref?` <span class="eq-ref">[${lppEsc(s.ref)}]</span>`:''}${s.note?`<div class="tbl-note">${lppEsc(s.note)}</div>`:''}</li>`).join('')}</ol>`;
+function ltsStepsHTML(steps,start){   // start (LPSS): the number of the first step, where one list of steps is shown in two parts
+  return `<ol class="steps"${start>1?` start="${start}"`:''}>${steps.map(s=>`<li id="st-lts-${lppEsc(s.id)}"><b>${lppEsc(s.label)}:</b> ${SharedSteps.line(s,true)}${s.ref?` <span class="eq-ref">[${lppEsc(s.ref)}]</span>`:''}${s.note?`<div class="tbl-note">${lppEsc(s.note)}</div>`:''}</li>`).join('')}</ol>`;
 }
 const LTS_LIMITS=['The soil torsional resistance of the shaft is not checked (LRFDLTS Art. 13.6 gives no method).','The vertical (axial) bearing resistance of the shaft (Art. 13.6.1.2) is not checked: the axial loads of these supports are small (LPL10, 2026-11-07).','Ice on a square or rectangular support is taken as radial ice on a round of the side width (a few % below the square perimeter; Strength I only; LPL7).','Balanced twin arms: no "one arm loaded" wind case (Art. 3.9.4.1 is written for overhead cantilevered supports; LPL9).','The dimensioned drawings and DXF are produced in the IBC mode only.','8-, 12- and 16-sided sections are not built.','Mast arms, high-mast towers (55 ft and taller: warning) and fatigue design are outside this mode; cables are not supported.'];
 function ltsDevHTML(){
@@ -9349,8 +9485,9 @@ function ltsCalc(){
       else {
         const b=fd.gov.br, r=fd.gov.r;
         const st=(fd.sh?LpLts.groundlineSteps(fd.gov.gl,g,fd.sh):[]).concat([{id:'f.dem',label:`Governing groundline demand: ${r.name}, ${r.lcName}`,sym:'M_{F},\\,V_{F}',eq:'',sub:'',value:fd.sh?`${n2(b.MF,2)} kip-ft (B·M + V·p + W_s·p/2, B = ${n2(fd.gov.B,4)}; shaft projection p = ${n2(fd.sh.p,2)} ft), ${n2(b.VF,3)} kip`:`${n2(b.MF,2)} kip-ft (M × B = ${n2(fd.gov.B,4)}), ${n2(b.VF,3)} kip`,unit:'',ref:LpLts.ref('Arts. 13.1, 13.6.1.1; Table 3.4-1')}]);
-        st.push(
+        st.push(   // LPSS: the steps up to and including H are the Forces sub-tab, the Broms steps after it the Embedment sub-tab
           {id:'f.H',label:'Height of the resultant above the groundline',sym:'H',eq:'M_{F}/V_{F}',sub:`${n2(b.MF,2)}/${n2(b.VF,3)}`,value:b.H,unit:'ft',d:3,ref:LpLts.ref('Eq. C13.6.1.1-2 (p. 13-3)')});
+        const nF=st.length;
         if(b.model==='cohesive'){
           st.push({id:'f.q',label:'Coefficient q (cohesive soil)',sym:'q',eq:'\\frac{V_{F}}{9cD}',sub:`\\frac{${n2(b.VF,3)}}{9\\cdot${n2(b.c,3)}\\cdot${n2(b.D,2)}}`,value:b.q,unit:'ft',d:4,ref:LpLts.ref('Eq. C13.6.1.1-3 (p. 13-3)')});
           st.push({id:'f.L',label:'Required embedment (cohesive)',sym:'L',eq:'1.5D + q\\left[1 + \\sqrt{2 + \\frac{4H + 6D}{q}}\\right]',sub:`1.5\\cdot${n2(b.D,2)} + ${n2(b.q,4)}\\left[1 + \\sqrt{2 + \\frac{4\\cdot${n2(b.H,3)} + 6\\cdot${n2(b.D,2)}}{${n2(b.q,4)}}}\\right]`,value:b.L,unit:'ft',d:2,ref:LpLts.ref('Eq. C13.6.1.1-1 (p. 13-3)')});
@@ -9360,11 +9497,13 @@ function ltsCalc(){
           st.push({id:'f.L',label:'Required embedment (cohesionless; root of the cubic)',sym:'L',eq:'L^{3} - \\frac{2V_{F}L}{K_{p}\\gamma D} - \\frac{2M_{F}}{K_{p}\\gamma D} = 0',sub:`K_{p}\\gamma D = ${n2(b.K,4)}`,value:b.L,unit:'ft',d:2,ref:LpLts.ref('Eq. C13.6.1.1-5 (p. 13-4)'),note:'γ with a unit load factor (C13.6.1.1).'});
           st.push({id:'f.Mu',label:'Maximum moment in the shaft',sym:'M_{u}',eq:'V_{F}\\left(H + 0.54\\sqrt{\\frac{V_{F}}{\\gamma DK_{p}}}\\right)',sub:`${n2(b.VF,3)}(${n2(b.H,3)} + 0.54\\cdot${n2(b.rootTerm,4)})`,value:b.Mu,unit:'kip-ft',d:2,ref:LpLts.ref('Eq. C13.6.1.1-7 (p. 13-4)')});
         }
-        body+=ltsStepsHTML(lppLtsLast.fdSteps=st)+`<p class="lts-basis"><b>Required embedment L = ${fmt(b.L,2)} ft</b> (shaft ${inp.shaftShape==='square'?'width':'diameter'} ${fmt(inp.b,2)} ft). Largest shaft moment ${fmt(fd.gm.br.Mu,2)} kip-ft (${lppEsc(fd.gm.r.name)}, ${lppEsc(fd.gm.r.lcName)}).</p>`;
-        body+=`<div class="tbl-note lpNL">${lpNL(`Torsion: T<sub>u</sub> = ${fmt(fd.Tu,0)} lb·ft at the groundline.`,[   // LPNL
+        lppLtsLast.fdSteps=st;
+        body+=`<div data-shsub="forces">`+ltsStepsHTML(st.slice(0,nF))+`</div><div data-shsub="embed">`+ltsStepsHTML(st.slice(nF),nF+1)+`<p class="lts-basis"><b>Required embedment L = ${fmt(b.L,2)} ft</b> (shaft ${inp.shaftShape==='square'?'width':'diameter'} ${fmt(inp.b,2)} ft). Largest shaft moment ${fmt(fd.gm.br.Mu,2)} kip-ft (${lppEsc(fd.gm.r.name)}, ${lppEsc(fd.gm.r.lcName)}).</p></div>`;
+        body+=`<div data-shsub="reo"><div class="tbl-note lpNL">${lpNL(`Torsion: T<sub>u</sub> = ${fmt(fd.Tu,0)} lb·ft at the groundline.`,[   // LPNL
           ['Soil:','LRFDLTS Art. 13.6 (p. 13-2) requires the shaft to resist the applied torsion but gives no method; the soil torsional resistance is not checked here (open item N2).'],
           ['Concrete torsion threshold',`(ACI 318-19 §22.7.1.1): φT<sub>th</sub> = ${fmt(fd.tor.phiTth,0)} lb·ft → ${fd.Tu<=fd.tor.phiTth?'torsion may be neglected in the shaft reinforcement':'<b>exceeds the threshold: torsion reinforcement required (not designed here)</b>'}.`]])}</div>`;
         if(fd.reo){ body+=`<div class="eq-title" style="margin-top:8px"><b>Shaft reinforcement — ACI 318-19</b> (with the LRFDLTS demands; Art. 13.6.2 not applied)</div>`+rebarWorkedHTML(fd.reo,inp,fd.gm.br.Mu*1000,fd.gm.r.P,fd.Vu); }
+        body+=`</div>`;
       }
       ltsAddCard('shaft','ltsFndCard','13',(g.mode==='sign'?'Post':'Pole')+' foundation — drilled shaft','Section 13; ACI 318-19',body); }
     // LTS-5: deflection (Section 10), fatigue applicability (Section 11), breakaway (Art. 2.5.2, Section 12)
@@ -9905,6 +10044,7 @@ function applyPostSelection(){
   document.querySelectorAll('.sign-post-wrap').forEach(w=>{
     w.style.display = (w.getAttribute('data-post')===String(__selectedPost))?'':'none';
   });
+  if(typeof lppShSync==='function') lppShSync();   // LPSS: the summary strip shows the selected post
 }
 
 // ================= INPUT PANEL TABS (UI only) =================
@@ -10034,6 +10174,7 @@ function lppResetPoleOutputs(mode){ (LPP_MODE_OUT_SNAP[mode]||[]).forEach(x=>{ x
   distributeCards();
   lppLdSync();   // LPLS: the Loading sub-tab bar and strip
   lppCvSync();   // LPCV: the combination-view switch
+  lppShSync();   // LPSS: the Shaft / Post sub-tabs
   if($('soilClass')) applySoilClass($('soilClass').value,{silent:true});
   applyBromsUI();
   applyRebarUI();
