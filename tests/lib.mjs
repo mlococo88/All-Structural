@@ -48,10 +48,10 @@ export const BLANK_TILE = (() => {
 })();
 const TYPES = { '.js': 'application/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf' };
 
-export async function openPage(file, { ls, vw = 1400, vh = 1000, hash = '', timeout } = {}) {   // timeout: page load, ms (default 30 s)
+export async function openPage(file, { ls, vw = 1400, vh = 1000, hash = '', timeout, dsf } = {}) {   // dsf: device scale factor (screenshots; default 1)   // timeout: page load, ms (default 30 s)
   const { chromium } = await loadPlaywright();
   const b = await chromium.launch({ executablePath: chromiumPath() });
-  const ctx = await b.newContext({ viewport: { width: vw, height: vh } });
+  const ctx = await b.newContext({ viewport: { width: vw, height: vh }, ...(dsf ? { deviceScaleFactor: dsf } : {}) });
   const blocked = new Set();
   await ctx.route('**/*', r => {
     const u = r.request().url();

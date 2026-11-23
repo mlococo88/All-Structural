@@ -27,6 +27,12 @@
       (spans, skews, joints, girder layout, deck edges, deck, girder section) for Bridge Substructure Loading. One "Send to Substructure
       Loading" button with the Geometry and Reactions boxes (both ticked by default) and "Export hand-off (JSON)"; click only. Keys: the
       channel key, superGeometry.by.steelbridge and the per-project copy superGeometry.by.steelbridge.<project id> (§5.1).
+   5. SHO (2026-11-23; engineer 2026-11-23: the PS Bridge app's hand-off stale banner here too, its decision HO-D2 of 2026-11-21): the
+      hand-offs stay click only; when a channel's data changed since this project last sent or loaded it, a banner names the channel with
+      a one-click Send / Load that runs the click action of this card (staleRefresh: #sbdHoBar above the output tabs' content, every tab,
+      and the card's #hoStale). The check is engine/hostale.js (SBDHoStale) on shared/handoff-stale.js; the record of what this project
+      last sent / loaded is the optional project field handoffs (engine/model.js header) and, for the LL & DL pull, dfPull.source (+ via).
+      A project without the record shows no banner. Display only: no payload, key or computed value changes.
    girderDemands (§4.9): GirderDetail → ST-Girder inside the old app; this app has both roles, so it neither sends nor pulls it (a hand-off
    file from GirderDetail still opens on the check tabs, engine/demandfile.js). Nothing is applied without the user's click and confirm. */
 (function () {
@@ -113,9 +119,10 @@
     return { err: [...new Set(err)], warn, rows, unused, j, ext, tKey, basis, bySpan: !!bySpan, basisLbl, pull };
   }
   /* lldfApply(P, gi, plan, now): writes girders[gi].dfPull (GirderDetail gdLldfApply); returns the girder */
-  function lldfApply(P, gi, plan, now, j) {
+  function lldfApply(P, gi, plan, now, j, via) {
     const g = P.girders[gi], u = JSON.parse(JSON.stringify(plan.pull));
     u.source.adoptedAt = now || new Date().toISOString();
+    if (via) u.source.via = String(via);   // SHO (2026-11-23): how it was pulled; marks a pull made since the stale check keeps a record (engine/hostale.js)
     u.source.fields = plan.rows.filter(r => r.nu != null).map(r => r.lbl);
     if (Number.isInteger(j)) { window.SBDModel.lineOvEntry(P, gi, j).dfPull = u; return g; }   // SBLO (SB-9): pulled for one line of the type (girders[gi].lineOv[j].dfPull)
     g.dfPull = u; return g;
@@ -296,7 +303,8 @@
     const sent = !pname ? 'not kept per project until the project has a name' : sg || sr ? [sg && `Geometry ${esc(when(sg.producedAt))}`, sr && `Reactions ${esc(when(sr.producedAt))}`].filter(Boolean).join('; ') + ` (project "${esc(pname)}", from this browser)` : `nothing sent yet for project "${esc(pname)}" from this browser`;
     const row = (title, who, body) => `<div class="hoRow"><div class="hoWho"><b>${title}</b> <span class="hoTool">${who}</span></div>${body}</div>`;
     return `<section class="sec" id="sbdHo"><div class="secHead">Hand-offs</div><div class="secBody">
-      <p class="note">Nothing is applied until you click and confirm: each pull shows what changes first. Each send is kept for this project, so the other tools can pull any project's latest; with Cloud sync (GitHub) set up the sent copies are also uploaded. Opened as files, the tools must be in one folder and opened in Chrome or Edge; otherwise use Export / Import hand-off (JSON).</p>
+      <div id="hoStale">${cardHtml(P0)}</div>
+      <p class="note">Nothing is applied until you click and confirm: each pull shows what changes first. Every hand-off is a click: when a channel's data changes after this project sent or loaded it, a banner names it (here and above the results) with Send / Load, which is the same click as the button below. Each send is kept for this project, so the other tools can pull any project's latest; with Cloud sync (GitHub) set up the sent copies are also uploaded. Opened as files, the tools must be in one folder and opened in Chrome or Edge; otherwise use Export / Import hand-off (JSON).</p>
       <div class="hoGrp">Receive from other tools</div>
       ${row('Shared project info', 'from any tool', `<div class="fRow"><button type="button" data-ho="pmUse">Use shared project info</button></div>
         <p class="note">Fills project name, number, client, designer, checker and date from bridgeSuite.v1.projectMeta. You see what changes and confirm first.</p>`)}
@@ -336,23 +344,33 @@
   }
   function applyPend() {
     if (!pend || !pend.plan || pend.plan.err.length) return; const P = ctx.getP(), gi = ctx.ui().g || 0, pl = pend.pl, T = lovT();
-    lldfApply(P, gi, pend.plan, null, T && T.gi === gi ? T.j : null); try { BX().markAdopted(LLDF.ch, RX, pl.producedAt); } catch (e) { /* marker only */ }
+    lldfApply(P, gi, pend.plan, null, T && T.gi === gi ? T.j : null, pend.via); try { BX().markAdopted(LLDF.ch, RX, pl.producedAt); } catch (e) { /* marker only */ }
     pend = null; dlg.close(); ctx.changed(true);
   }
   function onClick(e, P, ui) {
-    const b = e.target.closest && e.target.closest('[data-ho]'); if (!b || b.tagName === 'INPUT') return false; const a = b.dataset.ho;
-    if (a === 'goAn') { e.preventDefault(); const t = document.querySelector('#tabBar [data-otab="an"]'); if (t) t.click(); return false; }   // link to the worked factors (CLAUDE.md §6)
+    if (onStale(e, P, ui)) return false;   // SHO: a stale banner's button (it calls ctx.changed itself when the project changed)
+    const b = e.target.closest && e.target.closest('[data-ho]'); if (!b || b.tagName === 'INPUT') return false;
+    return act(b.dataset.ho, P, ui, b, e);
+  }
+  /* act(a, P, ui, b, e, o): one click action of the card (a = its data-ho); true when the project changed. o (SHO, a stale banner's
+     button): { basis } the basis the LL & DL pull opens with (the one recorded). */
+  function act(a, P, ui, b, e, o) {
+    if (a === 'goAn') { if (e) e.preventDefault(); const t = document.querySelector('#tabBar [data-otab="an"]'); if (t) t.click(); return false; }   // link to the worked factors (CLAUDE.md §6)
     if (!BX()) { alert('The hand-off helper is not available in this browser.'); return false; }
-    if (a === 'pmShare') { const r = BX().publish('projectMeta', pmPayload(P), PRODUCER, FILE); alert(r.error ? 'Could not share project info: ' + r.error : 'Project info shared. Other tools can load it with "Use shared project info".'); return false; }
+    if (a === 'pmShare') { const r = BX().publish('projectMeta', pmPayload(P), PRODUCER, FILE);
+      if (!r.error && HSt()) { recPut(P, 'sent', 'projectMeta', { sig: HSt().pmSig(window.SBDHandoffs, P), at: (r.payload && r.payload.producedAt) || '' }); sentNow(); }   // SHO: what this project sent
+      alert(r.error ? 'Could not share project info: ' + r.error : 'Project info shared. Other tools can load it with "Use shared project info".'); return false; }
     if (a === 'pmUse') { const r = BX().read('projectMeta', 'bridge-project-meta', 1);
       if (r.error) { alert(r.empty ? 'No shared project info yet. Click "Share project info" in a tool that has the project filled in.' : 'Cannot use shared project info: ' + r.error); return false; }
       const todo = pmPlan(P, r.payload), from = 'From: ' + BX().describe(r.payload);
       if (!todo.length) { alert('Shared project info has nothing new for this tool.\n\n' + from); return false; }
       if (!confirm('Use shared project info?\n\n' + from + '\n\nThis will overwrite:\n' + todo.map(t => `  ${PM_LBL[t.k]}: "${t.old}" -> "${t.nu}"`).join('\n') + '\n\nBlank shared fields are left unchanged.')) return false;
-      todo.forEach(t => { P.project[t.path] = t.nu; }); return true; }
+      todo.forEach(t => { P.project[t.path] = t.nu; });
+      if (HSt()) recPut(P, 'loaded', 'projectMeta', { at: r.payload.producedAt || '', sig: 'same' });   // SHO: what this project loaded
+      return true; }
     if (a === 'lldfPull') { const r = BX().read(LLDF.ch, LLDF.schema, LLDF.ver);
       if (r.error) { alert(r.empty ? 'Nothing has been published yet. In LL & DL Distribution (lldf.html) click "Send DFs to Design Apps", or use "Import hand-off (JSON)".' : `Cannot use the LL & DL hand-off: ${r.error}`); return false; }
-      pend = { pl: r.payload, via: 'shared browser storage', basis: 'type' }; showLldf(); return false; }
+      pend = { pl: r.payload, via: 'shared browser storage', basis: o && o.basis === 'beam' && Number(r.payload.Nb) === Math.round(P.xs.nb) ? 'beam' : 'type' }; showLldf(); return false; }
     if (a === 'lldfFile') { const f = b.parentNode.querySelector('[data-ho="lldfInput"]'); if (f) { f.value = ''; f.onchange = () => { const file = f.files && f.files[0]; if (!file) return;
       BX().importFile(file, LLDF.schema, LLDF.ver, r => { if (r.error) { alert(`Cannot import the hand-off file: ${r.error}`); return; } pend = { pl: r.payload, via: `file ${file.name}`, basis: 'type' }; showLldf(); }); }; f.click(); } return false; }
     if (a === 'lldfDrop') { const T = lovT(), o = T && T.gi === (ui.g || 0) ? window.SBDModel.lineOv(P, T.gi, T.j) : null;   // SBLO: the line's own pull first
@@ -361,20 +379,84 @@
     if (a === 'subSend' || a === 'subFile') { subSend(P, a === 'subFile'); return false; }
     return false;
   }
+  /* ---- SHO (2026-11-23): the stale banners (display only; each button is this card's own click action) ----
+     staleItems(P): every channel this project has a record of (engine/hostale.js items), with its state; kept while the project text,
+     its record, the input-error state and the stored hand-offs are the same.
+     staleRefresh(): fills #sbdHoBar (above the output tab's content, every tab: the channels out of date, each with Send / Load) and the
+     card's #hoStale (the same banners and each recorded channel's status). Called by index.html after each redraw, by a Send and when
+     another tool writes a channel (storage event). */
+  const HSt = () => window.SBDHoStale, SHS = () => window.SharedHandoffStale;
+  const getRaw = ch => { try { return localStorage.getItem(BX().NS + ch) || ''; } catch (e) { return ''; } };
+  /* recPut(P, part, id, rec): the record on the project (hidden property: engine/model.js setRec; header of engine/hostale.js) */
+  function recPut(P, part, id, rec) {
+    const M = window.SBDModel; if (!SHS() || !M || !M.setRec) return;
+    if (!P.handoffs || typeof P.handoffs !== 'object') M.setRec(P, {});
+    (part === 'sent' ? SHS().setSent : SHS().setLoaded)(P, id, rec);
+  }
+  const sentNow = () => { memo.key = null; if (ctx && ctx.sent) ctx.sent(); else staleRefresh(); };
+  const WATCH = ['superGeometry', 'superReactions', 'projectMeta', 'lldf'];
+  let memo = { key: null, items: [] };
+  function staleItems(P) {
+    const S = HSt(); if (!S || !SHS() || !BX() || !P) return [];
+    if (!P.handoffs && !S.lldfPulls(P).length) return [];   // nothing recorded (every project saved before): no banner
+    const raw = {}; WATCH.forEach(c => { raw[c] = getRaw(c); });
+    const errs = window.SBDInputCheck ? window.SBDInputCheck.collect(P).errors.length : 0;
+    const key = [JSON.stringify(P), JSON.stringify(P.handoffs || null), errs].concat(WATCH.map(c => raw[c])).join('\u0001');
+    if (memo.key === key) return memo.items;
+    let it = []; try { it = S.items(window.SBDHandoffs, window.SBDModel, P, c => raw[c] || '', errs > 0); } catch (e) { console.warn(e); it = []; }
+    memo = { key, items: it };
+    return it;
+  }
+  const STX = { current: 'up to date', stale: 'out of date', unchecked: 'cannot be checked now (input errors, or the stored data is for another bridge or cannot be read)', none: 'the data is no longer in this browser', unknown: '' };
+  const btnOf = q => `<button type="button" class="primary" data-hos="${q.id}"${q.gi != null ? ` data-gi="${q.gi}"` : ''}${q.j != null ? ` data-j="${q.j}"` : ''}>${q.btn}</button>`;
+  function cardHtml(P) {
+    const it = staleItems(P), st = it.filter(q => q.state === 'stale');
+    const ban = st.map(q => `<div class="hoStaleN" data-hos-ch="${q.id}${q.gi != null ? '.' + q.gi : ''}${q.j != null ? '.' + q.j : ''}"><div><b>${esc(q.head)}</b>: ${esc(q.msg)}.</div><div class="nBtns">${btnOf(q)}</div></div>`).join('');
+    const rows = it.map(q => `<li>${esc(q.head)}: ${q.dir === 'out' ? 'sent' : 'loaded'} ${esc(when(q.dir === 'out' ? q.rec.at : q.rec.pulled || q.rec.at))}${q.rec.via && q.rec.via !== 'shared browser storage' ? ` (${esc(q.rec.via)})` : ''} — <b>${esc(STX[q.state] || q.state)}</b>${q.later ? ` <span class="note">(the shared key now holds a later send, ${esc(when(q.later))})</span>` : ''}</li>`).join('');
+    return ban + `<p class="note"><b>This project's hand-offs:</b> ${rows ? '' : 'nothing sent or loaded from this project yet (or only before this app kept a record of it), so no banner is shown.'}</p>${rows ? `<ul class="note hoStList">${rows}</ul>` : ''}`;
+  }
+  function barHtml(P) {
+    const bar = staleItems(P).filter(q => q.state === 'stale'); if (!bar.length) return '';
+    return `<div><b>Hand-offs out of date</b> (this project; nothing is sent or loaded until you click):<ul class="hoStList">${bar.map(q => `<li><b>${esc(q.head)}</b>: ${esc(q.msg)} ${btnOf(q)}</li>`).join('')}</ul></div><div class="nBtns"><button type="button" data-hos-go>Hand-offs card</button></div>`;
+  }
+  function staleRefresh() {
+    if (!ctx) return; const P = ctx.getP();
+    let c = '', b = ''; try { c = cardHtml(P); b = barHtml(P); } catch (e) { console.warn(e); }
+    const el = document.getElementById('hoStale'); if (el && el.innerHTML !== c) el.innerHTML = c;
+    const bar = document.getElementById('sbdHoBar'); if (bar) { if (bar.innerHTML !== b) bar.innerHTML = b; bar.hidden = !b; }
+  }
+  /* onStale(e, P, ui): a stale banner's button = the card's click action (the LL & DL pull: its girder type, and its line when the pull
+     was for one line only, chosen first: ctx.pick). True when the click was a banner's. */
+  function onStale(e, P, ui) {
+    const t = e.target; if (!t || !t.closest) return false;
+    if (t.closest('[data-hos-go]')) { e.preventDefault(); if (ctx && ctx.goin) ctx.goin(); return true; }
+    const b = t.closest('[data-hos]'); if (!b) return false;
+    e.preventDefault(); if (!BX() || !HSt()) { alert('The hand-off helper is not available in this browser.'); return true; }
+    const id = b.dataset.hos;
+    if (id === 'superGeometry' || id === 'superReactions') { subSend(P, false, [id === 'superGeometry' ? 'geo' : 'rx']); return true; }
+    if (id === 'projectMeta') { act('pmShare', P, ui, b, e); return true; }
+    if (id === 'projectMetaIn') { if (act('pmUse', P, ui, b, e)) ctx.changed(true); return true; }
+    if (id === 'lldf') { const gi = +b.dataset.gi, j = b.dataset.j != null ? +b.dataset.j : null, g = P.girders[gi]; if (!g) return true;
+      const u = j == null ? g.dfPull : ((g.lineOv || {})[String(j)] || {}).dfPull;
+      if (ctx.pick) ctx.pick(gi, j);
+      act('lldfPull', P, ctx.ui(), b, e, { basis: u && u.source && u.source.basis }); return true; }
+    return true;
+  }
   /* GXF (2026-11-09): "Send to Substructure Loading" with the Geometry and Reactions boxes (both ticked by default; this page only, not saved).
      Send: each ticked channel is built first (nothing is sent when one fails), then published (channel key, .updatedAt), its .by.<id> copy
      (superGeometry.by.steelbridge; superReactions.by.girderdetail as before) and its per-project copy and GitHub upload (shared/handoff-store.js,
      HANDOFF.md §5.1; producer id steelbridge). Export: one file per ticked channel. */
   const SEND = { geo: true, rx: true };
-  async function subSend(P, file) {
+  async function subSend(P, file, only) {   // only (SHO, the stale banner's Send): ['geo'] or ['rx'] whatever the boxes
     // SBINV (2026-11-10): nothing is sent or exported while the project has a blocking input error (engine/inputcheck.js; the banner lists them)
     const IE = window.SBDInputCheck ? window.SBDInputCheck.collect(P).errors : [];
     if (IE.length) { alert(`Nothing was ${file ? 'exported' : 'sent'}: ${IE.length} input${IE.length > 1 ? 's need' : ' needs'} fixing first.\n\n${IE.slice(0, 12).map(e => '- ' + e.msg).join('\n')}${IE.length > 12 ? `\n… and ${IE.length - 12} more (listed above the results).` : ''}`); return; }
-    const todo = [SEND.geo && 'geo', SEND.rx && 'rx'].filter(Boolean);
+    const todo = only || [SEND.geo && 'geo', SEND.rx && 'rx'].filter(Boolean);
     if (!todo.length) { alert('Tick Geometry, Reactions or both.'); return; }
     const built = {}, errs = [];
     todo.forEach(k => { const r = k === 'geo' ? sgPayload(P) : srPayload(P); if (r.error) errs.push(`${k === 'geo' ? 'Geometry' : 'Reactions (analysis)'}: ${r.error}`); else built[k] = r; });
     if (errs.length) { alert(`Nothing was ${file ? 'exported' : 'sent'}.\n\n${errs.join('\n')}`); return; }
+    const sg = {}; if (HSt()) todo.forEach(k => { sg[k] = k === 'geo' ? SHS().sig(built[k].payload) : HSt().rxSig(P); });   // SHO: the sig of what is sent (before the device field)
     const dev = HS() ? HS().deviceName(localStorage) : '';
     todo.forEach(k => { if (dev) built[k].payload.device = dev; });   // §5.1 optional envelope field
     const CH = { geo: GEO, rx: SR };
@@ -387,11 +469,15 @@
       let cl = '';
       if (HS()) { const r = await HS().send({ storage: localStorage, channel: c.ch, producer: GEO.id, payload: w.payload, fetch: (u, i) => window.fetch(u, i) });
         cl = !r.ok ? ` (the per-project copy was not saved: ${r.error})` : !r.pid ? '' : r.cloud && r.cloud.ok ? '; also uploaded to GitHub' : r.cloud && r.cloud.queued ? `; GitHub upload waiting (${r.cloud.error})` : ''; }
+      if (sg[k]) recPut(P, 'sent', k === 'geo' ? 'superGeometry' : 'superReactions', { sig: sg[k], at: w.payload.producedAt || '' });   // SHO: what this project sent
       out.push(k === 'geo' ? `Geometry sent: ${built.geo.sum}${cl}.` : `Reactions sent (unfactored, kip, DC1 / DC2 / DW per girder)${cl}:\n${built.rx.sum}`);
     }
+    sentNow();   // SHO: the card's "Last sent", the record and the banners
     alert(`${pname ? `Kept for project "${pname}".` : 'This project has no name, so the send is kept only as the latest hand-off (no project). Enter a project name on the Project tab to keep one copy per project.'}\n\n${out.join('\n\n')}\n\nIn Bridge Substructure Loading: Project tab, Hand-offs card, "Pull geometry from Steel Bridge Design" and "Pull from PS-Beam / GirderDetail". Each asks which project first.`);
   }
-  function init(o) { ctx = o; window.addEventListener('storage', e => { if (!e.key || e.key.indexOf(BX().NS + LLDF.ch) === 0) document.querySelectorAll('[data-ho-new]').forEach(s => { s.hidden = !isNew(); }); });
+  function init(o) { ctx = o; window.addEventListener('storage', e => { if (!e.key || e.key.indexOf(BX().NS + LLDF.ch) === 0) document.querySelectorAll('[data-ho-new]').forEach(s => { s.hidden = !isNew(); });
+      if (!e.key || WATCH.some(c => e.key.indexOf(BX().NS + c) === 0)) staleRefresh(); });   // SHO: the stale banners follow the other tools' sends
+    const bar = document.getElementById('sbdHoBar'); if (bar) bar.addEventListener('click', e => { onStale(e, ctx.getP(), ctx.ui()); });   // SHO
     document.addEventListener('change', e => { const t = e.target; if (t && t.dataset && t.dataset.hoOpt) SEND[t.dataset.hoOpt] = !!t.checked; }); }
-  window.SBDHandoffUI = { card, onClick, init };
+  window.SBDHandoffUI = { card, onClick, init, staleRefresh, staleItems };
 })();
