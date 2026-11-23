@@ -9240,3 +9240,15 @@ PR: claude/ps-rating-e1-d4-d5 (link in the PR)
 - E1-D5b (applied, to confirm): a part that is exactly zero takes the maximum factor (no effect on the RF; keeps the engine's expression and order where nothing relieves).
 ### Other copies
 - None. The Steel Bridge app already uses φ_s = 1.0 for shear; its positive-flexure rating is its own engine (not changed). The old app (frozen) keeps its rating.
+
+## 2026-11-23 — PR: claude/steel-handoff-stale (SHO) — the shared part of the hand-off stale check moved to shared/handoff-stale.js (pure refactor, no change of behaviour)
+- **Why:** the Steel Bridge app gets the same banner (engineer, 2026-11-23); CLAUDE.md §3. See fixlog/shared-handoff-stale.md and fixlog/steel-bridge.md (SHO).
+- **Where:** `apps/ps-bridge/engine/hostale.js`.
+  - Before (anchor `const VOL = ['producedAt', 'updatedAt', 'device'];`): the definitions of `VOL`, `isObj`, `canon`, `hash`, `sig`. After: `const isObj = …;` (kept) and `const { canon, hash, sig } = W.SharedHandoffStale;`.
+  - Before (anchor `/* the record */`): `recs`, `sentOf`, `loadedOf`, `put`, `setSent`, `setLoaded`, `carrySent`. After: `const { sentOf, loadedOf, setSent, setLoaded, carrySent, outState, inState } = W.SharedHandoffStale;`.
+  - Before (anchor `function outState(rec, cur)`): `outState`, `inState`. After: taken from the shared file (line above); the comment of the states kept.
+  - `window.PSBHoStale` exports the same names as before.
+  - `apps/ps-bridge/index.html` script list: + `'../../shared/handoff-stale.js'` before `'engine/hostale.js'`.
+  - Tests: `tests/engine/psbridge-model.test.mjs` (the page's script list; the shared file left out of the key check as the other shared files), `tests/engine/psbridge-hostale.test.mjs` (loads the shared file).
+- **Governing provision / computed values:** none; the moved text is unchanged. To re-apply by hand: copy the functions back from `shared/handoff-stale.js`.
+- **How verified:** `node tests/engine/run.mjs psbridge` (all PS engine tests), `tests/smoke/ps-bridge-hostale.mjs`, `tests/smoke/ps-bridge-handoffs.mjs`, `node tests/check-syntax.mjs`.
