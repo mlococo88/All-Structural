@@ -152,6 +152,11 @@
                   splRules: { shipLen (ft), shipWt (kip), minLen, minSup, minXf, minTr (ft) } ('' = the owner's rule or the stated default) }
      -- added 2026-10-29 (load rating PR), optional: a version 1 project without it reads as defaultRating() --
      rating:    { phiC (condition factor, MBE Table 6A.4.2.3-1), phiS (system factor, MBE Table 6A.4.2.4-1) }
+                  -- added 2026-11-23 (legal and permit rating), optional, written only when a vehicle input is changed on the Rating tab; absent = no
+                  vehicles, the HL-93 rating as before --
+                  veh: { on: [keys of shared/vehicles.js presets ticked], imL, imP (IM percent of legal / permit loads; '' = 33, or the preset's for the
+                         permit vehicle), evG ('legal' | 'fhwa': γ_LL of the emergency vehicles), permit: { key ('' none | preset key | 'custom'),
+                         type ('routine' | 'multi' | 'trip-mixed' | 'trip-escort'), gam ('' = MBE Table 6A.4.5.4.2a-1), axles (text "P@s, …", kip @ ft), name } }
      -- added 2026-10-30 (legacy import PR), optional, written only by an import of an old project (engine/legacy.js) --
      legacy:    { importedAt, source, parts: ['gd' | 'pl' | 'st'], unmapped: { gd, pl, st: every field of the old file not mapped, at its
                   own path }, summary: { source, parts, unmapped: [{ part, label, field, what }], notes } }

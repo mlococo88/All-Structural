@@ -69,7 +69,7 @@
       // DFG (2026-11-09): the camber of every girder line (the Deflection tab's lineRun: the same analysis, each line's own dead loads)
       if (src === 'analysis' && on('defl') && W().SBDDeflectionUI && W().SBDDeflectionUI.allLines) B.cam = run('defl', () => W().SBDDeflectionUI.allLines(P));
       if (on('sec')) B.sec = run('sec', () => sections(P, g, B.an ? B.an.sup : pl ? (pl.member || {}).supports : sup0));
-      if (on('rt') || on('flex') || on('sum')) B.rating = run('rt', () => W().SBDRatingUI.build(cu('rt') ? { P, g, src: 'custom' } : src === 'file' ? { P, g, pl } : { P, g, src: 'analysis' }));
+      if (on('rt') || on('flex') || on('sum')) B.rating = run('rt', () => W().SBDRatingUI.build(cu('rt') ? { P, g, src: 'custom', veh: true } : src === 'file' ? { P, g, pl, veh: true } : { P, g, src: 'analysis', veh: true }));   // veh (2026-11-23): the legal and permit vehicles ticked on the Rating tab
       // flexure: the Flexure module (f_ℓ and brace points as the tab: engine/framing.js design); with the analysis the rating's flexure is
       // that module's build already (ui/rating.js, paths PR): the same object, not built twice
       if (on('flex') || on('sum')) B.flex = cu('flex') ? run('flex', () => W().SBDFlexureUI.build({ P, g, src: 'custom', method: 'auto' })) : src === 'file' ? run('flex', () => W().SBDFlexureUI.build({ P, g, src: 'file', pl, plName: B.plName, method: 'auto' }))

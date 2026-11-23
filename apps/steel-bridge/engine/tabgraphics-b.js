@@ -517,7 +517,9 @@
      marked (the governing rows of B.sum circled). Values above opt.cap (default 5) are drawn at the top edge. */
   function ratingChart(B, P, opt) {
     opt = opt || {}; const sup = B.pl && B.pl.member && B.pl.member.supports ? B.pl.member.supports : geoProject(P, opt.gi || 0).sup, Lg = sup[sup.length - 1], Lin = Lg * 12, h = Lin * 0.024;
-    const cap = opt.cap || 5, ser = [['flex', 'inv', 5, undefined, 'INVENTORY, FLEXURE'], ['shear', 'inv', 3, undefined, 'INVENTORY, SHEAR'], ['flex', 'opr', 5, 'DASHED', 'OPERATING, FLEXURE'], ['shear', 'opr', 3, 'DASHED', 'OPERATING, SHEAR']];
+    const one = B.one ? up(String(B.one)) : '';   // B.one (2026-11-23): a legal or permit vehicle's rows (one rating factor, no Inventory / Operating levels)
+    const cap = opt.cap || 5, ser = one ? [['flex', 'inv', 5, undefined, `${one}, FLEXURE`], ['shear', 'inv', 3, undefined, `${one}, SHEAR`]]
+      : [['flex', 'inv', 5, undefined, 'INVENTORY, FLEXURE'], ['shear', 'inv', 3, undefined, 'INVENTORY, SHEAR'], ['flex', 'opr', 5, 'DASHED', 'OPERATING, FLEXURE'], ['shear', 'opr', 3, 'DASHED', 'OPERATING, SHEAR']];
     const data = ser.map(q => rfSeries(B.rows, q[0], q[1])); let ymax = 0; data.forEach(s => s.forEach(p => { if (fin(p[1])) ymax = Math.max(ymax, Math.min(p[1], cap)); })); ymax = Math.max(2, Math.ceil(ymax * 1.05 * 2) / 2);
     const C = chartOver({ at: [0, 0], w: Lin, hgt: Lin * 0.16, h, xr: [0, Lg], yr: [0, ymax], ystep: ymax > 6 ? 1 : 0.5, xstep: niceStep(0, Lg, 10), file: 'rating-chart', xlab: 'STATION ALONG THE GIRDER (FT)', ylab: 'RATING FACTOR RF',
       vlines: sup.map(x => ({ x })), limits: [{ y: 1, label: 'RF = 1.0', color: 1 }], legend: 'below', legendExtra: [{ text: `SCALE CAPPED AT RF ${ymax}: ARROW AND DASHED CAP = VALUE ABOVE THE SCALE`, arrow: true }],
@@ -526,18 +528,18 @@
     // QA2 (2026-11-09): the support names in a row above the plot (not over the capped-value arrows at its top edge), the governing INV / OPR labels above them
     // on leaders from their circles (not over the curves), the title in two lines above everything (it fits a phone screen at the reading zoom)
     const pt = C.plot[3], ys = pt + 0.5 * hh, gl = [], tv = C.h * 0.7;
-    ['inv', 'opr'].forEach(k => { const g = B.sum && B.sum.gov && B.sum.gov[k]; if (g && fin(g.x) && fin(g[k])) { const xx = C.X(g.x), yy = C.Y(Math.min(Math.max(g[k], 0), ymax)); D.circle(L.gov, xx, yy, 1.1 * hh); const txt = `${k === 'inv' ? 'INV' : 'OPR'} RF ${f2(g[k])} AT ${f1(g.x)} FT`, w = TW(txt, hh * 0.85, hh) + 0.4 * hh;
+    (one ? ['inv'] : ['inv', 'opr']).forEach(k => { const g = B.sum && B.sum.gov && B.sum.gov[k]; if (g && fin(g.x) && fin(g[k])) { const xx = C.X(g.x), yy = C.Y(Math.min(Math.max(g[k], 0), ymax)); D.circle(L.gov, xx, yy, 1.1 * hh); const txt = `${one ? '' : k === 'inv' ? 'INV ' : 'OPR '}RF ${f2(g[k])} AT ${f1(g.x)} FT`, w = TW(txt, hh * 0.85, hh) + 0.4 * hh;
       gl.push({ x: Math.min(xx + 0.4 * hh, C.plot[2] - w), y: pt + 2.2 * hh, w, hh: hh * 0.85, txt, xx, yy }); } });
     const gy = window.SBDGraphics.declutter(gl, { gap: 0.3 * hh }), ttop = Math.max(pt + 1.6 * hh, ...gy.map(y => y + 1.0 * hh)) + 0.6 * hh;
     sup.forEach((x, k) => { const xs = C.X(x), nm = supName(k, sup.length), hw = TW(nm, tv, hh) / 2 + 0.5 * hh, hit = gl.some(q => Math.abs(q.xx - xs) < hw), last = k === sup.length - 1;   // clear of a leader at the support
       D.text(L.t, hit ? xs + (last ? -0.4 : 0.4) * hh : xs, ys, tv, nm, k === 0 ? 0 : last ? 2 : hit ? 0 : 1); });
-    window.SBDGraphics.wrap(`GIRDER ${(P.girders[opt.gi || 0] || {}).label || 'G1'}: LOAD RATING FACTOR ALONG THE GIRDER (LRFR)`, 30).forEach((q, i, a) => D.text(L.t, C.plot[0], ttop + (a.length - 1 - i) * 1.45 * hh, 1.1 * hh, q));
+    window.SBDGraphics.wrap(`GIRDER ${(P.girders[opt.gi || 0] || {}).label || 'G1'}: LOAD RATING FACTOR ALONG THE GIRDER (LRFR)${one ? ', ' + one : ''}`, 30).forEach((q, i, a) => D.text(L.t, C.plot[0], ttop + (a.length - 1 - i) * 1.45 * hh, 1.1 * hh, q));
     gl.forEach((q, i) => { D.line(L.gov, q.xx, q.yy + 1.1 * hh, q.xx, gy[i] - 0.2 * hh); D.text(L.gov, q.x, gy[i], q.hh, q.txt, 0); });
     // click regions: one band per station, selecting the row with the smallest Inventory RF there (flexure or shear): the Rating tab's S.sel is a row index
     const best = new Map(); B.rows.forEach((r, i) => { if ((r.kind !== 'flex' && r.kind !== 'shear') || !fin(r.x) || r.oos) return; const k = +r.x.toFixed(3), v = fin(r.inv) ? r.inv : Infinity; if (!best.has(k) || v < best.get(k).v) best.set(k, { v, i }); });
     const xs = [...best.keys()].sort((a, b) => a - b), reg = [];
     xs.forEach((x, j) => { const a = j ? (xs[j - 1] + x) / 2 : 0, b = j < xs.length - 1 ? (x + xs[j + 1]) / 2 : Lg, r = B.rows[best.get(x).i];
-      reg.push({ k: 'rt', i: best.get(x).i, x0: C.X(a), y0: C.plot[1], x1: C.X(b), y1: C.plot[3], lab: `${up(r.name)}: ${up(r.title)}: INV ${fin(r.inv) ? f2(r.inv) : '-'}, OPR ${fin(r.opr) ? f2(r.opr) : '-'}` }); });
+      reg.push({ k: 'rt', i: best.get(x).i, x0: C.X(a), y0: C.plot[1], x1: C.X(b), y1: C.plot[3], lab: one ? `${up(r.name)}: ${up(r.title)}: RF ${fin(r.inv) ? f2(r.inv) : '-'}` : `${up(r.name)}: ${up(r.title)}: INV ${fin(r.inv) ? f2(r.inv) : '-'}, OPR ${fin(r.opr) ? f2(r.opr) : '-'}` }); });
     if (opt.sel != null && B.rows[opt.sel] && fin(B.rows[opt.sel].x)) { const x = C.X(B.rows[opt.sel].x); D.line(L.sel, x, C.plot[1], x, C.plot[3]); D.circle(L.sel, x, C.plot[1], 0.6 * hh); }
     return base('ratingChart', 'Rating factor along the girder', D, 0, reg, `The scale is capped at RF ${ymax}; a value above it is shown by an arrow and a dashed cap at the top edge.`);
   }

@@ -24,7 +24,7 @@
   /* the modules, in run order: k = report/data.js want key; cols = the Summary columns it fills; tab = its output tab */
   const MODS = [
     { k: 'an', name: 'Analysis', tab: 'an', cols: ['defl'] },
-    { k: 'flex', name: 'Flexure and rating', tab: 'flex', cols: ['flexStr', 'flexSvc', 'flexProp', 'rtInv', 'rtOpr'] },   // compute() builds the rating with the flexure (one object)
+    { k: 'flex', name: 'Flexure and rating', tab: 'flex', cols: ['flexStr', 'flexSvc', 'flexProp', 'rtInv', 'rtOpr', 'rtVeh'] },   // compute() builds the rating with the flexure (one object)
     { k: 'shear', name: 'Shear & stiffeners', tab: 'shear', cols: ['shear', 'stiff'] },
     { k: 'fat', name: 'Fatigue & studs', tab: 'fat', cols: ['fat', 'studs'] },
     { k: 'cn', name: 'Constructibility', tab: 'cn', cols: ['cn'] },
@@ -47,6 +47,12 @@
     { id: 'defl', grp: 'Deflection', head: 'LL deflection', short: 'Defl.', tab: 'defl', what: 'SA3' },   // tab 'defl' since DEFL (2026-11-09): the Deflection tab works SA3 (before: 'an')
     { id: 'rtInv', grp: 'Rating', head: 'Rating, Inventory RF', short: 'RF Inv.', tab: 'rt', rf: true },
     { id: 'rtOpr', grp: 'Rating', head: 'Rating, Operating RF', short: 'RF Opr.', tab: 'rt', rf: true }];
+  // VEH_COL (2026-11-23): the lowest rating factor of the legal and permit vehicles ticked on the Rating tab; a column only of a project with such
+  // vehicles (cols(P), vehOn(P)): without them COLS is the list, no cell is made and every count, table and verdict is as before. RF < 1.0: FAIL, as
+  // the HL-93 columns. ALL: COLS and this column (the loops that take whatever cells exist).
+  const VEH_COL = { id: 'rtVeh', grp: 'Rating', head: 'Rating, legal / permit RF', short: 'RF L/P', tab: 'rt', rf: true }, ALL = [...COLS, VEH_COL];
+  const vehOn = P => { const v = ((P || {}).rating || {}).veh; return !!v && ((Array.isArray(v.on) && v.on.length > 0) || !!(v.permit && v.permit.key)); };
+  const cols = P => (vehOn(P) ? ALL : COLS);
   const GROUPS = [...new Set(COLS.map(c => c.grp))];
   /* SBDIA (2026-11-10): with a rolled or channel diaphragm as the intermediate bracing (crossframes.dia.on = 'yes') the Cross-frames column
      and chip read "Diaphragms" (checks CF10, CF11, CFD, CFE; CF1 to CF9 are not made). Display only: the column id 'cf' and the group key
@@ -57,7 +63,7 @@
   const modOf = col => MODS.find(m => m.cols.includes(col));
   /* the Report's governing groups (report/builders.js model().gov[].grp) of each column */
   const GRP = { shear: /^Shear & stiffeners: (Web panels|Stations)$/, stiff: /^Shear & stiffeners: (Transverse|Bearing) stiffeners$/, fat: /^Fatigue & studs: (Fatigue details|Flanges, every station)$/,
-    studs: /^Fatigue & studs: Studs$/, cn: /^Constructibility/, cf: /^Cross-frames$/, spl: /^Field splices$/, wd: /^Welds: /, defl: /^Analysis: SA3/, rtInv: /^Rating: Inventory RF$/, rtOpr: /^Rating: Operating RF$/ };
+    studs: /^Fatigue & studs: Studs$/, cn: /^Constructibility/, cf: /^Cross-frames$/, spl: /^Field splices$/, wd: /^Welds: /, defl: /^Analysis: SA3/, rtInv: /^Rating: Inventory RF$/, rtOpr: /^Rating: Operating RF$/, rtVeh: /^Rating: Legal and permit RF$/ };
   const FLEX_CLS = id => /^GS1[23]$/.test(id) ? 'flexSvc' : /^GS([1-4]|22)$/.test(id) ? 'flexProp' : 'flexStr';
   const gr = r => (isFinite(r) ? r : Infinity);   // engine/flexure.js gr(): a ratio that is not a number governs
 
@@ -83,7 +89,7 @@
     out.err = { ...B.err };
     let M = null; try { M = W().SBDReportBuild.model(B, { detail: 'gov' }); } catch (e) { out.warn.push('Summary: the report model failed: ' + (e && e.message)); }
     const gov = M ? M.gov : []; out.gov = gov;   // the Report's governing rows (the girder elevation figure, engine/tabgraphics-b.js summary)
-    COLS.forEach(c => {
+    cols(P).forEach(c => {
       const m = modOf(c.id);
       if (!parts || !parts[m.k]) { out.cells[c.id] = { st: 'notrun', tab: c.tab }; return; }
       if (/^flex/.test(c.id)) { out.cells[c.id] = flexCell(B, c); return; }
@@ -134,7 +140,7 @@
   function overall(P, list) {
     const n = { pass: 0, fail: 0, review: 0, na: 0, notrun: 0 }, nan = []; let top = null, low = null;
     const byCol = {};
-    list.forEach(G => COLS.forEach(c => { const q = G.cells[c.id]; if (!q) return; n[q.st] = (n[q.st] || 0) + 1;
+    list.forEach(G => ALL.forEach(c => { const q = G.cells[c.id]; if (!q) return; n[q.st] = (n[q.st] || 0) + 1;
       if (q.r != null && !isFinite(q.r) && q.st !== 'notrun') nan.push({ G, c, q });
       if (q.r != null && isFinite(q.r) && (!top || q.r > top.q.r)) top = { G, c, q };   // the governing check: the largest ratio that is a number (one that is not: REVIEW, listed apart)
       if (q.rf != null && isFinite(q.rf) && (!low || q.rf < low.q.rf)) low = { G, c, q };
@@ -146,7 +152,7 @@
   }
   /* grpStat(list, grp): one chip of the left summary: the columns of a module group over every girder */
   function grpStat(list, grp) {
-    const cols = COLS.filter(c => c.grp === grp), all = [];
+    const cols = ALL.filter(c => c.grp === grp && (c !== VEH_COL || list.some(G => G.cells[c.id]))), all = [];
     list.forEach(G => cols.forEach(c => { const q = G.cells[c.id]; if (q) all.push({ G, c, q }); }));
     const run = all.filter(z => z.q.st !== 'notrun'), real = run.filter(z => z.q.st !== 'na');
     const rf = cols.every(c => c.rf);
@@ -176,7 +182,7 @@
     if (!J.length) return null;
     if (J.length === 1) return J[0].G;   // one line: its summary unchanged (the line is the type's design line, or the only one)
     const out = { gi, label: lab, cells: {}, warn: [], notes: [], err: {}, lines: J.map(q => q.j), byLine: J.map(q => ({ j: q.j, cells: q.G.cells })) };
-    COLS.forEach(c => { let b = null;
+    ALL.forEach(c => { let b = null;
       J.forEach(q => { const x = q.G.cells[c.id]; if (!x) return; const v = c.rf ? x.rf : x.r;
         const rank = z => z.st === 'notrun' ? 0 : z.st === 'na' ? 1 : 2;
         if (!b || rank(x) > rank(b.x) || (rank(x) === 2 && rank(b.x) === 2 && (c.rf ? v < b.x.rf : gr(v) > gr(b.x.r)))) b = { x, j: q.j }; });
@@ -188,5 +194,5 @@
     J.forEach(q => { Object.entries(q.G.err || {}).forEach(([k, v]) => { if (!out.err[k]) out.err[k] = v; }); });
     return out;
   }
-  window.SBDSummary = { units, merge, weight, MODS, COLS, GROUPS, run, cells, overall, grpStat, modOf, FLEX_CLS, label, grpLabel };
+  window.SBDSummary = { units, merge, weight, MODS, COLS, ALL, cols, vehOn, GROUPS, run, cells, overall, grpStat, modOf, FLEX_CLS, label, grpLabel };
 })();

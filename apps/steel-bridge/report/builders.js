@@ -601,9 +601,29 @@
       subs.push(sub('all', 'Rating factors at every location', [tbl(['Location', 'Check', 'C', 'DC', 'DW', 'LL+IM', 'Unit', 'RF Inv.', 'RF Opr.'], R.rows.map(q => q.oos ? [q.name, { t: q.title, cls: 'na', span: 8 }] : { cells: [q.name, tt(q.title), N(q.C, q.unit === 'ksi' ? 2 : 1), N(q.DC, q.unit === 'ksi' ? 2 : 1), N(q.DW, q.unit === 'ksi' ? 2 : 1), N(q.LL, q.unit === 'ksi' ? 2 : 1), q.unit || '',
         { t: rf(q.inv), cls: rcls(q.inv), n: true, key: K(rk(q), rfStep(q)) }, q.kind === 'fat' ? '—' : { t: rf(q.opr), cls: rcls(q.opr), n: true }], cls: q === gi ? 'gov' : '' })),
         ...rest.map(q => { const c = capOf(q); if (c.item) caps.push(c.item); return gsteps('SBDRatingUI:x', rk(q), q.steps, { see: c.sc, lazy: true, title: `${q.name}: ${tt(q.title)}, RF ${rf(q.inv)} / ${rf(q.opr)}` }); })])); }
+    // legal-load and permit rating (2026-11-23; ui/rating.js buildVeh): one table, then each vehicle's governing rating worked (its live load, γ_LL,
+    // RF, rated load and posting) with the capacity of its location (the vehicle's own flexure / shear build)
+    if (R.veh && !R.veh.only) { const V = R.veh, RU = window.SBDRatingUI, ok = V.list.filter(v => v.rows), vk = (v, q) => `rtv.${V.list.indexOf(v)}@${v.rows.indexOf(q)}`, g4 = x => f(x, 4).replace(/(\.\d\d)0+$/, '$1');
+      ok.forEach(v => { if (v.gov) X.gov.push({ mod: 'Rating', grp: 'Rating: Legal and permit RF', check: `${v.short} RF, ${tt(v.gov.title)}`, loc: v.gov.name, rf: v.rf, key: K(vk(v, v.gov), rfStep(v.gov)) }); });
+      subs.push(sub('veh', `Legal-load and permit rating (${ok.length} vehicle${ok.length === 1 ? '' : 's'})`, [
+        note(`Each vehicle is run on this app's line-girder model (the live-load stiffness and stations of the [[tab:an|Analysis tab]]) and rated by ${window.SBDRating.MBE} Eq. 6A.4.2.1-1 with the capacities, $\\phi_{c}$, $\\phi_{s}$, $\\gamma_{DC}$ 1.25 and $\\gamma_{DW}$ 1.50 of the design-load rating: one rating factor per vehicle; legal loads at Strength I with $\\gamma_{LL}$ by ADTT (Tables 6A.4.4.2.3a-1, 6A.4.4.2.3b-1), permit loads at Strength II (Table 6A.4.5.4.2a-1), Service II with $\\gamma_{LL}$ 1.30 (legal) or 1.00 (permit) (Table 6A.4.2.2-1); IM on the axles (Arts. 6A.4.4.3, 6A.4.5.5); fatigue is not rated for these loads. ADTT (one direction) = ${V.adtt == null ? 'unknown' : f(V.adtt, 0)}. Rated load RT = RF × W (Art. 6A.4.4.4); posting by Eq. 6A.8.3-1 for the AASHTO legal loads and the specialized hauling vehicles.${V.pedIn ? ' The pedestrian load is added to each vehicle\'s live load, as in the design-load rating.' : ''} A rating factor below 1.0 counts as FAIL in the verdict, as the HL-93 rating factors do. As on the [[tab:rt|Rating tab]].`),
+        ...V.err.map(e => note(e, true)),
+        V.laneWarn ? note('MBE Art. 6A.4.4.2.1a calls for the lane-type legal load model on this girder (a continuous span or a span longer than 200 ft) together with the AASHTO legal loads: it is not selected, so negative moment and the interior reactions are rated for the single trucks only.', true) : null,
+        V.list.some(v => v.cat === 'permit' && v.verified === false) ? note('Special or limited-crossing permit: its live-load factor has not been verified against the MBE 4th Ed. text (Table 6A.4.5.4.2a-1): confirm the value.', true) : null,
+        tbl(['Vehicle', 'W (tons)', 'IM (%)', '$\\gamma_{LL}$', 'DF', ...RU.VGRP.map(q => q[1]), 'Governing RF', 'Governing check and location', 'RT (tons)', 'Posting / acceptance'], V.list.map(v => v.rows ? [v.short, v.tons != null ? f(v.tons, 2) : '—', f(v.im, 0), g4(v.gam), v.df === 'one' ? 'one lane, no m' : 'design',
+          ...RU.VGRP.map(([k]) => { const q = v.by[k]; return q ? { t: rf(q.inv), cls: rcls(q.inv), n: true } : '—'; }), v.gov ? { t: rf(v.rf), cls: rcls(v.rf), n: true, key: K(vk(v, v.gov), rfStep(v.gov)) } : '—', v.gov ? `${tt(v.gov.title)}, ${v.gov.name} (${v.gov.lim})` : 'no live-load effect', v.rated != null ? N(v.rated, 1) : '—', RU.postText(v)]
+          : [v.short, v.tons != null ? f(v.tons, 2) : '—', { t: v.na || v.err || '', cls: 'na', span: 8 + RU.VGRP.length }])),
+        note(`Live-load factors: ${[...new Set(ok.map(v => `${v.short}: ${v.gRef}`))].join('. ')}.`)]));
+      ok.forEach(v => { const q = v.gov; if (!q) return; const r = v.cap.get(q), sc = 'rtvcap@' + (nCap++), ts = RU.vehSteps(v);
+        const capItem = r ? gsteps(q.kind === 'shear' ? 'SBDShearUI:loc' : 'SBDFlexureUI:x', sc, (q.kind === 'shear' ? window.SBDShearUI.stepsOf(v.shear, 'loc', r) : window.SBDFlexureUI.stepsOf(v.flex, r)) || [], { lazy: true, title: `Capacity with the ${v.short} demands: ${q.kind === 'shear' ? 'shear' : 'flexure'} at ${r.name}` }) : null;
+        subs.push(sub(vk(v, q), `${v.short}: ${q.name}, ${tt(q.title)} (governing)`, [
+          note(`${v.label}. ${v.lim} $\\gamma_{LL}$ = ${g4(v.gam)}; IM ${f(v.im, 0)} %; ${v.df === 'one' ? 'one-lane distribution factor without the multiple presence factor' : 'design distribution factor'} (worked on the [[tab:loads|Loads & LLDF tab]]).`),
+          tbl(['C', 'DC', 'DW', 'LL+IM', 'Unit', 'RF', 'RT (tons)'], [[N(q.C, q.unit === 'ksi' ? 2 : 1), N(q.DC, q.unit === 'ksi' ? 2 : 1), N(q.DW, q.unit === 'ksi' ? 2 : 1), N(q.LL, q.unit === 'ksi' ? 2 : 1), q.unit || '', { t: rf(q.inv), cls: rcls(q.inv), n: true }, v.rated != null ? N(v.rated, 1) : '—']]),
+          gsteps('SBDRatingUI:x', vk(v, q), q.steps, { see: r ? sc : null, title: `Rating (${window.SBDRating.MBE})` }),
+          ts.length ? gsteps('SBDRatingUI:v', vk(v, q) + 't', ts, { title: 'Rated load and posting' }) : null, capItem])); }); }
     if (caps.length) subs.push(sub('cap', 'Capacities used by the rating (worked here: not shown in an earlier section of this report)', caps));
     if (R.custom) { subs.push(cdSub('flex', B)); subs[subs.length - 1].id = 'cdf'; subs.push(cdSub('shear', B)); subs[subs.length - 1].id = 'cds'; }   // the tables the rating took (custom demands PR)
-    return { title: 'Load rating (LRFR, design load)', subs };
+    return { title: R.veh && !R.veh.only ? 'Load rating (LRFR: design, legal and permit loads)' : 'Load rating (LRFR, design load)', subs };
   }
 
   /* ---------- 1. summary ---------- */
@@ -926,7 +946,7 @@
     const SM = window.SBDSummary; if (!SM || !SM.overall || !SM.merge || !list.length || !list.every(G => G.sum && G.sum.cells)) return null;
     const by = new Map(); list.forEach((G, k) => { if (!by.has(G.gi)) by.set(G.gi, []); by.get(G.gi).push({ j: G.j, G: G.sum, k }); });
     const T = [...by.entries()].map(([gi, us]) => ({ gi, us, S: SM.merge(P, gi, us) })).filter(t => t.S);
-    const ov = SM.overall(P, T.map(t => t.S)), n = ov.n, COLS = SM.COLS.map(c => SM.label(c, P));
+    const ov = SM.overall(P, T.map(t => t.S)), n = ov.n, COLS = (SM.cols ? SM.cols(P) : SM.COLS).map(c => SM.label(c, P));
     let AP = null; try { AP = window.SBDAnalysis && window.SBDAnalysis.applicability ? window.SBDAnalysis.applicability(P) : null; } catch (e) { AP = null; }
     const apFail = !!(AP && AP.level === 'fail'), verdict = apFail ? 'FAIL' : ov.verdict;   // ui/summary.js paint(): an applicability FAIL fails the verdict
     const kOf = (S, q) => { const t = T.find(z => z.S === S), u = t && (q.ln != null ? t.us.find(z => z.j === q.ln) : null) || (t && t.us[0]); return u ? u.k : 0; };

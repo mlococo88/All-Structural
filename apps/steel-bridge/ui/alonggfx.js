@@ -261,21 +261,25 @@
   function rfSeries(rows, kind, key) { const m = new Map(); rows.forEach(r => { if (r.kind !== kind || !fin(r.x)) return; const v = r[key]; if (v == null || Number.isNaN(v)) return; const k = +r.x.toFixed(3); m.set(k, Math.min(m.has(k) ? m.get(k) : Infinity, v)); }); return [...m.entries()].sort((a, b) => a[0] - b[0]); }
   function rating(slot, o) {
     const B = o.R, P = o.P, TX = TB(), gi = o.gi || 0, sup = B.pl && B.pl.member && B.pl.member.supports ? B.pl.member.supports : TX.geoProject(P, gi).sup, Lg = sup[sup.length - 1], cap = 5;
-    const SS = [{ key: 'if', html: 'Inventory, flexure', ci: 0, kind: 'flex', w: 'inv' }, { key: 'is', html: 'Inventory, shear', ci: 2, kind: 'shear', w: 'inv' }, { key: 'of', html: 'Operating, flexure', ci: 0, dash: '6 3', kind: 'flex', w: 'opr' }, { key: 'os', html: 'Operating, shear', ci: 2, dash: '6 3', kind: 'shear', w: 'opr' }];
+    // B.one (2026-11-23): a legal or permit vehicle's rows (ui/rating.js vehicle view): one rating factor, no Inventory / Operating levels
+    const one = B.one ? String(B.one) : '';
+    const SS = one ? [{ key: 'if', html: `${esc(one)}, flexure`, ci: 0, kind: 'flex', w: 'inv' }, { key: 'is', html: `${esc(one)}, shear`, ci: 2, kind: 'shear', w: 'inv' }]
+      : [{ key: 'if', html: 'Inventory, flexure', ci: 0, kind: 'flex', w: 'inv' }, { key: 'is', html: 'Inventory, shear', ci: 2, kind: 'shear', w: 'inv' }, { key: 'of', html: 'Operating, flexure', ci: 0, dash: '6 3', kind: 'flex', w: 'opr' }, { key: 'os', html: 'Operating, shear', ci: 2, dash: '6 3', kind: 'shear', w: 'opr' }];
     const data = SS.map(q => rfSeries(B.rows, q.kind, q.w)); let ymax = 0; data.forEach(s => s.forEach(p => { if (fin(p[1])) ymax = Math.max(ymax, Math.min(p[1], cap)); })); ymax = Math.max(2, Math.ceil(ymax * 1.05 * 2) / 2);
-    const govs = ['inv', 'opr'].map(k => { const q = B.sum && B.sum.gov && B.sum.gov[k]; return q && fin(q.x) && fin(q[k]) ? { x: q.x, y: Math.min(Math.max(q[k], 0), ymax), text: `${k === 'inv' ? 'Inventory' : 'Operating'} RF ${f2(q[k])} at ${f1(q.x)} ft` } : null; }).filter(Boolean);
+    const govs = (one ? ['inv'] : ['inv', 'opr']).map(k => { const q = B.sum && B.sum.gov && B.sum.gov[k]; return q && fin(q.x) && fin(q[k]) ? { x: q.x, y: Math.min(Math.max(q[k], 0), ymax), text: `${one ? '' : k === 'inv' ? 'Inventory ' : 'Operating '}RF ${f2(q[k])} at ${f1(q.x)} ft` } : null; }).filter(Boolean);
     // the click areas: one per station, the row with the smallest Inventory RF there (flexure or shear), as the old graphic
     const best = new Map(); B.rows.forEach((r, i) => { if ((r.kind !== 'flex' && r.kind !== 'shear') || !fin(r.x) || r.oos) return; const k = +r.x.toFixed(3), v = fin(r.inv) ? r.inv : Infinity; if (!best.has(k) || v < best.get(k).v) best.set(k, { v, i }); });
     const xs = [...best.keys()].sort((a, b) => a - b), regs = xs.map((x, j) => { const r = B.rows[best.get(x).i]; return { x0: j ? (xs[j - 1] + x) / 2 : 0, x1: j < xs.length - 1 ? (x + xs[j + 1]) / 2 : Lg, v: { k: 'rt', i: best.get(x).i }, pri: 3,
-      lab: [`${txt(r.name)}: ${txt(r.title)}`, `Inventory ${fin(r.inv) ? f2(r.inv) : '-'}, Operating ${fin(r.opr) ? f2(r.opr) : '-'}`] }; });
+      lab: [`${txt(r.name)}: ${txt(r.title)}`, one ? `RF ${fin(r.inv) ? f2(r.inv) : '-'}` : `Inventory ${fin(r.inv) ? f2(r.inv) : '-'}, Operating ${fin(r.opr) ? f2(r.opr) : '-'}`] }; });
     const sr = o.sel != null && B.rows[o.sel] && fin(B.rows[o.sel].x) ? B.rows[o.sel] : null;
-    return VA().mount(slot, { key: 'rating', title: 'Rating factor along the girder', sub: `Girder ${esc((P.girders[gi] || {}).label || 'G1')} · load rating (LRFR), Inventory and Operating, flexure and shear`,
+    return VA().mount(slot, { key: 'rating', title: 'Rating factor along the girder', sub: one ? `Girder ${esc((P.girders[gi] || {}).label || 'G1')} · load rating (LRFR), ${esc(one)}, flexure and shear` : `Girder ${esc((P.girders[gi] || {}).label || 'G1')} · load rating (LRFR), Inventory and Operating, flexure and shear`,
       draw: W => VA().render({ L0: 0, L1: Lg, sup, axisTitle: 'Station along the girder, ft', sel: sr ? sr.x : null, selLabel: sr ? txt(sr.name) : '', aria: 'Load rating factors along the girder', rows: [
         { kind: 'chart', key: 'rf', label: 'Rating factor RF', h: W < 600 ? 160 : 220, yr: [0, ymax], ystep: ymax > 6 ? 1 : 0.5, cap: ymax, supNames: sup.map((x, k) => supName(k, sup.length)), hidden: S.hide.rt,
           series: SS.map((q, k) => ({ key: q.key, ci: q.ci, dash: q.dash, pts: data[k] })), limits: [{ y: 1, label: 'RF = 1.0' }], gov: govs, govLabels: govs, regs }] }, W),
       at: () => null, onSelect: v => o.onSel && o.onSel(v), chips: () => [chipGroup('rt', 'Show', SS)], onChip,
       legend: legendMore([['va-dot r-gov', 'governing (smallest RF)']]), hint: 'Point at (or tap) the chart to read the rating factors at a station; click or tap to select its row.',
-      caption: prLegend(SS) + `<p class="vk-cap">The RF of each station is the smallest of the rows there (the governing check), Inventory solid and Operating dashed. The scale is capped at RF ${ymax}; a value above it is shown by an arrow and a dashed cap at the top edge. RF = 1.0 marked; the governing Inventory and Operating ratings are circled.</p>`,
+      caption: prLegend(SS) + (one ? `<p class="vk-cap">The RF of each station is the smallest of the rows there (the governing check) for ${esc(one)}. The scale is capped at RF ${ymax}; a value above it is shown by an arrow and a dashed cap at the top edge. RF = 1.0 marked; the governing rating is circled.</p>`
+        : `<p class="vk-cap">The RF of each station is the smallest of the rows there (the governing check), Inventory solid and Operating dashed. The scale is capped at RF ${ymax}; a value above it is shown by an arrow and a dashed cap at the top edge. RF = 1.0 marked; the governing Inventory and Operating ratings are circled.</p>`),
       dxf: o.build, file: o.file });
   }
 

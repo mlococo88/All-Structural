@@ -60,6 +60,10 @@ node tests/smoke/report-go-scroll.mjs [--dir <folder with a shared/ folder, e.g.
 # an entered g, the Summary / left column notes, the Report subsection, 390 px, 0 console errors
 node tests/smoke/steel-bridge-fatlife.mjs
 
+# Steel Bridge legal-load and permit rating (MBE 4th Ed. 6A.4.4, 6A.4.5): nothing ticked = as before; tick vehicles, the results table, a vehicle's rows,
+# graph and worked steps, the Summary column "RF L/P", the Report subsection, 390 px, 0 console errors
+node tests/smoke/steel-bridge-rating-vehicles.mjs [--shots <dir>]
+
 # Steel Bridge, decisions of 2026-11-23: the "Shear skew correction along the girder" drop-down (whole length / tapered, 4.6.2.2.3c), its notes
 # and steps, the stud edition note, the live load deflection on the bridge stiffness (2.5.2.6.2); 0 console errors
 node tests/smoke/steel-bridge-skewv-defl.mjs

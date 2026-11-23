@@ -31,7 +31,7 @@
 
   /* the list to show: this project state's results; a girder or module not run yet takes the last results, marked out of date */
   function view(P) {
-    const st = SU().state(), prev = st.prev || [], COLS = SM().COLS;
+    const st = SU().state(), prev = st.prev || [], COLS = SM().cols ? SM().cols(P) : SM().COLS;
     const list = P.girders.map((g, gi) => { const G = st.list[gi], O = prev[gi], lab = g.label || g.id || `G${gi + 1}`, cells = {}, old = {};
       COLS.forEach(c => { const q = G && G.cells[c.id]; if (q && q.st !== 'notrun') cells[c.id] = q; else if (O && O.cells[c.id] && O.cells[c.id].st !== 'notrun' && O.label === lab) { cells[c.id] = O.cells[c.id]; old[c.id] = true; } else cells[c.id] = { st: 'notrun', tab: c.tab }; });
       return { gi, label: lab, cells, old, lines: G ? G.lines : null }; });   // lines: SB-2 PR 2 (the governing line shown)
@@ -52,7 +52,7 @@
     if (D.coll) { o.el.innerHTML = head; return; }
     const govLink = top ? `<a href="#" data-sdgo="${top.G.gi}|${top.c.id}">${esc(SM().label(top.c, P).head)}, ${esc(top.G.label)}${lnT(top.G, top.q)}: D/C ${isFinite(top.q.r) ? fmt(top.q.r, 3) : 'NaN'}</a>` : '';
     const status = st.busy ? `<div class="sdRun"><span class="spin" aria-hidden="true"></span>${esc(st.prog)}</div>`
-      : anyOld || (nRun && nRun < list.length * SM().COLS.length) || !nRun ? `<div class="sdRun">${anyOld ? 'Inputs changed: values out of date. ' : !nRun ? 'Nothing run yet. ' : 'Some modules not run. '}<a href="#" id="sbDashRun">Run all</a></div>` : '';
+      : anyOld || (nRun && nRun < list.length * (SM().cols ? SM().cols(P) : SM().COLS).length) || !nRun ? `<div class="sdRun">${anyOld ? 'Inputs changed: values out of date. ' : !nRun ? 'Nothing run yet. ' : 'Some modules not run. '}<a href="#" id="sbDashRun">Run all</a></div>` : '';
     const verdict = `<div class="sdVerd"><b class="sd-${n.fail ? 'fail' : n.review ? 'review' : n.pass ? 'pass' : 'notrun'}">${n.fail ? 'FAIL' : n.review ? 'REVIEW' : n.pass ? 'PASS' : '—'}</b>${top ? ` · max D/C ${isFinite(top.q.r) ? fmt(top.q.r, 3) : 'NaN'}` : ''}${anyOld ? ' <span class="sdOld">(out of date)</span>' : ''}</div>
       ${govLink ? `<div class="sdGov">Governing: ${govLink}</div>` : ''}${status}`;
     const chips = SM().GROUPS.map(gp => {
