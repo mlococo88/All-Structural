@@ -9242,7 +9242,7 @@ PR: claude/ps-rating-e1-d4-d5 (link in the PR)
 - None. The Steel Bridge app already uses φ_s = 1.0 for shear; its positive-flexure rating is its own engine (not changed). The old app (frozen) keeps its rating.
 
 ## 2026-11-23 — PL-A: pedestrian live load (3.6.1.6) and utility line loads (DW) in the girder design (engine/pl.js, engine/bridge-dl.js; Cross-section tab, Loads & LLDF tab, Report) (CALCULATION CHANGE, §4)
-PR: claude/ps-pedestrian-load (link in the PR)
+PR #1664: https://github.com/mlococo88/All-Structural/pull/1664 (claude/ps-pedestrian-load)
 ### Request
 - Engineer, 2026-11-23: close the gaps against the Steel Bridge app ("just go for it"). Gap A: a sidewalk could be entered but the Cross-section tab said "Not offered (no engine input): pedestrian live load, utilities …". Mirror the Steel Bridge app (apps/steel-bridge/engine/loads.js `dead()`: the load and its distribution; engine/analysis.js `analyzeGirder` / `llPL`: the load on the influence lines, added once to LL+IM; its fixlog entry "sb-ped-owner", 2026-10-30).
 ### What changed
@@ -9285,7 +9285,7 @@ PR: claude/ps-pedestrian-load (link in the PR)
 - `tests/engine/psbridge-pl.test.mjs` (new, 9 tests): the copy of computeAll with w_PL = 0 = computeAll on the 658 parity cases (38 recorded + 600 seeded + 20 edge), tolerance 0 (Object.is on every number, functions at sample arguments); 149 girder type × line results of the 19 harness B designs, a new project and a sidewalk project identical with and without engine/pl.js loaded (no `inputs.pl`); the hand checks above; the 2.0 ft rule and the off states; the continuous unit; imported demands; the UT row; the worked steps (every shown value = the engine's).
 - `tests/smoke/ps-bridge-pl.mjs` (new, 7 checks): the input (a real change event), the notes and tables, the Loads & LLDF card and steps, the § links, the tab notes, the Report, the UT row, the keys (`psb2.*` only), 0 console errors.
 ### How verified
-- See the PR description (counts of `node tests/check-syntax.mjs`, `node tests/engine/run.mjs psbridge`, `tex`, the smokes and harness B).
+- `node tests/check-syntax.mjs`: all scripts pass. `node tests/engine/run.mjs psbridge tex`: 56 files, 528 passed, 0 failed. Harness B (24 designs): 61,234 shown values and 10,616 step values, 0 differences. Smokes: ps-bridge-pl (7), -skeleton (273), -tables (5), -figures (225), -types (106), -display (8): 0 failed, 0 console errors.
 ### Decisions (pending engineer review)
 - **PL-A-D1 (how PL enters the frozen engine).** A girder with a pedestrian load runs a run-time copy of `computeAll` with 7 marked edits (above), because the engine has no input for it and its live-load functions are local. Proven identical to the engine with w_PL = 0 (658 cases); the anchors are asserted. Alternative: put the pedestrian load into the engine itself (unfreeze `pbd-compute.js` in a PR of its own).
 - **PL-A-D2 (2.0 ft).** PL is applied to a sidewalk whose entered width (deck edge to curb face) is wider than 2.0 ft (3.6.1.6), on its walkable width. The Steel Bridge app applies it to any walkable width > 0 (no 2.0 ft test). The test is on the entered width, not the walkable width (the larger measure: PL applied more often).
