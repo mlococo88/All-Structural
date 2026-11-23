@@ -10750,7 +10750,7 @@ None (tests only; no formula, factor, unit or reference touched).
 - SMK-D1. `steel-bridge-scroll.mjs` is left as it is (three window sizes, about 19 minutes). Making it shorter would mean dropping sizes or links from the default run,
   which is a coverage choice for the engineer; `--quick` already exists for a 6-minute run.
 
-## 2026-11-23 — PR: claude/sb-rolled-beam (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (ROLL) — rolled-beam (AISC W-shape) girder segments (engineer request 2026-11-23; new option, a project without it is unchanged)
+## 2026-11-23 — PR: claude/sb-rolled-beam (PR #1680: https://github.com/mlococo88/All-Structural/pull/1680) (ROLL) — rolled-beam (AISC W-shape) girder segments (engineer request 2026-11-23; new option, a project without it is unchanged)
 ### Where
 - New `shared/aisc-w.js` (`window.SharedAiscW`; fixlog/shared-aisc-w.md): the 289 W shapes of the AISC Shapes Database v16.0, data only.
 - New `apps/steel-bridge/engine/rolled.js` (`window.SBDRolled`, no DOM): `plates(sh)`, `state(seg)`, `shapeOf`, `isRolled`, `label`,

@@ -1,6 +1,6 @@
 # Fix log — shared/aisc-w.js (window.SharedAiscW)
 
-## 2026-11-23 — new shared data file: the AISC W shapes (PR: claude/sb-rolled-beam)
+## 2026-11-23 — new shared data file: the AISC W shapes (PR #1680, claude/sb-rolled-beam)
 ### Where
 - New file `shared/aisc-w.js` (classic script, one namespace `window.SharedAiscW`, no DOM, data and lookups only).
   - `ROWS` / `COLS`: the 289 W shapes of the AISC Shapes Database v16.0, columns `name, W (lb/ft), A, d, bf, tf, tw, kdes, Ix, Zx, Sx, Iy, ry, J`
