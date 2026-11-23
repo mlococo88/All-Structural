@@ -50,6 +50,7 @@
     'engine/rigid.js',       // PS-19: the exterior rigid-section factor on the real girder lines (unequal bays; an engine addition, §4)
     'engine/lldf-fg.js',     // PS-35: box beams and voided slabs, live-load distribution types (f) / (g) (an app-side override of distFactors, §4)
     'engine/pl.js',          // PL-A: the pedestrian live load (3.6.1.6) added to the engine's live load for a girder that has one (§4)
+    'engine/applicability.js', // AP-B: the ranges of applicability of the LLDF equations, every section family (a FAIL when a computed factor is outside, §4)
     'engine/holddown.js',    // PR 2d-3: the optional hold-down check for AASHTO / RIDOT (PS-10), an engine addition after computeAll (§4)
     'engine/pierblock.js',   // PS-34: the pier compression block against the family's thickness (NEXT stems, box bottom slab, slabs; a warning only)
     'engine/demands.js',     // batch D1 (2026-11-15): the demand source of each girder type (this app / custom table / MIDAS file, the old app's import)
