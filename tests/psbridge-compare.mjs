@@ -206,8 +206,9 @@ for (const name of names) {
       const num = p => { const v = M.vals.find(q => q.sec === 'sum' && q.path === p); return v ? at(R, p) : undefined; };
       const sum = { checks: R.checks.map((c, i) => ({ loc: num(`checks.${i}.loc`), v: num(`checks.${i}.v`), lim: num(`checks.${i}.lim`), r: num(`checks.${i}.r`) })),
         kq: Object.fromEntries(['totalLoss', 'pctLoss', 'fpe', 'dfm', 'dfv', 'fMid.phiMn', 'MuMid', 'cam.rel', 'cam.final', 'L'].map(p => [p, num(p)])) };
-      const nF = [...document.querySelectorAll('.rp-doc section[data-rpsec="rp-s1"] table tbody tr')].filter(tr => tr.children[7] && tr.children[7].textContent.trim() === 'FAIL').length;
-      const s1 = document.querySelector('.rp-doc section[data-rpsec="rp-s1"]'), ownRows = s1 ? [...s1.querySelectorAll('table tbody tr')].filter(tr => tr.children[0] && tr.children[0].textContent.trim() === 'Owner limits').length : 0;
+      const SUM = `.rp-doc section[data-rpsec="rp-s${M.sections.findIndex(q => q.id === 'sum') + 1}"]`;   // the Summary of checks (section 2 since the executive summary, 2026-11-23)
+      const nF = [...document.querySelectorAll(SUM + ' table tbody tr')].filter(tr => tr.children[7] && tr.children[7].textContent.trim() === 'FAIL').length;
+      const s1 = document.querySelector(SUM), ownRows = s1 ? [...s1.querySelectorAll('table tbody tr')].filter(tr => tr.children[0] && tr.children[0].textContent.trim() === 'Owner limits').length : 0;
       return { nF, ownRows, notCol: !!s1 && /Not in the check summary column/.test(s1.textContent), ev, st, nSteps, domSteps: document.querySelectorAll('.rp-doc .rp-step').length, k10, sum, kErr: document.querySelectorAll('.rp-doc .katex-error').length, bad: document.querySelectorAll('.rp-doc .rp-bad').length };
     });
     shown.push(...rpt.ev); steps.push(...rpt.st);

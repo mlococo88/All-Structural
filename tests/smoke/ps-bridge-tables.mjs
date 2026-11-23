@@ -48,7 +48,7 @@ try {
   await tab('rpt'); await p.waitForSelector('.rp-doc', { timeout: 60000 }); await p.waitForTimeout(800);
   const anRows = () => p.evaluate(() => { const s = [...document.querySelectorAll('.rp-doc h2, .rp-doc h3')].find(h => /Force effects along the girder/.test(h.textContent)); let e = s; while (e && !(e.tagName === 'TABLE' || (e.querySelector && e.querySelector('table')))) e = e.nextElementSibling; const tb = e && (e.tagName === 'TABLE' ? e : e.querySelector('table')); return tb ? tb.querySelectorAll('tbody tr').length : -1; });
   const n0 = await anRows();
-  r = await p.evaluate(() => ({ figs: [...document.querySelectorAll('.rp-doc figcaption, .rp-doc .rp-fig-cap')].map(f => f.textContent).filter(t => /^Figure 1\.\d+: Girder elevation/.test(t)).length, detail: !!document.querySelector('[data-rpdetail="all"]') }));
+  r = await p.evaluate(() => ({ figs: [...document.querySelectorAll('.rp-doc figcaption, .rp-doc .rp-fig-cap')].map(f => f.textContent).filter(t => /^Figure 2\.\d+: Girder elevation/.test(t)).length, detail: !!document.querySelector('[data-rpdetail="all"]') }));
   assert.ok(r.figs >= 1 && r.detail, JSON.stringify(r));
   await p.click('[data-rpdetail="all"]'); await p.waitForTimeout(2500);
   const n1 = await anRows();
