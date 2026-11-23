@@ -43,7 +43,10 @@
   const compute2 = inp => { const R = compute1(inp); return window.PSBRatingAlong && window.PSBRatingAlong.apply ? window.PSBRatingAlong.apply(inp, R) : R; };
   // PL-A (2026-11-23): a girder with a pedestrian live load (inputs.pl, AASHTO LRFD 10th Ed. 3.6.1.6) runs the same chain with the engine's
   // live load + PL (engine/pl.js); every other girder: compute2 itself
-  const compute3 = inp => (window.PSBPL && inp && inp.pl ? window.PSBPL.run(inp, compute2) : compute2(inp));
+  // UT-N (2026-11-23): a girder with a utility on the noncomposite section or a future utility allowance (inputs.ut; engine/ut.js): the same
+  // chain with UT at the DW load factors and the allowance present or absent, whichever governs; every other girder: compute2 itself
+  const compute2u = inp => (window.PSBUT && inp && inp.ut ? window.PSBUT.run(inp, compute2) : compute2(inp));
+  const compute3 = inp => (window.PSBPL && inp && inp.pl ? window.PSBPL.run(inp, compute2u) : compute2u(inp));
   // AP-B (2026-11-23): the ranges of applicability of the distribution factor equations (engine/applicability.js): R.ap, and a failing check
   // and a warning only when a computed factor is outside its range (a girder inside every range: the result as before)
   const compute = inp => { const R = compute3(inp); return window.PSBApplic ? window.PSBApplic.apply(inp, R) : R; };

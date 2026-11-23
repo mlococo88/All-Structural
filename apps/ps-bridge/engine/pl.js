@@ -142,6 +142,7 @@
      symbol), the note that it includes the pedestrian load, with the § of its derivation (CLAUDE.md §6). No pedestrian load: K itself. */
   const NOTE = 'LL+IM here includes the pedestrian live load (§ld.pl.MLLPL, Loads & LLDF tab).';
   function note(K, R) {
+    if (W.PSBUT) K = W.PSBUT.note(K, R);   // UT-N: the steps that take DC1 also say that it includes the noncomposite utilities (engine/ut.js); none: K itself
     const q = R && R.pl; if (!q || q.mode === 'ext' || !K || !Array.isArray(K.steps)) return K;
     const re = /[MVf]_\{LL|M_\{u|V_\{u|M_\{s,I/;
     K.steps = K.steps.map(s => (re.test(s.eq || '') || /[MVf]_\{LL/.test(s.sym || '')) && !/ld\.pl\./.test(s.note || '') && !/^(ld|dk|hn)\./.test(s.id) && !/(^|\.)veh\d/.test(s.id) ? Object.assign({}, s, { note: (s.note ? s.note + ' ' : '') + NOTE }) : s);
