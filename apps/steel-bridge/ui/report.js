@@ -8,7 +8,8 @@
    built on demand (Build report: the analysis takes a few seconds) and marked out of date when the project changes.
 
    Scope (added 2026-10-30, report wiring PR; kept in ctx.opts.scope): 'girder' (the selected girder's detailed report, as before) or
-   'all' (every girder: the governing ratio of each check group per girder, the controlling girder marked; report/builders.js allModel).
+   'all' (every girder: the governing ratio of each check group per girder, the controlling girder marked; report/builders.js allModel;
+   since 2026-11-23 with the Executive summary first, the Summary tab's verdict of the bridge, and the steel bill of materials last).
    The every-girder report runs each girder's report in turn (one girder per timer tick, with progress) with this project's analysis;
    each girder's summary rows are kept by project state and girder (S.rows), and its analysis in report/data.js's cache, so the
    selected girder's report afterwards, or a second every-girder build with nothing changed, does not run the analyses again.
@@ -106,8 +107,8 @@
       const { gi, j, P } = US[k], g = P.girders[gi], many = US.filter(q => q.gi === gi).length > 1, lab = (g.label || g.id || `G${gi + 1}`) + (many ? ` on G${j + 1}` : '');
       try {
         let e = S.rows.get(rowKey(P, gi));
-        if (!e) { const B = window.SBDReportData.compute(P, gi, { src: 'analysis' }), r = window.SBDReportBuild.govRows(B); e = { rows: r.rows, err: r.err }; S.rows.set(rowKey(P, gi), e); }
-        list.push({ gi, label: lab, rows: e.rows, err: e.err });
+        if (!e) { const B = window.SBDReportData.compute(P, gi, { src: 'analysis' }), r = window.SBDReportBuild.govRows(B); e = { rows: r.rows, err: r.err, sum: r.sum, bom: r.bom }; S.rows.set(rowKey(P, gi), e); }
+        list.push({ gi, j, label: lab, rows: e.rows, err: e.err, sum: e.sum, bom: e.bom });   // sum, bom (2026-11-23): the Executive summary and the bill of materials of the every-girder report
       } catch (er) { list.push({ gi, label: lab, rows: [], err: { all: 'Report error: ' + (er && er.message) } }); }
       if (S.rows.size > 4 * n + 8) S.rows.delete(S.rows.keys().next().value);
       S.prog = `Building the report of every girder: girder ${Math.min(k + 2, n)} of ${n}…`; render(host, ctx);
@@ -120,7 +121,7 @@
     S.busy = true; S.err = ''; render(host, ctx);
     setTimeout(() => {
       try { S.B = window.SBDReportData.compute(ctx.P, ctx.g, { src: S.src, pl: S.pl, plName: S.plName }); if (S.B.err.all) S.err = S.B.err.all;
-        else if (S.src === 'analysis' && !S.B.custom && window.SBDReportBuild.govRows) { const r = window.SBDReportBuild.govRows(S.B); S.rows.set(rowKey(ctx.P, ctx.g), { rows: r.rows, err: r.err }); } }
+        else if (S.src === 'analysis' && !S.B.custom && window.SBDReportBuild.govRows) { const r = window.SBDReportBuild.govRows(S.B); S.rows.set(rowKey(ctx.P, ctx.g), { rows: r.rows, err: r.err, sum: r.sum, bom: r.bom }); } }
       catch (e) { S.B = null; S.err = 'Report error: ' + (e && e.message); }
       S.key = keyOf(ctx); S.busy = false; render(host, ctx);
     }, 30);
