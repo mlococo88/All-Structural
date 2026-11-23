@@ -468,7 +468,12 @@
     worked.forEach(z => {
       const R = z.R;
       R.checks.filter(c => !GR.some(gp => gp.checks.some(([n]) => n === c.n))).forEach(c => out.push([`${plain(c.n)} (${who(z)})`, c.pass ? 'PASS' : 'FAIL', 'a check in no group of the check summary: listed in the Summary of checks', keys.has('rs.sum') ? 'see [[rs.sum]]' : '—']));
-      if (R.df && R.df.fg && R.df.fg.out && R.df.fg.out.length) out.push([`Live-load distribution outside its range of applicability (${who(z)})`, 'NOTE', R.df.fg.out.map(o => plain(o.text)).join('; '), see({ gp: { tab: 'lds', name: 'Loads & LLDF' }, st: 'ld.dfm', k: z.k, g: z.g, label: z.label })]);
+      // AP-B (engine/applicability.js, R.ap): a computed factor outside its range is a check (group LLDF applicability, in the verdict); its
+      // warnings and notes are not in the verdict and are listed here. Without R.ap: the type (f) / (g) limits as before.
+      if (R.ap) { const lds = { gp: { tab: 'lds', name: 'Loads & LLDF' }, st: 'ld.ap.r', k: z.k, g: z.g, label: z.label }, LV = { warn: 'WARNING', note: 'NOTE' };
+        (R.ap.items || []).filter(q => LV[q.level]).forEach(q => out.push([`Line-girder applicability: ${plain(q.name)} (${who(z)})`, LV[q.level], plain(q.note || `${fx(q.value, q.d != null ? q.d : 2)} ${q.unit || ''}`), see(lds)]));
+        (R.ap.extra || []).filter(q => LV[q.level]).forEach(q => out.push([`Line-girder applicability: ${plain(q.title)} (${who(z)})`, LV[q.level], plain(`${q.val != null ? q.val + ': ' : ''}${q.msg || ''}`), see(lds)])); }
+      else if (R.df && R.df.fg && R.df.fg.out && R.df.fg.out.length) out.push([`Live-load distribution outside its range of applicability (${who(z)})`, 'NOTE', R.df.fg.out.map(o => plain(o.text)).join('; '), see({ gp: { tab: 'lds', name: 'Loads & LLDF' }, st: 'ld.dfm', k: z.k, g: z.g, label: z.label })]);
       if (R.handling) out.push([`Hauling stresses (${who(z)})`, 'not checked', 'shown for comparison; impact during transport is not included', see({ gp: { tab: 'hand', name: 'Handling' }, st: 'hn.lift.r', k: z.k, g: z.g, label: z.label })]);
       (R.warns || []).forEach(w => out.push([`Design warning of the engine (${who(z)})`, 'Warning', plain(w), '—']));
     });
@@ -477,7 +482,7 @@
       top ? note(`Governing D/C: ${rec.chk(top, top.q.n, 'r', 3)} (${top.gp.name}: ${plain(top.q.n)}; ${who(top)}${top.gp.input || top.gp.id === 'deck' ? '' : `, x = ${rec.chk(top, top.q.n, 'loc', 2)} ft`}), ${see(top)}.`, E.nF > 0) : note('No check was made.', true),
       tbl(['Limit state / check group', 'Governing check', 'Girder type, line', 'Location', 'D/C', 'Status', 'Worked'], rows, { wide: true, caption: 'One row per check group: its governing check over every girder type and line checked (the largest ratio), where it governs, and the step of this report that works it' }),
       out.length ? tbl(['Not included in the verdict', 'Status', 'Value', 'Worked'], out, { wide: true }) : note('Not included in the verdict: none.'),
-      note(`Items not included in the verdict are listed so that this summary never reads as all-pass while something is open: rating factors are not design checks (RF ≥ 1.0 is OK), a check group switched off makes no check, a girder line with no girder type is not checked, and the engine's warnings are for review.${B.all ? ' The same verdict, counts and values, with every girder type and line: the [[tab:sum|Summary tab]].' : ''}${keys.has('rs.sum') ? ' Every check with its demand and limit: [[rs.sum]].' : ''}`)];
+      note(`Items not included in the verdict are listed so that this summary never reads as all-pass while something is open: rating factors are not design checks (RF ≥ 1.0 is OK), the applicability warnings and notes do not change the verdict (a computed distribution factor outside its range does: it is a check), a check group switched off makes no check, a girder line with no girder type is not checked, and the engine's warnings are for review.${B.all ? ' The same verdict, counts and values, with every girder type and line: the [[tab:sum|Summary tab]].' : ''}${keys.has('rs.sum') ? ' Every check with its demand and limit: [[rs.sum]].' : ''}`)];
     return { title: 'Executive summary', subs: [sub('v', `Verdict: ${E.what}`, items)] };
   }
   /* basis(B, X, secs): the values are those of the first worked girder (the design girder); a "see §" link where this report writes the step */
@@ -524,6 +529,7 @@
         ['Design lanes $N_{L}$, skew', `${fx(+ld.NL, 0)}, ${fx(+ld.skew, 1)}°`]])]),
       sub('an', 'Analysis method', [kv([['Method', 'Line-girder analysis of each girder type on its line, at the analysis stations along the span: the girder and DC1 on the bare girder, DC2, DW and LL+IM on the composite section; the live load per girder by the distribution factors'],
         ['Spans', cont ? 'made continuous for composite loads (5.12.3.3): the girder and DC1 on the simple span; DC2, DW and live load on the continuous unit; restraint moments as switched on the Bridge layout tab' : 'simple spans', k(cont ? 'an.pier.Mu' : 'an.MuS')],
+        ...(R.ap ? [['Applicability of the distribution factors (Art. 4.6.2.2)', R.ap.entered ? 'entered distribution factors: not tested' : ({ fail: 'FAIL: a computed factor is outside its range of applicability (a check, counted in the verdict)', warn: 'WARNING (listed in the Executive summary)', note: 'within the ranges; notes listed in the Executive summary', ok: 'within the ranges of applicability' })[R.ap.level] || plain(R.ap.level), k('ld.ap.r')]] : []),
         ['Section properties', `${o.useTrans ? 'transformed section at release' : 'gross section of the girder at release'}; the haunch ${inp.haunchInProps ? 'is' : 'is not'} in the composite section`, k('sec.Ic')]])]),
       sub('loss', 'Prestress loss method', [kv([['Time-dependent losses', o.lossMethod === 'refined' ? 'refined estimate (Art. 5.9.3.4)' : 'approximate estimate (Art. 5.9.3.3)', k(o.lossMethod === 'refined' ? 'ls.ref.total' : 'ls.apx.total')],
         ['Elastic shortening $\\Delta f_{pES}$', `${V('lo.dfES', 2)} ksi (Art. 5.9.3.2.3)`, k('ls.dfES')],
