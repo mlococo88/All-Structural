@@ -21,11 +21,13 @@
    - LL: HL-93 per lane with IM on truck and tandem (3.6.1.2, 3.6.2.1), 90 % of two trucks + lane for negative moment and
      interior reactions (3.6.1.3.1); fatigue truck with IM_f (3.6.1.4.1). The distribution factor per station: the pier
      factor g_M in the region of negative permanent-load moment around each interior support, the span factor elsewhere;
-     g_V of the span of the element; reactions the larger g_V of the adjacent spans; fatigue g's of the span.
+     g_V of the span of the element; reactions the larger g_V of the adjacent spans; fatigue g's of the span. N3 (2026-11-23): with
+     xs.lldf.skewVx 'taper' the skew correction in g_V and g_fat,V decreases linearly to 1.0 at mid-span (4.6.2.2.3c); absent: as before.
    - pedestrian load (added 2026-10-30, sb-ped-owner PR; 3.6.1.6, GirderDetail plRow / vSec): w_PL of this girder (the loads module's
      share of the sidewalk load) on the + and − parts of each influence line (live-load stiffness): R.pl, apart from R.ll (HL-93);
      llPL(R) gives LL+IM + PL, once, to the modules; not in fatigue, deck placement or the LL deflection.
-   - LL deflection (SA3, 2.5.2.6.2): g_Δ max(Δ_truck(1 + IM), 0.25 Δ_truck(1 + IM) + Δ_lane) ≤ L/limit, per span; truck axles that
+   - LL deflection (SA3, 2.5.2.6.2): g_Δ max(Δ_truck(1 + IM), 0.25 Δ_truck(1 + IM) + Δ_lane) ≤ L/limit, per span, on the bridge stiffness
+     shared equally (N4, 2026-11-23: I_avg(x) = Σ I_n,j(x) / N_b over the cross-section girder lines; before: this girder's I_n); truck axles that
      do not add neglected (LL8, SB2-A4); the limit from the owner rule OWN19 where there is one (deflOwner, SB2-A5).
    - camber: dead-load deflection per stage (steel, wet deck, DC2 + DW, existing utilities) and the total.
    - deck placement sequence (SA7, 6.10.3.4.1): pours from the sign of M_DC1 (positive regions first, then negative)
@@ -175,7 +177,8 @@
     // GirderDetail's mv(id, k) ?? module); gDef is not sent by lldf and is kept. Used only with the same span count. Absent: unchanged.
     if (!U || U.use === false || !Array.isArray(U.spans) || U.spans.length !== ns) return B;
     const v = (o, k) => o && isNum(o[k]) && o[k] > 0 ? o[k] : null;
-    const spans = B.spans.map((s, i) => { const q = U.spans[i] || {}; return { gM: v(q, 'gM') ?? s.gM, gV: v(q, 'gV') ?? s.gV, fatM: v(q, 'fatM') ?? s.fatM, fatV: v(q, 'fatV') ?? s.fatV, gDef: s.gDef }; });
+    const spans = B.spans.map((s, i) => { const q = U.spans[i] || {}; return { gM: v(q, 'gM') ?? s.gM, gV: v(q, 'gV') ?? s.gV, fatM: v(q, 'fatM') ?? s.fatM, fatV: v(q, 'fatV') ?? s.fatV, gDef: s.gDef,
+      rV: v(q, 'gV') == null ? s.rV : null, rVf: v(q, 'fatV') == null ? s.rVf : null, dP: s.dP }; });   // N3: a pulled g_V / g_fat,V: its skew correction is not known (no taper)
     const piers = B.piers.map((p, k) => ({ gM: v((U.piers || [])[k], 'gM') ?? p.gM }));
     const so = U.source || {}, kept = ['gM', 'gV', 'fatM', 'fatV'].filter(k => U.spans.some(q => v(q, k) == null));
     const src = `pulled from ${so.producer || 'LL & DL Distribution'} (${so.producerFile || 'lldf.html'}), produced ${so.producedAt || '?'}${so.project ? `, project "${so.project}"` : ''}; ${so.basisLbl || ''}`
@@ -199,7 +202,10 @@
         // override on (2026-11-09): an entered factor (> 0) replaces the module's for every span; a blank one keeps the module's; the pier
         // g moment: entered, else the entered span g moment, else the module's (the entry's "blank = spans")
         const e = k => ov && isNum(Mn[k]) && Mn[k] > 0 ? Mn[k] : null, used = ov && DF_K.some(k => e(k) != null);
-        const spans = [...Array(ns)].map((_, i) => { const r = rg('s' + i), m = r.members[j]; return { gM: e('gM') ?? m.gM, gV: e('gV') ?? m.gV, fatM: e('fatM') ?? m.fatM, fatV: e('fatV') ?? m.fatV, gDef: e('gDef') ?? r.gDef }; });
+        const spans = [...Array(ns)].map((_, i) => { const r = rg('s' + i), m = r.members[j]; return { gM: e('gM') ?? m.gM, gV: e('gV') ?? m.gV, fatM: e('fatM') ?? m.fatM, fatV: e('fatV') ?? m.fatV, gDef: e('gDef') ?? r.gDef,
+          // N3 (2026-11-23): the shear skew correction r_V contained in the module's g_V (rV) and g_fat,V (rVf), for the taper along the girder
+          // (an entered factor: not known, null); N4: the parts of the module's g_Δ (N_L, m, N_b) for the worked step (an entered g_Δ: null)
+          rV: e('gV') == null && isNum(m.rVg) ? m.rVg : null, rVf: e('fatV') == null && isNum(m.rV) ? m.rV : null, dP: e('gDef') == null && r.geo ? { NL: r.geo.NL, m: r.mD, Nb: r.members.length } : null }; });
         const piers = [...Array(Math.max(0, ns - 1))].map((_, k) => { const r = rg('p' + (k + 1)); return { gM: e('gMpier') ?? e('gM') ?? (r ? r.members[j].gM : spans[k].gM) }; });
         return { spans, piers, src: `loads module (LLDF), cross-section girder G${j + 1}${used ? ', with entered overrides' : ''}`, manual: false, override: used };
       }
@@ -249,6 +255,20 @@
     for (let i = 1; i < N; i++) if (sg(MD[i]) !== sg(MD[i - 1]) || i === N - 1) { reg.push({ a: xs[s], b: xs[i], pos: sg(MD[Math.floor((s + i) / 2)]) > 0 }); s = i; }
     return [...reg.filter(r => r.pos), ...reg.filter(r => !r.pos)].map(r => ({ a: r.a, b: r.b }));
   }
+
+  /* plateOfLine(P, j, nb): the plate girder (index in P.girders) of cross-section girder line j of nb: the girder type assigned to the line
+     (girders[i].lines), else the one whose line it is, else the first one of the line's position (exterior / interior), else the first. The
+     same rule as the Drawings and the Deflection tab (engine/drawings.js plateGirderOf), here so that the analysis needs no other engine. */
+  function plateOfLine(P, j, nb) {
+    const G = P.girders || [], ext = j === 0 || j === nb - 1;
+    let k = G.findIndex(g => Array.isArray(g.lines) && g.lines.includes(j)); if (k >= 0) return k;
+    k = G.findIndex(g => Number.isInteger(g.line) && g.line === j); if (k >= 0) return k;
+    k = G.findIndex(g => !Number.isInteger(g.line) && (g.position === 'exterior') === ext); return k >= 0 ? k : 0;
+  }
+  /* skewTaper(c, x, a, L): N3 (2026-11-23), AASHTO LRFD 10th Ed. Art. 4.6.2.2.3c: the ratio of the shear skew correction at station x of the
+     span from a to a + L (ft) to the correction c at its supports, the correction decreasing linearly from c at each support to 1.0 at
+     mid-span: r_V(x)/r_V = [1 + (c − 1)(1 − x′/(L/2))]/c, x′ = the distance from the nearer support. 1 for c ≤ 1 or c not known. */
+  function skewTaper(c, x, a, L) { if (!(c > 1) || !(L > 0)) return 1; const t = Math.min(1, Math.max(0, Math.min(x - a, a + L - x) / (L / 2))); return (1 + (c - 1) * (1 - t)) / c; }
 
   /* analyzeGirder(project, gi, opt): the analysis of girder gi. opt.stations overrides the station grid (tests);
      opt.ll = false skips the live loads (dead loads, camber and the pour sequence only); opt.steelPlf (tests only): the steel
@@ -314,6 +334,27 @@
       for (let e = 0; e < N - 1; e++) if (ck[e]) { const l = crack[crack.length - 1]; if (l && Math.abs(l[1] - xs[e]) < 1e-9) l[1] = xs[e + 1]; else crack.push([xs[e], xs[e + 1]]); }
     }
     const sb3 = sbOf(segs, 'I3u', crack), sbN = sbOf(segs, 'Inu', crack);
+    /* bridgeEI(): N4 (2026-11-23), the bridge's live-load stiffness shared equally (2.5.2.6.2). Each cross-section girder line j takes the
+       plate girder of plateOfLine (its segments and b_eff; the same deck, n and haunch rule; this girder's cracked zones). Returns null without
+       a cross-section, else { nb, E, types: [{ gi, label, lines, sb }], same (every line on this girder: I_avg = I_n), sb: [[x0, x1, I_avg]],
+       at(x): { x, nb, E, parts: [{ label, n (lines), I }], sumI, Iavg, Iown } }. A type whose plates do not reach a station: this girder's I there. */
+    const bridgeEI = () => {
+      const x0 = P.xs || (window.SBDModel && window.SBDModel.defaultXs ? window.SBDModel.defaultXs(P) : null), nb = x0 ? Math.round(x0.nb) : 0; if (!(nb > 0)) return null;
+      const by = new Map(); for (let j = 0; j < nb; j++) { const k = plateOfLine(P, j, nb); if (!by.has(k)) by.set(k, []); by.get(k).push(j); }
+      const IAt = (sb, x) => { const q = sb.find(r => x >= r[0] - 1e-9 && x <= r[1] + 1e-9); return q ? q[2] : null; };
+      const types = [...by.entries()].map(([k, lines]) => { const gg = P.girders[k], own = k === gi;
+        const sg = own ? segs : gg.segments.map(t => { const p = { D: t.D, tw: t.tw, topB: t.topB, topT: t.topT, botB: t.botB, botT: t.botT }, dk = { ...deckS, beff: gg.beff }, st0 = SEC().steelCore(p);
+          return { x0: t.x0, x1: t.x1, Inu: comp ? SEC().composite(p, dk, n, 1).I : st0.I, Icr: comp ? SEC().withRebar(p, dk).I : st0.I }; });
+        return { gi: k, label: gg.label || gg.id || 'G' + (k + 1), lines, sb: own ? sbN : sbOf(sg, 'Inu', crack) }; });
+      const same = types.length === 1 && types[0].gi === gi, Iof = (t, x) => { const v = IAt(t.sb, x); return v != null ? v : IAt(sbN, x); };
+      const at = x => { const xe = Math.min(Math.max(x, 1e-6), Lt - 1e-6), parts = types.map(t => ({ label: t.label, n: t.lines.length, lines: t.lines, I: Iof(t, xe) })), sumI = parts.reduce((a, q) => a + q.n * q.I, 0);
+        return { x, nb, E, parts, sumI, Iavg: same ? IAt(sbN, xe) : sumI / nb, Iown: IAt(sbN, xe), same }; };
+      let sb = sbN;
+      if (!same) { const cuts = new Set(); types.forEach(t => t.sb.forEach(r => { cuts.add(+r[0].toFixed(9)); cuts.add(+r[1].toFixed(9)); })); sbN.forEach(r => { cuts.add(+r[0].toFixed(9)); cuts.add(+r[1].toFixed(9)); });
+        const pts = [...cuts].filter(v => v >= -1e-9 && v <= Lt + 1e-9).sort((a, b) => a - b); sb = [];
+        for (let i = 0; i < pts.length - 1; i++) if (pts[i + 1] - pts[i] > 1e-9) sb.push([pts[i], pts[i + 1], at((pts[i] + pts[i + 1]) / 2).Iavg]); }
+      return { nb, E, types, same, sb, at };
+    };
 
     // dead-load stages (staticAnalysis, loads applied exactly)
     const st = {};
@@ -368,7 +409,7 @@
     }
 
     // live load (HL-93 and the fatigue truck, per lane, IM included, DF = 1 inside the engine; the factors are applied below)
-    let ll = null, fat = null, lld = null, llR = null, ped = null;
+    let ll = null, fat = null, lld = null, llR = null, ped = null, skV = null, bEI = null;
     if (opt.ll !== false) {
       // mesh keys: the stations, plus the midpoint of each station interval that ends at a support, so that the section just right of
       // the station before a support has its own element (GirderDetail VLLr); negX: the pier regions also take the 90 % two-truck case for
@@ -386,11 +427,19 @@
       const h = pick(RH), f = pick(RF);
       const gMat = i => region[i] >= 1 ? DF.piers[region[i] - 1].gM : DF.spans[spanOfX(sup, xs[i])].gM;
       const spR = i => spanOfX(sup, i < N - 1 ? (xs[i] + xs[i + 1]) / 2 : xs[i] - 1e-6), spL = i => spanOfX(sup, i > 0 ? (xs[i - 1] + xs[i]) / 2 : xs[i]);
-      ll = { perLane: h, gM: xs.map((_, i) => gMat(i)), gVR: xs.map((_, i) => DF.spans[spR(i)].gV), gVL: xs.map((_, i) => DF.spans[spL(i)].gV) };
+      // N3 (2026-11-23, engineer's decision): the shear skew correction along the girder (xs.lldf.skewVx). 'taper': the correction contained in
+      // g_V and g_fat,V (the loads module's r_V of the span) is full at each support of the span and decreases linearly to 1.0 at mid-span
+      // (4.6.2.2.3c), so the factor at station x is g_V × skewTaper; 'whole' / absent: the span's g_V at every station (tp = 1: as before, bit
+      // for bit). An entered or pulled g_V has no known r_V and is used over the whole span. The reactions keep the support value.
+      const taper = !!(P.xs && P.xs.lldf && P.xs.lldf.skewVx === 'taper');
+      const tp = (k, i, key) => taper ? skewTaper(DF.spans[k][key], xs[i], sup[k], spans[k]) : 1;
+      skV = taper ? { on: true, spans: DF.spans.map((q, k) => ({ k, rV: isNum(q.rV) ? q.rV : null, rVf: isNum(q.rVf) ? q.rVf : null })) } : null;
+      if (skV && skV.spans.some(q => q.rV == null || q.rVf == null)) warnings.push('Shear skew correction along the girder: "tapered" is chosen, but a shear distribution factor of this girder is entered, pulled or from a hand-off, so its skew correction is not known: that factor is used over the whole span (not tapered).');
+      ll = { perLane: h, gM: xs.map((_, i) => gMat(i)), gVR: xs.map((_, i) => DF.spans[spR(i)].gV * tp(spR(i), i, 'rV')), gVL: xs.map((_, i) => DF.spans[spL(i)].gV * tp(spL(i), i, 'rV')) };
       ll.Mpos = h.Mmax.map((v, i) => ll.gM[i] * v); ll.Mneg = h.Mmin.map((v, i) => ll.gM[i] * v);
       ll.VRpos = h.VRmax.map((v, i) => ll.gVR[i] * v); ll.VRneg = h.VRmin.map((v, i) => ll.gVR[i] * v);
       ll.VLpos = h.VLmax.map((v, i) => ll.gVL[i] * v); ll.VLneg = h.VLmin.map((v, i) => ll.gVL[i] * v);
-      fat = { perLane: f, gM: xs.map((x) => DF.spans[spanOfX(sup, x)].fatM), gVR: xs.map((_, i) => DF.spans[spR(i)].fatV), gVL: xs.map((_, i) => DF.spans[spL(i)].fatV) };
+      fat = { perLane: f, gM: xs.map((x) => DF.spans[spanOfX(sup, x)].fatM), gVR: xs.map((_, i) => DF.spans[spR(i)].fatV * tp(spR(i), i, 'rVf')), gVL: xs.map((_, i) => DF.spans[spL(i)].fatV * tp(spL(i), i, 'rVf')) };
       fat.Mpos = f.Mmax.map((v, i) => fat.gM[i] * v); fat.Mneg = f.Mmin.map((v, i) => fat.gM[i] * v);
       fat.VRpos = f.VRmax.map((v, i) => fat.gVR[i] * v); fat.VRneg = f.VRmin.map((v, i) => fat.gVR[i] * v);
       fat.VLpos = f.VLmax.map((v, i) => fat.gVL[i] * v); fat.VLneg = f.VLmin.map((v, i) => fat.gVL[i] * v);
@@ -411,12 +460,21 @@
       // LL deflection (SA3): shared deflection() at the 1/20 points, truck with IM or 25 % of it + lane, per lane; × g_Δ of the span.
       // Truck axles that do not add to the deflection sought are neglected (3.6.1.3.1; GirderDetail LL8; SB2-A4, 2026-10-29: neglect).
       // The limit: the owner rule (OWN19, deflOwner) or the entered L/… (2.5.2.6.2, optional criterion).
-      const DL = ML().deflection(RH, { mode: 'lrfd', DF: 1, useIM: true, neglect: true }), OW = deflOwner(P, g, S), rq = OW ? OW.rq : S.deflLimit;
+      // N4 (2026-11-23, engineer's decision "all girders deflect equally"; 2.5.2.6.2): the deflection is worked on the BRIDGE stiffness shared
+      // equally: at every station the average of the cross-section girder lines' live-load stiffness, I_avg(x) = Σ_j I_n,j(x) / N_b (each line
+      // with the plates and b_eff of its girder type; in this girder's cracked zones each line's I_cr), in place of this girder's own I_n(x).
+      // One lane on a girder of I_avg, × g_Δ = m N_L / N_b. Before: this girder's own I_n. Every line on one girder type (or no cross-section):
+      // I_avg = I_n, the same run as before (bit for bit). The moments, shears and reactions keep this girder's own stiffness.
+      bEI = bridgeEI(); let RHd = RH;
+      // (the second run: the same mesh (scanKeys) and the 1/20-point sections the deflection uses, without the station scan of M and V, which it does not use)
+      if (bEI && !bEI.same) RHd = ML().analyze({ ...mH, axles: H.axles.map(a => [...a]), udl: { ...H.udl }, segs: segsOf(bEI.sb), scanM: null, scanV: false, negX: [] }, { vehicles: pre });
+      const DL = ML().deflection(RHd, { mode: 'lrfd', DF: 1, useIM: true, neglect: true }), OW = deflOwner(P, g, S), rq = OW ? OW.rq : S.deflLimit;
       lld = spans.map((L, k) => { let best = null;
         DL.secs.forEach((s, si) => { if (s.k !== k) return; const v = -DL.res[si].dn; if (!best || v > best.raw) best = { x: s.x, raw: v, lab: DL.res[si].dnG ? DL.res[si].dnG.lab : '' }; });
         const gD = DF.spans[k].gDef, dd = best ? best.raw * gD : 0, lim = L * 12 / rq, limP = OW && OW.pref ? L * 12 / OW.pref : 0, ok = dd <= lim + 1e-9;
         const status = OW && OW.rep ? 'na' : !ok ? 'fail' : limP && dd > limP + 1e-9 ? 'warn' : 'pass';
-        return { k, L, x: best ? best.x : null, perLane: best ? best.raw : 0, case: best ? best.lab : '', gD, d: dd, lim, ratio: rq, pref: OW ? OW.pref : 0, limP, ok, status, own: OW }; });
+        return { k, L, x: best ? best.x : null, perLane: best ? best.raw : 0, case: best ? best.lab : '', gD, d: dd, lim, ratio: rq, pref: OW ? OW.pref : 0, limP, ok, status, own: OW,
+          dP: DF.spans[k].dP || null, EI: bEI && best ? bEI.at(best.x) : null }; });
     }
 
     // deck placement sequence (saSeq): continuous girders, composite deck
@@ -448,7 +506,7 @@
     }
 
     const R = { errors: [], warnings, settings: S, fc: m.concrete.fc, h0, line: mod && mod.j != null ? mod.j : null, girder: g, gi, spans, sup, supIdx, cont, Lt, x: xs, n, nr, segs, plf, wSteel, loads: LD, df: DF, crack, sb: { s: sbS, c3: sb3, cn: sbN }, region,
-      st, camber, ll, fat, llR, lld, seq, pl: ped, fm, wetCorr, wetTot };
+      st, camber, ll, fat, llR, lld, seq, pl: ped, fm, wetCorr, wetTot, skV, bEI: bEI ? { nb: bEI.nb, same: bEI.same, sb: bEI.sb, types: bEI.types.map(t => ({ gi: t.gi, label: t.label, lines: t.lines })) } : null };
     R.steps = steps(R);
     return R;
   }
@@ -510,6 +568,21 @@
         ref: `${ED} Art. 3.6.1.6, Table 3.4.1-1`, note: 'The pedestrian load acts with the vehicular live load (3.6.1.6) and takes its load factor; the owner multiplier m is not applied to it (GirderDetail GD45).' }); }
     if (R.llR) R.llR.forEach(r => w.add({ id: `R.LL.${r.k}`, label: `LL+IM reaction, support ${r.k + 1}`, sym: 'R_{LL+IM}', eq: 'g_{V}\\,R_{HL93}', sub: `${n3(r.gV)}(${n2(r.perLane.max)})`, value: r.max, unit: kip, d: 2,
       ref: `${ED} Art. 3.6.1.3.1, 4.6.2.2.3a`, note: (r.two ? '90 % of two trucks + lane governs (interior support). ' : '') + 'g_V = the larger of the adjacent spans.' }));
+    // N3 (2026-11-23): the shear skew correction tapered along the girder (4.6.2.2.3c): the factor at a station, shown at each span's quarter point
+    if (R.skV && R.skV.on && R.ll && R.fat) R.skV.spans.forEach(q => { const k = q.k, a = R.sup[k], Ls = R.spans[k], D = R.df.spans[k]; let i = R.supIdx[k]; for (let j = R.supIdx[k]; j <= R.supIdx[k + 1]; j++) if (Math.abs(x[j] - (a + Ls / 4)) < Math.abs(x[i] - (a + Ls / 4))) i = j;
+      const xp = x[i] - a, base = `${ED} Art. 4.6.2.2.3c`, why = 'The article applies the correction between the support at the obtuse corner and mid-span and permits decreasing it linearly to 1.0 at mid-span, whatever the end condition; here it is full at both supports of the span (reactions and bearing stiffeners unchanged).';
+      if (q.rV != null && q.rV > 1) {
+        w.add({ id: `gVx.s${k + 1}`, label: `Shear distribution factor at x = ${n2(x[i])} ft (span ${k + 1}, ${n2(xp)} ft from its support): skew correction tapered to 1.0 at mid-span`, sym: 'g_{V}(x)', eq: 'g_{V}\\,\\frac{1 + (r_{V} - 1)\\left(1 - \\frac{x}{L/2}\\right)}{r_{V}}',
+          sub: `${n4(D.gV)}\\,\\frac{1 + (${n4(q.rV)} - 1)\\left(1 - \\frac{${n2(xp)}}{${n2(Ls)}/2}\\right)}{${n4(q.rV)}}`, value: R.ll.gVR[i], unit: '', d: 4, ref: base,
+          note: `g_V = ${n4(D.gV)} contains the skew correction r_V = ${n4(q.rV)} (Loads & LLDF tab). r_V(x): ${n4(q.rV)} at the support, ${n4(1 + (q.rV - 1) / 2)} at the quarter point, 1.0000 at mid-span; g_V(x): ${n4(D.gV)} at the support, ${n4(D.gV / q.rV)} at mid-span. ${why} Every station's LL+IM shear (shear checks, factored diagrams, splices, rating) uses g_V(x).` });
+        w.add({ id: `gVx.V.s${k + 1}`, label: `LL+IM shear at x = ${n2(x[i])} ft with the tapered skew correction`, sym: 'V_{LL+IM}', eq: 'g_{V}(x)\\,V_{HL93}', sub: `${n4(R.ll.gVR[i])}(${n2(R.ll.perLane.VRmax[i])})`, value: R.ll.VRpos[i], unit: kip, d: 2, ref: `${ED} Art. 3.6.1.3.1, 4.6.2.2.3c`,
+          note: `With the correction over the whole span: ${n4(D.gV)}(${n2(R.ll.perLane.VRmax[i])}) = ${n2(D.gV * R.ll.perLane.VRmax[i])} kip.` }); }
+      if (q.rVf != null && q.rVf > 1) { const rg = R.fat.perLane.VRmax[i] - R.fat.perLane.VRmin[i];
+        w.add({ id: `gVx.fat.s${k + 1}`, label: `Fatigue shear range at x = ${n2(x[i])} ft with the tapered skew correction (shear connectors, V_f)`, sym: 'V_{f}', eq: 'g_{fat,V}\\,\\frac{1 + (r_{V} - 1)\\left(1 - \\frac{x}{L/2}\\right)}{r_{V}}\\,(V^{+} - V^{-})',
+          sub: `${n4(D.fatV)}\\,\\frac{1 + (${n4(q.rVf)} - 1)\\left(1 - \\frac{${n2(xp)}}{${n2(Ls)}/2}\\right)}{${n4(q.rVf)}}\\,(${n2(R.fat.perLane.VRmax[i])} - (${n2(R.fat.perLane.VRmin[i])}))`, value: R.fat.VRpos[i] - R.fat.VRneg[i], unit: kip, d: 2, ref: `${ED} Art. 3.6.1.4, 4.6.2.2.3c`,
+          note: `g_fat,V(x) = ${n4(R.fat.gVR[i])}. With the correction over the whole span: ${n4(D.fatV)}(${n2(rg)}) = ${n2(D.fatV * rg)} kip. Unfactored fatigue truck with IM, per girder.` }); }
+      if (q.rV == null || q.rVf == null) w.add({ id: `gVx.na.s${k + 1}`, label: `Span ${k + 1}: the tapered skew correction is not applied to an entered, pulled or hand-off shear factor`, sym: 'g_{V}(x)', eq: 'g_{V}', sub: '', value: D.gV, unit: '', d: 4, ref: base,
+        note: 'The skew correction contained in an entered factor is not known, so the factor is used over the whole span (the conservative reading).' }); });
     if (R.pl) R.pl.R.forEach(r => w.add({ id: `R.PL.${r.k}`, label: `Pedestrian load reaction, support ${r.k + 1}`, sym: 'R_{PL}', eq: 'w_{PL}\\,A^{+}', sub: `${St().n(R.pl.w, 4)}(${n2(r.max / R.pl.w)})`, value: r.max, unit: kip, d: 2,
       ref: `${ED} Art. 3.6.1.6`, note: 'A⁺: the positive area of the reaction influence line (ft). Added to R_LL+IM in the bearing checks.' }));
     if (R.lld) R.lld.forEach(q => { const O = q.own;
@@ -517,8 +590,15 @@
         ref: O ? `${O.cite}; ${ED} Art. 2.5.2.6.2` : `${ED} Art. 2.5.2.6.2`, note: O ? `${O.cite}: ${O.rule.text}. Sidewalk or pedestrians: ${O.sw ? 'yes' : 'no'} (${O.swHow}), so L/${O.req}${O.uR > O.req ? `; the entered L/${O.uR} is stricter and is used` : ''}.${O.rep ? ` Applied to the typical interior beam only: this plate girder takes cross-section girder G${O.line + 1} (exterior), so it is reported, not checked.` : ''}` : 'Optional criterion (2.5.2.6.2): the L/… entered under Analysis settings.' });
       if (q.limP) w.add({ id: `defl.pref${q.k + 1}`, label: `LL deflection, preferred limit, span ${q.k + 1} (${O.cite})`, sym: '\\Delta_{pref}', eq: `\\frac{12L}{${q.pref}}`, sub: `\\frac{12(${n2(q.L)})}{${q.pref}}`, value: q.limP, unit: 'in', d: 3,
         ref: `${O.cite}`, ok: q.status !== 'warn', note: q.status === 'warn' ? 'Exceeded: a warning (preferably L/' + q.pref + ').' : '' });
+      // N4 (2026-11-23): the bridge stiffness shared equally (2.5.2.6.2) and the parts of g_Δ
+      if (q.EI) { const B = q.EI, many = B.parts.length > 1, big = v => Math.round(v).toLocaleString('en-US');
+        w.add({ id: `defl.EI${q.k + 1}`, label: `Bridge stiffness shared equally by the ${B.nb} girders, span ${q.k + 1}, at x = ${n2(q.x)} ft`, sym: 'EI_{avg}', eq: '\\frac{\\sum_{j} E I_{n,j}}{N_{b}}',
+          sub: `\\frac{${g0(B.E)}(${B.parts.map(t => `${t.n}(${g0(t.I)})`).join(' + ')})}{${B.nb}}`, value: B.E * B.Iavg, unit: 'kip-in^{2}', d: 0, ref: `${ED} Art. 2.5.2.6.2`,
+          note: `ΣEI = ${big(B.E * B.sumI)} kip-in² (${B.parts.map(t => `${t.n} × ${t.label}: I_n = ${big(t.I)} in⁴ on ${t.lines.map(j => 'G' + (j + 1)).join(', ')}`).join('; ')}); I_avg = ${big(B.Iavg)} in⁴. This girder's own I_n here: ${big(B.Iown)} in⁴${many ? '' : ' (every girder line has this girder\'s plates: I_avg = I_n)'}. All design lanes loaded and all girders deflecting equally: the deflection is that of one lane on a girder of the average stiffness at every station (short-term composite I_n of each girder line, I_cr in the cracked zones), × g_Δ. The moments, shears and reactions keep this girder's own stiffness.` }); }
+      if (q.dP) w.add({ id: `defl.g${q.k + 1}`, label: `Deflection distribution factor, span ${q.k + 1}: all lanes loaded, all girders equal (worked on the Loads & LLDF tab)`, sym: 'g_{\\Delta}', eq: '\\frac{m N_{L}}{N_{b}}', sub: `\\frac{${n2(q.dP.m)}(${q.dP.NL})}{${q.dP.Nb}}`, value: q.gD, unit: '', d: 4, ref: `${ED} Art. 2.5.2.6.2, Table 3.6.1.1.2-1`,
+        note: 'N_L design lanes, m the multiple presence factor for N_L lanes, N_b girders.' });
       w.add({ id: `defl.LL${q.k + 1}`, label: `LL deflection, span ${q.k + 1}, at x = ${n2(q.x)} ft`, sym: '\\Delta_{LL}', eq: 'g_{\\Delta}\\max(\\Delta_{truck}(1 + IM),\\ 0.25\\Delta_{truck}(1 + IM) + \\Delta_{lane})', sub: `${n3(q.gD)}(${n3(q.perLane)})`, value: q.d, unit: 'in', d: 3,
-        ref: `${ED} Art. 2.5.2.6.2, 3.6.1.3.2`, ok: q.status === 'na' ? undefined : q.ok, note: `${q.ok ? '≤' : '>'} Δ_lim = ${n3(q.lim)} in${q.status === 'na' ? ' (reported, not checked: exterior girder under the owner rule)' : ''}. Governing per-lane case: ${q.case || '—'}. All lanes loaded, all girders deflecting equally (g_Δ). Truck axles that do not add to the deflection are neglected (3.6.1.3.1).` }); });
+        ref: `${ED} Art. 2.5.2.6.2, 3.6.1.3.2`, ok: q.status === 'na' ? undefined : q.ok, note: `${q.ok ? '≤' : '>'} Δ_lim = ${n3(q.lim)} in${q.status === 'na' ? ' (reported, not checked: exterior girder under the owner rule)' : ''}. Governing per-lane case: ${q.case || '—'}. All lanes loaded, all girders deflecting equally (g_Δ)${q.EI ? `; per lane on a girder of the bridge-average stiffness EI_avg (step an.defl.EI${q.k + 1})` : ''}. Truck axles that do not add to the deflection are neglected (3.6.1.3.1).` }); });
     for (let k = 0; k < R.spans.length; k++) { const a = R.supIdx[k], b = R.supIdx[k + 1]; let i = a; for (let j = a; j <= b; j++) if (R.camber.total[j] > R.camber.total[i]) i = j; const c = R.camber;
       w.add({ id: `camber.s${k + 1}`, label: `Dead-load deflection (camber), span ${k + 1}, at x = ${n2(x[i])} ft`, sym: '\\Delta_{DL}', eq: '\\Delta_{steel} + \\Delta_{wet} + \\Delta_{DC2+DW}' + (c.ut ? ' + \\Delta_{UT}' : ''),
         sub: `${n3(c.steel[i])} + ${n3(c.wet[i])} + ${n3(c.sd[i])}` + (c.ut ? ` + ${n3(c.ut[i])}` : ''), value: c.total[i], unit: 'in', d: 3, ref: `${ED} Art. 6.7.2`, note: 'Steel and wet deck on I_s, DC2 + DW on I_3n (cracked zones as used). Downward positive.' }); }
@@ -615,5 +695,5 @@
     return { level: lv, items, th, wg, Is, steps: w.steps };
   }
 
-  window.SBDAnalysis = { applicability, DEF, STEEL_PLF, grid, settings, lineOf, deflOwner, moduleOf, loadsOf, dfOf, deadOverride, dfOverride, clOf, fmOf, sbOf, analyzeGirder, pourRegions, ready, llPL };
+  window.SBDAnalysis = { skewTaper, plateOfLine, applicability, DEF, STEEL_PLF, grid, settings, lineOf, deflOwner, moduleOf, loadsOf, dfOf, deadOverride, dfOverride, clOf, fmOf, sbOf, analyzeGirder, pourRegions, ready, llPL };
 })();

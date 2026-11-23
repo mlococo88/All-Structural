@@ -90,7 +90,9 @@
       extra: h.card('Utilities and other line loads', extra),
       dist: h.card('Distribution', `${h.sel('xs.dlMethod', 'Dead load distribution', Object.entries(LD().METHODS))}${h.num('xs.lldf.gap', 'Gap between adjacent trucks', 'ft')}
         ${h.sel('xs.lldf.kg', 'K<sub>g</sub>', [['max', 'At the region section'], ['avg', 'Length-weighted over the region'], ['simple', 'Simplified terms (Table 4.6.2.2.1-3)']])}
-        ${h.sel('xs.lldf.skewV', 'Shear skew correction', [['all', 'All girders'], ['ext', 'Exterior girders only']])}${h.sel('xs.lldf.extMin', 'Exterior not less than interior', tf, String(!!x.lldf.extMin))}`),
+        ${h.sel('xs.lldf.skewV', 'Shear skew correction', [['all', 'All girders'], ['ext', 'Exterior girders only']])}
+        ${h.sel('xs.lldf.skewVx', 'Shear skew correction along the girder', [['whole', 'Whole length'], ['taper', 'Tapered: full at the support, 1.0 at mid-span']], x.lldf.skewVx === 'taper' ? 'taper' : 'whole')}${h.sel('xs.lldf.extMin', 'Exterior not less than interior', tf, String(!!x.lldf.extMin))}
+        <p class="note" id="ld-skewvx-note"><b>Shear skew correction along the girder</b> (AASHTO LRFD 10th Ed. Art. 4.6.2.2.3c). <b>Whole length</b> (default): the correction r<sub>V</sub> of Table 4.6.2.2.3c-1 on the shear distribution factor at every station of the span (the conservative reading). <b>Tapered</b>: r<sub>V</sub> in full at each support of every span, decreasing linearly to 1.0 at mid-span, r<sub>V</sub>(x) = 1 + (r<sub>V</sub> − 1)(1 − x/(L/2)); the article applies the correction between the support at the obtuse corner and mid-span and permits this linear decrease whatever the end condition (simple or continuous). An "end region only" option is not offered: the article gives no end region shorter than support to mid-span. The reactions and bearing stiffeners keep the support value; the factor at a station is worked on the <a href="#" data-gotab="an">Analysis tab</a> (steps g<sub>V</sub>(x)). An entered or pulled shear factor is not tapered.</p>`),
       skews: list('xs.skews', 'Support skews', 'one per support line'),
       wcE: opt('materials.concrete.wcE', 'w<sub>c</sub> for E<sub>c</sub> only', 'kcf', 'blank = w_c')
     };
@@ -163,7 +165,7 @@
     { key: 'lev', title: 'Lever rule', ref: A + '4.6.2.2.2d, 4.6.2.2.3b', ids: /^df\.[sp]\d+\.G\d+\.lev\d*\./ },
     { key: 'ext', title: 'Exterior girder: correction factor e', ref: A + '4.6.2.2.2d, 4.6.2.2.3b', ids: /^df\.[sp]\d+\.G\d+\.(de|eM|eV|mE|vE)$/ },
     { key: 'rig', title: 'Rigid cross-section (special analysis)', ref: A + 'C4.6.2.2.2d', ids: /^df\.[sp]\d+\.G\d+\.rig/ },
-    { key: 'skew', title: 'Skew reduction and correction', ref: A + '4.6.2.2.2e, 4.6.2.2.3c', ids: /^df\.[sp]\d+\.(scfM|scfV)$/ },
+    { key: 'skew', title: 'Skew reduction and correction', ref: A + '4.6.2.2.2e, 4.6.2.2.3c', ids: /^df\.[sp]\d+\.(scfM|scfV|rVx)$/ },
     { key: 'gov', title: 'Distribution factors used (moment, shear)', ref: A + '4.6.2.2', ids: /^df\.[sp]\d+\.G\d+\.g[MV]\d*$/, res: /\.gM$/ },
     { key: 'fat', title: 'Fatigue factors (one lane, multiple presence removed)', ref: A + '3.6.1.4, 4.6.2.2.2b', ids: /^df\.[sp]\d+\.G\d+\.fat/ },
     { key: 'def', title: 'Deflection distribution factor', ref: A + '2.5.2.6.2', ids: /^df\.[sp]\d+\.gDef$/ }] };

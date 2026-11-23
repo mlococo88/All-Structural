@@ -164,9 +164,9 @@
   function build(ctx) {
     const P = ensure(ctx.P), M = window.SBDModel, OW = window.SBDOwners, FA = window.SBDFatigue, SC = window.SBDStuds, FX = window.SBDFlexure, SB = window.SBDStiffeners, g = ctx.g || 0;
     const src = ctx.src || srcOf(ctx);   // ctx.src: the demand source chosen by the caller (the Report tab), else the tab's own choice
-    let pl = ctx.pl !== undefined ? ctx.pl : src === 'file' ? S.pl : null;
+    let pl = ctx.pl !== undefined ? ctx.pl : src === 'file' ? S.pl : null, skV = null;   // skV (N3, 2026-11-23): the analysis' tapered shear skew correction, for the note on the studs card (display only)
     if (ctx.pl === undefined && src === 'file' && !pl) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
-    if (ctx.pl === undefined && src === 'analysis') { const A = fromAnalysis(P, g); if (A.err) return A; pl = A.pl; }
+    if (ctx.pl === undefined && src === 'analysis') { const A = fromAnalysis(P, g); if (A.err) return A; pl = A.pl; skV = (A.R && A.R.skV) || null; }
     // custom (custom demands PR, 2026-11-01): the rows entered on this tab (ui/demands.js payload), the analysis path; the stud zones and regions
     // made from them (studsOf; enter the pitch zones on the input tab to check a given stud layout); the details between the first and last row, GS17 at the rows (below)
     let CU = null; if (ctx.pl === undefined && src === 'custom') { const CD = window.SBDCustomDemands; if (!CD) return { err: 'ui/demands.js is not loaded.' }; CU = CD.payload(P, g, 'fat'); if (CU.err) return { err: CU.err }; pl = CU.pl;
@@ -227,7 +227,7 @@
     // governing of each list
     const gov = (C, skip) => { let b = null; (C || []).forEach(c => c.items.forEach((it, i) => { if (skip && skip(c, it)) return; if ((isFinite(it.r) || (typeof it.r === 'number' && it.st === 'fail')) && it.r != null && (it.st === 'pass' || it.st === 'fail') && (!b || (x => isFinite(x) ? x : Infinity)(it.r) > (x => isFinite(x) ? x : Infinity)(b.it.r))) b = { c, it, i }; })); return b; };
     const g17 = gs17 ? gs17.reduce((b, q, i) => { q.o.items.forEach(it => { if (!b || (x => isFinite(x) ? x : Infinity)(it.r) > (x => isFinite(x) ? x : Infinity)(b.it.r)) b = { it, i }; }); return b; }, null) : null;
-    return { pl: !!pl, set, B, cats: { T: F.catT, B: F.catB }, oldFat: oldGamFat(P), FR, FC, faGov: gov(FC, c => c.id === 'FA4'), gs17, g17, SR, SCC, scGov: gov(SCC, c => c.id === 'SC6' && false), alt, env,
+    return { skV, pl: !!pl, set, B, cats: { T: F.catT, B: F.catB }, oldFat: oldGamFat(P), FR, FC, faGov: gov(FC, c => c.id === 'FA4'), gs17, g17, SR, SCC, scGov: gov(SCC, c => c.id === 'SC6' && false), alt, env,
       custom: CU ? { rows: CU.rows, mode: 'unf' } : null,
       what: CU ? `Demands: entered (Custom), unfactored, on ${esc((pg || {}).label || '')}: ${CU.rows.length} row(s); GS17 at each entered station (${gs17 ? gs17.length : 0} location(s)); the fatigue details of the layout between the first and last row (${(FR.rows || []).length}; moments linear between the rows); ${(Q.zones || []).length ? 'the pitch zones of this project' : 'pitch zones (span tenths) and strength regions made from the rows as Preliminary sizing makes them (a zone with no row has V<sub>f</sub> = 0: enter the pitch zones on the Fatigue &amp; studs input tab to check a given stud layout)'}; the project's plates, deck and materials; b<sub>eff</sub> for the studs ${Q.beffMode === 'girder' ? 'this girder\'s' : 'the exterior girder\'s (bridge-wide)'}.`
         : pl && pl._schema === 'sbd2-analysis' ? `This project's analysis of ${esc((pg || {}).label || '')} (engine/analysis.js): ${(pl.stations || []).length} stations, ${sup.length - 1} span(s); fatigue moments and shears per girder (fatigue truck, IM, single-lane factors); ${(Q.zones || []).length ? 'the pitch zones of this project' : 'pitch zones and strength regions made as Preliminary sizing makes them for GirderDetail (span tenths)'}; b<sub>eff</sub> for the studs ${Q.beffMode === 'girder' ? 'this girder\'s' : 'the exterior girder\'s (bridge-wide)'}.`
@@ -344,6 +344,8 @@
     // studs
     if (!R.SR.errors.length) { const Sr = R.SR, C = R.SCC, ck = id => C.find(c => c.id === id) || { items: [] };
       h += `<section class="sec"><div class="secHead">Shear connectors (6.10.10): ${Sr.zones.length} pitch zones, ${Sr.regions.length} strength regions</div><div class="secBody">
+        <p class="note" id="sc-edition">${SC_ED}</p>
+        ${R.skV && R.skV.on && R.skV.spans.some(q => q.rVf > 1) ? `<p class="note" id="sc-skewvx">The fatigue shear range V<sub>f</sub> of each zone uses the shear skew correction tapered to 1.0 at mid-span (4.6.2.2.3c; Loads input tab, Distribution): g<sub>fat,V</sub>(x) at each station, worked on the <a href="#" data-gotab="an">Analysis tab</a> (steps an.gVx.fat).</p>` : ''}
         <p class="note">Studs ${fmt(Sr.d, 3)} × ${fmt(Sr.h, 2)} in: Q<sub>r</sub> = ${fmt(Sr.Qr, 2)} kip ${go('sc', 0, 'sc.Qr')}, Z<sub>r</sub> (Fatigue I) = ${fmt(Sr.Zr, 3)} kip ${go('sc', 0, 'sc.ZrI')}; b<sub>eff</sub> = ${fmt(Sr.dk.beff, 2)} in (${Sr.beffMode === 'girder' ? 'this girder\'s own, 6.10.10 (default)' : 'bridge-wide, as GirderDetail (option)'}) ${go('sc', 0, 'sc.beff')}; F<sub>fat</sub> = ${fmt(Sr.Ffat, 4)} kip/in; γ Fatigue I = ${fmt(Sr.gf, 2)} (the Fatigue &amp; studs input, one source).</p>
         ${R.oldFat ? `<div class="alert">The saved γ Fatigue I (studs) ${esc(R.oldFat.was)} is no longer used (now ${fmt(R.oldFat.now, 2)}, the Fatigue &amp; studs input γ Fatigue I).</div>` : ''}
         ${R.alt ? `<p class="note">For comparison: with ${Sr.beffMode === 'girder' ? 'the bridge-wide (GirderDetail)' : 'this girder\'s own'} b<sub>eff</sub> = ${fmt(R.alt.beff, 2)} in the largest SC1 ratio would be ${fmt(R.alt.sc1, 3)} (now ${fmt(R.alt.sc1o, 3)}) and the largest SC2 ratio ${fmt(R.alt.sc2, 3)} (now ${fmt(R.alt.sc2o, 3)}).</p>` : ''}
@@ -360,15 +362,19 @@
     if (sel.k === 'fa' && R.FR.rows && R.FR.rows[sel.i]) { const r = R.FR.rows[sel.i]; title = r.name; list = stepsOf(R, 'fa', r); }
     else if (sel.k === 'gs' && R.gs17 && R.gs17[sel.i]) { const q = R.gs17[sel.i]; title = `${q.r.name} (GS17)`; list = stepsOf(R, 'gs', q); }
     else if (!R.SR.errors.length) { title = 'shear connectors'; list = stepsOf(R, 'sc'); }
-    if (list.length) h += `<section class="sec"><div class="secHead">Worked steps, ${esc(title)}</div><div class="secBody"><p class="note">Click a row above to show its work. AASHTO LRFD 10th Ed. (2024).</p>${stepsHtml(list)}</div></section>`;
+    if (list.length) h += `<section class="sec"><div class="secHead">Worked steps, ${esc(title)}</div><div class="secBody"><p class="note">Click a row above to show its work. AASHTO LRFD 10th Ed. (2024).</p>${title === 'shear connectors' ? `<p class="note" id="sc-edition-steps">${SC_ED}</p>` : ''}${stepsHtml(list)}</div></section>`;
     return h;
   }
 
+  /* SC_ED (F5, engineer's decision 2026-11-23; text only): the edition note of the shear connector checks, on the studs card, above their worked
+     steps and (SC_ED_TXT, plain text) in the report's stud section */
+  const SC_ED = `<b>Edition.</b> The shear connector checks shown follow AASHTO LRFD 10th Ed. (2024) only: the fatigue resistance Z<sub>r</sub> (Art. 6.10.10.2), the pitch limits (Art. 6.10.10.1.2) and the strength Q<sub>n</sub> with φ<sub>sc</sub> (Art. 6.10.10.4, 6.5.4.2). A project designed to the 9th Ed. has different stud requirements; they are not shown here. The design specification is listed in the report's Basis of design (<a href="#" data-gotab="rpt">Report tab</a>).`;
+  const SC_ED_TXT = 'Edition: the shear connector checks shown follow AASHTO LRFD 10th Ed. (2024) only: the fatigue resistance $Z_{r}$ (Art. 6.10.10.2), the pitch limits (Art. 6.10.10.1.2) and the strength $Q_{n}$ with $\\phi_{sc}$ (Art. 6.10.10.4, 6.5.4.2). A project designed to the 9th Ed. has different stud requirements; they are not shown here. The design specification is listed in Basis of design, Specification and owner.';
   /* stepsOf(R, kind, o): the worked steps of a fatigue detail ('fa', o = its row), GS17 location ('gs', o = { r, o }) or the shear connectors
      ('sc'); with custom demands the step that names them first (custom demands PR) */
   function stepsOf(R, kind, o) {
     const list = kind === 'fa' ? window.SBDFatigue.steps(R.FR, o) : kind === 'gs' ? o.o.steps : window.SBDStuds.steps(R.SR);
     return R.custom ? [window.SBDCustomDemands.step('fat', R.custom, kind === 'sc' ? NaN : kind === 'gs' ? o.r.x : +o.x)].concat(list) : list;
   }
-  window.SBDFatigueUI = { fatI, oldGamFat, ensure, inputs, onClick, render, build, fromAnalysis, studsOf, stepsOf, TOPICS, groups };
+  window.SBDFatigueUI = { SC_ED, SC_ED_TXT, fatI, oldGamFat, ensure, inputs, onClick, render, build, fromAnalysis, studsOf, stepsOf, TOPICS, groups };
 })();
