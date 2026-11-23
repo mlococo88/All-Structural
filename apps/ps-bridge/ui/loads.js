@@ -22,13 +22,15 @@
     { key: 'int', title: 'Interior girder equations', ref: A + 'Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1', ids: /^ld\.(k|m1|m2|v1|v2)$/ },
     { key: 'ext', title: 'Exterior girder: lever rule, e, rigid section', ref: A + '4.6.2.2.2d, 4.6.2.2.3b', ids: /^ld\.(lever|eM|eV|rigid|rigXbar|rigXext|rigSx2|eM1|eM2|eV1|eV2|f48)$/ },
     { key: 'df', title: 'Distribution factors used', ref: A + '4.6.2.2.2e, 4.6.2.2.3c', ids: /^ld\.(dfmRaw|dfvRaw|c1|skM|skV|dfm|dfv)$/, res: /^ld\.dfm$/ },
+    // AP-B (2026-11-23): the ranges of applicability of the distribution factor equations (engine/applicability.js, steps ld.ap.*)
+    { key: 'ap', title: 'Line-girder analysis: ranges of applicability of the distribution factors', ref: A + '4.6.2.2, Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1, 4.6.2.2.2e-1, 4.6.2.2.3a-1, 4.6.2.2.3b-1, 4.6.2.2.3c-1', ids: /^ld\.ap\./, res: /^ld\.ap\.r$/ },
     // PL-A (2026-11-23): the pedestrian live load (engine/pl.js, steps ld.pl.*; only with one)
     { key: 'pl', title: 'Pedestrian live load (with the vehicular live load)', ref: A + '3.6.1.6, 3.6.2.1, Table 3.4.1-1', ids: /^ld\.pl\./, res: /^ld\.pl\.MLLPL$/ },
     { key: 'll', title: 'Live load per girder', ref: A + '3.6.1.3, 4.6.2.2', ids: /^ld\.(xfp|xfn|xfv|MLL|VLL)$/, res: /^ld\.MLL$/ }];   // xf*: batch D1, the factors on imported live load
   function output(ctx) {
     const { R, inp, P } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, df = R.df, cp = R.cp, own = R.own;
     const simple = !R.fe && !R.useExt, DL = window.PSBBridgeDL, dist = !!(DL && DL.on(P)), dg = window.PSBDesign.sel(P).g;   // PR 3a-3
-    let h = K().gcard('Loads graphic: cross-section', 'gfx_ld');
+    let h = (R.ap ? apCard(ctx) : '') + K().gcard('Loads graphic: cross-section', 'gfx_ld');   // AP-B: the applicability banner first
     // batch D1: with imported demands the DC2 / DW moments and shears are the file's (or the table's); the klf here gives the deflection only
     const xm = R.useExt ? '; <b>moments and shears imported</b> (Analysis tab), this w is used for the superimposed dead-load deflection only' : '';
     h += k.card('Owner load rules', k.kv([['Owner', k.esc(own ? own.owner : 'AASHTO')], ['Load modifier η (Strength I)', `${own ? ev('own.eta', 4) : '1.0000'} ${wk('ld.eta')}`],
@@ -87,6 +89,24 @@
     h += everyLine(ctx);   // 2026-11-15 (batch C): the dead loads and distribution factors of every girder line (the steel app's tables)
     h += k.card('Worked steps: loads and distribution factors', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value.</p>${k.steps(ctx.W.loads.steps, TOPICS, OPEN)}`);
     return h;
+  }
+  /* apCard(ctx) (AP-B, 2026-11-23; the Steel Bridge app's SA4 banner): is the line-girder analysis with the approximate distribution
+     factors permitted for the girder shown? R.ap (engine/applicability.js): each tested value with its range, table and result, the other
+     items (curvature, skew effects not computed), the level (FAIL counts in the verdict: the check "LLDF range of applicability") */
+  function apCard(ctx) {
+    const { R } = ctx, k = K(), a = R.ap, wk = k.wk; if (!a || !a.family) return '';
+    const LV = { fail: 'FAIL', warn: 'WARNING', note: 'NOTE', ok: 'OK' }, cls = { fail: 'sd-fail', warn: 'sd-review', note: '', ok: 'sd-pass' };
+    const f = v => String(+(+v).toFixed(3)), rng = q => !isFinite(q.hi) ? `≥ ${f(q.lo)}` : q.lo === -Infinity ? `≤ ${f(q.hi)}` : `${f(q.lo)} to ${f(q.hi)}`;
+    const st = q => a.entered ? 'not tested' : q.ok ? 'OK' : LV[q.level];
+    const rows = a.items.map(q => `<tr${!a.entered && !q.ok && q.level === 'fail' ? ' class="apBad" style="background:#fdecec"' : ''}><td class="lft">${k.esc(q.name)}</td><td>${k.fx(q.value, q.d)} ${k.esc(q.unit)} ${wk('ld.ap.' + q.key)}</td><td>${rng(q)} ${k.esc(q.unit)}</td><td class="lft">${k.esc(q.table)}</td><td class="lft"><b class="${a.entered ? '' : q.ok ? 'sd-pass' : cls[q.level]}">${st(q)}</b>${!a.entered && !q.ok && q.note ? ' ' + k.esc(q.note) : ''}</td></tr>`).join('');
+    const extra = a.extra.map(q => `<tr><td class="lft">${k.esc(q.title)}</td><td>${k.esc(q.val)}</td><td></td><td></td><td class="lft"><b class="${cls[q.level]}">${LV[q.level]}</b> ${k.esc(q.msg)}</td></tr>`).join('');
+    const head = a.entered ? 'Distribution factors entered (Loads tab): the ranges of the equations are not tested.'
+      : a.level === 'fail' ? `<b>FAIL: ${a.bad.length} value${a.bad.length > 1 ? 's' : ''} outside the range of applicability of the distribution factor equations.</b> A line-girder analysis with these factors is not permitted: use a refined analysis (4.6.3) and enter its factors on the <a href="#" data-goin="loads">Loads tab</a> (an entered factor is not flagged), or change the layout. Counted in the verdict (check "LLDF range of applicability") ${wk('ld.ap.r')}.`
+      : a.level === 'warn' ? 'WARNING: a value is outside its range by an accepted exception (below); the factors are used.'
+      : `The approximate distribution factor equations apply: every tested value is inside its range ${wk('ld.ap.r')}.`;
+    return k.card(`Line-girder analysis applicability: ${k.esc(a.kind)}`, `<div class="${a.level === 'fail' && !a.entered ? 'alert err' : a.level === 'warn' ? 'alert' : 'note'}" id="apBanner" data-aplevel="${a.entered ? 'entered' : a.level}" role="${a.level === 'fail' ? 'alert' : 'status'}">${head}</div>
+      <div class="tscroll"><table class="tbl" id="apTbl"><thead><tr><th class="lft">Item</th><th>Value</th><th>Range</th><th class="lft">AASHTO LRFD 10th Ed.</th><th class="lft">Result</th></tr></thead><tbody>${rows}${extra}</tbody></table></div>
+      <p class="note">The values the distribution factors of this girder line were computed with (S, t<sub>s</sub>, L, N<sub>b</sub>, K<sub>g</sub>, d<sub>e</sub>, the larger skew of the span's supports). As the Steel Bridge app's applicability check: a computed factor outside its range is a FAIL; entered factors are not tested. Every girder type and line is tested (the check summary and the Summary tab show the ones that fail).</p>`, 'card-ap');
   }
   /* pedCard(ctx) (PL-A, 2026-11-23): the pedestrian live load of the girder shown (R.pl, engine/pl.js): w_PL of the line (the distribution's
      step), M_PL and V_PL and the live load the checks take, each linked to its worked step; where it is and is not used */

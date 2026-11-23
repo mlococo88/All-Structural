@@ -42,6 +42,9 @@
     { id: 'shear', name: 'Shear', tab: 'shear', checks: [['Shear', 'sh.gov'], ['Long. reinf (5.7.3.5)', 'sh.Tr'], ['Interface shear (5.7.4)', 'sh.ifr']] },
     { id: 'end', name: 'End zone & hold-down', tab: 'end', checks: [['Splitting steel (5.9.4.4)', 'ez.dc'], ['Confinement steel (5.9.4.4.2)', 'ez.conf.gov'], ['Release tens. steel (5.9.2.3.1b)', 'ez.rel.dc'],
       ['Hold-down force (MassDOT 3.7.2.2)', 'ez.hd.r'], ['Hold-down force (CTDOT 5.9.1.6)', 'ez.hd.r'], ['Hold-down force (PS-10)', 'ez.hd.r'], ['Debonded strands (CTDOT 5.9.4.3.3)', 'ez.db.r']] },
+    // AP-B (2026-11-23): the line-girder analysis' applicability (engine/applicability.js): the check exists only when a computed
+    // distribution factor is outside its range of applicability (a FAIL, as the Steel Bridge app's SA4); else no chip
+    { id: 'ap', name: 'LLDF applicability', tab: 'lds', checks: [['LLDF range of applicability (4.6.2.2)', 'ld.ap.r']] },
     { id: 'camb', name: 'Camber & deflection', tab: 'camb', checks: [['LL deflection', 'cb.ll.r']] },
     { id: 'hand', name: 'Handling', tab: 'hand', off: 'loads', checks: [['Lifting stress', 'hn.lift.r'], ['Lifting FS (crack, screening)', 'hn.FSl.r'], ['Hauling FS (crack, screening)', 'hn.FSh.r']] },
     { id: 'deck', name: 'Deck', tab: 'deck', off: 'dd', checks: [['Deck +M', 'dk.pos.r'], ['Deck −M', 'dk.neg.r'], ['Deck overhang', 'dk.oh.r']] },

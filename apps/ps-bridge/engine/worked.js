@@ -344,6 +344,7 @@
       add({ id: 'MLL', label: 'Live load moment per girder at midspan (continuous unit)', sym: 'M_{LL+IM}', value: R.MLL, unit: 'kip-ft', d: 1, note: 'HL-93 on the continuous unit (influence lines of the FE model, Analysis tab) × DF_M.' });
       add({ id: 'VLL', label: 'Live load shear per girder at the support (continuous unit)', sym: 'V_{LL+IM}', value: R.VLL, unit: 'kip', d: 2, note: 'HL-93 on the continuous unit × DF_V (Analysis tab).' });
     }
+    if (R.ap && window.PSBApplic) window.PSBApplic.steps(add, inp, R, { n, g, par });   // AP-B: the ranges of applicability (4.6.2.2), steps ld.ap.*
     if (R.pl && window.PSBPL) window.PSBPL.steps(add, inp, R, { n, g, par });   // PL-A: the pedestrian live load (3.6.1.6), steps ld.pl.*
     return K.done();
   }
