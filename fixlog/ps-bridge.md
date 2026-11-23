@@ -9357,3 +9357,15 @@ Recorded with the AP-B PR (#1666). A note only: no file of the tool changes, and
   - **HO-D2-e approved:** a recorded girder hand-off whose girder type or line was removed shows a neutral note in the card, no banner.
 ### Still pending
 - The other decisions of those two entries, and of the E1 entry (PR #1580), are as listed there.
+
+## 2026-11-23 — PR: claude/steel-handoff-stale (SHO) — the shared part of the hand-off stale check moved to shared/handoff-stale.js (pure refactor, no change of behaviour)
+- **Why:** the Steel Bridge app gets the same banner (engineer, 2026-11-23); CLAUDE.md §3. See fixlog/shared-handoff-stale.md and fixlog/steel-bridge.md (SHO).
+- **Where:** `apps/ps-bridge/engine/hostale.js`.
+  - Before (anchor `const VOL = ['producedAt', 'updatedAt', 'device'];`): the definitions of `VOL`, `isObj`, `canon`, `hash`, `sig`. After: `const isObj = …;` (kept) and `const { canon, hash, sig } = W.SharedHandoffStale;`.
+  - Before (anchor `/* the record */`): `recs`, `sentOf`, `loadedOf`, `put`, `setSent`, `setLoaded`, `carrySent`. After: `const { sentOf, loadedOf, setSent, setLoaded, carrySent, outState, inState } = W.SharedHandoffStale;`.
+  - Before (anchor `function outState(rec, cur)`): `outState`, `inState`. After: taken from the shared file (line above); the comment of the states kept.
+  - `window.PSBHoStale` exports the same names as before.
+  - `apps/ps-bridge/index.html` script list: + `'../../shared/handoff-stale.js'` before `'engine/hostale.js'`.
+  - Tests: `tests/engine/psbridge-model.test.mjs` (the page's script list; the shared file left out of the key check as the other shared files), `tests/engine/psbridge-hostale.test.mjs` (loads the shared file).
+- **Governing provision / computed values:** none; the moved text is unchanged. To re-apply by hand: copy the functions back from `shared/handoff-stale.js`.
+- **How verified:** `node tests/engine/run.mjs psbridge` (all PS engine tests), `tests/smoke/ps-bridge-hostale.mjs`, `tests/smoke/ps-bridge-handoffs.mjs`, `node tests/check-syntax.mjs`.

@@ -19,26 +19,11 @@
 (function () {
   'use strict';
   const W = typeof window !== 'undefined' ? window : globalThis;
-  const VOL = ['producedAt', 'updatedAt', 'device'];
   const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
-  /* canon(v): JSON text with the object keys sorted (a stable text for the hash) */
-  function canon(v) {
-    if (Array.isArray(v)) return '[' + v.map(canon).join(',') + ']';
-    if (isObj(v)) return '{' + Object.keys(v).sort().filter(k => v[k] !== undefined).map(k => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}';
-    return JSON.stringify(v === undefined ? null : v);
-  }
-  /* hash(s): FNV-1a 32-bit of the text, hex, with the text length (not a security hash: a change detector) */
-  function hash(s) {
-    let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
-    return ('0000000' + h.toString(16)).slice(-8) + ':' + s.length;
-  }
-  /* sig(payload): the hash of the payload without its stamp fields; null for no payload */
-  function sig(payload) {
-    if (payload == null) return null;
-    const o = isObj(payload) ? Object.assign({}, payload) : payload;
-    if (isObj(o)) VOL.forEach(k => { delete o[k]; });
-    return hash(canon(o));
-  }
+  /* 2026-11-23: canon, hash, sig, the record helpers (sentOf, loadedOf, setSent, setLoaded, carrySent) and the states (outState, inState)
+     are in shared/handoff-stale.js (window.SharedHandoffStale; moved there unchanged when the Steel Bridge app got the same banner); the
+     page loads it before this file. */
+  const { canon, hash, sig } = W.SharedHandoffStale;
 
   /* the channels: id -> { ch (the bridgeSuite.v1 channel), dir, label, to / from (the banner text), cell (per girder type and line) } */
   const CH = {
@@ -58,22 +43,7 @@
   const OUT_IDS = ['psSection', 'lldfGeom', 'capacity', 'superReactions', 'superReactionsAll', 'superGeometry', 'projectMeta'];
   const IN_IDS = ['lldf', 'dlLoads', 'projectMetaIn'];
 
-  /* the record */
-  const recs = P => (P && isObj(P.handoffs)) ? P.handoffs : null;
-  const sentOf = (P, id) => { const r = recs(P); return r && isObj(r.sent) && isObj(r.sent[id]) ? r.sent[id] : null; };
-  const loadedOf = (P, id) => { const r = recs(P); return r && isObj(r.loaded) && isObj(r.loaded[id]) ? r.loaded[id] : null; };
-  function put(P, part, id, rec) {
-    const r = isObj(P.handoffs) ? P.handoffs : {}; r[part] = Object.assign({}, isObj(r[part]) ? r[part] : {}, { [id]: rec }); P.handoffs = r; return P;
-  }
-  const setSent = (P, id, rec) => put(P, 'sent', id, rec), setLoaded = (P, id, rec) => put(P, 'loaded', id, rec);
-  /* carrySent(from, to): the sent records of from on to (Undo / Redo: a send happened and stays sent; the loaded records follow the
-     project text, since they say what the design uses). Returns to. */
-  function carrySent(from, to) {
-    const s = recs(from) && recs(from).sent;
-    if (s) { to.handoffs = Object.assign({}, isObj(to.handoffs) ? to.handoffs : {}, { sent: s }); }
-    else if (isObj(to.handoffs)) { delete to.handoffs.sent; if (!Object.keys(to.handoffs).length) delete to.handoffs; }
-    return to;
-  }
+  const { sentOf, loadedOf, setSent, setLoaded, carrySent, outState, inState } = W.SharedHandoffStale;
   /* noStep(a, b): the two project texts differ only in the design shown (P.design) or the sent records: not an Undo step */
   function noStep(a, b) {
     try {
@@ -85,23 +55,10 @@
   /* designText(P): the project text without the hand-off record (the keys that mean "the inputs changed": a send is not an input change) */
   const designText = P => JSON.stringify(Object.assign({}, P, { handoffs: undefined }));
 
-  /* the states: 'unknown' (no record: nothing sent / loaded from this project, or before the record was kept), 'current', 'stale',
-     'unchecked' (cannot be compared now: input errors, results still running, the payload cannot be built), 'gone' (the girder type or
-     line it was sent for / loaded into is no longer in the project), 'none' (the incoming data is no longer in this browser) */
-  function outState(rec, cur) {
-    if (!rec || !rec.sig) return 'unknown';
-    if (cur == null) return 'unchecked';
-    return cur === rec.sig ? 'current' : 'stale';
-  }
-  /* inState(rec, cur): cur = { at, sig } of the stored payload (null: none stored; { bad: true }: unreadable) */
-  function inState(rec, cur) {
-    if (!rec || (!rec.at && !rec.sig)) return 'unknown';
-    if (!cur) return 'none';
-    if (cur.bad) return 'unchecked';
-    if (rec.at && cur.at === rec.at) return 'current';
-    if (rec.sig && cur.sig && cur.sig === rec.sig) return 'current';   // published again with the same values
-    return 'stale';
-  }
+  /* the states (shared/handoff-stale.js outState, inState): 'unknown' (no record: nothing sent / loaded from this project, or before the
+     record was kept), 'current', 'stale', 'unchecked' (cannot be compared now: input errors, results still running, the payload cannot be
+     built), 'gone' (the girder type or line it was sent for / loaded into is no longer in the project), 'none' (the incoming data is no
+     longer in this browser) */
 
   /* the current sig of a girder hand-off of one girder type x line: H = PSBHandoffs, inp / R = its engine inputs and result */
   const extOn = inp => { const e = inp && inp.external; return !!(e && Array.isArray(e.stations) && e.stations.length); };
