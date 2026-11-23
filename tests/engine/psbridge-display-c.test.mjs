@@ -50,7 +50,7 @@ for (const [name, P0] of Object.entries(CASES)) {
     assert.deepEqual(J(W.SharedReport.build(M1).unresolved), []);
     // §1 figure
     const M2 = RB.model(Bd, { sumFig: [{ svg: '<svg/>', cap: 'Girder elevation: X', list: 'Flexure: F at x = 60.00 ft on G2, ratio 0.752 (PASS)' }] });
-    const el = M2.sections[0].subs.find(q => /Girder elevations/.test(q.title)); assert.ok(el && el.items.some(i => i.type === 'figure'));
-    assert.ok(!M0.sections[0].subs.some(q => /Girder elevations/.test(q.title)));
+    const el = M2.sections.find(s => s.id === 'sum').subs.find(q => /Girder elevations/.test(q.title)); assert.ok(el && el.items.some(i => i.type === 'figure'));
+    assert.ok(!M0.sections.find(s => s.id === 'sum').subs.some(q => /Girder elevations/.test(q.title)));
   });
 }

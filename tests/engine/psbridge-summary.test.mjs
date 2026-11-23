@@ -180,19 +180,19 @@ test('Report, PS-25: each girder type on its governing line (default) or every g
       const M = W.PSBReportBuild.model(B, {}), ks = keysOf(M);
       const bad = refsOf(M).filter(k => !ks.has(k));   // PS-26: ui/bridgedl.js loaded, so the Loads & LLDF sections (and §1's [[ld.dfm]]) are built here too
       assert.deepEqual([...new Set(bad)], [], `${name} ${mode}: every reference resolves`);
-      if (!B.multi) { assert.equal(M.sections.length, 14, name); assert.ok(M.sections.every(s => !/ on G\d+, span \d+$/.test(s.title)), `${name}: one girder, no unit headings`);
+      if (!B.multi) { assert.equal(M.sections.length, 18, name);   // 2026-11-23: + exec, basis, bom, sign assert.ok(M.sections.every(s => !/ on G\d+, span \d+$/.test(s.title)), `${name}: one girder, no unit headings`);
         // and the model equals the one-girder model (the PS-25 code not used)
         assert.equal(JSON.stringify(M), JSON.stringify(W.PSBReportBuild.model(Object.assign({}, B, { units: null, multi: false }), {})), `${name}: one-girder report unchanged`); continue; }
       nm++;
-      assert.equal(M.sections.length, 2 + 12 * B.units.length, `${name} ${mode}: sections`);
-      B.units.forEach((u, i) => { const ss = M.sections.slice(2 + 12 * i, 14 + 12 * i);   // numbered per unit: §(3 + 12 i) – §(14 + 12 i)
+      assert.equal(M.sections.length, 6 + 12 * B.units.length, `${name} ${mode}: sections`);   // 2026-11-23: exec, sum, proj, basis, the units, bom, sign
+      B.units.forEach((u, i) => { const ss = M.sections.slice(4 + 12 * i, 16 + 12 * i);   // numbered per unit: §(5 + 12 i) – §(16 + 12 i)
         ss.forEach(s => { assert.ok(s.title.endsWith(`: ${u.label} on G${u.g}, span ${u.s}`), `${name}: heading ${s.title}`); assert.match(s.key, new RegExp(`@u${i}$`)); }); });
       // every number recorded: the value of its unit's engine result (sections §3+ and §1's unit tables)
       M.vals.forEach(v => { const R = v.u != null ? B.units[v.u].R : v.cell ? A.cells.find(c => `${c.k}|${c.g}` === v.cell).R : B.R, x = v.path.split('.').reduce((o, k) => o == null ? o : o[k], R);
         assert.equal(v.text, OKF(v.div ? x / v.div : x, v.d), `${name} ${mode}: ${v.sec} u${v.u} ${v.path}`); nv++; });
       assert.ok(M.vals.filter(v => v.u === B.units.length - 1).length > 300, `${name} ${mode}: the last unit's values`);
       // §1's "see §": the unit that works that type (gov) or that type × line (all)
-      const all = M.sections[0].subs.find(q => q.id === 'all');
+      const all = M.sections.find(s => s.id === 'sum').subs.find(q => q.id === 'all');
       if (all) { const [grid] = all.items.filter(i => i.type === 'table');
         grid.rows.forEach((r, i) => r.slice(1).forEach((c, j) => { const z = SM.grid[i][j]; if (!z || z.err || !z.gov || z.gov.gp.input) return;
           const ui = B.units.findIndex(u => u.k === z.c.k && (mode !== 'all' || u.g === z.c.g)); assert.ok(c.t.includes(`[[rs.${z.gov.gp.tab}@u${ui}]]`), `${name} ${mode}: grid G${i + 1}/S${j + 1} ${c.t}`); })); }
@@ -202,7 +202,7 @@ test('Report, PS-25: each girder type on its governing line (default) or every g
 });
 test('Report, PS-25: a section left out is left out for every unit; its references say "(section not included)"', () => {
   const P = PS['three spans made continuous'], B = W.PSBReportData.compute(P, null, 'gov'), M = W.PSBReportBuild.model(B, { include: { flex: false } });
-  assert.equal(M.sections.length, 2 + 11 * B.units.length);
+  assert.equal(M.sections.length, 6 + 11 * B.units.length);
   assert.ok(!M.sections.some(s => /^Flexure/.test(s.title)));
   assert.deepEqual(refsOf(M).filter(k => /^(u\d+\/fx\.|rs\.flex)/.test(k)), []);
   assert.ok(JSON.stringify(M.sections).includes('(section not included)'));
@@ -236,9 +236,9 @@ test('Report, PS-26: §2 Owner rules — one "Applied here" column per girder ty
       assert.equal(T.tb.head.length, 4, `${name} ${mode}: one column`); nOne++;
       const su = W.PSBSummaryUI; let M0; W.PSBSummaryUI = undefined;   // report/builders.js ownTypes: no PSBSummaryUI, no per-type columns (§1's tables need it, §2 does not)
       try { M0 = W.PSBReportBuild.model(Bn, {}); } finally { W.PSBSummaryUI = su; }
-      assert.ok(!M0.sections[0].subs.some(q => q.id === 'all') || !Bn.multi, 'PSBSummaryUI hidden');
+      assert.ok(!M0.sections.find(s => s.id === 'sum').subs.some(q => q.id === 'all') || !Bn.multi, 'PSBSummaryUI hidden');
       assert.equal(JSON.stringify(M.sections.find(s => s.id === 'proj')), JSON.stringify(M0.sections.find(s => s.id === 'proj')), `${name} ${mode}: §2 unchanged`);
-      assert.ok(!M.vals.some(v => v.cell), name);
+      assert.ok(!M.vals.some(v => v.cell && v.sec !== 'exec' && v.sec !== 'bom'), name);   // the executive summary and the bill of materials name lines the report does not work in full
       continue;
     }
     nCols++;
@@ -272,7 +272,7 @@ test('Report links: no [[…]] or "§step" reference of any test project points 
     assert.deepEqual(J(doc.unresolved), [], `${name} ${mode}: unresolved`); assert.deepEqual(J(doc.dup), [], `${name} ${mode}: duplicate anchors`);
     assert.deepEqual([...new Set(refsOf(M).filter(k => !ks.has(k)))], [], `${name} ${mode}: references to a missing key`);
     assert.ok(!W.SharedReport.text(doc).includes('§?'), `${name} ${mode}: §?`);
-    M.sections[0].subs.filter(q => /^kq/.test(q.id)).forEach(q => { const r = q.items[0].rows.find(x => /^DF/.test(x[0])), k = /\[\[([^\]]+)\]\]/.exec(r[1])[1];
+    M.sections.find(s => s.id === 'sum').subs.filter(q => /^kq/.test(q.id)).forEach(q => { const r = q.items[0].rows.find(x => /^DF/.test(x[0])), k = /\[\[([^\]]+)\]\]/.exec(r[1])[1];
       const i = /^u(\d+)\//.exec(k), sec = M.sections.find(s => s.key === (i ? `rs.lds@u${i[1]}` : 'rs.lds'));
       const stp = [].concat(...sec.subs.map(s => s.items.filter(it => it.type === 'steps').map(it => it.steps))).flat().find(s => s.id === 'ld.dfm');
       assert.ok(k === (i ? `u${i[1]}/ld.dfm` : 'ld.dfm') && stp && stp.label === 'Moment distribution factor', `${name} ${mode}: ${q.title} → ${k}`); nd++; });
