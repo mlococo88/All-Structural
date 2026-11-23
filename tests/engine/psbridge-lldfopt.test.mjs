@@ -121,6 +121,10 @@ test('LL-O both on: the interior factor the exterior is compared with has no she
   near(on.R.dfv, Math.max(off.R.dfv, v2), 1e-12); near(on.R.dfv, 0.88388, 1e-5); assert.equal(on.R.dfm, off.R.dfm);
   near(on.R.df.opt.int.skV, 1, 0); near(on.R.df.opt.int.skVtab, off.R.df.skV, 1e-15);
   const i2 = cell(W, bridge({ skewV: 'ext', extMin: true }), 2); near(i2.R.dfv, v2, 1e-12);
+  // with a pedestrian load and a noncomposite utility (the engine copies of engine/pl.js and engine/ut.js): the same factors
+  const pu = P => { P.xs.dl.swL = { w: 6, t: 9 }; P.xs.dl.ped = 75; P.xs.dl.extra = [{ name: 'Gas main', cat: 'UTN', x: 16.5, plf: 0.10 }]; };
+  const q1 = cell(W, bridge({ skewV: 'ext', extMin: true }, pu), 1), q0 = cell(W, bridge(null, pu), 1);
+  assert.ok(q1.R.pl && q1.R.ut, 'the pedestrian load and the utility are in the run'); near(q1.R.dfv, Math.max(q0.R.dfv, v2), 1e-12, 'DF_V with PL and UT'); assert.equal(q1.R.dfm, q0.R.dfm);
 });
 
 test('LL-O: the design with a raised factor = the design with that factor entered (every check and the rating take the same factor)', () => {
