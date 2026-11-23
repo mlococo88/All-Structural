@@ -27,8 +27,8 @@ test('Auto design basis: no run: one short note; the rest of the report as witho
   const P = load(M.defaultProject()), B = W.PSBReportData.compute(P, null), Mo = RB.model(B), q = adOf(Mo), doc = SR.build(Mo);
   assert.equal(q.title, 'Auto design basis'); assert.equal(q.key, 'rs.adb');
   assert.equal(q.items.length, 1); assert.match(q.items[0].text, /^No auto design was run in this page view: nothing in this report comes from an auto design/);
-  assert.equal(Mo.sections.length, 14, '14 sections as before');
-  assert.equal(doc.index.get('rs.adb').n, `2.${Mo.sections.find(s => s.id === 'proj').subs.length}`, 'the last subsection of §2');
+  assert.equal(Mo.sections.length, 18, '18 sections (14 before the report package of 2026-11-23: + exec, basis, bom, sign)');
+  assert.equal(doc.index.get('rs.adb').n, `${Mo.sections.findIndex(s => s.id === 'proj') + 1}.${Mo.sections.find(s => s.id === 'proj').subs.length}`, 'the last subsection of the project section (§3 since the executive summary, 2026-11-23)');
   assert.deepEqual(J(doc.unresolved), []);
   const run = RB.model(W.PSBReportData.compute(P, null), { autodesign: { kind: 'running' } });
   assert.match(adOf(run).items[0].text, /^An auto design run is under way/);

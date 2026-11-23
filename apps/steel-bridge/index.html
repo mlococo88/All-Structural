@@ -190,6 +190,8 @@
        width (it was ~500 px beside a 230 px list); it may be wider than 8.5 in on a wide panel. shared/report.js unchanged; print unchanged.
      - Ctrl+P on the Report tab prints the report only, as "Print report" does: the app header and the Demands bar are not printed. */
   #out .rp-host{container-type:inline-size;}
+  /* RPX (2026-11-23): a tab graphic as a report figure (ui/report.js figures): the card's figure, legend and captions, static */
+  .rp-fig .rp-vk{background:#fff;padding:0;border:0;font-size:9.5pt;} .rp-fig .rp-vk .vk-fig svg{max-width:100%;height:auto;} .rp-fig .rp-vk .vk-figs{flex-wrap:nowrap;} .rp-fig .rp-vk .vk-figs>div{flex:0 1 auto;max-width:100%;} .rp-fig .rp-vk .vk-cap{display:block;}
   /* QA2 (2026-11-09): the 3D view's drop-downs (View, Diagram) as wide as their choice ("Whole bridge", "Moment: Strength I"), not cut at 110 px */
   #out .v3d-bar select{width:auto;max-width:100%;}
   @media screen{
