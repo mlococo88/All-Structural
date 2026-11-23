@@ -10784,7 +10784,7 @@ The Prestressed Bridge Design app has a deck design module (transverse strip des
 4. **Overhang dead loads** are the Loads module's loads at their positions (barrier, curb, railing, sidewalk slab, fence, added line loads; categories DC1 / DC2 / UF at 1.25, DW / UT at 1.50), in place of the Prestressed module's single barrier: the same statics, more loads. With a single barrier and wearing surface the result equals the Prestressed formula (tested).
 5. **Pedestrian load on a sidewalk over the overhang is taken together with the wheel** (1.75, no IM, no multiple presence, no m): conservative.
 6. **Loads between the exterior girders that the interior strip does not include** (a sidewalk or median slab, a fence, added line loads inside the exterior girders): the interior moments are slab + wearing surface + Table A4-1, as the Prestressed module; the tab lists such loads in a warning for a separate check. SIP form weight is not placed on the slab.
-7. **Part 1 does not yet put the deck checks in the Summary tab, the left check column or the Report** (part 2 of this work); the Deck tab is the only place they show.
+7. **Summary verdict:** the deck checks are the bridge's, not a girder's: they are counted once (one count per check DK1–DK3), shown in their own card on the Summary tab and their own chip in the left column, not as a column of the girder table (part 2, next entry).
 ### Governing provisions
 AASHTO LRFD 10th Ed. (2024): Art. 4.6.2.1, 4.6.2.1.6, Table A4-1, Table 3.4.1-1, 1.3.2.1, 5.6.3.2, 5.6.2.2, 5.5.4.2, 3.6.1.3.1, Table 4.6.2.1.3-1, 3.6.2, 3.6.1.1.2, 3.6.1.6, 9.7.3.2. Not checked (stated on the tab): A13.4 Extreme Event II overhang, 5.6.7 crack control, 5.6.3.3 minimum reinforcement, 5.10.6 temperature and shrinkage.
 ### Check case (the new-project bridge with deck design on, bottom bars at 8 in; by hand)
@@ -10805,4 +10805,27 @@ Before: no deck check in the Steel app. A sidewalk / curb / overlay / pedestrian
 The Prestressed app's deck module (`apps/ps-bridge/engine/pbd-handling-deck.js`, `Prestressed Bridge Design.html`): same method, not changed, not wired to `shared/deck.js` (see `fixlog/shared-deck.md`).
 ### Open items
 - The issues found in the Prestressed module and mirrored here (distribution-steel S, φ limits for bars other than Grade 60, no crack control / minimum reinforcement / temperature steel / Extreme Event II overhang): `fixlog/shared-deck.md`, Open items 1–5. Engineer to decide; a change would be made in both tools.
-- Part 2: the deck checks in the Summary tab, the left check column, the Report (section with "see §" links, executive summary, bill of materials, Nomenclature).
+
+## 2026-11-23 — PR: claude/sb-deck-report (DK, part 2 of 2; same PR as part 1) — the deck slab checks in the Summary verdict, the left column, the Report, the bill of materials and the Nomenclature   [display and verdict wiring; every number is engine/deck.js calc()'s; nothing changes in a project with the deck design off]
+### Where
+- `report/data.js` `compute()`, anchor `if (on('wd') || on('sum')) B.wd = run('wd',`: before it `if (on('dk') && W().SBDDeck && W().SBDDeck.isOn(P)) { B.dkOn = true; B.dk = run('dk', () => W().SBDDeck.calc(P)); }` (no `B.dk` / `B.dkOn` without the switch).
+- `report/builders.js`: new `dk(B, X)` (section "Deck slab (transverse design)": checks table, values used, interior bays, overhangs, distribution steel, the section figure, the worked steps in the tab's topics; its three governing rows pushed to `X.gov` with group "Deck slab (bridge)", so they appear in the Summary section and the Executive summary with "see §" links), `bomDeck(P, R)`, `sectionsOf(P)`; `BUILD` + `dk`; `NEED` + `dk: 'dk'`; in `model()` the section loop runs over `B.dkOn ? SECTIONS_DK : SECTIONS` (SECTIONS itself is unchanged: 18 entries; SECTIONS_DK has `['dk', 'Deck slab']` before `rt`), and a deck that could not be calculated pushes a row with ratio NaN (REVIEW); `bom()` and `allBom()` append the deck reinforcement subsection; `allExec()` adds one row per deck check and drops the word "girder" for a deck check.
+- `report/summary.js`: `DECK_COL`, `DECK_G`, `deckOf(P)`; `overall()` adds the deck cells to the counts, `top`, `nan` and returns `deck`, `deckIn`. Before: `return { n, top, low, nan, byCol, verdict, gov: top || low };` After: the same with the deck cells counted first when `deckOf(P)` is not null and at least one girder cell has run, and `...(deck ? { deck, deckIn } : {})`.
+- `ui/summary.js`: `gotoCell()` first line `if (id === 'deck') { … X0.goto('dk', null); return; }`; `paint()` writes "Deck slab, bridge deck" without "girder" and adds `SBDDeckUI.summaryCard(ov.deck, ov.deckIn)` after the graphics card.
+- `ui/dash.js` `draw()`: after the chips a "Deck slab" chip from `ov.deck` (`data-sdgrp="Deck"`, link `0|deck`).
+- `ui/report.js`: `secOf(P)`; `incOf(o, P)` and `controls()` use `sectionsOf(P)` (a "Deck slab" tick box only with the deck design on).
+- `ui/nomen.js` `MODS`: `['dk', 'dk', 'Deck slab']` before the Rating (listed only when the report has that section).
+- `ui/deck.js`: `summaryCard()`.
+- `shared/deck.js`, `engine/deck.js` (display only): the symbols `M_{DC,+}`, `M_{u,-}`, `A_{s,+}` … are written `M_{DC,pos}`, `M_{u,neg}`, `A_{s,pos}` … so that the Nomenclature lists them (its rule leaves out a name with "+"); no value changes.
+### Decisions (pending engineer review)
+1. The deck checks count in the verdict **once for the bridge** (three counts), and only after at least one girder module has run, so that a project whose girders have not been run never shows the deck's PASS as the bridge verdict.
+2. A deck design that is on but cannot be calculated (an input error) counts as one REVIEW and is named, in the Summary tab and the Report.
+3. Bill of materials: the deck bars are listed in their own subsection and are **not** added to the steel totals (rebar, not structural steel); deck concrete is not listed (the Prestressed app lists it; the Steel bill of materials is a steel list). Laps, hooks and bends not added, as the Prestressed app.
+### Governing provision
+None new (display); the checks' provisions are in the entry above.
+### Check case
+New-project bridge, deck design on with bottom bars at 8 in: Report section 16 "Deck slab (transverse design)" shows DK1 0.974, DK2 0.916, DK3 0.733 (the hand check above); the Summary section and the Executive summary carry the same three rows, each linked to its step. Bill of materials, deck bars: L = 360 ft, deck width 44.5 ft: top #5 at 6 in: ⌈12(360)/6⌉ + 1 = 721 bars × 44.5 ft × 0.31 in² × 490/144 = 33,845 lb; bottom at 8 in: 541 bars = 25,395 lb; distribution 0.67(0.465) = 0.3116 in²/ft × 44.5 × 360 × 3.4028 = 16,983 lb; total 76,223 lb. Summary tab (default bars): 22 PASS counts with the deck on, 19 with it off (browser smoke).
+### How verified
+- `tests/engine/sb-deck-report.test.mjs` (new, 8 tests): off = as before (18 sections, `sectionsOf(P) === SECTIONS`, no deck in `overall()`, the other modules' results and governing rows identical with the deck on or off); on = 19 sections, every reference resolves (detail gov and all), rows = the engine's values; a section left out; verdict counts, FAIL and REVIEW; the bill of materials by hand; Nomenclature.
+- Existing tests unchanged: `report.test.mjs`, `sb-summary.test.mjs`, `sb-nomen.test.mjs`, `sb-report-*.test.mjs` (deck off) pass as they are.
+- Browser: `tests/smoke/steel-bridge-deck.mjs` (7 checks) and the existing steel-bridge smokes named in the PR.

@@ -41,3 +41,7 @@ The Prestressed Bridge Design app has the same method in its own frozen engine c
   3. No crack control (5.6.7), minimum reinforcement (5.6.3.3) or temperature and shrinkage (5.10.6) check, and no Extreme Event II overhang design (A13.4). Stated on the tab and in the report.
   4. Dead-load moments use the coefficients wS²/10 and wS²/11 with S centre to centre, and the negative dead-load moment is not reduced to the design section (conservative).
   5. The overhang moment is taken at the girder centreline, not at the design section of 4.6.2.1.6 (conservative), and the slab weight uses one thickness for the whole overhang.
+
+## 2026-11-23 — same PR (DK part 2) — step symbols without "+" / "−" subscripts (display only)
+- **Where:** `steps.interior`, `steps.capacity` callers, `muStep`, `steps.dist`: `M_{DC,+}` → `M_{DC,pos}`, `M_{DW,+}` → `M_{DW,pos}`, `M_{DC,-}` → `M_{DC,neg}`, `M_{DW,-}` → `M_{DW,neg}`, `M_{LL,+}` / `M_{LL,-}` → `M_{LL,pos}` / `M_{LL,neg}`, `M_{u,+}` / `M_{u,-}` → `M_{u,pos}` / `M_{u,neg}`, `A_{s,+}` → `A_{s,pos}`.
+- **Why:** the Steel app's Nomenclature tab lists a step's symbol only when it is a plain name (no "+"); with the old subscripts the deck moments were left out. No value, equation or reference changes; the parity and hand-check tests are unchanged and pass.
