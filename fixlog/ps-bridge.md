@@ -9304,7 +9304,7 @@ PR #1664: https://github.com/mlococo88/All-Structural/pull/1664 (claude/ps-pedes
 - `dead()` in `engine/bridge-dl.js` is the verbatim copy of the Steel Bridge app's (unchanged; its PL branch was already there, called with ped 0 until now). The old app (frozen) has no pedestrian load.
 
 ## 2026-11-23 — AP-B: line-girder applicability check and the LLDF ranges of applicability for every section family (engine/applicability.js; Loads & LLDF tab, check summary, Summary, Report) (VERDICT CHANGE for out-of-range designs, §4)
-PR: claude/ps-lldf-applicability (link in the PR)
+PR #1666: https://github.com/mlococo88/All-Structural/pull/1666 (claude/ps-lldf-applicability). How verified: `node tests/check-syntax.mjs` all pass; `node tests/engine/run.mjs psbridge tex` 57 files, 534 passed, 0 failed; harness B (24 designs) 61,234 shown values and 10,616 step values, 0 differences; smokes ps-bridge-applic (5), -pl (7), -skeleton (273), -tables (5), -figures (225), -types (106), -display (8), 0 failed.
 ### Request
 - Engineer, 2026-11-23: close the gaps against the Steel Bridge app. Gap B: this app flagged the range of applicability only for box beams and slabs (PS-35, a warning). Mirror the Steel Bridge app's check SA4 (apps/steel-bridge/engine/analysis.js `applicability()`, engine/lldf.js `ranges()`; engineer-approved there 2026-11-21: a COMPUTED distribution factor outside its range is a FAIL that counts in the verdict; an ENTERED factor is not flagged). Engineer correction: Art. 4.6.3.3.2's skew index I_S is for grid / plate analyses of steel bridges, not a line-girder limit and not for concrete: omitted.
 ### What changed
@@ -9344,7 +9344,7 @@ PR: claude/ps-lldf-applicability (link in the PR)
 - None. The Steel Bridge app has its own SA4 (not changed).
 
 ## 2026-11-23 — Engineer approvals recorded: E1-D5a, E1-D5b (PR #1660) and HO-D2-a to HO-D2-e (PR #1659)   [no code change]
-Recorded with the AP-B PR (claude/ps-lldf-applicability). A note only: no file of the tool changes, and the earlier entries are not edited.
+Recorded with the AP-B PR (#1666). A note only: no file of the tool changes, and the earlier entries are not edited.
 ### Approved by the engineer, 2026-11-23
 - Load rating, entry "E1-D4 / E1-D5" of 2026-11-21 (PR #1660), its "Decisions (pending engineer review)":
   - **E1-D5a approved:** the relieving-load factors (γ_DC 0.90, γ_DW 0.65 for a dead-load part that relieves the positive moment, part by part) also apply to the flexure rating of the legal and permit vehicles (rated at midspan).
