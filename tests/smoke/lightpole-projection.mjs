@@ -143,9 +143,9 @@ console.log('3 · grade actions recomputed from the base actions, p = 2 ft');
 // ===== 4. sign post length and input errors =====
 console.log('4 · sign: post length and input errors');
 { const s1 = { top: { appMode: 'sign', signPosts: 1 } };
-  const a = await run(s1, 2, ERR), b = await run(s1, 10, ERR), c = await run({}, -1, ERR);
+  const a = await run(s1, 2, ERR), b = await run(s1, 7, ERR), c = await run({}, -1, ERR);   // 7 ft: the new-project sign clearance (default 10 → 7 ft, 2026-11-23)
   check(!a.err && near(a.H, a.clr + a.s - 2), `IBC monopost: post H = clr + s − p = ${a.clr} + ${a.s} − 2 = ${a.H} ft, no input error`);
-  check(b.clr === 10 && /must be less than the clearance/.test(b.err), 'p = clearance (10 ft): input error');
+  check(b.clr === 7 && /must be less than the clearance/.test(b.err), 'p = clearance (7 ft): input error');
   check(/must be 0 or more/.test(c.err), 'p < 0: input error');
 }
 

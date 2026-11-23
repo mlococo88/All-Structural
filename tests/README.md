@@ -200,6 +200,11 @@ node tests/smoke/lightpole-basemoment.mjs [--shots <dir>]
 # note and "show all"; Summary / check panel / hand-off payload identical in both views; the Report in both views (§ references, the
 # view statement); links; print; 390 px; 0 console errors. 8 cases at 1400 px, 2 at 390 px. ~5 min
 node tests/smoke/lightpole-combo-view.mjs [--shots <dir>]
+# The new-project sign on its default inputs (LPDF, 2026-11-23): no failing check for the monopost and the two-post sign (IBC; LRFDLTS with a
+# Broms soil), the IBC monopost's governing post / base plate D/C within 0.60 to 0.95; a project saved with the former sign defaults keeps
+# its values and results; the default pole unchanged; the combination count in the hint, the Report caption and the Manual = the number
+# of combinations in COMBOS; "segments" and t_d in the ice notes; the LRFDLTS Report without unresolved references. ~1 min
+node tests/smoke/lightpole-default-sign.mjs
 
 # Saved-project list and Undo / Redo (shared/projects.js, PLIB): main vs the working tree (results on load, after an input change, B on
 # main's autosave and project list), Undo / Redo / Ctrl+Z / Ctrl+Y, the dialog (rename, duplicate, delete, open), quota refusal, 390 px
