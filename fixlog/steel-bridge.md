@@ -10750,7 +10750,7 @@ None (tests only; no formula, factor, unit or reference touched).
 - SMK-D1. `steel-bridge-scroll.mjs` is left as it is (three window sizes, about 19 minutes). Making it shorter would mean dropping sizes or links from the default run,
   which is a coverage choice for the engineer; `--quick` already exists for a 6-minute run.
 
-## 2026-11-23 — PR: claude/sb-mbe-verify (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (MBV) — legal-load and permit rating (LPR, #1674) read against the AASHTO MBE 4th Ed. (2026) text: values confirmed, three corrections, "unverified" warnings removed   [CALCULATION CHANGE for permit vehicles and the lane-type legal model; the HL-93 rating, every result with no vehicle ticked, and the AASHTO legal trucks, SU4 to SU7, EV2 / EV3 and owner legal vehicles are unchanged]
+## 2026-11-23 — PR: claude/sb-mbe-verify (PR #1678: https://github.com/mlococo88/All-Structural/pull/1678) (MBV) — legal-load and permit rating (LPR, #1674) read against the AASHTO MBE 4th Ed. (2026) text: values confirmed, three corrections, "unverified" warnings removed   [CALCULATION CHANGE for permit vehicles and the lane-type legal model; the HL-93 rating, every result with no vehicle ticked, and the AASHTO legal trucks, SU4 to SU7, EV2 / EV3 and owner legal vehicles are unchanged]
 Basis: AASHTO Manual for Bridge Evaluation, 4th Ed. (2026), Section 6A, read from the text in this session (articles, tables and figures cited by number; nothing of the text is reproduced here). Resistances: AASHTO LRFD 10th Ed. (2024), unchanged.
 
 ### What was checked (LPR items 2 to 9) and the result
