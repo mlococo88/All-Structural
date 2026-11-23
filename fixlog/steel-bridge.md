@@ -10749,3 +10749,60 @@ None (tests only; no formula, factor, unit or reference touched).
 ### Decisions (pending engineer review)
 - SMK-D1. `steel-bridge-scroll.mjs` is left as it is (three window sizes, about 19 minutes). Making it shorter would mean dropping sizes or links from the default run,
   which is a coverage choice for the engineer; `--quick` already exists for a 6-minute run.
+
+## 2026-11-23 — PR: claude/sb-deck-design (DK, part 1 of 2) — deck slab design: the Prestressed app's deck module in the Steel app (engineer request 2026-11-23)   [NEW CALCULATION, optional and off by default; no existing result changes]
+### Why
+The Prestressed Bridge Design app has a deck design module (transverse strip design) and the Steel app had none; the engineer does not want one bridge tool to have a feature the other lacks. Scope = what the Prestressed module offers: positive and negative moment of the interior bays, the overhang under gravity loads, distribution reinforcement.
+### Where (new files; hooks in `index.html` only)
+- `shared/deck.js` (new, `window.SharedDeck`): the calculation and its worked steps, see `fixlog/shared-deck.md` (expressions, provisions, hand checks, parity with the Prestressed module).
+- `apps/steel-bridge/engine/deck.js` (new, `window.SBDDeck`): `calc(P)` builds the deck from the project and runs the shared code; `inputs(P)`, `isOn(P)`, `DEF`, `BARS`, `topics(R)`.
+- `apps/steel-bridge/ui/deck.js` (new, `window.SBDDeckUI`): the **Deck** output tab (checks DK1–DK3, section figure, values used with links, moments, resistance, overhangs, distribution steel, worked steps) and the input card "Deck design (transverse)" of the Cross-section input tab.
+- `apps/steel-bridge/index.html`, five hooks:
+  1. script list, anchor `'ui/welds.js',`: after it `'../../shared/deck.js', 'engine/deck.js', 'ui/deck.js',`;
+  2. `#tabBar`, anchor `data-otab="wt">Welds</button>`: after it `<button type="button" role="tab" aria-selected="false" data-otab="dk">Deck</button>`;
+  3. `panes()` `xsec:`, anchor `Materials tab</a>.</p>\`)` + `+ xsp.edges + xsp.sidewalks,`: between them `+ (window.SBDDeckUI ? window.SBDDeckUI.inputs(P) : '')`;
+  4. `$('inPanes')` change handler, before the `SBDAnalysisUI.onInputChange` line: `if (window.SBDDeckUI && window.SBDDeckUI.onChange(el, P)) { changed(true); return; }`;
+  5. `drawTab()`, before `if (ui.otab === 'rpt')`: `if (ui.otab === 'dk') { window.SBDDeckUI.render($('out'), { P, changed: r => changed(r) }); return; }`.
+### Inputs: nothing the project holds is asked twice
+| Value | Source (where it is entered) |
+|---|---|
+| girder spacings S (each different spacing is designed; the largest M_u governs) | `xs.bays`, Cross-section tab |
+| overhangs; barrier / curb / railing weight and position; sidewalk slab; added line loads; pedestrian load | `xs.ohL`, `xs.ohR`, `xs.edges`, `xs.sidewalks`, `xs.extra`: the Loads module's own list `SBDLoads.compute().dead.per` (overrides included) |
+| traffic face of the wheel (1 ft inside it) | the Loads module's `ll.L.r`, `ll.R.r` (barrier face, a 12 in curb, a fence) |
+| slab: t_s for the resistance, total thickness for the dead load | `deck.ts`, `deck.tdeck`, Cross-section tab |
+| f′c, w_c, rebar F_yr | `materials.concrete.fc`, `.wc`, `materials.rebar.Fyr`, Materials tab |
+| wearing surface and overlays w_DW | `xs.ws`, `xs.overlays`, Loads tab |
+| design section x = b_f/4 (AASHTO LRFD 10th Ed. Art. 4.6.2.1.6, steel I-girder) | the narrowest top flange `topB` of every girder type and plate segment, Girders & plates tab |
+| η and m | `SBDOwners.loadFactors` (Project tab), as every module |
+| **new:** switch, top and bottom transverse bars (area, spacing, clear cover), design section automatic or entered | `P.deckDesign`, Cross-section tab, card "Deck design (transverse)" |
+### Saved data (CLAUDE.md §5)
+- One new optional project field, `deckDesign: { on, barTop, sTop, coverT, barBot, sBot, coverB, xnegAuto, xneg }`; absent = the defaults `{ on: false, #5 (0.31 in²) at 6 in top and bottom, covers 2.5 / 1.0 in, automatic design section }` (the Prestressed module's defaults). It is written only when the user changes one of its inputs: a project saved before opens, computes and saves exactly as before, without the field. No key, schema version or existing field changes; no new localStorage key.
+### Decisions (pending engineer review)
+1. **Off by default, for old and new projects** (as the Prestressed module, whose `deck.on` defaults to false). While off nothing is calculated and no result, verdict or report section changes. The alternative (on for new projects) would add deck checks to every new design's verdict before the engineer has chosen the bars; off was taken as the choice that changes nothing unasked.
+2. **Design section from the narrowest top flange of the bridge** (every girder type and segment): the section nearest the girder centreline, the largest negative moment. One value for all bays.
+3. **Unequal bays:** each different spacing is designed; DK1 / DK2 report the bay with the largest M_u; the distribution percentage uses the smallest spacing (largest percentage).
+4. **Overhang dead loads** are the Loads module's loads at their positions (barrier, curb, railing, sidewalk slab, fence, added line loads; categories DC1 / DC2 / UF at 1.25, DW / UT at 1.50), in place of the Prestressed module's single barrier: the same statics, more loads. With a single barrier and wearing surface the result equals the Prestressed formula (tested).
+5. **Pedestrian load on a sidewalk over the overhang is taken together with the wheel** (1.75, no IM, no multiple presence, no m): conservative.
+6. **Loads between the exterior girders that the interior strip does not include** (a sidewalk or median slab, a fence, added line loads inside the exterior girders): the interior moments are slab + wearing surface + Table A4-1, as the Prestressed module; the tab lists such loads in a warning for a separate check. SIP form weight is not placed on the slab.
+7. **Part 1 does not yet put the deck checks in the Summary tab, the left check column or the Report** (part 2 of this work); the Deck tab is the only place they show.
+### Governing provisions
+AASHTO LRFD 10th Ed. (2024): Art. 4.6.2.1, 4.6.2.1.6, Table A4-1, Table 3.4.1-1, 1.3.2.1, 5.6.3.2, 5.6.2.2, 5.5.4.2, 3.6.1.3.1, Table 4.6.2.1.3-1, 3.6.2, 3.6.1.1.2, 3.6.1.6, 9.7.3.2. Not checked (stated on the tab): A13.4 Extreme Event II overhang, 5.6.7 crack control, 5.6.3.3 minimum reinforcement, 5.10.6 temperature and shrinkage.
+### Check case (the new-project bridge with deck design on, bottom bars at 8 in; by hand)
+5 girders at 9.5 ft, overhangs 3.25 ft, barrier 1.5 ft wide of 0.40 klf, slab 8 in (8.5 in total), w_c 0.150 kcf, 25 psf wearing surface, f′c 4 ksi, F_yr 60 ksi, narrowest top flange 16 in; top #5 at 6 in (cover 2.5 in), bottom #5 at 8 in (cover 1.0 in); AASHTO (η = m = 1).
+- w_DC = 8.5/12(0.150) = 0.10625 ksf; w_DW = 0.025 ksf; x = 16/4 = 4.00 in
+- M_DC+ = 0.10625(9.5)²/11 = 0.872; M_DW+ = 0.205; M_LL+ (Table A4-1, 9.5 ft) = 6.59 → M_u+ = 1.25(0.872) + 1.50(0.205) + 1.75(6.59) = **12.930**
+- M_DC− = 0.959; M_DW− = 0.226; M_LL− = 6.31 + (5.46 − 6.31)(1/3) = 6.027 → M_u− = 1.25(0.959) + 1.50(0.226) + 1.75(6.027) = **12.084**
+- bottom: A_s = 0.465 in²/ft, d = 8 − 1 − 0.314 = 6.686 in, a = 0.684 in, φ 0.90, M_n = 0.465(60)(6.686 − 0.342)/12 = 14.750, φM_n = 13.275 → **DK1 = 0.974**
+- top: A_s = 0.620, d = 5.186 in, a = 0.912 in, φ 0.90, M_n = 14.663, φM_n = 13.197 → **DK2 = 0.916**
+- overhang: X = 3.25 − 1.5 − 1.0 = 0.75 ft; strip 52.5 in; M_LL = 1.33(1.2)(16)(0.75)/(52.5/12) = 4.378; M_DC = 0.10625(3.25)²/2 + 0.40(2.50) = 1.561; M_DW = 0.025(1.75)²/2 = 0.038; M_u = 1.25(1.561) + 1.50(0.038) + 1.75(4.378) = 9.670 → **DK3 = 9.670/13.197 = 0.733**
+- distribution: min(220/√9.5, 67) = 67 % of 0.465 = 0.312 in²/ft.
+Before: no deck check in the Steel app. A sidewalk / curb / overlay / pedestrian overhang is hand-checked in `tests/engine/sb-deck.test.mjs` (left M_u = 17.629, right 15.766 kip-ft/ft).
+### How verified
+- `node tests/engine/run.mjs`: new `deck.test.mjs` (6), `deck-parity.test.mjs` (14), `sb-deck.test.mjs` (10); every existing test unchanged and passing (deck design off: no existing file's result path is touched; `calc()` on a project without the field returns `{ on: false }` and leaves the project text identical).
+- `node tests/check-syntax.mjs`.
+- Browser: `node tests/smoke/steel-bridge-deck.mjs` (new, 5 checks: off by default and no field written; on: DK1 0.744 / DK2 0.916 / DK3 0.733 with the default bars; input card, Undo; NG and input error; other tabs, 390 px, 0 console errors) and the existing steel-bridge smokes listed in the PR.
+### Other copies
+The Prestressed app's deck module (`apps/ps-bridge/engine/pbd-handling-deck.js`, `Prestressed Bridge Design.html`): same method, not changed, not wired to `shared/deck.js` (see `fixlog/shared-deck.md`).
+### Open items
+- The issues found in the Prestressed module and mirrored here (distribution-steel S, φ limits for bars other than Grade 60, no crack control / minimum reinforcement / temperature steel / Extreme Event II overhang): `fixlog/shared-deck.md`, Open items 1–5. Engineer to decide; a change would be made in both tools.
+- Part 2: the deck checks in the Summary tab, the left check column, the Report (section with "see §" links, executive summary, bill of materials, Nomenclature).
