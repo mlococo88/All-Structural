@@ -411,7 +411,7 @@
     }
 
     // live load (HL-93 and the fatigue truck, per lane, IM included, DF = 1 inside the engine; the factors are applied below)
-    let ll = null, fat = null, lld = null, llR = null, ped = null, skV = null, bEI = null;
+    let ll = null, fat = null, lld = null, llR = null, ped = null, skV = null, bEI = null, vehRun = null;
     if (opt.ll !== false) {
       // mesh keys: the stations, plus the midpoint of each station interval that ends at a support, so that the section just right of
       // the station before a support has its own element (GirderDetail VLLr); negX: the pier regions also take the 90 % two-truck case for
@@ -427,6 +427,14 @@
         imp: { method: 'const', val: 1 + S.imf / 100, S: 6.5, bal: false, onUdl: false } };
       const RH = ML().analyze(mH, { vehicles: pre }), RF = ML().analyze(mF, { vehicles: pre });
       const h = pick(RH), f = pick(RF);
+      // rating vehicles (legal and permit loads, 2026-11-23; ui/rating.js): R.vehicle(v) runs one vehicle on the same live-load model (stiffness,
+      // mesh, stations, negative-moment regions) and returns its per-lane envelopes at the stations with IM on the axles, DF = 1 (the caller
+      // applies the factors). v = { short, axles [[P, spacing]…], udl, neglect, multi { on, scale, hmin, fixed }, im (percent) }. Run only when asked,
+      // kept with this analysis result (one run per vehicle and IM). at: the governing case of each envelope value (label, position, direction).
+      vehRun = (() => { const memo = new Map(); return v => { const k = JSON.stringify(v); if (memo.has(k)) return memo.get(k);
+        const mu = v.multi || {}, mV = { ...base, axles: v.axles.map(a => [...a]), short: v.short || 'Vehicle', udl: v.udl ? { ...v.udl } : { mode: 'none', w: 0, gap: 0, trunc: false }, vK: 0, vMin: 0, vMax: 0, neglect: !!v.neglect,
+          secondary: '', multi: !!mu.on, mScale: mu.scale != null ? mu.scale : 1, mHmin: mu.hmin != null ? mu.hmin : 50, mFixed: mu.fixed || 0, imp: { method: 'const', val: 1 + (+v.im || 0) / 100, S: 6.5, bal: false, onUdl: false } };
+        const RV = ML().analyze(mV, { vehicles: pre }), o = { perLane: pick(RV), at: pick(RV, ei => ({ max: RV.res[ei].maxG || null, min: RV.res[ei].minG || null })) }; memo.set(k, o); return o; }; })();
       const gMat = i => region[i] >= 1 ? DF.piers[region[i] - 1].gM : DF.spans[spanOfX(sup, xs[i])].gM;
       const spR = i => spanOfX(sup, i < N - 1 ? (xs[i] + xs[i + 1]) / 2 : xs[i] - 1e-6), spL = i => spanOfX(sup, i > 0 ? (xs[i - 1] + xs[i]) / 2 : xs[i]);
       // N3 (2026-11-23, engineer's decision): the shear skew correction along the girder (xs.lldf.skewVx). 'taper': the correction contained in
@@ -510,6 +518,7 @@
     const R = { errors: [], warnings, settings: S, fc: m.concrete.fc, h0, line: mod && mod.j != null ? mod.j : null, girder: g, gi, spans, sup, supIdx, cont, Lt, x: xs, n, nr, segs, plf, wSteel, loads: LD, df: DF, crack, sb: { s: sbS, c3: sb3, cn: sbN }, region,
       st, camber, ll, fat, llR, lld, seq, pl: ped, fm, wetCorr, wetTot, skV, bEI: bEI ? { nb: bEI.nb, same: bEI.same, sb: bEI.sb, types: bEI.types.map(t => ({ gi: t.gi, label: t.label, lines: t.lines })) } : null };
     R.steps = steps(R);
+    if (vehRun) Object.defineProperty(R, 'vehicle', { value: vehRun, enumerable: false });   // not a result: the rating vehicles' runner (above)
     return R;
   }
 

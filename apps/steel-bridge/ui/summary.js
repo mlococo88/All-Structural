@@ -114,6 +114,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
   /* the row of the cell's location on its tab (the tab's own row-selection attribute), from the Report key's scope */
   function rowSel(scope) {
     if (scope === 'sc') return '[data-fa="sc:0"]';   // the studs: one scope (the zones table)
+    const mv = /^rtv\.(\d+)@(\d+)$/.exec(scope || ''); if (mv) return `a[data-rtvi="${mv[1]}"][data-rtvrow="${mv[2]}"]`;   // a legal / permit vehicle's governing row (Rating tab, 2026-11-23)
     const m = /^([a-z0-9.]+)@([a-z]*)(\d+)$/i.exec(scope || ''); if (!m) return null;
     const [, s, p, i] = m;
     return { flex: `[data-fx="${i}"]`, 'sh.pan': `[data-sh="pan:${i}"]`, 'sh.st': `[data-sh="loc:${i}"]`, 'sh.ts': `[data-sh="ts:${i}"]`, 'sh.bs': `[data-sh="bs:${i}"]`, fa: `[data-fa="fa:${i}"]`, gs17: `[data-fa="gs:${i}"]`,
@@ -148,7 +149,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
   /* gotoCell(gi, id, cx): the cell's tab, girder and step (cx: the caller's { P, goto } when the Summary tab has not been drawn: the left
      summary); a module not run yet is run (and its tab, selected, runs itself: #1260) */
   function gotoCell(gi, id, cx, j) {
-    const X = cx || S.ctx, col = SM().COLS.find(q => q.id === id); if (!X || !col) return;
+    const X = cx || S.ctx, col = (SM().ALL || SM().COLS).find(q => q.id === id); if (!X || !col) return;
     sync(X.P); const G = S.list[gi], c0 = G && G.cells[id], bl = j != null && G && G.byLine ? G.byLine.find(q => q.j === j) : null, c = bl ? { ...bl.cells[id], ln: j } : c0;
     if (!c || c.st === 'notrun') { S.pendFocus = { gi, id }; start(X.P, { mods: [SM().modOf(id).k] }); } else S.pendFocus = null;
     X.goto(col.tab, gi, c && c.ln != null ? c.ln : (j != null ? j : undefined)); const c2 = (S.list[gi] || {}).cells; if (c2 && c2[id] && c2[id].st !== 'notrun') focus(c2[id]);
@@ -234,7 +235,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
     window.addEventListener('resize', later); window.addEventListener('sbd2:panelresize', later);
   }
   function paint(host, ctx) {
-    const P = ctx.P, COLS = SM().COLS.map(c => SM().label(c, P)), LB = c => SM().label(c, P), list = P.girders.map((g, gi) => S.list[gi] || { gi, label: g.label || g.id || `G${gi + 1}`, cells: {}, warn: [], err: {} });
+    const P = ctx.P, COLS = SM().cols(P).map(c => SM().label(c, P)), LB = c => SM().label(c, P), list = P.girders.map((g, gi) => S.list[gi] || { gi, label: g.label || g.id || `G${gi + 1}`, cells: {}, warn: [], err: {} });
     const ov = SM().overall(P, list), n = ov.n, top = ov.gov, done = !todo(P).length;
     let AP = null; try { AP = window.SBDAnalysis && window.SBDAnalysis.applicability ? window.SBDAnalysis.applicability(P) : null; } catch (e) { AP = null; }   // SA4 (2026-11-19)
     const apFail = !!(AP && AP.level === 'fail');   // a FAIL of the applicability (skew > 60°, distribution factors outside their range) fails the verdict; WARNING / NOTE never
