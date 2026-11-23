@@ -439,7 +439,7 @@
   const rlKey = () => `${ui.g}.${Math.min(ui.seg, P.girders[ui.g].segments.length - 1)}`;
   function rlOptions(cur) {
     const A = window.SharedAiscW, f = rlFind.toUpperCase().replace(/\s+/g, '');
-    return `<option value="">${cur ? 'Choose a shape…' : 'Choose a shape…'}</option>` + A.groups().map(G => { const L = G.names.filter(n => !f || n.indexOf(f) >= 0 || n === cur);
+    return '<option value="">Choose a shape…</option>' + A.groups().map(G => { const L = G.names.filter(n => !f || n.indexOf(f) >= 0 || n === cur);
       return L.length ? `<optgroup label="W${G.nom}: nominal depth ${G.nom} in">${L.map(n => { const q = A.get(n); return `<option value="${n}"${n === cur ? ' selected' : ''}>${n} · d ${q.d} in · b_f ${q.bf} in · ${q.W} lb/ft</option>`; }).join('')}</optgroup>` : ''; }).join('');
   }
   function rolledCard(g) {
@@ -606,11 +606,11 @@
   $('inPanes').addEventListener('change', e => {
     const el = e.target;
     if (el.id === 'i__g' || el.id === 'i__gHo' || el.id === 'i__gLd') { ui.g = +el.value; ui.seg = 0; delete ui.ln; delAsk = null; saveUi(); drawInputs(); markStale(); return; }
-    if (el.id === 'i__lnLd') { ui.ln = +el.value; saveUi(); drawInputs(); return; }
+    if (el.id === 'i__lnLd') { ui.ln = +el.value; saveUi(); drawInputs(); return; }   // SB-2: the line of the Loads tab's cards (display only)
     if (el.id === 'rl_find' || el.id === 'rl_nmin' || el.id === 'rl_nmax') { if (el.id !== 'rl_find') rlNom[el.id === 'rl_nmin' ? 'min' : 'max'] = el.value; return; }   // ROLL: the search text (page state; the list is filtered on input)
     if (el.id === 'rl_type' || el.id === 'rl_shape') { const g = P.girders[ui.g], s = g.segments[Math.min(ui.seg, g.segments.length - 1)], RL = window.SBDRolled;   // ROLL: plate girder / rolled shape of the selected segment
       if (el.id === 'rl_type') { if (el.value === 'rolled') { rlAsk = rlKey(); drawInputs(); } else { rlAsk = null; if (s.shape != null) { RL.clear(s); changed(true); } else drawInputs(); } return; }
-      if (el.value && RL.apply(s, el.value)) { rlAsk = null; rlRun = null; changed(true); } return; }   // SB-2: the line of the Loads tab's cards (display only)
+      if (el.value && RL.apply(s, el.value)) { rlAsk = null; rlRun = null; changed(true); } return; }
     if (el.id === 'i__lovLd') { ui.lov = el.value === 'line'; saveUi(); drawInputs(); return; }   // SBLO: entered for the type or the line only (UI choice, sbd2.ui)
     if (window.SBDAnalysisUI.onInputChange(el, P, Math.min(ui.g, P.girders.length - 1), { lov: lovOn() ? { j: lnSel() } : null })) { changed(true); return; }   // AIN: the analysis inputs (ui/analysis.js)
     if (el.dataset.path === 'xs.nb') { const LT0 = M.lineTypes(P), nb0 = LT0.length; if (UL.onChange(el, P)) { const ch = M.renumberLines(P, LT0); changed(true); if (ch) nbNotice(nb0, ch); else nbOffer(nb0); return; } }   // SB-2: N_b changed; SBNB (SB-14): typed projects re-assigned at once, with a notice and Undo

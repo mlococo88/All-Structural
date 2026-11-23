@@ -7,14 +7,14 @@
 //          I = 2[12(0.79)^3/12 + 12(0.79)(17.405)^2] + 0.6(34.02)^3/12 = 2[0.4930 + 2871.8146] + 1968.6701 = 7713.29 in^4 (98.9 % of 7800)
 //        n = 29000 / (120000 (0.15)^2 4^0.33) = 29000 / 4266.2 = 6.798
 //        short-term composite: slab 96(8)/n = 112.98 in^2 at 35.6 + 2 + 4 = 41.6 in; ybar = (39.372(17.8) + 112.98(41.6)) / 152.35 = 35.45 in;
-//          I = 7713.3 + 39.372(17.65)^2 + 112.98(64)/12 + 112.98(6.15)^2 = 24 855 in^4 (computed below to the last figure)
+//          I = 7713.3 + 39.372(17.65)^2 + 112.98(64)/12 + 112.98(6.15)^2 = 24 854 in^4 (computed below to the last figure)
 //        plastic moment (App. D6.1): P_s = 0.85(4)(96)(8) = 2611.2 kip; P_t = P_c = 12(0.79)(50) = 474 kip; P_w = 34.02(0.6)(50) = 1020.6 kip;
 //          P_s > P_c + P_w + P_t = 1968.6 kip: plastic neutral axis in the slab, Ybar = 8(1968.6)/2611.2 = 6.03125 in below the top of slab;
-//          M_p = Ybar^2 P_s / (2 t_s) + P_c(4.36375) + P_w(21.76875) + P_t(39.38875)... with the arms from the PNA:
+//          M_p = Ybar^2 P_s / (2 t_s) + P_c(4.36375) + P_w(21.76875) + P_t(39.17375), with the arms from the PNA:
 //            top flange 8 - 6.03125 + 2 + 0.395 = 4.36375 in; web 1.96875 + 2 + 0.79 + 17.01 = 21.76875 in; bottom flange 1.96875 + 2 + 0.79 + 34.02 + 0.395 = 39.17375 in
-//            = 5936.18 + 2068.42 + 22217.19 + 18568.36 = 48 790.1 kip-in = 4065.8 kip-ft
+//            = 5936.56 + 2068.42 + 22217.19 + 18568.36 = 48 790.5 kip-in = 4065.9 kip-ft
 //        FLEXURE (Strength I, compact, 6.10.7.1.2): D_p = 6.03125 in > 0.1 D_t = 0.1(35.6 + 2 + 8) = 4.56 in:
-//          M_n = M_p (1.07 - 0.7 D_p / D_t) = 4065.8 (1.07 - 0.7(6.03125)/45.6) = 4065.8 (0.97742) = 3974.0 kip-ft; check M_u / (phi_f M_n), phi_f = 1.0
+//          M_n = M_p (1.07 - 0.7 D_p / D_t) = 4065.9 (1.07 - 0.7(6.03125)/45.6) = 4065.9 (0.97742) = 3974.0 kip-ft; check M_u / (phi_f M_n), phi_f = 1.0
 //        SHEAR (6.10.9): D / t_w = 34.02 / 0.6 = 56.7 <= 1.12 sqrt(E k / F_yw) = 1.12 sqrt(29000(5)/50) = 60.3 (k = 5, the least k): C = 1.0;
 //          V_n = V_p = 0.58 F_yw D t_w = 0.58(50)(34.02)(0.6) = 591.9 kip; check V_u / (phi_v V_n), phi_v = 1.0
 //        weight: w_s = 135 lb/ft (tabulated) x 1.05 (5 % detail allowance) = 0.14175 klf (three plates at 490 pcf: 39.372(3.4028) = 134.0 lb/ft);
@@ -90,7 +90,7 @@ test('HAND CHECK W36X135, 60 ft simple span: section properties, M_p, flexure (M
   const Ps = 0.85 * 4 * 96 * 8, Pf = 12 * 0.79 * 50, Pw = 34.02 * 0.6 * 50, Y = 8 * (2 * Pf + Pw) / Ps;
   near(Ps, 2611.2, 1e-9, 'P_s'); near(Pf, 474, 1e-9, 'P_c = P_t'); near(Pw, 1020.6, 1e-9, 'P_w'); near(Y, 6.03125, 1e-9, 'Ybar');
   const Mp = (Y * Y * Ps / (2 * 8) + Pf * (8 - Y + 2 + 0.395) + Pw * (8 - Y + 2 + 0.79 + 17.01) + Pf * (8 - Y + 2 + 0.79 + 34.02 + 0.395)) / 12;
-  near(Mp, 4065.8, 0.1, 'M_p by hand'); near(c.Mp, Mp, 1e-6, 'M_p (engine)'); near(c.Dp, Y, 1e-9, 'D_p');
+  near(Mp, 4065.88, 0.01, 'M_p by hand'); near(c.Mp, Mp, 1e-6, 'M_p (engine)'); near(c.Dp, Y, 1e-9, 'D_p');
   // flexure at midspan (Flexure tab's build)
   const FB = W.SBDFlexureUI.build({ P, g: 0, src: 'analysis' }); assert.ok(!FB.err, FB.err);
   const r = FB.rows.find(x => Math.abs(x.x - 30) < 1e-6); assert.ok(r, 'midspan row');
