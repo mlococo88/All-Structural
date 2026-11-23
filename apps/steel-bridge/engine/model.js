@@ -36,7 +36,9 @@
                   spMode: 'individual' | 'equal' (girder spacing input mode), Wcc (ft; 'equal' only: exterior girder spacing, ℄ to ℄ of the two
                   exterior girders). In 'equal' the page writes S = Wcc / (nb − 1) into every bays entry (equalSpacing below); everything
                   computed reads xs.bays as before, so Wcc and spMode change no result by themselves,
-                  lldf: { gap (ft), kg: 'max' | 'avg' | 'simple', skewV: 'all' | 'ext', extMin: true | false } },
+                  lldf: { gap (ft), kg: 'max' | 'avg' | 'simple', skewV: 'all' | 'ext', extMin: true | false,
+                          skewVx: 'whole' | 'taper' (added 2026-11-23, N3, optional: the extent of the shear skew correction along the girder,
+                          4.6.2.2.3c; 'whole' or absent: over the whole span, as before; 'taper': full at each support, linearly to 1.0 at mid-span) } },
      -- added 2026-10-29 (shear and stiffeners PR), optional: a version 1 project without it reads as defaultStiffeners() --
      stiffeners: { layout: { web: 'stiffened' | 'unstiffened', mode: 'uniform' | 'bays', doRatio (uniform d_o/D),
                              bays: [ { g (girder number, 1-based), a, b (ft, the bay between bearings / cross-frames), n (intermediate

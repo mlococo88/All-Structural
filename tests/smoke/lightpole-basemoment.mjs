@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 // Light Pole and Sign Post: base reactions and the base moment build-up (LPBM, 2026-11-19). Display only. Headless Chromium
 // (KaTeX served from tests/libs). Per case, at 1400 and 390 px:
-//   - the Base reactions card and the Base moment build-up card come first on the Loading tab (IBC mode);
+//   - the Base reactions card comes first on the Loading tab's Combinations sub-tab and the Base moment build-up card is on it
+//     (IBC mode; LPLS 2026-11-23: the Loading tab is in sub-tabs, before that the two cards were the first two of the tab);
 //   - the build-up reconciles with the envelope: LPP_BMB ok for every governing combination (and post), and the moments shown
 //     (Base reactions card, build-up result line) are the text of the envelope tables (pole: the governing rows of the Load
 //     combinations card; sign: the per-post demand card);
 //   - the worked lines typeset (no .katex-error in the card), the "worked →" links open the step they name;
 //   - the long derivations (ice t_d, n1 / G_f, fixtures) are collapsed (details.lpFold) with their content present, and open
 //     for printing (beforeprint) and close again (afterprint);
-//   - the Report has the Base reactions subsection first in the Design summary and the build-up in Load combinations, with
+//   - the Report has the Base reactions subsection first in the Design summary and the build-up in the Loading chapter (Combinations), with
 //     every § reference resolved;
 //   - no horizontal page scroll at 390 px; no console / page errors.
 //   node tests/smoke/lightpole-basemoment.mjs [--shots <dir>]   (--shots: Loading and Report screenshots, lpb-<case>-<tab>-<vw>.png)
@@ -44,7 +45,8 @@ for (const vw of [1400, 390]) for (const [name, mut] of Object.entries(CASES)) {
     await o.p.waitForTimeout(600);
     const r = await o.p.evaluate(() => {
       const lts = document.body.classList.contains('lts-mode'), B = LPP_BMB;
-      const page = document.getElementById('page-loading'), first = [...page.children].filter(c => c.offsetParent).slice(0, 2).map(c => c.id);
+      if (!lts && typeof lppLdSet === 'function') lppLdSet('combos', true);   // LPLS: the two cards are on the Combinations sub-tab
+      const page = lts ? document.getElementById('page-loading') : document.getElementById('lppLdPane-combos'), first = [...page.children].filter(c => c.offsetParent).map(c => c.id);
       const txt = el => el ? el.textContent.replace(/\s+/g, ' ').trim() : '';
       const out = { lts, mode: B && B.mode, first, ok: [], shown: [], env: [], katexErr: document.querySelectorAll('#lppBmbCard .katex-error').length,
         katex: document.querySelectorAll('#lppBmbCard .katex').length, scroll: document.documentElement.scrollWidth - document.documentElement.clientWidth };
@@ -63,7 +65,8 @@ for (const vw of [1400, 390]) for (const [name, mut] of Object.entries(CASES)) {
       }
       out.list = list.map(b => ({ name: b.name, M: fmt(b.env.M, 0), post: b.post || 0, fam: b.fam }));
       // folds: closed by default, content present; beforeprint opens, afterprint closes
-      const folds = [...document.querySelectorAll('details.lpFold')];
+      const folds = [...document.querySelectorAll('details.lpFold')].filter(d => { const c = d.closest('.card'); const pn = d.closest('.lppLdPane'), bt = pn && document.querySelector('#lppLdBar button[data-ldsub="' + pn.dataset.ldpane + '"]');
+        return !(c && c.style.display === 'none') && !(bt && bt.style.display === 'none'); });   // LPLS: not the folds of the other mode's (hidden, empty) cards, nor of a sub-tab that does not apply (Cables without cables)
       out.folds = folds.length; out.foldClosed = folds.every(d => !d.open); out.foldContent = folds.every(d => d.textContent.length > 200);
       window.dispatchEvent(new Event('beforeprint')); out.foldPrintOpen = folds.every(d => d.open);
       window.dispatchEvent(new Event('afterprint')); out.foldAfter = folds.every(d => !d.open);
@@ -74,7 +77,7 @@ for (const vw of [1400, 390]) for (const [name, mut] of Object.entries(CASES)) {
     if (r.lts) {
       check(!r.first.includes('lppBaseRxCard') && !r.first.includes('lppBmbCard'), 'LRFDLTS mode: the IBC base reactions / build-up cards are hidden (the LRFDLTS cards are shown)');
     } else {
-      check(r.first[0] === 'lppBaseRxCard' && r.first[1] === 'lppBmbCard', 'Base reactions and build-up are the first two cards on the Loading tab: ' + r.first.join(', '));
+      check(r.first[0] === 'lppBaseRxCard' && r.first.includes('lppBmbCard'), 'Base reactions is the first card of the Combinations sub-tab and the build-up is on it: ' + r.first.join(', '));
       check(r.ok.length > 0 && r.ok.every(Boolean), 'build-up reconciles with the envelope for every governing combination: ' + r.ok.join(','));
       check(r.katexErr === 0 && r.katex > 0, `worked lines typeset (${r.katex} KaTeX blocks, ${r.katexErr} errors)`);
       if (r.mode === 'pole') {
@@ -105,7 +108,7 @@ for (const vw of [1400, 390]) for (const [name, mut] of Object.entries(CASES)) {
     // Report
     const rp = await o.p.evaluate(async () => { switchTab('report', true); await new Promise(r => setTimeout(r, 600));
       const lts = document.body.classList.contains('lts-mode'); if (lts) return { lts };
-      const M = lprModel(), d = SharedReport.build(M), s2 = M.sections[1], s4 = M.sections.find(s => s.title === 'Load combinations');
+      const M = lprModel(), d = SharedReport.build(M), s2 = M.sections[1], s4 = M.sections.find(s => s.title === 'Loading');
       const host = document.getElementById('lprHost');
       return { lts, unres: d.unresolved.map(x => x.key), dup: d.dup, first2: s2.subs[0].title, bmb: s4.subs.filter(q => /build-up/.test(q.title)).map(q => q.title),
         see: SharedReport.ref(d, 'lp:bmb') || SharedReport.ref(d, 'lp:bmb:p1'), katexErr: host.querySelectorAll('.katex-error').length,
@@ -114,7 +117,7 @@ for (const vw of [1400, 390]) for (const [name, mut] of Object.entries(CASES)) {
     if (!rp.lts) {
       check(rp.unres.length === 0 && rp.dup.length === 0, 'Report: § references resolved, no duplicate keys ' + JSON.stringify(rp.unres) + JSON.stringify(rp.dup));
       check(/^Base reactions/.test(rp.first2) && rp.hasRx, 'Report: Base reactions first in the Design summary (' + rp.first2 + ')');
-      check(rp.bmb.length >= 1 && !!rp.see, 'Report: build-up in Load combinations (' + rp.bmb.join('; ') + ', ' + rp.see + ')');
+      check(rp.bmb.length >= 1 && !!rp.see, 'Report: build-up in the Loading chapter (' + rp.bmb.join('; ') + ', ' + rp.see + ')');
       check(rp.katexErr === 0, 'Report: no KaTeX errors');
       if (vw === 390) check(rp.scroll <= 0, 'Report: no horizontal page scroll at 390 px');
       if (shots) { await o.p.screenshot({ path: path.join(shots, `lpb-${name}-report-${vw}.png`) }); }

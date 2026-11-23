@@ -269,6 +269,7 @@
     if (R.bsGov) gl.push([R.bsGov.it.r, `${window.SBDSub.html(R.bsGov.it.loc)}: ${esc(R.bsGov.c.id)} ${tt(R.bsGov.c.title)}`, go('bs', R.bsGov.i, R.bsGov.it.step), 'Bearing stiffeners']);
     const top = gl.reduce((a, b) => (!a || b[0] > a[0] ? b : a), null);
     h += `<section class="sec"><div class="secHead">Shear &amp; stiffeners: governing</div><div class="secBody"><p class="note">${R.what}</p>
+      ${R.AR && R.AR.skV && R.AR.skV.on && R.AR.skV.spans.some(q => q.rV > 1) ? `<p class="note" id="sh-skewvx">The LL+IM shear at each station uses the shear skew correction tapered to 1.0 at mid-span (4.6.2.2.3c; Loads input tab, Distribution): g<sub>V</sub>(x), worked on the <a href="#" data-gotab="an">Analysis tab</a> (steps an.gVx). The reactions and the bearing stiffeners keep the support value.</p>` : ''}
       ${top ? `<p>Governing ratio <b class="${cls(top[0])}">${fmt(top[0], 3)}</b>: ${top[1]} ${top[2]}</p>` : ''}
       <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Group</th><th class="lft">Governing item</th><th>Ratio</th><th></th></tr></thead><tbody>
       ${gl.map(q => `<tr><td class="lft">${q[3]}</td><td class="lft">${q[1]}</td><td class="${cls(q[0])}">${rt3(q[0])}</td><td>${q[2]}</td></tr>`).join('')}</tbody></table></div>

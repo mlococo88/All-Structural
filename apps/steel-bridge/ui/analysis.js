@@ -130,6 +130,7 @@
       <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Distribution factor</th>${DF.spans.map((_, i) => `<th>Span ${i + 1}</th>`).join('')}${DF.piers.map((_, k) => `<th>Pier ${k + 1}</th>`).join('')}</tr></thead><tbody>
       ${[['gM', 'g moment'], ['gV', 'g shear'], ['fatM', 'g fatigue moment'], ['fatV', 'g fatigue shear'], ['gDef', 'g deflection']].map(([k, t]) => `<tr><td class="lft">${t}</td>${DF.spans.map(s => `<td>${f(s[k], 3)}</td>`).join('')}${DF.piers.map(p => `<td>${k === 'gM' ? f(p.gM, 3) : ''}</td>`).join('')}</tr>`).join('')}
       </tbody></table></div>
+      ${P.xs && P.xs.lldf && P.xs.lldf.skewVx === 'taper' ? `<p class="note" id="an-skewvx"><b>Shear skew correction along the girder: tapered</b> (4.6.2.2.3c; chosen on the <a href="#" data-goto="loads">Loads input tab</a>, Distribution). g shear and g fatigue shear above are the values at the supports; at a station x of a span the skew correction r<sub>V</sub> they contain decreases linearly to 1.0 at mid-span: g<sub>V</sub>(x) = g<sub>V</sub>[1 + (r<sub>V</sub> − 1)(1 − x/(L/2))]/r<sub>V</sub> ${DF.spans.some(q => q.rV > 1) ? wk(`an.gVx.s${DF.spans.findIndex(q => q.rV > 1) + 1}`) : '(no known skew correction in these shear factors: nothing is tapered)'}. The reactions keep the support value.</p>` : ''}
       <p class="note">Distribution factors: <b>${esc(DF.src)}</b>; ${C.rgOk && !DF.pulled ? `worked on the <a href="#" data-gotab="loads">Loads &amp; LLDF tab</a> (girder ${G}, regions s1… and p1…)` : 'entered or pulled: <a href="#" data-goto="loads">Loads input tab</a>'}. Dead loads: <b>${esc(LD.source)}</b>.
       Settings: IM ${f(S.im, 0)} % truck and tandem, ${f(S.imf, 0)} % fatigue (${blank(A0.im) && blank(A0.imf) ? `${IM_SRC}, default` : `entered; ${IM_SRC}: 33 %, 15 %`}); cracked zones ${S.crack === 'none' ? 'none' : S.crack === '15' ? '15 % either side of each pier' : 'negative dead-load moment region'}; LL deflection L/${f(S.deflLimit, 0)}; deck placement sequence ${S.seq}.
       Every input here is on the <a href="#" data-goto="loads">Loads input tab</a>.</p>`, 'an-used');
@@ -175,6 +176,7 @@
     { key: 'eq', title: 'Equilibrium checks of the dead-load analyses', ref: '', ids: /^an\.eq\./ },
     { key: 'dc', title: 'Permanent-load moments (DC1, DC2, DW)', ref: A + '4.6.2.1, 6.10.1.1.1', ids: /^an\.M\.(DC|perm)/ },
     { key: 'll', title: 'Live-load envelopes and reactions (LL+IM)', ref: A + '3.6.1.2, 3.6.1.3.1, 3.6.2.1', ids: /^an\.(M\.LL|R\.LL)/ },
+    { key: 'skv', title: 'Shear skew correction tapered along the girder', ref: A + '4.6.2.2.3c', ids: /^an\.gVx\./ },   // N3 (2026-11-23)
     { key: 'defl', title: 'Live-load deflection', ref: A + '2.5.2.6.2, 3.6.1.3.2', ids: /^an\.defl\./ },
     { key: 'camber', title: 'Dead-load deflection (camber)', ref: A + '6.7.2', ids: /^an\.camber/ },
     { key: 'seq', title: 'Deck placement sequence', ref: A + '6.10.3.4.1', ids: /^an\.seq\./ },

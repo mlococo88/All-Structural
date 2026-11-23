@@ -19,7 +19,7 @@
           tsDeck (structural slab, in), tsac (sacrificial / integral wearing thickness, dead load only, in), haunch (in), fc (ksi), wc (kcf),
           wcE (kcf, for E_c only; optional), fws (psf), sip (psf), spans [ft], cont, skews [deg per support], regions (SBDLldf.regions),
           lf (owner load rules, SBDOwners.loadFactors) }
-     p: { gap, kg, skewV, extMin, dl: { method, ped, swL, swThkL, swR, swThkR, medW, medThk, medJoint, wcA, fenceL, fenceXL, fenceR, fenceXR,
+     p: { gap, kg, skewV, skewVx ('whole' | 'taper', N3 2026-11-23; absent: 'whole'), extMin, dl: { method, ped, swL, swThkL, swR, swThkR, medW, medThk, medJoint, wcA, fenceL, fenceXL, fenceR, fenceXR,
           wsMode, wsThk, wsGam }, extra: [{ name, cat, x, plf, dist }], ovl: [{ name, mode, psf, thk, gam }],
           edges: { L, R: { type, bw, bwt, cw, ch, rw, rp, rf, face } } | absent, loadOverrides: { id: { x, plf, dist } }, beamClass: { i: class } } */
 (function () {
@@ -250,7 +250,7 @@
     const fL = b.faceL != null ? b.faceL : b.barrier, fR = b.faceR != null ? b.faceR : b.barrier;
     const ll = llFaces(b, p.dl, xs, fL, fR);
     const base = { Nb, spacings, OL: b.ohL, OR: b.ohR, rL: ll.L.r, rR: ll.R.r, fL, fR, ts: b.tsDeck, gap: nm(p.gap), simple: p.kg === 'simple' };
-    const DF = window.SBDLldf.compute({ ...base, haunchP: hP, n: MR.n, kg: p.kg, skewV: p.skewV, extMin: p.extMin, regions: b.regions, skews: b.skews,
+    const DF = window.SBDLldf.compute({ ...base, haunchP: hP, n: MR.n, kg: p.kg, skewV: p.skewV, skewVx: p.skewVx, extMin: p.extMin, regions: b.regions, skews: b.skews,
       haunchNote: lf.h0 ? `Haunch taken as 0 in the composite properties (${lf.cite && lf.cite.h ? lf.cite.h : lf.o}; owner rule OWN8); its weight stays in DC1.` : '' });
     const regions = DF.regions, g0 = regions[0].geo, lo = p.loadOverrides && typeof p.loadOverrides === 'object' ? p.loadOverrides : null;
     if (lo) Object.entries(lo).forEach(([id, o]) => { if (!o || typeof o !== 'object') return; if (o.x != null && !(isFinite(o.x) && o.x >= 0 && o.x <= g0.Wdeck + 1e-9)) errors.push(`Override of "${id}": x must be from 0 to the deck width ${f2(g0.Wdeck)} ft.`); if (o.plf != null && !(isFinite(o.plf) && o.plf >= 0)) errors.push(`Override of "${id}": the line load must be zero or positive.`); });
@@ -324,7 +324,7 @@
     const b = { ok: true, nb: xs.nb, S, bays, ohL: xs.ohL, ohR: xs.ohR, barrier: E && E.L && E.L.type !== 'curb' ? +E.L.bw || 0 : 0, barW: 0, faceL: null, faceR: null, edge: null,
       tsDeck: d.ts, haunch: d.haunch, fc: c.fc, wc: c.wc, ...(c.wcE > 0 ? { wcE: c.wcE } : {}), ...(tsac > 1e-9 ? { tsac } : {}), fws: ws.mode === 'thk' ? 0 : +ws.psf || 0, sip: +xs.sip || 0, allow: +xs.allow || 0,
       spans: spans.slice(), cont, skews: (xs.skews || []).slice(), regions, owner: lf.o, lf };
-    const p = { gap: xs.lldf && xs.lldf.gap != null ? xs.lldf.gap : 4, kg: (xs.lldf && xs.lldf.kg) || 'max', skewV: (xs.lldf && xs.lldf.skewV) || 'all', extMin: xs.lldf && xs.lldf.extMin ? 'yes' : 'no', radius: 0,
+    const p = { gap: xs.lldf && xs.lldf.gap != null ? xs.lldf.gap : 4, kg: (xs.lldf && xs.lldf.kg) || 'max', skewV: (xs.lldf && xs.lldf.skewV) || 'all', skewVx: xs.lldf && xs.lldf.skewVx === 'taper' ? 'taper' : 'whole', extMin: xs.lldf && xs.lldf.extMin ? 'yes' : 'no', radius: 0,
       dl: { method: xs.dlMethod || 'massdot', ped: +sw.ped || 0, swL: +swL.w || 0, swThkL: swL.t != null ? swL.t : 8, swR: +swR.w || 0, swThkR: swR.t != null ? swR.t : 8,
         medW: +med.w || 0, medThk: med.t != null ? med.t : 8, medJoint: med.joint ? 'yes' : 'no', wcA: xs.wcA, fenceL: swL.fence, fenceXL: swL.fenceX, fenceR: swR.fence, fenceXR: swR.fenceX,
         wsMode: ws.mode === 'thk' ? 'thk' : 'psf', wsThk: ws.thk, wsGam: ws.gam },

@@ -80,6 +80,12 @@ export const CASES = {
   // IBC monopost sign on a rectangular 6 × 12 post, depth along the panel normal, small panel high up (added 2026-11-19, LPEW: the
   // edge-on check about the weak axis governs the post, embedment and shaft)
   signrect: { inputs: { poleShape: 'rect', poleDiaTop: '6', poleDepthTop: '12', poleTwTop: '0.25', V: '130', signB: '3', signS: '1.5', signClr: '30', signWt: '60' }, top: { appMode: 'sign', signPosts: 1 } },
+  // made-up variants for the Loading sub-tabs (added 2026-11-23, LPLS, display only): an IBC pole on a shaft projection with arms off
+  // the axes, 1 in map ice and stiff cables; a two-post sign on rectangular posts with ice and a shaft projection; a pole without
+  // cables, fixtures or ice
+  lsproj: { inputs: { shaftProj: '2', tIce: '1.0', iceBasis: 'map', cableMethod: 'stiff' }, fixtures: [{ hf: 30, th: 45, a: 8, epa: 2.4, aIce: 2.4, tIce: 0.5, W: 70, armD: 3.5 }, { hf: 35, th: 200, a: 4, epa: 1.2, aIce: 1.2, tIce: 0.5, W: 40 }] },
+  signrect2: { inputs: { poleShape: 'rect', poleDiaTop: '6', poleDepthTop: '12', poleTwTop: '0.25', V: '130', signB: '4', signS: '2', signClr: '20', signSpacing: '3', tIce: '1.0', shaftProj: '1.5' }, top: { appMode: 'sign', signPosts: 2 } },
+  bare: { inputs: { tIce: '0' }, top: { cablesEnabled: false }, fixtures: [] },
 };
 
 if (args.list) { console.log(Object.keys(CASES).join('\n')); process.exit(0); }
