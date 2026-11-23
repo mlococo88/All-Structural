@@ -9358,6 +9358,18 @@ Recorded with the AP-B PR (#1666). A note only: no file of the tool changes, and
 ### Still pending
 - The other decisions of those two entries, and of the E1 entry (PR #1580), are as listed there.
 
+## 2026-11-23 — PR: claude/steel-handoff-stale (SHO) — the shared part of the hand-off stale check moved to shared/handoff-stale.js (pure refactor, no change of behaviour)
+- **Why:** the Steel Bridge app gets the same banner (engineer, 2026-11-23); CLAUDE.md §3. See fixlog/shared-handoff-stale.md and fixlog/steel-bridge.md (SHO).
+- **Where:** `apps/ps-bridge/engine/hostale.js`.
+  - Before (anchor `const VOL = ['producedAt', 'updatedAt', 'device'];`): the definitions of `VOL`, `isObj`, `canon`, `hash`, `sig`. After: `const isObj = …;` (kept) and `const { canon, hash, sig } = W.SharedHandoffStale;`.
+  - Before (anchor `/* the record */`): `recs`, `sentOf`, `loadedOf`, `put`, `setSent`, `setLoaded`, `carrySent`. After: `const { sentOf, loadedOf, setSent, setLoaded, carrySent, outState, inState } = W.SharedHandoffStale;`.
+  - Before (anchor `function outState(rec, cur)`): `outState`, `inState`. After: taken from the shared file (line above); the comment of the states kept.
+  - `window.PSBHoStale` exports the same names as before.
+  - `apps/ps-bridge/index.html` script list: + `'../../shared/handoff-stale.js'` before `'engine/hostale.js'`.
+  - Tests: `tests/engine/psbridge-model.test.mjs` (the page's script list; the shared file left out of the key check as the other shared files), `tests/engine/psbridge-hostale.test.mjs` (loads the shared file).
+- **Governing provision / computed values:** none; the moved text is unchanged. To re-apply by hand: copy the functions back from `shared/handoff-stale.js`.
+- **How verified:** `node tests/engine/run.mjs psbridge` (all PS engine tests), `tests/smoke/ps-bridge-hostale.mjs`, `tests/smoke/ps-bridge-handoffs.mjs`, `node tests/check-syntax.mjs`.
+
 ## 2026-11-23 — PR: claude/ps-report-package (PR #1667: https://github.com/mlococo88/All-Structural/pull/1667) — Report: Executive summary, Basis of design, Bill of materials, design-point headers, sign-off and revisions (report and presentation only; no calculation change)
 - **Request (engineer, 2026-11-23):** bring the Prestressed Bridge app's Report up to the Steel Bridge app's (its PR #1645 features: `apps/steel-bridge/report/builders.js` exec / basis / bom / sign / ptHead); display only; prove the results unchanged.
 - **Where:** `apps/ps-bridge/report/builders.js` only (and tests). No engine file, no saved-data key or field, no other tool.

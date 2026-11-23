@@ -83,6 +83,8 @@
     'ui/summary.js',
     'ui/dash.js',
     'ui/bridgexfer.js',
+    '../../shared/handoff-stale.js',   // SHO (2026-11-23): the hand-off stale check, the part shared with the PS Bridge app (no DOM)
+    'engine/hostale.js',   // SHO: this app's channels and its record of what the project last sent / loaded (no DOM; display only)
     'ui/handoffs.js',
     'ui/inputcheck.js',   // SBINV: the field marks, the tab counts and the banner (display only)
     'ui/lists.js',
@@ -188,6 +190,8 @@
        width (it was ~500 px beside a 230 px list); it may be wider than 8.5 in on a wide panel. shared/report.js unchanged; print unchanged.
      - Ctrl+P on the Report tab prints the report only, as "Print report" does: the app header and the Demands bar are not printed. */
   #out .rp-host{container-type:inline-size;}
+  /* RPX (2026-11-23): a tab graphic as a report figure (ui/report.js figures): the card's figure, legend and captions, static */
+  .rp-fig .rp-vk{background:#fff;padding:0;border:0;font-size:9.5pt;} .rp-fig .rp-vk .vk-fig svg{max-width:100%;height:auto;} .rp-fig .rp-vk .vk-figs{flex-wrap:nowrap;} .rp-fig .rp-vk .vk-figs>div{flex:0 1 auto;max-width:100%;} .rp-fig .rp-vk .vk-cap{display:block;}
   /* QA2 (2026-11-09): the 3D view's drop-downs (View, Diagram) as wide as their choice ("Whole bridge", "Moment: Strength I"), not cut at 110 px */
   #out .v3d-bar select{width:auto;max-width:100%;}
   @media screen{
@@ -217,6 +221,11 @@
   /* HOC (2026-11-10): the Project tab's Hand-offs card (ui/handoffs.js) */
   #sbdHo .hoGrp{margin:10px 0 2px;font-family:var(--font-ui);font-size:8.5pt;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#334155;}
   #sbdHo .hoRow{border-top:1px solid var(--color-border);padding:6px 0 2px;}
+  /* SHO (2026-11-23): the hand-off stale banners (ui/handoffs.js staleRefresh): above the output tab's content and in the Hand-offs card; not printed */
+  #sbdHoBar,#hoStale .hoStaleN{display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px 10px;border:1px solid var(--color-border);border-left:4px solid var(--warn);background:#FFFBEB;padding:6px 9px;margin:6px 0;font-family:var(--font-ui);font-size:9pt;}
+  #sbdHoBar[hidden]{display:none;} #sbdHoBar>div:first-child,#hoStale .hoStaleN>div:first-child{flex:1 1 200px;min-width:0;overflow-wrap:anywhere;} #sbdHoBar .nBtns,#hoStale .nBtns{display:flex;gap:6px;margin-left:auto;}
+  .hoStList{margin:3px 0 0;padding-left:18px;} .hoStList li{margin:2px 0;} .hoStList button{margin-left:6px;}
+  @media print{#sbdHoBar,#hoStale .hoStaleN{display:none!important;}}
   #sbdHo .hoWho{font-size:10pt;}
   #sbdHo .hoTool{color:#475569;font-size:9pt;}
   #sbdHo .fRow label{min-width:0;}
@@ -340,6 +349,7 @@
     <main id="outputPanel">
       <div id="tabBar" role="tablist"><button type="button" role="tab" aria-selected="false" data-otab="sum">Summary</button><button type="button" role="tab" aria-selected="true" data-otab="sec">Section properties</button><button type="button" role="tab" aria-selected="false" data-otab="flex">Flexure</button><button type="button" role="tab" aria-selected="false" data-otab="loads">Loads &amp; LLDF</button><button type="button" role="tab" aria-selected="false" data-otab="shear">Shear &amp; stiffeners</button><button type="button" role="tab" aria-selected="false" data-otab="fat">Fatigue &amp; studs</button><button type="button" role="tab" aria-selected="false" data-otab="an">Analysis</button><button type="button" role="tab" aria-selected="false" data-otab="defl">Deflection</button><button type="button" role="tab" aria-selected="false" data-otab="cn">Constructibility</button><button type="button" role="tab" aria-selected="false" data-otab="cf">Cross-frames</button><button type="button" role="tab" aria-selected="false" data-otab="spl">Field splices</button><button type="button" role="tab" aria-selected="false" data-otab="rt">Rating</button><button type="button" role="tab" aria-selected="false" data-otab="wt">Welds</button><button type="button" role="tab" aria-selected="false" data-otab="rpt">Report</button><button type="button" role="tab" aria-selected="false" data-otab="dwg">Drawings</button><button type="button" role="tab" aria-selected="false" data-otab="ad">Auto design</button><button type="button" role="tab" aria-selected="false" data-otab="3d">3D view</button></div>
       <div id="gBar" hidden></div><!-- SB-2 PR 2: the girder type and line of the output tab --><div id="autoBar" hidden><span id="autoMsg" role="status" aria-live="polite"></span><button type="button" id="bRerun" title="Calculate this tab again now">Re-run</button></div>
+      <div id="sbdHoBar" role="status" hidden></div><!-- SHO (2026-11-23): hand-offs out of date since this project sent / loaded them (ui/handoffs.js; click only) -->
       <div id="out"></div>
     </main>
   </div>
@@ -359,7 +369,7 @@
   /* saved-project link (engine/library.js): cur.id = the library item the open project was last saved to / opened from; cur.text = its
      normalised file text then (null: not saved anywhere in the browser). The open project is "unsaved" when its normalised text differs. */
   const ensureAll = Q => { UL.ensure(Q); window.SBDShearUI.ensure(Q); window.SBDFatigueUI.ensure(Q); window.SBDFramingUI.ensure(Q); window.SBDSplicesUI.ensure(Q); window.SBDRatingUI.ensure(Q); };
-  const norm = Q => { const c = JSON.parse(JSON.stringify(Q)); ensureAll(c); return M.exportJSON(c); };
+  const norm = Q => { const c = M.carryRec(Q, JSON.parse(JSON.stringify(Q))); ensureAll(c); return M.exportJSON(c); };   // SHO: with the hand-off record (a hidden property, engine/model.js), as the file text
   let pb = null;   // STDS-B: the standard save controls (shared/projects-ui.js projectBar), made below
   let cur = { id: null, text: null }, autoFailed = false, snap = '', undoS = [], redoS = [], stepNo = 0, toastStep = -1;
   const UNDO_MAX = 100;   // steps kept in this session (the brief asks for at least 50)
@@ -590,10 +600,15 @@
     syncBar();
   }
   if (window.SBDCustomDemands && window.SBDCustomDemands.setLovTarget) window.SBDCustomDemands.setLovTarget(() => (lovOn() ? { gi: Math.min(ui.g, P.girders.length - 1), j: lnSel() } : null));   // SBLO (SB-10): the Custom demand edits for one line
-  if (window.SBDHandoffUI) window.SBDHandoffUI.init({ getP: () => P, ui: () => ui, changed: r => changed(r), lov: () => (lovOn() ? { gi: Math.min(ui.g, P.girders.length - 1), j: lnSel() } : null) });   // SBLO: the pull for one line   // B2: the LL & DL pull dialog applies after its confirm
+  if (window.SBDHandoffUI) window.SBDHandoffUI.init({ getP: () => P, ui: () => ui, changed: r => changed(r), lov: () => (lovOn() ? { gi: Math.min(ui.g, P.girders.length - 1), j: lnSel() } : null),
+    // SHO (2026-11-23): sent(): after a Send the record (engine/hostale.js) goes to the autosave and the card and banners are redrawn (no Undo step: the record is not in the project's own text);
+    // pick(gi, j): the girder type (and, for a line's own pull, the line) a stale banner's Load is for; goin(): the Hand-offs card
+    sent: () => { if (autosave) autoFailed = !M.save(LS, P); syncBar(); drawInputs(); window.SBDHandoffUI.staleRefresh(); },
+    pick: (gi, j) => { if (!P.girders[gi]) return; const ch = ui.g !== gi; ui.g = gi; if (ch) ui.seg = 0; if (j != null) { ui.lov = true; ui.ln = j; } else ui.lov = false; saveUi(); drawInputs(); if (ch) markStale(); },
+    goin: () => { ui.itab = 'proj'; saveUi(); drawInputs(); const c = $('sbdHo'); if (c && c.scrollIntoView) c.scrollIntoView({ block: 'start' }); } });   // SBLO: the pull for one line   // B2: the LL & DL pull dialog applies after its confirm
   /* ---------- undo / redo (session only: nothing is stored) ---------- */
   function restore(from, to) {
-    if (!from.length) return; to.push(snap); snap = from.pop(); P = JSON.parse(snap);
+    if (!from.length) return; to.push(snap); snap = from.pop(); P = M.carryRec(P, JSON.parse(snap));   // SHO: the hand-off record stays through Undo / Redo (a send happened)
     ui.g = Math.min(ui.g, P.girders.length - 1); ui.seg = Math.min(ui.seg, P.girders[ui.g].segments.length - 1);
     closeToast(); changed(true, true);
   }
@@ -788,7 +803,7 @@
   }
   // a tab that calculates in steps (the Analysis tab, the Drawings) shows its own progress; the status clears when the tab is no longer out of date
   function autoWatch(t) { const b = autoBtn(t); if (autoStale(t, b) || /Calculating/.test(($('out').querySelector('.alert:not(.stale)') || {}).textContent || '') || (b && b.disabled)) { setTimeout(() => (ui.otab || 'sec') === t && autoWatch(t), 250); return; } autoMsg(t, ''); }
-  function drawOut() { drawOut0(); autoRun(); if (window.SBDDashUI) window.SBDDashUI.refresh(); }   // DASH: the left check summary follows the project
+  function drawOut() { drawOut0(); autoRun(); if (window.SBDDashUI) window.SBDDashUI.refresh(); if (window.SBDHandoffUI) window.SBDHandoffUI.staleRefresh(); }   // SHO: the hand-off stale banner follows the project   // DASH: the left check summary follows the project
   /* gotoOut(tab, gi): an output tab with girder gi selected (as the Girder select of the Girders & plates tab); the Summary tab's links and the left check summary */
   function gotoOut(t, gi, ln) { if (Number.isInteger(ln) && ln !== lnSel()) { ui.ln = ln; stale = true; if (gi == null || gi === ui.g) drawInputs(); } if (gi != null && gi !== ui.g && P.girders[gi]) { ui.g = gi; ui.seg = 0; stale = true; drawInputs(); } ui.otab = t; saveUi(); autoNow = true; drawOut(); $('outputPanel').scrollTop = 0; }
   $('bRerun').addEventListener('click', () => { const t = ui.otab || 'sec', b = autoBtn(t); if (!b) return; autoMsg(t, 'Calculating…'); requestAnimationFrame(() => setTimeout(() => { b.click(); autoWatch(t); }, 0)); });

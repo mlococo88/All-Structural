@@ -168,6 +168,11 @@
      -- added 2026-11-19 (LGA, MIDAS .lga import), optional, written only by an import of a MIDAS Line Girder Analysis file (engine/lga.js) --
      midasLga:  { importedAt, fileName, appVersion, saved, keep: the file's project object without midas_url (the MIDAS inputs the app does
                   not model, written back by the .lga export) }; not read by any calculation
+     -- added 2026-11-23 (SHO, hand-off stale banner), optional, written only by a Send / "Use shared project info" click (ui/handoffs.js) --
+     handoffs:  { sent: { superGeometry | superReactions | projectMeta: { sig, at } }, loaded: { projectMeta: { sig, at } } }: what this
+                  project last sent / loaded (engine/hostale.js); not read by any calculation. On the open project it is a hidden
+                  (non-enumerable) property: hideRec (importJSON) hides it, exportJSON writes it back as the last field of the file,
+                  carryRec copies it to another project object (Undo / Redo, the saved-state text). A project without it is unchanged.
    } */
 (function () {
   'use strict';
@@ -623,13 +628,22 @@
 
   /* exportJSON(p): the file text (pretty-printed). importJSON(text): { ok, project, errors, warnings, notes } or { ok: false, error }
      (notes: one-line notices of the field migrations run on load, e.g. migrateNbList; [] when none). */
-  function exportJSON(p) { return JSON.stringify(p, null, 2); }
+  /* SHO (2026-11-23): the hand-off record P.handoffs (header) is kept off the project's own JSON text. hideRec(p): a handoffs field read
+     from a file becomes a hidden property (its value untouched); withRec(p): the object exportJSON writes (p itself when it has no
+     record); carryRec(from, to): from's record on to (to's own record removed when from has none). */
+  const REC = 'handoffs', hasRec = p => !!p && typeof p === 'object' && Object.prototype.hasOwnProperty.call(p, REC) && p[REC] !== undefined;
+  function setRec(p, v) { Object.defineProperty(p, REC, { value: v, enumerable: false, writable: true, configurable: true }); return p; }
+  function hideRec(p) { if (hasRec(p) && Object.prototype.propertyIsEnumerable.call(p, REC)) { const v = p[REC]; delete p[REC]; setRec(p, v); } return p; }
+  const withRec = p => (hasRec(p) && !Object.prototype.propertyIsEnumerable.call(p, REC) ? Object.assign({}, p, { [REC]: p[REC] }) : p);
+  function carryRec(from, to) { if (!to || typeof to !== 'object') return to; if (hasRec(from)) setRec(to, JSON.parse(JSON.stringify(from[REC]))); else if (hasRec(to)) delete to[REC]; return to; }
+  function exportJSON(p) { return JSON.stringify(withRec(p), null, 2); }
   function importJSON(text) {
     let obj;
     try { obj = JSON.parse(text); } catch (e) { return { ok: false, error: `Not a JSON file: ${e.message}` }; }
     if (legacyKind(obj)) return importLegacy(obj);
     if (!obj || obj.schema !== SCHEMA) return { ok: false, error: 'Not a Steel Bridge Design (sbd2) project file.' };
     let p; try { p = migrate(obj); } catch (e) { return { ok: false, error: e.message }; }
+    hideRec(p);   // SHO: the hand-off record, kept with the project but off its own JSON text
     const notes = [migrateNbList(p), migrateLineOv(p)].filter(Boolean);   // field migrations within version 1 (2026-11-02; SBLO 2026-11-13: per-line values)
     const v = validate(p);
     return { ok: true, project: p, errors: v.errors, warnings: v.warnings, notes };
@@ -660,5 +674,5 @@
      (ownerRules.owner) when it is not AASHTO, else '' (as before the owner card moved to the Project tab). Display only; nothing computed or saved. */
   const clientName = P => { const t = String(((P || {}).project || {}).owner == null ? '' : P.project.owner).trim(), o = ((P || {}).ownerRules || {}).owner;
     return t || (o && o !== 'AASHTO' ? o : ''); };
-  window.SBDModel = { clientName, SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, newProject, designLine, typeLines, lineTypes, unassigned, isExtLine, tribBeff, setLines, assignLine, renumberLines, addType, deleteType, atLine, LO_KEYS, lineOv, lineOvEntry, lineOvReset, effective, customAt, migrateLineOv, defaultXs, equalSpacing, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, migrateNbList, legacyKind, importLegacy, exportJSON, importJSON, save, load };
+  window.SBDModel = { hideRec, carryRec, setRec, clientName, SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, newProject, designLine, typeLines, lineTypes, unassigned, isExtLine, tribBeff, setLines, assignLine, renumberLines, addType, deleteType, atLine, LO_KEYS, lineOv, lineOvEntry, lineOvReset, effective, customAt, migrateLineOv, defaultXs, equalSpacing, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, migrateNbList, legacyKind, importLegacy, exportJSON, importJSON, save, load };
 })();
