@@ -65,6 +65,7 @@ try {
 
   console.log('4 · wording');
   const w = await o.p.evaluate(async () => {
+    lppCvSet(false, true);   // "All load combinations" (LPGD, 2026-11-23: the tool opens on "Governing combination only"); the caption read below is the "all" view's; not stored   // eslint-disable-line no-undef
     const st = JSON.parse(JSON.stringify(DEFAULT_STATE)); st.inputs.iceBasis = 'map'; applyState(st); await new Promise(r => setTimeout(r, 400));   // eslint-disable-line no-undef
     const hint = document.getElementById('comboMatrixTbl').closest('.card').querySelector('.hint').textContent;
     const ice = document.getElementById('lppLdIceWk').textContent, man = JSON.stringify(MANUAL);   // the Manual's text, every part (the tab shows one part at a time)   // eslint-disable-line no-undef

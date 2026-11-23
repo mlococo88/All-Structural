@@ -184,7 +184,9 @@ function lineDiff(a, b) {   // LCS on lines: [-] only in A, [+] only in B
 }
 
 async function runSide(sd, name, state, shotsDir) {
-  const o = await openPage(sd.file, { vw: 1280, vh: 900 });
+  // LPGD (2026-11-23): both sides in the "All load combinations" view (the tool opens on "Governing combination only" when nothing is
+  // saved; a version before that change opens on "All"), so the tab text is compared like for like, every combination row included
+  const o = await openPage(sd.file, { vw: 1280, vh: 900, ls: { lpp_comboView_v1: 'all' } });
   try {
     await o.p.waitForFunction(() => typeof window.applyState === 'function' && typeof window.renderMathInElement === 'function', null, { timeout: 15000 }).catch(() => {});
     await o.p.waitForTimeout(300);
