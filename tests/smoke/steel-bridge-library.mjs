@@ -38,7 +38,7 @@ try {
   await p.evaluate(() => { const t = document.querySelector('[data-itab="spans"]'); t && t.click(); }); await p.click('[data-sp=chip]');
   assert.equal(await p.evaluate(() => { const t = document.querySelector('#inTabs [aria-selected=true]'); const c = document.querySelector('[data-sp=card]'); return (t && t.dataset.itab) + '|' + !!(c && c.offsetParent); }), 'proj|true', 'HDRS: the chip opens the Project tab with the card');
   assert.equal(await p.evaluate(() => [...document.querySelectorAll('[data-pane=proj] .sec')][0].querySelector('.secHead').textContent), 'Save and open');
-  assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll('[data-sp=card] button')].map(b => b.textContent.replace(/Ctrl\+(Shift\+)?S/, '').trim())), ['Save', 'Save as…', 'Saved projects…', 'New', 'Export JSON', 'Import JSON', 'From old app']);
+  assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll('[data-sp=card] button')].map(b => b.textContent.replace(/Ctrl\+(Shift\+)?S/, '').trim())), ['Save', 'Save as…', 'Saved projects…', 'New', 'Export JSON', 'Import JSON', 'From old app', 'Import MIDAS (.lga)', 'Export to MIDAS (.lga)']);   // the two .lga buttons: PR #1643 (LGA)
   // 1. edit, Save (no name yet: Save as), list
   await setIn('project.name', 'Route 9 over Mill River'); await setIn('project.number', 'B-1234');
   await hsave(); await p.waitForSelector('dialog.spSave[open]');
