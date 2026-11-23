@@ -4,8 +4,11 @@
 //   - first visit: sub-tab 1 · Forces, no key stored; the summary strip and the bar are second on the Shaft page (after the
 //     combination-view bar); IBC: four sub-tabs, LRFDLTS: three (no soil bearing check in that mode);
 //   - each sub-tab shows only its own cards / blocks; every output element of the Shaft page is shown in exactly one sub-tab;
-//   - the strip: the embedment depth = the engine's d (L in the LRFDLTS mode); the soil bearing and reinforcement D/C = the largest
-//     D/C of those checks in the check panel, marked NG when one fails; a node opens its sub-tab;
+//   - the strip: the embedment depth = the engine's d (L in the LRFDLTS mode); the soil bearing D/C = that check in the check panel;
+//     4 · Reinforcement (LPGD, 2026-11-23) = the largest STRENGTH D/C of the check panel (shaft flexure, shear, torsion threshold,
+//     shear tie spacing of a manual cage) with its name, then "Detailing OK" or "Detailing NG (the failed limits)" for the minimum /
+//     maximum steel, bar clear spacing, tie spacing and tie size; the node is marked NG when any of them fails (case detail_ng: the
+//     strength checks pass and a detailing limit fails); a node opens its sub-tab;
 //   - the chosen sub-tab is the per-browser key lpp_shaftSub_v1, is not in the project state and survives a reload;
 //   - the "All load combinations / Governing combination only" switch works in every sub-tab and keeps the sub-tab;
 //   - links: a check-panel line, a Summary link (lppGoto) and the Loading load-path strip's "Soil" step open the sub-tab of their target
@@ -34,6 +37,7 @@ const CASES0 = {
   sign2: { inputs: { V: '130', shaftShape: 'square', signB: '16', signS: '5', signClr: '10', signSpacing: '8' }, top: { appMode: 'sign', signPosts: 2 } },
   proj_arms: { inputs: { shaftProj: '2', tIce: '1.0', bromsSoil: 'cohesive', bromsC: '1.2' }, fixtures: [{ hf: 30, th: 45, a: 8, epa: 2.4, aIce: 2.4, tIce: 0.5, W: 70, armD: 3.5 }, { hf: 35, th: 200, a: 4, epa: 1.2, aIce: 1.2, tIce: 0.5, W: 40 }] },
   signrect2: { inputs: { poleShape: 'rect', poleDiaTop: '6', poleDepthTop: '12', poleTwTop: '0.25', V: '130', signB: '4', signS: '2', signClr: '20', signSpacing: '3', tIce: '1.0', shaftProj: '1.5' }, top: { appMode: 'sign', signPosts: 2 } },
+  detail_ng: { inputs: { rebarMode: 'manual', manTieS: '18' } },
   shaft_ng: { inputs: { V: '130', signB: '16', signS: '8', signClr: '10', b: '2', rebarMode: 'manual', manBarN: '4', manBarSize: '#4' }, top: { appMode: 'sign', signPosts: 1 } },
   lts_pole: { inputs: { bromsSoil: 'cohesive', bromsC: '1.0' }, top: { codeMode: 'lts', cablesEnabled: false } },
   lts_sign2: { inputs: { bromsSoil: 'cohesionless', bromsPhi: '30', bromsGam: '0.115', shaftProj: '1' }, top: { codeMode: 'lts', appMode: 'sign', signPosts: 2 } },
@@ -90,7 +94,8 @@ const FINGER = () => {
   const dash = (lppDashItems() || []).map(i => [i.name, i.dc, i.st, i.text, i.ref, i.where ? i.where.tab + '|' + nm(i.where.card) : '']);   // eslint-disable-line no-undef
   return { ids, lts, dash: JSON.stringify(dash), summary: nm(document.getElementById('page-summary').innerHTML), copy: window.__summary,
     anch: JSON.stringify((x => { if (x && x.payload) delete x.payload.producedAt; return x; })(lppAnchorPayload())),   // eslint-disable-line no-undef
-    loading: nm(document.getElementById('page-loading').innerHTML), geometry: document.getElementById('page-geometry').innerHTML.replace(/ style=""/g, '') };
+    loading: nm((c => { c.querySelectorAll('.lppCvBar').forEach(x => x.remove()); return c.innerHTML; })(document.getElementById('page-loading').cloneNode(true))),   // without the switch bar (its buttons' attribute order depends on the view the page opened on; LPGD)
+    geometry: document.getElementById('page-geometry').innerHTML.replace(/ style=""/g, '') };
 };
 const near = (a, b, t = 6e-3) => Math.abs(a - b) <= t;
 const num = s => parseFloat(String(s).replace(/,/g, ''));
@@ -106,6 +111,7 @@ for (const [name, mut] of Object.entries(CASES)) {
       await o.p.evaluate(() => switchTab('shaft', true));   // eslint-disable-line no-undef
       await o.p.waitForTimeout(250);
       const A = await o.p.evaluate(SNAP), lts = A.lts, subs = lts ? ['forces', 'embed', 'reo'] : ['forces', 'embed', 'bearing', 'reo'];
+      check(A.gov === true && A.cvOn === 'gov', 'first visit: the combination view is "Governing combination only" (LPGD)');
       check(A.cur === 'forces' && A.key === null && A.bar.map(b => b.k).join() === subs.join() && A.bar.filter(b => b.on).map(b => b.k).join() === 'forces',
         `first visit: 1 · Forces, no key; sub-tabs ${A.bar.map(b => b.t).join(' | ')}`);
       check(A.order.join() === 'lppCvBar,lppShBox' && A.cvVis, 'the combination-view bar is first on the page, the summary strip and the sub-tab bar second');
@@ -132,8 +138,16 @@ for (const [name, mut] of Object.entries(CASES)) {
         const g = L => L.reduce((a, b) => b.dc > a.dc ? b : a, L[0]);
         if (!lts) { const b = g(bear); check(near(num((st.bearing.v.match(/D\/C ([\d.,∞]+)/) || [])[1]), b.dc) && st.bearing.ng === (b.st === 'fail'), `strip, 3 · Soil bearing: "${st.bearing.v}" = the check panel's ${b.dc.toFixed(3)} (${b.st})`); }
         else check(!st.bearing, 'LRFDLTS: no soil bearing sub-tab (not checked in that mode)');
-        const r = g(reo), anyFail = reo.some(i => i.st === 'fail'), shown = (st.reo.v.match(/D\/C ([\d.,∞]+)/) || [])[1];
-        check((isFinite(r.dc) ? near(num(shown), r.dc) : shown === '∞') && st.reo.ng === anyFail && st.reo.v.includes(r.name.replace(lab, '')), `strip, 4 · Reinforcement: "${st.reo.v}" = the largest of the ${reo.length} shaft checks, ${r.name} ${isFinite(r.dc) ? r.dc.toFixed(3) : '∞'}${anyFail ? ' (NG marked)' : ''}`);
+        // LPGD (2026-11-23): the largest STRENGTH ratio with its name, and the detailing limits as one OK / NG
+        const isStr = i => /^(Shaft flexure|Shaft shear|Shaft torsion ≤|Tie spacing, shear)/.test(i.name), bare = i => i.name.replace(lab, '');
+        const str = reo.filter(isStr), det = reo.filter(i => !isStr(i)), detBad = det.filter(i => i.st === 'fail').map(bare);
+        const r = g(str), anyFail = reo.some(i => i.st === 'fail'), strFail = str.some(i => i.st === 'fail'), m = st.reo.v.match(/^D\/C ([\d.,∞]+) (OK|NG) · (.+?) · Detailing (OK|NG)(?: \((.+)\))?$/) || [];
+        check(str.length >= 2 && det.length >= 4 && (isFinite(r.dc) ? near(num(m[1]), r.dc) : m[1] === '∞') && m[2] === (strFail ? 'NG' : 'OK') && m[3] === bare(r),
+          `strip, 4 · Reinforcement: "${st.reo.v}": the largest of the ${str.length} strength checks, ${r.name} ${isFinite(r.dc) ? r.dc.toFixed(3) : '∞'} (not the largest of all ${reo.length}: ${g(reo).name} ${isFinite(g(reo).dc) ? g(reo).dc.toFixed(3) : '∞'})`);
+        check(m[4] === (detBad.length ? 'NG' : 'OK') && (m[5] || '') === detBad.join('; ') && st.reo.ng === anyFail,
+          `strip, 4 · Reinforcement: "Detailing ${m[4]}" for the ${det.length} detailing limits${detBad.length ? ' (failed: ' + detBad.join('; ') + ')' : ''}; the entry is ${anyFail ? '' : 'not '}marked NG (${reo.filter(i => i.st === 'fail').length} of ${reo.length} checks fail)`);
+        if (name === 'detail_ng') check(!strFail && detBad.length > 0 && st.reo.ng && m[2] === 'OK' && m[4] === 'NG', 'a failed detailing limit with passing strength checks still shows NG on the strip: ' + detBad.join(', '));
+        if (name === 'shaft_ng') check(anyFail && st.reo.ng, 'a failing shaft: the entry is marked NG');
         check(/M_[uF] [\d.,]+/.test(st.forces.v), `strip, 1 · Forces: "${st.forces.v}"`); }
       // a strip node opens its sub-tab; the key; not in the project
       await o.p.click('#lppShStrip .lppShNode[data-shgo="embed"]'); await o.p.waitForTimeout(150);
@@ -143,13 +157,14 @@ for (const [name, mut] of Object.entries(CASES)) {
       { let ok = true; const notes = [];
         for (const k of subs) {
           await o.p.click(`#lppShBar button[data-shgo="${k}"]`); await o.p.waitForTimeout(100);
+          await o.p.click('#page-shaft .lppCvBar button[data-cv="all"]'); await o.p.waitForTimeout(k === subs[0] ? 500 : 100);   // LPGD: the tool opens on "Governing"; start from "All"
           const a = await o.p.evaluate(SNAP);
           await o.p.click('#page-shaft .lppCvBar button[data-cv="gov"]'); await o.p.waitForTimeout(500);
           const g = await o.p.evaluate(SNAP);
           await o.p.click('#page-shaft .lppCvBar button[data-cv="all"]'); await o.p.waitForTimeout(500);
           const b = await o.p.evaluate(SNAP);
           if (process.env.LPSS_DBG && (b.html !== a.html || g.html !== a.html)) { const x = g.html !== a.html ? g.html : b.html; let i = 0; while (i < x.length && x[i] === a.html[i]) i++; console.log('    dbg ' + k + ' @' + i + ': A …' + a.html.slice(i - 80, i + 120) + '\n    B …' + x.slice(i - 80, i + 120)); }
-          const good = a.cvVis && g.gov === true && g.cvOn === 'gov' && g.cur === k && g.shownSubs.join() === k && b.gov === false && b.cur === k && b.html === a.html && g.html === a.html && JSON.stringify(g.strip) === JSON.stringify(a.strip);
+          const good = a.cvVis && a.gov === false && g.gov === true && g.cvOn === 'gov' && g.cur === k && g.shownSubs.join() === k && b.gov === false && b.cur === k && b.html === a.html && g.html === a.html && JSON.stringify(g.strip) === JSON.stringify(a.strip);
           if (!good) { ok = false; notes.push(k); }
         }
         check(ok, 'the "All / Governing combination only" switch works in every sub-tab: the sub-tab stays, the page content and the strip are the same in both views, back to "All"' + (notes.length ? ' — failed in: ' + notes.join() : '')); }
@@ -228,6 +243,8 @@ if (base) {
   const bf = baseFile(base); console.log(`before / after: ${base} (${bf}) vs the working tree`);
   const get = async file => { const o = await openPage(file, { vw: 1400, vh: 1000 }); const out = {};
     try { await o.p.waitForFunction(() => typeof window.applyState === 'function' && typeof window.renderMathInElement === 'function', null, { timeout: 30000 }); await o.p.waitForTimeout(300);
+      // like for like (LPGD, 2026-11-23): both versions in the "all" view, whatever each opens on (not stored)
+      await o.p.evaluate(() => { if (typeof lppCvSet === 'function') lppCvSet(false, true); });   // eslint-disable-line no-undef
       for (const [name, mut] of Object.entries(CASES)) { await o.p.evaluate(APPLY, mut); out[name] = await o.p.evaluate(FINGER); }
       out.__errs = o.errs.slice(); } finally { await o.b.close(); }
     return out; };

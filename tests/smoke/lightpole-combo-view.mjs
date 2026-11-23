@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 // Light Pole and Sign Post: the "All load combinations / Governing combination only" switch (LPCV, 2026-11-23). Display only.
 // Headless Chromium, file://, KaTeX served from tests/libs. Per case (1400 px; the default pole and the default sign also at 390 px):
-//   - first visit: "All load combinations" (no key stored, no note, every bar on "All"); the bars are first on the Loading, Post,
-//     Anchorage, Shaft and Report tabs, and are not printed;
+//   - first visit (LPGD, 2026-11-23): "Governing combination only" (no key stored, every bar on "Governing"); the bars are first on
+//     the Loading, Post, Anchorage, Shaft and Report tabs, each is VISIBLE on its tab (also in the LRFDLTS mode; computed display,
+//     size and offsetParent, not only its presence in the DOM), and they are not printed; "All load combinations" on a bar gives the
+//     "all" view (key = all), which the rest of the test uses as the reference;
+//   - a saved choice is honoured: with lpp_comboView_v1 = all a reload opens on "All"; with = gov on "Governing";
 //   - the switch on one tab (the Post tab) changes every tab; the choice is the per-browser key lpp_comboView_v1, is not in the
 //     project state, and survives a reload;
 //   - governing view: the rows shown are the engine's governing records of every check (IBC pole / sign: largest M, pole / post check,
@@ -96,6 +99,18 @@ const REPORT = async () => {
     refs: lts ? [] : ['lp:rx', 'lp:basis', 'lp:src', 'lp:fac', sign ? 'lp:env:p1' : 'lp:env', sign ? 'lp:bmb:p1' : 'lp:bmb', 'lpcs:0', 'lpcs:1'].map(k => [k, SharedReport.ref(d, k)]),
     tables, scroll: document.documentElement.scrollWidth - document.documentElement.clientWidth };
 };
+// runs in the page: each switch bar on its own tab: is it really shown (LPGD, 2026-11-23: a bar present in the DOM but hidden by a
+// mode rule was not caught before, #1673 / #1676)
+const VISBARS = async () => {
+  const out = [];
+  for (const t of ['loading', 'post', 'anchors', 'shaft', 'report']) { switchTab(t, true); await new Promise(r => setTimeout(r, 200));
+    const b = document.querySelector('#page-' + t + ' > .lppCvBar'), r = b ? b.getBoundingClientRect() : null, cs = b ? getComputedStyle(b) : null;
+    const btn = b ? [...b.querySelectorAll('button[data-cv]')].map(x => { const q = x.getBoundingClientRect(); return q.width > 10 && q.height > 10 && !!x.offsetParent; }) : [];
+    let anc = true; for (let e = b; e && e !== document.documentElement; e = e.parentElement) { const c = getComputedStyle(e); if (c.display === 'none' || c.visibility === 'hidden') anc = false; }
+    const o = { tab: t, found: !!b, display: cs ? cs.display : null, vis: cs ? cs.visibility : null, w: r ? Math.round(r.width) : 0, h: r ? Math.round(r.height) : 0, off: !!(b && b.offsetParent), btn: btn.join(), anc };
+    o.ok = o.found && o.display !== 'none' && o.vis === 'visible' && o.w > 50 && o.h > 10 && o.off && btn.length === 2 && btn.every(Boolean) && anc; out.push(o); }
+  return out;
+};
 // The LRFDLTS report has one reference that does not resolve on main (the fillet-weld step's "§J2" text is read as a step
 // reference, lts.wd/J2). It is the same in both views and is not part of this change (raised in the fix log).
 const KNOWN_UNRES = ['lts.wd/J2'], unresOK = r => r.unres.every(k => KNOWN_UNRES.includes(k));
@@ -112,9 +127,17 @@ for (const vw of [1400, 390]) for (const [name, mut] of Object.entries(CASES)) {
     await o.p.evaluate(m => { const st = JSON.parse(JSON.stringify(DEFAULT_STATE)); Object.assign(st.inputs, m.inputs || {}); Object.assign(st, m.top || {});
       if (m.cables) st.cables = m.cables; if (m.fixtures) st.fixtures = m.fixtures; applyState(st); switchTab('loading', true); lppLdSet('combos', true); }, mut);
     await o.p.waitForTimeout(600);
-    // ---- 1. first visit: all
+    // ---- 1. first visit: governing (LPGD, 2026-11-23); every bar visible on its tab; then "All load combinations" = the reference
+    const F0 = await o.p.evaluate(SNAP);
+    check(F0.gov === true && F0.key === null && F0.notes.length > 0 && F0.bars.length === 5 && F0.bars.every(b => b.on === 'gov'), `first visit: "Governing combination only" (no key stored; ${F0.notes.length} reduced table notes)`);
+    for (const view of ['gov', 'all']) {
+      if (view === 'all') { await o.p.evaluate(() => { switchTab('loading', true); document.querySelector('#page-loading .lppCvBar button[data-cv="all"]').click(); }); await o.p.waitForTimeout(700); }
+      const bv = await o.p.evaluate(VISBARS), bad = bv.filter(b => !b.ok);
+      check(bv.length === 5 && bad.length === 0, `${view === 'gov' ? 'first visit' : '"all" view'}: the switch is visible on each of its 5 tabs${F0.lts ? ' in the LRFDLTS mode' : ''} (display, size, both buttons)` + (bad.length ? ' — NOT visible: ' + JSON.stringify(bad) : ''));
+    }
+    await o.p.evaluate(() => { switchTab('loading', true); lppLdSet('combos', true); });
     const A = await o.p.evaluate(SNAP), RA = await o.p.evaluate(REPORT);
-    check(A.gov === false && A.key === null && A.notes.length === 0 && A.bars.every(b => b.on === 'all'), 'first visit: "All load combinations" (no key stored, no note)');
+    check(A.gov === false && A.key === 'all' && A.notes.length === 0 && A.bars.every(b => b.on === 'all'), '"All load combinations" on the Loading tab: every tab on "All" (lpp_comboView_v1 = all, no note)');
     check(A.bars.length === 5 && sameSet(A.bars.map(b => b.tab), ['loading', 'post', 'anchors', 'shaft', 'report']) && A.bars.every(b => b.page === 'page-' + b.tab && b.first && b.noprint),
       'the switch is first on the Loading, Post, Anchorage, Shaft and Report tabs (not printed): ' + A.bars.map(b => b.tab).join(', '));
     check(RA.stmt === null && !RA.shown && (A.lts ? unresOK(RA) : RA.unres.length === 0) && RA.dup.length === 0 && RA.kerr === 0 && RA.refs.every(x => !!x[1]), `Report ("all"): no view statement, every § reference resolves (${RA.tables.length} tables)`);
@@ -219,6 +242,13 @@ for (const vw of [1400, 390]) for (const [name, mut] of Object.entries(CASES)) {
       check(JSON.stringify(B.tbl) === JSON.stringify(A.tbl) && d2.length === 0, 'back in the "all" view every combination table is as on the first visit, row for row' + (d2.length ? ' — differ: ' + d2.join(', ') : '')); }
     if (vw === 390) { const sc = await o.p.evaluate(async () => { const out = {}; for (const t of ['loading', 'post', 'anchors', 'shaft', 'report']) { switchTab(t, true); await new Promise(r => setTimeout(r, 250)); out[t] = document.documentElement.scrollWidth - document.documentElement.clientWidth; } return out; });
       check(Object.values(sc).every(v => v <= 0), '"all" view, 390 px: no horizontal page scroll on any tab ' + JSON.stringify(sc)); }
+    // ---- 9. a saved choice is honoured (LPGD, 2026-11-23): saved "all" opens on "All"; no key opens on "Governing"
+    await o.p.reload(); await ready(); await o.p.waitForTimeout(700);
+    const sa = await o.p.evaluate(() => ({ gov: lppCvGov, key: localStorage.getItem('lpp_comboView_v1'), on: [...document.querySelectorAll('.lppCvBar button.on')].map(x => x.dataset.cv).join(','), notes: document.querySelectorAll('.lppCvNote').length }));
+    check(sa.gov === false && sa.key === 'all' && /^(all,){4}all$/.test(sa.on) && sa.notes === 0, 'a saved "all" choice is honoured: after a reload the tool opens on "All load combinations" (key still all)');
+    await o.p.evaluate(() => localStorage.removeItem('lpp_comboView_v1')); await o.p.reload(); await ready(); await o.p.waitForTimeout(700);
+    const sn = await o.p.evaluate(() => ({ gov: lppCvGov, key: localStorage.getItem('lpp_comboView_v1'), on: [...document.querySelectorAll('.lppCvBar button.on')].map(x => x.dataset.cv).join(',') }));
+    check(sn.gov === true && sn.key === null && /^(gov,){4}gov$/.test(sn.on), 'with no saved choice a reload opens on "Governing combination only" and stores nothing');
     check(o.errs.length === 0, 'no console / page errors' + (o.errs.length ? ': ' + o.errs.join(' | ') : ''));
     if (o.blocked.size) console.log('  note: blocked requests: ' + [...o.blocked].join(', '));
   } finally { await o.b.close(); }

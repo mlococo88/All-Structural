@@ -3082,7 +3082,7 @@ manPart("p3","3. Output Reference",[
 
 {h3:"3.3.6 Load combination matrix"},
 {p:"Every combination evaluated, showing the resultant, its azimuth, P, M, h and N, with the governing LRFD and ASD rows marked. Eleven combinations are evaluated, six LRFD and five ASD, for a light pole and for a sign alike; a sign carries ice and wind-on-ice on its panel and posts in the ice combinations (since 2026-11-01)."},
-{note:"<b>All load combinations / Governing combination only</b> (LPCV, 2026-11-23): a switch at the top of the Loading, Post, Anchorage, Shaft and Report tabs; one setting for the whole tool, remembered in this browser, not saved in the project and not printed. \u201cAll load combinations\u201d lists every combination. \u201cGoverning combination only\u201d keeps, in each table with one row per combination, the row of each check\u2019s governing combination, named with the check it governs, with a line saying how many combinations were checked and a \u201cshow all\u201d link. The switch changes only what is listed: every combination is always checked, and no result, governing case or verdict changes. The Report states which view it shows."},
+{note:"<b>All load combinations / Governing combination only</b> (LPCV, 2026-11-23): a switch at the top of the Loading, Post, Anchorage, Shaft and Report tabs; one setting for the whole tool, remembered in this browser, not saved in the project and not printed. The tool opens on \u201cGoverning combination only\u201d until a choice is made in this browser; a choice already made is kept. \u201cAll load combinations\u201d lists every combination. \u201cGoverning combination only\u201d keeps, in each table with one row per combination, the row of each check\u2019s governing combination, named with the check it governs, with a line saying how many combinations were checked and a \u201cshow all\u201d link. The switch changes only what is listed: every combination is always checked, and no result, governing case or verdict changes. The Report states which view it shows."},
 
 {h:"3.4 Post tab"},
 {p:"The AISC 360 check of the pole or post section itself."},
@@ -3099,7 +3099,7 @@ manPart("p3","3. Output Reference",[
 {nl:["Anchor rod design (ACI 318-19 Chapter 17) is done in the Anchorage app (BasePlateAnchorDesigner.html).", [["This tab keeps", "the anchor and base plate inputs;", ["the Anchorage card (send the anchor pattern, the shaft and every LRFD combination to the Anchorage app, or export them as JSON; the D/C the app returns is shown there and on the Summary);", "the base plate check (bending line at the pole face, double-nut; an engineering method, not an LRFDLTS article)."]], ["Background:", "Part 4C.3 is kept as background."]]],c:"manP"},
 
 {h:"3.6 Shaft tab"},
-{note:"<b>Sub-tabs</b> (LPSS, 2026-11-23): the Shaft tab follows the load path in four sub-tabs: <b>1 \u00b7 Forces</b> (the governing demand at the top of the shaft and at grade: 3.6.1), <b>2 \u00b7 Embedment</b> (3.6.2, with the Broms reference check), <b>3 \u00b7 Soil bearing</b> (3.6.4) and <b>4 \u00b7 Reinforcement</b> (3.6.3). The strip above the sub-tabs gives each one\u2019s governing result (the largest D/C of its checks; the required depth for the embedment, which is a depth and not a ratio) and opens it. For a two-post sign it shows the post chosen in \u201cShowing results for\u201d. In the LRFDLTS mode the soil bearing sub-tab is not shown (the axial bearing of the shaft is not checked in that mode), and the Post tab has two sub-tabs (member check; deflection and fatigue). The chosen sub-tab is remembered in this browser, not in the project; a link to a check opens its sub-tab. The Report keeps one Drilled shaft chapter in the same order, and nothing is hidden in print."},
+{note:"<b>Sub-tabs</b> (LPSS, 2026-11-23): the Shaft tab follows the load path in four sub-tabs: <b>1 \u00b7 Forces</b> (the governing demand at the top of the shaft and at grade: 3.6.1), <b>2 \u00b7 Embedment</b> (3.6.2, with the Broms reference check), <b>3 \u00b7 Soil bearing</b> (3.6.4) and <b>4 \u00b7 Reinforcement</b> (3.6.3). The strip above the sub-tabs gives each one\u2019s governing result (the largest D/C of its checks; the required depth for the embedment, which is a depth and not a ratio) and opens it. For the reinforcement it gives the largest <b>strength</b> D/C (shaft flexure, shear, the torsion threshold when there is torsion, and the shear tie spacing of a manual cage) with the check\u2019s name, and separately \u201cDetailing OK\u201d or \u201cDetailing NG\u201d with the failed limits named (minimum and maximum longitudinal steel, bar clear spacing, tie spacing, tie size); the entry is marked NG when any of them fails. For a two-post sign it shows the post chosen in \u201cShowing results for\u201d. In the LRFDLTS mode the soil bearing sub-tab is not shown (the axial bearing of the shaft is not checked in that mode), and the Post tab has two sub-tabs (member check; deflection and fatigue). The chosen sub-tab is remembered in this browser, not in the project; a link to a check opens its sub-tab. The Report keeps one Drilled shaft chapter in the same order, and nothing is hidden in print."},
 {h3:"3.6.1 Foundation demand"},
 {p:"The governing service demand carried into the embedment calculation: total lateral P, overturning M, effective height h = M/P, and total axial N. Flags appear here for shallow d/b and for partially cancelling cable pulls."},
 {h3:"3.6.2 Embedment"},
@@ -3111,7 +3111,7 @@ manPart("p3","3. Output Reference",[
 {p:"Bearing compares service axial over the base area against q<sub>allow</sub>. The Broms block, when enabled, is visually separated and labelled reference-only; see Part 4D."},
 
 {h:"3.7 Report tab"},
-{nl:["The calculation package (the one report of this tool; the former Calc sheet tab was merged into it on 2026-11-02).", [["Layout:", "a title block, cover, contents and numbered sections \u00a7n.m with a navigation tree, search, Expand all / Collapse all."], ["Sections:", "Project and scope (with the design inputs and basis), Design summary (the Summary tab\u2019s verdict, design, governing demands and utilization tables, then every check of every stack sorted by D/C), Wind and ice loads, Load combinations, Pole / Post check, Base plate, Drilled shaft, Assumptions and references."], ["Each section", "gives the key worked steps first, then the derivation worked in full by the <b>same generator functions</b> as the discipline tabs (same arguments), so the two cannot disagree; each check ends with its result line (D/C, code, PASS/FAIL)."], ["Links", "open the tab and card where a value is worked."], ["Print:", "with its <b>Print</b> button, the <b>Export PDF / Print</b> button, or the browser\u2019s print (Ctrl+P) from any tab, and choose Save as PDF: only the report prints, with a running header and \u201cPage X of Y\u201d."], ["Title block fields:", "the tool has no project-number, engineer or date fields, so those read \u201c\u2014\u201d."]]],c:"manP"},
+{nl:["The calculation package (the one report of this tool; the former Calc sheet tab was merged into it on 2026-11-02).", [["Layout:", "a title block, cover, contents and numbered sections \u00a7n.m with a navigation tree, search, Expand all / Collapse all."], ["Sections:", "Project and scope (with the design inputs and basis), Design summary (the Summary tab\u2019s verdict, design, governing demands and utilization tables, then every check of every stack sorted by D/C), Loading (wind and ice loads, the forces at the base and the load combinations, in the order of the Loading tab), Pole check (Post check for a sign), Base plate, Drilled shaft, Assumptions and references. The combination tables follow the \u201cAll load combinations / Governing combination only\u201d switch (3.3.6)."], ["Each section", "gives the key worked steps first, then the derivation worked in full by the <b>same generator functions</b> as the discipline tabs (same arguments), so the two cannot disagree; each check ends with its result line (D/C, code, PASS/FAIL)."], ["Links", "open the tab and card where a value is worked."], ["Print:", "with its <b>Print</b> button, the <b>Export PDF / Print</b> button, or the browser\u2019s print (Ctrl+P) from any tab, and choose Save as PDF: only the report prints, with a running header and \u201cPage X of Y\u201d."], ["Title block fields:", "the tool has no project-number, engineer or date fields, so those read \u201c\u2014\u201d."]]],c:"manP"},
 
 {h:"3.8 Result flags and what to do about them"},
 {tbl:{head:["Flag","Meaning","Action"],rows:[
@@ -7250,10 +7250,11 @@ function lprLdSubs(){
 // the table says how many were checked and offers "show all"). No value is computed and nothing is chosen here: the rows kept are
 // the engine's governing records (pole / sign: the "Governs" column of 7 · Combinations, lppLdComboM; LRFDLTS: the gov records of
 // the member check, base plate, weld, Broms, shaft and deflection). The switch re-renders with calc() (same inputs, same results).
-// Per-browser UI key lpp_comboView_v1 ('gov' | 'all'; absent = all); not in the project, the session or the export; not printed.
+// Per-browser UI key lpp_comboView_v1 ('gov' | 'all'); not in the project, the session or the export; not printed.
+// LPGD (2026-11-23): with no saved choice the tool opens on "Governing combination only" (before: on "All"); a saved 'all' or 'gov' is kept.
 const LPP_CV_KEY='lpp_comboView_v1';
-let lppCvGov=false;
-try{ lppCvGov=localStorage.getItem(LPP_CV_KEY)==='gov'; }catch(e){}
+let lppCvGov=true;
+try{ lppCvGov=localStorage.getItem(LPP_CV_KEY)!=='all'; }catch(e){}
 const lppCvTxt=(n,N,what)=>n>=N?`Governing combinations only: all ${N} ${what||'combinations'} govern a check and are shown.`
   :`Governing combinations only: ${n} of ${N} ${what||'combinations'} shown; all ${N} were checked, the other ${N-n} are hidden.`;
 const lppCvNoteHTML=(n,N,what)=>`<p class="tbl-note lppCvNote">${lppCvTxt(n,N,what)} <a href="#" class="lppCvAll noprint">show all</a></p>`;
@@ -7321,6 +7322,9 @@ const LPP_SH={
   shaft:{key:'lpp_shaftSub_v1',cur:'forces',box:'lppSh',subs:[['forces','1 · Forces'],['embed','2 · Embedment'],['bearing','3 · Soil bearing'],['reo','4 · Reinforcement']]},
   post:{key:'lpp_postSub_v1',cur:'member',box:'lppPs',subs:[['member','1 · Member check'],['defl','2 · Deflection and fatigue']]}};
 const LPP_SH_LTSCARD={ltsMemberCard:'member',ltsDeflCard:'defl'};
+// LPGD (2026-11-23): the shaft checks shown on the strip as strength (by collectChecks / ltsShaftChecks name); the other shaft
+// reinforcement checks (steel min / max, bar clear spacing, tie spacing, tie size) are the detailing limits
+const LPP_SH_STR=['Shaft flexure (P–M)','Shaft shear','Shaft torsion ≤ φT_th (neglect)','Tie spacing, shear'];
 Object.keys(LPP_SH).forEach(pg=>{ try{ const t=localStorage.getItem(LPP_SH[pg].key); if(LPP_SH[pg].subs.some(x=>x[0]===t)) LPP_SH[pg].cur=t; }catch(e){} });
 // the sub-tabs of a page now: {} = all, {k:false} = k does not apply (hidden), null = the page has no sub-tabs in this mode
 function lppShApplicable(pg){
@@ -7333,6 +7337,11 @@ function lppShShown(pg){ const c=LPP_SH[pg], ap=lppShApplicable(pg); if(!ap) ret
 function lppShSum(pg){
   const out={}, gov=L=>{ L=(L||[]).filter(c=>c&&c.ratio!=null&&!isNaN(c.ratio)); if(!L.length) return null;
     const g=L.reduce((a,b)=>b.ratio>a.ratio?b:a,L[0]); return {dc:g.ratio,ok:L.every(c=>c.ok),name:g.name}; };
+  // LPGD (2026-11-23): 4 · Reinforcement = the largest STRENGTH D/C with its name, and the detailing limits as one OK / NG (no check,
+  // ratio or verdict is made here: both lists are the rows of lppShaftRows / the torsion row as the Summary and the check panel list them)
+  const reoSum=L=>{ L=(L||[]).filter(c=>c&&c.ratio!=null&&!isNaN(c.ratio)); if(!L.length) return null;
+    const isStr=c=>LPP_SH_STR.indexOf(c.name)>=0, r=gov(L.filter(isStr))||gov(L), dt=L.filter(c=>!isStr(c)), bad=dt.filter(c=>!c.ok).map(c=>c.name);
+    r.det=dt.length?{ok:!bad.length,bad}:null; r.allOk=L.every(c=>c.ok); return r; };
   if(codeMode==='lts'){ const X=lppLtsLast; if(!X) return out;
     if(pg==='post'){
       if(X.mc){ const gv=X.mc.gov.gov; out.member={dc:gv.ratio,ok:gv.ratio<=1&&X.mc.valid,name:'combined forces'}; }
@@ -7340,7 +7349,7 @@ function lppShSum(pg){
     } else if(X.fd&&X.fd.gov){ const b=X.fd.gov.br;
       out.forces={txt:`M_F ${fmt(b.MF,2)} kip-ft · V_F ${fmt(b.VF,3)} kip`};
       out.embed={txt:`L = ${fmt(b.L,2)} ft required (Broms)`};
-      out.reo=gov(ltsShaftChecks(X.fd)); }
+      out.reo=reoSum(ltsShaftChecks(X.fd)); }
     return out; }
   const ctx=LPP_SUMCTX; if(!ctx||pg!=='shaft') return out;
   const s=ctx.stacks[ctx.mode==='sign'&&ctx.stacks.length>1?Math.min(ctx.stacks.length,Math.max(1,__selectedPost))-1:0]; if(!s||!s.found) return out;
@@ -7348,7 +7357,7 @@ function lppShSum(pg){
   out.forces={txt:`M_u ${fmt(s.found.Mu,0)} lb·ft · V_u ${fmt(s.found.Vu,0)} lb`};
   out.embed={txt:`d = ${fmt(s.found.d,2)} ft required · d/b ${fmt(s.found.ratio,2)}`};
   out.bearing=gov(of(['bearing']));
-  out.reo=gov(of(['flex','shear','asmin','asmax','spacing','ties','torsion']));
+  out.reo=reoSum(of(['flex','shear','asmin','asmax','spacing','ties','torsion']));
   return out;
 }
 function lppShSync(){
@@ -7362,7 +7371,8 @@ function lppShSync(){
     const er=$('lppInErr'), S=(er&&er.classList.contains('on'))?{}:lppShSum(pg);
     const two=pg==='shaft'&&codeMode!=='lts'&&LPP_SUMCTX&&LPP_SUMCTX.mode==='sign'&&LPP_SUMCTX.stacks.length>1;
     st.innerHTML=`<span class="lppShLbl">Governing${two?' · Post '+__selectedPost:''}:</span>`+subs.map(([k,t],i)=>{ const r=S[k]; let sub='—', cls='';
-      if(r&&r.txt) sub=r.txt; else if(r){ sub=`D/C ${isFinite(r.dc)?fmt(r.dc,2):'∞'} ${r.ok?'OK':'NG'} · ${r.name}`; if(!r.ok) cls=' ng'; }
+      if(r&&r.txt) sub=r.txt; else if(r){ sub=`D/C ${isFinite(r.dc)?fmt(r.dc,2):'∞'} ${r.ok?'OK':'NG'} · ${r.name}`; if(!r.ok) cls=' ng';
+        if(r.det){ sub+=` · Detailing ${r.det.ok?'OK':'NG ('+r.det.bad.join('; ')+')'}`; if(r.allOk===false) cls=' ng'; } }   // LPGD (2026-11-23)
       return (i?'<span class="lppLdArw" aria-hidden="true">→</span>':'')+`<button type="button" class="lppLdNode lppShNode${k===cur?' on':''}${cls}" data-shgo="${k}" data-shpg="${pg}"${k===cur?' aria-current="step"':''} title="Open the sub-tab ${lppEsc(t)}"><b>${t}</b><span>${lppEsc(sub)}</span></button>`; }).join('');
   });
 }
