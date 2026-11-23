@@ -65,7 +65,8 @@ for (const vw of [1400, 390]) for (const [name, mut] of Object.entries(CASES)) {
       }
       out.list = list.map(b => ({ name: b.name, M: fmt(b.env.M, 0), post: b.post || 0, fam: b.fam }));
       // folds: closed by default, content present; beforeprint opens, afterprint closes
-      const folds = [...document.querySelectorAll('details.lpFold')];
+      const folds = [...document.querySelectorAll('details.lpFold')].filter(d => { const c = d.closest('.card'); const pn = d.closest('.lppLdPane'), bt = pn && document.querySelector('#lppLdBar button[data-ldsub="' + pn.dataset.ldpane + '"]');
+        return !(c && c.style.display === 'none') && !(bt && bt.style.display === 'none'); });   // LPLS: not the folds of the other mode's (hidden, empty) cards, nor of a sub-tab that does not apply (Cables without cables)
       out.folds = folds.length; out.foldClosed = folds.every(d => !d.open); out.foldContent = folds.every(d => d.textContent.length > 200);
       window.dispatchEvent(new Event('beforeprint')); out.foldPrintOpen = folds.every(d => d.open);
       window.dispatchEvent(new Event('afterprint')); out.foldAfter = folds.every(d => !d.open);

@@ -402,7 +402,7 @@
   .lppLdDirBar{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;justify-content:space-between;font-size:11.5px;color:var(--slate-600);background:var(--slate-50);border:1px solid var(--line);border-radius:4px;padding:5px 9px;margin:0 0 8px}
   .lppLdDirBar label{display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-weight:600;color:#1E3A5F}
   table.tbl tr.lppLdRef td{color:var(--slate-600);font-style:italic} table.tbl tr.lppLdGov td{background:var(--accent-wash);font-weight:600}
-  .lppLdCombGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:10px} .lppLdCombGrid>div{min-width:0}
+  .lppLdCombGrid{display:flex;flex-wrap:wrap;gap:10px} .lppLdCombGrid>div{flex:1 1 440px;min-width:0}
   .lppFbd svg{display:block;width:100%;max-width:470px;height:auto;margin:0 auto} .lppLdWk:empty{display:none} .lppLdBack{margin:0 0 8px}
   @media print{ .lppLdPane{display:block!important} .lppAllDirs{display:block!important} }
   @media print{ header.masthead,#postSelBar{display:none!important} }
@@ -907,7 +907,7 @@
       <div class="card-body"><div id="lppLdBasis"><p class="tbl-note">—</p></div><div id="lppLdBasisWk" class="example-box lppLdWk"></div></div>
     </section>
     <section class="card" id="lppLdDeadCard" data-tab="loading" data-ldsub="dead">
-      <div class="card-h"><span class="num">2</span><h2>Dead load</h2><span class="hint">weight of each item, N at the base, eccentric moment</span></div>
+      <div class="card-h"><span class="num">2</span><h2>Dead load</h2><span class="hint">weight of each item, N at the top of the shaft, eccentric moment</span></div>
       <div class="card-body"><div id="lppLdDead"><p class="tbl-note">—</p></div><div id="lppLdDeadWk" class="example-box lppLdWk"></div></div>
     </section>
     <section class="card" id="lppLdWindCard" data-tab="loading" data-ldsub="wind">
@@ -6806,15 +6806,15 @@ function lppLdDeadM(L){
     R.push(['Sign panel, per post (W_sign / '+nP+')',lppLdV(inp.signWt/nP,0),lppLdV(inp.signWt/nP,0)]);
     R.push(['Post self-weight (per post)',lppLdV(self,0),lppLdV(self,0)]);
     R.push(['Misc. dead load (per post)',lppLdV(inp.DL||0,0),lppLdV(inp.DL||0,0)]);
-    R.push({c:['N_D at each post base (unfactored)','',lppLdV(N,0)],cls:'tot'});
+    R.push({c:['N_D at the top of the shaft, each post (unfactored)','',lppLdV(N,0)],cls:'tot'});
     return {head:['Item','Weight (lb)','N per post (lb)'],rows:R,id:'lppLdDeadTbl',N,M:0}; }
   let N=0, Mx=0, My=0; const self=inp.poleSelfW||0;
-  const row=(n,W,a,th,mx,my)=>{ N+=W; Mx+=mx||0; My+=my||0; R.push([n,lppLdV(W,0),a==null?'—':fmt(a,2),th==null?'—':lppLdAz(th),a==null?'—':lppLdV(W*a,0),lppLdV(mx||0,0),lppLdV(my||0,0)]); };
+  const row=(n,W,a,th,mx,my)=>{ N+=W; Mx+=mx||0; My+=my||0; R.push([n,fmt(W,0),a==null?'—':fmt(a,2),th==null?'—':lppLdAz(th),a==null?'—':lppLdV(W*a,0),lppLdV(mx||0,0),lppLdV(my||0,0)]); };
   row('Misc. dead load at the top',inp.DL||0,null,null);
   row('Pole self-weight ('+L.poleSeg.segs.length+' segments)',self,null,null);
   L.fxs.forEach((fc,i)=>row('Fixture '+(i+1)+' (h = '+fmt(fc.hf,1)+' ft)',fc.Wdead,Math.hypot(fc.ex,fc.ey),fc.th,fc.Wdead*fc.ex,fc.Wdead*fc.ey));
   L.comps.forEach((cp,j)=>row('Cable '+(j+1)+', half span g·L/2',cp.D_v*cp.c.L/2,null,null));
-  R.push({c:['Σ — N_D at the base and the eccentric dead moment (unfactored)',lppLdV(N,0),'','','|M| = '+lppLdV(Math.hypot(Mx,My),0),lppLdV(Mx,0),lppLdV(My,0)],cls:'tot'});
+  R.push({c:['Σ — N_D at the top of the shaft and the eccentric dead moment (unfactored)',fmt(N,0),'','','|M| = '+fmt(Math.hypot(Mx,My),0),fmt(lppBmb0(Mx),0),fmt(lppBmb0(My),0)],cls:'tot'});
   return {head:['Item','Weight W (lb)','Arm a (ft)','θ (°)','W·a (lb·ft)','M_x (lb·ft)','M_y (lb·ft)'],rows:R,id:'lppLdDeadTbl',N,Mx,My,M:Math.hypot(Mx,My)};
 }
 // wind elements, each ending with a force and its height (pole: wind toward phi)
@@ -7062,7 +7062,7 @@ function lppLdRender(L){
   set('lppLdBasis',lppLdTblHTML(lppLdBasisM(L))+`<p class="tbl-note">Inputs: the Wind &amp; site, ${sign?'Pole':'Pole, Fixtures, Cables'} and Ice input tabs. The loads follow in ${sub('dead','2 · Dead load')}, ${sub('wind','3 · Wind')}${inp.tIce>0?', '+sub('ice','4 · Ice'):''}${!sign&&L.comps.length?', '+sub('cables','5 · Cables'):''}; their sum at the base is ${sub('base','6 · Forces at the base')}.</p>`);
   { const M=lppLdDeadM(L); let H=lppLdTblHTML(M);
     H+=sign?`<p class="tbl-note">The panel hangs concentrically on the post group: no dead-load moment (M<sub>D</sub> = 0). Post self-weight: ${lppGoA('poleTbl','Pole properties (Geometry tab)')}.</p>`
-      :`<p class="tbl-note">N<sub>D</sub> = ${fmt(M.N,0)} lb at the pole base. The eccentric weights give M<sub>D</sub> = (${lppLdV(M.Mx,0)}, ${lppLdV(M.My,0)}) lb·ft, |M<sub>D</sub>| = ${lppLdV(M.M,0)} lb·ft, a fixed vector along the arm azimuths θ (it does not turn with the wind).${L.comps.length?' The dead load of a cable also pulls on the pole: '+sub('cables','5 · Cables')+'.':''}</p>`;
+      :`<p class="tbl-note">N<sub>D</sub> = ${fmt(M.N,0)} lb at the top of the shaft. The eccentric weights give M<sub>D</sub> = (${fmt(lppBmb0(M.Mx),0)}, ${fmt(lppBmb0(M.My),0)}) lb·ft, |M<sub>D</sub>| = ${fmt(M.M,0)} lb·ft, a fixed vector along the arm azimuths θ (it does not turn with the wind).${L.comps.length?' The dead load of a cable also pulls on the pole: '+sub('cables','5 · Cables')+'.':''}</p>`;
     const segs=L.poleSeg.segs;
     H+=lppLdFold((sign?'Post':'Pole')+' self-weight by segment (click to open)',lppLdTblHTML({head:['Segment','Mid-height z (ft)','Weight (lb)'],rows:segs.map(s=>[String(s.i),fmt(s.zMid,1),fmt(s.wSeg,1)]).concat([{c:['Σ','',fmt(L.poleSeg.totalW,1)],cls:'tot'}])})+`<p class="tbl-note">Section properties of each segment: ${lppGoA('poleTbl','Pole properties (Geometry tab)')}.</p>`);
     set('lppLdDead',H); }
@@ -7140,7 +7140,7 @@ function lprLdSubs(){
   o.basis.push({title:'Basis',key:'lp:basis',items:[lprLdTbl(lppLdBasisM(L)),note('The loads follow in the order of the load path: dead load (see [[lp:dead]]), wind (see [[lp:wind]]), ice, cables; their sum at the base is in [[lp:src]] and the factored combinations in [[lp:fac]].')]});
   { const M=lppLdDeadM(L);
     o.dead.push({title:'Dead load',key:'lp:dead',items:[lprLdTbl(M),note(sign?'The panel hangs concentrically on the post group: no dead-load moment. N_D per post = '+N(M.N,0)+' lb, carried to the post base (see [[lp:src]]).'
-      :'N_D = '+N(M.N,0)+' lb at the pole base; eccentric dead moment |M_D| = '+N(M.M,0)+' lb·ft, a fixed vector along the arm azimuths (see [[lp:src]]).')]}); }
+      :'N_D = '+N(M.N,0)+' lb at the top of the shaft; eccentric dead moment |M_D| = '+N(M.M,0)+' lb·ft, a fixed vector along the arm azimuths (see [[lp:src]]).')]}); }
   o.wind.push({title:'Wind — each element: force and height',key:'lp:wind',items:[
     note(sign?'Velocity pressure q_h·K_d·G = '+N(L.sw.qh,1)+' psf at the top of the sign; the post drag takes q_z per exposed segment. Wind normal to the panel (toward 0°).'
       :'Velocity pressure q_z·K_d = '+N(L.pw.qzMid,1)+' psf at mid-height and '+N(L.pw.qzTop,1)+' psf at the top; G = '+N(inp.G,3)+'. Shown for wind toward '+N(L.phi0,0)+'°, the governing direction of '+L.govLRFD.name+'.'),
