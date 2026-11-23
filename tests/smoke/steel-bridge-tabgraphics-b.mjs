@@ -96,8 +96,12 @@ try {
   await clickV('rating', 'rt', await p.evaluate(() => window.SBDTabGfxBUI.handles.rating.R.regs[40].v.i)); assert.ok(await p.$('#out tr[data-rt].sel'), 'a rating row selected'); await shot('rating', '#out [data-gfxb="rating"]');
   // ---- Report: the summary section carries the figure
   await p.click('#tabBar [data-otab="rpt"]'); await p.click('#rp_build'); await p.waitForSelector('#out .rp-fig svg', { timeout: 240000 });
-  const fig = await p.$eval('#out .rp-fig svg', s => ({ texts: s.querySelectorAll('text').length, w: s.getBoundingClientRect().width })); assert.ok(fig.texts > 10 && fig.w > 300, JSON.stringify(fig)); done.push('rpt/summary figure');
-  await shot('report-summary', '#out .rp-fig');
+  // the summary figure by its caption: since PR #1645 the Report's first figure is the verdict banner of the executive summary (2 texts), and since PR #1668
+  // (RPX) every tab graphic is a figure too, so "the first .rp-fig" is no longer the summary figure
+  const SUMFIG = '#out .rp-fig:has(figcaption:text("Governing check of each group along girder"))';
+  assert.equal(await p.locator(SUMFIG).count(), 1, 'the Report has one summary figure (caption "Governing check of each group along girder …")');
+  const fig = await p.$eval(SUMFIG + ' svg', s => ({ texts: s.querySelectorAll('text').length, w: s.getBoundingClientRect().width })); assert.ok(fig.texts > 10 && fig.w > 300, JSON.stringify(fig)); done.push('rpt/summary figure');
+  await shot('report-summary', SUMFIG);
   // phone width: the graphics fit without a horizontal page scroll
   await p.setViewportSize({ width: 390, height: 800 }); await p.waitForTimeout(400);
   // a viewport resize must not mark a result out of date (the lazily created defaults of the Rating tab were what changed the project key of the other tabs): every calculated tab is still current
