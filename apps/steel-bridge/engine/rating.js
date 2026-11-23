@@ -61,7 +61,7 @@
     q.cs = cs; q.C = cs * q.phiR * q.Rn;
     const g = sv ? { dc: G.sd, dw: G.sd, inv: G.sInv, opr: G.sOpr } : { dc: G.dc, dw: G.dw, inv: G.inv, opr: G.opr };
     q.g = g;
-    if (G.one) { q.one = G.one; q.gRef = sv ? G.sRef : G.gRef; q.gStep = sv ? null : G.gStep || null; }   // legal and permit loads (2026-11-23): one rating factor (inv = opr = it), its γ_LL reference
+    if (G.one) { q.one = G.one; q.gRef = sv ? G.sRef : G.gRef; q.gStep = sv ? { note: G.sNote || '' } : G.gStep || null; }   // legal and permit loads (2026-11-23): one rating factor (inv = opr = it), its γ_LL reference
     const one = gLL => q.quad ? (q.LL > 1e-6 ? kAt(k => q.quad(k * gLL), 100) : NONE) : rf({ C: q.C, DC: q.DC, DW: q.DW, F: q.F, LL: q.LL, gLL, gDC: g.dc, gDW: g.dw });
     q.inv = one(g.inv); q.opr = one(g.opr);
     Object.defineProperty(q, 'steps', { enumerable: false, configurable: true, get() { const s = worked(q, ph); Object.defineProperty(q, 'steps', { value: s, enumerable: false }); return s; } });
@@ -90,7 +90,7 @@
     const gT = q.one ? x => St().n(x, 4).replace(/(\.\d\d)0+$/, '$1') : n2;
     if (q.one) w.add({ id: 'gLL', label: `Live-load factor, ${q.lim}`, sym: '\\gamma_{LL}', eq: (q.gStep && q.gStep.eq) || '', sub: (q.gStep && q.gStep.sub) || '', value: g.inv, unit: '', d: 4, ref: q.gRef, note: (q.gStep && q.gStep.note) || '' });
     (q.one ? [['inv', q.one, g.inv]] : [['inv', 'Inventory', g.inv], ['opr', 'Operating', g.opr]]).forEach(([k, lab, gl]) => {
-      const sym = q.one ? 'RF' : `RF_{${k === 'inv' ? 'inv' : 'op'}}`, tab = q.one ? 'Table 6A.4.2.2-1 (γ_DC, γ_DW)' : 'Table 6A.4.2.2-1';
+      const sym = q.one ? 'RF' : `RF_{${k === 'inv' ? 'inv' : 'op'}}`, tab = 'Table 6A.4.2.2-1';
       if (q.quad) {
         w.add({ id: k, label: `${lab} rating factor, ${q.lim} (the capacity depends on the load: the load factor at which the check reaches its limit)`, sym,
           eq: q.quadEq, sub: q.quadSub ? q.quadSub(q[k] * gl, gl) : '', value: isFinite(q[k]) ? q[k] : 'no live-load effect', unit: '', d: 3, ref: `${MBE} Eq. 6A.4.2.1-1, ${tab}${sv ? ', Art. 6A.6.4.2.2' : ''}` });
@@ -370,10 +370,12 @@
       const ev = Gp.id === 'ev', fh = ev && V.evG === 'fhwa', g = fh ? 1.30 : gL, lane = Gp.id === 'lane', W = Wof(p.axles);
       const gRef = fh ? 'FHWA memorandum, Load Rating for the FAST Act Emergency Vehicles (2016-11-03): γ_LL = 1.30' : `${Gp.id === 'shv' ? tabS : tabL} (${aTxt})${ev ? '; the legal-load factor is used for the emergency vehicle (conservative default)' : ''}`;
       const itp = !fh && +adtt > 1000 && +adtt < 5000, gStep = itp ? { eq: '1.30 + (1.45 - 1.30)\\frac{ADTT - 1000}{5000 - 1000}', sub: `1.30 + 0.15\\frac{${Math.round(+adtt)} - 1000}{4000}`, note: 'Linear between ADTT 1000 (1.30) and 5000 (1.45); ADTT one direction, from the Fatigue & studs inputs.' }
-        : { note: fh ? '' : 'ADTT one direction, from the Fatigue & studs inputs: 1.30 at ADTT ≤ 1000, 1.45 at ADTT ≥ 5000 or unknown.' };
+        : { note: fh ? 'FHWA memorandum, Load Rating for the FAST Act Emergency Vehicles (2016-11-03).' : 'ADTT one direction, from the Fatigue & studs inputs: 1.30 at ADTT ≤ 1000, 1.45 at ADTT ≥ 5000 or unknown.' };
+      if (ev && !fh) gStep.note += ' The legal-load factor is used for the emergency vehicle (conservative default; the FHWA memorandum of 2016-11-03 gives 1.30).';
+      const cite = fh ? 'FHWA memorandum (2016-11-03)' : Gp.id === 'shv' ? tabS : tabL;
       out.list.push({ key, id: key, cat: Gp.id, label: p.label, short: VEH_SHORT[key] || key, axles: p.axles.map(a => [...a]), udl: { ...p.udl }, multi: { ...p.multi }, neglect: !!p.neglect, W, tons: lane ? null : W / 2, im: im(V.imL), lim: 'Strength I',
         gam: g, gamS: 1.30, gRef, df: 'multi', post: Gp.id === 'legal' || Gp.id === 'shv', kind: 'Legal load',
-        G: { inv: g, opr: g, sInv: 1.30, sOpr: 1.30, one: lane ? 'Legal load (lane-type model)' : ev ? 'Emergency vehicle' : 'Legal load', gRef, gStep, sRef: `${MBE} Table 6A.4.2.2-1 (steel, Service II, legal load: 1.30)` } }); }));
+        G: { inv: g, opr: g, sInv: 1.30, sOpr: 1.30, one: lane ? 'Legal load (lane-type model)' : ev ? 'Emergency vehicle' : 'Legal load', gRef: cite, gStep, sRef: `${MBE} Table 6A.4.2.2-1`, sNote: 'Steel, Service II, legal load: 1.30.' } }); }));
     const Pm = V.permit || {};
     if (Pm.key) {
       let ax = null, label = '', short = '', udl = { mode: 'none', w: 0, gap: 0, trunc: false }, neglect = true, imDef = null;
@@ -386,7 +388,7 @@
         const imP = V.imP !== '' && V.imP != null && +V.imP >= 0 ? +V.imP : imDef != null ? imDef : 33;
         out.list.push({ key: 'permit:' + Pm.key, id: Pm.key, cat: 'permit', label, short: `Permit: ${short}`, axles: ax, udl, multi: { on: false }, neglect, W: wr.gvw, tons: wr.gvw / 2, im: imP, imPreset: imDef, lim: 'Strength II', gam: g, gamS: 1.00, gRef, df: T.df, post: false, kind: 'Permit load',
           ptype: ty, wr, verified: ent ? null : T.verified,
-          G: { inv: g, opr: g, sInv: 1.00, sOpr: 1.00, one: 'Permit load', gRef, gStep: { note: ent ? 'Entered by the engineer.' : T.df === 'multi' ? 'Routine or annual permits: the column by GVW/AL (not interpolated between columns), the row by ADTT (linear between 100, 1000 and 5000; one direction, from the Fatigue & studs inputs).' : 'Special or limited-crossing permit: one value for every ADTT; rated with the one-lane distribution factor without the multiple presence factor.' }, sRef: `${MBE} Table 6A.4.2.2-1 (steel, Service II, permit load: 1.00)` } }); }
+          G: { inv: g, opr: g, sInv: 1.00, sOpr: 1.00, one: 'Permit load', gRef: `${MBE} Table 6A.4.5.4.2a-1`, gStep: { note: `${gRef.replace(MBE + ' ', '')}. ` + (ent ? 'Entered by the engineer.' : T.df === 'multi' ? 'Routine or annual permits: the column by GVW/AL (not interpolated between columns), the row by ADTT (linear between 100, 1000 and 5000; one direction, from the Fatigue & studs inputs).' : 'Special or limited-crossing permit: one value for every ADTT; rated with the one-lane distribution factor without the multiple presence factor.') }, sRef: `${MBE} Table 6A.4.2.2-1`, sNote: 'Steel, Service II, permit load: 1.00.' } }); }
     }
     return out;
   }

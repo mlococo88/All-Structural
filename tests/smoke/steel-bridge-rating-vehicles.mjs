@@ -35,6 +35,7 @@ const calc = async p => { await p.click('#tabBar [data-otab="rt"]'); await p.wai
     await p.click('#tabBar [data-otab="rt"]'); await p.waitForSelector('#rt-veh');
     for (const k of ['Type3', 'SU4']) { await p.check(`[data-rtveh="${k}"]`); await p.waitForSelector(`[data-rtveh="${k}"]:checked`); }
     await p.selectOption('#rt_pk', 'CT-TLC'); await p.waitForSelector('#rt_pt');
+    await p.waitForTimeout(600);
     if (SHOTS) await p.locator('#rt-veh').screenshot({ path: path.join(SHOTS, 'sb-legal-permit-1-selection.png') });
     const saved = await p.evaluate(() => JSON.parse(localStorage.getItem('sbd2.project.current')).rating.veh);
     assert.deepEqual(saved.on, ['Type3', 'SU4']); assert.equal(saved.permit.key, 'CT-TLC'); assert.equal(saved.permit.type, 'routine');
@@ -53,7 +54,7 @@ const calc = async p => { await p.click('#tabBar [data-otab="rt"]'); await p.wai
     assert.equal(s.view, 'Type3'); assert.equal(s.kErr, 0); assert.ok(s.rows > 300 && s.sel, JSON.stringify([s.rows, s.sel]));
     ['Type 3: LL+IM', 'Live-load factor, Strength I', 'Legal load rating factor', 'Rated load (safe load capacity in tons)', 'Table 6A.4.4.2.3a-1'].forEach(t => assert.ok(s.txt.includes(t), `worked steps: ${t}`));
     assert.ok(/Type 3, flexure/.test(s.sub), 'the graph is the vehicle\'s');
-    if (SHOTS) { await p.locator('[data-gfxb="rating"]').screenshot({ path: path.join(SHOTS, 'sb-legal-permit-3-plot.png') }); const h = await p.locator('#rt-steps').boundingBox(); await p.locator('#rt-steps').scrollIntoViewIfNeeded();
+    if (SHOTS) { await p.locator('[data-gfxb="rating"]').screenshot({ path: path.join(SHOTS, 'sb-legal-permit-3-plot.png') }); await p.evaluate(() => document.querySelector('#rt-steps').scrollIntoView({ block: 'start' })); await p.waitForTimeout(400);
       await p.screenshot({ path: path.join(SHOTS, 'sb-legal-permit-4-worked.png'), fullPage: false }); }
     // back to HL-93
     await p.selectOption('#rt_view', ''); await p.waitForFunction(() => /RF along the girder$/.test(([...document.querySelectorAll('#out .secHead')].find(h => /along the girder/.test(h.textContent)) || {}).textContent || ''));
@@ -66,9 +67,9 @@ const calc = async p => { await p.click('#tabBar [data-otab="rt"]'); await p.wai
     await p.click('#sum-table a[data-sumgo$="|rtVeh"]'); await p.waitForFunction(() => /CT-TLC/.test((document.querySelector('#rt-steps .secHead') || {}).textContent || ''), null, { timeout: 600000 });
     // 4. Report
     await p.click('#tabBar [data-otab="rpt"]'); await p.click('#rp_build'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 600000 });
-    const rp = await p.evaluate(() => ({ kErr: document.querySelectorAll('.rp-doc .katex-error').length, bad: document.querySelectorAll('.rp-doc .rp-bad').length, text: document.querySelector('.rp-doc').innerText }));
+    const rp = await p.evaluate(() => ({ kErr: document.querySelectorAll('.rp-doc .katex-error').length, bad: document.querySelectorAll('.rp-doc .rp-bad').length, text: document.querySelector('.rp-doc').textContent }));
     assert.equal(rp.kErr, 0); assert.equal(rp.bad, 0); ['Legal-load and permit rating (3 vehicles)', 'Type 3: x =', 'Permit: CT-TLC: x =', 'Rated load (safe load capacity in tons)', 'Load rating (LRFR: design, legal and permit loads)'].forEach(t => assert.ok(rp.text.includes(t), `report: ${t}`));
-    assert.ok(!/NaN|undefined|\[object/.test(rp.text), 'NaN / undefined in the report');
+    assert.ok(!/NaN|undefined|\[object/.test(rp.text.replace(/<annotation[^]*?<\/annotation>/g, '')), 'NaN / undefined in the report');
     console.log(`ok   1400 px: rating ${r.R.map(q => `${q[0]} RF ${q[9]}`).join(', ')} (Calculate ${Date.now() - tc} ms); Summary RF L/P ${sm.v}; report section built`);
   } finally { allErrs.push(...errs); await b.close(); }
 }

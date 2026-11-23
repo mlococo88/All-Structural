@@ -330,7 +330,7 @@
   function vehSteps(v) {
     const w = window.SharedSteps.work('rtv'), MBE = window.SBDRating.MBE, n = (x, d) => window.SharedSteps.n(x, d);
     if (v.tons == null || !v.gov) return [];
-    w.add({ id: 'W', label: `${v.short}: gross weight`, sym: 'W', eq: '\\frac{\\sum P}{2}', sub: `\\frac{${v.axles.map(a => n(a[0], 2).replace(/\.?0+$/, '')).join(' + ')}}{2}`, value: v.tons, unit: 'tons', d: 2, ref: v.cat === 'permit' ? 'the permit vehicle\'s axle loads' : 'shared/vehicles.js (MBE Appendix D6A figures; owner documents)', note: 'Axle loads in kip; 1 ton = 2 kip.' });
+    w.add({ id: 'W', label: `${v.short}: gross weight`, sym: 'W', eq: '\\frac{\\sum P}{2}', sub: `\\frac{${v.axles.map(a => n(a[0], 2).replace(/\.?0+$/, '')).join(' + ')}}{2}`, value: v.tons, unit: 'tons', d: 2, ref: '', note: `Axle loads in kip; 1 ton = 2 kip. ${v.cat === 'permit' && v.id === 'custom' ? 'The entered axle train.' : 'From the shared vehicle list (MBE Appendix D6A figures and the owner documents it names).'}` });
     w.add({ id: 'RT', label: 'Rated load (safe load capacity in tons)', sym: 'RT', eq: 'RF \\times W', sub: `${n(v.rf, 3)}(${n(v.tons, 2)})`, value: v.rated, unit: 'tons', d: 1, ref: `${MBE} Art. 6A.4.4.4`, note: `RF: the governing rating factor of this vehicle (${v.gov.name}: ${v.gov.title}), worked in the steps of that row.` });
     if (v.posting && v.posting.st === 'post') w.add({ id: 'post', label: 'Safe posting load', sym: 'P_{post}', eq: '\\frac{W}{0.7}(RF - 0.3)', sub: `\\frac{${n(v.tons, 2)}}{0.7}(${n(v.rf, 3)} - 0.3)`, value: v.posting.P, unit: 'tons', d: 1, ref: `${MBE} Eq. 6A.8.3-1`, ok: false, note: 'For 0.3 < RF < 1.0 of a legal load. The posting decision and sign are the owner\'s (MBE Art. 6A.8).' });
     return w.steps;
