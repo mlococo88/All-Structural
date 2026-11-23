@@ -300,43 +300,55 @@
      vehicle (no Inventory / Operating levels). What differs is the live load (each selected vehicle run on the line-girder model, engine/analysis.js
      R.vehicle), its dynamic load allowance, its distribution factor and γ_LL:
        legal loads (Type 3, 3S2, 3-3; SU4 to SU7; owner legal vehicles): Strength I, γ_LL by ADTT (one direction) from Tables 6A.4.4.2.3a-1 and
-         6A.4.4.2.3b-1: 1.30 at ADTT ≤ 1000, 1.45 at ADTT ≥ 5000 or unknown, linear between (the values checked against the 4th Ed. for index.html,
-         fixlog/index.md); Service II γ_LL 1.30 (Table 6A.4.2.2-1); the governing (one or more lanes) distribution factor; IM 33 % unless entered
+         6A.4.4.2.3b-1: 1.30 at ADTT ≤ 1000, 1.45 at ADTT ≥ 5000 or unknown, linear between; Service II γ_LL 1.30 (Table 6A.4.2.2-1); the governing (one or more lanes) distribution factor; IM 33 % unless entered
          (Art. 6A.4.4.3);
-       lane-type legal load model (Figs. D6A-4, D6A-5; Art. 6A.4.4.2.1a): 75 % of Type 3-3 + 0.2 klf (no IM on the lane load), two such trucks at
-         30 ft or more for negative moment; its effects are used for negative moment (continuous girders, every span length), for the shear at the
-         stations of the negative-moment regions around the piers (the interior reactions; decision pending engineer review), and for every effect
-         in spans longer than 200 ft;
-       emergency vehicles EV2, EV3 (FAST Act; FHWA memorandum of 2016-11-03): γ_LL from the legal-load table (the conservative default, ≥ 1.30) or
+       lane-type legal load model (Figs. D6A-4, D6A-5; Art. 6A.4.4.2.1a): 75 % of Type 3-3 + 0.2 klf (no IM on the lane load, Art. 6A.4.4.3), two
+         such trucks for negative moment and interior reactions (the MBE figure spaces them 30 ft; the shared engine searches 30 ft and more, which
+         includes the MBE case); its effects are used for negative moment (continuous girders, every span length), for the shear at the stations of
+         the negative-moment regions around the piers (the interior reactions; decision pending engineer review), and for every effect in spans
+         longer than 200 ft; rated load and posting with W = 80 kip (Arts. 6A.4.4.4, 6A.8.3);
+       emergency vehicles EV2, EV3 (FAST Act; FHWA memorandum of 2016-11-03; the MBE 4th Ed. does not cover them): γ_LL from the legal-load table (the conservative default, ≥ 1.30) or
          1.30 (the FHWA memorandum) by the engineer's choice; decision pending engineer review;
-       permit loads: Strength II, γ_LL from Table 6A.4.5.4.2a-1 by permit type: routine or annual (by ADTT and GVW / AL; the values checked against
-         the 4th Ed. p. 6-43 for index.html) with the governing multi-lane factor; special or limited-crossing permits with the one-lane factor
-         without the multiple presence factor (Art. 6A.4.5.4.2b: this app's fatigue factors, g_1 / 1.2) and γ_LL 1.40 (multiple trips, fewer than 100
-         crossings, mixed with traffic), 1.20 (single trip, mixed with traffic), 1.10 (single trip, escorted, no other vehicle on the bridge): these
-         three values are NOT verified against the 4th Ed. text (decision pending engineer review; γ_LL can be entered); Service II γ_LL 1.00
-         (Table 6A.4.2.2-1); IM 33 % unless entered (Art. 6A.4.5.5); a 0.2 klf lane load on top of the permit vehicle (no IM) for negative moment
-         of continuous girders and for spans longer than 200 ft (Art. 6A.4.5.4.1; decision pending engineer review).
-     Posting (Art. 6A.8.3, Eq. 6A.8.3-1): safe posting load = (W / 0.7)(RF − 0.3) for 0.3 < RF < 1.0 of a legal load (as index.html). */
+       permit loads: Strength II, γ_LL from Table 6A.4.5.4.2a-1 by permit type: routine or annual (by ADTT and GVW / AL) with the design
+         (multi-lane) factor; special or limited-crossing permits with the one-lane factor without the multiple presence factor (Art. 6A.4.5.4.2b:
+         this app's fatigue factors, g_1 / 1.2) and γ_LL 1.40 (multiple trips, fewer than 100 crossings, mixed with traffic), 1.20 (single trip,
+         mixed with traffic), 1.10 (single trip, escorted, no other vehicle on the bridge); Service II γ_LL 1.00 (Table 6A.4.2.2-1) with the design
+         distribution factor for every permit that mixes with traffic and the one-lane factor only for the escorted permit (C6A.6.4.2.2); IM 33 %
+         unless entered (Art. 6A.4.5.5); a 0.2 klf lane load on top of the permit vehicle (no IM) where Art. 6A.4.5.4.1 asks for it (permitLane,
+         vehicleLL).
+     Posting (Art. 6A.8.3, Eq. 6A.8.3-1): safe posting load = (W / 0.7)(RF − 0.3) for 0.3 < RF < 1.0 of a legal load.
+     Verified against the MBE 4th Ed. (2026) text, 2026-11-23 (fixlog/steel-bridge.md, MBV): Tables 6A.4.2.2-1, 6A.4.4.2.3a-1, 6A.4.4.2.3b-1,
+     6A.4.5.4.2a-1; Arts. 6A.4.4.2.1a, 6A.4.4.3, 6A.4.4.4, 6A.4.5.4.1, 6A.4.5.4.2a, 6A.4.5.4.2b, 6A.4.5.5, 6A.4.5.6, 6A.6.4.2, 6A.8.3; Figs. D6A-1 to
+     D6A-5 and D6A-7. */
   /* gammaLegal(adtt): generalized live-load factor of legal loads, MBE Tables 6A.4.4.2.3a-1 / -3b-1 (ADTT one direction; unknown: 1.45) */
   function gammaLegal(adtt) { const A = +adtt; if (adtt == null || adtt === '' || !(A >= 0)) return 1.45; if (A >= 5000) return 1.45; if (A <= 1000) return 1.30; return 1.30 + (1.45 - 1.30) * (A - 1000) / (5000 - 1000); }
   /* weightRatio(axles): GVW (kip), AL (ft, front to rear axle), GVW / AL (kip/ft; null with fewer than two axles); axles [[P, spacing]…] */
   function weightRatio(axles) { const ax = axles || [], gvw = ax.reduce((a, q) => a + (+q[0] || 0), 0), AL = ax.slice(1).reduce((a, q) => a + (+q[1] || 0), 0); return { gvw, AL, wr: ax.length > 1 && AL > 0 ? gvw / AL : null }; }
   const PERMIT_ROUTINE = [[5000, [1.40, 1.35, 1.30]], [1000, [1.35, 1.25, 1.20]], [100, [1.30, 1.20, 1.15]]];   // Table 6A.4.5.4.2a-1: ADTT rows; GVW/AL ≤ 2.0 | 2.0–3.0 | ≥ 3.0 kip/ft
+  /* df: the distribution factor at Strength II (Table 6A.4.5.4.2a-1, Arts. 6A.4.5.4.2a, 6A.4.5.4.2b); dfS: at Service II (C6A.6.4.2.2: the LRFD
+     design factors for a permit that mixes with traffic; the one-lane factor only for an escorted permit with no other vehicle on the bridge);
+     mixed: other vehicles may be on the bridge (the 0.2 klf lane load of Art. 6A.4.5.4.1 stands for them; C6A.4.5.4.1: not needed when the
+     permit excludes other loads) */
   const PERMIT_TYPES = [
-    { id: 'routine', df: 'multi', label: 'Routine or annual: unlimited crossings, mixed with traffic (two or more lanes)' },
-    { id: 'multi', df: 'one', gam: 1.40, label: 'Special or limited crossing: multiple trips (fewer than 100 crossings), mixed with traffic (one lane)' },
-    { id: 'trip-mixed', df: 'one', gam: 1.20, label: 'Special or limited crossing: single trip, mixed with traffic (one lane)' },
-    { id: 'trip-escort', df: 'one', gam: 1.10, label: 'Special or limited crossing: single trip, escorted, no other vehicle on the bridge (one lane)' }];
+    { id: 'routine', df: 'multi', dfS: 'multi', mixed: true, label: 'Routine or annual: unlimited crossings, mixed with traffic (two or more lanes)' },
+    { id: 'multi', df: 'one', dfS: 'multi', mixed: true, gam: 1.40, label: 'Special or limited crossing: multiple trips (fewer than 100 crossings), mixed with traffic (one lane)' },
+    { id: 'trip-mixed', df: 'one', dfS: 'multi', mixed: true, gam: 1.20, label: 'Special or limited crossing: single trip, mixed with traffic (one lane)' },
+    { id: 'trip-escort', df: 'one', dfS: 'one', mixed: false, gam: 1.10, label: 'Special or limited crossing: single trip, escorted, no other vehicle on the bridge (one lane)' }];
   /* gammaPermit(type, adtt, wr): MBE Table 6A.4.5.4.2a-1. Routine: the column by GVW/AL (not interpolated between columns: the lower column, the
      larger factor; no ratio: the ≤ 2.0 column), the row by ADTT (linear between 100, 1000 and 5000; unknown: the ≥ 5000 row). Special: the fixed
-     value of its type (not verified against the 4th Ed., see above). Returns { g, df ('multi' | 'one'), col, verified } */
+     value of its type, for every ADTT. Every value read against the 4th Ed. table, 2026-11-23 (verified: true). The table's columns are
+     GVW/AL below 2.0, between 2.0 and 3.0, above 3.0: a ratio of exactly 2.0 takes the first column and exactly 3.0 the third (the table does not
+     say; open item). Returns { g, df ('multi' | 'one'), col, verified } */
   function gammaPermit(type, adtt, wr) {
     const T = PERMIT_TYPES.find(t => t.id === type) || PERMIT_TYPES[0];
-    if (T.id !== 'routine') return { g: T.gam, df: 'one', col: null, verified: false };
+    if (T.id !== 'routine') return { g: T.gam, df: 'one', col: null, verified: true };
     const col = (wr == null || !(wr > 2.0)) ? 0 : (wr < 3.0 ? 1 : 2), R = PERMIT_ROUTINE.map(([a, f]) => [a, f[col]]), A = (adtt == null || adtt === '' || !(+adtt >= 0)) ? 5000 : +adtt;
     let g; if (A >= R[0][0]) g = R[0][1]; else if (A <= R[2][0]) g = R[2][1]; else { const [hi, lo] = A >= R[1][0] ? [R[0], R[1]] : [R[1], R[2]]; g = lo[1] + (hi[1] - lo[1]) * (A - lo[0]) / (hi[0] - lo[0]); }
     return { g, df: 'multi', col, verified: true };
   }
+  /* LANE_W: the equivalent truck weight (kip) of the lane-type legal load model for the rated load and the posting equation (MBE Arts. 6A.4.4.4,
+     6A.8.3): 80 kip = 40 tons, whatever the 75 % axles add up to */
+  const LANE_W = 80;
   /* the vehicles offered (keys of shared/vehicles.js presets), by group; short: the name used in tables */
   const VEH_GROUPS = [
     { id: 'legal', title: 'AASHTO legal loads (MBE Figs. D6A-1 to D6A-3)', keys: ['Type3', 'Type3S2', 'Type3-3'] },
@@ -373,8 +385,8 @@
         : { note: fh ? 'FHWA memorandum, Load Rating for the FAST Act Emergency Vehicles (2016-11-03).' : 'ADTT one direction, from the Fatigue & studs inputs: 1.30 at ADTT ≤ 1000, 1.45 at ADTT ≥ 5000 or unknown.' };
       if (ev && !fh) gStep.note += ' The legal-load factor is used for the emergency vehicle (conservative default; the FHWA memorandum of 2016-11-03 gives 1.30).';
       const cite = fh ? 'FHWA memorandum (2016-11-03)' : Gp.id === 'shv' ? tabS : tabL;
-      out.list.push({ key, id: key, cat: Gp.id, label: p.label, short: VEH_SHORT[key] || key, axles: p.axles.map(a => [...a]), udl: { ...p.udl }, multi: { ...p.multi }, neglect: !!p.neglect, W, tons: lane ? null : W / 2, im: im(V.imL), lim: 'Strength I',
-        gam: g, gamS: 1.30, gRef, df: 'multi', post: Gp.id === 'legal' || Gp.id === 'shv', kind: 'Legal load',
+      out.list.push({ key, id: key, cat: Gp.id, label: p.label, short: VEH_SHORT[key] || key, axles: p.axles.map(a => [...a]), udl: { ...p.udl }, multi: { ...p.multi }, neglect: !!p.neglect, W, tons: lane ? LANE_W / 2 : W / 2, Weq: lane ? LANE_W : null, im: im(V.imL), lim: 'Strength I',
+        gam: g, gamS: 1.30, gRef, df: 'multi', post: Gp.id === 'legal' || Gp.id === 'shv' || lane, kind: 'Legal load',
         G: { inv: g, opr: g, sInv: 1.30, sOpr: 1.30, one: lane ? 'Legal load (lane-type model)' : ev ? 'Emergency vehicle' : 'Legal load', gRef: cite, gStep, sRef: `${MBE} Table 6A.4.2.2-1`, sNote: 'Steel, Service II, legal load: 1.30.' } }); }));
     const Pm = V.permit || {};
     if (Pm.key) {
@@ -384,11 +396,11 @@
       else out.err.push(`Permit vehicle "${Pm.key}" is not in shared/vehicles.js.`);
       if (ax) { const wr = weightRatio(ax), T = gammaPermit(Pm.type, adtt, wr.wr), ent = Pm.gam !== '' && Pm.gam != null && +Pm.gam > 0, g = ent ? +Pm.gam : T.g, ty = PERMIT_TYPES.find(t => t.id === Pm.type) || PERMIT_TYPES[0];
         const gRef = ent ? `γ_LL entered (${MBE} Table 6A.4.5.4.2a-1 gives ${n2(T.g)} for this permit type)` : T.df === 'multi' ? `${MBE} Table 6A.4.5.4.2a-1, routine or annual (${aTxt}; GVW/AL = ${wr.wr == null ? 'n/a' : n2(wr.wr)} kip/ft, column ${['≤ 2.0', '2.0 to 3.0', '≥ 3.0'][T.col]})`
-          : `${MBE} Table 6A.4.5.4.2a-1, special or limited crossing (${ty.id === 'multi' ? 'multiple trips, fewer than 100 crossings' : ty.id === 'trip-mixed' ? 'single trip, mixed with traffic' : 'single trip, escorted'}); value not verified against the 4th Ed. text`;
+          : `${MBE} Table 6A.4.5.4.2a-1, special or limited crossing (${ty.id === 'multi' ? 'multiple trips, fewer than 100 crossings' : ty.id === 'trip-mixed' ? 'single trip, mixed with traffic' : 'single trip, escorted, no other vehicle on the bridge'})`;
         const imP = V.imP !== '' && V.imP != null && +V.imP >= 0 ? +V.imP : imDef != null ? imDef : 33;
-        out.list.push({ key: 'permit:' + Pm.key, id: Pm.key, cat: 'permit', label, short: `Permit: ${short}`, axles: ax, udl, multi: { on: false }, neglect, W: wr.gvw, tons: wr.gvw / 2, im: imP, imPreset: imDef, lim: 'Strength II', gam: g, gamS: 1.00, gRef, df: T.df, post: false, kind: 'Permit load',
+        out.list.push({ key: 'permit:' + Pm.key, id: Pm.key, cat: 'permit', label, short: `Permit: ${short}`, axles: ax, udl, multi: { on: false }, neglect, W: wr.gvw, tons: wr.gvw / 2, im: imP, imPreset: imDef, lim: 'Strength II', gam: g, gamS: 1.00, gRef, df: T.df, dfS: ty.dfS, mixed: ty.mixed, post: false, kind: 'Permit load',
           ptype: ty, wr, verified: ent ? null : T.verified,
-          G: { inv: g, opr: g, sInv: 1.00, sOpr: 1.00, one: 'Permit load', gRef: `${MBE} Table 6A.4.5.4.2a-1`, gStep: { note: `${gRef.replace(MBE + ' ', '')}. ` + (ent ? 'Entered by the engineer.' : T.df === 'multi' ? 'Routine or annual permits: the column by GVW/AL (not interpolated between columns), the row by ADTT (linear between 100, 1000 and 5000; one direction, from the Fatigue & studs inputs).' : 'Special or limited-crossing permit: one value for every ADTT; rated with the one-lane distribution factor without the multiple presence factor.') }, sRef: `${MBE} Table 6A.4.2.2-1`, sNote: 'Steel, Service II, permit load: 1.00.' } }); }
+          G: { inv: g, opr: g, sInv: 1.00, sOpr: 1.00, one: 'Permit load', gRef: `${MBE} Table 6A.4.5.4.2a-1`, gStep: { note: `${gRef.replace(MBE + ' ', '')}. ` + (ent ? 'Entered by the engineer.' : T.df === 'multi' ? 'Routine or annual permits: the column by GVW/AL (not interpolated between columns), the row by ADTT (linear between 100, 1000 and 5000; one direction, from the Fatigue & studs inputs).' : 'Special or limited-crossing permit: one value for every ADTT; rated at Strength II with the one-lane distribution factor without the multiple presence factor.') }, sRef: `${MBE} Table 6A.4.2.2-1`, sNote: `Steel, Service II, permit load: 1.00 (an optional check in the table). Distribution factor at Service II: ${ty.dfS === 'one' ? 'one lane without the multiple presence factor (escorted permit, no other vehicle on the bridge)' : 'the design factor (the permit mixes with traffic)'} (MBE C6A.6.4.2.2).` } }); }
     }
     return out;
   }
@@ -397,16 +409,21 @@
      of two or more lanes loaded, the shear skew correction as the design uses it), 'one' the one-lane factors without the multiple presence factor
      (R.fat.gM, gVR, gVL: g_1 / 1.2). The lane-type model (v.cat 'lane') is masked to where MBE 6A.4.4.2.1a calls for it: negative moment where the
      girder is continuous; shear at the stations of the pier regions (R.region ≥ 1) where continuous; every effect at stations of a span longer than
-     200 ft. runLane (a permit vehicle, optional): the same vehicle run with a 0.2 klf lane load on top (MBE Art. 6A.4.5.4.1: closely following
-     vehicles), used for negative moment where the girder is continuous and for every effect at stations of a span longer than 200 ft.
+     200 ft. runLane (a permit vehicle, optional; given only when permitLane() says the lane load applies): the same vehicle run with a 0.2 klf lane
+     load on top (MBE Art. 6A.4.5.4.1: closely leading and following vehicles), used for negative moment where the girder is continuous, for the
+     shear at the stations of the pier regions (R.region ≥ 1: between the points of contraflexure over the interior supports) where continuous,
+     and for every effect at stations of a span longer than 200 ft (the MBE names spans of 200 to 300 ft; kept above 300 ft, conservative).
      Returns { ll: { Mpos, Mneg, VRpos, VRneg, VLpos, VLneg }, g: { M, VR, VL }, per (the per-lane values used), at (their governing cases),
      withLane (true where the lane-load run is used), applies (any effect kept), over200 [span…] } */
   function vehicleLL(R, run, v, runLane) {
     const src = v.df === 'one' ? R.fat : R.ll, g = { M: src.gM, VR: src.gVR, VL: src.gVL }, N = R.x.length, sup = R.sup, ns = sup.length - 1;
     const long = k => k >= 0 && k < ns && sup[k + 1] - sup[k] > 200 + 1e-9, spansAt = x => { const o = []; for (let k = 0; k < ns; k++) if (x >= sup[k] - 1e-6 && x <= sup[k + 1] + 1e-6) o.push(k); return o; };
     const lane = v.cat === 'lane', far = R.x.map(x => spansAt(x).some(long)), big = far.map(b => !lane || b), pier = R.x.map((_, i) => !lane || (!!R.cont && R.region && R.region[i] >= 1));
-    // a permit vehicle with the 0.2 klf lane load (runLane; MBE 6A.4.5.4.1): negative moment where continuous, every effect in a span over 200 ft
-    const useL = (key, i) => !!runLane && (far[i] || (key === 'Mmin' && !!R.cont)), per = {}, at = {}, wl = {};
+    // a permit vehicle with the 0.2 klf lane load (runLane; MBE 6A.4.5.4.1): negative moment where continuous, the shear of the pier regions where
+    // continuous (added 2026-11-23, MBV: the article lists the shear between the points of contraflexure over the interior supports), every effect
+    // in a span over 200 ft
+    const inPier = i => !!R.cont && !!R.region && R.region[i] >= 1;
+    const useL = (key, i) => !!runLane && (far[i] || (key === 'Mmin' && !!R.cont) || (key.charAt(0) === 'V' && inPier(i))), per = {}, at = {}, wl = {};
     ['Mmax', 'Mmin', 'VRmax', 'VRmin', 'VLmax', 'VLmin'].forEach(key => { per[key] = []; at[key] = []; wl[key] = [];
       for (let i = 0; i < N; i++) { const L = useL(key, i), q = L ? runLane : run; per[key].push(q.perLane[key][i]); at[key].push(q.at ? q.at[key][i] : null); wl[key].push(L); } });
     const mk = (key, gk, keep) => per[key].map((val, i) => (keep(i) ? g[gk][i] * val : 0));
@@ -417,6 +434,18 @@
   }
   /* laneModelNeeded(spans, cont): does MBE 6A.4.4.2.1a call for the lane-type legal load model on this girder (a span over 200 ft, or continuous) */
   function laneModelNeeded(spans, cont) { return (!!cont && spans.length > 1) || spans.some(L => L > 200 + 1e-9); }
+  /* permitLane(v, adtt, spans, cont): is the 0.2 klf lane load of MBE Art. 6A.4.5.4.1 run with permit vehicle v? Required for bridges with an ADTT
+     above 500 (one direction; unknown ADTT: taken as above 500), for every effect of spans over 200 ft and for negative moment, shear between the
+     points of contraflexure and reactions at the interior supports of continuous spans; not needed for a permit that excludes other vehicles from
+     the bridge (C6A.4.5.4.1: the escorted type, v.mixed false). Returns { on, why (plain text) } */
+  function permitLane(v, adtt, spans, cont) {
+    if (!v || v.cat !== 'permit') return { on: false, why: '' };
+    if (!laneModelNeeded(spans, cont)) return { on: false, why: 'No 0.2 klf lane load with the permit vehicle: simple spans of 200 ft or less (MBE Art. 6A.4.5.4.1).' };
+    if (v.mixed === false) return { on: false, why: 'No 0.2 klf lane load with the permit vehicle: the escorted permit excludes other vehicles from the bridge (MBE C6A.4.5.4.1).' };
+    const known = adtt != null && adtt !== '' && +adtt >= 0;
+    if (known && !(+adtt > 500)) return { on: false, why: `No 0.2 klf lane load with the permit vehicle: ADTT ${Math.round(+adtt)} (one direction) is not above 500 (MBE Art. 6A.4.5.4.1).` };
+    return { on: true, why: `A 0.2 klf lane load (no IM) is on top of the permit vehicle for negative moment and the shear of the pier regions of continuous spans and for every effect in spans over 200 ft: ${known ? `ADTT ${Math.round(+adtt)} (one direction) is above 500` : 'ADTT unknown, taken as above 500'} (MBE Art. 6A.4.5.4.1).` };
+  }
   /* posting(W, RF): MBE Eq. 6A.8.3-1 for a legal load of weight W (tons): RF ≥ 1 none; 0.3 < RF < 1: (W/0.7)(RF − 0.3); RF ≤ 0.3: the equation
      does not apply (6A.8.3: consider closing the bridge) */
   function posting(W, RF) { if (!(RF < 1 - 1e-9) && !Number.isNaN(RF)) return { st: 'ok' }; if (!(RF > 0.3)) return { st: 'close' }; return { st: 'post', P: W / 0.7 * (RF - 0.3) }; }
@@ -431,5 +460,5 @@
     shear: 'Shear at the Strength limit state takes the system factor φ_s = 1.0 (MBE 4th Ed. Art. 6A.4.2.4, p. 6-25): C = φ_cφ_vV_n; the entered φ_s applies to flexure (C = φ_cφ_sφ_fR_n, φ_cφ_s ≥ 0.85, Eq. 6A.4.2.1-3).' };
   BASIS.short = 'Rating per MBE 4th Ed. (2026): Service II f_R = 0.95F_yf composite, 0.80R_hF_yf noncomposite (6A.6.4.2.2); φ_s = 1.0 on shear (6A.4.2.4).';
   window.SBDRating = { MBE, BASIS, factors, phi, rf, kAt, flexure, service, shear, shearCases, noDoublePL, fatigue, target, girder,
-    gammaLegal, gammaPermit, weightRatio, parseAxles, vehicleList, vehicleLL, laneModelNeeded, posting, vehTarget, VEH_GROUPS, VEH_SHORT, PERMIT_TYPES, PERMIT_KEYS };
+    gammaLegal, gammaPermit, weightRatio, parseAxles, vehicleList, vehicleLL, laneModelNeeded, permitLane, LANE_W, posting, vehTarget, VEH_GROUPS, VEH_SHORT, PERMIT_TYPES, PERMIT_KEYS };
 })();
