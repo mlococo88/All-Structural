@@ -277,7 +277,7 @@
       else nn(r.psf, `xs.dl.ovl.${i}.psf`, `${L}: the weight`); });
     const Wd = deckWidth(P);
     (Array.isArray(q.extra) ? q.extra : []).forEach((r, i) => {
-      if (!CATS.includes(r.cat)) e(`xs.dl.extra.${i}.cat`, `Added line load ${i + 1}: choose DC2, DW, DC1 or Utility.`);
+      if (!CATS.includes(r.cat)) e(`xs.dl.extra.${i}.cat`, `Added line load ${i + 1}: choose DC2, DW, DC1, a utility category or the future utility allowance.`);
       if (r.dist != null && !XDIST.includes(r.dist)) e(`xs.dl.extra.${i}.dist`, `Added line load ${i + 1}: choose its distribution.`);
       if (!(isNum(r.x) && r.x >= 0 && (!isNum(Wd) || r.x <= Wd + 1e-9))) e(`xs.dl.extra.${i}.x`, `Added line load ${i + 1}: x must be from 0 to the deck width${isNum(Wd) ? ` ${Wd.toFixed(2)} ft` : ''}.`);
       nn(r.plf, `xs.dl.extra.${i}.plf`, `Added line load ${i + 1}: the line load`); });
@@ -310,8 +310,19 @@
          the lever rule). pl(P) / line(P, g).PL; the engine takes it through engine/pl.js (inputs.pl).
        extra[i].cat 'UT': a utility line load (DW, AASHTO LRFD 10th Ed. Art. 3.5.1: DW = wearing surfaces and utilities; Table 3.4.1-2
          γ_DW), distributed as the steel app distributes its UT rows (dead()), added to the line's DW (the engine's w_DW: on the composite
-         section, on the continuous unit when made continuous). */
-  const CATS = ['DC2', 'DW', 'DC1', 'UT'], XDIST = ['auto', 'pilecap', 'equal', 'two'], PED_MIN = 2.0;
+         section, on the continuous unit when made continuous).
+     UT-N (2026-11-23, engineer request: "add to Prestressed the two utility categories the Steel Bridge app has"; fixlog/ps-bridge.md
+     UT-N; supersedes PL-A decision D8; optional within psb2.project v1, absent in every project saved before: the results as before):
+       extra[i].cat 'UTN': a utility on the NONCOMPOSITE section with the DW load factors (the Steel Bridge app's category UT; the code
+         'UT' is already this app's composite utility of PL-A, so the stored code is 'UTN'); extra[i].cat 'UF': the future utility
+         allowance on the noncomposite section, γ 1.25 or 0 (the Steel Bridge app's UF). Both are distributed exactly as the steel app
+         distributes its UT / UF rows (dead() is given the steel category: 'massdot' the pile-cap method, 'aashto' equally, 'ridot' the
+         two adjacent beams; or the row's own distribution). line(P, g).UTN / .UF: the line's shares; engine/design.js one() adds them to
+         w_NC and names them in inputs.ut; engine/ut.js gives them their load factors. */
+  const CATS = ['DC2', 'DW', 'DC1', 'UT', 'UTN', 'UF'], XDIST = ['auto', 'pilecap', 'equal', 'two'], PED_MIN = 2.0;
+  /* the category names shown (the Steel Bridge app's CATS for the two noncomposite ones) and the category dead() is given */
+  const CATN = { DC2: 'DC2', DW: 'DW', DC1: 'DC1', UT: 'Utility (composite, DW)', UTN: 'Utility (noncomposite, DW factors)', UF: 'Future utility allowance (noncomposite, γ 1.25/0)' };
+  const steelCat = c => (c === 'UTN' ? 'UT' : c);
   const edgesOf = q => { const o = {}; ['L', 'R'].forEach(s => { const b = q['bar' + s] || {};
     o[s] = { type: b.type === 'curb' ? 'curb' : 'barrier', bw: b.bw, bwt: b.w, cw: b.cw, ch: b.ch, rw: b.rw, rp: b.rp, rf: b.rf, face: b.face }; }); return o; };
   const xsInOf = (q, sw) => ({ dl: { wcA: q.wcA, swL: sw('L'), swR: sw('R'), fenceL: (q.swL || {}).fence, fenceXL: (q.swL || {}).fenceX, fenceR: (q.swR || {}).fence, fenceXR: (q.swR || {}).fenceX,
@@ -341,9 +352,19 @@
       { method: q.method, ped, swL, swThkL: swt('L'), swR, swThkR: swt('R'), medW: +med.w > 0 ? +med.w : 0, medThk: +med.w > 0 ? +med.t || 0 : 0, medJoint: med.joint ? 'yes' : 'no',
         fws: xi.fws !== null ? xi.fws : +q.fws || 0, uwc: wc, uwcA: xi.wcA, hh: 0, sip: 0, bf: 0,
         fenceL: xi.fenceL, fenceXL: xi.fenceXL, fenceR: xi.fenceR, fenceXR: xi.fenceXR, wsThk: xi.wsThk, wsGam: xi.wsGam,
-        edges, extra: (q.extra || []).map((r, i) => ({ desc: r.name || `Added line load ${i + 1}`, cat: r.cat, x: +r.x, plf: +r.plf, dist: r.dist || 'auto' })), ovl: xi.ovl, ovr: null, bcls: null }];
+        edges, extra: (q.extra || []).map((r, i) => ({ desc: r.name || `Added line load ${i + 1}`, cat: steelCat(r.cat), x: +r.x, plf: +r.plf, dist: r.dist || 'auto' })), ovl: xi.ovl, ovr: null, bcls: null }];
     const R = dead(...args(0, sw('L'), sw('R')));   // the dead loads: the same call as before PL-A (ped 0)
     const out = Object.assign({}, R, { wc, ts, Wd, edge: Ed });
+    // UT-N: rows of the noncomposite categories (stored 'UTN' and 'UF'; dead() was given the steel categories 'UT' and 'UF'): each row
+    // of the result gets its stored category (cat0), and the shares are summed per stored category (xu: utc the composite utilities of
+    // PL-A, utn, uf). No such row (every project saved before): nothing added, the result as before.
+    const X0 = q.extra || [], c0 = L => { const m = /^u(\d+)$/.exec(L.id || ''); return m && X0[+m[1]] ? X0[+m[1]].cat : null; };
+    if (R.per.some(L => c0(L) === 'UTN' || c0(L) === 'UF')) {
+      out.per = R.per.map(L => (c0(L) === 'UTN' || c0(L) === 'UF' ? Object.assign({}, L, { cat0: c0(L) }) : L));
+      const sum = f => R.ub.map((_, i) => out.per.filter(f).reduce((a, L) => a + L.r[i], 0));
+      out.xu = { utc: sum(L => L.cat === 'UT' && !L.cat0), utn: sum(L => L.cat0 === 'UTN'), uf: sum(L => L.cat0 === 'UF'),
+        hasC: out.per.some(L => L.cat === 'UT' && !L.cat0), hasN: out.per.some(L => L.cat0 === 'UTN'), hasF: out.per.some(L => L.cat0 === 'UF') };
+    }
     // PL-A: the pedestrian live load, by a second call of the steel app's dead() with ped and only the sidewalks wider than 2.0 ft
     // (3.6.1.6); each line load's shares do not depend on the other loads, so only its pedestrian rows, shares and steps are taken
     const ped = +q.ped > 0 ? +q.ped : 0, pw = s => (sw(s) > PED_MIN + 1e-9 ? sw(s) : 0);
@@ -359,7 +380,9 @@
      DC1 = the line's share of them (added to the engine's w_NC, the non-composite DC1 on the bare girder; engine/design.js one()). */
   function line(P, g) { const R = distribute(P); if (!R) return null; const o = { DC2: R.dc2[g - 1], DW: R.dw[g - 1] };
     // PL-A: utility line loads (UT) are DW (3.5.1): the line's share added to its DW (no UT row: DW exactly as before); PL its own value
-    if (R.ut && R.per.some(L => L.cat === 'UT')) { o.UT = R.ut[g - 1]; o.DWonly = o.DW; o.DW = o.DW + o.UT; }
+    // UT-N: with noncomposite rows (R.xu) the composite share is summed from the composite rows only; their own shares are UTN and UF
+    if (R.xu) { if (R.xu.hasC) { o.UT = R.xu.utc[g - 1]; o.DWonly = o.DW; o.DW = o.DW + o.UT; } if (R.xu.hasN) o.UTN = R.xu.utn[g - 1]; if (R.xu.hasF) o.UF = R.xu.uf[g - 1]; }
+    else if (R.ut && R.per.some(L => L.cat === 'UT')) { o.UT = R.ut[g - 1]; o.DWonly = o.DW; o.DW = o.DW + o.UT; }
     if (R.ped && R.ped.pl[g - 1] !== 0) o.PL = R.ped.pl[g - 1];
     const d1 = R.per.filter(L => L.cat === 'DC1'); if (d1.length) o.DC1 = d1.reduce((a, L) => a + L.r[g - 1], 0); return o; }
   /* stepsFor(P, g): the worked steps of the distribution that give line g its DC2 and DW (ids dl.*): x̄, Σc² (pile-cap), each line load,
@@ -368,6 +391,20 @@
     const R = distribute(P); if (!R) return [];
     const G = `dl.G${g}.`, keep = s => !/^dl\.G\d+\./.test(s.id) || (s.id.indexOf(G) === 0 && !/\.(trib|deck|haunch|sip|DC1|UF)$/.test(s.id));
     let S = R.steps.filter(keep);
+    // UT-N: with noncomposite rows, the steel app's steps of the line: each share named by its category here, the UT sum split into the
+    // composite utilities (this app's PL-A category) and the noncomposite ones, and the UF sum kept (the steel app's own step)
+    const xu = R.xu;
+    if (xu) {
+      const i = g - 1, rowsOf = f => R.per.filter(f).map(L => n4(L.r[i])).join(' + ') || '0';
+      S = R.steps.filter(s => !/^dl\.G\d+\./.test(s.id) || (s.id.indexOf(G) === 0 && !/\.(trib|deck|haunch|sip|DC1)$/.test(s.id) && !(/\.UF$/.test(s.id) && !xu.hasF) && !(/\.UT$/.test(s.id) && !xu.hasC)));
+      S = S.map(s => { const m = /^dl\.G\d+\.(u\d+)$/.exec(s.id), L = m && R.per.find(q => q.id === m[1]);
+        return L && L.cat0 ? Object.assign({}, s, { label: `G${g}: share of the ${L.desc.toLowerCase()} (${CATN[L.cat0]}, ${DIST[L.dist] || L.dist})` }) : s; });
+      S = S.map(s => { const L = /^dl\.load\.u\d+$/.test(s.id) ? R.per.find(q => 'dl.load.' + q.id === s.id) : null; return L && L.cat0 ? Object.assign({}, s, { label: `${L.desc} (${CATN[L.cat0]})` }) : s; });
+      if (xu.hasC) S = S.map(s => s.id === G + 'UT' ? Object.assign({}, s, { sub: rowsOf(L => L.cat === 'UT' && !L.cat0), value: xu.utc[i] }) : s);
+      if (xu.hasN) S.push(St().step({ id: G + 'UTN', label: `G${g}: utilities on the noncomposite section (DW factors)`, sym: 'w_{UT}', eq: '\\sum w', sub: rowsOf(L => L.cat0 === 'UTN'), value: xu.utn[i], unit: 'klf', d: 4, ref: `${ED} Art. 3.5.1, Table 3.4.1-2; as the Steel Bridge app`,
+        note: 'On the precast girder alone, added to w_NC (§ld.ut.wNC); Strength I γ_DW, Service 1.00 (§ld.ut.gUT).' }));
+      S = S.map(s => s.id === G + 'UF' ? Object.assign({}, s, { ref: `${ED} Table 3.4.1-2; as the Steel Bridge app`, note: 'On the precast girder alone, added to w_NC (§ld.ut.wNC); γ 1.25 or 0: present or absent, whichever governs (§ld.ut.abs).' }) : s);
+    }
     // PL-A: a utility (UT) row: the steel app's step relabelled (this app: DW, on the composite section) and the DW the engine takes
     const q = line(P, g);
     if (q && q.UT != null) {
@@ -388,6 +425,8 @@
     Wl.steps = Wl.steps.map(s => s.id === 'ld.wDC2' || s.id === 'ld.wDW' ? Object.assign({}, s, { label: `${s.id === 'ld.wDC2' ? 'DC2 superimposed dead load' : 'DW wearing surface'} (distributed to G${g})`,
       note: `Distributed to girder line G${g} by the Steel Bridge app's method (§dl.G${g}.${s.id === 'ld.wDC2' ? 'DC2' : q0 && q0.UT != null ? 'DWt' : 'DW'}); on the composite section.` }) : s).concat(stepsFor(P, g));
     const q = q0;   // PR 9: added DC1 line loads: the line's share, added to w_NC (§dl.G<g>.DC1x)
+    // UT-N: the noncomposite utilities of the line are also in w_NC (§ld.ut.wNC: the sum; their load factors below it)
+    if (q && (q.UTN || q.UF)) Wl.steps = Wl.steps.map(s => s.id === 'ld.wDC1' ? Object.assign({}, s, { note: `${s.note ? s.note + ' ' : ''}w_NC includes G${g}'s noncomposite utilities of the Cross-section tab${q.UTN ? `, w_UT = ${St().n(q.UTN, 4)} klf (§dl.G${g}.UTN)` : ''}${q.UF ? `, w_UF = ${St().n(q.UF, 4)} klf (§dl.G${g}.UF)` : ''}: §ld.ut.wNC.` }) : s);
     if (q && q.DC1 != null) {
       const R = distribute(P), parts = R.per.filter(L => L.cat === 'DC1'), n4 = v => St().n(v, 4);
       Wl.steps = Wl.steps.map(s => s.id === 'ld.wDC1' ? Object.assign({}, s, { note: `${s.note ? s.note + ' ' : ''}w_NC includes G${g}'s share of the added DC1 line loads of the Cross-section tab, ${n4(q.DC1)} klf (§dl.G${g}.DC1x).` }) : s);
@@ -395,5 +434,5 @@
     }
     return Wl;
   }
-  window.PSBBridgeDL = { pl, PED_MIN, edgeFace, llFace, CATS, XDIST, OWNER_METHOD, ownerMethod, onOwner, withSteps, METHODS, DIST, defaults, on, checks, distribute, line, stepsFor, deckWidth, dead };
+  window.PSBBridgeDL = { CATN, pl, PED_MIN, edgeFace, llFace, CATS, XDIST, OWNER_METHOD, ownerMethod, onOwner, withSteps, METHODS, DIST, defaults, on, checks, distribute, line, stepsFor, deckWidth, dead };
 })();

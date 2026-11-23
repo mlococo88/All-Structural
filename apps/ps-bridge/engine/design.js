@@ -150,6 +150,10 @@
     // PR 9 (§4, only with added line loads of category DC1 on the Cross-section tab): the line's share of them added to w_NC (the
     // non-composite DC1 on the bare girder); no DC1 line load: w_NC as entered (unchanged)
     if (q && q.DC1 != null) o.loads = Object.assign({}, o.loads, { wNC: +o.loads.wNC + q.DC1 });
+    // UT-N (§4, only with line loads of category "Utility (noncomposite, DW factors)" (UTN) or "Future utility allowance" (UF) on the
+    // Cross-section tab): the line's shares added to w_NC (they act on the bare girder as DC1 does) and named in inputs.ut, with which
+    // engine/ut.js gives UT the DW load factors and takes the allowance present or absent; none (every project saved before): no inputs.ut
+    if (q && (q.UTN || q.UF)) { const wNC0 = +o.loads.wNC, wUT = +q.UTN || 0, wUF = +q.UF || 0; o.loads = Object.assign({}, o.loads, { wNC: wNC0 + wUT + wUF }); o.ut = { wUT, wUF, wNC0 }; }
     // PL-A (§4, only with a pedestrian live load on the Cross-section tab, AASHTO LRFD 10th Ed. 3.6.1.6): this line's share w_PL (klf), which
     // engine/pl.js adds to the engine's live load; no pedestrian load (every project saved before): no inputs.pl, the engine's own run
     if (q && q.PL > 0) o.pl = { w: q.PL };

@@ -49,6 +49,7 @@
     'engine/model.js',
     'engine/rigid.js',       // PS-19: the exterior rigid-section factor on the real girder lines (unequal bays; an engine addition, §4)
     'engine/lldf-fg.js',     // PS-35: box beams and voided slabs, live-load distribution types (f) / (g) (an app-side override of distFactors, §4)
+    'engine/ut.js',          // UT-N: utilities on the noncomposite section (DW factors) and the future utility allowance (γ 1.25 / 0), as the Steel Bridge app (§4)
     'engine/pl.js',          // PL-A: the pedestrian live load (3.6.1.6) added to the engine's live load for a girder that has one (§4)
     'engine/applicability.js', // AP-B: the ranges of applicability of the LLDF equations, every section family (a FAIL when a computed factor is outside, §4)
     'engine/holddown.js',    // PR 2d-3: the optional hold-down check for AASHTO / RIDOT (PS-10), an engine addition after computeAll (§4)
@@ -710,6 +711,7 @@
         const sh = BR.hasTypes(P) ? BR.shown(P) : null;
         h += `<p class="note">${sh ? `Girder type ${esc(P.types[sh.k].label)} on ` : 'Design girder '}${esc(rc.inp.proj.girderId)}, span ${d.s} (L = ${fmt(rc.R.L, 2)} ft): <a href="#" data-goin="gird">Girders &amp; strands tab</a>.</p>`
           + (rc.R.pl && rc.R.pl.mode !== 'ext' && ['an', 'loss', 'str', 'flex', 'shear', 'rt'].includes(ui.otab) ? `<p class="note" id="plTabNote">Pedestrian live load (AASHTO LRFD 10th Ed. 3.6.1.6): the live load on this tab is LL+IM + PL (w<sub>PL</sub> = ${fmt(rc.R.pl.w, 4)} klf on this girder line) <a class="wk" href="#st-ld.pl.MLLPL" data-gotab="lds" title="Worked step">§</a>.</p>` : '')   /* PL-A */
+          + (rc.R.ut && ['an', 'loss', 'str', 'flex', 'shear', 'camb', 'rt'].includes(ui.otab) ? `<p class="note" id="utTabNote">Utilities on the noncomposite section: DC1 on this tab includes ${rc.R.ut.wUT ? `the utility w<sub>UT</sub> = ${fmt(rc.R.ut.wUT, 4)} klf (DW load factors)` : ''}${rc.R.ut.wUT && rc.R.ut.wUF ? ' and ' : ''}${rc.R.ut.wUF ? `the future utility allowance w<sub>UF</sub> = ${fmt(rc.R.ut.wUF, 4)} klf (present; not in the camber)` : ''} of this girder line <a class="wk" href="#st-ld.ut.wNC" data-gotab="lds" title="Worked step">§</a>.${rc.R.ut.abs && rc.R.ut.abs.n ? ` With the allowance absent ${rc.R.ut.abs.n} check${rc.R.ut.abs.n > 1 ? 's have' : ' has'} a larger ratio (check summary "UF absent") <a class="wk" href="#st-ld.ut.abs" data-gotab="lds" title="Worked step">§</a>.` : ''}</p>` : '')   /* UT-N */
           + TABUI[ui.otab]().output(ctxOut); }
     } else if (ui.otab === 'sum') {
       // PR 3b: the Summary tab (ui/summary.js): verdict and run state, project overview and weights, girder × span grid, type × check-group
