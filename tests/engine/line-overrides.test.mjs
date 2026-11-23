@@ -14,7 +14,9 @@ const W = loadShared('units.js', 'steps.js', 'lldf.js', 'vehicles.js', 'moving-l
   'engine/shear.js', 'engine/stiffeners.js', 'engine/analysis.js', 'engine/fatigue.js', 'engine/studs.js', 'engine/framing.js', 'engine/crossframes.js', 'engine/constructibility.js', 'engine/splices.js',
   'engine/rating.js', 'engine/welds.js', 'ui/shear.js', 'ui/fatigue.js', 'ui/framing.js', 'ui/splices.js', 'ui/flexure.js', 'ui/rating.js', 'ui/welds.js', 'engine/splplace.js', 'engine/autodesign.js', 'ui/handoffs.js', 'ui/demands.js'].map(E));
 const M = W.SBDModel, AN = W.SBDAnalysis, AD = W.SBDAutoDesign, J = o => JSON.parse(JSON.stringify(o));
-const anKey = R => JSON.stringify({ ...plain(R), girder: null, gi: null });
+// N4 (2026-11-23): the bridge-stiffness description (R.bEI, lld[].EI, step an.defl.EI<k>) names the girder types and their lines, which an Auto design
+// run copy splits per line: identity, set aside like the girder's; the deflections themselves (lld[].d, perLane) stay compared exactly.
+const anKey = R => JSON.stringify({ ...plain(R), bEI: null, lld: R.lld ? plain(R.lld).map(q => ({ ...q, EI: null })) : null, steps: plain(R.steps).filter(q => !/^an\.defl\.EI\d+$/.test(q.id)), girder: null, gi: null });
 
 test('no overrides: atLine as before; saved projects carry no lineOv and read none', () => {
   const P = M.newProject(), D = M.defaultProject();
