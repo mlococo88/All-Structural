@@ -10567,6 +10567,17 @@ No code change.
 - RPX-D5. The 3D capture is shown in the selected-girder report only (Project and owner), not in the every-girder report; it is not saved with the project (as PS).
 - RPX-D6. The every-girder report's References name the two specifications without an article list (its values are worked in each girder's own report).
 
+## 2026-11-23 — PR: claude/ps-report-review (PR #1670: https://github.com/mlococo88/All-Structural/pull/1670) — Report review tools: the code moved to shared/report-review.js (also used by the PS app); this app's file is a wrapper (no behaviour change; display and review only)
+- **Why:** the Prestressed Bridge app gets the same review tools (engineer, 2026-11-23); CLAUDE.md §3: one copy in `shared/`. Details and the exact differences: `fixlog/shared-report-review.md`.
+- **Where / Before / After:**
+  - `apps/steel-bridge/ui/rpreview.js`: before, the whole of the tools (154 lines, PR #1646) ending `window.SBDReportReview = { attach, KEY, TOC_KEY, projKey, load, save, esc, reviewedCopy };`; after, the header comment and `window.SBDReportReview = window.SharedReportReview.create({ key: 'sbd2.reportReview.v1', tocKey: 'sbd2.reportToc', title: 'Steel Bridge Design' });` (the same object: the same API).
+  - `apps/steel-bridge/index.html`, script list: before `'ui/rpreview.js',`; after `'../../shared/report-review.js',` then `'ui/rpreview.js',`.
+  - `apps/steel-bridge/ui/report.js`: not changed (it calls `window.SBDReportReview.attach(box, ctx)` as before).
+- **Saved data (§5):** unchanged: `sbd2.reportReview.v1`, `sbd2.reportToc` (+ `.author`), the same stored format; comments saved before are read as before (`tests/engine/report-review.test.mjs`).
+- **Governing provision:** none. No formula, factor or value changed.
+- **How verified:** `diff` of the old steel file and the shared file: only the lines listed above; `tests/engine/report-review.test.mjs` (new, 4 tests) and `sb-report-review.test.mjs` (2): pass; `node tests/engine/run.mjs report sb- psbridge-model psbridge-nopending`: 27 files, 182 passed, 0 failed; `node tests/check-syntax.mjs`: all scripts pass. Steel smokes, one at a time: steel-bridge-report-review (1400 and 390 px), -report, -report-pr3, -report-allgirder, -report-extras, -wiring, -summary: all pass, 0 console errors. PS smokes: ps-bridge-report-review (new; 1400 and 390 px), ps-bridge-report-pkg (12), ps-bridge-skeleton (273): pass.
+- **Open items:** none new (PR #1646's stand).
+
 ## 2026-11-23 — PR: claude/steel-nomenclature (NOM, FOOT) — Nomenclature output tab (the symbols of the worked steps, with value, unit, article, search and § links) and a page footer (display only; the PS Bridge app's Nomenclature tab and footer)
 - **Request (engineer, 2026-11-23):** the Steel Bridge app should not lack the good features of the Prestressed Bridge app. This PR: the Nomenclature tab (apps/ps-bridge/ui/nomen.js) and, of the small items, the footer (`#appFoot`). Input tooltips: not done (see Open items).
 - **Where:**
