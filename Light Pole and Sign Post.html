@@ -389,6 +389,22 @@
   details.lpFold>summary{padding:6px 2px}
   .wkFlash{animation:lppWkFlash 1.4s ease-out} @keyframes lppWkFlash{from{background:#DBEAFE}to{background:transparent}}
   @media (prefers-reduced-motion: reduce){.wkFlash{animation:none}}
+  /* LPLS (2026-11-23): Loading sub-tabs, load-path strip, free-body sketch (display only) */
+  .lppLdBar{display:flex;gap:2px;flex-wrap:wrap;border-bottom:1px solid var(--slate-300,#CBD5E1);margin:0 0 8px}
+  .lppLdBar button{font-family:var(--font-ui);font-size:9pt;border:1px solid var(--line);border-bottom:0;background:var(--slate-100);color:var(--slate-600);padding:5px 9px;cursor:pointer;border-radius:5px 5px 0 0}
+  .lppLdBar button.on{background:var(--paper);color:var(--accent);font-weight:600;box-shadow:inset 0 2px 0 var(--blue-600)} .lppLdBar button:hover:not(.on){background:var(--slate-200)}
+  .lppLdPane{display:none} .lppLdPane.on{display:block}
+  .lppLdStrip{display:flex;flex-wrap:wrap;align-items:stretch;gap:4px;margin:0 0 10px}
+  .lppLdNode{font-family:var(--font-ui);display:flex;flex-direction:column;align-items:flex-start;gap:1px;border:1px solid var(--line);background:#fff;color:var(--slate-600);border-radius:5px;padding:3px 8px;cursor:pointer;text-align:left}
+  .lppLdNode b{font-size:9pt;font-weight:600} .lppLdNode span{font-size:7.5pt} .lppLdNode.on{border-color:var(--blue-600);background:#EFF6FF;color:#1E3A5F;box-shadow:inset 0 -2px 0 var(--blue-600)}
+  .lppLdNode:hover:not(.on){background:var(--slate-100)} .lppLdArw{align-self:center;color:var(--slate-600);font-size:11pt}
+  .lppAllDirs{display:none} #lppLd.lppLdAll .lppAllDirs{display:block}
+  .lppLdDirBar{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;justify-content:space-between;font-size:11.5px;color:var(--slate-600);background:var(--slate-50);border:1px solid var(--line);border-radius:4px;padding:5px 9px;margin:0 0 8px}
+  .lppLdDirBar label{display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-weight:600;color:#1E3A5F}
+  table.tbl tr.lppLdRef td{color:var(--slate-600);font-style:italic} table.tbl tr.lppLdGov td{background:var(--accent-wash);font-weight:600}
+  .lppLdCombGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,430px),1fr));gap:10px} .lppLdCombGrid>div{min-width:0}
+  .lppFbd svg{display:block;width:100%;max-width:470px;height:auto;margin:0 auto} .lppLdWk:empty{display:none} .lppLdBack{margin:0 0 8px}
+  @media print{ .lppLdPane{display:block!important} .lppAllDirs{display:block!important} }
   @media print{ header.masthead,#postSelBar{display:none!important} }
   /* LTS-1 (2026-11-02): code mode. IBC mode: the LTS cards are hidden. LTS mode: the IBC input cards marked ibcOnly and every
      output card except the LTS cards and the Manual are hidden (the IBC engine still runs underneath, unchanged). */
@@ -872,18 +888,61 @@
       </div>
     </section>
 
-    <!-- LPBM (2026-11-19): base reactions and the base moment build-up, first on the Loading tab (display only; IBC mode, pole and sign) -->
-    <section class="card" id="lppBaseRxCard" data-tab="loading">
+    <!-- LPLS (2026-11-23): the Loading output in sub-tabs that follow the load path (display / organisation only; IBC mode, pole and
+         sign). distributeCards() files every card marked data-ldsub into its pane #lppLdPane-<sub>. In the LRFDLTS mode the whole
+         block is hidden by the existing body.lts-mode .tabpage > *:not(.ltsCard) rule. -->
+    <div id="lppLd" data-tab="loading">
+      <div class="lppLdBar noprint" id="lppLdBar" role="tablist" aria-label="Loading sub-tabs"></div>
+      <div class="lppLdStrip noprint" id="lppLdStrip" aria-label="Load path"></div>
+      <div class="lppLdPane" id="lppLdPane-basis" data-ldpane="basis"></div>
+      <div class="lppLdPane" id="lppLdPane-dead" data-ldpane="dead"></div>
+      <div class="lppLdPane" id="lppLdPane-wind" data-ldpane="wind"></div>
+      <div class="lppLdPane" id="lppLdPane-ice" data-ldpane="ice"></div>
+      <div class="lppLdPane" id="lppLdPane-cables" data-ldpane="cables"></div>
+      <div class="lppLdPane" id="lppLdPane-base" data-ldpane="base"></div>
+      <div class="lppLdPane" id="lppLdPane-combos" data-ldpane="combos"></div>
+    </div>
+    <section class="card" id="lppLdBasisCard" data-tab="loading" data-ldsub="basis">
+      <div class="card-h"><span class="num">1</span><h2>Basis</h2><span class="hint">code, wind, exposure, factors, ice</span></div>
+      <div class="card-body"><div id="lppLdBasis"><p class="tbl-note">—</p></div><div id="lppLdBasisWk" class="example-box lppLdWk"></div></div>
+    </section>
+    <section class="card" id="lppLdDeadCard" data-tab="loading" data-ldsub="dead">
+      <div class="card-h"><span class="num">2</span><h2>Dead load</h2><span class="hint">weight of each item, N at the base, eccentric moment</span></div>
+      <div class="card-body"><div id="lppLdDead"><p class="tbl-note">—</p></div><div id="lppLdDeadWk" class="example-box lppLdWk"></div></div>
+    </section>
+    <section class="card" id="lppLdWindCard" data-tab="loading" data-ldsub="wind">
+      <div class="card-h"><span class="num">3</span><h2>Wind</h2><span class="hint">q<sub>z</sub>, then each element: force and height</span></div>
+      <div class="card-body"><div id="lppLdWind"><p class="tbl-note">—</p></div></div>
+    </section>
+    <section class="card" id="lppLdIceCard" data-tab="loading" data-ldsub="ice">
+      <div class="card-h"><span class="num">4</span><h2>Ice</h2><span class="hint">ice weight on each element, wind on the iced elements</span></div>
+      <div class="card-body"><div id="lppLdIce"><p class="tbl-note">—</p></div><div id="lppLdIceWk" class="example-box lppLdWk"></div></div>
+    </section>
+    <section class="card" id="lppLdBaseCard" data-tab="loading" data-ldsub="base">
+      <div class="card-h"><span class="num">6</span><h2>Forces at the base</h2><span class="hint">each load source, unfactored: V, N, M</span></div>
+      <div class="card-body"><div id="lppLdBase"><p class="tbl-note">—</p></div></div>
+    </section>
+    <section class="card" id="signPathCard" data-tab="loading" data-ldsub="base" style="display:none">
+      <div class="card-h"><span class="num">6b</span><h2>Load path — panel to posts</h2><span class="hint">panel → posts → P, V, M &amp; N per post</span></div>
+      <div class="card-body">
+        <details class="calc lpFold"><summary>Load path — panel → posts → groundline P, V, M &amp; N — worked derivation</summary>
+          <div id="signLoadPath" class="example-box"></div>
+        </details>
+      </div>
+    </section>
+    <section class="card" id="lppLdComboCard" data-tab="loading" data-ldsub="combos">
+      <div class="card-h"><span class="num">7</span><h2>Combinations</h2><span class="hint">factors × the rows of 6 · LRFD and ASD</span></div>
+      <div class="card-body"><div id="lppLdCombo"><p class="tbl-note">—</p></div></div>
+    </section>
+
+    <!-- LPBM (2026-11-19): base reactions and the base moment build-up (display only; IBC mode, pole and sign). LPLS (2026-11-23): on the Combinations sub-tab -->
+    <section class="card" id="lppBaseRxCard" data-tab="loading" data-ldsub="combos">
       <div class="card-h"><span class="num">R</span><h2>Base reactions — governing</h2><span class="hint">M, V and N at the base, LRFD and ASD</span></div>
       <div class="card-body" id="lppBaseRx"><p class="tbl-note">—</p></div>
     </section>
-    <section class="card" id="lppBmbCard" data-tab="loading">
-      <div class="card-h"><span class="num">M</span><h2>Base moment build-up</h2><span class="hint">components → load cases → governing combination</span></div>
-      <div class="card-body" id="lppBmb"><p class="tbl-note">—</p></div>
-    </section>
 
     <!-- SIGN RESULTS (shown only in sign mode) -->
-    <section class="card" id="signWindCard" data-tab="loading" style="display:none">
+    <section class="card" id="signWindCard" data-tab="loading" data-ldsub="wind" style="display:none">
       <div class="card-h"><span class="num">2</span><h2>Sign wind load — ASCE 7 Ch. 29</h2><span class="hint">solid sign, Fig 29.3-1</span></div>
       <div class="card-body">
         <div class="resrow"><span class="k">Panel B × s / clearance</span><span class="v" id="sgDims">—</span></div>
@@ -895,11 +954,8 @@
         <table class="tbl" id="sgCaseTbl"></table>
         <div class="flag" id="sgCaseCFlag" style="display:none"></div>
         <div class="tbl-note lpNL" id="sgTorsionNote" style="margin-top:8px"></div>
-        <details class="calc" open style="margin-top:12px"><summary>ASCE 7-16 Ch. 29 sign wind — worked calculation</summary>
+        <details class="calc lpFold" style="margin-top:12px"><summary>ASCE 7-16 Ch. 29 sign wind — worked calculation</summary>
           <div id="signWindExample" class="example-box"></div>
-        </details>
-        <details class="calc" open style="margin-top:8px"><summary>Load path — panel → posts → groundline P, V, M &amp; N — worked derivation</summary>
-          <div id="signLoadPath" class="example-box"></div>
         </details>
       </div>
     </section>
@@ -929,7 +985,7 @@
     </section>
 
     <!-- 3. FIXTURE LOADING -->
-    <section class="card" id="fixOutCard" data-tab="loading">
+    <section class="card" id="fixOutCard" data-tab="loading" data-ldsub="wind">
       <div class="card-h"><span class="num">3</span><h2>Fixture loading</h2><span class="hint">wind, ice &amp; eccentric dead</span></div>
       <div class="card-body">
         <div class="tbl-note lpNL"><div class="lpNLl">Fixture loads:</div><ul class="lpNLu"><li><b class="lpNLk">Wind:</b> each fixture generates a wind drag force F = q_z(h)·EPA·C_f at its mount height (full EPA is exposed regardless of wind azimuth, since EPA already embeds drag and shape).</li><li><b class="lpNLk">Ice weight:</b> uses the accreted volume V = t·(2·A_ice + 4·√EPA·depth) at the global radial ice thickness.</li><li><b class="lpNLk">Eccentric moment:</b> the fixture dead + ice weight, acting at the cantilever arm <i>a</i>, produces an eccentric overturning moment W·a directed along the arm azimuth θ — so fixtures at opposing azimuths (0° / 180°) cancel in moment but add in axial and shear.</li></ul></div>
@@ -937,11 +993,12 @@
         <details class="calc" open style="margin-top:12px"><summary>ASCE 7-16 velocity pressure &amp; wind force — worked calculation</summary>
           <div id="windExample" class="example-box"></div>
         </details>
+        <div id="lppLdWindWk" class="example-box lppLdWk"></div>
       </div>
     </section>
 
     <!-- 4. CABLE GEOMETRY & LOADING -->
-    <section class="card" id="cableOutCard" data-tab="loading">
+    <section class="card" id="cableOutCard" data-tab="loading" data-ldsub="cables">
       <div class="card-h"><span class="num">4</span><h2>Cable loading</h2><span class="hint">reactions, unfactored &amp; factored</span></div>
       <div class="card-body">
         <div class="resrow" style="border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:10px"><span class="k">Computed cable wind pressure q<sub>W</sub> / q<sub>Wi</sub></span><span class="v" id="oCablePress">—</span></div>
@@ -950,7 +1007,7 @@
         <div class="tbl-note lpNL"><div class="lpNLl">Each load source shown in isolation (pure component, nominal).</div><ul class="lpNLu"><li><b class="lpNLk">Every source</b> — dead, ice, wind, wind-on-ice — develops an along-cable catenary pull H∥ from its own line load by the selected method, acting along the cable's plan azimuth θ (resolved to global H_x, H_y).</li><li><b class="lpNLk">Vertical sources (dead, ice)</b> additionally deliver a half-span vertical support reaction V = w·L/2.</li><li><b class="lpNLk">Bare wind and wind-on-ice</b> are mutually exclusive cases and are never summed.</li><li><b class="lpNLk">Cable-local:</b> R∥ along the cable, R⊥v perpendicular in-plane.</li></ul></div>
         <p class="tbl-note" id="methodNote" style="font-weight:600;color:var(--accent-deep)"></p>
         <table class="tbl" id="unfactTbl"></table>
-        <details class="calc" open style="margin-top:10px"><summary>Cable pressures, line loads &amp; support reactions — worked calculation</summary>
+        <details class="calc lpFold" style="margin-top:10px"><summary>Cable pressures, line loads &amp; support reactions — worked calculation</summary>
           <div id="cableExample" class="example-box"></div>
         </details>
 
@@ -986,7 +1043,7 @@
     </section>
 
     <!-- 5. WIND DIRECTION STUDY -->
-    <section class="card poleOnly" data-tab="loading">
+    <section class="card poleOnly lppAllDirs" id="lppWindDirCard" data-tab="loading" data-ldsub="wind">
       <div class="card-h"><span class="num">5</span><h2>Wind direction study</h2><span class="hint">four azimuths, governing envelope</span></div>
       <div class="card-body">
         <div class="tbl-note lpNL"><div class="lpNLl">How the base demand is found:</div><ul class="lpNLu"><li><b class="lpNLk">Wind directions:</b> the base demand is evaluated for wind blowing toward 0°, 90°, 180°, and 270°.</li><li><b class="lpNLk">Vectors:</b> forces and moments are assembled as vectors in the plan frame — opposing contributions cancel — then resolved.</li><li><b class="lpNLk">Governs:</b> the direction giving the largest resultant moment governs each load combination.</li><li><b class="lpNLk">Row shown:</b> the governing combination in each family.</li></ul></div>
@@ -998,21 +1055,29 @@
     </section>
 
     <!-- 5b. LOAD COMBINATIONS MATRIX -->
-    <section class="card poleOnly" data-tab="loading">
+    <section class="card poleOnly" id="lppComboMatCard" data-tab="loading" data-ldsub="combos">
       <div class="card-h"><span class="num">5b</span><h2>Load combinations — base demand envelope</h2><span class="hint">all ten ASCE 7 combinations</span></div>
       <div class="card-body">
         <div class="tbl-note lpNL"><div class="lpNLl">Every ASCE 7 combination is evaluated at its own worst wind direction.</div><ul class="lpNLu"><li><b class="lpNLk">Embedment</b> (a service check against presumptive soil bearing): driven by the worst <b>ASD</b> row.</li><li><b class="lpNLk">Reinforced-concrete shaft</b> (a strength check): driven by the worst <b>LRFD</b> row.</li><li>Governing rows are highlighted.</li></ul></div>
         <table class="tbl" id="comboMatrixTbl"></table>
       </div>
     </section>
-    <section class="card" id="signComboCard" data-tab="loading" style="display:none">
+    <section class="card" id="signComboCard" data-tab="loading" data-ldsub="combos" style="display:none">
       <div class="card-h"><span class="num">3b</span><h2>Load combinations — per-post demand</h2><span class="hint">non-ice ASCE 7 combinations</span></div>
       <div class="card-body">
         <div class="tbl-note lpNL"><div class="lpNLl">Every combination applies.</div><ul class="lpNLu"><li><b class="lpNLk">Ice:</b> the atmospheric-ice ones included (ice on the sign panel and posts, ASCE 7-16 Ch. 10, added 2026-11-01).</li><li><b class="lpNLk">Envelope:</b> each combination is enveloped over the applicable Fig. 29.3-1 load cases and wind directions, per post.</li><li><b class="lpNLk">Governing rows</b> (largest M) are highlighted for each design family.</li></ul></div>
         <table class="tbl" id="sgComboTbl"></table>
       </div>
     </section>
+    <section class="card" id="lppBmbCard" data-tab="loading" data-ldsub="combos">
+      <div class="card-h"><span class="num">M</span><h2>Base moment build-up</h2><span class="hint">components → load cases → governing combination</span></div>
+      <div class="card-body" id="lppBmb"><p class="tbl-note">—</p></div>
+    </section>
 
+    <!-- LPLS (2026-11-23): the demand of these tabs is developed on the Loading tab (§6 link rule) -->
+    <p class="tbl-note lppLdBack noprint" data-tab="post">Demand (LRFD): <a href="#" class="wkA" data-lpsub="base">Loading → Forces at the base</a> · <a href="#" class="wkA" data-lpsub="combos">Loading → Combinations</a></p>
+    <p class="tbl-note lppLdBack noprint" data-tab="anchors">Demand (LRFD): <a href="#" class="wkA" data-lpsub="base">Loading → Forces at the base</a> · <a href="#" class="wkA" data-lpsub="combos">Loading → Combinations</a></p>
+    <p class="tbl-note lppLdBack noprint" data-tab="shaft">Demand (ASD: embedment, soil bearing; LRFD: shaft): <a href="#" class="wkA" data-lpsub="base">Loading → Forces at the base</a> · <a href="#" class="wkA" data-lpsub="combos">Loading → Combinations</a></p>
     <!-- 6. POLE STRESS -->
     <section class="card poleOnly" data-tab="post">
       <div class="card-h"><span class="num">6</span><h2>Pole combined stress</h2><span class="hint">AISC 360 · axial + bending</span></div>
@@ -1409,6 +1474,7 @@ function applyMode(){
   lppResetPoleOutputs(sign?'pole':'sign');   // LP-O12: no stale numbers in the other mode's hidden cards
   // sign-only output cards
   show('signWindCard', sign);
+  show('signPathCard', sign);   // LPLS: the load path card (was inside the sign wind card)
   show('signComboCard', sign);
   show('signPostsCard', false);   // redundant with the full per-post stacks; kept hidden
   show('sgStackContainer', sign);
@@ -4548,6 +4614,7 @@ function calcSign(inp){
         return {name:r.name+', wind '+fmt(dr.phi,0)+'°, '+(pp.edge?lppSignEdgeLbl(sw):'Case '+pp.case), P:pp.axial, Vx:pp.P*c, Vy:pp.P*s, Mx:B*pp.M*c, My:B*pp.M*s, T:pp.T||0, B2:B}; }); }))}))};
   renderSignLoadPath(inp,sw,pw,postGovList);
   lppBmbRenderSign(inp,sw,postGovList);   // LPBM (2026-11-19): base reactions and base moment build-up per post (display only)
+  lppLdRender({mode:'sign',inp,sw,pw,poleSeg,allCombos,postDesigns,postGovList,sp:lppShaftProj(inp)});   // LPLS (2026-11-23): the Loading sub-tab summaries (display only)
   renderSummary({inp, mode:'sign',
     stacks:postDesigns.map((pd,i)=>({label:'P'+(i+1), found:pd.found, pstress:pd.pstress, nat:pd.nat, b2:pd.b2,
       asd:{...(pd.gASDF||pd.gASD)}, lrfd:{...pd.gLRFD},
@@ -5097,6 +5164,7 @@ function lppCalcIbc(){
   // calc() (e.g. "Invalid array length" in drawElev) and leave the previous results on screen.
   lppLastInp=null;
   lppBmbClear();   // LPBM: no stale base reactions / build-up (display only)
+  lppLdClear();    // LPLS: no stale Loading sub-tab summaries (display only)
   { const errs=lppInputErrors(inp), le=(codeMode==='lts')?lppLtsInputErrors(inp):[]; lppLtsBlocked=le.length>0; lppShowInputErrors(errs.concat(le)); if(errs.length) return; }   // LTS-L2
   lppLastInp=inp;   // LTS-1: the LRFDLTS engine reads the same geometry
 
@@ -5326,6 +5394,10 @@ function lppCalcIbc(){
     $('comboMatrixTbl').innerHTML=cm;
   }
   lppBmbRenderPole(inp,comps,fxs,pw,govLRFD,govASD,govB2);   // LPBM (2026-11-19): base reactions and base moment build-up (display only)
+  // LPLS (2026-11-23): the Loading sub-tab summaries (display only): the same objects, read after the calculation
+  lppLdRender({mode:'pole',inp,comps,fxs,pw,poleSeg,allCombos,govLRFD,govASD,sp,b2:govB2,
+    use:{post:{name:pstress.comboName,phi:pstress.phi},bp:{name:(bolts.byCheck.BP||bolts).comboName},shaft:{name:shaftGov.name},shear:{name:(shaftCands.reduce((a,x)=>x.P>a.P?x:a)).name},
+         emb:{name:fASD.name},bearing:{name:govAxASD.name}}});
 
   // ---- POLE STRESS TABLE ----
   if($('poleStressTbl')){
@@ -6064,7 +6136,7 @@ function lppMastSegTableHTML(pw,inp){
     (ice?`<td></td><td><b>${fmt(pw.FpoleI,1)}</b></td><td><b>${fmt(pw.MpoleI,0)}</b></td>`:'')+(iceW?`<td><b>${fmt(pw.WiceMast,1)}</b></td>`:'')+`</tr></table></div>`;
   return h;
 }
-function windWorkedHTML(pw, inp, o){   // o.fold (LPBM, 2026-11-19): the ice and n1 / G_f derivations in collapsed <details> (Loading tab); content unchanged
+function windWorkedHTML(pw, inp, o){   // o.fold (LPBM, 2026-11-19): the ice and n1 / G_f derivations in collapsed <details> (Loading tab); content unchanged. o.noFolds (LPLS, 2026-11-23): without them (the Ice and Basis sub-tabs show them)
   const g=(t)=>`\\[${t}\\]`, step=(t)=>`<div class="step-label">${t}</div>`, ref=(s)=>`<span class="eq-ref">[${s}]</span>`;
   let H='';
   H+=step(`1 · Velocity pressure exposure coefficient ${ref('ASCE 7-16 Table 26.10-1')}`);
@@ -6086,7 +6158,7 @@ function windWorkedHTML(pw, inp, o){   // o.fold (LPBM, 2026-11-19): the ice and
     H+=`<div class="eq-why lpNL">${lpNL(`Rectangular pole: the values above are for wind toward 0° / 180° on the width B = ${fmt(inp.poleDiaTop,2)} in face.`,[['Other directions:',`wind toward 90° / 270° acts on the depth face (${fmt(inp.poleDepthTop,2)} in), and between the axes the projected width is |cos φ|·B + |sin φ|·depth (as in the LRFDLTS mode).`],['C<sub>f</sub>','stays the least-dimension value.'],['Ice weight:','the mast ice is taken as a radial ring on a round of diameter B (the width), not on the rectangle.']])}</div>`;   // LPNL; ASM (2026-11-10): ice basis stated
     H+=g(`F_{pole,90} = \\sum_i q_z(z_i)K_d\\,G\\,C_f\\,d(z_i)\\,L_i = ${fmt(pw.Fd,0)}\\ \\text{lb}\\qquad M_{pole,90} = ${fmt(pw.Md,0)}\\ \\text{lb}{\\cdot}\\text{ft}\\qquad F_{pole}(\\varphi) = |\\cos\\varphi|\\,F_{pole} + |\\sin\\varphi|\\,F_{pole,90}`);
   }
-  { const fold=(o&&o.fold)?((t,x)=>x?`<details class="calc lpFold"><summary>${t}</summary>${x}</details>`:''):((t,x)=>x);
+  if(!(o&&o.noFolds)){ const fold=(o&&o.fold)?((t,x)=>x?`<details class="calc lpFold"><summary>${t}</summary>${x}</details>`:''):((t,x)=>x);
     H+=fold('Design ice thickness t<sub>d</sub>(z) and ice on the mast — worked derivation (click to open)',iceWorkedHTML(inp,pw,null));
     H+=fold('Natural frequency n<sub>1</sub> (Rayleigh table) and gust-effect factor — worked derivation (click to open)',natGfWorkedHTML(inp)); }
   H+=`<p class="eq-result">Mast wind F_pole = ${fmt(pw.Fpole,0)} lb, resultant at z = ${fmt(pw.zF,2)} ft (H/2 = ${fmt(inp.H/2,2)} ft), giving base moment ${fmt(pw.Mpole,0)} lb·ft. Fixture and cable wind (tabulated above) use the same q_z form at their own heights.</p>`;
@@ -6099,10 +6171,19 @@ function renderCableExample(comps,inp){
 }
 function renderWindExample(pw,inp,fxs){
   const box=$('windExample'); if(!box) return;
-  let H=windWorkedHTML(pw,inp,{fold:true});
-  if(fxs && fxs.length){ H+=`<details class="calc lpFold"><summary>Fixture loads — worked derivations: wind, iced wind, ice weight, arm wind, eccentric moment (click to open)</summary><div class="step-label" style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">Fixture loads — worked derivations</div>`+fixtureWorkedHTML(fxs,inp)+`</details>`; }   // LPBM: collapsed, content unchanged
-  box.innerHTML=H;
-  if(window.renderMathInElement) renderMathInElement(box,{delimiters:[{left:'\\[',right:'\\]',display:true},{left:'$',right:'$',display:false}],throwOnError:false});
+  // LPLS (2026-11-23): the same derivations, each on the sub-tab of its load: velocity pressure, C_f and the mast wind here (Wind);
+  // fixture wind, arm wind and torsion (Wind); t_d, mast ice, iced fixture wind and ice weight (Ice); n1 / G_f (Basis); the
+  // eccentric weight (Dead load). Content unchanged; the long ones stay collapsed (LPBM).
+  const fold=(t,x)=>x?`<details class="calc lpFold"><summary>${t}</summary>${x}</details>`:'';
+  const put=(id,H)=>{ const e=$(id); if(!e) return; e.innerHTML=H; e.style.display=H?'':'none';
+    if(H && window.renderMathInElement) renderMathInElement(e,{delimiters:[{left:'\\[',right:'\\]',display:true},{left:'$',right:'$',display:false}],throwOnError:false}); };
+  put('windExample',windWorkedHTML(pw,inp,{fold:true,noFolds:true}));
+  const has=fxs && fxs.length;
+  put('lppLdWindWk',has?fold('Fixture loads — worked derivations: wind, arm wind, torsion (click to open)',`<div class="step-label" style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">Fixture loads — worked derivations</div>`+fixtureWorkedHTML(fxs,inp,'wind')):'');
+  put('lppLdIceWk',fold('Design ice thickness t<sub>d</sub>(z) and ice on the mast — worked derivation (click to open)',iceWorkedHTML(inp,pw,null))
+    +(has?fold('Fixture loads — worked derivations: iced wind, ice weight (click to open)',fixtureWorkedHTML(fxs,inp,'ice')):''));
+  put('lppLdBasisWk',fold('Natural frequency n<sub>1</sub> (Rayleigh table) and gust-effect factor — worked derivation (click to open)',natGfWorkedHTML(inp)));
+  put('lppLdDeadWk',has?fold('Fixture loads — worked derivation: eccentric moment (click to open)',fixtureWorkedHTML(fxs,inp,'dead')):'');
 }
 
 // ---- CABLE worked derivations: pressures, line loads, per-cable reactions (shared tab+report) ----
@@ -6208,8 +6289,10 @@ function cableWorkedHTML(comps,inp){
   return H;
 }
 // ---- FIXTURE worked example: wind, iced wind, ice weight, eccentric dead (shared tab+report) ----
-function fixtureWorkedHTML(fxs, inp){
+function fixtureWorkedHTML(fxs, inp, part){   // part (LPLS, 2026-11-23): 'wind' (intro, steps 1, 5, 6), 'ice' (2, 3), 'dead' (4); none: all (Report)
   if(!fxs || !fxs.length) return '';
+  if(part){ const A=fixtureWorkedHTML(fxs,inp).split('<div class="step-label">'), pick={wind:[1,5,6],ice:[2,3],dead:[4]}[part]||[];
+    return (part==='wind'?A[0]:'')+A.slice(1).filter(x=>pick.indexOf(parseInt(x,10))>=0).map(x=>'<div class="step-label">'+x).join(''); }
   const g=(t)=>`\\[${t}\\]`, step=(t)=>`<div class="step-label">${t}</div>`, ref=(s)=>`<span class="eq-ref">[${s}]</span>`;
   const fg=fxs[0], tft=(fg.td!==undefined?fg.td:inp.tIce)/12;
   let H='';
@@ -6242,7 +6325,10 @@ function fixtureWorkedHTML(fxs, inp){
 }
 
 // ---- SIGN WIND worked example: ASCE 7-16 Ch. 29 solid freestanding sign (full derivation) ----
-function signWindWorkedHTML(sw, inp){
+function signWindWorkedHTML(sw, inp, part){   // part (LPLS, 2026-11-23): 'wind' (steps 1–5, post C_f), 'ice' (ice on the sign), 'gf' (n1 / G_f); none: all (Report)
+  if(part){ const all=signWindWorkedHTML(sw,inp), gf=natGfWorkedHTML(inp), body=gf&&all.endsWith(gf)?all.slice(0,all.length-gf.length):all;
+    const i=body.indexOf('<div class="step-label">Ice on the sign'), w=i>=0?body.slice(0,i):body, ic=i>=0?body.slice(i):'';
+    return part==='wind'?w:part==='ice'?ic:gf; }
   const g=(t)=>`\\[${t}\\]`, step=(t)=>`<div class="step-label">${t}</div>`, ref=(s)=>`<span class="eq-ref">[${s}]</span>`;
   const nPost=inp.signPosts;
   let H='';
@@ -6297,8 +6383,14 @@ function signWindWorkedHTML(sw, inp){
 }
 function renderSignWindExample(sw,inp){
   const box=$('signWindExample'); if(!box) return;
-  box.innerHTML=signWindWorkedHTML(sw,inp);
-  if(window.renderMathInElement) renderMathInElement(box,{delimiters:[{left:'\\[',right:'\\]',display:true},{left:'$',right:'$',display:false}],throwOnError:false});
+  // LPLS (2026-11-23): the sign wind steps here (Wind); the ice on the sign (Ice) and n1 / G_f (Basis) on their sub-tabs; content unchanged
+  const fold=(t,x)=>x?`<details class="calc lpFold"><summary>${t}</summary>${x}</details>`:'';
+  const put=(e,H)=>{ if(!e) return; e.innerHTML=H; e.style.display=H?'':'none';
+    if(H && window.renderMathInElement) renderMathInElement(e,{delimiters:[{left:'\\[',right:'\\]',display:true},{left:'$',right:'$',display:false}],throwOnError:false}); };
+  put(box,signWindWorkedHTML(sw,inp,'wind'));
+  put($('lppLdWindWk'),''); put($('lppLdDeadWk'),'');
+  put($('lppLdIceWk'),fold('Ice on the sign — worked derivation (click to open)',signWindWorkedHTML(sw,inp,'ice')));
+  put($('lppLdBasisWk'),fold('Natural frequency n<sub>1</sub> (Rayleigh table) and gust-effect factor — worked derivation (click to open)',signWindWorkedHTML(sw,inp,'gf')));
 }
 
 // ================= LPBM (2026-11-19): base reactions and the base moment build-up (display only) =================
@@ -6437,6 +6529,7 @@ function lppBmbResultHTML(b,where){
 // links to a card / table on another tab (§6): opens its tab, scrolls to it and flashes it; changes nothing else
 function lppGoId(id){
   const e=$(id); if(!e) return; const pg=e.closest('.tabpage'); if(pg) switchTab(pg.dataset.page);
+  lppLdReveal(e);   // LPLS: its Loading sub-tab
   const d=e.closest('details'); if(d) d.open=true;
   e.scrollIntoView({behavior:'smooth',block:'start'}); e.classList.add('wkFlash'); setTimeout(()=>e.classList.remove('wkFlash'),1400);
 }
@@ -6556,6 +6649,528 @@ function lprBmbSubs(){
       {type:'note',text:'Governing ASD combination, '+A.name+', wind toward '+lprN(A.phi,0)+'°, '+lppBmbCaseTxt(A)+':'},...lprBmbWorked(A,'M_a'),res(A,'lp:env:p'+(p+1))]}; });
 }
 
+// ================= LPLS (2026-11-23): the Loading output in sub-tabs that follow the load path (display / organisation only) =================
+// Engineer, 2026-11-23: Basis → Dead load → Wind → Ice → Cables → Forces at the base → Combinations, with a load-path strip and a
+// free-body sketch. No result changes: every number is read from what the engine already computed (fixtureComponents,
+// cableComponents, poleWindNominal / lppPoleWindDir, signWind, evalCombo / evalSignCombo, lppShaftProj). The per-source rows are the
+// unfactored terms of evalComboDir / evalSignComboDir, one row per term; Σ γ × rows (+ the combination's own cable pulls) equals the
+// engine's V, N, M and T of every combination and direction (tests/engine/lightpole-sources.test.mjs). Nothing is saved in the
+// project: LPP_LD is the last calc()'s display data; the chosen sub-tab and the "show all directions" switch are per-browser UI keys.
+let LPP_LD=null;
+const LPP_LD_SUBS=[['basis','1 · Basis'],['dead','2 · Dead load'],['wind','3 · Wind'],['ice','4 · Ice'],['cables','5 · Cables'],['base','6 · Forces at the base'],['combos','7 · Combinations']];
+const LPP_LD_KEY='lpp_loadSub_v1', LPP_LD_DIRKEY='lpp_loadAllDirs_v1';
+let lppLdCur='base', lppLdAllDirs=false;
+try{ const t=localStorage.getItem(LPP_LD_KEY); if(LPP_LD_SUBS.some(x=>x[0]===t)) lppLdCur=t; lppLdAllDirs=localStorage.getItem(LPP_LD_DIRKEY)==='1'; }catch(e){}
+const LPP_SRC_K=['D','W','Di','Wi'];
+const LPP_SRC_KN={D:'Dead D',W:'Wind W',Di:'Ice D_i',Wi:'Wind on ice W_i'};
+const lppSrcZero=()=>({Vx:0,Vy:0,N:0,Mx:0,My:0,T:0});
+const LPP_SRC_Q=['Vx','Vy','N','Mx','My','T'];
+// ---- pole: the unfactored terms of evalComboDir at the pole base, wind toward phi. One row per term: k = its load case,
+// F = the force (lb), z = its height or arm (ft), V / N / M / T = what it adds at the base (plan vectors, as the engine).
+// ref rows (cable pulls of one source alone) are for reference only: the pull is not a sum of the load cases (catenary law).
+function lppSrcPole(inp,comps,fxs,pw,phi){
+  const cw=Math.cos(phi*RAD), sw=Math.sin(phi*RAD), pwd=lppPoleWindDir(pw,phi), R=[];
+  const add=(grp,name,k,o)=>{ R.push(Object.assign({grp,name,k,F:0,z:null},lppSrcZero(),o)); };
+  const wind=(grp,name,k,F,M,z,T,o)=>add(grp,name,k,Object.assign({F,z,Vx:F*cw,Vy:F*sw,Mx:M*cw,My:M*sw,T:T||0,az:phi,wind:true},o));
+  const DLax=(inp.DLaxial!==undefined?inp.DLaxial:(inp.DLtotal!==undefined?inp.DLtotal:inp.DL));
+  add('dead','Pole self-weight + misc. dead load at the top','D',{F:DLax,N:DLax});
+  fxs.forEach((fc,i)=>{ const n='Fixture '+(i+1), a=Math.hypot(fc.ex,fc.ey), lev=fc.ex*sw-fc.ey*cw;
+    add('dead',n+' weight','D',{F:fc.Wdead,z:a,arm:true,az:fc.th,N:fc.Wdead,Mx:fc.Wdead*fc.ex,My:fc.Wdead*fc.ey});
+    wind('wfix',n,'W',fc.Fw,fc.Fw*fc.hf,fc.hf,fc.Fw*lev);
+    add('ice',n+' ice','Di',{F:fc.Wice,z:a,arm:true,az:fc.th,N:fc.Wice,Mx:fc.Wice*fc.ex,My:fc.Wice*fc.ey});
+    wind('wifix',n+', iced','Wi',fc.Fwi,fc.Fwi*fc.hf,fc.hf,fc.Fwi*lev);
+    if((fc.FarmMax||0)>0 || (fc.FarmMaxI||0)>0){ const s=Math.abs(Math.sin((fc.th-phi)*RAD)), Fa=(fc.FarmMax||0)*s, FaI=(fc.FarmMaxI||0)*s;
+      wind('warm',n+' arm','W',Fa,Fa*fc.hf,fc.hf,Fa*0.5*lev,{sin:s});
+      wind('wiarm',n+' arm, iced','Wi',FaI,FaI*fc.hf,fc.hf,FaI*0.5*lev,{sin:s}); }
+  });
+  wind('wpole','Pole (mast), '+pw.NSTRIP+' segments','W',pwd.Wpole,pwd.Mpole,pwd.Wpole>0?pwd.Mpole/pwd.Wpole:0,0);
+  add('ice','Pole (mast) ice','Di',{F:pw.WiceMast,N:pw.WiceMast});
+  wind('wipole','Pole (mast), iced','Wi',pwd.FpoleI,pwd.MpoleI,pwd.FpoleI>0?pwd.MpoleI/pwd.FpoleI:0,0);
+  comps.forEach((cp,j)=>{ const c=cp.c, n='Cable '+(j+1), h=c.hc, ct=Math.cos(c.th*RAD), st=Math.sin(c.th*RAD), hw=cp.W_h*c.L/2, hwi=cp.Wi_h*c.L/2;
+    add('cabV',n+' dead, half span g·L/2','D',{F:cp.D_v*c.L/2,N:cp.D_v*c.L/2});
+    add('cabV',n+' ice, half span','Di',{F:cp.Di_v*c.L/2,N:cp.Di_v*c.L/2});
+    wind('cabW',n+' transverse wind w·L/2','W',hw,hw*h,h,0);
+    wind('cabW',n+' transverse wind on ice','Wi',hwi,hwi*h,h,0);
+    [['D',cp.D_v],['W',cp.W_h],['Di',cp.Di_v],['Wi',cp.Wi_h]].forEach(([k,w])=>{ const H=cp.pullFromLoad(w);
+      add('pull',n+' pull, '+LPP_SRC_KN[k]+' alone','ref',{src:k,ref:true,F:H,z:h,az:c.th,Vx:H*ct,Vy:H*st,Mx:H*h*ct,My:H*h*st}); });
+  });
+  return R;
+}
+// the cable pulls of one combination and direction (an evalComboDir result): Σ H_j as vectors, each at its own attach height
+function lppSrcPull(r){
+  const o=lppSrcZero(); (r.per||[]).forEach(pc=>{ o.Vx+=pc.Hx; o.Vy+=pc.Hy; o.Mx+=pc.Hx*pc.cp.c.hc; o.My+=pc.Hy*pc.cp.c.hc; }); return o;
+}
+// per load case totals of the rows (reference rows left out)
+function lppSrcTot(rows){
+  const t={}; LPP_SRC_K.forEach(k=>t[k]=lppSrcZero());
+  rows.forEach(r=>{ if(r.ref) return; LPP_SRC_Q.forEach(q=>{ t[r.k][q]+=r[q]; }); });
+  return t;
+}
+// Σ γ × case totals (+ the combination's cable pulls)
+function lppSrcComb(tot,f,pull){
+  const o=lppSrcZero(); LPP_SRC_Q.forEach(q=>{ o[q]=LPP_SRC_K.reduce((s,k)=>s+f[k]*tot[k][q],0)+(pull?pull[q]:0); });
+  o.V=Math.hypot(o.Vx,o.Vy); o.M=Math.hypot(o.Mx,o.My); return o;
+}
+// ---- the same rows at grade, a shaft projection p below the pole / post base (lppGradeDir with B = 1): M + V·p for every row,
+// plus the projection's own weight, ice and wind (lppShaftProj). phi: the wind direction of the rows (sign: 0, along the wind).
+function lppSrcGrade(rows,sp,phi){
+  const p=sp.p, c=Math.cos((phi||0)*RAD), s=Math.sin((phi||0)*RAD);
+  const R=rows.map(r=>Object.assign({},r,{Mx:r.Mx+r.Vx*p,My:r.My+r.Vy*p,Mx0:r.Mx,My0:r.My}));
+  const add=(name,k,o)=>R.push(Object.assign({grp:'proj',name,k,F:0,z:null,proj:true},lppSrcZero(),o));
+  add('Shaft projection weight','D',{F:sp.Wc,N:sp.Wc});
+  add('Shaft projection ice','Di',{F:sp.Wice,N:sp.Wice});
+  add('Wind on the shaft projection','W',{F:sp.F,z:p/2,Vx:sp.F*c,Vy:sp.F*s,Mx:sp.F*c*p/2,My:sp.F*s*p/2,az:phi,wind:true});
+  add('Wind on the iced shaft projection','Wi',{F:sp.FI,z:p/2,Vx:sp.FI*c,Vy:sp.FI*s,Mx:sp.FI*c*p/2,My:sp.FI*s*p/2,az:phi,wind:true});
+  return R;
+}
+// ---- sign: the unfactored terms of evalSignComboDir for post p (0-based), wind toward phi, Fig. 29.3-1 case cname ('A', 'B', 'C';
+// an edge-on record of a rectangular post has no panel case). One axis, along the wind: Vx = V, Mx = M.
+function lppSrcSign(inp,sw,p,phi,cname){
+  const nP=inp.signPosts, Lp=inp.signSpacing, R=[], c0=Math.cos(phi*RAD);
+  const onFace=Math.max(0,c0)+Math.max(0,-c0), wsg=c0>=0?1:-1, edge=!!sw.edge && onFace<1e-9, onF=edge?0:onFace;
+  let F=sw.F_A*onF, FI=(sw.F_Ai||0)*onF, x=0, z=sw.zA;
+  if(cname==='B') x=0.2*sw.B*wsg;
+  else if(cname==='C' && sw.caseC){ F=sw.caseC.F*onF; FI=(sw.caseC.FI||0)*onF; x=sw.caseC.e*wsg; z=sw.zc; }
+  const zarm=z-(inp.pProj>0?inp.pProj:0), sh=signPostSplit(F,x,Lp,nP)[p], shI=signPostSplit(FI,x,Lp,nP)[p];
+  const add=(grp,name,k,o)=>{ R.push(Object.assign({grp,name,k,F:0,z:null},lppSrcZero(),o)); };
+  const selfW=inp.__poleTotalW!==undefined?inp.__poleTotalW:0;
+  add('dead','Sign panel weight'+(nP>1?', share W/'+nP:''),'D',{F:inp.signWt/nP,N:inp.signWt/nP});
+  add('dead','Post self-weight','D',{F:selfW,N:selfW});
+  add('dead','Misc. dead load (per post)','D',{F:inp.DL||0,N:inp.DL||0});
+  add('ice','Sign panel ice'+(nP>1?', share /'+nP:''),'Di',{F:(sw.WiPanel||0)/nP,N:(sw.WiPanel||0)/nP});
+  add('ice','Post ice','Di',{F:sw.WiPost||0,N:sw.WiPost||0});
+  if(!edge){
+    add('wsign','Sign panel, Case '+cname+(nP>1?' (post '+(p+1)+' share)':''),'W',{F:sh,z:zarm,Vx:sh,Mx:sh*zarm,T:nP===1?Math.abs(sh*x):0,wind:true});
+    add('wisign','Iced sign panel, Case '+cname+(nP>1?' (post '+(p+1)+' share)':''),'Wi',{F:shI,z:zarm,Vx:shI,Mx:shI*zarm,T:nP===1?Math.abs(shI*x):0,wind:true});
+  }
+  const Fd=edge?sw.FpostD:sw.Fpost, Md=edge?sw.MpostD:sw.Mpost, FdI=edge?(sw.FpostDI||0):(sw.FpostI||0), MdI=edge?(sw.MpostDI||0):(sw.MpostI||0);
+  add('wpost',edge?'Post drag on the depth face (edge-on)':'Post drag (exposed post below the panel)','W',{F:Fd,z:Fd>0?Md/Fd:0,Vx:Fd,Mx:Md,wind:true});
+  add('wipost',edge?'Iced post drag on the depth face (edge-on)':'Iced post drag','Wi',{F:FdI,z:FdI>0?MdI/FdI:0,Vx:FdI,Mx:MdI,wind:true});
+  R.meta={edge,case:edge?'edge-on':cname,F,FI,x,sh,shI,zarm,phi};
+  return R;
+}
+// ---- display helpers: one table model for the tab (HTML) and the Report (items) ----
+const lppLdV=(v,d)=>{ d=d==null?0:d; if(typeof v!=='number'||!isFinite(v)) return '—'; if(Math.abs(v)<0.5*Math.pow(10,-d)) return Math.abs(v)<1e-9?'—':fmt(0,d); return fmt(v,d); };
+const lppLdSubH=s=>lppEsc(s).replace(/_\{([^}]+)\}/g,'<sub>$1</sub>').replace(/_([A-Za-z0-9]+)/g,'<sub>$1</sub>');
+const LPP_LD_ROWCLS={tot:'lppBmbTot',ref:'lppLdRef',grp:'lppLdGrp',gov:'lppLdGov'};
+function lppLdTblHTML(m){
+  let h='<div class="lppTblScroll"><table class="tbl lppLdTbl'+(m.cls?' '+m.cls:'')+'"'+(m.id?' id="'+m.id+'"':'')+'>';
+  if(m.head) h+='<tr>'+m.head.map((x,i)=>`<th${i===0?' style="text-align:left"':''}>${lppLdSubH(x).replace(/ \(([^()]*)\)$/,'<span class="sym">($1)</span>')}</th>`).join('')+'</tr>';
+  m.rows.forEach(r=>{ const cells=Array.isArray(r)?r:r.c, cls=Array.isArray(r)?'':(r.cls||'');
+    h+=`<tr${cls?` class="${LPP_LD_ROWCLS[cls]||cls}"`:''}>`+cells.map((c,i)=>{ const o=(c&&typeof c==='object')?c:{t:c};
+      return `<td${i===0?' style="text-align:left"':''}${o.span?` colspan="${o.span}"`:''}>${o.html!=null?o.html:lppLdSubH(o.t==null?'':o.t)}</td>`; }).join('')+'</tr>'; });
+  return h+'</table></div>';
+}
+function lprLdTbl(m,o){
+  return Object.assign({type:'table',head:m.head||[],rows:m.rows.map(r=>{ const cells=Array.isArray(r)?r:r.c, cls=Array.isArray(r)?'':(r.cls||'');
+    return {cells:cells.map(c=>{ const x=(c&&typeof c==='object')?c:{t:c}, t=x.rt!=null?x.rt:String(x.t==null?'':x.t); const q={t,n:/^[-−]?[\d.,]+$/.test(t)}; if(x.span) q.span=x.span; if(x.key) q.key=x.key; return q; }),
+      cls:(cls==='tot'||cls==='gov')?'gov':''}; })},o||{});
+}
+const lppLdFold=(t,x,id)=>x?`<details class="calc lpFold"${id?' id="'+id+'"':''}><summary>${t}</summary>${x}</details>`:'';
+const lppLdSubA=(sub,txt)=>`<a href="#" class="wkA" data-lpsub="${sub}">${txt}</a>`;
+const LPP_SRC_GRP={dead:'Dead load — pole, misc., fixtures',cabV:'Cables — vertical reaction (half span)',wpole:'Wind on the pole',wfix:'Wind on fixtures',warm:'Wind on arms',
+  cabW:'Wind on cables (transverse, w·L/2)',ice:'Ice weight',wipole:'Wind on the iced pole',wifix:'Wind on iced fixtures',wiarm:'Wind on iced arms',
+  wsign:'Wind on the sign panel',wpost:'Wind on the post (drag)',wisign:'Wind on the iced sign panel',wipost:'Wind on the iced post',proj:'Shaft projection (weight, ice, wind)'};
+const lppLdAz=a=>fmt(((a%360)+360)%360,0);
+// ---- models ----
+function lppLdBasisM(L){
+  const inp=L.inp, sign=L.mode==='sign', sw=L.sw, R=[], nat=inp.nat;
+  R.push(['Codes','IBC 2021 §1807.3 · ASCE/SEI 7-16 (Ch. 2, 10, 26, 29) · AISC 360-16 · ACI 318-19','combinations ASCE 7-16 §2.3 (LRFD), §2.4 (ASD)']);
+  R.push(['Risk category','not an input of this mode','V and the ice thickness t are entered from the maps of the project\'s risk category; ice importance factor I_i below']);
+  R.push(['Basic wind speed V',fmt(inp.V,0)+' mph','ASCE 7-16 §26.5 (entered)']);
+  R.push(['Exposure category',String(inp.expo),'ASCE 7-16 §26.7; K_z by Table 26.10-1']);
+  R.push(['Topographic factor K_zt',fmt(inp.Kzt,2),'ASCE 7-16 §26.8']);
+  R.push(['Ground elevation factor K_e','1.00','ASCE 7-16 §26.9 (taken as 1.0)']);
+  R.push(['Directionality factor K_d',kdStr(inp),inp.KdMode==='override'?'single value entered, every component':'ASCE 7-16 Table 26.6-1, per component']);
+  R.push(['Gust-effect factor G, entered',fmt(inp.Ginput!==undefined?inp.Ginput:inp.G,2),'ASCE 7-16 §26.11']);
+  if(nat&&nat.n1>0) R.push(['Natural frequency n_1',fmt(nat.n1,2)+' Hz ('+(nat.n1>=1?'rigid':'flexible')+')','Rayleigh estimate; ASCE 7-16 §26.2 (worked below)']);
+  if(inp.gf) R.push(['Flexible gust-effect factor G_f',fmt(inp.gf.Gf,3)+' (β = '+fmt(inp.gf.beta,3)+')','ASCE 7-16 §26.11.5']);
+  R.push({c:['Gust-effect factor G, used',fmt(inp.G,3),inp.gf?'max(G, G_f), every wind force':'as entered'],cls:'tot'});
+  if(inp.Gcable!==undefined) R.push(['G for the cables',fmt(inp.Gcable,3),'G_f with h = H']);
+  R.push([sign?'Post force coefficient C_f':'Pole force coefficient C_f',fmt(inp.cfPole,3),inp.cfPoleMode==='auto'?'ASCE 7-16 Fig. 29.4-1 (auto)':'entered']);
+  if(sign) R.push(['Sign force coefficient C_f (Case A / B)',fmt(sw.cfAB,3),sw.cfManual?'entered (manual)':'ASCE 7-16 Fig. 29.3-1, B/s = '+fmt(sw.bs,2)+', s/h = '+fmt(sw.sh,2)]);
+  else { R.push(['Fixture force coefficient C_f (on the EPA)',fmt(inp.cfLum,2),'entered']);
+    if(L.comps.length) R.push(['Cable force coefficient C_f',fmt(inp.cfCable,2),'entered']); }
+  R.push(['Ice thickness t',fmt(inp.tIce,3)+' in',inp.iceBasis==='map'?'nominal (map) thickness; t_d(z) = t·f_z·K_zt^0.35·I_i, ASCE 7-16 §10.4.6':'uniform design thickness, as entered']);
+  if(inp.iceBasis==='map') R.push(['Ice importance factor I_i',fmt(inp.iceIi,2),'ASCE 7-16 §10.4.4']);
+  R.push(['Ice density',fmt(inp.iceDen,0)+' pcf','ASCE 7-16 §10.4.1']);
+  R.push(['Concurrent wind speed with ice V_ice',fmt(inp.Vice,0)+' mph','ASCE 7-16 §10.5']);
+  if(inp.pProj>0) R.push(['Shaft projection above grade p',fmt(inp.pProj,2)+' ft','heights z are above grade: z + p']);
+  R.push(['Wind directions',sign?(sw.edge?'toward 0°, 180° (normal to the panel) and 90° (edge-on, rectangular post)':'toward 0° and 180° (normal to the panel)'):'toward 0°, 90°, 180° and 270°','the largest moment governs each combination']);
+  return {head:['Quantity','Value','Basis'],rows:R,id:'lppLdBasisTbl'};
+}
+function lppLdDeadM(L){
+  const inp=L.inp, R=[];
+  if(L.mode==='sign'){ const nP=inp.signPosts, self=inp.__poleTotalW||0, N=inp.signWt/nP+self+(inp.DL||0);
+    R.push(['Sign panel, total',lppLdV(inp.signWt,0),'—']);
+    R.push(['Sign panel, per post (W_sign / '+nP+')',lppLdV(inp.signWt/nP,0),lppLdV(inp.signWt/nP,0)]);
+    R.push(['Post self-weight (per post)',lppLdV(self,0),lppLdV(self,0)]);
+    R.push(['Misc. dead load (per post)',lppLdV(inp.DL||0,0),lppLdV(inp.DL||0,0)]);
+    R.push({c:['N_D at each post base (unfactored)','',lppLdV(N,0)],cls:'tot'});
+    return {head:['Item','Weight (lb)','N per post (lb)'],rows:R,id:'lppLdDeadTbl',N,M:0}; }
+  let N=0, Mx=0, My=0; const self=inp.poleSelfW||0;
+  const row=(n,W,a,th,mx,my)=>{ N+=W; Mx+=mx||0; My+=my||0; R.push([n,lppLdV(W,0),a==null?'—':fmt(a,2),th==null?'—':lppLdAz(th),a==null?'—':lppLdV(W*a,0),lppLdV(mx||0,0),lppLdV(my||0,0)]); };
+  row('Misc. dead load at the top',inp.DL||0,null,null);
+  row('Pole self-weight ('+L.poleSeg.segs.length+' segments)',self,null,null);
+  L.fxs.forEach((fc,i)=>row('Fixture '+(i+1)+' (h = '+fmt(fc.hf,1)+' ft)',fc.Wdead,Math.hypot(fc.ex,fc.ey),fc.th,fc.Wdead*fc.ex,fc.Wdead*fc.ey));
+  L.comps.forEach((cp,j)=>row('Cable '+(j+1)+', half span g·L/2',cp.D_v*cp.c.L/2,null,null));
+  R.push({c:['Σ — N_D at the base and the eccentric dead moment (unfactored)',lppLdV(N,0),'','','|M| = '+lppLdV(Math.hypot(Mx,My),0),lppLdV(Mx,0),lppLdV(My,0)],cls:'tot'});
+  return {head:['Item','Weight W (lb)','Arm a (ft)','θ (°)','W·a (lb·ft)','M_x (lb·ft)','M_y (lb·ft)'],rows:R,id:'lppLdDeadTbl',N,Mx,My,M:Math.hypot(Mx,My)};
+}
+// wind elements, each ending with a force and its height (pole: wind toward phi)
+function lppLdWindM(L,phi){
+  const inp=L.inp, R=[]; let F=0, M=0;
+  if(L.mode==='sign'){ const sw=L.sw, pj=inp.pProj>0?inp.pProj:0;
+    const r=(n,q,cf,A,f,z,ex)=>R.push([n,q==null?'—':fmt(q,2),cf==null?'—':fmt(cf,3),A==null?'—':fmt(A,2),lppLdV(f,0),fmt(z,2),lppLdV(f*z,0),ex==null?'—':fmt(ex,2)]);
+    r('Sign panel, Case A',sw.qh,sw.cfAB,sw.As,sw.F_A,sw.zA-pj,0);
+    r('Sign panel, Case B (same force, eccentric)',sw.qh,sw.cfAB,sw.As,sw.F_A,sw.zA-pj,sw.eB);
+    if(sw.caseC) r('Sign panel, Case C (stepped bands)',sw.qh,null,sw.As,sw.caseC.F,sw.zc-pj,sw.caseC.e);
+    r('Post drag, per post (exposed post below the panel)',sw.qzPost,sw.cfPost,sw.Apost,sw.Fpost,sw.zPost,null);
+    if(sw.edge) r('Post drag on the depth face, per post (edge-on, wind toward 90°)',sw.qzPost,sw.cfPost,sw.ApostD,sw.FpostD,sw.zPostD,null);
+    return {head:['Element','q·K_d·G (psf)','C_f','Area (ft²)','Force F (lb)','Height z above the post base (ft)','F·z (lb·ft)','Eccentricity e (ft)'],rows:R,id:'lppLdWindTbl'}; }
+  const rows=lppSrcPole(inp,L.comps,L.fxs,L.pw,phi).filter(x=>x.k==='W'&&!x.ref), fx=L.fxs, arm={}, fxr={};
+  let ia=0, ifx=0, ic=0;
+  rows.forEach(x=>{ let q='—', cf='—', A='—';
+    if(x.grp==='wfix'){ const fc=fx[ifx++]; q=fmt(fc.qz,2); cf=fmt(inp.cfLum,2); A=fmt(fc.x.epa,2); }
+    else if(x.grp==='warm'){ while(ia<fx.length && !((fx[ia].FarmMax||0)>0||(fx[ia].FarmMaxI||0)>0)) ia++; const fc=fx[ia++]; q=fmt(fc.qz,2); cf=fmt(fc.cfArm,3); A=fmt(fc.armDin/12*fc.x.a*x.sin,2); }
+    else if(x.grp==='wpole'){ cf=fmt(inp.cfPole,3); q='by segment'; }
+    else if(x.grp==='cabW'){ const cp=L.comps[ic++]; q=fmt(cp.qW,2); cf=fmt(inp.cfCable,2); A=fmt(cp.c.D/12*cp.c.L/2,2); }
+    F+=x.F; M+=x.F*(x.z||0);
+    R.push([x.name,q,cf,A,lppLdV(x.F,0),fmt(x.z||0,2),lppLdV(x.grp==='wpole'?Math.hypot(x.Mx,x.My):x.F*x.z,0),Math.abs(x.T)>1e-9?lppLdV(x.T,0):'—']); });
+  const tot=lppSrcTot(rows).W;
+  R.push({c:['Σ wind W, toward '+fmt(phi,0)+'° (unfactored)','','','',lppLdV(Math.hypot(tot.Vx,tot.Vy),0),'',lppLdV(Math.hypot(tot.Mx,tot.My),0),Math.abs(tot.T)>1e-9?lppLdV(tot.T,0):'—'],cls:'tot'});
+  return {head:['Element','q_z·K_d·G (psf)','C_f','Area / EPA (ft²)','Force F (lb)','Height z (ft)','F·z (lb·ft)','Torsion T (lb·ft)'],rows:R,id:phi===L.govLRFD.phi?'lppLdWindTbl':''};
+}
+function lppLdIceM(L,phi){
+  const inp=L.inp, R=[];
+  if(L.mode==='sign'){ const sw=L.sw, nP=inp.signPosts, pj=inp.pProj>0?inp.pProj:0;
+    R.push(['Sign panel (total'+(nP>1?'; each post takes 1/'+nP+' of the weight':'')+')',fmt(sw.tdP,3),lppLdV(sw.WiPanel,1),lppLdV(sw.F_Ai,0)+' (Case A / B)'+(sw.caseC?', '+lppLdV(sw.caseC.FI,0)+' (Case C)':''),fmt(sw.zA-pj,2)]);
+    R.push(['Post, per post',fmt(sw.tdPost,3),lppLdV(sw.WiPost,1),lppLdV(sw.FpostI,1),fmt(sw.FpostI>0?sw.MpostI/sw.FpostI:0,2)]);
+    if(sw.edge) R.push(['Post, depth face (edge-on), per post','','—',lppLdV(sw.FpostDI,1),fmt(sw.FpostDI>0?sw.MpostDI/sw.FpostDI:0,2)]);
+    R.push({c:['Per post: N_Di = W_panel/'+nP+' + W_post','',lppLdV((sw.WiPanel||0)/nP+(sw.WiPost||0),1),'',''],cls:'tot'});
+    return {head:['Element','t_d (in)','Ice weight W_ice (lb)','Wind on ice F (lb)','Height z above the post base (ft)'],rows:R,id:'lppLdIceTbl'}; }
+  const pw=L.pw, pwd=lppPoleWindDir(pw,phi), all=lppSrcPole(inp,L.comps,L.fxs,pw,phi), tot=lppSrcTot(all);
+  R.push(['Pole (mast)',inp.iceBasis==='map'?fmt(pw.tdTop,3)+' at the top':fmt(inp.tIce,3),lppLdV(pw.WiceMast,1),lppLdV(pwd.FpoleI,1),fmt(pwd.FpoleI>0?pwd.MpoleI/pwd.FpoleI:0,2),lppLdV(pwd.MpoleI,0)]);
+  L.fxs.forEach((fc,i)=>{ R.push(['Fixture '+(i+1),fmt(fc.td,3),lppLdV(fc.Wice,1),lppLdV(fc.Fwi,1),fmt(fc.hf,2),lppLdV(fc.Fwi*fc.hf,0)]);
+    if((fc.FarmMax||0)>0||(fc.FarmMaxI||0)>0){ const s=Math.abs(Math.sin((fc.th-phi)*RAD)); R.push(['Fixture '+(i+1)+' arm (no ice weight taken)',fmt(fc.td,3),'—',lppLdV(fc.FarmMaxI*s,1),fmt(fc.hf,2),lppLdV(fc.FarmMaxI*s*fc.hf,0)]); } });
+  L.comps.forEach((cp,j)=>R.push(['Cable '+(j+1)+', half span (pull: Cables)',fmt(inp.tIce,3),lppLdV(cp.Di_v*cp.c.L/2,1),lppLdV(cp.Wi_h*cp.c.L/2,1),fmt(cp.c.hc,2),lppLdV(cp.Wi_h*cp.c.L/2*cp.c.hc,0)]));
+  R.push({c:['Σ — N_Di and wind on ice W_i, toward '+fmt(phi,0)+'° (unfactored)','',lppLdV(tot.Di.N,1),lppLdV(Math.hypot(tot.Wi.Vx,tot.Wi.Vy),1),'',lppLdV(Math.hypot(tot.Wi.Mx,tot.Wi.My),0)],cls:'tot'});
+  return {head:['Element','t_d (in)','Ice weight W_ice (lb)','Wind on ice F (lb)','Height z (ft)','F·z (lb·ft)'],rows:R,id:'lppLdIceTbl'};
+}
+// the centre table: one row per load source and load case, unfactored, at one section. o.one: one axis (sign); o.pulls: [{name, v}]
+function lppLdBaseM(rows,o){
+  o=o||{}; const one=!!o.one, tot=lppSrcTot(rows), P=o.pulls||[];
+  const hasT=rows.some(r=>!r.ref&&Math.abs(r.T)>1e-9);
+  const Q=one?['Vx','N','Mx']:['Vx','Vy','N','Mx','My']; if(hasT) Q.push('T');
+  const head=['Load source','Case'].concat(one?['V (lb)','N (lb)','M (lb·ft)']:['V_x (lb)','V_y (lb)','N (lb)','M_x (lb·ft)','M_y (lb·ft)'],hasT?['T (lb·ft)']:[]);
+  const R=[], lab=g=>(g==='dead'&&one)?'Dead load — panel share, post, misc.':LPP_SRC_GRP[g];
+  LPP_SRC_K.forEach(k=>{ const G=[]; rows.forEach(r=>{ if(r.ref||r.k!==k) return; let g=G.find(x=>x.grp===r.grp); if(!g){ g=Object.assign({grp:r.grp},lppSrcZero()); G.push(g); } LPP_SRC_Q.forEach(q=>{ g[q]+=r[q]; }); });
+    const S=G.filter(g=>LPP_SRC_Q.some(q=>Math.abs(g[q])>1e-9)); if(!S.length) return;
+    S.forEach(g=>R.push([lab(g.grp),k==='Di'?'D_i':k==='Wi'?'W_i':k].concat(Q.map(q=>lppLdV(g[q],0)))));
+    R.push({c:['Σ '+LPP_SRC_KN[k],''].concat(Q.map(q=>lppLdV(tot[k][q],0))),cls:'tot'}); });
+  P.forEach(x=>R.push({c:[x.name,'‡'].concat(Q.map(q=>lppLdV(x.v[q],0))),cls:'ref'}));
+  return {head,rows:R,id:o.id||'',tot,Q};
+}
+// every item: force × height
+function lppLdItemM(rows,one){
+  const hasT=rows.some(r=>Math.abs(r.T)>1e-9), Q=one?['Vx','N','Mx']:['Vx','Vy','N','Mx','My']; if(hasT) Q.push('T');
+  const head=['Item','Case','Force (lb)','Height z or arm a (ft)'].concat(one?['V (lb)','N (lb)','M (lb·ft)']:['V_x (lb)','V_y (lb)','N (lb)','M_x (lb·ft)','M_y (lb·ft)'],hasT?['T (lb·ft)']:[]);
+  const R=[]; rows.forEach(r=>{ if(!r.ref && Math.abs(r.F)<1e-9) return;
+    R.push({c:[r.name+(r.ref?' ‡':''),r.ref?'(ref.)':(r.k==='Di'?'D_i':r.k==='Wi'?'W_i':r.k),lppLdV(r.F,1),r.z==null?'—':fmt(r.z,2)+(r.arm?' (a)':'')].concat(Q.map(q=>r.ref?(Math.abs(r[q])>1e-9?'('+fmt(r[q],0)+')':'—'):lppLdV(r[q],0))),cls:r.ref?'ref':''}); });
+  return {head,rows:R};
+}
+// Σ γ × rows of one combination against the engine's own value (cmp: {Vx, Vy, N, Mx, My, T} or one axis {V, N, M})
+function lppLdFacM(tot,f,pull,eng,one){
+  const Q=one?['Vx','N','Mx']:['Vx','Vy','N','Mx','My','T'], c=lppSrcComb(tot,f,pull), R=[];
+  LPP_SRC_K.forEach(k=>{ if(!(f[k]>0)) return; R.push([LPP_SRC_KN[k],fmt(f[k],1)].concat(Q.map(q=>lppLdV(tot[k][q],0)))); });
+  if(pull) R.push({c:['Cable pulls of this combination ‡','1.0'].concat(Q.map(q=>lppLdV(pull[q],0))),cls:'ref'});
+  R.push({c:['Σ γ × rows',''].concat(Q.map(q=>lppLdV(c[q],0))),cls:'tot'});
+  const ok=Q.every(q=>Math.abs(c[q]-eng[q])<=1e-9*Math.max(1,Math.abs(eng[q])));
+  R.push({c:['Envelope value (engine) '+(ok?'✓':'✗ does not reconcile: please report'),''].concat(Q.map(q=>lppLdV(eng[q],0))),cls:'gov'});
+  return {head:['Load case','γ'].concat(one?['V (lb)','N (lb)','M (lb·ft)']:['V_x (lb)','V_y (lb)','N (lb)','M_x (lb·ft)','M_y (lb·ft)','T (lb·ft)']),rows:R,ok,c};
+}
+// ---- free-body sketch (elevation in the plane of the wind; the style of the tool's schematics) ----
+// o: {H, p, title, hz:[{z, F, lbl, small}], wt:[{z, x, W, lbl}], pts:[{z, lbl}], panel:{z0, z1}, sum:[lines]}
+function lppFbdSVG(o){
+  const W=340, top=30, baseY=248, cx=112, H=Math.max(o.H,1), px=(baseY-top)/H, y=z=>baseY-z*px, pj=o.p>0?36:0;
+  const Hh=baseY+pj+26+14*(o.sum||[]).length, f1=v=>v.toFixed(1);
+  let g=`<rect x="${cx-4}" y="${f1(y(H))}" width="8" height="${f1(baseY-y(H))}" fill="#cdd6db" stroke="#6b7480"/>`;
+  if(o.panel) g+=`<rect x="${cx-34}" y="${f1(y(o.panel.z1))}" width="68" height="${f1(y(o.panel.z0)-y(o.panel.z1))}" fill="#e8eef2" fill-opacity="0.85" stroke="#6b7480"/>`;
+  g+=`<rect x="${cx-16}" y="${baseY-3}" width="32" height="3" fill="#9aa3af"/>`;
+  if(pj){ g+=`<rect x="${cx-14}" y="${baseY}" width="28" height="${pj}" fill="#ece7dc" stroke="#6b7480"/><text x="${cx+20}" y="${baseY+pj/2+4}" font-size="10.5" fill="#6b7480" font-family="ui-monospace,monospace">p = ${fmt(o.p,2)} ft</text>`; }
+  g+=`<line x1="16" y1="${baseY+pj}" x2="${W-16}" y2="${baseY+pj}" stroke="#6b7480" stroke-width="1.3"/><text x="18" y="${baseY+pj+12}" font-size="10.5" fill="#6b7480" font-family="ui-monospace,monospace">grade</text>`;
+  g+=`<text x="${cx-20}" y="${baseY+(pj?-6:12)}" font-size="10.5" fill="#6b7480" text-anchor="end" font-family="ui-monospace,monospace">base z = 0</text>`;
+  const Fmax=Math.max(1e-9,...(o.hz||[]).map(h=>Math.abs(h.F))), L=[];
+  (o.hz||[]).forEach(h=>{ if(!(Math.abs(h.F)>1e-9)) return; const yy=y(h.z), len=h.small?(6+30*Math.abs(h.F)/Fmax):(16+44*Math.abs(h.F)/Fmax);
+    g+=arrow(cx-6-len,+f1(yy),cx-6,yy,h.small?'#7fa6ba':'#2f6f8f',h.small?1:1.6); if(h.lbl) L.push({y:yy,x:cx+5,lbl:h.lbl,col:'#2f6f8f'}); });
+  (o.wt||[]).forEach(w=>{ if(!(Math.abs(w.W)>1e-9)) return; const xw=cx+Math.max(-70,Math.min(64,(w.x||0)*px)), yy=y(w.z);
+    if(Math.abs(xw-cx)>5) g+=`<line x1="${cx}" y1="${f1(yy)}" x2="${f1(xw)}" y2="${f1(yy)}" stroke="#6b7480" stroke-width="1.2"/>`;
+    g+=arrow(+f1(xw),+f1(yy),xw,yy+16,'#b8431f',1.6); L.push({y:yy+10,x:Math.max(xw,cx)+5,lbl:w.lbl,col:'#b8431f'}); });
+  (o.pts||[]).forEach(q=>{ const yy=y(q.z); g+=`<circle cx="${cx}" cy="${f1(yy)}" r="3.5" fill="#2f6f8f"/><line x1="${cx}" y1="${f1(yy)}" x2="${cx+30}" y2="${f1(yy-10)}" stroke="#2f6f8f" stroke-width="1.3" stroke-dasharray="5 4"/>`; L.push({y:yy-8,x:cx+32,lbl:q.lbl,col:'#2f6f8f'}); });
+  // labels: one column on the right, top to bottom, at least 12 px apart, each with a leader to its arrow
+  L.sort((a,b)=>a.y-b.y); let last=top-14; const lx=cx+76;
+  L.forEach(l=>{ const ly=Math.max(l.y+3,last+12); last=ly;
+    g+=`<line x1="${f1(l.x)}" y1="${f1(l.y)}" x2="${lx-3}" y2="${f1(ly-3)}" stroke="#9aa3af" stroke-width="0.7"/><text x="${lx}" y="${f1(ly)}" font-size="10.5" fill="${l.col}" font-family="ui-monospace,monospace">${lppEsc(l.lbl)}</text>`; });
+  const Hs=Math.max(Hh,last+pj+40);
+  (o.sum||[]).forEach((t,i)=>{ g+=`<text x="16" y="${Hs-8-14*((o.sum.length-1)-i)}" font-size="10.5" fill="#1a2230" font-family="ui-monospace,monospace">${lppEsc(t)}</text>`; });
+  return `<div class="drawwrap lppFbd"><svg viewBox="0 0 ${W} ${Hs}" role="img" aria-label="${lppEsc(o.title||'Free-body sketch')}"><text x="16" y="14" font-size="10.5" fill="#1a2230" font-family="ui-monospace,monospace">${lppEsc(o.title||'')}</text>${g}</svg></div>`;
+}
+function lppFbdPole(L,phi){
+  const inp=L.inp, rows=lppSrcPole(inp,L.comps,L.fxs,L.pw,phi), pwd=lppPoleWindDir(L.pw,phi), tot=lppSrcTot(rows), o={H:inp.H,p:inp.pProj>0?inp.pProj:0,hz:[],wt:[],pts:[]};
+  o.title='Unfactored loads, wind toward '+fmt(phi,0)+'° (lb, ft)';
+  (L.pw.strips||[]).forEach(st=>o.hz.push({z:st.z,F:pwd.sF(st),small:true}));
+  let ifx=0, iarm=0;
+  rows.forEach(r=>{ if(r.ref) return;
+    if(r.k==='W'){ if(r.grp==='wpole') o.hz.push({z:r.z,F:1e-6,lbl:'Pole Σ '+fmt(r.F,0)+' @ '+fmt(r.z,1)});
+      else if(Math.abs(r.F)>1e-9) o.hz.push({z:r.z,F:r.F,lbl:(r.grp==='wfix'?'F':r.grp==='warm'?'Arm ':'Cable w·L/2 ')+(r.grp==='cabW'?'':r.name.replace(/\D+/g,'')+' ')+fmt(r.F,0)+' @ '+fmt(r.z,1)}); }
+  });
+  L.fxs.forEach((fc,i)=>{ const a=Math.hypot(fc.ex,fc.ey), xa=a*Math.cos((fc.th-phi)*RAD); o.wt.push({z:fc.hf,x:xa,W:fc.Wdead,lbl:'W'+(i+1)+' '+fmt(fc.Wdead,0)+(a>0?', a '+fmt(a,1):'')}); });
+  const DLax=(inp.DLaxial!==undefined?inp.DLaxial:inp.DL); o.wt.push({z:inp.H/2,x:0,W:DLax,lbl:'Pole + misc. '+fmt(DLax,0)});
+  L.comps.forEach((cp,j)=>o.pts.push({z:cp.c.hc,lbl:'Cable '+(j+1)+' pull ‡ @ '+fmt(cp.c.hc,1)}));
+  o.sum=['Wind W: ΣF = '+fmt(Math.hypot(tot.W.Vx,tot.W.Vy),0)+' lb, ΣF·z = '+fmt(Math.hypot(tot.W.Mx,tot.W.My),0)+' lb·ft','Dead D: N = '+fmt(tot.D.N,0)+' lb, ΣW·a = '+fmt(Math.hypot(tot.D.Mx,tot.D.My),0)+' lb·ft'];
+  return lppFbdSVG(o);
+}
+function lppFbdSign(L,p,rows){
+  const inp=L.inp, sw=L.sw, pj=inp.pProj>0?inp.pProj:0, m=rows.meta, tot=lppSrcTot(rows), o={H:inp.H,p:pj,hz:[],wt:[],panel:{z0:sw.clr-pj,z1:sw.h-pj}};
+  o.title=(inp.signPosts>1?'Post '+(p+1)+': u':'U')+'nfactored loads, wind toward '+fmt(m.phi,0)+'°, '+(m.edge?'edge-on':'Case '+m.case)+' (lb, ft)';
+  rows.forEach(r=>{ if(r.k==='W'&&Math.abs(r.F)>1e-9) o.hz.push({z:r.z,F:r.F,lbl:(r.grp==='wsign'?'Sign ':'Post drag ')+fmt(r.F,0)+' @ '+fmt(r.z,2)}); });
+  if(!m.edge) (sw.postStrips||[]).forEach(st=>o.hz.push({z:st.z,F:st.F,small:true}));
+  o.wt.push({z:sw.zc-pj,x:0,W:inp.signWt/inp.signPosts,lbl:'Panel '+fmt(inp.signWt/inp.signPosts,0)});
+  o.wt.push({z:(sw.clr-pj)/2,x:0,W:(inp.__poleTotalW||0)+(inp.DL||0),lbl:'Post + misc. '+fmt((inp.__poleTotalW||0)+(inp.DL||0),0)});
+  o.sum=['Wind W: ΣF = '+fmt(tot.W.Vx,0)+' lb, ΣF·z = '+fmt(tot.W.Mx,0)+' lb·ft'+(Math.abs(tot.W.T)>1e-9?', T = '+fmt(tot.W.T,0)+' lb·ft':''),'Dead D: N = '+fmt(tot.D.N,0)+' lb'];
+  return lppFbdSVG(o);
+}
+// ---- the sub-tab bodies (one summary table first, derivations collapsed below) ----
+function lppLdDirBarHTML(txt){ return `<div class="lppLdDirBar"><span>${txt}</span><label class="noprint"><input type="checkbox" class="lppLdDirChk"${lppLdAllDirs?' checked':''}> show all directions</label></div>`; }
+function lppLdPoleDirTxt(L){ return `Shown for wind toward <b>${fmt(L.phi0,0)}°</b>, the governing direction of ${lppEsc(L.govLRFD.name)} (largest LRFD base moment).`; }
+// sign: the direction and Fig. 29.3-1 case of each post's governing LRFD demand
+function lppLdSignGov(L,p){ const gl=L.postGovList[p].gLRFD; return {gl,phi:gl.phi||0,cname:gl.edge?'A':gl.case,rows:lppSrcSign(L.inp,L.sw,p,gl.phi||0,gl.edge?'A':gl.case)}; }
+function lppLdSignShareM(L,phi){
+  const inp=L.inp, sw=L.sw, R=[], cs=['A','B'].concat(sw.caseC?['C']:[]), edge=!!sw.edge && Math.abs(Math.cos(phi*RAD))<1e-9;
+  (edge?['A']:cs).forEach(c=>{ for(let p=0;p<inp.signPosts;p++){ const rows=lppSrcSign(inp,sw,p,phi,c), t=lppSrcTot(rows).W, m=rows.meta;
+    R.push([edge?'edge-on (post drag only)':'Case '+c,'P'+(p+1),edge?'—':lppLdV(m.sh,0),edge?'—':fmt(m.zarm,2),lppLdV(t.Vx,0),lppLdV(t.Mx,0),Math.abs(t.T)>1e-9?lppLdV(t.T,0):'—']); } });
+  return {head:['Wind toward '+fmt(phi,0)+'°','Post','Panel share (lb)','z (ft)','V = share + drag (lb)','M (lb·ft)','T (lb·ft)'],rows:R};
+}
+function lppLdXferHTML(L,rows,phi,one,idx){
+  const sp=L.sp, what=L.mode==='sign'?'post':'pole';
+  if(!sp) return `<p class="eq-result lppLdXfer">Section B — top of the shaft / groundline: the ${what} stands on the top of the shaft at grade (shaft projection p = 0), so the two sections coincide. The base plate, the anchors, the shaft and the embedment all take the forces of Section A.</p>`;
+  const G=lppSrcGrade(rows,sp,one?0:phi), tA=lppSrcTot(rows), tB=lppSrcTot(G), g=t=>`\\[${t}\\]`, n=(v,d)=>fmt(v,d||0).replace(/,/g,'{,}');
+  let H=`<div class="tbl-note lpNL lppLdXfer">${lpNL(`Section B — grade (groundline), p = ${fmt(sp.p,2)} ft below the ${what} base: the shaft projects above grade.`,[
+    ['Used by:','the embedment and the soil bearing (ASD) and the shaft (LRFD) take their demand at Section B; the base plate and the anchors keep Section A.'],
+    ['Transfer:','every force of Section A moves down by p: M<sub>B</sub> = M<sub>A</sub> + V·p; V and N are unchanged.'],
+    ['Added at B:',`the projection's own weight W<sub>c</sub> = ${fmt(sp.Wc,0)} lb (D), its ice ${fmt(sp.Wice,0)} lb (D<sub>i</sub>) and the wind on it F<sub>s</sub> = ${fmt(sp.F,0)} lb (W; iced ${fmt(sp.FI,0)} lb) at p/2 ${lppLink('proj',idx||0)}.`],
+    ['LRFD:','with P-Δ the shaft takes B₂·M<sub>A</sub> + V·p + F<sub>s</sub>·p/2 (Shaft tab); the values here are first-order.']])}</div>`;
+  const ax=one?[['x','Vx','Mx','']]:[['x','Vx','Mx','\\cos\\varphi'],['y','Vy','My','\\sin\\varphi']];
+  ax.forEach(([a,qv,qm,tr])=>{ if(Math.abs(tA.W[qv])<1e-9 && Math.abs(tB.W[qm])<1e-9) return; const sfx=one?'':','+a, Fs=tB.W[qv]-tA.W[qv];
+    H+=g(`M_{B${sfx},W} = M_{A${sfx},W} + V_{${one?'W':a+',W'}}\\,p + F_{s}${tr}\\,\\tfrac{p}{2} = ${n(tA.W[qm])} + (${n(tA.W[qv])})(${fmt(sp.p,2)}) + (${n(Fs)})\\tfrac{${fmt(sp.p,2)}}{2} = ${n(tB.W[qm])}\\ \\text{lb}{\\cdot}\\text{ft}`); });
+  H+=g(`N_{B,D} = N_{A,D} + W_{c} = ${n(tA.D.N)} + ${n(sp.Wc)} = ${n(tB.D.N)}\\ \\text{lb}`);
+  H+=`<div class="subhead2" style="margin-top:8px">Section B — at grade, unfactored${one?'':', wind toward '+fmt(phi,0)+'°'}</div>`+lppLdTblHTML(lppLdBaseM(G,{one,id:idx?'':'lppLdBaseTblB'}));
+  return H;
+}
+function lppLdBaseHTML(L){
+  const inp=L.inp, sub=(k,t)=>lppLdSubA(k,t);
+  if(L.mode==='sign'){ const sw=L.sw, nP=inp.signPosts, two=nP>1; let H='';
+    H+=`<div class="tbl-note lpNL">${lpNL('Section A — each post base: underside of the base plate = top of the shaft. Unfactored forces of each load source, per post.',[
+      ['One axis:','the wind acts along the panel normal (V and M along the wind); N is compression.'],
+      ['Shown:','each post at the wind direction and Fig. 29.3-1 case of its governing LRFD demand; the switch shows every direction and case.'],
+      ['Panel → posts:',`the panel force is shared between the posts by statics (${lppGoA('signLoadPath','load path, worked')}).`],
+      ['Worked on:',`${sub('dead','2 · Dead load')}, ${sub('wind','3 · Wind')}${inp.tIce>0?', '+sub('ice','4 · Ice'):''}; factored in ${sub('combos','7 · Combinations')}.`]])}</div>`;
+    H+=lppLdDirBarHTML('Governing direction and case of each post shown.');
+    for(let p=0;p<nP;p++){ const G=lppLdSignGov(L,p), m=G.rows.meta, gl=G.gl, ga=L.postGovList[p].gASD;
+      H+=`<div class="subhead2" style="margin-top:12px" id="lppLdBaseP${p+1}">${two?'Post '+(p+1)+' — ':''}wind toward ${fmt(G.phi,0)}°, ${m.edge?lppSignEdgeLbl(sw)+' (post drag only)':'Case '+m.case} — Section A</div>`;
+      if(!m.edge) H+=`<p class="eq-why">Panel → posts: Case ${m.case} resultant F = ${fmt(m.F,0)} lb at x = ${fmt(m.x,2)} ft from the post-group centreline → ${two?`this post takes F(½ ${(p===0?1:-1)*(m.x>=0?1:-1)>=0?'+':'−'} |x|/L<sub>p</sub>) = <b>${fmt(m.sh,0)} lb</b>`:`the single post takes <b>${fmt(m.sh,0)} lb</b>${m.x?`, torsion T = F·|x| = ${fmt(Math.abs(m.sh*m.x),0)} lb·ft`:''}`} at z = ${fmt(m.zarm,2)} ft above the post base.</p>`;
+      if(ga && ((ga.phi||0)!==G.phi || ga.case!==gl.case)) H+=`<p class="eq-why">The governing ASD demand of this post (${lppEsc(ga.name)}) is at wind toward ${fmt(ga.phi||0,0)}°, ${ga.edge?'edge-on':'Case '+ga.case}: see the all-directions table.</p>`;
+      H+=lppLdTblHTML(lppLdBaseM(G.rows,{one:true,id:'lppLdBaseTbl'+(p?'_p'+(p+1):'')}));
+      H+=lppLdXferHTML(L,G.rows,0,true,p);
+      H+=lppFbdSign(L,p,G.rows);
+      H+=lppLdFold((two?'Post '+(p+1)+' — e':'E')+'ach item: force × height (click to open)',lppLdTblHTML(lppLdItemM(G.rows,true)));
+    }
+    H+=`<div class="lppAllDirs"><div class="subhead2" style="margin-top:12px">Wind W on each post — every direction and case (unfactored, Section A)</div>`+lppSignDirs(sw).map(phi=>lppLdTblHTML(lppLdSignShareM(L,phi))).join('')+`</div>`;
+    return H; }
+  const phi=L.phi0, rows=lppSrcPole(inp,L.comps,L.fxs,L.pw,phi), cab=L.comps.length>0;
+  const aDir=(L.govASD.dirs||[]).find(d=>d.phi===phi)||L.govASD;
+  const pulls=cab?[{name:'Cable pulls — '+L.govLRFD.name+' (LRFD)',v:lppSrcPull(L.govLRFD)},{name:'Cable pulls — '+L.govASD.name+' (ASD)',v:lppSrcPull(aDir)}]:[];
+  let H=`<div class="tbl-note lpNL">${lpNL('Section A — the pole base: underside of the base plate = top of the shaft (z = 0). Unfactored forces of each load source.',[
+    ['Vectors:','x points toward 0°, y toward 90° (plan). Wind forces act along the wind; eccentric weights along the arm azimuth θ. M<sub>x</sub> is the moment of the x forces, as in the envelope; N is compression.'],
+    ...(cab?[['‡ Cable pulls:',`the along-cable pull follows the catenary law of the combined factored line load, so it is not a sum of the load cases: its rows are those of the governing combinations (${sub('cables','5 · Cables')}); the vertical reaction and the transverse wind of each cable are load-case rows.`]]:[]),
+    ['Worked on:',`${sub('dead','2 · Dead load')}, ${sub('wind','3 · Wind')}${inp.tIce>0?', '+sub('ice','4 · Ice'):''}${cab?', '+sub('cables','5 · Cables'):''}; factored in ${sub('combos','7 · Combinations')}.`]])}</div>`;
+  H+=lppLdDirBarHTML(lppLdPoleDirTxt(L));
+  H+=`<div class="subhead2">Section A — pole base, wind toward ${fmt(phi,0)}°</div>`+lppLdTblHTML(lppLdBaseM(rows,{id:'lppLdBaseTbl',pulls}));
+  H+=lppLdXferHTML(L,rows,phi,false,0);
+  H+=`<div class="subhead2" style="margin-top:10px">Free-body sketch — each force at its height</div>`+lppFbdPole(L,phi);
+  H+=lppLdFold('Each item: force × height or arm (click to open)',lppLdTblHTML(lppLdItemM(rows,false)));
+  H+=`<div class="lppAllDirs">`+WIND_DIRS.filter(d=>d!==phi).map(d=>`<div class="subhead2" style="margin-top:12px">Section A — pole base, wind toward ${fmt(d,0)}°</div>`+lppLdTblHTML(lppLdBaseM(lppSrcPole(inp,L.comps,L.fxs,L.pw,d),{}))).join('')+`</div>`;
+  return H;
+}
+// combinations: γ and the factored V, N, M of every combination, LRFD and ASD side by side, with what each one governs
+function lppLdComboM(L,fam,p){
+  const sign=L.mode==='sign', R=[], uses=[];
+  const chip=(k,txt)=>({k,txt});
+  if(!sign){ const U=L.use;
+    L.allCombos.filter(r=>r.fam===fam).forEach(r=>{ const u=[];
+      if(fam==='LRFD'){ if(r.key===L.govLRFD.key) u.push(chip(null,'largest M'));
+        if(U.post.name===r.name) u.push(chip('post','Pole check')); if(U.bp.name===r.name) u.push(chip('anchors','Base plate'));
+        if(U.shaft.name===r.name) u.push(chip('flex','Shaft P–M')); if(U.shear.name===r.name) u.push(chip('shear','Shaft shear')); }
+      else { if(r.key===L.govASD.key) u.push(chip(null,'largest M')); if(U.emb.name===r.name) u.push(chip('dem','Embedment')); if(U.bearing.name===r.name) u.push(chip('bearing','Soil bearing')); }
+      R.push({r,name:r.name,f:r.factors,cells:[fmt(r.phi,0),lppLdV(r.P,0),lppLdV(r.axial,0),lppLdV(r.M,0)],u}); });
+    return {head:['Combination ('+fam+')','γ_D','γ_W','γ_Di','γ_Wi','Wind toward (°)','V (lb)','N (lb)','M (lb·ft)','Governs'],R}; }
+  const pd=L.postDesigns[p], F=pd.found, bp=(F.bolts&&F.bolts.byCheck&&F.bolts.byCheck.BP)||F.bolts||{}, emb=(pd.gASDF||pd.gASD).name;
+  const mk=(name,key,g)=>{ const u=[];
+    if(fam==='LRFD'){ if(pd.gLRFD.name===name) u.push(chip(null,'largest M')); if(pd.pstress.comboName===name) u.push(chip('post','Post check')); if(bp.comboName===name) u.push(chip('anchors','Base plate')); if(F.shaftCombo===name) u.push(chip('flex','Shaft P–M')); }
+    else { if(pd.gASD.name===name) u.push(chip(null,'largest M')); if(emb===name) u.push(chip('dem','Embedment')); if(F.bearing&&F.bearing.comboName===name) u.push(chip('bearing','Soil bearing')); }
+    R.push({name,f:COMBOS[key],cells:[g.edge?'edge-on':g.case,fmt(g.phi||0,0),lppLdV(g.P,0),lppLdV(g.axial,0),lppLdV(g.M,0)],u}); };
+  L.allCombos.filter(r=>r.fam===fam).forEach(r=>{ mk(r.name,r.key,r.postGovN[p]); if(r.postEdge) mk(r.name+', '+lppSignEdgeLbl(L.sw),r.key,r.postEdge[p]); });
+  return {head:['Combination ('+fam+')','γ_D','γ_W','γ_Di','γ_Wi','Case','Wind toward (°)','V (lb)','N (lb)','M (lb·ft)','Governs'],R};
+}
+function lppLdComboTbl(M,st,id){   // the model above as a table model (screen: links; Report: text)
+  return {head:M.head,id,rows:M.R.map(x=>({c:[x.name].concat(LPP_SRC_K.map(k=>x.f[k]?fmt(x.f[k],1):'—'),x.cells,
+    [{html:x.u.map(u=>u.k?lppLink(u.k,st,u.txt):'<b>'+lppEsc(u.txt)+'</b>').join('<br>')||'—',rt:x.u.map(u=>u.txt).join('; ')||'—'}]),cls:x.u.length?'gov':''}))};
+}
+// Σ γ × rows for the governing combination of each family (pole: at its own direction; sign: post p)
+function lppLdFacList(L,p){
+  if(L.mode==='sign'){ const inp=L.inp, pg=L.postGovList[p];
+    return [['LRFD',pg.gLRFD],['ASD',pg.gASD]].map(([fam,g])=>{ const rows=lppSrcSign(inp,L.sw,p,g.phi||0,g.edge?'A':g.case), f=COMBOS[g.key]||COMBOS.L1;
+      return {fam,name:g.name,phi:g.phi||0,cs:g.edge?'edge-on':'Case '+g.case,M:lppLdFacM(lppSrcTot(rows),f,null,{Vx:g.P,N:g.axial,Mx:g.M},true)}; }); }
+  return [['LRFD',L.govLRFD],['ASD',L.govASD]].map(([fam,g])=>{ const rows=lppSrcPole(L.inp,L.comps,L.fxs,L.pw,g.phi);
+    return {fam,name:g.name,phi:g.phi,M:lppLdFacM(lppSrcTot(rows),g.factors,L.comps.length?lppSrcPull(g):null,{Vx:g.Vx,Vy:g.Vy,N:g.axial,Mx:g.Mx,My:g.My,T:g.Tz},false)}; });
+}
+function lppLdComboHTML(L){
+  const sign=L.mode==='sign', nP=sign?L.inp.signPosts:1, two=nP>1, sub=(k,t)=>lppLdSubA(k,t); let H='';
+  H+=`<div class="tbl-note lpNL">${lpNL(`Factored cases, built from the unfactored rows of ${sub('base','6 · Forces at the base')}: each combination is Σ γ × its load-case rows${sign?'':', at its own worst wind direction'}.`,[
+    ['LRFD (strength):',`the ${sign?'post':'pole'}, the base plate and anchors, and the shaft (Post, Anchorage and Shaft tabs).`],
+    ['ASD (service):','the embedment (IBC §1807.3) and the soil bearing (Shaft tab).'],
+    ['Governs:','the highlighted rows are the ones a downstream check uses; the link opens that check. Every LRFD combination and direction is sent to the Anchorage app.'],
+    ...(L.sp?[['Shaft projection:',`the shaft and the embedment take these forces moved to grade (Section B of ${sub('base','6')}; ${lppLink('proj',0)}).`]]:[]),
+    ['P-Δ:',`first-order values; the LRFD moment is multiplied by B₂ for the ${sign?'post':'pole'}, base plate and shaft (Post tab).`]])}</div>`;
+  for(let p=0;p<nP;p++){
+    if(two) H+=`<div class="subhead2" style="margin-top:12px">Post ${p+1}</div>`;
+    H+=`<div class="lppLdCombGrid"><div>`+lppLdTblHTML(lppLdComboTbl(lppLdComboM(L,'LRFD',p),p,'lppLdComboL'+(p?'_p'+(p+1):'')))+`</div><div>`+lppLdTblHTML(lppLdComboTbl(lppLdComboM(L,'ASD',p),p,'lppLdComboA'+(p?'_p'+(p+1):'')))+`</div></div>`;
+    lppLdFacList(L,p).forEach(x=>{ H+=`<div class="subhead2" style="margin-top:10px" id="lppLdFac_${x.fam}${p?'_p'+(p+1):''}">${two?'Post '+(p+1)+' — ':''}γ × rows: ${lppEsc(x.name)} (governing ${x.fam}), wind toward ${fmt(x.phi,0)}°${x.cs?', '+x.cs:''}</div>`+lppLdTblHTML(Object.assign({cls:'lppLdFacTbl'},x.M)); });
+  }
+  H+=`<p class="tbl-note">The moment of these combinations is worked term by term in the ${lppGoA('lppBmbCard','base moment build-up')} below; every combination is listed in the ${lppGoA(sign?'sgComboTbl':'comboMatrixTbl','envelope table')}.</p>`;
+  return H;
+}
+function lppLdClear(){ LPP_LD=null; ['lppLdBasis','lppLdDead','lppLdWind','lppLdIce','lppLdBase','lppLdCombo'].forEach(id=>{ if($(id)) $(id).innerHTML='<p class="tbl-note">—</p>'; }); }
+function lppLdRender(L){
+  LPP_LD=L; const sign=L.mode==='sign', inp=L.inp, sw=L.sw, set=(id,H)=>{ const e=$(id); if(e){ e.innerHTML=H; lppBmbMath(e); } };
+  L.phi0=sign?0:L.govLRFD.phi;
+  const sub=(k,t)=>lppLdSubA(k,t), dirsOther=sign?[]:WIND_DIRS.filter(d=>d!==L.phi0);
+  set('lppLdBasis',lppLdTblHTML(lppLdBasisM(L))+`<p class="tbl-note">Inputs: the Wind &amp; site, ${sign?'Pole':'Pole, Fixtures, Cables'} and Ice input tabs. The loads follow in ${sub('dead','2 · Dead load')}, ${sub('wind','3 · Wind')}${inp.tIce>0?', '+sub('ice','4 · Ice'):''}${!sign&&L.comps.length?', '+sub('cables','5 · Cables'):''}; their sum at the base is ${sub('base','6 · Forces at the base')}.</p>`);
+  { const M=lppLdDeadM(L); let H=lppLdTblHTML(M);
+    H+=sign?`<p class="tbl-note">The panel hangs concentrically on the post group: no dead-load moment (M<sub>D</sub> = 0). Post self-weight: ${lppGoA('poleTbl','Pole properties (Geometry tab)')}.</p>`
+      :`<p class="tbl-note">N<sub>D</sub> = ${fmt(M.N,0)} lb at the pole base. The eccentric weights give M<sub>D</sub> = (${lppLdV(M.Mx,0)}, ${lppLdV(M.My,0)}) lb·ft, |M<sub>D</sub>| = ${lppLdV(M.M,0)} lb·ft, a fixed vector along the arm azimuths θ (it does not turn with the wind).${L.comps.length?' The dead load of a cable also pulls on the pole: '+sub('cables','5 · Cables')+'.':''}</p>`;
+    const segs=L.poleSeg.segs;
+    H+=lppLdFold((sign?'Post':'Pole')+' self-weight by segment (click to open)',lppLdTblHTML({head:['Segment','Mid-height z (ft)','Weight (lb)'],rows:segs.map(s=>[String(s.i),fmt(s.zMid,1),fmt(s.wSeg,1)]).concat([{c:['Σ','',fmt(L.poleSeg.totalW,1)],cls:'tot'}])})+`<p class="tbl-note">Section properties of each segment: ${lppGoA('poleTbl','Pole properties (Geometry tab)')}.</p>`);
+    set('lppLdDead',H); }
+  { let H='';
+    if(sign){ H+=lppLdDirBarHTML('Wind normal to the panel (toward 0°); the switch adds the other directions.');
+      H+=`<p class="tbl-note">Velocity pressure, once: q<sub>h</sub>K<sub>d</sub>G = ${fmt(sw.qh,1)} psf at the top of the sign (h = ${fmt(sw.h,1)} ft, K<sub>z</sub> = ${fmt(sw.Kzh,3)}); the post drag takes q<sub>z</sub> at the mid-height of each exposed segment. Worked in the ${lppGoA('signWindExample','sign wind calculation')} below.</p>`;
+      H+=lppLdTblHTML(lppLdWindM(L,0));
+      H+=`<div class="subhead2" style="margin-top:10px">Panel → posts: each post's share, wind toward 0° (unfactored)</div>`+lppLdTblHTML(lppLdSignShareM(L,0));
+      H+=`<div class="lppAllDirs">`+lppSignDirs(sw).filter(d=>d!==0).map(d=>lppLdTblHTML(lppLdSignShareM(L,d))).join('')+`</div>`;
+    } else { const pw=L.pw;
+      H+=lppLdDirBarHTML(lppLdPoleDirTxt(L));
+      H+=`<p class="tbl-note">Velocity pressure, once: q<sub>z</sub>K<sub>d</sub> = 0.00256 K<sub>z</sub>K<sub>zt</sub>K<sub>e</sub>V²K<sub>d</sub> = ${fmt(pw.qzMid,1)} psf at mid-height (K<sub>z</sub> = ${fmt(pw.KzMid,3)}) and ${fmt(pw.qzTop,1)} psf at the top (K<sub>z</sub> = ${fmt(pw.KzTop,3)}); G = ${fmt(inp.G,3)}. Each element takes q<sub>z</sub> at its own height: F = q<sub>z</sub>K<sub>d</sub>·G·C<sub>f</sub>·A. Worked in the ${lppGoA('windExample','velocity-pressure calculation')} below.</p>`;
+      H+=lppLdTblHTML(lppLdWindM(L,L.phi0));
+      H+=`<div class="lppAllDirs">`+dirsOther.map(d=>`<div class="subhead2" style="margin-top:10px">Wind toward ${fmt(d,0)}°</div>`+lppLdTblHTML(lppLdWindM(L,d))).join('')+`</div>`;
+      H+=`<div class="subhead2" style="margin-top:10px">Free-body sketch — each force at its height</div>`+lppFbdPole(L,L.phi0);
+    }
+    set('lppLdWind',H); }
+  { let H='';
+    if(!(inp.tIce>0)) H=`<p class="tbl-note">No ice: t = 0.</p>`;
+    else { H+=sign?'':lppLdDirBarHTML(lppLdPoleDirTxt(L));
+      H+=lppLdTblHTML(lppLdIceM(L,L.phi0));
+      H+=`<p class="tbl-note">Ice weight is load case D<sub>i</sub>; wind on the iced elements, at V<sub>ice</sub> = ${fmt(inp.Vice,0)} mph on the iced widths, is load case W<sub>i</sub> (ASCE 7-16 §10.5). Their rows at the base: ${sub('base','6 · Forces at the base')}.</p>`;
+      if(!sign) H+=`<div class="lppAllDirs">`+dirsOther.map(d=>`<div class="subhead2" style="margin-top:10px">Wind toward ${fmt(d,0)}°</div>`+lppLdTblHTML(Object.assign(lppLdIceM(L,d),{id:''}))).join('')+`</div>`; }
+    set('lppLdIce',H); }
+  set('lppLdBase',lppLdBaseHTML(L));
+  set('lppLdCombo',lppLdComboHTML(L));
+  lppLdSync();
+}
+// ---- sub-tab bar, load-path strip, links ----
+function lppLdApplicable(){ const L=LPP_LD; return L?{ice:L.inp.tIce>0,cables:L.mode==='pole'&&L.comps.length>0}:{}; }
+function lppLdShown(){ return lppLdApplicable()[lppLdCur]===false?'base':lppLdCur; }
+function lppLdStripHTML(cur){
+  const sign=!!(LPP_LD&&LPP_LD.mode==='sign');
+  const N=[['loads',sign?'Sign panel':'Fixtures · arms · cables','loads: sub-tabs 2 to 5'],['post',sign?'Post':'Pole','Post tab'],['bp','Base plate','forces at the base: 6, 7'],['shaft','Shaft','Shaft tab'],['soil','Soil','embedment: Shaft tab']];
+  const on={basis:[],dead:['loads','post'],wind:['loads','post'],ice:['loads','post'],cables:['loads'],base:['bp'],combos:['bp']}[cur]||[];
+  return N.map(([k,t,s],i)=>(i?'<span class="lppLdArw" aria-hidden="true">→</span>':'')+`<button type="button" class="lppLdNode${on.indexOf(k)>=0?' on':''}" data-ldgo="${k}"${on.indexOf(k)>=0?' aria-current="step"':''}><b>${t}</b><span>${s}</span></button>`).join('');
+}
+function lppLdSync(){
+  const bar=$('lppLdBar'), box=$('lppLd'); if(!bar||!box) return; const ap=lppLdApplicable(), cur=lppLdShown();
+  if(!bar.children.length) bar.innerHTML=LPP_LD_SUBS.map(([k,t])=>`<button type="button" role="tab" data-ldsub="${k}">${t}</button>`).join('');
+  bar.querySelectorAll('button').forEach(b=>{ const k=b.dataset.ldsub; b.style.display=ap[k]===false?'none':''; b.classList.toggle('on',k===cur); b.setAttribute('aria-selected',k===cur?'true':'false'); });
+  box.querySelectorAll('.lppLdPane').forEach(p=>p.classList.toggle('on',p.dataset.ldpane===cur));
+  box.classList.toggle('lppLdAll',lppLdAllDirs);
+  box.querySelectorAll('.lppLdDirChk').forEach(c=>{ c.checked=lppLdAllDirs; });
+  const st=$('lppLdStrip'); if(st) st.innerHTML=lppLdStripHTML(cur);
+}
+function lppLdSet(sub,noSave){
+  if(!LPP_LD_SUBS.some(x=>x[0]===sub)) return; lppLdCur=sub;
+  if(!noSave){ try{ localStorage.setItem(LPP_LD_KEY,sub); }catch(e){} }
+  lppLdSync();
+}
+function lppLdDirs(on,noSave){ lppLdAllDirs=!!on; if(!noSave){ try{ localStorage.setItem(LPP_LD_DIRKEY,on?'1':'0'); }catch(e){} } lppLdSync(); }
+// a link target inside the Loading tab: show its sub-tab (and the all-directions block it sits in); not remembered
+function lppLdReveal(e){
+  const pane=e&&e.closest?e.closest('.lppLdPane'):null; if(!pane) return;
+  if(e.closest('.lppAllDirs') && !lppLdAllDirs) lppLdDirs(true,true);
+  if(pane.dataset.ldpane!==lppLdShown()) lppLdSet(pane.dataset.ldpane,true);
+}
+function lppLdGo(k){
+  const st=__selectedPost>1?__selectedPost-1:0;
+  if(k==='loads'){ lppLdSet('wind'); return; }
+  if(k==='bp'){ lppLdSet('base'); return; }
+  lppGoto(k==='post'?'post':k==='shaft'?'flex':'dem',st);
+}
+document.addEventListener('click',ev=>{ const t=ev.target; if(!t||!t.closest) return;
+  const b=t.closest('#lppLdBar button[data-ldsub]'); if(b){ lppLdSet(b.dataset.ldsub); return; }
+  const n=t.closest('.lppLdNode'); if(n){ lppLdGo(n.dataset.ldgo); return; }
+  const a=t.closest('a[data-lpsub]'); if(a){ ev.preventDefault(); switchTab('loading'); lppLdSet(a.dataset.lpsub); if(!a.closest('#lppLd')) lppOutToTop(); else { const p=$('lppLd'); if(p) p.scrollIntoView({block:'start'}); } } });
+document.addEventListener('change',ev=>{ const c=ev.target; if(c&&c.classList&&c.classList.contains('lppLdDirChk')) lppLdDirs(c.checked); });
+// ---- Report: the same seven sections (items built from the same table models) ----
+function lprLdSubs(){
+  const L=LPP_LD, o={basis:[],dead:[],wind:[],ice:[],base:[],combos:[]}; if(!L) return o;
+  const sign=L.mode==='sign', inp=L.inp, N=lprN, nP=sign?inp.signPosts:1, note=t=>({type:'note',text:t});
+  const svg=h=>h.replace(/^<div[^>]*>/,'').replace(/<\/div>$/,'');
+  o.basis.push({title:'Basis',key:'lp:basis',items:[lprLdTbl(lppLdBasisM(L)),note('The loads follow in the order of the load path: dead load (see [[lp:dead]]), wind (see [[lp:wind]]), ice, cables; their sum at the base is in [[lp:src]] and the factored combinations in [[lp:fac]].')]});
+  { const M=lppLdDeadM(L);
+    o.dead.push({title:'Dead load',key:'lp:dead',items:[lprLdTbl(M),note(sign?'The panel hangs concentrically on the post group: no dead-load moment. N_D per post = '+N(M.N,0)+' lb, carried to the post base (see [[lp:src]]).'
+      :'N_D = '+N(M.N,0)+' lb at the pole base; eccentric dead moment |M_D| = '+N(M.M,0)+' lb·ft, a fixed vector along the arm azimuths (see [[lp:src]]).')]}); }
+  o.wind.push({title:'Wind — each element: force and height',key:'lp:wind',items:[
+    note(sign?'Velocity pressure q_h·K_d·G = '+N(L.sw.qh,1)+' psf at the top of the sign; the post drag takes q_z per exposed segment. Wind normal to the panel (toward 0°).'
+      :'Velocity pressure q_z·K_d = '+N(L.pw.qzMid,1)+' psf at mid-height and '+N(L.pw.qzTop,1)+' psf at the top; G = '+N(inp.G,3)+'. Shown for wind toward '+N(L.phi0,0)+'°, the governing direction of '+L.govLRFD.name+'.'),
+    lprLdTbl(lppLdWindM(L,L.phi0),{wide:true}),...(sign?[lprLdTbl(lppLdSignShareM(L,0),{caption:'Panel → posts: each post\'s share, wind toward 0° (unfactored)'})]:[]),
+    note('Each force and its height are carried to the base in [[lp:src]].')]});
+  if(inp.tIce>0) o.ice.push({title:'Ice — weight on each element and wind on the iced elements',key:'lp:ice',items:[lprLdTbl(lppLdIceM(L,L.phi0),{wide:true}),
+    note('Ice weight is load case D_i; wind on the iced elements at V_ice = '+N(inp.Vice,0)+' mph is load case W_i (ASCE 7-16 §10.5). Their rows at the base: see [[lp:src]].')]});
+  for(let p=0;p<nP;p++){ const it=[], k='lp:src'+(p?':p'+(p+1):'');
+    let rows, phi, one=sign;
+    if(sign){ const G=lppLdSignGov(L,p), m=G.rows.meta; rows=G.rows; phi=0;
+      it.push(note('Section A — the post base (underside of the base plate = top of the shaft). Unfactored, one axis along the wind; wind toward '+N(G.phi,0)+'°, '+(m.edge?'edge-on (post drag only)':'Case '+m.case)+': the direction and case of the governing LRFD demand of the post.'));
+      if(!m.edge) it.push(note('Panel → posts: Case '+m.case+' resultant F = '+N(m.F,0)+' lb at x = '+N(m.x,2)+' ft from the post-group centreline; this post takes '+N(m.sh,0)+' lb at z = '+N(m.zarm,2)+' ft (load path: see [[lpcs:1b]]).'));
+      it.push(lprLdTbl(lppLdBaseM(rows,{one:true})));
+    } else { phi=L.phi0; rows=lppSrcPole(inp,L.comps,L.fxs,L.pw,phi); const cab=L.comps.length>0, aDir=(L.govASD.dirs||[]).find(d=>d.phi===phi)||L.govASD;
+      it.push(note('Section A — the pole base (underside of the base plate = top of the shaft, z = 0). Unfactored forces of each load source, wind toward '+N(phi,0)+'° (the governing direction of '+L.govLRFD.name+'). x toward 0°, y toward 90°; M_x is the moment of the x forces; N is compression.'));
+      it.push(lprLdTbl(lppLdBaseM(rows,{pulls:cab?[{name:'Cable pulls — '+L.govLRFD.name+' (LRFD)',v:lppSrcPull(L.govLRFD)},{name:'Cable pulls — '+L.govASD.name+' (ASD)',v:lppSrcPull(aDir)}]:[]}),{wide:true}));
+      if(cab) it.push(note('‡ Cable pulls follow the catenary law of the combined factored line load: not a sum of the load cases, so their rows are those of the governing combinations.')); }
+    if(!L.sp) it.push(note('Section B — top of the shaft / groundline: the '+(sign?'post':'pole')+' stands on the top of the shaft at grade (shaft projection p = 0), so the two sections coincide; the base plate, the anchors, the shaft and the embedment all take the forces of Section A.'));
+    else { const sp=L.sp, G=lppSrcGrade(rows,sp,phi);
+      it.push(note('Section B — grade (groundline), p = '+N(sp.p,2)+' ft below the base: M_B = M_A + V·p for every row, V and N unchanged, plus the projection\'s own weight W_c = '+N(sp.Wc,0)+' lb, its ice '+N(sp.Wice,0)+' lb and the wind on it F_s = '+N(sp.F,0)+' lb at p/2. The embedment, the soil bearing (ASD) and the shaft (LRFD, with B₂ on M_A) take Section B; the base plate and the anchors keep Section A.'));
+      it.push(lprLdTbl(lppLdBaseM(G,{one}),{wide:!one,caption:'Section B — at grade, unfactored'})); }
+    it.push({type:'figure',svg:svg(sign?lppFbdSign(L,p,rows):lppFbdPole(L,phi)),caption:'Free-body sketch: each unfactored force at its height above the base.'});
+    it.push(lprLdTbl(lppLdItemM(rows,one),{wide:!one,caption:'Each item: force × height or arm'}));
+    it.push(note('Factored: see [[lp:fac'+(p?':p'+(p+1):'')+']].'));
+    o.base.push({title:'Forces at the base'+(nP>1?' — post '+(p+1):'')+' (each load source, unfactored)',key:k,items:it}); }
+  for(let p=0;p<nP;p++){ const it=[];
+    it.push(note('Each combination is Σ γ × the unfactored load-case rows of [[lp:src'+(p?':p'+(p+1):'')+']]'+(sign?'':', at its own worst wind direction')+'. LRFD: '+(sign?'post':'pole')+', base plate and anchors, shaft. ASD: embedment and soil bearing. The last column names the check each combination governs.'));
+    ['LRFD','ASD'].forEach(f=>it.push(lprLdTbl(lppLdComboTbl(lppLdComboM(L,f,p),p),{wide:true})));
+    lppLdFacList(L,p).forEach(x=>{ it.push(lprLdTbl(x.M,{wide:!sign,caption:'γ × rows: '+x.name+' (governing '+x.fam+'), wind toward '+N(x.phi,0)+'°'+(x.cs?', '+x.cs:'')})); });
+    it.push(note('The moment is worked term by term in [[lp:bmb'+(sign?':p'+(p+1):'')+']]; every combination: see [[lp:env'+(sign?':p'+(p+1):'')+']].'));
+    o.combos.push({title:'Combinations'+(nP>1?' — post '+(p+1):'')+' — factors × rows, LRFD and ASD',key:'lp:fac'+(p?':p'+(p+1):''),items:it}); }
+  return o;
+}
+
 // ================= D11 (2026-10-18): CALCULATION-SHEET REPORT + DERIVATION LINKS =================
 // Display only. No value is computed here: every number is a result object the tabs already show
 // (the Summary context saved by renderSummary, the check list of collectChecks, and the worked-
@@ -6592,6 +7207,7 @@ function lppGoto(k,st){
   if(t.post){ __selectedPost=t.post; const s=$('postSel'); if(s) s.value=String(t.post); applyPostSelection(); }
   switchTab(t.tab);
   const e=$(t.id); if(!e) return;
+  lppLdReveal(e);   // LPLS: its Loading sub-tab
   const d=e.closest('details'); if(d) d.open=true;
   e.scrollIntoView({behavior:'smooth',block:'start'});
   e.classList.add('wkFlash'); setTimeout(()=>e.classList.remove('wkFlash'),1400);
@@ -6618,6 +7234,7 @@ function lppDashCond(it){
 // a card of the LRFDLTS mode (no D11 key): open its tab, scroll to it and flash it, as lppGoto
 function lppDashGoEl(tab,id){
   switchTab(tab); const e=$(id); if(!e) return;
+  lppLdReveal(e);   // LPLS: its Loading sub-tab
   e.scrollIntoView({behavior:'smooth',block:'start'});
   e.classList.add('wkFlash'); setTimeout(()=>e.classList.remove('wkFlash'),1400);
 }
@@ -7513,7 +8130,7 @@ function lprModel(){
     ['Mode',$('appEyebrow')?$('appEyebrow').textContent:''],
     ['Prepared with','Light Pole and Sign Post, by Mario Lococo · '+new Date().toLocaleString()]]},
     ...lprNL('Every value in this report is the value the tool computes on its tabs ([[tab:geometry|Geometry]], [[tab:summary|Summary]], [[tab:loading|Loading]], [[tab:post|Post]], [[tab:anchors|Anchorage]], [[tab:shaft|Shaft]]).',[['Worked sections:','the worked sections (“worked in full”) are written by the same functions as the tabs, with the same arguments.']]),   // LPNL
-    ...lprNL('Equations are shown symbolically, then with values substituted, then with the result.',[['Result line:','each check ends with its result line (D/C as in the Summary tab: demand ÷ capacity, or required ÷ provided for minimum-type checks).'],['Title block:','the tool has no project-number, engineer or date fields: the title block and the page header show “—” for them (fill in by hand), and the project is the saved project name.']])]}].concat(xs(['0']))});
+    ...lprNL('Equations are shown symbolically, then with values substituted, then with the result.',[['Result line:','each check ends with its result line (D/C as in the Summary tab: demand ÷ capacity, or required ÷ provided for minimum-type checks).'],['Title block:','the tool has no project-number, engineer or date fields: the title block and the page header show “—” for them (fill in by hand), and the project is the saved project name.']])]}]});   // LPLS (2026-11-23): the legacy section 0 (Design inputs & basis) is the Basis of the Loading chapter
   /* 2. Design summary */
   { const subs=[];
     stacks.forEach((st,si)=>{
@@ -7530,11 +8147,13 @@ function lprModel(){
     { const rx=lprBmbRx(); if(rx) subs.unshift(rx); }   // LPBM (2026-11-19): the base reactions first
     secs.push({title:'Design summary',subs});
   }
-  /* 3. Wind and ice */
-  { const subs=[];
+  /* 3. Loading (LPLS, 2026-11-23): one chapter in the order of the load path: Basis, Dead load, Wind, Ice, Cables, Forces at the base,
+     Combinations. The subsections that existed (titles, keys and content) are kept, each under its section's name. */
+  { const subs=[], LD=lprLdSubs(), W=[], I=[], B=[], C=[];
+    const pre=(t,Q)=>Q.map(q=>Object.assign(q,{title:t+' — '+q.title}));
     if(!sign){
       const pw=L.gov.pw, fxs=L.struct.fxs||[];
-      subs.push({title:'Velocity pressure and mast wind',items:[lprTopics('wind',[
+      W.push({title:'Velocity pressure and mast wind',items:[lprTopics('wind',[
         {title:'Velocity pressure',ref:'ASCE 7-16 §26.10, Eq. 26.10-1 (K_e = 1.0); K_d per Eq. 29.4-1',steps:[
           S({id:'kzm',label:'Exposure coefficient at mid-height',sym:'K_{z}(H/2)',eq:'2.01\\left(\\frac{z}{z_{g}}\\right)^{2/\\alpha}',sub:'',value:pw.KzMid,unit:'',d:3}),
           S({id:'kzt',label:'Exposure coefficient at the top',sym:'K_{z}(H)',eq:'2.01\\left(\\frac{z}{z_{g}}\\right)^{2/\\alpha}',sub:'',value:pw.KzTop,unit:'',d:3}),
@@ -7547,16 +8166,17 @@ function lprModel(){
           S({id:'Mp',label:'Mast wind moment at the base',sym:'M_{pole}',eq:'\\sum F_{i}z_{i}',sub:'',value:pw.Mpole,unit:'lb-ft',d:0}),
           S({id:'zF',label:'Height of the resultant',sym:'\\bar{z}_{F}',eq:'\\frac{M_{pole}}{F_{pole}}',sub:'\\frac{'+N(pw.Mpole,0)+'}{'+N(pw.Fpole,0)+'}',value:pw.zF,unit:'ft'})].concat(pw.rectDir?[   // LPH2: rectangular pole, depth face
           S({id:'Fpd',label:'Mast wind on the depth face (wind toward 90° / 270°; '+pw.NSTRIP+' pole segments, q_z at each mid-height)',sym:'F_{pole,90}',eq:'\\sum q_{z}(z_{i})K_{d}G\\,C_{f}\\,d(z_{i})\\,L_{i}',sub:'',value:pw.Fd,unit:'lb',d:0}),
-          S({id:'Mpd',label:'Its moment at the base (any azimuth: |cos φ|·M_pole + |sin φ|·M_pole,90)',sym:'M_{pole,90}',eq:'\\sum F_{i}z_{i}',sub:'',value:pw.Md,unit:'lb-ft',d:0})]:[])},
+          S({id:'Mpd',label:'Its moment at the base (any azimuth: |cos φ|·M_pole + |sin φ|·M_pole,90)',sym:'M_{pole,90}',eq:'\\sum F_{i}z_{i}',sub:'',value:pw.Md,unit:'lb-ft',d:0})]:[])}])]});
+      I.push({title:'Design ice thickness',items:[lprTopics('ice',[
         {title:'Design ice thickness',ref:'ASCE 7-16 §10.4.6',steps:[
           S({id:'td',label:inp.iceBasis==='map'?'Design ice at the top (t_d = t f_z K_zt^0.35 I_i; cables use t)':'Uniform design ice (as entered)',sym:'t_{d}(H)',eq:inp.iceBasis==='map'?'t\\,f_{z}K_{zt}^{0.35}I_{i}':'t',sub:'',value:pw.tdTop,unit:'in',d:3}),
           S({id:'Wim',label:'Ice on the mast',sym:'W_{ice,mast}',eq:'\\sum \\gamma_{ice}A_{ring}(t_{d})\\,L_{i}',sub:'',value:pw.WiceMast,unit:'lb',d:1})]}])]});
-      if(fxs.length) subs.push({title:'Fixtures and arms',items:[{type:'table',head:['Fixture','h (ft)','θ (°)','a (ft)','q_zK_dG (psf)','F_w (lb)','F_w,ice (lb)','W_ice (lb)','F_arm,max (lb)'],
+      if(fxs.length) W.push({title:'Fixtures and arms',items:[{type:'table',head:['Fixture','h (ft)','θ (°)','a (ft)','q_zK_dG (psf)','F_w (lb)','F_w,ice (lb)','W_ice (lb)','F_arm,max (lb)'],
         rows:fxs.map((f,i)=>['F'+(i+1),lprCell(f.hf,1),lprCell(f.th,0),lprCell(f.x.a,1),lprCell(f.qz,2),lprCell(f.Fw,1),lprCell(f.Fwi,1),lprCell(f.Wice,1),lprCell(f.FarmMax||0,1)])},
         {type:'note',text:'Worked on the [[tab:loading|Loading tab]] (fixture loads, arm wind and torsion T = Σ(F_w + ½F_arm)·a·sin(φ − θ)).'}]});
     } else {
       const sw=L.sw;
-      subs.push({title:'Sign panel wind',items:[lprTopics('swind',[
+      W.push({title:'Sign panel wind',items:[lprTopics('swind',[
         {title:'Velocity pressure at the top of the sign',ref:'ASCE 7-16 §26.10, §29.3',steps:[
           S({id:'kzh',label:'Exposure coefficient at h',sym:'K_{z}(h)',eq:'',sub:'',value:sw.Kzh,unit:'',d:3}),
           S({id:'qh',label:'q_h·K_d·G (sign K_d)',sym:'q_{h}K_{d}G',eq:'0.00256\\,K_{z}K_{zt}K_{e}V^{2}K_{d}G',sub:'0.00256('+N(sw.Kzh,3)+')('+N(inp.Kzt)+')(1.00)('+N(inp.V,0)+')^{2}('+N(inp.KdSign)+')('+N(inp.G)+')',value:sw.qh,unit:'psf',d:2})]},
@@ -7576,21 +8196,16 @@ function lprModel(){
         S({id:'Gf',label:'Flexible gust-effect factor',sym:'G_{f}',eq:'0.925\\frac{1+1.7I_{\\bar{z}}\\sqrt{g_{Q}^{2}Q^{2}+g_{R}^{2}R^{2}}}{1+1.7g_{v}I_{\\bar{z}}}',sub:'0.925\\frac{1+1.7('+N(inp.gf.Iz,4)+')\\sqrt{3.4^{2}('+N(inp.gf.Q2,4)+')+'+N(inp.gf.gR,3)+'^{2}('+N(inp.gf.R2,4)+')}}{1+1.7(3.4)('+N(inp.gf.Iz,4)+')}',value:inp.gf.Gf,unit:'',d:4}),
         S({id:'G',label:'G used',sym:'G',eq:'\\max(G,\\,G_{f})',sub:'\\max('+N(inp.Ginput)+',\\,'+N(inp.gf.Gf,3)+')',value:inp.G,unit:'',d:3})].concat(inp.Gcable!==undefined?[
         S({id:'Gc',label:'G for the cables (G_f with h = H, engineer 2026-11-03)',sym:'G_{cable}',eq:'\\max(G,\\,G_{f}(h = H))',sub:'\\max('+N(inp.Ginput)+',\\,'+N(inp.gfCable.Gf,3)+')',value:inp.Gcable,unit:'',d:3})]:[])});
-      if(T.length) subs.push({title:'Dynamic response',items:[lprTopics('dyn',T),{type:'note',text:'Worked in full on the [[tab:loading|Loading tab]] (weights, deflections, and every G_f term).'}]});
+      if(T.length) B.push({title:'Dynamic response',items:[lprTopics('dyn',T),{type:'note',text:'Worked in full on the [[tab:loading|Loading tab]] (weights, deflections, and every G_f term).'}]});
     }
-    subs.push(...xs(sign?['1']:['1','2','2b','3']));   // LPRX: worked in full (pole: 1, 2, 2b, 3; sign: 1)
-    secs.push({title:'Wind and ice loads',subs});
-  }
-  /* 4. Load combinations */
-  { const subs=[];
     if(!sign){
-      subs.push({title:'Base demand, every combination (governing azimuth)',key:'lp:env',items:[{type:'table',head:['Family','Combination','Wind toward (°)','P (lb)','M (lb·ft)','h (ft)','N (lb)','T (lb·ft)'],
+      C.push({title:'Base demand, every combination (governing azimuth)',key:'lp:env',items:[{type:'table',head:['Family','Combination','Wind toward (°)','P (lb)','M (lb·ft)','h (ft)','N (lb)','T (lb·ft)'],
         rows:L.allCombos.map(r=>({cells:[r.fam,r.name,lprCell(r.phi,0),lprCell(r.P,0),lprCell(r.M,0),lprCell(r.h,2),lprCell(r.axial,0),lprCell(r.Tmax||0,0)],cls:(r.key===L.gov.govASD.key||r.key===L.gov.govLRFD.key)?'gov':''}))},
         ...lprNL('ASCE 7-16 §2.3 (LRFD) and §2.4 (ASD), including the atmospheric-ice combinations.',[['Wind directions:','wind is checked toward 0°, 90°, 180° and 270°; the largest moment governs each combination.'],['Cable loads','as on the [[tab:loading|Loading tab]].']])]});   // LPNL
     } else {
       // LPEW (2026-11-19): the panel-normal records (0° / 180°); a rectangular post adds its edge-on rows (90°, y axis)
       const sw=L.sw, ed=!!(sw&&sw.edge);
-      L.postDesigns.forEach((pd,pi)=>subs.push({title:'Post '+(pi+1)+' demand, every combination',key:'lp:env:p'+(pi+1),items:[{type:'table',head:['Family','Combination','Case','P (lb)','M (lb·ft)','N (lb)','T (lb·ft)'],
+      L.postDesigns.forEach((pd,pi)=>C.push({title:'Post '+(pi+1)+' demand, every combination',key:'lp:env:p'+(pi+1),items:[{type:'table',head:['Family','Combination','Case','P (lb)','M (lb·ft)','N (lb)','T (lb·ft)'],
         rows:[].concat(...L.allCombos.map(r=>{ const out=[]; const g=r.postGovN[pi];
           out.push({cells:[r.fam,r.name,g.case,lprCell(g.P,0),lprCell(g.M,0),lprCell(g.axial,0),lprCell(g.Tmax||0,0)],cls:(r.name===pd.gASD.name||r.name===pd.gLRFD.name)?'gov':''});
           if(ed){ const e=r.postEdge[pi], nm=r.name+', '+lppSignEdgeLbl(sw);
@@ -7598,9 +8213,17 @@ function lprModel(){
           return out; }))},
         ...lprNL('Wind toward 0° and 180° (normal to the panel), every Fig. 29.3-1 case; each row is the case and direction with the largest M of the post.',[lppSignEdgeNote(sw).map(x=>String(x).replace(/<[^>]+>/g,''))])]}));
     }
-    subs.push(...lprBmbSubs());   // LPBM (2026-11-19): the base moment build-up
-    subs.push(...xs(sign?['1b','2']:['4','4b']));   // LPRX
-    secs.push({title:'Load combinations',subs});
+    C.push(...lprBmbSubs());   // LPBM (2026-11-19): the base moment build-up
+    C.push(...xs(sign?['2']:['4','4b']));   // LPRX
+    // LPRX: the legacy worked sections (pole: 0, 1, 2, 2b, 3, 4, 4b; sign: 0, 1, 1b, 2), each under its section
+    subs.push(...LD.basis, ...pre('Basis',xs(['0']).concat(B)),
+      ...LD.dead,
+      ...LD.wind, ...pre('Wind',W.concat(xs(sign?['1']:['1','2','2b']))),
+      ...LD.ice, ...pre('Ice',I),
+      ...pre('Cables',sign?[]:xs(['3'])),
+      ...LD.base, ...pre('Forces at the base',sign?xs(['1b']):[]),
+      ...LD.combos, ...pre('Combinations',C));
+    secs.push({title:'Loading',subs});
   }
   /* 5. Pole / post */
   { const subs=[];
@@ -9089,7 +9712,8 @@ function distributeCards(){
   // move each tagged card into its page (order preserved)
   src.querySelectorAll('[data-tab]').forEach(card=>{
     const page=$('page-'+card.getAttribute('data-tab'));
-    if(page) page.appendChild(card);
+    const pane=card.getAttribute('data-ldsub') ? $('lppLdPane-'+card.getAttribute('data-ldsub')) : null;   // LPLS (2026-11-23): Loading sub-tab pane
+    if(pane) pane.appendChild(card); else if(page) page.appendChild(card);
   });
   // the sign per-post stacks + summary live in dedicated containers; relocate them too
   // (sgStackContainer holds full per-post detail stacks; keep it in the Shaft page as a fallback host,
@@ -9278,7 +9902,7 @@ function lppInputTabMarks(){
 const LPP_MODE_OUT_SNAP={pole:[], sign:[]};
 function lppSnapPoleOutputs(){
   const sets={pole:[...document.querySelectorAll('.poleOnly')].concat(['fixOutCard','cableOutCard'].map(id=>$(id)).filter(Boolean)),
-              sign:['signWindCard','signComboCard','signPostsCard'].map(id=>$(id)).filter(Boolean)};
+              sign:['signWindCard','signPathCard','signComboCard','signPostsCard'].map(id=>$(id)).filter(Boolean)};
   Object.keys(sets).forEach(k=>{ const L=LPP_MODE_OUT_SNAP[k];
     sets[k].forEach(r=>r.querySelectorAll('[id]').forEach(el=>{
       if(el.matches('input,select,textarea,button')||el.querySelector('input,select,textarea,button')) return;
@@ -9292,6 +9916,7 @@ function lppResetPoleOutputs(mode){ (LPP_MODE_OUT_SNAP[mode]||[]).forEach(x=>{ x
   lppInputTabs();   // move the input cards into the input tabs (before any state is applied)
   renderManual();
   distributeCards();
+  lppLdSync();   // LPLS: the Loading sub-tab bar and strip
   if($('soilClass')) applySoilClass($('soilClass').value,{silent:true});
   applyBromsUI();
   applyRebarUI();
