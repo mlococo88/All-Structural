@@ -344,6 +344,7 @@
       add({ id: 'MLL', label: 'Live load moment per girder at midspan (continuous unit)', sym: 'M_{LL+IM}', value: R.MLL, unit: 'kip-ft', d: 1, note: 'HL-93 on the continuous unit (influence lines of the FE model, Analysis tab) × DF_M.' });
       add({ id: 'VLL', label: 'Live load shear per girder at the support (continuous unit)', sym: 'V_{LL+IM}', value: R.VLL, unit: 'kip', d: 2, note: 'HL-93 on the continuous unit × DF_V (Analysis tab).' });
     }
+    if (R.pl && window.PSBPL) window.PSBPL.steps(add, inp, R, { n, g, par });   // PL-A: the pedestrian live load (3.6.1.6), steps ld.pl.*
     return K.done();
   }
 
@@ -409,7 +410,7 @@
         });
       }
     }
-    return K.done();
+    return window.PSBPL ? window.PSBPL.note(K.done(), R) : K.done();   // PL-A: the live-load steps say that LL+IM includes the pedestrian load
   }
   window.PSBWorked = { weakAxis, section, loads, analysis, kit, n, g, par };   // kit, n, g, par: for the worked steps of the PR 2c tabs (engine/worked-stress.js, worked-strength.js)
 })();

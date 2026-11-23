@@ -22,6 +22,8 @@
     { key: 'int', title: 'Interior girder equations', ref: A + 'Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1', ids: /^ld\.(k|m1|m2|v1|v2)$/ },
     { key: 'ext', title: 'Exterior girder: lever rule, e, rigid section', ref: A + '4.6.2.2.2d, 4.6.2.2.3b', ids: /^ld\.(lever|eM|eV|rigid|rigXbar|rigXext|rigSx2|eM1|eM2|eV1|eV2|f48)$/ },
     { key: 'df', title: 'Distribution factors used', ref: A + '4.6.2.2.2e, 4.6.2.2.3c', ids: /^ld\.(dfmRaw|dfvRaw|c1|skM|skV|dfm|dfv)$/, res: /^ld\.dfm$/ },
+    // PL-A (2026-11-23): the pedestrian live load (engine/pl.js, steps ld.pl.*; only with one)
+    { key: 'pl', title: 'Pedestrian live load (with the vehicular live load)', ref: A + '3.6.1.6, 3.6.2.1, Table 3.4.1-1', ids: /^ld\.pl\./, res: /^ld\.pl\.MLLPL$/ },
     { key: 'll', title: 'Live load per girder', ref: A + '3.6.1.3, 4.6.2.2', ids: /^ld\.(xfp|xfn|xfv|MLL|VLL)$/, res: /^ld\.MLL$/ }];   // xf*: batch D1, the factors on imported live load
   function output(ctx) {
     const { R, inp, P } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, df = R.df, cp = R.cp, own = R.own;
@@ -80,10 +82,22 @@
       + (nt ? `<div class="alert" id="nedbtNoTop"><b>NEDBT without a topping: the distribution factor is likely very conservative</b> ${nt} The moment factors g<sub>M1</sub> ${wk('ld.m1')} and g<sub>M2</sub> ${wk('ld.m2')} are worked in the Loads &amp; LLDF steps.</div>` : '')
       + `<p class="note">${inp.loads.dfAuto ? `AASHTO equations, cross-section type ${df.isNext ? '(i)/(j)' : '(k)'}; S = ${k.fx(df.isNext ? df.Sf : inp.S, 3)} ft, L = ${k.fx(R.L, 2)} ft, N<sub>b</sub> = ${inp.nGirders}.` : 'Distribution factors entered on the Loads tab.'} Position and skew from the bridge (<a href="#" data-goin="gird">Design girder card</a>).</p>`);
     }
+    if (R.pl) h += pedCard(ctx);   // PL-A: the pedestrian live load of this girder line
     if (R.useExt) h += importedLL(ctx);   // batch D1: the imported live load and its factors
     h += everyLine(ctx);   // 2026-11-15 (batch C): the dead loads and distribution factors of every girder line (the steel app's tables)
     h += k.card('Worked steps: loads and distribution factors', `<p class="note">AASHTO LRFD 10th Ed. (2024). Every result is the engine's value.</p>${k.steps(ctx.W.loads.steps, TOPICS, OPEN)}`);
     return h;
+  }
+  /* pedCard(ctx) (PL-A, 2026-11-23): the pedestrian live load of the girder shown (R.pl, engine/pl.js): w_PL of the line (the distribution's
+     step), M_PL and V_PL and the live load the checks take, each linked to its worked step; where it is and is not used */
+  function pedCard(ctx) {
+    const { R, P } = ctx, k = K(), ev = (p, d, u) => k.ev(R, p, d, u), wk = k.wk, q = R.pl, dg = window.PSBDesign.sel(P).g, DL = window.PSBBridgeDL, dist = !!(DL && DL.on(P));
+    if (q.mode === 'ext') return k.card('Pedestrian live load', `<div class="alert" id="plExt">${k.esc(window.PSBPL.WARN_EXT)}</div>`, 'card-pl');
+    return k.card('Pedestrian live load (AASHTO LRFD 10th Ed. 3.6.1.6)', k.kv([['w<sub>PL</sub> on this girder line', `<b>${ev('pl.w', 4, 'klf')}</b> ${dist ? wk(`dl.G${dg}.PL`) : wk('ld.pl.w')}`],
+      [`M<sub>PL</sub> at midspan${q.mode === 'cont' ? ' (continuous unit)' : ''}`, `${ev('pl.Mmid', 1, 'kip-ft')} ${wk('ld.pl.M')}`], ['V<sub>PL</sub> at the support', `${ev('pl.Vsup', 2, 'kip')} ${wk('ld.pl.V')}`],
+      ...(q.pier || []).map((p, i) => [`M<sub>PL,n</sub> at the ${p.side} pier`, `${ev(`pl.pier.${i}.M`, 1, 'kip-ft')} ${wk('ld.pl.Mn' + i)}`]),
+      ['M<sub>LL+IM</sub> + M<sub>PL</sub> at midspan (the checks)', `<b>${k.fx(q.Mhl + q.Mmid, 1)} kip-ft</b> ${wk('ld.pl.MLLPL')}`], ['V<sub>LL+IM</sub> + V<sub>PL</sub> at the support (the checks)', `<b>${k.fx(q.Vhl + q.Vsup, 2)} kip</b> ${wk('ld.pl.VLLPL')}`]])
+      + `<p class="note" id="plNote">The sidewalk load of the <a href="#" data-goin="xsec">Cross-section tab</a>, distributed to the girder lines as the Steel Bridge app distributes it; no distribution factor, no dynamic load allowance (3.6.2.1). It acts with the vehicular live load and takes its load factor (Table 3.4.1-1): added to LL+IM in Strength I, Service I and Service III on the <a href="#" data-gotab="an">Analysis</a>, Stresses, Flexure and Shear tabs and in the load rating. Not in the fatigue check (3.6.1.4.1) nor in the live-load deflection (2.5.2.6.2). The HL-93 values above (M<sub>LL+IM</sub>, V<sub>LL+IM</sub> per girder) are without it.</p>`, 'card-pl');
   }
   /* importedLL(ctx) (batch D1, 2026-11-15; the old app's Loads card O:6225-6243): the live load of a type whose demands come from a MIDAS file
      or a custom table: the factors DF × m per effect and the midspan / support values the engine takes, each linked to its worked step */

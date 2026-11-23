@@ -40,6 +40,9 @@
   const compute1 = inp => { const R = compute0(inp); return window.PSBPierBlock ? window.PSBPierBlock.apply(inp, R) : R; };
   // E1-D4 / E1-D5 (engineer decisions 2026-11-21): the engine's load rating with φ_s = 1.0 for shear and the positive-moment dead-load
   // factors part by part (engine/rating-along.js apply)
-  const compute = inp => { const R = compute1(inp); return window.PSBRatingAlong && window.PSBRatingAlong.apply ? window.PSBRatingAlong.apply(inp, R) : R; };
+  const compute2 = inp => { const R = compute1(inp); return window.PSBRatingAlong && window.PSBRatingAlong.apply ? window.PSBRatingAlong.apply(inp, R) : R; };
+  // PL-A (2026-11-23): a girder with a pedestrian live load (inputs.pl, AASHTO LRFD 10th Ed. 3.6.1.6) runs the same chain with the engine's
+  // live load + PL (engine/pl.js); every other girder: compute2 itself
+  const compute = inp => (window.PSBPL && inp && inp.pl ? window.PSBPL.run(inp, compute2) : compute2(inp));
   window.PSBHoldDown = { NAME, FRAC, apply, compute, fracOf };
 })();
