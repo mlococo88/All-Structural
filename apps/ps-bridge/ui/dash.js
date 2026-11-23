@@ -45,6 +45,10 @@
     // AP-B (2026-11-23): the line-girder analysis' applicability (engine/applicability.js): the check exists only when a computed
     // distribution factor is outside its range of applicability (a FAIL, as the Steel Bridge app's SA4); else no chip
     { id: 'ap', name: 'LLDF applicability', tab: 'lds', checks: [['LLDF range of applicability (4.6.2.2)', 'ld.ap.r']] },
+    // UT-N (2026-11-23): a girder with a future utility allowance (engine/ut.js) is also computed with the allowance absent; a check whose
+    // ratio is larger then is in R.checks as "UF absent: <check>" (its own value, limit, PASS / FAIL). This group lists them (filled below
+    // from the names of every other group); no such check: no chip
+    { id: 'uf', name: 'Future utility allowance absent', tab: 'lds', checks: [] },
     { id: 'camb', name: 'Camber & deflection', tab: 'camb', checks: [['LL deflection', 'cb.ll.r']] },
     { id: 'hand', name: 'Handling', tab: 'hand', off: 'loads', checks: [['Lifting stress', 'hn.lift.r'], ['Lifting FS (crack, screening)', 'hn.FSl.r'], ['Hauling FS (crack, screening)', 'hn.FSh.r']] },
     { id: 'deck', name: 'Deck', tab: 'deck', off: 'dd', checks: [['Deck +M', 'dk.pos.r'], ['Deck −M', 'dk.neg.r'], ['Deck overhang', 'dk.oh.r']] },
@@ -52,6 +56,8 @@
     // the material limits and (2026-11-13) the RIDOT girder age at continuity
     { id: 'mat', name: 'Owner limits', tab: 'own', input: true, checks: [['Girder f′c (RIDOT 5.2.1)', 'own-rule-fc.min'], ['Girder f′c (CTDOT 5.9.1.2)', 'own-rule-fc.range'],
       ['Release strength f′ci (MassDOT 3.7.2.1)', 'own-rule-fci.max'], ['Release strength f′ci (CTDOT 5.9.1.2)', 'own-rule-fci.range'], ['Girder age at continuity (RIDOT 5.6.3.3)', 'own-rule-cont.age']] }];
+  { const U = GROUPS.find(g => g.id === 'uf'), pre = window.PSBUT ? window.PSBUT.PRE : 'UF absent: ';
+    GROUPS.forEach(gp => { if (gp !== U) gp.checks.forEach(([n]) => U.checks.push([pre + n, 'ld.ut.abs'])); }); }
   /* the Rating chip: the HL-93 inventory rating factors (not checks), the lowest governs. E1 (2026-11-15): the lowest of each group over every
      station of the girder (engine/rating-along.js; before, the engine's governing stations only: R.rating, R.shrRating, R.svcRating, kept as
      ENG for the Report's §1 column and as the fallback without that file). Each entry [name, R -> RF (undefined: none), step id, R -> the

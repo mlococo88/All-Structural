@@ -28,10 +28,12 @@
     const fpu = +inp.str.fpu, lowlax = !!inp.str.lowlax, kk = lowlax ? 0.28 : 0.38, ts = +inp.ts, hasTop = ts > 0, fcd = hasTop ? +m.fcd : +m.fc;
     const iM = near(R.grid, L / 2), rM = R.grid[iM], dM = R.diagrams[iM], aM = ss.at(L / 2), Aps = aM.Aps;
     const hasR = rM.mrp != null;
-    add({ id: 'Mu', label: `Strength I moment at midspan (x = ${n(rM.x, 2)} ft)`, sym: 'M_{u}', eq: `\\eta[1.25(M_{g} + M_{DC1} + M_{DC2}) + 1.50\\,M_{DW} + 1.75\\,m\\,M_{LL+IM}${hasR ? ' + M_{r}' : ''}]`,
-      sub: `${n(eta, 4)}[1.25(${g(rM.Mg, 0)} + ${g(rM.Mdk, 0)} + ${g(dM.M_DC2 * 12, 0)}) + 1.50(${g(dM.M_DW * 12, 0)}) + 1.75(${n(mLL, 2)})(${g(rM.Mll, 0)})${hasR ? ` + ${g(rM.mrp, 0)}` : ''}]`, value: R.MuMid, unit: 'kip-in', d: 0, ref: A10 + 'Table 3.4.1-1, 1.3.2.1',
-      note: `= ${n(R.MuMid / 12, 1)} kip-ft. Moments in kip-in (Analysis tab); η, m: owner factors (1 for AASHTO).${hasR ? ' M_r: the positive restraint moment where it increases the effect (5.12.3.3.2).' : ''}` },
-      eta * (1.25 * (rM.Mg + rM.Mdk + dM.M_DC2 * 12) + 1.5 * dM.M_DW * 12 + 1.75 * mLL * rM.Mll + (hasR ? rM.mrp : 0)), 'MuMid');
+    // UT-N: a utility on the noncomposite section (R.ut, engine/ut.js): + (γ_UT − 1.25) M_UT (M_DC1 holds it at 1.25); none: as before
+    const uT = window.PSBUT ? window.PSBUT.at(R, rM.x) : null, uOn = !!(uT && uT.dM);
+    add({ id: 'Mu', label: `Strength I moment at midspan (x = ${n(rM.x, 2)} ft)`, sym: 'M_{u}', eq: `\\eta[1.25(M_{g} + M_{DC1} + M_{DC2}) + 1.50\\,M_{DW} + 1.75\\,m\\,M_{LL+IM}${uOn ? ' + (\\gamma_{UT} - 1.25)M_{UT}' : ''}${hasR ? ' + M_{r}' : ''}]`,
+      sub: `${n(eta, 4)}[1.25(${g(rM.Mg, 0)} + ${g(rM.Mdk, 0)} + ${g(dM.M_DC2 * 12, 0)}) + 1.50(${g(dM.M_DW * 12, 0)}) + 1.75(${n(mLL, 2)})(${g(rM.Mll, 0)})${uOn ? ` + ${par(uT.k, 2)}(${g(uT.MUT * 12, 0)})` : ''}${hasR ? ` + ${g(rM.mrp, 0)}` : ''}]`, value: R.MuMid, unit: 'kip-in', d: 0, ref: A10 + 'Table 3.4.1-1, 1.3.2.1',
+      note: `= ${n(R.MuMid / 12, 1)} kip-ft. Moments in kip-in (Analysis tab); η, m: owner factors (1 for AASHTO).${hasR ? ' M_r: the positive restraint moment where it increases the effect (5.12.3.3.2).' : ''}${uOn ? ' (γ_UT − 1.25) M_UT brings the utility on the noncomposite section from the 1.25 of DC1 to γ_UT (§ld.ut.dMu, Loads & LLDF tab).' : ''}` },
+      uOn ? eta * (1.25 * (rM.Mg + rM.Mdk + dM.M_DC2 * 12) + 1.5 * dM.M_DW * 12 + 1.75 * mLL * rM.Mll + uT.k * (uT.MUT * 12) + (hasR ? rM.mrp : 0)) : eta * (1.25 * (rM.Mg + rM.Mdk + dM.M_DC2 * 12) + 1.5 * dM.M_DW * 12 + 1.75 * mLL * rM.Mll + (hasR ? rM.mrp : 0)), 'MuMid');
     add({ id: 'b1', label: `Stress block factor (${hasTop ? 'deck' : 'girder'} concrete in compression)`, sym: '\\beta_{1}', eq: `0.85 - 0.05(f^{\\prime}_{c} - 4) \\text{, } 0.65 \\le \\beta_{1} \\le 0.85`, sub: `0.85 - 0.05(${n(fcd, 2)} - 4)`, value: f.b1, unit: '', d: 3, ref: A10 + '5.6.2.2' }, cl(0.85 - 0.05 * (fcd - 4), 0.65, 0.85), 'fMid.b1');
     add({ id: 'dp', label: 'Depth to the strand centroid at midspan', sym: 'd_{p}', eq: 'h_{c} - y_{ps}', sub: `${n(cp.hc, 2)} - ${n(aM.cgs, 3)}`, value: f.dp, unit: 'in', d: 2 }, cp.hc - aM.cgs, 'fMid.dp');
     const b = cp.beff, bw = G.isNext ? G.bw : G.btf, hf = hasTop ? (ts + (G.isNext ? 0 : +inp.th)) : (G.isNext ? G.next.ft : G.d[0]);
@@ -129,10 +131,12 @@
       const X = R.useExt && window.PSBDemands ? window.PSBDemands.slice(inp.external, L) : null;
       if (X) { const fv = window.PSBDemands.fac(inp).v; vdc2 = -X.at('V_DC2', x).v; vdw = -X.at('V_DW', x).v; vll = Math.max(Math.abs(X.at('V_LLpos', x).v * fv), Math.abs(X.at('V_LLneg', x).v * fv)); }
     }
-    const vdl = 1.25 * (vg + vdc1 + vdc2) + 1.5 * vdw;
-    add({ id: 'Vu', label: 'Strength I shear at the section', sym: 'V_{u}', eq: `\\eta\\left(\\left|1.25(V_{g} + V_{DC1} + V_{DC2}) + 1.50\\,V_{DW}${rIn ? ' + V_{r}' : ''}\\right| + 1.75\\,m\\,V_{LL+IM}\\right)`,
-      sub: `${n(eta, 4)}\\left(\\left|1.25(${n(vg, 2)} + ${n(vdc1, 2)} + ${n(vdc2, 2)}) + 1.50(${n(vdw, 2)})${rIn ? ` + ${par(vr, 2)}` : ''}\\right| + 1.75(${n(mLL, 2)})(${n(vll, 2)})\\right)`, value: s.Vu, unit: 'kip', d: 2, ref: A10 + 'Table 3.4.1-1',
-      note: (s.vc ? 'Shears of the continuous unit for DC2, DW and LL (the engine). ' : 'Simple span; V_LL+IM = V_LL (L − x)/L (the engine\'s envelope). Component shears: display intermediates. ') + (R.pl && R.pl.mode !== 'ext' ? 'V_LL+IM includes the pedestrian load (§ld.pl.VLLPL, Loads & LLDF tab). ' : '') + (rIn ? 'V_r: the restraint shear where it increases |V| (5.12.3.3.2).' : '') },
+    // UT-N: a utility on the noncomposite section (R.ut, engine/ut.js): + (γ_UT − 1.25) V_UT in the dead-load shear; none: as before
+    const uT = window.PSBUT ? window.PSBUT.at(R, x) : null, uOn = !!(uT && uT.dV);
+    const vdl = uOn ? 1.25 * (vg + vdc1 + vdc2) + 1.5 * vdw + uT.dV : 1.25 * (vg + vdc1 + vdc2) + 1.5 * vdw;
+    add({ id: 'Vu', label: 'Strength I shear at the section', sym: 'V_{u}', eq: `\\eta\\left(\\left|1.25(V_{g} + V_{DC1} + V_{DC2}) + 1.50\\,V_{DW}${uOn ? ' + (\\gamma_{UT} - 1.25)V_{UT}' : ''}${rIn ? ' + V_{r}' : ''}\\right| + 1.75\\,m\\,V_{LL+IM}\\right)`,
+      sub: `${n(eta, 4)}\\left(\\left|1.25(${n(vg, 2)} + ${n(vdc1, 2)} + ${n(vdc2, 2)}) + 1.50(${n(vdw, 2)})${uOn ? ` + ${par(uT.k, 2)}(${par(uT.VUT, 2)})` : ''}${rIn ? ` + ${par(vr, 2)}` : ''}\\right| + 1.75(${n(mLL, 2)})(${n(vll, 2)})\\right)`, value: s.Vu, unit: 'kip', d: 2, ref: A10 + 'Table 3.4.1-1',
+      note: (uOn ? '(γ_UT − 1.25) V_UT brings the utility on the noncomposite section from the 1.25 of DC1 to γ_UT (§ld.ut.dVu, Loads & LLDF tab). ' : '') + (s.vc ? 'Shears of the continuous unit for DC2, DW and LL (the engine). ' : 'Simple span; V_LL+IM = V_LL (L − x)/L (the engine\'s envelope). Component shears: display intermediates. ') + (R.pl && R.pl.mode !== 'ext' ? 'V_LL+IM includes the pedestrian load (§ld.pl.VLLPL, Loads & LLDF tab). ' : '') + (rIn ? 'V_r: the restraint shear where it increases |V| (5.12.3.3.2).' : '') },
       eta * (Math.max(Math.abs(vdl), Math.abs(vdl + vr)) + 1.75 * mLL * vll), P + 'Vu');
     const a = +ss.hp.frac * L, ramp = cl(xm * 12 / ss.lt, 0, 1), Ph = ss.AsHarp * R.fpe * ramp;
     if (ss.nh > 0 && xm < a) add({ id: 'Vp', label: 'Vertical component of the draped strands\' force', sym: 'V_{p}', eq: 'A_{p,dr}\\,f_{pe}\\,\\min\\left(\\frac{x}{\\ell_{t}},\\,1\\right)\\,\\tan\\alpha', sub: `${n(ss.AsHarp, 3)}(${n(R.fpe, 2)})(${n(ramp, 3)})(${n(ss.slope, 5)})`, value: s.Vp, unit: 'kip', d: 2, ref: A10 + '5.7.3.3' }, Ph * ss.slope, P + 'Vp');

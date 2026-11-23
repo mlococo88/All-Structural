@@ -74,11 +74,23 @@
      positive moment (negative) takes the LRFD minimum factor (DC 0.90, DW 0.65; AASHTO LRFD 10th Ed. Table 3.4.1-2), one that adds (or is
      zero) the MBE Strength I factor (DC 1.25, DW 1.50; MBE 4th Ed. Table 6A.4.2.2-1): the noncomposite part (girder + DC1), DC2 and DW each
      on its own, as the negative-moment rows split them. max: every part adds (the engine's expression applies, posCap). */
-  function posDL(mSW, mDC1, mDC2, mDW) {
+  function posDL(mSW, mDC1, mDC2, mDW, u) {
+    if (u && u.MUT) return posDLu(mSW, mDC1, mDC2, mDW, u);
     const sNC = mSW + mDC1, s2 = mDC2, sW = mDW, gNC = sNC < 0 ? 0.90 : 1.25, g2 = s2 < 0 ? 0.90 : 1.25, gW = sW < 0 ? 0.65 : 1.50;
     const max = gNC === 1.25 && g2 === 1.25 && gW === 1.50, DC = mSW + mDC1 + mDC2, DW = mDW;
     return { sNC, s2, sW, gNC, g2, gW, max, DC, DW, D: max ? 1.25 * DC + 1.50 * DW : gNC * sNC + g2 * s2 + gW * sW };
   }
+  /* UT-N (2026-11-23, engine/ut.js; as the Steel Bridge app's rating: UT with DW, UF with DC): u = PSBUT.at(R, x), a utility on the
+     noncomposite section at the station. Its moment M_UT is inside the engine's M_DC1; it is taken out of DC1 and rated with DW (γ_DW
+     1.50; it adds to the positive moment). A negative share (it relieves) stays in DC1 as 0.65 / 1.25 of itself, i.e. at 0.65. The future
+     utility allowance stays in DC1 (present, 1.25: it adds). ut: { MUT, sU (the part in DW), d1 (M_DC1 without it), mDW } for the steps. */
+  function posDLu(mSW, mDC1, mDC2, mDW, u) {
+    const d1 = mDC1 - u.dc * u.MUT, sU = u.add ? u.MUT : 0;
+    const sNC = mSW + d1, s2 = mDC2, sW = mDW, gNC = sNC < 0 ? 0.90 : 1.25, g2 = s2 < 0 ? 0.90 : 1.25, gW = sW < 0 ? 0.65 : 1.50;
+    const max = gNC === 1.25 && g2 === 1.25 && gW === 1.50, DC = mSW + d1 + mDC2, DW = mDW + sU;
+    return { sNC, s2, sW, gNC, g2, gW, max, DC, DW, D: max ? 1.25 * DC + 1.50 * DW : gNC * sNC + g2 * s2 + gW * sW + 1.50 * sU, ut: { MUT: u.MUT, sU, d1, mDW } };
+  }
+  const utAt = (R, x) => (window.PSBUT ? window.PSBUT.at(R, x) : null);
   /* C − factored dead load: with every part adding, the engine's rateAt in its order of operations (C − 1.25 DC − 1.50 DW) */
   const posCap = (C, q) => (q.max ? C - 1.25 * q.DC - 1.50 * q.DW : C - q.D);
   /* E1-D4 (engineer decision 2026-11-21): the shear capacity factor, φ_s = 1.0 for shear (MBE 4th Ed. Art. 6A.4.2.4): φ_c × 1.0 within the
@@ -96,10 +108,10 @@
     let gov = null;
     R.flexFull.forEach(r => {
       const ll = r.mLLpos; if (!(ll > 1e-6) || !(r.phiMn > 0)) return;
-      const Rn = r.phiMn / 12, q = posDL(r.mSW, r.mDC1, r.mDC2, r.mDW), cap = posCap(cs * Rn, q), rf = cap / (1.75 * ll);
+      const Rn = r.phiMn / 12, q = posDL(r.mSW, r.mDC1, r.mDC2, r.mDW, utAt(R, r.x)), cap = posCap(cs * Rn, q), rf = cap / (1.75 * ll);
       if (!gov || rf < gov.RFinv) gov = { x: r.x, Rn, MDC: q.DC, MDW: q.DW, MLL: ll, RFinv: rf, RFopr: cap / (1.35 * ll), dl: q };
     });
-    const fm = R.fMid, md = rt.mid, qm = fm && Math.abs(fm.x - L / 2) < 1e-9 ? posDL(fm.mSW, fm.mDC1, fm.mDC2, fm.mDW) : null;
+    const fm = R.fMid, md = rt.mid, qm = fm && Math.abs(fm.x - L / 2) < 1e-9 ? posDL(fm.mSW, fm.mDC1, fm.mDC2, fm.mDW, utAt(R, fm.x)) : null;
     let mid = md, capMd = null;
     if (qm && !qm.max) { capMd = cs * md.Rn - qm.D; mid = Object.assign({}, md, { RFinv: capMd / (1.75 * md.MLL), RFopr: capMd / (1.35 * md.MLL) }); }
     mid = Object.assign({}, mid, { dl: qm });
@@ -142,9 +154,9 @@
     // ---- flexure, positive: the engine's own rating expression at each R.flexFull station (pbd-compute.js rateAt; same order of operations)
     R.flexFull.forEach(r => {
       const ll = r.mLLpos; if (!(ll > 1e-6) || !(r.phiMn > 0)) return;
-      const Rn = r.phiMn / 12, q = posDL(r.mSW, r.mDC1, r.mDC2, r.mDW), cap = posCap(cs * Rn, q);   // E1-D5: posDL
+      const Rn = r.phiMn / 12, q = posDL(r.mSW, r.mDC1, r.mDC2, r.mDW, utAt(R, r.x)), cap = posCap(cs * Rn, q);   // E1-D5: posDL; UT-N: the utility with DW
       rows.push({ kind: 'flexP', x: r.x, name: nm(r.x), C: cs * Rn, DC: q.DC, DW: q.DW, LL: ll, unit: 'kip-ft', inv: cap / (1.75 * ll), opr: cap / (1.35 * ll), src: 'grid',
-        parts: { Rn, mSW: r.mSW, mDC1: r.mDC1, mDC2: r.mDC2, cap, dl: q } });
+        parts: { Rn, mSW: r.mSW, mDC1: q.ut ? q.ut.d1 : r.mDC1, mDC2: r.mDC2, cap, dl: q } });
     });
     // ---- flexure, negative: continuity on (R.cont), the half span next to an interior support
     const c = R.cont, U = c && c.unit;
@@ -154,11 +166,14 @@
       const nS = U.spans.length, near = x => (U.s > 1 && x <= L / 2 + 1e-9) || (U.s < nS && x >= L / 2 - 1e-9), Rn = c.phiMnN / 12;
       R.flexFull.forEach(r => {
         const ll = -r.mLLneg; if (!(ll > 1e-6) || !near(r.x)) return;
-        const hNC = -(r.mSW + r.mDC1), h2 = -r.mDC2, hW = -r.mDW;   // hogging positive
+        // UT-N: the noncomposite utilities are inside the engine's M_DC1; here each on its own (as the Steel Bridge app: only where it adds):
+        // UT at γ_DW 1.50 where it adds to the negative moment, else 0.65; the future allowance 1.25 where it adds, else absent (0)
+        const u = utAt(R, r.x), d1 = u ? r.mDC1 - u.MUT - u.MUF : r.mDC1, hU = u ? -u.MUT : 0, hF = u ? -u.MUF : 0, gU = hU > 0 ? 1.50 : 0.65, gF = hF > 0 ? 1.25 : 0;
+        const hNC = -(r.mSW + d1), h2 = -r.mDC2, hW = -r.mDW;   // hogging positive
         const gNC = hNC > 0 ? 1.25 : 0.90, g2 = h2 > 0 ? 1.25 : 0.90, gW = hW > 0 ? 1.50 : 0.65;
-        const D = gNC * hNC + g2 * h2 + gW * hW, cap = cs * Rn - D;
+        const D = u ? gNC * hNC + g2 * h2 + gW * hW + gU * hU + gF * hF : gNC * hNC + g2 * h2 + gW * hW, cap = cs * Rn - D;
         rows.push({ kind: 'flexN', x: r.x, name: nm(r.x), C: cs * Rn, DC: hNC + h2, DW: hW, LL: ll, unit: 'kip-ft', inv: cap / (1.75 * ll), opr: cap / (1.35 * ll), src: 'grid',
-          parts: { Rn, hNC, h2, hW, gNC, g2, gW, D, cap, mSW: r.mSW, mDC1: r.mDC1 } });
+          parts: { Rn, hNC, h2, hW, gNC, g2, gW, D, cap, mSW: r.mSW, mDC1: d1, ...(u ? { ut: { hU, gU, hF, gF } } : {}) } });
       });
     } else if (hasNeg) negNote = 'The live load gives negative moments but continuity is off (Loads tab): no negative-moment capacity (deck bars) is entered, so the negative moment is not rated.';
     // ---- shear: grid stations from the critical section to its mirror (R.shearDiag φV_n; components from R.diagrams)
@@ -171,7 +186,8 @@
       const x = dg.x; if (x < xc0 - 1e-9 || x > xc1 + 1e-9 || !SD[j]) return;
       const isEng = sh && Math.abs(x - sh.x) < 1e-9;
       if (isEng) shOnGrid = true;
-      const phiVn = isEng ? sh.phiVn : SD[j].phiVn, VDC = isEng ? sh.VDC : Math.abs(dg.V_DC), VDW = isEng ? sh.VDW : Math.abs(dg.V_DW),
+      const u = utAt(R, x);   // UT-N: the utility's shear out of DC, with DW (the engine's own section: already so, engine/ut.js)
+      const phiVn = isEng ? sh.phiVn : SD[j].phiVn, VDC = isEng ? sh.VDC : u ? Math.abs(dg.V_DC - u.dc * u.VUT) : Math.abs(dg.V_DC), VDW = isEng ? sh.VDW : u && u.add ? Math.abs(dg.V_DW + u.VUT) : Math.abs(dg.V_DW),
         VLL = isEng ? sh.VLL : (sym ? Math.max(vll(j), vll(mirror(x))) : vll(j));
       const cap = csV * phiVn - 1.25 * VDC - 1.50 * VDW;
       rows.push({ kind: 'shear', x, name: nm(x) + (isEng ? ': the engine\'s governing shear section' : ''), C: csV * phiVn, DC: VDC, DW: VDW, LL: VLL, unit: 'kip',
@@ -198,7 +214,7 @@
     rows.forEach((r, i) => { r.i = i; });
     const low = (list, k) => list.filter(r => fin(r[k])).reduce((b, r) => (!b || r[k] < b[k] ? r : b), null);
     const gov = {}; GROUPS.forEach(([k]) => { gov[k] = low(rows.filter(r => r.kind === k), 'inv'); });
-    return { rows, gov, inv: low(rows, 'inv'), opr: low(rows.filter(r => r.kind !== 's3'), 'opr'), phiCS: cs, phiCSv: csV, phiC: R.rating.phiC, phiS: R.rating.phiS, negNote, L, xc: [xc0, xc1], sec: { gA: G.A, gSb: G.Sb, Sbc: cp.Sbc } };
+    return { ut: !!(R.ut && R.ut.wUT), rows, gov, inv: low(rows, 'inv'), opr: low(rows.filter(r => r.kind !== 's3'), 'opr'), phiCS: cs, phiCSv: csV, phiC: R.rating.phiC, phiS: R.rating.phiS, negNote, L, xc: [xc0, xc1], sec: { gA: G.A, gSb: G.Sb, Sbc: cp.Sbc } };
   }
 
   /* steps(A, q, prefix): the rating of row q worked out (equation, substituted values, result), its inputs named with the tab that works them */
@@ -209,8 +225,10 @@
     if (q.kind === 'flexP') {
       w.add({ id: 'C', label: `Capacity at ${at}: φ_c φ_s φM_n`, sym: 'C', eq: '\\phi_{c}\\phi_{s}\\,\\phi M_{n}', sub: `${n(cs, 3)}(${n(p.Rn, 1)})`, value: q.C, unit: 'kip-ft', d: 1, ref: `${MBE} Eq. 6A.4.2.1-2; Art. 6A.5.3`,
         note: `φM_n: the Strength I flexure check's at this station (Flexure tab; ${A10}5.6.3.2, φ by 5.5.4.2). ${csN}.` });
-      w.add({ id: 'DC', label: 'Dead load, structural components (girder, DC1, DC2)', sym: 'M_{DC}', eq: 'M_{g} + M_{DC1} + M_{DC2}', sub: `${n(p.mSW, 1)} + ${n(p.mDC1, 1)} + ${n(p.mDC2, 1)}`, value: q.DC, unit: 'kip-ft', d: 1, note: 'Analysis tab (the engine\'s component moments at this station).' });
-      w.add({ id: 'DW', label: 'Dead load, wearing surface', sym: 'M_{DW}', value: q.DW, unit: 'kip-ft', d: 1, note: 'Analysis tab.' });
+      const ut = p.dl && p.dl.ut;   // UT-N: the utility on the noncomposite section, out of DC1 and with DW
+      w.add({ id: 'DC', label: 'Dead load, structural components (girder, DC1, DC2)', sym: 'M_{DC}', eq: 'M_{g} + M_{DC1} + M_{DC2}', sub: `${n(p.mSW, 1)} + ${n(p.mDC1, 1)} + ${n(p.mDC2, 1)}`, value: q.DC, unit: 'kip-ft', d: 1, note: 'Analysis tab (the engine\'s component moments at this station).' + (ut ? ` M_DC1 here is without the utility on the noncomposite section (M_UT = ${n(ut.MUT, 1)} kip-ft at this station, §ld.ut.MUT, Loads & LLDF tab), which is rated with DW.` : '') });
+      if (ut) w.add({ id: 'DW', label: 'Dead load, wearing surface and the utility on the noncomposite section', sym: 'M_{DW}', eq: 'M_{DW} + M_{UT}', sub: `${n(ut.mDW, 1)} + ${n(ut.sU, 1)}`, value: q.DW, unit: 'kip-ft', d: 1, note: 'Analysis tab; M_UT: §ld.ut.MUT (utilities take γ_DW, as the Steel Bridge app rates them).' });
+      else w.add({ id: 'DW', label: 'Dead load, wearing surface', sym: 'M_{DW}', value: q.DW, unit: 'kip-ft', d: 1, note: 'Analysis tab.' });
       w.add({ id: 'LL', label: 'Live load, HL-93 positive moment with IM and DF', sym: 'M_{LL+IM}', value: q.LL, unit: 'kip-ft', d: 1, note: 'Analysis tab (the positive envelope).' });
       const dl = p.dl, gNote = dlNote(dl);
       if (dl.max) {
@@ -218,7 +236,7 @@
         w.add({ ...RF('1.75', 'inv', q.inv), eq: e, sub: s('1.75'), note: `γ_DC = 1.25, γ_DW = 1.50, Strength I. ${gNote}` });
         w.add({ ...RF('1.35', 'opr', q.opr), eq: e, sub: s('1.35') });
       } else {
-        w.add({ id: 'D', label: 'Factored dead load, sagging sense (each part with its own factor)', sym: 'D_{u}', eq: '\\gamma_{nc}(M_{g} + M_{DC1}) + \\gamma_{2}M_{DC2} + \\gamma_{w}M_{DW}', sub: `${n(dl.gNC, 2)}(${n(dl.sNC, 1)}) + ${n(dl.g2, 2)}(${n(dl.s2, 1)}) + ${n(dl.gW, 2)}(${n(dl.sW, 1)})`, value: dl.D, unit: 'kip-ft', d: 1,
+        w.add({ id: 'D', label: 'Factored dead load, sagging sense (each part with its own factor)', sym: 'D_{u}', eq: '\\gamma_{nc}(M_{g} + M_{DC1}) + \\gamma_{2}M_{DC2} + \\gamma_{w}M_{DW}' + (ut ? ' + 1.50\\,M_{UT}' : ''), sub: `${n(dl.gNC, 2)}(${n(dl.sNC, 1)}) + ${n(dl.g2, 2)}(${n(dl.s2, 1)}) + ${n(dl.gW, 2)}(${n(dl.sW, 1)})${ut ? ` + 1.50(${n(ut.sU, 1)})` : ''}`, value: dl.D, unit: 'kip-ft', d: 1,
           ref: `${MBE} Table 6A.4.2.2-1; ${A10}Table 3.4.1-2`, note: gNote });
         const e = '\\frac{C - D_{u}}{\\gamma_{LL}\\,M_{LL+IM}}', s = g => `\\frac{${n(q.C, 1)} - (${n(dl.D, 1)})}{${g}(${n(q.LL, 1)})}`;
         w.add({ ...RF('1.75', 'inv', q.inv), eq: e, sub: s('1.75'), note: 'Strength I.' });
@@ -233,7 +251,9 @@
         note: `${p.h2 > 0 ? 'Adds: γ_DC = 1.25.' : 'Relieves: γ = 0.90 (' + A10 + 'Table 3.4.1-2).'} Analysis tab.` });
       w.add({ id: 'DW', label: 'Wearing surface DW (continuous unit), hogging sense', sym: 'M_{DW}', eq: '-M_{DW}', sub: `-(${n(-p.hW, 1)})`, value: p.hW, unit: 'kip-ft', d: 1,
         note: `${p.hW > 0 ? 'Adds: γ_DW = 1.50.' : 'Relieves: γ = 0.65, the minimum load factor for DW (' + A10 + 'Table 3.4.1-2).'}` });
-      w.add({ id: 'D', label: 'Factored dead load, hogging sense', sym: 'D_{u}', eq: '\\gamma_{nc}M_{DC,nc} + \\gamma_{2}M_{DC2} + \\gamma_{w}M_{DW}', sub: `${n(p.gNC, 2)}(${n(p.hNC, 1)}) + ${n(p.g2, 2)}(${n(p.h2, 1)}) + ${n(p.gW, 2)}(${n(p.hW, 1)})`, value: p.D, unit: 'kip-ft', d: 1, ref: `${MBE} Table 6A.4.2.2-1` });
+      if (p.ut) w.add({ id: 'UT', label: 'Noncomposite utilities (simple span), hogging sense: UT and the future allowance UF', sym: 'M_{UT}', eq: '-M_{UT}', sub: `-(${n(-p.ut.hU, 1)})`, value: p.ut.hU, unit: 'kip-ft', d: 1, ref: `${A10}Table 3.4.1-2`,
+        note: `M_DC1 above is without them (§ld.ut.MUT, Loads & LLDF tab). UT ${p.ut.hU > 0 ? 'adds: γ_DW = 1.50' : 'relieves the negative moment: γ = 0.65, the minimum load factor for DW'}. Future utility allowance: −M_UF = ${n(p.ut.hF, 1)} kip-ft, ${p.ut.hF > 0 ? 'adds: γ = 1.25' : 'it would relieve: taken absent, γ = 0'} (as the Steel Bridge app).` });
+      w.add({ id: 'D', label: 'Factored dead load, hogging sense', sym: 'D_{u}', eq: '\\gamma_{nc}M_{DC,nc} + \\gamma_{2}M_{DC2} + \\gamma_{w}M_{DW}' + (p.ut ? ' + \\gamma_{UT}(-M_{UT}) + \\gamma_{UF}(-M_{UF})' : ''), sub: `${n(p.gNC, 2)}(${n(p.hNC, 1)}) + ${n(p.g2, 2)}(${n(p.h2, 1)}) + ${n(p.gW, 2)}(${n(p.hW, 1)})${p.ut ? ` + ${n(p.ut.gU, 2)}(${n(p.ut.hU, 1)}) + ${n(p.ut.gF, 2)}(${n(p.ut.hF, 1)})` : ''}`, value: p.D, unit: 'kip-ft', d: 1, ref: `${MBE} Table 6A.4.2.2-1` });
       w.add({ id: 'LL', label: 'Live load, HL-93 negative moment with IM and DF (magnitude)', sym: 'M_{LL+IM}', value: q.LL, unit: 'kip-ft', d: 1, note: 'Analysis tab (the negative envelope on the continuous unit).' });
       const e = '\\frac{C - D_{u}}{\\gamma_{LL}\\,M_{LL+IM}}', s = g => `\\frac{${n(q.C, 1)} - (${n(p.D, 1)})}{${g}(${n(q.LL, 1)})}`;
       w.add({ ...RF('1.75', 'inv', q.inv), eq: e, sub: s('1.75'), note: 'The continuity restraint moments are not in the rating (MBE 4th Ed. Art. 6A.5.10, as the engine\'s rating).' });
@@ -241,8 +261,8 @@
     } else if (q.kind === 'shear') {
       w.add({ id: 'C', label: `Capacity at ${at}: φ_c φ_s φV_n with φ_s = 1.0 for shear`, sym: 'C', eq: '\\phi_{c}(1.0)\\,\\phi V_{n}', sub: `${n(A.phiCSv, 3)}(${n(p.phiVn, 1)})`, value: q.C, unit: 'kip', d: 1, ref: `${MBE} Eq. 6A.4.2.1-2; Art. 6A.4.2.4; Art. 6A.5.8`,
         note: `φV_n: the engine's general-procedure (MCFT) shear resistance at this station (${p.eng ? 'the Shear tab\'s governing section' : 'the Shear tab\'s chart of φV_n along the span'}; ${A10}5.7.3.3, 5.7.3.4.2). φ_s = 1.0 (MBE 6A.4.2.4: the system factor is 1.0 for shear; engineer decision E1-D4, 2026-11-21): φ_c × 1.0 = ${n(A.phiCSv, 3)} (φ_c = ${n(A.phiC, 2)}, the lower limit 0.85 of MBE 4th Ed. Eq. 6A.4.2.1-3; at most 1.00, as the engine)${A.phiS !== 1 ? `; the entered φ_s = ${n(A.phiS, 2)} is for flexure only` : ''}.` });
-      w.add({ id: 'DC', label: 'Dead-load shear, structural components', sym: 'V_{DC}', eq: '\\left|V_{g} + V_{DC1} + V_{DC2}\\right|', value: q.DC, unit: 'kip', d: 1, note: 'Analysis tab.' });
-      w.add({ id: 'DW', label: 'Dead-load shear, wearing surface', sym: 'V_{DW}', eq: '\\left|V_{DW}\\right|', value: q.DW, unit: 'kip', d: 1, note: 'Analysis tab.' });
+      w.add({ id: 'DC', label: 'Dead-load shear, structural components', sym: 'V_{DC}', eq: A.ut ? '\\left|V_{g} + V_{DC1} + V_{DC2} - V_{UT}\\right|' : '\\left|V_{g} + V_{DC1} + V_{DC2}\\right|', value: q.DC, unit: 'kip', d: 1, note: 'Analysis tab.' + (A.ut ? ' V_UT: the utility on the noncomposite section (inside V_DC1; §ld.ut.VUT, Loads & LLDF tab), rated with DW.' : '') });
+      w.add({ id: 'DW', label: A.ut ? 'Dead-load shear, wearing surface and the utility on the noncomposite section' : 'Dead-load shear, wearing surface', sym: 'V_{DW}', eq: A.ut ? '\\left|V_{DW} + V_{UT}\\right|' : '\\left|V_{DW}\\right|', value: q.DW, unit: 'kip', d: 1, note: 'Analysis tab.' });
       w.add({ id: 'LL', label: 'Live-load shear, HL-93 envelope with IM and DF', sym: 'V_{LL+IM}', value: q.LL, unit: 'kip', d: 1, note: 'Analysis tab (the larger magnitude of the two envelopes; a simple span: from the nearer support).' });
       const e = '\\frac{C - \\gamma_{DC}V_{DC} - \\gamma_{DW}V_{DW}}{\\gamma_{LL}\\,V_{LL+IM}}', s = g => `\\frac{${n(q.C, 1)} - 1.25(${n(q.DC, 1)}) - 1.50(${n(q.DW, 1)})}{${g}(${n(q.LL, 1)})}`;
       if (fin(q.inv)) { w.add({ ...RF('1.75', 'inv', q.inv), eq: e, sub: s('1.75') }); w.add({ ...RF('1.35', 'opr', q.opr), eq: e, sub: s('1.35') }); }

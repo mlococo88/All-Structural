@@ -346,6 +346,7 @@
     }
     if (R.ap && window.PSBApplic) window.PSBApplic.steps(add, inp, R, { n, g, par });   // AP-B: the ranges of applicability (4.6.2.2), steps ld.ap.*
     if (R.pl && window.PSBPL) window.PSBPL.steps(add, inp, R, { n, g, par });   // PL-A: the pedestrian live load (3.6.1.6), steps ld.pl.*
+    if (R.ut && window.PSBUT) window.PSBUT.steps(add, inp, R, { n, g, par });   // UT-N: utilities on the noncomposite section and the future utility allowance, steps ld.ut.*
     return K.done();
   }
 
@@ -380,8 +381,11 @@
     else add({ id: 'Mll', label: 'Live load moment (LL+IM) at midspan, positive envelope', sym: 'M_{LL+IM}', value: mid.M_LLpos, unit: 'kip-ft', d: 1,
       note: simple && inp.loads.llAuto ? 'HL-93 envelope at x: each axle placed at x, both truck orientations and the tandem, with IM = 33 % on the vehicles, plus the lane load, × DF_M (Loads & LLDF tab).' : simple ? 'Entered M_LL (parabola along the span).' : 'HL-93 on the continuous unit × DF_M.' });
     add({ id: 'Mdc', label: 'Total DC moment at midspan', sym: 'M_{DC}', eq: 'M_{g} + M_{DC1} + M_{DC2}', sub: `${n(mid.M_g, 1)} + ${n(mid.M_DC1, 1)} + ${n(mid.M_DC2, 1)}`, value: mid.M_DC, unit: 'kip-ft', d: 1 }, mid.M_g + mid.M_DC1 + mid.M_DC2);
-    add({ id: 'MuS', label: 'Strength I moment at midspan', sym: 'M_{u}', eq: '\\eta(1.25\\,M_{DC} + 1.50\\,M_{DW} + 1.75\\,m\\,M_{LL+IM})', sub: `${n(eta, 4)}(1.25(${n(mid.M_DC, 1)}) + 1.50(${n(mid.M_DW, 1)}) + 1.75(${n(mLL, 2)})(${n(mid.M_LLpos, 1)}))`, value: mid.M_StrI_pos, unit: 'kip-ft', d: 1, ref: A10 + 'Table 3.4.1-1, 3.4.1-2' },
-      eta * (1.25 * mid.M_DC + 1.5 * mid.M_DW + 1.75 * mLL * mid.M_LLpos));
+    // UT-N: a utility on the noncomposite section (R.ut, engine/ut.js): + (γ_UT − 1.25) M_UT, V_UT (M_DC1 holds it at 1.25); none: as before
+    const uM = window.PSBUT ? window.PSBUT.at(R, x) : null, uV = window.PSBUT ? window.PSBUT.at(R, s0.x) : null, uOn = !!(uM && uM.dM);
+    const UN = ' The last term brings the utility on the noncomposite section from the 1.25 of DC1 to γ_UT (§ld.ut.dMu, Loads & LLDF tab).';
+    add({ id: 'MuS', label: 'Strength I moment at midspan', sym: 'M_{u}', eq: `\\eta(1.25\\,M_{DC} + 1.50\\,M_{DW} + 1.75\\,m\\,M_{LL+IM}${uOn ? ' + (\\gamma_{UT} - 1.25)M_{UT}' : ''})`, sub: `${n(eta, 4)}(1.25(${n(mid.M_DC, 1)}) + 1.50(${n(mid.M_DW, 1)}) + 1.75(${n(mLL, 2)})(${n(mid.M_LLpos, 1)})${uOn ? ` + ${par(uM.k, 2)}(${par(uM.MUT, 1)})` : ''})`, value: mid.M_StrI_pos, unit: 'kip-ft', d: 1, ref: A10 + 'Table 3.4.1-1, 3.4.1-2', ...(uOn ? { note: UN.trim() } : {}) },
+      uOn ? eta * (1.25 * mid.M_DC + 1.5 * mid.M_DW + 1.75 * mLL * mid.M_LLpos + uM.dM) : eta * (1.25 * mid.M_DC + 1.5 * mid.M_DW + 1.75 * mLL * mid.M_LLpos));
     add({ id: 'MsI', label: 'Service I moment at midspan', sym: 'M_{s,I}', eq: 'M_{DC} + M_{DW} + m\\,M_{LL+IM}', sub: `${n(mid.M_DC, 1)} + ${n(mid.M_DW, 1)} + ${n(mLL, 2)}(${n(mid.M_LLpos, 1)})`, value: mid.M_SrvI_pos, unit: 'kip-ft', d: 1, ref: A10 + 'Table 3.4.1-1' }, mid.M_DC + mid.M_DW + mLL * mid.M_LLpos);
     const gl = +inp.opt.gLLs3;
     add({ id: 'MsIII', label: 'Service III moment at midspan', sym: 'M_{s,III}', eq: 'M_{DC} + M_{DW} + \\gamma_{LL}\\,m\\,M_{LL+IM}', sub: `${n(mid.M_DC, 1)} + ${n(mid.M_DW, 1)} + ${n(gl, 2)}(${n(mLL, 2)})(${n(mid.M_LLpos, 1)})`, value: mid.M_SrvIII_pos, unit: 'kip-ft', d: 1, ref: A10 + 'Table 3.4.1-1, 3.4.1-4' }, mid.M_DC + mid.M_DW + gl * mLL * mid.M_LLpos);
@@ -389,8 +393,8 @@
     const Vw = w => w * (L / 2 - s0.x);
     add({ id: 'Vg', label: 'Girder self-weight shear at the support', sym: 'V_{g}', eq: 'w_{g}\\left(\\frac{L}{2} - x\\right)', sub: `${n(R.wG, 4)}\\left(\\frac{${n(L, 2)}}{2} - ${n(s0.x, 2)}\\right)`, value: s0.V_g, unit: 'kip', d: 2 }, Vw(R.wG));
     add({ id: 'Vdc', label: 'Total DC shear at the support', sym: 'V_{DC}', eq: 'V_{g} + V_{DC1} + V_{DC2}', sub: `${n(s0.V_g, 2)} + ${n(s0.V_DC1, 2)} + ${n(s0.V_DC2, 2)}`, value: s0.V_DC, unit: 'kip', d: 2 }, s0.V_g + s0.V_DC1 + s0.V_DC2);
-    add({ id: 'VuS', label: 'Strength I shear at the support', sym: 'V_{u}', eq: '\\eta(1.25\\,V_{DC} + 1.50\\,V_{DW} + 1.75\\,m\\,V_{LL+IM})', sub: `${n(eta, 4)}(1.25(${n(s0.V_DC, 2)}) + 1.50(${n(s0.V_DW, 2)}) + 1.75(${n(mLL, 2)})(${n(s0.V_LLpos, 2)}))`, value: s0.V_StrI_pos, unit: 'kip', d: 2, ref: A10 + 'Table 3.4.1-1' },
-      eta * (1.25 * s0.V_DC + 1.5 * s0.V_DW + 1.75 * mLL * s0.V_LLpos));
+    add({ id: 'VuS', label: 'Strength I shear at the support', sym: 'V_{u}', eq: `\\eta(1.25\\,V_{DC} + 1.50\\,V_{DW} + 1.75\\,m\\,V_{LL+IM}${uOn ? ' + (\\gamma_{UT} - 1.25)V_{UT}' : ''})`, sub: `${n(eta, 4)}(1.25(${n(s0.V_DC, 2)}) + 1.50(${n(s0.V_DW, 2)}) + 1.75(${n(mLL, 2)})(${n(s0.V_LLpos, 2)})${uOn ? ` + ${par(uV.k, 2)}(${par(uV.VUT, 2)})` : ''})`, value: s0.V_StrI_pos, unit: 'kip', d: 2, ref: A10 + 'Table 3.4.1-1', ...(uOn ? { note: UN.trim().replace('dMu', 'dVu') } : {}) },
+      uOn ? eta * (1.25 * s0.V_DC + 1.5 * s0.V_DW + 1.75 * mLL * s0.V_LLpos + uV.dV) : eta * (1.25 * s0.V_DC + 1.5 * s0.V_DW + 1.75 * mLL * s0.V_LLpos));
     // continuity: the pier section and the restraint moments
     const c = R.cont;
     if (c) {
