@@ -60,6 +60,10 @@ node tests/smoke/report-go-scroll.mjs [--dir <folder with a shared/ folder, e.g.
 # an entered g, the Summary / left column notes, the Report subsection, 390 px, 0 console errors
 node tests/smoke/steel-bridge-fatlife.mjs
 
+# Steel Bridge, decisions of 2026-11-23: the "Shear skew correction along the girder" drop-down (whole length / tapered, 4.6.2.2.3c), its notes
+# and steps, the stud edition note, the live load deflection on the bridge stiffness (2.5.2.6.2); 0 console errors
+node tests/smoke/steel-bridge-skewv-defl.mjs
+
 # Steel Bridge Field splices with custom values: Custom demands (errors shown after Calculate, a changed value changes the result), every entered
 # plate / bolt / basis field changes the FS1 result and is saved (SPERR; about 6 min)
 node tests/smoke/steel-bridge-splices.mjs

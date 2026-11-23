@@ -100,7 +100,7 @@
 
   /* compute(input): every region (span and pier) and every girder.
      input: { Nb, spacings [ft], OL, OR, rL, rR (ft), ts (structural slab, in), haunchP (haunch in the composite properties, in),
-              n (modular ratio), gap (ft, ≥ 4), kg: 'max' | 'avg' | 'simple', skewV: 'all' | 'ext', extMin: 'yes' | 'no',
+              n (modular ratio), gap (ft, ≥ 4), kg: 'max' | 'avg' | 'simple', skewV: 'all' | 'ext', skewVx: 'whole' | 'taper' (optional; absent: 'whole'), extMin: 'yes' | 'no',
               skews (deg, every support line, for the pier rule of 4.6.2.2.2e), regions: [{ id, i, kind: 'span' | 'sup', label, L (ft), skA, skB (support skews, deg), sec: plates { D, tw, topB, topT, botB, botT },
                           segs: [{ L, sec }] (the plate pieces of the region, for kg 'avg') }] }
      Returns { geo, regions: [{ …region, s, eg, Kg, KgAvg, pp, geo, sk, members, lever, mD, gDef, steps }], steps (geometry) }. */
@@ -118,12 +118,21 @@
       w.add({ id: 'Kg', label: `${rg.label}: K_g used`, sym: 'K_{g}', eq: q.kg === 'avg' && KgAvg ? 'K_{g,avg}' : 'K_{g}', sub: '', value: Kgv, unit: 'in^{4}', d: 0, note: q.kg === 'simple' ? 'Simplified K_g terms of Table 4.6.2.2.1-3 used in the equations.' : '' });
       skewSteps(w, { ...pp, geoSavg: geo.Savg, pier: rg.kind === 'sup' }, sk, Kgv);
       const members = []; for (let j = 0; j < q.Nb; j++) { const mw = St().work(`df.${rg.id}.G${j + 1}`);
-        members.push(member(pp, geo, Kgv, q.skewV === 'ext' && typeOf(pp, j) === 'int' ? { ...sk, scfV: 1 } : sk, j, mw)); members[j].steps = mw.steps; }
+        const skj = q.skewV === 'ext' && typeOf(pp, j) === 'int' ? { ...sk, scfV: 1 } : sk;
+        members.push(member(pp, geo, Kgv, skj, j, mw)); members[j].steps = mw.steps;
+        members[j].rV = skj.scfV; members[j].rVg = skj.scfV; }   // N3 (2026-11-23): the shear skew correction r_V contained in fatV (rV) and in gV (rVg), for the taper along the girder (engine/analysis.js)
       if (q.extMin === 'yes') { const ints = members.filter(m => m.type === 'int'); if (ints.length) { const iM = Math.max(...ints.map(m => m.gM)), iV = Math.max(...ints.map(m => m.gV));
-        members.filter(m => m.type === 'ext').forEach(m => { if (iM > m.gM) { m.gM = iM; m.policyM = true; } if (iV > m.gV) { m.gV = iV; m.policyV = true; } if (m.policyM || m.policyV) { m.method += ', raised to interior (policy)';
+        members.filter(m => m.type === 'ext').forEach(m => { if (iM > m.gM) { m.gM = iM; m.policyM = true; } if (iV > m.gV) { m.gV = iV; m.policyV = true; m.rVg = ints.find(t => t.gV === iV).rV; } if (m.policyM || m.policyV) { m.method += ', raised to interior (policy)';
           m.steps.push(St().step({ id: `df.${rg.id}.G${m.j + 1}.policy`, label: `${m.label}: exterior factors not less than the interior (owner / engineer policy)`, sym: 'g_{M}, g_{V}', eq: '\\max(g_{ext}, g_{int})', sub: '', value: `${n4(m.gM)}, ${n4(m.gV)}`, unit: '', d: 4 })); } }); } }
       const lev = members.map((m, j) => leverAll(pp, geo, j)), mD = MPF(geo.NL), gDef = geo.NL * mD / q.Nb;
       w.add({ id: 'gDef', label: `${rg.label}: deflection distribution factor (all lanes loaded, all girders equal)`, sym: 'g_{\\Delta}', eq: '\\frac{N_{L}m}{N_{b}}', sub: `\\frac{${geo.NL}(${n2(mD)})}{${q.Nb}}`, value: gDef, unit: '', d: 4, ref: `${ED} Art. 2.5.2.6.2` });
+      // N3 (2026-11-23, engineer's decision): the extent of the shear skew correction along the girder. 'taper' (q.skewVx): the correction is
+      // full at each support of the span and decreases linearly to 1.0 at mid-span (4.6.2.2.3c: "may be decreased linearly to a value of 1.0
+      // at mid-span, regardless of end condition"); 'whole' / absent: r_V over the whole span, as before (no step, nothing changed).
+      if (q.skewVx === 'taper' && rg.kind === 'span' && sk.scfV > 1) { const rx = t => 1 + (sk.scfV - 1) * (1 - t);
+        w.add({ id: 'rVx', label: `${rg.label}: shear skew correction along the girder: full at each support, 1.0 at mid-span (shown at the quarter point, x = L/4)`, sym: 'r_{V}(x)', eq: '1 + (r_{V} - 1)\\left(1 - \\frac{x}{L/2}\\right)',
+          sub: `1 + (${n4(sk.scfV)} - 1)\\left(1 - \\frac{${n2(rg.L / 4)}}{${n2(rg.L)}/2}\\right)`, value: rx(0.5), unit: '', d: 4, ref: `${ED} Art. 4.6.2.2.3c`,
+          note: `x: the distance from the nearer support of the span. At the support r_V(0) = ${n4(rx(0))}, at the quarter point ${n4(rx(0.5))}, at mid-span ${n4(rx(1))}. The article applies the correction between the support at the obtuse corner and mid-span and permits decreasing it linearly to 1.0 at mid-span, whatever the end condition. Here it is taken full at both supports of every span (the obtuse corner is at one end for one exterior girder and at the other end for the other), so the support values and the reactions are unchanged. The shear at a station uses g_V r_V(x)/r_V (Analysis tab, steps gVx).${q.skewV === 'ext' ? ' Exterior girders only (the option above): the interior girders have r_V = 1.0.' : ''}` }); }
       return { ...rg, s, eg, Kg: Kgv, KgAvg, pp, geo, sk, members, lever: lev, mD, gDef, steps: w.steps };
     });
     const geo0 = regions.length ? regions[0].geo : geometry({ ...base, L: 1, skewM: 0, skewV: 0 });
