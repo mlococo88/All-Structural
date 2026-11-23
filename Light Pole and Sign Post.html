@@ -405,6 +405,12 @@
   .lppLdCombGrid{display:flex;flex-wrap:wrap;gap:10px} .lppLdCombGrid>div{flex:1 1 440px;min-width:0}
   .lppFbd svg{display:block;width:100%;max-width:470px;height:auto;margin:0 auto} .lppLdWk:empty{display:none} .lppLdBack{margin:0 0 8px}
   @media print{ .lppLdPane{display:block!important} .lppAllDirs{display:block!important} }
+  /* LPCV (2026-11-23): the "All load combinations / Governing combination only" switch at the top of the output tabs (display only) */
+  .lppCvBar{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-family:var(--font-ui);font-size:11.5px;color:var(--slate-600);background:var(--slate-50);border:1px solid var(--line);border-radius:4px;padding:5px 9px;margin:0 0 8px}
+  .lppCvBar .lppCvLbl{font-weight:600;color:#1E3A5F} .lppCvBar .lppCvSeg{display:inline-flex;flex-wrap:wrap;gap:2px}
+  .lppCvBar button{font-family:var(--font-ui);font-size:11.5px;border:1px solid var(--line);background:#fff;color:var(--slate-600);padding:4px 9px;cursor:pointer;border-radius:4px}
+  .lppCvBar button.on{background:#EFF6FF;border-color:var(--blue-600);color:#1E3A5F;font-weight:600} .lppCvBar button:hover:not(.on){background:var(--slate-100)}
+  .lppCvBar .lppCvInfo{flex:1 1 200px;min-width:0} .lppCvNote{margin:4px 0 8px} .lppCvNote a{font-weight:600} .lppCvHost:empty{display:none}
   @media print{ header.masthead,#postSelBar{display:none!important} }
   /* LTS-1 (2026-11-02): code mode. IBC mode: the LTS cards are hidden. LTS mode: the IBC input cards marked ibcOnly and every
      output card except the LTS cards and the Manual are hidden (the IBC engine still runs underneath, unchanged). */
@@ -412,6 +418,8 @@
   body.lts-mode .ibcOnly{display:none!important}
   body.lts-mode .tabpage:not([data-page=manual]) > *:not(.ltsCard){display:none!important}
   body.lts-mode #postSelBar{display:none!important}
+  body.lts-mode .tabpage > .lppCvBar{display:flex!important}   /* LPCV: the combination-view switch serves both modes */
+  @media print{ .tabpage > .lppCvBar, body.lts-mode .tabpage > .lppCvBar{display:none!important} }
   body.lts-mode .tabpage > #lpAnchCard{display:block!important}   /* LTS-8: the Anchorage hand-off card serves both modes */
   .lts-basis{font-family:var(--font-ui);font-size:9pt;color:#1E3A5F;background:#EFF6FF;border:1px solid #BFDBFE;border-left:4px solid var(--steel);border-radius:4px;padding:5px 9px;margin:0 0 8px}
   .lts-dev{font-family:var(--font-ui);font-size:9pt;color:#78350F;background:#FFFBEB;border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:4px;padding:5px 9px;margin:0 0 8px}
@@ -864,6 +872,13 @@
     <div class="tabpage" data-page="report" id="page-report"></div>
     <div class="tabpage" data-page="manual" id="page-manual"></div>
     <div id="cardSource" style="display:none">
+    <!-- LPCV (2026-11-23): one shared setting, shown at the top of the Loading, Post, Anchorage, Shaft and Report tabs (display only;
+         per-browser key lpp_comboView_v1; not printed, not in the project). distributeCards() files each bar first in its page. -->
+    <div class="lppCvBar noprint" data-tab="loading" data-cvtab="loading" role="group" aria-label="Load combinations shown"><span class="lppCvLbl">Show:</span><span class="lppCvSeg"><button type="button" data-cv="all">All load combinations</button><button type="button" data-cv="gov">Governing combination only</button></span><span class="lppCvInfo"></span></div>
+    <div class="lppCvBar noprint" data-tab="post" data-cvtab="post" role="group" aria-label="Load combinations shown"><span class="lppCvLbl">Show:</span><span class="lppCvSeg"><button type="button" data-cv="all">All load combinations</button><button type="button" data-cv="gov">Governing combination only</button></span><span class="lppCvInfo"></span></div>
+    <div class="lppCvBar noprint" data-tab="anchors" data-cvtab="anchors" role="group" aria-label="Load combinations shown"><span class="lppCvLbl">Show:</span><span class="lppCvSeg"><button type="button" data-cv="all">All load combinations</button><button type="button" data-cv="gov">Governing combination only</button></span><span class="lppCvInfo"></span></div>
+    <div class="lppCvBar noprint" data-tab="shaft" data-cvtab="shaft" role="group" aria-label="Load combinations shown"><span class="lppCvLbl">Show:</span><span class="lppCvSeg"><button type="button" data-cv="all">All load combinations</button><button type="button" data-cv="gov">Governing combination only</button></span><span class="lppCvInfo"></span></div>
+    <div class="lppCvBar noprint" data-tab="report" data-cvtab="report" role="group" aria-label="Load combinations shown"><span class="lppCvLbl">Show:</span><span class="lppCvSeg"><button type="button" data-cv="all">All load combinations</button><button type="button" data-cv="gov">Governing combination only</button></span><span class="lppCvInfo"></span></div>
 
 
     <!-- 1. SCHEMATICS -->
@@ -1059,14 +1074,14 @@
       <div class="card-h"><span class="num">5b</span><h2>Load combinations — base demand envelope</h2><span class="hint">all ten ASCE 7 combinations</span></div>
       <div class="card-body">
         <div class="tbl-note lpNL"><div class="lpNLl">Every ASCE 7 combination is evaluated at its own worst wind direction.</div><ul class="lpNLu"><li><b class="lpNLk">Embedment</b> (a service check against presumptive soil bearing): driven by the worst <b>ASD</b> row.</li><li><b class="lpNLk">Reinforced-concrete shaft</b> (a strength check): driven by the worst <b>LRFD</b> row.</li><li>Governing rows are highlighted.</li></ul></div>
-        <table class="tbl" id="comboMatrixTbl"></table>
+        <table class="tbl" id="comboMatrixTbl"></table><div class="lppCvHost" id="lppCvN_comboMat"></div>
       </div>
     </section>
     <section class="card" id="signComboCard" data-tab="loading" data-ldsub="combos" style="display:none">
       <div class="card-h"><span class="num">3b</span><h2>Load combinations — per-post demand</h2><span class="hint">non-ice ASCE 7 combinations</span></div>
       <div class="card-body">
         <div class="tbl-note lpNL"><div class="lpNLl">Every combination applies.</div><ul class="lpNLu"><li><b class="lpNLk">Ice:</b> the atmospheric-ice ones included (ice on the sign panel and posts, ASCE 7-16 Ch. 10, added 2026-11-01).</li><li><b class="lpNLk">Envelope:</b> each combination is enveloped over the applicable Fig. 29.3-1 load cases and wind directions, per post.</li><li><b class="lpNLk">Governing rows</b> (largest M) are highlighted for each design family.</li></ul></div>
-        <table class="tbl" id="sgComboTbl"></table>
+        <table class="tbl" id="sgComboTbl"></table><div class="lppCvHost" id="lppCvN_sgCombo"></div>
       </div>
     </section>
     <section class="card" id="lppBmbCard" data-tab="loading" data-ldsub="combos">
@@ -3036,6 +3051,7 @@ manPart("p3","3. Output Reference",[
 
 {h3:"3.3.6 Load combination matrix"},
 {p:"Every combination evaluated, showing the resultant, its azimuth, P, M, h and N, with the governing LRFD and ASD rows marked. Eight combinations are evaluated for a light pole; signs use only the four non-ice combinations, since ice is not applied to panels."},
+{note:"<b>All load combinations / Governing combination only</b> (LPCV, 2026-11-23): a switch at the top of the Loading, Post, Anchorage, Shaft and Report tabs; one setting for the whole tool, remembered in this browser, not saved in the project and not printed. \u201cAll load combinations\u201d lists every combination. \u201cGoverning combination only\u201d keeps, in each table with one row per combination, the row of each check\u2019s governing combination, named with the check it governs, with a line saying how many combinations were checked and a \u201cshow all\u201d link. The switch changes only what is listed: every combination is always checked, and no result, governing case or verdict changes. The Report states which view it shows."},
 
 {h:"3.4 Post tab"},
 {p:"The AISC 360 check of the pole or post section itself."},
@@ -4733,15 +4749,23 @@ function renderSign(inp,sw,pw,allCombos,postDesigns,poleSeg){
       });
       if(best) govKeys[best.key]=fam;
     });
+    // LPCV (2026-11-23): governing view = the rows a check of any post uses (the "Governs" column of 7 · Combinations) and the row marked here
+    const cvU=lppCvGov?postDesigns.map((pd,p)=>lppCvUseMap({mode:'sign',allCombos,postDesigns,sw},p)):null; let cvN=0;
     allCombos.forEach(r=>{
       const gf=govKeys[r.key];
       const gEdge=gf&&ed&&r.postGov.some(pg=>pg.edge&&pg.M>=Math.max(...r.postGov.map(x=>x.M)));
-      cm+=`<tr${gf?' style="background:var(--accent-wash);font-weight:700"':''}><td>${r.fam}</td><td style="text-align:left">${r.name}${gf?' ◄ governs '+gf+(gEdge?', '+el:''):''}</td>`;
+      let cvL='';
+      if(cvU){ const per=cvU.map(U=>(U[r.name]||[]).concat((U[r.name+', '+el]||[]).map(t=>t+' ('+el+')')));
+        if(!gf && !per.some(x=>x.length)) return;
+        cvL=per.map((x,p)=>x.length?(nPost>1?'P'+(p+1)+': ':'')+x.join(', '):'').filter(Boolean).join('; '); }
+      cvN++;
+      cm+=`<tr${gf?' style="background:var(--accent-wash);font-weight:700"':''}><td>${r.fam}</td><td style="text-align:left">${r.name}${gf?' ◄ governs '+gf+(gEdge?', '+el:''):''}${cvL?' — '+cvL:''}</td>`;
       r.postGovN.forEach((pg,p)=>{cm+=`<td>${fmt(pg.P,0)}</td><td>${fmt(pg.M,0)}</td><td>${fmt(pg.h,2)}</td>`;
         if(ed){ const pe=r.postEdge[p]; cm+=`<td>${fmt(pe.P,0)}</td><td>${fmt(pe.M,0)}</td>`; } });
       cm+=`</tr>`;
     });
     $('sgComboTbl').innerHTML=cm;
+    if($('lppCvN_sgCombo')) $('lppCvN_sgCombo').innerHTML=cvU?lppCvNoteHTML(cvN,allCombos.length):'';
   }
 
   // load-case table
@@ -4969,6 +4993,7 @@ function buildSignReport(inp,sw,pw,allCombos,postDesigns,poleSeg){
     H+=`<details class="rpt-sec" data-old="2" open><summary><span class="tag">2</span><h3>Load combinations — per-post demand</h3><span class="arw">▶</span></summary><div class="rpt-body">`;
     H+=`<div class="eq-why lpNL">${lpNL('Every combination applies.',[['Ice:','the atmospheric-ice ones included (ice on the sign panel and posts, ASCE 7-16 Ch. 10, added 2026-11-01).'],['Envelope:','each combination is enveloped over the applicable Fig. 29.3-1 load cases and wind directions, per post.'],['Governing row','of each family (largest M on any post) is marked.']])}</div>`;   // LPNL
     H+=`<table class="tbl">${$('sgComboTbl').innerHTML}</table>`;
+    if(lppCvGov) H+=`<p class="eq-why">${lppCvTxt($('sgComboTbl').rows.length-1,allCombos.length)} Each row names what it governs.</p>`;   // LPCV
     if(nPost===2){
       H+=eqB('Two-post force split',
         `A resultant F acting at horizontal distance x from the post-group centerline is shared between the two posts by statics: the post nearer the resultant takes more. Case A gives 50/50; Cases B and C bias load onto the windward post.`,
@@ -5115,6 +5140,8 @@ function calc(){
   if(codeMode==='lts') ltsCalc(); else ltsClear();
   if(typeof lpsvRefresh==='function') lpsvRefresh();   // LPSV (2026-11-02): the sign 3D view, and the sign drawings in the LRFDLTS mode
   lppDashRender();   // LPDC (2026-11-03): the check summary panel, from the results just shown
+  if(codeMode==='lts') ltsCvApply();   // LPCV (2026-11-23): governing-only view of the LRFDLTS tables (display only; nothing in the "all" view)
+  lppCvSync();   // LPCV: the switch bars
 }
 function lppCalcIbc(){
   const inp={V:num('V'),expo:$('expo').value,Kzt:num('Kzt'),Kd:kdComponents().mast,KdSign:kdComponents().sign,KdMode:kdComponents().mode,G:num('G'),beta:($('lppBeta')?num('lppBeta'):0.005),
@@ -5385,19 +5412,25 @@ function lppCalcIbc(){
   if($('windDirLRFD')) $('windDirLRFD').innerHTML=windTblHTML(govLRFD);
   if($('windDirASD'))  $('windDirASD').innerHTML=windTblHTML(govASD);
   // ---- LOAD COMBINATIONS MATRIX (all eight, governing highlighted) ----
+  // LPCV (2026-11-23): the combination each downstream check takes (the engine's governing records; as passed to lppLdRender below)
+  const lppUse={post:{name:pstress.comboName,phi:pstress.phi},bp:{name:(bolts.byCheck.BP||bolts).comboName},shaft:{name:shaftGov.name},shear:{name:(shaftCands.reduce((a,x)=>x.P>a.P?x:a)).name},
+         emb:{name:fASD.name},bearing:{name:govAxASD.name}};
   if($('comboMatrixTbl')){
+    const cvU=lppCvGov?lppCvUseMap({mode:'pole',allCombos,govLRFD,govASD,use:lppUse},0):null; let cvN=0;   // LPCV: governing view = the rows a check uses
     let cm=`<tr><th>Family</th><th style="text-align:left">Combination</th><th>Net cable pull<span class="sym">R (lb)</span></th><th>Pull dir<span class="sym">φ (°)</span></th><th>Lateral<span class="sym">P (lb)</span></th><th>Moment<span class="sym">M (lb·ft)</span></th><th>h = M/P<span class="sym">(ft)</span></th><th>Axial<span class="sym">N (lb)</span></th></tr>`;
     allCombos.forEach(r=>{
       const isGov=(r.key===govASD.key||r.key===govLRFD.key);
-      cm+=`<tr${isGov?' style="background:var(--accent-wash);font-weight:700"':''}><td>${r.fam}</td><td style="text-align:left">${r.name}${isGov?' ◄ governs '+r.fam:''}</td><td>${fmt(r.cableRes,0)}</td><td>${fmt(r.cableAng,1)}</td><td>${fmt(r.P,0)}</td><td>${fmt(r.M,0)}</td><td>${fmt(r.h,2)}</td><td>${fmt(r.axial,0)}</td></tr>`;
+      if(cvU && !(cvU[r.name]||[]).length) return;
+      cvN++; const cvL=cvU?cvU[r.name].filter(t=>t!=='largest M'):[];   // LPCV: what the row governs besides the largest M
+      cm+=`<tr${isGov?' style="background:var(--accent-wash);font-weight:700"':''}><td>${r.fam}</td><td style="text-align:left">${r.name}${isGov?' ◄ governs '+r.fam:''}${cvL.length?(isGov?'; ':' ◄ ')+cvL.join(', '):''}</td><td>${fmt(r.cableRes,0)}</td><td>${fmt(r.cableAng,1)}</td><td>${fmt(r.P,0)}</td><td>${fmt(r.M,0)}</td><td>${fmt(r.h,2)}</td><td>${fmt(r.axial,0)}</td></tr>`;
     });
     $('comboMatrixTbl').innerHTML=cm;
+    if($('lppCvN_comboMat')) $('lppCvN_comboMat').innerHTML=cvU?lppCvNoteHTML(cvN,allCombos.length):'';
   }
   lppBmbRenderPole(inp,comps,fxs,pw,govLRFD,govASD,govB2);   // LPBM (2026-11-19): base reactions and base moment build-up (display only)
   // LPLS (2026-11-23): the Loading sub-tab summaries (display only): the same objects, read after the calculation
   lppLdRender({mode:'pole',inp,comps,fxs,pw,poleSeg,allCombos,govLRFD,govASD,sp,b2:govB2,
-    use:{post:{name:pstress.comboName,phi:pstress.phi},bp:{name:(bolts.byCheck.BP||bolts).comboName},shaft:{name:shaftGov.name},shear:{name:(shaftCands.reduce((a,x)=>x.P>a.P?x:a)).name},
-         emb:{name:fASD.name},bearing:{name:govAxASD.name}}});
+    use:lppUse});
 
   // ---- POLE STRESS TABLE ----
   if($('poleStressTbl')){
@@ -7027,7 +7060,8 @@ function lppLdComboM(L,fam,p){
   return {head:['Combination ('+fam+')','γ_D','γ_W','γ_Di','γ_Wi','Case','Wind toward (°)','V (lb)','N (lb)','M (lb·ft)','Governs'],R};
 }
 function lppLdComboTbl(M,st,id){   // the model above as a table model (screen: links; Report: text)
-  return {head:M.head,id,rows:M.R.map(x=>({c:[x.name].concat(LPP_SRC_K.map(k=>x.f[k]?fmt(x.f[k],1):'—'),x.cells,
+  const R=lppCvGov?M.R.filter(x=>x.u.length):M.R;   // LPCV (2026-11-23): governing view = the rows a downstream check uses
+  return {head:M.head,id,nAll:M.R.length,rows:R.map(x=>({c:[x.name].concat(LPP_SRC_K.map(k=>x.f[k]?fmt(x.f[k],1):'—'),x.cells,
     [{html:x.u.map(u=>u.k?`<a href="#" class="wkA" data-k="${u.k}" data-st="${+st||0}">${lppEsc(u.txt)} →</a>`:lppEsc(u.txt)).join(' · ')||'—',rt:x.u.map(u=>u.txt).join('; ')||'—'}]),cls:x.u.length?'gov':''}))};
 }
 // Σ γ × rows for the governing combination of each family (pole: at its own direction; sign: post p)
@@ -7048,10 +7082,11 @@ function lppLdComboHTML(L){
     ['P-Δ:',`first-order values; the LRFD moment is multiplied by B₂ for the ${sign?'post':'pole'}, base plate and shaft (Post tab).`]])}</div>`;
   for(let p=0;p<nP;p++){
     if(two) H+=`<div class="subhead2" style="margin-top:12px">Post ${p+1}</div>`;
-    H+=`<div class="lppLdCombGrid"><div>`+lppLdTblHTML(lppLdComboTbl(lppLdComboM(L,'LRFD',p),p,'lppLdComboL'+(p?'_p'+(p+1):'')))+`</div><div>`+lppLdTblHTML(lppLdComboTbl(lppLdComboM(L,'ASD',p),p,'lppLdComboA'+(p?'_p'+(p+1):'')))+`</div></div>`;
+    const cvT=(fam,id)=>{ const T=lppLdComboTbl(lppLdComboM(L,fam,p),p,id+(p?'_p'+(p+1):'')); return lppLdTblHTML(T)+(lppCvGov?lppCvNoteHTML(T.rows.length,T.nAll,fam+(sign&&L.sw.edge?' combination rows':' combinations')):''); };   // LPCV
+    H+=`<div class="lppLdCombGrid"><div>`+cvT('LRFD','lppLdComboL')+`</div><div>`+cvT('ASD','lppLdComboA')+`</div></div>`;
     lppLdFacList(L,p).forEach(x=>{ H+=`<div class="subhead2" style="margin-top:10px" id="lppLdFac_${x.fam}${p?'_p'+(p+1):''}">${two?'Post '+(p+1)+' — ':''}Factors × rows: ${lppEsc(x.name)} (governing ${x.fam}), wind toward ${fmt(x.phi,0)}°${x.cs?', '+x.cs:''}</div>`+lppLdTblHTML(Object.assign({cls:'lppLdFacTbl'},x.M)); });
   }
-  H+=`<p class="tbl-note">The moment of these combinations is worked term by term in the ${lppGoA('lppBmbCard','base moment build-up')} below; every combination is listed in the ${lppGoA(sign?'sgComboTbl':'comboMatrixTbl','envelope table')}.</p>`;
+  H+=`<p class="tbl-note">The moment of these combinations is worked term by term in the ${lppGoA('lppBmbCard','base moment build-up')} below; ${lppCvGov?'the governing combinations are also listed in the':'every combination is listed in the'} ${lppGoA(sign?'sgComboTbl':'comboMatrixTbl','envelope table')}.</p>`;
   return H;
 }
 function lppLdClear(){ LPP_LD=null; ['lppLdBasis','lppLdDead','lppLdWind','lppLdIce','lppLdBase','lppLdCombo'].forEach(id=>{ if($(id)) $(id).innerHTML='<p class="tbl-note">—</p>'; }); }
@@ -7166,11 +7201,76 @@ function lprLdSubs(){
     o.base.push({title:'Forces at the base'+(nP>1?' — post '+(p+1):'')+' (top of the shaft; each load source, unfactored)',key:k,items:it}); }
   for(let p=0;p<nP;p++){ const it=[];
     it.push(note('Factored forces at the top of the shaft. Each combination is Σ γ × the unfactored load-case rows of [[lp:src'+(p?':p'+(p+1):'')+']]'+(sign?'':', at its own worst wind direction')+'. LRFD: '+(sign?'post':'pole')+', base plate and anchors, shaft. ASD: embedment and soil bearing. The last column names the check each combination governs.'));
-    ['LRFD','ASD'].forEach(f=>it.push(lprLdTbl(lppLdComboTbl(lppLdComboM(L,f,p),p),{wide:true})));
+    ['LRFD','ASD'].forEach(f=>{ const T=lppLdComboTbl(lppLdComboM(L,f,p),p); it.push(lprLdTbl(T,{wide:true})); if(lppCvGov) it.push(note(lppCvTxt(T.rows.length,T.nAll,f+(sign&&L.sw.edge?' combination rows':' combinations')))); });   // LPCV
     lppLdFacList(L,p).forEach(x=>{ it.push(lprLdTbl(x.M,{wide:!sign,caption:'Factors × rows: '+x.name+' (governing '+x.fam+'), wind toward '+N(x.phi,0)+'°'+(x.cs?', '+x.cs:'')})); });
-    it.push(note('The moment is worked term by term in [[lp:bmb'+(sign?':p'+(p+1):'')+']]; every combination: see [[lp:env'+(sign?':p'+(p+1):'')+']].'));
+    it.push(note('The moment is worked term by term in [[lp:bmb'+(sign?':p'+(p+1):'')+']]; '+(lppCvGov?'the governing combinations':'every combination')+': see [[lp:env'+(sign?':p'+(p+1):'')+']].'));
     o.combos.push({title:'Combinations'+(nP>1?' — post '+(p+1):'')+' — factors × rows, LRFD and ASD',key:'lp:fac'+(p?':p'+(p+1):''),items:it}); }
   return o;
+}
+
+// ================= LPCV (2026-11-23): "All load combinations" / "Governing combination only" (display only) =================
+// Engineer, 2026-11-23: the tool investigates every load combination and the output is cumbersome. One shared switch, shown at the
+// top of the Loading, Post, Anchorage, Shaft and Report tabs: "All load combinations" (the output as it was) or "Governing
+// combination only" (each per-combination table keeps the row(s) that govern a check, named with what they govern; a line under
+// the table says how many were checked and offers "show all"). No value is computed and nothing is chosen here: the rows kept are
+// the engine's governing records (pole / sign: the "Governs" column of 7 · Combinations, lppLdComboM; LRFDLTS: the gov records of
+// the member check, base plate, weld, Broms, shaft and deflection). The switch re-renders with calc() (same inputs, same results).
+// Per-browser UI key lpp_comboView_v1 ('gov' | 'all'; absent = all); not in the project, the session or the export; not printed.
+const LPP_CV_KEY='lpp_comboView_v1';
+let lppCvGov=false;
+try{ lppCvGov=localStorage.getItem(LPP_CV_KEY)==='gov'; }catch(e){}
+const lppCvTxt=(n,N,what)=>n>=N?`Governing combinations only: all ${N} ${what||'combinations'} govern a check and are shown.`
+  :`Governing combinations only: ${n} of ${N} ${what||'combinations'} shown; all ${N} were checked, the other ${N-n} are hidden.`;
+const lppCvNoteHTML=(n,N,what)=>`<p class="tbl-note lppCvNote">${lppCvTxt(n,N,what)} <a href="#" class="lppCvAll noprint">show all</a></p>`;
+// combination name -> the checks it governs (the texts of the "Governs" column of 7 · Combinations; sign: post p, 0-based)
+function lppCvUseMap(L,p){ const m={}; ['LRFD','ASD'].forEach(f=>lppLdComboM(L,f,p||0).R.forEach(x=>{ m[x.name]=x.u.map(u=>u.txt); })); return m; }
+// the tabs that list per-combination rows in the current code mode (the other bars say so)
+function lppCvTabs(){ return codeMode==='lts'?{loading:true,post:true,report:true}:{loading:true,report:true}; }
+function lppCvSync(){
+  const has=lppCvTabs();
+  document.querySelectorAll('.lppCvBar').forEach(b=>{ const t=b.dataset.cvtab;
+    b.querySelectorAll('button[data-cv]').forEach(x=>{ const on=(x.dataset.cv==='gov')===lppCvGov; x.classList.toggle('on',on); x.setAttribute('aria-pressed',on?'true':'false'); });
+    const i=b.querySelector('.lppCvInfo'); if(!i) return;
+    i.textContent=!has[t]?'This tab has no per-combination table: it shows the governing combination of each check in both views.'
+      :!lppCvGov?'':t==='report'?'The Report lists the governing combinations only, and says so under Project.':'Tables list the governing combination of each check; the others are checked and hidden.'; });
+}
+function lppCvSet(gov,noSave){
+  gov=!!gov;
+  if(gov!==lppCvGov){ lppCvGov=gov; if(!noSave){ try{ localStorage.setItem(LPP_CV_KEY,gov?'gov':'all'); }catch(e){} } calc(); }
+  lppCvSync();
+}
+document.addEventListener('click',ev=>{ const t=ev.target; if(!t||!t.closest) return;
+  const b=t.closest('.lppCvBar button[data-cv]'); if(b){ lppCvSet(b.dataset.cv==='gov'); return; }
+  const a=t.closest('a.lppCvAll'); if(a){ ev.preventDefault(); const h=a.closest('[id]'), id=h&&h.id; lppCvSet(false); const e=id&&$(id); if(e&&e.scrollIntoView) e.scrollIntoView({block:'nearest'}); } });
+// ---- LRFDLTS mode: the base-action rows (limit state × load case) each check takes, from the engine's governing records
+function ltsCvUses(X){
+  const m=new Map(), rows=(X.ba&&X.ba.rows)||[];
+  const add=(r,t)=>{ if(!r||r.combo==null) return; const k=r.combo+'|'+r.lc, a=m.get(k)||[]; if(a.indexOf(t)<0) a.push(t); m.set(k,a); };
+  add(X.baGov,'largest Extreme I moment');
+  if(X.mc&&X.mc.gov) add(X.mc.gov.gov,'Member check');
+  if(X.bp) add(X.bp.gov,'Base plate');
+  if(X.wd) add(X.wd.gov,'Base weld');
+  const fd=X.fd;
+  if(fd&&fd.gov){ add(fd.gov.r,'Embedment (Broms)'); add(fd.gm.r,'Largest shaft moment');
+    const gd=fd.reo&&fd.reo.long&&fd.reo.long.govDem; if(gd&&gd.name){ const x=fd.per.find(q=>q.r.name+', '+q.r.lcName===gd.name); if(x) add(x.r,'Shaft P–M'); }
+    const xv=fd.per.find(q=>(q.gl?q.gl.VF:q.r.V)===fd.Vu); if(xv) add(xv.r,'Shaft shear'); }
+  if(fd&&fd.Tu>0){ const rt=rows.find(r=>Math.abs(r.T)===fd.Tu); if(rt) add(rt,'Shaft torsion'); }
+  if(X.dfl){ const sv=l=>l?rows.find(r=>r.combo==='SV1'&&r.lc===l.lc):null; add(sv(X.dfl.gov),'Deflection'); add(sv(X.dfl.govS),'Slope at the top'); }
+  return m;
+}
+const ltsCvDflLbl=(d,r)=>[r===d.gov?'largest Δ':'',r===d.govS?'largest slope':''].filter(Boolean).join('; ');
+// governing view of the two LRFDLTS tables with one row per combination / load case: the built table is cut down in place (the
+// cards are built before the checks that use the rows are run). Not called for the "all" view: that output is untouched.
+function ltsCvApply(){
+  const X=lppLtsLast; if(!lppCvGov||!X||!X.ba||!X.mc) return;
+  const find=(id,n,h)=>{ const c=$(id); return c?Array.from(c.querySelectorAll('table')).find(t=>t.rows.length&&t.rows[0].cells.length===n&&t.rows[0].cells[0].textContent.trim()===h):null; };
+  const cut=(tb,list,lbl,what)=>{ if(!tb||tb.rows.length!==list.length+1) return; let n=0;
+    tb.rows[0].insertAdjacentHTML('beforeend','<th style="text-align:left">Governs</th>');
+    Array.from(tb.rows).slice(1).forEach((tr,i)=>{ const u=lbl(list[i]); if(!u){ tr.remove(); return; } n++; tr.insertAdjacentHTML('beforeend','<td style="text-align:left">'+lppEsc(u)+'</td>'); });
+    (tb.parentElement.tagName==='DIV'?tb.parentElement:tb).insertAdjacentHTML('afterend',lppCvNoteHTML(n,list.length,what)); };
+  const U=ltsCvUses(X);
+  cut(find('ltsWindCard',9,'Limit state'),X.ba.rows,r=>(U.get(r.combo+'|'+r.lc)||[]).join('; '),'limit state × load case rows');
+  if(X.dfl) cut(find('ltsDeflCard',5,'Service I load case'),X.dfl.rows,r=>ltsCvDflLbl(X.dfl,r),'Service I load cases');
 }
 
 // ================= D11 (2026-10-18): CALCULATION-SHEET REPORT + DERIVATION LINKS =================
@@ -7502,11 +7602,13 @@ function buildReport(inp,allCombos,gov,embed,struct){
   H+=`<details class="rpt-sec" data-old="4" open><summary><span class="tag">4</span><h3>Load combinations — pole base demand</h3><span class="arw">▶</span></summary><div class="rpt-body">`;
   H+=`<div class="eq-why lpNL">${lpNL('The nominal loads (dead, wind, ice, wind-on-ice) are combined using the ASCE 7 load combinations, applied separately for strength design (LRFD) and allowable-stress design (ASD).',[['Line loads:','within each combination the factored line loads are w_v = f_D·g + f_Di·w_ice (vertical) and w_h = f_W·w_W + f_Wi·w_Wi (wind).'],['Cables:','these produce the cable pulls and vertical reactions, which are summed over all cables and added to the factored direct pole wind.'],['Result:','the pole base demand — lateral shear P, overturning moment M, and axial N — for every combination.']])}</div>`;   // LPNL
   H+=`<div class="eq-why lpNL">${lpNL('The foundation uses the correct family for each check:',[['Embedment:','the drilled-shaft <b>embedment</b> is an allowable-stress (service) check paired with presumptive soil bearing, so it is driven by the worst <b>ASD</b> combination.'],['Shaft:','the reinforced-concrete <b>shaft</b> is a strength check, so it is driven by the worst <b>LRFD</b> combination.'],['Highlighted:','both governing rows are highlighted below.']])}</div>`;   // LPNL
-  H+=`<table class="matrix"><caption>Pole base demand for all ten combinations. Highlighted rows govern each design family (largest overturning moment).</caption>`;
+  const cvU=(lppCvGov&&LPP_LD&&LPP_LD.mode==='pole')?lppCvUseMap(LPP_LD,0):null, cvAC=cvU?allCombos.filter(r=>(cvU[r.name]||[]).length):allCombos;   // LPCV (2026-11-23)
+  H+=cvU?`<table class="matrix"><caption>Pole base demand — ${lppCvTxt(cvAC.length,allCombos.length)} Each row names what it governs; highlighted rows govern each design family (largest overturning moment).</caption>`
+    :`<table class="matrix"><caption>Pole base demand for all ten combinations. Highlighted rows govern each design family (largest overturning moment).</caption>`;
   H+=`<thead><tr><th>Design<br>family</th><th>Load combination</th><th>Net cable pull<span class="sym">R_cable (lb)</span></th><th>Pull direction<span class="sym">φ (°)</span></th><th>Total lateral<span class="sym">P (lb)</span></th><th>Overturning moment<span class="sym">M (lb·ft)</span></th><th>Resultant height<span class="sym">h = M/P (ft)</span></th><th>Axial<span class="sym">N (lb)</span></th></tr></thead><tbody>`;
-  allCombos.forEach(r=>{
+  cvAC.forEach(r=>{
     const isGov=(r.key===govASD.key||r.key===govLRFD.key);
-    H+=`<tr${isGov?' class="gov"':''}><th>${r.fam}</th><th style="text-align:left">${r.name}</th><td>${n(r.cableRes,0)}</td><td>${n(r.cableAng,1)}</td><td>${n(r.P,0)}</td><td>${n(r.M,0)}</td><td>${n(r.h,2)}</td><td>${n(r.axial,0)}</td></tr>`;
+    H+=`<tr${isGov?' class="gov"':''}><th>${r.fam}</th><th style="text-align:left">${r.name}${cvU?' — '+cvU[r.name].join(', '):''}</th><td>${n(r.cableRes,0)}</td><td>${n(r.cableAng,1)}</td><td>${n(r.P,0)}</td><td>${n(r.M,0)}</td><td>${n(r.h,2)}</td><td>${n(r.axial,0)}</td></tr>`;
   });
   H+=`</tbody></table>`;
   H+=`<p class="eq-result">Governing ASD combination (drives embedment): <b>${govASD.name}</b>, M = ${n(govASD.M,0)} lb·ft. Governing LRFD combination (drives shaft): <b>${govLRFD.name}</b>, M = ${n(govLRFD.M,0)} lb·ft.</p>`;
@@ -8130,6 +8232,7 @@ function lprModel(){
     ['Codes','IBC 2021 §1807.3 · ASCE/SEI 7-16 (Ch. 2, 10, 26, 29; ice t_d by §10.4.6) · AISC 360-16 · ACI 318-19 · AASHTO LRFDLTS (base plate bending-line method)'],
     ['Units','lb, ft, in, psf / ksf unless noted'],
     ['Mode',$('appEyebrow')?$('appEyebrow').textContent:''],
+    ...(lppCvGov?[['Load combinations shown','Governing combinations only; '+L.allCombos.length+' combinations checked. The combination tables list only the rows that govern a check, each named with what it governs; the rows of the other combinations are omitted (the Report with "All load combinations" lists them).']]:[]),   // LPCV (2026-11-23)
     ['Prepared with','Light Pole and Sign Post, by Mario Lococo · '+new Date().toLocaleString()]]},
     ...lprNL('Every value in this report is the value the tool computes on its tabs ([[tab:geometry|Geometry]], [[tab:summary|Summary]], [[tab:loading|Loading]], [[tab:post|Post]], [[tab:anchors|Anchorage]], [[tab:shaft|Shaft]]).',[['Worked sections:','the worked sections (“worked in full”) are written by the same functions as the tabs, with the same arguments.']]),   // LPNL
     ...lprNL('Equations are shown symbolically, then with values substituted, then with the result.',[['Result line:','each check ends with its result line (D/C as in the Summary tab: demand ÷ capacity, or required ÷ provided for minimum-type checks).'],['Title block:','the tool has no project-number, engineer or date fields: the title block and the page header show “—” for them (fill in by hand), and the project is the saved project name.']])]}]});   // LPLS (2026-11-23): the legacy section 0 (Design inputs & basis) is the Basis of the Loading chapter
@@ -8201,19 +8304,24 @@ function lprModel(){
       if(T.length) B.push({title:'Dynamic response',items:[lprTopics('dyn',T),{type:'note',text:'Worked in full on the [[tab:loading|Loading tab]] (weights, deflections, and every G_f term).'}]});
     }
     if(!sign){
-      C.push({title:'Base demand, every combination (governing azimuth)',key:'lp:env',items:[{type:'table',head:['Family','Combination','Wind toward (°)','P (lb)','M (lb·ft)','h (ft)','N (lb)','T (lb·ft)'],
-        rows:L.allCombos.map(r=>({cells:[r.fam,r.name,lprCell(r.phi,0),lprCell(r.P,0),lprCell(r.M,0),lprCell(r.h,2),lprCell(r.axial,0),lprCell(r.Tmax||0,0)],cls:(r.key===L.gov.govASD.key||r.key===L.gov.govLRFD.key)?'gov':''}))},
+      const cvU=(lppCvGov&&LPP_LD&&LPP_LD.mode==='pole')?lppCvUseMap(LPP_LD,0):null, cvAC=cvU?L.allCombos.filter(r=>(cvU[r.name]||[]).length):L.allCombos;   // LPCV (2026-11-23)
+      C.push({title:'Base demand, '+(cvU?'governing combinations':'every combination')+' (governing azimuth)',key:'lp:env',items:[{type:'table',head:['Family','Combination','Wind toward (°)','P (lb)','M (lb·ft)','h (ft)','N (lb)','T (lb·ft)'],
+        rows:cvAC.map(r=>({cells:[r.fam,cvU?r.name+' — '+cvU[r.name].join(', '):r.name,lprCell(r.phi,0),lprCell(r.P,0),lprCell(r.M,0),lprCell(r.h,2),lprCell(r.axial,0),lprCell(r.Tmax||0,0)],cls:(r.key===L.gov.govASD.key||r.key===L.gov.govLRFD.key)?'gov':''}))},
+        ...(cvU?[{type:'note',text:lppCvTxt(cvAC.length,L.allCombos.length)+' Each row names what it governs.'}]:[]),
         ...lprNL('ASCE 7-16 §2.3 (LRFD) and §2.4 (ASD), including the atmospheric-ice combinations.',[['Wind directions:','wind is checked toward 0°, 90°, 180° and 270°; the largest moment governs each combination.'],['Cable loads','as on the [[tab:loading|Loading tab]].']])]});   // LPNL
     } else {
       // LPEW (2026-11-19): the panel-normal records (0° / 180°); a rectangular post adds its edge-on rows (90°, y axis)
       const sw=L.sw, ed=!!(sw&&sw.edge);
-      L.postDesigns.forEach((pd,pi)=>C.push({title:'Post '+(pi+1)+' demand, every combination',key:'lp:env:p'+(pi+1),items:[{type:'table',head:['Family','Combination','Case','P (lb)','M (lb·ft)','N (lb)','T (lb·ft)'],
-        rows:[].concat(...L.allCombos.map(r=>{ const out=[]; const g=r.postGovN[pi];
-          out.push({cells:[r.fam,r.name,g.case,lprCell(g.P,0),lprCell(g.M,0),lprCell(g.axial,0),lprCell(g.Tmax||0,0)],cls:(r.name===pd.gASD.name||r.name===pd.gLRFD.name)?'gov':''});
+      L.postDesigns.forEach((pd,pi)=>{ const cvU=(lppCvGov&&LPP_LD&&LPP_LD.mode==='sign')?lppCvUseMap(LPP_LD,pi):null, cvW=nm=>cvU?nm+' — '+cvU[nm].join(', '):nm;   // LPCV (2026-11-23)
+        const envRows=[].concat(...L.allCombos.map(r=>{ const out=[]; const g=r.postGovN[pi];
+          if(!cvU||(cvU[r.name]||[]).length) out.push({cells:[r.fam,cvW(r.name),g.case,lprCell(g.P,0),lprCell(g.M,0),lprCell(g.axial,0),lprCell(g.Tmax||0,0)],cls:(r.name===pd.gASD.name||r.name===pd.gLRFD.name)?'gov':''});
           if(ed){ const e=r.postEdge[pi], nm=r.name+', '+lppSignEdgeLbl(sw);
-            out.push({cells:[r.fam,nm,'edge-on',lprCell(e.P,0),lprCell(e.M,0),lprCell(e.axial,0),'0'],cls:(nm===pd.gASD.name||nm===pd.gLRFD.name)?'gov':''}); }
-          return out; }))},
-        ...lprNL('Wind toward 0° and 180° (normal to the panel), every Fig. 29.3-1 case; each row is the case and direction with the largest M of the post.',[lppSignEdgeNote(sw).map(x=>String(x).replace(/<[^>]+>/g,''))])]}));
+            if(!cvU||(cvU[nm]||[]).length) out.push({cells:[r.fam,cvW(nm),'edge-on',lprCell(e.P,0),lprCell(e.M,0),lprCell(e.axial,0),'0'],cls:(nm===pd.gASD.name||nm===pd.gLRFD.name)?'gov':''}); }
+          return out; }));
+        C.push({title:'Post '+(pi+1)+' demand, '+(cvU?'governing combinations':'every combination'),key:'lp:env:p'+(pi+1),items:[{type:'table',head:['Family','Combination','Case','P (lb)','M (lb·ft)','N (lb)','T (lb·ft)'],
+        rows:envRows},
+        ...(cvU?[{type:'note',text:lppCvTxt(envRows.length,L.allCombos.length*(ed?2:1),ed?'combination rows':'combinations')+' Each row names what it governs.'}]:[]),
+        ...lprNL('Wind toward 0° and 180° (normal to the panel), every Fig. 29.3-1 case; each row is the case and direction with the largest M of the post.',[lppSignEdgeNote(sw).map(x=>String(x).replace(/<[^>]+>/g,''))])]}); });
     }
     C.push(...lprBmbSubs());   // LPBM (2026-11-19): the base moment build-up
     C.push(...xs(sign?['2']:['4','4b']));   // LPRX
@@ -9169,6 +9277,7 @@ function ltsCalc(){
     const g=ltsGeom(inp,L), ba=LpLts.baseActions(g,L), ws=LpLts.windSteps(g,L);
     lppLtsLast={g,L,ba,ws,m,mSteps};
     const ext=ba.rows.filter(r=>r.combo==='E1max'||r.combo==='E1min'), gov=ext.reduce((a,b)=>b.M>a.M?b:a,ext[0]);
+    lppLtsLast.baGov=gov;   // LPCV (2026-11-23): the row marked in bold below, read by the governing-only view
     const gr=ba.gravity, per=g.mode==='sign'&&g.sign.nPost===2?' (per post)':'';
     const tr=ba.rows.map(r=>`<tr${r===gov?' style="font-weight:700;background:#fff7e6"':''}><td>${lppEsc(r.name)}</td><td>${lppEsc(r.lcName)}</td><td>${fmt(r.P,0)}</td><td>${fmt(r.Vx,0)}</td><td>${fmt(r.Vy,0)}</td><td>${fmt(r.Mx,0)}</td><td>${fmt(r.My,0)}</td><td>${fmt(r.M,0)}</td><td>${fmt(r.T,0)}</td></tr>`).join('');
     ltsAddCard('loading','ltsWindCard','W','LRFDLTS wind, dead load and base actions','Arts. 3.5, 3.7, 3.8, 3.9',
@@ -9339,16 +9448,20 @@ function ltsReportModel(){
     ['Project',activeProject||'Untitled'],['Structure',sign?(g.sign.nPost===2?'Two-post roadside sign':'Monopost roadside sign'):'Highway luminaire pole'],
     ['Specification',LpLts.BASIS],
     ['Other references','ACI 318-19 (shaft reinforcement; LRFDLTS Art. 13.6.2 refers to the AASHTO LRFD BDS — not applied); AWS D1.1 / AISC 360-16 §J2 (base weld); AISC 360-16 §H3.1 (square-tube torsional constant when no corner radius)'],
-    ['Units','lb, ft, in, psf, kip, ksi as noted'],['Prepared with','Light Pole and Sign Post, by Mario Lococo · '+new Date().toLocaleString()]]},
+    ['Units','lb, ft, in, psf, kip, ksi as noted'],
+    ...(lppCvGov?[['Load combinations shown','Governing combinations only; '+X.ba.rows.length+' combinations checked (limit state × load case). The base-action and deflection tables list only the rows that govern a check, each named with what it governs; the other rows are omitted (the Report with "All load combinations" lists them).']]:[]),   // LPCV (2026-11-23)
+    ['Prepared with','Light Pole and Sign Post, by Mario Lococo · '+new Date().toLocaleString()]]},
     ...lprNL('Known limits (accepted by the engineer, 2026-11-02):',LTS_LIMITS)]},   // LPNL
     {title:'Wind criteria',items:[steps('lts.mri',X.mSteps||X.m.steps),{type:'kv',rows:[['Extreme I basic wind speed V',N(L.V,0)+' mph ('+(L.vSrc==='ctdot'?'max of the LRFDLTS map V '+N(L.Vmap,0)+' mph ('+X.m.fig+') and CTDOT BDM §14.2.2 120 mph; see the step above':X.m.fig)+')'],['Service I wind speed',N(L.Vsvc,0)+' mph (10-yr, Fig. 3.8-4)'],['Atmospheric ice (Art. 3.7)',L.tIce>0?N(L.tIce,2)+' in, Strength I only (decision Q-C1, accepted)':'none']]}]}]});
   // 2. Loads
   const cb=LpLts.COMBOS.map(c=>[c.name,c.desc,String(c.DC),L.tIce>0&&c.ICE?String(c.ICE):'—',c.W?N(c.W,1):'—',c.wind==='extreme'?(L.vSrc==='ctdot'?'max(map '+N(L.Vmap,0)+', CTDOT 120) = '+N(L.V,0)+' mph':X.m.mri+'-yr'):c.wind==='service'?'10-yr':'—',c.ref]);
-  const ba=X.ba.rows.map(r=>[r.name,r.lcName,N(r.P,0),N(r.Vx,0),N(r.Vy,0),N(r.Mx,0),N(r.My,0),N(r.M,0),N(r.T,0)]);
+  const cvU=lppCvGov?ltsCvUses(X):null, cvK=r=>r.combo+'|'+r.lc, cvBa=cvU?X.ba.rows.filter(r=>cvU.has(cvK(r))):X.ba.rows;   // LPCV (2026-11-23): governing view
+  const ba=cvBa.map(r=>[r.name,r.lcName,N(r.P,0),N(r.Vx,0),N(r.Vy,0),N(r.Mx,0),N(r.My,0),N(r.M,0),N(r.T,0)].concat(cvU?[cvU.get(cvK(r)).join('; ')]:[]));
   secs.push({title:'Loads and load combinations',subs:[
     {title:'Load combinations (Table 3.4-1)',items:[tbl(['Limit state','Use','γDC','γIC','γW','Wind','Reference'],cb),{type:'note',text:'LL (Art. 3.6): walkways only, not applicable. No ice-plus-wind combination (C3.7). Wind from any direction: load cases 1–3 of Table 3.9.3-1.'}]},
     {title:'Wind loads (Arts. 3.8, 3.9)',items:[steps('lts.w',X.ws)]},
-    {title:'Factored base actions'+post,items:[tbl(['Limit state','Load case','P (lb)','Vx (lb)','Vy (lb)','Mx (lb·ft)','My (lb·ft)','|M| (lb·ft)','T (lb·ft)'],ba,{lazy:true,title:'Base actions, every limit state and load case (first order)'}),
+    {title:'Factored base actions'+post,items:[tbl(['Limit state','Load case','P (lb)','Vx (lb)','Vy (lb)','Mx (lb·ft)','My (lb·ft)','|M| (lb·ft)','T (lb·ft)'].concat(cvU?['Governs']:[]),ba,{lazy:true,title:cvU?'Base actions, governing limit states and load cases (first order)':'Base actions, every limit state and load case (first order)'}),
+      ...(cvU?[{type:'note',text:lppCvTxt(cvBa.length,X.ba.rows.length,'limit state × load case rows')}]:[]),
       {type:'note',text:`Dead load DC = ${N(X.ba.gravity.W,0)} lb (Art. 3.5). P compression +; Mx = moment of a push toward +x. First order; B is applied to M in the member, base-plate, weld and foundation checks.`}]}]});
   // 3. Member
   const mc=X.mc, mrow=mc.rows.map(r=>[N(r.sec.z,2),N(r.cl.lam,1),r.mx.cls,N(r.Mrx,1),N(r.Pr,1),N(r.Vr,1),N(r.Tr,1),r.gov.comboName+'; '+r.gov.lcName,r.gov.eq,isFinite(r.gov.ratio)?N(r.gov.ratio,3):'∞']);
@@ -9362,7 +9475,8 @@ function ltsReportModel(){
   if(X.dfl){ const d=X.dfl;
     secs.push({title:'Deflection (Section 10) and fatigue (Section 11)',subs:[{title:'Service I deflection'+post,items:[
       tbl(['Check','Value','Limit','Result','Reference'],d.checks.map(c=>[c.label,N(c.value,c.unit==='in'?2:3)+' '+c.unit,N(c.limit,c.unit==='in'?2:3)+' '+c.unit,c.applies?(c.ok?'OK':'NOT OK')+' ('+N(c.ratio,3)+')':'information ('+N(c.ratio,3)+')',c.ref])),
-      tbl(['Service I load case','Δx (in)','Δy (in)','Δ (in)','slope (in/ft)'],d.rows.map(r=>[r.lcName,N(r.dx,2),N(r.dy,2),N(r.d,2),N(r.slope,3)])),
+      tbl(['Service I load case','Δx (in)','Δy (in)','Δ (in)','slope (in/ft)'].concat(cvU?['Governs']:[]),(cvU?d.rows.filter(r=>r===d.gov||r===d.govS):d.rows).map(r=>[r.lcName,N(r.dx,2),N(r.dy,2),N(r.d,2),N(r.slope,3)].concat(cvU?[ltsCvDflLbl(d,r)]:[]))),
+      ...(cvU?[{type:'note',text:lppCvTxt(d.rows.filter(r=>r===d.gov||r===d.govS).length,d.rows.length,'Service I load cases')}]:[]),
       {type:'note',text:`Elastic double integration of M/(EI), times the Service I B = ${N(d.B,4)} (C10.4.2.1).`}]},
       {title:'Fatigue',items:[{type:'note',text:X.fat.text}]}]});
     flags.push('Deflection: 10 % H for luminaire supports is checked; the 0.35 in/ft slope of Art. 10.4.2.1 is checked when unbalanced arm-mounted fixtures put a dead-load moment on the pole (a moment load application, C10.4.2.1) and shown as information otherwise; the 2.5 % H limit (transverse load applications such as strain poles, not modelled in this mode) is shown as information (engineer, 2026-11-02).'); }   // ASM (2026-11-10): no "pending engineer review" in the Report
@@ -9919,6 +10033,7 @@ function lppResetPoleOutputs(mode){ (LPP_MODE_OUT_SNAP[mode]||[]).forEach(x=>{ x
   renderManual();
   distributeCards();
   lppLdSync();   // LPLS: the Loading sub-tab bar and strip
+  lppCvSync();   // LPCV: the combination-view switch
   if($('soilClass')) applySoilClass($('soilClass').value,{silent:true});
   applyBromsUI();
   applyRebarUI();

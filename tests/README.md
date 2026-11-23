@@ -190,6 +190,12 @@ node tests/smoke/lightpole-projection.mjs
 node tests/smoke/lightpole-basemoment.mjs [--shots <dir>]
 # The mast wind per pole segment (LPSG, 2026-11-19): tests/engine/lightpole-segments.test.mjs (hand check of the default pole's 10 segments,
 # the part of a segment above a cut, the LRFDLTS engine's segments).
+# The "All load combinations / Governing combination only" switch (LPCV, 2026-11-23; display only): default = all; the switch on one tab
+# changes every tab (per-browser key lpp_comboView_v1, not in the project, kept over a reload); the rows shown in the governing view =
+# the engine's governing records of every check (IBC pole and sign per post, LRFDLTS), each named, numbers as in the "all" view; the
+# note and "show all"; Summary / check panel / hand-off payload identical in both views; the Report in both views (§ references, the
+# view statement); links; print; 390 px; 0 console errors. 8 cases at 1400 px, 2 at 390 px. ~5 min
+node tests/smoke/lightpole-combo-view.mjs [--shots <dir>]
 
 # Saved-project list and Undo / Redo (shared/projects.js, PLIB): main vs the working tree (results on load, after an input change, B on
 # main's autosave and project list), Undo / Redo / Ctrl+Z / Ctrl+Y, the dialog (rename, duplicate, delete, open), quota refusal, 390 px
