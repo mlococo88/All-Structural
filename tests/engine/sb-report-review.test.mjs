@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { loadShared, test, ROOT } from './harness.mjs';
 
-const W = loadShared(path.join(ROOT, 'apps/steel-bridge/ui/rpreview.js')), R = W.SBDReportReview;
+const W = loadShared('report-review.js', path.join(ROOT, 'apps/steel-bridge/ui/rpreview.js')), R = W.SBDReportReview;   // 2026-11-23: the code is shared/report-review.js; rpreview.js gives it this app's keys
 const store = new Map(); W.localStorage = { getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) };
 
 test('keys are prefixed (sbd2.*), comments are kept per project, the project object is not touched', () => {
