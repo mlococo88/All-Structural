@@ -72,7 +72,9 @@
           1.33 * Math.min(ll.truckMin, ll.tanMin) + ll.laneNeg, 'cont.pier.nd.ll.neg');
         add({ id: 'pier.neg2', label: 'Negative moment per lane at the pier: two trucks 50 ft apart, 90 %', sym: 'M_{LL,2}', eq: '0.9(1.33\\,M_{2tr} + M_{ln})', sub: `0.9(1.33(${par(ll.twoMin, 1)}) + ${par(ll.laneNeg, 1)})`, value: ll.neg2, unit: 'kip-ft', d: 1, ref: A10 + '3.6.1.3.1' }, 0.9 * (1.33 * ll.twoMin + ll.laneNeg), 'cont.pier.nd.ll.neg2');
         add({ id: 'pier.Mlane', label: `Governing negative moment per lane (${c.llSrc})`, sym: 'M_{LL,lane}', value: pr.nd.Mn, unit: 'kip-ft', d: 1, note: 'The two-truck case applies where the uniform-load support moment is negative (at an interior support) and it is larger.' }, undefined, 'cont.pier.nd.Mn');
-        add({ id: 'pier.MLL', label: 'Live load moment at the pier per girder', sym: 'M_{LL,n}', eq: '-DF_{M}\\,M_{LL,lane}', sub: `-${n(R.dfm, 4)}(${par(pr.nd.Mn, 1)})`, value: c.MLLn, unit: 'kip-ft', d: 1, ref: A10 + '4.6.2.2' }, -R.dfm * pr.nd.Mn, 'cont.MLLn');
+        const plN = R.pl && R.pl.pier ? R.pl.pier.find(q => q.side === pr.side) : null;   // PL-A: the pedestrian load at this pier (engine/pl.js)
+        if (plN) add({ id: 'pier.MLL', label: 'Live load moment at the pier per girder, with the pedestrian load', sym: 'M_{LL,n}', eq: '-DF_{M}\\,M_{LL,lane} + M_{PL,n}', sub: `-${n(R.dfm, 4)}(${par(pr.nd.Mn, 1)}) + ${n(plN.M, 1)}`, value: c.MLLn, unit: 'kip-ft', d: 1, ref: A10 + '4.6.2.2, 3.6.1.6', note: 'M_PL,n: Loads & LLDF tab (§ld.pl.Mn0).' }, -R.dfm * pr.nd.Mn + plN.M, 'cont.MLLn');
+        else add({ id: 'pier.MLL', label: 'Live load moment at the pier per girder', sym: 'M_{LL,n}', eq: '-DF_{M}\\,M_{LL,lane}', sub: `-${n(R.dfm, 4)}(${par(pr.nd.Mn, 1)})`, value: c.MLLn, unit: 'kip-ft', d: 1, ref: A10 + '4.6.2.2' }, -R.dfm * pr.nd.Mn, 'cont.MLLn');
       } else add({ id: 'pier.MLL', label: `Live load moment at the pier per girder (${c.llSrc})`, sym: 'M_{LL,n}', value: c.MLLn, unit: 'kip-ft', d: 1 }, undefined, 'cont.MLLn');
       const Mrn = c.MrnPier || 0;
       add({ id: 'pier.Mu', label: 'Strength I negative moment at the pier', sym: 'M_{u,n}', eq: '\\eta(1.25\\,M_{DC2,n} + 1.50\\,M_{DW,n} + 1.75\\,m\\,M_{LL,n} + M_{r,n})\\times 12', sub: `${n(eta, 4)}(1.25(${n(c.MDC2n, 1)}) + 1.50(${n(c.MDWn, 1)}) + 1.75(${n(mLL, 2)})(${n(c.MLLn, 1)}) + ${n(Mrn, 1)})\\times 12`, value: c.MuN, unit: 'kip-in', d: 0, ref: A10 + 'Table 3.4.1-1, 5.12.3.3.2',
@@ -103,7 +105,7 @@
         } else add({ id: 'conn.none', label: 'Positive moment connection', sym: '', value: 'no positive moment at the connection', unit: '', note: 'Detail the connection per 5.12.3.3.8 and the owner.' });
       }
     }
-    return K.done();
+    return window.PSBPL ? window.PSBPL.note(K.done(), R) : K.done();   // PL-A
   }
 
   function shear(inp, R) {
@@ -121,7 +123,7 @@
     else {
       const V = w => w * (L / 2 - x), dia = (inp.loads.diaph || []).filter(d => +d.P > 0 && +d.a >= 0 && +d.a <= L);
       const Vdia = dia.reduce((t, d) => { const Pp = +d.P, a = +d.a, Rl = Pp * (L - a) / L; return t + (x < a ? Rl : x > a ? Rl - Pp : Rl - Pp / 2); }, 0);
-      vg = V(R.wG); vdc1 = V(R.wDk) + Vdia; vdc2 = V(R.wBar); vdw = V(R.wDW); vll = R.VLL * (L - xm) / L;
+      vg = V(R.wG); vdc1 = V(R.wDk) + Vdia; vdc2 = V(R.wBar); vdw = V(R.wDW); vll = R.VLL * (L - xm) / L + (window.PSBPL ? window.PSBPL.VplAt(R, x) : 0);   // PL-A: + the pedestrian part (0 without one)
       // batch D1 (display only): imported demands on a simple span (the engine keeps the components only when made continuous): DC2, DW and
       // LL+IM at x as the engine reads them (buildExternal: the file's shear negated; the LL the larger branch × f_V)
       const X = R.useExt && window.PSBDemands ? window.PSBDemands.slice(inp.external, L) : null;
@@ -130,7 +132,7 @@
     const vdl = 1.25 * (vg + vdc1 + vdc2) + 1.5 * vdw;
     add({ id: 'Vu', label: 'Strength I shear at the section', sym: 'V_{u}', eq: `\\eta\\left(\\left|1.25(V_{g} + V_{DC1} + V_{DC2}) + 1.50\\,V_{DW}${rIn ? ' + V_{r}' : ''}\\right| + 1.75\\,m\\,V_{LL+IM}\\right)`,
       sub: `${n(eta, 4)}\\left(\\left|1.25(${n(vg, 2)} + ${n(vdc1, 2)} + ${n(vdc2, 2)}) + 1.50(${n(vdw, 2)})${rIn ? ` + ${par(vr, 2)}` : ''}\\right| + 1.75(${n(mLL, 2)})(${n(vll, 2)})\\right)`, value: s.Vu, unit: 'kip', d: 2, ref: A10 + 'Table 3.4.1-1',
-      note: (s.vc ? 'Shears of the continuous unit for DC2, DW and LL (the engine). ' : 'Simple span; V_LL+IM = V_LL (L − x)/L (the engine\'s envelope). Component shears: display intermediates. ') + (rIn ? 'V_r: the restraint shear where it increases |V| (5.12.3.3.2).' : '') },
+      note: (s.vc ? 'Shears of the continuous unit for DC2, DW and LL (the engine). ' : 'Simple span; V_LL+IM = V_LL (L − x)/L (the engine\'s envelope). Component shears: display intermediates. ') + (R.pl && R.pl.mode !== 'ext' ? 'V_LL+IM includes the pedestrian load (§ld.pl.VLLPL, Loads & LLDF tab). ' : '') + (rIn ? 'V_r: the restraint shear where it increases |V| (5.12.3.3.2).' : '') },
       eta * (Math.max(Math.abs(vdl), Math.abs(vdl + vr)) + 1.75 * mLL * vll), P + 'Vu');
     const a = +ss.hp.frac * L, ramp = cl(xm * 12 / ss.lt, 0, 1), Ph = ss.AsHarp * R.fpe * ramp;
     if (ss.nh > 0 && xm < a) add({ id: 'Vp', label: 'Vertical component of the draped strands\' force', sym: 'V_{p}', eq: 'A_{p,dr}\\,f_{pe}\\,\\min\\left(\\frac{x}{\\ell_{t}},\\,1\\right)\\,\\tan\\alpha', sub: `${n(ss.AsHarp, 3)}(${n(R.fpe, 2)})(${n(ramp, 3)})(${n(ss.slope, 5)})`, value: s.Vp, unit: 'kip', d: 2, ref: A10 + '5.7.3.3' }, Ph * ss.slope, P + 'Vp');
@@ -177,7 +179,7 @@
     add({ id: 'lt', label: 'Transfer length', sym: '\\ell_{t}', eq: '60\\,d_{b}', sub: `60(${n(ss.st.db, 3)})`, value: ss.lt, unit: 'in', d: 1, ref: A10 + '5.9.4.3.1' }, 60 * ss.st.db, 'ss.lt');
     add({ id: 'ldB', label: 'Development length, bonded strand', sym: '\\ell_{d}', eq: '1.6\\left(f_{ps} - \\frac{2}{3}f_{pe}\\right)d_{b}', sub: `1.6\\left(${n(fpsM, 2)} - \\frac{2}{3}(${n(R.fpe, 2)})\\right)(${n(ss.st.db, 3)})`, value: R.ldBonded, unit: 'in', d: 1, ref: A10 + 'Eq. 5.9.4.3.2-1', note: 'κ = 1.6; f_ps at midspan (Flexure tab).' }, 1.6 * (fpsM - 2 / 3 * R.fpe) * ss.st.db, 'ldBonded');
     add({ id: 'ldD', label: 'Development length, debonded strand', sym: '\\ell_{d}', eq: '2.0\\left(f_{ps} - \\frac{2}{3}f_{pe}\\right)d_{b}', sub: `2.0\\left(${n(fpsM, 2)} - \\frac{2}{3}(${n(R.fpe, 2)})\\right)(${n(ss.st.db, 3)})`, value: R.ldDebond, unit: 'in', d: 1, ref: A10 + '5.9.4.3.3' }, 2.0 * (fpsM - 2 / 3 * R.fpe) * ss.st.db, 'ldDebond');
-    return K.done();
+    return window.PSBPL ? window.PSBPL.note(K.done(), R) : K.done();   // PL-A
   }
   window.PSBWorkedStrength = { flexure, shear };
 })();

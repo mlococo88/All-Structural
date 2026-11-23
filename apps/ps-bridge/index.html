@@ -49,6 +49,7 @@
     'engine/model.js',
     'engine/rigid.js',       // PS-19: the exterior rigid-section factor on the real girder lines (unequal bays; an engine addition, §4)
     'engine/lldf-fg.js',     // PS-35: box beams and voided slabs, live-load distribution types (f) / (g) (an app-side override of distFactors, §4)
+    'engine/pl.js',          // PL-A: the pedestrian live load (3.6.1.6) added to the engine's live load for a girder that has one (§4)
     'engine/holddown.js',    // PR 2d-3: the optional hold-down check for AASHTO / RIDOT (PS-10), an engine addition after computeAll (§4)
     'engine/pierblock.js',   // PS-34: the pier compression block against the family's thickness (NEXT stems, box bottom slab, slabs; a warning only)
     'engine/demands.js',     // batch D1 (2026-11-15): the demand source of each girder type (this app / custom table / MIDAS file, the old app's import)
@@ -706,7 +707,9 @@
       if (ok) { ctxOut = { P, inp: rc.inp, R: rc.R, W: rc.W, ui, all: rc.all || null, redraw: () => { saveUi(); drawOut(); }, save: saveUi };   /* save (batch G3): keep a ui choice without a redraw (the Analysis chart's series) */   // all (2026-11-15, batch C): every girder type × line, for the tables of every line
         const d = window.PSBDesign.sel(P);
         const sh = BR.hasTypes(P) ? BR.shown(P) : null;
-        h += `<p class="note">${sh ? `Girder type ${esc(P.types[sh.k].label)} on ` : 'Design girder '}${esc(rc.inp.proj.girderId)}, span ${d.s} (L = ${fmt(rc.R.L, 2)} ft): <a href="#" data-goin="gird">Girders &amp; strands tab</a>.</p>` + TABUI[ui.otab]().output(ctxOut); }
+        h += `<p class="note">${sh ? `Girder type ${esc(P.types[sh.k].label)} on ` : 'Design girder '}${esc(rc.inp.proj.girderId)}, span ${d.s} (L = ${fmt(rc.R.L, 2)} ft): <a href="#" data-goin="gird">Girders &amp; strands tab</a>.</p>`
+          + (rc.R.pl && rc.R.pl.mode !== 'ext' && ['an', 'loss', 'str', 'flex', 'shear', 'rt'].includes(ui.otab) ? `<p class="note" id="plTabNote">Pedestrian live load (AASHTO LRFD 10th Ed. 3.6.1.6): the live load on this tab is LL+IM + PL (w<sub>PL</sub> = ${fmt(rc.R.pl.w, 4)} klf on this girder line) <a class="wk" href="#st-ld.pl.MLLPL" data-gotab="lds" title="Worked step">§</a>.</p>` : '')   /* PL-A */
+          + TABUI[ui.otab]().output(ctxOut); }
     } else if (ui.otab === 'sum') {
       // PR 3b: the Summary tab (ui/summary.js): verdict and run state, project overview and weights, girder × span grid, type × check-group
       // table, the governing check per type, the girder type shown (the design girder card of PR 2b-2, unchanged), warnings

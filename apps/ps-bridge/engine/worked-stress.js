@@ -132,7 +132,7 @@
       add({ id: 'row.fpe', label: 'Row 1 permanent (final), without gains', sym: 'f_{pe,1}', eq: 'f_{pbt} - r_{1}\\,\\Delta f_{pES} - \\Delta f_{pLT,1}', sub: `${n(S.fpbt, 2)} - ${n(r0.fac, 4)}(${n(rr.dfES, 3)}) - ${n(r0.dLT, 3)}`, value: r0.fpe, unit: 'ksi', d: 2 }, S.fpbt - r0.fac * rr.dfES - r0.dLT, P + 'fpe');
       add({ id: 'row.Ppe', label: 'Row 1 permanent force', sym: 'P_{e,1}', eq: 'f_{pe,1}\\,n_{1}\\,A_{b}', sub: `${n(r0.fpe, 2)}(${r0.n})(${n(S.Ab, 3)})`, value: r0.Ppe, unit: 'kip', d: 1 }, r0.fpe * r0.A, P + 'Ppe');
     }
-    return K.done();
+    return window.PSBPL ? window.PSBPL.note(K.done(), R) : K.done();   // PL-A
   }
 
   /* ---------- Stresses (5.9.2.3): limits, the governing fibre stresses, 5.12.3.3.5 at the interior supports, Fatigue I, crack control ---------- */
@@ -258,7 +258,7 @@
       add({ id: 'crk.s', label: 'Maximum spacing of the bonded reinforcement', sym: 's_{max}', eq: '\\max\\left(\\frac{700\\gamma_{e}}{\\beta_{s}\\,f_{ss}} - 2d_{c},\\,4\\right)', sub: `\\max\\left(\\frac{700(${n(cr.gammaE, 2)})}{${n(cr.betaCr, 3)}(${n(Math.max(fss, 1), 2)})} - 2(${n(dc, 1)}),\\,4\\right)`, value: cr.sMaxCrack, unit: 'in', d: 1, ref: A10 + 'Eq. 5.6.7-1', note: 'γ_e = 0.75 (Class 2 exposure).' },
         Math.max(700 * cr.gammaE / (cr.betaCr * Math.max(fss, 1)) - 2 * dc, 4), 'crack.sMaxCrack');
     } else add({ id: 'crk.none', label: 'Crack control (spacing of the bonded reinforcement)', sym: '', value: 'not triggered', unit: '', ref: A10 + '5.6.7', note: 'The Service III bottom fibre stays in compression: the 5.6.7 spacing limit does not apply.' });
-    return K.done();
+    return window.PSBPL ? window.PSBPL.note(K.done(), R) : K.done();   // PL-A
   }
   window.PSBWorkedStress = { losses, stresses, near };
 })();
