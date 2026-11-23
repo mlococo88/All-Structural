@@ -126,3 +126,13 @@ test('worked steps: each check links to a step with its ratio; topics group ever
   assert.deepEqual([...G.map(g => g.key)], ['b1', 'pos', 'neg', 'ohL', 'ohR', 'dist']); assert.equal(G.reduce((a, g) => a + g.steps.length, 0), R.steps.length);
   R.steps.forEach(s => { if (/AASHTO/.test(s.ref)) assert.match(s.ref, /^AASHTO LRFD 10th Ed\. /); });
 });
+
+test('Table A4-1 limits (Art. A4.1): warnings for fewer than three girders, under 14 ft between the exterior girders, a long overhang; still calculated', () => {
+  const R0 = DK.calc(on(M.newProject())); assert.ok(!R0.warn.some(w => /A4\.1/.test(w)), 'the default bridge is within the limits');
+  const P = on(M.newProject()); P.xs.nb = 4; P.xs.bays = [6, 6, 6]; P.xs.ohL = 3.9; P.xs.ohR = 3.75;
+  const R = DK.calc(P), a = R.warn.filter(w => /A4\.1/.test(w));
+  assert.equal(a.length, 1, JSON.stringify(R.warn)); assert.match(a[0], /^Left overhang 3\.90 ft is more than the smaller of 0\.625 S = 3\.75 ft and 6\.0 ft/);
+  const P2 = on(M.newProject()); P2.xs.nb = 2; P2.xs.bays = [9.5]; const R2 = DK.calc(P2);
+  assert.equal(R2.err, undefined, R2.err); { const b = R2.warn.filter(w => /A4\.1/.test(w)); assert.ok(b.some(w => /^2 girders: Table A4-1 is for decks on at least three/.test(w)) && b.some(w => /^9\.50 ft between the exterior girder centrelines/.test(w)), JSON.stringify(b)); }
+  assert.ok(R.checks.every(c => isFinite(c.r)), 'still calculated');
+});

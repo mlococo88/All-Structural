@@ -10829,3 +10829,24 @@ New-project bridge, deck design on with bottom bars at 8 in: Report section 16 "
 - `tests/engine/sb-deck-report.test.mjs` (new, 8 tests): off = as before (18 sections, `sectionsOf(P) === SECTIONS`, no deck in `overall()`, the other modules' results and governing rows identical with the deck on or off); on = 19 sections, every reference resolves (detail gov and all), rows = the engine's values; a section left out; verdict counts, FAIL and REVIEW; the bill of materials by hand; Nomenclature.
 - Existing tests unchanged: `report.test.mjs`, `sb-summary.test.mjs`, `sb-nomen.test.mjs`, `sb-report-*.test.mjs` (deck off) pass as they are.
 - Browser: `tests/smoke/steel-bridge-deck.mjs` (7 checks) and the existing steel-bridge smokes named in the PR.
+
+## 2026-11-23 — PR: claude/sb-deck-report (DK, review; same PR as parts 1 and 2) — Table A4-1 limits as warnings; a note on the covers   [warnings and text only; no value, ratio or verdict changes]
+### Why
+Review of parts 1 and 2: Table A4-1 is only valid within the limits of AASHTO LRFD 10th Ed. Art. A4.1 (at least three parallel girders, at least 14.0 ft between the exterior girder centrelines, overhangs not over the smaller of 0.625 S and 6.0 ft). Neither the Prestressed module nor part 1 told the engineer when a deck is outside them. The deck card also did not say that its clear covers are not the Deck card's longitudinal rebar depths.
+### Where
+- `engine/deck.js` `calc()`, anchor `if (!auto && +D.xneg > 24) warn.push('The entered design section is beyond the 24 in of Table A4-1; 24 in is used.');`: after it, a block that pushes to `warn`
+  - `` `${n} girders: Table A4-1 is for decks on at least three parallel girders (AASHTO LRFD 10th Ed. Art. A4.1); a refined analysis is required.` `` when `bays.length + 1 < 3`;
+  - `` `${W} ft between the exterior girder centrelines: Table A4-1 is for at least 14.0 ft (…Art. A4.1).` `` when the sum of the bays is below 14.0 ft;
+  - `` `Left|Right overhang ${o} ft is more than the smaller of 0.625 S = … ft and 6.0 ft: outside the range of Table A4-1 (…Art. A4.1); the interior-bay moments next to that girder may not apply.` `` when `oh > min(0.625 S_ext, 6.0)`, S_ext the exterior bay on that side.
+  The warnings show on the Deck tab and in the Report's Deck slab section (both already list `R.warn`). Before: no such warning.
+- `ui/deck.js` `inputs()`, the note of the card, after `(<a href="#" data-itgo="proj">Project tab</a>).`: with the module on, " The covers here are the clear covers of the transverse bars; the rebar depths of the Deck card above are those of the longitudinal layers (the girder's composite section) and are not used here."
+### Decisions (pending engineer review)
+- DK-R1. The limits are warnings, not a REVIEW in the verdict (as the existing "S outside 4 to 15 ft" warning). The overhang limit is compared with the exterior bay on its own side.
+- DK-R2. The transverse bars' clear covers stay the module's own inputs (defaults 2.5 / 1.0 in, the Prestressed module's): the project's `deck.rebar.top.c` / `bot.c` are centroid depths of the longitudinal layers, a different quantity, so they are not reused.
+- DK-R3. The haunch (`deck.haunch`) is not used: the strip method designs the slab alone; the haunch is a girder dead load (Loads module).
+### Governing provision
+AASHTO LRFD 10th Ed. (2024) Art. A4.1 (limits of Table A4-1). No formula, factor or reference of a check changes.
+### Check case
+The new-project bridge (5 girders, 4 × 9.5 = 38 ft, overhangs 3.25 ft ≤ min(0.625 × 9.5 = 5.94, 6.0)): no warning; DK1–DK3 as before. 4 girders at 6 ft with a 3.90 ft left overhang: one warning, 3.90 > min(0.625 × 6 = 3.75, 6.0); the ratios are still calculated. 2 girders at 9.5 ft: the three-girder and the 14 ft warnings.
+### How verified
+`tests/engine/sb-deck.test.mjs`, new test "Table A4-1 limits (Art. A4.1) …"; the default bridge has no A4.1 warning (so the smoke's values and the old projects are untouched).
