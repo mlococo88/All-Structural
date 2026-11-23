@@ -187,14 +187,14 @@
       <label>Scale <input type="range" id="v3d_dsc" min="0.25" max="4" step="0.25" value="${+st.dsc || 1}" style="width:90px"></label><label><input type="checkbox" id="v3d_eng"${st.eng !== false ? ' checked' : ''}> + moment down</label>
       ${RS ? '' : `<button type="button" id="v3d_calc">Calculate results</button>`}</div>
       <div class="v3d-bar">${LAY.map(([k, l]) => `<label><input type="checkbox" data-v3d="${k}"${ui.v3d.lay[k] ? ' checked' : ''}> ${esc(k === 'xf' && window.SBDFramingUI && window.SBDFramingUI.isDia(ctx.P) ? 'Diaphragms' : l)}</label>`).join('')}
-      <span style="flex:1"></span><button type="button" id="v3d_reset">Reset view</button><button type="button" id="v3d_png">Save PNG</button></div>`;
+      <span style="flex:1"></span><button type="button" id="v3d_reset">Reset view</button><button type="button" id="v3d_cap" title="Keep the view as drawn now for the Report (Project and owner section)">Capture for the Report</button><button type="button" id="v3d_png">Save PNG</button></div>`;
     if (typeof THREE === 'undefined' && document.readyState === 'loading') {   // three.js is loaded with defer: it runs after the page's own script
       host.innerHTML = '<p class="note">Loading the 3D library…</p>'; document.addEventListener('DOMContentLoaded', () => { if (host.isConnected && ctx.ui.otab === '3d') render(host, ctx); }, { once: true }); return; }
     if (typeof THREE === 'undefined' || !THREE.WebGLRenderer) { host.innerHTML = `<section class="sec"><div class="secHead">3D view</div><div class="secBody"><div class="alert err">The 3D library (three.js r128 from cdnjs) could not be loaded: this view needs an internet connection the first time.</div></div></section>`; return; }
     let G = null; try { G = window.SBDDrawings.model(ctx.P); } catch (e) { G = { errors: [`The model could not be built: ${e.message}`] }; }
     if (G.errors.length) { host.innerHTML = `<section class="sec"><div class="secHead">3D view</div><div class="secBody"><div class="alert err">${G.errors.map(esc).join('<br>')}</div></div></section>`; return; }
     host.innerHTML = `<section class="sec"><div class="secHead">3D view</div><div class="secBody">${bar}<div id="v3d-host" class="v3d-host"></div>
-      <p class="note" id="v3d-note"></p><p class="note" id="v3d-dg"></p><p class="note">${RS ? 'Diagrams and splice plates: the results of the Drawings tab (each plate girder\'s analysis, Analysis tab; Strength I as the Flexure tab, AASHTO LRFD 10th Ed. Table 3.4.1-1; splice plates from the Field splices tab), at each girder\'s own stations. Point at a diagram to read its value.' : 'The diagrams and the splice plates need the results (Calculate results: one analysis per plate girder, about 15 s each; the same as the Drawings tab).'} Drag to rotate, right-drag (or two fingers) to pan, wheel (or pinch) to zoom. The view keeps its camera when the inputs change; Reset view frames the bridge. Geometry as on the Drawings tab (see the framing plan for the stations).</p>
+      <p class="note" id="v3d-note"></p><p class="note" id="v3d-dg"></p><p class="note" id="v3d-cap">${V.snap ? `Captured for the Report (${esc(V.snap.at)}): Report, Project and owner, "3D view (captured)"${V.snap.key !== JSON.stringify(ctx.P) ? '; captured before the last input change' : ''}.` : ''}</p><p class="note">${RS ? 'Diagrams and splice plates: the results of the Drawings tab (each plate girder\'s analysis, Analysis tab; Strength I as the Flexure tab, AASHTO LRFD 10th Ed. Table 3.4.1-1; splice plates from the Field splices tab), at each girder\'s own stations. Point at a diagram to read its value.' : 'The diagrams and the splice plates need the results (Calculate results: one analysis per plate girder, about 15 s each; the same as the Drawings tab).'} Drag to rotate, right-drag (or two fingers) to pan, wheel (or pinch) to zoom. The view keeps its camera when the inputs change; Reset view frames the bridge. Geometry as on the Drawings tab (see the framing plan for the stations).</p>
       ${G.warnings.length ? `<div class="alert">${G.warnings.map(esc).join('<br>')}</div>` : ''}</div></section>`;
     const h = host.querySelector('#v3d-host');
     try {
@@ -214,6 +214,12 @@
       loop();
     } catch (e) { h.innerHTML = `<div class="alert err">The 3D view could not start (WebGL): ${esc(e.message)}</div>`; return; }
     host.querySelectorAll('[data-v3d]').forEach(el => el.addEventListener('change', () => { ui.v3d.lay[el.dataset.v3d] = el.checked; if (V.groups[el.dataset.v3d]) V.groups[el.dataset.v3d].visible = el.checked; ctx.saveUi && ctx.saveUi(); }));
+    // RPX (2026-11-23; the PS Bridge app's "Capture for the Report"): the view as drawn now, kept in this page view for the Report (Project and owner)
+    host.querySelector('#v3d_cap').addEventListener('click', () => { V.r.render(V.scene, V.cam);
+      const mo = host.querySelector('#v3d_mode'), dg = host.querySelector('#v3d_dg'), tx = e => (e && e.selectedOptions && e.selectedOptions[0] ? e.selectedOptions[0].textContent.trim() : '');
+      V.snap = { png: V.r.domElement.toDataURL('image/png'), at: new Date().toLocaleString(), key: JSON.stringify(ctx.P),
+        meta: `${tx(mo) || 'Whole bridge'}${V.dgLbl ? `; diagram: ${V.dgLbl}` : ''}; layers: ${LAY.filter(([k]) => ui.v3d.lay[k]).map(q => q[1].toLowerCase()).join(', ')}` };
+      const c = host.querySelector('#v3d-cap'); if (c) c.textContent = `Captured for the Report (${V.snap.at}): Report, Project and owner, "3D view (captured)".`; });
     host.querySelector('#v3d_reset').addEventListener('click', () => { if (V.home) { V.home(); saveCam(); } });
     const re = () => { ctx.saveUi && ctx.saveUi(); render(host, ctx); };
     host.querySelector('#v3d_mode').addEventListener('change', e => { st.mode = e.target.value; ui.v3d.lay.stud = st.mode !== 'bridge'; re(); });
@@ -231,5 +237,6 @@
   /* the camera (tests): { p, t } */
   const camera = () => (V.cam ? { p: V.cam.position.toArray(), t: V.ctl ? V.ctl.target.toArray() : null } : null);
 
-  window.SBD3DUI = { render, camera, LAY, DG, series, state: () => ({ fences: V.fences.length, mode: V.mode, tg: V.tg, dg: V.dgLbl }) };
+  const snapshot = () => V.snap || null;   // RPX: the capture for the Report (ui/report.js)
+  window.SBD3DUI = { render, camera, LAY, DG, series, snapshot, state: () => ({ fences: V.fences.length, mode: V.mode, tg: V.tg, dg: V.dgLbl }) };
 })();
