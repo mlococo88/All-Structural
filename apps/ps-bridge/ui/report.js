@@ -24,6 +24,10 @@
   'use strict';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const S = { closed: new Set(), key: '', M: null };
+  /* 2026-11-23: the Report review tools (shared/report-review.js, the steel app's tools of 2026-11-19, one shared copy): this app's own
+     localStorage keys, prefixed psb2. (CLAUDE.md §5; new, additive, per viewer; nothing is written into the project): psb2.reportReview.v1
+     ({ <project number | name>: [comments] }) and psb2.reportToc ({ hidden, compact, w }; psb2.reportToc.author the last author name) */
+  const REVIEW = window.SharedReportReview ? window.SharedReportReview.create({ key: 'psb2.reportReview.v1', tocKey: 'psb2.reportToc', title: 'Prestressed Bridge Design' }) : null;
   const incOf = o => { const inc = {}; window.PSBReportBuild.SECTIONS.forEach(([k]) => { inc[k] = !(o.inc && o.inc[k] === false); }); return inc; };
   /* PS-25 (engineer decision 2026-11-13): "Worked sections: each type's governing line (default) | every girder line", kept in ctx.opts.worked
      (the page's psb2.ui object, as the section chips); shown when the project has more than one girder type × line */
@@ -131,10 +135,12 @@
     const V = window.SharedReport.mount(box, S.M, { controls: controls(o, B), closed: S.closed, stick: tb ? tb.offsetHeight : 0, spy: true,
       onGoto: t => { if (/^in:/.test(t)) { if (ctx.goin) ctx.goin(t.slice(3)); } else if (ctx.goto) ctx.goto(t); } });
     S.V = V;   // ADB: the viewer, for a link that jumps to a key (index.html, href "#rp:<key>")
+    if (REVIEW) REVIEW.attach(box, ctx);   // 2026-11-23: the review tools (shared/report-review.js): contents sidebar, markup comments, reviewed copy, comments appendix in print
     box.querySelectorAll('[data-rpdetail]').forEach(el => el.addEventListener('change', () => { if (!el.checked) return; o.detail = el.dataset.rpdetail; if (ctx.save) ctx.save(); render(host, ctx); }));
     box.querySelectorAll('[data-rpworked]').forEach(el => el.addEventListener('change', () => { if (!el.checked) return; o.worked = el.dataset.rpworked; if (ctx.save) ctx.save(); render(host, ctx); }));
     box.querySelectorAll('[data-rpinc]').forEach(el => el.addEventListener('change', () => { o.inc = o.inc || {}; o.inc[el.dataset.rpinc] = el.checked; if (ctx.save) ctx.save(); render(host, ctx); }));
     return V;
   }
   window.PSBReportUI = { render, figures, sumFig, state: S, PW };
+  if (REVIEW) window.PSBReportReview = REVIEW;
 })();
