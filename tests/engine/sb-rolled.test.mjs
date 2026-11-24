@@ -207,3 +207,69 @@ test('W-shape search: lightest first, stops at the first that passes; the quick 
   assert.equal(Ev.pass, true, JSON.stringify(Ev.fails.slice(0, 3))); assert.ok(Ev.ratio <= 1 + 1e-9);
   assert.equal(Ev.fails.some(f => f.mod === 'welds'), false);
 });
+
+// ROLL-CAP (2026-11-24, pending engineer review): the three plates are never stiffer than the tabulated shape. For the 23 shapes whose
+// uncapped three plates exceed the tabulated A, I_x, S_x or Z_x, both flanges are taken minimally thinner (to 0.0001 in, rounded down),
+// web D = d - 2 t_f (tabulated t_f) and t_w kept.
+//   HAND CHECK W18X234 (d 21.1, b_f 11.7, t_f 2.11, t_w 1.16 in; A 68.6 in^2, I_x 4900 in^4, S_x 466, Z_x 549 in^3):
+//     D = 21.1 - 2(2.11) = 16.88 in.  Before: A_3 = 2(11.7)(2.11) + 16.88(1.16) = 49.374 + 19.5808 = 68.9548 in^2 (1.0052 A);
+//       I_3 = 2[11.7(2.11)^3/12 + 11.7(2.11)(9.495)^2] + 1.16(16.88)^3/12 = 2[9.1591 + 2225.6571] + 464.9370 = 4934.57 in^4 (1.0071 I_x)
+//     A governs: t_f,eq = (A - D t_w) / (2 b_f) = (68.6 - 19.5808) / 23.4 = 2.094838 -> 2.0948 in (rounded down)
+//     After: A_3 = 2(11.7)(2.0948) + 19.5808 = 68.59912 in^2 (0.99999 A); lever (16.88 + 2.0948)/2 = 9.4874 in;
+//       I_3 = 2[11.7(2.0948)^3/12 + 11.7(2.0948)(9.4874)^2] + 464.9370 = 2[8.9626 + 2206.0881] + 464.9370 = 4895.04 in^4 (0.9990 I_x);
+//       d_3 = 16.88 + 2(2.0948) = 21.0696 in; S_3 = 2(4895.04)/21.0696 = 464.65 in^3 (0.9971 S_x);
+//       Z_3 = 11.7(2.0948)(16.88 + 2.0948) + 1.16(16.88)^2/4 = 465.0546 + 82.6328 = 547.69 in^3 (0.9976 Z_x)
+//   W18X192 (d 20.4, b_f 11.5, t_f 1.75, t_w 0.96; A 56.2, I_x 3870): D = 16.9; before A_3 = 56.474 (1.0049 A), I_3 = 3896.38 (1.0068 I_x);
+//     t_f,eq = (56.2 - 16.224)/23 = 1.738087 -> 1.7380 in; after A_3 = 56.198, I_3 = 3867.70 (0.9994 I_x)
+test('ROLL-CAP: for every shape the three plates have A, I_x, S_x, Z_x at most the tabulated values; W18X234 and W18X192 by hand', () => {
+  const T = W.SharedAiscW; let cut = 0;
+  for (const nm of T.names()) {
+    const sh = T.get(nm), pl = RL.plates(sh), st = SEC.steelCore(pl), q = RL.props(sh);
+    assert.ok(pl.topT <= sh.tf && pl.topT === pl.botT && pl.D === RL.plates0(sh).D && pl.tw === sh.tw && pl.topB === sh.bf, `${nm}: only the flange thickness may be reduced`);
+    const tol = 1e-9;   // rounding of the floating-point sums only
+    assert.ok(st.A <= sh.A * (1 + tol), `${nm}: A ${st.A} > ${sh.A}`); assert.ok(st.I <= sh.Ix * (1 + tol), `${nm}: I ${st.I} > ${sh.Ix}`);
+    assert.ok(st.I / st.yb <= sh.Sx * (1 + tol) && st.I / (st.d - st.yb) <= sh.Sx * (1 + tol), `${nm}: S > ${sh.Sx}`);
+    assert.ok(q.Z3 <= sh.Zx * (1 + tol), `${nm}: Z ${q.Z3} > ${sh.Zx}`);
+    near(q.A3, st.A, 1e-9, `${nm} props A3`); near(q.I3, st.I, 1e-6, `${nm} props I3`);
+    if (q.cut) {
+      cut++; assert.ok(sh.tf - pl.topT <= 0.021, `${nm}: reduction ${sh.tf - pl.topT} in`);
+      const up = RL.geo(sh, pl.D, pl.topT + 1e-4);   // minimal: 0.0001 in thicker exceeds a tabulated value
+      assert.ok(up.A3 > sh.A || up.I3 > sh.Ix || up.S3 > sh.Sx || up.Z3 > sh.Zx, `${nm}: not minimal`);
+    } else assert.deepEqual(J(pl), J(RL.plates0(sh)), `${nm}: not cut, plates of the first release`);
+  }
+  assert.equal(cut, 23);
+  // W18X234 by hand
+  const a = T.get('W18X234'), pa = RL.plates(a), b0 = RL.geo(a, 16.88, 2.11), qa = RL.props(a);
+  assert.deepEqual(J(pa), { D: 16.88, tw: 1.16, topB: 11.7, topT: 2.0948, botB: 11.7, botT: 2.0948 });
+  near(b0.A3, 68.9548, 1e-9, 'W18X234 A_3 before'); near(b0.I3, 4934.57, 0.01, 'W18X234 I_3 before'); near(b0.A3 / 68.6, 1.0052, 1e-4, 'A ratio before'); near(b0.I3 / 4900, 1.0071, 1e-4, 'I ratio before');
+  near((68.6 - 16.88 * 1.16) / (2 * 11.7), 2.094838, 1e-6, 't_f,eq unrounded (A governs)');
+  near(qa.A3, 68.59912, 1e-9, 'W18X234 A_3 after'); near(qa.I3, 4895.04, 0.01, 'W18X234 I_3 after'); near(qa.d3, 21.0696, 1e-9, 'd_3');
+  near(qa.S3, 464.65, 0.01, 'S_3'); near(qa.Z3, 547.69, 0.01, 'Z_3');
+  const sa = SEC.steelCore(pa); near(sa.A, 68.59912, 1e-9, 'steelCore A'); near(sa.I, qa.I3, 1e-6, 'steelCore I'); near(sa.d, 21.0696, 1e-9, 'steelCore depth');
+  // W18X192
+  const c = T.get('W18X192'), pc = RL.plates(c), c0 = RL.geo(c, 16.9, 1.75), qc = RL.props(c);
+  assert.equal(pc.topT, 1.738); near(c0.A3, 56.474, 1e-9, 'W18X192 A before'); near(c0.I3, 3896.38, 0.01, 'W18X192 I before');
+  near(qc.A3, 56.198, 1e-9, 'W18X192 A after'); near(qc.I3, 3867.70, 0.01, 'W18X192 I after');
+  // the worked steps of a cut shape show t_f,eq and the ratios
+  const seg = { x0: 0, x1: 60 }; assert.equal(RL.apply(seg, 'W18X234'), true); assert.equal(seg.topT, 2.0948);
+  const S = RL.steps(seg), id = k => S.find(x => x.id === 'rolled.' + k);
+  assert.equal(id('tfe').value, 2.0948); near(id('d3').value, 21.0696, 1e-9, 'step d3'); assert.match(id('tfe').note, /ROLL-CAP/);
+  ['rA', 'rI', 'rS', 'rZ'].forEach(k => assert.ok(id(k).value <= 1, k));
+  // W36X135 (the hand check above) is not cut: no t_f,eq step
+  const s1 = { x0: 0, x1: 60 }; RL.apply(s1, 'W36X135'); assert.equal(RL.steps(s1).some(x => x.id === 'rolled.tfe'), false);
+});
+
+test('ROLL-CAP migration: a segment saved with the uncapped plates of the first release gets the capped plates on load, shape kept', () => {
+  const P = simple('W18X234'), s = P.girders[0].segments[0];
+  Object.assign(s, RL.plates0(W.SharedAiscW.get('W18X234')));   // as saved on 2026-11-23
+  assert.equal(RL.state(s).status, 'old'); assert.equal(RL.isRolled(s), false);
+  assert.ok(M.validate(P).warnings.some(w => /uncapped three plates of W18X234/.test(w.msg)));
+  const r = M.importJSON(M.exportJSON(P)); assert.equal(r.ok, true);
+  const t = r.project.girders[0].segments[0]; assert.equal(t.shape, 'W18X234'); assert.equal(t.topT, 2.0948); assert.equal(t.botT, 2.0948); assert.equal(t.D, 16.88);
+  assert.equal(RL.state(t).status, 'rolled'); assert.ok(r.notes.some(n => /W18X234 \(flange thickness 2\.11 → 2\.0948 in\)/.test(n)), JSON.stringify(r.notes));
+  assert.equal(r.warnings.some(w => /uncapped/.test(w.msg)), false);
+  // runs once: the migrated project loads with no note; a capped or a not-cut shape, and a plate girder, are never touched
+  const r2 = M.importJSON(M.exportJSON(r.project)); assert.equal(r2.notes.length, 0); assert.equal(M.exportJSON(r2.project), M.exportJSON(r.project));
+  const U = simple('W36X135'), r3 = M.importJSON(M.exportJSON(U)); assert.equal(r3.notes.length, 0); assert.equal(M.exportJSON(r3.project), M.exportJSON(U));
+  const V = simple(), r4 = M.importJSON(M.exportJSON(V)); assert.equal(r4.notes.length, 0); assert.equal(M.exportJSON(r4.project), M.exportJSON(V));
+});
