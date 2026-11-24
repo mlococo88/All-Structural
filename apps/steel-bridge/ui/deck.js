@@ -5,7 +5,8 @@
    The module is optional and OFF until switched on (P.deckDesign.on; a project saved before 2026-11-23 has no P.deckDesign and reads as
    off). While it is off the tab says so and links to the switch; P.deckDesign is written only when the user changes one of its inputs.
    Inputs (Cross-section input tab, card "Deck design (transverse)"): the switch, the top and bottom transverse bars (size, spacing, clear
-   cover) and the negative-moment design section (automatic b_f/4, or entered). Everything else is read from the project and shown with a
+   cover), the top and bottom longitudinal bars (size and spacing; optional, DKL 2026-11-24) and the negative-moment design section
+   (automatic b_f/4, or entered). Everything else is read from the project and shown with a
    link to where it is entered: girder spacings, overhangs, deck edges, sidewalks (Cross-section tab), slab thicknesses (Cross-section tab,
    Deck), f'c, w_c, F_yr (Materials tab), wearing surface and overlays (Loads tab), owner eta and m (Project tab).
 
@@ -35,13 +36,17 @@
     const num = (k, lbl, unit) => `<div class="fRow"><label for="dk_${k}">${lbl}</label><input type="number" step="any" id="dk_${k}" data-dk="${k}" value="${esc(D[k])}"><span class="unit">${unit}</span></div>`;
     const bar = (k, lbl) => { const std = DK().BARS.some(q => Math.abs(q[1] - +D[k]) < 1e-9);
       return `<div class="fRow"><label for="dk_${k}">${lbl}</label><select id="dk_${k}" data-dk="${k}">${DK().BARS.map(q => opt(q[1], `${q[0]} (${fmt(q[1], 2)} in²)`, std ? +D[k] : '')).join('')}${std ? '' : opt(D[k], `A_b = ${D[k]} in²`, D[k])}</select></div>`; };
+    const lbar = (k, lbl) => { const v = +D[k], has = isFinite(v) && v > 0, std = DK().BARS.some(q => Math.abs(q[1] - v) < 1e-9);   // DKL: the longitudinal bars, blank = not entered
+      return `<div class="fRow"><label for="dk_${k}">${lbl}</label><select id="dk_${k}" data-dk="${k}">${opt('', '— not entered —', has ? 'x' : '')}${DK().BARS.map(q => opt(q[1], `${q[0]} (${fmt(q[1], 2)} in²)`, has && std ? v : 'x')).join('')}${has && !std ? opt(v, `A_b = ${v} in²`, v) : ''}</select></div>`; };
+    const lnum = (k, lbl) => `<div class="fRow"><label for="dk_${k}">${lbl}</label><input type="number" step="any" id="dk_${k}" data-dk="${k}" value="${D[k] == null || !isFinite(+D[k]) ? '' : esc(D[k])}" placeholder="not entered"><span class="unit">in</span></div>`;
     let h = `<div class="fRow"><label for="dk_on">Deck design (strip method)</label><select id="dk_on" data-dk="on">${opt('false', 'Off', String(on))}${opt('true', 'On', String(on))}</select></div>`;
     if (on) h += `${bar('barTop', 'Top transverse bars')}${num('sTop', 'Top bar spacing', 'in')}${num('coverT', 'Top clear cover', 'in')}
       ${bar('barBot', 'Bottom transverse bars')}${num('sBot', 'Bottom bar spacing', 'in')}${num('coverB', 'Bottom clear cover', 'in')}
       <div class="fRow"><label for="dk_xnegAuto">Negative-moment design section</label><select id="dk_xnegAuto" data-dk="xnegAuto">${opt('true', 'Automatic: b_f/4 of the narrowest top flange (4.6.2.1.6)', String(D.xnegAuto !== false))}${opt('false', 'Entered', String(D.xnegAuto !== false))}</select></div>
-      ${D.xnegAuto === false ? num('xneg', 'Design section from the girder ℄', 'in (0 to 24)') : ''}`;
+      ${D.xnegAuto === false ? num('xneg', 'Design section from the girder ℄', 'in (0 to 24)') : ''}
+      ${lbar('barLongTop', 'Top longitudinal bars')}${lnum('sLongTop', 'Top longitudinal spacing')}${lbar('barLongBot', 'Bottom longitudinal bars')}${lnum('sLongBot', 'Bottom longitudinal spacing')}`;
     h += `<p class="note">Transverse design of the slab: interior bays (AASHTO LRFD 10th Ed. Table A4-1) and the overhangs (gravity loads), as the Prestressed Bridge Design app. Optional: off until switched on${on ? '' : '; while it is off nothing is calculated and no result changes'}. Results: <a href="#" data-gotab="dk">Deck tab</a>.
-      It uses what the project already holds: the girder spacings, overhangs, deck edges and sidewalks (this tab), the slab thicknesses (Deck card above), f′<sub>c</sub>, w<sub>c</sub> and F<sub>yr</sub> (<a href="#" data-itgo="mat">Materials tab</a>), the wearing surface (<a href="#" data-itgo="loads">Loads tab</a>) and the owner's η and m (<a href="#" data-itgo="proj">Project tab</a>).${on ? ' The covers here are the clear covers of the transverse bars; the rebar depths of the Deck card above are those of the longitudinal layers (the girder\'s composite section) and are not used here.' : ''}</p>`;
+      It uses what the project already holds: the girder spacings, overhangs, deck edges and sidewalks (this tab), the slab thicknesses (Deck card above), f′<sub>c</sub>, w<sub>c</sub> and F<sub>yr</sub> (<a href="#" data-itgo="mat">Materials tab</a>), the wearing surface (<a href="#" data-itgo="loads">Loads tab</a>) and the owner's η and m (<a href="#" data-itgo="proj">Project tab</a>).${on ? ' The covers here are the clear covers of the transverse bars; the rebar depths of the Deck card above are those of the longitudinal layers (the girder\'s composite section) and are not used here. Longitudinal bars (parallel to the girders; optional): drawn in the Deck tab\'s section inside the transverse bars; the bottom ones, where entered, are checked against the distribution reinforcement of 9.7.3.2 (DK4). The top ones are drawn and reported, not checked.' : ''}</p>`;
     return `<section class="sec" id="dkIn"><div class="secHead">Deck design (transverse)</div><div class="secBody">${h}</div></section>`;
   }
   /* onChange(el, P): an input of the card (data-dk). P.deckDesign is created on the first change (the defaults, then the change). */
@@ -49,6 +54,7 @@
     const k = el && el.dataset ? el.dataset.dk : null; if (!k) return false;
     if (!P.deckDesign || typeof P.deckDesign !== 'object') P.deckDesign = { ...DK().DEF };
     const v = el.value;
+    if (/^(barLong|sLong)(Top|Bot)$/.test(k) && v === '') { delete P.deckDesign[k]; return true; }   // DKL: blank = not entered (no key, as a project saved before)
     P.deckDesign[k] = (k === 'on' || k === 'xnegAuto') ? v === 'true' : (v === '' ? NaN : Number(v));
     return true;
   }
@@ -61,12 +67,12 @@
   /* ---------- the deck section over the left exterior girder and the first interior girder (true scale across; display only) ---------- */
   function figure(R, W) {
     const q = R.oh.L, O = q.O, In = R.in, D = R.D, S = R.bays[0].S, ts = In.ts, oh = O.oh * 12, Sp = S * 12, x1 = oh + Sp + Math.min(Sp * 0.4, 30), bf = In.bf || 16;
-    const w = Math.max(360, Math.min(W || 760, 900)), m = { l: 14, r: 44, t: 58, b: 46 }, k = (w - m.l - m.r) / x1, H = Math.round(m.t + ts * k + 18 * k + m.b);
+    const w = Math.max(360, Math.min(W || 760, 900)), m = { l: 14, r: 44, t: 58, b: 60 }, k = (w - m.l - m.r) / x1, H = Math.round(m.t + ts * k + 18 * k + m.b);
     const X = x => m.l + x * k, Y = y => m.t + (ts - y) * k;   // y up from the bottom of the slab
     const f1 = v => fmt(v, 2), gx = [oh, oh + Sp], face = O.face * 12, xw = face + 12, dbT = Math.sqrt(4 * +D.barTop / Math.PI), dbB = Math.sqrt(4 * +D.barBot / Math.PI);
     const yT = ts - +D.coverT - dbT / 2, yB = +D.coverB + dbB / 2;
     const dimH = (a, b, y, t) => `<line x1="${X(a)}" y1="${y}" x2="${X(b)}" y2="${y}" stroke="#475569" stroke-width="1"/><line x1="${X(a)}" y1="${y - 4}" x2="${X(a)}" y2="${y + 4}" stroke="#475569"/><line x1="${X(b)}" y1="${y - 4}" x2="${X(b)}" y2="${y + 4}" stroke="#475569"/><text x="${(X(a) + X(b)) / 2}" y="${y - 4}" text-anchor="middle" font-size="11" fill="#1e293b">${t}</text>`;
-    let s = `<svg xmlns="http://www.w3.org/2000/svg" class="dk-fig" viewBox="0 0 ${w} ${H}" width="${w}" height="${H}" role="img" aria-label="Deck section over the left exterior girder: overhang, barrier, design wheel, design sections and bars"><rect width="${w}" height="${H}" fill="#fff"/>`;
+    let s = `<svg xmlns="http://www.w3.org/2000/svg" class="dk-fig" viewBox="0 0 ${w} ${H}" width="${w}" height="${H}" role="img" aria-label="Deck section over the left exterior girder: overhang, barrier, design wheel, design sections, transverse bars (lines) and longitudinal bars (circles)"><rect width="${w}" height="${H}" fill="#fff"/>`;
     s += `<rect x="${X(0)}" y="${Y(ts)}" width="${x1 * k}" height="${ts * k}" fill="#e2e8f0" stroke="#334155"/>`;
     gx.forEach(x => { s += `<rect x="${X(x - bf / 2)}" y="${Y(0)}" width="${bf * k}" height="${Math.max(3, 1.2 * k)}" fill="#64748b"/><rect x="${X(x) - Math.max(1, 0.3 * k)}" y="${Y(0)}" width="${Math.max(2, 0.6 * k)}" height="${14 * k}" fill="#64748b"/>
       <line x1="${X(x)}" y1="${Y(ts) - 30}" x2="${X(x)}" y2="${Y(0) + 16 * k}" stroke="#0f172a" stroke-dasharray="8 3 2 3" stroke-width="0.8"/>`; });
@@ -75,11 +81,23 @@
     if (O.Xoh > 0) s += `<line x1="${X(xw)}" y1="${Y(ts) - 34}" x2="${X(xw)}" y2="${Y(ts) - 2}" stroke="#1E3A5F" stroke-width="2"/><polygon points="${X(xw) - 4},${Y(ts) - 9} ${X(xw) + 4},${Y(ts) - 9} ${X(xw)},${Y(ts) - 1}" fill="#1E3A5F"/><text x="${X(xw) + 5}" y="${Y(ts) - 28}" font-size="10.5" fill="#1E3A5F">16 kip wheel, X = ${f1(O.Xoh)} ft</text>`;
     [gx[0] + In.xneg, gx[1] - In.xneg].forEach(x => { s += `<line x1="${X(x)}" y1="${Y(ts) - 4}" x2="${X(x)}" y2="${Y(0) + 4}" stroke="#2563EB" stroke-width="1.6"/>`; });
     s += `<text x="${X(gx[0] + In.xneg) + 4}" y="${Y(0) + 15}" font-size="10.5" fill="#2563EB">design section, x = ${f1(In.xneg)} in</text>`;
-    for (let x = 3; x < x1 - 1; x += Math.max(+D.sTop || 6, 3)) s += `<circle cx="${X(x)}" cy="${Y(yT)}" r="${Math.max(1.5, dbT / 2 * k)}" fill="#B45309"/>`;
-    for (let x = Math.max(face, 3); x < x1 - 1; x += Math.max(+D.sBot || 6, 3)) s += `<circle cx="${X(x)}" cy="${Y(yB)}" r="${Math.max(1.5, dbB / 2 * k)}" fill="#0f766e"/>`;
+    // DKL (2026-11-24, engineer: "The deck is missing the transverse steel"): this is a section ACROSS the bridge, so the transverse bars
+    // (perpendicular to traffic) are continuous lines at their cover depth, from 2 in inside the deck edge to the cut; the circles are the
+    // LONGITUDINAL bars (parallel to the girders) at their spacing, inside the transverse bars (bottom ones on the bottom transverse bars, top
+    // ones under the top transverse bars). Before DKL the transverse bars were drawn as circles at their spacing.
+    const LB = R.long || DK().longBars(D), nm = A => esc(DK().barName(A));
+    [['top', yT, dbT, '#B45309', +D.barTop, +D.sTop], ['bot', yB, dbB, '#0f766e', +D.barBot, +D.sBot]].forEach(([t, y, db, c, A, sp]) => {
+      s += `<line data-dkbar="${t}-tr" x1="${X(2)}" y1="${Y(y)}" x2="${X(x1)}" y2="${Y(y)}" stroke="${c}" stroke-width="${Math.max(1.5, db * k)}" stroke-linecap="round"/>`;
+      s += `<text x="${X(oh + Sp * (t === 'top' ? 0.5 : 0.62))}" y="${t === 'top' ? Y(ts) - 5 : Y(0) + 28}" text-anchor="middle" font-size="10.5" fill="${c}">${t === 'top' ? 'top' : 'bottom'} transverse ${nm(A)} @ ${f1(sp)} in</text>`; });
+    const yL = { top: ts - +D.coverT - dbT, bot: +D.coverB + dbB };   // the face of the transverse bars that the longitudinal bars sit on
+    [['top', '#7C2D12'], ['bot', '#134E4A']].forEach(([t, c]) => { const q = LB[t]; if (!q) return;
+      const y = t === 'top' ? yL.top - q.db / 2 : yL.bot + q.db / 2;
+      for (let x = 3; x < x1 - 1; x += Math.max(q.s, 3)) s += `<circle data-dkbar="${t}-long" cx="${X(x)}" cy="${Y(y)}" r="${Math.max(1.5, q.db / 2 * k)}" fill="#fff" stroke="${c}" stroke-width="1.3"/>`; });
     s += dimH(0, oh, 16, `o_h = ${f1(O.oh)} ft`) + dimH(oh, oh + Sp, 16, `S = ${f1(S)} ft`);
     s += `<text x="${X(x1) + 4}" y="${Y(ts / 2) + 4}" font-size="11" fill="#1e293b">t_s ${fmt(ts, 1)}</text>`;
-    s += `<text x="${m.l}" y="${H - 8}" font-size="10.5" fill="#475569">Top bars ${esc(DK().barName(+D.barTop))} at ${f1(+D.sTop)} in (cover ${f1(+D.coverT)} in); bottom bars ${esc(DK().barName(+D.barBot))} at ${f1(+D.sBot)} in (cover ${f1(+D.coverB)} in). Girders schematic.</text>`;
+    s += `<text x="${m.l}" y="${H - 22}" font-size="10.5" fill="#475569">Transverse bars (lines): top ${nm(+D.barTop)} at ${f1(+D.sTop)} in (cover ${f1(+D.coverT)} in); bottom ${nm(+D.barBot)} at ${f1(+D.sBot)} in (cover ${f1(+D.coverB)} in). Girders schematic.</text>`;
+    const lt = q => (q ? `${nm(q.A)} at ${f1(q.s)} in` : 'not entered');
+    s += `<text data-dklong="${LB.top || LB.bot ? 'on' : 'none'}" x="${m.l}" y="${H - 8}" font-size="10.5" fill="#475569">${LB.top || LB.bot ? `Longitudinal bars (circles, inside the transverse bars): top ${lt(LB.top)}; bottom ${lt(LB.bot)}.` : 'Longitudinal bars not entered (Cross-section tab, Deck design): none drawn.'}</text>`;
     return s + '</svg>';
   }
 
@@ -90,12 +108,13 @@
     let h = `<section class="sec" id="dk-gov"><div class="secHead">Deck design: checks</div><div class="secBody">
       <p style="font-size:11pt;margin:4px 0 6px"><b>Governing:</b> ${esc(gov.id)} ${esc(gov.title)}, ${esc(gov.loc)}: ratio <span class="${cls(gov.r)}" style="padding:0 6px">${fmt(gov.r, 3)}</span> ${nF ? `<span class="dk-ng" style="padding:0 4px">${nF} check${nF > 1 ? 's' : ''} NG</span>` : 'all checks OK'}</p>
       <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Check</th><th class="lft">Governing location</th><th>M<sub>u</sub><br>kip-ft/ft</th><th>φM<sub>n</sub><br>kip-ft/ft</th><th>Ratio</th><th>Status</th><th></th><th class="lft">Reference</th></tr></thead><tbody>
-      ${R.checks.map(c => `<tr data-dkck="${c.id}"><td class="lft">${esc(c.id)} ${esc(c.title)}</td><td class="lft">${esc(c.loc)}</td><td>${fmt(c.Mu, 2)}</td><td>${fmt(c.phiMn, 2)}</td>${st(c)}<td>${see(c.step)}</td><td class="lft" style="font-size:8.5pt">${esc(c.ref)}</td></tr>`).join('')}
+      ${R.checks.map(c => `<tr data-dkck="${c.id}"><td class="lft">${esc(c.id)} ${esc(c.title)}</td><td class="lft">${esc(c.loc)}</td>${c.Mu == null ? `<td>A<sub>s,d</sub> ${fmt(c.req, 3)}<br><span style="font-size:8.5pt">in²/ft</span></td><td>A<sub>s,prov</sub> ${fmt(c.prov, 3)}<br><span style="font-size:8.5pt">in²/ft</span></td>` : `<td>${fmt(c.Mu, 2)}</td><td>${fmt(c.phiMn, 2)}</td>`}${st(c)}<td>${see(c.step)}</td><td class="lft" style="font-size:8.5pt">${esc(c.ref)}</td></tr>`).join('')}
+      ${R.checks.some(c => c.id === 'DK4') ? '' : `<tr data-dkck="DK4-none"><td class="lft">DK4 Deck distribution reinforcement, bottom longitudinal bars</td><td class="lft" colspan="6"><i>Not checked: bottom longitudinal bars not entered</i> (<a href="#" data-goin="xsec">Cross-section tab, Deck design</a>); required A<sub>s,d</sub> = ${fmt(R.dist.As, 3)} in²/ft ${see('dk.distAs')}</td><td class="lft" style="font-size:8.5pt">AASHTO LRFD 10th Ed. Art. 9.7.3.2</td></tr>`}
       </tbody></table></div>
       <p class="note">Strip method per foot of deck, AASHTO LRFD 10th Ed. (2024): the same method as the Prestressed Bridge Design app's deck module. Strength I${In.eta !== 1 || In.mLL !== 1 ? ` with the owner's η = ${fmt(In.eta, 3)}${In.mLL !== 1 ? ` and m = ${fmt(In.mLL, 2)}` : ''} (${lnk('Project tab', 'proj')})` : ''}.
       <b>Not checked here:</b> the Extreme Event II vehicular-collision cases of the overhang (A13.4; they need a barrier-specific analysis), crack control (5.6.7), minimum reinforcement (5.6.3.3), temperature and shrinkage reinforcement (5.10.6), bar development.</p>
       ${R.warn.map(w => `<div class="alert">${esc(w)}</div>`).join('')}</div></section>`;
-    h += `<section class="sec"><div class="secHead">Deck section</div><div class="secBody"><div id="dk-fig"></div><p class="note">The left overhang and the first bay, true scale across: the barrier or curb to the traffic face, the design wheel 1 ft inside it, the negative-moment design sections (blue), the top bars (brown) and bottom bars (green) at their covers and spacings. Display only.</p></div></section>`;
+    h += `<section class="sec"><div class="secHead">Deck section</div><div class="secBody"><div id="dk-fig"></div><p class="note">The left overhang and the first bay, true scale across: the barrier or curb to the traffic face, the design wheel 1 ft inside it, the negative-moment design sections (blue), the top (brown) and bottom (green) transverse bars as lines at their covers, and the longitudinal bars, where entered, as circles at their spacings inside them (top under the top transverse bars, bottom on the bottom transverse bars). Display only.</p></div></section>`;
     const ro = (lbl, v, where) => `<div class="fRow"><label>${lbl}</label><span class="dk-ro">${v}</span><span class="unit">${where}</span></div>`;
     h += `<section class="sec"><div class="secHead">Values used (from the project)</div><div class="secBody">
       ${ro('Girder spacings S', R.bays.map(q => `${fmt(q.S, 2)} ft`).join(', '), lnk('Cross-section tab', 'xsec'))}
@@ -107,7 +126,8 @@
       ${ro('Narrowest top flange b<sub>f</sub>', `${fmt(In.bf, 2)} in`, `${esc(In.bfAt)}; ${lnk('Girders &amp; plates tab', 'gird')}`)}
       ${ro('Design section x', `${fmt(In.xneg, 2)} in`, `${In.auto ? 'b<sub>f</sub>/4 (4.6.2.1.6)' : 'entered'} ${see('dk.b1.xneg')}`)}
       ${ro('Top bars / bottom bars', `${esc(DK().barName(+D.barTop))} at ${fmt(+D.sTop, 2)} in / ${esc(DK().barName(+D.barBot))} at ${fmt(+D.sBot, 2)} in`, lnk('Cross-section tab, Deck design', 'xsec'))}
-      ${ro('Clear cover, top / bottom', `${fmt(+D.coverT, 2)} / ${fmt(+D.coverB, 2)} in`, lnk('Cross-section tab, Deck design', 'xsec'))}</div></section>`;
+      ${ro('Clear cover, top / bottom', `${fmt(+D.coverT, 2)} / ${fmt(+D.coverB, 2)} in`, lnk('Cross-section tab, Deck design', 'xsec'))}
+      ${ro('Longitudinal bars, top / bottom', ['top', 'bot'].map(t => R.long && R.long[t] ? `${esc(DK().barName(R.long[t].A))} at ${fmt(R.long[t].s, 2)} in` : 'not entered').join(' / '), `${lnk('Cross-section tab, Deck design', 'xsec')}${R.long && R.long.bot ? ` (bottom: DK4 ${see('dk.distR')})` : ''}`)}</div></section>`;
     h += `<section class="sec"><div class="secHead">Interior bays: transverse moments per foot of deck</div><div class="secBody"><div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Bays</th><th class="lft">Moment</th><th>M<sub>DC</sub></th><th>M<sub>DW</sub></th><th>M<sub>LL+IM</sub><br>Table A4-1</th><th>M<sub>u</sub><br>Strength I</th><th>φM<sub>n</sub></th><th>Ratio</th><th></th></tr></thead><tbody>
       ${R.bays.map((q, k) => { const I = q.I, b = 'dk.b' + (k + 1) + '.';
         return `<tr class="${k === R.gp ? 'sel' : ''}"><td class="lft" rowspan="2">${esc(q.name)}</td><td class="lft">Positive (midbay), bottom bars${many && k === R.gp ? ' <b>governs</b>' : ''}</td><td>${fmt(I.MDC_pos, 3)}</td><td>${fmt(I.MDW_pos, 3)}</td><td>${fmt(I.MLL_pos, 3)}</td><td><b>${fmt(I.Mu_pos, 3)}</b></td><td>${fmt(q.pos.phiMn, 2)}</td><td class="${cls(q.pos.dc)}">${fmt(q.pos.dc, 3)}</td><td>${see(b + 'Mup')}</td></tr>
@@ -124,6 +144,8 @@
       <b>Gravity loads only:</b> the Extreme Event II vehicular-collision cases (A13.4) are not checked.</p></div></section>`;
     h += `<section class="sec"><div class="secHead">Distribution reinforcement (9.7.3.2)</div><div class="secBody">
       ${ro('Bottom bars parallel to the girders', `${fmt(R.dist.pct, 1)} % of the positive-moment steel = ${fmt(R.dist.As, 3)} in²/ft`, `${see('dk.dist')} min(220/√S<sub>eff</sub>, 67 %)`)}
+      ${R.long && R.long.bot ? ro('DK4 Bottom longitudinal bars provided', `${esc(DK().barName(R.long.bot.A))} at ${fmt(R.long.bot.s, 2)} in: A<sub>s,prov</sub> = ${fmt(R.long.bot.As, 3)} in²/ft, ratio <span class="${cls(R.long.bot.r)}" style="padding:0 4px">${fmt(R.long.bot.r, 3)}</span> ${R.long.bot.ok ? 'OK' : 'NG'}`, `${see('dk.distProv')} 12 A<sub>b</sub>/s; ${see('dk.distR')} A<sub>s,d</sub> ≤ A<sub>s,prov</sub>`)
+        : ro('DK4 Bottom longitudinal bars provided', 'not checked: bottom longitudinal bars not entered', lnk('Cross-section tab, Deck design', 'xsec'))}
       ${ro('Effective span length (9.7.2.3)', R.dist.E && R.dist.E.ok ? `S<sub>eff</sub> = ${fmt(R.dist.Seff, 3)} ft` : 'not available: 67 % used', R.dist.E && R.dist.E.ok ? `${see('dk.distSe')} S − b<sub>f</sub>/12 + (b<sub>f</sub> − t<sub>w</sub>)/24, S = ${fmt(R.dist.S, 2)} ft, b<sub>f</sub> = ${fmt(R.dist.bf, 2)} in, t<sub>w</sub> = ${fmt(R.dist.tw, 4)} in (${esc(R.dist.at)})` : '')}
       <p class="note">The distance between the flange tips plus one flange overhang (flange tip to the face of the web, fillets disregarded), with the smallest girder spacing and the girder segment of the largest b<sub>f</sub> + t<sub>w</sub>: the shortest effective span, the largest percentage.</p></div></section>`;
     h += `<section class="sec" id="dk-steps"><div class="secHead">Worked steps: deck</div><div class="secBody"><p class="note">AASHTO LRFD 10th Ed. (2024). Inputs: ${lnk('Cross-section tab', 'xsec')} (Deck design).</p>${window.SharedSteps.groupsHTML(groups('x', R.steps), { open: OPEN, item: stepLi })}</div></section>`;

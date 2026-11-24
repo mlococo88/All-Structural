@@ -12,21 +12,47 @@
    that girder selected and scrolls to and flashes the card that works the value (ui/summary.js gotoCell / focus). A module not run yet
    shows "not run"; its chip runs it (the Summary's run, through the shared analysis cache) and opens its tab, which runs itself (#1260).
    After an input change the last values stay, marked out of date, until the modules run again (the Summary tab, "Run all", a chip).
+   SBAR (2026-11-24, engineer: the cards did not update after the beam depth was edited): while the column shows values out of date it
+   runs them again by itself, AUTO_MS after the last input change and the last key or click on the page (so it does not start while the
+   user types: the girder analysis, the first module, cannot yield inside and holds the page for its run, about 6 s on the built-in
+   project, as Run all does) ("Inputs changed — updating…"): the same call as "Run all"
+   (SBDSummaryUI.start(P), so the values are those of Run all), one module of one girder per timer tick as before. A new change restarts
+   the wait; a run in progress stops at the next module (ui/summary.js sync: S.run). It waits while the open output tab runs itself
+   (o.tabBusy(); the tab goes first, at most TAB_WAIT ms) and while a blocking input error exists. Only where the column is shown
+   (1200 px and wider). The "Auto-refresh" box turns it off (per-browser UI key sbd2.dashAuto_v1: '0' off; not in the project, the
+   autosave or the export); Run all stays. Auto design and the Report stay manual.
 
-   init(o): o = { el (the column), store (localStorage or null), getP(), ui(), goto(tab, gi), fix(i) and errUi() (SBINV: the input error links) };
-   refresh() after the page draws. */
+   init(o): o = { el (the column), store (localStorage or null), getP(), ui(), goto(tab, gi), fix(i) and errUi() (SBINV: the input error links),
+   tabBusy() (SBAR: the open output tab is running or about to) }; refresh() after the page draws. */
 (function () {
   'use strict';
   const lnT = (G, q) => G && G.lines && G.lines.length > 1 && q && q.ln != null ? ` on G${q.ln + 1}` : '';   // SB-2 PR 2: the governing line of a girder type on several lines
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const KEY = 'sbd2.dashCollapsed_v1';
-  const D = { o: null, open: new Set(), coll: false };
+  const KEY = 'sbd2.dashCollapsed_v1', AKEY = 'sbd2.dashAuto_v1', AUTO_MS = 1000, TAB_WAIT = 60000;   // SBAR
+  const D = { o: null, open: new Set(), coll: false, auto: true, at: null, atPk: null, act: 0 };   // act: the last key / click / input on the page (SBAR)
   const SM = () => window.SBDSummary, SU = () => window.SBDSummaryUI, fmt = (x, d) => window.SharedUnits.fmt(x, d);
   const LBL = { pass: 'PASS', fail: 'FAIL', review: 'REVIEW', na: 'n/a', notrun: 'not run' };
   const vOf = (q, c) => !q ? '—' : q.st === 'notrun' ? 'not run' : q.st === 'na' ? 'n/a' : c.rf ? (isFinite(q.rf) ? 'RF ' + fmt(q.rf, 2) : '—') : (isFinite(q.r) ? fmt(q.r, 3) : q.r === Infinity ? '∞' : q.r === -Infinity ? '−∞' : 'NaN');   // QA2: as the Summary table (∞ added; NaN only for a true NaN)
   const rd = k => { try { return D.o.store ? D.o.store.getItem(k) : null; } catch (e) { return null; } };
   const wr = (k, v) => { try { if (D.o.store) D.o.store.setItem(k, v); } catch (e) { /* not kept */ } };
 
+  /* SBAR: the auto-refresh. kick(P, st, old): called by each draw; (re)starts the wait only for a new project state (another draw of the
+     same state, e.g. a run's progress, leaves it running); go(): after the wait, the open tab first, then the same call as "Run all" */
+  function kick(P, st, old) {
+    if (D.atPk === st.pk && (D.at || st.busy)) return;
+    clearTimeout(D.at); D.at = null; D.atPk = st.pk;
+    if (!D.auto || st.busy || !old || !D.o.el.getClientRects().length || !SU().pending || !SU().pending(P)) return;
+    const t0 = Date.now(), pk = st.pk;
+    const go = () => {
+      D.at = null; const Q = D.o.getP(); if (!D.auto || !Q || SU().state().pk !== pk) return;
+      const q = AUTO_MS - (Date.now() - D.act); if (q > 0) { D.at = setTimeout(go, q); return; }   // a key or click since: the quiet starts again
+      if (D.o.tabBusy && D.o.tabBusy() && Date.now() - t0 < TAB_WAIT) { D.at = setTimeout(go, 250); return; }   // the open tab's own run first
+      if (window.SBDInputCheck && window.SBDInputCheck.blocked(Q)) { draw(); return; }
+      SU().start(Q);   // as "Run all"
+    };
+    D.at = setTimeout(go, AUTO_MS);
+  }
+  function setAuto(v) { D.auto = !!v; wr(AKEY, D.auto ? '1' : '0'); if (!D.auto) { clearTimeout(D.at); D.at = null; } D.atPk = null; draw(); }
   function setColl(v) { D.coll = !!v; document.body.classList.toggle('sbDashColl', D.coll); wr(KEY, D.coll ? '1' : '0'); draw(); }
 
   /* the list to show: this project state's results; a girder or module not run yet takes the last results, marked out of date */
@@ -46,12 +72,14 @@
       + (D.coll ? '' : window.SBDInputCheckUI.dash(IE, o.errUi())); return; }
     SU().sync(P);
     const { st, list } = view(P), ov = SM().overall(P, list), n = ov.n, anyOld = list.some(G => Object.keys(G.old).length), top = ov.top;
+    kick(P, st, anyOld);   // SBAR
     const nRun = list.reduce((a, G) => a + Object.values(G.cells).filter(q => q.st !== 'notrun').length, 0);
     const cnt = `<span class="sdC">${n.fail ? `<span class="sdF">${n.fail} FAIL</span>` : ''}${n.review ? `<span class="sdW">${n.review} REVIEW</span>` : ''}${n.pass ? `<span class="sdP">${n.pass} PASS</span>` : ''}${!nRun ? '<span class="sdN">not run</span>' : ''}</span>`;
     const head = `<div id="sbDashHead"><button type="button" id="sbDashTgl" aria-expanded="${!D.coll}" title="${D.coll ? 'Show the check summary' : 'Shrink the check summary to a strip'}">${D.coll ? '»' : '«'}</button><h2 id="sbDashTtl">Check summary</h2>${cnt}</div>`;
     if (D.coll) { o.el.innerHTML = head; return; }
     const govLink = top ? `<a href="#" data-sdgo="${top.G.gi}|${top.c.id}">${esc(SM().label(top.c, P).head)}, ${esc(top.G.label)}${lnT(top.G, top.q)}: D/C ${isFinite(top.q.r) ? fmt(top.q.r, 3) : 'NaN'}</a>` : '';
     const status = st.busy ? `<div class="sdRun"><span class="spin" aria-hidden="true"></span>${esc(st.prog)}</div>`
+      : D.at ? `<div class="sdRun"><span class="spin" aria-hidden="true"></span>Inputs changed — updating… <a href="#" id="sbDashRun">Run all</a></div>`   // SBAR: waiting for quiet (or for the open tab)
       : anyOld || (nRun && nRun < list.length * (SM().cols ? SM().cols(P) : SM().COLS).length) || !nRun ? `<div class="sdRun">${anyOld ? 'Inputs changed: values out of date. ' : !nRun ? 'Nothing run yet. ' : 'Some modules not run. '}<a href="#" id="sbDashRun">Run all</a></div>` : '';
     const verdict = `<div class="sdVerd"><b class="sd-${n.fail ? 'fail' : n.review ? 'review' : n.pass ? 'pass' : 'notrun'}">${n.fail ? 'FAIL' : n.review ? 'REVIEW' : n.pass ? 'PASS' : '—'}</b>${top ? ` · max D/C ${isFinite(top.q.r) ? fmt(top.q.r, 3) : 'NaN'}` : ''}${anyOld ? ' <span class="sdOld">(out of date)</span>' : ''}</div>
       ${govLink ? `<div class="sdGov">Governing: ${govLink}</div>` : ''}${status}`;
@@ -66,23 +94,26 @@
       // DK (2026-11-23): the deck slab checks of the bridge, a chip only where the project has the deck design on (report/summary.js deckOf)
       + (ov.deck ? (() => { const d = ov.deck, g = d.gov; return `<div class="sdChip sd-${d.st}" data-sdgrp="Deck"><span class="sdX"></span><a href="#" class="sdMain" data-sdgo="0|deck" title="${esc(`${g.check} (${g.loc})`)}">
         <span class="sdName">Deck slab</span><span class="sdVal">${g.r != null && isFinite(g.r) ? fmt(g.r, 3) : '—'} · bridge</span><span class="sdSt">${LBL[d.st] || ''}</span></a></div>`; })() : '');
-    o.el.innerHTML = head + verdict + `<div id="sbDash">${chips}</div><p class="sdNote">Each chip: the governing value over every girder (ratio = demand / capacity, OK ≤ 1.0; RF OK ≥ 1.0), as on the <a href="#" data-sdtab="sum">Summary tab</a>. Click: its tab, girder and the card that works it.${window.SBDRating && window.SBDRating.BASIS ? ' ' + esc(window.SBDRating.BASIS.short) : ''}${P.fatigue && P.fatigue.ev && P.fatigue.ev.on === 'yes' ? ' Fatigue includes the remaining fatigue life (FA6, MBE 4th Ed. Section 7; fatigue-prone details only, 7.2.3).' : ''}</p>`;
+    o.el.innerHTML = head + verdict + `<div id="sbDash">${chips}</div><p class="sdNote">Each chip: the governing value over every girder (ratio = demand / capacity, OK ≤ 1.0; RF OK ≥ 1.0), as on the <a href="#" data-sdtab="sum">Summary tab</a>. Click: its tab, girder and the card that works it.${window.SBDRating && window.SBDRating.BASIS ? ' ' + esc(window.SBDRating.BASIS.short) : ''}${P.fatigue && P.fatigue.ev && P.fatigue.ev.on === 'yes' ? ' Fatigue includes the remaining fatigue life (FA6, MBE 4th Ed. Section 7; fatigue-prone details only, 7.2.3).' : ''}</p>`
+      + `<label class="sdAuto"><input type="checkbox" id="sbDashAuto"${D.auto ? ' checked' : ''}> Auto-refresh after an input change</label>`;   // SBAR
   }
   function init(o) {
     D.o = o; const el = o.el; if (!el) return;
-    D.coll = rd(KEY) === '1'; document.body.classList.toggle('sbDashColl', D.coll);
+    D.coll = rd(KEY) === '1'; document.body.classList.toggle('sbDashColl', D.coll); D.auto = rd(AKEY) !== '0';   // SBAR: on unless turned off
     el.addEventListener('click', e => {
       const t = e.target.closest('button, a'); if (!t) return;
       if (t.id === 'sbDashTgl') { setColl(!D.coll); return; }
       e.preventDefault();
       if (t.dataset.icgo != null) { if (o.fix) o.fix(+t.dataset.icgo); return; }   // SBINV: an input error's link
       if (t.dataset.sdx) { const k = t.dataset.sdx; if (D.open.has(k)) D.open.delete(k); else D.open.add(k); draw(); return; }
-      if (t.id === 'sbDashRun') { SU().start(o.getP()); return; }
+      if (t.id === 'sbDashRun') { clearTimeout(D.at); D.at = null; SU().start(o.getP()); return; }   // SBAR: a wait for the auto-refresh is replaced by this run
       if (t.dataset.sdtab) { o.goto(t.dataset.sdtab, null); return; }
       if (t.dataset.sdgo) { const [gi, id] = t.dataset.sdgo.split('|'); SU().gotoCell(+gi, id, { P: o.getP(), goto: o.goto }); }
     });
+    el.addEventListener('change', e => { if (e.target.id === 'sbDashAuto') setAuto(e.target.checked); });   // SBAR
+    ['keydown', 'input', 'pointerdown'].forEach(t => document.addEventListener(t, () => { D.act = Date.now(); }, { capture: true, passive: true }));   // SBAR: the quiet before an auto-refresh
     SU().subscribe(() => draw());
     draw();
   }
-  window.SBDDashUI = { init, refresh: draw, KEY };
+  window.SBDDashUI = { init, refresh: draw, KEY, AKEY, AUTO_MS };
 })();

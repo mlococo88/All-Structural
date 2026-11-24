@@ -11373,6 +11373,187 @@ Deck design **off** (the default, every project saved before 2026-11-23 and new 
 ### Saved data
 None: no new field or key; `P.deckDesign` unchanged.
 
+## 2026-11-24 — PR: claude/sb-summary-autorefresh (PR #1691: https://github.com/mlococo88/All-Structural/pull/1691) (SBAR) — the left check summary refreshes itself after an input change   [display only; no computed value, saved field or project format changes; one new per-browser UI key]
+### Why
+- Engineer (2026-11-24): the beam depth was edited and the left "Check summary" cards did not update: they showed the last values with
+  "Inputs changed: values out of date. Run all" until Run all was clicked or the Summary tab was opened. Only the open output tab ran itself (AUTO).
+### Where
+- `apps/steel-bridge/ui/dash.js` (window.SBDDashUI): new `kick(P, st, old)` and `setAuto(v)` (anchor `/* SBAR: the auto-refresh.`), called from
+  `draw()` right after `view(P)` (anchor `kick(P, st, anyOld);   // SBAR`); the status line, the "Auto-refresh" box, `init()`; the header comment.
+- `apps/steel-bridge/ui/summary.js`: new `pending(P)` (anchor `const pending = P => { sync(P); return todo(P).length > 0; };`), exported.
+- `apps/steel-bridge/index.html`: `SBDDashUI.init({ …, tabBusy })` (anchor `tabBusy: () => autoBusy || autoPend || !!$('autoMsg').querySelector('.spin')`);
+  CSS `#sbDashCol .sdAuto`.
+- New smoke `tests/smoke/steel-bridge-dash-auto.mjs`.
+### Before / After
+- Before (dash.js): `const KEY = 'sbd2.dashCollapsed_v1';` / `const D = { o: null, open: new Set(), coll: false };`; status
+  `` const status = st.busy ? `…${esc(st.prog)}</div>` : anyOld || … ? `<div class="sdRun">${anyOld ? 'Inputs changed: values out of date. ' : …}<a href="#" id="sbDashRun">Run all</a></div>` : ''; ``;
+  Run all `if (t.id === 'sbDashRun') { SU().start(o.getP()); return; }`.
+- After:
+  ```js
+  const KEY = 'sbd2.dashCollapsed_v1', AKEY = 'sbd2.dashAuto_v1', AUTO_MS = 1000, TAB_WAIT = 60000;   // SBAR
+  const D = { o: null, open: new Set(), coll: false, auto: true, at: null, atPk: null, act: 0 };
+  function kick(P, st, old) {
+    if (D.atPk === st.pk && (D.at || st.busy)) return;
+    clearTimeout(D.at); D.at = null; D.atPk = st.pk;
+    if (!D.auto || st.busy || !old || !D.o.el.getClientRects().length || !SU().pending || !SU().pending(P)) return;
+    const t0 = Date.now(), pk = st.pk;
+    const go = () => {
+      D.at = null; const Q = D.o.getP(); if (!D.auto || !Q || SU().state().pk !== pk) return;
+      const q = AUTO_MS - (Date.now() - D.act); if (q > 0) { D.at = setTimeout(go, q); return; }
+      if (D.o.tabBusy && D.o.tabBusy() && Date.now() - t0 < TAB_WAIT) { D.at = setTimeout(go, 250); return; }
+      if (window.SBDInputCheck && window.SBDInputCheck.blocked(Q)) { draw(); return; }
+      SU().start(Q);   // as "Run all"
+    };
+    D.at = setTimeout(go, AUTO_MS);
+  }
+  ```
+  status: `: D.at ? '<div class="sdRun"><span class="spin"></span>Inputs changed — updating… <a href="#" id="sbDashRun">Run all</a></div>' : anyOld …` (as before);
+  after the note `<label class="sdAuto"><input type="checkbox" id="sbDashAuto" checked> Auto-refresh after an input change</label>`;
+  Run all: `clearTimeout(D.at); D.at = null; SU().start(o.getP());`; init: `D.auto = rd(AKEY) !== '0'`, a `change` listener for the box
+  (`setAuto`), and capture listeners `keydown`, `input`, `pointerdown` on the document that set `D.act = Date.now()` (nothing else).
+- Behaviour: when the column shows values out of date (an earlier run of this page view, now stale), it runs the modules again by itself
+  1 s after the last input change and the last key / click / input event on the page ("Inputs changed — updating…" with a spinner and a
+  Run all link meanwhile; then the run's own progress "Running Flexure and rating, G1 (2/8)…"). The run is `SBDSummaryUI.start(P)`, the
+  call of "Run all", unchanged: one module of one girder per timer tick. A new input change restarts the wait and stops a run in progress
+  at the next module (summary.js `sync()` increments `S.run`, as before). It waits while the open output tab runs itself (`tabBusy`, up to
+  60 s), and does nothing while a blocking input error exists, while the column is not shown (below 1200 px) or when the box is off.
+  Nothing runs by itself on a page view that has not run the summary yet ("Nothing run yet. Run all", as before). Auto design and the
+  Report stay manual.
+### Saved data (CLAUDE.md §5)
+- New per-browser UI key `sbd2.dashAuto_v1` ('1' on, '0' off; absent = on), prefixed as the column's `sbd2.dashCollapsed_v1`. Not in the
+  project, the autosave, the saved projects or the export. No existing key or format changed.
+### §4 callout
+- None: display only. No formula, factor, unit, reference or computed value changed; the run is the same call as Run all.
+### Check case
+- Built-in project (one girder type, `tests/smoke/sbd-seed.mjs`), Run all, then web depth D of segment 1 +2 in: "Inputs changed — updating…"
+  at once, the run starts by itself 1.0 s later. D +4 in made between the run's 2nd and 3rd module: no module of that run after the change;
+  12 keys typed over 3.6 s held the next run off (each key answered in 2–30 ms); it started 1.0 s after the last key.
+- The 14 cells of the auto-refresh (ratio, RF, status, check, location, step) equal those of Run all on the same project (page reloaded with
+  the autosave, Run all clicked): identical JSON.
+- The girder analysis (the first module) is one call of 5.7–6.5 s on this machine, during which the page does not answer (unchanged: the same
+  for Run all and the Analysis tab; it cannot yield inside). The wait for 1 s of no typing keeps it from starting while the user types.
+### How verified
+- `node tests/smoke/steel-bridge-dash-auto.mjs` (new), `steel-bridge-dash`, `steel-bridge-summary`, `steel-bridge-invalid`;
+  `node tests/engine/run.mjs dxf-sheets sb-report-allgirder`; `node tests/check-syntax.mjs`.
+### Other copies
+- `apps/ps-bridge/ui/dash.js` is an adapted copy of this column (Prestressed Bridge Design); not changed (one tool per PR). Open item.
+### Decisions (pending engineer review)
+- SBAR-1. Auto-refresh only once the summary has values in this page view (the stale values are what it refreshes); a fresh page does not
+  run every module by itself.
+- SBAR-2. The wait restarts on any key, click or input on the page (not only on project changes), because the girder analysis holds the
+  page for ~6 s once started.
+- SBAR-3. Not below 1200 px (the column is hidden there); the "Auto-refresh" box (on by default) turns it off per browser.
+
+## 2026-11-24 — PR: claude/sb-detail-allowance (PR #1690: https://github.com/mlococo88/All-Structural/pull/1690) (SBALLOW) — one girder steel detail allowance: the Analysis settings box read-only when the loads module gives the value; the erection drawing's shipping pieces with the allowance of the analysis   [display and drawing only; no analysis result changes; no saved field or key changes]
+### Problem
+Two inputs hold a girder steel detail allowance: `xs.allow` (Loads input tab, card "Wearing surface, forms and steel") and `analysis.steelAllowPct` (Loads input tab, Analysis settings, default 5). The analysis (`engine/analysis.js loadsOf`) takes girder.loads.steelAllowPct (a hand-off), else the loads module's `xs.allow` (blank: 0), else `analysis.steelAllowPct`. (1) The Analysis settings box was always shown, editable, with 5, even when it was ignored. (2) The erection drawing (`engine/sheets.js erect`, sheet "ERECTION DIAGRAM AND GIRDER LAYOUT", table "SHIPPING PIECES") always used `analysis.steelAllowPct`, so its piece weights could disagree with DC1 of the analysis and with the splice shipping check SP3 (which uses `xs.allow`).
+### Where
+- `engine/analysis.js`: new `allowFor(P, g, mod)` and `allowOf(P, gi, mod)` (exported on `window.SBDAnalysis`), anchor `function allowFor(P, g, mod) {`; `loadsOf`, anchor `o.steelAllowPct = `.
+- `engine/sheets.js` `erect()`, anchor `const alPg = {}, alOf = g =>`.
+- `ui/analysis.js` new `allowRow(P, C, S, A0)`, anchor `function allowRow(P, C, S, A0) {`; `inputs()`, anchor `${allowRow(P, C, S, A0)}`.
+- `index.html` input change handler: anchor `xs\.(edges\.[LR]\.type|ws\.mode|allow$)` (redraw the tab when xs.allow changes, so the read-only value follows).
+- `ui/tips.js` tip `i_xs.allow` ("w" text).
+### Before / After
+`engine/analysis.js loadsOf`:
+```js
+// before
+o.steelAllowPct = A && isNum(A.steelAllowPct) ? A.steelAllowPct : M && isNum(mod.allow) ? mod.allow : settings(P).steelAllowPct;
+// after (same precedence, moved into allowFor)
+o.steelAllowPct = allowFor(P, g, mod).pct;
+function allowFor(P, g, mod) {
+  const A = (g && g.loads) || null, M = mod && mod.G ? mod.G : null;
+  if (A && isNum(A.steelAllowPct)) return { pct: A.steelAllowPct, src: 'girder' };
+  if (M && isNum(mod.allow)) return { pct: mod.allow, src: 'module' };
+  return { pct: settings(P).steelAllowPct, src: 'setting' };
+}
+function allowOf(P, gi, mod) {
+  const g = P && P.girders ? P.girders[gi] : null; if (!g) return { pct: settings(P).steelAllowPct, src: 'setting' };
+  if (mod === undefined) mod = g.loads && g.df ? null : moduleOf(P, gi);
+  return allowFor(P, g, mod);
+}
+```
+`engine/sheets.js erect()`:
+```js
+// before
+const allow = +(window.SBDAnalysis ? window.SBDAnalysis.settings(C.P).steelAllowPct : 0) || 0, Lc = n => String.fromCharCode(65 + n), pcs = [];
+... f2(w * (1 + allow / 100))
+... `WITH ${f0(allow)}% DETAIL ALLOWANCE (KIP)`
+// after
+const alPg = {}, alOf = g => { if (!(g.pg in alPg)) alPg[g.pg] = +(window.SBDAnalysis ? window.SBDAnalysis.allowOf(C.P, g.pg).pct : 0) || 0; return alPg[g.pg]; };
+G.girders.forEach(alOf); const als = [...new Set(Object.values(alPg))], one = als.length <= 1, allow = one ? (als[0] || 0) : null;
+const Lc = n => String.fromCharCode(65 + n), pcs = [];
+... f2(w * (1 + alOf(g) / 100)) + (one ? '' : ` (${f0(alOf(g))}%)`)
+... one ? `WITH ${f0(allow)}% DETAIL ALLOWANCE (KIP)` : 'WITH DETAIL ALLOWANCE (KIP; % BY GIRDER)'
+```
+`ui/analysis.js inputs()`: before `${numIn('a', 'steelAllowPct', 'Girder steel detail allowance', '%', S.steelAllowPct)}`; after `${allowRow(P, C, S, A0)}`: the same box when `allowFor(...).src === 'setting'`; otherwise a disabled grey input `#an_a_steelAllowPct_used` with the value used and a note naming the source (loads module: link `data-itgo="loads"` to the card "Wearing surface, forms and steel" at the top of the same tab; or the hand-off girder loads), a link to the Analysis tab steps an.wst*, and, when one is stored, the stored analysis.steelAllowPct ("kept and used only when neither gives a value").
+### Governing provision
+None: the detail allowance is an owner/designer allowance, not an AASHTO value. Steel unit weight unchanged: AASHTO LRFD 10th Ed. Table 3.5.1-1, 0.490 kcf (3.4028 lb/ft per in²).
+### Check case
+Built-in project with one field splice at 82 ft, xs.allow = 3 %, analysis.steelAllowPct = 5 % (`tests/engine/sb-detail-allowance.test.mjs`):
+- analysis DC1 girder steel: (1 + 3/100), before and after (unchanged);
+- erection drawing, piece G1-B, plates 69.29 kip: before 69.29 × 1.05 = **72.75** kip, header "WITH 5% DETAIL ALLOWANCE"; after 69.29 × 1.03 = **71.37** kip, header "WITH 3% …"; piece G1-A 17.79 kip: 18.68 → 18.32.
+- Hand check: a piece of 30.00 kip of plates: before 30.00 × 1.05 = 31.50 kip, after 30.00 × 1.03 = 30.90 kip.
+- Two plate girders with hand-off allowances 5 % and 8 %: header "WITH DETAIL ALLOWANCE (KIP; % BY GIRDER)", each cell with its own % (e.g. 19.21 (8%)).
+### What changes for a project
+Analysis results: none (13 girder analyses on 12 projects, origin/main and this branch, whole `analyzeGirder` result identical). Drawing: only the shipping-piece "with allowance" column and its header, and only where the allowance the analysis uses differs from analysis.steelAllowPct (e.g. xs.allow ≠ the setting; xs.allow blank: 0 % now, as the analysis). New project and every project with xs.allow = setting: the sheet is byte-identical (tests/baselines/dxf-sheets.json unchanged).
+### How verified
+`node tests/engine/run.mjs sb-detail-allowance dxf-sheets sheets drawings analysis …`; smoke `tests/smoke/steel-bridge-detail-allowance.mjs`; comparison of origin/main and the branch (PR description).
+### Saved data
+None: `analysis.steelAllowPct` and `xs.allow` keep their keys and values; the stored setting is not cleared and is still used where neither the hand-off nor the loads module gives an allowance.
+### Open items
+- SP3 (splice shipping weight, engine/autodesign.js) uses `+xs.allow || 0` directly; when the loads module fails it can differ from the analysis (which then uses the setting). Not changed (calculation check; raise with the engineer).
+- The header shows the % rounded to a whole number (`f0`, as before): 2.5 % reads "3%".
+
+## 2026-11-24 — PR: claude/sb-deck-long-bars (PR #1693: https://github.com/mlococo88/All-Structural/pull/1693) (DKL) — deck section: transverse bars as lines, longitudinal bar inputs, check DK4 (bottom longitudinal bars provided against the distribution reinforcement of 9.7.3.2)
+### Problem
+Engineer: "The deck is missing the transverse steel." The Deck tab figure (`ui/deck.js figure(R, W)`) cuts the slab ACROSS the bridge but drew the transverse (primary, perpendicular-to-traffic) top and bottom bars as circles at their spacing. In a transverse section the transverse bars are lines along the slab and the circles are the LONGITUDINAL bars. The module had no input for the longitudinal bars; it only computed the required bottom distribution steel A_s,d (9.7.3.2 on S_eff of 9.7.2.3) without checking it against bars provided.
+### Where
+- `engine/deck.js`: new `longBars(D)`, anchor `function longBars(D) {` (exported, with `LONG`); `calc()`: anchor `// DKL: the longitudinal bars; DK4 where the bottom ones are entered`; steps `dk.distProv`, `dk.distR` after `S.steps.dist(w, Smin, pct, ...)`; check DK4 pushed after the `checks` array (anchor `if (LB.bot) checks.push({ id: 'DK4'`); warnings for a half-entered pair (anchor `if (LB.topPart)`); result field `long: LB`; `topics()` dist title.
+- `ui/deck.js`: `inputs()` (anchor `const lbar = (k, lbl) =>`, four new inputs `dk_barLongTop`, `dk_sLongTop`, `dk_barLongBot`, `dk_sLongBot`); `onChange()` (anchor `/^(barLong|sLong)(Top|Bot)$/`); `figure()` (anchor `// DKL (2026-11-24, engineer: "The deck is missing the transverse steel")`); `results()`: checks table (DK4 row with areas; anchor `data-dkck="DK4-none"`), values used (anchor `'Longitudinal bars, top / bottom'`), distribution section (anchor `'DK4 Bottom longitudinal bars provided'`).
+- `report/builders.js dk()`: checks table (anchor `R.checks.some(c => c.id === 'DK4') ? [] :`), values used (anchor `'Bottom longitudinal bars (Cross-section tab, Deck design; DK4)'`), dist sub, figure caption; `bomDeck()` (anchor `// DKL (2026-11-24): where the longitudinal bars are entered`).
+- `ui/tips.js`: tips `dk_barLongBot`, `dk_barLongTop`.
+### Before / After
+`ui/deck.js figure()`:
+```js
+// before
+for (let x = 3; x < x1 - 1; x += Math.max(+D.sTop || 6, 3)) s += `<circle cx="${X(x)}" cy="${Y(yT)}" r="${Math.max(1.5, dbT / 2 * k)}" fill="#B45309"/>`;
+for (let x = Math.max(face, 3); x < x1 - 1; x += Math.max(+D.sBot || 6, 3)) s += `<circle cx="${X(x)}" cy="${Y(yB)}" r="${Math.max(1.5, dbB / 2 * k)}" fill="#0f766e"/>`;
+// after: transverse bars = one line each at yT / yB (stroke = bar diameter), from 2 in inside the deck edge to the cut, labelled
+// "top transverse #5 @ 6.00 in" / "bottom transverse ..."; longitudinal bars = circles at their spacing from 3 in, where entered:
+const yL = { top: ts - +D.coverT - dbT, bot: +D.coverB + dbB };
+const y = t === 'top' ? yL.top - q.db / 2 : yL.bot + q.db / 2;          // q = R.long.top / R.long.bot, q.db = sqrt(4 A_b / pi)
+for (let x = 3; x < x1 - 1; x += Math.max(q.s, 3)) s += `<circle data-dkbar="${t}-long" .../>`;
+// bottom margin 46 -> 60 px: two caption lines (transverse bars; longitudinal bars or "Longitudinal bars not entered")
+```
+`engine/deck.js calc()` (new; nothing before):
+```js
+const LB = longBars(D);   // { top, bot: null | { A, s, db }, topPart, botPart }; entered = A_b > 0 and s > 0
+if (LB.bot) { const q = LB.bot; q.As = 12 * q.A / q.s; q.r = dist.As / q.As; q.ok = dist.As <= q.As; }
+w.add({ id: 'distProv', sym: 'A_{s,prov}', eq: '\\frac{12\\,A_{b}}{s_{L}}', ... });            // in the 'dk' work of S.steps.dist
+w.add({ id: 'distR', sym: 'A_{s,d} \\le A_{s,prov}', sub: `${n(dist.As, 3)} \\le ${n(q.As, 3)}`, value: q.r, ok: q.ok, ... });
+if (LB.bot) checks.push({ id: 'DK4', title: 'Deck distribution reinforcement, bottom longitudinal bars', ref: ED + 'Art. 9.7.3.2, 9.7.2.3', r, Mu: null, phiMn: null, req: dist.As, prov: LB.bot.As, ok, loc, step: 'dk.distR' });
+```
+`report/builders.js bomDeck()`: before one row "Distribution (bottom, parallel to the girders)" (required area × W × L × 490/144); after, where entered: rows "Top longitudinal bars" and "Bottom longitudinal bars (distribution ...)", number = ⌈12 W / s⌉ + 1, length L, weight n × L × A_b × 490/144; the entered bottom bars replace the distribution-area row. Not entered: the rows and note text as before.
+### Governing provision
+AASHTO LRFD 10th Ed. (2024) Art. 9.7.3.2 (bottom distribution reinforcement, percentage of the primary positive-moment steel, S as the effective span) and Art. 9.7.2.3 (effective span length). New check; no existing formula, factor or reference changed.
+### Check case
+Made-up bridge: five plate girders at 12 ft, b_f 18 in, t_w 0.5625 in, bottom transverse #5 at 6 in (`tests/engine/sb-deck-long.test.mjs`).
+- A_s,pos = 12(0.31)/6 = 0.620 in²/ft; S_eff = 12 − 18/12 + (18 − 0.5625)/24 = 11.2266 ft; p_d = min(220/√11.2266, 67) = 65.66 %; A_s,d = 0.6566(0.620) = 0.4071 in²/ft (unchanged).
+- Bottom longitudinal #5 at 9 in: A_s,prov = 12(0.31)/9 = 0.4133 in²/ft; DK4 = 0.4071/0.4133 = **0.985 OK**.
+- #4 at 9 in: A_s,prov = 12(0.20)/9 = 0.2667 in²/ft; DK4 = **1.527 NG**.
+- Before: no DK4 (no input). Without the bars: DK1–DK3 and every step as before.
+- Default bridge in the app (#5 at 6 in transverse, 67 %): A_s,d = 0.4154; bottom longitudinal #5 at 8 in: 0.465 → 0.893 OK; at 9 in: 1.005 NG (smoke `tests/smoke/steel-bridge-deck-long.mjs`).
+### What changes for a project
+Only when the bottom longitudinal bars are entered: check DK4 joins the Deck tab, the Report's deck section and governing rows, the Summary deck card and the verdict (counted once, as DK1–DK3). A project without them: the same checks, ratios, steps and verdicts; the Deck tab and report show a "DK4 not checked: bottom longitudinal bars not entered" row and the figure draws the transverse bars as lines (display only).
+### How verified
+`node tests/engine/run.mjs deck sb-nomen sb-report sb-deck-long`; `node tests/check-syntax.mjs`; smokes `tests/smoke/steel-bridge-deck.mjs` (card input count 8 → 12), `tests/smoke/steel-bridge-deck-long.mjs`, `tests/smoke/steel-bridge-tips.mjs`.
+### Saved data
+New optional keys inside `P.deckDesign` only: `barLongTop`, `sLongTop`, `barLongBot`, `sLongBot` (in², in). Not in `DEF`: a project saved before reads them as not entered and is written unchanged; blanking an input deletes its key. No key renamed; JSON export/import round trip tested.
+### Open items
+- Not checked (raise with the engineer): temperature and shrinkage steel (5.10.6, would govern the top longitudinal bars), crack control (5.6.7), the 9.7.3.2 note on the top longitudinal bars; the top longitudinal bars are drawn and reported only.
+- Decision (pending engineer review): DK4 uses the governing bay's bottom transverse steel A_s,pos (as A_s,d before); a half-entered pair gives a warning and no DK4 (not an input error); the bill of materials replaces the required distribution area by the entered bottom bars.
+- The Summary deck card shows "—" for M_u / φM_n of DK4 (report/summary.js deckOf passes no areas).
+
 ## 2026-11-24 — PR: claude/sb-dia-fail-highlight (PR #1692: https://github.com/mlococo88/All-Structural/pull/1692) (SBDFH) — Diaphragms / Cross-frames tab: the topic chip from the check items, failing steps red, the slenderness limit shown, TeX "{,}" in plain-text labels   [DISPLAY ONLY: no value, factor, formula or verdict changed]
 ### Problem (engineer report, 2026-11-24)
 A C15x33.9 intermediate diaphragm showed the worked-steps topic "Diaphragm (intermediate bracing), CFD" with a red chip "47.153" and the result line "Diaphragm: slenderness (secondary member): Kℓ/r_min", while every expanded step looked neutral; the brace stiffness step label read "β_br = 6EI_x/S = 1{,}009{,}882".
