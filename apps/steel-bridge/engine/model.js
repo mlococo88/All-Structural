@@ -24,10 +24,12 @@
                     segments: [ { x0, x1 (ft from the left end), D, tw, topB, topT, botB, botT (in) } ] } ],
      -- added 2026-11-23 (ROLL, rolled-beam girders), optional: absent = a plate segment, exactly as before --
      girders[i].segments[k].shape: the AISC W-shape designation of a rolled segment (e.g. 'W36X135', a name of shared/aisc-w.js). The
-                  plate fields of the segment then hold the shape's equivalent three plates (b_f × t_f flanges, web D = d − 2 t_f, t_w),
-                  written when the shape is picked, and every check reads them as before (engine/rolled.js). A name that is not in the
-                  list, or plates that differ from the shape's: the stored plates are used as a plate girder, with a warning; nothing
-                  is rewritten on load.
+                  plate fields of the segment then hold the shape's equivalent three plates (b_f × t_f flanges, web D = d − 2 t_f, t_w;
+                  since 2026-11-24 t_f reduced for 23 shapes so the plates are not stiffer than the table, ROLL-CAP), written when the
+                  shape is picked, and every check reads them as before (engine/rolled.js). A name that is not in the list, or plates
+                  that differ from the shape's: the stored plates are used as a plate girder, with a warning; nothing is rewritten on
+                  load, except the uncapped plates of the first release of one of those 23 shapes, which SBDRolled.migrate (importJSON
+                  notes) replaces with the capped plates (the shape name kept).
      -- added 2026-10-29 (loads PR), optional: a version 1 project without them reads as defaultXs() and owner AASHTO --
      materials.concrete.wcE: unit weight for E_c only (kcf; blank = w_c; CTDOT BRSDM V2 5.4.2.4),
      ownerRules: { owner: 'AASHTO' | 'RIDOT' | 'MassDOT' | 'CTDOT', eta: { D: 'yes'|'no', R: 'auto'|'yes'|'no', I: 'yes'|'no', eD, eR, eI } },
@@ -660,7 +662,8 @@
     if (!obj || obj.schema !== SCHEMA) return { ok: false, error: 'Not a Steel Bridge Design (sbd2) project file.' };
     let p; try { p = migrate(obj); } catch (e) { return { ok: false, error: e.message }; }
     hideRec(p);   // SHO: the hand-off record, kept with the project but off its own JSON text
-    const notes = [migrateNbList(p), migrateLineOv(p)].filter(Boolean);   // field migrations within version 1 (2026-11-02; SBLO 2026-11-13: per-line values)
+    const RLm = typeof window !== 'undefined' && window.SBDRolled && window.SBDRolled.migrate;   // ROLL-CAP (2026-11-24): uncapped rolled-shape plates → capped
+    const notes = [migrateNbList(p), migrateLineOv(p), RLm ? RLm(p) : ''].filter(Boolean);   // field migrations within version 1 (2026-11-02; SBLO 2026-11-13: per-line values)
     const v = validate(p);
     return { ok: true, project: p, errors: v.errors, warnings: v.warnings, notes };
   }

@@ -10999,6 +10999,9 @@ Each item of the table above and the three corrections were re-read against the 
   on the safe side (larger stress and deflection); for 20 shapes whose tabulated dimensions are rounded up the three plates exceed the
   tabulated A or I_x by up to 0.5 % and 0.7 % (largest: W18X234, W18X192). The Section properties steps show both values and the ratio for
   the shape picked, with a note when the ratio is above 1.0. Not capped to the tabulated values: say if it should be.
+  **Updated 2026-11-24 (ROLL-CAP, entry below):** capped. For the 23 shapes whose three plates exceeded the tabulated A, I_x, S_x or Z_x,
+  both flanges are taken minimally thinner (0.0002 to 0.0209 in) so that none of the four exceeds the table; now A_3/A 0.973 to 1.000
+  and I_3/I_x 0.959 to 1.000 for the 289 shapes.
 - **ROLL-D2, web depth D = d − 2 t_f, not reduced for the fillets.** AASHTO LRFD 10th Ed. Art. 6.10 takes D as the web depth; whether the
   depth of a rolled shape's web may be measured clear of the fillets (as AISC 360 does with h = d − 2k) in 6.10.2.1 (D/t_w), 6.10.1.9,
   6.10.6.2 (2D_cp/t_w, 2D_c/t_w) and 6.10.9 (shear) was not clear to me from the article, so the plate-girder treatment is kept: the larger
@@ -11079,3 +11082,129 @@ Each item of the table above and the three corrections were re-read against the 
   shapes such as W8X10, t_w 0.17 in, are in the list).
 - The W-shape search passes or fails a shape with the detail inputs as entered: a bearing stiffener wider than (b_f − t_w)/2 of a
   narrower shape fails that shape (BS6), so the stiffener width can govern the shape found. The result names the governing check.
+
+## 2026-11-24 — PR: claude/sb-rolled-cap (PR #1685: https://github.com/mlococo88/All-Structural/pull/1685) (ROLL-CAP, ROLL-D1 follow-up) — the three plates of a rolled shape are never stiffer than the AISC table   [CALCULATION CHANGE for rolled segments of 23 W shapes only; plate girders, projects without a shape and the other 266 shapes are unchanged, bit for bit]
+### Where
+- `apps/steel-bridge/engine/rolled.js`: new `plates0(sh)` (the plates of the first release, kept to recognise them), `geo(sh, D, t)`,
+  `within`, `tfEq(sh)`, `migrate(P)`; changed `plates(sh)`, `state(seg)` (new status `'old'`), `warnings(P)`, `props(sh)`, `steps(seg)`;
+  exports `plates0, geo, tfEq, migrate`.
+- `apps/steel-bridge/engine/model.js` `importJSON`, anchor `const notes = [migrateNbList(p), migrateLineOv(p)`: runs `SBDRolled.migrate`;
+  the format note of `segments[k].shape`.
+- Display only: `apps/steel-bridge/index.html` `rolledCard` (S_x and Z_x columns, the reduced t_f and d_3 of a cut shape, status `'old'`
+  warning); `report/builders.js` (two notes), `engine/lga.js` (export note): "t_f reduced where needed so that A, I_x, S_x and Z_x do not
+  exceed the tabulated values".
+- Tests: `tests/engine/sb-rolled.test.mjs`, two new tests (every shape; W18X234 and W18X192 by hand; migration).
+### Before / After
+- `plates(sh)`. Before:
+  `function plates(sh) { return { D: r4(sh.d - 2 * sh.tf), tw: sh.tw, topB: sh.bf, topT: sh.tf, botB: sh.bf, botT: sh.tf }; }`
+  After (the old line renamed `plates0`, unchanged):
+  ```js
+  function geo(sh, D, t) {
+    const A3 = 2 * sh.bf * t + D * sh.tw, h = (D + t) / 2, I3 = 2 * (sh.bf * t ** 3 / 12 + sh.bf * t * h * h) + sh.tw * D ** 3 / 12, d3 = D + 2 * t;
+    return { A3, I3, S3: I3 / (d3 / 2), Z3: sh.bf * t * (D + t) + sh.tw * D * D / 4, d3 };
+  }
+  const within = (sh, q) => q.A3 <= sh.A && q.I3 <= sh.Ix && q.S3 <= sh.Sx && q.Z3 <= sh.Zx;
+  function tfEq(sh) {   // (cached per name)
+    const D = r4(sh.d - 2 * sh.tf); let t = sh.tf;
+    if (!within(sh, geo(sh, D, t))) {
+      let lo = 0, hi = sh.tf; for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (within(sh, geo(sh, D, m))) lo = m; else hi = m; }
+      t = r4(Math.floor(lo * 1e4) / 1e4); while (t > 0 && !within(sh, geo(sh, D, t))) t = r4(t - 1e-4);
+    }
+    return t;
+  }
+  function plates(sh) { const t = tfEq(sh); return { D: r4(sh.d - 2 * sh.tf), tw: sh.tw, topB: sh.bf, topT: t, botB: sh.bf, botT: t }; }
+  ```
+- `state(seg)`. Before: `return { status: same ? 'rolled' : 'edited', name: sh.name, sh, pl };`
+  After: `if (eq(pl)) return { status: 'rolled', … }; return { status: eq(plates0(sh)) ? 'old' : 'edited', name: sh.name, sh, pl };`
+  (`'old'`: not a rolled segment, the stored plates computed as a plate girder, with a warning, until `migrate` runs.)
+- `migrate(P)` (new, called by `importJSON`, i.e. every file import, the autosaved project and the project library): a segment in state
+  `'old'` gets `Object.assign(s, q.pl)` (the capped plates; the shape name and every other field kept) and a load note
+  "Rolled shapes: the equivalent plates of G1 segment 1 W18X234 (flange thickness 2.11 → 2.0948 in) were reduced …". Nothing else is touched.
+- `props(sh)`: adds `t, cut, S3, Z3, d3, rS, rZ`; `A3`, `I3` of a shape that is not cut: the expressions of the first release, unchanged.
+- `steps(seg)`: new steps `rolled.Sx`, `rolled.Zx` (tabulated), `rolled.S3`, `rolled.rS`, `rolled.Z3`, `rolled.rZ` (every shape), and for a
+  cut shape `rolled.tfe` (t_f,eq, with the ratios the tabulated t_f gives) and `rolled.d3` (d_3 = D + 2 t_f,eq); `A3` and `I3` written
+  with t_f,eq and the lever arm (D + t_f,eq)/2 for a cut shape. The `rI` note no longer says "Above 1.0".
+### Problem
+- ROLL-D1 (PR #1680) took a W shape as three plates b_f × t_f and (d − 2 t_f) × t_w. Leaving out the fillets makes the plates lighter
+  than the shape for most shapes, but where the tabulated dimensions are rounded up the plates exceeded the tabulated properties: 23 shapes
+  exceed one or more of A (3 shapes, up to +0.52 %), I_x (18, up to +0.71 %), S_x (17, up to +0.53 %) and Z_x (15, up to +0.48 %).
+  Larger section properties give smaller stresses and deflections and larger resistances: **less conservative** (stress, deflection,
+  fatigue stress range, M_y, M_p). After: **more conservative** for these 23 shapes, by at most the excess; the other 266 are unchanged.
+### Decision (pending engineer review) — ROLL-CAP
+- Approach: the flange thickness only. Both flanges of the equivalent plates are t_f,eq = the largest t ≤ t_f (to 0.0001 in, rounded
+  down) for which A_3 ≤ A, I_3 ≤ I_x, S_3 = 2 I_3 / (D + 2t) ≤ S_x and Z_3 = b_f t (D + t) + t_w D²/4 ≤ Z_x. D = d − 2 t_f (tabulated
+  t_f) and t_w are kept, so the steel depth becomes D + 2 t_f,eq (0.0004 to 0.042 in less than d).
+- Why the flanges, D kept: a thinner flange only lowers A, I, S, Z, M_y, M_p (noncomposite and composite), the steel depth (smaller
+  composite lever arm), the flange's own I_y and r_t (Art. 6.10.8.2.3), and raises b_f/2t_f (6.10.8.2.2): each check moves to the safe
+  side. Keeping D keeps the web as before: D/t_w, C and V_p = 0.58 F_yw D t_w (6.10.9), D_c, the cross-frame fit d ≤ D − c. A thinner web
+  instead would need about 10 % of t_w for W18X234 (the web carries little of I) and would cut V_p by that much; keeping d with a thinner
+  flange would deepen D and raise V_p. Applying the tabulated values directly is not possible without changing the section calculation of
+  every check (they all compute from the plate fields).
+- Not capped (not used by the girder checks): I_y, r_y and J of the plates. I_y_3 > I_y for many shapes (b_f rounded; the plates leave out
+  the fillets near the axis, which raises r_y); the girder checks use the flange plates (I_yc / I_yt = 1, r_t, b_f/2t_f), not the
+  tabulated I_y, r_y or J. Listed under Open items.
+- A project saved with one of the 23 shapes before this PR (the uncapped plates) is migrated on load (CLAUDE.md §5): the plates were
+  written from the shape, not typed, and the shape name is kept; the load note names each segment and its old and new thickness.
+### Governing provision
+- AASHTO LRFD 10th Ed. (2024) Art. 6.10.1.1.1 (section properties used for stresses and deflections: those of the actual section,
+  here bounded by the tabulated ones); App. D6.1 (M_p from the plates); Art. 6.10.9 (shear on D t_w, unchanged); AISC Shapes Database
+  v16.0 (A, I_x, S_x, Z_x of the shapes). No formula, factor or code reference of any check changed: only the flange thickness written
+  into the plate fields for the 23 shapes.
+### The 23 shapes (t_f → t_f,eq, in; ratios to the tabulated values before → after)
+| Shape | t_f → t_f,eq | Exceeded before | A_3/A | I_3/I_x | S_3/S_x | Z_3/Z_x |
+|---|---|---|---|---|---|---|
+| W36X652 | 3.54 → 3.5398 | Z | 0.9981 → 0.9980 | 0.9988 → 0.9988 | 0.9998 → 0.9997 | 1.00005 → 1.0000 |
+| W27X539 | 3.54 → 3.5385 | S | 0.9962 → 0.9959 | 0.9970 → 0.9965 | 1.0004 → 1.0000 | 0.9983 → 0.9979 |
+| W27X368 | 2.48 → 2.4751 | S, Z | 0.9910 → 0.9897 | 0.9963 → 0.9942 | 1.0017 → 1.0000 | 1.0009 → 0.9991 |
+| W24X370 | 2.72 → 2.7058 | I, S, Z | 0.9983 → 0.9948 | 1.0006 → 0.9949 | 1.0007 → 0.9960 | 1.0048 → 1.0000 |
+| W24X192 | 1.46 → 1.4578 | I, S, Z | 0.9956 → 0.9946 | 1.0013 → 0.9998 | 1.0013 → 1.0000 | 1.0009 → 0.9996 |
+| W18X283 | 2.50 → 2.4921 | I, S, Z | 0.9983 → 0.9961 | 1.0036 → 1.0000 | 1.0009 → 0.9980 | 1.0016 → 0.9986 |
+| W18X258 | 2.30 → 2.2885 | I, S, Z | 0.9988 → 0.9953 | 1.0057 → 1.0000 | 1.0028 → 0.9982 | 1.0024 → 0.9977 |
+| W18X234 | 2.11 → 2.0948 | A, I, S, Z | 1.0052 → 1.0000 | 1.0071 → 0.9990 | 1.0037 → 0.9971 | 1.0044 → 0.9976 |
+| W18X211 | 1.91 → 1.9021 | I, S, Z | 0.9985 → 0.9955 | 1.0045 → 1.0000 | 1.0030 → 0.9992 | 1.0037 → 0.9998 |
+| W18X192 | 1.75 → 1.7380 | A, I, S, Z | 1.0049 → 1.0000 | 1.0068 → 0.9994 | 1.0053 → 0.9990 | 1.0042 → 0.9979 |
+| W18X130 | 1.20 → 1.1931 | I, S, Z | 0.9975 → 0.9934 | 1.0058 → 1.0000 | 1.0016 → 0.9965 | 1.0038 → 0.9987 |
+| W18X119 | 1.06 → 1.0588 | I | 0.9975 → 0.9967 | 1.0010 → 0.9999 | 0.9990 → 0.9980 | 0.9983 → 0.9973 |
+| W16X89 | 0.875 → 0.8721 | I, S | 0.9962 → 0.9939 | 1.0032 → 1.0000 | 1.0017 → 0.9988 | 0.9980 → 0.9951 |
+| W14X873 | 5.51 → 5.4901 | I, S | 0.9990 → 0.9961 | 1.0015 → 0.9958 | 1.0041 → 1.0000 | 0.9999 → 0.9956 |
+| W14X808 | 5.12 → 5.0991 | I, S, Z | 0.9976 → 0.9944 | 1.0011 → 0.9948 | 1.0045 → 1.0000 | 1.0007 → 0.9958 |
+| W14X730 | 4.91 → 4.9088 | I | 0.9972 → 0.9970 | 1.0004 → 1.0000 | 0.9978 → 0.9976 | 0.9992 → 0.9989 |
+| W14X665 | 4.52 → 4.5177 | I | 0.9977 → 0.9973 | 1.0008 → 1.0000 | 0.9991 → 0.9986 | 0.9987 → 0.9981 |
+| W14X426 | 3.04 → 3.0321 | A, I, S, Z | 1.0021 → 1.0000 | 1.0027 → 0.9993 | 1.0026 → 0.9999 | 1.0010 → 0.9982 |
+| W14X398 | 2.85 → 2.8479 | I, S, Z | 0.9993 → 0.9987 | 1.0009 → 1.0000 | 1.0005 → 0.9998 | 1.0002 → 0.9994 |
+| W12X279 | 2.47 → 2.4646 | I | 0.9949 → 0.9932 | 1.0028 → 1.0000 | 0.9982 → 0.9960 | 0.9990 → 0.9966 |
+| W12X230 | 2.07 → 2.0649 | I, S, Z | 0.9977 → 0.9958 | 1.0031 → 1.0000 | 1.0016 → 0.9992 | 1.0018 → 0.9992 |
+| W12X190 | 1.74 → 1.7346 | I, S, Z | 0.9959 → 0.9935 | 1.0037 → 1.0000 | 1.0018 → 0.9988 | 1.0012 → 0.9980 |
+| W10X112 | 1.25 → 1.2479 | I | 0.9945 → 0.9932 | 1.0019 → 1.0000 | 0.9989 → 0.9973 | 0.9993 → 0.9976 |
+(1.0000 after = at most 1, shown to four places; the test checks ≤ 1 for every shape. S_3 here = 2 I_3 / d_3.)
+### Check case (tests/engine/sb-rolled.test.mjs)
+- **W18X234** (d 21.1, b_f 11.7, t_f 2.11, t_w 1.16 in; A 68.6 in², I_x 4900 in⁴, S_x 466, Z_x 549 in³). D = 21.1 − 2(2.11) = 16.88 in.
+  - Before: A_3 = 2(11.7)(2.11) + 16.88(1.16) = 49.374 + 19.5808 = 68.9548 in² (1.0052 A); I_3 = 2[11.7(2.11)³/12 + 11.7(2.11)(9.495)²]
+    + 1.16(16.88)³/12 = 2[9.1591 + 2225.6571] + 464.9370 = 4934.57 in⁴ (1.0071 I_x); S_3 = 2(4934.57)/21.1 = 467.73 (1.0037 S_x);
+    Z_3 = 11.7(2.11)(18.99) + 1.16(16.88)²/4 = 551.44 (1.0044 Z_x).
+  - A governs: t_f,eq = (A − D t_w)/(2 b_f) = (68.6 − 19.5808)/23.4 = 2.094838 → **2.0948 in** (rounded down).
+  - After: A_3 = 2(11.7)(2.0948) + 19.5808 = 68.59912 in² (0.99999 A); lever (16.88 + 2.0948)/2 = 9.4874 in; I_3 = 2[11.7(2.0948)³/12 +
+    11.7(2.0948)(9.4874)²] + 464.9370 = 2[8.9626 + 2206.0881] + 464.9370 = 4895.04 in⁴ (0.9990 I_x); d_3 = 16.88 + 2(2.0948) = 21.0696 in;
+    S_3 = 2(4895.04)/21.0696 = 464.65 in³ (0.9971 S_x); Z_3 = 11.7(2.0948)(18.9748) + 82.6328 = 547.69 in³ (0.9976 Z_x).
+  - In a girder (40 ft simple span, 5 girders at 8 ft, b_eff 96 in, 8 in slab, 2 in haunch, f′c 4 ksi, Grade 50W; the test bridge of
+    this file with L = 40 ft), midspan, Strength I: steel I 4934.57 → 4895.04 in⁴; short-term composite I_n 17 265.8 → 17 167.2 in⁴;
+    D_p 10.7150 → 10.6998 in, D_t 31.1 → 31.0696 in; M_n 3573.75 → 3558.51 kip-ft (−0.43 %); M_u 1319.11 kip-ft (the tabulated weight,
+    unchanged); M_u/φ_f M_n 0.3691 → 0.3707.
+- **W18X192** (d 20.4, b_f 11.5, t_f 1.75, t_w 0.96; A 56.2, I_x 3870, S_x 380, Z_x 442). D = 16.9 in. Before: A_3 = 2(11.5)(1.75) +
+  16.9(0.96) = 40.25 + 16.224 = 56.474 in² (1.0049 A); I_3 = 3896.38 in⁴ (1.0068 I_x). A governs: t_f,eq = (56.2 − 16.224)/23 = 1.738087
+  → **1.7380 in**. After: A_3 = 56.198 in² (0.99996 A); I_3 = 2[11.5(1.738)³/12 + 11.5(1.738)(9.319)²] + 0.96(16.9)³/12 = 2[5.0311 +
+  1735.7463] + 386.1447 = 3867.70 in⁴ (0.9994 I_x).
+- W36X135 (the ROLL hand check): not cut, every value unchanged (t_f 0.790, A_3 39.372, I_3 7713.29).
+### How verified
+- `node tests/engine/run.mjs sb-rolled`: 8 tests (6 before, unchanged and passing; new: every shape A, I, S (both fibres of
+  `SBDSections.steelCore`), Z ≤ tabulated within 1e-9 relative, only t_f changed, at most 0.021 in, minimal (0.0001 in thicker exceeds),
+  266 shapes with the plates of the first release; the two hand checks; the steps of a cut shape; the migration, once, and no change for
+  a shape that is not cut or a plate girder). The test "a project without a shape: the same results, bit for bit" still passes.
+- Steel engine subset, `check-syntax`, the Steel smokes: counts in the PR description.
+### Other copies
+- None. `shared/aisc-w.js` is unchanged (its test still checks the uncapped plates against the table, as data).
+### Open items (not changed; for the engineer)
+- ROLL-CAP above is a decision pending review (flange thickness reduced, web kept; S_x and Z_x included; I_y, r_y, J not capped).
+- I_y of the three plates exceeds the tabulated I_y for many shapes (b_f rounded); the girder checks do not use the tabulated I_y, r_y or
+  J, but the flange-plate quantities (r_t, f_ℓ = M_ℓ / (t_f b_f²/6), the cross-frame bracing I_y,eff) are computed with the tabulated
+  b_f. Not changed.
