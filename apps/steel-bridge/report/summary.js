@@ -56,15 +56,16 @@
   const GROUPS = [...new Set(COLS.map(c => c.grp))];
   /* DK (2026-11-23): the deck slab design (engine/deck.js; the bridge's deck, not a girder's) joins the verdict only where the project has it
      switched on (P.deckDesign.on). It is not a column of the girder table: deckOf(P) -> null (off), or { R, cells, st, gov } with one cell per
-     check DK1–DK3 (a ratio over 1.0: fail), or one REVIEW cell when its inputs are in error. overall() counts those cells once for the bridge
+     check DK1–DK6 (a ratio over 1.0: fail; DK4 to DK6 with their demand / limit pair dem, cap, DKTS 2026-11-24), or one REVIEW cell when its inputs are in error. overall() counts those cells once for the bridge
      (after at least one girder module has run, so that the verdict is never the deck's alone) and returns them as .deck. DECK_COL / DECK_G:
      the column and "girder" of such a cell where a governing check is named (tab 'dk'). A project without deck design: nothing changes. */
-  const DECK_COL = { id: 'deck', grp: 'Deck', head: 'Deck slab', short: 'Deck', tab: 'dk', what: 'DK1–DK3' }, DECK_G = { gi: 0, label: 'bridge deck', deck: true, cells: {} };
+  const DECK_COL = { id: 'deck', grp: 'Deck', head: 'Deck slab', short: 'Deck', tab: 'dk', what: 'DK1–DK6' }, DECK_G = { gi: 0, label: 'bridge deck', deck: true, cells: {} };
   function deckOf(P) {
     const DK = W().SBDDeck; if (!DK || !DK.isOn || !DK.isOn(P)) return null;
     let R; try { R = DK.calc(P); } catch (e) { R = { on: true, err: 'Calculation error: ' + (e && e.message) }; }
     const cells = R.err ? [{ st: 'review', r: null, mod: 'Deck', check: 'Deck design: input error', loc: R.err, tab: 'dk', why: R.err }]
-      : R.checks.map(c => ({ st: stOf(c.r, false, false), r: c.r, mod: 'Deck', check: `${c.id} ${c.title}`, loc: c.loc, tab: 'dk', step: c.step, id: c.id, Mu: c.Mu, phiMn: c.phiMn }));
+      : R.checks.map(c => ({ st: stOf(c.r, false, false), r: c.r, mod: 'Deck', check: `${c.id} ${c.title}`, loc: c.loc, tab: 'dk', step: c.step, id: c.id, Mu: c.Mu, phiMn: c.phiMn,
+          ...(c.Mu == null ? { req: c.req, prov: c.prov, unit: c.unit, dem: c.dem || null, cap: c.cap || null } : {}) }));   // DKTS (2026-11-24): DK4 to DK6 show their demand / limit (before: '—')
     const rank = { fail: 3, review: 2, pass: 1 }, st = cells.reduce((a, q) => (rank[q.st] > rank[a] ? q.st : a), 'pass');
     const gov = cells.filter(q => q.r != null).reduce((a, q) => (!a || gr(q.r) > gr(a.r) ? q : a), null) || cells[0];
     return { R, cells, st, gov };
