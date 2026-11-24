@@ -126,9 +126,28 @@
     const xf = A && Array.isArray(A.xf) ? A.xf : CFm ? CFm.pts : B && Array.isArray(B.xf) ? B.xf : [];
     o.xf = xf.filter(q => q && isNum(q.x) && isNum(q.P)).map(q => ({ x: q.x, P: q.P })); o.src.xf = A && Array.isArray(A.xf) ? 'girder' : CFm ? 'module' : B && Array.isArray(B.xf) ? 'manual' : 'none';
     if (CFm) o.xfInfo = { line: CFm.line, tot: CFm.tot, n: CFm.pts.length, kind: CFm.X.kind, allow: CFm.X.allow };
-    o.steelAllowPct = A && isNum(A.steelAllowPct) ? A.steelAllowPct : M && isNum(mod.allow) ? mod.allow : settings(P).steelAllowPct;
+    o.steelAllowPct = allowFor(P, g, mod).pct;   // SBALLOW (2026-11-24): the same precedence as before, in allowFor
     o.source = A ? (A.source || 'girder loads') : M ? `loads module, cross-section girder G${mod.j + 1}${ov && ['DC1wet', 'DC2', 'DW', 'UT', 'UF', 'PL'].some(k => o.src[k] === 'manual') ? ', with entered overrides' : ''}` : B && g.loadsOverride !== false ? 'entered (manual)' : 'none entered';
     return o;
+  }
+  /* allowFor(P, g, mod) / allowOf(P, gi, mod) (SBALLOW, 2026-11-24): the girder steel detail allowance (%) the analysis of plate girder g
+     (index gi) uses, loadsOf's steelAllowPct, and where it comes from: { pct, src } with src
+       'girder'  the explicit girder loads, girder.loads.steelAllowPct (a hand-off);
+       'module'  the loads module, xs.allow (Loads input tab, card "Wearing surface, forms and steel"; blank: 0);
+       'setting' analysis.steelAllowPct (Loads input tab, Analysis settings; default 5), only when neither gives one.
+     allowFor takes the loads module result mod as loadsOf does (none: no module); allowOf(P, gi) without mod computes it as
+     analyzeGirder does (none when the girder has both explicit loads and factors). The Analysis settings box and the erection drawing
+     (engine/sheets.js erect) show this value, so they cannot disagree with DC1 of the analysis. */
+  function allowFor(P, g, mod) {
+    const A = (g && g.loads) || null, M = mod && mod.G ? mod.G : null;
+    if (A && isNum(A.steelAllowPct)) return { pct: A.steelAllowPct, src: 'girder' };
+    if (M && isNum(mod.allow)) return { pct: mod.allow, src: 'module' };
+    return { pct: settings(P).steelAllowPct, src: 'setting' };
+  }
+  function allowOf(P, gi, mod) {
+    const g = P && P.girders ? P.girders[gi] : null; if (!g) return { pct: settings(P).steelAllowPct, src: 'setting' };
+    if (mod === undefined) mod = g.loads && g.df ? null : moduleOf(P, gi);
+    return allowFor(P, g, mod);
   }
   /* deadOverride(g, M) / dfOverride(g, modOk): is the girder's "Override calculated value" on for its dead loads / distribution factors
      (added 2026-11-09)? The saved flag (girder.loadsOverride / girder.dfOverride, true | false) when there is one; absent (every project
@@ -709,5 +728,5 @@
     return { level: lv, items, th, wg, Is, steps: w.steps };
   }
 
-  window.SBDAnalysis = { skewTaper, plateOfLine, applicability, DEF, STEEL_PLF, grid, settings, lineOf, deflOwner, moduleOf, loadsOf, dfOf, deadOverride, dfOverride, clOf, fmOf, sbOf, analyzeGirder, pourRegions, ready, llPL };
+  window.SBDAnalysis = { skewTaper, plateOfLine, applicability, DEF, STEEL_PLF, grid, settings, lineOf, deflOwner, moduleOf, loadsOf, allowFor, allowOf, dfOf, deadOverride, dfOverride, clOf, fmOf, sbOf, analyzeGirder, pourRegions, ready, llPL };
 })();

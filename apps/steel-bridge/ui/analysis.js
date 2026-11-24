@@ -39,6 +39,19 @@
   const calcL = (C, k) => C.M ? ({ DC1wet: C.M.DC1, DC2: C.M.DC2, DW: C.M.DW, UT: C.M.UT, UF: C.M.UF, PL: C.M.PL })[k] : null;
   const calcD = (C, k) => { if (!C.rgOk || !C.mod) return null; const R = C.mod.R, j = C.mod.j, s0 = R.regions.find(r => r.id === 's0'), p1 = R.regions.find(r => r.id === 'p1');
     if (!s0) return null; return k === 'gDef' ? s0.gDef : k === 'gMpier' ? (p1 ? p1.members[j].gM : null) : s0.members[j][k]; };
+  /* allowRow(P, C, S, A0) (SBALLOW, 2026-11-24): the girder steel detail allowance of the Analysis settings. The box (analysis.steelAllowPct,
+     saved as before) only when the analysis of this girder uses it (SBDAnalysis.allowFor: neither the girder loads nor the loads module give
+     one); otherwise the value used, read-only and grey, with its source and a link to where it is entered (the stored setting is kept). */
+  function allowRow(P, C, S, A0) {
+    const al = AN().allowFor(P, C.g, C.mod);
+    if (al.src === 'setting') return numIn('a', 'steelAllowPct', 'Girder steel detail allowance', '%', S.steelAllowPct);
+    const kept = blank(A0.steelAllowPct) ? '' : ` The Analysis setting entered before (${esc(A0.steelAllowPct)} %) is kept and used only when neither gives a value.`;
+    const where = al.src === 'module'
+      ? `from the loads module: Steel detail allowance (<a href="#" data-itgo="loads">card "Wearing surface, forms and steel", this tab</a>; blank there: 0 %)`
+      : 'from the girder loads of the imported hand-off (girder.loads.steelAllowPct; not entered in this app)';
+    return `<div class="fRow sb-allow-used"><label for="an_a_steelAllowPct_used">Girder steel detail allowance</label><input type="number" id="an_a_steelAllowPct_used" value="${esc(al.pct)}" disabled readonly style="background:#eee;color:#666" title="Used by the analysis; entered elsewhere (see the note)"><span class="unit">%</span></div>
+      <p class="note">Detail allowance used by the analysis of this girder: <b>${f(al.pct, 1)} %</b>, ${where}; worked in DC1 on the <a href="#" data-gotab="an">Analysis tab</a> (steps an.wst*).${kept}</p>`;
+  }
   function inputs(P, gi, opt) {
     const S = AN().settings(P), A0 = P.analysis || {}, C = ctxOf(P, gi), g = C.g, LV = opt && opt.lov ? opt.lov : null, T = LV ? LV.T : g;
     const Lm = LV ? (LV.o.loadsManual || {}) : g.loadsManual || {}, Dm = LV ? (LV.o.dfManual || {}) : g.dfManual || {}, LD = C.LD, gl = esc(g.label || g.id) + (LV ? `, line G${LV.j + 1}` : '');
@@ -55,7 +68,7 @@
       ${sel('deflSidewalk', 'Sidewalk or pedestrians, owner LL deflection limit (OWN19)', [['auto', 'Automatic: a sidewalk on the Cross-section tab'], ['yes', 'Yes'], ['no', 'No']])}
       ${sel('seq', 'Deck placement sequence (6.10.3.4.1)', [['on', 'On'], ['off', 'Off']])}${sel('seqMod', 'Hardened pours act with', [['n', 'n'], ['3n', '3n']])}
       <div class="fRow"><label for="an_a_seqCustom">Pours (optional)</label><input type="text" id="an_a_seqCustom" data-an="a" data-k="seqCustom" value="${esc(S.seqCustom)}" style="width:180px"><span class="unit">from–to per row (none: automatic)</span></div>
-      ${numIn('a', 'steelAllowPct', 'Girder steel detail allowance', '%', S.steelAllowPct)}
+      ${allowRow(P, C, S, A0)}
       ${sel('haunchInStiffness', 'Haunch in the composite stiffness', [['', 'As the owner rule (OWN8)'], ['true', 'Yes'], ['false', 'No']])}
       <p class="note">Used by the <a href="#" data-gotab="an">Analysis tab</a> (moved here from it; saved as before); the LL deflection limit, the sidewalk choice and the cracked zones also by the <a href="#" data-gotab="defl">Deflection tab</a>.</p>`, 'an-settings');
     // dead loads: the calculated values, the override box, the entered values

@@ -632,7 +632,7 @@
     else if (el.dataset.path) { const k = el.dataset.kind, v = el.value;
       set(el.dataset.path, k === 'num' ? (v === '' ? NaN : Number(v)) : k === 'sel' ? (v === 'true' ? true : v === 'false' ? false : v) : v); }
     else return;
-    changed(/segments\.\d+\.x1$/.test(el.dataset.path || '') || el.dataset.kind === 'spans' || /label$/.test(el.dataset.path || '') || /^(ownerRules|xs\.(edges\.[LR]\.type|ws\.mode)|stiffeners\.layout\.(mode|web)|framing\.|crossframes\.|splices\.auto|fatigue\.gam\.fI$)/.test(el.dataset.path || ''));   // fatigue.gam.fI: the studs' read-only γ on the same input tab (SCGAM)
+    changed(/segments\.\d+\.x1$/.test(el.dataset.path || '') || el.dataset.kind === 'spans' || /label$/.test(el.dataset.path || '') || /^(ownerRules|xs\.(edges\.[LR]\.type|ws\.mode|allow$)|stiffeners\.layout\.(mode|web)|framing\.|crossframes\.|splices\.auto|fatigue\.gam\.fI$)/.test(el.dataset.path || ''));   // fatigue.gam.fI: the studs' read-only γ on the same input tab (SCGAM); xs.allow: the read-only detail allowance of the Analysis settings on the same tab (SBALLOW)
   });
   $('inPanes').addEventListener('click', e => {
     const og = e.target.closest('[data-gotab]'); if (og) { e.preventDefault(); const b = document.querySelector(`#tabBar [data-otab="${og.dataset.gotab}"]`); if (b) b.click(); return; }   // AIN: a link to an output tab
