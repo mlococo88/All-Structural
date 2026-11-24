@@ -11604,3 +11604,45 @@ None changed (no key, path or format touched).
 ### Decisions (pending engineer review)
 - SWGRP-1. Labels drop the side under each sub-heading ("Width", "Edge type"); the side remains as hidden label text, so the input-check banner reads e.g. "Left sidewalk: Fence from deck edge".
 - SWGRP-2. The shared items of the sidewalk card are headed "Pedestrian load and median"; the deck-edge card has no shared inputs (its note stays at the end). The `<hr>` between the two deck edges is replaced by the sub-headings.
+
+## 2026-11-24 — PR: claude/sp3-allow-of (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SBALLOW2) — the splice shipping weight check SP3, the old app's splice placement rule and the BOM note use the girder steel detail allowance of the analysis (SBDAnalysis.allowOf)   [CALCULATION CHANGE in a rare case only: SP3 and the reference placement change only where the loads module fails or hand-off girder loads give their own allowance]
+### Problem
+PR #1690 (SBALLOW) made the analysis's girder steel detail allowance available once, `SBDAnalysis.allowFor / allowOf` (the girder loads of a hand-off, girder.loads.steelAllowPct; else the loads module's xs.allow, blank 0; else the Analysis setting analysis.steelAllowPct, default 5), and used it for the Analysis settings box and the erection drawing. The Auto design splice checks still read `+((P.xs || {}).allow) || 0` directly: SP3 (piece shipping weight ≤ W_ship, engine/splplace.js `check`, called from engine/autodesign.js `splCheck`) and the old app's placement rule (engine/splplace.js `reference`, which divides pieces over the shipping weight, called from `splPlan`). Where the loads module fails (the analysis then uses the setting) or a hand-off gives the girder its own allowance, SP3 weighed a piece with a different allowance from the DC1 of the analysis. The Report's steel bill of materials note ("The analysis adds a detail allowance of X % …", report/builders.js `bomTotals`) quoted xs.allow the same way. More conservative where the analysis's allowance is larger than xs.allow, less where it is smaller.
+### Where
+- `apps/steel-bridge/engine/autodesign.js` `splCheck(P, S, L, Q)`, anchor `const segs = segmentsOf(L), al = splAllow(P, S);`; new `splAllow(P, S)` just below it, anchor `function splAllow(P, S) {`; `splPlan(P, S, ctx, L0)`, anchor `allow = splAllow(P, S).pct, ref =`.
+- `apps/steel-bridge/engine/splplace.js` `check(P, spl, Ru, o)`: SP3 step note, anchor `3.403 lb/ft per in² (0.490 kcf).${o.allowSrc`; header comment of `check` (o.allowSrc).
+- `apps/steel-bridge/report/builders.js` `bomTotals(P, PL, units, xf, rest)`, anchor `const AN = window.SBDAnalysis, alg =`.
+### Before / After
+`engine/autodesign.js splCheck`:
+```js
+// before
+const segs = segmentsOf(L); return SPP().check(P, L.spl, S.splR, { segs, allow: +((P.xs || {}).allow) || 0, trans: SPP().transitions(segs, L.spl), frames: Q ? framesOf(Q) : null });
+// after
+const segs = segmentsOf(L), al = splAllow(P, S); return SPP().check(P, L.spl, S.splR, { segs, allow: al.pct, allowSrc: al.txt, trans: SPP().transitions(segs, L.spl), frames: Q ? framesOf(Q) : null });
+```
+`engine/autodesign.js splPlan`:
+```js
+// before
+const Ru = S.splR, cf = Sp.contraflexure(R), segs0 = segmentsOf(L0), allow = +((P.xs || {}).allow) || 0, ref = Sp.reference(P, cf, Ru, segs0, allow);
+// after
+const Ru = S.splR, cf = Sp.contraflexure(R), segs0 = segmentsOf(L0), allow = splAllow(P, S).pct, ref = Sp.reference(P, cf, Ru, segs0, allow);
+```
+New `splAllow(P, S)`: the largest `SBDAnalysis.allowOf(P, gi).pct` over the plate girders the layout goes on (every girder that is not `adFixed`; none: every girder), with a text naming the source for the SP3 step note; memo per settings object S (one Auto design run); without SBDAnalysis.allowOf: `+xs.allow || 0` as before.
+`engine/splplace.js check`, SP3 note: before `` note: `W_ship: ${Ru.src.shipWt}. 3.403 lb/ft per in² (0.490 kcf).` `` after `` note: `W_ship: ${Ru.src.shipWt}. 3.403 lb/ft per in² (0.490 kcf).${o.allowSrc ? ` ${o.allowSrc}.` : ''}` ``.
+`report/builders.js bomTotals`: before `const al = +((P.xs || {}).allow) || 0, Ua = …` and `` `…adds a detail allowance of ${f(al, 0)} % to the girder…` ``; after the allowOf value of every plate girder (`alg`), one value `X %` where they agree, else `X % (G1), Y % (G2)`: `` `…adds a detail allowance of ${alT} to the girder…` ``.
+The SP3 expression itself is unchanged: W_pc = (1 + a/100) Σ 3.403 A_i L_i ≤ W_ship; only the source of a changes: before a = xs.allow; after a = SBDAnalysis.allowOf (the a of the analysis's DC1 girder steel).
+### Governing provision
+None: the detail allowance is an owner/designer allowance, not an AASHTO value; W_ship is an Auto design input (owner or fabricator limit). Steel unit weight unchanged: AASHTO LRFD 10th Ed. Table 3.5.1-1, 0.490 kcf (3.403 lb/ft per in² of plate).
+### Check case
+- Hand check: a piece of 30.00 kip of plates, loads module failed (xs.nb = 0) so the analysis uses the setting 5 % while xs.allow = 3 %: SP3 before 30.00 × (1 + 3/100) = **30.90** kip, after 30.00 × (1 + 5/100) = **31.50** kip (both ≤ 90 kip default W_ship).
+- Built-in project with the loads module failing (xs.nb = 0), xs.allow 3, setting 5, splices 82/145/215/278 ft: SP3 piece 1 (0–82 ft) plates 17.79 kip: before 18.3 kip (ratio 0.2036), after 18.7 kip (0.2075); piece 3 (145–215 ft) 15.18 kip: 15.6 → 15.9 kip.
+- Hand-off girder loads 5 % with xs.allow 2 %: SP3 at 5 % (before 2 %); two plate girders 5 % and 8 %: 8 % (the larger).
+### What changes for a project
+Only projects whose loads module fails (the analysis then uses the Analysis setting) or whose girders carry a hand-off allowance (girder.loads.steelAllowPct) that differs from xs.allow: SP3 weights and ratios, the reference layout of Auto splice placement where a piece is near W_ship, and the BOM note's %. Every other project: identical. Checked by a scratch script that runs `splCheck` (every SP1–SP6 item and ratio) and `splPlan` (reference and layouts) with origin/main's and this branch's engines on 8 made-up projects (default; xs.allow 3; xs.allow 8 with setting 2; xs.allow blank; 4 splices with xs.allow 4; simple 120 ft span; MassDOT xs.allow 6; loads module failing): 7 identical, only the last differs (the 5 SP3 rows above).
+### How verified
+`node tests/engine/run.mjs sb-sp3-allowance sb-detail-allowance autodesign-splices splices sb-report report sheets lga`; `node tests/check-syntax.mjs`; the before/after scratch comparison above.
+### Saved data
+None: no key, field or format changes.
+### Open items
+- engine/lga.js (MIDAS .lga export) adds `xs.allow` to w_misc. The export stops when the loads module fails, so it differs from the analysis only with a hand-off girder allowance; not changed (an export mapping, raise with the engineer).
+- With girders of different allowances SP3 takes the largest (conservative, Decision pending engineer review); the layout is one per Auto design run.
