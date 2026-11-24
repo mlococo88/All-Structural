@@ -11815,7 +11815,7 @@ None.
 - Geometry-mode barriers (BARG) are still drawn with the schematic shape; drawing their own outline (and seating the fence on it) is the follow-up PR (approved by the engineer 2026-11-24).
 - The Deck tab's section figure (ui/deck.js) draws no railing or fence; not changed.
 
-## 2026-11-24 — PR: claude/sb-geom-barrier-render (PR #TBD) (GEOM) — a barrier entered by its geometry is drawn with its own outline in every rendering, the fence on its top (display only)
+## 2026-11-24 — PR: claude/sb-geom-barrier-render (PR #1705: https://github.com/mlococo88/All-Structural/pull/1705) (GEOM) — a barrier entered by its geometry is drawn with its own outline in every rendering, the fence on its top (display only)
 ### Request (engineer, 2026-11-24, approved follow-up of FOB)
 Render the Geometry-mode barriers (BARG, "Barrier weight from: Geometry", shared/barrier.js) with their actual profile in the 3D view, the DXF and the 2D graphics, and seat the railing / fence on that profile's top. Entered barriers render exactly as before.
 ### Where / Before / After
