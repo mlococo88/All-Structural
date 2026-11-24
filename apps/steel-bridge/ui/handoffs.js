@@ -161,6 +161,36 @@
       haunchInProperties: !L.h0, haunchCite: cit(row('ld.haunch0')),
       ratingTarget: rr ? { kind: rr.kind, rf: rr.value && +rr.value.rf > 0 ? +rr.value.rf : null, fatigue: rr.value && +rr.value.fat > 0 ? +rr.value.fat : null, cite: cit(rr), basis: 'HL-93 inventory design-load rating, AASHTO factors without m or eta' } : null, _L: L };
   }
+  /* BRG-HO (2026-11-24): the pedestrian reaction as an optional separate item, the PS Bridge app's shape (HANDOFF.md §4.4 "Separate items",
+     SRP #1683): girders[].separate = { PL, PLmin } (kip, unfactored, + up; max and min of the girder's pedestrian load reaction, R.pl.R) on
+     the girders whose line carries a pedestrian load, and the top-level descriptor PL_SEP. The existing fields keep their meaning: the
+     pedestrian load is in no other field (DC1, DC2, DW, UT, UF and liveLoad unchanged); this app's utilities stay in their own top-level
+     girders[].UT / UF (outside DC1), so no utility goes in "separate" (Decision BRG-D12). A project without a pedestrian load sends the
+     same payload as before. */
+  const plHas = R => !!(R && R.loads && R.loads.PL > 0 && R.pl && R.pl.R && R.pl.R.some(q => q.max > 1e-9 || q.min < -1e-9));
+  const PL_SEP = { note: 'Optional separate items under supports[].girders[].separate (kip, unfactored, + up). includedIn names the existing field that ALREADY contains the item; includedIn null: the item is in no other field. This app\'s utilities are its own fields girders[].UT / UF (outside DC1), as before.',
+    pedestrian: { field: 'PL', fieldMin: 'PLmin', includedIn: null, loadType: 'PL', cite: 'AASHTO LRFD 10th Ed. 3.6.1.6', imIncluded: false, dfIncluded: false, basis: 'pedestrian live load of the sidewalks, the girder line\'s share (this app\'s w_PL); max / min over the influence line; no dynamic load allowance, no distribution factor' } };
+  /* runLines(P): the analysis of every cross-section girder line, moved out of srPayload unchanged (BRG-HO, 2026-11-24, so that the bearing
+     loads hand-off uses the same runs): { LN (lines(P)), Rs (one result per line), src (the run whose HL-93 per-lane envelope and
+     pedestrian influence areas the line takes: the line's own full run, or the full run of the plates it borrows) } or { error } */
+  function runLines(P) {
+    const LN = lines(P), Rs = [], src = [], full = new Map();
+    const run = (Q, gi, o) => { const R = AN().analyzeGirder(Q, gi, o); if (R.errors && R.errors.length) throw new Error(R.errors[0]); return R; };
+    try {
+      for (const q of LN) {
+        if (q.own && q.P === P) { if (!full.has(q.gi)) full.set(q.gi, run(P, q.gi)); Rs.push(full.get(q.gi)); src.push(full.get(q.gi)); continue; }
+        // a borrowed line, and (SB-2 PR 4) a girder type on a line other than its design line (atLine: the same plates, so the same
+        // per-lane envelope as the type's design-line run): its own dead load run, the live load as below
+        const si = q.own ? q.gi : q.src; if (!full.has(si)) full.set(si, run(P, si));
+        const D = full.get(si), R = run(q.P, q.own ? q.gi : 0, { ll: false }), ns0 = R.spans.length;
+        if (D.llR) R.llR = D.llR.map((r, k) => { const adj = [k - 1, k].filter(i => i >= 0 && i < ns0), gV = Math.max(...adj.map(i => R.df.spans[i].gV)); return { k, gV, max: gV * r.perLane.max, min: gV * r.perLane.min, perLane: r.perLane, two: r.two }; });
+        if (R.loads.PL > 0) { if (D.pl && D.loads.PL > 0) R.pl = { w: R.loads.PL, R: D.pl.R.map(r => ({ k: r.k, max: r.max / D.loads.PL * R.loads.PL, min: r.min / D.loads.PL * R.loads.PL })) };
+          else R.pl = run(q.P, q.own ? q.gi : 0).pl; }
+        Rs.push(R); src.push(D);
+      }
+    } catch (e) { return { error: e.message }; }
+    return { LN, Rs, src };
+  }
   /* srPayload(P): GirderDetail gdSrPayload on this app's analysis. { ok, payload, sum } or { error } */
   function srPayload(P) {
     if (!AN()) return { error: 'The analysis module is not loaded.' };
@@ -169,29 +199,16 @@
     // cross-section girder that borrows a plate girder's plates takes them from that girder's full run, times its own g_V (the larger of the
     // adjacent spans, as engine/analysis.js llR) and its own w_PL; its dead loads come from its own run without live load (opt.ll = false).
     // The same values as a full run of that girder, without repeating the moving-load analysis (about 20 s per girder).
-    const LN = lines(P), Rs = [], full = new Map();
-    const run = (Q, gi, o) => { const R = AN().analyzeGirder(Q, gi, o); if (R.errors && R.errors.length) throw new Error(R.errors[0]); return R; };
-    try {
-      for (const q of LN) {
-        if (q.own && q.P === P) { if (!full.has(q.gi)) full.set(q.gi, run(P, q.gi)); Rs.push(full.get(q.gi)); continue; }
-        // a borrowed line, and (SB-2 PR 4) a girder type on a line other than its design line (atLine: the same plates, so the same
-        // per-lane envelope as the type's design-line run): its own dead load run, the live load as below
-        const si = q.own ? q.gi : q.src; if (!full.has(si)) full.set(si, run(P, si));
-        const D = full.get(si), R = run(q.P, q.own ? q.gi : 0, { ll: false }), ns0 = R.spans.length;
-        if (D.llR) R.llR = D.llR.map((r, k) => { const adj = [k - 1, k].filter(i => i >= 0 && i < ns0), gV = Math.max(...adj.map(i => R.df.spans[i].gV)); return { k, gV, max: gV * r.perLane.max, min: gV * r.perLane.min, perLane: r.perLane, two: r.two }; });
-        if (R.loads.PL > 0) { if (D.pl && D.loads.PL > 0) R.pl = { w: R.loads.PL, R: D.pl.R.map(r => ({ k: r.k, max: r.max / D.loads.PL * R.loads.PL, min: r.min / D.loads.PL * R.loads.PL })) };
-          else R.pl = run(q.P, q.own ? q.gi : 0).pl; }
-        Rs.push(R);
-      }
-    } catch (e) { return { error: e.message }; }
+    const RL = runLines(P); if (RL.error) return { error: RL.error }; const LN = RL.LN, Rs = RL.Rs;   // BRG-HO: the runs moved to runLines (unchanged)
     const R0 = Rs[0], ns = R0.spans.length, lab = i => `G${i + 1}`;
     const sid = k => k === 0 ? 'Abut. 1' : k === ns ? 'Abut. 2' : `Pier ${k}`;
     const has = (R, k) => isNum(R.loads[k]) && R.loads[k] > 0;
     const supports = R0.sup.map((x, k) => ({ id: sid(k), x: r3(x),
       girders: Rs.map((R, i) => { const S = R.st; return { label: lab(i), position: ext0(i, nb) ? 'exterior' : 'interior', DC1: r3(S.DC1.R[k]), DC2: r3(S.DC2.R[k]), DW: r3(S.DW.R[k]),
-        ...(has(R, 'UT') ? { UT: r3(S.UT ? S.UT.R[k] : 0) } : {}), ...(has(R, 'UF') ? { UF: r3(S.UF ? S.UF.R[k] : 0) } : {}) }; }) }));
+        ...(has(R, 'UT') ? { UT: r3(S.UT ? S.UT.R[k] : 0) } : {}), ...(has(R, 'UF') ? { UF: r3(S.UF ? S.UF.R[k] : 0) } : {}),
+        ...(plHas(R) ? { separate: { PL: r3(R.pl.R[k].max), PLmin: r3(R.pl.R[k].min) } } : {}) }; }) }));   // BRG-HO (SRP shape, PS #1683): the pedestrian reaction as the optional item separate.PL / PLmin
     const per = (fn, gs) => R0.sup.map((_, k) => `${sid(k)}: ${(gs || Rs.map((_, i) => i)).map(i => `${lab(i)} ${fn(Rs[i], k)}`).join(', ')}`).join('; ');
-    const hasPL = Rs.some(R => R.pl && R.pl.R && R.pl.R.some(q => q.max > 1e-9 || q.min < -1e-9));
+    const hasPL = Rs.some(plHas);
     const gUT = Rs.map((_, i) => i).filter(i => has(Rs[i], 'UT')), gUF = Rs.map((_, i) => i).filter(i => has(Rs[i], 'UF'));
     const ORD = ownerRulesData(P), L = ORD ? ORD._L : { o: 'AASHTO', m: 1, eta: 1, etaN: 1, eD: 1, eR: 1, eI: 1, h0: false }; if (ORD) delete ORD._L;
     const lfId = L.m === 1 && L.eta === 1 && L.etaN === 1 && !L.h0;
@@ -203,7 +220,7 @@
       `Unfactored, kip, + up. DC1 = girder steel (490 pcf x (1 + ${f0(R0.loads.steelAllowPct)}% detail allowance)), cross-frames and diaphragms (point loads at the girder's frames), deck, haunch, SIP forms and other DC1 loads, on the steel section; DC2 and DW on the long-term composite section; each load on the stage that carries it.`,
       `Live load is not sent (liveLoad null): Substructure Loading computes its own. For information, this app's LL+IM reactions per girder (HL-93, IM ${f0(S0.im)}% on the truck and tandem, x the girder's shear distribution factor with the skew correction, the larger of the adjacent spans; 90% of two trucks plus lane at interior supports), max / min, kip: ${per((R, k) => R.llR ? `${f2(R.llR[k].max)} / ${f2(R.llR[k].min)}` : 'n/a')}.`,
       ...(LN.some(q => !(q.own && q.P === P)) ? [`Assumption (engineer decision SB-13, 2026-11-13): the LL+IM values above for ${LN.filter(q => !(q.own && q.P === P)).map(q => `G${q.j + 1}`).join(', ')} (a line other than its girder type's design line${borrowed.length ? ', or a line that borrows a plate girder' : ''}) are the HL-93 per-lane reaction envelope of the design-line run of the same plates times that line's own shear distribution factor g_V (the larger of the adjacent spans), not a separate moving-load run of the line: the per-lane envelope depends only on the spans and the plates (live-load stiffness); each line's dead loads come from its own run.`] : []),
-      ...(hasPL ? [`Pedestrian load: no field in this hand-off, not sent as a load. This app's pedestrian load reactions, max / min, kip: ${per((R, k) => R.pl && R.pl.R ? `${f2(R.pl.R[k].max)} / ${f2(R.pl.R[k].min)}` : '0.00 / 0.00')}.`] : []),
+      ...(hasPL ? [`Pedestrian load: sent as the optional separate item girders[].separate { PL, PLmin } (max / min, kip, unfactored, no IM, no distribution factor: this app's w_PL is already the girder's share; in NO other field; described in the top-level "separate"). This app's pedestrian load reactions, max / min, kip: ${per((R, k) => R.pl && R.pl.R ? `${f2(R.pl.R[k].max)} / ${f2(R.pl.R[k].min)}` : '0.00 / 0.00')}.`] : []),
       ...(gUT.length || gUF.length ? [`MassDOT utilities (OWN16; MassDOT LRFD Bridge Manual Part I 3.5.5.2, 3.5.5.4) are NOT in DC1, DC2 or DW; they are sent as their own fields girders[].UT (existing) and girders[].UF (future allowance), unfactored, on the girders that carry them (0 on the others). ${gUT.length ? `Existing utilities (UT; factored as DW: Strength 1.50 where they add, 0.65 where they relieve), kip: ${per((R, k) => f2(R.st.UT ? R.st.UT.R[k] : 0), gUT)}.` : 'No existing utilities.'} ${gUF.length ? `Future utility allowance (UF; Strength 1.25 where it adds, 0 where it relieves), kip: ${per((R, k) => f2(R.st.UF ? R.st.UF.R[k] : 0), gUF)}.` : 'No future utility allowance.'}`] : []),
       ...(P.girders.some(g => g.dfPull && g.dfPull.use !== false) ? ['Distribution factors pulled from LL & DL apply to their own plate girder only; only the LL+IM values in these notes depend on them.'] : []),
       ...(!R0.cont && ns > 1 ? ['Simple spans: the reaction at a pier is the sum of the end reactions of the two spans on it (one support point in this model); split it between the back and ahead bearing rows by hand where needed.'] : []),
@@ -211,11 +228,85 @@
     const pr = P.project || {};
     const payload = { _schema: SR.schema, schemaVersion: 1, producer: PRODUCER, producerFile: FILE,
       project: { name: String(pr.name || ''), bridgeId: '' }, units: { force: 'kip', length: 'ft' }, factored: false, imIncluded: false, dfIncluded: false, perGirder: true,
-      allGirders: true, span: { index: null, length: r3(R0.Lt) }, supports, liveLoad: null, notes, ...(ORD ? { ownerRules: ORD } : {}),
+      allGirders: true, span: { index: null, length: r3(R0.Lt) }, supports, liveLoad: null, notes, ...(ORD ? { ownerRules: ORD } : {}), ...(hasPL ? { separate: PL_SEP } : {}),
       ...(gUT.length || gUF.length ? { utilities: { cite: 'MassDOT LRFD Bridge Manual Part I 3.5.5.2, 3.5.5.4 (OWN16)', section: 'noncomposite (steel)',
         existing: gUT.length ? { field: 'UT', treatAs: 'DW', strMax: 1.50, strMin: 0.65, service: 1.0 } : null,
         future: gUF.length ? { field: 'UF', treatAs: 'DC', strMax: 1.25, strMin: 0, service: 1.0, serviceRelieving: 0 } : null } } : {}) };
     return { ok: true, payload, sum: supports.map(s => `  ${s.id} (x = ${f2(s.x)} ft): ${s.girders.map(g => `${g.label} ${f2(g.DC1)} / ${f2(g.DC2)} / ${f2(g.DW)}${g.UT != null || g.UF != null ? ` (UT ${f2(g.UT || 0)}, UF ${f2(g.UF || 0)})` : ''}`).join(', ')}`).join('\n') };
+  }
+
+  /* ---------- 3b. bearingLoads (HANDOFF.md §4.17; BRG-HO, 2026-11-24): the bearing loads for the Elastomeric Bearing Design Module ----------
+     blPayload(P): from the same runs as srPayload (runLines). Every value is read from the analysis (unfactored, kip, + up, per girder):
+       continuous girders, or one span: one bearing line per support (the girder is continuous over the pier on one bearing):
+         DC1, DC2, DW = R.st.<stage>.R[k] (the Analysis tab's reactions, as superReactions); LL maxIM / minIM = R.llR[k] (HL-93 with IM,
+         × g_V the larger of the adjacent spans; 90 % of two trucks plus lane at interior supports, 3.6.1.3.1); PL / PLmin = R.pl.R[k];
+       simple spans (more than one): two bearing lines per pier ("back" = span k right end, "ahead" = span k+1 left end), each the end shear
+         of its span: ahead = V_R, back = −V_L at the support station (st.<stage>.VR / VL); a point load applied at the support station (the
+         end cross-frame or diaphragm, the part R − (V_R − V_L) of the reaction) goes half to each end at a pier (Decision BRG-D13) and
+         whole to the one end at an abutment, so the two lines sum to R; LL: the span's g_V × the HL-93 per-lane end shear with IM (the line's
+         own R.ll, or for a line that borrows plates the per-lane envelope of that run, as srPayload's llR); PL: the end shear of R.pl
+         (V_R / V_L; scaled by w_PL for a borrowed line, as srPayload);
+       UT, UF (this app's MassDOT utilities, outside DC1 in superReactions): ADDED to DC1 here and sent as separate.UT / UF ALREADY INSIDE
+         DC1, the meaning the bearingLoads channel gives them (shared/bearing-loads.js: P_DL = DC1 + DC2 + DW includes them, P_min takes them
+         out); LL without IM: not sent (max / min null: this app's moving-load run has IM on the axles; a run without IM is not made).
+     movement: material steel, the continuous unit or each span, fixity null (this app defines no bearing fixity; no thermal coefficient). */
+  const BL_ID = 'steelbridge';
+  function blPayload(P) {
+    if (!AN()) return { error: 'The analysis module is not loaded.' };
+    const SB = window.SharedBearingLoads; if (!SB) return { error: 'shared/bearing-loads.js is not loaded.' };
+    const nb = P.xs ? Math.round(P.xs.nb) : 0; if (!(nb > 0)) return { error: 'Define the cross-section (number of girders) first.' };
+    const RL = runLines(P); if (RL.error) return { error: RL.error };
+    const Rs = RL.Rs, SRC = RL.src, R0 = Rs[0], ns = R0.spans.length, sup = R0.sup, perEnd = !R0.cont && ns > 1;
+    const sid = k => k === 0 ? 'Abut. 1' : k === ns ? 'Abut. 2' : `Pier ${k}`;
+    const has = (R, k) => isNum(R.loads[k]) && R.loads[k] > 0;
+    const idxOf = (xs, v) => xs.reduce((b, x, i) => Math.abs(x - v) < Math.abs(xs[b] - v) ? i : b, 0);
+    const lines = [];
+    if (!perEnd) sup.forEach((x, k) => lines.push({ support: sid(k), side: k === 0 ? 'ahead' : k === ns ? 'back' : 'both', span: k === 0 ? 1 : k === ns ? ns : null, end: k === 0 ? 'left' : k === ns ? 'right' : '', x: r3(x), unit: 0, k }));
+    else for (let s = 1; s <= ns; s++) { lines.push({ support: sid(s - 1), side: 'ahead', span: s, end: 'left', x: r3(sup[s - 1]), unit: s - 1, k: s - 1 }); lines.push({ support: sid(s), side: 'back', span: s, end: 'right', x: r3(sup[s]), unit: s - 1, k: s }); }
+    // the value of one stage at a line: R (per support) or the end shear (+ the support point load: half at a pier, whole at an abutment)
+    const at = (st, l) => {
+      if (!st) return 0; if (!perEnd) return st.R[l.k];
+      const i = idxOf(st.x, sup[l.k]), pt = st.R[l.k] - (st.VR[i] - st.VL[i]), sh = l.k === 0 || l.k === ns ? 1 : 0.5;
+      return (l.end === 'left' ? st.VR[i] : -st.VL[i]) + sh * pt; };
+    const llAt = (R, D, l) => {
+      if (!perEnd) { const r = R.llR && R.llR[l.k]; return r ? { max: null, min: null, maxIM: r3(r.max), minIM: r3(r.min) } : null; }
+      const L = R.ll || D.ll; if (!L) return null; const i = idxOf(L === R.ll ? R.st.DC1.x : D.st.DC1.x, sup[l.k]), gV = R.df.spans[l.span - 1].gV, h = L.perLane;
+      return l.end === 'left' ? { max: null, min: null, maxIM: r3(gV * h.VRmax[i]), minIM: r3(gV * h.VRmin[i]) } : { max: null, min: null, maxIM: r3(-gV * h.VLmin[i]), minIM: r3(-gV * h.VLmax[i]) }; };
+    const plAt = (R, D, l) => {
+      if (!plHas(R)) return null;
+      if (!perEnd) return { PL: r3(R.pl.R[l.k].max), PLmin: r3(R.pl.R[l.k].min) };
+      const Q = R.pl.VRpos ? { q: R.pl, f: 1, x: R.st.DC1.x } : D.pl && D.pl.VRpos ? { q: D.pl, f: R.loads.PL / D.loads.PL, x: D.st.DC1.x } : null; if (!Q) return null;
+      const i = idxOf(Q.x, sup[l.k]);
+      return l.end === 'left' ? { PL: r3(Q.f * Q.q.VRpos[i]), PLmin: r3(Q.f * Q.q.VRneg[i]) } : { PL: r3(-Q.f * Q.q.VLneg[i]), PLmin: r3(-Q.f * Q.q.VLpos[i]) }; };
+    let anyUT = false, anyUF = false, anyPL = false;
+    lines.forEach(l => { l.girders = Rs.map((R, i) => {
+      const S = R.st, ut = has(R, 'UT') ? at(S.UT, l) : null, uf = has(R, 'UF') ? at(S.UF, l) : null, pl = plAt(R, SRC[i], l);
+      const sep = {}; if (pl) { Object.assign(sep, pl); anyPL = true; } if (ut != null) { sep.UT = r3(ut); anyUT = true; } if (uf != null) { sep.UF = r3(uf); anyUF = true; }
+      const g = { label: `G${i + 1}`, position: ext0(i, nb) ? 'exterior' : 'interior', type: String((RL.LN[i] && RL.LN[i].label) || ''),
+        DC1: r3(at(S.DC1, l) + (ut || 0) + (uf || 0)), DC2: r3(at(S.DC2, l)), DW: r3(at(S.DW, l)), ...(Object.keys(sep).length ? { separate: sep } : {}), LL: llAt(R, SRC[i], l) };
+      g.service = SB.service(g); return g; }); delete l.k; });
+    const X = [0]; R0.spans.forEach(v => X.push(r3(X[X.length - 1] + v)));
+    const units = R0.cont || ns === 1 ? [{ spans: R0.spans.map((_, i) => i + 1), length: r3(R0.Lt) }] : R0.spans.map((v, i) => ({ spans: [i + 1], length: r3(v) }));
+    const sepD = anyPL || anyUT || anyUF ? { note: 'Optional separate items under lines[].girders[].separate (kip, unfactored, + up). includedIn names the existing field that ALREADY contains the item (carry it on its own only after taking it out of that field); includedIn null: the item is in no other field.',
+      ...(anyPL ? { pedestrian: PL_SEP.pedestrian } : {}),
+      ...(anyUT || anyUF ? { utilities: { cite: 'MassDOT LRFD Bridge Manual Part I 3.5.5.2, 3.5.5.4 (OWN16)',
+        existing: anyUT ? { field: 'UT', includedIn: 'DC1', section: 'noncomposite (steel)', treatAs: 'DW', strMax: 1.50, strMin: 0.65, service: 1.0 } : null,
+        future: anyUF ? { field: 'UF', includedIn: 'DC1', section: 'noncomposite (steel)', treatAs: 'DC', strMax: 1.25, strMin: 0, service: 1.0, serviceRelieving: 0 } : null, composite: null } } : {}) } : null;
+    const S0 = AN().settings(P), pr = P.project || {};
+    const notes = [
+      `Bearing loads of every girder line (G1 to G${nb}) from this app's analysis (Steel Bridge Design, apps/steel-bridge, engine/analysis.js; the same runs as the superReactions hand-off), ${R0.cont ? 'continuous girders: one bearing line per support (one bearing per girder over each pier)' : ns > 1 ? 'simple spans: one bearing line per girder end (a pier has a "back" line, span k right end, and an "ahead" line, span k+1 left end)' : 'one span: one bearing line per abutment'}.`,
+      'Unfactored, kip, + up, per girder (one bearing per girder at each line: divide by the number of bearings where there are more). DC1 = girder steel with the detail allowance, cross-frames and diaphragms, deck, haunch, SIP forms and other DC1 loads, on the steel section, PLUS this app\'s MassDOT utilities UT and UF (sent again as separate.UT / UF, ALREADY INSIDE DC1); DC2 and DW on the long-term composite section.',
+      ...(perEnd ? ['Simple spans: each line is its span\'s end shear (V_R ahead, −V_L back at the support station); a point load at the support station (end cross-frame or diaphragm) is split half to each end at a pier, whole to the end at an abutment, so the two lines of a pier add up to the Analysis tab\'s reaction.'] : []),
+      `Live load: HL-93 with IM ${f0(S0.im)} % on the truck and tandem (3.6.2.1), × the girder's shear distribution factor g_V with the skew correction (multiple presence as in the factor), maxIM / minIM; ${perEnd ? 'the end shear of the span, × the span\'s g_V' : 'the support reaction, × the larger g_V of the adjacent spans, with 90 % of two trucks plus the lane at interior supports (3.6.1.3.1)'}. The live load without IM is not computed by this app (max / min null). The owner's design load multiplier (if any) is not included.`,
+      'Service totals (load factor 1.0): Pdl = DC1 + DC2 + DW; PllIM = LL maxIM + PL (Pll null: no LL without IM); Pmin = DC1 + DC2 − UT − UF (the permanent DC load for the slip check: no DW, no utilities, no future allowance).',
+      ...(anyPL ? ['Pedestrian load PL / PLmin (3.6.1.6; this app\'s w_PL, the girder\'s share: no IM, no distribution factor): max / min, in NO other field.'] : []),
+      `Movement: material steel; ${R0.cont || ns === 1 ? `one unit of ${f2(R0.Lt)} ft` : 'each span its own unit'}; bearing fixity is not defined in this app and no coefficient of thermal expansion is an input: neither is sent. End rotations are not sent (not computed as an output of this app).`];
+    const payload = { _schema: SB.SCHEMA, schemaVersion: 1, producer: PRODUCER, producerFile: FILE, project: { name: String(pr.name || ''), bridgeId: '' },
+      units: { force: 'kip', length: 'ft' }, factored: false, perGirder: true,
+      liveLoad: { vehicle: 'HL-93', dfIncluded: true, multiplePresence: 'as in the distribution factor', im: +S0.im / 100, fields: { noIM: [], withIM: ['maxIM', 'minIM'] } },
+      spans: R0.spans.slice(), continuity: R0.cont ? 'continuous' : 'simple', lines, ...(sepD ? { separate: sepD } : {}),
+      movement: { material: 'steel', continuity: R0.cont ? 'continuous' : 'simple', units, length: r3(R0.Lt), fixity: null }, notes };
+    return { ok: true, payload, sum: lines.map(l => `  ${SB.lineName(l)}: ${l.girders.map(g => `${g.label} ${f2(g.service.Pdl)}/${g.service.PllIM == null ? '—' : f2(g.service.PllIM)}`).join(', ')}`).join('\n') };
   }
 
   /* ---------- 4. superGeometry (HANDOFF.md §4.14, added 2026-11-09, GXF) ----------
@@ -277,7 +368,7 @@
     return { ok: true, payload, sum: `${HS() ? HS().summary(GEO.ch, payload) : `${ns} spans`}; skews ${skews.map(f2).join(', ')} deg; overhangs ${f2(+xs.ohL)} / ${f2(+xs.ohR)} ft; deck ${f2(+d.ts)} in, haunch ${f2(+d.haunch)} in; girder depth ${f3(sec.depth)} in (largest)` };
   }
 
-  window.SBDHandoffs = { PRODUCER, FILE, RX, LLDF, SR, GEO, PM, pmFields, pmPayload, pmPlan, lldfPlan, lldfApply, lines, ownerRulesData, srPayload, sgPayload };
+  window.SBDHandoffs = { PRODUCER, FILE, RX, LLDF, SR, GEO, PM, pmFields, pmPayload, pmPlan, lldfPlan, lldfApply, lines, ownerRulesData, srPayload, sgPayload, blPayload, BL_ID, runLines };   // BRG-HO (2026-11-24): + blPayload, BL_ID, runLines
 
   /* ---------- UI: one card on the Project tab ---------- */
   let ctx = null;   // { getP, changed, ui }: set by init (index.html)
@@ -314,6 +405,8 @@
       <div class="hoGrp">Send to other tools</div>
       ${row('Shared project info', 'to every tool', `<div class="fRow"><button type="button" data-ho="pmShare">Share project info</button></div>
         <p class="note">Shares project name, number, client, designer, checker and date (bridgeSuite.v1.projectMeta).</p>`)}
+      ${row('Bearing loads', 'to the Elastomeric Bearing Design Module', `<div class="fRow"><button type="button" data-ho="brgSend">Send bearing loads to the Elastomeric Bearing module</button> <button type="button" data-ho="brgFile">Export hand-off (JSON)</button></div>
+        <p class="note">Runs this app's analysis for every girder (as the reactions below) and sends, per girder at each bearing line (each support of continuous girders; each girder end of simple spans), the unfactored DC1 (with the MassDOT utilities, named again as separate items), DC2, DW, the HL-93 live load with IM × g<sub>V</sub>, the pedestrian load and P<sub>DL</sub>, P<sub>LL</sub>, P<sub>min</sub> (bridgeSuite.v1.bearingLoads), for the bearing module's "Pull bearing loads". Not sent: the live load without IM, end rotations and thermal movement (not computed or not inputs here). <b>Last sent:</b> ${(() => { const bl = lastSent(P, 'bearingLoads'); return !pname ? 'not kept per project until the project has a name' : bl ? `${esc(when(bl.producedAt))} (project "${esc(pname)}", from this browser)` : `nothing sent yet for project "${esc(pname)}" from this browser`; })()}.</p>`)}
       ${row('Geometry and reactions', 'to Bridge Substructure Loading', `<div class="fRow"><button type="button" data-ho="subSend">Send to Substructure Loading</button> <label><input type="checkbox" data-ho-opt="geo"${SEND.geo ? ' checked' : ''}> Geometry</label> <label><input type="checkbox" data-ho-opt="rx"${SEND.rx ? ' checked' : ''}> Reactions</label> <button type="button" data-ho="subFile">Export hand-off (JSON)</button></div>
         <p class="note"><b>Geometry</b> (bridgeSuite.v1.superGeometry): spans, support skews and joints, girder count, spacings and overhangs, the deck edges, the deck and haunch, and the girder section (largest depth, flange and web; the depth at each support and the deepest in each span), for Bridge Substructure Loading (Pull geometry from Steel Bridge Design). <b>Reactions</b> (bridgeSuite.v1.superReactions): runs this app's analysis for every girder (G1 to G${nb}) and sends each girder's unfactored DC1, DC2 and DW reactions at every support (kip; the Analysis tab's reactions) for its Pull from PS-Beam / GirderDetail; the MassDOT utilities go as their own values, the LL+IM and pedestrian reactions in the notes, the owner's load rules for information. Each send is kept for this project (${pname ? `"${esc(pname)}"` : 'enter a project name on this tab first'}). Nothing is sent until you click.</p>
         <p class="note"><b>Last sent:</b> ${sent}.</p>`)}
@@ -377,6 +470,7 @@
       if (o && o.dfPull) { if (!confirm(`Stop using the factors pulled from LL & DL for line G${T.j + 1} only? The line takes the type's factors again (Undo restores them).`)) return false; window.SBDModel.lineOvReset(P, T.gi, T.j, 'dfPull'); return true; }
       const g = P.girders[ui.g || 0]; if (!g || !g.dfPull) return false; if (!confirm(`Stop using the factors pulled from LL & DL for ${g.label || g.id}? Its factors come from the Loads & LLDF tab again (Undo restores them).`)) return false; delete g.dfPull; return true; }
     if (a === 'subSend' || a === 'subFile') { subSend(P, a === 'subFile'); return false; }
+    if (a === 'brgSend' || a === 'brgFile') { brgSend(P, a === 'brgFile'); return false; }   // BRG-HO
     return false;
   }
   /* ---- SHO (2026-11-23): the stale banners (display only; each button is this card's own click action) ----
@@ -394,7 +488,7 @@
     (part === 'sent' ? SHS().setSent : SHS().setLoaded)(P, id, rec);
   }
   const sentNow = () => { memo.key = null; if (ctx && ctx.sent) ctx.sent(); else staleRefresh(); };
-  const WATCH = ['superGeometry', 'superReactions', 'projectMeta', 'lldf'];
+  const WATCH = ['superGeometry', 'superReactions', 'bearingLoads', 'projectMeta', 'lldf'];
   let memo = { key: null, items: [] };
   function staleItems(P) {
     const S = HSt(); if (!S || !SHS() || !BX() || !P) return [];
@@ -434,6 +528,7 @@
     e.preventDefault(); if (!BX() || !HSt()) { alert('The hand-off helper is not available in this browser.'); return true; }
     const id = b.dataset.hos;
     if (id === 'superGeometry' || id === 'superReactions') { subSend(P, false, [id === 'superGeometry' ? 'geo' : 'rx']); return true; }
+    if (id === 'bearingLoads') { brgSend(P, false); return true; }   // BRG-HO
     if (id === 'projectMeta') { act('pmShare', P, ui, b, e); return true; }
     if (id === 'projectMetaIn') { if (act('pmUse', P, ui, b, e)) ctx.changed(true); return true; }
     if (id === 'lldf') { const gi = +b.dataset.gi, j = b.dataset.j != null ? +b.dataset.j : null, g = P.girders[gi]; if (!g) return true;
@@ -474,6 +569,26 @@
     }
     sentNow();   // SHO: the card's "Last sent", the record and the banners
     alert(`${pname ? `Kept for project "${pname}".` : 'This project has no name, so the send is kept only as the latest hand-off (no project). Enter a project name on the Project tab to keep one copy per project.'}\n\n${out.join('\n\n')}\n\nIn Bridge Substructure Loading: Project tab, Hand-offs card, "Pull geometry from Steel Bridge Design" and "Pull from PS-Beam / GirderDetail". Each asks which project first.`);
+  }
+  /* BRG-HO (2026-11-24): "Send bearing loads to the Elastomeric Bearing module" / "Export hand-off (JSON)": blPayload (HANDOFF.md §4.17)
+     published (channel key, .updatedAt), its copy bearingLoads.by.steelbridge and its per-project copy (shared/handoff-store.js, producer id
+     steelbridge, §5.1); recorded for the stale banner (handoffs.sent.bearingLoads, sig = rxSig as superReactions). Click only. */
+  async function brgSend(P, file) {
+    const IE = window.SBDInputCheck ? window.SBDInputCheck.collect(P).errors : [];
+    if (IE.length) { alert(`Nothing was ${file ? 'exported' : 'sent'}: ${IE.length} input${IE.length > 1 ? 's need' : ' needs'} fixing first.\n\n${IE.slice(0, 12).map(e => '- ' + e.msg).join('\n')}`); return; }
+    const r = blPayload(P); if (r.error) { alert(`Nothing was ${file ? 'exported' : 'sent'}.\n\nBearing loads (analysis): ${r.error}`); return; }
+    const sg = HSt() ? HSt().rxSig(P) : null, dev = HS() ? HS().deviceName(localStorage) : ''; if (dev) r.payload.device = dev;
+    if (file) { BX().exportFile('bearingLoads', { ...r.payload, producedAt: new Date().toISOString() }); return; }
+    const w = BX().publish('bearingLoads', r.payload, PRODUCER, FILE);
+    if (w.error) { alert(`Bearing loads NOT sent: ${w.error} Use "Export hand-off (JSON)" instead.`); return; }
+    try { localStorage.setItem(BX().NS + 'bearingLoads.by.' + BL_ID, JSON.stringify(w.payload)); } catch (er) { /* the channel key has it */ }
+    let cl = '';
+    if (HS()) { const q = await HS().send({ storage: localStorage, channel: 'bearingLoads', producer: BL_ID, payload: w.payload, fetch: (u, i) => window.fetch(u, i) });
+      cl = !q.ok ? ` (the per-project copy was not saved: ${q.error})` : !q.pid ? '' : q.cloud && q.cloud.ok ? '; also uploaded to GitHub' : q.cloud && q.cloud.queued ? `; GitHub upload waiting (${q.cloud.error})` : ''; }
+    if (sg) recPut(P, 'sent', 'bearingLoads', { sig: sg, at: w.payload.producedAt || '' });
+    sentNow();
+    const pname = String((P.project || {}).name || '').trim();
+    alert(`${pname ? `Kept for project "${pname}".` : 'This project has no name, so the send is kept only as the latest hand-off (no project). Enter a project name on the Project tab to keep one copy per project.'}\n\nBearing loads sent${cl} (unfactored, kip, per girder; P_DL / P_LL with IM):\n${r.sum}\n\nIn the Elastomeric Bearing Design Module: Project tab, Hand-offs, "Pull bearing loads". It asks which project and which bearing line first.`);
   }
   function init(o) { ctx = o; window.addEventListener('storage', e => { if (!e.key || e.key.indexOf(BX().NS + LLDF.ch) === 0) document.querySelectorAll('[data-ho-new]').forEach(s => { s.hidden = !isNew(); });
       if (!e.key || WATCH.some(c => e.key.indexOf(BX().NS + c) === 0)) staleRefresh(); });   // SHO: the stale banners follow the other tools' sends
