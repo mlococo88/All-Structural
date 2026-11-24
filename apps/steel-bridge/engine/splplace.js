@@ -82,7 +82,7 @@
      1-ft steps, the plates at each step's middle) */
   function pieceWt(segs, x0, x1, allow) {
     const at = x => segs.find(s => x >= s.x0 - 1e-9 && x < s.x1 - 1e-9) || segs[segs.length - 1]; let w = 0;
-    for (let x = x0; x < x1 - 1e-9; x += 1) { const dx = Math.min(1, x1 - x), s = at(x + dx / 2); w += (s.topB * s.topT + s.botB * s.botT + s.D * s.tw) * STEEL * dx / 1000; }
+    for (let x = x0; x < x1 - 1e-9; x += 1) { const dx = Math.min(1, x1 - x), s = at(x + dx / 2); w += ((window.SBDRolled && window.SBDRolled.wtA(s)) || (s.topB * s.topT + s.botB * s.botT + s.D * s.tw)) * STEEL * dx / 1000; }   // ROLL (2026-11-23): a rolled segment at its tabulated weight
     return w * (1 + (+allow || 0) / 100);
   }
   const edgesOf = (G, spl) => uniq([0, ...spl, ...(G.cont ? [] : G.sup.slice(1, -1)), G.Lt]);

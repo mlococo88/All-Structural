@@ -654,6 +654,8 @@
     o.girder_segments_by_label = Object.fromEntries(labs.map((l, j) => [l, lineSched[j].flat().map(q => ({ label: q.label, length: q.length, tf_w: q.tf_w, tf_t: q.tf_t, web_d: q.web_d, web_t: q.web_t, bf_w: q.bf_w, bf_t: q.bf_t, haunch: q.haunch, tf_fy: q.tf_fy, web_fy: q.web_fy, bf_fy: q.bf_fy }))]));
     o.girder_segments_by_span = Object.fromEntries(labs.map((l, j) => [l, lineSched[j].map(sp => sp.map(q => ({ label: q.label, length: q.length, tf_w: q.tf_w, tf_t: q.tf_t, web_d: q.web_d, web_t: q.web_t, bf_w: q.bf_w, bf_t: q.bf_t, haunch: q.haunch, tf_fy: q.tf_fy, web_fy: q.web_fy, bf_fy: q.bf_fy })))]));
     W(`Girder plates: ${sameAll ? 'one schedule for all girders' : 'a schedule per girder line from its girder type'}; segments split at the supports (labels S<span>-<n>).`);
+    { const RL = window.SBDRolled, nm = RL ? [...new Set(P.girders.flatMap(g => g.segments.map(s => RL.label(s)).filter(Boolean)))] : [];   // ROLL (2026-11-23)
+      if (nm.length) A(`Rolled shapes (${nm.join(', ')}) are written as their equivalent three plates (flanges b_f × t_f, web d − 2 t_f by t_w; fillets left out): the MIDAS girder schedule holds plate sizes only. Choose the rolled section in MIDAS if its database section is wanted; MIDAS computes the steel weight from the plates.`); }
     o.Fy_steel = grade.top; if (grade.top !== grade.web || grade.top !== grade.bot) I(`Fy_steel = ${grade.top} ksi (top flange); each segment carries its own F_y (top ${grade.top}, web ${grade.web}, bottom ${grade.bot} ksi).`);
     if (!keep) o.haunch_width = Math.max(...P.girders.flatMap(g => g.segments.map(s => s.topB)));
     // deck

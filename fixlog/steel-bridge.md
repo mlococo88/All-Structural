@@ -10836,3 +10836,143 @@ Basis: AASHTO Manual for Bridge Evaluation, 4th Ed. (2026), Section 6A, read fro
 
 ### Review (2026-11-23, second pass)
 Each item of the table above and the three corrections were re-read against the MBE 4th Ed. (2026) text by a second reviewer: Arts. 6A.4.4.2.1a, 6A.4.4.3, 6A.4.4.4, 6A.4.5.4.1 (with C6A.4.5.4.1), 6A.4.5.4.2a, 6A.4.5.4.2b, 6A.4.5.5, 6A.4.5.6, 6A.6.4.2.2 (with C6A.6.4.2.2), 6A.8.3 and Eq. 6A.8.3-1, Tables 6A.4.2.2-1, 6A.4.4.2.3a-1, 6A.4.4.2.3b-1, 6A.4.5.4.2a-1, and the escorted-permit Service II example in Appendix A1A (one-lane factor; its 1.2 multiplier there is 1 + IM at IM 20 %, not a multiple presence factor). All confirmed; no further change. Check case 2 of MBV-1 corrected to g_M = 0.7263 at the pier (the engine's value; the RFs 3.397 and 4.422 are unchanged).
+
+## 2026-11-23 — PR: claude/sb-rolled-beam (PR #1680: https://github.com/mlococo88/All-Structural/pull/1680) (ROLL) — rolled-beam (AISC W-shape) girder segments (engineer request 2026-11-23; new option, a project without it is unchanged)
+### Where
+- New `shared/aisc-w.js` (`window.SharedAiscW`; fixlog/shared-aisc-w.md): the 289 W shapes of the AISC Shapes Database v16.0, data only.
+- New `apps/steel-bridge/engine/rolled.js` (`window.SBDRolled`, no DOM): `plates(sh)`, `state(seg)`, `shapeOf`, `isRolled`, `label`,
+  `apply(seg, name)`, `clear(seg)`, `wtA(seg)`, `plf(seg)`, `warnings(P)`, `hybridErr(P)`, `props(sh)`, `steps(seg)`, `candidates(o)`,
+  `withShape(P, gi, name)`, `lightest(P, gi, passes, o)`. Every other file reads it through `window.SBDRolled` and works without it
+  (a page or test that does not load it behaves as before).
+- `index.html`: loads `../../shared/aisc-w.js` and `engine/rolled.js` after `engine/model.js`; Girders & plates tab: card "Section type
+  of segment n: plate girder or rolled shape" (`rolledCard`, `rlOptions`, `rlSearch`; ids `rl_type`, `rl_find`, `rl_shape`, `rl_all`,
+  `rl_nmin`, `rl_nmax`, `rl_auto`, `rl_use`, `rl_stop`), the six plate fields of a rolled segment read-only (class `rl-ro`); Section
+  properties tab: the Location line names the shape, the worked steps start with `SBDRolled.steps`.
+- `engine/model.js`: the format note of `girders[i].segments[k].shape`; `validate`: a shape that is not text is an error; `hybridErr` → errors,
+  `warnings` → warnings.
+- Weight (a rolled segment weighs its tabulated W lb/ft): `engine/loads.js` `steelWeight`, `engine/analysis.js` `analyzeGirder` (`segs[].Wr`,
+  `segs[].shape`, `wSteel`) and `steps` (`wst<i>`), `engine/splplace.js` (shipping weight), `engine/sheets.js` `quantities` and `wtAt`,
+  `report/builders.js` `bomPlates`.
+- No flange-to-web weld on a rolled segment: `engine/welds.js` `fromDemands` (a location whose `segAt` result has `rolled` is left out),
+  `ui/welds.js` `input` (`segAt` marks `rolled`; a girder with no weld location and no transition returns `{ err, na: true }`),
+  `engine/autodesign.js` `evaluate` (a Welds result with `na` is not a failure), `engine/sheets.js` (`quantities`: no FLANGE-TO-WEB FILLET
+  WELDS length for a rolled segment; `section`: no weld symbols when the section drawn is rolled).
+- Names the shape: `report/builders.js` (`project` plate table: a Section column and a note when a segment is rolled; `sec`: heading, note
+  and the rolled steps; `bomPlates`), `ui/summary.js` `overview` (`rlTxt`), `ui/flexure.js` `TP.roll` (topic "Rolled shape: tabulated values
+  and the three plates used", first after the modular ratio in `TOPICS.sec`), `engine/drawings.js` (`segs[].shape`; framing plan and
+  elevation labels `W36X135 (ROLLED SHAPE)` in place of TOP FL. / BOT. FL. / WEB; plate schedule row ROLLED SHAPE), the Nomenclature tab
+  (from the report's steps, no code change).
+- `ui/autodesign.js`: `rolledTypes(P)`; Run Auto design explains and does not run while a girder type of the run has a rolled shape
+  (note `#ad_rolled`). `engine/lga.js` `toLga`: a note that rolled shapes are written as their three plates.
+- Tests: `tests/engine/aisc-w.test.mjs`, `tests/engine/sb-rolled.test.mjs`, `tests/smoke/steel-bridge-rolled.mjs`.
+### Before / After (the lines changed in existing calculation code; everything else is new code or display)
+- `engine/loads.js` `steelWeight`, anchor `const A = s.topB * s.topT + s.botB * s.botT + s.D * s.tw, v = A * STEEL_PLF / 1000 * (1 + allow / 100);`
+  Before: every segment `w = (b_t t_t + b_b t_b + D t_w) × 490/144 / 1000 × (1 + a/100)`.
+  After: the same line for a plate segment; before it, for a rolled segment (`window.SBDRolled.plf(s) != null`):
+  `const v = Wr / 1000 * (1 + allow / 100);` and `return { x0: s.x0, x1: s.x1, A: Wr / STEEL_PLF, w: v };` with its own worked step.
+- `engine/analysis.js` `analyzeGirder`, anchor `wSteel = segs.map(`
+  Before: `wSteel = segs.map(s => s.As * plf / 1000 * (1 + allow / 100));`
+  After:  `wSteel = segs.map(s => (s.Wr != null ? s.Wr : s.As * plf) / 1000 * (1 + allow / 100));` (`Wr` only on a rolled segment).
+- `engine/splplace.js`, anchor `s = at(x + dx / 2); w +=`
+  Before: `w += (s.topB * s.topT + s.botB * s.botT + s.D * s.tw) * STEEL * dx / 1000;`
+  After:  `w += ((window.SBDRolled && window.SBDRolled.wtA(s)) || (s.topB * s.topT + s.botB * s.botT + s.D * s.tw)) * STEEL * dx / 1000;`
+- `engine/sheets.js` `quantities` and `wtAt`: the same substitution (`rlA(s) || (three-plate area)`), and
+  `if (!rlA(s)) add('FLANGE-TO-WEB FILLET WELDS (2 PER FLANGE)', fwSize(P, s), 4, L);` (before: always added).
+- `engine/welds.js` `fromDemands`, anchor `pts.forEach(([x, s, name]) => { const p = D.segAt(`
+  After: `if (p.rolled) return;` before the row is built (before: every support side and plate change got a row).
+- `engine/autodesign.js` `evaluate`, anchor `if (WB.err)`
+  Before: `if (WB.err) take({ ...gm, mod: 'welds', tab: 'wt', id: 'input', title: WB.err, r: Infinity, fail: true }); else lists(WB.C, 'welds', 'wt');`
+  After:  `if (WB.err) { if (!WB.na) take({ … }); } else lists(WB.C, 'welds', 'wt');`
+- `engine/model.js` `validate`: after the segment checks, `if (s.shape != null && typeof s.shape !== 'string') E(…)`; before the owner
+  rules, `RL.hybridErr(p).forEach(e => E(e.path, e.msg)); RL.warnings(p).forEach(w => W(w.path, w.msg));` when `window.SBDRolled` is loaded.
+### Problem
+- A girder could only be entered as three plates. A rolled W shape had to be typed as plates by hand, its weight was then the plates
+  at 490 pcf, and the flange-to-web weld checks and weld quantities ran on welds that do not exist.
+### How a rolled shape is modelled — Decision (pending engineer review)
+- **ROLL-D1, three plates.** A rolled segment = the optional field `segments[i].shape` + the shape's equivalent three plates written
+  into the segment's plate fields when the shape is picked: flanges b_f × t_f (top = bottom), web D = d − 2 t_f (rounded to 0.0001 in)
+  by t_w. Every check reads the plate fields as before, with no change of formula. The fillets are left out, so the three-plate A and I
+  are the tabulated ones less the fillets: for the 289 shapes A_3/A = 0.973 to 1.005 and I_3/I_x = 0.959 to 1.007. For most shapes this is
+  on the safe side (larger stress and deflection); for 20 shapes whose tabulated dimensions are rounded up the three plates exceed the
+  tabulated A or I_x by up to 0.5 % and 0.7 % (largest: W18X234, W18X192). The Section properties steps show both values and the ratio for
+  the shape picked, with a note when the ratio is above 1.0. Not capped to the tabulated values: say if it should be.
+- **ROLL-D2, web depth D = d − 2 t_f, not reduced for the fillets.** AASHTO LRFD 10th Ed. Art. 6.10 takes D as the web depth; whether the
+  depth of a rolled shape's web may be measured clear of the fillets (as AISC 360 does with h = d − 2k) in 6.10.2.1 (D/t_w), 6.10.1.9,
+  6.10.6.2 (2D_cp/t_w, 2D_c/t_w) and 6.10.9 (shear) was not clear to me from the article, so the plate-girder treatment is kept: the larger
+  D gives the larger web slenderness, the smaller C and the smaller F_crw (on the safe side), and the larger V_p = 0.58 F_yw D t_w by
+  about 2(k_des − t_f)/D against a web clear of the fillets, the usual value for a rolled beam (D t_w with D between the flanges; AISC
+  uses the full d t_w). No rolled-specific formula was added.
+- **ROLL-D3, weight.** The girder steel of a rolled segment is the tabulated nominal weight W lb/ft (× the detail allowance), in the
+  dead load (Loads tab, Analysis, DC1), the shipping weight, the drawing quantities and the Report's bill of material. For W36X135:
+  135 lb/ft against 133.97 lb/ft for the three plates.
+- **ROLL-D4, one grade.** A project with a rolled segment and different grades for top flange / bottom flange / web is an input error
+  (a rolled shape is one piece of steel; Art. 6.10.1.3 and the hybrid factor of 6.10.1.10.1 are for built-up hybrid sections). The grades
+  are project-wide in this app, so a project that mixes a hybrid plate girder with a rolled segment cannot be entered.
+- **ROLL-D5, welds.** No flange-to-web weld check (FW1–FW4) and no flange-to-web weld quantity at a rolled segment. A shop flange
+  transition between two different segments that is not at a field splice is still checked as a butt splice (TR1–TR4), also between a
+  rolled and a plate segment (kept: on the safe side; a rolled-to-plate change would in practice be a field splice).
+- **ROLL-D6, fatigue category unchanged.** The flange detail categories (Fatigue & studs tab, catT / catB, default B) are project inputs
+  and are not changed by picking a shape. Base metal of a rolled section is Category A (Table 6.6.1.2.3-1, plain members) against B for a
+  built-up member with continuous fillet welds; the default B is on the safe side. The card says to set it.
+- **ROLL-D7, Auto design.** The plate Auto design does not run while a girder type of its run has a rolled shape (it would replace the
+  shape with plates). In its place the Girders & plates tab has "Find the lightest W shape that passes": the shapes from the lightest up
+  (optional nominal-depth range), each written into the rolled segments of the type, checked with Auto design's full evaluation of the
+  project (`SBDAutoDesign.evaluate`, level full: every module, the detail inputs as entered); the first that passes is offered. A quick
+  check first (level screen: flexure and shear with the reference live load) only leaves out a shape whose quick ratio is above 1.25; the
+  pass is always the full evaluation's. The result lists the heaviest lighter shapes checked in full with their governing check.
+- **ROLL-D8, MIDAS .lga and hand-offs.** Unchanged code path: the export writes the plate fields, i.e. the equivalent three plates
+  (the exporter's girder schedule has plate sizes only), with a note in the export summary. The hand-offs send the same plate fields.
+- **ROLL-D9, unknown or edited shape.** A segment is rolled only while its shape is in the list and its stored plates equal the shape's
+  plates. A name not in the list, or plates that differ (a file edited by hand; plates written by Auto design Apply, an .lga import):
+  the stored plates are computed as a plate girder, with a warning (model warning; shown on the card); nothing is rewritten or dropped.
+### Governing provision
+- AASHTO LRFD 10th Ed. (2024): Table 3.5.1-1 (steel 0.490 kcf, plate segments, unchanged); Art. 6.10.1.1.1 (section properties, unchanged);
+  6.10.2 (proportions, run on the three plates, unchanged); 6.10.7.1.2, 6.10.9 (flexure and shear, unchanged); 6.13.3 (flange-to-web welds:
+  not applicable to a rolled shape); 6.10.1.3 (hybrid sections: not a rolled shape). AISC Shapes Database v16.0 (dimensions, A, I_x, W).
+- No formula, load factor, resistance factor, unit or code reference of an existing check was changed. Changed for a rolled segment only:
+  the steel weight (tabulated W in place of the plates at 490 pcf) and the omission of the flange-to-web weld checks.
+### Check case (tests/engine/sb-rolled.test.mjs; a made-up bridge)
+- 60 ft simple span, 5 girders at 8 ft, 3 ft overhangs, interior girder W36X135 (d 35.6, b_f 12.0, t_f 0.790, t_w 0.600 in, A 39.9 in²,
+  I_x 7800 in⁴, 135 lb/ft), Grade 50W, slab 8 in, haunch 2 in, b_eff 96 in, f′c 4 ksi, w_c 0.150 kcf, deck rebar not in M_p, 5 % allowance.
+- Three plates: D = 35.6 − 2(0.79) = 34.02 in. A = 2(12)(0.79) + 34.02(0.6) = 18.96 + 20.412 = 39.372 in² (0.987 of 39.9).
+  I = 2[12(0.79)³/12 + 12(0.79)(17.405)²] + 0.6(34.02)³/12 = 2[0.4930 + 2871.8146] + 1968.6701 = 7713.29 in⁴ (0.989 of 7800). ȳ = 17.8 in.
+- n = 29000 / (120000(1.0)(0.150)²(4)^0.33) = 29000 / 4266.2 = 6.798. Short-term composite: slab 96(8)/6.798 = 112.98 in² at 41.6 in;
+  ȳ = (39.372(17.8) + 112.98(41.6)) / 152.35 = 35.45 in; I = 7713.3 + 39.372(17.65)² + 112.98(8)²/12 + 112.98(6.15)² = 24 854 in⁴.
+- Plastic moment (App. D6.1): P_s = 0.85(4)(96)(8) = 2611.2 kip; P_c = P_t = 12(0.79)(50) = 474 kip; P_w = 34.02(0.6)(50) = 1020.6 kip;
+  P_s > 1968.6 kip: PNA in the slab at Ȳ = 8(1968.6)/2611.2 = 6.03125 in below the top of the slab. Arms from the PNA: top flange
+  4.36375 in, web 21.76875 in, bottom flange 39.17375 in. M_p = [6.03125²(2611.2)/16 + 474(4.36375) + 1020.6(21.76875) + 474(39.17375)]/12
+  = [5936.6 + 2068.4 + 22217.2 + 18568.4]/12 = 4065.9 kip-ft.
+- Flexure, Strength I, midspan (6.10.7.1.2): D_p = 6.03125 in > 0.1 D_t = 0.1(35.6 + 2 + 8) = 4.56 in: M_n = M_p(1.07 − 0.7 D_p/D_t)
+  = 4065.9(1.07 − 0.7(6.03125)/45.6) = 4065.9(0.97742) = 3974.0 kip-ft. App: M_u = 1.25(513.59 + 113.06) + 1.5(78.75) + 1.75(869.63)
+  = 2423.3 kip-ft; M_u / (φ_f M_n) = 2423.3 / 3974.0 = 0.610.
+- Shear, abutment (6.10.9): D/t_w = 34.02/0.6 = 56.7 ≤ 1.12√(29000(5)/50) = 60.3: C = 1.0; V_n = V_p = 0.58(50)(34.02)(0.6) = 591.9 kip;
+  app V_u = 202.5 kip; V_u / (φ_v V_n) = 0.342.
+- Weight: before this PR the shape could only be entered as its plates: w_s = 39.372(490/144)/1000 × 1.05 = 0.14067 klf. After, as a
+  rolled shape: w_s = 135/1000 × 1.05 = 0.14175 klf (+0.8 %); the steel's midspan moment 0.14175(60)²/8 = 63.79 kip-ft against 63.30.
+  M_n, V_n and every section property are equal in the two cases (same plates).
+### How verified
+- `node tests/engine/run.mjs sb-rolled`: 6 tests (plates, state, apply / clear, save and reopen; the hand check above against
+  `SBDSections`, the Flexure tab's and the Shear tab's builds and the analysis; a project without a shape gives the same JSON, character
+  for character, with and without `engine/rolled.js` loaded: validation, analysis with its steps, steel weight, flexure rows with steps,
+  shear, stiffeners, welds of the built-in 3-span project and a 60 ft plate girder, and Auto design's full evaluation of the built-in
+  project; unknown / edited shape; one grade; welds; .lga export; the W-shape search).
+- `node tests/engine/run.mjs aisc-w`: 4 tests. `node tests/smoke/steel-bridge-rolled.mjs`: picker, read-only fields, Undo, Section
+  properties, Welds, Summary, Report, Nomenclature, Auto design note, unknown shape; 0 console errors.
+- The whole engine suite and the Steel Bridge smokes: see the PR description for the counts.
+### Other copies
+- None for the rolled-beam code. The W table: `Steel Beam Design - AISC 15th.html` and `Section Property Calculator.html` keep their own
+  copies (fixlog/shared-aisc-w.md).
+### Open items (not changed; for the engineer)
+- ROLL-D1 to ROLL-D9 above are decisions pending review.
+- Diaphragm / cross-frame fit (CFD, CF10): d ≤ D_0 − c with D_0 = the web depth D = d − 2 t_f and the entered clearance c (default 2 in,
+  1 in top and bottom). The fillet of a rolled girder is not checked against c/2 (k_des − t_f is 0.25 to 1.18 in for the list).
+- Bearing and transverse stiffeners, connection plates: sized and checked as on a plate girder (widths against (b_f − t_w)/2, welds to
+  the web and flanges, clips). The clip is not checked against the fillet radius.
+- Cover plates are not modelled (said on the card). Camber of a rolled beam (mill camber, heat cambering limits) is not addressed:
+  the camber diagram is the computed dead-load deflection, as for a plate girder.
+- 3D view and section graphics draw the three plates (no fillets). The typical-section sheet has no shape label (the elevation, framing
+  plan and plate schedule name the shape).
+- Minimum thickness: Art. 6.7.3 asks 0.25 in for the webs of rolled beams; the app's existing checks are not extended for it (light
+  shapes such as W8X10, t_w 0.17 in, are in the list).
+- The W-shape search passes or fails a shape with the detail inputs as entered: a bearing stiffener wider than (b_f − t_w)/2 of a
+  narrower shape fails that shape (BS6), so the stiffener width can govern the shape found. The result names the governing check.

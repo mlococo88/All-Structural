@@ -22,6 +22,12 @@
                   rebarInPositiveMp: false (App. D6.1: count the deck rebar in the positive plastic moment) },
      girders:   [ { id, label, position: 'interior' | 'exterior', beff (in),
                     segments: [ { x0, x1 (ft from the left end), D, tw, topB, topT, botB, botT (in) } ] } ],
+     -- added 2026-11-23 (ROLL, rolled-beam girders), optional: absent = a plate segment, exactly as before --
+     girders[i].segments[k].shape: the AISC W-shape designation of a rolled segment (e.g. 'W36X135', a name of shared/aisc-w.js). The
+                  plate fields of the segment then hold the shape's equivalent three plates (b_f × t_f flanges, web D = d − 2 t_f, t_w),
+                  written when the shape is picked, and every check reads them as before (engine/rolled.js). A name that is not in the
+                  list, or plates that differ from the shape's: the stored plates are used as a plate girder, with a warning; nothing
+                  is rewritten on load.
      -- added 2026-10-29 (loads PR), optional: a version 1 project without them reads as defaultXs() and owner AASHTO --
      materials.concrete.wcE: unit weight for E_c only (kcf; blank = w_c; CTDOT BRSDM V2 5.4.2.4),
      ownerRules: { owner: 'AASHTO' | 'RIDOT' | 'MassDOT' | 'CTDOT', eta: { D: 'yes'|'no', R: 'auto'|'yes'|'no', I: 'yes'|'no', eD, eR, eI } },
@@ -470,10 +476,13 @@
         const x0 = si ? S[si - 1].x1 : 0;
         if (isNum(s.x0) && isNum(x0) && Math.abs(s.x0 - x0) > 1e-6) E(`${sp2}.x0`, `${g.label || g.id} segment ${si + 1} starts at ${s.x0} ft, not at ${x0} ft (segments must be contiguous from 0).`);
         if (isNum(s.D) && isNum(s.tw) && s.D / s.tw > 150) W(`${sp2}.tw`, `${g.label || g.id} segment ${si + 1}: D/t_w = ${(s.D / s.tw).toFixed(1)} > 150 (6.10.2.1.1).`);
+        if (s.shape != null && typeof s.shape !== 'string') E(`${sp2}.shape`, `${g.label || g.id} segment ${si + 1}: the rolled shape must be a designation (text), e.g. W36X135.`);   // ROLL
       });
       const last = S[S.length - 1];
       if (last && isNum(last.x1) && total > 0 && Math.abs(last.x1 - total) > 1e-6) E(`${gp}.segments`, `${g.label || g.id}: the segments end at ${last.x1} ft; the girder is ${total} ft long.`);
     });
+    // ROLL (2026-11-23): rolled-beam segments (engine/rolled.js; absent on a page or test that does not load it: no check, as before)
+    { const RL = typeof window !== 'undefined' && window.SBDRolled; if (RL) { RL.hybridErr(p).forEach(e => E(e.path, e.msg)); RL.warnings(p).forEach(w => W(w.path, w.msg)); } }
     // added 2026-10-29 (loads PR): the optional owner rules and cross-section
     if (c.wcE != null && c.wcE !== '' && !(isNum(c.wcE) && c.wcE > 0)) E('materials.concrete.wcE', 'w_c for E_c must be positive (or blank for w_c).');
     if (p.ownerRules != null) { const o = p.ownerRules || {};
