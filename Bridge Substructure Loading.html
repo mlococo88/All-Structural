@@ -3665,7 +3665,9 @@ async function rxImport(file) {
         const sp = g ? g.separate : undefined;
         if (sp != null) {
           if (typeof sp !== 'object' || Array.isArray(sp)) return { err: `support ${id}, ${lab}: "separate" is not readable` };
-          if (g.UT != null || g.UF != null) return { err: `support ${id}, ${lab}: the hand-off has both UT / UF values outside DC1 and "separate" items inside DC1; it cannot be read without counting a utility twice` };
+          // BRG-HO (2026-11-24): the Steel Bridge app sends its pedestrian reaction as separate { PL, PLmin } beside its own UT / UF (outside DC1):
+          // refused only when "separate" also has UT / UF (the two forms of a utility on one girder; was: any "separate" beside UT / UF)
+          if ((g.UT != null || g.UF != null) && (sp.UT != null || sp.UF != null)) return { err: `support ${id}, ${lab}: the hand-off has both UT / UF values outside DC1 and "separate" items inside DC1; it cannot be read without counting a utility twice` };
           const o = {}; for (const c of SEPK) { const n = sp[c]; if (n == null) continue; if (typeof n !== 'number' || !f(n)) return { err: `support ${id}, ${lab}: separate ${c} is not a valid number` }; o[c] = n * kf; }
           if (o.UT != null || o.UF != null) { const d = (o.UT || 0) + (o.UF || 0); v.dc1all = v.dc1; v.dc1 = v.dc1 - d; if (o.UT != null) v.ut = o.UT; if (o.UF != null) v.uf = o.UF; hasU = true; sep.u = true;
             if (d > v.dc1all + 1e-6 && v.dc1all >= 0) warns.push(`${id}, ${lab}: the separate utilities (${d.toFixed(2)} kip) are more than the DC1 that should contain them (${v.dc1all.toFixed(2)} kip).`); }
