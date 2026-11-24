@@ -11503,3 +11503,53 @@ None: `analysis.steelAllowPct` and `xs.allow` keep their keys and values; the st
 ### Open items
 - SP3 (splice shipping weight, engine/autodesign.js) uses `+xs.allow || 0` directly; when the loads module fails it can differ from the analysis (which then uses the setting). Not changed (calculation check; raise with the engineer).
 - The header shows the % rounded to a whole number (`f0`, as before): 2.5 % reads "3%".
+
+## 2026-11-24 — PR: claude/sb-deck-long-bars (PR #TBD) (DKL) — deck section: transverse bars as lines, longitudinal bar inputs, check DK4 (bottom longitudinal bars provided against the distribution reinforcement of 9.7.3.2)
+### Problem
+Engineer: "The deck is missing the transverse steel." The Deck tab figure (`ui/deck.js figure(R, W)`) cuts the slab ACROSS the bridge but drew the transverse (primary, perpendicular-to-traffic) top and bottom bars as circles at their spacing. In a transverse section the transverse bars are lines along the slab and the circles are the LONGITUDINAL bars. The module had no input for the longitudinal bars; it only computed the required bottom distribution steel A_s,d (9.7.3.2 on S_eff of 9.7.2.3) without checking it against bars provided.
+### Where
+- `engine/deck.js`: new `longBars(D)`, anchor `function longBars(D) {` (exported, with `LONG`); `calc()`: anchor `// DKL: the longitudinal bars; DK4 where the bottom ones are entered`; steps `dk.distProv`, `dk.distR` after `S.steps.dist(w, Smin, pct, ...)`; check DK4 pushed after the `checks` array (anchor `if (LB.bot) checks.push({ id: 'DK4'`); warnings for a half-entered pair (anchor `if (LB.topPart)`); result field `long: LB`; `topics()` dist title.
+- `ui/deck.js`: `inputs()` (anchor `const lbar = (k, lbl) =>`, four new inputs `dk_barLongTop`, `dk_sLongTop`, `dk_barLongBot`, `dk_sLongBot`); `onChange()` (anchor `/^(barLong|sLong)(Top|Bot)$/`); `figure()` (anchor `// DKL (2026-11-24, engineer: "The deck is missing the transverse steel")`); `results()`: checks table (DK4 row with areas; anchor `data-dkck="DK4-none"`), values used (anchor `'Longitudinal bars, top / bottom'`), distribution section (anchor `'DK4 Bottom longitudinal bars provided'`).
+- `report/builders.js dk()`: checks table (anchor `R.checks.some(c => c.id === 'DK4') ? [] :`), values used (anchor `'Bottom longitudinal bars (Cross-section tab, Deck design; DK4)'`), dist sub, figure caption; `bomDeck()` (anchor `// DKL (2026-11-24): where the longitudinal bars are entered`).
+- `ui/tips.js`: tips `dk_barLongBot`, `dk_barLongTop`.
+### Before / After
+`ui/deck.js figure()`:
+```js
+// before
+for (let x = 3; x < x1 - 1; x += Math.max(+D.sTop || 6, 3)) s += `<circle cx="${X(x)}" cy="${Y(yT)}" r="${Math.max(1.5, dbT / 2 * k)}" fill="#B45309"/>`;
+for (let x = Math.max(face, 3); x < x1 - 1; x += Math.max(+D.sBot || 6, 3)) s += `<circle cx="${X(x)}" cy="${Y(yB)}" r="${Math.max(1.5, dbB / 2 * k)}" fill="#0f766e"/>`;
+// after: transverse bars = one line each at yT / yB (stroke = bar diameter), from 2 in inside the deck edge to the cut, labelled
+// "top transverse #5 @ 6.00 in" / "bottom transverse ..."; longitudinal bars = circles at their spacing from 3 in, where entered:
+const yL = { top: ts - +D.coverT - dbT, bot: +D.coverB + dbB };
+const y = t === 'top' ? yL.top - q.db / 2 : yL.bot + q.db / 2;          // q = R.long.top / R.long.bot, q.db = sqrt(4 A_b / pi)
+for (let x = 3; x < x1 - 1; x += Math.max(q.s, 3)) s += `<circle data-dkbar="${t}-long" .../>`;
+// bottom margin 46 -> 60 px: two caption lines (transverse bars; longitudinal bars or "Longitudinal bars not entered")
+```
+`engine/deck.js calc()` (new; nothing before):
+```js
+const LB = longBars(D);   // { top, bot: null | { A, s, db }, topPart, botPart }; entered = A_b > 0 and s > 0
+if (LB.bot) { const q = LB.bot; q.As = 12 * q.A / q.s; q.r = dist.As / q.As; q.ok = dist.As <= q.As; }
+w.add({ id: 'distProv', sym: 'A_{s,prov}', eq: '\\frac{12\\,A_{b}}{s_{L}}', ... });            // in the 'dk' work of S.steps.dist
+w.add({ id: 'distR', sym: 'A_{s,d} \\le A_{s,prov}', sub: `${n(dist.As, 3)} \\le ${n(q.As, 3)}`, value: q.r, ok: q.ok, ... });
+if (LB.bot) checks.push({ id: 'DK4', title: 'Deck distribution reinforcement, bottom longitudinal bars', ref: ED + 'Art. 9.7.3.2, 9.7.2.3', r, Mu: null, phiMn: null, req: dist.As, prov: LB.bot.As, ok, loc, step: 'dk.distR' });
+```
+`report/builders.js bomDeck()`: before one row "Distribution (bottom, parallel to the girders)" (required area × W × L × 490/144); after, where entered: rows "Top longitudinal bars" and "Bottom longitudinal bars (distribution ...)", number = ⌈12 W / s⌉ + 1, length L, weight n × L × A_b × 490/144; the entered bottom bars replace the distribution-area row. Not entered: the rows and note text as before.
+### Governing provision
+AASHTO LRFD 10th Ed. (2024) Art. 9.7.3.2 (bottom distribution reinforcement, percentage of the primary positive-moment steel, S as the effective span) and Art. 9.7.2.3 (effective span length). New check; no existing formula, factor or reference changed.
+### Check case
+Made-up bridge: five plate girders at 12 ft, b_f 18 in, t_w 0.5625 in, bottom transverse #5 at 6 in (`tests/engine/sb-deck-long.test.mjs`).
+- A_s,pos = 12(0.31)/6 = 0.620 in²/ft; S_eff = 12 − 18/12 + (18 − 0.5625)/24 = 11.2266 ft; p_d = min(220/√11.2266, 67) = 65.66 %; A_s,d = 0.6566(0.620) = 0.4071 in²/ft (unchanged).
+- Bottom longitudinal #5 at 9 in: A_s,prov = 12(0.31)/9 = 0.4133 in²/ft; DK4 = 0.4071/0.4133 = **0.985 OK**.
+- #4 at 9 in: A_s,prov = 12(0.20)/9 = 0.2667 in²/ft; DK4 = **1.527 NG**.
+- Before: no DK4 (no input). Without the bars: DK1–DK3 and every step as before.
+- Default bridge in the app (#5 at 6 in transverse, 67 %): A_s,d = 0.4154; bottom longitudinal #5 at 8 in: 0.465 → 0.893 OK; at 9 in: 1.005 NG (smoke `tests/smoke/steel-bridge-deck-long.mjs`).
+### What changes for a project
+Only when the bottom longitudinal bars are entered: check DK4 joins the Deck tab, the Report's deck section and governing rows, the Summary deck card and the verdict (counted once, as DK1–DK3). A project without them: the same checks, ratios, steps and verdicts; the Deck tab and report show a "DK4 not checked: bottom longitudinal bars not entered" row and the figure draws the transverse bars as lines (display only).
+### How verified
+`node tests/engine/run.mjs deck sb-nomen sb-report sb-deck-long`; `node tests/check-syntax.mjs`; smokes `tests/smoke/steel-bridge-deck.mjs` (card input count 8 → 12), `tests/smoke/steel-bridge-deck-long.mjs`, `tests/smoke/steel-bridge-tips.mjs`.
+### Saved data
+New optional keys inside `P.deckDesign` only: `barLongTop`, `sLongTop`, `barLongBot`, `sLongBot` (in², in). Not in `DEF`: a project saved before reads them as not entered and is written unchanged; blanking an input deletes its key. No key renamed; JSON export/import round trip tested.
+### Open items
+- Not checked (raise with the engineer): temperature and shrinkage steel (5.10.6, would govern the top longitudinal bars), crack control (5.6.7), the 9.7.3.2 note on the top longitudinal bars; the top longitudinal bars are drawn and reported only.
+- Decision (pending engineer review): DK4 uses the governing bay's bottom transverse steel A_s,pos (as A_s,d before); a half-entered pair gives a warning and no DK4 (not an input error); the bill of materials replaces the required distribution area by the entered bottom bars.
+- The Summary deck card shows "—" for M_u / φM_n of DK4 (report/summary.js deckOf passes no areas).
