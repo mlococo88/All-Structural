@@ -47,7 +47,8 @@
     // barriers and sidewalks (Cross-section tab, P.xs.dl; without it the base design's barrier base width, in)
     const dl = P.xs.dl;
     ['L', 'R'].forEach(sd => {
-      const bw = dl ? (+((dl['bar' + sd] || {}).bw) || 0) * 12 : (+((P.base && P.base.deck && P.base.deck.bBar) || 0));
+      const gb = window.PSB3DUI.barGeo ? window.PSB3DUI.barGeo(P, sd) : null;   // GEOM (2026-11-24): a Geometry-mode barrier, its own outline (ui/view3d.js barGeo)
+      const bw = gb ? gb.bw : dl ? (+((dl['bar' + sd] || {}).bw) || 0) * 12 : (+((P.base && P.base.deck && P.base.deck.bBar) || 0));
       const sw = dl ? (dl['sw' + sd] || {}) : {}, w = (+sw.w || 0) * 12, t = w > 0 ? (+sw.t || 0) : 0;
       const at = d => sd === 'L' ? d : Wd - d;   // a distance from this side's deck edge → x
       if (w > 0 && t > 0) out.app.push({ kind: 'sw', side: sd, x0: Math.min(at(0), at(w)), x1: Math.max(at(0), at(w)), y0: yTop, y1: yTop + t, w, t });
@@ -56,7 +57,7 @@
         const cw = +e.cw || 0, ch = +e.ch || 0, rp = (+e.rp || 0) * 12, y = yTop + onSw(cw);
         if (cw > 0 && ch > 0) out.app.push({ kind: 'curb', side: sd, x0: Math.min(at(0), at(cw)), x1: Math.max(at(0), at(cw)), y0: y, y1: y + ch, cw, ch });
         if (+e.rw > 0) { const yr = yTop + Math.max(onSw(rp), rp <= cw + 1e-9 ? onSw(cw) + ch : 0); out.app.push({ kind: 'rail', side: sd, x0: at(rp) - POST / 2, x1: at(rp) + POST / 2, y0: yr, y1: yr + RAIL_H, rp, rw: +e.rw }); }
-      } else if (bw > 0) { const yb = yTop + (w > 0 && t > 0 && w >= bw ? t : 0); out.app.push({ kind: 'bar', side: sd, x0: Math.min(at(0), at(bw)), x1: Math.max(at(0), at(bw)), y0: yb, y1: yb + BAR_H, bw, edge: at(0), inner: at(bw) }); }
+      } else if (bw > 0) { const yb = yTop + (w > 0 && t > 0 && w >= bw ? t : 0); out.app.push({ kind: 'bar', side: sd, x0: Math.min(at(0), at(bw)), x1: Math.max(at(0), at(bw)), y0: yb, y1: yb + (gb ? gb.h : BAR_H), bw, edge: at(0), inner: at(bw), ...(gb ? { geo: true, poly: gb.pts.map(([u, y]) => [at(u), yb + y]), h: gb.h } : {}) }); }
       const fx = (+sw.fenceX || 0) * 12;   // PR 9: a railing or fence on the sidewalk
       if (w > 0 && fx > 0 && (+sw.fence > 0 || sw.fence == null)) { const et = window.PSB3DUI.edgeTop ? window.PSB3DUI.edgeTop(P, sd, fx) : null, yf = yTop + (et !== null ? et : t);   // FOB: on the barrier or curb top where one is under it (ui/view3d.js edgeTop)
         out.app.push({ kind: 'fence', side: sd, x0: at(fx) - POST / 2, x1: at(fx) + POST / 2, y0: yf, y1: yf + RAIL_H, fx }); }
@@ -129,6 +130,8 @@
     m.app.filter(a => a.kind === 'sw').forEach(a => { S.rect(a.x0, a.y0, a.x1, a.y1, 'dt-cc'); S.region(a.x0, a.y0, a.x1, a.y1, `${a.side === 'L' ? 'Left' : 'Right'} sidewalk ${ft(a.w)} × ${f2(a.t, 1)} in`); });
     m.app.filter(a => a.kind === 'bar').forEach(a => {
       const e = a.edge, i = a.inner, d = i - e, H = a.y1 - a.y0, y0 = a.y0;
+      if (a.geo) { S.poly(a.poly, 'dt-cc');   // GEOM: its own outline
+        S.region(Math.min(...a.poly.map(q => q[0])), a.y0, Math.max(...a.poly.map(q => q[0])), a.y1, `${a.side === 'L' ? 'Left' : 'Right'} barrier from its geometry: ${ft(a.bw)} wide at the deck (the traffic face), ${f2(a.h, 1)} in high`); return; }
       S.poly([[e, y0], [i, y0], [i - 0.25 * d, y0 + 0.25 * H], [e + 0.45 * d, y0 + H], [e, y0 + H]], 'dt-cc');
       S.region(a.x0, a.y0, a.x1, a.y1, `${a.side === 'L' ? 'Left' : 'Right'} barrier: ${ft(a.bw)} wide at the deck (the traffic face); height drawn ${BAR_H} in (schematic)`);
     });
