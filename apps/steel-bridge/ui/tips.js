@@ -159,6 +159,7 @@
     decorate();
     new MutationObserver(() => { decorate(); if (cur && !cur.isConnected) hide(); }).observe(document.body, { childList: true, subtree: true });
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install); else install();
+  // no DOM (the engine tests load every script of the page in Node): the list only
+  if (typeof document !== 'undefined') { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install); else install(); }
   window.SBDTips = { TIPS, decorate, show, hide };
 })();
