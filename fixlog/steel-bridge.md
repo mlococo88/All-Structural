@@ -11967,7 +11967,7 @@ None.
 - **How verified:** main vs this branch, the tool opened headless with every tab clicked and every topic's chip / class / one-line result recorded (PR description: audit table); `node tests/engine/run.mjs` (crossframes, welds, sb-dia-fail-highlight, steps-groups, all); `tests/smoke/steel-bridge-dia-fail.mjs`.
 - **Other copies:** none.
 
-## 2026-11-24 — PR: claude/sb-deck-fig-edge (PR #TBD) (DKFE) — Deck tab section figure: the left deck edge drawn as the Drawings tab (sidewalk, barrier or curb, the railing / fence on its top) (display only)
+## 2026-11-24 — PR: claude/sb-deck-fig-edge (PR #1708: https://github.com/mlococo88/All-Structural/pull/1708) (DKFE) — Deck tab section figure: the left deck edge drawn as the Drawings tab (sidewalk, barrier or curb, the railing / fence on its top) (display only)
 ### Request (engineer, 2026-11-24, approved)
 The Deck tab's section figure (`ui/deck.js figure(R, W)`) drew a schematic barrier (a fixed polygon from the deck edge to the traffic face), no fence or railing, no sidewalk, no curb. Make it consistent with the renderers fixed in FOB (#1701) and GEOM (#1705).
 ### Where / Before / After
