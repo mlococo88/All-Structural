@@ -11443,3 +11443,63 @@ None: no new field or key; `P.deckDesign` unchanged.
 - SBAR-2. The wait restarts on any key, click or input on the page (not only on project changes), because the girder analysis holds the
   page for ~6 s once started.
 - SBAR-3. Not below 1200 px (the column is hidden there); the "Auto-refresh" box (on by default) turns it off per browser.
+
+## 2026-11-24 — PR: claude/sb-detail-allowance (PR #1690: https://github.com/mlococo88/All-Structural/pull/1690) (SBALLOW) — one girder steel detail allowance: the Analysis settings box read-only when the loads module gives the value; the erection drawing's shipping pieces with the allowance of the analysis   [display and drawing only; no analysis result changes; no saved field or key changes]
+### Problem
+Two inputs hold a girder steel detail allowance: `xs.allow` (Loads input tab, card "Wearing surface, forms and steel") and `analysis.steelAllowPct` (Loads input tab, Analysis settings, default 5). The analysis (`engine/analysis.js loadsOf`) takes girder.loads.steelAllowPct (a hand-off), else the loads module's `xs.allow` (blank: 0), else `analysis.steelAllowPct`. (1) The Analysis settings box was always shown, editable, with 5, even when it was ignored. (2) The erection drawing (`engine/sheets.js erect`, sheet "ERECTION DIAGRAM AND GIRDER LAYOUT", table "SHIPPING PIECES") always used `analysis.steelAllowPct`, so its piece weights could disagree with DC1 of the analysis and with the splice shipping check SP3 (which uses `xs.allow`).
+### Where
+- `engine/analysis.js`: new `allowFor(P, g, mod)` and `allowOf(P, gi, mod)` (exported on `window.SBDAnalysis`), anchor `function allowFor(P, g, mod) {`; `loadsOf`, anchor `o.steelAllowPct = `.
+- `engine/sheets.js` `erect()`, anchor `const alPg = {}, alOf = g =>`.
+- `ui/analysis.js` new `allowRow(P, C, S, A0)`, anchor `function allowRow(P, C, S, A0) {`; `inputs()`, anchor `${allowRow(P, C, S, A0)}`.
+- `index.html` input change handler: anchor `xs\.(edges\.[LR]\.type|ws\.mode|allow$)` (redraw the tab when xs.allow changes, so the read-only value follows).
+- `ui/tips.js` tip `i_xs.allow` ("w" text).
+### Before / After
+`engine/analysis.js loadsOf`:
+```js
+// before
+o.steelAllowPct = A && isNum(A.steelAllowPct) ? A.steelAllowPct : M && isNum(mod.allow) ? mod.allow : settings(P).steelAllowPct;
+// after (same precedence, moved into allowFor)
+o.steelAllowPct = allowFor(P, g, mod).pct;
+function allowFor(P, g, mod) {
+  const A = (g && g.loads) || null, M = mod && mod.G ? mod.G : null;
+  if (A && isNum(A.steelAllowPct)) return { pct: A.steelAllowPct, src: 'girder' };
+  if (M && isNum(mod.allow)) return { pct: mod.allow, src: 'module' };
+  return { pct: settings(P).steelAllowPct, src: 'setting' };
+}
+function allowOf(P, gi, mod) {
+  const g = P && P.girders ? P.girders[gi] : null; if (!g) return { pct: settings(P).steelAllowPct, src: 'setting' };
+  if (mod === undefined) mod = g.loads && g.df ? null : moduleOf(P, gi);
+  return allowFor(P, g, mod);
+}
+```
+`engine/sheets.js erect()`:
+```js
+// before
+const allow = +(window.SBDAnalysis ? window.SBDAnalysis.settings(C.P).steelAllowPct : 0) || 0, Lc = n => String.fromCharCode(65 + n), pcs = [];
+... f2(w * (1 + allow / 100))
+... `WITH ${f0(allow)}% DETAIL ALLOWANCE (KIP)`
+// after
+const alPg = {}, alOf = g => { if (!(g.pg in alPg)) alPg[g.pg] = +(window.SBDAnalysis ? window.SBDAnalysis.allowOf(C.P, g.pg).pct : 0) || 0; return alPg[g.pg]; };
+G.girders.forEach(alOf); const als = [...new Set(Object.values(alPg))], one = als.length <= 1, allow = one ? (als[0] || 0) : null;
+const Lc = n => String.fromCharCode(65 + n), pcs = [];
+... f2(w * (1 + alOf(g) / 100)) + (one ? '' : ` (${f0(alOf(g))}%)`)
+... one ? `WITH ${f0(allow)}% DETAIL ALLOWANCE (KIP)` : 'WITH DETAIL ALLOWANCE (KIP; % BY GIRDER)'
+```
+`ui/analysis.js inputs()`: before `${numIn('a', 'steelAllowPct', 'Girder steel detail allowance', '%', S.steelAllowPct)}`; after `${allowRow(P, C, S, A0)}`: the same box when `allowFor(...).src === 'setting'`; otherwise a disabled grey input `#an_a_steelAllowPct_used` with the value used and a note naming the source (loads module: link `data-itgo="loads"` to the card "Wearing surface, forms and steel" at the top of the same tab; or the hand-off girder loads), a link to the Analysis tab steps an.wst*, and, when one is stored, the stored analysis.steelAllowPct ("kept and used only when neither gives a value").
+### Governing provision
+None: the detail allowance is an owner/designer allowance, not an AASHTO value. Steel unit weight unchanged: AASHTO LRFD 10th Ed. Table 3.5.1-1, 0.490 kcf (3.4028 lb/ft per in²).
+### Check case
+Built-in project with one field splice at 82 ft, xs.allow = 3 %, analysis.steelAllowPct = 5 % (`tests/engine/sb-detail-allowance.test.mjs`):
+- analysis DC1 girder steel: (1 + 3/100), before and after (unchanged);
+- erection drawing, piece G1-B, plates 69.29 kip: before 69.29 × 1.05 = **72.75** kip, header "WITH 5% DETAIL ALLOWANCE"; after 69.29 × 1.03 = **71.37** kip, header "WITH 3% …"; piece G1-A 17.79 kip: 18.68 → 18.32.
+- Hand check: a piece of 30.00 kip of plates: before 30.00 × 1.05 = 31.50 kip, after 30.00 × 1.03 = 30.90 kip.
+- Two plate girders with hand-off allowances 5 % and 8 %: header "WITH DETAIL ALLOWANCE (KIP; % BY GIRDER)", each cell with its own % (e.g. 19.21 (8%)).
+### What changes for a project
+Analysis results: none (13 girder analyses on 12 projects, origin/main and this branch, whole `analyzeGirder` result identical). Drawing: only the shipping-piece "with allowance" column and its header, and only where the allowance the analysis uses differs from analysis.steelAllowPct (e.g. xs.allow ≠ the setting; xs.allow blank: 0 % now, as the analysis). New project and every project with xs.allow = setting: the sheet is byte-identical (tests/baselines/dxf-sheets.json unchanged).
+### How verified
+`node tests/engine/run.mjs sb-detail-allowance dxf-sheets sheets drawings analysis …`; smoke `tests/smoke/steel-bridge-detail-allowance.mjs`; comparison of origin/main and the branch (PR description).
+### Saved data
+None: `analysis.steelAllowPct` and `xs.allow` keep their keys and values; the stored setting is not cleared and is still used where neither the hand-off nor the loads module gives an allowance.
+### Open items
+- SP3 (splice shipping weight, engine/autodesign.js) uses `+xs.allow || 0` directly; when the loads module fails it can differ from the analysis (which then uses the setting). Not changed (calculation check; raise with the engineer).
+- The header shows the % rounded to a whole number (`f0`, as before): 2.5 % reads "3%".

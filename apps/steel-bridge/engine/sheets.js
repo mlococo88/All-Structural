@@ -2,7 +2,7 @@
    (window.SBDSheets). Classic script, no DOM. Display and export only: nothing here feeds a result.
    Needs (loaded first, read at call time): shared/dxf.js, engine/drawings.js (SBDDrawings: geometry, plan, elevation, section, table,
    notes, tag), engine/framing.js, engine/flexure.js (envelopeStrI, factors), engine/crossframes.js, engine/constructibility.js (OH_DEF),
-   engine/fatigue.js (DET), engine/welds.js (wMinFor), engine/analysis.js (settings); for results(): report/data.js (SBDReportData),
+   engine/fatigue.js (DET), engine/welds.js (wMinFor), engine/analysis.js (allowOf); for results(): report/data.js (SBDReportData),
    report/builders.js (SBDReportBuild) and ui/welds.js (SBDWeldsUI.build), as the Report tab.
 
    Ported 2026-10-30 from GirderDetail ("Steel Bridge Design.html", the R12 sheet set of its DXF export), item SB2-DW5:
@@ -172,17 +172,21 @@
     const G = C.G, FR = G.FR, h = D.h, ly = { g: D.layer('GRDR-CNTR', 8), b: D.layer('BRNG-CNTR', 8), s: D.layer('SPLC', 1), t: D.layer('ANNO-TEXT', 7), tb: D.layer('TABL', 7) }, cl = D.ltype('CENTER'), X = x => x * 12, nb = G.nb, Y = y => (G.ys[nb - 1] - y) * 12, T = DW().table;
     G.sup.forEach((_, k) => { const ax = X(FR.xb(k, 0)), ay = Y(G.ys[0]), bx = X(FR.xb(k, nb - 1)), by = Y(G.ys[nb - 1]), L = Math.hypot(bx - ax, by - ay) || 1, ux = (bx - ax) / L, uy = (by - ay) / L, ex = 2 * h;   // SBFLIP: run on past G1 and G_nb along the line (true skew)
       D.line(ly.b, ax - ux * ex, ay - uy * ex, bx + ux * ex, by + uy * ex, cl); });
-    const allow = +(window.SBDAnalysis ? window.SBDAnalysis.settings(C.P).steelAllowPct : 0) || 0, Lc = n => String.fromCharCode(65 + n), pcs = [];
+    // SBALLOW (2026-11-24): each girder's pieces with the detail allowance its analysis uses (SBDAnalysis.allowOf of its plate girder: the
+    // girder loads, else xs.allow of the loads module, else the Analysis setting); before, the Analysis setting steelAllowPct for every girder
+    const alPg = {}, alOf = g => { if (!(g.pg in alPg)) alPg[g.pg] = +(window.SBDAnalysis ? window.SBDAnalysis.allowOf(C.P, g.pg).pct : 0) || 0; return alPg[g.pg]; };
+    G.girders.forEach(alOf); const als = [...new Set(Object.values(alPg))], one = als.length <= 1, allow = one ? (als[0] || 0) : null;
+    const Lc = n => String.fromCharCode(65 + n), pcs = [];
     G.girders.forEach((g, i) => { const S = g.segs, beg = S[0].s0, end = S[S.length - 1].s1, cuts = [beg, ...g.spl, end];
       D.line(ly.g, X(g.x0 + beg), Y(g.y), X(g.x0 + end), Y(g.y));
-      for (let q = 0; q < cuts.length - 1; q++) { const mk = `${g.label}-${Lc(q)}`, w = wtAt(S, cuts[q], cuts[q + 1]); pcs.push([mk, g.label, dFI(X(cuts[q] - beg)), dFI(X(cuts[q + 1] - beg)), dFI(X(cuts[q + 1] - cuts[q])), f2(w), f2(w * (1 + allow / 100))]);
+      for (let q = 0; q < cuts.length - 1; q++) { const mk = `${g.label}-${Lc(q)}`, w = wtAt(S, cuts[q], cuts[q + 1]); pcs.push([mk, g.label, dFI(X(cuts[q] - beg)), dFI(X(cuts[q + 1] - beg)), dFI(X(cuts[q + 1] - cuts[q])), f2(w), f2(w * (1 + alOf(g) / 100)) + (one ? '' : ` (${f0(alOf(g))}%)`)]);
         D.text(ly.t, X(g.x0 + (cuts[q] + cuts[q + 1]) / 2), Y(g.y) + 0.5 * h, h * 0.9, mk, 1); }
       g.spl.forEach((s, k) => { D.line(ly.s, X(g.x0 + s), Y(g.y) - h, X(g.x0 + s), Y(g.y) + h); if (i === nb - 1) D.text(ly.t, X(g.x0 + s), Y(g.y) - 2.9 * h, h * 0.9, `FS${k + 1}`, 1); }); });
     const xr = Math.min(...G.sup.map((_, k) => Math.min(X(FR.xb(k, 0)), X(FR.xb(k, nb - 1))))), BW = DW().bwName(G);
     D.text(ly.t, xr, Y(G.ys[0]) + 7 * h, 1.6 * h, 'ERECTION DIAGRAM');
     D.text(ly.t, xr, Y(G.ys[0]) + 5.3 * h, 0.8 * h, `PIECE MARKS SHOWN. SUGGESTED SEQUENCE: SET THE PIECES OF ADJACENT GIRDERS IN PAIRS, INSTALL ${BW}S BETWEEN THEM, AND COMPLETE FIELD SPLICES BEFORE RELEASING THE CRANE; ERECTION PLAN BY THE CONTRACTOR.`);
     const y = Y(G.ys[nb - 1]) - 6 * h, heavy = Math.max(...pcs.map(p => +p[5]));
-    const T1 = T(D, ly.tb, xr, y, ['MARK', 'GIRDER', 'FROM', 'TO', 'LENGTH', 'PLATES (KIP)', `WITH ${f0(allow)}% DETAIL ALLOWANCE (KIP)`], pcs.map(p => +p[5] === heavy ? [...p.slice(0, 6), p[6] + ' (HEAVIEST)'] : p), 'SHIPPING PIECES (STATIONS FROM GIRDER END; STEEL AT 490 PCF; ALLOWANCE OF THE ANALYSIS TAB)');
+    const T1 = T(D, ly.tb, xr, y, ['MARK', 'GIRDER', 'FROM', 'TO', 'LENGTH', 'PLATES (KIP)', one ? `WITH ${f0(allow)}% DETAIL ALLOWANCE (KIP)` : 'WITH DETAIL ALLOWANCE (KIP; % BY GIRDER)'], pcs.map(p => +p[5] === heavy ? [...p.slice(0, 6), p[6] + ' (HEAVIEST)'] : p), 'SHIPPING PIECES (STATIONS FROM GIRDER END; STEEL AT 490 PCF; ALLOWANCE OF THE ANALYSIS TAB)');
     const tot = G.girders.map(g => [g.label, f2(pcs.filter(p => p[1] === g.label).reduce((a, p) => a + +p[5], 0))]);
     const T2 = T(D, ly.tb, xr + T1.w + 8 * h, y, ['GIRDER', 'PLATE WEIGHT (KIP)'], [...tot, ['TOTAL', f2(tot.reduce((a, r) => a + +r[1], 0))]], 'STEEL BY GIRDER');
     const x00 = FR.xb(0, 0), wp = [];
