@@ -141,6 +141,9 @@
       sub('d', `Dead loads per girder (klf), ${LD.METHODS[D.method] || D.method}`, [tbl(['Girder', 'Class', 'Deck', 'Haunch', 'SIP', 'DC1', 'DC2', 'DW'],
         gs.map(i => [`G${i + 1}`, LD.CLS[D.cls[i]] || D.cls[i], N(D.deck[i], 4), N(D.haunch[i], 4), N(D.sip[i], 4), { ...N(D.dc1[i], 4), key: `dl.G${i + 1}.DC1` }, { ...N(D.dc2[i], 4), key: `dl.G${i + 1}.DC2` }, { ...N(D.dw[i], 4), key: `dl.G${i + 1}.DW` }])),
         kv([[`Girder steel, ${R.girderLabel} (average)`, `${f(R.steel.avg, 4)} klf`, `dl.steel.${R.girderId}.avg`], ['Deck width', `${f(D.Wd, 2)} ft`], ['Live-load faces L / R', `${f(R.ll.L.r, 2)} / ${f(R.ll.R.r, 2)} ft`, 'xs.rL']]),
+        // BARG (2026-11-24): a barrier entered by its geometry: its area, weight, width at the deck and load point (the centroid), each worked in the steps below
+        ...(() => { const gb = D.per.filter(L => L.def && L.def.kind === 'barGeo'); return gb.length ? [kv(gb.flatMap(L => { const G = L.def.G, id = `dl.load.${L.id}`;
+          return [[`${L.desc}: area from its cross-section`, `${f(G.A, 2)} in²`, `${id}.geo.A`], [`${L.desc}: weight (DC2)`, `${f(G.w, 4)} klf`, id], [`${L.desc}: width at the deck`, `${f(G.bDeck, 3)} ft`, `${id}.geo.b`], [`${L.desc}: load point, centroid x̄ from the deck edge`, `${f(G.xc, 3)} ft`, `${id}.geo.xc`]]; }))] : []; })(),
         // SBSW (2026-11-19; CLAUDE.md §6): haunch, SIP and DC1 with each plate segment's top flange, as the analysis takes them (A2; display only)
         ...(() => { const S = R.segDC1 || [], ls = gs.filter(i => (S[i] || []).some(r => !r.base)); if (!ls.length) return [];
           return [note(`Haunch and SIP forms with each plate segment's top flange (${R.girderLabel}'s plates): the table above takes $b_{f,0}$ = ${f(D.bf * 12, 2)} in (the first region's top flange); the analysis takes each segment's own width (wet deck stage, Analysis section). DC1 there:`),
@@ -582,6 +585,10 @@
   /* ---------- 12a. deck slab (DK, 2026-11-23): engine/deck.js calc(), the Deck tab's result; only in a project with the deck design on ---------- */
   const DK_GRP = 'Deck slab (bridge)';
   const dkBar = A => (window.SBDDeck ? window.SBDDeck.barName(A) : f(A, 2) + ' in²');
+  /* dkDC(c): the demand and limit cells of a deck check that is not a moment check (DK4 to DK6; DKTS 2026-11-24): its dem / cap pair */
+  const dkTeX = t => String(t);
+  const dkDC = c => { const one = q => (q ? { t: `$${dkTeX(q.sym)}$ ${f(q.v, q.unit === 'in²/ft' ? 3 : 2)} ${q.unit}`, n: true } : '—');
+    return c.dem || c.cap ? [one(c.dem), one(c.cap)] : [one({ sym: 'A_{s,d}', v: c.req, unit: 'in²/ft' }), one({ sym: 'A_{s,prov}', v: c.prov, unit: 'in²/ft' })]; };
   function dk(B, X) {
     const R = B.dk, In = R.in, D = R.D, k = id => K('', id), many = R.bays.length > 1, st = c => (c.ok ? 'OK' : 'NG');
     R.checks.forEach(c => X.gov.push({ mod: 'Deck', grp: DK_GRP, check: `${c.id} ${c.title}`, loc: c.loc, r: c.r, key: k(c.step) }));
@@ -589,9 +596,9 @@
     const fig = window.SBDDeckUI && window.SBDDeckUI.figure ? (() => { try { return { type: 'figure', svg: window.SBDDeckUI.figure(R, 700), caption: 'Deck section over the left exterior girder and the first bay (true scale across): the traffic face, the design wheel 1 ft inside it, the negative-moment design sections, the top and bottom transverse bars (lines) and the longitudinal bars where entered (circles). Display only.' }; } catch (e) { return null; } })() : null;
     const subs = [sub('gov', 'Checks of the deck slab (the bridge\'s deck: the same in every girder\'s report)', [
       note(`Transverse design of the slab per foot of deck by the strip method, as the [[tab:dk|Deck tab]] (the method of the Prestressed Bridge Design app's deck module). Strength I${In.eta !== 1 || In.mLL !== 1 ? ` with the owner's $\\eta$ = ${f(In.eta, 3)}${In.mLL !== 1 ? ` and m = ${f(In.mLL, 2)}` : ''}` : ''}. Interior bays: dead load by $wS^{2}/11$ and $wS^{2}/10$, live load from Table A4-1; overhangs: gravity loads only. ${ED}.`),
-      tbl(['Check', 'Governing location', '$M_{u}$ (kip-ft/ft)', '$\\phi M_{n}$ (kip-ft/ft)', 'Ratio', 'Status', 'Reference'], R.checks.map(c => ({ cells: [`${c.id} ${c.title}`, c.loc, ...(c.Mu == null ? [{ t: `$A_{s,d}$ ${f(c.req, 3)} in²/ft`, n: true }, { t: `$A_{s,prov}$ ${f(c.prov, 3)} in²/ft`, n: true }] : [N(c.Mu, 2), N(c.phiMn, 2)]), R3(c.r, k(c.step)), st(c), String(c.ref).replace('AASHTO LRFD 10th Ed. ', '')], cls: c.r > 1 + 1e-9 ? 'gov' : '' }))
+      tbl(['Check', 'Governing location', '$M_{u}$ (kip-ft/ft)', '$\\phi M_{n}$ (kip-ft/ft)', 'Ratio', 'Status', 'Reference'], R.checks.map(c => ({ cells: [`${c.id} ${c.title}`, c.loc, ...(c.Mu == null ? dkDC(c) : [N(c.Mu, 2), N(c.phiMn, 2)]), R3(c.r, k(c.step)), st(c), String(c.ref).replace('AASHTO LRFD 10th Ed. ', '')], cls: c.r > 1 + 1e-9 ? 'gov' : '' }))
         .concat(R.checks.some(c => c.id === 'DK4') ? [] : [{ cells: ['DK4 Deck distribution reinforcement, bottom longitudinal bars', { t: `Not checked: bottom longitudinal bars not entered (required $A_{s,d}$ = ${f(R.dist.As, 3)} in²/ft, [[${k('dk.distAs')}]])`, span: 5 }, 'Art. 9.7.3.2'] }]), { wide: true }),
-      note('Not checked by this module: the Extreme Event II vehicular-collision cases of the overhang (A13.4; a barrier-specific analysis), crack control (5.6.7), minimum reinforcement (5.6.3.3), temperature and shrinkage reinforcement (5.10.6), bar development.', true),
+      note('DK4 to DK6 are not moment checks: the two columns give the demand and the limit of the check. Not checked by this module: the Extreme Event II vehicular-collision cases of the overhang (A13.4; a barrier-specific analysis), minimum reinforcement (5.6.3.3), the maximum spacing of 5.10.3.2, bar development.', true),
       ...R.warn.map(w => note(w, true)), fig]),
       sub('in', 'Values used', [kv([
         ['Girder spacings S (Cross-section tab)', R.bays.map(q => `${f(q.S, 2)} ft`).join(', ')],
@@ -616,8 +623,25 @@
         ['Effective span length $S_{eff}$ (Art. 9.7.2.3)', R.dist.E && R.dist.E.ok ? `${f(R.dist.Seff, 3)} ft (S = ${f(R.dist.S, 2)} ft; $b_{f}$ = ${f(R.dist.bf, 2)} in, $t_{w}$ = ${f(R.dist.tw, 4)} in, ${R.dist.at})` : 'not available: 67 % used', R.dist.E && R.dist.E.ok ? k('dk.distSe') : ''],
         R.long && R.long.bot ? ['DK4 Bottom longitudinal bars provided', `${dkBar(R.long.bot.A)} at ${f(R.long.bot.s, 2)} in: $A_{s,prov}$ = ${f(R.long.bot.As, 3)} in²/ft ≥ $A_{s,d}$? ratio ${f(R.long.bot.r, 3)} ${R.long.bot.ok ? 'OK' : 'NG'}`, k('dk.distR')]
           : ['DK4 Bottom longitudinal bars provided', 'not checked: bottom longitudinal bars not entered']])]),
+      ...dkTsCr(R, k),
       sub('steps', 'Worked steps', [gsteps('SBDDeckUI:x', '', R.steps, { title: 'Worked steps: deck slab' })])];
     return { title: 'Deck slab (transverse design)', subs };
+  }
+  /* dkTsCr(R, k) (DKTS / DKCR, 2026-11-24): the DK5 shrinkage and temperature table and the DK6 crack control table, each value keyed to
+     its worked step */
+  function dkTsCr(R, k) {
+    const T = R.ts, C = R.crack, out = []; if (!T || !C) return out;
+    out.push(sub('ts', 'DK5 Shrinkage and temperature reinforcement (Art. 5.10.6)', [
+      note(`Each face and each direction: $A_{s,T\\&S}$ = min(max(1.30bh / (2(b + h)$f_{y}$), 0.11), 0.60) = ${f(T.A, 3)} in²/ft [[${k('dk.ts.A')}]] with h = ${f(T.h, 2)} in (the total deck thickness), b = ${f(T.b, 1)} in (the deck width), $f_{y}$ = ${f(T.fyU, 1)} ksi; spacing not over $s_{max}$ = min(3.0h, 18.0 in) = ${f(T.smax, 2)} in [[${k('dk.ts.smax')}]] (Decision pending engineer review: the lesser of the two). The deck edges are the faces the article exempts.`),
+      tbl(['Bars', 'Size and spacing', '$A_{s}$ (in²/ft)', '$A_{s,T\\&S}/A_{s}$', '$s/s_{max}$', 'Status'], T.sets.map(q => q.on
+        ? { cells: [q.name, `${dkBar(q.A)} at ${f(q.s, 2)} in`, { t: f(q.As, 3), n: true, key: k(`dk.ts.${q.k}.As`) }, R3(q.rA, k(`dk.ts.${q.k}.rA`)), R3(q.rs, k(`dk.ts.${q.k}.rs`)), q.ok ? 'OK' : 'NG'], cls: q.ok ? '' : 'gov' }
+        : { cells: [q.name, { t: 'Not checked: bars not entered', span: 5 }] }))]));
+    out.push(sub('cr', 'DK6 Crack control of the transverse bars (Art. 5.6.7, Service I)', [
+      note(`$s \\le 700\\gamma_{e}/(\\beta_{s} f_{ss}) - 2d_{c}$ (Eq. 5.6.7-1) and $f_{ss} \\le 0.60 f_{y}$ = ${f(C.lim, 2)} ksi; Class ${C.cls} exposure, $\\gamma_{e}$ = ${f(C.ge, 2)} [[${k('dk.cr.ge')}]] (Decision pending engineer review: Class 1 by default, an input); $\\beta_{s} = 1 + d_{c}/(0.7(h - d_{c}))$ (Eq. 5.6.7-2); n = ${f(C.n, 3)} [[${k('dk.cr.n')}]]; applies where $f_{t} > 0.8 f_{r}$, $f_{r}$ = ${f(C.fr, 4)} ksi [[${k('dk.cr.fr')}]]. Service I moments: the unfactored moments of DK1 to DK3 at 1.0 (η = 1.0${C.mLL !== 1 ? `; the owner's m = ${f(C.mLL, 2)} on the live load, Decision pending engineer review` : ''}). $f_{ss}$ from the cracked transformed 12 in strip. Decision (pending engineer review): top bars $d_{c}$ = ($t_{L}$ − $t_{s}$) + $c_{t}$ + $d_{b}$/2 and h = $t_{L}$, bottom bars $d_{c}$ = $c_{b}$ + $d_{b}$/2 and h = $t_{s}$ (conservative).`),
+      tbl(['Section, bars', '$M_{s}$ (kip-ft/ft)', '$f_{ss}$ (ksi)', '$d_{c}$ (in)', '$\\beta_{s}$', '$s_{max}$ (in)', 's (in)', 'Ratio', 'Status'], C.cases.map(q => { const p = `dk.${q.key}.`;
+        return q.app ? { cells: [q.name, { t: f(q.Ms, 3), n: true, key: k(p + 'Ms') }, { t: f(q.fss, 2), n: true, key: k(p + 'fss') }, { t: f(q.dc, 3), n: true, key: k(p + 'dc') }, { t: f(q.bs, 3), n: true, key: k(p + 'bs') }, { t: f(q.smax, 2), n: true, key: k(p + 'smax') }, N(q.s, 2), R3(q.r, k(p + (q.by === 'stress' ? 'fl' : 's'))), q.ok ? 'OK' : 'NG'], cls: q.ok ? '' : 'gov' }
+          : { cells: [q.name, { t: f(q.Ms, 3), n: true, key: k(p + 'Ms') }, { t: `Not required: $f_{t}$ = ${f(q.ft, 3)} ≤ 0.8$f_{r}$ (${f(0.8 * C.fr, 3)} ksi)`, span: 5, key: k(p + 'app') }, '—', 'OK'] }; }), { wide: true })]));
+    return out;
   }
   /* bomDeck(P, R): the deck reinforcement of the Deck section (DK): the transverse bars over the bridge length and the distribution steel,
      as the Prestressed Bridge Design app's bill of materials. Rebar, not structural steel: not in the steel totals. */
@@ -885,10 +909,12 @@
     if (xf) { tot += xf.tot; rows.push([xf.dia ? 'Diaphragms (bridge)' : 'Cross-frames (bridge)', '', '', '', '', '', String(xf.rows.reduce((a, q) => a + q.n, 0)), N(xf.tot, 3)]); }
     else { const t = units.map(u => (u.it.miss || []).find(q => /^cross-frames/.test(q))).find(Boolean); if (t) miss.push(t); }
     rows.push([(rest || []).length ? 'Bridge total (the other girder types: plates only)' : 'Bridge total', '', '', '', '', '', '', N(tot, 3)]);
-    const al = +((P.xs || {}).allow) || 0, Ua = window.SBDModel.unassigned ? window.SBDModel.unassigned(P) : [];
+    // SBALLOW2 (2026-11-24): the allowance the analysis uses for each plate girder (SBDAnalysis.allowOf); before, xs.allow for every girder
+    const AN = window.SBDAnalysis, alg = (P.girders || []).map((g, gi) => ({ g, a: AN && AN.allowOf ? +AN.allowOf(P, gi).pct || 0 : +((P.xs || {}).allow) || 0 })), als = [...new Set(alg.map(q => q.a))];
+    const alT = als.length <= 1 ? `${f(als.length ? als[0] : +((P.xs || {}).allow) || 0, 0)} %` : alg.map(q => `${f(q.a, 0)} % (${gName(q.g)})`).join(', '), Ua = window.SBDModel.unassigned ? window.SBDModel.unassigned(P) : [];
     return sub('t', 'Girder and bridge totals', [
       tbl(['Girder', 'Plates (kip)', 'Transverse stiffeners, connection plates (kip)', 'Bearing stiffeners (kip)', 'Splice plates (kip)', 'One girder (kip)', 'Number', 'Total (kip)'], rows, { wide: true, caption: 'One girder = plates + stiffeners + connection plates + bearing stiffeners + splice plates; total = one girder × number; bridge total = the sum of the rows' }),
-      note(`Not included: shear studs; field splice bolts (counted above, no weight) and fill plates; cross-frame gusset and connection plates and their bolts beyond the allowance in the frame weight; lateral bracing; bearings and sole plates; welds${miss.length ? '; ' + miss.join('; ') : ''}. The analysis adds a detail allowance of ${f(al, 0)} % to the girder steel dead load (DC1, Analysis section) and the cross-frame weights as point loads; the allowance is not in this table.${Ua.length ? ` Girder lines without a girder type (${Ua.map(j => 'G' + (j + 1)).join(', ')}) have no girder in these totals; the frames of every bay are counted.` : ''}`)]);
+      note(`Not included: shear studs; field splice bolts (counted above, no weight) and fill plates; cross-frame gusset and connection plates and their bolts beyond the allowance in the frame weight; lateral bracing; bearings and sole plates; welds${miss.length ? '; ' + miss.join('; ') : ''}. The analysis adds a detail allowance of ${alT} to the girder steel dead load (DC1, Analysis section) and the cross-frame weights as point loads; the allowance is not in this table.${Ua.length ? ` Girder lines without a girder type (${Ua.map(j => 'G' + (j + 1)).join(', ')}) have no girder in these totals; the frames of every bay are counted.` : ''}`)]);
   }
   /* bom(B, X): steel bill of materials: the plate girders of every type (PR3), then the reported girder's stiffeners, connection plates and
      splice plates and the bridge's cross-frames (BOM2), the girder and bridge totals */

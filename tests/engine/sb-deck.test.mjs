@@ -53,15 +53,15 @@ test('default bridge (5 girders at 9.5 ft, 3.25 ft overhangs, 8 in slab + 0.5 in
   // M_u = 1.951416 + 0.057422 + 7.6608 = 9.669638; ratio 9.669638/13.19667 = 0.73273
   const O = R.oh.L.O; assert.equal(O.Xoh, 0.75); assert.equal(O.SWoh, 52.5); near(O.MohDC, 1.561133, 1e-6, 'M_DC,oh'); near(O.MohDW, 0.038281, 1e-6, 'M_DW,oh'); near(O.Mu_oh, 9.669638, 2e-6, 'M_u,oh');
   near(R.checks[2].r, 0.73273, 2e-5, 'DK3'); assert.ok(Object.is(R.oh.R.O.Mu_oh, O.Mu_oh), 'symmetric');
-  assert.deepEqual([...R.checks.map(c => c.id)], ['DK1', 'DK2', 'DK3']); assert.ok(R.checks.every(c => c.ok)); assert.equal(R.warn.length, 0);
+  assert.deepEqual([...R.checks.map(c => c.id)], ['DK1', 'DK2', 'DK3', 'DK5', 'DK6']); assert.ok(R.checks.slice(0, 3).every(c => c.ok)); assert.equal(R.warn.length, 0);   // DK5, DK6: DKTS / DKCR (2026-11-24)
   assert.equal(R.dist.pct, 67); near(R.dist.As, 0.31155, 1e-9, 'A_s,d');
   // the same numbers as the shared strip() with the Prestressed-style inputs (barrier 18 in, 0.40 klf)
   const Sx = W.SharedDeck.strip({ S: 9.5, ts: 8, tsLoad: 8.5, fc: 4, fy: 60, wc: 0.15, wsFut: 0.025, xneg: 4, barTop: 0.31, sTop: 6, coverT: 2.5, barBot: 0.31, sBot: 8, coverB: 1, oh: 3.25, bBar: 18, wBar: 0.4 });
   assert.ok(Object.is(Sx.Mu_pos, I.Mu_pos) && Object.is(Sx.Mu_neg, I.Mu_neg) && Object.is(Sx.Mu_oh, O.Mu_oh) && Object.is(Sx.pos.dc, R.checks[0].r) && Object.is(Sx.ohCap.dc, R.checks[2].r));
 });
 
-test('with the default bars (#5 at 6 top and bottom) the default bridge passes', () => {
-  const R = DK.calc(on(M.newProject())); assert.ok(R.checks.every(c => c.ok && c.r < 1)); near(R.checks[0].r, 12.929837 / R.checks[0].phiMn, 1e-6);
+test('with the default bars (#5 at 6 top and bottom) the default bridge passes DK1 to DK5 (DK6: sb-deck-tscrack.test.mjs)', () => {
+  const R = DK.calc(on(M.newProject())); assert.ok(R.checks.filter(c => c.id !== 'DK6').every(c => c.ok && c.r < 1)); near(R.checks[0].r, 12.929837 / R.checks[0].phiMn, 1e-6);
 });
 
 test('unequal bays: each spacing is designed; the governing bay of each check; the smallest spacing sets the distribution steel', () => {
@@ -123,7 +123,7 @@ test('worked steps: each check links to a step with its ratio; topics group ever
   const R = DK.calc(on(M.newProject()));
   R.checks.forEach(c => { const s = R.steps.find(q => q.id === c.step); assert.ok(s, c.step); assert.ok(Object.is(s.value, c.r)); assert.equal(s.ok, c.ok); assert.match(c.ref, /^AASHTO LRFD 10th Ed\. /); });
   const G = W.SharedSteps.group(R.steps, DK.topics(DK.metaOf(R.steps)), { strip: /^dk\./ });
-  assert.deepEqual([...G.map(g => g.key)], ['b1', 'pos', 'neg', 'ohL', 'ohR', 'dist']); assert.equal(G.reduce((a, g) => a + g.steps.length, 0), R.steps.length);
+  assert.deepEqual([...G.map(g => g.key)], ['b1', 'pos', 'neg', 'ohL', 'ohR', 'dist', 'ts', 'cr', 'crp1', 'crn1', 'crohL', 'crohR']); assert.equal(G.reduce((a, g) => a + g.steps.length, 0), R.steps.length);
   R.steps.forEach(s => { if (/AASHTO/.test(s.ref)) assert.match(s.ref, /^AASHTO LRFD 10th Ed\. /); });
 });
 
@@ -145,7 +145,7 @@ test('rolled-beam segments (ROLL, #1680): the design section is b_f/4 of the W s
   const R = WR.SBDDeck.calc(P), sh = WR.SharedAiscW.get('W36X135');
   assert.equal(R.err, undefined, R.err); assert.equal(R.in.bf, sh.bf); assert.equal(R.in.xneg, sh.bf / 4);
   const R0 = DK.calc(on(M.newProject())); assert.ok(R.bays[0].I.MLL_neg > R0.bays[0].I.MLL_neg, 'a narrower flange: the design section nearer the girder, a larger negative moment');
-  assert.equal(R.checks.map(c => c.id).join(), 'DK1,DK2,DK3'); assert.equal(R.checks[0].r, R0.checks[0].r, 'the positive moment does not depend on the flange');
+  assert.equal(R.checks.map(c => c.id).join(), 'DK1,DK2,DK3,DK5,DK6'); assert.equal(R.checks[0].r, R0.checks[0].r, 'the positive moment does not depend on the flange');
 });
 
 // DD (2026-11-24, engineer request "Please fix the deck distribution steel"): the distribution reinforcement on the effective span of AASHTO

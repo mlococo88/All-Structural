@@ -22,6 +22,7 @@
        ratio  optional (SSR, 2026-11-24): true / false, whether a test step's value is a demand / capacity ratio (D/C, passing at <= 1.0), for
               the status chip of its topic (group()); undefined: decided from the step itself (see isRatio below). Display only.
    It renders as:  label:  sym = eq = sub = value unit   (ref)
+   (comparison steps: 'sym eq' when eq starts with a relation, no repeated value, ', OK' after a comparison; CMPL, line() below)
 
    Equation notation (eq, sub, sym, unit): a small TeX subset that is also valid KaTeX, so that the built-in renderer and
    KaTeX (toHTML, when the page has loaded it; 2026-10-29) show the same strings: _{…} subscript, ^{…} superscript, \frac{a}{b}, \bar{x}, \sqrt{x}, \text{…},
@@ -242,16 +243,31 @@
   const toText = (s, o) => render(String(s == null ? '' : s), false, !(o && o.legacy));
   /* line(step, html): the one-line rendering  sym = eq = sub = value unit
      With KaTeX, sym, eq and sub are set in display style (full-size fractions) and a numeric value with its unit is set by
-     KaTeX too (same digits as fmt), so the whole line is in one typeface; a string value stays as it is. */
+     KaTeX too (same digits as fmt), so the whole line is in one typeface; a string value stays as it is.
+     CMPL (2026-11-24; display only): two fixes for comparison steps; a step without a relation renders exactly as before.
+     (1) An eq that starts with a relation (\le, \ge, \lt, \gt, \ne, ≤, ≥, <, >, ≠) continues sym as a comparison (sym 'D_{p}', eq
+         '\le 0.42D_{t}'): the two are set as one, 'sym eq' ("D_p ≤ 0.42D_t …"), not 'sym = eq' ("D_p = ≤ 0.42D_t …").
+     (2) After a comparison (the last of sym / eq / sub shown holds a relation): a numeric value that the comparison already shows (its
+         digits as formatted, e.g. sub '… = 47.2 \le 140', value 47.2) is not repeated ("… = 47.2 ≤ 140", not "… ≤ 140 = 47.2"); a text
+         value (a verdict, 'OK') follows a comma ("… = 11.340, OK", not "… = 11.340 = OK"). Any other numeric value (a ratio not in the
+         comparison) is shown as before, " = value". */
+  const REL = /^\s*(?:\\(?:le|ge|lt|gt|ne|leq|geq|neq)(?![A-Za-z])|[<>≤≥≠])/;
+  const HASREL = /\\(?:le|ge|lt|gt|ne|leq|geq|neq)(?![A-Za-z])|[<>≤≥≠]/;
+  const isRel = s => !!(s && s.sym && s.eq && REL.test(String(s.eq)));
+  const shows = (src, v) => new RegExp('(^|[^0-9.])' + v.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&') + '(?![0-9])').test(src);   // the value's digits in the comparison
   function line(s, html, o) {   // o: toText's options (plain text only)
     const K = html ? kx() : null, D = t => K.renderToString('\\displaystyle ' + t, KATEX_OPT);
     const R = K ? D : html ? toHTML : t => toText(t, o), parts = [];
-    if (s.sym) parts.push(R(s.sym));
-    if (s.eq) parts.push(R(s.eq));
-    if (s.sub && s.sub !== s.eq) parts.push(R(s.sub));
+    let last = '';   // the source of the last part shown (CMPL)
+    if (isRel(s)) { last = s.sym + ' ' + String(s.eq).trim(); parts.push(R(last)); }   // CMPL (1): 'sym eq', one comparison
+    else { if (s.sym) { parts.push(R(s.sym)); last = s.sym; } if (s.eq) { parts.push(R(s.eq)); last = s.eq; } }
+    if (s.sub && s.sub !== s.eq) { parts.push(R(s.sub)); last = s.sub; }
     const v = typeof s.value === 'number' ? fmt(s.value, s.d) : s.value == null ? '' : String(s.value);
-    if (v !== '' && K && typeof s.value === 'number') parts.push(K.renderToString(v + (s.unit ? '\\;' + unitTeX(s.unit) : ''), KATEX_OPT));
-    else if (v !== '') parts.push(v + (s.unit ? (html ? '&nbsp;' : ' ') + (K ? toHTML(unitTeX(s.unit)) : R(s.unit)) : ''));
+    const cmp = parts.length > 0 && HASREL.test(String(last)), num = typeof s.value === 'number';
+    if (v === '' || (cmp && num && shows(String(last), v))) return parts.join(' = ');   // CMPL (2): the comparison shows the value
+    const vs = K && num ? K.renderToString(v + (s.unit ? '\\;' + unitTeX(s.unit) : ''), KATEX_OPT) : v + (s.unit ? (html ? '&nbsp;' : ' ') + (K ? toHTML(unitTeX(s.unit)) : R(s.unit)) : '');
+    if (cmp && !num) return parts.join(' = ') + ', ' + vs;   // CMPL (2): a verdict after a comparison
+    parts.push(vs);
     return parts.join(' = ');
   }
 
@@ -344,5 +360,5 @@
     window.addEventListener('afterprint', () => { opened.forEach(d => { d.open = false; }); opened = []; });
   }
 
-  window.SharedSteps = { step, work, n, g, fmt, toHTML, toText, line, unitTeX, katexOpt: KATEX_OPT, group, summary, groupsHTML, wire, reveal, groupCss, noteParts, noteSep, noteText };
+  window.SharedSteps = { step, work, n, g, fmt, toHTML, toText, line, isRel, unitTeX, katexOpt: KATEX_OPT, group, summary, groupsHTML, wire, reveal, groupCss, noteParts, noteSep, noteText };
 })();

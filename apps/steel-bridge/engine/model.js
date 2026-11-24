@@ -35,7 +35,8 @@
      ownerRules: { owner: 'AASHTO' | 'RIDOT' | 'MassDOT' | 'CTDOT', eta: { D: 'yes'|'no', R: 'auto'|'yes'|'no', I: 'yes'|'no', eD, eR, eI } },
      xs:        { nb (girders in the cross-section), bays: [ft, nb − 1], ohL, ohR (overhang, girder ℄ to deck edge, ft),
                   skews: [deg, one per support line], edges: { L, R: { type: 'barrier' | 'curb', bw (ft), bwt (klf), cw, ch (in), rw (klf),
-                  rp, rf (ft; rf null = rp), face (ft; null = derived) } }, sidewalks: { L, R: { w (ft), t (in), fence (klf), fenceX (ft) }, ped (psf) },
+                  rp, rf (ft; rf null = rp), face (ft; null = derived);
+                  optional (BARG, 2026-11-24; absent = entered): bMode 'entered' | 'geom', bShape 'rect' | 'slope' | 'poly', bDims { b, h, bt } (in), bPts [[x, y]] (in), bGam (kcf; null = 0.150) } }, sidewalks: { L, R: { w (ft), t (in), fence (klf), fenceX (ft) }, ped (psf) },
                   median: { w (ft), t (in), joint }, wcA (appurtenance concrete, kcf; null = w_c), ws: { mode: 'psf' | 'thk', psf, thk (in), gam (kcf) },
                   overlays: [ { name, mode, psf, thk, gam } ], sip (psf), allow (steel detail allowance, %),
                   extra: [ { name, cat: 'DC1'|'DC2'|'DW'|'PL'|'UT'|'UF', x (ft), plf (klf), dist: 'auto'|'pilecap'|'equal'|'two' } ],
