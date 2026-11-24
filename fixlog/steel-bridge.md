@@ -11967,6 +11967,35 @@ None.
 - **How verified:** main vs this branch, the tool opened headless with every tab clicked and every topic's chip / class / one-line result recorded (PR description: audit table); `node tests/engine/run.mjs` (crossframes, welds, sb-dia-fail-highlight, steps-groups, all); `tests/smoke/steel-bridge-dia-fail.mjs`.
 - **Other copies:** none.
 
+## 2026-11-24 — PR: claude/sb-deck-fig-edge (PR #1708: https://github.com/mlococo88/All-Structural/pull/1708) (DKFE) — Deck tab section figure: the left deck edge drawn as the Drawings tab (sidewalk, barrier or curb, the railing / fence on its top) (display only)
+### Request (engineer, 2026-11-24, approved)
+The Deck tab's section figure (`ui/deck.js figure(R, W)`) drew a schematic barrier (a fixed polygon from the deck edge to the traffic face), no fence or railing, no sidewalk, no curb. Make it consistent with the renderers fixed in FOB (#1701) and GEOM (#1705).
+### Where / Before / After
+- `apps/steel-bridge/ui/deck.js`, new above `function figure`: `edgeOf(P)` (the left side's items of `SBDDrawings.appOf(SBDLoads.compute(...))`, the same `SBDLoads.fromModel(P, { girder: 0 })` / `compute` that engine/deck.js `loadsOf` and engine/drawings.js `model` read; kinds sw, bar, curb, rail, fence; null without P, the modules or with loads errors), `wrap(t, n)`, `edgeCap(EI)` (the caption line).
+- `figure(R, W)` → `figure(R, W, P)` (P optional). Anchor `const EI = edgeOf(P);`. Before: `m = { l: 14, r: 44, t: 58, b: 60 }`, `H` from them. After: `m.b = 60 + 14 × (caption lines)`, `m.t = max(58, round(topIn × kv + 32))` with `kv = min(k, 26/34)` (the vertical scale above the slab: the old schematic barrier's 34 in drawn 26 px) and `topIn` the highest item top (y0 + h, in).
+- The barrier, anchor `let wy = 0;`. Before: `if (face > 0) s += \`<polygon points="${X(0)},${Y(ts)} ${X(face)},${Y(ts)} ${X(face * 0.6)},${Y(ts) - 26} ${X(0)},${Y(ts) - 26}" …/>\`;` (kept, unchanged, when P is not given). After, with P: the sidewalk and curb as rects (`data-dkedge="sw|curb"`, from the deck edge, width true, height × kv, clipped at the figure end); the barrier as `<polygon data-dkedge="bar">` of `SBDDrawings.barOutline(a)` (entered: BAR_SCH × (w, 34 in); Geometry: the shared/barrier.js outline) at `X(a.x0·12 + u)`, `Yv(a.y0 + y)`; the railing / fence (`<g data-dkedge="rail|fence" data-base="y0">`) as appDraw: a post from `a.y0` (FOB `SBDDrawings.topAt` base: the barrier / curb top, else the sidewalk / deck) to `a.y0 + 42`, rails at h − 1.5 and 0.55 h, ±3 in wide.
+- The wheel: before at `Y(ts) - 34 … Y(ts) - 1`; after the same shifted up by `wy × kv`, wy = the surface under it (topAt, else the sidewalk under it, else 0: unchanged without a sidewalk there).
+- The caption: a new line (wrapped) above the two bar lines: "Left deck edge: … Railing / fence height 42 in schematic. Heights above the slab at a reduced scale, widths true."
+- `render`: `figure(R, …, P)`; the note under the figure: "the barrier or curb to the traffic face, the design wheel 1 ft inside it" → "the left deck edge as the Drawings tab draws it (the sidewalk, the barrier or the curb, and the railing or fence on its top; heights above the slab at a reduced scale), the design wheel 1 ft inside the traffic face".
+- `report/builders.js dk`: `window.SBDDeckUI.figure(R, 700)` → `figure(R, 700, B.P)`; the caption "the traffic face, the design wheel 1 ft inside it" → "the left deck edge as the drawings (sidewalk, barrier or curb, the railing or fence on its top; heights above the slab at a reduced scale), the design wheel 1 ft inside the traffic face".
+### Governing provision
+None (display only). No engine file changed; no computed value, check, step or saved data changes.
+### Check case (made-up: the built-in project, deck design on, W = 760)
+- (a) left sidewalk 6 ft × 8 in, fence at 0.5 ft; entered barrier 1.5 ft: barrier outline from 8 in, top 8 + 34 = 42 in; fence base 42 in (before: no sidewalk, no fence, the 26 px trapezoid from the edge to the traffic face); fence at 3 ft: base 8 in.
+- (b) curb 12 × 10 in, railing at 0.5 ft: curb rect 12 in × 10 in; railing base 10 in.
+- (c) Geometry rectangle 12 × 42 in, same sidewalk and fence: 4-point outline from 8 to 50 in; fence base 50 in.
+- Built-in project (barrier only): top 34 in × 26/34 = 26 px → m.t = 58 as before; the slab, bars, girders, sections and dimensions at the same pixels; only the barrier's shape changes (BAR_SCH instead of the trapezoid) and the caption line is added.
+### How verified
+- Results unchanged: engine/deck.js `calc(P)` hashed (JSON, sha256) on origin/main and on this branch for the built-in, (a), (b), (c) and (a) with longitudinal bars: identical (367e3148…, f244f934…, d0632e39…, c113c90b…, 6ad3c298…), and identical again after drawing the figure (figure does not touch R).
+- `tests/engine/sb-deck-fig-edge.test.mjs` (new: (a) (b) (c), the pixels of the outline and the post feet by hand, R unchanged, without P as before, the longitudinal circles the same with P). `node tests/engine/run.mjs sb-deck-fig-edge sb-deck-long sb-deck sb-deck-report sb-deck-tscrack deck-parity sb-fence-on-barrier sb-summary sb-report`; `node tests/check-syntax.mjs`; smokes `steel-bridge-deck`, `steel-bridge-deck-long`, `steel-bridge-deck-tscrack`. sb-deck-long's figure test calls `figure(R, 760)` (no P: unchanged) and counts circles and bar lines only: not changed.
+### Saved data
+None.
+### Decisions (pending engineer review)
+- DKFE-1. The figure keeps showing the LEFT overhang and first bay (its caption, the report caption and the Values table say so); it does not switch to the governing side R.go. The left side's own edge is drawn. Showing R.go (mirrored, the last bay) is a possible follow-up.
+- DKFE-2. Heights above the slab are drawn at the figure's existing reduced scale (34 in barrier = 26 px, kv = min(k, 26/34)); widths true; the top margin grows for taller items (min 58 px as before).
+- DKFE-3. The design wheel stands on the surface under it (on the sidewalk where the sidewalk extends past the traffic face, as with a mountable sidewalk), shifted up by that height; on the slab otherwise, as before.
+- DKFE-4. Without P (a caller that passes only R, W) the figure is exactly as before DKFE.
+
 ## 2026-11-24 — PR: claude/sb-red-ng-steps (PR #TBD) (SBNG) — failing check's worked step red "NG", warning amber "Warning", on every output tab (display only)
 - **Request (engineer, approved follow-up of #1692 SBDFH):** extend SBDFH's red NG / amber Warning on the steps of failing / warning checks from the Diaphragms tab to every output tab, only for steps linked to a real check item; a step whose ok merely selects a case keeps today's grey "no" (decision SBDFH-3).
 - **Where / Before / After:**
