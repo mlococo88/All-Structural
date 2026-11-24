@@ -11877,7 +11877,7 @@ Projects with the deck design on (off by default) and a sacrificial/dead-load-on
 ### How verified
 - `node tests/check-syntax.mjs`; `node tests/engine/run.mjs sb-deck sb-summary sb-report deck-parity tex`.
 - `tests/engine/sb-deck-tscrack.test.mjs`: the top-bar test rewritten as an independent hand check (d_c 2.8141, h 8, h − d_c = d, β_s 1.7752, s_max 7.526, s/s_max 0.797, ratio 0.833 by bar stress; overhang s_max 10.242, ratio 0.690; the worked step's eq, sub and note; t_L = t_s unchanged).
-- Smoke `tests/smoke/steel-bridge-deck-tscrack.mjs` updated (DK6 0.833 OK, 29.98 / 36.00 ksi, DK2 governs, all OK; s_max 7.53 in in the step; Class 2 NG); `steel-bridge-deck.mjs`.
+- Smokes: `tests/smoke/steel-bridge-deck-tscrack.mjs` updated (DK6 0.833 OK, 29.98 / 36.00 ksi, DK2 governs, all OK; s_max 7.53 in in the step; Class 2 NG); `steel-bridge-deck-long.mjs` updated (the default deck now "all checks OK"; DK4 at 9 in: 1 check NG, before 2); `steel-bridge-deck.mjs` passes unchanged. `sb-deck-long` and `sb-deck-report` engine tests: the default deck now passes DK6.
 - A scratch run of the engine before / after on the default and built-in projects: only the top-bar cases' d_c, h, β_s, s_max and ratios differ.
 ### Saved data
 None: no key or format changes.
