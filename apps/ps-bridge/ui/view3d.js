@@ -52,6 +52,28 @@
   const TCOL = ['#a9b4c2', '#c9a27e', '#9fb89a', '#c2a3c4', '#d1c38a', '#8fb3c9', '#c79494', '#a6a6a6'];
   const RAIL_H = 42, POST = 3;   // PR 9: a railing or fence post (schematic)
   const BAR_H = 32, SW_CURB = 0, DIA_T = 10, CONT_T = 24, PAD_T = 3, SEAT = 42;   // schematic sizes (in): PS3c-D2 … D5
+  /* FOB (2026-11-24, engineer: "a fence or railing on top of the concrete barrier … the renderings … show it as basically embedded in the
+     concrete"; display only): the one helper for the top of a deck-edge barrier or curb, used by this 3D view and by ui/xsfig.js (the
+     cross-section figure, and through it the typical-section DXF of ui/sheets.js). BAR_PROF: the schematic barrier outline the figure and
+     the DXF draw (Decision XS-D1), as fractions [u / b_w, y / BAR_H], u from the deck edge toward the roadway: flat top over 0.45 b_w, the
+     traffic face sloping to 0.25 BAR_H at 0.75 b_w and to the deck at b_w. The 3D view draws the barrier as a BAR_H block: the same top
+     over the flat 0.45 b_w (pending engineer review: beyond it a post on the sloped face starts below the block's top). */
+  const BAR_PROF = [[0, 0], [1, 0], [0.75, 0.25], [0.45, 1], [0, 1]];
+  /* topOf(pts, u): the top surface of an outline [[u, y]] at u (the highest y of its edges over u), null where the outline is not over u */
+  function topOf(pts, u) { let t = null; const n = pts.length;
+    for (let i = 0; i < n; i++) { const [a0, a1] = pts[i], [b0, b1] = pts[(i + 1) % n], lo = Math.min(a0, b0), hi = Math.max(a0, b0);
+      if (u < lo - 1e-9 || u > hi + 1e-9) continue; const y = hi - lo < 1e-9 ? Math.max(a1, b1) : a1 + (b1 - a1) * (u - a0) / (b0 - a0); t = t === null ? y : Math.max(t, y); }
+    return t; }
+  /* edgeTop(P, sd, u): the height (in) above the top of the deck of the top of side sd's barrier or curb at u in from that deck edge (the
+     barrier on the sidewalk slab where the slab is at least as wide, the curb where the slab is under its width; as the figures place
+     them), null where neither is under u: the base of a sidewalk railing or fence there */
+  function edgeTop(P, sd, u) {
+    const dl = P && P.xs && P.xs.dl; if (!dl) return null;
+    const e = dl['bar' + sd] || {}, s = dl['sw' + sd] || {}, w = (+s.w || 0) * 12, t = +s.t || 0, on = d => w > 0 && t > 0 && d <= w + 1e-9 ? t : 0;
+    if (e.type === 'curb') { const cw = +e.cw || 0, ch = +e.ch || 0; return cw > 0 && ch > 0 && u >= -1e-9 && u <= cw + 1e-9 ? on(cw) + ch : null; }
+    const bw = (+e.bw || 0) * 12; if (!(bw > 0)) return null;
+    const f = topOf(BAR_PROF.map(([a, b]) => [a * bw, b * BAR_H]), u); return f === null ? null : (w > 0 && t > 0 && w >= bw ? t : 0) + f;
+  }
   const isNum = v => typeof v === 'number' && isFinite(v);
   const tan = d => Math.tan((+d || 0) * Math.PI / 180);
 
@@ -98,7 +120,8 @@
         if (+e.rw > 0) out.app.push({ kind: 'rail', side: s, ...zr(ze, dir, rp - POST / 2, rp + POST / 2), y0: yTop + Math.max(on(rp), rp <= cw + 1e-9 ? on(cw) + ch : 0), h: RAIL_H }); }
       else if (b > 0) out.app.push({ kind: 'bar', side: s, ...zr(ze, dir, 0, b), y0: yTop + (w > 0 && t > 0 && w >= b ? t : 0), h: BAR_H });
       if (w > 0 && t > 0) out.app.push({ kind: 'sw', side: s, ...zr(ze, dir, 0, w), y0: yTop, h: t + SW_CURB });
-      const fx = (+sw(s).fenceX || 0) * 12; if (w > 0 && fx > 0 && (+sw(s).fence > 0 || sw(s).fence == null)) out.app.push({ kind: 'fence', side: s, ...zr(ze, dir, fx - POST / 2, fx + POST / 2), y0: yTop + t, h: RAIL_H }); });
+      const fx = (+sw(s).fenceX || 0) * 12; if (w > 0 && fx > 0 && (+sw(s).fence > 0 || sw(s).fence == null)) { const et = edgeTop(P, s, fx);   // FOB: on the barrier or curb top where one is under it
+        out.app.push({ kind: 'fence', side: s, ...zr(ze, dir, fx - POST / 2, fx + POST / 2), y0: yTop + (et !== null ? et : t), h: RAIL_H }); } });
     { const md = dl && dl.med, zc = (zL + zR) / 2; if (md && +md.w > 0 && +md.t > 0) out.app.push({ kind: 'med', z0: zc - md.w * 6, z1: zc + md.w * 6, y0: yTop, h: +md.t }); }
     // diaphragms: in each bay next to a line whose type has one at a (from the left ℄ bearing of each line, parallel to the supports)
     const at = (s, g) => out.girders.find(q => q.s === s && q.g === g);
@@ -362,5 +385,5 @@
   /* for tests: the camera, the counts of the last build */
   const camera = () => (V.cam ? { p: V.cam.position.toArray(), t: V.ctl ? V.ctl.target.toArray() : null } : null);
   const snapshot = () => V.snap || null;   // batch G8: the capture for the Report (ui/report.js)
-  window.PSB3DUI = { render, geom, camera, LAY, DG, series, snapshot, state: () => ({ cage: V.cage || null, snap: !!V.snap, camNote: V.camNote, sfcNote: V.sfcNote, counts: V.counts, info: V.info, fences: V.fences.length, dg: V.dgLbl, tg: V.tg ? V.tg.map(t => t[0]) : null, mode: V.mode }) };
+  window.PSB3DUI = { render, geom, camera, BAR_PROF, topOf, edgeTop, LAY, DG, series, snapshot, state: () => ({ cage: V.cage || null, snap: !!V.snap, camNote: V.camNote, sfcNote: V.sfcNote, counts: V.counts, info: V.info, fences: V.fences.length, dg: V.dgLbl, tg: V.tg ? V.tg.map(t => t[0]) : null, mode: V.mode }) };
 })();
