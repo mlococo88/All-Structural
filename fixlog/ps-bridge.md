@@ -9685,7 +9685,7 @@ None changed.
 ### Other copies
 The old `Prestressed Bridge Design.html` has no left / right sidewalk or deck-edge inputs (only a "Bridge with sidewalks" owner-rule checkbox and one barrier for the deck design) and is frozen (PS-14 g): not changed.
 
-## 2026-11-24 — PR: claude/ps-barrier-geometry (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (BARG) — Cross-section tab, deck edges: "Barrier weight from: Entered / Geometry" (shared/barrier.js, as the Steel Bridge app, PR #1697); with Geometry the barrier's weight and width at the deck are computed and its DC2 acts at its centroid   [NEW OPTION; Entered (the default) and "DC2 and DW entered per girder type" unchanged; §4: the load point in Geometry mode]
+## 2026-11-24 — PR: claude/ps-barrier-geometry (PR #1700: https://github.com/mlococo88/All-Structural/pull/1700) (BARG) — Cross-section tab, deck edges: "Barrier weight from: Entered / Geometry" (shared/barrier.js, as the Steel Bridge app, PR #1697); with Geometry the barrier's weight and width at the deck are computed and its DC2 acts at its centroid   [NEW OPTION; Entered (the default) and "DC2 and DW entered per girder type" unchanged; §4: the load point in Geometry mode]
 ### Request (engineer, 2026-11-24)
 "RIDOT has a barrier that is a rectangle shape, not an F-shape barrier. Can I enter the barrier geometry in a new section and let the app calculate the weight directly?" Then: "Use the centroid for the barrier load point. Do this for both the steel and ps apps."
 ### Where / Before / After
