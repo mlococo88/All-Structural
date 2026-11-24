@@ -609,7 +609,8 @@
       sub('oh', 'Overhangs (gravity loads)', [tbl(['Side', '$o_{h}$ (ft)', 'X (ft)', 'Strip (in)', '$M_{DC}$', '$M_{DW}$', '$M_{LL+IM}$ wheel', '$M_{PL}$', '$M_{u}$', '$\\phi M_{n}$', 'Ratio'], ['L', 'R'].map(sd => { const q = R.oh[sd], O = q.O, b = `dk.oh${sd}.`;
         return { cells: [q.name, N(O.oh, 2), { t: f(O.Xoh, 3), n: true, key: k(b + 'X') }, N(O.SWoh, 1), { t: f(O.MohDC, 3), n: true, key: k(b + 'MohDC') }, N(O.MohDW, 3), N(O.MohLL, 3), O.PL.length ? N(O.MohPL, 3) : '—', { t: f(O.Mu_oh, 3), n: true, key: k(b + 'Muoh') }, N(q.cap.phiMn, 2), R3(q.cap.dc, k(b + 'cap.r'))], cls: sd === R.go ? 'gov' : '' }; }), { wide: true, caption: 'kip-ft per foot about the exterior girder centreline; one 16 kip wheel 1 ft inside the traffic face, IM 1.33, multiple presence 1.20; a pedestrian load on the overhang is taken with the wheel' }),
         note('Gravity loads only: the Extreme Event II vehicular-collision cases (A13.4) are not checked.', true)]),
-      sub('dist', 'Distribution reinforcement (Art. 9.7.3.2)', [kv([['Bottom bars parallel to the girders', `${f(R.dist.pct, 1)} % of the positive-moment steel = ${f(R.dist.As, 3)} in²/ft of deck width`, k('dk.dist')]])]),
+      sub('dist', 'Distribution reinforcement (Art. 9.7.3.2)', [kv([['Bottom bars parallel to the girders', `${f(R.dist.pct, 1)} % of the positive-moment steel = ${f(R.dist.As, 3)} in²/ft of deck width`, k('dk.dist')],
+        ['Effective span length $S_{eff}$ (Art. 9.7.2.3)', R.dist.E && R.dist.E.ok ? `${f(R.dist.Seff, 3)} ft (S = ${f(R.dist.S, 2)} ft; $b_{f}$ = ${f(R.dist.bf, 2)} in, $t_{w}$ = ${f(R.dist.tw, 4)} in, ${R.dist.at})` : 'not available: 67 % used', R.dist.E && R.dist.E.ok ? k('dk.distSe') : '']])]),
       sub('steps', 'Worked steps', [gsteps('SBDDeckUI:x', '', R.steps, { title: 'Worked steps: deck slab' })])];
     return { title: 'Deck slab (transverse design)', subs };
   }

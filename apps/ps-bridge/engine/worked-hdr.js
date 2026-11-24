@@ -146,7 +146,21 @@
     add({ id: 'oh.phiMn', label: 'Overhang: factored resistance (the top bars, as the negative moment)', sym: '\\phi M_{n,oh}', eq: '\\phi\\,M_{n}', sub: `${n(D.ohCap.phi, 3)}(${n(D.ohCap.Mn, 3)})`, value: D.ohCap.phiMn, unit: 'kip-ft/ft', d: 3, note: 'Same bars, cover and depth as the negative moment above.' }, D.ohCap.phi * D.ohCap.Mn, 'deck.ohCap.phiMn');
     const kO = ckIx(R, 'Deck overhang');
     add({ id: 'oh.r', label: 'Ratio, overhang', sym: 'D/C', eq: '\\frac{M_{u,oh}}{\\phi M_{n,oh}}', sub: `\\frac{${n(D.Mu_oh, 3)}}{${n(D.ohCap.phiMn, 3)}}`, value: R.checks[kO].r, unit: '', d: 3, ok: R.checks[kO].pass }, D.Mu_oh / D.ohCap.phiMn, `checks.${kO}.r`);
-    add({ id: 'dist', label: 'Distribution reinforcement, percent of the positive-moment steel', sym: '\\%', eq: '\\min\\left(\\frac{220}{\\sqrt{S}},\\ 67\\right)', sub: `\\min\\left(\\frac{220}{\\sqrt{${n(S, 3)}}},\\ 67\\right)`, value: D.distPct, unit: '', d: 1, ref: A10 + '9.7.3.2', note: 'S in ft (the engine: the girder spacing). Bottom bars parallel to the girders.' }, Math.min(220 / Math.sqrt(S), 67), 'deck.distPct');
+    // DD (2026-11-24): the percentage on the effective span length of 9.7.2.3 (engine/deckdist.js apply, R.deck.dd); without it (the engine
+    // alone, e.g. a test that does not load deckdist.js) the engine's step on the girder spacing as before
+    const dd = D.dd;
+    if (!dd) add({ id: 'dist', label: 'Distribution reinforcement, percent of the positive-moment steel', sym: '\\%', eq: '\\min\\left(\\frac{220}{\\sqrt{S}},\\ 67\\right)', sub: `\\min\\left(\\frac{220}{\\sqrt{${n(S, 3)}}},\\ 67\\right)`, value: D.distPct, unit: '', d: 1, ref: A10 + '9.7.3.2', note: 'S in ft (the engine: the girder spacing). Bottom bars parallel to the girders.' }, Math.min(220 / Math.sqrt(S), 67), 'deck.distPct');
+    else {
+      const bt = +G.btf, bw = +G.bw, fam = { next: 'a NEXT beam', box: 'a box beam', deck: 'a voided deck slab' }[dd.kind];
+      if (dd.ok && dd.kind === 'I') add({ id: 'distSe', label: 'Effective span length of the slab: the distance between the flange tips plus one flange overhang (flange tip to the face of the web)', sym: 'S_{eff}',
+        eq: 'S - \\frac{b_{tf}}{12} + \\frac{b_{tf} - b_{w}}{24}', sub: `${n(S, 3)} - \\frac{${n(bt, 3)}}{12} + \\frac{${n(bt, 3)} - ${n(bw, 4)}}{24}`, value: dd.Seff, unit: 'ft', d: 3, ref: A10 + '9.7.2.3, 9.7.3.2',
+        note: 'S the girder spacing of the design girder line (ft); b_tf the top flange width and b_w the web width of the girder (in, Section tab); fillets disregarded.' + (dd.why === 'nonpositive' ? ' S_eff is not positive (check the inputs): the 67 % upper limit is used.' : '') }, S - bt / 12 + (bt - bw) / 24);
+      const cap = !!dd.why;
+      add({ id: 'dist', label: 'Distribution reinforcement, percent of the positive-moment steel', sym: '\\%', eq: cap ? '67' : '\\min\\left(\\frac{220}{\\sqrt{S_{eff}}},\\ 67\\right)', sub: cap ? '67' : `\\min\\left(\\frac{220}{\\sqrt{${n(dd.Seff, 3)}}},\\ 67\\right)`, value: D.distPct, unit: '', d: 1, ref: A10 + '9.7.3.2',
+        note: cap ? (fam ? `The deck of ${fam} is a topping on the precast flange or on beams side by side, not a slab between flange tips (9.7.2.3): the upper limit of 67 % is used (conservative; decision pending engineer review).` : 'No valid top flange and web width for the effective span: the upper limit of 67 % is used (conservative).')
+          : `S_eff in ft (9.7.2.3). Bottom bars parallel to the girders. On the girder spacing S = ${n(S, 3)} ft (the moved engine) the value would be ${n(dd.pct0, 1)} %.` },
+        cap ? 67 : Math.min(220 / Math.sqrt(S - bt / 12 + (bt - bw) / 24), 67), 'deck.distPct');
+    }
     return K.done();
   }
 

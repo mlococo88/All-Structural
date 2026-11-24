@@ -16,7 +16,7 @@
     { key: 'pos', title: 'Positive moment: bottom bars', ref: A + '5.6.3', ids: /^dk\.pos\./, res: /^dk\.pos\.r$/ },
     { key: 'neg', title: 'Negative moment: top bars', ref: A + '5.6.3', ids: /^dk\.neg\./, res: /^dk\.neg\.r$/ },
     { key: 'oh', title: 'Overhang (gravity and barrier)', ref: A + 'Table 4.6.2.1.3-1', ids: /^dk\.(X|SWoh|MohDC|MohDW|MohLL|Muoh|oh\.phiMn|oh\.r)$/, res: /^dk\.oh\.r$/ },
-    { key: 'dist', title: 'Distribution reinforcement', ref: A + '9.7.3.2', ids: /^dk\.dist$/ }];
+    { key: 'dist', title: 'Distribution reinforcement', ref: A + '9.7.2.3, 9.7.3.2', ids: /^dk\.dist(Se)?$/ }];
   const ckOf = (R, nm) => { const i = R.checks.findIndex(c => c.n === nm); return i < 0 ? null : { i, c: R.checks[i] }; };
   const st = ok => `<td class="${ok ? 'ok' : 'ngt'}">${ok ? 'PASS' : 'FAIL'}</td>`;
   function output(ctx) {
@@ -42,7 +42,11 @@
       ['M<sub>DC</sub> (slab + barrier) / M<sub>DW</sub>', `${ev('deck.MohDC', 3)} ${wk('dk.MohDC')} / ${ev('deck.MohDW', 4, 'kip-ft/ft')} ${wk('dk.MohDW')}`], ['M<sub>LL+IM</sub> (16 kip wheel, IM 1.33, multiple presence 1.20)', `${ev('deck.MohLL', 3, 'kip-ft/ft')} ${wk('dk.MohLL')}`],
       ['M<sub>u</sub> / φM<sub>n</sub>', `${ev('deck.Mu_oh', 3)} / ${ev('deck.ohCap.phiMn', 3, 'kip-ft/ft')}: <b>${ev(`checks.${qO.i}.r`, 3)}</b> ${qO.c.pass ? 'PASS' : '<b style="color:var(--fail)">FAIL</b>'} ${wk('dk.oh.r')}`]])
       + '<p class="note">The gravity and barrier-weight case on the 45 + 10X strip only. The Extreme Event II vehicular-collision cases (A13.4) still need a barrier-specific analysis.</p>', 'card-dkoh');
-    h += k.card('Distribution reinforcement (9.7.3.2)', k.kv([['Bottom distribution steel, % of the positive-moment steel', `${ev('deck.distPct', 1)} % ${wk('dk.dist')}`]]) + '<p class="note">min(220/√S, 67 %), S in ft, bottom bars parallel to the girders (as the old app).</p>', 'card-dkdist');
+    // DD (2026-11-24): the percentage on the effective span length of 9.7.2.3 (engine/deckdist.js, R.deck.dd)
+    const dd = D.dd, f = (v, d) => (typeof v === 'number' && isFinite(v) ? v.toFixed(d) : '—');
+    h += k.card('Distribution reinforcement (9.7.3.2)', k.kv([['Bottom distribution steel, % of the positive-moment steel', `${ev('deck.distPct', 1)} % ${wk('dk.dist')}`]]
+      .concat(dd ? [['Effective span length S<sub>eff</sub> (9.7.2.3)', dd.kind === 'I' && dd.ok ? `${f(dd.Seff, 3)} ft ${wk('dk.distSe')}` : '67 % upper limit used (no flange-tip span: see the step)']] : []))
+      + (dd ? `<p class="note">min(220/√S<sub>eff</sub>, 67 %), S<sub>eff</sub> = S − b<sub>tf</sub>/12 + (b<sub>tf</sub> − b<sub>w</sub>)/24 in ft: the distance between the flange tips plus one flange overhang (flange tip to the face of the web). Bottom bars parallel to the girders. The old app takes S = the girder spacing${dd.changed ? ` (${f(dd.pct0, 1)} % here)` : ''}.</p>` : '<p class="note">min(220/√S, 67 %), S in ft, bottom bars parallel to the girders (as the old app).</p>'), 'card-dkdist');
     h += K().gcard('Deck graphic: section', 'gfx_dksec');
     h += k.card('Worked steps: deck', `<p class="note">${A}(2024) 4.6.2.1, Table A4-1, 5.6.3, 9.7. Every result is the engine's value (the moved Prestressed Bridge Design engine). Inputs: <a href="#" data-goin="dd">Diaphragms / deck tab</a>.</p>${k.steps(ctx.W.deck.steps, TOPICS, OPEN)}`);
     return h;
