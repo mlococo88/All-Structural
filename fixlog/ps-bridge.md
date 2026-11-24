@@ -9662,3 +9662,25 @@ Deck design **off**: nothing (tested: the whole result identical). Deck design *
 - Smokes `ps-bridge-display` (8 checks) and `ps-bridge-skeleton` (273 checks): pass, 0 console errors.
 ### Other copies
 **The old `Prestressed Bridge Design.html` (still the working tool until the switch-over) has the same `deckCalc` on the girder spacing and is NOT changed by this PR.** Open item for the engineer: the same correction there would be its own PR.
+
+## 2026-11-24 — PR: claude/psb-sidewalk-groups (PR #1695: https://github.com/mlococo88/All-Structural/pull/1695) (SWGRP) — Cross-section tab, card "Barriers, sidewalks and wearing surface": deck edges and sidewalks grouped by side   [DISPLAY ONLY: no input, path, key, value or result changed]
+### Request (engineer, 2026-11-24)
+"For both the steel bridge and prestressed bridge apps, can we separate the left and right sidewalk, even just a space between the inputs. The input boxes are very congested and need to be organized a little nicer." Then: "Same with the deck edges." (Steel Bridge Design: PR #1694.)
+### Where / Before / After
+- `ui/bridgedl.js`, new helper after `const sub = t =>`: `const sdh = t => \`<span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap">${t}: </span>\`;` (the side as hidden label text: screen readers and the input-check banner, `PSBInputCheckUI.labelOf`).
+- `card(P)`, deck edges: before `h += sub('Deck edges');` then per side the labels `${side} deck edge`, `${side} curb width`, `${side} curb height`, `${side} railing weight`, `${side} railing load point from edge`, `${side} railing traffic face from edge`, `${side} barrier weight`, `${side} barrier width (deck edge to traffic face)`, `${side} edge to traffic face`; after no "Deck edges" sub-heading, per side `h += sub(\`${side} deck edge\`);` and the labels `Edge type`, `Curb width`, `Curb height`, `Railing weight`, `Railing load point from edge`, `Railing traffic face from edge`, `Barrier weight`, `Barrier width (deck edge to traffic face)`, `Edge to traffic face`, each preceded by the hidden `Left deck edge: ` (or Right). The traffic-face note stays under its side.
+- Sidewalks: before `h += sub('Sidewalks and median');` then `${side} sidewalk width`, `${side} sidewalk thickness`, `${side} sidewalk railing / fence`, `${side} fence from deck edge`; after per side `sub(\`${side} sidewalk\`)` and `Width`, `Thickness`, `Railing / fence`, `Fence from deck edge` (hidden `Left sidewalk: ` / `Right sidewalk: `), then `h += sub('Pedestrian load and median');` before the pedestrian load, its notes, the median, the joint, the appurtenance concrete and the mountable note (unchanged).
+- The sub-heading is the card's existing `sub()` (`.dlSub`, as "Wearing surface"); stacked (no two-column pattern in the app's input rows).
+### Proof that no result changed
+Only template strings in `card(P)` changed. Headless Chromium, a made-up project (distributed DC2/DW; left curb and railing, right barrier; left sidewalk 6 ft × 9 in with a 0.05 klf fence at 3 ft, right sidewalk 5 ft × 10 in; 75 psf; 2 ft median), origin/main and this branch: every `input` / `select` / `textarea` of the page (168) has the same tag, id, data-path, data-dl, name, type, value and title, in order; the autosaved `psb2.project.current` is byte-identical; `PSBDesign.inputs(P)`, `PSBHoldDown.compute` (MuMid, checks, pl) and `PSBBridgeDL.distribute(P).dc2` serialise identically (md5 d4bd819a013611c39eec40bc053bbdd3 both).
+### Check case
+Display only (no value). Before / after screenshots of the card (1440 px, 420 px) taken for the PR.
+### Saved data
+None changed.
+### How verified
+`node tests/check-syntax.mjs`; `node tests/engine/run.mjs psbridge-model psbridge-summary psbridge-dl psbridge-pl psbridge-verbatim` (33 passed; engine/pbd-*.js untouched); smoke `tests/smoke/ps-bridge-pl.mjs` (7 checks).
+### Decisions (pending engineer review)
+- SWGRP-1. Under a side's sub-heading the labels drop the side; it remains as hidden label text (the input-check banner reads e.g. "Left sidewalk: Width").
+- SWGRP-2. The sub-headings "Deck edges" and "Sidewalks and median" are replaced by "Left / Right deck edge", "Left / Right sidewalk" and "Pedestrian load and median" (the existing `.dlSub` style, 10 px above).
+### Other copies
+The old `Prestressed Bridge Design.html` has no left / right sidewalk or deck-edge inputs (only a "Bridge with sidewalks" owner-rule checkbox and one barrier for the deck design) and is frozen (PS-14 g): not changed.
