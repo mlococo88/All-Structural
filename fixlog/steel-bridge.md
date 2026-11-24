@@ -11710,3 +11710,26 @@ None.
 ### Open items
 - Geometry-mode barriers (BARG) are still drawn with the schematic shape; drawing their own outline (and seating the fence on it) is the follow-up PR (approved by the engineer 2026-11-24).
 - The Deck tab's section figure (ui/deck.js) draws no railing or fence; not changed.
+
+## 2026-11-24 — PR: claude/sb-geom-barrier-render (PR #TBD) (GEOM) — a barrier entered by its geometry is drawn with its own outline in every rendering, the fence on its top (display only)
+### Request (engineer, 2026-11-24, approved follow-up of FOB)
+Render the Geometry-mode barriers (BARG, "Barrier weight from: Geometry", shared/barrier.js) with their actual profile in the 3D view, the DXF and the 2D graphics, and seat the railing / fence on that profile's top. Entered barriers render exactly as before.
+### Where / Before / After
+- `engine/drawings.js appOf`: the deck-edge record keeps `geo: e.geo` (the `SharedBarrier.compute` result carried by `SBDLoads` `bridgeEff`) for a barrier; the barrier item, before always `{ k: 'bar', …, h: APP_H.bar, sch: true }` → after, with geometry, `{ k: 'bar', …, h: geo.h, pts: geo.pts, geo: true }` (entered: unchanged). `barOutline(a)`: `if (a.pts) return a.pts;` first, so `topAt` (the fence base, FOB) and `barPts` use the geometry outline.
+- `appDraw`: the barrier polyline is `barOutline(a)` (the geometry outline on S-DECK-BARR); its callout with geometry reads `BARRIER <w> AT DECK x <h> HIGH, FROM ITS GEOMETRY (… KLF DC2)` anchored over the outline's top (entered: unchanged text and anchor).
+- `ui/gfxa.js loadsGraphic` (Loads & LLDF Download DXF): with geometry `D.pline(ly.ap, SBDDrawings.barPts(a)…)` and the height `a.h`; entered: the 34 in rectangle as before (`hA = a.k === 'bar' && !a.geo ? 34 : a.h`).
+- `ui/gfxdet.js lldfSvg` (Loads & LLDF graphic): with geometry `S.poly(SBDDrawings.barPts(a)…)`; entered: the rectangle as before.
+- `ui/view3d.js build`: with geometry `barSolid(a)`, the outline extruded along the bridge between the skewed end lines (THREE.ShapeUtils for the end caps, double-sided material `MT.appD`); entered: the `prism` block as before.
+### Governing provision
+None (display only).
+### Check case (made-up: built-in project, left barrier rectangle 12 × 42 in, right polygon (0,0) (16,0) (16,3) (9,10) (7,36) (0,36) in, sidewalks 6 ft × 8 in, fences at 0.5 ft and 0.25 ft)
+- Left: outline 4 points, h 42 in; fence base before (FOB, schematic 1 ft × 34 in, u = 6 in on the slope) 32.48 in, after 8 + 42 = 50 in.
+- Right: outline 6 points, h 36 in; fence at 3 in (top 0..7 in): before 42 in (schematic), after 8 + 36 = 44 in; at 0.7 ft = 8.4 in on the face (9,10)–(7,36): 8 + 10 + 26 × 0.6/2 = 25.8 in.
+### How verified
+- `tests/engine/sb-fence-on-barrier.test.mjs` (Geometry case added). `node tests/engine/run.mjs drawings sheets dxf-sheets dxf-detc graphics-overlap xf-dxf sb-fence-on-barrier sb-barrier`; `node tests/check-syntax.mjs`.
+- Results unchanged: `SBDLoads.compute` hashes and every line load identical before/after on the made-up projects (entered and geometry).
+- DXF (`SBDDrawings.dxf`): the entered-barrier projects (barrier + fences, curbs + fences, built-in) byte-identical; the Geometry project: the S-DECK-BARR outlines, S-DECK-RAIL, the barrier callouts and the deck-edge chain change; the rest of the section matches after the sheet shift from its taller top (8 in).
+### Saved data
+None.
+### Open items
+- The Deck tab's section figure (ui/deck.js) draws a schematic barrier to the traffic face; not changed.
