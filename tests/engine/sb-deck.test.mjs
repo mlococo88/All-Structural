@@ -138,3 +138,12 @@ test('Table A4-1 limits (Appendix A4): warnings for fewer than three girders, un
   const P3 = on(M.newProject()); P3.xs.ohR = 1.5; const a3 = DK.calc(P3).warn.filter(w => /Appendix A4/.test(w));
   assert.equal(a3.length, 1, JSON.stringify(a3)); assert.match(a3[0], /^Right overhang 1\.50 ft is less than the 21\.0 in \(1\.75 ft\) of Table A4-1/);
 });
+
+test('rolled-beam segments (ROLL, #1680): the design section is b_f/4 of the W shape (its equivalent plates); the rest as a plate girder', () => {
+  const WR = loadShared(...['units.js', 'steps.js', 'lldf.js', 'deck.js', 'aisc-w.js'].concat(['engine/rolled.js', 'engine/model.js', 'engine/sections.js', 'engine/owners.js', 'engine/lldf.js', 'engine/loads.js', 'engine/deck.js'].map(E)));
+  const P = on(WR.SBDModel.newProject()); assert.ok(WR.SBDRolled.apply(P.girders[0].segments[0], 'W36X135'));
+  const R = WR.SBDDeck.calc(P), sh = WR.SharedAiscW.get('W36X135');
+  assert.equal(R.err, undefined, R.err); assert.equal(R.in.bf, sh.bf); assert.equal(R.in.xneg, sh.bf / 4);
+  const R0 = DK.calc(on(M.newProject())); assert.ok(R.bays[0].I.MLL_neg > R0.bays[0].I.MLL_neg, 'a narrower flange: the design section nearer the girder, a larger negative moment');
+  assert.equal(R.checks.map(c => c.id).join(), 'DK1,DK2,DK3'); assert.equal(R.checks[0].r, R0.checks[0].r, 'the positive moment does not depend on the flange');
+});
