@@ -11548,6 +11548,6 @@ None: `analysis.steelAllowPct` and `xs.allow` keep their keys and values; the st
 - `tests/smoke/steel-bridge-unstiffened.mjs` (new); `node tests/engine/run.mjs shear stiffeners`; `node tests/check-syntax.mjs`.
 ### Decisions (pending engineer review)
 - UNSTF-1. Type A kept enabled (the Example demands use it), with a one-line note saying so.
-- UNSTF-2. A greyed field that has an input error is left enabled so it can be fixed (model validation still checks it when unstiffened).
+- UNSTF-2. A greyed field that has an input error is left enabled so it can be fixed (model validation still checks it when unstiffened); once fixed it is greyed the next time the tab is drawn (the d_o/D and bay edits do not redraw the tab, as before).
 - UNSTF-3. Set/Reset does nothing while the web is unstiffened.
 - Open: Auto design sizes Type A with the web unstiffened (vacuous pass, smallest plate proposed); model validation of the unused fields.

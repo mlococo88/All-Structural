@@ -79,8 +79,9 @@ try {
   await setSel(F('stiffeners.layout.web'), 'unstiffened');
   assert.equal(await dis(F('stiffeners.layout.doRatio')), false, 'in error: enabled'); assert.equal(await dis('#stf_fill'), true);
   await p.fill(F('stiffeners.layout.doRatio'), '1'); await p.press(F('stiffeners.layout.doRatio'), 'Tab'); await p.waitForTimeout(300);
-  assert.equal(await dis(F('stiffeners.layout.doRatio')), true, 'fixed: disabled again');
-  console.log('  ok   an input error on d_o/D keeps it enabled while unstiffened; fixed, it is greyed again');
+  await p.click('#inTabs [data-itab="mat"]'); await p.click('#inTabs [data-itab="stf"]'); await p.waitForSelector(F('stiffeners.layout.doRatio'));
+  assert.equal(await dis(F('stiffeners.layout.doRatio')), true, 'fixed: disabled again (the next time the tab is drawn)');
+  console.log('  ok   an input error on d_o/D keeps it enabled while unstiffened; fixed, it is greyed again when the tab is next drawn');
   assert.deepEqual(errs, [], 'console errors');
   console.log(`steel-bridge-unstiffened: all passed, 0 console errors (${((Date.now() - t0) / 1000).toFixed(0)} s)`);
 } finally { await b.close(); }
