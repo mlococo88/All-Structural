@@ -11209,7 +11209,7 @@ Each item of the table above and the three corrections were re-read against the 
   J, but the flange-plate quantities (r_t, f_ℓ = M_ℓ / (t_f b_f²/6), the cross-frame bracing I_y,eff) are computed with the tabulated
   b_f. Not changed.
 
-## 2026-11-24 — PR: claude/sb-tooltips (TIP) — help tooltips on the key inputs (engineer's choice "Key inputs only")   [display only; no computed value, saved field or key changes]
+## 2026-11-24 — PR: claude/sb-tooltips (PR #1687: https://github.com/mlococo88/All-Structural/pull/1687) (TIP) — help tooltips on the key inputs (engineer's choice "Key inputs only")   [display only; no computed value, saved field or key changes]
 ### Where
 - New `apps/steel-bridge/ui/tips.js` (`window.SBDTips = { TIPS, decorate, show, hide }`), loaded last in `index.html` (anchor
   `'ui/tips.js'   // TIP (2026-11-24)` in the script list after `'ui/splitter.js'`). No other app file changed.
