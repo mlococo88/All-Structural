@@ -11677,7 +11677,7 @@ New optional keys inside each `xs.edges.L` / `xs.edges.R` object: `bMode` ('ente
 - BARG-b. Switching back to Entered keeps the last computed width and weight in the typed fields (not the earlier typed values).
 - BARG-c. An entered "Edge to traffic face" still governs over the computed width; a load override (x, w) of the barrier still governs over the computed values.
 
-## 2026-11-24 — PR: claude/sb-fence-on-barrier (PR #TBD) (FOB) — a railing or fence over a barrier or curb is drawn standing on its top (display only)
+## 2026-11-24 — PR: claude/sb-fence-on-barrier (PR #1701: https://github.com/mlococo88/All-Structural/pull/1701) (FOB) — a railing or fence over a barrier or curb is drawn standing on its top (display only)
 ### Request (engineer, 2026-11-24)
 "There's an option to add a fence or railing on top of the concrete barrier, which is great. But the renderings — the 3D model, the regular drawings, the DXF drawings and the graphics — all show it as basically embedded in the concrete. Can we fix that?"
 ### Input combinations with a railing or fence over a barrier or curb
