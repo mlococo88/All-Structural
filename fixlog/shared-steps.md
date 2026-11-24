@@ -175,7 +175,7 @@ Tests: `node tests/engine/run.mjs` (steps, steps-totext, tex, report, …).
 ### Other copies
 - None.
 
-## 2026-11-24 — PR: claude/sb-le-display (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CMPL) — line(): comparison steps read "D_p ≤ 0.42D_t = 9.204 ≤ … = 11.340, OK" and "… = 115.18 ≤ 140" (no stray "=", no repeated value)   [display only; no value, verdict, formula or reference changes]
+## 2026-11-24 — PR: claude/sb-le-display (PR #1699: https://github.com/mlococo88/All-Structural/pull/1699) (CMPL) — line(): comparison steps read "D_p ≤ 0.42D_t = 9.204 ≤ … = 11.340, OK" and "… = 115.18 ≤ 140" (no stray "=", no repeated value)   [display only; no value, verdict, formula or reference changes]
 ### Problem
 - Engineer (2026-11-24), Steel Bridge Design, Flexure tab, topic "Compact positive flexure" (6.10.7.1.2 / 6.10.7.3):
   "D_p = ≤ 0.42D_t = 9.204 ≤ 0.42(27.000) = 11.340 = OK" and "M_u + 1/3 f_ℓ S_xt = ≤ φ_f M_n = 2086.83 + … ≤ 2284.07 = OK".

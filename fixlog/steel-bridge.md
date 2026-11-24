@@ -11774,7 +11774,7 @@ New optional keys inside each `xs.edges.L` / `xs.edges.R` object: `bMode` ('ente
 - BARG-b. Switching back to Entered keeps the last computed width and weight in the typed fields (not the earlier typed values).
 - BARG-c. An entered "Edge to traffic face" still governs over the computed width; a load override (x, w) of the barrier still governs over the computed values.
 
-## 2026-11-24 — PR: claude/sb-le-display (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CMPL) — worked-step comparisons read "D_p ≤ 0.42D_t = … = 11.340, OK" and "… = 115.18 ≤ 140" (no stray "=", no value repeated after its comparison)   [display only]
+## 2026-11-24 — PR: claude/sb-le-display (PR #1699: https://github.com/mlococo88/All-Structural/pull/1699) (CMPL) — worked-step comparisons read "D_p ≤ 0.42D_t = … = 11.340, OK" and "… = 115.18 ≤ 140" (no stray "=", no value repeated after its comparison)   [display only]
 - Fixed in `shared/steps.js` `line()`: see `fixlog/shared-steps.md` (CMPL) for the code, the check case and the tools. No file of this app changed.
 - Steel steps affected (eq starting with \le / \ge): engine/flexure.js 14 (6.10.7 ductility, compact and noncompact positive flexure, 6.10.8
   flanges, Service II, web bend-buckling, …), constructibility.js 5, proportions.js 5, autodesign.js 1, framing.js 1, splplace.js 1; shared/lldf.js 1.
