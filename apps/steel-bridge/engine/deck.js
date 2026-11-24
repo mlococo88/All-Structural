@@ -122,13 +122,15 @@
     const warn = [];
     bays.forEach(q => { if (q.I.A4.below) warn.push(`${q.name}: the spacing is below the 4 ft of Table A4-1; the 4 ft row is used.`); if (q.I.A4.above) warn.push(`${q.name}: the spacing is above the 15 ft of Table A4-1; the 15 ft row is used and a refined analysis is required.`); });
     if (!auto && +D.xneg > 24) warn.push('The entered design section is beyond the 24 in of Table A4-1; 24 in is used.');
-    // DK review (2026-11-23): the limits of Table A4-1 (Art. A4.1): at least three parallel girders, at least 14.0 ft between the exterior girder
-    // centrelines, overhangs not over the smaller of 0.625 S and 6.0 ft (S of the exterior bay on that side). Warnings only: no value or verdict changes.
-    { const nbays = (b.bays || []).length, Wx = (b.bays || []).reduce((a, s) => a + (+s || 0), 0), A41 = `${ED}Art. A4.1`;
+    // DK review (2026-11-23): the assumptions of Table A4-1 (AASHTO LRFD 10th Ed. Appendix A4): at least three parallel girders, at least 14.0 ft
+    // between the exterior girder centrelines, overhangs within the cases the table was developed for (21.0 in to the smaller of 0.625 S and
+    // 6.0 ft, S of the exterior bay on that side). Warnings only: no value or verdict changes.
+    { const nbays = (b.bays || []).length, Wx = (b.bays || []).reduce((a, s) => a + (+s || 0), 0), A41 = `${ED}Appendix A4`;
       if (nbays + 1 < 3) warn.push(`${nbays + 1} girders: Table A4-1 is for decks on at least three parallel girders (${A41}); a refined analysis is required.`);
       if (Wx < 14 - 1e-9) warn.push(`${St().fmt(Wx, 2)} ft between the exterior girder centrelines: Table A4-1 is for at least 14.0 ft (${A41}).`);
       ['L', 'R'].forEach(sd => { const Sx = +(sd === 'L' ? b.bays[0] : b.bays[nbays - 1]) || 0, lim = Math.min(0.625 * Sx, 6.0), o = sd === 'L' ? +b.ohL : +b.ohR;
-        if (nbays && o > lim + 1e-9) warn.push(`${sd === 'L' ? 'Left' : 'Right'} overhang ${St().fmt(o, 2)} ft is more than the smaller of 0.625 S = ${St().fmt(0.625 * Sx, 2)} ft and 6.0 ft: outside the range of Table A4-1 (${A41}); the interior-bay moments next to that girder may not apply.`); }); }
+        if (nbays && o > lim + 1e-9) warn.push(`${sd === 'L' ? 'Left' : 'Right'} overhang ${St().fmt(o, 2)} ft is more than the smaller of 0.625 S = ${St().fmt(0.625 * Sx, 2)} ft and 6.0 ft: outside the range of Table A4-1 (${A41}); the interior-bay moments next to that girder may not apply.`);
+        if (nbays && o < 21 / 12 - 1e-9) warn.push(`${sd === 'L' ? 'Left' : 'Right'} overhang ${St().fmt(o, 2)} ft is less than the 21.0 in (1.75 ft) of Table A4-1 (${A41}); the interior-bay moments next to that girder may not apply.`); }); }
     const inBay = dead.per.filter(L => /^(sw[LR]|med|fence[LR]|u\d+)$/.test(L.id || '') && L.cat !== 'PL' && (L.x1 != null ? Math.max(L.x0, L.x1) > +b.ohL + 1e-9 && Math.min(L.x0, L.x1) < dead.Wd - +b.ohR - 1e-9 : L.x > +b.ohL + 1e-9 && L.x < dead.Wd - +b.ohR - 1e-9));
     if (inBay.length) warn.push(`Loads between the exterior girders that the interior strip moments do not include (slab and wearing surface only): ${inBay.map(L => L.desc || L.id).join(', ')}. Check their effect on the deck separately.`);
     const out = { on: true, D, in: { ts, tL, wc, fc, fy, wDC, wDW, dwA, bf, bfAt, xneg, auto, eta, mLL, owner: lf.o || '', Wd: dead.Wd, ohL: +b.ohL, ohR: +b.ohR }, bays, gp, gn, oh, go, dist, checks, warn, steps };
