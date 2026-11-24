@@ -206,7 +206,7 @@
   }
   function assumed(inp, R) {
     if (!R || R.error || !R.useExt || !inp) return R;
-    const pl = inp.pl && +inp.pl.w > 0 ? +inp.pl.w : 0, utc = inp.imp && isNum(+inp.imp.utc) && +inp.imp.utc !== 0 ? +inp.imp.utc : 0; if (!pl && !utc) return R;
+    const pl = inp.pl && +inp.pl.w > 0 ? +inp.pl.w : 0, utc = isNum(+inp.utc) && +inp.utc !== 0 ? +inp.utc : 0; if (!pl && !utc) return R;
     const u = inp.ut || {}, a = { pl, utc, wUT: +u.wUT || 0, wUF: +u.wUF || 0 }; a.text = noteText(a);
     R.imp = a;
     if (Array.isArray(R.warns)) { const PL = window.PSBPL, i = PL ? R.warns.indexOf(PL.WARN_EXT) : -1; if (i >= 0) R.warns.splice(i, 1); R.warns.push(a.text); }

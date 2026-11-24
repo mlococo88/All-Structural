@@ -80,11 +80,11 @@ const calc = async p => { await p.click('#tabBar [data-otab="rt"]'); await p.wai
   try {
     await calc(p); await p.waitForSelector('#rt-vehres table');
     const m = await p.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: innerWidth, rows: [...document.querySelectorAll('#rt-vehres tbody tr')].map(tr => tr.cells[0].innerText.trim()), warn: /not been verified/.test(document.querySelector('#rt-vehres').innerText), df: document.querySelector('#rt-vehres tbody tr:last-child').cells[4].innerText }));
-    assert.ok(m.sw <= m.iw + 1, `horizontal page scroll at 390 px: ${m.sw} > ${m.iw}`); assert.deepEqual(m.rows, ['Type 3', 'EV3', 'Permit: Crane']); assert.ok(m.warn); assert.equal(m.df, 'one lane, no m');
+    assert.ok(m.sw <= m.iw + 1, `horizontal page scroll at 390 px: ${m.sw} > ${m.iw}`); assert.deepEqual(m.rows, ['Type 3', 'EV3', 'Permit: Crane']); assert.ok(!m.warn, 'no unverified warning: the special-permit factors were read against the MBE 4th Ed. text'); assert.equal(m.df, 'one lane, no m (Service II: design)');
     await p.click('#rt-vehres tbody tr:last-child td:nth-child(10) a'); await p.waitForFunction(() => /Crane/.test((document.querySelector('#rt-steps .secHead') || {}).textContent || ''));
     const m2 = await p.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: innerWidth, kErr: document.querySelectorAll('#out .katex-error').length })); assert.ok(m2.sw <= m2.iw + 1 && m2.kErr === 0, JSON.stringify(m2));
     if (SHOTS) { await p.locator('#rt-vehres').scrollIntoViewIfNeeded(); await p.screenshot({ path: path.join(SHOTS, 'sb-legal-permit-5-390px.png') }); }
-    console.log('ok   390 px: no horizontal page scroll; entered axle train rated as a special permit (one lane, no m)');
+    console.log('ok   390 px: no horizontal page scroll; entered axle train rated as a special permit (one lane, no m; Service II with the design factor)');
   } finally { allErrs.push(...errs); await b.close(); }
 }
 assert.deepEqual(allErrs, [], 'console errors');
