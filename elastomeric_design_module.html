@@ -14,6 +14,10 @@
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
 <script src="shared/github-sync.js"></script>   <!-- GHS2 (2026-11-05): copy of the saved projects to a private GitHub repository; off until set up -->
+<!-- BRG-HO (2026-11-24): the bearingLoads hand-off from the two bridge apps (HANDOFF.md §4.17): the per-project copies (§5.1), the stale check and the payload checks (shared, unchanged except bearing-loads.js, new) -->
+<script src="shared/handoff-store.js"></script>
+<script src="shared/handoff-stale.js"></script>
+<script src="shared/bearing-loads.js"></script>
 <style>
 :root{--navy:#1f3a5f;--navy-lt:#33517a;--panel:#f4f5f0;--panel-h:#e7e9e0;--line:#c9ccc0;--ok:#1a7f37;--bad:#c62828;--amber:#b8860b;}
 *{box-sizing:border-box;}
@@ -328,6 +332,10 @@ textarea{width:100%;min-height:90px;font-family:inherit;font-size:13px;border:1p
   <div class="hoGrp">Receive from other tools</div>
   <div class="prjGrp"><b>Shared project info</b> <span class="hoFrom">from any tool, to the title block</span><div class="prjRow toolbar" style="padding:0;border:0;background:none">
   <button type="button" id="bx-pm-use" title="Fill this title block from the project info shared by another tool">Use shared project info</button></div></div>
+  <div class="prjGrp" id="edmBrgGrp"><b>Bearing loads</b> <span class="hoFrom">from Prestressed Bridge Design or Steel Bridge Design</span><div class="prjHint">Per girder at each bearing line (girder end): the unfactored DC1, DC2, DW, live load and pedestrian / utility items. "Pull bearing loads" asks which project and which bearing line, shows every value and what it overwrites (P<sub>DL</sub>, P<sub>LL</sub>, P<sub>min</sub>, the Girder Run), and changes nothing until you click Apply. The values stay editable. Rotations and the shear movement are not sent (enter them in the Loads tab).</div><div class="prjRow toolbar" style="padding:0;border:0;background:none">
+  <button type="button" id="edmBrgPull" title="Bearing loads sent by Prestressed Bridge Design or Steel Bridge Design (bridgeSuite.v1.bearingLoads): asks which project and bearing line first">Pull bearing loads</button>
+  <button type="button" id="edmBrgImport" title="The same pull from a bridge-bearing-loads JSON file">Import hand-off (JSON)</button><input type="file" id="edmBrgFile" accept=".json,application/json" style="display:none"><span id="edmBrgNew" class="hoFrom" hidden> · <b>new data</b></span></div>
+  <div class="prjHint" id="edmBrgLast"></div><div id="edmBrgStaleHo"></div></div>
   <div class="prjGrp"><b>Bearing loads</b> <span class="hoFrom">from the Abutment app</span><div class="prjHint">Filled in when the Abutment app opens this module (no button). <b>Status:</b> <span id="edmHoLink"></span></div></div>
   <div class="hoGrp">Send to other tools</div>
   <div class="prjGrp"><b>Shared project info</b> <span class="hoFrom">to every tool</span><div class="prjRow toolbar" style="padding:0;border:0;background:none">
@@ -347,6 +355,7 @@ textarea{width:100%;min-height:90px;font-family:inherit;font-size:13px;border:1p
   </aside>
   <div id="inputPanel"></div>
   <div id="outputPanel">
+    <div id="edmBrgBar"></div><!-- BRG-HO (2026-11-24): the stale banner of the bearing loads hand-off (click only) -->
     <div id="dashboard"></div>
     <div id="tabbar"></div>
     <div id="tabs"></div>
@@ -503,6 +512,7 @@ function buildInputs(){
   // loads
   h+=panel("in-loads","I-4","Loads & Movements (service, per bearing)",`
     <div class="in-note">Auto-filled from the Abutment app when opened via its “Open EDM” button; editable here.</div>
+    ${edmBrgInNote()}
     ${inpRow("Dead-load reaction P<sub>DL</sub>","loads.Pdl","kip")}
     ${inpRow("Live-load reaction P<sub>LL</sub>","loads.Pll","kip")}
     ${inpRow("Min. permanent load P<sub>min</sub> (0 = P<sub>DL</sub>)","loads.Pmin","kip",{title:"Minimum vertical force due to permanent loads, for the slip check H ≤ P_min/5 [14.8.3.1 / C14.8.3.1]: use the DC reaction only (no DW, no future wearing surface) where they differ. 0 or blank uses P_DL (which includes DW when it comes from the Abutment app). In the Girder Run a value entered here is scaled to each girder by its P_DL."})}
@@ -903,7 +913,7 @@ function checkLine(name,dc,ref,key){
    In the calculation report the same link reads "see §n.k" (buildReport rewrites it). ---- */
 let EDM_RPT=false;   // true only while buildReport() renders the tab content for the report
 const EDM_TABNAME={"tab-in":"Geometry & Schematic","tab-des":"Design Checks","tab-rot":"Rotation & Movement","tab-gird":"Girder Run","tab-warn":"Warnings & Assumptions"};
-const EDM_CARDS={"o-geom":["tab-in","Plan Geometry & Shape Factor"],"o-rot":["tab-rot","Design Rotation Build-up"],"o-therm":["tab-rot","Thermal Movement"],
+const EDM_CARDS={"o-brg":["tab-gird","Bearing loads received"],"o-geom":["tab-in","Plan Geometry & Shape Factor"],"o-rot":["tab-rot","Design Rotation Build-up"],"o-therm":["tab-rot","Thermal Movement"],
   sig:["tab-des","Compressive stress"],shear:["tab-des","Shear deformation"],gast:["tab-des","Axial shear strain"],rot:["tab-des","Rotational shear strain"],
   gs:["tab-des","Shear strain from movement"],comb:["tab-des","Combined static + cyclic limit"],stab:["tab-des","Stability"],stabT:["tab-des","Stability thickness"],
   uplift:["tab-des","Combined compression & rotation (uplift)"],reinf:["tab-des","Steel reinforcement thickness"],cover:["tab-des","Cover layer"],
@@ -939,6 +949,7 @@ function renderAll(){
   const R=LAST; if(!R)return;
   renderDashboard(R);
   edmSumCol(R);   /* EDSC */
+  edmBrgStale();   /* BRG-HO: the stale banner and the Hand-offs panel's bearing-loads line */
   // tabbar
   document.getElementById("tabbar").innerHTML=TABS.map(([id,t])=>`<div class="tab${S.ui.tab===id?" active":""}" data-tab="${id}">${t}</div>`).join("");
   // tabs
@@ -946,7 +957,7 @@ function renderAll(){
   h+=`<div class="tabpane${S.ui.tab==="tab-in"?" active":""}" id="tab-in">${renderGeom(R)}</div>`;
   h+=`<div class="tabpane${S.ui.tab==="tab-des"?" active":""}" id="tab-des">${renderDesign(R)}</div>`;
   h+=`<div class="tabpane${S.ui.tab==="tab-rot"?" active":""}" id="tab-rot">${renderRot(R)}</div>`;
-  h+=`<div class="tabpane${S.ui.tab==="tab-gird"?" active":""}" id="tab-gird">${renderGird(R)}</div>`;
+  h+=`<div class="tabpane${S.ui.tab==="tab-gird"?" active":""}" id="tab-gird">${edmBrgPanel()}${renderGird(R)}</div>`;   /* BRG-HO: the bearing loads received, worked */
   h+=`<div class="tabpane${S.ui.tab==="tab-warn"?" active":""}" id="tab-warn">${renderWarn(R)}</div>`;
   h+=`<div class="tabpane" id="tab-rpt"></div>`;   /* EDRP */
   document.getElementById("tabs").innerHTML=h;
@@ -1411,6 +1422,7 @@ function edrModel(){
       ["Dead-load reaction P_DL",edrCell(+L.Pdl),"kip"],["Live-load reaction P_LL",edrCell(+L.Pll),"kip"],["Minimum permanent load P_min (anchorage)",(+L.Pmin>0)?edrCell(+L.Pmin):"= P_DL","kip"],
       ["Profile-grade rotation θ_pg",edrCell(+L.thetaProfile,4),"rad"],["Dead-load rotation θ_DL",edrCell(+L.thetaDL,4),"rad"],["Live-load rotation θ_LL",edrCell(+L.thetaLL,4),"rad"],
       ["Camber rotation θ_c",edrCell(+L.thetaCamber,4),"rad"],["Beam-seat slope",edrCell(+L.seatSlope,4),"rad"],["Transverse rotation θ_t",edrCell(+L.thetaTrans,4),"rad"],["Design shear movement Δ_s",edrCell(+L.deltaS,3),"in"]]}]});
+    { const bs=edmBrgReport(); if(bs) subs.push(bs); }   /* BRG-HO (2026-11-24): the bearing loads received (hand-off), worked */
     subs.push({title:"MassDOT / AASHTO toggles and code coefficients",items:[{type:"table",head:["Setting","Value"],rows:[
       ["Combined shear-strain limit",tg.exteriorCheck?"5.0 (exterior-beam check)":edrN(+tg.combLimit)],["Construction rotation tolerance",edrN(+tg.rotTol,3)+" rad"],["Thermal movement factor",edrN(+tg.thermalFactor,1)],
       ["Bridge deck fixed against horizontal translation (Method B stability, Eq. 14.7.5.3.4-5)",tg.fixedShear?"yes":"no"],["Exterior-beam check",tg.exteriorCheck?"yes":"no"],["Pad anchored / doweled",tg.anchored?"yes":"no"]]},
@@ -1666,6 +1678,212 @@ window.addEventListener("beforeprint",()=>{
   document.body.classList.add("rp-printing");
 });
 window.addEventListener("afterprint",()=>{ if(EDR_BACK){ EDR_BACK=false; EDR.on=false; renderAll(); } });
+</script>
+<script>
+/* ---- BRG-HO (2026-11-24, engineer-approved): the bearingLoads hand-off from Prestressed Bridge Design (apps/ps-bridge) and Steel Bridge
+   Design (apps/steel-bridge) — HANDOFF.md §4.17; receiver id 'edm'. Click only (HANDOFF.md §3): "Pull bearing loads" lists the copies
+   (shared/handoff-store.js: this browser's per-project copies, the channel key and its .by copies, and GitHub with Cloud sync), asks which
+   project, copy and bearing line, shows every received value and what it overwrites, and changes nothing until Apply. Apply fills the
+   inputs the user can still edit (I-4 P_DL, P_LL, P_min; optionally the Girder Run and the thermal reference span) and records the source
+   in the new optional field S.brgSrc (saved with the project; a project without it is unchanged). The values are formed by
+   SharedBearingLoads.plan (shared/bearing-loads.js): service sums with load factor 1.0, no new combination and no formula of the design.
+   Stale banner (the HO-D2 pattern, shared/handoff-stale.js): when this browser holds a later copy of the pulled project whose values for
+   the pulled bearing line differ from the ones applied, a banner names it with a Load button (the same pull). Display only. ---- */
+const EDM_BRG={ RX:"edm", CH:"bearingLoads", PROD:["psbridge","steelbridge"] };
+function edmBrgLegacy(){ const NS=BridgeXfer.NS; return [{key:NS+"bearingLoads",via:"latest hand-off (this browser)"},{key:NS+"bearingLoads.by.psbridge",via:"latest from Prestressed Bridge Design (this browser)",producer:"psbridge"},{key:NS+"bearingLoads.by.steelbridge",via:"latest from Steel Bridge Design (this browser)",producer:"steelbridge"}]; }
+const edmBrgWhen=t=>{ const d=new Date(t); return t&&isFinite(d)?d.toLocaleString():"time unknown"; };
+/* the line object of payload p that matches the saved record's line (support, side, span, end) */
+function edmBrgLineIdx(p,ln){ if(!p||!Array.isArray(p.lines)||!ln) return -1;
+  return p.lines.findIndex(l=>l.support===ln.support&&(l.side||"")===(ln.side||"")&&(l.span==null?null:+l.span)===(ln.span==null?null:+ln.span)&&(l.end||"")===(ln.end||"")); }
+const edmBrgSig=l=>SharedHandoffStale.sig({girders:l.girders});
+/* the stale state of the pulled bearing line against this browser's newest copy of the same project and producer (local copies only: no
+   request to GitHub for the banner) -> null | { state, entry, li, why } */
+function edmBrgState(){
+  const B=S.brgSrc; if(!B||!B.pid||!window.SharedHandoffStore||!window.SharedHandoffStale||!window.SharedBearingLoads) return null;
+  let L; try{ L=SharedHandoffStore.local({storage:localStorage,channel:EDM_BRG.CH,schema:SharedBearingLoads.SCHEMA,maxVersion:1,producers:EDM_BRG.PROD,legacy:edmBrgLegacy()}); }catch(e){ return null; }
+  const es=L.entries.filter(e=>e.pid===B.pid&&(e.payload.producer||"")===(B.producer||"")).sort((a,b)=>String(b.payload.producedAt||"").localeCompare(String(a.payload.producedAt||"")));
+  if(!es.length) return {state:"none"};
+  const e=es[0], li=edmBrgLineIdx(e.payload,B.line);
+  const cur={at:e.payload.producedAt||"",sig:li>=0?edmBrgSig(e.payload.lines[li]):"gone"};
+  return {state:SharedHandoffStale.inState({at:B.producedAt,sig:B.sig},cur),entry:e,li,why:li<0?"the bearing line is no longer in the hand-off":""};
+}
+/* before any pull: a copy whose project name is this project's (the "new data" marker of HANDOFF.md §5.1) */
+function edmBrgMatch(){
+  if(S.brgSrc||!window.SharedHandoffStore||!window.SharedBearingLoads) return false;
+  const nm=SharedHandoffStore.norm(S.proj&&S.proj.name).toLowerCase(); if(!nm) return false;
+  try{ const L=SharedHandoffStore.local({storage:localStorage,channel:EDM_BRG.CH,schema:SharedBearingLoads.SCHEMA,maxVersion:1,producers:EDM_BRG.PROD,legacy:[]});
+    return L.entries.some(e=>e.pid&&SharedHandoffStore.projectOf(e.payload).name.toLowerCase()===nm); }catch(e){ return false; }
+}
+function edmBrgStale(){
+  const bar=document.getElementById("edmBrgBar"), ho=document.getElementById("edmBrgStaleHo"), last=document.getElementById("edmBrgLast"), nw=document.getElementById("edmBrgNew");
+  const B=S.brgSrc, st=edmBrgState();
+  if(last) last.innerHTML=B?`<b>Last received:</b> ${esc(B.producer||"?")}, sent ${esc(edmBrgWhen(B.producedAt))}${B.project&&B.project.name?`, project "${esc(B.project.name)}"`:""}: ${esc(B.lineName||"")}, ${esc(B.girder||"")} (pulled ${esc(edmBrgWhen(B.adoptedAt))}, ${esc(B.via||"")}). `+edmWorkedIn([["o-brg"]]):"Nothing received from the bridge apps yet.";
+  const stale=st&&st.state==="stale";
+  if(nw) nw.hidden=!(stale||edmBrgMatch());
+  const html=stale?`<div class="warn-item" id="edmBrgStaleN" role="status"><b>Bearing loads (bearingLoads)</b> from ${esc(B.producer||"?")}: this browser holds a later hand-off of project "${esc((B.project&&B.project.name)||"")}" (sent ${esc(edmBrgWhen(st.entry.payload.producedAt))}) whose values for ${esc(B.lineName||"")} ${st.why?"— "+esc(st.why)+" —":""} differ from the ones this design took (sent ${esc(edmBrgWhen(B.producedAt))}). Nothing changes until you click. <button type="button" class="mini-btn" data-brg-load="1">Load</button></div>`:"";
+  if(bar) bar.innerHTML=html; if(ho) ho.innerHTML=html;
+}
+document.addEventListener("click",ev=>{ const b=ev.target.closest&&ev.target.closest("[data-brg-load]"); if(!b) return; ev.preventDefault(); edmBrgPull(true); });
+window.addEventListener("storage",ev=>{ if(!ev.key||/^bridgeSuite\.v1\.bearingLoads/.test(ev.key)) edmBrgStale(); });
+
+/* the Pull: list, then the dialog */
+async function edmBrgPull(fromBanner){
+  if(!window.SharedHandoffStore||!window.SharedBearingLoads||!window.BridgeXfer){ alert("The hand-off helper is not available in this browser."); return; }
+  let r; try{ r=await SharedHandoffStore.list({storage:localStorage,channel:EDM_BRG.CH,schema:SharedBearingLoads.SCHEMA,maxVersion:1,producers:EDM_BRG.PROD,legacy:edmBrgLegacy(),fetch:(u,i)=>window.fetch(u,i)}); }
+  catch(e){ alert("Could not list the bearing loads hand-offs: "+e.message); return; }
+  if(!r.groups.length){ alert("No bearing loads have been sent yet. In Prestressed Bridge Design or Steel Bridge Design: Project tab, Hand-offs, \"Send bearing loads to the Elastomeric Bearing module\" (or use Import hand-off (JSON))."+(r.errors.length?"\n\nNot listed:\n• "+r.errors.join("\n• "):"")); return; }
+  const B=S.brgSrc; let gi=-1;
+  if(B&&B.pid) gi=r.groups.findIndex(g=>g.pid===B.pid);
+  if(gi<0){ const m=SharedHandoffStore.match(r.groups,{name:S.proj&&S.proj.name,bridgeId:""}); if(m!=null) gi=r.groups.findIndex(g=>g.pid===m); }
+  edmBrgDlg({groups:r.groups,errors:r.errors,cloud:r.cloud,gi,ei:0,keepLine:!!(fromBanner||(B&&gi>=0&&r.groups[gi].pid===B.pid))});
+}
+function edmBrgImport(){
+  const f=document.getElementById("edmBrgFile"); if(!f) return; f.value="";
+  f.onchange=()=>{ const file=f.files&&f.files[0]; if(!file) return;
+    BridgeXfer.importFile(file,SharedBearingLoads.SCHEMA,1,res=>{ if(res.error){ alert("Cannot import the hand-off file: "+res.error); return; }
+      const pid=SharedHandoffStore.pidOf(SharedHandoffStore.projectOf(res.payload));
+      edmBrgDlg({groups:[{pid,project:SharedHandoffStore.projectOf(res.payload),label:"file "+file.name,entries:[{payload:res.payload,via:"file "+file.name,producer:"",pid}]}],errors:[],cloud:"off",gi:0,ei:0,keepLine:false}); }); };
+  f.click();
+}
+document.addEventListener("click",ev=>{ const t=ev.target; if(!t||!t.closest) return;
+  if(t.closest("#edmBrgPull")){ ev.preventDefault(); edmBrgPull(false); } else if(t.closest("#edmBrgImport")){ ev.preventDefault(); edmBrgImport(); } });
+
+const EDMB={};   /* the open dialog's state (memory only) */
+function edmBrgDlg(o){
+  Object.assign(EDMB,{groups:o.groups,errors:o.errors||[],cloud:o.cloud,gi:o.gi,ei:o.ei||0,li:null,girder:null,im:!!(S.tog&&S.tog.includeIM),pl:true,n:1,run:true,therm:false,keepLine:o.keepLine});
+  const B=S.brgSrc; if(o.keepLine&&B&&B.opts){ EDMB.im=!!B.opts.im; EDMB.pl=B.opts.pl!==false; EDMB.n=+B.opts.n||1; EDMB.run=B.opts.run!==false; EDMB.therm=!!B.opts.therm; EDMB.girder=B.girder||null; }
+  let d=document.getElementById("dlgBrg");
+  if(!d){ d=document.createElement("dialog"); d.id="dlgBrg"; d.style.maxWidth="min(1180px,96vw)"; d.style.width="96vw"; document.body.appendChild(d);
+    d.addEventListener("change",edmBrgDlgChange); d.addEventListener("click",edmBrgDlgClick); }
+  edmBrgDlgDraw();
+  if(typeof d.showModal==="function"){ if(!d.open) d.showModal(); } else d.setAttribute("open","");
+}
+function edmBrgCur(){ const g=EDMB.gi>=0?EDMB.groups[EDMB.gi]:null; const e=g?g.entries[Math.min(EDMB.ei,g.entries.length-1)]:null; return {g,e,p:e?e.payload:null}; }
+function edmBrgDlgDraw(){
+  const d=document.getElementById("dlgBrg"); if(!d) return;
+  const SB=SharedBearingLoads, {g,e,p}=edmBrgCur(), f3=v=>v==null||!isFinite(v)?"—":(+v).toFixed(3), f2=v=>v==null||!isFinite(v)?"—":(+v).toFixed(2);
+  let h=`<h3>Pull bearing loads</h3><div class="in-note">Nothing changes until you click <b>Apply</b>. Every value applied stays editable (Loads tab, I-4; the Girder Run). Values per bearing, unfactored service loads (load factor 1.0), kip.</div>`;
+  h+=`<div class="in-row"><label>Project</label><select data-brg="gi"><option value="-1"${EDMB.gi<0?" selected":""}>— choose the project —</option>${EDMB.groups.map((q,i)=>`<option value="${i}"${i===EDMB.gi?" selected":""}>${esc(q.label)} · ${esc(edmBrgWhen(q.newest&&q.newest.payload?q.newest.payload.producedAt:q.entries[0].payload.producedAt))} · ${esc(SB.summary(q.entries[0].payload))}</option>`).join("")}</select></div>`;
+  if(EDMB.errors.length) h+=`<div class="warn-item">Not listed: ${EDMB.errors.map(esc).join("; ")}</div>`;
+  if(EDMB.cloud&&EDMB.cloud!=="off"&&EDMB.cloud!=="ok") h+=`<div class="warn-item">GitHub copies not read: ${esc(EDMB.cloud)}</div>`;
+  if(!p){ h+=`<div style="text-align:right;margin-top:8px"><button type="button" class="mini-btn" data-brg-act="cancel">Cancel</button></div>`; d.innerHTML=h; return; }
+  if(g.entries.length>1) h+=`<div class="in-row"><label>Copy</label><select data-brg="ei">${g.entries.map((x,i)=>`<option value="${i}"${i===EDMB.ei?" selected":""}>${esc(x.payload.producer||"?")} · ${esc(edmBrgWhen(x.payload.producedAt))} · ${esc(x.via||"")}${x.payload.device?" · "+esc(x.payload.device):""}</option>`).join("")}</select></div>`;
+  const ck=SB.check(p);
+  h+=`<div class="in-note"><b>From:</b> ${esc(p.producer||"?")} (${esc(p.producerFile||"")}), sent ${esc(edmBrgWhen(p.producedAt))}${p.project&&p.project.name?`, project "${esc(p.project.name)}"`:""}${p.project&&p.project.bridgeId?` (${esc(p.project.bridgeId)})`:""}${p.device?`, device ${esc(p.device)}`:""}; ${esc(e.via||"")}.</div>`;
+  if(ck.error){ h+=`<div class="warn-item err">Refused: ${esc(ck.error)}</div><div style="text-align:right;margin-top:8px"><button type="button" class="mini-btn" data-brg-act="cancel">Close</button></div>`; d.innerHTML=h; return; }
+  // the bearing line: the one pulled last (same support, side, span, end) when it is this project's copy, else the first
+  if(EDMB.li==null||EDMB.li>=p.lines.length){ const B=S.brgSrc; const k=EDMB.keepLine&&B?edmBrgLineIdx(p,B.line):-1; EDMB.li=k>=0?k:0; }
+  const P=SB.plan(p,EDMB.li,{im:EDMB.im,pl:EDMB.pl,n:EDMB.n,girder:EDMB.girder}); if(!P.design) { d.innerHTML=h; return; }
+  EDMB.girder=P.design.label;
+  h+=`<div class="in-row"><label>Bearing line</label><select data-brg="li">${p.lines.map((l,i)=>`<option value="${i}"${i===EDMB.li?" selected":""}>${esc(SB.lineName(l))}${l.side?" · "+esc(l.side):""} · x = ${f2(l.x)} ft</option>`).join("")}</select></div>`;
+  const hasSep=k=>P.rows.some(r=>r.sep&&r.sep[k]!=null);
+  const sk=["UT","UF","UTc","PL","PLmin"].filter(hasSep);
+  h+=`<div style="overflow-x:auto"><table class="itbl"><tr><th>Design (I-4)</th><th>Girder</th><th>Position</th><th>Girder type</th><th>DC1</th><th>DC2</th><th>DW</th>${sk.map(k=>`<th>${k}${k==="UT"||k==="UF"?" (in DC1)":k==="UTc"?" (in DW)":k==="PLmin"?" (info)":""}</th>`).join("")}<th>LL</th><th>LL min (info)</th><th>LL+IM</th><th>LL+IM min (info)</th><th>P<sub>DL</sub></th><th>P<sub>LL</sub></th><th>P<sub>min</sub></th></tr>`
+    +P.rows.map(r=>`<tr${r.label===P.design.label?' style="background:#eef4ff"':""}><td><input type="radio" name="brgG" data-brg="girder" value="${esc(r.label)}"${r.label===P.design.label?" checked":""}></td><td>${esc(r.label)}</td><td>${esc(r.position)}</td><td>${esc(r.type)}</td><td>${f3(r.DC1)}</td><td>${f3(r.DC2)}</td><td>${f3(r.DW)}</td>${sk.map(k=>`<td>${f3(r.sep[k])}</td>`).join("")}<td>${f3(r.LL&&r.LL.max)}</td><td>${f3(r.LL&&r.LL.min)}</td><td>${f3(r.LL&&r.LL.maxIM)}</td><td>${f3(r.LL&&r.LL.minIM)}</td><td><b>${f3(r.Pdl)}</b></td><td><b>${f3(r.Pll)}</b></td><td><b>${f3(r.Pmin)}</b></td></tr>`).join("")+`</table></div>`;
+  h+=`<div class="in-note">Per bearing: P<sub>DL</sub> = (DC1 + DC2 + DW)/n; P<sub>LL</sub> = (LL${EDMB.im?"+IM":""}${EDMB.pl?" + PL":""})/n; P<sub>min</sub> = (DC1 + DC2 − UT − UF)/n (the permanent DC load for the slip check: no DW, no utilities, no future utility allowance). UT and UF are inside DC1 and UTc inside DW as sent (not added again). Default design girder: the largest P<sub>DL</sub> + P<sub>LL</sub> of the line (pick another with the radio buttons).</div>`;
+  h+=`<div class="in-row"><label>Live load</label><select data-brg="im"><option value="0"${EDMB.im?"":" selected"}>LL without the dynamic load allowance (this module's basis, I-5 "includeIM" off: MassDOT excludes IM from bearings)</option><option value="1"${EDMB.im?" selected":""}>LL+IM (with the dynamic load allowance)</option></select></div>`;
+  h+=`<div class="chk-row"><input type="checkbox" data-brg="pl"${EDMB.pl?" checked":""}${hasSep("PL")?"":" disabled"}><label>Add the pedestrian live load reaction PL to P<sub>LL</sub>${hasSep("PL")?"":" (none sent)"}</label></div>`;
+  h+=`<div class="in-row"><label>Bearings per girder end n</label><input type="number" min="1" step="1" data-brg="n" value="${EDMB.n}"><span class="unit">each bearing takes 1/n</span></div>`;
+  h+=`<div class="chk-row"><input type="checkbox" data-brg="run"${EDMB.run?" checked":""}><label>Also fill the Girder Run with every girder of this line (replaces the girder set now loaded: ${(S.girders||[]).length} girder(s))</label></div>`;
+  const mv=p.movement||{}, un=Array.isArray(mv.units)&&isFinite(+p.lines[EDMB.li].unit)?mv.units[+p.lines[EDMB.li].unit]:null;
+  h+=`<div class="chk-row"><input type="checkbox" data-brg="therm"${EDMB.therm?" checked":""}${un?"":" disabled"}><label>Set the thermal reference calculation's span (Rotation &amp; Movement, 3.2; a reference only, Δ<sub>s</sub> is not changed) to the length of this bearing's unit${un?`, ${f2(un.length)} ft`:" (not sent)"}</label></div>`;
+  P.warnings.concat(ck.warnings||[]).forEach(w=>{ h+=`<div class="warn-item">${esc(w)}</div>`; });
+  if(P.design.Pmin<=0) h+=`<div class="warn-item err">P<sub>min</sub> of ${esc(P.design.label)} = ${f3(P.design.Pmin)} kip ≤ 0: not filled (0 means "use P<sub>DL</sub>" here); the pad needs an anchorage or another bearing type — check by hand.</div>`;
+  h+=`<div class="in-note"><b>Not sent, unchanged here:</b> rotations θ (the sender computes no end rotations), the design shear movement Δ<sub>s</sub> and Δ<sub>s,cy</sub>, the pad and the code settings. <b>Movement information:</b> material ${esc(mv.material||"—")}, ${esc(mv.continuity||"—")}${un?`, unit of spans ${un.spans.join(", ")} = ${f2(un.length)} ft`:""}; bearing fixity ${mv.fixity?esc(String(mv.fixity)):"not defined by the sender (point of zero movement not known)"}; no coefficient of thermal expansion sent.</div>`;
+  // what is overwritten
+  const ov=[["P<sub>DL</sub> (I-4)",fmt(+S.loads.Pdl,3),f3(P.design.Pdl)],["P<sub>LL</sub> (I-4)",fmt(+S.loads.Pll,3),P.design.Pll==null?"kept (not sent)":f3(P.design.Pll)],["P<sub>min</sub> (I-4)",+S.loads.Pmin>0?fmt(+S.loads.Pmin,3):"0 (= P<sub>DL</sub>)",P.design.Pmin>0?f3(P.design.Pmin):"kept (≤ 0 received)"]];
+  ov.push(["Girder Run",(S.girders||[]).length+" girder(s)",EDMB.run?P.rows.length+" girders of "+esc(SB.lineName(P.line)):"kept"]);
+  if(EDMB.therm&&un) ov.push(["Thermal reference span",fmt(+(S.thermal&&S.thermal.span),2)+" ft",f2(un.length)+" ft"]);
+  h+=`<div class="subhead">What Apply changes (current → incoming)</div><table class="itbl"><tr><th>Input</th><th>Current</th><th>Incoming</th></tr>${ov.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td><b>${r[2]}</b></td></tr>`).join("")}</table>`;
+  if(Array.isArray(p.notes)&&p.notes.length) h+=`<details><summary>Notes from ${esc(p.producer||"the sender")} (${p.notes.length})</summary><ul style="font-size:12px">${p.notes.map(n=>`<li>${esc(n)}</li>`).join("")}</ul></details>`;
+  h+=`<div style="text-align:right;margin-top:8px;display:flex;gap:6px;justify-content:flex-end"><button type="button" class="mini-btn" data-brg-act="cancel">Cancel</button><button type="button" class="mini-btn" data-brg-act="apply" style="background:var(--navy);color:#fff;border-color:var(--navy)">Apply</button></div>`;
+  d.innerHTML=h;
+}
+function edmBrgDlgChange(ev){ const t=ev.target, k=t&&t.dataset&&t.dataset.brg; if(!k) return;
+  if(k==="gi"){ EDMB.gi=+t.value; EDMB.ei=0; EDMB.li=null; EDMB.girder=null; EDMB.keepLine=!!(S.brgSrc&&EDMB.gi>=0&&EDMB.groups[EDMB.gi].pid===S.brgSrc.pid); }
+  else if(k==="ei"){ EDMB.ei=+t.value; EDMB.li=null; EDMB.girder=null; }
+  else if(k==="li"){ EDMB.li=+t.value; EDMB.girder=null; }
+  else if(k==="girder"){ EDMB.girder=t.value; }
+  else if(k==="im"){ EDMB.im=t.value==="1"; EDMB.girder=null; }
+  else if(k==="pl"){ EDMB.pl=!!t.checked; EDMB.girder=null; }
+  else if(k==="n"){ const v=Math.round(+t.value); EDMB.n=isFinite(v)&&v>=1?v:1; }
+  else if(k==="run"){ EDMB.run=!!t.checked; }
+  else if(k==="therm"){ EDMB.therm=!!t.checked; }
+  edmBrgDlgDraw(); }
+function edmBrgDlgClick(ev){ const b=ev.target.closest&&ev.target.closest("[data-brg-act]"); if(!b) return; ev.preventDefault();
+  const d=document.getElementById("dlgBrg");
+  if(b.dataset.brgAct==="cancel"){ if(d.close) d.close(); else d.removeAttribute("open"); return; }
+  if(b.dataset.brgAct==="apply"){ if(edmBrgApply()){ if(d.close) d.close(); else d.removeAttribute("open"); } } }
+/* Apply: the inputs (editable afterwards), the source record S.brgSrc, the adoption marker; one Undo step (scheduleSave -> EDPL) */
+function edmBrgApply(){
+  const SB=SharedBearingLoads, {g,e,p}=edmBrgCur(); if(!p) return false;
+  const ck=SB.check(p); if(ck.error){ alert("Refused: "+ck.error); return false; }
+  const P=SB.plan(p,EDMB.li,{im:EDMB.im,pl:EDMB.pl,n:EDMB.n,girder:EDMB.girder}), D=P.design, l=P.line, ln=SB.lineName(l);
+  const mv=p.movement||{}, un=Array.isArray(mv.units)&&isFinite(+l.unit)?mv.units[+l.unit]:null;
+  S.loads.Pdl=D.Pdl; if(D.Pll!=null) S.loads.Pll=D.Pll; if(D.Pmin>0) S.loads.Pmin=D.Pmin;
+  let girders=null;
+  if(EDMB.run){ girders=P.rows.map(r=>{ const o={tag:r.label+" — "+ln,Pdl:r.Pdl}; if(r.Pll!=null) o.Pll=r.Pll; if(r.Pmin>0) o.Pmin=r.Pmin; return o; }); S.girders=girders; }
+  let ts=null; if(EDMB.therm&&un){ if(!S.thermal) S.thermal={span:75,alpha:6.5e-6,dT:100,factor:1.2}; S.thermal.span=+un.length; ts=+un.length; }
+  S.brgSrc={ producer:p.producer||"", producerFile:p.producerFile||"", producedAt:p.producedAt||"", project:SharedHandoffStore.projectOf(p), device:p.device||"", pid:g.pid||"",
+    via:e.via||"", adoptedAt:new Date().toISOString(), line:{support:l.support,side:l.side||"",span:l.span==null?null:+l.span,end:l.end||"",x:+l.x}, lineName:ln,
+    girder:D.label, opts:{im:P.im,pl:P.pl,n:P.n,run:!!EDMB.run,therm:!!(EDMB.therm&&un)},
+    rows:P.rows.map(r=>({label:r.label,position:r.position,type:r.type,DC1:r.DC1,DC2:r.DC2,DW:r.DW,sep:r.sep,LL:r.LL,ll:r.ll,PL:r.PL,Pdl:r.Pdl,Pll:r.Pll,Pmin:r.Pmin})),
+    unit:un?{spans:un.spans,length:+un.length}:null, material:mv.material||"", continuity:mv.continuity||p.continuity||"", fixity:mv.fixity==null?null:mv.fixity,
+    applied:{Pdl:D.Pdl,Pll:D.Pll,Pmin:D.Pmin>0?D.Pmin:null,girders,thermalSpan:ts}, warnings:P.warnings.concat(ck.warnings||[]), notes:Array.isArray(p.notes)?p.notes.slice():[], sig:edmBrgSig(l) };
+  try{ BridgeXfer.markAdopted(EDM_BRG.CH,EDM_BRG.RX,p.producedAt||""); }catch(er){}
+  migrate(); buildInputs(); recalc();
+  document.getElementById("saveStatus").textContent="bearing loads applied ("+ln+", "+D.label+")";
+  return true;
+}
+/* ---- the worked display (CLAUDE.md §6): every received value with its source ---- */
+function edmBrgInNote(){ const B=S.brgSrc; if(!B) return "";
+  return `<div class="in-note">P<sub>DL</sub>, P<sub>LL</sub>, P<sub>min</sub>${B.opts&&B.opts.run?" and the Girder Run":""} were filled from <b>${esc(B.producer||"?")}</b> (${esc(B.lineName||"")}, ${esc(B.girder||"")}, sent ${esc(edmBrgWhen(B.producedAt))}); you can still edit them.${edmWorkedIn([["o-brg"]])}</div>`; }
+function edmBrgParts(B,r){ const o=B.opts||{}, n=+o.n||1, s=r.sep||{}, t=v=>fmtT(v,3);
+  const dl=[`P_{DL} = \\dfrac{DC1 + DC2 + DW}{n}`,`P_{DL} = \\dfrac{${t(r.DC1)} + ${t(r.DC2)} + ${t(r.DW)}}{${n}} = ${t(r.Pdl)}\\ \\text{kip}`];
+  const llS=o.im?"LL_{+IM}":"LL", pl=o.pl&&r.PL;
+  const ll=r.Pll==null?null:[`P_{LL} = \\dfrac{${llS}${pl?" + PL":""}}{n}`,`P_{LL} = \\dfrac{${t(r.ll)}${pl?" + "+t(r.PL):""}}{${n}} = ${t(r.Pll)}\\ \\text{kip}`];
+  const ut=s.UT!=null, uf=s.UF!=null;
+  const mn=[`P_{min} = \\dfrac{DC1 + DC2${ut?" - UT":""}${uf?" - UF":""}}{n}`,`P_{min} = \\dfrac{${t(r.DC1)} + ${t(r.DC2)}${ut?" - "+t(s.UT):""}${uf?" - "+t(s.UF):""}}{${n}} = ${t(r.Pmin)}\\ \\text{kip}`];
+  return {dl,ll,mn,n}; }
+function edmBrgPanel(){
+  const B=S.brgSrc; if(!B||!Array.isArray(B.rows)||!B.rows.length) return "";
+  const r=B.rows.find(x=>x.label===B.girder)||B.rows[0], q=edmBrgParts(B,r), A=B.applied||{}, L=S.loads, f3=v=>v==null||!isFinite(v)?"—":(+v).toFixed(3);
+  const ed=[]; if(A.Pdl!=null&&Math.abs(+L.Pdl-A.Pdl)>5e-4) ed.push(`P<sub>DL</sub> is now ${fmt(+L.Pdl,3)} kip`); if(A.Pll!=null&&Math.abs(+L.Pll-A.Pll)>5e-4) ed.push(`P<sub>LL</sub> is now ${fmt(+L.Pll,3)} kip`);
+  if(A.Pmin!=null&&Math.abs(+L.Pmin-A.Pmin)>5e-4) ed.push(`P<sub>min</sub> is now ${+L.Pmin>0?fmt(+L.Pmin,3)+" kip":"0 (= P<sub>DL</sub>)"}`);
+  if(A.girders&&JSON.stringify(S.girders||null)!==JSON.stringify(A.girders)) ed.push("the Girder Run set was changed or replaced");
+  const src=`From <b>${esc(B.producer||"?")}</b> (${esc(B.producerFile||"")}), sent ${esc(edmBrgWhen(B.producedAt))}${B.project&&B.project.name?`, project "${esc(B.project.name)}"`:""}${B.device?`, device ${esc(B.device)}`:""}; pulled ${esc(edmBrgWhen(B.adoptedAt))} (${esc(B.via||"")}). Bearing line <b>${esc(B.lineName||"")}</b>${B.line&&B.line.side?` (${esc(B.line.side)})`:""}, x = ${fmt(B.line&&B.line.x,2)} ft; design girder <b>${esc(r.label)}</b> (${esc(r.position||"")}${r.type?", "+esc(r.type):""}).`;
+  const sk=["UT","UF","UTc","PL","PLmin"].filter(k=>B.rows.some(x=>x.sep&&x.sep[k]!=null));
+  const ref="unfactored service loads, γ = 1.0 (AASHTO LRFD 10th Ed. Table 3.4.1-1, Service I); hand-off HANDOFF.md §4.17";
+  return panel("o-brg","4.0","Bearing loads received (hand-off)",`
+    <div class="in-note">${src}</div>
+    ${ed.length?`<div class="warn-item">Edited after the hand-off: ${ed.join("; ")}. The design uses the values now in the inputs; the received values are shown below.</div>`:""}
+    ${eqB("Dead-load reaction per bearing (I-4 P<sub>DL</sub>)",ref,q.dl,`DC1, DC2 and DW as sent${r.sep&&(r.sep.UT!=null||r.sep.UF!=null)?" (DC1 contains UT and UF)":""}${r.sep&&r.sep.UTc!=null?" (DW contains UTc)":""}; n = ${q.n} bearing(s) per girder end.`)}
+    ${q.ll?eqB("Live-load reaction per bearing (I-4 P<sub>LL</sub>)",ref,q.ll,`${B.opts&&B.opts.im?"LL with the dynamic load allowance (IM)":"LL without the dynamic load allowance (this module's basis)"}: HL-93 × the girder's shear distribution factor, as sent${B.opts&&B.opts.pl&&r.PL?"; PL = pedestrian live load reaction (no IM, no DF)":""}.`):`<div class="warn-item">P<sub>LL</sub>: no live load reaction ${B.opts&&B.opts.im?"with":"without"} IM was sent for ${esc(r.label)}; P<sub>LL</sub> was not filled (entered value used).</div>`}
+    ${eqB("Minimum permanent load per bearing (I-4 P<sub>min</sub>, slip check)",ref+"; C14.8.3.1",q.mn,"DC only: no DW, no existing utilities (UT) and no future utility allowance (UF), which are inside DC1 as sent."+(r.Pmin<=0?" ≤ 0: not filled (0 means “use P_DL” in I-4).":""))}
+    <div class="subhead">Every girder of this bearing line (kip, as received; per bearing = ÷ n)</div>
+    <div style="overflow-x:auto"><table class="itbl"><tr><th>Girder</th><th>Position</th><th>DC1</th><th>DC2</th><th>DW</th>${sk.map(k=>`<th>${k}</th>`).join("")}<th>LL</th><th>LL min</th><th>LL+IM</th><th>LL+IM min</th><th>P<sub>DL</sub></th><th>P<sub>LL</sub></th><th>P<sub>min</sub></th></tr>
+    ${B.rows.map(x=>`<tr${x.label===r.label?' style="background:#eef4ff"':""}><td>${esc(x.label)}</td><td>${esc(x.position||"")}</td><td>${f3(x.DC1)}</td><td>${f3(x.DC2)}</td><td>${f3(x.DW)}</td>${sk.map(k=>`<td>${f3(x.sep&&x.sep[k])}</td>`).join("")}<td>${f3(x.LL&&x.LL.max)}</td><td>${f3(x.LL&&x.LL.min)}</td><td>${f3(x.LL&&x.LL.maxIM)}</td><td>${f3(x.LL&&x.LL.minIM)}</td><td>${f3(x.Pdl)}</td><td>${f3(x.Pll)}</td><td>${f3(x.Pmin)}</td></tr>`).join("")}</table></div>
+    <div class="in-note">${edmNL("Information (not applied):",[["LL min:","the smallest live load reaction (uplift when negative) is shown only: this module has no uplift check of the net reaction."],sk.indexOf("UTc")>=0?["UTc:","utilities on the composite section, already inside DW."]:null,sk.indexOf("PLmin")>=0?["PLmin:","the uplift part of the pedestrian reaction, shown only."]:null,
+      ["Girder Run:",B.opts&&B.opts.run?"filled with every girder of this line (P_DL, P_LL, P_min per bearing as above)":"not changed by the hand-off"],["Movement:",`material ${esc(B.material||"—")}, ${esc(B.continuity||"—")}${B.unit?`, unit of span(s) ${B.unit.spans.join(", ")} = ${fmt(B.unit.length,2)} ft`:""}; bearing fixity ${B.fixity?esc(String(B.fixity)):"not defined by the sender"}; no coefficient of thermal expansion sent; ${B.opts&&B.opts.therm?"the thermal reference span was set to the unit length":"the thermal reference calculation was not changed"}; Δ<sub>s</sub> is the I-4 input.`],
+      ["Rotations:","not sent (the sender computes no end rotations): the I-4 rotations are the entered values."]])}</div>
+    ${(B.warnings||[]).map(w=>`<div class="warn-item">${esc(w)}</div>`).join("")}
+    ${B.notes&&B.notes.length?`<details><summary>Notes from the sender (${B.notes.length})</summary><ul style="font-size:12px">${B.notes.map(n=>`<li>${esc(n)}</li>`).join("")}</ul></details>`:""}`);
+}
+/* the Report subsection (§2, "Project and inputs"): the same values and source as the panel */
+function edmBrgReport(){
+  const B=S.brgSrc; if(!B||!Array.isArray(B.rows)||!B.rows.length||!window.SharedSteps) return null;
+  const r=B.rows.find(x=>x.label===B.girder)||B.rows[0], o=B.opts||{}, n=+o.n||1, s=r.sep||{}, ut=s.UT!=null, uf=s.UF!=null, pl=o.pl&&r.PL;
+  const w=SharedSteps.work("brg"), ref="Service I, γ = 1.0 (AASHTO LRFD 10th Ed. Table 3.4.1-1); hand-off HANDOFF.md §4.17";
+  w.add({id:"dl",label:"Dead-load reaction per bearing (I-4 P_DL), "+r.label,sym:"P_{DL}",eq:"\\frac{DC1 + DC2 + DW}{n}",sub:"\\frac{"+edrN(r.DC1,3)+" + "+edrN(r.DC2,3)+" + "+edrN(r.DW,3)+"}{"+n+"}",value:r.Pdl,unit:"kip",d:3,ref});
+  if(r.Pll!=null) w.add({id:"ll",label:"Live-load reaction per bearing (I-4 P_LL), "+(o.im?"with IM":"without IM")+(pl?", with the pedestrian load":""),sym:"P_{LL}",eq:"\\frac{"+(o.im?"LL_{+IM}":"LL")+(pl?" + PL":"")+"}{n}",sub:"\\frac{"+edrN(r.ll,3)+(pl?" + "+edrN(r.PL,3):"")+"}{"+n+"}",value:r.Pll,unit:"kip",d:3,ref});
+  w.add({id:"mn",label:"Minimum permanent load per bearing (I-4 P_min, slip check; DC only)",sym:"P_{min}",eq:"\\frac{DC1 + DC2"+(ut?" - UT":"")+(uf?" - UF":"")+"}{n}",sub:"\\frac{"+edrN(r.DC1,3)+" + "+edrN(r.DC2,3)+(ut?" - "+edrN(s.UT,3):"")+(uf?" - "+edrN(s.UF,3):"")+"}{"+n+"}",value:r.Pmin,unit:"kip",d:3,ref:ref+"; C14.8.3.1"});
+  const c=v=>edrCell(v==null?"—":v,3);
+  return {title:"Bearing loads received (hand-off)",items:[
+    {type:"note",text:"From "+(B.producer||"?")+" ("+(B.producerFile||"")+"), sent "+edmBrgWhen(B.producedAt)+(B.project&&B.project.name?", project \""+B.project.name+"\"":"")+"; pulled "+edmBrgWhen(B.adoptedAt)+" ("+(B.via||"")+"). Bearing line "+(B.lineName||"")+", design girder "+r.label+". Unfactored, kip; n = "+n+" bearing(s) per girder end. The inputs of §2 above are the values in use (editable after the hand-off). As on the Girder Run tab [[tab:gird:o-brg|open]]."},
+    edrTopics("brg",[{title:"Service loads per bearing from the hand-off",ref:"",w}],{title:"Worked steps"}),
+    {type:"table",head:["Girder","DC1","DC2","DW","UT (in DC1)","UF (in DC1)","UTc (in DW)","PL","LL","LL+IM","P_DL","P_LL","P_min"],rows:B.rows.map(x=>({cells:[x.label,c(x.DC1),c(x.DC2),c(x.DW),c(x.sep&&x.sep.UT),c(x.sep&&x.sep.UF),c(x.sep&&x.sep.UTc),c(x.sep&&x.sep.PL),c(x.LL&&x.LL.max),c(x.LL&&x.LL.maxIM),c(x.Pdl),c(x.Pll),c(x.Pmin)],cls:x.label===r.label?"gov":""}))},
+    {type:"note",text:"Not sent: end rotations (the sender computes none) and the shear movement; movement information: "+(B.material||"—")+", "+(B.continuity||"—")+(B.unit?", unit "+edrN(B.unit.length,2)+" ft":"")+", bearing fixity not defined by the sender."}]};
+}
 </script>
 <script>
 /* ---- postMessage linkage with the Abutment app ---- */

@@ -434,7 +434,7 @@
         if (RB.sum.tgt && RB.sum.tgt.fat && !RB.sum.tgt.fat.pass) warns.push({ ...gm, mod: 'rating', id: 'RT3', title: `owner target fatigue RF ≥ ${RB.sum.tgt.fat.need}: ${(+RB.sum.tgt.fat.rf).toFixed(3)} (${RB.T.cite}; reported)` }); }
       // flange-to-web welds and shop transitions (ui/welds.js build, the Welds tab; FW1–FW4, TR1–TR4)
       const WB = withLL(ctx, false, () => window.SBDWeldsUI ? window.SBDWeldsUI.build({ P, g: gi, src: 'analysis' }) : { err: 'ui/welds.js is not loaded.' }); mods['wt' + gi] = WB;
-      if (WB.err) take({ ...gm, mod: 'welds', tab: 'wt', id: 'input', title: WB.err, r: Infinity, fail: true }); else lists(WB.C, 'welds', 'wt');
+      if (WB.err) { if (!WB.na) take({ ...gm, mod: 'welds', tab: 'wt', id: 'input', title: WB.err, r: Infinity, fail: true }); } else lists(WB.C, 'welds', 'wt');   // ROLL (2026-11-23): na = a girder of rolled shapes only (no flange-to-web weld to check): not a failure
       // live load deflection (optional, 2.5.2.6.2) only when the analysis settings ask for it: reported, not a pass/fail here
       if (R.lld) R.lld.forEach(q => { if (!q.ok) warns.push({ ...gm, mod: 'analysis', id: 'LLD', title: `Live load deflection, span ${q.k + 1}: ${q.d.toFixed(3)} in > L/${q.ratio}` }); });
     }

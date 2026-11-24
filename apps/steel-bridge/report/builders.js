@@ -117,8 +117,10 @@
       sub('m', 'Materials and deck', [kv([['Steel, top / bottom flange, web', `${m.steel.top} / ${m.steel.bot} / ${m.steel.web} ($F_{y}$ = ${G[m.steel.top].Fy} / ${G[m.steel.bot].Fy} / ${G[m.steel.web].Fy} ksi)`], ['$E_{s}$', `${f(m.Es, 0)} ksi`],
         ["$f'_{c}$, $w_{c}$, $K_{1}$", `${f(m.concrete.fc, 2)} ksi, ${f(m.concrete.wc, 3)} kcf, ${f(m.concrete.K1, 2)}`], ['Deck', `${d.composite === false ? 'noncomposite' : 'composite'}; $t_{s}$ = ${f(d.ts, 2)} in, total ${f(d.tdeck, 2)} in, haunch ${f(d.haunch, 2)} in`],
         ['Deck rebar', `top ${f(d.rebar.top.A, 2)} in² at ${f(d.rebar.top.c, 2)} in, bottom ${f(d.rebar.bot.A, 2)} in² at ${f(d.rebar.bot.c, 2)} in; $F_{yr}$ = ${f(m.rebar.Fyr, 0)} ksi`]])]),
-      sub('g', `Plate segments, ${gName(g)}`, [tbl(['Segment', '$x_{0}$ (ft)', '$x_{1}$ (ft)', 'D (in)', '$t_{w}$ (in)', '$b_{t}$ (in)', '$t_{t}$ (in)', '$b_{b}$ (in)', '$t_{b}$ (in)'],
-        g.segments.map((s, i) => [String(i + 1), N(s.x0, 2), N(s.x1, 2), N(s.D, 3), N(s.tw, 4), N(s.topB, 3), N(s.topT, 4), N(s.botB, 3), N(s.botT, 4)]))]),
+      sub('g', `Plate segments, ${gName(g)}`, [tbl(['Segment', '$x_{0}$ (ft)', '$x_{1}$ (ft)', 'D (in)', '$t_{w}$ (in)', '$b_{t}$ (in)', '$t_{t}$ (in)', '$b_{b}$ (in)', '$t_{b}$ (in)'].concat(g.segments.some(rlNm) ? ['Section'] : []),
+        g.segments.map((s, i) => [String(i + 1), N(s.x0, 2), N(s.x1, 2), N(s.D, 3), N(s.tw, 4), N(s.topB, 3), N(s.topT, 4), N(s.botB, 3), N(s.botT, 4)].concat(g.segments.some(rlNm) ? [rlNm(s) || 'plate girder'] : []))),
+        // ROLL (2026-11-23): a rolled segment is named; its plate sizes are the shape's equivalent three plates (a report without one is unchanged)
+        g.segments.some(rlNm) ? note(`Rolled shapes (${window.SharedAiscW.VERSION}): ${[...new Set(g.segments.map(rlNm).filter(Boolean))].join(', ')}. Each is checked as its equivalent three plates, flanges b_f × t_f and web D = d − 2 t_f by t_w (the fillets left out), listed above; the girder weight is the tabulated lb/ft. The tabulated values and the three-plate values are worked in Section properties (§5). One steel grade; no flange-to-web welds; cover plates are not modelled.`) : null]),
       sub('o', 'Owner load rules', [kv([['Owner', lf.o || 'AASHTO'], ['η (maximum Strength factors)', f(lf.eta, 3), 'own.eta'], ['η (minimum Strength factors)', f(lf.etaN, 3), 'own.etaN'],
         ['Design load multiplier m', f(lf.m, 2), 'own.m'], ['Haunch in section properties', lf.h0 ? '0 (owner rule)' : 'as entered', 'own.h0']]), steps('', lf.steps || [])])] };
   }
@@ -286,16 +288,18 @@
   }
 
   /* ---------- 5. section properties ---------- */
+  const rlNm = s => (window.SBDRolled ? window.SBDRolled.label(s) : '');   // ROLL (2026-11-23): the shape name of a rolled segment ('' for a plate segment)
   function sec(B, X) {
     const S = B.sec, subs = [sub('n', 'Modular ratio', [steps('', S.nr.steps)])];
     S.cards.forEach(q => { const c = q.c, sc = `sec@${q.i}.${q.region}`, s = q.seg;
       const row = (nm, p, id) => p ? [nm, N(p.A, 2), N(p.yb, 3), { t: U().fmtInt(p.I), n: true, key: K(sc, id + '.I') }, { t: U().fmtInt(p.St), n: true }, { t: U().fmtInt(p.Sb), n: true }] : null;
-      subs.push(sub(sc, `Segment ${q.i + 1} (x = ${f(s.x0, 2)} to ${f(s.x1, 2)} ft), ${q.region === 'pos' ? 'positive' : 'negative'} flexure`, [
+      subs.push(sub(sc, `Segment ${q.i + 1} (x = ${f(s.x0, 2)} to ${f(s.x1, 2)} ft), ${q.region === 'pos' ? 'positive' : 'negative'} flexure${rlNm(s) ? `, rolled shape ${rlNm(s)}` : ''}`, [
+        rlNm(s) ? note(`Rolled shape ${rlNm(s)}, checked as three plates (flanges b_f × t_f, web D = d − 2 t_f by t_w; fillets left out). Its tabulated values and the three-plate values: first topic of the worked steps below.`) : null,
         tbl(['Section', 'A (in²)', '$\\bar{y}$ (in)', 'I (in⁴)', '$S_{top}$ (in³)', '$S_{bot}$ (in³)'], [row('Steel', c.s, 'sec.s'), row('Long-term 3n', c.c3, 'sec.c3'), row('Short-term n', c.cn, 'sec.cn'), c.comp ? row('Steel + rebar', c.cr, 'sec.cr') : null].filter(Boolean)),
         kv([['$M_{p}$', `${f(c.Mp, 1)} kip-ft`, K(sc, `pl.${c.region}.Mp`)], ['PNA $y_{p}$ from bottom', `${f(c.yp, 3)} in`, K(sc, `pl.${c.region}.yp`)], ['D6.1 case', c.pl.cs], ['$D_{cp}$', `${f(c.Dcp, 3)} in`, K(sc, `pl.${c.region}.Dcp`)],
           ['$R_{h}$', f(c.Rh, 3), K(sc, !c.comp ? 'rh.s.Rh' : c.region === 'pos' ? 'rh.cn.Rh' : 'rh.cr.Rh')]]),
         c.comp ? null : note('Noncomposite girder: the steel section alone (6.10.1.1.1a).'),
-        gsteps('SBDFlexureUI:sec', sc, c.steps, { lazy: true, title: 'Worked steps' })])); });   // opened on demand: the flexure and constructibility steps repeat them per location
+        gsteps('SBDFlexureUI:sec', sc, (window.SBDRolled ? window.SBDRolled.steps(s) : []).concat(c.steps), { lazy: true, title: 'Worked steps' })])); });   // opened on demand: the flexure and constructibility steps repeat them per location
     return { title: 'Section properties', note: `Plates of ${gName(B.girder)}; y up from the bottom of the steel. As on the [[tab:sec|Section properties tab]]; the flexure and constructibility steps below repeat the properties of each location.`, subs };
   }
 
@@ -844,15 +848,18 @@
     tbl(['Frame', 'Members', 'Count', 'S (ft)', 'h (in)', 'Each (kip)', 'W (kip)'], xf.rows.map(q => [q.item, q.mem, String(q.n), N(q.Lf, 2), q.h != null ? N(q.h, 2) : '—', N(q.W, 3), N(q.n * q.W, 3)]).concat([['Subtotal: ' + (xf.dia ? 'diaphragms' : 'cross-frames'), '', String(xf.rows.reduce((a, q) => a + q.n, 0)), '', '', '', N(xf.tot, 3)]]), { wide: true, caption: 'Every frame of the framing plan (all bays)' })]);
   /* bomPlates(P): the plate girders (PR3, unchanged): rows per segment, per-type weights w[gi] (kip, one girder) and lines */
   function bomPlates(P) {
-    const M = window.SBDModel, plf = PLF(), rows = [], sumT = [], w1 = [], nLs = []; let tot = 0;
+    const M = window.SBDModel, plf = PLF(), rows = [], sumT = [], w1 = [], nLs = []; let tot = 0, anyRl = false;
     (P.girders || []).forEach((g, gi) => { const ln = M.typeLines ? M.typeLines(P, gi) : [], nL = ln.length || 1; let w = 0;
-      (g.segments || []).forEach((s, k) => { const A = s.D * s.tw + s.topB * s.topT + s.botB * s.botT, wf = A * plf, L = s.x1 - s.x0, W = wf * L / 1000; w += W;
+      (g.segments || []).forEach((s, k) => { const L = s.x1 - s.x0;
+        if (rlNm(s)) { const sh = window.SBDRolled.shapeOf(s), W = sh.W * L / 1000; w += W; anyRl = true;   // ROLL (2026-11-23): a rolled segment: the shape, its tabulated area and weight
+          rows.push([gName(g), String(k + 1), `${f(s.x0, 2)}–${f(s.x1, 2)}`, `${sh.name} (rolled shape; d ${f(sh.d, 3)}, b_f ${f(sh.bf, 3)}, t_f ${f(sh.tf, 4)}, t_w ${f(sh.tw, 4)})`, N(sh.A, 3), N(sh.W, 2), N(L, 2), N(W, 3)]); return; }
+        const A = s.D * s.tw + s.topB * s.topT + s.botB * s.botT, wf = A * plf, W = wf * L / 1000; w += W;
         rows.push([gName(g), String(k + 1), `${f(s.x0, 2)}–${f(s.x1, 2)}`, `web ${f(s.D, 3)} × ${f(s.tw, 4)}; top ${f(s.topB, 3)} × ${f(s.topT, 4)}; bot ${f(s.botB, 3)} × ${f(s.botT, 4)}`, N(A, 3), N(wf, 2), N(L, 2), N(W, 3)]); });
       sumT.push([gName(g), N(w, 3), ln.length ? ln.map(j => 'G' + (j + 1)).join(', ') : 'design line (no line assigned)', String(nL), N(w * nL, 3)]); tot += w * nL; w1.push(w); nLs.push(nL); });
-    return { plf, rows, sumT, tot, w1, nLs };
+    return { plf, rows, sumT, tot, w1, nLs, anyRl };
   }
   const bomPlatesItems = (P, PL) => [
-    note(`Per plate segment: A = D t_w + b_t t_t + b_b t_b (in²); w = A × 490/144 = A × ${f(PL.plf, 4)} lb/ft (steel 490 pcf, Table 3.5.1-1); W = w ℓ / 1000 (kip). The weights are of the plates as entered (Girders & plates tab).`),
+    note(`Per plate segment: A = D t_w + b_t t_t + b_b t_b (in²); w = A × 490/144 = A × ${f(PL.plf, 4)} lb/ft (steel 490 pcf, Table 3.5.1-1); W = w ℓ / 1000 (kip). The weights are of the plates as entered (Girders & plates tab).${PL.anyRl ? ` Rolled shapes: A and w are the tabulated area and nominal weight of the shape (${window.SharedAiscW.VERSION}), not the three plates; no flange-to-web welds.` : ''}`),
     tbl(['Girder type', 'Segment', 'x (ft)', 'Plates (in)', 'A (in²)', 'w (lb/ft)', 'ℓ (ft)', 'W (kip)'], PL.rows, { wide: true }),
     tbl(['Girder type', 'One girder (kip)', 'Lines', 'Number', 'Total (kip)'], PL.sumT.concat([['Bridge total', '', '', '', N(PL.tot, 3)]]), { caption: 'Girder subtotals and the bridge total (plate girders only)' }),
     ...(() => { const M = window.SBDModel, U = M.unassigned ? M.unassigned(P) : []; return U.length ? [note(`Girder lines without a girder type (${U.map(j => 'G' + (j + 1)).join(', ')}) are not checked and not in this total (Girders & plates tab).`, true)] : []; })()];

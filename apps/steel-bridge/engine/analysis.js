@@ -296,7 +296,8 @@
     const deckS = { ts: d.ts, haunch: h0 ? 0 : d.haunch, beff: g.beff, rebar: d.rebar };
     const segs = g.segments.map(s => { const p = { D: s.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT }, st = SEC().steelCore(p);
       const c3 = comp ? SEC().composite(p, deckS, n, 3) : null, cn = comp ? SEC().composite(p, deckS, n, 1) : null, cr = SEC().withRebar(p, deckS);
-      return { x0: s.x0, x1: s.x1, p, As: st.A, Is: st.I, I3u: c3 ? c3.I : st.I, Inu: cn ? cn.I : st.I, Icr: comp ? cr.I : st.I, c3, cn }; });
+      const Wr = window.SBDRolled ? window.SBDRolled.plf(s) : null;   // ROLL: the tabulated weight of a rolled segment (lb/ft); a plate segment has no Wr / shape field
+      return { x0: s.x0, x1: s.x1, p, As: st.A, Is: st.I, I3u: c3 ? c3.I : st.I, Inu: cn ? cn.I : st.I, Icr: comp ? cr.I : st.I, c3, cn, ...(Wr != null ? { Wr, shape: window.SBDRolled.label(s) } : {}) }; });
 
     const LD = loadsOf(P, g, mod), DF = dfOf(P, g, ns, mod), warnings = [];
     if (mod && mod.errors) warnings.push(`Loads module: ${mod.errors[0]} The entered loads and factors are used.`);
@@ -306,7 +307,7 @@
     if (LD.src.CL === 'calc' && LD.cl.own && LD.cl.q < LD.cl.own - 1e-9) warnings.push(`Construction live load q_CL = ${LD.cl.q} psf is below the owner's minimum ${LD.cl.own} psf (${LD.cl.ownCite}).`);
     const FM = fmOf(P, mod, mod && mod.j != null ? mod.j : lineOf(P, g));
     if (FM && !isNum(FM.Pj)) warnings.push('Finishing machine: its share to this girder needs the loads module (complete cross-section); it is not applied.');
-    const allow = LD.steelAllowPct, plf = isNum(opt.steelPlf) ? opt.steelPlf : STEEL_PLF, wSteel = segs.map(s => s.As * plf / 1000 * (1 + allow / 100));
+    const allow = LD.steelAllowPct, plf = isNum(opt.steelPlf) ? opt.steelPlf : STEEL_PLF, wSteel = segs.map(s => (s.Wr != null ? s.Wr : s.As * plf) / 1000 * (1 + allow / 100));   // ROLL (2026-11-23): a rolled segment weighs its tabulated W (lb/ft)
     const distSteel = segs.map((s, i) => [s.x0, s.x1, wSteel[i]]);
     const xfP = LD.xf.map(q => [q.x, q.P]);
     // A2 (2026-11-19): haunch and SIP forms with each plate segment's top flange width. The loads module works them with one b_f (the first
@@ -528,7 +529,9 @@
     const w = St().work('an'), S = R.settings, L = R.loads, kip = 'kip', kft = 'kip-ft';
     w.add({ id: 'n', label: 'Modular ratio (for the composite stiffness)', sym: 'n', eq: '\\frac{E_{s}}{E_{c}}', sub: '', value: R.n, unit: '', d: 3, ref: `${ED} Art. 6.10.1.1.1b`, note: 'Worked in Section properties (n).' });
     R.segs.forEach((s, i) => {
-      w.add({ id: `wst${i}`, label: `Girder steel weight, segment ${i + 1} (${n1(s.x0)}–${n1(s.x1)} ft)`, sym: 'w_{s}', eq: 'A_{s}(\\frac{490}{144}\\,\\text{lb/ft/in}^{2})(1 + a)/1000', sub: `${n2(s.As)}(${St().n(R.plf, 4)})(1 + ${n2(L.steelAllowPct / 100)})/1000`, value: R.wSteel[i], unit: 'klf', d: 4,
+      if (s.Wr != null) w.add({ id: `wst${i}`, label: `Girder steel weight, segment ${i + 1} (${n1(s.x0)}–${n1(s.x1)} ft), rolled shape ${s.shape}`, sym: 'w_{s}', eq: 'W(1 + a)/1000', sub: `${n2(s.Wr)}(1 + ${n2(L.steelAllowPct / 100)})/1000`, value: R.wSteel[i], unit: 'klf', d: 4,
+        ref: `${window.SharedAiscW.VERSION}, ${s.shape}`, note: 'W = the tabulated nominal weight of the rolled shape, lb/ft (fillets included), in place of the three plates at 490 pcf. a = detail allowance for stiffeners, connection plates and splices.' });
+      else w.add({ id: `wst${i}`, label: `Girder steel weight, segment ${i + 1} (${n1(s.x0)}–${n1(s.x1)} ft)`, sym: 'w_{s}', eq: 'A_{s}(\\frac{490}{144}\\,\\text{lb/ft/in}^{2})(1 + a)/1000', sub: `${n2(s.As)}(${St().n(R.plf, 4)})(1 + ${n2(L.steelAllowPct / 100)})/1000`, value: R.wSteel[i], unit: 'klf', d: 4,
         ref: `${ED} Table 3.5.1-1 (steel 0.490 kcf)`, note: 'a = detail allowance for stiffeners, connection plates and splices. Steel 490 pcf: 490/144 = 3.4028 lb/ft per in² of plate (GirderDetail rounds it to 3.4).' });
       w.add({ id: `I${i}`, label: `Stiffness, segment ${i + 1}: I_s / I_3n / I_n / I_cr`, sym: 'I', eq: 'I_{s},\\ I_{3n},\\ I_{n},\\ I_{cr}', sub: `${g0(s.Is)},\\ ${g0(s.I3u)},\\ ${g0(s.Inu)},\\ ${g0(s.Icr)}`, value: s.Inu, unit: 'in^{4}', d: 0,
         ref: `${ED} Art. 6.10.1.1.1, 6.10.1.5`, note: 'DC1 on I_s, DC2 and DW on I_3n, LL on I_n; I_cr (steel + longitudinal reinforcement) replaces I_3n and I_n in the cracked zones. Worked in Section properties.' });

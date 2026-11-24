@@ -168,6 +168,8 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
     const nn = c.st !== 'na' && c.st !== 'notrun' && !col.rf && c.r != null && !isFinite(c.r) ? NF_WHY[nfTxt(c.r)] + '(Counted as REVIEW.) ' : '';
     const tip = c.st === 'na' ? c.why : c.st === 'notrun' ? 'Not run yet: click to run' : `${nn}${G.label}${lnTxt(G, c)}: ${c.check} — ${c.loc}${c.nWarn ? ` (${c.nWarn} warning item(s) on the tab)` : ''}`;
     return `<td class="s-${c.st}${k0 ? ' g0' : ''}" title="${esc(String(tip || '').replace(/\$|\{\}|[{}]|\\/g, ''))}"><a href="#" data-sumgo="${G.gi}|${col.id}${G.j != null ? '|' + G.j : ''}">${vTxt(c, col)}</a>${G.j == null && c.ln != null && G.lines && G.lines.length > 1 ? `<span class="sum-sub">G${c.ln + 1}</span>` : ''}</td>`; };
+  /* ROLL (2026-11-23): the rolled shapes of a girder type (engine/rolled.js), named in the overview; '' for a plate girder */
+  const rlTxt = g => { const RL = window.SBDRolled, nm = RL ? [...new Set((g.segments || []).map(s => RL.label(s)).filter(Boolean))] : []; return nm.length ? `; rolled shape ${nm.map(esc).join(', ')}${(g.segments || []).some(s => !RL.label(s)) ? ' and plate segments' : ''}` : ''; };
   function overview(P, list) {
     const M = window.SBDModel, G = M.GRADES, m = P.materials, d = P.deck, xs = P.xs || {}, U = window.SharedUnits, AN = window.SBDAnalysis;
     const sp = P.spans.lengths, cont = P.spans.continuity !== 'simple' && sp.length > 1, own = (P.ownerRules || {}).owner || 'AASHTO';
@@ -181,7 +183,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
       ${kv('Spans', `${sp.map(L => U.fmt(+L, 2)).join(' + ')} = ${U.fmt(sp.reduce((a, b) => a + (+b || 0), 0), 2)} ft, ${cont ? 'continuous' : sp.length > 1 ? 'simple spans' : 'simple span'}`)}
       ${kv('Support skews', (xs.skews || []).length ? xs.skews.map(s => U.fmt(+s, 1) + '°').join(', ') : '—')}
       ${kv('Cross-section', `${xs.nb || '—'} girders at ${bays.length ? (same ? U.fmt(bays[0], 2) + ' ft' : bays.map(b => U.fmt(b, 2)).join(', ') + ' ft') : '—'}; overhangs ${U.fmt(+xs.ohL, 2)} / ${U.fmt(+xs.ohR, 2)} ft`)}
-      ${kv('Plate girders designed', P.girders.map((g, gi) => { const L = M.typeLines(P, gi); return `${esc(g.label || g.id)} (${esc(g.position)}${L.length > 1 ? `, girder type on lines ${L.map(j => 'G' + (j + 1)).join(', ')}` : AN ? `, loads of G${AN.lineOf(P, g) + 1}` : ''})`; }).join(', '))}
+      ${kv('Plate girders designed', P.girders.map((g, gi) => { const L = M.typeLines(P, gi); return `${esc(g.label || g.id)} (${esc(g.position)}${L.length > 1 ? `, girder type on lines ${L.map(j => 'G' + (j + 1)).join(', ')}` : AN ? `, loads of G${AN.lineOf(P, g) + 1}` : ''}${rlTxt(g)})`; }).join(', '))}
       ${kv('Steel (A709)', `top ${esc(m.steel.top)}, bottom ${esc(m.steel.bot)}, web ${esc(m.steel.web)} (F<sub>y</sub> ${G[m.steel.top].Fy} / ${G[m.steel.bot].Fy} / ${G[m.steel.web].Fy} ksi)`)}
       ${kv('Deck', `${d.composite === false ? 'noncomposite' : 'composite'}, t<sub>s</sub> ${U.fmt(d.ts, 2)} in (total ${U.fmt(d.tdeck, 2)} in), haunch ${U.fmt(d.haunch, 2)} in, f′<sub>c</sub> ${U.fmt(m.concrete.fc, 2)} ksi`)}
       ${kv('Owner', (() => { const cn = M.clientName ? M.clientName(P) : ''; return cn ? `${esc(cn)}; load rules ${esc(own)}` : `none entered; load rules ${esc(own)}`; })())}

@@ -220,6 +220,11 @@
      tributary lengths (the same integral on the analysis mesh). segments: [{ x0, x1, D, tw, topB, topT, botB, botT }]. */
   function steelWeight(segments, allow, label) {
     const w = St().work('dl.steel' + (label ? '.' + label : '')), out = segments.map((s, k) => {
+      const Wr = window.SBDRolled ? window.SBDRolled.plf(s) : null;   // ROLL (2026-11-23): a rolled segment weighs its tabulated W (lb/ft)
+      if (Wr != null) { const v = Wr / 1000 * (1 + allow / 100);
+        w.add({ id: 'w' + (k + 1), label: `Girder steel, segment ${k + 1} (x = ${n2(s.x0)} to ${n2(s.x1)} ft), rolled shape ${window.SBDRolled.label(s)} at its tabulated weight with the ${n2(allow)}% detail allowance`, sym: 'w_{st}', eq: '\\frac{W}{1000}(1 + \\frac{a}{100})',
+          sub: `\\frac{${n2(Wr)}}{1000}(1 + \\frac{${n2(allow)}}{100})`, value: v, unit: 'klf', d: 4, ref: `${window.SharedAiscW.VERSION}, ${window.SBDRolled.label(s)}`, note: 'W: the nominal weight of the rolled shape, lb/ft (fillets included), in place of the three plates at 490 pcf.' });
+        return { x0: s.x0, x1: s.x1, A: Wr / STEEL_PLF, w: v }; }
       const A = s.topB * s.topT + s.botB * s.botT + s.D * s.tw, v = A * STEEL_PLF / 1000 * (1 + allow / 100);
       w.add({ id: 'w' + (k + 1), label: `Girder steel, segment ${k + 1} (x = ${n2(s.x0)} to ${n2(s.x1)} ft), flanges and web at 490 pcf with the ${n2(allow)}% detail allowance`, sym: 'w_{st}', eq: '(b_{t}t_{t} + b_{b}t_{b} + Dt_{w})\\frac{490/144}{1000}(1 + \\frac{a}{100})',
         sub: `(${n3(s.topB)}(${n4(s.topT)}) + ${n3(s.botB)}(${n4(s.botT)}) + ${n3(s.D)}(${n4(s.tw)}))\\frac{${n4(STEEL_PLF)}}{1000}(1 + \\frac{${n2(allow)}}{100})`, value: v, unit: 'klf', d: 4, ref: `${ED} Table 3.5.1-1`, note: 'Steel 490 pcf: 490/144 = 3.4028 lb/ft per in² of plate.' });

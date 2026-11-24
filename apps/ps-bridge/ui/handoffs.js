@@ -23,6 +23,8 @@
    banner names each channel whose data changed since this project last sent or loaded it, with a one-click Send / Load that runs the click
    action of the card (staleBar: above the output tabs, every tab; the card's #hoStale). The record of what this project last sent / loaded
    is P.handoffs (engine/hostale.js, PSBHoStale; the MCT demands: P.demands, as loaded); a project without it shows no banner.
+   BRG-HO (2026-11-24): "Send bearing loads to the Elastomeric Bearing module" and "Export hand-off (JSON)": bearingLoads (engine/bearing.js,
+   HANDOFF.md §4.17) with its .by.psbridge and per-project copies, click only, with the stale banner (P.handoffs.sent.bearingLoads).
    Not here (fixlog/ps-bridge.md, Open items): writing designBeam / beamRoster, appPaths and the shared Bridge Suite project list
    (switch-over). */
 (function () {
@@ -62,6 +64,8 @@
       <div class="fRow">${btn('srSend', 'Send reactions to Substructure Loading', 'The unfactored DC1, DC2 and DW end reactions of this girder line (kip): bridgeSuite.v1.superReactions and its copy superReactions.by.psbeam')}${btn('srExport', 'Export hand-off (JSON)', 'The same reactions hand-off as a JSON file')}</div>
       <div class="fRow">${btn('subSend', 'Send to Substructure Loading', 'Every girder line: the bridge geometry (bridgeSuite.v1.superGeometry) and the reactions of every girder line G1 to Gn (bridgeSuite.v1.superReactions, allGirders), as the Steel Bridge app sends them')} <label><input type="checkbox" data-ho-opt="geo"${SEND.geo ? ' checked' : ''}> Geometry</label> <label><input type="checkbox" data-ho-opt="rx"${SEND.rx ? ' checked' : ''}> Reactions of every girder line</label> ${btn('subFile', 'Export hand-off (JSON)', 'The same hand-offs as JSON files (one per ticked box)')}</div>
       <p class="note">The row above sends the girder line shown only (the old app's hand-off). This row, as the Steel Bridge app: <b>Geometry</b>: spans, support skews and joints, girder count, spacings and overhangs, the deck edges (traffic faces), the deck and haunch, and the girder sections (largest depth, flange and web; the depth at each support and the deepest in each span), for Bridge Substructure Loading's "Pull geometry". <b>Reactions</b>: each girder line's unfactored DC1, DC2 and DW at every support (kip) from every girder type on its lines — each span's end reactions are the Analysis tab's (choose the type and line above the output tabs), a pier's the sum of its two spans' (each span's share in the hand-off notes) — for its "Pull from PS-Beam / GirderDetail". Each send is also kept for this project (${pname ? `"${esc(pname)}"` : 'enter a project name on this tab first'}). <b>Last sent:</b> ${sent}.</p>
+      <div class="fRow">${btn('brgSend', 'Send bearing loads to the Elastomeric Bearing module', 'Every girder line at every bearing line (girder end): the unfactored DC1, DC2, DW, the live load without and with IM, the pedestrian and utility items and the service totals, for the bearing module\'s "Pull bearing loads" (bridgeSuite.v1.bearingLoads)')}${btn('brgFile', 'Export hand-off (JSON)', 'The same bearing loads hand-off as a JSON file')}</div>
+      <p class="note"><b>Bearing loads</b> (to elastomeric_design_module.html): one bearing line per girder end (a pier has a back and an ahead line; the two spans are not added), per girder: DC1, DC2, DW and the separate items as the Analysis tab's reactions, the HL-93 live load reaction × DF<sub>v</sub> without and with IM, and P<sub>DL</sub>, P<sub>LL</sub>, P<sub>min</sub> (service). No end rotations (not computed here) and no thermal movement (bearing fixity and the coefficient of thermal expansion are not inputs here): enter them in the bearing module. Kept for this project as the other sends. <b>Last sent:</b> ${(() => { const bl = lastSent(P, 'bearingLoads'); return !pname ? 'not kept per project until the project has a name' : bl ? `${esc(whenL(bl.producedAt))} (project "${esc(pname)}", from this browser)` : `nothing sent yet for project "${esc(pname)}" from this browser`; })()}.</p>
       <div class="fRow">${btn('geoSend', 'Send geometry to LL &amp; DL', 'Spans, girder count and spacing, deck, skew and girder section properties for LL & DL Distribution (bridgeSuite.v1.lldfGeom)')}${btn('geoExport', 'Export (JSON)', 'The same geometry hand-off as a JSON file')}</div>
       <div class="fRow">${btn('secSend', 'Send section properties', 'The composite section properties and outline for the MCT generator and LL & DL (bridgeSuite.v1.psSection)')}${btn('secExport', 'Export (JSON)', 'The same section hand-off as a JSON file')}</div>
       <div class="fRow">${btn('capSend', 'Send capacity to the MCT rating', 'φMn± and φVn at every station of the girder for the MCT generator\'s AASHTO rating (bridgeSuite.v1.capacity)')}${btn('capExport', 'Export (JSON)', 'The same capacity hand-off as a JSON file')}</div>
@@ -211,12 +215,35 @@
     say(`${pname ? `Kept for project "${pname}".` : 'This project has no name, so the send is kept only as the latest hand-off (no project). Enter a project name on this tab to keep one copy per project.'}\n\n${out.join('\n\n')}\n\nIn Bridge Substructure Loading: Project tab, Hand-offs card, "Pull geometry from Steel Bridge Design" and "Pull from PS-Beam / GirderDetail". Each asks which project first.`);
     if (sent) ctx.changed(); else if (ctx.redrawIn) ctx.redrawIn();   // the card's "Last sent" (HO-D2: and the record of this project's sends)
   }
+  /* BRG-HO (2026-11-24): bearingLoads (HANDOFF.md §4.17) to the Elastomeric Bearing Design Module: engine/bearing.js blPayload of every girder
+     line, published (channel key, .updatedAt), its copy bearingLoads.by.psbridge and its per-project copy (shared/handoff-store.js, producer
+     id psbridge, §5.1); file: one JSON file. Click only; recorded for the stale banner (P.handoffs.sent.bearingLoads). */
+  async function brgSend(ctx, file) {
+    const A = ctx.all ? ctx.all() : null, B = window.PSBBearing;
+    if (!B) { say('The bearing loads hand-off is not available (engine/bearing.js not loaded).'); return; }
+    if (!A) { say(`Nothing was ${file ? 'exported' : 'sent'}: fix the inputs first (the input errors are listed above the results).`); return; }
+    const P = ctx.P(), r = B.blPayload(P, A.cells);
+    if (r.error) { say(`Nothing was ${file ? 'exported' : 'sent'}.\n\nBearing loads: ${r.error}`); return; }
+    const sg = HSt().sig(r.payload), dev = HS() ? HS().deviceName(localStorage) : ''; if (dev) r.payload.device = dev;
+    if (file) { exportP('bearingLoads', Object.assign({}, r.payload, { producedAt: new Date().toISOString() })); return; }
+    const w = BX().publish('bearingLoads', r.payload, H().PRODUCER, FILE);
+    if (w.error) { say(`Bearing loads NOT sent: ${w.error} Use "Export hand-off (JSON)" instead.`); return; }
+    write(BX().NS + 'bearingLoads.by.' + B.ID, JSON.stringify(w.payload));
+    HSt().setSent(P, 'bearingLoads', { sig: sg, at: w.payload.producedAt });   // HO-D2 pattern
+    let cl = '';
+    if (HS()) { const q = await HS().send({ storage: localStorage, channel: 'bearingLoads', producer: B.ID, payload: w.payload, fetch: (u, i) => window.fetch(u, i) });
+      cl = !q.ok ? ` (the per-project copy was not saved: ${q.error})` : !q.pid ? '' : q.cloud && q.cloud.ok ? '; also uploaded to GitHub' : q.cloud && q.cloud.queued ? `; GitHub upload waiting (${q.cloud.error})` : ''; }
+    const pname = String((P.project || {}).name || '').trim();
+    say(`${pname ? `Kept for project "${pname}".` : 'This project has no name, so the send is kept only as the latest hand-off (no project). Enter a project name on this tab to keep one copy per project.'}\n\nBearing loads sent${cl} (unfactored, kip, per girder end; P_DL / P_LL without IM):\n${r.sum}\n\nIn the Elastomeric Bearing Design Module: Project tab, Hand-offs, "Pull bearing loads". It asks which project and which bearing line first.`);
+    ctx.changed();
+  }
   function onClick(e, ctx) {
     if (onStale(e, ctx)) return true;   // HO-D2: the card's stale banners
     const b = e.target.closest('[data-ho]'); if (!b) return false;
     if (!BX() || !H()) { say('The hand-off helper is not available in this browser.'); return true; }
     const a = b.dataset.ho;
     if (a === 'subSend' || a === 'subFile') { subSend(ctx, a === 'subFile'); return true; }
+    if (a === 'brgSend' || a === 'brgFile') { brgSend(ctx, a === 'brgFile'); return true; }   // BRG-HO
     if (a === 'lldfFile') { const f = b.parentNode.querySelector('[data-ho-file="lldf"]'); if (f) { f.value = ''; f.onchange = () => { const file = f.files && f.files[0]; if (!file) return;   // batch F4
       BX().importFile(file, 'bridge-lldf-factors', 1, r => { if (r.error) { say('Cannot import the hand-off file: ' + r.error); return; } lldfPull(ctx, JSON.stringify(r.payload), 'file ' + file.name); refresh(); }); }; f.click(); } return true; }   // batch F (async: the per-project copy)
     ({ pmUse, pmShare, lldfPull, dlPull, srSend, srExport, secSend: c => secSend(c, false), secExport: c => secSend(c, true),
@@ -243,7 +270,7 @@
     return ctx.resultOf ? ctx.resultOf(k, cell.g) : null;
   }
   const atOf = raw => { try { const p = raw ? JSON.parse(raw) : null; return (p && p.producedAt) || ''; } catch (e) { return ''; } };
-  const WATCH = ['psSection', 'lldfGeom', 'capacity', 'superReactions', 'superGeometry', 'projectMeta', 'lldf', 'dlLoads'];
+  const WATCH = ['psSection', 'lldfGeom', 'capacity', 'superReactions', 'superGeometry', 'bearingLoads', 'projectMeta', 'lldf', 'dlLoads'];
   function staleItems(ctx) {
     const S = HSt(), h = H(), B = window.PSBBridge; if (!S || !h || !ctx || !BX()) return [];
     const P = ctx.P(); if (!P || (!P.handoffs && !P.demands)) return [];   // nothing recorded (every project saved before): no banner
@@ -304,7 +331,7 @@
     const show = cell => { if (!cell || !ctx.pick) return; const k = (P.types || []).findIndex(t => t.id === cell.id), sh = ctx.cell(); if (k >= 0 && (!sh || sh.k !== k || sh.g !== cell.g)) ctx.pick(k, cell.g); };
     const run = {
       psSection: c => secSend(c, false), lldfGeom: c => geoSend(c, false), capacity: c => capSend(c, false), superReactions: srSend,
-      superReactionsAll: c => subSend(c, false, ['rx']), superGeometry: c => subSend(c, false, ['geo']), projectMeta: pmShare,
+      superReactionsAll: c => subSend(c, false, ['rx']), superGeometry: c => subSend(c, false, ['geo']), bearingLoads: c => brgSend(c, false), projectMeta: pmShare,
       lldf: c => lldfPull(c), dlLoads: dlPull, projectMetaIn: pmUse, mct: c => mctLoad(c, b.dataset.tid), geometryChanges: openGeo }[id];
     if (!run) return true;
     if (rec && rec.cell) show(rec.cell);
@@ -405,6 +432,6 @@
   function openGeo(ctx) { const d = geoDialog(ctx.P()); if (d) { d.__ctx = ctx; if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', ''); } }
   function init(onMctChange, ctx) { if (ctx) CTX = ctx; document.addEventListener('change', e => { const t = e.target; if (t && t.dataset && t.dataset.hoOpt) SEND[t.dataset.hoOpt] = !!t.checked; });   // batch F
     window.addEventListener('storage', e => { if (!e.key || /^bridgeSuite\.v1\.(lldf|dlLoads)/.test(e.key)) refresh();
-    if (onMctChange && (!e.key || /^bridgeSuite\.v1\.(latestId|updatedAt|handoffs|geometryChanges|designBeam|beamRoster|lldf|dlLoads|projectMeta|psSection|capacity|superReactions|superGeometry)/.test(e.key))) onMctChange(); }); }   // HO-D2: + every channel of the stale banners   // batch F3: + the design beam chip   // batch D3: the banners follow the MCT Generator's sends
+    if (onMctChange && (!e.key || /^bridgeSuite\.v1\.(latestId|updatedAt|handoffs|geometryChanges|designBeam|beamRoster|lldf|dlLoads|projectMeta|psSection|capacity|superReactions|superGeometry|bearingLoads)/.test(e.key))) onMctChange(); }); }   // HO-D2: + every channel of the stale banners   // batch F3: + the design beam chip   // batch D3: the banners follow the MCT Generator's sends
   window.PSBHandoffUI = { card, onClick, refresh, init, mctBanner, onMct, mctLoad, beamChip, staleBar, staleItems };
 })();

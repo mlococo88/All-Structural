@@ -239,7 +239,8 @@
     const chg = (D.segs || []).slice(0, -1).map(s => s.x1).filter(x => x > 1e-6 && x < Lt - 1e-6 && !sup.some(v => Math.abs(v - x) < 1e-6));
     chg.forEach(x => { pts.push([x, 'L', `x = ${n2(x)} ft, left of the plate change`]); pts.push([x, 'R', `x = ${n2(x)} ft, right of the plate change`]); });
     pts.sort((a, b) => a[0] - b[0] || (a[1] === 'L' ? -1 : 1));
-    pts.forEach(([x, s, name]) => { const p = D.segAt(s === 'L' ? x - 1e-6 : x + 1e-6), tmax = Math.max(p.topT, p.botT, p.tw), wv = opt.w === '' || opt.w == null ? wMinFor(tmax) : nm(opt.w);
+    pts.forEach(([x, s, name]) => { const p = D.segAt(s === 'L' ? x - 1e-6 : x + 1e-6); if (p.rolled) return;   // ROLL (2026-11-23): no flange-to-web weld on a rolled shape (segAt marks it; absent before)
+      const tmax = Math.max(p.topT, p.botT, p.tw), wv = opt.w === '' || opt.w == null ? wMinFor(tmax) : nm(opt.w);
       const row = { name, x, side: s, D: p.D, tw: p.tw, topB: p.topB, topT: p.topT, botB: p.botB, botT: p.botT, w: wv, VDC1: side('DC1', x, s), VDC2: side('DC2', x, s), VDW: side('DW', x, s), VLL: side('LL', x, s), Vfr: side('F', x, s) };
       if (opt.beff > 0) row.beff = opt.beff;
       const ut = { VUT: side('UT', x, s), VUF: side('UF', x, s) }; if (ut.VUT || ut.VUF) row.ut = ut;
