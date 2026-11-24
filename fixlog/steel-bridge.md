@@ -11333,3 +11333,42 @@ PR: see the PR body (branch claude/bearing-handoff-steel).
 - **BRG-D16.** Continuous girders: one bearing line per support (one bearing per girder over the pier), the reaction with 90 % of two trucks at interior supports, as superReactions.
 ### Other copies
 - None. The bootstrap / BridgeXfer snippet is not touched.
+
+## 2026-11-24 — PR: claude/deck-dist-effspan (DD) — deck slab: the distribution reinforcement on the effective span length of AASHTO LRFD 10th Ed. Art. 9.7.2.3   [CALCULATION CHANGE, engineer request 2026-11-24 "Please fix the deck distribution steel"; more conservative; only with the deck design on]
+### Problem
+DK (above) took S of Art. 9.7.3.2 as the smallest girder spacing (fixlog/shared-deck.md Open item 1). Art. 9.7.3.2 takes S = the effective span length of Art. 9.7.2.3: for a slab on steel girders, the distance between the flange tips plus one flange overhang (extreme flange tip to the face of the web, fillets disregarded). Shorter than the spacing, so the old percentage was too low wherever it was below 67 %: for a smallest girder spacing above (220/67)² = 10.782 ft.
+### Where
+- `engine/deck.js` `calc()`, anchor `// distribution reinforcement: the smallest spacing gives the largest percentage`. Before:
+  ```js
+  const Smin = Math.min(...bays.map(q => q.S)), pct = S.distPct(Smin), dist = { S: Smin, pct, As: pct / 100 * bays[gp].pos.As };
+  ```
+  After:
+  ```js
+  let fw = null; (P.girders || []).forEach(g => (g.segments || []).forEach((s, i) => { const bq = +s.topB, tq = +s.tw;
+    if (bq > 0 && tq > 0 && (!fw || bq + tq > fw.bf + fw.tw)) fw = { bf: bq, tw: tq, at: `${g.label || g.id}, segment ${i + 1}` }; }));
+  const Smin = Math.min(...bays.map(q => q.S)), DE = S.distEff({ S: Smin, bf: fw ? fw.bf : NaN, tw: fw ? fw.tw : NaN }), pct = DE.pct;
+  const dist = { S: Smin, pct, As: pct / 100 * bays[gp].pos.As, Seff: DE.Seff, bf: DE.bf, tw: DE.tw, at: fw ? fw.at : '', pct0: DE.pct0, E: DE };
+  ```
+  and the worked step call `S.steps.dist(w, Smin, pct, { As, eff: DE, effNote })` (before: `{ As, note: 'S in ft, taken as the girder spacing…' }`): the steps are now `dk.distSe` (S_eff), `dk.dist`, `dk.distAs`.
+- `ui/deck.js` `render`, card "Distribution reinforcement (9.7.3.2)": the formula text `min(220/√S, 67 %), S = … ft` → `min(220/√S_eff, 67 %)`, plus a row "Effective span length (9.7.2.3)" (S_eff with its § link to `dk.distSe`, S, b_f, t_w and the segment) and a note.
+- `report/builders.js` `dk()`, sub `dist`: a second row "Effective span length S_eff (Art. 9.7.2.3)" linked to `dk.distSe`.
+- The worked steps (Deck tab topic "Distribution reinforcement", Report §16 steps) and the Nomenclature (S_eff, A_s,d: built from the steps) follow.
+- `shared/deck.js`: `distEff`, `effSpan`, `steps.dist` option `eff` (fixlog/shared-deck.md DD).
+### Before / After
+`p_d = min(220/√S_min, 67)` → `p_d = min(220/√S_eff, 67)`, `S_eff = S_min − b_f/12 + (b_f − t_w)/24` (ft; b_f, t_w in). `A_s,d = p_d/100 · A_s,pos` (unchanged). No segment with a positive b_f and t_w: 67 %.
+### Decisions (pending engineer review)
+- DD-1. **Unequal bays and girder types:** the existing rule is kept (the smallest spacing: the largest percentage), combined with the segment of the **largest b_f + t_w** of the whole bridge (every girder type and plate segment, rolled shapes by their equivalent plates `topB` = b_f and `tw` = the tabulated t_w): the shortest effective span, the largest percentage. It may pair a spacing and a flange that are not next to each other (conservative). Figure 9.7.2.3-1 (beams not parallel) is not modelled: the girders of this app are parallel.
+- DD-2. The "flange overhang" is the top flange's (b_f − t_w)/2 of one girder (equal flanges on both sides of the bay).
+### Governing provision
+AASHTO LRFD 10th Ed. (2024) Art. 9.7.3.2 and Art. 9.7.2.3.
+### Check cases (by hand; `tests/engine/sb-deck.test.mjs` "DD hand check …")
+- (a) The new-project bridge, deck design on, bottom bars at 8 in (the DK check case): S = 9.5 ft, the largest flange 18 in with t_w 0.5625 in: S_eff = 9.5 − 1.5 + 17.4375/24 = 8.7266 ft → 220/√8.7266 = 74.5 → **67 %** (before 220/√9.5 = 71.4 → **67 %**): A_s,d = 0.67(0.465) = 0.3116 in²/ft, **no change**. All bays 9 ft, b_f 16 in, t_w 0.5625 in: S_eff 8.3099 ft → 67 % before and after.
+- (b) All bays 12 ft, every segment b_f 18 in, t_w 0.5625 in, bottom #5 at 6 in: S_eff = 12 − 1.5 + 0.72656 = **11.2266 ft** → **65.66 %** (before **63.51 %**); A_s,pos = 0.620 → **A_s,d = 0.4071 in²/ft** (before 0.3938). DK1–DK3 unchanged.
+- Unequal bays [13, 12, 12, 13] ft, one segment b_f 20 in, t_w 0.625 in (the rest 16 / 0.5): S = 12, S_eff = 12 − 1.6667 + 0.8073 = 11.1406 ft → 65.91 %.
+- W36X135 on every segment, 12 ft: S_eff = 12 − 1 + 11.4/24 = 11.475 ft → 64.95 % (before 63.51 %).
+### What changes for a project
+Deck design **off** (the default, every project saved before 2026-11-23 and new ones): nothing. Deck design **on**: only the distribution percentage, A_s,d, the distribution bars of the bill of materials (Report, deck reinforcement) and the text / steps above; and only when the smallest girder spacing is above 10.782 ft (below, 67 % before and after). DK1–DK3 and the verdict do not use the distribution steel: unchanged. Verified: `calc()` of origin/main and of this branch on six bridges (default, 12 ft, unequal, 14 ft, W36X135 at 12 ft, RIDOT at 11.5 ft), deck on and off: every value identical except `dist.*` and the distribution steps (ad-hoc comparison in the session).
+### How verified
+`node tests/engine/run.mjs` (sb-deck 4 new tests, deck, deck-parity, sb-deck-report with S_eff / A_s,d in the Nomenclature, tex); smokes `steel-bridge-deck`, `steel-bridge-report`, `steel-bridge-summary` (PR description).
+### Saved data
+None: no new field or key; `P.deckDesign` unchanged.

@@ -1,7 +1,7 @@
 # Fix log — shared/deck.js (window.SharedDeck)
 
-Transverse design of a concrete deck slab on girders by the strip method. Loaded by `apps/steel-bridge/index.html` (engine: `apps/steel-bridge/engine/deck.js`).
-The Prestressed Bridge Design app has the same method in its own frozen engine copy (`apps/ps-bridge/engine/pbd-handling-deck.js`) and is **not** wired to this file; `tests/engine/deck-parity.test.mjs` proves the two give identical numbers.
+Transverse design of a concrete deck slab on girders by the strip method. Loaded by `apps/steel-bridge/index.html` (engine: `apps/steel-bridge/engine/deck.js`) and, since DD (2026-11-24), by `apps/ps-bridge/index.html` (only `distEff`, used by `apps/ps-bridge/engine/deckdist.js`).
+The Prestressed Bridge Design app has the same method in its own frozen engine copy (`apps/ps-bridge/engine/pbd-handling-deck.js`); its strip design is **not** wired to this file; `tests/engine/deck-parity.test.mjs` proves the two give identical numbers.
 
 ## 2026-11-23 — PR: claude/sb-deck-design (DK) — new file: the deck strip design of the Prestressed app, written once for the Steel Bridge app   [NEW CALCULATION in Steel Bridge Design; no existing result changes]
 - **Why:** engineer request 2026-11-23: the Steel tool gets the deck design the Prestressed tool has. CLAUDE.md §3: calculation code used by more than one tool lives once in `shared/`.
@@ -36,7 +36,7 @@ The Prestressed Bridge Design app has the same method in its own frozen engine c
 - **Tools that load it:** Steel Bridge Design (`apps/steel-bridge`). Not loaded by the Prestressed app.
 - **Other copies:** `apps/ps-bridge/engine/pbd-handling-deck.js` (frozen copy of the old Prestressed app's engine: `A4_1`, `deckTableA4`, `deckDesignSection`, `deckCalc`) and the same code in `Prestressed Bridge Design.html`. Keep them in step until the Prestressed app is moved onto this file (a later PR of its own: the engine copy is frozen); the parity test fails if either side changes.
 - **Open items (found in the Prestressed module, mirrored here unchanged, for the engineer to decide; see fixlog/steel-bridge.md DK):**
-  1. Distribution reinforcement uses S = the girder spacing centre to centre; Art. 9.7.3.2 defines S as the effective span of Art. 9.7.2.3 (shorter), which gives a larger percentage when 220/√S is below 67 % (S above about 10.8 ft). Slightly unconservative for wide spacings.
+  1. ~~Distribution reinforcement uses S = the girder spacing centre to centre; Art. 9.7.3.2 defines S as the effective span of Art. 9.7.2.3 (shorter), which gives a larger percentage when 220/√S is below 67 % (S above about 10.8 ft). Slightly unconservative for wide spacings.~~ **Fixed by DD (2026-11-24), entry below.**
   2. φ varies between ε_t = 0.002 and 0.005 for every bar grade; Art. 5.5.4.2 / 5.6.2.1 set the compression-controlled limit ε_cl = f_y/E_s and, above 75 ksi, a different tension-controlled limit. Exact for Grade 60 only.
   3. No crack control (5.6.7), minimum reinforcement (5.6.3.3) or temperature and shrinkage (5.10.6) check, and no Extreme Event II overhang design (A13.4). Stated on the tab and in the report.
   4. Dead-load moments use the coefficients wS²/10 and wS²/11 with S centre to centre, and the negative dead-load moment is not reduced to the design section (conservative).
@@ -46,3 +46,37 @@ The Prestressed Bridge Design app has the same method in its own frozen engine c
 ## 2026-11-23 — same PR (DK part 2) — step symbols without "+" / "−" subscripts (display only)
 - **Where:** `steps.interior`, `steps.capacity` callers, `muStep`, `steps.dist`: `M_{DC,+}` → `M_{DC,pos}`, `M_{DW,+}` → `M_{DW,pos}`, `M_{DC,-}` → `M_{DC,neg}`, `M_{DW,-}` → `M_{DW,neg}`, `M_{LL,+}` / `M_{LL,-}` → `M_{LL,pos}` / `M_{LL,neg}`, `M_{u,+}` / `M_{u,-}` → `M_{u,pos}` / `M_{u,neg}`, `A_{s,+}` → `A_{s,pos}`.
 - **Why:** the Steel app's Nomenclature tab lists a step's symbol only when it is a plain name (no "+"); with the old subscripts the deck moments were left out. No value, equation or reference changes; the parity and hand-check tests are unchanged and pass.
+
+## 2026-11-24 — PR: claude/deck-dist-effspan (DD) — distribution reinforcement on the effective span length of Art. 9.7.2.3   [CALCULATION CHANGE, engineer request 2026-11-24: "Please fix the deck distribution steel"; more conservative]
+- **Problem (Open item 1 above):** the distribution reinforcement percentage `min(220/√S, 67)` took S = the girder spacing. AASHTO LRFD 10th Ed. (2024) Art. 9.7.3.2 takes S as the effective span length of Art. 9.7.2.3, which for a slab on steel or concrete girders is the distance between the flange tips plus the flange overhang (from the extreme flange tip to the face of the web, fillets disregarded); for a slab monolithic with walls or beams, the face-to-face distance. The effective span is shorter than the spacing, so the old percentage was too low (unconservative) wherever it was below the 67 % limit: exactly for a girder spacing above S = (220/67)² = **10.782 ft** (below that both give 67 %). (The 100/√S ≤ 50 % rule for primary steel parallel to traffic is not used by the module: its primary steel is transverse.)
+- **Where:** `shared/deck.js`.
+  - New, after `const distPct = S => Math.min(220 / Math.sqrt(S), 67);` (anchor), unchanged itself:
+    ```js
+    const SCAP = Math.pow(220 / 67, 2);
+    function effSpan(S, bf, tw) {
+      const Sn = +S, b = +bf, t = +tw;
+      const ok = isFinite(Sn) && Sn > 0 && isFinite(b) && b > 0 && isFinite(t) && t > 0 && t <= b;
+      if (!ok) return { S: Sn, bf: b, tw: t, ok: false, clear: NaN, ohF: NaN, Seff: NaN };
+      const clear = Sn - b / 12, ohF = (b - t) / 24, Seff = clear + ohF;
+      return { S: Sn, bf: b, tw: t, ok: true, clear, ohF, Seff };
+    }
+    function distEff(o) {
+      const E = effSpan(o.S, o.bf, o.tw), why = !E.ok ? 'geometry' : !(E.Seff > 0) ? 'nonpositive' : '';
+      const pct = why ? 67 : distPct(E.Seff);
+      return { ...E, pct, pct0: distPct(E.S), capped: pct === 67, why };
+    }
+    ```
+    exported: `window.SharedDeck = { …, distPct, SCAP, effSpan, distEff, strip, … }`.
+  - `steps.dist(w, S, pct, o)`: new option `o.eff` (a `distEff` result; `o.effNote`, `o.sym`). With it: step `distSe` (S_eff: `S − b_f/12 + (b_f − t_w)/24` → values → result, ft, ref Art. 9.7.2.3, 9.7.3.2), then `dist` with `min(220/√S_eff, 67)` (or `67` with a note when the geometry is missing), then `distAs`. Without `o.eff` the steps are exactly as before.
+  - `strip()` and `distPct(S)` are **unchanged** (S = the girder spacing): they are the raw Prestressed module's arithmetic, compared value by value with `deckCalc` by the parity test. Each tool applies `distEff` on top (Steel `engine/deck.js`, Prestressed `engine/deckdist.js`).
+- **Before / After (the expression a tool uses):** before `p_d = min(220/√S, 67) %`, S = girder spacing (ft). After `p_d = min(220/√S_eff, 67) %`, `S_eff = S − b_f/12 + (b_f − t_w)/24` (ft; b_f top flange width, t_w web thickness, in). No geometry (b_f or t_w not positive, t_w > b_f) or S_eff ≤ 0: `p_d = 67 %` (the largest the article allows; conservative). `A_s,d = p_d/100 × A_s,pos` as before.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 9.7.3.2 (distribution reinforcement, S = the effective span length of 9.7.2.3, ft) and Art. 9.7.2.3 (effective length; Figure 9.7.2.3-1 for nonuniform spacing). Read in the 10th Edition text in this session; paraphrased, nothing reproduced.
+- **Check cases (by hand; `tests/engine/deck.test.mjs` "DD hand checks"):**
+  - (a) S = 9 ft. W36X135 (b_f 12.0 in, t_w 0.600 in): S_eff = 9 − 12/12 + (12 − 0.6)/24 = 8 + 0.475 = 8.475 ft; 220/√8.475 = 75.6 → **67 %**; before 220/√9 = 73.3 → **67 %**: no change. Plate girder b_f 16 in, t_w 0.5625 in: S_eff = 7.6667 + 0.6432 = 8.3099 ft → 67 % both. A_s,d unchanged.
+  - (b) Plate girder, S = 12 ft, b_f 18 in, t_w 0.5625 in: clear 12 − 1.5 = 10.5 ft; overhang (18 − 0.5625)/24 = 0.72656 ft; **S_eff = 11.2266 ft**; 220/√11.2266 = 220/3.35061 = **65.66 %** (before 220/√12 = 220/3.46410 = **63.51 %**). Bottom #5 at 6 in (A_s,pos = 0.620 in²/ft): **A_s,d = 0.4071 in²/ft** (before 0.3938), +3.4 %.
+  - (c) Prestressed PCI BT-72 (b_tf 42 in, b_w 6 in) at S = 12 ft: S_eff = 12 − 3.5 + 36/24 = **10.000 ft**; 220/√10 = 69.6 → **67 %** (before **63.51 %**); #5 at 6 in: **A_s,d = 0.4154 in²/ft** (before 0.3938), +5.5 %.
+  - The 67 % point: 220/√S = 67 at S = (220/67)² = 10.782 ft. The result changes exactly when the girder spacing exceeds 10.782 ft (S_eff < S always).
+- **How verified:** `tests/engine/deck.test.mjs` (2 new tests: the hand checks above, S_eff ≤ S never lowers the percentage over S = 4–16 ft and five sections, the fall-backs; the steps); `tests/engine/deck-parity.test.mjs` (the raw parity unchanged, 14 tests; 2 new: the Prestressed correction = `distEff` on all 10 cases, Steel = Prestressed for six spacing/flange/web sets, `Object.is`); `tests/engine/sb-deck.test.mjs` (4 new), `tests/engine/psbridge-deckdist.test.mjs` (new, 5); `tests/engine/tex.test.mjs` parses the new steps.
+- **Tools that load it:** Steel Bridge Design (`apps/steel-bridge`), Prestressed Bridge Design (new app, `apps/ps-bridge`, from this PR). Their tests were run (PR description).
+- **Other copies:** the old Prestressed page `Prestressed Bridge Design.html` (the tool linked first in `tools.html`) has the same `deckCalc` with S = the girder spacing and is **not** changed by this PR (one tool per PR; the caller scoped the fix to the new app). Open item for the engineer.
+- **Open items:** (i) unequal bays: each tool keeps its existing rule for which spacing is used (Steel: the smallest spacing; Prestressed: the design girder line's spacing, `lineS`: an interior girder the mean of its two bays). Figure 9.7.2.3-1 (nonuniform spacing) takes the larger of two deck lengths for non-parallel beams; neither tool models flared girders. (ii) The old page above.

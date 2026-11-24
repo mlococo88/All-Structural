@@ -9628,3 +9628,36 @@ PR: see the PR body (branch claude/bearing-handoff-ps).
 - **BRG-D5.** No rotations and no thermal movement sent (not computed / not inputs here); material and unit lengths are sent for information.
 ### Other copies
 - None. The bootstrap / BridgeXfer snippet is not touched.
+
+## 2026-11-24 — DD: deck slab, the distribution reinforcement on the effective span length of AASHTO LRFD 10th Ed. Art. 9.7.2.3 (engine/deckdist.js new, engine/holddown.js, engine/worked-hdr.js, ui/deck.js, report/builders.js, index.html; shared/deck.js now loaded)   [CALCULATION CHANGE, engineer request 2026-11-24 "Please fix the deck distribution steel"; more conservative; only with the deck design on]
+PR: claude/deck-dist-effspan (one PR with shared/deck.js and the Steel Bridge app, CLAUDE.md §3 / §7 shared-file exception).
+### Problem
+The moved engine's `deckCalc` (pbd-handling-deck.js, frozen) computes `const distPct=Math.min(220/Math.sqrt(S*12)*0+ 220/Math.sqrt(S),67);` with S = `inp.S`, the girder spacing of the design line. AASHTO LRFD 10th Ed. Art. 9.7.3.2 takes S = the effective span length of Art. 9.7.2.3: for a slab on concrete girders, the distance between the flange tips plus the flange overhang (extreme flange tip to the face of the web, fillets disregarded). Unconservative for a spacing above (220/67)² = 10.782 ft.
+### Where (the frozen engine is not edited; the verbatim test holds)
+- `engine/deckdist.js` (new, `window.PSBDeckDist`): `apply(inp, R)` after computeAll, as `holddown.js` / `rating-along.js`: with `R.deck`, it checks the engine (anchors below, each found exactly once in `deckCalc`'s text, and `R.deck.distPct` equal to the engine's own expression on `inp.S`, `Object.is`; else it throws: no silent fallback), then sets `R.deck.dd = { S, bf, tw, ok, clear, ohF, Seff, pct, pct0, capped, why, kind, changed }` and **`R.deck.distPct = SharedDeck.distEff(...).pct`**. Anchors: `const D=inp.deck, S=inp.S, ts=inp.ts, m=inp.mat;`, `const distPct=Math.min(220/Math.sqrt(S*12)*0+ 220/Math.sqrt(S),67); // S in ft per legacy; clamp`, `pos,neg,oh,bBar,Pbar,Xoh,SWoh,MohDC,MohDW,MohDL,MohLL,Mu_oh,ohCap,distPct,fcd,fy,ts,`.
+- `engine/holddown.js`, anchor `const compute = inp => { const R = compute4(inp); return window.PSBDemands …`: renamed `compute5`, and after it
+  `const compute = inp => { const R = compute5(inp); return window.PSBDeckDist && R && R.deck ? window.PSBDeckDist.apply(inp, R) : R; };`
+- `index.html` script list, before `'engine/holddown.js',`: `'../../shared/deck.js',` and `'engine/deckdist.js',` (the app now loads one more shared file).
+- `engine/worked-hdr.js` `deck()`, anchor `add({ id: 'dist', label: 'Distribution reinforcement, percent of the positive-moment steel'`: with `D.dd`, the steps `dk.distSe` (I-girders: `S − b_tf/12 + (b_tf − b_w)/24` → values → S_eff), `dk.dist` (`min(220/√S_eff, 67)`, or `67` with the reason; R path `deck.distPct` as before) and `dk.distAs` (new: `A_s,d = %/100 · A_s,pos`); without `D.dd` the old step unchanged.
+- `ui/deck.js`: the card "Distribution reinforcement (9.7.3.2)" adds the S_eff and A_s,d rows (§ links to their steps) and the note; TOPICS `dist`: ids `/^dk\.dist(Se|As)?$/`, ref 9.7.2.3, 9.7.3.2.
+- `report/builders.js` `ASSUME`, the Deck line: "… distribution reinforcement min(220/√S, 67 %) with S the effective span length of 9.7.2.3 …". The Report's Deck section is the tab's (fromtab), the bill of materials reads `R.deck.distPct` (follows).
+### Before / After
+`% = min(220/√S, 67)`, S = girder spacing (ft) → `% = min(220/√S_eff, 67)`, `S_eff = S − b_tf/12 + (b_tf − b_w)/24` (ft; b_tf top flange width, b_w web width of the gross section `R.g`, in).
+### The girder families
+- I-girders and bulb tees (AASHTO, PCI, NEBT and the other library shapes, custom sections): the expression above. b_w of the library shapes is the web width (the face of the web).
+- **Decision DD-P1 (pending engineer review):** NEXT beams, box beams (adjacent or spread) and voided / solid deck slabs (`R.g.isNext / isBox / isDeck`): **67 %**, the upper limit. The deck of these sections is a topping on the precast flange or on beams side by side, not a slab between flange tips, and the families carry no flange overhang to a web face; 67 % is never less than the article gives (a spread box's S_eff would be S − w/12 or longer).
+- A section without valid b_tf and b_w (not positive, or b_w > b_tf), or S_eff ≤ 0: 67 %.
+- **DD-P2:** S is the engine's S of the design line (`engine/design.js lineS`: an exterior girder the bay next to it, an interior girder the mean of its two bays), as before; with unequal bays an interior line's smaller bay is not used separately (open item).
+### Governing provision
+AASHTO LRFD 10th Ed. (2024) Art. 9.7.3.2 and Art. 9.7.2.3.
+### Check case (c) (by hand; `tests/engine/psbridge-deckdist.test.mjs`)
+Default project (PCI BT-72, b_tf 42 in, b_w 6 in), bays 12 ft, deck design on, #5 at 6 in bottom: S_eff = 12 − 42/12 + (42 − 6)/24 = 8.5 + 1.5 = **10.000 ft**; 220/√10 = 69.57 → **67 %** (before 220/√12 = **63.51 %**); A_s,pos = 0.620 in²/ft → **A_s,d = 0.4154 in²/ft** (before 0.3938). The default design (bays 9 ft): S_eff = 7.5 ft, 67 % before and after.
+### What changes for a project
+Deck design **off**: nothing (tested: the whole result identical). Deck design **on**: `R.deck.distPct` (Deck tab card and worked steps, the sheets' deck table "%" column, the Report's Deck section and the deck bars "Distribution (bottom, longitudinal)" of the bill of materials) and the added `R.deck.dd`; only for an I-girder / bulb tee with a design-line spacing above 10.782 ft, or a NEXT / box / deck slab with a spacing above 10.782 ft (then 67 %). No check, ratio or verdict uses it (tested: every other value of R identical, `Object.is`).
+### How verified
+- `tests/engine/psbridge-deckdist.test.mjs` (new, 5 tests): the page's result with and without the correction, value by value: only `deck.distPct` differs (and `deck.dd` added); hand check (c); 9 ft no change; deck off identical; NEXT 36F at 11.5 ft and box BIII-36 at 12 ft: 67 %; anchors once in the frozen file; a changed engine value throws; apply twice harmless.
+- `tests/engine/deck-parity.test.mjs`: the raw `deckCalc` parity unchanged; new: the corrected Prestressed results = `SharedDeck.distEff` (10 cases) and = the Steel app's (6 sets).
+- `tests/engine/psbridge-tabs.test.mjs` loads `shared/deck.js` and `engine/deckdist.js` (as the page) and passes (worked steps = engine values); `psbridge-model.test.mjs`: the script list; `psbridge-verbatim.test.mjs` passes (no engine edit).
+- Harness B (`tests/psbridge-compare.mjs`) and the ps-bridge smokes: PR description.
+### Other copies
+**The old `Prestressed Bridge Design.html` (still the working tool until the switch-over) has the same `deckCalc` on the girder spacing and is NOT changed by this PR.** Open item for the engineer: the same correction there would be its own PR.
