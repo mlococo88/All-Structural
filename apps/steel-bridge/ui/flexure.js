@@ -47,6 +47,7 @@
   const TP = {
     own: { key: 'own', title: 'Owner load rules (η, m, haunch)', ref: '', ids: /^(own\.|fx\.own\.)/, res: /^own\.eta$/ },
     n: { key: 'n', title: 'Modular ratio and deck modulus', ref: A + '6.10.1.1.1b', ids: /^n\./, res: /^n\.n$/ },
+    roll: { key: 'roll', title: 'Rolled shape: tabulated values and the three plates used', ref: '', ids: /^rolled\./, res: /^rolled\.rI$/, info: /./ },   // ROLL (2026-11-23): engine/rolled.js steps (a rolled segment only)
     steel: { key: 'steel', title: 'Steel section properties', ref: A + '6.10.1.1.1a', ids: /^sec\.s\./, res: /^sec\.s\.I$/ },
     c3: { key: 'c3', title: 'Composite section, long-term (3n)', ref: A + '6.10.1.1.1b', ids: /^sec\.c\d+\./, res: /^sec\.c\d+\.I$/ },
     cn: { key: 'cn', title: 'Composite section, short-term (n)', ref: A + '6.10.1.1.1b', ids: /^sec\.cn\./, res: /^sec\.cn\.I$/ },
@@ -70,7 +71,7 @@
     a6: { key: 'a6', title: 'Appendix A6 (web compact or noncompact)', ref: A + '6.10.6.2.3, App. A6', ids: /^fx\.a\d/, info: /^fx\.a\d+\.(ok|crw)$/ },
     prop: { key: 'prop', title: 'Cross-section proportions and minimum deck reinforcement (GS1–GS4)', ref: A + '6.10.2, 6.10.1.7', ids: /^fx\.gs(1|2|3|4|22)(\.|$)/ }   // engine/proportions.js (B3)
   };
-  const TOPICS = { sec: ['own', 'n', 'steel', 'c3', 'cn', 'cr', 'plPos', 'plNeg', 'dcRh'].map(k => TP[k]), x: ['own', 'n', 'steel', 'c3', 'cn', 'cr', 'plPos', 'plNeg', 'dcRh', 'prop', 'dem', 'web', 'svc', 'fat', 'lat', 'yld', 'mn', 'rev', 'rb', 'flb', 'ltb', 'fnc', 'chk', 'a6'].map(k => TP[k]) };
+  const TOPICS = { sec: ['own', 'n', 'roll', 'steel', 'c3', 'cn', 'cr', 'plPos', 'plNeg', 'dcRh'].map(k => TP[k]), x: ['own', 'n', 'steel', 'c3', 'cn', 'cr', 'plPos', 'plNeg', 'dcRh', 'prop', 'dem', 'web', 'svc', 'fat', 'lat', 'yld', 'mn', 'rev', 'rb', 'flb', 'ltb', 'fnc', 'chk', 'a6'].map(k => TP[k]) };
   /* propHtml(rows): the proportion limits over the girder (engine/proportions.js summary): the largest ratio of each of GS1–GS4 with its
      location (a link selects it), and the warnings (GS4 top-layer share, GS22) */
   function propHtml(rows) {

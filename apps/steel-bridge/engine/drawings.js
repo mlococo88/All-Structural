@@ -87,7 +87,7 @@
     const zones0 = opt.studZones || ((P.studs || {}).zones) || [];
     const girders = FR.girders.map((g, i) => {
       const pg = plateGirderOf(P, i, nb), G = P.girders[pg], toG = x => FRM.toG(FR, i, sup, x), toX = s => FRM.toX(FR, i, sup, s);
-      const segs = G.segments.map(s => ({ s0: toG(s.x0), s1: toG(s.x1), x0: s.x0, x1: s.x1, D: s.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT }));
+      const segs = G.segments.map(s => ({ s0: toG(s.x0), s1: toG(s.x1), x0: s.x0, x1: s.x1, D: s.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT, ...(s.shape != null ? { shape: s.shape } : {}) }));   // ROLL (2026-11-23): the rolled shape name goes with the plates
       const cps = g.pts.filter(q => q.f.type !== 'sup').map(q => ({ s: q.s, side: q.side === 'R' ? 1 : -1 })).sort((a, b) => a.s - b.s);
       const ints = [...new Set(cps.map(q => +toX(q.s).toFixed(3)))].sort((a, b) => a - b), Dmax = Math.max(...segs.map(s => s.D));
       let stiff = [];
@@ -136,6 +136,7 @@
     if (note) D.text(l, cx + dx * (r + 0.6 * h), cy - 0.4 * h, h * 0.75, note, dx < 0 ? 2 : 0);
   }
   const segAt = (segs, s) => segs.find(q => s >= q.s0 - 1e-9 && s <= q.s1 + 1e-9) || segs[segs.length - 1];
+  const rlNm = s => (window.SBDRolled ? window.SBDRolled.label(s) : '');   // ROLL (2026-11-23): the shape name of a rolled segment ('' for a plate segment): the labels name the shape
   /* the field splice design (engine/splices.js girder(), Field splices tab) of splice k of girder g; RS = SBDSheets.results() (the results
      of g's plate girder); null when not calculated or not designed (SB2-DW5) */
   function splR(RS, g, k) {
@@ -279,7 +280,7 @@
       if (!pick) { const y = yF, B = txBox(t, x, y, hh, 1); pick = { x, y, B, sg: [[s.ab, [x, B[3] + 0.25 * h]]] }; }
       D.line(ly.b, s.ab[0], s.ab[1], pick.x, pick.sg[0][1][1], cl); D.text(ly.t, pick.x, pick.y, hh, t, 1); sceneAdd(S, [pick.B], pick.sg); yEnd = Math.min(yEnd, pick.y); });
     // top-flange labels of G1: along their segment, under G1 (bay 1) or else above it
-    g0.segs.forEach(s => { const t = `TOP FL. ${frac(s.topB)} x ${frac(s.topT)}`, hh = 0.7 * h, w = txW(t, hh), xa = X(g0.x0 + s.s0) + w / 2 + 0.3 * h, xb = X(g0.x0 + s.s1) - w / 2 - 0.3 * h, xm = X(g0.x0 + (s.s0 + s.s1) / 2), gy = Y(g0.y);
+    g0.segs.forEach(s => { const t = rlNm(s) || `TOP FL. ${frac(s.topB)} x ${frac(s.topT)}`, hh = 0.7 * h, w = txW(t, hh), xa = X(g0.x0 + s.s0) + w / 2 + 0.3 * h, xb = X(g0.x0 + s.s1) - w / 2 - 0.3 * h, xm = X(g0.x0 + (s.s0 + s.s1) / 2), gy = Y(g0.y);
       const xs = [xm]; for (let d = 0.5 * h; xm - d >= xa || xm + d <= xb; d += 0.5 * h) { if (xm - d >= xa) xs.push(xm - d); if (xm + d <= xb) xs.push(xm + d); }
       const ys = [gy - s.topB / 2 - 1.5 * h, gy - s.topB / 2 - 1.1 * h, gy + s.topB / 2 + 0.6 * h, gy + s.topB / 2 + 1.2 * h]; let pick = null;
       for (const y of ys) { for (const x of xs) { const B = txBox(t, x, y, hh, 1); if (clearOf(S, [B], [], [], pad)) { pick = { x, y, B }; break; } } if (pick) break; }
@@ -315,11 +316,11 @@
     D.k = opt.k || scaleFor(Lg * 12 * 1.1, 30); D.h = TXT * D.k; const h = D.h, i0 = D.mark();
     const ly = { p: D.layer('GRDR-PLAT', 4), w: D.layer('GRDR', 5), st: D.layer('GRDR-STIF', 30), s: D.layer('SPLC', 1), b: D.layer('BRNG', 8), sc: D.layer('STUD', 2), d: D.layer('DIMS', 7), t: D.layer('ANNO-TEXT', 7), tb: D.layer('TABL', 7) };
     const X = x => x * 12, Dw = s => s.D * v, tmax = g.tTmax * v, bmax = g.tBmax * v, yTop = Math.max(...S.map(Dw)), yB = 0;
-    S.forEach(s => { D.rect(ly.p, X(s.s0), yB + Dw(s), X(s.s1), yB + Dw(s) + s.topT * v); D.text(ly.t, X((s.s0 + s.s1) / 2), yTop + tmax + 0.6 * h, h * 0.8, `TOP FL. ${frac(s.topB)} x ${frac(s.topT)}`, 1); });
-    S.forEach(s => { D.rect(ly.p, X(s.s0), yB - s.botT * v, X(s.s1), yB); D.text(ly.t, X((s.s0 + s.s1) / 2), yB - bmax - 1.6 * h, h * 0.8, `BOT. FL. ${frac(s.botB)} x ${frac(s.botT)}`, 1); });
+    S.forEach(s => { D.rect(ly.p, X(s.s0), yB + Dw(s), X(s.s1), yB + Dw(s) + s.topT * v); D.text(ly.t, X((s.s0 + s.s1) / 2), yTop + tmax + 0.6 * h, h * 0.8, rlNm(s) ? `${rlNm(s)} (ROLLED SHAPE)` : `TOP FL. ${frac(s.topB)} x ${frac(s.topT)}`, 1); });
+    S.forEach(s => { D.rect(ly.p, X(s.s0), yB - s.botT * v, X(s.s1), yB); if (!rlNm(s)) D.text(ly.t, X((s.s0 + s.s1) / 2), yB - bmax - 1.6 * h, h * 0.8, `BOT. FL. ${frac(s.botB)} x ${frac(s.botT)}`, 1); });
     S.forEach((s, k) => { D.line(ly.w, X(s.s0), yB, X(s.s1), yB); D.line(ly.w, X(s.s0), yB + Dw(s), X(s.s1), yB + Dw(s));
       const dPrev = k ? Dw(S[k - 1]) : 0; D.line(ly.w, X(s.s0), yB, X(s.s0), yB + Math.max(Dw(s), dPrev)); if (k === S.length - 1) D.line(ly.w, X(s.s1), yB, X(s.s1), yB + Dw(s));
-      if (k === 0 || s.tw !== S[k - 1].tw || s.D !== S[k - 1].D) D.text(ly.t, X((s.s0 + s.s1) / 2), yB + Dw(s) * 0.3, h * 0.8, `WEB ${frac(s.D)} x ${frac(s.tw)}`, 1); });
+      if (!rlNm(s) && (k === 0 || s.tw !== S[k - 1].tw || s.D !== S[k - 1].D)) D.text(ly.t, X((s.s0 + s.s1) / 2), yB + Dw(s) * 0.3, h * 0.8, `WEB ${frac(s.D)} x ${frac(s.tw)}`, 1); });
     const Dat = s => Dw(segAt(S, s));
     // stiffeners: connection plates at the cross-frames, bearing stiffeners at the bearings, intermediate stiffeners
     const cps = [...new Set(g.cps.map(q => +q.s.toFixed(4)))];
@@ -351,8 +352,10 @@
     D.text(ly.t, 0, yB + yTop + tmax + 14.2 * h, h * 0.8, `STEEL: TOP FLANGE ${G.mat.top}, WEB ${G.mat.web}, BOTTOM FLANGE ${G.mat.bot}. CONNECTION PLATES AT ${bwName(G)}S; BEARING STIFFENERS AT BEARINGS. STATIONS FROM CL BRG. ABUT. 1 ALONG THE GIRDER. SCALE ${SCALE_NAME[D.k]} WHEN PLOTTED.`);
     // plate schedule
     const sched = []; [['TOP FLANGE', s => [s.topB, s.topT], G.mat.top], ['WEB', s => [s.D, s.tw], G.mat.web], ['BOTTOM FLANGE', s => [s.botB, s.botT], G.mat.bot]].forEach(([n, fz, gr]) => {
-      let run = null; S.forEach(s => { const z = fz(s); if (run && run.z[0] === z[0] && run.z[1] === z[1]) run.s1 = s.s1; else { if (run) sched.push(run); run = { n, z, s0: s.s0, s1: s.s1, gr }; } }); if (run) sched.push(run); });
-    table(D, ly.tb, 0, yB - bmax - 12 * h, ['PLATE', 'FROM', 'TO', 'LENGTH', 'SIZE (IN)', 'GRADE'], sched.map(r => [r.n, dFI(X(r.s0)), dFI(X(r.s1)), dFI(X(r.s1 - r.s0)), `${frac(r.z[0])} x ${frac(r.z[1])}`, r.gr]), 'PLATE SCHEDULE (STATIONS FROM CL BRG. ABUT. 1, ALONG THE GIRDER)');
+      let run = null; S.forEach(s => { if (rlNm(s)) { if (run) sched.push(run); run = null; return; }   // ROLL: a rolled segment is one row of the schedule (below), not three plates
+        const z = fz(s); if (run && run.z[0] === z[0] && run.z[1] === z[1]) run.s1 = s.s1; else { if (run) sched.push(run); run = { n, z, s0: s.s0, s1: s.s1, gr }; } }); if (run) sched.push(run); });
+    { let rr = null; S.forEach(s => { const nm = rlNm(s); if (!nm) { if (rr) sched.push(rr); rr = null; return; } if (rr && rr.nm === nm) rr.s1 = s.s1; else { if (rr) sched.push(rr); rr = { n: 'ROLLED SHAPE', nm, s0: s.s0, s1: s.s1, gr: G.mat.web }; } }); if (rr) sched.push(rr); }   // ROLL (2026-11-23)
+    table(D, ly.tb, 0, yB - bmax - 12 * h, ['PLATE', 'FROM', 'TO', 'LENGTH', 'SIZE (IN)', 'GRADE'], sched.map(r => [r.n, dFI(X(r.s0)), dFI(X(r.s1)), dFI(X(r.s1 - r.s0)), r.nm || `${frac(r.z[0])} x ${frac(r.z[1])}`, r.gr]), 'PLATE SCHEDULE (STATIONS FROM CL BRG. ABUT. 1, ALONG THE GIRDER)');
     return { id: 'elev', title: `Girder ${g.label} elevation`, i0, i1: D.mark(), k: D.k, h: D.h, gi: g.i };
   }
 

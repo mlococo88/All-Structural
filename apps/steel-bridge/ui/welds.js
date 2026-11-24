@@ -77,13 +77,14 @@
       return { DC1: abs(st.DC1['V' + s]), DC2: abs(st.DC2['V' + s]), DW: abs(st.DW['V' + s]), UT: st.UT ? abs(st.UT['V' + s]) : zero, UF: st.UF ? abs(st.UF['V' + s]) : zero,
         LL: Vp.map((v, i) => Math.max(Math.abs(v), Math.abs(Vn[i]))), F: f['V' + s + 'pos'].map((v, i) => v - f['V' + s + 'neg'][i]),
         ...(q ? { PL: Vp.map((_, i) => Math.abs(big(i) ? q['V' + s + 'pos'][i] : q['V' + s + 'neg'][i])) } : {}) }; };
-    const segAt = x => { const s = g.segments.find(q => x >= q.x0 - 1e-9 && x < q.x1) || g.segments[g.segments.length - 1]; return { D: s.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT }; };
+    const segAt = x => { const s = g.segments.find(q => x >= q.x0 - 1e-9 && x < q.x1) || g.segments[g.segments.length - 1]; return { D: s.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT, ...(window.SBDRolled && window.SBDRolled.isRolled(s) ? { rolled: window.SBDRolled.label(s) } : {}) }; };   // ROLL (2026-11-23): a rolled segment has no flange-to-web weld
     const fr = P.framing || {}, d = P.deck, m = P.materials, rb = d.rebar || {}, T = rb.top || { A: 0, c: 0 }, B = rb.bot || { A: 0, c: 0 }, Ar = (+T.A || 0) + (+B.A || 0);
     const layers = [[+T.A || 0, +T.c || 0], [+B.A || 0, d.ts - (+B.c || 0)]];
     const D = { ...(CU ? CU.D0 : { x: R.x, sup: R.sup, V: { L: side('L'), R: side('R') }, PL: q ? true : undefined, MfP: Array.from(f.Mpos), MfN: Array.from(f.Mneg) }), segAt, segs: g.segments, splices: Array.isArray(fr.splices) ? fr.splices : [], tol: +fr.tol >= 0 ? +fr.tol : 0.5 };
     const gen = { gF: m.steel.top, gW: m.steel.web, Fexx: Wd.Fexx, gam: projGam(P), ts: d.ts, hh: d.haunch, beff: g.beff, fc: m.concrete.fc, wc: m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc, K1: m.concrete.K1, nRule: m.concrete.nRule,
       Ar, dr: Ar > 0 ? layers.reduce((s, q) => s + q[0] * q[1], 0) / Ar : 0, layers };
     const p = WT.fromDemands(D, { gen, w: Wd.w, ground: Wd.ground });
+    if (!p.fw.length && !p.tr.length && window.SBDRolled && window.SBDRolled.girderRolled(g)) return { err: `Welds: not applicable to ${g.label || g.id}. Every weld location is on a rolled shape (${[...new Set(g.segments.map(s => window.SBDRolled.label(s)).filter(Boolean))].join(', ')}): a rolled shape has no flange-to-web welds, and there is no shop flange transition.`, na: true };   // ROLL
     if (CU) { p.fw = p.fw.filter(r => !CU.miss.has(`${r.x}|${r.side}`)); p.tr = p.tr.filter(t => !CU.miss.has(`${t.x}|L`) || !CU.miss.has(`${t.x}|R`)); }   // only where a row is entered
     const own = P.ownerRules || { owner: 'AASHTO', eta: {} }, lf = OWN ? OWN.loadFactors(own.owner, own.eta, (P.xs && P.xs.nb) || 0) : { eta: 1, etaN: 1, m: 1, h0: false };
     return { p, env: { lf }, an: R, g, custom: CU ? CU.C : null };
