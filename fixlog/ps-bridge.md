@@ -9744,7 +9744,7 @@ None.
 ### Open items
 - Geometry-mode barriers (BARG, once on main for this app) drawn with their own outline and the fence seated on it: follow-up PR.
 
-## 2026-11-24 — PR: claude/ps-geom-barrier-render (PR #TBD) (GEOM) — a barrier entered by its geometry is drawn with its own outline in the figure, the DXF and the 3D view; the fence on its top (display only)
+## 2026-11-24 — PR: claude/ps-geom-barrier-render (PR #1707: https://github.com/mlococo88/All-Structural/pull/1707) (GEOM) — a barrier entered by its geometry is drawn with its own outline in the figure, the DXF and the 3D view; the fence on its top (display only)
 ### Request (engineer, 2026-11-24, approved follow-up of FOB)
 Render the Geometry-mode barriers (BARG, #1700, shared/barrier.js) with their actual profile in every renderer and seat the railing / fence on that profile's top. Entered barriers render exactly as before.
 ### Where / Before / After
