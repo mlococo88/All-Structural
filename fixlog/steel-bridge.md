@@ -11373,7 +11373,7 @@ Deck design **off** (the default, every project saved before 2026-11-23 and new 
 ### Saved data
 None: no new field or key; `P.deckDesign` unchanged.
 
-## 2026-11-24 — PR: claude/sb-summary-autorefresh (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SBAR) — the left check summary refreshes itself after an input change   [display only; no computed value, saved field or project format changes; one new per-browser UI key]
+## 2026-11-24 — PR: claude/sb-summary-autorefresh (PR #1691: https://github.com/mlococo88/All-Structural/pull/1691) (SBAR) — the left check summary refreshes itself after an input change   [display only; no computed value, saved field or project format changes; one new per-browser UI key]
 ### Why
 - Engineer (2026-11-24): the beam depth was edited and the left "Check summary" cards did not update: they showed the last values with
   "Inputs changed: values out of date. Run all" until Run all was clicked or the Summary tab was opened. Only the open output tab ran itself (AUTO).
