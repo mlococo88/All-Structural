@@ -11444,6 +11444,144 @@ None: no new field or key; `P.deckDesign` unchanged.
   page for ~6 s once started.
 - SBAR-3. Not below 1200 px (the column is hidden there); the "Auto-refresh" box (on by default) turns it off per browser.
 
+## 2026-11-24 — PR: claude/sb-detail-allowance (PR #1690: https://github.com/mlococo88/All-Structural/pull/1690) (SBALLOW) — one girder steel detail allowance: the Analysis settings box read-only when the loads module gives the value; the erection drawing's shipping pieces with the allowance of the analysis   [display and drawing only; no analysis result changes; no saved field or key changes]
+### Problem
+Two inputs hold a girder steel detail allowance: `xs.allow` (Loads input tab, card "Wearing surface, forms and steel") and `analysis.steelAllowPct` (Loads input tab, Analysis settings, default 5). The analysis (`engine/analysis.js loadsOf`) takes girder.loads.steelAllowPct (a hand-off), else the loads module's `xs.allow` (blank: 0), else `analysis.steelAllowPct`. (1) The Analysis settings box was always shown, editable, with 5, even when it was ignored. (2) The erection drawing (`engine/sheets.js erect`, sheet "ERECTION DIAGRAM AND GIRDER LAYOUT", table "SHIPPING PIECES") always used `analysis.steelAllowPct`, so its piece weights could disagree with DC1 of the analysis and with the splice shipping check SP3 (which uses `xs.allow`).
+### Where
+- `engine/analysis.js`: new `allowFor(P, g, mod)` and `allowOf(P, gi, mod)` (exported on `window.SBDAnalysis`), anchor `function allowFor(P, g, mod) {`; `loadsOf`, anchor `o.steelAllowPct = `.
+- `engine/sheets.js` `erect()`, anchor `const alPg = {}, alOf = g =>`.
+- `ui/analysis.js` new `allowRow(P, C, S, A0)`, anchor `function allowRow(P, C, S, A0) {`; `inputs()`, anchor `${allowRow(P, C, S, A0)}`.
+- `index.html` input change handler: anchor `xs\.(edges\.[LR]\.type|ws\.mode|allow$)` (redraw the tab when xs.allow changes, so the read-only value follows).
+- `ui/tips.js` tip `i_xs.allow` ("w" text).
+### Before / After
+`engine/analysis.js loadsOf`:
+```js
+// before
+o.steelAllowPct = A && isNum(A.steelAllowPct) ? A.steelAllowPct : M && isNum(mod.allow) ? mod.allow : settings(P).steelAllowPct;
+// after (same precedence, moved into allowFor)
+o.steelAllowPct = allowFor(P, g, mod).pct;
+function allowFor(P, g, mod) {
+  const A = (g && g.loads) || null, M = mod && mod.G ? mod.G : null;
+  if (A && isNum(A.steelAllowPct)) return { pct: A.steelAllowPct, src: 'girder' };
+  if (M && isNum(mod.allow)) return { pct: mod.allow, src: 'module' };
+  return { pct: settings(P).steelAllowPct, src: 'setting' };
+}
+function allowOf(P, gi, mod) {
+  const g = P && P.girders ? P.girders[gi] : null; if (!g) return { pct: settings(P).steelAllowPct, src: 'setting' };
+  if (mod === undefined) mod = g.loads && g.df ? null : moduleOf(P, gi);
+  return allowFor(P, g, mod);
+}
+```
+`engine/sheets.js erect()`:
+```js
+// before
+const allow = +(window.SBDAnalysis ? window.SBDAnalysis.settings(C.P).steelAllowPct : 0) || 0, Lc = n => String.fromCharCode(65 + n), pcs = [];
+... f2(w * (1 + allow / 100))
+... `WITH ${f0(allow)}% DETAIL ALLOWANCE (KIP)`
+// after
+const alPg = {}, alOf = g => { if (!(g.pg in alPg)) alPg[g.pg] = +(window.SBDAnalysis ? window.SBDAnalysis.allowOf(C.P, g.pg).pct : 0) || 0; return alPg[g.pg]; };
+G.girders.forEach(alOf); const als = [...new Set(Object.values(alPg))], one = als.length <= 1, allow = one ? (als[0] || 0) : null;
+const Lc = n => String.fromCharCode(65 + n), pcs = [];
+... f2(w * (1 + alOf(g) / 100)) + (one ? '' : ` (${f0(alOf(g))}%)`)
+... one ? `WITH ${f0(allow)}% DETAIL ALLOWANCE (KIP)` : 'WITH DETAIL ALLOWANCE (KIP; % BY GIRDER)'
+```
+`ui/analysis.js inputs()`: before `${numIn('a', 'steelAllowPct', 'Girder steel detail allowance', '%', S.steelAllowPct)}`; after `${allowRow(P, C, S, A0)}`: the same box when `allowFor(...).src === 'setting'`; otherwise a disabled grey input `#an_a_steelAllowPct_used` with the value used and a note naming the source (loads module: link `data-itgo="loads"` to the card "Wearing surface, forms and steel" at the top of the same tab; or the hand-off girder loads), a link to the Analysis tab steps an.wst*, and, when one is stored, the stored analysis.steelAllowPct ("kept and used only when neither gives a value").
+### Governing provision
+None: the detail allowance is an owner/designer allowance, not an AASHTO value. Steel unit weight unchanged: AASHTO LRFD 10th Ed. Table 3.5.1-1, 0.490 kcf (3.4028 lb/ft per in²).
+### Check case
+Built-in project with one field splice at 82 ft, xs.allow = 3 %, analysis.steelAllowPct = 5 % (`tests/engine/sb-detail-allowance.test.mjs`):
+- analysis DC1 girder steel: (1 + 3/100), before and after (unchanged);
+- erection drawing, piece G1-B, plates 69.29 kip: before 69.29 × 1.05 = **72.75** kip, header "WITH 5% DETAIL ALLOWANCE"; after 69.29 × 1.03 = **71.37** kip, header "WITH 3% …"; piece G1-A 17.79 kip: 18.68 → 18.32.
+- Hand check: a piece of 30.00 kip of plates: before 30.00 × 1.05 = 31.50 kip, after 30.00 × 1.03 = 30.90 kip.
+- Two plate girders with hand-off allowances 5 % and 8 %: header "WITH DETAIL ALLOWANCE (KIP; % BY GIRDER)", each cell with its own % (e.g. 19.21 (8%)).
+### What changes for a project
+Analysis results: none (13 girder analyses on 12 projects, origin/main and this branch, whole `analyzeGirder` result identical). Drawing: only the shipping-piece "with allowance" column and its header, and only where the allowance the analysis uses differs from analysis.steelAllowPct (e.g. xs.allow ≠ the setting; xs.allow blank: 0 % now, as the analysis). New project and every project with xs.allow = setting: the sheet is byte-identical (tests/baselines/dxf-sheets.json unchanged).
+### How verified
+`node tests/engine/run.mjs sb-detail-allowance dxf-sheets sheets drawings analysis …`; smoke `tests/smoke/steel-bridge-detail-allowance.mjs`; comparison of origin/main and the branch (PR description).
+### Saved data
+None: `analysis.steelAllowPct` and `xs.allow` keep their keys and values; the stored setting is not cleared and is still used where neither the hand-off nor the loads module gives an allowance.
+### Open items
+- SP3 (splice shipping weight, engine/autodesign.js) uses `+xs.allow || 0` directly; when the loads module fails it can differ from the analysis (which then uses the setting). Not changed (calculation check; raise with the engineer).
+- The header shows the % rounded to a whole number (`f0`, as before): 2.5 % reads "3%".
+
+## 2026-11-24 — PR: claude/sb-deck-long-bars (PR #1693: https://github.com/mlococo88/All-Structural/pull/1693) (DKL) — deck section: transverse bars as lines, longitudinal bar inputs, check DK4 (bottom longitudinal bars provided against the distribution reinforcement of 9.7.3.2)
+### Problem
+Engineer: "The deck is missing the transverse steel." The Deck tab figure (`ui/deck.js figure(R, W)`) cuts the slab ACROSS the bridge but drew the transverse (primary, perpendicular-to-traffic) top and bottom bars as circles at their spacing. In a transverse section the transverse bars are lines along the slab and the circles are the LONGITUDINAL bars. The module had no input for the longitudinal bars; it only computed the required bottom distribution steel A_s,d (9.7.3.2 on S_eff of 9.7.2.3) without checking it against bars provided.
+### Where
+- `engine/deck.js`: new `longBars(D)`, anchor `function longBars(D) {` (exported, with `LONG`); `calc()`: anchor `// DKL: the longitudinal bars; DK4 where the bottom ones are entered`; steps `dk.distProv`, `dk.distR` after `S.steps.dist(w, Smin, pct, ...)`; check DK4 pushed after the `checks` array (anchor `if (LB.bot) checks.push({ id: 'DK4'`); warnings for a half-entered pair (anchor `if (LB.topPart)`); result field `long: LB`; `topics()` dist title.
+- `ui/deck.js`: `inputs()` (anchor `const lbar = (k, lbl) =>`, four new inputs `dk_barLongTop`, `dk_sLongTop`, `dk_barLongBot`, `dk_sLongBot`); `onChange()` (anchor `/^(barLong|sLong)(Top|Bot)$/`); `figure()` (anchor `// DKL (2026-11-24, engineer: "The deck is missing the transverse steel")`); `results()`: checks table (DK4 row with areas; anchor `data-dkck="DK4-none"`), values used (anchor `'Longitudinal bars, top / bottom'`), distribution section (anchor `'DK4 Bottom longitudinal bars provided'`).
+- `report/builders.js dk()`: checks table (anchor `R.checks.some(c => c.id === 'DK4') ? [] :`), values used (anchor `'Bottom longitudinal bars (Cross-section tab, Deck design; DK4)'`), dist sub, figure caption; `bomDeck()` (anchor `// DKL (2026-11-24): where the longitudinal bars are entered`).
+- `ui/tips.js`: tips `dk_barLongBot`, `dk_barLongTop`.
+### Before / After
+`ui/deck.js figure()`:
+```js
+// before
+for (let x = 3; x < x1 - 1; x += Math.max(+D.sTop || 6, 3)) s += `<circle cx="${X(x)}" cy="${Y(yT)}" r="${Math.max(1.5, dbT / 2 * k)}" fill="#B45309"/>`;
+for (let x = Math.max(face, 3); x < x1 - 1; x += Math.max(+D.sBot || 6, 3)) s += `<circle cx="${X(x)}" cy="${Y(yB)}" r="${Math.max(1.5, dbB / 2 * k)}" fill="#0f766e"/>`;
+// after: transverse bars = one line each at yT / yB (stroke = bar diameter), from 2 in inside the deck edge to the cut, labelled
+// "top transverse #5 @ 6.00 in" / "bottom transverse ..."; longitudinal bars = circles at their spacing from 3 in, where entered:
+const yL = { top: ts - +D.coverT - dbT, bot: +D.coverB + dbB };
+const y = t === 'top' ? yL.top - q.db / 2 : yL.bot + q.db / 2;          // q = R.long.top / R.long.bot, q.db = sqrt(4 A_b / pi)
+for (let x = 3; x < x1 - 1; x += Math.max(q.s, 3)) s += `<circle data-dkbar="${t}-long" .../>`;
+// bottom margin 46 -> 60 px: two caption lines (transverse bars; longitudinal bars or "Longitudinal bars not entered")
+```
+`engine/deck.js calc()` (new; nothing before):
+```js
+const LB = longBars(D);   // { top, bot: null | { A, s, db }, topPart, botPart }; entered = A_b > 0 and s > 0
+if (LB.bot) { const q = LB.bot; q.As = 12 * q.A / q.s; q.r = dist.As / q.As; q.ok = dist.As <= q.As; }
+w.add({ id: 'distProv', sym: 'A_{s,prov}', eq: '\\frac{12\\,A_{b}}{s_{L}}', ... });            // in the 'dk' work of S.steps.dist
+w.add({ id: 'distR', sym: 'A_{s,d} \\le A_{s,prov}', sub: `${n(dist.As, 3)} \\le ${n(q.As, 3)}`, value: q.r, ok: q.ok, ... });
+if (LB.bot) checks.push({ id: 'DK4', title: 'Deck distribution reinforcement, bottom longitudinal bars', ref: ED + 'Art. 9.7.3.2, 9.7.2.3', r, Mu: null, phiMn: null, req: dist.As, prov: LB.bot.As, ok, loc, step: 'dk.distR' });
+```
+`report/builders.js bomDeck()`: before one row "Distribution (bottom, parallel to the girders)" (required area × W × L × 490/144); after, where entered: rows "Top longitudinal bars" and "Bottom longitudinal bars (distribution ...)", number = ⌈12 W / s⌉ + 1, length L, weight n × L × A_b × 490/144; the entered bottom bars replace the distribution-area row. Not entered: the rows and note text as before.
+### Governing provision
+AASHTO LRFD 10th Ed. (2024) Art. 9.7.3.2 (bottom distribution reinforcement, percentage of the primary positive-moment steel, S as the effective span) and Art. 9.7.2.3 (effective span length). New check; no existing formula, factor or reference changed.
+### Check case
+Made-up bridge: five plate girders at 12 ft, b_f 18 in, t_w 0.5625 in, bottom transverse #5 at 6 in (`tests/engine/sb-deck-long.test.mjs`).
+- A_s,pos = 12(0.31)/6 = 0.620 in²/ft; S_eff = 12 − 18/12 + (18 − 0.5625)/24 = 11.2266 ft; p_d = min(220/√11.2266, 67) = 65.66 %; A_s,d = 0.6566(0.620) = 0.4071 in²/ft (unchanged).
+- Bottom longitudinal #5 at 9 in: A_s,prov = 12(0.31)/9 = 0.4133 in²/ft; DK4 = 0.4071/0.4133 = **0.985 OK**.
+- #4 at 9 in: A_s,prov = 12(0.20)/9 = 0.2667 in²/ft; DK4 = **1.527 NG**.
+- Before: no DK4 (no input). Without the bars: DK1–DK3 and every step as before.
+- Default bridge in the app (#5 at 6 in transverse, 67 %): A_s,d = 0.4154; bottom longitudinal #5 at 8 in: 0.465 → 0.893 OK; at 9 in: 1.005 NG (smoke `tests/smoke/steel-bridge-deck-long.mjs`).
+### What changes for a project
+Only when the bottom longitudinal bars are entered: check DK4 joins the Deck tab, the Report's deck section and governing rows, the Summary deck card and the verdict (counted once, as DK1–DK3). A project without them: the same checks, ratios, steps and verdicts; the Deck tab and report show a "DK4 not checked: bottom longitudinal bars not entered" row and the figure draws the transverse bars as lines (display only).
+### How verified
+`node tests/engine/run.mjs deck sb-nomen sb-report sb-deck-long`; `node tests/check-syntax.mjs`; smokes `tests/smoke/steel-bridge-deck.mjs` (card input count 8 → 12), `tests/smoke/steel-bridge-deck-long.mjs`, `tests/smoke/steel-bridge-tips.mjs`.
+### Saved data
+New optional keys inside `P.deckDesign` only: `barLongTop`, `sLongTop`, `barLongBot`, `sLongBot` (in², in). Not in `DEF`: a project saved before reads them as not entered and is written unchanged; blanking an input deletes its key. No key renamed; JSON export/import round trip tested.
+### Open items
+- Not checked (raise with the engineer): temperature and shrinkage steel (5.10.6, would govern the top longitudinal bars), crack control (5.6.7), the 9.7.3.2 note on the top longitudinal bars; the top longitudinal bars are drawn and reported only.
+- Decision (pending engineer review): DK4 uses the governing bay's bottom transverse steel A_s,pos (as A_s,d before); a half-entered pair gives a warning and no DK4 (not an input error); the bill of materials replaces the required distribution area by the entered bottom bars.
+- The Summary deck card shows "—" for M_u / φM_n of DK4 (report/summary.js deckOf passes no areas).
+
+## 2026-11-24 — PR: claude/sb-dia-fail-highlight (PR #1692: https://github.com/mlococo88/All-Structural/pull/1692) (SBDFH) — Diaphragms / Cross-frames tab: the topic chip from the check items, failing steps red, the slenderness limit shown, TeX "{,}" in plain-text labels   [DISPLAY ONLY: no value, factor, formula or verdict changed]
+### Problem (engineer report, 2026-11-24)
+A C15x33.9 intermediate diaphragm showed the worked-steps topic "Diaphragm (intermediate bracing), CFD" with a red chip "47.153" and the result line "Diaphragm: slenderness (secondary member): Kℓ/r_min", while every expanded step looked neutral; the brace stiffness step label read "β_br = 6EI_x/S = 1{,}009{,}882".
+### Root cause
+- The chip is `SharedSteps.group` (shared/steps.js): it takes every step with an `ok` flag and a numeric value **without a unit** as a demand / capacity ratio. The slenderness step `cf.cfd.ax.sl` (value Kℓ/r_min = 47.15, unit '', ok: 47.15 ≤ 140) was read as the ratio 47.153 > 1, so the topic was coloured "ng" and the step chosen as its result line. No check failed in that state: the slenderness item itself is 47.15 / 140 = 0.337, pass. (Same for the cross-frame member steps cf.top/bot/diag.sl once they carry ok.)
+- The steps looked neutral because a step with ok false gets class `no`, styled grey (`.steps .no{color:#94A3B8}`), and 12 of the CFD / CFE items had no worked step of their own (they linked to the bolt resistance step `cf.cfd` or the resistance step `cf.cfd.Mn`, whose ok is not their check).
+- The label used `n0` (SharedSteps.g: TeX, thousands separator `{,}`) in plain text.
+### Where / Before / After
+- `engine/crossframes.js` `cfDiaChecks`, anchor `const tag = k => { c.items[c.items.length - 1][k] = true; };`: new `const CK = [], ck = (k, o) => { const q = c.items[c.items.length - 1]; q.step = \`cf.${st}.ck.${k}\`; CK.push({ q, k, o }); };` and `ck(...)` after the items Depth (no girder types: `dep`), Brace moment (`Mbr`), Shear from the brace moment (`Vbr`), Jacking flexure / shear (`jM`, `jV`), Wind shear (`Vw`), Bolt line (`bl`), Bolt lines g (`bg`), Connection plate fit (`pf`), plate ends (`pe`). Item links changed: Torsional brace system stiffness `step` (none → `cf.${st}.bT`); bolts, one line: `nl === 2 ? \`cf.${st}.bolt\` : undefined` → `` `cf.${st}.bolt` `` (and `.boltw`). After `diaSteps(R, end);`: `diaCkSteps(R, CK, end);`.
+- `diaCkSteps(R, CK, end)` (new, before `function diaSteps(`): one step per CK entry, `value: q.r` (the item's own ratio, the same number as the check table), `unit: ''`, `d: 3`, `ok: q.st === 'pass'`.
+- `diaSteps`, slenderness step `${id}.ax.sl`: before `sub: \`\\frac{${n2(X.KL)}}{${n3(X.rmin)}}\`, … note: \`Limit ${X.lim} (…)\`` → after `sub: \`\\frac{${n2(X.KL)}}{${n3(X.rmin)}} = ${St().n(X.sl, 1)}\\ ${X.sl <= X.lim ? '\\le' : '\\gt'}\\ ${X.lim}\``, note `"47.15 ≤ 140: OK. Limit 140 (…); ratio Kℓ/r_min ÷ limit = 0.34. A slenderness, not a demand / capacity ratio."`; value and ok unchanged.
+- `diaSteps`, `${id}.bT` label: `${n0(D.bbr)}` → `${f0(D.bbr)}`. `ptx` (new, anchor `const ptx = t =>`): `{,}` → `,` in every crossframes step label and note (`R.steps = steps(R).map(ptx)`, both `R.steps.push(...w.steps.map(ptx))`); also fixes the notes of `cf.cf[de].Mn` ("1{,}158 kip-in"), `cf.cf[de].ax.Pe` ("P_ex = 13{,}726 kip").
+- `steps(R)`, member step `${id}.sl` (CF3): before no ok; after `ok: m.slC <= slL(m)`, sub with `= ℓ/r ≤ (or >) limit`, note "… OK / NG (CF3: limit …)"; `slL = m => (m.Cu > 0 ? (R.primary ? 120 : 140) : (R.primary ? 140 : 240))`, CF3's `lims` of checks(). `${id}.bolt` (CF4) ok: `ge(m.boltR, m.Fmax)` → `ge(m.boltR, m.Fmax) && R.n >= 2` (CF4 fails with fewer than 2 bolts).
+- `ui/framing.js`: `itemSt(C)`, `stepLi(s, ST)` (class `no ng` + "NG" tag where a linked item fails or ok is false with items given; `no wn` + "Warning" tag where the linked item is a warning; `no` as before otherwise); `groups(kind, list, C)`: a topic with linked items takes its chip, colour and result line from the governing item (worst status, then largest ratio: as `ckNew`'s `c.gov`); without items, slenderness steps (`….sl`) are left out of the ratio; `stepsHtml(list, kind, C)`; `results()` passes `C`.
+- `report/builders.js`: `gsteps(kind, scope, list, o, ck)` passes `ck` to `groups`; `frm` passes `C` (the Report's topic chips as the tab).
+- `index.html` CSS after `.steps .no{color:#94A3B8;}`: `.steps li.no.ng` (red), `.steps li.no.wn` (amber), `.ngTag`.
+### Check case (made-up bridge; tests/engine/sb-dia-fail-highlight.test.mjs, tests/smoke/steel-bridge-dia-fail.mjs)
+One 40 ft span, 9 plate girders at 4.5 ft (S = 54 in), web D = 16 in, flanges 8 × 0.75 in (d = 17.5 in), C15x33.9 channel diaphragms, wind 130 mph. Kℓ = 54.00 − 2(3.50) = 47.00 in, r_min = 0.997 in → Kℓ/r_min = 47.15 ≤ 140 (secondary): item ratio 0.337, pass. Fit: d = 15.00 in > D_0 − c = 16.00 − 2.00 = 14.00 in → 15/14 = 1.071, **fail** (the real failing item). Before: chip "47.153" (red), result line the slenderness, fit step grey. After: chip "1.071 NG", result line the fit step, the fit step red with "NG"; slenderness "Kℓ/r_min = 47.00/0.997 = 47.2 ≤ 140". With D = 17 in: D_0 − c = 15.00 → 1.000, pass; chip "1.000" (amber, ≥ 0.9), no red step. β_br = 6(29,000)(I_x)/54 = 1,009,882 (was "1{,}009{,}882").
+### Proof that no value changed
+origin/main and this branch, side by side in Node, on 9 made-up bridges (X, Kb, Kt primary, C15x33.9 shallow and default, MC18x42.7 with jacking, W21x44 two bolt lines, W24x55 9 bolts at 2 in, C12x20.7 at S = 160 in): 296 check items (id, status, governing item, title, note, every item's loc, cells, st, r, demand, capacity) identical except `step`; all 534 steps of origin/main present with identical value, unit, d, sym, eq; differences only in sub / note / ok of the slenderness steps, the `{,}` labels / notes, and the added `cf.cf[de].ck.*` steps.
+### Decisions (pending engineer review)
+- SBDFH-1. A warning item (e.g. the SB-27 depth shortfall) shows its step amber ("Warning"), not red; the topic chip is amber with "warning".
+- SBDFH-2. The topic chip of the Cross-frames tab (cross-frame mode too: geometry, torsional bracing, member topics) is the governing linked check item's D/C ratio; a topic no item links to keeps SharedSteps.group's chip, without the slenderness steps.
+- SBDFH-3. The red step styling is on this tab only (ui/framing.js); other tabs keep the grey `no` (some of their ok flags only state which case applies).
+### Open items
+- The step renderer appends "= value" after a sub that ends in a comparison ("47.2 ≤ 140 = 47.2"), as the existing P_r steps ("… ≥ C_u = P_r"); left to the renderer fix in progress elsewhere.
+- shared/steps.js `group()` counts any unitless test step as a ratio (other tools, e.g. TR4 thickness / area proportions t₁/t₂ ≥ 0.5, may show the same kind of chip); not changed here (shared file).
+
 ## 2026-11-24 — PR: claude/sb-le-display (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CMPL) — worked-step comparisons read "D_p ≤ 0.42D_t = …", not "D_p = ≤ 0.42D_t = …"   [display only]
 - Fixed in `shared/steps.js` `line()`: see `fixlog/shared-steps.md` (CMPL) for the code, the check case and the tools. No file of this app changed.
 - Steel steps affected (eq starting with \le / \ge): engine/flexure.js 14 (6.10.7 ductility, compact and noncompact positive flexure, 6.10.8

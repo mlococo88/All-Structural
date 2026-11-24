@@ -51,7 +51,7 @@ try {
   await p.evaluate(() => document.querySelector('#out tr[data-dkck="DK2"] a[href^="#st-"]').click()); await p.waitForTimeout(200);
   assert.equal(await p.evaluate(() => document.querySelector('#out details.sg-t[data-sgk="neg"]').open), true, 'the § link opens the topic of its step');
   assert.match(await p.evaluate(() => document.getElementById('st-dk.neg.r').innerText), /12\.084.*13\.197.*0\.916/s);
-  assert.equal(await p.locator('#dkIn [data-dk]').count(), 8, 'the card shows the bars, covers and design section when on');
+  assert.equal(await p.locator('#dkIn [data-dk]').count(), 12, 'the card shows the bars, covers, design section and (DKL) the longitudinal bars when on');
   await shot('sb-deck-2-on.png');
   await p.evaluate(() => { document.querySelectorAll('#out details.sg-t').forEach(d => { d.open = /^(b1|pos)$/.test(d.dataset.sgk); }); document.getElementById('dk-steps').scrollIntoView(); }); await p.waitForTimeout(300);
   await shot('sb-deck-3-steps.png');

@@ -22,12 +22,18 @@
      owner rules              eta and m of SBDOwners.loadFactors (the loads module's lf)
    The module's own inputs, P.deckDesign (OPTIONAL; absent in every project saved before 2026-11-23, which reads as DEF: off):
      { on (false), barTop, barBot (area of one bar, in^2), sTop, sBot (spacing, in), coverT, coverB (clear cover, in),
-       xnegAuto (true: b_f/4), xneg (entered design section, in) }
+       xnegAuto (true: b_f/4), xneg (entered design section, in),
+       barLongTop, sLongTop, barLongBot, sLongBot (DKL, 2026-11-24: the LONGITUDINAL bars, parallel to the girders: area of one bar in^2 and
+       spacing in; OPTIONAL and not in DEF: absent in every project saved before, which reads as "not entered") }
+   DKL (2026-11-24, engineer request "The deck is missing the transverse steel"): the bottom longitudinal bars, where entered, are checked
+   against the required distribution reinforcement: DK4 A_s,d (9.7.3.2 on S_eff of 9.7.2.3) <= A_s,prov = 12 A_b / s. Not entered: no DK4,
+   the checks and verdicts are those of before. The top longitudinal bars are drawn and reported only (not checked).
    Decision (pending engineer review): the module is OFF until switched on (old and new projects), as the Prestressed app's deck module;
    while it is off nothing is calculated and no result, Summary verdict or report section changes.
 
    calc(P) -> { on: false } | { on: true, err } | { on: true, D, in: {…}, bays: [{ S, lines, I, pos, neg }], gp, gn (governing bay index),
-     oh: { L, R: { O, cap, side, name } }, go ('L' | 'R'), dist: { S, pct, As, Seff, bf, tw, at, pct0, E }, checks: [{ id, title, ref, r, Mu, phiMn, ok, loc, step }],
+     oh: { L, R: { O, cap, side, name } }, go ('L' | 'R'), dist: { S, pct, As, Seff, bf, tw, at, pct0, E }, long: longBars(D) (+ bot.As, r, ok),
+     checks: [{ id, title, ref, r, Mu, phiMn, ok, loc, step }] (DK4: Mu, phiMn null; req, prov, unit),
      warn: [text], steps }   (moments kip-ft per foot of deck) */
 (function () {
   'use strict';
@@ -39,6 +45,13 @@
   const isOn = P => !!(P && P.deckDesign && P.deckDesign.on === true);
   const barName = A => { const b = BARS.find(q => Math.abs(q[1] - A) < 1e-9); return b ? b[0] : `${St().fmt(A, 2)} in²`; };
   const fin = v => typeof v === 'number' && isFinite(v);
+  /* longBars(D): the longitudinal bars (DKL) { top, bot: null | { A, s, db }, topPart, botPart (one of the two entered, the other not) } */
+  const LONG = [['top', 'barLongTop', 'sLongTop'], ['bot', 'barLongBot', 'sLongBot']];
+  function longBars(D) {
+    const o = {}; LONG.forEach(([k, a, sp]) => { const A = +D[a], s = +D[sp], okA = fin(A) && A > 0, okS = fin(s) && s > 0;
+      o[k] = okA && okS ? { A, s, db: Math.sqrt(4 * A / Math.PI) } : null; o[k + 'Part'] = !o[k] && (okA || okS); });
+    return o;
+  }
   const META = new WeakMap();   // steps list -> its result (the topics' titles)
 
   /* loadsOf(P): the loads module's cross-section (no change to P) */
@@ -104,6 +117,9 @@
       if (bq > 0 && tq > 0 && (!fw || bq + tq > fw.bf + fw.tw)) fw = { bf: bq, tw: tq, at: `${g.label || g.id}, segment ${i + 1}` }; }));
     const Smin = Math.min(...bays.map(q => q.S)), DE = S.distEff({ S: Smin, bf: fw ? fw.bf : NaN, tw: fw ? fw.tw : NaN }), pct = DE.pct;
     const dist = { S: Smin, pct, As: pct / 100 * bays[gp].pos.As, Seff: DE.Seff, bf: DE.bf, tw: DE.tw, at: fw ? fw.at : '', pct0: DE.pct0, E: DE };
+    // DKL: the longitudinal bars; DK4 where the bottom ones are entered (A_s,prov = 12 A_b / s, in^2/ft; ratio A_s,d / A_s,prov)
+    const LB = longBars(D);
+    if (LB.bot) { const q = LB.bot; q.As = 12 * q.A / q.s; q.r = dist.As / q.As; q.ok = dist.As <= q.As; }
     // worked steps
     const steps = [], many = bays.length > 1;
     const xs = auto ? { kind: 'steel', b: bf, note: `The narrowest top flange of the bridge (${bfAt}): the design section nearest the girder centreline, the largest negative moment. Kept within 0 to 24 in (Table A4-1).` } : { kind: 'entered', xent: +D.xneg, note: 'Entered on the Cross-section tab (Deck design).' };
@@ -123,12 +139,24 @@
       S.steps.capacity(w, 'cap', `${q.name}, top bars`, q.cap, { short: true, muSym: 'M_{u,oh}', check: `DK3 ${q.name}, top bars` });
       w.steps.forEach(s => { s.label = s.label.replace(/^Overhang:/, q.name + ':'); steps.push(s); }); });
     { const w = St().work('dk'); S.steps.dist(w, Smin, pct, { As: bays[gp].pos.As, eff: DE,
-        effNote: `S = ${St().fmt(Smin, 2)} ft${many ? ', the smallest spacing' : ''}; b_f and t_w of ${fw ? fw.at : '—'}${fw ? ' (the largest b_f + t_w of the bridge)' : ''}: the shortest effective span, the largest percentage.` }); steps.push(...w.steps); }
+        effNote: `S = ${St().fmt(Smin, 2)} ft${many ? ', the smallest spacing' : ''}; b_f and t_w of ${fw ? fw.at : '—'}${fw ? ' (the largest b_f + t_w of the bridge)' : ''}: the shortest effective span, the largest percentage.` });
+      if (LB.bot) { const q = LB.bot, n = St().n;
+        w.add({ id: 'distProv', label: `Bottom longitudinal bars (${barName(q.A)} at ${St().fmt(q.s, 2)} in): steel area provided per foot of deck width`, sym: 'A_{s,prov}', eq: '\\frac{12\\,A_{b}}{s_{L}}', sub: `\\frac{12(${n(q.A, 2)})}{${n(q.s, 2)}}`,
+          value: q.As, unit: 'in^{2}/ft', d: 3, ref: ED + 'Art. 9.7.3.2', note: 'A_b the area of one bottom longitudinal bar, s_L their spacing (Cross-section tab, Deck design).' });
+        w.add({ id: 'distR', label: 'DK4 Distribution reinforcement: bottom longitudinal bars provided', sym: 'A_{s,d} \\le A_{s,prov}', eq: '', sub: `${n(dist.As, 3)} ${q.ok ? '\\le' : '\\gt'} ${n(q.As, 3)}`,
+          value: q.r, unit: '', d: 3, ref: ED + 'Art. 9.7.3.2, 9.7.2.3', ok: q.ok, note: 'Ratio A_s,d / A_s,prov; A_s,d the required distribution reinforcement above.' }); }
+      steps.push(...w.steps); }
     const checks = [
       { id: 'DK1', title: 'Deck positive moment, bottom bars (Strength I)', ref: ED + 'Art. 4.6.2.1, Table A4-1, 5.6.3.2', r: bays[gp].pos.dc, Mu: bays[gp].pos.Mu, phiMn: bays[gp].pos.phiMn, ok: bays[gp].pos.ok, loc: bays[gp].name, step: 'dk.pos.r' },
       { id: 'DK2', title: 'Deck negative moment, top bars (Strength I)', ref: ED + 'Art. 4.6.2.1.6, Table A4-1, 5.6.3.2', r: bays[gn].neg.dc, Mu: bays[gn].neg.Mu, phiMn: bays[gn].neg.phiMn, ok: bays[gn].neg.ok, loc: bays[gn].name, step: 'dk.neg.r' },
       { id: 'DK3', title: 'Deck overhang, top bars (Strength I, gravity loads)', ref: ED + 'Art. 3.6.1.3.1, Table 4.6.2.1.3-1, 5.6.3.2', r: oh[go].cap.dc, Mu: oh[go].cap.Mu, phiMn: oh[go].cap.phiMn, ok: oh[go].cap.ok, loc: oh[go].name, step: `dk.oh${go}.cap.r` }];
+    // DKL: DK4 only where the bottom longitudinal bars are entered (a project without them: DK1 to DK3, as before). Not a moment check:
+    // Mu / phiMn null; req / prov the areas (in^2/ft).
+    if (LB.bot) checks.push({ id: 'DK4', title: 'Deck distribution reinforcement, bottom longitudinal bars', ref: ED + 'Art. 9.7.3.2, 9.7.2.3', r: LB.bot.r, Mu: null, phiMn: null, req: dist.As, prov: LB.bot.As, unit: 'in²/ft',
+      ok: LB.bot.ok, loc: `Bottom longitudinal bars ${barName(LB.bot.A)} at ${St().fmt(LB.bot.s, 2)} in`, step: 'dk.distR' });
     const warn = [];
+    if (LB.topPart) warn.push('Top longitudinal bars: enter both the bar size and a spacing greater than 0 (Cross-section tab, Deck design); they are not drawn.');
+    if (LB.botPart) warn.push('Bottom longitudinal bars: enter both the bar size and a spacing greater than 0 (Cross-section tab, Deck design); DK4 is not checked.');
     bays.forEach(q => { if (q.I.A4.below) warn.push(`${q.name}: the spacing is below the 4 ft of Table A4-1; the 4 ft row is used.`); if (q.I.A4.above) warn.push(`${q.name}: the spacing is above the 15 ft of Table A4-1; the 15 ft row is used and a refined analysis is required.`); });
     if (!auto && +D.xneg > 24) warn.push('The entered design section is beyond the 24 in of Table A4-1; 24 in is used.');
     // DK review (2026-11-23): the assumptions of Table A4-1 (AASHTO LRFD 10th Ed. Appendix A4): at least three parallel girders, at least 14.0 ft
@@ -142,7 +170,7 @@
         if (nbays && o < 21 / 12 - 1e-9) warn.push(`${sd === 'L' ? 'Left' : 'Right'} overhang ${St().fmt(o, 2)} ft is less than the 21.0 in (1.75 ft) of Table A4-1 (${A41}); the interior-bay moments next to that girder may not apply.`); }); }
     const inBay = dead.per.filter(L => /^(sw[LR]|med|fence[LR]|u\d+)$/.test(L.id || '') && L.cat !== 'PL' && (L.x1 != null ? Math.max(L.x0, L.x1) > +b.ohL + 1e-9 && Math.min(L.x0, L.x1) < dead.Wd - +b.ohR - 1e-9 : L.x > +b.ohL + 1e-9 && L.x < dead.Wd - +b.ohR - 1e-9));
     if (inBay.length) warn.push(`Loads between the exterior girders that the interior strip moments do not include (slab and wearing surface only): ${inBay.map(L => L.desc || L.id).join(', ')}. Check their effect on the deck separately.`);
-    const out = { on: true, D, in: { ts, tL, wc, fc, fy, wDC, wDW, dwA, bf, bfAt, xneg, auto, eta, mLL, owner: lf.o || '', Wd: dead.Wd, ohL: +b.ohL, ohR: +b.ohR }, bays, gp, gn, oh, go, dist, checks, warn, steps };
+    const out = { on: true, D, in: { ts, tL, wc, fc, fy, wDC, wDW, dwA, bf, bfAt, xneg, auto, eta, mLL, owner: lf.o || '', Wd: dead.Wd, ohL: +b.ohL, ohR: +b.ohR }, bays, gp, gn, oh, go, dist, long: LB, checks, warn, steps };
     META.set(steps, out);
     return out;
   }
@@ -157,9 +185,9 @@
       { key: 'neg', title: 'DK2 Negative moment: top bars', ref: A + 'Art. 5.6.3.2, 5.5.4.2', ids: /^neg\./ },
       { key: 'ohL', title: 'DK3 Left overhang (gravity loads)', ref: A + 'Art. 3.6.1.3.1, Table 4.6.2.1.3-1', ids: /^ohL\./ },
       { key: 'ohR', title: 'DK3 Right overhang (gravity loads)', ref: A + 'Art. 3.6.1.3.1, Table 4.6.2.1.3-1', ids: /^ohR\./ },
-      { key: 'dist', title: 'Distribution reinforcement', ref: A + 'Art. 9.7.3.2', ids: /^dist/ });
+      { key: 'dist', title: R && R.long && R.long.bot ? 'DK4 Distribution reinforcement: bottom longitudinal bars' : 'Distribution reinforcement', ref: A + 'Art. 9.7.3.2', ids: /^dist/ });
     return T;
   }
   const metaOf = list => META.get(list) || null;
-  window.SBDDeck = { DEF, BARS, inputs, isOn, barName, calc, sideLoads, topics, metaOf };
+  window.SBDDeck = { DEF, BARS, LONG, inputs, isOn, barName, longBars, calc, sideLoads, topics, metaOf };
 })();
