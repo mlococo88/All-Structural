@@ -11605,7 +11605,7 @@ None changed (no key, path or format touched).
 - SWGRP-1. Labels drop the side under each sub-heading ("Width", "Edge type"); the side remains as hidden label text, so the input-check banner reads e.g. "Left sidewalk: Fence from deck edge".
 - SWGRP-2. The shared items of the sidewalk card are headed "Pedestrian load and median"; the deck-edge card has no shared inputs (its note stays at the end). The `<hr>` between the two deck edges is replaced by the sub-headings.
 
-## 2026-11-24 — PR: claude/sb-deck-ts-crack (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (DKTS / DKCR) — Deck: shrinkage and temperature reinforcement (DK5, 5.10.6), crack control of the transverse bars (DK6, 5.6.7), the Summary deck card's demand / limit for DK4 to DK6   [NEW CALCULATION CHECKS: the deck verdict of a project with the deck design on can change; DK1 to DK4 unchanged]
+## 2026-11-24 — PR: claude/sb-deck-ts-crack (PR #1698: https://github.com/mlococo88/All-Structural/pull/1698) (DKTS / DKCR) — Deck: shrinkage and temperature reinforcement (DK5, 5.10.6), crack control of the transverse bars (DK6, 5.6.7), the Summary deck card's demand / limit for DK4 to DK6   [NEW CALCULATION CHECKS: the deck verdict of a project with the deck design on can change; DK1 to DK4 unchanged]
 ### Problem
 Engineer request (2026-11-24): the deck module (engine/deck.js, the strip method) did not check shrinkage and temperature reinforcement (AASHTO LRFD 10th Ed. Art. 5.10.6) or crack control (Art. 5.6.7); both were listed as "not checked". The Summary tab's deck card showed "—" in the M_u / φM_n columns for DK4 because `report/summary.js deckOf` did not pass the areas.
 ### Where
