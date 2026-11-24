@@ -115,8 +115,8 @@ test('report: DK4 in the checks table, the summary rows and the verdict; "not ch
   const g = b.Mx.gov.filter(q => q.mod === 'Deck'); assert.equal(g.length, 6); assert.equal(g[3].key, 'dk.distR'); near(g[3].r, 0.31155 / (0.31 * 12 / 9), 1e-5, "default bridge: 67 % of 0.465 = 0.31155 / 0.41333");
   // the Summary verdict: unchanged without the bars; DK4 counted once with them; a failing DK4 fails it
   const gird = [{ gi: 0, label: 'G1', cells: { flexStr: { st: 'pass', r: 0.5, tab: 'flex' } } }];
-  // DKCR (2026-11-24): the default bridge's DK6 (crack control, top bars) is NG (sb-deck-tscrack.test.mjs): DK1 to DK3 and DK5 pass
-  assert.equal(SM.overall(P0, gird).n.pass, 1 + 4); assert.equal(SM.overall(P1, gird).n.pass, 1 + 5);
+  // DKDC (2026-11-24, engineer decision: top-bar d_c within t_s): the default bridge's DK6 is 0.833 OK (before, DKCR: 1.075 NG), so DK1 to DK3, DK5, DK6 pass
+  assert.equal(SM.overall(P0, gird).n.pass, 1 + 5); assert.equal(SM.overall(P1, gird).n.pass, 1 + 6);
   const f = SM.overall(P2, gird); assert.equal(f.verdict, 'FAIL'); assert.match(f.top.q.check, /^DK4 /);
   // bill of materials: without the bars the distribution row as before; with them the bars (number = ceil(12 W / s) + 1, each of length L)
   const bom = Mx => Mx.sections.find(s => s.id === 'bom').subs.find(q => q.id === 'dk'), rows = Mx => bom(Mx).items.find(i => i.type === 'table').rows;

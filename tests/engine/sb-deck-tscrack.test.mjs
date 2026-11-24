@@ -59,17 +59,26 @@ test('DK6 hand check: #5 at 6 in bottom, S = 9 ft, 8.5 in slab: f_ss 21.46 ksi, 
   console.log(`       M_s ${Ms.toFixed(3)}, f_ss ${fss.toFixed(2)} ksi, beta_s ${bs.toFixed(4)}, s_max ${s1.toFixed(2)} in (Class 2 ${s2.toFixed(2)} in); DK6 governing ${R.checks.find(c => c.id === 'DK6').r.toFixed(4)}`);
 });
 
-test('DK6 top bars: d_c with the dead-load-only layer, h = t_L (default bridge: 8 in + 0.5 in, cover 2.5 in): hand check, NG 1.0755', () => {
-  const R = DK.calc({ ...M.newProject(), deckDesign: { on: true, sBot: 8 } }), q = R.crack.cases.find(c => c.key === 'crn1'), I = R.bays[0].I;
-  const db = Math.sqrt(4 * 0.31 / Math.PI), dc = 0.5 + 2.5 + db / 2, h = 8.5, d = 8 - 2.5 - db / 2, As = 0.62, n = R.crack.n;
+test('DK6 top bars: d_c and h within the structural slab (DKDC, engineer decision 2026-11-24; default bridge 8 in + 0.5 in, cover 2.5 in): hand check 0.833 OK', () => {
+  const R = DK.calc({ ...M.newProject(), deckDesign: { on: true } }), q = R.crack.cases.find(c => c.key === 'crn1'), I = R.bays[0].I;
+  // the sacrificial wearing surface (t_L - t_s = 0.5 in) is excluded: d_c = c_t + d_b/2 = 2.5 + 0.3141 = 2.8141 in, h = t_s = 8 in (before: 3.3141 in, 8.5 in)
+  const db = Math.sqrt(4 * 0.31 / Math.PI), dc = 2.5 + db / 2, h = 8, d = 8 - 2.5 - db / 2, As = 0.62, n = R.crack.n;
   const Ms = I.MDC_neg + I.MDW_neg + I.MLL_neg, rho = As / (12 * d), rn = rho * n, k = Math.sqrt(2 * rn + rn * rn) - rn, fss = 12 * Ms / (As * (1 - k / 3) * d);
-  const bs = 1 + dc / (0.7 * (h - dc)), smax = 700 / (bs * fss) - 2 * dc;
-  near(q.dc, dc, 1e-12); assert.equal(q.h, 8.5); near(q.fss, fss, 1e-9); near(q.smax, smax, 1e-9); near(q.r, 6 / smax, 1e-12); assert.equal(q.ok, false);
-  near(q.r, 1.0755, 1e-4); const c = R.checks.find(x => x.id === 'DK6'); assert.equal(c.ok, false); assert.equal(c.step, 'dk.crn1.s'); assert.equal(c.dem.v, 6); near(c.cap.v, smax, 1e-9);
-  // positive moment bottom bars: h = t_s (8 in), d_c = c_b + d_b/2
+  const bs = 1 + dc / (0.7 * (h - dc)), smax = 700 / (bs * fss) - 2 * dc;   // beta_s 1.7752, f_ss 29.976 ksi, s_max 7.526 in
+  near(dc, 2.81413, 1e-5); near(h - dc, d, 1e-12, 'h - d_c = d'); near(bs, 1.77522, 1e-5); near(fss, 29.976, 1e-3); near(smax, 7.5265, 1e-3);
+  near(q.dc, dc, 1e-12); assert.equal(q.h, 8); near(q.d, d, 1e-12); near(q.fss, fss, 1e-9); near(q.bs, bs, 1e-12); near(q.smax, smax, 1e-9); near(q.rS, 6 / smax, 1e-12); near(q.rS, 0.7972, 1e-4);
+  near(q.r, fss / 36, 1e-12); near(q.r, 0.8327, 1e-4); assert.equal(q.by, 'stress'); assert.equal(q.ok, true);
+  const c = R.checks.find(x => x.id === 'DK6'); assert.equal(c.ok, true); assert.equal(c.step, 'dk.crn1.fl'); near(c.dem.v, fss, 1e-9); assert.equal(c.cap.v, 36);
+  const st = id => R.steps.find(s => s.id === id);
+  assert.equal(st('dk.crn1.dc').eq, 'c_{t} + \\frac{d_{b}}{2}'); assert.equal(st('dk.crn1.dc').sub, '2.50 + \\frac{0.628}{2}'); assert.match(st('dk.crn1.dc').note, /Engineer decision 2026-11-24: exclude the sacrificial wearing surface \(t_L − t_s = 0\.50 in\)/);
+  assert.equal(st('dk.crn1.h').eq, 't_{s}'); assert.equal(st('dk.crn1.h').value, 8);
+  // positive moment bottom bars: h = t_s (8 in), d_c = c_b + d_b/2 (unchanged)
   const p = R.crack.cases.find(x => x.key === 'crp1'); assert.equal(p.h, 8); near(p.dc, 1 + db / 2, 1e-12);
-  // the overhangs: Service I with the wheel and the dead loads of DK3
-  const o = R.crack.cases.find(x => x.key === 'crohL'), O = R.oh.L.O; near(o.Ms, O.MohDC + O.MohDW + O.MohLL, 1e-12);
+  // the overhangs: Service I with the wheel and the dead loads of DK3; same d_c, h as the negative moment
+  const o = R.crack.cases.find(x => x.key === 'crohL'), O = R.oh.L.O; near(o.Ms, O.MohDC + O.MohDW + O.MohLL, 1e-12); near(o.dc, dc, 1e-12); assert.equal(o.h, 8);
+  near(o.smax, 700 / (bs * o.fss) - 2 * dc, 1e-9); near(o.smax, 10.242, 1e-3); near(o.r, 0.6902, 1e-4);
+  // a deck without a wearing surface (t_L = t_s): top bars as before
+  const P1 = M.newProject(); P1.deck.tdeck = P1.deck.ts; P1.deckDesign = { on: true }; const q1 = DK.calc(P1).crack.cases.find(x => x.key === 'crn1'); near(q1.dc, dc, 1e-12); assert.equal(q1.h, P1.deck.ts);
 });
 
 test('DK5 hand check: #4 at 12 in top longitudinal: A_s,T&S = 0.11 in²/ft (lower bound), ratios 0.550 (area) and 0.667 (spacing)', () => {
