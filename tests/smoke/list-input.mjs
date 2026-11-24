@@ -26,7 +26,13 @@ const shots = args.shots ? path.resolve(String(args.shots)) : null; if (shots) f
 const outDir = args.out ? path.resolve(String(args.out)) : null; if (outDir) fs.mkdirSync(outDir, { recursive: true });   // raw readouts A / B per tool and case
 // BASE: origin/main at the re-baseline of 2026-11-06 (RLI). Differences from the entries' `a` commits checked as display text only
 // (smd, sbeam, bsl, secprop, index, pbd, sbridge, secpropren: the standard save card, headers, Report tab additions, labels).
-const BASE = '6c3b1bcc62';
+// Re-baselined 2026-11-24 (RLI2) to origin/main 7c45638c9c (was 6c3b1bcc62; bsl f572c90, sbridge 89a12db). Every commit since the old
+// base that touched a part's tool or a shared file it loads was run as A = the commit before, B = the commit (one at a time): each result,
+// input or saved-data difference (in the readout fields or in the numbers of the result text) comes from a merged PR that meant it
+// (§4 changes, new inputs and defaults: smd #1082 #1096 #1115 #1118; sbeam #1065; bsl #1436; bgeo #1116 #1119 #1122 #1126 #1131 #1135;
+// gusset #1031-#1361; secprop #1070 #1086 #1098 #1107; stonearch #1064 #1072 #1075 #1114; index #1360; bpad #886 #906 #962-#978;
+// sbridge #1644 #1648 #1674); every other difference is display text. Per commit: fixlog/shared-list-input.md (RLI2).
+const BASE = '7c45638c9c';
 let fails = 0;
 const ok = (c, m) => { if (!c) { fails++; console.log('  FAIL ' + m); } else console.log('  ok   ' + m); };
 
@@ -151,7 +157,8 @@ const TOOLS = {
     // re-baselined 2026-11-11 (SLPL PR) to origin/main f572c90: 5d8eeba → 8d82112 passed this test at each merge (SLAL, SLDW, ABX, SLLS:
     // display text only in these two cases, no approach slab); 8d82112 → f572c90 is SLFH #1410 alone (§4, engineer decision: TU / WS / WL at the
     // abutment seat; the abutment moments on the Summary and the Report subsection "Height of the superstructure horizontal forces")
-    base: 'f572c90',
+    // re-baselined 2026-11-24 (RLI2) with BASE to origin/main 7c45638c9c: see the comment above BASE.
+    base: '7c45638c9c',
     expect: '{"spans":[110,150,120,95],"bays":[9,9.5,10]}',
     setup: async p => { await p.waitForTimeout(2500); await p.click('.itab[data-pane="bridge"]'); await p.waitForTimeout(400); },
     typeOld: async (p, v) => { for (const k of ['spans', 'bays']) { await p.evaluate(([k, v]) => { const i = document.getElementById('f_' + k); i.value = v;
@@ -282,7 +289,9 @@ TOOLS.stonearch = {   // Stone Masonry Arch: SDL line items and depth overrides 
     for (const t of tabs) { if (t === 'rpt') continue; await p.click(`#outPanel button[data-tab="${t}"]`); await p.waitForTimeout(800);
       out.tabs[t] = await p.evaluate(t => { const e = document.getElementById('pane_' + t); if (!e) return null; const k = e.cloneNode(true);
         k.querySelectorAll('[data-sli],script,style,canvas,.js-plotly-plot').forEach(x => x.remove());
-        return k.innerText.replace(/ ?Computed in [\d.]+ s;[^.]*\./g, '').replace(/\s+/g, ' '); }, t); }   // a timing note, shown only when the sweep was not cached
+        return k.innerText.replace(/ ?Computed in [\d.]+ s;[^.]*\./g, '')   // a timing note, shown only when the sweep was not cached
+          .replace(/\b(Computed|rated) in [\d.]+ s\b/g, '$1 in (time) s')   // run times of the rating (#1064 "rated in", #1188 "Run time: Computed in"): timing only
+          .replace(/\s+/g, ' '); }, t); }
     return out;
   },
   tableSel: '#sdlItems + .sliPaste',
@@ -361,7 +370,8 @@ TOOLS.sbridge = {   // apps/steel-bridge: spans, girder spacings, skews (arrays)
   // base: re-baselined 2026-11-15 (SBLI) to origin/main 89a12db: the input tabs were reorganised (#1255: 'spans' -> 'layout', 'xs' ->
   // 'xsec' / 'loads') and the analysis inputs (pours, cross-frame loads) moved from the Analysis output tab to the Loads input tab (AIN),
   // so the steps below no longer drive the app at BASE (the part timed out waiting for the old tab).
-  base: '89a12db',
+  // re-baselined 2026-11-24 (RLI2) with BASE to origin/main 7c45638c9c: see the comment above BASE.
+  base: '7c45638c9c',
   values: { spans: '110, 140, 110', bays: '9, 9.5, 9, 9.5', skews: '10, 10, 10, 10', seq: '0-80, 140-220' },
   expect: '{"spans":[110,140,110],"bays":[9,9.5,9,9.5],"skews":[10,10,10,10],"seq":"0-80, 140-220"}',
   serial: true, timeout: 120000,
