@@ -77,7 +77,7 @@ A step is a plain object:
 | `note` | Optional remark (condition, why a case applies, a scope flag). A string, or (SNL, 2026-11-08) a **list note** `{ lead, items: [[lead, text] \| text, …], action? }` for a long remark: rendered by `shared/report.js` as the action line(s) in warning style, a bold lead and a bullet list with bold lead words; in `SharedReport.text()` as the step's line, then the lines `action`, `lead`, `• lead: text` (indented). `SharedSteps.noteParts(note)` / `noteText(note)` read it. A string note renders exactly as before. |
 | `ok` | Optional, for a test step: `true` / `false`. |
 
-It renders as `label` over `sym = eq = sub = value unit`, with `ref` beside the label. An `eq` that starts with a relation (`\le 0.42D_{t}`, also `\ge`, `\lt`, `\gt`, `\ne`) continues `sym` as one comparison: `sym eq = sub = value` ("D_p ≤ 0.42D_t = 9.204 ≤ … = OK"; CMPL, 2026-11-24).
+It renders as `label` over `sym = eq = sub = value unit`, with `ref` beside the label. An `eq` that starts with a relation (`\le 0.42D_{t}`, also `\ge`, `\lt`, `\gt`, `\ne`) continues `sym` as one comparison (`sym eq = sub`). After a comparison, a value the comparison already shows is not repeated and a text value follows a comma ("D_p ≤ 0.42D_t = 9.204 ≤ 0.42(27.000) = 11.340, OK"; "ℓ/r = 114.00/0.990 = 115.18 ≤ 140"); a ratio it does not show stays " = 0.437" (CMPL, 2026-11-24).
 
 - **Notation** of `sym`, `eq`, `sub`, `unit`: a small TeX subset — `_{…}`, `^{…}`, `\frac{a}{b}`, `\bar{x}`,
   `\sqrt{x}`, `\text{…}`, Greek letters, `\sum`, `\cdot`, `\times`, `\le`, `\ge`, `\lt`, `\gt`,
