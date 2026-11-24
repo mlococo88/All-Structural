@@ -9685,7 +9685,7 @@ None changed.
 ### Other copies
 The old `Prestressed Bridge Design.html` has no left / right sidewalk or deck-edge inputs (only a "Bridge with sidewalks" owner-rule checkbox and one barrier for the deck design) and is frozen (PS-14 g): not changed.
 
-## 2026-11-24 — PR: claude/ps-fence-on-barrier (PR #TBD) (FOB) — a sidewalk railing or fence over the barrier or curb is drawn standing on its top (display only)
+## 2026-11-24 — PR: claude/ps-fence-on-barrier (PR #1702: https://github.com/mlococo88/All-Structural/pull/1702) (FOB) — a sidewalk railing or fence over the barrier or curb is drawn standing on its top (display only)
 ### Request (engineer, 2026-11-24)
 "There's an option to add a fence or railing on top of the concrete barrier, which is great. But the renderings — the 3D model, the regular drawings, the DXF drawings and the graphics — all show it as basically embedded in the concrete. Can we fix that?"
 ### Input combinations with a railing or fence over a barrier or curb (Cross-section tab, deck edges and sidewalks)
