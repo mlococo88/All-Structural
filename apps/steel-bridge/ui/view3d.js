@@ -73,7 +73,7 @@
     LAY.forEach(([k]) => { const g = new T.Group(); g.name = k; V.groups[k] = g; root.add(g); });
     const grp = k => V.groups[k];
     const mat = (c, o) => new T.MeshStandardMaterial({ color: c, metalness: 0.15, roughness: 0.7, ...(o || {}) });
-    const MT = { steel: mat(0x7d8ea3), stf: mat(0x5f7f9f), deck: mat(0xc8c3b6, { transparent: true, opacity: single ? 0.55 : 0.4, depthWrite: false }), plate: mat(0xc9853a), bolt: mat(0x2c2c2c), haunch: mat(0xb9b3a4), stud: mat(0xd9b24a), brg: mat(0x2f2f2f), sup: mat(0xb3ada0), xf: mat(0x3f6f4f), app: mat(0xb9b5ab), rail: mat(0x6b7280), spl: mat(0xc0392b) };
+    const MT = { steel: mat(0x7d8ea3), stf: mat(0x5f7f9f), deck: mat(0xc8c3b6, { transparent: true, opacity: single ? 0.55 : 0.4, depthWrite: false }), plate: mat(0xc9853a), bolt: mat(0x2c2c2c), haunch: mat(0xb9b3a4), stud: mat(0xd9b24a), brg: mat(0x2f2f2f), sup: mat(0xb3ada0), xf: mat(0x3f6f4f), app: mat(0xb9b5ab), appD: mat(0xb9b5ab, { side: T.DoubleSide }), rail: mat(0x6b7280), spl: mat(0xc0392b) };
     const box = (g, x, y, z, dx, dy, dz, mt) => { if (!(dx > 0 && dy > 0 && dz > 0)) return null; const b = new T.Mesh(new T.BoxGeometry(dx, dy, dz), mt); b.position.set(x, y, z); grp(g).add(b); return b; };
     const rod = (g, p, q, r, mt) => { const a = new T.Vector3(...p), b = new T.Vector3(...q), L = a.distanceTo(b); if (L < 1e-6) return; const c = new T.Mesh(new T.CylinderGeometry(r, r, L, 8), mt); c.position.copy(a.clone().add(b).multiplyScalar(0.5)); c.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), b.clone().sub(a).normalize()); grp(g).add(c); };
     const inst = (g, pts, geo, mt, rot) => { if (!pts.length) return; const im = new T.InstancedMesh(geo, mt, pts.length), ob = new T.Object3D(); if (rot) ob.rotation.set(...rot); pts.forEach((p, i) => { ob.position.set(p[0], p[1], p[2]); ob.updateMatrix(); im.setMatrixAt(i, ob.matrix); }); grp(g).add(im); };
@@ -132,8 +132,17 @@
     else { const g = gl[0], i = g.i, wL = i === 0 ? dk.ohL * 12 : (G.ys[i] - G.ys[i - 1]) * 6, wR = i === nb - 1 ? dk.ohR * 12 : (G.ys[i + 1] - G.ys[i]) * 6, x0 = Xg(g, g.segs[0].s0), x1 = Xg(g, g.segs[g.segs.length - 1].s1);
       box('deck', (x0 + x1) / 2, yTop - dk.ts / 2, Z(i) + (wR - wL) / 2, x1 - x0, dk.ts, wL + wR, MT.deck); }
     let nApp = 0;
+    /* GEOM (2026-11-24, display only): a barrier entered by its geometry (BARG) is its own outline (SBDDrawings.barPts, shared/barrier.js)
+       run along the bridge between the skewed end lines; an entered barrier stays a 34 in block (prism) as before */
+    const barSolid = a => { const pr = window.SBDDrawings.barPts(a).map(([x, y]) => [z0 + x * 12, yTop + y]), n = pr.length, pos = [], idx = [];
+      pr.forEach(([z, y]) => pos.push(ext(0, z / 12), y, z)); pr.forEach(([z, y]) => pos.push(ext(kN, z / 12), y, z));
+      for (let i = 0; i < n; i++) { const j = (i + 1) % n; idx.push(i, j, n + j, i, n + j, n + i); }
+      T.ShapeUtils.triangulateShape(pr.map(([z, y]) => new T.Vector2(z, y)), []).forEach(([p, q, r]) => idx.push(p, q, r, n + p, n + r, n + q));
+      let geo = new T.BufferGeometry(); geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); geo.setIndex(idx); geo = geo.toNonIndexed(); geo.computeVertexNormals();
+      grp('app').add(new T.Mesh(geo, MT.appD)); };
     if (G.app && !single) G.app.items.forEach(a => { const yb = yTop + a.y0;
-      if (a.k === 'sw' || a.k === 'med' || a.k === 'curb' || a.k === 'bar') { prism('app', z0 + a.x0 * 12, z0 + a.x1 * 12, yb, a.h, MT.app); nApp++; }
+      if (a.k === 'bar' && a.geo) { barSolid(a); nApp++; }
+      else if (a.k === 'sw' || a.k === 'med' || a.k === 'curb' || a.k === 'bar') { prism('app', z0 + a.x0 * 12, z0 + a.x1 * 12, yb, a.h, MT.app); nApp++; }
       else if (a.k === 'rail' || a.k === 'fence') { const z = z0 + a.x * 12; prism('app', z - 1.5, z + 1.5, yb + a.h - 3, 3, MT.rail); prism('app', z - 1.5, z + 1.5, yb + a.h * 0.55 - 1.5, 3, MT.rail);
         const xa = ext(0, z / 12), xb = ext(kN, z / 12), n = Math.max(1, Math.round((xb - xa) / 96)), pts = []; for (let q = 0; q <= n; q++) pts.push([xa + (xb - xa) * q / n, yb + a.h / 2, z]); inst('app', pts, new T.BoxGeometry(3, a.h, 3), MT.rail); nApp++; } });
     // labels: girders at the Abut. 1 end, supports

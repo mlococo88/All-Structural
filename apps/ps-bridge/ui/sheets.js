@@ -43,7 +43,8 @@
     D.rect(lK, 0, m.yD, m.Wd, m.yTop);
     m.haunch.forEach(q => D.rect(lK, q.x0, q.y0, q.x1, q.y1));
     m.app.forEach(a => {
-      if (a.kind === 'bar') { const e = a.edge, i = a.inner, d = i - e, H = a.y1 - a.y0, y0 = a.y0; D.pline(lA, [[e, y0], [i, y0], [i - 0.25 * d, y0 + 0.25 * H], [e + 0.45 * d, y0 + H], [e, y0 + H]], true); }
+      if (a.kind === 'bar' && a.geo) D.pline(lA, a.poly, true);   // GEOM (2026-11-24): a Geometry-mode barrier, its own outline (ui/xsfig.js)
+      else if (a.kind === 'bar') { const e = a.edge, i = a.inner, d = i - e, H = a.y1 - a.y0, y0 = a.y0; D.pline(lA, [[e, y0], [i, y0], [i - 0.25 * d, y0 + 0.25 * H], [e + 0.45 * d, y0 + H], [e, y0 + H]], true); }
       else D.rect(lA, a.x0, a.y0, a.x1, a.y1);
     });
     const yLow = Math.min(...m.girders.map(q => q.yBot), m.yD);
@@ -66,7 +67,8 @@
     if (m.haunch.length) D.text(lT, m.Wd + 2 * h, m.yTop - 2 * h, h, `HAUNCH ${f2(Math.max(...m.haunch.map(q => q.y1 - q.y0)), 2)} IN`, 0);
     // the notes under the section
     const notes = [`TYPICAL SECTION${C.ns > 1 ? `, SPAN ${C.s}` : ''} (LOOKING AHEAD). GIRDER OUTLINES AND VOIDS FROM THE GIRDER LIBRARY; DECK FROM EDGE TO EDGE.`,
-      'BARRIER HEIGHT AND PROFILE, RAILING AND FENCE POST HEIGHTS: SCHEMATIC (THE WIDTHS, POSITIONS AND THICKNESSES ARE THE CROSS-SECTION TAB\'S INPUTS).',
+      m.app.some(a => a.kind === 'bar' && a.geo) ? 'BARRIER ENTERED BY ITS GEOMETRY: DRAWN TO ITS OUTLINE (CROSS-SECTION TAB). OTHER BARRIER HEIGHT AND PROFILE, RAILING AND FENCE POST HEIGHTS: SCHEMATIC.'   // GEOM
+        : 'BARRIER HEIGHT AND PROFILE, RAILING AND FENCE POST HEIGHTS: SCHEMATIC (THE WIDTHS, POSITIONS AND THICKNESSES ARE THE CROSS-SECTION TAB\'S INPUTS).',
       `DE: EXTERIOR GIRDER CL TO THE TRAFFIC FACE, AS THE LIVE LOAD DISTRIBUTION USES IT (${m.faces.map(f => `G${f.g} ${f2(f.de, 3)} FT, ${f.src.toUpperCase()}`).join('; ')}). WORKED: LOADS & LLDF TAB.`];
     wrap(notes, C.wrap).forEach((t, i) => D.text(lT, 0, yDim - (7 + 1.8 * i) * h, h, t, 0));
   }

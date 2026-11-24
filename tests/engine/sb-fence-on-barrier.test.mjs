@@ -48,3 +48,22 @@ test('curb edges: a sidewalk fence over the curb on its top; the curb railing on
 test('the built-in project (no fence) has the same appurtenance items as before FOB', () => {
   assert.deepEqual(J(items(base()).map(a => [a.k, a.sd, a.x0, a.x1, a.y0, a.h])), [['bar', 'L', 0, 1.5, 0, 34], ['bar', 'R', 43, 44.5, 0, 34], ['ws', null, 1.5, 43, 0, 0]]);
 });
+
+// GEOM (2026-11-24, engineer: draw a Geometry-mode barrier with its actual profile in every renderer): the barrier item carries its outline
+// (shared/barrier.js G.pts) and height; the fence stands on that outline's top. Hand checks: left rectangle 12 × 42 in on an 8 in sidewalk,
+// fence at 0.5 ft = 6 in: 8 + 42 = 50 in; right polygon (0,0) (16,0) (16,3) (9,10) (7,36) (0,36), fence at 0.25 ft = 3 in (top 0..7 in at
+// 36 in): 8 + 36 = 44 in; at 0.7 ft = 8.4 in, on the face (9,10)-(7,36): y = 10 + 26 × (9 − 8.4)/2 = 17.8 in, 8 + 17.8 = 25.8 in.
+test('Geometry-mode barriers: drawn with their own outline; the fence on its top; an entered barrier as before', () => {
+  const P = base(); P.xs.edges.L = { ...P.xs.edges.L, bMode: 'geom', bShape: 'rect', bDims: { b: 12, h: 42 } };
+  P.xs.edges.R = { ...P.xs.edges.R, bMode: 'geom', bShape: 'poly', bPts: [[0, 0], [16, 0], [16, 3], [9, 10], [7, 36], [0, 36]] };
+  P.xs.sidewalks.L = { w: 6, t: 8, fence: 0.05, fenceX: 0.5 }; P.xs.sidewalks.R = { w: 6, t: 8, fence: 0.05, fenceX: 0.25 }; P.xs.sidewalks.ped = 75;
+  const bL = at(P, 'bar', 'L'), bR = at(P, 'bar', 'R');
+  assert.ok(bL.geo && bR.geo && !bL.sch); assert.equal(bL.h, 42); assert.equal(bR.h, 36);
+  assert.deepEqual(J(bL.pts), [[0, 0], [12, 0], [12, 42], [0, 42]]); assert.deepEqual(J(DW.barPts(bR))[2], [44.5 - 16 / 12, 8 + 3]);
+  assert.equal(at(P, 'fence', 'L').y0, 50); assert.equal(at(P, 'fence', 'R').y0, 44);
+  const Q = J(P); Q.xs.sidewalks.R.fenceX = 0.7; assert.ok(Math.abs(at(Q, 'fence', 'R').y0 - 25.8) < 1e-9, at(Q, 'fence', 'R').y0);
+  const E = base(); E.xs.sidewalks.L = { w: 6, t: 8, fence: 0.05, fenceX: 0.5 }; const bE = at(E, 'bar', 'L'); assert.ok(bE.sch && !bE.geo && !bE.pts && bE.h === 34);
+  // the DXF section draws the outline on S-DECK-BARR
+  const D = W.SharedDxf.drawing({ prefix: 'S-' }); DW.section(DW.model(P), D); const pl = D.E.filter(e => e.t === 'PL' && D.L[e.l] && /DECK-BARR/.test(D.L[e.l].name || e.l));
+  assert.ok(pl.length >= 2, 'barrier outlines'); assert.ok(pl.some(e => e.pts.length === 6) && pl.some(e => e.pts.length === 4), 'the polygon (6 points) and the rectangle (4 points)');
+});
