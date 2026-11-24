@@ -11781,7 +11781,7 @@ New optional keys inside each `xs.edges.L` / `xs.edges.R` object: `bMode` ('ente
 - Also the Cross-frames / Diaphragms steps whose sub ends in a comparison since #1692 (slenderness ℓ/r ≤ limit, P_r ≥ C_u, P_r ≥ T_u): the value is no longer repeated after it.
 - New smoke `tests/smoke/steel-bridge-cmpl.mjs` (Flexure, Constructibility, Cross-frames: no relation right after "=", no repeated value, no "= OK" after a comparison).
 
-## 2026-11-24 — PR: claude/sb-unstiffened-greyout (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (UNSTF) — Stiffeners input tab: the inputs an unstiffened web does not use are greyed   [display only; no computed value, saved field or format changes]
+## 2026-11-24 — PR: claude/sb-unstiffened-greyout (PR #1704: https://github.com/mlococo88/All-Structural/pull/1704) (UNSTF) — Stiffeners input tab: the inputs an unstiffened web does not use are greyed   [display only; no computed value, saved field or format changes]
 ### Why
 - Engineer (2026-11-24): with Web = Unstiffened, the stiffener spacing, d_o/D, the per-bay table and the Type A inputs looked active though unused.
 ### Engine check (what reads these inputs when `stiffeners.layout.web === 'unstiffened'`)
