@@ -63,6 +63,8 @@
     'engine/inputcheck.js',  // PR 2b: the blocking input errors (the steel app's pattern)
     'engine/legacy.js',      // PR 2f: "From the old app": read-only import of the old app's saved designs and Export JSON files
     'engine/handoffs.js',    // 2026-11-14 (item 12): the old app's bridgeSuite.v1.* hand-off payloads (its code; formats unchanged)
+    '../../shared/bearing-loads.js',   // BRG-HO (2026-11-24): the bearingLoads hand-off's shared part (service totals; the bearing module reads it too)
+    'engine/bearing.js',     // BRG-HO (2026-11-24): the bearingLoads payload (every girder line at every girder end) for the Elastomeric Bearing module
     '../../shared/handoff-stale.js',   // 2026-11-23: the shared part of the hand-off stale check (moved from engine/hostale.js unchanged; also the Steel Bridge app)
     'engine/hostale.js',     // HO-D2 (2026-11-21): the hand-off stale check (what this project last sent / loaded, P.handoffs; display only)
     'engine/compare.js',     // batch G4 (2026-11-15): the Compare tab's design sweep (the old app's sweepDesign on this app's engine call)

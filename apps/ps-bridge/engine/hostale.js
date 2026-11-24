@@ -5,7 +5,8 @@
 
    The record (what this project last sent / loaded) is the optional project field P.handoffs (engine/model.js header):
      P.handoffs = { sent:   { <id>: { sig, at, cell? } },        id: psSection, lldfGeom, capacity, superReactions (the line shown),
-                                                                  superReactionsAll, superGeometry, projectMeta
+                                                                  superReactionsAll, superGeometry, bearingLoads (BRG-HO,
+                                                                  2026-11-24: every girder line), projectMeta
                     loaded: { <id>: { sig, at, cell?, via? } } } id: lldf, dlLoads, projectMeta
      sig  = sig(payload): a short hash of the payload's JSON with its stamp fields left out (producedAt, updatedAt, device), so a re-send of
             the same values has the same sig; capacity with MIDAS / MCT demands: the hash of the girder's engine inputs (rebuilding that
@@ -33,6 +34,7 @@
     superReactions: { ch: 'superReactions', dir: 'out', label: 'Reactions of the girder line', to: 'Substructure Loading', cell: true },
     superReactionsAll: { ch: 'superReactions', dir: 'out', label: 'Reactions of every girder line', to: 'Substructure Loading' },
     superGeometry: { ch: 'superGeometry', dir: 'out', label: 'Bridge geometry', to: 'Substructure Loading' },
+    bearingLoads: { ch: 'bearingLoads', dir: 'out', label: 'Bearing loads', to: 'the Elastomeric Bearing module' },   // BRG-HO (2026-11-24)
     projectMeta: { ch: 'projectMeta', dir: 'out', label: 'Project info', to: 'the other tools' },
     lldf: { ch: 'lldf', dir: 'in', label: 'Distribution factors', from: 'the LLDF tool' },
     dlLoads: { ch: 'dlLoads', dir: 'in', label: 'Dead loads DC2 / DW', from: 'the LLDF tool' },
@@ -40,7 +42,7 @@
     mct: { ch: 'handoffs', dir: 'in', label: 'MCT demands', from: 'the MCT Generator' },
     geometryChanges: { ch: 'geometryChanges', dir: 'in', label: 'MCT geometry changes', from: 'the MCT Generator' }
   };
-  const OUT_IDS = ['psSection', 'lldfGeom', 'capacity', 'superReactions', 'superReactionsAll', 'superGeometry', 'projectMeta'];
+  const OUT_IDS = ['psSection', 'lldfGeom', 'capacity', 'superReactions', 'superReactionsAll', 'superGeometry', 'bearingLoads', 'projectMeta'];
   const IN_IDS = ['lldf', 'dlLoads', 'projectMetaIn'];
 
   const { sentOf, loadedOf, setSent, setLoaded, carrySent, outState, inState } = W.SharedHandoffStale;
@@ -78,7 +80,7 @@
   function allSig(H, id, P, cells) {
     try {
       if (!cells) return null;
-      const r = id === 'superGeometry' ? H.sgPayload(P, cells) : H.srAll(P, cells);
+      const r = id === 'superGeometry' ? H.sgPayload(P, cells) : id === 'bearingLoads' ? (W.PSBBearing ? W.PSBBearing.blPayload(P, cells) : null) : H.srAll(P, cells);   // BRG-HO: bearingLoads (engine/bearing.js)
       return r && !r.error && r.payload ? sig(r.payload) : null;
     } catch (e) { return null; }
   }
