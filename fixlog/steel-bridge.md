@@ -11503,3 +11503,51 @@ None: `analysis.steelAllowPct` and `xs.allow` keep their keys and values; the st
 ### Open items
 - SP3 (splice shipping weight, engine/autodesign.js) uses `+xs.allow || 0` directly; when the loads module fails it can differ from the analysis (which then uses the setting). Not changed (calculation check; raise with the engineer).
 - The header shows the % rounded to a whole number (`f0`, as before): 2.5 % reads "3%".
+
+## 2026-11-24 — PR: claude/sb-unstiffened-greyout (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (UNSTF) — Stiffeners input tab: the inputs an unstiffened web does not use are greyed   [display only; no computed value, saved field or format changes]
+### Why
+- Engineer (2026-11-24): with Web = Unstiffened, the stiffener spacing, d_o/D, the per-bay table and the Type A inputs looked active though unused.
+### Engine check (what reads these inputs when `stiffeners.layout.web === 'unstiffened'`)
+- `layout.mode`, `layout.doRatio`, `layout.bays`: **unused by every check.** engine/stiffeners.js `girderBays()` returns n = 0 in every bay
+  (`if (!on) return { ...B0, n: 0, … }`; `st` is [] and `dR` is not reached), and every user of the layout goes through it: ui/shear.js
+  build() (panels, stations, stiffener rows), engine/splices.js (web shear basis: only `ly.web === 'stiffened'`), engine/drawings.js and
+  engine/sheets.js (stiffeners drawn / welds counted: none), engine/lga.js export (line 550: none), ui/view3d.js. engine/autodesign.js locks
+  the spacing variable (`tsUniform`: false when unstiffened). Still read: engine/model.js validate (lines 515–520) and engine/inputcheck.js
+  check them, so an invalid entry blocks results even when unstiffened → such a field stays enabled (below); ui/autodesign.js shows the
+  current value in its table (display).
+- `frames.Lb`: used (cross-frame stations without framing, ui/shear.js framesOf) — kept enabled.
+- **Type A (intermediate stiffener): USED — kept enabled.** The Example demands (Shear & stiffeners tab source "Example", the default while the
+  analysis is not ready) check GirderDetail's built-in rows `SBDStiffeners.TS_DEFAULT.rows`, which include a Type A row, whatever the layout.
+  With the analysis / a file / custom demands it is unused (all rows Type B: `stiffenerRows` gives Type A only between two panels of one bay).
+  Also: Auto design sizes Type A when its b_t / t_p variables are Auto or Range even with the web unstiffened (no Type A row: every combo passes,
+  so the smallest plate is proposed) — not changed here (Auto design behaviour); open item. engine/lga.js writes Type A's size in its export
+  note (no stiffener zone is written).
+- Type B, bearing stiffeners, grades, F_EXX: used — enabled.
+### Where
+- `apps/steel-bridge/ui/shear.js` `inputs()` (anchor `/* UNSTF (2026-11-24, engineer)`): `off`, `errP`, `offIf(re)`, `fs(dis, body)`,
+  `offNote`; the spacing select and d_o/D inside `fs(offIf(/^stiffeners\.layout\.(mode|doRatio)$/), …)`; the per-bay card body inside
+  `fs(offIf(/^stiffeners\.layout\.bays\b/), …)` with the note before it; a note under "Type A, intermediate stiffener" when unstiffened.
+- `onClick()`: `if (ensure(P).layout.web === 'unstiffened') return false;` after the `stf_fill` test (the uniform layout of an unstiffened web
+  has n = 0 in every bay: Set/Reset would have written n = 0 over the entries).
+- `apps/steel-bridge/index.html` CSS: `fieldset.stfOff{border:0;margin:0;padding:0;min-width:0} fieldset.stfOff:disabled{opacity:.5}`.
+### Before / After
+- Before: `${h.sel('stiffeners.layout.mode', …)}${h.num('stiffeners.layout.doRatio', …)}` and the per-bay card body
+  `${bays.length ? `<div class="tscroll">…` : '…'}<button type="button" id="stf_fill">…</button><p class="note">n intermediate stiffeners …</p>` always enabled.
+- After: the same markup inside `<fieldset class="stfOff" disabled>` when the web is unstiffened (no `disabled` when stiffened), and the note
+  "Not used: the web is unstiffened; only the connection plates at the cross-frames bound the panels. Entries are kept for when you switch back
+  to Stiffened." under Web and at the top of the per-bay card. A disabled control sends no change: the saved values are untouched; Web →
+  Stiffened redraws the tab (index.html `changed(true)` on `stiffeners.layout.(mode|web)`) with them enabled. A field with an input error
+  (SBDInputCheck) stays enabled so that it can be fixed.
+### §4 callout
+- None: display only. No formula, factor, unit, reference, computed value, key or saved format changed.
+### Check case
+- Built-in project, G1: per-bay entries set (16 bays, bay 1 n = 3), spacing per bay; Web → Unstiffened: spacing, d_o/D, the bay inputs and
+  Reset disabled (opacity 0.5), 10 other stiffener inputs enabled; saved project identical except `stiffeners.layout.web`; Shear results
+  (16 panels, 363 stations, 15 connection plates) the same with d_o/D 0.5, mode uniform, no bays and Type A b_t 3; Web → Stiffened: values intact.
+### How verified
+- `tests/smoke/steel-bridge-unstiffened.mjs` (new); `node tests/engine/run.mjs shear stiffeners`; `node tests/check-syntax.mjs`.
+### Decisions (pending engineer review)
+- UNSTF-1. Type A kept enabled (the Example demands use it), with a one-line note saying so.
+- UNSTF-2. A greyed field that has an input error is left enabled so it can be fixed (model validation still checks it when unstiffened).
+- UNSTF-3. Set/Reset does nothing while the web is unstiffened.
+- Open: Auto design sizes Type A with the web unstiffened (vacuous pass, smallest plate proposed); model validation of the unused fields.
