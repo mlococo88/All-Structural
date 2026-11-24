@@ -309,6 +309,7 @@
   #sbDashCol .sdList{grid-column:2;margin:0 0 4px;padding:0 4px 0 0;list-style:none;font-size:8.5pt} #sbDashCol .sdList a{text-decoration:none} #sbDashCol .sdList a:hover{text-decoration:underline}
   #sbDashCol .sdList a.sd-fail{color:#991B1B;font-weight:700} #sbDashCol .sdList a.sd-review{color:#92400E} #sbDashCol .sdList a.sd-pass{color:#065F46} #sbDashCol .sdList a.sd-na,#sbDashCol .sdList a.sd-notrun{color:#64748b} #sbDashCol .sdOldV{font-style:italic}
   #sbDashCol .sdNote{font-size:8pt;color:#64748b;margin:6px 0}
+  #sbDashCol .sdAuto{display:flex;align-items:center;gap:4px;margin-top:5px;color:#475569;cursor:pointer} #sbDashCol .sdAuto input{margin:0}   /* SBAR: the auto-refresh box */
   @media print{#sbDashCol{display:none!important}}
   /* SBW (2026-11-09): the full screen width (no 1500 px cap) and the splitter between the input and output panels (ui/splitter.js).
      --sbIn: the input panel's share of the width beside the check summary column (default .33; set on #main only after a drag, from the
@@ -992,7 +993,8 @@
   if (window.SBDLgaUI) window.SBDLgaUI.init({ getP: () => P, dirty: () => pb.dirty(), loadNew: q => loadAs(q, null, null), replace: q => { P = q; ui.g = Math.min(ui.g, P.girders.length - 1); ui.seg = 0; changed(true); }, calc: () => calc() });   // LGA (2026-11-19): MIDAS .lga import / export (ui/lga.js)
 
   drawInputs(); calc();
-  if (window.SBDDashUI) window.SBDDashUI.init({ el: $('sbDashCol'), store, getP: () => P, ui: () => ui, goto: gotoOut, fix: i => gotoErr(icErr[i]), errUi: icO });   // DASH (2026-11-09)
+  if (window.SBDDashUI) window.SBDDashUI.init({ el: $('sbDashCol'), store, getP: () => P, ui: () => ui, goto: gotoOut, fix: i => gotoErr(icErr[i]), errUi: icO,
+    tabBusy: () => autoBusy || autoPend || !!$('autoMsg').querySelector('.spin') });   // DASH (2026-11-09); SBAR (2026-11-24): the auto-refresh lets the open tab's own run go first
   { const lc = LIB.getCur(LS);   // which saved project the autosave belongs to (nothing to lose when it is a blank new project)
     if (L.source === 'saved' && lc) { const r = LIB.open(LS, lc); if (r.ok) cur = { id: lc, text: norm(r.project) }; }
     else if (L.source === 'default') cur = { id: null, text: norm(P) };

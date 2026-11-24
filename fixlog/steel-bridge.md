@@ -11372,3 +11372,74 @@ Deck design **off** (the default, every project saved before 2026-11-23 and new 
 `node tests/engine/run.mjs` (sb-deck 4 new tests, deck, deck-parity, sb-deck-report with S_eff / A_s,d in the Nomenclature, tex); smokes `steel-bridge-deck`, `steel-bridge-report`, `steel-bridge-summary` (PR description).
 ### Saved data
 None: no new field or key; `P.deckDesign` unchanged.
+
+## 2026-11-24 — PR: claude/sb-summary-autorefresh (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SBAR) — the left check summary refreshes itself after an input change   [display only; no computed value, saved field or project format changes; one new per-browser UI key]
+### Why
+- Engineer (2026-11-24): the beam depth was edited and the left "Check summary" cards did not update: they showed the last values with
+  "Inputs changed: values out of date. Run all" until Run all was clicked or the Summary tab was opened. Only the open output tab ran itself (AUTO).
+### Where
+- `apps/steel-bridge/ui/dash.js` (window.SBDDashUI): new `kick(P, st, old)` and `setAuto(v)` (anchor `/* SBAR: the auto-refresh.`), called from
+  `draw()` right after `view(P)` (anchor `kick(P, st, anyOld);   // SBAR`); the status line, the "Auto-refresh" box, `init()`; the header comment.
+- `apps/steel-bridge/ui/summary.js`: new `pending(P)` (anchor `const pending = P => { sync(P); return todo(P).length > 0; };`), exported.
+- `apps/steel-bridge/index.html`: `SBDDashUI.init({ …, tabBusy })` (anchor `tabBusy: () => autoBusy || autoPend || !!$('autoMsg').querySelector('.spin')`);
+  CSS `#sbDashCol .sdAuto`.
+- New smoke `tests/smoke/steel-bridge-dash-auto.mjs`.
+### Before / After
+- Before (dash.js): `const KEY = 'sbd2.dashCollapsed_v1';` / `const D = { o: null, open: new Set(), coll: false };`; status
+  `` const status = st.busy ? `…${esc(st.prog)}</div>` : anyOld || … ? `<div class="sdRun">${anyOld ? 'Inputs changed: values out of date. ' : …}<a href="#" id="sbDashRun">Run all</a></div>` : ''; ``;
+  Run all `if (t.id === 'sbDashRun') { SU().start(o.getP()); return; }`.
+- After:
+  ```js
+  const KEY = 'sbd2.dashCollapsed_v1', AKEY = 'sbd2.dashAuto_v1', AUTO_MS = 1000, TAB_WAIT = 60000;   // SBAR
+  const D = { o: null, open: new Set(), coll: false, auto: true, at: null, atPk: null, act: 0 };
+  function kick(P, st, old) {
+    if (D.atPk === st.pk && (D.at || st.busy)) return;
+    clearTimeout(D.at); D.at = null; D.atPk = st.pk;
+    if (!D.auto || st.busy || !old || !D.o.el.getClientRects().length || !SU().pending || !SU().pending(P)) return;
+    const t0 = Date.now(), pk = st.pk;
+    const go = () => {
+      D.at = null; const Q = D.o.getP(); if (!D.auto || !Q || SU().state().pk !== pk) return;
+      const q = AUTO_MS - (Date.now() - D.act); if (q > 0) { D.at = setTimeout(go, q); return; }
+      if (D.o.tabBusy && D.o.tabBusy() && Date.now() - t0 < TAB_WAIT) { D.at = setTimeout(go, 250); return; }
+      if (window.SBDInputCheck && window.SBDInputCheck.blocked(Q)) { draw(); return; }
+      SU().start(Q);   // as "Run all"
+    };
+    D.at = setTimeout(go, AUTO_MS);
+  }
+  ```
+  status: `: D.at ? '<div class="sdRun"><span class="spin"></span>Inputs changed — updating… <a href="#" id="sbDashRun">Run all</a></div>' : anyOld …` (as before);
+  after the note `<label class="sdAuto"><input type="checkbox" id="sbDashAuto" checked> Auto-refresh after an input change</label>`;
+  Run all: `clearTimeout(D.at); D.at = null; SU().start(o.getP());`; init: `D.auto = rd(AKEY) !== '0'`, a `change` listener for the box
+  (`setAuto`), and capture listeners `keydown`, `input`, `pointerdown` on the document that set `D.act = Date.now()` (nothing else).
+- Behaviour: when the column shows values out of date (an earlier run of this page view, now stale), it runs the modules again by itself
+  1 s after the last input change and the last key / click / input event on the page ("Inputs changed — updating…" with a spinner and a
+  Run all link meanwhile; then the run's own progress "Running Flexure and rating, G1 (2/8)…"). The run is `SBDSummaryUI.start(P)`, the
+  call of "Run all", unchanged: one module of one girder per timer tick. A new input change restarts the wait and stops a run in progress
+  at the next module (summary.js `sync()` increments `S.run`, as before). It waits while the open output tab runs itself (`tabBusy`, up to
+  60 s), and does nothing while a blocking input error exists, while the column is not shown (below 1200 px) or when the box is off.
+  Nothing runs by itself on a page view that has not run the summary yet ("Nothing run yet. Run all", as before). Auto design and the
+  Report stay manual.
+### Saved data (CLAUDE.md §5)
+- New per-browser UI key `sbd2.dashAuto_v1` ('1' on, '0' off; absent = on), prefixed as the column's `sbd2.dashCollapsed_v1`. Not in the
+  project, the autosave, the saved projects or the export. No existing key or format changed.
+### §4 callout
+- None: display only. No formula, factor, unit, reference or computed value changed; the run is the same call as Run all.
+### Check case
+- Built-in project (one girder type, `tests/smoke/sbd-seed.mjs`), Run all, then web depth D of segment 1 +2 in: "Inputs changed — updating…"
+  at once, the run starts by itself 1.0 s later. D +4 in made between the run's 2nd and 3rd module: no module of that run after the change;
+  12 keys typed over 3.6 s held the next run off (each key answered in 2–30 ms); it started 1.0 s after the last key.
+- The 14 cells of the auto-refresh (ratio, RF, status, check, location, step) equal those of Run all on the same project (page reloaded with
+  the autosave, Run all clicked): identical JSON.
+- The girder analysis (the first module) is one call of 5.7–6.5 s on this machine, during which the page does not answer (unchanged: the same
+  for Run all and the Analysis tab; it cannot yield inside). The wait for 1 s of no typing keeps it from starting while the user types.
+### How verified
+- `node tests/smoke/steel-bridge-dash-auto.mjs` (new), `steel-bridge-dash`, `steel-bridge-summary`, `steel-bridge-invalid`;
+  `node tests/engine/run.mjs dxf-sheets sb-report-allgirder`; `node tests/check-syntax.mjs`.
+### Other copies
+- `apps/ps-bridge/ui/dash.js` is an adapted copy of this column (Prestressed Bridge Design); not changed (one tool per PR). Open item.
+### Decisions (pending engineer review)
+- SBAR-1. Auto-refresh only once the summary has values in this page view (the stale values are what it refreshes); a fresh page does not
+  run every module by itself.
+- SBAR-2. The wait restarts on any key, click or input on the page (not only on project changes), because the girder analysis holds the
+  page for ~6 s once started.
+- SBAR-3. Not below 1200 px (the column is hidden there); the "Auto-refresh" box (on by default) turns it off per browser.
