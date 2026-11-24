@@ -12,7 +12,8 @@
 
    inputs(P) -> HTML of the input card; onChange(el, P) -> true when it changed P.deckDesign;
    render(host, ctx), ctx = { P, changed(redrawInputs) }; build(ctx) -> engine/deck.js calc(P) (the Report);
-   groups(kind, list) -> SharedSteps.group of the steps (the Report's worked steps); figure(R, W) -> the deck section as an SVG string. */
+   groups(kind, list) -> SharedSteps.group of the steps (the Report's worked steps); figure(R, W, P) -> the deck section as an SVG string
+   (P optional: the left deck edge's sidewalk, barrier or curb and railing / fence, DKFE 2026-11-24). */
 (function () {
   'use strict';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -66,10 +67,42 @@
   const see = id => `<a href="#st-${esc(id)}" title="Worked step">§</a>`;
 
   /* ---------- the deck section over the left exterior girder and the first interior girder (true scale across; display only) ---------- */
-  function figure(R, W) {
+  /* DKFE (2026-11-24, engineer: the Deck tab's section consistent with the renderers of FOB / GEOM): edgeOf(P) -> the deck-edge items of the
+     left side (the side the figure shows) as the Drawings tab draws them, SBDDrawings.appOf of the Loads module's cross-section (the same
+     SBDLoads.fromModel(P, { girder: 0 }) / compute that engine/deck.js reads): the sidewalk, the barrier (the schematic outline BAR_SCH of an
+     entered barrier, the outline of shared/barrier.js for one entered by its geometry) or the curb, and the railing / fence with its base y0
+     on the barrier or curb top (SBDDrawings.topAt) or on the sidewalk. null without P or the modules (the figure then draws the schematic
+     barrier to the traffic face, as before DKFE). Display only: nothing here reaches R. */
+  function edgeOf(P) {
+    const LD = window.SBDLoads, DW = window.SBDDrawings; if (!P || !LD || !DW || !DW.appOf) return null;
+    try { const q = LD.fromModel(P, { girder: 0 }), L = LD.compute(q.b, q.p); if (L.errors && L.errors.length) return null;
+      return DW.appOf(L).items.filter(a => a.sd === 'L' && /^(sw|bar|curb|rail|fence)$/.test(a.k)); } catch (e) { return null; }
+  }
+  /* wrap(t, n): t in lines of at most about n characters (at the spaces) */
+  const wrap = (t, n) => { const out = []; let l = ''; String(t).split(' ').forEach(wd => { if (l && (l + ' ' + wd).length > n) { out.push(l); l = wd; } else l = l ? l + ' ' + wd : wd; }); if (l) out.push(l); return out; };
+  /* edgeCap(EI): the caption line of the deck-edge elements (DKFE) */
+  function edgeCap(EI) {
+    const f2 = v => fmt(v, 2), f1 = v => fmt(v, 1), DW = window.SBDDrawings, on = x => { const t = DW.topAt(EI, 'L', x); if (t === null) return EI.some(a => a.k === 'sw' && x >= a.x0 - 1e-9 && x <= a.x1 + 1e-9) ? 'on the sidewalk' : 'on the deck';
+      const c = EI.find(a => (a.k === 'bar' || a.k === 'curb') && x >= a.x0 - 1e-9 && x <= a.x1 + 1e-9); return `on the ${c && c.k === 'curb' ? 'curb' : 'barrier'} top`; };
+    const p = EI.map(a => a.k === 'sw' ? `sidewalk ${f2(a.x1 - a.x0)} ft × ${f1(a.h)} in`
+      : a.k === 'bar' ? `barrier ${f2(a.x1 - a.x0)} ft at the deck${a.geo ? ` × ${f1(a.h)} in, its outline from its geometry` : ' (shape and 34 in height schematic, as the Drawings tab)'}${a.y0 > 0 ? ' on the sidewalk' : ''}`
+      : a.k === 'curb' ? `curb ${f1((a.x1 - a.x0) * 12)} × ${f1(a.h)} in${a.y0 > 0 ? ' on the sidewalk' : ''}`
+      : `${a.k === 'rail' ? 'railing' : 'railing or fence'} at ${f2(a.x)} ft ${on(a.x)}`);
+    return `Left deck edge: ${p.length ? p.join('; ') : 'none'}.${EI.some(a => a.k === 'rail' || a.k === 'fence') ? ' Railing / fence height 42 in schematic.' : ''} Heights above the slab at a reduced scale, widths true.`;
+  }
+  /* figure(R, W, P): P (optional, DKFE) the project, for the deck-edge elements; without it the schematic barrier as before */
+  function figure(R, W, P) {
     const q = R.oh.L, O = q.O, In = R.in, D = R.D, S = R.bays[0].S, ts = In.ts, oh = O.oh * 12, Sp = S * 12, x1 = oh + Sp + Math.min(Sp * 0.4, 30), bf = In.bf || 16;
-    const w = Math.max(360, Math.min(W || 760, 900)), m = { l: 14, r: 44, t: 58, b: 60 }, k = (w - m.l - m.r) / x1, H = Math.round(m.t + ts * k + 18 * k + m.b);
+    const EI = edgeOf(P);
+    const w = Math.max(360, Math.min(W || 760, 900));
+    const cap = EI ? wrap(edgeCap(EI), Math.floor((w - 20) / 5.6)) : [];   // DKFE: the deck-edge caption, wrapped to the figure width
+    const m = { l: 14, r: 44, t: 58, b: 60 + 14 * cap.length }, k = (w - m.l - m.r) / x1;
+    // DKFE: heights above the slab at the figure's reduced scale (the schematic barrier's 34 in drawn 26 px since DK); widths true
+    const kv = Math.min(k, 26 / 34), topIn = EI ? EI.reduce((a, b) => Math.max(a, b.y0 + (b.h || 0)), 0) : 0;
+    m.t = Math.max(58, Math.round(topIn * kv + 32));
+    const H = Math.round(m.t + ts * k + 18 * k + m.b);
     const X = x => m.l + x * k, Y = y => m.t + (ts - y) * k;   // y up from the bottom of the slab
+    const Yv = y => Y(ts) - y * kv;   // DKFE: y in above the top of the slab, at the reduced vertical scale
     const f1 = v => fmt(v, 2), gx = [oh, oh + Sp], face = O.face * 12, xw = face + 12, dbT = Math.sqrt(4 * +D.barTop / Math.PI), dbB = Math.sqrt(4 * +D.barBot / Math.PI);
     const yT = ts - +D.coverT - dbT / 2, yB = +D.coverB + dbB / 2;
     const dimH = (a, b, y, t) => `<line x1="${X(a)}" y1="${y}" x2="${X(b)}" y2="${y}" stroke="#475569" stroke-width="1"/><line x1="${X(a)}" y1="${y - 4}" x2="${X(a)}" y2="${y + 4}" stroke="#475569"/><line x1="${X(b)}" y1="${y - 4}" x2="${X(b)}" y2="${y + 4}" stroke="#475569"/><text x="${(X(a) + X(b)) / 2}" y="${y - 4}" text-anchor="middle" font-size="11" fill="#1e293b">${t}</text>`;
@@ -78,8 +111,19 @@
     gx.forEach(x => { s += `<rect x="${X(x - bf / 2)}" y="${Y(0)}" width="${bf * k}" height="${Math.max(3, 1.2 * k)}" fill="#64748b"/><rect x="${X(x) - Math.max(1, 0.3 * k)}" y="${Y(0)}" width="${Math.max(2, 0.6 * k)}" height="${14 * k}" fill="#64748b"/>
       <line x1="${X(x)}" y1="${Y(ts) - 30}" x2="${X(x)}" y2="${Y(0) + 16 * k}" stroke="#0f172a" stroke-dasharray="8 3 2 3" stroke-width="0.8"/>`; });
     s += `<text x="${X(gx[0]) + 4}" y="${Y(0) + 15 * k + 12}" font-size="10.5" fill="#334155">exterior girder ℄</text>`;
-    if (face > 0) s += `<polygon points="${X(0)},${Y(ts)} ${X(face)},${Y(ts)} ${X(face * 0.6)},${Y(ts) - 26} ${X(0)},${Y(ts) - 26}" fill="#cbd5e1" stroke="#334155"/>`;
-    if (O.Xoh > 0) s += `<line x1="${X(xw)}" y1="${Y(ts) - 34}" x2="${X(xw)}" y2="${Y(ts) - 2}" stroke="#1E3A5F" stroke-width="2"/><polygon points="${X(xw) - 4},${Y(ts) - 9} ${X(xw) + 4},${Y(ts) - 9} ${X(xw)},${Y(ts) - 1}" fill="#1E3A5F"/><text x="${X(xw) + 5}" y="${Y(ts) - 28}" font-size="10.5" fill="#1E3A5F">16 kip wheel, X = ${f1(O.Xoh)} ft</text>`;
+    let wy = 0;   // DKFE: the wheel stands on the surface under it (the sidewalk where one is there), else on the slab as before
+    if (!EI) { if (face > 0) s += `<polygon points="${X(0)},${Y(ts)} ${X(face)},${Y(ts)} ${X(face * 0.6)},${Y(ts) - 26} ${X(0)},${Y(ts) - 26}" fill="#cbd5e1" stroke="#334155"/>`; }
+    else {   // DKFE: the deck-edge elements of the left side, as the Drawings tab (engine/drawings.js appDraw); the railing / fence on the top under it
+      const DW = window.SBDDrawings, cx = x => X(Math.min(x, x1)), pt = (x, y) => `${X(x)},${Yv(y)}`;
+      EI.forEach(a => {
+        if (a.k === 'sw' || a.k === 'curb') { if (a.x0 * 12 < x1) s += `<rect data-dkedge="${a.k}" x="${X(a.x0 * 12)}" y="${Yv(a.y0 + a.h)}" width="${cx(a.x1 * 12) - X(a.x0 * 12)}" height="${a.h * kv}" fill="${a.k === 'sw' ? '#e2e8f0' : '#cbd5e1'}" stroke="#334155"/>`; }
+        else if (a.k === 'bar') s += `<polygon data-dkedge="bar" points="${DW.barOutline(a).map(([u, y]) => pt(a.x0 * 12 + u, a.y0 + y)).join(' ')}" fill="#cbd5e1" stroke="#334155"/>`; });
+      EI.filter(a => a.k === 'rail' || a.k === 'fence').forEach(a => { const x = X(a.x * 12), r = 3 * k;
+        s += `<g data-dkedge="${a.k}" data-base="${a.y0}"><line x1="${x}" y1="${Yv(a.y0)}" x2="${x}" y2="${Yv(a.y0 + a.h)}" stroke="#7f1d1d" stroke-width="1.6"/><line x1="${x - r}" y1="${Yv(a.y0 + a.h - 1.5)}" x2="${x + r}" y2="${Yv(a.y0 + a.h - 1.5)}" stroke="#7f1d1d" stroke-width="1.3"/><line x1="${x - r}" y1="${Yv(a.y0 + a.h * 0.55)}" x2="${x + r}" y2="${Yv(a.y0 + a.h * 0.55)}" stroke="#7f1d1d" stroke-width="1.3"/></g>`; });
+      const t = DW.topAt(EI, 'L', xw / 12), sw = EI.find(a => a.k === 'sw' && xw / 12 >= a.x0 - 1e-9 && xw / 12 <= a.x1 + 1e-9);
+      wy = t !== null ? t : sw ? sw.h : 0; }
+    const wv = wy * kv;
+    if (O.Xoh > 0) s += `<line x1="${X(xw)}" y1="${Y(ts) - 34 - wv}" x2="${X(xw)}" y2="${Y(ts) - 2 - wv}" stroke="#1E3A5F" stroke-width="2"/><polygon points="${X(xw) - 4},${Y(ts) - 9 - wv} ${X(xw) + 4},${Y(ts) - 9 - wv} ${X(xw)},${Y(ts) - 1 - wv}" fill="#1E3A5F"/><text x="${X(xw) + 5}" y="${Y(ts) - 28 - wv}" font-size="10.5" fill="#1E3A5F">16 kip wheel, X = ${f1(O.Xoh)} ft</text>`;
     [gx[0] + In.xneg, gx[1] - In.xneg].forEach(x => { s += `<line x1="${X(x)}" y1="${Y(ts) - 4}" x2="${X(x)}" y2="${Y(0) + 4}" stroke="#2563EB" stroke-width="1.6"/>`; });
     s += `<text x="${X(gx[0] + In.xneg) + 4}" y="${Y(0) + 15}" font-size="10.5" fill="#2563EB">design section, x = ${f1(In.xneg)} in</text>`;
     // DKL (2026-11-24, engineer: "The deck is missing the transverse steel"): this is a section ACROSS the bridge, so the transverse bars
@@ -96,6 +140,7 @@
       for (let x = 3; x < x1 - 1; x += Math.max(q.s, 3)) s += `<circle data-dkbar="${t}-long" cx="${X(x)}" cy="${Y(y)}" r="${Math.max(1.5, q.db / 2 * k)}" fill="#fff" stroke="${c}" stroke-width="1.3"/>`; });
     s += dimH(0, oh, 16, `o_h = ${f1(O.oh)} ft`) + dimH(oh, oh + Sp, 16, `S = ${f1(S)} ft`);
     s += `<text x="${X(x1) + 4}" y="${Y(ts / 2) + 4}" font-size="11" fill="#1e293b">t_s ${fmt(ts, 1)}</text>`;
+    cap.forEach((t, i) => { s += `<text data-dkedgecap="${i + 1}" x="${m.l}" y="${H - 36 - 14 * (cap.length - 1 - i)}" font-size="10.5" fill="#475569">${esc(t)}</text>`; });
     s += `<text x="${m.l}" y="${H - 22}" font-size="10.5" fill="#475569">Transverse bars (lines): top ${nm(+D.barTop)} at ${f1(+D.sTop)} in (cover ${f1(+D.coverT)} in); bottom ${nm(+D.barBot)} at ${f1(+D.sBot)} in (cover ${f1(+D.coverB)} in). Girders schematic.</text>`;
     const lt = q => (q ? `${nm(q.A)} at ${f1(q.s)} in` : 'not entered');
     s += `<text data-dklong="${LB.top || LB.bot ? 'on' : 'none'}" x="${m.l}" y="${H - 8}" font-size="10.5" fill="#475569">${LB.top || LB.bot ? `Longitudinal bars (circles, inside the transverse bars): top ${lt(LB.top)}; bottom ${lt(LB.bot)}.` : 'Longitudinal bars not entered (Cross-section tab, Deck design): none drawn.'}</text>`;
@@ -122,7 +167,7 @@
       DK4 to DK6 are not moment checks: their columns show the demand and the limit of the check (areas in²/ft, spacings in, stress ksi). <a href="#dk-ts">DK5 shrinkage and temperature (5.10.6)</a>, <a href="#dk-cr">DK6 crack control (5.6.7, Service I)</a>.
       <b>Not checked here:</b> the Extreme Event II vehicular-collision cases of the overhang (A13.4; they need a barrier-specific analysis), minimum reinforcement (5.6.3.3), the maximum spacing of 5.10.3.2, bar development.</p>
       ${R.warn.map(w => `<div class="alert">${esc(w)}</div>`).join('')}</div></section>`;
-    h += `<section class="sec"><div class="secHead">Deck section</div><div class="secBody"><div id="dk-fig"></div><p class="note">The left overhang and the first bay, true scale across: the barrier or curb to the traffic face, the design wheel 1 ft inside it, the negative-moment design sections (blue), the top (brown) and bottom (green) transverse bars as lines at their covers, and the longitudinal bars, where entered, as circles at their spacings inside them (top under the top transverse bars, bottom on the bottom transverse bars). Display only.</p></div></section>`;
+    h += `<section class="sec"><div class="secHead">Deck section</div><div class="secBody"><div id="dk-fig"></div><p class="note">The left overhang and the first bay, true scale across: the left deck edge as the Drawings tab draws it (the sidewalk, the barrier or the curb, and the railing or fence on its top; heights above the slab at a reduced scale), the design wheel 1 ft inside the traffic face, the negative-moment design sections (blue), the top (brown) and bottom (green) transverse bars as lines at their covers, and the longitudinal bars, where entered, as circles at their spacings inside them (top under the top transverse bars, bottom on the bottom transverse bars). Display only.</p></div></section>`;
     const ro = (lbl, v, where) => `<div class="fRow"><label>${lbl}</label><span class="dk-ro">${v}</span><span class="unit">${where}</span></div>`;
     h += `<section class="sec"><div class="secHead">Values used (from the project)</div><div class="secBody">
       ${ro('Girder spacings S', R.bays.map(q => `${fmt(q.S, 2)} ft`).join(', '), lnk('Cross-section tab', 'xsec'))}
@@ -201,7 +246,7 @@
     else h = results(R, P);
     host.innerHTML = h;
     window.SharedSteps.wire(host, { onToggle: (k, open) => { if (open) OPEN.add(k); else OPEN.delete(k); } });
-    const fg = host.querySelector('#dk-fig'); if (fg && R.on && !R.err) fg.innerHTML = figure(R, Math.max(360, (host.clientWidth || 800) - 40));
+    const fg = host.querySelector('#dk-fig'); if (fg && R.on && !R.err) fg.innerHTML = figure(R, Math.max(360, (host.clientWidth || 800) - 40), P);   // DKFE: P for the deck-edge elements
     const b = host.querySelector('#dk_turnOn'); if (b) b.addEventListener('click', () => { if (!P.deckDesign || typeof P.deckDesign !== 'object') P.deckDesign = { ...DK().DEF }; P.deckDesign.on = true; save(true); });
     host.querySelectorAll('[data-gotab]').forEach(el => el.addEventListener('click', e => { e.preventDefault(); const t = document.querySelector(`#tabBar [data-otab="${el.dataset.gotab}"]`); if (t) t.click(); }));
     host.querySelectorAll('[data-goin]').forEach(el => el.addEventListener('click', e => { e.preventDefault(); const t = document.querySelector(`#inTabs [data-itab="${el.dataset.goin}"]`); if (t) t.click();
