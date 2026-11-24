@@ -11781,6 +11781,40 @@ New optional keys inside each `xs.edges.L` / `xs.edges.R` object: `bMode` ('ente
 - Also the Cross-frames / Diaphragms steps whose sub ends in a comparison since #1692 (slenderness ℓ/r ≤ limit, P_r ≥ C_u, P_r ≥ T_u): the value is no longer repeated after it.
 - New smoke `tests/smoke/steel-bridge-cmpl.mjs` (Flexure, Constructibility, Cross-frames: no relation right after "=", no repeated value, no "= OK" after a comparison).
 
+## 2026-11-24 — PR: claude/sb-fence-on-barrier (PR #1701: https://github.com/mlococo88/All-Structural/pull/1701) (FOB) — a railing or fence over a barrier or curb is drawn standing on its top (display only)
+### Request (engineer, 2026-11-24)
+"There's an option to add a fence or railing on top of the concrete barrier, which is great. But the renderings — the 3D model, the regular drawings, the DXF drawings and the graphics — all show it as basically embedded in the concrete. Can we fix that?"
+### Input combinations with a railing or fence over a barrier or curb
+- Deck edge "Barrier" on a sidewalk + sidewalk "Railing / fence" with "Fence from deck edge" ≤ the barrier width at the deck: drawn from the sidewalk top, inside the barrier (fixed).
+- Deck edge "Curb and railing" on a sidewalk + sidewalk fence within the curb width: drawn from the sidewalk top, inside the curb (fixed).
+- Deck edge "Curb and railing" with "Railing load point from edge" ≤ the curb width: already on the curb top (unchanged; now through the same helper, same numbers).
+- (A sidewalk fence needs a sidewalk: the loads module rejects 0 < x ≤ w otherwise.)
+### Where / Before / After
+- `engine/drawings.js`, above `function appOf(R)`: new `BAR_SCH` (the schematic barrier outline the DXF already drew, fractions [u/w, y/h]: `[[0, 0], [0, 1], [0.42, 1], [0.62, 0.3], [1, 0.12], [1, 0]]`), `barOutline(a)`, `barPts(a)`, `topOf(pts, u)` (the top surface of an outline at u) and `topAt(items, sd, x)` (the top elevation of the barrier or curb of side sd under x, else null). Exported on `SBDDrawings`.
+- `appOf`, anchor `const rl = byId('rail' + sd);`: before `y0: e.cw > 0 && e.rp <= e.cw + 1e-9 ? y0 + e.ch : surf(rl.x)` → after `y0: base(sd, rl.x)`; the fence: before `y0: surf(L.x)` → after `y0: base(sd, L.x)`, with `const base = (sd, x) => { const t = topAt(out, sd, x); return t !== null ? t : surf(x); };`.
+- `appDraw`, the barrier: before `P_ = (f, g) => [x0 + s * f * w, y0 + g * a.h]; D.pline(ly.b, [P_(0, 0), P_(0, 1), P_(0.42, 1), P_(0.62, 0.3), P_(1, 0.12), P_(1, 0)], true)` → after `D.pline(ly.b, barOutline(a).map(([u, y]) => [x0 + s * u, y0 + y]), true)` (the same points, bit for bit: ±(f·w) either way).
+- The renderers read the items' `y0`, so the change reaches all of them without an edit: the Drawings tab section and the sheet set DXF (`appDraw`), the Loads & LLDF graphic (`ui/gfxdet.js lldfSvg`) and its Download DXF (`ui/gfxa.js loadsGraphic`), and the 3D view (`ui/view3d.js`, the posts and rails from `yTop + a.y0`).
+### Problem
+The base of a sidewalk railing or fence was always the sidewalk surface, so over a barrier (34 in drawn) the 42 in post showed only 8 in above the barrier; over a curb it started inside the curb.
+### Governing provision
+None (display only). No load, weight, load point or computed value changes: the line loads keep their entered x and w.
+### Check case (made-up project: built-in, left sidewalk 6 ft × 8 in with a fence 0.05 klf at 0.5 ft, right sidewalk 5 ft × 10 in with a fence 0.04 klf at 1.2 ft; barriers 1.5 ft = 18 in)
+- Left fence: u = 6 in ≤ 0.42 × 18 = 7.56 in (flat top): base before 8 in (sidewalk top), after 8 + 34 = 42 in.
+- Right fence: u = 14.4 in, u/w = 0.8 on the face (0.62, 0.30)–(1, 0.12): g = 0.30 − 0.18 × (0.8 − 0.62)/0.38 = 0.21474; base before 10 in, after 10 + 0.21474 × 34 = 17.30 in.
+- Curb edges 12 × 10 in on an 8 in sidewalk, fence at 0.4 ft: before 8 in, after 18 in; fence at 3 ft (beyond the curb): 8 in both; curb railing at 0.5 ft: 18 in both.
+### How verified
+- `tests/engine/sb-fence-on-barrier.test.mjs` (the cases above). `node tests/engine/run.mjs drawings sheets dxf-sheets dxf-detc graphics-overlap xf-dxf sb-fence-on-barrier` (DXF baselines unchanged: their projects have no fence); `node tests/check-syntax.mjs`.
+- Results unchanged: `SBDLoads.compute` of the made-up projects (barrier + fences, curbs + fences, Geometry-mode barriers + fences, built-in) hashed before/after: identical, every line load's id, x, w and category identical. Only engine/drawings.js changed (no engine file the analysis reads).
+- DXF (the whole drawing set, `SBDDrawings.dxf`): built-in project byte-identical; curb project: only the 3 S-DECK-RAIL lines of the left fence and its callout leader moved up; barrier project: the S-DECK-RAIL entities and the deck-edge chain and callouts above the appurtenances move up with the taller items, and the section block sits 32 in lower on the sheet (laid out from its top), every other section entity unchanged relative to the deck.
+### Saved data
+None.
+### Decisions (pending engineer review)
+- FOB-a. The top is that of the schematic barrier the Drawings tab draws (flat over 0.42 w, then the sloped traffic face). The Loads & LLDF graphic and the 3D view draw the entered barrier as a 34 in block (unchanged, "entered barriers render exactly as today"): over the flat top they agree; a fence placed on the sloped face shows its post starting below that block's top there.
+- FOB-b. A fence exactly at the barrier's inner toe sits on the toe (0.12 h), and just beyond it on the sidewalk.
+### Open items
+- Geometry-mode barriers (BARG) are still drawn with the schematic shape; drawing their own outline (and seating the fence on it) is the follow-up PR (approved by the engineer 2026-11-24).
+- The Deck tab's section figure (ui/deck.js) draws no railing or fence; not changed.
+
 ## 2026-11-24 — PR: claude/sb-unstiffened-greyout (PR #1704: https://github.com/mlococo88/All-Structural/pull/1704) (UNSTF) — Stiffeners input tab: the inputs an unstiffened web does not use are greyed   [display only; no computed value, saved field or format changes]
 ### Why
 - Engineer (2026-11-24): with Web = Unstiffened, the stiffener spacing, d_o/D, the per-bay table and the Type A inputs looked active though unused.
