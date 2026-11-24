@@ -11373,7 +11373,7 @@ Deck design **off** (the default, every project saved before 2026-11-23 and new 
 ### Saved data
 None: no new field or key; `P.deckDesign` unchanged.
 
-## 2026-11-24 — PR: claude/sb-dia-fail-highlight (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SBDFH) — Diaphragms / Cross-frames tab: the topic chip from the check items, failing steps red, the slenderness limit shown, TeX "{,}" in plain-text labels   [DISPLAY ONLY: no value, factor, formula or verdict changed]
+## 2026-11-24 — PR: claude/sb-dia-fail-highlight (PR #1692: https://github.com/mlococo88/All-Structural/pull/1692) (SBDFH) — Diaphragms / Cross-frames tab: the topic chip from the check items, failing steps red, the slenderness limit shown, TeX "{,}" in plain-text labels   [DISPLAY ONLY: no value, factor, formula or verdict changed]
 ### Problem (engineer report, 2026-11-24)
 A C15x33.9 intermediate diaphragm showed the worked-steps topic "Diaphragm (intermediate bracing), CFD" with a red chip "47.153" and the result line "Diaphragm: slenderness (secondary member): Kℓ/r_min", while every expanded step looked neutral; the brace stiffness step label read "β_br = 6EI_x/S = 1{,}009{,}882".
 ### Root cause
