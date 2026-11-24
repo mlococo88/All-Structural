@@ -1,6 +1,6 @@
 # Fix log — shared/barrier.js (window.SharedBarrier)
 
-## 2026-11-24 — PR: claude/shared-barrier-steel (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (BARG-1) — new shared file: a barrier's area, weight, width at the deck and centroid from its geometry   [NEW CALCULATION; loaded by apps/steel-bridge/index.html; no existing result changes]
+## 2026-11-24 — PR: claude/shared-barrier-steel (PR #1697: https://github.com/mlococo88/All-Structural/pull/1697) (BARG-1) — new shared file: a barrier's area, weight, width at the deck and centroid from its geometry   [NEW CALCULATION; loaded by apps/steel-bridge/index.html; no existing result changes]
 ### Request (engineer, 2026-11-24)
 "RIDOT has a barrier that is a rectangle shape, not an F-shape barrier. Can I enter the barrier geometry in a new section and let the app calculate the weight directly?" Then: "Use the centroid for the barrier load point. Do this for both the steel and ps apps."
 ### Where

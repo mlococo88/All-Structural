@@ -11605,7 +11605,7 @@ None changed (no key, path or format touched).
 - SWGRP-1. Labels drop the side under each sub-heading ("Width", "Edge type"); the side remains as hidden label text, so the input-check banner reads e.g. "Left sidewalk: Fence from deck edge".
 - SWGRP-2. The shared items of the sidewalk card are headed "Pedestrian load and median"; the deck-edge card has no shared inputs (its note stays at the end). The `<hr>` between the two deck edges is replaced by the sub-headings.
 
-## 2026-11-24 — PR: claude/shared-barrier-steel (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (BARG) — Cross-section tab, deck edges: "Barrier weight from: Entered / Geometry" (shared/barrier.js); with Geometry the barrier's weight and width at the deck are computed and its DC2 acts at its centroid   [NEW OPTION; Entered (the default, every saved project) unchanged; §4: the load point in Geometry mode]
+## 2026-11-24 — PR: claude/shared-barrier-steel (PR #1697: https://github.com/mlococo88/All-Structural/pull/1697) (BARG) — Cross-section tab, deck edges: "Barrier weight from: Entered / Geometry" (shared/barrier.js); with Geometry the barrier's weight and width at the deck are computed and its DC2 acts at its centroid   [NEW OPTION; Entered (the default, every saved project) unchanged; §4: the load point in Geometry mode]
 ### Request (engineer, 2026-11-24)
 "RIDOT has a barrier that is a rectangle shape, not an F-shape barrier. Can I enter the barrier geometry in a new section and let the app calculate the weight directly?" Then: "Use the centroid for the barrier load point. Do this for both the steel and ps apps."
 ### Where / Before / After
