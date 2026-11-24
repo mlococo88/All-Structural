@@ -279,7 +279,7 @@
     if (R.SCC) c.push({ k: 'sc', i: 0, r: R.scGov ? R.scGov.it.r : 0 });
     return c.reduce((a, b) => (!a || b.r > a.r ? b : a), null) || { k: 'sc', i: 0 };
   }
-  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>`;
+  const stepLi = (s, ST) => { const k = window.SBDSub.mark(s, ST); return `<li id="st-${esc(s.id)}"${k.cls ? ` class="${k.cls}"` : ''}><div class="lbl">${k.tag}${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>` };
   const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
 
   /* ---------- topics of the worked steps (presentation spec A, 2026-10-31; as ui/shear.js): fatigue details, GS17 flanges, shear connectors; the flexure work they quote uses the topics of the Flexure tab ---------- */
@@ -304,7 +304,7 @@
     { key: 'sN', title: 'Number of connectors required and provided', ref: A + '6.10.10.4.1', ids: /^scr\d+\.(nreq|nprov|ok|net)/ },
     { key: 'sg', title: 'Studs over splices', ref: A + '6.10.10.4.1', ids: /^scg\d+/ }] };
   const groups = (kind, list) => window.SharedSteps.group(list, TOPICS[kind || 'x'](), { strip: false });
-  const stepsHtml = (list, kind) => window.SharedSteps.groupsHTML(groups(kind, list), { open: OPEN, item: stepLi });
+  const stepsHtml = (list, kind, ST) => window.SharedSteps.groupsHTML(groups(kind, list), { open: OPEN, item: q => stepLi(q, ST) });   // SBNG: ST, ui/sub.js stepSt
   const go = (k, i, id, txt) => `<a class="wk" href="#st-${esc(id)}" data-go="${k}:${i}:${esc(id)}">${txt || '§'}</a>`;
   const stCell = st => `<td class="${st === 'fail' ? 'fx-ng' : st === 'warn' ? 'fx-hi' : st === 'na' ? 'fx-na' : 'fx-ok'}">${{ pass: 'OK', fail: 'Fail', warn: 'Warning', adv: 'Advisory', na: 'n/a' }[st] || esc(st)}</td>`;
   function results(R) {
@@ -362,7 +362,11 @@
     if (sel.k === 'fa' && R.FR.rows && R.FR.rows[sel.i]) { const r = R.FR.rows[sel.i]; title = r.name; list = stepsOf(R, 'fa', r); }
     else if (sel.k === 'gs' && R.gs17 && R.gs17[sel.i]) { const q = R.gs17[sel.i]; title = `${q.r.name} (GS17)`; list = stepsOf(R, 'gs', q); }
     else if (!R.SR.errors.length) { title = 'shear connectors'; list = stepsOf(R, 'sc'); }
-    if (list.length) h += `<section class="sec"><div class="secHead">Worked steps, ${esc(title)}</div><div class="secBody"><p class="note">Click a row above to show its work. AASHTO LRFD 10th Ed. (2024).</p>${title === 'shear connectors' ? `<p class="note" id="sc-edition-steps">${SC_ED}</p>` : ''}${stepsHtml(list)}</div></section>`;
+    /* SBNG (2026-11-24): the steps that a failing / warning check item links to (it.step), red "NG" / amber "Warning" (ui/sub.js mark; display
+       only): fatigue details FA1–FA6 (FC), GS17 of the selected station (its own items: the GS17 step ids repeat from station to station),
+       shear connectors SC1–SC7 (SCC) */
+    const SB_ = window.SBDSub, ST = SB_.stepSt(sel.k === 'fa' ? SB_.items(R.FC) : sel.k === 'gs' ? SB_.items(R.gs17 && R.gs17[sel.i] ? [R.gs17[sel.i].o] : []) : SB_.items(R.SCC));
+    if (list.length) h += `<section class="sec"><div class="secHead">Worked steps, ${esc(title)}</div><div class="secBody"><p class="note">Click a row above to show its work. AASHTO LRFD 10th Ed. (2024).</p>${title === 'shear connectors' ? `<p class="note" id="sc-edition-steps">${SC_ED}</p>` : ''}${stepsHtml(list, undefined, ST)}</div></section>`;
     return h;
   }
 

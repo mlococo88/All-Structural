@@ -237,7 +237,7 @@
     host.querySelectorAll('[data-rtgo]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); S.view = ''; S.sel = +a.dataset.rtgo; redraw(); const t = host.querySelector('#rt-steps'); if (t) t.scrollIntoView({ block: 'start' }); }));
     if (S.R && !stale && !S.err && window.SBDTabGfxBUI) { const D = viewOf(S.R); if (D && !D.chart) D.chart = { rows: D.rows, sum: D.sum, pl: D.pl, one: D.short }; window.SBDTabGfxBUI.rating(host, ctx, D ? D.chart : S.R, S.sel, v => { S.sel = v.i; redraw(); }); }   // the graphic (ui/tabgraphics-b.js): a click selects that station's row
   }
-  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>`;
+  const stepLi = (s, ST) => { const k = window.SBDSub.mark(s, ST); return `<li id="st-${esc(s.id)}"${k.cls ? ` class="${k.cls}"` : ''}><div class="lbl">${k.tag}${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>` };
   const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
 
   /* ---------- topics of the worked steps (presentation spec A, 2026-10-31; as ui/shear.js): the rating factor from its load effects and capacity; the capacity work uses the Flexure / Shear topics ---------- */
@@ -251,7 +251,13 @@
   const groups = (kind, list) => window.SharedSteps.group(list, TOPICS[kind || 'x'](), { strip: false });
   /* the capacity work of a location: the Shear or the Flexure tab's topics (the same steps as those tabs) */
   const capGroups = (q, list) => q.kind === 'shear' ? window.SBDShearUI.groups('loc', list) : window.SBDFlexureUI.groups('x', list);
-  const stepsHtml = (list, G) => window.SharedSteps.groupsHTML(G || groups('x', list), { open: OPEN, item: stepLi });
+  const stepsHtml = (list, G, ST) => window.SharedSteps.groupsHTML(G || groups('x', list), { open: OPEN, item: q => stepLi(q, ST) });
+  /* SBNG (2026-11-24; display only): the steps marked red "NG" (ui/sub.js mark): a rating row's rating factor below 1.0 where the tab shows it
+     red (cls: RF < 1 − 1e-9, −∞ or NaN): rt.inv, rt.opr (a legal / permit vehicle: rt.inv, its one RF), rt.fat (fatigue RF); and in the
+     capacity work of the location, the failing Flexure / Shear check rows (r.checks, as on those tabs) */
+  const rfBad = v => v === -Infinity || Number.isNaN(v) || (typeof v === 'number' && isFinite(v) && v < 1 - 1e-9) ? 'fail' : '';
+  const rfSt = q => window.SBDSub.stepSt(q.kind === 'fat' ? [{ step: 'rt.fat', st: rfBad(q.inv) }] : [{ step: 'rt.inv', st: rfBad(q.inv) }, { step: 'rt.opr', st: q.opr === undefined ? '' : rfBad(q.opr) }]);
+  const capSt = r => r && r.checks ? window.SBDSub.stepSt(window.SBDSub.rows(r.checks)) : null;
   const grpOf = q => q.kind === 'flex' ? (q.region === 'pos' ? 'flexP' : 'flexN') : q.kind;
   function results(R) {
     const s = R.sum, gi = s.gov.inv, go = s.gov.opr, idx = q => R.rows.indexOf(q), lk = q => q ? ` <a class="wk" href="#rt-steps" data-rtgo="${idx(q)}">§</a>` : '';
@@ -279,7 +285,7 @@
     const q = R.rows[S.sel] || gi;
     if (q && !q.oos) { const r = R.cap.get(q), cst = r ? (q.kind === 'shear' ? window.SBDShearUI.stepsOf(R.shear, 'loc', r) : window.SBDFlexureUI.stepsOf(R.flex, r)) : [];   // with custom demands their step first
       h += `<section class="sec" id="rt-steps"><div class="secHead">Worked steps, ${esc(q.name)}: ${window.SBDSub.html(q.title)}</div><div class="secBody"><p class="note">The rating first (${esc(window.SBDRating.MBE)}), then the ${q.kind === 'shear' ? 'shear' : 'flexure'} work of this location (the same steps as the ${q.kind === 'shear' ? 'Shear &amp; stiffeners' : 'Flexure'} tab), where R<sub>n</sub> is worked. AASHTO LRFD 10th Ed. (2024).</p>
-        ${stepsHtml(q.steps)}${cst && cst.length ? `<h4 class="sub" style="font-family:var(--font-ui);font-size:9pt;margin:10px 0 2px">${q.kind === 'shear' ? 'Shear' : 'Flexure'} at ${esc(r.name)}</h4>${stepsHtml(cst, capGroups(q, cst))}` : ''}</div></section>`; }
+        ${stepsHtml(q.steps, null, rfSt(q))}${cst && cst.length ? `<h4 class="sub" style="font-family:var(--font-ui);font-size:9pt;margin:10px 0 2px">${q.kind === 'shear' ? 'Shear' : 'Flexure'} at ${esc(r.name)}</h4>${stepsHtml(cst, capGroups(q, cst), capSt(r))}` : ''}</div></section>`; }
     return h;
   }
 
@@ -380,8 +386,8 @@
     const q = D.rows[S.sel] || gi;
     if (q && !q.oos) { const r = D.cap.get(q), cst = r ? (q.kind === 'shear' ? window.SBDShearUI.stepsOf(D.shear, 'loc', r) : window.SBDFlexureUI.stepsOf(D.flex, r)) : [], ts = vehSteps(D);
       h += `<section class="sec" id="rt-steps"><div class="secHead">Worked steps, ${esc(D.short)}, ${esc(q.name)}: ${window.SBDSub.html(q.title)}</div><div class="secBody"><p class="note">The rating first (${esc(window.SBDRating.MBE)}): the vehicle's live load from this app's line-girder model (<a href="#" data-gotab="an">Analysis tab</a>: stiffness and stations; distribution factors on the <a href="#" data-gotab="loads">Loads &amp; LLDF tab</a>), then the ${q.kind === 'shear' ? 'shear' : 'flexure'} work of this location with this vehicle's demands, where R<sub>n</sub> is worked (the method of the ${q.kind === 'shear' ? '<a href="#" data-gotab="shear">Shear &amp; stiffeners</a>' : '<a href="#" data-gotab="flex">Flexure</a>'} tab). AASHTO LRFD 10th Ed. (2024).</p>
-        ${stepsHtml(q.steps)}${q === gi && ts.length ? `<h4 class="sub" style="font-family:var(--font-ui);font-size:9pt;margin:10px 0 2px">Rated load${D.posting && D.posting.st === 'post' ? ' and posting' : ''}, ${esc(D.short)}</h4>${stepsHtml(ts, groups('v', ts))}` : q !== gi && gi ? `<p class="note">The rated load of ${esc(D.short)} is worked with its governing row: <a href="#rt-steps" data-rtv="${esc(D.key)}" data-rtvrow="${D.rows.indexOf(gi)}">${esc(gi.name)}</a>.</p>` : ''}
-        ${cst && cst.length ? `<h4 class="sub" style="font-family:var(--font-ui);font-size:9pt;margin:10px 0 2px">${q.kind === 'shear' ? 'Shear' : 'Flexure'} at ${esc(r.name)}</h4>${stepsHtml(cst, capGroups(q, cst))}` : ''}</div></section>`; }
+        ${stepsHtml(q.steps, null, rfSt(q))}${q === gi && ts.length ? `<h4 class="sub" style="font-family:var(--font-ui);font-size:9pt;margin:10px 0 2px">Rated load${D.posting && D.posting.st === 'post' ? ' and posting' : ''}, ${esc(D.short)}</h4>${stepsHtml(ts, groups('v', ts))}` : q !== gi && gi ? `<p class="note">The rated load of ${esc(D.short)} is worked with its governing row: <a href="#rt-steps" data-rtv="${esc(D.key)}" data-rtvrow="${D.rows.indexOf(gi)}">${esc(gi.name)}</a>.</p>` : ''}
+        ${cst && cst.length ? `<h4 class="sub" style="font-family:var(--font-ui);font-size:9pt;margin:10px 0 2px">${q.kind === 'shear' ? 'Shear' : 'Flexure'} at ${esc(r.name)}</h4>${stepsHtml(cst, capGroups(q, cst), capSt(r))}` : ''}</div></section>`; }
     return h;
   }
 

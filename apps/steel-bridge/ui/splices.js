@@ -153,7 +153,7 @@
   }
   /* stepsOf(R, s): the worked steps of splice s; with custom demands the step that names them first */
   const stepsOf = (R, s) => { const list = SP().steps(s.R).concat(s.CK.steps); return R && R.custom ? [window.SBDCustomDemands.step('spl', R.custom, s.x)].concat(list) : list; };
-  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>`;
+  const stepLi = (s, ST) => { const k = window.SBDSub.mark(s, ST); return `<li id="st-${esc(s.id)}"${k.cls ? ` class="${k.cls}"` : ''}><div class="lbl">${k.tag}${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>` };
   const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
 
   /* ---------- topics of the worked steps (presentation spec A, 2026-10-31; as ui/shear.js): loads and section properties of the splice, then the flange and web splices ---------- */
@@ -171,7 +171,7 @@
     { key: 'mt', title: 'Moment resistance of the flange splice (MT)', ref: A + '6.13.6.1.4', ids: /^sp\.MT\d/ },
     { key: 'dt', title: 'Detailing: bolt spacing and edge distance (DT)', ref: A + '6.13.2.6', ids: /^sp\.DT\d/ }] };
   const groups = (kind, list) => window.SharedSteps.group(list, TOPICS[kind || 'x'](), { strip: false });
-  const stepsHtml = (list, kind) => window.SharedSteps.groupsHTML(groups(kind, list), { open: OPEN, item: stepLi });
+  const stepsHtml = (list, kind, ST) => window.SharedSteps.groupsHTML(groups(kind, list), { open: OPEN, item: q => stepLi(q, ST) });   // SBNG: ST, ui/sub.js stepSt
   /* the largest ratio among the strength checks (bolts, plates, web: TF1–TF5, BF1–BF5, WS1, WS2, WS4, WS5) */
   const strGov = CK => { let b = null; (CK || []).filter(c => /^(TF|BF)[1245]$|^WS[1245]$/.test(c.id)).forEach(c => c.items.forEach(it => { if (it.r != null && (isFinite(it.r) || (typeof it.r === 'number' && it.st === 'fail')) && (!b || (x => isFinite(x) ? x : Infinity)(it.r) > (x => isFinite(x) ? x : Infinity)(b.it.r))) b = { c, it }; /* SB2-R2: NaN / ∞ failing items govern */ })); return b; };
   const plTxt = F => `${F.nl} line${F.nl > 1 ? 's' : ''} each side × ${F.nr} rows; outer PL ${SP().frac(F.bo)} × ${SP().frac(F.to)}${F.inner ? `, 2 inner PL ${SP().frac(F.bi)} × ${SP().frac(F.ti)}` : ''}`;
@@ -243,7 +243,7 @@
       ${s.CK.map(c => `<details class="sp-ck"><summary>${c.id} ${tt(c.title)}: ${c.items.length} item${c.items.length === 1 ? '' : 's'}, ${ST[c.status]}</summary>${c.note ? `<p class="note">${tt(c.note)}</p>` : ''}
         <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Item</th><th>Demand</th><th>Resistance / limit</th><th>Ratio</th><th>Status</th><th></th></tr></thead><tbody>${c.items.map(it => `<tr><td class="lft">${window.SBDSub.html(it.loc)}</td><td>${it.dem != null ? fmt(it.dem, 2) : ''} ${esc(it.unit || '')}</td><td>${it.cap != null ? fmt(it.cap, 2) : ''} ${esc(it.unit || '')}</td><td class="${cls(it.r, it.st)}">${it.r != null ? fmt(it.r, 3) : '—'}</td><td>${ST[it.st]}</td><td><a class="wk" href="#st-${esc(it.step)}">§</a></td></tr>`).join('')}</tbody></table></div></details>`).join('')}
       <p class="note">Advisory items (MT1, TF3/BF3 under the 10th Ed.): the excess moment goes to the web splice (WS1, WS3, WS5) instead of failing the splice.</p></div></section>`;
-    h += `<section class="sec"><div class="secHead">Worked steps, ${esc(s.name)}</div><div class="secBody"><p class="note">AASHTO LRFD 10th Ed. (2024); y up from the bottom of the steel; tension +. The analysis moments and shears are worked on the Analysis tab.</p>${stepsHtml(stepsOf(Rg, s))}</div></section>`;
+    h += `<section class="sec"><div class="secHead">Worked steps, ${esc(s.name)}</div><div class="secBody"><p class="note">AASHTO LRFD 10th Ed. (2024); y up from the bottom of the steel; tension +. The analysis moments and shears are worked on the Analysis tab.</p>${stepsHtml(stepsOf(Rg, s), undefined, window.SBDSub.stepSt(window.SBDSub.items(s.CK)))}</div></section>`;
     return h;
   }
 

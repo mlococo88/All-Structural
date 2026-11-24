@@ -110,7 +110,10 @@
   const isDefl = s => /^an\.(defl\.|camber)/.test(s.id);
   function stepsHtml(R) {
     const list = R.steps.filter(isDefl), G = AUI() && AUI().groups ? AUI().groups('x', list) : null;
-    const item = q => `<li id="st-${esc(q.id)}"${q.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(q.label)}${q.ref ? `<span class="ref">${esc(q.ref)}</span>` : ''}</div><div>${ST().line(q, true)}</div>${q.note ? `<div class="nt">${window.SBDSub.html(q.note)}</div>` : ''}</li>`;
+    /* SBNG (2026-11-24; display only): SA3 of each span (R.lld status) marks its step: a failing span its deflection an.defl.LL<k> red "NG", a
+       span over the owner's preferred limit (a warning) its step an.defl.pref<k> amber "Warning" (ui/sub.js mark) */
+    const MK = window.SBDSub.stepSt((R.lld || []).map(q => q.status === 'fail' ? { step: `an.defl.LL${q.k + 1}`, st: 'fail' } : q.status === 'warn' ? { step: `an.defl.pref${q.k + 1}`, st: 'warn' } : null));
+    const item = q => { const k = window.SBDSub.mark(q, MK); return `<li id="st-${esc(q.id)}"${k.cls ? ` class="${k.cls}"` : ''}><div class="lbl">${k.tag}${window.SBDSub.html(q.label)}${q.ref ? `<span class="ref">${esc(q.ref)}</span>` : ''}</div><div>${ST().line(q, true)}</div>${q.note ? `<div class="nt">${window.SBDSub.html(q.note)}</div>` : ''}</li>` };
     return card('Worked steps', `<p class="note">AASHTO LRFD 10th Ed. (2024). The engine's own steps (the same ids as before; the analysis' other steps are on the <a href="#" data-gotab="an">Analysis tab</a>: the girder steel weight, the cracked zones, the stiffness of each segment).</p>${G ? ST().groupsHTML(G, { open: OPEN, item }) : `<ul class="steps">${list.map(item).join('')}</ul>`}`, 'df-steps');
   }
 

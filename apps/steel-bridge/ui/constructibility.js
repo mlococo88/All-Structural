@@ -106,7 +106,8 @@
     S.key = key(ctx);
   }
 
-  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>`;
+  /* SBNG (2026-11-24): a step that a failing check row (GS14–GS16, OH1–OH5: c.step) links to red with "NG" (ui/sub.js mark); display only */
+  const stepLi = (s, ST) => { const k = window.SBDSub.mark(s, ST); return `<li id="st-${esc(s.id)}"${k.cls ? ` class="${k.cls}"` : ''}><div class="lbl">${k.tag}${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>` };
   const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
 
   /* ---------- topics of the worked steps (presentation spec A, 2026-10-31; as ui/shear.js): deck placement (6.10.3) and the overhang brackets ---------- */
@@ -126,7 +127,7 @@
     { key: 'ohr', title: 'Overhang: resistances', ref: A + '6.10.8.2, 6.10.1.9.1', ids: /^oh\.(Dc|k|Fcrw|FLB|LTB|rt)$/ },
     { key: 'ohc', title: 'OH1 to OH5: checks', ref: A + '6.10.3.2', ids: /^oh\..*\.ok$/ }] };
   const groups = (kind, list) => window.SharedSteps.group(list, TOPICS[kind || 'x'](), { strip: false });
-  const stepsHtml = (list, kind) => window.SharedSteps.groupsHTML(groups(kind, list), { open: OPEN, item: stepLi });
+  const stepsHtml = (list, kind, checks) => { const ST = checks ? window.SBDSub.stepSt(window.SBDSub.rows(checks)) : null; return window.SharedSteps.groupsHTML(groups(kind, list), { open: OPEN, item: q => stepLi(q, ST) }); };   // SBNG: checks, the rows whose failing steps are marked
   // SBTS: cs (0 the reported case, 1 the other sign case) on the § link, so that it shows that case's worked steps first
   const csA = cs => (cs == null ? '' : ` data-cncase="${cs}"`);
   const ckRows = (checks, gov, cs) => checks.map(c => `<tr${gov === c ? ' class="cn-gov"' : ''}><td class="lft">${esc(c.id)} ${tt(c.title)}</td><td>${fmt(c.demand, 2)} ${esc(c.unit)}</td><td>${fmt(c.capacity, 2)} ${esc(c.unit)}</td><td class="${cls(c.ratio)}">${rtx(c)}</td><td class="lft">${esc(c.ref.replace('AASHTO LRFD 10th Ed. ', ''))}</td><td><a class="wk" href="#st-${esc(c.step)}"${csA(cs)}>§</a></td></tr>`).join('');
@@ -179,14 +180,14 @@
         h += `<section class="sec"><div class="secHead">${esc(r.name)}: deck placement checks</div><div class="secBody">${two ? `<p class="note">Both signs of the deck-placement moment occur here and both are checked (6.10.3.4.1). Reported: the ${sgn(r)}-moment case (it governs), ${r.conC.lab} flange in compression.</p>` : ''}<div class="tscroll"><table class="tbl">${ckHead}<tbody>${ckRows(r.checks, r.gov, cs0)}</tbody></table></div>
           ${kvOf(r, cs0)}
           ${two ? `<h4 class="sub">Also checked: the ${sgn(r.alt)}-moment case, ${r.alt.conC.lab} flange in compression (not governing)</h4><div class="tscroll"><table class="tbl">${ckHead}<tbody>${ckRows(r.alt.checks, r.alt.gov, 1)}</tbody></table></div>${kvOf(r.alt, 1)}` : ''}</div></section>
-          <section class="sec"><div class="secHead">Worked steps, ${esc(r.name)}${two ? `, ${sgn(rs)}-moment case${rs === r ? ' (governing)' : ' (not governing)'}` : ''}</div><div class="secBody">${two ? `<p class="fRow"><button type="button" id="cn_case">Show the worked steps of the ${sgn(rs === r ? r.alt : r)}-moment case</button></p>` : ''}<p class="note">AASHTO LRFD 10th Ed. (2024); y up from the bottom of the steel; tension +. The steel section properties are worked on the Section properties tab (sec.s).</p>${stepsHtml(stepsOf(R, rs))}</div></section>`;
+          <section class="sec"><div class="secHead">Worked steps, ${esc(r.name)}${two ? `, ${sgn(rs)}-moment case${rs === r ? ' (governing)' : ' (not governing)'}` : ''}</div><div class="secBody">${two ? `<p class="fRow"><button type="button" id="cn_case">Show the worked steps of the ${sgn(rs === r ? r.alt : r)}-moment case</button></p>` : ''}<p class="note">AASHTO LRFD 10th Ed. (2024); y up from the bottom of the steel; tension +. The steel section properties are worked on the Section properties tab (sec.s).</p>${stepsHtml(stepsOf(R, rs), undefined, rs.checks)}</div></section>`;
       }
       if (R.oh && !(R.oh.errors && R.oh.errors.length)) { const O = R.oh, q = O.rows[S.ohSel] || O.rows[0];
         h += `<section class="sec"><div class="secHead">Overhang brackets: flange lateral bending (exterior girder, OH1–OH5)</div><div class="secBody">
           <p class="note">One location per span: the largest ${nf(GP.cdc)}M<sub>DC1</sub> + ${nf(GP.ccl)}M<sub>CL</sub> (GirderDetail's placement; deck placement factors, 3.4.2.1), with its plates and deck-placement L<sub>b</sub>. w<sub>u</sub> = ${fmt(O.wu, 4)} kip/ft, F<sub>ℓ</sub> = ${fmt(O.Fl, 4)} kip/ft, P<sub>ℓ</sub> = ${fmt(O.Pl, 3)} kip <a class="wk" href="#st-oh.Fl">§</a>${O.given ? ' (as stored in the hand-off file)' : ''}.</p>
           <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Location</th><th>M<sub>u</sub> (kip-ft)</th><th>M<sub>ℓ</sub> (kip-in)</th><th class="lft">Governing</th><th>Ratio</th></tr></thead><tbody>
           ${O.rows.map((o, i) => `<tr data-ohsel="${i}" class="${i === S.ohSel ? 'sel' : ''}"><td class="lft">${esc(o.name)}</td><td>${fmt(o.Mu, 1)}</td><td>${fmt(o.Ml, 1)}</td><td class="lft">${esc(o.gov.id)}</td><td class="${cls(o.gov.ratio)}">${rtx(o.gov)}</td></tr>`).join('')}</tbody></table></div>
-          ${q ? `<h4 class="sub">${esc(q.name)}</h4><div class="tscroll"><table class="tbl">${ckHead}<tbody>${ckRows(q.checks, q.gov)}</tbody></table></div>${stepsHtml(q.steps)}` : ''}</div></section>`; }
+          ${q ? `<h4 class="sub">${esc(q.name)}</h4><div class="tscroll"><table class="tbl">${ckHead}<tbody>${ckRows(q.checks, q.gov)}</tbody></table></div>${stepsHtml(q.steps, undefined, q.checks)}` : ''}</div></section>`; }
     }
     host.innerHTML = h;
     window.SharedSteps.wire(host, { onToggle: (k, open) => { if (open) OPEN.add(k); else OPEN.delete(k); } });
