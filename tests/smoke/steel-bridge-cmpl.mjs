@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // Browser smoke test (CMPL, 2026-11-24; shared/steps.js line()): a worked step whose eq starts with a relation reads "sym ≤ eq = sub = …",
 // not "sym = ≤ eq …", with KaTeX (the CDN copy tests/libs serves) — Steel Bridge Design, built-in project:
-//   1. Flexure tab, a positive-flexure location (compact, 6.10.7): step "Ductility" reads D_p ≤ 0.42D_t = … ≤ 0.42(…) = … = OK and
-//      "Strength I, compact positive flexure" M_u + 1/3 f_ℓ S_xt ≤ φ_f M_n = … ≤ … = OK.
+//   1. Flexure tab, a positive-flexure location (compact, 6.10.7): step "Ductility" reads D_p ≤ 0.42D_t = … ≤ 0.42(…) = …, OK and
+//      "Strength I, compact positive flexure" M_u + 1/3 f_ℓ S_xt ≤ φ_f M_n = … ≤ …, OK.
 //   2. Every worked step on the Flexure (that location and the governing one), Constructibility and Cross-frames tabs: no "= ≤", "= ≥",
-//      "= <", "= >" or "= ≠" (the relation right after an equals sign). 0 console errors.
+//      "= <", "= >" or "= ≠" (the relation right after an equals sign), no value repeated after its comparison ("115.18 ≤ 140 = 115.18",
+//      "52.71 ≥ 3.03 = 52.71 kip", #1692), no "= OK" after a comparison (", OK"). 0 console errors.
 //   node tests/smoke/steel-bridge-cmpl.mjs [--shot <png>]
 import path from 'path';
 import assert from 'assert/strict';
@@ -18,7 +19,7 @@ const { b, p, errs } = await openPage(path.join(REPO, 'apps/steel-bridge/index.h
 const lines = () => p.evaluate(() => [...document.querySelectorAll('#out li[id^="st-"]')].map(li => { const d = li.children[1]; if (!d) return null; const c = d.cloneNode(true);
   c.querySelectorAll('.katex-mathml').forEach(e => e.remove()); return [li.id.slice(3), c.textContent.replace(/\u200b/g, '').replace(/\s+/g, ' ').trim(), !!d.querySelector('.katex')]; }).filter(Boolean));
 const ready = () => p.waitForFunction(() => { const s = document.querySelector('#out .alert.stale'); return document.querySelector('#out li[id^="st-"]') && (!s || s.hidden); }, null, { timeout: 300000 });
-const BAD = /=\s*[≤≥<>≠]/;
+const BAD = /=\s*[≤≥<>≠]|(\d[\d,.]*) ?[≤≥<>≠] ?[\d,.]+ ?= ?\1(?![\d])|[≤≥<>≠][^=]*= ?(OK|NG|NOT OK)$/;   // a relation after '=', a value repeated after its comparison, '= OK' after a comparison
 try {
   await p.waitForSelector('#tabBar [data-otab="flex"]');
   await p.click('#tabBar [data-otab="flex"]'); await ready();
@@ -36,8 +37,8 @@ try {
   }
   assert.ok(found, 'a location with the ductility step');
   assert.ok(found.d[2], 'KaTeX rendered the step');
-  assert.match(found.d[1], /^Dp ?≤ ?0\.42Dt ?= ?[\d.]+ ?≤ ?0\.42\([\d.]+\) ?= ?[\d.]+ ?= ?OK$/, found.d[1]);
-  if (found.m) assert.match(found.m[1], /^Mu ?\+ ?31 ?fℓ ?Sxt ?≤ ?ϕf ?Mn ?= [^=]+=[^=]+≤[^=]+= OK$/, found.m[1]);
+  assert.match(found.d[1], /^Dp ?≤ ?0\.42Dt ?= ?[\d.]+ ?≤ ?0\.42\([\d.]+\) ?= ?[\d.]+, OK$/, found.d[1]);
+  if (found.m) assert.match(found.m[1], /^Mu ?\+ ?31 ?fℓ ?Sxt ?≤ ?ϕf ?Mn ?= [^=]+=[^=]+≤[^=]+, OK$/, found.m[1]);
   console.log(`  ok   Flexure, location ${found.i}: "${found.d[1]}"${found.m ? ` / "${found.m[1]}"` : ''}`);
   if (SHOT) { const el = await p.$(`#out li[id="st-${found.d[0]}"]`); const ol = await el.evaluateHandle(e => e.closest('details') || e.parentElement); await ol.scrollIntoViewIfNeeded(); await ol.screenshot({ path: SHOT }); }
   for (const t of ['cn', 'cf']) {

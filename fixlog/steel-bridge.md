@@ -11582,8 +11582,9 @@ origin/main and this branch, side by side in Node, on 9 made-up bridges (X, Kb, 
 - The step renderer appends "= value" after a sub that ends in a comparison ("47.2 ≤ 140 = 47.2"), as the existing P_r steps ("… ≥ C_u = P_r"); left to the renderer fix in progress elsewhere.
 - shared/steps.js `group()` counts any unitless test step as a ratio (other tools, e.g. TR4 thickness / area proportions t₁/t₂ ≥ 0.5, may show the same kind of chip); not changed here (shared file).
 
-## 2026-11-24 — PR: claude/sb-le-display (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CMPL) — worked-step comparisons read "D_p ≤ 0.42D_t = …", not "D_p = ≤ 0.42D_t = …"   [display only]
+## 2026-11-24 — PR: claude/sb-le-display (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CMPL) — worked-step comparisons read "D_p ≤ 0.42D_t = … = 11.340, OK" and "… = 115.18 ≤ 140" (no stray "=", no value repeated after its comparison)   [display only]
 - Fixed in `shared/steps.js` `line()`: see `fixlog/shared-steps.md` (CMPL) for the code, the check case and the tools. No file of this app changed.
 - Steel steps affected (eq starting with \le / \ge): engine/flexure.js 14 (6.10.7 ductility, compact and noncompact positive flexure, 6.10.8
   flanges, Service II, web bend-buckling, …), constructibility.js 5, proportions.js 5, autodesign.js 1, framing.js 1, splplace.js 1; shared/lldf.js 1.
-- New smoke `tests/smoke/steel-bridge-cmpl.mjs` (Flexure, Constructibility, Cross-frames: no relation right after "=").
+- Also the Cross-frames / Diaphragms steps whose sub ends in a comparison since #1692 (slenderness ℓ/r ≤ limit, P_r ≥ C_u, P_r ≥ T_u): the value is no longer repeated after it.
+- New smoke `tests/smoke/steel-bridge-cmpl.mjs` (Flexure, Constructibility, Cross-frames: no relation right after "=", no repeated value, no "= OK" after a comparison).

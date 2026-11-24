@@ -1,6 +1,7 @@
-// shared/steps.js line() (CMPL, 2026-11-24): a step whose eq starts with a relation (\le, \ge, \lt, \gt, \ne, ≤, ≥, <, >, ≠) continues its
-// sym as one comparison: "D_p ≤ 0.42D_t = 9.204 ≤ … = OK", not "D_p = ≤ 0.42D_t = …" (Steel Bridge Design Flexure, step 15, 6.10.7.3).
-// Every other step renders exactly as before (the old line() is kept below as OLD and compared). Display only.
+// shared/steps.js line() (CMPL, 2026-11-24): (1) a step whose eq starts with a relation (\le, \ge, \lt, \gt, \ne, ≤, ≥, <, >, ≠) continues
+// its sym as one comparison: "D_p ≤ 0.42D_t = 9.204 ≤ …", not "D_p = ≤ 0.42D_t = …" (Steel Bridge Design Flexure, step 15, 6.10.7.3);
+// (2) after a comparison a value it already shows is not repeated, and a verdict follows a comma (", OK"). A step without a relation
+// renders exactly as before (the old line() is kept below as OLD and compared). Display only.
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -28,34 +29,47 @@ function OLD(SS, win, s, html, o) {
 const DUCT = { id: 'fx.duct.ok', label: 'Ductility', sym: 'D_{p}', eq: R`\le 0.42D_{t}`, sub: R`9.204 \le 0.42(27.000) = 11.340`, value: 'OK', unit: '', d: 2, ok: true };
 const MN = { id: 'fx.mn.ok', label: 'Strength I, compact positive flexure', sym: R`M_{u} + \frac{1}{3}f_{\ell}S_{xt}`, eq: R`\le \phi_{f}M_{n}`, sub: R`2086.83 + \frac{1}{3}(0.00)\frac{4{,}210}{12} = 2086.83 \le 2284.07`, value: 'OK', unit: '', d: 2, ok: true };
 
-test('CMPL: the two Flexure step-15 lines read "sym ≤ eq = sub = OK" (plain text, built-in HTML, KaTeX)', () => {
-  assert.equal(S.line(DUCT, false), 'D_p ≤ 0.42D_t = 9.204 ≤ 0.42(27.000) = 11.340 = OK');
-  assert.equal(S.line(MN, false), 'M_u + 1/3f_ℓS_(xt) ≤ φ_fM_n = 2086.83 + 1/3(0.00)(4,210)/12 = 2086.83 ≤ 2284.07 = OK');
+test('CMPL (1)+(2): the two Flexure step-15 lines read "sym ≤ eq = sub, OK" (plain text, built-in HTML, KaTeX)', () => {
+  assert.equal(S.line(DUCT, false), 'D_p ≤ 0.42D_t = 9.204 ≤ 0.42(27.000) = 11.340, OK');
+  assert.equal(S.line(MN, false), 'M_u + 1/3f_ℓS_(xt) ≤ φ_fM_n = 2086.83 + 1/3(0.00)(4,210)/12 = 2086.83 ≤ 2284.07, OK');
   assert.equal(OLD(S, W, DUCT, false), 'D_p = ≤ 0.42D_t = 9.204 ≤ 0.42(27.000) = 11.340 = OK', 'before');
-  assert.equal(S.line(DUCT, true), 'D<sub>p</sub> ≤ 0.42D<sub>t</sub> = 9.204 ≤ 0.42(27.000) = 11.340 = OK');
-  const k = SK.line(DUCT, true), kOld = OLD(SK, WK, DUCT, true);
-  assert.equal(k, katex.renderToString(R`\displaystyle D_{p} \le 0.42D_{t}`, SK.katexOpt) + ' = ' + katex.renderToString(R`\displaystyle 9.204 \le 0.42(27.000) = 11.340`, SK.katexOpt) + ' = OK');
-  assert.equal(kOld.split(' = ').length, k.split(' = ').length + 1, 'one " = " less than before');
+  assert.equal(S.line(DUCT, true), 'D<sub>p</sub> ≤ 0.42D<sub>t</sub> = 9.204 ≤ 0.42(27.000) = 11.340, OK');
+  const k = SK.line(DUCT, true);
+  assert.equal(k, katex.renderToString(R`\displaystyle D_{p} \le 0.42D_{t}`, SK.katexOpt) + ' = ' + katex.renderToString(R`\displaystyle 9.204 \le 0.42(27.000) = 11.340`, SK.katexOpt) + ', OK');
   for (const t of [S.line(DUCT, false), S.line(MN, false), S.line(DUCT, true), S.line(MN, true)]) assert.doesNotMatch(t, /= (≤|≥|<|>|≠|&lt;|&gt;)/, t);
+});
+
+test('CMPL (2): a value the comparison already shows is not repeated (Cross-frames / Diaphragms slenderness and P_r, #1692)', () => {
+  const SL = { id: 'cf.d.ax.sl', label: 'slenderness', sym: R`\frac{K\ell}{r_{min}}`, eq: '', sub: R`\frac{47.00}{0.997} = 47.1\ \le\ 140`, value: 47.14, unit: '', d: 1, ok: true };
+  assert.equal(OLD(S, W, SL, false), 'Kℓ/(r_(min)) = 47.00/0.997 = 47.1 ≤ 140 = 47.1', 'before');
+  assert.equal(S.line(SL, false), 'Kℓ/(r_(min)) = 47.00/0.997 = 47.1 ≤ 140');
+  const PR = { id: 'cf.x.Pr', label: 'P_r', sym: 'P_{r}', eq: R`0.95P_{n} \ge C_{u}`, sub: R`0.95(130.00) = 123.50\ \ge\ 100.00`, value: 123.5, unit: 'kip', d: 2, ok: true };
+  assert.equal(OLD(S, W, PR, false), 'P_r = 0.95P_n ≥ C_u = 0.95(130.00) = 123.50 ≥ 100.00 = 123.50 kip', 'before');
+  assert.equal(S.line(PR, false), 'P_r = 0.95P_n ≥ C_u = 0.95(130.00) = 123.50 ≥ 100.00');
+  const D = t => katex.renderToString('\\displaystyle ' + t, SK.katexOpt);
+  assert.equal(SK.line(PR, true), [PR.sym, PR.eq, PR.sub].map(D).join(' = '), 'KaTeX: no value part');
+  // a value not in the comparison (a ratio) is still shown; digits must match exactly (12.3 is not in 112.30 or 12.34)
+  assert.equal(S.line({ sym: R`V_{u} \le \phi_{v}V_{n}`, eq: '', sub: R`812.50 \le 1.0(1858.00)`, value: 0.437, d: 3 }, false), 'V_u ≤ φ_vV_n = 812.50 ≤ 1.0(1858.00) = 0.437');
+  assert.equal(S.line({ sym: 'x', eq: '', sub: R`112.30 \le 12.34`, value: 12.3, d: 1 }, false), 'x = 112.30 ≤ 12.34 = 12.3');
 });
 
 test('CMPL: every relation the subset knows, and only at the start of eq', () => {
   for (const [eq, rel] of [[R`\le a`, '≤'], [R`\ge a`, '≥'], [R`\lt a`, '<'], [R`\gt a`, '>'], [R`\ne a`, '≠'], ['≤ a', '≤'], ['≥ a', '≥'], ['< a', '<'], ['> a', '>'], [' \\le a', '≤']])
-    assert.equal(S.line({ sym: 'x', eq, sub: '', value: 'OK' }, false), `x ${eq.trim().startsWith('\\') ? rel : eq.trim()[0]} a = OK`, eq);
+    assert.equal(S.line({ sym: 'x', eq, sub: '', value: 'OK' }, false), `x ${eq.trim().startsWith('\\') ? rel : eq.trim()[0]} a, OK`, eq);
   assert.equal(S.isRel({ sym: 'x', eq: R`\left(a\right)` }), false, R`\left is not \le`);
   assert.equal(S.isRel({ sym: 'x', eq: R`\leftarrow` }), false);
-  assert.equal(S.isRel({ sym: 'x', eq: R`a \le b` }), false, 'a relation inside eq: unchanged');
-  assert.equal(S.isRel({ sym: '', eq: R`\le b` }), false, 'no sym: unchanged');
+  assert.equal(S.isRel({ sym: 'x', eq: R`a \le b` }), false, 'a relation inside eq: not merged');
+  assert.equal(S.isRel({ sym: '', eq: R`\le b` }), false, 'no sym: not merged');
+  assert.equal(S.line({ sym: 'x', eq: R`\left(a\right)`, sub: R`\left(1\right)`, value: 'OK' }, false), 'x = (a) = (1) = OK', R`\left is no comparison`);
 });
 
-test('CMPL: every other step renders exactly as before (plain text, built-in HTML, KaTeX)', () => {
+test('CMPL: every step without a relation renders exactly as before (plain text, built-in HTML, KaTeX)', () => {
   const steps = [
     { sym: 'S_{bot}', eq: R`\frac{I}{\bar{y}}`, sub: R`\frac{51{,}050}{33.535}`, value: 51050 / 33.535, unit: 'in^{3}', d: 0 },
-    { sym: R`V_{u} \le \phi_{v}V_{n}`, eq: '', sub: R`812.50 \le 1.0(1858.00)`, value: 0.437, unit: '', d: 3, ok: true },
+    { sym: R`V_{u} \le \phi_{v}V_{n}`, eq: '', sub: R`812.50 \le 1.0(1858.00)`, value: 0.437, unit: '', d: 3, ok: true },   // a relation, a ratio not in it: as before
     { sym: 'n', eq: '', sub: '', value: 8.04, unit: '', d: 3 },
-    { sym: R`\frac{D}{t_{w}}`, eq: R`0.1 \le \frac{I_{yc}}{I_{yt}} \le 10`, sub: '0.1 \\le 1.00 \\le 10', value: 'OK' },
-    { sym: '', eq: R`\le 150`, sub: '120 \\le 150', value: 'OK' },
     { sym: 'x', eq: 'y', sub: 'y', value: 2, unit: 'kip-ft', d: 1 },
+    { sym: R`\phi`, eq: R`\left(\frac{a}{b}\right)`, sub: R`\left(\frac{1}{2}\right)`, value: 'yes' },
     { sym: '', eq: '', sub: '', value: 'text', unit: '' },
     { sym: R`\gamma_{LL}`, eq: '', sub: '', value: null }];
   for (const s of steps) for (const html of [false, true]) {
