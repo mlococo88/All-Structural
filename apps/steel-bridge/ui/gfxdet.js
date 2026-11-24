@@ -395,7 +395,9 @@
       S.rect(cx - s.topB / 2, 0, cx + s.topB / 2, hh, 'dt-cc'); S.poly([[cx - s.botB / 2, y0], [cx + s.botB / 2, y0], [cx + s.botB / 2, y0 + s.botT], [cx + s.tw / 2, y0 + s.botT], [cx + s.tw / 2, -s.topT], [cx + s.topB / 2, -s.topT], [cx + s.topB / 2, 0], [cx - s.topB / 2, 0], [cx - s.topB / 2, -s.topT], [cx - s.tw / 2, -s.topT], [cx - s.tw / 2, y0 + s.botT], [cx - s.botB / 2, y0 + s.botT]], 'dt-st', o);
       S.text(cx, y0, `G${i + 1}`, { dy: 15, a: 'middle', sz: 12, w: true, cls: on ? 'dt-g' : 'dt-t' }); yBot = Math.min(yBot, y0); });
     (m.M.app ? m.M.app.items : []).forEach(a => { const y0 = yd + (a.y0 || 0);
-      if (a.x0 != null && a.k !== 'ws' && a.k !== 'ovl') { const h = a.k === 'bar' ? 34 : a.h; S.rect(X(a.x0), y0, X(a.x1), y0 + h, 'dt-cc', { fill: '#D6CFC0' }); top = Math.max(top, (a.y0 || 0) + h);
+      // GEOM (2026-11-24, display only): a barrier entered by its geometry (BARG) with its own outline and height (SBDDrawings.barPts); an
+      // entered barrier as before (a 34 in rectangle)
+      if (a.x0 != null && a.k !== 'ws' && a.k !== 'ovl') { const h = a.k === 'bar' && !a.geo ? 34 : a.h; if (a.geo) S.poly(window.SBDDrawings.barPts(a).map(([x, y]) => [X(x), yd + y]), 'dt-cc', { fill: '#D6CFC0' }); else S.rect(X(a.x0), y0, X(a.x1), y0 + h, 'dt-cc', { fill: '#D6CFC0' }); top = Math.max(top, (a.y0 || 0) + h);
         S.text(X((a.x0 + a.x1) / 2), y0 + h, a.k === 'sw' ? 'Sidewalk' : a.k === 'med' ? 'Median' : a.k === 'curb' ? 'Curb' : 'Barrier', { dy: -5, a: 'middle', sz: 10, cls: 'dt-m' }); }
       else if (a.x != null) { S.line(X(a.x), y0, X(a.x), y0 + a.h, 'dt-ol', { sw: 1.6 }); top = Math.max(top, (a.y0 || 0) + a.h); S.text(X(a.x), y0 + a.h, a.k === 'rail' ? 'Railing' : 'Fence', { dy: -5, a: 'middle', sz: 10, cls: 'dt-m' }); } });
     // traffic faces, lanes and wheels: rows in px above the top of the appurtenances

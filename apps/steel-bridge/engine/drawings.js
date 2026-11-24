@@ -50,22 +50,51 @@
   }
 
   /* the appurtenance footprints across the deck (GirderDetail dfFoot + dfApp): x in ft from the left deck edge, base y0 and height h in
-     inches above the deck top; barrier 34 in and railing / fence 42 in high are schematic (sch). R = SBDLoads.compute(...) */
+     inches above the deck top; barrier 34 in and railing / fence 42 in high are schematic (sch). R = SBDLoads.compute(...)
+     FOB (2026-11-24, engineer: "a fence or railing on top of the concrete barrier … the renderings … show it as basically embedded in the
+     concrete"; display only): a railing or fence over a barrier or a curb stands on its top surface (topAt below), in every renderer that
+     reads these items (Drawings tab and sheets DXF, the Loads & LLDF graphic and its DXF, the 3D view). The top is that of the schematic
+     barrier outline BAR_SCH (w = the barrier width at the deck by 34 in, the shape the Drawings tab draws); the Loads & LLDF graphic and the
+     3D view draw the barrier as a 34 in block, the same top over the flat 0.42 w (pending engineer review: beyond it, on the sloped traffic
+     face, they show the post starting below the block's top). */
   const APP_H = { bar: 34, rail: 42 };
+  /* the schematic barrier outline as fractions [u / w, y / h] (u from the deck edge toward the roadway): the shape the DXF has drawn since
+     GirderDetail (flat top over 0.42 w, traffic face sloping to 0.12 h at the toe) */
+  const BAR_SCH = [[0, 0], [0, 1], [0.42, 1], [0.62, 0.3], [1, 0.12], [1, 0]];
+  /* barOutline(a): barrier item a's outline [[u, y]] in inches, u from its own deck edge toward the roadway, y above its base a.y0 (GEOM:
+     a barrier entered by its geometry, BARG, has its own outline a.pts, shared/barrier.js; else the schematic BAR_SCH) */
+  function barOutline(a) { if (a.pts) return a.pts; const w = (a.x1 - a.x0) * 12; return BAR_SCH.map(([f, g]) => [f * w, g * a.h]); }
+  /* barPts(a): the same outline in deck coordinates [[x ft from the left deck edge, y in above the deck top]] (the graphics and the 3D view) */
+  function barPts(a) { return barOutline(a).map(([u, y]) => [a.sd === 'R' ? a.x1 - u / 12 : a.x0 + u / 12, a.y0 + y]); }
+  /* topOf(pts, u): the top surface of an outline [[u, y]] at u (the highest y of its edges over u), null where the outline is not over u */
+  function topOf(pts, u) { let t = null; const n = pts.length;
+    for (let i = 0; i < n; i++) { const [a0, a1] = pts[i], [b0, b1] = pts[(i + 1) % n], lo = Math.min(a0, b0), hi = Math.max(a0, b0);
+      if (u < lo - 1e-9 || u > hi + 1e-9) continue; const y = hi - lo < 1e-9 ? Math.max(a1, b1) : a1 + (b1 - a1) * (u - a0) / (b0 - a0); t = t === null ? y : Math.max(t, y); }
+    return t; }
+  /* topAt(items, sd, x): the elevation (in above the deck top) of the top of the barrier or curb on side sd under x (ft from the left deck
+     edge), null where neither is under x: the base of a railing or fence there (FOB) */
+  function topAt(items, sd, x) {
+    for (const a of items) { if (a.sd !== sd || (a.k !== 'bar' && a.k !== 'curb')) continue; const u = (sd === 'R' ? a.x1 - x : x - a.x0) * 12;
+      const t = a.k === 'curb' ? (u >= -1e-6 && u <= (a.x1 - a.x0) * 12 + 1e-6 ? a.h : null) : topOf(barOutline(a), u); if (t !== null) return a.y0 + t; }
+    return null; }
   function appOf(R) {
     const b = R.b, dl = R.p.dl, D = R.dead, Wd = D.Wd, byId = id => D.per.find(L => L.id === id), out = [];
     const sw = { L: nm(dl.swL) > 0 ? nm(dl.swL) : 0, R: nm(dl.swR) > 0 ? nm(dl.swR) : 0 }, swT = { L: nm(dl.swThkL), R: nm(dl.swThkR) };
     const medW = nm(dl.medW) > 0 ? nm(dl.medW) : 0, med = { w: medW, t: nm(dl.medThk), x0: Wd / 2 - medW / 2, x1: Wd / 2 + medW / 2, joint: dl.medJoint === 'yes' };
     const ed = {}; ['L', 'R'].forEach(sd => { const e = b.edge && b.edge[sd];
-      ed[sd] = e && e.mode === 'curb' ? { curb: true, cw: e.cw > 0 && e.ch > 0 ? e.cw / 12 : 0, ch: e.cw > 0 && e.ch > 0 ? e.ch : 0, rp: e.rp } : { curb: false, w: e && e.mode === 'barrier' ? (e.bw > 0 ? e.bw : 0) : b.barrier > 0 ? b.barrier : 0 }; });
+      ed[sd] = e && e.mode === 'curb' ? { curb: true, cw: e.cw > 0 && e.ch > 0 ? e.cw / 12 : 0, ch: e.cw > 0 && e.ch > 0 ? e.ch : 0, rp: e.rp } : { curb: false, w: e && e.mode === 'barrier' ? (e.bw > 0 ? e.bw : 0) : b.barrier > 0 ? b.barrier : 0, geo: e && e.mode === 'barrier' && e.geo && e.geo.ok ? e.geo : null }; });
     const surf = x => { for (const sd of ['L', 'R']) if (sw[sd] && (sd === 'L' ? x <= sw.L + 1e-9 : x >= Wd - sw.R - 1e-9)) return swT[sd]; if (med.w && x >= med.x0 - 1e-9 && x <= med.x1 + 1e-9) return med.t; return 0; };
     ['L', 'R'].forEach(sd => { if (!sw[sd]) return; const a = sd === 'L' ? 0 : Wd - sw[sd]; out.push({ k: 'sw', sd, x0: a, x1: a + sw[sd], y0: 0, h: swT[sd], L: byId('sw' + sd) }); });
     if (med.w) out.push({ k: 'med', x0: med.x0, x1: med.x1, y0: 0, h: med.t, joint: med.joint, L: byId('med') });
+    // FOB: the railing of a curb edge and a sidewalk railing or fence stand on the top of the barrier or curb under them, else on the deck,
+    // sidewalk or median surface (as before; a curb railing over its curb was already on the curb top)
+    const base = (sd, x) => { const t = topAt(out, sd, x); return t !== null ? t : surf(x); };
     ['L', 'R'].forEach(sd => { const e = ed[sd], y0 = sw[sd] ? swT[sd] : 0, X0 = w => sd === 'L' ? [0, w] : [Wd - w, Wd];
-      if (!e.curb) { if (e.w > 0) { const [x0, x1] = X0(e.w); out.push({ k: 'bar', sd, x0, x1, y0, h: APP_H.bar, sch: true, L: byId('bar' + sd) }); } return; }
+      if (!e.curb) { if (e.w > 0) { const [x0, x1] = X0(e.w);   // GEOM (2026-11-24): a barrier from its geometry (BARG) with its own outline and height
+        out.push(e.geo ? { k: 'bar', sd, x0, x1, y0, h: e.geo.h, pts: e.geo.pts.map(p => [p[0], p[1]]), geo: true, L: byId('bar' + sd) } : { k: 'bar', sd, x0, x1, y0, h: APP_H.bar, sch: true, L: byId('bar' + sd) }); } return; }
       if (e.cw > 0) { const [x0, x1] = X0(e.cw); out.push({ k: 'curb', sd, x0, x1, y0, h: e.ch, L: byId('curb' + sd) }); }
-      const rl = byId('rail' + sd); if (rl) out.push({ k: 'rail', sd, x: rl.x, y0: e.cw > 0 && e.rp <= e.cw + 1e-9 ? y0 + e.ch : surf(rl.x), h: APP_H.rail, sch: true, L: rl }); });
-    ['L', 'R'].forEach(sd => { const L = byId('fence' + sd); if (L) out.push({ k: 'fence', sd, x: L.x, y0: surf(L.x), h: APP_H.rail, sch: true, L }); });
+      const rl = byId('rail' + sd); if (rl) out.push({ k: 'rail', sd, x: rl.x, y0: base(sd, rl.x), h: APP_H.rail, sch: true, L: rl }); });
+    ['L', 'R'].forEach(sd => { const L = byId('fence' + sd); if (L) out.push({ k: 'fence', sd, x: L.x, y0: base(sd, L.x), h: APP_H.rail, sch: true, L }); });
     const ws = byId('ws'); if (ws) out.push({ k: 'ws', x0: ws.x0, x1: ws.x1, y0: 0, h: ws.thk > 0 ? ws.thk : 0, L: ws });
     D.per.filter(L => /^ovl\d/.test(L.id)).forEach(L => out.push({ k: 'ovl', x0: L.x0, x1: L.x1, y0: 0, h: L.thk > 0 ? L.thk : 0, L }));
     return { Wd, items: out };
@@ -472,9 +501,11 @@
       if (a.k === 'sw' || a.k === 'med' || a.k === 'curb') { D.rect(a.k === 'sw' ? ly.s : a.k === 'med' ? ly.m : ly.c, X(a.x0), y0, X(a.x1), y0 + a.h);
         if (a.k === 'med' && a.joint) D.line(ly.m, X((a.x0 + a.x1) / 2), y0 + a.h + h, X((a.x0 + a.x1) / 2), yTop - 1.5 * h, D.ltype('HIDDEN'));
         labs.push({ a0: X(a.x0), a1: X(a.x1), y: y0 + a.h, s: a.k === 'sw' ? `${a.sd === 'L' ? 'LEFT' : 'RIGHT'} SIDEWALK ${dFI((a.x1 - a.x0) * 12)} x ${dIn(a.h)}${kl(a.L)}` : a.k === 'med' ? `RAISED MEDIAN ${dFI((a.x1 - a.x0) * 12)} x ${dIn(a.h)}${kl(a.L)}${a.joint ? ', LONGIT. JOINT' : ''}` : `CURB ${dIn((a.x1 - a.x0) * 12)} x ${dIn(a.h)}${kl(a.L)}` }); }
-      else if (a.k === 'bar') { const w = (a.x1 - a.x0) * 12, s = a.sd === 'L' ? 1 : -1, x0 = a.sd === 'L' ? X(a.x0) : X(a.x1), P_ = (f, g) => [x0 + s * f * w, y0 + g * a.h];
-        D.pline(ly.b, [P_(0, 0), P_(0, 1), P_(0.42, 1), P_(0.62, 0.3), P_(1, 0.12), P_(1, 0)], true);
-        labs.push({ a0: Math.min(x0, x0 + s * 0.42 * w), a1: Math.max(x0, x0 + s * 0.42 * w), y: y0 + a.h, s: `BARRIER ${dFI(w)} AT DECK${kl(a.L)}, SHAPE AND HEIGHT SCHEMATIC` }); }
+      else if (a.k === 'bar') { const w = (a.x1 - a.x0) * 12, s = a.sd === 'L' ? 1 : -1, x0 = a.sd === 'L' ? X(a.x0) : X(a.x1);
+        D.pline(ly.b, barOutline(a).map(([u, y]) => [x0 + s * u, y0 + y]), true);   // FOB: the outline of barOutline (entered: BAR_SCH, the same points as before)
+        if (a.geo) { const ut = Math.max(...a.pts.filter(p => p[1] >= a.h - 1e-9).map(p => p[0])), u0 = Math.min(...a.pts.filter(p => p[1] >= a.h - 1e-9).map(p => p[0]));   // GEOM: the label on the top of the outline
+          labs.push({ a0: Math.min(x0 + s * u0, x0 + s * ut), a1: Math.max(x0 + s * u0, x0 + s * ut), y: y0 + a.h, s: `BARRIER ${dFI(w)} AT DECK x ${dIn(a.h)} HIGH, FROM ITS GEOMETRY${kl(a.L)}` }); }
+        else labs.push({ a0: Math.min(x0, x0 + s * 0.42 * w), a1: Math.max(x0, x0 + s * 0.42 * w), y: y0 + a.h, s: `BARRIER ${dFI(w)} AT DECK${kl(a.L)}, SHAPE AND HEIGHT SCHEMATIC` }); }
       else if (a.k === 'rail' || a.k === 'fence') { const x = X(a.x); D.line(ly.r, x, y0, x, y0 + a.h); D.line(ly.r, x - 3, y0 + a.h - 1.5, x + 3, y0 + a.h - 1.5); D.line(ly.r, x - 3, y0 + a.h * 0.55, x + 3, y0 + a.h * 0.55);
         labs.push({ a0: x, a1: x, pt: true, y: y0 + a.h, s: `${a.k === 'rail' ? 'RAILING' : 'SIDEWALK RAILING OR FENCE'} AT ${dFI((a.sd === 'L' ? a.x : G.app.Wd - a.x) * 12)} FROM DECK EDGE${kl(a.L)}, HEIGHT SCHEMATIC` }); }
       else { const t = a.h > 0 ? a.h : 0, yb = yTop + ovY, x0 = X(a.x0), x1 = X(a.x1), q = a.L && a.L.q != null ? a.L.q : a.L ? a.L.plf * 1000 / (a.x1 - a.x0) : 0;
@@ -524,5 +555,5 @@
   /* dxf(G, opt): the DXF text of all() */
   function dxf(G, opt) { const A = all(G, opt); return A.D.toDXF({ ltscale: 1 }); }
 
-  window.SBDDrawings = { fit: { scene, clearOf, sceneAdd, txBox, txW }, SCALES, SCALE_NAME, TXT, scaleFor, plateGirderOf, appOf, model, plan, planTables, secNotes, elevation, section, all, dxf, table, notes, tag, segAt, splR, brgType, tsType, bwName };
+  window.SBDDrawings = { fit: { scene, clearOf, sceneAdd, txBox, txW }, SCALES, SCALE_NAME, TXT, scaleFor, plateGirderOf, appOf, BAR_SCH, barOutline, barPts, topOf, topAt, model, plan, planTables, secNotes, elevation, section, all, dxf, table, notes, tag, segAt, splR, brgType, tsType, bwName };
 })();

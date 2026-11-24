@@ -60,8 +60,8 @@ test('a section not chosen: the Deck slab section left out keeps its summary row
 });
 
 test('Summary verdict: the deck checks count once for the bridge, after a girder module has run; a failing deck fails it', () => {
-  // DKCR (2026-11-24): P1's DK6 (crack control, top bars at 6 in) is NG, so the deck fails; with top bars at 5 in every check passes
-  const d1 = SM.deckOf(P1); assert.equal(d1.cells.length, 5); assert.equal(d1.st, 'fail'); assert.match(d1.gov.check, /^DK6 /);
+  // DKDC (2026-11-24, engineer decision: top-bar d_c within t_s): P1's DK6 (top bars at 6 in) is 0.833 OK (before, DKCR: 1.075 NG), so the deck passes
+  const d1 = SM.deckOf(P1); assert.equal(d1.cells.length, 5); assert.equal(d1.st, 'pass'); assert.doesNotMatch(d1.gov.check, /^DK6 /);
   const P1o = J(P1); P1o.deckDesign.sTop = 5; const Bo = W.SBDReportData.compute(P1o, 0, { src: 'analysis', want: { dk: true } });
   const d = SM.deckOf(P1o); assert.equal(d.cells.length, 5); assert.equal(d.st, 'pass'); assert.ok(Object.is(d.gov.r, Math.max(...Bo.dk.checks.map(c => c.r))));
   const none = SM.overall(P1o, [{ gi: 0, label: 'G1', cells: { flexStr: { st: 'notrun', tab: 'flex' } } }]); assert.equal(none.deckIn, false); assert.equal(none.n.pass, 0); assert.equal(none.verdict, '—');
