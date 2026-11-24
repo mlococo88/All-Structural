@@ -25,7 +25,7 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   /* the report sections that hold worked steps, their output tab and name (the order of the list) */
   const MODS = [['proj', 'loads', 'Owner load rules'], ['loads', 'loads', 'Loads & LLDF'], ['an', 'an', 'Analysis'], ['defl', 'defl', 'Deflection'], ['sec', 'sec', 'Section properties'], ['flex', 'flex', 'Flexure'],
-    ['shear', 'shear', 'Shear & stiffeners'], ['fat', 'fat', 'Fatigue & studs'], ['cn', 'cn', 'Constructibility'], ['frm', 'cf', 'Cross-frames'], ['spl', 'spl', 'Field splices'], ['wd', 'wt', 'Welds'], ['rt', 'rt', 'Rating']];
+    ['shear', 'shear', 'Shear & stiffeners'], ['fat', 'fat', 'Fatigue & studs'], ['cn', 'cn', 'Constructibility'], ['frm', 'cf', 'Cross-frames'], ['spl', 'spl', 'Field splices'], ['wd', 'wt', 'Welds'], ['dk', 'dk', 'Deck slab'], ['rt', 'rt', 'Rating']];   // dk (DK, 2026-11-23): only a project with the deck design on has that section
   /* isSym(sym): a quantity's name, not a check (comparison, ratio, text) */
   const isSym = t => { const s = String(t || '').trim(); return !!s && s.length <= 40 && !/[=<>≤≥]|\\(le|ge|leq|geq|lt|gt|ne|neq|approx|frac|dfrac|tfrac|text|sum|times|cdot|div|to|rightarrow)\b|\/|\+|,\s/.test(s) && !/^\d/.test(s); };
   const arts = ref => String(ref || '').replace(/AASHTO LRFD 10th Ed\.?( \(2024\))?\s*/g, '').replace(/AASHTO MBE 4th Ed\.?( \(2026\))?\s*/g, 'MBE ').replace(/\bArts?\.\s*/g, '').replace(/\s*\(p\. [^)]*\)/g, '').trim();

@@ -10750,6 +10750,109 @@ None (tests only; no formula, factor, unit or reference touched).
 - SMK-D1. `steel-bridge-scroll.mjs` is left as it is (three window sizes, about 19 minutes). Making it shorter would mean dropping sizes or links from the default run,
   which is a coverage choice for the engineer; `--quick` already exists for a 6-minute run.
 
+## 2026-11-23 — PR: claude/sb-deck-design (DK, part 1 of 2) — deck slab design: the Prestressed app's deck module in the Steel app (engineer request 2026-11-23)   [NEW CALCULATION, optional and off by default; no existing result changes]
+### Why
+The Prestressed Bridge Design app has a deck design module (transverse strip design) and the Steel app had none; the engineer does not want one bridge tool to have a feature the other lacks. Scope = what the Prestressed module offers: positive and negative moment of the interior bays, the overhang under gravity loads, distribution reinforcement.
+### Where (new files; hooks in `index.html` only)
+- `shared/deck.js` (new, `window.SharedDeck`): the calculation and its worked steps, see `fixlog/shared-deck.md` (expressions, provisions, hand checks, parity with the Prestressed module).
+- `apps/steel-bridge/engine/deck.js` (new, `window.SBDDeck`): `calc(P)` builds the deck from the project and runs the shared code; `inputs(P)`, `isOn(P)`, `DEF`, `BARS`, `topics(R)`.
+- `apps/steel-bridge/ui/deck.js` (new, `window.SBDDeckUI`): the **Deck** output tab (checks DK1–DK3, section figure, values used with links, moments, resistance, overhangs, distribution steel, worked steps) and the input card "Deck design (transverse)" of the Cross-section input tab.
+- `apps/steel-bridge/index.html`, five hooks:
+  1. script list, anchor `'ui/welds.js',`: after it `'../../shared/deck.js', 'engine/deck.js', 'ui/deck.js',`;
+  2. `#tabBar`, anchor `data-otab="wt">Welds</button>`: after it `<button type="button" role="tab" aria-selected="false" data-otab="dk">Deck</button>`;
+  3. `panes()` `xsec:`, anchor `Materials tab</a>.</p>\`)` + `+ xsp.edges + xsp.sidewalks,`: between them `+ (window.SBDDeckUI ? window.SBDDeckUI.inputs(P) : '')`;
+  4. `$('inPanes')` change handler, before the `SBDAnalysisUI.onInputChange` line: `if (window.SBDDeckUI && window.SBDDeckUI.onChange(el, P)) { changed(true); return; }`;
+  5. `drawTab()`, before `if (ui.otab === 'rpt')`: `if (ui.otab === 'dk') { window.SBDDeckUI.render($('out'), { P, changed: r => changed(r) }); return; }`.
+### Inputs: nothing the project holds is asked twice
+| Value | Source (where it is entered) |
+|---|---|
+| girder spacings S (each different spacing is designed; the largest M_u governs) | `xs.bays`, Cross-section tab |
+| overhangs; barrier / curb / railing weight and position; sidewalk slab; added line loads; pedestrian load | `xs.ohL`, `xs.ohR`, `xs.edges`, `xs.sidewalks`, `xs.extra`: the Loads module's own list `SBDLoads.compute().dead.per` (overrides included) |
+| traffic face of the wheel (1 ft inside it) | the Loads module's `ll.L.r`, `ll.R.r` (barrier face, a 12 in curb, a fence) |
+| slab: t_s for the resistance, total thickness for the dead load | `deck.ts`, `deck.tdeck`, Cross-section tab |
+| f′c, w_c, rebar F_yr | `materials.concrete.fc`, `.wc`, `materials.rebar.Fyr`, Materials tab |
+| wearing surface and overlays w_DW | `xs.ws`, `xs.overlays`, Loads tab |
+| design section x = b_f/4 (AASHTO LRFD 10th Ed. Art. 4.6.2.1.6, steel I-girder) | the narrowest top flange `topB` of every girder type and plate segment, Girders & plates tab |
+| η and m | `SBDOwners.loadFactors` (Project tab), as every module |
+| **new:** switch, top and bottom transverse bars (area, spacing, clear cover), design section automatic or entered | `P.deckDesign`, Cross-section tab, card "Deck design (transverse)" |
+### Saved data (CLAUDE.md §5)
+- One new optional project field, `deckDesign: { on, barTop, sTop, coverT, barBot, sBot, coverB, xnegAuto, xneg }`; absent = the defaults `{ on: false, #5 (0.31 in²) at 6 in top and bottom, covers 2.5 / 1.0 in, automatic design section }` (the Prestressed module's defaults). It is written only when the user changes one of its inputs: a project saved before opens, computes and saves exactly as before, without the field. No key, schema version or existing field changes; no new localStorage key.
+### Decisions (pending engineer review)
+1. **Off by default, for old and new projects** (as the Prestressed module, whose `deck.on` defaults to false). While off nothing is calculated and no result, verdict or report section changes. The alternative (on for new projects) would add deck checks to every new design's verdict before the engineer has chosen the bars; off was taken as the choice that changes nothing unasked.
+2. **Design section from the narrowest top flange of the bridge** (every girder type and segment): the section nearest the girder centreline, the largest negative moment. One value for all bays.
+3. **Unequal bays:** each different spacing is designed; DK1 / DK2 report the bay with the largest M_u; the distribution percentage uses the smallest spacing (largest percentage).
+4. **Overhang dead loads** are the Loads module's loads at their positions (barrier, curb, railing, sidewalk slab, fence, added line loads; categories DC1 / DC2 / UF at 1.25, DW / UT at 1.50), in place of the Prestressed module's single barrier: the same statics, more loads. With a single barrier and wearing surface the result equals the Prestressed formula (tested).
+5. **Pedestrian load on a sidewalk over the overhang is taken together with the wheel** (1.75, no IM, no multiple presence, no m): conservative.
+6. **Loads between the exterior girders that the interior strip does not include** (a sidewalk or median slab, a fence, added line loads inside the exterior girders): the interior moments are slab + wearing surface + Table A4-1, as the Prestressed module; the tab lists such loads in a warning for a separate check. SIP form weight is not placed on the slab.
+7. **Summary verdict:** the deck checks are the bridge's, not a girder's: they are counted once (one count per check DK1–DK3), shown in their own card on the Summary tab and their own chip in the left column, not as a column of the girder table (part 2, next entry).
+### Governing provisions
+AASHTO LRFD 10th Ed. (2024): Art. 4.6.2.1, 4.6.2.1.6, Table A4-1, Table 3.4.1-1, 1.3.2.1, 5.6.3.2, 5.6.2.2, 5.5.4.2, 3.6.1.3.1, Table 4.6.2.1.3-1, 3.6.2, 3.6.1.1.2, 3.6.1.6, 9.7.3.2. Not checked (stated on the tab): A13.4 Extreme Event II overhang, 5.6.7 crack control, 5.6.3.3 minimum reinforcement, 5.10.6 temperature and shrinkage.
+### Check case (the new-project bridge with deck design on, bottom bars at 8 in; by hand)
+5 girders at 9.5 ft, overhangs 3.25 ft, barrier 1.5 ft wide of 0.40 klf, slab 8 in (8.5 in total), w_c 0.150 kcf, 25 psf wearing surface, f′c 4 ksi, F_yr 60 ksi, narrowest top flange 16 in; top #5 at 6 in (cover 2.5 in), bottom #5 at 8 in (cover 1.0 in); AASHTO (η = m = 1).
+- w_DC = 8.5/12(0.150) = 0.10625 ksf; w_DW = 0.025 ksf; x = 16/4 = 4.00 in
+- M_DC+ = 0.10625(9.5)²/11 = 0.872; M_DW+ = 0.205; M_LL+ (Table A4-1, 9.5 ft) = 6.59 → M_u+ = 1.25(0.872) + 1.50(0.205) + 1.75(6.59) = **12.930**
+- M_DC− = 0.959; M_DW− = 0.226; M_LL− = 6.31 + (5.46 − 6.31)(1/3) = 6.027 → M_u− = 1.25(0.959) + 1.50(0.226) + 1.75(6.027) = **12.084**
+- bottom: A_s = 0.465 in²/ft, d = 8 − 1 − 0.314 = 6.686 in, a = 0.684 in, φ 0.90, M_n = 0.465(60)(6.686 − 0.342)/12 = 14.750, φM_n = 13.275 → **DK1 = 0.974**
+- top: A_s = 0.620, d = 5.186 in, a = 0.912 in, φ 0.90, M_n = 14.663, φM_n = 13.197 → **DK2 = 0.916**
+- overhang: X = 3.25 − 1.5 − 1.0 = 0.75 ft; strip 52.5 in; M_LL = 1.33(1.2)(16)(0.75)/(52.5/12) = 4.378; M_DC = 0.10625(3.25)²/2 + 0.40(2.50) = 1.561; M_DW = 0.025(1.75)²/2 = 0.038; M_u = 1.25(1.561) + 1.50(0.038) + 1.75(4.378) = 9.670 → **DK3 = 9.670/13.197 = 0.733**
+- distribution: min(220/√9.5, 67) = 67 % of 0.465 = 0.312 in²/ft.
+Before: no deck check in the Steel app. A sidewalk / curb / overlay / pedestrian overhang is hand-checked in `tests/engine/sb-deck.test.mjs` (left M_u = 17.629, right 15.766 kip-ft/ft).
+### How verified
+- `node tests/engine/run.mjs`: new `deck.test.mjs` (6), `deck-parity.test.mjs` (14), `sb-deck.test.mjs` (10); every existing test unchanged and passing (deck design off: no existing file's result path is touched; `calc()` on a project without the field returns `{ on: false }` and leaves the project text identical).
+- `node tests/check-syntax.mjs`.
+- Browser: `node tests/smoke/steel-bridge-deck.mjs` (new, 5 checks: off by default and no field written; on: DK1 0.744 / DK2 0.916 / DK3 0.733 with the default bars; input card, Undo; NG and input error; other tabs, 390 px, 0 console errors) and the existing steel-bridge smokes listed in the PR.
+### Other copies
+The Prestressed app's deck module (`apps/ps-bridge/engine/pbd-handling-deck.js`, `Prestressed Bridge Design.html`): same method, not changed, not wired to `shared/deck.js` (see `fixlog/shared-deck.md`).
+### Open items
+- The issues found in the Prestressed module and mirrored here (distribution-steel S, φ limits for bars other than Grade 60, no crack control / minimum reinforcement / temperature steel / Extreme Event II overhang): `fixlog/shared-deck.md`, Open items 1–5. Engineer to decide; a change would be made in both tools.
+
+## 2026-11-23 — PR: claude/sb-deck-report (DK, part 2 of 2; same PR as part 1) — the deck slab checks in the Summary verdict, the left column, the Report, the bill of materials and the Nomenclature   [display and verdict wiring; every number is engine/deck.js calc()'s; nothing changes in a project with the deck design off]
+### Where
+- `report/data.js` `compute()`, anchor `if (on('wd') || on('sum')) B.wd = run('wd',`: before it `if (on('dk') && W().SBDDeck && W().SBDDeck.isOn(P)) { B.dkOn = true; B.dk = run('dk', () => W().SBDDeck.calc(P)); }` (no `B.dk` / `B.dkOn` without the switch).
+- `report/builders.js`: new `dk(B, X)` (section "Deck slab (transverse design)": checks table, values used, interior bays, overhangs, distribution steel, the section figure, the worked steps in the tab's topics; its three governing rows pushed to `X.gov` with group "Deck slab (bridge)", so they appear in the Summary section and the Executive summary with "see §" links), `bomDeck(P, R)`, `sectionsOf(P)`; `BUILD` + `dk`; `NEED` + `dk: 'dk'`; in `model()` the section loop runs over `B.dkOn ? SECTIONS_DK : SECTIONS` (SECTIONS itself is unchanged: 18 entries; SECTIONS_DK has `['dk', 'Deck slab']` before `rt`), and a deck that could not be calculated pushes a row with ratio NaN (REVIEW); `bom()` and `allBom()` append the deck reinforcement subsection; `allExec()` adds one row per deck check and drops the word "girder" for a deck check.
+- `report/summary.js`: `DECK_COL`, `DECK_G`, `deckOf(P)`; `overall()` adds the deck cells to the counts, `top`, `nan` and returns `deck`, `deckIn`. Before: `return { n, top, low, nan, byCol, verdict, gov: top || low };` After: the same with the deck cells counted first when `deckOf(P)` is not null and at least one girder cell has run, and `...(deck ? { deck, deckIn } : {})`.
+- `ui/summary.js`: `gotoCell()` first line `if (id === 'deck') { … X0.goto('dk', null); return; }`; `paint()` writes "Deck slab, bridge deck" without "girder" and adds `SBDDeckUI.summaryCard(ov.deck, ov.deckIn)` after the graphics card.
+- `ui/dash.js` `draw()`: after the chips a "Deck slab" chip from `ov.deck` (`data-sdgrp="Deck"`, link `0|deck`).
+- `ui/report.js`: `secOf(P)`; `incOf(o, P)` and `controls()` use `sectionsOf(P)` (a "Deck slab" tick box only with the deck design on).
+- `ui/nomen.js` `MODS`: `['dk', 'dk', 'Deck slab']` before the Rating (listed only when the report has that section).
+- `ui/deck.js`: `summaryCard()`.
+- `shared/deck.js`, `engine/deck.js` (display only): the symbols `M_{DC,+}`, `M_{u,-}`, `A_{s,+}` … are written `M_{DC,pos}`, `M_{u,neg}`, `A_{s,pos}` … so that the Nomenclature lists them (its rule leaves out a name with "+"); no value changes.
+### Decisions (pending engineer review)
+1. The deck checks count in the verdict **once for the bridge** (three counts), and only after at least one girder module has run, so that a project whose girders have not been run never shows the deck's PASS as the bridge verdict.
+2. A deck design that is on but cannot be calculated (an input error) counts as one REVIEW and is named, in the Summary tab and the Report.
+3. Bill of materials: the deck bars are listed in their own subsection and are **not** added to the steel totals (rebar, not structural steel); deck concrete is not listed (the Prestressed app lists it; the Steel bill of materials is a steel list). Laps, hooks and bends not added, as the Prestressed app.
+### Governing provision
+None new (display); the checks' provisions are in the entry above.
+### Check case
+New-project bridge, deck design on with bottom bars at 8 in: Report section 16 "Deck slab (transverse design)" shows DK1 0.974, DK2 0.916, DK3 0.733 (the hand check above); the Summary section and the Executive summary carry the same three rows, each linked to its step. Bill of materials, deck bars: L = 360 ft, deck width 44.5 ft: top #5 at 6 in: ⌈12(360)/6⌉ + 1 = 721 bars × 44.5 ft × 0.31 in² × 490/144 = 33,845 lb; bottom at 8 in: 541 bars = 25,395 lb; distribution 0.67(0.465) = 0.3116 in²/ft × 44.5 × 360 × 3.4028 = 16,983 lb; total 76,223 lb. Summary tab (default bars): 22 PASS counts with the deck on, 19 with it off (browser smoke).
+### How verified
+- `tests/engine/sb-deck-report.test.mjs` (new, 8 tests): off = as before (18 sections, `sectionsOf(P) === SECTIONS`, no deck in `overall()`, the other modules' results and governing rows identical with the deck on or off); on = 19 sections, every reference resolves (detail gov and all), rows = the engine's values; a section left out; verdict counts, FAIL and REVIEW; the bill of materials by hand; Nomenclature.
+- Existing tests unchanged: `report.test.mjs`, `sb-summary.test.mjs`, `sb-nomen.test.mjs`, `sb-report-*.test.mjs` (deck off) pass as they are.
+- Browser: `tests/smoke/steel-bridge-deck.mjs` (7 checks) and the existing steel-bridge smokes named in the PR.
+
+## 2026-11-23 — PR: claude/sb-deck-report (DK, review; same PR as parts 1 and 2) — Table A4-1 limits (Appendix A4) as warnings; a note on the covers   [warnings and text only; no value, ratio or verdict changes]
+### Why
+Review of parts 1 and 2: Table A4-1 is developed under the assumptions listed in AASHTO LRFD 10th Ed. Appendix A4 (at least three parallel girders, at least 14.0 ft between the exterior girder centrelines, overhangs from 21.0 in to the smaller of 0.625 S and 6.0 ft). The 10th Edition numbers no article A4.1: the citation is "Appendix A4". Neither the Prestressed module nor part 1 told the engineer when a deck is outside them. The deck card also did not say that its clear covers are not the Deck card's longitudinal rebar depths.
+### Where
+- `engine/deck.js` `calc()`, anchor `if (!auto && +D.xneg > 24) warn.push('The entered design section is beyond the 24 in of Table A4-1; 24 in is used.');`: after it, a block that pushes to `warn`
+  - `` `${n} girders: Table A4-1 is for decks on at least three parallel girders (AASHTO LRFD 10th Ed. Appendix A4); a refined analysis is required.` `` when `bays.length + 1 < 3`;
+  - `` `${W} ft between the exterior girder centrelines: Table A4-1 is for at least 14.0 ft (…Appendix A4).` `` when the sum of the bays is below 14.0 ft;
+  - `` `Left|Right overhang ${o} ft is more than the smaller of 0.625 S = … ft and 6.0 ft: outside the range of Table A4-1 (…Appendix A4); the interior-bay moments next to that girder may not apply.` `` when `oh > min(0.625 S_ext, 6.0)`, S_ext the exterior bay on that side;
+  - `` `Left|Right overhang ${o} ft is less than the 21.0 in (1.75 ft) of Table A4-1 (…Appendix A4); the interior-bay moments next to that girder may not apply.` `` when `oh < 21/12` ft.
+  The warnings show on the Deck tab and in the Report's Deck slab section (both already list `R.warn`). Before: no such warning.
+- `ui/deck.js` `inputs()`, the note of the card, after `(<a href="#" data-itgo="proj">Project tab</a>).`: with the module on, " The covers here are the clear covers of the transverse bars; the rebar depths of the Deck card above are those of the longitudinal layers (the girder's composite section) and are not used here."
+### Decisions (pending engineer review)
+- DK-R1. The limits are warnings, not a REVIEW in the verdict (as the existing "S outside 4 to 15 ft" warning). The overhang limit is compared with the exterior bay on its own side.
+- DK-R2. The transverse bars' clear covers stay the module's own inputs (defaults 2.5 / 1.0 in, the Prestressed module's): the project's `deck.rebar.top.c` / `bot.c` are centroid depths of the longitudinal layers, a different quantity, so they are not reused.
+- DK-R3. The haunch (`deck.haunch`) is not used: the strip method designs the slab alone; the haunch is a girder dead load (Loads module).
+### Governing provision
+AASHTO LRFD 10th Ed. (2024) Appendix A4 (the assumptions of Table A4-1). No formula, factor or reference of a check changes.
+### Check case
+The new-project bridge (5 girders, 4 × 9.5 = 38 ft, overhangs 3.25 ft ≤ min(0.625 × 9.5 = 5.94, 6.0)): no warning; DK1–DK3 as before. 4 girders at 6 ft with a 3.90 ft left overhang: one warning, 3.90 > min(0.625 × 6 = 3.75, 6.0); the ratios are still calculated. 2 girders at 9.5 ft: the three-girder and the 14 ft warnings. The default bridge with a 1.50 ft right overhang: one warning, 1.50 < 1.75 ft.
+### How verified
+`tests/engine/sb-deck.test.mjs`, new test "Table A4-1 limits (Appendix A4) …"; the default bridge has no such warning (so the smoke's values and the old projects are untouched).
+- After the merge of the rolled beams (#1680): new test "rolled-beam segments (ROLL, #1680) …" in `tests/engine/sb-deck.test.mjs`: with W36X135 (b_f 12.0 in) on a segment the design section is b_f/4 = 3.0 in, read from the shape's equivalent plates (`topB`); no code change was needed.
+
 ## 2026-11-23 — PR: claude/sb-mbe-verify (PR #1678: https://github.com/mlococo88/All-Structural/pull/1678) (MBV) — legal-load and permit rating (LPR, #1674) read against the AASHTO MBE 4th Ed. (2026) text: values confirmed, three corrections, "unverified" warnings removed   [CALCULATION CHANGE for permit vehicles and the lane-type legal model; the HL-93 rating, every result with no vehicle ticked, and the AASHTO legal trucks, SU4 to SU7, EV2 / EV3 and owner legal vehicles are unchanged]
 Basis: AASHTO Manual for Bridge Evaluation, 4th Ed. (2026), Section 6A, read from the text in this session (articles, tables and figures cited by number; nothing of the text is reproduced here). Resistances: AASHTO LRFD 10th Ed. (2024), unchanged.
 

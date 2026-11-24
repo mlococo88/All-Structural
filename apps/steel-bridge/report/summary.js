@@ -54,6 +54,21 @@
   const vehOn = P => { const v = ((P || {}).rating || {}).veh; return !!v && ((Array.isArray(v.on) && v.on.length > 0) || !!(v.permit && v.permit.key)); };
   const cols = P => (vehOn(P) ? ALL : COLS);
   const GROUPS = [...new Set(COLS.map(c => c.grp))];
+  /* DK (2026-11-23): the deck slab design (engine/deck.js; the bridge's deck, not a girder's) joins the verdict only where the project has it
+     switched on (P.deckDesign.on). It is not a column of the girder table: deckOf(P) -> null (off), or { R, cells, st, gov } with one cell per
+     check DK1–DK3 (a ratio over 1.0: fail), or one REVIEW cell when its inputs are in error. overall() counts those cells once for the bridge
+     (after at least one girder module has run, so that the verdict is never the deck's alone) and returns them as .deck. DECK_COL / DECK_G:
+     the column and "girder" of such a cell where a governing check is named (tab 'dk'). A project without deck design: nothing changes. */
+  const DECK_COL = { id: 'deck', grp: 'Deck', head: 'Deck slab', short: 'Deck', tab: 'dk', what: 'DK1–DK3' }, DECK_G = { gi: 0, label: 'bridge deck', deck: true, cells: {} };
+  function deckOf(P) {
+    const DK = W().SBDDeck; if (!DK || !DK.isOn || !DK.isOn(P)) return null;
+    let R; try { R = DK.calc(P); } catch (e) { R = { on: true, err: 'Calculation error: ' + (e && e.message) }; }
+    const cells = R.err ? [{ st: 'review', r: null, mod: 'Deck', check: 'Deck design: input error', loc: R.err, tab: 'dk', why: R.err }]
+      : R.checks.map(c => ({ st: stOf(c.r, false, false), r: c.r, mod: 'Deck', check: `${c.id} ${c.title}`, loc: c.loc, tab: 'dk', step: c.step, id: c.id, Mu: c.Mu, phiMn: c.phiMn }));
+    const rank = { fail: 3, review: 2, pass: 1 }, st = cells.reduce((a, q) => (rank[q.st] > rank[a] ? q.st : a), 'pass');
+    const gov = cells.filter(q => q.r != null).reduce((a, q) => (!a || gr(q.r) > gr(a.r) ? q : a), null) || cells[0];
+    return { R, cells, st, gov };
+  }
   /* SBDIA (2026-11-10): with a rolled or channel diaphragm as the intermediate bracing (crossframes.dia.on = 'yes') the Cross-frames column
      and chip read "Diaphragms" (checks CF10, CF11, CFD, CFE; CF1 to CF9 are not made). Display only: the column id 'cf' and the group key
      'Cross-frames' (data-sdgrp, the Report's governing group) are unchanged. label(c, P): the column as shown; grpLabel(grp, P): the chip name. */
@@ -147,8 +162,14 @@
       const b = byCol[c.id], v = c.rf ? q.rf : q.r;
       if (q.st === 'notrun' || q.st === 'na') { if (!b) byCol[c.id] = { G, c, q }; return; }
       if (!b || b.q.st === 'notrun' || b.q.st === 'na' || (c.rf ? v < (b.c.rf ? b.q.rf : b.q.r) : gr(v) > gr(b.q.r))) byCol[c.id] = { G, c, q }; }));
+    // DK: the deck slab checks, once for the bridge, when the project has them on and a girder module has run
+    const deck = deckOf(P), ran = list.some(G => Object.values(G.cells || {}).some(q => q && q.st !== 'notrun')), deckIn = !!deck && ran;
+    if (deckIn) deck.cells.forEach(q => { n[q.st] = (n[q.st] || 0) + 1;
+      if (q.r != null && !isFinite(q.r)) nan.push({ G: DECK_G, c: DECK_COL, q });
+      if (q.r != null && isFinite(q.r) && (!top || q.r > top.q.r)) top = { G: DECK_G, c: DECK_COL, q }; });
+    if (deckIn) byCol.deck = { G: DECK_G, c: DECK_COL, q: deck.gov };
     const verdict = n.fail ? 'FAIL' : n.review ? 'REVIEW' : n.pass ? 'PASS' : '—';
-    return { n, top, low, nan, byCol, verdict, gov: top || low };
+    return { n, top, low, nan, byCol, verdict, gov: top || low, ...(deck ? { deck, deckIn } : {}) };
   }
   /* grpStat(list, grp): one chip of the left summary: the columns of a module group over every girder */
   function grpStat(list, grp) {
@@ -194,5 +215,5 @@
     J.forEach(q => { Object.entries(q.G.err || {}).forEach(([k, v]) => { if (!out.err[k]) out.err[k] = v; }); });
     return out;
   }
-  window.SBDSummary = { units, merge, weight, MODS, COLS, ALL, cols, vehOn, GROUPS, run, cells, overall, grpStat, modOf, FLEX_CLS, label, grpLabel };
+  window.SBDSummary = { units, merge, weight, MODS, COLS, ALL, cols, vehOn, GROUPS, run, cells, overall, grpStat, modOf, FLEX_CLS, label, grpLabel, deckOf, DECK_COL, DECK_G };
 })();

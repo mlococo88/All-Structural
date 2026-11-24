@@ -30,7 +30,8 @@
   const keyOf = ctx => JSON.stringify([ctx.P, ctx.g, S.src, S.plName]);
   const allKey = ctx => JSON.stringify([ctx.base || ctx.P]);   // SB-2 PR 2: ctx.base, the project itself (ctx.P: the type on the line chosen)
   const rowKey = (P, gi) => JSON.stringify([P, gi]);   // one girder's summary rows (this project's analysis)
-  const incOf = o => { const SEC = window.SBDReportBuild.SECTIONS, inc = {}; SEC.forEach(([k]) => { inc[k] = !(o.inc && o.inc[k] === false); }); return inc; };
+  const secOf = P => (window.SBDReportBuild.sectionsOf ? window.SBDReportBuild.sectionsOf(P) : window.SBDReportBuild.SECTIONS);   // DK (2026-11-23): + "Deck slab" where the project has the deck design on
+  const incOf = (o, P) => { const SEC = secOf(P), inc = {}; SEC.forEach(([k]) => { inc[k] = !(o.inc && o.inc[k] === false); }); return inc; };
 
   /* ---------- RPX: the tabs' graphics as report figures ---------- */
   const PW = 700;   // the width the graphics are drawn at (px): the printed text width
@@ -85,7 +86,7 @@
   }
 
   function controls(ctx, built) {
-    const o = ctx.opts, inc = incOf(o), SEC = window.SBDReportBuild.SECTIONS, opt = (v, t, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${t}</option>`;
+    const o = ctx.opts, inc = incOf(o, ctx.base || ctx.P), SEC = secOf(ctx.base || ctx.P), opt = (v, t, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${t}</option>`;
     const sc = `<label>Scope <select id="rp_scope">${opt('girder', 'Selected girder (detailed report)', o.scope)}${opt('all', 'Every girder (governing ratios)', o.scope)}</select></label>`;
     if (o.scope === 'all') return `${sc} <span class="note">Demands: this project's analysis of each girder. Each girder's analysis takes a few seconds; results are kept until the project changes.</span>
       <button type="button" id="rp_build"${built ? '' : ' class="primary"'}>${built ? 'Rebuild' : 'Build report'}</button>`;
@@ -125,7 +126,7 @@
       wire(); return;
     }
     if (S.figB !== S.B) { S.figs = {}; try { S.figs = figures(S.B); } catch (e) { console.warn(e); } S.figB = S.B; }   // RPX: the tabs' graphics, drawn once per built report
-    const M = window.SBDReportBuild.model(S.B, { detail: o.detail, include: incOf(o), figures: S.figs, snap3d: snap3d(ctx) });
+    const M = window.SBDReportBuild.model(S.B, { detail: o.detail, include: incOf(o, ctx.base || ctx.P), figures: S.figs, snap3d: snap3d(ctx) });
     const tb = document.getElementById('tabBar');
     window.SharedReport.mount(box, M, { controls: controls(ctx, true), closed: S.closed, stick: tb ? tb.offsetHeight : 0, onGoto: t => { if (ctx.goto) ctx.goto(t); } });
     if (bar) box.insertAdjacentHTML('afterbegin', bar);

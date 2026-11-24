@@ -579,6 +579,54 @@
     return { title: 'Welds (flange-to-web, shop transitions)', subs };
   }
 
+  /* ---------- 12a. deck slab (DK, 2026-11-23): engine/deck.js calc(), the Deck tab's result; only in a project with the deck design on ---------- */
+  const DK_GRP = 'Deck slab (bridge)';
+  const dkBar = A => (window.SBDDeck ? window.SBDDeck.barName(A) : f(A, 2) + ' in²');
+  function dk(B, X) {
+    const R = B.dk, In = R.in, D = R.D, k = id => K('', id), many = R.bays.length > 1, st = c => (c.ok ? 'OK' : 'NG');
+    R.checks.forEach(c => X.gov.push({ mod: 'Deck', grp: DK_GRP, check: `${c.id} ${c.title}`, loc: c.loc, r: c.r, key: k(c.step) }));
+    R.warn.forEach(w => X.warn.push('Deck: ' + w));
+    const fig = window.SBDDeckUI && window.SBDDeckUI.figure ? (() => { try { return { type: 'figure', svg: window.SBDDeckUI.figure(R, 700), caption: 'Deck section over the left exterior girder and the first bay (true scale across): the traffic face, the design wheel 1 ft inside it, the negative-moment design sections, the top and bottom transverse bars. Display only.' }; } catch (e) { return null; } })() : null;
+    const subs = [sub('gov', 'Checks of the deck slab (the bridge\'s deck: the same in every girder\'s report)', [
+      note(`Transverse design of the slab per foot of deck by the strip method, as the [[tab:dk|Deck tab]] (the method of the Prestressed Bridge Design app's deck module). Strength I${In.eta !== 1 || In.mLL !== 1 ? ` with the owner's $\\eta$ = ${f(In.eta, 3)}${In.mLL !== 1 ? ` and m = ${f(In.mLL, 2)}` : ''}` : ''}. Interior bays: dead load by $wS^{2}/11$ and $wS^{2}/10$, live load from Table A4-1; overhangs: gravity loads only. ${ED}.`),
+      tbl(['Check', 'Governing location', '$M_{u}$ (kip-ft/ft)', '$\\phi M_{n}$ (kip-ft/ft)', 'Ratio', 'Status', 'Reference'], R.checks.map(c => ({ cells: [`${c.id} ${c.title}`, c.loc, N(c.Mu, 2), N(c.phiMn, 2), R3(c.r, k(c.step)), st(c), String(c.ref).replace('AASHTO LRFD 10th Ed. ', '')], cls: c.r > 1 + 1e-9 ? 'gov' : '' })), { wide: true }),
+      note('Not checked by this module: the Extreme Event II vehicular-collision cases of the overhang (A13.4; a barrier-specific analysis), crack control (5.6.7), minimum reinforcement (5.6.3.3), temperature and shrinkage reinforcement (5.10.6), bar development.', true),
+      ...R.warn.map(w => note(w, true)), fig]),
+      sub('in', 'Values used', [kv([
+        ['Girder spacings S (Cross-section tab)', R.bays.map(q => `${f(q.S, 2)} ft`).join(', ')],
+        ['Overhangs $o_{h}$, left / right (Cross-section tab)', `${f(R.oh.L.O.oh, 2)} / ${f(R.oh.R.O.oh, 2)} ft`, k('dk.ohL.X')],
+        ['Deck edge to the traffic face, left / right (as the Cross-section & loads section)', `${f(R.oh.L.O.face, 2)} / ${f(R.oh.R.O.face, 2)} ft`, k('dk.ohL.X')],
+        ['Structural slab $t_{s}$ / total thickness for dead load (Cross-section tab)', `${f(In.ts, 2)} / ${f(In.tL, 2)} in`, k('dk.b1.wDC')],
+        ["$f'_{c}$, $w_{c}$, $F_{yr}$ (Materials tab)", `${f(In.fc, 2)} ksi, ${f(In.wc, 3)} kcf, ${f(In.fy, 0)} ksi`],
+        ['Wearing surface and overlays $w_{DW}$ (Loads tab)', `${f(In.wDW, 4)} ksf`, k('dk.b1.wDW')],
+        [`Narrowest top flange $b_{f}$ (${In.bfAt})`, `${f(In.bf, 2)} in`],
+        [`Negative-moment design section x (${In.auto ? '$b_{f}/4$, Art. 4.6.2.1.6' : 'entered'})`, `${f(In.xneg, 2)} in`, k('dk.b1.xneg')],
+        ['Top transverse bars (Cross-section tab, Deck design)', `${dkBar(+D.barTop)} at ${f(+D.sTop, 2)} in, clear cover ${f(+D.coverT, 2)} in`, k('dk.neg.As')],
+        ['Bottom transverse bars (Cross-section tab, Deck design)', `${dkBar(+D.barBot)} at ${f(+D.sBot, 2)} in, clear cover ${f(+D.coverB, 2)} in`, k('dk.pos.As')]])]),
+      sub('bay', 'Interior bays: moments per foot of deck', [tbl(['Bays', 'Moment', '$M_{DC}$', '$M_{DW}$', '$M_{LL+IM}$ (Table A4-1)', '$M_{u}$', '$\\phi M_{n}$', 'Ratio'], [].concat(...R.bays.map((q, i) => { const I = q.I, b = `dk.b${i + 1}.`;
+        return [{ cells: [q.name, `Positive, bottom bars${many && i === R.gp ? ' (governs)' : ''}`, N(I.MDC_pos, 3), N(I.MDW_pos, 3), N(I.MLL_pos, 3), { t: f(I.Mu_pos, 3), n: true, key: k(b + 'Mup') }, N(q.pos.phiMn, 2), R3(q.pos.dc, k(i === R.gp ? 'dk.pos.r' : b + 'pos.r'))], cls: i === R.gp ? 'gov' : '' },
+          { cells: [q.name, `Negative at the design section, top bars${many && i === R.gn ? ' (governs)' : ''}`, N(I.MDC_neg, 3), N(I.MDW_neg, 3), N(I.MLL_neg, 3), { t: f(I.Mu_neg, 3), n: true, key: k(b + 'Mun') }, N(q.neg.phiMn, 2), R3(q.neg.dc, k(i === R.gn ? 'dk.neg.r' : b + 'neg.r'))], cls: i === R.gn ? 'gov' : '' }]; })), { wide: true, caption: 'kip-ft per foot of deck; the tabulated live-load moments include the multiple presence factors and the dynamic load allowance' })]),
+      sub('oh', 'Overhangs (gravity loads)', [tbl(['Side', '$o_{h}$ (ft)', 'X (ft)', 'Strip (in)', '$M_{DC}$', '$M_{DW}$', '$M_{LL+IM}$ wheel', '$M_{PL}$', '$M_{u}$', '$\\phi M_{n}$', 'Ratio'], ['L', 'R'].map(sd => { const q = R.oh[sd], O = q.O, b = `dk.oh${sd}.`;
+        return { cells: [q.name, N(O.oh, 2), { t: f(O.Xoh, 3), n: true, key: k(b + 'X') }, N(O.SWoh, 1), { t: f(O.MohDC, 3), n: true, key: k(b + 'MohDC') }, N(O.MohDW, 3), N(O.MohLL, 3), O.PL.length ? N(O.MohPL, 3) : '—', { t: f(O.Mu_oh, 3), n: true, key: k(b + 'Muoh') }, N(q.cap.phiMn, 2), R3(q.cap.dc, k(b + 'cap.r'))], cls: sd === R.go ? 'gov' : '' }; }), { wide: true, caption: 'kip-ft per foot about the exterior girder centreline; one 16 kip wheel 1 ft inside the traffic face, IM 1.33, multiple presence 1.20; a pedestrian load on the overhang is taken with the wheel' }),
+        note('Gravity loads only: the Extreme Event II vehicular-collision cases (A13.4) are not checked.', true)]),
+      sub('dist', 'Distribution reinforcement (Art. 9.7.3.2)', [kv([['Bottom bars parallel to the girders', `${f(R.dist.pct, 1)} % of the positive-moment steel = ${f(R.dist.As, 3)} in²/ft of deck width`, k('dk.dist')]])]),
+      sub('steps', 'Worked steps', [gsteps('SBDDeckUI:x', '', R.steps, { title: 'Worked steps: deck slab' })])];
+    return { title: 'Deck slab (transverse design)', subs };
+  }
+  /* bomDeck(P, R): the deck reinforcement of the Deck section (DK): the transverse bars over the bridge length and the distribution steel,
+     as the Prestressed Bridge Design app's bill of materials. Rebar, not structural steel: not in the steel totals. */
+  function bomDeck(P, R) {
+    if (!R || R.err || !R.in) return null;
+    const D = R.D, Lt = ((P.spans || {}).lengths || []).reduce((a, x) => a + (+x || 0), 0), Wd = R.in.Wd, SW = 490 / 144, rows = [];
+    const bar = (lab, Ab, sp) => { if (!(sp > 0) || !(Ab > 0)) return 0; const n = Math.ceil(12 * Lt / sp) + 1, w = n * Wd * Ab * SW; rows.push([lab, `${dkBar(Ab)} (${f(Ab, 2)} in²) at ${f(sp, 2)} in`, { t: String(n), n: true }, N(Wd, 2), N(w, 0)]); return w; };
+    let tot = bar('Top transverse bars', +D.barTop, +D.sTop) + bar('Bottom transverse bars', +D.barBot, +D.sBot);
+    const wd = R.dist.As * Wd * Lt * SW; tot += wd; rows.push(['Distribution (bottom, parallel to the girders)', `${f(R.dist.pct, 1)} % of the bottom transverse steel = ${f(R.dist.As, 3)} in²/ft of width`, '—', N(Lt, 2), N(wd, 0)]);
+    rows.push(['Total', '', '', '', N(tot, 0)]);
+    return sub('dk', 'Deck reinforcement (Deck tab; rebar, not in the steel totals)', [
+      note(`The transverse bars of the deck design and its distribution reinforcement: number of transverse bars = ⌈12 L / s⌉ + 1 over the bridge length L = ${f(Lt, 2)} ft, each of the deck width ${f(Wd, 2)} ft; weight = number × length × $A_{b}$ × 490/144 lb/ft. Distribution steel: its area per foot of deck width × the deck width × L × 490/144. Laps, hooks, bends and skewed ends are not added; the top longitudinal bars, any additional overhang bars and the deck concrete are not included.`),
+      tbl(['Bars', 'Size and spacing', 'Number', 'Length (ft)', 'Weight (lb)'], rows)]);
+  }
+
   /* ---------- 13. load rating ---------- */
   const GRP = [['flexP', 'Flexure, positive (Strength I)'], ['flexN', 'Flexure, negative (Strength I)'], ['shear', 'Shear (Strength I)'], ['svc', 'Service II (permanent deformation)'], ['fat', 'Fatigue (owner target only)']];
   function rt(B, X) {
@@ -838,7 +886,7 @@
     const rest = (P.girders || []).map((g, gi) => gi).filter(gi => gi !== B.g);
     return { title: 'Steel bill of materials', subs: [sub('b', 'Plate girders', bomPlatesItems(P, PL)),
       ...bomItemSubs('g', `girder ${G}`, it, ref), ...(it.xf ? [bomXfSub(it.xf)] : []),
-      bomTotals(P, PL, [{ who: `Girder ${G}`, gi: B.g, n: PL.nLs[B.g] || 1, it }], it.xf, rest)].concat(
+      bomTotals(P, PL, [{ who: `Girder ${G}`, gi: B.g, n: PL.nLs[B.g] || 1, it }], it.xf, rest), ...(B.dk ? [bomDeck(P, B.dk)].filter(Boolean) : [])].concat(
       (PL.nLs[B.g] || 1) > 1 ? [sub('n', 'Lines of this girder type', [note(`Girder type ${G} is on ${PL.nLs[B.g]} lines: its stiffeners, connection plates and splice plates are counted here as those of the reported line on each of them. The every-girder report (Report tab, scope "Every girder") lists each line's own.`)])] : []) };
   }
   /* dfFigs(B): the cross-section with the wheel positions of each LLDF case (ui/gfxa.js loadsGraphic, the tab's own drawing), exterior girder G1 and the reported girder, span 1 */
@@ -868,15 +916,20 @@
       ['Stiffener panel $d_{o}$', sh && +sh.do > 0 ? `${f(+sh.do, 2)} in (Shear & stiffeners section, x = ${f(sh.x, 2)} ft)` : sh ? 'unstiffened web' : '—']]);
   }
 
-  const BUILD = { proj, loads, an, defl, sec, flex, shear, fat, cn, frm, spl, wd, rt };
+  const BUILD = { proj, loads, an, defl, sec, flex, shear, fat, cn, frm, spl, wd, dk, rt };
+  /* sectionsOf(P) (DK): SECTIONS, with "Deck slab" before the Rating where the project has the deck design switched on (else SECTIONS itself) */
+  const DK_SEC = ['dk', 'Deck slab'], dkOn = P => !!(window.SBDDeck && window.SBDDeck.isOn && window.SBDDeck.isOn(P));
+  const SECTIONS_DK = [].concat(...SECTIONS.map(s => (s[0] === 'rt' ? [DK_SEC, s] : [s])));
+  const sectionsOf = P => (dkOn(P) ? SECTIONS_DK : SECTIONS);
   const BOM_ANCH = { shear: { ts: 'bom.ts', bs: 'bom.bs' }, spl: { list: 'bom.spl' } };   // section: { sub id: anchor key }
-  const NEED = { loads: 'loads', an: 'an', defl: 'an', sec: 'sec', flex: 'flex', shear: 'shear', fat: 'fat', cn: 'cn', frm: 'frm', spl: 'spl', wd: 'wd', rt: 'rating' };
+  const NEED = { loads: 'loads', an: 'an', defl: 'an', sec: 'sec', flex: 'flex', shear: 'shear', fat: 'fat', cn: 'cn', frm: 'frm', spl: 'spl', wd: 'wd', dk: 'dk', rt: 'rating' };
   function model(B, opt) {
     opt = opt || {};
     const inc = opt.include || null, on = k => !inc || inc[k] !== false, X = { detail: opt.detail === 'all' ? 'all' : 'gov', have: new Map(), gov: [], warn: [], on, anch: new Set() };   // on, anch: BOM2 (2026-11-23), the bill of materials links only into the subsections written in this report (BOM_ANCH)
     const P = B.P, p = P.project || {}, secs = [], built = [], dropped = [];
-    const dataOf = { loads: B.loads, an: B.src === 'file' ? B.pl : B.an, defl: B.src === 'file' ? null : B.an, sec: B.sec, flex: B.flex, shear: B.shear, fat: B.fat, cn: B.cn, frm: B.frm, spl: B.spl, wd: B.wd, rt: B.rating };
-    SECTIONS.forEach(([k, label]) => {
+    const dataOf = { loads: B.loads, an: B.src === 'file' ? B.pl : B.an, defl: B.src === 'file' ? null : B.an, sec: B.sec, flex: B.flex, shear: B.shear, fat: B.fat, cn: B.cn, frm: B.frm, spl: B.spl, wd: B.wd, dk: B.dk, rt: B.rating };
+    (B.dkOn ? SECTIONS_DK : SECTIONS).forEach(([k, label]) => {
+      if (k === 'dk' && !B.dk) X.gov.push({ mod: 'Deck', grp: DK_GRP, check: 'Deck design: not calculated', loc: B.err.dk || 'input error', r: NaN, key: null });   // DK: an input error is REVIEW, not silence
       if (k === 'sum' || k === 'exec' || k === 'sign') return;   // built after the modules (exec, sum) or last (sign)
       if (k === 'basis' || k === 'bom') { if (on(k)) { let s0; try { s0 = (k === 'basis' ? basis : bom)(B, X); } catch (e) { s0 = { title: label, subs: [sub('n', 'Not available', [note('Report error: ' + (e && e.message), true)])] }; } secs.push({ id: k, ...s0 }); } return; }
       const want = on(k);
@@ -963,6 +1016,7 @@
     const cnt = c => { const a = { fail: 0, review: 0, pass: 0 }; T.forEach(t => { const q = t.S.cells[c.id]; if (q && a[q.st] != null) a[q.st]++; }); return `${a.fail} / ${a.review} / ${a.pass}`; };
     const rows = COLS.map(c => { const z = ov.byCol[c.id]; if (!z) return null; const q = z.q, k = kOf(z.G, q);
       return { cells: [c.head, chk(c, q), q.st === 'na' || q.st === 'notrun' ? '—' : gl(z.G, q), q.loc || '—', val(c, q, k), stT[q.st] || q.st, cnt(c), `[[tab:${c.tab}|${TABN[c.tab] || c.tab} tab]]`], cls: q.st === 'fail' ? 'gov' : '' }; }).filter(Boolean);
+    if (ov.deckIn) ov.deck.cells.forEach(q => rows.push({ cells: [`Deck slab: ${q.id || 'inputs'}`, q.check, 'bridge deck', q.loc || '—', q.r != null ? { t: nf(q.r), n: true, cls: rc(q.r), key: 'per.g0' } : '—', stT[q.st] || q.st, '—', '[[tab:dk|Deck tab]]'], cls: q.st === 'fail' ? 'gov' : '' }));   // DK: the deck slab checks, once for the bridge
     const out = [];   // not in the verdict
     T.forEach(t => { const D = t.S.depth; if (D) out.push(['Span-to-depth guidance (Art. 2.5.2.6.3, optional criteria)', t.S.label, D.flagged ? 'below optional AASHTO depth guidance' : 'meets the optional guidance', (D.rows || []).map(q => `${q.k}L = ${f(q.need, 2)} in vs ${f(q.have, 2)} in`).join('; ')]); });
     if (AP) AP.items.filter(q => q.level === 'warn' || q.level === 'note').forEach(q => out.push([`Applicability of the line-girder analysis (SA4): ${q.title}`, 'bridge', q.level === 'warn' ? 'WARNING' : 'NOTE', `${q.val}: ${q.msg}`]));
@@ -972,7 +1026,7 @@
     const Ua = window.SBDModel.unassigned ? window.SBDModel.unassigned(P) : [];
     const items = [{ type: 'figure', plain: true, svg: banner(verdict, `Every girder: ${n.fail} FAIL, ${n.review} REVIEW, ${n.pass} PASS${n.na ? `, ${n.na} n/a` : ''} (${T.length} girder type${T.length === 1 ? '' : 's'} × ${COLS.length} limit states)${apFail ? ' + analysis applicability FAIL' : ''}`),
         caption: 'Verdict of the bridge, by the rules of the [[tab:sum|Summary tab]]: FAIL where a demand / capacity ratio exceeds 1.0, a rating factor RF is below 1.0, or the line-girder analysis is not applicable (SA4 FAIL); else REVIEW where a ratio is not a number or a module item has a Warning status (welds, cross-frames, deflection over the owner\'s preferred limit); else PASS. Counts: one per girder type and limit state (the columns of the Summary tab).' },
-      top ? note(`Governing D/C: ${nf(top.q.r)} (${top.c.head}; girder ${gl(top.G, top.q)}, ${chk(top.c, top.q)}, ${top.q.loc}) [[per.g${kOf(top.G, top.q)}]].${low ? ` Lowest rating factor: ${f(low.q.rf, 2)} (${low.c.head.replace('Rating, ', '')}; girder ${gl(low.G, low.q)}, ${low.q.loc}) [[per.g${kOf(low.G, low.q)}]].` : ''}`, top.q.r > 1 + 1e-9) : low ? note(`Lowest rating factor: ${f(low.q.rf, 2)} (girder ${gl(low.G, low.q)}, ${low.q.loc}) [[per.g${kOf(low.G, low.q)}]].`, low.q.rf < 1 - 1e-9) : null,
+      top ? note(`Governing D/C: ${nf(top.q.r)} (${top.c.head}; ${top.G.deck ? '' : 'girder '}${gl(top.G, top.q)}, ${chk(top.c, top.q)}, ${top.q.loc}) [[per.g${kOf(top.G, top.q)}]].${low ? ` Lowest rating factor: ${f(low.q.rf, 2)} (${low.c.head.replace('Rating, ', '')}; girder ${gl(low.G, low.q)}, ${low.q.loc}) [[per.g${kOf(low.G, low.q)}]].` : ''}`, top.q.r > 1 + 1e-9) : low ? note(`Lowest rating factor: ${f(low.q.rf, 2)} (girder ${gl(low.G, low.q)}, ${low.q.loc}) [[per.g${kOf(low.G, low.q)}]].`, low.q.rf < 1 - 1e-9) : null,
       apFail ? note(`Line-girder analysis not applicable (SA4 FAIL): ${AP.items.filter(q => q.level === 'fail').map(q => `${q.title}, ${q.val}`).join('; ')}: refined analysis required (worked in each girder's report, Summary section, and on the [[tab:an|Analysis tab]]).`, true) : null,
       ov.nan.length ? note(`Not evaluated (ratio not a number; counted as REVIEW): ${ov.nan.map(z => `${z.c.head}, girder ${gl(z.G, z.q)}, ${z.q.loc}: ${chk(z.c, z.q)}, ratio ${nf(z.q.r)}`).join('; ')}.`, true) : null,
       cu.length ? note(`Custom (entered) demands are chosen on a tab (${cu.map(k => (CD.SPECS && CD.SPECS[k] ? CD.SPECS[k].name : k)).join(', ')}): the Summary tab uses them for those modules; this report uses this project's analysis for every module, so those rows can differ from the Summary tab.`, true) : null,
@@ -991,7 +1045,8 @@
     const U = [...grp.values()].map(g => ({ who: `Girder ${g.labs.join(', ')}`, gi: g.gi, n: g.labs.length, it: { ...g.it, miss: g.miss } }));
     const xf = (list.find(G => G.bom.xf) || { bom: {} }).bom.xf || null, ref = k => ` (that girder's report, ${k === 'shear' ? 'Shear & stiffeners' : 'Field splices'} section)`;
     return { id: 'bom', title: 'Steel bill of materials', subs: [sub('b', 'Plate girders', bomPlatesItems(P, PL)),
-      ...[].concat(...U.map((u, i) => bomItemSubs('g' + i, u.who.replace(/^Girder/, 'girder'), u.it, ref))), ...(xf ? [bomXfSub(xf)] : []), bomTotals(P, PL, U, xf, [])] };
+      ...[].concat(...U.map((u, i) => bomItemSubs('g' + i, u.who.replace(/^Girder/, 'girder'), u.it, ref))), ...(xf ? [bomXfSub(xf)] : []), bomTotals(P, PL, U, xf, []),
+      ...(dkOn(P) ? (() => { try { return [bomDeck(P, window.SBDDeck.calc(P))].filter(Boolean); } catch (e) { return []; } })() : [])] };   // DK: the deck bars, where the deck is designed
   }
   /* allModel(P, list, opt): the report of every girder: per check group the governing ratio (or RF) of each girder, the controlling
      girder of the group (largest ratio; smallest RF) marked, and the girder that controls the whole bridge; then each girder's governing
@@ -1035,5 +1090,5 @@
       sections: allSecs, top, low, ctl: C, verdict: EX && EX.verdict, ov: EX && EX.ov };
   }
 
-  window.SBDReportBuild = { SECTIONS, model, govRows, allModel, bomItems, citedRefs, refsOf, numberFigs, FIG_TAB };
+  window.SBDReportBuild = { SECTIONS, sectionsOf, model, govRows, allModel, bomItems, citedRefs, refsOf, numberFigs, FIG_TAB };
 })();
