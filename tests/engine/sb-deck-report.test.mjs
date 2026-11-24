@@ -44,29 +44,32 @@ test('deck design on: a Deck slab section before the Rating; every reference res
     assert.deepEqual(J(doc.unresolved), [], detail + ': unresolved'); assert.deepEqual(J(doc.dup), [], detail + ': duplicate keys');
     assert.ok(!/NaN|undefined|\[object|§\?/.test(txt), detail + ': text clean');
     assert.ok(txt.includes('Deck slab (transverse design)') && txt.includes('DK2 Deck negative moment, top bars (Strength I)') && txt.includes('Not checked by this module')); }
-  const rows = M1.gov.filter(q => q.mod === 'Deck'); assert.equal(rows.length, 3);
+  const rows = M1.gov.filter(q => q.mod === 'Deck'); assert.equal(rows.length, 5);   // DK5, DK6: DKTS / DKCR (2026-11-24)
   B1.dk.checks.forEach((c, i) => { assert.ok(Object.is(rows[i].r, c.r)); assert.equal(rows[i].key, c.step); assert.equal(rows[i].grp, 'Deck slab (bridge)'); });
   assert.ok(Math.abs(rows[0].r - 0.97402) < 2e-5 && Math.abs(rows[1].r - 0.91567) < 2e-5 && Math.abs(rows[2].r - 0.73273) < 2e-5, 'the hand-checked ratios');
   const cells = id => JSON.stringify(M1.sections.find(s => s.id === id));
   assert.ok(cells('sum').includes('DK1 Deck positive moment') && cells('exec').includes('Deck slab (bridge)') && cells('exec').includes('DK3 Deck overhang'));
-  const dkS = M1.sections.find(s => s.id === 'dk'); assert.deepEqual([...dkS.subs.map(q => q.id)], ['gov', 'in', 'bay', 'oh', 'dist', 'steps']);
-  assert.equal(dkS.subs[5].items[0].steps.length, B1.dk.steps.length);
+  const dkS = M1.sections.find(s => s.id === 'dk'); assert.deepEqual([...dkS.subs.map(q => q.id)], ['gov', 'in', 'bay', 'oh', 'dist', 'ts', 'cr', 'steps']);
+  assert.equal(dkS.subs[7].items[0].steps.length, B1.dk.steps.length);
 });
 
 test('a section not chosen: the Deck slab section left out keeps its summary rows without links', () => {
   const Mx = RB.model(B1, { detail: 'gov', include: { dk: false } }), doc = W.SharedReport.build(Mx);
   assert.ok(!ids(Mx).includes('dk')); assert.deepEqual(J(doc.unresolved), []);
-  const rows = Mx.gov.filter(q => q.mod === 'Deck'); assert.equal(rows.length, 3); assert.ok(rows.every(q => q.key === null && /section not included/.test(q.loc)));
+  const rows = Mx.gov.filter(q => q.mod === 'Deck'); assert.equal(rows.length, 5); assert.ok(rows.every(q => q.key === null && /section not included/.test(q.loc)));
 });
 
 test('Summary verdict: the deck checks count once for the bridge, after a girder module has run; a failing deck fails it', () => {
-  const d = SM.deckOf(P1); assert.equal(d.cells.length, 3); assert.equal(d.st, 'pass'); assert.ok(Object.is(d.gov.r, B1.dk.checks[0].r));
-  const none = SM.overall(P1, [{ gi: 0, label: 'G1', cells: { flexStr: { st: 'notrun', tab: 'flex' } } }]); assert.equal(none.deckIn, false); assert.equal(none.n.pass, 0); assert.equal(none.verdict, '—');
-  const ran = SM.overall(P1, [{ gi: 0, label: 'G1', cells: { flexStr: { st: 'pass', r: 0.5, tab: 'flex' } } }, { gi: 1, label: 'G2', cells: { flexStr: { st: 'pass', r: 0.6, tab: 'flex' } } }]);
-  assert.equal(ran.deckIn, true); assert.equal(ran.n.pass, 2 + 3, 'three deck checks, once'); assert.equal(ran.verdict, 'PASS'); assert.equal(ran.top.c.id, 'deck'); assert.equal(ran.top.c.tab, 'dk'); assert.equal(ran.top.G.deck, true);
-  const Pf = J(P1); Pf.deckDesign.sTop = 12; const f = SM.overall(Pf, [{ gi: 0, label: 'G1', cells: { flexStr: { st: 'pass', r: 0.5, tab: 'flex' } } }]);
-  assert.equal(f.verdict, 'FAIL'); assert.ok(f.n.fail >= 1); assert.ok(f.top.q.r > 1); assert.match(f.top.q.check, /^DK2 /);
-  const Pe = J(P1); Pe.deckDesign.sTop = 0; const e = SM.overall(Pe, [{ gi: 0, label: 'G1', cells: { flexStr: { st: 'pass', r: 0.5, tab: 'flex' } } }]);
+  // DKCR (2026-11-24): P1's DK6 (crack control, top bars at 6 in) is NG, so the deck fails; with top bars at 5 in every check passes
+  const d1 = SM.deckOf(P1); assert.equal(d1.cells.length, 5); assert.equal(d1.st, 'fail'); assert.match(d1.gov.check, /^DK6 /);
+  const P1o = J(P1); P1o.deckDesign.sTop = 5; const Bo = W.SBDReportData.compute(P1o, 0, { src: 'analysis', want: { dk: true } });
+  const d = SM.deckOf(P1o); assert.equal(d.cells.length, 5); assert.equal(d.st, 'pass'); assert.ok(Object.is(d.gov.r, Math.max(...Bo.dk.checks.map(c => c.r))));
+  const none = SM.overall(P1o, [{ gi: 0, label: 'G1', cells: { flexStr: { st: 'notrun', tab: 'flex' } } }]); assert.equal(none.deckIn, false); assert.equal(none.n.pass, 0); assert.equal(none.verdict, '—');
+  const ran = SM.overall(P1o, [{ gi: 0, label: 'G1', cells: { flexStr: { st: 'pass', r: 0.5, tab: 'flex' } } }, { gi: 1, label: 'G2', cells: { flexStr: { st: 'pass', r: 0.6, tab: 'flex' } } }]);
+  assert.equal(ran.deckIn, true); assert.equal(ran.n.pass, 2 + 5, 'five deck checks, once'); assert.equal(ran.verdict, 'PASS'); assert.equal(ran.top.c.id, 'deck'); assert.equal(ran.top.c.tab, 'dk'); assert.equal(ran.top.G.deck, true);
+  const Pf = J(P1o); Pf.deckDesign.sTop = 12; const f = SM.overall(Pf, [{ gi: 0, label: 'G1', cells: { flexStr: { st: 'pass', r: 0.5, tab: 'flex' } } }]);
+  assert.equal(f.verdict, 'FAIL'); assert.ok(f.n.fail >= 1); assert.ok(f.top.q.r > 1); assert.match(f.top.q.check, /^DK[26] /);
+  const Pe = J(P1o); Pe.deckDesign.sTop = 0; const e = SM.overall(Pe, [{ gi: 0, label: 'G1', cells: { flexStr: { st: 'pass', r: 0.5, tab: 'flex' } } }]);
   assert.equal(e.verdict, 'REVIEW'); assert.equal(e.n.review, 1); assert.match(e.deck.cells[0].loc, /Top bar spacing/);
 });
 
