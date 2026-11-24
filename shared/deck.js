@@ -4,7 +4,8 @@
 
    SAME METHOD AND ARITHMETIC AS THE PRESTRESSED BRIDGE DESIGN DECK MODULE (apps/ps-bridge/engine/pbd-handling-deck.js: deckTableA4,
    deckDesignSection, deckCalc), operation for operation: tests/engine/deck-parity.test.mjs runs both on made-up decks and requires every
-   value to be identical. The Prestressed app is NOT wired to this file (its engine is a frozen copy); a later PR can move it here.
+   value to be identical. The Prestressed app's strip design is NOT wired to this file (its engine is a frozen copy); a later PR can move it
+   here. Since DD (2026-11-24) the Prestressed app loads this file for distEff only (apps/ps-bridge/engine/deckdist.js).
    What the method is (and is not), as the Prestressed module:
      interior bays   dead load by the continuous-slab coefficients w S^2/11 (positive) and w S^2/10 (negative), S = the girder spacing
                      centre to centre; live load + IM from AASHTO LRFD 10th Ed. Table A4-1 (multiple presence and the 33 % dynamic load
@@ -45,7 +46,8 @@
                                  fc, fy, wc (kcf, dead load), wsFut (ksf), xneg (in), barTop, sTop, coverT, barBot, sBot, coverB, oh (ft),
                                  bBar (in), wBar (klf), eta, mLL }
      steps.interior / steps.capacity / steps.overhang / steps.dist (w, …)   the worked steps (shared/steps.js format; needs SharedSteps)
-   Tests: tests/engine/deck.test.mjs (hand checks), tests/engine/deck-parity.test.mjs (the Prestressed module). Log: fixlog/shared-deck.md. */
+   Tests: tests/engine/deck.test.mjs (hand checks), tests/engine/deck-parity.test.mjs (the Prestressed module), sb-deck*.test.mjs,
+   psbridge-deckdist.test.mjs. Loaded by apps/steel-bridge/index.html and apps/ps-bridge/index.html. Log: fixlog/shared-deck.md. */
 (function () {
   'use strict';
   const ED = 'AASHTO LRFD 10th Ed. ';

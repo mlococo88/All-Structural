@@ -45,7 +45,7 @@ test('hand check (c): PCI BT-72 at 12 ft, interior girder: S_eff 10.0 ft, 67 % (
   ST.pairs.forEach(p => assert.ok(Math.abs(p.shown - p.engine) <= 1e-9 * Math.max(1, Math.abs(p.engine)), `${p.id}: ${p.shown} vs ${p.engine}`));
 });
 
-test('the default design (9 ft): S_eff 7.5 ft, 67 % before and after: the whole result identical apart from deck.dd', () => {
+test('the default design (9 ft): S_eff 7.0 ft, 67 % before and after: the whole result identical apart from deck.dd', () => {
   const { R, R0 } = both(design());
   near(R.deck.dd.Seff, 9 - 3.5 + 1.5, 1e-12); assert.equal(R.deck.distPct, 67); assert.equal(R0.deck.distPct, 67); assert.equal(R.deck.dd.changed, false);
   assert.deepEqual(diff(R, R0).filter(p => !p.startsWith('deck.dd')), []);
