@@ -11582,7 +11582,7 @@ origin/main and this branch, side by side in Node, on 9 made-up bridges (X, Kb, 
 - The step renderer appends "= value" after a sub that ends in a comparison ("47.2 ≤ 140 = 47.2"), as the existing P_r steps ("… ≥ C_u = P_r"); left to the renderer fix in progress elsewhere.
 - shared/steps.js `group()` counts any unitless test step as a ratio (other tools, e.g. TR4 thickness / area proportions t₁/t₂ ≥ 0.5, may show the same kind of chip); not changed here (shared file).
 
-## 2026-11-24 — PR: claude/sb-sidewalk-groups (PR #TBD) (SWGRP) — Cross-section tab: the cards "Deck edges" and "Sidewalks and median" grouped by side   [DISPLAY ONLY: no input, path, key, value or result changed]
+## 2026-11-24 — PR: claude/sb-sidewalk-groups (PR #1694: https://github.com/mlococo88/All-Structural/pull/1694) (SWGRP) — Cross-section tab: the cards "Deck edges" and "Sidewalks and median" grouped by side   [DISPLAY ONLY: no input, path, key, value or result changed]
 ### Request (engineer, 2026-11-24)
 "For both the steel bridge and prestressed bridge apps, can we separate the left and right sidewalk, even just a space between the inputs. The input boxes are very congested and need to be organized a little nicer." Then: "Same with the deck edges."
 ### Where / Before / After
