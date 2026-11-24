@@ -28,3 +28,10 @@
 - BARG-1a. Points must have x ≥ 0 and y ≥ 0 (the barrier on the deck, inside the deck edge); a barrier part beyond the deck edge or below the top of the deck (a fascia drip, a key) is not accepted. Conservative: no part of a barrier off the deck is assumed.
 - BARG-1b. The width at the deck is the deck edge to the inner toe (largest x on y = 0), the "barrier width at deck" the apps already use as the deck edge to the traffic face. For a barrier whose face leans over the roadway beyond its toe, enter "Edge to traffic face".
 - BARG-1c. Templates: Rectangle and Sloped face (vertical back) only, plus Custom (polygon); an F-shape or other profile is entered as a polygon.
+
+## 2026-11-24 — PR: claude/ps-barrier-geometry (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (BARG-2) — now also loaded by apps/ps-bridge   [the file is unchanged]
+### Where
+`apps/ps-bridge/index.html` loads `../../shared/barrier.js` (engine/bridge-dl.js, ui/bridgedl.js; fixlog/ps-bridge.md BARG). `shared/barrier.js` itself is not changed in this PR.
+### Tools that load it, and their tests (run for this PR)
+- Steel Bridge Design (`apps/steel-bridge/index.html`): `tests/engine/barrier.test.mjs`, `tests/engine/sb-barrier.test.mjs`, smoke `tests/smoke/steel-bridge-barrier.mjs`.
+- PS Bridge (`apps/ps-bridge/index.html`): `tests/engine/psbridge-barrier.test.mjs`, smoke `tests/smoke/ps-bridge-barrier.mjs`.
