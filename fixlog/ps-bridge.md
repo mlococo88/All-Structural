@@ -9743,3 +9743,19 @@ None.
 - FOB-a. The top is that of the schematic barrier the figure and the DXF draw (flat over 0.45 b_w, then the sloped face). The 3D view draws an entered barrier as a 32 in block (unchanged): over the flat top they agree; a fence on the sloped face shows its post starting below the block's top there.
 ### Open items
 - Geometry-mode barriers (BARG, once on main for this app) drawn with their own outline and the fence seated on it: follow-up PR.
+
+## 2026-11-24 — PR: claude/ps-geom-barrier-render (PR #1707: https://github.com/mlococo88/All-Structural/pull/1707) (GEOM) — a barrier entered by its geometry is drawn with its own outline in the figure, the DXF and the 3D view; the fence on its top (display only)
+### Request (engineer, 2026-11-24, approved follow-up of FOB)
+Render the Geometry-mode barriers (BARG, #1700, shared/barrier.js) with their actual profile in every renderer and seat the railing / fence on that profile's top. Entered barriers render exactly as before.
+### Where / Before / After
+- `ui/view3d.js`: new `barGeo(P, sd)` (`SharedBarrier.compute(SharedBarrier.spec(dl.bar<sd>))` for `bMode === 'geom'`, not a curb; `{ geo, pts, bw = bDeck × 12, h }` or null), exported on `PSB3DUI`. `edgeTop`: the outline and width of `barGeo` when present (else `BAR_PROF` × b_w × BAR_H as before). `geom`: `bw(s)` takes `barGeo`'s width; the barrier item gets `h: geo.h, geo, pts, ze, dir`. `build`: a `geo` barrier is `outlineSolid(a)` (the outline extruded along the bridge between the skewed end lines, `MT.appD` double-sided); other items `prism` as before.
+- `ui/xsfig.js model`: the barrier width from `barGeo`; the item gets `y1 = y0 + geo.h`, `geo`, `poly` (the outline at its x, y); `svg`: a `geo` barrier is `S.poly(a.poly)` with its own hover text; entered: the schematic polygon as before.
+- `ui/sheets.js section`: a `geo` barrier is `D.pline(lA, a.poly, true)` (S-APPR); the section note reads "BARRIER ENTERED BY ITS GEOMETRY: DRAWN TO ITS OUTLINE (CROSS-SECTION TAB). OTHER BARRIER HEIGHT AND PROFILE, RAILING AND FENCE POST HEIGHTS: SCHEMATIC." only when a Geometry-mode barrier is drawn (else unchanged).
+### Governing provision
+None (display only).
+### Check case (made up: 4 lines at 8 ft, sidewalks 6 ft × 8 in; left rectangle 12 × 42 in, right polygon (0,0) (16,0) (16,3) (9,10) (7,36) (0,36) in; fences at 0.5 ft and 0.25 ft)
+Left: before (FOB, schematic at the typed width) the post base by the schematic top; after 8 + 42 = 50 in. Right: width at the deck 16 in, height 36 in; fence at 3 in: 8 + 36 = 44 in.
+### How verified
+`tests/engine/psbridge-fence-on-barrier.test.mjs` (Geometry case); `node tests/engine/run.mjs psbridge-fence-on-barrier psbridge-xsfig psbridge-view3d psbridge-3dviews psbridge-drawings psbridge-barrier`; `node tests/check-syntax.mjs`. Every cell's engine inputs hashed: identical to origin/main on the made-up projects. DXF: entered-barrier projects byte-identical to the FOB branch; the Geometry project: only the barrier outlines, the fence posts (S-APPR), the faces and dims that reach the appurtenance top and the section note change (the rest matches after the sheet shift).
+### Saved data
+None.

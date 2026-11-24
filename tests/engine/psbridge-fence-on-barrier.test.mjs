@@ -12,7 +12,7 @@ import { loadShared, test, ROOT } from './harness.mjs';
 
 const APP = path.join(ROOT, 'apps/ps-bridge');
 const PBD = ['model', 'library', 'section', 'strands', 'losses-ll', 'handling-deck', 'lldf-flexure', 'external', 'compute', 'optimize', 'merge'].map(n => path.join(APP, `engine/pbd-${n}.js`));
-const W = loadShared('steps.js', ...PBD, ...['sections', 'model', 'rigid', 'lldf-fg', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl'].map(n => path.join(APP, `engine/${n}.js`)), ...['vizkit', 'strands', 'view3d', 'xsfig'].map(n => path.join(APP, `ui/${n}.js`)));
+const W = loadShared('steps.js', 'barrier.js', ...PBD, ...['sections', 'model', 'rigid', 'lldf-fg', 'holddown', 'pierblock', 'design', 'bridge', 'bridge-dl'].map(n => path.join(APP, `engine/${n}.js`)), ...['vizkit', 'strands', 'view3d', 'xsfig'].map(n => path.join(APP, `ui/${n}.js`)));
 W.PSBSections.install();
 const J = v => JSON.parse(JSON.stringify(v));
 function project() {
@@ -42,3 +42,19 @@ test('figure and 3D: the sidewalk fence on the barrier or curb top; elsewhere on
   near(fig(C, 'rail', 'L').y0 - yT, 18, 'curb railing on the curb (as before)');
 });
 
+
+// GEOM (2026-11-24, engineer: Geometry-mode barriers drawn with their actual profile): left rectangle 12 × 42 in, right polygon (0,0) (16,0)
+// (16,3) (9,10) (7,36) (0,36) in, sidewalks 6 ft × 8 in; fences at 0.5 ft (6 in: 8 + 42 = 50 in) and 0.25 ft (3 in: 8 + 36 = 44 in).
+test('Geometry-mode barriers: the figure, the DXF and the 3D view take their outline; the fence on its top; entered as before', () => {
+  const P = project(), dl = P.xs.dl; Object.assign(dl.barL, { bMode: 'geom', bShape: 'rect', bDims: { b: 12, h: 42 } });
+  Object.assign(dl.barR, { bMode: 'geom', bShape: 'poly', bPts: [[0, 0], [16, 0], [16, 3], [9, 10], [7, 36], [0, 36]] });
+  dl.swL = { w: 6, t: 8, fence: 0.05, fenceX: 0.5 }; dl.swR = { w: 6, t: 8, fence: 0.05, fenceX: 0.25 };
+  const m = W.PSBXsFig.model(P, 1), bL = fig(P, 'bar', 'L'), bR = fig(P, 'bar', 'R');
+  assert.ok(bL.geo && bR.geo); near(bL.y1 - bL.y0, 42, 'L height'); near(bR.y1 - bR.y0, 36, 'R height'); near(bR.bw, 16, 'R width at the deck');
+  assert.deepEqual(J(bL.poly), [[0, m.yTop + 8], [12, m.yTop + 8], [12, m.yTop + 50], [0, m.yTop + 50]]);
+  near(bR.poly[2][0], m.Wd - 16, 'R polygon mirrored from the right edge');
+  near(fig(P, 'fence', 'L').y0 - m.yTop, 50, 'figure L fence'); near(fig(P, 'fence', 'R').y0 - m.yTop, 44, 'figure R fence');
+  const G = W.PSB3DUI.geom(P), gL = g3(P, 'bar', 'L'); assert.ok(gL.geo && gL.pts.length === 4); near(gL.h, 42, '3D height');
+  near(g3(P, 'fence', 'L').y0 - G.deck.yTop, 50, '3D L fence'); near(g3(P, 'fence', 'R').y0 - G.deck.yTop, 44, '3D R fence');
+  const E = project(); E.xs.dl.swL = { w: 6, t: 8, fence: 0.05, fenceX: 0.5 }; const bE = fig(E, 'bar', 'L'); assert.ok(!bE.geo && !bE.poly); near(bE.y1 - bE.y0, 32, 'entered: schematic height');
+});
