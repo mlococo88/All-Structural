@@ -53,8 +53,8 @@ try {
   assert.equal(await p.$$eval('#inPanes input.rl-ro', L => L.filter(i => i.readOnly).length), 6, 'the six plate fields of segment 1 are read-only');
   assert.equal(await p.$eval('#inPanes [data-path="girders.0.segments.0.x1"]', i => i.readOnly), false);
   const card = await p.$eval('#rl_tbl', t => t.innerText);
-  assert.match(card, /W36X135/); assert.match(card, /Tabulated \(AISC Shapes Database v16\.0\)\s+35\.600\s+12\.000\s+0\.790\s+0\.600\s+39\.90\s+7,?800\s+135\.0/);
-  assert.match(card, /Three plates used in the checks \(web D = d − 2tf = 34\.0200 in\)[\s\S]*39\.37\s+7,?713\s+134\.0/); assert.match(card, /Three plates \/ tabulated\s+0\.987\s+0\.989/);
+  assert.match(card, /W36X135/); assert.match(card, /Tabulated \(AISC Shapes Database v16\.0\)\s+35\.600\s+12\.000\s+0\.790\s+0\.600\s+39\.90\s+7,?800\s+439\.0\s+509\.0\s+135\.0/);   // ROLL-CAP (2026-11-24): S_x and Z_x columns
+  assert.match(card, /Three plates used in the checks \(web D = d − 2tf = 34\.0200 in\)[\s\S]*39\.37\s+7,?713\s+433\.3\s+503\.6\s+134\.0/); assert.match(card, /Three plates \/ tabulated\s+0\.987\s+0\.989\s+0\.987\s+0\.989/);
   await shot(p, 'sb-rolled-1-picker.png', '#rl_type');
   mark('picked');
   // the built-in girder is hybrid-free (50W): no error; the Section properties tab of segment 1 names the shape
