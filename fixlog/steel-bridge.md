@@ -11083,7 +11083,7 @@ Each item of the table above and the three corrections were re-read against the 
 - The W-shape search passes or fails a shape with the detail inputs as entered: a bearing stiffener wider than (b_f − t_w)/2 of a
   narrower shape fails that shape (BS6), so the stiffener width can govern the shape found. The result names the governing check.
 
-## 2026-11-24 — PR: claude/sb-rolled-cap (ROLL-CAP, ROLL-D1 follow-up) — the three plates of a rolled shape are never stiffer than the AISC table   [CALCULATION CHANGE for rolled segments of 23 W shapes only; plate girders, projects without a shape and the other 266 shapes are unchanged, bit for bit]
+## 2026-11-24 — PR: claude/sb-rolled-cap (PR #1685: https://github.com/mlococo88/All-Structural/pull/1685) (ROLL-CAP, ROLL-D1 follow-up) — the three plates of a rolled shape are never stiffer than the AISC table   [CALCULATION CHANGE for rolled segments of 23 W shapes only; plate girders, projects without a shape and the other 266 shapes are unchanged, bit for bit]
 ### Where
 - `apps/steel-bridge/engine/rolled.js`: new `plates0(sh)` (the plates of the first release, kept to recognise them), `geo(sh, D, t)`,
   `within`, `tfEq(sh)`, `migrate(P)`; changed `plates(sh)`, `state(seg)` (new status `'old'`), `warnings(P)`, `props(sh)`, `steps(seg)`;
