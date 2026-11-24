@@ -141,6 +141,8 @@
         const xs = rows.map(r => +r.x).filter(isNum);
         if (new Set(xs).size !== xs.length) Wn('table', 'two custom demand rows have the same station x: the engine interpolates between neighbouring rows (enter a support twice only when the value jumps).');
       }
+      // IMP-N (2026-11-23): imported demands are used as given: a pedestrian load / composite utility of the Cross-section tab is not added
+      { const a = assumedOf(P, T); if (a) Wn('src', a.text); }
     });
     return { errors, warnings };
   }
@@ -181,5 +183,41 @@
     const m = f1(l.extLLmpf), dfp = f1(l.extDFpos), dfn = f1(l.extDFneg), dfv = f1(l.extDFv);
     return { dfp, dfn, dfv, m, pos: dfp * m, neg: dfn * m, v: dfv * m };
   }
-  window.PSBDemands = { slice, fac, SCHEMA, SRC, COLS, isFile, parse, spans, entry, srcOf, pickOf, external, tableFile, setSrc, setFile, setSpan, tableRows, setTable, anyExt, checks, describe };
+  /* IMP-N (2026-11-23, engineer's decision: "imported demands are used as given and are ASSUMED to include PL"; fixlog/ps-bridge.md IMP-N).
+     A NOTE ONLY: no value is computed or changed here. What the engine does with imported demands (engine/pbd-compute.js, unchanged):
+       DC2, DW and LL+IM moments and shears = the file's or the table's, so
+         the pedestrian live load PL (engine/pl.js, mode 'ext')               NOT added: the imported live load must include it;
+         a utility on the composite section (category UT, in the line's DW)   NOT added: the imported DW must include it (its klf is used
+                                                                              for the superimposed dead-load deflection only);
+       the girder self-weight and DC1 = this app's, on the precast girder alone, so
+         a utility on the noncomposite section (UTN) and the future utility allowance (UF), both in w_NC   ARE applied by this app.
+     noteText(a): the note; a = { pl (klf or true), utc (klf or true), wUT, wUF } (a number names the girder line's share).
+     assumed(inp, R): R with R.imp = { pl, utc, wUT, wUF, text } and the note as ONE design warning (replacing engine/pl.js's own) when the
+       girder has imported demands and a pedestrian load or a composite utility; any other girder: R unchanged.
+     assumedOf(P, T): the same for girder type T on any of its lines (the input side: the Demands card, the input warnings), or null. */
+  const A316 = 'AASHTO LRFD 10th Ed. 3.6.1.6';
+  function noteText(a) {
+    const k = v => (isNum(v) ? ` (${v.toFixed(4)} klf on this girder line)` : ''), t = [];
+    t.push('Imported demands (a MIDAS file or a custom table) are used as given: DC2, DW and LL+IM are the imported values.');
+    if (a.pl) t.push(`A pedestrian live load is entered on the Cross-section tab${k(a.pl)}: the imported live load must already include it; it is NOT added by this app (${A316}).`);
+    if (a.utc) t.push(`A utility on the composite section is entered on the Cross-section tab${k(a.utc)}: the imported DW must already include it; it is NOT added by this app (its klf is used for the superimposed dead-load deflection only).`);
+    if (a.wUT || a.wUF) t.push('The utilities on the noncomposite section and the future utility allowance of the Cross-section tab ARE applied by this app: they act on the precast girder alone, which this app always computes itself (not imported).');
+    return t.join(' ');
+  }
+  function assumed(inp, R) {
+    if (!R || R.error || !R.useExt || !inp) return R;
+    const pl = inp.pl && +inp.pl.w > 0 ? +inp.pl.w : 0, utc = isNum(+inp.utc) && +inp.utc !== 0 ? +inp.utc : 0; if (!pl && !utc) return R;
+    const u = inp.ut || {}, a = { pl, utc, wUT: +u.wUT || 0, wUF: +u.wUF || 0 }; a.text = noteText(a);
+    R.imp = a;
+    if (Array.isArray(R.warns)) { const PL = window.PSBPL, i = PL ? R.warns.indexOf(PL.WARN_EXT) : -1; if (i >= 0) R.warns.splice(i, 1); R.warns.push(a.text); }
+    return R;
+  }
+  function assumedOf(P, T) {
+    const B = window.PSBBridge, DL = window.PSBBridgeDL; if (!B || !DL || !T || srcOf(P, T.id) === 'app' || !P.xs || !P.xs.dl) return null;
+    const k = B.types(P).indexOf(T), gs = B.hasTypes(P) ? B.typeLines(P, k) : [window.PSBDesign ? window.PSBDesign.sel(P).g : 1], a = { pl: false, utc: false, wUT: false, wUF: false };
+    gs.forEach(g => { let q = null; try { q = DL.line(P, g); } catch (e) { q = null; } if (!q) return; if (q.PL > 0) a.pl = true; if (q.UT) a.utc = true; if (q.UTN) a.wUT = true; if (q.UF) a.wUF = true; });
+    if (!a.pl && !a.utc) return null;
+    a.text = noteText(a); return a;
+  }
+  window.PSBDemands = { noteText, assumed, assumedOf, slice, fac, SCHEMA, SRC, COLS, isFile, parse, spans, entry, srcOf, pickOf, external, tableFile, setSrc, setFile, setSpan, tableRows, setTable, anyExt, checks, describe };
 })();

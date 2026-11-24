@@ -3645,7 +3645,7 @@ async function rxImport(file) {
     if (!kf) return { err: `force unit "${u.force || 'not stated'}" is not one SubLoads converts (kip, kN, lb)` };
     if (!lf) return { err: `length unit "${u.length}" is not one SubLoads converts (ft, m)` };
     if (!Array.isArray(p.supports) || !p.supports.length) return { err: 'there are no supports in the hand-off' };
-    const warns = [], labels = [], sups = []; let hasU = false;
+    const warns = [], labels = [], sups = [], sep = {}, SEPK = ['PL', 'PLmin', 'UT', 'UF', 'UTc']; let hasU = false;
     if (kf !== 1) warns.push(`Forces converted from ${u.force} to kip (× ${kf.toFixed(6)}).`);
     for (let i = 0; i < p.supports.length; i++) {
       const s = p.supports[i] || {}, id = String(s.id == null ? `Support ${i + 1}` : s.id), x = s.x == null ? NaN : +s.x;
@@ -3658,12 +3658,26 @@ async function rxImport(file) {
         if (v.dc1 < 0 || v.dc2 < 0 || v.dw < 0) warns.push(`${id}, ${lab}: a negative (uplift) dead-load reaction is included.`);
         for (const c of ['UT', 'UF']) { if (!g || g[c] == null) continue; const n = g[c];   // SRXU (2026-10-19): optional MassDOT utilities (GirderDetail)
           if (typeof n !== 'number' || !f(n)) return { err: `support ${id}, ${lab}: ${c} is not a valid number` }; v[c.toLowerCase()] = n * kf; hasU = true; }
+        // SRP (2026-11-23, HANDOFF.md §4.4 "Separate items"; sent by the PS Bridge app): optional girders[].separate = { UT, UF (ALREADY INSIDE DC1),
+        // UTc (ALREADY INSIDE DW), PL, PLmin (in no other field) }. UT and UF are taken OUT of DC1 here and carried as their own values (the
+        // same keys as SRXU: UT as DW, UF as its own permanent load), so nothing is counted twice; UTc stays in DW; PL is shown only.
+        // A payload without the field (every payload before) is read exactly as before.
+        const sp = g ? g.separate : undefined;
+        if (sp != null) {
+          if (typeof sp !== 'object' || Array.isArray(sp)) return { err: `support ${id}, ${lab}: "separate" is not readable` };
+          if (g.UT != null || g.UF != null) return { err: `support ${id}, ${lab}: the hand-off has both UT / UF values outside DC1 and "separate" items inside DC1; it cannot be read without counting a utility twice` };
+          const o = {}; for (const c of SEPK) { const n = sp[c]; if (n == null) continue; if (typeof n !== 'number' || !f(n)) return { err: `support ${id}, ${lab}: separate ${c} is not a valid number` }; o[c] = n * kf; }
+          if (o.UT != null || o.UF != null) { const d = (o.UT || 0) + (o.UF || 0); v.dc1all = v.dc1; v.dc1 = v.dc1 - d; if (o.UT != null) v.ut = o.UT; if (o.UF != null) v.uf = o.UF; hasU = true; sep.u = true;
+            if (d > v.dc1all + 1e-6 && v.dc1all >= 0) warns.push(`${id}, ${lab}: the separate utilities (${d.toFixed(2)} kip) are more than the DC1 that should contain them (${v.dc1all.toFixed(2)} kip).`); }
+          if (o.UTc != null) { v.utc = o.UTc; sep.utc = true; }
+          if (o.PL != null || o.PLmin != null) { v.pl = o.PL || 0; v.plmin = o.PLmin || 0; sep.pl = true; }
+        }
         if (labels.indexOf(lab) < 0) labels.push(lab);
         gs.push({ label: lab, position: g.position || '', ...v });
       }
       sups.push({ id, x: f(x) ? x * lf : null, girders: gs });
     }
-    return { sups, labels, warns, hasU };
+    return { sups, labels, warns, hasU, ...(sep.u || sep.utc || sep.pl ? { sep } : {}) };
   }
   /* default SubLoads support for a source support id; -1 = skip */
   function defTarget(id, i, n) {
@@ -3732,11 +3746,13 @@ async function rxImport(file) {
     if (c.labels.length > 1) h += `<h3>${D.byN ? 'Show the values of' : 'Source girder'}</h3><select data-rxh="gl">${c.labels.map((l, i) => `<option value="${i}"${i === D.gl ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
     const opt = (k, sel) => `<option value="-1"${sel < 0 ? ' selected' : ''}>(skip)</option>` + P.units.map((u, i) => `<option value="${i}"${i === sel ? ' selected' : ''}>${esc(u.name)}</option>`).join('');
     const hu = !!c.hasU, uk = hu ? ['dc1', 'dc2', 'dw', 'ut', 'uf'] : ['dc1', 'dc2', 'dw'];   // SRXU
-    if (hu) h += `<p style="margin-top:6px"><b>MassDOT utilities from GirderDetail</b> are adopted as their own values (Reactions tab, under each support): UT (existing utilities) is carried as DW and UF (future utility allowance) as DC in the load cases; see the Dead load tab.</p>`;
-    h += `<h3>Supports</h3><table class="mini-t"><thead><tr><th>From</th><th>DC1</th><th>DC2</th><th>DW</th>${hu ? '<th>UT</th><th>UF</th>' : ''}<th>To SubLoads support</th><th>Bearing row</th></tr></thead><tbody>`;
+    const sq = c.sep || null, xk = sq ? [sq.utc ? 'utc' : '', sq.pl ? 'pl' : ''].filter(Boolean) : [];   // SRP: the separate items shown for information (not adopted)
+    if (hu && !(sq && sq.u)) h += `<p style="margin-top:6px"><b>MassDOT utilities from GirderDetail</b> are adopted as their own values (Reactions tab, under each support): UT (existing utilities) is carried as DW and UF (future utility allowance) as DC in the load cases; see the Dead load tab.</p>`;
+    if (sq) h += `<div id="rxh-sep" style="margin-top:6px;font-size:.9rem"><b>Separate items from ${esc(p.producer || 'the producer')}</b> (optional fields of the hand-off):<ul style="margin:2px 0 0 18px">${sq.u ? `<li><b>UT</b> (utilities on the noncomposite section) and <b>UF</b> (future utility allowance) are inside the sender's DC1. They are <b>taken out of DC1 here</b> and adopted as their own values (Reactions tab, under each support), so nothing is counted twice: UT is carried as DW (the DW load factors) and UF as its own permanent load (the DC maximum factor where it adds, 0 where it relieves), the factors this tool already has for them. The DC1 column below is net of them.</li>` : ''}${sq.utc ? '<li><b>UTc</b> (utilities on the composite section) is inside DW and stays there (DW load factors): shown for information.</li>' : ''}${sq.pl ? `<li><b>PL</b> (pedestrian live load reaction, unfactored, no IM, no distribution factor): <b>information only, not applied here</b>. This tool computes its own pedestrian load from the sidewalks of the Bridge tab (${plOwnTxt()}); applying both would count it twice. Compare the values on the Pedestrian load card of the Live load tab.</li>` : ''}</ul></div>`;
+    h += `<h3>Supports</h3><table class="mini-t"><thead><tr><th>From</th><th>DC1</th><th>DC2</th><th>DW</th>${hu ? '<th>UT</th><th>UF</th>' : ''}${xk.map(k => `<th>${k === 'utc' ? 'UTc <small>(in DW)</small>' : 'PL <small>(info)</small>'}</th>`).join('')}<th>To SubLoads support</th><th>Bearing row</th></tr></thead><tbody>`;
     const lab = c.labels[D.gl];
     c.sups.forEach((s, i) => { const g = s.girders.find(x => x.label === lab), t = D.map[i];
-      h += `<tr><td class="lbl">${esc(s.id)}${s.x != null ? ` <small>(x = ${f2(s.x)} ft)</small>` : ''}</td>${g ? uk.map(k => `<td style="text-align:right">${f2(g[k] || 0)}</td>`).join('') : `<td colspan="${uk.length}">(no value for this girder)</td>`}<td><select data-rxh="k" data-i="${i}">${opt(i, t.k)}</select></td><td>${t.k >= 0 && isJoint(t.k) ? `<select data-rxh="side" data-i="${i}"><option value="back"${t.side === 'back' ? ' selected' : ''}>back (span behind)</option><option value="ahead"${t.side === 'ahead' ? ' selected' : ''}>ahead (span ahead)</option></select>` : '<span style="color:var(--muted)">single row</span>'}</td></tr>`; });
+      h += `<tr><td class="lbl">${esc(s.id)}${s.x != null ? ` <small>(x = ${f2(s.x)} ft)</small>` : ''}</td>${g ? uk.concat(xk).map(k => `<td style="text-align:right">${f2(g[k] || 0)}</td>`).join('') : `<td colspan="${uk.length + xk.length}">(no value for this girder)</td>`}<td><select data-rxh="k" data-i="${i}">${opt(i, t.k)}</select></td><td>${t.k >= 0 && isJoint(t.k) ? `<select data-rxh="side" data-i="${i}"><option value="back"${t.side === 'back' ? ' selected' : ''}>back (span behind)</option><option value="ahead"${t.side === 'ahead' ? ' selected' : ''}>ahead (span ahead)</option></select>` : '<span style="color:var(--muted)">single row</span>'}</td></tr>`; });
     h += `</tbody></table>`;
     const n = nb(), presets = (D.byN ? [['bynum', 'Every girder with a source of the same number']] : []).concat([['pos', `Same position as the source (${D.pos === 'exterior' ? 'exterior: G1 and G' + n : 'interior: G2 to G' + (n - 1)})`], ['all', 'All girders'], ['int', 'Interior girders only'], ['ext', 'Exterior girders only (G1, G' + n + ')']].concat(D.idx >= 1 && D.idx <= n ? [['one', `Only G${D.idx} (the source beam number)`]] : []).concat([['custom', 'Custom (tick below)']]));
     h += `<h3>Girders</h3><select data-rxh="preset">${presets.map(([v, l]) => `<option value="${v}"${v === D.preset ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select><div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px">${[...Array(n)].map((_, j) => `<label style="display:flex;gap:4px;align-items:center;font-size:.9rem"><input type="checkbox" data-rxh="g" value="${j}"${D.gir.indexOf(j) >= 0 ? ' checked' : ''}> G${j + 1}</label>`).join('')}</div>`;
@@ -3760,12 +3776,38 @@ async function rxImport(file) {
     if (D.pid) rec.pid = D.pid;   // GXF (2026-11-09, optional): the project id pulled (HANDOFF.md §5.1)
     const os = ownSum(p); if (os) rec.ownerRules = os;   // SRX: recorded for information only
     if (D.c.hasU) rec.utilities = { ut: r3(pl.cells.filter(x => x.c0 === 'ut').reduce((a, x) => a + x.val, 0)), uf: r3(pl.cells.filter(x => x.c0 === 'uf').reduce((a, x) => a + x.val, 0)) };   // SRXU (optional)
+    if (D.c.sep) rec.separate = sepRec(D);   // SRP (2026-11-23, optional): the separate items of the hand-off, as read
     P.rxSrc = (Array.isArray(P.rxSrc) ? P.rxSrc : []).concat([rec]).slice(-20);
     if (BX()) BX().markAdopted(CH, RID, p.producedAt || '');
     closeDialog(); buildSide(); recompute(); autosave();
     flash(`Reactions from ${rec.producer} applied: ${pl.cells.length} values.`);
     return true;
   }
+  /* ---------- SRP (2026-11-23): the separate items of a PS Bridge hand-off (HANDOFF.md §4.4) ----------
+     plOwn(): this tool's own pedestrian load is on (a sidewalk wider than 2 ft on the Bridge tab, 3.6.1.6). sepRec(D): the optional
+     source-record field separate = { fromDC1: true | false (UT / UF taken out of DC1), utc (kip, inside DW, as adopted), pl: [{ k, support,
+     row, g: { '<girder no>': kip }, min: { … } }] (the pedestrian reactions received per support mapped; information only, never applied) }. */
+  const plOwn = () => [nz(P.br.swL), nz(P.br.swR)].some(w => w > 2);
+  const plOwnTxt = () => { const b = P.br, w = [['left', nz(b.swL)], ['right', nz(b.swR)]].filter(x => x[1] > 0); return plOwn() ? `now: ${w.map(([s2, v]) => `${s2} sidewalk ${f2(v)} ft`).join(', ')}` : 'now: no sidewalk wider than 2 ft is entered, so NO pedestrian load is in this tool\'s analysis'; };
+  function sepRec(D) {
+    const c = D.c, lab = c.labels[D.gl], o = { fromDC1: !!c.sep.u }; let utc = 0; const pls = [];
+    c.sups.forEach((s2, i) => { const t = D.map[i]; if (t.k < 0) return; const side = isJoint(t.k) ? t.side : 'back', g0 = s2.girders.find(x => x.label === lab); if (!g0 && !D.byN) return;
+      const e = { k: t.k, support: P.units[t.k].name, row: isJoint(t.k) ? side : '', g: {}, min: {} }; let any = false;
+      D.gir.forEach(j => { const g = D.byN ? s2.girders.find(x => x.label === `G${j + 1}`) : g0; if (!g) return; if (g.utc) utc += g.utc; if (g.pl != null) { e.g[j + 1] = r3(g.pl); e.min[j + 1] = r3(g.plmin || 0); any = true; } });
+      if (any) pls.push(e); });
+    if (c.sep.utc) o.utc = r3(utc); if (pls.length) o.pl = pls;
+    return o;
+  }
+  const sepTxt = (rec, k) => { const q = rec.separate; if (!q) return ''; const t = [];
+    if (q.fromDC1) t.push('UT and UF were taken out of its DC1 and are carried on their own (UT as DW, UF as its own permanent load)');
+    if (q.utc != null) t.push(`its DW contains the utilities on the composite section, UTc ${f2(q.utc)} kip as adopted`);
+    const pl = (q.pl || []).filter(x => k == null || x.k === k);
+    if (pl.length) t.push(`pedestrian load reactions received, unfactored kip, INFORMATION ONLY, not applied (this tool computes its own pedestrian load from the Bridge tab's sidewalks; ${plOwnTxt()}): ${pl.map(x => `${esc(x.support)}${x.row ? ` (${esc(x.row)} row)` : ''} ${Object.keys(x.g).map(j => `G${j} ${f2(x.g[j])}${x.min && x.min[j] < 0 ? ` (min ${f2(x.min[j])})` : ''}`).join(', ')}`).join('; ')}`);
+    return t.length ? `; separate items of the hand-off: ${t.join('; ')}` : ''; };
+  { const ck2 = checks; checks = function (G, UG) { const C = ck2(G, UG);   // SRP: pedestrian reactions were received, but this tool has no pedestrian load of its own
+      if (!G.E.length && !plOwn()) { const r = (Array.isArray(P.rxSrc) ? P.rxSrc : []).filter(x => x.separate && (x.separate.pl || []).some(q => Object.keys(q.g).some(j => q.g[j] > 0)));
+        if (r.length) C.push(['warn', 'Pedestrian load', `A pulled reactions hand-off (${r[r.length - 1].producer}) carries pedestrian load reactions, which are information only here, and no sidewalk wider than 2 ft is entered on the Bridge tab: no pedestrian load is in this analysis. Enter the sidewalk widths (Bridge tab, Sidewalks) if the bridge has sidewalks.`]); }
+      return C; }; }
   function pull() {
     if (window.SubLoadsPicker && window.SharedHandoffStore) {   // GXF (2026-11-09): first ask which project (HANDOFF.md §5.1)
       const NSx = 'bridgeSuite.v1.';
@@ -3790,7 +3832,7 @@ async function rxImport(file) {
   function srcText(rec, k) {
     const t = (rec.targets || []).filter(x => k == null || x.k === k);
     const where = t.map(x => `${esc(x.support)}${x.row ? ` (${esc(x.row)} row)` : ''} G${(x.girders || []).join(', G')}`).join('; ');
-    return `${esc(rec.producer)}${rec.producerFile ? ` (${esc(rec.producerFile)})` : ''}, produced ${esc(when(rec.producedAt))}, girder ${esc(rec.girder)}${rec.position ? ` (${esc(rec.position)})` : ''}, ${rec.mode === 'add' ? 'added to existing values' : 'replaced'}${where ? `: ${where}` : ''}${rec.utilities ? `; MassDOT utilities from GirderDetail: UT ${f2(rec.utilities.ut)} kip (carried as DW), UF ${f2(rec.utilities.uf)} kip (carried as DC), as adopted` : ''}${rec.ownerRules ? `; owner load rules ${esc(ownTxt(rec.ownerRules))} (information only, not applied here)` : ''}`;
+    return `${esc(rec.producer)}${rec.producerFile ? ` (${esc(rec.producerFile)})` : ''}, produced ${esc(when(rec.producedAt))}, girder ${esc(rec.girder)}${rec.position ? ` (${esc(rec.position)})` : ''}, ${rec.mode === 'add' ? 'added to existing values' : 'replaced'}${where ? `: ${where}` : ''}${rec.utilities ? `; ${rec.separate && rec.separate.fromDC1 ? 'utilities' : 'MassDOT utilities from GirderDetail'}: UT ${f2(rec.utilities.ut)} kip (carried as DW), UF ${f2(rec.utilities.uf)} kip (carried as DC), as adopted` : ''}${sepTxt(rec, k)}${rec.ownerRules ? `; owner load rules ${esc(ownTxt(rec.ownerRules))} (information only, not applied here)` : ''}`;
   }
   const recsFor = k => (Array.isArray(P.rxSrc) ? P.rxSrc : []).filter(r => (r.targets || []).some(x => x.k === k));
   const css = document.createElement('style'); css.textContent = `.itab.bx-new::after { content: ' \\2022'; color: var(--warn); } .rxh-new { color: var(--warn); font-size: .8rem; font-weight: 600; align-self: center; }`; document.head.appendChild(css);
@@ -3813,13 +3855,16 @@ async function rxImport(file) {
      allowance) is its own permanent load D.UF (SRXF, 2026-10-19), factored in comboComps with the limit state's DC maximum where it adds and 0
      where it relieves (GirderDetail: 1.25 / 0, Service 1.0 / 0). The Dead load tab and the report show the breakdown.
      A support without these keys is computed exactly as before. */
+  // SRP (2026-11-23): the name of the utilities of support k: taken out of the DC1 of a hand-off with separate items (the PS Bridge app), else as before
+  const uSep = k => { const rs = recsFor(k).filter(r => r.utilities); return !!(rs.length && rs[rs.length - 1].separate && rs[rs.length - 1].separate.fromDC1); };
+  const uName = k => (uSep(k) ? `Utilities from ${esc(recsFor(k).filter(r => r.utilities).slice(-1)[0].producer || 'the girder app')} (separate items, taken out of its DC1)` : 'MassDOT utilities from GirderDetail');
   const UK = ['ut', 'uf', 'uta', 'ufa'], hasUk = k => ((P.rx.data || [])[k] || []).some(r => r && UK.some(q => r[q] != null)), anyU = k => ((P.rx.data || [])[k] || []).some(r => r && UK.some(q => nz(r[q])));
   function utilTables(h) { const G = MODEL.G; if (!G || G.E.length) return h; let pos = 0;
     (P.units || []).forEach((u, k) => { const tag = `<div class="sec-h">${esc(u.name)}`; let i = h.indexOf(tag, pos);
       while (i >= 0 && !/[< ]/.test(h.charAt(i + tag.length))) i = h.indexOf(tag, i + 1);
       if (i < 0) return; const e = h.indexOf('</table>', i); if (e < 0) return; pos = e; if (!hasUk(k)) return;
       const jt = !!(G.sup[k] && G.sup[k].joint), cols = jt ? [['ut', 'UT bk'], ['uf', 'UF bk'], ['uta', 'UT ah'], ['ufa', 'UF ah']] : [['ut', 'UT (as DW)'], ['uf', 'UF (as DC)']], row = P.rx.data[k];
-      const t = `</table><p class="note" style="padding:6px 0 2px"><b>MassDOT utilities from GirderDetail</b> (kip, unfactored; own values, not in the DC1, DC2, DW columns above). UT = existing utilities, carried as DW; UF = future utility allowance, carried as DC.</p><table class="mini-t"><thead><tr><th>Girder</th>${cols.map(c => `<th>${c[1]}</th>`).join('')}</tr></thead><tbody>${row.map((r, j) => `<tr><td class="lbl">G${j + 1}</td>${cols.map(([c]) => `<td><input data-k="rx.data.${k}.${j}.${c}" data-kind="num" value="${esc(r && r[c] != null ? r[c] : 0)}"></td>`).join('')}</tr>`).join('')}<tr><td class="lbl">Total</td>${cols.map(([c]) => `<td style="text-align:right">${f1(row.reduce((a, r) => a + nz(r && r[c]), 0))}</td>`).join('')}</tr></tbody>`;
+      const t = `</table><p class="note" style="padding:6px 0 2px"><b>${uName(k)}</b> (kip, unfactored; own values, not in the DC1, DC2, DW columns above). UT = existing utilities, carried as DW; UF = future utility allowance, carried as DC.</p><table class="mini-t"><thead><tr><th>Girder</th>${cols.map(c => `<th>${c[1]}</th>`).join('')}</tr></thead><tbody>${row.map((r, j) => `<tr><td class="lbl">G${j + 1}</td>${cols.map(([c]) => `<td><input data-k="rx.data.${k}.${j}.${c}" data-kind="num" value="${esc(r && r[c] != null ? r[c] : 0)}"></td>`).join('')}</tr>`).join('')}<tr><td class="lbl">Total</td>${cols.map(([c]) => `<td style="text-align:right">${f1(row.reduce((a, r) => a + nz(r && r[c]), 0))}</td>`).join('')}</tr></tbody>`;
       h = h.slice(0, e) + t + h.slice(e); pos = e + t.length; });
     return h; }
   // analysis: UT into DW, UF into DC2 (DC superstructure) at the bearings of every row; unchanged when the support has none
@@ -3833,7 +3878,7 @@ async function rxImport(file) {
     return { ...r, dc2, dw, ut, uf, ...(hasUF ? { UF: UM.evalFn(uf, false) } : {}), DW: UM.evalFn(dw, false), has: true }; };
   const rxt = rxTotals; rxTotals = function (G) { const t = rxt(G), d = P.rx.data || []; t.forEach((x, k) => (d[k] || []).forEach(r => { if (!r) return; const a = nz(r.uf) + nz(r.ufa), b = nz(r.ut) + nz(r.uta); if (a || b) { x.dc2 += a; x.dc += a; x.dw += b; } })); return t; };
   const utTxt = k => { const d = (P.rx.data || [])[k] || [], sum = q => d.reduce((a, r) => a + nz(r && r[q]) + nz(r && r[q + 'a']), 0), by = q => d.map((r, j) => [j, nz(r && r[q]) + nz(r && r[q + 'a'])]).filter(x => x[1]).map(([j, v]) => `G${j + 1} ${f2(v)}`).join(', ');
-    return `MassDOT utilities from GirderDetail at ${esc(P.units[k].name)}: DW includes the existing utilities UT = ${f2(sum('ut'))} kip${by('ut') ? ` (${by('ut')})` : ''}; the DC2 column of the bearing table below includes the future utility allowance UF = ${f2(sum('uf'))} kip${by('uf') ? ` (${by('uf')})` : ''}. UT takes the DW factors (Strength 1.50 / 0.65, as GirderDetail). In the load cases UF is its own permanent load (not in DC super): the limit state's DC maximum factor where it adds (Strength I 1.25, Service 1.0) and 0 where it relieves, as GirderDetail (MassDOT Part I 3.5.5.2); it is listed separately in the Dead load effects table.`; };
+    return `${uName(k)} at ${esc(P.units[k].name)}: DW includes the existing utilities UT = ${f2(sum('ut'))} kip${by('ut') ? ` (${by('ut')})` : ''}; the DC2 column of the bearing table below includes the future utility allowance UF = ${f2(sum('uf'))} kip${by('uf') ? ` (${by('uf')})` : ''}. UT takes the DW factors (Strength 1.50 / 0.65, as GirderDetail). In the load cases UF is its own permanent load (not in DC super): the limit state's DC maximum factor where it adds (Strength I 1.25, Service 1.0) and 0 where it relieves, as GirderDetail (MassDOT Part I 3.5.5.2); it is listed separately in the Dead load effects table.`; };
   { const dh0 = dlHtml; dlHtml = function () { const h = dh0(), k = P.ui.sel; if (!anyU(k)) return h;
     return h.replace('Superstructure loads at the bearings</h3>', `Superstructure loads at the bearings</h3><p class="note" style="padding:0 0 6px">${utTxt(k)}</p>`); }; }
   { const be0 = basisExtra; basisExtra = function () { const h = be0(), ks = (P.units || []).map((u, k) => k).filter(anyU); if (!ks.length) return h;

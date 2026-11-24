@@ -141,6 +141,7 @@
   function srSummary(p) {
     const L = [];
     (p.supports || []).forEach(s => { (s.girders || []).forEach(g => { L.push('  ' + s.id + ' (x = ' + f2(s.x) + ' ft), ' + g.label + ': DC1 ' + f2(g.DC1) + ', DC2 ' + f2(g.DC2) + ', DW ' + f2(g.DW) + ' kip'); }); });
+    (p.supports || []).forEach(s => { (s.girders || []).forEach(g => { if (g.separate) L.push('  ' + s.id + ', ' + g.label + ', separate items (optional fields; UT and UF are inside DC1, UTc inside DW, PL in no other field): ' + Object.keys(g.separate).map(k => k + ' ' + f2(g.separate[k])).join(', ') + ' kip'); }); });   // SRP
     if (p.liveLoad && p.liveLoad.supports) L.push('  Live load per lane, no IM, no DF (information only): ' + p.liveLoad.supports.map(s => s.id + ' ' + f2(s.Rmax) + ' kip').join(', '));
     return L.join('\n');
   }
