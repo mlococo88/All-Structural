@@ -11209,6 +11209,106 @@ Each item of the table above and the three corrections were re-read against the 
   J, but the flange-plate quantities (r_t, f_ℓ = M_ℓ / (t_f b_f²/6), the cross-frame bracing I_y,eff) are computed with the tabulated
   b_f. Not changed.
 
+## 2026-11-24 — PR: claude/sb-tooltips (PR #1687: https://github.com/mlococo88/All-Structural/pull/1687) (TIP) — help tooltips on the key inputs (engineer's choice "Key inputs only")   [display only; no computed value, saved field or key changes]
+### Where
+- New `apps/steel-bridge/ui/tips.js` (`window.SBDTips = { TIPS, decorate, show, hide }`), loaded last in `index.html` (anchor
+  `'ui/tips.js'   // TIP (2026-11-24)` in the script list after `'ui/splitter.js'`). No other app file changed.
+- New smoke `tests/smoke/steel-bridge-tips.mjs`.
+### Before / After
+- Before: no help text on Steel's inputs (Prestressed Bridge Design uses the native `title` attribute on its labels and controls, which
+  does not show on touch screens or on keyboard focus, so it was not reused; there is no shared tooltip file to reuse).
+- After: `TIPS` (60 entries) lists the inputs by element id (or, for the rating vehicle groups, the group heading; for the utility line
+  loads, the "Add line load" button). A `MutationObserver` on `document.body` calls `decorate()` after every render: each listed input
+  drawn on the page gets one `<button type="button" class="sbtip" aria-label="Help: …" aria-expanded aria-controls="sbTipPop">` at the
+  end of its `label[for=id]` (the "?" is CSS `::before`, so the label's text is unchanged). One floating box `#sbTipPop` (role tooltip,
+  `position: fixed`, kept inside the window) shows the text: hover (mouse), keyboard focus (Tab), click / tap (pinned until a second
+  click, a click elsewhere, or Escape). A click on the button does not reach the label (preventDefault), so a check box or select is
+  never toggled by it. Hidden in print. Nothing is stored.
+- Each text: what the input is, units, default, where it is used, the article (AASHTO LRFD 10th Ed. (2024); MBE 4th Ed. (2026)),
+  paraphrased. Defaults read from engine/model.js (defaultXs, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes,
+  defaultRating), engine/analysis.js DEF, engine/deck.js DEF, ui/rating.js (VDEF, PHI_C, PHI_S, the vehicle card) and engine/rating.js
+  (gammaLegal, PERMIT_TYPES); the uses from the code that reads each path.
+### The inputs (id or selector | name | default | reference)
+| Input | Name | Default | Reference |
+|---|---|---|---|
+| i_xs.lldf.gap | Gap between adjacent trucks | 4 ft | AASHTO LRFD 10th Ed. Arts. 3.6.1.3.1, 4.6.2.2.2d |
+| i_xs.lldf.kg | K_g | At the region section | AASHTO LRFD 10th Ed. Eq. 4.6.2.2.1-1, Table 4.6.2.2.1-3 |
+| i_xs.lldf.skewV | Shear skew correction | All girders | AASHTO LRFD 10th Ed. Art. 4.6.2.2.3c |
+| i_xs.lldf.skewVx | Shear skew correction along the girder | Whole length | AASHTO LRFD 10th Ed. Art. 4.6.2.2.3c |
+| i_xs.lldf.extMin | Exterior not less than interior | No | Policy; the factors themselves: AASHTO LRFD 10th Ed. Art. 4.6.2.2 |
+| i_xs.dlMethod | Dead load distribution | MassDOT 3.5.3 | AASHTO LRFD 10th Ed. Art. 4.6.2.2.1; MassDOT LRFD BDM 3.5.3; RIDOT BDM 3.3.1 |
+| an_a_im | IM, truck and tandem | 33 % | AASHTO LRFD 10th Ed. Table 3.6.2.1-1 |
+| an_a_imf | IM, fatigue truck | 15 % | AASHTO LRFD 10th Ed. Table 3.6.2.1-1 |
+| an_a_crack | Cracked zones | None | AASHTO LRFD 10th Ed. Art. 6.10.1.5 |
+| i_xs.allow | Steel detail allowance | 5 % | AASHTO LRFD 10th Ed. Table 3.5.1-1 (steel 0.490 kcf) |
+| i_xs.sidewalks.ped | Pedestrian load | 0 psf | AASHTO LRFD 10th Ed. Art. 3.6.1.6 |
+| button[data-xsact="addExtra"] | Utilities and other line loads | None | MassDOT LRFD BDM 3.5.5 (utilities); AASHTO LRFD 10th Ed. Art. 3.5.1 |
+| an_a_deflLimit | LL deflection limit L/… | L/800 | AASHTO LRFD 10th Ed. Art. 2.5.2.6.2 |
+| an_a_deflSidewalk | Sidewalk or pedestrians (deflection) | Automatic | AASHTO LRFD 10th Ed. Art. 2.5.2.6.2; owner manual |
+| i_ownerRules.owner | Client / owner (DOT) | AASHTO | Owner bridge design manual; AASHTO LRFD 10th Ed. |
+| i_ownerRules.eta.eD | η_D (ductility) | 1.00 | AASHTO LRFD 10th Ed. Arts. 1.3.2.1, 1.3.3 |
+| i_ownerRules.eta.eR | η_R (redundancy) | 1.00 | AASHTO LRFD 10th Ed. Arts. 1.3.2.1, 1.3.4 |
+| i_ownerRules.eta.eI | η_I (operational importance) | 1.00 | AASHTO LRFD 10th Ed. Arts. 1.3.2.1, 1.3.5 |
+| rl_type | Section type | Plate girder | AISC Shapes Database v16.0; AASHTO LRFD 10th Ed. Art. 6.10 |
+| rl_shape | W shape | None | AISC Shapes Database v16.0 |
+| i_framing.spacing | Cross-frame spacing s, at most | 25 ft | AASHTO LRFD 10th Ed. Art. 6.7.4.2 |
+| i_framing.orient | Orientation | Automatic | AASHTO LRFD 10th Ed. Art. 6.7.4.2 |
+| i_crossframes.type | Intermediate bracing | X-frame | AASHTO LRFD 10th Ed. Art. 6.7.4.2 |
+| i_crossframes.dMinXF | Minimum girder depth for cross-frames | 48 in | App recommendation; owner rules OWN34–OWN36 (Project tab owner) |
+| i_crossframes.primary | Primary members | Automatic | AASHTO LRFD 10th Ed. Arts. 6.8.4, 6.9.3 |
+| i_crossframes.dia.clr | Fit clearance c (diaphragm) | 2 in | App rule (no AASHTO limit) |
+| i_crossframes.fatCat | Member end detail | B | AASHTO LRFD 10th Ed. Table 6.6.1.2.3-1 |
+| i_framing.flSkI | f_ℓ from skew, interior girders | 10 ksi (exterior 7.5 ksi) | AASHTO LRFD 10th Ed. C6.10.1 |
+| i_fatigue.limit | Fatigue limit state | By ADTT | AASHTO LRFD 10th Ed. Art. 6.6.1.2.3, Table 6.6.1.2.3-2 |
+| i_fatigue.ADTT | ADTT, one direction | 2000 | AASHTO LRFD 10th Ed. Art. 3.6.1.4.2; MBE 4th Ed. Tables 6A.4.4.2.3a-1, 6A.4.5.4.2a-1 |
+| i_fatigue.p | Lane fraction p | 0.85 | AASHTO LRFD 10th Ed. Table 3.6.1.4.2-1 |
+| i_fatigue.life | Design life | 75 | AASHTO LRFD 10th Ed. Eq. 6.6.1.2.5-2 |
+| i_fatigue.gam.fI | γ Fatigue I | 1.75 | AASHTO LRFD 10th Ed. Table 3.4.1-1 |
+| i_fatigue.catT | Top flange category | B | AASHTO LRFD 10th Ed. Table 6.6.1.2.3-1 |
+| i_fatigue.catB | Bottom flange category | B | AASHTO LRFD 10th Ed. Table 6.6.1.2.3-1 |
+| i_fatigue.negSec | Negative-moment section at the details | Steel + reinforcement | AASHTO LRFD 10th Ed. Art. 6.6.1.2.1 |
+| i_studs.d | Stud diameter | 7/8 in | AASHTO LRFD 10th Ed. Art. 6.10.10 |
+| i_studs.h | Stud height h | 6 in | AASHTO LRFD 10th Ed. Arts. 6.10.10.1.1, 6.10.10.1.4 |
+| i_studs.st | Transverse spacing s_t | 4 in | AASHTO LRFD 10th Ed. Art. 6.10.10.1.3 |
+| i_studs.Fu | Stud F_u | 60 ksi | AASHTO LRFD 10th Ed. Eq. 6.10.10.4.3-1 |
+| i_studs.Qn10 | Q_n entered | 0 (computed) | AASHTO LRFD 10th Ed. Art. 6.10.10.4.3 |
+| i_studs.skew | Radial term F_fat = F_rc/w | Auto | AASHTO LRFD 10th Ed. Art. 6.10.10.1.2 |
+| i_studs.beffMode | b_eff for the studs | Each girder its own | AASHTO LRFD 10th Ed. Arts. 4.6.2.6, 6.10.10 |
+| dk_on | Deck design (strip method) | Off | AASHTO LRFD 10th Ed. Art. 4.6.2.1, Table A4-1 |
+| dk_barTop | Top transverse bars | #5 (0.31 in²) | AASHTO LRFD 10th Ed. Arts. 5.6.3, 5.6.7 |
+| dk_coverT | Top clear cover | 2.5 in | AASHTO LRFD 10th Ed. Table 5.10.1-1 |
+| dk_xnegAuto | Negative-moment design section | Automatic (b_f/4) | AASHTO LRFD 10th Ed. Art. 4.6.2.1.6 |
+| rt_phiC | Condition factor φ_c | 1.00 | MBE 4th Ed. Table 6A.4.2.3-1, Eq. 6A.4.2.1-3 |
+| rt_phiS | System factor φ_s | 1.00 | MBE 4th Ed. Table 6A.4.2.4-1 |
+| rt_src | Demands | This app's analysis | MBE 4th Ed. Art. 6A.4.2 |
+| .rt-vg:has([data-rtveh="Type3"]) .rt-vt | AASHTO legal loads | Not rated | MBE 4th Ed. Arts. 6A.4.4, 6A.8.3; Figs. D6A-1 to D6A-3 |
+| .rt-vg:has([data-rtveh="Legal-Lane"]) .rt-vt | Lane-type legal load model | Not rated | MBE 4th Ed. Art. 6A.4.4.2.1a; Figs. D6A-4, D6A-5 |
+| .rt-vg:has([data-rtveh="SU4"]) .rt-vt | Specialized hauling vehicles | Not rated | MBE 4th Ed. Art. 6A.4.4.2.1b; Fig. D6A-7 |
+| .rt-vg:has([data-rtveh="EV2"]) .rt-vt | Emergency vehicles | Not rated | FHWA memorandum 2016-11-03; MBE 4th Ed. Art. 6A.4.4 |
+| rt_imL | IM, legal loads and emergency vehicles | 33 % | MBE 4th Ed. Art. 6A.4.4.3 |
+| rt_evG | γ_LL, emergency vehicles | Legal-load table by ADTT | MBE 4th Ed. Tables 6A.4.4.2.3a-1, -3b-1; FHWA memorandum 2016-11-03 |
+| rt_pk | Permit vehicle | None | MBE 4th Ed. Art. 6A.4.5 |
+| rt_pt | Permit type | Routine or annual | MBE 4th Ed. Table 6A.4.5.4.2a-1, Art. 6A.4.5.4.2b |
+| rt_pg | γ_LL, permit | From the table | MBE 4th Ed. Table 6A.4.5.4.2a-1 |
+| rt_imP | IM, permit vehicle | 33 % | MBE 4th Ed. Art. 6A.4.5.5 |
+### Problem
+- Inputs easy to misread (distribution options, rating options, bracing, studs, fatigue, deck design, owner settings) had no help in the app.
+### Governing provision
+- None changed (display only). The articles quoted are listed above.
+### Check case
+- Display only: no computed result changes. The engine tests do not load ui/tips.js; the page smokes run with it (counts in the PR).
+- `node tests/smoke/steel-bridge-tips.mjs`: every entry gets its button once its input is drawn (each input tab, a rolled shape, deck
+  design on, a permit vehicle, a W diaphragm), no label gets two; label text unchanged; the select does not move while the box shows;
+  hover / Tab / Escape / tap; the box inside the window at 390 px, no sideways scroll; the stored project text unchanged by the
+  tooltips; 0 console errors.
+### Other copies
+- None. (Prestressed Bridge Design keeps its own `title` tooltips; not changed.)
+### Open items
+- The "?" adds about 19 px to a label's width: a label that just fitted on one line can wrap to two (e.g. "Exterior not less than
+  interior" at the default panel width). Showing a tip moves nothing.
+- Inputs without a tooltip (not "key inputs") are unchanged; more can be added to TIPS (one line each).
+
+
 ## 2026-11-24 — BRG-HO PR 2: bearing loads hand-off to the Elastomeric Bearing Design Module; superReactions carries the pedestrian reaction as the optional item separate { PL, PLmin } (ui/handoffs.js, engine/hostale.js, index.html; cross-tool PR with Bridge Substructure Loading.html and elastomeric_design_module.html; no design value changes)
 PR: see the PR body (branch claude/bearing-handoff-steel).
 ### Request
