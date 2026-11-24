@@ -27,6 +27,45 @@
   // app's two noncomposite categories: UTN (the steel app's UT) and UF (stored codes; the labels are the steel app's)
   const XC = [['DC2', 'DC2'], ['DW', 'DW'], ['DC1', 'DC1'], ['UT', 'Utility (composite, DW)'], ['UTN', 'Utility (noncomposite, DW factors)'], ['UF', 'Future utility allowance (noncomposite, γ 1.25/0)']];
   const catN = L => (L.cat0 ? DL().CATN[L.cat0] : L.cat);
+  /* BARG (2026-11-24; engineer: "RIDOT has a barrier that is a rectangle shape … Can I enter the barrier geometry … and let the app
+     calculate the weight directly?"; "Use the centroid for the barrier load point. Do this for both the steel and ps apps."): per deck edge
+     "Barrier weight from": Entered (absent: the typed weight and width, as before) or Geometry (bMode 'geom': bShape, bDims { b, h, bt } in,
+     bPts [[x, y]] in, bGam kcf; shared/barrier.js, the Steel Bridge app's keys). With Geometry the width at the deck, the weight and the
+     centroid are shown read-only, worked here and on the Loads & LLDF tab (step dl.load.bar<L|R>), and written into w and bw as well (the
+     drawings, the 3D view, the sheets and the hand-offs read them); engine/bridge-dl.js computes them again from the shape. */
+  const BMODES = [['entered', 'Entered'], ['geom', 'Geometry']];
+  function barrierRows(P, s, k, b, x) {
+    const B = window.SharedBarrier, geo = b.bMode === 'geom' && B;
+    const mode = `<div class="fRow"><label for="i_${k}bMode">${x}Barrier weight from</label><select id="i_${k}bMode" data-path="${k}bMode" data-dl="bgeo">${BMODES.map(([v, t]) => `<option value="${v}"${(geo ? 'geom' : 'entered') === v ? ' selected' : ''}>${t}</option>`).join('')}</select></div>`;
+    if (!geo) return (B ? mode : '') + num(P, k + 'w', `${x}Barrier weight`, 'klf', 'DC2 line load at half the barrier width from the deck edge') + num(P, k + 'bw', `${x}Barrier width (deck edge to traffic face)`, 'ft', 'Also the start of the wearing surface');
+    const sp = B.spec(b), G = B.compute(sp), v = p => { const y = get(P, k + p); return y == null || (typeof y === 'number' && !isFinite(y)) ? '' : y; };
+    const gnum = (p, label, unit, ph) => `<div class="fRow"><label for="i_${k}${p}">${x}${label}</label><input type="number" step="any" id="i_${k}${p}" data-path="${k}${p}" data-dl="bgeo" value="${esc(v(p))}"${ph ? ` placeholder="${esc(ph)}"` : ''}><span class="unit">${unit}</span></div>`;
+    const ro = (label, val, unit) => `<div class="fRow"><label>${x}${label}</label><input type="text" readonly tabindex="-1" value="${esc(val)}" style="background:#f1f5f9;color:#475569" title="Computed from the barrier geometry"><span class="unit">${unit}</span></div>`;
+    let o = mode + `<div class="fRow"><label for="i_${k}bShape">${x}Barrier shape</label><select id="i_${k}bShape" data-path="${k}bShape" data-dl="bgeo">${B.SHAPES.map(([vv, t]) => `<option value="${vv}"${sp.shape === vv ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
+    if (sp.shape === 'poly') o += `<div class="fRow"><label for="i_${k}bPts">${x}Points x, y (in)</label><input type="text" id="i_${k}bPts" data-path="${k}bPts" data-dl="bgeo" value="${esc(B.ptsText(b.bPts))}" style="width:220px" placeholder="0, 0; 12, 0; 12, 42; 0, 42"></div>
+      <p class="note">In order around the outline, separated by semicolons: x from the deck edge (toward the roadway), y up from the top of the deck; at least 3 points, an edge on the deck (y = 0), not crossing itself.</p>`;
+    else o += gnum('bDims.b', sp.shape === 'slope' ? 'Base width b (on the deck)' : 'Barrier width b', 'in') + (sp.shape === 'slope' ? gnum('bDims.bt', 'Top width b<sub>t</sub>', 'in') : '') + gnum('bDims.h', 'Barrier height h', 'in');
+    o += gnum('bGam', 'Unit weight γ', 'kcf', `blank = ${B.GAMMA.toFixed(3)}`);
+    if (!G.ok) return o + `<div class="alert">${G.errors.map(e => esc(e.msg.charAt(0).toUpperCase() + e.msg.slice(1)) + '.').join(' ')}</div>`;
+    const S = window.SharedSteps, st = B.steps(G, { prefix: 'xs', base: 'bar' + s, wLabel: 'Barrier weight per foot' });
+    return o + ro('Barrier weight', fx(G.w, 4), 'klf') + ro('Barrier width at deck (traffic face)', fx(G.bDeck, 3), 'ft') + ro('Centroid x̄ (load point)', fx(G.xc, 3), 'ft')
+      + `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start"><div>${B.svg(G, { w: 170, side: s })}</div><ul class="steps" style="flex:1 1 260px;min-width:0">${st.map(t => `<li><div class="lbl">${esc(t.label)}${t.ref ? `<span class="ref">${esc(t.ref)}</span>` : ''}</div><div>${S ? S.line(t, true) : ''}</div>${t.note ? `<div class="nt">${esc(t.note)}</div>` : ''}</li>`).join('')}</ul></div>
+      <p class="note">Computed from the geometry (read-only); the DC2 line load acts at the centroid x̄ from the deck edge. Worked with the other line loads on the <a href="#st-dl.load.bar${s}" data-gotab="lds">Loads &amp; LLDF tab §</a> (step dl.load.bar${s}).</p>`;
+  }
+  /* barrierChange(P, s, key, el): an input of the barrier geometry (BARG); true = handled */
+  function barrierChange(P, s, key, el) {
+    const B = window.SharedBarrier, q = P.xs.dl, e = q['bar' + s] = q['bar' + s] || {}, v = el.value, nv = () => (v.trim() === '' ? null : Number(v));
+    if (key === 'bMode') { e.bMode = v === 'geom' ? 'geom' : 'entered';
+      if (e.bMode === 'geom') { if (!e.bShape) e.bShape = 'rect'; if (!e.bDims) e.bDims = { b: +e.bw > 0 ? Math.round(+e.bw * 12 * 1e4) / 1e4 : null, h: null }; if (e.bGam == null) e.bGam = B ? B.GAMMA : 0.15; } }
+    else if (key === 'bShape') { const prev = B ? B.outline(B.spec(e)) : null; e.bShape = ['rect', 'slope', 'poly'].includes(v) ? v : 'rect'; e.bDims = e.bDims || { b: null, h: null };
+      if (e.bShape === 'slope' && e.bDims.bt == null) e.bDims.bt = e.bDims.b;
+      if (e.bShape === 'poly' && !(Array.isArray(e.bPts) && e.bPts.length) && prev && prev.length >= 3 && prev.every(p => isFinite(p[0]) && isFinite(p[1]))) e.bPts = prev.map(p => [p[0], p[1]]); }
+    else if (key === 'bPts') e.bPts = B ? B.parsePts(v) : [];
+    else if (key === 'bGam') e.bGam = nv();
+    else { e.bDims = e.bDims || {}; e.bDims[key.slice(6)] = nv(); }
+    if (e.bMode === 'geom' && B) { const G = B.compute(B.spec(e)); if (G.ok) { e.bw = G.bDeck; e.w = G.w; } }   // the computed values in the two fields (figures, sheets, hand-offs)
+    return true;
+  }
   function card(P) {
     const q = (P.xs && P.xs.dl) || {}, on = DL().on(P);
     let h = `<div class="fRow"><label for="i_xs.dl.mode" title="Distributed: DC2 and DW of each girder line from the loads below (the Steel Bridge app's method). Entered: the values entered per girder type on the Loads tab (the old app's way).">DC2 and DW per girder</label><select id="i_xs.dl.mode" data-path="xs.dl.mode" data-dl="mode">
@@ -38,7 +77,7 @@
       h += sub(`${side} deck edge`);
       h += sel(P, k + 'type', `${x}Edge type`, [['barrier', 'Barrier'], ['curb', 'Curb and railing']], 'A curb lower than 12 in is mountable (the railing face is the traffic face)').replace(`data-path="${k}type" data-dl="sel"`, `data-path="${k}type" data-dl="type"`);
       if (b.type === 'curb') h += num(P, k + 'cw', `${x}Curb width`, 'in', 'DC2 line load c_w/12 × c_h/12 × w_c at c_w/2 from the deck edge') + num(P, k + 'ch', `${x}Curb height`, 'in', '') + num(P, k + 'rw', `${x}Railing weight`, 'klf', 'DC2 line load at its load point') + num(P, k + 'rp', `${x}Railing load point from edge`, 'ft', '') + opt(P, k + 'rf', `${x}Railing traffic face from edge`, 'ft', 'blank = load point');
-      else h += num(P, k + 'w', `${x}Barrier weight`, 'klf', 'DC2 line load at half the barrier width from the deck edge') + num(P, k + 'bw', `${x}Barrier width (deck edge to traffic face)`, 'ft', 'Also the start of the wearing surface');
+      else h += barrierRows(P, s, k, b, x);   // BARG: "Barrier weight from" Entered (the two fields, as before) / Geometry
       h += opt(P, k + 'face', `${x}Edge to traffic face`, 'ft', 'optional', 'Blank: computed from the barrier or curb and railing');
       if (F && (b.type === 'curb' || b.face != null && b.face !== '' && !(typeof b.face === 'number' && isNaN(b.face)))) h += `<p class="note">${side} traffic face ${fx(F.f, 3)} ft from the deck edge (${esc(F.by)}).</p>`; });
     // PR 9: sidewalks and median (the steel app's "Sidewalks and median"). PL-A (2026-11-23): + the pedestrian live load (3.6.1.6)
@@ -96,6 +135,7 @@
   function onChange(el, P) {
     const t = el.dataset.dl; if (!t) return false;
     const path = el.dataset.path;
+    { const m = /^xs\.dl\.bar([LR])\.(bMode|bShape|bDims\.(?:b|bt|h)|bPts|bGam)$/.exec(path || ''); if (m && P.xs.dl) return barrierChange(P, m[1], m[2], el); }   // BARG
     if (t === 'type') { const q = P.xs.dl, s = path.split('.')[2]; q[s] = Object.assign({}, q[s], { type: el.value === 'curb' ? 'curb' : 'barrier' }); return true; }   // PR 9: a curb's sizes are entered (blank until then: a blocking input error names them)
     if (t === 'mode') { if (el.value === 'distributed') { if (!P.xs.dl) P.xs.dl = DL().defaults(P); P.xs.dl.mode = 'distributed'; } else if (P.xs.dl) P.xs.dl.mode = 'entered'; return true; }
     const ks = path.split('.'), last = ks.pop(), o = ks.reduce((a, k) => (a[k] == null ? (a[k] = {}) : a[k]), P);
