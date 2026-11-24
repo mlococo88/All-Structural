@@ -11581,3 +11581,26 @@ origin/main and this branch, side by side in Node, on 9 made-up bridges (X, Kb, 
 ### Open items
 - The step renderer appends "= value" after a sub that ends in a comparison ("47.2 ≤ 140 = 47.2"), as the existing P_r steps ("… ≥ C_u = P_r"); left to the renderer fix in progress elsewhere.
 - shared/steps.js `group()` counts any unitless test step as a ratio (other tools, e.g. TR4 thickness / area proportions t₁/t₂ ≥ 0.5, may show the same kind of chip); not changed here (shared file).
+
+## 2026-11-24 — PR: claude/sb-sidewalk-groups (PR #1694: https://github.com/mlococo88/All-Structural/pull/1694) (SWGRP) — Cross-section tab: the cards "Deck edges" and "Sidewalks and median" grouped by side   [DISPLAY ONLY: no input, path, key, value or result changed]
+### Request (engineer, 2026-11-24)
+"For both the steel bridge and prestressed bridge apps, can we separate the left and right sidewalk, even just a space between the inputs. The input boxes are very congested and need to be organized a little nicer." Then: "Same with the deck edges."
+### Where / Before / After
+- `ui/loads.js` `parts(P, h)`, new helper before `const edge = sd =>`: `const sdh = t => \`<span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap">${t}: </span>\`;` (the side as hidden label text: screen readers and the input-check banner, `SBDInputCheckUI.labelOf`, still name the side).
+- `edge(sd)`: before the labels `${s} deck edge`, `${s} curb width`, `${s} curb height`, `${s} railing weight`, `${s} railing load point from edge`, `${s} railing traffic face from edge`, `${s} barrier width at deck`, `${s} barrier weight`, `${s} edge to traffic face` (s = Left / Right); after `<h4 class="sub">Left deck edge</h4>` (or Right) first, and the labels `Edge type`, `Curb width`, `Curb height`, `Railing weight`, `Railing load point from edge`, `Railing traffic face from edge`, `Barrier width at deck`, `Barrier weight`, `Edge to traffic face`, each preceded by the hidden `Left deck edge: `.
+- `sw(sd)`: before `${s} sidewalk width`, `${s} sidewalk thickness`, `${s} sidewalk railing / fence`, `${s} fence from deck edge`; after `<h4 class="sub">Left sidewalk</h4>` (or Right) and `Width`, `Thickness`, `Railing / fence`, `Fence from deck edge`, each preceded by the hidden `Left sidewalk: `.
+- Card "Deck edges": before `` `${edge('L')}<hr>${edge('R')}<p class="note">`` → after `` `${edge('L')}${edge('R')}<p class="note">`` (the sub-headings separate the sides).
+- Card "Sidewalks and median": before `` `${sw('L')}${sw('R')}${h.num('xs.sidewalks.ped'`` → after `` `${sw('L')}${sw('R')}<h4 class="sub">Pedestrian load and median</h4>${h.num('xs.sidewalks.ped'`` (pedestrian load, median, joint, appurtenance concrete and the note unchanged below it).
+- `<h4 class="sub">`: the sub-heading the app already uses inside input cards (ui/shear.js, ui/framing.js). Stacked groups (no two-column layout: the app has no two-column pattern for input rows).
+- `tests/smoke/steel-bridge-invalid.mjs`: the banner text `Cross-section › Left fence from deck edge:` → `Cross-section › Left sidewalk: Fence from deck edge:` (the label as `labelOf` now reads it).
+### Proof that no result changed
+Only template strings in `parts()` changed. Headless Chromium, a made-up project (left curb and railing, right barrier, left sidewalk 6 ft with a 0.05 klf fence at 3 ft, right sidewalk 5 ft × 10 in, 75 psf, 2 ft median), origin/main and this branch: every `input` / `select` / `textarea` of the page (319) has the same tag, id, data-path, data-kind, name, type and value, in the same order; the autosaved `sbd2.project.current` is byte-identical. The engine reads the project, not the labels.
+### Check case
+Display only (no value). Before / after screenshots of both cards (1440 px and 420 px wide) taken for the PR.
+### Saved data
+None changed (no key, path or format touched).
+### How verified
+`node tests/check-syntax.mjs`; `node tests/engine/run.mjs paths ownerdef-msg` (load ui/loads.js); smoke `tests/smoke/steel-bridge-invalid.mjs`; the DOM / saved-project comparison above.
+### Decisions (pending engineer review)
+- SWGRP-1. Labels drop the side under each sub-heading ("Width", "Edge type"); the side remains as hidden label text, so the input-check banner reads e.g. "Left sidewalk: Fence from deck edge".
+- SWGRP-2. The shared items of the sidewalk card are headed "Pedestrian load and median"; the deck-edge card has no shared inputs (its note stays at the end). The `<hr>` between the two deck edges is replaced by the sub-headings.
