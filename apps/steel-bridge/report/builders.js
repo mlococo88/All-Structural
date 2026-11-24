@@ -40,8 +40,8 @@
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
   const steps = (scope, list, o) => ({ type: 'steps', scope, steps: list || [], ...(o || {}) });
   /* gsteps: worked steps in topics (presentation spec A; trial on Shear & stiffeners, 2026-10-31; every output tab since): kind = 'UiName:kind' (the tab's UI file, groups(kind, list)) or, bare, a Shear & stiffeners kind. The topics of the tab (SBDShearUI.groups,
-     SharedSteps.group), the steps in topic order with a sub-heading per topic (shared/report.js item.topics); ids and keys unchanged */
-  const gsteps = (kind, scope, list, o) => { const [ui, k] = /:/.test(kind) ? kind.split(':') : ['SBDShearUI', kind], U = window[ui], G = U && U.groups ? U.groups(k, list || []) : null; if (!G) return steps(scope, list, o);
+     SharedSteps.group), the steps in topic order with a sub-heading per topic (shared/report.js item.topics); ids and keys unchanged; ck (SBDFH, 2026-11-24): the check items, passed to groups (the Framing tab: the topic chips from the items) */
+  const gsteps = (kind, scope, list, o, ck) => { const [ui, k] = /:/.test(kind) ? kind.split(':') : ['SBDShearUI', kind], U = window[ui], G = U && U.groups ? U.groups(k, list || [], ck) : null; if (!G) return steps(scope, list, o);
     return steps(scope, [].concat(...G.map(t => t.steps)), { ...(o || {}), topics: G.map(t => ({ title: t.title, ref: t.ref, n: t.steps.length, cls: t.cls, chip: t.chip, res: t.res })) }); };
   const note = (text, warn) => ({ type: 'note', text, warn: !!warn });
   const tbl = (head, rows, o) => ({ type: 'table', head, rows, ...(o || {}) });
@@ -498,7 +498,7 @@
       ...(FUI && FUI.ckNotes ? FUI.ckNotes(C).map(q => note(`${q.id}: ${tt(q.note)}${q.id === 'CF10' && rS ? ` [[${rS}]]` : ''}`)) : []),   // SBCKN: every check's note, as the tab
       note(`References: ${C.map(c => `${c.id} ${c.ref}`).join('; ')}.`)]));
     if (R.frames && !dOn) subs.push(sub('mf', 'Member forces (truss model)', [tbl(['Member', 'Length (in)', 'per kip of $F_{w}$', ...R.combos.map(c => `${c.id} T / C (kip)`)], R.frames.map((e, i) => [e.lbl, N(e.L, 2), { ...N(e.unit, 3), key: `cf.tr${i}` }, ...R.combos.map(c => c.off ? 'not used' : `${f(c.f[i].T, 2)} / ${f(c.f[i].Cc, 2)}`)]))]));
-    subs.push(sub('w', 'Worked steps', [gsteps('SBDFramingUI:x', '', work)]));
+    subs.push(sub('w', 'Worked steps', [gsteps('SBDFramingUI:x', '', work, undefined, C)]));
     return { title: dOn ? 'Framing and diaphragms' : 'Framing and cross-frames', subs };
   }
 
