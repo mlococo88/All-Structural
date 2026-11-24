@@ -14,7 +14,7 @@
    600 ms of quiet. "Re-run all" runs every module again. The results are kept in memory for the last project state only (nothing saved).
 
    render(host, ctx): ctx = { P, ui, now (true: selected now: run at once), open() (is the Summary the tab shown), goto(tab, gi) (selects
-   an output tab and girder), save() }. Also: state(), start(P, o), subscribe(fn), focus(cell) (after goto: selects the cell's location on
+   an output tab and girder), save() }. Also: state(), start(P, o), pending(P), subscribe(fn), focus(cell) (after goto: selects the cell's location on
    its tab, opens and flashes the step and the card that works it), gotoCell(gi, colId), txt(t). */
 (function () {
   'use strict';
@@ -106,6 +106,7 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
     };
     clearTimeout(S.timer); S.timer = setTimeout(() => step(0), o.delay || 0);
   }
+  const pending = P => { sync(P); return todo(P).length > 0; };   // SBAR (2026-11-24): a module of this project state not run yet (the left check summary's auto-refresh)
   const state = () => ({ busy: S.busy, prog: S.prog, list: S.list, prev: S.prev || null, secs: S.secs, pk: S.pk, ov: SM().overall(null, S.list.filter(Boolean)) });
   const subscribe = f => { S.subs.push(f); };
   function draw() { if (S.host && S.ctx && S.ctx.open && S.ctx.open() && S.host.isConnected) paint(S.host, S.ctx); }
@@ -321,5 +322,5 @@ details.sum-g>summary{cursor:pointer;font-family:var(--font-ui);font-size:9.5pt;
     if (!S.busy && todo(P).length) start(P, { delay: ctx.now ? 0 : AUTO_MS });
   }
 
-  window.SBDSummaryUI = { render, state, start, subscribe, focus, gotoCell, txt, rowSel, sync };
+  window.SBDSummaryUI = { render, state, start, subscribe, focus, gotoCell, txt, rowSel, sync, pending };
 })();
