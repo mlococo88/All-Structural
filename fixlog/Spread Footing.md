@@ -9131,7 +9131,7 @@ index 32153e4..953d349 100644
 - **How verified:** `tests/smoke/spread-footing-rebar-ui.mjs --a <origin/main checkout>` covers 9 projects, opened and edited through the card in both versions. Saved JSON, R, P2, dashboard, result tabs and Report: 0 differences. Every edit went through a visible, enabled input to its data-path. No visible input is disabled. 390 px OK. The existing `spread-footing-*` smoke tests and `check-syntax` pass.
 - **Other copies:** none.
 
-## 2026-11-24 — PR: claude/shared-steps-ratio (PR #TBD) (SSR) — worked-step topic chips: ε_t (tension-controlled), ρ_g, ρ_ℓ, ρ_t, ℓ_w/t, δ_s δ and kℓ_u/r marked as not a demand / capacity ratio (`ratio: false`; display only)
+## 2026-11-24 — PR: claude/shared-steps-ratio (PR #1706: https://github.com/mlococo88/All-Structural/pull/1706) (SSR) — worked-step topic chips: ε_t (tension-controlled), ρ_g, ρ_ℓ, ρ_t, ℓ_w/t, δ_s δ and kℓ_u/r marked as not a demand / capacity ratio (`ratio: false`; display only)
 - **Where:** the worked-step builders of the Report tab; anchors `ok:!!des.tcBotOK,`, `ok:!!des.tcTopOK,`, `ok:r.cap.eps_t>=des.epsTC-1e-12,`, `value:pd.rho,unit:'',d:4,ok:!!pd.rhoOK}`, `ok:!!w.rlOK})`, `ok:!!w.rtOK})`, `value:w.lt,unit:'',d:2,ok:true,ref:'ACI 318-19 2.3'`, `ok:!pd.slFail,ref:'ACI 318-19 6.2.5.3'`, `ok:!ip.slFail,ref:'ACI 318-19 6.2.5.1`.
 - **Before / After:** in each anchor `ok:` → `ratio:false,ok:` (nothing else).
 - **Display change (built-in project):** Report, topic "Longitudinal steel": chip `0.020` (ρ_g read as a D/C) → `OK`; one-line result → the bars and clear spacing step. Other topics change only for inputs where those steps govern (e.g. ε_t alone in a topic).

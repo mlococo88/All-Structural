@@ -3114,7 +3114,7 @@ None new.
 - Brace points at the spacing l<sub>u</sub> from each support are illustrative (the tool takes l<sub>u</sub>, not brace locations).
 - AASHTO Δ<sub>DL</sub> + Δ<sub>LL</sub>: the sum of the dead-load deflection and the live-load envelope (display; Art. 2.5.2.6.2 limits the live load only).
 
-## 2026-11-24 — PR: claude/shared-steps-ratio (PR #TBD) (SSR) — worked-step topic chips: the slenderness ratio R_B marked as not a demand / capacity ratio (`ratio: false`; display only)
+## 2026-11-24 — PR: claude/shared-steps-ratio (PR #1706: https://github.com/mlococo88/All-Structural/pull/1706) (SSR) — worked-step topic chips: the slenderness ratio R_B marked as not a demand / capacity ratio (`ratio: false`; display only)
 - **Where:** the bending steps (`tbrS`), anchor `note: it.rbNG ? 'R_B > 50: not permitted — NG.' : 'R_B ≤ 50.', ok: !it.rbNG }`.
 - **Before / After:** `…, ok: !it.rbNG }` → `…, ratio: false, ok: !it.rbNG }`.
 - **Display change:** none on the built-in project (its bending topic is governed by the bending ratio). Where R_B governs a topic (e.g. R_B = 12.4 ≤ 50 with no other ratio), its chip was a red `12.4`; now `OK`.

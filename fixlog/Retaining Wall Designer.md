@@ -6786,7 +6786,7 @@ None: no computed value changes. Only worked-step text (tab and Report).
 - **Decisions (pending engineer review):** (1) The Piles tab card keeps its sent / received table and "Clear results record" (item level), with a link instead of its second copy of the buttons. (2) "Last sent" is read from the `by.retwall` copy in this browser.
 - **Other copies:** none.
 
-## 2026-11-24 — PR: claude/shared-steps-ratio (PR #TBD) (SSR) — worked-step topic chips: the factors of safety with earthquake FOS_OT,E and FOS_SL,E marked as not a demand / capacity ratio (`ratio: false`; display only)
+## 2026-11-24 — PR: claude/shared-steps-ratio (PR #1706: https://github.com/mlococo88/All-Structural/pull/1706) (SSR) — worked-step topic chips: the factors of safety with earthquake FOS_OT,E and FOS_SL,E marked as not a demand / capacity ratio (`ratio: false`; display only)
 - **Where:** the Report steps, anchors `value: r.FOS_OT_E, unit: '', d: 3, ok: ok('otE')` and `value: r.FOS_SL_E, unit: '', d: 3, ok: ok('slidingE')`.
 - **Before / After:** `ok: ok(` → `ratio: false, ok: ok(` in both.
 - **Display change:** none on the built-in project (no seismic). With seismic, a passing FOS ≥ 1.1 was a red ratio > 1 when it governed its topic; now its status OK / NG.

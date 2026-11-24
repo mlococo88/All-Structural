@@ -176,7 +176,7 @@ Tests: `node tests/engine/run.mjs` (steps, steps-totext, tex, report, …).
 - None.
 
 <<<<<<< HEAD
-## 2026-11-24 — PR: claude/shared-steps-ratio (PR #TBD) — topic chips: only real demand / capacity ratios give the number (SSR; display only)
+## 2026-11-24 — PR: claude/shared-steps-ratio (PR #1706: https://github.com/mlococo88/All-Structural/pull/1706) — topic chips: only real demand / capacity ratios give the number (SSR; display only)
 ### Where
 - `shared/steps.js`: the header comment (new field `ratio`); `step(o)`, anchor `if (s.ok === undefined) delete s.ok;`; `isRatio`, anchor
   `/* isRatio(s): a test step whose value is a demand / capacity ratio`; the `group()` doc line `ratio  the largest ratio of its test steps`.

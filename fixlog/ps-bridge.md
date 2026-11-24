@@ -9686,7 +9686,7 @@ None changed.
 The old `Prestressed Bridge Design.html` has no left / right sidewalk or deck-edge inputs (only a "Bridge with sidewalks" owner-rule checkbox and one barrier for the deck design) and is frozen (PS-14 g): not changed.
 
 <<<<<<< HEAD
-## 2026-11-24 — PR: claude/shared-steps-ratio (PR #TBD) (SSR) — worked-step topic chips: the ranges of applicability of the distribution factors (ld.ap.*, ld.ap.r) marked as not a demand / capacity ratio (`ratio: false`; display only)
+## 2026-11-24 — PR: claude/shared-steps-ratio (PR #1706: https://github.com/mlococo88/All-Structural/pull/1706) (SSR) — worked-step topic chips: the ranges of applicability of the distribution factors (ld.ap.*, ld.ap.r) marked as not a demand / capacity ratio (`ratio: false`; display only)
 - **Where:** `engine/applicability.js` `steps()`, anchors `id: 'ap.' + q.key` and `id: 'ap.r'`.
 - **Before / After:** `d: q.d, ref: A10 + q.table,` → `d: q.d, ref: A10 + q.table, ratio: false,`; `d: 0, ref: A10 + 'Art. 4.6.2.2', ...(a.entered` → `d: 0, ref: A10 + 'Art. 4.6.2.2', ratio: false, ...(a.entered`.
 - **Display change (built-in project):** Loads & LLDF tab and Report, topic "Line-girder analysis: ranges of applicability of the distribution factors": chip `5.000` red (N_b = 5 read as a D/C > 1) → `OK` green; one-line result `Number of beams …: N_b` → `… items outside their range: n_out = 0`. The Rating topics' raw group() chips also change (RF ≥ 1 no longer a red ratio), but PSBOutKit.groups overrides every RF topic (rf: RegExp), so the tab and the report are unchanged there.
