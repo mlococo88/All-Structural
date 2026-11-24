@@ -9684,3 +9684,31 @@ None changed.
 - SWGRP-2. The sub-headings "Deck edges" and "Sidewalks and median" are replaced by "Left / Right deck edge", "Left / Right sidewalk" and "Pedestrian load and median" (the existing `.dlSub` style, 10 px above).
 ### Other copies
 The old `Prestressed Bridge Design.html` has no left / right sidewalk or deck-edge inputs (only a "Bridge with sidewalks" owner-rule checkbox and one barrier for the deck design) and is frozen (PS-14 g): not changed.
+
+## 2026-11-24 — PR: claude/ps-fence-on-barrier (PR #TBD) (FOB) — a sidewalk railing or fence over the barrier or curb is drawn standing on its top (display only)
+### Request (engineer, 2026-11-24)
+"There's an option to add a fence or railing on top of the concrete barrier, which is great. But the renderings — the 3D model, the regular drawings, the DXF drawings and the graphics — all show it as basically embedded in the concrete. Can we fix that?"
+### Input combinations with a railing or fence over a barrier or curb (Cross-section tab, deck edges and sidewalks)
+- Deck edge Barrier + sidewalk "Railing / fence" at a position ≤ the barrier width: drawn from the sidewalk top, inside the barrier (fixed). With the sidewalk narrower than the barrier, the barrier sits on the deck and the fence was drawn under it (fixed).
+- Deck edge Curb and railing + sidewalk fence within the curb width: drawn inside the curb (fixed).
+- Curb railing at a load point ≤ the curb width: already on the curb top (unchanged code).
+### Where / Before / After
+- `ui/view3d.js`, after `const BAR_H = 32, SW_CURB = 0, …`: new `BAR_PROF` (the schematic barrier outline the figure and the DXF draw, fractions [u/b_w, y/BAR_H]: `[[0, 0], [1, 0], [0.75, 0.25], [0.45, 1], [0, 1]]`), `topOf(pts, u)` and `edgeTop(P, sd, u)` (the height above the deck top of side sd's barrier or curb top at u in from that edge, null off them); exported on `PSB3DUI` (the one helper of the app's renderers).
+- `ui/view3d.js geom`, anchor `const fx = (+sw(s).fenceX || 0) * 12;`: before `y0: yTop + t` → after `y0: yTop + (et !== null ? et : t)` with `const et = edgeTop(P, s, fx)`.
+- `ui/xsfig.js model`, anchor `// PR 9: a railing or fence on the sidewalk`: before `y0: yTop + t, y1: yTop + t + RAIL_H` → after `y0: yf, y1: yf + RAIL_H` with `yf = yTop + (et !== null ? et : t)`, `et = PSB3DUI.edgeTop(P, sd, fx)`. The typical-section DXF (`ui/sheets.js`) draws `PSBXsFig.model`'s items, so it follows.
+### Problem
+The fence base was always the sidewalk top: over a barrier (32 in drawn) the 42 in post showed 10 in above it; over a curb it started inside the curb.
+### Governing provision
+None (display only): no load, weight, load point or computed value changes.
+### Check case (made-up: 4 lines at 8 ft, overhangs 3 ft, barriers 1.5 ft = 18 in, sidewalks 6 ft × 8 in)
+- Fence at 0.5 ft = 6 in ≤ 0.45 × 18 = 8.1 in (flat top): base before 8 in, after 8 + 32 = 40 in above the deck top.
+- Fence at 1.2 ft = 14.4 in: u/b_w = 0.8 on the face (0.75, 0.25)–(1, 0): g = 0.25 × 0.2/0.25 = 0.20; base before 8 in, after 8 + 6.4 = 14.4 in.
+- Curb 12 × 10 in, fence at 0.4 ft: before 8 in, after 18 in; fence at 3 ft: 8 in both.
+### How verified
+`tests/engine/psbridge-fence-on-barrier.test.mjs`; `node tests/engine/run.mjs psbridge-xsfig psbridge-view3d psbridge-3dviews psbridge-3dcage psbridge-drawings`; `node tests/check-syntax.mjs`; verbatim and harness B (see the PR); results and DXF comparison in the PR.
+### Saved data
+None.
+### Decisions (pending engineer review)
+- FOB-a. The top is that of the schematic barrier the figure and the DXF draw (flat over 0.45 b_w, then the sloped face). The 3D view draws an entered barrier as a 32 in block (unchanged): over the flat top they agree; a fence on the sloped face shows its post starting below the block's top there.
+### Open items
+- Geometry-mode barriers (BARG, once on main for this app) drawn with their own outline and the fence seated on it: follow-up PR.
