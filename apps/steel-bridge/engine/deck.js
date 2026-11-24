@@ -86,7 +86,7 @@
      Bars on each face and in each direction: A_s >= 1.30 b h / (2 (b + h) f_y) per foot (Eq. 5.10.6-1), within 0.11 to 0.60 in^2/ft
      (Eq. 5.10.6-2); f_y not over 75 ksi; b the least width of the component (the deck width out-to-out), h its least thickness (the total
      deck thickness as cast, t_L). Spacing: components over 36 in thick 12 in (walls and footings over 18 in are not decks); otherwise
-     3.0 times the thickness and 18.0 in. Decision (pending engineer review): s_max = min(3h, 18 in), the lesser of the two (the 9th Ed.
+     3.0 times the thickness and 18.0 in. Engineer decision 2026-11-24 (confirmed): s_max = min(3h, 18 in), the lesser of the two (the 9th Ed.
      reading; the 10th Ed. words "3.0 times the component thickness but not less than 18.0 in" can also be read as max(3h, 18 in), which
      allows more for decks thicker than 6 in). The faces exempted by the article (faces whose smaller dimension is 18 in or less) are the
      deck edges, not the top and bottom faces. Sets: the top and bottom transverse bars (always), the top and bottom longitudinal bars
@@ -111,7 +111,7 @@
     w.add({ id: 'A', label: 'Shrinkage and temperature: area required per foot (within 0.11 to 0.60 in²/ft)', sym: 'A_{s,T\\&S}', eq: '\\min(\\max(A_{s,eq},\\ 0.11),\\ 0.60)', sub: `\\min(\\max(${n(T.eq, 4)},\\ 0.11),\\ 0.60)`, value: T.A, unit: 'in^{2}/ft', d: 3, ref: ED + 'Eq. 5.10.6-2',
       note: T.lo ? 'The lower bound 0.11 in²/ft governs.' : T.hi ? 'The upper bound 0.60 in²/ft governs.' : '' });
     w.add({ id: 'smax', label: 'Shrinkage and temperature: maximum spacing', sym: 's_{max}', eq: T.h > 36 ? '12.0' : '\\min(3.0\\,h,\\ 18.0)', sub: T.h > 36 ? '12.0' : `\\min(3.0(${n(T.h, 2)}),\\ 18.0)`, value: T.smax, unit: 'in', d: 2, ref: R,
-      note: 'Decision (pending engineer review): the lesser of 3.0h and 18.0 in. The 10th Ed. wording ("3.0 times the component thickness but not less than 18.0 in") can also be read as the larger, ' + `max(3h, 18) = ${St().fmt(Math.max(T.s3, 18), 2)} in here.` });
+      note: 'Engineer decision 2026-11-24 (confirmed): the lesser of 3.0h and 18.0 in. The 10th Ed. wording ("3.0 times the component thickness but not less than 18.0 in") can also be read as the larger, ' + `max(3h, 18) = ${St().fmt(Math.max(T.s3, 18), 2)} in here.` });
     sets.forEach(q => { if (!q.on) return; const p = q.k + '.';
       w.add({ id: p + 'As', label: `${q.name} (${barName(q.A)} at ${St().fmt(q.s, 2)} in): area provided per foot`, sym: 'A_{s}', eq: '\\frac{12\\,A_{b}}{s}', sub: `\\frac{12(${n(q.A, 2)})}{${n(q.s, 2)}}`, value: q.As, unit: 'in^{2}/ft', d: 3, ref: R });
       w.add({ id: p + 'rA', label: `DK5 ${q.name}: area`, sym: 'A_{s,T\\&S} \\le A_{s}', eq: '', sub: `${n(T.A, 3)} ${T.A <= q.As ? '\\le' : '\\gt'} ${n(q.As, 3)}`, value: q.rA, unit: '', d: 3, ref: R, ok: T.A <= q.As, note: 'Ratio A_s,T&S / A_s.' });
@@ -138,9 +138,11 @@
      strip (k = sqrt(2 rho n + (rho n)^2) - rho n, j = 1 - k/3, f_ss = 12 M_s / (A_s j d), d and A_s as DK1 to DK3, n = 29,000 / E_c,
      E_c = 120,000 K_1 w_c^2 f'c^0.33 Eq. 5.4.2.4-1); f_ss <= 0.60 f_y (checked); beta_s = 1 + d_c / (0.7 (h - d_c)) (Eq. 5.6.7-2);
      s <= 700 gamma_e / (beta_s f_ss) - 2 d_c (Eq. 5.6.7-1), gamma_e 1.00 (Class 1) or 0.75 (Class 2, input exposure).
-     d_c and h (Decision pending engineer review, conservative): bottom bars d_c = c_b + d_b/2, h = t_s (the dead-load-only layer, on the
-     compression face, is left out); top bars d_c = (t_L - t_s) + c_t + d_b/2 (the actual cover to the top of the deck), h = t_L. The
-     commentary's d_c limit of 2.0 in plus the bar radius for large covers is not used. */
+     d_c and h, measured within the structural slab t_s (the clear covers c_t, c_b are measured from the faces of t_s, as the effective
+     depth d = t_s - c - d_b/2 of DK1 to DK3): bottom bars d_c = c_b + d_b/2, h = t_s (Decision pending engineer review: the dead-load-only
+     layer, on the compression face, is left out); top bars d_c = c_t + d_b/2, h = t_s (Engineer decision 2026-11-24: exclude the
+     sacrificial wearing surface t_L - t_s, as strength does; PR #1698 had d_c = (t_L - t_s) + c_t + d_b/2, h = t_L). So h - d_c = d, the
+     depth of the cracked-section f_ss. The commentary's d_c limit of 2.0 in plus the bar radius for large covers is not used. */
   const GAM = { 1: 1.00, 2: 0.75 };
   const expoOf = D => (+D.exposure === 2 ? 2 : 1);
   function crackAll(o) {
@@ -149,8 +151,8 @@
     const common = { cls, ge, Ec, n: nr, lam, fr, wcE: o.wcE, K1: o.K1, fc: o.fc, fy: o.fy, ts: o.ts, tL: o.tL, mLL, lim: 0.6 * o.fy };
     const one = (key, name, top, c, M) => {
       const db = c.dbar, A = c.As, d = c.dEff, s = c.sp, Ms = M.DC + M.DW + mLL * M.LL + (M.PL || 0), hg = o.ts, Sg = 12 * hg * hg / 6, ft = 12 * Ms / Sg, app = ft > 0.8 * fr;
-      const dc = (top ? o.tL - o.ts : 0) + c.cover + db / 2, h = top ? o.tL : o.ts;
-      const q = { key, name, top, M, Ms, hg, Sg, ft, app, dc, h, db, A, d, s, cover: c.cover, extra: top ? o.tL - o.ts : 0, barA: c.barA };
+      const dc = c.cover + db / 2, h = o.ts;   // DKDC (engineer decision 2026-11-24): top bars too, within t_s (the sacrificial wearing surface excluded)
+      const q = { key, name, top, M, Ms, hg, Sg, ft, app, dc, h, db, A, d, s, cover: c.cover, barA: c.barA };
       if (!app) return { ...q, r: 0, ok: true, by: 'na' };
       const rho = A / (12 * d), rn = rho * nr, k = Math.sqrt(2 * rn + rn * rn) - rn, j = 1 - k / 3, fss = 12 * Ms / (A * j * d), bs = 1 + dc / (0.7 * (h - dc));
       const smax = 700 * ge / (bs * fss) - 2 * dc, rS = smax > 0 ? s / smax : Infinity, rF = fss / common.lim;
@@ -188,9 +190,9 @@
         w.add({ id: 'j', label: `${nm}: lever arm ratio`, sym: 'j', eq: '1 - \\frac{k}{3}', sub: `1 - \\frac{${n(q.k, 4)}}{3}`, value: q.j, unit: '', d: 4, ref: 'Cracked transformed section' });
         w.add({ id: 'fss', label: `${nm}: bar stress at Service I`, sym: 'f_{ss}', eq: '\\frac{12\\,M_{s}}{A_{s}\\,j\\,d}', sub: `\\frac{12(${n(q.Ms, 3)})}{${n(q.A, 3)}(${n(q.j, 4)})(${n(q.d, 3)})}`, value: q.fss, unit: 'ksi', d: 2, ref: R });
         w.add({ id: 'fl', label: `DK6 ${nm}: bar stress not over 0.60 f_y`, sym: 'f_{ss} \\le 0.60\\,f_{y}', eq: '', sub: `${n(q.fss, 2)} ${q.fss <= C.lim ? '\\le' : '\\gt'} ${n(C.lim, 2)}`, value: q.rF, unit: '', d: 3, ref: R, ok: q.fss <= C.lim, note: 'Ratio f_ss / 0.60 f_y.' });
-        w.add({ id: 'dc', label: `${nm}: tension face to the centre of the ${q.top ? 'top' : 'bottom'} bars`, sym: 'd_{c}', eq: q.top ? '(t_{L} - t_{s}) + c_{t} + \\frac{d_{b}}{2}' : 'c_{b} + \\frac{d_{b}}{2}', sub: q.top ? `${n(q.extra, 2)} + ${n(q.cover, 2)} + \\frac{${n(q.db, 3)}}{2}` : `${n(q.cover, 2)} + \\frac{${n(q.db, 3)}}{2}`, value: q.dc, unit: 'in', d: 3, ref: R,
-          note: q.top ? 'The actual cover to the top of the deck: the dead-load-only layer t_L − t_s plus the clear cover of the top bars (Decision pending engineer review, conservative).' : 'The clear cover of the bottom bars plus half the bar diameter.' });
-        w.add({ id: 'h', label: `${nm}: overall thickness`, sym: 'h', eq: q.top ? 't_{L}' : 't_{s}', sub: n(q.h, 2), value: q.h, unit: 'in', d: 2, ref: R, note: q.top ? 'The whole deck: the tension face is its top.' : 'The structural slab (Decision pending engineer review: the dead-load-only layer on the compression face is left out, conservative).' });
+        w.add({ id: 'dc', label: `${nm}: tension face to the centre of the ${q.top ? 'top' : 'bottom'} bars`, sym: 'd_{c}', eq: q.top ? 'c_{t} + \\frac{d_{b}}{2}' : 'c_{b} + \\frac{d_{b}}{2}', sub: `${n(q.cover, 2)} + \\frac{${n(q.db, 3)}}{2}`, value: q.dc, unit: 'in', d: 3, ref: R,
+          note: q.top ? `From the top of the structural slab t_s: the clear cover of the top bars plus half the bar diameter. Engineer decision 2026-11-24: exclude the sacrificial wearing surface${C.tL - C.ts > 1e-9 ? ` (t_L − t_s = ${St().fmt(C.tL - C.ts, 2)} in)` : ''}, as the Strength I depth d does.` : 'The clear cover of the bottom bars plus half the bar diameter.' });
+        w.add({ id: 'h', label: `${nm}: overall thickness`, sym: 'h', eq: 't_{s}', sub: n(q.h, 2), value: q.h, unit: 'in', d: 2, ref: R, note: q.top ? 'The structural slab (Engineer decision 2026-11-24: the sacrificial wearing surface is excluded); h − d_c = d, the depth used for f_ss.' : 'The structural slab (Decision pending engineer review: the dead-load-only layer on the compression face is left out, conservative).' });
         w.add({ id: 'bs', label: `${nm}: strain ratio, tension face to the bars`, sym: '\\beta_{s}', eq: '1 + \\frac{d_{c}}{0.7\\,(h - d_{c})}', sub: `1 + \\frac{${n(q.dc, 3)}}{0.7(${n(q.h, 2)} - ${n(q.dc, 3)})}`, value: q.bs, unit: '', d: 4, ref: ED + 'Eq. 5.6.7-2' });
         w.add({ id: 'smax', label: `${nm}: maximum bar spacing for crack control`, sym: 's_{max}', eq: '\\frac{700\\,\\gamma_{e}}{\\beta_{s}\\,f_{ss}} - 2\\,d_{c}', sub: `\\frac{700(${n(C.ge, 2)})}{${n(q.bs, 4)}(${n(q.fss, 2)})} - 2(${n(q.dc, 3)})`, value: q.smax, unit: 'in', d: 2, ref: ED + 'Eq. 5.6.7-1' });
         w.add({ id: 's', label: `DK6 ${nm}: bar spacing`, sym: 's \\le s_{max}', eq: '', sub: `${n(q.s, 2)} ${q.smax > 0 && q.s <= q.smax ? '\\le' : '\\gt'} ${n(q.smax, 2)}`, value: q.rS, unit: '', d: 3, ref: ED + 'Eq. 5.6.7-1', ok: q.smax > 0 && q.s <= q.smax,

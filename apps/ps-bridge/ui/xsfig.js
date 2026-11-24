@@ -58,7 +58,8 @@
         if (+e.rw > 0) { const yr = yTop + Math.max(onSw(rp), rp <= cw + 1e-9 ? onSw(cw) + ch : 0); out.app.push({ kind: 'rail', side: sd, x0: at(rp) - POST / 2, x1: at(rp) + POST / 2, y0: yr, y1: yr + RAIL_H, rp, rw: +e.rw }); }
       } else if (bw > 0) { const yb = yTop + (w > 0 && t > 0 && w >= bw ? t : 0); out.app.push({ kind: 'bar', side: sd, x0: Math.min(at(0), at(bw)), x1: Math.max(at(0), at(bw)), y0: yb, y1: yb + BAR_H, bw, edge: at(0), inner: at(bw) }); }
       const fx = (+sw.fenceX || 0) * 12;   // PR 9: a railing or fence on the sidewalk
-      if (w > 0 && fx > 0 && (+sw.fence > 0 || sw.fence == null)) out.app.push({ kind: 'fence', side: sd, x0: at(fx) - POST / 2, x1: at(fx) + POST / 2, y0: yTop + t, y1: yTop + t + RAIL_H, fx });
+      if (w > 0 && fx > 0 && (+sw.fence > 0 || sw.fence == null)) { const et = window.PSB3DUI.edgeTop ? window.PSB3DUI.edgeTop(P, sd, fx) : null, yf = yTop + (et !== null ? et : t);   // FOB: on the barrier or curb top where one is under it (ui/view3d.js edgeTop)
+        out.app.push({ kind: 'fence', side: sd, x0: at(fx) - POST / 2, x1: at(fx) + POST / 2, y0: yf, y1: yf + RAIL_H, fx }); }
     });
     const md = dl && dl.med; if (md && +md.w > 0 && +md.t > 0) out.app.push({ kind: 'med', x0: Wd / 2 - md.w * 6, x1: Wd / 2 + md.w * 6, y0: yTop, y1: yTop + +md.t, w: md.w * 12, t: +md.t, joint: !!md.joint });   // PR 9: the raised median
     // traffic faces and d_e of the exterior lines (PS-20 deOf; else the entered d_e of the type on that line)

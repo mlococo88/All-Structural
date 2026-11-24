@@ -9685,17 +9685,6 @@ None changed.
 ### Other copies
 The old `Prestressed Bridge Design.html` has no left / right sidewalk or deck-edge inputs (only a "Bridge with sidewalks" owner-rule checkbox and one barrier for the deck design) and is frozen (PS-14 g): not changed.
 
-<<<<<<< HEAD
-## 2026-11-24 — PR: claude/shared-steps-ratio (PR #1706: https://github.com/mlococo88/All-Structural/pull/1706) (SSR) — worked-step topic chips: the ranges of applicability of the distribution factors (ld.ap.*, ld.ap.r) marked as not a demand / capacity ratio (`ratio: false`; display only)
-- **Where:** `engine/applicability.js` `steps()`, anchors `id: 'ap.' + q.key` and `id: 'ap.r'`.
-- **Before / After:** `d: q.d, ref: A10 + q.table,` → `d: q.d, ref: A10 + q.table, ratio: false,`; `d: 0, ref: A10 + 'Art. 4.6.2.2', ...(a.entered` → `d: 0, ref: A10 + 'Art. 4.6.2.2', ratio: false, ...(a.entered`.
-- **Display change (built-in project):** Loads & LLDF tab and Report, topic "Line-girder analysis: ranges of applicability of the distribution factors": chip `5.000` red (N_b = 5 read as a D/C > 1) → `OK` green; one-line result `Number of beams …: N_b` → `… items outside their range: n_out = 0`. The Rating topics' raw group() chips also change (RF ≥ 1 no longer a red ratio), but PSBOutKit.groups overrides every RF topic (rf: RegExp), so the tab and the report are unchanged there.
-- **Check case:** built-in project: N_b = 5 in 4 to 20 (ok), n_out = 0: before chip `5.000` (class ng), after `OK` (class ok).
-- **Problem:** `shared/steps.js` group() read every unitless test step with an ok flag as a D/C ratio for its topic's status chip (PR #1692). SSR changes the shared rule (fixlog/shared-steps.md) and these steps say so themselves, so that a count or a geometric range value is not shown as a D/C.
-- **Governing provision:** none (display only; no value, ok flag, verdict, saved key or saved-data format change).
-- **How verified:** main vs this branch, the tool opened headless with every tab clicked and every topic's chip / class / one-line result recorded (PR description: audit table); `node tests/engine/run.mjs` (psbridge-*); `tests/smoke/ps-bridge-*` not affected (display text of one topic chip).
-- **Other copies:** none.
-=======
 ## 2026-11-24 — PR: claude/ps-barrier-geometry (PR #1700: https://github.com/mlococo88/All-Structural/pull/1700) (BARG) — Cross-section tab, deck edges: "Barrier weight from: Entered / Geometry" (shared/barrier.js, as the Steel Bridge app, PR #1697); with Geometry the barrier's weight and width at the deck are computed and its DC2 acts at its centroid   [NEW OPTION; Entered (the default) and "DC2 and DW entered per girder type" unchanged; §4: the load point in Geometry mode]
 ### Request (engineer, 2026-11-24)
 "RIDOT has a barrier that is a rectangle shape, not an F-shape barrier. Can I enter the barrier geometry in a new section and let the app calculate the weight directly?" Then: "Use the centroid for the barrier load point. Do this for both the steel and ps apps."
@@ -9726,4 +9715,41 @@ New optional keys inside `xs.dl.barL` / `xs.dl.barR` (the Steel Bridge app's nam
 - BARG-PS-a. The geometry applies to "DC2 and DW distributed to each girder line" (the card's barriers). "Entered per girder type" (base.loads.wBar on the Loads tab) and the deck slab design's own barrier (base.deck.wBar, bBar; the frozen engine's overhang design) are unchanged; whether the deck design should take the geometry's weight and centroid is open.
 - BARG-PS-b. The same defaults and rules as the Steel Bridge app (fixlog/steel-bridge.md BARG-a, -b, -c; fixlog/shared-barrier.md BARG-1a..c).
 - The old root `Prestressed Bridge Design.html` is frozen and unchanged.
->>>>>>> origin/main
+
+## 2026-11-24 — PR: claude/ps-fence-on-barrier (PR #1702: https://github.com/mlococo88/All-Structural/pull/1702) (FOB) — a sidewalk railing or fence over the barrier or curb is drawn standing on its top (display only)
+### Request (engineer, 2026-11-24)
+"There's an option to add a fence or railing on top of the concrete barrier, which is great. But the renderings — the 3D model, the regular drawings, the DXF drawings and the graphics — all show it as basically embedded in the concrete. Can we fix that?"
+### Input combinations with a railing or fence over a barrier or curb (Cross-section tab, deck edges and sidewalks)
+- Deck edge Barrier + sidewalk "Railing / fence" at a position ≤ the barrier width: drawn from the sidewalk top, inside the barrier (fixed). With the sidewalk narrower than the barrier, the barrier sits on the deck and the fence was drawn under it (fixed).
+- Deck edge Curb and railing + sidewalk fence within the curb width: drawn inside the curb (fixed).
+- Curb railing at a load point ≤ the curb width: already on the curb top (unchanged code).
+### Where / Before / After
+- `ui/view3d.js`, after `const BAR_H = 32, SW_CURB = 0, …`: new `BAR_PROF` (the schematic barrier outline the figure and the DXF draw, fractions [u/b_w, y/BAR_H]: `[[0, 0], [1, 0], [0.75, 0.25], [0.45, 1], [0, 1]]`), `topOf(pts, u)` and `edgeTop(P, sd, u)` (the height above the deck top of side sd's barrier or curb top at u in from that edge, null off them); exported on `PSB3DUI` (the one helper of the app's renderers).
+- `ui/view3d.js geom`, anchor `const fx = (+sw(s).fenceX || 0) * 12;`: before `y0: yTop + t` → after `y0: yTop + (et !== null ? et : t)` with `const et = edgeTop(P, s, fx)`.
+- `ui/xsfig.js model`, anchor `// PR 9: a railing or fence on the sidewalk`: before `y0: yTop + t, y1: yTop + t + RAIL_H` → after `y0: yf, y1: yf + RAIL_H` with `yf = yTop + (et !== null ? et : t)`, `et = PSB3DUI.edgeTop(P, sd, fx)`. The typical-section DXF (`ui/sheets.js`) draws `PSBXsFig.model`'s items, so it follows.
+### Problem
+The fence base was always the sidewalk top: over a barrier (32 in drawn) the 42 in post showed 10 in above it; over a curb it started inside the curb.
+### Governing provision
+None (display only): no load, weight, load point or computed value changes.
+### Check case (made-up: 4 lines at 8 ft, overhangs 3 ft, barriers 1.5 ft = 18 in, sidewalks 6 ft × 8 in)
+- Fence at 0.5 ft = 6 in ≤ 0.45 × 18 = 8.1 in (flat top): base before 8 in, after 8 + 32 = 40 in above the deck top.
+- Fence at 1.2 ft = 14.4 in: u/b_w = 0.8 on the face (0.75, 0.25)–(1, 0): g = 0.25 × 0.2/0.25 = 0.20; base before 8 in, after 8 + 6.4 = 14.4 in.
+- Curb 12 × 10 in, fence at 0.4 ft: before 8 in, after 18 in; fence at 3 ft: 8 in both.
+### How verified
+`tests/engine/psbridge-fence-on-barrier.test.mjs`; `node tests/engine/run.mjs psbridge-xsfig psbridge-view3d psbridge-3dviews psbridge-3dcage psbridge-drawings`; `node tests/check-syntax.mjs`; verbatim and harness B (see the PR); results and DXF comparison in the PR.
+### Saved data
+None.
+### Decisions (pending engineer review)
+- FOB-a. The top is that of the schematic barrier the figure and the DXF draw (flat over 0.45 b_w, then the sloped face). The 3D view draws an entered barrier as a 32 in block (unchanged): over the flat top they agree; a fence on the sloped face shows its post starting below the block's top there.
+### Open items
+- Geometry-mode barriers (BARG, once on main for this app) drawn with their own outline and the fence seated on it: follow-up PR.
+
+## 2026-11-24 — PR: claude/shared-steps-ratio (PR #1706: https://github.com/mlococo88/All-Structural/pull/1706) (SSR) — worked-step topic chips: the ranges of applicability of the distribution factors (ld.ap.*, ld.ap.r) marked as not a demand / capacity ratio (`ratio: false`; display only)
+- **Where:** `engine/applicability.js` `steps()`, anchors `id: 'ap.' + q.key` and `id: 'ap.r'`.
+- **Before / After:** `d: q.d, ref: A10 + q.table,` → `d: q.d, ref: A10 + q.table, ratio: false,`; `d: 0, ref: A10 + 'Art. 4.6.2.2', ...(a.entered` → `d: 0, ref: A10 + 'Art. 4.6.2.2', ratio: false, ...(a.entered`.
+- **Display change (built-in project):** Loads & LLDF tab and Report, topic "Line-girder analysis: ranges of applicability of the distribution factors": chip `5.000` red (N_b = 5 read as a D/C > 1) → `OK` green; one-line result `Number of beams …: N_b` → `… items outside their range: n_out = 0`. The Rating topics' raw group() chips also change (RF ≥ 1 no longer a red ratio), but PSBOutKit.groups overrides every RF topic (rf: RegExp), so the tab and the report are unchanged there.
+- **Check case:** built-in project: N_b = 5 in 4 to 20 (ok), n_out = 0: before chip `5.000` (class ng), after `OK` (class ok).
+- **Problem:** `shared/steps.js` group() read every unitless test step with an ok flag as a D/C ratio for its topic's status chip (PR #1692). SSR changes the shared rule (fixlog/shared-steps.md) and these steps say so themselves, so that a count or a geometric range value is not shown as a D/C.
+- **Governing provision:** none (display only; no value, ok flag, verdict, saved key or saved-data format change).
+- **How verified:** main vs this branch, the tool opened headless with every tab clicked and every topic's chip / class / one-line result recorded (PR description: audit table); `node tests/engine/run.mjs` (psbridge-*); `tests/smoke/ps-bridge-*` not affected (display text of one topic chip).
+- **Other copies:** none.

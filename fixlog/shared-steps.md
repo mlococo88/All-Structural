@@ -175,63 +175,6 @@ Tests: `node tests/engine/run.mjs` (steps, steps-totext, tex, report, …).
 ### Other copies
 - None.
 
-<<<<<<< HEAD
-## 2026-11-24 — PR: claude/shared-steps-ratio (PR #1706: https://github.com/mlococo88/All-Structural/pull/1706) — topic chips: only real demand / capacity ratios give the number (SSR; display only)
-### Where
-- `shared/steps.js`: the header comment (new field `ratio`); `step(o)`, anchor `if (s.ok === undefined) delete s.ok;`; `isRatio`, anchor
-  `/* isRatio(s): a test step whose value is a demand / capacity ratio`; the `group()` doc line `ratio  the largest ratio of its test steps`.
-  `shared/README.md`, "Worked steps" table: new row `ratio`.
-### Before / After
-- Before:
-  ```js
-  const isRatio = s => s.ok !== undefined && typeof s.value === 'number' && !s.unit;
-  ```
-  and `step()` dropped any key not in `KEYS`.
-- After:
-  ```js
-  const RTOL = 1e-3;
-  const isRatio = s => s.ok !== undefined && typeof s.value === 'number' && !s.unit && (typeof s.ratio === 'boolean' ? s.ratio
-    : s.ok !== false ? fin(s.value) && s.value <= 1 + RTOL : !(fin(s.value) && s.value <= 1 - RTOL));
-  ```
-  and in `step()`, after `if (s.ok === undefined) delete s.ok;`:
-  ```js
-  if (typeof o.ratio === 'boolean') s.ratio = o.ratio;
-  ```
-  `group()` and `summary()` are unchanged; they call `isRatio`. A test step that is no longer a ratio still counts for its topic's status
-  through its `ok` flag (chip `OK` / `NG`, class `ok` / `ng`), gives no number, and its one-line result shows its value.
-### Problem
-- PR #1692 (SBDFH) found that `group()` read every test step with a number and no unit as a D/C ratio, so a slenderness Kℓ/r = 47.15 ≤ 140
-  showed as a red "47.153" chip. Audit (every tool that loads this file, below): the same false badge on the Prestressed (app) Loads & LLDF
-  tab ("Number of beams N_b = 5" as a red "5.000"), its Rating topics' raw chips (rating factors ≥ 1 as red ratios; the tab and report
-  override them, PSBOutKit.groups, so not shown), Spread Footing "Longitudinal steel" (ρ_g = 0.020 as a green D/C), Steel Bridge
-  cross-frame members (ℓ/r = 115 as red "115.178" where no check item links to the topic; the tab and report use the items, #1692) and
-  Welds TR4 (t_1/t_2, A_1/A_2 proportions as D/C). Display only: no value, ok flag, verdict or saved data changes.
-### Governing provision
-- None: display only. No formula, factor, unit, value or code reference changes.
-### Check case
-- `group([step({ id: 'sl', label: 'sl', value: 47.153, unit: '', ok: true })], [{ key: 't', title: 'T', ids: () => true }])`: before chip
-  `47.153`, class `ng`; after chip `OK`, class `ok`, summary `sl: 47.15`. A ratio 0.95 (ok) stays `0.950` `hi`; 1.2 (not ok) `1.200 NG`;
-  a factor of safety 2.1 (ok) `OK`; a rating factor 0.8 (not ok) `NG` (was `0.800 NG`); `ratio: true` on a 0.6 that fails: `0.600 NG`.
-  `tests/engine/steps-ratio.test.mjs`.
-### How verified
-- New `tests/engine/steps-ratio.test.mjs`; `tests/engine/steps-groups.test.mjs` (its synthetic 0.4-failing step now reads `NG` with no number;
-  the same step declared `ratio: true` keeps `0.400 NG`); the whole engine suite (`node tests/engine/run.mjs`, 4 chunks); `tests/check-syntax.mjs`.
-- Every tool that loads the file opened headless (main vs this branch), every tab clicked, every `SharedSteps.group` call recorded (chip,
-  class, result step, one-line result, and each step's value and ok): only the topics listed in the PR changed; every step value and ok
-  flag the same; console errors the same. Tools: `ASCE7-16 Load Generator.html`, `Pile Designer.html`, `Prestressed Bridge Design.html`,
-  `Light Pole and Sign Post.html`, `Shear and Moment Diagrams.html`, `abutment_calculator.html`, `Timber Beam Check.html`, `index.html`,
-  `Stone Masonry Arch Load Rating.html`, `Retaining Wall Designer.html`, `Section Property Calculator.html`, `Bridge Substructure Loading.html`,
-  `elastomeric_design_module.html`, `Concrete Beam Capacity.html`, `lldf.html`, `apps/steel-bridge/index.html`, `apps/ps-bridge/index.html`,
-  `apps/crane-pick/index.html` (loads the file, calls no group), `Gusset Plate Rating.html`, `BasePlateAnchorDesigner.html`,
-  `Moving Load Generator.html`, `Spread Footing.html`, `Steel Beam Design - AISC 15th.html`.
-### Other copies
-- `apps/steel-bridge/ui/framing.js` groups() (#1692) keeps its own slenderness rule for topics no check item links to (unchanged).
-- The tools' explicit `ratio: false` (same PR): `fixlog/steel-bridge.md`, `fixlog/ps-bridge.md`, `fixlog/Spread Footing.md`,
-  `fixlog/Retaining Wall Designer.md`, `fixlog/Timber Beam Check.md`.
-### Open items
-- Decision (pending engineer review): the rule (ok agrees with value ≤ 1 within 1e-3) and a failing step below 1.0 read as not a ratio
-  (chip `NG` with no number); a D/C with a limit other than 1.0 must declare `ratio: true` to keep its number. None found in the audit.
-=======
 ## 2026-11-24 — PR: claude/sb-le-display (PR #1699: https://github.com/mlococo88/All-Structural/pull/1699) (CMPL) — line(): comparison steps read "D_p ≤ 0.42D_t = 9.204 ≤ … = 11.340, OK" and "… = 115.18 ≤ 140" (no stray "=", no repeated value)   [display only; no value, verdict, formula or reference changes]
 ### Problem
 - Engineer (2026-11-24), Steel Bridge Design, Flexure tab, topic "Compact positive flexure" (6.10.7.1.2 / 6.10.7.3):
@@ -305,4 +248,59 @@ Tests: `node tests/engine/run.mjs` (steps, steps-totext, tex, report, …).
   "D_p ≤ 0.42D_t: 9.204 ≤ …" is not used.
 - CMPL-2. A ratio after a comparison that does not show it ("812.50 ≤ 1858.00 = 0.437") is kept as before.
 - CMPL-3. A repeated value is dropped with its unit (the unit is in the label / value column elsewhere).
->>>>>>> origin/main
+
+## 2026-11-24 — PR: claude/shared-steps-ratio (PR #1706: https://github.com/mlococo88/All-Structural/pull/1706) — topic chips: only real demand / capacity ratios give the number (SSR; display only)
+### Where
+- `shared/steps.js`: the header comment (new field `ratio`); `step(o)`, anchor `if (s.ok === undefined) delete s.ok;`; `isRatio`, anchor
+  `/* isRatio(s): a test step whose value is a demand / capacity ratio`; the `group()` doc line `ratio  the largest ratio of its test steps`.
+  `shared/README.md`, "Worked steps" table: new row `ratio`.
+### Before / After
+- Before:
+  ```js
+  const isRatio = s => s.ok !== undefined && typeof s.value === 'number' && !s.unit;
+  ```
+  and `step()` dropped any key not in `KEYS`.
+- After:
+  ```js
+  const RTOL = 1e-3;
+  const isRatio = s => s.ok !== undefined && typeof s.value === 'number' && !s.unit && (typeof s.ratio === 'boolean' ? s.ratio
+    : s.ok !== false ? fin(s.value) && s.value <= 1 + RTOL : !(fin(s.value) && s.value <= 1 - RTOL));
+  ```
+  and in `step()`, after `if (s.ok === undefined) delete s.ok;`:
+  ```js
+  if (typeof o.ratio === 'boolean') s.ratio = o.ratio;
+  ```
+  `group()` and `summary()` are unchanged; they call `isRatio`. A test step that is no longer a ratio still counts for its topic's status
+  through its `ok` flag (chip `OK` / `NG`, class `ok` / `ng`), gives no number, and its one-line result shows its value.
+### Problem
+- PR #1692 (SBDFH) found that `group()` read every test step with a number and no unit as a D/C ratio, so a slenderness Kℓ/r = 47.15 ≤ 140
+  showed as a red "47.153" chip. Audit (every tool that loads this file, below): the same false badge on the Prestressed (app) Loads & LLDF
+  tab ("Number of beams N_b = 5" as a red "5.000"), its Rating topics' raw chips (rating factors ≥ 1 as red ratios; the tab and report
+  override them, PSBOutKit.groups, so not shown), Spread Footing "Longitudinal steel" (ρ_g = 0.020 as a green D/C), Steel Bridge
+  cross-frame members (ℓ/r = 115 as red "115.178" where no check item links to the topic; the tab and report use the items, #1692) and
+  Welds TR4 (t_1/t_2, A_1/A_2 proportions as D/C). Display only: no value, ok flag, verdict or saved data changes.
+### Governing provision
+- None: display only. No formula, factor, unit, value or code reference changes.
+### Check case
+- `group([step({ id: 'sl', label: 'sl', value: 47.153, unit: '', ok: true })], [{ key: 't', title: 'T', ids: () => true }])`: before chip
+  `47.153`, class `ng`; after chip `OK`, class `ok`, summary `sl: 47.15`. A ratio 0.95 (ok) stays `0.950` `hi`; 1.2 (not ok) `1.200 NG`;
+  a factor of safety 2.1 (ok) `OK`; a rating factor 0.8 (not ok) `NG` (was `0.800 NG`); `ratio: true` on a 0.6 that fails: `0.600 NG`.
+  `tests/engine/steps-ratio.test.mjs`.
+### How verified
+- New `tests/engine/steps-ratio.test.mjs`; `tests/engine/steps-groups.test.mjs` (its synthetic 0.4-failing step now reads `NG` with no number;
+  the same step declared `ratio: true` keeps `0.400 NG`); the whole engine suite (`node tests/engine/run.mjs`, 4 chunks); `tests/check-syntax.mjs`.
+- Every tool that loads the file opened headless (main vs this branch), every tab clicked, every `SharedSteps.group` call recorded (chip,
+  class, result step, one-line result, and each step's value and ok): only the topics listed in the PR changed; every step value and ok
+  flag the same; console errors the same. Tools: `ASCE7-16 Load Generator.html`, `Pile Designer.html`, `Prestressed Bridge Design.html`,
+  `Light Pole and Sign Post.html`, `Shear and Moment Diagrams.html`, `abutment_calculator.html`, `Timber Beam Check.html`, `index.html`,
+  `Stone Masonry Arch Load Rating.html`, `Retaining Wall Designer.html`, `Section Property Calculator.html`, `Bridge Substructure Loading.html`,
+  `elastomeric_design_module.html`, `Concrete Beam Capacity.html`, `lldf.html`, `apps/steel-bridge/index.html`, `apps/ps-bridge/index.html`,
+  `apps/crane-pick/index.html` (loads the file, calls no group), `Gusset Plate Rating.html`, `BasePlateAnchorDesigner.html`,
+  `Moving Load Generator.html`, `Spread Footing.html`, `Steel Beam Design - AISC 15th.html`.
+### Other copies
+- `apps/steel-bridge/ui/framing.js` groups() (#1692) keeps its own slenderness rule for topics no check item links to (unchanged).
+- The tools' explicit `ratio: false` (same PR): `fixlog/steel-bridge.md`, `fixlog/ps-bridge.md`, `fixlog/Spread Footing.md`,
+  `fixlog/Retaining Wall Designer.md`, `fixlog/Timber Beam Check.md`.
+### Open items
+- Decision (pending engineer review): the rule (ok agrees with value ≤ 1 within 1e-3) and a failing step below 1.0 read as not a ratio
+  (chip `NG` with no number); a D/C with a limit other than 1.0 must declare `ratio: true` to keep its number. None found in the audit.
