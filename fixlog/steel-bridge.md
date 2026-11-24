@@ -11504,7 +11504,7 @@ None: `analysis.steelAllowPct` and `xs.allow` keep their keys and values; the st
 - SP3 (splice shipping weight, engine/autodesign.js) uses `+xs.allow || 0` directly; when the loads module fails it can differ from the analysis (which then uses the setting). Not changed (calculation check; raise with the engineer).
 - The header shows the % rounded to a whole number (`f0`, as before): 2.5 % reads "3%".
 
-## 2026-11-24 — PR: claude/sb-deck-long-bars (PR #TBD) (DKL) — deck section: transverse bars as lines, longitudinal bar inputs, check DK4 (bottom longitudinal bars provided against the distribution reinforcement of 9.7.3.2)
+## 2026-11-24 — PR: claude/sb-deck-long-bars (PR #1693: https://github.com/mlococo88/All-Structural/pull/1693) (DKL) — deck section: transverse bars as lines, longitudinal bar inputs, check DK4 (bottom longitudinal bars provided against the distribution reinforcement of 9.7.3.2)
 ### Problem
 Engineer: "The deck is missing the transverse steel." The Deck tab figure (`ui/deck.js figure(R, W)`) cuts the slab ACROSS the bridge but drew the transverse (primary, perpendicular-to-traffic) top and bottom bars as circles at their spacing. In a transverse section the transverse bars are lines along the slab and the circles are the LONGITUDINAL bars. The module had no input for the longitudinal bars; it only computed the required bottom distribution steel A_s,d (9.7.3.2 on S_eff of 9.7.2.3) without checking it against bars provided.
 ### Where
