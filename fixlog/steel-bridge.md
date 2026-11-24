@@ -11781,7 +11781,7 @@ New optional keys inside each `xs.edges.L` / `xs.edges.R` object: `bMode` ('ente
 - Also the Cross-frames / Diaphragms steps whose sub ends in a comparison since #1692 (slenderness ℓ/r ≤ limit, P_r ≥ C_u, P_r ≥ T_u): the value is no longer repeated after it.
 - New smoke `tests/smoke/steel-bridge-cmpl.mjs` (Flexure, Constructibility, Cross-frames: no relation right after "=", no repeated value, no "= OK" after a comparison).
 
-## 2026-11-24 — PR: claude/sb-dk6-dc-ws (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (DKDC) — Deck crack control DK6, top bars: d_c and h measured within the structural slab (the sacrificial wearing surface excluded); DK5 s_max = min(3h, 18 in) confirmed   [CALCULATION CHANGE: DK6 top-bar cases (negative moment, overhangs) of every project with the deck design on and t_L > t_s; less conservative]
+## 2026-11-24 — PR: claude/sb-dk6-dc-ws (PR #1703: https://github.com/mlococo88/All-Structural/pull/1703) (DKDC) — Deck crack control DK6, top bars: d_c and h measured within the structural slab (the sacrificial wearing surface excluded); DK5 s_max = min(3h, 18 in) confirmed   [CALCULATION CHANGE: DK6 top-bar cases (negative moment, overhangs) of every project with the deck design on and t_L > t_s; less conservative]
 ### Engineer decision (2026-11-24)
 - DK6 (AASHTO LRFD 10th Ed. Art. 5.6.7): for the top bars, exclude the sacrificial (integral) wearing surface, consistent with strength. PR #1698 (DKCR) used d_c = (t_L − t_s) + c_t + d_b/2 and h = t_L.
 - DK5 (Art. 5.10.6): s_max = min(3.0h, 18.0 in) confirmed. Only the decision notes change (engine step note and header comment, Deck tab note, Report note); no code change.
