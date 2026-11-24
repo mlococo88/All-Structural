@@ -9663,7 +9663,7 @@ Deck design **off**: nothing (tested: the whole result identical). Deck design *
 ### Other copies
 **The old `Prestressed Bridge Design.html` (still the working tool until the switch-over) has the same `deckCalc` on the girder spacing and is NOT changed by this PR.** Open item for the engineer: the same correction there would be its own PR.
 
-## 2026-11-24 — PR: claude/psb-sidewalk-groups (PR #TBD) (SWGRP) — Cross-section tab, card "Barriers, sidewalks and wearing surface": deck edges and sidewalks grouped by side   [DISPLAY ONLY: no input, path, key, value or result changed]
+## 2026-11-24 — PR: claude/psb-sidewalk-groups (PR #1695: https://github.com/mlococo88/All-Structural/pull/1695) (SWGRP) — Cross-section tab, card "Barriers, sidewalks and wearing surface": deck edges and sidewalks grouped by side   [DISPLAY ONLY: no input, path, key, value or result changed]
 ### Request (engineer, 2026-11-24)
 "For both the steel bridge and prestressed bridge apps, can we separate the left and right sidewalk, even just a space between the inputs. The input boxes are very congested and need to be organized a little nicer." Then: "Same with the deck edges." (Steel Bridge Design: PR #1694.)
 ### Where / Before / After
