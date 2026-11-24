@@ -18,6 +18,10 @@
      Sidewalks and median, Wearing surface, Utilities and other line loads, Distribution) */
   const opt = (P, path, label, unit, ph, tip) => { const v = get(P, path); return `<div class="fRow"><label for="i_${path}" title="${esc(tip || '')}">${label}</label><input type="number" step="any" id="i_${path}" data-path="${path}" data-dl="opt" value="${esc(v == null || (typeof v === 'number' && isNaN(v)) ? '' : v)}" placeholder="${esc(ph || '')}" title="${esc(tip || '')}"><span class="unit">${unit}</span></div>`; };
   const sub = t => `<div class="dlSub" style="font-weight:600;margin:10px 0 4px">${t}</div>`;
+  /* SWGRP (2026-11-24, engineer: "separate the left and right sidewalk … Same with the deck edges"; display only): each side under its own
+     sub-heading, the labels without the side; the side stays in the label as hidden text (screen readers, the input-check banner). Same
+     ids, paths and kinds. */
+  const sdh = t => `<span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap">${t}: </span>`;
   const XD = [['auto', 'Follows the method'], ['pilecap', 'MassDOT pile-cap'], ['equal', 'Equal (all beams)'], ['two', 'Two adjacent beams']];
   // PL-A: UT, a utility line load (DW, 3.5.1) on the composite section. UT-N (2026-11-23): its label names the section, and the Steel Bridge
   // app's two noncomposite categories: UTN (the steel app's UT) and UF (stored codes; the labels are the steel app's)
@@ -30,17 +34,17 @@
     if (!on) return box('dl', 'Barriers, sidewalks and wearing surface (DC2, DW)', 'AASHTO LRFD 10th Ed. 3.5.1, 4.6.2.2.1', h + '<p class="note">DC2 and DW are the values entered per girder type on the <a href="#" data-goin="loads">Loads tab</a> (as the old app). "Distributed" computes them for each girder line from the barriers, sidewalks and wearing surface (the Steel Bridge app\'s method, PS-9).</p>');
     h += sel(P, 'xs.dl.method', 'Distribution method', Object.entries(DL().METHODS), 'How the barrier, sidewalk and added DC2 loads go to the girders; the wearing surface always equally (the Steel Bridge app).');
     // PR 9: deck edges (the steel app's "Deck edges": a barrier, or a curb and railing; an entered edge to traffic face governs)
-    h += sub('Deck edges');
-    ['L', 'R'].forEach(s => { const side = s === 'L' ? 'Left' : 'Right', b = q['bar' + s] || {}, k = `xs.dl.bar${s}.`, F = DL().edgeFace(P, s);
-      h += sel(P, k + 'type', `${side} deck edge`, [['barrier', 'Barrier'], ['curb', 'Curb and railing']], 'A curb lower than 12 in is mountable (the railing face is the traffic face)').replace(`data-path="${k}type" data-dl="sel"`, `data-path="${k}type" data-dl="type"`);
-      if (b.type === 'curb') h += num(P, k + 'cw', `${side} curb width`, 'in', 'DC2 line load c_w/12 × c_h/12 × w_c at c_w/2 from the deck edge') + num(P, k + 'ch', `${side} curb height`, 'in', '') + num(P, k + 'rw', `${side} railing weight`, 'klf', 'DC2 line load at its load point') + num(P, k + 'rp', `${side} railing load point from edge`, 'ft', '') + opt(P, k + 'rf', `${side} railing traffic face from edge`, 'ft', 'blank = load point');
-      else h += num(P, k + 'w', `${side} barrier weight`, 'klf', 'DC2 line load at half the barrier width from the deck edge') + num(P, k + 'bw', `${side} barrier width (deck edge to traffic face)`, 'ft', 'Also the start of the wearing surface');
-      h += opt(P, k + 'face', `${side} edge to traffic face`, 'ft', 'optional', 'Blank: computed from the barrier or curb and railing');
+    ['L', 'R'].forEach(s => { const side = s === 'L' ? 'Left' : 'Right', b = q['bar' + s] || {}, k = `xs.dl.bar${s}.`, F = DL().edgeFace(P, s), x = sdh(`${side} deck edge`);
+      h += sub(`${side} deck edge`);
+      h += sel(P, k + 'type', `${x}Edge type`, [['barrier', 'Barrier'], ['curb', 'Curb and railing']], 'A curb lower than 12 in is mountable (the railing face is the traffic face)').replace(`data-path="${k}type" data-dl="sel"`, `data-path="${k}type" data-dl="type"`);
+      if (b.type === 'curb') h += num(P, k + 'cw', `${x}Curb width`, 'in', 'DC2 line load c_w/12 × c_h/12 × w_c at c_w/2 from the deck edge') + num(P, k + 'ch', `${x}Curb height`, 'in', '') + num(P, k + 'rw', `${x}Railing weight`, 'klf', 'DC2 line load at its load point') + num(P, k + 'rp', `${x}Railing load point from edge`, 'ft', '') + opt(P, k + 'rf', `${x}Railing traffic face from edge`, 'ft', 'blank = load point');
+      else h += num(P, k + 'w', `${x}Barrier weight`, 'klf', 'DC2 line load at half the barrier width from the deck edge') + num(P, k + 'bw', `${x}Barrier width (deck edge to traffic face)`, 'ft', 'Also the start of the wearing surface');
+      h += opt(P, k + 'face', `${x}Edge to traffic face`, 'ft', 'optional', 'Blank: computed from the barrier or curb and railing');
       if (F && (b.type === 'curb' || b.face != null && b.face !== '' && !(typeof b.face === 'number' && isNaN(b.face)))) h += `<p class="note">${side} traffic face ${fx(F.f, 3)} ft from the deck edge (${esc(F.by)}).</p>`; });
     // PR 9: sidewalks and median (the steel app's "Sidewalks and median"). PL-A (2026-11-23): + the pedestrian live load (3.6.1.6)
-    h += sub('Sidewalks and median');
-    ['L', 'R'].forEach(s => { const side = s === 'L' ? 'Left' : 'Right', k = `xs.dl.sw${s}.`, on2 = +((q['sw' + s] || {}).w) > 0;
-      h += num(P, k + 'w', `${side} sidewalk width`, 'ft', 'Sidewalk slab from the deck edge (DC2, deck concrete for loads); 0 = none') + (on2 ? num(P, k + 't', `${side} sidewalk thickness`, 'in', '') + opt(P, k + 'fence', `${side} sidewalk railing / fence`, 'klf', 'none') + opt(P, k + 'fenceX', `${side} fence from deck edge`, 'ft', 'none') : ''); });
+    ['L', 'R'].forEach(s => { const side = s === 'L' ? 'Left' : 'Right', k = `xs.dl.sw${s}.`, on2 = +((q['sw' + s] || {}).w) > 0, x = sdh(`${side} sidewalk`);
+      h += sub(`${side} sidewalk`) + num(P, k + 'w', `${x}Width`, 'ft', 'Sidewalk slab from the deck edge (DC2, deck concrete for loads); 0 = none') + (on2 ? num(P, k + 't', `${x}Thickness`, 'in', '') + opt(P, k + 'fence', `${x}Railing / fence`, 'klf', 'none') + opt(P, k + 'fenceX', `${x}Fence from deck edge`, 'ft', 'none') : ''); });
+    h += sub('Pedestrian load and median');
     h += opt(P, 'xs.dl.ped', 'Pedestrian live load PL', 'psf', '0 = none; 75 (3.6.1.6)', 'AASHTO LRFD 10th Ed. 3.6.1.6: 75 psf on sidewalks wider than 2.0 ft, with the vehicular live load. On the walkable width (sidewalk − the deck edge\'s barrier or curb), distributed to the girder lines by the distribution method (the Steel Bridge app). Blank or 0: none.');
     { const sws = ['L', 'R'].filter(s => +((q['sw' + s] || {}).w) > 0), pq = DL().pl(P), pedOn = +q.ped > 0;   // PL-A: what the pedestrian load does here
       if (sws.length && !pedOn) h += '<p class="note" id="plOff"><b>No pedestrian live load is applied</b> to the sidewalk' + (sws.length > 1 ? 's' : '') + ': enter 75 psf (AASHTO LRFD 10th Ed. 3.6.1.6) to add it to the live load of the girder design.</p>';

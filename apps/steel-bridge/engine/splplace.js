@@ -119,7 +119,7 @@
     return { spl: out, notes };
   }
 
-  /* check(P, spl, Ru, o): the rules for a layout. o: { segs (plates, for the weight), allow, frames: [[own stations of the intermediate
+  /* check(P, spl, Ru, o): the rules for a layout. o: { segs (plates, for the weight), allow, allowSrc (where a comes from, for the SP3 note), frames: [[own stations of the intermediate
      cross-frames] per girder line] | null, trans: [stations of the shop flange transitions] }. Returns { ok, items: [{ id, what, x, r, ok }], steps } */
   function check(P, spl, Ru, o) {
     o = o || {}; const G = geom(P), w = St().work('spl'), n = St().n, items = [], e = edgesOf(G, spl);
@@ -129,7 +129,7 @@
       add('SP1', `${lab}: length ${n(len, 2)} ft ≤ ${n(lim, 2)} ft`, x0, len / lim, len <= lim + 1e-9, { label: `${lab}: shipping length`, sym: 'L_{pc}', eq: `x_{1} - x_{0} \\le L_{ship}`, sub: `${n(x1, 2)} - ${n(x0, 2)} = ${n(len, 2)} \\le ${n(lim, 2)}`, value: len, unit: 'ft', d: 2, ref: Ru.cite.ship || 'shipping limit (Auto design input)', note: `L_ship: ${Ru.src.shipLen}.` });
       add('SP2', `${lab}: length ${n(len, 2)} ft ≥ ${n(Ru.minLen, 2)} ft`, x0, Ru.minLen / len, len >= Ru.minLen - 1e-9, { label: `${lab}: minimum piece length`, sym: 'L_{pc}', eq: `\\ge L_{min}`, sub: `${n(len, 2)} \\ge ${n(Ru.minLen, 2)}`, value: len, unit: 'ft', d: 2, ref: 'Auto design input', note: `L_min: ${Ru.src.minLen}.` });
       if (o.segs && o.segs.length) { const wt = pieceWt(o.segs, x0, x1, o.allow), w0 = pieceWt(o.segs, x0, x1, 0);
-        add('SP3', `${lab}: weight ${n(wt, 1)} kip ≤ ${n(Ru.shipWt, 1)} kip`, x0, wt / Ru.shipWt, wt <= Ru.shipWt + 1e-9, { label: `${lab}: shipping weight (flanges and web, with the detail allowance)`, sym: 'W_{pc}', eq: '(1 + \\frac{a}{100})\\sum 3.403A_{i}L_{i} \\le W_{ship}', sub: `(1 + \\frac{${n(+o.allow || 0, 1)}}{100})(${n(w0, 2)}) = ${n(wt, 1)} \\le ${n(Ru.shipWt, 1)}`, value: wt, unit: 'kip', d: 1, ref: Ru.cite.ship || 'shipping limit (Auto design input)', note: `W_ship: ${Ru.src.shipWt}. 3.403 lb/ft per in² (0.490 kcf).` }); } }
+        add('SP3', `${lab}: weight ${n(wt, 1)} kip ≤ ${n(Ru.shipWt, 1)} kip`, x0, wt / Ru.shipWt, wt <= Ru.shipWt + 1e-9, { label: `${lab}: shipping weight (flanges and web, with the detail allowance)`, sym: 'W_{pc}', eq: '(1 + \\frac{a}{100})\\sum 3.403A_{i}L_{i} \\le W_{ship}', sub: `(1 + \\frac{${n(+o.allow || 0, 1)}}{100})(${n(w0, 2)}) = ${n(wt, 1)} \\le ${n(Ru.shipWt, 1)}`, value: wt, unit: 'kip', d: 1, ref: Ru.cite.ship || 'shipping limit (Auto design input)', note: `W_ship: ${Ru.src.shipWt}. 3.403 lb/ft per in² (0.490 kcf).${o.allowSrc ? ` ${o.allowSrc}.` : ''}` }); } }
     spl.forEach((x, j) => { const lab = `Splice ${j + 1} at ${n(x, 2)} ft`;
       const near = G.sup.reduce((p, q) => Math.abs(q - x) < Math.abs(p - x) ? q : p, G.sup[0]), d = Math.abs(x - near);
       add('SP4', `${lab}: ${n(d, 2)} ft from the bearing at ${n(near, 2)} ft ≥ ${n(Ru.minSup, 2)} ft`, x, d > 0 ? Ru.minSup / d : Infinity, d >= Ru.minSup - 1e-9, { label: `${lab}: distance from the nearest bearing`, sym: 'd_{brg}', eq: `|x - x_{brg}| \\ge c_{brg}`, sub: `|${n(x, 2)} - ${n(near, 2)}| = ${n(d, 2)} \\ge ${n(Ru.minSup, 2)}`, value: d, unit: 'ft', d: 2, ref: 'Auto design input', note: `c_brg: ${Ru.src.minSup}.` });

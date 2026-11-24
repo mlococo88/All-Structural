@@ -680,7 +680,25 @@
   /* splCheck(P, S, L, Q): the placement rules for layout L's splices on its plates (piece length and weight, distance from bearings, from
      the flange transitions of L and, with Q (the project being checked), from its cross-frames) */
   function splCheck(P, S, L, Q) {
-    const segs = segmentsOf(L); return SPP().check(P, L.spl, S.splR, { segs, allow: +((P.xs || {}).allow) || 0, trans: SPP().transitions(segs, L.spl), frames: Q ? framesOf(Q) : null });
+    const segs = segmentsOf(L), al = splAllow(P, S); return SPP().check(P, L.spl, S.splR, { segs, allow: al.pct, allowSrc: al.txt, trans: SPP().transitions(segs, L.spl), frames: Q ? framesOf(Q) : null });
+  }
+  /* splAllow(P, S) (SBALLOW2, 2026-11-24): the girder steel detail allowance (%) of the splice shipping weight (SP3) and of the old app's
+     placement rule (reference: pieces over the shipping weight divided): SBDAnalysis.allowOf of the plate girders the layout goes on (every
+     girder that is not adFixed; none: every girder), the largest where they differ, so a piece weighs what the analysis weighs it in DC1
+     (the girder loads of a hand-off, else xs.allow of the loads module, else the Analysis setting). Before: xs.allow for every layout. In a
+     project whose loads module runs and whose girders have no hand-off allowance, both are xs.allow. { pct, txt }; memo per settings S. */
+  const allowMemo = new WeakMap();
+  function splAllow(P, S) {
+    const m = S && allowMemo.get(S); if (m && m.P === P) return m.v;
+    const G = P.girders || [], all = G.map((g, gi) => gi), use = all.filter(gi => !adF(G[gi])), gis = use.length ? use : all;
+    let v;
+    if (!AN() || !AN().allowOf || !gis.length) v = { pct: +((P.xs || {}).allow) || 0, txt: 'xs.allow (Loads input tab, Steel detail allowance)' };
+    else {
+      const SRC = { girder: 'the girder loads of the imported hand-off (girder.loads.steelAllowPct)', module: 'the loads module (Loads input tab, Steel detail allowance, xs.allow)', setting: 'the Analysis setting (Loads input tab, Analysis settings; the loads module gives none)' };
+      const a = gis.map(gi => ({ gi, ...AN().allowOf(P, gi) })), pct = Math.max(...a.map(q => +q.pct || 0)), w = a.find(q => (+q.pct || 0) === pct);
+      v = { pct, txt: `a = ${pct} %, the detail allowance the analysis uses for the girder steel (DC1) of ${G[w.gi].label || G[w.gi].id}: ${SRC[w.src] || w.src}${a.length > 1 && a.some(q => (+q.pct || 0) !== pct) ? `; the largest of the plate girders (${a.map(q => `${G[q.gi].label || G[q.gi].id} ${q.pct} %`).join(', ')})` : ''}` };
+    }
+    if (S) allowMemo.set(S, { P, v }); return v;
   }
   /* splPlan(P, S, ctx, L0): the splice layouts to size (Auto / Range): the points of contraflexure from the analysis of the current design
      (the first interior plate girder, else the first; the screen's live-load reference, the dead loads exact), the old app's rule (reference),
@@ -688,7 +706,7 @@
   function splPlan(P, S, ctx, L0) {
     const Sp = SPP(), gi = Math.max(0, P.girders.findIndex(g => g.position === 'interior')), gl = P.girders[gi].label || P.girders[gi].id;
     const R = withLL(ctx, true, () => AN().analyzeGirder(P, gi)); if (R.errors && R.errors.length) return { gl, err: R.errors.join(' '), lays: [], steps: [] };
-    const Ru = S.splR, cf = Sp.contraflexure(R), segs0 = segmentsOf(L0), allow = +((P.xs || {}).allow) || 0, ref = Sp.reference(P, cf, Ru, segs0, allow);
+    const Ru = S.splR, cf = Sp.contraflexure(R), segs0 = segmentsOf(L0), allow = splAllow(P, S).pct, ref = Sp.reference(P, cf, Ru, segs0, allow);
     const trans = S.V.trans.mode === 'lock' ? Sp.transitions(segs0, L0.spl) : [];
     const frames = spl => framesOf(projectWith(P, relayout(L0, spl)));
     const lays = Sp.layouts(P, { cf, ref, Ru, cur: L0.spl, q: S.V.spl, qk: k => S.V[`spl#${k + 1}`] || S.V.spl, segs: segs0, allow, frames, trans });
