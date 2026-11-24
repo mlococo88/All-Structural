@@ -234,7 +234,15 @@
       return { L, I: { ...I, p }, R: Rg, C: Rg.errors && !Rg.errors.length ? CF.checks(Rg) : null, line: g.bays[0], grp: g }; }); }
     return { L, I, R, C, fl, XF, br, line, G, A, dxfG, dflt: !full };
   }
-  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>`;
+  /* SBDFH (2026-11-24; engineer, approved: "when a card shows red FAIL, the failing check(s) must be highlighted red in the expanded steps too";
+     display only, no value or verdict changes). itemSt(C): Map step id -> the worst status (fail, warn) of the check items (CF.checks) that link to
+     that step (§). stepLi(s, ST): a step whose linked item fails, or whose own ok is false, gets class "no ng" (red, "NG" tag); a step whose
+     linked item is a warning gets "wn" (amber, "Warning" tag); as before (class "no") where nothing links and ok is false. */
+  const SRK = { na: 0, pass: 1, adv: 2, warn: 3, fail: 4 };
+  const itemSt = C => { const m = new Map(); (C || []).forEach(c => (c.items || []).forEach(it => { if (!it || !it.step || (it.st !== 'fail' && it.st !== 'warn')) return;
+    if (!m.has(it.step) || SRK[it.st] > SRK[m.get(it.step)]) m.set(it.step, it.st); })); return m; };
+  const stepLi = (s, ST) => { const q = ST && ST.get(s.id), k = q === 'fail' || (s.ok === false && q !== 'warn' && ST) ? 'no ng' : q === 'warn' ? 'no wn' : s.ok === false ? 'no' : '';
+    return `<li id="st-${esc(s.id)}"${k ? ` class="${k}"` : ''}><div class="lbl">${k === 'no ng' ? '<span class="ngTag">NG</span> ' : k === 'no wn' ? '<span class="ngTag wn">Warning</span> ' : ''}${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>`; };
   const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
 
   /* ---------- topics of the worked steps (presentation spec A, 2026-10-31; as ui/shear.js): framing layout, wind, torsional bracing, then each cross-frame member ---------- */
@@ -252,8 +260,35 @@
     mem('top', 'Top chord'), mem('bot', 'Bottom chord'), mem('diag', 'Diagonals'),
     { key: 'dia', title: 'Diaphragm (intermediate bracing), CFD', ref: A + '6.7.4.2, 6.10.8, 6.10.9, 6.13.2', ids: /^cf\.cfd(\.|$)/ },   // SBDIA (2026-11-10): the diaphragm steps (were under "Other steps")
     { key: 'diae', title: 'End diaphragms (bearing lines), CFE', ref: A + '6.7.4.2, 6.10.8, 6.10.9, 6.13.2, 3.4.3.1', ids: /^cf\.cfe(\.|$)/ }] };
-  const groups = (kind, list) => window.SharedSteps.group(list, TOPICS[kind || 'x'](), { strip: false });
-  const stepsHtml = (list, kind) => window.SharedSteps.groupsHTML(groups(kind, list), { open: OPEN, item: stepLi });
+  /* groups(kind, list, C) (SBDFH, 2026-11-24; display only): SharedSteps.group's topics, with each topic's status chip and one-line result taken
+     from the check items (C = CF.checks) whose worked step (§) is in the topic, when there are any: the governing item (the worst status, then the
+     largest ratio, as the check card's governing item) gives the chip (its D/C ratio, "NG" when an item fails, "warning" when one is a warning)
+     and the result line (its step). SharedSteps.group alone counts every step with an ok flag and a number without a unit as a demand / capacity
+     ratio, so the slenderness Kℓ/r_min (47.2 ≤ 140) showed as a red "47.153" for a passing diaphragm. Without C, or in a topic no item links
+     to, a slenderness step (id ….sl) is still left out of the topic's ratio (its ok still counts); the rest as SharedSteps.group. */
+  const SL = /\.sl$/, fin = v => typeof v === 'number' && isFinite(v);
+  function groups(kind, list, C) {
+    const G = window.SharedSteps.group(list, TOPICS[kind || 'x'](), { strip: false }), its = [];
+    (C || []).forEach(c => (c.items || []).forEach(it => { if (it && it.step && (it.st === 'pass' || it.st === 'fail' || it.st === 'warn')) its.push(it); }));
+    return G.map(t => {
+      const ids = new Set(t.steps.map(s => s.id)), mine = its.filter(it => ids.has(it.step)), ng = t.steps.some(s => s.ok === false);
+      if (mine.length) {
+        const gov = mine.reduce((a, b) => (SRK[b.st] > SRK[a.st] || (SRK[b.st] === SRK[a.st] && (fin(b.r) ? b.r : -1) > (fin(a.r) ? a.r : -1)) ? b : a));
+        const fail = mine.some(i => i.st === 'fail'), warn = mine.some(i => i.st === 'warn'), r = fin(gov.r) ? gov.r : NaN;
+        const cls = fail || (ng && !warn) ? 'ng' : warn || (fin(r) && r >= 0.9) ? 'hi' : 'ok';
+        const chip = (fin(r) ? window.SharedSteps.fmt(r, 3) + (fail ? ' NG' : warn ? ' warning' : '') : fail ? 'NG' : warn ? 'Warning' : 'OK');
+        return { ...t, ratio: r, cls, chip, res: t.steps.find(s => s.id === gov.step) || t.res };
+      }
+      const sl = t.steps.filter(s => SL.test(String(s.id)) && s.ok !== undefined && typeof s.value === 'number' && !s.unit);
+      if (!sl.length) return t;
+      const rest = t.steps.filter(s => !sl.includes(s)), tests = rest.filter(s => s.ok !== undefined), rs = tests.filter(s => typeof s.value === 'number' && !s.unit), ngS = t.steps.find(s => s.ok === false);
+      const ratio = rs.length ? Math.max(...rs.map(s => (fin(s.value) ? s.value : Infinity))) : NaN;
+      const cls = ngS || ratio > 1 + 1e-9 ? 'ng' : ratio >= 0.9 ? 'hi' : 'ok', chip = rs.length ? (fin(ratio) ? window.SharedSteps.fmt(ratio, 3) : '∞') + (ngS ? ' NG' : '') : ngS ? 'NG' : 'OK';
+      const res = ngS || (rs.length ? rs.reduce((a, b) => ((fin(b.value) ? b.value : Infinity) > (fin(a.value) ? a.value : Infinity) ? b : a)) : tests[tests.length - 1]) || t.res;
+      return { ...t, ratio, cls, chip, res };
+    });
+  }
+  const stepsHtml = (list, kind, C) => { const ST = C ? itemSt(C) : null; return window.SharedSteps.groupsHTML(groups(kind, list, C), { open: OPEN, item: s => stepLi(s, ST) }); };
   const wk = id => id ? `<a class="wk" href="#st-${esc(id)}" data-cfgo="${esc(id)}">§</a>` : '';
   const stName = st => ({ pass: 'OK', fail: 'Fail', warn: 'Warning', adv: 'Advisory', na: 'n/a' }[st] || st);
   /* SBDIA (2026-11-10; engineer: "I have channel diaphragm selected and there is still a lot of output and failures related to cross frames"):
@@ -350,7 +385,7 @@
     if (R.frames && !dOn) h += `<section class="sec"><div class="secHead">Member forces (truss model)</div><div class="secBody"><div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Member</th><th>Length (in)</th><th>per kip of F<sub>w</sub></th>${R.combos.map(c => `<th>${esc(c.id)} T / C (kip)</th>`).join('')}</tr></thead><tbody>
       ${R.frames.map((e, i) => `<tr><td class="lft">${esc(e.lbl)}</td><td>${fmt(e.L, 2)}</td><td>${fmt(e.unit, 3)} ${wk(`cf.tr${i}`)}</td>${R.combos.map(c => c.off ? '<td class="fx-na">not used</td>' : `<td>${fmt(c.f[i].T, 2)} / ${fmt(c.f[i].Cc, 2)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
       <p class="note">Each load combination is a separate case (AASHTO LRFD 10th Ed. Table 3.4.1-1), checked on its own; each member is designed for the largest. Strength I: the entered member forces (nothing is computed for Strength I); Strength III and V: ± |wind force| f<sub>w</sub>F<sub>w</sub> alone (not added to the Strength I forces); Constructibility: the entered forces ± brace force f<sub>br</sub>M<sub>br</sub>. The top chord work points are held by the deck.${umNote(R)}</p></div></section>`;
-    h += `<section class="sec"><div class="secHead">Worked steps</div><div class="secBody"><p class="note">Every value above links here (§). AASHTO LRFD 10th Ed. (2024).</p>${stepsHtml([...L.steps, ...fl.steps, ...(R.steps || [])])}</div></section>`;
+    h += `<section class="sec"><div class="secHead">Worked steps</div><div class="secBody"><p class="note">Every value above links here (§). AASHTO LRFD 10th Ed. (2024).</p>${stepsHtml([...L.steps, ...fl.steps, ...(R.steps || [])], 'x', C)}</div></section>`;
     return h;
   }
   function css() {
