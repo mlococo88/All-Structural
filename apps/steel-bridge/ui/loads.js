@@ -64,12 +64,16 @@
     const opt = (path, label, unit, note) => `<div class="fRow"><label for="i_${path}">${label}</label><input type="number" step="any" id="i_${path}" data-path="${path}" data-kind="xopt" value="${esc(get(P, path) == null ? '' : get(P, path))}" placeholder="${esc(note || '')}"><span class="unit">${unit || ''}</span></div>`;
     const list = (path, label, unit) => `<div class="fRow"><label for="i_${path}">${label}</label><input type="text" id="i_${path}" data-path="${path}" data-kind="xlist" value="${esc((get(P, path) || []).join(', '))}" style="width:180px"><span class="unit">${unit}</span></div>`;
     const tf = [['false', 'No'], ['true', 'Yes']];
-    const edge = sd => { const k = `xs.edges.${sd}.`, e = x.edges[sd], s = sd === 'L' ? 'Left' : 'Right';
-      return `${h.sel(k + 'type', `${s} deck edge`, [['barrier', 'Barrier'], ['curb', 'Curb and railing']])}
-        ${e.type === 'curb' ? `${h.num(k + 'cw', `${s} curb width`, 'in')}${h.num(k + 'ch', `${s} curb height`, 'in')}${h.num(k + 'rw', `${s} railing weight`, 'klf')}${h.num(k + 'rp', `${s} railing load point from edge`, 'ft')}${opt(k + 'rf', `${s} railing traffic face from edge`, 'ft', 'blank = load point')}`
-          : `${h.num(k + 'bw', `${s} barrier width at deck`, 'ft')}${h.num(k + 'bwt', `${s} barrier weight`, 'klf')}`}${opt(k + 'face', `${s} edge to traffic face`, 'ft', 'optional')}`; };
-    const sw = sd => { const k = `xs.sidewalks.${sd}.`, s = sd === 'L' ? 'Left' : 'Right';
-      return `${h.num(k + 'w', `${s} sidewalk width`, 'ft')}${h.num(k + 't', `${s} sidewalk thickness`, 'in')}${opt(k + 'fence', `${s} sidewalk railing / fence`, 'klf', 'none')}${opt(k + 'fenceX', `${s} fence from deck edge`, 'ft', 'none')}`; };
+    /* SWGRP (2026-11-24, engineer: "separate the left and right sidewalk … Same with the deck edges"; display only): each side under its own
+       sub-heading, the labels without the side; the side stays in the label as hidden text (screen readers, the input-check banner). Same
+       ids, paths and kinds. */
+    const sdh = t => `<span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap">${t}: </span>`;
+    const edge = sd => { const k = `xs.edges.${sd}.`, e = x.edges[sd], s = sdh(`${sd === 'L' ? 'Left' : 'Right'} deck edge`);
+      return `<h4 class="sub">${sd === 'L' ? 'Left' : 'Right'} deck edge</h4>${h.sel(k + 'type', `${s}Edge type`, [['barrier', 'Barrier'], ['curb', 'Curb and railing']])}
+        ${e.type === 'curb' ? `${h.num(k + 'cw', `${s}Curb width`, 'in')}${h.num(k + 'ch', `${s}Curb height`, 'in')}${h.num(k + 'rw', `${s}Railing weight`, 'klf')}${h.num(k + 'rp', `${s}Railing load point from edge`, 'ft')}${opt(k + 'rf', `${s}Railing traffic face from edge`, 'ft', 'blank = load point')}`
+          : `${h.num(k + 'bw', `${s}Barrier width at deck`, 'ft')}${h.num(k + 'bwt', `${s}Barrier weight`, 'klf')}`}${opt(k + 'face', `${s}Edge to traffic face`, 'ft', 'optional')}`; };
+    const sw = sd => { const k = `xs.sidewalks.${sd}.`, s = sdh(`${sd === 'L' ? 'Left' : 'Right'} sidewalk`);
+      return `<h4 class="sub">${sd === 'L' ? 'Left' : 'Right'} sidewalk</h4>${h.num(k + 'w', `${s}Width`, 'ft')}${h.num(k + 't', `${s}Thickness`, 'in')}${opt(k + 'fence', `${s}Railing / fence`, 'klf', 'none')}${opt(k + 'fenceX', `${s}Fence from deck edge`, 'ft', 'none')}`; };
     const cats = Object.entries(LD().CATS), dists = [['auto', 'Follows the method'], ['pilecap', 'MassDOT pile-cap'], ['equal', 'Equal (all beams)'], ['two', 'Two adjacent beams']];
     const cell = (path, kind, v, w) => `<td><input type="${kind === 'text' ? 'text' : 'number'}" step="any" data-path="${path}" data-kind="${kind}" value="${esc(v)}" style="width:${w || 62}px"></td>`;
     const scell = (path, opts, v) => `<td><select data-path="${path}" data-kind="sel" style="width:auto">${opts.map(([k, t]) => `<option value="${esc(k)}"${String(v) === String(k) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></td>`;
@@ -82,8 +86,8 @@
     return {
       girders: h.card('Girders and overhangs', `${h.sel('xs.spMode', 'Girder spacing', [['individual', 'Individual spacings'], ['equal', 'Equal spacing']], x.spMode === 'equal' ? 'equal' : 'individual')}${h.num('xs.nb', 'Number of girders N<sub>b</sub>', '')}${x.spMode === 'equal' ? equalRows(P, h) : list('xs.bays', 'Girder spacings', 'left to right')}${h.num('xs.ohL', 'Left overhang (girder ℄ to deck edge)', 'ft')}${h.num('xs.ohR', 'Right overhang', 'ft')}
         <p class="note">Deck thickness, haunch and deck reinforcement: Deck card below. f′c and w<sub>c</sub>: Materials tab. Support skews: Bridge layout tab. The LLDF regions take their sections from the girder selected on the Girders &amp; plates tab.</p>`),
-      edges: h.card('Deck edges', `${edge('L')}<hr>${edge('R')}<p class="note">Distances from the deck edge. A curb lower than 12 in is mountable (the railing face governs); an entered edge to traffic face governs.</p>`),
-      sidewalks: h.card('Sidewalks and median', `${sw('L')}${sw('R')}${h.num('xs.sidewalks.ped', 'Pedestrian load', 'psf')}${h.num('xs.median.w', 'Raised median width', 'ft')}${h.num('xs.median.t', 'Median thickness', 'in')}${h.sel('xs.median.joint', 'Longitudinal joint at the median', tf, String(!!x.median.joint))}${opt('xs.wcA', 'Curb / sidewalk / median concrete', 'kcf', 'blank = w_c')}
+      edges: h.card('Deck edges', `${edge('L')}${edge('R')}<p class="note">Distances from the deck edge. A curb lower than 12 in is mountable (the railing face governs); an entered edge to traffic face governs.</p>`),
+      sidewalks: h.card('Sidewalks and median', `${sw('L')}${sw('R')}<h4 class="sub">Pedestrian load and median</h4>${h.num('xs.sidewalks.ped', 'Pedestrian load', 'psf')}${h.num('xs.median.w', 'Raised median width', 'ft')}${h.num('xs.median.t', 'Median thickness', 'in')}${h.sel('xs.median.joint', 'Longitudinal joint at the median', tf, String(!!x.median.joint))}${opt('xs.wcA', 'Curb / sidewalk / median concrete', 'kcf', 'blank = w_c')}
         <p class="note">A sidewalk thinner than 12 in is mountable and does not move the live-load traffic face.</p>`),
       ws: h.card('Wearing surface, forms and steel', `${h.sel('xs.ws.mode', 'Wearing surface entered as', [['psf', 'Weight (psf)'], ['thk', 'Thickness × unit weight']])}${x.ws.mode === 'thk' ? `${opt('xs.ws.thk', 'Wearing surface thickness', 'in')}${opt('xs.ws.gam', 'Wearing surface unit weight', 'kcf')}` : h.num('xs.ws.psf', 'Future wearing surface', 'psf')}
         ${ovl}${h.num('xs.sip', 'Stay-in-place forms', 'psf')}${h.num('xs.allow', 'Steel detail allowance', '%')}`),
