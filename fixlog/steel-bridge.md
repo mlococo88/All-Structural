@@ -11605,6 +11605,103 @@ None changed (no key, path or format touched).
 - SWGRP-1. Labels drop the side under each sub-heading ("Width", "Edge type"); the side remains as hidden label text, so the input-check banner reads e.g. "Left sidewalk: Fence from deck edge".
 - SWGRP-2. The shared items of the sidewalk card are headed "Pedestrian load and median"; the deck-edge card has no shared inputs (its note stays at the end). The `<hr>` between the two deck edges is replaced by the sub-headings.
 
+## 2026-11-24 — PR: claude/sb-deck-ts-crack (PR #1698: https://github.com/mlococo88/All-Structural/pull/1698) (DKTS / DKCR) — Deck: shrinkage and temperature reinforcement (DK5, 5.10.6), crack control of the transverse bars (DK6, 5.6.7), the Summary deck card's demand / limit for DK4 to DK6   [NEW CALCULATION CHECKS: the deck verdict of a project with the deck design on can change; DK1 to DK4 unchanged]
+### Problem
+Engineer request (2026-11-24): the deck module (engine/deck.js, the strip method) did not check shrinkage and temperature reinforcement (AASHTO LRFD 10th Ed. Art. 5.10.6) or crack control (Art. 5.6.7); both were listed as "not checked". The Summary tab's deck card showed "—" in the M_u / φM_n columns for DK4 because `report/summary.js deckOf` did not pass the areas.
+### Where
+- `apps/steel-bridge/engine/deck.js`: new `TS_SETS`, `tsOf(h, b, fy)`, `tsSets(D, LB, T)`, `tsSteps(steps, T, sets)`, `tsCheck(T, sets)` (anchor `function tsOf(h, b, fy) {`); new `GAM`, `expoOf`, `crackAll(o)`, `crackSteps(steps, C)`, `crackCheck(C)` (anchor `function crackAll(o) {`); `calc(P)`: anchors `const mc = (P.materials || {}).concrete || {}, TS = tsOf(`, `tsSteps(steps, TS, sets);`, `checks.push(tsCheck(TS, sets), crackCheck(CR));`, result `ts: { ...TS, sets }, crack: CR,`; DK4 gets `dem` / `cap`; `topics(R)`: topics `ts`, `cr` and one per crack case (`crp<k>`, `crn<k>`, `crohL`, `crohR`); exports `TS_SETS, GAM, expoOf, tsOf`. Header comment updated.
+- `apps/steel-bridge/ui/deck.js`: card `inputs()`: select `#dk_exposure` (data-dk `exposure`); new `dcCells(c)` (the demand / capacity cells), `tsSec(R)` (`#dk-ts`), `crSec(R)` (`#dk-cr`); `results()`: anchor `${dcCells(c)}${st(c)}`; `summaryCard()`: `${dcCells(q)}`; notes "Not checked" updated.
+- `apps/steel-bridge/report/summary.js` `deckOf(P)`: anchor `...(c.Mu == null ? { req: c.req, prov: c.prov, unit: c.unit, dem: c.dem || null, cap: c.cap || null } : {})`; `DECK_COL.what` 'DK1–DK6'.
+- `apps/steel-bridge/report/builders.js`: new `dkDC(c)`, `dkTsCr(R, k)` (subs `ts`, `cr` of the Deck slab section); `dk()`: anchors `...(c.Mu == null ? dkDC(c) :` and `...dkTsCr(R, k),`.
+- `apps/steel-bridge/ui/tips.js`: tip `dk_exposure`; tip `dk_barLongTop` (now checked by DK5).
+### Before / After
+Before: `checks` = DK1, DK2, DK3 (+ DK4 where the bottom longitudinal bars are entered). After: DK1, DK2, DK3, (DK4), DK5, DK6. DK1 to DK4 values, steps and ids unchanged.
+- **DK5** (Art. 5.10.6, Eq. 5.10.6-1, 5.10.6-2): A_s,eq = 1.30 b h / (2 (b + h) f_y), f_y = min(F_yr, 75); A_s,T&S = min(max(A_s,eq, 0.11), 0.60) in²/ft on each face in each direction; b = 12 W_d (deck width out-to-out, in), h = t_L (total deck thickness as cast); s_max = 12 in for h > 36 in, else min(3.0 h, 18.0 in). For each bar set (top and bottom transverse always; top and bottom longitudinal where entered): A_s = 12 A_b / s; ratio = max(A_s,T&S / A_s, s / s_max). A longitudinal set that is not entered is listed as "Not checked: bars not entered".
+- **DK6** (Art. 5.6.7, Eq. 5.6.7-1, 5.6.7-2): cases = positive moment of each bay (bottom bars), negative moment at the design section of each bay (top bars), left and right overhangs (top bars).
+  - Service I: M_s = M_DC + M_DW + m M_LL+IM (+ M_PL on the overhang), using the module's unfactored moments, with η = 1.0.
+  - Applies only where f_t = 12 M_s / (12 t_s²/6) > 0.8 f_r, with f_r = 0.24 λ √f'c (5.4.2.6) and λ = min(max(7.5 w_c, 0.75), 1.0) (5.4.2.8).
+  - Cracked transformed strip, b = 12 in: ρ = A_s / (12 d), k = √(2ρn + (ρn)²) − ρn, j = 1 − k/3, f_ss = 12 M_s / (A_s j d). A_s and d are those of DK1 to DK3. n = 29,000 / E_c with E_c = 120,000 K_1 w_c² f'c^0.33 (5.4.2.4), not rounded.
+  - β_s = 1 + d_c / (0.7 (h − d_c)).
+  - s_max = 700 γ_e / (β_s f_ss) − 2 d_c, with γ_e = 1.00 for Class 1 (the default) or 0.75 for Class 2 (input `exposure`).
+  - d_c and h: bottom bars d_c = c_b + d_b/2 and h = t_s; top bars d_c = (t_L − t_s) + c_t + d_b/2 and h = t_L.
+  - Requirements: s ≤ s_max and f_ss ≤ 0.60 f_y. Ratio = max(s / s_max, f_ss / 0.60 f_y); s_max ≤ 0 gives ∞ (NG). A case that does not apply gives ratio 0 and "Not required".
+- Checks of DK4 to DK6 carry `dem` / `cap` ({ sym (TeX), v, unit }). The Deck tab, the Report and the Summary card show them where M_u / φM_n are null. Before this, the Summary card showed "—" for DK4.
+### Governing provision
+AASHTO LRFD 10th Ed. (2024):
+- Art. 5.10.6 (Eq. 5.10.6-1, 5.10.6-2) and Art. 5.6.7 (Eq. 5.6.7-1, 5.6.7-2);
+- Art. 5.4.2.4 (Eq. 5.4.2.4-1), 5.4.2.6, 5.4.2.8 and 5.4.3.2;
+- Table 3.4.1-1 (Service I);
+- Art. 1.3.3 to 1.3.5 (η = 1.0 at the service limit state);
+- Appendix A4 (the Table A4-1 moments include multiple presence and the dynamic load allowance).
+### Check case
+Hand check (`tests/engine/sb-deck-tscrack.test.mjs`, independent arithmetic). Made-up bridge: 5 girders at S = 9 ft; 8.5 in slab (t_s = t_L = 8.5 in); f'c 4 ksi; w_c 0.150 kcf; F_yr 60 ksi; wearing surface 25 psf; bottom transverse bars #5 at 6 in with 1.0 in clear cover.
+
+DK6 positive moment:
+
+| Quantity | Hand value |
+|---|---|
+| w_DC | 8.5/12 (0.150) = 0.10625 ksf |
+| M_DC | 0.10625 (81)/11 = 0.7824 kip-ft/ft |
+| M_DW | 0.025 (81)/11 = 0.1841 kip-ft/ft |
+| M_LL+IM (Table A4-1, S = 9 ft) | 6.29 kip-ft/ft |
+| M_s | 7.2565 kip-ft/ft |
+| E_c | 120,000 (0.150)² (4)^0.33 = 4266.2 ksi |
+| n | 6.7976 |
+| A_s | 0.620 in²/ft |
+| d_b | 0.6283 in |
+| d | 8.5 − 1.0 − 0.3141 = 7.1859 in |
+| ρ | 0.0071900 |
+| k | 0.26757 |
+| j | 0.91081 |
+| f_ss | 12 (7.2565)/(0.620 × 0.91081 × 7.1859) = 21.459 ksi ≤ 36 |
+| d_c | 1.3141 in |
+| β_s | 1 + 1.3141/(0.7 × 7.1859) = 1.26125 |
+| s_max, Class 1 | 700/(1.26125 × 21.459) − 2.628 = 23.24 in ≥ 6 |
+| s_max, Class 2 | 16.77 in |
+| f_t | 0.6026 ksi > 0.8 f_r = 0.384 ksi (applies) |
+| Ratio | max(6/23.24, 21.46/36) = 0.596 (OK) |
+
+DK5, top longitudinal bars #4 at 12 in (same bridge, W_d = 42.5 ft):
+
+| Quantity | Hand value |
+|---|---|
+| b | 510 in |
+| A_s,eq | 1.30 (510)(8.5)/(2 (518.5)(60)) = 0.0906 in²/ft |
+| A_s,T&S | 0.11 in²/ft (lower bound) |
+| A_s provided | 0.20 in²/ft (area ratio 0.550) |
+| s_max | min(25.5, 18) = 18 in (spacing ratio 0.667, OK) |
+
+Default new project, deck on (8 in + 0.5 in, #5 at 6 in top and bottom, top cover 2.5 in): DK5 = 0.333 (spacing).
+
+| DK6 case | M_s (kip-ft/ft) | f_ss (ksi) | s_max (in) | Ratio |
+|---|---|---|---|---|
+| Positive | 7.667 | 24.44 | 19.73 | 0.679 |
+| Negative | 7.211 | 29.98 | 5.58 | **1.075 NG** |
+| Overhangs | 5.977 | 24.85 | 8.10 | 0.741 |
+
+The negative-moment case uses d_c = 0.5 + 2.5 + 0.314 = 3.314 in, h = 8.5 in and β_s = 1.913. With d_c taken from the top of the structural slab (2.814 in, h = 8 in) it would be s_max = 7.53 in, ratio 0.797.
+### What changes for a project
+Only projects with the deck design on, which is off by default. DK5 and DK6 are new checks in the Deck tab, the Summary verdict and deck card, the Report (checks table, governing list, DK5 / DK6 sections, worked steps) and the Nomenclature. The deck verdict can change: the default new project with the deck on now has 1 NG (DK6, top bars), where before all its checks were OK. DK1 to DK4 are unchanged. The Summary card shows DK4's areas instead of "—".
+### How verified
+- `node tests/engine/run.mjs deck sb-nomen sb-summary sb-report tex report-wiring` and `node tests/check-syntax.mjs`.
+- New `tests/engine/sb-deck-tscrack.test.mjs`.
+- Updated `sb-deck`, `sb-deck-long` and `sb-deck-report` tests: DK5 and DK6 added to the check lists, and the "as before" claims limited to DK1 to DK4.
+- Smokes: `tests/smoke/steel-bridge-deck-tscrack.mjs` (new), plus `steel-bridge-deck.mjs` and `steel-bridge-deck-long.mjs` (updated).
+- A scratch independent hand calculation.
+### Saved data
+One new optional key, `P.deckDesign.exposure` (1 | 2). It is not in DEF, as for DKL. Absent reads as Class 1. A project saved before is exported byte-identically, and the JSON roundtrip is tested.
+### Decisions (pending engineer review)
+- The DK5 maximum spacing is the lesser of 3.0h and 18.0 in. The 10th Ed. wording ("3.0 times the component thickness but not less than 18.0 in") can also be read as the larger value. **Engineer decision 2026-11-24: min(3h, 18 in) confirmed** (DKDC entry below; no code change).
+- DK5 uses h = the total deck thickness t_L and b = the deck width. The deck edges are the faces the article exempts; the top and bottom faces are checked.
+- DK6 exposure defaults to Class 1 (γ_e 1.00) and is an input. Many owners take decks as Class 2.
+- DK6 top bars use d_c = (t_L − t_s) + c_t + d_b/2 and h = t_L, which is the actual cover above the module's top bars. Bottom bars use h = t_s. Both are conservative. The commentary's d_c ≤ 2.0 in + bar radius is not used. **Engineer decision 2026-11-24: exclude the sacrificial wearing surface** — top bars now d_c = c_t + d_b/2, h = t_s (DKDC entry below). Bottom bars unchanged (still pending).
+- The owner's HL-93 multiplier m is applied to the Service I live load.
+- f_ss ≤ 0.60 f_y is checked as a requirement. f_ss is not capped in Eq. 5.6.7-1.
+- n is exact (not rounded) for the deck strip.
+### Open items
+- The maximum spacing of 5.10.3.2 (1.5 t or 18 in for slabs), which 5.6.7 refers to, is not checked.
+- The Extreme Event II overhang cases (A13.4) are still not checked.
+
 ## 2026-11-24 — PR: claude/sp3-allow-of (PR #1696: https://github.com/mlococo88/All-Structural/pull/1696) (SBALLOW2) — the splice shipping weight check SP3, the old app's splice placement rule and the BOM note use the girder steel detail allowance of the analysis (SBDAnalysis.allowOf)   [CALCULATION CHANGE in a rare case only: SP3 and the reference placement change only where the loads module fails or hand-off girder loads give their own allowance]
 ### Problem
 PR #1690 (SBALLOW) made the analysis's girder steel detail allowance available once, `SBDAnalysis.allowFor / allowOf` (the girder loads of a hand-off, girder.loads.steelAllowPct; else the loads module's xs.allow, blank 0; else the Analysis setting analysis.steelAllowPct, default 5), and used it for the Analysis settings box and the erection drawing. The Auto design splice checks still read `+((P.xs || {}).allow) || 0` directly: SP3 (piece shipping weight ≤ W_ship, engine/splplace.js `check`, called from engine/autodesign.js `splCheck`) and the old app's placement rule (engine/splplace.js `reference`, which divides pieces over the shipping weight, called from `splPlan`). Where the loads module fails (the analysis then uses the setting) or a hand-off gives the girder its own allowance, SP3 weighed a piece with a different allowance from the DC1 of the analysis. The Report's steel bill of materials note ("The analysis adds a detail allowance of X % …", report/builders.js `bomTotals`) quoted xs.allow the same way. More conservative where the analysis's allowance is larger than xs.allow, less where it is smaller.
@@ -11676,3 +11773,196 @@ New optional keys inside each `xs.edges.L` / `xs.edges.R` object: `bMode` ('ente
 - BARG-a. The geometry defaults: switching to Geometry starts a rectangle with b = the typed width × 12 and h blank (a blocking input error until entered; no height assumed), γ = 0.150 kcf.
 - BARG-b. Switching back to Entered keeps the last computed width and weight in the typed fields (not the earlier typed values).
 - BARG-c. An entered "Edge to traffic face" still governs over the computed width; a load override (x, w) of the barrier still governs over the computed values.
+
+## 2026-11-24 — PR: claude/sb-le-display (PR #1699: https://github.com/mlococo88/All-Structural/pull/1699) (CMPL) — worked-step comparisons read "D_p ≤ 0.42D_t = … = 11.340, OK" and "… = 115.18 ≤ 140" (no stray "=", no value repeated after its comparison)   [display only]
+- Fixed in `shared/steps.js` `line()`: see `fixlog/shared-steps.md` (CMPL) for the code, the check case and the tools. No file of this app changed.
+- Steel steps affected (eq starting with \le / \ge): engine/flexure.js 14 (6.10.7 ductility, compact and noncompact positive flexure, 6.10.8
+  flanges, Service II, web bend-buckling, …), constructibility.js 5, proportions.js 5, autodesign.js 1, framing.js 1, splplace.js 1; shared/lldf.js 1.
+- Also the Cross-frames / Diaphragms steps whose sub ends in a comparison since #1692 (slenderness ℓ/r ≤ limit, P_r ≥ C_u, P_r ≥ T_u): the value is no longer repeated after it.
+- New smoke `tests/smoke/steel-bridge-cmpl.mjs` (Flexure, Constructibility, Cross-frames: no relation right after "=", no repeated value, no "= OK" after a comparison).
+
+## 2026-11-24 — PR: claude/sb-fence-on-barrier (PR #1701: https://github.com/mlococo88/All-Structural/pull/1701) (FOB) — a railing or fence over a barrier or curb is drawn standing on its top (display only)
+### Request (engineer, 2026-11-24)
+"There's an option to add a fence or railing on top of the concrete barrier, which is great. But the renderings — the 3D model, the regular drawings, the DXF drawings and the graphics — all show it as basically embedded in the concrete. Can we fix that?"
+### Input combinations with a railing or fence over a barrier or curb
+- Deck edge "Barrier" on a sidewalk + sidewalk "Railing / fence" with "Fence from deck edge" ≤ the barrier width at the deck: drawn from the sidewalk top, inside the barrier (fixed).
+- Deck edge "Curb and railing" on a sidewalk + sidewalk fence within the curb width: drawn from the sidewalk top, inside the curb (fixed).
+- Deck edge "Curb and railing" with "Railing load point from edge" ≤ the curb width: already on the curb top (unchanged; now through the same helper, same numbers).
+- (A sidewalk fence needs a sidewalk: the loads module rejects 0 < x ≤ w otherwise.)
+### Where / Before / After
+- `engine/drawings.js`, above `function appOf(R)`: new `BAR_SCH` (the schematic barrier outline the DXF already drew, fractions [u/w, y/h]: `[[0, 0], [0, 1], [0.42, 1], [0.62, 0.3], [1, 0.12], [1, 0]]`), `barOutline(a)`, `barPts(a)`, `topOf(pts, u)` (the top surface of an outline at u) and `topAt(items, sd, x)` (the top elevation of the barrier or curb of side sd under x, else null). Exported on `SBDDrawings`.
+- `appOf`, anchor `const rl = byId('rail' + sd);`: before `y0: e.cw > 0 && e.rp <= e.cw + 1e-9 ? y0 + e.ch : surf(rl.x)` → after `y0: base(sd, rl.x)`; the fence: before `y0: surf(L.x)` → after `y0: base(sd, L.x)`, with `const base = (sd, x) => { const t = topAt(out, sd, x); return t !== null ? t : surf(x); };`.
+- `appDraw`, the barrier: before `P_ = (f, g) => [x0 + s * f * w, y0 + g * a.h]; D.pline(ly.b, [P_(0, 0), P_(0, 1), P_(0.42, 1), P_(0.62, 0.3), P_(1, 0.12), P_(1, 0)], true)` → after `D.pline(ly.b, barOutline(a).map(([u, y]) => [x0 + s * u, y0 + y]), true)` (the same points, bit for bit: ±(f·w) either way).
+- The renderers read the items' `y0`, so the change reaches all of them without an edit: the Drawings tab section and the sheet set DXF (`appDraw`), the Loads & LLDF graphic (`ui/gfxdet.js lldfSvg`) and its Download DXF (`ui/gfxa.js loadsGraphic`), and the 3D view (`ui/view3d.js`, the posts and rails from `yTop + a.y0`).
+### Problem
+The base of a sidewalk railing or fence was always the sidewalk surface, so over a barrier (34 in drawn) the 42 in post showed only 8 in above the barrier; over a curb it started inside the curb.
+### Governing provision
+None (display only). No load, weight, load point or computed value changes: the line loads keep their entered x and w.
+### Check case (made-up project: built-in, left sidewalk 6 ft × 8 in with a fence 0.05 klf at 0.5 ft, right sidewalk 5 ft × 10 in with a fence 0.04 klf at 1.2 ft; barriers 1.5 ft = 18 in)
+- Left fence: u = 6 in ≤ 0.42 × 18 = 7.56 in (flat top): base before 8 in (sidewalk top), after 8 + 34 = 42 in.
+- Right fence: u = 14.4 in, u/w = 0.8 on the face (0.62, 0.30)–(1, 0.12): g = 0.30 − 0.18 × (0.8 − 0.62)/0.38 = 0.21474; base before 10 in, after 10 + 0.21474 × 34 = 17.30 in.
+- Curb edges 12 × 10 in on an 8 in sidewalk, fence at 0.4 ft: before 8 in, after 18 in; fence at 3 ft (beyond the curb): 8 in both; curb railing at 0.5 ft: 18 in both.
+### How verified
+- `tests/engine/sb-fence-on-barrier.test.mjs` (the cases above). `node tests/engine/run.mjs drawings sheets dxf-sheets dxf-detc graphics-overlap xf-dxf sb-fence-on-barrier` (DXF baselines unchanged: their projects have no fence); `node tests/check-syntax.mjs`.
+- Results unchanged: `SBDLoads.compute` of the made-up projects (barrier + fences, curbs + fences, Geometry-mode barriers + fences, built-in) hashed before/after: identical, every line load's id, x, w and category identical. Only engine/drawings.js changed (no engine file the analysis reads).
+- DXF (the whole drawing set, `SBDDrawings.dxf`): built-in project byte-identical; curb project: only the 3 S-DECK-RAIL lines of the left fence and its callout leader moved up; barrier project: the S-DECK-RAIL entities and the deck-edge chain and callouts above the appurtenances move up with the taller items, and the section block sits 32 in lower on the sheet (laid out from its top), every other section entity unchanged relative to the deck.
+### Saved data
+None.
+### Decisions (pending engineer review)
+- FOB-a. The top is that of the schematic barrier the Drawings tab draws (flat over 0.42 w, then the sloped traffic face). The Loads & LLDF graphic and the 3D view draw the entered barrier as a 34 in block (unchanged, "entered barriers render exactly as today"): over the flat top they agree; a fence placed on the sloped face shows its post starting below that block's top there.
+- FOB-b. A fence exactly at the barrier's inner toe sits on the toe (0.12 h), and just beyond it on the sidewalk.
+### Open items
+- Geometry-mode barriers (BARG) are still drawn with the schematic shape; drawing their own outline (and seating the fence on it) is the follow-up PR (approved by the engineer 2026-11-24).
+- The Deck tab's section figure (ui/deck.js) draws no railing or fence; not changed.
+
+## 2026-11-24 — PR: claude/sb-unstiffened-greyout (PR #1704: https://github.com/mlococo88/All-Structural/pull/1704) (UNSTF) — Stiffeners input tab: the inputs an unstiffened web does not use are greyed   [display only; no computed value, saved field or format changes]
+### Why
+- Engineer (2026-11-24): with Web = Unstiffened, the stiffener spacing, d_o/D, the per-bay table and the Type A inputs looked active though unused.
+### Engine check (what reads these inputs when `stiffeners.layout.web === 'unstiffened'`)
+- `layout.mode`, `layout.doRatio`, `layout.bays`: **unused by every check.** engine/stiffeners.js `girderBays()` returns n = 0 in every bay
+  (`if (!on) return { ...B0, n: 0, … }`; `st` is [] and `dR` is not reached), and every user of the layout goes through it: ui/shear.js
+  build() (panels, stations, stiffener rows), engine/splices.js (web shear basis: only `ly.web === 'stiffened'`), engine/drawings.js and
+  engine/sheets.js (stiffeners drawn / welds counted: none), engine/lga.js export (line 550: none), ui/view3d.js. engine/autodesign.js locks
+  the spacing variable (`tsUniform`: false when unstiffened). Still read: engine/model.js validate (lines 515–520) and engine/inputcheck.js
+  check them, so an invalid entry blocks results even when unstiffened → such a field stays enabled (below); ui/autodesign.js shows the
+  current value in its table (display).
+- `frames.Lb`: used (cross-frame stations without framing, ui/shear.js framesOf) — kept enabled.
+- **Type A (intermediate stiffener): USED — kept enabled.** The Example demands (Shear & stiffeners tab source "Example", the default while the
+  analysis is not ready) check GirderDetail's built-in rows `SBDStiffeners.TS_DEFAULT.rows`, which include a Type A row, whatever the layout.
+  With the analysis / a file / custom demands it is unused (all rows Type B: `stiffenerRows` gives Type A only between two panels of one bay).
+  Also: Auto design sizes Type A when its b_t / t_p variables are Auto or Range even with the web unstiffened (no Type A row: every combo passes,
+  so the smallest plate is proposed) — not changed here (Auto design behaviour); open item. engine/lga.js writes Type A's size in its export
+  note (no stiffener zone is written).
+- Type B, bearing stiffeners, grades, F_EXX: used — enabled.
+### Where
+- `apps/steel-bridge/ui/shear.js` `inputs()` (anchor `/* UNSTF (2026-11-24, engineer)`): `off`, `errP`, `offIf(re)`, `fs(dis, body)`,
+  `offNote`; the spacing select and d_o/D inside `fs(offIf(/^stiffeners\.layout\.(mode|doRatio)$/), …)`; the per-bay card body inside
+  `fs(offIf(/^stiffeners\.layout\.bays\b/), …)` with the note before it; a note under "Type A, intermediate stiffener" when unstiffened.
+- `onClick()`: `if (ensure(P).layout.web === 'unstiffened') return false;` after the `stf_fill` test (the uniform layout of an unstiffened web
+  has n = 0 in every bay: Set/Reset would have written n = 0 over the entries).
+- `apps/steel-bridge/index.html` CSS: `fieldset.stfOff{border:0;margin:0;padding:0;min-width:0} fieldset.stfOff:disabled{opacity:.5}`.
+### Before / After
+- Before: `${h.sel('stiffeners.layout.mode', …)}${h.num('stiffeners.layout.doRatio', …)}` and the per-bay card body
+  `${bays.length ? `<div class="tscroll">…` : '…'}<button type="button" id="stf_fill">…</button><p class="note">n intermediate stiffeners …</p>` always enabled.
+- After: the same markup inside `<fieldset class="stfOff" disabled>` when the web is unstiffened (no `disabled` when stiffened), and the note
+  "Not used: the web is unstiffened; only the connection plates at the cross-frames bound the panels. Entries are kept for when you switch back
+  to Stiffened." under Web and at the top of the per-bay card. A disabled control sends no change: the saved values are untouched; Web →
+  Stiffened redraws the tab (index.html `changed(true)` on `stiffeners.layout.(mode|web)`) with them enabled. A field with an input error
+  (SBDInputCheck) stays enabled so that it can be fixed.
+### §4 callout
+- None: display only. No formula, factor, unit, reference, computed value, key or saved format changed.
+### Check case
+- Built-in project, G1: per-bay entries set (16 bays, bay 1 n = 3), spacing per bay; Web → Unstiffened: spacing, d_o/D, the bay inputs and
+  Reset disabled (opacity 0.5), 10 other stiffener inputs enabled; saved project identical except `stiffeners.layout.web`; Shear results
+  (16 panels, 363 stations, 15 connection plates) the same with d_o/D 0.5, mode uniform, no bays and Type A b_t 3; Web → Stiffened: values intact.
+### How verified
+- `tests/smoke/steel-bridge-unstiffened.mjs` (new); `node tests/engine/run.mjs shear stiffeners`; `node tests/check-syntax.mjs`.
+### Decisions (pending engineer review)
+- UNSTF-1. Type A kept enabled (the Example demands use it), with a one-line note saying so.
+- UNSTF-2. A greyed field that has an input error is left enabled so it can be fixed (model validation still checks it when unstiffened); once fixed it is greyed the next time the tab is drawn (the d_o/D and bay edits do not redraw the tab, as before).
+- UNSTF-3. Set/Reset does nothing while the web is unstiffened.
+- Open: Auto design sizes Type A with the web unstiffened (vacuous pass, smallest plate proposed); model validation of the unused fields.
+
+## 2026-11-24 — PR: claude/sb-dk6-dc-ws (PR #1703: https://github.com/mlococo88/All-Structural/pull/1703) (DKDC) — Deck crack control DK6, top bars: d_c and h measured within the structural slab (the sacrificial wearing surface excluded); DK5 s_max = min(3h, 18 in) confirmed   [CALCULATION CHANGE: DK6 top-bar cases (negative moment, overhangs) of every project with the deck design on and t_L > t_s; less conservative]
+### Engineer decision (2026-11-24)
+- DK6 (AASHTO LRFD 10th Ed. Art. 5.6.7): for the top bars, exclude the sacrificial (integral) wearing surface, consistent with strength. PR #1698 (DKCR) used d_c = (t_L − t_s) + c_t + d_b/2 and h = t_L.
+- DK5 (Art. 5.10.6): s_max = min(3.0h, 18.0 in) confirmed. Only the decision notes change (engine step note and header comment, Deck tab note, Report note); no code change.
+### Definitions (from the module)
+- The top clear cover c_t (`D.coverT`) is measured from the top of the **structural slab** t_s: the Strength I depth is d = t_s − c_t − d_b/2 (`shared/deck.js capacity`, anchor `const dEff = ts - cover - dbar / 2;`), and the Deck tab's section draws the top bars at y = t_s − c_t − d_b/2 (`ui/deck.js`, anchor `const yT = ts - +D.coverT - dbT / 2`).
+- So, top bars: d_c = the top of t_s to the centre of the top bar = c_t + d_b/2; h = t_s (the same h as the bottom bars). Then h − d_c = d, the depth of the cracked-section f_ss, which was already d = t_s − c_t − d_b/2 (the DK1 to DK3 depth): f_ss, k, j, ρ do not change; β_s, s_max and the ratio do.
+### Where
+- `apps/steel-bridge/engine/deck.js` `crackAll(o)` `one(...)`, anchor `const dc = c.cover + db / 2, h = o.ts;`; `crackSteps(steps, C)` steps `dk.<case>.dc` and `dk.<case>.h` (anchor `w.add({ id: 'dc', label:`); DKCR header comment (d_c and h); DKTS header comment and step `dk.ts.smax` note (DK5 decision).
+- `apps/steel-bridge/ui/deck.js` `crSec(R)` note (anchor `d<sub>c</sub> and h within the structural slab`), `tsSec(R)` note (anchor `Engineer decision 2026-11-24 (confirmed): s<sub>max</sub>`).
+- `apps/steel-bridge/report/builders.js` `dkTsCr(R, k)` notes of the `ts` and `cr` subs (anchors `Engineer decision 2026-11-24, confirmed: the lesser of the two` and `$d_{c}$ and h within the structural slab $t_{s}$`).
+### Before / After
+`engine/deck.js crackAll`:
+```js
+// before
+      const dc = (top ? o.tL - o.ts : 0) + c.cover + db / 2, h = top ? o.tL : o.ts;
+      const q = { key, name, top, M, Ms, hg, Sg, ft, app, dc, h, db, A, d, s, cover: c.cover, extra: top ? o.tL - o.ts : 0, barA: c.barA };
+// after
+      const dc = c.cover + db / 2, h = o.ts;   // DKDC (engineer decision 2026-11-24): top bars too, within t_s (the sacrificial wearing surface excluded)
+      const q = { key, name, top, M, Ms, hg, Sg, ft, app, dc, h, db, A, d, s, cover: c.cover, barA: c.barA };
+```
+`engine/deck.js crackSteps`, top-bar steps: `dk.<case>.dc` eq before `(t_{L} - t_{s}) + c_{t} + \frac{d_{b}}{2}`, sub `${extra} + ${c_t} + \frac{${d_b}}{2}` → after eq `c_{t} + \frac{d_{b}}{2}`, sub `${c_t} + \frac{${d_b}}{2}`, note "From the top of the structural slab t_s … Engineer decision 2026-11-24: exclude the sacrificial wearing surface (t_L − t_s = x in), as the Strength I depth d does."; `dk.<case>.h` eq before `t_{L}` → after `t_{s}`.
+Expressions:
+- d_c, top bars: before (t_L − t_s) + c_t + d_b/2; after c_t + d_b/2.
+- h, top bars: before t_L; after t_s.
+- β_s = 1 + d_c / (0.7 (h − d_c)) (Eq. 5.6.7-2), s_max = 700 γ_e / (β_s f_ss) − 2 d_c (Eq. 5.6.7-1), f_ss = 12 M_s / (A_s j d), d = t_s − c_t − d_b/2: unchanged expressions. Bottom bars unchanged.
+- A deck with t_L = t_s: identical results.
+### Governing provision
+AASHTO LRFD 10th Ed. (2024) Art. 5.6.7, Eq. 5.6.7-1 and 5.6.7-2 (d_c, h, β_s); Art. 5.10.6 (DK5 spacing, decision only).
+### Check case (hand)
+Default new project, deck design on (made up): 5 girders at 9.5 ft, t_s = 8 in, t_L = 8.5 in (0.5 in sacrificial), #5 at 6 in top and bottom (A_b 0.31 in², d_b = √(4 × 0.31/π) = 0.6283 in), c_t = 2.5 in, f'c 4 ksi, w_c 0.150 kcf, F_yr 60 ksi, Class 1 (γ_e 1.00). E_c = 120,000 (0.150)² (4)^0.33 = 4266.2 ksi, n = 6.7976. A_s = 0.620 in²/ft, d = 8 − 2.5 − 0.3141 = 5.1859 in (unchanged), ρ = 0.620/(12 × 5.1859) = 0.0099630, ρn = 0.067724, k = 0.30649, j = 0.89784.
+
+Negative moment at the design section (crn1): M_s = 0.9589 + 0.2256 + 6.0267 = 7.2112 kip-ft/ft; f_ss = 12 (7.2112)/(0.620 × 0.89784 × 5.1859) = 29.976 ksi (≤ 36, unchanged).
+
+| | Before (PR #1698) | After (DKDC) |
+|---|---|---|
+| d_c | 0.5 + 2.5 + 0.3141 = 3.3141 in | 2.5 + 0.3141 = 2.8141 in |
+| h | 8.5 in | 8.0 in |
+| h − d_c | 5.1859 | 5.1859 |
+| β_s | 1 + 3.3141/(0.7 × 5.1859) = 1.9130 | 1 + 2.8141/(0.7 × 5.1859) = 1.7752 |
+| f_ss | 29.976 ksi | 29.976 ksi |
+| s_max | 700/(1.9130 × 29.976) − 2(3.3141) = 12.207 − 6.628 = 5.579 in | 700/(1.7752 × 29.976) − 2(2.8141) = 13.154 − 5.628 = 7.526 in |
+| s/s_max | 6/5.579 = 1.075 | 6/7.526 = 0.797 |
+| f_ss/0.60f_y | 29.976/36 = 0.833 | 0.833 |
+| Ratio | **1.075 NG** (spacing) | **0.833 OK** (bar stress) |
+
+Overhangs (crohL = crohR): M_s = 1.5611 + 0.0383 + 4.3776 = 5.9770 kip-ft/ft; f_ss = 12 (5.9770)/(0.620 × 0.89784 × 5.1859) = 24.846 ksi.
+
+| | Before | After |
+|---|---|---|
+| d_c / h | 3.3141 / 8.5 in | 2.8141 / 8.0 in |
+| β_s | 1.9130 | 1.7752 |
+| f_ss | 24.846 ksi | 24.846 ksi |
+| s_max | 700/(1.9130 × 24.846) − 6.628 = 8.100 in | 700/(1.7752 × 24.846) − 5.628 = 10.242 in |
+| Ratio | max(6/8.100, 24.846/36) = **0.741** (spacing) | max(0.586, 0.690) = **0.690** (bar stress) |
+
+Positive moment (bottom bars): unchanged, 0.679. DK6 of the default project: before 1.075 NG (governing the deck), after 0.833 OK; the deck's governing check becomes DK2 (0.916), all checks OK. Note: the figure quoted to the engineer, "ratio 0.797", is s/s_max only; DK6's ratio is max(s/s_max, f_ss/0.60 f_y) = 0.833, governed by the bar stress (unchanged by this decision).
+### What changes for a project
+Projects with the deck design on (off by default) and a sacrificial/dead-load-only thickness (t_L > t_s): DK6's negative-moment and overhang cases get a smaller d_c and h (larger s_max; less conservative); the DK6 ratio, its governing case and the deck verdict can change. Positive moment, DK1 to DK5, and decks with t_L = t_s: unchanged.
+### How verified
+- `node tests/check-syntax.mjs`; `node tests/engine/run.mjs sb-deck sb-summary sb-report deck-parity tex`.
+- `tests/engine/sb-deck-tscrack.test.mjs`: the top-bar test rewritten as an independent hand check (d_c 2.8141, h 8, h − d_c = d, β_s 1.7752, s_max 7.526, s/s_max 0.797, ratio 0.833 by bar stress; overhang s_max 10.242, ratio 0.690; the worked step's eq, sub and note; t_L = t_s unchanged).
+- Smokes: `tests/smoke/steel-bridge-deck-tscrack.mjs` updated (DK6 0.833 OK, 29.98 / 36.00 ksi, DK2 governs, all OK; s_max 7.53 in in the step; Class 2 NG); `steel-bridge-deck-long.mjs` updated (the default deck now "all checks OK"; DK4 at 9 in: 1 check NG, before 2); `steel-bridge-deck.mjs` passes unchanged. `sb-deck-long` and `sb-deck-report` engine tests: the default deck now passes DK6.
+- A scratch run of the engine before / after on the default and built-in projects: only the top-bar cases' d_c, h, β_s, s_max and ratios differ.
+### Saved data
+None: no key or format changes.
+### Decisions
+- Engineer decision 2026-11-24: DK6 top bars exclude the sacrificial wearing surface (d_c = c_t + d_b/2, h = t_s).
+- Engineer decision 2026-11-24: DK5 s_max = min(3.0h, 18.0 in) (confirmed).
+- Still pending engineer review (unchanged): DK6 bottom bars h = t_s; DK5 h = t_L; Class 1 default; m on Service I; the commentary's d_c limit not used.
+
+## 2026-11-24 — PR: claude/sb-geom-barrier-render (PR #1705: https://github.com/mlococo88/All-Structural/pull/1705) (GEOM) — a barrier entered by its geometry is drawn with its own outline in every rendering, the fence on its top (display only)
+### Request (engineer, 2026-11-24, approved follow-up of FOB)
+Render the Geometry-mode barriers (BARG, "Barrier weight from: Geometry", shared/barrier.js) with their actual profile in the 3D view, the DXF and the 2D graphics, and seat the railing / fence on that profile's top. Entered barriers render exactly as before.
+### Where / Before / After
+- `engine/drawings.js appOf`: the deck-edge record keeps `geo: e.geo` (the `SharedBarrier.compute` result carried by `SBDLoads` `bridgeEff`) for a barrier; the barrier item, before always `{ k: 'bar', …, h: APP_H.bar, sch: true }` → after, with geometry, `{ k: 'bar', …, h: geo.h, pts: geo.pts, geo: true }` (entered: unchanged). `barOutline(a)`: `if (a.pts) return a.pts;` first, so `topAt` (the fence base, FOB) and `barPts` use the geometry outline.
+- `appDraw`: the barrier polyline is `barOutline(a)` (the geometry outline on S-DECK-BARR); its callout with geometry reads `BARRIER <w> AT DECK x <h> HIGH, FROM ITS GEOMETRY (… KLF DC2)` anchored over the outline's top (entered: unchanged text and anchor).
+- `ui/gfxa.js loadsGraphic` (Loads & LLDF Download DXF): with geometry `D.pline(ly.ap, SBDDrawings.barPts(a)…)` and the height `a.h`; entered: the 34 in rectangle as before (`hA = a.k === 'bar' && !a.geo ? 34 : a.h`).
+- `ui/gfxdet.js lldfSvg` (Loads & LLDF graphic): with geometry `S.poly(SBDDrawings.barPts(a)…)`; entered: the rectangle as before.
+- `ui/view3d.js build`: with geometry `barSolid(a)`, the outline extruded along the bridge between the skewed end lines (THREE.ShapeUtils for the end caps, double-sided material `MT.appD`); entered: the `prism` block as before.
+### Governing provision
+None (display only).
+### Check case (made-up: built-in project, left barrier rectangle 12 × 42 in, right polygon (0,0) (16,0) (16,3) (9,10) (7,36) (0,36) in, sidewalks 6 ft × 8 in, fences at 0.5 ft and 0.25 ft)
+- Left: outline 4 points, h 42 in; fence base before (FOB, schematic 1 ft × 34 in, u = 6 in on the slope) 32.48 in, after 8 + 42 = 50 in.
+- Right: outline 6 points, h 36 in; fence at 3 in (top 0..7 in): before 42 in (schematic), after 8 + 36 = 44 in; at 0.7 ft = 8.4 in on the face (9,10)–(7,36): 8 + 10 + 26 × 0.6/2 = 25.8 in.
+### How verified
+- `tests/engine/sb-fence-on-barrier.test.mjs` (Geometry case added). `node tests/engine/run.mjs drawings sheets dxf-sheets dxf-detc graphics-overlap xf-dxf sb-fence-on-barrier sb-barrier`; `node tests/check-syntax.mjs`.
+- Results unchanged: `SBDLoads.compute` hashes and every line load identical before/after on the made-up projects (entered and geometry).
+- DXF (`SBDDrawings.dxf`): the entered-barrier projects (barrier + fences, curbs + fences, built-in) byte-identical; the Geometry project: the S-DECK-BARR outlines, S-DECK-RAIL, the barrier callouts and the deck-edge chain change; the rest of the section matches after the sheet shift from its taller top (8 in).
+### Saved data
+None.
+### Open items
+- The Deck tab's section figure (ui/deck.js) draws a schematic barrier to the traffic face; not changed.
+
+## 2026-11-24 — PR: claude/shared-steps-ratio (PR #1706: https://github.com/mlococo88/All-Structural/pull/1706) (SSR) — worked-step topic chips: the cross-frame slenderness ℓ/r_z and Kℓ/r_min (CF3), the welds' thickness and area proportions (TR4) marked as not a demand / capacity ratio (`ratio: false`; display only)
+- **Where:** `engine/crossframes.js`, the member steps (anchor `` id: `${id}.sl`, label: `${m.l}: slenderness (CF3`` ) and the diaphragm / end-diaphragm steps (anchor `` id: `${id}.ax.sl` ``); `engine/welds.js`, steps `pt` (anchor `id: 'pt', label: 'Thickness proportion (TR4)'`) and `pa` (anchor `id: 'pa', label: 'Area proportion (TR4)'`).
+- **Before / After:** `ref: `${ED} Arts. 6.9.3, 6.8.4`, ok: m.slC <= slL(m),` → `ref: `${ED} Arts. 6.9.3, 6.8.4`, ratio: false, ok: m.slC <= slL(m),`; `ref: `${ED} Art. 6.9.3`, ok: X.sl <= X.lim,` → `ref: `${ED} Art. 6.9.3`, ratio: false, ok: X.sl <= X.lim,`; welds `ref: 'Practice (AASHTO/NSBA G12.1)', ok: ge(a, 0.5)` → `… ratio: false, ok: ge(a, 0.5)` and the same for `ge(b, 0.5)`.
+- **Display change (built-in project):** Welds tab, topic "Area and thickness proportions (TR4)": chip `0.500 NG` (t_1/t_2 = 0.500 read as a D/C) → `NG`, one-line result `Area proportion (TR4): A_1/A_2 ≥ 0.5` → `… = 0.444`. Cross-frames: the member topics' raw chips (`115.178` red) → `OK`; the tab and the report show the check items' chips (#1692), unchanged.
+- **Check case:** built-in project, Welds, transition 1: t_1/t_2 = 0.563 ≥ 0.5 (ok), A_1/A_2 = 0.444 < 0.5 (not ok): before `0.563` / `0.500 NG` style chips, after `NG` (status from ok), values unchanged.
+- **Problem:** `shared/steps.js` group() read every unitless test step with an ok flag as a D/C ratio for its topic's status chip (PR #1692). SSR changes the shared rule (fixlog/shared-steps.md) and these steps say so themselves, so that a slenderness or a proportion that must be at least 0.5 is not shown as a D/C.
+- **Governing provision:** none (display only; no value, ok flag, verdict, saved key or saved-data format change).
+- **How verified:** main vs this branch, the tool opened headless with every tab clicked and every topic's chip / class / one-line result recorded (PR description: audit table); `node tests/engine/run.mjs` (crossframes, welds, sb-dia-fail-highlight, steps-groups, all); `tests/smoke/steel-bridge-dia-fail.mjs`.
+- **Other copies:** none.

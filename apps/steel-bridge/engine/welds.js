@@ -205,8 +205,8 @@
       else if (r.wType === 'taper') w.add({ id: 'slW', label: 'Width transition taper (TR3)', sym: '\\frac{(b_{2} - b_{1})/2}{L_{w}} \\le \\frac{1}{2.5}', eq: '', sub: isFinite(r.slopeW) ? `\\frac{${n3(r.dbw)}}{${n2(r.Lw)}} = ${n3(r.slopeW)} ${ge(0.4, r.slopeW) ? '\\le' : '\\gt'} 0.400` : '\\text{no taper length}', value: r.slopeW / 0.4, unit: '', d: 3, ref: `${ED} Art. 6.13.6.2; Table 6.6.1.2.3-1 (5.2)`, ok: ge(0.4, r.slopeW) });
       else w.add({ id: 'slW', label: 'Width transition (TR3)', sym: '', eq: '', sub: '\\text{widths differ but no transition is detailed}', value: 'none', unit: '', d: 0, ref: `${ED} Art. 6.13.6.2`, ok: false }); }
     const a = r.t1 / r.t2, b = r.A1 / r.A2;
-    w.add({ id: 'pt', label: 'Thickness proportion (TR4)', sym: '\\frac{t_{1}}{t_{2}} \\ge 0.5', eq: '', sub: `\\frac{${n4(r.t1)}}{${n4(r.t2)}} = ${n3(a)}`, value: a, unit: '', d: 3, ref: 'Practice (AASHTO/NSBA G12.1)', ok: ge(a, 0.5), note: ge(a, 0.5) ? '' : 'Warning: an abrupt change concentrates stress.' });
-    w.add({ id: 'pa', label: 'Area proportion (TR4)', sym: '\\frac{A_{1}}{A_{2}} \\ge 0.5', eq: '', sub: `\\frac{${n2(r.b1)}(${n4(r.t1)})}{${n2(r.b2)}(${n4(r.t2)})} = ${n3(b)}`, value: b, unit: '', d: 3, ref: 'Practice (AASHTO/NSBA G12.1)', ok: ge(b, 0.5), note: ge(b, 0.5) ? '' : 'Warning: a change this small rarely saves enough steel to pay for the butt weld.' });
+    w.add({ id: 'pt', label: 'Thickness proportion (TR4)', sym: '\\frac{t_{1}}{t_{2}} \\ge 0.5', eq: '', sub: `\\frac{${n4(r.t1)}}{${n4(r.t2)}} = ${n3(a)}`, value: a, unit: '', d: 3, ref: 'Practice (AASHTO/NSBA G12.1)', ratio: false, ok: ge(a, 0.5), note: ge(a, 0.5) ? '' : 'Warning: an abrupt change concentrates stress.' });
+    w.add({ id: 'pa', label: 'Area proportion (TR4)', sym: '\\frac{A_{1}}{A_{2}} \\ge 0.5', eq: '', sub: `\\frac{${n2(r.b1)}(${n4(r.t1)})}{${n2(r.b2)}(${n4(r.t2)})} = ${n3(b)}`, value: b, unit: '', d: 3, ref: 'Practice (AASHTO/NSBA G12.1)', ratio: false, ok: ge(b, 0.5), note: ge(b, 0.5) ? '' : 'Warning: a change this small rarely saves enough steel to pay for the butt weld.' });
     return w.steps;
   }
 

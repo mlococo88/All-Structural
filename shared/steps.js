@@ -19,7 +19,10 @@
               list of strings: "Input needed…", "Decision (pending engineer review): …") on its own line(s) first, in warning style.
               noteParts(note) / noteText(note) below; shared/report.js renders it (screen, print, plain text). A string note is unchanged.
        ok     optional: true / false for a test step (a condition met or not); undefined otherwise
+       ratio  optional (SSR, 2026-11-24): true / false, whether a test step's value is a demand / capacity ratio (D/C, passing at <= 1.0), for
+              the status chip of its topic (group()); undefined: decided from the step itself (see isRatio below). Display only.
    It renders as:  label:  sym = eq = sub = value unit   (ref)
+   (comparison steps: 'sym eq' when eq starts with a relation, no repeated value, ', OK' after a comparison; CMPL, line() below)
 
    Equation notation (eq, sub, sym, unit): a small TeX subset that is also valid KaTeX, so that the built-in renderer and
    KaTeX (toHTML, when the page has loaded it; 2026-10-29) show the same strings: _{…} subscript, ^{…} superscript, \frac{a}{b}, \bar{x}, \sqrt{x}, \text{…},
@@ -47,6 +50,7 @@
     const s = {};
     KEYS.forEach(k => { s[k] = o[k] === undefined ? (k === 'value' ? null : k === 'd' ? 2 : k === 'ok' ? undefined : '') : o[k]; });
     if (s.ok === undefined) delete s.ok;
+    if (typeof o.ratio === 'boolean') s.ratio = o.ratio;   // SSR (2026-11-24): kept only when given, so every other step is the same object as before
     return s;
   }
   /* ---------- list notes (SNL, 2026-11-08): a step note as a lead and bullets ----------
@@ -239,16 +243,31 @@
   const toText = (s, o) => render(String(s == null ? '' : s), false, !(o && o.legacy));
   /* line(step, html): the one-line rendering  sym = eq = sub = value unit
      With KaTeX, sym, eq and sub are set in display style (full-size fractions) and a numeric value with its unit is set by
-     KaTeX too (same digits as fmt), so the whole line is in one typeface; a string value stays as it is. */
+     KaTeX too (same digits as fmt), so the whole line is in one typeface; a string value stays as it is.
+     CMPL (2026-11-24; display only): two fixes for comparison steps; a step without a relation renders exactly as before.
+     (1) An eq that starts with a relation (\le, \ge, \lt, \gt, \ne, ≤, ≥, <, >, ≠) continues sym as a comparison (sym 'D_{p}', eq
+         '\le 0.42D_{t}'): the two are set as one, 'sym eq' ("D_p ≤ 0.42D_t …"), not 'sym = eq' ("D_p = ≤ 0.42D_t …").
+     (2) After a comparison (the last of sym / eq / sub shown holds a relation): a numeric value that the comparison already shows (its
+         digits as formatted, e.g. sub '… = 47.2 \le 140', value 47.2) is not repeated ("… = 47.2 ≤ 140", not "… ≤ 140 = 47.2"); a text
+         value (a verdict, 'OK') follows a comma ("… = 11.340, OK", not "… = 11.340 = OK"). Any other numeric value (a ratio not in the
+         comparison) is shown as before, " = value". */
+  const REL = /^\s*(?:\\(?:le|ge|lt|gt|ne|leq|geq|neq)(?![A-Za-z])|[<>≤≥≠])/;
+  const HASREL = /\\(?:le|ge|lt|gt|ne|leq|geq|neq)(?![A-Za-z])|[<>≤≥≠]/;
+  const isRel = s => !!(s && s.sym && s.eq && REL.test(String(s.eq)));
+  const shows = (src, v) => new RegExp('(^|[^0-9.])' + v.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&') + '(?![0-9])').test(src);   // the value's digits in the comparison
   function line(s, html, o) {   // o: toText's options (plain text only)
     const K = html ? kx() : null, D = t => K.renderToString('\\displaystyle ' + t, KATEX_OPT);
     const R = K ? D : html ? toHTML : t => toText(t, o), parts = [];
-    if (s.sym) parts.push(R(s.sym));
-    if (s.eq) parts.push(R(s.eq));
-    if (s.sub && s.sub !== s.eq) parts.push(R(s.sub));
+    let last = '';   // the source of the last part shown (CMPL)
+    if (isRel(s)) { last = s.sym + ' ' + String(s.eq).trim(); parts.push(R(last)); }   // CMPL (1): 'sym eq', one comparison
+    else { if (s.sym) { parts.push(R(s.sym)); last = s.sym; } if (s.eq) { parts.push(R(s.eq)); last = s.eq; } }
+    if (s.sub && s.sub !== s.eq) { parts.push(R(s.sub)); last = s.sub; }
     const v = typeof s.value === 'number' ? fmt(s.value, s.d) : s.value == null ? '' : String(s.value);
-    if (v !== '' && K && typeof s.value === 'number') parts.push(K.renderToString(v + (s.unit ? '\\;' + unitTeX(s.unit) : ''), KATEX_OPT));
-    else if (v !== '') parts.push(v + (s.unit ? (html ? '&nbsp;' : ' ') + (K ? toHTML(unitTeX(s.unit)) : R(s.unit)) : ''));
+    const cmp = parts.length > 0 && HASREL.test(String(last)), num = typeof s.value === 'number';
+    if (v === '' || (cmp && num && shows(String(last), v))) return parts.join(' = ');   // CMPL (2): the comparison shows the value
+    const vs = K && num ? K.renderToString(v + (s.unit ? '\\;' + unitTeX(s.unit) : ''), KATEX_OPT) : v + (s.unit ? (html ? '&nbsp;' : ' ') + (K ? toHTML(unitTeX(s.unit)) : R(s.unit)) : '');
+    if (cmp && !num) return parts.join(' = ') + ', ' + vs;   // CMPL (2): a verdict after a comparison
+    parts.push(vs);
     return parts.join(' = ');
   }
 
@@ -261,7 +280,7 @@
                  default /^[^.]+\./: 'ts3.p1.Vn' -> 'p1.Vn'; false: the whole id, for lists that mix the ids of several works); the first match takes the step; steps no topic takes go to a last topic
                  'other' ('Other steps'); topics with no step are left out. Topic order = the order of topics.
          res    the topic's result step: its governing test step (ok === false first, else the largest ratio), else its last step with a value
-         ratio  the largest ratio of its test steps (a test step whose value is a number without a unit: demand / capacity), NaN if none
+         ratio  the largest ratio of its test steps (a test step that is a demand / capacity ratio, isRatio below), NaN if none
          cls    'ng' (a test fails or a ratio > 1), 'hi' (ratio >= opt.hi, default 0.9), 'ok', or '' (no test step); chip: the text of the status chip
        summary(t, html) -> the one-line result of topic t: "label: sym = value unit" of its result step (KaTeX / built-in, as line())
        groupsHTML(groups, o) -> HTML: an Expand all / Collapse all bar and one <details class="sg-t" data-sgk="key"> per topic (closed unless
@@ -270,7 +289,17 @@
        wire(root, o) (browser) -> the Expand all / Collapse all buttons inside root, and o.onToggle(key, open) when a topic opens or closes.
        CSS: SharedSteps.groupCss (class prefix sg-), for the page to add once. On print every topic is opened (beforeprint) and closed again. */
   const fin = v => typeof v === 'number' && isFinite(v);
-  const isRatio = s => s.ok !== undefined && typeof s.value === 'number' && !s.unit;
+  /* isRatio(s): a test step whose value is a demand / capacity ratio (D/C), the number on its topic's status chip.
+     Before SSR (2026-11-24) every test step with a number and no unit was read as one, so a slenderness Kℓ/r = 47.15 ≤ 140 (ok) showed as a red
+     "47.153" chip, a factor of safety 2.1 ≥ 1.5 or a rating factor 1.86 ≥ 1.0 as a red ratio > 1, a strain ε_t = 0.039 ≥ 0.005 or a steel ratio
+     ρ = 0.020 as a green D/C. Now (display only; values and ok flags unchanged):
+       s.ratio === true / false: as the step declares;
+       else a unitless numeric test step is a D/C ratio only when its ok flag agrees with "value ≤ 1.0" (a D/C passes at ≤ 1 and fails above):
+         ok and value ≤ 1.001, or not ok and value > 0.999 (1e-3: the 3-decimal chip; a ratio that rounds to 1.000 stays a ratio).
+       A test step that is not a ratio still counts for the topic's status (its ok flag: chip OK / NG), but gives no number. */
+  const RTOL = 1e-3;
+  const isRatio = s => s.ok !== undefined && typeof s.value === 'number' && !s.unit && (typeof s.ratio === 'boolean' ? s.ratio
+    : s.ok !== false ? fin(s.value) && s.value <= 1 + RTOL : !(fin(s.value) && s.value <= 1 - RTOL));
   function group(steps, topics, opt) {
     opt = opt || {}; const strip = opt.strip === false ? null : opt.strip || /^[^.]+\./, hi = opt.hi != null ? opt.hi : 0.9;
     const T = (topics || []).map(t => ({ key: t.key, title: t.title, ref: t.ref || '', see: t.see || '', test: t.ids, pick: t.res, skip: t.info, steps: [] })), other = { key: 'other', title: 'Other steps', ref: '', see: '', steps: [] };
@@ -331,5 +360,5 @@
     window.addEventListener('afterprint', () => { opened.forEach(d => { d.open = false; }); opened = []; });
   }
 
-  window.SharedSteps = { step, work, n, g, fmt, toHTML, toText, line, unitTeX, katexOpt: KATEX_OPT, group, summary, groupsHTML, wire, reveal, groupCss, noteParts, noteSep, noteText };
+  window.SharedSteps = { step, work, n, g, fmt, toHTML, toText, line, isRel, unitTeX, katexOpt: KATEX_OPT, group, summary, groupsHTML, wire, reveal, groupCss, noteParts, noteSep, noteText };
 })();

@@ -52,6 +52,37 @@
   const TCOL = ['#a9b4c2', '#c9a27e', '#9fb89a', '#c2a3c4', '#d1c38a', '#8fb3c9', '#c79494', '#a6a6a6'];
   const RAIL_H = 42, POST = 3;   // PR 9: a railing or fence post (schematic)
   const BAR_H = 32, SW_CURB = 0, DIA_T = 10, CONT_T = 24, PAD_T = 3, SEAT = 42;   // schematic sizes (in): PS3c-D2 … D5
+  /* FOB (2026-11-24, engineer: "a fence or railing on top of the concrete barrier … the renderings … show it as basically embedded in the
+     concrete"; display only): the one helper for the top of a deck-edge barrier or curb, used by this 3D view and by ui/xsfig.js (the
+     cross-section figure, and through it the typical-section DXF of ui/sheets.js). BAR_PROF: the schematic barrier outline the figure and
+     the DXF draw (Decision XS-D1), as fractions [u / b_w, y / BAR_H], u from the deck edge toward the roadway: flat top over 0.45 b_w, the
+     traffic face sloping to 0.25 BAR_H at 0.75 b_w and to the deck at b_w. The 3D view draws the barrier as a BAR_H block: the same top
+     over the flat 0.45 b_w (pending engineer review: beyond it a post on the sloped face starts below the block's top). */
+  const BAR_PROF = [[0, 0], [1, 0], [0.75, 0.25], [0.45, 1], [0, 1]];
+  /* topOf(pts, u): the top surface of an outline [[u, y]] at u (the highest y of its edges over u), null where the outline is not over u */
+  function topOf(pts, u) { let t = null; const n = pts.length;
+    for (let i = 0; i < n; i++) { const [a0, a1] = pts[i], [b0, b1] = pts[(i + 1) % n], lo = Math.min(a0, b0), hi = Math.max(a0, b0);
+      if (u < lo - 1e-9 || u > hi + 1e-9) continue; const y = hi - lo < 1e-9 ? Math.max(a1, b1) : a1 + (b1 - a1) * (u - a0) / (b0 - a0); t = t === null ? y : Math.max(t, y); }
+    return t; }
+  /* edgeTop(P, sd, u): the height (in) above the top of the deck of the top of side sd's barrier or curb at u in from that deck edge (the
+     barrier on the sidewalk slab where the slab is at least as wide, the curb where the slab is under its width; as the figures place
+     them), null where neither is under u: the base of a sidewalk railing or fence there */
+  /* GEOM (2026-11-24, engineer: draw a Geometry-mode barrier with its actual profile in every renderer; display only): barGeo(P, sd) is
+     side sd's barrier entered by its geometry (BARG, P.xs.dl.bar<sd>.bMode 'geom', shared/barrier.js) as { geo: true, pts (its outline
+     [[u, y]] in, u from the deck edge), bw (its width at the deck, in), h (in) }, else null (an entered barrier, a curb, an invalid shape:
+     drawn as before). The figure, the DXF and this view draw that outline; edgeTop seats a fence on its top. */
+  function barGeo(P, sd) {
+    const dl = P && P.xs && P.xs.dl, e = dl && dl['bar' + sd], B = typeof window !== 'undefined' && window.SharedBarrier;
+    if (!e || e.type === 'curb' || e.bMode !== 'geom' || !B) return null;
+    const G = B.compute(B.spec(e)); return G && G.ok ? { geo: true, pts: G.pts.map(p => [p[0], p[1]]), bw: G.bDeck * 12, h: G.h } : null;
+  }
+  function edgeTop(P, sd, u) {
+    const dl = P && P.xs && P.xs.dl; if (!dl) return null;
+    const e = dl['bar' + sd] || {}, s = dl['sw' + sd] || {}, w = (+s.w || 0) * 12, t = +s.t || 0, on = d => w > 0 && t > 0 && d <= w + 1e-9 ? t : 0;
+    if (e.type === 'curb') { const cw = +e.cw || 0, ch = +e.ch || 0; return cw > 0 && ch > 0 && u >= -1e-9 && u <= cw + 1e-9 ? on(cw) + ch : null; }
+    const gb = barGeo(P, sd), bw = gb ? gb.bw : (+e.bw || 0) * 12; if (!(bw > 0)) return null;
+    const f = topOf(gb ? gb.pts : BAR_PROF.map(([a, b]) => [a * bw, b * BAR_H]), u); return f === null ? null : (w > 0 && t > 0 && w >= bw ? t : 0) + f;
+  }
   const isNum = v => typeof v === 'number' && isFinite(v);
   const tan = d => Math.tan((+d || 0) * Math.PI / 180);
 
@@ -88,7 +119,7 @@
     const zL = -out.ohL * 12, zR = (ys[nb - 1] + out.ohR) * 12;
     out.deck = { ts, yBot: yD, yTop, zL, zR, x: [xb(0, -out.ohL), xb(ns, -out.ohL), xb(ns, ys[nb - 1] + out.ohR), xb(0, ys[nb - 1] + out.ohR)] };
     // barriers and sidewalks (Cross-section tab, P.xs.dl; without it the base design's barrier base width)
-    const dl = P.xs.dl, bw = s => dl ? (+((dl['bar' + s] || {}).bw) || 0) * 12 : (+((P.base && P.base.deck && P.base.deck.bBar) || 0)), sw = s => dl ? (dl['sw' + s] || {}) : {};
+    const dl = P.xs.dl, gbs = { L: barGeo(P, 'L'), R: barGeo(P, 'R') }, bw = s => gbs[s] ? gbs[s].bw : dl ? (+((dl['bar' + s] || {}).bw) || 0) * 12 : (+((P.base && P.base.deck && P.base.deck.bBar) || 0)), sw = s => dl ? (dl['sw' + s] || {}) : {};   // GEOM: a Geometry-mode barrier's own width
     // PR 9: the sidewalk from the deck edge (as engine/bridge-dl.js loads it and the cross-section figure draws it; XS-D3 resolved), the
     // barrier or curb on it where it is under; a curb and railing deck edge; a railing or fence on the sidewalk; the raised median
     const zr = (ze, dir, a, b) => ({ z0: Math.min(ze + dir * a, ze + dir * b), z1: Math.max(ze + dir * a, ze + dir * b) });
@@ -96,9 +127,10 @@
       if (e.type === 'curb') { const cw = +e.cw || 0, ch = +e.ch || 0, rp = (+e.rp || 0) * 12;
         if (cw > 0 && ch > 0) out.app.push({ kind: 'curb', side: s, ...zr(ze, dir, 0, cw), y0: yTop + on(cw), h: ch });
         if (+e.rw > 0) out.app.push({ kind: 'rail', side: s, ...zr(ze, dir, rp - POST / 2, rp + POST / 2), y0: yTop + Math.max(on(rp), rp <= cw + 1e-9 ? on(cw) + ch : 0), h: RAIL_H }); }
-      else if (b > 0) out.app.push({ kind: 'bar', side: s, ...zr(ze, dir, 0, b), y0: yTop + (w > 0 && t > 0 && w >= b ? t : 0), h: BAR_H });
+      else if (b > 0) out.app.push({ kind: 'bar', side: s, ...zr(ze, dir, 0, b), y0: yTop + (w > 0 && t > 0 && w >= b ? t : 0), h: gbs[s] ? gbs[s].h : BAR_H, ...(gbs[s] ? { geo: true, pts: gbs[s].pts, ze, dir } : {}) });   // GEOM: its outline
       if (w > 0 && t > 0) out.app.push({ kind: 'sw', side: s, ...zr(ze, dir, 0, w), y0: yTop, h: t + SW_CURB });
-      const fx = (+sw(s).fenceX || 0) * 12; if (w > 0 && fx > 0 && (+sw(s).fence > 0 || sw(s).fence == null)) out.app.push({ kind: 'fence', side: s, ...zr(ze, dir, fx - POST / 2, fx + POST / 2), y0: yTop + t, h: RAIL_H }); });
+      const fx = (+sw(s).fenceX || 0) * 12; if (w > 0 && fx > 0 && (+sw(s).fence > 0 || sw(s).fence == null)) { const et = edgeTop(P, s, fx);   // FOB: on the barrier or curb top where one is under it
+        out.app.push({ kind: 'fence', side: s, ...zr(ze, dir, fx - POST / 2, fx + POST / 2), y0: yTop + (et !== null ? et : t), h: RAIL_H }); } });
     { const md = dl && dl.med, zc = (zL + zR) / 2; if (md && +md.w > 0 && +md.t > 0) out.app.push({ kind: 'med', z0: zc - md.w * 6, z1: zc + md.w * 6, y0: yTop, h: +md.t }); }
     // diaphragms: in each bay next to a line whose type has one at a (from the left ℄ bearing of each line, parallel to the supports)
     const at = (s, g) => out.girders.find(q => q.s === s && q.g === g);
@@ -191,7 +223,7 @@
     const root = new T.Group(); V.root = root; V.scene.add(root); V.groups = {};
     LAY.forEach(([k]) => { const g = new T.Group(); g.name = k; V.groups[k] = g; root.add(g); });
     const grp = k => V.groups[k], mat = (c, o) => new T.MeshStandardMaterial({ color: c, metalness: 0.05, roughness: 0.85, ...(o || {}) });
-    const MT = { deck: mat(0xc8c3b6, { transparent: true, opacity: 0.4, depthWrite: false }), haunch: mat(0xb9b3a4), app: mat(0xb9b5ab), dia: mat(0x8c8676), cont: mat(0x7b7466, { transparent: true, opacity: 0.75 }), brg: mat(0x2f2f2f), sup: mat(0xb3ada0) };
+    const MT = { deck: mat(0xc8c3b6, { transparent: true, opacity: 0.4, depthWrite: false }), haunch: mat(0xb9b3a4), app: mat(0xb9b5ab), appD: mat(0xb9b5ab, { side: T.DoubleSide }), dia: mat(0x8c8676), cont: mat(0x7b7466, { transparent: true, opacity: 0.75 }), brg: mat(0x2f2f2f), sup: mat(0xb3ada0) };
     const TM = {}; const tmat = q => TM[q.k] || (TM[q.k] = mat(new T.Color(q.col), q.shown ? { transparent: true, opacity: 0.5, depthWrite: false } : {}));   // the type shown: see-through, its strands visible
     const add = (g, m) => { grp(g).add(m); return m; };
     const box = (g, x, y, z, dx, dy, dz, mt) => (dx > 0 && dy > 0 && dz > 0) ? add(g, Object.assign(new T.Mesh(new T.BoxGeometry(dx, dy, dz), mt), {})).position.set(x, y, z) : null;
@@ -213,7 +245,14 @@
     const zl = line ? (line === 1 ? d.zL : (G.ys[line - 2] + G.ys[line - 1]) / 2 * 12) : d.zL, zr = line ? (line === G.nb ? d.zR : (G.ys[line - 1] + G.ys[line]) / 2 * 12) : d.zR;
     if (d.ts > 0) prism('deck', zl, zr, d.yBot, d.ts, MT.deck);
     G.haunch.filter(on).forEach(h => box('deck', (h.x0 + h.x1) / 2, (h.y0 + h.y1) / 2, h.z, h.x1 - h.x0, h.y1 - h.y0, h.w, MT.haunch));
-    G.app.filter(a => !line || (a.z1 > zl && a.z0 < zr)).forEach(a => prism('app', Math.max(a.z0, zl), Math.min(a.z1, zr), a.y0, a.h, MT.app));
+    // GEOM (2026-11-24): a Geometry-mode barrier is its outline run along the bridge between the skewed end lines; the rest as before
+    const outlineSolid = a => { const pr = a.pts.map(([u, y]) => [a.ze + a.dir * u, a.y0 + y]), n = pr.length, pos = [], idx = [], ex = (k, z) => G.xb(k, z / 12);
+      pr.forEach(([z, y]) => pos.push(ex(0, z), y, z)); pr.forEach(([z, y]) => pos.push(ex(G.ns, z), y, z));
+      for (let i = 0; i < n; i++) { const j = (i + 1) % n; idx.push(i, j, n + j, i, n + j, n + i); }
+      T.ShapeUtils.triangulateShape(pr.map(([z, y]) => new T.Vector2(z, y)), []).forEach(([p, q, r]) => idx.push(p, q, r, n + p, n + r, n + q));
+      let geo = new T.BufferGeometry(); geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); geo.setIndex(idx); geo = geo.toNonIndexed(); geo.computeVertexNormals();
+      grp('app').add(new T.Mesh(geo, MT.appD)); };
+    G.app.filter(a => !line || (a.z1 > zl && a.z0 < zr)).forEach(a => a.geo ? outlineSolid(a) : prism('app', Math.max(a.z0, zl), Math.min(a.z1, zr), a.y0, a.h, MT.app));
     // diaphragms, continuity diaphragms, bearings, seats and pier caps
     G.dia.filter(q => !line || q.bay === line || q.bay === line - 1).forEach(q => wall('dia', q.xa, q.za, q.xc, q.zc, q.t, q.y0, q.y1, MT.dia));
     G.cont.forEach(q => { if (!line) { wall('dia', q.xa, q.za, q.xc, q.zc, q.t, q.y0, q.y1, MT.cont); return; } const f = z => q.xa + (q.xc - q.xa) * (z - q.za) / ((q.zc - q.za) || 1); wall('dia', f(zl), zl, f(zr), zr, q.t, q.y0, q.y1, MT.cont); });
@@ -362,5 +401,5 @@
   /* for tests: the camera, the counts of the last build */
   const camera = () => (V.cam ? { p: V.cam.position.toArray(), t: V.ctl ? V.ctl.target.toArray() : null } : null);
   const snapshot = () => V.snap || null;   // batch G8: the capture for the Report (ui/report.js)
-  window.PSB3DUI = { render, geom, camera, LAY, DG, series, snapshot, state: () => ({ cage: V.cage || null, snap: !!V.snap, camNote: V.camNote, sfcNote: V.sfcNote, counts: V.counts, info: V.info, fences: V.fences.length, dg: V.dgLbl, tg: V.tg ? V.tg.map(t => t[0]) : null, mode: V.mode }) };
+  window.PSB3DUI = { render, geom, camera, BAR_PROF, topOf, edgeTop, barGeo, LAY, DG, series, snapshot, state: () => ({ cage: V.cage || null, snap: !!V.snap, camNote: V.camNote, sfcNote: V.sfcNote, counts: V.counts, info: V.info, fences: V.fences.length, dg: V.dgLbl, tg: V.tg ? V.tg.map(t => t[0]) : null, mode: V.mode }) };
 })();

@@ -111,10 +111,10 @@
     const a = R && R.ap; if (!a || !a.family) return;
     const f = v => String(+(+v).toFixed(3)), tex = s => s.replace('θ', '\\theta').replace(/_([A-Za-z]+)/, '_{$1}');
     a.items.forEach(q => { const flagged = !a.entered && !q.ok;
-      add({ id: 'ap.' + q.key, label: `${q.name}: range of applicability (${q.table})`, sym: tex(q.sym), value: q.value, unit: q.unit === '°' ? 'deg' : q.unit === 'in⁴' ? 'in^{4}' : q.unit, d: q.d, ref: A10 + q.table,
+      add({ id: 'ap.' + q.key, label: `${q.name}: range of applicability (${q.table})`, sym: tex(q.sym), value: q.value, unit: q.unit === '°' ? 'deg' : q.unit === 'in⁴' ? 'in^{4}' : q.unit, d: q.d, ref: A10 + q.table, ratio: false,
         ...(a.entered ? {} : { ok: q.ok || q.level !== 'fail' }),
         note: `Range: ${rangeTxt(q, f)}${q.unit ? ' ' + q.unit : ''}. ${a.entered ? 'Distribution factors entered: not tested.' : q.ok ? 'Inside.' : q.level === 'fail' ? 'OUTSIDE: the equations do not apply (FAIL).' : q.level === 'warn' ? 'Outside (warning).' : 'Outside (note).'}${q.note && (flagged || q.key === 'Nb' && q.value === 3) ? ' ' + q.note : ''}` }); });
-    add({ id: 'ap.r', label: 'Line-girder analysis with the approximate distribution factors: items outside their range', sym: 'n_{out}', value: a.entered ? 0 : a.bad.length, unit: '', d: 0, ref: A10 + 'Art. 4.6.2.2', ...(a.entered ? {} : { ok: !a.bad.length }),
+    add({ id: 'ap.r', label: 'Line-girder analysis with the approximate distribution factors: items outside their range', sym: 'n_{out}', value: a.entered ? 0 : a.bad.length, unit: '', d: 0, ref: A10 + 'Art. 4.6.2.2', ratio: false, ...(a.entered ? {} : { ok: !a.bad.length }),
       note: a.entered ? 'The distribution factors are entered (Loads tab): the ranges of the equations are not tested.' : a.bad.length ? `${a.bad.map(q => q.sym).join(', ')} outside: FAIL, counted in the verdict (as the Steel Bridge app's applicability check). Refined analysis (4.6.3), or enter the distribution factors.` : 'Every tested value is inside its range: the approximate equations apply.' }, a.entered ? 0 : a.bad.length);
   }
   window.PSBApplic = { NAME, RANGE, exceed, of, apply, steps };

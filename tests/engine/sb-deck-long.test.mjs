@@ -30,7 +30,7 @@ test('saved data: the longitudinal keys are optional (not in DEF), stored in P.d
 
 test('a project without longitudinal bars (saved before DKL): DK1 to DK3 as before, no DK4, no new step, no warning', () => {
   [M.newProject(), bridge()].forEach(P0 => { P0.deckDesign = P0.deckDesign || { on: true, sBot: 8 };
-    const R = DK.calc(P0); assert.deepEqual([...R.checks.map(c => c.id)], ['DK1', 'DK2', 'DK3']);
+    const R = DK.calc(P0); assert.deepEqual([...R.checks.map(c => c.id)], ['DK1', 'DK2', 'DK3', 'DK5', 'DK6']);   // DK5, DK6: DKTS / DKCR (2026-11-24), always
     assert.equal(R.long.top, null); assert.equal(R.long.bot, null); assert.equal(R.long.topPart, false); assert.equal(R.long.botPart, false);
     assert.deepEqual([...R.steps.map(s => s.id).filter(i => /dist/.test(i))], ['dk.distSe', 'dk.dist', 'dk.distAs']);
     assert.ok(!R.warn.some(w => /longitudinal/.test(w)));
@@ -39,7 +39,7 @@ test('a project without longitudinal bars (saved before DKL): DK1 to DK3 as befo
   const R = DK.calc({ ...M.newProject(), deckDesign: { on: true, sBot: 8 } });
   near(R.checks[0].r, 0.97402, 2e-5, 'DK1'); near(R.checks[1].r, 0.91567, 2e-5, 'DK2'); near(R.checks[2].r, 0.73273, 2e-5, 'DK3');
   // blank inputs (the card's "not entered": the key is deleted) and null (a NaN saved to JSON) read as not entered
-  const Rn = DK.calc(bridge({ barLongBot: null, sLongBot: null, barLongTop: null })); assert.equal(Rn.checks.length, 3); assert.equal(Rn.warn.some(w => /longitudinal/.test(w)), false);
+  const Rn = DK.calc(bridge({ barLongBot: null, sLongBot: null, barLongTop: null })); assert.equal(Rn.checks.length, 5); assert.equal(Rn.warn.some(w => /longitudinal/.test(w)), false);
 });
 
 test('DK4 hand check: S_eff 11.2266 ft -> 65.66 % of 0.620 in²/ft = 0.4071 in²/ft; #5 at 9 in OK (0.985), #4 at 9 in NG (1.527)', () => {
@@ -53,7 +53,7 @@ test('DK4 hand check: S_eff 11.2266 ft -> 65.66 % of 0.620 in²/ft = 0.4071 in²
   near(c.prov, 0.4133333, 1e-7); near(c.req, 0.4070905, 1e-7); near(c.r, 0.984896, 1e-6); assert.equal(c.ok, true); assert.equal(c.step, 'dk.distR');
   assert.match(c.ref, /9\.7\.3\.2/); assert.match(c.loc, /#5 at 9\.00 in/);
   // the other checks are those without the bars
-  assert.equal(JSON.stringify(J(R.checks.slice(0, 3))), JSON.stringify(J(R0.checks)));
+  assert.equal(JSON.stringify(J(R.checks.slice(0, 3))), JSON.stringify(J(R0.checks.slice(0, 3))));
   // worked steps: symbolic, substituted, result; in the distribution topic
   const sp = R.steps.find(s => s.id === 'dk.distProv'), sr = R.steps.find(s => s.id === 'dk.distR');
   assert.equal(sp.sym, 'A_{s,prov}'); assert.equal(sp.eq, '\\frac{12\\,A_{b}}{s_{L}}'); assert.equal(sp.sub, '\\frac{12(0.31)}{9.00}'); assert.ok(Object.is(sp.value, c.prov));
@@ -64,12 +64,12 @@ test('DK4 hand check: S_eff 11.2266 ft -> 65.66 % of 0.620 in²/ft = 0.4071 in²
   const Q = DK.calc(bridge({ barLongBot: 0.2, sLongBot: 9 })), q = Q.checks[3];
   near(q.prov, 0.2666667, 1e-7); near(q.r, 1.526589, 1e-6); assert.equal(q.ok, false); assert.equal(Q.steps.find(s => s.id === 'dk.distR').sub, '0.407 \\gt 0.267');
   // the top longitudinal bars alone: drawn and reported, not checked
-  const T = DK.calc(bridge({ barLongTop: 0.2, sLongTop: 12 })); assert.equal(T.checks.length, 3); assert.equal(T.long.top.s, 12); assert.equal(T.long.bot, null);
+  const T = DK.calc(bridge({ barLongTop: 0.2, sLongTop: 12 })); assert.equal(T.checks.length, 5); assert.ok(!T.checks.some(c => c.id === 'DK4')); assert.equal(T.long.top.s, 12); assert.equal(T.long.bot, null);
 });
 
 test('one of a pair entered: a warning, no DK4, the checks unchanged', () => {
   const R0 = DK.calc(bridge());
-  const R = DK.calc(bridge({ barLongBot: 0.31 })); assert.equal(R.checks.length, 3); assert.equal(R.long.botPart, true);
+  const R = DK.calc(bridge({ barLongBot: 0.31 })); assert.equal(R.checks.length, 5); assert.equal(R.long.botPart, true);
   assert.ok(R.warn.some(w => /Bottom longitudinal bars: enter both/.test(w))); assert.equal(JSON.stringify(J(R.checks)), JSON.stringify(J(R0.checks)));
   const T = DK.calc(bridge({ sLongTop: 12, barLongTop: 0 })); assert.ok(T.warn.some(w => /Top longitudinal bars: enter both/.test(w))); assert.equal(T.long.top, null);
 });
@@ -110,12 +110,13 @@ test('report: DK4 in the checks table, the summary rows and the verdict; "not ch
   [a, b, c].forEach(({ Mx }, i) => { const doc = WR.SharedReport.build(Mx), txt = WR.SharedReport.text(doc);
     assert.deepEqual(J(doc.unresolved), [], i + ': unresolved'); assert.ok(!/NaN|undefined|\[object|§\?/.test(txt), i + ': text clean'); });
   const sec = Mx => JSON.stringify(Mx.sections.find(s => s.id === 'dk'));
-  assert.ok(sec(a.Mx).includes('Not checked: bottom longitudinal bars not entered')); assert.equal(a.Mx.gov.filter(q => q.mod === 'Deck').length, 3);
+  assert.ok(sec(a.Mx).includes('Not checked: bottom longitudinal bars not entered')); assert.equal(a.Mx.gov.filter(q => q.mod === 'Deck').length, 5);
   assert.ok(sec(b.Mx).includes('DK4 Deck distribution reinforcement, bottom longitudinal bars') && !sec(b.Mx).includes('Not checked: bottom longitudinal'));
-  const g = b.Mx.gov.filter(q => q.mod === 'Deck'); assert.equal(g.length, 4); assert.equal(g[3].key, 'dk.distR'); near(g[3].r, 0.31155 / (0.31 * 12 / 9), 1e-5, "default bridge: 67 % of 0.465 = 0.31155 / 0.41333");
+  const g = b.Mx.gov.filter(q => q.mod === 'Deck'); assert.equal(g.length, 6); assert.equal(g[3].key, 'dk.distR'); near(g[3].r, 0.31155 / (0.31 * 12 / 9), 1e-5, "default bridge: 67 % of 0.465 = 0.31155 / 0.41333");
   // the Summary verdict: unchanged without the bars; DK4 counted once with them; a failing DK4 fails it
   const gird = [{ gi: 0, label: 'G1', cells: { flexStr: { st: 'pass', r: 0.5, tab: 'flex' } } }];
-  assert.equal(SM.overall(P0, gird).n.pass, 1 + 3); assert.equal(SM.overall(P1, gird).n.pass, 1 + 4);
+  // DKDC (2026-11-24, engineer decision: top-bar d_c within t_s): the default bridge's DK6 is 0.833 OK (before, DKCR: 1.075 NG), so DK1 to DK3, DK5, DK6 pass
+  assert.equal(SM.overall(P0, gird).n.pass, 1 + 5); assert.equal(SM.overall(P1, gird).n.pass, 1 + 6);
   const f = SM.overall(P2, gird); assert.equal(f.verdict, 'FAIL'); assert.match(f.top.q.check, /^DK4 /);
   // bill of materials: without the bars the distribution row as before; with them the bars (number = ceil(12 W / s) + 1, each of length L)
   const bom = Mx => Mx.sections.find(s => s.id === 'bom').subs.find(q => q.id === 'dk'), rows = Mx => bom(Mx).items.find(i => i.type === 'table').rows;

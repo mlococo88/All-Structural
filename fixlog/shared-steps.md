@@ -174,3 +174,133 @@ Tests: `node tests/engine/run.mjs` (steps, steps-totext, tex, report, …).
 - `node tests/engine/run.mjs steps-listnote` (new, 5 tests); the whole engine suite; `node tests/check-syntax.mjs`. Consumer checks: see `fixlog/shared-report.md` (same PR).
 ### Other copies
 - None.
+
+## 2026-11-24 — PR: claude/sb-le-display (PR #1699: https://github.com/mlococo88/All-Structural/pull/1699) (CMPL) — line(): comparison steps read "D_p ≤ 0.42D_t = 9.204 ≤ … = 11.340, OK" and "… = 115.18 ≤ 140" (no stray "=", no repeated value)   [display only; no value, verdict, formula or reference changes]
+### Problem
+- Engineer (2026-11-24), Steel Bridge Design, Flexure tab, topic "Compact positive flexure" (6.10.7.1.2 / 6.10.7.3):
+  "D_p = ≤ 0.42D_t = 9.204 ≤ 0.42(27.000) = 11.340 = OK" and "M_u + 1/3 f_ℓ S_xt = ≤ φ_f M_n = 2086.83 + … ≤ 2284.07 = OK".
+- Root cause: `line()` joins every part with " = " (sym = eq = sub = value). A step whose `eq` starts with a relation (`'\le 0.42D_{t}'`) is the
+  right-hand side of a comparison with `sym`, so the join put "=" in front of "≤". 67 steps in the repository have this form (source scan in
+  the new test): Steel Bridge Design engine/flexure.js 14, constructibility.js 5, proportions.js 5, autodesign.js 1, framing.js 1, splplace.js 1;
+  shared/lldf.js 1 (exterior shear width factor, capV); Crane Pick tandem.js 4, clear3d.js 2; Spread Footing 20; Concrete Beam Capacity 11;
+  Retaining Wall Designer 1; Light Pole and Sign Post 1 — each shows the same "= ≤" (or "= ≥", "= <") wherever it is drawn through `line()`
+  (the tabs that use it, and `shared/report.js` screen / print / plain-text step lines).
+- Second pattern (coordinator, after #1692 put the comparison in `sub`): a numeric value repeated after its own comparison, e.g. Cross-frames
+  `cf.top.sl` "ℓ/r_z = 114.00/0.990 = 115.18 ≤ 140 = 115.18", `cf.top.Pr` "P_r = 0.95P_n ≥ C_u = 0.95(55.49) = 52.71 ≥ 3.03 = 52.71 kip",
+  `cf.top.Pt` "… = min(123.44, 80.60) ≥ 3.03 = 80.60 kip", the diaphragm `ax.sl` "Kℓ/r_min = 47.00/0.997 = 47.2 ≤ 140 = 47.2"; and a verdict
+  joined with "=" after a comparison ("… = 11.340 = OK").
+### Where
+- `shared/steps.js`, `line()` (anchor `function line(s, html, o) {   // o: toText's options`), and the new `REL`, `isRel` just above it; `isRel`
+  exported on `window.SharedSteps`.
+### Before / After
+- Before:
+  ```js
+  if (s.sym) parts.push(R(s.sym));
+  if (s.eq) parts.push(R(s.eq));
+  ```
+- After:
+  ```js
+  const REL = /^\s*(?:\\(?:le|ge|lt|gt|ne|leq|geq|neq)(?![A-Za-z])|[<>≤≥≠])/;
+  const HASREL = /\\(?:le|ge|lt|gt|ne|leq|geq|neq)(?![A-Za-z])|[<>≤≥≠]/;
+  const isRel = s => !!(s && s.sym && s.eq && REL.test(String(s.eq)));
+  const shows = (src, v) => new RegExp('(^|[^0-9.])' + v.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&') + '(?![0-9])').test(src);
+  …
+  let last = '';
+  if (isRel(s)) { last = s.sym + ' ' + String(s.eq).trim(); parts.push(R(last)); }   // (1) 'sym eq', one comparison
+  else { if (s.sym) { parts.push(R(s.sym)); last = s.sym; } if (s.eq) { parts.push(R(s.eq)); last = s.eq; } }
+  if (s.sub && s.sub !== s.eq) { parts.push(R(s.sub)); last = s.sub; }
+  const v = …;   // as before
+  const cmp = parts.length > 0 && HASREL.test(String(last)), num = typeof s.value === 'number';
+  if (v === '' || (cmp && num && shows(String(last), v))) return parts.join(' = ');   // (2) the comparison shows the value
+  const vs = …;   // the value and unit, as before
+  if (cmp && !num) return parts.join(' = ') + ', ' + vs;   // (2) a verdict after a comparison
+  parts.push(vs); return parts.join(' = ');
+  ```
+  (1) With KaTeX the comparison is one display-style formula. (2) After a comparison (the last of sym / eq / sub shown holds a relation):
+  a numeric value whose formatted digits the comparison already shows is not repeated (its unit, which the comparison does not show, goes
+  with it: "P_r = … = 52.71 ≥ 3.03", the value 52.71 kip stays in the report's value column and the tab's tables); a text value follows a
+  comma. A numeric value not in the comparison (a ratio, e.g. shear "V_u ≤ φ_vV_n = 812.50 ≤ 1.0(1858.00) = 0.437") is shown as before.
+  A step without a relation renders byte for byte as before.
+### Governing provision
+- None: display only. No step object, value, verdict, formula, factor, unit or reference changes.
+### Check case
+- `{ sym: 'D_{p}', eq: '\le 0.42D_{t}', sub: '9.204 \le 0.42(27.000) = 11.340', value: 'OK' }`: plain text before
+  `D_p = ≤ 0.42D_t = 9.204 ≤ 0.42(27.000) = 11.340 = OK`, after `D_p ≤ 0.42D_t = 9.204 ≤ 0.42(27.000) = 11.340, OK`.
+- Steel built-in project (KaTeX, the page): Flexure location 0 before "Dp = ≤0.42Dt = 10.054≤0.42(71.875)=30.188 = OK", after
+  "Dp≤0.42Dt = 10.054≤0.42(71.875)=30.188, OK"; Cross-frames before "Pr = 0.95Pn≥Cu = 0.95(55.49)=52.71 ≥ 3.03 = 52.71kip" and
+  "rzℓ = 0.990114.00=115.18 ≤ 140 = 115.18", after "… = 0.95(55.49)=52.71 ≥ 3.03" and "… =115.18 ≤ 140" (the page run on both versions of the file).
+- Any other step: the same string as before, byte for byte (the new test compares with a copy of the old `line()`, plain, built-in HTML and KaTeX).
+### How verified
+- `node tests/engine/run.mjs steps-cmpl` (new, 4 tests), `steps-`, `tex`; the whole engine suite (4 chunks); `node tests/check-syntax.mjs`.
+- Browser: `tests/smoke/steel-bridge-cmpl.mjs` (new: Flexure, Constructibility, Cross-frames, every step line, no relation right after "=");
+  smokes of the other tools with such steps: crane-tandem, crane-clear3d, cbc-loads, lightpole-shaft-subtabs, retaining-wall-checks,
+  spread-footing-plain, ps-bridge-skeleton.
+### Tools that load shared/steps.js (CLAUDE.md §3)
+- index.html, lldf.html, elastomeric_design_module.html, apps/steel-bridge, apps/ps-bridge, apps/crane-pick, abutment_calculator.html,
+  Timber Beam Check.html, Stone Masonry Arch Load Rating.html, Steel Beam Design - AISC 15th.html, Spread Footing.html, Shear and Moment
+  Diagrams.html, Section Property Calculator.html, Retaining Wall Designer.html, Prestressed Bridge Design.html, Pile Designer.html, Moving Load
+  Generator.html, Light Pole and Sign Post.html, Gusset Plate Rating.html, Concrete Beam Capacity.html, Bridge Substructure Loading.html,
+  BasePlateAnchorDesigner.html, ASCE7-16 Load Generator.html. Only steps with a relation (≤ ≥ < > ≠) in sym, eq or sub can render differently (a stray "=" removed, a repeated value dropped, ", OK" for "= OK"); every other step is byte for byte unchanged.
+### Other copies
+- None.
+### Decisions (pending engineer review)
+- CMPL-1. The comparison keeps " = " before the substitution ("D_p ≤ 0.42D_t = 9.204 ≤ …"), as the shear checks; the colon form
+  "D_p ≤ 0.42D_t: 9.204 ≤ …" is not used.
+- CMPL-2. A ratio after a comparison that does not show it ("812.50 ≤ 1858.00 = 0.437") is kept as before.
+- CMPL-3. A repeated value is dropped with its unit (the unit is in the label / value column elsewhere).
+
+## 2026-11-24 — PR: claude/shared-steps-ratio (PR #1706: https://github.com/mlococo88/All-Structural/pull/1706) — topic chips: only real demand / capacity ratios give the number (SSR; display only)
+### Where
+- `shared/steps.js`: the header comment (new field `ratio`); `step(o)`, anchor `if (s.ok === undefined) delete s.ok;`; `isRatio`, anchor
+  `/* isRatio(s): a test step whose value is a demand / capacity ratio`; the `group()` doc line `ratio  the largest ratio of its test steps`.
+  `shared/README.md`, "Worked steps" table: new row `ratio`.
+### Before / After
+- Before:
+  ```js
+  const isRatio = s => s.ok !== undefined && typeof s.value === 'number' && !s.unit;
+  ```
+  and `step()` dropped any key not in `KEYS`.
+- After:
+  ```js
+  const RTOL = 1e-3;
+  const isRatio = s => s.ok !== undefined && typeof s.value === 'number' && !s.unit && (typeof s.ratio === 'boolean' ? s.ratio
+    : s.ok !== false ? fin(s.value) && s.value <= 1 + RTOL : !(fin(s.value) && s.value <= 1 - RTOL));
+  ```
+  and in `step()`, after `if (s.ok === undefined) delete s.ok;`:
+  ```js
+  if (typeof o.ratio === 'boolean') s.ratio = o.ratio;
+  ```
+  `group()` and `summary()` are unchanged; they call `isRatio`. A test step that is no longer a ratio still counts for its topic's status
+  through its `ok` flag (chip `OK` / `NG`, class `ok` / `ng`), gives no number, and its one-line result shows its value.
+### Problem
+- PR #1692 (SBDFH) found that `group()` read every test step with a number and no unit as a D/C ratio, so a slenderness Kℓ/r = 47.15 ≤ 140
+  showed as a red "47.153" chip. Audit (every tool that loads this file, below): the same false badge on the Prestressed (app) Loads & LLDF
+  tab ("Number of beams N_b = 5" as a red "5.000"), its Rating topics' raw chips (rating factors ≥ 1 as red ratios; the tab and report
+  override them, PSBOutKit.groups, so not shown), Spread Footing "Longitudinal steel" (ρ_g = 0.020 as a green D/C), Steel Bridge
+  cross-frame members (ℓ/r = 115 as red "115.178" where no check item links to the topic; the tab and report use the items, #1692) and
+  Welds TR4 (t_1/t_2, A_1/A_2 proportions as D/C). Display only: no value, ok flag, verdict or saved data changes.
+### Governing provision
+- None: display only. No formula, factor, unit, value or code reference changes.
+### Check case
+- `group([step({ id: 'sl', label: 'sl', value: 47.153, unit: '', ok: true })], [{ key: 't', title: 'T', ids: () => true }])`: before chip
+  `47.153`, class `ng`; after chip `OK`, class `ok`, summary `sl: 47.15`. A ratio 0.95 (ok) stays `0.950` `hi`; 1.2 (not ok) `1.200 NG`;
+  a factor of safety 2.1 (ok) `OK`; a rating factor 0.8 (not ok) `NG` (was `0.800 NG`); `ratio: true` on a 0.6 that fails: `0.600 NG`.
+  `tests/engine/steps-ratio.test.mjs`.
+### How verified
+- New `tests/engine/steps-ratio.test.mjs`; `tests/engine/steps-groups.test.mjs` (its synthetic 0.4-failing step now reads `NG` with no number;
+  the same step declared `ratio: true` keeps `0.400 NG`); the whole engine suite (`node tests/engine/run.mjs`, 4 chunks); `tests/check-syntax.mjs`.
+- Every tool that loads the file opened headless (main vs this branch), every tab clicked, every `SharedSteps.group` call recorded (chip,
+  class, result step, one-line result, and each step's value and ok): only the topics listed in the PR changed; every step value and ok
+  flag the same; console errors the same. Tools: `ASCE7-16 Load Generator.html`, `Pile Designer.html`, `Prestressed Bridge Design.html`,
+  `Light Pole and Sign Post.html`, `Shear and Moment Diagrams.html`, `abutment_calculator.html`, `Timber Beam Check.html`, `index.html`,
+  `Stone Masonry Arch Load Rating.html`, `Retaining Wall Designer.html`, `Section Property Calculator.html`, `Bridge Substructure Loading.html`,
+  `elastomeric_design_module.html`, `Concrete Beam Capacity.html`, `lldf.html`, `apps/steel-bridge/index.html`, `apps/ps-bridge/index.html`,
+  `apps/crane-pick/index.html` (loads the file, calls no group), `Gusset Plate Rating.html`, `BasePlateAnchorDesigner.html`,
+  `Moving Load Generator.html`, `Spread Footing.html`, `Steel Beam Design - AISC 15th.html`.
+### Other copies
+- `apps/steel-bridge/ui/framing.js` groups() (#1692) keeps its own slenderness rule for topics no check item links to (unchanged).
+- The tools' explicit `ratio: false` (same PR): `fixlog/steel-bridge.md`, `fixlog/ps-bridge.md`, `fixlog/Spread Footing.md`,
+  `fixlog/Retaining Wall Designer.md`, `fixlog/Timber Beam Check.md`.
+### Open items
+- Decision (pending engineer review): the rule (ok agrees with value ≤ 1 within 1e-3) and a failing step below 1.0 read as not a ratio
+  (chip `NG` with no number); a D/C with a limit other than 1.0 must declare `ratio: true` to keep its number. None found in the audit.

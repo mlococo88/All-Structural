@@ -29,7 +29,7 @@ try {
   assert.equal((await row('DK1'))[4], '0.744'); assert.equal((await row('DK2'))[4], '0.916'); assert.equal((await row('DK3'))[4], '0.733');
   assert.equal(await row('DK4'), null); assert.match((await row('DK4-none'))[1], /Not checked: bottom longitudinal bars not entered/);
   let F = await fig(); assert.equal(F.circ, 0); assert.equal(F.lines, 2); assert.match(F.txt, /top transverse #5 @ 6\.00 in/); assert.match(F.txt, /bottom transverse #5 @ 6\.00 in/); assert.match(F.txt, /Longitudinal bars not entered/);
-  assert.match(await p.locator('#out #dk-gov').innerText(), /all checks OK/);
+  assert.match(await p.locator('#out #dk-gov').innerText(), /Governing: DK2[\s\S]*all checks OK/);   // DKDC (2026-11-24, engineer decision): DK6 of the default top bars 0.833 OK (DKCR: 1.075 NG)
   ok('on, no longitudinal bars: DK1–DK3 as before, DK4 "not checked", transverse bars as two lines, no circle');
 
   // 2. the longitudinal bars
@@ -52,14 +52,14 @@ try {
     await p.evaluate(() => document.querySelector('#out #dk-gov').scrollIntoView({ block: 'start' })); await p.waitForTimeout(200);
     await p.locator('#out #dk-gov').screenshot({ path: path.join(SHOT, 'sb-deck-long-check.png') });
   }
-  await setIn('dk_sLongBot', '9'); r4 = await row('DK4'); assert.deepEqual([r4[4], r4[5]], ['1.005', 'NG']); assert.match(await p.locator('#out #dk-gov').innerText(), /DK4.*1 check NG/s);
+  await setIn('dk_sLongBot', '9'); r4 = await row('DK4'); assert.deepEqual([r4[4], r4[5]], ['1.005', 'NG']); assert.match(await p.locator('#out #dk-gov').innerText(), /Governing: DK4[\s\S]*1 check NG/);   // DKDC: DK4 only (DKCR: 2, with DK6)
   ok('longitudinal bars: DK4 0.893 OK at #5 @ 8 in, 1.005 NG at 9 in; circles for them only; § opens the worked step; saved in deckDesign');
 
   // 3. blank again
   await setIn('dk_barLongBot', ''); await setIn('dk_sLongBot', ''); await setIn('dk_barLongTop', ''); await setIn('dk_sLongTop', '');
   S = await saved(); if (S) ['barLongTop', 'sLongTop', 'barLongBot', 'sLongBot'].forEach(k => assert.equal(k in S.deckDesign, false, k));
   assert.equal(await row('DK4'), null); assert.ok(await row('DK4-none')); F = await fig(); assert.equal(F.circ, 0);
-  assert.match(await p.locator('#out #dk-gov').innerText(), /all checks OK/);
+  assert.match(await p.locator('#out #dk-gov').innerText(), /Governing: DK2[\s\S]*all checks OK/);   // DKDC (2026-11-24, engineer decision): DK6 of the default top bars 0.833 OK (DKCR: 1.075 NG)
   assert.deepEqual(errs, [], 'console errors');
   ok('blank again: keys removed (as a project saved before), DK4 not checked, no circle; 0 console errors');
   console.log(`\nsteel-bridge-deck-long: ${n} checks passed`);

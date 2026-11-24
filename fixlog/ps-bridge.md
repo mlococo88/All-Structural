@@ -9684,3 +9684,88 @@ None changed.
 - SWGRP-2. The sub-headings "Deck edges" and "Sidewalks and median" are replaced by "Left / Right deck edge", "Left / Right sidewalk" and "Pedestrian load and median" (the existing `.dlSub` style, 10 px above).
 ### Other copies
 The old `Prestressed Bridge Design.html` has no left / right sidewalk or deck-edge inputs (only a "Bridge with sidewalks" owner-rule checkbox and one barrier for the deck design) and is frozen (PS-14 g): not changed.
+
+## 2026-11-24 — PR: claude/ps-barrier-geometry (PR #1700: https://github.com/mlococo88/All-Structural/pull/1700) (BARG) — Cross-section tab, deck edges: "Barrier weight from: Entered / Geometry" (shared/barrier.js, as the Steel Bridge app, PR #1697); with Geometry the barrier's weight and width at the deck are computed and its DC2 acts at its centroid   [NEW OPTION; Entered (the default) and "DC2 and DW entered per girder type" unchanged; §4: the load point in Geometry mode]
+### Request (engineer, 2026-11-24)
+"RIDOT has a barrier that is a rectangle shape, not an F-shape barrier. Can I enter the barrier geometry in a new section and let the app calculate the weight directly?" Then: "Use the centroid for the barrier load point. Do this for both the steel and ps apps."
+### Where / Before / After
+- `index.html` script list: new `'../../shared/barrier.js',` before `'engine/bridge-dl.js',`.
+- `engine/bridge-dl.js` (outside DEAD-VERBATIM and EDGE-VERBATIM, which are unchanged; no `engine/pbd-*.js` touched):
+  - new `GEO_PATH`, `geoOf(b)` after `const isNum = …`: null unless a barrier with `b.bMode === 'geom'`; else `SharedBarrier.compute(SharedBarrier.spec(b))`.
+  - `checks(P)`, anchor `nn(b.bw, \`xs.dl.bar${s}.bw\``: before the two `nn` checks always; after, in Geometry each `SharedBarrier` error as `{ path: 'xs.dl.bar<s>.<bDims.b|bDims.bt|bDims.h|bPts|bGam>', msg: '<Side> deck edge: the barrier … must ….' }`, else the two checks as before.
+  - `ew(s)` (the two edges wider than the deck): `+b.bw` → the computed width in Geometry.
+  - `edgesOf(q)`: before `bw: b.bw, bwt: b.w` → after `bw: g ? g.bDeck : b.bw, bwt: g ? g.w : b.w` (g: the computed shape in Geometry; the traffic face and the line load through the copied steel `edgeIn`).
+  - `distribute(P)`: `edges = EDGE.edgeLoads(…)` → `.map(E => barrier in Geometry ? { …E, x: x̄ } : E)`; after `const out = …`, in Geometry `out.geo` and `out.steps` with each `dl.load.bar<L|R>` ("line load as entered") replaced by `SharedBarrier.steps` (ids `dl.load.bar<L|R>.geo.*`, the weight keeping `dl.load.bar<L|R>`).
+- `ui/bridgedl.js` `card(P)`: before `else h += num(P, k + 'w', …) + num(P, k + 'bw', …)` → after `else h += barrierRows(P, s, k, b, x)`: the select "Barrier weight from" (Entered / Geometry); Entered the same two fields; Geometry the shape (Rectangle, Sloped face with vertical back, Custom polygon), its dimensions or points, γ (blank = 0.150), the weight, width and centroid read-only, a sketch, the worked steps and a link to the Loads & LLDF tab. New `barrierChange()`, called first from `onChange` for the paths `xs.dl.bar<L|R>.(bMode|bShape|bDims.*|bPts|bGam)`: it also writes the computed weight and width into `w`, `bw` (the cross-section figure, the 3D view, the sheets' dead-load note and the hand-offs read those).
+- `engine/model.js`: the doc comment of `xs.dl` (the new optional keys).
+- `tests/engine/psbridge-model.test.mjs`: the expected page script list gets `'../../shared/barrier.js'` before `'engine/bridge-dl.js'`.
+### Calculation change (CLAUDE.md §4) — Geometry mode only
+- Weight: before (only mode) `xs.dl.bar<s>.w` typed (klf); after (Geometry) w = A/144 × γ (shared/barrier.js; AASHTO LRFD 10th Ed. Art. 3.5.1, Table 3.5.1-1 0.145 kcf + 0.005 kcf C3.5.1 = 0.150 kcf default).
+- Load point: before (and still in Entered) x = bw/2 from the deck edge (the copied steel `edgeLoads`, `x: e.bw / 2`); after (Geometry, engineer 2026-11-24) x = x̄, the centroid (b/2 for a rectangle: no change for a rectangle). Distribution rules unchanged: "Typical AASHTO" equal share (AASHTO LRFD 10th Ed. Art. 4.6.2.2.1; x does not enter), MassDOT Bridge Manual Part I 3.5.3 pile-cap (x through e = x − x̄_girders), RIDOT BDM 3.3.1 60/40 (x does not enter), an added load's "two adjacent" (lever rule).
+- Check case (made up: 5 girders at 9.5 ft, overhangs 3.25 ft, deck 44.5 ft, MassDOT pile-cap, x̄_girders 22.25 ft, Σc² = 902.5 ft², no sidewalk, no wearing surface):
+  - Rectangle 12 × 42 in both edges: w = 504/144 × 0.150 = 0.525 klf, b = 1.00 ft, x̄ = 0.50 ft = b/2: DC2 per line identical to typing 0.525 klf and 1.00 ft (every method; test and smoke).
+  - Six-point polygon (0,0) (18,0) (18,3) (9,12) (6,42) (0,42) on the left (A = 400.5 in², w = 0.41719 klf, b = 1.500 ft, x̄ = 0.45599 ft), right 0.40 klf at 0.75 ft: G1's share of the left barrier before (typed, at b/2 = 0.75 ft) 0.083438 + 0.41719(21.50)(19)/902.5 = 0.272270 klf; after (at x̄) 0.083438 + 0.41719(21.79401)(19)/902.5 = 0.274852 klf. DC2 G1..G5 after 0.354852, 0.259145, 0.163438, 0.253964, 0.344490 klf — the Steel Bridge app's values for the same bridge (fixlog/steel-bridge.md BARG), and equal to the steel `SBDLoads.dead` with the load at x̄ (test).
+### Proof that Entered is unchanged
+`tests/engine/psbridge-barrier.test.mjs`: `distribute()` (DC2, DW, every line load's x, w, distribution, shares, every step's id, value, substitution and label) and `checks()` the same with and without shared/barrier.js loaded, MassDOT, AASHTO and RIDOT, with `bMode` absent or 'entered' (a stored shape not read); the engine inputs of every line of the 19 harness B designs with the distribution on, the same with and without the new code; an old project's file the same after import. `tests/engine/psbridge-dl.test.mjs` (DEAD- and EDGE-VERBATIM byte for byte) and `psbridge-verbatim.test.mjs` pass; harness B (`tests/psbridge-compare.mjs`, Entered: 24 designs, 62 207 shown values and 10 616 step values) 0 with differences, 0 errors.
+### Saved data (CLAUDE.md §5)
+New optional keys inside `xs.dl.barL` / `xs.dl.barR` (the Steel Bridge app's names): `bMode`, `bShape`, `bDims` { b, h, bt }, `bPts`, `bGam`. Nothing written on load; in Geometry the computed weight and width are also kept in `w`, `bw`. JSON export / import and the GitHub cloud sync carry the same project JSON.
+### How verified
+`node tests/check-syntax.mjs`; `node tests/engine/run.mjs barrier psbridge-dl psbridge-verbatim psbridge-model psbridge-inputs psbridge-xsloads psbridge-xsfig psbridge-view3d psbridge-handoffs psbridge-report.test psbridge-nomen psbridge-pl psbridge-ut psbridge-de.test psbridge-drawings.test tex.test` and the Steel Bridge app's barrier tests (`sb-barrier`, the same shared file); smoke `tests/smoke/ps-bridge-barrier.mjs`; harness B.
+### Decisions (pending engineer review)
+- BARG-PS-a. The geometry applies to "DC2 and DW distributed to each girder line" (the card's barriers). "Entered per girder type" (base.loads.wBar on the Loads tab) and the deck slab design's own barrier (base.deck.wBar, bBar; the frozen engine's overhang design) are unchanged; whether the deck design should take the geometry's weight and centroid is open.
+- BARG-PS-b. The same defaults and rules as the Steel Bridge app (fixlog/steel-bridge.md BARG-a, -b, -c; fixlog/shared-barrier.md BARG-1a..c).
+- The old root `Prestressed Bridge Design.html` is frozen and unchanged.
+
+## 2026-11-24 — PR: claude/ps-fence-on-barrier (PR #1702: https://github.com/mlococo88/All-Structural/pull/1702) (FOB) — a sidewalk railing or fence over the barrier or curb is drawn standing on its top (display only)
+### Request (engineer, 2026-11-24)
+"There's an option to add a fence or railing on top of the concrete barrier, which is great. But the renderings — the 3D model, the regular drawings, the DXF drawings and the graphics — all show it as basically embedded in the concrete. Can we fix that?"
+### Input combinations with a railing or fence over a barrier or curb (Cross-section tab, deck edges and sidewalks)
+- Deck edge Barrier + sidewalk "Railing / fence" at a position ≤ the barrier width: drawn from the sidewalk top, inside the barrier (fixed). With the sidewalk narrower than the barrier, the barrier sits on the deck and the fence was drawn under it (fixed).
+- Deck edge Curb and railing + sidewalk fence within the curb width: drawn inside the curb (fixed).
+- Curb railing at a load point ≤ the curb width: already on the curb top (unchanged code).
+### Where / Before / After
+- `ui/view3d.js`, after `const BAR_H = 32, SW_CURB = 0, …`: new `BAR_PROF` (the schematic barrier outline the figure and the DXF draw, fractions [u/b_w, y/BAR_H]: `[[0, 0], [1, 0], [0.75, 0.25], [0.45, 1], [0, 1]]`), `topOf(pts, u)` and `edgeTop(P, sd, u)` (the height above the deck top of side sd's barrier or curb top at u in from that edge, null off them); exported on `PSB3DUI` (the one helper of the app's renderers).
+- `ui/view3d.js geom`, anchor `const fx = (+sw(s).fenceX || 0) * 12;`: before `y0: yTop + t` → after `y0: yTop + (et !== null ? et : t)` with `const et = edgeTop(P, s, fx)`.
+- `ui/xsfig.js model`, anchor `// PR 9: a railing or fence on the sidewalk`: before `y0: yTop + t, y1: yTop + t + RAIL_H` → after `y0: yf, y1: yf + RAIL_H` with `yf = yTop + (et !== null ? et : t)`, `et = PSB3DUI.edgeTop(P, sd, fx)`. The typical-section DXF (`ui/sheets.js`) draws `PSBXsFig.model`'s items, so it follows.
+### Problem
+The fence base was always the sidewalk top: over a barrier (32 in drawn) the 42 in post showed 10 in above it; over a curb it started inside the curb.
+### Governing provision
+None (display only): no load, weight, load point or computed value changes.
+### Check case (made-up: 4 lines at 8 ft, overhangs 3 ft, barriers 1.5 ft = 18 in, sidewalks 6 ft × 8 in)
+- Fence at 0.5 ft = 6 in ≤ 0.45 × 18 = 8.1 in (flat top): base before 8 in, after 8 + 32 = 40 in above the deck top.
+- Fence at 1.2 ft = 14.4 in: u/b_w = 0.8 on the face (0.75, 0.25)–(1, 0): g = 0.25 × 0.2/0.25 = 0.20; base before 8 in, after 8 + 6.4 = 14.4 in.
+- Curb 12 × 10 in, fence at 0.4 ft: before 8 in, after 18 in; fence at 3 ft: 8 in both.
+### How verified
+`tests/engine/psbridge-fence-on-barrier.test.mjs`; `node tests/engine/run.mjs psbridge-xsfig psbridge-view3d psbridge-3dviews psbridge-3dcage psbridge-drawings`; `node tests/check-syntax.mjs`; verbatim and harness B (see the PR); results and DXF comparison in the PR.
+### Saved data
+None.
+### Decisions (pending engineer review)
+- FOB-a. The top is that of the schematic barrier the figure and the DXF draw (flat over 0.45 b_w, then the sloped face). The 3D view draws an entered barrier as a 32 in block (unchanged): over the flat top they agree; a fence on the sloped face shows its post starting below the block's top there.
+### Open items
+- Geometry-mode barriers (BARG, once on main for this app) drawn with their own outline and the fence seated on it: follow-up PR.
+
+## 2026-11-24 — PR: claude/ps-geom-barrier-render (PR #1707: https://github.com/mlococo88/All-Structural/pull/1707) (GEOM) — a barrier entered by its geometry is drawn with its own outline in the figure, the DXF and the 3D view; the fence on its top (display only)
+### Request (engineer, 2026-11-24, approved follow-up of FOB)
+Render the Geometry-mode barriers (BARG, #1700, shared/barrier.js) with their actual profile in every renderer and seat the railing / fence on that profile's top. Entered barriers render exactly as before.
+### Where / Before / After
+- `ui/view3d.js`: new `barGeo(P, sd)` (`SharedBarrier.compute(SharedBarrier.spec(dl.bar<sd>))` for `bMode === 'geom'`, not a curb; `{ geo, pts, bw = bDeck × 12, h }` or null), exported on `PSB3DUI`. `edgeTop`: the outline and width of `barGeo` when present (else `BAR_PROF` × b_w × BAR_H as before). `geom`: `bw(s)` takes `barGeo`'s width; the barrier item gets `h: geo.h, geo, pts, ze, dir`. `build`: a `geo` barrier is `outlineSolid(a)` (the outline extruded along the bridge between the skewed end lines, `MT.appD` double-sided); other items `prism` as before.
+- `ui/xsfig.js model`: the barrier width from `barGeo`; the item gets `y1 = y0 + geo.h`, `geo`, `poly` (the outline at its x, y); `svg`: a `geo` barrier is `S.poly(a.poly)` with its own hover text; entered: the schematic polygon as before.
+- `ui/sheets.js section`: a `geo` barrier is `D.pline(lA, a.poly, true)` (S-APPR); the section note reads "BARRIER ENTERED BY ITS GEOMETRY: DRAWN TO ITS OUTLINE (CROSS-SECTION TAB). OTHER BARRIER HEIGHT AND PROFILE, RAILING AND FENCE POST HEIGHTS: SCHEMATIC." only when a Geometry-mode barrier is drawn (else unchanged).
+### Governing provision
+None (display only).
+### Check case (made up: 4 lines at 8 ft, sidewalks 6 ft × 8 in; left rectangle 12 × 42 in, right polygon (0,0) (16,0) (16,3) (9,10) (7,36) (0,36) in; fences at 0.5 ft and 0.25 ft)
+Left: before (FOB, schematic at the typed width) the post base by the schematic top; after 8 + 42 = 50 in. Right: width at the deck 16 in, height 36 in; fence at 3 in: 8 + 36 = 44 in.
+### How verified
+`tests/engine/psbridge-fence-on-barrier.test.mjs` (Geometry case); `node tests/engine/run.mjs psbridge-fence-on-barrier psbridge-xsfig psbridge-view3d psbridge-3dviews psbridge-drawings psbridge-barrier`; `node tests/check-syntax.mjs`. Every cell's engine inputs hashed: identical to origin/main on the made-up projects. DXF: entered-barrier projects byte-identical to the FOB branch; the Geometry project: only the barrier outlines, the fence posts (S-APPR), the faces and dims that reach the appurtenance top and the section note change (the rest matches after the sheet shift).
+### Saved data
+None.
+
+## 2026-11-24 — PR: claude/shared-steps-ratio (PR #1706: https://github.com/mlococo88/All-Structural/pull/1706) (SSR) — worked-step topic chips: the ranges of applicability of the distribution factors (ld.ap.*, ld.ap.r) marked as not a demand / capacity ratio (`ratio: false`; display only)
+- **Where:** `engine/applicability.js` `steps()`, anchors `id: 'ap.' + q.key` and `id: 'ap.r'`.
+- **Before / After:** `d: q.d, ref: A10 + q.table,` → `d: q.d, ref: A10 + q.table, ratio: false,`; `d: 0, ref: A10 + 'Art. 4.6.2.2', ...(a.entered` → `d: 0, ref: A10 + 'Art. 4.6.2.2', ratio: false, ...(a.entered`.
+- **Display change (built-in project):** Loads & LLDF tab and Report, topic "Line-girder analysis: ranges of applicability of the distribution factors": chip `5.000` red (N_b = 5 read as a D/C > 1) → `OK` green; one-line result `Number of beams …: N_b` → `… items outside their range: n_out = 0`. The Rating topics' raw group() chips also change (RF ≥ 1 no longer a red ratio), but PSBOutKit.groups overrides every RF topic (rf: RegExp), so the tab and the report are unchanged there.
+- **Check case:** built-in project: N_b = 5 in 4 to 20 (ok), n_out = 0: before chip `5.000` (class ng), after `OK` (class ok).
+- **Problem:** `shared/steps.js` group() read every unitless test step with an ok flag as a D/C ratio for its topic's status chip (PR #1692). SSR changes the shared rule (fixlog/shared-steps.md) and these steps say so themselves, so that a count or a geometric range value is not shown as a D/C.
+- **Governing provision:** none (display only; no value, ok flag, verdict, saved key or saved-data format change).
+- **How verified:** main vs this branch, the tool opened headless with every tab clicked and every topic's chip / class / one-line result recorded (PR description: audit table); `node tests/engine/run.mjs` (psbridge-*); `tests/smoke/ps-bridge-*` not affected (display text of one topic chip).
+- **Other copies:** none.

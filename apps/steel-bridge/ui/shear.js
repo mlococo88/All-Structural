@@ -46,16 +46,23 @@
       ${h.num(`stiffeners.bearing.types.${k}.sp`, 'Pair spacing (c-c)', 'in')}${h.num(`stiffeners.bearing.types.${k}.w`, 'Fillet weld to web', 'in')}
       ${h.sel(`stiffeners.bearing.types.${k}.conn`, 'Bottom flange connection', [['milled', 'Milled to bear'], ['cjp', 'CJP groove weld'], ['fillet', 'Fillet welds only']])}`;
     const bays = (ly.bays || []).map((q, i) => [q, i]).filter(([q]) => q.g === g + 1);
+    /* UNSTF (2026-11-24, engineer): with the web unstiffened the stiffener spacing (mode, d_o/D) and the per-bay table are not used
+       (engine/stiffeners.js girderBays: n = 0 in every bay); they are shown greyed (a disabled fieldset), their saved values untouched, and
+       enabled again when the web is set back to Stiffened. A field with an input error (engine/model.js validate still checks them) stays
+       enabled so that it can be fixed. Type A stays enabled: the Example demands' built-in rows check a Type A stiffener whatever the layout. */
+    const off = ly.web === 'unstiffened', errP = off && window.SBDInputCheck ? window.SBDInputCheck.collect(P).errors.map(e => String(e.path || '')) : [];
+    const offIf = re => off && !errP.some(p => re.test(p)), fs = (dis, body) => `<fieldset class="stfOff"${dis ? ' disabled' : ''}>${body}</fieldset>`;
+    const offNote = off ? '<p class="note stfOffNote">Not used: the web is unstiffened; only the connection plates at the cross-frames bound the panels. Entries are kept for when you switch back to Stiffened.</p>' : '';
     return h.card('Stiffener layout (6.10.9.1)', `${h.sel('stiffeners.layout.web', 'Web', [['stiffened', 'Stiffened (transverse stiffeners)'], ['unstiffened', 'Unstiffened (connection plates only)']])}
-        ${h.sel('stiffeners.layout.mode', 'Stiffener spacing', [['uniform', 'Uniform d_o/D in every bay'], ['bays', 'Per cross-frame bay (table below)']])}${h.num('stiffeners.layout.doRatio', 'd<sub>o</sub>/D (uniform; bays without an entry)', '')}
+        ${offNote}${fs(offIf(/^stiffeners\.layout\.(mode|doRatio)$/), `${h.sel('stiffeners.layout.mode', 'Stiffener spacing', [['uniform', 'Uniform d_o/D in every bay'], ['bays', 'Per cross-frame bay (table below)']])}${h.num('stiffeners.layout.doRatio', 'd<sub>o</sub>/D (uniform; bays without an entry)', '')}`)}
         ${h.num('stiffeners.layout.frames.Lb', 'Intermediate cross-frames at most', 'ft apart')}
         <p class="note">A bay is the girder between consecutive bearings and intermediate cross-frames; the connection plates at the cross-frames act as stiffeners. Uniform: in each bay ⌈L/(d<sub>o</sub>/D·D)⌉ − 1 stiffeners, evenly spaced (Preliminary sizing). End panels (next to an abutment, or any bearing of a simple span) use V<sub>n</sub> = CV<sub>p</sub> (6.10.9.3.3); pier panels are interior panels with tension-field action (S2-4). Cross-frames: this girder's own frames from the Framing &amp; bracing tab (engine/framing.js; mapped to the analysis stations proportionally within each span); without framing, evenly at most the spacing below in each span.</p>`)
-      + h.card(`Per-bay stiffeners, ${esc((P.girders[g] || {}).label || 'G' + (g + 1))}`, `${bays.length ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Bay (ft)</th><th>n</th><th>e<sub>0</sub> (in)</th><th>e<sub>1</sub> (in)</th></tr></thead><tbody>
+      + h.card(`Per-bay stiffeners, ${esc((P.girders[g] || {}).label || 'G' + (g + 1))}`, `${offNote}${fs(offIf(/^stiffeners\.layout\.bays\b/), `${bays.length ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Bay (ft)</th><th>n</th><th>e<sub>0</sub> (in)</th><th>e<sub>1</sub> (in)</th></tr></thead><tbody>
           ${bays.map(([q, i]) => `<tr><td>${fmt(q.a, 2)}–${fmt(q.b, 2)}</td>${['n', 'e0', 'e1'].map(k => `<td><input type="number" step="${k === 'n' ? 1 : 'any'}" data-path="stiffeners.layout.bays.${i}.${k}" data-kind="num" value="${esc(q[k] == null ? '' : q[k])}" aria-label="bay ${i + 1} ${k}"></td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '<p class="note">No per-bay entries for this girder.</p>'}
         <button type="button" id="stf_fill">${bays.length ? 'Reset' : 'Set'} this girder's bays from the uniform d<sub>o</sub>/D</button>
-        <p class="note">n intermediate stiffeners in the bay; e<sub>0</sub> / e<sub>1</sub> (optional): an end stiffener at that distance from the bay's start / end, the rest evenly spaced. Used when the spacing is "per cross-frame bay"; a bay without an entry takes the uniform d<sub>o</sub>/D.</p>`)
+        <p class="note">n intermediate stiffeners in the bay; e<sub>0</sub> / e<sub>1</sub> (optional): an end stiffener at that distance from the bay's start / end, the rest evenly spaced. Used when the spacing is "per cross-frame bay"; a bay without an entry takes the uniform d<sub>o</sub>/D.</p>`)}`)
       + h.card('Transverse stiffeners and connection plates (6.10.11.1)', `${h.sel('stiffeners.transverse.gS', 'Plate grade', grades)}${h.num('stiffeners.transverse.Fexx', 'Electrode F<sub>EXX</sub>', 'ksi')}
-        <h4 class="sub">Type A, intermediate stiffener</h4>${tsT('A')}<h4 class="sub">Type B, connection plate</h4>${tsT('B')}`)
+        <h4 class="sub">Type A, intermediate stiffener</h4>${off ? '<p class="note stfOffNote">With the web unstiffened, Type A is used only by the Example demands (the built-in rows on the Shear &amp; stiffeners tab).</p>' : ''}${tsT('A')}<h4 class="sub">Type B, connection plate</h4>${tsT('B')}`)
       + h.card('Bearing stiffeners (6.10.11.2)', `${h.sel('stiffeners.bearing.gS', 'Plate grade', grades)}${h.num('stiffeners.bearing.Fexx', 'Electrode F<sub>EXX</sub>', 'ksi')}${h.num('stiffeners.bearing.ed', 'Bearing ℄ to the girder end (abutments)', 'in')}
         <h4 class="sub">Type A, abutments</h4>${bsT('A')}<h4 class="sub">Type B, piers</h4>${bsT('B')}
         <p class="note">Stiffeners normal to the web, on both sides, full depth.</p>`);
@@ -78,6 +85,7 @@
   }
   function onClick(e, P, ui) {
     if (e.target.id !== 'stf_fill') return false;
+    if (ensure(P).layout.web === 'unstiffened') return false;   // UNSTF: the uniform layout of an unstiffened web has n = 0 in every bay; never written over the entries
     const st = ensure(P), SB = window.SBDStiffeners, gm = geom(P, ui.g, null), uni = SB.girderBays({ ...st.layout, mode: 'uniform' }, gm.D, gm.sup, gm.cont, gm.sup, gm.frames, ui.g + 1);
     st.layout.bays = (st.layout.bays || []).filter(q => q.g !== ui.g + 1).concat(uni.map(B => ({ g: ui.g + 1, a: B.a, b: B.b, n: B.n })));
     return true;

@@ -22,7 +22,11 @@ test('SharedSteps.group: topics in the given order, first match wins, the rest t
   assert.equal(S.summary(pan, false), 'ts1.p1.ok'); assert.equal(S.summary(I, false), 'ts1.Ireq: I_t ≥ I_(req)');
   // a failing test step governs its topic (NG) whatever the ratios; a test step with a unit is not a ratio
   const F = S.group([mk('a.g', { value: 2.75, unit: 'in', ok: true }), mk('a.w', { value: 0.4, unit: '', ok: false })], [{ key: 'w', title: 'Welds', ids: /./ }])[0];
-  assert.equal(F.cls, 'ng'); assert.equal(F.res.id, 'a.w'); assert.equal(F.ratio, 0.4); assert.equal(F.chip, '0.400 NG');
+  // SSR (2026-11-24): a failing step with a value below 1.0 is not a demand / capacity ratio (a D/C fails above 1.0), so it gives the topic
+  // no number: before, F.ratio 0.4 and chip '0.400 NG'; declared a ratio (ratio: true) it does, as before
+  assert.equal(F.cls, 'ng'); assert.equal(F.res.id, 'a.w'); assert.ok(Number.isNaN(F.ratio)); assert.equal(F.chip, 'NG');
+  const F2 = S.group([mk('a.g', { value: 2.75, unit: 'in', ok: true }), mk('a.w', { value: 0.4, unit: '', ok: false, ratio: true })], [{ key: 'w', title: 'Welds', ids: /./ }])[0];
+  assert.equal(F2.cls, 'ng'); assert.equal(F2.res.id, 'a.w'); assert.equal(F2.ratio, 0.4); assert.equal(F2.chip, '0.400 NG');
   assert.equal(S.group([mk('a.r', { value: 1.2, unit: '', ok: false })], [{ key: 'x', title: 'X', ids: /./ }])[0].cls, 'ng');
   const H = S.groupsHTML(G, { open: new Set(['pan']), item: s => `<li id="st-${s.id}">${s.label}</li>` });
   assert.equal((H.match(/<details class="sg-t/g) || []).length, 4); assert.equal((H.match(/ open>/g) || []).length, 1); assert.ok(/data-sgall="1"/.test(H) && /data-sgall="0"/.test(H));

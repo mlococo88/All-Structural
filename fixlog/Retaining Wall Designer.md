@@ -6785,3 +6785,13 @@ None: no computed value changes. Only worked-step text (tab and Report).
 - **Saved data (§5):** none.
 - **Decisions (pending engineer review):** (1) The Piles tab card keeps its sent / received table and "Clear results record" (item level), with a link instead of its second copy of the buttons. (2) "Last sent" is read from the `by.retwall` copy in this browser.
 - **Other copies:** none.
+
+## 2026-11-24 — PR: claude/shared-steps-ratio (PR #1706: https://github.com/mlococo88/All-Structural/pull/1706) (SSR) — worked-step topic chips: the factors of safety with earthquake FOS_OT,E and FOS_SL,E marked as not a demand / capacity ratio (`ratio: false`; display only)
+- **Where:** the Report steps, anchors `value: r.FOS_OT_E, unit: '', d: 3, ok: ok('otE')` and `value: r.FOS_SL_E, unit: '', d: 3, ok: ok('slidingE')`.
+- **Before / After:** `ok: ok(` → `ratio: false, ok: ok(` in both.
+- **Display change:** none on the built-in project (no seismic). With seismic, a passing FOS ≥ 1.1 was a red ratio > 1 when it governed its topic; now its status OK / NG.
+- **Check case:** FOS_OT,E = 2.10 ≥ 1.1 (ok): before chip `2.100` red where governing, after `OK`; a failing 1.05 < 1.1: before `1.050 NG`, after `NG`.
+- **Problem:** `shared/steps.js` group() read every unitless test step with an ok flag as a D/C ratio for its topic's status chip (PR #1692). SSR changes the shared rule (fixlog/shared-steps.md) and these steps say so themselves, so that a factor of safety is not shown as a D/C.
+- **Governing provision:** none (display only; no value, ok flag, verdict, saved key or saved-data format change).
+- **How verified:** main vs this branch, the tool opened headless with every tab clicked and every topic's chip / class / one-line result recorded (PR description: audit table); `node tests/engine/run.mjs`.
+- **Other copies:** none.
