@@ -53,7 +53,7 @@ const sumCells = p => p.evaluate(() => { const st = window.SBDSummaryUI.state();
       tabs: [...document.querySelectorAll('#inTabs button.has-err')].map(b => [b.dataset.itab, b.querySelector('.inDot').textContent]),
       dash: document.getElementById('sbDashCol').innerText }));
     assert.match(s.banner, /^1 input needs fixing before results can be shown/);
-    assert.match(s.banner, /Cross-section › Left fence from deck edge: Left sidewalk railing or fence: its position from the deck edge must be on the left sidewalk/);
+    assert.match(s.banner, /Cross-section › Left sidewalk: Fence from deck edge: Left sidewalk railing or fence: its position from the deck edge must be on the left sidewalk/);
     assert.deepEqual(s.bad, ['xs.sidewalks.L.fenceX']);
     assert.equal(s.msg.length, 1); assert.match(s.msg[0], /its position from the deck edge/);
     assert.deepEqual(s.tabs, [['xsec', '1']]);
