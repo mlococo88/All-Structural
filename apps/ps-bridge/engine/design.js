@@ -157,11 +157,18 @@
     // PL-A (§4, only with a pedestrian live load on the Cross-section tab, AASHTO LRFD 10th Ed. 3.6.1.6): this line's share w_PL (klf), which
     // engine/pl.js adds to the engine's live load; no pedestrian load (every project saved before): no inputs.pl, the engine's own run
     if (q && q.PL > 0) o.pl = { w: q.PL };
+    // SRP / IMP-N (2026-11-23; no engine value reads it): the line's share of the utilities on the composite section (category UT; already
+    // inside w_DW above), named in inputs.utc for the hand-off's separate item (engine/handoffs.js srParts) and for the note "imported
+    // demands are used as given" (engine/demands.js assumed()). No such utility (every project saved before PL-A): nothing added.
+    if (q && q.UT) o.utc = q.UT;
     // PS-20 (§4): d_e of an exterior line from the bridge cross-section (deOf) when the project has its barriers (P.xs.dl); else as entered
     const de = deOf(P, d.g); if (de != null) o.loads = Object.assign({}, o.loads, { de });
     // PS-19 (§4): with unequal bays the exterior rigid-section factor on the real girder lines (engine/rigid.js); equal bays and interior lines: nothing added
     const B = (P.xs && P.xs.bays) || [];
     if ((d.g === 1 || d.g === P.xs.nb) && B.length >= 2 && B.some(v => Math.abs(v - B[0]) > 1e-9)) { /* exterior lines only (the rigid section is theirs) */ const x = [0]; B.forEach(v => x.push(x[x.length - 1] + v)); o.rigidX = { x, g: d.g }; }
+    // LL-O (§4, only with a distribution option of the Cross-section tab on: P.xs.lldf.skewV 'ext' or extMin true, engine/lldf-opt.js): the
+    // options and, for an exterior line, the largest interior girder spacing; both off (every project saved before): no inputs.lldf
+    const lo = window.PSBLldfOpt ? window.PSBLldfOpt.forInputs(P, d.g, lineS) : null; if (lo) o.lldf = lo;
     return o;
   }
   /* driven(P): the bridge values of the design, for display: [{ key, label, value, unit, where }] (where = the input tab that holds them) */

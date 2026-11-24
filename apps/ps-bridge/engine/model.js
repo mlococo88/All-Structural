@@ -72,6 +72,10 @@
                       demand table) or 'midas' (a MIDAS demands file, kept as read). Absent (every project saved before) = every type uses this
                       app's analysis, as before: those projects are byte-identical and compute as before (no migration). An old-app design
                       with MIDAS demands (engine/legacy.js) gets them here for its type (PS-18), so it computes as the old app.
+     xs.lldf: { skewV: 'all' | 'ext', extMin: true | false }  added 2026-11-23 (LL-O), optional within version 1, the Steel Bridge app's
+                      names and values (its xs.lldf.skewV, xs.lldf.extMin): the shear skew correction on all girders or the exterior
+                      girders only, and "exterior not less than interior" (engine/lldf-opt.js). Absent, or 'all' and false (every
+                      project saved before; a new project has no xs.lldf) = both off: those projects compute exactly as before.
      handoffs: { sent: { <id>: { sig, at, cell? } }, loaded: { <id>: { sig, at, cell?, via? } } }  added 2026-11-21 (engineer decision
                       HO-D2), optional within version 1: what this project last sent / loaded on each bridgeSuite.v1 hand-off channel
                       (engine/hostale.js header), written only by a click of Send / Load (ui/handoffs.js). Read by the stale banners only:
@@ -153,6 +157,11 @@
     const S = Array.isArray(x.skews) ? x.skews : [];
     if (L.length && S.length !== L.length + 1) E('xs.skews', `Enter ${L.length + 1} support skews (abutment, piers, abutment) for ${L.length} span${L.length === 1 ? '' : 's'}.`);
     S.forEach((v, i) => { if (!(isNum(v) && Math.abs(v) < 90)) E(`xs.skews.${i}`, `Skew at support ${i + 1} must be a number of degrees between −90 and 90.`); });
+    // 2026-11-23 (LL-O): the optional distribution options xs.lldf (the Steel Bridge app's names); absent = both off
+    if (x.lldf != null) { const q = x.lldf;
+      if (typeof q !== 'object' || Array.isArray(q)) E('xs.lldf', 'Live-load distribution options: not readable (expected skewV and extMin).');
+      else { if (q.skewV != null && !['all', 'ext'].includes(q.skewV)) E('xs.lldf.skewV', 'Shear skew correction: choose All girders or Exterior girders only.');
+        if (q.extMin != null && typeof q.extMin !== 'boolean') E('xs.lldf.extMin', 'Exterior not less than interior: choose Yes or No.'); } }
     if (p.base !== undefined && (!p.base || typeof p.base !== 'object' || Array.isArray(p.base))) E('base', 'The base girder design is not an inputs object.');
     const BR = typeof window !== 'undefined' && window.PSBBridge;   // PR 3a-1: the girder types (engine/bridge.js), when present
     if (p.types !== undefined && BR && !BR.validTypes(p.types)) E('types', 'The girder types cannot be read (each needs an id, a span, its lines and its overrides).');

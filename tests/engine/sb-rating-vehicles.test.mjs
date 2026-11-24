@@ -6,6 +6,8 @@
 //  2. every vehicle of shared/vehicles.js offered here: its per-lane simple-span moment at every station and its end reaction against a hand
 //     method (an axle at the section, both directions: Σ P·(influence ordinate)), IM 0 and IM 33 %;
 //  3. hand check, 100 ft simple span, Type 3: M at midspan by axle positions, IM, DF, γ_LL, RF and tons; one shear RF; a permit (special, one lane);
+//  5. MBE 4th Ed. verification (2026-11-23, MBV): the 0.2 klf lane load with a permit (Art. 6A.4.5.4.1: ADTT above 500, not escorted, the pier-region
+//     shear), Service II of a mixed-traffic special permit with the design factor (C6A.6.4.2.2), the lane-type model's W = 80 kip (6A.4.4.4, 6A.8.3).
 //  4. identity: with no vehicle ticked build() returns no veh field and the same rows as without the option; the analysis result is unchanged by a
 //     vehicle run; the lane-type model's mask; the owner targets; the Summary column only with vehicles.
 import assert from 'node:assert/strict';
@@ -29,7 +31,7 @@ test('factor tables: legal γ_LL by ADTT, permit γ_LL, posting, GVW/AL, the axl
     .forEach(([a, w, g]) => near(RT.gammaPermit('routine', a, w).g, g, 1e-12, `routine ADTT ${a} GVW/AL ${w}`));
   near(RT.gammaPermit('routine', 3000, 2.5).g, 1.30, 1e-12, 'routine, ADTT 3000, middle column: 1.25 + 0.10(2000/4000)'); near(RT.gammaPermit('routine', 550, 3.5).g, 1.175, 1e-12, 'routine, ADTT 550: 1.15 + 0.05(450/900)');
   assert.equal(RT.gammaPermit('routine', 2000, 2).df, 'multi');
-  [['multi', 1.40], ['trip-mixed', 1.20], ['trip-escort', 1.10]].forEach(([t, g]) => { const q = RT.gammaPermit(t, 2000, 2.5); assert.equal(q.g, g); assert.equal(q.df, 'one'); assert.equal(q.verified, false); });
+  [['multi', 1.40], ['trip-mixed', 1.20], ['trip-escort', 1.10]].forEach(([t, g]) => { const q = RT.gammaPermit(t, 2000, 2.5); assert.equal(q.g, g); assert.equal(q.df, 'one'); assert.equal(q.verified, true); });   // read against MBE 4th Ed. Table 6A.4.5.4.2a-1 (2026-11-23)
   // posting, Eq. 6A.8.3-1: W = 25 tons, RF 0.80 → 25/0.7(0.80 − 0.30) = 17.857 tons
   near(RT.posting(25, 0.8).P, 17.857142857, 1e-8, 'posting'); assert.equal(RT.posting(25, 1.0).st, 'ok'); assert.equal(RT.posting(25, 0.3).st, 'close'); assert.equal(RT.posting(25, 0.31).st, 'post');
   // CT-TLC: GVW 279.6 kip over 84.78 ft = 3.298 kip/ft
@@ -80,7 +82,7 @@ test('hand check, 100 ft simple span, interior girder: Type 3 flexure RF and ton
   // Service II: γ_LL 1.30 for a legal load
   const sv = v.rows.find(r => r.kind === 'svc' && r.key === 'svb' && Math.abs(r.x - 50) < 1e-9); near(sv.inv, (sv.C - sv.DC - sv.DW - (sv.F || 0)) / (1.30 * sv.LL), 1e-9, 'Service II RF');
   // permit, single trip escorted: Strength II, γ_LL 1.10, the one-lane factor without m (the fatigue factor), Service II γ_LL 1.00
-  assert.equal(pm.cat, 'permit'); assert.equal(pm.lim, 'Strength II'); assert.equal(pm.gam, 1.10); assert.equal(pm.df, 'one'); assert.equal(pm.verified, false);
+  assert.equal(pm.cat, 'permit'); assert.equal(pm.lim, 'Strength II'); assert.equal(pm.gam, 1.10); assert.equal(pm.df, 'one'); assert.equal(pm.dfS, 'one'); assert.equal(pm.verified, true); assert.equal(pm.VLs, null);
   const hp = handM(PRE.Type3S2.axles, 50, 100), Mp = R.fat.gM[i50] * 1.33 * hp, qp = pm.rows.find(r => r.kind === 'flex' && r.key === 'mp' && Math.abs(r.x - 50) < 1e-9);
   near(qp.LL, Mp, 1e-6 * Mp, 'permit M per girder'); near(qp.inv, (qp.C - 1.25 * qp.DC - 1.50 * qp.DW - (qp.F || 0)) / (1.10 * Mp), 1e-5, 'permit RF'); assert.equal(qp.lim, 'Strength II');
   const svp = pm.rows.find(r => r.kind === 'svc' && r.key === 'svb' && Math.abs(r.x - 50) < 1e-9); near(svp.inv, (svp.C - svp.DC - svp.DW - (svp.F || 0)) / (1.00 * svp.LL), 1e-9, 'permit Service II RF');
@@ -113,9 +115,52 @@ test('nothing ticked: the same results as before; the vehicles do not change the
   // 0.2 klf × (the negative area of the influence line) = the difference of the two runs, and it carries no IM (the same difference at IM 0 and 33 %)
   const ct = PRE['CT-TLC'], pr = im => R.vehicle({ short: 'P', axles: ct.axles, udl: { mode: 'none', w: 0, gap: 0, trunc: false }, neglect: ct.neglect, multi: { on: false }, im }), prL = im => R.vehicle({ short: 'P+', axles: ct.axles, udl: { mode: 'lane', w: 0.2, gap: 0, trunc: false }, neglect: ct.neglect, multi: { on: false }, im });
   const VP = RT.vehicleLL(R, pr(0), { cat: 'permit', df: 'multi' }, prL(0)), ip = R.supIdx[1];
-  assert.ok(VP.withLane.Mmin[ip] && !VP.withLane.Mmax[ip] && !VP.withLane.VRmax[ip]); assert.equal(VP.per.Mmax[ip - 30], pr(0).perLane.Mmax[ip - 30]); assert.ok(VP.per.Mmin[ip] < pr(0).perLane.Mmin[ip] - 100);
+  assert.ok(VP.withLane.Mmin[ip] && !VP.withLane.Mmax[ip] && VP.withLane.VRmax[ip] && VP.withLane.VLmin[ip], 'pier: negative moment and shear with the lane load (MBE 6A.4.5.4.1)'); const io = R.x.findIndex((x, i) => !(R.region[i] >= 1) && x > 5); assert.ok(io > 0 && !VP.withLane.VRmax[io] && !VP.withLane.VLmin[io] && !VP.withLane.Mmax[io] && VP.withLane.Mmin[io], 'outside the pier region: shear without the lane load'); R.x.forEach((x, i) => assert.equal(VP.withLane.VRmax[i], R.region[i] >= 1, `shear with the lane load only in the pier regions (x = ${x})`)); assert.equal(VP.per.Mmax[ip - 30], pr(0).perLane.Mmax[ip - 30]); assert.ok(VP.per.Mmin[ip] < pr(0).perLane.Mmin[ip] - 100);
   near(prL(33).perLane.Mmin[ip] - pr(33).perLane.Mmin[ip], prL(0).perLane.Mmin[ip] - pr(0).perLane.Mmin[ip], 1e-6, 'the lane load carries no IM');
   assert.equal(RT.laneModelNeeded([100], false), false); assert.equal(RT.laneModelNeeded([201], false), true); assert.equal(RT.laneModelNeeded([100, 100], true), true); assert.equal(RT.laneModelNeeded([100, 100], false), false);
   // owner targets (reported): RIDOT 1.10 every vehicle; CTDOT 1.20, CT-TLC 1.10; AASHTO and MassDOT none
   assert.equal(RT.vehTarget('RIDOT', 'Type3').need, 1.10); assert.equal(RT.vehTarget('CTDOT', 'EV3').need, 1.20); assert.equal(RT.vehTarget('CTDOT', 'CT-TLC').need, 1.10); assert.equal(RT.vehTarget('AASHTO', 'Type3'), null); assert.equal(RT.vehTarget('MassDOT', 'Type3'), null);
+});
+
+test('MBE 4th Ed. verification: permit lane load (6A.4.5.4.1), Service II factor of special permits (C6A.6.4.2.2), lane-type W = 80 kip (6A.4.4.4, 6A.8.3)', () => {
+  // permitLane: required at ADTT > 500 (or unknown) for continuous girders and spans over 200 ft; not for the escorted permit; not at ADTT ≤ 500
+  const pv = (mixed) => ({ cat: 'permit', mixed });
+  assert.equal(RT.permitLane(pv(true), 2000, [100, 100], true).on, true); assert.equal(RT.permitLane(pv(true), null, [100, 100], true).on, true); assert.equal(RT.permitLane(pv(true), 501, [250], false).on, true);
+  assert.equal(RT.permitLane(pv(true), 500, [100, 100], true).on, false); assert.equal(RT.permitLane(pv(true), 100, [250], false).on, false);
+  assert.equal(RT.permitLane(pv(false), 2000, [100, 100], true).on, false, 'escorted: no other vehicle on the bridge'); assert.equal(RT.permitLane(pv(true), 2000, [100], false).on, false, 'simple span of 200 ft or less');
+  assert.equal(RT.permitLane({ cat: 'legal' }, 2000, [100, 100], true).on, false); assert.ok(/ADTT 400/.test(RT.permitLane(pv(true), 400, [100, 100], true).why));
+  RT.PERMIT_TYPES.forEach(t => { assert.equal(t.dfS, t.id === 'trip-escort' ? 'one' : 'multi'); assert.equal(t.mixed, t.id !== 'trip-escort'); });
+  // two equal continuous spans of 100 ft, one plate size: the shear just left of the pier under a uniform load on both spans is (5/8) w L:
+  // the 0.2 klf lane load adds 0.625(0.2)(100) = 12.5 kip per lane to the permit vehicle's shear there, with no IM
+  const P = M.defaultProject(); P.spans = { lengths: [100, 100], continuity: 'continuous' }; P.xs = M.defaultXs(P); P.girders.forEach(g => { g.segments = [{ ...g.segments[0], x0: 0, x1: 200 }]; }); P.rating = { phiC: 1, phiS: 1, veh: { on: [], permit: { key: 'Type3S2', type: 'routine' } } };
+  const A = RU.fromAnalysis(P, 0); assert.ok(!A.err, A.err); const R = A.R, ip = R.supIdx[1], ax = PRE.Type3S2.axles;
+  const run = (w, im) => R.vehicle({ short: 'P' + w, axles: ax, udl: w ? { mode: 'lane', w, gap: 0, trunc: false } : { mode: 'none', w: 0, gap: 0, trunc: false }, neglect: true, multi: { on: false }, im });
+  const dV = Math.abs(run(0.2, 33).perLane.VLmin[ip]) - Math.abs(run(0, 33).perLane.VLmin[ip]);
+  near(dV, 12.5, 0.15, 'lane-load shear at the pier, (5/8)(0.2)(100) kip per lane'); near(Math.abs(run(0.2, 0).perLane.VLmin[ip]) - Math.abs(run(0, 0).perLane.VLmin[ip]), dV, 1e-6, 'no IM on the lane load');
+  const B = RU.build({ P, g: 0, src: 'analysis', veh: true }); assert.ok(!B.err, B.err); const v = B.veh.list[0]; assert.ok(v.rows, v.err); assert.equal(v.laneLoad, true); assert.ok(/above 500/.test(v.laneWhy));
+  const Vt = Math.abs(run(0, 33).perLane.VLmin[ip]), Vl = Math.abs(run(0.2, 33).perLane.VLmin[ip]); near(Math.abs(v.VL.per.VLmin[ip]), Vl, 1e-9, 'the pier shear takes the run with the lane load'); assert.ok(v.VL.withLane.VLmin[ip]);
+  const sp = v.rows.filter(r => r.kind === 'shear' && Math.abs(r.x - 100) < 0.02).sort((a, b) => a.inv - b.inv)[0], gV = Math.max(R.ll.gVL[ip], R.ll.gVR[ip]);
+  console.log(`       permit Type 3S2 (routine, ADTT 2000) on 100-100 ft continuous, shear at the pier: V_lane = ${Vt.toFixed(2)} kip (truck, IM 33 %) + ${dV.toFixed(2)} (0.2 klf) = ${Vl.toFixed(2)}; g_V = ${gV.toFixed(4)}; row LL = ${sp.LL.toFixed(2)}, C = ${sp.C.toFixed(1)}, DC = ${sp.DC.toFixed(1)}, DW = ${sp.DW.toFixed(1)}, γ_LL = ${v.gam.toFixed(4)}: RF = ${sp.inv.toFixed(3)} (without the lane load: ${((sp.C - 1.25 * sp.DC - 1.5 * sp.DW) / (v.gam * (sp.LL - gV * dV))).toFixed(3)})`);
+  near(sp.inv, (sp.C - 1.25 * sp.DC - 1.50 * sp.DW) / (v.gam * sp.LL), 1e-5, 'pier shear RF');
+  // ADTT 400: no lane load; the escorted permit: none either
+  const P4 = JSON.parse(JSON.stringify(P)); P4.fatigue.ADTT = 400; const v4 = RU.build({ P: P4, g: 0, src: 'analysis', veh: true }).veh.list[0]; assert.equal(v4.laneLoad, false); assert.ok(/not above 500/.test(v4.laneWhy)); near(Math.abs(v4.VL.per.VLmin[ip]), Vt, 1e-9, 'ADTT 400: the truck alone');
+  const Pe = JSON.parse(JSON.stringify(P)); Pe.rating.veh.permit.type = 'trip-escort'; const ve = RU.build({ P: Pe, g: 0, src: 'analysis', veh: true }).veh.list[0]; assert.equal(ve.laneLoad, false); assert.ok(/escorted/.test(ve.laneWhy));
+  // Service II of a special permit: mixed with traffic → the design factor; escorted → the one-lane factor; Strength II one lane for both
+  const S = simple(), mk = type => { const Q = JSON.parse(JSON.stringify(S)); Q.rating.veh = { on: [], permit: { key: 'Type3S2', type } }; const b = RU.build({ P: Q, g: 0, src: 'analysis', veh: true }); assert.ok(!b.err, b.err); return b.veh.list[0]; };
+  const RS = RU.fromAnalysis(S, 0).R, i50 = RS.x.findIndex(x => Math.abs(x - 50) < 1e-9), mix = mk('trip-mixed'), esc = mk('trip-escort'), mul = mk('multi'), rou = mk('routine');
+  const row = (v, kind, key) => v.rows.find(r => r.kind === kind && r.key === key && Math.abs(r.x - 50) < 1e-9), gD = RS.ll.gM[i50], g1 = RS.fat.gM[i50];
+  assert.equal(mix.dfS, 'multi'); assert.ok(mix.VLs && mul.VLs && !esc.VLs && !rou.VLs); assert.equal(RU.dfCell(mix), 'one lane, no m (Service II: design)'); assert.equal(RU.dfCell(esc), 'one lane, no m'); assert.equal(RU.dfCell(rou), 'design');
+  near(row(mix, 'flex', 'mp').LL, row(esc, 'flex', 'mp').LL, 1e-9, 'Strength II: the one-lane factor for both special permits'); near(row(mix, 'flex', 'mp').LL, g1 * 1.33 * 1322, 1e-6 * 1322, 'M = g_1/1.2 × 1.33 × 1,322.0');
+  const sm = row(mix, 'svc', 'svb'), se = row(esc, 'svc', 'svb'), sr = row(rou, 'svc', 'svb');
+  near(sm.LL / se.LL, gD / g1, 1e-9, 'Service II live-load stress: design factor / one-lane factor'); near(sm.LL, sr.LL, 1e-9, 'the same Service II stress as the routine permit (design factor)'); near(sm.DC, se.DC, 1e-12, 'same dead load');
+  near(sm.inv, (sm.C - sm.DC - sm.DW - (sm.F || 0)) / (1.00 * sm.LL), 1e-9, 'Service II RF, γ_LL 1.00'); near(sm.inv, se.inv * g1 / gD, 1e-9, 'RF scales with the factor');
+  const st = sm.steps.find(t => t.id === 'rt.LLv'); assert.ok(st && /design distribution factor/.test(st.note) && /C6A\.6\.4\.2\.2/.test(st.note), 'the Service II live-load step names the design factor'); assert.ok(/one-lane/.test(row(mix, 'flex', 'mp').steps.find(t => t.id === 'rt.LLv').note));
+  assert.ok(mix.cap.get(sm) && mix.cap.get(sm).steps, 'the capacity location of the Service II row'); assert.ok(mix.rf <= esc.rf + 1e-12);
+  console.log(`       special permit Type 3S2, single trip mixed with traffic, 100 ft simple span, x = 50 ft, Service II bottom flange: f_LL = ${se.LL.toFixed(3)} ksi with g_1/1.2 = ${g1.toFixed(4)} → ${sm.LL.toFixed(3)} ksi with g = ${gD.toFixed(4)}; f_R = ${sm.C.toFixed(2)}, f_DC = ${sm.DC.toFixed(3)}, f_DW = ${sm.DW.toFixed(3)}, f_l/2 = ${(sm.F || 0).toFixed(3)}: RF ${se.inv.toFixed(3)} → ${sm.inv.toFixed(3)}; governing RF ${esc.rf.toFixed(3)} (escorted) / ${mix.rf.toFixed(3)} (mixed), RT ${mix.rated.toFixed(1)} tons`);
+  // lane-type legal model: W = 80 kip (40 tons) for the rated load and posting
+  const L = RT.vehicleList({ on: ['Legal-Lane'] }, PRE, { adtt: 2000 }).list[0]; assert.equal(L.tons, 40); assert.equal(L.Weq, 80); assert.equal(L.post, true); assert.equal(L.W, 60); assert.equal(RT.LANE_W, 80);
+  near(RT.posting(40, 0.8).P, 40 / 0.7 * 0.5, 1e-12, 'posting with W = 40 tons: 28.57 tons');
+  const C = M.defaultProject(); C.rating = { phiC: 1, phiS: 1, veh: { on: ['Legal-Lane'] } }; const lv = RU.build({ P: C, g: 0, src: 'analysis', veh: true }).veh.list[0]; assert.ok(lv.rows, lv.err || lv.na);
+  near(lv.rated, lv.rf * 40, 1e-9, 'lane-type model: RT = RF × 40 tons'); assert.ok(lv.posting && lv.posting.st); const ws = RU.vehSteps(lv); assert.equal(ws[0].value, 40); assert.ok(/6A\.4\.4\.4/.test(ws[0].ref));
+  console.log(`       lane-type legal model on the default continuous girder: RF = ${lv.rf.toFixed(3)}, RT = RF × 40 tons = ${lv.rated.toFixed(1)} tons, posting ${lv.posting.st}`);
 });
