@@ -11956,3 +11956,13 @@ None (display only).
 None.
 ### Open items
 - The Deck tab's section figure (ui/deck.js) draws a schematic barrier to the traffic face; not changed.
+
+## 2026-11-24 — PR: claude/shared-steps-ratio (PR #1706: https://github.com/mlococo88/All-Structural/pull/1706) (SSR) — worked-step topic chips: the cross-frame slenderness ℓ/r_z and Kℓ/r_min (CF3), the welds' thickness and area proportions (TR4) marked as not a demand / capacity ratio (`ratio: false`; display only)
+- **Where:** `engine/crossframes.js`, the member steps (anchor `` id: `${id}.sl`, label: `${m.l}: slenderness (CF3`` ) and the diaphragm / end-diaphragm steps (anchor `` id: `${id}.ax.sl` ``); `engine/welds.js`, steps `pt` (anchor `id: 'pt', label: 'Thickness proportion (TR4)'`) and `pa` (anchor `id: 'pa', label: 'Area proportion (TR4)'`).
+- **Before / After:** `ref: `${ED} Arts. 6.9.3, 6.8.4`, ok: m.slC <= slL(m),` → `ref: `${ED} Arts. 6.9.3, 6.8.4`, ratio: false, ok: m.slC <= slL(m),`; `ref: `${ED} Art. 6.9.3`, ok: X.sl <= X.lim,` → `ref: `${ED} Art. 6.9.3`, ratio: false, ok: X.sl <= X.lim,`; welds `ref: 'Practice (AASHTO/NSBA G12.1)', ok: ge(a, 0.5)` → `… ratio: false, ok: ge(a, 0.5)` and the same for `ge(b, 0.5)`.
+- **Display change (built-in project):** Welds tab, topic "Area and thickness proportions (TR4)": chip `0.500 NG` (t_1/t_2 = 0.500 read as a D/C) → `NG`, one-line result `Area proportion (TR4): A_1/A_2 ≥ 0.5` → `… = 0.444`. Cross-frames: the member topics' raw chips (`115.178` red) → `OK`; the tab and the report show the check items' chips (#1692), unchanged.
+- **Check case:** built-in project, Welds, transition 1: t_1/t_2 = 0.563 ≥ 0.5 (ok), A_1/A_2 = 0.444 < 0.5 (not ok): before `0.563` / `0.500 NG` style chips, after `NG` (status from ok), values unchanged.
+- **Problem:** `shared/steps.js` group() read every unitless test step with an ok flag as a D/C ratio for its topic's status chip (PR #1692). SSR changes the shared rule (fixlog/shared-steps.md) and these steps say so themselves, so that a slenderness or a proportion that must be at least 0.5 is not shown as a D/C.
+- **Governing provision:** none (display only; no value, ok flag, verdict, saved key or saved-data format change).
+- **How verified:** main vs this branch, the tool opened headless with every tab clicked and every topic's chip / class / one-line result recorded (PR description: audit table); `node tests/engine/run.mjs` (crossframes, welds, sb-dia-fail-highlight, steps-groups, all); `tests/smoke/steel-bridge-dia-fail.mjs`.
+- **Other copies:** none.

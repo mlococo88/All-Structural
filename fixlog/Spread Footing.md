@@ -9130,3 +9130,13 @@ index 32153e4..953d349 100644
 - **Governing provision:** none (display only). **Check case:** default Ped 1, entry "Total quantity": only Total qty is shown; type 14 → `reinf.nTot = 14`, bars 14 #8. Dowel summary "14 #8 (longitudinal bars, continuous into the footing), hooked 90° in the footing". Results are identical to origin/main with the same entry.
 - **How verified:** `tests/smoke/spread-footing-rebar-ui.mjs --a <origin/main checkout>` covers 9 projects, opened and edited through the card in both versions. Saved JSON, R, P2, dashboard, result tabs and Report: 0 differences. Every edit went through a visible, enabled input to its data-path. No visible input is disabled. 390 px OK. The existing `spread-footing-*` smoke tests and `check-syntax` pass.
 - **Other copies:** none.
+
+## 2026-11-24 — PR: claude/shared-steps-ratio (PR #1706: https://github.com/mlococo88/All-Structural/pull/1706) (SSR) — worked-step topic chips: ε_t (tension-controlled), ρ_g, ρ_ℓ, ρ_t, ℓ_w/t, δ_s δ and kℓ_u/r marked as not a demand / capacity ratio (`ratio: false`; display only)
+- **Where:** the worked-step builders of the Report tab; anchors `ok:!!des.tcBotOK,`, `ok:!!des.tcTopOK,`, `ok:r.cap.eps_t>=des.epsTC-1e-12,`, `value:pd.rho,unit:'',d:4,ok:!!pd.rhoOK}`, `ok:!!w.rlOK})`, `ok:!!w.rtOK})`, `value:w.lt,unit:'',d:2,ok:true,ref:'ACI 318-19 2.3'`, `ok:!pd.slFail,ref:'ACI 318-19 6.2.5.3'`, `ok:!ip.slFail,ref:'ACI 318-19 6.2.5.1`.
+- **Before / After:** in each anchor `ok:` → `ratio:false,ok:` (nothing else).
+- **Display change (built-in project):** Report, topic "Longitudinal steel": chip `0.020` (ρ_g read as a D/C) → `OK`; one-line result → the bars and clear spacing step. Other topics change only for inputs where those steps govern (e.g. ε_t alone in a topic).
+- **Check case:** built-in project, pedestal: ρ_g = 0.020 ≤ 0.08 (ok): before chip `0.020`, after `OK`; values unchanged.
+- **Problem:** `shared/steps.js` group() read every unitless test step with an ok flag as a D/C ratio for its topic's status chip (PR #1692). SSR changes the shared rule (fixlog/shared-steps.md) and these steps say so themselves, so that a strain, a steel ratio, a slenderness or a moment magnifier is not shown as a D/C.
+- **Governing provision:** none (display only; no value, ok flag, verdict, saved key or saved-data format change).
+- **How verified:** main vs this branch, the tool opened headless with every tab clicked and every topic's chip / class / one-line result recorded (PR description: audit table); `node tests/engine/run.mjs`.
+- **Other copies:** none.
