@@ -6,7 +6,8 @@
    The hash, the record helpers and the states are shared/handoff-stale.js (SharedHandoffStale; the PS Bridge app's, moved there unchanged).
 
    The record (what this project last sent / loaded):
-     P.handoffs = { sent:   { superGeometry: { sig, at }, superReactions: { sig, at }, projectMeta: { sig, at } },
+     P.handoffs = { sent:   { superGeometry: { sig, at }, superReactions: { sig, at }, bearingLoads: { sig, at } (BRG-HO, 2026-11-24: sig as
+                              superReactions, the inputs hash rxSig), projectMeta: { sig, at } },
                     loaded: { projectMeta: { sig: 'same', at } } }
        sig: superGeometry, projectMeta: the hash of the payload sent, its stamp fields left out (SharedHandoffStale.sig);
             superReactions: 'inp:' + the hash of the inputs its analysis reads (rxInputs): rebuilding that payload runs the moving-load
@@ -30,11 +31,12 @@
   const CH = {
     superGeometry: { ch: 'superGeometry', dir: 'out', label: 'Bridge geometry', to: 'Substructure Loading' },
     superReactions: { ch: 'superReactions', dir: 'out', label: 'Reactions of every girder line', to: 'Substructure Loading' },
+    bearingLoads: { ch: 'bearingLoads', dir: 'out', label: 'Bearing loads', to: 'the Elastomeric Bearing module' },   // BRG-HO (2026-11-24): sig as superReactions (rxSig)
     projectMeta: { ch: 'projectMeta', dir: 'out', label: 'Project info', to: 'the other tools' },
     lldf: { ch: 'lldf', dir: 'in', label: 'Distribution factors', from: 'LL & DL Distribution' },
     projectMetaIn: { ch: 'projectMeta', dir: 'in', label: 'Shared project info', from: 'another tool', rec: 'projectMeta' }
   };
-  const OUT_IDS = ['superGeometry', 'superReactions', 'projectMeta'];
+  const OUT_IDS = ['superGeometry', 'superReactions', 'bearingLoads', 'projectMeta'];
 
   /* rxInputs(P): the inputs the reactions hand-off depends on: the project text the analysis cache is keyed by (report/data.js pkOf: the
      project without the rating factors, the f_l entered on the Flexure tab, the custom demands and the demand choices, which the analysis
@@ -95,10 +97,10 @@
     const atOf = raw => { try { const p = raw ? JSON.parse(raw) : null; return (p && p.producedAt) || ''; } catch (e) { return ''; } };
     OUT_IDS.forEach(id => {
       const rec = St.sentOf(P, id); if (!rec) return;
-      const C = CH[id], cur = errs ? null : id === 'superGeometry' ? geoSig(H, P) : id === 'superReactions' ? rxSig(P) : pmSig(H, P);
+      const C = CH[id], cur = errs ? null : id === 'superGeometry' ? geoSig(H, P) : id === 'superReactions' || id === 'bearingLoads' ? rxSig(P) : pmSig(H, P);
       const sh = atOf(get(C.ch));
       it.push({ id, dir: 'out', state: St.outState(rec, cur), rec, later: sh && rec.at && sh !== rec.at ? sh : '', head: `${C.label} (${C.ch})`,
-        msg: id === 'superReactions' ? `the inputs its analysis reads changed since last sent to ${C.to}` : `changed since last sent to ${C.to}`, btn: 'Send' });
+        msg: id === 'superReactions' || id === 'bearingLoads' ? `the inputs its analysis reads changed since last sent to ${C.to}` : `changed since last sent to ${C.to}`, btn: 'Send' });
     });
     lldfPulls(P).forEach(q => {
       const rec = { at: q.u.source.producedAt || '', sig: pullSig(q.u), via: q.u.source.via, pulled: q.u.source.adoptedAt || '' };

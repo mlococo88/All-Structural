@@ -1751,7 +1751,7 @@ document.addEventListener("click",ev=>{ const t=ev.target; if(!t||!t.closest) re
 const EDMB={};   /* the open dialog's state (memory only) */
 function edmBrgDlg(o){
   Object.assign(EDMB,{groups:o.groups,errors:o.errors||[],cloud:o.cloud,gi:o.gi,ei:o.ei||0,li:null,girder:null,im:!!(S.tog&&S.tog.includeIM),pl:true,n:1,run:true,therm:false,keepLine:o.keepLine});
-  const B=S.brgSrc; if(o.keepLine&&B&&B.opts){ EDMB.im=!!B.opts.im; EDMB.pl=B.opts.pl!==false; EDMB.n=+B.opts.n||1; EDMB.run=B.opts.run!==false; EDMB.therm=!!B.opts.therm; EDMB.girder=B.girder||null; }
+  const B=S.brgSrc; EDMB.imUser=false; EDMB.imAuto=false; if(o.keepLine&&B&&B.opts){ EDMB.imUser=true; EDMB.im=!!B.opts.im; EDMB.pl=B.opts.pl!==false; EDMB.n=+B.opts.n||1; EDMB.run=B.opts.run!==false; EDMB.therm=!!B.opts.therm; EDMB.girder=B.girder||null; }
   let d=document.getElementById("dlgBrg");
   if(!d){ d=document.createElement("dialog"); d.id="dlgBrg"; d.style.maxWidth="min(1180px,96vw)"; d.style.width="96vw"; document.body.appendChild(d);
     d.addEventListener("change",edmBrgDlgChange); d.addEventListener("click",edmBrgDlgClick); }
@@ -1773,6 +1773,10 @@ function edmBrgDlgDraw(){
   if(ck.error){ h+=`<div class="warn-item err">Refused: ${esc(ck.error)}</div><div style="text-align:right;margin-top:8px"><button type="button" class="mini-btn" data-brg-act="cancel">Close</button></div>`; d.innerHTML=h; return; }
   // the bearing line: the one pulled last (same support, side, span, end) when it is this project's copy, else the first
   if(EDMB.li==null||EDMB.li>=p.lines.length){ const B=S.brgSrc; const k=EDMB.keepLine&&B?edmBrgLineIdx(p,B.line):-1; EDMB.li=k>=0?k:0; }
+  /* BRG-HO PR 2 (2026-11-24): a sender without the live load without IM (the Steel Bridge app: max / min null) but with LL+IM: the dialog
+     takes LL+IM (the larger, conservative) and says so, until the user chooses (Decision BRG-D14) */
+  { const ls=p.lines[EDMB.li]?p.lines[EDMB.li].girders:[], hasN=ls.some(g=>g.LL&&isFinite(g.LL.max)&&g.LL.max!==null), hasI=ls.some(g=>g.LL&&isFinite(g.LL.maxIM)&&g.LL.maxIM!==null);
+    EDMB.imAuto=false; if(!EDMB.imUser&&!hasN&&hasI){ EDMB.im=true; EDMB.imAuto=true; } else if(!EDMB.imUser) EDMB.im=!!(S.tog&&S.tog.includeIM); }
   const P=SB.plan(p,EDMB.li,{im:EDMB.im,pl:EDMB.pl,n:EDMB.n,girder:EDMB.girder}); if(!P.design) { d.innerHTML=h; return; }
   EDMB.girder=P.design.label;
   h+=`<div class="in-row"><label>Bearing line</label><select data-brg="li">${p.lines.map((l,i)=>`<option value="${i}"${i===EDMB.li?" selected":""}>${esc(SB.lineName(l))}${l.side?" · "+esc(l.side):""} · x = ${f2(l.x)} ft</option>`).join("")}</select></div>`;
@@ -1781,7 +1785,8 @@ function edmBrgDlgDraw(){
   h+=`<div style="overflow-x:auto"><table class="itbl"><tr><th>Design (I-4)</th><th>Girder</th><th>Position</th><th>Girder type</th><th>DC1</th><th>DC2</th><th>DW</th>${sk.map(k=>`<th>${k}${k==="UT"||k==="UF"?" (in DC1)":k==="UTc"?" (in DW)":k==="PLmin"?" (info)":""}</th>`).join("")}<th>LL</th><th>LL min (info)</th><th>LL+IM</th><th>LL+IM min (info)</th><th>P<sub>DL</sub></th><th>P<sub>LL</sub></th><th>P<sub>min</sub></th></tr>`
     +P.rows.map(r=>`<tr${r.label===P.design.label?' style="background:#eef4ff"':""}><td><input type="radio" name="brgG" data-brg="girder" value="${esc(r.label)}"${r.label===P.design.label?" checked":""}></td><td>${esc(r.label)}</td><td>${esc(r.position)}</td><td>${esc(r.type)}</td><td>${f3(r.DC1)}</td><td>${f3(r.DC2)}</td><td>${f3(r.DW)}</td>${sk.map(k=>`<td>${f3(r.sep[k])}</td>`).join("")}<td>${f3(r.LL&&r.LL.max)}</td><td>${f3(r.LL&&r.LL.min)}</td><td>${f3(r.LL&&r.LL.maxIM)}</td><td>${f3(r.LL&&r.LL.minIM)}</td><td><b>${f3(r.Pdl)}</b></td><td><b>${f3(r.Pll)}</b></td><td><b>${f3(r.Pmin)}</b></td></tr>`).join("")+`</table></div>`;
   h+=`<div class="in-note">Per bearing: P<sub>DL</sub> = (DC1 + DC2 + DW)/n; P<sub>LL</sub> = (LL${EDMB.im?"+IM":""}${EDMB.pl?" + PL":""})/n; P<sub>min</sub> = (DC1 + DC2 − UT − UF)/n (the permanent DC load for the slip check: no DW, no utilities, no future utility allowance). UT and UF are inside DC1 and UTc inside DW as sent (not added again). Default design girder: the largest P<sub>DL</sub> + P<sub>LL</sub> of the line (pick another with the radio buttons).</div>`;
-  h+=`<div class="in-row"><label>Live load</label><select data-brg="im"><option value="0"${EDMB.im?"":" selected"}>LL without the dynamic load allowance (this module's basis, I-5 "includeIM" off: MassDOT excludes IM from bearings)</option><option value="1"${EDMB.im?" selected":""}>LL+IM (with the dynamic load allowance)</option></select></div>`;
+  h+=`<div class="in-row"><label>Live load</label><select data-brg="im"><option value="0"${EDMB.im?"":" selected"}>LL without the dynamic load allowance (this module's basis, I-5 "includeIM" off: MassDOT excludes IM from bearings)</option><option value="1"${EDMB.im?" selected":""}>LL+IM (with the dynamic load allowance)</option></select></div>`
+    +(EDMB.imAuto?`<div class="warn-item">${esc(p.producer||"The sender")} sent the live load with IM only (no value without IM): LL+IM is used (the larger value, conservative). Choose "without IM" to enter P<sub>LL</sub> yourself.</div>`:"");
   h+=`<div class="chk-row"><input type="checkbox" data-brg="pl"${EDMB.pl?" checked":""}${hasSep("PL")?"":" disabled"}><label>Add the pedestrian live load reaction PL to P<sub>LL</sub>${hasSep("PL")?"":" (none sent)"}</label></div>`;
   h+=`<div class="in-row"><label>Bearings per girder end n</label><input type="number" min="1" step="1" data-brg="n" value="${EDMB.n}"><span class="unit">each bearing takes 1/n</span></div>`;
   h+=`<div class="chk-row"><input type="checkbox" data-brg="run"${EDMB.run?" checked":""}><label>Also fill the Girder Run with every girder of this line (replaces the girder set now loaded: ${(S.girders||[]).length} girder(s))</label></div>`;
@@ -1804,7 +1809,7 @@ function edmBrgDlgChange(ev){ const t=ev.target, k=t&&t.dataset&&t.dataset.brg; 
   else if(k==="ei"){ EDMB.ei=+t.value; EDMB.li=null; EDMB.girder=null; }
   else if(k==="li"){ EDMB.li=+t.value; EDMB.girder=null; }
   else if(k==="girder"){ EDMB.girder=t.value; }
-  else if(k==="im"){ EDMB.im=t.value==="1"; EDMB.girder=null; }
+  else if(k==="im"){ EDMB.im=t.value==="1"; EDMB.imUser=true; EDMB.girder=null; }
   else if(k==="pl"){ EDMB.pl=!!t.checked; EDMB.girder=null; }
   else if(k==="n"){ const v=Math.round(+t.value); EDMB.n=isFinite(v)&&v>=1?v:1; }
   else if(k==="run"){ EDMB.run=!!t.checked; }
