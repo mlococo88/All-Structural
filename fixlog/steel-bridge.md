@@ -11079,3 +11079,28 @@ Each item of the table above and the three corrections were re-read against the 
   shapes such as W8X10, t_w 0.17 in, are in the list).
 - The W-shape search passes or fails a shape with the detail inputs as entered: a bearing stiffener wider than (b_f − t_w)/2 of a
   narrower shape fails that shape (BS6), so the stiffener width can govern the shape found. The result names the governing check.
+
+## 2026-11-24 — BRG-HO PR 2: bearing loads hand-off to the Elastomeric Bearing Design Module; superReactions carries the pedestrian reaction as the optional item separate { PL, PLmin } (ui/handoffs.js, engine/hostale.js, index.html; cross-tool PR with Bridge Substructure Loading.html and elastomeric_design_module.html; no design value changes)
+PR: see the PR body (branch claude/bearing-handoff-steel).
+### Request
+- Engineer-approved task (2026-11-24): (a) send bearing design data to the elastomeric bearing module (HANDOFF.md §4.17, as the PS Bridge app since #1684); (b) bring the hand-off to Substructure Loading in line with the PS Bridge app's #1683 (SRP): pedestrian and utility reactions as separate optional items in the same `separate` shape, existing totals keep their meaning, old payloads unaffected.
+### What changed (ui/handoffs.js)
+- **`runLines(P)` (new; a pure move):** the analysis loop of `srPayload` (anchor `const LN = lines(P), Rs = [], full = new Map();` … `} catch (e) { return { error: e.message }; }`) moved unchanged into `runLines`, which also returns `src` (the run whose per-lane envelope a line takes). `srPayload` now starts with `const RL = runLines(P); if (RL.error) return { error: RL.error }; const LN = RL.LN, Rs = RL.Rs;`. Proof: `srPayload` of the default project and of the default project with UT / UF rows gives the same JSON text (producedAt aside) with origin/main's file and this branch's, loaded side by side in Node.
+- **`srPayload`:** girder entries add `...(plHas(R) ? { separate: { PL: r3(R.pl.R[k].max), PLmin: r3(R.pl.R[k].min) } } : {})`; the payload adds `...(hasPL ? { separate: PL_SEP } : {})`; `hasPL = Rs.some(plHas)` (same test as before, `plHas` also requires `R.loads.PL > 0`); the pedestrian note: before "Pedestrian load: no field in this hand-off, not sent as a load. This app's pedestrian load reactions, max / min, kip: …", after "Pedestrian load: sent as the optional separate item girders[].separate { PL, PLmin } (… in NO other field; described in the top-level "separate"). This app's pedestrian load reactions, max / min, kip: …". With the items and that note removed, the payload of a project with a pedestrian load equals origin/main's (checked the same way).
+- **`blPayload(P)`, `BL_ID = 'steelbridge'` (new):** bearingLoads (HANDOFF.md §4.17), see the header comment (anchor `/* ---------- 3b. bearingLoads`). `brgSend(P, file)` (new), the card row "Bearing loads" (data-ho `brgSend` / `brgFile`), `act`, `onStale` (`bearingLoads`), `WATCH` + `bearingLoads`. Exports + `blPayload, BL_ID, runLines`.
+- **engine/hostale.js:** `CH.bearingLoads`, `OUT_IDS` + `'bearingLoads'`, `items()` signs it with `rxSig(P)` as `superReactions`.
+- **index.html** script list: `'../../shared/bearing-loads.js'` before `'ui/handoffs.js'`.
+### Values (unfactored, kip; no load factor, no new formula)
+- Continuous / one span, line k = support k: DC1 = R.st.DC1.R[k] + UT + UF; DC2, DW = R.st.DC2 / DW .R[k]; LL maxIM / minIM = R.llR[k].max / min; PL = R.pl.R[k]. Simple spans: ahead = V_R, back = −V_L at the support station of each stage, + the support point load R − (V_R − V_L) × ½ at a pier (× 1 at an abutment); LL = g_V(span) × per-lane V_R,max / −V_L,min.
+- Check case (default bridge 110–140–110 ft, 5 girders, "Elm Street (made up)", 6 ft left sidewalk PL 75 psf, UT 0.3 klf (rule "two" at 17.5 ft), UF 0.25 klf): Pier 1, G2: R.DC1 = 204.741, UT 21.176, UF 7.059 → DC1 232.976; DC2 69.225; DW 26.024; LL+IM = R.llR = 215.258; PL 20.060. P_DL = 232.976 + 69.225 + 26.024 = 328.225; P_LL (LL+IM + PL) = 235.318; P_min = 232.976 + 69.225 − 21.176 − 7.059 = 273.966 kip. Two simple spans 80 + 100 ft: back + ahead at the pier = the Analysis reaction for DC1, DC2, DW (test).
+### Saved data / formats (CLAUDE.md §5)
+- superReactions: new optional fields `girders[].separate { PL, PLmin }` and top-level `separate` only for a project with a pedestrian load (such a project shows the stale banner once); every other payload byte for byte as before. New channel `bridgeSuite.v1.bearingLoads` (+ `.updatedAt`, `.by.steelbridge`, `.by.steelbridge.<project id>`); new optional record `handoffs.sent.bearingLoads` (the hidden record of SHO).
+### Tests
+- `tests/engine/steel-bearing.test.mjs` (new, 5 tests), `tests/smoke/steel-bridge-bearing.mjs` (new). Results in the PR body.
+### Decisions (pending engineer review)
+- **BRG-D12.** The Steel app's utilities stay in their top-level `UT` / `UF` (outside DC1) in superReactions; only the pedestrian reaction goes in `separate` (putting UT / UF in `separate` would mean "inside DC1" to the receiver, or two forms of one utility, which it refuses).
+- **BRG-D13.** Simple spans: a point load at a pier support station goes half to each girder end's bearing line.
+- **BRG-D15.** No LL without IM is sent (no second moving-load run); the bearing module then uses LL+IM (BRG-D14 there).
+- **BRG-D16.** Continuous girders: one bearing line per support (one bearing per girder over the pier), the reaction with 90 % of two trucks at interior supports, as superReactions.
+### Other copies
+- None. The bootstrap / BridgeXfer snippet is not touched.
