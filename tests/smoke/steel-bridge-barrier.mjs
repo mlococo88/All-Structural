@@ -22,12 +22,12 @@ try {
     await p.waitForSelector(`#${q(`i_xs.edges.${sd}.bDims.h`)}`);
     await setNum(`i_xs.edges.${sd}.bDims.b`, 12); await setNum(`i_xs.edges.${sd}.bDims.h`, 42);
   }
-  const ro = await p.evaluate(() => [...document.querySelectorAll('#inPanes input[readonly]')].map(e => e.value));
+  const ro = await p.evaluate(() => [...document.querySelectorAll('#inPanes input[readonly][title="Computed from the barrier geometry"]')].map(e => e.value));
   assert.deepEqual(ro, ['1.000', '0.5250', '0.500', '1.000', '0.5250', '0.500'], JSON.stringify(ro));
   assert.equal(await p.evaluate(() => document.querySelectorAll('#inPanes svg[aria-label="Barrier cross-section sketch"]').length), 2);
   assert.match(await p.evaluate(() => document.querySelector('#inPanes').textContent), /504\.00\/144\(0\.150\) = 0\.5250 klf|504\.00/);
   console.log('  ok   Geometry 12 × 42 in both sides: 1.000 ft, 0.5250 klf, x̄ 0.500 ft shown read-only, worked, sketched');
-  if (SHOT) { const el = await p.$('#inPanes'); await el.screenshot({ path: SHOT }); }
+  if (SHOT) { const el = p.locator('#inPanes section.sec', { hasText: 'Barrier weight from' }).first(); await el.scrollIntoViewIfNeeded(); await el.screenshot({ path: SHOT }); }
   await p.click('#tabBar [data-otab="loads"]');
   await p.waitForFunction(() => document.getElementById('st-dl.load.barL'), null, { timeout: 120000 });
   const st = await p.evaluate(() => document.getElementById('st-dl.load.barL').textContent + ' | ' + (document.getElementById('st-dl.load.barL.geo.A') || {}).textContent);

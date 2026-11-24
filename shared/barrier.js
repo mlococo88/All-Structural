@@ -150,8 +150,8 @@
   /* svg(G, o): o = { w: px (default 200), side: 'L' | 'R' (the right deck edge drawn mirrored: the roadway to the left) } */
   function svg(G, o0) {
     const o = o0 || {}; if (!G || !G.ok) return '';
-    const W = o.w || 200, H = Math.round(W * 0.9), pad = 26, xs = G.pts.map(q => q[0]), xmax = Math.max(...xs, G.bIn) * 1.25 + 2, ymax = G.h * 1.08 + 2;
-    const k = Math.min((W - 2 * pad) / xmax, (H - 2 * pad) / ymax), m = o.side === 'R', X = x => (m ? W - pad - x * k : pad + x * k), Y = y => H - pad - y * k, r = v => Math.round(v * 10) / 10;
+    const W = o.w || 200, H = Math.round(W * 0.95), pad = 26, padS = 52, xs = G.pts.map(q => q[0]), xmax = Math.max(...xs, G.bIn) * 1.25 + 2, ymax = G.h * 1.08 + 2;
+    const k = Math.min((W - pad - padS) / xmax, (H - 2 * pad) / ymax), m = o.side === 'R', X = x => (m ? W - padS - x * k : padS + x * k), Y = y => H - pad - y * k, r = v => Math.round(v * 10) / 10;
     const poly = G.pts.map(q => `${r(X(q[0]))},${r(Y(q[1]))}`).join(' '), f2 = v => (Math.round(v * 100) / 100).toString();
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Barrier cross-section sketch" style="font:10px sans-serif">
       <line x1="${r(X(0))}" y1="${r(Y(0))}" x2="${r(X(xmax))}" y2="${r(Y(0))}" stroke="#64748b" stroke-width="2"/>
@@ -159,9 +159,9 @@
       <polygon points="${poly}" fill="#cbd5e1" stroke="#1e3a5f" stroke-width="1.5"/>
       <line x1="${r(X(G.xcIn))}" y1="${r(Y(0) - 3)}" x2="${r(X(G.xcIn))}" y2="${r(Y(G.h) - 4)}" stroke="#dc2626" stroke-dasharray="3 2"/>
       <text x="${r(X(G.xcIn))}" y="${r(Y(G.h) - 7)}" text-anchor="middle" fill="#dc2626">x̄ ${f2(G.xcIn)} in</text>
-      <text x="${r((X(0) + X(G.bIn)) / 2)}" y="${r(Y(0) + 14)}" text-anchor="middle">b_deck ${f2(G.bIn)} in</text>
-      <text x="${r(X(xmax) + (m ? 2 : -2))}" y="${r(Y(G.h / 2))}" text-anchor="${m ? 'start' : 'end'}">h ${f2(G.h)} in</text>
-      <text x="${r(X(0))}" y="${r(Y(0) + 22)}" text-anchor="middle" fill="#64748b">deck edge</text></svg>`;
+      <text x="${r((X(0) + X(G.bIn)) / 2)}" y="${r(Y(0) + 12)}" text-anchor="middle">b_deck ${f2(G.bIn)} in</text>
+      <text x="${r(X(0) + (m ? 4 : -4))}" y="${r(Y(G.h / 2))}" text-anchor="${m ? 'start' : 'end'}">h ${f2(G.h)} in</text>
+      <text x="${r(X(0))}" y="${r(Y(0) + 26)}" text-anchor="middle" fill="#64748b">deck edge</text></svg>`;
   }
 
   window.SharedBarrier = { GAMMA, SHAPES, REF_W, LBL, spec, outline, compute, steps, parsePts, ptsText, svg };
