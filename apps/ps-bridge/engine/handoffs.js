@@ -43,7 +43,84 @@
   /* ---- superReactions: the moved engine's function (verbatim slice of the old page) ---- */
   function srPayload(inp, R) {
     if (typeof W.bxSuperRxPayload !== 'function') return { error: 'the engine is not loaded' };
-    return W.bxSuperRxPayload(inp, R);
+    const b = W.bxSuperRxPayload(inp, R);
+    // SRP (2026-11-23): the pedestrian and utility reactions of the line as separate OPTIONAL items (srParts below); a girder with none
+    // (every project saved before PL-A / UT-N): the old app's payload, byte for byte
+    const q = b && b.payload ? srParts(inp, R) : null;
+    if (q) { const p = b.payload;
+      p.supports.forEach((s, k) => { const o = sepAt(q, k); if (o) s.girders[0].separate = o; });
+      const any = Object.keys(q.has).length > 0; if (any) p.separate = sepInfo(q.has);
+      p.notes = p.notes.concat(sepNotes(q, any ? [`${p.girderLine.label}: ${sepTxt(q)}`] : [])); }
+    return b;
+  }
+
+  /* ---- SRP (2026-11-23, engineer-approved): the pedestrian reaction and the utility reactions sent as SEPARATE OPTIONAL items of
+     superReactions (HANDOFF.md §4.4 "Separate items"), so that the receiver can factor each by its own load type ----
+     WHAT THE EXISTING FIELDS HOLD (unchanged, CLAUDE.md §5): DC1 = everything on the non-composite girder, which since UT-N includes the
+     utilities on the noncomposite section (UTN) and the future utility allowance (UF) (both in w_NC); DW = the line's DW, which since
+     PL-A includes the utilities on the composite section (UT); the pedestrian load is in no field (liveLoad is the HL-93 lane value or
+     null). The new items therefore say where each is: girders[].separate = { UT, UF (kip, ALREADY INSIDE DC1), UTc (kip, ALREADY INSIDE
+     DW), PL, PLmin (kip, in NO other field) }, only the keys the girder has, and the top-level separate = sepInfo() describes each
+     (includedIn, treatAs, the load factors this app uses). A receiver that does not read them is unaffected and counts nothing twice.
+     srParts(inp, R) -> null | { has: { PL, UT, UF, UTc }, L, w: { PL, UT, UF, UTc } (klf), PL: [left, right], PLmin, UT, UF, UTc (kip, + up,
+     the two ends of the span), plBasis, plExt, utcExt }:
+       UT, UF   w L / 2 at each end (on the simple non-composite span, as DC1; inputs.ut, engine/ut.js);
+       UTc      as DW: w L / 2, or with continuity the end shears of the span on the continuous unit, w V_w(0) and −w V_w(L) (R.fe);
+                with imported demands the DW reactions are the file's, which this app does not add the utility to: not sent;
+       PL       the pedestrian live load w_PL (inputs.pl, engine/pl.js; no DF, no IM, unfactored): simple span w L / 2 (PLmin 0); with
+                continuity the + and − areas of the end-shear influence lines of the span (PSBPL.areas: the engine's lane rows / 0.64):
+                left end w A+ / w A−, right end −w A− / −w A+ (max / min, + up); with imported demands PL is not computed here (the imported
+                live load is assumed to include it, IMP-N): not sent. */
+  const UTF = { strMax: 1.50, strMin: 0.65, service: 1.0 };
+  function srParts(inp, R) {
+    if (!inp || !R || R.error) return null;
+    const L = +R.L, ext = !!(R.useExt && inp.external), fe = !ext && R.fe && R.fe.Vw ? R.fe : null;
+    const wPL = inp.pl && +inp.pl.w > 0 ? +inp.pl.w : 0, u = inp.ut || {}, wUT = isN(+u.wUT) ? +u.wUT : 0, wUF = isN(+u.wUF) ? +u.wUF : 0, wUTc = isN(+inp.utc) ? +inp.utc : 0;
+    if (!(L > 0) || (!wPL && !wUT && !wUF && !wUTc)) return null;
+    const half = w => [w * L / 2, w * L / 2];
+    const q = { L, w: { PL: wPL, UT: wUT, UF: wUF, UTc: wUTc }, has: {}, plExt: ext && wPL > 0, utcExt: ext && wUTc !== 0 };
+    if (wUT) { q.UT = half(wUT); q.has.UT = true; }
+    if (wUF) { q.UF = half(wUF); q.has.UF = true; }
+    if (wUTc && !ext) { q.UTc = fe ? [wUTc * fe.Vw(0), -wUTc * fe.Vw(L)] : half(wUTc); q.has.UTc = true; }
+    if (wPL && !ext) {
+      if (fe && W.PSBPL && W.PSBPL.areas && W.PBD && W.PBD.contFE) { const E = endAreas(fe.spans, fe.s), a = E[0], z = E[1];
+        q.PL = [wPL * a.Vp, -wPL * z.Vn]; q.PLmin = [wPL * a.Vn, -wPL * z.Vp]; q.plBasis = 'cont'; }
+      else { q.PL = half(wPL); q.PLmin = [0, 0]; q.plBasis = 'simple'; }
+      q.has.PL = true;
+    }
+    q.anyPlExt = q.plExt; q.anyUtcExt = q.utcExt;
+    return q.has.PL || q.has.UT || q.has.UF || q.has.UTc || q.plExt || q.utcExt ? q : null;
+  }
+  /* endAreas(spans, s): the + and − areas (ft) of the shear influence lines at the two ends of span s of the continuous unit: the engine's
+     own analysis of that span (PBD.contFE, as computeAll runs it; R.fe keeps only its summary) read by engine/pl.js areas(); kept per unit */
+  const EA = new Map();
+  function endAreas(spans, s) { const k = spans.join(',') + '|' + s; if (!EA.has(k)) { const N = W.PSBPL.areas(W.PBD.contFE(spans, s)); EA.set(k, [N[0], N[N.length - 1]]); if (EA.size > 40) EA.delete(EA.keys().next().value); } return EA.get(k); }
+  const SEPK = ['PL', 'PLmin', 'UT', 'UF', 'UTc'];
+  /* sepAt(q, k): girders[].separate of end k (0 left, 1 right) of one line, or null */
+  function sepAt(q, k) { const o = {}; SEPK.forEach(f => { if (q[f]) o[f] = r3(q[f][k]); }); return Object.keys(o).length ? o : null; }
+  /* sepInfo(has): the top-level descriptor of the separate items that the payload carries */
+  function sepInfo(has) {
+    const o = { note: 'Optional separate items under supports[].girders[].separate (kip, unfactored, + up). includedIn names the existing field that ALREADY contains the item (carry it on its own only after taking it out of that field); includedIn null: the item is in no other field.' };
+    if (has.PL) o.pedestrian = { field: 'PL', fieldMin: 'PLmin', includedIn: null, loadType: 'PL', cite: 'AASHTO LRFD 10th Ed. 3.6.1.6', imIncluded: false, dfIncluded: false, basis: 'pedestrian live load of the sidewalks, the girder line\'s share; no dynamic load allowance, no distribution factor' };
+    if (has.UT || has.UF || has.UTc) { o.utilities = { cite: 'AASHTO LRFD 10th Ed. 3.5.1, Tables 3.4.1-1, 3.4.1-2; the noncomposite stage and the future allowance as the Steel Bridge app (MassDOT LRFD Bridge Manual Part I 3.5.5.2, 3.5.5.4)',
+      existing: has.UT ? Object.assign({ field: 'UT', includedIn: 'DC1', section: 'noncomposite (precast girder)', treatAs: 'DW' }, UTF) : null,
+      future: has.UF ? { field: 'UF', includedIn: 'DC1', section: 'noncomposite (precast girder)', treatAs: 'DC', strMax: 1.25, strMin: 0, service: 1.0, serviceRelieving: 0 } : null,
+      composite: has.UTc ? Object.assign({ field: 'UTc', includedIn: 'DW', section: 'composite', treatAs: 'DW' }, UTF) : null }; }
+    return o;
+  }
+  const sepTxt = q => SEPK.filter(f => q[f]).map(f => `${f} ${f3(q[f][0])} / ${f3(q[f][1])}`).join(', ') + ' (left / right end)';
+  /* sepNotes(q, rows): the notes of the separate items (q: any line's parts with the bridge's has; rows: the values in words) */
+  function sepNotes(q, rows) {
+    const has = q.has, n = [];
+    if (has.PL || has.UT || has.UF || has.UTc) n.push('Separate items (optional fields girders[].separate; unfactored, kip, + up; described in the top-level "separate"): the totals DC1, DC2 and DW are unchanged and still contain the utilities, so a receiver that carries a utility on its own takes it out of the field named below first (no double count).'
+      + (has.UT ? ' UT = utilities on the noncomposite section: ALREADY INSIDE DC1; this app factors them as DW (Strength 1.50 where they add, 0.65 where they relieve; Service 1.0).' : '')
+      + (has.UF ? ' UF = future utility allowance (noncomposite): ALREADY INSIDE DC1; this app takes it present (Strength 1.25, Service 1.0) or absent (0), whichever governs.' : '')
+      + (has.UTc ? ' UTc = utilities on the composite section: ALREADY INSIDE DW (DW factors).' : '')
+      + (has.PL ? ' PL = pedestrian live load reaction (AASHTO LRFD 10th Ed. 3.6.1.6; no IM, no distribution factor), max (PLmin: the uplift part, 0 on a simple span): in NO other field; a live load (it takes the live-load factor).' : ''));
+    if (rows && rows.length) n.push('Separate items, kip: ' + rows.join('; ') + '.');
+    if (q.anyPlExt) n.push('Pedestrian load: a girder type on imported demands does not get a PL item (the imported live load is assumed to include the pedestrian load; this app does not compute it there).');
+    if (q.anyUtcExt) n.push('Utilities on the composite section: a girder type on imported demands does not get a UTc item (its DW reactions are the imported ones, which this app does not add the utility to).');
+    return n;
   }
 
   /* ---- psSection: the old app's standing publisher (its useEffect), the payload part ---- */
@@ -296,20 +373,24 @@
     for (let s = 1; s <= ns; s++) for (let g = 1; g <= nb; g++) if (!at[s + '.' + g]) miss.push(`G${g}/S${s}`);
     if (miss.length) return { error: `Every girder line of every span needs a girder type (Girders & strands tab, Girder types): none on ${miss.join(', ')}.` };
     // sh[k][g-1]: the end reactions on support k of line g: [{ s, end: 'left' | 'right', DC1, DC2, DW, basis }]
-    const sh = Array.from({ length: ns + 1 }, () => Array.from({ length: nb }, () => [])), pos = [], basis = {};
+    const sh = Array.from({ length: ns + 1 }, () => Array.from({ length: nb }, () => [])), pos = [], basis = {}, sepHas = {}, sepExt = {};
     for (let s = 1; s <= ns; s++) for (let g = 1; g <= nb; g++) {
       const c = at[s + '.' + g], b = srPayload(c.inp, c.R);
       if (!b || b.error || !b.payload) { bad.push(`G${g}, span ${s} (${c.label || 'type ' + (c.k + 1)}): ${(b && b.error) || 'no result'}`); continue; }
       const p = b.payload, q = p.supports; if (!Array.isArray(q) || q.length !== 2) { bad.push(`G${g}, span ${s}: not two end reactions`); continue; }
       if (s === 1 || pos[g - 1] == null) pos[g - 1] = p.girderLine.position;
       basis[p.girderLine.source] = (basis[p.girderLine.source] || []).concat([`G${g}/S${s}`]);
-      [[s - 1, 'left', q[0]], [s, 'right', q[1]]].forEach(([k, end, r]) => { const x = r.girders[0]; sh[k][g - 1].push({ s, end, DC1: x.DC1, DC2: x.DC2, DW: x.DW }); });
+      [[s - 1, 'left', q[0]], [s, 'right', q[1]]].forEach(([k, end, r]) => { const x = r.girders[0]; sh[k][g - 1].push({ s, end, DC1: x.DC1, DC2: x.DC2, DW: x.DW, sep: x.separate || null }); });
+      // SRP: the line's separate items (srParts), summed at a pier as DC1 / DC2 / DW are
+      const pq = srParts(c.inp, c.R); if (pq) { Object.keys(pq.has).forEach(f => { sepHas[f] = true; }); if (pq.plExt) sepExt.pl = true; if (pq.utcExt) sepExt.utc = true; }
     }
     if (bad.length) return { error: `The reactions cannot be built: ${bad.join('; ')}. Fix the inputs first.` };
     const X = [0]; spans.forEach(v => X.push(r3(X[X.length - 1] + v)));
     const sum = (a, f) => r3(a.reduce((t, x) => t + x[f], 0));
+    // SRP: girders[].separate of a support = the sum of the spans' end values (only the keys a span of the line has; none: no field)
+    const sepSum = a => { const o = {}; SEPK.forEach(f => { if (a.some(x => x.sep && x.sep[f] != null)) o[f] = r3(a.reduce((t, x) => t + ((x.sep && x.sep[f]) || 0), 0)); }); return Object.keys(o).length ? { separate: o } : {}; };
     const supports = X.map((x, k) => ({ id: supId(k, ns), x, girders: sh[k].map((a, i) => ({ label: 'G' + (i + 1), position: pos[i] || (i === 0 || i === nb - 1 ? 'exterior' : 'interior'),
-      DC1: sum(a, 'DC1'), DC2: sum(a, 'DC2'), DW: sum(a, 'DW') })) }));
+      DC1: sum(a, 'DC1'), DC2: sum(a, 'DC2'), DW: sum(a, 'DW'), ...sepSum(a) })) }));
     const cont = !!(P.spans && P.spans.continuity === 'composite') && ns > 1;
     const piers = []; for (let k = 1; k < ns; k++) piers.push(k);
     const shareTxt = k => `${supId(k, ns)} (span ${k} right end + span ${k + 1} left end), DC1 / DC2 / DW kip: ` + sh[k].map((a, i) => {
@@ -322,11 +403,18 @@
       ...Object.keys(basis).filter(k => /MIDAS/.test(k)).map(k => `${basis[k].join(', ')}: DC2 and DW are the imported MIDAS shears at the two ends of the span used (the girder type's demands file), sign-corrected to reactions (+ up).`),
       ...(piers.length ? [`At a pier the reaction is the sum of the end reactions of the two spans on it (one support point per pier, as the Steel Bridge app sends).${cont ? '' : ' Simple spans: split it between the back and ahead bearing rows by hand where needed, with the shares below.'}`].concat(piers.map(shareTxt)) : []),
       'Live load is not sent (liveLoad null): Substructure Loading computes its own.'];
+    const anySep = Object.keys(sepHas).length > 0;
+    if (anySep || sepExt.pl || sepExt.utc) {   // SRP: the separate items in words (per support and line)
+      const rows = supports.map(s => { const t = s.girders.filter(g => g.separate).map(g => `${g.label} ${SEPK.filter(f => g.separate[f] != null).map(f => `${f} ${f3(g.separate[f])}`).join(' ')}`); return t.length ? `${s.id}: ${t.join(', ')}` : ''; }).filter(Boolean);
+      sepNotes({ has: sepHas, anyPlExt: !!sepExt.pl, anyUtcExt: !!sepExt.utc }, rows).forEach(t => notes.push(t));
+      if (sepHas.PL && piers.length) notes.push('Pedestrian load at a pier: the sum of the two spans\' end values (PL: each span\'s largest end reaction, an upper bound of the pier reaction when the spans are continuous; PLmin: the sum of the uplift parts).');
+    }
     const pr = (P && P.project) || {};
     const payload = { _schema: 'bridge-super-reactions', schemaVersion: 1, producer: PRODUCER, producerFile: FILE, project: { name: String(pr.name || ''), bridgeId: '' },
       units: { force: 'kip', length: 'ft' }, factored: false, imIncluded: false, dfIncluded: false, perGirder: true,
-      allGirders: true, span: { index: null, length: r3(X[ns]) }, supports, liveLoad: null, notes };
-    return { ok: true, payload, shares: sh, sum: supports.map(s => `  ${s.id} (x = ${f2(s.x)} ft): ${s.girders.map(g => `${g.label} ${f2(g.DC1)} / ${f2(g.DC2)} / ${f2(g.DW)}`).join(', ')}`).join('\n') };
+      allGirders: true, span: { index: null, length: r3(X[ns]) }, supports, liveLoad: null, ...(anySep ? { separate: sepInfo(sepHas) } : {}), notes };
+    return { ok: true, payload, shares: sh, sum: supports.map(s => `  ${s.id} (x = ${f2(s.x)} ft): ${s.girders.map(g => `${g.label} ${f2(g.DC1)} / ${f2(g.DC2)} / ${f2(g.DW)}`).join(', ')}`).join('\n')
+      + (anySep ? '\n  Separate items (optional fields; UT and UF are inside DC1, UTc inside DW, PL in no other field), kip:\n' + supports.map(s => { const t = s.girders.filter(g => g.separate).map(g => `${g.label} ${SEPK.filter(f => g.separate[f] != null).map(f => `${f} ${f2(g.separate[f])}`).join(' ')}`); return t.length ? `  ${s.id}: ${t.join(', ')}` : ''; }).filter(Boolean).join('\n') : '') };
   }
   /* secDims(g): the girder section in the §4.14 terms from the engine's own section (girderGross / R.g, in): depth = h (the girder's total
      depth); bf = the larger flange width (btf, bbf); tw = bw (the engine's web width: both webs of a box, both stems of a NEXT beam); tf =
@@ -425,7 +513,7 @@
     return o;
   }
 
-  W.PSBHandoffs = { PRODUCER, SR_ID, RX, applyLoads, dlBlocked, srPayload, psSection, capacity, CAP_BASIS, lldfGeom, lldfResolve, lldfTheirs, lldfFields, dlResolve, dlTheirs,
+  W.PSBHandoffs = { PRODUCER, SR_ID, RX, applyLoads, dlBlocked, srPayload, srParts, sepInfo, SEPK, psSection, capacity, CAP_BASIS, lldfGeom, lldfResolve, lldfTheirs, lldfFields, dlResolve, dlTheirs,
     PM, PM_LABELS, pmFields, pmPlan, MCT_VERSION, MCT_K, verOf, tokenOf, mctPending, mctDescribe, mctPlan, geomPending,
     GEO_ID, srAll, secDims, sgPayload, DB_K, dbState };   // batch F (2026-11-15)
 })();

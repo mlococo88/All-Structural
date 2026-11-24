@@ -201,7 +201,7 @@ test('IMP-N: imported demands are used as given: PL and a composite utility are 
   const st = W.PSBWorked.loads(b.i, b.R).steps; assert.ok(st.some(s => s.id === 'ld.imp' && /NOT added/.test(s.note))); assert.ok(st.some(s => s.id === 'ld.pl.ext'));
   // a composite utility (category UT, in the line's DW): the imported DW is used, so it is not added: noted
   const Pu = mk(P => { P.xs.dl.extra = [{ name: 'Water main', cat: 'UT', x: 16.5, plf: 0.06 }]; }), c = cell(W, Pu, 1);
-  assert.ok(c.i.imp && c.i.imp.utc > 0); assert.ok(c.R.imp && c.R.imp.utc > 0 && !c.R.imp.pl);
+  assert.ok(c.i.utc > 0); assert.ok(c.R.imp && c.R.imp.utc > 0 && !c.R.imp.pl);
   assert.equal(JSON.stringify(c.R.checks.map(q => [q.n, q.pass])), JSON.stringify(a.R.checks.map(q => [q.n, q.pass])));
   const fm = R => R.grid.reduce((p, r) => Math.abs(r.x - 60) < Math.abs(p.x - 60) ? r : p);
   near(fm(c.R).Mu, fm(a.R).Mu, 1e-9, 'M_u at midspan (kip-in): the composite utility is not added to the imported DW');
@@ -212,5 +212,5 @@ test('IMP-N: imported demands are used as given: PL and a composite utility are 
   near((fm(d.R).Mu - fm(d0.R).Mu) / 12, 1.5 * d.i.ut.wUT * fm(d.R).x * (120 - fm(d.R).x) / 2, 0.5, 'by 1.50 M_UT');
   assert.match(d.R.imp.text, /noncomposite section .* ARE applied by this app/);
   // a type on this app's own analysis: nothing
-  const Q = M.newProject(); Q.xs.dl.swL = { w: 6, t: 9 }; Q.xs.dl.ped = 75; const e = cell(W, Q, 1); assert.ok(!e.R.imp); assert.ok(!e.i.imp);
+  const Q = M.newProject(); Q.xs.dl.swL = { w: 6, t: 9 }; Q.xs.dl.ped = 75; const e = cell(W, Q, 1); assert.ok(!e.R.imp);
 });
