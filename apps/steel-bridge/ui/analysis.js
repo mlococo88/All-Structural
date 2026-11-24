@@ -249,7 +249,9 @@
   }
   function apCard(AP) {
     if (!AP) return '';
-    const st = { fail: 'FAIL', warn: 'WARNING', note: 'NOTE', ok: 'OK' }, li = t => `<li id="st-${esc(t.id)}"${t.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(t.label)}${t.ref ? `<span class="ref">${esc(t.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(t, true)}</div>${t.note ? `<div class="nt">${window.SBDSub.html(t.note)}</div>` : ''}</li>`;
+    /* SBNG (2026-11-24; display only): a step that a FAIL item links to (q.step) red "NG", a WARNING item's amber "Warning" (ui/sub.js mark); a NOTE is not marked */
+    const MK = window.SBDSub.stepSt(AP.items.map(q => ({ step: q.step, st: q.level === 'fail' ? 'fail' : q.level === 'warn' ? 'warn' : '' })));
+    const st = { fail: 'FAIL', warn: 'WARNING', note: 'NOTE', ok: 'OK' }, li = t => { const k = window.SBDSub.mark(t, MK); return `<li id="st-${esc(t.id)}"${k.cls ? ` class="${k.cls}"` : ''}><div class="lbl">${k.tag}${window.SBDSub.html(t.label)}${t.ref ? `<span class="ref">${esc(t.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(t, true)}</div>${t.note ? `<div class="nt">${window.SBDSub.html(t.note)}</div>` : ''}</li>` };
     return card('Applicability of the line-girder analysis (SA4)', `<p class="note">This tab is a line-girder analysis with the approximate distribution factors of 4.6.2.2. Each item: its limit and result; FAIL counts in the Summary verdict, WARNING and NOTE do not.</p>
       <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Item</th><th class="lft">This bridge</th><th class="lft">Result</th><th>Status</th></tr></thead><tbody>${AP.items.map(q => `<tr><td class="lft">${esc(q.title)}</td><td class="lft">${esc(q.val)}${q.step ? ' ' + wk(q.step) : ''}</td><td class="lft">${esc(q.msg)}</td><td class="${q.level === 'fail' ? 'fx-hi' : ''}">${st[q.level]}</td></tr>`).join('')}</tbody></table></div>
       <ol class="steps">${AP.steps.map(li).join('')}</ol>`, 'an-ap');

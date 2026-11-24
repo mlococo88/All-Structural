@@ -205,7 +205,8 @@
     return { ...window.SBDFlexure.girder(I.locs, I.prj, { supports: I.supports }), prj: I.prj, what: I.what, fl: I.fl, flS: I.flS, frB: I.frB, D: I.D, custom: I.custom || null };
   }
 
-  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>`;
+  /* SBNG (2026-11-24): a step that a failing check row of this location links to (c.step) red with "NG" (ui/sub.js mark); display only */
+  const stepLi = (s, ST) => { const k = window.SBDSub.mark(s, ST); return `<li id="st-${esc(s.id)}"${k.cls ? ` class="${k.cls}"` : ''}><div class="lbl">${k.tag}${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>` };
   function render(host, ctx) {
     css();
     const stale = (!S.R && !S.err) || S.key !== key(ctx), src = srcOf(ctx), rd = rdOf(ctx);   // SPERR2: a run that ended in an error is current (its message shows), not out of date
@@ -248,7 +249,7 @@
           ${r.p7 ? `<div><span>Section</span><span>${r.below ? 'PNA below the web' : r.compact ? 'compact' : 'noncompact'} <a class="wk" href="#st-fx.cmp">§</a></span></div>` : `<div><span>F<sub>nc</sub> (FLB / LTB)</span><span>${fmt(r.lt.FLB, 2)} / ${fmt(r.lt.LTB, 2)} ksi <a class="wk" href="#st-fx.Fnc">§</a></span></div><div><span>App. A6</span><span>${r.A6.ok ? (r.useA6 ? 'permitted, used' : 'permitted, not selected') : 'not permitted'} <a class="wk" href="#st-fx.a6.ok">§</a></span></div>`}
           <div><span>D<sub>c</sub> (Service II)</span><span>${fmt(r.DcS, 3)} in <a class="wk" href="#st-fx.DcS">§</a></span></div><div><span>Fatigue I Δf top / bottom</span><span>${fmt(r.dfT, 2)} / ${fmt(r.dfB, 2)} ksi <a class="wk" href="#st-fx.fatT">§</a></span></div></div></div></section>`;
         h += `<section class="sec"><div class="secHead">Worked steps, ${esc(r.name)}</div><div class="secBody"><p class="note">Flexure steps first, then the section properties of this location (also on the Section properties tab). AASHTO LRFD 10th Ed. (2024); y up from the bottom of the steel; tension +.</p>
-          ${window.SharedSteps.groupsHTML(groups('x', stepsOf(R, r)), { open: OPEN, item: stepLi })}</div></section>`;
+          ${window.SharedSteps.groupsHTML(groups('x', stepsOf(R, r)), { open: OPEN, item: (ST => q => stepLi(q, ST))(window.SBDSub.stepSt(window.SBDSub.rows(r.checks))) })}</div></section>`;
       }
     }
     host.innerHTML = h;

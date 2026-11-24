@@ -230,7 +230,7 @@
   }
   const stepsHtml = list => `<ol class="steps">${list.map(s => stepLi(s, list)).join('')}</ol>`;
   /* one worked step; a "§id" in its note (engine/shear.js "See §p1.Vn.") becomes a link to that step of the same list (CLAUDE.md §6) */
-  const stepLi = (s, list) => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${noteHtml(s.note, list)}</div>` : ''}</li>`;
+  const stepLi = (s, list, ST) => { const k = window.SBDSub.mark(s, ST); return `<li id="st-${esc(s.id)}"${k.cls ? ` class="${k.cls}"` : ''}><div class="lbl">${k.tag}${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${noteHtml(s.note, list)}</div>` : ''}</li>` };
   const noteHtml = (t, list) => esc(t).replace(/§([A-Za-z](?:[\w.]*\w)?)/g, (m, id) => { const q = (list || []).find(x => x.id === id || String(x.id).endsWith('.' + id)); return q ? `<a class="wk" href="#st-${esc(q.id)}" data-step="${esc(q.id)}">§${esc(id)}</a>` : m; });
 
   /* ---------- topics of the worked steps (presentation spec A, trial on this tab, 2026-10-31) ----------
@@ -314,9 +314,14 @@
     else if (sel.k === 'ts' && R.TS && R.TS.rows[sel.i]) { const r = R.TS.rows[sel.i]; title = `${r.name} (Type ${r.type})`; list = stepsOf(R, 'ts', r); }
     else if (sel.k === 'bs' && R.BS.rows[sel.i]) { const r = R.BS.rows[sel.i]; title = `${r.name} (Type ${r.type})`; list = stepsOf(R, 'bs', r); }
     if (list.length) { const SS = window.SharedSteps, an = R.AR ? ' <a href="#" class="sg-see" data-gotab="an">worked on the Analysis tab</a>' : '';
+      /* SBNG (2026-11-24): the steps that a failing check links to, red with "NG" (ui/sub.js mark; display only): a station's check rows (GS11,
+         GS16, GS18: c.step), the stiffener checks (tsC, bsC items: it.step); a panel has no check item: its ratio step (pn.ok) where the
+         panel's ratio is above 1, as the Web panels table shows it red */
+      const SB_ = window.SBDSub, ST = SB_.stepSt(sel.k === 'loc' ? SB_.rows(R.stations[sel.i].checks) : sel.k === 'ts' ? SB_.items(R.tsC) : sel.k === 'bs' ? SB_.items(R.bsC)
+        : sel.k === 'pan' ? [{ step: (list.find(q => /^pn\.ok$/.test(String(q.id))) || {}).id, st: (q => typeof q.r === 'number' && (!isFinite(q.r) || q.r > 1 + 1e-9) ? 'fail' : '')(R.panels.rows[sel.i]) }] : []);
       // "see" links (CLAUDE.md §6): the shears and reactions of the demand topics are worked on the Analysis tab when the analysis is the source
       h += `<section class="sec"><div class="secHead">Worked steps, ${esc(title)}</div><div class="secBody"><p class="note">Click a row above, or a location on the graphic, to show its work. AASHTO LRFD 10th Ed. (2024); E = 29,000 ksi. Topics in the order of the check: geometry, demands, intermediate values by sub-article, resistance, ratio.</p>
-        ${SS.groupsHTML(groups(sel.k, list), { open: S.open, item: s => stepLi(s, list), see: t => (t.key === 'dem' && (sel.k === 'ts' || sel.k === 'bs' || sel.k === 'loc') ? an : '') })}</div></section>`; }
+        ${SS.groupsHTML(groups(sel.k, list), { open: S.open, item: s => stepLi(s, list, ST), see: t => (t.key === 'dem' && (sel.k === 'ts' || sel.k === 'bs' || sel.k === 'loc') ? an : '') })}</div></section>`; }
     return h;
   }
 

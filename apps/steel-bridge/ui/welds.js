@@ -110,7 +110,7 @@
     st.textContent = `.fx-ok{background:#e7f4ec;} .fx-hi{background:#fdf3d8;} .fx-ng{background:#fbe1dd;font-weight:600;} .fx-list{max-height:320px;overflow:auto;} .fx-list tr{cursor:pointer;} .fx-na{color:#64748b;font-style:italic;}`;
     document.head.appendChild(st);
   }
-  const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>`;
+  const stepLi = (s, ST) => { const k = window.SBDSub.mark(s, ST); return `<li id="st-${esc(s.id)}"${k.cls ? ` class="${k.cls}"` : ''}><div class="lbl">${k.tag}${window.SBDSub.html(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${window.SBDSub.html(s.note)}</div>` : ''}</li>` };
   const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
 
   /* ---------- topics of the worked steps (presentation spec A, 2026-10-31; as ui/shear.js): flange-to-web welds, then the shop flange transitions ---------- */
@@ -125,7 +125,7 @@
     { key: 'tsl', title: 'Thickness and width transitions (TR2, TR3)', ref: A + '6.13.6.2', ids: /^wt\d+\.(slT|slW)$/ },
     { key: 'tpr', title: 'Area and thickness proportions (TR4)', ref: A + '6.13.6.2', ids: /^wt\d+\.(pa|pt)$/ }] };
   const groups = (kind, list) => window.SharedSteps.group(list, TOPICS[kind || 'x'](), { strip: false });
-  const stepsHtml = (list, kind) => window.SharedSteps.groupsHTML(groups(kind, list), { open: OPEN, item: stepLi });
+  const stepsHtml = (list, kind, ST) => window.SharedSteps.groupsHTML(groups(kind, list), { open: OPEN, item: q => stepLi(q, ST) });   // SBNG: ST, ui/sub.js stepSt
   const stCell = (st, r) => `<td class="${st === 'fail' ? 'fx-ng' : st === 'warn' ? 'fx-hi' : st === 'na' ? 'fx-na' : r != null ? cls(r) : 'fx-ok'}">${r != null && isFinite(r) ? fmt(r, 3) : { pass: 'OK', fail: 'Fail', warn: 'Warning', na: 'n/a' }[st] || esc(st)}</td>`;
 
   /* gamHtml(P): the project's load factors, read-only, with links to where they are set; the no-longer-used saved values of this tab */
@@ -211,7 +211,7 @@
         return `<tr data-wt="tr:${r.i}" class="${S.sel && S.sel.k === 'tr' && S.sel.i === r.i ? 'sel' : ''}"><td class="lft">${esc(r.name)}</td><td>${fmt(r.b1, 2)} × ${frac(r.t1)} to ${fmt(r.b2, 2)} × ${frac(r.t2)}</td><td>${r.cat}</td><td>${fmt(r.df, 2)}</td><td class="${cls(t1.r)}">${rt3(t1.r)}</td>${t2 ? `<td class="${cls(t2.r)}">${rt3(t2.r)}</td>` : '<td class="fx-na">n/a</td>'}${t3 ? stCell(t3.st, t3.r) : '<td class="fx-na">n/a</td>'}${stCell(t4.some(it => it.st === 'warn') ? 'warn' : 'pass')}</tr>`; }).join('')}
       </tbody></table></div><p class="note">TR1 is the butt splice in the smaller flange at mid-thickness; the Fatigue tab also checks the flange face at each shop transition (FA1, Category B, Fatigue I or II).</p></div></section>`;
     const sel = S.sel || { k: 'fw', i: 0 }, list = (sel.k === 'fw' ? R.fw : R.tr).find(r => r.i === sel.i);
-    if (list) h += `<section class="sec" id="wt-steps"><div class="secHead">Worked steps, ${esc(list.name)}</div><div class="secBody"><p class="note">AASHTO LRFD 10th Ed. (2024). The section properties used come first; y is measured up from the bottom of the steel.</p>${stepsHtml(stepsOf(B, sel.k, sel.i))}</div></section>`;
+    if (list) h += `<section class="sec" id="wt-steps"><div class="secHead">Worked steps, ${esc(list.name)}</div><div class="secBody"><p class="note">AASHTO LRFD 10th Ed. (2024). The section properties used come first; y is measured up from the bottom of the steel.</p>${stepsHtml(stepsOf(B, sel.k, sel.i), undefined, window.SBDSub.stepSt(window.SBDSub.items(B.C)))}</div></section>`;
     return h;
   }
 

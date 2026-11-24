@@ -19,5 +19,27 @@
   }
   function watch() { const o = document.getElementById('out'); if (!o || typeof MutationObserver === 'undefined') return; fix(o); new MutationObserver(() => fix(o)).observe(o, { childList: true, subtree: true }); }
   if (typeof document !== 'undefined') { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watch); else watch(); }
-  window.SBDSub = { html, fix };
+  /* ---------- SBNG (2026-11-24; engineer, approved: the failing check's step red with "NG", a warning amber, on every output tab, as #1692
+     (SBDFH) did on the Cross-frames / Diaphragms tab). Display only: no value, verdict or step changes. A step is marked only through the check
+     items that link to it (an item's step id, its "§"): a step whose own ok flag is false but that no failing item links to (a test that only
+     selects a case: compact or not, which equation applies) keeps the grey class "no" as before (decision SBDFH-3).
+       stepSt(entries) -> Map step id -> 'fail' | 'warn' (the worst of the entries that link to it); entries: [{ step, st }] (st 'fail', 'warn';
+                         any other status is not marked)
+       items(C)        -> the entries of check groups C = [{ items: [{ st, step }] }] (the engines' checks(): fatigue, studs, welds, splices,
+                         stiffeners, rating, …)
+       rows(checks)    -> the entries of a check-row list [{ step, ratio, ok, inUse, ng }] (engine/flexure.js, constructibility.js,
+                         proportions.js, shear.js ck()): 'fail' where the tab's own table shows it red, i.e. a check in use (or with an
+                         NG reason, c.ng) whose ratio is above 1 + 1e-9 or that carries an NG reason; a check not in use is not marked
+       mark(s, ST)     -> { cls, tag } for the step's <li>: 'no ng' + an "NG" tag, 'no wn' + a "Warning" tag, else 'no' where s.ok is false
+                         (as before), else ''. The CSS (.steps li.no.ng, li.no.wn, .ngTag) is in index.html (SBDFH). */
+  const SRK = { warn: 1, fail: 2 };
+  const stepSt = entries => { const m = new Map(); (entries || []).forEach(e => { if (!e || !e.step || !SRK[e.st]) return;
+    if (!m.has(e.step) || SRK[e.st] > SRK[m.get(e.step)]) m.set(e.step, e.st); }); return m; };
+  const items = C => (C || []).flatMap(c => (c && c.items) || []).map(it => ({ step: it && it.step, st: it && it.st }));
+  const rowFail = c => !!c && (c.inUse !== false || !!c.ng) && (!!c.ng || (typeof c.ratio === 'number' && isFinite(c.ratio) && c.ratio > 1 + 1e-9));
+  const rows = checks => (checks || []).map(c => ({ step: c && c.step, st: rowFail(c) ? 'fail' : '' }));
+  const mark = (s, ST) => { const q = ST && s ? ST.get(s.id) : null;
+    return q === 'fail' ? { cls: 'no ng', tag: '<span class="ngTag">NG</span> ' } : q === 'warn' ? { cls: 'no wn', tag: '<span class="ngTag wn">Warning</span> ' }
+      : { cls: s && s.ok === false ? 'no' : '', tag: '' }; };
+  window.SBDSub = { html, fix, stepSt, items, rows, rowFail, mark };
 })();
