@@ -99,3 +99,40 @@ test('worked steps: every step value is the result value; the steps of strip() c
   assert.equal(new Set(w.steps.map(s => s.id)).size, w.steps.length, 'unique ids');
   w.steps.forEach(s => { assert.ok(St.line(s, false).length > 3); if (/^AASHTO/.test(s.ref)) assert.ok(s.ref.startsWith('AASHTO LRFD 10th Ed. '), s.ref); });
 });
+
+// DD (2026-11-24, engineer request "Please fix the deck distribution steel"): the distribution reinforcement of AASHTO LRFD 10th Ed. Art. 9.7.3.2
+// on S = the effective span length of Art. 9.7.2.3 (slab on girders: the distance between the flange tips plus one flange overhang, flange tip
+// to the face of the web): S_eff = S - b_f/12 + (b_f - t_w)/24 ft. Before: S = the girder spacing. Hand checks (fixlog/shared-deck.md DD).
+test('DD hand checks: the effective span of 9.7.2.3 and the percentage of 9.7.3.2', () => {
+  // the 67 % limit: 220/sqrt(S) = 67 at S = (220/67)^2 = 10.7819 ft; a girder spacing up to that gives 67 % before and after
+  near(SD.SCAP, 10.781911, 1e-6, '(220/67)^2'); assert.equal(SD.distPct(SD.SCAP - 1e-9), 67); assert.ok(SD.distPct(SD.SCAP + 1e-6) < 67);
+  // (a) S = 9 ft. W36X135 (b_f 12.0 in, t_w 0.600 in): 9 - 12/12 + (12 - 0.6)/24 = 8 + 0.475 = 8.475 ft; 220/sqrt(8.475) = 75.57 -> 67 %
+  let r = SD.distEff({ S: 9, bf: 12, tw: 0.6 }); near(r.clear, 8, 1e-12); near(r.ohF, 0.475, 1e-12); near(r.Seff, 8.475, 1e-12);
+  assert.equal(r.pct, 67); assert.equal(r.pct0, 67); assert.equal(r.capped, true); assert.equal(r.why, '');
+  //     plate girder b_f 16 in, t_w 0.5625 in: 9 - 1.33333 + 15.4375/24 = 7.66667 + 0.64323 = 8.30990 ft -> 67 % (before 220/sqrt(9) = 73.3 -> 67 %)
+  r = SD.distEff({ S: 9, bf: 16, tw: 0.5625 }); near(r.Seff, 8.309896, 1e-6); assert.equal(r.pct, 67); assert.equal(r.pct0, 67);
+  // (b) plate girder S = 12 ft, b_f 18 in, t_w 0.5625 in: clear 12 - 1.5 = 10.5 ft; overhang (18 - 0.5625)/24 = 0.7265625 ft;
+  //     S_eff = 11.2265625 ft; 220/sqrt(11.2265625) = 220/3.350606 = 65.660 % (before 220/sqrt(12) = 220/3.464102 = 63.509 %)
+  //     with #5 at 6 in bottom (A_s 0.620 in^2/ft): A_s,d = 0.6566(0.620) = 0.4071 in^2/ft (before 0.6351(0.620) = 0.3938)
+  r = SD.distEff({ S: 12, bf: 18, tw: 0.5625 }); assert.equal(r.Seff, 11.2265625); near(r.pct, 65.65976, 1e-5, 'after'); near(r.pct0, 63.50853, 1e-5, 'before');
+  near(r.pct / 100 * 0.62, 0.407091, 1e-6, 'A_s,d after'); near(r.pct0 / 100 * 0.62, 0.393753, 1e-6, 'A_s,d before'); assert.equal(r.capped, false);
+  // (c) the Prestressed PCI BT-72 at S = 12 ft (b_tf 42 in, b_w 6 in): 12 - 3.5 + 36/24 = 10.0 ft; 220/sqrt(10) = 69.57 -> 67 % (before 63.509 %)
+  r = SD.distEff({ S: 12, bf: 42, tw: 6 }); assert.equal(r.Seff, 10); assert.equal(r.pct, 67); near(r.pct0, 63.50853, 1e-5);
+  // no geometry, or a web wider than the flange, or S_eff not positive: the 67 % upper limit (conservative)
+  [{ S: 12 }, { S: 12, bf: 0, tw: 0.5 }, { S: 12, bf: 10, tw: 12 }, { S: 12, bf: NaN, tw: NaN }].forEach(o => { const q = SD.distEff(o); assert.equal(q.ok, false); assert.equal(q.why, 'geometry'); assert.equal(q.pct, 67); });
+  r = SD.distEff({ S: 1, bf: 30, tw: 1 }); assert.equal(r.ok, true); assert.ok(r.Seff < 0); assert.equal(r.why, 'nonpositive'); assert.equal(r.pct, 67);
+  // never smaller than before: S_eff <= S
+  for (let S = 4; S <= 16; S += 0.37) for (const [bf, tw] of [[12, 0.5], [18, 0.5625], [24, 0.75], [42, 6], [48, 7]]) { const q = SD.distEff({ S, bf, tw }); assert.ok(q.pct >= q.pct0, `${S} ${bf}`); }
+});
+
+test('DD worked steps: S_eff (equation, values, result), then the percentage on S_eff, then A_s,d; the old form without eff', () => {
+  const St = W.SharedSteps, w = St.work('dk'), E = SD.distEff({ S: 12, bf: 18, tw: 0.5625 });
+  SD.steps.dist(w, 12, E.pct, { As: 0.62, eff: E });
+  assert.deepEqual([...w.steps.map(s => s.id)], ['dk.distSe', 'dk.dist', 'dk.distAs']);
+  const [a, b, c] = w.steps;
+  assert.equal(a.sym, 'S_{eff}'); assert.equal(a.value, 11.2265625); assert.match(a.sub, /^12\.000 - \\frac\{18\.000\}\{12\} \+ \\frac\{18\.000 - 0\.5625\}\{24\}$/); assert.match(a.ref, /9\.7\.2\.3/);
+  assert.match(b.eq, /S_\{eff\}/); assert.match(b.sub, /11\.227/); assert.ok(Object.is(b.value, E.pct)); assert.ok(Object.is(c.value, E.pct / 100 * 0.62));
+  const w2 = St.work('dk'); SD.steps.dist(w2, 12, 67, { As: 0.62, eff: SD.distEff({ S: 12 }) });
+  assert.deepEqual([...w2.steps.map(s => s.id)], ['dk.dist', 'dk.distAs']); assert.equal(w2.steps[0].eq, '67'); assert.match(w2.steps[0].note, /67 %/);
+  const w3 = St.work('dk'); SD.steps.dist(w3, 12, SD.distPct(12), { As: 0.62 }); assert.deepEqual([...w3.steps.map(s => s.id)], ['dk.dist', 'dk.distAs']); assert.match(w3.steps[0].sub, /\\sqrt\{12\.000\}/);
+});

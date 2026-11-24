@@ -16,6 +16,9 @@
                               live load (its ll.L.r / ll.R.r): the wheel is 1 ft inside it
      slab                     deck.ts (resistance), deck.tdeck (dead load), materials.concrete.fc, wc; rebar F_y materials.rebar.Fyr
      top flange width         the narrowest top flange of every girder type and plate segment (the largest negative moment)
+     effective span (DD)      the distribution reinforcement (9.7.3.2) on S_eff of 9.7.2.3 = S - b_f/12 + (b_f - t_w)/24, S the smallest
+                              spacing, b_f and t_w of the segment with the largest b_f + t_w (every girder type and segment; rolled shapes
+                              by their equivalent plates): the shortest effective span, the largest percentage (conservative)
      owner rules              eta and m of SBDOwners.loadFactors (the loads module's lf)
    The module's own inputs, P.deckDesign (OPTIONAL; absent in every project saved before 2026-11-23, which reads as DEF: off):
      { on (false), barTop, barBot (area of one bar, in^2), sTop, sBot (spacing, in), coverT, coverB (clear cover, in),
@@ -24,7 +27,7 @@
    while it is off nothing is calculated and no result, Summary verdict or report section changes.
 
    calc(P) -> { on: false } | { on: true, err } | { on: true, D, in: {…}, bays: [{ S, lines, I, pos, neg }], gp, gn (governing bay index),
-     oh: { L, R: { O, cap, side, name } }, go ('L' | 'R'), dist: { S, pct, As }, checks: [{ id, title, ref, r, Mu, phiMn, ok, loc, step }],
+     oh: { L, R: { O, cap, side, name } }, go ('L' | 'R'), dist: { S, pct, As, Seff, bf, tw, at, pct0, E }, checks: [{ id, title, ref, r, Mu, phiMn, ok, loc, step }],
      warn: [text], steps }   (moments kip-ft per foot of deck) */
 (function () {
   'use strict';
@@ -94,8 +97,13 @@
       const O = S.overhang({ oh: L.oh, face, wSlab: wDC, DC: L.DC, DW: L.DW, PL: L.PL, eta, mLL });
       oh[sd] = { side: sd, name: sd === 'L' ? 'Left overhang' : 'Right overhang', O, cap: cap(true, O.Mu_oh), faceBy: ((R.ll || {})[sd] || {}).by || '' }; });
     const go = oh.R.O.Mu_oh > oh.L.O.Mu_oh ? 'R' : 'L';
-    // distribution reinforcement: the smallest spacing gives the largest percentage
-    const Smin = Math.min(...bays.map(q => q.S)), pct = S.distPct(Smin), dist = { S: Smin, pct, As: pct / 100 * bays[gp].pos.As };
+    // distribution reinforcement: the smallest spacing gives the largest percentage. DD (2026-11-24, engineer request "Please fix the deck
+    // distribution steel"): S of Art. 9.7.3.2 is the effective span of Art. 9.7.2.3, S_eff = S - b_f/12 + (b_f - t_w)/24, with the segment of
+    // the largest b_f + t_w of the bridge (the shortest effective span: the largest percentage). Before: S = the smallest girder spacing.
+    let fw = null; (P.girders || []).forEach(g => (g.segments || []).forEach((s, i) => { const bq = +s.topB, tq = +s.tw;
+      if (bq > 0 && tq > 0 && (!fw || bq + tq > fw.bf + fw.tw)) fw = { bf: bq, tw: tq, at: `${g.label || g.id}, segment ${i + 1}` }; }));
+    const Smin = Math.min(...bays.map(q => q.S)), DE = S.distEff({ S: Smin, bf: fw ? fw.bf : NaN, tw: fw ? fw.tw : NaN }), pct = DE.pct;
+    const dist = { S: Smin, pct, As: pct / 100 * bays[gp].pos.As, Seff: DE.Seff, bf: DE.bf, tw: DE.tw, at: fw ? fw.at : '', pct0: DE.pct0, E: DE };
     // worked steps
     const steps = [], many = bays.length > 1;
     const xs = auto ? { kind: 'steel', b: bf, note: `The narrowest top flange of the bridge (${bfAt}): the design section nearest the girder centreline, the largest negative moment. Kept within 0 to 24 in (Table A4-1).` } : { kind: 'entered', xent: +D.xneg, note: 'Entered on the Cross-section tab (Deck design).' };
@@ -114,7 +122,8 @@
       S.steps.overhang(w, q.O, { faceNote: `o_h = the ${sd === 'L' ? 'left' : 'right'} overhang, exterior girder centreline to the deck edge (Cross-section tab); x_f = the deck edge to the traffic face${q.faceBy ? ` (${q.faceBy})` : ''}, as the Loads & LLDF module.` });
       S.steps.capacity(w, 'cap', `${q.name}, top bars`, q.cap, { short: true, muSym: 'M_{u,oh}', check: `DK3 ${q.name}, top bars` });
       w.steps.forEach(s => { s.label = s.label.replace(/^Overhang:/, q.name + ':'); steps.push(s); }); });
-    { const w = St().work('dk'); S.steps.dist(w, Smin, pct, { As: bays[gp].pos.As, note: `S in ft, taken as the girder spacing${many ? ' (the smallest spacing: the largest percentage)' : ''}. Bottom bars parallel to the girders.` }); steps.push(...w.steps); }
+    { const w = St().work('dk'); S.steps.dist(w, Smin, pct, { As: bays[gp].pos.As, eff: DE,
+        effNote: `S = ${St().fmt(Smin, 2)} ft${many ? ', the smallest spacing' : ''}; b_f and t_w of ${fw ? fw.at : '—'}${fw ? ' (the largest b_f + t_w of the bridge)' : ''}: the shortest effective span, the largest percentage.` }); steps.push(...w.steps); }
     const checks = [
       { id: 'DK1', title: 'Deck positive moment, bottom bars (Strength I)', ref: ED + 'Art. 4.6.2.1, Table A4-1, 5.6.3.2', r: bays[gp].pos.dc, Mu: bays[gp].pos.Mu, phiMn: bays[gp].pos.phiMn, ok: bays[gp].pos.ok, loc: bays[gp].name, step: 'dk.pos.r' },
       { id: 'DK2', title: 'Deck negative moment, top bars (Strength I)', ref: ED + 'Art. 4.6.2.1.6, Table A4-1, 5.6.3.2', r: bays[gn].neg.dc, Mu: bays[gn].neg.Mu, phiMn: bays[gn].neg.phiMn, ok: bays[gn].neg.ok, loc: bays[gn].name, step: 'dk.neg.r' },

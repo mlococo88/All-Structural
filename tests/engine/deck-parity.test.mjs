@@ -75,3 +75,36 @@ CASES.forEach(([name, inp, g]) => test(`parity, deck ${name}: every value of dec
   assert.ok(n >= 60, `${n} values compared`);
   assert.equal(!!R.own, !!P.own);
 }));
+
+/* DD (2026-11-24, engineer request "Please fix the deck distribution steel"): the corrected distribution reinforcement of the two tools.
+   The raw parity above stays (deckCalc and strip() both on S = the girder spacing). The Prestressed app corrects R.deck.distPct after
+   computeAll (apps/ps-bridge/engine/deckdist.js apply); the Steel app computes it in engine/deck.js calc(); both on S_eff of AASHTO LRFD
+   10th Ed. Art. 9.7.2.3 with shared/deck.js distEff. Here: the Prestressed correction of every I-girder case above equals distEff with the
+   same S, flange and web; and the Steel app on a bridge of the same spacing, flange and web gives the same S_eff and percentage. */
+ps.SharedDeck = SD;
+vm.runInContext(fs.readFileSync(path.join(ROOT, 'apps/ps-bridge/engine/deckdist.js'), 'utf8'), ps, { filename: 'deckdist.js' });
+const corr = (inp, g) => ps.PSBDeckDist.apply(inp, { g, deck: PS.deckCalc(inp, g, null) });
+test('DD parity: the Prestressed correction of every case = shared distEff on the same S, flange and web (I-girders); 67 % for a box or a deck slab', () => {
+  let n = 0;
+  CASES.forEach(([name, inp, g0], i) => {
+    const bw = [6, 6, 7, 8, 6.5][i % 5], g = { ...g0, bw };
+    const R = corr(inp, g), E = SD.distEff({ S: inp.S, bf: g.btf, tw: bw }), raw = PS.deckCalc(inp, g, null).distPct;
+    assert.ok(Object.is(R.deck.dd.pct0, raw), name);
+    if (g.isBox || g.isDeck) { assert.equal(R.deck.distPct, 67, name); assert.equal(R.deck.dd.why, 'family'); n++; return; }
+    ['Seff', 'clear', 'ohF', 'pct', 'pct0'].forEach(k => assert.ok(Object.is(R.deck.dd[k], E[k]), `${name} ${k}: ${R.deck.dd[k]} / ${E[k]}`));
+    assert.ok(Object.is(R.deck.distPct, E.pct)); assert.ok(R.deck.distPct >= raw); n++;
+  });
+  assert.equal(n, CASES.length);
+});
+test('DD parity: the Steel app and the Prestressed app give the same S_eff and percentage for the same spacing, flange and web', () => {
+  const E = f => path.join(ROOT, 'apps/steel-bridge', f);
+  const WS = loadShared(...['units.js', 'steps.js', 'lldf.js', 'deck.js'].concat(['engine/model.js', 'engine/sections.js', 'engine/owners.js', 'engine/lldf.js', 'engine/loads.js', 'engine/deck.js'].map(E)));
+  [[9, 16, 0.5625], [11, 18, 0.5625], [12, 18, 0.5625], [12.37, 20, 0.625], [13.5, 24, 0.75], [14, 42, 6]].forEach(([S, bf, tw]) => {
+    const P = WS.SBDModel.newProject(); P.deckDesign = { on: true }; P.xs.bays = P.xs.bays.map(() => S);
+    P.girders.forEach(gq => gq.segments.forEach(s => { s.topB = bf; s.tw = tw; }));
+    const St = WS.SBDDeck.calc(P), inp = { S, ts: 8, mat: { fcd: 4, wcd: 0.150 }, deck: deck({}) }, Pr = corr(inp, { btf: bf, bw: tw });
+    assert.equal(St.err, undefined, St.err);
+    assert.ok(Object.is(St.dist.Seff, Pr.deck.dd.Seff), `S_eff at S=${S}: Steel ${St.dist.Seff} / Prestressed ${Pr.deck.dd.Seff}`);
+    assert.ok(Object.is(St.dist.pct, Pr.deck.distPct), `pct at S=${S}`); assert.ok(Object.is(St.dist.pct0, Pr.deck.dd.pct0), `before at S=${S}`);
+  });
+});

@@ -4,7 +4,8 @@
 
    SAME METHOD AND ARITHMETIC AS THE PRESTRESSED BRIDGE DESIGN DECK MODULE (apps/ps-bridge/engine/pbd-handling-deck.js: deckTableA4,
    deckDesignSection, deckCalc), operation for operation: tests/engine/deck-parity.test.mjs runs both on made-up decks and requires every
-   value to be identical. The Prestressed app is NOT wired to this file (its engine is a frozen copy); a later PR can move it here.
+   value to be identical. The Prestressed app's strip design is NOT wired to this file (its engine is a frozen copy); a later PR can move it
+   here. Since DD (2026-11-24) the Prestressed app loads this file for distEff only (apps/ps-bridge/engine/deckdist.js).
    What the method is (and is not), as the Prestressed module:
      interior bays   dead load by the continuous-slab coefficients w S^2/11 (positive) and w S^2/10 (negative), S = the girder spacing
                      centre to centre; live load + IM from AASHTO LRFD 10th Ed. Table A4-1 (multiple presence and the 33 % dynamic load
@@ -16,7 +17,11 @@
                      wheel 1 ft from the traffic face (Art. 3.6.1.3.1) on the strip 45.0 + 10.0 X in (Table 4.6.2.1.3-1) with IM 1.33
                      (Art. 3.6.2) and multiple presence 1.20 (Art. 3.6.1.1.2); the top bars of the negative moment.
      distribution    bottom bars parallel to the girders: min(220 / sqrt(S), 67) percent of the positive-moment steel (Art. 9.7.3.2),
-                     S in ft, taken as the girder spacing (as the Prestressed module).
+                     S in ft. strip() and distPct(S) keep the Prestressed module's S = the girder spacing (the parity test of the raw
+                     module); the tools use distEff() (DD, 2026-11-24, engineer request "Please fix the deck distribution steel"): S = the
+                     effective span length of Art. 9.7.2.3, slab on steel or concrete girders: the distance between the flange tips plus one
+                     flange overhang (extreme flange tip to the face of the web, fillets disregarded):
+                       S_eff = S - b_f/12 + (b_f - t_w)/24  (ft; S the girder spacing ft, b_f the top flange width in, t_w the web thickness in).
      NOT checked     the Extreme Event II vehicular-collision cases of the overhang (A13.4), crack control (5.6.7), minimum reinforcement
                      (5.6.3.3), shrinkage and temperature steel (5.10.6), the empirical design (9.7.2), fatigue, development of the bars.
    The numbers of Table A4-1 are held as data (kip-ft/ft), the same values as the Prestressed module's table (the parity test compares the
@@ -32,12 +37,17 @@
      capacity(o)              -> o = { barA, sp, cover, ts, fc, fy, Mu }: A_s, d, a, c, eps_t, phi, M_n, phi M_n, ratio
      overhang(o)              -> o = { oh, face (edge to the traffic face, ft), wSlab (ksf), DC: [load], DW: [load], PL: [load], eta, mLL };
                                  load = { w (klf), x (ft from the deck edge) } or { q (ksf), x0, x1 (ft from the deck edge) }, name optional
-     distPct(S)               -> percent of the positive-moment steel
+     distPct(S)               -> percent of the positive-moment steel, min(220 / sqrt(S), 67)
+     effSpan(S, bf, tw)       -> { S, bf, tw, ok, clear (S - b_f/12), ohF ((b_f - t_w)/24), Seff } (ft); ok false (Seff NaN) without a valid b_f, t_w
+     distEff(o)               -> o = { S, bf, tw }: effSpan + { pct, pct0 (= distPct(S), the girder spacing, before DD), capped (pct = 67),
+                                 why ('' | 'geometry' | 'nonpositive') }. Without a valid b_f and t_w, or S_eff <= 0: pct = 67, the upper limit
+                                 (conservative: a shorter span can only raise the percentage up to 67)
      strip(inp)               -> the whole design of one deck as the Prestressed module's deckCalc (same field names), inp = { S, ts, tsLoad,
                                  fc, fy, wc (kcf, dead load), wsFut (ksf), xneg (in), barTop, sTop, coverT, barBot, sBot, coverB, oh (ft),
                                  bBar (in), wBar (klf), eta, mLL }
      steps.interior / steps.capacity / steps.overhang / steps.dist (w, …)   the worked steps (shared/steps.js format; needs SharedSteps)
-   Tests: tests/engine/deck.test.mjs (hand checks), tests/engine/deck-parity.test.mjs (the Prestressed module). Log: fixlog/shared-deck.md. */
+   Tests: tests/engine/deck.test.mjs (hand checks), tests/engine/deck-parity.test.mjs (the Prestressed module), sb-deck*.test.mjs,
+   psbridge-deckdist.test.mjs. Loaded by apps/steel-bridge/index.html and apps/ps-bridge/index.html. Log: fixlog/shared-deck.md. */
 (function () {
   'use strict';
   const ED = 'AASHTO LRFD 10th Ed. ';
@@ -169,6 +179,22 @@
   }
 
   const distPct = S => Math.min(220 / Math.sqrt(S), 67);
+  /* DD (2026-11-24): the effective span length of AASHTO LRFD 10th Ed. Art. 9.7.2.3 (slab supported on steel or concrete girders), the S of
+     Art. 9.7.3.2: the clear distance between the flange tips, S - b_f/12, plus one flange overhang from the extreme flange tip to the face of
+     the web, (b_f - t_w)/2 in = (b_f - t_w)/24 ft. b_f, t_w in; S, S_eff ft. 220/sqrt(S) = 67 at S = (220/67)^2 = 10.78 ft (SCAP). */
+  const SCAP = Math.pow(220 / 67, 2);
+  function effSpan(S, bf, tw) {
+    const Sn = +S, b = +bf, t = +tw;
+    const ok = isFinite(Sn) && Sn > 0 && isFinite(b) && b > 0 && isFinite(t) && t > 0 && t <= b;
+    if (!ok) return { S: Sn, bf: b, tw: t, ok: false, clear: NaN, ohF: NaN, Seff: NaN };
+    const clear = Sn - b / 12, ohF = (b - t) / 24, Seff = clear + ohF;
+    return { S: Sn, bf: b, tw: t, ok: true, clear, ohF, Seff };
+  }
+  function distEff(o) {
+    const E = effSpan(o.S, o.bf, o.tw), why = !E.ok ? 'geometry' : !(E.Seff > 0) ? 'nonpositive' : '';
+    const pct = why ? 67 : distPct(E.Seff);
+    return { ...E, pct, pct0: distPct(E.S), capped: pct === 67, why };
+  }
 
   /* strip(inp): the whole deck design with the Prestressed module's inputs and result names (deckCalc). */
   function strip(inp) {
@@ -258,14 +284,28 @@
       w.add({ ...muStep(r, 'Muoh', 'Overhang: factored moment, Strength I (gravity loads only)', 'M_{u,oh}', ',oh', r.MohDC, r.MohDW, Math.max(r.MohLL, 0), r.Mu_oh, r.PL.length ? { sym: 'M_{PL,oh}', v: r.MohPL } : null),
         note: 'The Extreme Event II vehicular-collision cases (A13.4) need a barrier-specific analysis: not checked here.' + (own(r) ? ' η and the owner\'s multiplier m on HL-93 (owner rules).' : '') });
     },
-    /* dist(w, S, pct, o): o = { As (the positive-moment steel, in^2/ft), note } */
+    /* dist(w, S, pct, o): o = { As (the positive-moment steel, in^2/ft), note, eff (a distEff() result: the effective span of Art. 9.7.2.3
+       is worked first and the percentage uses it; DD 2026-11-24), effNote, sym: { bf, tw } (TeX names of the flange width and web thickness) } */
     dist(w, S, pct, o) {
       const n = St().n; o = o || {};
+      const E = o.eff;
+      if (E) {
+        const sb = (o.sym && o.sym.bf) || 'b_{f}', st = (o.sym && o.sym.tw) || 't_{w}';
+        if (E.ok) w.add({ id: 'distSe', label: 'Effective span length of the slab: the distance between the flange tips plus one flange overhang (flange tip to the face of the web)', sym: 'S_{eff}',
+          eq: `S - \\frac{${sb}}{12} + \\frac{${sb} - ${st}}{24}`, sub: `${n(E.S, 3)} - \\frac{${n(E.bf, 3)}}{12} + \\frac{${n(E.bf, 3)} - ${n(E.tw, 4)}}{24}`, value: E.Seff, unit: 'ft', d: 3,
+          ref: ED + 'Art. 9.7.2.3, 9.7.3.2', note: (o.effNote ? o.effNote + ' ' : '') + 'S the girder spacing (ft); flange width and web thickness in inches; fillets disregarded.' + (E.why === 'nonpositive' ? ' S_eff is not positive (check the inputs): the 67 % upper limit is used.' : '') });
+        const cap = !!E.why;
+        w.add({ id: 'dist', label: 'Distribution reinforcement, percent of the positive-moment steel', sym: 'p_{d}', eq: cap ? '67' : '\\min\\left(\\frac{220}{\\sqrt{S_{eff}}},\\ 67\\right)',
+          sub: cap ? '67' : `\\min\\left(\\frac{220}{\\sqrt{${n(E.Seff, 3)}}},\\ 67\\right)`, value: pct, unit: '', d: 1, ref: ED + 'Art. 9.7.3.2',
+          note: o.note || (cap ? 'No flange width and web thickness for the effective span: the upper limit of 67 % is used (conservative).' : 'S_eff in ft (Art. 9.7.2.3). Bottom bars parallel to the girders.') });
+        if (o.As != null) w.add({ id: 'distAs', label: 'Distribution reinforcement, area per foot of deck width', sym: 'A_{s,d}', eq: '\\frac{p_{d}}{100}\\,A_{s,pos}', sub: `\\frac{${n(pct, 1)}}{100}(${n(o.As, 3)})`, value: pct / 100 * o.As, unit: 'in^{2}/ft', d: 3, ref: ED + 'Art. 9.7.3.2' });
+        return;
+      }
       w.add({ id: 'dist', label: 'Distribution reinforcement, percent of the positive-moment steel', sym: 'p_{d}', eq: '\\min\\left(\\frac{220}{\\sqrt{S}},\\ 67\\right)', sub: `\\min\\left(\\frac{220}{\\sqrt{${n(S, 3)}}},\\ 67\\right)`, value: pct, unit: '', d: 1, ref: ED + 'Art. 9.7.3.2',
         note: o.note || 'S in ft, taken as the girder spacing. Bottom bars parallel to the girders.' });
       if (o.As != null) w.add({ id: 'distAs', label: 'Distribution reinforcement, area per foot of deck width', sym: 'A_{s,d}', eq: '\\frac{p_{d}}{100}\\,A_{s,pos}', sub: `\\frac{${n(pct, 1)}}{100}(${n(o.As, 3)})`, value: pct / 100 * o.As, unit: 'in^{2}/ft', d: 3, ref: ED + 'Art. 9.7.3.2' });
     }
   };
 
-  window.SharedDeck = { A4_X, A4, tableA4, designSection, interior, capacity, overhang, distPct, strip, steps, clamp };
+  window.SharedDeck = { A4_X, A4, tableA4, designSection, interior, capacity, overhang, distPct, SCAP, effSpan, distEff, strip, steps, clamp };
 })();

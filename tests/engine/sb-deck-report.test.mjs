@@ -91,7 +91,7 @@ test('bill of materials: the deck bars (hand check), apart from the steel totals
 test('Nomenclature: the deck symbols under "Deck slab", values the steps\' own', () => {
   const D = W.SBDNomenUI.collect(RB.model(B1, { detail: 'gov', include: { exec: false, basis: false, sum: false, bom: false, sign: false } }));
   const g = D.groups.find(q => q.id === 'dk'); assert.ok(g, 'group'); assert.equal(g.tab, 'dk'); assert.equal(g.title, 'Deck slab');
-  const sym = [...g.rows.map(r => r.sym)]; ['w_{DC}', 'M_{LL,pos}', 'M_{u,neg}', 'A_{s}', '\\varepsilon_{t}', '\\phi M_{n}', 'SW_{oh}', 'p_{d}'].forEach(s => assert.ok(sym.includes(s), s));
+  const sym = [...g.rows.map(r => r.sym)]; ['w_{DC}', 'M_{LL,pos}', 'M_{u,neg}', 'A_{s}', '\\varepsilon_{t}', '\\phi M_{n}', 'SW_{oh}', 'p_{d}', 'S_{eff}', 'A_{s,d}'].forEach(s => assert.ok(sym.includes(s), s));
   assert.ok(!sym.some(s => /\\le/.test(s)), 'checks are not symbols');
   const D0 = W.SBDNomenUI.collect(RB.model(B0, { detail: 'gov', include: { exec: false, basis: false, sum: false, bom: false, sign: false } })); assert.ok(!D0.groups.some(q => q.id === 'dk'));
 });
