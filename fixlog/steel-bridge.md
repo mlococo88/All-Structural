@@ -11996,7 +11996,7 @@ None.
 - DKFE-3. The design wheel stands on the surface under it (on the sidewalk where the sidewalk extends past the traffic face, as with a mountable sidewalk), shifted up by that height; on the slab otherwise, as before.
 - DKFE-4. Without P (a caller that passes only R, W) the figure is exactly as before DKFE.
 
-## 2026-11-24 — PR: claude/sb-red-ng-steps (PR #TBD) (SBNG) — failing check's worked step red "NG", warning amber "Warning", on every output tab (display only)
+## 2026-11-24 — PR: claude/sb-red-ng-steps (PR #1709: https://github.com/mlococo88/All-Structural/pull/1709) (SBNG) — failing check's worked step red "NG", warning amber "Warning", on every output tab (display only)
 - **Request (engineer, approved follow-up of #1692 SBDFH):** extend SBDFH's red NG / amber Warning on the steps of failing / warning checks from the Diaphragms tab to every output tab, only for steps linked to a real check item; a step whose ok merely selects a case keeps today's grey "no" (decision SBDFH-3).
 - **Where / Before / After:**
   - `ui/sub.js`: new `stepSt(entries)`, `items(C)`, `rows(checks)`, `rowFail(c)`, `mark(s, ST)` (anchor `/* ---------- SBNG (2026-11-24;`); export `window.SBDSub = { html, fix }` → `{ html, fix, stepSt, items, rows, rowFail, mark }`. `rowFail(c) = (c.inUse !== false || !!c.ng) && (!!c.ng || isFinite(c.ratio) && c.ratio > 1 + 1e-9)` (what the tab's table shows red); `mark` → `'no ng'` + `<span class="ngTag">NG</span> `, `'no wn'` + `<span class="ngTag wn">Warning</span> `, else `'no'` where `s.ok === false` (as before), else `''`.
