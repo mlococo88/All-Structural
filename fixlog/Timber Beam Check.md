@@ -3113,3 +3113,13 @@ None new.
 - NDS shear chart: the notched-end check is not drawn (its own card); NDS bearing detail: the beam at its governing support (supporting members and point loads on their own card).
 - Brace points at the spacing l<sub>u</sub> from each support are illustrative (the tool takes l<sub>u</sub>, not brace locations).
 - AASHTO Δ<sub>DL</sub> + Δ<sub>LL</sub>: the sum of the dead-load deflection and the live-load envelope (display; Art. 2.5.2.6.2 limits the live load only).
+
+## 2026-11-24 — PR: claude/shared-steps-ratio (PR #TBD) (SSR) — worked-step topic chips: the slenderness ratio R_B marked as not a demand / capacity ratio (`ratio: false`; display only)
+- **Where:** the bending steps (`tbrS`), anchor `note: it.rbNG ? 'R_B > 50: not permitted — NG.' : 'R_B ≤ 50.', ok: !it.rbNG }`.
+- **Before / After:** `…, ok: !it.rbNG }` → `…, ratio: false, ok: !it.rbNG }`.
+- **Display change:** none on the built-in project (its bending topic is governed by the bending ratio). Where R_B governs a topic (e.g. R_B = 12.4 ≤ 50 with no other ratio), its chip was a red `12.4`; now `OK`.
+- **Check case:** R_B = 12.40 ≤ 50 (ok): before chip `12.400` red where governing, after `OK`.
+- **Problem:** `shared/steps.js` group() read every unitless test step with an ok flag as a D/C ratio for its topic's status chip (PR #1692). SSR changes the shared rule (fixlog/shared-steps.md) and these steps say so themselves, so that a slenderness ratio is not shown as a D/C.
+- **Governing provision:** none (display only; no value, ok flag, verdict, saved key or saved-data format change).
+- **How verified:** main vs this branch, the tool opened headless with every tab clicked and every topic's chip / class / one-line result recorded (PR description: audit table); `node tests/engine/run.mjs`.
+- **Other copies:** none.

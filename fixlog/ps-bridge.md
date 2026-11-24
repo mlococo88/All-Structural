@@ -9684,3 +9684,13 @@ None changed.
 - SWGRP-2. The sub-headings "Deck edges" and "Sidewalks and median" are replaced by "Left / Right deck edge", "Left / Right sidewalk" and "Pedestrian load and median" (the existing `.dlSub` style, 10 px above).
 ### Other copies
 The old `Prestressed Bridge Design.html` has no left / right sidewalk or deck-edge inputs (only a "Bridge with sidewalks" owner-rule checkbox and one barrier for the deck design) and is frozen (PS-14 g): not changed.
+
+## 2026-11-24 — PR: claude/shared-steps-ratio (PR #TBD) (SSR) — worked-step topic chips: the ranges of applicability of the distribution factors (ld.ap.*, ld.ap.r) marked as not a demand / capacity ratio (`ratio: false`; display only)
+- **Where:** `engine/applicability.js` `steps()`, anchors `id: 'ap.' + q.key` and `id: 'ap.r'`.
+- **Before / After:** `d: q.d, ref: A10 + q.table,` → `d: q.d, ref: A10 + q.table, ratio: false,`; `d: 0, ref: A10 + 'Art. 4.6.2.2', ...(a.entered` → `d: 0, ref: A10 + 'Art. 4.6.2.2', ratio: false, ...(a.entered`.
+- **Display change (built-in project):** Loads & LLDF tab and Report, topic "Line-girder analysis: ranges of applicability of the distribution factors": chip `5.000` red (N_b = 5 read as a D/C > 1) → `OK` green; one-line result `Number of beams …: N_b` → `… items outside their range: n_out = 0`. The Rating topics' raw group() chips also change (RF ≥ 1 no longer a red ratio), but PSBOutKit.groups overrides every RF topic (rf: RegExp), so the tab and the report are unchanged there.
+- **Check case:** built-in project: N_b = 5 in 4 to 20 (ok), n_out = 0: before chip `5.000` (class ng), after `OK` (class ok).
+- **Problem:** `shared/steps.js` group() read every unitless test step with an ok flag as a D/C ratio for its topic's status chip (PR #1692). SSR changes the shared rule (fixlog/shared-steps.md) and these steps say so themselves, so that a count or a geometric range value is not shown as a D/C.
+- **Governing provision:** none (display only; no value, ok flag, verdict, saved key or saved-data format change).
+- **How verified:** main vs this branch, the tool opened headless with every tab clicked and every topic's chip / class / one-line result recorded (PR description: audit table); `node tests/engine/run.mjs` (psbridge-*); `tests/smoke/ps-bridge-*` not affected (display text of one topic chip).
+- **Other copies:** none.

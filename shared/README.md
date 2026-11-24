@@ -76,6 +76,7 @@ A step is a plain object:
 | `ref` | Code reference with edition, e.g. `AASHTO LRFD 10th Ed. Eq. 6.10.1.10.1-1`; empty if none. |
 | `note` | Optional remark (condition, why a case applies, a scope flag). A string, or (SNL, 2026-11-08) a **list note** `{ lead, items: [[lead, text] \| text, …], action? }` for a long remark: rendered by `shared/report.js` as the action line(s) in warning style, a bold lead and a bullet list with bold lead words; in `SharedReport.text()` as the step's line, then the lines `action`, `lead`, `• lead: text` (indented). `SharedSteps.noteParts(note)` / `noteText(note)` read it. A string note renders exactly as before. |
 | `ok` | Optional, for a test step: `true` / `false`. |
+| `ratio` | Optional (SSR, 2026-11-24), for a test step: `true` / `false`, whether `value` is a demand / capacity ratio (passing at ≤ 1.0), the number on its topic's status chip (`group()`). Left out: a unitless numeric test step counts as a ratio only when its `ok` agrees with "value ≤ 1.0" (within 1e-3); a slenderness, a factor of safety, a rating factor, a strain or a steel ratio with an `ok` flag gives its topic an OK / NG chip, not a number. `step()` keeps it only when given. Display only. |
 
 It renders as `label` over `sym = eq = sub = value unit`, with `ref` beside the label.
 
