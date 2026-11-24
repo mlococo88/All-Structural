@@ -9597,3 +9597,34 @@ PR #1683: https://github.com/mlococo88/All-Structural/pull/1683 (claude/psb-subl
 - **SRP-D4.** With imported demands no PL and no UTc item is sent (IMP-N: used as given).
 ### Other copies
 - None changed. The `bridgeSuite.v1.*` bootstrap / BridgeXfer snippet (index.html, lldf.html, this app's ui/bridgexfer.js) is not touched. The Steel Bridge app (apps/steel-bridge/ui/handoffs.js `srPayload`) is not changed: its pedestrian reactions stay in `notes`.
+
+## 2026-11-24 — BRG-HO: bearing loads hand-off to the Elastomeric Bearing Design Module (engine/bearing.js, engine/hostale.js, ui/handoffs.js, index.html; cross-tool PR with elastomeric_design_module.html and the new shared/bearing-loads.js; no design value changes)
+PR: see the PR body (branch claude/bearing-handoff-ps).
+### Request
+- Engineer-approved task (2026-11-24): send bearing design data (per bearing line and girder: unfactored reactions by load case, service totals, rotations and movement inputs where known) to the elastomeric bearing module; only what the module can use; HANDOFF.md conventions; click only with the stale banner.
+### What was found
+- The module's inputs: P_DL, P_LL, P_min (slip check), θ_pg, θ_DL, θ_LL, θ_c, θ_t, seat slope, Δs, Δs,cy, the thermal reference (span, α, ΔT) and the Girder Run set `{ tag, Pdl, Pll, Pmin }`. This app computes no girder end rotations (only midspan deflections and camber), has no coefficient of thermal expansion input and does not define bearing fixity: no rotation or movement value is sent (decision BRG-D5).
+### What changed
+- **New `engine/bearing.js`** (`window.PSBBearing`): `llEnds(inp, R)` (the HL-93 reactions at the two ends, × DF_v, without and with IM, read from the engine: simple span `R.hl`, `R.VLL`; continuity on `PBD.sgBeam` end-shear rows, the rows `PBD.contFE` takes; imported demands null) and `blPayload(P, cells)` (HANDOFF.md §4.17: one bearing line per girder end, DC1 / DC2 / DW / separate = `PSBHandoffs.srPayload` of the cell, `service` = `SharedBearingLoads.service`).
+- **`engine/hostale.js`**: `CH.bearingLoads` (outgoing), `OUT_IDS` + `'bearingLoads'` (anchor `const OUT_IDS = [`), `allSig` builds `PSBBearing.blPayload` for id `bearingLoads` (anchor `const r = id === 'superGeometry' ? H.sgPayload(P, cells)`).
+- **`ui/handoffs.js`**: card row "Send bearing loads to the Elastomeric Bearing module" + "Export hand-off (JSON)" (data-ho `brgSend` / `brgFile`) with its note and "Last sent"; `brgSend(ctx, file)` (publish, `.by.psbridge`, per-project copy, `HSt().setSent(P, 'bearingLoads', …)`); `WATCH` and the storage-event pattern + `bearingLoads`; `onStale` run map + `bearingLoads`.
+- **`index.html`** script list (after `engine/handoffs.js`): `'../../shared/bearing-loads.js'`, `'engine/bearing.js'`.
+- `engine/pbd-*.js` (frozen copies): not changed.
+### Expressions (unfactored, kip; no load factor)
+- LL (simple span, automatic): `max = DF_v (max(V_tr, V_td) + V_ln)`, `maxIM = R.VLL = DF_v (1.33 max(V_tr, V_td) + V_ln)`, `min = minIM = 0`. Continuity on, left end: `maxIM = DF_v·pos`, `minIM = DF_v·neg`, `max = DF_v (max(truckMax, tanMax) + lanePos)`, `min = DF_v (min(truckMin, tanMin) + laneNeg)`; right end the negatives of the opposite branch.
+- Service: `Pdl = DC1 + DC2 + DW`, `Pll = LL max + PL`, `PllIM = LL maxIM + PL`, `Pmin = DC1 + DC2 − UT − UF`.
+### Check case (the SRP bridge: new project, 5 girders, 120 ft simple span, 6 ft sidewalk PL 75 psf, UTN 0.10, UF 0.05, UT 0.06 klf)
+- V_tr = 32 + 32·106/120 + 8·92/120 = 66.400, V_td = 25 + 25·116/120 = 49.167, V_ln = 0.64·60 = 38.400 kip per lane; DF_v (G2) = 0.88388.
+- G2, Abut. 1: DC1 116.585, DC2 15.300, DW 11.070, separate { PL 4.05, PLmin 0, UT 1.2, UF 0.6, UTc 0.72 }; LL max = 0.88388·104.8 = 92.630, LL maxIM = 0.88388·126.712 = 111.998 (= R.VLL); Pdl = 142.955, Pll = 96.680, PllIM = 116.048, Pmin = 116.585 + 15.300 − 1.2 − 0.6 = 130.085 kip. Before: nothing sent.
+### Saved data / hand-off format (CLAUDE.md §5)
+- New channel `bridgeSuite.v1.bearingLoads` (+ `.updatedAt`, `.by.psbridge`, `.by.psbridge.<project id>`); new optional record `P.handoffs.sent.bearingLoads` (HO-D2 shape). No existing key or format changed; a project saved before has no record (no banner).
+### Tests
+- `tests/engine/psbridge-bearing.test.mjs` (new, 5 tests), `tests/smoke/ps-bridge-bearing.mjs` (new). Results in the PR body.
+### Decisions (pending engineer review)
+- **BRG-D1.** One bearing line per girder end; at a pier the two spans are separate lines (not summed as in superReactions).
+- **BRG-D2.** LL: the end-shear envelope of one truck or tandem + lane × DF_v (the engine's); the 3.6.1.3.1 two-truck pier reaction case and the owner's design load multiplier are not included (said in the notes).
+- **BRG-D3.** Imported demands: no LL sent (the file's IM / DF basis is not restated here); the user enters P_LL.
+- **BRG-D4.** P_min = DC1 + DC2 − UT − UF (DC only, without the utilities and the future allowance: the smallest permanent load, conservative for the slip check); P_DL includes UF and the utilities (conservative for compression).
+- **BRG-D5.** No rotations and no thermal movement sent (not computed / not inputs here); material and unit lengths are sent for information.
+### Other copies
+- None. The bootstrap / BridgeXfer snippet is not touched.
