@@ -230,6 +230,18 @@
   })();
 
   const isNum = v => typeof v === 'number' && isFinite(v);
+  /* BARG (2026-11-24; engineer: "RIDOT has a barrier that is a rectangle shape … Can I enter the barrier geometry … and let the app
+     calculate the weight directly?", then "Use the centroid for the barrier load point. Do this for both the steel and ps apps."):
+     barL / barR + bMode ('entered' | 'geom'; absent = entered, every project saved before), bShape, bDims { b, h, bt } (in), bPts [[x, y]]
+     (in), bGam (kcf; null = 0.150), the Steel Bridge app's keys. With 'geom' (a barrier, not a curb) shared/barrier.js (window.SharedBarrier)
+     gives the width at the deck and the weight in place of bw and w (edgesOf: the traffic face, the line load), and the DC2 line load acts at
+     the centroid x̄ (distribute). Entered: nothing here runs; the copied steel code (DEAD-, EDGE-VERBATIM) is not touched.
+     geoOf(b): null (entered, a curb) or SharedBarrier.compute's result. */
+  const GEO_PATH = { b: 'bDims.b', bt: 'bDims.bt', h: 'bDims.h', pts: 'bPts', gam: 'bGam', '': 'bMode' };
+  function geoOf(b) {
+    if (!b || b.type === 'curb' || b.bMode !== 'geom') return null; const B = window.SharedBarrier;
+    return B ? B.compute(B.spec(b)) : { ok: false, errors: [{ key: '', msg: 'the barrier geometry cannot be computed (shared/barrier.js is not loaded)' }] };
+  }
   /* OWNER_METHOD (engineer decision PS-21, 2026-11-13): the distribution method of a NEW project by its owner: AASHTO (no owner rule) the
      "Typical AASHTO" equal share (AASHTO LRFD 10th Ed. Art. 4.6.2.2.1); MassDOT the pile-cap method (MassDOT Bridge Manual Part I 3.5.3);
      RIDOT its 60/40 rule (RIDOT BDM 3.3.1, the steel app's owner rule dl.dist); CTDOT the equal share (the steel app's CTDOT rule: no CTDOT
@@ -261,7 +273,9 @@
         nn(b.cw, `xs.dl.bar${s}.cw`, `${side} curb width`); nn(b.ch, `xs.dl.bar${s}.ch`, `${side} curb height`); nn(b.rw, `xs.dl.bar${s}.rw`, `${side} railing weight`); nn(b.rp, `xs.dl.bar${s}.rp`, `${side} railing load point`);
         on0(b.rf, `xs.dl.bar${s}.rf`, `${side} railing traffic face`);
       } else { if (b.type != null && b.type !== 'barrier') e(`xs.dl.bar${s}.type`, `${side} deck edge: choose Barrier or Curb and railing.`);
-        nn(b.bw, `xs.dl.bar${s}.bw`, `${side} barrier width`); nn(b.w, `xs.dl.bar${s}.w`, `${side} barrier weight`); }
+        const G = geoOf(b);   // BARG: from the geometry, its own checks in place of the typed width and weight
+        if (G) { if (!G.ok) G.errors.forEach(x => e(`xs.dl.bar${s}.${GEO_PATH[x.key] || 'bMode'}`, `${side} deck edge: ${x.msg}.`)); }
+        else { nn(b.bw, `xs.dl.bar${s}.bw`, `${side} barrier width`); nn(b.w, `xs.dl.bar${s}.w`, `${side} barrier weight`); } }
       on0(b.face, `xs.dl.bar${s}.face`, `${side} edge to traffic face`);
       nn(w.w, `xs.dl.sw${s}.w`, `${side} sidewalk width`); if (+w.w > 0) nn(w.t, `xs.dl.sw${s}.t`, `${side} sidewalk thickness`);
       if (!blank(w.fence) || !blank(w.fenceX)) {   // PR 9: a railing or fence on the sidewalk (xsIn)
@@ -281,7 +295,7 @@
       if (r.dist != null && !XDIST.includes(r.dist)) e(`xs.dl.extra.${i}.dist`, `Added line load ${i + 1}: choose its distribution.`);
       if (!(isNum(r.x) && r.x >= 0 && (!isNum(Wd) || r.x <= Wd + 1e-9))) e(`xs.dl.extra.${i}.x`, `Added line load ${i + 1}: x must be from 0 to the deck width${isNum(Wd) ? ` ${Wd.toFixed(2)} ft` : ''}.`);
       nn(r.plf, `xs.dl.extra.${i}.plf`, `Added line load ${i + 1}: the line load`); });
-    const ew = s => { const b = q['bar' + s] || {}; return b.type === 'curb' ? (+b.cw || 0) / 12 : (+b.bw || 0); };   // PR 9: a curb's width
+    const ew = s => { const b = q['bar' + s] || {}, G = geoOf(b); return b.type === 'curb' ? (+b.cw || 0) / 12 : G && G.ok ? G.bDeck : (+b.bw || 0); };   // BARG: the computed width   // PR 9: a curb's width
     if (isNum(Wd) && ew('L') + ew('R') >= Wd) e(q.barL && q.barL.type === 'curb' ? 'xs.dl.barL.cw' : 'xs.dl.barL.bw', 'The two deck edges (barriers or curbs) are as wide as the deck.');
     return E;
   }
@@ -323,8 +337,8 @@
   /* the category names shown (the Steel Bridge app's CATS for the two noncomposite ones) and the category dead() is given */
   const CATN = { DC2: 'DC2', DW: 'DW', DC1: 'DC1', UT: 'Utility (composite, DW)', UTN: 'Utility (noncomposite, DW factors)', UF: 'Future utility allowance (noncomposite, γ 1.25/0)' };
   const steelCat = c => (c === 'UTN' ? 'UT' : c);
-  const edgesOf = q => { const o = {}; ['L', 'R'].forEach(s => { const b = q['bar' + s] || {};
-    o[s] = { type: b.type === 'curb' ? 'curb' : 'barrier', bw: b.bw, bwt: b.w, cw: b.cw, ch: b.ch, rw: b.rw, rp: b.rp, rf: b.rf, face: b.face }; }); return o; };
+  const edgesOf = q => { const o = {}; ['L', 'R'].forEach(s => { const b = q['bar' + s] || {}, G = geoOf(b), g = G && G.ok ? G : null;   // BARG: the computed width and weight
+    o[s] = { type: b.type === 'curb' ? 'curb' : 'barrier', bw: g ? g.bDeck : b.bw, bwt: g ? g.w : b.w, cw: b.cw, ch: b.ch, rw: b.rw, rp: b.rp, rf: b.rf, face: b.face }; }); return o; };
   const xsInOf = (q, sw) => ({ dl: { wcA: q.wcA, swL: sw('L'), swR: sw('R'), fenceL: (q.swL || {}).fence, fenceXL: (q.swL || {}).fenceX, fenceR: (q.swR || {}).fence, fenceXR: (q.swR || {}).fenceX,
     wsMode: q.wsMode, wsThk: q.wsThk, wsGam: q.wsGam }, ovl: Array.isArray(q.ovl) ? q.ovl : [] });
   /* edgeFace(P, s): the deck edge's traffic face from that edge (ft; the steel app's edgeIn: the barrier width; a curb lower than 12 in is
@@ -347,7 +361,8 @@
     // PR 9: the deck edges (barrier, or curb and railing) and the optional cross-section inputs through the steel app's own functions
     // (EDGE: edgeIn, bridgeEff, edgeLoads, xsIn). A barrier with none of the new inputs gives the same line load, x and traffic face as before.
     const Ed = EDGE.edgeIn(edgesOf(q), err), xi = EDGE.xsIn(xsInOf(q, sw), err); if (err.length) return null;
-    const edges = EDGE.edgeLoads(EDGE.bridgeEff({ wc }, Ed), xi.wcA), med = q.med || {};
+    const gx = { L: geoOf(q.barL), R: geoOf(q.barR) }, geo = sd => (gx[sd] && gx[sd].ok ? gx[sd] : null);   // BARG
+    const edges = EDGE.edgeLoads(EDGE.bridgeEff({ wc }, Ed), xi.wcA).map(E => (/^bar[LR]$/.test(E.id) && geo(E.side) ? Object.assign({}, E, { x: geo(E.side).xc }) : E)), med = q.med || {};   // BARG: at the centroid x̄
     const args = (ped, swL, swR) => [{ Nb: N, OL: +x.ohL, ts, fL: Ed.L.f, fR: Ed.R.f }, { pos, Wdeck: Wd },
       { method: q.method, ped, swL, swThkL: swt('L'), swR, swThkR: swt('R'), medW: +med.w > 0 ? +med.w : 0, medThk: +med.w > 0 ? +med.t || 0 : 0, medJoint: med.joint ? 'yes' : 'no',
         fws: xi.fws !== null ? xi.fws : +q.fws || 0, uwc: wc, uwcA: xi.wcA, hh: 0, sip: 0, bf: 0,
@@ -355,6 +370,14 @@
         edges, extra: (q.extra || []).map((r, i) => ({ desc: r.name || `Added line load ${i + 1}`, cat: steelCat(r.cat), x: +r.x, plf: +r.plf, dist: r.dist || 'auto' })), ovl: xi.ovl, ovr: null, bcls: null }];
     const R = dead(...args(0, sw('L'), sw('R')));   // the dead loads: the same call as before PL-A (ped 0)
     const out = Object.assign({}, R, { wc, ts, Wd, edge: Ed });
+    // BARG: a barrier from its geometry: its step dl.load.bar<L|R> (dead()'s "line load as entered") becomes the shared file's worked steps
+    // (shoelace / closed form, w = A/144 γ, b_deck, x̄), the weight keeping the id; geo: the shapes (Loads tab, Report)
+    if (geo('L') || geo('R')) {
+      out.geo = { L: geo('L'), R: geo('R') };
+      out.steps = R.steps.flatMap(st => { const m = /^dl\.load\.bar([LR])$/.exec(st.id), G = m && geo(m[1]); if (!G) return [st];
+        return window.SharedBarrier.steps(G, { prefix: 'dl', base: `load.bar${m[1]}.geo`, wId: `load.bar${m[1]}`, wLabel: `${m[1] === 'L' ? 'Left' : 'Right'} barrier (DC2), from its cross-section (Cross-section tab, deck edges)`,
+          wNote: `Load point: the barrier's centroid x̄_bar = ${n3(G.xc)} ft from the ${m[1] === 'L' ? 'left' : 'right'} deck edge (engineer 2026-11-24; an entered barrier weight acts at half the barrier width, b/2 = ${n3(G.bDeck / 2)} ft).` }); });
+    }
     // UT-N: rows of the noncomposite categories (stored 'UTN' and 'UF'; dead() was given the steel categories 'UT' and 'UF'): each row
     // of the result gets its stored category (cat0), and the shares are summed per stored category (xu: utc the composite utilities of
     // PL-A, utn, uf). No such row (every project saved before): nothing added, the result as before.

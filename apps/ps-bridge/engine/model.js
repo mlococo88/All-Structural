@@ -43,6 +43,8 @@
                       2026-11-14 (PR 9, the Steel Bridge app's cross-section load items), optional within it: barL / barR type ('barrier'
                       | 'curb'), cw, ch, rw, rp, rf, face; swL / swR fence, fenceX; med { w, t, joint }; wcA; wsMode, wsThk, wsGam; ovl [];
                       extra[i].dist and category 'DC1' (engine/bridge-dl.js). Absent = as before (no migration needed; no result changes).
+                      2026-11-24 (BARG), optional within barL / barR: bMode ('entered' | 'geom'; absent = entered), bShape, bDims { b, h, bt }
+                      (in), bPts [[x, y]] (in), bGam (kcf): the barrier from its geometry (shared/barrier.js). Absent = as before.
                       2026-11-23 (PL-A), optional within it: ped (psf, the pedestrian live load of AASHTO LRFD 10th Ed. 3.6.1.6 on the
                       sidewalks wider than 2.0 ft; absent, blank or 0 = none: no result changes) and extra[i].cat 'UT' (a utility line
                       load, DW) (engine/bridge-dl.js, engine/pl.js).
