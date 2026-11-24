@@ -11701,3 +11701,74 @@ One new optional key, `P.deckDesign.exposure` (1 | 2). It is not in DEF, as for 
 ### Open items
 - The maximum spacing of 5.10.3.2 (1.5 t or 18 in for slabs), which 5.6.7 refers to, is not checked.
 - The Extreme Event II overhang cases (A13.4) are still not checked.
+## 2026-11-24 — PR: claude/sp3-allow-of (PR #1696: https://github.com/mlococo88/All-Structural/pull/1696) (SBALLOW2) — the splice shipping weight check SP3, the old app's splice placement rule and the BOM note use the girder steel detail allowance of the analysis (SBDAnalysis.allowOf)   [CALCULATION CHANGE in a rare case only: SP3 and the reference placement change only where the loads module fails or hand-off girder loads give their own allowance]
+### Problem
+PR #1690 (SBALLOW) made the analysis's girder steel detail allowance available once, `SBDAnalysis.allowFor / allowOf` (the girder loads of a hand-off, girder.loads.steelAllowPct; else the loads module's xs.allow, blank 0; else the Analysis setting analysis.steelAllowPct, default 5), and used it for the Analysis settings box and the erection drawing. The Auto design splice checks still read `+((P.xs || {}).allow) || 0` directly: SP3 (piece shipping weight ≤ W_ship, engine/splplace.js `check`, called from engine/autodesign.js `splCheck`) and the old app's placement rule (engine/splplace.js `reference`, which divides pieces over the shipping weight, called from `splPlan`). Where the loads module fails (the analysis then uses the setting) or a hand-off gives the girder its own allowance, SP3 weighed a piece with a different allowance from the DC1 of the analysis. The Report's steel bill of materials note ("The analysis adds a detail allowance of X % …", report/builders.js `bomTotals`) quoted xs.allow the same way. More conservative where the analysis's allowance is larger than xs.allow, less where it is smaller.
+### Where
+- `apps/steel-bridge/engine/autodesign.js` `splCheck(P, S, L, Q)`, anchor `const segs = segmentsOf(L), al = splAllow(P, S);`; new `splAllow(P, S)` just below it, anchor `function splAllow(P, S) {`; `splPlan(P, S, ctx, L0)`, anchor `allow = splAllow(P, S).pct, ref =`.
+- `apps/steel-bridge/engine/splplace.js` `check(P, spl, Ru, o)`: SP3 step note, anchor `3.403 lb/ft per in² (0.490 kcf).${o.allowSrc`; header comment of `check` (o.allowSrc).
+- `apps/steel-bridge/report/builders.js` `bomTotals(P, PL, units, xf, rest)`, anchor `const AN = window.SBDAnalysis, alg =`.
+### Before / After
+`engine/autodesign.js splCheck`:
+```js
+// before
+const segs = segmentsOf(L); return SPP().check(P, L.spl, S.splR, { segs, allow: +((P.xs || {}).allow) || 0, trans: SPP().transitions(segs, L.spl), frames: Q ? framesOf(Q) : null });
+// after
+const segs = segmentsOf(L), al = splAllow(P, S); return SPP().check(P, L.spl, S.splR, { segs, allow: al.pct, allowSrc: al.txt, trans: SPP().transitions(segs, L.spl), frames: Q ? framesOf(Q) : null });
+```
+`engine/autodesign.js splPlan`:
+```js
+// before
+const Ru = S.splR, cf = Sp.contraflexure(R), segs0 = segmentsOf(L0), allow = +((P.xs || {}).allow) || 0, ref = Sp.reference(P, cf, Ru, segs0, allow);
+// after
+const Ru = S.splR, cf = Sp.contraflexure(R), segs0 = segmentsOf(L0), allow = splAllow(P, S).pct, ref = Sp.reference(P, cf, Ru, segs0, allow);
+```
+New `splAllow(P, S)`: the largest `SBDAnalysis.allowOf(P, gi).pct` over the plate girders the layout goes on (every girder that is not `adFixed`; none: every girder), with a text naming the source for the SP3 step note; memo per settings object S (one Auto design run); without SBDAnalysis.allowOf: `+xs.allow || 0` as before.
+`engine/splplace.js check`, SP3 note: before `` note: `W_ship: ${Ru.src.shipWt}. 3.403 lb/ft per in² (0.490 kcf).` `` after `` note: `W_ship: ${Ru.src.shipWt}. 3.403 lb/ft per in² (0.490 kcf).${o.allowSrc ? ` ${o.allowSrc}.` : ''}` ``.
+`report/builders.js bomTotals`: before `const al = +((P.xs || {}).allow) || 0, Ua = …` and `` `…adds a detail allowance of ${f(al, 0)} % to the girder…` ``; after the allowOf value of every plate girder (`alg`), one value `X %` where they agree, else `X % (G1), Y % (G2)`: `` `…adds a detail allowance of ${alT} to the girder…` ``.
+The SP3 expression itself is unchanged: W_pc = (1 + a/100) Σ 3.403 A_i L_i ≤ W_ship; only the source of a changes: before a = xs.allow; after a = SBDAnalysis.allowOf (the a of the analysis's DC1 girder steel).
+### Governing provision
+None: the detail allowance is an owner/designer allowance, not an AASHTO value; W_ship is an Auto design input (owner or fabricator limit). Steel unit weight unchanged: AASHTO LRFD 10th Ed. Table 3.5.1-1, 0.490 kcf (3.403 lb/ft per in² of plate).
+### Check case
+- Hand check: a piece of 30.00 kip of plates, loads module failed (xs.nb = 0) so the analysis uses the setting 5 % while xs.allow = 3 %: SP3 before 30.00 × (1 + 3/100) = **30.90** kip, after 30.00 × (1 + 5/100) = **31.50** kip (both ≤ 90 kip default W_ship).
+- Built-in project with the loads module failing (xs.nb = 0), xs.allow 3, setting 5, splices 82/145/215/278 ft: SP3 piece 1 (0–82 ft) plates 17.79 kip: before 18.3 kip (ratio 0.2036), after 18.7 kip (0.2075); piece 3 (145–215 ft) 15.18 kip: 15.6 → 15.9 kip.
+- Hand-off girder loads 5 % with xs.allow 2 %: SP3 at 5 % (before 2 %); two plate girders 5 % and 8 %: 8 % (the larger).
+### What changes for a project
+Only projects whose loads module fails (the analysis then uses the Analysis setting) or whose girders carry a hand-off allowance (girder.loads.steelAllowPct) that differs from xs.allow: SP3 weights and ratios, the reference layout of Auto splice placement where a piece is near W_ship, and the BOM note's %. Every other project: identical. Checked by a scratch script that runs `splCheck` (every SP1–SP6 item and ratio) and `splPlan` (reference and layouts) with origin/main's and this branch's engines on 8 made-up projects (default; xs.allow 3; xs.allow 8 with setting 2; xs.allow blank; 4 splices with xs.allow 4; simple 120 ft span; MassDOT xs.allow 6; loads module failing): 7 identical, only the last differs (the 5 SP3 rows above).
+### How verified
+`node tests/engine/run.mjs sb-sp3-allowance sb-detail-allowance autodesign-splices splices sb-report report sheets lga`; `node tests/check-syntax.mjs`; the before/after scratch comparison above.
+### Saved data
+None: no key, field or format changes.
+### Open items
+- engine/lga.js (MIDAS .lga export) adds `xs.allow` to w_misc. The export stops when the loads module fails, so it differs from the analysis only with a hand-off girder allowance; not changed (an export mapping, raise with the engineer).
+- With girders of different allowances SP3 takes the largest (conservative, Decision pending engineer review); the layout is one per Auto design run.
+
+## 2026-11-24 — PR: claude/shared-barrier-steel (PR #1697: https://github.com/mlococo88/All-Structural/pull/1697) (BARG) — Cross-section tab, deck edges: "Barrier weight from: Entered / Geometry" (shared/barrier.js); with Geometry the barrier's weight and width at the deck are computed and its DC2 acts at its centroid   [NEW OPTION; Entered (the default, every saved project) unchanged; §4: the load point in Geometry mode]
+### Request (engineer, 2026-11-24)
+"RIDOT has a barrier that is a rectangle shape, not an F-shape barrier. Can I enter the barrier geometry in a new section and let the app calculate the weight directly?" Then: "Use the centroid for the barrier load point. Do this for both the steel and ps apps."
+### Where / Before / After
+- `index.html` script list: new `'../../shared/barrier.js',` before `'engine/loads.js',`.
+- `engine/loads.js` `edgeIn(E, errors)`, anchor `EDGE_K.forEach(k => { q[k] = opt(e[k]); });`: after it, new block (BARG): for a barrier with `e.bMode === 'geom'`, `G = SharedBarrier.compute(SharedBarrier.spec(e))`; errors → `` `${nm_} deck edge: ${x.msg}.` `` (blocking); else `q.bw = G.bDeck; q.bwt = G.w; q.geo = G;`. The required-value check before `(q.type === 'curb' ? ['cw', 'ch', 'rw', 'rp'] : ['bw', 'bwt']).forEach(…)` → after `if (!geoBad) (q.type === 'curb' ? …`.
+- `bridgeEff`: before `{ mode: 'barrier', bw: q.bw, w: q.bwt, fby: q.fby }` → after `{ mode: 'barrier', bw: q.bw, w: q.bwt, fby: q.fby, ...(q.geo ? { geo: q.geo } : {}) }`.
+- `edgeLoads`: before `x: e.bw / 2, plf: e.w }` → after `x: e.geo ? e.geo.xc : e.bw / 2, plf: e.w, ...(e.geo ? { def: { kind: 'barGeo', G: e.geo, xHalf: e.bw / 2 } } : {}) }`.
+- `deadSteps`: new branch before `else if (d.kind === 'curb')`: `else if (d.kind === 'barGeo') w.take(window.SharedBarrier.steps(d.G, { prefix: 'dl', base: id + '.geo', wId: id, … }))` — steps `dl.load.bar<L|R>.geo.(A|S|h|b|xc)` and the weight as `dl.load.bar<L|R>` (the step the DC2 table already links), all in the DC2 topic (regex unchanged).
+- `engine/inputcheck.js` `EDGE_KEY`: + `'the barrier base width': 'bDims.b'`, `'the barrier top width': 'bDims.bt'`, `'the barrier height': 'bDims.h'`, `'the barrier points': 'bPts'`, `'the barrier unit weight': 'bGam'` (each geometry message on its field).
+- `ui/loads.js` `parts()` `edge(sd)`: before `` `${h.num(k + 'bw', …)}${h.num(k + 'bwt', …)}` `` → after `barrierRows(P, h, sd, k, e, s)`: the select "Barrier weight from" (Entered / Geometry), then in Entered the same two fields; in Geometry the shape (Rectangle, Sloped face with vertical back, Custom polygon), its dimensions (in) or points, γ (kcf, blank = 0.150), the computed width at deck, weight and centroid read-only, a sketch, the worked steps and a link to the Loads & LLDF tab (step dl.load.bar<L|R>). New `barrierChange()` (called first from `onChange`): sets the inputs and writes the computed width and weight into `bw`, `bwt` (so the hand-offs, the drawings and the .lga export, which read those fields, get them).
+- `report/builders.js` `loads()` sub 'd': in Geometry mode only, a key-value block per barrier (area, weight, width at deck, load point x̄), each keyed to its step.
+### Calculation change (CLAUDE.md §4) — Geometry mode only
+- Weight: before (only mode): typed `bwt` klf. After (Geometry): w = A/144 × γ (shared/barrier.js; AASHTO LRFD 10th Ed. Art. 3.5.1, Table 3.5.1-1 0.145 kcf normal-weight concrete f′c ≤ 5.0 ksi + 0.005 kcf for the reinforcement per C3.5.1 = 0.150 kcf default).
+- Load point: before (and still in Entered): x = b/2 from the deck edge (`edgeLoads`, b = barrier width at the deck). After (Geometry, engineer 2026-11-24): x = x̄, the centroid of the cross-section (shoelace; b/2 for a rectangle). The distribution rule that uses x is unchanged: MassDOT Bridge Manual Part I 3.5.3 pile-cap P/N + max(0, P e c_i/Σc²) (x enters through e = x − x̄_girders); "Typical AASHTO" AASHTO LRFD 10th Ed. Art. 4.6.2.2.1 (equally; x does not enter); RIDOT BDM 3.3.1 60/40 (by side; x does not enter); a "two adjacent" override (lever rule) uses x.
+- Width at the deck: the outline's inner toe; it is also the traffic face (as a typed width is) and the start of the wearing surface.
+- Check case (built-in project, made up: 5 girders at 9.5 ft, overhangs 3.25 ft, deck 44.5 ft, girder centroid 22.25 ft, Σc² = 2(19² + 9.5²) = 902.5 ft², MassDOT pile-cap):
+  - Rectangle 12 × 42 in both sides: w = 0.525 klf, b = 1.00 ft, x̄ = 0.50 ft = b/2. G1's share of the left barrier: 0.525/5 + 0.525(0.50 − 22.25)(−19)/902.5 = 0.105 + 0.240395 = 0.345395 klf; right barrier e > 0 for G1 → 0.105. DC2 G1..G5 typed 1.00 ft / 0.525 klf: 0.450395, 0.330197, 0.210000, 0.330197, 0.450395 klf; Geometry: the same (identical: x̄ = b/2).
+  - Six-point polygon on the left (A = 400.5 in², w = 0.41719 klf, b = 1.500 ft, x̄ = 0.45599 ft), right barrier 0.4 klf at 0.75 ft: G1's share of the left barrier before (typed, at b/2 = 0.75 ft): 0.083438 + 0.41719(21.50)(19)/902.5 = 0.083438 + 0.188832 = 0.272270 klf; after (at x̄): 0.083438 + 0.41719(21.79401)(19)/902.5 = 0.083438 + 0.191414 = 0.274852 klf. DC2 G1..G5 before 0.352270, 0.257854, 0.163438, 0.253964, 0.344490; after 0.354852, 0.259145, 0.163438, 0.253964, 0.344490 klf. Geometry = typed width and weight with the load override x = x̄ (test).
+### Proof that Entered is unchanged
+`tests/engine/sb-barrier.test.mjs`: the loads (DC1, DC2, DW, every line load's x, w, distribution and shares, faces, every dead-load step's id, value and substitution) of the built-in project with an edited right barrier, MassDOT, AASHTO and RIDOT methods, are the same with and without shared/barrier.js loaded, with bMode absent or 'entered', and with a shape kept but not used. The Geometry code runs only when `bMode === 'geom'`.
+### Saved data (CLAUDE.md §5)
+New optional keys inside each `xs.edges.L` / `xs.edges.R` object: `bMode` ('entered' | 'geom'; absent = entered), `bShape` ('rect' | 'slope' | 'poly'), `bDims` { b, h, bt } (in), `bPts` [[x, y]…] (in), `bGam` (kcf; null = 0.150). Nothing is written on load or by `ensure()`: an old project exports byte-identical after import (test). In Geometry the computed width and weight are also kept in `bw`, `bwt`; switching back to Entered keeps them as typed values. The JSON export / import and the GitHub cloud sync carry the same project JSON.
+### How verified
+`node tests/check-syntax.mjs`; `node tests/engine/run.mjs barrier sb-barrier loads.test handoffs.test lga.test paths.test report-wiring report.test sb-nomen sb-report static.test inputcheck sidewalk tex.test`; smoke `tests/smoke/steel-bridge-barrier.mjs` (12 × 42 in both sides; DC2 per girder = typed 1.00 ft / 0.525 klf; 0 console errors).
+### Decisions (pending engineer review)
+- BARG-a. The geometry defaults: switching to Geometry starts a rectangle with b = the typed width × 12 and h blank (a blocking input error until entered; no height assumed), γ = 0.150 kcf.
+- BARG-b. Switching back to Entered keeps the last computed width and weight in the typed fields (not the earlier typed values).
+- BARG-c. An entered "Edge to traffic face" still governs over the computed width; a load override (x, w) of the barrier still governs over the computed values.
