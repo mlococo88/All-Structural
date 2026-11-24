@@ -21,7 +21,7 @@
           lf (owner load rules, SBDOwners.loadFactors) }
      p: { gap, kg, skewV, skewVx ('whole' | 'taper', N3 2026-11-23; absent: 'whole'), extMin, dl: { method, ped, swL, swThkL, swR, swThkR, medW, medThk, medJoint, wcA, fenceL, fenceXL, fenceR, fenceXR,
           wsMode, wsThk, wsGam }, extra: [{ name, cat, x, plf, dist }], ovl: [{ name, mode, psf, thk, gam }],
-          edges: { L, R: { type, bw, bwt, cw, ch, rw, rp, rf, face } } | absent, loadOverrides: { id: { x, plf, dist } }, beamClass: { i: class } } */
+          edges: { L, R: { type, bw, bwt, cw, ch, rw, rp, rf, face, bMode?, bShape?, bDims?, bPts?, bGam? (BARG: 'geom' = from the geometry, shared/barrier.js) } } | absent, loadOverrides: { id: { x, plf, dist } }, beamClass: { i: class } } */
 (function () {
   'use strict';
   const ED = 'AASHTO LRFD 10th Ed.';
@@ -74,7 +74,15 @@
     if (!E || !E.L || !E.R) return null; const o = {};
     ['L', 'R'].forEach(sd => { const e = E[sd] || {}, nm_ = sd === 'L' ? 'Left' : 'Right', q = { type: e.type === 'curb' ? 'curb' : 'barrier' };
       EDGE_K.forEach(k => { q[k] = opt(e[k]); });
-      (q.type === 'curb' ? ['cw', 'ch', 'rw', 'rp'] : ['bw', 'bwt']).forEach(k => { if (!(q[k] !== null && q[k] >= 0)) errors.push(`${nm_} deck edge: enter ${EDGE_LBL[k]} (zero or positive).`); });
+      /* BARG (2026-11-24, engineer: "enter the barrier geometry … and let the app calculate the weight"): "Barrier weight from: Geometry"
+         (e.bMode 'geom'; absent or 'entered': as before, the typed bw and bwt). The weight and the width at the deck come from the shape
+         (shared/barrier.js, window.SharedBarrier, read here only in this mode) and go where the typed bw and bwt go; q.geo keeps the shape
+         for the worked steps and the load point (the centroid, engineer 2026-11-24; edgeLoads). */
+      let geoBad = false;
+      if (q.type === 'barrier' && e.bMode === 'geom') { const B = window.SharedBarrier;
+        if (!B) { errors.push(`${nm_} deck edge: the barrier geometry cannot be computed (shared/barrier.js is not loaded).`); geoBad = true; }
+        else { const G = B.compute(B.spec(e)); if (!G.ok) { G.errors.forEach(x => errors.push(`${nm_} deck edge: ${x.msg}.`)); geoBad = true; } else { q.bw = G.bDeck; q.bwt = G.w; q.geo = G; } } }
+      if (!geoBad) (q.type === 'curb' ? ['cw', 'ch', 'rw', 'rp'] : ['bw', 'bwt']).forEach(k => { if (!(q[k] !== null && q[k] >= 0)) errors.push(`${nm_} deck edge: enter ${EDGE_LBL[k]} (zero or positive).`); });
       ['rf', 'face'].forEach(k => { if (q[k] !== null && !(q[k] >= 0)) errors.push(`${nm_} deck edge: ${EDGE_LBL[k]} must be zero or positive (or blank).`); });
       if (q.type === 'barrier') { q.fAuto = q.bw; q.fbyAuto = 'barrier face'; }
       else { const rf = q.rf !== null ? q.rf : q.rp, cf = q.cw / 12; q.mount = !(q.ch >= 12 - 1e-9);
@@ -87,7 +95,7 @@
   /* the bridge with the module's deck edges in place of the ones sent (GirderDetail dfBridgeEff) */
   function bridgeEff(b, Ed) {
     if (!Ed) return b; const edge = {};
-    ['L', 'R'].forEach(sd => { const q = Ed[sd]; edge[sd] = q.type === 'curb' ? { mode: 'curb', cw: q.cw, ch: q.ch, rp: q.rp, rw: q.rw, fby: q.fby } : { mode: 'barrier', bw: q.bw, w: q.bwt, fby: q.fby }; });
+    ['L', 'R'].forEach(sd => { const q = Ed[sd]; edge[sd] = q.type === 'curb' ? { mode: 'curb', cw: q.cw, ch: q.ch, rp: q.rp, rw: q.rw, fby: q.fby } : { mode: 'barrier', bw: q.bw, w: q.bwt, fby: q.fby, ...(q.geo ? { geo: q.geo } : {}) }; });
     return { ...b, edge, faceL: Ed.L.f, faceR: Ed.R.f, gdEdges: Ed };
   }
   /* edge line loads (GirderDetail dfEdges): a barrier, or a curb (cw/12 × ch/12 × w_c) plus a railing, per side; x from that side's edge */
@@ -96,7 +104,7 @@
     ['L', 'R'].forEach(sd => { const e = b.edge && b.edge[sd], nm_ = sd === 'L' ? 'Left' : 'Right';
       if (e && e.mode === 'curb') { if (e.cw > 0 && e.ch > 0) out.push({ id: 'curb' + sd, desc: `${nm_} curb`, cat: 'DC2', side: sd, x: e.cw / 24, plf: e.cw / 12 * e.ch / 12 * (wcA > 0 ? wcA : b.wc), def: { kind: 'curb', cw: e.cw, ch: e.ch, wc: wcA > 0 ? wcA : b.wc } });
         if (e.rw > 0) out.push({ id: 'rail' + sd, desc: `${nm_} railing`, cat: 'DC2', side: sd, x: e.rp, plf: e.rw }); }
-      else if (e && e.mode === 'barrier') { if (e.w > 0) out.push({ id: 'bar' + sd, desc: `${nm_} barrier`, cat: 'DC2', side: sd, x: e.bw / 2, plf: e.w }); }
+      else if (e && e.mode === 'barrier') { if (e.w > 0) out.push({ id: 'bar' + sd, desc: `${nm_} barrier`, cat: 'DC2', side: sd, x: e.geo ? e.geo.xc : e.bw / 2, plf: e.w, ...(e.geo ? { def: { kind: 'barGeo', G: e.geo, xHalf: e.bw / 2 } } : {}) }); }   // BARG: from the geometry, at its centroid x̄ (engineer 2026-11-24); entered: at bw/2 (as before)
       else if (b.barW > 0) out.push({ id: 'bar' + sd, desc: `${nm_} barrier`, cat: 'DC2', side: sd, x: b.barrier / 2, plf: b.barW }); });
     return out;
   }
@@ -183,6 +191,8 @@
     R.per.forEach(L => {
       const d = L.def || {}, id = 'load.' + L.id, ovr = L.ovr && L.ovr.includes('plf');
       if (ovr) w.add({ id, label: `${L.desc} (${L.cat}): line load entered as an override`, sym: 'w', eq: '', sub: '', value: L.plf, unit: 'klf', d: 4, note: `Computed: ${n4(L.plfAuto)} klf.` });
+      else if (d.kind === 'barGeo') w.take(window.SharedBarrier.steps(d.G, { prefix: 'dl', base: id + '.geo', wId: id, wLabel: `${L.desc} (${L.cat}), from its cross-section (Cross-section tab, Deck edges)`,
+        wNote: `Load point: the barrier's centroid x̄_bar = ${n3(d.G.xc)} ft from the ${L.side === 'R' ? 'right' : 'left'} deck edge (engineer 2026-11-24; an entered barrier weight acts at half the barrier width, b/2 = ${n3(d.xHalf)} ft).` }));
       else if (d.kind === 'curb') w.add({ id, label: `${L.desc} (${L.cat})`, sym: 'w', eq: '\\frac{c_{w}}{12}\\frac{c_{h}}{12}w_{c}', sub: `\\frac{${n2(d.cw)}}{12}\\frac{${n2(d.ch)}}{12}(${n3(d.wc)})`, value: L.plf, unit: 'klf', d: 4, ref: `${ref3}, Table 3.5.1-1` });
       else if (d.kind === 'sw') w.add({ id, label: `${L.desc} (${L.cat})`, sym: 'w', eq: 'b\\frac{t}{12}w_{c}', sub: `${n2(d.w)}\\frac{${n2(d.t)}}{12}(${n3(d.wc)})`, value: L.plf, unit: 'klf', d: 4, ref: `${ref3}, Table 3.5.1-1` });
       else if (d.kind === 'area') w.add({ id, label: `${L.desc} (${L.cat}), between the curb faces`, sym: 'w', eq: '\\frac{q}{1000}(x_{1} - x_{0})', sub: `\\frac{${n2(d.q)}}{1000}(${n2(L.x1)} - ${n2(L.x0)})`, value: L.plf, unit: 'klf', d: 4, ref: ref3, note: L.thk ? `q = t/12 × γ × 1000 = ${n2(L.thk)}/12 × ${n3(L.gam)} × 1000 psf.` : '' });

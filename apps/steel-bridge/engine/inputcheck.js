@@ -30,7 +30,8 @@
   }
 
   /* ---------- the loads module (engine/loads.js compute): its messages, each given the field it is about ---------- */
-  const EDGE_KEY = { 'the barrier width': 'bw', 'the barrier weight': 'bwt', 'the curb width': 'cw', 'the curb height': 'ch', 'the railing weight': 'rw', 'the railing load point': 'rp', 'the railing traffic face': 'rf', 'the edge to traffic face': 'face' };
+  const EDGE_KEY = { 'the barrier width': 'bw', 'the barrier weight': 'bwt', 'the curb width': 'cw', 'the curb height': 'ch', 'the railing weight': 'rw', 'the railing load point': 'rp', 'the railing traffic face': 'rf', 'the edge to traffic face': 'face',
+    'the barrier base width': 'bDims.b', 'the barrier top width': 'bDims.bt', 'the barrier height': 'bDims.h', 'the barrier points': 'bPts', 'the barrier unit weight': 'bGam' };   // BARG (2026-11-24): the barrier geometry (shared/barrier.js messages)
   const DL_KEY = { swL: 'xs.sidewalks.L.w', swThkL: 'xs.sidewalks.L.t', swR: 'xs.sidewalks.R.w', swThkR: 'xs.sidewalks.R.t', medW: 'xs.median.w', medThk: 'xs.median.t', ped: 'xs.sidewalks.ped' };
   const ROW_F = { Description: 'name', 'Location from left deck edge': 'x', 'Line load': 'plf', Weight: 'psf', Thickness: 'thk', 'Unit weight': 'gam' };
   function loadsPath(msg, P) {

@@ -141,6 +141,9 @@
       sub('d', `Dead loads per girder (klf), ${LD.METHODS[D.method] || D.method}`, [tbl(['Girder', 'Class', 'Deck', 'Haunch', 'SIP', 'DC1', 'DC2', 'DW'],
         gs.map(i => [`G${i + 1}`, LD.CLS[D.cls[i]] || D.cls[i], N(D.deck[i], 4), N(D.haunch[i], 4), N(D.sip[i], 4), { ...N(D.dc1[i], 4), key: `dl.G${i + 1}.DC1` }, { ...N(D.dc2[i], 4), key: `dl.G${i + 1}.DC2` }, { ...N(D.dw[i], 4), key: `dl.G${i + 1}.DW` }])),
         kv([[`Girder steel, ${R.girderLabel} (average)`, `${f(R.steel.avg, 4)} klf`, `dl.steel.${R.girderId}.avg`], ['Deck width', `${f(D.Wd, 2)} ft`], ['Live-load faces L / R', `${f(R.ll.L.r, 2)} / ${f(R.ll.R.r, 2)} ft`, 'xs.rL']]),
+        // BARG (2026-11-24): a barrier entered by its geometry: its area, weight, width at the deck and load point (the centroid), each worked in the steps below
+        ...(() => { const gb = D.per.filter(L => L.def && L.def.kind === 'barGeo'); return gb.length ? [kv(gb.flatMap(L => { const G = L.def.G, id = `dl.load.${L.id}`;
+          return [[`${L.desc}: area from its cross-section`, `${f(G.A, 2)} in²`, `${id}.geo.A`], [`${L.desc}: weight (DC2)`, `${f(G.w, 4)} klf`, id], [`${L.desc}: width at the deck`, `${f(G.bDeck, 3)} ft`, `${id}.geo.b`], [`${L.desc}: load point, centroid x̄ from the deck edge`, `${f(G.xc, 3)} ft`, `${id}.geo.xc`]]; }))] : []; })(),
         // SBSW (2026-11-19; CLAUDE.md §6): haunch, SIP and DC1 with each plate segment's top flange, as the analysis takes them (A2; display only)
         ...(() => { const S = R.segDC1 || [], ls = gs.filter(i => (S[i] || []).some(r => !r.base)); if (!ls.length) return [];
           return [note(`Haunch and SIP forms with each plate segment's top flange (${R.girderLabel}'s plates): the table above takes $b_{f,0}$ = ${f(D.bf * 12, 2)} in (the first region's top flange); the analysis takes each segment's own width (wet deck stage, Analysis section). DC1 there:`),

@@ -71,7 +71,7 @@
     const edge = sd => { const k = `xs.edges.${sd}.`, e = x.edges[sd], s = sdh(`${sd === 'L' ? 'Left' : 'Right'} deck edge`);
       return `<h4 class="sub">${sd === 'L' ? 'Left' : 'Right'} deck edge</h4>${h.sel(k + 'type', `${s}Edge type`, [['barrier', 'Barrier'], ['curb', 'Curb and railing']])}
         ${e.type === 'curb' ? `${h.num(k + 'cw', `${s}Curb width`, 'in')}${h.num(k + 'ch', `${s}Curb height`, 'in')}${h.num(k + 'rw', `${s}Railing weight`, 'klf')}${h.num(k + 'rp', `${s}Railing load point from edge`, 'ft')}${opt(k + 'rf', `${s}Railing traffic face from edge`, 'ft', 'blank = load point')}`
-          : `${h.num(k + 'bw', `${s}Barrier width at deck`, 'ft')}${h.num(k + 'bwt', `${s}Barrier weight`, 'klf')}`}${opt(k + 'face', `${s}Edge to traffic face`, 'ft', 'optional')}`; };
+          : barrierRows(P, h, sd, k, e, s)}${opt(k + 'face', `${s}Edge to traffic face`, 'ft', 'optional')}`; };
     const sw = sd => { const k = `xs.sidewalks.${sd}.`, s = sdh(`${sd === 'L' ? 'Left' : 'Right'} sidewalk`);
       return `<h4 class="sub">${sd === 'L' ? 'Left' : 'Right'} sidewalk</h4>${h.num(k + 'w', `${s}Width`, 'ft')}${h.num(k + 't', `${s}Thickness`, 'in')}${opt(k + 'fence', `${s}Railing / fence`, 'klf', 'none')}${opt(k + 'fenceX', `${s}Fence from deck edge`, 'ft', 'none')}`; };
     const cats = Object.entries(LD().CATS), dists = [['auto', 'Follows the method'], ['pilecap', 'MassDOT pile-cap'], ['equal', 'Equal (all beams)'], ['two', 'Two adjacent beams']];
@@ -101,6 +101,45 @@
       wcE: opt('materials.concrete.wcE', 'w<sub>c</sub> for E<sub>c</sub> only', 'kcf', 'blank = w_c')
     };
   }
+  /* BARG (2026-11-24; engineer: "RIDOT has a barrier that is a rectangle shape, not an F-shape barrier. Can I enter the barrier geometry …
+     and let the app calculate the weight directly?"): per deck edge "Barrier weight from": Entered (absent: the typed width and weight, as
+     before) or Geometry (bMode 'geom': the shape's inputs bShape, bDims { b, h, bt } in, bPts [[x, y]] in, bGam kcf; shared/barrier.js).
+     With Geometry the width at the deck and the weight are computed, shown read-only in place of the two typed fields, worked here and on the
+     Loads & LLDF tab (step dl.load.bar<L|R>), and written into bw and bwt as well (so the hand-offs and the .lga export read them). The
+     engine (engine/loads.js edgeIn) computes them again from the shape; the load acts at the centroid x̄ (engineer 2026-11-24). */
+  const BMODES = [['entered', 'Entered'], ['geom', 'Geometry']];
+  function barrierRows(P, h, sd, k, e, s) {
+    const B = window.SharedBarrier, geo = e.bMode === 'geom' && B, mode = h.sel(k + 'bMode', `${s}Barrier weight from`, BMODES, geo ? 'geom' : 'entered');
+    if (!geo) return `${B ? mode : ''}${h.num(k + 'bw', `${s}Barrier width at deck`, 'ft')}${h.num(k + 'bwt', `${s}Barrier weight`, 'klf')}`;
+    const sp = B.spec(e), G = B.compute(sp), v = p => { const x = get(P, k + p); return x == null || (typeof x === 'number' && !isFinite(x)) ? '' : x; };
+    const gnum = (p, label, unit, ph) => `<div class="fRow"><label for="i_${k}${p}">${s}${label}</label><input type="number" step="any" id="i_${k}${p}" data-path="${k}${p}" data-kind="bgeo" value="${esc(v(p))}"${ph ? ` placeholder="${esc(ph)}"` : ''}><span class="unit">${unit}</span></div>`;
+    const ro = (label, val, unit) => `<div class="fRow"><label>${s}${label}</label><input type="text" readonly tabindex="-1" value="${esc(val)}" style="background:#f1f5f9;color:#475569" title="Computed from the barrier geometry"><span class="unit">${unit}</span></div>`;
+    let o = mode + h.sel(k + 'bShape', `${s}Barrier shape`, B.SHAPES, sp.shape);
+    if (sp.shape === 'poly') o += `<div class="fRow"><label for="i_${k}bPts">${s}Points x, y (in)</label><input type="text" id="i_${k}bPts" data-path="${k}bPts" data-kind="bgeo" value="${esc(B.ptsText(e.bPts))}" style="width:220px" placeholder="0, 0; 12, 0; 12, 42; 0, 42"></div>
+      <p class="note">In order around the outline, separated by semicolons: x from the deck edge (toward the roadway), y up from the top of the deck; at least 3 points, an edge on the deck (y = 0), not crossing itself.</p>`;
+    else o += gnum('bDims.b', sp.shape === 'slope' ? 'Base width b (on the deck)' : 'Barrier width b', 'in') + (sp.shape === 'slope' ? gnum('bDims.bt', 'Top width b<sub>t</sub>', 'in') : '') + gnum('bDims.h', 'Barrier height h', 'in');
+    o += gnum('bGam', 'Unit weight γ', 'kcf', `blank = ${B.GAMMA.toFixed(3)}`);
+    if (!G.ok) return o + `<div class="alert">${G.errors.map(x => esc(x.msg.charAt(0).toUpperCase() + x.msg.slice(1)) + '.').join(' ')}</div>`;
+    const st = B.steps(G, { prefix: 'xs', base: 'bar' + sd, wLabel: 'Barrier weight per foot' });
+    const link = `<a href="#" data-gotab="loads" title="Loads &amp; LLDF tab, Barriers and wearing surface (DC2, DW), step dl.load.bar${sd}">Loads &amp; LLDF §</a>`;
+    return o + ro('Barrier width at deck', f(G.bDeck, 3), 'ft') + ro('Barrier weight', f(G.w, 4), 'klf') + ro('Centroid x̄ (load point)', f(G.xc, 3), 'ft')
+      + `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start"><div>${B.svg(G, { w: 170, side: sd })}</div><ul class="steps" style="flex:1 1 260px;min-width:0">${st.map(t => `<li><div class="lbl">${window.SBDSub.html(t.label)}${t.ref ? `<span class="ref">${esc(t.ref)}</span>` : ''}</div><div>${S().line(t, true)}</div>${t.note ? `<div class="nt">${window.SBDSub.html(t.note)}</div>` : ''}</li>`).join('')}</ul></div>
+      <p class="note">Computed from the geometry (read-only); the DC2 line load acts at the centroid x̄ from the deck edge. Worked with the dead loads on the ${link} (step dl.load.bar${sd}).</p>`;
+  }
+  /* barrierChange(P, sd, key, el): an input of the barrier geometry (BARG); true = handled */
+  function barrierChange(P, sd, key, el) {
+    const B = window.SharedBarrier, e = P.xs.edges[sd], v = el.value, nv = () => (v.trim() === '' ? null : Number(v));
+    if (key === 'bMode') { e.bMode = v === 'geom' ? 'geom' : 'entered';
+      if (e.bMode === 'geom') { if (!e.bShape) e.bShape = 'rect'; if (!e.bDims) e.bDims = { b: +e.bw > 0 ? Math.round(+e.bw * 12 * 1e4) / 1e4 : null, h: null }; if (e.bGam == null) e.bGam = B ? B.GAMMA : 0.15; } }
+    else if (key === 'bShape') { const prev = B ? B.outline({ ...B.spec(e) }) : null; e.bShape = ['rect', 'slope', 'poly'].includes(v) ? v : 'rect'; e.bDims = e.bDims || { b: null, h: null };
+      if (e.bShape === 'slope' && e.bDims.bt == null) e.bDims.bt = e.bDims.b;
+      if (e.bShape === 'poly' && !(Array.isArray(e.bPts) && e.bPts.length) && prev && prev.length >= 3 && prev.every(q => isFinite(q[0]) && isFinite(q[1]))) e.bPts = prev.map(q => [q[0], q[1]]); }
+    else if (key === 'bPts') e.bPts = B ? B.parsePts(v) : [];
+    else if (key === 'bGam') e.bGam = nv();
+    else { e.bDims = e.bDims || {}; e.bDims[key.slice(6)] = nv(); }
+    if (e.bMode === 'geom' && B) { const G = B.compute(B.spec(e)); if (G.ok) { e.bw = G.bDeck; e.bwt = G.w; } }   // the computed values in the two fields (hand-offs, .lga export)
+    return true;
+  }
   /* EQSP (2026-11-09; engineer's definition 2026-11-09): equal girder spacing. The engineer enters the exterior girder spacing W_cc (℄ to ℄ of
      the two exterior girders); S = W_cc / (N_b − 1) (SBDModel.equalSpacing) is written into every xs.bays entry, which everything computed
      reads as before. The overhangs stay inputs (deck width out to out = oh_L + W_cc + oh_R, shown). The S warning reuses the LLDF range of
@@ -118,6 +157,7 @@
   /* onChange(el, P): the kinds this tab adds; true = handled */
   function onChange(el, P) {
     const path = el.dataset.path, k = el.dataset.kind; if (!path) return false;
+    { const m = /^xs\.edges\.([LR])\.(bMode|bShape|bDims\.(?:b|bt|h)|bPts|bGam)$/.exec(path); if (m && P.xs.edges && P.xs.edges[m[1]]) return barrierChange(P, m[1], m[2], el); }   // BARG
     if (k === 'xlist') { setp(P, path, el.value.split(/[,;\s]+/).filter(Boolean).map(Number)); return true; }
     if (k === 'xopt') { setp(P, path, el.value.trim() === '' ? null : Number(el.value)); return true; }
     if (path === 'xs.nb') { const n = Math.round(Number(el.value)), B = P.xs.bays || []; P.xs.nb = n;
