@@ -174,3 +174,58 @@ Tests: `node tests/engine/run.mjs` (steps, steps-totext, tex, report, …).
 - `node tests/engine/run.mjs steps-listnote` (new, 5 tests); the whole engine suite; `node tests/check-syntax.mjs`. Consumer checks: see `fixlog/shared-report.md` (same PR).
 ### Other copies
 - None.
+
+## 2026-11-24 — PR: claude/sb-le-display (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CMPL) — line(): a comparison step reads "sym ≤ eq = …", not "sym = ≤ eq …"   [display only; no value, verdict, formula or reference changes]
+### Problem
+- Engineer (2026-11-24), Steel Bridge Design, Flexure tab, topic "Compact positive flexure" (6.10.7.1.2 / 6.10.7.3):
+  "D_p = ≤ 0.42D_t = 9.204 ≤ 0.42(27.000) = 11.340 = OK" and "M_u + 1/3 f_ℓ S_xt = ≤ φ_f M_n = 2086.83 + … ≤ 2284.07 = OK".
+- Root cause: `line()` joins every part with " = " (sym = eq = sub = value). A step whose `eq` starts with a relation (`'\le 0.42D_{t}'`) is the
+  right-hand side of a comparison with `sym`, so the join put "=" in front of "≤". 67 steps in the repository have this form (source scan in
+  the new test): Steel Bridge Design engine/flexure.js 14, constructibility.js 5, proportions.js 5, autodesign.js 1, framing.js 1, splplace.js 1;
+  shared/lldf.js 1 (exterior shear width factor, capV); Crane Pick tandem.js 4, clear3d.js 2; Spread Footing 20; Concrete Beam Capacity 11;
+  Retaining Wall Designer 1; Light Pole and Sign Post 1 — each shows the same "= ≤" (or "= ≥", "= <") wherever it is drawn through `line()`
+  (the tabs that use it, and `shared/report.js` screen / print / plain-text step lines).
+### Where
+- `shared/steps.js`, `line()` (anchor `function line(s, html, o) {   // o: toText's options`), and the new `REL`, `isRel` just above it; `isRel`
+  exported on `window.SharedSteps`.
+### Before / After
+- Before:
+  ```js
+  if (s.sym) parts.push(R(s.sym));
+  if (s.eq) parts.push(R(s.eq));
+  ```
+- After:
+  ```js
+  const REL = /^\s*(?:\\(?:le|ge|lt|gt|ne|leq|geq|neq)(?![A-Za-z])|[<>≤≥≠])/;
+  const isRel = s => !!(s && s.sym && s.eq && REL.test(String(s.eq)));
+  …
+  if (isRel(s)) parts.push(R(s.sym + ' ' + String(s.eq).trim()));   // CMPL: 'sym eq', one comparison
+  else { if (s.sym) parts.push(R(s.sym)); if (s.eq) parts.push(R(s.eq)); }
+  ```
+  With KaTeX the comparison is one display-style formula. The rest of the line (sub, value, unit) is unchanged, so the line now reads as the
+  steps that already hold the whole comparison in `sym` (e.g. Steel's shear "V_u ≤ φ_vV_n = 812.50 ≤ 1.0(1858.00) = 0.437").
+### Governing provision
+- None: display only. No step object, value, verdict, formula, factor, unit or reference changes.
+### Check case
+- `{ sym: 'D_{p}', eq: '\le 0.42D_{t}', sub: '9.204 \le 0.42(27.000) = 11.340', value: 'OK' }`: plain text before
+  `D_p = ≤ 0.42D_t = 9.204 ≤ 0.42(27.000) = 11.340 = OK`, after `D_p ≤ 0.42D_t = 9.204 ≤ 0.42(27.000) = 11.340 = OK`.
+- Steel built-in project, Flexure, location 0 (KaTeX): before "Dp = ≤0.42Dt = 10.054≤0.42(71.875)=30.188 = OK", after
+  "Dp≤0.42Dt = 10.054≤0.42(71.875)=30.188 = OK" (the browser smoke run on both versions of the file).
+- Any other step: the same string as before, byte for byte (the new test compares with a copy of the old `line()`, plain, built-in HTML and KaTeX).
+### How verified
+- `node tests/engine/run.mjs steps-cmpl` (new, 4 tests), `steps-`, `tex`; the whole engine suite (4 chunks); `node tests/check-syntax.mjs`.
+- Browser: `tests/smoke/steel-bridge-cmpl.mjs` (new: Flexure, Constructibility, Cross-frames, every step line, no relation right after "=");
+  smokes of the other tools with such steps: crane-tandem, crane-clear3d, cbc-loads, lightpole-shaft-subtabs, retaining-wall-checks,
+  spread-footing-plain, ps-bridge-skeleton.
+### Tools that load shared/steps.js (CLAUDE.md §3)
+- index.html, lldf.html, elastomeric_design_module.html, apps/steel-bridge, apps/ps-bridge, apps/crane-pick, abutment_calculator.html,
+  Timber Beam Check.html, Stone Masonry Arch Load Rating.html, Steel Beam Design - AISC 15th.html, Spread Footing.html, Shear and Moment
+  Diagrams.html, Section Property Calculator.html, Retaining Wall Designer.html, Prestressed Bridge Design.html, Pile Designer.html, Moving Load
+  Generator.html, Light Pole and Sign Post.html, Gusset Plate Rating.html, Concrete Beam Capacity.html, Bridge Substructure Loading.html,
+  BasePlateAnchorDesigner.html, ASCE7-16 Load Generator.html. Only the steps listed under Problem render differently.
+### Other copies
+- None.
+### Decisions (pending engineer review)
+- CMPL-1. The fix keeps the app's existing comparison form "sym ≤ eq = sub = value" (as the shear checks) and only removes the stray "=";
+  the form "D_p ≤ 0.42D_t: 9.204 ≤ 0.42(27.000) = 11.340, OK" (a colon and a comma) would change every comparison step of every tool,
+  including the ones that render correctly today, so it is left for the engineer to choose.

@@ -11443,3 +11443,9 @@ None: no new field or key; `P.deckDesign` unchanged.
 - SBAR-2. The wait restarts on any key, click or input on the page (not only on project changes), because the girder analysis holds the
   page for ~6 s once started.
 - SBAR-3. Not below 1200 px (the column is hidden there); the "Auto-refresh" box (on by default) turns it off per browser.
+
+## 2026-11-24 — PR: claude/sb-le-display (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (CMPL) — worked-step comparisons read "D_p ≤ 0.42D_t = …", not "D_p = ≤ 0.42D_t = …"   [display only]
+- Fixed in `shared/steps.js` `line()`: see `fixlog/shared-steps.md` (CMPL) for the code, the check case and the tools. No file of this app changed.
+- Steel steps affected (eq starting with \le / \ge): engine/flexure.js 14 (6.10.7 ductility, compact and noncompact positive flexure, 6.10.8
+  flanges, Service II, web bend-buckling, …), constructibility.js 5, proportions.js 5, autodesign.js 1, framing.js 1, splplace.js 1; shared/lldf.js 1.
+- New smoke `tests/smoke/steel-bridge-cmpl.mjs` (Flexure, Constructibility, Cross-frames: no relation right after "=").
