@@ -147,3 +147,41 @@ test('rolled-beam segments (ROLL, #1680): the design section is b_f/4 of the W s
   const R0 = DK.calc(on(M.newProject())); assert.ok(R.bays[0].I.MLL_neg > R0.bays[0].I.MLL_neg, 'a narrower flange: the design section nearer the girder, a larger negative moment');
   assert.equal(R.checks.map(c => c.id).join(), 'DK1,DK2,DK3'); assert.equal(R.checks[0].r, R0.checks[0].r, 'the positive moment does not depend on the flange');
 });
+
+// DD (2026-11-24, engineer request "Please fix the deck distribution steel"): the distribution reinforcement on the effective span of AASHTO
+// LRFD 10th Ed. Art. 9.7.2.3, S_eff = S - b_f/12 + (b_f - t_w)/24, S the smallest spacing, b_f and t_w of the segment with the largest b_f + t_w
+const plates = (P, bf, tw) => P.girders.forEach(g => g.segments.forEach(s => { s.topB = bf; s.tw = tw; }));
+test('DD hand check (a): the default bridge at 9.5 ft and a 9 ft bridge: S_eff below 10.78 ft, 67 % before and after; nothing else changes', () => {
+  const R = DK.calc(on(M.newProject(), { sBot: 8 }));
+  // the segments of the new project: b_f 16 / 18 in, t_w 0.5625 in -> the 18 in flange: 9.5 - 1.5 + 17.4375/24 = 8.7265625 ft -> 67 %
+  assert.equal(R.dist.bf, 18); assert.equal(R.dist.tw, 0.5625); assert.equal(R.dist.Seff, 8.7265625); assert.equal(R.dist.pct, 67); assert.equal(R.dist.pct0, 67);
+  near(R.dist.As, 0.31155, 1e-9, 'A_s,d as before');
+  const P = on(M.newProject()); P.xs.bays = P.xs.bays.map(() => 9); plates(P, 16, 0.5625);
+  const Q = DK.calc(P); near(Q.dist.Seff, 8.309896, 1e-6); assert.equal(Q.dist.pct, 67); assert.equal(Q.dist.pct0, 67);
+  const ids = R.steps.map(s => s.id).filter(i => /dist/.test(i)); assert.deepEqual([...ids], ['dk.distSe', 'dk.dist', 'dk.distAs']);
+  assert.ok(Object.is(R.steps.find(s => s.id === 'dk.distSe').value, R.dist.Seff) && Object.is(R.steps.find(s => s.id === 'dk.distAs').value, R.dist.As));
+});
+test('DD hand check (b): plate girders at 12 ft, b_f 18 in, t_w 0.5625 in: S_eff 11.2266 ft, 65.66 % (before 63.51 %); A_s,d with #5 at 6 in', () => {
+  const P = on(M.newProject()); P.xs.bays = P.xs.bays.map(() => 12); plates(P, 18, 0.5625);
+  const R = DK.calc(P); assert.equal(R.err, undefined, R.err);
+  assert.equal(R.dist.S, 12); assert.equal(R.dist.Seff, 11.2265625); near(R.dist.pct, 65.65976, 1e-5); near(R.dist.pct0, 63.50853, 1e-5);
+  // A_s,pos = 12(0.31)/6 = 0.620 in^2/ft: A_s,d = 0.6566(0.620) = 0.40709 (before 0.39375)
+  near(R.bays[0].pos.As, 0.62, 1e-12); near(R.dist.As, 0.407091, 1e-6);
+  assert.ok(W.SharedDeck.distPct(12) < R.dist.pct, 'more steel than on the girder spacing');
+});
+test('DD: unequal bays and girder types: the smallest spacing with the largest b_f + t_w of the bridge (the shortest effective span)', () => {
+  const P = on(M.newProject()); P.xs.bays = [13, 12, 12, 13]; plates(P, 16, 0.5); P.girders[1].segments[0].topB = 20; P.girders[1].segments[0].tw = 0.625;
+  const R = DK.calc(P);
+  // 12 - 20/12 + (20 - 0.625)/24 = 10.33333 + 0.80729 = 11.14063 ft; 220/sqrt(11.14063) = 65.912 %
+  assert.equal(R.dist.S, 12); assert.equal(R.dist.bf, 20); assert.equal(R.dist.tw, 0.625); assert.match(R.dist.at, /Exterior, segment 1/);
+  near(R.dist.Seff, 11.140625, 1e-9); near(R.dist.pct, 220 / Math.sqrt(11.140625), 1e-12);
+});
+test('DD: rolled-beam segments (#1680 / #1685): b_f and t_w of the W shape', () => {
+  const WR = loadShared(...['units.js', 'steps.js', 'lldf.js', 'deck.js', 'aisc-w.js'].concat(['engine/rolled.js', 'engine/model.js', 'engine/sections.js', 'engine/owners.js', 'engine/lldf.js', 'engine/loads.js', 'engine/deck.js'].map(E)));
+  const P = on(WR.SBDModel.newProject()); P.xs.bays = P.xs.bays.map(() => 12);
+  P.girders.forEach(g => g.segments.forEach(s => assert.ok(WR.SBDRolled.apply(s, 'W36X135'))));
+  const R = WR.SBDDeck.calc(P), sh = WR.SharedAiscW.get('W36X135'); assert.equal(R.err, undefined, R.err);
+  assert.equal(R.dist.bf, sh.bf); assert.equal(R.dist.tw, sh.tw);
+  // W36X135: b_f 12.0 in, t_w 0.600 in: 12 - 1 + 11.4/24 = 11.475 ft; 220/sqrt(11.475) = 220/3.38748 = 64.945 %
+  near(R.dist.Seff, 12 - sh.bf / 12 + (sh.bf - sh.tw) / 24, 1e-12); near(R.dist.Seff, 11.475, 1e-9, 'W36X135'); near(R.dist.pct, 64.9451, 1e-4);
+});

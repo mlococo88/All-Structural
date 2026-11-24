@@ -160,6 +160,8 @@
         note: cap ? (fam ? `The deck of ${fam} is a topping on the precast flange or on beams side by side, not a slab between flange tips (9.7.2.3): the upper limit of 67 % is used (conservative; decision pending engineer review).` : 'No valid top flange and web width for the effective span: the upper limit of 67 % is used (conservative).')
           : `S_eff in ft (9.7.2.3). Bottom bars parallel to the girders. On the girder spacing S = ${n(S, 3)} ft (the moved engine) the value would be ${n(dd.pct0, 1)} %.` },
         cap ? 67 : Math.min(220 / Math.sqrt(S - bt / 12 + (bt - bw) / 24), 67), 'deck.distPct');
+      add({ id: 'distAs', label: 'Distribution reinforcement, area per foot of deck width', sym: 'A_{s,d}', eq: '\\frac{\\%}{100}\\,A_{s,pos}', sub: `\\frac{${n(D.distPct, 1)}}{100}(${n(D.pos.As, 3)})`, value: D.distPct / 100 * D.pos.As, unit: 'in^{2}/ft', d: 3, ref: A10 + '9.7.3.2',
+        note: 'A_s,pos = the bottom transverse bars (the positive-moment steel above).' }, D.distPct / 100 * (+Di.sBot > 0 ? +Di.barBot * 12 / +Di.sBot : 0));
     }
     return K.done();
   }
