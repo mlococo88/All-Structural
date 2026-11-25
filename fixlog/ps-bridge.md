@@ -9770,7 +9770,7 @@ None.
 - **How verified:** main vs this branch, the tool opened headless with every tab clicked and every topic's chip / class / one-line result recorded (PR description: audit table); `node tests/engine/run.mjs` (psbridge-*); `tests/smoke/ps-bridge-*` not affected (display text of one topic chip).
 - **Other copies:** none.
 
-## 2026-11-25 — PR: claude/ps-gird-subtabs (PR pending) (GSUB) — the Girders & strands input tab split into sub-tabs: Girder types · Section · Strands · Reinforcement (display only)
+## 2026-11-25 — PR: claude/ps-gird-subtabs (PR #1715: https://github.com/mlococo88/All-Structural/pull/1715) (GSUB) — the Girders & strands input tab split into sub-tabs: Girder types · Section · Strands · Reinforcement (display only)
 ### Request (engineer, 2026-11-25)
 The Girders & strands input tab was about 4,000 px long with 11 cards. Approved layout: a sub-tab row inside the tab.
 - **Girder types:** the Girder types card (with no girder types: the Design girder card) and "Shown on the output tabs".
